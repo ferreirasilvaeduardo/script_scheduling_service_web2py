@@ -1,0 +1,65 @@
+[app]
+sss_env = DEV                     ; DEV | HML | PROD
+data_backend = FAKE               ; FAKE (somente DEV) | ORACLE
+
+[oracle]
+user = gfcadastro
+dsn = 10.0.0.1:1521/servico_homolog
+owner = gfcadastro
+table_prefix = tbsss_
+driver = oracledb                 ; oracledb | cx_Oracle
+use_thick_mode = true
+oracle_client_lib_dir =           ; somente macOS/Windows (dev); no Linux usar ldconfig/LD_LIBRARY_PATH
+call_timeout_ms = 30000
+pool_min = 1
+pool_max = 4
+
+[secrets]
+secrets_file = /etc/sss/secrets.cfg
+
+[agent]
+agent_id = srv-linux-prod-01
+ambientes_atendidos = PRODUCAO,HOMOLOGACAO
+base_script_dir = /opt/automacoes/scripts
+work_dir = /var/lib/sss/work
+script_owner_uids = 0
+max_parallel_jobs = 4
+max_parallel_hard_limit = 32
+claim_batch_size = 20
+schedule_batch_size = 50
+orchestrator_interval_s = 10
+cancel_poll_interval_s = 2
+heartbeat_interval_s = 10
+fence_timeout_s = 90
+node_offline_timeout_s = 180
+kill_grace_s = 5
+script_timeout_s = 21600
+shutdown_mode = TERMINATE         ; TERMINATE | DRAIN
+shutdown_grace_s = 30
+misfire_policy = RUN_ONCE         ; RUN_ONCE | SKIP
+misfire_tolerance_s = 300
+cron_horizon_days = 1461
+child_locale = C.UTF-8
+env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
+
+[logging]
+log_dir = /var/log/sss
+level = INFO                      ; DEBUG | INFO | WARN | ERROR
+app_log_max_bytes = 10485760
+app_log_backups = 10
+max_log_size_bytes = 5242880
+max_local_log_size_bytes = 52428800
+local_log_retention_days = 30
+
+[web]
+session_idle_timeout_s = 1800
+login_max_tentativas = 5
+login_bloqueio_s = 900
+log_poll_interval_s = 3
+trusted_proxies =
+allowed_origins = https://sss.empresa.local   ; lista separada por vírgula, validada contra Origin/Referer
+
+[retencao]
+ticket_retention_days = 180
+audit_retention_days = 730
+purge_batch_size = 1000
