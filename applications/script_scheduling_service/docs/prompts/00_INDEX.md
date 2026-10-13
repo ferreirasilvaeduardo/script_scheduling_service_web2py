@@ -1,0 +1,67 @@
+# SSS — Plano de Execução UI-First (Antigravity)
+
+## Como usar
+
+1. **Regra permanente:** cadastre o conteúdo integral do `AGENTS.md` como regra do workspace no Antigravity. Assim ela vale em toda conversa.
+2. **Uma conversa por prompt.** Use o modo **Planning** e revise o plano de implementação gerado **antes** de aprovar a execução.
+3. **Cole o prompt inteiro.** Não resuma nem misture dois prompts na mesma conversa.
+4. **Ao terminar cada prompt:**
+   * confira o relatório (§9 do AGENTS);
+   * rode os testes você mesmo;
+   * faça o commit (`git commit -m "F<x>.<y> <título>"`);
+   * só então abra o próximo prompt.
+5. **Relatório com lacuna do README:** se ele apontar uma lacuna ("Observações / Anomalias"), **não prossiga**. Decida, atualize o README e reexecute o prompt.
+6. **Convenção:** `APP` = `applications/script_scheduling_service`. Os testes rodam a partir de `APP`.
+
+## Pré-requisitos (antes do F0.1)
+
+| Item | Detalhe |
+|---|---|
+| Python 3.6 | `pyenv install 3.6.15`. Em Apple Silicon, use um shell x86_64 (Rosetta) ou um container Linux x86_64 |
+| web2py | Versão homologada, descompactada na raiz do repositório (`web2py.py` na raiz) |
+| Bootstrap 5.3.8 | `bootstrap.min.css` e `bootstrap.bundle.min.js` copiados para `applications/script_scheduling_service/static/bootstrap/` |
+| Alpine.js (build CSP) | Pacote `@alpinejs/csp`, arquivo minificado copiado para `applications/script_scheduling_service/static/js/alpine.min.js` |
+| Git | Repositório inicializado, com `README.md` e `AGENTS.md` na raiz |
+
+## Sequência
+
+| # | Arquivo | Título | Depende de | Verificação principal |
+|---|---|---|---|---|
+| 0.1 | `F0_1_ambiente_esqueleto.md` | Ambiente e esqueleto do repositório | — | `scripts/check_env.py` |
+| 0.2 | `F0_2_config_logging.md` | Configuração tipada, logging e launchers | 0.1 | `test_config.py` |
+| 0.3 | `F0_3_registro_identificadores.md` | Registro de identificadores e testes de schema/compatibilidade | 0.2 | `test_db_schema.py`, `test_py36_compat.py` |
+| 0.4 | `F0_4_contratos_repo_fake.md` | Contratos de repositório e backend FAKE | 0.3 | `test_repo_contract.py` |
+| 1.1 | `F1_1_layout_shell.md` | Layout base, design tokens e navegação | 0.4 | Browser: CSP sem violação |
+| 1.2 | `F1_2_componentes_ui.md` | Biblioteca de componentes | 1.1 | `/dev/componentes` |
+| 2.1 | `F2_1_seguranca_base.md` | Hash, CSRF, Origin, sessão, cabeçalhos e mascaramento | 1.2 | `test_security.py`, `test_masking.py` |
+| 2.2 | `F2_2_login_rbac.md` | Login, bloqueio, guardas e RBAC | 2.1 | `test_rbac.py`, `test_auth_service.py` |
+| 3.1 | `F3_1_params_path_guard.md` | Compilador de parâmetros e path_guard | 2.2 | `test_params_compiler.py`, `test_path_guard.py` |
+| 3.2 | `F3_2_tela_disparo.md` | Tela de disparo de script | 3.1 | Browser |
+| 3.3 | `F3_3_tickets_lista_detalhe.md` | Tickets: lista, detalhe, cancelamento, reexecução | 3.2 | `test_ticket_service.py` + browser |
+| 3.4 | `F3_4_visualizador_log.md` | Visualizador de log com polling | 3.3 | Browser |
+| 4.1 | `F4_1_admin_ambientes.md` | Gestão de ambientes | 3.4 | Browser |
+| 4.2 | `F4_2_admin_perfis.md` | Perfis e matriz de permissões | 4.1 | `test_rbac.py` ampliado |
+| 4.3 | `F4_3_admin_usuarios.md` | Gestão de usuários | 4.2 | Browser |
+| 4.4 | `F4_4_admin_parametros.md` | Dicionário de parâmetros | 4.3 | `test_params_compiler.py` ampliado |
+| 4.5 | `F4_5_admin_scripts.md` | Gestão de scripts e homologação | 4.4 | Browser + `test_path_guard.py` |
+| 5.1 | `F5_1_cron_recorrencia.md` | Parser CRON e recorrência | 4.5 | `test_cron_parser.py`, `test_recurrence.py` |
+| 5.2 | `F5_2_tela_agendamentos.md` | Tela de agendamentos | 5.1 | Browser |
+| 6.1 | `F6_1_auditoria_agentes.md` | Auditoria e painel de agentes | 5.2 | Browser |
+| ◆ | `UI_FREEZE.md` | **Homologação visual e funcional (manual)** | 6.1 | Seu aceite |
+| 7.1 | `F7_1_init_db.md` | Bootstrap de DDL (`init_db.py`) | ◆ | `test_db_schema.py` + `--dry-run` |
+| 7.2 | `F7_2_oracle_conn.md` | Conexão Oracle (shim Thick) | 7.1 | `test_oracle_conn.py` |
+| 7.3 | `F7_3_repo_oracle.md` | Repositórios Oracle (**executar 1x por agregado**) | 7.2 | `test_repo_contract.py` (ORACLE) |
+| 8.1 | `F8_1_env_executor.md` | Ambiente do filho e executor | 7.3 | `test_env_builder.py`, `test_executor.py` |
+| 8.2 | `F8_2_log_pump.md` | Coleta de log para CLOB | 8.1 | `test_log_pump.py` |
+| 8.3 | `F8_3_daemon_claim.md` | Daemon: inicialização, claim, heartbeat, cancelamento | 8.2 | `test_scheduler_claim.py` |
+| 8.4 | `F8_4_daemon_desdobro_fencing.md` | Daemon: desdobro, NODE_OFFLINE, fencing, shutdown | 8.3 | `test_scheduler_ha.py` |
+| 9.1 | `F9_1_purge_hardening.md` | Purge, hardening e runbook | 8.4 | Revisão |
+| 9.2 | `F9_2_e2e.md` | Roteiro E2E com 2 nós | 9.1 | Execução assistida |
+
+> **F7.3 é executado uma vez por agregado:** `RBAC_USUARIOS`, `CATALOGO`, `TICKETS`, `AGENDAMENTOS`, `AUDITORIA_AGENTES`. São 29 arquivos de prompt e **33 sessões** do Antigravity (o F7.3 conta 5 vezes), mais o marco manual de UI Freeze.
+
+## Regras de ouro para o executor
+
+* O README é a autoridade de negócio. Diante de qualquer lacuna, o executor **para e pergunta**, nunca inventa.
+* Nada fora do escopo IN do prompt. Melhorias percebidas vão para "Observações".
+* A UI nunca é a única barreira: toda validação existe também no servidor.

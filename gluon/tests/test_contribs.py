@@ -1,0 +1,95 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+""" Unit tests for contribs """
+
+import os
+import unittest
+
+from gluon import HTTP
+from gluon.contrib.generics import _resolve_pdf_image_path
+from gluon.contrib import fpdf as fpdf
+from gluon.contrib import pyfpdf as pyfpdf
+from gluon.contrib.appconfig import AppConfig
+from gluon.storage import Storage
+
+
+def setUpModule():
+    pass
+
+
+def tearDownModule():
+    if os.path.isfile("appconfig.json"):
+        os.unlink("appconfig.json")
+
+
+class TestContribs(unittest.TestCase):
+    """Tests the contrib package"""
+
+    def test_fpdf(self):
+        """Basic PDF test and sanity checks"""
+
+        self.assertEqual(fpdf.FPDF_VERSION, pyfpdf.FPDF_VERSION, "version mistmatch")
+        self.assertEqual(fpdf.FPDF, pyfpdf.FPDF, "class mistmatch")
+
+        pdf = fpdf.FPDF()
+        pdf.add_page()
+        pdf.compress = False
+        pdf.set_font("Arial", "", 14)
+        pdf.ln(10)
+        pdf.write(5, "hello world")
+        pdf_out = pdf.output("", "S")
+
+        self.assertTrue(fpdf.FPDF_VERSION.encode("utf8") in pdf_out, "version string")
+        self.assertTrue(b"hello world" in pdf_out, "sample message")
+
+    def test_appconfig(self):
+        """
+        Test for the appconfig module
+        """
+        from gluon import current
+
+        s = Storage({"application": "admin", "folder": "applications/admin"})
+        current.request = s
+        simple_config = '{"config1" : "abc", "config2" : "bcd", "config3" : { "key1" : 1, "key2" : 2} }'
+        with open("appconfig.json", "w") as g:
+            g.write(simple_config)
+        myappconfig = AppConfig("appconfig.json")
+        self.assertEqual(myappconfig["config1"], "abc")
+        self.assertEqual(myappconfig["config2"], "bcd")
+        self.assertEqual(myappconfig.take("config1"), "abc")
+        self.assertEqual(myappconfig.take("config3.key1", cast=str), "1")
+        # once parsed, can't be casted to other types
+        self.assertEqual(myappconfig.take("config3.key1", cast=int), "1")
+
+        self.assertEqual(myappconfig.take("config3.key2"), 2)
+
+        current.request = {}
+
+    def test_pdf_image_map_allows_static_subpath(self):
+        request = Storage(
+            {
+                "application": "welcome",
+                "folder": os.path.join("applications", "welcome"),
+                "is_https": False,
+                "env": Storage({"http_host": "example.com"}),
+            }
+        )
+        result = _resolve_pdf_image_path("/welcome/static/img/logo.png", request)
+        expected_suffix = os.path.normpath(
+            os.path.join("applications", "welcome", "static", "img", "logo.png")
+        )
+        self.assertTrue(result.endswith(expected_suffix), result)
+
+    def test_pdf_image_map_rejects_static_traversal(self):
+        request = Storage(
+            {
+                "application": "welcome",
+                "folder": os.path.join("applications", "welcome"),
+                "is_https": False,
+                "env": Storage({"http_host": "example.com"}),
+            }
+        )
+        with self.assertRaises(HTTP) as ctx:
+            _resolve_pdf_image_path("/welcome/static/../../private/secret.txt", request)
+        self.assertEqual(ctx.exception.status, 403)

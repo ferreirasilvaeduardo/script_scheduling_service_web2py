@@ -1,0 +1,27 @@
+# Byte-compiled / cache files
+*.pyc
+__pycache__/
+
+# Ignorar aplicações padrão do web2py
+applications/*
+!applications/script_scheduling_service/
+
+# Ignora todas as outras aplicações padrão do web2py
+applications/admin/
+applications/examples/
+applications/welcome/
+
+# web2py runtime directories
+applications/script_scheduling_service/sessions/
+applications/script_scheduling_service/errors/
+applications/script_scheduling_service/cache/
+applications/script_scheduling_service/databases/
+applications/script_scheduling_service/log/
+
+# SSS instance configuration (only .example is tracked)
+applications/script_scheduling_service/instance/config.ini
+
+# Logs and secrets
+*.log
+secrets.cfg
+.env

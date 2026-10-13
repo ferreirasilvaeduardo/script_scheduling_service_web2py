@@ -1,0 +1,95 @@
+No **Antigravity** (assim como em ambientes de agentes de código baseados em VS Code / Cursor / Windsurf), as regras de workspace são configuradas definindo um arquivo de diretrizes na raiz do projeto que o agente lê automaticamente em cada conversa.
+
+Como você está com o terminal aberto em `/portaloptrib/TESHUVA/web2py`, há duas formas diretas de configurar isso:
+
+---
+
+### Método 1: Via Arquivo de Regras na Raiz (Mais Prático e Recomendado)
+
+O Antigravity monitora arquivos de instrução do workspace na raiz de trabalho (geralmente `.cursorrules`, `.windsurfrules` ou `.antigravity/rules.md`). Para garantir que o agente carregue o conteúdo em qualquer variação de configuração, crie uma cópia ou link simbólico do `AGENTS.md` diretamente na raiz do workspace (`/portaloptrib/TESHUVA/web2py`):
+
+Execute no terminal:
+
+```bash
+cd /portaloptrib/TESHUVA/web2py
+
+# Cria os arquivos padrão de regras que os agentes de workspace leem automaticamente
+cp applications/script_scheduling_service/AGENTS.md .cursorrules
+cp applications/script_scheduling_service/AGENTS.md AGENTS.md
+
+# Caso a ferramenta use pasta .antigravity
+mkdir -p .antigravity
+cp applications/script_scheduling_service/AGENTS.md .antigravity/rules.md
+
+```
+
+Dessa forma, qualquer sessão aberta no workspace carregará o `AGENTS.md` como contexto persistente.
+
+---
+
+### Método 2: Pela Interface Gráfica do Antigravity
+
+Se você estiver interagindo pelo painel de configurações do próprio aplicativo/extensão:
+
+1. Acesse as configurações de IA (ícone de engrenagem no canto do chat ou menu de opções do agente).
+2. Procure por **Workspace Rules**, **Custom Instructions** ou **System Instructions**.
+3. No terminal, copie todo o conteúdo de `AGENTS.md` para a área de transferência:
+```bash
+cat /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/AGENTS.md
+
+```
+
+
+4. Cole o texto completo no campo de texto e salve.
+
+---
+
+### Método 3: Injeção Direta no Chat de Planejamento (Alternativa 100% à Prova de Falhas)
+
+Caso a interface do seu Antigravity não possua um campo explícito de Workspace Rules, você pode prefixar a própria instrução no início da sessão do chat:
+
+Abra a conversa em modo **Planning** e cole no início da mensagem:
+
+```text
+[REGRAS PERMANENTES DO WORKSPACE - AGENTS.MD]
+<cole aqui o conteúdo integral do arquivo AGENTS.md>
+--------------------------------------------------
+[TAREFA ATUAL]
+<cole aqui o conteúdo do arquivo F0_1_ambiente_esqueleto.md>
+
+```
+
+Com o Método 1 aplicado no terminal, o workspace já estará configurado e pronto para receber o envio do prompt **`F0_1_ambiente_esqueleto.md`**.
+
+
+
+
+Sim, **pode e é uma excelente prática**. O link simbólico garante que qualquer alteração ou atualização futura no arquivo `AGENTS.md` original seja refletida imediatamente na raiz, sem risco de arquivos desatualizados.
+
+Para criar os links simbólicos a partir da raiz do web2py (`/portaloptrib/TESHUVA/web2py`), execute no terminal:
+
+```bash
+cd /portaloptrib/TESHUVA/web2py
+
+# Cria os symlinks na raiz apontando para o AGENTS.md oficial da aplicação
+ln -sf applications/script_scheduling_service/AGENTS.md AGENTS.md
+ln -sf applications/script_scheduling_service/AGENTS.md .cursorrules
+
+# Caso a ferramenta procure dentro de .antigravity/
+mkdir -p .antigravity
+ln -sf ../applications/script_scheduling_service/AGENTS.md .antigravity/rules.md
+
+```
+
+### Verificação dos links
+
+Execute o comando abaixo para confirmar se os links apontam corretamente:
+
+```bash
+ls -l AGENTS.md .cursorrules .antigravity/rules.md
+
+```
+
+Você verá as setas `->` indicando o caminho para `applications/script_scheduling_service/AGENTS.md`. Com isso, o Antigravity já carregará as regras automaticamente.
+
+

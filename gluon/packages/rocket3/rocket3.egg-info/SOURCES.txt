@@ -1,0 +1,10 @@
+LICENSE.txt
+README.md
+pyproject.toml
+rocket3/__init__.py
+rocket3.egg-info/PKG-INFO
+rocket3.egg-info/SOURCES.txt
+rocket3.egg-info/dependency_links.txt
+rocket3.egg-info/top_level.txt
+tests/test_http.py
+tests/test_https.py

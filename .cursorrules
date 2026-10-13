@@ -1,0 +1,1 @@
+applications/script_scheduling_service/AGENTS.md
