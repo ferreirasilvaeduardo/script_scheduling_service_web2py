@@ -18,7 +18,7 @@ class RepoTicketsFake(RepoTickets):
         return self._store.agora()
 
     def criar(self, ticket, respostas):
-        """Cria ticket e respostas vinculadas atomicamente, com auditoria TICKET_CRIAR."""
+        """Cria ticket e respostas vinculadas atomicamente, com auditoria TICKET_CRIAR ou TICKET_REEXECUTAR."""
         with self._store.lock_tickets:
             script_id = int(ticket.get("script_id", 0))
             ambiente = ticket.get("ambiente")
@@ -39,6 +39,10 @@ class RepoTicketsFake(RepoTickets):
             if status not in ("PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED"):
                 raise RepoViolacao("Status invalido", constraint="ck_tbsss_tck_stat")
 
+            parent_id = ticket.get("parent_ticket_id")
+            if parent_id is not None and parent_id not in self._store.tickets:
+                raise RepoViolacao("ticket pai inexistente", constraint="fk_tbsss_tck_parent")
+
             tid = self._store.proximo_id("tbsss_tickets")
             agora = self._store.agora()
             sched = ticket.get("scheduled_at") or agora
@@ -56,7 +60,7 @@ class RepoTicketsFake(RepoTickets):
                 "prioridade": prio,
                 "cancel_requested": ticket.get("cancel_requested", "N"),
                 "status_motivo": ticket.get("status_motivo"),
-                "parent_ticket_id": ticket.get("parent_ticket_id"),
+                "parent_ticket_id": parent_id,
                 "agendamento_id": ticket.get("agendamento_id"),
                 "parametros_enviados": ticket.get("parametros_enviados", "{}"),
                 "log_output": ticket.get("log_output", ""),
@@ -83,13 +87,19 @@ class RepoTicketsFake(RepoTickets):
                 self._store.ticket_resp[rid] = copy.deepcopy(nresp)
 
             # Auditoria na mesma transacao (lock)
+            if parent_id is None:
+                acao = "TICKET_CRIAR"
+                detalhe = "Ticket criado para script %s em %s" % (script_id, ambiente)
+            else:
+                acao = "TICKET_REEXECUTAR"
+                detalhe = "Reexecucao do ticket %s para script %s em %s" % (parent_id, script_id, ambiente)
             self._store.registrar_auditoria_interno(
                 ator=solicitante,
                 ip=ticket.get("ip_origem"),
-                acao="TICKET_CRIAR",
+                acao=acao,
                 entidade="tbsss_tickets",
                 entidade_id=tid,
-                detalhe="Ticket criado para script %s em %s" % (script_id, ambiente),
+                detalhe=detalhe,
             )
 
             return tid
@@ -130,7 +140,11 @@ class RepoTicketsFake(RepoTickets):
 
             usr_f = filtros.get("solicitante")
             if usr_f:
-                lista = [t for t in lista if usr_f.lower() in t.get("solicitante", "").lower()]
+                lista = [t for t in lista if t.get("solicitante") == usr_f]
+
+            par_f = filtros.get("parent_ticket_id")
+            if par_f is not None:
+                lista = [t for t in lista if t.get("parent_ticket_id") == int(par_f)]
 
             origem_f = filtros.get("origem")
             if origem_f == "manual":
@@ -144,7 +158,7 @@ class RepoTicketsFake(RepoTickets):
 
             dt_fim = filtros.get("criado_fim")
             if dt_fim:
-                lista = [t for t in lista if t.get("created_at") and t["created_at"] <= dt_fim]
+                lista = [t for t in lista if t.get("created_at") and t["created_at"] < dt_fim]
 
             # Ordenacao estavel padrao: created_at DESC, id DESC
             lista.sort(key=lambda x: (x.get("created_at") or self._store.agora(), x["id"]), reverse=True)
@@ -160,8 +174,8 @@ class RepoTicketsFake(RepoTickets):
             resps.sort(key=lambda x: x["id"])
             return copy.deepcopy(resps)
 
-    def solicitar_cancelamento(self, id):
-        """Logica de cancelamento do no web (README §5.6)."""
+    def solicitar_cancelamento(self, id, ator, ip):
+        """Logica de cancelamento do no web (README §5.6), auditada em nome de quem cancelou."""
         with self._store.lock_tickets:
             if id not in self._store.tickets:
                 raise RepoNaoEncontrado("Ticket ID %s nao encontrado" % id)
@@ -180,8 +194,8 @@ class RepoTicketsFake(RepoTickets):
                 t["finished_at"] = self._store.agora()
 
                 self._store.registrar_auditoria_interno(
-                    ator=t.get("solicitante", "SYSTEM"),
-                    ip=t.get("ip_origem"),
+                    ator=ator,
+                    ip=ip,
                     acao="TICKET_CANCELAR",
                     entidade="tbsss_tickets",
                     entidade_id=id,
@@ -193,8 +207,8 @@ class RepoTicketsFake(RepoTickets):
                 t["cancel_requested"] = "S"
 
                 self._store.registrar_auditoria_interno(
-                    ator=t.get("solicitante", "SYSTEM"),
-                    ip=t.get("ip_origem"),
+                    ator=ator,
+                    ip=ip,
                     acao="TICKET_CANCELAR",
                     entidade="tbsss_tickets",
                     entidade_id=id,

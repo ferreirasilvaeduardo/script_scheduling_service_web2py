@@ -1,15 +1,23 @@
 # -*- coding: utf-8 -*-
-"""Disparo de script e tickets (README §5.4). Regras de negocio ficam em modules/ticket_service.py.
+"""Disparo de script e tickets (README §5). Regras de negocio ficam em modules/ticket_service.py.
 
 CSRF e Origin de todo POST sao validados em models/10_security.py.
 """
 import ticket_service
 import ui_helpers
-from repo_errors import RepoNaoEncontrado
-from ticket_service import AcessoNegado
+from repo_errors import RepoErro, RepoNaoEncontrado
+from ticket_service import AcessoNegado, ErroReexecucao
 
 _PREFIXO_PARAM = "p_"
 _JS_DISPARO = "js/app/disparo.js"
+_JS_TICKETS = "js/app/tickets.js"
+_TAMANHOS = (20, 50, 100)
+_EXTENSOES_LISTA = ("html", "load")
+_MSG_FALHA_LISTA = u"Não foi possível carregar os tickets. Tente novamente em instantes."
+_MSG_FALHA_CANCELAR = u"Não foi possível cancelar o ticket. Tente novamente em instantes."
+_MSG_REEXECUCAO_REVISAR = (u"Não foi possível reexecutar automaticamente: o cadastro do script pode ter mudado "
+                           u"desde a execução original. Revise os campos destacados e crie o ticket novamente.")
+_TIPO_FLASH_CANCELAMENTO = {"TERMINAL": "aviso", "CANCELADO": "sucesso", "SINALIZADO": "sucesso"}
 
 
 def _metodo():
@@ -25,6 +33,19 @@ def _negado():
     raise HTTP(403, u"Acesso negado.", **response.headers)
 
 
+def _nao_encontrado():
+    raise HTTP(404, u"Ticket não encontrado.", **response.headers)
+
+
+def _exigir_consulta():
+    ctx = _exigir_login()
+    if not ticket_service.pode_consultar(ctx):
+        _log.warning("acesso negado (login=%s funcionalidade=VER_LOGS|EXEC_SCRIPT caminho=%s ip=%s)",
+                     ctx["login"], request.env.path_info, _ip_origem(), extra={"acao": "RBAC"})
+        _negado()
+    return ctx
+
+
 def _texto(valor, limite):
     valor = valor[-1] if isinstance(valor, list) and valor else valor
     return valor[:limite] if isinstance(valor, str) else None
@@ -38,13 +59,14 @@ def _respostas_post():
     return respostas
 
 
-def _pagina_novo(ctx, script_id, ambiente, valores=None, erros=None, prioridade=None, scheduled_at=None):
+def _pagina_novo(ctx, script_id, ambiente, valores=None, erros=None, prioridade=None, scheduled_at=None,
+                 reexecucao_de=None):
     response.title = u"Disparar script — SSS"
     response.sss_scripts = [_JS_DISPARO]
     erros = erros or {}
     dados = dict(etapa=1, grupos=[], script=None, ambientes=[], form=None, erros=erros,
                  erro_geral=erros.get(ticket_service.CAMPO_GERAL), prioridade=prioridade,
-                 scheduled_at=scheduled_at or "", foco_campo=None)
+                 scheduled_at=scheduled_at or "", foco_campo=None, reexecucao_de=reexecucao_de)
     if not script_id:
         dados["grupos"] = ticket_service.scripts_disponiveis(ctx)
         return dados
@@ -63,9 +85,16 @@ def _pagina_novo(ctx, script_id, ambiente, valores=None, erros=None, prioridade=
 def novo():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func("EXEC_SCRIPT")
+    reexecucao = _texto(request.get_vars.get("reexecucao"), 10)
     try:
+        if reexecucao:
+            dados = ticket_service.preparar_reexecucao(ctx, reexecucao)
+            return _pagina_novo(ctx, dados["script_id"], dados["ambiente"], dados["valores"], dados["erros"],
+                                dados["prioridade"], reexecucao_de=dados["ticket_id"])
         return _pagina_novo(ctx, _texto(request.get_vars.get("script_id"), 10),
                             _texto(request.get_vars.get("ambiente"), 30))
+    except RepoNaoEncontrado:
+        _nao_encontrado()
     except AcessoNegado:
         _negado()
 
@@ -77,17 +106,21 @@ def criar():
     ambiente = _texto(request.post_vars.get("ambiente"), 30)
     prioridade = _texto(request.post_vars.get("prioridade"), 2)
     scheduled_at = _texto(request.post_vars.get("scheduled_at"), 19)
+    reexecucao_de = _texto(request.post_vars.get("reexecucao_de"), 10)
     respostas = _respostas_post()
     try:
         ticket_id, erros = ticket_service.criar_ticket(ctx, _ip_origem(), script_id, ambiente, respostas,
-                                                       prioridade, scheduled_at)
+                                                       prioridade, scheduled_at, reexecucao_de)
         if ticket_id is not None:
             session.flash = {"tipo": "sucesso", "mensagem": u"Ticket #%s criado com sucesso." % ticket_id}
             redirect(URL(c="tickets", f="detalhe", args=[ticket_id]))
         # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
         response.flash = {"tipo": "erro", "mensagem": u"Corrija os campos destacados e envie novamente."}
         response.view = "tickets/novo.html"
-        return _pagina_novo(ctx, script_id, ambiente, respostas, erros, prioridade, scheduled_at)
+        return _pagina_novo(ctx, script_id, ambiente, respostas, erros, prioridade, scheduled_at,
+                            reexecucao_de or None)
+    except RepoNaoEncontrado:
+        _nao_encontrado()
     except AcessoNegado:
         _negado()
 
@@ -107,14 +140,79 @@ def previa():
     return response.json({"argv": argv, "erros": erros})
 
 
-def detalhe():
+def lista():
     _exigir_metodo("GET", "HEAD")
-    ctx = _exigir_login()
+    if request.extension not in _EXTENSOES_LISTA:
+        raise HTTP(404, **response.headers)
+    ctx = _exigir_consulta()
+    filtros = ticket_service.normalizar_filtros(request.get_vars)
+    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("pagina"), 9))
+    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("tamanho"), 3), _TAMANHOS)
+    erro = None
     try:
-        ticket = ticket_service.ticket_resumo(ctx, request.args(0))
-    except RepoNaoEncontrado:
-        raise HTTP(404, u"Ticket não encontrado.", **response.headers)
+        resultado = ticket_service.listar(ctx, filtros, pagina, tamanho)
     except AcessoNegado:
         _negado()
+    except RepoErro:
+        _log.exception("falha ao listar tickets (login=%s)", ctx["login"], extra={"acao": "TICKET_LISTAR"})
+        resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
+        erro = _MSG_FALHA_LISTA
+    query_params = dict(filtros, tamanho=tamanho)
+    dados = dict(resultado=resultado, erro=erro, pagina=resultado["pagina"], tamanho=tamanho,
+                 query_params=query_params,
+                 url_fragmento=URL(c="tickets", f="lista", extension="load",
+                                   vars=dict(query_params, pagina=resultado["pagina"])))
+    if request.extension == "load":
+        return dados
+    response.title = u"Tickets — SSS"
+    response.sss_scripts = [_JS_TICKETS]
+    dados["filtros_ativos"] = filtros
+    dados["opcoes"] = ticket_service.opcoes_filtro(ctx)
+    return dados
+
+
+def detalhe():
+    _exigir_metodo("GET", "HEAD")
+    ctx = _exigir_consulta()
+    try:
+        ticket = ticket_service.detalhe(ctx, request.args(0))
+    except RepoNaoEncontrado:
+        _nao_encontrado()
     response.title = u"Ticket #%s — SSS" % ticket["id"]
+    response.sss_scripts = [_JS_TICKETS]
     return dict(ticket=ticket)
+
+
+def cancelar():
+    _exigir_metodo("POST")
+    ctx = _exigir_login()
+    ticket_id = _texto(request.post_vars.get("ticket_id"), 10)
+    try:
+        resultado = ticket_service.cancelar(ctx, _ip_origem(), ticket_id)
+        session.flash = {"tipo": _TIPO_FLASH_CANCELAMENTO[resultado],
+                         "mensagem": ticket_service.MSG_CANCELAMENTO[resultado]}
+    except RepoNaoEncontrado:
+        _nao_encontrado()
+    except AcessoNegado:
+        _negado()
+    except RepoErro:
+        session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_CANCELAR}
+    redirect(URL(c="tickets", f="detalhe", args=[ticket_id]))
+
+
+def reexecutar():
+    _exigir_metodo("POST")
+    ctx = _exigir_func("EXEC_SCRIPT")
+    ticket_id = _texto(request.post_vars.get("ticket_id"), 10)
+    try:
+        novo_id = ticket_service.reexecutar(ctx, _ip_origem(), ticket_id)
+    except RepoNaoEncontrado:
+        _nao_encontrado()
+    except AcessoNegado:
+        _negado()
+    except ErroReexecucao as e:
+        session.flash = {"tipo": "aviso", "mensagem": _MSG_REEXECUCAO_REVISAR}
+        redirect(URL(c="tickets", f="novo", vars={"reexecucao": e.ticket_id}))
+    session.flash = {"tipo": "sucesso",
+                     "mensagem": u"Ticket #%s criado como reexecução do ticket #%s." % (novo_id, ticket_id)}
+    redirect(URL(c="tickets", f="detalhe", args=[novo_id]))

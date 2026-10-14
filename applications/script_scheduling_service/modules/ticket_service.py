@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Disparo manual de script: formulario, previa e criacao de ticket (README §5.3, §5.4, §6).
+"""Disparo manual de script e consulta de tickets (README §4.3.C, §5, §6).
 
 O servidor e a autoridade: script, ambiente e homologacao sao sempre recarregados do
 repositorio e reautorizados com rbac.pode_executar. Valores de parametros nunca vao para
@@ -9,11 +9,13 @@ import collections
 import datetime
 import json
 import re
+import shlex
 import threading
 
 import params_compiler
 import path_guard
 import rbac
+import ui_helpers
 from repo_errors import RepoErro, RepoNaoEncontrado
 
 CAMPO_GERAL = params_compiler.CHAVE_GERAL
@@ -37,6 +39,23 @@ _RE_ID = re.compile(r"[0-9]{1,10}")
 _RE_AMBIENTE = re.compile(r"[A-Z0-9_]{1,30}")
 _FORMATOS_AGENDAMENTO = ("%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S")
 _AMBIENTES_MAX = 1000
+_SCRIPTS_MAX = 1000
+_FILHOS_MAX = 100
+
+STATUS_TICKET = ("PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED")
+STATUS_TERMINAIS = ("SUCCESS", "FAILED", "CANCELLED")
+STATUS_CANCELAVEIS = ("PENDING", "RUNNING")
+ORIGENS = (("manual", u"Manual"), ("agendamento", u"Agendamento"))
+FILTROS = ("status", "ambiente", "script", "solicitante", "criado_de", "criado_ate", "origem")
+
+MSG_CANCELAMENTO = {
+    "TERMINAL": u"O ticket já estava finalizado.",
+    "CANCELADO": u"Ticket cancelado.",
+    "SINALIZADO": u"Cancelamento solicitado; o agente encerrará a execução.",
+}
+
+_RE_LOGIN = re.compile(r"[a-z0-9._-]{3,30}")
+_FORMATO_DIA = "%Y-%m-%d"
 
 
 class AcessoNegado(Exception):
@@ -45,6 +64,18 @@ class AcessoNegado(Exception):
     def __init__(self, motivo):
         Exception.__init__(self, motivo)
         self.motivo = motivo
+
+
+class ErroReexecucao(Exception):
+    """Reexecucao nao gravada (recompilacao invalida ou falha de persistencia).
+
+    erros: dict codigo_campo -> mensagem, ja seguro para exibicao (sem valores).
+    """
+
+    def __init__(self, ticket_id, erros):
+        Exception.__init__(self, ",".join(sorted(erros)))
+        self.ticket_id = ticket_id
+        self.erros = erros
 
 
 def _id(valor):
@@ -85,6 +116,96 @@ def _texto_resposta(valor):
     if valor is False:
         return "false"
     return valor
+
+
+def _dia(valor):
+    if not isinstance(valor, str):
+        return None
+    try:
+        return datetime.datetime.strptime(valor.strip(), _FORMATO_DIA)
+    except ValueError:
+        return None
+
+
+def normalizar_filtros(entrada):
+    """Allowlist de chaves e valores dos filtros da lista de tickets (querystring).
+
+    Retorna OrderedDict apenas com os filtros validos, na forma de exibicao/URL: status
+    (lista na ordem canonica), ambiente, script (int), solicitante, criado_de/criado_ate
+    ('YYYY-MM-DD') e origem. Chaves desconhecidas e valores invalidos sao descartados.
+    """
+    entrada = entrada or {}
+    limpos = collections.OrderedDict()
+    status = entrada.get("status")
+    if isinstance(status, str):
+        status = [status]
+    if isinstance(status, (list, tuple)):
+        marcados = [st for st in STATUS_TICKET if st in status]
+        if marcados:
+            limpos["status"] = marcados
+    ambiente = _ultimo(entrada.get("ambiente"))
+    if isinstance(ambiente, str) and _RE_AMBIENTE.fullmatch(ambiente):
+        limpos["ambiente"] = ambiente
+    script = _id(_ultimo(entrada.get("script")))
+    if script is not None:
+        limpos["script"] = script
+    solicitante = _ultimo(entrada.get("solicitante"))
+    if isinstance(solicitante, str):
+        solicitante = solicitante.strip().lower()
+        if _RE_LOGIN.fullmatch(solicitante):
+            limpos["solicitante"] = solicitante
+    for chave in ("criado_de", "criado_ate"):
+        dia = _dia(_ultimo(entrada.get(chave)))
+        if dia is not None:
+            limpos[chave] = dia.strftime(_FORMATO_DIA)
+    origem = _ultimo(entrada.get("origem"))
+    if origem in dict(ORIGENS):
+        limpos["origem"] = origem
+    return limpos
+
+
+def _filtros_repo(limpos):
+    """Traduz filtros normalizados para as chaves do contrato; periodo vira [inicio, fim + 1 dia)."""
+    repo = {}
+    if "status" in limpos:
+        repo["status"] = list(limpos["status"])
+    if "ambiente" in limpos:
+        repo["ambiente"] = limpos["ambiente"]
+    if "script" in limpos:
+        repo["script_id"] = limpos["script"]
+    if "solicitante" in limpos:
+        repo["solicitante"] = limpos["solicitante"]
+    if "origem" in limpos:
+        repo["origem"] = limpos["origem"]
+    if "criado_de" in limpos:
+        repo["criado_inicio"] = _dia(limpos["criado_de"])
+    if "criado_ate" in limpos:
+        repo["criado_fim"] = _dia(limpos["criado_ate"]) + datetime.timedelta(days=1)
+    return repo
+
+
+def _duracao(ticket, agora):
+    fim = ticket.get("finished_at")
+    if fim is None and ticket.get("status") == "RUNNING":
+        fim = agora
+    return ui_helpers.formatar_duracao(ticket.get("started_at"), fim)
+
+
+def _snapshot(ticket):
+    try:
+        snap = json.loads(ticket.get("parametros_enviados") or "")
+    except (TypeError, ValueError):
+        return None
+    return snap if isinstance(snap, dict) else None
+
+
+def _argv_exibicao(snap):
+    if snap is None:
+        return None
+    try:
+        return params_compiler.argv_para_exibicao(snap)
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return None
 
 
 class ServicoTicket(object):
@@ -326,12 +447,20 @@ class ServicoTicket(object):
             return None, dict(erros)
         return params_compiler.argv_para_exibicao(json.loads(snapshot)), {}
 
-    def criar_ticket(self, ctx, ip, script_id, ambiente, respostas, prioridade, scheduled_at):
+    def criar_ticket(self, ctx, ip, script_id, ambiente, respostas, prioridade, scheduled_at,
+                     reexecucao_de=None):
         """Cria o ticket (README §5.4). Retorna (ticket_id | None, erros_por_campo).
 
-        Lanca AcessoNegado quando pode_executar nega. A auditoria TICKET_CRIAR e gravada
-        pelo repositorio na mesma transacao do INSERT.
+        reexecucao_de (opcional) vincula o novo ticket ao original (README §5.5), exigindo
+        as mesmas regras de reexecutar e o mesmo script/ambiente. Lanca AcessoNegado quando
+        pode_executar nega. A auditoria e gravada pelo repositorio na mesma transacao do INSERT.
         """
+        parent_id = None
+        if reexecucao_de not in (None, ""):
+            original = self._ticket_reexecutavel(ctx, reexecucao_de)
+            if str(original["script_id"]) != str(script_id) or original["ambiente"] != ambiente:
+                self._negar(ctx, "REEXECUCAO_DIVERGENTE", script_id, ambiente)
+            parent_id = original["id"]
         script, amb = self._autorizar(ctx, script_id, ambiente)
         agora = self._tickets.agora()
         erros = collections.OrderedDict()
@@ -340,7 +469,10 @@ class ServicoTicket(object):
         snapshot, resolvidos, vinculos = self._compilar(ctx, script, amb, respostas, agora, erros)
         if erros:
             return None, dict(erros)
+        return self._gravar(ctx, ip, script, amb, prio, sched, snapshot, resolvidos, vinculos, parent_id)
 
+    def _gravar(self, ctx, ip, script, amb, prio, sched, snapshot, resolvidos, vinculos, parent_id):
+        acao = "TICKET_CRIAR" if parent_id is None else "TICKET_REEXECUTAR"
         ticket = {
             "script_id": script["id"],
             "ambiente": amb["nome"],
@@ -350,6 +482,7 @@ class ServicoTicket(object):
             "prioridade": prio,
             "parametros_enviados": snapshot,
             "scheduled_at": sched,
+            "parent_ticket_id": parent_id,
         }
         linhas = []
         for v in _ordenados(vinculos):
@@ -359,41 +492,283 @@ class ServicoTicket(object):
         try:
             ticket_id = self._tickets.criar(ticket, linhas)
         except RepoErro:
-            self._log.exception("falha ao gravar ticket (login=%s script_id=%s ambiente=%s)",
-                                ctx["login"], script["id"], amb["nome"], extra={"acao": "TICKET_CRIAR"})
+            self._log.exception("falha ao gravar ticket (login=%s script_id=%s ambiente=%s pai=%s)",
+                                ctx["login"], script["id"], amb["nome"], parent_id, extra={"acao": acao})
             return None, {CAMPO_GERAL: MSG_FALHA_CRIAR}
-        self._log.info("ticket criado (ticket=%s login=%s script_id=%s ambiente=%s prioridade=%s ip=%s)",
-                       ticket_id, ctx["login"], script["id"], amb["nome"], prio, ip,
-                       extra={"acao": "TICKET_CRIAR"})
+        self._log.info("ticket criado (ticket=%s login=%s script_id=%s ambiente=%s prioridade=%s pai=%s ip=%s)",
+                       ticket_id, ctx["login"], script["id"], amb["nome"], prio, parent_id, ip,
+                       extra={"acao": acao})
         return ticket_id, {}
 
-    def ticket_resumo(self, ctx, ticket_id):
-        """Resumo do ticket para o placeholder de detalhe: VER_LOGS no ambiente ou ticket proprio.
+    # ------------------------------------------------------------ consulta
 
-        Lanca RepoNaoEncontrado se nao existir e AcessoNegado se nao puder ver.
-        """
+    def pode_consultar(self, ctx):
+        """Acesso a lista de tickets: VER_LOGS (escopo de ambientes) ou EXEC_SCRIPT (proprios)."""
+        return rbac.tem_func(ctx, "VER_LOGS") or rbac.tem_func(ctx, "EXEC_SCRIPT")
+
+    def _proprio(self, ctx, ticket):
+        return rbac.tem_func(ctx, "EXEC_SCRIPT") and ticket.get("solicitante") == ctx.get("login")
+
+    def _pode_ver(self, ctx, ticket):
+        return self._proprio(ctx, ticket) or rbac.pode_ver_ticket(ctx, ticket)
+
+    def _ticket_visivel(self, ctx, ticket_id, acao):
+        """Ticket existente e visivel; fora do escopo e tratado como inexistente (404, nao 403)."""
         tid = _id(ticket_id)
         if tid is None:
             raise RepoNaoEncontrado("ticket invalido")
         ticket = self._tickets.obter(tid)
-        proprio = rbac.tem_func(ctx, "EXEC_SCRIPT") and ticket.get("solicitante") == ctx.get("login")
-        if not (proprio or rbac.pode_ver_ticket(ctx, ticket)):
-            self._negar(ctx, "SEM_VISAO_TICKET", ticket.get("script_id"), ticket.get("ambiente"))
+        if not self._pode_ver(ctx, ticket):
+            self._log.warning("ticket fora do escopo (login=%s ticket=%s ambiente=%s)",
+                              ctx.get("login"), tid, ticket.get("ambiente"), extra={"acao": acao})
+            raise RepoNaoEncontrado("ticket fora do escopo")
+        return ticket
+
+    def _nomes_scripts(self):
+        pagina = self._catalogo.scripts_listar(pagina=1, tamanho=_SCRIPTS_MAX)
+        return dict((s["id"], s["nome"]) for s in pagina["itens"])
+
+    def opcoes_filtro(self, ctx):
+        """Opcoes dos selects de filtro: ambientes visiveis ao perfil e scripts do catalogo."""
+        if rbac.tem_func(ctx, "VER_LOGS") and ctx.get("is_admin") is True:
+            pagina = self._catalogo.ambientes_listar(pagina=1, tamanho=_AMBIENTES_MAX)
+            ambientes = sorted(a["nome"] for a in pagina["itens"])
+        else:
+            ambientes = sorted(ctx.get("ambientes") or ())
+        scripts = sorted(self._nomes_scripts().items(), key=lambda par: (par[1], par[0]))
+        return {"ambientes": ambientes, "scripts": scripts, "status": list(STATUS_TICKET),
+                "origens": list(ORIGENS)}
+
+    def listar(self, ctx, filtros, pagina, tamanho):
+        """Lista paginada no escopo do perfil (README §4.3.C).
+
+        Com VER_LOGS: ambientes autorizados (admin: todos). Sem VER_LOGS: apenas os
+        tickets do proprio solicitante. filtros passa por normalizar_filtros.
+        """
+        if not self.pode_consultar(ctx):
+            self._negar(ctx, rbac.Motivo.SEM_FUNC, None, None)
+        repo_filtros = _filtros_repo(normalizar_filtros(filtros))
+        escopo = None
+        vazio = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
+        if rbac.tem_func(ctx, "VER_LOGS"):
+            if ctx.get("is_admin") is not True:
+                escopo = sorted(ctx.get("ambientes") or ())
+                if not escopo:
+                    return vazio
+        else:
+            if repo_filtros.get("solicitante", ctx["login"]) != ctx["login"]:
+                return vazio
+            repo_filtros["solicitante"] = ctx["login"]
+        resultado = self._tickets.listar(filtros=repo_filtros, pagina=pagina, tamanho=tamanho,
+                                         escopo_ambientes=escopo)
+        info = ui_helpers.paginacao_info(pagina, tamanho, resultado["total"])
+        if not resultado["itens"] and info["pagina"] != resultado["pagina"]:
+            resultado = self._tickets.listar(filtros=repo_filtros, pagina=info["pagina"], tamanho=tamanho,
+                                             escopo_ambientes=escopo)
+        agora = self._tickets.agora()
+        nomes = self._nomes_scripts()
+        itens = []
+        for t in resultado["itens"]:
+            itens.append({
+                "id": t["id"],
+                "script_nome": nomes.get(t["script_id"], "#%s" % t["script_id"]),
+                "ambiente": t["ambiente"],
+                "status": t["status"],
+                "status_motivo": t.get("status_motivo"),
+                "descricao_motivo": ui_helpers.descricao_motivo(t.get("status_motivo")),
+                "cancel_requested": t.get("cancel_requested") == "S",
+                "prioridade": t["prioridade"],
+                "solicitante": t["solicitante"],
+                "origem": "agendamento" if t.get("agendamento_id") is not None else "manual",
+                "created_at": t.get("created_at"),
+                "started_at": t.get("started_at"),
+                "duracao": _duracao(t, agora),
+            })
+        return {"itens": itens, "total": resultado["total"], "pagina": resultado["pagina"],
+                "tamanho": resultado["tamanho"]}
+
+    def _respostas_exibicao(self, ticket_id, snap):
+        sensiveis = set((snap or {}).get("sensiveis") or ())
+        linhas = []
+        for r in self._tickets.respostas(ticket_id):
+            try:
+                prm = self._catalogo.parametros_obter(r["parametro_id"])
+                codigo, rotulo = prm["codigo"], prm.get("label") or prm["codigo"]
+                sensivel = prm.get("sensivel") == "S" or codigo in sensiveis
+            except RepoNaoEncontrado:
+                codigo = rotulo = "#%s" % r["parametro_id"]
+                sensivel = True
+            valor = r.get("valor_resposta")
+            linhas.append({"codigo": codigo, "rotulo": rotulo, "sensivel": sensivel,
+                           "valor": params_compiler.MASCARA if sensivel and valor not in (None, "") else valor})
+        return linhas
+
+    def _pode_reexecutar_regra(self, ctx, ticket):
+        # README §4.3.C: EXEC_SCRIPT reexecuta tickets proprios; admin, qualquer ticket visivel.
+        return (ctx.get("is_admin") is True and rbac.tem_func(ctx, "EXEC_SCRIPT")) or self._proprio(ctx, ticket)
+
+    def _pode_executar_vigente(self, ctx, ticket):
+        try:
+            script = self._catalogo.scripts_obter(ticket["script_id"])
+        except RepoNaoEncontrado:
+            return False
+        amb = self._ambiente_por_nome(ticket["ambiente"])
+        if amb is None:
+            return False
+        ok, _motivo = rbac.pode_executar(ctx, script, amb, self._catalogo.homologacao_obter(script["id"]))
+        return ok
+
+    def detalhe(self, ctx, ticket_id):
+        """Ticket visivel com snapshot (sensiveis mascarados), respostas, cadeia e acoes permitidas.
+
+        Lanca RepoNaoEncontrado se nao existir ou estiver fora do escopo do perfil.
+        """
+        ticket = self._ticket_visivel(ctx, ticket_id, "TICKET_DETALHE")
+        snap = _snapshot(ticket)
         try:
             script_nome = self._catalogo.scripts_obter(ticket["script_id"])["nome"]
         except RepoNaoEncontrado:
-            script_nome = "#%s" % ticket["script_id"]
+            script_nome = (snap or {}).get("script_nome") or "#%s" % ticket["script_id"]
+
+        pai = None
+        if ticket.get("parent_ticket_id") is not None:
+            try:
+                original = self._tickets.obter(ticket["parent_ticket_id"])
+            except RepoNaoEncontrado:
+                original = None
+            if original is not None and self._pode_ver(ctx, original):
+                pai = {"id": original["id"], "status": original["status"]}
+        filhos = [{"id": f["id"], "status": f["status"]}
+                  for f in self._tickets.listar(filtros={"parent_ticket_id": ticket["id"]}, pagina=1,
+                                                tamanho=_FILHOS_MAX)["itens"]
+                  if self._pode_ver(ctx, f)]
+        filhos.sort(key=lambda f: f["id"])
+
+        status = ticket["status"]
+        cancel_requested = ticket.get("cancel_requested") == "S"
+        pode_cancelar = (status in STATUS_CANCELAVEIS and not cancel_requested
+                         and rbac.pode_cancelar(ctx, ticket))
+        pode_reexecutar = (status in STATUS_TERMINAIS and self._pode_reexecutar_regra(ctx, ticket)
+                           and self._pode_executar_vigente(ctx, ticket))
+        argv = _argv_exibicao(snap)
+        snapshot = None
+        if snap is not None:
+            snapshot = dict((k, snap.get(k)) for k in ("versao", "comando_real", "path_file", "script_real",
+                                                       "tipo_param", "compilado_em"))
         return {
             "id": ticket["id"],
+            "script_id": ticket["script_id"],
             "script_nome": script_nome,
             "ambiente": ticket["ambiente"],
-            "status": ticket["status"],
+            "status": status,
+            "status_motivo": ticket.get("status_motivo"),
+            "descricao_motivo": ui_helpers.descricao_motivo(ticket.get("status_motivo")),
+            "return_code": ticket.get("return_code"),
+            "cancel_requested": cancel_requested,
             "prioridade": ticket["prioridade"],
             "solicitante": ticket["solicitante"],
-            "scheduled_at": ticket.get("scheduled_at"),
+            "origem": "agendamento" if ticket.get("agendamento_id") is not None else "manual",
+            "agendamento_id": ticket.get("agendamento_id"),
+            "agente_id": ticket.get("agente_id"),
+            "process_id": ticket.get("process_id"),
             "created_at": ticket.get("created_at"),
+            "scheduled_at": ticket.get("scheduled_at"),
+            "started_at": ticket.get("started_at"),
+            "heartbeat_at": ticket.get("heartbeat_at"),
+            "finished_at": ticket.get("finished_at"),
+            "duracao": _duracao(ticket, self._tickets.agora()),
+            "log_truncado": ticket.get("log_truncado") == "S",
+            "snapshot": snapshot,
+            "argv_para_exibicao": argv,
+            "comando_exibicao": " ".join(shlex.quote(str(t)) for t in argv) if argv else None,
+            "respostas": self._respostas_exibicao(ticket["id"], snap),
+            "pai": pai,
+            "filhos": filhos,
+            "pode_cancelar": pode_cancelar,
+            "pode_reexecutar": pode_reexecutar,
         }
 
+    # --------------------------------------------------- cancelar/reexecutar
+
+    def cancelar(self, ctx, ip, ticket_id):
+        """Cancelamento pelo no web (README §5.6) com auditoria TICKET_CANCELAR no repositorio.
+
+        Retorna 'TERMINAL' | 'CANCELADO' | 'SINALIZADO' (mensagens em MSG_CANCELAMENTO).
+        Lanca RepoNaoEncontrado (fora do escopo) e AcessoNegado (sem CANC_TICKET/proprio).
+        """
+        ticket = self._ticket_visivel(ctx, ticket_id, "TICKET_CANCELAR")
+        if not rbac.pode_cancelar(ctx, ticket):
+            self._negar(ctx, "SEM_CANCELAMENTO", ticket["script_id"], ticket["ambiente"])
+        try:
+            resultado = self._tickets.solicitar_cancelamento(ticket["id"], ctx["login"], ip)
+        except RepoErro:
+            self._log.exception("falha ao cancelar ticket (ticket=%s login=%s)", ticket["id"], ctx["login"],
+                                extra={"acao": "TICKET_CANCELAR"})
+            raise
+        self._log.info("cancelamento de ticket (ticket=%s login=%s resultado=%s ip=%s)",
+                       ticket["id"], ctx["login"], resultado, ip, extra={"acao": "TICKET_CANCELAR"})
+        return resultado
+
+    def _ticket_reexecutavel(self, ctx, ticket_id):
+        ticket = self._ticket_visivel(ctx, ticket_id, "TICKET_REEXECUTAR")
+        if ticket["status"] not in STATUS_TERMINAIS:
+            self._negar(ctx, "TICKET_NAO_TERMINAL", ticket["script_id"], ticket["ambiente"])
+        if not self._pode_reexecutar_regra(ctx, ticket):
+            self._negar(ctx, rbac.Motivo.SEM_FUNC, ticket["script_id"], ticket["ambiente"])
+        return ticket
+
+    def _respostas_originais(self, ticket, vinculos):
+        """Respostas resolvidas do original (tbsss_ticket_resp) indexadas pelo codigo vigente."""
+        codigos = dict((v["parametro_id"], v["codigo"]) for v in vinculos)
+        respostas = {}
+        for r in self._tickets.respostas(ticket["id"]):
+            codigo = codigos.get(r["parametro_id"])
+            if codigo is not None and r.get("valor_resposta") is not None:
+                respostas[codigo] = r["valor_resposta"]
+        return respostas
+
+    def _recompilar(self, ctx, ticket):
+        script, amb = self._autorizar(ctx, ticket["script_id"], ticket["ambiente"])
+        respostas = self._respostas_originais(ticket, self._vinculos(script["id"]))
+        agora = self._tickets.agora()
+        erros = collections.OrderedDict()
+        prio = self._prioridade(ctx, str(ticket["prioridade"]), erros)
+        snapshot, resolvidos, vinculos = self._compilar(ctx, script, amb, respostas, agora, erros)
+        return script, amb, prio, respostas, snapshot, resolvidos, vinculos, erros
+
+    def reexecutar(self, ctx, ip, ticket_id):
+        """Novo ticket com parent_ticket_id, recompilado contra o catalogo vigente (README §5.5).
+
+        Retorna o novo ID. Lanca RepoNaoEncontrado (fora do escopo), AcessoNegado (regra de
+        reexecucao ou pode_executar vigente) e ErroReexecucao (recompilacao ou gravacao).
+        """
+        original = self._ticket_reexecutavel(ctx, ticket_id)
+        script, amb, prio, _resp, snapshot, resolvidos, vinculos, erros = self._recompilar(ctx, original)
+        if erros:
+            raise ErroReexecucao(original["id"], dict(erros))
+        novo_id, erros = self._gravar(ctx, ip, script, amb, prio, None, snapshot, resolvidos, vinculos,
+                                      original["id"])
+        if novo_id is None:
+            raise ErroReexecucao(original["id"], erros)
+        return novo_id
+
+    def preparar_reexecucao(self, ctx, ticket_id):
+        """Dados para reabrir o questionario a partir de um ticket (fallback da reexecucao).
+
+        Retorna {ticket_id, script_id, ambiente, prioridade, valores, erros}; valores de
+        parametros sensiveis nunca sao devolvidos.
+        """
+        original = self._ticket_reexecutavel(ctx, ticket_id)
+        script, amb, prio, respostas, _snap, _resolv, vinculos, erros = self._recompilar(ctx, original)
+        sensiveis = set(v["codigo"] for v in vinculos if v.get("sensivel") == "S")
+        return {
+            "ticket_id": original["id"],
+            "script_id": script["id"],
+            "ambiente": amb["nome"],
+            "prioridade": str(prio if prio is not None else PRIORIDADE_PADRAO),
+            "valores": dict((k, v) for k, v in respostas.items() if k not in sensiveis),
+            "erros": dict(erros),
+        }
 
 _padrao = None
 _lock_padrao = threading.Lock()
@@ -437,11 +812,42 @@ def previa(ctx, script_id, ambiente, respostas):
     return _servico().previa(ctx, script_id, ambiente, respostas)
 
 
-def criar_ticket(ctx, ip, script_id, ambiente, respostas, prioridade, scheduled_at):
+def criar_ticket(ctx, ip, script_id, ambiente, respostas, prioridade, scheduled_at, reexecucao_de=None):
     """Criacao do ticket (servico padrao)."""
-    return _servico().criar_ticket(ctx, ip, script_id, ambiente, respostas, prioridade, scheduled_at)
+    return _servico().criar_ticket(ctx, ip, script_id, ambiente, respostas, prioridade, scheduled_at,
+                                   reexecucao_de)
 
 
-def ticket_resumo(ctx, ticket_id):
-    """Resumo do ticket para o placeholder de detalhe (servico padrao)."""
-    return _servico().ticket_resumo(ctx, ticket_id)
+def pode_consultar(ctx):
+    """Acesso a lista de tickets (servico padrao)."""
+    return _servico().pode_consultar(ctx)
+
+
+def opcoes_filtro(ctx):
+    """Opcoes dos filtros da lista de tickets (servico padrao)."""
+    return _servico().opcoes_filtro(ctx)
+
+
+def listar(ctx, filtros, pagina, tamanho):
+    """Lista de tickets no escopo do perfil (servico padrao)."""
+    return _servico().listar(ctx, filtros, pagina, tamanho)
+
+
+def detalhe(ctx, ticket_id):
+    """Detalhe do ticket visivel (servico padrao)."""
+    return _servico().detalhe(ctx, ticket_id)
+
+
+def cancelar(ctx, ip, ticket_id):
+    """Cancelamento pelo no web (servico padrao)."""
+    return _servico().cancelar(ctx, ip, ticket_id)
+
+
+def reexecutar(ctx, ip, ticket_id):
+    """Reexecucao do ticket (servico padrao)."""
+    return _servico().reexecutar(ctx, ip, ticket_id)
+
+
+def preparar_reexecucao(ctx, ticket_id):
+    """Questionario pre-preenchido para reexecucao com erro (servico padrao)."""
+    return _servico().preparar_reexecucao(ctx, ticket_id)

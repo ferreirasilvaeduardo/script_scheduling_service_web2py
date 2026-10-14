@@ -182,7 +182,7 @@ class BaseRepoContractTest(object):
             "status": "PENDING",
             "prioridade": 2,
         }, [])
-        res1 = tck.solicitar_cancelamento(tid_pend)
+        res1 = tck.solicitar_cancelamento(tid_pend, "admin", "10.0.0.1")
         self.assertEqual(res1, "CANCELADO")
         t1 = tck.obter(tid_pend)
         self.assertEqual(t1["status"], "CANCELLED")
@@ -190,7 +190,7 @@ class BaseRepoContractTest(object):
         self.assertEqual(t1["status_motivo"], "CANCEL_USER")
 
         # 2. Já TERMINAL (CANCELLED) -> TERMINAL
-        res2 = tck.solicitar_cancelamento(tid_pend)
+        res2 = tck.solicitar_cancelamento(tid_pend, "admin", "10.0.0.1")
         self.assertEqual(res2, "TERMINAL")
 
         # 3. RUNNING -> SINALIZADO
@@ -201,7 +201,7 @@ class BaseRepoContractTest(object):
             "status": "RUNNING",
             "prioridade": 2,
         }, [])
-        res3 = tck.solicitar_cancelamento(tid_run)
+        res3 = tck.solicitar_cancelamento(tid_run, "admin", "10.0.0.1")
         self.assertEqual(res3, "SINALIZADO")
         t3 = tck.obter(tid_run)
         self.assertEqual(t3["status"], "RUNNING")

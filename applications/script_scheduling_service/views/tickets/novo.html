@@ -89,6 +89,13 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
     {{=csrf_campo()}}
     <input type="hidden" name="script_id" value="{{=form['script']['id']}}">
     <input type="hidden" name="ambiente" value="{{=form['ambiente']['nome']}}">
+    {{if reexecucao_de:}}
+    <input type="hidden" name="reexecucao_de" value="{{=reexecucao_de}}">
+    <div class="alert alert-info sss-alerta" role="note">
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
+      <span>Reexecução do <a href="{{=URL(c='tickets', f='detalhe', args=[reexecucao_de])}}">ticket #{{=reexecucao_de}}</a>. As respostas originais foram carregadas; valores sigilosos não são exibidos e precisam ser informados novamente, se necessário.</span>
+    </div>
+    {{pass}}
 
     {{if erros:}}
     <div class="alert alert-danger sss-alerta-lista" role="alert" id="resumo-erros">

@@ -21,6 +21,29 @@ def status_info(status):
     return {"rotulo": rotulo, "classe": classe, "icone": icone}
 
 
+_MOTIVOS = {
+    "EXIT_OK": u"Execução concluída com código de saída 0.",
+    "EXIT_ERROR": u"O script terminou com código de saída diferente de zero.",
+    "KILLED_SIGNAL": u"O processo foi encerrado por um sinal não solicitado (código 128 + número do sinal).",
+    "TIMEOUT": u"A execução excedeu o tempo limite e foi encerrada.",
+    "NODE_OFFLINE": u"O agente responsável ficou sem sinal de vida e o ticket foi encerrado por outro agente.",
+    "ORPHAN_PROCESS": u"O processo não foi encontrado no agente dono (processo órfão).",
+    "FENCED": u"O agente perdeu a conexão com o banco e interrompeu a execução para evitar duplicidade.",
+    "PRECHECK_FAILED": u"A pré-validação do script falhou antes da execução.",
+    "SPAWN_ERROR": u"Não foi possível iniciar o processo do script.",
+    "LOG_LIMIT": u"A saída do script excedeu o limite de log e a execução foi encerrada.",
+    "SHUTDOWN": u"O agente foi desligado durante a execução.",
+    "CANCEL_USER": u"Execução cancelada por solicitação do usuário.",
+}
+
+
+def descricao_motivo(status_motivo):
+    """Texto em portugues do status_motivo (README §5.2); None/vazio vira None, codigo desconhecido e citado."""
+    if status_motivo is None or status_motivo == "":
+        return None
+    return _MOTIVOS.get(status_motivo, u"Motivo não catalogado (%s)." % status_motivo)
+
+
 def formatar_data(dt):
     """Formata datetime como dd/mm/aaaa HH:MM:SS; None vira '-'."""
     if dt is None:

@@ -63,6 +63,8 @@
           for (i = 0; i < campos.length; i++) {
             if (campos[i].tagName === 'SELECT') {
               campos[i].selectedIndex = 0;
+            } else if (campos[i].type === 'checkbox') {
+              campos[i].checked = false;
             } else {
               campos[i].value = '';
             }

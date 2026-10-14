@@ -4,8 +4,9 @@
 #   filtros -- dict:
 #     id        -- prefixo ASCII dos ids dos campos (ex.: 'filtro-tickets');
 #     url_base  -- tupla (controller, funcao) da listagem;
-#     campos    -- lista de {nome, rotulo, tipo: 'texto' | 'select' | 'data', valor,
-#                  opcoes (select: lista de (valor, rotulo); a primeira deve ser a opção "todos")};
+#     campos    -- lista de {nome, rotulo, tipo: 'texto' | 'select' | 'data' | 'multipla', valor,
+#                  opcoes (select: lista de (valor, rotulo); a primeira deve ser a opção "todos";
+#                  multipla: lista de (valor, rotulo) em caixas de seleção, valor = lista marcada)};
 #     preservar -- opcional; dict de parâmetros mantidos ao filtrar e ao limpar (ex.: tamanho).
 # 'pagina' nunca é preservada: filtrar ou limpar volta para a página 1.
 _flt_preservar = dict((k, v) for k, v in (filtros.get('preservar') or {}).items() if k != 'pagina')
@@ -18,6 +19,17 @@ _flt_url = URL(c=filtros['url_base'][0], f=filtros['url_base'][1])
   {{_flt_id = filtros['id'] + '-' + _flt_c['nome']
   _flt_valor = _flt_c.get('valor')
   _flt_valor = '' if _flt_valor is None else _flt_valor}}
+  {{if _flt_c['tipo'] == 'multipla':}}
+  <fieldset class="sss-filtros-campo sss-filtros-multipla">
+    <legend class="form-label">{{=_flt_c['rotulo']}}</legend>
+    {{for _flt_i, (_flt_ov, _flt_or) in enumerate(_flt_c.get('opcoes', ())):}}
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="checkbox" id="{{=_flt_id}}-{{=_flt_i}}" name="{{=_flt_c['nome']}}" value="{{=_flt_ov}}"{{if _flt_ov in (_flt_valor or ()):}} checked{{pass}}>
+      <label class="form-check-label" for="{{=_flt_id}}-{{=_flt_i}}">{{=_flt_or}}</label>
+    </div>
+    {{pass}}
+  </fieldset>
+  {{else:}}
   <div class="sss-filtros-campo">
     <label class="form-label" for="{{=_flt_id}}">{{=_flt_c['rotulo']}}</label>
     {{if _flt_c['tipo'] == 'select':}}
@@ -32,6 +44,7 @@ _flt_url = URL(c=filtros['url_base'][0], f=filtros['url_base'][1])
     <input class="form-control form-control-sm" type="search" id="{{=_flt_id}}" name="{{=_flt_c['nome']}}" value="{{=_flt_valor}}" maxlength="100">
     {{pass}}
   </div>
+  {{pass}}
   {{pass}}
   <div class="sss-filtros-acoes">
     <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>

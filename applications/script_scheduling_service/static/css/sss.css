@@ -736,6 +736,108 @@
   margin: 0;
 }
 
+/* Tickets (lista e detalhe) */
+.sss-linha-running > * {
+  background-color: var(--sss-status-running-bg);
+}
+
+/* Destaque nao depende so de cor: barra lateral na primeira celula. */
+.sss-linha-running > :first-child {
+  box-shadow: inset 4px 0 0 var(--sss-status-running-bd);
+}
+
+.sss-motivo {
+  display: block;
+  margin-top: 0.125rem;
+  color: var(--sss-text-muted);
+  font-family: var(--bs-font-monospace);
+  font-size: var(--sss-fs-xs);
+}
+
+.sss-filtros-multipla {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.sss-filtros-multipla .form-check-inline {
+  margin-right: var(--sss-esp-2);
+}
+
+.sss-titulo-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sss-esp-2) var(--sss-esp-4);
+}
+
+.sss-card-titulo-texto {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.sss-auto-situacao {
+  font-weight: 400;
+  font-size: var(--sss-fs-xs);
+}
+
+.sss-detalhe-cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sss-esp-2);
+}
+
+.sss-detalhe-cabecalho .sss-page-titulo {
+  display: flex;
+  align-items: center;
+  gap: var(--sss-esp-2);
+}
+
+.sss-detalhe-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 0 var(--sss-esp-3);
+}
+
+.sss-linha-tempo {
+  margin: 0;
+  list-style: none;
+}
+
+.sss-linha-tempo li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sss-esp-3);
+  padding: var(--sss-esp-1) 0 var(--sss-esp-1) var(--sss-esp-3);
+  border-left: 2px solid var(--sss-border);
+}
+
+.sss-linha-tempo .sss-tempo-feito {
+  border-left-color: var(--sss-status-running-bd);
+}
+
+.sss-tempo-rotulo {
+  font-weight: 600;
+}
+
+.sss-tempo-pendente .sss-tempo-rotulo,
+.sss-tempo-pendente .sss-tempo-valor {
+  color: var(--sss-text-muted);
+}
+
+.sss-lista-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sss-esp-1) var(--sss-esp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 /* Rodape */
 .sss-footer {
   display: flex;

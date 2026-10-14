@@ -53,6 +53,22 @@ class TestStatusInfo(unittest.TestCase):
             self.assertIn(ui_helpers.status_info(status)["icone"], ids)
 
 
+class TestDescricaoMotivo(unittest.TestCase):
+
+    MOTIVOS = ("EXIT_OK", "EXIT_ERROR", "KILLED_SIGNAL", "TIMEOUT", "NODE_OFFLINE", "ORPHAN_PROCESS", "FENCED",
+               "PRECHECK_FAILED", "SPAWN_ERROR", "LOG_LIMIT", "SHUTDOWN", "CANCEL_USER")
+
+    def test_catalogo_completo_do_readme(self):
+        textos = [ui_helpers.descricao_motivo(m) for m in self.MOTIVOS]
+        self.assertTrue(all(textos))
+        self.assertEqual(len(set(textos)), len(self.MOTIVOS))
+
+    def test_vazio_e_desconhecido(self):
+        self.assertIsNone(ui_helpers.descricao_motivo(None))
+        self.assertIsNone(ui_helpers.descricao_motivo(""))
+        self.assertIn("OWNERSHIP_LOST", ui_helpers.descricao_motivo("OWNERSHIP_LOST"))
+
+
 class TestFormatarData(unittest.TestCase):
 
     def test_formato(self):

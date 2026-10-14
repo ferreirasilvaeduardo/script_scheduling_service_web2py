@@ -1,0 +1,67 @@
+{{
+# Fragmento da tabela de tickets: resposta de tickets/lista.load (atualização automática) e
+# incluído por tickets/lista.html. O controller aplica os mesmos guardas nas duas extensões.
+# Variáveis: resultado, erro, pagina, tamanho, query_params.
+import ui_helpers
+_lt_itens = resultado['itens']
+_lt_ncol = 10
+total = resultado['total']
+url_base = ('tickets', 'lista')
+}}<div data-sss-fragmento="tickets">
+  <div class="table-responsive">
+    <table class="table table-sm sss-tabela mb-0">
+      <caption class="visually-hidden">Tickets{{if erro:}} (erro ao carregar){{pass}}</caption>
+      <thead>
+        <tr>
+          <th scope="col" class="sss-col-num">#</th>
+          <th scope="col">Script</th>
+          <th scope="col">Ambiente</th>
+          <th scope="col">Status</th>
+          <th scope="col" class="sss-col-num">Prioridade</th>
+          <th scope="col">Solicitante</th>
+          <th scope="col" class="sss-col-data">Criado em</th>
+          <th scope="col" class="sss-col-data">Início</th>
+          <th scope="col" class="sss-col-num">Duração</th>
+          <th scope="col"><span class="visually-hidden">Ações</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {{if erro:}}
+        <tr>
+          <td colspan="{{=_lt_ncol}}" class="sss-tabela-estado">
+            <div class="alert alert-danger mb-0" role="alert">
+              <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
+              <span>{{=erro}}</span>
+            </div>
+          </td>
+        </tr>
+        {{elif not _lt_itens:}}
+        <tr>
+          <td colspan="{{=_lt_ncol}}" class="sss-tabela-estado sss-tabela-vazia">Nenhum ticket encontrado para os filtros informados.</td>
+        </tr>
+        {{else:}}
+        {{for _lt in _lt_itens:}}
+        <tr{{if _lt['status'] == 'RUNNING':}} class="sss-linha-running"{{pass}}>
+          <td class="sss-col-num sss-mono"><a href="{{=URL(c='tickets', f='detalhe', args=[_lt['id']], extension=False)}}">{{=_lt['id']}}</a></td>
+          <td class="sss-mono">{{=_lt['script_nome']}}{{if _lt['origem'] == 'agendamento':}} <span class="badge text-bg-secondary" title="Criado por regra de agendamento">agend.</span>{{pass}}</td>
+          <td>{{=_lt['ambiente']}}</td>
+          <td>
+            {{status = _lt['status']
+            status_motivo = None}}{{include 'components/badge_status.html'}}
+            {{if _lt['status_motivo']:}}<span class="sss-motivo" title="{{=_lt['descricao_motivo']}}">{{=_lt['status_motivo']}}</span>{{pass}}
+            {{if _lt['cancel_requested'] and _lt['status'] == 'RUNNING':}}<span class="sss-motivo">Cancelamento solicitado</span>{{pass}}
+          </td>
+          <td class="sss-col-num">{{=_lt['prioridade']}}</td>
+          <td>{{=_lt['solicitante']}}</td>
+          <td class="sss-col-data">{{=ui_helpers.formatar_data(_lt['created_at'])}}</td>
+          <td class="sss-col-data">{{=ui_helpers.formatar_data(_lt['started_at'])}}</td>
+          <td class="sss-col-num">{{=_lt['duracao']}}</td>
+          <td><a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='detalhe', args=[_lt['id']], extension=False)}}" aria-label="Detalhes do ticket {{=_lt['id']}}">Detalhes</a></td>
+        </tr>
+        {{pass}}
+        {{pass}}
+      </tbody>
+    </table>
+  </div>
+  {{include 'components/paginacao.html'}}
+</div>
