@@ -269,7 +269,7 @@ class TestMontarMenu(unittest.TestCase):
         self.assertEqual(itens[0], {
             "codigo": "EXEC_SCRIPT",
             "rotulo": u"Disparar Scripts",
-            "rota": ("tickets", "disparo"),
+            "rota": ("tickets", "novo"),
             "icone": "icon-play",
             "ativo": False,
         })

@@ -7,7 +7,7 @@ Funcao pura: nao importa gluon nem acessa repositorios.
 # CANC_TICKET e uma acao dentro das telas de tickets, nao uma tela propria; fica fora do menu.
 _CATALOGO = (
     ("OPERACAO", u"Operação", (
-        ("EXEC_SCRIPT", u"Disparar Scripts", "tickets", "disparo", "icon-play"),
+        ("EXEC_SCRIPT", u"Disparar Scripts", "tickets", "novo", "icon-play"),
         ("VER_LOGS", u"Consultar Logs", "tickets", "lista", "icon-list"),
     )),
     ("ADMIN", u"Administração", (

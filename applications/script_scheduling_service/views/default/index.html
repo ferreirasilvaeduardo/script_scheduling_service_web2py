@@ -5,6 +5,19 @@
   <p class="sss-page-sub">Perfil {{=ctx['perfil_nome']}}. Escolha uma das funcionalidades disponíveis.</p>
 </div>
 
+{{if pode_disparar:}}
+<section class="sss-card sss-card-destaque" aria-labelledby="painel-disparo">
+  <h2 class="sss-card-titulo" id="painel-disparo">Disparar script</h2>
+  <div class="sss-card-corpo sss-escolhido">
+    <span>Escolha um script e um ambiente autorizados, preencha o questionário e crie o ticket de execução.</span>
+    <a class="btn btn-sm btn-primary" href="{{=URL(c='tickets', f='novo')}}">
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-play"></use></svg>
+      <span>Disparar script</span>
+    </a>
+  </div>
+</section>
+{{pass}}
+
 {{if not menu:}}
 <section class="sss-card">
   <div class="sss-card-corpo">Seu perfil ainda não tem funcionalidades liberadas. Procure um administrador.</div>

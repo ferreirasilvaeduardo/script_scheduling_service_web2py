@@ -5,6 +5,10 @@
 class RepoTickets(object):
     """Contrato abstrato para gestao do ciclo de vida e logs dos tickets."""
 
+    def agora(self):
+        """Instante corrente do banco (SYSDATE), sem microssegundos, para regras de negocio."""
+        raise NotImplementedError
+
     def criar(self, ticket, respostas):
         """Cria ticket e respostas vinculadas em transacao unica e retorna o ID criado."""
         raise NotImplementedError

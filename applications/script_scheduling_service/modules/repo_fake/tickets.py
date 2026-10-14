@@ -13,6 +13,10 @@ class RepoTicketsFake(RepoTickets):
     def __init__(self, store):
         self._store = store
 
+    def agora(self):
+        """Emula SYSDATE com o relogio injetavel do armazem."""
+        return self._store.agora()
+
     def criar(self, ticket, respostas):
         """Cria ticket e respostas vinculadas atomicamente, com auditoria TICKET_CRIAR."""
         with self._store.lock_tickets:

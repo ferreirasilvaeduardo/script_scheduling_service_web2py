@@ -1,0 +1,31 @@
+{{extend 'layout.html'}}
+{{
+# Placeholder do detalhe do ticket (a tela completa é o F3.3).
+import ui_helpers
+}}
+<div class="sss-page-header">
+  <h1 class="sss-page-titulo">Ticket #{{=ticket['id']}}</h1>
+  <p class="sss-page-sub">A visualização completa do ticket (log e histórico) estará disponível em breve.</p>
+</div>
+
+<section class="sss-card" aria-labelledby="titulo-resumo-ticket">
+  <h2 class="sss-card-titulo" id="titulo-resumo-ticket">Resumo</h2>
+  <dl class="sss-card-corpo sss-resumo">
+    <dt>Status</dt>
+    <dd>{{status = ticket['status']
+    status_motivo = None}}{{include 'components/badge_status.html'}}</dd>
+    <dt>Script</dt>
+    <dd class="sss-mono">{{=ticket['script_nome']}}</dd>
+    <dt>Ambiente</dt>
+    <dd>{{=ticket['ambiente']}}</dd>
+    <dt>Prioridade</dt>
+    <dd>{{=ticket['prioridade']}}</dd>
+    <dt>Solicitante</dt>
+    <dd>{{=ticket['solicitante']}}</dd>
+    <dt>Agendado para</dt>
+    <dd>{{=ui_helpers.formatar_data(ticket['scheduled_at'])}}</dd>
+    <dt>Criado em</dt>
+    <dd>{{=ui_helpers.formatar_data(ticket['created_at'])}}</dd>
+  </dl>
+</section>
+<p><a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='novo')}}">Disparar outro script</a></p>

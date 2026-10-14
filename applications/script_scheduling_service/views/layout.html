@@ -89,6 +89,9 @@
 
 <script defer src="{{=URL('static', 'js/app/sss.js')}}"></script>
 <script defer src="{{=URL('static', 'js/app/componentes.js')}}"></script>
+{{for _sss_js in response.sss_scripts or []:}}
+<script defer src="{{=URL('static', _sss_js)}}"></script>
+{{pass}}
 <script defer src="{{=URL('static', 'js/alpine.min.js')}}"></script>
 </body>
 </html>

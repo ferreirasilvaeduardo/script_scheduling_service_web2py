@@ -5,6 +5,7 @@ import time
 from gluon import current
 
 import auth_service
+import rbac
 import security
 
 
@@ -18,7 +19,7 @@ def _texto_post(nome, limite):
 def index():
     ctx = _exigir_login()
     response.title = u"Início — SSS"
-    return dict(ctx=ctx, menu=response.sss_menu)
+    return dict(ctx=ctx, menu=response.sss_menu, pode_disparar=rbac.tem_func(ctx, "EXEC_SCRIPT"))
 
 
 def login():
