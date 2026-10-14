@@ -1,0 +1,438 @@
+/* SSS - tokens de design e estilos proprios sobre o Bootstrap 5.3.8.
+   Pares texto/fundo dos tokens foram escolhidos para contraste WCAG AA (>= 4.5:1). */
+
+:root {
+  --sss-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif;
+  --sss-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace;
+  --sss-fs-base: 0.875rem;
+  --sss-fs-sm: 0.8125rem;
+  --sss-fs-xs: 0.75rem;
+
+  --sss-esp-1: 0.25rem;
+  --sss-esp-2: 0.5rem;
+  --sss-esp-3: 0.75rem;
+  --sss-esp-4: 1rem;
+  --sss-esp-5: 1.5rem;
+  --sss-raio: 4px;
+
+  --sss-bg: #f3f4f6;
+  --sss-surface: #ffffff;
+  --sss-surface-alt: #f9fafb;
+  --sss-border: #d1d5db;
+  --sss-text: #111827;
+  --sss-text-muted: #4b5563;
+
+  --sss-accent: #0b5cad;
+  --sss-accent-text: #ffffff;
+  --sss-link: #0b5cad;
+  --sss-focus: #0b5cad;
+
+  --sss-header-bg: #1f2937;
+  --sss-header-text: #f9fafb;
+  --sss-header-muted: #d1d5db;
+  --sss-header-focus: #93c5fd;
+
+  --sss-banner-bg: #fde68a;
+  --sss-banner-text: #78350f;
+  --sss-banner-border: #d97706;
+
+  --sss-status-pending-bg: #fef3c7;
+  --sss-status-pending-fg: #92400e;
+  --sss-status-pending-bd: #f59e0b;
+  --sss-status-running-bg: #dbeafe;
+  --sss-status-running-fg: #1e40af;
+  --sss-status-running-bd: #3b82f6;
+  --sss-status-success-bg: #dcfce7;
+  --sss-status-success-fg: #166534;
+  --sss-status-success-bd: #22c55e;
+  --sss-status-failed-bg: #fee2e2;
+  --sss-status-failed-fg: #991b1b;
+  --sss-status-failed-bd: #ef4444;
+  --sss-status-cancelled-bg: #f3f4f6;
+  --sss-status-cancelled-fg: #374151;
+  --sss-status-cancelled-bd: #9ca3af;
+  --sss-status-unknown-bg: #ffffff;
+  --sss-status-unknown-fg: #374151;
+  --sss-status-unknown-bd: #6b7280;
+
+  --sss-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sss-bg: #0f1115;
+    --sss-surface: #181b21;
+    --sss-surface-alt: #1f232b;
+    --sss-border: #374151;
+    --sss-text: #e5e7eb;
+    --sss-text-muted: #9ca3af;
+
+    --sss-accent: #0b5cad;
+    --sss-accent-text: #ffffff;
+    --sss-link: #8ab8f0;
+    --sss-focus: #8ab8f0;
+
+    --sss-header-bg: #0b0d10;
+    --sss-header-text: #f3f4f6;
+    --sss-header-muted: #c3c8d0;
+    --sss-header-focus: #8ab8f0;
+
+    --sss-banner-bg: #78350f;
+    --sss-banner-text: #fef3c7;
+    --sss-banner-border: #f59e0b;
+
+    --sss-status-pending-bg: #3b2506;
+    --sss-status-pending-fg: #fcd34d;
+    --sss-status-pending-bd: #b45309;
+    --sss-status-running-bg: #102a4c;
+    --sss-status-running-fg: #93c5fd;
+    --sss-status-running-bd: #2563eb;
+    --sss-status-success-bg: #0d2e1a;
+    --sss-status-success-fg: #86efac;
+    --sss-status-success-bd: #16a34a;
+    --sss-status-failed-bg: #3a1212;
+    --sss-status-failed-fg: #fca5a5;
+    --sss-status-failed-bd: #dc2626;
+    --sss-status-cancelled-bg: #23262d;
+    --sss-status-cancelled-fg: #d1d5db;
+    --sss-status-cancelled-bd: #6b7280;
+    --sss-status-unknown-bg: #181b21;
+    --sss-status-unknown-fg: #d1d5db;
+    --sss-status-unknown-bd: #9ca3af;
+
+    --sss-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* Base */
+.sss-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  margin: 0;
+  font-family: var(--sss-font-sans);
+  font-size: var(--sss-fs-base);
+  background-color: var(--sss-bg);
+  color: var(--sss-text);
+}
+
+.sss-body a {
+  color: var(--sss-link);
+}
+
+:focus-visible {
+  outline: 2px solid var(--sss-focus);
+  outline-offset: 2px;
+}
+
+.sss-icon {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  vertical-align: -0.125em;
+}
+
+.sss-icon-lg {
+  width: 1.375em;
+  height: 1.375em;
+}
+
+.sss-mono {
+  font-family: var(--sss-font-mono);
+  font-size: var(--sss-fs-sm);
+}
+
+/* Acessibilidade: atalho para o conteudo, visivel apenas com foco */
+.sss-skip-link {
+  position: absolute;
+  top: -100px;
+  left: var(--sss-esp-2);
+  z-index: 2000;
+  padding: var(--sss-esp-2) var(--sss-esp-3);
+  background-color: var(--sss-accent);
+  color: var(--sss-accent-text);
+  border-radius: var(--sss-raio);
+}
+
+.sss-body .sss-skip-link:focus {
+  top: var(--sss-esp-2);
+  color: var(--sss-accent-text);
+}
+
+/* Faixa de ambiente nao produtivo (sss_env != PROD) */
+.sss-env-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sss-esp-2);
+  padding: var(--sss-esp-1) var(--sss-esp-3);
+  background-color: var(--sss-banner-bg);
+  color: var(--sss-banner-text);
+  border-bottom: 2px solid var(--sss-banner-border);
+  font-size: var(--sss-fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Cabecalho e navegacao */
+.sss-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sss-esp-2) var(--sss-esp-5);
+  padding: var(--sss-esp-2) var(--sss-esp-4);
+  background-color: var(--sss-header-bg);
+  color: var(--sss-header-text);
+}
+
+.sss-header :focus-visible {
+  outline-color: var(--sss-header-focus);
+}
+
+.sss-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sss-esp-2);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.sss-brand-nome {
+  color: var(--sss-header-muted);
+  font-weight: 400;
+  font-size: var(--sss-fs-sm);
+  letter-spacing: 0;
+}
+
+.sss-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sss-esp-2) var(--sss-esp-5);
+}
+
+.sss-nav-secao {
+  display: flex;
+  align-items: center;
+  gap: var(--sss-esp-2);
+}
+
+.sss-nav-titulo {
+  color: var(--sss-header-muted);
+  font-size: var(--sss-fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sss-nav-lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sss-esp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sss-body .sss-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: var(--sss-esp-1) var(--sss-esp-2);
+  border-radius: var(--sss-raio);
+  color: var(--sss-header-text);
+  font-size: var(--sss-fs-sm);
+  text-decoration: none;
+}
+
+.sss-body .sss-nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--sss-header-text);
+}
+
+.sss-body .sss-nav-link[aria-current="page"] {
+  background-color: var(--sss-accent);
+  color: var(--sss-accent-text);
+  font-weight: 600;
+}
+
+/* Conteudo */
+.sss-main {
+  flex: 1 0 auto;
+  padding: var(--sss-esp-4);
+}
+
+.sss-main:focus {
+  outline: none;
+}
+
+.sss-page-header {
+  margin-bottom: var(--sss-esp-3);
+}
+
+.sss-page-titulo {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.sss-page-sub {
+  margin: var(--sss-esp-1) 0 0;
+  color: var(--sss-text-muted);
+  font-size: var(--sss-fs-sm);
+}
+
+.sss-card {
+  margin-bottom: var(--sss-esp-3);
+  background-color: var(--sss-surface);
+  border: 1px solid var(--sss-border);
+  border-radius: var(--sss-raio);
+}
+
+.sss-card-titulo {
+  margin: 0;
+  padding: var(--sss-esp-2) var(--sss-esp-3);
+  border-bottom: 1px solid var(--sss-border);
+  background-color: var(--sss-surface-alt);
+  font-size: var(--sss-fs-sm);
+  font-weight: 600;
+}
+
+.sss-card-corpo {
+  padding: var(--sss-esp-3);
+}
+
+.sss-status-lista,
+.sss-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sss-esp-2);
+}
+
+/* O cinza padrao do Bootstrap (#6c757d) fica abaixo de AA sobre a superficie escura. */
+.sss-body .btn-outline-secondary {
+  --bs-btn-color: var(--sss-text-muted);
+  --bs-btn-border-color: var(--sss-border);
+  --bs-btn-hover-color: var(--sss-text);
+  --bs-btn-hover-bg: var(--sss-surface-alt);
+  --bs-btn-hover-border-color: var(--sss-text-muted);
+  --bs-btn-active-color: var(--sss-text);
+  --bs-btn-active-bg: var(--sss-surface-alt);
+  --bs-btn-active-border-color: var(--sss-text-muted);
+}
+
+/* Status: cor + icone + texto, nunca apenas cor (README §5.1) */
+.sss-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sss-esp-1);
+  padding: 0.125rem var(--sss-esp-2);
+  border: 1px solid;
+  border-radius: var(--sss-raio);
+  font-size: var(--sss-fs-xs);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.sss-status-pending { background-color: var(--sss-status-pending-bg); color: var(--sss-status-pending-fg); border-color: var(--sss-status-pending-bd); }
+.sss-status-running { background-color: var(--sss-status-running-bg); color: var(--sss-status-running-fg); border-color: var(--sss-status-running-bd); }
+.sss-status-success { background-color: var(--sss-status-success-bg); color: var(--sss-status-success-fg); border-color: var(--sss-status-success-bd); }
+.sss-status-failed { background-color: var(--sss-status-failed-bg); color: var(--sss-status-failed-fg); border-color: var(--sss-status-failed-bd); }
+.sss-status-cancelled { background-color: var(--sss-status-cancelled-bg); color: var(--sss-status-cancelled-fg); border-color: var(--sss-status-cancelled-bd); }
+.sss-status-unknown { background-color: var(--sss-status-unknown-bg); color: var(--sss-status-unknown-fg); border-color: var(--sss-status-unknown-bd); border-style: dashed; }
+
+/* Tabelas densas */
+.sss-tabela {
+  --bs-table-bg: var(--sss-surface);
+  --bs-table-color: var(--sss-text);
+  --bs-table-hover-bg: var(--sss-surface-alt);
+  --bs-table-border-color: var(--sss-border);
+  font-size: var(--sss-fs-sm);
+}
+
+.sss-tabela > :not(caption) > * > * {
+  padding: 0.3rem var(--sss-esp-2);
+  vertical-align: middle;
+}
+
+.sss-tabela thead th {
+  background-color: var(--sss-surface-alt);
+  color: var(--sss-text-muted);
+  font-size: var(--sss-fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.sss-tabela tbody tr:hover > * {
+  background-color: var(--sss-surface-alt);
+}
+
+.sss-col-id { width: 6rem; }
+.sss-col-data { width: 11rem; }
+.sss-col-num { text-align: right; white-space: nowrap; }
+
+/* Toasts */
+.sss-toasts {
+  position: fixed;
+  right: var(--sss-esp-4);
+  bottom: var(--sss-esp-4);
+  z-index: 1090;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sss-esp-2);
+  width: min(24rem, calc(100vw - 2rem));
+}
+
+.sss-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sss-esp-2);
+  padding: var(--sss-esp-2) var(--sss-esp-3);
+  background-color: var(--sss-surface);
+  color: var(--sss-text);
+  border: 1px solid var(--sss-border);
+  border-left-width: 4px;
+  border-radius: var(--sss-raio);
+  box-shadow: var(--sss-shadow);
+  font-size: var(--sss-fs-sm);
+}
+
+.sss-toast-msg {
+  flex: 1 1 auto;
+}
+
+.sss-toast-sucesso { border-left-color: var(--sss-status-success-bd); }
+.sss-toast-erro { border-left-color: var(--sss-status-failed-bd); }
+.sss-toast-alerta { border-left-color: var(--sss-status-pending-bd); }
+.sss-toast-info { border-left-color: var(--sss-status-running-bd); }
+
+.sss-toast-fechar {
+  padding: 0.125rem;
+  border: 0;
+  border-radius: var(--sss-raio);
+  background: transparent;
+  color: var(--sss-text-muted);
+  line-height: 1;
+}
+
+.sss-toast-fechar:hover {
+  color: var(--sss-text);
+}
+
+/* Rodape */
+.sss-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--sss-esp-2);
+  padding: var(--sss-esp-2) var(--sss-esp-4);
+  border-top: 1px solid var(--sss-border);
+  background-color: var(--sss-surface);
+  color: var(--sss-text-muted);
+  font-size: var(--sss-fs-xs);
+}

@@ -1,0 +1,68 @@
+{{extend 'layout.html'}}
+{{icones = URL('static', 'img/icons.svg')}}
+
+<div class="sss-page-header">
+  <h1 class="sss-page-titulo">Shell de desenvolvimento</h1>
+  <p class="sss-page-sub">Layout, tokens de design, ícones e navegação sob CSP estrita. Menu simulado: perfil não administrador com EXEC_SCRIPT, VER_LOGS e CAD_AGENDAMENTOS.</p>
+</div>
+
+<section class="sss-card" aria-labelledby="sec-status">
+  <h2 class="sss-card-titulo" id="sec-status">Estados do ticket</h2>
+  <div class="sss-card-corpo sss-status-lista">
+    {{for t in tickets:}}
+    <span class="sss-status {{=t['status']['classe']}}">
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=t['status']['icone']}}"></use></svg>
+      <span>{{=t['status']['rotulo']}}</span>
+    </span>
+    {{pass}}
+    <span class="sss-status {{=status_desconhecido['classe']}}">
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=status_desconhecido['icone']}}"></use></svg>
+      <span>{{=status_desconhecido['rotulo']}}</span>
+    </span>
+  </div>
+</section>
+
+<section class="sss-card" aria-labelledby="sec-tickets">
+  <h2 class="sss-card-titulo" id="sec-tickets">Tickets (tabela compacta)</h2>
+  <div class="table-responsive">
+    <table class="table table-sm sss-tabela mb-0">
+      <thead>
+        <tr>
+          <th scope="col" class="sss-col-id">Ticket</th>
+          <th scope="col">Script</th>
+          <th scope="col">Ambiente</th>
+          <th scope="col">Status</th>
+          <th scope="col" class="sss-col-data">Início</th>
+          <th scope="col" class="sss-col-num">Duração</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{for t in tickets:}}
+        <tr>
+          <td class="sss-mono">{{=t['id']}}</td>
+          <td class="sss-mono">{{=t['script']}}</td>
+          <td>{{=t['ambiente']}}</td>
+          <td>
+            <span class="sss-status {{=t['status']['classe']}}">
+              <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=t['status']['icone']}}"></use></svg>
+              <span>{{=t['status']['rotulo']}}</span>
+            </span>
+          </td>
+          <td class="sss-mono">{{=t['inicio']}}</td>
+          <td class="sss-mono sss-col-num">{{=t['duracao']}}</td>
+        </tr>
+        {{pass}}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="sss-card" aria-labelledby="sec-toast">
+  <h2 class="sss-card-titulo" id="sec-toast">Notificações</h2>
+  <div class="sss-card-corpo sss-acoes" x-data="toastDemo">
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="sucesso" data-mensagem="Ticket 1023 concluído com sucesso." @click="disparar">Sucesso</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="erro" data-mensagem="Ticket 1022 falhou: tempo limite excedido." @click="disparar">Erro</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="alerta" data-mensagem="Agendamento pausado após falhas consecutivas." @click="disparar">Alerta</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="info" data-mensagem="Agente srv-linux-prod-01 ativo." @click="disparar">Informação</button>
+  </div>
+</section>

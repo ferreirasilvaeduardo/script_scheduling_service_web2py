@@ -656,3 +656,27 @@ def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None):
             registrar_segredo(amb.password)
 
     return segredos
+
+
+_CONFIG_CACHE = None
+
+
+def caminho_config_padrao():
+    """Caminho canonico do config.ini da aplicacao (instance/config.ini)."""
+    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(app_dir, "instance", "config.ini")
+
+
+def obter_config():
+    """Retorna a configuracao validada, carregada uma unica vez por processo."""
+    global _CONFIG_CACHE
+    if _CONFIG_CACHE is None:
+        # Corrida entre threads do servidor web apenas recarrega o mesmo arquivo imutavel.
+        _CONFIG_CACHE = carregar(caminho_config_padrao())
+    return _CONFIG_CACHE
+
+
+def reset_config_cache():
+    """Descarta a configuracao em cache (uso em testes)."""
+    global _CONFIG_CACHE
+    _CONFIG_CACHE = None

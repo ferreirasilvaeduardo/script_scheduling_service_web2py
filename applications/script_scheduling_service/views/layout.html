@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{{=response.title or 'Script Scheduling Service'}}</title>
+  <link rel="icon" type="image/svg+xml" href="{{=URL('static', 'img/favicon.svg')}}">
+  <link rel="stylesheet" href="{{=URL('static', 'bootstrap/bootstrap.min.css')}}">
+  <link rel="stylesheet" href="{{=URL('static', 'css/sss.css')}}">
+</head>
+<body class="sss-body">
+{{icones = URL('static', 'img/icons.svg')}}
+<a class="sss-skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+{{if response.sss_env != 'PROD':}}
+<div class="sss-env-banner" role="note">
+  <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
+  <span>Ambiente {{=response.sss_env}} — dados e execuções não produtivos</span>
+</div>
+{{pass}}
+
+<header class="sss-header">
+  <span class="sss-brand">
+    <svg class="sss-icon sss-icon-lg" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-logo"></use></svg>
+    <span>SSS</span>
+    <span class="sss-brand-nome">Script Scheduling Service</span>
+  </span>
+  <nav class="sss-nav" aria-label="Menu principal">
+    {{for secao in response.sss_menu:}}
+    <div class="sss-nav-secao">
+      <span class="sss-nav-titulo" id="menu-{{=secao['secao'].lower()}}">{{=secao['titulo']}}</span>
+      <ul class="sss-nav-lista" aria-labelledby="menu-{{=secao['secao'].lower()}}">
+        {{for item in secao['itens']:}}
+        <li>
+          {{if item['ativo']:}}
+          <a class="sss-nav-link" href="{{=URL(c=item['rota'][0], f=item['rota'][1])}}" aria-current="page">
+          {{else:}}
+          <a class="sss-nav-link" href="{{=URL(c=item['rota'][0], f=item['rota'][1])}}">
+          {{pass}}
+            <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=item['icone']}}"></use></svg>
+            <span>{{=item['rotulo']}}</span>
+          </a>
+        </li>
+        {{pass}}
+      </ul>
+    </div>
+    {{pass}}
+  </nav>
+</header>
+
+<main id="conteudo" class="sss-main" tabindex="-1">
+  {{include}}
+</main>
+
+<div class="sss-toasts" x-data="toast" aria-live="polite">
+  <template x-for="t in itens" :key="t.id">
+    <div class="sss-toast" :class="t.classe" role="status">
+      <span class="sss-toast-msg" x-text="t.mensagem"></span>
+      <button type="button" class="sss-toast-fechar" aria-label="Fechar notificação" @click="fechar">
+        <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-close"></use></svg>
+      </button>
+    </div>
+  </template>
+</div>
+
+<footer class="sss-footer">
+  <span>Script Scheduling Service</span>
+  <span>Ambiente <strong>{{=response.sss_env}}</strong> · Versão {{=response.sss_versao}}</span>
+</footer>
+
+<script defer src="{{=URL('static', 'js/app/sss.js')}}"></script>
+<script defer src="{{=URL('static', 'js/alpine.min.js')}}"></script>
+</body>
+</html>

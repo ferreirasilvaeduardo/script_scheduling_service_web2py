@@ -47,7 +47,7 @@ def _resolver_config(config_param=None):
     if cfg is None:
         try:
             from gluon import current
-            cfg = getattr(current, "sss_config", None)
+            cfg = getattr(current, "sss_cfg", None) or getattr(current, "sss_config", None)
         except ImportError:
             pass
 
