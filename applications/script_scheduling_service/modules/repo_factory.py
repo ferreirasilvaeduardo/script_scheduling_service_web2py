@@ -4,9 +4,9 @@
 Seleciona e instancia os repositorios FAKE ou ORACLE conforme configuracao.
 Garante singletons por processo e aplica a trava de ambiente para o backend FAKE.
 """
-import os
 import threading
 
+from gluon import current
 
 from repo_fake.agendamentos import RepoAgendamentosFake
 from repo_fake.agentes import RepoAgentesFake
@@ -40,37 +40,21 @@ def reset_singletons():
 
 
 def _resolver_config(config_param=None):
-    """Resolve tupla (data_backend, sss_env) a partir dos parametros, override ou current."""
+    """Resolve (data_backend, sss_env) do parametro, do override ou de current.sss_cfg.
+
+    Sem configuracao, ou sem as chaves [app], falha: backend e ambiente nunca sao
+    presumidos, pois um padrao silencioso poderia ativar o FAKE fora de DEV.
+    """
     cfg = config_param
     if cfg is None:
         cfg = _config_override
     if cfg is None:
-        try:
-            from gluon import current
-            cfg = getattr(current, "sss_cfg", None) or getattr(current, "sss_config", None)
-        except ImportError:
-            pass
+        cfg = getattr(current, "sss_cfg", None)
+    if cfg is None:
+        raise RuntimeError("Configuracao ausente: informe config ou carregue models/00_config.py (current.sss_cfg)")
 
-    backend = None
-    env = None
-
-    if cfg is not None:
-        if hasattr(cfg, "__getitem__"):
-            try:
-                backend = cfg["app"]["data_backend"]
-            except (KeyError, TypeError):
-                pass
-            try:
-                env = cfg["app"]["sss_env"]
-            except (KeyError, TypeError):
-                pass
-
-    if not backend:
-        backend = os.environ.get("SSS_DATA_BACKEND", "FAKE")
-    if not env:
-        env = os.environ.get("SSS_ENV", "DEV")
-
-    return str(backend).upper(), str(env).upper()
+    app = cfg["app"]
+    return str(app["data_backend"]).upper(), str(app["sss_env"]).upper()
 
 
 def obter(nome, config=None):

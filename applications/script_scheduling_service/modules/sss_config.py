@@ -638,22 +638,15 @@ def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None):
 
     segredos = Segredos(oracle_password=oracle_password, cookie_key=cookie_key, ambientes=ambientes)
 
-    # Registro automatico em masking.py se disponivel
-    try:
-        from masking import registrar_segredo
-    except ImportError:
-        try:
-            from .masking import registrar_segredo
-        except (ImportError, ValueError):
-            registrar_segredo = None
+    # Import tardio para nao acoplar carregar() ao masking. Sem masking.py a carga de
+    # segredos falha (ImportError): segredo sem mascaramento nunca chega aos logs (AGENTS §3.3).
+    from masking import registrar_segredo
 
-    if registrar_segredo:
-        if oracle_password:
-            registrar_segredo(oracle_password)
-        if cookie_key:
-            registrar_segredo(cookie_key)
-        for amb in ambientes.values():
-            registrar_segredo(amb.password)
+    if oracle_password:
+        registrar_segredo(oracle_password)
+    registrar_segredo(cookie_key)
+    for amb in ambientes.values():
+        registrar_segredo(amb.password)
 
     return segredos
 

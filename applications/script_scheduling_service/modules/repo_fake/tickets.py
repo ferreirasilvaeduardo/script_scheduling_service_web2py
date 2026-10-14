@@ -207,17 +207,12 @@ class RepoTicketsFake(RepoTickets):
             t = self._store.tickets[id]
             log_output = t.get("log_output") or ""
 
-            try:
-                off = int(offset)
-            except (ValueError, TypeError):
-                off = 0
+            # Valor nao numerico propaga ValueError/TypeError, como o bind NUMBER no Oracle.
+            off = int(offset)
             if off < 0:
                 off = 0
 
-            try:
-                mc = int(max_chars)
-            except (ValueError, TypeError):
-                mc = 65536
+            mc = int(max_chars)
             if mc < 1:
                 mc = 65536
 

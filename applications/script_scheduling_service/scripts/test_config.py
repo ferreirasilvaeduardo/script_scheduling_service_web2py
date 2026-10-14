@@ -11,8 +11,11 @@ import secrets
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
+import types
 import unittest
+from unittest import mock
 
 import _testenv
 import sss_config
@@ -27,6 +30,14 @@ class TestConfig(unittest.TestCase):
         self.app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.web2py_root = os.path.dirname(os.path.dirname(self.app_dir))
         self.example_ini = os.path.join(self.app_dir, "instance", "config.ini.example")
+
+        # masking.py ainda nao existe; o substituto registra o que carregar_segredos entrega.
+        self.mascarados = []
+        masking_stub = types.ModuleType("masking")
+        masking_stub.registrar_segredo = self.mascarados.append
+        patcher = mock.patch.dict(sys.modules, {"masking": masking_stub})
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         if os.path.exists(self.tmp_dir):
@@ -387,6 +398,49 @@ class TestConfig(unittest.TestCase):
         # Em PROD e ORACLE -> erro por [oracle] ausente
         with self.assertRaises(sss_config.ConfigErro):
             sss_config.carregar_segredos(caminho_sec, sss_env="PROD", data_backend="ORACLE")
+
+    def test_segredos_carregados_sao_registrados_no_masking(self):
+        """Regressao: todo segredo carregado e entregue a masking.registrar_segredo (AGENTS §3.3)."""
+        caminho_sec, tokens = self._criar_secrets_temporario(modo=0o600)
+        sss_config.carregar_segredos(caminho_sec)
+        self.assertEqual(sorted(self.mascarados), sorted(tokens.values()))
+
+        del self.mascarados[:]
+        caminho_sec, tokens = self._criar_secrets_temporario(modo=0o600, incluir_oracle=False)
+        sss_config.carregar_segredos(caminho_sec, sss_env="DEV", data_backend="FAKE")
+        self.assertEqual(sorted(self.mascarados),
+                         sorted([tokens["cookie_key"], tokens["prod_pwd"], tokens["hml_pwd"]]))
+
+    def test_carga_de_segredos_sem_masking_falha(self):
+        """Regressao: sem masking.py a carga falha, em vez de seguir sem mascaramento."""
+        caminho_sec, _ = self._criar_secrets_temporario(modo=0o600)
+        with mock.patch.dict(sys.modules, {"masking": None}):
+            with self.assertRaises(ImportError):
+                sss_config.carregar_segredos(caminho_sec)
+
+    def _cfg_com_log_dir(self, log_dir):
+        cfg = sss_config.carregar(self.example_ini)
+        return cfg._replace(logging=cfg.logging._replace(log_dir=log_dir))
+
+    def test_log_dir_criado_com_0750_independente_da_umask(self):
+        """O chmod apos makedirs garante 0o750 mesmo com umask restritiva."""
+        log_dir = os.path.join(self.tmp_dir, "logs_novos")
+        umask_anterior = os.umask(0o077)
+        try:
+            logger = sss_logging.configurar("teste_umask", self._cfg_com_log_dir(log_dir))
+        finally:
+            os.umask(umask_anterior)
+        for h in list(logger.handlers):
+            logger.removeHandler(h)
+            h.close()
+        self.assertEqual(stat.S_IMODE(os.stat(log_dir).st_mode), 0o750)
+
+    def test_falha_no_chmod_do_log_dir_propaga(self):
+        """Regressao: falha no chmod do log_dir aborta a configuracao (antes: except OSError: pass)."""
+        log_dir = os.path.join(self.tmp_dir, "logs_chmod")
+        with mock.patch("sss_logging.os.chmod", side_effect=PermissionError(1, "Operation not permitted")):
+            with self.assertRaises(OSError):
+                sss_logging.configurar("teste_chmod", self._cfg_com_log_dir(log_dir))
 
     def test_formato_log_readme_13(self):
         """Valida que o log gerado segue fielmente o formato do README §13."""

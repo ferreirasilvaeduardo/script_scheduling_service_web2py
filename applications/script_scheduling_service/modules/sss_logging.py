@@ -76,10 +76,8 @@ def configurar(nome_log, cfg):
     log_dir = cfg.logging.log_dir
     if not os.path.exists(log_dir):
         os.makedirs(log_dir, mode=0o750, exist_ok=True)
-        try:
-            os.chmod(log_dir, 0o750)
-        except OSError:
-            pass
+        # makedirs aplica a umask ao mode; o chmod garante 0o750. Falha aqui aborta a subida.
+        os.chmod(log_dir, 0o750)
 
     filename = nome_log if nome_log.endswith(".log") else (nome_log + ".log")
     filepath = os.path.join(log_dir, filename)

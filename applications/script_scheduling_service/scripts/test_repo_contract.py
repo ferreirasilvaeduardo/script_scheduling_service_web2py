@@ -15,15 +15,19 @@ Valida requisitos do prompt F0.4, README §2.5 e AGENTS.md §4, §5.5, §7:
 11. repo_factory com trava de ambiente (sss_env != DEV com FAKE lanca RuntimeError);
 12. repo_factory com ORACLE lanca NotImplementedError;
 13. Nenhum import repo_fake fora de repo_factory.py;
-14. FAKE nao expos nenhum metodo publico alem dos definidos no contrato (paridade estrita).
+14. FAKE nao expos nenhum metodo publico alem dos definidos no contrato (paridade estrita);
+15. Regressao fail-fast: repo_factory sem configuracao e FAKE com entrada nao numerica.
 """
 import copy
 import datetime
 import os
 import re
 import unittest
+from unittest import mock
 
 import _testenv  # noqa: F401
+from gluon import current
+
 import repo_factory
 from repo_agendamentos import RepoAgendamentos
 from repo_agentes import RepoAgentes
@@ -421,3 +425,64 @@ class TestRepoFactoryEIntegridade(unittest.TestCase):
 
         u2 = usr.obter_por_login("admin")
         self.assertNotEqual(u2["nome"], "Mutacao Indevida Externa")
+
+
+class TestRegressaoFailFast(unittest.TestCase):
+    """Regressao: fabrica sem padrao silencioso e FAKE sem coercao silenciosa de entrada."""
+
+    def setUp(self):
+        self._sss_cfg_anterior = getattr(current, "sss_cfg", None)
+        current.sss_cfg = None
+        repo_factory.configurar(None)
+        repo_factory.reset_singletons()
+
+    def tearDown(self):
+        current.sss_cfg = self._sss_cfg_anterior
+        repo_factory.configurar(None)
+        repo_factory.reset_singletons()
+
+    def test_sem_configuracao_falha_mesmo_com_variaveis_de_ambiente(self):
+        with mock.patch.dict(os.environ, {"SSS_DATA_BACKEND": "FAKE", "SSS_ENV": "DEV"}):
+            with self.assertRaises(RuntimeError) as ctx:
+                repo_factory.obter("usuarios")
+        self.assertIn("Configuracao ausente", str(ctx.exception))
+
+    def test_configuracao_incompleta_falha(self):
+        for cfg in ({}, {"app": {"sss_env": "DEV"}}, {"app": {"data_backend": "FAKE"}}):
+            with self.subTest(cfg=cfg):
+                repo_factory.configurar(cfg)
+                with self.assertRaises(KeyError):
+                    repo_factory.obter("usuarios")
+
+    def test_usa_current_sss_cfg_quando_sem_override(self):
+        current.sss_cfg = {"app": {"data_backend": "FAKE", "sss_env": "DEV"}}
+        self.assertIsInstance(repo_factory.obter("usuarios"), RepoUsuarios)
+
+        repo_factory.reset_singletons()
+        current.sss_cfg = {"app": {"data_backend": "FAKE", "sss_env": "PROD"}}
+        with self.assertRaises(RuntimeError):
+            repo_factory.obter("usuarios")
+
+    def test_paginacao_rejeita_entrada_nao_numerica(self):
+        repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        usr = repo_factory.obter("usuarios")
+        with self.assertRaises(ValueError):
+            usr.listar(pagina="abc")
+        with self.assertRaises(TypeError):
+            usr.listar(tamanho=[])
+        pag = usr.listar(pagina=None, tamanho=None)
+        self.assertEqual((pag["pagina"], pag["tamanho"]), (1, 20))
+        pag = usr.listar(pagina="0", tamanho="-5")
+        self.assertEqual((pag["pagina"], pag["tamanho"]), (1, 20))
+
+    def test_log_ler_rejeita_entrada_nao_numerica(self):
+        repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        tck = repo_factory.obter("tickets")
+        with self.assertRaises(ValueError):
+            tck.log_ler(11, offset="x", max_chars=20)
+        with self.assertRaises(TypeError):
+            tck.log_ler(11, offset=None, max_chars=20)
+        with self.assertRaises(ValueError):
+            tck.log_ler(11, offset=0, max_chars="muito")
+        self.assertEqual(tck.log_ler(11, offset=-3, max_chars=5)[0],
+                         tck.log_ler(11, offset=0, max_chars=5)[0])

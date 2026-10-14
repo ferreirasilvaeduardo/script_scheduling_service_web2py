@@ -74,7 +74,7 @@ class TestEnvSkeleton(unittest.TestCase):
         """Verifica regras obrigatorias no .gitignore da raiz."""
         gitignore_path = os.path.join(self.web2py_root, ".gitignore")
         self.assertTrue(os.path.isfile(gitignore_path), ".gitignore nao encontrado na raiz")
-        with open(gitignore_path, "r") as f:
+        with open(gitignore_path, "r", encoding="utf-8") as f:
             content = f.read()
 
         required_patterns = [
@@ -97,7 +97,7 @@ class TestEnvSkeleton(unittest.TestCase):
         """Verifica se docs/AMBIENTE_DEV.md existe e nao contem URLs externas/CDN."""
         doc_path = os.path.join(self.app_dir, "docs", "AMBIENTE_DEV.md")
         self.assertTrue(os.path.isfile(doc_path), "docs/AMBIENTE_DEV.md ausente")
-        with open(doc_path, "r") as f:
+        with open(doc_path, "r", encoding="utf-8") as f:
             content = f.read()
         import re
         urls = re.findall(r"https?://[^\s)]+", content)

@@ -106,14 +106,9 @@ class FakeDataStore(object):
 def paginar(itens, pagina=1, tamanho=20):
     """Utilitario padrao para paginacao deterministica com retorno em dict."""
     total = len(itens)
-    try:
-        p = int(pagina) if pagina is not None else 1
-    except (ValueError, TypeError):
-        p = 1
-    try:
-        t = int(tamanho) if tamanho is not None else 20
-    except (ValueError, TypeError):
-        t = 20
+    # Valor nao numerico propaga ValueError/TypeError: o controller valida a entrada antes.
+    p = 1 if pagina is None else int(pagina)
+    t = 20 if tamanho is None else int(tamanho)
 
     if p < 1:
         p = 1
