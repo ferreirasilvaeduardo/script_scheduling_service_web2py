@@ -27,7 +27,9 @@ response.headers.update({
     ),
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
-    "Referrer-Policy": "no-referrer",
+    # 'no-referrer' faz o navegador enviar "Origin: null" em POST de formulario (spec Fetch),
+    # o que derruba a checagem de Origin abaixo; 'same-origin' omite o Referer para fora do site.
+    "Referrer-Policy": "same-origin",
 })
 
 # O web2py recria o cookie de dados da sessao sem HttpOnly/Secure apos o controller;

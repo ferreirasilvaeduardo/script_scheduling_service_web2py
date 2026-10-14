@@ -1681,12 +1681,11 @@ class WSGIWorker(Worker):
                 # If chunked, send our final chunk length
                 self.conn.sendall(b"0\r\n\r\n")
 
+        # SSLCertVerificationError (3.7+) e subclasse de SSLError e ja cai aqui; referencia-la
+        # no 3.6 levanta AttributeError ao avaliar o except e mascara SocketTimeout/BadRequest.
         except ssl.SSLError as err:
             if __debug__:
                 self.err_log.debug(f"SSLError: {err}")
-        except ssl.SSLCertVerificationError as err:
-            if __debug__:
-                self.err_log.debug(f"SSLCertVerificationError: {err}")
 
         # Don't capture exceptions here.  The Worker class handles
         # them appropriately.

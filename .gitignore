@@ -25,3 +25,10 @@ applications/script_scheduling_service/instance/config.ini
 *.log
 secrets.cfg
 .env
+# Launchers locais de desenvolvimento (podem conter dados da maquina do desenvolvedor)
+bin/sss-web-*_v*.sh
+# Artefatos de execucao do servidor web2py (parameters_<porta>.py guarda o hash da senha do admin)
+/parameters_*.py
+/httpserver.pid
+/cron.master
+/welcome.w2p

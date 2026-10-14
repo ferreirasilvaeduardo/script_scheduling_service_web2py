@@ -212,7 +212,7 @@ password = ...
   * `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'`
   * `X-Content-Type-Options: nosniff`
   * `X-Frame-Options: DENY`
-  * `Referrer-Policy: no-referrer`
+  * `Referrer-Policy: same-origin`. Com `no-referrer`, o navegador envia `Origin: null` em POST de formulário (especificação Fetch), o que inviabiliza a checagem de `Origin` descrita acima. `same-origin` continua omitindo o `Referer` em navegação para fora do site.
   * `Cache-Control: no-store` em páginas autenticadas
 * **IP de origem:** usa `request.env.remote_addr`. O `X-Forwarded-For` só é aceito se o `remote_addr` constar em `trusted_proxies`.
 * **XSS:**

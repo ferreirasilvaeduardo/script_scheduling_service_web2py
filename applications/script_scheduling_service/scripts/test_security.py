@@ -299,5 +299,19 @@ class TestIpOrigem(unittest.TestCase):
     def test_ipv6(self):
         self.assertEqual(security.ip_origem("::1", None, ()), "::1")
 
+
+class TestCabecalhoReferrer(unittest.TestCase):
+    """Regressao: 'no-referrer' faz o navegador enviar Origin: null e todo POST de formulario vira 403."""
+
+    def test_referrer_policy_same_origin(self):
+        caminho = os.path.join(os.path.dirname(_MODULES), "models", "10_security.py")
+        with open(caminho, encoding="utf-8") as f:
+            codigo = f.read()
+        self.assertRegex(codigo, r'"Referrer-Policy":\s*"same-origin"')
+        self.assertNotRegex(codigo, r'"Referrer-Policy":\s*"no-referrer"')
+
+    def test_origin_null_continua_rejeitado(self):
+        self.assertFalse(security.origem_permitida("null", None, ["http://127.0.0.1:8000"]))
+
 if __name__ == "__main__":
     unittest.main()
