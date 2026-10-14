@@ -113,3 +113,50 @@ python -m unittest discover -s scripts -p "test_*.py"
 ```
 
 O módulo `scripts/_testenv.py` é responsável por configurar o `sys.path` dinamicamente para permitir a importação dos módulos da aplicação (`modules/`) e do web2py (`gluon`) sem caminhos fixos.
+
+---
+
+## 6. Árvore de Scripts de Exemplo (`dev/scripts/`)
+
+A pasta `dev/scripts/` contém scripts de exemplo **sem lógica perigosa**, usados pelo `path_guard` (README §8.5), pela compilação do snapshot (README §6) e, mais adiante, pelos testes do executor:
+
+| Arquivo | Comportamento |
+|---|---|
+| `faturamento/carga_faturas.py` | Imprime os argumentos e sai com 0 |
+| `faturamento/conciliacao.sh` | Gera N linhas de saída (`$1`, padrão 10) |
+| `infra/limpeza.sh` | Sai com 3 se receber `--falhar`; caso contrário, 0 |
+| `infra/longo.py` | Dorme em ciclos e imprime progresso (`[ciclos] [intervalo_s]`), para testes de timeout e cancelamento |
+| `relatorios/exporta.sh` | Imprime os argumentos posicionais |
+| `carga_diaria.py`, `relatorio_mensal.py`, `validacao_fiscal.py`, `cleanup_tmp.sh`, `sync_tabelas.sh`, `backup_extra.sh` | Correspondem aos `path_file` do seed FAKE e imprimem os argumentos |
+
+### 6.1 Dono e permissões exigidos pelo `path_guard`
+
+O `path_guard` verifica o script, **cada diretório** entre a base e o script, e a própria base. Para cada um deles exige que:
+
+* o dono seja um UID de `script_owner_uids`;
+* não haja escrita para grupo nem para outros (`st_mode & 0o022 == 0`);
+* o UID do agente **não** consiga escrever (`os.access(p, os.W_OK)` falso).
+
+Em DEV, o agente roda com o **seu** UID, que também é o dono dos arquivos. Por isso, os modos `0644` (scripts) e `0755` (diretórios) **não** servem: o bit de escrita do dono torna `os.access(W_OK)` verdadeiro, e o `path_guard` rejeita com `GRAVAVEL_PELO_AGENTE`. Use modos somente leitura: **`0444` para scripts e `0555` para diretórios, inclusive a base.**
+
+O Git não preserva esses modos. Por isso, aponte `base_script_dir` para uma **cópia** da árvore:
+
+```bash
+cd applications/script_scheduling_service
+BASE="$HOME/sss_dev_scripts"
+rm -rf "$BASE" 2>/dev/null || { chmod -R u+w "$BASE" && rm -rf "$BASE"; }
+cp -r dev/scripts "$BASE"
+rm -f "$BASE/.gitkeep"
+find "$BASE" -type f -exec chmod 0444 {} +
+find "$BASE" -type d -exec chmod 0555 {} +
+id -u   # UID a incluir em script_owner_uids
+```
+
+Em `instance/config.ini`, seção `[agent]`:
+
+```ini
+base_script_dir = /home/<usuario>/sss_dev_scripts
+script_owner_uids = 0,<seu UID>
+```
+
+Para alterar um script da cópia, devolva a escrita temporariamente (`chmod -R u+w "$BASE"`) e volte aos modos acima antes de executar. Executar como `root` não funciona com essa checagem, porque `os.access(W_OK)` é sempre verdadeiro para root.
