@@ -1,0 +1,47 @@
+{{
+# Componente: campo de formulário com label, ajuda e erro por campo.
+# Variáveis de entrada:
+#   campo -- dict:
+#     nome        -- nome ASCII do campo (vira id 'campo-<nome>');
+#     rotulo      -- texto do label;
+#     tipo        -- 'text' | 'number' | 'date' | 'select' | 'textarea' (padrão 'text');
+#     valor       -- valor atual (reapresentado após erro);
+#     ajuda       -- opcional; texto de ajuda;
+#     erro        -- opcional; mensagem de erro do campo (aplica is-invalid + invalid-feedback);
+#     obrigatorio -- opcional; bool;
+#     opcoes      -- select: lista de (valor, rotulo).
+#   foco_campo -- nome do primeiro campo inválido (ui_helpers.primeiro_campo_invalido);
+#                 esse campo recebe autofocus, sem JavaScript.
+_fc_id = 'campo-' + campo['nome']
+_fc_tipo = campo.get('tipo') or 'text'
+_fc_valor = campo.get('valor')
+_fc_valor = '' if _fc_valor is None else _fc_valor
+_fc_erro = campo.get('erro')
+_fc_desc = []
+if campo.get('ajuda'):
+    _fc_desc.append(_fc_id + '-ajuda')
+pass
+if _fc_erro:
+    _fc_desc.append(_fc_id + '-erro')
+pass
+_fc_classe = ('form-select' if _fc_tipo == 'select' else 'form-control') + (' is-invalid' if _fc_erro else '')
+_fc_attrs = {'id': _fc_id, 'name': campo['nome'], 'class': _fc_classe}
+if _fc_desc:
+    _fc_attrs['aria-describedby'] = ' '.join(_fc_desc)
+pass
+}}<div class="sss-form-campo mb-3">
+  <label class="form-label" for="{{=_fc_id}}">{{=campo['rotulo']}}{{if campo.get('obrigatorio'):}} <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span>{{pass}}</label>
+  {{if _fc_tipo == 'select':}}
+  <select{{for _fc_k in sorted(_fc_attrs):}} {{=_fc_k}}="{{=_fc_attrs[_fc_k]}}"{{pass}}{{if campo.get('obrigatorio'):}} required{{pass}}{{if _fc_erro:}} aria-invalid="true"{{pass}}{{if _fc_erro and campo['nome'] == foco_campo:}} autofocus{{pass}}>
+    {{for _fc_ov, _fc_or in campo.get('opcoes', ()):}}
+    <option value="{{=_fc_ov}}"{{if str(_fc_ov) == str(_fc_valor):}} selected{{pass}}>{{=_fc_or}}</option>
+    {{pass}}
+  </select>
+  {{elif _fc_tipo == 'textarea':}}
+  <textarea rows="3"{{for _fc_k in sorted(_fc_attrs):}} {{=_fc_k}}="{{=_fc_attrs[_fc_k]}}"{{pass}}{{if campo.get('obrigatorio'):}} required{{pass}}{{if _fc_erro:}} aria-invalid="true"{{pass}}{{if _fc_erro and campo['nome'] == foco_campo:}} autofocus{{pass}}>{{=_fc_valor}}</textarea>
+  {{else:}}
+  <input type="{{=_fc_tipo}}" value="{{=_fc_valor}}"{{for _fc_k in sorted(_fc_attrs):}} {{=_fc_k}}="{{=_fc_attrs[_fc_k]}}"{{pass}}{{if campo.get('obrigatorio'):}} required{{pass}}{{if _fc_erro:}} aria-invalid="true"{{pass}}{{if _fc_erro and campo['nome'] == foco_campo:}} autofocus{{pass}}>
+  {{pass}}
+  {{if campo.get('ajuda'):}}<div class="form-text" id="{{=_fc_id}}-ajuda">{{=campo['ajuda']}}</div>{{pass}}
+  {{if _fc_erro:}}<div class="invalid-feedback" id="{{=_fc_id}}-erro">{{=_fc_erro}}</div>{{pass}}
+</div>

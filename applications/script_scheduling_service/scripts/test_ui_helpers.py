@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Testes de ui_helpers e ui_menu (F1.1)."""
+"""Testes de ui_helpers e ui_menu (F1.1, F1.2)."""
 import _testenv  # noqa: F401
 
 import datetime
@@ -94,6 +94,141 @@ class TestFormatarDuracao(unittest.TestCase):
 
     def test_fim_anterior_ao_inicio(self):
         self.assertEqual(self._dur(seconds=-1), "-")
+
+
+class TestSanitizarPagina(unittest.TestCase):
+
+    def test_validos(self):
+        self.assertEqual(ui_helpers.sanitizar_pagina("3"), 3)
+        self.assertEqual(ui_helpers.sanitizar_pagina(3), 3)
+        self.assertEqual(ui_helpers.sanitizar_pagina("1"), 1)
+        self.assertEqual(ui_helpers.sanitizar_pagina("007"), 7)
+        self.assertEqual(ui_helpers.sanitizar_pagina("999999999"), 999999999)
+
+    def test_invalidos_viram_padrao(self):
+        for valor in (None, "", " 3", "0", 0, "-1", -5, "abc", "1.5", 1.5, u"\u00b2", u"\u0663",
+                      "1e3", True, False, ["2"], "1234567890"):
+            with self.subTest(valor=valor):
+                self.assertEqual(ui_helpers.sanitizar_pagina(valor), 1)
+
+    def test_padrao_customizado(self):
+        self.assertEqual(ui_helpers.sanitizar_pagina("x", padrao=4), 4)
+        self.assertEqual(ui_helpers.sanitizar_pagina("2", padrao=4), 2)
+
+
+class TestSanitizarTamanho(unittest.TestCase):
+
+    def test_permitidos(self):
+        for valor, esperado in (("20", 20), (20, 20), ("50", 50), (50, 50), ("100", 100), (100, 100)):
+            with self.subTest(valor=valor):
+                self.assertEqual(ui_helpers.sanitizar_tamanho(valor), esperado)
+
+    def test_fora_da_lista_vira_primeiro(self):
+        for valor in ("30", 30, 0, "0", -20, "-20", None, "", "abc", True, "1000", ["50"]):
+            with self.subTest(valor=valor):
+                self.assertEqual(ui_helpers.sanitizar_tamanho(valor), 20)
+
+    def test_permitidos_customizados(self):
+        self.assertEqual(ui_helpers.sanitizar_tamanho("10", permitidos=(10, 25)), 10)
+        self.assertEqual(ui_helpers.sanitizar_tamanho("25", permitidos=(10, 25)), 25)
+        self.assertEqual(ui_helpers.sanitizar_tamanho("20", permitidos=(10, 25)), 10)
+
+
+class TestPaginacaoInfo(unittest.TestCase):
+
+    def _resumo(self, info):
+        return (info["pagina"], info["total_paginas"], info["tem_anterior"], info["tem_proxima"],
+                info["anterior"], info["proxima"], info["primeiro_registro"], info["ultimo_registro"])
+
+    def test_total_zero(self):
+        info = ui_helpers.paginacao_info(1, 20, 0)
+        self.assertEqual(self._resumo(info), (1, 1, False, False, 1, 1, 0, 0))
+        self.assertEqual(self._resumo(ui_helpers.paginacao_info(5, 20, 0)), self._resumo(info))
+
+    def test_pagina_zero_e_negativa(self):
+        for pagina in (0, -1, "0", "-3", None, "abc"):
+            with self.subTest(pagina=pagina):
+                self.assertEqual(self._resumo(ui_helpers.paginacao_info(pagina, 20, 57)),
+                                 (1, 3, False, True, 1, 2, 1, 20))
+
+    def test_pagina_alem_do_total(self):
+        self.assertEqual(self._resumo(ui_helpers.paginacao_info(99, 20, 57)),
+                         (3, 3, True, False, 2, 3, 41, 57))
+        self.assertEqual(self._resumo(ui_helpers.paginacao_info("4", 20, 57))[0], 3)
+
+    def test_meio(self):
+        self.assertEqual(self._resumo(ui_helpers.paginacao_info(2, 20, 57)),
+                         (2, 3, True, True, 1, 3, 21, 40))
+
+    def test_ultima_exata(self):
+        self.assertEqual(self._resumo(ui_helpers.paginacao_info(2, 20, 40)),
+                         (2, 2, True, False, 1, 2, 21, 40))
+        self.assertEqual(ui_helpers.paginacao_info(1, 20, 20)["total_paginas"], 1)
+        self.assertEqual(ui_helpers.paginacao_info(1, 20, 21)["total_paginas"], 2)
+
+    def test_um_registro(self):
+        self.assertEqual(self._resumo(ui_helpers.paginacao_info(1, 50, 1)),
+                         (1, 1, False, False, 1, 1, 1, 1))
+
+    def test_tamanho_e_total_invalidos(self):
+        info = ui_helpers.paginacao_info(1, 0, 57)
+        self.assertEqual((info["tamanho"], info["total_paginas"]), (20, 3))
+        self.assertEqual(ui_helpers.paginacao_info(1, -5, 57)["tamanho"], 20)
+        info = ui_helpers.paginacao_info(3, 20, -1)
+        self.assertEqual((info["total"], info["pagina"], info["total_paginas"]), (0, 1, 1))
+        self.assertEqual(ui_helpers.paginacao_info(1, 20, None)["total"], 0)
+
+    def test_chaves(self):
+        self.assertEqual(sorted(ui_helpers.paginacao_info(1, 20, 5)), sorted([
+            "pagina", "tamanho", "total", "total_paginas", "tem_anterior", "tem_proxima",
+            "anterior", "proxima", "primeiro_registro", "ultimo_registro"]))
+
+
+class TestPrimeiroCampoInvalido(unittest.TestCase):
+
+    def test_ordem(self):
+        campos = [{"nome": "a"}, {"nome": "b", "erro": u"Obrigatório."}, {"nome": "c", "erro": u"Inválido."}]
+        self.assertEqual(ui_helpers.primeiro_campo_invalido(campos), "b")
+
+    def test_sem_erro(self):
+        self.assertIsNone(ui_helpers.primeiro_campo_invalido([{"nome": "a", "erro": ""}, {"nome": "b"}]))
+        self.assertIsNone(ui_helpers.primeiro_campo_invalido([]))
+        self.assertIsNone(ui_helpers.primeiro_campo_invalido(None))
+
+
+class TestAlertaInfo(unittest.TestCase):
+
+    def test_tipos(self):
+        esperados = {
+            "sucesso": ("alert-success", "status-success", "status"),
+            "aviso": ("alert-warning", "icon-alert", "status"),
+            "erro": ("alert-danger", "status-failed", "alert"),
+        }
+        for tipo, (classe, icone, role) in esperados.items():
+            with self.subTest(tipo=tipo):
+                self.assertEqual(ui_helpers.alerta_info({"tipo": tipo, "mensagem": u"Mensagem"}), {
+                    "tipo": tipo, "mensagem": u"Mensagem", "classe": classe, "icone": icone, "role": role})
+
+    def test_formatos_de_entrada(self):
+        self.assertEqual(ui_helpers.alerta_info(("erro", u"Falhou."))["tipo"], "erro")
+        self.assertEqual(ui_helpers.alerta_info(["sucesso", u"Ok."])["tipo"], "sucesso")
+        info = ui_helpers.alerta_info(u"Texto simples")
+        self.assertEqual((info["tipo"], info["mensagem"]), ("aviso", u"Texto simples"))
+
+    def test_tipo_desconhecido_vira_aviso(self):
+        for tipo in ("info", "ERRO", None, "<script>"):
+            with self.subTest(tipo=tipo):
+                self.assertEqual(ui_helpers.alerta_info({"tipo": tipo, "mensagem": "x"})["tipo"], "aviso")
+
+    def test_sem_mensagem(self):
+        for flash in (None, "", {}, {"tipo": "erro"}, {"tipo": "erro", "mensagem": ""}, ("erro", None)):
+            with self.subTest(flash=flash):
+                self.assertIsNone(ui_helpers.alerta_info(flash))
+
+    def test_icones_existem_no_sprite(self):
+        ids = _ids_sprite()
+        for tipo in ("sucesso", "aviso", "erro"):
+            self.assertIn(ui_helpers.alerta_info((tipo, "x"))["icone"], ids)
 
 
 class TestMontarMenu(unittest.TestCase):

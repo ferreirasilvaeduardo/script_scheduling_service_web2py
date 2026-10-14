@@ -50,6 +50,9 @@
 </header>
 
 <main id="conteudo" class="sss-main" tabindex="-1">
+  {{import ui_helpers
+  alerta = ui_helpers.alerta_info(response.flash)}}
+  {{include 'components/alerta.html'}}
   {{include}}
 </main>
 
@@ -70,6 +73,7 @@
 </footer>
 
 <script defer src="{{=URL('static', 'js/app/sss.js')}}"></script>
+<script defer src="{{=URL('static', 'js/app/componentes.js')}}"></script>
 <script defer src="{{=URL('static', 'js/alpine.min.js')}}"></script>
 </body>
 </html>

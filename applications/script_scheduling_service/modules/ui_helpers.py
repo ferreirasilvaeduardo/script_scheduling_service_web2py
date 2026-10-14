@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Formatacao de status, datas e duracoes para as views.
+"""Formatacao de status, datas, duracoes, paginacao e alertas para as views.
 
 Funcoes puras: nao importam gluon.
 """
+import re
 
 _STATUS = {
     "PENDING": (u"Pendente", "sss-status-pending", "status-pending"),
@@ -44,3 +45,94 @@ def formatar_duracao(inicio, fim):
     if minutos:
         return "%dm %02ds" % (minutos, segundos)
     return "%ds" % segundos
+
+
+_RE_INTEIRO = r"[0-9]{1,9}"
+
+
+def _inteiro_positivo(valor):
+    """int >= 1 a partir de int ou str ASCII de ate 9 digitos; None se invalido."""
+    if isinstance(valor, bool):
+        return None
+    if isinstance(valor, int):
+        n = valor
+    elif isinstance(valor, str) and re.fullmatch(_RE_INTEIRO, valor):
+        n = int(valor)
+    else:
+        return None
+    return n if n >= 1 else None
+
+
+def sanitizar_pagina(valor, padrao=1):
+    """Pagina de request.vars; valor ausente, nao numerico ou < 1 vira `padrao`."""
+    n = _inteiro_positivo(valor)
+    return padrao if n is None else n
+
+
+def sanitizar_tamanho(valor, permitidos=(20, 50, 100)):
+    """Tamanho de pagina restrito a `permitidos`; fora da lista vira permitidos[0]."""
+    n = _inteiro_positivo(valor)
+    return n if n in permitidos else permitidos[0]
+
+
+def paginacao_info(pagina, tamanho, total):
+    """Dados de navegacao com a pagina limitada a [1, total_paginas].
+
+    Com total 0 ha uma unica pagina, sem registros (faixa 0-0).
+    """
+    tamanho = _inteiro_positivo(tamanho) or 20
+    total = total if isinstance(total, int) and not isinstance(total, bool) and total > 0 else 0
+    total_paginas = max(1, (total + tamanho - 1) // tamanho)
+    pagina = min(max(sanitizar_pagina(pagina), 1), total_paginas)
+    if total:
+        primeiro = (pagina - 1) * tamanho + 1
+        ultimo = min(pagina * tamanho, total)
+    else:
+        primeiro = ultimo = 0
+    return {
+        "pagina": pagina,
+        "tamanho": tamanho,
+        "total": total,
+        "total_paginas": total_paginas,
+        "tem_anterior": pagina > 1,
+        "tem_proxima": pagina < total_paginas,
+        "anterior": max(pagina - 1, 1),
+        "proxima": min(pagina + 1, total_paginas),
+        "primeiro_registro": primeiro,
+        "ultimo_registro": ultimo,
+    }
+
+
+def primeiro_campo_invalido(campos):
+    """Nome do primeiro campo (na ordem dada) com 'erro' preenchido; None se nenhum."""
+    for campo in campos or ():
+        if campo.get("erro"):
+            return campo.get("nome")
+    return None
+
+
+_ALERTAS = {
+    "sucesso": ("alert-success", "status-success", "status"),
+    "aviso": ("alert-warning", "icon-alert", "status"),
+    "erro": ("alert-danger", "status-failed", "alert"),
+}
+
+
+def alerta_info(flash):
+    """Normaliza response.flash para {tipo, mensagem, classe, icone, role}.
+
+    Aceita {'tipo', 'mensagem'}, (tipo, mensagem) ou texto simples. Tipo ausente
+    ou desconhecido vira 'aviso'. Retorna None quando nao ha mensagem.
+    """
+    if isinstance(flash, dict):
+        tipo, mensagem = flash.get("tipo"), flash.get("mensagem")
+    elif isinstance(flash, (tuple, list)) and len(flash) == 2:
+        tipo, mensagem = flash
+    else:
+        tipo, mensagem = None, flash
+    if mensagem is None or mensagem == "":
+        return None
+    if tipo not in _ALERTAS:
+        tipo = "aviso"
+    classe, icone, role = _ALERTAS[tipo]
+    return {"tipo": tipo, "mensagem": mensagem, "classe": classe, "icone": icone, "role": role}

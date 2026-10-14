@@ -1,0 +1,36 @@
+{{
+# Componente: paginação por links GET (funciona sem JavaScript).
+# Variáveis de entrada:
+#   pagina       -- página pedida (já saneada com ui_helpers.sanitizar_pagina);
+#   tamanho      -- tamanho da página (ui_helpers.sanitizar_tamanho);
+#   total        -- total de registros retornado pelo repositório;
+#   url_base     -- tupla (controller, funcao) da listagem;
+#   query_params -- dict com os filtros ativos, preservados em todos os links.
+# 'pagina' e 'tamanho' em query_params são sobrescritos pelos valores do link.
+import ui_helpers
+_pag = ui_helpers.paginacao_info(pagina, tamanho, total)
+_pag_vars = dict((k, v) for k, v in (query_params or {}).items() if k not in ('pagina', 'tamanho') and v not in (None, ''))
+_pag_vars['tamanho'] = _pag['tamanho']
+_pag_links = (
+    ('Primeira', 1, _pag['tem_anterior'], 'Primeira página'),
+    ('Anterior', _pag['anterior'], _pag['tem_anterior'], 'Página anterior'),
+    ('Próxima', _pag['proxima'], _pag['tem_proxima'], 'Próxima página'),
+    ('Última', _pag['total_paginas'], _pag['tem_proxima'], 'Última página'),
+)
+}}<nav class="sss-paginacao" aria-label="Paginação">
+  <span class="sss-paginacao-total">
+    {{if _pag['total']:}}{{=_pag['primeiro_registro']}}–{{=_pag['ultimo_registro']}} de {{=_pag['total']}} {{='registro' if _pag['total'] == 1 else 'registros'}}{{else:}}0 registros{{pass}}
+  </span>
+  <ul class="pagination pagination-sm mb-0">
+    {{for _pag_i, (_pag_rotulo, _pag_num, _pag_ativo, _pag_aria) in enumerate(_pag_links):}}
+    {{if _pag_i == 2:}}
+    <li class="page-item active" aria-current="page"><span class="page-link">Página {{=_pag['pagina']}} de {{=_pag['total_paginas']}}</span></li>
+    {{pass}}
+    {{if _pag_ativo:}}
+    <li class="page-item"><a class="page-link" href="{{=URL(c=url_base[0], f=url_base[1], vars=dict(_pag_vars, pagina=_pag_num))}}" aria-label="{{=_pag_aria}}">{{=_pag_rotulo}}</a></li>
+    {{else:}}
+    <li class="page-item disabled"><span class="page-link" aria-disabled="true">{{=_pag_rotulo}}</span></li>
+    {{pass}}
+    {{pass}}
+  </ul>
+</nav>

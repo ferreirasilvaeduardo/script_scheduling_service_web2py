@@ -1,0 +1,59 @@
+{{
+# Componente: tabela de listagem com estados vazio e de erro.
+# Variáveis de entrada:
+#   tabela -- dict:
+#     legenda   -- texto do <caption> (lido por leitores de tela; visualmente oculto);
+#     colunas   -- lista de {chave, rotulo, classe (opcional), tipo: 'texto' | 'mono' | 'status'};
+#                  tipo 'status' usa components/badge_status.html e lê '<chave>_motivo' da linha;
+#     linhas    -- lista de dicts indexados pela 'chave' de cada coluna;
+#     erro      -- opcional; mensagem segura ao usuário (sem ORA-, SQL ou stack trace, AGENTS §3.1);
+#     msg_vazio -- opcional; padrão "Nenhum registro encontrado".
+_tab_colunas = tabela['colunas']
+_tab_linhas = tabela.get('linhas') or []
+}}<div class="table-responsive">
+  <table class="table table-sm sss-tabela mb-0">
+    {{if tabela.get('legenda'):}}<caption class="visually-hidden">{{=tabela['legenda']}}</caption>{{pass}}
+    <thead>
+      <tr>
+        {{for _tab_col in _tab_colunas:}}
+        <th scope="col" class="{{=_tab_col.get('classe', '')}}">{{=_tab_col['rotulo']}}</th>
+        {{pass}}
+      </tr>
+    </thead>
+    <tbody>
+      {{if tabela.get('erro'):}}
+      <tr>
+        <td colspan="{{=len(_tab_colunas)}}" class="sss-tabela-estado">
+          <div class="alert alert-danger mb-0" role="alert">
+            <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
+            <span>{{=tabela['erro']}}</span>
+          </div>
+        </td>
+      </tr>
+      {{elif not _tab_linhas:}}
+      <tr>
+        <td colspan="{{=len(_tab_colunas)}}" class="sss-tabela-estado sss-tabela-vazia">{{=tabela.get('msg_vazio') or 'Nenhum registro encontrado'}}</td>
+      </tr>
+      {{else:}}
+      {{for _tab_linha in _tab_linhas:}}
+      <tr>
+        {{for _tab_col in _tab_colunas:}}
+        {{_tab_tipo = _tab_col.get('tipo', 'texto')}}
+        {{if _tab_tipo == 'status':}}
+        <td class="{{=_tab_col.get('classe', '')}}">
+          {{status = _tab_linha.get(_tab_col['chave'])
+          status_motivo = _tab_linha.get(_tab_col['chave'] + '_motivo')}}
+          {{include 'components/badge_status.html'}}
+        </td>
+        {{elif _tab_tipo == 'mono':}}
+        <td class="sss-mono {{=_tab_col.get('classe', '')}}">{{=_tab_linha.get(_tab_col['chave'], '')}}</td>
+        {{else:}}
+        <td class="{{=_tab_col.get('classe', '')}}">{{=_tab_linha.get(_tab_col['chave'], '')}}</td>
+        {{pass}}
+        {{pass}}
+      </tr>
+      {{pass}}
+      {{pass}}
+    </tbody>
+  </table>
+</div>
