@@ -673,3 +673,21 @@ def reset_config_cache():
     """Descarta a configuracao em cache (uso em testes)."""
     global _CONFIG_CACHE
     _CONFIG_CACHE = None
+
+
+_SEGREDOS_CACHE = None
+
+
+def obter_segredos():
+    """Retorna os segredos validados de [secrets] secrets_file, carregados uma unica vez por processo."""
+    global _SEGREDOS_CACHE
+    if _SEGREDOS_CACHE is None:
+        cfg = obter_config()
+        _SEGREDOS_CACHE = carregar_segredos(cfg.secrets.secrets_file, cfg=cfg)
+    return _SEGREDOS_CACHE
+
+
+def reset_segredos_cache():
+    """Descarta os segredos em cache (uso em testes)."""
+    global _SEGREDOS_CACHE
+    _SEGREDOS_CACHE = None

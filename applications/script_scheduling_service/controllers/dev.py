@@ -112,8 +112,8 @@ def _formulario_demo():
 
 def componentes():
     _exigir_dev()
-    # CSRF entra no F2.1; ate la nenhuma action de DEV aceita POST.
-    if request.env.request_method not in ("GET", "HEAD"):
+    # POST chega aqui ja validado (CSRF + Origin) por models/10_security.py.
+    if request.env.request_method not in ("GET", "HEAD", "POST"):
         raise HTTP(405)
     response.title = u"Componentes — SSS"
     response.sss_menu = ui_menu.montar_menu(
@@ -123,6 +123,8 @@ def componentes():
     )
 
     flash_demo = request.vars.get("flash")
+    if request.env.request_method == "POST" and request.post_vars.get("ticket_id"):
+        response.flash = {"tipo": "sucesso", "mensagem": u"Confirmação recebida (demonstração; nenhuma ação executada)."}
     if flash_demo in ("sucesso", "aviso", "erro"):
         response.flash = {
             "tipo": flash_demo,

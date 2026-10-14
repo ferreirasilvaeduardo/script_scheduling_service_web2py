@@ -45,7 +45,8 @@
     {{if not form_enviado:}}
     <p class="sss-page-sub"><a href="{{=URL(c=url_base[0], f=url_base[1], vars=dict(ex_enviar='1', ex_timeout='0'), anchor='sec-form')}}">Simular envio com erros</a> (foco vai para o primeiro campo inválido).</p>
     {{pass}}
-    <form method="get" action="{{=URL(c=url_base[0], f=url_base[1], anchor='sec-form')}}" novalidate>
+    <form method="post" action="{{=URL(c=url_base[0], f=url_base[1], anchor='sec-form')}}" novalidate>
+      {{=csrf_campo()}}
       <input type="hidden" name="ex_enviar" value="1">
       {{for campo in campos_form:}}
       {{include 'components/form_campo.html'}}
@@ -62,7 +63,7 @@
     {{include 'components/modal_confirmacao.html'}}
     {{pass}}
   </div>
-  <p class="sss-card-corpo sss-page-sub mb-0">O POST de confirmação é recusado (405) até o CSRF do F2.1.</p>
+  <p class="sss-card-corpo sss-page-sub mb-0">O POST de confirmação envia o campo <code>_csrf</code>; sem ele, a resposta é 403.</p>
 </section>
 
 <section class="sss-card" aria-labelledby="sec-alerta">

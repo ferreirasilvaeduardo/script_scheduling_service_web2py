@@ -1,0 +1,264 @@
+# -*- coding: utf-8 -*-
+"""Testes de security.py (F2.1): hash de senha, politica, CSRF, Origin, sessao e cookies."""
+import _testenv  # noqa: F401
+
+import ast
+import os
+import re
+import unittest
+
+import security
+
+_MODULES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "modules")
+_RE_FORMATO = re.compile(r"pbkdf2_sha256\$200000\$[0-9a-f]{32}\$[0-9a-f]{64}")
+
+
+def _hash_com_iteracoes(senha, iteracoes):
+    import hashlib
+    salt = b"\x01" * 16
+    dk = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, iteracoes)
+    return "pbkdf2_sha256$%d$%s$%s" % (iteracoes, salt.hex(), dk.hex())
+
+
+class TestHashSenha(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.senha = u"correta-horse-çã-12"
+        cls.armazenado = security.hash_senha(cls.senha)
+
+    def test_formato(self):
+        self.assertTrue(_RE_FORMATO.fullmatch(self.armazenado))
+
+    def test_salt_aleatorio(self):
+        self.assertNotEqual(self.armazenado, security.hash_senha(self.senha))
+
+    def test_verificacao_certa_e_errada(self):
+        self.assertTrue(security.verificar_senha(self.senha, self.armazenado))
+        self.assertFalse(security.verificar_senha(self.senha + "x", self.armazenado))
+        self.assertFalse(security.verificar_senha("", self.armazenado))
+
+    def test_senha_nao_str(self):
+        self.assertFalse(security.verificar_senha(None, self.armazenado))
+        self.assertFalse(security.verificar_senha(self.senha.encode("utf-8"), self.armazenado))
+        with self.assertRaises(TypeError):
+            security.hash_senha(None)
+
+    def test_bloqueado_exclamacao(self):
+        self.assertFalse(security.verificar_senha(self.senha, "!"))
+        self.assertFalse(security.verificar_senha("!", "!"))
+
+    def test_formatos_invalidos(self):
+        partes = self.armazenado.split("$")
+        invalidos = [
+            None, "", "lixo", self.armazenado + "$",
+            "pbkdf2_sha1$" + "$".join(partes[1:]),
+            "$".join([partes[0], "abc", partes[2], partes[3]]),
+            "$".join([partes[0], "0", partes[2], partes[3]]),
+            "$".join([partes[0], partes[1], partes[2][:-2], partes[3]]),
+            "$".join([partes[0], partes[1], partes[2], partes[3].upper()]),
+            "$".join([partes[0], partes[1], partes[2], partes[3][:-1] + "g"]),
+        ]
+        for inv in invalidos:
+            self.assertFalse(security.verificar_senha(self.senha, inv), inv)
+            self.assertFalse(security.precisa_rehash(inv), inv)
+
+    def test_iteracoes_antigas_verificam_e_pedem_rehash(self):
+        antigo = _hash_com_iteracoes("senha-antiga-123", 1000)
+        self.assertTrue(security.verificar_senha("senha-antiga-123", antigo))
+        self.assertTrue(security.precisa_rehash(antigo))
+        self.assertFalse(security.precisa_rehash(self.armazenado))
+        self.assertFalse(security.precisa_rehash("!"))
+
+    def test_hash_ficticio(self):
+        h = security.hash_ficticio()
+        self.assertTrue(_RE_FORMATO.fullmatch(h))
+        self.assertEqual(h, security.hash_ficticio())
+        self.assertFalse(security.verificar_senha("qualquer-coisa-123", h))
+
+
+class TestPoliticaSenha(unittest.TestCase):
+
+    def test_minimo_12(self):
+        self.assertEqual(len(security.validar_politica_senha("a" * 11)), 1)
+        self.assertEqual(security.validar_politica_senha("a" * 12), [])
+        self.assertEqual(security.validar_politica_senha(u"ç" * 12), [])
+
+    def test_nao_str_ou_vazia(self):
+        self.assertTrue(security.validar_politica_senha(None))
+        self.assertTrue(security.validar_politica_senha(""))
+
+
+class TestCsrf(unittest.TestCase):
+
+    def test_token(self):
+        t = security.gerar_token_csrf()
+        self.assertGreaterEqual(len(t), 43)
+        self.assertTrue(re.fullmatch(r"[A-Za-z0-9_\-]+", t))
+        self.assertNotEqual(t, security.gerar_token_csrf())
+
+    def test_validacao(self):
+        t = security.gerar_token_csrf()
+        self.assertTrue(security.validar_token_csrf(t, t))
+        self.assertFalse(security.validar_token_csrf(t, t[:-1] + ("A" if t[-1] != "A" else "B")))
+        self.assertFalse(security.validar_token_csrf(t, ""))
+        self.assertFalse(security.validar_token_csrf(t, None))
+        self.assertFalse(security.validar_token_csrf(None, None))
+        self.assertFalse(security.validar_token_csrf("", ""))
+        self.assertFalse(security.validar_token_csrf(t, [t]))
+        self.assertFalse(security.validar_token_csrf(t, u"çãé"))
+
+
+class TestOrigemPermitida(unittest.TestCase):
+
+    PERMITIDAS = ["https://sss.empresa.local", "http://127.0.0.1:8000"]
+
+    def _ok(self, origin, referer=None):
+        return security.origem_permitida(origin, referer, self.PERMITIDAS)
+
+    def test_origem_igual(self):
+        self.assertTrue(self._ok("https://sss.empresa.local"))
+        self.assertTrue(self._ok("HTTPS://SSS.Empresa.Local"))
+        self.assertTrue(self._ok("http://127.0.0.1:8000"))
+
+    def test_porta_padrao_implicita_e_explicita(self):
+        self.assertTrue(self._ok("https://sss.empresa.local:443"))
+
+    def test_porta_diferente(self):
+        self.assertFalse(self._ok("https://sss.empresa.local:8443"))
+        self.assertFalse(self._ok("http://127.0.0.1:8001"))
+
+    def test_esquema_diferente(self):
+        self.assertFalse(self._ok("http://sss.empresa.local"))
+        self.assertFalse(self._ok("ftp://sss.empresa.local"))
+
+    def test_host_diferente(self):
+        self.assertFalse(self._ok("https://sss.empresa.local.evil.com"))
+        self.assertFalse(self._ok("https://evil.com"))
+
+    def test_so_referer(self):
+        self.assertTrue(self._ok(None, "https://sss.empresa.local/script_scheduling_service/dev/componentes?x=1"))
+        self.assertTrue(self._ok("", "http://127.0.0.1:8000/a/b"))
+        self.assertFalse(self._ok(None, "https://evil.com/https://sss.empresa.local"))
+
+    def test_nenhum_dos_dois(self):
+        self.assertFalse(self._ok(None, None))
+        self.assertFalse(self._ok("", ""))
+
+    def test_null_e_userinfo(self):
+        self.assertFalse(self._ok("null"))
+        self.assertFalse(self._ok("https://user@sss.empresa.local"))
+        self.assertFalse(self._ok(None, "https://sss.empresa.local@evil.com/"))
+
+    def test_origin_invalido_nao_cai_para_referer(self):
+        self.assertFalse(self._ok("https://evil.com", "https://sss.empresa.local/"))
+        self.assertFalse(self._ok("null", "https://sss.empresa.local/"))
+
+    def test_porta_invalida(self):
+        self.assertFalse(self._ok("http://127.0.0.1:99999"))
+        self.assertFalse(self._ok("http://127.0.0.1:abc"))
+
+    def test_lista_vazia(self):
+        self.assertFalse(security.origem_permitida("https://sss.empresa.local", None, []))
+
+
+class TestSessaoExpirada(unittest.TestCase):
+
+    def test_limites(self):
+        self.assertFalse(security.sessao_expirada(1000.0, 1000.0 + 1800, 1800))
+        self.assertTrue(security.sessao_expirada(1000.0, 1000.0 + 1801, 1800))
+
+    def test_sem_marca(self):
+        self.assertTrue(security.sessao_expirada(None, 1000.0, 1800))
+        self.assertTrue(security.sessao_expirada("1000", 1000.0, 1800))
+        self.assertTrue(security.sessao_expirada(True, 1000.0, 1800))
+
+
+class TestCookiesSeguros(unittest.TestCase):
+
+    def test_httponly_e_secure(self):
+        c = security.CookiesSeguros(secure=True)
+        c["session_data_x"] = "valor"
+        c["session_data_x"]["path"] = "/"
+        saida = c["session_data_x"].OutputString()
+        self.assertIn("HttpOnly", saida)
+        self.assertIn("Secure", saida)
+
+    def test_sem_secure(self):
+        c = security.CookiesSeguros(secure=False)
+        c["a"] = "1"
+        saida = c["a"].OutputString()
+        self.assertIn("HttpOnly", saida)
+        self.assertNotIn("Secure", saida)
+
+    def test_reatribuicao_mantem_atributos(self):
+        c = security.CookiesSeguros(secure=True)
+        c["a"] = "1"
+        c.pop("a")
+        c["a"] = "2"
+        self.assertIn("HttpOnly", c["a"].OutputString())
+
+    def test_valor_bytes_decodificado(self):
+        c = security.CookiesSeguros(secure=False)
+        c["s"] = b"hmac256:abc:ZGF0YQ=="
+        self.assertEqual(c["s"].value, "hmac256:abc:ZGF0YQ==")
+        self.assertNotIn("b'", c["s"].OutputString())
+
+    def test_adaptar_cookie_sessao(self):
+        import http.cookies
+        r = http.cookies.SimpleCookie()
+        r.load('s="hmac256:abc:ZGF0YQ=="; outro=1')
+        security.adaptar_cookie_sessao(r, "s")
+        self.assertEqual(r["s"].value, b"hmac256:abc:ZGF0YQ==")
+        security.adaptar_cookie_sessao(r, "ausente")
+        self.assertEqual(r["outro"].value, "1")
+
+    def test_adaptar_cookie_sessao_nao_ascii_descartado(self):
+        import http.cookies
+        r = http.cookies.SimpleCookie()
+        r["s"] = u"ção"
+        security.adaptar_cookie_sessao(r, "s")
+        self.assertNotIn("s", r)
+
+    def test_roundtrip_secure_dumps(self):
+        """Regressao: cookie de sessao do web2py precisa sobreviver a ida e volta no Python 3."""
+        import http.cookies
+        from gluon.utils import secure_dumps, secure_loads
+        chave = "k" * 32
+        c = security.CookiesSeguros(secure=True)
+        c["session_data_x"] = secure_dumps({"csrf_token": "t"}, chave)
+        r = http.cookies.SimpleCookie()
+        r.load(c["session_data_x"].OutputString().split(";")[0])
+        security.adaptar_cookie_sessao(r, "session_data_x")
+        self.assertEqual(secure_loads(r["session_data_x"].value, chave, safe_unpickle=False), {"csrf_token": "t"})
+
+    def test_adotar(self):
+        import http.cookies
+        origem = http.cookies.SimpleCookie()
+        origem["b"] = "2"
+        c = security.CookiesSeguros(secure=True)
+        c.adotar(origem)
+        saida = c["b"].OutputString()
+        self.assertIn("HttpOnly", saida)
+        self.assertIn("Secure", saida)
+
+
+class TestModulosPuros(unittest.TestCase):
+
+    def test_sem_gluon(self):
+        for nome in ("security.py", "masking.py"):
+            with open(os.path.join(_MODULES, nome), "r", encoding="utf-8") as f:
+                arvore = ast.parse(f.read())
+            for no in ast.walk(arvore):
+                if isinstance(no, ast.Import):
+                    nomes = [a.name for a in no.names]
+                elif isinstance(no, ast.ImportFrom):
+                    nomes = [no.module or ""]
+                else:
+                    continue
+                for n in nomes:
+                    self.assertFalse(n.split(".")[0] == "gluon", "%s importa %s" % (nome, n))
+
+
+if __name__ == "__main__":
+    unittest.main()

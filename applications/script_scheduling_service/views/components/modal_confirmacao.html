@@ -9,16 +9,15 @@
 #     variante          -- 'perigo' (btn-danger) | 'normal' (btn-primary);
 #     acao              -- URL do POST;
 #     campos_ocultos    -- opcional; dict de campos hidden enviados no POST.
-#   csrf_token -- opcional até o F2.1; quando definido, é enviado como campo '_csrf' (README §4.2).
+# O token CSRF da sessão é enviado no campo oculto '_csrf' (csrf_campo(), README §4.2).
 # Abrir/fechar exige JavaScript (Alpine 'confirmacao' em static/js/app/componentes.js).
 _mod_perigo = modal.get('variante') == 'perigo'
-_mod_csrf = globals().get('csrf_token')
 }}<div class="sss-confirmacao" x-data="confirmacao" @keydown.escape.window="fechar">
   <button type="button" class="btn btn-sm {{='btn-outline-danger' if _mod_perigo else 'btn-outline-primary'}}" x-ref="gatilho" @click="abrir">{{=modal['rotulo_gatilho']}}</button>
   <div class="modal sss-modal" :class="classeModal" role="dialog" aria-modal="true" aria-labelledby="{{=modal['id']}}-titulo" aria-describedby="{{=modal['id']}}-texto" tabindex="-1" @click.self="fechar">
     <div class="modal-dialog modal-dialog-centered">
       <form class="modal-content" method="post" action="{{=modal['acao']}}">
-        {{if _mod_csrf:}}<input type="hidden" name="_csrf" value="{{=_mod_csrf}}">{{pass}}
+        {{=csrf_campo()}}
         {{for _mod_k, _mod_v in sorted((modal.get('campos_ocultos') or {}).items()):}}
         <input type="hidden" name="{{=_mod_k}}" value="{{=_mod_v}}">
         {{pass}}

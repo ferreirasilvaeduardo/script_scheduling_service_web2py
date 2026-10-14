@@ -10,6 +10,7 @@ import datetime
 import logging
 import logging.handlers
 import os
+import threading
 
 
 FMT_SSS = "%(asctime)s %(levelname)s [pid=%(process)d] [agente=%(agente)s] [ticket=%(ticket)s] [acao=%(acao)s] %(message)s"
@@ -113,3 +114,17 @@ def configurar(nome_log, cfg):
     logger.addHandler(handler)
 
     return logger
+
+
+_LOGGERS = {}
+_LOCK_LOGGERS = threading.Lock()
+
+
+def obter_logger(nome_log, cfg):
+    """Retorna o logger configurado por configurar(), criando-o uma unica vez por processo."""
+    with _LOCK_LOGGERS:
+        logger = _LOGGERS.get(nome_log)
+        if logger is None:
+            logger = configurar(nome_log, cfg)
+            _LOGGERS[nome_log] = logger
+        return logger

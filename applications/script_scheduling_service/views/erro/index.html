@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Erro {{=codigo}} — SSS</title>
+  <link rel="icon" type="image/svg+xml" href="{{=URL('static', 'img/favicon.svg')}}">
+  <link rel="stylesheet" href="{{=URL('static', 'bootstrap/bootstrap.min.css')}}">
+  <link rel="stylesheet" href="{{=URL('static', 'css/sss.css')}}">
+</head>
+<body class="sss-body">
+<main id="conteudo" class="sss-main">
+  <section class="sss-card" aria-labelledby="erro-titulo">
+    <h1 class="sss-card-titulo" id="erro-titulo">Erro {{=codigo}}</h1>
+    <p class="mb-0">{{=mensagem}}</p>
+  </section>
+</main>
+</body>
+</html>

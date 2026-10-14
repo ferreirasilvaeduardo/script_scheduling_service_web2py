@@ -29,6 +29,39 @@
     }));
   };
 
+  var METODOS_SEGUROS = { GET: 1, HEAD: 1 };
+
+  function tokenCsrf() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+  }
+
+  // fetch com cookies de mesma origem e X-CSRF-Token em metodos que alteram estado (README §4.2).
+  SSS.fetch = window.sssFetch = function (url, opcoes) {
+    var opts = {};
+    var chave;
+    opcoes = opcoes || {};
+    for (chave in opcoes) {
+      if (Object.prototype.hasOwnProperty.call(opcoes, chave)) {
+        opts[chave] = opcoes[chave];
+      }
+    }
+    var metodo = String(opts.method || 'GET').toUpperCase();
+    var cabecalhos = new Headers(opts.headers || {});
+    if (!METODOS_SEGUROS[metodo]) {
+      cabecalhos.set('X-CSRF-Token', tokenCsrf());
+    }
+    opts.method = metodo;
+    opts.headers = cabecalhos;
+    opts.credentials = 'same-origin';
+    return window.fetch(url, opts).then(function (resposta) {
+      if (resposta.status === 403) {
+        SSS.toast('erro', 'Requisição recusada. Recarregue a página e tente novamente.');
+      }
+      return resposta;
+    });
+  };
+
   document.addEventListener('alpine:init', function () {
     window.Alpine.data('toast', function () {
       return {
