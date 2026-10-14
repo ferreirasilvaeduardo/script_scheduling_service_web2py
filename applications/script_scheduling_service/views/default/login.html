@@ -1,0 +1,29 @@
+{{extend 'layout.html'}}
+<div class="sss-login">
+  <section class="sss-card" aria-labelledby="login-titulo">
+    <h1 class="sss-card-titulo" id="login-titulo">Entrar</h1>
+    <div class="sss-card-corpo">
+      {{if mensagem:}}
+      {{# components/alerta.html ja e incluido pelo layout; o parser do web2py nao o inclui duas vezes.
+      _erro = ui_helpers.alerta_info({'tipo': 'erro', 'mensagem': mensagem})}}
+      <div class="alert {{=_erro['classe']}} sss-alerta" role="{{=_erro['role']}}">
+        <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_erro['icone']}}"></use></svg>
+        <span>{{=_erro['mensagem']}}</span>
+      </div>
+      {{pass}}
+      <form method="post" action="{{=URL(c='default', f='login')}}">
+        {{=csrf_campo()}}
+        {{if destino:}}<input type="hidden" name="next" value="{{=destino}}">{{pass}}
+        <div class="mb-3">
+          <label class="form-label" for="campo-login">Usuário</label>
+          <input type="text" class="form-control" id="campo-login" name="login" value="{{=login_digitado}}" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="campo-senha">Senha</label>
+          <input type="password" class="form-control" id="campo-senha" name="senha" maxlength="1024" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Entrar</button>
+      </form>
+    </div>
+  </section>
+</div>

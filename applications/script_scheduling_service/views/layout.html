@@ -22,11 +22,11 @@
 {{pass}}
 
 <header class="sss-header">
-  <span class="sss-brand">
+  <a class="sss-brand" href="{{=URL(c='default', f='index')}}">
     <svg class="sss-icon sss-icon-lg" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-logo"></use></svg>
     <span>SSS</span>
     <span class="sss-brand-nome">Script Scheduling Service</span>
-  </span>
+  </a>
   <nav class="sss-nav" aria-label="Menu principal">
     {{for secao in response.sss_menu:}}
     <div class="sss-nav-secao">
@@ -48,6 +48,20 @@
     </div>
     {{pass}}
   </nav>
+  {{_sss_ctx = current.sss_ctx}}
+  {{if _sss_ctx:}}
+  <div class="sss-usuario">
+    <span class="sss-usuario-id">
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-users"></use></svg>
+      <span>{{=_sss_ctx['login']}}</span>
+      <span class="sss-usuario-perfil">{{=_sss_ctx['perfil_nome']}}</span>
+    </span>
+    <form method="post" action="{{=URL(c='default', f='logout')}}" class="sss-usuario-sair">
+      {{=csrf_campo()}}
+      <button type="submit" class="btn btn-sm btn-outline-light">Sair</button>
+    </form>
+  </div>
+  {{pass}}
 </header>
 
 <main id="conteudo" class="sss-main" tabindex="-1">

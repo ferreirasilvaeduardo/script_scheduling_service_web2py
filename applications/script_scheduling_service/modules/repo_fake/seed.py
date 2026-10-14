@@ -6,9 +6,18 @@ Totalmente deterministico, sem aleatoriedade, compativel com Python 3.6.
 import datetime
 import json
 
+import security
 
-def carregar_seed(store, forcar=False):
-    """Carrega dados iniciais deterministicos no store FAKE de forma idempotente."""
+# Contas de demonstracao que permanecem sem senha utilizavel mesmo em DEV.
+_SEM_SENHA_DEV = ("inativo", "bloqueado")
+
+
+def carregar_seed(store, forcar=False, senha_dev=None):
+    """Carrega dados iniciais deterministicos no store FAKE de forma idempotente.
+
+    senha_dev: senha comum dos usuarios de demonstracao (exceto inativo e bloqueado),
+    com hash e salt individuais. Sem ela, as senhas ficam inutilizaveis ('!').
+    """
     with store.lock_usuarios:
         with store.lock_rbac:
             with store.lock_catalogo:
@@ -80,6 +89,8 @@ def carregar_seed(store, forcar=False):
                                 ]
                                 for u in usuarios:
                                     u["created_at"] = base_dt - datetime.timedelta(days=60)
+                                    if senha_dev is not None and u["login"] not in _SEM_SENHA_DEV:
+                                        u["senha_hash"] = security.hash_senha(senha_dev)
                                     store.usuarios[u["id"]] = u
                                 store.seqs["tbsss_usuarios"] = 6
 

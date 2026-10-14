@@ -4,9 +4,14 @@
 Seleciona e instancia os repositorios FAKE ou ORACLE conforme configuracao.
 Garante singletons por processo e aplica a trava de ambiente para o backend FAKE.
 """
+import logging
+import os
 import threading
 
 from gluon import current
+
+import masking
+import security
 
 from repo_fake.agendamentos import RepoAgendamentosFake
 from repo_fake.agentes import RepoAgentesFake
@@ -22,6 +27,8 @@ _lock_fabrica = threading.RLock()
 _singletons = {}
 _fake_store = None
 _config_override = None
+
+ENV_SENHA_DEV = "SSS_DEV_SEED_PASSWORD"
 
 
 def configurar(cfg):
@@ -57,6 +64,22 @@ def _resolver_config(config_param=None):
     return str(app["data_backend"]).upper(), str(app["sss_env"]).upper()
 
 
+def _senha_dev_seed():
+    """Senha DEV do seed FAKE, lida do ambiente; ausente ou fora da politica deixa os logins impossiveis."""
+    log = logging.getLogger("sss_web")
+    senha = os.environ.get(ENV_SENHA_DEV)
+    if not senha:
+        log.warning("%s ausente: usuarios do seed FAKE sem senha utilizavel (logins DEV impossiveis)",
+                    ENV_SENHA_DEV, extra={"acao": "SEED"})
+        return None
+    masking.registrar_segredo(senha)
+    if security.validar_politica_senha(senha):
+        log.warning("%s fora da politica de senha: usuarios do seed FAKE sem senha utilizavel",
+                    ENV_SENHA_DEV, extra={"acao": "SEED"})
+        return None
+    return senha
+
+
 def obter(nome, config=None):
     """Retorna a instancia singleton do repositorio solicitado.
 
@@ -82,7 +105,7 @@ def obter(nome, config=None):
     with _lock_fabrica:
         if _fake_store is None:
             _fake_store = FakeDataStore()
-            carregar_seed(_fake_store)
+            carregar_seed(_fake_store, senha_dev=_senha_dev_seed())
 
             _singletons["usuarios"] = RepoUsuariosFake(_fake_store)
             _singletons["rbac"] = RepoRbacFake(_fake_store)

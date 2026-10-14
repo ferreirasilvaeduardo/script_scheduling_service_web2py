@@ -6,7 +6,6 @@ import re
 from gluon import current
 
 import ui_helpers
-import ui_menu
 
 
 def _exigir_dev():
@@ -15,13 +14,9 @@ def _exigir_dev():
 
 
 def shell():
+    _exigir_login()
     _exigir_dev()
     response.title = u"Shell de desenvolvimento — SSS"
-    response.sss_menu = ui_menu.montar_menu(
-        ["EXEC_SCRIPT", "VER_LOGS", "CAD_AGENDAMENTOS"],
-        False,
-        (request.controller, request.function),
-    )
 
     base = datetime.datetime(2026, 10, 14, 9, 0, 0)
     amostras = (
@@ -111,16 +106,12 @@ def _formulario_demo():
 
 
 def componentes():
+    _exigir_login()
     _exigir_dev()
     # POST chega aqui ja validado (CSRF + Origin) por models/10_security.py.
     if request.env.request_method not in ("GET", "HEAD", "POST"):
         raise HTTP(405)
     response.title = u"Componentes — SSS"
-    response.sss_menu = ui_menu.montar_menu(
-        ["EXEC_SCRIPT", "VER_LOGS", "CAD_AGENDAMENTOS"],
-        False,
-        (request.controller, request.function),
-    )
 
     flash_demo = request.vars.get("flash")
     if request.env.request_method == "POST" and request.post_vars.get("ticket_id"):
@@ -214,3 +205,11 @@ def componentes():
         )],
         texto_copia=u"/opt/sss/scripts/carga_diaria.py --data 2026-10-14",
     )
+
+
+def admin_teste():
+    _exigir_login()
+    _exigir_dev()
+    ctx = _exigir_func("CAD_USUARIOS")
+    response.title = u"Rota administrativa de teste — SSS"
+    return dict(ctx=ctx)

@@ -200,6 +200,12 @@
   letter-spacing: 0.04em;
 }
 
+.sss-body a.sss-brand,
+.sss-body a.sss-brand:hover {
+  color: var(--sss-header-text);
+  text-decoration: none;
+}
+
 .sss-brand-nome {
   color: var(--sss-header-muted);
   font-weight: 400;
@@ -256,6 +262,29 @@
   background-color: var(--sss-accent);
   color: var(--sss-accent-text);
   font-weight: 600;
+}
+
+.sss-usuario {
+  display: flex;
+  align-items: center;
+  gap: var(--sss-esp-3);
+  margin-left: auto;
+  font-size: var(--sss-fs-sm);
+}
+
+.sss-usuario-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.sss-usuario-perfil {
+  color: var(--sss-header-muted);
+  font-size: var(--sss-fs-xs);
+}
+
+.sss-usuario-sair {
+  margin: 0;
 }
 
 /* Conteudo */
@@ -527,4 +556,10 @@
   background-color: var(--sss-surface);
   color: var(--sss-text-muted);
   font-size: var(--sss-fs-xs);
+}
+
+/* Login */
+.sss-login {
+  max-width: 24rem;
+  margin: var(--sss-esp-5) auto 0;
 }

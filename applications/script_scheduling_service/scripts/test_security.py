@@ -260,5 +260,44 @@ class TestModulosPuros(unittest.TestCase):
                     self.assertFalse(n.split(".")[0] == "gluon", "%s importa %s" % (nome, n))
 
 
+
+class TestValidarNext(unittest.TestCase):
+
+    def test_validos(self):
+        for v in ("/script_scheduling_service/default/index",
+                  "/script_scheduling_service/dev/componentes?pagina=2&status=FAILED"):
+            self.assertEqual(security.validar_next(v), v)
+
+    def test_rejeitados(self):
+        for v in (None, "", 123, "//evil.com", "//evil.com/script_scheduling_service/",
+                  "/\\evil.com", "http://evil.com/script_scheduling_service/",
+                  "https:/script_scheduling_service/", "/outra_app/default/index",
+                  "/script_scheduling_service//evil.com", "/script_scheduling_service/../admin/",
+                  "/script_scheduling_service/%2e%2e/admin", "/script_scheduling_service/%2F%2Fevil",
+                  "/script_scheduling_service/a b", "/script_scheduling_service/\n",
+                  "script_scheduling_service/default", "/script_scheduling_service/" + "a" * 600):
+            self.assertIsNone(security.validar_next(v), repr(v))
+
+
+class TestIpOrigem(unittest.TestCase):
+
+    def test_sem_proxy(self):
+        self.assertEqual(security.ip_origem("10.0.0.5", "1.2.3.4", ()), "10.0.0.5")
+
+    def test_xff_ignorado_de_nao_confiavel(self):
+        self.assertEqual(security.ip_origem("10.0.0.5", "1.2.3.4", ("10.0.0.9",)), "10.0.0.5")
+
+    def test_xff_de_proxy_confiavel(self):
+        self.assertEqual(security.ip_origem("10.0.0.9", "6.6.6.6, 1.2.3.4", ("10.0.0.9",)), "1.2.3.4")
+        self.assertEqual(security.ip_origem("10.0.0.9", "1.2.3.4, 10.0.0.8", ("10.0.0.9", "10.0.0.8")),
+                         "1.2.3.4")
+
+    def test_xff_invalido(self):
+        self.assertEqual(security.ip_origem("10.0.0.9", "lixo", ("10.0.0.9",)), "10.0.0.9")
+        self.assertIsNone(security.ip_origem("nao-ip", None, ()))
+
+    def test_ipv6(self):
+        self.assertEqual(security.ip_origem("::1", None, ()), "::1")
+
 if __name__ == "__main__":
     unittest.main()

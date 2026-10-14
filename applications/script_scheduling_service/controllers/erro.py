@@ -3,7 +3,7 @@
 
 _MENSAGENS = {
     400: u"A requisição é inválida.",
-    403: u"Requisição recusada. Recarregue a página e tente novamente.",
+    403: u"Acesso negado. Você não tem permissão para esta página ou a requisição expirou; recarregue e tente novamente.",
     404: u"A página solicitada não existe.",
     405: u"Método não permitido para esta página.",
 }

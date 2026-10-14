@@ -6,6 +6,7 @@ Modulo puro: nao importa gluon (AGENTS §7.1).
 import hashlib
 import hmac
 import http.cookies
+import ipaddress
 import re
 import secrets
 import urllib.parse
@@ -21,6 +22,9 @@ _RE_HASH = re.compile(r"pbkdf2_sha256\$([0-9]{1,7})\$([0-9a-f]{32})\$([0-9a-f]{6
 _RE_NETLOC = re.compile(r"([a-z0-9.\-]+|\[[0-9a-f:.]+\])(?::([0-9]{1,5}))?")
 _PORTA_PADRAO = {"http": 80, "https": 443}
 _RE_COOKIE_ASCII = re.compile(r"[\x21-\x7e]*")
+_RE_NEXT = re.compile(r"[\x21-\x7e]{1,512}")
+PREFIXO_APP = "/script_scheduling_service/"
+IP_MAX = 45
 
 
 def _derivar(senha, salt, iteracoes):
@@ -57,6 +61,11 @@ def verificar_senha(senha, armazenado):
         return False
     iteracoes, salt, esperado = partes
     return hmac.compare_digest(_derivar(senha, salt, iteracoes), esperado)
+
+
+def hash_reconhecido(armazenado):
+    """True se o valor armazenado tem o formato de hash vigente (senha utilizavel)."""
+    return _decompor(armazenado) is not None
 
 
 def precisa_rehash(armazenado):
@@ -174,3 +183,47 @@ def adaptar_cookie_sessao(cookies, nome):
         morsel.set(morsel.key, morsel.value.encode("ascii"), morsel.coded_value)
     else:
         del cookies[nome]
+
+
+def validar_next(valor, prefixo=PREFIXO_APP):
+    """Retorna o destino pos-login se for caminho local da aplicacao; senao None (open redirect)."""
+    if not isinstance(valor, str) or not _RE_NEXT.fullmatch(valor):
+        return None
+    if "\\" in valor or "//" in valor or not valor.startswith(prefixo):
+        return None
+    partes = urllib.parse.urlsplit(valor)
+    if partes.scheme or partes.netloc:
+        return None
+    caminho = urllib.parse.unquote(partes.path)
+    if "\\" in caminho or "//" in caminho or ".." in caminho.split("/") or not caminho.startswith(prefixo):
+        return None
+    return valor
+
+
+def _ip_normalizado(texto):
+    if not isinstance(texto, str):
+        return None
+    try:
+        return str(ipaddress.ip_address(texto.strip()))
+    except ValueError:
+        return None
+
+
+def ip_origem(remote_addr, x_forwarded_for, trusted_proxies):
+    """IP do cliente: remote_addr, ou o X-Forwarded-For quando remote_addr e proxy confiavel.
+
+    No XFF, percorre da direita para a esquerda e devolve o primeiro IP nao confiavel.
+    """
+    confiaveis = frozenset(ip for ip in (_ip_normalizado(t) for t in (trusted_proxies or ())) if ip)
+    remoto = _ip_normalizado(remote_addr)
+    if remoto is None:
+        return None
+    if remoto not in confiaveis or not isinstance(x_forwarded_for, str):
+        return remoto[:IP_MAX]
+    for item in reversed(x_forwarded_for.split(",")):
+        ip = _ip_normalizado(item)
+        if ip is None:
+            return remoto[:IP_MAX]
+        if ip not in confiaveis:
+            return ip[:IP_MAX]
+    return remoto[:IP_MAX]

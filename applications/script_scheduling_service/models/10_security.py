@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Sessao, CSRF + Origin em todo metodo que altera estado, cabecalhos de seguranca e mascaramento.
+"""Sessao, revalidacao, guardas de acesso, CSRF + Origin, cabecalhos de seguranca e mascaramento.
 
 Roda antes de qualquer controller (README §4.2, AGENTS §3.4).
 """
 import io
 import time
 
+import auth_service
 import masking
+import rbac
 import security
 import sss_config
 import sss_logging
+import ui_menu
+from repo_errors import RepoIndisponivel
 
 _cfg = current.sss_cfg
 _segredos = sss_config.obter_segredos()
@@ -39,15 +43,34 @@ session.connect(request, response, cookie_key=_segredos.cookie_key)
 
 _URL_LOGIN = ("default", "login")
 
+
+def _encerrar_sessao(mensagem):
+    session.clear()
+    session.csrf_token = security.gerar_token_csrf()
+    session.flash = {"tipo": "aviso", "mensagem": mensagem}
+    redirect(URL(c=_URL_LOGIN[0], f=_URL_LOGIN[1]))
+
+
+current.sss_ctx = None
 if session.usuario_id:
     _agora = time.time()
     if security.sessao_expirada(session.ultimo_acesso, _agora, _cfg.web.session_idle_timeout_s):
-        session.clear()
-        session.csrf_token = security.gerar_token_csrf()
-        session.flash = {"tipo": "aviso", "mensagem": u"Sua sessão expirou por inatividade. Entre novamente."}
-        redirect(URL(c=_URL_LOGIN[0], f=_URL_LOGIN[1]))
+        _encerrar_sessao(u"Sua sessão expirou por inatividade. Entre novamente.")
+    try:
+        _ctx = auth_service.revalidar(session)
+    except RepoIndisponivel:
+        _log.exception("revalidacao de sessao indisponivel (usuario_id=%s caminho=%s)",
+                       session.usuario_id, request.env.path_info, extra={"acao": "SESSAO"})
+        raise HTTP(503)
+    if _ctx is None:
+        _encerrar_sessao(u"Sua sessão foi encerrada. Entre novamente.")
+    current.sss_ctx = _ctx
+    session.perfil_id = _ctx["perfil_id"]
+    session.perm_versao = _ctx["perm_versao"]
     session.ultimo_acesso = _agora
     response.headers["Cache-Control"] = "no-store"
+    response.sss_menu = ui_menu.montar_menu(
+        _ctx["funcionalidades"], _ctx["is_admin"], (request.controller, request.function))
 
 if not session.csrf_token:
     session.csrf_token = security.gerar_token_csrf()
@@ -91,3 +114,39 @@ if (request.env.request_method or "GET").upper() not in ("GET", "HEAD", "OPTIONS
         _token = request.env.http_x_csrf_token
     if not security.validar_token_csrf(session.csrf_token, _token):
         _rejeitar("csrf")
+
+
+def _ip_origem():
+    """IP do cliente (README §4.2): X-Forwarded-For so quando remote_addr e proxy confiavel."""
+    return security.ip_origem(request.env.remote_addr, request.env.http_x_forwarded_for,
+                              _cfg.web.trusted_proxies)
+
+
+def _destino_atual():
+    caminho = request.env.path_info or ""
+    if request.env.query_string:
+        caminho = "%s?%s" % (caminho, request.env.query_string)
+    return security.validar_next(caminho)
+
+
+def _exigir_login():
+    """Guarda de autenticacao: sem sessao valida, redireciona ao login com 'next' local validado."""
+    ctx = current.sss_ctx
+    if ctx:
+        return ctx
+    destino = None
+    if (request.env.request_method or "GET").upper() in ("GET", "HEAD"):
+        destino = _destino_atual()
+    redirect(URL(c=_URL_LOGIN[0], f=_URL_LOGIN[1], vars={"next": destino} if destino else {}))
+
+
+def _exigir_func(codigo):
+    """Guarda de autorizacao: exige login e a funcionalidade; sem ela, 403 com log WARN."""
+    ctx = _exigir_login()
+    if not rbac.tem_func(ctx, codigo):
+        _log.warning(
+            "acesso negado (login=%s funcionalidade=%s caminho=%s ip=%s)",
+            ctx["login"], codigo, request.env.path_info, _ip_origem(), extra={"acao": "RBAC"},
+        )
+        raise HTTP(403, u"Acesso negado.", **response.headers)
+    return ctx
