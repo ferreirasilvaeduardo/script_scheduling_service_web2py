@@ -37,6 +37,16 @@ try:
 except ImportError:
     has_ssl = False
 
+    class ssl(object):
+        """Substituto quando o Python foi compilado sem o modulo ssl (sem OpenSSL no build).
+
+        Fora de HTTPS, so o 'except ssl.SSLError' do WSGIWorker referencia o modulo; sem este
+        substituto, avaliar o except levanta NameError e mascara o SocketTimeout de conexoes ociosas.
+        """
+
+        class SSLError(OSError):
+            pass
+
 __all__ = [
     "__version__",
     "SERVER_SOFTWARE",

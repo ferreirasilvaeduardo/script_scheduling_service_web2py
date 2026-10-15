@@ -3,6 +3,9 @@
 
 Defeito: 'except ssl.SSLCertVerificationError' (classe do 3.7+) levantava AttributeError
 ao avaliar o except, mascarando o SocketTimeout de conexoes ociosas (log ERROR com traceback).
+
+Defeito 2: em Python compilado sem o modulo ssl (ex.: servidor clone 7, OL6), o mesmo except
+levantava NameError pelo mesmo caminho.
 """
 import _testenv  # noqa: F401
 
@@ -10,6 +13,7 @@ import os
 import queue
 import re
 import socket
+import subprocess
 import sys
 import unittest
 
@@ -61,6 +65,48 @@ class TestRocketPy36(unittest.TestCase):
         with open(rocket3.__file__, encoding="utf-8") as f:
             codigo = f.read()
         self.assertIsNone(re.search(r"except\s+ssl\.SSLCertVerificationError", codigo))
+
+
+# Roda num interpretador separado: o ssl ausente nao pode vazar para os demais testes.
+_SCRIPT_SEM_SSL = r"""
+import queue, socket, sys
+sys.modules["ssl"] = None
+sys.path.insert(0, sys.argv[1])
+import rocket3
+
+class Arquivo(object):
+    def readline(self, *args):
+        raise socket.timeout("timed out")
+    def close(self):
+        pass
+
+class Conexao(object):
+    def makefile(self, *args, **kwargs):
+        return Arquivo()
+
+assert rocket3.has_ssl is False
+assert issubclass(rocket3.ssl.SSLError, OSError)
+app_info = {"server_software": "teste", "wsgi_app": lambda environ, start_response: []}
+worker = rocket3.WSGIWorker(app_info, queue.Queue(), queue.Queue())
+worker.conn = Conexao()
+try:
+    worker.run_app(worker.conn)
+except rocket3.SocketTimeout:
+    assert worker._handleError(*sys.exc_info()) is True
+else:
+    raise AssertionError("SocketTimeout nao propagado")
+print("SEM_SSL_OK")
+"""
+
+
+class TestRocketSemSSL(unittest.TestCase):
+
+    def test_conexao_ociosa_sem_modulo_ssl(self):
+        resultado = subprocess.run([sys.executable, "-I", "-c", _SCRIPT_SEM_SSL, _ROCKET_DIR],
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
+        saida = resultado.stdout.decode("utf-8", "replace")
+        self.assertEqual(resultado.returncode, 0, saida)
+        self.assertIn("SEM_SSL_OK", saida)
 
 
 if __name__ == "__main__":
