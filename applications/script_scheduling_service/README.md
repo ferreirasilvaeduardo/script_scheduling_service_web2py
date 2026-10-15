@@ -27,7 +27,9 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 * **Python 3.6.0 ou superior** com o framework **web2py**.
   * A sintaxe e a biblioteca padrão usadas são as da 3.6.0.
   * As versões validadas vão da 3.6.0 à 3.13, e a 3.6.8 é a referência de produção (AGENTS §2.1).
-  * A versão do web2py é homologada e fixada no repositório. O `gluon/contrib/multipart.py` tem uma proteção local de import para rodar na 3.6.0 (`typing.AsyncGenerator` só existe a partir da 3.6.1).
+  * A versão do web2py é homologada e fixada no repositório. Patches locais no framework, todos marcados com `SSS:` no código:
+    * `gluon/contrib/multipart.py`: proteção de import para rodar na 3.6.0 (`typing.AsyncGenerator` só existe a partir da 3.6.1);
+    * `gluon/contenttype.py`: tipo `font/woff2` para as fontes locais (§2.4).
 * É proibido usar recursos de Python 3.7+. A lista normativa completa está no `AGENTS.md` §2.1.
 
 ### 2.2 Banco de dados
@@ -59,6 +61,12 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 ### 2.4 Frontend
 
 * HTML5, **Bootstrap 5.3.8** e **Alpine.js (build CSP)**, servidos exclusivamente de `static/` com fontes locais.
+* **Identidade visual Kyros** (Manual de Marca), aplicada pelos tokens de `static/css/sss.css`:
+  * **Cores:** Roxo Vivo `#5f0684` (ações primárias, links, cabeçalho), Azul Esverdeado `#4daf9a` (destaques, item ativo, faixa do cabeçalho) e Amarelo `#faba00` (avisos e faixa de ambiente). As variações claras e escuras do manual são usadas no modo escuro e nos estados de passar o mouse e de clique.
+  * **Contraste:** todo par texto/fundo atende WCAG AA (≥ 4,5:1, verificado por `scripts/test_contraste_cores.py`). Por isso o Azul Esverdeado nunca é cor de texto sobre fundo claro (contraste de 2,6:1).
+  * **Tipografia:** Montserrat (OFL 1.1), em arquivos `woff2` locais em `static/fonts/montserrat/`, com a licença junto. A Cocomat Light do manual é comercial e não está disponível; os títulos usam Montserrat.
+  * **Formas:** cantos levemente arredondados (`--sss-raio: 8px`) e ícones com traço arredondado.
+  * **Logo:** a logo oficial não é desenhada nem aproximada (o manual proíbe distorção). Ela só entra quando houver os arquivos oficiais.
 * Não há CDN, Google Fonts nem `@import` remoto.
 * O build CSP do Alpine é obrigatório porque a política `script-src 'self'` proíbe `unsafe-eval`. Toda lógica de componente fica registrada via `Alpine.data()` em arquivos `.js` de `static/js/app/`, sem expressões complexas inline.
 

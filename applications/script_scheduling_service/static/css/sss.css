@@ -1,8 +1,101 @@
 /* SSS - tokens de design e estilos proprios sobre o Bootstrap 5.3.8.
-   Pares texto/fundo dos tokens foram escolhidos para contraste WCAG AA (>= 4.5:1). */
+   Identidade visual Kyros (Manual de Marca): Azul Esverdeado #4daf9a, Roxo Vivo #5f0684 e Amarelo
+   #faba00, com as variacoes claras/escuras do manual; Montserrat local (OFL, static/fonts/montserrat).
+   Pares texto/fundo dos tokens tem contraste WCAG AA (>= 4.5:1), verificado por
+   scripts/test_contraste_cores.py: o azul esverdeado nunca e cor de texto sobre fundo claro. */
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("../fonts/montserrat/montserrat-latin-ext-300-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/montserrat/montserrat-latin-ext-400-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/montserrat/montserrat-latin-ext-500-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../fonts/montserrat/montserrat-latin-ext-600-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/montserrat/montserrat-latin-ext-700-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("../fonts/montserrat/montserrat-latin-300-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/montserrat/montserrat-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../fonts/montserrat/montserrat-latin-500-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../fonts/montserrat/montserrat-latin-600-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/montserrat/montserrat-latin-700-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
 
 :root {
-  --sss-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif;
+  --sss-font-sans: "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif;
   --sss-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace;
   --sss-fs-base: 0.875rem;
   --sss-fs-sm: 0.8125rem;
@@ -13,7 +106,18 @@
   --sss-esp-3: 0.75rem;
   --sss-esp-4: 1rem;
   --sss-esp-5: 1.5rem;
-  --sss-raio: 4px;
+  --sss-raio: 8px;
+
+  /* Paleta da marca (Manual de Marca Kyros, p. 5-6) */
+  --sss-marca-verde: #4daf9a;
+  --sss-marca-verde-claro: #68d8bd;
+  --sss-marca-verde-escuro: #38977f;
+  --sss-marca-roxo: #5f0684;
+  --sss-marca-roxo-claro: #831fb2;
+  --sss-marca-roxo-escuro: #430463;
+  --sss-marca-amarelo: #faba00;
+  --sss-marca-amarelo-claro: #ffce55;
+  --sss-marca-amarelo-escuro: #f8a600;
 
   --sss-bg: #f3f4f6;
   --sss-surface: #ffffff;
@@ -22,29 +126,34 @@
   --sss-text: #111827;
   --sss-text-muted: #4b5563;
 
-  --sss-accent: #0b5cad;
+  --sss-accent: #5f0684;
+  --sss-accent-rgb: 95, 6, 132;
+  --sss-accent-hover: #430463;
   --sss-accent-text: #ffffff;
-  --sss-link: #0b5cad;
-  --sss-focus: #0b5cad;
+  --sss-link: #5f0684;
+  --sss-focus: #5f0684;
 
-  --sss-header-bg: #1f2937;
-  --sss-header-text: #f9fafb;
-  --sss-header-muted: #d1d5db;
-  --sss-header-focus: #93c5fd;
+  --sss-header-bg: #430463;
+  --sss-header-text: #ffffff;
+  --sss-header-muted: #e2cdf0;
+  --sss-header-focus: #68d8bd;
+  --sss-header-faixa: #4daf9a;
+  --sss-header-ativo-bg: #4daf9a;
+  --sss-header-ativo-text: #10241f;
 
-  --sss-banner-bg: #fde68a;
-  --sss-banner-text: #78350f;
-  --sss-banner-border: #d97706;
+  --sss-banner-bg: #faba00;
+  --sss-banner-text: #2e2100;
+  --sss-banner-border: #f8a600;
 
-  --sss-status-pending-bg: #fef3c7;
-  --sss-status-pending-fg: #92400e;
-  --sss-status-pending-bd: #f59e0b;
-  --sss-status-running-bg: #dbeafe;
-  --sss-status-running-fg: #1e40af;
-  --sss-status-running-bd: #3b82f6;
-  --sss-status-success-bg: #dcfce7;
-  --sss-status-success-fg: #166534;
-  --sss-status-success-bd: #22c55e;
+  --sss-status-pending-bg: #fff4d6;
+  --sss-status-pending-fg: #6b4800;
+  --sss-status-pending-bd: #faba00;
+  --sss-status-running-bg: #f3e6fa;
+  --sss-status-running-fg: #5f0684;
+  --sss-status-running-bd: #831fb2;
+  --sss-status-success-bg: #e2f4ef;
+  --sss-status-success-fg: #1e6655;
+  --sss-status-success-bd: #4daf9a;
   --sss-status-failed-bg: #fee2e2;
   --sss-status-failed-fg: #991b1b;
   --sss-status-failed-bd: #ef4444;
@@ -67,29 +176,34 @@
     --sss-text: #e5e7eb;
     --sss-text-muted: #9ca3af;
 
-    --sss-accent: #0b5cad;
+    --sss-accent: #831fb2;
+    --sss-accent-rgb: 131, 31, 178;
+    --sss-accent-hover: #5f0684;
     --sss-accent-text: #ffffff;
-    --sss-link: #8ab8f0;
-    --sss-focus: #8ab8f0;
+    --sss-link: #68d8bd;
+    --sss-focus: #68d8bd;
 
-    --sss-header-bg: #0b0d10;
-    --sss-header-text: #f3f4f6;
-    --sss-header-muted: #c3c8d0;
-    --sss-header-focus: #8ab8f0;
+    --sss-header-bg: #2b0240;
+    --sss-header-text: #ffffff;
+    --sss-header-muted: #d9c2ea;
+    --sss-header-focus: #68d8bd;
+    --sss-header-faixa: #38977f;
+    --sss-header-ativo-bg: #68d8bd;
+    --sss-header-ativo-text: #0b1f1a;
 
-    --sss-banner-bg: #78350f;
-    --sss-banner-text: #fef3c7;
-    --sss-banner-border: #f59e0b;
+    --sss-banner-bg: #f8a600;
+    --sss-banner-text: #241a00;
+    --sss-banner-border: #faba00;
 
-    --sss-status-pending-bg: #3b2506;
-    --sss-status-pending-fg: #fcd34d;
-    --sss-status-pending-bd: #b45309;
-    --sss-status-running-bg: #102a4c;
-    --sss-status-running-fg: #93c5fd;
-    --sss-status-running-bd: #2563eb;
-    --sss-status-success-bg: #0d2e1a;
-    --sss-status-success-fg: #86efac;
-    --sss-status-success-bd: #16a34a;
+    --sss-status-pending-bg: #352800;
+    --sss-status-pending-fg: #ffce55;
+    --sss-status-pending-bd: #f8a600;
+    --sss-status-running-bg: #2a0c3b;
+    --sss-status-running-fg: #d6a6f0;
+    --sss-status-running-bd: #831fb2;
+    --sss-status-success-bg: #0d2a23;
+    --sss-status-success-fg: #68d8bd;
+    --sss-status-success-bd: #38977f;
     --sss-status-failed-bg: #3a1212;
     --sss-status-failed-fg: #fca5a5;
     --sss-status-failed-bd: #dc2626;
@@ -118,6 +232,15 @@
 
 .sss-body a {
   color: var(--sss-link);
+}
+
+/* Links com aparencia de botao seguem as cores do botao, nao a cor de link (ex.: "Minha senha" no cabecalho). */
+.sss-body a.btn {
+  color: var(--bs-btn-color);
+}
+
+.sss-body a.btn:hover {
+  color: var(--bs-btn-hover-color);
 }
 
 :focus-visible {
@@ -186,6 +309,8 @@
   padding: var(--sss-esp-2) var(--sss-esp-4);
   background-color: var(--sss-header-bg);
   color: var(--sss-header-text);
+  /* Faixa no azul esverdeado da marca (conexao entre as cores principais). */
+  border-bottom: 3px solid var(--sss-header-faixa);
 }
 
 .sss-header :focus-visible {
@@ -258,17 +383,21 @@
   color: var(--sss-header-text);
 }
 
-.sss-body .sss-nav-link[aria-current="page"] {
-  background-color: var(--sss-accent);
-  color: var(--sss-accent-text);
+.sss-body .sss-nav-link[aria-current="page"],
+.sss-body .sss-nav-link[aria-current="page"]:hover {
+  background-color: var(--sss-header-ativo-bg);
+  color: var(--sss-header-ativo-text);
   font-weight: 600;
 }
 
 .sss-usuario {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--sss-esp-3);
+  justify-content: flex-end;
+  gap: var(--sss-esp-2) var(--sss-esp-3);
   margin-left: auto;
+  max-width: 100%;
   font-size: var(--sss-fs-sm);
 }
 
@@ -1070,4 +1199,70 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/* Identidade Kyros sobre o Bootstrap: cor primaria, foco e controles na paleta da marca. */
+.sss-body {
+  --bs-primary: var(--sss-accent);
+  --bs-primary-rgb: var(--sss-accent-rgb);
+  --bs-link-color: var(--sss-link);
+  --bs-link-hover-color: var(--sss-accent-hover);
+  --bs-border-radius: var(--sss-raio);
+  --bs-border-radius-sm: calc(var(--sss-raio) - 2px);
+  --bs-border-radius-lg: calc(var(--sss-raio) + 4px);
+  --bs-focus-ring-color: rgba(var(--sss-accent-rgb), 0.35);
+  --bs-body-font-family: var(--sss-font-sans);
+}
+
+.sss-body .btn-primary {
+  --bs-btn-bg: var(--sss-accent);
+  --bs-btn-border-color: var(--sss-accent);
+  --bs-btn-color: var(--sss-accent-text);
+  --bs-btn-hover-bg: var(--sss-accent-hover);
+  --bs-btn-hover-border-color: var(--sss-accent-hover);
+  --bs-btn-hover-color: var(--sss-accent-text);
+  --bs-btn-active-bg: var(--sss-accent-hover);
+  --bs-btn-active-border-color: var(--sss-accent-hover);
+  --bs-btn-active-color: var(--sss-accent-text);
+  --bs-btn-disabled-bg: var(--sss-accent);
+  --bs-btn-disabled-border-color: var(--sss-accent);
+  --bs-btn-disabled-color: var(--sss-accent-text);
+  --bs-btn-focus-shadow-rgb: var(--sss-accent-rgb);
+}
+
+.sss-body .btn-outline-primary {
+  --bs-btn-color: var(--sss-link);
+  --bs-btn-border-color: var(--sss-accent);
+  --bs-btn-hover-bg: var(--sss-accent);
+  --bs-btn-hover-border-color: var(--sss-accent);
+  --bs-btn-hover-color: var(--sss-accent-text);
+  --bs-btn-active-bg: var(--sss-accent-hover);
+  --bs-btn-active-border-color: var(--sss-accent-hover);
+  --bs-btn-active-color: var(--sss-accent-text);
+  --bs-btn-focus-shadow-rgb: var(--sss-accent-rgb);
+}
+
+.sss-body .btn-link {
+  --bs-btn-color: var(--sss-link);
+  --bs-btn-hover-color: var(--sss-accent-hover);
+}
+
+.sss-body .form-control:focus,
+.sss-body .form-select:focus,
+.sss-body .form-check-input:focus {
+  border-color: var(--sss-accent);
+  box-shadow: 0 0 0 0.2rem rgba(var(--sss-accent-rgb), 0.25);
+}
+
+.sss-body .form-check-input:checked {
+  background-color: var(--sss-accent);
+  border-color: var(--sss-accent);
+}
+
+.sss-body .nav-tabs .nav-link.active {
+  border-top: 3px solid var(--sss-marca-verde);
+}
+
+.sss-page-titulo {
+  letter-spacing: 0.01em;
 }

@@ -769,6 +769,7 @@ CONTENT_TYPE = {
     ".wmv": "video/x-ms-wmv",
     ".wmx": "audio/x-ms-asx",
     ".woff": "application/font-woff",
+    ".woff2": "font/woff2",  # SSS: Montserrat local (static/fonts)
     ".wp": "application/vnd.wordperfect",
     ".wp4": "application/vnd.wordperfect",
     ".wp5": "application/vnd.wordperfect",
