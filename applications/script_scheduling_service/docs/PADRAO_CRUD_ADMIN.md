@@ -44,6 +44,7 @@ As entidades mestras nunca são excluídas, apenas desativadas (README §10).
 | `RepoViolacao` | Mapeada por `constraint` para o campo. Exemplo: `uk_tbsss_amb_nome` vira "Já existe um ambiente com este nome." |
 | `RepoConflito` | `erros['_geral']`, com a mensagem de conflito |
 | Outra `RepoErro` | `erros['_geral']` com "Não foi possível salvar...". O detalhe técnico (ORA-, SQL, traceback) vai só para o log. |
+| Regra de negócio (ex.: último administrador) | `RepoViolacao` com constraint de aplicação (`sss_*`), traduzida para `erros['_geral']` ou `OperacaoNegada(mensagem)`, que o controller exibe no flash |
 | Sem funcionalidade | 403 no controller (guarda) e `AcessoNegado` no service |
 | ID inexistente ou inválido | 404 |
 

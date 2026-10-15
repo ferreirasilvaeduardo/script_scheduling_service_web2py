@@ -263,6 +263,22 @@ SELECT u.id
 
 As operações cobertas são: desativar usuário, trocar o perfil de usuário, desativar perfil e remover `is_admin`. Se o conjunto resultante ficar vazio, a operação é rejeitada com `ROLLBACK`. O lock serializa operações concorrentes.
 
+* **No contrato de repositório**, a proteção faz parte da própria operação de alteração (`perfis_alterar`; no F4.3, a de usuários): lock, cálculo do conjunto resultante e `UPDATE` ou rejeição, numa só chamada. O service nunca faz check-then-act com duas chamadas soltas.
+* A rejeição é `RepoViolacao(constraint='sss_ultimo_admin')`, uma regra de aplicação e não uma constraint do banco. A UI exibe "Operação negada: não pode restar nenhum administrador ativo."
+* Um perfil `is_admin = 'S'` sem usuários ativos não conta como administrador ativo.
+
+#### B.1 Matriz de permissões na UI (`admin_perfis`)
+
+* **Um único POST** com as três listas (funcionalidades, ambientes e scripts), revalidado inteiro no servidor.
+* **Concorrência:** a tela envia o `perm_versao` lido. `matriz_salvar` só grava se ele não tiver mudado; senão, `RepoConflito`.
+* **Validação dos IDs:**
+  * um ID inexistente ou não numérico rejeita a operação inteira;
+  * só itens **ativos** podem ser adicionados;
+  * associações já existentes a itens **inativos** aparecem marcadas e desabilitadas e são **preservadas** pelo servidor.
+* **Auditoria `PERM_ALTERAR`:** o `detalhe` é o diff `+EXEC_SCRIPT, -VER_LOGS, +amb:PRODUCAO, -scr:carga_diaria` (por dimensão, rótulo e sinal). Salvar sem mudança não incrementa `perm_versao` nem audita. O resumo do modal de confirmação usa o mesmo formato.
+* **Perfil administrativo:** a matriz continua editável e registrada, com um aviso de que o perfil dispensa as dimensões 1 a 3 (mas não a homologação). Ela passa a valer se `is_admin` for removido.
+* **Desativar perfil:** o modal mostra os usuários ativos afetados, que têm a sessão encerrada no próximo request pela revalidação (§4.2).
+
 #### C. Escopo das funcionalidades operacionais
 
 | Funcionalidade | Escopo |
@@ -955,7 +971,7 @@ END;
 * CK: `ck_tbsss_per_adm`, `ck_tbsss_per_ativo`, `ck_tbsss_per_versao (perm_versao >= 1)`
 * **Colunas:**
   * `id`
-  * `nome VARCHAR2(30 CHAR) NOT NULL`
+  * `nome VARCHAR2(30 CHAR) NOT NULL` (na UI: `^[A-Z0-9_]{1,30}$`, mutável, único)
   * `descricao VARCHAR2(100 CHAR)`
   * `is_admin CHAR(1) DEFAULT 'N' NOT NULL`
   * `perm_versao NUMBER(10) DEFAULT 1 NOT NULL`

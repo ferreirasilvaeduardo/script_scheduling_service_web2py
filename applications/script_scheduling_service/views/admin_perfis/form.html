@@ -1,0 +1,69 @@
+{{extend 'layout.html'}}
+{{
+# Inclusão e edição de perfil (padrão de CRUD administrativo, docs/PADRAO_CRUD_ADMIN.md).
+import ui_helpers
+_novo = not perfil.get('id')
+_situacao = ui_helpers.ativo_info(perfil.get('ativo'))
+_campos = [
+    {'nome': 'nome', 'rotulo': 'Nome', 'valor': perfil.get('nome'), 'erro': erros.get('nome'), 'obrigatorio': True, 'maxlength': 30,
+     'ajuda': u'Letras maiúsculas, dígitos e _ (ex.: OPERADOR_PROD).'},
+    {'nome': 'descricao', 'rotulo': u'Descrição', 'valor': perfil.get('descricao'), 'erro': erros.get('descricao'), 'maxlength': 100},
+]
+if not _novo:
+    _desativar = perfil.get('ativo') == 'S'
+    if _desativar:
+        _texto_modal = u'%s Usuários ativos afetados: %d.' % (aviso_desativacao, perfil.get('usuarios_ativos') or 0)
+    else:
+        _texto_modal = u'Os usuários do perfil voltarão a ter acesso conforme a matriz de permissões.'
+    pass
+    _modal_ativo = {'id': 'modal-ativo', 'titulo': (u'Desativar perfil %s' if _desativar else u'Reativar perfil %s') % perfil['nome'],
+                    'texto': _texto_modal, 'rotulo_gatilho': 'Desativar' if _desativar else 'Reativar',
+                    'rotulo_confirmar': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
+                    'variante': 'perigo' if _desativar else 'normal', 'acao': URL(c='admin_perfis', f='alternar_ativo'),
+                    'campos_ocultos': dict(id=perfil['id'], versao=perfil['versao'])}
+pass
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">{{if _novo:}}Novo perfil{{else:}}Perfil <span class="sss-mono">{{=perfil['nome']}}</span>
+      <span class="sss-status {{=_situacao['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icone']}}"></use></svg><span>{{=_situacao['rotulo']}}</span></span>{{pass}}
+    </h1>
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_perfis', f='lista')}}">Voltar à lista</a>
+    {{if not _novo:}}
+    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_perfis', f='matriz', args=[perfil['id']])}}">Permissões</a>
+    {{modal = _modal_ativo}}
+    {{include 'components/modal_confirmacao.html'}}
+    {{pass}}
+  </div>
+</div>
+
+<section class="sss-card" aria-labelledby="titulo-form">
+  <h2 class="sss-card-titulo" id="titulo-form">Dados do perfil</h2>
+  <form class="sss-card-corpo" method="post" action="{{=URL(c='admin_perfis', f='salvar')}}" autocomplete="off">
+    {{=csrf_campo()}}
+    {{if not _novo:}}
+    <input type="hidden" name="id" value="{{=perfil['id']}}">
+    <input type="hidden" name="versao" value="{{=perfil['versao']}}">
+    {{pass}}
+    {{if erro_geral:}}
+    <div class="alert alert-danger sss-alerta" role="alert">
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
+      <span>{{=erro_geral}}</span>
+    </div>
+    {{pass}}
+    {{for campo in _campos:}}
+    {{include 'components/form_campo.html'}}
+    {{pass}}
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" id="campo-is_admin" name="is_admin" value="S" aria-describedby="campo-is_admin-ajuda"{{if perfil.get('is_admin') == 'S':}} checked{{pass}}>
+      <label class="form-check-label" for="campo-is_admin">Perfil administrativo</label>
+      <div class="form-text" id="campo-is_admin-ajuda">Dispensa funcionalidades, ambientes e scripts; não dispensa a homologação nem as flags de ativo. O sistema nunca fica sem administrador ativo.</div>
+    </div>
+    <div class="sss-form-acoes">
+      <button type="submit" class="btn btn-primary">{{='Incluir perfil' if _novo else u'Salvar alterações'}}</button>
+      <a class="btn btn-outline-secondary" href="{{=URL(c='admin_perfis', f='lista')}}">Cancelar</a>
+    </div>
+  </form>
+</section>

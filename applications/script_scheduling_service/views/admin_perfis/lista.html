@@ -1,0 +1,52 @@
+{{extend 'layout.html'}}
+{{
+# Lista de perfis (padrão de CRUD administrativo, docs/PADRAO_CRUD_ADMIN.md).
+_opc_ativo = [('', 'Todos'), ('S', 'Ativos'), ('N', 'Inativos')]
+_opc_admin = [('', 'Todos'), ('S', 'Administrativos'), ('N', 'Operacionais')]
+filtros = {'id': 'filtro-perfis', 'url_base': ('admin_perfis', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': [
+    {'nome': 'nome', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('nome')},
+    {'nome': 'is_admin', 'rotulo': 'Tipo', 'tipo': 'select', 'valor': filtros_ativos.get('is_admin'), 'opcoes': _opc_admin},
+    {'nome': 'ativo', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('ativo'), 'opcoes': _opc_ativo},
+]}
+_linhas = []
+for _p in resultado['itens']:
+    _linhas.append({
+        'nome': _p['nome'],
+        'descricao': _p.get('descricao') or '-',
+        'tipo': 'Administrativo' if _p['is_admin'] == 'S' else 'Operacional',
+        'ativo': _p['ativo'],
+        'acao': [
+            {'href': URL(c='admin_perfis', f='form', args=[_p['id']]), 'rotulo': 'Editar', 'descricao': u'Editar perfil %s' % _p['nome']},
+            {'href': URL(c='admin_perfis', f='matriz', args=[_p['id']]), 'rotulo': u'Permissões', 'descricao': u'Permissões do perfil %s' % _p['nome']},
+        ],
+    })
+pass
+tabela = {'legenda': 'Perfis cadastrados', 'erro': erro, 'linhas': _linhas, 'msg_vazio': 'Nenhum perfil encontrado.', 'colunas': [
+    {'chave': 'nome', 'rotulo': 'Nome', 'tipo': 'mono'},
+    {'chave': 'descricao', 'rotulo': u'Descrição'},
+    {'chave': 'tipo', 'rotulo': 'Tipo'},
+    {'chave': 'ativo', 'rotulo': u'Situação', 'tipo': 'ativo'},
+    {'chave': 'acao', 'rotulo': u'Ações', 'tipo': 'acao'},
+]}
+pagina = resultado['pagina']
+total = resultado['total']
+url_base = ('admin_perfis', 'lista')
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">Perfis</h1>
+    <p class="sss-page-sub">Perfis de acesso e suas matrizes de permissão. Alterações valem no próximo clique dos usuários do perfil.</p>
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-primary" href="{{=URL(c='admin_perfis', f='form')}}">Novo perfil</a>
+  </div>
+</div>
+
+<section class="sss-card" aria-label="Filtros">
+  {{include 'components/filtros.html'}}
+</section>
+
+<section class="sss-card" aria-label="Perfis">
+  {{include 'components/tabela.html'}}
+  {{include 'components/paginacao.html'}}
+</section>

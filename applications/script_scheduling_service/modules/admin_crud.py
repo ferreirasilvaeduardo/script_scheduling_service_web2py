@@ -21,6 +21,14 @@ class AcessoNegado(Exception):
     """Perfil sem a funcionalidade de cadastro exigida."""
 
 
+class OperacaoNegada(Exception):
+    """Regra de negocio impede a operacao; 'mensagem' e segura para exibicao."""
+
+    def __init__(self, mensagem):
+        Exception.__init__(self, mensagem)
+        self.mensagem = mensagem
+
+
 def exigir_func(ctx, codigo):
     """Defesa em profundidade: o controller ja exige a funcionalidade, o service reconfirma."""
     if not rbac.tem_func(ctx, codigo):
@@ -61,7 +69,8 @@ def _exibir(valor):
     return _VAZIO if valor is None else masking.MASCARADOR.mascarar(str(valor))
 
 
-def _limitar(detalhe):
+def limitar(detalhe):
+    """Corta o detalhe de auditoria em LIMITE_DETALHE caracteres (coluna VARCHAR2(1000 CHAR))."""
     if len(detalhe) <= LIMITE_DETALHE:
         return detalhe
     return detalhe[:LIMITE_DETALHE - 3] + u"..."
@@ -74,12 +83,12 @@ def detalhe_alteracoes(antes, depois, campos):
         a, d = normalizar(antes.get(c)), normalizar(depois.get(c))
         if a != d:
             partes.append(u"%s: %s%s%s" % (c, _exibir(a), _SETA, _exibir(d)))
-    return _limitar(u"; ".join(partes)) if partes else None
+    return limitar(u"; ".join(partes)) if partes else None
 
 
 def detalhe_insercao(registro, campos):
     """'campo: valor' dos campos informados na inclusao, mascarado e limitado."""
-    return _limitar(u"; ".join(u"%s: %s" % (c, _exibir(registro.get(c))) for c in campos))
+    return limitar(u"; ".join(u"%s: %s" % (c, _exibir(registro.get(c))) for c in campos))
 
 
 def auditoria(ctx, ip, acao, detalhe):

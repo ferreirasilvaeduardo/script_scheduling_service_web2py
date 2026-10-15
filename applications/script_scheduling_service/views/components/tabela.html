@@ -6,7 +6,8 @@
 #     colunas   -- lista de {chave, rotulo, classe (opcional), tipo: 'texto' | 'mono' | 'status' | 'ativo' | 'acao'};
 #                  tipo 'status' usa components/badge_status.html e lê '<chave>_motivo' da linha;
 #                  tipo 'ativo' mostra o selo Ativo/Inativo da flag 'S'/'N' (ui_helpers.ativo_info);
-#                  tipo 'acao' espera na linha {href, rotulo, descricao (opcional, aria-label)} e gera um link;
+#                  tipo 'acao' espera na linha {href, rotulo, descricao (opcional, aria-label)}, ou uma lista
+#                  deles, e gera um link por item;
 #     linhas    -- lista de dicts indexados pela 'chave' de cada coluna;
 #     erro      -- opcional; mensagem segura ao usuário (sem ORA-, SQL ou stack trace, AGENTS §3.1);
 #     msg_vazio -- opcional; padrão "Nenhum registro encontrado".
@@ -52,8 +53,9 @@ _tab_linhas = tabela.get('linhas') or []
         {{_tab_ativo = ui_helpers.ativo_info(_tab_linha.get(_tab_col['chave']))}}
         <td class="{{=_tab_col.get('classe', '')}}"><span class="sss-status {{=_tab_ativo['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_tab_ativo['icone']}}"></use></svg><span>{{=_tab_ativo['rotulo']}}</span></span></td>
         {{elif _tab_tipo == 'acao':}}
-        {{_tab_acao = _tab_linha.get(_tab_col['chave']) or dict()}}
-        <td class="sss-tabela-acoes {{=_tab_col.get('classe', '')}}">{{if _tab_acao.get('href'):}}<a class="btn btn-sm btn-outline-secondary" href="{{=_tab_acao['href']}}"{{if _tab_acao.get('descricao'):}} aria-label="{{=_tab_acao['descricao']}}"{{pass}}>{{=_tab_acao['rotulo']}}</a>{{pass}}</td>
+        {{_tab_acoes = _tab_linha.get(_tab_col['chave']) or []
+        _tab_acoes = _tab_acoes if isinstance(_tab_acoes, (list, tuple)) else [_tab_acoes]}}
+        <td class="sss-tabela-acoes {{=_tab_col.get('classe', '')}}">{{for _tab_acao in _tab_acoes:}}{{if _tab_acao.get('href'):}}<a class="btn btn-sm btn-outline-secondary" href="{{=_tab_acao['href']}}"{{if _tab_acao.get('descricao'):}} aria-label="{{=_tab_acao['descricao']}}"{{pass}}>{{=_tab_acao['rotulo']}}</a> {{pass}}{{pass}}</td>
         {{elif _tab_tipo == 'mono':}}
         <td class="sss-mono {{=_tab_col.get('classe', '')}}">{{=_tab_linha.get(_tab_col['chave'], '')}}</td>
         {{else:}}

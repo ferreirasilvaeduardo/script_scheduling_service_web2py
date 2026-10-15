@@ -183,6 +183,48 @@ class BaseRepoContractTest(object):
         ins = aud.listar(filtros={"acao": "CAD_INSERIR"}, pagina=1, tamanho=1)["itens"][0]
         self.assertEqual((ins["entidade"], ins["entidade_id"]), ("tbsss_ambientes", novo["id"]))
 
+    def test_04c_perfil_ultimo_admin_e_matriz_condicional(self):
+        rbac = self.obter_repo("rbac")
+        aud = self.obter_repo("auditoria")
+        admin = rbac.perfis_listar(filtros={"nome": "ADMINISTRADOR"})["itens"][0]
+        versao = admin["perm_versao"]
+        desativacoes = aud.listar(filtros={"acao": "CAD_DESATIVAR"}, pagina=1, tamanho=1)["total"]
+
+        # Ultimo admin: a mesma operacao bloqueia, valida e rejeita, sem alterar nada.
+        for dados in ({"ativo": "N"}, {"is_admin": "N"}):
+            with self.assertRaises(RepoViolacao) as ctx:
+                rbac.perfis_alterar(admin["id"], dados,
+                                    auditoria={"ator": "admin", "ip": None, "acao": "CAD_DESATIVAR", "detalhe": "x"})
+            self.assertEqual(ctx.exception.constraint, "sss_ultimo_admin")
+        atual = rbac.perfis_obter(admin["id"])
+        self.assertEqual((atual["ativo"], atual["is_admin"], atual["perm_versao"]), ("S", "S", versao))
+        self.assertEqual(aud.listar(filtros={"acao": "CAD_DESATIVAR"}, pagina=1, tamanho=1)["total"], desativacoes)
+
+        # esperado divergente: conflito sem incremento de perm_versao.
+        with self.assertRaises(RepoConflito):
+            rbac.perfis_alterar(admin["id"], {"descricao": "x"}, esperado={"descricao": "outra"})
+        self.assertEqual(rbac.perfis_obter(admin["id"])["perm_versao"], versao)
+
+        consulta = rbac.perfis_listar(filtros={"nome": "CONSULTA"})["itens"][0]
+        matriz = rbac.matriz_obter(consulta["id"])
+        v0 = consulta["perm_versao"]
+        with self.assertRaises(RepoConflito):
+            rbac.matriz_salvar(consulta["id"], [], [], [], perm_versao_esperada=v0 + 7)
+        with self.assertRaises(RepoViolacao):
+            rbac.matriz_salvar(consulta["id"], [999999], matriz["ambs"], matriz["scrs"], perm_versao_esperada=v0)
+        self.assertEqual(rbac.matriz_obter(consulta["id"]), matriz)
+        self.assertEqual(rbac.perfis_obter(consulta["id"])["perm_versao"], v0)
+
+        antes = aud.listar(filtros={"acao": "PERM_ALTERAR"}, pagina=1, tamanho=1)["total"]
+        nova = rbac.matriz_salvar(consulta["id"], [], matriz["ambs"], matriz["scrs"], perm_versao_esperada=v0,
+                                  auditoria={"ator": "admin", "ip": None, "acao": "PERM_ALTERAR", "detalhe": "-VER_LOGS"})
+        self.assertEqual(nova["funcs"], [])
+        self.assertEqual(rbac.perfis_obter(consulta["id"])["perm_versao"], v0 + 1)
+        ultimo = aud.listar(filtros={"acao": "PERM_ALTERAR"}, pagina=1, tamanho=1)
+        self.assertEqual(ultimo["total"], antes + 1)
+        self.assertEqual((ultimo["itens"][0]["entidade"], ultimo["itens"][0]["entidade_id"]),
+                         ("tbsss_perfis", consulta["id"]))
+
     def test_05_cascata_associacao(self):
         cat = self.obter_repo("catalogo")
         rbac = self.obter_repo("rbac")
