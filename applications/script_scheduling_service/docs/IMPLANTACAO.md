@@ -1,0 +1,602 @@
+# SSS — Guia de Implantação em Outro Servidor
+
+| Campo | Valor |
+|---|---|
+| Público | Quem vai instalar e operar o SSS num servidor novo (infraestrutura, desenvolvimento, homologação) |
+| Versão do sistema | 0.1.0 — commit de referência `34e7160` (fases F0.1 a F6.1 concluídas) |
+| Validação | Procedimento **ensaiado de ponta a ponta** em 2026-10-15 num clone limpo do repositório (Python 3.6.0 e 3.13), com subida pelo launcher, login, disparo de ticket, painel de agentes e logout. O que não foi ensaiado está marcado como **[não ensaiado]** |
+| Documentos relacionados | `README.md` (regras de negócio e arquitetura), `AGENTS.md` (regras de desenvolvimento), `docs/AMBIENTE_DEV.md` (estação do desenvolvedor), `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx` (roteiro de homologação) |
+
+---
+
+## 1. Leia antes: o que dá para implantar hoje
+
+O SSS está sendo construído em fases (`docs/prompts/00_INDEX.md`). Hoje está pronta a **interface web completa sobre o backend FAKE** (dados de demonstração em memória). O banco Oracle real (F7), o agente executor (F8) e o pacote de produção (F9) **ainda não existem**.
+
+| Cenário | Possível hoje? | Por quê |
+|---|---|---|
+| **Servidor de homologação visual** (UI Freeze): web + backend FAKE, `sss_env = DEV` | **Sim** — é o que este guia instala | Tudo implementado e testado |
+| Homologação integrada ou produção (`sss_env = HML`/`PROD`) | **Não** | O backend FAKE é proibido fora de DEV (a subida aborta) e o backend ORACLE ainda não foi implementado (F7) |
+| Execução real de scripts | **Não** | O agente executor (`run_scheduler.py`) é o F8. No FAKE, os tickets "em execução" são simulados |
+| Nó web em Windows | **Não** | A camada de plataforma Windows é o F8.0. Hoje o nó web roda em **Linux** (x86_64) |
+
+> **Consequências práticas do backend FAKE:**
+> * os dados ficam **na memória do processo**: reiniciar o servidor apaga tudo o que foi feito e restaura o seed;
+> * ele exige **um único processo** web (o servidor embutido do web2py). Não use gunicorn/uWSGI com vários workers;
+> * por regra do projeto, o servidor DEV escuta **somente em `127.0.0.1`**. Os usuários acessam por túnel SSH (§13).
+
+O capítulo 18 lista o que preparar desde já para a implantação definitiva (Oracle + agentes).
+
+---
+
+## 2. Visão geral do procedimento
+
+```text
+ 1. Requisitos do servidor ............ §3      9. Configuração (config.ini) .......... §9
+ 2. Usuário e diretórios .............. §4     10. Teste de carga da configuração ..... §10
+ 3. Código-fonte ...................... §5     11. Subida do servidor ................. §11
+ 4. Python ............................ §6     12. Validação pós-subida ............... §12
+ 5. Verificação do código ............. §7     13. Acesso dos usuários ................ §13
+ 6. Árvore de scripts de exemplo ...... §8.1   14. Execução contínua (systemd) ........ §14
+ 7. Segredos (secrets.cfg) ............ §8.2   15. Operação, logs e atualização ....... §15-16
+ 8. Senha dos usuários de demonstração  §8.3   17. Problemas e soluções ............... §17
+```
+
+Convenções deste guia:
+
+* Os comandos marcados com `sudo` são executados por um administrador do servidor. Os demais, pelo usuário de serviço `sss` (`sudo -u sss -H bash`).
+* Caminhos padrão (podem ser trocados, desde que trocados também no `config.ini`):
+
+| Caminho | Conteúdo | Dono | Modo |
+|---|---|---|---|
+| `/opt/sss/web2py` | Código (web2py + aplicação) | `sss` | `0750` |
+| `/etc/sss/secrets.cfg` | Segredos | `sss` | arquivo `0600`, diretório `0700` |
+| `/var/log/sss` | Logs da aplicação | `sss` | `0750` |
+| `/var/lib/sss/work` | Diretório de trabalho do agente (reservado ao F8) | `sss` | `0700` |
+| `/opt/automacoes/scripts` | Árvore de scripts (somente leitura para o `sss`) | `root` | diretórios `0755`, arquivos `0644` |
+
+* `APP` = `/opt/sss/web2py/applications/script_scheduling_service`.
+
+---
+
+## 3. Requisitos do servidor
+
+| Item | Requisito |
+|---|---|
+| Sistema operacional | Linux x86_64 (RHEL/Oracle Linux 8+, Rocky/Alma 8+, Ubuntu 20.04+, Debian 11+) |
+| CPU / memória / disco | 1 vCPU, 1 GB de RAM livre, 500 MB de disco (código ~60 MB + logs) |
+| Python | **3.6.0 ou superior** (validado de 3.6.0 a 3.13). Ver §6 |
+| Pacotes Python | **Nenhum.** O web2py e todas as bibliotecas de frontend vêm no repositório. Não use `pip install` |
+| Ferramentas | `git` (ou `tar`), `curl`, `sudo` |
+| Rede | Nenhuma porta aberta para a rede: o servidor escuta em `127.0.0.1:8000`. Acesso dos usuários por SSH (porta 22). **Não precisa de internet** |
+| Relógio | NTP ativo e fuso definido (o FAKE usa o relógio do servidor). Recomendado `America/Sao_Paulo` |
+| Navegador dos usuários | Chrome, Edge ou Firefox atualizados |
+
+---
+
+## 4. Usuário de serviço e diretórios
+
+O SSS **recusa rodar como root** (o launcher aborta). Crie um usuário dedicado, sem login interativo:
+
+```bash
+# 4.1 Usuário de serviço (sem shell de login; os comandos rodam via "sudo -u sss")
+sudo useradd --system --create-home --home-dir /var/lib/sss --shell /sbin/nologin sss
+# Em Debian/Ubuntu, se /sbin/nologin não existir, use /usr/sbin/nologin
+
+# 4.2 Diretórios
+sudo install -d -o sss -g sss -m 0750 /opt/sss
+sudo install -d -o sss -g sss -m 0700 /etc/sss
+sudo install -d -o sss -g sss -m 0750 /var/log/sss
+sudo install -d -o sss -g sss -m 0700 /var/lib/sss/work
+
+# 4.3 Fuso horário do servidor (se ainda não estiver definido)
+sudo timedatectl set-timezone America/Sao_Paulo
+timedatectl | grep -E "Time zone|synchronized"
+```
+
+Para abrir um shell como `sss` durante a instalação:
+
+```bash
+sudo -u sss -H bash
+cd /opt/sss
+```
+
+---
+
+## 5. Obter o código-fonte
+
+> **Importante:** use **o web2py que está no repositório**, não um download do site do web2py. O repositório traz correções necessárias para o Python 3.6 (`gluon/packages/rocket3`, `gluon/contrib/multipart.py`).
+
+Escolha **uma** das opções, sempre fixando um commit ou tag conhecido.
+
+### 5.1 Servidor com acesso ao Git
+
+```bash
+# como sss
+cd /opt/sss
+git clone https://github.com/ferreirasilvaeduardo/script_scheduling_service_web2py.git web2py
+cd web2py
+git checkout 34e7160        # ou a tag/commit homologado
+git log --oneline -1
+```
+
+Se o repositório for privado, use um *deploy token* de leitura ou a opção 5.2. Nunca grave credenciais do Git no servidor.
+
+### 5.2 Servidor sem acesso ao Git (air-gapped)
+
+Na máquina que tem o repositório:
+
+```bash
+cd /caminho/do/repositorio
+git archive --format=tar.gz -o sss-34e7160.tar.gz 34e7160
+sha256sum sss-34e7160.tar.gz > sss-34e7160.tar.gz.sha256
+```
+
+Copie os dois arquivos para o servidor (por exemplo, `scp` para `/tmp`) e:
+
+```bash
+# como sss
+cd /tmp && sha256sum -c sss-34e7160.tar.gz.sha256      # deve responder "OK"
+mkdir -p /opt/sss/web2py && tar -xzf /tmp/sss-34e7160.tar.gz -C /opt/sss/web2py
+```
+
+O pacote do `git archive` (~11 MB) não contém `config.ini`, `secrets.cfg`, logs nem arquivos de parâmetros do web2py: eles são criados nos passos seguintes.
+
+### 5.3 Conferência
+
+```bash
+cd /opt/sss/web2py
+ls                      # deve listar web2py.py, gluon/, applications/, bin/, routes.py ...
+ls applications         # deve listar SOMENTE script_scheduling_service
+ls applications/script_scheduling_service/instance   # config.ini.example e secrets.cfg.example
+```
+
+As aplicações de exemplo do web2py (`admin`, `welcome`, `examples`) **não** vêm no repositório, por segurança. Isso é intencional.
+
+---
+
+## 6. Python
+
+O código usa somente sintaxe do Python 3.6 e roda de **3.6.0 a 3.13**. A referência de produção é a **3.6.8**. Escolha uma opção e anote o caminho do executável (usado como `PYTHON` nos passos seguintes).
+
+| Opção | Quando usar | Como |
+|---|---|---|
+| **A. Python do sistema (3.8+)** | Servidor moderno; mais simples | `python3 --version` já atende. Ex.: Ubuntu 22.04 (3.10), Debian 12 (3.11), RHEL 9 (3.9) |
+| **B. Python 3.6.8 do RHEL/Oracle Linux 8** | Igualar a referência de produção | `sudo dnf install -y python36` → `/usr/bin/python3.6` **[não ensaiado]** |
+| **C. pyenv (3.6.0 ou 3.6.8)** | Distribuição recente sem pacote 3.6 | Receita completa em `docs/AMBIENTE_DEV.md` §1.1 (compilação com OpenSSL 1.1.1w e patch do bpo-27987) |
+
+Verifique a versão e o suporte a PBKDF2 (obrigatório para as senhas):
+
+```bash
+PYTHON=python3          # ajuste conforme a opção escolhida (ex.: /usr/bin/python3.6)
+$PYTHON --version
+$PYTHON -c "import ssl, hashlib; print(ssl.OPENSSL_VERSION); hashlib.pbkdf2_hmac('sha256', b'x', b'y', 1); print('pbkdf2 OK')"
+```
+
+---
+
+## 7. Verificação do código no servidor
+
+```bash
+# como sss
+cd /opt/sss/web2py/applications/script_scheduling_service
+
+# 7.1 Pré-requisitos (Python, web2py.py, Bootstrap, Alpine.js em build CSP)
+$PYTHON scripts/check_env.py ; echo "codigo de saida: $?"
+# esperado: tabela com todos os itens "OK" e código 0 (1 = falta arquivo; 2 = Python < 3.6.0)
+
+# 7.2 Suíte de testes completa (não precisa de configuração nem de segredos)
+$PYTHON -m unittest discover -s scripts -p "test_*.py"
+# esperado no final: "Ran 614 tests ... OK (skipped=17)"
+# Os 17 "skipped" são testes de banco Oracle real e de Windows; é o resultado esperado.
+```
+
+Não prossiga se algum desses passos falhar.
+
+---
+
+## 8. Pré-requisitos de dados: árvore de scripts, segredos e senha de demonstração
+
+### 8.1 Árvore de scripts de exemplo (necessária para disparar tickets)
+
+Ao criar um ticket, o servidor valida o script com o `path_guard` (README §8.5): o arquivo precisa existir dentro de `base_script_dir`, e o script, **cada diretório** do caminho e a própria base precisam pertencer a um UID de `script_owner_uids`, sem escrita para grupo/outros e **sem escrita para o usuário `sss`**. O modelo correto é a árvore pertencer ao `root`:
+
+```bash
+sudo install -d -o root -g root -m 0755 /opt/automacoes
+sudo cp -r /opt/sss/web2py/applications/script_scheduling_service/dev/scripts /opt/automacoes/scripts
+sudo rm -f /opt/automacoes/scripts/.gitkeep
+sudo chown -R root:root /opt/automacoes/scripts
+sudo find /opt/automacoes/scripts -type d -exec chmod 0755 {} +
+sudo find /opt/automacoes/scripts -type f -exec chmod 0644 {} +
+
+# conferência: o usuário sss lê, mas não escreve
+sudo -u sss test -r /opt/automacoes/scripts/carga_diaria.py && echo "leitura OK"
+sudo -u sss test -w /opt/automacoes/scripts/carga_diaria.py || echo "sem escrita OK"
+```
+
+No `config.ini` (§9): `base_script_dir = /opt/automacoes/scripts` e `script_owner_uids = 0`.
+
+> Sem `sudo` (árvore pertencente ao próprio `sss`), use a alternativa do `docs/AMBIENTE_DEV.md` §6.1: modos `0444`/`0555` e o UID do `sss` em `script_owner_uids`. Essa variante foi a usada no ensaio.
+
+### 8.2 Segredos (`/etc/sss/secrets.cfg`)
+
+O arquivo precisa ser **regular, pertencer ao usuário que roda o processo (`sss`) e ter modo `0600`**; caso contrário a aplicação não sobe (§17). Com o backend FAKE, basta a chave do cookie de sessão:
+
+```bash
+# como sss
+umask 077
+$PYTHON -c "import secrets; print('[web]'); print('cookie_key = ' + secrets.token_urlsafe(48))" > /etc/sss/secrets.cfg
+chmod 600 /etc/sss/secrets.cfg
+ls -l /etc/sss/secrets.cfg        # -rw------- 1 sss sss ...
+```
+
+* `cookie_key` assina e cifra o cookie de sessão. Trocar o valor desconecta todos os usuários.
+* As seções `[oracle]` e `[ambiente:<NOME>]` do `secrets.cfg.example` são opcionais em DEV/FAKE e passam a ser obrigatórias com o Oracle (F7).
+* **Nunca** copie o `secrets.cfg` de outra máquina por e-mail ou chat, nem o coloque dentro do diretório do código.
+
+### 8.3 Senha dos usuários de demonstração (`SSS_DEV_SEED_PASSWORD`)
+
+No FAKE, os usuários `admin`, `op.prod`, `op.hml` e `consulta` recebem, a cada subida, a senha informada na variável de ambiente `SSS_DEV_SEED_PASSWORD` (`inativo` e `bloqueado` nunca entram, de propósito).
+
+* Mínimo de **12 caracteres**. Fora da política, ou sem a variável, o servidor sobe, mas **nenhum login funciona** (há um WARN no log).
+* A senha não fica gravada em arquivo na subida interativa (§11.1). Na subida por `systemd` (§14), ela fica num arquivo `0600` do próprio `sss`.
+* Combine a senha com a equipe de homologação por um canal seguro.
+
+---
+
+## 9. Configuração (`instance/config.ini`)
+
+```bash
+# como sss
+cd /opt/sss/web2py/applications/script_scheduling_service/instance
+cp config.ini.example config.ini
+chmod 640 config.ini
+vi config.ini          # ou o editor de sua preferência
+```
+
+O `config.ini` não contém segredos. **Toda chave é validada na subida**: chave desconhecida, ausente ou fora da faixa impede a aplicação de subir, com a chave e o motivo na mensagem (§10). Ajuste **somente** as chaves abaixo:
+
+| Seção | Chave | Valor para este servidor | Observação |
+|---|---|---|---|
+| `[app]` | `sss_env` | `DEV` | Obrigatório com FAKE. Também exibe a faixa amarela "AMBIENTE DEV" |
+| `[app]` | `data_backend` | `FAKE` | `ORACLE` ainda não está implementado |
+| `[secrets]` | `secrets_file` | `/etc/sss/secrets.cfg` | Caminho absoluto do §8.2 |
+| `[agent]` | `agent_id` | identificador do servidor, ex.: `srv-sss-hml-01` | Aparece em todas as linhas de log; `^[A-Za-z0-9._-]{1,30}$` |
+| `[agent]` | `base_script_dir` | `/opt/automacoes/scripts` | §8.1 |
+| `[agent]` | `script_owner_uids` | `0` | UID do dono da árvore (root). Na variante sem sudo, o UID do `sss` (`id -u sss`) |
+| `[agent]` | `work_dir` | `/var/lib/sss/work` | Reservado ao agente (F8) |
+| `[logging]` | `log_dir` | `/var/log/sss` | Criado com `0750` se não existir |
+| `[logging]` | `level` | `INFO` | `DEBUG` só para investigação |
+| `[web]` | `allowed_origins` | `http://127.0.0.1:8000` | Lista separada por vírgula. Em DEV, o próprio endereço acessado já é aceito automaticamente; com proxy reverso, inclua a URL pública (§13.2) |
+| `[web]` | `trusted_proxies` | vazio | Só com proxy reverso (§13.2) |
+
+**Não altere** as demais chaves. Em especial:
+
+* a seção `[oracle]` é obrigatória mesmo com FAKE (o arquivo é validado inteiro), mas não é usada; mantenha os valores do exemplo;
+* `[agent]`: `fence_timeout_s * 2 <= node_offline_timeout_s`, `heartbeat_interval_s * 3 <= fence_timeout_s` e `max_parallel_jobs <= max_parallel_hard_limit` são validados;
+* `[web] session_idle_timeout_s` (30 min), `login_max_tentativas` (5) e `login_bloqueio_s` (15 min) são os padrões de segurança do README §4.2.
+
+---
+
+## 10. Teste de carga da configuração (antes de subir)
+
+Este teste carrega a aplicação no terminal, sem servidor, e mostra **a causa exata** de qualquer erro de configuração ou de segredos:
+
+```bash
+# como sss
+cd /opt/sss/web2py
+umask 077
+echo 'print("SSS: configuracao OK (sss_env=%s, backend=%s, agent_id=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.app.data_backend, current.sss_cfg.agent.agent_id))' > /tmp/sss_diag.py
+$PYTHON web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E "^SSS:|ConfigErro"
+rm -f /tmp/sss_diag.py
+```
+
+* **Sucesso:** `SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv-sss-hml-01)`.
+* **Falha:** aparece a linha `ConfigErro` com o motivo, por exemplo `ConfigErro: Arquivo de segredos possui permissoes inseguras (mode 644, ...)`. Corrija conforme o §17 e repita.
+* Se nenhuma das duas linhas aparecer, rode o comando sem o `grep` e leia as últimas linhas da saída. O aviso `unable to create welcome.w2p file` pode aparecer e é inofensivo (§11.1).
+
+---
+
+## 11. Subir o servidor
+
+### 11.1 Subida interativa (primeira vez e testes)
+
+```bash
+# como sss
+cd /opt/sss/web2py
+read -s -p "SSS_DEV_SEED_PASSWORD: " SSS_DEV_SEED_PASSWORD && export SSS_DEV_SEED_PASSWORD && echo
+export PYTHON SSS_TZ=America/Sao_Paulo
+bin/sss-web.sh "$PYTHON" web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui
+```
+
+O que cada parte faz:
+
+| Parte | Função |
+|---|---|
+| `bin/sss-web.sh` | Launcher do projeto: **recusa root**, aplica `umask 077`, exporta `TZ` (de `SSS_TZ`) e substitui o próprio processo pelo comando (`exec`), para que os sinais de parada cheguem direto ao servidor |
+| `web2py.py` | Servidor web embutido do web2py (Rocket), multithread em **um único processo**, como o FAKE exige |
+| `-a '<recycle>'` | Senha do painel administrativo do web2py. `<recycle>` reaproveita a existente ou, na primeira vez, **desabilita** o painel (que nem é implantado). Assim nenhuma senha aparece na lista de processos (`ps`). **Não** use `-a 'senha'` |
+| `-i 127.0.0.1` | Escuta só local (regra do projeto em DEV). **Nunca** use `0.0.0.0` |
+| `-p 8000` | Porta. Se mudar, ajuste o túnel (§13) e `allowed_origins` |
+| `--no_gui` | Sem interface gráfica do web2py |
+
+A subida está pronta quando aparece `please visit: http://127.0.0.1:8000/`. Para parar: **Ctrl+C**.
+
+Na **primeira** subida aparece no terminal `New installation error: unable to create welcome.w2p file` com um traceback. É **esperado e inofensivo**: o web2py tenta empacotar a aplicação de exemplo `welcome`, que foi removida de propósito.
+
+### 11.2 Arquivos criados pela subida
+
+| Arquivo | O que é |
+|---|---|
+| `/opt/sss/web2py/parameters_8000.py` | Senha (hash) do painel do web2py; com `<recycle>` na primeira vez, `password=None` |
+| `/opt/sss/web2py/httpserver.log` | Log de acesso do servidor web (uma linha por requisição) |
+| `/var/log/sss/sss_web.log` | Log da aplicação (§15.2) |
+| `APP/errors/` | "Tickets" de erro interno do web2py (§15.3) |
+
+---
+
+## 12. Validação pós-subida
+
+Num **segundo terminal** do servidor:
+
+```bash
+# 12.1 Página de login responde
+curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:8000/script_scheduling_service/default/login
+# esperado: login: HTTP 200
+
+# 12.2 Cabeçalhos de segurança presentes
+curl -sI http://127.0.0.1:8000/script_scheduling_service/default/login | grep -iE "content-security-policy|x-frame-options|x-content-type-options|referrer-policy"
+# esperado: as 4 linhas
+
+# 12.3 Requisição de outra origem é recusada
+curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://outro-host" http://127.0.0.1:8000/script_scheduling_service/default/login
+# esperado: origem estranha: HTTP 403
+
+# 12.4 Log da aplicação sendo escrito
+tail -n 5 /var/log/sss/sss_web.log
+```
+
+Depois, pelo navegador (via túnel, §13.1), faça o **teste de fumaça**:
+
+1. Abrir `http://localhost:8000/script_scheduling_service` → tela **Entrar**, com a faixa "AMBIENTE DEV".
+2. Entrar com `admin` e a senha do §8.3 → **Painel inicial** "Olá, Administrador Geral", com os cartões de tickets, agendamentos e saúde dos agentes.
+3. **Disparar script** → `carga_diaria` → `PRODUCAO` → **Criar ticket** → confirmar → mensagem "Ticket #41 criado com sucesso." (prova que a árvore de scripts do §8.1 está correta).
+4. **Auditoria** → aba **Agentes** → dois cartões (`agt-host01` OK; `agt-host02` envelhecendo com o tempo).
+5. **Sair** → volta para **Entrar** com "Você saiu do sistema.".
+
+A homologação completa segue o `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx`.
+
+> A raiz do servidor (`http://localhost:8000/`) responde **404**, porque redireciona para a aplicação `welcome`, removida. Use sempre o caminho `/script_scheduling_service`. A aplicação padrão será fixada no `routes.py` no F9.1.
+
+---
+
+## 13. Acesso dos usuários
+
+### 13.1 Túnel SSH (recomendado; não abre porta nenhuma) — [ensaiado o modelo de origem]
+
+Cada usuário cria um túnel da própria máquina até o servidor e usa o navegador normalmente:
+
+```bash
+# Linux, macOS ou Windows 10+ (PowerShell/Prompt já trazem o ssh)
+ssh -N -L 8000:127.0.0.1:8000 usuario@servidor-sss
+# deixe a janela aberta e acesse no navegador: http://localhost:8000/script_scheduling_service
+```
+
+* No PuTTY: *Connection → SSH → Tunnels*: Source port `8000`, Destination `127.0.0.1:8000`, **Add**, e conecte.
+* O usuário precisa de conta SSH no servidor (pode ser restrita a túnel, sem shell: `PermitTTY no` / `ForceCommand /bin/false` para o grupo, a critério da infraestrutura).
+* Em DEV, o endereço acessado (`http://localhost:8000`) é aceito automaticamente na checagem de origem; não é preciso mudar o `config.ini`.
+* Se a porta 8000 local estiver ocupada, use outra só do lado do usuário (`-L 18000:127.0.0.1:8000` e `http://localhost:18000/...`).
+
+### 13.2 Proxy reverso HTTPS (alternativa) — [não ensaiado]
+
+Só com aprovação da segurança da informação, porque expõe na rede um ambiente DEV com dados de demonstração. O SSS continua em `127.0.0.1:8000` e um Nginx/Apache **no mesmo servidor** publica `https://sss-hml.empresa.local`:
+
+* `config.ini`: `allowed_origins = https://sss-hml.empresa.local` e `trusted_proxies = 127.0.0.1`;
+* o proxy deve repassar `Host`, `X-Forwarded-For` e o corpo sem alteração; não use cache de respostas;
+* use certificado da empresa (o cookie de sessão não recebe `Secure` em DEV atrás de proxy HTTP local; o HTTPS do proxy protege o trecho de rede);
+* restrinja o acesso por rede/VPN.
+
+---
+
+## 14. Execução contínua com systemd (opcional) — [sintaxe verificada; não ensaiado como serviço]
+
+Para manter o servidor no ar sem um terminal aberto. Lembre que **reiniciar o serviço restaura os dados de demonstração**.
+
+```bash
+# 14.1 Senha de demonstração num arquivo do próprio sss (somente leitura dele)
+sudo install -o sss -g sss -m 0600 /dev/null /etc/sss/web.env
+sudo -u sss bash -c 'read -s -p "SSS_DEV_SEED_PASSWORD: " P; echo; printf "SSS_DEV_SEED_PASSWORD=%s\nSSS_TZ=America/Sao_Paulo\n" "$P" > /etc/sss/web.env'
+```
+
+`/etc/systemd/system/sss-web.service` (ajuste `PYTHON` conforme o §6):
+
+```ini
+[Unit]
+Description=SSS - Script Scheduling Service (web, backend FAKE/DEV)
+After=network.target
+
+[Service]
+Type=simple
+User=sss
+Group=sss
+WorkingDirectory=/opt/sss/web2py
+EnvironmentFile=/etc/sss/web.env
+Environment=PYTHON=/usr/bin/python3
+ExecStart=/opt/sss/web2py/bin/sss-web.sh /usr/bin/python3 web2py.py -a <recycle> -i 127.0.0.1 -p 8000 --no_gui
+Restart=on-failure
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=30
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/sss/web2py /var/log/sss /var/lib/sss
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now sss-web
+systemctl status sss-web --no-pager
+journalctl -u sss-web -n 50 --no-pager
+```
+
+* `ReadWritePaths` inclui o diretório do código porque o web2py grava `parameters_8000.py`, `httpserver.log`, `errors/` e caches de bytecode nele.
+* Parar: `sudo systemctl stop sss-web`. Reiniciar (zera os dados FAKE): `sudo systemctl restart sss-web`.
+
+---
+
+## 15. Operação do dia a dia
+
+### 15.1 Parar, reiniciar e verificar
+
+| Ação | Interativo (§11.1) | systemd (§14) |
+|---|---|---|
+| Parar | Ctrl+C no terminal | `sudo systemctl stop sss-web` |
+| Subir | comando do §11.1 | `sudo systemctl start sss-web` |
+| Está no ar? | `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/script_scheduling_service/default/login` (200) | idem, ou `systemctl is-active sss-web` |
+
+### 15.2 Logs
+
+| Log | Onde | Conteúdo |
+|---|---|---|
+| Aplicação | `/var/log/sss/sss_web.log` (rotação automática: 10 MB × 10 arquivos) | Formato `data nível [pid] [agente] [ticket] [acao] mensagem`. Login, logout, criação/cancelamento de ticket, negações de acesso, recusas de CSRF/origem. **Nunca** contém senhas nem valores sigilosos |
+| Acesso HTTP | `/opt/sss/web2py/httpserver.log` | Uma linha por requisição (IP, método, caminho, status) |
+| Serviço | `journalctl -u sss-web` | Saída do processo quando rodando por systemd |
+| Erros internos | `APP/errors/` | Ver 15.3 |
+
+Exemplos úteis:
+
+```bash
+grep -E " (WARNING|ERROR|CRITICAL) " /var/log/sss/sss_web.log | tail -n 20     # problemas recentes
+grep "acao=LOGIN" /var/log/sss/sss_web.log | tail -n 20                        # logins e logouts
+grep "acao=CSRF\|acao=RBAC" /var/log/sss/sss_web.log | tail -n 20              # recusas de segurança
+```
+
+### 15.3 Erro interno (HTTP 500 com "Ticket issued")
+
+O link do ticket na página não abre (o painel `admin` não é implantado). Para ler a causa:
+
+```bash
+# como sss, a partir da raiz do web2py
+cd /opt/sss/web2py
+F=$(ls -t applications/script_scheduling_service/errors/* | head -1)
+$PYTHON -c "import pickle,sys; d=pickle.load(open(sys.argv[1],'rb')); print(d['traceback'])" "$F" | tail -n 5
+```
+
+Erros de configuração aparecem melhor pelo teste do §10. Depois de resolver, limpe os tickets antigos: `rm -f applications/script_scheduling_service/errors/*`.
+
+### 15.4 Limpeza de disco
+
+* `sss_web.log` tem rotação própria. `httpserver.log` **não**: inclua-o no `logrotate` da empresa (`copytruncate`, semanal, 4 cópias) ou apague-o periodicamente com o serviço parado.
+* `APP/errors/` só cresce quando há erro interno; limpe após a análise.
+
+---
+
+## 16. Atualização de versão e retorno
+
+```bash
+# 16.1 Parar o servidor (§15.1) e guardar a configuração local
+cp /opt/sss/web2py/applications/script_scheduling_service/instance/config.ini /var/lib/sss/config.ini.bak
+
+# 16.2 Trocar o código
+cd /opt/sss/web2py
+git fetch && git checkout <novo-commit-ou-tag>          # opção Git
+# ou, sem Git: extrair o novo pacote numa pasta nova (/opt/sss/web2py-<versao>), copiar
+# instance/config.ini para ela e trocar o caminho no systemd/atalhos
+
+# 16.3 Conferir se o config.ini.example ganhou ou perdeu chaves
+diff <(grep -oE "^[a-z_]+ =" applications/script_scheduling_service/instance/config.ini.example | sort) \
+     <(grep -oE "^[a-z_]+ =" applications/script_scheduling_service/instance/config.ini | sort)
+# qualquer diferença precisa ser refletida no config.ini antes de subir
+
+# 16.4 Verificar e subir
+cd applications/script_scheduling_service
+$PYTHON scripts/check_env.py && $PYTHON -m unittest discover -s scripts -p "test_*.py"
+# §10 (teste de carga) → §11 (subida) → §12 (validação)
+```
+
+**Retorno (rollback):** pare, volte ao commit anterior (`git checkout <commit-anterior>`, ou a pasta anterior), restaure o `config.ini` guardado e suba. Como o FAKE não guarda dados, não há base a restaurar.
+
+> **Atenção para a próxima versão (F7.0):** a seção `[oracle]` troca `driver` e `use_thick_mode` por `modo_driver` (CR-002). O passo 16.3 mostra essa diferença; ajuste o `config.ini` conforme o `config.ini.example` da versão nova.
+
+---
+
+## 17. Problemas e soluções
+
+Mensagens reais, capturadas no ensaio. Para os erros de subida, use sempre o teste do §10, que mostra a causa no terminal.
+
+| Sintoma | Mensagem / onde ver | Causa | Solução |
+|---|---|---|---|
+| Página com "Internal error — Ticket issued" (HTTP 500) em qualquer tela | §10 ou §15.3: `ConfigErro: Arquivo de configuracao nao encontrado: .../instance/config.ini` | Falta o `config.ini` | §9 |
+| Idem | `ConfigErro: Arquivo de segredos nao encontrado: /etc/sss/secrets.cfg` | Caminho de `secrets_file` errado ou arquivo ausente | §8.2 e §9 |
+| Idem | `ConfigErro: Arquivo de segredos possui permissoes inseguras (mode 644, esperado sem acesso grupo/outros)` | Modo diferente de `0600` | `chmod 600 /etc/sss/secrets.cfg` |
+| Idem | `ConfigErro: Arquivo de segredos deve pertencer ao usuario corrente (UID ..., atual ...)` | O processo roda com outro usuário, ou o arquivo foi criado pelo root | `sudo chown sss:sss /etc/sss/secrets.cfg` e suba como `sss` |
+| Idem | `ConfigErro: Chave cookie_key obrigatoria ausente em [web]` | `secrets.cfg` incompleto | §8.2 |
+| Idem | `ConfigErro` citando `[secao] chave` e motivo | Chave ausente, desconhecida ou fora da faixa no `config.ini` | Compare com o `config.ini.example` (§16.3) |
+| Idem | `ConfigErro: [app]: data_backend: data_backend=FAKE exige sss_env=DEV (atual: HML)` | `sss_env` diferente de `DEV` com FAKE | `sss_env = DEV` |
+| Ninguém consegue entrar ("Usuário ou senha inválidos.") | `sss_web.log`: `SSS_DEV_SEED_PASSWORD ausente: usuarios do seed FAKE sem senha utilizavel` (ou `fora da politica`) | Variável ausente ou com menos de 12 caracteres | §8.3 e reinicie |
+| Um usuário específico não entra | Tela: "Acesso temporariamente bloqueado por excesso de tentativas. Tente novamente mais tarde." | 5 senhas erradas seguidas: bloqueio de 15 minutos (`login_bloqueio_s`) | Aguarde, ou reinicie o servidor (restaura o seed) |
+| Launcher aborta | `Erro: execucao como root nao e permitida.` | Executado como root | Use `sudo -u sss -H bash` |
+| Servidor não sobe: porta ocupada | Terminal: `Socket 127.0.0.1:8000 in use by other process and it won't share.` | Outro processo na porta 8000 | `ss -ltnp | grep 8000`; pare o outro processo ou troque a porta |
+| Formulários retornam "Requisição recusada." (HTTP 403) | `sss_web.log`: `requisicao rejeitada (motivo=origem ...)` | Acesso por endereço que não está em `allowed_origins` (típico com proxy reverso) | Incluir a URL pública em `allowed_origins` (§13.2) |
+| Idem | `motivo=csrf` | Página aberta há muito tempo ou sessão expirada | Recarregar a página e repetir |
+| Sessão cai sozinha | "Sua sessão expirou por inatividade." | 30 min sem uso (`session_idle_timeout_s`) | Comportamento esperado |
+| Criar ticket falha com aviso de script indisponível | `sss_web.log`: `path_guard rejeitou o script (... codigo=...)` | Árvore de scripts fora do padrão do §8.1 (dono, modo, gravável pelo `sss`, ou `base_script_dir` errado) | Refazer §8.1 e conferir `base_script_dir`/`script_owner_uids` |
+| Raiz `http://localhost:8000/` dá 404 | — | A raiz aponta para a aplicação `welcome`, removida | Use `/script_scheduling_service` |
+| Aviso `unable to create welcome.w2p file` na subida | Terminal | Mesma causa acima | Ignorar |
+| Dados "sumiram" | — | O servidor foi reiniciado (FAKE em memória) | Comportamento esperado |
+| `check_env.py` com código 2 | `FALHA: Python 3.6.0 ou superior e obrigatorio` | Python antigo | §6 |
+| `check_env.py` com código 1 | Item `FALHA` na tabela | Código incompleto (Bootstrap/Alpine ausentes) | Obter o código de novo (§5) |
+
+---
+
+## 18. Para a implantação definitiva (Oracle + agentes): o que preparar desde já
+
+Ainda **não executável** (F7–F9). O `docs/RUNBOOK.md` será entregue no F9.1. Itens com prazo longo que a infraestrutura e o DBA já podem providenciar:
+
+| Item | Detalhe | Referência |
+|---|---|---|
+| Banco Oracle | 11gR2 (11.2.0.4) ou superior, charset AL32UTF8; schema/owner da aplicação (ex.: `gfcadastro`), usuário de aplicação e *grants*; espaço para as 16 tabelas `tbsss_*` | README §2.2, §10, §11.1 |
+| Conectividade | Rota e firewall dos servidores web/agentes até o listener Oracle (porta 1521) | README §2.3 |
+| Oracle Instant Client 19 | Obrigatório se o banco for 11g (o modo Thin não conecta ao 11g); recomendado em todos os nós como contingência | README §2.3, CR-002 |
+| Driver Python | `python-oracledb` (`< 2.0` na 3.6; `2.x` na 3.7+) com `cryptography`, e `cx_Oracle 8.3` como contingência, **pré-instalados** pela infraestrutura | AGENTS §2.2 |
+| Servidores agentes | Linux e/ou Windows Server 2016+, com conta de serviço sem privilégio administrativo; interpretadores (`python3`, `bash`, `sh`, `powershell`) nos caminhos que serão mapeados | README §2.6, §8.5, CR-001 |
+| Árvore de scripts real | Dono root (Linux) ou Administradores (Windows), sem escrita para a conta do agente | README §8.5 |
+| HTTPS e DNS | Nome e certificado para o nó web em HML/PROD (`sss_env = HML/PROD` exige cookie `Secure`) | README §4.2 |
+| Credenciais | Senha do Oracle e credenciais por ambiente para o `secrets.cfg`, entregues por canal seguro | README §4.1 |
+
+---
+
+## 19. Checklist de implantação (resumo)
+
+- [ ] §3 Servidor Linux x86_64 com NTP e fuso `America/Sao_Paulo`
+- [ ] §4 Usuário `sss` (sem login) e diretórios com donos/modos da tabela do §2
+- [ ] §5 Código obtido por Git (commit fixado) ou pacote com SHA-256 conferido; só `script_scheduling_service` em `applications/`
+- [ ] §6 Python ≥ 3.6.0 com PBKDF2 OK
+- [ ] §7 `check_env.py` com código 0 e suíte com `OK (skipped=17)`
+- [ ] §8.1 Árvore `/opt/automacoes/scripts` do root, sem escrita para o `sss`
+- [ ] §8.2 `/etc/sss/secrets.cfg` do `sss`, modo `0600`, com `cookie_key` gerado
+- [ ] §8.3 Senha de demonstração (≥ 12 caracteres) combinada com a equipe
+- [ ] §9 `config.ini` ajustado (DEV, FAKE, caminhos, `agent_id`, `allowed_origins`)
+- [ ] §10 Teste de carga: `SSS: configuracao OK`
+- [ ] §11 Subida pelo `bin/sss-web.sh` com `-a '<recycle>' -i 127.0.0.1`
+- [ ] §12 Validações por `curl` (200, cabeçalhos, 403) e teste de fumaça no navegador
+- [ ] §13 Túnel SSH testado por um usuário da homologação
+- [ ] §14 (opcional) Serviço `systemd` ativo
+- [ ] §15.4 `httpserver.log` no `logrotate`
+
+---
+
+## 20. Desinstalação
+
+```bash
+sudo systemctl disable --now sss-web 2>/dev/null; sudo rm -f /etc/systemd/system/sss-web.service; sudo systemctl daemon-reload
+sudo rm -rf /opt/sss /etc/sss /var/log/sss /var/lib/sss /opt/automacoes/scripts
+sudo userdel sss
+```
+
+O FAKE não deixa dados em banco. Antes de apagar `/var/log/sss`, guarde os logs se forem evidência de homologação.

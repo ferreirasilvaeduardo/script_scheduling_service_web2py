@@ -1,5 +1,7 @@
 # Guia de Configuração do Ambiente de Desenvolvimento (SSS)
 
+> Para instalar o SSS em **outro servidor** (usuário de serviço, diretórios, segredos, subida, acesso por túnel, systemd, atualização e troubleshooting), siga o `docs/IMPLANTACAO.md`.
+
 Este documento descreve como configurar o ambiente de desenvolvimento local para o **Script Scheduling Service (SSS)**, executar o verificador de ambiente, iniciar o servidor web2py em modo de desenvolvimento e rodar a suíte de testes.
 
 ---
