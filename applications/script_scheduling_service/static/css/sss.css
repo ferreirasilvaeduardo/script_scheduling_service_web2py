@@ -976,3 +976,59 @@
 .sss-form-estreito {
   max-width: 32rem;
 }
+
+/* Dicionário de parâmetros (F4.4) */
+.sss-opcoes-linha {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--sss-esp-2);
+  align-items: center;
+  margin-bottom: var(--sss-esp-1);
+  font-size: var(--sss-fs-xs);
+}
+
+/* Itens de grade têm min-width: auto; inputs não encolheriam abaixo da largura intrínseca. */
+.sss-opcoes-linha > * {
+  min-width: 0;
+}
+
+/* fieldset tem min-width: min-content por padrão e estouraria a tela estreita. */
+.sss-opcoes {
+  min-width: 0;
+}
+
+/* O Bootstrap flutua o legend; a grade da primeira linha encolheria até 0 ao lado do float. */
+.sss-opcoes > legend,
+.sss-teste > legend {
+  float: none;
+}
+
+.sss-teste {
+  min-width: 0;
+  padding: var(--sss-esp-3);
+  border: 1px dashed var(--sss-border);
+  border-radius: var(--sss-raio);
+}
+
+.sss-teste-linha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sss-esp-2);
+}
+
+.sss-teste-linha .form-control {
+  flex: 1 1 12rem;
+  width: auto;
+}
+
+.sss-teste-ok {
+  color: var(--sss-status-success-fg);
+}
+
+.sss-teste-erro {
+  color: var(--sss-status-failed-fg);
+}
+
+.sss-usuario .btn {
+  white-space: nowrap;
+}

@@ -139,6 +139,33 @@ class TestRegexCadastro(unittest.TestCase):
                 self.assertIn("ReDoS", ctx.exception.mensagem)
 
 
+class TestCadastroOpcoesEFlag(unittest.TestCase):
+
+    def test_opcoes_validas_preservam_ordem_e_normalizam(self):
+        self.assertEqual(pc.validar_opcoes_cadastro(' { "Z": " Último ", "A": "Primeiro" } '),
+                         u'{"Z":"Último","A":"Primeiro"}')
+
+    def test_opcoes_invalidas(self):
+        for texto in (None, "", "   ", "{", "[]", '"x"', "{}", '{"a": 1}', '{"": "x"}', '{"a": " "}',
+                      '{"a": "x", "a": "y"}', '{"a": "x", " a": "y"}', '{"a\\u0001": "x"}',
+                      '{"%s": "x"}' % ("k" * 101)):
+            with self.assertRaises(pc.ParamErro, msg=repr(texto)) as cm:
+                pc.validar_opcoes_cadastro(texto)
+            self.assertEqual(cm.exception.codigo_param, "opcoes_json")
+
+    def test_opcoes_acima_de_500_caracteres(self):
+        grande = "{" + ",".join('"k%02d": "%s"' % (i, "r" * 20) for i in range(25)) + "}"
+        with self.assertRaises(pc.ParamErro):
+            pc.validar_opcoes_cadastro(grande)
+
+    def test_flag(self):
+        for ok in ("--data-ref", "-n", "--a_b", "-X1"):
+            pc.validar_flag(ok)
+        for ruim in ("data", "---x", "--", "-", "--x y", "--" + "a" * 29, "-_x", None):
+            with self.assertRaises(pc.ParamErro, msg=repr(ruim)):
+                pc.validar_flag(ruim)
+
+
 class TestPrecedencia(unittest.TestCase):
 
     def test_ordem_de_precedencia(self):

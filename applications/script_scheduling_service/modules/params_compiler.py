@@ -23,6 +23,10 @@ _RE_CONTROLE = re.compile(r'[\x00-\x1f\x7f]')
 _RE_NUMBER = re.compile(r'^-?\d{1,18}(\.\d{1,6})?$')
 _RE_REDOS = re.compile(r'\([^)]*[+*][^)]*\)[+*{]')
 _CHECKBOX = {'true': True, '1': True, 'false': False, '0': False}
+_RE_FLAG = re.compile(r'-{1,2}[A-Za-z0-9][A-Za-z0-9_-]{0,27}')
+TAMANHO_OPCOES = 500
+TAMANHO_CHAVE_OPCAO = 100
+TAMANHO_ROTULO_OPCAO = 100
 
 _CHAVES_SNAPSHOT = ('versao', 'script_id', 'script_nome', 'comando_real', 'path_file',
                     'script_real', 'tipo_param', 'argv', 'respostas', 'sensiveis', 'compilado_em')
@@ -126,6 +130,58 @@ def validar_regex_cadastro(padrao):
     if _RE_REDOS.search(padrao):
         raise ParamErro('regex_validacao',
                         'A expressão regular tem quantificador aninhado e foi rejeitada (risco de ReDoS).')
+
+
+def validar_flag(flag):
+    """Valida param_nomeado pela CK ck_tbsss_prm_flag (README §10 tabela 10); lanca ParamErro."""
+    if not isinstance(flag, str) or not _RE_FLAG.fullmatch(flag):
+        raise ParamErro('param_nomeado', 'Use uma flag como --data-ref ou -n (até 30 caracteres, '
+                                         'letras, dígitos, _ e -).')
+
+
+def _pares_sem_duplicata(pares):
+    vistos = collections.OrderedDict()
+    for chave, valor in pares:
+        if chave in vistos:
+            raise ValueError('chave duplicada')
+        vistos[chave] = valor
+    return vistos
+
+
+def validar_opcoes_cadastro(texto):
+    """Valida opcoes_json de SELECT e devolve o JSON canonico (ordem do usuario preservada).
+
+    Exige objeto {"valor": "Rotulo"} nao vazio, sem chave duplicada, com chaves e rotulos str nao vazios
+    (apos strip), sem caracteres de controle, e serializacao com ate TAMANHO_OPCOES caracteres.
+    """
+    if not isinstance(texto, str) or not texto.strip():
+        raise ParamErro('opcoes_json', 'Informe as opções da lista (pelo menos uma).')
+    try:
+        opcoes = json.loads(texto, object_pairs_hook=_pares_sem_duplicata)
+    except ValueError:
+        raise ParamErro('opcoes_json', 'As opções não formam um JSON válido sem chaves repetidas.')
+    if not isinstance(opcoes, dict) or not opcoes:
+        raise ParamErro('opcoes_json', 'As opções devem ser um objeto {"valor": "Rótulo"} com pelo menos um item.')
+    limpas = collections.OrderedDict()
+    for chave, rotulo in opcoes.items():
+        if not isinstance(rotulo, str):
+            raise ParamErro('opcoes_json', 'Todo rótulo de opção deve ser texto.')
+        chave, rotulo = chave.strip(), rotulo.strip()
+        if not chave or not rotulo:
+            raise ParamErro('opcoes_json', 'Valores e rótulos das opções não podem ser vazios.')
+        if _RE_CONTROLE.search(chave) or _RE_CONTROLE.search(rotulo):
+            raise ParamErro('opcoes_json', 'As opções contêm caracteres de controle não permitidos.')
+        if len(chave) > TAMANHO_CHAVE_OPCAO or len(rotulo) > TAMANHO_ROTULO_OPCAO:
+            raise ParamErro('opcoes_json', 'Cada valor e rótulo de opção aceita até %d caracteres.'
+                                           % TAMANHO_CHAVE_OPCAO)
+        if chave in limpas:
+            raise ParamErro('opcoes_json', 'O valor "%s" aparece mais de uma vez.' % chave)
+        limpas[chave] = rotulo
+    canonico = json.dumps(limpas, ensure_ascii=False, separators=(',', ':'))
+    if len(canonico) > TAMANHO_OPCOES:
+        raise ParamErro('opcoes_json', 'As opções excedem %d caracteres; reduza a lista ou os rótulos.'
+                                       % TAMANHO_OPCOES)
+    return canonico
 
 
 def _ordenados(vinculos):

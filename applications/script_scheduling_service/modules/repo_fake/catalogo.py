@@ -351,7 +351,11 @@ class RepoCatalogoFake(RepoCatalogo):
                 lista = [p for p in lista if p["ativo"] == ativo_f]
 
             lista.sort(key=lambda x: (x.get("codigo", ""), x["id"]))
-            return paginar(lista, pagina=pagina, tamanho=tamanho)
+            pagina_ = paginar(lista, pagina=pagina, tamanho=tamanho)
+            for item in pagina_["itens"]:
+                item["qtd_scripts"] = sum(1 for sp in self._store.script_param.values()
+                                          if sp["parametro_id"] == item["id"])
+            return pagina_
 
     def parametros_obter(self, id):
         """Retorna dict do parametro pelo ID ou lanca RepoNaoEncontrado."""
@@ -360,8 +364,19 @@ class RepoCatalogoFake(RepoCatalogo):
                 raise RepoNaoEncontrado("Parametro ID %s nao encontrado" % id)
             return copy.deepcopy(self._store.parametros[id])
 
-    def parametros_inserir(self, dados):
-        """Insere novo parametro validando CKs e UK."""
+    def _auditar_parametro(self, auditoria, parametro_id):
+        if auditoria:
+            self._store.registrar_auditoria_interno(
+                ator=auditoria.get("ator"),
+                ip=auditoria.get("ip"),
+                acao=auditoria["acao"],
+                entidade="tbsss_parametros",
+                entidade_id=parametro_id,
+                detalhe=auditoria.get("detalhe"),
+            )
+
+    def parametros_inserir(self, dados, auditoria=None):
+        """Insere novo parametro validando CKs e UK, auditando na mesma operacao."""
         with self._store.lock_catalogo:
             codigo = dados.get("codigo")
             if not codigo or not _RE_PRM_CODIGO.fullmatch(codigo):
@@ -405,55 +420,50 @@ class RepoCatalogoFake(RepoCatalogo):
                 "ativo": ativo,
             }
             self._store.parametros[pid] = copy.deepcopy(novo)
+            self._auditar_parametro(auditoria, pid)
             return copy.deepcopy(novo)
 
-    def parametros_alterar(self, id, dados):
-        """Altera parametro aplicando validacoes de integridade."""
+    def parametros_alterar(self, id, dados, esperado=None, auditoria=None):
+        """Altera parametro (CKs, dependencias de vinculo e 'esperado') na mesma operacao."""
         with self._store.lock_catalogo:
             if id not in self._store.parametros:
                 raise RepoNaoEncontrado("Parametro ID %s nao encontrado" % id)
 
             atual = self._store.parametros[id]
+            for campo, valor in (esperado or {}).items():
+                if atual.get(campo) != valor:
+                    raise RepoConflito("Parametro ID %s alterado por outra operacao (%s)" % (id, campo))
 
-            if "label" in dados:
-                atual["label"] = dados["label"]
-            if "descricao" in dados:
-                atual["descricao"] = dados["descricao"]
-
+            mudancas = dict((k, dados[k]) for k in ("label", "descricao", "opcoes_json", "valor_padrao",
+                                                    "regex_validacao") if k in dados)
             if "param_nomeado" in dados:
-                flag = dados["param_nomeado"]
-                if flag is not None and flag != "":
-                    if not _RE_PRM_FLAG.fullmatch(flag):
-                        raise RepoViolacao("Flag param_nomeado invalida", constraint="ck_tbsss_prm_flag")
-                    atual["param_nomeado"] = flag
-                else:
-                    atual["param_nomeado"] = None
-
+                flag = dados["param_nomeado"] or None
+                if flag is not None and not _RE_PRM_FLAG.fullmatch(flag):
+                    raise RepoViolacao("Flag param_nomeado invalida", constraint="ck_tbsss_prm_flag")
+                mudancas["param_nomeado"] = flag
             if "tipo_componente" in dados:
-                tcomp = dados["tipo_componente"]
-                if tcomp not in ("TEXT", "NUMBER", "DATE", "SELECT", "CHECKBOX"):
+                if dados["tipo_componente"] not in ("TEXT", "NUMBER", "DATE", "SELECT", "CHECKBOX"):
                     raise RepoViolacao("Tipo de componente invalido", constraint="ck_tbsss_prm_tcomp")
-                atual["tipo_componente"] = tcomp
+                mudancas["tipo_componente"] = dados["tipo_componente"]
+            for campo, ck in (("sensivel", "ck_tbsss_prm_sens"), ("ativo", "ck_tbsss_prm_ativo")):
+                if campo in dados:
+                    if dados[campo] not in ("S", "N"):
+                        raise RepoViolacao("Flag %s deve ser 'S' ou 'N'" % campo, constraint=ck)
+                    mudancas[campo] = dados[campo]
 
-            if "opcoes_json" in dados:
-                atual["opcoes_json"] = dados["opcoes_json"]
-            if "valor_padrao" in dados:
-                atual["valor_padrao"] = dados["valor_padrao"]
-            if "regex_validacao" in dados:
-                atual["regex_validacao"] = dados["regex_validacao"]
+            # Regras de dependencia (README §10) avaliadas sob o mesmo lock da alteracao.
+            scripts = [self._store.scripts[sp["script_id"]] for sp in self._store.script_param.values()
+                       if sp["parametro_id"] == id and sp["script_id"] in self._store.scripts]
+            if scripts and mudancas.get("tipo_componente", atual["tipo_componente"]) != atual["tipo_componente"]:
+                raise RepoViolacao("Tipo de componente com vinculos", constraint="sss_prm_tipo_vinculado")
+            if "param_nomeado" in mudancas and mudancas["param_nomeado"] != atual["param_nomeado"] \
+                    and any(s.get("tipo_param") == "NOMEADO" for s in scripts):
+                raise RepoViolacao("Flag com vinculo NOMEADO", constraint="sss_prm_flag_nomeado")
+            if mudancas.get("ativo") == "N" and atual["ativo"] == "S" and any(s.get("ativo") == "S" for s in scripts):
+                raise RepoViolacao("Desativacao com vinculo a script ativo", constraint="sss_prm_vinculo_ativo")
 
-            if "sensivel" in dados:
-                sens = dados["sensivel"]
-                if sens not in ("S", "N"):
-                    raise RepoViolacao("sensivel deve ser 'S' ou 'N'", constraint="ck_tbsss_prm_sens")
-                atual["sensivel"] = sens
-
-            if "ativo" in dados:
-                ativo = dados["ativo"]
-                if ativo not in ("S", "N"):
-                    raise RepoViolacao("Flag ativo deve ser 'S' ou 'N'", constraint="ck_tbsss_prm_ativo")
-                atual["ativo"] = ativo
-
+            atual.update(mudancas)
+            self._auditar_parametro(auditoria, id)
             return copy.deepcopy(atual)
 
     def parametro_vinculos(self, parametro_id):

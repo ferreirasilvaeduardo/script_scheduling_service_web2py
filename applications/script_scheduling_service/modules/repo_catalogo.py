@@ -55,19 +55,34 @@ class RepoCatalogo(object):
         raise NotImplementedError
 
     def parametros_listar(self, filtros=None, pagina=1, tamanho=20):
-        """Lista parametros paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}."""
+        """Lista parametros paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
+
+        Ordem: codigo ASC, id ASC. Cada item traz 'qtd_scripts' (vinculos em tbsss_script_param, de
+        scripts ativos ou nao), calculado na mesma consulta.
+        """
         raise NotImplementedError
 
     def parametros_obter(self, id):
         """Retorna dict com dados do parametro ou lanca RepoNaoEncontrado."""
         raise NotImplementedError
 
-    def parametros_inserir(self, dados):
-        """Insere novo parametro e retorna dict com o registro criado."""
+    def parametros_inserir(self, dados, auditoria=None):
+        """Insere novo parametro e retorna dict com o registro criado.
+
+        auditoria: opcional, {'ator', 'ip', 'acao', 'detalhe'}; gravada na mesma transacao
+        (entidade tbsss_parametros, entidade_id = novo id).
+        """
         raise NotImplementedError
 
-    def parametros_alterar(self, id, dados):
-        """Atualiza dados do parametro."""
+    def parametros_alterar(self, id, dados, esperado=None, auditoria=None):
+        """Atualiza o parametro e retorna o registro, com as regras de dependencia na mesma operacao.
+
+        Lanca RepoViolacao com constraint de aplicacao, sem alterar nada, quando:
+        sss_prm_tipo_vinculado (tipo_componente muda e ha qualquer vinculo), sss_prm_flag_nomeado
+        (param_nomeado muda e ha vinculo com script NOMEADO) ou sss_prm_vinculo_ativo (desativacao com
+        vinculo a script ativo). esperado: opcional, divergencia lanca RepoConflito.
+        auditoria: opcional, na mesma transacao.
+        """
         raise NotImplementedError
 
     def parametro_vinculos(self, parametro_id):

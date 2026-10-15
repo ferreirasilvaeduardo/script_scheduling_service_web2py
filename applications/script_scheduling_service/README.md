@@ -477,6 +477,35 @@ Para todos os tipos:
 * Também é rejeitado padrão com quantificador aninhado, detectado pela heurística `\([^)]*[+*][^)]*\)[+*{]`, para mitigar ReDoS. O Python 3.6 não oferece timeout de regex.
 * Somente admin cadastra padrões.
 
+**Cadastro no dicionário de parâmetros** (UI `admin_parametros`, F4.4):
+
+* **`codigo` imutável depois de criado:** ele é a chave de `respostas` no snapshot (§6.5) e de `tbsss_agendamentos.parametros_json` (§6.1). Renomeá-lo faria agendamentos perderem respostas sem aviso.
+* **`opcoes_json`** (somente `SELECT`) é validado no servidor:
+  * objeto JSON não vazio, sem chave repetida;
+  * chaves e rótulos não vazios, sem caracteres de controle, com até 100 caracteres cada;
+  * até 500 caracteres serializado;
+  * a ordem do usuário é preservada.
+
+  O editor de pares valor/rótulo do cliente é apenas conveniência. Em outros tipos, `opcoes_json` é proibido.
+* **`regex_validacao`** só existe em `TEXT`.
+  * Perfil não admin com `CAD_PARAMETROS`:
+    * vê a regex somente leitura, e o servidor preserva a gravada;
+    * não troca o tipo de parâmetro que tem regex;
+    * não usa "Testar valor" com regex.
+  * A regex nunca é executada no navegador.
+* **`valor_padrao`** é validado por `validar_valor` contra a configuração em edição e gravado normalizado (`CHECKBOX` → `true`/`false`, `DATE` → `AAAA-MM-DD`), com até 100 caracteres.
+* **`valor_padrao` de parâmetro sensível é só de escrita:**
+  * campo `password` nunca reapresentado; deixar em branco mantém o valor gravado, e "remover" apaga;
+  * na auditoria aparece como `****`;
+  * na lista aparece mascarado;
+  * o "Testar valor" responde `****`.
+* **Regras de dependência**, verificadas antes (a mensagem lista os scripts) e garantidas na **mesma operação** do repositório (`RepoViolacao` com constraint de aplicação):
+  * trocar `tipo_componente` com qualquer vínculo: `sss_prm_tipo_vinculado`;
+  * alterar ou remover `param_nomeado` com vínculo a script `NOMEADO`, ativo ou não: `sss_prm_flag_nomeado`;
+  * desativar com vínculo a script **ativo**: `sss_prm_vinculo_ativo`.
+* **"Usado por N scripts"** conta todos os vínculos e vem de `parametros_listar` (`qtd_scripts`, uma subconsulta `COUNT` no Oracle).
+* **Risco aceito:** alterar `opcoes_json` ou a regex de um parâmetro vinculado pode invalidar um `valor_padrao_sub` já gravado. Isso é detectado na compilação do ticket (§6.1); a revalidação dos vínculos ao salvar fica com o cadastro de scripts (F4.5).
+
 ### 6.3 Estratégias de montagem (`tipo_param`)
 
 * **`NOMEADO`**: todo parâmetro vinculado exige `param_nomeado`, validado no vínculo. Por parâmetro, em ordem de `ordem`:

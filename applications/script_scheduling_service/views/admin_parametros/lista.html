@@ -1,0 +1,56 @@
+{{extend 'layout.html'}}
+{{
+# Lista do dicionário de parâmetros (padrão de CRUD administrativo).
+_rotulo_tipo = dict(tipos)
+_opc_tipo = [('', 'Todos')] + list(tipos)
+_opc_ativo = [('', 'Todos'), ('S', 'Ativos'), ('N', 'Inativos')]
+filtros = {'id': 'filtro-parametros', 'url_base': ('admin_parametros', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': [
+    {'nome': 'codigo', 'rotulo': u'Código', 'tipo': 'texto', 'valor': filtros_ativos.get('codigo')},
+    {'nome': 'label', 'rotulo': u'Rótulo', 'tipo': 'texto', 'valor': filtros_ativos.get('label')},
+    {'nome': 'tipo_componente', 'rotulo': 'Tipo', 'tipo': 'select', 'valor': filtros_ativos.get('tipo_componente'), 'opcoes': _opc_tipo},
+    {'nome': 'ativo', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('ativo'), 'opcoes': _opc_ativo},
+]}
+_linhas = []
+for _p in resultado['itens']:
+    _qtd = _p.get('qtd_scripts') or 0
+    _linhas.append({
+        'codigo': _p['codigo'],
+        'label': _p['label'] + (u' (sigiloso)' if _p.get('sensivel') == 'S' else ''),
+        'tipo': _rotulo_tipo.get(_p['tipo_componente'], _p['tipo_componente']),
+        'flag': _p.get('param_nomeado') or '-',
+        'uso': (u'Usado por %d script%s' % (_qtd, '' if _qtd == 1 else 's')) if _qtd else u'Não usado',
+        'ativo': _p['ativo'],
+        'acao': {'href': URL(c='admin_parametros', f='form', args=[_p['id']]), 'rotulo': 'Editar', 'descricao': u'Editar parâmetro %s' % _p['codigo']},
+    })
+pass
+tabela = {'legenda': u'Parâmetros cadastrados', 'erro': erro, 'linhas': _linhas, 'msg_vazio': u'Nenhum parâmetro encontrado.', 'colunas': [
+    {'chave': 'codigo', 'rotulo': u'Código', 'tipo': 'mono'},
+    {'chave': 'label', 'rotulo': u'Rótulo'},
+    {'chave': 'tipo', 'rotulo': 'Tipo'},
+    {'chave': 'flag', 'rotulo': 'Flag', 'tipo': 'mono'},
+    {'chave': 'uso', 'rotulo': 'Uso'},
+    {'chave': 'ativo', 'rotulo': u'Situação', 'tipo': 'ativo'},
+    {'chave': 'acao', 'rotulo': u'Ações', 'tipo': 'acao'},
+]}
+pagina = resultado['pagina']
+total = resultado['total']
+url_base = ('admin_parametros', 'lista')
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">Dicionário de parâmetros</h1>
+    <p class="sss-page-sub">Perguntas e flags reutilizáveis pelos scripts. O vínculo com cada script é feito na gestão de scripts.</p>
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-primary" href="{{=URL(c='admin_parametros', f='form')}}">Novo parâmetro</a>
+  </div>
+</div>
+
+<section class="sss-card" aria-label="Filtros">
+  {{include 'components/filtros.html'}}
+</section>
+
+<section class="sss-card" aria-label="Parâmetros">
+  {{include 'components/tabela.html'}}
+  {{include 'components/paginacao.html'}}
+</section>

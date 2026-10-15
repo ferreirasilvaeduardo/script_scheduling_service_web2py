@@ -259,6 +259,37 @@ class BaseRepoContractTest(object):
         bloqueados = usr.listar(filtros={"bloqueado_em": datetime.datetime(2998, 1, 1)}, pagina=1, tamanho=50)
         self.assertEqual([u["login"] for u in bloqueados["itens"]], ["consulta"])
 
+    def test_04e_parametro_dependencias_atomicas_qtd_scripts_e_auditoria(self):
+        cat = self.obter_repo("catalogo")
+        aud = self.obter_repo("auditoria")
+        data_ref = cat.parametros_listar(filtros={"codigo": "data_ref"})["itens"][0]
+        self.assertEqual(data_ref["qtd_scripts"], len(cat.parametro_vinculos(data_ref["id"])))
+        self.assertGreater(data_ref["qtd_scripts"], 0)
+
+        for dados, constraint in (({"tipo_componente": "TEXT"}, "sss_prm_tipo_vinculado"),
+                                  ({"param_nomeado": "--outra-flag"}, "sss_prm_flag_nomeado"),
+                                  ({"ativo": "N"}, "sss_prm_vinculo_ativo")):
+            with self.assertRaises(RepoViolacao) as ctx:
+                cat.parametros_alterar(data_ref["id"], dict(dados, label="Nao deve gravar"))
+            self.assertEqual(ctx.exception.constraint, constraint)
+        self.assertEqual(cat.parametros_obter(data_ref["id"])["label"], data_ref["label"])
+
+        with self.assertRaises(RepoConflito):
+            cat.parametros_alterar(data_ref["id"], {"label": "x"}, esperado={"label": "outro"})
+
+        antes = aud.listar(filtros={"acao": "CAD_INSERIR"}, pagina=1, tamanho=1)["total"]
+        novo = cat.parametros_inserir({"codigo": "contrato_prm", "label": "Contrato", "tipo_componente": "TEXT"},
+                                      auditoria={"ator": "admin", "ip": None, "acao": "CAD_INSERIR", "detalhe": "x"})
+        ultimo = aud.listar(filtros={"acao": "CAD_INSERIR"}, pagina=1, tamanho=1)
+        self.assertEqual(ultimo["total"], antes + 1)
+        self.assertEqual((ultimo["itens"][0]["entidade"], ultimo["itens"][0]["entidade_id"]),
+                         ("tbsss_parametros", novo["id"]))
+        # Sem vinculo, tipo e flag mudam e a desativacao passa.
+        alterado = cat.parametros_alterar(novo["id"], {"tipo_componente": "NUMBER", "param_nomeado": "--n",
+                                                       "ativo": "N"})
+        self.assertEqual((alterado["tipo_componente"], alterado["param_nomeado"], alterado["ativo"]),
+                         ("NUMBER", "--n", "N"))
+
     def test_05_cascata_associacao(self):
         cat = self.obter_repo("catalogo")
         rbac = self.obter_repo("rbac")

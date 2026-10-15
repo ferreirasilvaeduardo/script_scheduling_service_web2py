@@ -1,0 +1,172 @@
+{{extend 'layout.html'}}
+{{
+# Inclusão e edição de parâmetro. Campos condicionais por tipo (Alpine 'parametroForm'); o editor de
+# opções só monta o JSON por conveniência e o servidor revalida tudo. A regex nunca roda no cliente.
+import ui_helpers
+_p = prm
+_novo = not _p.get('id')
+_sensivel = _p.get('sensivel') == 'S'
+_situacao = ui_helpers.ativo_info(_p.get('ativo'))
+_icones = URL('static', 'img/icons.svg')
+import json
+import admin_parametros_service
+_pares = admin_parametros_service.opcoes_em_pares(_p['opcoes_json'])
+if not _novo:
+    _desativar = _p.get('ativo') == 'S'
+    _ativos = [_s['nome'] for _s in _p['vinculos'] if _s['ativo'] == 'S']
+    if _desativar and _ativos:
+        _texto_modal = u'Este parâmetro está vinculado aos scripts ativos %s; a desativação será negada.' % ', '.join(_ativos)
+    elif _desativar:
+        _texto_modal = u'O parâmetro deixará de poder ser vinculado a scripts.'
+    else:
+        _texto_modal = u'O parâmetro voltará a poder ser vinculado a scripts.'
+    pass
+    _modal_ativo = {'id': 'modal-ativo', 'titulo': (u'Desativar parâmetro %s' if _desativar else u'Reativar parâmetro %s') % _p['codigo'],
+                    'texto': _texto_modal, 'rotulo_gatilho': 'Desativar' if _desativar else 'Reativar',
+                    'rotulo_confirmar': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
+                    'variante': 'perigo' if _desativar else 'normal', 'acao': URL(c='admin_parametros', f='alternar_ativo'),
+                    'campos_ocultos': dict(id=_p['id'], versao=_p['versao'])}
+pass
+def _classe(campo):
+    return 'form-control is-invalid' if erros.get(campo) else 'form-control'
+pass
+def _desc(campo, ajuda=True):
+    _ids = []
+    if ajuda:
+        _ids.append('campo-%s-ajuda' % campo)
+    pass
+    if erros.get(campo):
+        _ids.append('campo-%s-erro' % campo)
+    pass
+    return ' '.join(_ids)
+pass
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">{{if _novo:}}Novo parâmetro{{else:}}Parâmetro <span class="sss-mono">{{=_p['codigo']}}</span>
+      <span class="sss-status {{=_situacao['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icones}}#{{=_situacao['icone']}}"></use></svg><span>{{=_situacao['rotulo']}}</span></span>{{pass}}
+    </h1>
+    {{if not _novo:}}
+    <p class="sss-page-sub">{{if _p['vinculos']:}}Usado por: {{for _i, _s in enumerate(_p['vinculos']):}}{{=', ' if _i else ''}}<span class="sss-mono">{{=_s['nome']}}</span> ({{=_s['tipo_param']}}{{=', inativo' if _s['ativo'] != 'S' else ''}}){{pass}}. Tipo e flag ficam bloqueados enquanto houver vínculos.{{else:}}Nenhum script usa este parâmetro.{{pass}}</p>
+    {{pass}}
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_parametros', f='lista')}}">Voltar à lista</a>
+    {{if not _novo:}}
+    {{modal = _modal_ativo}}
+    {{include 'components/modal_confirmacao.html'}}
+    {{pass}}
+  </div>
+</div>
+
+<section class="sss-card" aria-labelledby="titulo-form">
+  <h2 class="sss-card-titulo" id="titulo-form">Dados do parâmetro</h2>
+  <form class="sss-card-corpo" method="post" action="{{=URL(c='admin_parametros', f='salvar')}}" autocomplete="off"
+        x-data="parametroForm" data-url-testar="{{=URL(c='admin_parametros', f='testar')}}">
+    {{=csrf_campo()}}
+    {{if not _novo:}}
+    <input type="hidden" name="id" value="{{=_p['id']}}">
+    <input type="hidden" name="versao" value="{{=_p['versao']}}">
+    {{pass}}
+    {{if erro_geral:}}
+    <div class="alert alert-danger sss-alerta" role="alert">
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icones}}#icon-alert"></use></svg>
+      <span>{{=erro_geral}}</span>
+    </div>
+    {{pass}}
+
+    <div class="sss-form-linha">
+      <div class="sss-form-campo mb-3">
+        <label class="form-label" for="campo-codigo">Código{{if _novo:}} <span class="sss-obrigatorio" aria-hidden="true">*</span>{{pass}}</label>
+        <input type="text" class="{{=_classe('codigo')}}" id="campo-codigo" name="codigo" value="{{=_p['codigo']}}" maxlength="30" aria-describedby="{{=_desc('codigo')}}"{{if _novo:}} required{{else:}} readonly aria-readonly="true"{{pass}}{{if foco_campo == 'codigo':}} autofocus{{pass}}>
+        <div class="form-text" id="campo-codigo-ajuda">Minúsculas, dígitos e _ (ex.: data_ref). É a chave das respostas e dos agendamentos: não muda depois de criado.</div>
+        {{if erros.get('codigo'):}}<div class="invalid-feedback" id="campo-codigo-erro">{{=erros['codigo']}}</div>{{pass}}
+      </div>
+      <div class="sss-form-campo mb-3">
+        <label class="form-label" for="campo-param_nomeado">Flag (opcional)</label>
+        <input type="text" class="{{=_classe('param_nomeado')}} sss-mono" id="campo-param_nomeado" name="param_nomeado" value="{{=_p['param_nomeado']}}" maxlength="30" aria-describedby="{{=_desc('param_nomeado')}}"{{if foco_campo == 'param_nomeado':}} autofocus{{pass}}>
+        <div class="form-text" id="campo-param_nomeado-ajuda">Ex.: --data-ref ou -n. Obrigatória para scripts que montam o comando por flag (NOMEADO).</div>
+        {{if erros.get('param_nomeado'):}}<div class="invalid-feedback" id="campo-param_nomeado-erro">{{=erros['param_nomeado']}}</div>{{pass}}
+      </div>
+    </div>
+
+    <div class="sss-form-campo mb-3">
+      <label class="form-label" for="campo-label">Rótulo <span class="sss-obrigatorio" aria-hidden="true">*</span></label>
+      <input type="text" class="{{=_classe('label')}}" id="campo-label" name="label" value="{{=_p['label']}}" maxlength="60" required aria-describedby="{{=_desc('label', False)}}"{{if foco_campo == 'label':}} autofocus{{pass}}>
+      {{if erros.get('label'):}}<div class="invalid-feedback" id="campo-label-erro">{{=erros['label']}}</div>{{pass}}
+    </div>
+    <div class="sss-form-campo mb-3">
+      <label class="form-label" for="campo-descricao">Descrição</label>
+      <textarea rows="2" class="{{=_classe('descricao')}}" id="campo-descricao" name="descricao" maxlength="150" aria-describedby="{{=_desc('descricao', False)}}">{{=_p['descricao']}}</textarea>
+      {{if erros.get('descricao'):}}<div class="invalid-feedback" id="campo-descricao-erro">{{=erros['descricao']}}</div>{{pass}}
+    </div>
+
+    <div class="sss-form-campo mb-3">
+      <label class="form-label" for="campo-tipo_componente">Tipo do componente <span class="sss-obrigatorio" aria-hidden="true">*</span></label>
+      <select class="form-select{{=' is-invalid' if erros.get('tipo_componente') else ''}}" id="campo-tipo_componente" name="tipo_componente" x-ref="tipo" @change="trocarTipo" aria-describedby="{{=_desc('tipo_componente', False)}}"{{if foco_campo == 'tipo_componente':}} autofocus{{pass}}>
+        {{for _tv, _tr in tipos:}}
+        <option value="{{=_tv}}"{{if _tv == _p['tipo_componente']:}} selected{{pass}}>{{=_tr}}</option>
+        {{pass}}
+      </select>
+      {{if erros.get('tipo_componente'):}}<div class="invalid-feedback" id="campo-tipo_componente-erro">{{=erros['tipo_componente']}}</div>{{pass}}
+    </div>
+
+    <fieldset class="sss-form-campo mb-3 sss-opcoes" x-show="ehSelect">
+      <legend class="form-label fs-6">Opções da lista <span class="sss-obrigatorio" aria-hidden="true">*</span></legend>
+      <input type="hidden" name="opcoes_json" x-ref="opcoes" value="{{=_p['opcoes_json']}}" data-pares="{{=json.dumps(_pares) if _pares is not None else ''}}" :value="opcoesJson">
+      <template x-for="(linha, indice) in linhas" :key="indice">
+        <div class="sss-opcoes-linha">
+          <input type="text" class="form-control form-control-sm sss-mono" maxlength="100" aria-label="Valor da opção" placeholder="Valor enviado" :value="linha.valor" :data-i="indice" data-campo="valor" @input="editarLinha">
+          <input type="text" class="form-control form-control-sm" maxlength="100" aria-label="Rótulo da opção" placeholder="Rótulo exibido" :value="linha.rotulo" :data-i="indice" data-campo="rotulo" @input="editarLinha">
+          <button type="button" class="btn btn-sm btn-outline-secondary" :data-i="indice" @click="removerLinha" aria-label="Remover opção">Remover</button>
+        </div>
+      </template>
+      <button type="button" class="btn btn-sm btn-outline-primary mt-1" @click="adicionarLinha">Adicionar opção</button>
+      <p class="form-text mb-0">Até 500 caracteres no total. O servidor valida as opções ao salvar.</p>
+      {{if erros.get('opcoes_json'):}}<div class="invalid-feedback d-block" id="campo-opcoes_json-erro">{{=erros['opcoes_json']}}</div>{{pass}}
+    </fieldset>
+
+    <div class="sss-form-campo mb-3" x-show="ehTexto">
+      <label class="form-label" for="campo-regex_validacao">Validação por expressão regular (opcional)</label>
+      <input type="text" class="{{=_classe('regex_validacao')}} sss-mono" id="campo-regex_validacao" name="regex_validacao" value="{{=_p['regex_validacao']}}" maxlength="150" aria-describedby="{{=_desc('regex_validacao')}}"{{if not _p['pode_regex']:}} readonly aria-readonly="true"{{pass}}{{if foco_campo == 'regex_validacao':}} autofocus{{pass}}>
+      <div class="form-text" id="campo-regex_validacao-ajuda">Aplicada com fullmatch. Quantificador aninhado, como (a+)+, é rejeitado por risco de desempenho.{{if not _p['pode_regex']:}} Somente administradores alteram este campo.{{pass}}</div>
+      {{if erros.get('regex_validacao'):}}<div class="invalid-feedback" id="campo-regex_validacao-erro">{{=erros['regex_validacao']}}</div>{{pass}}
+    </div>
+
+    <div class="form-check mb-2">
+      <input class="form-check-input" type="checkbox" id="campo-sensivel" name="sensivel" value="S" x-ref="sensivel" @change="trocarSensivel"{{if _sensivel:}} checked{{pass}}>
+      <label class="form-check-label" for="campo-sensivel">Valor sigiloso (mascarado na tela e nos logs)</label>
+    </div>
+    <div class="alert alert-warning sss-alerta" role="note" x-show="sensivel"{{if not _sensivel:}} x-cloak{{pass}}>
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icones}}#icon-alert"></use></svg>
+      <span>{{=aviso_sensivel}}</span>
+    </div>
+
+    <div class="sss-form-campo mb-3">
+      <label class="form-label" for="campo-valor_padrao">Valor padrão (opcional)</label>
+      <input class="{{=_classe('valor_padrao')}}" id="campo-valor_padrao" name="valor_padrao" maxlength="100" :type="tipoPadrao" type="{{='password' if _sensivel else 'text'}}" value="{{='' if _sensivel else _p['valor_padrao']}}" autocomplete="off" aria-describedby="{{=_desc('valor_padrao')}}"{{if foco_campo == 'valor_padrao':}} autofocus{{pass}}>
+      <div class="form-text" id="campo-valor_padrao-ajuda">Validado pelas mesmas regras do tipo.{{if _sensivel and _p.get('tem_padrao'):}} Há um padrão sigiloso gravado: deixe em branco para mantê-lo.{{pass}}</div>
+      {{if erros.get('valor_padrao'):}}<div class="invalid-feedback" id="campo-valor_padrao-erro">{{=erros['valor_padrao']}}</div>{{pass}}
+      {{if _sensivel and _p.get('tem_padrao'):}}
+      <div class="form-check mt-1">
+        <input class="form-check-input" type="checkbox" id="campo-remover_padrao" name="remover_padrao" value="S">
+        <label class="form-check-label" for="campo-remover_padrao">Remover o padrão sigiloso gravado</label>
+      </div>
+      {{pass}}
+    </div>
+
+    <fieldset class="sss-teste mb-3">
+      <legend class="form-label fs-6">Testar valor com a configuração acima (sem salvar)</legend>
+      <div class="sss-teste-linha">
+        <input type="text" class="form-control form-control-sm" id="campo-valor_teste" maxlength="500" aria-label="Valor de teste" x-ref="valorTeste">
+        <button type="button" class="btn btn-sm btn-outline-primary" @click="testar" :disabled="testando">Testar</button>
+      </div>
+      <p class="mt-2 mb-0" :class="classeTeste" role="status" aria-live="polite" x-text="resultadoTeste"></p>
+    </fieldset>
+
+    <div class="sss-form-acoes">
+      <button type="submit" class="btn btn-primary">{{=u'Incluir parâmetro' if _novo else u'Salvar alterações'}}</button>
+      <a class="btn btn-outline-secondary" href="{{=URL(c='admin_parametros', f='lista')}}">Cancelar</a>
+    </div>
+  </form>
+</section>
