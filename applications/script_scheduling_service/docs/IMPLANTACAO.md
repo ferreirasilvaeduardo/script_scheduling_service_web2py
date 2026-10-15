@@ -3,8 +3,8 @@
 | Campo | Valor |
 |---|---|
 | Público | Quem vai instalar e operar o SSS num servidor novo (infraestrutura, desenvolvimento, homologação) |
-| Versão do sistema | 0.1.0 — commit de referência `34e7160` (fases F0.1 a F6.1 concluídas) |
-| Validação | Procedimento **ensaiado de ponta a ponta** em 2026-10-15 num clone limpo do repositório (Python 3.6.0 e 3.13), com subida pelo launcher, login, disparo de ticket, painel de agentes e logout. O que não foi ensaiado está marcado como **[não ensaiado]** |
+| Versão do sistema | 0.1.0 — commit de referência `fdf6f35` ou posterior (fases F0.1 a F6.1 concluídas) |
+| Validação | Procedimento **ensaiado de ponta a ponta** em 2026-10-15 num clone limpo do repositório (Python 3.6.0 e 3.13) e **implantado** no mesmo dia no servidor clone 7 (Oracle Linux 6.9, Python 3.7 sem `ssl`, sem `sudo` nem `systemd` — registro no §21). O que não foi ensaiado está marcado como **[não ensaiado]** |
 | Documentos relacionados | `README.md` (regras de negócio e arquitetura), `AGENTS.md` (regras de desenvolvimento), `docs/AMBIENTE_DEV.md` (estação do desenvolvedor), `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx` (roteiro de homologação) |
 
 ---
@@ -40,6 +40,7 @@ O capítulo 18 lista o que preparar desde já para a implantação definitiva (O
  6. Árvore de scripts de exemplo ...... §8.1   14. Execução contínua (systemd) ........ §14
  7. Segredos (secrets.cfg) ............ §8.2   15. Operação, logs e atualização ....... §15-16
  8. Senha dos usuários de demonstração  §8.3   17. Problemas e soluções ............... §17
+                                               21. Servidor sem sudo/systemd (clone 7) . §21
 ```
 
 Convenções deste guia:
@@ -63,11 +64,11 @@ Convenções deste guia:
 
 | Item | Requisito |
 |---|---|
-| Sistema operacional | Linux x86_64 (RHEL/Oracle Linux 8+, Rocky/Alma 8+, Ubuntu 20.04+, Debian 11+) |
+| Sistema operacional | Linux x86_64. Validado em Oracle Linux 6.9 (clone 7) e Ubuntu 24.04; esperado em RHEL/Oracle Linux/Rocky/Alma 7+, Ubuntu 20.04+, Debian 11+ |
 | CPU / memória / disco | 1 vCPU, 1 GB de RAM livre, 500 MB de disco (código ~60 MB + logs) |
-| Python | **3.6.0 ou superior** (validado de 3.6.0 a 3.13). Ver §6 |
+| Python | **3.6.0 ou superior** (validado de 3.6.0 a 3.13). Os módulos `ssl` e `sqlite3` **não** são necessários (desde o commit `fdf6f35`); `hashlib` com OpenSSL (`_hashlib`) é. Ver §6 |
 | Pacotes Python | **Nenhum.** O web2py e todas as bibliotecas de frontend vêm no repositório. Não use `pip install` |
-| Ferramentas | `git` (ou `tar`), `curl`, `sudo` |
+| Ferramentas | `git` (ou `tar`), `curl`. `sudo` e `systemd` são opcionais: sem eles, use a variante do §21 |
 | Rede | Nenhuma porta aberta para a rede: o servidor escuta em `127.0.0.1:8000`. Acesso dos usuários por SSH (porta 22). **Não precisa de internet** |
 | Relógio | NTP ativo e fuso definido (o FAKE usa o relógio do servidor). Recomendado `America/Sao_Paulo` |
 | Navegador dos usuários | Chrome, Edge ou Firefox atualizados |
@@ -116,7 +117,7 @@ Escolha **uma** das opções, sempre fixando um commit ou tag conhecido.
 cd /opt/sss
 git clone https://github.com/ferreirasilvaeduardo/script_scheduling_service_web2py.git web2py
 cd web2py
-git checkout 34e7160        # ou a tag/commit homologado
+git checkout fdf6f35        # ou a tag/commit homologado
 git log --oneline -1
 ```
 
@@ -128,16 +129,16 @@ Na máquina que tem o repositório:
 
 ```bash
 cd /caminho/do/repositorio
-git archive --format=tar.gz -o sss-34e7160.tar.gz 34e7160
-sha256sum sss-34e7160.tar.gz > sss-34e7160.tar.gz.sha256
+git archive --format=tar.gz -o sss-fdf6f35.tar.gz fdf6f35
+sha256sum sss-fdf6f35.tar.gz > sss-fdf6f35.tar.gz.sha256
 ```
 
 Copie os dois arquivos para o servidor (por exemplo, `scp` para `/tmp`) e:
 
 ```bash
 # como sss
-cd /tmp && sha256sum -c sss-34e7160.tar.gz.sha256      # deve responder "OK"
-mkdir -p /opt/sss/web2py && tar -xzf /tmp/sss-34e7160.tar.gz -C /opt/sss/web2py
+cd /tmp && sha256sum -c sss-fdf6f35.tar.gz.sha256      # deve responder "OK"
+mkdir -p /opt/sss/web2py && tar -xzf /tmp/sss-fdf6f35.tar.gz -C /opt/sss/web2py
 ```
 
 O pacote do `git archive` (~11 MB) não contém `config.ini`, `secrets.cfg`, logs nem arquivos de parâmetros do web2py: eles são criados nos passos seguintes.
@@ -170,7 +171,9 @@ Verifique a versão e o suporte a PBKDF2 (obrigatório para as senhas):
 ```bash
 PYTHON=python3          # ajuste conforme a opção escolhida (ex.: /usr/bin/python3.6)
 $PYTHON --version
-$PYTHON -c "import ssl, hashlib; print(ssl.OPENSSL_VERSION); hashlib.pbkdf2_hmac('sha256', b'x', b'y', 1); print('pbkdf2 OK')"
+$PYTHON -c "import _hashlib, hashlib, time; t=time.time(); hashlib.pbkdf2_hmac('sha256', b'x', b'y', 200000); print('pbkdf2 OK (%.2fs por senha)' % (time.time()-t))"
+# esperado: "pbkdf2 OK" em menos de ~1 s. ImportError em _hashlib = Python sem OpenSSL: use outro Python.
+# Ausência de ssl e de sqlite3 não impede o SSS (ex.: clone 7).
 ```
 
 ---
@@ -187,7 +190,7 @@ $PYTHON scripts/check_env.py ; echo "codigo de saida: $?"
 
 # 7.2 Suíte de testes completa (não precisa de configuração nem de segredos)
 $PYTHON -m unittest discover -s scripts -p "test_*.py"
-# esperado no final: "Ran 614 tests ... OK (skipped=17)"
+# esperado no final: "Ran 615 tests ... OK (skipped=17)" (o total cresce com as versões)
 # Os 17 "skipped" são testes de banco Oracle real e de Windows; é o resultado esperado.
 ```
 
@@ -600,3 +603,64 @@ sudo userdel sss
 ```
 
 O FAKE não deixa dados em banco. Antes de apagar `/var/log/sss`, guarde os logs se forem evidência de homologação.
+
+---
+
+## 21. Variante: servidor compartilhado sem `sudo` nem `systemd` (registro do clone 7)
+
+Implantação feita em 2026-10-15 no servidor **clone 7** (`brtlvlts1216pl`, 10.238.10.109), que serve de modelo para servidores parecidos.
+
+### 21.1 O que o servidor tinha
+
+| Item | Situação | Decisão |
+|---|---|---|
+| Sistema | Oracle Linux 6.9 (glibc 2.12) | Funciona com o Python já instalado |
+| Python | `/usr/local/bin/python3.7` (3.7.4), **sem `ssl` e sem `sqlite3`** | Usado como está. Correção do Rocket para Python sem `ssl` no commit `fdf6f35` (antes dela, cada conexão ociosa gerava `NameError` no log) |
+| `git`, `sudo`, `systemd`, `crontab` | Ausentes ou sem permissão | Código por pacote (§5.2); tudo no usuário `mastersafgf`; processo mantido num `screen` |
+| `/portaloptrib/TESHUVA` | Modo `777`, compartilhado com outros sistemas | Pasta própria `SSS/` com `0750`; segredos **fora** da árvore compartilhada, em `~/.sss` (`0700`) |
+| Portas | Várias em uso por outros sistemas | Porta **18000**, somente `127.0.0.1` |
+
+### 21.2 Estrutura instalada
+
+| Caminho | Conteúdo | Modo |
+|---|---|---|
+| `/portaloptrib/TESHUVA/SSS/web2py` | Código (pacote `sss-fdf6f35.tar.gz`, SHA-256 conferido) | `0750` |
+| `/portaloptrib/TESHUVA/SSS/scripts` | Árvore de scripts de exemplo, do próprio usuário, somente leitura | arquivos `0444`, diretórios `0555` |
+| `/portaloptrib/TESHUVA/SSS/logs` | `sss_web.log` (aplicação) e `servidor.out` (saída do servidor) | `0750` |
+| `/portaloptrib/TESHUVA/SSS/work` | Reservado ao agente (F8) | `0700` |
+| `/portaloptrib/TESHUVA/SSS/pacotes` | Pacotes recebidos e `.sha256` | `0750` |
+| `/portaloptrib/TESHUVA/SSS/iniciar_sss.sh`, `parar_sss.sh` | Operação | `0750` |
+| `~/.sss/secrets.cfg` | `cookie_key` | `0600` |
+| `~/.sss/web.env` | `SSS_DEV_SEED_PASSWORD` (gerada no servidor) e `SSS_TZ` | `0600` |
+
+Diferenças do `config.ini` em relação ao exemplo: `secrets_file = /home/mastersafgf/.sss/secrets.cfg`, `agent_id = clone7-sss-hml`, `base_script_dir = /portaloptrib/TESHUVA/SSS/scripts`, `work_dir = /portaloptrib/TESHUVA/SSS/work`, `script_owner_uids = 4304` (UID do `mastersafgf`), `log_dir = /portaloptrib/TESHUVA/SSS/logs` e `allowed_origins = http://127.0.0.1:18000`.
+
+### 21.3 Operação
+
+```bash
+/portaloptrib/TESHUVA/SSS/iniciar_sss.sh    # sobe no screen "sss" e confere o HTTP 200 do login
+/portaloptrib/TESHUVA/SSS/parar_sss.sh      # Ctrl+C no screen e espera a porta 18000 ser liberada
+screen -r sss                               # acompanhar a saída; sair SEM parar: Ctrl+A e depois D
+cat ~/.sss/web.env                          # senha dos usuários de demonstração (admin, op.prod, op.hml, consulta)
+tail -f /portaloptrib/TESHUVA/SSS/logs/sss_web.log
+```
+
+* O `iniciar_sss.sh` carrega `~/.sss/web.env` dentro do `screen` e chama `bin/sss-web.sh /usr/local/bin/python3.7 web2py.py -a '<recycle>' -i 127.0.0.1 -p 18000 --no_gui`. A senha não aparece na lista de processos.
+* **Sem início automático:** se o servidor reiniciar, rode o `iniciar_sss.sh` de novo. Reiniciar o SSS restaura os dados de demonstração.
+* Trocar a senha de demonstração: edite `~/.sss/web.env` e reinicie (`parar_sss.sh` + `iniciar_sss.sh`).
+
+### 21.4 Acesso dos usuários
+
+Túnel SSH da máquina do usuário (§13.1), com uma conta que tenha SSH no servidor. Este servidor exige os algoritmos RSA legados:
+
+```bash
+ssh -N -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -L 18000:127.0.0.1:18000 <usuario>@10.238.10.109
+# navegador: http://localhost:18000/script_scheduling_service
+```
+
+### 21.5 Validação realizada
+
+* `check_env.py`: todos os itens OK; suíte completa no servidor: `Ran 615 tests ... OK (skipped=17)`.
+* Teste de carga da configuração (§10): `SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=clone7-sss-hml)`.
+* Escuta somente em `127.0.0.1:18000`; cabeçalhos de segurança presentes; POST com origem estranha → 403 (registrado no log); painel do web2py desabilitado (`parameters_18000.py` com `password=None`).
+* Pelo túnel: login do `admin`, disparo de ticket, painel de agentes e logout, sem erros no console. Em seguida, reinício pelos scripts para entregar os dados de demonstração limpos.
