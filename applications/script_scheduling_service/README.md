@@ -650,13 +650,30 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 * Se a próxima ocorrência passar de `data_fim`, a regra recebe `ativo = 'N'` e `pausa_motivo = 'CONCLUIDO'`.
 * `proxima_execucao` é calculada no salvamento da regra pelo mesmo módulo `recurrence.py`.
 
+**Semântica de piso, teto e precisão (decisões do F5.1):**
+
+* **Precisão de minuto:** toda ocorrência tem segundos e microssegundos zerados. `data_inicio` também é considerado truncado ao minuto.
+* **Piso inclusivo:** a primeira ocorrência é a primeira **maior ou igual** a `data_inicio` (e maior que o instante de referência). Exemplo:
+  * `DIARIA` às 03:00 com `data_inicio = 15/10 10:00` começa em 16/10 às 03:00;
+  * com `data_inicio = 15/10 03:00`, começa no próprio 15/10 às 03:00.
+* **Teto inclusivo:** uma ocorrência exatamente em `data_fim` ainda vale. `data_fim` é data **e hora**.
+* **`UNICA`:** ocorre em `data_inicio` e só é devolvida se for estritamente maior que a referência.
+* **`MENSAL`:** o dia inexistente cai no último dia do mês sem deriva. Exemplo para o dia 31: 31/01 → 28/02 → 31/03 → 30/04.
+
 ### 7.3 Parser CRON (implementação própria, sem bibliotecas)
 
 * Cinco campos: `minuto hora dia_mes mes dia_semana`.
 * Sintaxe suportada: `*`, número, lista `a,b`, intervalo `a-b` e passo `*/n` ou `a-b/n`. **Não** há suporte a nomes (`MON`, `JAN`), `L`, `W`, `#` nem `?`.
 * `dia_semana` aceita 0–7, onde 0 e 7 são domingo.
 * Se `dia_mes` **e** `dia_semana` forem ambos restritos, vale a semântica **OU** (padrão Vixie cron).
+  * Um campo cujo texto começa com `*` (inclusive `*/n`) **não** é restrito. Nesse caso, os dois campos precisam casar (E), como no Vixie. Exemplo: `0 0 */2 * 1` = dias ímpares que caiam numa segunda.
 * O cálculo da próxima ocorrência é feito campo a campo, não minuto a minuto, com horizonte de `cron_horizon_days`. Uma expressão sem ocorrência no horizonte é rejeitada no cadastro e pausa a regra (`CRON_INVALIDO`) no desdobro.
+  * **Exceção:** se `data_fim` cair dentro do horizonte, a falta de ocorrência significa que a regra terminou (`CONCLUIDO`), não que a expressão é inválida.
+* O passo exige `*` ou intervalo (`*/5`, `0-30/5`). A forma `a/n` é rejeitada, e a expressão tem no máximo 60 caracteres.
+* `CronExpr.descrever()` gera a descrição em português exibida na UI. Exemplos:
+  * `30 2 * * 1-5` → "às 02:30, de segunda a sexta";
+  * `*/15 * * * *` → "a cada 15 minutos";
+  * `0 0 1 * 1` → "às 00:00, no dia 1 de cada mês ou às segundas".
 
 ### 7.4 Política de *misfire*
 
@@ -668,6 +685,22 @@ Se `SYSDATE - proxima_execucao > misfire_tolerance_s` (por exemplo, após um dow
 | `SKIP` | Não gera ticket |
 
 Nos dois casos, `proxima_execucao` recebe a **primeira ocorrência futura** maior que `SYSDATE`. O número de ocorrências perdidas vai para o log em WARN.
+
+**Contrato de `recurrence.avaliar_disparo(regra, agora, misfire_policy, misfire_tolerance_s)`** (decisões do F5.1). A função devolve `Decisao(gerar_ticket, nova_data, perdidas, concluir)`:
+
+* **Vencidas** são as ocorrências em `[proxima_execucao, agora]`, contando a própria `proxima_execucao`.
+* **Atraso dentro da tolerância** (`agora − proxima_execucao ≤ misfire_tolerance_s`): gera **um** ticket, mesmo que várias ocorrências tenham vencido. Exemplo: CRON a cada minuto com o daemon 4 minutos atrasado.
+* **`perdidas`:**
+  * `vencidas − 1` quando há ticket (o ticket cobre a ocorrência mais recente);
+  * todas as vencidas com `SKIP` fora da tolerância;
+  * limitada a 10.000.
+  * Exemplo: `DIARIA` com 3 dias de downtime e `RUN_ONCE` gera 1 ticket e 3 perdidas.
+* **`nova_data`:** sempre a primeira ocorrência maior que `agora`, respeitando piso e teto. É `None` quando a regra terminou.
+* **`concluir`:**
+  * `UNICA` depois da decisão. No passado, `RUN_ONCE` dispara uma vez e conclui; `SKIP` fora da tolerância conclui sem ticket.
+  * Ou quando não há próxima ocorrência até `data_fim`. Nesse caso, o ticket da ocorrência atual ainda é gerado.
+* **Expressão CRON inválida ou sem ocorrência no horizonte:** lança `CronErro`, e o daemon pausa com `CRON_INVALIDO`.
+* Os módulos `cron_parser.py` e `recurrence.py` são puros: não importam `gluon`, nunca chamam `datetime.now()` e recebem o "agora" por parâmetro.
 
 ### 7.5 Algoritmo de desdobro (ciclo 1 do daemon)
 
