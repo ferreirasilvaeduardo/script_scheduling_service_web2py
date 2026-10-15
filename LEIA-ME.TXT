@@ -92,4 +92,7 @@ ls -l AGENTS.md .cursorrules .antigravity/rules.md
 
 Você verá as setas `->` indicando o caminho para `applications/script_scheduling_service/AGENTS.md`. Com isso, o Antigravity já carregará as regras automaticamente.
 
-
+#### subir no servidor
+cd /portaloptrib/TESHUVA/web2py
+read -s SSS_DEV_SEED_PASSWORD && export SSS_DEV_SEED_PASSWORD
+python3 web2py.py -a 'admin_web2py' -p 8000 -i 127.0.0.1
