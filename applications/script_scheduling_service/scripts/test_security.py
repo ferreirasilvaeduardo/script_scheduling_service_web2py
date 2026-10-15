@@ -89,6 +89,33 @@ class TestPoliticaSenha(unittest.TestCase):
         self.assertTrue(security.validar_politica_senha(""))
 
 
+class TestRetirarSenhas(unittest.TestCase):
+
+    def test_remove_de_todas_as_origens(self):
+        post_vars = {"login": "admin", "senha": "Segredo-123456", "outra": "x"}
+        todas = dict(post_vars, pagina="1")
+        senhas = security.retirar_senhas((post_vars, todas), ("senha", "confirmacao"))
+        self.assertEqual(senhas, {"senha": "Segredo-123456", "confirmacao": None})
+        self.assertNotIn("senha", post_vars)
+        self.assertNotIn("senha", todas)
+        self.assertEqual(post_vars, {"login": "admin", "outra": "x"})
+        self.assertNotIn("Segredo", repr(post_vars) + repr(todas))
+
+    def test_lista_vale_o_ultimo_e_nao_str_vira_none(self):
+        self.assertEqual(security.retirar_senhas(({"s": ["a", "b"]},), ("s",)), {"s": "b"})
+        self.assertEqual(security.retirar_senhas(({"s": []},), ("s",)), {"s": None})
+        self.assertEqual(security.retirar_senhas(({"s": 123},), ("s",)), {"s": None})
+
+    def test_controllers_nao_leem_senha_direto_de_request(self):
+        # Regressao: login lia request.post_vars.get("senha") e a senha ia parar no ticket de erro.
+        raiz = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "controllers")
+        padrao = re.compile(r"request\.(post_vars|vars)\.get\(\s*[\'\"](senha|senha_atual|nova|confirmacao)[\'\"]")
+        for nome in sorted(os.listdir(raiz)):
+            if nome.endswith(".py"):
+                with open(os.path.join(raiz, nome), encoding="utf-8") as f:
+                    self.assertIsNone(padrao.search(f.read()), nome)
+
+
 class TestCsrf(unittest.TestCase):
 
     def test_token(self):

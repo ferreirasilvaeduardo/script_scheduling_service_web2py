@@ -7,6 +7,7 @@ web2py grava as variaveis da requisicao.
 """
 import admin_crud
 import admin_usuarios_service as servico
+import security
 import ui_helpers
 from admin_crud import AcessoNegado, OperacaoNegada
 from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
@@ -37,14 +38,7 @@ def _texto(valor, limite):
 
 
 def _retirar_senhas():
-    senhas = {}
-    for campo in _CAMPOS_SENHA:
-        valor = request.post_vars.pop(campo, None)
-        request.vars.pop(campo, None)
-        senhas[campo] = valor[-1] if isinstance(valor, list) and valor else valor
-        if not isinstance(senhas[campo], str):
-            senhas[campo] = None
-    return senhas
+    return security.retirar_senhas((request.post_vars, request.vars), _CAMPOS_SENHA)
 
 
 def _inteiro(valor):

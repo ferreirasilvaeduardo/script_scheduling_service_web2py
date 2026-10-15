@@ -89,6 +89,25 @@ def validar_politica_senha(senha):
     return []
 
 
+def retirar_senhas(origens, campos):
+    """Remove os campos de senha de todos os dicts de variaveis da requisicao e devolve seus valores.
+
+    O ticket de erro do web2py grava request.vars/post_vars: as senhas saem deles assim que lidas.
+    origens: dicts na ordem de prioridade (ex.: post_vars, vars); valor nao str (ou lista) vira None.
+    """
+    senhas = {}
+    for campo in campos:
+        valor = None
+        for origem in origens:
+            achado = origem.pop(campo, None)
+            if valor is None:
+                valor = achado
+        if isinstance(valor, list):
+            valor = valor[-1] if valor else None
+        senhas[campo] = valor if isinstance(valor, str) else None
+    return senhas
+
+
 def gerar_token_csrf():
     """Token sincronizador CSRF (32 bytes aleatorios, urlsafe)."""
     return secrets.token_urlsafe(CSRF_BYTES)

@@ -36,7 +36,8 @@ def login():
     login_digitado = ""
     if metodo == "POST":
         login_digitado = _texto_post("login", 30).strip()
-        ctx, mensagem = auth_service.autenticar(login_digitado, request.post_vars.get("senha"), _ip_origem())
+        senha = security.retirar_senhas((request.post_vars, request.vars), ("senha",))["senha"]
+        ctx, mensagem = auth_service.autenticar(login_digitado, senha, _ip_origem())
         if ctx is not None:
             # Em sessao por cookie, renew() apenas limpa: o cookie e regravado com conteudo novo.
             session.renew(clear_session=True)
@@ -64,16 +65,6 @@ def logout():
 _CAMPOS_MINHA_SENHA = ("senha_atual", "nova", "confirmacao")
 
 
-def _retirar_senhas():
-    # O ticket de erro do web2py grava request.vars: senhas saem dele assim que lidas.
-    senhas = {}
-    for campo in _CAMPOS_MINHA_SENHA:
-        valor = request.post_vars.pop(campo, None)
-        request.vars.pop(campo, None)
-        senhas[campo] = valor if isinstance(valor, str) else None
-    return senhas
-
-
 def minha_senha():
     metodo = (request.env.request_method or "GET").upper()
     if metodo not in ("GET", "HEAD", "POST"):
@@ -82,7 +73,7 @@ def minha_senha():
     response.title = u"Minha senha — SSS"
     erros = {}
     if metodo == "POST":
-        senhas = _retirar_senhas()
+        senhas = security.retirar_senhas((request.post_vars, request.vars), _CAMPOS_MINHA_SENHA)
         resultado, erros = auth_service.trocar_senha(ctx, _ip_origem(), senhas["senha_atual"], senhas["nova"],
                                                      senhas["confirmacao"])
         if resultado == "BLOQUEADO":
