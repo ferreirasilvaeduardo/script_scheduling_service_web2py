@@ -9,7 +9,9 @@
 #     ajuda       -- opcional; texto de ajuda;
 #     erro        -- opcional; mensagem de erro do campo (aplica is-invalid + invalid-feedback);
 #     obrigatorio -- opcional; bool;
-#     opcoes      -- select: lista de (valor, rotulo).
+#     opcoes      -- select: lista de (valor, rotulo);
+#     maxlength   -- opcional; limite de caracteres (text/textarea);
+#     somente_leitura -- opcional; bool (readonly: o valor aparece mas o servidor o ignora).
 #   foco_campo -- nome do primeiro campo inválido (ui_helpers.primeiro_campo_invalido);
 #                 esse campo recebe autofocus, sem JavaScript.
 _fc_id = 'campo-' + campo['nome']
@@ -28,6 +30,13 @@ _fc_classe = ('form-select' if _fc_tipo == 'select' else 'form-control') + (' is
 _fc_attrs = {'id': _fc_id, 'name': campo['nome'], 'class': _fc_classe}
 if _fc_desc:
     _fc_attrs['aria-describedby'] = ' '.join(_fc_desc)
+pass
+if campo.get('maxlength'):
+    _fc_attrs['maxlength'] = campo['maxlength']
+pass
+if campo.get('somente_leitura'):
+    _fc_attrs['readonly'] = 'readonly'
+    _fc_attrs['aria-readonly'] = 'true'
 pass
 }}<div class="sss-form-campo mb-3">
   <label class="form-label" for="{{=_fc_id}}">{{=campo['rotulo']}}{{if campo.get('obrigatorio'):}} <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span>{{pass}}</label>

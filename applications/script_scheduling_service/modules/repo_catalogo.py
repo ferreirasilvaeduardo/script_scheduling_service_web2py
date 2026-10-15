@@ -13,12 +13,21 @@ class RepoCatalogo(object):
         """Retorna dict com dados do ambiente ou lanca RepoNaoEncontrado."""
         raise NotImplementedError
 
-    def ambientes_inserir(self, dados):
-        """Insere novo ambiente e retorna dict com o registro criado."""
+    def ambientes_inserir(self, dados, auditoria=None):
+        """Insere novo ambiente e retorna dict com o registro criado.
+
+        auditoria: opcional, {'ator', 'ip', 'acao', 'detalhe'}; gravada na mesma transacao
+        (entidade tbsss_ambientes, entidade_id = novo id).
+        """
         raise NotImplementedError
 
-    def ambientes_alterar(self, id, dados):
-        """Atualiza dados do ambiente. Nome e imutavel."""
+    def ambientes_alterar(self, id, dados, esperado=None, auditoria=None):
+        """Atualiza dados do ambiente e retorna o registro alterado. Nome e imutavel.
+
+        esperado: opcional, dict campo -> valor lido pelo chamador; o UPDATE e condicional a esses
+        valores (concorrencia otimista) e, se algum divergir, lanca RepoConflito sem alterar nada.
+        auditoria: opcional, como em ambientes_inserir, gravada na mesma transacao do UPDATE.
+        """
         raise NotImplementedError
 
     def scripts_listar(self, filtros=None, pagina=1, tamanho=20):

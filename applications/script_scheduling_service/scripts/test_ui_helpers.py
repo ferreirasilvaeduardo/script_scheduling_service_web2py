@@ -21,6 +21,19 @@ def _ids_sprite():
         return set(re.findall(r'<symbol id="([^"]+)"', f.read()))
 
 
+class TestAtivoInfo(unittest.TestCase):
+
+    def test_flags(self):
+        self.assertEqual(ui_helpers.ativo_info("S"),
+                         {"rotulo": u"Ativo", "classe": "sss-status-success", "icone": "status-success"})
+        self.assertEqual(ui_helpers.ativo_info("N"),
+                         {"rotulo": u"Inativo", "classe": "sss-status-cancelled", "icone": "status-cancelled"})
+
+    def test_desconhecido(self):
+        for flag in (None, "", "s", "X"):
+            self.assertEqual(ui_helpers.ativo_info(flag)["rotulo"], u"Desconhecido")
+
+
 class TestStatusInfo(unittest.TestCase):
 
     def test_cinco_status_canonicos(self):

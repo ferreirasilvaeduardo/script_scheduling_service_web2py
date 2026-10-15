@@ -21,6 +21,18 @@ def status_info(status):
     return {"rotulo": rotulo, "classe": classe, "icone": icone}
 
 
+_ATIVO = {
+    "S": (u"Ativo", "sss-status-success", "status-success"),
+    "N": (u"Inativo", "sss-status-cancelled", "status-cancelled"),
+}
+
+
+def ativo_info(flag):
+    """Retorna {rotulo, classe, icone} da flag ativo ('S'/'N') dos cadastros; outro valor e desconhecido."""
+    rotulo, classe, icone = _ATIVO.get(flag, _STATUS_DESCONHECIDO)
+    return {"rotulo": rotulo, "classe": classe, "icone": icone}
+
+
 _MOTIVOS = {
     "EXIT_OK": u"Execução concluída com código de saída 0.",
     "EXIT_ERROR": u"O script terminou com código de saída diferente de zero.",

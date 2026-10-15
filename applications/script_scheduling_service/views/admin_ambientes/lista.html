@@ -1,0 +1,47 @@
+{{extend 'layout.html'}}
+{{
+# Lista de ambientes (padrão de CRUD administrativo, docs/PADRAO_CRUD_ADMIN.md).
+_opc_ativo = [('', 'Todos'), ('S', 'Ativos'), ('N', 'Inativos')]
+filtros = {'id': 'filtro-ambientes', 'url_base': ('admin_ambientes', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': [
+    {'nome': 'nome', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('nome')},
+    {'nome': 'ativo', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('ativo'), 'opcoes': _opc_ativo},
+]}
+_linhas = []
+for _a in resultado['itens']:
+    _linhas.append({
+        'nome': _a['nome'],
+        'descricao': _a.get('descricao') or '-',
+        'conexao': _a.get('conexao') or '-',
+        'ativo': _a['ativo'],
+        'acao': {'href': URL(c='admin_ambientes', f='form', args=[_a['id']]), 'rotulo': 'Editar', 'descricao': u'Editar ambiente %s' % _a['nome']},
+    })
+pass
+tabela = {'legenda': 'Ambientes cadastrados', 'erro': erro, 'linhas': _linhas, 'msg_vazio': 'Nenhum ambiente encontrado.', 'colunas': [
+    {'chave': 'nome', 'rotulo': 'Nome', 'tipo': 'mono'},
+    {'chave': 'descricao', 'rotulo': u'Descrição'},
+    {'chave': 'conexao', 'rotulo': 'DSN', 'tipo': 'mono'},
+    {'chave': 'ativo', 'rotulo': u'Situação', 'tipo': 'ativo'},
+    {'chave': 'acao', 'rotulo': u'Ações', 'tipo': 'acao'},
+]}
+pagina = resultado['pagina']
+total = resultado['total']
+url_base = ('admin_ambientes', 'lista')
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">Ambientes</h1>
+    <p class="sss-page-sub">Ambientes de execução e seus DSNs. As credenciais ficam no secrets.cfg, nunca aqui.</p>
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-primary" href="{{=URL(c='admin_ambientes', f='form')}}">Novo ambiente</a>
+  </div>
+</div>
+
+<section class="sss-card" aria-label="Filtros">
+  {{include 'components/filtros.html'}}
+</section>
+
+<section class="sss-card" aria-label="Ambientes">
+  {{include 'components/tabela.html'}}
+  {{include 'components/paginacao.html'}}
+</section>

@@ -1,0 +1,73 @@
+{{extend 'layout.html'}}
+{{
+# Inclusão e edição de ambiente (padrão de CRUD administrativo, docs/PADRAO_CRUD_ADMIN.md).
+# Na edição o nome é somente leitura e o servidor ignora qualquer valor enviado para ele.
+import ui_helpers
+_novo = not amb.get('id')
+_situacao = ui_helpers.ativo_info(amb.get('ativo'))
+_campos = [
+    {'nome': 'nome', 'rotulo': 'Nome', 'valor': amb.get('nome'), 'erro': erros.get('nome'), 'obrigatorio': _novo, 'maxlength': 30, 'somente_leitura': not _novo,
+     'ajuda': u'Letras maiúsculas, dígitos e _ (ex.: PRODUCAO). Não pode ser alterado depois de criado.'},
+    {'nome': 'descricao', 'rotulo': u'Descrição', 'valor': amb.get('descricao'), 'erro': erros.get('descricao'), 'maxlength': 100},
+    {'nome': 'conexao', 'rotulo': 'DSN', 'valor': amb.get('conexao'), 'erro': erros.get('conexao'), 'maxlength': 250,
+     'ajuda': u'host:porta/serviço (ex.: db01.local:1521/svc) ou alias TNS. Sem usuário nem senha: credenciais ficam no secrets.cfg.'},
+]
+if not _novo:
+    _desativar = amb.get('ativo') == 'S'
+    _qtd = amb.get('agendamentos_ativos') or 0
+    if _desativar:
+        _texto_modal = u'%s Agendamentos ativos afetados: %d.' % (aviso_desativacao, _qtd)
+    else:
+        _texto_modal = u'O ambiente voltará a aceitar tickets e agendamentos.'
+    pass
+    _modal_ativo = {'id': 'modal-ativo', 'titulo': (u'Desativar ambiente %s' if _desativar else u'Reativar ambiente %s') % amb['nome'],
+                    'texto': _texto_modal, 'rotulo_gatilho': 'Desativar' if _desativar else 'Reativar',
+                    'rotulo_confirmar': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
+                    'variante': 'perigo' if _desativar else 'normal', 'acao': URL(c='admin_ambientes', f='alternar_ativo'),
+                    'campos_ocultos': dict(id=amb['id'], versao=amb['versao'])}
+pass
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">{{if _novo:}}Novo ambiente{{else:}}Ambiente <span class="sss-mono">{{=amb['nome']}}</span>
+      <span class="sss-status {{=_situacao['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icone']}}"></use></svg><span>{{=_situacao['rotulo']}}</span></span>{{pass}}
+    </h1>
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_ambientes', f='lista')}}">Voltar à lista</a>
+    {{if not _novo:}}
+    {{modal = _modal_ativo}}
+    {{include 'components/modal_confirmacao.html'}}
+    {{pass}}
+  </div>
+</div>
+
+{{if not _novo and amb.get('ativo') == 'S' and amb.get('agendamentos_ativos'):}}
+<div class="alert alert-info sss-alerta" role="note">
+  <span>Este ambiente tem {{=amb['agendamentos_ativos']}} agendamento(s) ativo(s). {{=aviso_desativacao}}</span>
+</div>
+{{pass}}
+
+<section class="sss-card" aria-labelledby="titulo-form">
+  <h2 class="sss-card-titulo" id="titulo-form">Dados do ambiente</h2>
+  <form class="sss-card-corpo" method="post" action="{{=URL(c='admin_ambientes', f='salvar')}}" autocomplete="off">
+    {{=csrf_campo()}}
+    {{if not _novo:}}
+    <input type="hidden" name="id" value="{{=amb['id']}}">
+    <input type="hidden" name="versao" value="{{=amb['versao']}}">
+    {{pass}}
+    {{if erro_geral:}}
+    <div class="alert alert-danger sss-alerta" role="alert">
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
+      <span>{{=erro_geral}}</span>
+    </div>
+    {{pass}}
+    {{for campo in _campos:}}
+    {{include 'components/form_campo.html'}}
+    {{pass}}
+    <div class="sss-form-acoes">
+      <button type="submit" class="btn btn-primary">{{='Incluir ambiente' if _novo else u'Salvar alterações'}}</button>
+      <a class="btn btn-outline-secondary" href="{{=URL(c='admin_ambientes', f='lista')}}">Cancelar</a>
+    </div>
+  </form>
+</section>

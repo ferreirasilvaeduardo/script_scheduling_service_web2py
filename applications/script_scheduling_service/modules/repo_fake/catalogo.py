@@ -4,7 +4,7 @@ import copy
 import re
 
 from repo_catalogo import RepoCatalogo
-from repo_errors import RepoNaoEncontrado, RepoViolacao
+from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 from repo_fake.store import paginar
 
 _RE_AMB_NOME = re.compile(r"^[A-Z0-9_]{1,30}$")
@@ -46,8 +46,19 @@ class RepoCatalogoFake(RepoCatalogo):
                 raise RepoNaoEncontrado("Ambiente ID %s nao encontrado" % id)
             return copy.deepcopy(self._store.ambientes[id])
 
-    def ambientes_inserir(self, dados):
-        """Insere novo ambiente com validacao de CKs, UK e DSN."""
+    def _auditar_ambiente(self, auditoria, ambiente_id):
+        if auditoria:
+            self._store.registrar_auditoria_interno(
+                ator=auditoria.get("ator"),
+                ip=auditoria.get("ip"),
+                acao=auditoria["acao"],
+                entidade="tbsss_ambientes",
+                entidade_id=ambiente_id,
+                detalhe=auditoria.get("detalhe"),
+            )
+
+    def ambientes_inserir(self, dados, auditoria=None):
+        """Insere novo ambiente com validacao de CKs, UK e DSN, auditando na mesma operacao."""
         with self._store.lock_catalogo:
             nome = dados.get("nome")
             if not nome or not _RE_AMB_NOME.fullmatch(nome):
@@ -75,35 +86,45 @@ class RepoCatalogoFake(RepoCatalogo):
                 "created_at": dados.get("created_at") or self._store.agora(),
             }
             self._store.ambientes[aid] = copy.deepcopy(novo)
+            self._auditar_ambiente(auditoria, aid)
             return copy.deepcopy(novo)
 
-    def ambientes_alterar(self, id, dados):
-        """Altera ambiente. Nome e imutavel (trigger tr_tbsss_amb_bu)."""
+    def ambientes_alterar(self, id, dados, esperado=None, auditoria=None):
+        """Altera ambiente (nome imutavel, trigger tr_tbsss_amb_bu), condicional a 'esperado'."""
         with self._store.lock_catalogo:
             if id not in self._store.ambientes:
                 raise RepoNaoEncontrado("Ambiente ID %s nao encontrado" % id)
 
             atual = self._store.ambientes[id]
+            for campo, valor in (esperado or {}).items():
+                if atual.get(campo) != valor:
+                    raise RepoConflito("Ambiente ID %s alterado por outra operacao (%s)" % (id, campo))
 
             novo_nome = dados.get("nome")
             if novo_nome is not None and novo_nome != atual["nome"]:
                 raise RepoViolacao("Nome de ambiente e imutavel", constraint="tr_tbsss_amb_bu")
 
+            mudancas = {}
             novo_conexao = dados.get("conexao")
             if novo_conexao is not None:
                 if "@" in novo_conexao:
                     raise RepoViolacao("Conexao nao pode conter credencial (@)", constraint="ck_tbsss_amb_conexao")
-                atual["conexao"] = novo_conexao
+                mudancas["conexao"] = novo_conexao
+            elif "conexao" in dados:
+                mudancas["conexao"] = None
 
             if "descricao" in dados:
-                atual["descricao"] = dados["descricao"]
+                mudancas["descricao"] = dados["descricao"]
 
             novo_ativo = dados.get("ativo")
             if novo_ativo is not None:
                 if novo_ativo not in ("S", "N"):
                     raise RepoViolacao("Flag ativo deve ser 'S' ou 'N'", constraint="ck_tbsss_amb_ativo")
-                atual["ativo"] = novo_ativo
+                mudancas["ativo"] = novo_ativo
 
+            # Validacao completa antes de aplicar: um UPDATE rejeitado nao altera nenhuma coluna.
+            atual.update(mudancas)
+            self._auditar_ambiente(auditoria, id)
             return copy.deepcopy(atual)
 
     # -------------------------------------------------------------------------

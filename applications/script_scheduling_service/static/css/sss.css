@@ -905,3 +905,21 @@
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+/* Cadastros administrativos (docs/PADRAO_CRUD_ADMIN.md) */
+.sss-form-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sss-esp-2);
+}
+
+.sss-tabela-acoes {
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* Campo somente leitura (ex.: chave natural na edição) não pode parecer editável. */
+.sss-form-campo .form-control[readonly] {
+  background-color: var(--sss-surface-alt);
+  color: var(--sss-text-muted);
+}

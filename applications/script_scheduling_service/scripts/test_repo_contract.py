@@ -145,6 +145,44 @@ class BaseRepoContractTest(object):
             usr.alterar(u["id"], {"login": "novo.login"})
         self.assertIn("tr_tbsss_usr_bu", str(ctx.exception.constraint or ""))
 
+    def test_04b_ambiente_alteracao_condicional_e_auditoria_na_mesma_operacao(self):
+        cat = self.obter_repo("catalogo")
+        aud = self.obter_repo("auditoria")
+        amb = cat.ambientes_listar(filtros={"nome": "HOMOLOGACAO"})["itens"][0]
+        lido = {"descricao": amb["descricao"], "conexao": amb["conexao"], "ativo": amb["ativo"]}
+
+        def total_aud():
+            return aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=1)["total"]
+
+        antes = total_aud()
+        alterado = cat.ambientes_alterar(amb["id"], {"descricao": "Contrato"}, esperado=lido,
+                                         auditoria={"ator": "admin", "ip": "10.0.0.1", "acao": "CAD_ALTERAR",
+                                                    "detalhe": "descricao: x -> Contrato"})
+        self.assertEqual(alterado["descricao"], "Contrato")
+        self.assertEqual(total_aud(), antes + 1)
+        ultimo = aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=1)["itens"][0]
+        self.assertEqual((ultimo["entidade"], ultimo["entidade_id"], ultimo["ator"]),
+                         ("tbsss_ambientes", amb["id"], "admin"))
+
+        # 'lido' ficou obsoleto: o UPDATE condicional perde, nada muda e nada e auditado.
+        with self.assertRaises(RepoConflito):
+            cat.ambientes_alterar(amb["id"], {"descricao": "Perdedor"}, esperado=lido,
+                                  auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "x"})
+        self.assertEqual(cat.ambientes_obter(amb["id"])["descricao"], "Contrato")
+        self.assertEqual(total_aud(), antes + 1)
+
+        # Violacao tambem nao grava auditoria nem altera colunas parcialmente.
+        with self.assertRaises(RepoViolacao):
+            cat.ambientes_alterar(amb["id"], {"descricao": "Parcial", "conexao": "a@b"},
+                                  auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "x"})
+        self.assertEqual(cat.ambientes_obter(amb["id"])["descricao"], "Contrato")
+        self.assertEqual(total_aud(), antes + 1)
+
+        novo = cat.ambientes_inserir({"nome": "CONTRATO_AUD", "conexao": "ALIAS"},
+                                     auditoria={"ator": "admin", "ip": None, "acao": "CAD_INSERIR", "detalhe": "y"})
+        ins = aud.listar(filtros={"acao": "CAD_INSERIR"}, pagina=1, tamanho=1)["itens"][0]
+        self.assertEqual((ins["entidade"], ins["entidade_id"]), ("tbsss_ambientes", novo["id"]))
+
     def test_05_cascata_associacao(self):
         cat = self.obter_repo("catalogo")
         rbac = self.obter_repo("rbac")

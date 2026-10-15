@@ -301,6 +301,17 @@ Toda ação sensível grava uma linha em `tbsss_auditoria` **na mesma transaçã
 
 O campo `detalhe` nunca contém segredos nem valores de parâmetros sensíveis.
 
+**Cadastros** (padrão em `docs/PADRAO_CRUD_ADMIN.md`):
+
+| Situação | Ação | `detalhe` |
+|---|---|---|
+| Inclusão | `CAD_INSERIR` | `campo: valor` dos campos informados |
+| Alteração | `CAD_ALTERAR` | `campo: antigo → novo`, só dos campos que mudaram (salvar sem mudança não audita) |
+| Desativação | `CAD_DESATIVAR` | `ativo: S → N`, mais o impacto (ex.: `agendamentos ativos afetados: 2`) |
+| Reativação | `CAD_ALTERAR` | `ativo: N → S` (não existe ação `CAD_REATIVAR`) |
+
+Os valores passam pelo `masking.py` e o texto é limitado a 1.000 caracteres.
+
 ---
 
 ## 5. Ciclo de Vida do Ticket
@@ -909,6 +920,12 @@ END;
 * **Desativação com dependência:**
   * Desativar um **parâmetro** vinculado a script ativo é bloqueado, e a UI lista os scripts afetados.
   * Desativar **script** ou **ambiente** pausa os agendamentos dependentes no próximo desdobro (§7.5).
+  * Na UI, desativar e reativar ficam no **formulário de edição**, não na lista. A ação abre um modal de confirmação que mostra o impacto (ex.: quantidade de agendamentos ativos afetados).
+* **Concorrência otimista nos cadastros (sem coluna de versão):**
+  * O formulário de edição carrega uma `versao`: o sha256 dos campos editáveis, `ativo` incluído, calculado pelo servidor na leitura.
+  * Ao salvar, o service relê o registro e compara a versão. Em seguida, repassa os valores lidos ao repositório, que executa `UPDATE ... WHERE id = :id AND <coluna = valor lido>` com comparação nula-segura (`DECODE`) e checa o `rowcount`.
+  * Se a versão divergir ou o `rowcount` for 0, o resultado é `RepoConflito`, sem alteração nem auditoria. A mensagem é "O registro foi alterado por outra pessoa. Recarregue a página."
+  * A linha de auditoria é gravada na mesma operação (transação) do `INSERT` ou `UPDATE`.
 * **Edição de agendamento:** ao salvar uma alteração, `usuario_id` passa a ser o **editor**, que precisa ter `pode_executar` vigente para o script e o ambiente da regra. A regra sempre roda sob os privilégios de quem a definiu por último, o que impede um usuário de reaproveitar privilégios de outro editando a regra dele. A alteração é auditada com o `usuario_id` anterior e o novo.
 
 ### 1. `tbsss_ambientes`
@@ -922,7 +939,14 @@ END;
   * `id`
   * `nome VARCHAR2(30 CHAR) NOT NULL`
   * `descricao VARCHAR2(100 CHAR)`
-  * `conexao VARCHAR2(250 CHAR)` (somente DSN)
+  * `conexao VARCHAR2(250 CHAR)` (somente DSN, opcional)
+* **Validação na UI** (`admin_ambientes_service.py`):
+  * `nome` segue a CK à risca. Letras minúsculas ou outros caracteres são **rejeitados** com mensagem, não convertidos. O `nome` é imutável depois de criado: o campo fica somente leitura e o servidor ignora o valor enviado.
+  * `conexao` é opcional, como a coluna. Quando preenchida, aceita apenas:
+    * Easy Connect: `^[A-Za-z0-9._-]+:[0-9]{1,5}/[A-Za-z0-9._-]+$`;
+    * alias TNS: `^[A-Za-z0-9._-]{1,128}$`.
+  * Um `@` é recusado com "Informe apenas o DSN; credenciais ficam no secrets.cfg."
+  * `descricao` é opcional, com até 100 caracteres.
   * `ativo CHAR(1) DEFAULT 'S' NOT NULL`
   * `created_at DATE DEFAULT SYSDATE NOT NULL`
 
