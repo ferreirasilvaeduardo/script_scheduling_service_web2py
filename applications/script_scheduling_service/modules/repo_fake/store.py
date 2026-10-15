@@ -43,6 +43,8 @@ class FakeDataStore(object):
         self.seqs = collections.defaultdict(int)
         # Simulacao do log_pump por ticket RUNNING do seed: {ticket_id: {...}} (protegido por lock_tickets).
         self.log_sim = {}
+        # Agentes "vivos" do seed: o heartbeat acompanha o relogio a cada leitura (protegido por lock_agentes).
+        self.agentes_hb_sim = set()
 
     def agora(self):
         """Retorna o instante atual naive sem microssegundos conforme o relogio injetavel."""
@@ -104,6 +106,7 @@ class FakeDataStore(object):
                                     self.auditoria.clear()
                                     self.seqs.clear()
                                     self.log_sim.clear()
+                                    self.agentes_hb_sim.clear()
 
 
 def paginar(itens, pagina=1, tamanho=20):

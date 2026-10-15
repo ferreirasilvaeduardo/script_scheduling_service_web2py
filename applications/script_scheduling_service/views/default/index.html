@@ -1,5 +1,8 @@
 {{extend 'layout.html'}}
-{{icones = URL('static', 'img/icons.svg')}}
+{{
+import ui_helpers
+icones = URL('static', 'img/icons.svg')
+}}
 <div class="sss-page-header">
   <h1 class="sss-page-titulo">Olá, {{=ctx['nome']}}</h1>
   <p class="sss-page-sub">Perfil {{=ctx['perfil_nome']}}. Escolha uma das funcionalidades disponíveis.</p>
@@ -16,6 +19,90 @@
     </a>
   </div>
 </section>
+{{pass}}
+
+{{if cartoes:}}
+<div class="sss-painel-grade">
+  {{if 'tickets' in cartoes:}}
+  {{_c_dados, _c_erro = cartoes['tickets']}}
+  <section class="sss-card" aria-labelledby="painel-contagem">
+    <h2 class="sss-card-titulo" id="painel-contagem">Tickets nas últimas 24 horas</h2>
+    <div class="sss-card-corpo">
+      {{if _c_erro:}}<p class="mb-0" role="alert">{{=_c_erro}}</p>{{else:}}
+      <ul class="sss-contagem">
+        {{for _st, _qtd in _c_dados['contagem']:}}
+        <li>
+          <span class="sss-contagem-numero">{{=_qtd}}</span>
+          {{status = _st
+          status_motivo = None}}{{include 'components/badge_status.html'}}
+        </li>
+        {{pass}}
+      </ul>
+      <p class="sss-texto-suave mt-2 mb-0">Criados desde {{=ui_helpers.formatar_data(_c_dados['desde'])}}, no escopo do seu perfil. <a href="{{=URL(c='tickets', f='lista')}}">Ver tickets</a></p>
+      {{pass}}
+    </div>
+  </section>
+  <section class="sss-card" aria-labelledby="painel-meus">
+    <h2 class="sss-card-titulo" id="painel-meus">Meus últimos tickets</h2>
+    <div class="sss-card-corpo">
+      {{if _c_erro:}}<p class="mb-0" role="alert">{{=_c_erro}}</p>{{elif not _c_dados['meus']:}}<p class="sss-texto-suave mb-0">Você ainda não criou tickets.</p>{{else:}}
+      <ul class="sss-lista-simples">
+        {{for _t in _c_dados['meus']:}}
+        <li>
+          <a class="sss-mono" href="{{=URL(c='tickets', f='detalhe', args=[_t['id']])}}">#{{=_t['id']}}</a>
+          <span class="sss-mono">{{=_t['script_nome']}}</span>
+          <span>{{=_t['ambiente']}}</span>
+          {{status = _t['status']
+          status_motivo = None}}{{include 'components/badge_status.html'}}
+          <span class="sss-texto-suave">{{=ui_helpers.formatar_data(_t['created_at'])}}</span>
+        </li>
+        {{pass}}
+      </ul>
+      {{pass}}
+    </div>
+  </section>
+  {{pass}}
+  {{if 'agendamentos' in cartoes:}}
+  {{_c_dados, _c_erro = cartoes['agendamentos']}}
+  <section class="sss-card" aria-labelledby="painel-agendamentos">
+    <h2 class="sss-card-titulo" id="painel-agendamentos">Próximos agendamentos</h2>
+    <div class="sss-card-corpo">
+      {{if _c_erro:}}<p class="mb-0" role="alert">{{=_c_erro}}</p>{{elif not _c_dados:}}<p class="sss-texto-suave mb-0">Nenhuma regra ativa nos seus ambientes.</p>{{else:}}
+      <ul class="sss-lista-simples">
+        {{for _a in _c_dados:}}
+        <li>
+          <span class="sss-mono">{{=_a['proxima_execucao']}}</span>
+          <a href="{{=URL(c='agendamentos', f='form', args=[_a['id']])}}">{{=_a['nome']}}</a>
+          <span class="sss-texto-suave">{{=_a['script']}} · {{=_a['ambiente']}}</span>
+        </li>
+        {{pass}}
+      </ul>
+      {{pass}}
+      <p class="mt-2 mb-0"><a href="{{=URL(c='agendamentos', f='lista')}}">Ver regras de agendamento</a></p>
+    </div>
+  </section>
+  {{pass}}
+  {{if 'agentes' in cartoes:}}
+  {{_c_dados, _c_erro = cartoes['agentes']}}
+  <section class="sss-card" aria-labelledby="painel-agentes">
+    <h2 class="sss-card-titulo" id="painel-agentes">Saúde dos agentes</h2>
+    <div class="sss-card-corpo">
+      {{if _c_erro:}}<p class="mb-0" role="alert">{{=_c_erro}}</p>{{elif not _c_dados['agentes']:}}<p class="sss-texto-suave mb-0">Nenhum agente registrado.</p>{{else:}}
+      <ul class="sss-lista-simples">
+        {{for _ag in _c_dados['agentes']:}}
+        <li>
+          <span class="sss-mono">{{=_ag['codigo']}}</span>
+          <span class="sss-status {{=_ag['saude']['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_ag['saude']['icone']}}"></use></svg><span>{{=_ag['saude']['rotulo']}}</span></span>
+          <span class="sss-texto-suave">heartbeat {{=_ag['ha']}} · {{=_ag['running']}} em execução</span>
+        </li>
+        {{pass}}
+      </ul>
+      {{pass}}
+      <p class="mt-2 mb-0"><a href="{{=URL(c='auditoria', f='agentes')}}">Abrir painel de agentes</a></p>
+    </div>
+  </section>
+  {{pass}}
+</div>
 {{pass}}
 
 {{if not menu:}}

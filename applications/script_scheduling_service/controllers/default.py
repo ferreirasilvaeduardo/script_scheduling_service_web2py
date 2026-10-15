@@ -4,10 +4,16 @@ import time
 
 from gluon import current
 
+import agendamentos_service
+import agentes_service
 import auth_service
 import rbac
 import security
+import ticket_service
 import ui_helpers
+from repo_errors import RepoErro
+
+_MSG_FALHA_CARTAO = u"Não foi possível carregar este quadro. Tente novamente em instantes."
 
 
 def _texto_post(nome, limite):
@@ -17,10 +23,30 @@ def _texto_post(nome, limite):
     return valor[:limite]
 
 
+def _cartao(ctx, nome, funcao):
+    """Executa a consulta de um cartao; falha de repositorio vira mensagem no proprio cartao."""
+    try:
+        return funcao(), None
+    except RepoErro:
+        _log.exception("falha ao montar o cartao %s do painel inicial (login=%s)", nome, ctx["login"],
+                       extra={"acao": "PAINEL"})
+        return None, _MSG_FALHA_CARTAO
+
+
 def index():
     ctx = _exigir_login()
     response.title = u"Início — SSS"
-    return dict(ctx=ctx, menu=response.sss_menu, pode_disparar=rbac.tem_func(ctx, "EXEC_SCRIPT"))
+    cartoes = {}
+    # Cada cartao so existe para quem tem a funcionalidade (F6.1); o escopo e o das telas de origem.
+    if ticket_service.pode_consultar(ctx):
+        cartoes["tickets"] = _cartao(ctx, "tickets", lambda: ticket_service.resumo_inicial(ctx))
+    if rbac.tem_func(ctx, "CAD_AGENDAMENTOS"):
+        cartoes["agendamentos"] = _cartao(
+            ctx, "agendamentos", lambda: agendamentos_service.listar(ctx, {"ativo": "S"}, 1, 5)["itens"])
+    if rbac.tem_func(ctx, "VER_AUDITORIA"):
+        cartoes["agentes"] = _cartao(ctx, "agentes", lambda: agentes_service.painel(ctx))
+    return dict(ctx=ctx, menu=response.sss_menu, pode_disparar=rbac.tem_func(ctx, "EXEC_SCRIPT"),
+                cartoes=cartoes)
 
 
 def login():

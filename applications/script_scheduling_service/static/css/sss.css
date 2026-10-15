@@ -1266,3 +1266,162 @@
 .sss-page-titulo {
   letter-spacing: 0.01em;
 }
+
+/* Auditoria e painel de agentes (F6.1) */
+.sss-abas-auditoria {
+  margin-bottom: var(--sss-esp-3);
+}
+
+.sss-exportar {
+  margin: 0;
+}
+
+.sss-aud-detalhe {
+  min-width: 14rem;
+  max-width: 32rem;
+  overflow-wrap: anywhere;
+}
+
+.sss-aud-detalhe summary {
+  cursor: pointer;
+}
+
+.sss-ver-mais {
+  color: var(--sss-link);
+  font-size: var(--sss-fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sss-aud-detalhe details[open] summary > span:first-child {
+  display: none;
+}
+
+.sss-aud-detalhe details[open] .sss-ver-mais::after {
+  content: " (recolher)";
+}
+
+.sss-aud-detalhe-completo {
+  margin-top: var(--sss-esp-1);
+  white-space: pre-wrap;
+}
+
+.sss-agentes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  gap: var(--sss-esp-3);
+}
+
+.sss-agente {
+  min-width: 0;
+  padding: var(--sss-esp-3);
+  border: 1px solid var(--sss-border);
+  border-radius: var(--sss-raio);
+  background-color: var(--sss-surface);
+}
+
+.sss-agente-cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sss-esp-2);
+  margin-bottom: var(--sss-esp-2);
+}
+
+.sss-agente-titulo {
+  margin: 0;
+  font-size: var(--sss-fs-base);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.sss-agente-tickets {
+  margin-top: var(--sss-esp-3);
+  padding-top: var(--sss-esp-2);
+  border-top: 1px solid var(--sss-border);
+  font-size: var(--sss-fs-sm);
+}
+
+.sss-agente-tickets summary {
+  cursor: pointer;
+}
+
+.sss-agente-lista {
+  margin: var(--sss-esp-2) 0 0;
+  padding-left: var(--sss-esp-4);
+  overflow-wrap: anywhere;
+}
+
+.sss-agente-lista li + li {
+  margin-top: var(--sss-esp-1);
+}
+
+.sss-legenda-saude {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--sss-esp-2) var(--sss-esp-3);
+  align-items: center;
+  margin: 0 0 var(--sss-esp-3);
+  font-size: var(--sss-fs-sm);
+}
+
+.sss-legenda-saude dd {
+  margin: 0;
+}
+
+/* Painel inicial (F6.1) */
+.sss-painel-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 0 var(--sss-esp-3);
+}
+
+.sss-contagem {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  gap: var(--sss-esp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sss-contagem li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sss-esp-1);
+}
+
+.sss-contagem-numero {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.sss-lista-simples {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--sss-fs-sm);
+}
+
+.sss-lista-simples li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sss-esp-1) var(--sss-esp-2);
+  padding: var(--sss-esp-1) 0;
+  border-bottom: 1px solid var(--sss-border);
+  overflow-wrap: anywhere;
+}
+
+.sss-lista-simples li:last-child {
+  border-bottom: 0;
+}
+
+@media (max-width: 575.98px) {
+  .sss-legenda-saude {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

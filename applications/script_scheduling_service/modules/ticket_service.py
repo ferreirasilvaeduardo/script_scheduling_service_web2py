@@ -567,6 +567,45 @@ class ServicoTicket(object):
         return {"ambientes": ambientes, "scripts": scripts, "status": list(STATUS_TICKET),
                 "origens": list(ORIGENS)}
 
+    def _escopo_consulta(self, ctx, repo_filtros):
+        """(visivel, escopo_ambientes) da consulta; sem VER_LOGS fixa o solicitante em repo_filtros.
+
+        Com VER_LOGS: ambientes autorizados (admin: todos, escopo None). Sem VER_LOGS: apenas
+        os tickets do proprio solicitante. visivel False: nada a consultar.
+        """
+        if rbac.tem_func(ctx, "VER_LOGS"):
+            if ctx.get("is_admin") is True:
+                return True, None
+            escopo = sorted(ctx.get("ambientes") or ())
+            return bool(escopo), escopo
+        if repo_filtros.get("solicitante", ctx["login"]) != ctx["login"]:
+            return False, None
+        repo_filtros["solicitante"] = ctx["login"]
+        return True, None
+
+    def resumo_inicial(self, ctx, horas=24, ultimos=5):
+        """Cartoes do painel inicial no escopo da lista de tickets; None sem acesso a consulta.
+
+        Retorna {"contagem": [(status, quantidade)], "desde": datetime, "meus": [itens da lista]}:
+        quantidade por status dos tickets criados nas ultimas `horas` e os `ultimos` tickets do
+        proprio usuario.
+        """
+        if not self.pode_consultar(ctx):
+            return None
+        agora = self._tickets.agora()
+        desde = agora - datetime.timedelta(hours=horas)
+        contagem = []
+        for status in STATUS_TICKET:
+            repo_filtros = {"status": [status], "criado_inicio": desde}
+            visivel, escopo = self._escopo_consulta(ctx, repo_filtros)
+            total = 0
+            if visivel:
+                total = self._tickets.listar(filtros=repo_filtros, pagina=1, tamanho=1,
+                                             escopo_ambientes=escopo)["total"]
+            contagem.append((status, total))
+        meus = self.listar(ctx, {"solicitante": ctx["login"]}, 1, ultimos)["itens"]
+        return {"contagem": contagem, "desde": desde, "meus": meus}
+
     def listar(self, ctx, filtros, pagina, tamanho):
         """Lista paginada no escopo do perfil (README §4.3.C).
 
@@ -576,17 +615,10 @@ class ServicoTicket(object):
         if not self.pode_consultar(ctx):
             self._negar(ctx, rbac.Motivo.SEM_FUNC, None, None)
         repo_filtros = _filtros_repo(normalizar_filtros(filtros))
-        escopo = None
         vazio = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
-        if rbac.tem_func(ctx, "VER_LOGS"):
-            if ctx.get("is_admin") is not True:
-                escopo = sorted(ctx.get("ambientes") or ())
-                if not escopo:
-                    return vazio
-        else:
-            if repo_filtros.get("solicitante", ctx["login"]) != ctx["login"]:
-                return vazio
-            repo_filtros["solicitante"] = ctx["login"]
+        visivel, escopo = self._escopo_consulta(ctx, repo_filtros)
+        if not visivel:
+            return vazio
         resultado = self._tickets.listar(filtros=repo_filtros, pagina=pagina, tamanho=tamanho,
                                          escopo_ambientes=escopo)
         info = ui_helpers.paginacao_info(pagina, tamanho, resultado["total"])
@@ -904,6 +936,11 @@ def opcoes_filtro(ctx):
 def listar(ctx, filtros, pagina, tamanho):
     """Lista de tickets no escopo do perfil (servico padrao)."""
     return _servico().listar(ctx, filtros, pagina, tamanho)
+
+
+def resumo_inicial(ctx):
+    """Cartoes de tickets do painel inicial (servico padrao)."""
+    return _servico().resumo_inicial(ctx)
 
 
 def detalhe(ctx, ticket_id):

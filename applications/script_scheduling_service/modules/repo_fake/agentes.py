@@ -14,6 +14,10 @@ class RepoAgentesFake(RepoAgentes):
     def listar(self):
         """Retorna lista de todos os agentes ordenados por codigo ASC, id ASC."""
         with self._store.lock_agentes:
+            agora = self._store.agora()
+            for ag in self._store.agentes.values():
+                if ag.get("codigo") in self._store.agentes_hb_sim and ag.get("status") == "ATIVO":
+                    ag["heartbeat_at"] = agora
             lista = list(self._store.agentes.values())
             lista.sort(key=lambda x: (x.get("codigo", ""), x["id"]))
             return copy.deepcopy(lista)

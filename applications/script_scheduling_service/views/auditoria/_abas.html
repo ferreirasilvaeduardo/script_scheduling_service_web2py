@@ -1,0 +1,16 @@
+{{
+# Abas da área de auditoria. Variável de entrada: aba_ativa ('lista' | 'agentes').
+_abas = (('lista', u'Trilha de auditoria'), ('agentes', u'Agentes'))
+}}<nav aria-label="Seções da auditoria">
+  <ul class="nav nav-tabs sss-abas-auditoria">
+    {{for _aba_f, _aba_rotulo in _abas:}}
+    <li class="nav-item">
+      {{if _aba_f == aba_ativa:}}
+      <a class="nav-link active" aria-current="page" href="{{=URL(c='auditoria', f=_aba_f, extension=False)}}">{{=_aba_rotulo}}</a>
+      {{else:}}
+      <a class="nav-link" href="{{=URL(c='auditoria', f=_aba_f, extension=False)}}">{{=_aba_rotulo}}</a>
+      {{pass}}
+    </li>
+    {{pass}}
+  </ul>
+</nav>

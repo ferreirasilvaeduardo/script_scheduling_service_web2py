@@ -393,6 +393,21 @@ O campo `detalhe` nunca contém segredos nem valores de parâmetros sensíveis.
 
 Os valores passam pelo `masking.py` e o texto é limitado a 1.000 caracteres.
 
+**Consulta e exportação** (tela `auditoria/lista`, `VER_AUDITORIA`, decisões do F6.1):
+
+* Filtros: período (`de`/`até`, por dia, inclusivos), ator (trecho), ação (catálogo da tabela 16), entidade, `entidade_id` e IP (trecho). Ordenação `created_at DESC, id DESC` e página de no máximo 100 linhas.
+* Período padrão: últimos 7 dias. Período máximo: 90 dias. Acima disso, até 366 dias, só com filtro seletivo: ator, ou entidade + ID.
+* O `detalhe` é sempre exibido escapado (truncado com "ver mais"), e passa de novo pelo `masking.py` na leitura.
+* O ID vira link só quando a entidade tem tela (tickets, agendamentos, usuários, perfis, ambientes, scripts e parâmetros) **e** o usuário tem a funcionalidade dessa tela. Nos outros casos, o ID aparece como texto.
+* **Exportação CSV** (`auditoria/exportar`):
+  * por `POST` com CSRF, porque grava auditoria e `GET` nunca altera estado;
+  * mesmos filtros e mesmo RBAC da tela;
+  * streaming de no máximo 50.000 linhas (as mais recentes);
+  * UTF-8 com BOM, separador `;`, cabeçalho em português e datas `AAAA-MM-DD HH:MM:SS`;
+  * neutralização de *CSV injection*: texto iniciado por `=`, `+`, `-`, `@`, TAB ou CR recebe o prefixo `'`;
+  * auditada com a ação `AUD_EXPORTAR` (entidade `tbsss_auditoria`, `detalhe` = filtros + quantidade de linhas), gravada antes do streaming. O arquivo para no ID anterior ao dessa linha.
+* Contrato: `RepoAuditoria.iterar(filtros, limite)` alimenta o streaming (no Oracle, um cursor com `arraysize`, sem paginação por offset). O filtro `id_max` delimita o conjunto exportado.
+
 ---
 
 ## 5. Ciclo de Vida do Ticket
@@ -1456,7 +1471,7 @@ END;
   * `entidade_id NUMBER(10)`
   * `detalhe VARCHAR2(1000 CHAR)`
   * `created_at DATE DEFAULT SYSDATE NOT NULL`
-* **Ações:** `LOGIN_OK`, `LOGIN_FALHA`, `LOGIN_BLOQUEIO`, `LOGOUT`, `TICKET_CRIAR`, `TICKET_CANCELAR`, `TICKET_REEXECUTAR`, `CAD_INSERIR`, `CAD_ALTERAR`, `CAD_DESATIVAR`, `PERM_ALTERAR`, `AGD_PAUSAR`, `AGENTE_INICIO`, `AGENTE_FIM`, `PURGE`. O catálogo é mantido em código e não usa CK, para permitir extensão.
+* **Ações:** `LOGIN_OK`, `LOGIN_FALHA`, `LOGIN_BLOQUEIO`, `LOGOUT`, `TICKET_CRIAR`, `TICKET_CANCELAR`, `TICKET_REEXECUTAR`, `CAD_INSERIR`, `CAD_ALTERAR`, `CAD_DESATIVAR`, `PERM_ALTERAR`, `AGD_PAUSAR`, `AGENTE_INICIO`, `AGENTE_FIM`, `PURGE`, `AUD_EXPORTAR` (exportação CSV da trilha, F6.1). O catálogo é mantido em código (`auditoria_service.ACOES`) e não usa CK, para permitir extensão.
 * A tabela não tem FKs intencionalmente: a trilha sobrevive a exclusões.
 
 ---
@@ -1625,7 +1640,22 @@ As chaves `dialeto`, `script_owner_sids` e `interpretadores` passam a ser lidas 
 
 * Todo `except` registra o código de erro do banco (ORA- no Oracle) e o stack trace em ERROR antes de qualquer `ROLLBACK`.
 * É proibido registrar senhas, `PADRAO_VALOR_RUN_CONEXAO_BD`, `cookie_key`, o conteúdo de `secrets.cfg` e valores de parâmetros sensíveis.
-* **Visão operacional:** a tela de agentes (`VER_AUDITORIA`) lista `tbsss_agentes` com o heartbeat e os tickets `RUNNING` de cada agente.
+* **Visão operacional:** a tela de agentes (`auditoria/agentes`, `VER_AUDITORIA`) lista `tbsss_agentes` com o heartbeat e os tickets `RUNNING` de cada agente. É **somente leitura**.
+  * **Saúde derivada** da idade do heartbeat, medida pelo relógio do banco (`SYSDATE`), com os limiares do daemon:
+
+    | Saúde | Condição | Exibição |
+    |---|---|---|
+    | `OK` | idade < `2 × heartbeat_interval_s` | verde, ícone de confirmação |
+    | `ATRASADO` | até `fence_timeout_s` | âmbar, ampulheta |
+    | `EM_RISCO` | até `node_offline_timeout_s` | vermelho, alerta |
+    | `OFFLINE` | além disso, sem heartbeat ou com status `PARADO` | cinza, círculo cortado |
+
+  * Cartões por agente com "há N s", lista expansível dos tickets `RUNNING` (com link para o detalhe), legenda dos estados e atualização automática a cada 15 s (fragmento `.load`, que preserva as listas abertas).
+  * Backend FAKE (DEV): o `agt-host01` renova o heartbeat a cada leitura. O `agt-host02` nasce com o heartbeat congelado 30 s antes da carga do seed, então envelhece com o relógio: começa `ATRASADO`, passa a `EM_RISCO` cerca de 1 min depois e a `OFFLINE` cerca de 2,5 min depois.
+* **Painel inicial** (`default/index`), com cartões por permissão:
+  * contagem por status dos tickets criados nas últimas 24 h e meus últimos 5 tickets (quem consulta tickets, no escopo da lista);
+  * próximos 5 agendamentos ativos (`CAD_AGENDAMENTOS`);
+  * saúde dos agentes (`VER_AUDITORIA`).
 
 ---
 

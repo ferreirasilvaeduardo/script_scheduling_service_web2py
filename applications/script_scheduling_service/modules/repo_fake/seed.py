@@ -18,6 +18,9 @@ MARCADOR_TRUNCADO = "[SSS] log truncado no banco; arquivo integral no agente\n"
 # o ticket 13 termina ~100 s depois e os demais entre 15 e 25 min depois.
 _PASSO_LOG_S = {11: 24, 12: 30, 13: 8, 14: 36, 15: 30, 16: 36}
 _LINHAS_LOG_VOLUMOSO = 27000
+# Idade inicial do heartbeat congelado do agt-host02: com os limiares padrao (10/90/180 s) ele
+# comeca ATRASADO, fica EM_RISCO ~1 min depois e OFFLINE ~2,5 min depois (README §13).
+_HB_CONGELADO_S = 30
 _TICKET_LOG_VOLUMOSO = 17
 
 
@@ -237,10 +240,12 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 # ---------------------------------------------------------
                                 agentes = [
                                     {"id": 1, "codigo": "agt-host01", "hostname": "worker01.internal", "pid_daemon": 1001, "versao": "1.0.0", "ambientes": "PRODUCAO,HOMOLOGACAO", "plataforma": "LINUX", "interpretadores": "PYTHON3,BASH,SH", "status": "ATIVO", "iniciado_em": base_dt - datetime.timedelta(days=3), "heartbeat_at": base_dt, "created_at": base_dt - datetime.timedelta(days=3)},
-                                    {"id": 2, "codigo": "agt-host02", "hostname": "worker02.internal", "pid_daemon": 1002, "versao": "1.0.0", "ambientes": "HOMOLOGACAO,DESENV", "plataforma": "WINDOWS", "interpretadores": "PYTHON3,POWERSHELL", "status": "ATIVO", "iniciado_em": base_dt - datetime.timedelta(days=2), "heartbeat_at": base_dt, "created_at": base_dt - datetime.timedelta(days=2)},
+                                    {"id": 2, "codigo": "agt-host02", "hostname": "worker02.internal", "pid_daemon": 1002, "versao": "1.0.0", "ambientes": "HOMOLOGACAO,DESENV", "plataforma": "WINDOWS", "interpretadores": "PYTHON3,POWERSHELL", "status": "ATIVO", "iniciado_em": base_dt - datetime.timedelta(days=2), "heartbeat_at": base_dt - datetime.timedelta(seconds=_HB_CONGELADO_S), "created_at": base_dt - datetime.timedelta(days=2)},
                                 ]
                                 for ag in agentes:
                                     store.agentes[ag["id"]] = ag
+                                # agt-host01 renova o heartbeat; agt-host02 envelhece com o relogio (F6.1).
+                                store.agentes_hb_sim.add("agt-host01")
                                 store.seqs["tbsss_agentes"] = 2
 
                                 # ---------------------------------------------------------
