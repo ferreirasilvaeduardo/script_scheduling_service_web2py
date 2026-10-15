@@ -50,15 +50,15 @@ Recomenda-se o uso do `pyenv` para gerenciamento da versão do Python:
 
    Em distribuições com GCC 10 ou anterior e OpenSSL 1.1 (ex.: Ubuntu 20.04, RHEL 8), basta `pyenv install 3.6.8`. A 3.6.15 compila direto com `pyenv install 3.6.15` e serve como alternativa, mas a referência de validação é a 3.6.8.
 
-3. Configure a versão padrão:
+3. Instale também a **3.6.0** (mínima suportada) com a mesma receita, trocando `3.6.8` por `3.6.0`, e escolha a versão padrão. Qualquer uma das duas serve como global; a suíte precisa passar **nas duas** (AGENTS §7.3). As demais versões podem ser chamadas pelo caminho completo (ex.: `~/.pyenv/versions/3.13.2/bin/python`):
    ```bash
-   pyenv global 3.6.8
+   pyenv global 3.6.0      # ou 3.6.8
    ```
 
 4. Valide a versão ativa e os módulos críticos:
    ```bash
    python --version
-   # Saída esperada: Python 3.6.8
+   # Saída esperada: Python 3.6.0 (ou 3.6.8)
    python -c "import ssl, hashlib, _hashlib, sqlite3; print(ssl.OPENSSL_VERSION, hashlib.pbkdf2_hmac is _hashlib.pbkdf2_hmac)"
    # Saída esperada: OpenSSL 1.1.1w  11 Sep 2023 True
    ```
@@ -103,7 +103,7 @@ cd applications/script_scheduling_service
 python scripts/check_env.py
 ```
 
-O script é somente leitura e exibirá uma tabela detalhada com o status `OK` ou `FALHA` de cada item. O código de retorno será `0` se todos os pré-requisitos forem atendidos, `1` em caso de falha de ativos/estrutura, e `2` se a versão do Python for diferente de 3.6.
+O script é somente leitura e exibirá uma tabela detalhada com o status `OK` ou `FALHA` de cada item. O código de retorno será `0` se todos os pré-requisitos forem atendidos, `1` em caso de falha de ativos/estrutura, e `2` se a versão do Python for anterior à 3.6.0. As versões 3.6.0 a 3.13 são aceitas (a sintaxe do código continua restrita à 3.6, AGENTS §2.1).
 
 ---
 
@@ -113,8 +113,19 @@ O servidor de desenvolvimento do web2py deve ser iniciado a partir da raiz do we
 
 ```bash
 cd /portaloptrib/TESHUVA/web2py
+export SSS_DEV_SEED_PASSWORD='<senha-de-demonstração>'
 python web2py.py -a '<senha_administrador>' -i 127.0.0.1 -p 8000 --no_gui
 ```
+
+A aplicação fica em `http://127.0.0.1:8000/script_scheduling_service`.
+
+### Senha dos usuários de demonstração (`SSS_DEV_SEED_PASSWORD`)
+
+* Com `data_backend = FAKE`, o seed define a senha de **todos** os usuários de demonstração (`admin`, `op.prod`, `op.hml`, `consulta`) a partir dessa variável de ambiente. `inativo` e `bloqueado` nunca conseguem entrar, de propósito.
+* A senha precisa atender à política (mínimo de 12 caracteres). Sem a variável, ou fora da política, a aplicação sobe, registra um WARN e **nenhum login funciona**.
+* Nenhuma senha fica no código nem no `config.ini`. A variável é registrada no mascarador e não aparece nos logs.
+* O FAKE guarda tudo em memória: reiniciar o servidor restaura o seed (útil para repetir testes e a homologação).
+* Perfis, permissões e dados de apoio de cada usuário: `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx`, capítulo 3.
 
 ### Regras Mandatórias de Execução:
 
@@ -187,3 +198,27 @@ script_owner_uids = 0,<seu UID>
 ```
 
 Para alterar um script da cópia, devolva a escrita temporariamente (`chmod -R u+w "$BASE"`) e volte aos modos acima antes de executar. Executar como `root` não funciona com essa checagem, porque `os.access(W_OK)` é sempre verdadeiro para root.
+
+### 6.2 Windows (a partir do F8.0)
+
+No Windows, a checagem equivalente usa SIDs e ACL, não UID e modo (README §8.5):
+
+* o dono do script, de cada diretório e da base deve ser um SID de `script_owner_sids` (ex.: `S-1-5-32-544`, Administradores);
+* a conta do agente, Users, Authenticated Users e Everyone não podem ter direito de escrita **efetivo** na árvore;
+* o agente roda com uma conta dedicada, **sem** elevação (token de administrador é recusado).
+
+Em DEV, copie `dev/scripts` para uma pasta própria, transfira o dono para Administradores e remova a herança de escrita (`icacls <pasta> /setowner *S-1-5-32-544 /T` e `icacls <pasta> /inheritance:r /grant:r *S-1-5-32-544:(OI)(CI)F *S-1-5-18:(OI)(CI)F <conta-do-agente>:(OI)(CI)RX`). O roteiro definitivo fica no `RUNBOOK.md` (F9.1).
+
+---
+
+## 7. Banco Oracle real (a partir do F7)
+
+O backend FAKE não precisa de banco. Para o F7 em diante (README §2.3, CR-002):
+
+* **Driver:** `python-oracledb` (`< 2.0` na 3.6; `2.x` na 3.7+) com `cryptography`, e `cx_Oracle 8.3` como contingência. São pré-instalados pela infraestrutura; não use `pip install` no projeto.
+* **Modo:** `[oracle] modo_driver = auto` tenta Thin → Thick → cx_Oracle por sondagem. Contra banco **11g**, só Thick e cx_Oracle conectam, então o **Instant Client 19** precisa estar instalado:
+  * Linux/Unix: no `ldconfig` (preferencial) ou em `LD_LIBRARY_PATH` exportado **antes** de iniciar o Python;
+  * Windows/macOS: `oracle_client_lib_dir` no `config.ini`.
+* **Credencial:** só no `secrets.cfg` (`0600`, dono = usuário do processo), nunca no `config.ini`.
+* **Testes contra banco real:** defina `SSS_TEST_DSN` (e o usuário/senha de teste conforme o prompt do passo). Sem ela, as partes de banco ficam `NÃO TESTADO` no relatório.
+* `python scripts/check_env.py` mostra a combinação de driver escolhida (a partir do F7.0).

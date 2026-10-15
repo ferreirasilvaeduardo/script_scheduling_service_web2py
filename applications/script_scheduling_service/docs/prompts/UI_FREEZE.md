@@ -2,6 +2,8 @@
 
 O objetivo é congelar o comportamento visual e funcional das telas sobre o backend FAKE antes de conectar o Oracle. **Depois deste marco, qualquer mudança de tela vira change request** e exige atualização do README.
 
+> **Roteiro de execução:** `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx` traz, para cada item abaixo, o passo a passo com telas, o resultado esperado e o quadro de registro. Este arquivo continua sendo a lista normativa.
+
 ## Pré-condições
 - [ ] A suíte completa passa: `python -m unittest discover -s scripts -p "test_*.py"`.
 - [ ] `python scripts/check_env.py` retorna 0.

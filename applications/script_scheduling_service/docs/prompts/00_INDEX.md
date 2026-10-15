@@ -52,14 +52,17 @@
 | 7.1 | `F7_1_init_db.md` | Bootstrap de DDL Oracle 11gR2 (`init_db.py`) | 7.0 | `test_db_schema.py` + `--dry-run` |
 | 7.2 | `F7_2_db_conn.md` | Conexão Oracle (`db_conn`: pool, transação, erros, reconexão) | 7.1 | `test_db_conn.py` |
 | 7.3 | `F7_3_repo_oracle.md` | Repositórios Oracle 11gR2 (**executar 1x por agregado**) | 7.2 | `test_repo_contract.py` (ORACLE, cada combinação de driver) + `test_sql_oracle11g.py` |
-| 8.1 | `F8_1_env_executor.md` | Ambiente do filho e executor | 7.3 | `test_env_builder.py`, `test_executor.py` |
+| 8.0 | `F8_0_plataforma.md` | Camada de plataforma POSIX/Windows (CR-001) | 7.3 | `test_plataforma.py` |
+| 8.1 | `F8_1_env_executor.md` | Ambiente do filho e executor | 8.0 | `test_env_builder.py`, `test_executor.py` |
 | 8.2 | `F8_2_log_pump.md` | Coleta de log para CLOB | 8.1 | `test_log_pump.py` |
 | 8.3 | `F8_3_daemon_claim.md` | Daemon: inicialização, claim, heartbeat, cancelamento | 8.2 | `test_scheduler_claim.py` |
 | 8.4 | `F8_4_daemon_desdobro_fencing.md` | Daemon: desdobro, NODE_OFFLINE, fencing, shutdown | 8.3 | `test_scheduler_ha.py` |
-| 9.1 | `F9_1_purge_hardening.md` | Purge, hardening e runbook | 8.4 | Revisão |
-| 9.2 | `F9_2_e2e.md` | Roteiro E2E com 2 nós | 9.1 | Execução assistida |
+| 9.1 | `F9_1_purge_hardening.md` | Purge, launchers Linux/Windows, pacote e runbook | 8.4 | `test_purge.py`, `test_empacotar.py` + revisão |
+| 9.2 | `F9_2_e2e.md` | Roteiro E2E com agentes Linux e Windows | 9.1 | Execução assistida |
 
-> **F7.3 é executado uma vez por agregado:** `RBAC_USUARIOS`, `CATALOGO`, `TICKETS`, `AGENDAMENTOS`, `AUDITORIA_AGENTES`. São 30 arquivos de prompt e **34 sessões** do Antigravity (o F7.3 conta 5 vezes), mais o marco manual de UI Freeze.
+> **F7.3 é executado uma vez por agregado:** `RBAC_USUARIOS`, `CATALOGO`, `TICKETS`, `AGENDAMENTOS`, `AUDITORIA_AGENTES`. São 31 arquivos de prompt e **35 sessões** do Antigravity (o F7.3 conta 5 vezes), mais o marco manual de UI Freeze.
+
+> **Prompts já executados são histórico.** Eles refletem o README da época em que rodaram. Mudanças posteriores de arquitetura (CR-001: agente multiplataforma e interpretador lógico; CR-002: Oracle único e driver adaptativo, em `docs/arquitetura/`) prevalecem e já estão no README, no AGENTS e nos prompts ainda não executados. Exemplo: o F3.1 e o F4.5 citam `comando_real` e caminhos Linux, substituídos pelo interpretador lógico no commit `c904ca3`.
 
 ## Regras de ouro para o executor
 

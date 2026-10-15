@@ -3,7 +3,7 @@
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §4.13, §6
 - `README.md` §5.2 (`LOG_LIMIT`), §8.10 (inteiro), §12.1 (`[logging]`)
-- Arquivos: `modules/masking.py` (`MascaradorFluxo`), `modules/db_conn.py`, `modules/executor.py`
+- Arquivos: `modules/masking.py` (`MascaradorFluxo`), `modules/db_conn.py` (F7.0/F7.2, CR-002), `modules/executor.py`, `modules/plataforma/` (F8.0)
 
 ## Objetivo
 Transferir o log local do ticket para `log_output` de forma incremental, mascarada, sem cortar caracteres multibyte e com limites que protegem o banco e o disco.
@@ -33,7 +33,8 @@ Transferir o log local do ticket para `log_output` de forma incremental, mascara
   - `blocos` com o tamanho exato;
   - arquivo que cresce entre coletas;
   - `anexar` com conexão mock retornando `NO_DATA_FOUND`, resultando em `False`.
-  - Com `SSS_TEST_DSN`: `WRITEAPPEND` real em um ticket de teste e leitura do CLOB idêntica ao texto mascarado esperado.
+  - arquivo aberto para escrita por outro processo durante a coleta (simula o filho);
+  - Com `SSS_TEST_DSN`: `WRITEAPPEND` real em um ticket de teste e leitura do CLOB idêntica ao texto mascarado esperado, em cada combinação de driver disponível.
 
 **OUT**
 - Sem o laço do daemon (isso é o F8.3). Este módulo só fornece as peças.
@@ -42,6 +43,8 @@ Transferir o log local do ticket para `log_output` de forma incremental, mascara
 1. É proibido reescrever o CLOB inteiro ou ler o CLOB para concatenar (AGENTS §4.13).
 2. O texto **nunca** chega ao banco sem passar pelo mascarador.
 3. Leitura de arquivo sempre em binário, com o offset controlado pela bomba.
+4. **Windows:** o arquivo é lido enquanto o filho ainda escreve nele. Abra para leitura sem bloquear a escrita do filho (o `open` padrão do Python já compartilha leitura e escrita) e trate `PermissionError` transitório como "nada novo neste ciclo". `\r\n` é preservado como veio do script.
+5. O bloco PL/SQL é o mesmo nas três combinações de driver (CR-002); o tipo do bind de CLOB vem do `db_conn`.
 
 ## Critérios de aceite
 - [ ] Os testes passam. O teste de corte multibyte cobre todas as posições.

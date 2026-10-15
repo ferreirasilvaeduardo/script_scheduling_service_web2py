@@ -1612,6 +1612,10 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
 * recusar a execução com token elevado ou como SYSTEM;
 * iniciar o Python em primeiro plano, para que `CTRL_BREAK` e o arquivo `.stop` sejam tratados pelo próprio daemon.
 
+`bin/sss-stop.sh` e `bin/sss-stop.ps1` criam o arquivo `work_dir/sss-<agent_id>.stop`, para a parada controlada sem sinal (§8.11).
+
+**Pacote de implantação:** `scripts/empacotar.py` (biblioteca padrão, roda em Linux e Windows) gera `dist/sss-<versao>.tar.gz` e `dist/sss-<versao>.zip` com o mesmo conteúdo e um `SHA256SUMS`, e falha se encontrar segredo ou código de DEV no pacote (F9.1).
+
 **Hardening do web2py em HML e PROD:**
 * As aplicações de exemplo `admin`, `welcome` e `examples` são **removidas** do pacote implantado.
 * `routes.py` fixa `script_scheduling_service` como aplicação padrão e única.
