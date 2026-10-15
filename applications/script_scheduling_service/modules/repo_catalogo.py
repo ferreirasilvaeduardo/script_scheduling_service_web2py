@@ -33,7 +33,7 @@ class RepoCatalogo(object):
     def scripts_listar(self, filtros=None, pagina=1, tamanho=20):
         """Lista scripts paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
 
-        Ordem: nome ASC, id ASC. Filtros: nome (trecho), grupo, categoria, comando_real e ativo.
+        Ordem: nome ASC, id ASC. Filtros: nome (trecho), grupo, categoria, interpretador (logico) e ativo.
         Cada item traz 'ambientes_homologados' (nomes, ordem alfabetica) e 'qtd_parametros'.
         """
         raise NotImplementedError

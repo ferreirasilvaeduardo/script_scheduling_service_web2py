@@ -95,9 +95,9 @@ _modal_reexecutar = {'id': 'modal-reexecutar', 'titulo': u'Reexecutar ticket #%s
     {{if _t['snapshot']:}}
     <dl class="sss-resumo mt-3">
       <dt>Interpretador</dt>
-      <dd class="sss-mono">{{=_t['snapshot']['comando_real'] or '-'}}</dd>
-      <dt>Script</dt>
-      <dd class="sss-mono">{{=_t['snapshot']['script_real'] or _t['snapshot']['path_file'] or '-'}}</dd>
+      <dd class="sss-mono">{{=_t['snapshot']['interpretador'] or '-'}}</dd>
+      <dt>Script (relativo à base)</dt>
+      <dd class="sss-mono">{{=_t['snapshot']['path_file'] or '-'}}</dd>
       <dt>Montagem</dt>
       <dd>{{=_t['snapshot']['tipo_param'] or '-'}}</dd>
       <dt>Compilado em</dt>

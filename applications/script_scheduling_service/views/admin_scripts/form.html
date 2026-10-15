@@ -1,6 +1,6 @@
 {{extend 'layout.html'}}
 {{
-# Inclusão e edição de script. comando_real é um select fixo da allowlist (o servidor revalida o valor exato);
+# Inclusão e edição de script. interpretador é um select fixo da allowlist lógica (o servidor revalida o valor exato);
 # o caminho é relativo ao diretório base, que só é exibido para administradores.
 import ui_helpers
 _s = scr
@@ -20,7 +20,8 @@ if _s.get('base_exibicao'):
     _ajuda_path = u'Diretório base: %s. %s' % (_s['base_exibicao'], _ajuda_path)
 pass
 _campos_c = [
-    {'nome': 'comando_real', 'rotulo': 'Interpretador', 'tipo': 'select', 'valor': _s.get('comando_real'), 'erro': erros.get('comando_real'), 'obrigatorio': True, 'opcoes': [(_c, _c) for _c in allowlist]},
+    {'nome': 'interpretador', 'rotulo': 'Interpretador', 'tipo': 'select', 'valor': _s.get('interpretador'), 'erro': erros.get('interpretador'), 'obrigatorio': True, 'opcoes': list(interpretadores),
+     'ajuda': u'Chave lógica: cada agente a traduz para o executável local. Cada agente só executa os interpretadores da plataforma dele.'},
     {'nome': 'path_file', 'rotulo': 'Arquivo do script', 'valor': _s.get('path_file'), 'erro': erros.get('path_file'), 'obrigatorio': True, 'maxlength': 250, 'ajuda': _ajuda_path},
     {'nome': 'tipo_param', 'rotulo': u'Montagem dos argumentos', 'tipo': 'select', 'valor': _s.get('tipo_param'), 'erro': erros.get('tipo_param'), 'obrigatorio': True, 'opcoes': list(tipos_param),
      'ajuda': u'Trocar a montagem revalida os parâmetros já vinculados.'},

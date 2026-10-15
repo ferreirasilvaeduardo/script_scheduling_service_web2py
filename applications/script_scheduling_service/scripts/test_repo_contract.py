@@ -100,7 +100,7 @@ class BaseRepoContractTest(object):
             cat.scripts_inserir({
                 "nome": "carga_diaria",
                 "descricao": "Duplicado",
-                "comando_real": "/usr/bin/python3",
+                "interpretador": "PYTHON3",
                 "path_file": "carga_diaria.py",
             })
         self.assertIn("uk_tbsss_scr_nome", str(ctx.exception.constraint or ""))

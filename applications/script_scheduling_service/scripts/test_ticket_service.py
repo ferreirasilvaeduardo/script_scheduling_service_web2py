@@ -116,14 +116,13 @@ class TestTicketService(_BaseTicket):
         snap = json.loads(bruto)
         self.assertEqual(bruto, json.dumps(snap, ensure_ascii=False, sort_keys=True))
         self.assertEqual(sorted(snap), sorted(params_compiler._CHAVES_SNAPSHOT))
-        real = os.path.join(self.base, "carga_diaria.py")
-        self.assertEqual(snap["versao"], 1)
+        self.assertEqual(snap["versao"], 2)
         self.assertEqual(snap["script_nome"], "carga_diaria")
-        self.assertEqual(snap["path_file"], "carga_diaria.py")
-        self.assertEqual(snap["script_real"], real)
+        self.assertEqual((snap["interpretador"], snap["path_file"]), ("PYTHON3", "carga_diaria.py"))
         self.assertEqual(snap["tipo_param"], "NOMEADO")
-        self.assertEqual(snap["argv"], [
-            "/usr/bin/python3", "-I", real,
+        # Snapshot v2 (CR-001): sem caminho absoluto do no web; o agente monta o argv real.
+        self.assertNotIn(self.base, bruto)
+        self.assertEqual(snap["args"], [
             "--data-ref", "2026-10-20", "-n", "5000", "--modo", "SIMULACAO",
             "--verbose", "--api-key", SEGREDO,
         ])
@@ -162,9 +161,9 @@ class TestTicketService(_BaseTicket):
         # hidden "false" + checkbox ausente: vale "false" e a flag e omitida.
         tid, _ = self._criar(respostas={"verbose": ["false"]})
         snap = json.loads(self.tickets.obter(tid)["parametros_enviados"])
-        self.assertNotIn("--verbose", snap["argv"])
+        self.assertNotIn("--verbose", snap["args"])
         tid2, _ = self._criar(respostas={"verbose": ["false", "true"]})
-        self.assertIn("--verbose", json.loads(self.tickets.obter(tid2)["parametros_enviados"])["argv"])
+        self.assertIn("--verbose", json.loads(self.tickets.obter(tid2)["parametros_enviados"])["args"])
 
     # ---------------------------------------------------------- autorizacao
 
@@ -414,7 +413,7 @@ class TestTicketConsulta(_BaseTicket):
         self.assertEqual(t_novo["parent_ticket_id"], original)
         self.assertEqual((t_novo["status"], t_novo["prioridade"], t_novo["solicitante"]), ("PENDING", 3, "op.hml"))
         snap_orig, snap_novo = json.loads(t_orig["parametros_enviados"]), json.loads(t_novo["parametros_enviados"])
-        self.assertEqual(snap_novo["argv"], snap_orig["argv"])
+        self.assertEqual(snap_novo["args"], snap_orig["args"])
         self.assertEqual(snap_novo["respostas"], snap_orig["respostas"])
         regs = self.auditoria.listar(filtros={"acao": "TICKET_REEXECUTAR", "entidade_id": novo})["itens"]
         self.assertEqual(len(regs), 1)

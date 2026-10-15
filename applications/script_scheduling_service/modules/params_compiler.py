@@ -11,7 +11,8 @@ import re
 
 import path_guard
 
-VERSAO_SNAPSHOT = 1
+VERSAO_SNAPSHOT = 2
+BASE_OCULTA = '<base>'
 TAMANHO_MAXIMO = 500
 MASCARA = '****'
 CHAVE_GERAL = '_geral'
@@ -28,8 +29,9 @@ TAMANHO_OPCOES = 500
 TAMANHO_CHAVE_OPCAO = 100
 TAMANHO_ROTULO_OPCAO = 100
 
-_CHAVES_SNAPSHOT = ('versao', 'script_id', 'script_nome', 'comando_real', 'path_file',
-                    'script_real', 'tipo_param', 'argv', 'respostas', 'sensiveis', 'compilado_em')
+# Snapshot v2 (README §6.5, CR-001): sem caminho absoluto nem executavel do no que compilou.
+_CHAVES_SNAPSHOT = ('versao', 'script_id', 'script_nome', 'interpretador', 'path_file', 'tipo_param',
+                    'args', 'respostas', 'sensiveis', 'compilado_em')
 
 
 class ParamErro(Exception):
@@ -284,24 +286,25 @@ def montar_args(tipo_param, vinculos, resolvidos):
     return args
 
 
-def montar_argv(comando_real, script_real, args):
-    """Monta o argv final (README §6.4); python sempre com -I. Lanca PathGuardErro se fora da allowlist."""
-    path_guard.validar_interpretador(comando_real)
-    if comando_real == '/usr/bin/python3':
-        return [comando_real, '-I', script_real] + list(args)
-    return [comando_real, script_real] + list(args)
+def montar_argv_agente(interpretador, executavel, script_real, args):
+    """argv real montado no agente (README §6.4): executavel local + argumentos fixos + script + args.
+
+    Lanca PathGuardErro se o interpretador logico estiver fora da allowlist.
+    """
+    path_guard.validar_interpretador(interpretador)
+    return [executavel] + list(path_guard.ARGS_FIXOS[interpretador]) + [script_real] + list(args)
 
 
-def compilar_snapshot(script, vinculos, respostas, script_real, agora):
-    """Compila o snapshot (README §6.5) -> (json_str | None, resolvidos, erros_por_campo).
+def compilar_snapshot(script, vinculos, respostas, agora):
+    """Compila o snapshot v2 (README §6.5) -> (json_str | None, resolvidos, erros_por_campo).
 
-    Erros de todos os campos sao acumulados; json_str e None quando houver qualquer erro.
+    Guarda o interpretador logico, o path_file relativo e apenas os argumentos: o argv real e montado
+    pelo agente com o proprio executavel e diretorio base. Erros de todos os campos sao acumulados.
     """
     resolvidos, erros = _resolver(vinculos, respostas)
     args = _montar(script['tipo_param'], vinculos, resolvidos, erros)
-    argv = None
     try:
-        argv = montar_argv(script['comando_real'], script_real, args)
+        path_guard.validar_interpretador(script['interpretador'])
     except path_guard.PathGuardErro:
         erros[CHAVE_GERAL] = 'O interpretador do script não é permitido.'
     if erros:
@@ -311,11 +314,10 @@ def compilar_snapshot(script, vinculos, respostas, script_real, agora):
         'versao': VERSAO_SNAPSHOT,
         'script_id': script['id'],
         'script_nome': script['nome'],
-        'comando_real': script['comando_real'],
+        'interpretador': script['interpretador'],
         'path_file': script['path_file'],
-        'script_real': script_real,
         'tipo_param': script['tipo_param'],
-        'argv': argv,
+        'args': args,
         'respostas': dict(resolvidos),
         'sensiveis': sorted(v['codigo'] for v in vinculos if _sensivel(v)),
         'compilado_em': agora.strftime('%Y-%m-%d %H:%M:%S'),
@@ -324,10 +326,10 @@ def compilar_snapshot(script, vinculos, respostas, script_real, agora):
 
 
 def validar_snapshot(json_str, cfg):
-    """Pre-valida o snapshot no claim (README §8.4 passo 1); lanca SnapshotErro.
+    """Pre-valida o snapshot no claim (README §8.4 passo 1) e devolve (snap, argv_real); lanca SnapshotErro.
 
-    cfg expoe base_script_dir e script_owner_uids (secao [agent]). Status e homologacao
-    do script ficam a cargo do chamador.
+    cfg expoe base_script_dir, script_owner_uids e interpretadores (dict logico -> executavel do agente).
+    Status e homologacao do script ficam a cargo do chamador.
     """
     try:
         snap = json.loads(json_str)
@@ -337,49 +339,53 @@ def validar_snapshot(json_str, cfg):
         raise SnapshotErro('ESTRUTURA_INVALIDA')
     if snap['versao'] != VERSAO_SNAPSHOT:
         raise SnapshotErro('VERSAO_NAO_SUPORTADA')
-
-    argv = snap['argv']
-    comando = snap['comando_real']
-    if not isinstance(argv, list) or not argv or argv[0] != comando:
-        raise SnapshotErro('ARGV0_DIVERGENTE')
-    if comando not in path_guard.ALLOWLIST:
+    interpretador = snap['interpretador']
+    if interpretador not in path_guard.ALLOWLIST:
         raise SnapshotErro('INTERPRETADOR_NAO_PERMITIDO')
+    executavel = (cfg.interpretadores or {}).get(interpretador)
+    if not executavel:
+        raise SnapshotErro('INTERPRETADOR_NAO_DISPONIVEL')
+    args = snap['args']
+    if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
+        raise SnapshotErro('ARGS_INVALIDOS')
 
     try:
         real = path_guard.resolver(cfg.base_script_dir, snap['path_file'], cfg.script_owner_uids)
     except path_guard.PathGuardErro as e:
         raise SnapshotErro('PATH_GUARD_' + e.codigo)
-    if real != snap['script_real']:
-        raise SnapshotErro('SCRIPT_REAL_DIVERGENTE')
-
-    prefixo = montar_argv(comando, real, [])
-    if argv[:len(prefixo)] != prefixo:
-        raise SnapshotErro('ARGV_PREFIXO_DIVERGENTE')
-    return snap
+    return snap, montar_argv_agente(interpretador, executavel, real, args)
 
 
-def argv_para_exibicao(snapshot):
-    """Copia do argv com valores de parametros sensiveis trocados por '****'.
-
-    Conservador: qualquer argumento igual a um valor sensivel e mascarado.
-    """
-    argv = list(snapshot['argv'])
+def _segredos(snapshot):
     respostas = snapshot.get('respostas') or {}
     segredos = set()
     for codigo in snapshot.get('sensiveis') or []:
         valor = respostas.get(codigo)
         if isinstance(valor, str) and valor != '':
             segredos.add(valor)
-    if not segredos:
-        return argv
+    return segredos
 
-    inicio = argv.index(snapshot['script_real']) + 1 if snapshot['script_real'] in argv else 1
-    for i in range(inicio, len(argv)):
-        token = argv[i]
+
+def _mascarar_args(args, segredos):
+    exibidos = []
+    for token in args:
         if token in segredos:
-            argv[i] = MASCARA
+            token = MASCARA
         elif token[:2] == '--' and '=' in token:
             flag, valor = token.split('=', 1)
             if valor in segredos:
-                argv[i] = flag + '=' + MASCARA
-    return argv
+                token = flag + '=' + MASCARA
+        exibidos.append(token)
+    return exibidos
+
+
+def argv_para_exibicao(snapshot, base=None):
+    """argv logico para a UI: interpretador, argumentos fixos, script e args com sensiveis em '****'.
+
+    base: diretorio base a exibir (perfil admin); None mostra '<base>' (README §8.5: caminho absoluto
+    so para admin). Conservador: qualquer argumento igual a um valor sensivel e mascarado.
+    """
+    interpretador = snapshot['interpretador']
+    script = (base.rstrip('/\\') + '/' if base else BASE_OCULTA + '/') + snapshot['path_file']
+    return ([interpretador] + list(path_guard.ARGS_FIXOS.get(interpretador, ())) + [script]
+            + _mascarar_args(list(snapshot['args']), _segredos(snapshot)))

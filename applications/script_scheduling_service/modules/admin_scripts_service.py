@@ -21,10 +21,14 @@ from path_guard import Codigo, PathGuardErro
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 
 FUNCIONALIDADE = "CAD_SCRIPTS"
-CAMPOS_EDITAVEIS = ("nome", "descricao", "grupo", "categoria", "etapa", "comando_real", "path_file", "tipo_param",
+CAMPOS_EDITAVEIS = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file", "tipo_param",
                     "max_qtd_parallel_env", "timeout_seg", "ativo")
-CAMPOS_INSERCAO = ("nome", "grupo", "categoria", "comando_real", "path_file", "tipo_param", "max_qtd_parallel_env",
+CAMPOS_INSERCAO = ("nome", "grupo", "categoria", "interpretador", "path_file", "tipo_param", "max_qtd_parallel_env",
                    "timeout_seg")
+ROTULOS_INTERPRETADOR = (("PYTHON3", u"PYTHON3 — Python 3 (Linux, Unix e Windows)"),
+                         ("BASH", u"BASH — Bash (Linux e Unix)"),
+                         ("SH", u"SH — Shell POSIX (Linux e Unix)"),
+                         ("POWERSHELL", u"POWERSHELL — PowerShell (Windows)"))
 ROTULOS_TIPO_PARAM = (("NOMEADO", u"Por flag (NOMEADO)"), ("SEQUENCIAL", u"Posicional (SEQUENCIAL)"),
                       ("NENHUM", u"Sem argumentos (NENHUM)"))
 TAMANHOS = {"nome": 60, "descricao": 200, "grupo": 30, "categoria": 30, "etapa": 30, "path_file": 250}
@@ -34,7 +38,6 @@ TAMANHO_PADRAO_SUB = 100
 MASCARA = params_compiler.MASCARA
 _CATALOGO_MAX = 1000
 _TAMANHO_CONTAGEM = 1  # so o total interessa
-BASE_OCULTA = u"<base>"
 
 _RE_ID = re.compile(r"[0-9]{1,10}")
 _RE_INTEIRO = re.compile(r"[0-9]{1,7}")
@@ -74,7 +77,7 @@ AVISO_DESATIVACAO = u"Agendamentos que usam este script serão pausados no próx
 
 _CAMPO_POR_CONSTRAINT = {
     "uk_tbsss_scr_nome": ("nome", MSG_NOME_DUPLICADO),
-    "ck_tbsss_scr_cmd": ("comando_real", MENSAGENS_PATH[Codigo.INTERPRETADOR_NAO_PERMITIDO]),
+    "ck_tbsss_scr_int": ("interpretador", MENSAGENS_PATH[Codigo.INTERPRETADOR_NAO_PERMITIDO]),
     "ck_tbsss_scr_path": ("path_file", MENSAGENS_PATH[Codigo.CONTEM_PONTOS]),
     "ck_tbsss_scr_paral": ("max_qtd_parallel_env", MSG_PARALELO),
     "ck_tbsss_scr_tmout": ("timeout_seg", MSG_TIMEOUT),
@@ -97,16 +100,16 @@ def msg_nomeado_sem_flag(codigos):
 
 
 def normalizar_filtros(entrada):
-    """Filtros da lista: nome (trecho), grupo, categoria, comando_real (allowlist) e ativo."""
+    """Filtros da lista: nome (trecho), grupo, categoria, interpretador (allowlist logica) e ativo."""
     entrada = entrada or {}
     filtros = {}
     for chave in ("nome", "grupo", "categoria"):
         valor = admin_crud.texto(entrada.get(chave), 60)
         if valor and _RE_FILTRO.fullmatch(valor):
             filtros[chave] = valor
-    cmd = admin_crud.texto(entrada.get("comando_real"), 60)
+    cmd = admin_crud.texto(entrada.get("interpretador"), 60)
     if cmd in path_guard.ALLOWLIST:
-        filtros["comando_real"] = cmd
+        filtros["interpretador"] = cmd
     ativo = admin_crud.texto(entrada.get("ativo"), 1)
     if ativo in ("S", "N"):
         filtros["ativo"] = ativo
@@ -148,11 +151,6 @@ class ServicoAdminScripts(object):
     def _admin(ctx):
         return ctx.get("is_admin") is True
 
-    def _caminho_exibicao(self, ctx, path_file):
-        if self._admin(ctx):
-            return os.path.join(os.path.realpath(self._base), path_file)
-        return u"%s/%s" % (BASE_OCULTA, path_file)
-
     # ----------------------------------------------------------------- leitura
 
     def listar(self, ctx, filtros, pagina, tamanho):
@@ -167,7 +165,7 @@ class ServicoAdminScripts(object):
                  "obs_validacao": OBS_VALIDACAO}
         if script_id in (None, ""):
             return dict(comum, id=None, nome="", descricao="", grupo="", categoria="", etapa="",
-                        comando_real=path_guard.ALLOWLIST[0], path_file="", tipo_param="NOMEADO",
+                        interpretador=path_guard.ALLOWLIST[0], path_file="", tipo_param="NOMEADO",
                         max_qtd_parallel_env=1, timeout_seg="", ativo="S", versao="", agendamentos_ativos=0)
         s = self._obter(script_id)
         dados = dict((c, s.get(c)) for c in CAMPOS_EDITAVEIS)
@@ -214,12 +212,12 @@ class ServicoAdminScripts(object):
             "timeout_seg": self._inteiro(dados, "timeout_seg", 1, TIMEOUT_MAXIMO, erros, MSG_TIMEOUT, opcional=True),
         }
         # Valor exato da allowlist: um HTML adulterado nunca grava outro interpretador.
-        cmd = dados.get("comando_real")
+        cmd = dados.get("interpretador")
         try:
             path_guard.validar_interpretador(cmd)
         except PathGuardErro as exc:
-            erros["comando_real"] = MENSAGENS_PATH[exc.codigo]
-        reg["comando_real"] = cmd
+            erros["interpretador"] = MENSAGENS_PATH[exc.codigo]
+        reg["interpretador"] = cmd
         tipo = admin_crud.texto(dados.get("tipo_param"), 15)
         if tipo not in TIPOS_PARAM:
             erros["tipo_param"] = MSG_TIPO_PARAM
@@ -531,17 +529,14 @@ class ServicoAdminScripts(object):
         aviso = None
         try:
             path_guard.validar_cadastro(script["path_file"])
-            script_real = path_guard.resolver(self._base, script["path_file"], self._owner_uids)
+            path_guard.resolver(self._base, script["path_file"], self._owner_uids)
         except PathGuardErro as exc:
-            script_real = os.path.join(os.path.realpath(self._base), script["path_file"])
             aviso = MENSAGENS_PATH[exc.codigo]
-        snap, _resolvidos, erros = params_compiler.compilar_snapshot(script, vinculos, {}, script_real, self._relogio())
+        snap, _resolvidos, erros = params_compiler.compilar_snapshot(script, vinculos, {}, self._relogio())
         if snap is None:
             return {"argv": None, "erros": erros, "aviso": aviso}
-        argv = params_compiler.argv_para_exibicao(json.loads(snap))
-        if not self._admin(ctx):
-            argv = [self._caminho_exibicao(ctx, script["path_file"]) if t == script_real else t for t in argv]
-        return {"argv": argv, "erros": {}, "aviso": aviso}
+        base = os.path.realpath(self._base) if self._admin(ctx) else None
+        return {"argv": params_compiler.argv_para_exibicao(json.loads(snap), base), "erros": {}, "aviso": aviso}
 
 
 _padrao = None

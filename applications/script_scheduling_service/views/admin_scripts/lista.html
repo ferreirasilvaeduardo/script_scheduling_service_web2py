@@ -1,13 +1,13 @@
 {{extend 'layout.html'}}
 {{
 # Lista de scripts (padrão de CRUD administrativo). Nenhum caminho absoluto do servidor é exibido.
-_opc_cmd = [('', 'Todos')] + [(_c, _c) for _c in allowlist]
+_opc_cmd = [('', 'Todos')] + [(_c, _c) for _c, _r in interpretadores]
 _opc_ativo = [('', 'Todos'), ('S', 'Ativos'), ('N', 'Inativos')]
 filtros = {'id': 'filtro-scripts', 'url_base': ('admin_scripts', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': [
     {'nome': 'nome', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('nome')},
     {'nome': 'grupo', 'rotulo': 'Grupo', 'tipo': 'texto', 'valor': filtros_ativos.get('grupo')},
     {'nome': 'categoria', 'rotulo': 'Categoria', 'tipo': 'texto', 'valor': filtros_ativos.get('categoria')},
-    {'nome': 'comando_real', 'rotulo': 'Interpretador', 'tipo': 'select', 'valor': filtros_ativos.get('comando_real'), 'opcoes': _opc_cmd},
+    {'nome': 'interpretador', 'rotulo': 'Interpretador', 'tipo': 'select', 'valor': filtros_ativos.get('interpretador'), 'opcoes': _opc_cmd},
     {'nome': 'ativo', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('ativo'), 'opcoes': _opc_ativo},
 ]}
 _linhas = []
@@ -15,7 +15,7 @@ for _s in resultado['itens']:
     _linhas.append({
         'nome': _s['nome'],
         'grupo': ' / '.join([_x for _x in (_s.get('grupo'), _s.get('categoria')) if _x]) or '-',
-        'cmd': _s['comando_real'],
+        'cmd': _s['interpretador'],
         'path': _s['path_file'],
         'ambientes': ', '.join(_s.get('ambientes_homologados') or []) or u'Nenhum',
         'parametros': str(_s.get('qtd_parametros') or 0),

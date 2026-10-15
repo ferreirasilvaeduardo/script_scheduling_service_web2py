@@ -156,11 +156,15 @@ class TestValidacoesTextuais(unittest.TestCase):
                 self.assertEqual(ctx.exception.codigo, codigo)
 
     def test_interpretador_na_allowlist(self):
-        for cmd in ("/usr/bin/python3", "/bin/bash", "/bin/sh"):
+        for cmd in ("PYTHON3", "BASH", "SH", "POWERSHELL"):
             path_guard.validar_interpretador(cmd)
+        self.assertEqual(path_guard.POR_PLATAFORMA["WINDOWS"], ("PYTHON3", "POWERSHELL"))
+        self.assertEqual(path_guard.ARGS_FIXOS["PYTHON3"], ("-I",))
 
     def test_interpretador_fora_da_allowlist(self):
-        for cmd in ("/usr/bin/python", "/bin/zsh", "", None, "/usr/bin/python3 ", "python3", "/bin/sh -c"):
+        # Caminhos absolutos (modelo anterior ao CR-001) e cmd/.bat (D2) tambem sao rejeitados.
+        for cmd in ("/usr/bin/python3", "/bin/bash", "/bin/zsh", "", None, "PYTHON3 ", "python3", "CMD", "cmd.exe",
+                    "BAT", "SH -c"):
             with self.subTest(cmd=cmd):
                 with self.assertRaises(PathGuardErro) as ctx:
                     path_guard.validar_interpretador(cmd)

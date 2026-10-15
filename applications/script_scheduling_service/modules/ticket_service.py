@@ -8,6 +8,7 @@ o log; so codigos de campo.
 import collections
 import datetime
 import json
+import os
 import re
 import shlex
 import threading
@@ -217,11 +218,12 @@ def _snapshot(ticket):
     return snap if isinstance(snap, dict) else None
 
 
-def _argv_exibicao(snap):
-    if snap is None:
+def _argv_exibicao(snap, base=None):
+    # Snapshot ilegivel ou de versao anterior ao CR-001 (v1) nao tem argv exibivel.
+    if snap is None or snap.get("versao") != params_compiler.VERSAO_SNAPSHOT:
         return None
     try:
-        return params_compiler.argv_para_exibicao(snap)
+        return params_compiler.argv_para_exibicao(snap, base)
     except (KeyError, TypeError, ValueError, AttributeError):
         return None
 
@@ -425,17 +427,21 @@ class ServicoTicket(object):
             return None
         return data.replace(microsecond=0)
 
+    def _base_exibicao(self, ctx):
+        """Diretorio base exibido no argv: caminho real so para admin (README §8.5)."""
+        return os.path.realpath(self._base) if ctx.get("is_admin") is True else None
+
     def _compilar(self, ctx, script, amb, respostas, agora, erros):
-        """Resolve script_real e compila o snapshot, acumulando erros por campo."""
+        """Valida o script no no web (path_guard) e compila o snapshot v2, acumulando erros por campo."""
         vinculos = self._vinculos(script["id"])
         codigos = set(v["codigo"] for v in vinculos)
         if not isinstance(respostas, dict):
             respostas = {}
         respostas = dict((k, _ultimo(v)) for k, v in respostas.items() if k in codigos)
 
-        script_real = None
+        # A validacao definitiva repete-se no agente, contra o diretorio base dele (README §8.4).
         try:
-            script_real = path_guard.resolver(self._base, script["path_file"], self._owner_uids)
+            path_guard.resolver(self._base, script["path_file"], self._owner_uids)
         except (path_guard.PathGuardErro, OSError) as e:
             self._log.warning("path_guard rejeitou o script (login=%s script_id=%s codigo=%s)",
                               ctx["login"], script["id"], getattr(e, "codigo", type(e).__name__),
@@ -443,7 +449,7 @@ class ServicoTicket(object):
             erros[CAMPO_GERAL] = MSG_SCRIPT_INDISPONIVEL
 
         snapshot, resolvidos, erros_param = params_compiler.compilar_snapshot(
-            script, vinculos, respostas, script_real or "", agora)
+            script, vinculos, respostas, agora)
         for codigo, mensagem in erros_param.items():
             erros.setdefault(codigo, mensagem)
         if erros:
@@ -463,7 +469,7 @@ class ServicoTicket(object):
                                                           self._tickets.agora(), erros)
         if snapshot is None:
             return None, dict(erros)
-        return params_compiler.argv_para_exibicao(json.loads(snapshot)), {}
+        return params_compiler.argv_para_exibicao(json.loads(snapshot), self._base_exibicao(ctx)), {}
 
     def criar_ticket(self, ctx, ip, script_id, ambiente, respostas, prioridade, scheduled_at,
                      reexecucao_de=None):
@@ -668,11 +674,11 @@ class ServicoTicket(object):
                          and rbac.pode_cancelar(ctx, ticket))
         pode_reexecutar = (status in STATUS_TERMINAIS and self._pode_reexecutar_regra(ctx, ticket)
                            and self._pode_executar_vigente(ctx, ticket))
-        argv = _argv_exibicao(snap)
+        argv = _argv_exibicao(snap, self._base_exibicao(ctx))
         snapshot = None
         if snap is not None:
-            snapshot = dict((k, snap.get(k)) for k in ("versao", "comando_real", "path_file", "script_real",
-                                                       "tipo_param", "compilado_em"))
+            snapshot = dict((k, snap.get(k)) for k in ("versao", "interpretador", "path_file", "tipo_param",
+                                                       "compilado_em"))
         return {
             "id": ticket["id"],
             "script_id": ticket["script_id"],

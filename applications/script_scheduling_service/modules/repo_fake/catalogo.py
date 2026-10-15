@@ -165,7 +165,7 @@ class RepoCatalogoFake(RepoCatalogo):
             nome_f = filtros.get("nome")
             if nome_f:
                 lista = [s for s in lista if nome_f.lower() in s["nome"].lower()]
-            for chave in ("grupo", "categoria", "comando_real", "ativo"):
+            for chave in ("grupo", "categoria", "interpretador", "ativo"):
                 valor = filtros.get(chave)
                 if valor:
                     lista = [s for s in lista if s.get(chave) == valor]
@@ -195,8 +195,8 @@ class RepoCatalogoFake(RepoCatalogo):
             raise RepoViolacao("Tipo de parametro invalido", constraint="ck_tbsss_scr_tparam")
         if base.get("ativo", "S") not in ("S", "N"):
             raise RepoViolacao("Flag ativo deve ser 'S' ou 'N'", constraint="ck_tbsss_scr_ativo")
-        if base.get("comando_real") not in ("/usr/bin/python3", "/bin/bash", "/bin/sh"):
-            raise RepoViolacao("Comando real fora da allowlist", constraint="ck_tbsss_scr_cmd")
+        if base.get("interpretador") not in ("PYTHON3", "BASH", "SH", "POWERSHELL"):
+            raise RepoViolacao("Interpretador fora da allowlist", constraint="ck_tbsss_scr_int")
         pfile = base.get("path_file") or ""
         if not pfile or pfile.startswith("/") or ".." in pfile:
             raise RepoViolacao("path_file deve ser relativo e sem '..'", constraint="ck_tbsss_scr_path")
@@ -222,7 +222,7 @@ class RepoCatalogoFake(RepoCatalogo):
                 "grupo": dados.get("grupo"),
                 "categoria": dados.get("categoria"),
                 "etapa": dados.get("etapa"),
-                "comando_real": dados["comando_real"],
+                "interpretador": dados["interpretador"],
                 "path_file": dados["path_file"],
                 "tipo_param": dados.get("tipo_param", "NOMEADO"),
                 "max_qtd_parallel_env": int(dados.get("max_qtd_parallel_env", 1)),
@@ -242,7 +242,7 @@ class RepoCatalogoFake(RepoCatalogo):
             for campo, valor in (esperado or {}).items():
                 if atual.get(campo) != valor:
                     raise RepoConflito("Script ID %s alterado por outra operacao (%s)" % (id, campo))
-            campos = ("nome", "descricao", "grupo", "categoria", "etapa", "comando_real", "path_file", "tipo_param",
+            campos = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file", "tipo_param",
                       "max_qtd_parallel_env", "timeout_seg", "ativo")
             mudancas = dict((k, dados[k]) for k in campos if k in dados)
             self._validar_script(mudancas, atual)

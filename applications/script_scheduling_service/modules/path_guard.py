@@ -1,11 +1,24 @@
 # -*- coding: utf-8 -*-
-"""Validacao de interpretador e caminho de script (README §8.5, AGENTS §3.2).
+"""Validacao de interpretador logico e caminho de script (README §6.4, §8.5, AGENTS §3.2, CR-001).
 
 Modulo puro: nao importa gluon (AGENTS §7.1).
 """
 import os
 
-ALLOWLIST = ('/usr/bin/python3', '/bin/bash', '/bin/sh')
+# Interpretadores logicos (CR-001, D1/D2): o catalogo guarda a chave; cada agente a mapeia para o
+# executavel local ([agent] interpretadores). cmd.exe/.bat/.cmd sao proibidos (injecao de argumentos).
+ALLOWLIST = ('PYTHON3', 'BASH', 'SH', 'POWERSHELL')
+POR_PLATAFORMA = {
+    'POSIX': ('PYTHON3', 'BASH', 'SH'),
+    'WINDOWS': ('PYTHON3', 'POWERSHELL'),
+}
+# Argumentos fixos entre o executavel e o script (README §6.4); Python sempre com -I.
+ARGS_FIXOS = {
+    'PYTHON3': ('-I',),
+    'BASH': (),
+    'SH': (),
+    'POWERSHELL': ('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File'),
+}
 
 
 class Codigo(object):
@@ -29,9 +42,9 @@ class PathGuardErro(Exception):
         self.codigo = codigo
 
 
-def validar_interpretador(comando_real):
-    """Exige que comando_real seja exatamente um item da ALLOWLIST."""
-    if comando_real not in ALLOWLIST:
+def validar_interpretador(interpretador):
+    """Exige que o interpretador logico seja exatamente um item da ALLOWLIST."""
+    if interpretador not in ALLOWLIST:
         raise PathGuardErro(Codigo.INTERPRETADOR_NAO_PERMITIDO)
 
 

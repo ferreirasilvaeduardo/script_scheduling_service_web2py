@@ -14,9 +14,10 @@ import params_compiler as pc
 from params_compiler import ParamErro, SnapshotErro
 
 AGORA = datetime.datetime(2026, 10, 13, 10, 47, 0, 123456)
-CfgAgente = collections.namedtuple("CfgAgente", ["base_script_dir", "script_owner_uids"])
-CHAVES_6_5 = {"versao", "script_id", "script_nome", "comando_real", "path_file", "script_real",
-              "tipo_param", "argv", "respostas", "sensiveis", "compilado_em"}
+CfgAgente = collections.namedtuple("CfgAgente", ["base_script_dir", "script_owner_uids", "interpretadores"])
+CHAVES_6_5 = {"versao", "script_id", "script_nome", "interpretador", "path_file", "tipo_param", "args",
+              "respostas", "sensiveis", "compilado_em"}
+EXE_PY = "/usr/bin/python3"
 
 
 def prm(codigo, tipo="TEXT", ordem=1, obrigatorio="N", flag=None, opcoes=None, padrao=None,
@@ -27,8 +28,8 @@ def prm(codigo, tipo="TEXT", ordem=1, obrigatorio="N", flag=None, opcoes=None, p
             "sensivel": sensivel}
 
 
-def script(tipo_param="NOMEADO", comando="/usr/bin/python3"):
-    return {"id": 12, "nome": "carga_faturas", "comando_real": comando,
+def script(tipo_param="NOMEADO", interpretador="PYTHON3"):
+    return {"id": 12, "nome": "carga_faturas", "interpretador": interpretador,
             "path_file": "faturamento/carga_faturas.py", "tipo_param": tipo_param}
 
 
@@ -276,17 +277,22 @@ class TestMontarArgs(unittest.TestCase):
         self.assertIsNone(e.codigo_param)
 
 
-class TestMontarArgv(unittest.TestCase):
+class TestMontarArgvAgente(unittest.TestCase):
 
     def test_interpretadores(self):
-        self.assertEqual(pc.montar_argv("/usr/bin/python3", "/b/s.py", ["a"]), ["/usr/bin/python3", "-I", "/b/s.py", "a"])
-        self.assertEqual(pc.montar_argv("/bin/bash", "/b/s.sh", ["a"]), ["/bin/bash", "/b/s.sh", "a"])
-        self.assertEqual(pc.montar_argv("/bin/sh", "/b/s.sh", []), ["/bin/sh", "/b/s.sh"])
+        self.assertEqual(pc.montar_argv_agente("PYTHON3", EXE_PY, "/b/s.py", ["a"]), [EXE_PY, "-I", "/b/s.py", "a"])
+        self.assertEqual(pc.montar_argv_agente("BASH", "/bin/bash", "/b/s.sh", ["a"]), ["/bin/bash", "/b/s.sh", "a"])
+        self.assertEqual(pc.montar_argv_agente("SH", "/bin/sh", "/b/s.sh", []), ["/bin/sh", "/b/s.sh"])
+        ps = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+        self.assertEqual(pc.montar_argv_agente("POWERSHELL", ps, "D:\\scripts\\s.ps1", ["-x"]),
+                         [ps, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
+                          "D:\\scripts\\s.ps1", "-x"])
 
     def test_fora_da_allowlist(self):
         import path_guard
-        with self.assertRaises(path_guard.PathGuardErro):
-            pc.montar_argv("/usr/bin/perl", "/b/s.pl", [])
+        for interp in ("/usr/bin/python3", "PERL", "CMD", "cmd.exe", ""):
+            with self.assertRaises(path_guard.PathGuardErro, msg=interp):
+                pc.montar_argv_agente(interp, "/x", "/b/s", [])
 
 
 class TestCompilarSnapshot(unittest.TestCase):
@@ -297,75 +303,76 @@ class TestCompilarSnapshot(unittest.TestCase):
                 prm("modo", "SELECT", ordem=3, flag="--modo", opcoes='{"A":"Ação","B":"Bê"}', padrao="A")]
 
     def test_formato_6_5(self):
-        js, resolvidos, erros = pc.compilar_snapshot(script(), self._vinculos()[:1], {"data_ref": "2026-10-13"},
-                                                     REAL, AGORA)
+        js, resolvidos, erros = pc.compilar_snapshot(script(), self._vinculos()[:1], {"data_ref": "2026-10-13"}, AGORA)
         self.assertEqual(erros, {})
         esperado = {
-            "versao": 1, "script_id": 12, "script_nome": "carga_faturas", "comando_real": "/usr/bin/python3",
-            "path_file": "faturamento/carga_faturas.py", "script_real": REAL, "tipo_param": "NOMEADO",
-            "argv": ["/usr/bin/python3", "-I", REAL, "--data", "2026-10-13"],
+            "versao": 2, "script_id": 12, "script_nome": "carga_faturas", "interpretador": "PYTHON3",
+            "path_file": "faturamento/carga_faturas.py", "tipo_param": "NOMEADO",
+            "args": ["--data", "2026-10-13"],
             "respostas": {"data_ref": "2026-10-13"}, "sensiveis": [], "compilado_em": "2026-10-13 10:47:00",
         }
         self.assertEqual(json.loads(js), esperado)
         self.assertEqual(js, json.dumps(esperado, ensure_ascii=False, sort_keys=True))
+        self.assertNotIn("/opt", js)
 
     def test_determinismo(self):
         v = self._vinculos()
         r1 = collections.OrderedDict([("data_ref", "2026-10-13"), ("token", "abc123"), ("modo", "B")])
         r2 = collections.OrderedDict([("modo", "B"), ("token", "abc123"), ("data_ref", "2026-10-13")])
-        js1 = pc.compilar_snapshot(script(), v, r1, REAL, AGORA)[0]
-        js2 = pc.compilar_snapshot(script(), list(reversed(v)), r2, REAL, AGORA)[0]
+        js1 = pc.compilar_snapshot(script(), v, r1, AGORA)[0]
+        js2 = pc.compilar_snapshot(script(), list(reversed(v)), r2, AGORA)[0]
         self.assertIsNotNone(js1)
         self.assertEqual(js1, js2)
         snap = json.loads(js1)
-        self.assertEqual(snap["argv"][3:], ["--data", "2026-10-13", "--token", "abc123", "--modo", "B"])
+        self.assertEqual(snap["args"], ["--data", "2026-10-13", "--token", "abc123", "--modo", "B"])
         self.assertEqual(snap["sensiveis"], ["token"])
 
     def test_utf8_sem_escape(self):
-        v = [prm("t", ordem=1, flag="--t")]
-        js = pc.compilar_snapshot(script(), v, {"t": "ação"}, REAL, AGORA)[0]
+        js = pc.compilar_snapshot(script(), [prm("t", ordem=1, flag="--t")], {"t": "ação"}, AGORA)[0]
         self.assertIn("ação", js)
 
     def test_respostas_tipadas(self):
         v = [prm("c", "CHECKBOX", ordem=1, flag="--c"), prm("o", ordem=2, flag="--o")]
-        snap = json.loads(pc.compilar_snapshot(script(), v, {"c": "1"}, REAL, AGORA)[0])
+        snap = json.loads(pc.compilar_snapshot(script(), v, {"c": "1"}, AGORA)[0])
         self.assertEqual(snap["respostas"], {"c": True, "o": None})
 
     def test_erros_acumulados(self):
         v = self._vinculos() + [prm("n", "NUMBER", ordem=4, flag="-n")]
-        js, resolvidos, erros = pc.compilar_snapshot(
-            script(), v, {"token": "a\x00b", "modo": "Z", "n": "-3"}, REAL, AGORA)
+        js, resolvidos, erros = pc.compilar_snapshot(script(), v, {"token": "a\x00b", "modo": "Z", "n": "-3"}, AGORA)
         self.assertIsNone(js)
         self.assertEqual(list(erros.keys()), ["data_ref", "token", "modo", "n"])
         for msg in erros.values():
             self.assertNotIn("a\x00b", msg)
 
     def test_erros_estruturais(self):
-        js, _, erros = pc.compilar_snapshot(script("NENHUM"), [prm("a", ordem=1)], {"a": "x"}, REAL, AGORA)
+        js, _, erros = pc.compilar_snapshot(script("NENHUM"), [prm("a", ordem=1)], {"a": "x"}, AGORA)
         self.assertIsNone(js)
         self.assertIn(pc.CHAVE_GERAL, erros)
-        js, _, erros = pc.compilar_snapshot(script(comando="/usr/bin/perl"), [], {}, REAL, AGORA)
-        self.assertIsNone(js)
-        self.assertIn(pc.CHAVE_GERAL, erros)
+        for interp in ("/usr/bin/python3", "PERL", "CMD"):
+            js, _, erros = pc.compilar_snapshot(script(interpretador=interp), [], {}, AGORA)
+            self.assertIsNone(js, interp)
+            self.assertIn(pc.CHAVE_GERAL, erros)
 
     def test_nenhum_sem_vinculos(self):
-        js = pc.compilar_snapshot(script("NENHUM", "/bin/bash"), [], {}, "/b/x.sh", AGORA)[0]
-        self.assertEqual(json.loads(js)["argv"], ["/bin/bash", "/b/x.sh"])
+        js = pc.compilar_snapshot(script("NENHUM", "BASH"), [], {}, AGORA)[0]
+        snap = json.loads(js)
+        self.assertEqual((snap["interpretador"], snap["args"]), ("BASH", []))
 
     def test_argv_para_exibicao(self):
         v = self._vinculos() + [prm("seq", ordem=4, flag="-s", sensivel="S")]
         snap = json.loads(pc.compilar_snapshot(
-            script(), v, {"data_ref": "2026-10-13", "token": "-segredo", "seq": "outro_segredo"}, REAL, AGORA)[0])
+            script(), v, {"data_ref": "2026-10-13", "token": "-segredo", "seq": "outro_segredo"}, AGORA)[0])
         exib = pc.argv_para_exibicao(snap)
-        self.assertEqual(exib, ["/usr/bin/python3", "-I", REAL, "--data", "2026-10-13",
+        self.assertEqual(exib, ["PYTHON3", "-I", "<base>/faturamento/carga_faturas.py", "--data", "2026-10-13",
                                 "--token=****", "--modo", "A", "-s", "****"])
         self.assertNotIn("segredo", " ".join(exib))
-        self.assertIn("-segredo", snap["argv"][5])
+        self.assertIn("-segredo", snap["args"][2])
+        admin = pc.argv_para_exibicao(snap, "/opt/automacoes/scripts/")
+        self.assertEqual(admin[2], REAL)
 
     def test_argv_para_exibicao_sem_sensiveis(self):
-        snap = json.loads(pc.compilar_snapshot(script(), self._vinculos()[:1], {"data_ref": "2026-10-13"},
-                                               REAL, AGORA)[0])
-        self.assertEqual(pc.argv_para_exibicao(snap), snap["argv"])
+        snap = json.loads(pc.compilar_snapshot(script("SEQUENCIAL", "SH"), [prm("a", ordem=1)], {"a": "x"}, AGORA)[0])
+        self.assertEqual(pc.argv_para_exibicao(snap), ["SH", "<base>/faturamento/carga_faturas.py", "x"])
 
 
 @unittest.skipIf(os.geteuid() == 0, "root sempre passa em os.access(W_OK)")
@@ -381,10 +388,10 @@ class TestValidarSnapshot(unittest.TestCase):
         os.chmod(self.arq, 0o444)
         os.chmod(os.path.join(self.base, "faturamento"), 0o555)
         os.chmod(self.base, 0o555)
-        self.cfg = CfgAgente(self.base, (os.getuid(),))
+        self.cfg = CfgAgente(self.base, (os.getuid(),), {"PYTHON3": EXE_PY, "SH": "/bin/sh"})
         self.real = os.path.realpath(self.arq)
         v = [prm("data_ref", "DATE", ordem=1, obrigatorio="S", flag="--data")]
-        self.js = pc.compilar_snapshot(script(), v, {"data_ref": "2026-10-13"}, self.real, AGORA)[0]
+        self.js = pc.compilar_snapshot(script(), v, {"data_ref": "2026-10-13"}, AGORA)[0]
 
     def tearDown(self):
         for raiz, _, _ in os.walk(self.raiz):
@@ -401,45 +408,34 @@ class TestValidarSnapshot(unittest.TestCase):
             pc.validar_snapshot(js, cfg or self.cfg)
         return ctx.exception.motivo
 
-    def test_ok(self):
-        snap = pc.validar_snapshot(self.js, self.cfg)
-        self.assertEqual(snap["script_real"], self.real)
+    def test_ok_monta_argv_com_executavel_e_base_do_agente(self):
+        snap, argv = pc.validar_snapshot(self.js, self.cfg)
+        self.assertEqual(argv, [EXE_PY, "-I", self.real, "--data", "2026-10-13"])
+        self.assertEqual(snap["interpretador"], "PYTHON3")
 
     def test_json_e_estrutura(self):
         self.assertEqual(self._motivo("{x"), "JSON_INVALIDO")
         self.assertEqual(self._motivo(None), "JSON_INVALIDO")
         self.assertEqual(self._motivo("[]"), "ESTRUTURA_INVALIDA")
-        self.assertEqual(self._motivo('{"versao": 1}'), "ESTRUTURA_INVALIDA")
+        self.assertEqual(self._motivo('{"versao": 2}'), "ESTRUTURA_INVALIDA")
 
-    def test_versao(self):
-        self.assertEqual(self._motivo(self._alterado(versao=2)), "VERSAO_NAO_SUPORTADA")
+    def test_versao_1_rejeitada(self):
+        self.assertEqual(self._motivo(self._alterado(versao=1)), "VERSAO_NAO_SUPORTADA")
 
-    def test_argv0(self):
-        snap = json.loads(self.js)
-        argv = ["/bin/sh"] + snap["argv"][1:]
-        self.assertEqual(self._motivo(self._alterado(argv=argv)), "ARGV0_DIVERGENTE")
-        self.assertEqual(self._motivo(self._alterado(argv=[])), "ARGV0_DIVERGENTE")
+    def test_interpretador_fora_da_allowlist_ou_indisponivel_no_agente(self):
+        self.assertEqual(self._motivo(self._alterado(interpretador="/usr/bin/perl")), "INTERPRETADOR_NAO_PERMITIDO")
+        self.assertEqual(self._motivo(self._alterado(interpretador="POWERSHELL")), "INTERPRETADOR_NAO_DISPONIVEL")
 
-    def test_interpretador_fora_da_allowlist(self):
-        snap = json.loads(self.js)
-        argv = ["/usr/bin/perl"] + snap["argv"][1:]
-        self.assertEqual(self._motivo(self._alterado(argv=argv, comando_real="/usr/bin/perl")),
-                         "INTERPRETADOR_NAO_PERMITIDO")
+    def test_args_invalidos(self):
+        self.assertEqual(self._motivo(self._alterado(args="--data x")), "ARGS_INVALIDOS")
+        self.assertEqual(self._motivo(self._alterado(args=["--n", 1])), "ARGS_INVALIDOS")
 
-    def test_path_guard_revalidado(self):
+    def test_path_guard_revalidado_no_agente(self):
         self.assertEqual(self._motivo(self._alterado(path_file="../x.py")), "PATH_GUARD_CONTEM_PONTOS")
-        outro = CfgAgente(self.base, (os.getuid() + 1,))
+        outro = CfgAgente(self.base, (os.getuid() + 1,), self.cfg.interpretadores)
         self.assertEqual(self._motivo(self.js, outro), "PATH_GUARD_DONO_INVALIDO")
-
-    def test_script_real_divergente(self):
-        self.assertEqual(self._motivo(self._alterado(script_real="/tmp/outro.py")), "SCRIPT_REAL_DIVERGENTE")
-
-    def test_prefixo_do_argv(self):
-        snap = json.loads(self.js)
-        sem_i = [snap["argv"][0]] + snap["argv"][2:]
-        self.assertEqual(self._motivo(self._alterado(argv=sem_i)), "ARGV_PREFIXO_DIVERGENTE")
-        trocado = snap["argv"][:2] + ["/tmp/outro.py"] + snap["argv"][3:]
-        self.assertEqual(self._motivo(self._alterado(argv=trocado)), "ARGV_PREFIXO_DIVERGENTE")
+        self.assertEqual(self._motivo(self._alterado(path_file="faturamento/nao_existe.py")),
+                         "PATH_GUARD_NAO_E_ARQUIVO")
 
 
 class TestSeedFake(unittest.TestCase):
@@ -459,14 +455,13 @@ class TestSeedFake(unittest.TestCase):
     def test_carga_diaria(self):
         scr = self.catalogo.scripts_obter(1)
         vinculos = self.catalogo.script_params_obter(1)
-        real = "/opt/automacoes/scripts/" + scr["path_file"]
-        js, resolvidos, erros = pc.compilar_snapshot(scr, vinculos, {}, real, AGORA)
+        js, resolvidos, erros = pc.compilar_snapshot(scr, vinculos, {}, AGORA)
         self.assertEqual(erros, {})
         snap = json.loads(js)
         self.assertEqual(set(snap.keys()), CHAVES_6_5)
         self.assertEqual(js, json.dumps(snap, ensure_ascii=False, sort_keys=True))
-        self.assertEqual(snap["argv"], ["/usr/bin/python3", "-I", real, "--data-ref", "2026-10-14", "-n", "5000",
-                                        "--modo", "REAL", "--verbose", "--api-key", "segredo_dev_123"])
+        self.assertEqual(snap["args"], ["--data-ref", "2026-10-14", "-n", "5000", "--modo", "REAL", "--verbose",
+                                        "--api-key", "segredo_dev_123"])
         self.assertEqual(snap["sensiveis"], ["chave_api"])
         self.assertEqual(snap["respostas"]["verbose"], True)
         self.assertNotIn("segredo_dev_123", pc.argv_para_exibicao(snap))
@@ -476,9 +471,15 @@ class TestSeedFake(unittest.TestCase):
             with self.subTest(script_id=sid):
                 scr = self.catalogo.scripts_obter(sid)
                 vinculos = self.catalogo.script_params_obter(sid)
-                js, _, erros = pc.compilar_snapshot(scr, vinculos, {}, "/b/" + scr["path_file"], AGORA)
+                js, _, erros = pc.compilar_snapshot(scr, vinculos, {}, AGORA)
                 self.assertEqual(erros, {})
                 self.assertEqual(set(json.loads(js).keys()), CHAVES_6_5)
+
+    def test_snapshots_do_seed_sao_v2(self):
+        tickets = self.repo_factory.obter("tickets")
+        for tid in (1, 11, 17, 37):
+            snap = json.loads(tickets.obter(tid)["parametros_enviados"])
+            self.assertEqual((snap["versao"], set(snap.keys())), (2, CHAVES_6_5), tid)
 
 
 if __name__ == "__main__":

@@ -105,7 +105,7 @@ class _Base(unittest.TestCase):
                 if a["entidade"] == "tbsss_scripts" and a["id"] > self.aud_base]
 
     def _incluir(self, svc=None, **mudancas):
-        dados = {"nome": "Novo script", "comando_real": "/usr/bin/python3", "path_file": "novo.py",
+        dados = {"nome": "Novo script", "interpretador": "PYTHON3", "path_file": "novo.py",
                  "tipo_param": "SEQUENCIAL", "max_qtd_parallel_env": "2", "timeout_seg": ""}
         dados.update(mudancas)
         return (svc or self.svc).salvar(self.ctx["admin"], IP, None, dados)
@@ -131,14 +131,14 @@ class TestCadastro(_Base):
         sid, erros, aviso = self._incluir()
         self.assertEqual((erros, aviso), ({}, None))
         s = self.catalogo.scripts_obter(sid)
-        self.assertEqual((s["comando_real"], s["path_file"], s["max_qtd_parallel_env"], s["timeout_seg"]),
-                         ("/usr/bin/python3", "novo.py", 2, None))
+        self.assertEqual((s["interpretador"], s["path_file"], s["max_qtd_parallel_env"], s["timeout_seg"]),
+                         ("PYTHON3", "novo.py", 2, None))
         self.assertIn("path_file: novo.py", self._auditorias("CAD_INSERIR")[0]["detalhe"])
 
     def test_interpretador_fora_da_allowlist(self):
-        for cmd in ("/bin/ls", "/usr/bin/python3 -c", "python3", "", None):
-            _sid, erros, _ = self._incluir(comando_real=cmd)
-            self.assertEqual(erros.get("comando_real"), scr_mod.MENSAGENS_PATH[Codigo.INTERPRETADOR_NAO_PERMITIDO], cmd)
+        for cmd in ("/bin/ls", "/usr/bin/python3", "PYTHON3 -c", "python3", "CMD", "", None):
+            _sid, erros, _ = self._incluir(interpretador=cmd)
+            self.assertEqual(erros.get("interpretador"), scr_mod.MENSAGENS_PATH[Codigo.INTERPRETADOR_NAO_PERMITIDO], cmd)
 
     def test_path_file_invalidos(self):
         casos = (("/etc/passwd", Codigo.CAMINHO_ABSOLUTO), ("../../etc/passwd", Codigo.CONTEM_PONTOS),
@@ -306,13 +306,13 @@ class TestPrevia(_Base):
         r = self.svc.previa(self.ctx["admin"], str(S_CARGA))
         real = os.path.join(self.base, "carga_diaria.py")
         self.assertEqual(r["erros"], {})
-        self.assertEqual(r["argv"], ["/usr/bin/python3", "-I", real, "--data-ref", "2026-10-14", "-n", "5000",
+        self.assertEqual(r["argv"], ["PYTHON3", "-I", real, "--data-ref", "2026-10-14", "-n", "5000",
                                      "--modo", "REAL", "--verbose", "--api-key", "****"])
 
     def test_previa_sem_admin_oculta_caminho_e_reflete_edicao(self):
         _tela, itens = self._vinculos_json(S_CARGA)
         r = self.svc.previa(self.ctx["gestor"], str(S_CARGA), json.dumps(itens[:1]))
-        self.assertEqual(r["argv"], ["/usr/bin/python3", "-I", "<base>/carga_diaria.py", "--data-ref", "2026-10-14"])
+        self.assertEqual(r["argv"], ["PYTHON3", "-I", "<base>/carga_diaria.py", "--data-ref", "2026-10-14"])
         self.assertNotIn(self.base, repr(r))
 
     def test_acesso_negado_e_nao_encontrado(self):
@@ -324,12 +324,13 @@ class TestPrevia(_Base):
             self.svc.formulario(self.ctx["admin"], "999")
 
     def test_lista_com_homologados_e_parametros(self):
-        pagina = self.svc.listar(self.ctx["admin"], {"comando_real": "/usr/bin/python3"}, 1, 20)
+        pagina = self.svc.listar(self.ctx["admin"], {"interpretador": "PYTHON3"}, 1, 20)
         carga = [s for s in pagina["itens"] if s["nome"] == "carga_diaria"][0]
         self.assertEqual(carga["qtd_parametros"], 5)
         self.assertIn("PRODUCAO", carga["ambientes_homologados"])
-        self.assertTrue(all(s["comando_real"] == "/usr/bin/python3" for s in pagina["itens"]))
-        self.assertEqual(scr_mod.normalizar_filtros({"comando_real": "/bin/ls", "ativo": "S"}), {"ativo": "S"})
+        self.assertTrue(all(s["interpretador"] == "PYTHON3" for s in pagina["itens"]))
+        self.assertEqual(scr_mod.normalizar_filtros({"interpretador": "/bin/ls", "ativo": "S"}), {"ativo": "S"})
+        self.assertEqual(scr_mod.normalizar_filtros({"interpretador": "POWERSHELL"}), {"interpretador": "POWERSHELL"})
 
 
 if __name__ == "__main__":
