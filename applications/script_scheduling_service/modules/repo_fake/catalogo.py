@@ -131,8 +131,33 @@ class RepoCatalogoFake(RepoCatalogo):
     # Scripts (tbsss_scripts)
     # -------------------------------------------------------------------------
 
+    def _auditar_script(self, auditoria, script_id):
+        if auditoria:
+            self._store.registrar_auditoria_interno(
+                ator=auditoria.get("ator"),
+                ip=auditoria.get("ip"),
+                acao=auditoria["acao"],
+                entidade="tbsss_scripts",
+                entidade_id=script_id,
+                detalhe=auditoria.get("detalhe"),
+            )
+
+    def _vinculos_do_script(self, script_id):
+        lista = [sp for sp in self._store.script_param.values() if sp["script_id"] == script_id]
+        lista.sort(key=lambda x: x["ordem"])
+        return lista
+
+    def _regras_tipo_param(self, tipo_param, parametro_ids):
+        # README §6.3: NENHUM nao aceita vinculos; NOMEADO exige flag em todo parametro vinculado.
+        if tipo_param == "NENHUM" and parametro_ids:
+            raise RepoViolacao("Script NENHUM com vinculos", constraint="sss_scr_nenhum_vinculado")
+        if tipo_param == "NOMEADO":
+            for pid in parametro_ids:
+                if not self._store.parametros[pid].get("param_nomeado"):
+                    raise RepoViolacao("Parametro sem flag em script NOMEADO", constraint="sss_scr_nomeado_sem_flag")
+
     def scripts_listar(self, filtros=None, pagina=1, tamanho=20):
-        """Lista scripts com paginacao deterministica por nome ASC, id ASC."""
+        """Lista scripts com paginacao deterministica por nome ASC, id ASC, homologacoes e qtd de parametros."""
         filtros = filtros or {}
         with self._store.lock_catalogo:
             lista = list(self._store.scripts.values())
@@ -140,21 +165,19 @@ class RepoCatalogoFake(RepoCatalogo):
             nome_f = filtros.get("nome")
             if nome_f:
                 lista = [s for s in lista if nome_f.lower() in s["nome"].lower()]
-
-            grupo_f = filtros.get("grupo")
-            if grupo_f:
-                lista = [s for s in lista if s.get("grupo") == grupo_f]
-
-            categoria_f = filtros.get("categoria")
-            if categoria_f:
-                lista = [s for s in lista if s.get("categoria") == categoria_f]
-
-            ativo_f = filtros.get("ativo")
-            if ativo_f:
-                lista = [s for s in lista if s["ativo"] == ativo_f]
+            for chave in ("grupo", "categoria", "comando_real", "ativo"):
+                valor = filtros.get(chave)
+                if valor:
+                    lista = [s for s in lista if s.get(chave) == valor]
 
             lista.sort(key=lambda x: (x.get("nome", ""), x["id"]))
-            return paginar(lista, pagina=pagina, tamanho=tamanho)
+            pagina_ = paginar(lista, pagina=pagina, tamanho=tamanho)
+            for item in pagina_["itens"]:
+                item["ambientes_homologados"] = sorted(
+                    self._store.ambientes[sa["ambiente_id"]]["nome"] for sa in self._store.script_amb.values()
+                    if sa["script_id"] == item["id"] and sa["ambiente_id"] in self._store.ambientes)
+                item["qtd_parametros"] = len(self._vinculos_do_script(item["id"]))
+            return pagina_
 
     def scripts_obter(self, id):
         """Retorna dict do script pelo ID ou lanca RepoNaoEncontrado."""
@@ -163,123 +186,75 @@ class RepoCatalogoFake(RepoCatalogo):
                 raise RepoNaoEncontrado("Script ID %s nao encontrado" % id)
             return copy.deepcopy(self._store.scripts[id])
 
-    def scripts_inserir(self, dados):
-        """Insere novo script com validacoes de seguranca e CKs."""
+    def _validar_script(self, dados, atual=None):
+        """CKs da tabela 6 sobre o registro resultante (atual + dados); devolve as mudancas validadas."""
+        base = dict(atual or {}, **dados)
+        if not base.get("nome"):
+            raise RepoViolacao("Nome de script e obrigatorio")
+        if base.get("tipo_param", "NOMEADO") not in ("NOMEADO", "SEQUENCIAL", "NENHUM"):
+            raise RepoViolacao("Tipo de parametro invalido", constraint="ck_tbsss_scr_tparam")
+        if base.get("ativo", "S") not in ("S", "N"):
+            raise RepoViolacao("Flag ativo deve ser 'S' ou 'N'", constraint="ck_tbsss_scr_ativo")
+        if base.get("comando_real") not in ("/usr/bin/python3", "/bin/bash", "/bin/sh"):
+            raise RepoViolacao("Comando real fora da allowlist", constraint="ck_tbsss_scr_cmd")
+        pfile = base.get("path_file") or ""
+        if not pfile or pfile.startswith("/") or ".." in pfile:
+            raise RepoViolacao("path_file deve ser relativo e sem '..'", constraint="ck_tbsss_scr_path")
+        if not (1 <= int(base.get("max_qtd_parallel_env", 1)) <= 999):
+            raise RepoViolacao("max_qtd_parallel_env deve estar entre 1 e 999", constraint="ck_tbsss_scr_paral")
+        tmout = base.get("timeout_seg")
+        if tmout is not None and int(tmout) <= 0:
+            raise RepoViolacao("timeout_seg deve ser maior que zero", constraint="ck_tbsss_scr_tmout")
+        for sid, s in self._store.scripts.items():
+            if (atual is None or sid != atual["id"]) and s["nome"].lower() == base["nome"].lower():
+                raise RepoViolacao("Script com nome '%s' ja existe" % base["nome"], constraint="uk_tbsss_scr_nome")
+
+    def scripts_inserir(self, dados, auditoria=None):
+        """Insere novo script com validacoes de seguranca e CKs, auditando na mesma operacao."""
         with self._store.lock_catalogo:
-            nome = dados.get("nome")
-            if not nome:
-                raise RepoViolacao("Nome de script e obrigatorio")
-
-            for s in self._store.scripts.values():
-                if s["nome"].lower() == nome.lower():
-                    raise RepoViolacao("Script com nome '%s' ja existe" % nome, constraint="uk_tbsss_scr_nome")
-
-            tparam = dados.get("tipo_param", "NOMEADO")
-            if tparam not in ("NOMEADO", "SEQUENCIAL", "NENHUM"):
-                raise RepoViolacao("Tipo de parametro invalido", constraint="ck_tbsss_scr_tparam")
-
-            ativo = dados.get("ativo", "S")
-            if ativo not in ("S", "N"):
-                raise RepoViolacao("Flag ativo deve ser 'S' ou 'N'", constraint="ck_tbsss_scr_ativo")
-
-            cmd = dados.get("comando_real")
-            if cmd not in ("/usr/bin/python3", "/bin/bash", "/bin/sh"):
-                raise RepoViolacao("Comando real fora da allowlist", constraint="ck_tbsss_scr_cmd")
-
-            pfile = dados.get("path_file", "")
-            if not pfile or pfile.startswith("/") or ".." in pfile:
-                raise RepoViolacao("path_file deve ser relativo e sem '..'", constraint="ck_tbsss_scr_path")
-
-            paral = int(dados.get("max_qtd_parallel_env", 1))
-            if not (1 <= paral <= 999):
-                raise RepoViolacao("max_qtd_parallel_env deve estar entre 1 e 999", constraint="ck_tbsss_scr_paral")
-
-            tmout = dados.get("timeout_seg")
-            if tmout is not None:
-                tmout = int(tmout)
-                if tmout <= 0:
-                    raise RepoViolacao("timeout_seg deve ser maior que zero", constraint="ck_tbsss_scr_tmout")
-
+            self._validar_script(dados)
             sid = self._store.proximo_id("tbsss_scripts")
+            tmout = dados.get("timeout_seg")
             novo = {
                 "id": sid,
-                "nome": nome,
+                "nome": dados["nome"],
                 "descricao": dados.get("descricao", ""),
                 "grupo": dados.get("grupo"),
                 "categoria": dados.get("categoria"),
                 "etapa": dados.get("etapa"),
-                "comando_real": cmd,
-                "path_file": pfile,
-                "tipo_param": tparam,
-                "max_qtd_parallel_env": paral,
-                "timeout_seg": tmout,
-                "ativo": ativo,
+                "comando_real": dados["comando_real"],
+                "path_file": dados["path_file"],
+                "tipo_param": dados.get("tipo_param", "NOMEADO"),
+                "max_qtd_parallel_env": int(dados.get("max_qtd_parallel_env", 1)),
+                "timeout_seg": int(tmout) if tmout is not None else None,
+                "ativo": dados.get("ativo", "S"),
             }
             self._store.scripts[sid] = copy.deepcopy(novo)
+            self._auditar_script(auditoria, sid)
             return copy.deepcopy(novo)
 
-    def scripts_alterar(self, id, dados):
-        """Altera script aplicando validacoes de integridade."""
+    def scripts_alterar(self, id, dados, esperado=None, auditoria=None):
+        """Altera script (CKs, esperado e regras de tipo_param x vinculos) na mesma operacao."""
         with self._store.lock_catalogo:
             if id not in self._store.scripts:
                 raise RepoNaoEncontrado("Script ID %s nao encontrado" % id)
-
             atual = self._store.scripts[id]
-
-            novo_nome = dados.get("nome")
-            if novo_nome and novo_nome.lower() != atual["nome"].lower():
-                for sid, s in self._store.scripts.items():
-                    if sid != id and s["nome"].lower() == novo_nome.lower():
-                        raise RepoViolacao("Script com nome '%s' ja existe" % novo_nome, constraint="uk_tbsss_scr_nome")
-                atual["nome"] = novo_nome
-
-            if "descricao" in dados:
-                atual["descricao"] = dados["descricao"]
-            if "grupo" in dados:
-                atual["grupo"] = dados["grupo"]
-            if "categoria" in dados:
-                atual["categoria"] = dados["categoria"]
-            if "etapa" in dados:
-                atual["etapa"] = dados["etapa"]
-
-            if "comando_real" in dados:
-                cmd = dados["comando_real"]
-                if cmd not in ("/usr/bin/python3", "/bin/bash", "/bin/sh"):
-                    raise RepoViolacao("Comando real fora da allowlist", constraint="ck_tbsss_scr_cmd")
-                atual["comando_real"] = cmd
-
-            if "path_file" in dados:
-                pfile = dados["path_file"]
-                if not pfile or pfile.startswith("/") or ".." in pfile:
-                    raise RepoViolacao("path_file deve ser relativo e sem '..'", constraint="ck_tbsss_scr_path")
-                atual["path_file"] = pfile
-
-            if "tipo_param" in dados:
-                tp = dados["tipo_param"]
-                if tp not in ("NOMEADO", "SEQUENCIAL", "NENHUM"):
-                    raise RepoViolacao("Tipo de parametro invalido", constraint="ck_tbsss_scr_tparam")
-                atual["tipo_param"] = tp
-
-            if "max_qtd_parallel_env" in dados:
-                paral = int(dados["max_qtd_parallel_env"])
-                if not (1 <= paral <= 999):
-                    raise RepoViolacao("max_qtd_parallel_env deve estar entre 1 e 999", constraint="ck_tbsss_scr_paral")
-                atual["max_qtd_parallel_env"] = paral
-
-            if "timeout_seg" in dados:
-                tmout = dados["timeout_seg"]
-                if tmout is not None:
-                    tmout = int(tmout)
-                    if tmout <= 0:
-                        raise RepoViolacao("timeout_seg deve ser maior que zero", constraint="ck_tbsss_scr_tmout")
-                atual["timeout_seg"] = tmout
-
-            if "ativo" in dados:
-                ativo = dados["ativo"]
-                if ativo not in ("S", "N"):
-                    raise RepoViolacao("Flag ativo deve ser 'S' ou 'N'", constraint="ck_tbsss_scr_ativo")
-                atual["ativo"] = ativo
-
+            for campo, valor in (esperado or {}).items():
+                if atual.get(campo) != valor:
+                    raise RepoConflito("Script ID %s alterado por outra operacao (%s)" % (id, campo))
+            campos = ("nome", "descricao", "grupo", "categoria", "etapa", "comando_real", "path_file", "tipo_param",
+                      "max_qtd_parallel_env", "timeout_seg", "ativo")
+            mudancas = dict((k, dados[k]) for k in campos if k in dados)
+            self._validar_script(mudancas, atual)
+            if "tipo_param" in mudancas and mudancas["tipo_param"] != atual["tipo_param"]:
+                self._regras_tipo_param(mudancas["tipo_param"],
+                                        [v["parametro_id"] for v in self._vinculos_do_script(id)])
+            if "max_qtd_parallel_env" in mudancas:
+                mudancas["max_qtd_parallel_env"] = int(mudancas["max_qtd_parallel_env"])
+            if mudancas.get("timeout_seg") is not None:
+                mudancas["timeout_seg"] = int(mudancas["timeout_seg"])
+            atual.update(mudancas)
+            self._auditar_script(auditoria, id)
             return copy.deepcopy(atual)
 
     # -------------------------------------------------------------------------
@@ -299,29 +274,26 @@ class RepoCatalogoFake(RepoCatalogo):
             ambs.sort()
             return copy.deepcopy(ambs)
 
-    def homologacao_salvar(self, script_id, ambiente_ids):
-        """Atualiza homologacoes do script."""
+    def homologacao_salvar(self, script_id, ambiente_ids, esperado=None, auditoria=None):
+        """Substitui homologacoes do script (FK, esperado e auditoria na mesma operacao)."""
         with self._store.lock_catalogo:
             if script_id not in self._store.scripts:
                 raise RepoNaoEncontrado("Script ID %s nao encontrado" % script_id)
+            if esperado is not None and sorted(int(x) for x in esperado) != self.homologacao_obter(script_id):
+                raise RepoConflito("Homologacao do script ID %s alterada por outra operacao" % script_id)
 
-            for aid in (ambiente_ids or []):
+            ids = sorted(set(int(x) for x in (ambiente_ids or [])))
+            for aid in ids:
                 if aid not in self._store.ambientes:
                     raise RepoViolacao("Ambiente ID %s nao existe" % aid, constraint="fk_tbsss_samb_amb")
 
-            # Remove anteriores
-            remover = [k for k, v in self._store.script_amb.items() if v["script_id"] == script_id]
-            for k in remover:
+            for k in [k for k, v in self._store.script_amb.items() if v["script_id"] == script_id]:
                 del self._store.script_amb[k]
-
-            for aid in set(ambiente_ids or []):
+            for aid in ids:
                 nid = self._store.proximo_id("tbsss_script_amb")
-                self._store.script_amb[nid] = {
-                    "id": nid,
-                    "script_id": script_id,
-                    "ambiente_id": int(aid),
-                }
+                self._store.script_amb[nid] = {"id": nid, "script_id": script_id, "ambiente_id": aid}
 
+            self._auditar_script(auditoria, script_id)
             return copy.deepcopy(self.homologacao_obter(script_id))
 
     # -------------------------------------------------------------------------
@@ -510,21 +482,24 @@ class RepoCatalogoFake(RepoCatalogo):
                     resultado.append(item)
             return copy.deepcopy(resultado)
 
-    def script_params_salvar(self, script_id, vinculos):
-        """Salva vinculos de parametros com validacao de ordem e unicidade."""
+    def script_params_salvar(self, script_id, vinculos, esperado=None, auditoria=None):
+        """Substitui os vinculos do script (UKs, FK, regras de tipo_param, esperado e auditoria)."""
         with self._store.lock_catalogo:
             if script_id not in self._store.scripts:
                 raise RepoNaoEncontrado("Script ID %s nao encontrado" % script_id)
+            if esperado is not None:
+                lidos = [(v["parametro_id"], v["ordem"], v["obrigatorio"], v.get("valor_padrao_sub"))
+                         for v in self._vinculos_do_script(script_id)]
+                if [tuple(e) for e in esperado] != lidos:
+                    raise RepoConflito("Vinculos do script ID %s alterados por outra operacao" % script_id)
 
             params_vistos = set()
             ordens_vistas = set()
-
             novos_vinculos = []
             for item in (vinculos or []):
                 pid = int(item["parametro_id"])
                 if pid not in self._store.parametros:
                     raise RepoViolacao("Parametro ID %s nao existe" % pid, constraint="fk_tbsss_sprm_prm")
-
                 if pid in params_vistos:
                     raise RepoViolacao("Parametro duplicado no script", constraint="uk_tbsss_sprm_scr_prm")
                 params_vistos.add(pid)
@@ -548,16 +523,17 @@ class RepoCatalogoFake(RepoCatalogo):
                     "valor_padrao_sub": item.get("valor_padrao_sub"),
                 })
 
-            # Remove anteriores
-            remover = [k for k, v in self._store.script_param.items() if v["script_id"] == script_id]
-            for k in remover:
-                del self._store.script_param[k]
+            self._regras_tipo_param(self._store.scripts[script_id]["tipo_param"],
+                                    [v["parametro_id"] for v in novos_vinculos])
 
+            for k in [k for k, v in self._store.script_param.items() if v["script_id"] == script_id]:
+                del self._store.script_param[k]
             for nv in novos_vinculos:
                 nid = self._store.proximo_id("tbsss_script_param")
                 nv["id"] = nid
                 self._store.script_param[nid] = nv
 
+            self._auditar_script(auditoria, script_id)
             return copy.deepcopy(self.script_params_obter(script_id))
 
     # -------------------------------------------------------------------------

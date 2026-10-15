@@ -1032,3 +1032,42 @@
 .sss-usuario .btn {
   white-space: nowrap;
 }
+
+/* Vínculo de parâmetros do script (F4.5) */
+.sss-vinculos {
+  margin: 0 0 var(--sss-esp-3);
+  padding-left: var(--sss-esp-4);
+}
+
+.sss-vinculo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sss-esp-2);
+  padding: var(--sss-esp-2) 0;
+  border-bottom: 1px solid var(--sss-border);
+}
+
+.sss-vinculo > *,
+.sss-vinculo-campos > * {
+  min-width: 0;
+}
+
+.sss-vinculo-titulo,
+.sss-vinculo-acoes,
+.sss-vinculo-campos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sss-esp-2);
+}
+
+.sss-vinculo-campos .form-control {
+  flex: 1 1 14rem;
+  width: auto;
+}
+
+.sss-busca-parametros {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

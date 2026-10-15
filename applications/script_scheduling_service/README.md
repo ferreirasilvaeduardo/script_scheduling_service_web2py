@@ -254,6 +254,9 @@ password = ...
   2. **Funcionalidade** (`tbsss_perfil_func`): telas e ações.
   3. **Script** (`tbsss_perfil_scr`): rotinas que o perfil pode executar.
   4. **Homologação** (`tbsss_script_amb`): em quais ambientes cada script **pode** rodar. Esta é uma propriedade do catálogo, não do perfil.
+     * Na UI (F4.5), só ambientes ativos podem ser homologados; homologações existentes a ambientes inativos são preservadas.
+     * A alteração é auditada (`CAD_ALTERAR`, `homologação: +A, -B`).
+     * O modal mostra os agendamentos ativos afetados nos ambientes removidos.
 * **Decisão composta para executar** (`rbac.pode_executar(usuario, script, ambiente)`), verdadeira somente se todas as condições forem atendidas:
   * usuário ativo **e** perfil ativo;
   * script ativo **e** ambiente ativo **e** par (script, ambiente) presente em `tbsss_script_amb`;
@@ -551,6 +554,14 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 
 * O snapshot é **compilado na criação do ticket** (manual ou desdobro). O agente **nunca** recompila nem lê `tbsss_script_param` e `tbsss_parametros` para executar.
 * **Defesa em profundidade no claim:** o agente revalida o snapshot (§8.4, passo 1).
+* **Vínculo de parâmetros pela UI** (`admin_scripts/parametros`, F4.5):
+  * a lista inteira vai num único POST, e a ordem é renumerada pelo servidor (1..n, pela posição);
+  * a lista é revalidada inteira: ID inexistente ou duplicado, `valor_padrao_sub` por `validar_valor` (com até 100 caracteres), `NENHUM` sem vínculos e `NOMEADO` com flag em todos os parâmetros;
+  * as regras de `NENHUM`/`NOMEADO` também são garantidas pelo repositório na mesma operação (`sss_scr_nenhum_vinculado` e `sss_scr_nomeado_sem_flag`), inclusive ao trocar `tipo_param`;
+  * só parâmetros ativos podem ser adicionados; vínculos existentes a parâmetros inativos são preservados;
+  * o `valor_padrao_sub` de parâmetro sensível é só de escrita (em branco mantém o gravado) e aparece como `****` na auditoria e na prévia;
+  * a **prévia do argv** usa a configuração em edição, com os valores padrão (§6.1), e não grava nada;
+  * concorrência pelo estado lido (hash dos vínculos), com a mensagem de conflito.
 * `tbsss_ticket_resp` é a cópia normalizada das respostas resolvidas, usada em relatórios, auditoria e reexecução. O executor não a utiliza.
 * **Parâmetros sensíveis** (`sensivel = 'S'`):
   * Os valores são listados em `"sensiveis"` (por `codigo`).
@@ -777,6 +788,14 @@ Validações complementares:
   * `ck_tbsss_scr_cmd` restringe `comando_real` à allowlist;
   * `ck_tbsss_scr_path` exige `path_file` relativo e sem `..`.
 * **TOCTOU residual:** é aceito porque o UID do agente não consegue alterar a árvore de scripts.
+* **Cadastro na UI** (`admin_scripts`, F4.5):
+  * a etapa 1 (`validar_cadastro`) e a etapa 2 (`resolver` contra o servidor local) rodam ao salvar, com os códigos traduzidos para português;
+  * em `sss_env = DEV`, apenas `NAO_E_ARQUIVO` (o arquivo não existe localmente) vira **aviso** e permite salvar; os demais códigos bloqueiam;
+  * em HML/PROD, a etapa 2 sempre bloqueia;
+  * a UI sempre informa que a validação definitiva ocorre também no agente;
+  * `comando_real` é um select fixo da allowlist, e o servidor exige o valor exato, mesmo que o HTML tenha sido adulterado;
+  * **caminho absoluto do servidor só para admin:** o `base_script_dir` aparece apenas para perfil admin, e na prévia do argv quem não é admin vê `<base>/path_file`;
+  * o `nome` do script é texto livre de 1 a 60 caracteres (sem caracteres de controle), único e editável, porque o snapshot guarda o nome da época e tickets e agendamentos referenciam o `script_id`.
 
 ### 8.6 Ambiente do processo filho (`env_builder.py`)
 

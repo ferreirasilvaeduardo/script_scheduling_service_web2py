@@ -1,0 +1,98 @@
+{{extend 'layout.html'}}
+{{
+# Inclusão e edição de script. comando_real é um select fixo da allowlist (o servidor revalida o valor exato);
+# o caminho é relativo ao diretório base, que só é exibido para administradores.
+import ui_helpers
+_s = scr
+_novo = not _s.get('id')
+_situacao = ui_helpers.ativo_info(_s.get('ativo'))
+_campos_a = [
+    {'nome': 'nome', 'rotulo': 'Nome', 'valor': _s.get('nome'), 'erro': erros.get('nome'), 'obrigatorio': True, 'maxlength': 60},
+    {'nome': 'descricao', 'rotulo': u'Descrição', 'tipo': 'textarea', 'valor': _s.get('descricao'), 'erro': erros.get('descricao'), 'maxlength': 200},
+]
+_campos_b = [
+    {'nome': 'grupo', 'rotulo': 'Grupo', 'valor': _s.get('grupo'), 'erro': erros.get('grupo'), 'maxlength': 30},
+    {'nome': 'categoria', 'rotulo': 'Categoria', 'valor': _s.get('categoria'), 'erro': erros.get('categoria'), 'maxlength': 30},
+    {'nome': 'etapa', 'rotulo': 'Etapa', 'valor': _s.get('etapa'), 'erro': erros.get('etapa'), 'maxlength': 30},
+]
+_ajuda_path = u'Relativo ao diretório base, sem / no início e sem "..". ' + _s['obs_validacao']
+if _s.get('base_exibicao'):
+    _ajuda_path = u'Diretório base: %s. %s' % (_s['base_exibicao'], _ajuda_path)
+pass
+_campos_c = [
+    {'nome': 'comando_real', 'rotulo': 'Interpretador', 'tipo': 'select', 'valor': _s.get('comando_real'), 'erro': erros.get('comando_real'), 'obrigatorio': True, 'opcoes': [(_c, _c) for _c in allowlist]},
+    {'nome': 'path_file', 'rotulo': 'Arquivo do script', 'valor': _s.get('path_file'), 'erro': erros.get('path_file'), 'obrigatorio': True, 'maxlength': 250, 'ajuda': _ajuda_path},
+    {'nome': 'tipo_param', 'rotulo': u'Montagem dos argumentos', 'tipo': 'select', 'valor': _s.get('tipo_param'), 'erro': erros.get('tipo_param'), 'obrigatorio': True, 'opcoes': list(tipos_param),
+     'ajuda': u'Trocar a montagem revalida os parâmetros já vinculados.'},
+]
+_campos_d = [
+    {'nome': 'max_qtd_parallel_env', 'rotulo': u'Execuções simultâneas por ambiente', 'tipo': 'number', 'valor': _s.get('max_qtd_parallel_env'), 'erro': erros.get('max_qtd_parallel_env'), 'obrigatorio': True, 'ajuda': u'De 1 a 999.'},
+    {'nome': 'timeout_seg', 'rotulo': 'Tempo limite (segundos)', 'tipo': 'number', 'valor': _s.get('timeout_seg'), 'erro': erros.get('timeout_seg'), 'ajuda': u'Em branco usa o padrão do agente.'},
+]
+if not _novo:
+    _desativar = _s.get('ativo') == 'S'
+    if _desativar:
+        _texto_modal = u'%s Agendamentos ativos afetados: %d.' % (aviso_desativacao, _s.get('agendamentos_ativos') or 0)
+    else:
+        _texto_modal = u'O script voltará a aceitar tickets e agendamentos.'
+    pass
+    _modal_ativo = {'id': 'modal-ativo', 'titulo': (u'Desativar script %s' if _desativar else u'Reativar script %s') % _s['nome'],
+                    'texto': _texto_modal, 'rotulo_gatilho': 'Desativar' if _desativar else 'Reativar',
+                    'rotulo_confirmar': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
+                    'variante': 'perigo' if _desativar else 'normal', 'acao': URL(c='admin_scripts', f='alternar_ativo'),
+                    'campos_ocultos': dict(id=_s['id'], versao=_s['versao'])}
+pass
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">{{if _novo:}}Novo script{{else:}}Script <span class="sss-mono">{{=_s['nome']}}</span>
+      <span class="sss-status {{=_situacao['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icone']}}"></use></svg><span>{{=_situacao['rotulo']}}</span></span>{{pass}}
+    </h1>
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_scripts', f='lista')}}">Voltar à lista</a>
+    {{if not _novo:}}
+    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='homologacao', args=[_s['id']])}}">Homologação</a>
+    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='parametros', args=[_s['id']])}}">Parâmetros</a>
+    {{modal = _modal_ativo}}
+    {{include 'components/modal_confirmacao.html'}}
+    {{pass}}
+  </div>
+</div>
+
+<section class="sss-card" aria-labelledby="titulo-form">
+  <h2 class="sss-card-titulo" id="titulo-form">Dados do script</h2>
+  <form class="sss-card-corpo" method="post" action="{{=URL(c='admin_scripts', f='salvar')}}" autocomplete="off">
+    {{=csrf_campo()}}
+    {{if not _novo:}}
+    <input type="hidden" name="id" value="{{=_s['id']}}">
+    <input type="hidden" name="versao" value="{{=_s['versao']}}">
+    {{pass}}
+    {{if erro_geral:}}
+    <div class="alert alert-danger sss-alerta" role="alert">
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
+      <span>{{=erro_geral}}</span>
+    </div>
+    {{pass}}
+    {{for campo in _campos_a:}}
+    {{include 'components/form_campo.html'}}
+    {{pass}}
+    <div class="sss-form-linha">
+      {{for campo in _campos_b:}}
+      {{include 'components/form_campo.html'}}
+      {{pass}}
+    </div>
+    {{for campo in _campos_c:}}
+    {{include 'components/form_campo.html'}}
+    {{pass}}
+    <div class="sss-form-linha">
+      {{for campo in _campos_d:}}
+      {{include 'components/form_campo.html'}}
+      {{pass}}
+    </div>
+    <div class="sss-form-acoes">
+      <button type="submit" class="btn btn-primary">{{=u'Incluir script' if _novo else u'Salvar alterações'}}</button>
+      <a class="btn btn-outline-secondary" href="{{=URL(c='admin_scripts', f='lista')}}">Cancelar</a>
+    </div>
+  </form>
+</section>

@@ -290,6 +290,42 @@ class BaseRepoContractTest(object):
         self.assertEqual((alterado["tipo_componente"], alterado["param_nomeado"], alterado["ativo"]),
                          ("NUMBER", "--n", "N"))
 
+    def test_04f_script_regras_de_tipo_param_homologacao_e_vinculos_condicionais(self):
+        cat = self.obter_repo("catalogo")
+        aud = self.obter_repo("auditoria")
+        carga = cat.scripts_listar(filtros={"nome": "carga_diaria"})["itens"][0]
+        self.assertEqual(carga["qtd_parametros"], len(cat.script_params_obter(carga["id"])))
+        self.assertIsInstance(carga["ambientes_homologados"], list)
+
+        with self.assertRaises(RepoViolacao) as ctx:
+            cat.scripts_alterar(carga["id"], {"tipo_param": "NENHUM", "descricao": "Nao grava"})
+        self.assertEqual(ctx.exception.constraint, "sss_scr_nenhum_vinculado")
+        self.assertEqual(cat.scripts_obter(carga["id"])["tipo_param"], "NOMEADO")
+        with self.assertRaises(RepoConflito):
+            cat.scripts_alterar(carga["id"], {"descricao": "x"}, esperado={"descricao": "outra"})
+
+        sem_flag = cat.parametros_inserir({"codigo": "contrato_sem_flag", "label": "X", "tipo_componente": "TEXT"})
+        with self.assertRaises(RepoViolacao) as ctx:
+            cat.script_params_salvar(carga["id"], [{"parametro_id": sem_flag["id"], "ordem": 1, "obrigatorio": "N"}])
+        self.assertEqual(ctx.exception.constraint, "sss_scr_nomeado_sem_flag")
+
+        homolog = cat.homologacao_obter(carga["id"])
+        with self.assertRaises(RepoConflito):
+            cat.homologacao_salvar(carga["id"], [], esperado=homolog + [999])
+        antes = aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=1)["total"]
+        cat.homologacao_salvar(carga["id"], homolog, esperado=homolog,
+                               auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "h"})
+        vinc = cat.script_params_obter(carga["id"])
+        lidos = [(v["parametro_id"], v["ordem"], v["obrigatorio"], v.get("valor_padrao_sub")) for v in vinc]
+        with self.assertRaises(RepoConflito):
+            cat.script_params_salvar(carga["id"], [], esperado=lidos[1:])
+        cat.script_params_salvar(carga["id"], [dict(parametro_id=x[0], ordem=x[1], obrigatorio=x[2],
+                                                    valor_padrao_sub=x[3]) for x in lidos], esperado=lidos,
+                                 auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "v"})
+        ultimos = aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=2)
+        self.assertEqual(ultimos["total"], antes + 2)
+        self.assertEqual(set((a["entidade"], a["entidade_id"]) for a in ultimos["itens"]), {("tbsss_scripts", carga["id"])})
+
     def test_05_cascata_associacao(self):
         cat = self.obter_repo("catalogo")
         rbac = self.obter_repo("rbac")

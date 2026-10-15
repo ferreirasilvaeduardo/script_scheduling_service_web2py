@@ -1,0 +1,61 @@
+{{extend 'layout.html'}}
+{{
+# Lista de scripts (padrão de CRUD administrativo). Nenhum caminho absoluto do servidor é exibido.
+_opc_cmd = [('', 'Todos')] + [(_c, _c) for _c in allowlist]
+_opc_ativo = [('', 'Todos'), ('S', 'Ativos'), ('N', 'Inativos')]
+filtros = {'id': 'filtro-scripts', 'url_base': ('admin_scripts', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': [
+    {'nome': 'nome', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('nome')},
+    {'nome': 'grupo', 'rotulo': 'Grupo', 'tipo': 'texto', 'valor': filtros_ativos.get('grupo')},
+    {'nome': 'categoria', 'rotulo': 'Categoria', 'tipo': 'texto', 'valor': filtros_ativos.get('categoria')},
+    {'nome': 'comando_real', 'rotulo': 'Interpretador', 'tipo': 'select', 'valor': filtros_ativos.get('comando_real'), 'opcoes': _opc_cmd},
+    {'nome': 'ativo', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('ativo'), 'opcoes': _opc_ativo},
+]}
+_linhas = []
+for _s in resultado['itens']:
+    _linhas.append({
+        'nome': _s['nome'],
+        'grupo': ' / '.join([_x for _x in (_s.get('grupo'), _s.get('categoria')) if _x]) or '-',
+        'cmd': _s['comando_real'],
+        'path': _s['path_file'],
+        'ambientes': ', '.join(_s.get('ambientes_homologados') or []) or u'Nenhum',
+        'parametros': str(_s.get('qtd_parametros') or 0),
+        'ativo': _s['ativo'],
+        'acao': [
+            {'href': URL(c='admin_scripts', f='form', args=[_s['id']]), 'rotulo': 'Editar', 'descricao': u'Editar script %s' % _s['nome']},
+            {'href': URL(c='admin_scripts', f='homologacao', args=[_s['id']]), 'rotulo': u'Homologação', 'descricao': u'Homologação do script %s' % _s['nome']},
+            {'href': URL(c='admin_scripts', f='parametros', args=[_s['id']]), 'rotulo': u'Parâmetros', 'descricao': u'Parâmetros do script %s' % _s['nome']},
+        ],
+    })
+pass
+tabela = {'legenda': 'Scripts cadastrados', 'erro': erro, 'linhas': _linhas, 'msg_vazio': 'Nenhum script encontrado.', 'colunas': [
+    {'chave': 'nome', 'rotulo': 'Nome', 'tipo': 'mono'},
+    {'chave': 'grupo', 'rotulo': 'Grupo / categoria'},
+    {'chave': 'cmd', 'rotulo': 'Interpretador', 'tipo': 'mono'},
+    {'chave': 'path', 'rotulo': 'Arquivo (relativo)', 'tipo': 'mono'},
+    {'chave': 'ambientes', 'rotulo': 'Ambientes homologados'},
+    {'chave': 'parametros', 'rotulo': u'Parâmetros'},
+    {'chave': 'ativo', 'rotulo': u'Situação', 'tipo': 'ativo'},
+    {'chave': 'acao', 'rotulo': u'Ações', 'tipo': 'acao'},
+]}
+pagina = resultado['pagina']
+total = resultado['total']
+url_base = ('admin_scripts', 'lista')
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">Scripts</h1>
+    <p class="sss-page-sub">Rotinas do catálogo, homologação por ambiente e parâmetros. Arquivos nunca são enviados nem editados pela interface.</p>
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-primary" href="{{=URL(c='admin_scripts', f='form')}}">Novo script</a>
+  </div>
+</div>
+
+<section class="sss-card" aria-label="Filtros">
+  {{include 'components/filtros.html'}}
+</section>
+
+<section class="sss-card" aria-label="Scripts">
+  {{include 'components/tabela.html'}}
+  {{include 'components/paginacao.html'}}
+</section>

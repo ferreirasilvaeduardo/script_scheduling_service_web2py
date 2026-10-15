@@ -31,27 +31,40 @@ class RepoCatalogo(object):
         raise NotImplementedError
 
     def scripts_listar(self, filtros=None, pagina=1, tamanho=20):
-        """Lista scripts paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}."""
+        """Lista scripts paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
+
+        Ordem: nome ASC, id ASC. Filtros: nome (trecho), grupo, categoria, comando_real e ativo.
+        Cada item traz 'ambientes_homologados' (nomes, ordem alfabetica) e 'qtd_parametros'.
+        """
         raise NotImplementedError
 
     def scripts_obter(self, id):
         """Retorna dict com dados do script ou lanca RepoNaoEncontrado."""
         raise NotImplementedError
 
-    def scripts_inserir(self, dados):
-        """Insere novo script e retorna dict com o registro criado."""
+    def scripts_inserir(self, dados, auditoria=None):
+        """Insere novo script e retorna dict com o registro criado (auditoria opcional na mesma transacao)."""
         raise NotImplementedError
 
-    def scripts_alterar(self, id, dados):
-        """Atualiza dados do script."""
+    def scripts_alterar(self, id, dados, esperado=None, auditoria=None):
+        """Atualiza o script e retorna o registro; esperado divergente lanca RepoConflito.
+
+        Trocar tipo_param revalida os vinculos na mesma operacao: NENHUM com vinculo lanca
+        RepoViolacao('sss_scr_nenhum_vinculado'); NOMEADO com parametro sem flag lanca
+        RepoViolacao('sss_scr_nomeado_sem_flag'). auditoria: opcional, na mesma transacao.
+        """
         raise NotImplementedError
 
     def homologacao_obter(self, script_id):
         """Retorna lista de ambiente_id homologados para o script."""
         raise NotImplementedError
 
-    def homologacao_salvar(self, script_id, ambiente_ids):
-        """Atualiza os ambientes homologados para o script."""
+    def homologacao_salvar(self, script_id, ambiente_ids, esperado=None, auditoria=None):
+        """Substitui os ambientes homologados do script e retorna a lista resultante.
+
+        esperado: opcional, lista de ambiente_id lida; divergencia lanca RepoConflito.
+        auditoria: opcional (entidade tbsss_scripts), na mesma transacao.
+        """
         raise NotImplementedError
 
     def parametros_listar(self, filtros=None, pagina=1, tamanho=20):
@@ -93,8 +106,14 @@ class RepoCatalogo(object):
         """Retorna lista de vinculos ordenados por ordem com dados completos do parametro."""
         raise NotImplementedError
 
-    def script_params_salvar(self, script_id, vinculos):
-        """Atualiza vinculos de parametros para o script com lista de dicts."""
+    def script_params_salvar(self, script_id, vinculos, esperado=None, auditoria=None):
+        """Substitui os vinculos do script ({parametro_id, ordem, obrigatorio, valor_padrao_sub}).
+
+        Regras na mesma operacao: script NENHUM nao aceita vinculo ('sss_scr_nenhum_vinculado');
+        script NOMEADO exige param_nomeado em todo parametro ('sss_scr_nomeado_sem_flag').
+        esperado: opcional, lista lida de (parametro_id, ordem, obrigatorio, valor_padrao_sub);
+        divergencia lanca RepoConflito. auditoria: opcional (entidade tbsss_scripts).
+        """
         raise NotImplementedError
 
     def scripts_executaveis(self, usuario_ctx):
