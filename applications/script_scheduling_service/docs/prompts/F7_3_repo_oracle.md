@@ -12,10 +12,10 @@
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §3.1, §4 (inteiro)
 - `README.md` §2.5 (paridade), §4.3.B, §5 (inteiro), §8.2, §8.3 (ordem de locks), §10 (tabelas do agregado), §10 (política de exclusão)
-- Arquivos: o contrato `modules/repo_<x>.py` do agregado, a implementação `modules/repo_fake/<x>.py`, `modules/oracle_conn.py`, `modules/sql_ident.py` e `scripts/test_repo_contract.py`
+- Arquivos: o contrato `modules/repo_<x>.py` do agregado, a implementação `modules/repo_fake/<x>.py`, `modules/db_conn.py`, `modules/sql_ident.py` e `scripts/test_repo_contract.py`
 
 ## Objetivo
-Implementar o contrato do agregado em `modules/repo_oracle/` com SQL Oracle 11gR2, com paridade comprovada pela mesma bateria de testes do FAKE.
+Implementar o contrato do agregado em `modules/repo_oracle/` com SQL Oracle 11gR2 escrito diretamente (CR-002, sem camada de dialeto), com paridade comprovada pela mesma bateria de testes do FAKE, em cada combinação de driver disponível (Thin com banco 12.1+, Thick e cx_Oracle).
 
 ## Escopo
 **IN**
@@ -30,7 +30,7 @@ Implementar o contrato do agregado em `modules/repo_oracle/` com SQL Oracle 11gR
     - escrita de `parametros_enviados` como bind CLOB;
     - `log_ler` lê por locator com `lob.read(offset + 1, amount)` (o LOB do Oracle começa em 1) e retorna o offset em base 0 coerente com o FAKE;
     - listagens **nunca** selecionam colunas CLOB.
-  - **Erros:** `oracle_conn.classificar_erro` traduz o ORA-00001 para `RepoViolacao(constraint)` (extraindo o nome da constraint da mensagem), o ORA-02291/02292 para `RepoViolacao`, o ORA-20001 (imutável) para `RepoViolacao` e as falhas de rede para `RepoIndisponivel`.
+  - **Erros:** `db_conn.classificar_erro` traduz o ORA-00001 para `RepoViolacao(constraint)` (extraindo o nome da constraint da mensagem), o ORA-02291/02292 para `RepoViolacao`, o ORA-20001 (imutável) para `RepoViolacao` e as falhas de rede para `RepoIndisponivel`.
   - **Pontos específicos por agregado:**
     - `RBAC_USUARIOS`: `admins_ativos_bloquear` com o SQL do README §4.3.B **literal** (`FOR UPDATE OF u.ativo WAIT 5`), executado na mesma transação que a alteração; `matriz_salvar` com `DELETE` + `executemany INSERT` e `UPDATE perm_versao = perm_versao + 1` em uma transação; `obter_estado_sessao` com uma query por PK (join usuário + perfil).
     - `CATALOGO`: `scripts_executaveis` com uma única query, com joins/`EXISTS` sobre `perfil_scr`, `perfil_amb` e `script_amb` e o atalho para admin; `parametro_vinculos` para o bloqueio de desativação.
@@ -47,7 +47,7 @@ Implementar o contrato do agregado em `modules/repo_oracle/` com SQL Oracle 11gR
 ## Requisitos
 1. **Paridade:** a mesma bateria de `test_repo_contract.py` passa contra ORACLE sem nenhum `if backend == ...` nos testes. Se algum teste exigir comportamento diferente, a divergência é do FAKE ou do contrato. **Pare** e reporte.
 2. `SELECT` sempre com a lista explícita de colunas (AGENTS §4.12).
-3. Toda função de escrita usa `oracle_conn.transacao`.
+3. Toda função de escrita usa `db_conn.transacao`.
 
 ## Critérios de aceite
 - [ ] Com `SSS_TEST_DSN`: `test_repo_contract.py` passa para o agregado nos dois backends.

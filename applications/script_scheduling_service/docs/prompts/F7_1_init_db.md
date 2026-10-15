@@ -40,7 +40,7 @@ Gerar e aplicar o DDL Oracle 11gR2 de forma idempotente e auditável, **a partir
 ## Requisitos
 1. Valores sempre como binds. Identificadores apenas via `sql_ident.qualificar` (AGENTS §3.1).
 2. O script é **reexecutável**: a segunda execução sobre a base pronta resulta em 100% `SKIP` e sem erro.
-3. A conexão é feita via `oracle_conn`. Se o F7.2 ainda não existir, isole a conexão numa função `_conectar(cfg)` com import tardio. O F7.2 vai substituí-la e o relatório deve registrar essa dependência.
+3. A conexão é feita via `db_conn`. Se o F7.2 ainda não existir, isole a conexão numa função `_conectar(cfg)` com import tardio. O F7.2 vai substituí-la e o relatório deve registrar essa dependência.
 
 ## Critérios de aceite
 - [ ] `python scripts/init_db.py --dry-run` gera um DDL completo e revisável. Salve-o como `docs/ddl_gerado.sql`.

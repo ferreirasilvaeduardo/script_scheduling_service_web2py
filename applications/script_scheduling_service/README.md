@@ -34,8 +34,8 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 
 ### 2.2 Banco de dados
 
-* **Oracle Database 11gR2** como piso de compatibilidade, com suporte às versões superiores (12c, 18c, 19c, 21c, 23ai). Todo SQL e DDL do dialeto `oracle11g` deve rodar no 11gR2, mesmo que o servidor seja mais novo.
-* **SQL ANSI por padrão**, com a sintaxe proprietária isolada num dialeto (§2.7). Trocar de banco = novo dialeto + driver homologado + a mesma suíte de contrato.
+* **Somente Oracle Database (CR-002).** O **11gR2** é o piso de compatibilidade, com suporte às versões superiores (12c, 18c, 19c, 21c, 23ai). Todo SQL e DDL deve rodar no 11gR2, mesmo que o servidor seja mais novo.
+* **SQL Oracle 11gR2 escrito diretamente** nos repositórios, sem camada de dialeto (§2.7).
 * **Charset:** AL32UTF8. Toda coluna textual usa `VARCHAR2(N CHAR)`.
 * **Teto de 30 caracteres** para todo identificador, inclusive após a expansão do prefixo (§9).
 
@@ -43,20 +43,29 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 
 | Componente | Versão permitida | Observação |
 |---|---|---|
-| Driver (Python 3.6) | `python-oracledb 1.x` (`< 2.0`) ou `cx_Oracle 8.3`, em modo **Thick** | A série 2.x exige Python 3.7+ |
-| Driver (Python 3.7 a 3.13) | `python-oracledb 2.x`, em modo **Thick** | — |
-| Cliente C | **Oracle Instant Client 19.x** (Linux, Unix ou Windows, conforme o nó) | Conecta do 11.2.0.4 ao 23ai. O IC 21c/23ai não conecta ao 11gR2 |
+| Driver (Python 3.6) | `python-oracledb 1.x` (`< 2.0`), com `cryptography <= 40.x`; contingência `cx_Oracle 8.3` | A série 2.x exige Python 3.7+ |
+| Driver (Python 3.7 a 3.13) | `python-oracledb 2.x`; contingência `cx_Oracle 8.3` (até 3.10) | — |
+| Cliente C (modos Thick e cx_Oracle) | **Oracle Instant Client 19.x** (Linux, Unix ou Windows, conforme o nó) | Conecta do 11.2.0.4 ao 23ai. O IC 21c/23ai não conecta ao 11gR2. Obrigatório nos nós que acessam banco 11g; recomendado em todos como contingência |
 
-* O modo **Thin** é proibido porque não suporta o 11g.
-* **Carregamento no Linux/Unix:** o Instant Client deve estar no caminho de bibliotecas **antes** de o processo Python iniciar, via `ldconfig` (preferencial) ou `LD_LIBRARY_PATH` exportado pelos launchers `bin/sss-web.sh` e `bin/sss-scheduler.sh`. Nessas plataformas, `init_oracle_client(lib_dir=...)` não tem efeito e deve ser chamado sem `lib_dir`.
+**Seleção do driver (CR-002, `[oracle] modo_driver`):**
+
+* `auto` (padrão): ordem **Thin → Thick → cx_Oracle**.
+  * O modo Thin dispensa o Instant Client, mas só conecta a banco **12.1 ou superior** (no 11gR2 falha com `DPY-3010`).
+  * Como o modo do `oracledb` é fixado por processo, a escolha é feita **antes da primeira conexão** por um subprocesso de sondagem (`scripts/sondar_driver.py`), um candidato por vez: importa o driver, conecta e executa `SELECT SYSDATE FROM DUAL`. O processo principal inicializa apenas o candidato vencedor.
+  * Erro de **autenticação** (ORA-01017, ORA-28000, ORA-28001, ORA-01005) interrompe a cadeia e aborta, para não consumir tentativas de login do usuário no banco. Os demais erros geram WARN e passam ao próximo candidato.
+  * Se nenhum candidato conectar, a subida aborta com CRITICAL listando o código de erro de cada tentativa.
+  * A senha chega ao subprocesso pela entrada padrão, nunca por argumento ou variável de ambiente.
+  * A combinação escolhida é registrada em INFO, exibida pelo `check_env.py` e mantida pelo processo; reconexões a reutilizam e só um reinício refaz a sondagem.
+* `thin`, `thick` ou `cx_oracle`: força um único candidato, sem sondagem; falha é fatal.
+* **Carregamento do Instant Client no Linux/Unix** (Thick e cx_Oracle): o IC deve estar no caminho de bibliotecas **antes** de o processo Python iniciar, via `ldconfig` (preferencial) ou `LD_LIBRARY_PATH` exportado pelos launchers `bin/sss-web.sh` e `bin/sss-scheduler.sh`. Nessas plataformas, `init_oracle_client(lib_dir=...)` não tem efeito e deve ser chamado sem `lib_dir`.
 * **Carregamento no Windows:** `init_oracle_client(lib_dir=oracle_client_lib_dir)`, com o mesmo caminho incluído no `PATH` pelos launchers `bin/sss-web.ps1` e `bin/sss-scheduler.ps1`.
-* **Desenvolvimento em macOS:** `oracle_client_lib_dir` só é usado em macOS/Windows. O IC 19 para macOS existe apenas para Intel (x86_64). Em Apple Silicon, use Python x86_64 sob Rosetta ou um container/VM Linux x86_64. Valide no portal da Oracle antes de montar o ambiente.
-* `modules/db_conn.py` é a **única** porta de acesso ao banco. Ele contém o *shim* que abstrai o driver (exceções mapeadas para os erros do contrato, tipos de bind, conversão do estilo `:nome` para o `paramstyle` do driver, pool e `init_oracle_client`) e entrega ao repositório o dialeto configurado (§2.7).
+* **Desenvolvimento em macOS:** `oracle_client_lib_dir` só é usado em macOS/Windows. O IC 19 para macOS existe apenas para Intel (x86_64). Em Apple Silicon, use o modo Thin (banco 12.1+), Python x86_64 sob Rosetta ou um container/VM Linux x86_64.
+* `modules/db_conn.py` é a **única** porta de acesso ao banco. Ele contém a seleção do driver, o adaptador das diferenças de API entre `oracledb` (Thin/Thick) e `cx_Oracle` (exceções mapeadas por driver e modo para os erros do contrato, tipos de bind, conversão do estilo `:nome` para o `paramstyle` do driver, pool e `init_oracle_client`).
 * **Toda conexão deve:**
   * usar `autocommit = False`;
   * definir `call_timeout` (`call_timeout_ms` no config);
   * preencher `module`, `action` e `client_identifier` para rastreabilidade pelo DBA (por exemplo, `module='SSS_SCHED'`, `action='CLAIM'`, `client_identifier=<agent_id ou login>`).
-* **Reconexão:** em erros de rede (no Oracle: ORA-03113, ORA-03114, ORA-03135, ORA-12541, ORA-12170, DPI-1080; a lista é mapeada por driver no `db_conn`), o daemon reconecta com *backoff* exponencial de 1 s a 60 s, registrando WARN a cada tentativa.
+* **Reconexão:** em erros de rede (Thick/cx_Oracle: ORA-03113, ORA-03114, ORA-03135, ORA-12541, ORA-12170, DPI-1080; Thin: os equivalentes `DPY-*`, como DPY-4011 e DPY-6005; a lista é mapeada por driver e modo no `db_conn`), o daemon reconecta com *backoff* exponencial de 1 s a 60 s, registrando WARN a cada tentativa.
 
 ### 2.4 Frontend
 
@@ -89,7 +98,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 | Backend | Uso | Implementação |
 |---|---|---|
 | `FAKE` | Desenvolvimento da UI e testes unitários | `modules/repo_fake/`: memória do processo, seed determinístico e `threading.Lock` por agregado |
-| `ORACLE` | Homologação e produção | `modules/repo_sql/` + dialeto `oracle11g` (§2.7): único local com SQL |
+| `ORACLE` | Homologação e produção | `modules/repo_oracle/` (§2.7): único local com SQL |
 
 * Os controllers e services **não sabem** qual backend está ativo.
 * **Paridade obrigatória:** o FAKE emula a semântica do Oracle que o código consome. Isso inclui `UPDATE` condicional com `rowcount` (transição perdida gera `RepoConflito`), unicidade (`RepoViolacao`), `ON DELETE CASCADE`, triggers de imutabilidade, paginação e ordenação idênticas.
@@ -113,24 +122,13 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 * O banco e a UI não dependem da plataforma do nó.
 * Um mesmo ambiente pode ter agentes Linux e Windows: o claim respeita os interpretadores de cada agente (§8.2).
 
-### 2.7 Portabilidade de SQL (CR-001)
+### 2.7 SQL Oracle 11gR2 (CR-002)
 
-* O SQL dos repositórios é **ANSI (SQL:2003)** sempre que o Oracle 11gR2 o aceitar. Exemplos:
-  * `MERGE`;
-  * `CASE`;
-  * comparação nula-segura `(c = :v OR (c IS NULL AND :v IS NULL))`;
-  * aritmética `dt - :n * INTERVAL '1' SECOND`.
-* A sintaxe proprietária fica **somente** em `modules/sql_dialeto/<dialeto>.py`, selecionado por `[oracle] dialeto` (hoje só `oracle11g`). O dialeto fornece:
-  * `paginar` e `limitar` (top-N);
-  * `proximo_id` (sequence);
-  * `agora` (relógio do banco);
-  * `para_atualizar` (lock com espera);
-  * `lob_anexar`, `lob_ler` e `lob_vazio`;
-  * `sem_tabela` (`DUAL`);
-  * a DDL de tipos, índices parciais, triggers e estatísticas.
-* A aplicação **sempre informa o `id`** na inclusão, obtido de `dialeto.proximo_id`. A trigger condicional do §10 continua existindo no Oracle como defesa.
-* **Os blocos SQL deste README estão escritos na forma do dialeto `oracle11g`.** Neles, `SYSDATE`, `ROWNUM`, `seq.NEXTVAL FROM DUAL`, `FOR UPDATE WAIT n`, `DBMS_LOB.*` e `EMPTY_CLOB()` correspondem a chamadas do dialeto no código.
-* Trocar de banco exige homologar o driver (AGENTS §2.2), escrever o dialeto e passar a mesma `test_repo_contract.py`. Enquanto o 11g for o alvo, SQL 100% ANSI não é possível.
+* O SQL é escrito diretamente na sintaxe aceita pelo **Oracle 11gR2**, em `modules/repo_oracle/`. O CR-002 revogou a camada de dialeto e o SQL ANSI do CR-001.
+* **Permitido:** `ROWNUM`, `SYSDATE`, `seq.NEXTVAL FROM DUAL`, `FOR UPDATE WAIT n` (n ≤ 5), `DBMS_LOB.WRITEAPPEND`, `DBMS_LOB.SUBSTR`, `EMPTY_CLOB()`, `MERGE`, `CASE`, `NVL` e `DECODE`. A comparação nula-segura continua `(c = :v OR (c IS NULL AND :v IS NULL))`.
+* **Proibido (12c+):** ver AGENTS §4.3. A varredura `test_sql_oracle11g.py` rejeita essa sintaxe em `repo_oracle/` e em `scripts/init_db.py`.
+* A aplicação **sempre informa o `id`** na inclusão (`seq.NEXTVAL` lido antes do `INSERT`). A trigger condicional do §10 continua existindo como defesa.
+* Os blocos SQL deste README estão na forma que vai para o código.
 
 ---
 
@@ -165,15 +163,14 @@ applications/script_scheduling_service/
   modules/
     sss_config.py             # parser e validação tipada do config.ini e do secrets.cfg
     sss_logging.py            # configuração de logging (§13)
-    db_conn.py                # shim de driver, binds, mapa de erros, pool, conexão dedicada do daemon
-    sql_dialeto/              # fragmentos SQL proprietários por banco (oracle11g.py) e DDL por dialeto (§2.7)
+    db_conn.py                # seleção do driver (Thin → Thick → cx_Oracle), adaptador, binds, mapa de erros, pool, conexão dedicada do daemon
     plataforma/               # primitivas de SO: posix.py (Linux/Unix) e windows.py (ctypes) (§8.0)
     sql_ident.py              # registro de identificadores, validação de owner/prefixo, nomes qualificados
     repo_errors.py            # exceções de contrato (§2.5)
-    repo_factory.py           # seleção do backend FAKE/ORACLE (banco real via repo_sql + dialeto)
+    repo_factory.py           # seleção do backend FAKE/ORACLE (banco real via repo_oracle)
     repo_*.py                 # contratos abstratos por agregado (sem SQL)
     repo_fake/                # implementação em memória + seed (somente DEV)
-    repo_sql/                 # implementação SQL genérica/ANSI (único local com SQL; fragmentos proprietários vêm do dialeto)
+    repo_oracle/              # implementação SQL Oracle 11gR2 (único local com SQL, §2.7)
     auth_service.py           # autenticação, bloqueio, revalidação de sessão
     ticket_service.py         # criação, cancelamento e reexecução de ticket (§5)
     ui_menu.py                # menu por permissão
@@ -192,6 +189,7 @@ applications/script_scheduling_service/
     audit.py                  # escrita em tbsss_auditoria
   scripts/
     init_db.py                # bootstrap idempotente de DDL e seed (§11)
+    sondar_driver.py          # sondagem isolada de um candidato de driver (Thin, Thick, cx_Oracle) (§2.3, CR-002)
     run_scheduler.py          # entrypoint do daemon
     purge.py                  # retenção (§11.3)
     test_*.py                 # testes unittest (AGENTS.md §7)
@@ -1099,10 +1097,10 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
    * `log_dir` e `work_dir` existem, são graváveis, **não** ficam sob `base_script_dir` e, no Windows, têm ACL restrita à conta do agente;
    * cada entrada de `[agent] interpretadores` é válida para a plataforma (§8.5).
 5. **Instância única por host:** `plataforma.travar_instancia` em `work_dir/sss-<agent_id>.lock`.
-6. **Banco:** carregar o Instant Client, conectar e confirmar o relógio do banco (`dialeto.agora()`; `SELECT SYSDATE FROM DUAL` no `oracle11g`).
+6. **Banco:** selecionar o driver (§2.3; a sondagem roda aqui), conectar e confirmar o relógio do banco (`SELECT SYSDATE FROM DUAL`).
 7. **Registro em `tbsss_agentes`:**
    * Se existir linha do mesmo `codigo` com `status = 'ATIVO'`, `heartbeat_at` recente (menor que `node_offline_timeout_s`) **e** `hostname` diferente, recusar a subida (`agent_id` duplicado).
-   * Caso contrário, executar `MERGE` (ANSI) com `status = 'ATIVO'`, `hostname`, `pid_daemon`, `versao`, `ambientes`, `plataforma`, `interpretadores` e `iniciado_em`.
+   * Caso contrário, executar `MERGE` com `status = 'ATIVO'`, `hostname`, `pid_daemon`, `versao`, `ambientes`, `plataforma`, `interpretadores` e `iniciado_em`.
    * Auditar `AGENTE_INICIO`.
 8. **Ambientes atendidos:** todos existem em `tbsss_ambientes` com `ativo = 'S'`. Um ambiente inexistente é ERROR fatal; um ambiente inativo gera WARN e é ignorado.
 9. **Startup check** de tickets `RUNNING` do próprio `agente_id`:
@@ -1157,7 +1155,7 @@ UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}   ix_tbsss_tck_fila
 **Padrões globais:**
 
 * O `owner` é parametrizado (`gfcadastro`), e todo SQL qualifica `{owner}.objeto`.
-* Toda coluna `id` é `NUMBER(10) NOT NULL` (inteiro de 10 dígitos, em DDL gerada pelo dialeto), PK. **A aplicação sempre informa o `id`** (`dialeto.proximo_id`, §2.7). No `oracle11g` existe também a trigger condicional abaixo, como defesa para inserções manuais:
+* Toda coluna `id` é `NUMBER(10) NOT NULL` (inteiro de 10 dígitos), PK. **A aplicação sempre informa o `id`** (`seq.NEXTVAL` lido antes do `INSERT`, §2.7). Existe também a trigger condicional abaixo, como defesa para inserções manuais:
 
 ```sql
 CREATE OR REPLACE TRIGGER {owner}.{trigger_name}
@@ -1480,7 +1478,7 @@ END;
 
 ### 11.1 `scripts/init_db.py` (idempotente)
 
-* A DDL é gerada pelo dialeto configurado (§2.7) a partir do registro de `sql_ident`. As fases abaixo e as consultas de catálogo (`ALL_OBJECTS` etc.) são as do `oracle11g`; outro dialeto fornece os equivalentes.
+* A DDL Oracle 11gR2 é gerada por `init_db.py` a partir do registro de `sql_ident` (§2.7).
 * **Fases**, nesta ordem:
   1. sequences;
   2. tabelas sem FK;
@@ -1496,7 +1494,7 @@ END;
   * `--lob-basicfile` aplica o fallback de LOB;
   * **não há** opção de DROP em produção. `--recreate` só é aceito com `SSS_ENV=DEV` e confirmação interativa.
 * Toda falha de fase aborta com código diferente de zero e com o objeto e o ORA- no log.
-* **Seed** via `MERGE` ANSI (idempotente): o catálogo de funcionalidades (§4.3.D) e o perfil `ADMINISTRADOR` (`is_admin = 'S'`).
+* **Seed** via `MERGE` (idempotente): o catálogo de funcionalidades (§4.3.D) e o perfil `ADMINISTRADOR` (`is_admin = 'S'`).
 * **Administrador inicial:** o login vem de `--admin-login`, e a senha é lida de `getpass` ou de `SSS_BOOTSTRAP_ADMIN_PASSWORD`. Nunca há valor fixo no código.
 * Se o usuário de aplicação for diferente do `owner`, o script emite os `GRANT`s e documenta os sinônimos necessários. Todo SQL da aplicação já qualifica o `owner`.
 
@@ -1535,9 +1533,7 @@ user = gfcadastro
 dsn = 10.0.0.1:1521/servico_homolog
 owner = gfcadastro
 table_prefix = tbsss_
-driver = oracledb                 ; oracledb | cx_Oracle (versão conforme o Python, §2.3)
-dialeto = oracle11g               ; dialeto SQL (§2.7); hoje apenas oracle11g
-use_thick_mode = true
+modo_driver = auto                ; auto (Thin → Thick → cx_Oracle) | thin | thick | cx_oracle (§2.3)
 oracle_client_lib_dir =           ; somente Windows/macOS; no Linux/Unix usar ldconfig/LD_LIBRARY_PATH
 call_timeout_ms = 30000
 pool_min = 1
@@ -1599,7 +1595,7 @@ purge_batch_size = 1000
 
 Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Chave desconhecida, ausente ou fora da faixa interrompe a subida com a chave e o motivo no log.
 
-As chaves `dialeto`, `script_owner_sids` e `interpretadores` passam a ser lidas e validadas a partir do F7.0 e do F8.0 (CR-001). Até lá, os processos implementados não as usam.
+A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR-002); até lá, o código atual (backend FAKE) ainda lê as chaves antigas. As chaves `script_owner_sids` e `interpretadores` passam a ser lidas e validadas a partir do F8.0 (CR-001).
 
 ### 12.2 Launchers
 

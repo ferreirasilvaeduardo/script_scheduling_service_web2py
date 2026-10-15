@@ -48,9 +48,10 @@
 | 5.2 | `F5_2_tela_agendamentos.md` | Tela de agendamentos | 5.1 | Browser |
 | 6.1 | `F6_1_auditoria_agentes.md` | Auditoria e painel de agentes | 5.2 | Browser |
 | ◆ | `UI_FREEZE.md` | **Homologação visual e funcional (manual)** | 6.1 | Seu aceite |
-| 7.1 | `F7_1_init_db.md` | Bootstrap de DDL (`init_db.py`) | ◆ | `test_db_schema.py` + `--dry-run` |
-| 7.2 | `F7_2_oracle_conn.md` | Conexão Oracle (shim Thick) | 7.1 | `test_oracle_conn.py` |
-| 7.3 | `F7_3_repo_oracle.md` | Repositórios Oracle (**executar 1x por agregado**) | 7.2 | `test_repo_contract.py` (ORACLE) |
+| 7.0 | `F7_0_driver_adaptativo.md` | Driver adaptativo Thin → Thick → cx_Oracle (CR-002) | ◆ | `test_db_conn.py` |
+| 7.1 | `F7_1_init_db.md` | Bootstrap de DDL Oracle 11gR2 (`init_db.py`) | 7.0 | `test_db_schema.py` + `--dry-run` |
+| 7.2 | `F7_2_db_conn.md` | Conexão Oracle (`db_conn`: pool, transação, erros, reconexão) | 7.1 | `test_db_conn.py` |
+| 7.3 | `F7_3_repo_oracle.md` | Repositórios Oracle 11gR2 (**executar 1x por agregado**) | 7.2 | `test_repo_contract.py` (ORACLE, cada combinação de driver) + `test_sql_oracle11g.py` |
 | 8.1 | `F8_1_env_executor.md` | Ambiente do filho e executor | 7.3 | `test_env_builder.py`, `test_executor.py` |
 | 8.2 | `F8_2_log_pump.md` | Coleta de log para CLOB | 8.1 | `test_log_pump.py` |
 | 8.3 | `F8_3_daemon_claim.md` | Daemon: inicialização, claim, heartbeat, cancelamento | 8.2 | `test_scheduler_claim.py` |
@@ -58,7 +59,7 @@
 | 9.1 | `F9_1_purge_hardening.md` | Purge, hardening e runbook | 8.4 | Revisão |
 | 9.2 | `F9_2_e2e.md` | Roteiro E2E com 2 nós | 9.1 | Execução assistida |
 
-> **F7.3 é executado uma vez por agregado:** `RBAC_USUARIOS`, `CATALOGO`, `TICKETS`, `AGENDAMENTOS`, `AUDITORIA_AGENTES`. São 29 arquivos de prompt e **33 sessões** do Antigravity (o F7.3 conta 5 vezes), mais o marco manual de UI Freeze.
+> **F7.3 é executado uma vez por agregado:** `RBAC_USUARIOS`, `CATALOGO`, `TICKETS`, `AGENDAMENTOS`, `AUDITORIA_AGENTES`. São 30 arquivos de prompt e **34 sessões** do Antigravity (o F7.3 conta 5 vezes), mais o marco manual de UI Freeze.
 
 ## Regras de ouro para o executor
 

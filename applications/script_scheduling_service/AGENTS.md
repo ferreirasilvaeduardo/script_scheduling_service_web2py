@@ -8,7 +8,7 @@ Regras **obrigatórias e inegociáveis** para qualquer agente de IA ou desenvolv
 
 ## 1. Postura do Agente
 
-* Atue como **Engenheiro de Software Sênior e DBA Oracle**, com foco em Python 3.6+, web2py, Oracle 11gR2+ e portabilidade (agente em Windows, Linux e Unix; SQL ANSI com dialeto isolado — `docs/arquitetura/CR-001-multiplataforma-e-sql-ansi.md`).
+* Atue como **Engenheiro de Software Sênior e DBA Oracle**, com foco em Python 3.6+, web2py, Oracle 11gR2+ e portabilidade do agente (Windows, Linux e Unix — `docs/arquitetura/CR-001-multiplataforma-e-sql-ansi.md`). Banco **somente Oracle**, com SQL 11gR2 e driver adaptativo (`docs/arquitetura/CR-002-oracle-unico-e-driver-adaptativo.md`).
 * **Escopo:**
   * Implemente **somente** o subitem solicitado.
   * Não refatore, renomeie nem "melhore" código fora do escopo.
@@ -51,17 +51,18 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 
 * Proibido `pip install` e qualquer dependência nova.
 * **Proibidos:** Celery, Redis, APScheduler, croniter, Flask, FastAPI, Django, Bottle, SQLAlchemy, Peewee, requests, o **DAL do web2py** (inclusive para auth e sessão) e `gluon.scheduler`.
-* **Exceção homologada (pré-instalada na infraestrutura):** o driver Oracle depende da versão do Python, sempre em modo **Thick** com o **Oracle Instant Client 19.x**:
+* **Exceção homologada (pré-instalada na infraestrutura):** o driver Oracle, conforme a versão do Python (CR-002):
 
-  | Python | Driver |
-  |---|---|
-  | 3.6 | `python-oracledb 1.x` (`< 2.0`) **ou** `cx_Oracle 8.3` |
-  | 3.7 a 3.13 | `python-oracledb 2.x` |
+  | Python | Driver principal (Thin ou Thick) | Contingência (Thick) |
+  |---|---|---|
+  | 3.6 | `python-oracledb 1.x` (`< 2.0`) + `cryptography <= 40.x` | `cx_Oracle 8.3` |
+  | 3.7 a 3.13 | `python-oracledb 2.x` + `cryptography` | `cx_Oracle 8.3` (até 3.10) |
 
-  * O modo Thin é proibido, porque não conecta ao 11g.
+  * Modos Thick e cx_Oracle usam o **Oracle Instant Client 19.x**.
+  * A seleção é feita por `[oracle] modo_driver` (`auto` = Thin → Thick → cx_Oracle), sempre por **sondagem em subprocesso** antes da primeira conexão do processo (README §2.3). É proibido tentar um modo e "cair" para outro dentro do mesmo processo.
+  * Erro de autenticação interrompe a cadeia (não pode consumir tentativas de login no banco).
   * É proibido chamar `init_oracle_client(lib_dir=...)` no Linux e no Unix (lá o IC vem do `ldconfig`/`LD_LIBRARY_PATH`). No Windows e no macOS, `lib_dir` vem de `oracle_client_lib_dir`.
-  * Todo acesso ao driver passa por `modules/db_conn.py`. Nenhum outro módulo pode importar `oracledb` ou `cx_Oracle`.
-  * Outro banco exige a homologação do driver dele (este documento) e um dialeto em `modules/sql_dialeto/` (§4.0).
+  * Todo acesso ao driver passa por `modules/db_conn.py` (e pela sondagem `scripts/sondar_driver.py`). Nenhum outro módulo pode importar `oracledb` ou `cx_Oracle`.
 * Partes do web2py **permitidas:** roteamento, controllers, views (templating), `gluon.current`, `session.connect(cookie_key=...)`, `HTTP`, `redirect` e `URL`. Proibidos: `SQLFORM`, `Auth`, `Crud`, `DAL` e `Field`.
 
 ### 2.3 Frontend hermético
@@ -102,7 +103,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
   * Nome final do objeto: validado contra o registro de identificadores e com `len <= 30`.
 * **Listas `IN`:** os placeholders (`:amb0, :amb1, ...`) são gerados pelo código com contagem controlada, e os valores sempre vão como binds.
 * **Binds de data** comparados a colunas de data são declarados pelo `db_conn` com o tipo de data do driver (`setinputsizes` no Oracle), sem microssegundos (README §7.5).
-* Mensagens de erro exibidas ao usuário **nunca** incluem o texto do ORA- (ou código equivalente de outro banco), SQL ou stack trace. Esses detalhes vão apenas para o log.
+* Mensagens de erro exibidas ao usuário **nunca** incluem o texto do ORA-/DPY-/DPI-, SQL ou stack trace. Esses detalhes vão apenas para o log.
 
 ### 3.2 Execução de processos
 
@@ -144,16 +145,14 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 
 ---
 
-## 4. Banco de Dados (Oracle 11gR2 como piso; SQL ANSI com dialeto)
+## 4. Banco de Dados (somente Oracle; 11gR2 como piso)
 
-0. **SQL ANSI por padrão (CR-001):**
-   * Todo SQL dos repositórios é escrito em **ANSI (SQL:2003)** desde que o Oracle 11gR2 o aceite. Por exemplo: `MERGE`; `CASE`; comparação nula-segura `(c = :v OR (c IS NULL AND :v IS NULL))` em vez de `DECODE`/`NVL`; aritmética `dt - :n * INTERVAL '1' SECOND`.
-   * Sintaxe proprietária só existe em `modules/sql_dialeto/<dialeto>.py` (`oracle11g` primeiro). Isso vale para: paginação e top-N, próximo valor de sequence, relógio do banco, `FOR UPDATE` com espera, anexar e ler LOB, LOB vazio, `FROM DUAL`, DDL de tipos, índices parciais, triggers e coleta de estatísticas.
-   * Os repositórios pedem os fragmentos ao dialeto e **nunca** escrevem `ROWNUM`, `SYSDATE`, `NEXTVAL`, `DUAL`, `DBMS_*`, `EMPTY_CLOB`, `DECODE`, `NVL` ou `WAIT n` diretamente.
-   * Os itens abaixo descrevem a forma **do dialeto `oracle11g`**, que precisa continuar rodando no 11gR2 e nas versões superiores.
+0. **SQL Oracle 11gR2 (CR-002):**
+   * Todo SQL dos repositórios fica em `modules/repo_oracle/`, escrito diretamente na sintaxe aceita pelo **Oracle 11gR2**, e precisa rodar também nas versões superiores (12c a 23ai).
+   * Permitidos: `ROWNUM`, `SYSDATE`, `seq.NEXTVAL FROM DUAL`, `FOR UPDATE WAIT n`, `DBMS_LOB.*`, `EMPTY_CLOB()`, `MERGE`, `CASE`, `NVL` e `DECODE`. Prefira `CASE` quando ele deixar a intenção mais clara.
 
 1. **30 caracteres:** todo identificador (tabela, coluna, sequence, trigger, constraint, índice) tem no máximo 30 caracteres **após a expansão do prefixo**. Os nomes vêm exclusivamente do registro em `modules/sql_ident.py`.
-2. **PK:** a aplicação **sempre informa o `id`**, obtido de `dialeto.proximo_id(sequence)`. No `oracle11g` existe também uma `SEQUENCE` + trigger `BEFORE INSERT` condicional (defesa para inserções manuais), conforme este template **literal**:
+2. **PK:** a aplicação **sempre informa o `id`**, obtido de `seq.NEXTVAL` antes do `INSERT`. Existe também uma `SEQUENCE` + trigger `BEFORE INSERT` condicional (defesa para inserções manuais), conforme este template **literal**:
    ```sql
    CREATE OR REPLACE TRIGGER {owner}.{trigger_name}
    BEFORE INSERT ON {owner}.{table_name}
@@ -166,20 +165,20 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
    /
    ```
    A atribuição `:NEW.id := seq.NEXTVAL` também é proibida: o 11g a aceita, mas o template acima é o padrão único.
-3. **Sintaxe 12c+ proibida no dialeto `oracle11g`** (um dialeto futuro para 12c+ ou ANSI 2008 pode usá-la):
+3. **Sintaxe 12c+ proibida** (verificada por `test_sql_oracle11g.py`):
    * `GENERATED ... AS IDENTITY`, `OFFSET`, `FETCH FIRST`, `DEFAULT seq.NEXTVAL`;
    * `JSON_VALUE`, `JSON_TABLE` e `IS JSON`;
    * `LATERAL`, `CROSS APPLY` e `OUTER APPLY`;
    * `VARCHAR2(32767)` em SQL, `LISTAGG ... ON OVERFLOW` e `WITH FUNCTION`;
    * coluna invisível e índice parcial nativo (use índice baseado em função com `CASE`).
-4. **Paginação:** sempre via `dialeto.paginar(sql_ordenado, inicio, fim)`. No `oracle11g`, gera a subquery com `ROWNUM`:
+4. **Paginação:** sempre com a subquery de `ROWNUM`:
    ```sql
    SELECT * FROM (
      SELECT a.*, ROWNUM rn FROM (<query ordenada>) a WHERE ROWNUM <= :fim
    ) WHERE rn > :inicio
    ```
 5. **JSON:** é parseado e gerado **apenas em Python** (`json`). O banco armazena o texto em CLOB e nunca o interpreta.
-6. **Texto:** colunas textuais `VARCHAR(N)` lógicas, geradas pelo dialeto (`VARCHAR2(N CHAR)` no `oracle11g`), e flags com `CHAR(1)` + CK `IN ('S','N')`.
+6. **Texto:** colunas textuais `VARCHAR2(N CHAR)` e flags com `CHAR(1)` + CK `IN ('S','N')`.
 7. **FKs:** toda FK filha tem índice cuja coluna líder é a FK. Uma UK composta cobre apenas a sua coluna líder.
 8. **Índices baseados em função** (`ix_tbsss_tck_fila`, `ix_tbsss_tck_run`): as queries devem repetir a expressão `CASE` **textualmente idêntica** à do índice.
 9. **Transações:**
@@ -188,9 +187,9 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
    * É proibido `COMMIT` dentro de laço de linhas, exceto nos lotes do `purge.py`.
    * É proibido manter transação aberta durante I/O externo ou espera (sleep, `Popen.wait`). O claim faz commit **antes** do spawn.
 10. **Locks:**
-    * Lock de linha sempre via `dialeto.para_atualizar(espera_s)`, com espera de no máximo 5 s (`FOR UPDATE WAIT n` no `oracle11g`; nos outros bancos, `FOR UPDATE` com timeout de lock na sessão).
+    * Lock de linha sempre com `FOR UPDATE WAIT n`, com espera de no máximo 5 s.
     * A ordem de aquisição é a do README §8.3 e não pode ser invertida.
-    * Timeout de lock e deadlock (ORA-00054, ORA-30006, ORA-00060 ou equivalentes, mapeados pelo `db_conn`) levam a `ROLLBACK`, log WARN e continuação.
+    * Timeout de lock e deadlock (ORA-00054, ORA-30006, ORA-00060, mapeados pelo `db_conn` para cada driver e modo) levam a `ROLLBACK`, log WARN e continuação.
 11. **Concorrência:**
     * Toda transição de estado é um `UPDATE` condicional (`WHERE status = ... AND agente_id = ...`), com checagem obrigatória de `rowcount`.
     * Ignorar `rowcount` é defeito.
@@ -200,10 +199,10 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
     * Use `executemany` para inserções em lote.
     * Toda query nova da fila, do claim, do heartbeat ou do purge tem o `EXPLAIN PLAN` registrado no PR, sem `TABLE ACCESS FULL` nas tabelas de ticket.
 13. **LOB:**
-    * Escrita incremental via `dialeto.lob_anexar` (`DBMS_LOB.WRITEAPPEND` no `oracle11g`, README §8.10).
-    * Leitura com offset via `dialeto.lob_ler` (locator no `oracle11g`).
+    * Escrita incremental com `DBMS_LOB.WRITEAPPEND` (README §8.10).
+    * Leitura com offset por locator ou `DBMS_LOB.SUBSTR`.
     * É proibido reescrever o CLOB inteiro e proibido carregar `log_output` completo em listagens.
-14. **DDL:** é gerada pelo dialeto a partir do registro de `sql_ident` e executada exclusivamente por `scripts/init_db.py`, que é idempotente (README §11). Nenhum arquivo em `models/` ou `modules/` executa DDL. O limite de 30 caracteres por identificador vale para todos os dialetos.
+14. **DDL:** é gerada a partir do registro de `sql_ident` e executada exclusivamente por `scripts/init_db.py`, que é idempotente (README §11). Nenhum arquivo em `models/` ou `modules/` executa DDL.
 
 ---
 
@@ -218,10 +217,10 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 5. **Separação de camadas:**
    * Controllers não contêm SQL nem regra de negócio. Eles validam a requisição, chamam services/módulos e renderizam.
    * Contratos de persistência ficam em `modules/repo_*.py`: classes abstratas, sem SQL.
-   * **SQL reside apenas em `modules/repo_sql/`** (genérico, ANSI), e os fragmentos proprietários só em `modules/sql_dialeto/`.
+   * **SQL reside apenas em `modules/repo_oracle/`** (Oracle 11gR2) e em `scripts/init_db.py` (DDL).
    * `modules/repo_fake/` implementa o mesmo contrato em memória, com paridade de semântica (README §2.5). É proibido adicionar ao FAKE um método que não exista no contrato.
-   * Controllers e services obtêm repositórios **somente** via `repo_factory`. É proibido importar `repo_fake` ou `repo_sql` diretamente.
-   * **Exceção — repositórios internos de processos batch:** `modules/repo_sql/scheduler_*.py` (fila, agenda e log) e `modules/repo_sql/purge.py` não fazem parte do contrato da UI e não têm versão FAKE. Eles são importados diretamente **apenas** por `scheduler_loop.py`, `log_pump.py` e `scripts/purge.py`, todos processos que exigem banco real (README §2.5).
+   * Controllers e services obtêm repositórios **somente** via `repo_factory`. É proibido importar `repo_fake` ou `repo_oracle` diretamente.
+   * **Exceção — repositórios internos de processos batch:** `modules/repo_oracle/scheduler_*.py` (fila, agenda e log) e `modules/repo_oracle/purge.py` não fazem parte do contrato da UI e não têm versão FAKE. Eles são importados diretamente **apenas** por `scheduler_loop.py`, `log_pump.py` e `scripts/purge.py`, todos processos que exigem banco real (README §2.5).
    * Regras de negócio residem em `modules/` (rbac, params_compiler, recurrence, executor, *_service).
    * **Trava de ambiente:** `data_backend = FAKE` fora de `sss_env = DEV` aborta a subida. O daemon aborta com FAKE.
 6. **Daemon:** o `scripts/run_scheduler.py` é o único entrypoint do scheduler. É proibido iniciar threads, timers ou o scheduler a partir de controllers ou models.
@@ -238,9 +237,9 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **Graceful shutdown:**
   * Handlers de SIGTERM/SIGINT (POSIX) e SIGBREAK/SIGINT (Windows) apenas acionam uma flag. O arquivo `work_dir/sss-<agent_id>.stop`, verificado a cada ciclo, tem o mesmo efeito em todas as plataformas.
   * O fechamento de conexão, lock file e descritores ocorre em `finally`.
-* **Reconexão:** só o `db_conn.py` decide reconectar, seguindo a lista de erros (mapeada por driver) e o *backoff* do README §2.3.
+* **Reconexão:** só o `db_conn.py` decide reconectar, seguindo a lista de erros (mapeada por driver e modo) e o *backoff* do README §2.3.
 * **Tempo:**
-  * Agendamento e tempo de negócio usam o relógio do banco (`dialeto.agora()`, que é `SYSDATE` no `oracle11g`).
+  * Agendamento e tempo de negócio usam o relógio do banco (`SYSDATE`).
   * Intervalos internos usam `time.monotonic()`.
   * É proibido `datetime.now()` em lógica de agendamento, heartbeat ou timeout.
 
@@ -250,7 +249,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 
 1. Framework **exclusivamente** `unittest`, executado a partir do diretório da aplicação: `python -m unittest discover -s scripts -p "test_*.py"`. O `pytest` é proibido.
    * `scripts/_testenv.py` ajusta o `sys.path` para a aplicação (`modules/`) e para a raiz do web2py (`gluon`). Todo teste o importa primeiro.
-   * Módulos de lógica pura (`params_compiler`, `cron_parser`, `recurrence`, `path_guard`, `env_builder`, `masking`, `security`, `rbac`, `sql_dialeto`) **não importam `gluon`**. Isso permite testá-los sem o framework.
+   * Módulos de lógica pura (`params_compiler`, `cron_parser`, `recurrence`, `path_guard`, `env_builder`, `masking`, `security`, `rbac`) **não importam `gluon`**. Isso permite testá-los sem o framework.
 2. Testes que dependem de banco real devem usar mocks da interface de `db_conn` **ou** se marcar com `@unittest.skipUnless(os.environ.get('SSS_TEST_DSN'), ...)`. Nesse caso, o veredito do relatório é `NÃO TESTADO` para a parte de banco.
    * **Plataforma:** a implementação da plataforma corrente é testada de verdade. A da outra plataforma é testada com dublês da API nativa e também marcada com `skipUnless(sys.platform ...)` para a execução real. Sem um runner Windows, as partes Windows saem como `NÃO TESTADO` no relatório (CR-001, D9).
 3. Os testes rodam em Python real, no mínimo na **3.6.0** (mínima suportada) e na **3.6.8** (referência de produção). Recomenda-se rodar também na mais nova disponível (3.13). Sem nenhum Python 3.6.x no ambiente, o veredito máximo é `NÃO TESTADO`, e o motivo deve constar nas observações.
@@ -258,7 +257,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 
 | Arquivo | Cobertura obrigatória |
 |---|---|
-| `test_repo_contract.py` | A mesma bateria contra FAKE (sempre) e ORACLE (com `SSS_TEST_DSN`): CRUD, unicidade, transições condicionais com `RepoConflito`, cascatas, imutabilidade de `nome`/`login`, paginação e ordenação |
+| `test_repo_contract.py` | A mesma bateria contra FAKE (sempre) e ORACLE (com `SSS_TEST_DSN`), em cada combinação de driver disponível — Thin (banco 12.1+), Thick e cx_Oracle (CR-002, D5): CRUD, unicidade, transições condicionais com `RepoConflito`, cascatas, imutabilidade de `nome`/`login`, paginação e ordenação |
 | `test_db_schema.py` | Todo identificador do registro com `len <= 30` usando o prefixo configurado **e** o pior caso de 8 caracteres; todo nome em ASCII; toda FK com índice de coluna líder; toda tabela com trigger no template condicional |
 | `test_py36_compat.py` | `ast.parse(..., feature_version)` ou compilação com 3.6 em todos os `.py`; busca por tokens proibidos (§2.1), `shell=True`, `os.system`, `eval(`, `exec(`, `pickle`, `XML(`, `x-html`, URLs `http(s)://` em `static/` e `views/` |
 | `test_path_guard.py` | Escape com `..`, symlink para fora da base, prefixo irmão (`/opt/x/scripts_evil`), caminho igual à base, diretório em vez de arquivo, arquivo gravável por grupo ou outros, interpretador fora da allowlist |
@@ -270,7 +269,8 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 | `test_rbac.py` | Matriz de `pode_executar` (admin, perfil inativo, sem homologação, sem `EXEC_SCRIPT`); proteção do último admin (mock) |
 | `test_executor.py` | Spawn real de script de teste (`/bin/sh` no POSIX, `PYTHON3` no Windows) em diretório temporário; saída em arquivo sem PIPE; geração de mais de 1 MB de saída sem travar; timeout; encerramento escalonado matando também o neto; conversão de `returncode` negativo |
 | `test_plataforma.py` | Por plataforma: grupo e encerramento escalonado, identidade do processo (`starttime` ou `CreationTime`) contra PID reciclado, lock de instância, recusa de root ou de elevação, dono e permissão (modo ou ACL) de segredos e da árvore de scripts, resolução de link e junction no Windows |
-| `test_sql_dialeto.py` | Para cada dialeto: paginação, top-N, próximo id, relógio, lock com espera, anexar e ler LOB, DDL de tipos e índices parciais; nenhum fragmento proprietário fora do dialeto (varredura de `repo_sql/`) |
+| `test_sql_oracle11g.py` | Varredura de `repo_oracle/` e `scripts/init_db.py`: nenhuma sintaxe 12c+ (§4.3); `FOR UPDATE` sempre com `WAIT n` (n ≤ 5); nenhum `SELECT *` |
+| `test_db_conn.py` | Com módulos falsos de driver: cadeia `auto` Thin → Thick → cx_Oracle, parada em erro de autenticação, valores forçados, senha fora de argv/ambiente/log, mapa de erros por driver e modo |
 
 5. Cada correção de defeito acompanha um teste de regressão.
 
@@ -279,9 +279,9 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 ## 8. Checklist Obrigatório antes de Entregar
 
 - [ ] Nenhum recurso de Python posterior à 3.6.0 nem módulo removido nas versões novas (§2.1).
-- [ ] Nenhuma dependência nova; o driver só é importado em `db_conn.py`.
-- [ ] SQL: ANSI por padrão; sintaxe proprietária só em `sql_dialeto/`; apenas binds e identificadores via `sql_ident`; sem sintaxe 12c+ no `oracle11g`; `rowcount` checado em toda transição.
-- [ ] Toda transação com `COMMIT`/`ROLLBACK` explícitos; lock de linha via `dialeto.para_atualizar` com espera ≤ 5 s.
+- [ ] Nenhuma dependência nova; o driver só é importado em `db_conn.py` e `sondar_driver.py`.
+- [ ] SQL: só em `repo_oracle/` e `init_db.py`; Oracle 11gR2 sem sintaxe 12c+; apenas binds e identificadores via `sql_ident`; `rowcount` checado em toda transição.
+- [ ] Toda transação com `COMMIT`/`ROLLBACK` explícitos; lock de linha com `FOR UPDATE WAIT n` (n ≤ 5).
 - [ ] Nenhum identificador novo acima de 30 caracteres; registro de identificadores atualizado.
 - [ ] Processos: primitivas de SO só em `plataforma/`; allowlist lógica (sem `cmd`/`.bat` no Windows), `path_guard`, `env_builder`, sem PIPE e encerramento escalonado.
 - [ ] Web: guarda de login/RBAC, CSRF em POST, saída escapada, sem `XML()` com dado.

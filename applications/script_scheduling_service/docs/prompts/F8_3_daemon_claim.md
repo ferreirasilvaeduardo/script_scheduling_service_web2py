@@ -3,7 +3,7 @@
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §3.2, §4.9–4.11, §5.6, §6
 - `README.md` §3.1, §5.1, §5.2, §5.6 (parte do agente), §8.1–8.4, §8.7, §8.10, §8.11 (apenas a parte de sinais; o resto é F8.4), §8.12 (inteiro), §10 (tabelas 13 e 15)
-- Arquivos: `modules/executor.py`, `modules/env_builder.py`, `modules/log_pump.py`, `modules/params_compiler.py` (`validar_snapshot`), `modules/oracle_conn.py`, `modules/sql_ident.py`
+- Arquivos: `modules/executor.py`, `modules/env_builder.py`, `modules/log_pump.py`, `modules/params_compiler.py` (`validar_snapshot`), `modules/db_conn.py`, `modules/sql_ident.py`
 
 ## Objetivo
 Colocar o agente executor de pé: inicialização fail-fast, claim concorrente seguro, execução, heartbeat, coleta de log, cancelamento, timeout e finalização.

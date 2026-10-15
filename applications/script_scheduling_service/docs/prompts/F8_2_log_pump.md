@@ -3,7 +3,7 @@
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §4.13, §6
 - `README.md` §5.2 (`LOG_LIMIT`), §8.10 (inteiro), §12.1 (`[logging]`)
-- Arquivos: `modules/masking.py` (`MascaradorFluxo`), `modules/oracle_conn.py`, `modules/executor.py`
+- Arquivos: `modules/masking.py` (`MascaradorFluxo`), `modules/db_conn.py`, `modules/executor.py`
 
 ## Objetivo
 Transferir o log local do ticket para `log_output` de forma incremental, mascarada, sem cortar caracteres multibyte e com limites que protegem o banco e o disco.
