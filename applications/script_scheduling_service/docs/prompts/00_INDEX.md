@@ -17,7 +17,7 @@
 
 | Item | Detalhe |
 |---|---|
-| Python 3.6 | `pyenv install 3.6.15`. Em Apple Silicon, use um shell x86_64 (Rosetta) ou um container Linux x86_64 |
+| Python 3.6 | **3.6.8** (versão de referência, igual ao `python36` de produção), com `pyenv global 3.6.8`. Em GCC ≥ 11 ou OpenSSL 3, siga a receita de `docs/AMBIENTE_DEV.md` §1.1 (patch bpo-27987 e OpenSSL 1.1.1w local). Em Apple Silicon, use um shell x86_64 (Rosetta) ou um container Linux x86_64 |
 | web2py | Versão homologada, descompactada na raiz do repositório (`web2py.py` na raiz) |
 | Bootstrap 5.3.8 | `bootstrap.min.css` e `bootstrap.bundle.min.js` copiados para `applications/script_scheduling_service/static/bootstrap/` |
 | Alpine.js (build CSP) | Pacote `@alpinejs/csp`, arquivo minificado copiado para `applications/script_scheduling_service/static/js/alpine.min.js` |

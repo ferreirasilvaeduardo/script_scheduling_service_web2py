@@ -20,20 +20,46 @@ Recomenda-se o uso do `pyenv` para gerenciamento da versão do Python:
        libncursesw5-dev xz-utils curl
    ```
 
-2. Instale o Python 3.6.15:
+2. Instale o **Python 3.6.8**, a versão de referência do projeto. É a do pacote `python36` do RHEL/Oracle Linux usado em produção.
+
+   Em distribuições recentes, a 3.6.8 **não compila direto** com `pyenv install 3.6.8`, por dois motivos:
+   * **GCC 11 ou mais novo:** dá segfault no `ensurepip` durante a instalação, por um bug de alinhamento de memória (bpo-27987) que só foi corrigido na 3.6.15;
+   * **OpenSSL 3 do sistema:** a 3.6.8 não reconhece essa versão, e o `_hashlib` não é compilado. O projeto exige `hashlib.pbkdf2_hmac` via OpenSSL para as senhas.
+
+   Receita testada no Ubuntu 24.04 (GCC 13, OpenSSL 3), sem `sudo` e sem alterar o sistema:
    ```bash
-   pyenv install 3.6.15
+   # 2.1 OpenSSL 1.1.1w local (somente para o build do Python)
+   mkdir -p ~/.local/src && cd ~/.local/src
+   curl -fsSLO https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1w/openssl-1.1.1w.tar.gz
+   echo "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8  openssl-1.1.1w.tar.gz" | sha256sum -c -
+   tar xzf openssl-1.1.1w.tar.gz && cd openssl-1.1.1w
+   ./config --prefix=$HOME/.local/openssl-1.1.1w --openssldir=$HOME/.local/openssl-1.1.1w \
+       shared zlib -Wl,-rpath,$HOME/.local/openssl-1.1.1w/lib
+   make -j"$(nproc)" && make install_sw
+
+   # 2.2 Patch oficial do bpo-27987 (os mesmos arquivos que o pyenv aplica na 3.6.15)
+   P=$(pyenv root)/plugins/python-build/share/python-build/patches/3.6.15/Python-3.6.15
+   cat "$P"/0009-bpo-27987-*.patch "$P"/0010-bpo-27987-*.patch > /tmp/py368_bpo27987.patch
+
+   # 2.3 Python 3.6.8 com o patch e o OpenSSL 1.1.1w
+   O=$HOME/.local/openssl-1.1.1w
+   CPPFLAGS="-I$O/include" LDFLAGS="-L$O/lib -Wl,-rpath,$O/lib" \
+       pyenv install --patch 3.6.8 < /tmp/py368_bpo27987.patch
    ```
 
-3. Configure a versão para o repositório ou terminal:
+   Em distribuições com GCC 10 ou anterior e OpenSSL 1.1 (ex.: Ubuntu 20.04, RHEL 8), basta `pyenv install 3.6.8`. A 3.6.15 compila direto com `pyenv install 3.6.15` e serve como alternativa, mas a referência de validação é a 3.6.8.
+
+3. Configure a versão padrão:
    ```bash
-   pyenv local 3.6.15
+   pyenv global 3.6.8
    ```
 
-4. Valide a versão ativa:
+4. Valide a versão ativa e os módulos críticos:
    ```bash
    python --version
-   # Saída esperada: Python 3.6.15
+   # Saída esperada: Python 3.6.8
+   python -c "import ssl, hashlib, _hashlib, sqlite3; print(ssl.OPENSSL_VERSION, hashlib.pbkdf2_hmac is _hashlib.pbkdf2_hmac)"
+   # Saída esperada: OpenSSL 1.1.1w  11 Sep 2023 True
    ```
 
 ### 1.2 Nota sobre Apple Silicon (macOS ARM64)
@@ -47,7 +73,7 @@ Para desenvolver em computadores Apple Silicon, adote uma das seguintes abordage
   ```bash
   arch -x86_64 zsh
   ```
-  Nessa sessão, utilize o `pyenv` configurado para arquitetura x86_64 para compilar e executar o Python 3.6.15 sob Rosetta 2.
+  Nessa sessão, utilize o `pyenv` configurado para arquitetura x86_64 para compilar e executar o Python 3.6.8 (ou a 3.6.15, se o build da 3.6.8 falhar) sob Rosetta 2.
 * **Container Linux x86_64 (Recomendado):**
   Utilize um container Docker ou Podman emulado para Linux x86_64 (`--platform linux/amd64`) com Ubuntu 18.04/20.04 ou Debian Buster/Bullseye, onde o Python 3.6 compila e roda de forma estável.
 
