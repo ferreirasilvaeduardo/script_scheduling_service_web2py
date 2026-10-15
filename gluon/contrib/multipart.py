@@ -33,7 +33,6 @@ import re
 from io import BufferedRandom, BytesIO
 from typing import (
     Generator,
-    AsyncGenerator,
     Union,
     Optional,
     Tuple,
@@ -48,6 +47,16 @@ from collections.abc import MutableMapping as DictMixin
 import tempfile
 import functools
 import typing
+
+try:
+    from typing import AsyncGenerator
+except ImportError:
+    # SSS: typing.AsyncGenerator surgiu na 3.6.1; na 3.6.0 a anotacao vira AsyncIterator.
+    class _AsyncGeneratorCompat(object):
+        def __getitem__(self, _params):
+            return typing.AsyncIterator
+
+    AsyncGenerator = _AsyncGeneratorCompat()
 from math import inf
 
 # Type Aliases (internal use only)

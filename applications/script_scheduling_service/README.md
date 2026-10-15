@@ -24,7 +24,10 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 
 ### 2.1 Linguagem e framework
 
-* **Python 3.6** com o framework **web2py**. A versão do web2py é homologada e fixada no repositório.
+* **Python 3.6.0 ou superior** com o framework **web2py**.
+  * A sintaxe e a biblioteca padrão usadas são as da 3.6.0.
+  * As versões validadas vão da 3.6.0 à 3.13, e a 3.6.8 é a referência de produção (AGENTS §2.1).
+  * A versão do web2py é homologada e fixada no repositório. O `gluon/contrib/multipart.py` tem uma proteção local de import para rodar na 3.6.0 (`typing.AsyncGenerator` só existe a partir da 3.6.1).
 * É proibido usar recursos de Python 3.7+. A lista normativa completa está no `AGENTS.md` §2.1.
 
 ### 2.2 Banco de dados

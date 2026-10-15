@@ -24,9 +24,9 @@ Regras **obrigatórias e inegociáveis** para qualquer agente de IA ou desenvolv
 
 ## 2. Runtime e Dependências
 
-### 2.1 Python 3.6 estrito
+### 2.1 Python: sintaxe 3.6, execução em 3.6.0 ou superior
 
-O código deve compilar e rodar em **CPython 3.6**. É proibido usar:
+O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões validadas vão da **3.6.0** (mínima) à **3.13**, e a **3.6.8** é a versão de referência de produção. A sintaxe e a biblioteca padrão permitidas são as da **3.6.0**. É proibido usar:
 
 | Versão | Recurso proibido |
 |---|---|
@@ -36,6 +36,11 @@ O código deve compilar e rodar em **CPython 3.6**. É proibido usar:
 | 3.10+ | `match`/`case`, `X | Y` em tipos, `zip(strict=True)`, `itertools.pairwise` |
 
 **Permitidos** (existem no 3.6): f-strings simples, `secrets`, `pathlib`, `typing` básico (`List`, `Dict`, `Optional`), `hmac.compare_digest`, `re.fullmatch`, `os.path.commonpath`, `subprocess.DEVNULL`, `time.monotonic()`.
+
+**Compatibilidade nas duas pontas:**
+
+* **Mínimo (3.6.0):** não use nada que tenha surgido em versões de correção posteriores (3.6.1 em diante). Por exemplo, `typing.AsyncGenerator` só existe a partir da 3.6.1; o web2py do repositório recebeu uma proteção de import para isso em `gluon/contrib/multipart.py`.
+* **Máximo (3.13):** é proibido depender de módulos removidos ou depreciados nas versões novas (`cgi`, `cgitb`, `imp`, `asyncore`, `asynchat`, `distutils`, `smtpd`, `telnetlib`, `pipes`, `crypt`).
 
 **Atenção a comportamentos:**
 
@@ -229,7 +234,7 @@ O código deve compilar e rodar em **CPython 3.6**. É proibido usar:
    * `scripts/_testenv.py` ajusta o `sys.path` para a aplicação (`modules/`) e para a raiz do web2py (`gluon`). Todo teste o importa primeiro.
    * Módulos de lógica pura (`params_compiler`, `cron_parser`, `recurrence`, `path_guard`, `env_builder`, `masking`, `security`, `rbac`) **não importam `gluon`**. Isso permite testá-los sem o framework.
 2. Testes que dependem de Oracle real devem usar mocks da interface de `oracle_conn` **ou** se marcar com `@unittest.skipUnless(os.environ.get('SSS_TEST_DSN'), ...)`. Nesse caso, o veredito do relatório é `NÃO TESTADO` para a parte de banco.
-3. Os testes rodam em Python 3.6 real. Se o ambiente não tiver 3.6, o veredito máximo é `NÃO TESTADO` e o motivo deve constar nas observações.
+3. Os testes rodam em Python real, no mínimo na **3.6.0** (mínima suportada) e na **3.6.8** (referência de produção). Recomenda-se rodar também na mais nova disponível (3.13). Sem nenhum Python 3.6.x no ambiente, o veredito máximo é `NÃO TESTADO`, e o motivo deve constar nas observações.
 4. **Testes obrigatórios mínimos:**
 
 | Arquivo | Cobertura obrigatória |

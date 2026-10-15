@@ -2,17 +2,17 @@
 """Verificador de ambiente e pre-requisitos do SSS.
 
 CLI de verificacao de ambiente sem efeitos colaterais (somente leitura).
-Executa fail-fast caso a versao do Python nao seja 3.6 ou caso algum
-recurso obrigatorio esteja ausente ou invalido.
+Executa fail-fast caso a versao do Python seja anterior a 3.6.0 ou caso algum
+recurso obrigatorio esteja ausente ou invalido (AGENTS §2.1: sintaxe 3.6, execucao em >= 3.6.0).
 """
 import os
 import re
 import sys
 
-# 1. Verificacao estrita de runtime: Python 3.6 obrigatorio
-if sys.version_info[:2] != (3, 6):
+# 1. Verificacao de runtime: Python 3.6.0 ou superior
+if sys.version_info[:3] < (3, 6, 0):
     sys.stderr.write(
-        "FALHA: Python 3.6 e obrigatorio. Versao detectada: %d.%d.%d\n"
+        "FALHA: Python 3.6.0 ou superior e obrigatorio. Versao detectada: %d.%d.%d\n"
         % (sys.version_info[0], sys.version_info[1], sys.version_info[2])
     )
     sys.exit(2)
@@ -209,7 +209,7 @@ def main():
 
     # Item 1: Versao do Python
     results.append((
-        "Versao do Python (3.6)",
+        "Versao do Python (>= 3.6.0)",
         "OK",
         "%d.%d.%d" % sys.version_info[:3],
     ))
