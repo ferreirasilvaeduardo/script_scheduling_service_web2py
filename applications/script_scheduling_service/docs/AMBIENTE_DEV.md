@@ -29,8 +29,9 @@ Recomenda-se o uso do `pyenv` para gerenciamento da versão do Python:
    Receita testada no Ubuntu 24.04 (GCC 13, OpenSSL 3), sem `sudo` e sem alterar o sistema:
    ```bash
    # 2.1 OpenSSL 1.1.1w local (somente para o build do Python)
+   # Baixe openssl-1.1.1w.tar.gz da página de releases oficial do projeto OpenSSL (tag OpenSSL_1_1_1w)
+   # para ~/.local/src e confira o SHA-256 antes de extrair.
    mkdir -p ~/.local/src && cd ~/.local/src
-   curl -fsSLO https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1w/openssl-1.1.1w.tar.gz
    echo "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8  openssl-1.1.1w.tar.gz" | sha256sum -c -
    tar xzf openssl-1.1.1w.tar.gz && cd openssl-1.1.1w
    ./config --prefix=$HOME/.local/openssl-1.1.1w --openssldir=$HOME/.local/openssl-1.1.1w \
