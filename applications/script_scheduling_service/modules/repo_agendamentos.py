@@ -13,20 +13,35 @@ class RepoAgendamentos(object):
         """Retorna dict com dados do agendamento ou lanca RepoNaoEncontrado."""
         raise NotImplementedError
 
-    def inserir(self, dados):
-        """Insere novo agendamento e retorna dict com o registro criado."""
+    def inserir(self, dados, auditoria=None):
+        """Insere novo agendamento e retorna dict com o registro criado.
+
+        Aplica as CKs da tabela (README §10, tabela 12) e grava `auditoria` (dict ator, ip, acao,
+        detalhe) na mesma operacao.
+        """
         raise NotImplementedError
 
-    def alterar(self, id, dados):
-        """Atualiza agendamento (com usuario_id do editor) e retorna dict atualizado."""
+    def alterar(self, id, dados, esperado=None, auditoria=None):
+        """Atualiza agendamento (com usuario_id do editor) e retorna dict atualizado.
+
+        UPDATE condicional aos valores lidos em `esperado` (RepoConflito se divergirem), CKs
+        aplicadas ao registro resultante e `auditoria` gravada na mesma operacao.
+        """
         raise NotImplementedError
 
-    def pausar(self, id, motivo, antiga_data=None):
-        """Pausa o agendamento de forma otimista, checando antiga_data se informada."""
+    def pausar(self, id, motivo, antiga_data=None, auditoria=None):
+        """Pausa o agendamento de forma otimista, checando antiga_data se informada (README §7.5 passo 7).
+
+        Audita AGD_PAUSAR na mesma operacao: com `auditoria` (ator e ip da UI) ou, sem ela, como SYSTEM.
+        """
         raise NotImplementedError
 
-    def retomar(self, id, nova_data):
-        """Retoma agendamento pausado, limpando pausa_motivo e definindo proxima_execucao."""
+    def retomar(self, id, nova_data, esperado=None, auditoria=None):
+        """Retoma agendamento pausado: ativo = 'S', pausa_motivo nulo e proxima_execucao = nova_data.
+
+        UPDATE condicional aos valores lidos em `esperado` (RepoConflito se divergirem) e `auditoria`
+        gravada na mesma operacao.
+        """
         raise NotImplementedError
 
     def ticket_status(self, ticket_id):

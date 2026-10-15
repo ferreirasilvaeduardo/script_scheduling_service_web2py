@@ -1,0 +1,92 @@
+{{extend 'layout.html'}}
+{{
+# Lista de regras de agendamento (README §7; padrão de lista em docs/PADRAO_CRUD_ADMIN.md).
+# Pausar e retomar abrem components/modal_confirmacao.html com POST real.
+import ui_helpers
+icones = URL('static', 'img/icons.svg')
+_opc_ativo = [('', 'Todas'), ('S', 'Ativas'), ('N', 'Pausadas')]
+filtros = {'id': 'filtro-agendamentos', 'url_base': ('agendamentos', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': [
+    {'nome': 'nome', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('nome')},
+    {'nome': 'ambiente', 'rotulo': 'Ambiente', 'tipo': 'texto', 'valor': filtros_ativos.get('ambiente')},
+    {'nome': 'ativo', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('ativo'), 'opcoes': _opc_ativo},
+]}
+_colunas = ('Nome', 'Script', 'Ambiente', u'Recorrência', u'Próxima execução', u'Última execução', u'Responsável', u'Situação', u'Ações')
+pagina = resultado['pagina']
+total = resultado['total']
+url_base = ('agendamentos', 'lista')
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">Regras de agendamento</h1>
+    <p class="sss-page-sub">Execuções recorrentes. Cada regra roda com as permissões de quem a salvou por último.</p>
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-primary" href="{{=URL(c='agendamentos', f='form')}}">Nova regra</a>
+  </div>
+</div>
+
+<section class="sss-card" aria-label="Filtros">
+  {{include 'components/filtros.html'}}
+</section>
+
+<section class="sss-card" aria-label="Regras de agendamento">
+  <div class="table-responsive">
+    <table class="table table-sm sss-tabela mb-0">
+      <caption class="visually-hidden">Regras de agendamento cadastradas</caption>
+      <thead>
+        <tr>
+          {{for _col in _colunas:}}<th scope="col">{{=_col}}</th>{{pass}}
+        </tr>
+      </thead>
+      <tbody>
+        {{if erro:}}
+        <tr>
+          <td colspan="{{=len(_colunas)}}" class="sss-tabela-estado">
+            <div class="alert alert-danger mb-0" role="alert">
+              <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
+              <span>{{=erro}}</span>
+            </div>
+          </td>
+        </tr>
+        {{elif not resultado['itens']:}}
+        <tr><td colspan="{{=len(_colunas)}}" class="sss-tabela-estado sss-tabela-vazia">Nenhuma regra de agendamento encontrada.</td></tr>
+        {{else:}}
+        {{for _r in resultado['itens']:}}
+        {{_sit = ui_helpers.ativo_info(_r['ativo'])}}
+        <tr>
+          <td>{{=_r['nome']}}</td>
+          <td class="sss-mono">{{=_r['script']}}</td>
+          <td>{{=_r['ambiente']}}</td>
+          <td>{{=_r['recorrencia']}}{{if _r['expressao_cron']:}}<br><code class="sss-mono">{{=_r['expressao_cron']}}</code>{{pass}}</td>
+          <td>{{=_r['proxima_execucao']}}</td>
+          <td>{{=_r['ultima_execucao']}}{{if _r['ultimo_ticket_id']:}}<br><a href="{{=URL(c='tickets', f='detalhe', args=[_r['ultimo_ticket_id']])}}" aria-label="Ticket #{{=_r['ultimo_ticket_id']}} da última execução">ticket #{{=_r['ultimo_ticket_id']}}</a>{{pass}}</td>
+          <td class="sss-mono">{{=_r['responsavel']}}</td>
+          <td>
+            <span class="sss-status {{=_sit['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_sit['icone']}}"></use></svg><span>{{=_r['situacao']}}</span></span>
+            {{if _r['motivo']:}}<div class="sss-texto-suave">{{=_r['motivo']}}</div>{{pass}}
+          </td>
+          <td class="sss-tabela-acoes">
+            <div class="sss-acoes">
+              <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='agendamentos', f='form', args=[_r['id']])}}" aria-label="Editar regra {{=_r['nome']}}">Editar</a>
+              {{if _r['ativo'] == 'S':}}
+              {{modal = {'id': 'modal-pausar-%s' % _r['id'], 'titulo': u'Pausar regra %s' % _r['nome'],
+                         'texto': u'A regra deixa de gerar tickets até ser retomada. Tickets já criados não são afetados.',
+                         'rotulo_gatilho': 'Pausar', 'rotulo_confirmar': u'Confirmar pausa', 'variante': 'perigo',
+                         'acao': URL(c='agendamentos', f='pausar'), 'campos_ocultos': dict(id=_r['id'])} }}
+              {{else:}}
+              {{modal = {'id': 'modal-retomar-%s' % _r['id'], 'titulo': u'Retomar regra %s' % _r['nome'],
+                         'texto': u'A próxima execução será recalculada a partir de agora. Suas permissões para o script e o ambiente serão conferidas; o responsável pela regra não muda.',
+                         'rotulo_gatilho': 'Retomar', 'rotulo_confirmar': u'Confirmar retomada', 'variante': 'normal',
+                         'acao': URL(c='agendamentos', f='retomar'), 'campos_ocultos': dict(id=_r['id'])} }}
+              {{pass}}
+              {{include 'components/modal_confirmacao.html'}}
+            </div>
+          </td>
+        </tr>
+        {{pass}}
+        {{pass}}
+      </tbody>
+    </table>
+  </div>
+  {{include 'components/paginacao.html'}}
+</section>

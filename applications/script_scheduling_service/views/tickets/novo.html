@@ -109,53 +109,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
     </div>
     {{pass}}
 
-    {{if not form['campos']:}}
-    <p class="sss-texto-suave">Este script não recebe parâmetros.</p>
-    {{pass}}
-
-    {{for _c in form['campos']:}}
-    {{_cid = 'campo-' + _c['nome']
-    _desc = []
-    if _c['descricao'] or _c['padrao_texto'] is not None or (_c['sensivel'] and _c['tem_padrao']):
-        _desc.append(_cid + '-ajuda')
-    pass
-    if _c['erro']:
-        _desc.append(_cid + '-erro')
-    pass
-    _requerido = _c['obrigatorio'] and not _c['tem_padrao']
-    _invalido = ' is-invalid' if _c['erro'] else ''
-    _foco = bool(_c['erro']) and _c['nome'] == foco_campo
-    }}
-    {{if _c['tipo'] == 'CHECKBOX':}}
-    <div class="sss-form-campo mb-3">
-      <input type="hidden" name="{{=_c['nome']}}" value="false">
-      <div class="form-check">
-        <input class="form-check-input{{=_invalido}}" type="checkbox" id="{{=_cid}}" name="{{=_c['nome']}}" value="true"{{if _c['marcado']:}} checked{{pass}}{{if _desc:}} aria-describedby="{{=' '.join(_desc)}}"{{pass}}{{if _c['erro']:}} aria-invalid="true"{{pass}}{{if _foco:}} autofocus{{pass}}>
-        <label class="form-check-label" for="{{=_cid}}">{{=_c['label']}}{{if _c['obrigatorio']:}} <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span>{{pass}}</label>
-        {{if _c['erro']:}}<div class="invalid-feedback" id="{{=_cid}}-erro">{{=_c['erro']}}</div>{{pass}}
-      </div>
-      {{if '%s-ajuda' % _cid in _desc:}}<div class="form-text" id="{{=_cid}}-ajuda">{{=_c['descricao']}}{{if _c['padrao_texto'] is not None:}} Padrão: {{=_c['padrao_texto']}}.{{pass}}</div>{{pass}}
-    </div>
-    {{else:}}
-    <div class="sss-form-campo mb-3">
-      <label class="form-label" for="{{=_cid}}">{{=_c['label']}}{{if _c['obrigatorio']:}} <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span>{{pass}}</label>
-      {{if _c['tipo'] == 'SELECT':}}
-      <select class="form-select{{=_invalido}}" id="{{=_cid}}" name="{{=_c['nome']}}"{{if _desc:}} aria-describedby="{{=' '.join(_desc)}}"{{pass}}{{if _requerido:}} required aria-required="true"{{pass}}{{if _c['erro']:}} aria-invalid="true"{{pass}}{{if _foco:}} autofocus{{pass}}>
-        <option value="">{{if _c['padrao_texto'] is not None:}}Usar o padrão ({{=_c['padrao_texto']}}){{else:}}Selecione…{{pass}}</option>
-        {{for _ov, _or in _c['opcoes']:}}
-        <option value="{{=_ov}}"{{if _c['valor'] == _ov:}} selected{{pass}}>{{=_or}}</option>
-        {{pass}}
-      </select>
-      {{else:}}
-      {{_tipo_html = 'password' if _c['sensivel'] else ('date' if _c['tipo'] == 'DATE' else 'text')
-      _placeholder = '' if (_c['sensivel'] or _c['padrao_texto'] is None) else u'Padrão: %s' % _c['padrao_texto']}}
-      <input class="form-control{{=_invalido}}" type="{{=_tipo_html}}" id="{{=_cid}}" name="{{=_c['nome']}}" maxlength="500"{{if not _c['sensivel'] and _c['valor'] is not None:}} value="{{=_c['valor']}}"{{pass}}{{if _placeholder:}} placeholder="{{=_placeholder}}"{{pass}}{{if _c['sensivel']:}} autocomplete="off"{{pass}}{{if _c['tipo'] == 'NUMBER':}} inputmode="decimal" pattern="-?[0-9]{1,18}(\.[0-9]{1,6})?"{{pass}}{{if _desc:}} aria-describedby="{{=' '.join(_desc)}}"{{pass}}{{if _requerido:}} required aria-required="true"{{pass}}{{if _c['erro']:}} aria-invalid="true"{{pass}}{{if _foco:}} autofocus{{pass}}>
-      {{pass}}
-      {{if '%s-ajuda' % _cid in _desc:}}<div class="form-text" id="{{=_cid}}-ajuda">{{=_c['descricao']}}{{if _c['sensivel'] and _c['tem_padrao']:}} Valor sigiloso: deixe em branco para usar o padrão configurado.{{elif _c['padrao_texto'] is not None:}} Padrão: {{=_c['padrao_texto']}}.{{pass}}</div>{{pass}}
-      {{if _c['erro']:}}<div class="invalid-feedback" id="{{=_cid}}-erro">{{=_c['erro']}}</div>{{pass}}
-    </div>
-    {{pass}}
-    {{pass}}
+    {{include 'components/questionario.html'}}
 
     <div class="sss-form-linha">
       <div class="sss-form-campo mb-3">

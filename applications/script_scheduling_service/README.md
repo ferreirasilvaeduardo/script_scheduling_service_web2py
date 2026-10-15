@@ -752,6 +752,40 @@ Para cada regra, em **uma transação**:
 * `:antiga_data` e `:nova_data` são declarados pelo `db_conn` com o tipo de data do driver (no Oracle, `setinputsizes` com `cx_Oracle.DATETIME` ou `oracledb.DB_TYPE_DATE`).
 * Um `datetime` com microssegundos **nunca** é comparado a uma coluna `DATE`. A regra travaria silenciosamente.
 
+### 7.6 Cadastro de regras na UI (decisões do F5.2)
+
+Implementação: `controllers/agendamentos.py`, `modules/agendamentos_service.py` e `views/agendamentos/`. O questionário de parâmetros é o mesmo do disparo (`views/components/questionario.html`).
+
+* **Escolha de script e ambiente:** na inclusão, a escolha é feita em etapas e usa os mesmos filtros do disparo (§4.3.A): só aparecem scripts e ambientes em que o editor tem `pode_executar`. Por isso, quem não é admin precisa também de `EXEC_SCRIPT`.
+* **Edição (D2):** script e ambiente ficam **fixos**. Para usar outro script ou ambiente, cria-se uma nova regra.
+* **`usuario_id`:** a inclusão e a edição gravam o editor, que precisa ter `pode_executar` vigente (§10). Sem essa permissão, a operação é negada e a regra fica intacta. A tela de edição sempre avisa: "Ao salvar, esta regra passará a executar com as suas permissões."
+* **Datas:**
+  * O servidor valida as datas e as converte para `datetime` sem microssegundos.
+  * `data_inicio` é obrigatória em `UNICA`. Nos demais tipos, vazio significa "agora" (relógio do banco, truncado ao minuto) (D3).
+  * Um `data_inicio` no passado é aceito, desde que exista próxima execução.
+  * Uma regra sem próxima execução (por exemplo, `UNICA` no passado ou `data_fim` vencida) é rejeitada.
+* **Campos por tipo:** só os campos do tipo escolhido são gravados; os demais ficam nulos, como exige `ck_tbsss_agd_campos`. Na `SEMANAL`, as caixas seg–dom viram `dias_semana` em ISO ordenado (ex.: `1,3,5`).
+* **Nome da regra (D7):** obrigatório, até 60 caracteres e **sem unicidade**.
+* **`parametros_json`:**
+  * Guarda as respostas **resolvidas** (já com a precedência do §6.1 aplicada) e validadas, como objeto `{codigo: valor}` com `sort_keys`.
+  * Valores nulos são omitidos, e `CHECKBOX` é gravado como `"true"`/`"false"`.
+  * No salvamento, o snapshot completo é compilado só para validar; o daemon recompila a cada desdobro.
+* **Parâmetros sensíveis na edição:** o valor salvo nunca é reexibido. Um campo vazio mantém o valor anterior, e a tela indica isso. Na auditoria, o valor aparece como `******`, com `(alterado)` quando muda.
+* **Prioridade:** igual ao disparo (§5.3), com padrão 2. Na edição, quem não é admin não consegue manter a prioridade 1.
+* **Concorrência:** a edição usa o padrão de versão e `esperado` dos cadastros (§10). O `esperado` inclui `proxima_execucao`, então um desdobro feito entre a leitura e a gravação gera conflito.
+* **Auditoria:**
+  * A inclusão grava `CAD_INSERIR`.
+  * A edição grava `CAD_ALTERAR` e **sempre** começa por `usuario_id: <anterior> (login) → <novo> (login)`, mesmo quando o editor não muda. Sem nenhuma mudança e com o mesmo editor, nada é gravado.
+* **Pausa manual:** grava `ativo = 'N'` e `pausa_motivo = 'MANUAL'`, de forma otimista sobre `proxima_execucao` (§7.5 passo 7), e audita `AGD_PAUSAR` com o login e o IP de quem pausou.
+* **Retomada:**
+  * Revalida `pode_executar` de **quem retoma**, recalcula `proxima_execucao` a partir de agora, limpa `pausa_motivo` e grava `ativo = 'S'`. Audita `CAD_ALTERAR`.
+  * O responsável (`usuario_id`) não muda: os privilégios dele continuam sendo revalidados a cada desdobro (§7.5 passo 2).
+  * Uma regra `CONCLUIDO` só é retomada se ainda houver próxima execução (D5). Pausar uma regra já pausada, ou retomar uma ativa, gera aviso sem gravar nem auditar.
+* **Lista:**
+  * Mostra as regras dos ambientes autorizados ao perfil (admin: todas). Uma regra fora do escopo é tratada como inexistente (404).
+  * A situação aparece como "Ativo" ou "Pausado" mais o motivo (D4): Pausado manualmente, Concluída, Responsável inativo, Responsável sem permissão, Script inativo, Ambiente inativo, Parâmetros inválidos ou Expressão CRON inválida.
+* **Prévia:** um POST com CSRF devolve as próximas 5 execuções e a descrição em português, chamado com *debounce* de 500 ms. A ajuda da sintaxe CRON fica num bloco recolhível do próprio formulário (D6).
+
 ---
 
 ## 8. Motor de Execução (ciclo 2 do daemon)
@@ -1140,7 +1174,7 @@ END;
   * Ao salvar, o service relê o registro e compara a versão. Em seguida, repassa os valores lidos ao repositório, que executa `UPDATE ... WHERE id = :id AND <coluna = valor lido>` com comparação nula-segura ANSI `(c = :v OR (c IS NULL AND :v IS NULL))` e checa o `rowcount`.
   * Se a versão divergir ou o `rowcount` for 0, o resultado é `RepoConflito`, sem alteração nem auditoria. A mensagem é "O registro foi alterado por outra pessoa. Recarregue a página."
   * A linha de auditoria é gravada na mesma operação (transação) do `INSERT` ou `UPDATE`.
-* **Edição de agendamento:** ao salvar uma alteração, `usuario_id` passa a ser o **editor**, que precisa ter `pode_executar` vigente para o script e o ambiente da regra. A regra sempre roda sob os privilégios de quem a definiu por último, o que impede um usuário de reaproveitar privilégios de outro editando a regra dele. A alteração é auditada com o `usuario_id` anterior e o novo.
+* **Edição de agendamento:** ao salvar uma alteração, `usuario_id` passa a ser o **editor**, que precisa ter `pode_executar` vigente para o script e o ambiente da regra. A regra sempre roda sob os privilégios de quem a definiu por último, o que impede um usuário de reaproveitar privilégios de outro editando a regra dele. A alteração é auditada com o `usuario_id` anterior e o novo. Script e ambiente da regra não mudam na edição (§7.6).
 
 ### 1. `tbsss_ambientes`
 * PK `pk_tbsss_ambientes` · UK `uk_tbsss_amb_nome (nome)`
@@ -1324,7 +1358,7 @@ END;
   * `hora_execucao VARCHAR2(5 CHAR)`
   * `dias_semana VARCHAR2(20 CHAR)`
   * `dia_mes NUMBER(2)`
-  * `parametros_json CLOB` (objeto `{"codigo": "valor"}`)
+  * `parametros_json CLOB` (objeto `{"codigo": "valor"}` com as respostas resolvidas; §7.6)
   * `data_inicio DATE NOT NULL`
   * `data_fim DATE`
   * `proxima_execucao DATE NOT NULL`

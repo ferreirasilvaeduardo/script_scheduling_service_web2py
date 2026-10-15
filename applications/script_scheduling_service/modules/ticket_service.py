@@ -276,6 +276,10 @@ class ServicoTicket(object):
             self._negar(ctx, motivo, script["id"], amb["nome"])
         return script, amb
 
+    def autorizar(self, ctx, script_id, ambiente):
+        """(script, ambiente) recarregados do repositorio e autorizados por pode_executar; lanca AcessoNegado."""
+        return self._autorizar(ctx, script_id, ambiente)
+
     def _ambientes_executaveis(self, ctx, script):
         ambientes = []
         for aid in self._catalogo.homologacao_obter(script["id"]):

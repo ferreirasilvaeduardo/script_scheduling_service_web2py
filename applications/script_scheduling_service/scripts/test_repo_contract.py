@@ -8,7 +8,7 @@ Valida requisitos do prompt F0.4, README §2.5 e AGENTS.md §4, §5.5, §7:
 4. Imutabilidade de ambientes.nome e usuarios.login;
 5. Cascatas de associacao (matriz, script_param, homologacao);
 6. solicitar_cancelamento nos 3 retornos ('TERMINAL', 'CANCELADO', 'SINALIZADO');
-7. Transicao concorrente perdida gerando RepoConflito;
+7. Transicao concorrente perdida gerando RepoConflito; CKs, UPDATE condicional e auditoria de agendamentos;
 8. perm_versao incrementando em alteracoes de perfil, matriz e usuario;
 9. Paginacao estavel e deterministica com desempate por id;
 10. Escopo de ambientes na listagem de tickets;
@@ -402,6 +402,81 @@ class BaseRepoContractTest(object):
         pausado = agd.pausar(regra["id"], motivo="MANUAL", antiga_data=data_correta)
         self.assertEqual(pausado["ativo"], "N")
         self.assertEqual(pausado["pausa_motivo"], "MANUAL")
+
+    def test_07b_agendamento_cks_condicional_e_auditoria_na_mesma_operacao(self):
+        agd = self.obter_repo("agendamentos")
+        aud = self.obter_repo("auditoria")
+        inicio = datetime.datetime(2026, 1, 15, 10, 0)
+        base = {"nome": "Contrato AGD", "script_id": 1, "ambiente": "HOMOLOGACAO", "usuario_id": 1,
+                "prioridade": 2, "tipo_recorrencia": "DIARIA", "hora_execucao": "03:00",
+                "parametros_json": "{}", "data_inicio": inicio,
+                "proxima_execucao": datetime.datetime(2026, 1, 16, 3, 0)}
+
+        def total_aud(acao):
+            return aud.listar(filtros={"acao": acao}, pagina=1, tamanho=1)["total"]
+
+        # CKs de tbsss_agendamentos (README §10, tabela 12): nada e gravado nem auditado.
+        violacoes = [
+            ({"tipo_recorrencia": "ANUAL"}, "ck_tbsss_agd_trec"),
+            ({"prioridade": 5}, "ck_tbsss_agd_prio"),
+            ({"ativo": "X"}, "ck_tbsss_agd_ativo"),
+            ({"tipo_recorrencia": "MENSAL", "dia_mes": 32}, "ck_tbsss_agd_dia"),
+            ({"hora_execucao": "24:00"}, "ck_tbsss_agd_hora"),
+            ({"tipo_recorrencia": "SEMANAL", "dias_semana": "1,8"}, "ck_tbsss_agd_dsem"),
+            ({"data_fim": inicio - datetime.timedelta(days=1)}, "ck_tbsss_agd_fim"),
+            ({"pausa_motivo": "OUTRO"}, "ck_tbsss_agd_pausa"),
+            ({"tipo_recorrencia": "SEMANAL"}, "ck_tbsss_agd_campos"),
+            ({"tipo_recorrencia": "CRON", "hora_execucao": None}, "ck_tbsss_agd_campos"),
+        ]
+        antes_ins = total_aud("CAD_INSERIR")
+        total_regras = agd.listar(pagina=1, tamanho=1)["total"]
+        for extra, constraint in violacoes:
+            with self.assertRaises(RepoViolacao) as cm:
+                agd.inserir(dict(base, **extra),
+                            auditoria={"ator": "admin", "ip": None, "acao": "CAD_INSERIR", "detalhe": "x"})
+            self.assertEqual(cm.exception.constraint, constraint, extra)
+        self.assertEqual(agd.listar(pagina=1, tamanho=1)["total"], total_regras)
+        self.assertEqual(total_aud("CAD_INSERIR"), antes_ins)
+
+        novo = agd.inserir(base, auditoria={"ator": "admin", "ip": "10.0.0.1", "acao": "CAD_INSERIR",
+                                            "detalhe": "nome: Contrato AGD"})
+        ins = aud.listar(filtros={"acao": "CAD_INSERIR"}, pagina=1, tamanho=1)["itens"][0]
+        self.assertEqual((ins["entidade"], ins["entidade_id"], ins["ator"]), ("tbsss_agendamentos", novo["id"], "admin"))
+
+        lido = {"nome": novo["nome"], "usuario_id": 1, "proxima_execucao": novo["proxima_execucao"]}
+        antes_alt = total_aud("CAD_ALTERAR")
+        alterado = agd.alterar(novo["id"], {"nome": "Contrato AGD 2", "usuario_id": 2}, esperado=lido,
+                               auditoria={"ator": "op.prod", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "y"})
+        self.assertEqual((alterado["nome"], alterado["usuario_id"]), ("Contrato AGD 2", 2))
+        self.assertEqual(total_aud("CAD_ALTERAR"), antes_alt + 1)
+        # 'lido' ficou obsoleto: o UPDATE condicional perde, nada muda e nada e auditado.
+        with self.assertRaises(RepoConflito):
+            agd.alterar(novo["id"], {"nome": "Perdedor"}, esperado=lido,
+                        auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "z"})
+        # Violacao tambem nao altera colunas parcialmente.
+        with self.assertRaises(RepoViolacao):
+            agd.alterar(novo["id"], {"nome": "Parcial", "tipo_recorrencia": "MENSAL"})
+        self.assertEqual(agd.obter(novo["id"])["nome"], "Contrato AGD 2")
+        self.assertEqual(total_aud("CAD_ALTERAR"), antes_alt + 1)
+
+        antes_pausa = total_aud("AGD_PAUSAR")
+        agd.pausar(novo["id"], "MANUAL", antiga_data=novo["proxima_execucao"],
+                   auditoria={"ator": "admin", "ip": "10.0.0.2", "acao": "AGD_PAUSAR", "detalhe": "p"})
+        pausa = aud.listar(filtros={"acao": "AGD_PAUSAR"}, pagina=1, tamanho=1)["itens"][0]
+        self.assertEqual((pausa["ator"], pausa["ip_origem"], pausa["entidade_id"]), ("admin", "10.0.0.2", novo["id"]))
+        self.assertEqual(total_aud("AGD_PAUSAR"), antes_pausa + 1)
+
+        pausado = {"ativo": "N", "pausa_motivo": "MANUAL", "proxima_execucao": novo["proxima_execucao"]}
+        nova = datetime.datetime(2026, 1, 20, 3, 0)
+        with self.assertRaises(RepoConflito):
+            agd.retomar(novo["id"], nova, esperado=dict(pausado, pausa_motivo="CONCLUIDO"),
+                        auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "r"})
+        self.assertEqual(agd.obter(novo["id"])["ativo"], "N")
+        self.assertEqual(total_aud("CAD_ALTERAR"), antes_alt + 1)
+        retomado = agd.retomar(novo["id"], nova, esperado=pausado,
+                               auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "r"})
+        self.assertEqual((retomado["ativo"], retomado["pausa_motivo"], retomado["proxima_execucao"]), ("S", None, nova))
+        self.assertEqual(total_aud("CAD_ALTERAR"), antes_alt + 2)
 
     def test_08_perm_versao_incrementando(self):
         rbac = self.obter_repo("rbac")
