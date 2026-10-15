@@ -722,7 +722,8 @@
 
 .sss-resumo {
   display: grid;
-  grid-template-columns: max-content 1fr;
+  /* minmax(0, ...): sem ele a coluna cresce ate o maior valor sem quebra (ex.: caminho do script). */
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: var(--sss-esp-2) var(--sss-esp-4);
   margin: 0;
 }
@@ -734,6 +735,13 @@
 
 .sss-resumo dd {
   margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Contém filhos absolutos (ex.: .visually-hidden dos badges), que de outro modo escapam da
+   rolagem do container e alargam a página. */
+.table-responsive {
+  position: relative;
 }
 
 /* Tickets (lista e detalhe) */
@@ -855,4 +863,45 @@
 .sss-login {
   max-width: 24rem;
   margin: var(--sss-esp-5) auto 0;
+}
+
+/* Visor de log do ticket (F3.4) */
+.sss-log-titulo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sss-esp-2);
+}
+
+.sss-log-barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sss-esp-2);
+  margin-bottom: var(--sss-esp-2);
+}
+
+.sss-log-situacao {
+  font-size: var(--sss-fs-sm);
+}
+
+.sss-log-aviso {
+  margin-bottom: var(--sss-esp-2);
+}
+
+.sss-log {
+  height: 28rem;
+  max-height: 70vh;
+  margin: 0;
+  padding: var(--sss-esp-2) var(--sss-esp-3);
+  overflow: auto;
+  border: 1px solid var(--sss-border);
+  border-radius: var(--sss-raio);
+  background-color: var(--sss-surface-alt);
+  color: var(--sss-text);
+  font-family: var(--sss-font-mono);
+  font-size: var(--sss-fs-xs);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-all;
 }

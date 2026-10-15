@@ -3,6 +3,8 @@
 
 CSRF e Origin de todo POST sao validados em models/10_security.py.
 """
+from gluon import current
+
 import ticket_service
 import ui_helpers
 from repo_errors import RepoErro, RepoNaoEncontrado
@@ -11,6 +13,7 @@ from ticket_service import AcessoNegado, ErroReexecucao
 _PREFIXO_PARAM = "p_"
 _JS_DISPARO = "js/app/disparo.js"
 _JS_TICKETS = "js/app/tickets.js"
+_JS_LOG = "js/app/log_viewer.js"
 _TAMANHOS = (20, 50, 100)
 _EXTENSOES_LISTA = ("html", "load")
 _MSG_FALHA_LISTA = u"Não foi possível carregar os tickets. Tente novamente em instantes."
@@ -179,8 +182,14 @@ def detalhe():
     except RepoNaoEncontrado:
         _nao_encontrado()
     response.title = u"Ticket #%s — SSS" % ticket["id"]
-    response.sss_scripts = [_JS_TICKETS]
-    return dict(ticket=ticket)
+    response.sss_scripts = [_JS_TICKETS, _JS_LOG]
+    visor_log = {
+        "url_chunk": URL(c="logs", f="chunk", vars={"ticket_id": ticket["id"]}),
+        "url_baixar": URL(c="logs", f="baixar", vars={"ticket_id": ticket["id"]}),
+        "intervalo_s": current.sss_cfg.web.log_poll_interval_s,
+        "max_chars": ticket_service.LOG_MAX_CHARS,
+    }
+    return dict(ticket=ticket, visor_log=visor_log)
 
 
 def cancelar():

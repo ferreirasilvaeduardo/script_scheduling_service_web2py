@@ -11,6 +11,25 @@ import security
 # Contas de demonstracao que permanecem sem senha utilizavel mesmo em DEV.
 _SEM_SENHA_DEV = ("inativo", "bloqueado")
 
+# Marcador final do log truncado no banco (README §8.10).
+MARCADOR_TRUNCADO = "[SSS] log truncado no banco; arquivo integral no agente\n"
+
+# Segundos por etapa do log simulado dos RUNNING: na carga ja decorreram 5 min desde started_at;
+# o ticket 13 termina ~100 s depois e os demais entre 15 e 25 min depois.
+_PASSO_LOG_S = {11: 24, 12: 30, 13: 8, 14: 36, 15: 30, 16: 36}
+_LINHAS_LOG_VOLUMOSO = 27000
+_TICKET_LOG_VOLUMOSO = 17
+
+
+def _log_volumoso(inicio):
+    # ~2 MB em UTF-8, com acentos, para exercitar a leitura por offset e o download.
+    linhas = []
+    for i in range(1, _LINHAS_LOG_VOLUMOSO + 1):
+        quando = inicio + datetime.timedelta(seconds=i // 100)
+        linhas.append(u"[%s] lote %06d/%06d: registros validados \u2014 situa\u00e7\u00e3o OK\n"
+                      % (quando, i, _LINHAS_LOG_VOLUMOSO))
+    return u"".join(linhas)
+
 
 def carregar_seed(store, forcar=False, senha_dev=None):
     """Carrega dados iniciais deterministicos no store FAKE de forma idempotente.
@@ -247,6 +266,13 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 # 12 SUCCESS (17..28)
                                 # 8 FAILED (29..36)
                                 # 4 CANCELLED (37..40)
+                                sensiveis_por_script = {}
+                                for v in store.script_param.values():
+                                    prm = store.parametros.get(v["parametro_id"])
+                                    if prm and prm["sensivel"] == "S" and v.get("valor_padrao_sub"):
+                                        sensiveis_por_script.setdefault(v["script_id"], []).append(
+                                            (prm["codigo"], v["valor_padrao_sub"]))
+
                                 for tid in range(1, 41):
                                     script_id = ((tid - 1) % 4) + 1  # rotaciona scripts 1..4
                                     scr = store.scripts[script_id]
@@ -281,6 +307,11 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                         log_out = "[%s] Script %s iniciado em %s.\nEtapa 1 concluida com sucesso.\n" % (
                                             str(started), scr["nome"], amb
                                         )
+                                        store.log_sim[tid] = {
+                                            "passo_s": _PASSO_LOG_S[tid],
+                                            "emitidos": 0,
+                                            "sensiveis": list(sensiveis_por_script.get(script_id, [])),
+                                        }
                                     elif tid <= 28:
                                         status = "SUCCESS"
                                         smotivo = "EXIT_OK"
@@ -293,6 +324,8 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                         pid_proc = 3000 + tid
                                         pstart = 1700000000 + tid
                                         log_out = "[%s] Script concluido com retorno 0.\n" % str(finished)
+                                        if tid == _TICKET_LOG_VOLUMOSO:
+                                            log_out = _log_volumoso(started) + log_out
                                     elif tid <= 36:
                                         status = "FAILED"
                                         sched = base_dt - datetime.timedelta(hours=tid * 2)
@@ -318,6 +351,8 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                         log_out = "[%s] Falha na execucao: %s (code=%s)\n" % (
                                             str(finished), smotivo, ret_code
                                         )
+                                        if trunc == "S":
+                                            log_out += MARCADOR_TRUNCADO
                                     else:
                                         status = "CANCELLED"
                                         smotivo = "CANCEL_USER"

@@ -57,6 +57,17 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 * Não há CDN, Google Fonts nem `@import` remoto.
 * O build CSP do Alpine é obrigatório porque a política `script-src 'self'` proíbe `unsafe-eval`. Toda lógica de componente fica registrada via `Alpine.data()` em arquivos `.js` de `static/js/app/`, sem expressões complexas inline.
 
+#### 2.4.1 Contrato de responsividade
+
+* **Larguras suportadas:** de 360 px (celular) a 1440 px ou mais (desktop), usando os breakpoints do Bootstrap 5.3.8.
+* **Sem rolagem horizontal da página:** em 360, 414, 768, 1024 e 1440 px, nenhuma página pode ficar mais larga que a tela (`scrollWidth <= clientWidth` no documento).
+* **Conteúdo largo rola dentro do próprio container:**
+  * tabelas ficam dentro de `.table-responsive`, que é posicionado para conter filhos absolutos, como o `.visually-hidden` dos badges;
+  * logs e comandos ficam em `<pre>` com `white-space: pre-wrap` e rolagem própria.
+* **Texto sem ponto de quebra** (caminhos, identificadores, argv) usa `overflow-wrap: anywhere`. Colunas flexíveis de grid usam `minmax(0, 1fr)`, nunca `1fr` puro.
+* **Barras de ações e de filtros** usam `flex-wrap`: nenhum botão ou campo fica fora da área visível.
+* **Verificação:** toda tela nova ou alterada é conferida nas cinco larguras acima antes da entrega, no DevTools ou com Playwright local. O Playwright fica fora do repositório (AGENTS §2.2).
+
 ### 2.5 Backend de dados (estratégia UI-first)
 
 * Toda persistência passa por **contratos de repositório** em `modules/repo_*.py`: classes abstratas por agregado, sem SQL.

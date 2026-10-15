@@ -1,10 +1,35 @@
 # -*- coding: utf-8 -*-
 """Implementacao em memoria do repositorio de tickets (README §2.5, §5, §10)."""
 import copy
+import datetime
 
+import masking
 from repo_errors import RepoNaoEncontrado, RepoViolacao
 from repo_fake.store import paginar
 from repo_tickets import RepoTickets
+
+
+_ETAPAS_SIMULADAS = 50
+_ETAPA_SEGREDO = 3
+_ETAPA_HTML = 5
+
+
+def _mascarar_como_log_pump(texto, sensiveis):
+    # README §8.10: segredos carregados e valores de parametros sensiveis antes de anexar ao CLOB.
+    local = masking.Mascarador()
+    for _codigo, valor in sensiveis:
+        local.registrar(valor)
+    return masking.MASCARADOR.mascarar(local.mascarar(texto))
+
+
+def _linhas_etapa(n, quando, sensiveis):
+    linhas = ["[%s] etapa %d/%d processada\n" % (quando, n, _ETAPAS_SIMULADAS)]
+    if n == _ETAPA_SEGREDO:
+        for codigo, valor in sensiveis:
+            linhas.append("[%s] conectando com %s=%s\n" % (quando, codigo, valor))
+    elif n == _ETAPA_HTML:
+        linhas.append("[%s] saida bruta do script: <script>alert(1)</script> <b>negrito</b>\n" % quando)
+    return linhas
 
 
 class RepoTicketsFake(RepoTickets):
@@ -223,6 +248,9 @@ class RepoTicketsFake(RepoTickets):
                 raise RepoNaoEncontrado("Ticket ID %s nao encontrado" % id)
 
             t = self._store.tickets[id]
+            sim = self._store.log_sim.get(id)
+            if sim is not None and t.get("status") == "RUNNING":
+                self._simular_log(t, sim)
             log_output = t.get("log_output") or ""
 
             # Valor nao numerico propaga ValueError/TypeError, como o bind NUMBER no Oracle.
@@ -240,3 +268,28 @@ class RepoTicketsFake(RepoTickets):
             truncado = t.get("log_truncado") == "S"
 
             return (texto, novo_offset, terminal, truncado)
+
+    def _simular_log(self, t, sim):
+        """Emula o log_pump e a finalizacao pelo agente em funcao do relogio injetavel (somente FAKE)."""
+        agora = self._store.agora()
+        decorrido = int((agora - t["started_at"]).total_seconds())
+        alvo = min(_ETAPAS_SIMULADAS, max(0, decorrido // sim["passo_s"]))
+        cancelar = t.get("cancel_requested") == "S"
+        if alvo <= sim["emitidos"] and not cancelar:
+            return
+        linhas = []
+        for n in range(sim["emitidos"] + 1, alvo + 1):
+            quando = t["started_at"] + datetime.timedelta(seconds=n * sim["passo_s"])
+            linhas.extend(_linhas_etapa(n, quando, sim["sensiveis"]))
+        sim["emitidos"] = alvo
+        if cancelar:
+            linhas.append("[%s] processo encerrado por cancelamento (SIGTERM)\n" % agora)
+            t.update(status="CANCELLED", status_motivo="CANCEL_USER", return_code=-1)
+        elif alvo >= _ETAPAS_SIMULADAS:
+            linhas.append("[%s] Script concluido com retorno 0.\n" % agora)
+            t.update(status="SUCCESS", status_motivo="EXIT_OK", return_code=0)
+        if t["status"] != "RUNNING":
+            t["finished_at"] = agora
+            self._store.log_sim.pop(t["id"], None)
+        t["heartbeat_at"] = agora
+        t["log_output"] = (t.get("log_output") or "") + _mascarar_como_log_pump("".join(linhas), sim["sensiveis"])

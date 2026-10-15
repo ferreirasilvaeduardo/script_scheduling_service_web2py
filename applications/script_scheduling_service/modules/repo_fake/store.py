@@ -41,6 +41,8 @@ class FakeDataStore(object):
         self.auditoria = collections.OrderedDict()
 
         self.seqs = collections.defaultdict(int)
+        # Simulacao do log_pump por ticket RUNNING do seed: {ticket_id: {...}} (protegido por lock_tickets).
+        self.log_sim = {}
 
     def agora(self):
         """Retorna o instante atual naive sem microssegundos conforme o relogio injetavel."""
@@ -101,6 +103,7 @@ class FakeDataStore(object):
                                     self.agentes.clear()
                                     self.auditoria.clear()
                                     self.seqs.clear()
+                                    self.log_sim.clear()
 
 
 def paginar(itens, pagina=1, tamanho=20):

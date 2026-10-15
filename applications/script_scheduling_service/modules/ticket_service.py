@@ -57,6 +57,11 @@ MSG_CANCELAMENTO = {
 _RE_LOGIN = re.compile(r"[a-z0-9._-]{3,30}")
 _FORMATO_DIA = "%Y-%m-%d"
 
+# Teto por chamada do visualizador e tamanho do bloco do download (README §8.10).
+LOG_MAX_CHARS = 65536
+_RE_OFFSET = re.compile(r"[0-9]{1,10}")
+MARCADOR_DOWNLOAD_INTERROMPIDO = u"\n[SSS] download interrompido por falha na leitura do log\n"
+
 
 class AcessoNegado(Exception):
     """Execucao nao autorizada; o motivo (rbac.Motivo) e destinado apenas ao log."""
@@ -76,6 +81,19 @@ class ErroReexecucao(Exception):
         Exception.__init__(self, ",".join(sorted(erros)))
         self.ticket_id = ticket_id
         self.erros = erros
+
+
+class OffsetInvalido(ValueError):
+    """Offset de leitura do log ausente, negativo ou nao inteiro."""
+
+
+def _offset(valor):
+    valor = _ultimo(valor)
+    if isinstance(valor, int) and not isinstance(valor, bool) and 0 <= valor < 10 ** 10:
+        return valor
+    if isinstance(valor, str) and _RE_OFFSET.fullmatch(valor):
+        return int(valor)
+    raise OffsetInvalido("offset invalido")
 
 
 def _id(valor):
@@ -688,6 +706,51 @@ class ServicoTicket(object):
             "pode_reexecutar": pode_reexecutar,
         }
 
+    # ------------------------------------------------------------------ log
+
+    def ler_log(self, ctx, ticket_id, offset):
+        """Bloco do log a partir de offset (caracteres, base 0), no maximo LOG_MAX_CHARS.
+
+        Retorna {texto, proximo_offset, terminal, truncado, status}. Lanca OffsetInvalido e
+        RepoNaoEncontrado (inexistente ou fora do escopo do perfil).
+        """
+        off = _offset(offset)
+        ticket = self._ticket_visivel(ctx, ticket_id, "LOG_LER")
+        texto, proximo, terminal, truncado = self._tickets.log_ler(ticket["id"], off, LOG_MAX_CHARS)
+        status = ticket["status"]
+        if terminal and status not in STATUS_TERMINAIS:
+            # O ticket terminou entre a checagem de escopo e a leitura.
+            status = self._tickets.obter(ticket["id"])["status"]
+        return {"texto": texto, "proximo_offset": proximo, "terminal": bool(terminal),
+                "truncado": bool(truncado), "status": status}
+
+    def blocos_log(self, ctx, ticket_id):
+        """Valida o escopo e retorna (id, gerador de blocos do log integral via log_ler).
+
+        A validacao ocorre antes do streaming; uma falha de leitura no meio encerra o
+        gerador com MARCADOR_DOWNLOAD_INTERROMPIDO, para o arquivo nao parecer completo.
+        """
+        ticket = self._ticket_visivel(ctx, ticket_id, "LOG_BAIXAR")
+        tid = ticket["id"]
+        self._log.info("download de log (login=%s ticket=%s)", ctx.get("login"), tid,
+                       extra={"acao": "LOG_BAIXAR"})
+
+        def gerar():
+            off = 0
+            while True:
+                try:
+                    texto, off, _terminal, _truncado = self._tickets.log_ler(tid, off, LOG_MAX_CHARS)
+                except RepoErro:
+                    self._log.exception("falha na leitura do log para download (ticket=%s offset=%s)", tid, off,
+                                        extra={"acao": "LOG_BAIXAR"})
+                    yield MARCADOR_DOWNLOAD_INTERROMPIDO
+                    return
+                if not texto:
+                    return
+                yield texto
+
+        return tid, gerar()
+
     # --------------------------------------------------- cancelar/reexecutar
 
     def cancelar(self, ctx, ip, ticket_id):
@@ -851,3 +914,13 @@ def reexecutar(ctx, ip, ticket_id):
 def preparar_reexecucao(ctx, ticket_id):
     """Questionario pre-preenchido para reexecucao com erro (servico padrao)."""
     return _servico().preparar_reexecucao(ctx, ticket_id)
+
+
+def ler_log(ctx, ticket_id, offset):
+    """Bloco incremental do log do ticket visivel (servico padrao)."""
+    return _servico().ler_log(ctx, ticket_id, offset)
+
+
+def blocos_log(ctx, ticket_id):
+    """Gerador do log integral do ticket visivel para download (servico padrao)."""
+    return _servico().blocos_log(ctx, ticket_id)
