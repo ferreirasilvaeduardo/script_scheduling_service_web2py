@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Proposta**, aguardando aprovação |
+| Status | **Aprovado** em 2026-10-15 (D1 a D10). Aplicado ao README e ao AGENTS |
 | Origem | Decisões do responsável pelo produto em 2026-10-15: **A** (Python ≥ 3.6.0, já aplicada em `1955fcf`), **B** (agente em Windows, Linux e Unix) e **C** (SQL ANSI sempre que possível, com dialeto isolado) |
 | Afeta | README §2.2, §2.3, §3, §4.1, §5.6, §7.5, §8, §9, §10, §11, §12 e §14. AGENTS §2.2, §3.1, §3.2, §4, §5.5, §6, §7 e §8. Prompts F4.5 (ajuste), F7.x e F8.x (reescrita) |
 | Não afeta | Regras de negócio (§1, §5.1 a §5.5, §6, §7.1 a §7.4), RBAC, UI (exceto o select de interpretador do F4.5) e backend FAKE |

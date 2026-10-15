@@ -32,7 +32,8 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 
 ### 2.2 Banco de dados
 
-* **Oracle Database 11gR2** como piso de compatibilidade. Todo SQL e DDL deve rodar no 11gR2, mesmo que o servidor seja mais novo.
+* **Oracle Database 11gR2** como piso de compatibilidade, com suporte às versões superiores (12c, 18c, 19c, 21c, 23ai). Todo SQL e DDL do dialeto `oracle11g` deve rodar no 11gR2, mesmo que o servidor seja mais novo.
+* **SQL ANSI por padrão**, com a sintaxe proprietária isolada num dialeto (§2.7). Trocar de banco = novo dialeto + driver homologado + a mesma suíte de contrato.
 * **Charset:** AL32UTF8. Toda coluna textual usa `VARCHAR2(N CHAR)`.
 * **Teto de 30 caracteres** para todo identificador, inclusive após a expansão do prefixo (§9).
 
@@ -40,19 +41,20 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 
 | Componente | Versão permitida | Observação |
 |---|---|---|
-| Driver | `python-oracledb < 2.0` (série 1.x), em modo **Thick** | A série 2.x exige Python 3.7+ |
-| Driver alternativo | `cx_Oracle 8.3` | — |
-| Cliente C | **Oracle Instant Client 19.x** | O IC 21c/23ai não conecta ao 11gR2 |
+| Driver (Python 3.6) | `python-oracledb 1.x` (`< 2.0`) ou `cx_Oracle 8.3`, em modo **Thick** | A série 2.x exige Python 3.7+ |
+| Driver (Python 3.7 a 3.13) | `python-oracledb 2.x`, em modo **Thick** | — |
+| Cliente C | **Oracle Instant Client 19.x** (Linux, Unix ou Windows, conforme o nó) | Conecta do 11.2.0.4 ao 23ai. O IC 21c/23ai não conecta ao 11gR2 |
 
 * O modo **Thin** é proibido porque não suporta o 11g.
-* **Carregamento no Linux:** o Instant Client deve estar no caminho de bibliotecas **antes** de o processo Python iniciar, via `ldconfig` (preferencial) ou `LD_LIBRARY_PATH` exportado pelos launchers `bin/sss-web.sh` e `bin/sss-scheduler.sh`. No Linux, `init_oracle_client(lib_dir=...)` não tem efeito e deve ser chamado sem `lib_dir`.
+* **Carregamento no Linux/Unix:** o Instant Client deve estar no caminho de bibliotecas **antes** de o processo Python iniciar, via `ldconfig` (preferencial) ou `LD_LIBRARY_PATH` exportado pelos launchers `bin/sss-web.sh` e `bin/sss-scheduler.sh`. Nessas plataformas, `init_oracle_client(lib_dir=...)` não tem efeito e deve ser chamado sem `lib_dir`.
+* **Carregamento no Windows:** `init_oracle_client(lib_dir=oracle_client_lib_dir)`, com o mesmo caminho incluído no `PATH` pelos launchers `bin/sss-web.ps1` e `bin/sss-scheduler.ps1`.
 * **Desenvolvimento em macOS:** `oracle_client_lib_dir` só é usado em macOS/Windows. O IC 19 para macOS existe apenas para Intel (x86_64). Em Apple Silicon, use Python x86_64 sob Rosetta ou um container/VM Linux x86_64. Valide no portal da Oracle antes de montar o ambiente.
-* `modules/oracle_conn.py` é a **única** porta de acesso ao banco. Ele contém o *shim* que abstrai `oracledb` e `cx_Oracle` (exceções, tipos de bind, pool, `init_oracle_client`).
+* `modules/db_conn.py` é a **única** porta de acesso ao banco. Ele contém o *shim* que abstrai o driver (exceções mapeadas para os erros do contrato, tipos de bind, conversão do estilo `:nome` para o `paramstyle` do driver, pool e `init_oracle_client`) e entrega ao repositório o dialeto configurado (§2.7).
 * **Toda conexão deve:**
   * usar `autocommit = False`;
   * definir `call_timeout` (`call_timeout_ms` no config);
   * preencher `module`, `action` e `client_identifier` para rastreabilidade pelo DBA (por exemplo, `module='SSS_SCHED'`, `action='CLAIM'`, `client_identifier=<agent_id ou login>`).
-* **Reconexão:** em erros de rede (ORA-03113, ORA-03114, ORA-03135, ORA-12541, ORA-12170, DPI-1080), o daemon reconecta com *backoff* exponencial de 1 s a 60 s, registrando WARN a cada tentativa.
+* **Reconexão:** em erros de rede (no Oracle: ORA-03113, ORA-03114, ORA-03135, ORA-12541, ORA-12170, DPI-1080; a lista é mapeada por driver no `db_conn`), o daemon reconecta com *backoff* exponencial de 1 s a 60 s, registrando WARN a cada tentativa.
 
 ### 2.4 Frontend
 
@@ -79,7 +81,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 | Backend | Uso | Implementação |
 |---|---|---|
 | `FAKE` | Desenvolvimento da UI e testes unitários | `modules/repo_fake/`: memória do processo, seed determinístico e `threading.Lock` por agregado |
-| `ORACLE` | Homologação e produção | `modules/repo_oracle/`: único local com SQL |
+| `ORACLE` | Homologação e produção | `modules/repo_sql/` + dialeto `oracle11g` (§2.7): único local com SQL |
 
 * Os controllers e services **não sabem** qual backend está ativo.
 * **Paridade obrigatória:** o FAKE emula a semântica do Oracle que o código consome. Isso inclui `UPDATE` condicional com `rowcount` (transição perdida gera `RepoConflito`), unicidade (`RepoViolacao`), `ON DELETE CASCADE`, triggers de imutabilidade, paginação e ordenação idênticas.
@@ -90,6 +92,37 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
   * `data_backend = FAKE` com `sss_env != DEV` **aborta a subida** com CRITICAL.
   * O FAKE exige servidor web de processo único (o servidor de desenvolvimento do web2py). Com múltiplos workers, cada um teria um estado diferente.
 * O daemon (`run_scheduler.py`) **exige** `ORACLE`. Com `FAKE`, ele aborta.
+
+### 2.6 Plataformas suportadas (CR-001)
+
+| Nível | Plataformas | Garantia |
+|---|---|---|
+| **1** | Linux x86_64 e Windows Server 2016 ou mais novo (x86_64), para o nó web e para o agente | Testes automatizados e roteiro E2E (F9.2) em cada uma |
+| **2** | Demais Unix (AIX, Solaris, HP-UX, macOS, BSD) | Mesma camada POSIX; homologação pela infraestrutura sob demanda |
+
+* Toda primitiva de sistema operacional fica em `modules/plataforma/` (§8.0).
+* No Windows, as APIs nativas são usadas via `ctypes`, sem dependência nova (`pywin32` e `psutil` continuam proibidos).
+* O banco e a UI não dependem da plataforma do nó.
+* Um mesmo ambiente pode ter agentes Linux e Windows: o claim respeita os interpretadores de cada agente (§8.2).
+
+### 2.7 Portabilidade de SQL (CR-001)
+
+* O SQL dos repositórios é **ANSI (SQL:2003)** sempre que o Oracle 11gR2 o aceitar. Exemplos:
+  * `MERGE`;
+  * `CASE`;
+  * comparação nula-segura `(c = :v OR (c IS NULL AND :v IS NULL))`;
+  * aritmética `dt - :n * INTERVAL '1' SECOND`.
+* A sintaxe proprietária fica **somente** em `modules/sql_dialeto/<dialeto>.py`, selecionado por `[oracle] dialeto` (hoje só `oracle11g`). O dialeto fornece:
+  * `paginar` e `limitar` (top-N);
+  * `proximo_id` (sequence);
+  * `agora` (relógio do banco);
+  * `para_atualizar` (lock com espera);
+  * `lob_anexar`, `lob_ler` e `lob_vazio`;
+  * `sem_tabela` (`DUAL`);
+  * a DDL de tipos, índices parciais, triggers e estatísticas.
+* A aplicação **sempre informa o `id`** na inclusão, obtido de `dialeto.proximo_id`. A trigger condicional do §10 continua existindo no Oracle como defesa.
+* **Os blocos SQL deste README estão escritos na forma do dialeto `oracle11g`.** Neles, `SYSDATE`, `ROWNUM`, `seq.NEXTVAL FROM DUAL`, `FOR UPDATE WAIT n`, `DBMS_LOB.*` e `EMPTY_CLOB()` correspondem a chamadas do dialeto no código.
+* Trocar de banco exige homologar o driver (AGENTS §2.2), escrever o dialeto e passar a mesma `test_repo_contract.py`. Enquanto o 11g for o alvo, SQL 100% ANSI não é possível.
 
 ---
 
@@ -105,16 +138,17 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 Regras de topologia:
 
 * É proibido instanciar o scheduler em threads dos workers web.
-* O daemon é **single-threaded**: um laço de eventos com `time.sleep`/`select`. Essa decisão torna seguro o uso de `preexec_fn` (§8.4).
-* O nó web **nunca** sinaliza processos do sistema operacional.
+* O daemon é **single-threaded**: um laço de eventos com `time.sleep`/`select`. No POSIX, essa decisão torna seguro o uso de `preexec_fn` (§8.4).
+* O nó web **nunca** sinaliza nem encerra processos do sistema operacional.
+* No Windows, o daemon é um processo de console iniciado por um serviço ou pelo Agendador de Tarefas da infraestrutura. Ele para pelo arquivo `work_dir/sss-<agent_id>.stop` ou por `CTRL_BREAK` (§8.11).
 * `models/*.py` deve ser leve, pois é carregado pelo daemon com `-M`. Esses arquivos não podem executar DDL, abrir conexão no import nem fazer I/O pesado.
 
 ### 3.2 Estrutura de diretórios
 
 ```text
 bin/
-  sss-web.sh                  # exporta LD_LIBRARY_PATH/TZ e sobe o WSGI
-  sss-scheduler.sh            # exporta LD_LIBRARY_PATH/TZ e sobe o daemon
+  sss-web.sh   sss-web.ps1         # Linux/Unix e Windows: ambiente do Instant Client/TZ e subida do WSGI
+  sss-scheduler.sh   sss-scheduler.ps1   # Linux/Unix e Windows: ambiente e subida do daemon
 applications/script_scheduling_service/
   controllers/                # default.py (login), tickets.py, logs.py, agendamentos.py, admin_*.py, auditoria.py, dev.py (somente DEV)
   models/
@@ -123,13 +157,15 @@ applications/script_scheduling_service/
   modules/
     sss_config.py             # parser e validação tipada do config.ini e do secrets.cfg
     sss_logging.py            # configuração de logging (§13)
-    oracle_conn.py            # shim de driver, pool, conexão dedicada do daemon
+    db_conn.py                # shim de driver, binds, mapa de erros, pool, conexão dedicada do daemon
+    sql_dialeto/              # fragmentos SQL proprietários por banco (oracle11g.py) e DDL por dialeto (§2.7)
+    plataforma/               # primitivas de SO: posix.py (Linux/Unix) e windows.py (ctypes) (§8.0)
     sql_ident.py              # registro de identificadores, validação de owner/prefixo, nomes qualificados
     repo_errors.py            # exceções de contrato (§2.5)
-    repo_factory.py           # seleção do backend FAKE/ORACLE
+    repo_factory.py           # seleção do backend FAKE/ORACLE (banco real via repo_sql + dialeto)
     repo_*.py                 # contratos abstratos por agregado (sem SQL)
     repo_fake/                # implementação em memória + seed (somente DEV)
-    repo_oracle/              # implementação SQL (único local com SQL)
+    repo_sql/                 # implementação SQL genérica/ANSI (único local com SQL; fragmentos proprietários vêm do dialeto)
     auth_service.py           # autenticação, bloqueio, revalidação de sessão
     ticket_service.py         # criação, cancelamento e reexecução de ticket (§5)
     ui_menu.py                # menu por permissão
@@ -157,7 +193,7 @@ applications/script_scheduling_service/
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
 docs/
   prompts/                    # prompts de execução faseada (UI-first)
-/etc/sss/secrets.cfg          # segredos, 0600, fora do repositório (§4.1)
+/etc/sss/secrets.cfg          # segredos fora do repositório: 0600 no POSIX; no Windows, ex.: C:\ProgramData\SSS\secrets.cfg com DACL restrita (§4.1)
 ```
 
 ---
@@ -167,10 +203,10 @@ docs/
 ### 4.1 Gestão de segredos
 
 * **Nenhum segredo** reside no `config.ini`, no repositório ou no banco.
-* Os segredos ficam em `secrets_file` (padrão `/etc/sss/secrets.cfg`). Na inicialização, web e daemon validam o arquivo e **recusam a subida** caso ele:
+* Os segredos ficam em `secrets_file` (padrão `/etc/sss/secrets.cfg`; no Windows, por exemplo `C:\ProgramData\SSS\secrets.cfg`). Na inicialização, web e daemon validam o arquivo pela camada de plataforma e **recusam a subida** caso ele:
   * não seja um arquivo regular;
-  * tenha dono diferente de `os.geteuid()`;
-  * tenha `mode & 0o077 != 0`.
+  * **POSIX:** tenha dono diferente de `os.geteuid()` ou `mode & 0o077 != 0`;
+  * **Windows:** tenha dono diferente do SID do processo, ou DACL com qualquer entrada além do dono e de SYSTEM (inclusive herdada de Users, Authenticated Users ou Everyone).
 
 ```ini
 [oracle]
@@ -436,15 +472,15 @@ UPDATE {owner}.tbsss_tickets
 
 **No agente dono:** a cada `cancel_poll_interval_s`, executa a varredura combinada da §8.7. Ao encontrar `cancel_requested = 'S'` em ticket próprio:
 
-1. `os.killpg(pgid, signal.SIGTERM)`, com o `pgid` obtido no spawn (igual ao PID, por causa de `start_new_session=True`).
+1. Pedir o encerramento do grupo pela camada de plataforma (§8.0): `SIGTERM` ao grupo no POSIX; `CTRL_BREAK_EVENT` no Windows.
 2. Aguardar até `kill_grace_s`, consultando `Popen.poll()`.
-3. Se o processo persistir, `os.killpg(pgid, signal.SIGKILL)` e então `Popen.wait()`.
+3. Se o processo persistir, forçar o encerramento (`SIGKILL` ao grupo no POSIX; `TerminateJobObject` no Windows) e então `Popen.wait()`.
 4. Fazer o flush final do log (§8.10).
 5. `UPDATE ... SET status = 'CANCELLED', status_motivo = 'CANCEL_USER', return_code = -1, finished_at = SYSDATE WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`, seguido de `COMMIT`.
 
 Se o processo terminou sozinho **antes** de o agente sinalizá-lo, prevalece o resultado real (`SUCCESS` ou `FAILED`).
 
-O `ProcessLookupError` no `killpg` é tratado como "grupo já encerrado".
+No POSIX, `ProcessLookupError` no `killpg` é tratado como "grupo já encerrado"; no Windows, o mesmo vale para um Job sem processos.
 
 ---
 
@@ -527,13 +563,19 @@ Para todos os tipos:
 
 ### 6.4 Montagem do `argv`
 
+O catálogo guarda um **interpretador lógico** (CR-001, D1). O nó web compila apenas os **argumentos** (`args`). O **agente** monta o `argv` real no claim, com o executável e o diretório base **dele**:
+
 ```text
-/usr/bin/python3 -> ["/usr/bin/python3", "-I", <script_real>, ...args]
-/bin/bash        -> ["/bin/bash", <script_real>, ...args]
-/bin/sh          -> ["/bin/sh", <script_real>, ...args]
+PYTHON3    -> [<exe PYTHON3>, "-I", <script_real>, ...args]
+BASH       -> [<exe BASH>, <script_real>, ...args]                 (só POSIX)
+SH         -> [<exe SH>, <script_real>, ...args]                   (só POSIX)
+POWERSHELL -> [<exe POWERSHELL>, "-NoProfile", "-NonInteractive",
+               "-ExecutionPolicy", "Bypass", "-File", <script_real>, ...args]   (só Windows)
 ```
 
-`<script_real>` é o caminho absoluto resolvido pela §8.5.
+* `<exe X>` vem de `[agent] interpretadores` do agente (§12.1).
+* `<script_real>` é resolvido pelo agente a partir de `path_file` e do `base_script_dir` local (§8.5).
+* A UI mostra o `argv` **lógico**, por exemplo `PYTHON3 -I <base>/carga.py --data 2026-10-13`.
 
 ### 6.5 Snapshot imutável (`tbsss_tickets.parametros_enviados`)
 
@@ -541,19 +583,21 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 
 ```json
 {
-  "versao": 1,
+  "versao": 2,
   "script_id": 12,
   "script_nome": "carga_faturas",
-  "comando_real": "/usr/bin/python3",
+  "interpretador": "PYTHON3",
   "path_file": "faturamento/carga_faturas.py",
-  "script_real": "/opt/automacoes/scripts/faturamento/carga_faturas.py",
   "tipo_param": "NOMEADO",
-  "argv": ["/usr/bin/python3", "-I", "/opt/automacoes/scripts/faturamento/carga_faturas.py", "--data", "2026-10-13"],
+  "args": ["--data", "2026-10-13"],
   "respostas": {"data_ref": "2026-10-13"},
   "sensiveis": [],
   "compilado_em": "2026-10-13 10:47:00"
 }
 ```
+
+* **Versão 2 (CR-001):** o snapshot não guarda mais caminho absoluto nem executável do nó que o compilou. O agente revalida `interpretador` contra a allowlist e o próprio mapeamento, resolve `path_file` pelo `path_guard` local e monta o `argv` (§6.4, §8.4).
+* Snapshots da versão 1, gerados antes do CR-001 apenas em DEV/FAKE, não são aceitos pelo agente. O claim os rejeita com `PRECHECK_FAILED`.
 
 * O snapshot é **compilado na criação do ticket** (manual ou desdobro). O agente **nunca** recompila nem lê `tbsss_script_param` e `tbsss_parametros` para executar.
 * **Defesa em profundidade no claim:** o agente revalida o snapshot (§8.4, passo 1).
@@ -664,12 +708,31 @@ Para cada regra, em **uma transação**:
 
 **Bind de datas:**
 
-* `:antiga_data` e `:nova_data` são declarados como `DATE` via `setinputsizes`, usando `cx_Oracle.DATETIME` ou `oracledb.DB_TYPE_DATE`.
+* `:antiga_data` e `:nova_data` são declarados pelo `db_conn` com o tipo de data do driver (no Oracle, `setinputsizes` com `cx_Oracle.DATETIME` ou `oracledb.DB_TYPE_DATE`).
 * Um `datetime` com microssegundos **nunca** é comparado a uma coluna `DATE`. A regra travaria silenciosamente.
 
 ---
 
 ## 8. Motor de Execução (ciclo 2 do daemon)
+
+### 8.0 Camada de plataforma (`modules/plataforma/`, CR-001)
+
+O daemon chama apenas a interface abaixo. As implementações ficam em `posix.py` (Linux e Unix) e `windows.py` (APIs nativas via `ctypes`). O restante do motor não conhece o sistema operacional.
+
+| Operação | POSIX | Windows |
+|---|---|---|
+| `iniciar_processo` (§8.4) | `Popen(..., start_new_session=True, preexec_fn=_child_limits)`, com `umask(0o077)` e `setrlimit` | `Popen(..., creationflags=CREATE_NEW_PROCESS_GROUP \| CREATE_NO_WINDOW)` e atribuição imediata a um **Job Object** com `KILL_ON_JOB_CLOSE` e limites de memória e de processos |
+| `encerrar_grupo` (escalonado) | `killpg(SIGTERM)` → `kill_grace_s` → `killpg(SIGKILL)` → `wait()` | `CTRL_BREAK_EVENT` → `kill_grace_s` → `TerminateJobObject` → `wait()`. O Job também encerra netos e processos desacoplados |
+| `identidade_processo(pid)` (contra PID reciclado) | Linux: `starttime` de `/proc/<pid>/stat` (campo 22, após o último `)`). Outros Unix: `/proc/<pid>/psinfo` ou `sysctl KERN_PROC` | `GetProcessTimes().CreationTime` |
+| `processo_existe(pid)` | `os.kill(pid, 0)` | `OpenProcess` + `GetExitCodeProcess` |
+| `travar_instancia(caminho)` | `fcntl.flock(LOCK_EX \| LOCK_NB)` | `msvcrt.locking(LK_NBLCK)` |
+| `usuario_privilegiado()` | `os.geteuid() == 0` | Token elevado (Administradores) ou SYSTEM |
+| `validar_arquivo_restrito(caminho)` (segredos, §4.1) | Dono = euid e `mode & 0o077 == 0` | Dono = SID do processo e DACL só com o dono e SYSTEM |
+| `validar_arvore_scripts` (§8.5) | UID em `script_owner_uids`, sem escrita de grupo ou outros nem do agente | SID em `script_owner_sids`, sem direito de escrita efetivo para o agente nem para grupos amplos |
+| `criar_dir_trabalho` (§8.4) | `0700` | ACL só para a conta do agente |
+| Parada | SIGTERM/SIGINT acionam a flag | SIGBREAK/SIGINT acionam a flag |
+
+Em todas as plataformas, o arquivo `work_dir/sss-<agent_id>.stop` também aciona a flag.
 
 ### 8.1 Laço principal
 
@@ -678,7 +741,7 @@ inicialização (§8.12) -> loop:
   a cada cancel_poll_interval_s : varredura própria (§8.7) + cancelamentos + timeouts + processos finalizados
   a cada heartbeat_interval_s   : heartbeat (§8.7) + log pump (§8.10) + self-fencing (§8.9)
   a cada orchestrator_interval_s: NODE_OFFLINE (§8.8) + desdobro (§7.5) + claim (§8.2-8.4)
-  sinal SIGTERM/SIGINT          : graceful shutdown (§8.11)
+  sinal SIGTERM/SIGINT (POSIX), SIGBREAK/SIGINT (Windows) ou arquivo .stop : graceful shutdown (§8.11)
 ```
 
 ### 8.2 Seleção de candidatos
@@ -689,9 +752,11 @@ O agente só tenta o claim se `execucoes_locais < max_parallel_jobs`, com `max_p
 SELECT id, script_id, ambiente FROM (
   SELECT t.id, t.script_id, t.ambiente
     FROM {owner}.tbsss_tickets t
+    JOIN {owner}.tbsss_scripts s ON s.id = t.script_id
    WHERE (CASE WHEN t.status = 'PENDING' THEN t.prioridade END) IS NOT NULL
      AND (CASE WHEN t.status = 'PENDING' THEN t.scheduled_at END) <= SYSDATE
      AND t.ambiente IN (:amb0, :amb1)
+     AND s.interpretador IN (:int0, :int1)
      AND t.cancel_requested = 'N'
    ORDER BY (CASE WHEN t.status = 'PENDING' THEN t.prioridade END),
             (CASE WHEN t.status = 'PENDING' THEN t.scheduled_at END),
@@ -700,6 +765,8 @@ SELECT id, script_id, ambiente FROM (
 ```
 
 As expressões `CASE` devem ser **textualmente idênticas** às do índice baseado em função `ix_tbsss_tck_fila`, que contém apenas os tickets `PENDING`.
+
+O filtro `s.interpretador IN (:int0..:intN)` usa os interpretadores que **este** agente suporta (§12.1). Assim, num ambiente com agentes Linux e Windows, cada um só pega os scripts que consegue executar. Os placeholders são gerados pelo código, e os valores vão sempre como binds.
 
 ### 8.3 Claim em três passos (por candidato, uma transação)
 
@@ -737,14 +804,15 @@ As expressões `CASE` devem ser **textualmente idênticas** às do índice basea
 
 1. **Pré-validação do snapshot.** Qualquer falha leva a `FAILED` com `PRECHECK_FAILED` e `-4`:
    * o JSON é válido e tem `versao` suportada;
-   * `argv[0] == comando_real`, e o valor consta na allowlist;
-   * `script_real` passa na §8.5 e é idêntico ao do snapshot;
+   * `versao == 2`, e `interpretador` consta na allowlist lógica **e** no mapeamento deste agente;
+   * `path_file` passa na §8.5 contra o `base_script_dir` local, que fornece o `script_real`;
+   * o `argv` é montado pelo agente (§6.4) a partir de `interpretador`, `script_real` e `args`;
    * o script segue `ativo = 'S'` e homologado para o ambiente.
 2. **Preparo do diretório de trabalho:**
-   * `work_dir/ticket_<id>/` com permissão `0700`, que é o `cwd` do processo;
+   * `work_dir/ticket_<id>/`, criado pela camada de plataforma (`0700` no POSIX; ACL só da conta do agente no Windows), que é o `cwd` do processo;
    * `work_dir/ticket_<id>/tmp/` como `TMPDIR`.
-3. **Arquivo de log:** `log_dir/tickets/<AAAAMM>/ticket_<id>.log`, aberto com `os.open(path, O_WRONLY | O_CREAT | O_EXCL | O_APPEND, 0o600)`.
-4. **Spawn:**
+3. **Arquivo de log:** `log_dir/tickets/<AAAAMM>/ticket_<id>.log`, aberto com `os.open(path, O_WRONLY | O_CREAT | O_EXCL | O_APPEND, 0o600)`. No Windows, o modo não tem efeito e a proteção vem da ACL de `log_dir`, validada na inicialização (§8.12).
+4. **Spawn** (forma POSIX; no Windows, `plataforma.iniciar_processo` conforme a §8.0):
    ```python
    p = subprocess.Popen(
        argv,
@@ -761,18 +829,32 @@ As expressões `CASE` devem ser **textualmente idênticas** às do índice basea
    os.close(log_fd)                # o filho mantém a própria cópia do descritor
    ```
    `OSError` no spawn leva a `FAILED` com `SPAWN_ERROR` e `-4`.
-5. **Instante de início:** ler `starttime` (campo 22 de `/proc/<pid>/stat`, contado **após o último `)`**) e gravar:
+5. **Instante de início:** ler `plataforma.identidade_processo(pid)` (`starttime` no Linux, `CreationTime` no Windows; §8.0) e gravar:
    ```sql
    UPDATE {owner}.tbsss_tickets
       SET process_id = :pid, process_start = :process_start
     WHERE id = :ticket_id AND agente_id = :agente_id AND status = 'RUNNING'
    ```
-   Se `rowcount = 0`, a posse foi perdida (por exemplo, `NODE_OFFLINE` durante o spawn): fazer `killpg` com SIGTERM → SIGKILL e registrar ERROR `OWNERSHIP_LOST`.
+   Se `rowcount = 0`, a posse foi perdida (por exemplo, `NODE_OFFLINE` durante o spawn): `plataforma.encerrar_grupo` e ERROR `OWNERSHIP_LOST`.
 
 ### 8.5 Validação de interpretador e caminho (`path_guard.py`)
 
+**Interpretadores lógicos (CR-001):**
+
+| Lógico | POSIX | Windows |
+|---|---|---|
+| `PYTHON3` | sim | sim |
+| `BASH` | sim | não |
+| `SH` | sim | não |
+| `POWERSHELL` | não | sim |
+
+* `cmd.exe`, `.bat` e `.cmd` são **proibidos**, porque reinterpretam argumentos e não há *quoting* seguro.
+* O executável de cada interpretador vem de `[agent] interpretadores`. Na inicialização, o agente valida que o caminho é absoluto, existe e é executável, e que a pasta dele não é gravável pelo agente.
+
+**Caminho (forma POSIX):**
+
 ```python
-ALLOWLIST = ('/usr/bin/python3', '/bin/bash', '/bin/sh')
+ALLOWLIST = ('PYTHON3', 'BASH', 'SH', 'POWERSHELL')
 
 base = os.path.realpath(base_script_dir)
 real = os.path.realpath(os.path.join(base, path_file))
@@ -780,15 +862,22 @@ try:
     dentro = os.path.commonpath([base, real]) == base
 except ValueError:
     dentro = False
-ok = (comando_real in ALLOWLIST and dentro and real != base and os.path.isfile(real))
+ok = (interpretador in ALLOWLIST and dentro and real != base and os.path.isfile(real))
 ```
+
+**Caminho no Windows:**
+* o caminho final é obtido por `GetFinalPathNameByHandleW`, em **qualquer** versão do Python, porque o `realpath` do Python < 3.8 não resolve links nem junctions. *Reparse points* intermediários não resolvidos são rejeitados;
+* `commonpath` é aplicado sobre `os.path.normcase`;
+* um drive diferente do da base resulta em `FORA_DA_BASE`.
 
 Validações complementares:
 
-* **Ownership e modo:** o script, **cada diretório** entre `base` e o script, e o próprio `base` devem pertencer a um UID de `script_owner_uids` (padrão: `0`, root). Eles não podem ter escrita para grupo nem para outros (`st_mode & 0o022 == 0`), e o UID do agente não pode ter permissão de escrita (`os.access(p, os.W_OK)` falso).
+* **Ownership e permissão:** o script, **cada diretório** entre `base` e o script, e o próprio `base` são verificados:
+  * **POSIX:** pertencem a um UID de `script_owner_uids` (padrão: `0`, root); não têm escrita para grupo nem para outros (`st_mode & 0o022 == 0`); e o UID do agente não tem permissão de escrita (`os.access(p, os.W_OK)` falso).
+  * **Windows:** pertencem a um SID de `script_owner_sids` (ex.: `S-1-5-32-544`, Administradores); a conta do agente, Users, Authenticated Users e Everyone não têm direito de escrita **efetivo** (`GetEffectiveRightsFromAclW`). `os.access` não serve no Windows, porque só olha o atributo "somente leitura".
 * **Momento:** a validação ocorre no cadastro (UI), na criação do ticket (snapshot) e novamente no claim (§8.4).
 * **CKs de banco** (defesa adicional):
-  * `ck_tbsss_scr_cmd` restringe `comando_real` à allowlist;
+  * `ck_tbsss_scr_int` restringe `interpretador` à allowlist lógica;
   * `ck_tbsss_scr_path` exige `path_file` relativo e sem `..`.
 * **TOCTOU residual:** é aceito porque o UID do agente não consegue alterar a árvore de scripts.
 * **Cadastro na UI** (`admin_scripts`, F4.5):
@@ -796,7 +885,7 @@ Validações complementares:
   * em `sss_env = DEV`, apenas `NAO_E_ARQUIVO` (o arquivo não existe localmente) vira **aviso** e permite salvar; os demais códigos bloqueiam;
   * em HML/PROD, a etapa 2 sempre bloqueia;
   * a UI sempre informa que a validação definitiva ocorre também no agente;
-  * `comando_real` é um select fixo da allowlist, e o servidor exige o valor exato, mesmo que o HTML tenha sido adulterado;
+  * `interpretador` é um select fixo da allowlist lógica, e o servidor exige o valor exato, mesmo que o HTML tenha sido adulterado;
   * **caminho absoluto do servidor só para admin:** o `base_script_dir` aparece apenas para perfil admin, e na prévia do argv quem não é admin vê `<base>/path_file`;
   * o `nome` do script é texto livre de 1 a 60 caracteres (sem caracteres de controle), único e editável, porque o snapshot guarda o nome da época e tickets e agendamentos referenciam o `script_id`.
 
@@ -817,7 +906,8 @@ Validações complementares:
 | `env_passthrough` | copiadas do ambiente do daemon (por exemplo, `ORACLE_HOME`, `TNS_ADMIN`, `NLS_LANG`, `LD_LIBRARY_PATH`) |
 
 * **Bloqueadas** mesmo se listadas em `env_passthrough`: `LD_PRELOAD`, `LD_AUDIT`, `PYTHONPATH`, `PYTHONHOME`, `PYTHONSTARTUP`, `PYTHONINSPECT`, `BASH_ENV`, `ENV`, `SHELLOPTS`, `BASHOPTS`, `IFS`, `PERL5LIB`, `PERL5OPT`. A configuração que as contiver é rejeitada na inicialização.
-* **Risco residual documentado:** a credencial no ambiente é legível em `/proc/<pid>/environ` pelo mesmo UID e por root. Mitigação: o agente roda com UID dedicado e sem login interativo.
+* **Windows:** a base é `SystemRoot`, `PATH=%SystemRoot%\System32;%SystemRoot%`, `TEMP`/`TMP` e `USERPROFILE` = `work_dir\ticket_<id>`, `PATHEXT` e `COMSPEC` com os valores padrão fixos, mais as variáveis `PYTHON*`/`SSS_*` da tabela. `LANG`/`LC_ALL` não se aplicam. A lista de bloqueio inclui também `PSModulePath` e `__PSLockdownPolicy` quando vierem do `env_passthrough`.
+* **Risco residual documentado:** a credencial no ambiente é legível pelo mesmo usuário e por administradores (`/proc/<pid>/environ` no Linux; leitura da memória do processo no Windows). Mitigação: o agente roda com uma conta dedicada, sem login interativo nem privilégio administrativo.
 
 ### 8.7 Varredura própria, heartbeat, timeout e finalização
 
@@ -829,12 +919,12 @@ SELECT id, cancel_requested
  WHERE (CASE WHEN status = 'RUNNING' THEN agente_id END) = :agente_id
 ```
 
-* Um ticket que está no mapa local mas **ausente** do resultado foi finalizado por outro nó. O agente executa `killpg` (SIGTERM → SIGKILL), registra ERROR `OWNERSHIP_LOST` e não grava status.
+* Um ticket que está no mapa local mas **ausente** do resultado foi finalizado por outro nó. O agente executa `plataforma.encerrar_grupo`, registra ERROR `OWNERSHIP_LOST` e não grava status.
 * **Heartbeat** (a cada `heartbeat_interval_s`):
   * `executemany` de `UPDATE ... SET heartbeat_at = SYSDATE WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`, com `arraydmlrowcounts=True`;
   * linha com contagem 0 é tratada como `OWNERSHIP_LOST`;
   * na mesma transação, atualiza `tbsss_agentes.heartbeat_at`.
-* **Timeout:** `timeout = tbsss_scripts.timeout_seg` ou, se nulo, `script_timeout_s`. Ao expirar, SIGTERM → `kill_grace_s` → SIGKILL, com finalização `FAILED`, `TIMEOUT` e `-3`.
+* **Timeout:** `timeout = tbsss_scripts.timeout_seg` ou, se nulo, `script_timeout_s`. Ao expirar, `plataforma.encerrar_grupo` (escalonado), com finalização `FAILED`, `TIMEOUT` e `-3`.
 * **Finalização normal** (detectada por `Popen.poll()`):
   1. flush final do log;
   2. `UPDATE ... SET status, status_motivo, return_code, finished_at = SYSDATE WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`;
@@ -848,7 +938,7 @@ UPDATE {owner}.tbsss_tickets
    SET status = 'FAILED', status_motivo = 'NODE_OFFLINE',
        return_code = -2, finished_at = SYSDATE
  WHERE (CASE WHEN status = 'RUNNING' THEN agente_id END) IS NOT NULL
-   AND heartbeat_at < SYSDATE - (:node_offline_timeout_s / 86400)
+   AND heartbeat_at < SYSDATE - :node_offline_timeout_s * INTERVAL '1' SECOND
 ```
 
 O relógio de referência é sempre o `SYSDATE` do banco, nunca o relógio do nó.
@@ -857,7 +947,7 @@ O relógio de referência é sempre o `SYSDATE` do banco, nunca o relógio do n�
 
 * O agente registra o instante do último heartbeat **confirmado** (commit OK).
 * Se `agora_monotonico - ultimo_hb_ok > fence_timeout_s`, o agente:
-  1. executa `killpg` em **todos** os grupos que possui (SIGTERM → SIGKILL);
+  1. executa `plataforma.encerrar_grupo` em **todos** os grupos que possui;
   2. suspende novos claims;
   3. registra CRITICAL `FENCED`.
 * Quando o banco volta, ele tenta `UPDATE ... SET status = 'FAILED', status_motivo = 'FENCED', return_code = -2 ... WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`. Se o ticket já estiver `NODE_OFFLINE`, o `rowcount = 0` é esperado.
@@ -897,13 +987,13 @@ END;
 
 ### 8.11 Graceful shutdown do daemon
 
-* SIGTERM/SIGINT apenas acionam uma flag; o laço trata o restante.
+* SIGTERM/SIGINT (POSIX), SIGBREAK/SIGINT (Windows) e o arquivo `work_dir/sss-<agent_id>.stop` apenas acionam uma flag; o laço trata o restante.
 * O daemon para de fazer desdobro e claim.
 
 | `shutdown_mode` | Comportamento |
 |---|---|
 | `DRAIN` | Aguarda os filhos por até `shutdown_grace_s` e então aplica `TERMINATE` aos restantes |
-| `TERMINATE` (padrão) | `killpg` SIGTERM → `kill_grace_s` → SIGKILL. Finaliza com `FAILED`, `SHUTDOWN` e `-6` |
+| `TERMINATE` (padrão) | `plataforma.encerrar_grupo` (escalonado, §8.0). Finaliza com `FAILED`, `SHUTDOWN` e `-6` |
 
 Em seguida, o daemon faz o flush dos logs, grava `tbsss_agentes.status = 'PARADO'`, audita `AGENTE_FIM`, fecha a conexão e o lock file, e sai com código 0.
 
@@ -911,23 +1001,24 @@ Em seguida, o daemon faz o flush dos logs, grava `tbsss_agentes.status = 'PARADO
 
 O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualquer passo:
 
-1. **Usuário:** `os.geteuid() != 0`. É proibido rodar como root.
+1. **Usuário:** `plataforma.usuario_privilegiado()` precisa ser falso. É proibido rodar como root (POSIX) ou com token elevado/SYSTEM (Windows).
 2. **Configuração:** carregar e validar o `config.ini` (tipos, faixas, invariantes da §8.9 e `max_parallel_jobs <= max_parallel_hard_limit`), o `owner` e o `table_prefix` (regex do `AGENTS.md`), e `agent_id` contra `^[A-Za-z0-9._-]{1,30}$`.
 3. **Segredos:** validar o `secrets.cfg` (§4.1).
-4. **Diretórios:**
-   * `base_script_dir` passa na regra de ownership da §8.5;
-   * `log_dir` e `work_dir` existem, são graváveis e **não** ficam sob `base_script_dir`.
-5. **Instância única por host:** `fcntl.flock(LOCK_EX | LOCK_NB)` em `work_dir/sss-<agent_id>.lock`.
-6. **Banco:** carregar o Instant Client, conectar e confirmar `SELECT SYSDATE FROM DUAL`.
+4. **Diretórios e interpretadores:**
+   * `base_script_dir` passa na regra de ownership e permissão da §8.5;
+   * `log_dir` e `work_dir` existem, são graváveis, **não** ficam sob `base_script_dir` e, no Windows, têm ACL restrita à conta do agente;
+   * cada entrada de `[agent] interpretadores` é válida para a plataforma (§8.5).
+5. **Instância única por host:** `plataforma.travar_instancia` em `work_dir/sss-<agent_id>.lock`.
+6. **Banco:** carregar o Instant Client, conectar e confirmar o relógio do banco (`dialeto.agora()`; `SELECT SYSDATE FROM DUAL` no `oracle11g`).
 7. **Registro em `tbsss_agentes`:**
    * Se existir linha do mesmo `codigo` com `status = 'ATIVO'`, `heartbeat_at` recente (menor que `node_offline_timeout_s`) **e** `hostname` diferente, recusar a subida (`agent_id` duplicado).
-   * Caso contrário, executar `MERGE` com `status = 'ATIVO'`, `hostname`, `pid_daemon`, `versao`, `ambientes` e `iniciado_em`.
+   * Caso contrário, executar `MERGE` (ANSI) com `status = 'ATIVO'`, `hostname`, `pid_daemon`, `versao`, `ambientes`, `plataforma`, `interpretadores` e `iniciado_em`.
    * Auditar `AGENTE_INICIO`.
 8. **Ambientes atendidos:** todos existem em `tbsss_ambientes` com `ativo = 'S'`. Um ambiente inexistente é ERROR fatal; um ambiente inativo gera WARN e é ignorado.
 9. **Startup check** de tickets `RUNNING` do próprio `agente_id`:
    * `process_id` nulo leva a `FAILED` com `ORPHAN_PROCESS`.
-   * PID inexistente (`os.kill(pid, 0)` com `ProcessLookupError`) ou `starttime` diferente de `process_start` (PID reciclado) também leva a `ORPHAN_PROCESS`.
-   * PID vivo com `starttime` igual indica um filho de uma instância anterior do daemon. Como não pode ser adotado (`waitpid` impossível), ele é encerrado com `killpg` (SIGTERM → SIGKILL) e finalizado com `ORPHAN_PROCESS`.
+   * PID inexistente (`plataforma.processo_existe`) ou identidade diferente de `process_start` (PID reciclado) também leva a `ORPHAN_PROCESS`.
+   * PID vivo com a mesma identidade indica um filho de uma instância anterior do daemon. Como não pode ser adotado, ele é encerrado (`plataforma.encerrar_grupo`; no Windows, pelo Job nomeado `SSS-<agent_id>-<ticket_id>`, reaberto por nome) e finalizado com `ORPHAN_PROCESS`.
 
 ---
 
@@ -976,7 +1067,7 @@ UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}   ix_tbsss_tck_fila
 **Padrões globais:**
 
 * O `owner` é parametrizado (`gfcadastro`), e todo SQL qualifica `{owner}.objeto`.
-* Toda coluna `id` é `NUMBER(10) NOT NULL`, PK, preenchida pela trigger condicional:
+* Toda coluna `id` é `NUMBER(10) NOT NULL` (inteiro de 10 dígitos, em DDL gerada pelo dialeto), PK. **A aplicação sempre informa o `id`** (`dialeto.proximo_id`, §2.7). No `oracle11g` existe também a trigger condicional abaixo, como defesa para inserções manuais:
 
 ```sql
 CREATE OR REPLACE TRIGGER {owner}.{trigger_name}
@@ -1005,7 +1096,7 @@ END;
   * Na UI, desativar e reativar ficam no **formulário de edição**, não na lista. A ação abre um modal de confirmação que mostra o impacto (ex.: quantidade de agendamentos ativos afetados).
 * **Concorrência otimista nos cadastros (sem coluna de versão):**
   * O formulário de edição carrega uma `versao`: o sha256 dos campos editáveis, `ativo` incluído, calculado pelo servidor na leitura.
-  * Ao salvar, o service relê o registro e compara a versão. Em seguida, repassa os valores lidos ao repositório, que executa `UPDATE ... WHERE id = :id AND <coluna = valor lido>` com comparação nula-segura (`DECODE`) e checa o `rowcount`.
+  * Ao salvar, o service relê o registro e compara a versão. Em seguida, repassa os valores lidos ao repositório, que executa `UPDATE ... WHERE id = :id AND <coluna = valor lido>` com comparação nula-segura ANSI `(c = :v OR (c IS NULL AND :v IS NULL))` e checa o `rowcount`.
   * Se a versão divergir ou o `rowcount` for 0, o resultado é `RepoConflito`, sem alteração nem auditoria. A mensagem é "O registro foi alterado por outra pessoa. Recarregue a página."
   * A linha de auditoria é gravada na mesma operação (transação) do `INSERT` ou `UPDATE`.
 * **Edição de agendamento:** ao salvar uma alteração, `usuario_id` passa a ser o **editor**, que precisa ter `pode_executar` vigente para o script e o ambiente da regra. A regra sempre roda sob os privilégios de quem a definiu por último, o que impede um usuário de reaproveitar privilégios de outro editando a regra dele. A alteração é auditada com o `usuario_id` anterior e o novo.
@@ -1072,7 +1163,7 @@ END;
   * `ck_tbsss_scr_tparam (tipo_param IN ('NOMEADO','SEQUENCIAL','NENHUM'))`
   * `ck_tbsss_scr_ativo`
   * `ck_tbsss_scr_paral (max_qtd_parallel_env BETWEEN 1 AND 999)`
-  * `ck_tbsss_scr_cmd (comando_real IN ('/usr/bin/python3','/bin/bash','/bin/sh'))`
+  * `ck_tbsss_scr_int (interpretador IN ('PYTHON3','BASH','SH','POWERSHELL'))`
   * `ck_tbsss_scr_path (SUBSTR(path_file, 1, 1) <> '/' AND INSTR(path_file, '..') = 0)`
   * `ck_tbsss_scr_tmout (timeout_seg IS NULL OR timeout_seg > 0)`
 * **Colunas:**
@@ -1082,7 +1173,7 @@ END;
   * `grupo VARCHAR2(30 CHAR)`
   * `categoria VARCHAR2(30 CHAR)`
   * `etapa VARCHAR2(30 CHAR)`
-  * `comando_real VARCHAR2(60 CHAR) NOT NULL`
+  * `interpretador VARCHAR2(15 CHAR) NOT NULL` (lógico; o executável é mapeado por agente, §8.5)
   * `path_file VARCHAR2(250 CHAR) NOT NULL` (relativo a `base_script_dir`)
   * `tipo_param VARCHAR2(15 CHAR) DEFAULT 'NOMEADO' NOT NULL`
   * `max_qtd_parallel_env NUMBER(3) DEFAULT 1 NOT NULL`
@@ -1268,6 +1359,8 @@ END;
   * `pid_daemon NUMBER(8)`
   * `versao VARCHAR2(20 CHAR)`
   * `ambientes VARCHAR2(500 CHAR)`
+  * `plataforma VARCHAR2(10 CHAR)`, com CK `ck_tbsss_agt_plat (plataforma IN ('LINUX','WINDOWS','UNIX'))`
+  * `interpretadores VARCHAR2(100 CHAR)` (lista separada por vírgula dos interpretadores lógicos suportados)
   * `status VARCHAR2(10 CHAR) DEFAULT 'ATIVO' NOT NULL`
   * `iniciado_em DATE`
   * `heartbeat_at DATE`
@@ -1297,6 +1390,7 @@ END;
 
 ### 11.1 `scripts/init_db.py` (idempotente)
 
+* A DDL é gerada pelo dialeto configurado (§2.7) a partir do registro de `sql_ident`. As fases abaixo e as consultas de catálogo (`ALL_OBJECTS` etc.) são as do `oracle11g`; outro dialeto fornece os equivalentes.
 * **Fases**, nesta ordem:
   1. sequences;
   2. tabelas sem FK;
@@ -1312,7 +1406,7 @@ END;
   * `--lob-basicfile` aplica o fallback de LOB;
   * **não há** opção de DROP em produção. `--recreate` só é aceito com `SSS_ENV=DEV` e confirmação interativa.
 * Toda falha de fase aborta com código diferente de zero e com o objeto e o ORA- no log.
-* **Seed** via `MERGE` (idempotente): o catálogo de funcionalidades (§4.3.D) e o perfil `ADMINISTRADOR` (`is_admin = 'S'`).
+* **Seed** via `MERGE` ANSI (idempotente): o catálogo de funcionalidades (§4.3.D) e o perfil `ADMINISTRADOR` (`is_admin = 'S'`).
 * **Administrador inicial:** o login vem de `--admin-login`, e a senha é lida de `getpass` ou de `SSS_BOOTSTRAP_ADMIN_PASSWORD`. Nunca há valor fixo no código.
 * Se o usuário de aplicação for diferente do `owner`, o script emite os `GRANT`s e documenta os sinônimos necessários. Todo SQL da aplicação já qualifica o `owner`.
 
@@ -1333,7 +1427,7 @@ END;
 * `tbsss_ticket_resp` é removida em cascata, e `parent_ticket_id` dos filhos vira `NULL`.
 * `tbsss_auditoria` usa `audit_retention_days` e o mesmo padrão de lote.
 * Os logs locais de ticket mais antigos que `local_log_retention_days` são removidos.
-* A execução é agendada via cron do sistema operacional no servidor do agente e auditada como `PURGE`.
+* A execução é agendada pelo agendador do sistema operacional no servidor do agente (cron no POSIX; Agendador de Tarefas no Windows) e auditada como `PURGE`.
 
 ---
 
@@ -1351,9 +1445,10 @@ user = gfcadastro
 dsn = 10.0.0.1:1521/servico_homolog
 owner = gfcadastro
 table_prefix = tbsss_
-driver = oracledb                 ; oracledb | cx_Oracle
+driver = oracledb                 ; oracledb | cx_Oracle (versão conforme o Python, §2.3)
+dialeto = oracle11g               ; dialeto SQL (§2.7); hoje apenas oracle11g
 use_thick_mode = true
-oracle_client_lib_dir =           ; somente macOS/Windows (dev); no Linux usar ldconfig/LD_LIBRARY_PATH
+oracle_client_lib_dir =           ; somente Windows/macOS; no Linux/Unix usar ldconfig/LD_LIBRARY_PATH
 call_timeout_ms = 30000
 pool_min = 1
 pool_max = 4
@@ -1366,7 +1461,10 @@ agent_id = srv-linux-prod-01
 ambientes_atendidos = PRODUCAO,HOMOLOGACAO
 base_script_dir = /opt/automacoes/scripts
 work_dir = /var/lib/sss/work
-script_owner_uids = 0
+script_owner_uids = 0             ; POSIX: UIDs donos da árvore de scripts
+script_owner_sids =               ; Windows: SIDs donos da árvore (ex.: S-1-5-32-544)
+interpretadores = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh
+                                  ; Windows ex.: PYTHON3=C:\Python36\python.exe,POWERSHELL=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
 max_parallel_jobs = 4
 max_parallel_hard_limit = 32
 claim_batch_size = 20
@@ -1383,7 +1481,7 @@ shutdown_grace_s = 30
 misfire_policy = RUN_ONCE         ; RUN_ONCE | SKIP
 misfire_tolerance_s = 300
 cron_horizon_days = 1461
-child_locale = C.UTF-8
+child_locale = C.UTF-8            ; somente POSIX
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 
 [logging]
@@ -1411,14 +1509,22 @@ purge_batch_size = 1000
 
 Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Chave desconhecida, ausente ou fora da faixa interrompe a subida com a chave e o motivo no log.
 
+As chaves `dialeto`, `script_owner_sids` e `interpretadores` passam a ser lidas e validadas a partir do F7.0 e do F8.0 (CR-001). Até lá, os processos implementados não as usam.
+
 ### 12.2 Launchers
 
-`bin/sss-web.sh` e `bin/sss-scheduler.sh` devem:
+`bin/sss-web.sh` e `bin/sss-scheduler.sh` (Linux/Unix) devem:
 
 * exportar `LD_LIBRARY_PATH` do Instant Client 19 (quando não houver `ldconfig`) e `TZ`;
 * aplicar `umask 077`;
 * recusar a execução como root;
 * fazer `exec` do processo Python, para que os sinais cheguem diretamente a ele.
+
+`bin/sss-web.ps1` e `bin/sss-scheduler.ps1` (Windows) devem:
+
+* incluir o Instant Client 19 no `PATH` do processo e definir `TZ`;
+* recusar a execução com token elevado ou como SYSTEM;
+* iniciar o Python em primeiro plano, para que `CTRL_BREAK` e o arquivo `.stop` sejam tratados pelo próprio daemon.
 
 **Hardening do web2py em HML e PROD:**
 * As aplicações de exemplo `admin`, `welcome` e `examples` são **removidas** do pacote implantado.
@@ -1442,7 +1548,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
   | ERROR | Falhas de operação, `OWNERSHIP_LOST` |
   | CRITICAL | Fencing e falhas de inicialização |
 
-* Todo `except` registra o ORA- e o stack trace em ERROR antes de qualquer `ROLLBACK`.
+* Todo `except` registra o código de erro do banco (ORA- no Oracle) e o stack trace em ERROR antes de qualquer `ROLLBACK`.
 * É proibido registrar senhas, `PADRAO_VALOR_RUN_CONEXAO_BD`, `cookie_key`, o conteúdo de `secrets.cfg` e valores de parâmetros sensíveis.
 * **Visão operacional:** a tela de agentes (`VER_AUDITORIA`) lista `tbsss_agentes` com o heartbeat e os tickets `RUNNING` de cada agente.
 
@@ -1452,9 +1558,11 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 
 | Risco | Mitigação vigente |
 |---|---|
-| Credencial legível em `/proc/<pid>/environ` (mesmo UID ou root) | UID dedicado, sem shell interativo, e servidor restrito |
-| Argumentos visíveis em `ps` | Proibição de parâmetro de senha; parâmetros sensíveis apenas mascarados na UI e nos logs |
-| Script que faça `setsid`/double-fork escapa do `killpg` | Homologação do script no catálogo; política de revisão de código dos scripts |
+| Credencial legível no ambiente do processo (`/proc/<pid>/environ` no Linux; memória do processo no Windows), pelo mesmo usuário ou por administradores | Conta dedicada, sem shell interativo nem privilégio administrativo, e servidor restrito |
+| Argumentos visíveis em `ps`/lista de processos | Proibição de parâmetro de senha; parâmetros sensíveis apenas mascarados na UI e nos logs |
+| POSIX: script que faça `setsid`/double-fork escapa do `killpg` | Homologação do script no catálogo; política de revisão de código. No Windows, o Job Object cobre esse caso |
+| Windows: janela entre o spawn e a atribuição ao Job Object, em que o filho poderia criar um processo fora do Job | A atribuição ocorre imediatamente após o `Popen`; homologação e revisão dos scripts |
+| Windows: interpretadores com política de execução própria (PowerShell) | `-NoProfile -NonInteractive -ExecutionPolicy Bypass -File` fixos; perfis e módulos de usuário não são carregados |
 | TOCTOU entre a validação e o `exec` | Árvore de scripts não gravável pelo agente (§8.5) |
 | Granularidade fina "perfil × script × ambiente" | Não suportada; a intersecção `perfil_amb ∩ script_amb` atende ao escopo atual |
 | Semântica de horário de verão | Horário de parede do servidor Oracle (§7.1) |
