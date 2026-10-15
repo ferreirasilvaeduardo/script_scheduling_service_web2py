@@ -41,6 +41,7 @@ O capítulo 18 lista o que preparar desde já para a implantação definitiva (O
  7. Segredos (secrets.cfg) ............ §8.2   15. Operação, logs e atualização ....... §15-16
  8. Senha dos usuários de demonstração  §8.3   17. Problemas e soluções ............... §17
                                                21. Servidor sem sudo/systemd (clone 7) . §21
+                                               22. Servidor acessado por salto (3067) .. §22
 ```
 
 Convenções deste guia:
@@ -66,7 +67,7 @@ Convenções deste guia:
 |---|---|
 | Sistema operacional | Linux x86_64. Validado em Oracle Linux 6.9 (clone 7) e Ubuntu 24.04; esperado em RHEL/Oracle Linux/Rocky/Alma 7+, Ubuntu 20.04+, Debian 11+ |
 | CPU / memória / disco | 1 vCPU, 1 GB de RAM livre, 500 MB de disco (código ~60 MB + logs) |
-| Python | **3.6.0 ou superior** (validado de 3.6.0 a 3.13). Os módulos `ssl` e `sqlite3` **não** são necessários (desde o commit `fdf6f35`); `hashlib` com OpenSSL (`_hashlib`) é. Ver §6 |
+| Python | **3.6.0 ou superior** (validado de 3.6.0 a 3.13). Os módulos `ssl`, `sqlite3` e `_hashlib` (OpenSSL) **não** são necessários (desde o commit `fdf6f35`); basta o `hashlib.pbkdf2_hmac` funcionar. Ver §6 |
 | Pacotes Python | **Nenhum.** O web2py e todas as bibliotecas de frontend vêm no repositório. Não use `pip install` |
 | Ferramentas | `git` (ou `tar`), `curl`. `sudo` e `systemd` são opcionais: sem eles, use a variante do §21 |
 | Rede | Nenhuma porta aberta para a rede: o servidor escuta em `127.0.0.1:8000`. Acesso dos usuários por SSH (porta 22). **Não precisa de internet** |
@@ -171,9 +172,11 @@ Verifique a versão e o suporte a PBKDF2 (obrigatório para as senhas):
 ```bash
 PYTHON=python3          # ajuste conforme a opção escolhida (ex.: /usr/bin/python3.6)
 $PYTHON --version
-$PYTHON -c "import _hashlib, hashlib, time; t=time.time(); hashlib.pbkdf2_hmac('sha256', b'x', b'y', 200000); print('pbkdf2 OK (%.2fs por senha)' % (time.time()-t))"
-# esperado: "pbkdf2 OK" em menos de ~1 s. ImportError em _hashlib = Python sem OpenSSL: use outro Python.
-# Ausência de ssl e de sqlite3 não impede o SSS (ex.: clone 7).
+$PYTHON -c "import hashlib, time; t=time.time(); hashlib.pbkdf2_hmac('sha256', b'x', b'y', 200000); print('pbkdf2 OK (%.2fs por senha)' % (time.time()-t))"
+# esperado: "pbkdf2 OK" em até ~1 s (é o tempo de cada login).
+# Sem OpenSSL (_hashlib), o Python 3.6 a 3.9 usa uma implementação em Python puro, que também serve
+# (0,28 s no servidor 10.129.164.55). Se der AttributeError/ImportError, use outro Python.
+# Ausência de ssl e de sqlite3 não impede o SSS.
 ```
 
 ---
@@ -608,7 +611,7 @@ O FAKE não deixa dados em banco. Antes de apagar `/var/log/sss`, guarde os logs
 
 ## 21. Variante: servidor compartilhado sem `sudo` nem `systemd` (registro do clone 7)
 
-Implantação feita em 2026-10-15 no servidor **clone 7** (`brtlvlts1216pl`, 10.238.10.109), que serve de modelo para servidores parecidos.
+Implantação feita em 2026-10-15 no servidor **clone 7** (`brtlvlts1216pl`, 10.238.10.109), que serve de modelo para servidores parecidos. **Situação atual:** removida no mesmo dia, a pedido do responsável (o SSS passou para o servidor do §22); o `~/.sss` do clone 7 também foi apagado.
 
 ### 21.1 O que o servidor tinha
 
@@ -664,3 +667,70 @@ ssh -N -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -L 180
 * Teste de carga da configuração (§10): `SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=clone7-sss-hml)`.
 * Escuta somente em `127.0.0.1:18000`; cabeçalhos de segurança presentes; POST com origem estranha → 403 (registrado no log); painel do web2py desabilitado (`parameters_18000.py` com `password=None`).
 * Pelo túnel: login do `admin`, disparo de ticket, painel de agentes e logout, sem erros no console. Em seguida, reinício pelos scripts para entregar os dados de demonstração limpos.
+
+---
+
+## 22. Servidor acessado por salto: `brtlvlty3067sl` (10.129.164.55)
+
+Implantação feita em 2026-10-15 com o pacote do commit `aca60b0` (código do `fdf6f35` mais documentação). **Este é o servidor ativo do SSS.**
+
+### 22.1 Diferenças em relação ao clone 7
+
+| Item | Situação | Decisão |
+|---|---|---|
+| Acesso | Só pelo clone 7 (10.238.10.109); não há rota direta das estações | Cópia de arquivos e túnel em dois saltos (22.4) |
+| Sistema | Oracle Linux 6.10 | — |
+| Python | `/portaloptrib/TESHUVA/sparta/python3.8/bin/python3` (3.8.5), **sem `ssl`, sem `sqlite3` e sem `_hashlib`** | Usado como está: suíte completa OK, PBKDF2 em Python puro (0,28 s por login). **Risco:** esse Python pertence ao sistema Sparta; se for trocado ou removido, o SSS para |
+| Ferramentas | `git`, `crontab` e `nohup` disponíveis; **sem `screen`/`tmux`**, `sudo` ou `systemd` | Processo com `nohup` e arquivo de PID |
+| `/portaloptrib/TESHUVA` | Do próprio usuário, modo `755` (não compartilhado como no clone 7) | Mesma estrutura do §21.2, em `/portaloptrib/TESHUVA/SSS` |
+| Porta | 18000 livre | `127.0.0.1:18000` |
+
+`config.ini`: igual ao do clone 7, exceto `agent_id = srv3067-sss-hml` e `script_owner_uids = 4135` (UID do `mastersafgf` neste servidor). Segredos e senha de demonstração em `~/.sss` (`0600`), gerados no servidor.
+
+### 22.2 Operação
+
+```bash
+/portaloptrib/TESHUVA/SSS/iniciar_sss.sh    # sobe com nohup, grava o PID em SSS/work/sss_web.pid e confere o HTTP 200
+/portaloptrib/TESHUVA/SSS/parar_sss.sh      # SIGINT ao PID (só se o PID ainda for o do SSS), espera a porta ser liberada
+tail -f /portaloptrib/TESHUVA/SSS/logs/servidor.out     # saída do servidor (equivale ao "screen -r" do clone 7)
+tail -f /portaloptrib/TESHUVA/SSS/logs/sss_web.log      # log da aplicação
+cat ~/.sss/web.env                                      # senha dos usuários de demonstração
+```
+
+* Os dois scripts são idempotentes: subir com o SSS no ar responde "O SSS ja esta rodando (PID ...)"; parar com ele parado responde "O SSS nao esta rodando.".
+* O processo continua no ar depois que a sessão SSH é encerrada (`nohup`).
+
+### 22.3 Início automático no boot (não ativado)
+
+O `crontab` do usuário está vazio e **não foi alterado**. Para ativar, o responsável roda uma vez no servidor:
+
+```bash
+( crontab -l 2>/dev/null; echo "@reboot /portaloptrib/TESHUVA/SSS/iniciar_sss.sh >> /portaloptrib/TESHUVA/SSS/logs/servidor.out 2>&1" ) | crontab -
+crontab -l      # conferir
+```
+
+Para desativar: `crontab -e` e apagar a linha. Depois de um reboot, os dados de demonstração voltam ao seed.
+
+### 22.4 Acesso dos usuários (túnel com salto pelo clone 7)
+
+Um único comando, na máquina do usuário (Linux, macOS ou Windows 10+):
+
+```bash
+ssh -N -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+    -o "ProxyCommand=ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -W %h:%p mastersafgf@10.238.10.109" \
+    -L 18000:127.0.0.1:18000 mastersafgf@10.129.164.55
+# navegador: http://localhost:18000/script_scheduling_service
+```
+
+* A senha é pedida **duas vezes**: a primeira do clone 7, a segunda do 10.129.164.55 (ambos aceitam senha). Quem tiver chave autorizada nos dois servidores não digita nada.
+* Na primeira conexão, o SSH pede para confiar na chave do servidor novo. A impressão digital correta é `SHA256:Gpacuzn+pHDGaLIHMxMnl8l0UVGvNE5N7Dkp3VzHpcM` (RSA 2048, a mesma que o clone 7 já confia).
+* No Windows, o comando funciona no PowerShell (OpenSSH do Windows 10+). No PuTTY, use *Connection → Proxy* tipo "Local" com o comando `plink mastersafgf@10.238.10.109 -nc %host:%port` e o túnel de *Connection → SSH → Tunnels* (18000 → `127.0.0.1:18000`). **[não ensaiado]**
+* **Alternativa em dois trechos** (usada na validação): no clone 7, `ssh -f -N -L 18001:127.0.0.1:18000 mastersafgf@10.129.164.55 </dev/null >/dev/null 2>&1`; na estação, `ssh -N -o HostKeyAlgorithms=+ssh-rsa -L 18000:127.0.0.1:18001 mastersafgf@10.238.10.109`. Lembre de encerrar o trecho do clone 7 depois (`kill` no PID do `ssh -f`).
+
+### 22.5 Validação realizada
+
+* Pacote com SHA-256 conferido; `check_env.py` OK; suíte no servidor: `Ran 615 tests ... OK (skipped=17)`.
+* Teste de carga da configuração: `SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)`.
+* Escuta só em `127.0.0.1:18000`; cabeçalhos de segurança presentes; origem estranha → 403; painel do web2py desabilitado.
+* Processo vivo depois do fim da sessão SSH; reinício e idempotência dos scripts conferidos.
+* Pelo túnel em dois trechos: login do `admin`, disparo de ticket, painel de agentes e logout, sem erros. Depois, reinício para entregar os dados de demonstração limpos.
