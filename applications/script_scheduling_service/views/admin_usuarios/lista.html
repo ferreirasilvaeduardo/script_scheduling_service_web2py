@@ -1,0 +1,55 @@
+{{extend 'layout.html'}}
+{{
+# Lista de usuários (padrão de CRUD administrativo). O serviço já remove senha_hash dos itens.
+import ui_helpers
+_opc_situacao = [('', 'Todos'), ('S', 'Ativos'), ('N', 'Inativos'), ('B', 'Bloqueados')]
+_opc_perfil = [('', 'Todos')] + [(str(_pf['id']), _pf['nome']) for _pf in perfis]
+filtros = {'id': 'filtro-usuarios', 'url_base': ('admin_usuarios', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': [
+    {'nome': 'login', 'rotulo': 'Login', 'tipo': 'texto', 'valor': filtros_ativos.get('login')},
+    {'nome': 'nome', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('nome')},
+    {'nome': 'perfil_id', 'rotulo': 'Perfil', 'tipo': 'select', 'valor': str(filtros_ativos.get('perfil_id') or ''), 'opcoes': _opc_perfil},
+    {'nome': 'situacao', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('situacao'), 'opcoes': _opc_situacao},
+]}
+_linhas = []
+for _u in resultado['itens']:
+    _linhas.append({
+        'login': _u['login'],
+        'nome': _u['nome'],
+        'perfil': _u['perfil_nome'],
+        'ativo': _u['ativo'],
+        'bloqueio': (u'Bloqueado até %s' % ui_helpers.formatar_data(_u['bloqueado_ate'])) if _u['bloqueado'] else '-',
+        'ultimo_login': ui_helpers.formatar_data(_u['ultimo_login']),
+        'acao': {'href': URL(c='admin_usuarios', f='form', args=[_u['id']]), 'rotulo': 'Editar', 'descricao': u'Editar usuário %s' % _u['login']},
+    })
+pass
+tabela = {'legenda': u'Usuários cadastrados', 'erro': erro, 'linhas': _linhas, 'msg_vazio': u'Nenhum usuário encontrado.', 'colunas': [
+    {'chave': 'login', 'rotulo': 'Login', 'tipo': 'mono'},
+    {'chave': 'nome', 'rotulo': 'Nome'},
+    {'chave': 'perfil', 'rotulo': 'Perfil', 'tipo': 'mono'},
+    {'chave': 'ativo', 'rotulo': u'Situação', 'tipo': 'ativo'},
+    {'chave': 'bloqueio', 'rotulo': 'Bloqueio'},
+    {'chave': 'ultimo_login', 'rotulo': u'Último login'},
+    {'chave': 'acao', 'rotulo': u'Ações', 'tipo': 'acao'},
+]}
+pagina = resultado['pagina']
+total = resultado['total']
+url_base = ('admin_usuarios', 'lista')
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">Usuários</h1>
+    <p class="sss-page-sub">Operadores, perfis de acesso, bloqueios e senhas. Senhas nunca são exibidas.</p>
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-primary" href="{{=URL(c='admin_usuarios', f='form')}}">Novo usuário</a>
+  </div>
+</div>
+
+<section class="sss-card" aria-label="Filtros">
+  {{include 'components/filtros.html'}}
+</section>
+
+<section class="sss-card" aria-label="Usuários">
+  {{include 'components/tabela.html'}}
+  {{include 'components/paginacao.html'}}
+</section>

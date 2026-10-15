@@ -225,6 +225,19 @@ password = ...
   * `X-Frame-Options: DENY`
   * `Referrer-Policy: same-origin`. Com `no-referrer`, o navegador envia `Origin: null` em POST de formulário (especificação Fetch), o que inviabiliza a checagem de `Origin` descrita acima. `same-origin` continua omitindo o `Referer` em navegação para fora do site.
   * `Cache-Control: no-store` em páginas autenticadas
+* **Gestão de senhas pela UI** (F4.3):
+  * **Inclusão de usuário:** a senha inicial passa pela política e exige confirmação. Grava `senha_hash` (nunca a senha) e `senha_alterada_em`.
+  * **Redefinir senha** (administrador, `CAD_USUARIOS`): aplica a política com confirmação e zera `tentativas_falha` e `bloqueado_ate`. A auditoria é `CAD_ALTERAR` com detalhe `senha redefinida`, sem o valor. Não existe "trocar no próximo login".
+  * **Desbloquear:** zera tentativas e bloqueio, com auditoria `CAD_ALTERAR`.
+  * **Minha senha** (`default/minha_senha`, qualquer usuário logado):
+    * exige a senha atual. Uma senha atual errada **conta como falha de login**, com o mesmo limite e bloqueio do item "Proteções do login" e auditoria `LOGIN_FALHA`;
+    * se a conta for bloqueada, a sessão é encerrada;
+    * no sucesso, a sessão é renovada (`session.renew()`, com novo token CSRF) e a troca é auditada (`CAD_ALTERAR`, "senha alterada pelo próprio usuário").
+  * **Autoproteção:** pela administração, o usuário logado não pode:
+    * desativar a si mesmo;
+    * trocar o próprio perfil administrativo por um não administrativo;
+    * redefinir a própria senha (para isso existe "Minha senha", que exige a senha atual).
+  * **Senhas não aparecem em lugar nenhum:** campos `type="password"`, nunca reapresentados. A listagem e o formulário recebem os registros sem `senha_hash`. Os controllers retiram as senhas de `request.vars` logo após a leitura, porque o ticket de erro do web2py grava as variáveis da requisição.
 * **IP de origem:** usa `request.env.remote_addr`. O `X-Forwarded-For` só é aceito se o `remote_addr` constar em `trusted_proxies`.
 * **XSS:**
   * Saída sempre escapada (`{{=valor}}`).
@@ -266,6 +279,8 @@ As operações cobertas são: desativar usuário, trocar o perfil de usuário, d
 * **No contrato de repositório**, a proteção faz parte da própria operação de alteração (`perfis_alterar`; no F4.3, a de usuários): lock, cálculo do conjunto resultante e `UPDATE` ou rejeição, numa só chamada. O service nunca faz check-then-act com duas chamadas soltas.
 * A rejeição é `RepoViolacao(constraint='sss_ultimo_admin')`, uma regra de aplicação e não uma constraint do banco. A UI exibe "Operação negada: não pode restar nenhum administrador ativo."
 * Um perfil `is_admin = 'S'` sem usuários ativos não conta como administrador ativo.
+* Para usuários (`repo_usuarios.alterar`), a proteção vale ao desativar o usuário ou ao movê-lo para um perfil não administrativo (ou inativo). No Oracle, é o mesmo `SELECT ... FOR UPDATE WAIT 5`, na mesma transação do `UPDATE`.
+* **Filtro de situação na lista de usuários:** Ativos, Inativos e **Bloqueados**, que são os usuários com `bloqueado_ate` ainda vigente (filtro `bloqueado_em` do contrato).
 
 #### B.1 Matriz de permissões na UI (`admin_perfis`)
 
@@ -1047,7 +1062,7 @@ END;
   * `id`
   * `login VARCHAR2(30 CHAR) NOT NULL`
   * `nome VARCHAR2(60 CHAR) NOT NULL`
-  * `senha_hash VARCHAR2(256 CHAR) NOT NULL`
+  * `senha_hash VARCHAR2(256 CHAR) NOT NULL` (nunca sai da camada de serviço)
   * `perfil_id NUMBER(10) NOT NULL`
   * `tentativas_falha NUMBER(2) DEFAULT 0 NOT NULL`
   * `bloqueado_ate DATE`

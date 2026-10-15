@@ -33,8 +33,8 @@ class RepoUsuariosFake(RepoUsuarios):
 
     def obter_estado_sessao(self, usuario_id):
         """Retorna estado composto de sessao (usuario + perfil + perm_versao)."""
-        with self._store.lock_usuarios:
-            with self._store.lock_rbac:
+        with self._store.lock_rbac:
+            with self._store.lock_usuarios:
                 if usuario_id not in self._store.usuarios:
                     raise RepoNaoEncontrado("Usuario ID %s nao encontrado" % usuario_id)
                 u = self._store.usuarios[usuario_id]
@@ -77,14 +77,34 @@ class RepoUsuariosFake(RepoUsuarios):
             if ativo_f:
                 lista = [u for u in lista if u["ativo"] == ativo_f]
 
+            bloq_f = filtros.get("bloqueado_em")
+            if bloq_f is not None:
+                lista = [u for u in lista if u.get("bloqueado_ate") is not None and u["bloqueado_ate"] > bloq_f]
+
             # Ordenacao estavel: login ASC, id ASC
             lista.sort(key=lambda x: (x.get("login", ""), x["id"]))
             return paginar(lista, pagina=pagina, tamanho=tamanho)
 
-    def inserir(self, dados):
-        """Insere novo usuario com validacoes de integridade."""
-        with self._store.lock_usuarios:
-            with self._store.lock_rbac:
+    def _auditar(self, auditoria, usuario_id):
+        if auditoria:
+            self._store.registrar_auditoria_interno(
+                ator=auditoria.get("ator"),
+                ip=auditoria.get("ip"),
+                acao=auditoria["acao"],
+                entidade="tbsss_usuarios",
+                entidade_id=usuario_id,
+                detalhe=auditoria.get("detalhe"),
+            )
+
+    def _eh_admin_ativo(self, usuario):
+        p = self._store.perfis.get(usuario["perfil_id"])
+        return usuario["ativo"] == "S" and p is not None and p["ativo"] == "S" and p["is_admin"] == "S"
+
+    def inserir(self, dados, auditoria=None):
+        """Insere novo usuario com validacoes de integridade, auditando na mesma operacao."""
+        # Ordem de locks unica no FAKE: rbac e depois usuarios (como admins_ativos_bloquear).
+        with self._store.lock_rbac:
+            with self._store.lock_usuarios:
                 login = dados.get("login")
                 if not login or not _RE_LOGIN.fullmatch(login):
                     raise RepoViolacao("Login invalido (esperado: 3-30 caracteres [a-z0-9._-])", constraint="ck_tbsss_usr_login")
@@ -120,16 +140,20 @@ class RepoUsuariosFake(RepoUsuarios):
                     "created_at": dados.get("created_at") or self._store.agora(),
                 }
                 self._store.usuarios[uid] = copy.deepcopy(novo)
+                self._auditar(auditoria, uid)
                 return copy.deepcopy(novo)
 
-    def alterar(self, id, dados):
-        """Altera usuario. O login e estritamente imutavel."""
-        with self._store.lock_usuarios:
-            with self._store.lock_rbac:
+    def alterar(self, id, dados, esperado=None, auditoria=None):
+        """Altera usuario (login imutavel), condicional a 'esperado' e com protecao do ultimo admin."""
+        with self._store.lock_rbac:
+            with self._store.lock_usuarios:
                 if id not in self._store.usuarios:
                     raise RepoNaoEncontrado("Usuario ID %s nao encontrado" % id)
 
                 atual = self._store.usuarios[id]
+                for campo, valor in (esperado or {}).items():
+                    if atual.get(campo) != valor:
+                        raise RepoConflito("Usuario ID %s alterado por outra operacao (%s)" % (id, campo))
 
                 # Imutabilidade do login (README §10 trigger tr_tbsss_usr_bu)
                 novo_login = dados.get("login")
@@ -137,33 +161,40 @@ class RepoUsuariosFake(RepoUsuarios):
                     raise RepoViolacao("Login de usuario e imutavel", constraint="tr_tbsss_usr_bu")
 
                 novo_perfil = dados.get("perfil_id")
-                perfil_alterado = False
-                if novo_perfil is not None:
-                    if novo_perfil not in self._store.perfis:
-                        raise RepoViolacao("Perfil ID %s nao existe" % novo_perfil, constraint="fk_tbsss_usr_per")
-                    if novo_perfil != atual["perfil_id"]:
-                        perfil_alterado = True
+                if novo_perfil is not None and novo_perfil not in self._store.perfis:
+                    raise RepoViolacao("Perfil ID %s nao existe" % novo_perfil, constraint="fk_tbsss_usr_per")
+                perfil_alterado = novo_perfil is not None and novo_perfil != atual["perfil_id"]
 
-                ativo_alterado = False
                 novo_ativo = dados.get("ativo")
-                if novo_ativo is not None:
-                    if novo_ativo not in ("S", "N"):
-                        raise RepoViolacao("Flag ativo deve ser 'S' ou 'N'", constraint="ck_tbsss_usr_ativo")
-                    if novo_ativo != atual["ativo"]:
-                        ativo_alterado = True
+                if novo_ativo is not None and novo_ativo not in ("S", "N"):
+                    raise RepoViolacao("Flag ativo deve ser 'S' ou 'N'", constraint="ck_tbsss_usr_ativo")
+                ativo_alterado = novo_ativo is not None and novo_ativo != atual["ativo"]
 
-                for k, v in dados.items():
-                    if k in ("nome", "perfil_id", "senha_hash", "tentativas_falha",
-                             "bloqueado_ate", "ultimo_login", "senha_alterada_em", "ativo"):
-                        atual[k] = v
+                mudancas = dict((k, v) for k, v in dados.items()
+                                if k in ("nome", "perfil_id", "senha_hash", "tentativas_falha", "bloqueado_ate",
+                                         "ultimo_login", "senha_alterada_em", "ativo"))
+                if int(mudancas.get("tentativas_falha", 0) or 0) < 0:
+                    raise RepoViolacao("Tentativas falhas nao podem ser negativas", constraint="ck_tbsss_usr_tent")
+
+                # README §4.3.B: lock dos admins e validacao do conjunto resultante na mesma operacao.
+                if self._eh_admin_ativo(atual) and not self._eh_admin_ativo(dict(atual, **mudancas)):
+                    restantes = [u for uid, u in self._store.usuarios.items()
+                                 if uid != id and self._eh_admin_ativo(u)]
+                    if not restantes:
+                        raise RepoViolacao("Operacao deixaria o sistema sem administrador ativo",
+                                           constraint="sss_ultimo_admin")
+
+                anterior = atual["perfil_id"]
+                atual.update(mudancas)
 
                 # Incrementa perm_versao do perfil se houver alteracao de perfil ou ativo
                 if perfil_alterado or ativo_alterado:
-                    if atual["perfil_id"] in self._store.perfis:
-                        self._store.perfis[atual["perfil_id"]]["perm_versao"] += 1
-                    if perfil_alterado and novo_perfil in self._store.perfis:
+                    if anterior in self._store.perfis:
+                        self._store.perfis[anterior]["perm_versao"] += 1
+                    if perfil_alterado:
                         self._store.perfis[novo_perfil]["perm_versao"] += 1
 
+                self._auditar(auditoria, id)
                 return copy.deepcopy(atual)
 
     def registrar_falha_login(self, login, bloqueio_ate=None):
@@ -188,7 +219,7 @@ class RepoUsuariosFake(RepoUsuarios):
                     return copy.deepcopy(u)
             raise RepoNaoEncontrado("Usuario com login '%s' nao encontrado" % login)
 
-    def desbloquear(self, id):
+    def desbloquear(self, id, auditoria=None):
         """Desbloqueia conta de usuario zerando tentativas."""
         with self._store.lock_usuarios:
             if id not in self._store.usuarios:
@@ -196,9 +227,10 @@ class RepoUsuariosFake(RepoUsuarios):
             u = self._store.usuarios[id]
             u["tentativas_falha"] = 0
             u["bloqueado_ate"] = None
+            self._auditar(auditoria, id)
             return copy.deepcopy(u)
 
-    def definir_senha(self, id, senha_hash, agora=None):
+    def definir_senha(self, id, senha_hash, agora=None, auditoria=None):
         """Atualiza a senha do usuario e zera contadores de bloqueio."""
         with self._store.lock_usuarios:
             if id not in self._store.usuarios:
@@ -208,4 +240,5 @@ class RepoUsuariosFake(RepoUsuarios):
             u["senha_alterada_em"] = agora or self._store.agora()
             u["tentativas_falha"] = 0
             u["bloqueado_ate"] = None
+            self._auditar(auditoria, id)
             return copy.deepcopy(u)

@@ -971,3 +971,8 @@
   font-size: var(--sss-fs-sm);
   overflow-wrap: anywhere;
 }
+
+/* Formulários curtos (senhas) não ocupam a largura toda em telas grandes. */
+.sss-form-estreito {
+  max-width: 32rem;
+}

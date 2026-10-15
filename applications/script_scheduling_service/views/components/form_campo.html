@@ -11,13 +11,15 @@
 #     obrigatorio -- opcional; bool;
 #     opcoes      -- select: lista de (valor, rotulo);
 #     maxlength   -- opcional; limite de caracteres (text/textarea);
-#     somente_leitura -- opcional; bool (readonly: o valor aparece mas o servidor o ignora).
+#     somente_leitura -- opcional; bool (readonly: o valor aparece mas o servidor o ignora);
+#     autocomplete -- opcional; valor do atributo autocomplete (ex.: 'new-password').
+# tipo 'password' nunca reapresenta o valor recebido.
 #   foco_campo -- nome do primeiro campo inválido (ui_helpers.primeiro_campo_invalido);
 #                 esse campo recebe autofocus, sem JavaScript.
 _fc_id = 'campo-' + campo['nome']
 _fc_tipo = campo.get('tipo') or 'text'
 _fc_valor = campo.get('valor')
-_fc_valor = '' if _fc_valor is None else _fc_valor
+_fc_valor = '' if (_fc_valor is None or _fc_tipo == 'password') else _fc_valor
 _fc_erro = campo.get('erro')
 _fc_desc = []
 if campo.get('ajuda'):
@@ -33,6 +35,9 @@ if _fc_desc:
 pass
 if campo.get('maxlength'):
     _fc_attrs['maxlength'] = campo['maxlength']
+pass
+if campo.get('autocomplete'):
+    _fc_attrs['autocomplete'] = campo['autocomplete']
 pass
 if campo.get('somente_leitura'):
     _fc_attrs['readonly'] = 'readonly'

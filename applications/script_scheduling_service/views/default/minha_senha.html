@@ -1,0 +1,27 @@
+{{extend 'layout.html'}}
+{{
+# Troca da própria senha (exige a atual). Campos de senha nunca são reapresentados.
+_campos = [
+    {'nome': 'senha_atual', 'rotulo': 'Senha atual', 'tipo': 'password', 'erro': erros.get('senha_atual'), 'obrigatorio': True, 'autocomplete': 'current-password', 'maxlength': 1024},
+    {'nome': 'nova', 'rotulo': 'Nova senha', 'tipo': 'password', 'erro': erros.get('nova'), 'obrigatorio': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'ajuda': ajuda_senha},
+    {'nome': 'confirmacao', 'rotulo': u'Confirmação da nova senha', 'tipo': 'password', 'erro': erros.get('confirmacao'), 'obrigatorio': True, 'autocomplete': 'new-password', 'maxlength': 1024},
+]
+}}
+<div class="sss-page-header">
+  <h1 class="sss-page-titulo">Minha senha</h1>
+  <p class="sss-page-sub">Depois da troca, a sessão é renovada. Tentativas com a senha atual errada contam para o bloqueio da conta.</p>
+</div>
+
+<section class="sss-card" aria-labelledby="titulo-senha">
+  <h2 class="sss-card-titulo" id="titulo-senha">Trocar senha</h2>
+  <form class="sss-card-corpo sss-form-estreito" method="post" action="{{=URL(c='default', f='minha_senha')}}" autocomplete="off">
+    {{=csrf_campo()}}
+    {{for campo in _campos:}}
+    {{include 'components/form_campo.html'}}
+    {{pass}}
+    <div class="sss-form-acoes">
+      <button type="submit" class="btn btn-primary">Trocar senha</button>
+      <a class="btn btn-outline-secondary" href="{{=URL(c='default', f='index')}}">Cancelar</a>
+    </div>
+  </form>
+</section>

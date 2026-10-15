@@ -17,6 +17,8 @@ MSG_GENERICA = u"Usuário ou senha inválidos."
 MSG_BLOQUEIO = u"Acesso temporariamente bloqueado por excesso de tentativas. Tente novamente mais tarde."
 
 ENTIDADE = "tbsss_usuarios"
+MSG_SENHA_ATUAL = u"A senha atual está incorreta."
+MSG_CONFIRMACAO = u"A confirmação não confere com a nova senha."
 SENHA_MAX = 1024
 CACHE_MATRIZ_MAX = 64
 SIMULADOS_MAX = 1024
@@ -202,6 +204,44 @@ class ServicoAuth(object):
                 self._cache_matriz.popitem(last=False)
         return valor
 
+    # ------------------------------------------------------- troca de senha
+
+    def trocar_senha(self, ctx, ip, atual, nova, confirmacao):
+        """Troca da propria senha (exige a atual). Retorna (resultado, erros por campo).
+
+        resultado: 'OK' | 'ERRO' | 'BLOQUEADO'. Senha atual errada conta como falha de login
+        (mesmo limite e bloqueio do §4.2); ao bloquear, o chamador encerra a sessao.
+        """
+        agora = self._relogio()
+        usuario = self._usuarios.obter_por_id(ctx["usuario_id"])
+        bloqueado_ate = usuario.get("bloqueado_ate")
+        if bloqueado_ate is not None and bloqueado_ate > agora:
+            self._registrar_falha(usuario, ip, "troca de senha com conta bloqueada")
+            return "BLOQUEADO", {"senha_atual": MSG_BLOQUEIO}
+        armazenado = usuario.get("senha_hash")
+        atual_ok = (isinstance(atual, str) and 0 < len(atual) <= SENHA_MAX
+                    and security.hash_reconhecido(armazenado) and security.verificar_senha(atual, armazenado))
+        if not atual_ok:
+            _ctx, mensagem = self._falha_senha(usuario, ip, agora)
+            if mensagem == MSG_BLOQUEIO:
+                return "BLOQUEADO", {"senha_atual": MSG_BLOQUEIO}
+            return "ERRO", {"senha_atual": MSG_SENHA_ATUAL}
+        erros = {}
+        problemas = security.validar_politica_senha(nova) if isinstance(nova, str) and len(nova) <= SENHA_MAX \
+            else [u"Informe a nova senha."]
+        if problemas:
+            erros["nova"] = problemas[0]
+        elif confirmacao != nova:
+            erros["confirmacao"] = MSG_CONFIRMACAO
+        if erros:
+            return "ERRO", erros
+        self._usuarios.definir_senha(usuario["id"], security.hash_senha(nova), agora,
+                                     auditoria={"ator": usuario["login"], "ip": ip, "acao": "CAD_ALTERAR",
+                                                "detalhe": u"senha alterada pelo próprio usuário"})
+        self._log.info("senha alterada pelo proprio usuario (login=%s ip=%s)", usuario["login"], ip,
+                       extra={"acao": "CAD_ALTERAR"})
+        return "OK", {}
+
     # ----------------------------------------------------------------- logout
 
     def logout(self, ctx, ip):
@@ -249,3 +289,8 @@ def revalidar(sessao):
 def logout(ctx, ip):
     """Audita o logout pelo servico padrao do processo web."""
     return _servico().logout(ctx, ip)
+
+
+def trocar_senha(ctx, ip, atual, nova, confirmacao):
+    """Troca da propria senha pelo servico padrao do processo web."""
+    return _servico().trocar_senha(ctx, ip, atual, nova, confirmacao)

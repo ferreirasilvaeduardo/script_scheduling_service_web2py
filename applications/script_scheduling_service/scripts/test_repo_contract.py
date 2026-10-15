@@ -225,6 +225,40 @@ class BaseRepoContractTest(object):
         self.assertEqual((ultimo["itens"][0]["entidade"], ultimo["itens"][0]["entidade_id"]),
                          ("tbsss_perfis", consulta["id"]))
 
+    def test_04d_usuario_ultimo_admin_auditoria_e_filtro_bloqueio(self):
+        usr = self.obter_repo("usuarios")
+        aud = self.obter_repo("auditoria")
+        admin = usr.obter_por_login("admin")
+        consulta = usr.obter_por_login("consulta")
+        alteracoes = aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=1)["total"]
+
+        for dados in ({"ativo": "N"}, {"perfil_id": consulta["perfil_id"]}):
+            with self.assertRaises(RepoViolacao) as ctx:
+                usr.alterar(admin["id"], dados,
+                            auditoria={"ator": "x", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "x"})
+            self.assertEqual(ctx.exception.constraint, "sss_ultimo_admin")
+        atual = usr.obter_por_id(admin["id"])
+        self.assertEqual((atual["ativo"], atual["perfil_id"]), ("S", admin["perfil_id"]))
+        self.assertEqual(aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=1)["total"], alteracoes)
+
+        with self.assertRaises(RepoConflito):
+            usr.alterar(consulta["id"], {"nome": "X"}, esperado={"nome": "outro"})
+        self.assertEqual(usr.obter_por_id(consulta["id"])["nome"], consulta["nome"])
+
+        usr.alterar(consulta["id"], {"nome": "Consulta Contrato"}, esperado={"nome": consulta["nome"]},
+                    auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "nome"})
+        usr.definir_senha(consulta["id"], "pbkdf2_sha256$1$00$00",
+                          auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "senha redefinida"})
+        usr.desbloquear(consulta["id"], auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "d"})
+        ultimos = aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=3)["itens"]
+        self.assertEqual(aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=1)["total"], alteracoes + 3)
+        self.assertEqual(set((a["entidade"], a["entidade_id"]) for a in ultimos), {("tbsss_usuarios", consulta["id"])})
+
+        futuro = datetime.datetime(2999, 1, 1)
+        usr.alterar(consulta["id"], {"bloqueado_ate": futuro})
+        bloqueados = usr.listar(filtros={"bloqueado_em": datetime.datetime(2998, 1, 1)}, pagina=1, tamanho=50)
+        self.assertEqual([u["login"] for u in bloqueados["itens"]], ["consulta"])
+
     def test_05_cascata_associacao(self):
         cat = self.obter_repo("catalogo")
         rbac = self.obter_repo("rbac")
