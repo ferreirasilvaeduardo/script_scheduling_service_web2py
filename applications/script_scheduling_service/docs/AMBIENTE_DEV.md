@@ -117,7 +117,7 @@ export SSS_DEV_SEED_PASSWORD='<senha-de-demonstração>'
 python web2py.py -a '<senha_administrador>' -i 127.0.0.1 -p 8000 --no_gui
 ```
 
-A aplicação fica em `http://127.0.0.1:8000/script_scheduling_service`.
+A aplicação fica no endereço local `127.0.0.1:8000/script_scheduling_service` (porta 8000, caminho `/script_scheduling_service`).
 
 ### Senha dos usuários de demonstração (`SSS_DEV_SEED_PASSWORD`)
 
