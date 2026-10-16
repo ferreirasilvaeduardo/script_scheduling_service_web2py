@@ -120,12 +120,12 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 # 5. Scripts (6)
                                 # ---------------------------------------------------------
                                 scripts = [
-                                    {"id": 1, "nome": "carga_diaria", "descricao": "Carga diaria de movimentacoes", "grupo": "CARGAS", "categoria": "DIARIA", "etapa": "PROCESSAMENTO", "interpretador": "PYTHON3", "path_file": "carga_diaria.py", "tipo_param": "NOMEADO", "max_qtd_parallel_env": 1, "timeout_seg": 3600, "ativo": "S"},
-                                    {"id": 2, "nome": "relatorio_mensal", "descricao": "Extracao financeira consolidada", "grupo": "RELATORIOS", "categoria": "FINANCEIRO", "etapa": "EXTRACAO", "interpretador": "PYTHON3", "path_file": "relatorio_mensal.py", "tipo_param": "SEQUENCIAL", "max_qtd_parallel_env": 2, "timeout_seg": 1800, "ativo": "S"},
-                                    {"id": 3, "nome": "cleanup_tmp", "descricao": "Limpeza de arquivos temporarios", "grupo": "MANUTENCAO", "categoria": "LIMPEZA", "etapa": "PURGE", "interpretador": "BASH", "path_file": "cleanup_tmp.sh", "tipo_param": "NENHUM", "max_qtd_parallel_env": 1, "timeout_seg": 600, "ativo": "S"},
-                                    {"id": 4, "nome": "sync_tabelas", "descricao": "Sincronizacao de tabelas auxiliares", "grupo": "INTEGRACAO", "categoria": "SYNC", "etapa": "CARGA", "interpretador": "SH", "path_file": "sync_tabelas.sh", "tipo_param": "NOMEADO", "max_qtd_parallel_env": 1, "timeout_seg": 1200, "ativo": "S"},
-                                    {"id": 5, "nome": "backup_extra", "descricao": "Rotina de backup extraordinario (legado)", "grupo": "BACKUP", "categoria": "SISTEMA", "etapa": "DUMP", "interpretador": "BASH", "path_file": "backup_extra.sh", "tipo_param": "SEQUENCIAL", "max_qtd_parallel_env": 1, "timeout_seg": 7200, "ativo": "N"},
-                                    {"id": 6, "nome": "validacao_fiscal", "descricao": "Checagem de consistencia de SPED", "grupo": "FISCAL", "categoria": "SPED", "etapa": "VALIDACAO", "interpretador": "PYTHON3", "path_file": "validacao_fiscal.py", "tipo_param": "NOMEADO", "max_qtd_parallel_env": 1, "timeout_seg": 900, "ativo": "S"},
+                                    {"id": 1, "nome": "carga_diaria", "descricao": "Carga diaria de movimentacoes", "grupo": "CARGAS", "categoria": "DIARIA", "etapa": "PROCESSAMENTO", "interpretador": "PYTHON3", "pasta_base": "ROTINAS", "path_file": "carga_diaria.py", "tipo_param": "NOMEADO", "max_qtd_parallel_env": 1, "timeout_seg": 3600, "ativo": "S"},
+                                    {"id": 2, "nome": "relatorio_mensal", "descricao": "Extracao financeira consolidada", "grupo": "RELATORIOS", "categoria": "FINANCEIRO", "etapa": "EXTRACAO", "interpretador": "PYTHON3", "pasta_base": "ROTINAS", "path_file": "relatorio_mensal.py", "tipo_param": "SEQUENCIAL", "max_qtd_parallel_env": 2, "timeout_seg": 1800, "ativo": "S"},
+                                    {"id": 3, "nome": "cleanup_tmp", "descricao": "Limpeza de arquivos temporarios", "grupo": "MANUTENCAO", "categoria": "LIMPEZA", "etapa": "PURGE", "interpretador": "BASH", "pasta_base": "ROTINAS", "path_file": "cleanup_tmp.sh", "tipo_param": "NENHUM", "max_qtd_parallel_env": 1, "timeout_seg": 600, "ativo": "S"},
+                                    {"id": 4, "nome": "sync_tabelas", "descricao": "Sincronizacao de tabelas auxiliares", "grupo": "INTEGRACAO", "categoria": "SYNC", "etapa": "CARGA", "interpretador": "SH", "pasta_base": "ROTINAS", "path_file": "sync_tabelas.sh", "tipo_param": "NOMEADO", "max_qtd_parallel_env": 1, "timeout_seg": 1200, "ativo": "S"},
+                                    {"id": 5, "nome": "backup_extra", "descricao": "Rotina de backup extraordinario (legado)", "grupo": "BACKUP", "categoria": "SISTEMA", "etapa": "DUMP", "interpretador": "BASH", "pasta_base": "ROTINAS", "path_file": "backup_extra.sh", "tipo_param": "SEQUENCIAL", "max_qtd_parallel_env": 1, "timeout_seg": 7200, "ativo": "N"},
+                                    {"id": 6, "nome": "validacao_fiscal", "descricao": "Checagem de consistencia de SPED", "grupo": "FISCAL", "categoria": "SPED", "etapa": "VALIDACAO", "interpretador": "PYTHON3", "pasta_base": "ROTINAS", "path_file": "validacao_fiscal.py", "tipo_param": "NOMEADO", "max_qtd_parallel_env": 1, "timeout_seg": 900, "ativo": "S"},
                                 ]
                                 for s in scripts:
                                     store.scripts[s["id"]] = s
@@ -239,8 +239,8 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 # 10. Agentes (2)
                                 # ---------------------------------------------------------
                                 agentes = [
-                                    {"id": 1, "codigo": "agt-host01", "hostname": "worker01.internal", "pid_daemon": 1001, "versao": "1.0.0", "ambientes": "PRODUCAO,HOMOLOGACAO", "plataforma": "LINUX", "interpretadores": "PYTHON3,BASH,SH", "status": "ATIVO", "iniciado_em": base_dt - datetime.timedelta(days=3), "heartbeat_at": base_dt, "created_at": base_dt - datetime.timedelta(days=3)},
-                                    {"id": 2, "codigo": "agt-host02", "hostname": "worker02.internal", "pid_daemon": 1002, "versao": "1.0.0", "ambientes": "HOMOLOGACAO,DESENV", "plataforma": "WINDOWS", "interpretadores": "PYTHON3,POWERSHELL", "status": "ATIVO", "iniciado_em": base_dt - datetime.timedelta(days=2), "heartbeat_at": base_dt - datetime.timedelta(seconds=_HB_CONGELADO_S), "created_at": base_dt - datetime.timedelta(days=2)},
+                                    {"id": 1, "codigo": "agt-host01", "hostname": "worker01.internal", "pid_daemon": 1001, "versao": "1.0.0", "ambientes": "PRODUCAO,HOMOLOGACAO", "plataforma": "LINUX", "interpretadores": "PYTHON3,BASH,SH", "pastas_base": "ROTINAS,BATCH", "status": "ATIVO", "iniciado_em": base_dt - datetime.timedelta(days=3), "heartbeat_at": base_dt, "created_at": base_dt - datetime.timedelta(days=3)},
+                                    {"id": 2, "codigo": "agt-host02", "hostname": "worker02.internal", "pid_daemon": 1002, "versao": "1.0.0", "ambientes": "HOMOLOGACAO,DESENV", "plataforma": "WINDOWS", "interpretadores": "PYTHON3,POWERSHELL", "pastas_base": "ROTINAS", "status": "ATIVO", "iniciado_em": base_dt - datetime.timedelta(days=2), "heartbeat_at": base_dt - datetime.timedelta(seconds=_HB_CONGELADO_S), "created_at": base_dt - datetime.timedelta(days=2)},
                                 ]
                                 for ag in agentes:
                                     store.agentes[ag["id"]] = ag
@@ -380,10 +380,11 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     # Montagem do snapshot JSON conforme README §6.5
                                     # Snapshot v2 (README §6.5, CR-001): interpretador logico, caminho relativo e args.
                                     snapshot_obj = {
-                                        "versao": 2,
+                                        "versao": 3,
                                         "script_id": scr["id"],
                                         "script_nome": scr["nome"],
                                         "interpretador": scr["interpretador"],
+                                        "pasta_base": scr["pasta_base"],
                                         "path_file": scr["path_file"],
                                         "tipo_param": scr["tipo_param"],
                                         "args": [] if scr["tipo_param"] == "NENHUM" else (

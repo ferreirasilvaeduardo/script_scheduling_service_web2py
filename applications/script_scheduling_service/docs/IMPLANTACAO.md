@@ -205,7 +205,7 @@ Não prossiga se algum desses passos falhar.
 
 ### 8.1 Árvore de scripts de exemplo (necessária para disparar tickets)
 
-Ao criar um ticket, o servidor valida o script com o `path_guard` (README §8.5): o arquivo precisa existir dentro de `base_script_dir`, e o script, **cada diretório** do caminho e a própria base precisam pertencer a um UID de `script_owner_uids`, sem escrita para grupo/outros e **sem escrita para o usuário `sss`**. O modelo correto é a árvore pertencer ao `root`:
+Ao criar um ticket, o servidor valida o script com o `path_guard` (README §8.5): o arquivo precisa existir dentro de uma das pastas base de `base_script_dirs`, e o script, **cada diretório** do caminho e a própria base precisam pertencer a um UID de `script_owner_uids`, sem escrita para grupo/outros e **sem escrita para o usuário `sss`**. O modelo correto é a árvore pertencer ao `root`:
 
 ```bash
 sudo install -d -o root -g root -m 0755 /opt/automacoes
@@ -220,7 +220,9 @@ sudo -u sss test -r /opt/automacoes/scripts/carga_diaria.py && echo "leitura OK"
 sudo -u sss test -w /opt/automacoes/scripts/carga_diaria.py || echo "sem escrita OK"
 ```
 
-No `config.ini` (§9): `base_script_dir = /opt/automacoes/scripts` e `script_owner_uids = 0`.
+No `config.ini` (§9): `base_script_dirs = ROTINAS=/opt/automacoes/scripts` e `script_owner_uids = 0`. Para usar mais de uma pasta, liste `NOME=caminho` separados por vírgula (README §8.5); cada pasta segue o mesmo padrão de dono e modo acima.
+
+> **Atualização de instalações anteriores (CR-003):** a chave antiga `base_script_dir = <caminho>` deixou de ser aceita. Antes de atualizar o código, troque-a por `base_script_dirs = ROTINAS=<caminho>` no `config.ini`; senão a subida é abortada com CRITICAL na chave `base_script_dir`.
 
 > Sem `sudo` (árvore pertencente ao próprio `sss`), use a alternativa do `docs/AMBIENTE_DEV.md` §6.1: modos `0444`/`0555` e o UID do `sss` em `script_owner_uids`. Essa variante foi a usada no ensaio.
 
@@ -268,7 +270,7 @@ O `config.ini` não contém segredos. **Toda chave é validada na subida**: chav
 | `[app]` | `data_backend` | `FAKE` | `ORACLE` ainda não está implementado |
 | `[secrets]` | `secrets_file` | `/etc/sss/secrets.cfg` | Caminho absoluto do §8.2 |
 | `[agent]` | `agent_id` | identificador do servidor, ex.: `srv-sss-hml-01` | Aparece em todas as linhas de log; `^[A-Za-z0-9._-]{1,30}$` |
-| `[agent]` | `base_script_dir` | `/opt/automacoes/scripts` | §8.1 |
+| `[agent]` | `base_script_dirs` | `ROTINAS=/opt/automacoes/scripts` (uma ou mais pastas `NOME=caminho`, README §8.5) | §8.1 |
 | `[agent]` | `script_owner_uids` | `0` | UID do dono da árvore (root). Na variante sem sudo, o UID do `sss` (`id -u sss`) |
 | `[agent]` | `work_dir` | `/var/lib/sss/work` | Reservado ao agente (F8) |
 | `[logging]` | `log_dir` | `/var/log/sss` | Criado com `0750` se não existir |
@@ -551,7 +553,7 @@ Mensagens reais, capturadas no ensaio. Para os erros de subida, use sempre o tes
 | Formulários retornam "Requisição recusada." (HTTP 403) | `sss_web.log`: `requisicao rejeitada (motivo=origem ...)` | Acesso por endereço que não está em `allowed_origins` (típico com proxy reverso) | Incluir a URL pública em `allowed_origins` (§13.2) |
 | Idem | `motivo=csrf` | Página aberta há muito tempo ou sessão expirada | Recarregar a página e repetir |
 | Sessão cai sozinha | "Sua sessão expirou por inatividade." | 30 min sem uso (`session_idle_timeout_s`) | Comportamento esperado |
-| Criar ticket falha com aviso de script indisponível | `sss_web.log`: `path_guard rejeitou o script (... codigo=...)` | Árvore de scripts fora do padrão do §8.1 (dono, modo, gravável pelo `sss`, ou `base_script_dir` errado) | Refazer §8.1 e conferir `base_script_dir`/`script_owner_uids` |
+| Criar ticket falha com aviso de script indisponível | `sss_web.log`: `path_guard rejeitou o script (... codigo=...)` | Árvore de scripts fora do padrão do §8.1 (dono, modo, gravável pelo `sss`, ou `base_script_dirs` errado) | Refazer §8.1 e conferir `base_script_dirs`/`script_owner_uids` |
 | Raiz `http://localhost:8000/` dá 404 | — | A raiz aponta para a aplicação `welcome`, removida | Use `/script_scheduling_service` |
 | Aviso `unable to create welcome.w2p file` na subida | Terminal | Mesma causa acima | Ignorar |
 | Dados "sumiram" | — | O servidor foi reiniciado (FAKE em memória) | Comportamento esperado |
@@ -636,7 +638,7 @@ Implantação feita em 2026-10-15 no servidor **clone 7** (`brtlvlts1216pl`, 10.
 | `~/.sss/secrets.cfg` | `cookie_key` | `0600` |
 | `~/.sss/web.env` | `SSS_DEV_SEED_PASSWORD` (gerada no servidor) e `SSS_TZ` | `0600` |
 
-Diferenças do `config.ini` em relação ao exemplo: `secrets_file = /home/mastersafgf/.sss/secrets.cfg`, `agent_id = clone7-sss-hml`, `base_script_dir = /portaloptrib/TESHUVA/SSS/scripts`, `work_dir = /portaloptrib/TESHUVA/SSS/work`, `script_owner_uids = 4304` (UID do `mastersafgf`), `log_dir = /portaloptrib/TESHUVA/SSS/logs` e `allowed_origins = http://127.0.0.1:18000`.
+Diferenças do `config.ini` em relação ao exemplo: `secrets_file = /home/mastersafgf/.sss/secrets.cfg`, `agent_id = clone7-sss-hml`, `base_script_dirs = ROTINAS=/portaloptrib/TESHUVA/SSS/scripts`, `work_dir = /portaloptrib/TESHUVA/SSS/work`, `script_owner_uids = 4304` (UID do `mastersafgf`), `log_dir = /portaloptrib/TESHUVA/SSS/logs` e `allowed_origins = http://127.0.0.1:18000`.
 
 ### 21.3 Operação
 

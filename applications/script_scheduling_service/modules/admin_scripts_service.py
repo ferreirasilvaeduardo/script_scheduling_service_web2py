@@ -21,9 +21,11 @@ from path_guard import Codigo, PathGuardErro
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 
 FUNCIONALIDADE = "CAD_SCRIPTS"
-CAMPOS_EDITAVEIS = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file", "tipo_param",
+CAMPOS_EDITAVEIS = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "pasta_base", "path_file",
+                    "tipo_param",
                     "max_qtd_parallel_env", "timeout_seg", "ativo")
-CAMPOS_INSERCAO = ("nome", "grupo", "categoria", "interpretador", "path_file", "tipo_param", "max_qtd_parallel_env",
+CAMPOS_INSERCAO = ("nome", "grupo", "categoria", "interpretador", "pasta_base", "path_file", "tipo_param",
+                   "max_qtd_parallel_env",
                    "timeout_seg")
 ROTULOS_INTERPRETADOR = (("PYTHON3", u"PYTHON3 — Python 3 (Linux, Unix e Windows)"),
                          ("BASH", u"BASH — Bash (Linux e Unix)"),
@@ -45,11 +47,13 @@ _RE_CONTROLE = re.compile(r"[\x00-\x1f\x7f]")
 _RE_FILTRO = re.compile(r"[^\x00-\x1f\x7f<>]{1,60}")
 
 MENSAGENS_PATH = {
-    Codigo.CAMINHO_ABSOLUTO: u"Informe um caminho relativo ao diretório base (sem / no início).",
+    Codigo.CAMINHO_ABSOLUTO: u"Informe um caminho relativo à pasta base (sem / no início).",
     Codigo.CONTEM_PONTOS: u"O caminho não pode conter '..'.",
-    Codigo.FORA_DA_BASE: u"Arquivo fora do diretório base de scripts.",
-    Codigo.IGUAL_A_BASE: u"Informe o arquivo do script, não o diretório base.",
-    Codigo.NAO_E_ARQUIVO: u"Arquivo não encontrado no diretório base (ou não é um arquivo).",
+    Codigo.FORA_DA_BASE: u"Arquivo fora da pasta base de scripts.",
+    Codigo.IGUAL_A_BASE: u"Informe o arquivo do script, não a pasta base.",
+    Codigo.NAO_E_ARQUIVO: u"Arquivo não encontrado na pasta base (ou não é um arquivo).",
+    Codigo.PASTA_INVALIDA: u"Escolha uma das pastas base da lista.",
+    Codigo.PASTA_NAO_MAPEADA: u"Esta pasta base não está configurada neste servidor.",
     Codigo.DONO_INVALIDO: u"O arquivo, ou uma pasta do caminho, pertence a um usuário não autorizado.",
     Codigo.GRAVAVEL_GRUPO_OUTROS: u"Arquivo gravável por outros usuários (ou pelo grupo); ajuste as permissões.",
     Codigo.GRAVAVEL_PELO_AGENTE: u"O arquivo, ou uma pasta do caminho, é gravável pelo usuário do sistema; "
@@ -59,10 +63,15 @@ MENSAGENS_PATH = {
 OBS_VALIDACAO = u"A validação definitiva ocorre também no agente executor no momento da execução."
 AVISO_DEV_ARQUIVO = (u"Ambiente DEV: o arquivo não existe neste servidor; o cadastro foi aceito, mas o agente "
                      u"recusará a execução se o arquivo não existir lá.")
+AVISOS_SEM_ETAPA2 = {
+    path_guard.OUTRA_PLATAFORMA: u"Caminho não verificado neste servidor: a validação ocorrerá no agente que "
+                                 u"executa este interpretador.",
+    path_guard.PASTA_NAO_DISPONIVEL: u"Pasta base não disponível neste servidor: a validação ocorrerá no agente.",
+}
 MSG_NOME_OBRIGATORIO = u"Informe o nome do script."
 MSG_NOME_DUPLICADO = u"Já existe um script com este nome."
 MSG_CONTROLE = u"O campo contém caracteres de controle não permitidos."
-MSG_PATH_OBRIGATORIO = u"Informe o caminho do arquivo, relativo ao diretório base."
+MSG_PATH_OBRIGATORIO = u"Informe o caminho do arquivo, relativo à pasta base."
 MSG_TIPO_PARAM = u"Selecione como os argumentos são montados."
 MSG_PARALELO = u"Informe um número de 1 a 999."
 MSG_TIMEOUT = u"Informe um número de segundos entre 1 e %d, ou deixe em branco." % TIMEOUT_MAXIMO
@@ -141,10 +150,11 @@ def _versao_vinculos(vinculos, dicionario):
 class ServicoAdminScripts(object):
     """Regras do cadastro de scripts com repositorios, configuracao do agente, relogio e log injetados."""
 
-    def __init__(self, catalogo, agendamentos, base_script_dir, script_owner_uids, sss_env, log, relogio):
+    def __init__(self, catalogo, agendamentos, base_script_dirs, script_owner_uids, sss_env, log, relogio):
         self._catalogo = catalogo
         self._agendamentos = agendamentos
-        self._base = base_script_dir
+        # Pastas base deste no (CR-003 D16): nome logico -> diretorio local (None = so existe nos agentes).
+        self._pastas = dict(base_script_dirs or {})
         self._owner_uids = tuple(script_owner_uids)
         self._env = sss_env
         self._log = log
@@ -164,6 +174,12 @@ class ServicoAdminScripts(object):
     def _admin(ctx):
         return ctx.get("is_admin") is True
 
+    def bases_exibicao(self, ctx):
+        """Mapa nome -> diretorio real das pastas base, so para admin (README §8.5)."""
+        if not self._admin(ctx):
+            return None
+        return dict((n, os.path.realpath(c)) for n, c in self._pastas.items() if c)
+
     # ----------------------------------------------------------------- leitura
 
     def listar(self, ctx, filtros, pagina, tamanho):
@@ -172,13 +188,14 @@ class ServicoAdminScripts(object):
         return self._catalogo.scripts_listar(filtros=filtros, pagina=pagina, tamanho=tamanho)
 
     def formulario(self, ctx, script_id=None):
-        """Dados do formulario; base_script_dir so para admin. Inclui agendamentos ativos na edicao."""
+        """Dados do formulario; diretorios das pastas base so para admin. Inclui agendamentos ativos na edicao."""
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        comum = {"base_exibicao": os.path.realpath(self._base) if self._admin(ctx) else None,
+        comum = {"base_exibicao": self.bases_exibicao(ctx), "pastas": list(self._pastas),
                  "obs_validacao": OBS_VALIDACAO}
         if script_id in (None, ""):
             return dict(comum, id=None, nome="", descricao="", grupo="", categoria="", etapa="",
-                        interpretador=path_guard.ALLOWLIST[0], path_file="", tipo_param="NOMEADO",
+                        interpretador=path_guard.ALLOWLIST[0], pasta_base=(list(self._pastas) or [""])[0],
+                        path_file="", tipo_param="NOMEADO",
                         max_qtd_parallel_env=1, timeout_seg="", ativo="S", versao="", agendamentos_ativos=0)
         s = self._obter(script_id)
         dados = dict((c, s.get(c)) for c in CAMPOS_EDITAVEIS)
@@ -213,7 +230,7 @@ class ServicoAdminScripts(object):
             return None
         return int(valor)
 
-    def _validar(self, dados, erros):
+    def _validar(self, dados, erros, atual=None):
         reg = {
             "nome": self._texto_campo(dados, "nome", erros, obrigatorio=True),
             "descricao": self._texto_campo(dados, "descricao", erros),
@@ -231,22 +248,31 @@ class ServicoAdminScripts(object):
         except PathGuardErro as exc:
             erros["interpretador"] = MENSAGENS_PATH[exc.codigo]
         reg["interpretador"] = cmd
+        # Pasta base: nome da lista deste no; na edicao, o valor gravado e mantido mesmo sem mapeamento.
+        pasta = dados.get("pasta_base")
+        if pasta not in self._pastas and not (atual and pasta == atual.get("pasta_base")):
+            erros["pasta_base"] = MENSAGENS_PATH[Codigo.PASTA_INVALIDA]
+        reg["pasta_base"] = pasta
         tipo = admin_crud.texto(dados.get("tipo_param"), 15)
         if tipo not in TIPOS_PARAM:
             erros["tipo_param"] = MSG_TIPO_PARAM
         reg["tipo_param"] = tipo
         return reg
 
-    def validar_caminho(self, path_file, erros):
+    def validar_caminho(self, path_file, erros, pasta_base=None, interpretador=None):
         """Etapas 1 (textual) e 2 (servidor local) do path_guard. Retorna aviso (str) ou None.
 
-        Em sss_env=DEV, apenas 'arquivo inexistente' na etapa 2 vira aviso; o resto bloqueia.
+        A etapa 2 so roda se este no suporta o interpretador e tem a pasta base (README §8.5); senao,
+        aviso. Em sss_env=DEV, apenas 'arquivo inexistente' na etapa 2 vira aviso; o resto bloqueia.
         """
-        if path_file is None or "path_file" in erros:
+        if path_file is None or "path_file" in erros or "pasta_base" in erros:
             return None
         try:
             path_guard.validar_cadastro(path_file)
-            path_guard.resolver(self._base, path_file, self._owner_uids)
+            motivo = path_guard.motivo_sem_etapa2(self._pastas, pasta_base, interpretador)
+            if motivo is not None:
+                return AVISOS_SEM_ETAPA2[motivo]
+            path_guard.resolver_pasta(self._pastas, pasta_base, path_file, self._owner_uids)
         except PathGuardErro as exc:
             if exc.codigo == Codigo.NAO_E_ARQUIVO and self._env == "DEV":
                 return AVISO_DEV_ARQUIVO
@@ -278,8 +304,9 @@ class ServicoAdminScripts(object):
         """Inclui ou altera um script. Retorna (id, erros, aviso). Lanca RepoNaoEncontrado e AcessoNegado."""
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         erros = {}
-        reg = self._validar(dados, erros)
-        aviso = self.validar_caminho(reg["path_file"], erros)
+        atual = None if script_id in (None, "") else self._obter(script_id)
+        reg = self._validar(dados, erros, atual)
+        aviso = self.validar_caminho(reg["path_file"], erros, reg["pasta_base"], reg["interpretador"])
         if script_id in (None, ""):
             if erros:
                 return None, erros, None
@@ -542,14 +569,19 @@ class ServicoAdminScripts(object):
         aviso = None
         try:
             path_guard.validar_cadastro(script["path_file"])
-            path_guard.resolver(self._base, script["path_file"], self._owner_uids)
+            motivo = path_guard.motivo_sem_etapa2(self._pastas, script.get("pasta_base"), script["interpretador"])
+            if motivo is None:
+                path_guard.resolver_pasta(self._pastas, script.get("pasta_base"), script["path_file"],
+                                          self._owner_uids)
+            else:
+                aviso = AVISOS_SEM_ETAPA2[motivo]
         except PathGuardErro as exc:
             aviso = MENSAGENS_PATH[exc.codigo]
         snap, _resolvidos, erros = params_compiler.compilar_snapshot(script, vinculos, {}, self._relogio())
         if snap is None:
             return {"argv": None, "erros": erros, "aviso": aviso}
-        base = os.path.realpath(self._base) if self._admin(ctx) else None
-        return {"argv": params_compiler.argv_para_exibicao(json.loads(snap), base), "erros": {}, "aviso": aviso}
+        return {"argv": params_compiler.argv_para_exibicao(json.loads(snap), self.bases_exibicao(ctx)),
+                "erros": {}, "aviso": aviso}
 
 
 _padrao = None
@@ -568,7 +600,7 @@ def _servico():
             _padrao = ServicoAdminScripts(
                 catalogo=fabrica.obter("catalogo"),
                 agendamentos=fabrica.obter("agendamentos"),
-                base_script_dir=cfg.agent.base_script_dir,
+                base_script_dirs=cfg.agent.base_script_dirs,
                 script_owner_uids=cfg.agent.script_owner_uids,
                 sss_env=cfg.app.sss_env,
                 log=sss_logging.obter_logger("sss_web", cfg),

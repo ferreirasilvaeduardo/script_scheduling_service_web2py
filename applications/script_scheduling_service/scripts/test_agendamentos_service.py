@@ -63,7 +63,7 @@ class _Base(unittest.TestCase):
             "consulta": self._ctx(4, "consulta", 4),
         }
         self.agora = AGORA
-        disparo = ServicoTicket(self.catalogo, repo_factory.obter("tickets"), "/nao/usado", (0,), self.log)
+        disparo = ServicoTicket(self.catalogo, repo_factory.obter("tickets"), {"ROTINAS": "/nao/usado"}, (0,), self.log)
         self.svc = ServicoAgendamentos(self.agd, self.catalogo, repo_factory.obter("usuarios"), disparo,
                                        lambda: self.agora, HORIZONTE, self.log)
         self.aud_base = max([a["id"] for a in self.auditoria.listar(pagina=1, tamanho=1000)["itens"]] or [0])

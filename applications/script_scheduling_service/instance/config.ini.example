@@ -20,7 +20,7 @@ secrets_file = /etc/sss/secrets.cfg
 [agent]
 agent_id = srv-linux-prod-01
 ambientes_atendidos = PRODUCAO,HOMOLOGACAO
-base_script_dir = /opt/automacoes/scripts
+base_script_dirs = ROTINAS=/opt/automacoes/scripts,BATCH=/home/batch/scripts
 work_dir = /var/lib/sss/work
 script_owner_uids = 0
 max_parallel_jobs = 4

@@ -14,8 +14,8 @@ import params_compiler as pc
 from params_compiler import ParamErro, SnapshotErro
 
 AGORA = datetime.datetime(2026, 10, 13, 10, 47, 0, 123456)
-CfgAgente = collections.namedtuple("CfgAgente", ["base_script_dir", "script_owner_uids", "interpretadores"])
-CHAVES_6_5 = {"versao", "script_id", "script_nome", "interpretador", "path_file", "tipo_param", "args",
+CfgAgente = collections.namedtuple("CfgAgente", ["base_script_dirs", "script_owner_uids", "interpretadores"])
+CHAVES_6_5 = {"versao", "script_id", "script_nome", "interpretador", "pasta_base", "path_file", "tipo_param", "args",
               "respostas", "sensiveis", "compilado_em"}
 EXE_PY = "/usr/bin/python3"
 
@@ -29,7 +29,7 @@ def prm(codigo, tipo="TEXT", ordem=1, obrigatorio="N", flag=None, opcoes=None, p
 
 
 def script(tipo_param="NOMEADO", interpretador="PYTHON3"):
-    return {"id": 12, "nome": "carga_faturas", "interpretador": interpretador,
+    return {"id": 12, "nome": "carga_faturas", "interpretador": interpretador, "pasta_base": "ROTINAS",
             "path_file": "faturamento/carga_faturas.py", "tipo_param": tipo_param}
 
 
@@ -312,8 +312,8 @@ class TestCompilarSnapshot(unittest.TestCase):
         js, resolvidos, erros = pc.compilar_snapshot(script(), self._vinculos()[:1], {"data_ref": "2026-10-13"}, AGORA)
         self.assertEqual(erros, {})
         esperado = {
-            "versao": 2, "script_id": 12, "script_nome": "carga_faturas", "interpretador": "PYTHON3",
-            "path_file": "faturamento/carga_faturas.py", "tipo_param": "NOMEADO",
+            "versao": 3, "script_id": 12, "script_nome": "carga_faturas", "interpretador": "PYTHON3",
+            "pasta_base": "ROTINAS", "path_file": "faturamento/carga_faturas.py", "tipo_param": "NOMEADO",
             "args": ["--data", "2026-10-13"],
             "respostas": {"data_ref": "2026-10-13"}, "sensiveis": [], "compilado_em": "2026-10-13 10:47:00",
         }
@@ -369,16 +369,16 @@ class TestCompilarSnapshot(unittest.TestCase):
         snap = json.loads(pc.compilar_snapshot(
             script(), v, {"data_ref": "2026-10-13", "token": "-segredo", "seq": "outro_segredo"}, AGORA)[0])
         exib = pc.argv_para_exibicao(snap)
-        self.assertEqual(exib, ["PYTHON3", "-I", "<base>/faturamento/carga_faturas.py", "--data", "2026-10-13",
+        self.assertEqual(exib, ["PYTHON3", "-I", "<ROTINAS>/faturamento/carga_faturas.py", "--data", "2026-10-13",
                                 "--token=****", "--modo", "A", "-s", "****"])
         self.assertNotIn("segredo", " ".join(exib))
         self.assertIn("-segredo", snap["args"][2])
-        admin = pc.argv_para_exibicao(snap, "/opt/automacoes/scripts/")
+        admin = pc.argv_para_exibicao(snap, {"ROTINAS": "/opt/automacoes/scripts/"})
         self.assertEqual(admin[2], REAL)
 
     def test_argv_para_exibicao_sem_sensiveis(self):
         snap = json.loads(pc.compilar_snapshot(script("SEQUENCIAL", "SH"), [prm("a", ordem=1)], {"a": "x"}, AGORA)[0])
-        self.assertEqual(pc.argv_para_exibicao(snap), ["SH", "<base>/faturamento/carga_faturas.py", "x"])
+        self.assertEqual(pc.argv_para_exibicao(snap), ["SH", "<ROTINAS>/faturamento/carga_faturas.py", "x"])
 
 
 @unittest.skipIf(os.geteuid() == 0, "root sempre passa em os.access(W_OK)")
@@ -394,7 +394,7 @@ class TestValidarSnapshot(unittest.TestCase):
         os.chmod(self.arq, 0o444)
         os.chmod(os.path.join(self.base, "faturamento"), 0o555)
         os.chmod(self.base, 0o555)
-        self.cfg = CfgAgente(self.base, (os.getuid(),), {"PYTHON3": EXE_PY, "SH": "/bin/sh"})
+        self.cfg = CfgAgente({"ROTINAS": self.base}, (os.getuid(),), {"PYTHON3": EXE_PY, "SH": "/bin/sh"})
         self.real = os.path.realpath(self.arq)
         v = [prm("data_ref", "DATE", ordem=1, obrigatorio="S", flag="--data")]
         self.js = pc.compilar_snapshot(script(), v, {"data_ref": "2026-10-13"}, AGORA)[0]
@@ -423,10 +423,16 @@ class TestValidarSnapshot(unittest.TestCase):
         self.assertEqual(self._motivo("{x"), "JSON_INVALIDO")
         self.assertEqual(self._motivo(None), "JSON_INVALIDO")
         self.assertEqual(self._motivo("[]"), "ESTRUTURA_INVALIDA")
-        self.assertEqual(self._motivo('{"versao": 2}'), "ESTRUTURA_INVALIDA")
+        self.assertEqual(self._motivo('{"versao": 3}'), "ESTRUTURA_INVALIDA")
 
-    def test_versao_1_rejeitada(self):
+    def test_versoes_1_e_2_rejeitadas(self):
+        # CR-003 D16: o snapshot v3 traz pasta_base; v1 e v2 so existiram em DEV/FAKE.
         self.assertEqual(self._motivo(self._alterado(versao=1)), "VERSAO_NAO_SUPORTADA")
+        self.assertEqual(self._motivo(self._alterado(versao=2)), "VERSAO_NAO_SUPORTADA")
+
+    def test_pasta_base_invalida_ou_nao_mapeada_no_agente(self):
+        self.assertEqual(self._motivo(self._alterado(pasta_base="batch")), "PATH_GUARD_PASTA_INVALIDA")
+        self.assertEqual(self._motivo(self._alterado(pasta_base="BATCH")), "PATH_GUARD_PASTA_NAO_MAPEADA")
 
     def test_interpretador_fora_da_allowlist_ou_indisponivel_no_agente(self):
         self.assertEqual(self._motivo(self._alterado(interpretador="/usr/bin/perl")), "INTERPRETADOR_NAO_PERMITIDO")
@@ -438,7 +444,7 @@ class TestValidarSnapshot(unittest.TestCase):
 
     def test_path_guard_revalidado_no_agente(self):
         self.assertEqual(self._motivo(self._alterado(path_file="../x.py")), "PATH_GUARD_CONTEM_PONTOS")
-        outro = CfgAgente(self.base, (os.getuid() + 1,), self.cfg.interpretadores)
+        outro = CfgAgente({"ROTINAS": self.base}, (os.getuid() + 1,), self.cfg.interpretadores)
         self.assertEqual(self._motivo(self.js, outro), "PATH_GUARD_DONO_INVALIDO")
         self.assertEqual(self._motivo(self._alterado(path_file="faturamento/nao_existe.py")),
                          "PATH_GUARD_NAO_E_ARQUIVO")
@@ -481,11 +487,11 @@ class TestSeedFake(unittest.TestCase):
                 self.assertEqual(erros, {})
                 self.assertEqual(set(json.loads(js).keys()), CHAVES_6_5)
 
-    def test_snapshots_do_seed_sao_v2(self):
+    def test_snapshots_do_seed_sao_v3(self):
         tickets = self.repo_factory.obter("tickets")
         for tid in (1, 11, 17, 37):
             snap = json.loads(tickets.obter(tid)["parametros_enviados"])
-            self.assertEqual((snap["versao"], set(snap.keys())), (2, CHAVES_6_5), tid)
+            self.assertEqual((snap["versao"], set(snap.keys())), (3, CHAVES_6_5), tid)
 
 
 if __name__ == "__main__":

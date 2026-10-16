@@ -179,7 +179,7 @@ O `path_guard` verifica o script, **cada diretório** entre a base e o script, e
 
 Em DEV, o agente roda com o **seu** UID, que também é o dono dos arquivos. Por isso, os modos `0644` (scripts) e `0755` (diretórios) **não** servem: o bit de escrita do dono torna `os.access(W_OK)` verdadeiro, e o `path_guard` rejeita com `GRAVAVEL_PELO_AGENTE`. Use modos somente leitura: **`0444` para scripts e `0555` para diretórios, inclusive a base.**
 
-O Git não preserva esses modos. Por isso, aponte `base_script_dir` para uma **cópia** da árvore:
+O Git não preserva esses modos. Por isso, aponte a pasta base `ROTINAS` de `base_script_dirs` para uma **cópia** da árvore:
 
 ```bash
 cd applications/script_scheduling_service
@@ -195,7 +195,7 @@ id -u   # UID a incluir em script_owner_uids
 Em `instance/config.ini`, seção `[agent]`:
 
 ```ini
-base_script_dir = /home/<usuario>/sss_dev_scripts
+base_script_dirs = ROTINAS=/home/<usuario>/sss_dev_scripts
 script_owner_uids = 0,<seu UID>
 ```
 

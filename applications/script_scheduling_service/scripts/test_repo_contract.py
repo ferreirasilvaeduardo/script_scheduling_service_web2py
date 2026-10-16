@@ -101,9 +101,16 @@ class BaseRepoContractTest(object):
                 "nome": "carga_diaria",
                 "descricao": "Duplicado",
                 "interpretador": "PYTHON3",
+                "pasta_base": "ROTINAS",
                 "path_file": "carga_diaria.py",
             })
         self.assertIn("uk_tbsss_scr_nome", str(ctx.exception.constraint or ""))
+
+        # CK da pasta base (CR-003 D16)
+        with self.assertRaises(RepoViolacao) as ctx:
+            cat.scripts_inserir({"nome": "pasta_invalida", "interpretador": "PYTHON3", "pasta_base": "rotinas",
+                                 "path_file": "x.py"})
+        self.assertEqual(ctx.exception.constraint, "ck_tbsss_scr_pasta")
 
         # UK usuario
         with self.assertRaises(RepoViolacao) as ctx:

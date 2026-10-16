@@ -4,6 +4,7 @@
 Modulo puro: nao importa gluon (AGENTS §7.1).
 """
 import os
+import re
 
 # Interpretadores logicos (CR-001, D1/D2): o catalogo guarda a chave; cada agente a mapeia para o
 # executavel local ([agent] interpretadores). cmd.exe/.bat/.cmd sao proibidos (injecao de argumentos).
@@ -32,6 +33,12 @@ class Codigo(object):
     GRAVAVEL_GRUPO_OUTROS = 'GRAVAVEL_GRUPO_OUTROS'
     GRAVAVEL_PELO_AGENTE = 'GRAVAVEL_PELO_AGENTE'
     INTERPRETADOR_NAO_PERMITIDO = 'INTERPRETADOR_NAO_PERMITIDO'
+    PASTA_INVALIDA = 'PASTA_INVALIDA'
+    PASTA_NAO_MAPEADA = 'PASTA_NAO_MAPEADA'
+
+
+# Nome logico de pasta base (README §8.5, CR-003 D16), igual a ck_tbsss_scr_pasta.
+RE_PASTA = re.compile(r'[A-Z][A-Z0-9_]{0,29}')
 
 
 class PathGuardErro(Exception):
@@ -54,6 +61,17 @@ def validar_cadastro(path_file):
         raise PathGuardErro(Codigo.CAMINHO_ABSOLUTO)
     if '..' in path_file:
         raise PathGuardErro(Codigo.CONTEM_PONTOS)
+
+
+def validar_pasta(pasta_base):
+    """Exige um nome logico de pasta base valido (ck_tbsss_scr_pasta)."""
+    if not isinstance(pasta_base, str) or not RE_PASTA.fullmatch(pasta_base):
+        raise PathGuardErro(Codigo.PASTA_INVALIDA)
+
+
+def pasta_mapeada(pastas, pasta_base):
+    """True se o no tem um diretorio local para a pasta base (NOME= sem caminho nao conta)."""
+    return bool((pastas or {}).get(pasta_base))
 
 
 def _gravavel_pelo_agente(caminho, st, uid_agente):
@@ -102,3 +120,36 @@ def resolver(base_script_dir, path_file, owner_uids, uid_agente=None):
         atual = os.path.dirname(atual)
     _checar_dono_e_modo(base, owner_uids, uid_agente)
     return real
+
+
+def resolver_pasta(pastas, pasta_base, path_file, owner_uids, uid_agente=None):
+    """Resolve o script na pasta base do no (README §8.5, CR-003 D16); lanca PathGuardErro.
+
+    pastas: mapa nome logico -> diretorio local ([agent] base_script_dirs); None/vazio = nao mapeada.
+    """
+    validar_pasta(pasta_base)
+    if not pasta_mapeada(pastas, pasta_base):
+        raise PathGuardErro(Codigo.PASTA_NAO_MAPEADA)
+    return resolver(pastas[pasta_base], path_file, owner_uids, uid_agente)
+
+
+# Motivos para o no web nao executar a etapa 2 (README §8.5, "Validacao no no web"; CR-003 D4/D16).
+OUTRA_PLATAFORMA = 'OUTRA_PLATAFORMA'
+PASTA_NAO_DISPONIVEL = 'PASTA_NAO_DISPONIVEL'
+
+
+def plataforma_local():
+    """'WINDOWS' ou 'POSIX', so para escolher a etapa 2 no no web (primitivas de SO ficam em plataforma/)."""
+    return 'WINDOWS' if os.name == 'nt' else 'POSIX'
+
+
+def motivo_sem_etapa2(pastas, pasta_base, interpretador, plataforma=None):
+    """None se o no web deve resolver o arquivo localmente; senao o motivo do aviso.
+
+    A validacao definitiva e sempre a do agente, no claim (README §8.4).
+    """
+    if interpretador not in POR_PLATAFORMA[plataforma or plataforma_local()]:
+        return OUTRA_PLATAFORMA
+    if not pasta_mapeada(pastas, pasta_base):
+        return PASTA_NAO_DISPONIVEL
+    return None

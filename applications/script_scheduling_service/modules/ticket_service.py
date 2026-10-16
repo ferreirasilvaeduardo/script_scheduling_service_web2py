@@ -232,10 +232,10 @@ def _argv_exibicao(snap, base=None):
 class ServicoTicket(object):
     """Servico de disparo com dependencias injetadas (repositorios, arvore de scripts e log)."""
 
-    def __init__(self, catalogo, tickets, base_script_dir, script_owner_uids, log):
+    def __init__(self, catalogo, tickets, base_script_dirs, script_owner_uids, log):
         self._catalogo = catalogo
         self._tickets = tickets
-        self._base = base_script_dir
+        self._pastas = dict(base_script_dirs or {})
         self._owner_uids = tuple(script_owner_uids)
         self._log = log
 
@@ -434,20 +434,29 @@ class ServicoTicket(object):
         return data.replace(microsecond=0)
 
     def _base_exibicao(self, ctx):
-        """Diretorio base exibido no argv: caminho real so para admin (README §8.5)."""
-        return os.path.realpath(self._base) if ctx.get("is_admin") is True else None
+        """Diretorios das pastas base exibidos no argv: caminho real so para admin (README §8.5)."""
+        if ctx.get("is_admin") is not True:
+            return None
+        return dict((nome, os.path.realpath(caminho)) for nome, caminho in self._pastas.items() if caminho)
 
     def _compilar(self, ctx, script, amb, respostas, agora, erros):
-        """Valida o script no no web (path_guard) e compila o snapshot v2, acumulando erros por campo."""
+        """Valida o script no no web (path_guard) e compila o snapshot v3, acumulando erros por campo."""
         vinculos = self._vinculos(script["id"])
         codigos = set(v["codigo"] for v in vinculos)
         if not isinstance(respostas, dict):
             respostas = {}
         respostas = dict((k, _ultimo(v)) for k, v in respostas.items() if k in codigos)
 
-        # A validacao definitiva repete-se no agente, contra o diretorio base dele (README §8.4).
+        # A validacao definitiva repete-se no agente, contra as pastas base dele (README §8.4).
+        motivo = path_guard.motivo_sem_etapa2(self._pastas, script.get("pasta_base"), script["interpretador"])
         try:
-            path_guard.resolver(self._base, script["path_file"], self._owner_uids)
+            path_guard.validar_pasta(script.get("pasta_base"))
+            path_guard.validar_cadastro(script["path_file"])
+            if motivo is None:
+                path_guard.resolver_pasta(self._pastas, script["pasta_base"], script["path_file"], self._owner_uids)
+            else:
+                self._log.info("caminho nao verificado no no web (script_id=%s motivo=%s)", script["id"], motivo,
+                               extra={"acao": "TICKET_CRIAR"})
         except (path_guard.PathGuardErro, OSError) as e:
             self._log.warning("path_guard rejeitou o script (login=%s script_id=%s codigo=%s)",
                               ctx["login"], script["id"], getattr(e, "codigo", type(e).__name__),
@@ -908,7 +917,7 @@ def _servico():
             _padrao = ServicoTicket(
                 catalogo=fabrica.obter("catalogo"),
                 tickets=fabrica.obter("tickets"),
-                base_script_dir=cfg.agent.base_script_dir,
+                base_script_dirs=cfg.agent.base_script_dirs,
                 script_owner_uids=cfg.agent.script_owner_uids,
                 log=sss_logging.obter_logger("sss_web", cfg),
             )

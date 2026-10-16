@@ -142,6 +142,28 @@ class TestResolver(unittest.TestCase):
 
 class TestValidacoesTextuais(unittest.TestCase):
 
+    def test_pasta_base_e_regra_do_no_web(self):
+        # CR-003 D16/D4 (README §8.5).
+        path_guard.validar_pasta("ROTINAS")
+        for nome in ("rotinas", "1X", "", None, "A" * 31, "RO-TINAS"):
+            with self.assertRaises(PathGuardErro) as ctx:
+                path_guard.validar_pasta(nome)
+            self.assertEqual(ctx.exception.codigo, Codigo.PASTA_INVALIDA, nome)
+        pastas = {"ROTINAS": "/opt/x", "SO_AGENTE": None}
+        with self.assertRaises(PathGuardErro) as ctx:
+            path_guard.resolver_pasta(pastas, "SO_AGENTE", "a.py", (0,))
+        self.assertEqual(ctx.exception.codigo, Codigo.PASTA_NAO_MAPEADA)
+        with self.assertRaises(PathGuardErro) as ctx:
+            path_guard.resolver_pasta(pastas, "OUTRA", "a.py", (0,))
+        self.assertEqual(ctx.exception.codigo, Codigo.PASTA_NAO_MAPEADA)
+        self.assertIsNone(path_guard.motivo_sem_etapa2(pastas, "ROTINAS", "PYTHON3", "POSIX"))
+        self.assertEqual(path_guard.motivo_sem_etapa2(pastas, "ROTINAS", "POWERSHELL", "POSIX"),
+                         path_guard.OUTRA_PLATAFORMA)
+        self.assertEqual(path_guard.motivo_sem_etapa2(pastas, "ROTINAS", "BASH", "WINDOWS"),
+                         path_guard.OUTRA_PLATAFORMA)
+        self.assertEqual(path_guard.motivo_sem_etapa2(pastas, "SO_AGENTE", "PYTHON3", "POSIX"),
+                         path_guard.PASTA_NAO_DISPONIVEL)
+
     def test_validar_cadastro(self):
         path_guard.validar_cadastro("faturamento/carga_faturas.py")
         casos = (("/etc/passwd", Codigo.CAMINHO_ABSOLUTO),

@@ -69,7 +69,7 @@ class _BaseLog(unittest.TestCase):
             repo_factory.obter("usuarios"), repo_factory.obter("rbac"), catalogo,
             repo_factory.obter("auditoria"), 5, 900, self.log)
         self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
-        self.svc = ServicoTicket(catalogo, self.tickets, "/inexistente", (os.geteuid(),), self.log)
+        self.svc = ServicoTicket(catalogo, self.tickets, {"ROTINAS": "/inexistente"}, (os.geteuid(),), self.log)
 
     def _ler_tudo(self, login, ticket_id):
         partes = []

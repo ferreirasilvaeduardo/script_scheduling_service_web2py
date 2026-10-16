@@ -13,6 +13,7 @@ import unittest
 from unittest import mock
 
 import admin_crud
+import path_guard
 import admin_scripts_service as scr_mod
 import auth_service
 import repo_factory
@@ -97,7 +98,7 @@ class _Base(unittest.TestCase):
         self.aud_base = max([a["id"] for a in self.auditoria.listar(pagina=1, tamanho=1000)["itens"]] or [0])
 
     def _servico(self, env):
-        return ServicoAdminScripts(self.catalogo, repo_factory.obter("agendamentos"), self.base, (os.geteuid(),), env,
+        return ServicoAdminScripts(self.catalogo, repo_factory.obter("agendamentos"), {"ROTINAS": self.base}, (os.geteuid(),), env,
                                    self.log, lambda: AGORA)
 
     def _auditorias(self, acao):
@@ -105,7 +106,7 @@ class _Base(unittest.TestCase):
                 if a["entidade"] == "tbsss_scripts" and a["id"] > self.aud_base]
 
     def _incluir(self, svc=None, **mudancas):
-        dados = {"nome": "Novo script", "interpretador": "PYTHON3", "path_file": "novo.py",
+        dados = {"nome": "Novo script", "interpretador": "PYTHON3", "pasta_base": "ROTINAS", "path_file": "novo.py",
                  "tipo_param": "SEQUENCIAL", "max_qtd_parallel_env": "2", "timeout_seg": ""}
         dados.update(mudancas)
         return (svc or self.svc).salvar(self.ctx["admin"], IP, None, dados)
@@ -177,6 +178,25 @@ class TestCadastro(_Base):
         _sid, erros, _ = self._incluir(nome="nome\x07estranho")
         self.assertEqual(erros, {"nome": scr_mod.MSG_CONTROLE})
 
+    def test_pasta_base_da_lista_e_avisos_da_etapa2(self):
+        # CR-003 D16/D4: pasta fora da lista recusada; pasta sem caminho ou outra plataforma viram aviso.
+        _sid, erros, _a = self._incluir(pasta_base="NAO_EXISTE")
+        self.assertEqual(erros, {"pasta_base": scr_mod.MENSAGENS_PATH[Codigo.PASTA_INVALIDA]})
+        svc = ServicoAdminScripts(self.catalogo, repo_factory.obter("agendamentos"),
+                                  {"ROTINAS": self.base, "WINAGT": None}, (os.geteuid(),), "HML", self.log, lambda: AGORA)
+        sid, erros, aviso = self._incluir(svc, nome="Pasta remota", pasta_base="WINAGT", path_file="x.py")
+        self.assertEqual((erros, aviso), ({}, scr_mod.AVISOS_SEM_ETAPA2[path_guard.PASTA_NAO_DISPONIVEL]))
+        self.assertEqual(self.catalogo.scripts_obter(sid)["pasta_base"], "WINAGT")
+        _sid, erros, aviso = self._incluir(svc, nome="Script PS", interpretador="POWERSHELL", path_file="x.ps1")
+        self.assertEqual((erros, aviso), ({}, scr_mod.AVISOS_SEM_ETAPA2[path_guard.OUTRA_PLATAFORMA]))
+
+    def test_pasta_gravada_e_mantida_mesmo_sem_mapeamento(self):
+        sid, erros, _a = self._incluir()
+        self.assertEqual(erros, {})
+        self.catalogo.scripts_alterar(sid, {"pasta_base": "ANTIGA"})
+        _sid, erros, _a = self._editar(sid, descricao="Mudou a descricao")
+        self.assertNotIn("pasta_base", erros)
+
     def test_troca_de_tipo_param_revalida_vinculos(self):
         _sid, erros, _ = self._editar(S_CARGA, tipo_param="NENHUM")
         self.assertEqual(erros, {"tipo_param": scr_mod.MSG_NENHUM_VINCULADO})
@@ -199,7 +219,7 @@ class TestCadastro(_Base):
             self.svc.alternar_ativo(self.ctx["admin"], IP, str(S_CARGA), f["versao"])
 
     def test_base_e_caminho_absoluto_so_para_admin(self):
-        self.assertEqual(self.svc.formulario(self.ctx["admin"])["base_exibicao"], self.base)
+        self.assertEqual(self.svc.formulario(self.ctx["admin"])["base_exibicao"], {"ROTINAS": self.base})
         self.assertIsNone(self.svc.formulario(self.ctx["gestor"])["base_exibicao"])
 
 
@@ -326,7 +346,7 @@ class TestPrevia(_Base):
     def test_previa_sem_admin_oculta_caminho_e_reflete_edicao(self):
         _tela, itens = self._vinculos_json(S_CARGA)
         r = self.svc.previa(self.ctx["gestor"], str(S_CARGA), json.dumps(itens[:1]))
-        self.assertEqual(r["argv"], ["PYTHON3", "-I", "<base>/carga_diaria.py", "--data-ref", "2026-10-14"])
+        self.assertEqual(r["argv"], ["PYTHON3", "-I", "<ROTINAS>/carga_diaria.py", "--data-ref", "2026-10-14"])
         self.assertNotIn(self.base, repr(r))
 
     def test_acesso_negado_e_nao_encontrado(self):

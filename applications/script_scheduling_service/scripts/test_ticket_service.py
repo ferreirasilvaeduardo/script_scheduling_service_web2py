@@ -82,7 +82,7 @@ class _BaseTicket(unittest.TestCase):
 
         self.base = _criar_arvore()
         self.addCleanup(_remover_arvore, self.base)
-        self.svc = ServicoTicket(self.catalogo, self.tickets, self.base, (os.geteuid(),), self.log)
+        self.svc = ServicoTicket(self.catalogo, self.tickets, {"ROTINAS": self.base}, (os.geteuid(),), self.log)
 
     def _total_tickets(self):
         return self.tickets.listar(pagina=1, tamanho=100)["total"]
@@ -116,11 +116,12 @@ class TestTicketService(_BaseTicket):
         snap = json.loads(bruto)
         self.assertEqual(bruto, json.dumps(snap, ensure_ascii=False, sort_keys=True))
         self.assertEqual(sorted(snap), sorted(params_compiler._CHAVES_SNAPSHOT))
-        self.assertEqual(snap["versao"], 2)
+        self.assertEqual(snap["versao"], 3)
         self.assertEqual(snap["script_nome"], "carga_diaria")
-        self.assertEqual((snap["interpretador"], snap["path_file"]), ("PYTHON3", "carga_diaria.py"))
+        self.assertEqual((snap["interpretador"], snap["pasta_base"], snap["path_file"]),
+                         ("PYTHON3", "ROTINAS", "carga_diaria.py"))
         self.assertEqual(snap["tipo_param"], "NOMEADO")
-        # Snapshot v2 (CR-001): sem caminho absoluto do no web; o agente monta o argv real.
+        # Snapshot v3 (CR-001, CR-003): sem caminho absoluto do no web; o agente monta o argv real.
         self.assertNotIn(self.base, bruto)
         self.assertEqual(snap["args"], [
             "--data-ref", "2026-10-20", "-n", "5000", "--modo", "SIMULACAO",
