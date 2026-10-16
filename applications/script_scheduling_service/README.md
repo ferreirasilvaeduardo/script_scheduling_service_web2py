@@ -682,6 +682,13 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
   | `TEXT` sem regex | A `descricao` do parâmetro, se houver |
 
   Obrigatório aparece como "(obrigatório)" no rótulo, e não só com asterisco.
+
+  **Montagem do texto de ajuda** de cada campo, nesta ordem e em frases separadas: a `descricao` do parâmetro, o exemplo do tipo e, por último, uma destas frases (só uma):
+  * campo sensível com valor já salvo (edição de agendamento): "Valor sigiloso já salvo (não exibido): deixe em branco para manter o valor atual.";
+  * campo sensível com padrão configurado: "Valor sigiloso: deixe em branco para usar o padrão configurado." (vale a precedência da §6.1);
+  * campo com padrão não sensível: "Padrão: {valor}.".
+
+  Se a `descricao` não terminar em ponto, interrogação ou exclamação e vier alguma frase depois dela, o servidor acrescenta o ponto, para que as frases não fiquem grudadas.
 * **Resumo em frase antes de confirmar:** o modal de confirmação abre com uma frase montada pelo servidor:
 
   > "Vamos rodar **{script}** no ambiente **{ambiente}** {agora | em {data} às {hora}}, com prioridade {n}. Respostas: {rótulo} = {valor}; …"
@@ -690,7 +697,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
   * respostas vazias aparecem como "(sem resposta)";
   * o comando lógico (argv, §6.4) continua no modal, abaixo da frase, com o título "Comando que será executado".
 * **"Usar as respostas da minha última execução":** o botão aparece na etapa 3 quando existe um ticket **do próprio usuário** para o mesmo script e o mesmo ambiente. Ele usa `listar` com os filtros `solicitante`, `script_id` e `ambiente`, `tamanho=1`, e depois `respostas`, sem método novo no contrato.
-  * Preenche só as respostas **não sensíveis**; os campos sensíveis ficam vazios, com a nota "por segurança, digite de novo".
+  * Preenche só as respostas **não sensíveis**; os campos sensíveis ficam vazios, com a nota "Por segurança, digite de novo." no início do texto de ajuda.
   * Uma resposta que não vale mais no catálogo atual (opção removida, formato novo) fica vazia, com o aviso "esta resposta mudou desde a última vez".
   * Nada é gravado até a confirmação, que segue o fluxo normal (§5.4).
 * **Aviso de horário:** ao lado do campo de agendamento aparece "Horário do servidor do banco de dados" (§5.4, passo 4).
@@ -770,7 +777,7 @@ O topo do detalhe (`tickets/detalhe/<id>`) responde "o que está acontecendo?" a
    * A etapa atual de um ticket `RUNNING` mostra "há {tempo}".
 3. Depois disso vêm, como hoje: resumo, linha do tempo, comando executado, respostas, reexecuções e log. A linha "Detalhe técnico" do resumo traz o status, o `status_motivo`, o `return_code` e a descrição técnica (`descricao_motivo`). O bloco do snapshot mostra a **pasta base** (`pasta_base`, snapshot v3) e o **arquivo na pasta base** (`path_file`) em linhas separadas; snapshot antigo sem pasta base mostra "-".
 4. **Botões com o efeito escrito:** "Cancelar este pedido" (com a consequência no modal) e "Rodar de novo com as mesmas respostas" (reexecução, §5.5).
-5. A página continua se atualizando sozinha enquanto o ticket não termina, e a frase e a barra acompanham.
+5. A página continua se atualizando sozinha enquanto o ticket não termina, e a frase e a barra acompanham. Quando o polling do log (§8.10) recebe uma situação diferente da que a página mostrou ao abrir, o visualizador para, mostra "A situação mudou; atualizando a página…" e recarrega a página após 1,5 s.
 
 ### 5.8 Rotinas disponíveis e histórico do script (CR-004)
 
@@ -795,7 +802,19 @@ O topo do detalhe (`tickets/detalhe/<id>`) responde "o que está acontecendo?" a
   * total de pedidos e quantos **deram certo**, **deram erro**, **foram cancelados** e ainda estão **esperando ou rodando**;
   * **taxa de acerto**: deram certo ÷ terminados, em porcentagem inteira, com a frase "De cada 10 vezes, {n} deram certo";
   * **duração típica** (mediana) e **mais demorada**, só dos que terminaram com `started_at`, em linguagem simples ("cerca de 4 minutos");
-  * **gráfico de barras por dia**, empilhado por situação, como SVG gerado no servidor. As cores vêm por classe CSS e não há `style=` inline. Abaixo do gráfico fica a mesma informação em tabela, para leitores de tela;
+  * **gráfico de barras por dia**, empilhado por situação, como SVG gerado no servidor (`ui_helpers.barras_empilhadas`). As cores vêm por classe CSS e não há `style=` inline:
+    * quatro séries, sempre na mesma ordem e com a mesma cor: Deu certo, Deu erro, Cancelado e Esperando ou rodando;
+    * as cores são tokens de `static/css/sss.css`, com valores próprios para o modo escuro:
+
+      | Token | Série | Claro | Escuro |
+      |---|---|---|---|
+      | `--sss-graf-certo` | Deu certo | `#4daf9a` | `#4daf9a` |
+      | `--sss-graf-erro` | Deu erro | `#ef4444` | `#ef4444` |
+      | `--sss-graf-cancelado` | Cancelado | `#9ca3af` | `#8b939f` |
+      | `--sss-graf-andamento` | Esperando ou rodando | `#831fb2` | `#b56ee0` |
+
+    * a cor nunca é a única pista: a **legenda** com o nome das séries fica sempre acima do gráfico; cada segmento tem um `<title>` com dia, série e quantidade, que aparece ao passar o mouse; e a mesma informação está na tabela "Ver os números em tabela" (`<details>`), logo abaixo, que também serve aos leitores de tela;
+    * um vão de 2 px separa os segmentos; o eixo vertical tem linhas de grade discretas;
   * os principais motivos de erro, com a contagem por `status_motivo` e o nome simples;
   * o link "Ver estes pedidos", que abre a lista de tickets filtrada por script e período.
 * **Contrato (leitura nova):** `RepoTickets.historico_script(script_id, desde, escopo_ambientes=None, solicitante=None, limite=5000)` devolve só `{id, status, status_motivo, created_at, started_at, finished_at}`, sem LOB, ordenado por `created_at`. A agregação é feita no service. Acima do limite, a tela avisa "mostrando os 5.000 mais recentes".
