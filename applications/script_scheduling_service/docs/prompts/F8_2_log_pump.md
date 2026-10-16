@@ -2,7 +2,7 @@
 
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §4.13, §6
-- `README.md` §5.2 (`LOG_LIMIT`), §8.10 (inteiro), §12.1 (`[logging]`)
+- `README.md` §4.1 (segredos com menos de 4 caracteres não são registrados no mascarador), §5.2 (`LOG_LIMIT`), §8.10 (inteiro, revisado no CR-003: medida do teto, marcador e leitura da UI), §12.1 (`[logging]`), §14 (risco aceito dos segredos curtos)
 - Arquivos: `modules/masking.py` (`MascaradorFluxo`), `modules/db_conn.py` (F7.0/F7.2, CR-002), `modules/executor.py`, `modules/plataforma/` (F8.0)
 
 ## Objetivo
@@ -28,6 +28,7 @@ Transferir o log local do ticket para `log_output` de forma incremental, mascara
   - texto ASCII;
   - texto com acentos e emoji (4 bytes) cortado em todas as posições de byte possíveis (o resultado final é igual ao original);
   - segredo cortado entre leituras é mascarado;
+  - segredo com menos de 4 caracteres não é mascarado (comportamento do `masking.py`, README §4.1);
   - teto do banco com o marcador;
   - teto local detectado;
   - `blocos` com o tamanho exato;
@@ -41,7 +42,7 @@ Transferir o log local do ticket para `log_output` de forma incremental, mascara
 
 ## Requisitos
 1. É proibido reescrever o CLOB inteiro ou ler o CLOB para concatenar (AGENTS §4.13).
-2. O texto **nunca** chega ao banco sem passar pelo mascarador.
+2. O texto **nunca** chega ao banco sem passar pelo mascarador. Segredos com menos de 4 caracteres **não** são mascarados (README §4.1, risco aceito no §14): não crie regra própria para eles; o teste confirma que um valor curto passa intacto e que um de 4 ou mais é mascarado.
 3. Leitura de arquivo sempre em binário, com o offset controlado pela bomba.
 4. **Windows:** o arquivo é lido enquanto o filho ainda escreve nele. Abra para leitura sem bloquear a escrita do filho (o `open` padrão do Python já compartilha leitura e escrita) e trate `PermissionError` transitório como "nada novo neste ciclo". `\r\n` é preservado como veio do script.
 5. O bloco PL/SQL é o mesmo nas três combinações de driver (CR-002); o tipo do bind de CLOB vem do `db_conn`.

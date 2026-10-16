@@ -3,7 +3,9 @@
 ## Leitura obrigatória antes de planejar
 - `docs/arquitetura/CR-002-oracle-unico-e-driver-adaptativo.md`
 - `AGENTS.md` §2.2, §4.9–4.11, §6 (reconexão)
-- `README.md` §2.3 (inteiro), §4.1 (segredos), §12.1 (`[oracle]`)
+- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D5, D6, D12 e o achado "Bind DATE com microssegundos")
+- `README.md` §2.3 (inteiro), §2.7 (`seq.NEXTVAL` antes do `INSERT`), §4.1 (segredos), §4.2 ("Relógio do banco"), §4.4 ("Quantidade registrada" da exportação), §7.1, §7.5 ("Bind de datas"), §12.1 (`[oracle]` e "Falha de configuração"), §13 (formato do log)
+- `AGENTS.md` §3.1 (binds de data)
 - Arquivos: `modules/sss_config.py`, `modules/masking.py`, `modules/db_conn.py` (seleção do F7.0), `scripts/init_db.py`
 
 ## Objetivo
@@ -14,6 +16,7 @@ Ter um ponto único, seguro e resiliente de acesso ao Oracle (11gR2 a 23ai), com
 - **`applications/script_scheduling_service/modules/db_conn.py`** (amplia o F7.0), o **único** módulo da aplicação que importa o driver:
   - **Pré-requisito:** a combinação vem de `selecionar_driver`/`inicializar` (F7.0). Nenhuma troca de modo depois da inicialização.
   - **Versões:** em Thick/cx_Oracle, `clientversion()` com major 19, senão CRITICAL. Em Thin, o servidor precisa ser 12.1+ (garantido pela sondagem).
+  - **Falhas fatais em CRITICAL:** versão de cliente recusada, `oracledb` 2.x no Python 3.6, falha de conexão no passo 6 da inicialização do daemon (README §8.12) e configuração `[oracle]` inválida geram **um** registro CRITICAL no formato do README §13, com o motivo e o código (ORA-/DPY-/DPI-), sem senha nem DSN com credencial. Sem logging configurado, o CRITICAL vai para o stderr no mesmo formato (README §12.1, "Falha de configuração").
   - **API neutra:** `conectar(cfg, segredos, papel)` com `papel` em `WEB` ou `SCHED`; `pool(cfg, segredos)` para o web com `pool_min`/`pool_max`; e `transacao(conn)`, context manager com `COMMIT` no sucesso, `ROLLBACK` em exceção e log ERROR com o ORA-.
   - **Configuração obrigatória de toda conexão:**
     - `autocommit = False`;
@@ -21,7 +24,11 @@ Ter um ponto único, seguro e resiliente de acesso ao Oracle (11gR2 a 23ai), com
     - `module`, `action` e `client_identifier` (README §2.3);
     - `current_schema` **não** é alterado (o SQL sempre qualifica o owner).
   - **Tipos neutros:** `TIPO_DATE`, `TIPO_CLOB` e `TIPO_NUMBER`, mapeados para cada driver e modo, e `definir_tipos_entrada(cursor, **mapa)`.
-  - **Exceções:** `classificar_erro(exc) -> (prefixo, numero)` (`ORA`, `DPY` ou `DPI`). `eh_erro_rede(exc)` cobre a lista do README §2.3 **por modo** (incluindo os `DPY-*` do Thin); `eh_lock(exc)` cobre 54, 30006 e 60; `eh_violacao(exc)` cobre 1, 2290, 2291, 2292 e 1400. Os demais erros são traduzidos para as exceções `repo_errors`.
+  - **Bind de datas (README §7.5 "Bind de datas", AGENTS §3.1):** todo bind comparado ou gravado numa coluna `DATE` é declarado por `definir_tipos_entrada` com `TIPO_DATE`, que vira `cursor.setinputsizes(...)` com `oracledb.DB_TYPE_DATE` (Thin e Thick) ou `cx_Oracle.DATETIME` (cx_Oracle). O tipo `DATE` declarado descarta a fração, então um `datetime` com microssegundos **nunca** é comparado como `TIMESTAMP` a uma coluna `DATE` (o `UPDATE` otimista travaria silenciosamente com `rowcount = 0`). Os repositórios (F7.3) e o daemon (F8.3/F8.4) não chamam `setinputsizes` direto: usam esta função.
+  - **Relógio e IDs do banco para os repositórios** (nomes sugeridos; registre os definitivos no relatório):
+    - `agora_banco(conn)` (abaixo) é a base de `RepoUsuarios.agora()` e `RepoTickets.agora()` no Oracle. O relógio do nó nunca é usado para regra de negócio (README §4.2 "Relógio do banco", §7.1);
+    - `proximo_id(conn, sequence_qualificada)`: `SELECT {owner}.sq_<...>.NEXTVAL FROM DUAL`, com o nome vindo de `sql_ident`. É a base de `RepoAuditoria.reservar_id()` (a exportação usa `id_max = id reservado − 1`, README §4.4 "Quantidade registrada") e de toda inclusão, porque a aplicação sempre informa o `id` (README §2.7).
+  - **Exceções:** `classificar_erro(exc) -> (prefixo, numero)` (`ORA`, `DPY` ou `DPI`). `eh_erro_rede(exc)` cobre a lista do README §2.3 **por modo** (incluindo os `DPY-*` do Thin); `eh_lock(exc)` cobre 54, 30006 e 60; `eh_violacao(exc)` cobre 1, 2290, 2291, 2292 e 1400, mais 12899 (valor maior que a coluna) e 1438 (número maior que a precisão), que o FAKE já recusa como `RepoViolacao` (limites de `ator`/`detalhe` da auditoria e `tentativas_falha NUMBER(2)`, README §2.5 e §4.4). Os demais erros são traduzidos para as exceções `repo_errors`.
   - **Reconexão:** `ConexaoResiliente`, para o daemon. Em erro de rede, reconecta com *backoff* exponencial de 1 s a 60 s e WARN a cada tentativa; a operação em curso **não** é reexecutada automaticamente, e o chamador decide. A espera usa `time.monotonic()` e pode ser interrompida pela flag de shutdown.
   - **`saude(conn)`:** `SELECT SYSDATE FROM DUAL`, retornando o `SYSDATE` *naive*.
   - **`agora_banco(conn)`:** idem, sem microssegundos (README §7.1).
@@ -36,8 +43,11 @@ Ter um ponto único, seguro e resiliente de acesso ao Oracle (11gR2 a 23ai), com
     - classificação de erros por driver e modo (`ORA-`, `DPY-`, `DPI-`);
     - *backoff* (tempos simulados);
     - `module`/`action` definidos;
-    - ausência de senha em logs (captura com `assertLogs`).
-  - **Com `SSS_TEST_DSN`:** em cada combinação disponível, conexão real, `saude`, `agora_banco` sem microssegundos e roundtrip de bind DATE.
+    - ausência de senha em logs (captura com `assertLogs`);
+    - falhas fatais registradas em CRITICAL no formato do §13 (`assertLogs` no nível CRITICAL);
+    - `definir_tipos_entrada` com `TIPO_DATE` chama `setinputsizes` com o tipo de data de cada driver (`DB_TYPE_DATE` ou `DATETIME`);
+    - `proximo_id` monta o `NEXTVAL` com o nome qualificado do `sql_ident`.
+  - **Com `SSS_TEST_DSN`:** em cada combinação disponível, conexão real, `saude`, `agora_banco` sem microssegundos, `proximo_id` e roundtrip de bind DATE. **Teste obrigatório de microssegundos (README §7.5):** um `datetime` igual a um valor `DATE` lido do banco, mas com microssegundos acrescentados, declarado com `TIPO_DATE`, casa na comparação com a coluna (`WHERE col = :d` retorna a linha).
 
 **OUT**
 - Sem SQL de negócio (isso é o F7.3).

@@ -3,8 +3,10 @@
 ## Leitura obrigatória antes de planejar
 - `docs/arquitetura/CR-001-multiplataforma-e-sql-ansi.md` §2 (parte B, inteira)
 - `AGENTS.md` §2.2, §3.2 (inteiro), §3.3, §7 (`test_plataforma.py`)
-- `README.md` §2.6, §4.1, §8.0 (inteiro), §8.5, §8.11, §8.12 (passos 1, 4, 5 e 9), §12.1 (`[agent]`), §14
-- Arquivos: `modules/path_guard.py`, `modules/sss_config.py` (validação do `secrets.cfg`), `scripts/test_path_guard.py`, `scripts/test_config.py`, `scripts/test_py36_compat.py`
+- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D16: várias pastas base; C4: formato de `path_file`)
+- `README.md` §2.6, §4.1, §8.0 (inteiro), §8.5 (inteiro, em especial "Pastas base", "Caminho no Windows" e "Formato de `path_file`"), §8.11, §8.12 (passos 1, 4, 5 e 9), §12.1 (`[agent]`, inclusive `base_script_dirs`), §14
+- `AGENTS.md` §3.2 (pastas base)
+- Arquivos: `modules/path_guard.py` (`resolver_pasta`, `pasta_mapeada`, `PASTA_NAO_MAPEADA`), `modules/sss_config.py` (validação do `secrets.cfg`), `scripts/test_path_guard.py`, `scripts/test_config.py`, `scripts/test_py36_compat.py`
 
 ## Objetivo
 Concentrar em `modules/plataforma/` **toda** primitiva que depende do sistema operacional, com implementações POSIX (Linux e demais Unix) e Windows (APIs nativas via `ctypes`, sem dependência nova), para que o motor (F8.1–F8.4) não conheça o SO.
@@ -19,7 +21,8 @@ Concentrar em `modules/plataforma/` **toda** primitiva que depende do sistema op
   - `travar_instancia(caminho) -> trava` e `liberar_instancia(trava)`;
   - `usuario_privilegiado() -> bool`;
   - `validar_arquivo_restrito(caminho)` (segredos, README §4.1) e `validar_dir_restrito(caminho)` (`log_dir`/`work_dir`, README §8.12 passo 4);
-  - `validar_item_arvore(caminho, donos, conta_agente=None) -> codigo | None` (um item da árvore de scripts, README §8.5);
+  - `validar_item_arvore(caminho, donos, conta_agente=None) -> codigo | None` (um item da árvore de scripts, README §8.5). É a primitiva da linha `validar_arvore_scripts` da tabela do README §8.0;
+  - `validar_arvore_scripts(pastas, donos, conta_agente=None)`: aplica a regra de dono e permissão à raiz de **cada** pasta de `[agent] base_script_dirs` (README §8.5 "Pastas base": toda pasta base passa pelas mesmas checagens, na inicialização e a cada resolução) e devolve o primeiro problema com o **nome** da pasta. Usada pelo passo 4 da inicialização (F8.3);
   - `caminho_final(caminho)` (`realpath` no POSIX; `GetFinalPathNameByHandleW` no Windows, em qualquer versão do Python, rejeitando *reparse points* não resolvidos);
   - `criar_dir_trabalho(caminho)` (`0700` no POSIX; ACL só da conta do agente no Windows);
   - `instalar_parada(flag)`: handlers de sinal que **apenas** setam a flag (SIGTERM/SIGINT no POSIX; SIGBREAK/SIGINT no Windows). O arquivo `.stop` é verificado pelo laço, não aqui.
@@ -36,13 +39,16 @@ Concentrar em `modules/plataforma/` **toda** primitiva que depende do sistema op
   - `validar_item_arvore`: dono em `script_owner_sids` e **direitos efetivos** sem escrita para a conta do agente nem para os grupos amplos (`GetEffectiveRightsFromAclW`). `os.access` é proibido aqui (só olha o atributo "somente leitura").
 - **Migração do código existente** (sem mudar comportamento no Linux):
   - `modules/sss_config.py`: a checagem de dono e modo do `secrets.cfg` passa a chamar `plataforma.validar_arquivo_restrito`;
-  - `modules/path_guard.py`: a regra de dono/escrita por item (`_checar_dono_e_modo`, `_gravavel_pelo_agente`) passa a chamar `plataforma.validar_item_arvore`, e a resolução usa `plataforma.caminho_final`. Os códigos de retorno do `path_guard` e as mensagens da UI (F4.5) não mudam.
+  - `modules/path_guard.py`: a regra de dono/escrita por item (`_checar_dono_e_modo`, `_gravavel_pelo_agente`) passa a chamar `plataforma.validar_item_arvore`, e a resolução usa `plataforma.caminho_final`. Os códigos de retorno do `path_guard` (inclusive `PASTA_NAO_MAPEADA`) e as mensagens da UI (F4.5) não mudam.
+  - **Pastas base (README §8.5, D16):** a resolução do agente e do nó web passa **sempre** por `path_guard.resolver_pasta(pastas, pasta_base, path_file, ...)`, com o mapa `base_script_dirs` (nome lógico → diretório local). A base das checagens é o diretório da pasta base do script. `resolver` com uma base única continua só como peça interna de `resolver_pasta`.
+  - **Separador no Windows (README §8.5, "Formato de `path_file`"):** `path_file` usa só `/` (a etapa 1 recusa início com `/` ou `//`, `..`, `\` e `:`; a CK `ck_tbsss_scr_path` também recusa `\` e `:`). No Windows, o agente converte `/` para o separador local antes de juntar com a pasta base e de chamar `plataforma.caminho_final`; o `commonpath` é aplicado sobre `os.path.normcase` e um drive diferente do da base dá `FORA_DA_BASE`.
 - **Configuração (`sss_config.py`, `config.ini.example`):** `[agent] script_owner_sids` (lista de SIDs, `^S-1-[0-9-]+$`) e `[agent] interpretadores` (`LOGICO=caminho`, lógico na allowlist **da plataforma corrente**), conforme o README §12.1; `script_owner_uids` só é exigido no POSIX e `script_owner_sids` só no Windows. Atualize `test_config.py`.
 - **`applications/script_scheduling_service/scripts/test_plataforma.py`:**
   - **Plataforma corrente (real):** grupo e encerramento escalonado matando o **neto**; processo que ignora o término morre dentro de `grace + 1` s; identidade do processo estável e diferente para outro PID; PID inexistente; lock de instância (segunda trava falha); recusa de usuário privilegiado (com dublê); arquivo restrito OK e rejeitado; diretório de trabalho restrito; item da árvore gravável rejeitado; parada por sinal seta a flag.
   - **Outra plataforma:** dublês da API nativa (módulo `ctypes` falso ou funções injetadas) cobrindo a lógica de decisão, marcados com `skipUnless(sys.platform ...)` para a execução real.
   - **POSIX:** `/proc/<pid>/stat` com `)` no nome do comando.
-  - **Windows (dublês):** link e junction resolvidos por `caminho_final`; *reparse point* não resolvido rejeitado; drive diferente da base = `FORA_DA_BASE`.
+  - **Windows (dublês):** link e junction resolvidos por `caminho_final`; *reparse point* não resolvido rejeitado; drive diferente da base = `FORA_DA_BASE`; `path_file` `sub/carga.ps1` resolvido como `<base>\sub\carga.ps1` (conversão de `/`).
+  - **Pastas base:** duas pastas (ex.: `ROTINAS` e `BATCH`) resolvidas cada uma contra o próprio diretório; `pasta_base` fora do mapa = `PASTA_NAO_MAPEADA`; `validar_arvore_scripts` rejeita a segunda pasta quando só ela está fora do padrão de dono/permissão e informa o nome dela.
 - **`scripts/test_py36_compat.py`:** fora de `modules/plataforma/` é proibido `os.killpg`, `os.setsid`, `resource`, `fcntl`, `msvcrt`, `ctypes.windll`, `/proc` e `sys.platform` (AGENTS §3.2).
 
 **OUT**

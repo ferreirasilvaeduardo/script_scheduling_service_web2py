@@ -2,8 +2,9 @@
 
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §3.2 (inteiro), §6, §7.4 (`test_env_builder`, `test_executor`)
-- `README.md` §5.2 (motivos e return codes), §6.4 (montagem do `argv`), §8.0, §8.4 (passos 2–5), §8.5, §8.6 (inteiro, inclusive a base Windows), §8.7 (timeout e finalização), §14
-- Arquivos: `modules/plataforma/` (F8.0), `modules/params_compiler.py` (`montar_argv_agente`), `modules/path_guard.py`
+- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D16: pastas base e snapshot versão 3)
+- `README.md` §5.2 (motivos e return codes), §6.4 (montagem do `argv`), §6.5 (snapshot versão 3), §8.0, §8.4 (passos 1–5), §8.5 (inclusive "Pastas base"), §8.6 (inteiro, inclusive a base Windows), §8.7 (timeout e finalização), §14
+- Arquivos: `modules/plataforma/` (F8.0), `modules/params_compiler.py` (`validar_snapshot`, `montar_argv_agente`), `modules/path_guard.py` (`resolver_pasta`)
 
 ## Objetivo
 Implementar o spawn seguro dos scripts com ambiente limpo, saída direta em arquivo, limites, timeout e encerramento do grupo de processos, **sem** depender do banco e **sem** conhecer o sistema operacional (tudo que é de SO vem de `plataforma`).
@@ -15,6 +16,7 @@ Implementar o spawn seguro dos scripts com ambiente limpo, saída direta em arqu
     - **POSIX:** `PATH=/usr/bin:/bin`, `HOME`, `TMPDIR`, `LANG`/`LC_ALL` = `child_locale`, `TZ` herdado;
     - **Windows:** `SystemRoot`, `PATH=%SystemRoot%\System32;%SystemRoot%`, `TEMP`/`TMP`/`USERPROFILE` no diretório do ticket, `PATHEXT` e `COMSPEC` com valores padrão fixos; sem `LANG`/`LC_ALL`;
     - em ambas: `PYTHONDONTWRITEBYTECODE`, `PYTHONIOENCODING=utf-8`, `SSS_TICKET_ID`, `SSS_AMBIENTE`, `SSS_AGENTE_ID`, `SSS_SCRIPT_DIR`.
+    - `SSS_SCRIPT_DIR` = `os.path.dirname(script_real)`, onde `script_real` é o caminho resolvido pelo `path_guard.resolver_pasta` **dentro da pasta base do script** (`pasta_base` traduzida por `base_script_dirs` do agente, README §8.5 e §8.6). Não é a pasta base nem o `cwd` (que é `work_dir/ticket_<id>`).
   - O `PADRAO_VALOR_RUN_CONEXAO_BD` só é incluído quando o ambiente tem DSN **e** o `secrets.cfg` tem a seção `[ambiente:<NOME>]` com `user` e `password`. Se faltar algum dos dois, a variável é omitida e um WARN é registrado (sem valores). O valor é registrado no `Mascarador`.
   - O `env_passthrough` é copiado de `environ_daemon`, recebido por parâmetro; o módulo **nunca** lê `os.environ`.
   - Variáveis bloqueadas (lista do README §8.6, mais `PSModulePath` e `__PSLockdownPolicy` no Windows) geram `ValueError`.
@@ -36,7 +38,8 @@ Implementar o spawn seguro dos scripts com ambiente limpo, saída direta em arqu
   - processo que ignora o pedido de término morre dentro de `grace + 1` s;
   - tradução de `returncode`;
   - arquivo de log com `O_EXCL` (e modo `0600` no POSIX);
-  - argv montado por `params_compiler.montar_argv_agente` (Python com `-I`; PowerShell com `-NoProfile -NonInteractive -ExecutionPolicy Bypass -File`).
+  - argv montado por `params_compiler.montar_argv_agente` (Python com `-I`; PowerShell com `-NoProfile -NonInteractive -ExecutionPolicy Bypass -File`), a partir de um **snapshot versão 3** (`interpretador`, `pasta_base`, `path_file`, `args`; README §6.5) passado por `params_compiler.validar_snapshot` com um `base_script_dirs` de teste de duas pastas; o executável vem de `[agent] interpretadores` e o `script_real` da pasta base do snapshot;
+  - `SSS_SCRIPT_DIR` do filho é o diretório do script dentro da pasta base (script em subpasta de uma segunda pasta base).
 
 **OUT**
 - Sem banco, sem laço de daemon e sem coleta para o CLOB (isso é o F8.2).

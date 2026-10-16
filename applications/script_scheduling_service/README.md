@@ -716,7 +716,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
 ```sql
 UPDATE {owner}.tbsss_tickets
    SET cancel_requested = 'S'
- WHERE id = :id AND status IN ('PENDING', 'RUNNING');
+ WHERE id = :id AND status IN ('PENDING', 'RUNNING') AND cancel_requested = 'N';
 
 UPDATE {owner}.tbsss_tickets
    SET status = 'CANCELLED', status_motivo = 'CANCEL_USER',
@@ -724,7 +724,7 @@ UPDATE {owner}.tbsss_tickets
  WHERE id = :id AND status = 'PENDING';
 ```
 
-* Se o primeiro `UPDATE` afetar 0 linhas, o ticket já é terminal e o sistema informa o usuário.
+* Se o primeiro `UPDATE` afetar 0 linhas, o ticket já é terminal **ou** o cancelamento já tinha sido pedido. Para saber qual, a mesma transação lê a linha pela PK (`SELECT status, cancel_requested FROM {owner}.tbsss_tickets WHERE id = :id FOR UPDATE WAIT 5`): terminal dá `sem efeito: ticket encerrado`; `RUNNING` com `cancel_requested = 'S'` dá `já sinalizado`. O sistema informa o usuário nos dois casos.
 * Se o segundo afetar 0 linhas, o ticket está `RUNNING` e o agente dono trata o cancelamento.
 * A operação é auditada e confirmada com `COMMIT`.
 * **Toda solicitação é auditada** (`TICKET_CANCELAR`), inclusive as que não mudam nada. O `detalhe` informa o resultado:
@@ -737,6 +737,20 @@ UPDATE {owner}.tbsss_tickets
   | `sem efeito: ticket encerrado` | Já era terminal | O ticket já estava encerrado |
 
   O botão some quando o cancelamento já foi solicitado, mas o servidor trata o POST repetido do mesmo modo.
+
+**No agente dono:** a cada `cancel_poll_interval_s`, executa a varredura combinada da §8.7. Ao encontrar `cancel_requested = 'S'` em ticket próprio:
+
+1. Pedir o encerramento do grupo pela camada de plataforma (§8.0): `SIGTERM` ao grupo no POSIX; `CTRL_BREAK_EVENT` no Windows.
+2. Aguardar até `kill_grace_s`, consultando `Popen.poll()`.
+3. Se o processo persistir, forçar o encerramento (`SIGKILL` ao grupo no POSIX; `TerminateJobObject` no Windows) e então `Popen.wait()`.
+4. Fazer o flush final do log (§8.10).
+5. `UPDATE ... SET status = 'CANCELLED', status_motivo = 'CANCEL_USER', return_code = -1, finished_at = SYSDATE WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`, seguido de `COMMIT`.
+
+Se o processo terminou sozinho **antes** de o agente sinalizá-lo, prevalece o resultado real (`SUCCESS` ou `FAILED`).
+
+No POSIX, `ProcessLookupError` no `killpg` é tratado como "grupo já encerrado"; no Windows, o mesmo vale para um Job sem processos.
+
+---
 
 ### 5.7 Detalhe do ticket: resumo e etapas (CR-004)
 
@@ -786,20 +800,6 @@ O topo do detalhe (`tickets/detalhe/<id>`) responde "o que está acontecendo?" a
   * o link "Ver estes pedidos", que abre a lista de tickets filtrada por script e período.
 * **Contrato (leitura nova):** `RepoTickets.historico_script(script_id, desde, escopo_ambientes=None, solicitante=None, limite=5000)` devolve só `{id, status, status_motivo, created_at, started_at, finished_at}`, sem LOB, ordenado por `created_at`. A agregação é feita no service. Acima do limite, a tela avisa "mostrando os 5.000 mais recentes".
 * Não grava nada e não audita.
-
-**No agente dono:** a cada `cancel_poll_interval_s`, executa a varredura combinada da §8.7. Ao encontrar `cancel_requested = 'S'` em ticket próprio:
-
-1. Pedir o encerramento do grupo pela camada de plataforma (§8.0): `SIGTERM` ao grupo no POSIX; `CTRL_BREAK_EVENT` no Windows.
-2. Aguardar até `kill_grace_s`, consultando `Popen.poll()`.
-3. Se o processo persistir, forçar o encerramento (`SIGKILL` ao grupo no POSIX; `TerminateJobObject` no Windows) e então `Popen.wait()`.
-4. Fazer o flush final do log (§8.10).
-5. `UPDATE ... SET status = 'CANCELLED', status_motivo = 'CANCEL_USER', return_code = -1, finished_at = SYSDATE WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`, seguido de `COMMIT`.
-
-Se o processo terminou sozinho **antes** de o agente sinalizá-lo, prevalece o resultado real (`SUCCESS` ou `FAILED`).
-
-No POSIX, `ProcessLookupError` no `killpg` é tratado como "grupo já encerrado"; no Windows, o mesmo vale para um Job sem processos.
-
----
 
 ## 6. Parâmetros, Validação e Compilação do Snapshot
 
@@ -1509,7 +1509,7 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
 3. **Segredos:** validar o `secrets.cfg` (§4.1).
 4. **Diretórios e interpretadores:**
    * cada pasta de `base_script_dirs` tem caminho, existe e passa na regra de ownership e permissão da §8.5; os nomes são únicos e os caminhos não são aninhados;
-   * `log_dir` e `work_dir` existem, são graváveis, **não** ficam sob nenhuma pasta base e, no Windows, têm ACL restrita à conta do agente;
+   * `log_dir` e `work_dir` existem, são graváveis, **não** ficam sob nenhuma pasta base nem contêm uma pasta base (§8.5) e, no Windows, têm ACL restrita à conta do agente;
    * cada entrada de `[agent] interpretadores` é válida para a plataforma (§8.5).
 5. **Instância única por host:** `plataforma.travar_instancia` em `work_dir/sss-<agent_id>.lock`.
 6. **Banco:** selecionar o driver (§2.3; a sondagem roda aqui), conectar e confirmar o relógio do banco (`SELECT SYSDATE FROM DUAL`).

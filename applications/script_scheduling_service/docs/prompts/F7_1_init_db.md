@@ -2,8 +2,9 @@
 
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §4 (inteiro)
-- `README.md` §9, §10 (inteiro), §11.1, §11.2, §4.3.D (seed de funcionalidades)
-- Arquivo: `modules/sql_ident.py` (fonte única do modelo)
+- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D5, D16 e C4: colunas e CKs novas, `table_prefix`, CRITICAL em configuração inválida)
+- `README.md` §9, §10 (inteiro; em especial as tabelas 6 `tbsss_scripts`, 9 `tbsss_usuarios`, 15 `tbsss_agentes` e 16 `tbsss_auditoria`), §11.1, §11.2, §4.3.D (seed de funcionalidades), §8.5 ("Pastas base" e "CKs de banco"), §12.1 (tabela de faixas e "Falha de configuração"), §13
+- Arquivos: `modules/sql_ident.py` (fonte única do modelo; já contém as colunas e CKs do CR-003), `modules/sss_config.py` (`obter_config`/`carregar`, regex de `owner` e `table_prefix`)
 
 ## Objetivo
 Gerar e aplicar o DDL Oracle 11gR2 de forma idempotente e auditável, **a partir do registro `sql_ident`**, sem nenhum nome escrito à mão.
@@ -19,6 +20,14 @@ Gerar e aplicar o DDL Oracle 11gR2 de forma idempotente e auditável, **a partir
   6. triggers `_bi` no template literal do AGENTS §4.2 e triggers `_bu` de imutabilidade (`IF :NEW.<col> <> :OLD.<col> THEN RAISE_APPLICATION_ERROR(-20001, '<col> é imutável'); END IF;`).
 
   Cada instrução vem acompanhada do tipo e do nome do objeto, para a checagem de existência.
+
+  **Modelo do CR-003 (já no registro `sql_ident`; gerar a partir dele, nunca escrever à mão):**
+  - `tbsss_scripts.pasta_base VARCHAR2(30 CHAR) NOT NULL` (nome lógico da pasta base, README §8.5 e §10 tabela 6), com a CK `ck_tbsss_scr_pasta (REGEXP_LIKE(pasta_base, '^[A-Z][A-Z0-9_]{0,29}$'))`;
+  - `ck_tbsss_scr_path` endurecida (C4): `SUBSTR(path_file, 1, 1) <> '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '\') = 0 AND INSTR(path_file, ':') = 0`. A barra invertida sai **literal** no DDL (`'\'`, um único caractere; no Oracle, `\` não é caractere de escape);
+  - `tbsss_agentes.pastas_base VARCHAR2(500 CHAR)` (nomes das pastas base do agente, sem caminhos; README §10 tabela 15);
+  - `tbsss_usuarios.tentativas_falha NUMBER(2)` (por isso `login_max_tentativas` vai de 1 a 99, README §12.1).
+
+  O banco ainda não existe, então não há migração (CR-003, "Modelo de dados"): as colunas entram no `CREATE TABLE` e as CKs na fase 3.
 - **`applications/script_scheduling_service/scripts/init_db.py`** (CLI, `print` permitido), com as opções `--config`, `--dry-run`, `--lob-basicfile`, `--admin-login <login>`, `--admin-nome <nome>`, `--recreate` (só com `SSS_ENV=DEV` e confirmação digitada "RECRIAR <owner>") e `--stats` (padrão ligado):
   - **Checagem de existência** em `ALL_OBJECTS`, `ALL_CONSTRAINTS` e `ALL_INDEXES`, com `owner` e nome como **binds** (`UPPER`). O que já existe é marcado `SKIP`.
   - **Execução fase a fase:** o DDL faz commit implícito no Oracle. A primeira falha **aborta**, com fase, objeto, ORA- e o SQL (sem segredos) no log e código de saída 1.
@@ -27,11 +36,14 @@ Gerar e aplicar o DDL Oracle 11gR2 de forma idempotente e auditável, **a partir
   - **Estatísticas:** `DBMS_STATS.GATHER_TABLE_STATS(ownname => :o, tabname => :t, cascade => TRUE)` por tabela.
   - **Usuário de aplicação diferente do owner:** com `--grants-para <usuario>`, imprime (sem executar) os `GRANT SELECT, INSERT, UPDATE, DELETE` necessários e o `GRANT SELECT` nas sequences, para o DBA aplicar.
   - O `--dry-run` imprime **todo** o DDL, em ordem, e não conecta. Quando não houver config de banco, usa o `owner` e o prefixo do config.
+  - **Configuração:** o `owner` segue `^[A-Za-z][A-Za-z0-9_]{0,29}$` e o `table_prefix` segue `^[A-Za-z][A-Za-z0-9_]{0,7}$` (começa com letra, até 8 caracteres; README §12.1, D5), validados por `sss_config`/`sql_ident` antes de gerar qualquer DDL. Configuração inválida aborta com um registro **CRITICAL** com a seção, a chave e o motivo (nunca o valor de um segredo), no formato do README §13, e código de saída diferente de zero, como na "Falha de configuração" do §12.1 (reaproveite o caminho de `sss_config.obter_config(nome_log=...)`; sem `[logging]` válido, o CRITICAL vai para o stderr). O `--dry-run` também aborta.
 - **`applications/script_scheduling_service/scripts/test_db_schema.py` (ampliar)** e **`applications/script_scheduling_service/scripts/test_ddl_builder.py`:**
   - o DDL gerado contém todos os nomes do registro;
   - nenhuma ocorrência de `IDENTITY`, `FETCH FIRST`, `OFFSET`, `JSON_` ou `VARCHAR2(n)` sem `CHAR`;
   - toda trigger `_bi` igual ao template literal;
   - a ordem das fases está correta (FK depois de PK/UK; índice FBI depois da tabela);
+  - **CR-003:** o DDL contém `pasta_base VARCHAR2(30 CHAR) NOT NULL` em `tbsss_scripts`, a CK `ck_tbsss_scr_pasta` com o `REGEXP_LIKE` do README §10 tabela 6, a `ck_tbsss_scr_path` com `INSTR(path_file, '\') = 0` e `INSTR(path_file, ':') = 0` (texto exato) e `pastas_base VARCHAR2(500 CHAR)` em `tbsss_agentes`;
+  - `table_prefix` começando por dígito ou com mais de 8 caracteres é recusado antes de gerar DDL, com CRITICAL (`assertLogs`);
   - `--dry-run` executável sem driver.
 
 **OUT**
@@ -45,6 +57,7 @@ Gerar e aplicar o DDL Oracle 11gR2 de forma idempotente e auditável, **a partir
 ## Critérios de aceite
 - [ ] `python scripts/init_db.py --dry-run` gera um DDL completo e revisável. Salve-o como `docs/ddl_gerado.sql`.
 - [ ] Os testes passam.
+- [ ] O `docs/ddl_gerado.sql` contém as colunas `pasta_base`/`pastas_base` e as CKs `ck_tbsss_scr_pasta` e `ck_tbsss_scr_path` endurecida (CR-003).
 - [ ] Com `SSS_TEST_DSN`: a primeira execução cria tudo e a segunda resulta em 100% SKIP. Sem `SSS_TEST_DSN`, o veredito dessa parte é `NÃO TESTADO`.
 
 ## Verificação
