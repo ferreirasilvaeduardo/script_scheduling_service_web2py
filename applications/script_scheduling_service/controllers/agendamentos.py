@@ -110,6 +110,20 @@ def lista():
                 query_params=dict(filtros, tamanho=tamanho))
 
 
+def agenda():
+    """Agenda (README §7.7): o que vai rodar hoje e nos proximos 7 dias; so leitura."""
+    _exigir_metodo("GET", "HEAD")
+    ctx = _exigir_func(_FUNC)
+    response.title = u"Agenda — SSS"
+    try:
+        return dict(dados=servico.agenda(ctx), erro=None)
+    except AcessoNegado:
+        _negado()
+    except RepoErro:
+        _log.exception("falha ao montar a agenda (login=%s)", ctx["login"], extra={"acao": _FUNC})
+        return dict(dados=None, erro=ui_helpers.mensagem("falha_interna"))
+
+
 def form():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)

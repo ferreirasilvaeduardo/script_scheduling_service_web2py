@@ -150,6 +150,23 @@ def _valor_campo_data(dt):
     return dt.strftime(FORMATO_CAMPO_DATA) if dt is not None else ""
 
 
+AGENDA_POR_REGRA = 20
+AGENDA_TOTAL = 500
+_AGENDA_PAGINA = 100
+_AGENDA_CONTAGEM_MAX = 5000
+_NOMES_DIA = (u"segunda-feira", u"terça-feira", u"quarta-feira", u"quinta-feira", u"sexta-feira", u"sábado",
+              u"domingo")
+
+
+def _rotulo_dia(dia, hoje):
+    """'Hoje', 'Amanhã' ou 'sexta-feira, 18/10' (README §7.7)."""
+    if dia == hoje:
+        return u"Hoje"
+    if dia == hoje + datetime.timedelta(days=1):
+        return u"Amanhã"
+    return u"%s, %s" % (_NOMES_DIA[dia.weekday()], dia.strftime("%d/%m"))
+
+
 def descrever_regra(regra):
     """Descricao da recorrencia em portugues para a lista e a previa."""
     tipo = regra.get("tipo_recorrencia")
@@ -396,6 +413,74 @@ class ServicoAgendamentos(object):
         return aud
 
     # ------------------------------------------------------------ consulta
+
+    def agenda(self, ctx):
+        """Agenda (README §7.7, CR-004 T3): o que vai rodar de agora ate o fim do 7o dia seguinte.
+
+        Retorna {atrasados: [...], dias: [{rotulo, itens}], aviso_total, ocorrencias}. Cada item:
+        hora, regra_id, nome, script, ambiente, recorrencia e, no ultimo item de uma regra com mais de
+        AGENDA_POR_REGRA ocorrencias, 'mais' (quantas a mais no periodo). So leitura.
+        """
+        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
+        agora = recurrence.truncar_segundos(self._agora())
+        fim = datetime.datetime.combine(agora.date() + datetime.timedelta(days=8), datetime.time())
+        escopo = None if ctx.get("is_admin") is True else sorted(ctx.get("ambientes") or ())
+        regras, pagina = [], 1
+        while escopo != []:
+            res = self._agendamentos.listar(filtros={"ativo": "S"}, pagina=pagina, tamanho=_AGENDA_PAGINA,
+                                            escopo_ambientes=escopo)
+            regras.extend(res["itens"])
+            if len(res["itens"]) < _AGENDA_PAGINA:
+                break
+            pagina += 1
+        scripts = {}
+        atrasados, ocorrencias = [], []
+        for reg in regras:
+            if reg["script_id"] not in scripts:
+                try:
+                    scripts[reg["script_id"]] = self._catalogo.scripts_obter(reg["script_id"])["nome"]
+                except RepoNaoEncontrado:
+                    scripts[reg["script_id"]] = u"#%s" % reg["script_id"]
+            base = {"regra_id": reg["id"], "nome": reg["nome"], "script": scripts[reg["script_id"]],
+                    "ambiente": reg["ambiente"], "recorrencia": descrever_regra(reg)}
+            prox = reg.get("proxima_execucao")
+            if prox is None:
+                continue
+            if prox < agora:
+                atrasados.append(dict(base, hora=prox.strftime("%d/%m %H:%M"),
+                                      frase=u"deveria ter rodado às %s; vai rodar assim que o servidor puder."
+                                      % prox.strftime("%H:%M")))
+            datas = []
+            atual = prox if prox >= agora else None
+            extra = 0
+            try:
+                if atual is None:
+                    atual = recurrence.proxima_execucao(reg, agora, self._horizonte)
+                while atual is not None and atual < fim:
+                    if len(datas) < AGENDA_POR_REGRA:
+                        datas.append(atual)
+                    elif extra < _AGENDA_CONTAGEM_MAX:
+                        extra += 1
+                    else:
+                        break
+                    atual = recurrence.proxima_execucao(reg, atual, self._horizonte)
+            except CronErro:
+                continue
+            for i, quando in enumerate(datas):
+                item = dict(base, quando=quando, hora=quando.strftime("%H:%M"))
+                if extra and i == len(datas) - 1:
+                    item["mais"] = extra
+                ocorrencias.append(item)
+        ocorrencias.sort(key=lambda o: (o["quando"], o["regra_id"]))
+        aviso_total = None
+        if len(ocorrencias) > AGENDA_TOTAL:
+            aviso_total = (u"Mostrando as primeiras %d execuções previstas; há mais no período." % AGENDA_TOTAL)
+            ocorrencias = ocorrencias[:AGENDA_TOTAL]
+        dias = collections.OrderedDict()
+        for o in ocorrencias:
+            dias.setdefault(o["quando"].date(), []).append(o)
+        return {"atrasados": atrasados, "aviso_total": aviso_total, "total": len(ocorrencias),
+                "dias": [{"rotulo": _rotulo_dia(d, agora.date()), "itens": itens} for d, itens in dias.items()]}
 
     def listar(self, ctx, filtros, pagina, tamanho):
         """Pagina de regras dos ambientes autorizados (admin: todos), pronta para a tabela."""
@@ -700,6 +785,11 @@ def _servico():
 def listar(ctx, filtros, pagina, tamanho):
     """Pagina de regras (servico padrao)."""
     return _servico().listar(ctx, filtros, pagina, tamanho)
+
+
+def agenda(ctx):
+    """Agenda dos proximos 7 dias (servico padrao)."""
+    return _servico().agenda(ctx)
 
 
 def formulario(ctx, agendamento_id=None, script_id=None, ambiente=None, enviados=None, valores=None, erros=None):

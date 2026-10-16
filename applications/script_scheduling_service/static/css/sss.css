@@ -1527,3 +1527,19 @@
   margin: 0 0 var(--sss-esp-2);
   font-size: 1rem;
 }
+
+/* Agenda (README §7.7, CR-004). */
+.sss-agenda-lista {
+  margin: 0;
+  padding-left: calc(var(--sss-esp-4) + 1.25rem);
+}
+
+.sss-agenda-lista li {
+  padding: var(--sss-esp-1) 0;
+  overflow-wrap: anywhere;
+}
+
+.sss-agenda-hora {
+  font-family: var(--sss-font-mono);
+  font-weight: 600;
+}

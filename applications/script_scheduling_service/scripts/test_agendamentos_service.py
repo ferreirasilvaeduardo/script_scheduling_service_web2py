@@ -378,6 +378,52 @@ class TestEdicao(_Base):
         self.assertIn(u"documento_cliente=%s (alterado)" % svc_mod.MASCARA, self._auditorias("CAD_ALTERAR")[0]["detalhe"])
 
 
+class TestAgenda(_Base):
+    """CR-004 U6 (README §7.7)."""
+
+    def _regra(self, **campos):
+        base = {"nome": "Agenda teste", "script_id": 1, "ambiente": "HOMOLOGACAO", "usuario_id": 1, "prioridade": 2,
+                "tipo_recorrencia": "DIARIA", "hora_execucao": "03:00", "parametros_json": "{}",
+                "data_inicio": datetime.datetime(2026, 1, 1, 0, 0),
+                "proxima_execucao": datetime.datetime(2026, 1, 16, 3, 0)}
+        base.update(campos)
+        return self.agd.inserir(base)["id"]
+
+    def _itens(self, dados, regra_id):
+        return [o for d in dados["dias"] for o in d["itens"] if o["regra_id"] == regra_id]
+
+    def test_diaria_sete_dias_com_rotulos(self):
+        rid = self._regra()
+        dados = self.svc.agenda(self.ctx["admin"])
+        itens = self._itens(dados, rid)
+        self.assertEqual(len(itens), 7)  # 16/01 a 22/01: ate o fim do 7o dia seguinte a 15/01
+        rotulos = [d["rotulo"] for d in dados["dias"] if any(o["regra_id"] == rid for o in d["itens"])]
+        self.assertEqual(rotulos[0], u"Amanhã")
+        self.assertTrue(rotulos[1].startswith(u"sábado, 17/01"))
+
+    def test_cron_a_cada_minuto_limitado_a_20_com_mais(self):
+        rid = self._regra(tipo_recorrencia="CRON", hora_execucao=None, expressao_cron="* * * * *",
+                          proxima_execucao=datetime.datetime(2026, 1, 15, 10, 1))
+        itens = self._itens(self.svc.agenda(self.ctx["admin"]), rid)
+        self.assertEqual(len(itens), svc_mod.AGENDA_POR_REGRA)
+        self.assertGreater(itens[-1]["mais"], 0)
+
+    def test_atrasada_pausada_e_escopo(self):
+        atrasada = self._regra(proxima_execucao=datetime.datetime(2026, 1, 15, 3, 0))
+        pausada = self._regra(ativo="N", pausa_motivo="MANUAL")
+        em_prod = self._regra(ambiente="PRODUCAO")
+        dados = self.svc.agenda(self.ctx["admin"])
+        self.assertIn(atrasada, [a["regra_id"] for a in dados["atrasados"]])
+        self.assertFalse(self._itens(dados, pausada))
+        self.assertTrue(self._itens(dados, em_prod))
+        # op.hml nao enxerga PRODUCAO (README §7.6, lista por escopo).
+        self.assertFalse(self._itens(self.svc.agenda(self.ctx["op.hml"]), em_prod))
+
+    def test_exige_cad_agendamentos(self):
+        with self.assertRaises(AcessoNegado):
+            self.svc.agenda(self.ctx["consulta"])
+
+
 class TestPausaRetomada(_Base):
 
     def test_pausar_e_retomar_com_recalculo(self):
