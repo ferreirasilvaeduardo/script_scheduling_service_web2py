@@ -17,7 +17,14 @@
     {{_cid = 'campo-' + _c['nome']
     _mantido = bool(_c.get('mantido'))
     _desc = []
-    if _c['descricao'] or _c['padrao_texto'] is not None or (_c['sensivel'] and _c['tem_padrao']) or _mantido:
+    _exemplo = _c.get('exemplo')
+    # Descrição e exemplo viram frases separadas: "Data base da rotina. Use o formato…".
+    _descricao = _c['descricao']
+    if _descricao and _exemplo and not _descricao.rstrip().endswith(('.', '!', '?')):
+        _descricao = _descricao.rstrip() + '.'
+    pass
+    _aviso = _c.get('aviso')
+    if _c['descricao'] or _c['padrao_texto'] is not None or (_c['sensivel'] and _c['tem_padrao']) or _mantido or _exemplo or _aviso:
         _desc.append(_cid + '-ajuda')
     pass
     if _c['erro']:
@@ -32,14 +39,14 @@
       <input type="hidden" name="{{=_c['nome']}}" value="false">
       <div class="form-check">
         <input class="form-check-input{{=_invalido}}" type="checkbox" id="{{=_cid}}" name="{{=_c['nome']}}" value="true"{{if _c['marcado']:}} checked{{pass}}{{if _desc:}} aria-describedby="{{=' '.join(_desc)}}"{{pass}}{{if _c['erro']:}} aria-invalid="true"{{pass}}{{if _foco:}} autofocus{{pass}}>
-        <label class="form-check-label" for="{{=_cid}}">{{=_c['label']}}{{if _c['obrigatorio']:}} <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span>{{pass}}</label>
+        <label class="form-check-label" for="{{=_cid}}">{{=_c['label']}}{{if _c['obrigatorio']:}} <span class="sss-obrigatorio">(obrigatório)</span>{{pass}}</label>
         {{if _c['erro']:}}<div class="invalid-feedback" id="{{=_cid}}-erro">{{=_c['erro']}}</div>{{pass}}
       </div>
-      {{if '%s-ajuda' % _cid in _desc:}}<div class="form-text" id="{{=_cid}}-ajuda">{{=_c['descricao']}}{{if _c['padrao_texto'] is not None:}} Padrão: {{=_c['padrao_texto']}}.{{pass}}</div>{{pass}}
+      {{if '%s-ajuda' % _cid in _desc:}}<div class="form-text" id="{{=_cid}}-ajuda">{{if _aviso:}}<strong>{{=_aviso}}</strong> {{pass}}{{=_descricao}}{{if _exemplo:}} {{=_exemplo}}{{pass}}{{if _c['padrao_texto'] is not None:}} Padrão: {{=_c['padrao_texto']}}.{{pass}}</div>{{pass}}
     </div>
     {{else:}}
     <div class="sss-form-campo mb-3">
-      <label class="form-label" for="{{=_cid}}">{{=_c['label']}}{{if _c['obrigatorio']:}} <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span>{{pass}}</label>
+      <label class="form-label" for="{{=_cid}}">{{=_c['label']}}{{if _c['obrigatorio']:}} <span class="sss-obrigatorio">(obrigatório)</span>{{pass}}</label>
       {{if _c['tipo'] == 'SELECT':}}
       <select class="form-select{{=_invalido}}" id="{{=_cid}}" name="{{=_c['nome']}}"{{if _desc:}} aria-describedby="{{=' '.join(_desc)}}"{{pass}}{{if _requerido:}} required aria-required="true"{{pass}}{{if _c['erro']:}} aria-invalid="true"{{pass}}{{if _foco:}} autofocus{{pass}}>
         <option value="">{{if _c['padrao_texto'] is not None:}}Usar o padrão ({{=_c['padrao_texto']}}){{else:}}Selecione…{{pass}}</option>
@@ -52,7 +59,7 @@
       _placeholder = '' if (_c['sensivel'] or _c['padrao_texto'] is None) else u'Padrão: %s' % _c['padrao_texto']}}
       <input class="form-control{{=_invalido}}" type="{{=_tipo_html}}" id="{{=_cid}}" name="{{=_c['nome']}}" maxlength="500"{{if not _c['sensivel'] and _c['valor'] is not None:}} value="{{=_c['valor']}}"{{pass}}{{if _placeholder:}} placeholder="{{=_placeholder}}"{{pass}}{{if _c['sensivel']:}} autocomplete="off"{{pass}}{{if _c['tipo'] == 'NUMBER':}} inputmode="decimal" pattern="-?[0-9]{1,18}(\.[0-9]{1,6})?"{{pass}}{{if _desc:}} aria-describedby="{{=' '.join(_desc)}}"{{pass}}{{if _requerido:}} required aria-required="true"{{pass}}{{if _c['erro']:}} aria-invalid="true"{{pass}}{{if _foco:}} autofocus{{pass}}>
       {{pass}}
-      {{if '%s-ajuda' % _cid in _desc:}}<div class="form-text" id="{{=_cid}}-ajuda">{{=_c['descricao']}}{{if _mantido:}} Valor sigiloso já salvo (não exibido): deixe em branco para manter o valor atual.{{elif _c['sensivel'] and _c['tem_padrao']:}} Valor sigiloso: deixe em branco para usar o padrão configurado.{{elif _c['padrao_texto'] is not None:}} Padrão: {{=_c['padrao_texto']}}.{{pass}}</div>{{pass}}
+      {{if '%s-ajuda' % _cid in _desc:}}<div class="form-text" id="{{=_cid}}-ajuda">{{if _aviso:}}<strong>{{=_aviso}}</strong> {{pass}}{{=_descricao}}{{if _exemplo:}} {{=_exemplo}}{{pass}}{{if _mantido:}} Valor sigiloso já salvo (não exibido): deixe em branco para manter o valor atual.{{elif _c['sensivel'] and _c['tem_padrao']:}} Valor sigiloso: deixe em branco para usar o padrão configurado.{{elif _c['padrao_texto'] is not None:}} Padrão: {{=_c['padrao_texto']}}.{{pass}}</div>{{pass}}
       {{if _c['erro']:}}<div class="invalid-feedback" id="{{=_cid}}-erro">{{=_c['erro']}}</div>{{pass}}
     </div>
     {{pass}}

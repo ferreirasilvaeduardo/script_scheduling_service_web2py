@@ -29,6 +29,8 @@ MSG_SCRIPT_INDISPONIVEL = (u"O script não está disponível para execução nes
                            u"Contate o administrador.")
 MSG_FALHA_CRIAR = u"Não foi possível criar o ticket. Tente novamente em instantes."
 
+MSG_ULTIMA_SENSIVEL = u"Por segurança, digite de novo."
+MSG_ULTIMA_MUDOU = u"Esta resposta mudou desde a última vez; preencha de novo."
 ROTULOS_PRIORIDADE = {
     1: u"1 — Urgente (exclusiva de administradores)",
     2: u"2 — Normal (padrão)",
@@ -340,15 +342,31 @@ class ServicoTicket(object):
                 return None
         return None
 
-    def preparar_formulario(self, ctx, script_id, ambiente, valores=None, erros=None):
+    def _exemplo(self, vinculo):
+        """Texto de ajuda gerado pelo tipo (README §5.4, "Clareza no disparo"); sem coluna nova."""
+        tipo = vinculo.get("tipo_componente")
+        if tipo == "DATE":
+            return u"Use o formato AAAA-MM-DD, por exemplo %s." % self._tickets.agora().strftime("%Y-%m-%d")
+        if tipo == "NUMBER":
+            return u"Use só números, com ponto para decimais, por exemplo 10 ou 2.5."
+        if tipo == "SELECT":
+            return u"Escolha uma das opções da lista."
+        if tipo == "CHECKBOX":
+            return u"Marque para sim; deixe desmarcado para não."
+        if tipo == "TEXT" and vinculo.get("regex_validacao"):
+            return u"Siga o formato pedido pelo cadastro."
+        return None
+
+    def preparar_formulario(self, ctx, script_id, ambiente, valores=None, erros=None, avisos=None):
         """Vinculos ordenados com padroes resolvidos para exibicao; valida pode_executar.
 
-        valores/erros (opcionais) reapresentam um POST com erro. Valores e padroes de
-        parametros sensiveis nunca sao devolvidos.
+        valores/erros (opcionais) reapresentam um POST com erro; avisos (opcional) sao notas por campo
+        (ex.: resposta da ultima execucao que mudou). Valores e padroes sensiveis nunca sao devolvidos.
         """
         script, amb = self._autorizar(ctx, script_id, ambiente)
         valores = valores or {}
         erros = erros or {}
+        avisos = avisos or {}
         campos = []
         for v in _ordenados(self._vinculos(script["id"])):
             codigo = v["codigo"]
@@ -384,6 +402,8 @@ class ServicoTicket(object):
                 "valor": valor,
                 "marcado": marcado,
                 "erro": erros.get(codigo),
+                "exemplo": self._exemplo(v),
+                "aviso": avisos.get(codigo),
             })
         prioridades = [(p, ROTULOS_PRIORIDADE[p]) for p in rbac.PRIORIDADES if rbac.prioridade_permitida(ctx, p)]
         return {
@@ -485,6 +505,80 @@ class ServicoTicket(object):
         if snapshot is None:
             return None, dict(erros)
         return params_compiler.argv_para_exibicao(json.loads(snapshot), self._base_exibicao(ctx)), {}
+
+    def resumo_disparo(self, ctx, script_id, ambiente, respostas, prioridade=None, scheduled_at=None):
+        """Resumo em frase do modal de confirmacao (README §5.4), montado pelo servidor; nao grava nada.
+
+        Retorna {argv, erros, resumo} com resumo = {script, ambiente, quando, prioridade, respostas:
+        [{rotulo, valor}], frase}. Sensiveis aparecem como '****'; vazios como '(sem resposta)'.
+        """
+        script, amb = self._autorizar(ctx, script_id, ambiente)
+        agora = self._tickets.agora()
+        erros = collections.OrderedDict()
+        prio = self._prioridade(ctx, prioridade, erros)
+        sched = self._agendamento(scheduled_at, agora, erros)
+        snapshot, resolvidos, vinculos = self._compilar(ctx, script, amb, respostas, agora, erros)
+        if snapshot is None or erros:
+            return {"argv": None, "erros": dict(erros), "resumo": None}
+        linhas = []
+        for v in _ordenados(vinculos):
+            valor = resolvidos.get(v["codigo"])
+            if v.get("sensivel") == "S" and valor not in (None, ""):
+                texto = params_compiler.MASCARA
+            elif valor is None or valor == "":
+                texto = u"(sem resposta)"
+            elif isinstance(valor, bool):
+                texto = u"sim" if valor else u"não"
+            else:
+                texto = dict(_opcoes(v)).get(valor, valor) if v.get("tipo_componente") == "SELECT" else valor
+            linhas.append({"rotulo": v.get("label") or v["codigo"], "valor": texto})
+        quando = u"agora" if sched is None else u"em %s às %s" % (sched.strftime("%d/%m/%Y"), sched.strftime("%H:%M"))
+        frase = u"Vamos rodar %s no ambiente %s %s, com prioridade %d." % (script["nome"], amb["nome"], quando, prio)
+        if linhas:
+            frase += u" Respostas: " + u"; ".join(u"%s = %s" % (l["rotulo"], l["valor"]) for l in linhas) + u"."
+        return {"argv": params_compiler.argv_para_exibicao(json.loads(snapshot), self._base_exibicao(ctx)),
+                "erros": {},
+                "resumo": {"script": script["nome"], "ambiente": amb["nome"], "quando": quando, "prioridade": prio,
+                           "respostas": linhas, "frase": frase}}
+
+    def _ultimo_ticket(self, ctx, script_id, ambiente):
+        sid = _id(script_id)
+        if sid is None or not ambiente:
+            return None
+        itens = self._tickets.listar(filtros={"solicitante": ctx.get("login"), "script_id": sid,
+                                              "ambiente": ambiente}, pagina=1, tamanho=1)["itens"]
+        return itens[0] if itens else None
+
+    def tem_ultima_execucao(self, ctx, script_id, ambiente):
+        """True se o proprio usuario ja pediu este script neste ambiente (botao do README §5.4)."""
+        return self._ultimo_ticket(ctx, script_id, ambiente) is not None
+
+    def ultimas_respostas(self, ctx, script_id, ambiente):
+        """(valores, avisos) da ultima execucao propria: so nao sensiveis e ainda validas (README §5.4).
+
+        Nada e gravado. Sensivel fica vazio com o aviso de digitar de novo; resposta que nao vale mais
+        no catalogo atual fica vazia com o aviso de que mudou.
+        """
+        script, _amb = self._autorizar(ctx, script_id, ambiente)
+        ticket = self._ultimo_ticket(ctx, script["id"], ambiente)
+        valores, avisos = {}, {}
+        if ticket is None:
+            return valores, avisos
+        por_id = dict((r["parametro_id"], r.get("valor_resposta")) for r in self._tickets.respostas(ticket["id"]))
+        for v in self._vinculos(script["id"]):
+            if v["parametro_id"] not in por_id:
+                continue
+            if v.get("sensivel") == "S":
+                avisos[v["codigo"]] = MSG_ULTIMA_SENSIVEL
+                continue
+            bruto = por_id[v["parametro_id"]]
+            try:
+                params_compiler.validar_valor(v, bruto)
+            except params_compiler.ParamErro:
+                avisos[v["codigo"]] = MSG_ULTIMA_MUDOU
+                continue
+            valores[v["codigo"]] = bruto
+        return valores, avisos
 
     def criar_ticket(self, ctx, ip, script_id, ambiente, respostas, prioridade, scheduled_at,
                      reexecucao_de=None):
@@ -942,9 +1036,24 @@ def ambientes_disponiveis(ctx, script_id):
     return _servico().ambientes_disponiveis(ctx, script_id)
 
 
-def preparar_formulario(ctx, script_id, ambiente, valores=None, erros=None):
+def preparar_formulario(ctx, script_id, ambiente, valores=None, erros=None, avisos=None):
     """Questionario do script no ambiente (servico padrao)."""
-    return _servico().preparar_formulario(ctx, script_id, ambiente, valores, erros)
+    return _servico().preparar_formulario(ctx, script_id, ambiente, valores, erros, avisos)
+
+
+def resumo_disparo(ctx, script_id, ambiente, respostas, prioridade=None, scheduled_at=None):
+    """Resumo em frase do disparo (servico padrao)."""
+    return _servico().resumo_disparo(ctx, script_id, ambiente, respostas, prioridade, scheduled_at)
+
+
+def tem_ultima_execucao(ctx, script_id, ambiente):
+    """Ha execucao propria anterior deste script neste ambiente (servico padrao)."""
+    return _servico().tem_ultima_execucao(ctx, script_id, ambiente)
+
+
+def ultimas_respostas(ctx, script_id, ambiente):
+    """Respostas reutilizaveis da ultima execucao propria (servico padrao)."""
+    return _servico().ultimas_respostas(ctx, script_id, ambiente)
 
 
 def previa(ctx, script_id, ambiente, respostas):

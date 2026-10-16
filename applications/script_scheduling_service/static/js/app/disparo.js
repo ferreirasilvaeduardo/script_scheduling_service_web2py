@@ -75,6 +75,77 @@
       };
     });
 
+    // Resumo em frase do modal de confirmacao (README §5.4): montado pelo servidor ao abrir o modal.
+    window.Alpine.data('resumoDisparo', function () {
+      return {
+        carregando: false,
+        script: '',
+        ambiente: '',
+        quando: '',
+        prioridade: '',
+        comando: '',
+        respostas: [],
+        erros: [],
+        get temResumo() { return this.script !== ''; },
+        get temRespostas() { return this.respostas.length > 0; },
+        get temErros() { return this.erros.length > 0; },
+        init: function () {
+          var self = this;
+          var form = this.$root.closest('form');
+          var gatilho = form.querySelector('[data-resumo-gatilho]');
+          if (gatilho) {
+            gatilho.addEventListener('click', function () { self.carregar(); });
+          }
+        },
+        carregar: function () {
+          var self = this;
+          var form = this.$root.closest('form');
+          var corpo = {
+            script_id: form.elements.script_id.value,
+            ambiente: form.elements.ambiente.value,
+            prioridade: form.elements.prioridade ? form.elements.prioridade.value : '',
+            scheduled_at: form.elements.scheduled_at ? form.elements.scheduled_at.value : '',
+            respostas: coletarRespostas(form)
+          };
+          this.carregando = true;
+          this.script = '';
+          this.erros = [];
+          window.sssFetch(this.$root.getAttribute('data-url'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(corpo)
+          }).then(function (resposta) {
+            return resposta.json();
+          }).then(function (dados) {
+            var chave;
+            if (dados && dados.resumo) {
+              self.script = dados.resumo.script;
+              self.ambiente = dados.resumo.ambiente;
+              self.quando = dados.resumo.quando;
+              self.prioridade = String(dados.resumo.prioridade);
+              self.respostas = dados.resumo.respostas.map(function (r, i) {
+                return { id: i, rotulo: r.rotulo, valor: String(r.valor) };
+              });
+              self.comando = (dados.argv || []).map(tokenExibicao).join(' ');
+            } else {
+              for (chave in (dados && dados.erros) || {}) {
+                if (Object.prototype.hasOwnProperty.call(dados.erros, chave)) {
+                  self.erros.push({ id: self.erros.length, texto: String(dados.erros[chave]) });
+                }
+              }
+              if (!self.erros.length) {
+                self.erros.push({ id: 0, texto: (dados && dados.erro) || 'Não foi possível montar o resumo.' });
+              }
+            }
+          }).catch(function () {
+            self.erros = [{ id: 0, texto: 'Não foi possível montar o resumo. Tente novamente.' }];
+          }).then(function () {
+            self.carregando = false;
+          });
+        }
+      };
+    });
+
     window.Alpine.data('previa', function () {
       return {
         carregando: false,

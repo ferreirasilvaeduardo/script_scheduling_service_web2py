@@ -64,13 +64,14 @@ def _respostas_post():
 
 
 def _pagina_novo(ctx, script_id, ambiente, valores=None, erros=None, prioridade=None, scheduled_at=None,
-                 reexecucao_de=None):
+                 reexecucao_de=None, avisos=None):
     response.title = u"Disparar script — SSS"
     response.sss_scripts = [_JS_DISPARO]
     erros = erros or {}
     dados = dict(etapa=1, grupos=[], script=None, ambientes=[], form=None, erros=erros,
                  erro_geral=erros.get(ticket_service.CAMPO_GERAL), prioridade=prioridade,
-                 scheduled_at=scheduled_at or "", foco_campo=None, reexecucao_de=reexecucao_de)
+                 scheduled_at=scheduled_at or "", foco_campo=None, reexecucao_de=reexecucao_de,
+                 tem_ultima=False, usou_ultima=avisos is not None)
     if not script_id:
         dados["grupos"] = ticket_service.scripts_disponiveis(ctx)
         return dados
@@ -78,7 +79,8 @@ def _pagina_novo(ctx, script_id, ambiente, valores=None, erros=None, prioridade=
     dados.update(etapa=2, script=script, ambientes=ambientes)
     if not ambiente:
         return dados
-    form = ticket_service.preparar_formulario(ctx, script_id, ambiente, valores, erros)
+    form = ticket_service.preparar_formulario(ctx, script_id, ambiente, valores, erros, avisos)
+    dados["tem_ultima"] = not reexecucao_de and ticket_service.tem_ultima_execucao(ctx, script_id, ambiente)
     campos = [{"nome": c["nome"], "erro": c["erro"]} for c in form["campos"]]
     campos.append({"nome": "prioridade", "erro": erros.get(ticket_service.CAMPO_PRIORIDADE)})
     campos.append({"nome": "scheduled_at", "erro": erros.get(ticket_service.CAMPO_AGENDAMENTO)})
@@ -95,8 +97,13 @@ def novo():
             dados = ticket_service.preparar_reexecucao(ctx, reexecucao)
             return _pagina_novo(ctx, dados["script_id"], dados["ambiente"], dados["valores"], dados["erros"],
                                 dados["prioridade"], reexecucao_de=dados["ticket_id"])
-        return _pagina_novo(ctx, _texto(request.get_vars.get("script_id"), 10),
-                            _texto(request.get_vars.get("ambiente"), 30))
+        script_id = _texto(request.get_vars.get("script_id"), 10)
+        ambiente = _texto(request.get_vars.get("ambiente"), 30)
+        if script_id and ambiente and request.get_vars.get("ultima") == "1":
+            # README §5.4: respostas da ultima execucao propria, sem sensiveis; nada e gravado.
+            valores, avisos = ticket_service.ultimas_respostas(ctx, script_id, ambiente)
+            return _pagina_novo(ctx, script_id, ambiente, valores, avisos=avisos)
+        return _pagina_novo(ctx, script_id, ambiente)
     except RepoNaoEncontrado:
         _nao_encontrado()
     except AcessoNegado:
@@ -135,13 +142,16 @@ def previa():
     ctx = _exigir_func("EXEC_SCRIPT")
     respostas = request.post_vars.get("respostas")
     try:
-        argv, erros = ticket_service.previa(ctx, _texto(request.post_vars.get("script_id"), 10),
-                                            _texto(request.post_vars.get("ambiente"), 30),
-                                            respostas if isinstance(respostas, dict) else {})
+        # Mesmo endpoint da previa do comando e do resumo em frase do modal (README §5.4).
+        dados = ticket_service.resumo_disparo(ctx, _texto(request.post_vars.get("script_id"), 10),
+                                              _texto(request.post_vars.get("ambiente"), 30),
+                                              respostas if isinstance(respostas, dict) else {},
+                                              _texto(request.post_vars.get("prioridade"), 10),
+                                              _texto(request.post_vars.get("scheduled_at"), 40))
     except AcessoNegado:
         response.status = 403
-        return response.json({"erro": u"Acesso negado."})
-    return response.json({"argv": argv, "erros": erros})
+        return response.json({"erro": ui_helpers.mensagem("sem_permissao")})
+    return response.json(dados)
 
 
 def lista():

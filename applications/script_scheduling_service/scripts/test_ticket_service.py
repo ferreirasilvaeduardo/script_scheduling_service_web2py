@@ -280,6 +280,58 @@ class TestTicketService(_BaseTicket):
 
 
 @_SKIP_ROOT
+class TestClarezaDisparo(_BaseTicket):
+    """CR-004 U4 (README §5.4, "Clareza no disparo")."""
+
+    def test_resumo_em_frase_com_sensivel_mascarado(self):
+        r = self.svc.resumo_disparo(self.ctx["op.hml"], "1", "HOMOLOGACAO",
+                                    {"documento_cliente": "12345678900"}, "3", "")
+        self.assertEqual(r["erros"], {})
+        resumo = r["resumo"]
+        self.assertEqual((resumo["script"], resumo["ambiente"], resumo["quando"], resumo["prioridade"]),
+                         ("carga_diaria", "HOMOLOGACAO", u"agora", 3))
+        self.assertTrue(resumo["frase"].startswith(u"Vamos rodar carga_diaria no ambiente HOMOLOGACAO agora, "
+                                                   u"com prioridade 3."))
+        valores = dict((x["rotulo"], x["valor"]) for x in resumo["respostas"])
+        self.assertNotIn("12345678900", resumo["frase"])
+        self.assertIn(params_compiler.MASCARA, valores.values())
+        self.assertTrue(r["argv"])
+
+    def test_resumo_com_horario_e_erros(self):
+        futuro = (self.tickets.agora() + datetime.timedelta(days=1)).replace(second=0)
+        r = self.svc.resumo_disparo(self.ctx["op.hml"], "1", "HOMOLOGACAO", {}, "2", futuro.strftime("%Y-%m-%dT%H:%M"))
+        self.assertEqual(r["resumo"]["quando"], u"em %s às %s" % (futuro.strftime("%d/%m/%Y"), futuro.strftime("%H:%M")))
+        r = self.svc.resumo_disparo(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"data_ref": "31/12/2026"}, "2", "")
+        self.assertIsNone(r["resumo"])
+        self.assertIn("data_ref", r["erros"])
+
+    def test_exemplo_por_tipo_no_formulario(self):
+        form = self.svc.preparar_formulario(self.ctx["op.hml"], "1", "HOMOLOGACAO")
+        exemplos = dict((c["codigo"], c["exemplo"]) for c in form["campos"])
+        self.assertTrue(exemplos["data_ref"].startswith(u"Use o formato AAAA-MM-DD"))
+        self.assertEqual(exemplos["modo_exec"], u"Escolha uma das opções da lista.")
+        self.assertEqual(exemplos["verbose"], u"Marque para sim; deixe desmarcado para não.")
+
+    def test_ultimas_respostas_sem_sensiveis(self):
+        ctx = self.ctx["op.hml"]
+        self.assertFalse(self.svc.tem_ultima_execucao(ctx, "1", "HOMOLOGACAO"))
+        tid, erros = self._criar(respostas={"data_ref": "2026-11-30", "documento_cliente": "99988877766",
+                                            "modo_exec": "SIMULACAO"})
+        self.assertEqual(erros, {})
+        self.assertTrue(self.svc.tem_ultima_execucao(ctx, "1", "HOMOLOGACAO"))
+        valores, avisos = self.svc.ultimas_respostas(ctx, "1", "HOMOLOGACAO")
+        self.assertEqual(valores["data_ref"], "2026-11-30")
+        self.assertEqual(valores["modo_exec"], "SIMULACAO")
+        self.assertNotIn("documento_cliente", valores)
+        self.assertEqual(avisos["documento_cliente"], ticket_service.MSG_ULTIMA_SENSIVEL)
+        # Opcao removida do catalogo: a resposta antiga deixa de valer e vem com aviso.
+        self.catalogo.parametros_alterar(3, {"opcoes_json": '{"REAL":"Execucao Real"}', "valor_padrao": "REAL"})
+        valores, avisos = self.svc.ultimas_respostas(ctx, "1", "HOMOLOGACAO")
+        self.assertNotIn("modo_exec", valores)
+        self.assertEqual(avisos["modo_exec"], ticket_service.MSG_ULTIMA_MUDOU)
+
+
+@_SKIP_ROOT
 class TestTicketConsulta(_BaseTicket):
     """F3.3: escopo da lista, filtros, detalhe, cancelamento e reexecucao."""
 

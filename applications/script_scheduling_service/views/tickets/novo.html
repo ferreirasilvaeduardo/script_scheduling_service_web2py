@@ -20,7 +20,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 
 {{if etapa == 1:}}
 <section class="sss-card" aria-labelledby="titulo-scripts" x-data="buscaScript">
-  <h2 class="sss-card-titulo" id="titulo-scripts">1. Selecione o script</h2>
+  <h2 class="sss-card-titulo" id="titulo-scripts">1. Escolha o script, que é a rotina que você quer rodar.</h2>
   <div class="sss-card-corpo">
     {{if not grupos:}}
     <p class="mb-0">Nenhum script está liberado para o seu perfil em ambientes homologados. Procure um administrador.</p>
@@ -60,7 +60,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 
 {{if etapa == 2:}}
 <section class="sss-card" aria-labelledby="titulo-ambientes">
-  <h2 class="sss-card-titulo" id="titulo-ambientes">2. Selecione o ambiente</h2>
+  <h2 class="sss-card-titulo" id="titulo-ambientes">2. Escolha o ambiente, que é onde ela vai rodar.</h2>
   <div class="sss-card-corpo">
     <ul class="sss-lista-escolha">
       {{for _a in ambientes:}}
@@ -84,7 +84,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 </section>
 
 <section class="sss-card" aria-labelledby="titulo-questionario">
-  <h2 class="sss-card-titulo" id="titulo-questionario">3. Questionário</h2>
+  <h2 class="sss-card-titulo" id="titulo-questionario">3. Responda às perguntas.</h2>
   <form class="sss-card-corpo" id="form-ticket" method="post" action="{{=URL(c='tickets', f='criar')}}" autocomplete="off">
     {{=csrf_campo()}}
     <input type="hidden" name="script_id" value="{{=form['script']['id']}}">
@@ -95,6 +95,12 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
       <span>Reexecução do <a href="{{=URL(c='tickets', f='detalhe', args=[reexecucao_de])}}">ticket #{{=reexecucao_de}}</a>. As respostas originais foram carregadas; valores sigilosos não são exibidos e precisam ser informados novamente, se necessário.</span>
     </div>
+    {{pass}}
+
+    {{if tem_ultima and not usou_ultima:}}
+    <p class="mb-3"><a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='novo', vars=dict(script_id=form['script']['id'], ambiente=form['ambiente']['nome'], ultima='1'))}}">Usar as respostas da minha última execução</a></p>
+    {{elif usou_ultima:}}
+    <div class="alert alert-info sss-alerta" role="note"><span>Carregamos as respostas da sua última execução. Confira antes de criar; valores sigilosos precisam ser digitados de novo.</span></div>
     {{pass}}
 
     {{if erros:}}
@@ -151,7 +157,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
     </div>
 
     <div class="sss-confirmacao sss-form-acoes" x-data="confirmacao" @keydown.escape.window="fechar">
-      <button type="button" class="btn btn-primary" x-ref="gatilho" @click="abrir">
+      <button type="button" class="btn btn-primary" x-ref="gatilho" data-resumo-gatilho @click="abrir">
         <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-play"></use></svg>
         <span>Criar ticket</span>
       </button>
@@ -169,7 +175,24 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
                 <strong>Ambiente de produção</strong>
               </div>
               {{pass}}
-              <p class="mb-0">Criar ticket para <span class="sss-mono">{{=form['script']['nome']}}</span> em <strong>{{=form['ambiente']['nome']}}</strong>?</p>
+              <div x-data="resumoDisparo" data-url="{{=URL(c='tickets', f='previa')}}">
+                <p class="mb-2" x-show="carregando">Montando o resumo…</p>
+                <div x-show="temResumo" x-cloak>
+                  <p class="mb-2">Vamos rodar <strong class="sss-mono" x-text="script"></strong> no ambiente <strong x-text="ambiente"></strong> <span x-text="quando"></span>, com prioridade <span x-text="prioridade"></span>.</p>
+                  <ul class="mb-2 sss-resumo-respostas" x-show="temRespostas">
+                    <template x-for="r in respostas" :key="r.id">
+                      <li><span x-text="r.rotulo"></span> = <span class="sss-mono" x-text="r.valor"></span></li>
+                    </template>
+                  </ul>
+                  <p class="mb-1"><strong>Comando que será executado</strong></p>
+                  <pre class="sss-argv" tabindex="0"><code x-text="comando"></code></pre>
+                </div>
+                <ul class="sss-previa-erros mb-0" x-show="temErros" x-cloak>
+                  <template x-for="e in erros" :key="e.id">
+                    <li x-text="e.texto"></li>
+                  </template>
+                </ul>
+              </div>
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancelar" @click="fechar">Cancelar</button>
