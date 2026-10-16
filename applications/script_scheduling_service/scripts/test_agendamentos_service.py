@@ -96,6 +96,28 @@ class _Base(unittest.TestCase):
 
 class TestSalvarTipos(_Base):
 
+    def test_valores_fora_do_formato_sao_recusados_nunca_cortados(self):
+        # CR-003 P7 / D11 (README §7.6).
+        casos = (
+            ({"tipo_recorrencia": "MENSAL", "hora_execucao": "01:00", "dia_mes": "100"}, "dia_mes"),
+            ({"tipo_recorrencia": "MENSAL", "hora_execucao": "01:00", "dia_mes": "311"}, "dia_mes"),
+            ({"tipo_recorrencia": "DIARIA", "hora_execucao": "03:000"}, "hora_execucao"),
+            ({"tipo_recorrencia": "DIARIA", "hora_execucao": "03:00", "data_inicio": "2026-02-01T10:00:00"},
+             "data_inicio"),
+            ({"tipo_recorrencia": "DIARIA", "hora_execucao": "03:00", "data_inicio": "2026-02-01T10:00:00.999"},
+             "data_inicio"),
+        )
+        for extra, campo in casos:
+            aid, erros = self._salvar(**extra)
+            self.assertIsNone(aid, extra)
+            self.assertIn(campo, erros, extra)
+
+    def test_data_fim_ignorada_em_unica(self):
+        aid, erros = self._salvar(tipo_recorrencia="UNICA", data_inicio="2026-02-01T08:30",
+                                  data_fim="2026-01-01T00:00")
+        self.assertEqual(erros, {})
+        self.assertIsNone(self.agd.obter(aid)["data_fim"])
+
     def test_salvar_cada_tipo(self):
         casos = [
             ({"tipo_recorrencia": "UNICA", "data_inicio": "2026-02-01T08:30"}, datetime.datetime(2026, 2, 1, 8, 30)),

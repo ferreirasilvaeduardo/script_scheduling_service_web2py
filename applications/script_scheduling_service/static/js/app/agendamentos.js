@@ -69,6 +69,13 @@
         get temErros() { return this.erros.length > 0; },
         alterarTipo: function () {
           this.tipo = this.$refs.tipo.value;
+          if (this.tipo === 'UNICA') {
+            // data_fim nao se aplica a UNICA (README §7.2): o campo escondido e limpo.
+            var fim = this.$root.querySelector('#campo-data_fim');
+            if (fim) {
+              fim.value = '';
+            }
+          }
         },
         agendarPrevia: function () {
           var self = this;

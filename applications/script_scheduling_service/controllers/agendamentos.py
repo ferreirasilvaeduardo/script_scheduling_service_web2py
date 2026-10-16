@@ -17,8 +17,9 @@ _JS = "js/app/agendamentos.js"
 _TAMANHOS = (20, 50, 100)
 _CAMPOS_REGRA = ("nome", "tipo_recorrencia", "expressao_cron", "hora_execucao", "dia_mes", "data_inicio",
                  "data_fim", "prioridade", "versao")
-_LIMITES = {"nome": 300, "expressao_cron": 100, "hora_execucao": 8, "dia_mes": 4, "data_inicio": 19,
-            "data_fim": 19, "prioridade": 2, "versao": 64, "tipo_recorrencia": 10}
+# Protecao de memoria acima dos limites do service, que recusa o excesso (README §7.6, AGENTS §3.4).
+_LIMITES = {"nome": 300, "expressao_cron": 300, "hora_execucao": 40, "dia_mes": 40, "data_inicio": 40,
+            "data_fim": 40, "prioridade": 10, "versao": 100, "tipo_recorrencia": 40}
 _MSG_FALHA_LISTA = u"Não foi possível carregar as regras. Tente novamente em instantes."
 _MSG_FALHA_ACAO = u"Não foi possível concluir a operação. Tente novamente em instantes."
 

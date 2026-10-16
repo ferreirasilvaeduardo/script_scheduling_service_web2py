@@ -191,6 +191,10 @@ class TestDescrever(unittest.TestCase):
             ('0 8,18 * * 1,3,5', 'às 08:00 e 18:00, em segunda, quarta e sexta'),
             ('0 0 29 2 *', 'às 00:00, no dia 29 de fevereiro'),
             ('0 0 1 * 1', 'às 00:00, no dia 1 de cada mês ou às segundas'),
+            # CR-003 P7 (README §7.3): passo no dia do mes.
+            ('0 0 */2 * *', 'às 00:00, a cada 2 dias a partir do dia 1'),
+            ('0 0 */2 * 1', 'às 00:00, a cada 2 dias a partir do dia 1, quando cair numa segunda'),
+            ('0 0 */3 * 0', 'às 00:00, a cada 3 dias a partir do dia 1, quando cair num domingo'),
             ('*/10 9-17 * * 1-5', 'a cada 10 minutos, das 09:00 às 17:59, de segunda a sexta'),
         )
         for expr, texto in casos:

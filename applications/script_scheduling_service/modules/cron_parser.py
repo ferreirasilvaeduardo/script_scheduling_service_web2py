@@ -276,6 +276,14 @@ def _descrever_dsem(itens):
     return 'nos dias da semana %s' % _texto_itens(itens, lambda v: _DIAS_SEMANA[v % 7])
 
 
+def _dsem_quando(itens, texto_dsem):
+    valores = _simples(itens)
+    if valores is not None and len(set(v % 7 for v in valores)) == 1:
+        dia = valores[0] % 7
+        return ('num ' if dia in (0, 6) else 'numa ') + _DIAS_SEMANA[dia]
+    return texto_dsem
+
+
 def _descrever_datas(cron):
     meses = _simples(cron._it_mes)
     if _estrela(cron._it_mes) == 1:
@@ -286,7 +294,11 @@ def _descrever_datas(cron):
         texto_mes = 'nos meses %s' % _texto_itens(cron._it_mes, lambda v: _MESES[v - 1])
 
     texto_dia = None
-    if cron.dia_restrito or _estrela(cron._it_dia) != 1:
+    passo_dia = _estrela(cron._it_dia)
+    if passo_dia is not None and passo_dia > 1:
+        # README §7.3: '*/n' no dia do mes e "a cada n dias a partir do dia 1" (sem "de cada mes").
+        texto_dia = 'a cada %d dias a partir do dia 1' % passo_dia
+    elif cron.dia_restrito or passo_dia != 1:
         dias = _simples(cron._it_dia)
         if dias is not None and len(dias) == 1:
             texto_dia = 'no dia %d' % dias[0]
@@ -305,7 +317,10 @@ def _descrever_datas(cron):
         texto_dsem = _descrever_dsem(cron._it_dsem)
 
     partes = []
-    if texto_dia and texto_dsem:
+    if texto_dia and texto_dsem and passo_dia is not None and passo_dia > 1:
+        # Semantica E do Vixie (dia comeca com '*'): "quando cair numa segunda".
+        partes.append(texto_dia + ', quando cair ' + _dsem_quando(cron._it_dsem, texto_dsem))
+    elif texto_dia and texto_dsem:
         conector = ' ou ' if cron.dia_restrito and cron.dsem_restrito else ' e '
         partes.append(texto_dia + conector + texto_dsem)
     elif texto_dia or texto_dsem:

@@ -85,7 +85,8 @@ _CAMPOS_INSERCAO = CAMPOS_AUDITORIA + ("usuario_id", "proxima_execucao")
 
 _RE_ID = re.compile(r"[0-9]{1,10}")
 _RE_AMBIENTE = re.compile(r"[A-Z0-9_]{1,30}")
-_FORMATOS_DATA = ("%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S")
+# Precisao de minuto (README §7.2/§7.6): segundos ou fracoes sao recusados, nunca cortados.
+_FORMATOS_DATA = ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M")
 _SETA = u" → "
 
 
@@ -108,7 +109,7 @@ def _vazio(valor):
 
 def _data(valor):
     """(datetime sem microssegundos | None, invalido). Vazio e (None, False)."""
-    texto = admin_crud.texto(valor, 19)
+    texto = admin_crud.texto(valor)
     if texto is None:
         return None, False
     for formato in _FORMATOS_DATA:
@@ -325,6 +326,9 @@ class ServicoAgendamentos(object):
                 # Decisao D3 do F5.2: sem inicio informado, a regra vale a partir de agora.
                 inicio = recurrence.truncar_segundos(agora)
         fim, invalido = _data(dados.get("data_fim"))
+        if tipo == "UNICA":
+            # data_fim nao se aplica a UNICA (README §7.2): ignorada e gravada nula.
+            fim, invalido = None, False
         if invalido:
             erros["data_fim"] = MSG_DATA_INVALIDA
         regra["data_inicio"] = inicio
