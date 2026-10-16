@@ -11,10 +11,11 @@ import threading
 
 import rbac
 import security
+import ui_helpers
 from repo_errors import RepoNaoEncontrado
 
-MSG_GENERICA = u"Usuário ou senha inválidos."
-MSG_BLOQUEIO = u"Acesso temporariamente bloqueado por excesso de tentativas. Tente novamente mais tarde."
+# Mensagens-padrao em duas partes (README §2.4.2); o bloqueio informa os minutos configurados.
+MSG_GENERICA = ui_helpers.mensagem("login_incorreto")
 
 ENTIDADE = "tbsss_usuarios"
 MSG_SENHA_ATUAL = u"A senha atual está incorreta."
@@ -42,6 +43,7 @@ class ServicoAuth(object):
         self._max = int(max_tentativas)
         self._bloqueio_s = int(bloqueio_s)
         self._bloqueio = datetime.timedelta(seconds=self._bloqueio_s)
+        self.msg_bloqueio = ui_helpers.mensagem("conta_bloqueada", minutos=max(1, -(-self._bloqueio_s // 60)))
         self._log = log
         # Relogio do banco (README §4.2): o bloqueio nunca depende do relogio do no web.
         self._relogio = relogio or usuarios.agora
@@ -74,7 +76,7 @@ class ServicoAuth(object):
 
         if self._bloqueado(usuario, agora):
             self._registrar_falha(usuario, ip, "conta bloqueada")
-            return None, MSG_BLOQUEIO
+            return None, self.msg_bloqueio
         usuario = self._reiniciar_se_expirado(usuario)
 
         if not senha_confere:
@@ -129,7 +131,7 @@ class ServicoAuth(object):
         if not bloquear:
             return None, MSG_GENERICA
         self._log.warning("conta bloqueada (login=%s ip=%s)", usuario["login"], ip, extra={"acao": "LOGIN"})
-        return None, MSG_BLOQUEIO
+        return None, self.msg_bloqueio
 
     def _falha_inexistente(self, login, ip, agora):
         with self._lock:
@@ -156,7 +158,7 @@ class ServicoAuth(object):
         if resultado == "bloqueou":
             self._auditoria.registrar(login, ip, "LOGIN_BLOQUEIO", ENTIDADE, None,
                                       "Bloqueio simulado de login inexistente")
-        return None, MSG_BLOQUEIO
+        return None, self.msg_bloqueio
 
     # ------------------------------------------------------------ revalidacao
 
@@ -238,15 +240,15 @@ class ServicoAuth(object):
         usuario = self._usuarios.obter_por_id(ctx["usuario_id"])
         if self._bloqueado(usuario, agora):
             self._registrar_falha(usuario, ip, "troca de senha com conta bloqueada")
-            return "BLOQUEADO", {"senha_atual": MSG_BLOQUEIO}
+            return "BLOQUEADO", {"senha_atual": self.msg_bloqueio}
         usuario = self._reiniciar_se_expirado(usuario)
         armazenado = usuario.get("senha_hash")
         atual_ok = (isinstance(atual, str) and 0 < len(atual) <= SENHA_MAX
                     and security.hash_reconhecido(armazenado) and security.verificar_senha(atual, armazenado))
         if not atual_ok:
             _ctx, mensagem = self._falha_senha(usuario, ip)
-            if mensagem == MSG_BLOQUEIO:
-                return "BLOQUEADO", {"senha_atual": MSG_BLOQUEIO}
+            if mensagem == self.msg_bloqueio:
+                return "BLOQUEADO", {"senha_atual": self.msg_bloqueio}
             return "ERRO", {"senha_atual": MSG_SENHA_ATUAL}
         erros = {}
         problemas = security.validar_politica_senha(nova) if isinstance(nova, str) and len(nova) <= SENHA_MAX \

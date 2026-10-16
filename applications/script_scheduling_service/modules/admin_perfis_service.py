@@ -9,6 +9,7 @@ import re
 import threading
 
 import admin_crud
+import ui_helpers
 from admin_crud import CAMPO_GERAL, OperacaoNegada
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 
@@ -28,7 +29,7 @@ MSG_NOME_OBRIGATORIO = u"Informe o nome do perfil."
 MSG_NOME_INVALIDO = u"Use de 1 a 30 caracteres: letras maiúsculas, dígitos e _ (ex.: OPERADOR_PROD)."
 MSG_NOME_DUPLICADO = u"Já existe um perfil com este nome."
 MSG_DESCRICAO_TAMANHO = u"A descrição deve ter no máximo %d caracteres." % TAMANHO_DESCRICAO
-MSG_ULTIMO_ADMIN = u"Operação negada: não pode restar nenhum administrador ativo."
+MSG_ULTIMO_ADMIN = ui_helpers.mensagem("ultimo_admin")
 MSG_AUTO_ADMIN = u"Você não pode remover o acesso administrativo do seu próprio perfil."
 MSG_AUTO_DESATIVAR = u"Você não pode desativar o seu próprio perfil."
 AFETADOS_MAX = 20

@@ -30,7 +30,7 @@ url_base = ('admin_ambientes', 'lista')
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
     <h1 class="sss-page-titulo">Ambientes</h1>
-    <p class="sss-page-sub">Ambientes de execução e seus DSNs. As credenciais ficam no secrets.cfg, nunca aqui.</p>
+    <p class="sss-page-sub">Ambiente é onde o script vai rodar (por exemplo, produção ou homologação). Cada um aponta para o seu banco (DSN). As credenciais ficam no secrets.cfg, nunca aqui.</p>
   </div>
   <div class="sss-acoes">
     <a class="btn btn-sm btn-primary" href="{{=URL(c='admin_ambientes', f='form')}}">Novo ambiente</a>

@@ -5,11 +5,12 @@ Funcoes puras: nao importam gluon.
 """
 import re
 
+# Nomes simples da situacao (README §2.4.2, §5.2.1); o codigo tecnico fica so como detalhe.
 _STATUS = {
-    "PENDING": (u"Pendente", "sss-status-pending", "status-pending"),
-    "RUNNING": (u"Em execução", "sss-status-running", "status-running"),
-    "SUCCESS": (u"Sucesso", "sss-status-success", "status-success"),
-    "FAILED": (u"Falha", "sss-status-failed", "status-failed"),
+    "PENDING": (u"Esperando", "sss-status-pending", "status-pending"),
+    "RUNNING": (u"Rodando", "sss-status-running", "status-running"),
+    "SUCCESS": (u"Deu certo", "sss-status-success", "status-success"),
+    "FAILED": (u"Deu erro", "sss-status-failed", "status-failed"),
     "CANCELLED": (u"Cancelado", "sss-status-cancelled", "status-cancelled"),
 }
 _STATUS_DESCONHECIDO = (u"Desconhecido", "sss-status-unknown", "status-unknown")
@@ -47,6 +48,114 @@ _MOTIVOS = {
     "SHUTDOWN": u"O agente foi desligado durante a execução.",
     "CANCEL_USER": u"Execução cancelada por solicitação do usuário.",
 }
+
+
+# Frases "o que aconteceu" / "o que fazer agora" por status_motivo (README §5.2.1, texto exato).
+_EXPLICACOES = {
+    "EXIT_OK": (u"Terminou e deu certo.", None),
+    "EXIT_ERROR": (u"O script rodou, mas terminou avisando que algo deu errado (código {codigo}).",
+                   u"Veja o fim do log para entender o erro. Se não souber resolver, envie o número deste ticket "
+                   u"ao responsável pelo script."),
+    "KILLED_SIGNAL": (u"O script foi interrompido de repente pelo servidor.",
+                      u"Tente de novo. Se acontecer outra vez, avise o suporte com o número deste ticket."),
+    "TIMEOUT": (u"O script demorou mais do que o tempo máximo ({tempo}) e foi parado.",
+                u"Confira se as respostas estão certas e tente de novo. Se o script costuma demorar mais, "
+                u"peça ao administrador para aumentar o tempo máximo."),
+    "NODE_OFFLINE": (u"O servidor que rodava o script parou de responder.",
+                     u"Tente de novo: outro servidor pode assumir."),
+    "ORPHAN_PROCESS": (u"O servidor foi reiniciado e perdeu o controle do script.", u"Tente de novo."),
+    "FENCED": (u"O servidor perdeu contato com o banco de dados e parou o script por segurança.",
+               u"Tente de novo em alguns minutos."),
+    "PRECHECK_FAILED": (u"O script não pôde começar: o servidor não encontrou o arquivo, ou ele não está liberado.",
+                        u"Avise o administrador com o número deste ticket."),
+    "SPAWN_ERROR": (u"O servidor não conseguiu iniciar o script.", u"Avise o administrador com o número deste ticket."),
+    "LOG_LIMIT": (u"O script escreveu mensagens demais e foi parado, para não lotar o disco.",
+                  u"Avise o responsável pelo script."),
+    "SHUTDOWN": (u"O servidor foi desligado enquanto o script rodava.", u"Tente de novo."),
+    "CANCEL_USER": (u"A execução foi cancelada a pedido.", None),
+}
+
+
+def tempo_simples(segundos):
+    """Duracao em linguagem simples: 'menos de 1 minuto', '1 minuto', '4 minutos', '2 horas e 5 minutos'."""
+    segundos = max(0, int(segundos or 0))
+    if segundos < 60:
+        return u"menos de 1 minuto"
+    horas, resto = divmod(segundos // 60, 60)
+    minutos = u"%d minuto%s" % (resto, "" if resto == 1 else "s")
+    if not horas:
+        return minutos
+    texto = u"%d hora%s" % (horas, "" if horas == 1 else "s")
+    return texto if not resto else u"%s e %s" % (texto, minutos)
+
+
+def explicacao_ticket(ticket, agora, timeout_s=None):
+    """{'situacao', 'aconteceu', 'fazer'} do ticket em linguagem simples (README §5.2.1, §5.7).
+
+    agora: relogio do banco; timeout_s: tempo maximo do script (para a frase de TIMEOUT).
+    """
+    status = ticket.get("status")
+    situacao = status_info(status)["rotulo"]
+    if status == "PENDING":
+        agendado = ticket.get("scheduled_at")
+        if agendado is not None and agora is not None and agendado > agora:
+            return {"situacao": situacao,
+                    "aconteceu": u"Está agendado para começar em %s às %s." % (
+                        agendado.strftime("%d/%m/%Y"), agendado.strftime("%H:%M")),
+                    "fazer": u"Não precisa fazer nada. Se não quiser mais, cancele."}
+        return {"situacao": situacao, "aconteceu": u"Está na fila, esperando um servidor livre.",
+                "fazer": u"Não precisa fazer nada. Esta página se atualiza sozinha."}
+    if status == "RUNNING":
+        if ticket.get("cancel_requested") == "S":
+            return {"situacao": situacao,
+                    "aconteceu": u"O cancelamento foi pedido. O servidor está parando o script.",
+                    "fazer": u"Espere alguns segundos."}
+        inicio = ticket.get("started_at")
+        decorrido = (agora - inicio).total_seconds() if inicio is not None and agora is not None else 0
+        return {"situacao": situacao, "aconteceu": u"Está rodando agora. Começou há %s." % tempo_simples(decorrido),
+                "fazer": u"Acompanhe o log abaixo."}
+    motivo = ticket.get("status_motivo")
+    if motivo not in _EXPLICACOES:
+        return {"situacao": situacao,
+                "aconteceu": u"Terminou com um motivo que o sistema não conhece (%s)." % (motivo or "-"),
+                "fazer": u"Avise o suporte com o número deste ticket."}
+    aconteceu, fazer = _EXPLICACOES[motivo]
+    tempo = tempo_simples(timeout_s) if timeout_s else u"definido para o script"
+    return {"situacao": situacao,
+            "aconteceu": aconteceu.format(codigo=ticket.get("return_code"), tempo=tempo),
+            "fazer": fazer}
+
+
+# Mensagens-padrao em duas partes: o que aconteceu + o que fazer agora (README §2.4.2, texto exato).
+MENSAGENS = {
+    "sem_permissao": (u"Você não tem permissão para abrir esta página.",
+                      u"Veja em O que eu posso fazer o que já está liberado para você, ou peça acesso ao administrador."),
+    "nao_encontrado": (u"Não encontramos o que você procurou.", u"Confira o número ou volte para a lista."),
+    "falha_interna": (u"Algo deu errado do nosso lado.",
+                      u"Tente de novo em alguns minutos. Se continuar, avise o suporte e informe o horário."),
+    "conflito": (u"Outra pessoa mudou este registro enquanto você editava.",
+                 u"Recarregue a página para ver a versão nova e faça a sua alteração de novo."),
+    "sessao_expirada": (u"Você ficou um tempo sem usar o sistema e saiu por segurança.", u"Entre de novo."),
+    "login_incorreto": (u"Usuário ou senha incorretos.", u"Confira o que digitou e tente de novo."),
+    "conta_bloqueada": (u"Houve muitas tentativas com a senha errada.",
+                        u"Espere {minutos} minutos ou peça ao administrador para desbloquear."),
+    "formulario": (u"Alguns campos precisam de correção.",
+                   u"Os campos estão marcados em vermelho, com a explicação embaixo de cada um."),
+    "ultimo_admin": (u"Não pode ficar sem nenhum administrador ativo.",
+                     u"Antes, dê acesso de administrador a outra pessoa."),
+}
+
+
+def mensagem(chave, **valores):
+    """Mensagem-padrao completa ('o que aconteceu' + 'o que fazer agora')."""
+    aconteceu, fazer = MENSAGENS[chave]
+    return u"%s %s" % (aconteceu, fazer.format(**valores))
+
+
+def mensagem_partes(chave, **valores):
+    """(o que aconteceu, o que fazer agora) para telas que mostram as duas partes separadas."""
+    aconteceu, fazer = MENSAGENS[chave]
+    return aconteceu, fazer.format(**valores)
 
 
 def descricao_motivo(status_motivo):

@@ -119,7 +119,7 @@ def criar():
             session.flash = {"tipo": "sucesso", "mensagem": u"Ticket #%s criado com sucesso." % ticket_id}
             redirect(URL(c="tickets", f="detalhe", args=[ticket_id]))
         # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-        response.flash = {"tipo": "erro", "mensagem": u"Corrija os campos destacados e envie novamente."}
+        response.flash = {"tipo": "erro", "mensagem": ui_helpers.mensagem("formulario")}
         response.view = "tickets/novo.html"
         return _pagina_novo(ctx, script_id, ambiente, respostas, erros, prioridade, scheduled_at,
                             reexecucao_de or None)

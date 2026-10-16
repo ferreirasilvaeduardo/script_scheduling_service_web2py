@@ -9,9 +9,10 @@ import re
 
 import masking
 import rbac
+import ui_helpers
 
 CAMPO_GERAL = "_geral"
-MSG_CONFLITO = u"O registro foi alterado por outra pessoa. Recarregue a página."
+MSG_CONFLITO = ui_helpers.mensagem("conflito")
 MSG_FALHA = u"Não foi possível salvar. Tente novamente em instantes."
 LIMITE_DETALHE = 1000
 _VAZIO = u"(vazio)"

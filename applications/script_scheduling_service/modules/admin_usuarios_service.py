@@ -10,6 +10,7 @@ import threading
 import admin_crud
 import auth_service
 import security
+import ui_helpers
 from admin_crud import CAMPO_GERAL, OperacaoNegada
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 
@@ -35,7 +36,7 @@ MSG_PERFIL_INVALIDO = u"Selecione um perfil ativo."
 MSG_SENHA_OBRIGATORIA = u"Informe a senha."
 MSG_SENHA_LONGA = u"A senha deve ter no máximo %d caracteres." % auth_service.SENHA_MAX
 MSG_CONFIRMACAO = auth_service.MSG_CONFIRMACAO
-MSG_ULTIMO_ADMIN = u"Operação negada: não pode restar nenhum administrador ativo."
+MSG_ULTIMO_ADMIN = ui_helpers.mensagem("ultimo_admin")
 MSG_AUTO_DESATIVAR = u"Operação negada: você não pode desativar o próprio usuário."
 MSG_AUTO_PERFIL = u"Operação negada: você não pode remover o próprio perfil administrativo."
 MSG_AUTO_SENHA = u"Para trocar a sua própria senha, use \"Minha senha\" (exige a senha atual)."

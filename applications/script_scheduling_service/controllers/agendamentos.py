@@ -163,7 +163,7 @@ def salvar():
         _redirecionar_lista("erro", exc.mensagem)
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
     response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.CAMPO_GERAL)
-                      or u"Corrija os campos destacados e envie novamente."}
+                      or ui_helpers.mensagem("formulario")}
     return _pagina_form(dados)
 
 

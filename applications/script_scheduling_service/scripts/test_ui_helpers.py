@@ -38,10 +38,10 @@ class TestStatusInfo(unittest.TestCase):
 
     def test_cinco_status_canonicos(self):
         esperados = {
-            "PENDING": (u"Pendente", "sss-status-pending", "status-pending"),
-            "RUNNING": (u"Em execução", "sss-status-running", "status-running"),
-            "SUCCESS": (u"Sucesso", "sss-status-success", "status-success"),
-            "FAILED": (u"Falha", "sss-status-failed", "status-failed"),
+            "PENDING": (u"Esperando", "sss-status-pending", "status-pending"),
+            "RUNNING": (u"Rodando", "sss-status-running", "status-running"),
+            "SUCCESS": (u"Deu certo", "sss-status-success", "status-success"),
+            "FAILED": (u"Deu erro", "sss-status-failed", "status-failed"),
             "CANCELLED": (u"Cancelado", "sss-status-cancelled", "status-cancelled"),
         }
         for status, (rotulo, classe, icone) in esperados.items():
@@ -58,7 +58,7 @@ class TestStatusInfo(unittest.TestCase):
     def test_retorno_nao_compartilha_estado(self):
         info = ui_helpers.status_info("FAILED")
         info["rotulo"] = "alterado"
-        self.assertEqual(ui_helpers.status_info("FAILED")["rotulo"], u"Falha")
+        self.assertEqual(ui_helpers.status_info("FAILED")["rotulo"], u"Deu erro")
 
     def test_icones_existem_no_sprite(self):
         ids = _ids_sprite()
@@ -332,6 +332,43 @@ class TestModulosPurosSemGluon(unittest.TestCase):
             caminho = sys.modules[nome].__file__
             with open(caminho, "r", encoding="utf-8") as f:
                 self.assertNotRegex(f.read(), r"^\s*(from|import)\s+gluon", nome)
+
+
+class TestLinguagemClara(unittest.TestCase):
+    """CR-004 U1 (README §2.4.2, §5.2.1)."""
+
+    AGORA = datetime.datetime(2026, 10, 16, 10, 0, 0)
+
+    def test_mensagens_padrao_em_duas_partes(self):
+        for chave in ui_helpers.MENSAGENS:
+            aconteceu, fazer = ui_helpers.mensagem_partes(chave, minutos=15)
+            self.assertTrue(aconteceu and fazer, chave)
+        self.assertEqual(ui_helpers.mensagem("conflito"),
+                         u"Outra pessoa mudou este registro enquanto você editava. "
+                         u"Recarregue a página para ver a versão nova e faça a sua alteração de novo.")
+
+    def test_explicacao_por_situacao(self):
+        e = ui_helpers.explicacao_ticket
+        futuro = self.AGORA + datetime.timedelta(hours=2)
+        self.assertEqual(e({"status": "PENDING", "scheduled_at": futuro}, self.AGORA)["aconteceu"],
+                         u"Está agendado para começar em 16/10/2026 às 12:00.")
+        self.assertEqual(e({"status": "PENDING", "scheduled_at": self.AGORA}, self.AGORA)["aconteceu"],
+                         u"Está na fila, esperando um servidor livre.")
+        rodando = {"status": "RUNNING", "started_at": self.AGORA - datetime.timedelta(minutes=4)}
+        self.assertEqual(e(rodando, self.AGORA)["aconteceu"], u"Está rodando agora. Começou há 4 minutos.")
+        self.assertIn(u"cancelamento foi pedido", e(dict(rodando, cancel_requested="S"), self.AGORA)["aconteceu"])
+        erro = e({"status": "FAILED", "status_motivo": "EXIT_ERROR", "return_code": 3}, self.AGORA)
+        self.assertEqual((erro["situacao"], erro["aconteceu"]),
+                         (u"Deu erro", u"O script rodou, mas terminou avisando que algo deu errado (código 3)."))
+        self.assertIn(u"6 horas", e({"status": "FAILED", "status_motivo": "TIMEOUT"}, self.AGORA, 21600)["aconteceu"])
+        self.assertIsNone(e({"status": "SUCCESS", "status_motivo": "EXIT_OK"}, self.AGORA)["fazer"])
+        self.assertIn("XYZ", e({"status": "FAILED", "status_motivo": "XYZ"}, self.AGORA)["aconteceu"])
+
+    def test_tempo_simples(self):
+        self.assertEqual(ui_helpers.tempo_simples(30), u"menos de 1 minuto")
+        self.assertEqual(ui_helpers.tempo_simples(60), u"1 minuto")
+        self.assertEqual(ui_helpers.tempo_simples(3600), u"1 hora")
+        self.assertEqual(ui_helpers.tempo_simples(7500), u"2 horas e 5 minutos")
 
 
 if __name__ == "__main__":

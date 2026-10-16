@@ -12,6 +12,7 @@ import rbac
 import security
 import sss_config
 import sss_logging
+import ui_helpers
 import ui_menu
 from repo_errors import RepoIndisponivel
 
@@ -59,7 +60,7 @@ if session.usuario_id:
     if security.sessao_expirada(session.ultimo_acesso, _agora, _cfg.web.session_idle_timeout_s):
         # Expiracao por inatividade: so log, sem auditoria (README §4.2).
         _log.info("sessao expirada por inatividade (login=%s)", session.login, extra={"acao": "SESSAO"})
-        _encerrar_sessao(u"Sua sessão expirou por inatividade. Entre novamente.")
+        _encerrar_sessao(ui_helpers.mensagem("sessao_expirada"))
     try:
         _ctx = auth_service.revalidar(session, security.ip_origem(
             request.env.remote_addr, request.env.http_x_forwarded_for, _cfg.web.trusted_proxies))
@@ -68,7 +69,7 @@ if session.usuario_id:
                        session.usuario_id, request.env.path_info, extra={"acao": "SESSAO"})
         raise HTTP(503)
     if _ctx is None:
-        _encerrar_sessao(u"Sua sessão foi encerrada. Entre novamente.")
+        _encerrar_sessao(u"Seu acesso mudou e a sessão foi encerrada. Entre de novo para continuar.")
     current.sss_ctx = _ctx
     session.perfil_id = _ctx["perfil_id"]
     session.perm_versao = _ctx["perm_versao"]

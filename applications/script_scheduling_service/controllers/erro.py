@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 """Pagina generica de erro via routes_onerror: o reprocessamento roda os models, que aplicam os cabecalhos."""
 
+import ui_helpers
+
+# Mensagens em duas partes (README §2.4.2): o que aconteceu + o que fazer agora.
 _MENSAGENS = {
-    400: u"A requisição é inválida.",
-    403: u"Acesso negado. Você não tem permissão para esta página ou a requisição expirou; recarregue e tente novamente.",
-    404: u"A página solicitada não existe.",
-    405: u"Método não permitido para esta página.",
+    400: (u"O pedido enviado não é válido.", u"Volte à página anterior e tente de novo."),
+    403: ui_helpers.mensagem_partes("sem_permissao"),
+    404: ui_helpers.mensagem_partes("nao_encontrado"),
+    405: (u"Esta página não aceita esse tipo de pedido.", u"Volte à página anterior e use os botões da tela."),
 }
 
 
@@ -19,5 +22,7 @@ def index():
     response.view = "erro/index.html"
     return dict(
         codigo=codigo,
-        mensagem=_MENSAGENS.get(codigo, u"Não foi possível concluir a operação. Tente novamente em instantes."),
+        aconteceu=_MENSAGENS.get(codigo, ui_helpers.mensagem_partes("falha_interna"))[0],
+        fazer=_MENSAGENS.get(codigo, ui_helpers.mensagem_partes("falha_interna"))[1],
+        permissoes=codigo == 403,
     )
