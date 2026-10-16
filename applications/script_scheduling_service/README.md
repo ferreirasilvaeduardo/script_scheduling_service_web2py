@@ -768,7 +768,7 @@ O topo do detalhe (`tickets/detalhe/<id>`) responde "o que está acontecendo?" a
 
    * Um ticket cancelado ainda na fila mostra a etapa "Rodando" como "não chegou a rodar" e a etapa final como "Cancelado".
    * A etapa atual de um ticket `RUNNING` mostra "há {tempo}".
-3. Depois disso vêm, como hoje: resumo, linha do tempo, comando executado, respostas, reexecuções e log. A linha "Detalhe técnico" do resumo traz o status, o `status_motivo`, o `return_code` e a descrição técnica (`descricao_motivo`).
+3. Depois disso vêm, como hoje: resumo, linha do tempo, comando executado, respostas, reexecuções e log. A linha "Detalhe técnico" do resumo traz o status, o `status_motivo`, o `return_code` e a descrição técnica (`descricao_motivo`). O bloco do snapshot mostra a **pasta base** (`pasta_base`, snapshot v3) e o **arquivo na pasta base** (`path_file`) em linhas separadas; snapshot antigo sem pasta base mostra "-".
 4. **Botões com o efeito escrito:** "Cancelar este pedido" (com a consequência no modal) e "Rodar de novo com as mesmas respostas" (reexecução, §5.5).
 5. A página continua se atualizando sozinha enquanto o ticket não termina, e a frase e a barra acompanham.
 

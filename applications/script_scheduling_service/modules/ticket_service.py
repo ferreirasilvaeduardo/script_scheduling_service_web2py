@@ -924,8 +924,8 @@ class ServicoTicket(object):
             timeout_s = None
         snapshot = None
         if snap is not None:
-            snapshot = dict((k, snap.get(k)) for k in ("versao", "interpretador", "path_file", "tipo_param",
-                                                       "compilado_em"))
+            snapshot = dict((k, snap.get(k)) for k in ("versao", "interpretador", "pasta_base", "path_file",
+                                                       "tipo_param", "compilado_em"))
         return {
             "id": ticket["id"],
             "script_id": ticket["script_id"],
