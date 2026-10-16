@@ -60,13 +60,14 @@ class TestAuthService(unittest.TestCase):
         self.rbac = repo_factory.obter("rbac")
         self.auditoria = repo_factory.obter("auditoria")
         self.relogio = _Relogio(INICIO)
+        # O bloqueio usa o relogio do banco (README §4.2): o relogio de teste e o SYSDATE do FAKE.
+        repo_factory._fake_store.definir_relogio(self.relogio)
         log = logging.getLogger("test_auth_service")
         log.addHandler(logging.NullHandler())
         log.propagate = False
         self.servico = auth_service.ServicoAuth(
             usuarios=self.usuarios, rbac_repo=self.rbac, catalogo=repo_factory.obter("catalogo"),
             auditoria=self.auditoria, max_tentativas=MAX, bloqueio_s=BLOQUEIO_S, log=log,
-            relogio=self.relogio,
         )
         self.usuarios.alterar(5, {"senha_hash": security.hash_senha(self.senha)})
         self.aud_base = max(a["id"] for a in self.auditoria.listar(tamanho=1000)["itens"])
@@ -185,6 +186,35 @@ class TestAuthService(unittest.TestCase):
         self.assertTrue(security.verificar_senha(self.senha, u["senha_hash"]))
         self.assertEqual(u["senha_alterada_em"], antes)
 
+    def test_login_e_auditoria_numa_operacao_do_repositorio(self):
+        # CR-003 P3: LOGIN_OK, LOGIN_FALHA e LOGIN_BLOQUEIO vao pelo repositorio de usuarios, na mesma operacao.
+        with mock.patch.object(self.auditoria, "registrar", side_effect=AssertionError("auditoria separada")):
+            ctx, msg = self.servico.autenticar("admin", self.senha, "10.0.0.1")
+            self.assertIsNone(msg)
+            self.assertEqual(self._errar("op.prod", MAX), (None, MSG_BLOQUEIO))
+        self.assertEqual(self._acoes("admin"), ["LOGIN_OK"])
+        acoes = self._acoes("op.prod")
+        self.assertEqual(acoes.count("LOGIN_FALHA"), MAX)
+        self.assertEqual(acoes.count("LOGIN_BLOQUEIO"), 1)
+
+    def test_rehash_na_mesma_operacao_do_sucesso(self):
+        self.usuarios.alterar(1, {"senha_hash": _hash_com_iteracoes(self.senha, ITER_TESTE // 2)})
+        with mock.patch.object(self.usuarios, "alterar", side_effect=AssertionError("rehash separado")):
+            _ctx, msg = self.servico.autenticar("admin", self.senha, "10.0.0.1")
+        self.assertIsNone(msg)
+        self.assertFalse(security.precisa_rehash(self.usuarios.obter_por_id(1)["senha_hash"]))
+
+    def test_minha_senha_reinicia_ciclo_apos_bloqueio_expirado(self):
+        # CR-003 P3: bloqueio expirado zera as tentativas tambem em "Minha senha" (README §4.2).
+        ctx, _ = self.servico.autenticar("op.prod", self.senha, "10.0.0.1")
+        self._errar("op.prod", MAX)
+        self.relogio.avancar(BLOQUEIO_S + 1)
+        resultado, _erros = self.servico.trocar_senha(ctx, "10.0.0.1", "senha-errada-123", "x", "x")
+        self.assertEqual(resultado, "ERRO")
+        u = self.usuarios.obter_por_id(2)
+        self.assertEqual(u["tentativas_falha"], 1)
+        self.assertIsNone(u["bloqueado_ate"])
+
     def test_auditoria_sem_senha(self):
         self.servico.autenticar("admin", self.senha, "10.0.0.1")
         self.servico.autenticar("admin", "senha-errada-123", "10.0.0.1")
@@ -219,15 +249,30 @@ class TestAuthService(unittest.TestCase):
         self.assertIn("EXEC_SCRIPT", ctx["funcionalidades"])
         self.assertGreater(ctx["perm_versao"], sessao["perm_versao"])
 
+    def _ultimo_logout(self, ator):
+        itens = [r for r in self.auditoria.listar({"acao": "LOGOUT"}, pagina=1, tamanho=10)["itens"]
+                 if r["ator"] == ator and r["id"] > self.aud_base]
+        return itens[0] if itens else None
+
     def test_revalidar_usuario_inativo(self):
         sessao = self._sessao("op.prod")
         self.usuarios.alterar(2, {"ativo": "N"})
-        self.assertIsNone(self.servico.revalidar(sessao))
+        self.assertIsNone(self.servico.revalidar(sessao, "10.9.9.9"))
+        aud = self._ultimo_logout("op.prod")
+        self.assertEqual(aud["detalhe"], u"sessão encerrada pela revalidação: usuário inativo")
+        self.assertEqual(aud["ip_origem"], "10.9.9.9")
 
     def test_revalidar_perfil_inativo(self):
         sessao = self._sessao("consulta")
         self.rbac.perfis_alterar(4, {"ativo": "N"})
         self.assertIsNone(self.servico.revalidar(sessao))
+        self.assertEqual(self._ultimo_logout("consulta")["detalhe"],
+                         u"sessão encerrada pela revalidação: perfil inativo")
+
+    def test_revalidar_sessao_invalida_nao_audita(self):
+        sessao = self._sessao("consulta")
+        self.assertIsNone(self.servico.revalidar(dict(sessao, usuario_id=999)))
+        self.assertIsNone(self._ultimo_logout("consulta"))
 
     def test_revalidar_sessao_invalida(self):
         sessao = self._sessao("consulta")

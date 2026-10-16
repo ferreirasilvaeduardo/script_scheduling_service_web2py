@@ -43,12 +43,25 @@ class RepoUsuarios(object):
         """
         raise NotImplementedError
 
-    def registrar_falha_login(self, login, bloqueio_ate=None):
-        """Incrementa tentativas_falha e atualiza bloqueado_ate se fornecido."""
+    def agora(self):
+        """Instante atual do banco (SYSDATE), sem microssegundos (README §4.2: relogio do banco)."""
         raise NotImplementedError
 
-    def registrar_sucesso_login(self, login, agora=None):
-        """Zera tentativas_falha e bloqueado_ate, e atualiza ultimo_login."""
+    def registrar_falha_login(self, login, bloqueio_s=None, auditoria=None):
+        """Incrementa tentativas_falha numa unica operacao (README §4.2, §4.4).
+
+        bloqueio_s: se informado, bloqueado_ate = SYSDATE + bloqueio_s/86400 (relogio do banco).
+        auditoria: dict ou lista de dicts {'ator', 'ip', 'acao', 'detalhe'} gravados na mesma transacao
+        (LOGIN_FALHA e, ao bloquear, LOGIN_BLOQUEIO). Retorna o registro atualizado.
+        """
+        raise NotImplementedError
+
+    def registrar_sucesso_login(self, login, novo_hash=None, auditoria=None):
+        """Zera tentativas_falha e bloqueado_ate e grava ultimo_login = SYSDATE numa unica operacao.
+
+        novo_hash: rehash da senha (iteracoes abaixo do vigente), gravado na mesma transacao.
+        auditoria: dict ou lista (LOGIN_OK), na mesma transacao. Retorna o registro atualizado.
+        """
         raise NotImplementedError
 
     def desbloquear(self, id, auditoria=None):

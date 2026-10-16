@@ -85,7 +85,8 @@ class ServicoAdminUsuarios(object):
         self._usuarios = usuarios
         self._rbac = rbac_repo
         self._log = log
-        self._relogio = relogio or auth_service.relogio_local
+        # Relogio do banco (README §4.2): bloqueio vigente e filtro "Bloqueados" comparam com SYSDATE.
+        self._relogio = relogio or usuarios.agora
 
     def _obter(self, usuario_id):
         uid = _id(usuario_id)

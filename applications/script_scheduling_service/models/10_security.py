@@ -57,9 +57,12 @@ current.sss_ctx = None
 if session.usuario_id:
     _agora = time.time()
     if security.sessao_expirada(session.ultimo_acesso, _agora, _cfg.web.session_idle_timeout_s):
+        # Expiracao por inatividade: so log, sem auditoria (README §4.2).
+        _log.info("sessao expirada por inatividade (login=%s)", session.login, extra={"acao": "SESSAO"})
         _encerrar_sessao(u"Sua sessão expirou por inatividade. Entre novamente.")
     try:
-        _ctx = auth_service.revalidar(session)
+        _ctx = auth_service.revalidar(session, security.ip_origem(
+            request.env.remote_addr, request.env.http_x_forwarded_for, _cfg.web.trusted_proxies))
     except RepoIndisponivel:
         _log.exception("revalidacao de sessao indisponivel (usuario_id=%s caminho=%s)",
                        session.usuario_id, request.env.path_info, extra={"acao": "SESSAO"})

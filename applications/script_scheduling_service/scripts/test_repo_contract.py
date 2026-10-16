@@ -254,6 +254,23 @@ class BaseRepoContractTest(object):
         self.assertEqual(aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=1)["total"], alteracoes + 3)
         self.assertEqual(set((a["entidade"], a["entidade_id"]) for a in ultimos), {("tbsss_usuarios", consulta["id"])})
 
+        # CR-003 P3: falha/sucesso de login com auditoria na mesma operacao e bloqueio pelo relogio do banco.
+        antes_login = aud.listar(filtros={"acao": "LOGIN_FALHA"}, pagina=1, tamanho=1)["total"]
+        inicio = usr.agora()
+        reg = usr.registrar_falha_login("consulta", bloqueio_s=60, auditoria=[
+            {"ator": "consulta", "ip": None, "acao": "LOGIN_FALHA", "detalhe": "f"},
+            {"ator": "consulta", "ip": None, "acao": "LOGIN_BLOQUEIO", "detalhe": "b"}])
+        self.assertGreaterEqual(reg["bloqueado_ate"], inicio + datetime.timedelta(seconds=60))
+        self.assertEqual(aud.listar(filtros={"acao": "LOGIN_FALHA"}, pagina=1, tamanho=1)["total"], antes_login + 1)
+        self.assertEqual(aud.listar(filtros={"acao": "LOGIN_BLOQUEIO", "entidade_id": consulta["id"]},
+                                    pagina=1, tamanho=1)["total"], 1)
+        reg = usr.registrar_sucesso_login("consulta", novo_hash="pbkdf2_sha256$2$00$00",
+                                          auditoria={"ator": "consulta", "ip": None, "acao": "LOGIN_OK", "detalhe": "ok"})
+        self.assertEqual((reg["tentativas_falha"], reg["bloqueado_ate"]), (0, None))
+        self.assertEqual(reg["senha_hash"], "pbkdf2_sha256$2$00$00")
+        self.assertGreaterEqual(reg["ultimo_login"], inicio)
+        self.assertEqual(reg["ultimo_login"].microsecond, 0)
+
         futuro = datetime.datetime(2999, 1, 1)
         usr.alterar(consulta["id"], {"bloqueado_ate": futuro})
         bloqueados = usr.listar(filtros={"bloqueado_em": datetime.datetime(2998, 1, 1)}, pagina=1, tamanho=50)

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Implementacao em memoria do repositorio de usuarios (README §2.5, §4.2, §10)."""
 import copy
+import datetime
 import re
 
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
@@ -86,15 +87,19 @@ class RepoUsuariosFake(RepoUsuarios):
             return paginar(lista, pagina=pagina, tamanho=tamanho)
 
     def _auditar(self, auditoria, usuario_id):
-        if auditoria:
+        for item in ([auditoria] if isinstance(auditoria, dict) else (auditoria or ())):
             self._store.registrar_auditoria_interno(
-                ator=auditoria.get("ator"),
-                ip=auditoria.get("ip"),
-                acao=auditoria["acao"],
+                ator=item.get("ator"),
+                ip=item.get("ip"),
+                acao=item["acao"],
                 entidade="tbsss_usuarios",
                 entidade_id=usuario_id,
-                detalhe=auditoria.get("detalhe"),
+                detalhe=item.get("detalhe"),
             )
+
+    def agora(self):
+        """SYSDATE simulado pelo relogio do store."""
+        return self._store.agora()
 
     def _eh_admin_ativo(self, usuario):
         p = self._store.perfis.get(usuario["perfil_id"])
@@ -197,27 +202,36 @@ class RepoUsuariosFake(RepoUsuarios):
                 self._auditar(auditoria, id)
                 return copy.deepcopy(atual)
 
-    def registrar_falha_login(self, login, bloqueio_ate=None):
-        """Incrementa contador de tentativas falhas de login."""
-        with self._store.lock_usuarios:
-            for u in self._store.usuarios.values():
-                if u["login"] == login:
-                    u["tentativas_falha"] = int(u.get("tentativas_falha", 0)) + 1
-                    if bloqueio_ate is not None:
-                        u["bloqueado_ate"] = bloqueio_ate
-                    return copy.deepcopy(u)
-            raise RepoNaoEncontrado("Usuario com login '%s' nao encontrado" % login)
+    def _por_login(self, login):
+        for u in self._store.usuarios.values():
+            if u["login"] == login:
+                return u
+        raise RepoNaoEncontrado("Usuario com login '%s' nao encontrado" % login)
 
-    def registrar_sucesso_login(self, login, agora=None):
-        """Zera falhas e atualiza data de ultimo login."""
+    def registrar_falha_login(self, login, bloqueio_s=None, auditoria=None):
+        """Incrementa as falhas e, se pedido, bloqueia pelo relogio do banco; auditoria na mesma operacao."""
         with self._store.lock_usuarios:
-            for u in self._store.usuarios.values():
-                if u["login"] == login:
-                    u["tentativas_falha"] = 0
-                    u["bloqueado_ate"] = None
-                    u["ultimo_login"] = agora or self._store.agora()
-                    return copy.deepcopy(u)
-            raise RepoNaoEncontrado("Usuario com login '%s' nao encontrado" % login)
+            u = self._por_login(login)
+            tentativas = int(u.get("tentativas_falha", 0)) + 1
+            if tentativas > 99:
+                raise RepoViolacao("tentativas_falha excede NUMBER(2)", constraint="ck_tbsss_usr_tent")
+            u["tentativas_falha"] = tentativas
+            if bloqueio_s is not None:
+                u["bloqueado_ate"] = self._store.agora() + datetime.timedelta(seconds=int(bloqueio_s))
+            self._auditar(auditoria, u["id"])
+            return copy.deepcopy(u)
+
+    def registrar_sucesso_login(self, login, novo_hash=None, auditoria=None):
+        """Zera falhas, grava ultimo_login (SYSDATE) e o rehash, com a auditoria, numa operacao."""
+        with self._store.lock_usuarios:
+            u = self._por_login(login)
+            u["tentativas_falha"] = 0
+            u["bloqueado_ate"] = None
+            u["ultimo_login"] = self._store.agora()
+            if novo_hash is not None:
+                u["senha_hash"] = novo_hash
+            self._auditar(auditoria, u["id"])
+            return copy.deepcopy(u)
 
     def desbloquear(self, id, auditoria=None):
         """Desbloqueia conta de usuario zerando tentativas."""

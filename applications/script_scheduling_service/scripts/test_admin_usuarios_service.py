@@ -262,6 +262,13 @@ class TestSenhaEBloqueio(_Base):
 
 class TestListaEAcesso(_Base):
 
+    def test_relogio_padrao_e_o_do_banco(self):
+        # CR-003 P3: sem relogio injetado, o service usa o SYSDATE do repositorio (nunca o do no web).
+        svc = ServicoAdminUsuarios(self.usuarios, self.rbac_repo, self.log)
+        futuro = self.usuarios.agora() + datetime.timedelta(minutes=5)
+        self.assertTrue(svc.bloqueado({"bloqueado_ate": futuro}))
+        self.assertFalse(svc.bloqueado({"bloqueado_ate": self.usuarios.agora() - datetime.timedelta(seconds=1)}))
+
     def test_lista_sem_hash_com_bloqueio_e_filtros(self):
         pagina = self.svc.listar(self.ctx["admin"], {}, 1, 20)
         self.assertEqual(pagina["total"], 6)

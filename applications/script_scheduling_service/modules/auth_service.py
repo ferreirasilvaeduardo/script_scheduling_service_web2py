@@ -26,9 +26,8 @@ SIMULADOS_MAX = 1024
 _RE_LOGIN = re.compile(r"[a-z0-9._-]{3,30}")
 
 
-def relogio_local():
-    """Relogio padrao do no web (sem microssegundos)."""
-    return datetime.datetime.now().replace(microsecond=0)
+def _aud(login, ip, acao, detalhe):
+    return {"ator": login, "ip": ip, "acao": acao, "detalhe": detalhe}
 
 
 class ServicoAuth(object):
@@ -41,9 +40,11 @@ class ServicoAuth(object):
         self._catalogo = catalogo
         self._auditoria = auditoria
         self._max = int(max_tentativas)
-        self._bloqueio = datetime.timedelta(seconds=int(bloqueio_s))
+        self._bloqueio_s = int(bloqueio_s)
+        self._bloqueio = datetime.timedelta(seconds=self._bloqueio_s)
         self._log = log
-        self._relogio = relogio or relogio_local
+        # Relogio do banco (README §4.2): o bloqueio nunca depende do relogio do no web.
+        self._relogio = relogio or usuarios.agora
         self._lock = threading.Lock()
         self._cache_matriz = collections.OrderedDict()
         # Falhas de logins inexistentes: replica o bloqueio para nao revelar a existencia da conta.
@@ -71,31 +72,40 @@ class ServicoAuth(object):
             security.verificar_senha(senha_txt, security.hash_ficticio())
             senha_confere = False
 
-        bloqueado_ate = usuario.get("bloqueado_ate")
-        if bloqueado_ate is not None and bloqueado_ate > agora:
+        if self._bloqueado(usuario, agora):
             self._registrar_falha(usuario, ip, "conta bloqueada")
             return None, MSG_BLOQUEIO
-        if bloqueado_ate is not None or int(usuario.get("tentativas_falha") or 0) >= self._max:
-            # Bloqueio expirado: novo ciclo de tentativas.
-            usuario = self._usuarios.desbloquear(usuario["id"])
+        usuario = self._reiniciar_se_expirado(usuario)
 
         if not senha_confere:
-            return self._falha_senha(usuario, ip, agora)
+            return self._falha_senha(usuario, ip)
 
         estado = self._usuarios.obter_estado_sessao(usuario["id"])
         if estado.get("usuario_ativo") != "S" or estado.get("perfil_ativo") != "S":
             self._registrar_falha(usuario, ip, "usuario ou perfil inativo")
             return None, MSG_GENERICA
 
-        self._usuarios.registrar_sucesso_login(usuario["login"], agora)
-        if security.precisa_rehash(armazenado):
-            self._usuarios.alterar(usuario["id"], {"senha_hash": security.hash_senha(senha_txt)})
+        novo_hash = security.hash_senha(senha_txt) if security.precisa_rehash(armazenado) else None
+        # Sucesso, rehash e auditoria numa unica operacao do repositorio (README §4.2, §4.4).
+        self._usuarios.registrar_sucesso_login(
+            usuario["login"], novo_hash=novo_hash,
+            auditoria=_aud(usuario["login"], ip, "LOGIN_OK", "Login bem-sucedido"))
+        if novo_hash is not None:
             self._log.info("hash de senha atualizado para as iteracoes vigentes (login=%s)",
                            usuario["login"], extra={"acao": "LOGIN"})
-        self._auditoria.registrar(usuario["login"], ip, "LOGIN_OK", ENTIDADE, usuario["id"],
-                                  "Login bem-sucedido")
         self._log.info("login ok (login=%s ip=%s)", usuario["login"], ip, extra={"acao": "LOGIN"})
         return self._montar_ctx(estado), None
+
+    @staticmethod
+    def _bloqueado(usuario, agora):
+        bloqueado_ate = usuario.get("bloqueado_ate")
+        return bloqueado_ate is not None and bloqueado_ate > agora
+
+    def _reiniciar_se_expirado(self, usuario):
+        # Bloqueio expirado (ou contador no limite): novo ciclo de tentativas, no login e na troca de senha.
+        if usuario.get("bloqueado_ate") is not None or int(usuario.get("tentativas_falha") or 0) >= self._max:
+            return self._usuarios.desbloquear(usuario["id"])
+        return usuario
 
     def _registrar_falha(self, usuario, ip, motivo):
         self._auditoria.registrar(usuario["login"], ip, "LOGIN_FALHA", ENTIDADE, usuario["id"],
@@ -103,15 +113,21 @@ class ServicoAuth(object):
         self._log.warning("login falhou (login=%s ip=%s motivo=%s)", usuario["login"], ip, motivo,
                           extra={"acao": "LOGIN"})
 
-    def _falha_senha(self, usuario, ip, agora):
+    def _falha_senha(self, usuario, ip):
         tentativas = int(usuario.get("tentativas_falha") or 0) + 1
         bloquear = tentativas >= self._max
-        self._usuarios.registrar_falha_login(usuario["login"], agora + self._bloqueio if bloquear else None)
-        self._registrar_falha(usuario, ip, "senha incorreta (tentativa %d de %d)" % (tentativas, self._max))
+        motivo = "senha incorreta (tentativa %d de %d)" % (tentativas, self._max)
+        auditorias = [_aud(usuario["login"], ip, "LOGIN_FALHA", "Falha de login: %s" % motivo)]
+        if bloquear:
+            auditorias.append(_aud(usuario["login"], ip, "LOGIN_BLOQUEIO",
+                                   "Conta bloqueada por %d falhas consecutivas" % tentativas))
+        # Falha, bloqueio (SYSDATE + segundos) e auditoria numa unica operacao do repositorio.
+        self._usuarios.registrar_falha_login(usuario["login"], self._bloqueio_s if bloquear else None,
+                                             auditoria=auditorias)
+        self._log.warning("login falhou (login=%s ip=%s motivo=%s)", usuario["login"], ip, motivo,
+                          extra={"acao": "LOGIN"})
         if not bloquear:
             return None, MSG_GENERICA
-        self._auditoria.registrar(usuario["login"], ip, "LOGIN_BLOQUEIO", ENTIDADE, usuario["id"],
-                                  "Conta bloqueada por %d falhas consecutivas" % tentativas)
         self._log.warning("conta bloqueada (login=%s ip=%s)", usuario["login"], ip, extra={"acao": "LOGIN"})
         return None, MSG_BLOQUEIO
 
@@ -144,8 +160,11 @@ class ServicoAuth(object):
 
     # ------------------------------------------------------------ revalidacao
 
-    def revalidar(self, sessao):
-        """Reconsulta usuario e perfil (README §4.2). Retorna ctx ou None se a sessao deve encerrar."""
+    def revalidar(self, sessao, ip=None):
+        """Reconsulta usuario e perfil (README §4.2). Retorna ctx ou None se a sessao deve encerrar.
+
+        Encerramento por usuario ou perfil inativo e auditado como LOGOUT (README §4.2, D13).
+        """
         usuario_id = sessao.get("usuario_id")
         if not isinstance(usuario_id, int) or isinstance(usuario_id, bool):
             return None
@@ -160,6 +179,9 @@ class ServicoAuth(object):
                               extra={"acao": "SESSAO"})
             return None
         if estado.get("usuario_ativo") != "S" or estado.get("perfil_ativo") != "S":
+            motivo = u"usuário inativo" if estado.get("usuario_ativo") != "S" else u"perfil inativo"
+            self._auditoria.registrar(estado.get("login"), ip, "LOGOUT", ENTIDADE, usuario_id,
+                                      u"sessão encerrada pela revalidação: %s" % motivo)
             self._log.info("sessao encerrada: usuario ou perfil inativo (login=%s)", estado.get("login"),
                            extra={"acao": "SESSAO"})
             return None
@@ -214,15 +236,15 @@ class ServicoAuth(object):
         """
         agora = self._relogio()
         usuario = self._usuarios.obter_por_id(ctx["usuario_id"])
-        bloqueado_ate = usuario.get("bloqueado_ate")
-        if bloqueado_ate is not None and bloqueado_ate > agora:
+        if self._bloqueado(usuario, agora):
             self._registrar_falha(usuario, ip, "troca de senha com conta bloqueada")
             return "BLOQUEADO", {"senha_atual": MSG_BLOQUEIO}
+        usuario = self._reiniciar_se_expirado(usuario)
         armazenado = usuario.get("senha_hash")
         atual_ok = (isinstance(atual, str) and 0 < len(atual) <= SENHA_MAX
                     and security.hash_reconhecido(armazenado) and security.verificar_senha(atual, armazenado))
         if not atual_ok:
-            _ctx, mensagem = self._falha_senha(usuario, ip, agora)
+            _ctx, mensagem = self._falha_senha(usuario, ip)
             if mensagem == MSG_BLOQUEIO:
                 return "BLOQUEADO", {"senha_atual": MSG_BLOQUEIO}
             return "ERRO", {"senha_atual": MSG_SENHA_ATUAL}
@@ -281,9 +303,9 @@ def autenticar(login, senha, ip):
     return _servico().autenticar(login, senha, ip)
 
 
-def revalidar(sessao):
+def revalidar(sessao, ip=None):
     """Revalida a sessao pelo servico padrao do processo web."""
-    return _servico().revalidar(sessao)
+    return _servico().revalidar(sessao, ip)
 
 
 def logout(ctx, ip):
