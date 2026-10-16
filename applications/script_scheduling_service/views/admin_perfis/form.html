@@ -12,7 +12,16 @@ _campos = [
 if not _novo:
     _desativar = perfil.get('ativo') == 'S'
     if _desativar:
-        _texto_modal = u'%s Usuários ativos afetados: %d.' % (aviso_desativacao, perfil.get('usuarios_ativos') or 0)
+        _total = perfil.get('usuarios_ativos') or 0
+        _logins = perfil.get('usuarios_afetados') or []
+        _texto_modal = u'%s Usuários ativos afetados: %d' % (aviso_desativacao, _total)
+        if _logins:
+            _texto_modal += u' (%s%s)' % (u', '.join(_logins), (u' e outros %d' % (_total - len(_logins))) if _total > len(_logins) else u'')
+        pass
+        _texto_modal += u'.'
+        if perfil.get('proprio'):
+            _texto_modal = u'Você não pode desativar o seu próprio perfil.'
+        pass
     else:
         _texto_modal = u'Os usuários do perfil voltarão a ter acesso conforme a matriz de permissões.'
     pass

@@ -237,6 +237,8 @@ class _BasePerfis(unittest.TestCase):
         self.auth = auth_service.ServicoAuth(self.usuarios, self.rbac_repo, self.catalogo, self.auditoria,
                                              5, 900, self.log)
         self.ctx = dict((login, self.auth.revalidar(sessao)) for login, sessao in SESSOES.items())
+        # Gestor: perfil nao admin com CAD_PERFIS; exercita o ultimo admin sem cair na autoprotecao.
+        self.ctx["gestor"] = dict(self.ctx["op.prod"], funcionalidades=frozenset(["CAD_PERFIS"]))
         self.svc = ServicoAdminPerfis(self.rbac_repo, self.catalogo, self.usuarios, self.log)
         self.aud_base = max([a["id"] for a in self.auditoria.listar(pagina=1, tamanho=1000)["itens"]] or [0])
 
@@ -308,14 +310,20 @@ class TestMatriz(_BasePerfis):
         self.assertEqual(self._matriz(PERFIL_CONSULTA), m)
         self.assertEqual(self._versao(PERFIL_CONSULTA), versao)
 
-    def test_inativo_associado_e_preservado_e_novo_inativo_rejeitado(self):
+    def test_inativo_associado_pode_sair_e_novo_inativo_rejeitado(self):
+        # CR-003 D9: associacao a item inativo pode ser removida; nunca readicionada.
         m = self._matriz(PERFIL_HML)
         self.assertIn(AMB_DESENV, m["ambs"])
-        # A tela nao envia o DESENV (desabilitado): o servidor preserva a associacao.
-        sem_desenv = [a for a in m["ambs"] if a != AMB_DESENV]
-        diff, erros = self._salvar_matriz(PERFIL_HML, m["funcs"], sem_desenv + [AMB_PRODUCAO], m["scrs"])
+        diff, erros = self._salvar_matriz(PERFIL_HML, m["funcs"], m["ambs"] + [AMB_PRODUCAO], m["scrs"])
         self.assertEqual((diff, erros), ("+amb:PRODUCAO", {}))
         self.assertIn(AMB_DESENV, self._matriz(PERFIL_HML)["ambs"])
+        m = self._matriz(PERFIL_HML)
+        sem_desenv = [a for a in m["ambs"] if a != AMB_DESENV]
+        diff, erros = self._salvar_matriz(PERFIL_HML, m["funcs"], sem_desenv, m["scrs"])
+        self.assertEqual((diff, erros), ("-amb:DESENV", {}))
+        self.assertNotIn(AMB_DESENV, self._matriz(PERFIL_HML)["ambs"])
+        diff, erros = self._salvar_matriz(PERFIL_HML, m["funcs"], sem_desenv + [AMB_DESENV], m["scrs"])
+        self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_MATRIZ_INATIVO})
         m = self._matriz(PERFIL_CONSULTA)
         diff, erros = self._salvar_matriz(PERFIL_CONSULTA, m["funcs"], m["ambs"] + [AMB_DESENV], m["scrs"])
         self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_MATRIZ_INATIVO})
@@ -348,7 +356,7 @@ class TestUltimoAdmin(_BasePerfis):
     def test_desativar_unico_perfil_admin_e_negado(self):
         form = self._form(PERFIL_ADMIN)
         with self.assertRaises(OperacaoNegada) as cm:
-            self.svc.alternar_ativo(self.ctx["admin"], IP, str(PERFIL_ADMIN), form["versao"])
+            self.svc.alternar_ativo(self.ctx["gestor"], IP, str(PERFIL_ADMIN), form["versao"])
         self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_ULTIMO_ADMIN)
         perfil = self.rbac_repo.perfis_obter(PERFIL_ADMIN)
         self.assertEqual((perfil["ativo"], perfil["perm_versao"]), ("S", 1))
@@ -356,7 +364,7 @@ class TestUltimoAdmin(_BasePerfis):
 
     def test_remover_is_admin_do_unico_perfil_admin_e_negado(self):
         form = self._form(PERFIL_ADMIN)
-        _id, erros = self.svc.salvar(self.ctx["admin"], IP, str(PERFIL_ADMIN),
+        _id, erros = self.svc.salvar(self.ctx["gestor"], IP, str(PERFIL_ADMIN),
                                      {"nome": form["nome"], "descricao": form["descricao"], "is_admin": None,
                                       "versao": form["versao"]})
         self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_ULTIMO_ADMIN})
@@ -368,7 +376,7 @@ class TestUltimoAdmin(_BasePerfis):
         u = self.usuarios.obter_por_login("op.hml")
         self.usuarios.alterar(u["id"], {"perfil_id": novo_id})
         form = self._form(PERFIL_ADMIN)
-        alterado = self.svc.alternar_ativo(self.ctx["admin"], IP, str(PERFIL_ADMIN), form["versao"])
+        alterado = self.svc.alternar_ativo(self.ctx["gestor"], IP, str(PERFIL_ADMIN), form["versao"])
         self.assertEqual(alterado["ativo"], "N")
         aud = self._auditorias("CAD_DESATIVAR")
         self.assertEqual(len(aud), 1)
@@ -378,8 +386,9 @@ class TestUltimoAdmin(_BasePerfis):
         # Um segundo perfil admin sem usuarios nao livra o ultimo admin real.
         self.svc.salvar(self.ctx["admin"], IP, None, {"nome": "ADMIN_VAZIO", "is_admin": "S"})
         form = self._form(PERFIL_ADMIN)
-        with self.assertRaises(OperacaoNegada):
-            self.svc.alternar_ativo(self.ctx["admin"], IP, str(PERFIL_ADMIN), form["versao"])
+        with self.assertRaises(OperacaoNegada) as cm:
+            self.svc.alternar_ativo(self.ctx["gestor"], IP, str(PERFIL_ADMIN), form["versao"])
+        self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_ULTIMO_ADMIN)
 
     def test_protecao_e_atomica_no_repositorio(self):
         with self.assertRaises(RepoViolacao) as cm:

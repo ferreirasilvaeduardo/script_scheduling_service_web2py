@@ -29,6 +29,9 @@ MSG_NOME_INVALIDO = u"Use de 1 a 30 caracteres: letras maiúsculas, dígitos e _
 MSG_NOME_DUPLICADO = u"Já existe um perfil com este nome."
 MSG_DESCRICAO_TAMANHO = u"A descrição deve ter no máximo %d caracteres." % TAMANHO_DESCRICAO
 MSG_ULTIMO_ADMIN = u"Operação negada: não pode restar nenhum administrador ativo."
+MSG_AUTO_ADMIN = u"Você não pode remover o acesso administrativo do seu próprio perfil."
+MSG_AUTO_DESATIVAR = u"Você não pode desativar o seu próprio perfil."
+AFETADOS_MAX = 20
 MSG_MATRIZ_ID_INVALIDO = u"A seleção contém itens inexistentes. Recarregue a página e tente novamente."
 MSG_MATRIZ_INATIVO = u"Itens inativos não podem ser adicionados ao perfil. Recarregue a página e tente novamente."
 AVISO_DESATIVACAO = u"Os usuários deste perfil perdem o acesso e têm a sessão encerrada no próximo clique."
@@ -114,6 +117,12 @@ class ServicoAdminPerfis(object):
         return self._usuarios.listar(filtros={"perfil_id": perfil_id, "ativo": "S"}, pagina=1,
                                      tamanho=_TAMANHO_CONTAGEM)["total"]
 
+    def usuarios_afetados(self, perfil_id):
+        """(total, logins) dos usuarios ativos do perfil; no maximo AFETADOS_MAX logins (README §4.3.B.1)."""
+        pagina = self._usuarios.listar(filtros={"perfil_id": perfil_id, "ativo": "S"}, pagina=1,
+                                       tamanho=AFETADOS_MAX)
+        return pagina["total"], [u["login"] for u in pagina["itens"]]
+
     # ------------------------------------------------------------- cadastro
 
     def listar(self, ctx, filtros, pagina, tamanho):
@@ -126,8 +135,9 @@ class ServicoAdminPerfis(object):
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         if perfil_id in (None, ""):
             return {"id": None, "nome": "", "descricao": "", "is_admin": "N", "ativo": "S", "versao": "",
-                    "usuarios_ativos": 0}
+                    "usuarios_ativos": 0, "usuarios_afetados": [], "proprio": False}
         perfil = self._obter(perfil_id)
+        total, logins = self.usuarios_afetados(perfil["id"])
         return {
             "id": perfil["id"],
             "nome": perfil["nome"],
@@ -135,7 +145,9 @@ class ServicoAdminPerfis(object):
             "is_admin": perfil["is_admin"],
             "ativo": perfil["ativo"],
             "versao": admin_crud.versao(perfil, CAMPOS_EDITAVEIS),
-            "usuarios_ativos": self.usuarios_ativos(perfil["id"]),
+            "usuarios_ativos": total,
+            "usuarios_afetados": logins,
+            "proprio": ctx.get("perfil_id") == perfil["id"],
         }
 
     def _validar(self, dados, erros):
@@ -190,6 +202,12 @@ class ServicoAdminPerfis(object):
         if admin_crud.texto(dados.get("versao"), 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
             erros[CAMPO_GERAL] = admin_crud.MSG_CONFLITO
             return atual["id"], erros
+        if ctx.get("perfil_id") == atual["id"] and atual["is_admin"] == "S" and is_admin == "N":
+            # Autoprotecao (README §4.3.B): vale mesmo havendo outros administradores.
+            self._log.warning("remocao de is_admin do proprio perfil negada (login=%s perfil=%s)",
+                              ctx.get("login"), atual["nome"], extra={"acao": "CAD_ALTERAR"})
+            erros[CAMPO_GERAL] = MSG_AUTO_ADMIN
+            return atual["id"], erros
         depois = dict(atual, nome=nome, descricao=descricao, is_admin=is_admin)
         detalhe = admin_crud.detalhe_alteracoes(atual, depois, CAMPOS_EDITAVEIS)
         if detalhe is None:
@@ -218,6 +236,10 @@ class ServicoAdminPerfis(object):
         if admin_crud.texto(versao, 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
             raise RepoConflito("versao divergente")
         novo_ativo = "N" if atual["ativo"] == "S" else "S"
+        if novo_ativo == "N" and ctx.get("perfil_id") == atual["id"]:
+            self._log.warning("desativacao do proprio perfil negada (login=%s perfil=%s)",
+                              ctx.get("login"), atual["nome"], extra={"acao": "CAD_DESATIVAR"})
+            raise OperacaoNegada(MSG_AUTO_DESATIVAR)
         detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, ativo=novo_ativo), ("ativo",))
         acao = "CAD_DESATIVAR" if novo_ativo == "N" else "CAD_ALTERAR"
         if novo_ativo == "N":
@@ -293,8 +315,8 @@ class ServicoAdminPerfis(object):
     def salvar_matriz(self, ctx, ip, perfil_id, funcs, ambs, scrs, perm_versao):
         """Substitui a matriz do perfil (um unico POST com as tres listas) e audita PERM_ALTERAR com o diff.
 
-        Associacoes existentes a itens inativos sao preservadas; so itens ativos podem ser adicionados;
-        ID inexistente rejeita a operacao inteira. Retorna (diff ou None se nada mudou, erros).
+        Associacoes existentes a itens inativos podem ser removidas, nunca readicionadas (README §4.3.B.1);
+        so itens ativos podem ser adicionados; ID inexistente rejeita a operacao inteira. Retorna (diff ou None se nada mudou, erros).
         Lanca RepoNaoEncontrado e AcessoNegado.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
@@ -319,8 +341,8 @@ class ServicoAdminPerfis(object):
             inativos = set(i for i, r in cat[dim].items() if r.get("ativo") != "S")
             if (enviados[dim] - atual[dim]) & inativos:
                 return None, {CAMPO_GERAL: MSG_MATRIZ_INATIVO}
-            # Inativos ja associados nao aparecem como editaveis: o servidor os preserva.
-            final[dim] = (enviados[dim] - inativos) | (atual[dim] & inativos)
+            # Inativo ja associado pode sair (desmarcado); nunca entra de novo (checado acima).
+            final[dim] = set(enviados[dim])
 
         diff = diff_matriz(atual, final, self._rotulos(cat))
         if diff is None:

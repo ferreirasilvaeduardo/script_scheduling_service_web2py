@@ -1,7 +1,7 @@
 {{extend 'layout.html'}}
 {{
 # Matriz de permissões do perfil (README §4.3): três abas, um único POST com as três listas.
-# Itens inativos já associados aparecem marcados e desabilitados; o servidor os preserva.
+# Itens inativos já associados aparecem marcados, com selo, e podem ser removidos; nunca readicionados.
 # O resumo do modal usa o mesmo formato do diff auditado (PERM_ALTERAR), e o servidor revalida tudo.
 _m = matriz
 _p = _m['perfil']
@@ -14,7 +14,7 @@ _abas = (
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
     <h1 class="sss-page-titulo">Permissões do perfil <span class="sss-mono">{{=_p['nome']}}</span></h1>
-    <p class="sss-page-sub">Marque o que o perfil pode acessar. A mudança vale no próximo clique dos usuários do perfil.</p>
+    <p class="sss-page-sub">Marque o que o perfil pode acessar. A mudança vale no próximo clique dos usuários do perfil. Itens marcados como inativo podem ser removidos, mas não adicionados de novo.</p>
   </div>
   <div class="sss-acoes">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_perfis', f='lista')}}">Voltar à lista</a>
@@ -65,7 +65,7 @@ _abas = (
         {{for _i in _g['itens']:}}
         {{_iid = '%s-%s' % (_dim, _i['id'])}}
         <div class="form-check sss-matriz-item" data-busca="{{=(_i['rotulo'] + ' ' + _i['detalhe'] + ' ' + _g['grupo']).lower()}}">
-          <input class="form-check-input" type="checkbox" name="{{=_dim}}" value="{{=_i['id']}}" id="{{=_iid}}" data-dim="{{=_dim}}" data-inicial="{{='S' if _i['marcado'] else 'N'}}" data-diff="{{=_i['rotulo_diff']}}"{{if _i['marcado']:}} checked{{pass}}{{if _i['inativo']:}} disabled{{pass}} @change="atualizar">
+          <input class="form-check-input" type="checkbox" name="{{=_dim}}" value="{{=_i['id']}}" id="{{=_iid}}" data-dim="{{=_dim}}" data-inicial="{{='S' if _i['marcado'] else 'N'}}" data-diff="{{=_i['rotulo_diff']}}"{{if _i['marcado']:}} checked{{pass}} @change="atualizar">
           <label class="form-check-label" for="{{=_iid}}">
             <span class="sss-mono">{{=_i['rotulo']}}</span>{{if _i['inativo']:}} <span class="badge text-bg-secondary">inativo</span>{{pass}}
             {{if _i['detalhe']:}}<span class="sss-matriz-detalhe">{{=_i['detalhe']}}</span>{{pass}}
