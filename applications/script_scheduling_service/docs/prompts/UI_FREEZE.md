@@ -8,7 +8,7 @@ O objetivo é congelar o comportamento visual e funcional das telas sobre o back
 - [ ] A suíte completa passa: `python -m unittest discover -s scripts -p "test_*.py"`.
 - [ ] `python scripts/check_env.py` retorna 0.
 - [ ] Todos os relatórios F0.1–F6.1 estão com `PASS` e sem lacunas abertas.
-- [ ] CR-003 (P1–P11, P6A) e CR-004 (U1–U8) concluídos, e o fechamento UF executado: bateria completa de testes e validações e `docs/homologacao/` atualizado.
+- [x] CR-003 (P1–P11, P6A) e CR-004 (U1–U8) concluídos, e o fechamento UF executado: bateria completa de testes e validações e `docs/homologacao/` atualizado (manual v2.0, 16/10/2026).
 
 ## Segurança transversal (executar com o DevTools aberto)
 - [ ] Nenhuma requisição a domínio externo em nenhuma tela (aba Network com "preserve log").

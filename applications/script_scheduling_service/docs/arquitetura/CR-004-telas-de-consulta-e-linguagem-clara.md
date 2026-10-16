@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Aprovado** em 2026-10-16 pelo responsável pelo produto ("seguir a recomendação"): T1 a T5 e M1 a M4. M5 a M10 ficam no backlog, sem aprovação |
+| Status | **Aprovado** em 2026-10-16 pelo responsável pelo produto ("seguir a recomendação"): T1 a T5 e M1 a M4. M5 a M10 ficam no backlog, sem aprovação. **Implementado** em 2026-10-16 (U1 a U8) e fechamento UF concluído no mesmo dia: 697 testes OK em Python 3.6.0, 3.6.8 e 3.13.2, varredura das telas nos quatro perfis e cinco larguras, e manual de homologação v2.0 |
 | Origem | Revisão de usabilidade com a régua "uma criança de 10 anos consegue usar sozinha" |
 | Restrições | Sem mudança de arquitetura e sem dependência nova. As telas novas são actions nos controllers existentes, services em `modules/`, views com Alpine CSP e arquivos locais. Todas são só de consulta (`GET`, não gravam, não auditam) |
 | Afeta | README §2.4.2 (novo), §2.4.3 (novo), §4.3.B.2 (novo), §4.3.E (novo), §5.2.1 (novo), §5.4, §5.7 (novo), §5.8 (novo), §7.7 (novo) e §10 (mensagem de conflito). `docs/PADRAO_CRUD_ADMIN.md`. `docs/prompts/UI_FREEZE.md` |
