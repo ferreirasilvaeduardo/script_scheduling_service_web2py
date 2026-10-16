@@ -128,9 +128,3 @@ def resolver(path_file, owner_uids, uid_agente=None, dirs_sss=(), parar_em='/'):
         atual = os.path.dirname(atual)
     return real
 
-
-def nome_exibicao(path_file, completo):
-    """Caminho do script para a tela: completo para admin; '…/arquivo' para os demais (CR-005, R-f)."""
-    if not path_file:
-        return path_file
-    return path_file if completo else u'…/' + os.path.basename(path_file)

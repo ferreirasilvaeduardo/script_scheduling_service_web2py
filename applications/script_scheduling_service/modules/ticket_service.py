@@ -222,12 +222,12 @@ def _snapshot(ticket):
     return snap if isinstance(snap, dict) else None
 
 
-def _argv_exibicao(snap, completo=False):
+def _argv_exibicao(snap):
     # Snapshot ilegivel ou de versao anterior ao CR-005 (v1 a v3) nao tem argv exibivel.
     if snap is None or snap.get("versao") != params_compiler.VERSAO_SNAPSHOT:
         return None
     try:
-        return params_compiler.argv_para_exibicao(snap, completo)
+        return params_compiler.argv_para_exibicao(snap)
     except (KeyError, TypeError, ValueError, AttributeError):
         return None
 
@@ -455,11 +455,6 @@ class ServicoTicket(object):
             return None
         return data.replace(microsecond=0)
 
-    @staticmethod
-    def _caminho_completo(ctx):
-        """Caminho completo visível a todos (README §6.4, §8.5, CR-005 D8)."""
-        return True
-
     def _compilar(self, ctx, script, amb, respostas, agora, erros):
         """Valida o script no no web (path_guard) e compila o snapshot v4, acumulando erros por campo."""
         vinculos = self._vinculos(script["id"])
@@ -507,7 +502,7 @@ class ServicoTicket(object):
                                                           self._tickets.agora(), erros)
         if snapshot is None:
             return None, dict(erros)
-        return params_compiler.argv_para_exibicao(json.loads(snapshot), self._caminho_completo(ctx)), {}
+        return params_compiler.argv_para_exibicao(json.loads(snapshot)), {}
 
     def resumo_disparo(self, ctx, script_id, ambiente, respostas, prioridade=None, scheduled_at=None):
         """Resumo em frase do modal de confirmacao (README §5.4), montado pelo servidor; nao grava nada.
@@ -539,7 +534,7 @@ class ServicoTicket(object):
         frase = u"Vamos rodar %s no ambiente %s %s, com prioridade %d." % (script["nome"], amb["nome"], quando, prio)
         if linhas:
             frase += u" Respostas: " + u"; ".join(u"%s = %s" % (l["rotulo"], l["valor"]) for l in linhas) + u"."
-        return {"argv": params_compiler.argv_para_exibicao(json.loads(snapshot), self._caminho_completo(ctx)),
+        return {"argv": params_compiler.argv_para_exibicao(json.loads(snapshot)),
                 "erros": {},
                 "resumo": {"script": script["nome"], "ambiente": amb["nome"], "quando": quando, "prioridade": prio,
                            "respostas": linhas, "frase": frase}}
@@ -917,7 +912,7 @@ class ServicoTicket(object):
                          and rbac.pode_cancelar(ctx, ticket))
         pode_reexecutar = (status in STATUS_TERMINAIS and self._pode_reexecutar_regra(ctx, ticket)
                            and self._pode_executar_vigente(ctx, ticket))
-        argv = _argv_exibicao(snap, self._caminho_completo(ctx))
+        argv = _argv_exibicao(snap)
         agora = self._tickets.agora()
         try:
             timeout_s = self._catalogo.scripts_obter(ticket["script_id"]).get("timeout_seg")
@@ -925,8 +920,9 @@ class ServicoTicket(object):
             timeout_s = None
         snapshot = None
         if snap is not None:
-            snapshot = dict((k, snap.get(k)) for k in ("versao", "interpretador", "tipo_param", "compilado_em"))
-            snapshot["path_file"] = path_guard.nome_exibicao(snap.get("path_file"), self._caminho_completo(ctx))
+            # Caminho completo para todos (README §8.5, CR-005 D8).
+            snapshot = dict((k, snap.get(k)) for k in ("versao", "interpretador", "path_file", "tipo_param",
+                                                       "compilado_em"))
         return {
             "id": ticket["id"],
             "script_id": ticket["script_id"],

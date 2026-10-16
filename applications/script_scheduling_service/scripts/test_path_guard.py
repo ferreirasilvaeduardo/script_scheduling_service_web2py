@@ -187,12 +187,6 @@ class TestValidacoesTextuais(unittest.TestCase):
             path_guard.checar_pastas_proibidas("/var/log/sss/x.py", ("/var/log/sss", "/var/lib/sss/work"))
         self.assertEqual(ctx.exception.codigo, Codigo.PASTA_DO_SSS)
 
-    def test_nome_exibicao(self):
-        caminho = "/opt/automacoes/scripts/carga.py"
-        self.assertEqual(path_guard.nome_exibicao(caminho, True), caminho)
-        self.assertEqual(path_guard.nome_exibicao(caminho, False), u"…/carga.py")
-        self.assertIsNone(path_guard.nome_exibicao(None, False))
-
     def test_interpretador_na_allowlist(self):
         for cmd in ("PYTHON3", "BASH", "SH"):
             path_guard.validar_interpretador(cmd)

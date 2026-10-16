@@ -367,17 +367,15 @@ class TestCompilarSnapshot(unittest.TestCase):
         snap = json.loads(pc.compilar_snapshot(
             script(), v, {"data_ref": "2026-10-13", "token": "-segredo", "seq": "outro_segredo"}, AGORA)[0])
         exib = pc.argv_para_exibicao(snap)
-        self.assertEqual(exib, ["PYTHON3", "-I", u"\u2026/carga_faturas.py", "--data", "2026-10-13",
+        # CR-005 D8: caminho completo para todos.
+        self.assertEqual(exib, ["PYTHON3", "-I", REAL, "--data", "2026-10-13",
                                 "--token=****", "--modo", "A", "-s", "****"])
         self.assertNotIn("segredo", " ".join(exib))
         self.assertIn("-segredo", snap["args"][2])
-        # CR-005 R-f: caminho completo so para admin ou no cadastro.
-        admin = pc.argv_para_exibicao(snap, completo=True)
-        self.assertEqual(admin[2], REAL)
 
     def test_argv_para_exibicao_sem_sensiveis(self):
         snap = json.loads(pc.compilar_snapshot(script("SEQUENCIAL", "SH"), [prm("a", ordem=1)], {"a": "x"}, AGORA)[0])
-        self.assertEqual(pc.argv_para_exibicao(snap), ["SH", u"\u2026/carga_faturas.py", "x"])
+        self.assertEqual(pc.argv_para_exibicao(snap), ["SH", REAL, "x"])
 
 
 @unittest.skipIf(os.geteuid() == 0, "root sempre passa em os.access(W_OK)")

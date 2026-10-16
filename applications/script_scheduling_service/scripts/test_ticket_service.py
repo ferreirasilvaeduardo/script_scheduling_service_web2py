@@ -572,6 +572,20 @@ class TestTicketConsulta(_BaseTicket):
         self.assertEqual(self.svc.detalhe(self.ctx["admin"], "25")["pai"]["id"], 17)
         self.assertEqual([f["id"] for f in self.svc.detalhe(self.ctx["admin"], "17")["filhos"]], [25])
 
+    def test_caminho_completo_para_quem_nao_e_admin(self):
+        """CR-005 D8: quem nao e admin ve o caminho completo no detalhe, no comando e na previa."""
+        tid, erros = self._criar(login="op.hml", respostas={"data_ref": "2026-10-20", "modo_exec": "SIMULACAO"})
+        self.assertEqual(erros, {})
+        caminho = os.path.join(self.base, "carga_diaria.py")
+        det = self.svc.detalhe(self.ctx["op.hml"], str(tid))
+        self.assertEqual(det["snapshot"]["path_file"], caminho)
+        self.assertEqual(det["argv_para_exibicao"][2], caminho)
+        self.assertIn(caminho, det["comando_exibicao"])
+        argv, erros = self.svc.previa(self.ctx["op.hml"], "1", "HOMOLOGACAO",
+                                      {"data_ref": "2026-10-20", "modo_exec": "SIMULACAO"})
+        self.assertEqual(erros, {})
+        self.assertEqual(argv[2], caminho)
+
 
 if __name__ == "__main__":
     unittest.main()

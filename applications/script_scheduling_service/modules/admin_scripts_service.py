@@ -577,8 +577,7 @@ class ServicoAdminScripts(object):
         snap, _resolvidos, erros = params_compiler.compilar_snapshot(script, vinculos, {}, self._relogio())
         if snap is None:
             return {"argv": None, "erros": erros, "aviso": aviso}
-        # No cadastro (CAD_SCRIPTS) o caminho aparece completo: e o que o usuario cadastrou (CR-005, R-f).
-        return {"argv": params_compiler.argv_para_exibicao(json.loads(snap), completo=True),
+        return {"argv": params_compiler.argv_para_exibicao(json.loads(snap)),
                 "erros": {}, "aviso": aviso}
 
 

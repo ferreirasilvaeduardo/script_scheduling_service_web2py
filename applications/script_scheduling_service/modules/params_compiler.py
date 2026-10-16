@@ -381,13 +381,12 @@ def _mascarar_args(args, segredos):
     return exibidos
 
 
-def argv_para_exibicao(snapshot, completo=False):
+def argv_para_exibicao(snapshot):
     """argv logico para a UI: interpretador, argumentos fixos, script e args com sensiveis em '****'.
 
-    completo=True mostra o caminho inteiro do script (admin ou cadastro); senao '…/arquivo'
-    (README §6.4, CR-005 R-f). Conservador: qualquer argumento igual a um valor sensivel e mascarado.
+    O caminho do script vai completo para todos (README §6.4, CR-005 D8).
+    Conservador: qualquer argumento igual a um valor sensivel e mascarado.
     """
     interpretador = snapshot['interpretador']
-    script = path_guard.nome_exibicao(snapshot['path_file'], completo)
-    return ([interpretador] + list(path_guard.ARGS_FIXOS.get(interpretador, ())) + [script]
+    return ([interpretador] + list(path_guard.ARGS_FIXOS.get(interpretador, ())) + [snapshot['path_file']]
             + _mascarar_args(list(snapshot['args']), _segredos(snapshot)))
