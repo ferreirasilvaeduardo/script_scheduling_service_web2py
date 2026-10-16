@@ -125,7 +125,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
       <div class="sss-form-campo mb-3">
         <label class="form-label" for="campo-scheduled_at">Agendar para (opcional)</label>
         <input class="form-control{{=' is-invalid' if erros.get('scheduled_at') else ''}}" type="datetime-local" id="campo-scheduled_at" name="scheduled_at" value="{{=scheduled_at}}" aria-describedby="campo-scheduled_at-ajuda{{=' campo-scheduled_at-erro' if erros.get('scheduled_at') else ''}}"{{if erros.get('scheduled_at'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'scheduled_at':}} autofocus{{pass}}>
-        <div class="form-text" id="campo-scheduled_at-ajuda">Deixe em branco para executar assim que houver agente disponível.</div>
+        <div class="form-text" id="campo-scheduled_at-ajuda">Horário do servidor do banco de dados. Deixe em branco para rodar assim que houver um servidor livre.</div>
         {{if erros.get('scheduled_at'):}}<div class="invalid-feedback" id="campo-scheduled_at-erro">{{=erros['scheduled_at']}}</div>{{pass}}
       </div>
     </div>

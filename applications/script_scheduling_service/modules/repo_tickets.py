@@ -38,7 +38,9 @@ class RepoTickets(object):
     def solicitar_cancelamento(self, id, ator, ip):
         """Cancelamento do no web (README §5.6) e auditoria TICKET_CANCELAR na mesma transacao.
 
-        Retorna 'TERMINAL' | 'CANCELADO' | 'SINALIZADO'; lanca RepoNaoEncontrado se nao existir.
+        Retorna 'TERMINAL' | 'CANCELADO' | 'SINALIZADO' | 'JA_SINALIZADO'. Toda solicitacao grava
+        TICKET_CANCELAR, inclusive as sem efeito, com detalhe 'resultado: <cancelado | sinalizado |
+        ja sinalizado | sem efeito: ticket encerrado>'. Lanca RepoNaoEncontrado se nao existir.
         """
         raise NotImplementedError
 

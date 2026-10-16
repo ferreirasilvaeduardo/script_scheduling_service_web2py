@@ -237,6 +237,15 @@ class TestTicketService(_BaseTicket):
         tid, erros = self._criar(scheduled_at="31/12/2099")
         self.assertEqual(list(erros), ["scheduled_at"])
 
+    def test_scheduled_at_exato_sem_tolerancia_de_minuto(self):
+        # CR-003 P5 (README §5.4): o minuto corrente, ja passado, e recusado.
+        repo_factory._fake_store.definir_relogio(lambda: datetime.datetime(2026, 10, 16, 10, 5, 30))
+        tid, erros = self._criar(scheduled_at="2026-10-16T10:05")
+        self.assertIsNone(tid)
+        self.assertIn(u"deixe em branco para rodar agora", erros["scheduled_at"])
+        tid, erros = self._criar(scheduled_at="2026-10-16T10:06")
+        self.assertEqual(erros, {})
+
     def test_path_guard_rejeita_script(self):
         os.chmod(self.base, 0o755)
         tid, erros = self._criar()
@@ -380,9 +389,23 @@ class TestTicketConsulta(_BaseTicket):
         self.assertEqual((t["status"], t["cancel_requested"]), ("RUNNING", "S"))
         self.assertFalse(self.svc.detalhe(ctx, str(rodando))["pode_cancelar"])
 
+        # CR-003 P5 (README §5.6): pedido repetido e ticket encerrado tambem sao auditados, com o resultado.
+        self.assertEqual(self.svc.cancelar(ctx, IP, str(rodando)), "JA_SINALIZADO")
         regs = self.auditoria.listar(filtros={"acao": "TICKET_CANCELAR", "entidade_id": rodando})["itens"]
-        self.assertEqual([(r["ator"], r["ip_origem"]) for r in regs], [("op.hml", IP)])
-        self.assertEqual(set(ticket_service.MSG_CANCELAMENTO), {"TERMINAL", "CANCELADO", "SINALIZADO"})
+        self.assertEqual([(r["ator"], r["ip_origem"], r["detalhe"]) for r in regs],
+                         [("op.hml", IP, u"resultado: já sinalizado"), ("op.hml", IP, u"resultado: sinalizado")])
+        regs = self.auditoria.listar(filtros={"acao": "TICKET_CANCELAR", "entidade_id": pendente})["itens"]
+        self.assertEqual([r["detalhe"] for r in regs],
+                         [u"resultado: sem efeito: ticket encerrado", u"resultado: cancelado"])
+        self.assertEqual(set(ticket_service.MSG_CANCELAMENTO),
+                         {"TERMINAL", "CANCELADO", "SINALIZADO", "JA_SINALIZADO"})
+
+    def test_canc_ticket_sem_ver_logs_cancela_ticket_de_terceiro(self):
+        # CR-003 P5 (README §4.3.C): CANC_TICKET nao exige VER_LOGS.
+        terceiro = self._inserir(solicitante="admin")
+        ctx = self._sem("op.hml", "VER_LOGS")
+        self.assertFalse(self.svc.visivel(ctx, str(terceiro)))
+        self.assertEqual(self.svc.cancelar(ctx, IP, str(terceiro)), "CANCELADO")
 
     def test_cancelar_terceiro_sem_canc_ticket_negado(self):
         terceiro = self._inserir(solicitante="admin")

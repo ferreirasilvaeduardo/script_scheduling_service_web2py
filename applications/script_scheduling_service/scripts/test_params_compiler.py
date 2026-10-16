@@ -52,6 +52,12 @@ class TestValidarValor(unittest.TestCase):
             with self.subTest(valor=repr(valor)):
                 self._erro(prm("t"), valor)
 
+    def test_strip_antes_de_controle_e_tamanho(self):
+        # CR-003 P5 (README §6.2): strip primeiro; controle so nas pontas nao rejeita.
+        self.assertEqual(pc.validar_valor(prm("t"), "\tabc\n"), "abc")
+        self.assertEqual(len(pc.validar_valor(prm("t"), "x" * 500 + "  ")), 500)
+        self._erro(prm("t"), "\ta\tb\n")
+
     def test_tamanho(self):
         self.assertEqual(len(pc.validar_valor(prm("t"), "x" * 500)), 500)
         self._erro(prm("t"), "x" * 501)

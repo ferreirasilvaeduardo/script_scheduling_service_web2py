@@ -20,7 +20,8 @@ _MSG_FALHA_LISTA = u"Não foi possível carregar os tickets. Tente novamente em 
 _MSG_FALHA_CANCELAR = u"Não foi possível cancelar o ticket. Tente novamente em instantes."
 _MSG_REEXECUCAO_REVISAR = (u"Não foi possível reexecutar automaticamente: o cadastro do script pode ter mudado "
                            u"desde a execução original. Revise os campos destacados e crie o ticket novamente.")
-_TIPO_FLASH_CANCELAMENTO = {"TERMINAL": "aviso", "CANCELADO": "sucesso", "SINALIZADO": "sucesso"}
+_TIPO_FLASH_CANCELAMENTO = {"TERMINAL": "aviso", "CANCELADO": "sucesso", "SINALIZADO": "sucesso",
+                            "JA_SINALIZADO": "aviso"}
 
 
 def _metodo():
@@ -206,7 +207,10 @@ def cancelar():
         _negado()
     except RepoErro:
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_CANCELAR}
-    redirect(URL(c="tickets", f="detalhe", args=[ticket_id]))
+    # CANC_TICKET sem VER_LOGS cancela sem poder ver o ticket (README §4.3.C): volta ao painel.
+    if ticket_service.visivel(ctx, ticket_id):
+        redirect(URL(c="tickets", f="detalhe", args=[ticket_id]))
+    redirect(URL(c="default", f="index"))
 
 
 def reexecutar():

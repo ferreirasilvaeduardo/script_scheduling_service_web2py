@@ -50,9 +50,10 @@ ORIGENS = (("manual", u"Manual"), ("agendamento", u"Agendamento"))
 FILTROS = ("status", "ambiente", "script", "solicitante", "criado_de", "criado_ate", "origem")
 
 MSG_CANCELAMENTO = {
-    "TERMINAL": u"O ticket já estava finalizado.",
+    "TERMINAL": u"O ticket já estava encerrado.",
     "CANCELADO": u"Ticket cancelado.",
-    "SINALIZADO": u"Cancelamento solicitado; o agente encerrará a execução.",
+    "SINALIZADO": u"Cancelamento solicitado ao agente; ele vai encerrar a execução.",
+    "JA_SINALIZADO": u"O cancelamento já havia sido solicitado.",
 }
 
 _RE_LOGIN = re.compile(r"[a-z0-9._-]{3,30}")
@@ -425,9 +426,10 @@ class ServicoTicket(object):
         if data is None:
             erros[CAMPO_AGENDAMENTO] = u"Informe uma data e hora válidas para o agendamento."
             return None
-        # O campo do navegador tem precisao de minuto: o minuto corrente conta como "agora".
-        if data < agora.replace(second=0, microsecond=0):
-            erros[CAMPO_AGENDAMENTO] = u"O agendamento não pode estar no passado."
+        # README §5.4 passo 4: >= SYSDATE exato, sem tolerancia de minuto.
+        if data < agora:
+            erros[CAMPO_AGENDAMENTO] = (u"O horário escolhido já passou. "
+                                        u"Escolha um horário futuro, ou deixe em branco para rodar agora.")
             return None
         return data.replace(microsecond=0)
 
@@ -539,6 +541,14 @@ class ServicoTicket(object):
 
     def _pode_ver(self, ctx, ticket):
         return self._proprio(ctx, ticket) or rbac.pode_ver_ticket(ctx, ticket)
+
+    def visivel(self, ctx, ticket_id):
+        """True se o ticket existe e pode ser visto (destino do redirecionamento apos cancelar)."""
+        tid = _id(ticket_id)
+        try:
+            return tid is not None and self._pode_ver(ctx, self._tickets.obter(tid))
+        except RepoNaoEncontrado:
+            return False
 
     def _ticket_visivel(self, ctx, ticket_id, acao):
         """Ticket existente e visivel; fora do escopo e tratado como inexistente (404, nao 403)."""
@@ -798,10 +808,18 @@ class ServicoTicket(object):
     def cancelar(self, ctx, ip, ticket_id):
         """Cancelamento pelo no web (README §5.6) com auditoria TICKET_CANCELAR no repositorio.
 
-        Retorna 'TERMINAL' | 'CANCELADO' | 'SINALIZADO' (mensagens em MSG_CANCELAMENTO).
+        Retorna 'TERMINAL' | 'CANCELADO' | 'SINALIZADO' | 'JA_SINALIZADO' (mensagens em MSG_CANCELAMENTO);
+        toda solicitacao e auditada (README §5.6). CANC_TICKET nao exige VER_LOGS (README §4.3.C).
         Lanca RepoNaoEncontrado (fora do escopo) e AcessoNegado (sem CANC_TICKET/proprio).
         """
-        ticket = self._ticket_visivel(ctx, ticket_id, "TICKET_CANCELAR")
+        tid = _id(ticket_id)
+        if tid is None:
+            raise RepoNaoEncontrado("ticket invalido")
+        ticket = self._tickets.obter(tid)
+        if not (self._pode_ver(ctx, ticket) or rbac.pode_cancelar(ctx, ticket)):
+            self._log.warning("ticket fora do escopo (login=%s ticket=%s ambiente=%s)",
+                              ctx.get("login"), tid, ticket.get("ambiente"), extra={"acao": "TICKET_CANCELAR"})
+            raise RepoNaoEncontrado("ticket fora do escopo")
         if not rbac.pode_cancelar(ctx, ticket):
             self._negar(ctx, "SEM_CANCELAMENTO", ticket["script_id"], ticket["ambiente"])
         try:
@@ -946,6 +964,11 @@ def resumo_inicial(ctx):
 def detalhe(ctx, ticket_id):
     """Detalhe do ticket visivel (servico padrao)."""
     return _servico().detalhe(ctx, ticket_id)
+
+
+def visivel(ctx, ticket_id):
+    """Ticket visivel ao usuario (servico padrao)."""
+    return _servico().visivel(ctx, ticket_id)
 
 
 def cancelar(ctx, ip, ticket_id):

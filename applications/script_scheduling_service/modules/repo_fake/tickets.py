@@ -208,8 +208,17 @@ class RepoTicketsFake(RepoTickets):
             t = self._store.tickets[id]
             st = t.get("status")
 
+            def auditar(resultado):
+                self._store.registrar_auditoria_interno(
+                    ator=ator, ip=ip, acao="TICKET_CANCELAR", entidade="tbsss_tickets", entidade_id=id,
+                    detalhe=u"resultado: %s" % resultado)
+
             if st not in ("PENDING", "RUNNING"):
+                auditar(u"sem efeito: ticket encerrado")
                 return "TERMINAL"
+            if st == "RUNNING" and t.get("cancel_requested") == "S":
+                auditar(u"já sinalizado")
+                return "JA_SINALIZADO"
 
             if st == "PENDING":
                 t["cancel_requested"] = "S"
@@ -218,27 +227,13 @@ class RepoTicketsFake(RepoTickets):
                 t["return_code"] = -1
                 t["finished_at"] = self._store.agora()
 
-                self._store.registrar_auditoria_interno(
-                    ator=ator,
-                    ip=ip,
-                    acao="TICKET_CANCELAR",
-                    entidade="tbsss_tickets",
-                    entidade_id=id,
-                    detalhe="Cancelamento de ticket PENDING realizado pelo no web",
-                )
+                auditar(u"cancelado")
                 return "CANCELADO"
 
             if st == "RUNNING":
                 t["cancel_requested"] = "S"
 
-                self._store.registrar_auditoria_interno(
-                    ator=ator,
-                    ip=ip,
-                    acao="TICKET_CANCELAR",
-                    entidade="tbsss_tickets",
-                    entidade_id=id,
-                    detalhe="Sinalizado cancelamento de ticket RUNNING para o agente dono",
-                )
+                auditar(u"sinalizado")
                 return "SINALIZADO"
 
     def log_ler(self, id, offset, max_chars):

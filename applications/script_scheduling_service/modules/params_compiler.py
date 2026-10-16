@@ -84,11 +84,12 @@ def validar_valor(parametro, valor_bruto):
         return valor_bruto
     if not isinstance(valor_bruto, str):
         raise ParamErro(codigo, 'Valor inválido para "%s".' % rotulo)
-    if _RE_CONTROLE.search(valor_bruto):
-        raise ParamErro(codigo, 'O campo "%s" contém caracteres de controle não permitidos.' % rotulo)
-    if len(valor_bruto) > TAMANHO_MAXIMO:
-        raise ParamErro(codigo, 'O campo "%s" excede o limite de %d caracteres.' % (rotulo, TAMANHO_MAXIMO))
+    # Ordem do README §6.2: strip primeiro; controle so nas pontas ja foi removido.
     valor = valor_bruto.strip()
+    if len(valor) > TAMANHO_MAXIMO:
+        raise ParamErro(codigo, 'O campo "%s" excede o limite de %d caracteres.' % (rotulo, TAMANHO_MAXIMO))
+    if _RE_CONTROLE.search(valor):
+        raise ParamErro(codigo, 'O campo "%s" contém caracteres de controle não permitidos.' % rotulo)
 
     if tipo == 'TEXT':
         padrao = parametro.get('regex_validacao')
