@@ -3,8 +3,8 @@
 | Campo | Valor |
 |---|---|
 | Público | Quem vai instalar e operar o SSS num servidor novo (infraestrutura, desenvolvimento, homologação) |
-| Versão do sistema | 0.1.0 — commit de referência `fdf6f35` ou posterior (fases F0.1 a F6.1 concluídas) |
-| Validação | Procedimento **ensaiado de ponta a ponta** em 2026-10-15 num clone limpo do repositório (Python 3.6.0 e 3.13) e **implantado** no mesmo dia no servidor clone 7 (Oracle Linux 6.9, Python 3.7 sem `ssl`, sem `sudo` nem `systemd` — registro no §21). O que não foi ensaiado está marcado como **[não ensaiado]** |
+| Versão do sistema | 0.1.0 — commit de referência `867390f` ou posterior (fases F0.1 a F6.1, CR-003 e CR-004 concluídos). Os servidores dos §21 e §22 foram implantados com o `fdf6f35`, anterior aos dois CRs |
+| Validação | Procedimento **ensaiado de ponta a ponta** em 2026-10-15 num clone limpo do repositório (Python 3.6.0 e 3.13) e **implantado** no mesmo dia no servidor clone 7 (Oracle Linux 6.9, Python 3.7 sem `ssl`, sem `sudo` nem `systemd` — registro no §21). A versão com o CR-003 e o CR-004 foi validada em 2026-10-16 na estação de desenvolvimento (suíte em Python 3.6.0, 3.6.8 e 3.13.2 e verificação das telas no navegador), mas ainda não foi reimplantada em servidor (§22). O que não foi ensaiado está marcado como **[não ensaiado]** |
 | Documentos relacionados | `README.md` (regras de negócio e arquitetura), `AGENTS.md` (regras de desenvolvimento), `docs/AMBIENTE_DEV.md` (estação do desenvolvedor), `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx` (roteiro de homologação) |
 
 ---
@@ -193,8 +193,8 @@ $PYTHON scripts/check_env.py ; echo "codigo de saida: $?"
 
 # 7.2 Suíte de testes completa (não precisa de configuração nem de segredos)
 $PYTHON -m unittest discover -s scripts -p "test_*.py"
-# esperado no final: "Ran 615 tests ... OK (skipped=17)" (o total cresce com as versões)
-# Os 17 "skipped" são testes de banco Oracle real e de Windows; é o resultado esperado.
+# esperado no final: "Ran 697 tests ... OK (skipped=18)" (o total cresce com as versões)
+# Os 18 "skipped" são testes de banco Oracle real e de Windows; é o resultado esperado.
 ```
 
 Não prossiga se algum desses passos falhar.
@@ -270,7 +270,7 @@ O `config.ini` não contém segredos. **Toda chave é validada na subida**: chav
 | `[app]` | `data_backend` | `FAKE` | `ORACLE` ainda não está implementado |
 | `[secrets]` | `secrets_file` | `/etc/sss/secrets.cfg` | Caminho absoluto do §8.2 |
 | `[agent]` | `agent_id` | identificador do servidor, ex.: `srv-sss-hml-01` | Aparece em todas as linhas de log; `^[A-Za-z0-9._-]{1,30}$` |
-| `[agent]` | `base_script_dirs` | `ROTINAS=/opt/automacoes/scripts` (uma ou mais pastas `NOME=caminho`, README §8.5) | §8.1 |
+| `[agent]` | `base_script_dirs` | `ROTINAS=/opt/automacoes/scripts` (uma ou mais pastas `NOME=caminho`, README §8.5) | §8.1. Os nomes aparecem na lista "Pasta base" do cadastro de scripts. Uma pasta que só existe nos agentes entra **sem caminho** (`NOME=`): pode ser escolhida no cadastro, e a conferência do arquivo fica para o agente. `NOME=` só vale no nó web; o agente (F8) recusa a subida sem caminho |
 | `[agent]` | `script_owner_uids` | `0` | UID do dono da árvore (root). Na variante sem sudo, o UID do `sss` (`id -u sss`) |
 | `[agent]` | `work_dir` | `/var/lib/sss/work` | Reservado ao agente (F8) |
 | `[logging]` | `log_dir` | `/var/log/sss` | Criado com `0750` se não existir |
@@ -368,7 +368,9 @@ Depois, pelo navegador (via túnel, §13.1), faça o **teste de fumaça**:
 
 1. Abrir `http://localhost:8000/script_scheduling_service` → tela **Entrar**, com a faixa "AMBIENTE DEV".
 2. Entrar com `admin` e a senha do §8.3 → **Painel inicial** "Olá, Administrador Geral", com os cartões de tickets, agendamentos e saúde dos agentes.
-3. **Disparar script** → `carga_diaria` → `PRODUCAO` → **Criar ticket** → confirmar → mensagem "Ticket #41 criado com sucesso." (prova que a árvore de scripts do §8.1 está correta).
+   * No topo, **O que eu posso fazer** → lista as telas, os ambientes e os scripts liberados para o perfil.
+   * No menu Operação, **Rotinas disponíveis** → um cartão por script, com a última execução.
+3. **Disparar script** → `carga_diaria` → `PRODUCAO` → **Criar ticket** → a confirmação mostra o resumo ("Vamos rodar carga_diaria no ambiente PRODUCAO agora…") e o comando com `<ROTINAS>/carga_diaria.py` → confirmar → mensagem "Ticket #41 criado com sucesso." (prova que a árvore de scripts do §8.1 e o `base_script_dirs` estão corretos).
 4. **Auditoria** → aba **Agentes** → dois cartões (`agt-host01` OK; `agt-host02` envelhecendo com o tempo).
 5. **Sair** → volta para **Entrar** com "Você saiu do sistema.".
 
@@ -520,6 +522,8 @@ git fetch && git checkout <novo-commit-ou-tag>          # opção Git
 diff <(grep -oE "^[a-z_]+ =" applications/script_scheduling_service/instance/config.ini.example | sort) \
      <(grep -oE "^[a-z_]+ =" applications/script_scheduling_service/instance/config.ini | sort)
 # qualquer diferença precisa ser refletida no config.ini antes de subir
+# vindo de versão anterior ao CR-003: troque base_script_dir = <caminho> por
+# base_script_dirs = ROTINAS=<caminho> (§8.1); a chave antiga aborta a subida
 
 # 16.4 Verificar e subir
 cd applications/script_scheduling_service
@@ -546,14 +550,17 @@ Mensagens reais, capturadas no ensaio. Para os erros de subida, use sempre o tes
 | Idem | `ConfigErro: Chave cookie_key obrigatoria ausente em [web]` | `secrets.cfg` incompleto | §8.2 |
 | Idem | `ConfigErro` citando `[secao] chave` e motivo | Chave ausente, desconhecida ou fora da faixa no `config.ini` | Compare com o `config.ini.example` (§16.3) |
 | Idem | `ConfigErro: [app]: data_backend: data_backend=FAKE exige sss_env=DEV (atual: HML)` | `sss_env` diferente de `DEV` com FAKE | `sss_env = DEV` |
-| Ninguém consegue entrar ("Usuário ou senha inválidos.") | `sss_web.log`: `SSS_DEV_SEED_PASSWORD ausente: usuarios do seed FAKE sem senha utilizavel` (ou `fora da politica`) | Variável ausente ou com menos de 12 caracteres | §8.3 e reinicie |
-| Um usuário específico não entra | Tela: "Acesso temporariamente bloqueado por excesso de tentativas. Tente novamente mais tarde." | 5 senhas erradas seguidas: bloqueio de 15 minutos (`login_bloqueio_s`) | Aguarde, ou reinicie o servidor (restaura o seed) |
+| Idem | `ConfigErro` citando `[agent] base_script_dir` | `config.ini` de versão anterior ao CR-003, com a chave antiga | Trocar por `base_script_dirs = ROTINAS=<caminho>` (§8.1, §16.3) |
+| Subida abortada sem o motivo no terminal | `log_dir/sss_web.log` (ou o stderr, se o `log_dir` não aceitar escrita): linha `CRITICAL` "Subida abortada: configuracao invalida: …" | Qualquer erro de configuração | Ler a linha `CRITICAL` (`grep CRITICAL /var/log/sss/sss_web.log`) e corrigir; o teste do §10 mostra o mesmo motivo |
+| Ninguém consegue entrar ("Usuário ou senha incorretos. Confira o que digitou e tente de novo.") | `sss_web.log`: `SSS_DEV_SEED_PASSWORD ausente: usuarios do seed FAKE sem senha utilizavel` (ou `fora da politica`) | Variável ausente ou com menos de 12 caracteres | §8.3 e reinicie |
+| Um usuário específico não entra | Tela: "Houve muitas tentativas com a senha errada. Espere 15 minutos ou peça ao administrador para desbloquear." | 5 senhas erradas seguidas: bloqueio de 15 minutos (`login_bloqueio_s`) | Aguarde, desbloqueie em **Gestão de Usuários**, ou reinicie o servidor (restaura o seed) |
 | Launcher aborta | `Erro: execucao como root nao e permitida.` | Executado como root | Use `sudo -u sss -H bash` |
 | Servidor não sobe: porta ocupada | Terminal: `Socket 127.0.0.1:8000 in use by other process and it won't share.` | Outro processo na porta 8000 | `ss -ltnp | grep 8000`; pare o outro processo ou troque a porta |
 | Formulários retornam "Requisição recusada." (HTTP 403) | `sss_web.log`: `requisicao rejeitada (motivo=origem ...)` | Acesso por endereço que não está em `allowed_origins` (típico com proxy reverso) | Incluir a URL pública em `allowed_origins` (§13.2) |
 | Idem | `motivo=csrf` | Página aberta há muito tempo ou sessão expirada | Recarregar a página e repetir |
-| Sessão cai sozinha | "Sua sessão expirou por inatividade." | 30 min sem uso (`session_idle_timeout_s`) | Comportamento esperado |
+| Sessão cai sozinha | "Você ficou um tempo sem usar o sistema e saiu por segurança. Entre de novo." | 30 min sem uso (`session_idle_timeout_s`) | Comportamento esperado |
 | Criar ticket falha com aviso de script indisponível | `sss_web.log`: `path_guard rejeitou o script (... codigo=...)` | Árvore de scripts fora do padrão do §8.1 (dono, modo, gravável pelo `sss`, ou `base_script_dirs` errado) | Refazer §8.1 e conferir `base_script_dirs`/`script_owner_uids` |
+| Ao salvar um script: "Pasta base não disponível neste servidor: a validação ocorrerá no agente." | Formulário de **Gestão de Scripts** | A pasta escolhida está no `base_script_dirs` sem caminho (`NOME=`), ou o caminho não existe neste servidor | Esperado para pasta que só existe nos agentes. Se a pasta deveria existir aqui, corrija o caminho no `config.ini` e reinicie |
 | Raiz `http://localhost:8000/` dá 404 | — | A raiz aponta para a aplicação `welcome`, removida | Use `/script_scheduling_service` |
 | Aviso `unable to create welcome.w2p file` na subida | Terminal | Mesma causa acima | Ignorar |
 | Dados "sumiram" | — | O servidor foi reiniciado (FAKE em memória) | Comportamento esperado |
@@ -585,11 +592,11 @@ Ainda **não executável** (F7–F9). O `docs/RUNBOOK.md` será entregue no F9.1
 - [ ] §4 Usuário `sss` (sem login) e diretórios com donos/modos da tabela do §2
 - [ ] §5 Código obtido por Git (commit fixado) ou pacote com SHA-256 conferido; só `script_scheduling_service` em `applications/`
 - [ ] §6 Python ≥ 3.6.0 com PBKDF2 OK
-- [ ] §7 `check_env.py` com código 0 e suíte com `OK (skipped=17)`
+- [ ] §7 `check_env.py` com código 0 e suíte com `OK (skipped=18)`
 - [ ] §8.1 Árvore `/opt/automacoes/scripts` do root, sem escrita para o `sss`
 - [ ] §8.2 `/etc/sss/secrets.cfg` do `sss`, modo `0600`, com `cookie_key` gerado
 - [ ] §8.3 Senha de demonstração (≥ 12 caracteres) combinada com a equipe
-- [ ] §9 `config.ini` ajustado (DEV, FAKE, caminhos, `agent_id`, `allowed_origins`)
+- [ ] §9 `config.ini` ajustado (DEV, FAKE, caminhos, `agent_id`, `base_script_dirs`, `allowed_origins`)
 - [ ] §10 Teste de carga: `SSS: configuracao OK`
 - [ ] §11 Subida pelo `bin/sss-web.sh` com `-a '<recycle>' -i 127.0.0.1`
 - [ ] §12 Validações por `curl` (200, cabeçalhos, 403) e teste de fumaça no navegador
@@ -675,6 +682,8 @@ ssh -N -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -L 180
 ## 22. Servidor acessado por salto: `brtlvlty3067sl` (10.129.164.55)
 
 Implantação feita em 2026-10-15 com o pacote do commit `aca60b0` (código do `fdf6f35` mais documentação). **Este é o servidor ativo do SSS.**
+
+> **Atualização pendente (CR-003 e CR-004):** este servidor ainda roda o código do `fdf6f35`, sem as correções do CR-003 nem as telas do CR-004. O `config.ini` dele ainda usa a chave antiga `base_script_dir`. Para atualizar, siga o §16 com um pacote novo (§5.2) e, no passo 16.3, troque a chave por `base_script_dirs = ROTINAS=/portaloptrib/TESHUVA/SSS/scripts`. Depois, valide como no §22.5 (a suíte esperada passa a ser `OK (skipped=18)`) e faça o teste de fumaça do §12.
 
 ### 22.1 Diferenças em relação ao clone 7
 
