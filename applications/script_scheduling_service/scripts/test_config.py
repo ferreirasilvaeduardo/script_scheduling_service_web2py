@@ -5,6 +5,7 @@ Segue rigorosamente AGENTS.md (§2.1, §3.3, §6, §7 e §8).
 Python 3.6 estrito, sem fixtures com segredos reais (usa secrets.token_hex).
 """
 import configparser
+import io
 import os
 import re
 import secrets
@@ -304,6 +305,73 @@ class TestConfig(unittest.TestCase):
         })
         with self.assertRaises(sss_config.ConfigErro):
             sss_config.carregar(ini_prod)
+
+    def test_prefixo_comeca_com_letra(self):
+        """CR-003 P2: prefixo iniciado por digito ou _ geraria nome Oracle invalido."""
+        for prefixo in ("1x_", "_x", "9"):
+            ini = self._copiar_e_modificar_ini(alteracoes={"oracle": {"table_prefix": prefixo}})
+            with self.assertRaises(sss_config.ConfigErro) as ctx:
+                sss_config.carregar(ini)
+            self.assertEqual(ctx.exception.chave, "table_prefix", prefixo)
+        ini_ok = self._copiar_e_modificar_ini(alteracoes={"oracle": {"table_prefix": "a1_"}})
+        self.assertEqual(sss_config.carregar(ini_ok).oracle.table_prefix, "a1_")
+
+    def test_login_max_tentativas_cabe_em_number_2(self):
+        """CR-003 P2: tentativas_falha e NUMBER(2), entao o teto e 99."""
+        ini_100 = self._copiar_e_modificar_ini(alteracoes={"web": {"login_max_tentativas": "100"}})
+        with self.assertRaises(sss_config.ConfigErro) as ctx:
+            sss_config.carregar(ini_100)
+        self.assertEqual(ctx.exception.chave, "login_max_tentativas")
+        ini_99 = self._copiar_e_modificar_ini(alteracoes={"web": {"login_max_tentativas": "99"}})
+        self.assertEqual(sss_config.carregar(ini_99).web.login_max_tentativas, 99)
+
+    def _obter_com_ini(self, ini, nome_log="sss_web"):
+        sss_config.reset_config_cache()
+        self.addCleanup(sss_config.reset_config_cache)
+        with mock.patch.object(sss_config, "caminho_config_padrao", return_value=ini):
+            return sss_config.obter_config(nome_log)
+
+    def test_configuracao_invalida_gera_critical_no_log(self):
+        """CR-003 P2: CRITICAL com secao, chave e motivo no log da aplicacao quando log_dir e utilizavel."""
+        log_dir = os.path.join(self.tmp_dir, "logs")
+        os.makedirs(log_dir)
+        ini = self._copiar_e_modificar_ini(alteracoes={"logging": {"log_dir": log_dir},
+                                                       "web": {"login_max_tentativas": "100"}})
+        with self.assertRaises(sss_config.ConfigErro):
+            self._obter_com_ini(ini)
+        with open(os.path.join(log_dir, "sss_web.log"), encoding="utf-8") as f:
+            conteudo = f.read()
+        self.assertIn(" CRITICAL ", conteudo)
+        self.assertIn("login_max_tentativas", conteudo)
+        self.assertIn("[acao=INICIO]", conteudo)
+
+    def test_configuracao_invalida_sem_log_dir_vai_para_stderr(self):
+        """CR-003 P2: sem log_dir utilizavel, o CRITICAL vai para o stderr no mesmo formato."""
+        ini = self._copiar_e_modificar_ini(alteracoes={"logging": {"log_dir": os.path.join(self.tmp_dir, "nao", "existe")},
+                                                       "oracle": {"table_prefix": "1x_"}})
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            with self.assertRaises(sss_config.ConfigErro):
+                self._obter_com_ini(ini)
+        self.assertIn(" CRITICAL ", err.getvalue())
+        self.assertIn("table_prefix", err.getvalue())
+
+    def test_segredos_invalidos_geram_critical_sem_valor(self):
+        """CR-003 P2: falha em secrets.cfg vira CRITICAL sem nenhum valor de segredo."""
+        log_dir = os.path.join(self.tmp_dir, "logs")
+        os.makedirs(log_dir)
+        caminho, tokens = self._criar_secrets_temporario(modo=0o644)
+        ini = self._copiar_e_modificar_ini(alteracoes={"logging": {"log_dir": log_dir},
+                                                       "secrets": {"secrets_file": caminho}})
+        self._obter_com_ini(ini)
+        sss_config.reset_segredos_cache()
+        self.addCleanup(sss_config.reset_segredos_cache)
+        with self.assertRaises(sss_config.ConfigErro):
+            sss_config.obter_segredos("sss_web")
+        with open(os.path.join(log_dir, "sss_web.log"), encoding="utf-8") as f:
+            conteudo = f.read()
+        self.assertIn(" CRITICAL ", conteudo)
+        for valor in tokens.values():
+            self.assertNotIn(valor, conteudo)
 
     def test_prefixo_de_9_caracteres(self):
         """Verifica restricao de regex de table_prefix (max 8 chars)."""

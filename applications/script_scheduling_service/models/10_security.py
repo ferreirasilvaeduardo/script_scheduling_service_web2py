@@ -16,7 +16,7 @@ import ui_menu
 from repo_errors import RepoIndisponivel
 
 _cfg = current.sss_cfg
-_segredos = sss_config.obter_segredos()
+_segredos = sss_config.obter_segredos("sss_web")
 _log = sss_logging.obter_logger("sss_web", _cfg)
 masking.instalar_filtro_em_handlers()
 

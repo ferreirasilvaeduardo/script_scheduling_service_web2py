@@ -99,7 +99,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **Proibido** concatenar ou formatar valores com `+`, `%`, `.format()` ou f-string.
 * **Identificadores dinâmicos** (owner, prefixo) só entram no SQL via `modules/sql_ident.py`, que os valida antes do uso:
   * `owner`: `^[A-Za-z][A-Za-z0-9_]{0,29}$`
-  * `table_prefix`: `^[a-zA-Z0-9_]{1,8}$`
+  * `table_prefix`: `^[A-Za-z][A-Za-z0-9_]{0,7}$` (começa com letra)
   * Nome final do objeto: validado contra o registro de identificadores e com `len <= 30`.
 * **Listas `IN`:** os placeholders (`:amb0, :amb1, ...`) são gerados pelo código com contagem controlada, e os valores sempre vão como binds.
 * **Binds de data** comparados a colunas de data são declarados pelo `db_conn` com o tipo de data do driver (`setinputsizes` no Oracle), sem microssegundos (README §7.5).

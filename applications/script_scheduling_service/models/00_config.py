@@ -7,7 +7,7 @@ import sss_config
 
 SSS_VERSAO = "0.1.0"
 
-current.sss_cfg = sss_config.obter_config()
+current.sss_cfg = sss_config.obter_config("sss_web")
 current.repo_factory = repo_factory
 
 response.sss_env = current.sss_cfg.app.sss_env

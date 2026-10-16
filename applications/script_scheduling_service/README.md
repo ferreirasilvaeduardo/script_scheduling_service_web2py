@@ -1538,7 +1538,7 @@ PK          = pk_{prefixo}{entidade}            pk_tbsss_tickets
 UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}   ix_tbsss_tck_fila
 ```
 
-* `{prefixo}` vem de `table_prefix`, inclui o `_` final e obedece à regex `^[a-zA-Z0-9_]{1,8}$`.
+* `{prefixo}` vem de `table_prefix`, inclui o `_` final e obedece à regex `^[A-Za-z][A-Za-z0-9_]{0,7}$` (começa com letra, para gerar nome Oracle válido; até 8 caracteres).
 * O DDL é gerado por `init_db.py` a partir de um **registro único de identificadores** em `modules/sql_ident.py`, consumido também por `test_db_schema.py`.
 * **Pior caso com prefixo de 8 caracteres:** `sq_` + 8 + `funcionalidades` = **26** (conforme).
 

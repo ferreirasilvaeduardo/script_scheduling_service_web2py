@@ -10,6 +10,7 @@ import datetime
 import logging
 import logging.handlers
 import os
+import sys
 import threading
 
 
@@ -118,6 +119,36 @@ def configurar(nome_log, cfg):
 
 _LOGGERS = {}
 _LOCK_LOGGERS = threading.Lock()
+
+
+def registrar_critico_inicial(nome_log, mensagem, log_dir=None, stream=None):
+    """CRITICAL de falha na subida, antes de haver configuracao valida (README §12.1).
+
+    Grava em log_dir/<nome_log>.log quando o diretorio existe e aceita escrita; senao, no stderr,
+    sempre no formato do README §13. Retorna o destino usado ('arquivo' ou 'stderr').
+    """
+    filename = nome_log if nome_log.endswith(".log") else (nome_log + ".log")
+    handler = None
+    destino = "stderr"
+    if log_dir and os.path.isdir(log_dir) and os.access(log_dir, os.W_OK):
+        try:
+            handler = logging.FileHandler(os.path.join(log_dir, filename), encoding="utf-8")
+            destino = "arquivo"
+        except OSError:
+            handler = None
+    if handler is None:
+        handler = logging.StreamHandler(stream or sys.stderr)
+    handler.setFormatter(SSSFormatter(FMT_SSS))
+    handler.addFilter(SSSContextFilter(default_acao="INICIO"))
+    logger = logging.getLogger("%s.inicio" % nome_log)
+    logger.propagate = False
+    logger.addHandler(handler)
+    try:
+        logger.critical(mensagem)
+    finally:
+        logger.removeHandler(handler)
+        handler.close()
+    return destino
 
 
 def obter_logger(nome_log, cfg):

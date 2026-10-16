@@ -71,7 +71,7 @@ SCHEMA = collections.OrderedDict([
         ("user", CampoDef("str", obrigatorio=True)),
         ("dsn", CampoDef("str", obrigatorio=True)),
         ("owner", CampoDef("str", obrigatorio=True, regex=r"^[A-Za-z][A-Za-z0-9_]{0,29}$")),
-        ("table_prefix", CampoDef("str", obrigatorio=True, regex=r"^[a-zA-Z0-9_]{1,8}$")),
+        ("table_prefix", CampoDef("str", obrigatorio=True, regex=r"^[A-Za-z][A-Za-z0-9_]{0,7}$")),
         ("driver", CampoDef("enum", obrigatorio=True, allowed_values=("oracledb", "cx_Oracle"))),
         ("use_thick_mode", CampoDef("bool", obrigatorio=True)),
         ("oracle_client_lib_dir", CampoDef("path", obrigatorio=False, default=None)),
@@ -118,7 +118,7 @@ SCHEMA = collections.OrderedDict([
     ])),
     ("web", collections.OrderedDict([
         ("session_idle_timeout_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=86400)),
-        ("login_max_tentativas", CampoDef("int", obrigatorio=True, min_val=1, max_val=100)),
+        ("login_max_tentativas", CampoDef("int", obrigatorio=True, min_val=1, max_val=99)),
         ("login_bloqueio_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=86400)),
         ("log_poll_interval_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=3600)),
         ("trusted_proxies", CampoDef("list_csv", obrigatorio=False, default=())),
@@ -660,12 +660,39 @@ def caminho_config_padrao():
     return os.path.join(app_dir, "instance", "config.ini")
 
 
-def obter_config():
-    """Retorna a configuracao validada, carregada uma unica vez por processo."""
+def _log_dir_bruto(caminho_ini):
+    """[logging] log_dir lido sem validacao, so para registrar o CRITICAL de uma configuracao invalida."""
+    try:
+        cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
+        with open(caminho_ini, "r", encoding="utf-8") as f:
+            cp.read_file(f)
+        valor = cp.get("logging", "log_dir", fallback="").strip()
+        return valor or None
+    except (OSError, ValueError, configparser.Error):
+        return None
+
+
+def _abortar(nome_log, exc, log_dir):
+    import sss_logging
+    sss_logging.registrar_critico_inicial(nome_log, "Subida abortada: configuracao invalida: %s" % exc, log_dir)
+
+
+def obter_config(nome_log=None):
+    """Retorna a configuracao validada, carregada uma unica vez por processo.
+
+    Com nome_log ('sss_web' ou 'sss_scheduler'), uma falha e registrada em CRITICAL antes de
+    ser relancada (README §12.1, "Falha de configuracao").
+    """
     global _CONFIG_CACHE
     if _CONFIG_CACHE is None:
-        # Corrida entre threads do servidor web apenas recarrega o mesmo arquivo imutavel.
-        _CONFIG_CACHE = carregar(caminho_config_padrao())
+        caminho = caminho_config_padrao()
+        try:
+            # Corrida entre threads do servidor web apenas recarrega o mesmo arquivo imutavel.
+            _CONFIG_CACHE = carregar(caminho)
+        except ConfigErro as exc:
+            if nome_log:
+                _abortar(nome_log, exc, _log_dir_bruto(caminho))
+            raise
     return _CONFIG_CACHE
 
 
@@ -678,12 +705,20 @@ def reset_config_cache():
 _SEGREDOS_CACHE = None
 
 
-def obter_segredos():
-    """Retorna os segredos validados de [secrets] secrets_file, carregados uma unica vez por processo."""
+def obter_segredos(nome_log=None):
+    """Retorna os segredos validados de [secrets] secrets_file, carregados uma unica vez por processo.
+
+    Com nome_log, uma falha e registrada em CRITICAL (sem valores de segredo) antes de ser relancada.
+    """
     global _SEGREDOS_CACHE
     if _SEGREDOS_CACHE is None:
-        cfg = obter_config()
-        _SEGREDOS_CACHE = carregar_segredos(cfg.secrets.secrets_file, cfg=cfg)
+        cfg = obter_config(nome_log)
+        try:
+            _SEGREDOS_CACHE = carregar_segredos(cfg.secrets.secrets_file, cfg=cfg)
+        except ConfigErro as exc:
+            if nome_log:
+                _abortar(nome_log, exc, cfg.logging.log_dir)
+            raise
     return _SEGREDOS_CACHE
 
 

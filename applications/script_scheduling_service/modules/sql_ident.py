@@ -12,7 +12,7 @@ from collections import OrderedDict
 
 # Regex oficiais de validacao (AGENTS.md §3.1)
 PADRAO_OWNER = r"^[A-Za-z][A-Za-z0-9_]{0,29}$"
-PADRAO_PREFIXO = r"^[a-zA-Z0-9_]{1,8}$"
+PADRAO_PREFIXO = r"^[A-Za-z][A-Za-z0-9_]{0,7}$"
 PADRAO_IDENTIFICADOR = r"^[a-zA-Z][a-zA-Z0-9_]{0,29}$"
 PADRAO_IDENT_ASCII_LOWER = r"^[a-z][a-z0-9_]*$"
 
@@ -59,7 +59,7 @@ def validar_owner(owner):
 def validar_prefixo(prefixo):
     """Valida o prefixo de tabela conforme AGENTS §3.1.
 
-    Aceita ^[a-zA-Z0-9_]{1,8}$ com comprimento maximo de 8 caracteres.
+    Aceita ^[A-Za-z][A-Za-z0-9_]{0,7}$: comeca com letra (nome Oracle valido), ate 8 caracteres.
     Lanca ValueError se invalido, sem ecoar o valor se tiver mais de 64 caracteres.
     """
     if not isinstance(prefixo, str) or not _RE_PREFIXO.fullmatch(prefixo):
