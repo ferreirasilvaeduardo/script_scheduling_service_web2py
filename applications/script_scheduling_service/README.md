@@ -167,7 +167,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
   * **chaves estrangeiras e NOT NULL:** inclusões de ticket, `ticket_resp` e agendamento com script, ambiente (nome), solicitante (login), usuário ou parâmetro inexistente geram `RepoViolacao` com o nome da FK do §10. A UK de `ticket_resp` também é verificada;
   * **limites de coluna** que o código grava, por exemplo `ator` (40) e `detalhe` (1.000) da auditoria;
   * **comparação de texto** idêntica à do Oracle: UKs diferenciam maiúsculas de minúsculas;
-  * **cascatas** (`ON DELETE CASCADE` e `SET NULL` do §10) cobertas pelo `test_repo_contract.py` nos dois backends, mesmo que hoje só o `purge.py` apague linhas.
+  * **cascatas** (`ON DELETE CASCADE` e `SET NULL` do §10): o contrato não expõe exclusão de registros mestres (só o `purge.py`, que é batch e não tem FAKE, apaga linhas). Por isso, não há cascata a emular no FAKE; o `test_repo_contract.py` as cobre **contra o Oracle** (F7.3), com `DELETE` direto no teste.
 * **Seed do FAKE coerente com as regras de negócio:** ele também serve de demonstração na homologação e precisa respeitar as regras:
   * funcionalidades com os nomes do §4.3.D;
   * nenhum parâmetro de senha ou credencial (§6.5); o exemplo sensível é um dado pessoal, como um documento;

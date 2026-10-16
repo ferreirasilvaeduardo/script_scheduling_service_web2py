@@ -6,6 +6,8 @@ Totalmente deterministico, sem aleatoriedade, compativel com Python 3.6.
 import datetime
 import json
 
+import params_compiler
+import recurrence
 import security
 
 # Contas de demonstracao que permanecem sem senha utilizavel mesmo em DEV.
@@ -32,6 +34,36 @@ def _log_volumoso(inicio):
         linhas.append(u"[%s] lote %06d/%06d: registros validados \u2014 situa\u00e7\u00e3o OK\n"
                       % (quando, i, _LINHAS_LOG_VOLUMOSO))
     return u"".join(linhas)
+
+
+def _vinculos_compilador(store, script_id):
+    """Vinculos ativos do script no formato do compilador (parametro + ordem, obrigatorio e sub)."""
+    vinculos = []
+    for v in sorted((v for v in store.script_param.values() if v["script_id"] == script_id), key=lambda v: v["ordem"]):
+        prm = store.parametros[v["parametro_id"]]
+        if prm["ativo"] == "S":
+            vinculos.append(dict(prm, parametro_id=prm["id"], ordem=v["ordem"], obrigatorio=v["obrigatorio"],
+                                 valor_padrao_sub=v.get("valor_padrao_sub")))
+    return vinculos
+
+
+def _compilar_seed(store, script_id, agora):
+    """Snapshot e respostas resolvidas reais do script (README §2.5: seed coerente com as regras)."""
+    vinculos = _vinculos_compilador(store, script_id)
+    snapshot, resolvidos, erros = params_compiler.compilar_snapshot(store.scripts[script_id], vinculos, {}, agora)
+    if erros:
+        raise ValueError("seed incoerente: script %s nao compila (%s)" % (script_id, sorted(erros)))
+    return snapshot, resolvidos, vinculos
+
+
+def _parametros_json(resolvidos):
+    """parametros_json de agendamento: respostas resolvidas, nulos omitidos, CHECKBOX como texto (README §7.6)."""
+    obj = {}
+    for codigo, valor in resolvidos.items():
+        if valor is None:
+            continue
+        obj[codigo] = ("true" if valor else "false") if isinstance(valor, bool) else valor
+    return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def carregar_seed(store, forcar=False, senha_dev=None):
@@ -70,15 +102,15 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 # 2. Funcionalidades canonicas (10) - README §4.3.D
                                 # ---------------------------------------------------------
                                 funcs = [
-                                    {"id": 1, "codigo": "EXEC_SCRIPT", "nome": "Disparar Scripts", "modulo": "OPERACAO", "descricao": "Preencher questionarios e abrir tickets", "ativo": "S"},
-                                    {"id": 2, "codigo": "VER_LOGS", "nome": "Consultar Logs", "modulo": "OPERACAO", "descricao": "Visualizar logs e historico em tempo quase real", "ativo": "S"},
+                                    {"id": 1, "codigo": "EXEC_SCRIPT", "nome": "Disparar Scripts", "modulo": "OPERACAO", "descricao": "Preencher questionários e abrir tickets", "ativo": "S"},
+                                    {"id": 2, "codigo": "VER_LOGS", "nome": "Consultar Logs", "modulo": "OPERACAO", "descricao": "Visualizar logs e histórico em tempo quase real", "ativo": "S"},
                                     {"id": 3, "codigo": "CANC_TICKET", "nome": "Cancelar Tickets", "modulo": "OPERACAO", "descricao": "Cancelar tickets de terceiros em ambientes autorizados", "ativo": "S"},
-                                    {"id": 4, "codigo": "CAD_USUARIOS", "nome": "Gestao de Usuarios", "modulo": "ADMIN", "descricao": "Gerenciar operadores e credenciais", "ativo": "S"},
-                                    {"id": 5, "codigo": "CAD_PERFIS", "nome": "Gestao de Perfis", "modulo": "ADMIN", "descricao": "Gerenciar perfis e matrizes de permissao", "ativo": "S"},
-                                    {"id": 6, "codigo": "CAD_AMBIENTES", "nome": "Gestao de Ambientes", "modulo": "ADMIN", "descricao": "Gerenciar ambientes e DSNs", "ativo": "S"},
-                                    {"id": 7, "codigo": "CAD_SCRIPTS", "nome": "Gestao de Scripts", "modulo": "ADMIN", "descricao": "Cadastrar rotinas e homologacao por ambiente", "ativo": "S"},
-                                    {"id": 8, "codigo": "CAD_PARAMETROS", "nome": "Dicionario de Parametros", "modulo": "ADMIN", "descricao": "Gerenciar perguntas e flags reutilizaveis", "ativo": "S"},
-                                    {"id": 9, "codigo": "CAD_AGENDAMENTOS", "nome": "Regras de Agendamento", "modulo": "ADMIN", "descricao": "Criar e gerenciar recorrencias", "ativo": "S"},
+                                    {"id": 4, "codigo": "CAD_USUARIOS", "nome": "Gestão de Usuários", "modulo": "ADMIN", "descricao": "Gerenciar operadores e credenciais", "ativo": "S"},
+                                    {"id": 5, "codigo": "CAD_PERFIS", "nome": "Gestão de Perfis", "modulo": "ADMIN", "descricao": "Gerenciar perfis e matrizes de permissão", "ativo": "S"},
+                                    {"id": 6, "codigo": "CAD_AMBIENTES", "nome": "Gestão de Ambientes", "modulo": "ADMIN", "descricao": "Gerenciar ambientes e DSNs", "ativo": "S"},
+                                    {"id": 7, "codigo": "CAD_SCRIPTS", "nome": "Gestão de Scripts", "modulo": "ADMIN", "descricao": "Cadastrar rotinas e homologação por ambiente", "ativo": "S"},
+                                    {"id": 8, "codigo": "CAD_PARAMETROS", "nome": "Dicionário de Parâmetros", "modulo": "ADMIN", "descricao": "Gerenciar perguntas e flags reutilizáveis", "ativo": "S"},
+                                    {"id": 9, "codigo": "CAD_AGENDAMENTOS", "nome": "Regras de Agendamento", "modulo": "ADMIN", "descricao": "Criar e gerenciar recorrências", "ativo": "S"},
                                     {"id": 10, "codigo": "VER_AUDITORIA", "nome": "Auditoria", "modulo": "ADMIN", "descricao": "Consultar a trilha de auditoria e os agentes", "ativo": "S"},
                                 ]
                                 for f in funcs:
@@ -201,7 +233,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     {"id": 3, "codigo": "modo_exec", "param_nomeado": "--modo", "label": "Modo de Operacao", "descricao": "Define se o processamento e simulacao ou real", "tipo_componente": "SELECT", "opcoes_json": '{"SIMULACAO":"Simulacao","REAL":"Execucao Real"}', "valor_padrao": "SIMULACAO", "regex_validacao": None, "sensivel": "N", "ativo": "S"},
                                     {"id": 4, "codigo": "verbose", "param_nomeado": "--verbose", "label": "Log Detalhado", "descricao": "Ativa impressao detalhada de passos", "tipo_componente": "CHECKBOX", "opcoes_json": None, "valor_padrao": "false", "regex_validacao": None, "sensivel": "N", "ativo": "S"},
                                     {"id": 5, "codigo": "codigo_filial", "param_nomeado": "--filial", "label": "Codigo da Filial", "descricao": "Identificador numerico de 4 digitos da filial", "tipo_componente": "TEXT", "opcoes_json": None, "valor_padrao": "0001", "regex_validacao": r"^[0-9]{4}$", "sensivel": "N", "ativo": "S"},
-                                    {"id": 6, "codigo": "chave_api", "param_nomeado": "--api-key", "label": "Token de Autenticacao", "descricao": "Chave de acesso a API externa", "tipo_componente": "TEXT", "opcoes_json": None, "valor_padrao": None, "regex_validacao": None, "sensivel": "S", "ativo": "S"},
+                                    {"id": 6, "codigo": "documento_cliente", "param_nomeado": "--documento", "label": "Documento do cliente (CPF)", "descricao": "Dado pessoal: mascarado na tela e nos logs; nunca use para senha ou credencial", "tipo_componente": "TEXT", "opcoes_json": None, "valor_padrao": None, "regex_validacao": None, "sensivel": "S", "ativo": "S"},
                                     {"id": 7, "codigo": "formato_saida", "param_nomeado": "-f", "label": "Formato de Arquivo", "descricao": "Extensao de exportacao do relatorio", "tipo_componente": "SELECT", "opcoes_json": '{"CSV":"Arquivo CSV","JSON":"Arquivo JSON"}', "valor_padrao": "CSV", "regex_validacao": None, "sensivel": "N", "ativo": "S"},
                                     {"id": 8, "codigo": "notificar_email", "param_nomeado": "-m", "label": "Disparar Alerta", "descricao": "Envia email aos gestores no encerramento", "tipo_componente": "CHECKBOX", "opcoes_json": None, "valor_padrao": "false", "regex_validacao": None, "sensivel": "N", "ativo": "S"},
                                     {"id": 9, "codigo": "taxa_ajuste", "param_nomeado": "--taxa", "label": "Fator de Correcao", "descricao": "Multiplicador financeiro", "tipo_componente": "NUMBER", "opcoes_json": None, "valor_padrao": "1.0", "regex_validacao": None, "sensivel": "N", "ativo": "S"},
@@ -220,7 +252,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     {"script_id": 1, "parametro_id": 2, "ordem": 2, "obrigatorio": "N", "valor_padrao_sub": "5000"},
                                     {"script_id": 1, "parametro_id": 3, "ordem": 3, "obrigatorio": "S", "valor_padrao_sub": "REAL"},
                                     {"script_id": 1, "parametro_id": 4, "ordem": 4, "obrigatorio": "N", "valor_padrao_sub": "true"},
-                                    {"script_id": 1, "parametro_id": 6, "ordem": 5, "obrigatorio": "N", "valor_padrao_sub": "segredo_dev_123"},
+                                    {"script_id": 1, "parametro_id": 6, "ordem": 5, "obrigatorio": "N", "valor_padrao_sub": "00011122233"},
                                     # relatorio_mensal (sid 2, SEQUENCIAL)
                                     {"script_id": 2, "parametro_id": 1, "ordem": 1, "obrigatorio": "S", "valor_padrao_sub": "2026-10-01"},
                                     {"script_id": 2, "parametro_id": 7, "ordem": 2, "obrigatorio": "S", "valor_padrao_sub": "CSV"},
@@ -258,8 +290,18 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     {"id": 4, "nome": "Fechamento Mensal Dia 1", "script_id": 2, "ambiente": "HOMOLOGACAO", "usuario_id": 3, "prioridade": 3, "tipo_recorrencia": "MENSAL", "expressao_cron": None, "hora_execucao": "01:00", "dias_semana": None, "dia_mes": 1, "parametros_json": '{"formato_saida":"JSON"}', "data_inicio": base_dt - datetime.timedelta(days=30), "data_fim": None, "proxima_execucao": base_dt + datetime.timedelta(days=15), "ultima_execucao": base_dt - datetime.timedelta(days=15), "ultimo_ticket_id": 34, "pausa_motivo": None, "ativo": "S"},
                                     {"id": 5, "nome": "Limpeza Cron Periódica (Pausado)", "script_id": 3, "ambiente": "PRODUCAO", "usuario_id": 1, "prioridade": 2, "tipo_recorrencia": "CRON", "expressao_cron": "0 */4 * * *", "hora_execucao": None, "dias_semana": None, "dia_mes": None, "parametros_json": "{}", "data_inicio": base_dt - datetime.timedelta(days=2), "data_fim": None, "proxima_execucao": base_dt + datetime.timedelta(hours=4), "ultima_execucao": base_dt, "ultimo_ticket_id": 35, "pausa_motivo": "MANUAL", "ativo": "N"},
                                 ]
+                                agora_agd = recurrence.truncar_segundos(base_dt)
                                 for a in agds:
                                     a["created_at"] = base_dt - datetime.timedelta(days=20)
+                                    # Coerente com as regras (README §2.5, §7.2, §7.6): minuto exato, proxima pelo
+                                    # recurrence e parametros_json com as respostas resolvidas completas.
+                                    a["data_inicio"] = recurrence.truncar_segundos(a["data_inicio"])
+                                    a["proxima_execucao"] = recurrence.proxima_execucao(a, agora_agd, 1461)
+                                    _snap, resolvidos, _v = _compilar_seed(store, a["script_id"], agora_agd)
+                                    respostas = dict(json.loads(a["parametros_json"]))
+                                    for codigo, valor in resolvidos.items():
+                                        respostas.setdefault(codigo, valor)
+                                    a["parametros_json"] = _parametros_json(respostas)
                                     store.agendamentos[a["id"]] = a
                                 store.seqs["tbsss_agendamentos"] = 5
 
@@ -271,6 +313,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 # 12 SUCCESS (17..28)
                                 # 8 FAILED (29..36)
                                 # 4 CANCELLED (37..40)
+                                compilados = {}
                                 sensiveis_por_script = {}
                                 for v in store.script_param.values():
                                     prm = store.parametros.get(v["parametro_id"])
@@ -284,6 +327,8 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     amb = "PRODUCAO" if tid % 2 == 1 else "HOMOLOGACAO"
                                     solicitante = "admin" if tid % 3 == 0 else ("op.prod" if tid % 2 == 1 else "op.hml")
                                     prio = ((tid - 1) % 4) + 1
+                                    if prio == 1 and solicitante != "admin":
+                                        prio = 2  # prioridade 1 e reservada a admin (README §5.3)
 
                                     # Status e motivos
                                     agente_id = None
@@ -377,24 +422,11 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     if tid in (31, 32, 33, 34, 35):
                                         agd_id = tid - 30
 
-                                    # Montagem do snapshot JSON conforme README §6.5
-                                    # Snapshot v2 (README §6.5, CR-001): interpretador logico, caminho relativo e args.
-                                    snapshot_obj = {
-                                        "versao": 3,
-                                        "script_id": scr["id"],
-                                        "script_nome": scr["nome"],
-                                        "interpretador": scr["interpretador"],
-                                        "pasta_base": scr["pasta_base"],
-                                        "path_file": scr["path_file"],
-                                        "tipo_param": scr["tipo_param"],
-                                        "args": [] if scr["tipo_param"] == "NENHUM" else (
-                                            ["--data-ref", "2026-10-14"] if scr["tipo_param"] == "NOMEADO" else ["2026-10-14"]),
-                                        "respostas": {"data_ref": "2026-10-14", "limite_linhas": "1000"},
-                                        "sensiveis": ["chave_api"] if script_id == 1 else [],
-                                        "compilado_em": str(base_dt - datetime.timedelta(minutes=30)),
-                                    }
-
-                                    snapshot_json = json.dumps(snapshot_obj, ensure_ascii=False, sort_keys=True)
+                                    # Snapshot v3 e respostas compilados de verdade (README §6.5, §2.5).
+                                    if script_id not in compilados:
+                                        compilados[script_id] = _compilar_seed(
+                                            store, script_id, base_dt - datetime.timedelta(minutes=30))
+                                    snapshot_json, resolvidos, vinc_scr = compilados[script_id]
 
                                     t_obj = {
                                         "id": tid,
@@ -419,27 +451,23 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                         "started_at": started,
                                         "heartbeat_at": heartbeat,
                                         "finished_at": finished,
-                                        "created_at": sched,
+                                        # created_at nunca no futuro (README §2.5): o agendado foi pedido antes.
+                                        "created_at": min(sched, base_dt - datetime.timedelta(minutes=tid)),
                                     }
                                     store.tickets[tid] = t_obj
 
-                                    # Respostas (tbsss_ticket_resp)
-                                    rid1 = store.proximo_id("tbsss_ticket_resp")
-                                    store.ticket_resp[rid1] = {
-                                        "id": rid1,
-                                        "ticket_id": tid,
-                                        "parametro_id": 1,
-                                        "valor_resposta": "2026-10-14",
-                                        "created_at": sched,
-                                    }
-                                    if script_id == 1:
-                                        rid2 = store.proximo_id("tbsss_ticket_resp")
-                                        store.ticket_resp[rid2] = {
-                                            "id": rid2,
+                                    # Respostas resolvidas (tbsss_ticket_resp, README §5.4): None omitido, CHECKBOX em texto.
+                                    for v in vinc_scr:
+                                        valor = resolvidos.get(v["codigo"])
+                                        if valor is None:
+                                            continue
+                                        rid = store.proximo_id("tbsss_ticket_resp")
+                                        store.ticket_resp[rid] = {
+                                            "id": rid,
                                             "ticket_id": tid,
-                                            "parametro_id": 2,
-                                            "valor_resposta": "1000",
-                                            "created_at": sched,
+                                            "parametro_id": v["parametro_id"],
+                                            "valor_resposta": ("true" if valor else "false") if isinstance(valor, bool) else valor,
+                                            "created_at": t_obj["created_at"],
                                         }
 
                                 store.seqs["tbsss_tickets"] = 40

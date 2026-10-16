@@ -8,6 +8,12 @@ import copy
 import datetime
 import threading
 
+from repo_errors import RepoViolacao
+
+# Limites de tbsss_auditoria (README §4.4, §10 tabela 16).
+_ATOR_MAX = 40
+_DETALHE_MAX = 1000
+
 
 class FakeDataStore(object):
     """Armazenamento central em memoria simulando as tabelas Oracle."""
@@ -64,11 +70,16 @@ class FakeDataStore(object):
 
     def registrar_auditoria_interno(self, ator, ip, acao, entidade, entidade_id=None, detalhe=None):
         """Grava registro de auditoria dentro do lock do agregado atual."""
+        # Paridade com o Oracle (README §2.5): ator NOT NULL e limites de coluna, sem valor padrao.
+        if not ator:
+            raise RepoViolacao("ator da auditoria e obrigatorio")
+        if len(ator) > _ATOR_MAX or (detalhe is not None and len(detalhe) > _DETALHE_MAX):
+            raise RepoViolacao("auditoria excede o tamanho da coluna (ORA-12899)")
         with self.lock_auditoria:
             aid = self.proximo_id("tbsss_auditoria")
             reg = {
                 "id": aid,
-                "ator": ator or "SYSTEM",
+                "ator": ator,
                 "ip_origem": ip,
                 "acao": acao,
                 "entidade": entidade,
@@ -78,6 +89,17 @@ class FakeDataStore(object):
             }
             self.auditoria[aid] = copy.deepcopy(reg)
             return copy.deepcopy(reg)
+
+    def checar_fk(self, existe, constraint):
+        """FK do Oracle emulada: referencia inexistente vira RepoViolacao com o nome da FK (README §2.5)."""
+        if not existe:
+            raise RepoViolacao("Referencia inexistente (%s)" % constraint, constraint=constraint)
+
+    def ambiente_existe(self, nome):
+        return any(a["nome"] == nome for a in self.ambientes.values())
+
+    def login_existe(self, login):
+        return any(u["login"] == login for u in self.usuarios.values())
 
     def reset(self):
         """Limpa todas as colecoes e sequencias em memoria."""

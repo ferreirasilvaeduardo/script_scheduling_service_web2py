@@ -99,7 +99,7 @@ class TestTicketService(_BaseTicket):
     # ------------------------------------------------------------- sucesso
 
     def test_criacao_ok_com_snapshot_correto(self):
-        respostas = {"data_ref": "2026-10-20", "modo_exec": "SIMULACAO", "chave_api": SEGREDO}
+        respostas = {"data_ref": "2026-10-20", "modo_exec": "SIMULACAO", "documento_cliente": SEGREDO}
         tid, erros = self._criar(respostas=respostas)
         self.assertEqual(erros, {})
         self.assertIsNotNone(tid)
@@ -125,23 +125,23 @@ class TestTicketService(_BaseTicket):
         self.assertNotIn(self.base, bruto)
         self.assertEqual(snap["args"], [
             "--data-ref", "2026-10-20", "-n", "5000", "--modo", "SIMULACAO",
-            "--verbose", "--api-key", SEGREDO,
+            "--verbose", "--documento", SEGREDO,
         ])
         self.assertEqual(snap["respostas"], {"data_ref": "2026-10-20", "limite_linhas": "5000",
                                              "modo_exec": "SIMULACAO", "verbose": True,
-                                             "chave_api": SEGREDO})
-        self.assertEqual(snap["sensiveis"], ["chave_api"])
+                                             "documento_cliente": SEGREDO})
+        self.assertEqual(snap["sensiveis"], ["documento_cliente"])
         datetime.datetime.strptime(snap["compilado_em"], "%Y-%m-%d %H:%M:%S")
 
     def test_ticket_resp_com_valores_resolvidos(self):
-        tid, _ = self._criar(respostas={"data_ref": "2026-10-20", "chave_api": SEGREDO})
+        tid, _ = self._criar(respostas={"data_ref": "2026-10-20", "documento_cliente": SEGREDO})
         valores = dict((r["parametro_id"], r["valor_resposta"]) for r in self.tickets.respostas(tid))
         # limite_linhas, modo_exec e verbose vieram dos padroes (precedencia §6.1).
         self.assertEqual(valores, {PRM_DATA_REF: "2026-10-20", PRM_LIMITE: "5000", PRM_MODO: "REAL",
                                    PRM_VERBOSE: "true", PRM_CHAVE_API: SEGREDO})
 
     def test_auditoria_gravada_sem_valor_sensivel(self):
-        tid, _ = self._criar(respostas={"chave_api": SEGREDO})
+        tid, _ = self._criar(respostas={"documento_cliente": SEGREDO})
         regs = self.auditoria.listar(filtros={"acao": "TICKET_CRIAR", "entidade_id": tid})["itens"]
         self.assertEqual(len(regs), 1)
         self.assertEqual(regs[0]["ator"], "op.hml")
@@ -256,24 +256,24 @@ class TestTicketService(_BaseTicket):
     # ----------------------------------------------------- previa e formulario
 
     def test_previa_mascara_sensivel(self):
-        argv, erros = self.svc.previa(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"chave_api": SEGREDO})
+        argv, erros = self.svc.previa(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"documento_cliente": SEGREDO})
         self.assertEqual(erros, {})
         self.assertNotIn(SEGREDO, " ".join(argv))
-        self.assertEqual(argv[argv.index("--api-key") + 1], params_compiler.MASCARA)
+        self.assertEqual(argv[argv.index("--documento") + 1], params_compiler.MASCARA)
         argv, erros = self.svc.previa(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"modo_exec": "X"})
         self.assertIsNone(argv)
         self.assertIn("modo_exec", erros)
 
     def test_formulario_nao_expoe_sensivel(self):
         form = self.svc.preparar_formulario(self.ctx["op.hml"], "1", "HOMOLOGACAO",
-                                            valores={"chave_api": SEGREDO, "data_ref": "2026-01-01"})
+                                            valores={"documento_cliente": SEGREDO, "data_ref": "2026-01-01"})
         campos = dict((c["codigo"], c) for c in form["campos"])
         self.assertEqual([c["codigo"] for c in form["campos"]],
-                         ["data_ref", "limite_linhas", "modo_exec", "verbose", "chave_api"])
-        self.assertIsNone(campos["chave_api"]["valor"])
-        self.assertIsNone(campos["chave_api"]["padrao"])
-        self.assertTrue(campos["chave_api"]["tem_padrao"])
-        self.assertNotIn("segredo_dev_123", json.dumps(form, default=str))
+                         ["data_ref", "limite_linhas", "modo_exec", "verbose", "documento_cliente"])
+        self.assertIsNone(campos["documento_cliente"]["valor"])
+        self.assertIsNone(campos["documento_cliente"]["padrao"])
+        self.assertTrue(campos["documento_cliente"]["tem_padrao"])
+        self.assertNotIn("00011122233", json.dumps(form, default=str))
         self.assertEqual(campos["data_ref"]["valor"], "2026-01-01")
         self.assertEqual(campos["modo_exec"]["padrao_texto"], "Execucao Real")
         self.assertTrue(campos["verbose"]["marcado"])
@@ -425,7 +425,7 @@ class TestTicketConsulta(_BaseTicket):
 
     def test_reexecucao_ok_com_parent_ticket_id(self):
         ctx = self.ctx["op.hml"]
-        original, _ = self._criar(respostas={"data_ref": "2026-10-20", "chave_api": SEGREDO}, prioridade="3")
+        original, _ = self._criar(respostas={"data_ref": "2026-10-20", "documento_cliente": SEGREDO}, prioridade="3")
         with self.assertRaises(AcessoNegado):
             self.svc.reexecutar(ctx, IP, str(original))
         self.assertFalse(self.svc.detalhe(ctx, str(original))["pode_reexecutar"])
@@ -456,7 +456,7 @@ class TestTicketConsulta(_BaseTicket):
 
     def test_reexecucao_com_catalogo_alterado_gera_erro_tratado(self):
         ctx = self.ctx["op.hml"]
-        original, _ = self._criar(respostas={"chave_api": SEGREDO})
+        original, _ = self._criar(respostas={"documento_cliente": SEGREDO})
         self.svc.cancelar(ctx, IP, str(original))
         vinculos = [{"parametro_id": v["parametro_id"], "ordem": v["ordem"], "obrigatorio": v["obrigatorio"],
                      "valor_padrao_sub": v["valor_padrao_sub"]} for v in self.catalogo.script_params_obter(1)]
@@ -472,7 +472,7 @@ class TestTicketConsulta(_BaseTicket):
         prep = self.svc.preparar_reexecucao(ctx, str(original))
         self.assertEqual((prep["ticket_id"], prep["script_id"], prep["ambiente"]), (original, 1, "HOMOLOGACAO"))
         self.assertIn("descricao_lote", prep["erros"])
-        self.assertNotIn("chave_api", prep["valores"])
+        self.assertNotIn("documento_cliente", prep["valores"])
         self.assertEqual(prep["valores"]["data_ref"], "2026-10-14")
 
         novo, erros = self.svc.criar_ticket(ctx, IP, "1", "HOMOLOGACAO", dict(prep["valores"], descricao_lote="x"),
@@ -485,20 +485,20 @@ class TestTicketConsulta(_BaseTicket):
     # ------------------------------------------------------------ sensiveis
 
     def test_sensiveis_mascarados_no_detalhe(self):
-        tid, _ = self._criar(respostas={"chave_api": SEGREDO})
+        tid, _ = self._criar(respostas={"documento_cliente": SEGREDO})
         for login in ("op.hml", "admin", "consulta"):
             if login == "consulta":
                 det = self.svc.detalhe(self.ctx[login], "1")
             else:
                 det = self.svc.detalhe(self.ctx[login], str(tid))
                 respostas = dict((r["codigo"], r) for r in det["respostas"])
-                self.assertEqual(respostas["chave_api"]["valor"], params_compiler.MASCARA)
-                self.assertTrue(respostas["chave_api"]["sensivel"])
+                self.assertEqual(respostas["documento_cliente"]["valor"], params_compiler.MASCARA)
+                self.assertTrue(respostas["documento_cliente"]["sensivel"])
                 self.assertEqual(respostas["data_ref"]["valor"], "2026-10-14")
                 self.assertIn(params_compiler.MASCARA, det["argv_para_exibicao"])
             serial = json.dumps(det, default=str)
             self.assertNotIn(SEGREDO, serial)
-            self.assertNotIn("segredo_dev_123", serial)
+            self.assertNotIn("00011122233", serial)
 
     def test_detalhe_campos_e_descricao_motivo(self):
         det = self.svc.detalhe(self.ctx["admin"], "30")

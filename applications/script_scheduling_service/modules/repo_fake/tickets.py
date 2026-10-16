@@ -67,6 +67,17 @@ class RepoTicketsFake(RepoTickets):
             parent_id = ticket.get("parent_ticket_id")
             if parent_id is not None and parent_id not in self._store.tickets:
                 raise RepoViolacao("ticket pai inexistente", constraint="fk_tbsss_tck_parent")
+            # FKs e UK checadas antes de gravar qualquer linha: a operacao e atomica como no Oracle.
+            self._store.checar_fk(script_id in self._store.scripts, "fk_tbsss_tck_scr")
+            self._store.checar_fk(self._store.ambiente_existe(ambiente), "fk_tbsss_tck_amb")
+            self._store.checar_fk(self._store.login_existe(solicitante), "fk_tbsss_tck_usr")
+            vistos = set()
+            for resp in (respostas or []):
+                pid = int(resp["parametro_id"])
+                self._store.checar_fk(pid in self._store.parametros, "fk_tbsss_trsp_prm")
+                if pid in vistos:
+                    raise RepoViolacao("resposta repetida para o parametro %s" % pid, constraint="uk_tbsss_trsp_tck_prm")
+                vistos.add(pid)
 
             tid = self._store.proximo_id("tbsss_tickets")
             agora = self._store.agora()

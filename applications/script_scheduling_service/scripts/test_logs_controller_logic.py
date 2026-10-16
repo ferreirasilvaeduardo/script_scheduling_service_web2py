@@ -19,12 +19,12 @@ SESSOES = {
     "op.hml": {"usuario_id": 3, "login": "op.hml", "perfil_id": 3, "perm_versao": 1},
     "consulta": {"usuario_id": 4, "login": "consulta", "perfil_id": 4, "perm_versao": 1},
 }
-# Seed FAKE: 13 RUNNING (PRODUCAO, op.prod, carga_diaria com chave_api sensivel, 8 s/etapa),
+# Seed FAKE: 13 RUNNING (PRODUCAO, op.prod, carga_diaria com documento_cliente sensivel, 8 s/etapa),
 # 17 SUCCESS com log de ~2 MB, 35 FAILED/LOG_LIMIT com log_truncado = 'S'.
 TCK_RUNNING, TCK_GRANDE, TCK_TRUNCADO = 13, 17, 35
 PASSO_13_S = 8
 ETAPAS = 50
-SEGREDO_SEED = "segredo_dev_123"
+SEGREDO_SEED = "00011122233"
 # README §8.10.
 MARCADOR_TRUNCADO = "[SSS] log truncado no banco; arquivo integral no agente\n"
 
@@ -185,7 +185,7 @@ class TestLerLogConteudo(_BaseLog):
 
     def test_segredo_mascarado(self):
         texto, _ = self._ler_tudo("admin", TCK_RUNNING)
-        self.assertIn("conectando com chave_api=****", texto)
+        self.assertIn("conectando com documento_cliente=****", texto)
         self.assertNotIn(SEGREDO_SEED, texto)
         self.assertNotIn(SEGREDO_SEED, self.tickets.obter(TCK_RUNNING)["log_output"])
 

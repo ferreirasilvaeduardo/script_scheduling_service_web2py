@@ -30,7 +30,7 @@ SESSOES = {
     "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1},
 }
 # Seed FAKE: script 1 carga_diaria (NOMEADO, python3, vinculos data_ref, limite_linhas, modo_exec, verbose,
-# chave_api sensivel), 3 cleanup_tmp (NENHUM). Ambientes 1 PRODUCAO, 2 HOMOLOGACAO, 3 DESENV (inativo).
+# documento_cliente sensivel), 3 cleanup_tmp (NENHUM). Ambientes 1 PRODUCAO, 2 HOMOLOGACAO, 3 DESENV (inativo).
 # Parametros: 1 data_ref (--data-ref), 5 codigo_filial (--filial), 10 descricao_lote (--descricao), sem flag: nenhum
 # no seed, por isso o teste cria um.
 S_CARGA, S_CLEANUP = 1, 3
@@ -304,7 +304,7 @@ class TestVinculos(_Base):
     def test_sub_sigiloso_mantido_e_revalidado_e_pode_ser_removido(self):
         # CR-003 P6 (README §6.5).
         tela, itens = self._vinculos_json(S_CARGA)
-        self.catalogo.parametros_alterar(6, {"regex_validacao": "^x$"})  # chave_api: o sub gravado deixa de valer
+        self.catalogo.parametros_alterar(6, {"regex_validacao": "^x$"})  # documento_cliente: o sub gravado deixa de valer
         _d, erros = self.svc.salvar_parametros(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens), tela["versao"])
         self.assertEqual(erros, {"vinculo_6": scr_mod.MSG_SIGILOSO_INVALIDO})
         for item in itens:
@@ -333,7 +333,7 @@ class TestVinculos(_Base):
         vinc = self.catalogo.script_params_obter(S_CARGA)
         lidos = [dict((k, v[k]) for k in ("parametro_id", "ordem", "obrigatorio", "valor_padrao_sub")) for v in vinc]
         for v in lidos:
-            if v["valor_padrao_sub"] == "segredo_dev_123":
+            if v["valor_padrao_sub"] == "00011122233":
                 v["valor_padrao_sub"] = "outro-segredo-456"
         self.catalogo.script_params_salvar(S_CARGA, lidos)
         tela = self.svc.parametros(self.ctx["admin"], str(S_CARGA))
@@ -348,13 +348,13 @@ class TestVinculos(_Base):
         self.assertEqual(erros, {})
         vinc = self.catalogo.script_params_obter(S_CARGA)
         self.assertEqual([v["ordem"] for v in vinc], [1, 2, 3, 4, 5])
-        self.assertEqual(vinc[0]["codigo"], "chave_api")
+        self.assertEqual(vinc[0]["codigo"], "documento_cliente")
         # Sub sigiloso preservado ("manter") e mascarado na auditoria.
-        self.assertEqual(vinc[0]["valor_padrao_sub"], "segredo_dev_123")
+        self.assertEqual(vinc[0]["valor_padrao_sub"], "00011122233")
         detalhe = self._auditorias("CAD_ALTERAR")[0]["detalhe"]
-        self.assertNotIn("segredo_dev_123", detalhe)
-        self.assertIn("chave_api=****", detalhe)
-        self.assertNotIn("segredo_dev_123", repr(self.svc.parametros(self.ctx["admin"], str(S_CARGA))))
+        self.assertNotIn("00011122233", detalhe)
+        self.assertIn("documento_cliente=****", detalhe)
+        self.assertNotIn("00011122233", repr(self.svc.parametros(self.ctx["admin"], str(S_CARGA))))
 
     def test_vinculo_duplicado_inexistente_e_json_invalido(self):
         tela, itens = self._vinculos_json(S_CARGA)
@@ -404,7 +404,7 @@ class TestPrevia(_Base):
         real = os.path.join(self.base, "carga_diaria.py")
         self.assertEqual(r["erros"], {})
         self.assertEqual(r["argv"], ["PYTHON3", "-I", real, "--data-ref", "2026-10-14", "-n", "5000",
-                                     "--modo", "REAL", "--verbose", "--api-key", "****"])
+                                     "--modo", "REAL", "--verbose", "--documento", "****"])
 
     def test_previa_sem_admin_oculta_caminho_e_reflete_edicao(self):
         _tela, itens = self._vinculos_json(S_CARGA)

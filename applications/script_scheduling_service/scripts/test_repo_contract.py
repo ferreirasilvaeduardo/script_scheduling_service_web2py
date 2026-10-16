@@ -427,6 +427,42 @@ class BaseRepoContractTest(object):
         self.assertEqual(pausado["ativo"], "N")
         self.assertEqual(pausado["pausa_motivo"], "MANUAL")
 
+    def test_06b_fks_e_limites_de_auditoria(self):
+        """CR-003 P8 (README §2.5): FKs, UK de ticket_resp e limites da auditoria, sem gravacao parcial."""
+        tck = self.obter_repo("tickets")
+        agd = self.obter_repo("agendamentos")
+        aud = self.obter_repo("auditoria")
+        base = {"script_id": 1, "ambiente": "PRODUCAO", "solicitante": "admin", "status": "PENDING", "prioridade": 2}
+        total = tck.listar(pagina=1, tamanho=1)["total"]
+        casos = (
+            (dict(base, script_id=9999), [], "fk_tbsss_tck_scr"),
+            (dict(base, ambiente="NAO_EXISTE"), [], "fk_tbsss_tck_amb"),
+            (dict(base, solicitante="ninguem"), [], "fk_tbsss_tck_usr"),
+            (base, [{"parametro_id": 9999, "valor_resposta": "x"}], "fk_tbsss_trsp_prm"),
+            (base, [{"parametro_id": 1, "valor_resposta": "a"}, {"parametro_id": 1, "valor_resposta": "b"}],
+             "uk_tbsss_trsp_tck_prm"),
+        )
+        for ticket, respostas, constraint in casos:
+            with self.assertRaises(RepoViolacao) as ctx:
+                tck.criar(ticket, respostas)
+            self.assertEqual(ctx.exception.constraint, constraint)
+        self.assertEqual(tck.listar(pagina=1, tamanho=1)["total"], total)
+
+        regra = {"nome": "FK", "script_id": 1, "ambiente": "HOMOLOGACAO", "usuario_id": 1, "prioridade": 2,
+                 "tipo_recorrencia": "DIARIA", "hora_execucao": "03:00", "parametros_json": "{}",
+                 "data_inicio": datetime.datetime(2026, 1, 15, 10, 0),
+                 "proxima_execucao": datetime.datetime(2026, 1, 16, 3, 0)}
+        for mudanca, constraint in (({"script_id": 9999}, "fk_tbsss_agd_scr"), ({"usuario_id": 9999}, "fk_tbsss_agd_usr"),
+                                    ({"ambiente": "NAO_EXISTE"}, "fk_tbsss_agd_amb")):
+            with self.assertRaises(RepoViolacao) as ctx:
+                agd.inserir(dict(regra, **mudanca))
+            self.assertEqual(ctx.exception.constraint, constraint)
+
+        for ator, detalhe in ((None, "x"), ("", "x"), ("a" * 41, "x"), ("admin", "d" * 1001)):
+            with self.assertRaises(RepoViolacao):
+                aud.registrar(ator, None, "CAD_ALTERAR", "tbsss_ambientes", 1, detalhe)
+        aud.registrar("a" * 40, None, "CAD_ALTERAR", "tbsss_ambientes", 1, "d" * 1000)
+
     def test_07b_agendamento_cks_condicional_e_auditoria_na_mesma_operacao(self):
         agd = self.obter_repo("agendamentos")
         aud = self.obter_repo("auditoria")

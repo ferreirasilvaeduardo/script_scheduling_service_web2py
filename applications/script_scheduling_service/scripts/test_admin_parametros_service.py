@@ -22,7 +22,7 @@ SESSOES = {
     "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1},
 }
 # Seed FAKE: 1 data_ref (DATE, carga_diaria NOMEADO e relatorio_mensal SEQUENCIAL), 5 codigo_filial
-# (TEXT com regex ^[0-9]{4}$, validacao_fiscal), 6 chave_api (TEXT sensivel), 10 descricao_lote (TEXT).
+# (TEXT com regex ^[0-9]{4}$, validacao_fiscal), 6 documento_cliente (TEXT sensivel), 10 descricao_lote (TEXT).
 P_DATA_REF, P_FILIAL, P_CHAVE_API, P_DESCRICAO_LOTE = 1, 5, 6, 10
 
 
@@ -249,7 +249,7 @@ class TestSensivelETeste(_Base):
         detalhes = " | ".join(a["detalhe"] for a in self._auditorias("CAD_ALTERAR"))
         self.assertNotIn("tok-padrao-secreto-1", detalhes)
         self.assertIn("****", detalhes)
-        pagina = self.svc.listar(self.ctx["admin"], {"codigo": "chave_api"}, 1, 20)
+        pagina = self.svc.listar(self.ctx["admin"], {"codigo": "documento_cliente"}, 1, 20)
         self.assertNotIn("tok-padrao", repr(pagina))
 
     def test_testar_reflete_configuracao_em_edicao(self):

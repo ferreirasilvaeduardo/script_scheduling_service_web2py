@@ -473,10 +473,10 @@ class TestSeedFake(unittest.TestCase):
         self.assertEqual(set(snap.keys()), CHAVES_6_5)
         self.assertEqual(js, json.dumps(snap, ensure_ascii=False, sort_keys=True))
         self.assertEqual(snap["args"], ["--data-ref", "2026-10-14", "-n", "5000", "--modo", "REAL", "--verbose",
-                                        "--api-key", "segredo_dev_123"])
-        self.assertEqual(snap["sensiveis"], ["chave_api"])
+                                        "--documento", "00011122233"])
+        self.assertEqual(snap["sensiveis"], ["documento_cliente"])
         self.assertEqual(snap["respostas"]["verbose"], True)
-        self.assertNotIn("segredo_dev_123", pc.argv_para_exibicao(snap))
+        self.assertNotIn("00011122233", pc.argv_para_exibicao(snap))
 
     def test_todos_os_scripts_do_seed_compilam(self):
         for sid in (1, 2, 3, 4, 6):

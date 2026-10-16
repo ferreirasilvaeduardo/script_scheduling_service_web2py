@@ -346,17 +346,17 @@ class TestEdicao(_Base):
 
     def test_sensivel_nao_reexibido_e_vazio_mantem_valor(self):
         # CR-003 P1: a versao do formulario tambem nao deriva da resposta sensivel.
-        aid0, _e = self._salvar(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "chave_api": "tok-um-111"})
+        aid0, _e = self._salvar(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": "tok-um-111"})
         v1 = self.svc.formulario(self.ctx["admin"], str(aid0))["regra"]["versao"]
         reg = self.agd.obter(aid0)
         trocado = json.loads(reg["parametros_json"])
-        trocado["chave_api"] = "tok-dois-222"
-        self.assertEqual(svc_mod.versao(dict(reg, parametros_json=json.dumps(trocado)), frozenset(["chave_api"])), v1)
+        trocado["documento_cliente"] = "tok-dois-222"
+        self.assertEqual(svc_mod.versao(dict(reg, parametros_json=json.dumps(trocado)), frozenset(["documento_cliente"])), v1)
         self.assertNotEqual(svc_mod.versao(reg), v1)
-        aid, erros = self._salvar(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "chave_api": SEGREDO})
+        aid, erros = self._salvar(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": SEGREDO})
         self.assertEqual(erros, {})
         dados = self.svc.formulario(self.ctx["admin"], str(aid))
-        campo = [c for c in dados["form"]["campos"] if c["codigo"] == "chave_api"][0]
+        campo = [c for c in dados["form"]["campos"] if c["codigo"] == "documento_cliente"][0]
         self.assertTrue(campo["mantido"])
         self.assertIsNone(campo["valor"])
         self.assertNotIn(SEGREDO, json.dumps(dados, default=str))
@@ -365,17 +365,17 @@ class TestEdicao(_Base):
         self.assertFalse(nao_sensivel["mantido"])
 
         _id, erros = self._editar(aid, hora_execucao="05:00",
-                                  respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "chave_api": ""})
+                                  respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": ""})
         self.assertEqual(erros, {})
-        self.assertEqual(json.loads(self.agd.obter(aid)["parametros_json"])["chave_api"], SEGREDO)
+        self.assertEqual(json.loads(self.agd.obter(aid)["parametros_json"])["documento_cliente"], SEGREDO)
         _id, erros = self._editar(aid, respostas={"data_ref": "2026-01-20", "modo_exec": "REAL",
-                                                  "chave_api": "outro-token-99"})
-        self.assertEqual(json.loads(self.agd.obter(aid)["parametros_json"])["chave_api"], "outro-token-99")
+                                                  "documento_cliente": "outro-token-99"})
+        self.assertEqual(json.loads(self.agd.obter(aid)["parametros_json"])["documento_cliente"], "outro-token-99")
         for aud in self._auditorias():
             self.assertNotIn(SEGREDO, aud["detalhe"])
             self.assertNotIn("outro-token-99", aud["detalhe"])
         # A auditoria lista do mais novo para o mais antigo.
-        self.assertIn(u"chave_api=%s (alterado)" % svc_mod.MASCARA, self._auditorias("CAD_ALTERAR")[0]["detalhe"])
+        self.assertIn(u"documento_cliente=%s (alterado)" % svc_mod.MASCARA, self._auditorias("CAD_ALTERAR")[0]["detalhe"])
 
 
 class TestPausaRetomada(_Base):
@@ -505,13 +505,13 @@ class TestListaPrevia(_Base):
 class TestAuditoriaInclusao(_Base):
 
     def test_inclusao_auditada_sem_valor_sensivel(self):
-        aid, _erros = self._salvar(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "chave_api": SEGREDO})
+        aid, _erros = self._salvar(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": SEGREDO})
         inclusoes = self._auditorias("CAD_INSERIR")
         self.assertEqual(len(inclusoes), 1)
         aud = inclusoes[0]
         self.assertEqual((aud["ator"], aud["ip_origem"], aud["entidade_id"]), ("admin", IP, aid))
         self.assertNotIn(SEGREDO, aud["detalhe"])
-        self.assertIn(u"chave_api=%s" % svc_mod.MASCARA, aud["detalhe"])
+        self.assertIn(u"documento_cliente=%s" % svc_mod.MASCARA, aud["detalhe"])
         self.assertIn(u"usuario_id: 1", aud["detalhe"])
         self.assertLessEqual(len(aud["detalhe"]), admin_crud.LIMITE_DETALHE)
 

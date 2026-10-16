@@ -123,6 +123,11 @@ class RepoAgendamentosFake(RepoAgendamentos):
                 entidade_id=id, detalhe=detalhe_padrao,
             )
 
+    def _checar_fks(self, reg):
+        self._store.checar_fk(reg["script_id"] in self._store.scripts, "fk_tbsss_agd_scr")
+        self._store.checar_fk(reg["usuario_id"] in self._store.usuarios, "fk_tbsss_agd_usr")
+        self._store.checar_fk(self._store.ambiente_existe(reg["ambiente"]), "fk_tbsss_agd_amb")
+
     def _conferir_esperado(self, id, atual, esperado):
         for campo, valor in (esperado or {}).items():
             if atual.get(campo) != valor:
@@ -154,6 +159,7 @@ class RepoAgendamentosFake(RepoAgendamentos):
                 "created_at": dados.get("created_at") or agora,
             }
             _checar_cks(novo)
+            self._checar_fks(novo)
             aid = self._store.proximo_id("tbsss_agendamentos")
             novo["id"] = aid
             self._store.agendamentos[aid] = copy.deepcopy(novo)
@@ -174,6 +180,7 @@ class RepoAgendamentosFake(RepoAgendamentos):
                     resultado[k] = dados[k]
             # Validacao completa antes de aplicar: um UPDATE rejeitado nao altera nenhuma coluna.
             _checar_cks(resultado)
+            self._checar_fks(resultado)
             atual.update(resultado)
             self._auditar(auditoria, id)
             return copy.deepcopy(atual)
