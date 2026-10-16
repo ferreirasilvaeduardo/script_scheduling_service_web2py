@@ -21,6 +21,7 @@
         texto: '',
         offset: 0,
         status: '',
+        statusInicial: '',
         truncado: false,
         descartado: false,
         seguir: true,
@@ -44,6 +45,7 @@
           this.intervaloMs = (segundos > 0 ? segundos : 3) * 1000;
           this.maxChars = max > 0 ? max : 65536;
           this.status = raiz.getAttribute('data-status') || '';
+          this.statusInicial = this.status;
           this.truncado = raiz.getAttribute('data-truncado') === 'S';
           try {
             this.statusInfo = JSON.parse(raiz.getAttribute('data-status-info') || '{}');
@@ -168,6 +170,13 @@
             }
             self.anexar(dados.texto);
             self.offset = dados.proximo_offset;
+            // README §5.7: a frase e a barra de etapas acompanham a mudanca de situacao.
+            if (self.statusInicial && dados.status && dados.status !== self.statusInicial) {
+              self.status = dados.status;
+              self.encerrar('A situação mudou; atualizando a página…');
+              window.setTimeout(function () { window.location.reload(); }, 1500);
+              return;
+            }
             self.status = dados.status;
             self.truncado = dados.truncado === true;
             cheio = dados.texto.length >= self.maxChars;

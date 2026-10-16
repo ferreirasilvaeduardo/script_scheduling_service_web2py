@@ -126,6 +126,39 @@ def explicacao_ticket(ticket, agora, timeout_s=None):
             "fazer": fazer}
 
 
+def etapas_ticket(ticket, agora):
+    """Barra de etapas do detalhe (README §5.7): Pedido criado -> Na fila -> Rodando -> Terminou.
+
+    Cada etapa: {rotulo, quando, estado} com estado 'feito' | 'atual' | 'pendente' | 'pulado'.
+    """
+    status = ticket.get("status")
+    terminal = status in ("SUCCESS", "FAILED", "CANCELLED")
+    nunca_rodou = status == "CANCELLED" and ticket.get("started_at") is None
+    agendado = ticket.get("scheduled_at")
+    fila_quando = formatar_data(agendado)
+    if status == "PENDING" and agendado is not None and agora is not None and agendado > agora:
+        fila_quando = u"agendado para %s" % fila_quando
+    if status == "RUNNING":
+        inicio = ticket.get("started_at")
+        decorrido = (agora - inicio).total_seconds() if inicio is not None and agora is not None else 0
+        rodando_quando = u"há %s" % tempo_simples(decorrido)
+    elif nunca_rodou:
+        rodando_quando = u"não chegou a rodar"
+    else:
+        rodando_quando = formatar_data(ticket.get("started_at"))
+    fim = formatar_data(ticket.get("finished_at"))
+    if terminal:
+        fim = u"%s — %s" % (status_info(status)["rotulo"], fim)
+    estados = {
+        "PENDING": ("feito", "atual", "pendente", "pendente"),
+        "RUNNING": ("feito", "feito", "atual", "pendente"),
+    }.get(status, ("feito", "feito", "pulado" if nunca_rodou else "feito", "atual"))
+    rotulos = (u"Pedido criado", u"Na fila", u"Rodando", u"Terminou")
+    quandos = (formatar_data(ticket.get("created_at")), fila_quando, rodando_quando,
+               fim if terminal else u"-")
+    return [{"rotulo": r, "quando": q, "estado": e} for r, q, e in zip(rotulos, quandos, estados)]
+
+
 # Mensagens-padrao em duas partes: o que aconteceu + o que fazer agora (README §2.4.2, texto exato).
 MENSAGENS = {
     "sem_permissao": (u"Você não tem permissão para abrir esta página.",

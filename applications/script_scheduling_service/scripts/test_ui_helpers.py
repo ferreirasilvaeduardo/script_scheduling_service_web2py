@@ -364,6 +364,26 @@ class TestLinguagemClara(unittest.TestCase):
         self.assertIsNone(e({"status": "SUCCESS", "status_motivo": "EXIT_OK"}, self.AGORA)["fazer"])
         self.assertIn("XYZ", e({"status": "FAILED", "status_motivo": "XYZ"}, self.AGORA)["aconteceu"])
 
+    def test_etapas_do_ticket(self):
+        # CR-004 U2 (README §5.7).
+        criado = self.AGORA - datetime.timedelta(minutes=10)
+        pend = ui_helpers.etapas_ticket({"status": "PENDING", "created_at": criado,
+                                         "scheduled_at": self.AGORA + datetime.timedelta(hours=1)}, self.AGORA)
+        self.assertEqual([e["estado"] for e in pend], ["feito", "atual", "pendente", "pendente"])
+        self.assertTrue(pend[1]["quando"].startswith(u"agendado para"))
+        rod = ui_helpers.etapas_ticket({"status": "RUNNING", "created_at": criado, "scheduled_at": criado,
+                                        "started_at": self.AGORA - datetime.timedelta(minutes=2)}, self.AGORA)
+        self.assertEqual([e["estado"] for e in rod], ["feito", "feito", "atual", "pendente"])
+        self.assertEqual(rod[2]["quando"], u"há 2 minutos")
+        canc = ui_helpers.etapas_ticket({"status": "CANCELLED", "created_at": criado, "scheduled_at": criado,
+                                         "finished_at": self.AGORA}, self.AGORA)
+        self.assertEqual([e["estado"] for e in canc], ["feito", "feito", "pulado", "atual"])
+        self.assertEqual(canc[2]["quando"], u"não chegou a rodar")
+        self.assertTrue(canc[3]["quando"].startswith(u"Cancelado"))
+        ok = ui_helpers.etapas_ticket({"status": "SUCCESS", "created_at": criado, "scheduled_at": criado,
+                                       "started_at": criado, "finished_at": self.AGORA}, self.AGORA)
+        self.assertEqual([e["estado"] for e in ok], ["feito", "feito", "feito", "atual"])
+
     def test_tempo_simples(self):
         self.assertEqual(ui_helpers.tempo_simples(30), u"menos de 1 minuto")
         self.assertEqual(ui_helpers.tempo_simples(60), u"1 minuto")

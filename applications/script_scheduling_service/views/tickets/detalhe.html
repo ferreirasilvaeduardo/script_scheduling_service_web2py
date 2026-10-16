@@ -13,12 +13,14 @@ _eventos = (
     (u'Finalizado', _t['finished_at']),
 )
 _ocultos = {'ticket_id': _t['id']}
-_txt_cancelar = u'O ticket ainda não foi iniciado e será cancelado imediatamente.'
+_txt_cancelar = u'O pedido ainda não começou a rodar e será cancelado na hora.'
 if _t['status'] == 'RUNNING':
-    _txt_cancelar = u'O ticket está em execução: o agente responsável receberá o pedido e encerrará o processo.'
+    _txt_cancelar = u'O script está rodando: o servidor vai receber o pedido e parar a execução em alguns segundos.'
 pass
-_modal_cancelar = {'id': 'modal-cancelar', 'titulo': u'Cancelar ticket #%s' % _t['id'], 'texto': _txt_cancelar, 'rotulo_gatilho': u'Cancelar ticket', 'rotulo_confirmar': u'Confirmar cancelamento', 'variante': 'perigo', 'acao': URL(c='tickets', f='cancelar'), 'campos_ocultos': _ocultos}
-_modal_reexecutar = {'id': 'modal-reexecutar', 'titulo': u'Reexecutar ticket #%s' % _t['id'], 'texto': u'Um novo ticket será criado com as mesmas respostas, recompiladas contra o cadastro atual do script. O ticket original não é alterado.', 'rotulo_gatilho': u'Reexecutar', 'rotulo_confirmar': u'Criar reexecução', 'variante': 'normal', 'acao': URL(c='tickets', f='reexecutar'), 'campos_ocultos': _ocultos}
+_modal_cancelar = {'id': 'modal-cancelar', 'titulo': u'Cancelar o pedido #%s' % _t['id'], 'texto': _txt_cancelar, 'rotulo_gatilho': u'Cancelar este pedido', 'rotulo_confirmar': u'Sim, cancelar', 'variante': 'perigo', 'acao': URL(c='tickets', f='cancelar'), 'campos_ocultos': _ocultos}
+_modal_reexecutar = {'id': 'modal-reexecutar', 'titulo': u'Rodar de novo o pedido #%s' % _t['id'], 'texto': u'Um novo pedido será criado com as mesmas respostas, conferidas de novo contra o cadastro atual do script. Este pedido não muda.', 'rotulo_gatilho': u'Rodar de novo com as mesmas respostas', 'rotulo_confirmar': u'Sim, rodar de novo', 'variante': 'normal', 'acao': URL(c='tickets', f='reexecutar'), 'campos_ocultos': _ocultos}
+_exp = _t['explicacao']
+_info = ui_helpers.status_info(_t['status'])
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
@@ -41,21 +43,32 @@ _modal_reexecutar = {'id': 'modal-reexecutar', 'titulo': u'Reexecutar ticket #%s
   </div>
 </div>
 
-{{if _t['cancel_requested'] and _t['status'] == 'RUNNING':}}
-<div class="alert alert-warning sss-alerta" role="status">
-  <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-stop"></use></svg>
-  <span>Cancelamento solicitado; o agente encerrará a execução.</span>
-</div>
-{{pass}}
+<section class="sss-card sss-explicacao" aria-labelledby="titulo-explicacao">
+  <div class="sss-card-corpo">
+    <h2 class="sss-explicacao-titulo" id="titulo-explicacao">
+      <span class="sss-status {{=_info['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_info['icone']}}"></use></svg><span>{{=_exp['situacao']}}</span></span>
+    </h2>
+    <p class="sss-explicacao-frase mb-1"><strong>O que aconteceu:</strong> {{=_exp['aconteceu']}}</p>
+    {{if _exp['fazer']:}}<p class="sss-explicacao-frase mb-3"><strong>O que fazer agora:</strong> {{=_exp['fazer']}}</p>{{pass}}
+    <ol class="sss-passos" aria-label="Etapas do pedido">
+      {{for _e in _t['etapas']:}}
+      <li class="sss-passo sss-passo-{{=_e['estado']}}"{{if _e['estado'] == 'atual':}} aria-current="step"{{pass}}>
+        <span class="sss-passo-rotulo">{{=_e['rotulo']}}</span>
+        <span class="sss-passo-quando">{{=_e['quando']}}</span>
+      </li>
+      {{pass}}
+    </ol>
+  </div>
+</section>
 
 <div class="sss-detalhe-grade">
   <section class="sss-card" aria-labelledby="titulo-resumo">
     <h2 class="sss-card-titulo" id="titulo-resumo">Resumo</h2>
     <dl class="sss-card-corpo sss-resumo">
-      <dt>Status</dt>
-      <dd>{{=ui_helpers.status_info(_t['status'])['rotulo']}}</dd>
-      <dt>Motivo</dt>
-      <dd>{{if _t['status_motivo']:}}<span class="sss-mono">{{=_t['status_motivo']}}</span> — {{=_t['descricao_motivo']}}{{else:}}-{{pass}}</dd>
+      <dt>Situação</dt>
+      <dd>{{=_info['rotulo']}}</dd>
+      <dt>Detalhe técnico</dt>
+      <dd><span class="sss-mono">{{=_t['status']}}{{if _t['status_motivo']:}} / {{=_t['status_motivo']}}{{pass}}</span>{{if _t['descricao_motivo']:}} — {{=_t['descricao_motivo']}}{{pass}}</dd>
       <dt>Código de retorno</dt>
       <dd class="sss-mono">{{='-' if _t['return_code'] is None else _t['return_code']}}</dd>
       <dt>Prioridade</dt>

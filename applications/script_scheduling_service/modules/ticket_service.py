@@ -730,6 +730,11 @@ class ServicoTicket(object):
         pode_reexecutar = (status in STATUS_TERMINAIS and self._pode_reexecutar_regra(ctx, ticket)
                            and self._pode_executar_vigente(ctx, ticket))
         argv = _argv_exibicao(snap, self._base_exibicao(ctx))
+        agora = self._tickets.agora()
+        try:
+            timeout_s = self._catalogo.scripts_obter(ticket["script_id"]).get("timeout_seg")
+        except RepoNaoEncontrado:
+            timeout_s = None
         snapshot = None
         if snap is not None:
             snapshot = dict((k, snap.get(k)) for k in ("versao", "interpretador", "path_file", "tipo_param",
@@ -755,7 +760,10 @@ class ServicoTicket(object):
             "started_at": ticket.get("started_at"),
             "heartbeat_at": ticket.get("heartbeat_at"),
             "finished_at": ticket.get("finished_at"),
-            "duracao": _duracao(ticket, self._tickets.agora()),
+            "duracao": _duracao(ticket, agora),
+            # CR-004 U2 (README §5.7): frase "o que aconteceu / o que fazer" e barra de etapas.
+            "explicacao": ui_helpers.explicacao_ticket(ticket, agora, timeout_s),
+            "etapas": ui_helpers.etapas_ticket(ticket, agora),
             "log_truncado": ticket.get("log_truncado") == "S",
             "snapshot": snapshot,
             "argv_para_exibicao": argv,

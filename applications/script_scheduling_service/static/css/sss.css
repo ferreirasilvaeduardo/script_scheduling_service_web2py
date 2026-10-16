@@ -966,6 +966,66 @@
   color: var(--sss-text-muted);
 }
 
+/* Detalhe do ticket: frase do que aconteceu e barra de etapas (README §5.7, CR-004). */
+.sss-explicacao-titulo {
+  margin: 0 0 var(--sss-esp-2);
+  font-size: 1.125rem;
+}
+
+.sss-explicacao-frase {
+  overflow-wrap: anywhere;
+}
+
+.sss-passos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: var(--sss-esp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: passo;
+}
+
+.sss-passo {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--sss-esp-2) var(--sss-esp-3);
+  border-top: 4px solid var(--sss-border);
+  border-radius: var(--sss-raio);
+  background: var(--sss-surface-alt);
+  counter-increment: passo;
+}
+
+.sss-passo-rotulo::before {
+  content: counter(passo) ". ";
+}
+
+.sss-passo-rotulo {
+  font-weight: 600;
+}
+
+.sss-passo-quando {
+  font-size: var(--sss-fs-sm);
+  color: var(--sss-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.sss-passo-feito {
+  border-top-color: var(--sss-status-running-bd);
+}
+
+.sss-passo-atual {
+  border-top-color: var(--sss-accent);
+  background: var(--sss-surface);
+  box-shadow: 0 0 0 2px var(--sss-accent) inset;
+}
+
+.sss-passo-pulado .sss-passo-rotulo {
+  text-decoration: line-through;
+  color: var(--sss-text-muted);
+}
+
 .sss-lista-inline {
   display: flex;
   flex-wrap: wrap;
