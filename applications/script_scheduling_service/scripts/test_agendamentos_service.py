@@ -87,6 +87,12 @@ class _Base(unittest.TestCase):
     def _salvar(self, login="admin", **extra):
         return self.svc.salvar(self.ctx[login], IP, self._dados(**extra))
 
+    def _versao(self, reg):
+        # Como a tela: as respostas sensiveis do script entram pelo marcador (CR-003 P1).
+        sensiveis = frozenset(v["codigo"] for v in repo_factory.obter("catalogo").script_params_obter(reg["script_id"])
+                              if v.get("sensivel") == "S")
+        return svc_mod.versao(reg, sensiveis)
+
 
 class TestSalvarTipos(_Base):
 
@@ -223,7 +229,7 @@ class TestEdicao(_Base):
 
     def _editar(self, aid, login="admin", **extra):
         reg = self.agd.obter(aid)
-        dados = self._dados(id=str(aid), versao=svc_mod.versao(reg), **extra)
+        dados = self._dados(id=str(aid), versao=self._versao(reg), **extra)
         return self.svc.salvar(self.ctx[login], IP, dados)
 
     def test_edicao_troca_usuario_id_para_o_editor(self):
@@ -241,7 +247,7 @@ class TestEdicao(_Base):
     def test_edicao_de_regra_do_seed_por_outro_usuario(self):
         # Regra 4: MENSAL, script 2 em HOMOLOGACAO, criada por op.hml (id 3).
         reg = self.agd.obter(4)
-        dados = {"id": "4", "versao": svc_mod.versao(reg), "nome": reg["nome"], "tipo_recorrencia": "MENSAL",
+        dados = {"id": "4", "versao": self._versao(reg), "nome": reg["nome"], "tipo_recorrencia": "MENSAL",
                  "hora_execucao": "01:00", "dia_mes": "1", "prioridade": "3",
                  "data_inicio": reg["data_inicio"].strftime("%Y-%m-%dT%H:%M"),
                  "respostas": {"formato_saida": "JSON"}}
@@ -297,7 +303,7 @@ class TestEdicao(_Base):
     def test_edicao_concorrente(self):
         aid, _erros = self._salvar()
         reg = self.agd.obter(aid)
-        versao = svc_mod.versao(reg)
+        versao = self._versao(reg)
         self.agd.alterar(aid, {"nome": "Mudou por outro"})
         _id, erros = self.svc.salvar(self.ctx["admin"], IP, self._dados(id=str(aid), versao=versao, nome="X"))
         self.assertEqual(erros, {CAMPO_GERAL: admin_crud.MSG_CONFLITO})
@@ -311,12 +317,20 @@ class TestEdicao(_Base):
 
         with mock.patch.object(self.agd, "alterar", side_effect=alterar_com_corrida):
             _id, erros = self.svc.salvar(self.ctx["admin"], IP,
-                                         self._dados(id=str(aid), versao=svc_mod.versao(reg), nome="Y"))
+                                         self._dados(id=str(aid), versao=self._versao(reg), nome="Y"))
         self.assertEqual(erros, {CAMPO_GERAL: admin_crud.MSG_CONFLITO})
         self.assertEqual(self.agd.obter(aid)["nome"], "Mudou por outro")
         self.assertEqual(self._auditorias("CAD_ALTERAR"), [])
 
     def test_sensivel_nao_reexibido_e_vazio_mantem_valor(self):
+        # CR-003 P1: a versao do formulario tambem nao deriva da resposta sensivel.
+        aid0, _e = self._salvar(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "chave_api": "tok-um-111"})
+        v1 = self.svc.formulario(self.ctx["admin"], str(aid0))["regra"]["versao"]
+        reg = self.agd.obter(aid0)
+        trocado = json.loads(reg["parametros_json"])
+        trocado["chave_api"] = "tok-dois-222"
+        self.assertEqual(svc_mod.versao(dict(reg, parametros_json=json.dumps(trocado)), frozenset(["chave_api"])), v1)
+        self.assertNotEqual(svc_mod.versao(reg), v1)
         aid, erros = self._salvar(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "chave_api": SEGREDO})
         self.assertEqual(erros, {})
         dados = self.svc.formulario(self.ctx["admin"], str(aid))

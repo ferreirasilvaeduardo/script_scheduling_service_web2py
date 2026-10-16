@@ -862,7 +862,7 @@ Para todos os tipos, **nesta ordem**:
   * na auditoria aparece como `****`;
   * na lista, a coluna "Valor padrão" mostra `****` quando existe um valor sensível, o valor quando não é sensível e `-` quando está vazio;
   * o "Testar valor" responde `****`;
-  * **o valor sensível nunca entra no HTML, nem de forma derivada:** o hash de versão usado na concorrência (§10) troca o valor sensível por um marcador fixo. A detecção de alteração concorrente desse valor fica com o `esperado` do repositório, que compara o valor real no servidor;
+  * **o valor sensível nunca entra no HTML, nem de forma derivada:** o hash de versão usado na concorrência (§10) troca o valor sensível por um marcador fixo (ver a consequência no §10);
   * **trocar `sensivel` de `S` para `N`** é recusado enquanto houver valor sensível gravado: o `valor_padrao` do parâmetro ou qualquer `valor_padrao_sub` dos vínculos. A mensagem pede para remover esses valores antes, para que um segredo não passe a ser exibido em claro. Trocar de `N` para `S` é sempre permitido.
 * **Textos livres** (`label` e `descricao`) seguem a regra global de texto dos cadastros (§10): sem caracteres de controle e sem truncamento silencioso.
 * **Regras de dependência**, verificadas antes (a mensagem lista os scripts) e garantidas na **mesma operação** do repositório (`RepoViolacao` com constraint de aplicação):
@@ -1134,7 +1134,7 @@ Implementação: `controllers/agendamentos.py`, `modules/agendamentos_service.py
   * Guarda as respostas **resolvidas** (já com a precedência do §6.1 aplicada) e validadas, como objeto `{codigo: valor}` com `sort_keys`.
   * Valores nulos são omitidos, e `CHECKBOX` é gravado como `"true"`/`"false"`.
   * No salvamento, o snapshot completo é compilado só para validar; o daemon recompila a cada desdobro.
-* **Parâmetros sensíveis na edição:** o valor salvo nunca é reexibido. Um campo vazio mantém o valor anterior, e a tela indica isso. Na auditoria, o valor aparece como `******`, com `(alterado)` quando muda.
+* **Parâmetros sensíveis na edição:** o valor salvo nunca é reexibido, nem de forma derivada: a versão do formulário troca as respostas sensíveis do `parametros_json` pelo marcador do §10. Um campo vazio mantém o valor anterior, e a tela indica isso. Na auditoria, o valor aparece como `******`, com `(alterado)` quando muda.
 * **Prioridade:** igual ao disparo (§5.3), com padrão 2. Na edição, quem não é admin não consegue manter a prioridade 1.
 * **Concorrência:** a edição usa o padrão de versão e `esperado` dos cadastros (§10). O `esperado` inclui `proxima_execucao`, então um desdobro feito entre a leitura e a gravação gera conflito.
 * **Efeito da edição na agenda:**
@@ -1604,7 +1604,12 @@ END;
   * Campos de **texto livre** (nome de script, `label`, `descricao`, `grupo`, `categoria`, `etapa`) recebem `strip()` e recusam caracteres de controle (`\x00-\x1f`, `\x7f`).
 * **Concorrência otimista nos cadastros (sem coluna de versão):**
   * O formulário de edição carrega uma `versao`: o sha256 dos campos editáveis, `ativo` incluído, calculado pelo servidor na leitura.
-    * Campo **sensível** (`valor_padrao` de parâmetro sensível, `valor_padrao_sub` de vínculo sensível) entra no hash como um **marcador fixo** (`<sensivel:preenchido>` ou `<sensivel:vazio>`), nunca pelo valor. A versão vai para o HTML e não pode permitir adivinhar o segredo por força bruta. A alteração concorrente só desse valor é detectada pelo `esperado` do repositório, que compara o valor real.
+    * Campo **sensível** (`valor_padrao` de parâmetro sensível, `valor_padrao_sub` de vínculo sensível, respostas sensíveis no `parametros_json` de agendamento) entra no hash como um **marcador fixo** (`<sensivel:preenchido>` ou `<sensivel:vazio>`), nunca pelo valor. A versão vai para o HTML e não pode permitir adivinhar o segredo por força bruta.
+    * **Consequência aceita:** uma troca feita por outra pessoa **só** no valor sensível, entre abrir o formulário e salvar, não gera conflito.
+      * Se o usuário deixou o campo sensível em branco, fica valendo o valor mais recente.
+      * Se digitou um valor novo, vale o dele.
+      * Trocas de preenchido para vazio, ou de vazio para preenchido, mudam o marcador e geram conflito normalmente.
+      * O `esperado` do repositório continua comparando os valores reais entre a releitura e a gravação.
     * Nas telas de conjunto (homologação, vínculos), a versão cobre só o conjunto lido. Uma mudança de estado de um item entre a leitura e o POST (por exemplo, ambiente desativado) aparece como a recusa específica ("item inativo"), não como conflito.
   * Ao salvar, o service relê o registro e compara a versão. Em seguida, repassa os valores lidos ao repositório, que executa `UPDATE ... WHERE id = :id AND <coluna = valor lido>` com comparação nula-segura ANSI `(c = :v OR (c IS NULL AND :v IS NULL))` e checa o `rowcount`.
   * Se a versão divergir ou o `rowcount` for 0, o resultado é `RepoConflito`, sem alteração nem auditoria. A mensagem é a de conflito de edição do §2.4.2: "Outra pessoa mudou este registro enquanto você editava. Recarregue a página para ver a versão nova e faça a sua alteração de novo."

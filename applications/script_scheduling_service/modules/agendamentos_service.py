@@ -218,20 +218,29 @@ def _serializar(resolvidos):
     return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def _estado(registro):
-    """Projecao serializavel dos campos da versao (datetime nao e serializavel em JSON)."""
+def _estado(registro, sensiveis=()):
+    """Projecao serializavel dos campos da versao (datetime nao e serializavel em JSON).
+
+    Respostas de parametros sensiveis em parametros_json entram pelo marcador (README §7.6, §10).
+    """
     estado = {}
     for campo in CAMPOS_VERSAO:
         valor = registro.get(campo)
         if isinstance(valor, datetime.datetime):
             valor = valor.strftime("%Y-%m-%d %H:%M:%S")
         estado[campo] = valor
+    if sensiveis:
+        respostas = _parametros(registro)
+        for codigo in sensiveis:
+            if codigo in respostas:
+                respostas[codigo] = admin_crud.marcador_sensivel(respostas[codigo])
+        estado["parametros_json"] = json.dumps(respostas, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return estado
 
 
-def versao(registro):
-    """Versao do formulario de edicao (sha256 dos campos editaveis)."""
-    return admin_crud.versao(_estado(registro), CAMPOS_VERSAO)
+def versao(registro, sensiveis=()):
+    """Versao do formulario de edicao (sha256 dos campos editaveis, sem valor sensivel)."""
+    return admin_crud.versao(_estado(registro, sensiveis), CAMPOS_VERSAO)
 
 
 class ServicoAgendamentos(object):
@@ -284,6 +293,11 @@ class ServicoAgendamentos(object):
 
     def _vinculos(self, script_id):
         return [v for v in self._catalogo.script_params_obter(script_id) if v.get("ativo") == "S"]
+
+    def _codigos_sensiveis(self, script_id):
+        # Todos os vinculos, ativos ou nao: parametros_json pode guardar resposta de parametro ja desativado.
+        return frozenset(v["codigo"] for v in self._catalogo.script_params_obter(script_id)
+                         if v.get("sensivel") == "S")
 
     def _regra(self, dados, agora, erros):
         """Campos de recorrencia validados (README §7.2); so os do tipo escolhido sao mantidos."""
@@ -474,7 +488,7 @@ class ServicoAgendamentos(object):
             "data_inicio": _valor_campo_data(base.get("data_inicio")) if atual else "",
             "data_fim": _valor_campo_data(base.get("data_fim")),
             "prioridade": base.get("prioridade") or PRIORIDADE_PADRAO,
-            "versao": versao(atual) if atual else "",
+            "versao": versao(atual, self._codigos_sensiveis(atual["script_id"])) if atual else "",
             "ativo": base.get("ativo", "S"),
             "situacao": situacao(atual) if atual else None,
             "responsavel": self._login(atual["usuario_id"]) if atual else None,
@@ -560,7 +574,7 @@ class ServicoAgendamentos(object):
         sensiveis = set(v["codigo"] for v in vinculos if v.get("sensivel") == "S")
         if atual is None:
             return self._incluir(ctx, ip, registro, sensiveis)
-        if admin_crud.texto(dados.get("versao"), 64) != versao(atual):
+        if admin_crud.texto(dados.get("versao"), 64) != versao(atual, self._codigos_sensiveis(atual["script_id"])):
             return atual["id"], {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
         return self._alterar(ctx, ip, atual, registro, sensiveis)
 

@@ -244,6 +244,20 @@ class TestHomologacao(_Base):
 @_SKIP_ROOT
 class TestVinculos(_Base):
 
+    def test_versao_dos_vinculos_nao_deriva_do_sub_sensivel(self):
+        # CR-003 P1: o sub sensivel entra na versao pelo marcador, nunca pelo valor.
+        v1 = self.svc.parametros(self.ctx["admin"], str(S_CARGA))["versao"]
+        vinc = self.catalogo.script_params_obter(S_CARGA)
+        lidos = [dict((k, v[k]) for k in ("parametro_id", "ordem", "obrigatorio", "valor_padrao_sub")) for v in vinc]
+        for v in lidos:
+            if v["valor_padrao_sub"] == "segredo_dev_123":
+                v["valor_padrao_sub"] = "outro-segredo-456"
+        self.catalogo.script_params_salvar(S_CARGA, lidos)
+        tela = self.svc.parametros(self.ctx["admin"], str(S_CARGA))
+        self.assertEqual(tela["versao"], v1)
+        self.assertNotEqual(tela["versao"], scr_mod._hash(scr_mod._lidos(self.catalogo.script_params_obter(S_CARGA))))
+        self.assertNotIn("outro-segredo-456", repr(tela))
+
     def test_renumeracao_e_reordenacao(self):
         tela, itens = self._vinculos_json(S_CARGA)
         itens.reverse()

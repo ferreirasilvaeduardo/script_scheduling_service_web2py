@@ -127,6 +127,12 @@ def _padrao_texto(valor):
     return valor
 
 
+def _versao(parametro):
+    """Versao do formulario; o valor_padrao sensivel entra pelo marcador (README §6.2, §10)."""
+    sensiveis = ("valor_padrao",) if parametro.get("sensivel") == "S" else ()
+    return admin_crud.versao(parametro, CAMPOS_EDITAVEIS, sensiveis=sensiveis)
+
+
 class ServicoAdminParametros(object):
     """Regras do dicionario de parametros com repositorio e log injetados."""
 
@@ -178,7 +184,7 @@ class ServicoAdminParametros(object):
             "valor_padrao": "" if sensivel else (p.get("valor_padrao") or ""),
             "tem_padrao": bool(p.get("valor_padrao")),
             "regex_validacao": p.get("regex_validacao") or "", "sensivel": p.get("sensivel") or "N",
-            "ativo": p["ativo"], "versao": admin_crud.versao(p, CAMPOS_EDITAVEIS),
+            "ativo": p["ativo"], "versao": _versao(p),
             "vinculos": self.vinculos(p["id"]), "pode_regex": pode_regex,
         }
 
@@ -350,7 +356,7 @@ class ServicoAdminParametros(object):
             self._dependencias(atual, reg, erros)
         if erros:
             return atual["id"], erros
-        if admin_crud.texto(dados.get("versao"), 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
+        if admin_crud.texto(dados.get("versao"), 64) != _versao(atual):
             return atual["id"], {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
         alteracoes = dict((c, reg[c]) for c in CAMPOS_EDITAVEIS if c != "ativo")
         depois = dict(atual, **alteracoes)
@@ -377,7 +383,7 @@ class ServicoAdminParametros(object):
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         atual = self._obter(parametro_id)
-        if admin_crud.texto(versao, 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
+        if admin_crud.texto(versao, 64) != _versao(atual):
             raise RepoConflito("versao divergente")
         novo_ativo = "N" if atual["ativo"] == "S" else "S"
         if novo_ativo == "N":

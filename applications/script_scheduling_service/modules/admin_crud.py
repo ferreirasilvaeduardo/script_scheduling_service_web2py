@@ -52,10 +52,29 @@ def normalizar(valor):
     return None if valor in (None, "") else valor
 
 
-def versao(registro, campos):
-    """Hash dos campos editaveis lidos agora; o formulario devolve-o para detectar edicao concorrente."""
-    estado = [[c, normalizar(registro.get(c))] for c in campos]
-    bruto = json.dumps(estado, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+MARCADOR_PREENCHIDO = u"<sensivel:preenchido>"
+MARCADOR_VAZIO = u"<sensivel:vazio>"
+
+
+def marcador_sensivel(valor):
+    """Marcador fixo que substitui um valor sensivel em tudo que vai ao HTML (README §10)."""
+    return MARCADOR_VAZIO if normalizar(valor) is None else MARCADOR_PREENCHIDO
+
+
+def versao(registro, campos, sensiveis=()):
+    """Hash dos campos editaveis lidos agora; o formulario devolve-o para detectar edicao concorrente.
+
+    Campos em 'sensiveis' entram pelo marcador, nunca pelo valor: a versao vai ao HTML e um sha256
+    sem sal do segredo permitiria adivinha-lo. A troca concorrente so do segredo fica com o esperado.
+    """
+    estado = [[c, marcador_sensivel(registro.get(c)) if c in sensiveis else normalizar(registro.get(c))]
+              for c in campos]
+    return hash_estado(estado)
+
+
+def hash_estado(estado):
+    """sha256 do JSON deterministico de um estado serializavel."""
+    bruto = json.dumps(estado, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(bruto.encode("utf-8")).hexdigest()
 
 

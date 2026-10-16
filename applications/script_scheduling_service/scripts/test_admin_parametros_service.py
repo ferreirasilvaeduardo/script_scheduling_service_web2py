@@ -73,6 +73,32 @@ class _Base(unittest.TestCase):
 
 class TestCadastro(_Base):
 
+    def test_versao_nao_deriva_do_valor_sensivel(self):
+        # CR-003 P1: a versao vai ao HTML; um sha256 sem sal do segredo permitiria adivinha-lo.
+        self._editar(P_CHAVE_API, valor_padrao="segredo-numero-um-111")
+        v1 = self.svc.formulario(self.ctx["admin"], str(P_CHAVE_API))["versao"]
+        self._editar(P_CHAVE_API, valor_padrao="segredo-numero-dois-222")
+        f = self.svc.formulario(self.ctx["admin"], str(P_CHAVE_API))
+        self.assertEqual(f["versao"], v1)
+        self.assertNotIn("segredo-numero-dois-222", repr(f))
+        p = self.catalogo.parametros_obter(P_CHAVE_API)
+        com_valor = admin_crud.versao(p, prm_mod.CAMPOS_EDITAVEIS)
+        self.assertNotEqual(f["versao"], com_valor)
+
+    def test_versao_muda_com_valor_nao_sensivel(self):
+        v1 = self.svc.formulario(self.ctx["admin"], str(P_DESCRICAO_LOTE))["versao"]
+        self._editar(P_DESCRICAO_LOTE, valor_padrao="lote-a")
+        self.assertNotEqual(self.svc.formulario(self.ctx["admin"], str(P_DESCRICAO_LOTE))["versao"], v1)
+
+    def test_sensivel_de_vazio_para_preenchido_gera_conflito(self):
+        f = self.svc.formulario(self.ctx["admin"], str(P_CHAVE_API))
+        self.assertFalse(f["tem_padrao"])
+        self.catalogo.parametros_alterar(P_CHAVE_API, {"valor_padrao": "colocado-por-outro-333"})
+        dados = dict((k, f[k]) for k in ("param_nomeado", "label", "descricao", "tipo_componente", "opcoes_json",
+                                          "valor_padrao", "regex_validacao", "versao", "sensivel"))
+        _pid, erros = self.svc.salvar(self.ctx["admin"], IP, str(P_CHAVE_API), dict(dados, label="Outro"))
+        self.assertEqual(erros, {CAMPO_GERAL: admin_crud.MSG_CONFLITO})
+
     def test_inclusao_de_cada_tipo(self):
         casos = (
             {"codigo": "p_text", "tipo_componente": "TEXT", "regex_validacao": "[A-Z]{2}", "valor_padrao": "SP"},

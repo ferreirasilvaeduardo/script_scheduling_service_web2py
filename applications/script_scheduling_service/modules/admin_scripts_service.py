@@ -125,6 +125,19 @@ def _lidos(vinculos):
     return [(v["parametro_id"], v["ordem"], v["obrigatorio"], v.get("valor_padrao_sub")) for v in vinculos]
 
 
+def _versao_vinculos(vinculos, dicionario):
+    """Hash dos vinculos lidos; o sub de parametro sensivel entra pelo marcador (README §6.5, §10).
+
+    O esperado do repositorio continua com _lidos (valores reais).
+    """
+    def sub(v):
+        valor = v.get("valor_padrao_sub")
+        if dicionario.get(v["parametro_id"], {}).get("sensivel") == "S":
+            return admin_crud.marcador_sensivel(valor)
+        return valor
+    return _hash([(v["parametro_id"], v["ordem"], v["obrigatorio"], sub(v)) for v in vinculos])
+
+
 class ServicoAdminScripts(object):
     """Regras do cadastro de scripts com repositorios, configuracao do agente, relogio e log injetados."""
 
@@ -410,7 +423,7 @@ class ServicoAdminScripts(object):
             vinculos.append(item)
         disponiveis = [resumo(p) for p in sorted(dicionario.values(), key=lambda p: p["codigo"]) if p.get("ativo") == "S"]
         return {"script": {"id": script["id"], "nome": script["nome"], "tipo_param": script["tipo_param"]},
-                "vinculos": vinculos, "disponiveis": disponiveis, "versao": _hash(_lidos(atuais))}
+                "vinculos": vinculos, "disponiveis": disponiveis, "versao": _versao_vinculos(atuais, dicionario)}
 
     def _montar_vinculos(self, script, vinculos_json, atuais, erros):
         """Valida o JSON do cliente e devolve a lista final ordenada (dicts completos para o compilador)."""
@@ -482,7 +495,7 @@ class ServicoAdminScripts(object):
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         script = self._obter(script_id)
         atuais = self._catalogo.script_params_obter(script["id"])
-        if admin_crud.texto(versao, 64) != _hash(_lidos(atuais)):
+        if admin_crud.texto(versao, 64) != _versao_vinculos(atuais, self._dicionario()):
             return None, {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
         erros = {}
         final = self._montar_vinculos(script, vinculos_json, atuais, erros)
