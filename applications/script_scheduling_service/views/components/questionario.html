@@ -18,9 +18,11 @@
     _mantido = bool(_c.get('mantido'))
     _desc = []
     _exemplo = _c.get('exemplo')
-    # Descrição e exemplo viram frases separadas: "Data base da rotina. Use o formato…".
+    # Descrição e o que vem depois (exemplo, padrão, aviso de sigilo) viram frases separadas:
+    # "Data base da rotina. Use o formato…".
     _descricao = _c['descricao']
-    if _descricao and _exemplo and not _descricao.rstrip().endswith(('.', '!', '?')):
+    _segue = _exemplo or _mantido or (_c['sensivel'] and _c['tem_padrao']) or _c['padrao_texto'] is not None
+    if _descricao and _segue and not _descricao.rstrip().endswith(('.', '!', '?')):
         _descricao = _descricao.rstrip() + '.'
     pass
     _aviso = _c.get('aviso')
