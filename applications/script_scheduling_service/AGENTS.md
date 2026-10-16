@@ -8,7 +8,7 @@ Regras **obrigatórias e inegociáveis** para qualquer agente de IA ou desenvolv
 
 ## 1. Postura do Agente
 
-* Atue como **Engenheiro de Software Sênior e DBA Oracle**, com foco em Python 3.6+, web2py, Oracle 11gR2+ e portabilidade do agente (Windows, Linux e Unix — `docs/arquitetura/CR-001-multiplataforma-e-sql-ansi.md`). Banco **somente Oracle**, com SQL 11gR2 e driver adaptativo (`docs/arquitetura/CR-002-oracle-unico-e-driver-adaptativo.md`).
+* Atue como **Engenheiro de Software Sênior e DBA Oracle**, com foco em Python 3.6+, web2py, Oracle 11gR2+ e agente **somente POSIX** (Linux e Unix — `docs/arquitetura/CR-005-posix-caminho-livre-e-logs.md`, que revoga a parte Windows do CR-001). Banco **somente Oracle**, com SQL 11gR2 e driver adaptativo (`docs/arquitetura/CR-002-oracle-unico-e-driver-adaptativo.md`).
 * **Escopo:**
   * Implemente **somente** o subitem solicitado.
   * Não refatore, renomeie nem "melhore" código fora do escopo.
@@ -61,7 +61,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
   * Modos Thick e cx_Oracle usam o **Oracle Instant Client 19.x**.
   * A seleção é feita por `[oracle] modo_driver` (`auto` = Thin → Thick → cx_Oracle), sempre por **sondagem em subprocesso** antes da primeira conexão do processo (README §2.3). É proibido tentar um modo e "cair" para outro dentro do mesmo processo.
   * Erro de autenticação interrompe a cadeia (não pode consumir tentativas de login no banco).
-  * É proibido chamar `init_oracle_client(lib_dir=...)` no Linux e no Unix (lá o IC vem do `ldconfig`/`LD_LIBRARY_PATH`). No Windows e no macOS, `lib_dir` vem de `oracle_client_lib_dir`.
+  * É proibido chamar `init_oracle_client(lib_dir=...)` no Linux e no Unix (lá o IC vem do `ldconfig`/`LD_LIBRARY_PATH`). No macOS (só desenvolvimento), `lib_dir` vem de `oracle_client_lib_dir`.
   * Todo acesso ao driver passa por `modules/db_conn.py` (e pela sondagem `scripts/sondar_driver.py`). Nenhum outro módulo pode importar `oracledb` ou `cx_Oracle`.
 * Partes do web2py **permitidas:** roteamento, controllers, views (templating), `gluon.current`, `session.connect(cookie_key=...)`, `HTTP`, `redirect` e `URL`. Proibidos: `SQLFORM`, `Auth`, `Crud`, `DAL` e `Field`.
 
@@ -118,29 +118,27 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 ### 3.2 Execução de processos
 
 * **Proibido:** `shell=True`, `os.system`, `os.popen`, `subprocess.getoutput`/`getstatusoutput`, `eval`, `exec`, `compile` sobre dado externo, `pickle`/`marshal`/`shelve` em dado externo, `yaml.load`, `__import__` dinâmico e `importlib` com nome vindo de dado.
-* **Camada de plataforma:** toda primitiva dependente do sistema operacional (spawn, grupo e encerramento de processos, limites, identidade do processo, lock de instância, checagem de dono e permissão, sinais e parada) fica **somente** em `modules/plataforma/` (`posix.py` para Linux e Unix, `windows.py` para Windows, via `ctypes`). Fora dela é proibido `os.killpg`, `os.setsid`, `resource`, `fcntl`, `msvcrt`, `ctypes.windll`, `/proc` e `sys.platform` (README §8.0).
+* **Camada de plataforma:** toda primitiva dependente do sistema operacional (spawn, grupo e encerramento de processos, limites, identidade do processo, lock de instância, checagem de dono e permissão, sinais e parada) fica **somente** em `modules/plataforma/` (`posix.py`, para Linux e Unix; CR-005: Windows não é suportado). Fora dela é proibido `os.killpg`, `os.setsid`, `resource`, `fcntl`, `/proc` e `sys.platform` (README §8.0). Também é proibido `ctypes`, `msvcrt` ou qualquer API Windows em todo o projeto.
 * **Spawn único permitido** (`plataforma.iniciar_processo`, chamado só por `modules/executor.py`):
-  * **POSIX:** `subprocess.Popen(argv, shell=False, start_new_session=True, close_fds=True, stdin=DEVNULL, stdout=log_fd, stderr=STDOUT, cwd=..., env=clean_env, preexec_fn=_child_limits)`. `_child_limits` pode **somente** chamar `os.umask` e `resource.setrlimit`. É proibido criar threads no daemon, porque `preexec_fn` não é thread-safe.
-  * **Windows:** `subprocess.Popen(argv, shell=False, close_fds=True, stdin=DEVNULL, stdout=log_fd, stderr=STDOUT, cwd=..., env=clean_env, creationflags=CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW)`, seguido da atribuição imediata a um **Job Object** com `KILL_ON_JOB_CLOSE` e os limites configurados.
+  * `subprocess.Popen(argv, shell=False, start_new_session=True, close_fds=True, stdin=DEVNULL, stdout=log_fd, stderr=STDOUT, cwd=..., env=clean_env, preexec_fn=_child_limits)`. `_child_limits` pode **somente** chamar `os.umask` e `resource.setrlimit`. É proibido criar threads no daemon, porque `preexec_fn` não é thread-safe.
   * **Proibido** `stdout=subprocess.PIPE` ou `stderr=subprocess.PIPE` para scripts executados. A saída vai sempre para arquivo.
 * **Validação de caminho:** apenas por `modules/path_guard.py` (README §8.5). Prefixo por `str.startswith` é **proibido**.
-  * O script fica em uma das **pastas base** do nó (`[agent] base_script_dirs`, nome lógico → diretório local). A "base" das regras abaixo é a pasta base do script (`pasta_base`), e cada pasta base passa pelas mesmas checagens. Caminho absoluto livre no cadastro é proibido (CR-003).
-  * **POSIX:** `realpath` na base e no script, `commonpath`, `isfile`, `real != base`, dono em `script_owners` (UIDs) e modo sem escrita de grupo ou outros nem do agente.
-  * **Windows:** caminho final por `GetFinalPathNameByHandleW` em **qualquer** versão do Python (o `realpath` do Python < 3.8 não resolve links), `commonpath` sobre `normcase`, dono em `script_owners` (SIDs) e **direitos efetivos** pela ACL. `os.access(W_OK)` não serve no Windows.
-* **Allowlist de interpretadores lógicos:** `PYTHON3`, `BASH`, `SH` e `POWERSHELL`, mapeados por agente para o executável local (`[agent] interpretadores`).
-  * No Windows, só `PYTHON3` e `POWERSHELL`. **`cmd.exe`, `.bat` e `.cmd` são proibidos** (injeção de argumentos).
-  * Python é sempre invocado com `-I`; PowerShell com `-NoProfile -NonInteractive -ExecutionPolicy Bypass -File`.
+  * **Caminho livre (CR-005):** `path_file` é o caminho **absoluto** do script, em qualquer lugar do servidor; não há pastas base. Formato: absoluto, normalizado, sem `..`, `\`, `//` nem caractere de controle.
+  * `realpath` do script; recusa em pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`) e dentro de `log_dir`/`work_dir`, conferidas por `commonpath` sobre o caminho digitado **e** o resolvido; `isfile`.
+  * Dono do arquivo em `script_owner_uids`; cada diretório até `/` com dono root ou em `script_owner_uids`; arquivo e diretórios sem escrita de grupo, outros ou do agente.
+  * No nó web, arquivo inexistente localmente é aviso (o agente confere no claim); arquivo existente que falha nas checagens bloqueia (README §8.5).
+* **Allowlist de interpretadores lógicos:** `PYTHON3`, `BASH` e `SH`, mapeados por agente para o executável local (`[agent] interpretadores`).
+  * Python é sempre invocado com `-I`.
 * **Ambiente do filho:** construído **somente** por `modules/env_builder.py` a partir de um dicionário novo, com a base por plataforma (README §8.6). É proibido usar `os.environ.copy()` como base.
 * **Encerramento escalonado** (`plataforma.encerrar_grupo`):
-  * **POSIX:** `os.killpg(pgid, SIGTERM)` → `kill_grace_s` → `os.killpg(pgid, SIGKILL)` → `Popen.wait()`. `ProcessLookupError` é tratado como "grupo encerrado".
-  * **Windows:** `CTRL_BREAK_EVENT` ao grupo → `kill_grace_s` → `TerminateJobObject` → `Popen.wait()`.
+  * `os.killpg(pgid, SIGTERM)` → `kill_grace_s` → `os.killpg(pgid, SIGKILL)` → `Popen.wait()`. `ProcessLookupError` é tratado como "grupo encerrado".
   * O nó web nunca envia sinais nem encerra processos.
 * **Launcher do nó web:** `bin/sss-web.sh` recusa root, aplica `umask 077` e só inicia um interpretador `python3[.x]` seguido de `web2py.py` ou `anyserver.py` (README §12.2). Nunca o transforme em executor de comando arbitrário.
 
 ### 3.3 Segredos e PII
 
 * Proibido segredo em código, `config.ini`, banco, testes ou fixtures.
-* Segredos são lidos **somente** via `modules/sss_config.py`, a partir de `secrets.cfg`, com checagem de dono e permissão pela camada de plataforma: modo `0600` no POSIX; no Windows, DACL só com o dono e SYSTEM (README §4.1).
+* Segredos são lidos **somente** via `modules/sss_config.py`, a partir de `secrets.cfg`, com checagem de dono e permissão pela camada de plataforma: dono = usuário do processo e modo `0600` (README §4.1).
 * Todo segredo carregado é registrado em `modules/masking.py`. Logs, mensagens de erro e `log_output` passam pelo mascaramento.
 * Proibido registrar em log: senhas, hashes de senha, `PADRAO_VALOR_RUN_CONEXAO_BD`, `cookie_key`, token CSRF, valores de parâmetros `sensivel = 'S'` e cabeçalho `Cookie`.
 
@@ -255,9 +253,12 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **Exceções:**
   * Todo `except` registra o contexto (ticket, agente, ação), o código ORA- quando houver e o stack trace em ERROR.
   * É proibido `except:` ou `except Exception: pass` silenciosos.
+* **Caminhos de log (CR-005):** montados **somente** por `modules/pastas_log.py`, nunca à mão:
+  * log da aplicação: `log_dir/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log`, com troca por tamanho e retenção por dias (README §13);
+  * log de execução do script: `log_dir/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log`, com a hora de `started_at` (README §8.4).
 * **Configuração:** toda chave tem tipo e faixa validados. Chave ausente, desconhecida ou inválida interrompe a inicialização (fail-fast). Antes de abortar, a falha é registrada em CRITICAL por `sss_logging.registrar_critico_inicial`, no `log_dir` quando ele aceita escrita e no stderr caso contrário (README §12.1).
 * **Graceful shutdown:**
-  * Handlers de SIGTERM/SIGINT (POSIX) e SIGBREAK/SIGINT (Windows) apenas acionam uma flag. O arquivo `work_dir/sss-<agent_id>.stop`, verificado a cada ciclo, tem o mesmo efeito em todas as plataformas.
+  * Handlers de SIGTERM/SIGINT apenas acionam uma flag. O arquivo `work_dir/sss-<agent_id>.stop`, verificado a cada ciclo, tem o mesmo efeito.
   * O fechamento de conexão, lock file e descritores ocorre em `finally`.
 * **Reconexão:** só o `db_conn.py` decide reconectar, seguindo a lista de erros (mapeada por driver e modo) e o *backoff* do README §2.3.
 * **Tempo:**
@@ -273,7 +274,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
    * `scripts/_testenv.py` ajusta o `sys.path` para a aplicação (`modules/`) e para a raiz do web2py (`gluon`). Todo teste o importa primeiro.
    * Módulos de lógica pura (`params_compiler`, `cron_parser`, `recurrence`, `path_guard`, `env_builder`, `masking`, `security`, `rbac`) **não importam `gluon`**. Isso permite testá-los sem o framework.
 2. Testes que dependem de banco real devem usar mocks da interface de `db_conn` **ou** se marcar com `@unittest.skipUnless(os.environ.get('SSS_TEST_DSN'), ...)`. Nesse caso, o veredito do relatório é `NÃO TESTADO` para a parte de banco.
-   * **Plataforma:** a implementação da plataforma corrente é testada de verdade. A da outra plataforma é testada com dublês da API nativa e também marcada com `skipUnless(sys.platform ...)` para a execução real. Sem um runner Windows, as partes Windows saem como `NÃO TESTADO` no relatório (CR-001, D9).
+   * **Plataforma:** a implementação POSIX é testada de verdade, no Linux (CR-005).
 3. Os testes rodam em Python real, no mínimo na **3.6.0** (mínima suportada) e na **3.6.8** (referência de produção). Recomenda-se rodar também na mais nova disponível (3.13). Sem nenhum Python 3.6.x no ambiente, o veredito máximo é `NÃO TESTADO`, e o motivo deve constar nas observações.
 4. **Testes obrigatórios mínimos:**
 
@@ -282,15 +283,16 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 | `test_repo_contract.py` | A mesma bateria contra FAKE (sempre) e ORACLE (com `SSS_TEST_DSN`), em cada combinação de driver disponível — Thin (banco 12.1+), Thick e cx_Oracle (CR-002, D5): CRUD, unicidade, transições condicionais com `RepoConflito`, cascatas, imutabilidade de `nome`/`login`, paginação e ordenação |
 | `test_db_schema.py` | Todo identificador do registro com `len <= 30` usando o prefixo configurado **e** o pior caso de 8 caracteres; todo nome em ASCII; toda FK com índice de coluna líder; toda tabela com trigger no template condicional |
 | `test_py36_compat.py` | `ast.parse(..., feature_version)` ou compilação com 3.6 em todos os `.py`; busca por tokens proibidos (§2.1), `shell=True`, `os.system`, `eval(`, `exec(`, `pickle`, `XML(`, `x-html`, URLs `http(s)://` em `static/` e `views/` |
-| `test_path_guard.py` | Escape com `..`, symlink para fora da base, prefixo irmão (`/opt/x/scripts_evil`), caminho igual à base, diretório em vez de arquivo, arquivo gravável por grupo ou outros, interpretador fora da allowlist |
+| `test_path_guard.py` | Caminho relativo, não normalizado, com `..` ou `\`; pastas do sistema (digitadas e via symlink); prefixo irmão (`/usrx`, `/etcetera` aceitos); dentro de `log_dir`/`work_dir`; arquivo inexistente; diretório em vez de arquivo; dono fora de `script_owner_uids`; arquivo ou diretório ancestral gravável por grupo, outros ou pelo agente; interpretador fora da allowlist |
+| `test_pastas_log.py` | Pasta do script (acento, espaço, `/`, maiúsculas, vazio, `app`); caminho do log de execução e do log da aplicação; sufixo na troca dentro do mesmo minuto; retenção só de pastas com formato de data |
 | `test_params_compiler.py` | Precedência; obrigatório ausente; `NOMEADO` com flag longa e curta; valor iniciado em `-`; `CHECKBOX`; `SEQUENCIAL` com opcional vazio intermediário; `NENHUM`; regex com `fullmatch`; rejeição de NUL e controle; `SELECT` fora de `opcoes_json`; serialização determinística do snapshot |
 | `test_cron_parser.py` | Listas, intervalos, passos, semântica OU de dia, dia 31 e fevereiro, ano bissexto, expressão sem ocorrência, rejeição de nomes e `L`/`W`/`#` |
 | `test_recurrence.py` | `DIARIA`, `SEMANAL`, `MENSAL` (mês curto), `UNICA`, `data_fim`, *misfire* `RUN_ONCE`/`SKIP`, datas sem microssegundos |
 | `test_env_builder.py` | Ambiente sem herança de `os.environ`; rejeição de variáveis bloqueadas; passthrough; ausência de DSN |
 | `test_masking.py` | Mascaramento de segredos, connect string e valores sensíveis, inclusive quando cortados entre blocos |
 | `test_rbac.py` | Matriz de `pode_executar` (admin, perfil inativo, sem homologação, sem `EXEC_SCRIPT`); proteção do último admin (mock) |
-| `test_executor.py` | Spawn real de script de teste (`/bin/sh` no POSIX, `PYTHON3` no Windows) em diretório temporário; saída em arquivo sem PIPE; geração de mais de 1 MB de saída sem travar; timeout; encerramento escalonado matando também o neto; conversão de `returncode` negativo |
-| `test_plataforma.py` | Por plataforma: grupo e encerramento escalonado, identidade do processo (`starttime` ou `CreationTime`) contra PID reciclado, lock de instância, recusa de root ou de elevação, dono e permissão (modo ou ACL) de segredos e da árvore de scripts, resolução de link e junction no Windows |
+| `test_executor.py` | Spawn real de script de teste (`/bin/sh`) em diretório temporário; log no caminho do CR-005, com o renome para `ticket_<id>_<PID>.log`; saída em arquivo sem PIPE; geração de mais de 1 MB de saída sem travar; timeout; encerramento escalonado matando também o neto; conversão de `returncode` negativo |
+| `test_plataforma.py` | Grupo e encerramento escalonado, identidade do processo (`starttime`) contra PID reciclado, lock de instância, recusa de root, dono e permissão de segredos e do caminho do script |
 | `test_sql_oracle11g.py` | Varredura de `repo_oracle/` e `scripts/init_db.py`: nenhuma sintaxe 12c+ (§4.3); `FOR UPDATE` sempre com `WAIT n` (n ≤ 5); nenhum `SELECT *` |
 | `test_seed_fake.py` | Seed FAKE coerente com as regras (README §2.5): funcionalidades com os nomes do README, nenhum parâmetro de credencial, prioridade 1 só para admin, `created_at` nunca no futuro, snapshot e respostas compilados contra o script, agendamentos no minuto exato e alinhados à regra |
 | `test_ui_helpers.py` | Catálogo de mensagens em duas partes, nomes simples de situação e de motivo, frase e etapas do ticket, tempo em linguagem simples |
@@ -309,7 +311,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 - [ ] SQL: só em `repo_oracle/` e `init_db.py`; Oracle 11gR2 sem sintaxe 12c+; apenas binds e identificadores via `sql_ident`; `rowcount` checado em toda transição.
 - [ ] Toda transação com `COMMIT`/`ROLLBACK` explícitos; lock de linha com `FOR UPDATE WAIT n` (n ≤ 5).
 - [ ] Nenhum identificador novo acima de 30 caracteres; registro de identificadores atualizado.
-- [ ] Processos: primitivas de SO só em `plataforma/`; allowlist lógica (sem `cmd`/`.bat` no Windows), `path_guard`, `env_builder`, sem PIPE e encerramento escalonado.
+- [ ] Processos: primitivas de SO só em `plataforma/` (somente POSIX); allowlist lógica, `path_guard`, `env_builder`, sem PIPE e encerramento escalonado; caminhos de log só por `pastas_log`.
 - [ ] Web: guarda de login/RBAC, CSRF em POST, saída escapada, sem `XML()` com dado.
 - [ ] Entrada recusada (nunca truncada) acima do limite; nenhum valor sensível, nem derivado, no HTML.
 - [ ] Mensagens ao usuário pelo catálogo de `ui_helpers`, em duas partes; telas de consulta só com `GET`, sem gravação nem auditoria.

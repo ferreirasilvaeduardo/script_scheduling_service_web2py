@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Aprovado** em 2026-10-16 pelo responsável pelo produto: D1 a D15, com a condição de que tudo fique documentado no README; D16 (várias pastas base); e as decisões complementares C1 a C10, ratificadas. **Implementado** em 2026-10-16 (P1 a P11 e P6A) |
+| Status | **Aprovado** em 2026-10-16 pelo responsável pelo produto: D1 a D15, com a condição de que tudo fique documentado no README; D16 (várias pastas base); e as decisões complementares C1 a C10, ratificadas. **Implementado** em 2026-10-16 (P1 a P11 e P6A). **A D16 (várias pastas base) foi substituída pelo CR-005** (caminho absoluto livre, sem `pasta_base` nem `base_script_dirs`) |
 | Origem | Análise de negócio e funcionalidade de todo o projeto, feita só por leitura (cinco frentes), complementada por uma análise externa do agendador |
 | Restrições | Sem mudança de arquitetura e sem dependência nova. O backend FAKE e as fases F7–F9 continuam como estão planejadas |
 | Afeta | README §2.5, §3.1, §3.2, §4.1, §4.2, §4.3 (A, B, B.1, C, D), §4.4, §5.4, §5.5, §5.6, §6.2, §6.3, §6.5, §7.2, §7.3, §7.4, §7.5, §7.6, §8.5, §8.9, §8.10, §10 (padrões globais, tabelas 1 e 6), §12.1, §12.2, §13 e §14. AGENTS §3.4 e §8. `docs/PADRAO_CRUD_ADMIN.md`. Prompts F7.3, F8.3, F8.4 e F9.2 (passo P11) |

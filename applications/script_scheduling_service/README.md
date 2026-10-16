@@ -2,7 +2,7 @@
 
 Serviço web corporativo para gestão, agendamento e execução distribuída de rotinas em Python e Shell em servidores Unix/Linux restritos, integrado ao Oracle Database >= 11gR2 e com arquitetura multi-ambiente e multi-nó.
 
-> **Change requests aplicados:** CR-001 (agente multiplataforma), CR-002 (Oracle único e driver adaptativo), CR-003 (correções da análise funcional pós-F6.1) e CR-004 (telas de consulta e linguagem clara), em `docs/arquitetura/`. O texto abaixo já os incorpora.
+> **Change requests aplicados:** CR-001 (agente com interpretador lógico; a parte Windows foi revogada pelo CR-005), CR-002 (Oracle único e driver adaptativo), CR-003 (correções da análise funcional pós-F6.1; a D16, várias pastas base, foi substituída pelo CR-005), CR-004 (telas de consulta e linguagem clara) e CR-005 (somente POSIX, caminho livre do script e pastas de log por minuto), em `docs/arquitetura/`. O texto abaixo já os incorpora.
 >
 > **Autoridade documental:** este README é a autoridade máxima de **negócio, dados e algoritmos**. O `AGENTS.md` é a autoridade sobre **como codificar**. Em conflito sobre regra de negócio ou modelo de dados, prevalece este documento. Em caso de lacuna, o desenvolvedor ou agente deve **parar e perguntar**, sem presumir.
 
@@ -47,7 +47,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 |---|---|---|
 | Driver (Python 3.6) | `python-oracledb 1.x` (`< 2.0`), com `cryptography <= 40.x`; contingência `cx_Oracle 8.3` | A série 2.x exige Python 3.7+ |
 | Driver (Python 3.7 a 3.13) | `python-oracledb 2.x`; contingência `cx_Oracle 8.3` (até 3.10) | — |
-| Cliente C (modos Thick e cx_Oracle) | **Oracle Instant Client 19.x** (Linux, Unix ou Windows, conforme o nó) | Conecta do 11.2.0.4 ao 23ai. O IC 21c/23ai não conecta ao 11gR2. Obrigatório nos nós que acessam banco 11g; recomendado em todos como contingência |
+| Cliente C (modos Thick e cx_Oracle) | **Oracle Instant Client 19.x** (Linux ou Unix, conforme o nó) | Conecta do 11.2.0.4 ao 23ai. O IC 21c/23ai não conecta ao 11gR2. Obrigatório nos nós que acessam banco 11g; recomendado em todos como contingência |
 
 **Seleção do driver (CR-002, `[oracle] modo_driver`):**
 
@@ -60,8 +60,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
   * A combinação escolhida é registrada em INFO, exibida pelo `check_env.py` e mantida pelo processo; reconexões a reutilizam e só um reinício refaz a sondagem.
 * `thin`, `thick` ou `cx_oracle`: força um único candidato, sem sondagem; falha é fatal.
 * **Carregamento do Instant Client no Linux/Unix** (Thick e cx_Oracle): o IC deve estar no caminho de bibliotecas **antes** de o processo Python iniciar, via `ldconfig` (preferencial) ou `LD_LIBRARY_PATH` exportado pelos launchers `bin/sss-web.sh` e `bin/sss-scheduler.sh`. Nessas plataformas, `init_oracle_client(lib_dir=...)` não tem efeito e deve ser chamado sem `lib_dir`.
-* **Carregamento no Windows:** `init_oracle_client(lib_dir=oracle_client_lib_dir)`, com o mesmo caminho incluído no `PATH` pelos launchers `bin/sss-web.ps1` e `bin/sss-scheduler.ps1`.
-* **Desenvolvimento em macOS:** `oracle_client_lib_dir` só é usado em macOS/Windows. O IC 19 para macOS existe apenas para Intel (x86_64). Em Apple Silicon, use o modo Thin (banco 12.1+), Python x86_64 sob Rosetta ou um container/VM Linux x86_64.
+* **Desenvolvimento em macOS:** `oracle_client_lib_dir` só é usado em macOS. O IC 19 para macOS existe apenas para Intel (x86_64). Em Apple Silicon, use o modo Thin (banco 12.1+), Python x86_64 sob Rosetta ou um container/VM Linux x86_64.
 * `modules/db_conn.py` é a **única** porta de acesso ao banco. Ele contém a seleção do driver, o adaptador das diferenças de API entre `oracledb` (Thin/Thick) e `cx_Oracle` (exceções mapeadas por driver e modo para os erros do contrato, tipos de bind, conversão do estilo `:nome` para o `paramstyle` do driver, pool e `init_oracle_client`).
 * **Toda conexão deve:**
   * usar `autocommit = False`;
@@ -187,17 +186,17 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
   * O FAKE exige servidor web de processo único (o servidor de desenvolvimento do web2py). Com múltiplos workers, cada um teria um estado diferente.
 * O daemon (`run_scheduler.py`) **exige** `ORACLE`. Com `FAKE`, ele aborta.
 
-### 2.6 Plataformas suportadas (CR-001)
+### 2.6 Plataformas suportadas (CR-005: somente POSIX)
 
 | Nível | Plataformas | Garantia |
 |---|---|---|
-| **1** | Linux x86_64 e Windows Server 2016 ou mais novo (x86_64), para o nó web e para o agente | Testes automatizados e roteiro E2E (F9.2) em cada uma |
+| **1** | Linux x86_64, para o nó web e para o agente | Testes automatizados e roteiro E2E (F9.2) |
 | **2** | Demais Unix (AIX, Solaris, HP-UX, macOS, BSD) | Mesma camada POSIX; homologação pela infraestrutura sob demanda |
 
-* Toda primitiva de sistema operacional fica em `modules/plataforma/` (§8.0).
-* No Windows, as APIs nativas são usadas via `ctypes`, sem dependência nova (`pywin32` e `psutil` continuam proibidos).
-* O banco e a UI não dependem da plataforma do nó.
-* Um mesmo ambiente pode ter agentes Linux e Windows: o claim respeita os interpretadores de cada agente (§8.2).
+* **Windows não é suportado** (CR-005, que revoga a parte Windows do CR-001): nem nó web nem agente.
+* Toda primitiva de sistema operacional fica em `modules/plataforma/` (§8.0), só com a implementação POSIX. A camada continua para isolar essas primitivas e permitir os testes.
+* O banco e a UI não dependem do sabor de Unix do nó.
+* Um mesmo ambiente pode ter agentes com interpretadores diferentes: o claim respeita os interpretadores de cada agente (§8.2).
 
 ### 2.7 SQL Oracle 11gR2 (CR-002)
 
@@ -224,15 +223,15 @@ Regras de topologia:
 * O daemon é **single-threaded**: um laço de eventos com `time.sleep`/`select`. No POSIX, essa decisão torna seguro o uso de `preexec_fn` (§8.4).
   * A regra vale para o **processo inteiro**, não só para o código do SSS. O daemon sobe via `web2py.py -S ... -M -R`, que carrega o web2py e os models. A inicialização do daemon confere que só existe a thread principal (`threading.active_count() == 1`) antes do primeiro spawn, e aborta com CRITICAL se houver outra.
 * O nó web **nunca** sinaliza nem encerra processos do sistema operacional.
-* No Windows, o daemon é um processo de console iniciado por um serviço ou pelo Agendador de Tarefas da infraestrutura. Ele para pelo arquivo `work_dir/sss-<agent_id>.stop` ou por `CTRL_BREAK` (§8.11).
 * `models/*.py` deve ser leve, pois é carregado pelo daemon com `-M`. Esses arquivos não podem executar DDL, abrir conexão no import nem fazer I/O pesado.
 
 ### 3.2 Estrutura de diretórios
 
 ```text
 bin/
-  sss-web.sh   sss-web.ps1         # Linux/Unix e Windows: ambiente do Instant Client/TZ e subida do WSGI
-  sss-scheduler.sh   sss-scheduler.ps1   # Linux/Unix e Windows: ambiente e subida do daemon
+  sss-web.sh                  # ambiente do Instant Client/TZ e subida do WSGI
+  sss-scheduler.sh            # ambiente e subida do daemon
+  sss-stop.sh                 # parada controlada do daemon pelo arquivo .stop (§8.11)
 applications/script_scheduling_service/
   controllers/                # default.py (login), tickets.py, logs.py, agendamentos.py, admin_*.py, auditoria.py, dev.py (somente DEV)
   models/
@@ -242,7 +241,7 @@ applications/script_scheduling_service/
     sss_config.py             # parser e validação tipada do config.ini e do secrets.cfg
     sss_logging.py            # configuração de logging (§13)
     db_conn.py                # seleção do driver (Thin → Thick → cx_Oracle), adaptador, binds, mapa de erros, pool, conexão dedicada do daemon
-    plataforma/               # primitivas de SO: posix.py (Linux/Unix) e windows.py (ctypes) (§8.0)
+    plataforma/               # primitivas de SO, só POSIX (Linux/Unix) (§8.0, CR-005)
     sql_ident.py              # registro de identificadores, validação de owner/prefixo, nomes qualificados
     repo_errors.py            # exceções de contrato (§2.5)
     repo_factory.py           # seleção do backend FAKE/ORACLE (banco real via repo_oracle)
@@ -259,6 +258,7 @@ applications/script_scheduling_service/
     cron_parser.py            # parser CRON de 5 campos (§7.3)
     recurrence.py             # cálculo da próxima execução e misfire (§7)
     path_guard.py             # validação de interpretador e script (§8.5)
+    pastas_log.py             # pasta do script e caminhos dos logs de execução e da aplicação (§8.4, §13, CR-005)
     env_builder.py            # montagem do ambiente limpo (§8.6)
     executor.py               # spawn, timeout, kill, finalização
     log_pump.py               # arquivo local -> CLOB com mascaramento (§8.10)
@@ -278,7 +278,7 @@ applications/script_scheduling_service/
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
 docs/
   prompts/                    # prompts de execução faseada (UI-first)
-/etc/sss/secrets.cfg          # segredos fora do repositório: 0600 no POSIX; no Windows, ex.: C:\ProgramData\SSS\secrets.cfg com DACL restrita (§4.1)
+/etc/sss/secrets.cfg          # segredos fora do repositório, modo 0600 (§4.1)
 ```
 
 ---
@@ -288,10 +288,9 @@ docs/
 ### 4.1 Gestão de segredos
 
 * **Nenhum segredo** reside no `config.ini`, no repositório ou no banco.
-* Os segredos ficam em `secrets_file` (padrão `/etc/sss/secrets.cfg`; no Windows, por exemplo `C:\ProgramData\SSS\secrets.cfg`). Na inicialização, web e daemon validam o arquivo pela camada de plataforma e **recusam a subida** caso ele:
+* Os segredos ficam em `secrets_file` (padrão `/etc/sss/secrets.cfg`). Na inicialização, web e daemon validam o arquivo pela camada de plataforma e **recusam a subida** caso ele:
   * não seja um arquivo regular;
-  * **POSIX:** tenha dono diferente de `os.geteuid()` ou `mode & 0o077 != 0`;
-  * **Windows:** tenha dono diferente do SID do processo, ou DACL com qualquer entrada além do dono e de SYSTEM (inclusive herdada de Users, Authenticated Users ou Everyone).
+  * tenha dono diferente de `os.geteuid()` ou `mode & 0o077 != 0`.
 
 ```ini
 [oracle]
@@ -661,7 +660,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
 6. `INSERT` em `tbsss_ticket_resp` via `executemany`, com os valores **resolvidos** (após a precedência).
 7. Auditoria `TICKET_CRIAR` e `COMMIT`. Em qualquer exceção, `ROLLBACK`.
 
-* **Caminho do script na criação:** o nó web valida `path_file` conforme a §8.5 ("Validação no nó web"). O `NAO_E_ARQUIVO` bloqueia a criação em qualquer `sss_env`, porque o ticket não poderia ser executado. A exceção é o interpretador que a plataforma do nó web não suporta: aí vale só a etapa 1, e a validação definitiva fica no claim (§8.4).
+* **Caminho do script na criação (CR-005, D4):** o nó web valida `path_file` conforme a §8.5 ("Validação no nó web"). O formato e as pastas do sistema são conferidos sempre. Se o arquivo existe no nó web, as checagens de dono e permissão também rodam e bloqueiam a criação. Se não existe ali, o ticket é criado e a validação definitiva fica no claim (§8.4).
 * **`ticket_resp`:** respostas sem valor (`None`) não são gravadas. `CHECKBOX` é gravado como `"true"`/`"false"`.
 
 **Clareza no disparo (CR-004):**
@@ -747,15 +746,15 @@ UPDATE {owner}.tbsss_tickets
 
 **No agente dono:** a cada `cancel_poll_interval_s`, executa a varredura combinada da §8.7. Ao encontrar `cancel_requested = 'S'` em ticket próprio:
 
-1. Pedir o encerramento do grupo pela camada de plataforma (§8.0): `SIGTERM` ao grupo no POSIX; `CTRL_BREAK_EVENT` no Windows.
+1. Pedir o encerramento do grupo pela camada de plataforma (§8.0): `SIGTERM` ao grupo.
 2. Aguardar até `kill_grace_s`, consultando `Popen.poll()`.
-3. Se o processo persistir, forçar o encerramento (`SIGKILL` ao grupo no POSIX; `TerminateJobObject` no Windows) e então `Popen.wait()`.
+3. Se o processo persistir, forçar o encerramento (`SIGKILL` ao grupo) e então `Popen.wait()`.
 4. Fazer o flush final do log (§8.10).
 5. `UPDATE ... SET status = 'CANCELLED', status_motivo = 'CANCEL_USER', return_code = -1, finished_at = SYSDATE WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`, seguido de `COMMIT`.
 
 Se o processo terminou sozinho **antes** de o agente sinalizá-lo, prevalece o resultado real (`SUCCESS` ou `FAILED`).
 
-No POSIX, `ProcessLookupError` no `killpg` é tratado como "grupo já encerrado"; no Windows, o mesmo vale para um Job sem processos.
+`ProcessLookupError` no `killpg` é tratado como "grupo já encerrado".
 
 ---
 
@@ -775,7 +774,7 @@ O topo do detalhe (`tickets/detalhe/<id>`) responde "o que está acontecendo?" a
 
    * Um ticket cancelado ainda na fila mostra a etapa "Rodando" como "não chegou a rodar" e a etapa final como "Cancelado".
    * A etapa atual de um ticket `RUNNING` mostra "há {tempo}".
-3. Depois disso vêm, como hoje: resumo, linha do tempo, comando executado, respostas, reexecuções e log. A linha "Detalhe técnico" do resumo traz o status, o `status_motivo`, o `return_code` e a descrição técnica (`descricao_motivo`). O bloco do snapshot mostra a **pasta base** (`pasta_base`, snapshot v3) e o **arquivo na pasta base** (`path_file`) em linhas separadas; snapshot antigo sem pasta base mostra "-".
+3. Depois disso vêm, como hoje: resumo, linha do tempo, comando executado, respostas, reexecuções e log. A linha "Detalhe técnico" do resumo traz o status, o `status_motivo`, o `return_code` e a descrição técnica (`descricao_motivo`). O bloco do snapshot mostra o **arquivo do script** (`path_file`, snapshot v4): o caminho completo para perfil admin e `…/<nome do arquivo>` para os demais (CR-005, R-f).
 4. **Botões com o efeito escrito:** "Cancelar este pedido" (com a consequência no modal) e "Rodar de novo com as mesmas respostas" (reexecução, §5.5).
 5. A página continua se atualizando sozinha enquanto o ticket não termina, e a frase e a barra acompanham. Quando o polling do log (§8.10) recebe uma situação diferente da que a página mostrou ao abrir, o visualizador para, mostra "A situação mudou; atualizando a página…" e recarrega a página após 1,5 s.
 
@@ -906,19 +905,17 @@ Para todos os tipos, **nesta ordem**:
 
 ### 6.4 Montagem do `argv`
 
-O catálogo guarda um **interpretador lógico** (CR-001, D1). O nó web compila apenas os **argumentos** (`args`). O **agente** monta o `argv` real no claim, com o executável e o diretório base **dele**:
+O catálogo guarda um **interpretador lógico** (CR-001, D1). O nó web compila apenas os **argumentos** (`args`). O **agente** monta o `argv` real no claim, com o executável **dele**:
 
 ```text
 PYTHON3    -> [<exe PYTHON3>, "-I", <script_real>, ...args]
-BASH       -> [<exe BASH>, <script_real>, ...args]                 (só POSIX)
-SH         -> [<exe SH>, <script_real>, ...args]                   (só POSIX)
-POWERSHELL -> [<exe POWERSHELL>, "-NoProfile", "-NonInteractive",
-               "-ExecutionPolicy", "Bypass", "-File", <script_real>, ...args]   (só Windows)
+BASH       -> [<exe BASH>, <script_real>, ...args]
+SH         -> [<exe SH>, <script_real>, ...args]
 ```
 
 * `<exe X>` vem de `[agent] interpretadores` do agente (§12.1).
-* `<script_real>` é resolvido pelo agente a partir de `pasta_base` e `path_file`. O nome lógico da pasta é traduzido para o diretório local pelo mapeamento `[agent] base_script_dirs` do agente (§8.5).
-* A UI mostra o `argv` **lógico**, com o nome da pasta base no lugar do diretório, por exemplo `PYTHON3 -I <ROTINAS>/carga.py --data 2026-10-13`.
+* `<script_real>` é o `realpath` de `path_file`, o caminho absoluto cadastrado (CR-005, D2), conferido pelo `path_guard` do agente (§8.5).
+* A UI mostra o `argv` **lógico**, por exemplo `PYTHON3 -I /opt/automacoes/scripts/carga.py --data 2026-10-13`. Quem não é admin vê só o nome do arquivo no lugar do diretório: `PYTHON3 -I …/carga.py --data 2026-10-13` (CR-005, R-f).
 
 ### 6.5 Snapshot imutável (`tbsss_tickets.parametros_enviados`)
 
@@ -926,12 +923,11 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 
 ```json
 {
-  "versao": 3,
+  "versao": 4,
   "script_id": 12,
   "script_nome": "carga_faturas",
   "interpretador": "PYTHON3",
-  "pasta_base": "ROTINAS",
-  "path_file": "faturamento/carga_faturas.py",
+  "path_file": "/opt/automacoes/scripts/faturamento/carga_faturas.py",
   "tipo_param": "NOMEADO",
   "args": ["--data", "2026-10-13"],
   "respostas": {"data_ref": "2026-10-13"},
@@ -943,8 +939,9 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 * **Tipos em `respostas`:** os valores são os resolvidos e normalizados (§6.2). Opcional sem valor fica `null`, `CHECKBOX` é booleano JSON (`true`/`false`) e os demais tipos são string. Os valores sensíveis ficam no snapshot (o banco é o único lugar onde ficam visíveis, §6.5 "Parâmetros sensíveis").
 * **`sensiveis`:** lista os códigos de **todos** os parâmetros sensíveis vinculados, mesmo os que ficaram sem valor.
 * **Versão 2 (CR-001):** o snapshot não guarda mais caminho absoluto nem executável do nó que o compilou. O agente revalida `interpretador` contra a allowlist e o próprio mapeamento, resolve `path_file` pelo `path_guard` local e monta o `argv` (§6.4, §8.4).
-* **Versão 3 (CR-003, várias pastas base):** acrescenta `pasta_base`, o nome lógico da pasta onde o script fica. O agente a traduz pelo próprio mapeamento `base_script_dirs` (§8.5).
-* Snapshots das versões 1 e 2 foram gerados apenas em DEV/FAKE e não são aceitos pelo agente. O claim os rejeita com `PRECHECK_FAILED`.
+* **Versão 3 (CR-003, várias pastas base):** acrescentava `pasta_base`, o nome lógico da pasta onde o script ficava.
+* **Versão 4 (CR-005, caminho livre):** sai `pasta_base`; `path_file` é o caminho **absoluto** cadastrado. O agente o confere pelo `path_guard` local (§8.5) e monta o `argv` (§6.4, §8.4). O executável do interpretador continua fora do snapshot.
+* Snapshots das versões 1 a 3 foram gerados apenas em DEV/FAKE e não são aceitos pelo agente. O claim os rejeita com `PRECHECK_FAILED`.
 
 * O snapshot é **compilado na criação do ticket** (manual ou desdobro). O agente **nunca** recompila nem lê `tbsss_script_param` e `tbsss_parametros` para executar.
 * **Defesa em profundidade no claim:** o agente revalida o snapshot (§8.4, passo 1).
@@ -1197,24 +1194,24 @@ Responde "o que vai rodar hoje e nos próximos dias?". Exige `CAD_AGENDAMENTOS` 
 
 ## 8. Motor de Execução (ciclo 2 do daemon)
 
-### 8.0 Camada de plataforma (`modules/plataforma/`, CR-001)
+### 8.0 Camada de plataforma (`modules/plataforma/`, CR-001 e CR-005)
 
-O daemon chama apenas a interface abaixo. As implementações ficam em `posix.py` (Linux e Unix) e `windows.py` (APIs nativas via `ctypes`). O restante do motor não conhece o sistema operacional.
+O daemon chama apenas a interface abaixo, implementada em `posix.py` (Linux e demais Unix; CR-005: somente POSIX). O restante do motor não conhece o sistema operacional.
 
-| Operação | POSIX | Windows |
-|---|---|---|
-| `iniciar_processo` (§8.4) | `Popen(..., start_new_session=True, preexec_fn=_child_limits)`, com `umask(0o077)` e `setrlimit` | `Popen(..., creationflags=CREATE_NEW_PROCESS_GROUP \| CREATE_NO_WINDOW)` e atribuição imediata a um **Job Object** com `KILL_ON_JOB_CLOSE` e limites de memória e de processos |
-| `encerrar_grupo` (escalonado) | `killpg(SIGTERM)` → `kill_grace_s` → `killpg(SIGKILL)` → `wait()` | `CTRL_BREAK_EVENT` → `kill_grace_s` → `TerminateJobObject` → `wait()`. O Job também encerra netos e processos desacoplados |
-| `identidade_processo(pid)` (contra PID reciclado) | Linux: `starttime` de `/proc/<pid>/stat` (campo 22, após o último `)`). Outros Unix: `/proc/<pid>/psinfo` ou `sysctl KERN_PROC` | `GetProcessTimes().CreationTime` |
-| `processo_existe(pid)` | `os.kill(pid, 0)` | `OpenProcess` + `GetExitCodeProcess` |
-| `travar_instancia(caminho)` | `fcntl.flock(LOCK_EX \| LOCK_NB)` | `msvcrt.locking(LK_NBLCK)` |
-| `usuario_privilegiado()` | `os.geteuid() == 0` | Token elevado (Administradores) ou SYSTEM |
-| `validar_arquivo_restrito(caminho)` (segredos, §4.1) | Dono = euid e `mode & 0o077 == 0` | Dono = SID do processo e DACL só com o dono e SYSTEM |
-| `validar_arvore_scripts` (§8.5) | UID em `script_owner_uids`, sem escrita de grupo ou outros nem do agente | SID em `script_owner_sids`, sem direito de escrita efetivo para o agente nem para grupos amplos |
-| `criar_dir_trabalho` (§8.4) | `0700` | ACL só para a conta do agente |
-| Parada | SIGTERM/SIGINT acionam a flag | SIGBREAK/SIGINT acionam a flag |
+| Operação | Implementação POSIX |
+|---|---|
+| `iniciar_processo` (§8.4) | `Popen(..., start_new_session=True, preexec_fn=_child_limits)`, com `umask(0o077)` e `setrlimit` |
+| `encerrar_grupo` (escalonado) | `killpg(SIGTERM)` → `kill_grace_s` → `killpg(SIGKILL)` → `wait()` |
+| `identidade_processo(pid)` (contra PID reciclado) | Linux: `starttime` de `/proc/<pid>/stat` (campo 22, após o último `)`). Outros Unix: `/proc/<pid>/psinfo` ou `sysctl KERN_PROC` |
+| `processo_existe(pid)` | `os.kill(pid, 0)` |
+| `travar_instancia(caminho)` | `fcntl.flock(LOCK_EX \| LOCK_NB)` |
+| `usuario_privilegiado()` | `os.geteuid() == 0` |
+| `validar_arquivo_restrito(caminho)` (segredos, §4.1) | Dono = euid e `mode & 0o077 == 0` |
+| `validar_caminho_script` (§8.5) | Dono do arquivo em `script_owner_uids`; arquivo e cada diretório até `/` sem escrita de grupo, outros ou do agente |
+| `criar_dir_trabalho` (§8.4) | `0700` |
+| Parada | SIGTERM/SIGINT acionam a flag |
 
-Em todas as plataformas, o arquivo `work_dir/sss-<agent_id>.stop` também aciona a flag.
+O arquivo `work_dir/sss-<agent_id>.stop` também aciona a flag.
 
 ### 8.1 Laço principal
 
@@ -1223,7 +1220,7 @@ inicialização (§8.12) -> loop:
   a cada cancel_poll_interval_s : varredura própria (§8.7) + cancelamentos + timeouts + processos finalizados
   a cada heartbeat_interval_s   : heartbeat (§8.7) + log pump (§8.10) + self-fencing (§8.9)
   a cada orchestrator_interval_s: NODE_OFFLINE (§8.8) + desdobro (§7.5) + claim (§8.2-8.4)
-  sinal SIGTERM/SIGINT (POSIX), SIGBREAK/SIGINT (Windows) ou arquivo .stop : graceful shutdown (§8.11)
+  sinal SIGTERM/SIGINT ou arquivo .stop : graceful shutdown (§8.11)
 ```
 
 ### 8.2 Seleção de candidatos
@@ -1239,7 +1236,6 @@ SELECT id, script_id, ambiente FROM (
      AND (CASE WHEN t.status = 'PENDING' THEN t.scheduled_at END) <= SYSDATE
      AND t.ambiente IN (:amb0, :amb1)
      AND s.interpretador IN (:int0, :int1)
-     AND s.pasta_base IN (:pb0, :pb1)
      AND t.cancel_requested = 'N'
    ORDER BY (CASE WHEN t.status = 'PENDING' THEN t.prioridade END),
             (CASE WHEN t.status = 'PENDING' THEN t.scheduled_at END),
@@ -1249,9 +1245,9 @@ SELECT id, script_id, ambiente FROM (
 
 As expressões `CASE` devem ser **textualmente idênticas** às do índice baseado em função `ix_tbsss_tck_fila`, que contém apenas os tickets `PENDING`.
 
-O filtro `s.interpretador IN (:int0..:intN)` usa os interpretadores que **este** agente suporta (§12.1). Assim, num ambiente com agentes Linux e Windows, cada um só pega os scripts que consegue executar. Os placeholders são gerados pelo código, e os valores vão sempre como binds.
+O filtro `s.interpretador IN (:int0..:intN)` usa os interpretadores que **este** agente suporta (§12.1). Assim, cada agente só pega os scripts que consegue executar. Os placeholders são gerados pelo código, e os valores vão sempre como binds.
 
-Do mesmo modo, o filtro `s.pasta_base IN (:pb0..:pbN)` usa os nomes lógicos de `[agent] base_script_dirs` **deste** agente. Assim, um agente nunca pega um script de uma pasta que ele não tem.
+Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um agente que não tenha o arquivo, ou em que ele não passe na §8.5, finaliza o ticket com `PRECHECK_FAILED`.
 
 ### 8.3 Claim em três passos (por candidato, uma transação)
 
@@ -1289,16 +1285,20 @@ Do mesmo modo, o filtro `s.pasta_base IN (:pb0..:pbN)` usa os nomes lógicos de 
 
 1. **Pré-validação do snapshot.** Qualquer falha leva a `FAILED` com `PRECHECK_FAILED` e `-4`:
    * o JSON é válido e tem `versao` suportada;
-   * `versao == 3`, e `interpretador` consta na allowlist lógica **e** no mapeamento deste agente;
-   * `pasta_base` consta no mapeamento `base_script_dirs` deste agente;
-   * `path_file` passa na §8.5 contra o diretório local dessa pasta base, que fornece o `script_real`;
+   * `versao == 4`, e `interpretador` consta na allowlist lógica **e** no mapeamento deste agente;
+   * `path_file` (absoluto) passa na §8.5 neste agente, que fornece o `script_real`;
    * o `argv` é montado pelo agente (§6.4) a partir de `interpretador`, `script_real` e `args`;
    * o script segue `ativo = 'S'` e homologado para o ambiente.
 2. **Preparo do diretório de trabalho:**
-   * `work_dir/ticket_<id>/`, criado pela camada de plataforma (`0700` no POSIX; ACL só da conta do agente no Windows), que é o `cwd` do processo;
+   * `work_dir/ticket_<id>/`, criado pela camada de plataforma com modo `0700`, que é o `cwd` do processo;
    * `work_dir/ticket_<id>/tmp/` como `TMPDIR`.
-3. **Arquivo de log:** `log_dir/tickets/<AAAAMM>/ticket_<id>.log`, aberto com `os.open(path, O_WRONLY | O_CREAT | O_EXCL | O_APPEND, 0o600)`. No Windows, o modo não tem efeito e a proteção vem da ACL de `log_dir`, validada na inicialização (§8.12).
-4. **Spawn** (forma POSIX; no Windows, `plataforma.iniciar_processo` conforme a §8.0):
+3. **Arquivo de log de execução (CR-005, D5):**
+   * pasta: `log_dir/<pasta do script>/AAAA/MM/DD/HH/MI/`, com a data e a hora de `started_at` (relógio do banco, devolvido pelo claim) e a **pasta do script** = forma segura do nome do script (`pastas_log.pasta_script`: sem acento, minúsculo, cada sequência fora de `[a-z0-9._-]` vira `_`, sem `.` ou `_` nas pontas; vazio vira `script_<id>`). Ex.: `log_dir/carga_diaria/2026/10/16/14/05/`;
+   * criada com `os.makedirs(..., mode=0o750)`;
+   * o arquivo é aberto **antes** do spawn como `ticket_<id>.log.parcial`, com `os.open(path, O_WRONLY | O_CREAT | O_EXCL | O_APPEND, 0o600)`;
+   * logo depois do `Popen`, é renomeado (`os.rename`, atômico no mesmo diretório; o descritor continua válido) para **`ticket_<id>_<PID>.log`**, com o PID do processo do script. Ex.: `log_dir/carga_diaria/2026/10/16/14/05/ticket_41_12345.log`;
+   * se o spawn falhar (`SPAWN_ERROR`), o agente grava a causa no arquivo e o renomeia para `ticket_<id>_0.log`.
+4. **Spawn** (`plataforma.iniciar_processo`, §8.0):
    ```python
    p = subprocess.Popen(
        argv,
@@ -1315,7 +1315,7 @@ Do mesmo modo, o filtro `s.pasta_base IN (:pb0..:pbN)` usa os nomes lógicos de 
    os.close(log_fd)                # o filho mantém a própria cópia do descritor
    ```
    `OSError` no spawn leva a `FAILED` com `SPAWN_ERROR` e `-4`.
-5. **Instante de início:** ler `plataforma.identidade_processo(pid)` (`starttime` no Linux, `CreationTime` no Windows; §8.0) e gravar:
+5. **Instante de início:** renomear o log (passo 3), ler `plataforma.identidade_processo(pid)` (`starttime` no Linux; §8.0) e gravar:
    ```sql
    UPDATE {owner}.tbsss_tickets
       SET process_id = :pid, process_start = :process_start
@@ -1323,84 +1323,68 @@ Do mesmo modo, o filtro `s.pasta_base IN (:pb0..:pbN)` usa os nomes lógicos de 
    ```
    Se `rowcount = 0`, a posse foi perdida (por exemplo, `NODE_OFFLINE` durante o spawn): `plataforma.encerrar_grupo` e ERROR `OWNERSHIP_LOST`.
 
-### 8.5 Validação de interpretador e caminho (`path_guard.py`)
+### 8.5 Validação de interpretador e caminho (`path_guard.py`, CR-005)
 
-**Interpretadores lógicos (CR-001):**
+**Interpretadores lógicos (somente POSIX):** `PYTHON3`, `BASH` e `SH`.
 
-| Lógico | POSIX | Windows |
-|---|---|---|
-| `PYTHON3` | sim | sim |
-| `BASH` | sim | não |
-| `SH` | sim | não |
-| `POWERSHELL` | não | sim |
-
-* `cmd.exe`, `.bat` e `.cmd` são **proibidos**, porque reinterpretam argumentos e não há *quoting* seguro.
 * O executável de cada interpretador vem de `[agent] interpretadores`. Na inicialização, o agente valida que o caminho é absoluto, existe e é executável, e que a pasta dele não é gravável pelo agente.
 
-**Pastas base (CR-003): os scripts podem ficar em qualquer pasta cadastrada, desde que o arquivo exista**
+**Caminho livre (CR-005, D2): o script pode ficar em qualquer lugar do servidor, desde que exista e passe nas checagens abaixo**
 
-* Cada nó tem uma lista de pastas permitidas em `[agent] base_script_dirs`, no formato `NOME=caminho,NOME=caminho` (ex.: `ROTINAS=/opt/automacoes/scripts,BATCH=/home/batch/scripts,DADOS=/dados/rotinas`).
-  * O `NOME` é lógico, segue `^[A-Z][A-Z0-9_]{0,29}$` e é o mesmo em todos os nós que atendem o script. O caminho é o diretório **local** de cada nó, e um agente Windows mapeia o mesmo nome para o próprio diretório (ex.: `ROTINAS=D:\automacoes\scripts`).
-  * Os nomes são únicos na lista. Os caminhos são absolutos, distintos e **não aninhados**: nenhuma pasta base fica dentro de outra.
-* O cadastro do script grava `pasta_base` (o nome lógico) e `path_file` (o caminho relativo a essa pasta). O script pode ficar em qualquer subpasta de qualquer pasta base, e o arquivo precisa existir:
-  * no agente, sempre (claim, §8.4);
-  * no nó web, conforme a etapa 2 abaixo.
-* Toda pasta base passa pelas mesmas checagens de dono e permissão da antiga `base_script_dir`, na inicialização e a cada resolução.
-* Nenhuma pasta base pode conter `log_dir` ou `work_dir`, nem ficar dentro deles.
-* A tela de agentes (§13) mostra os nomes das pastas base de cada agente, gravados em `tbsss_agentes.pastas_base`.
-
-**Caminho (forma POSIX):**
+* O cadastro grava em `path_file` o **caminho absoluto** do arquivo (ex.: `/opt/automacoes/scripts/faturamento/carga_faturas.py`). Não há pastas base nem mapeamento por nó: o mesmo caminho vale para o nó web e para todos os agentes que atendem o script.
+* **Formato** (`validar_cadastro`, também nas CKs):
+  * absoluto (começa com `/`) e normalizado (`os.path.normpath(p) == p`): sem `//`, sem `/./` e sem barra no fim;
+  * sem `..` em nenhum ponto, sem `\` e sem caractere de controle;
+  * até 500 caracteres.
+* **Resolução** (forma do código):
 
 ```python
-ALLOWLIST = ('PYTHON3', 'BASH', 'SH', 'POWERSHELL')
+ALLOWLIST = ('PYTHON3', 'BASH', 'SH')
+PASTAS_DO_SISTEMA = ('/bin', '/sbin', '/usr', '/lib', '/lib32', '/lib64', '/libx32',
+                     '/etc', '/boot', '/proc', '/sys', '/dev', '/root')
 
-base_script_dir = base_script_dirs[pasta_base]   # KeyError -> PASTA_NAO_MAPEADA
-base = os.path.realpath(base_script_dir)
-real = os.path.realpath(os.path.join(base, path_file))
-try:
-    dentro = os.path.commonpath([base, real]) == base
-except ValueError:
-    dentro = False
-ok = (interpretador in ALLOWLIST and dentro and real != base and os.path.isfile(real))
+def _dentro(caminho, pasta):
+    return os.path.commonpath([caminho, pasta]) == pasta     # por componente, nunca prefixo de texto
+
+real = os.path.realpath(path_file)
+for alvo in (path_file, real):                       # o digitado e o resolvido (symlink)
+    if any(_dentro(alvo, d) for d in PASTAS_DO_SISTEMA):
+        raise PathGuardErro('PASTA_DO_SISTEMA')
+    if any(_dentro(alvo, os.path.realpath(d)) for d in (log_dir, work_dir)):
+        raise PathGuardErro('PASTA_DO_SSS')
+if not os.path.lexists(real):
+    raise PathGuardErro('NAO_ENCONTRADO')            # no nó web, vira aviso (D4)
+if not os.path.isfile(real):
+    raise PathGuardErro('NAO_E_ARQUIVO')
 ```
 
-**Caminho no Windows:**
-* o caminho final é obtido por `GetFinalPathNameByHandleW`, em **qualquer** versão do Python, porque o `realpath` do Python < 3.8 não resolve links nem junctions. *Reparse points* intermediários não resolvidos são rejeitados;
-* `commonpath` é aplicado sobre `os.path.normcase`;
-* um drive diferente do da base resulta em `FORA_DA_BASE`.
-
-Validações complementares:
-
-* **Pasta não mapeada:** `pasta_base` ausente do mapeamento do nó resulta em `PASTA_NAO_MAPEADA`. No agente, isso vira `PRECHECK_FAILED`; no nó web, ver a etapa 2.
-* **Ownership e permissão:** o script, **cada diretório** entre `base` (a pasta base do script) e o script, e o próprio `base` são verificados:
-  * **POSIX:** pertencem a um UID de `script_owner_uids` (padrão: `0`, root); não têm escrita para grupo nem para outros (`st_mode & 0o022 == 0`); e o UID do agente não tem permissão de escrita (`os.access(p, os.W_OK)` falso).
-  * **Windows:** pertencem a um SID de `script_owner_sids` (ex.: `S-1-5-32-544`, Administradores); a conta do agente, Users, Authenticated Users e Everyone não têm direito de escrita **efetivo** (`GetEffectiveRightsFromAclW`). `os.access` não serve no Windows, porque só olha o atributo "somente leitura".
+* **Dono e permissão (D3), sobre o arquivo real e sobre cada diretório entre ele e `/`, inclusive `/`:**
+  * o **arquivo** pertence a um UID de `script_owner_uids`;
+  * cada **diretório** pertence ao root (0) ou a um UID de `script_owner_uids`;
+  * nenhum deles tem escrita para grupo nem para outros (`st_mode & 0o022 == 0`). Por isso, `/tmp` e pastas compartilhadas com escrita são recusadas;
+  * o UID do agente não tem permissão de escrita em nenhum deles (`os.access(p, os.W_OK)` falso).
+* **Pastas do sistema (D3):** um caminho, digitado ou resolvido, dentro de `/bin`, `/sbin`, `/usr`, `/lib`, `/lib32`, `/lib64`, `/libx32`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev` ou `/root` é recusado com `PASTA_DO_SISTEMA`. Também é recusado um caminho dentro de `log_dir` ou `work_dir` (`PASTA_DO_SSS`).
+* **Códigos de recusa:** `CAMINHO_RELATIVO`, `CAMINHO_NAO_NORMALIZADO`, `CONTEM_PONTOS`, `SEPARADOR_INVALIDO`, `PASTA_DO_SISTEMA`, `PASTA_DO_SSS`, `NAO_ENCONTRADO`, `NAO_E_ARQUIVO`, `DONO_INVALIDO`, `GRAVAVEL_GRUPO_OUTROS`, `GRAVAVEL_PELO_AGENTE` e `INTERPRETADOR_NAO_PERMITIDO`. A mensagem de erro nunca inclui o caminho.
 * **Momento:** a validação ocorre no cadastro (UI), na criação do ticket (snapshot) e novamente no claim (§8.4).
 * **CKs de banco** (defesa adicional):
   * `ck_tbsss_scr_int` restringe `interpretador` à allowlist lógica;
-  * `ck_tbsss_scr_path` exige `path_file` relativo e sem `..`;
-  * `ck_tbsss_scr_pasta` exige `pasta_base` no formato do nome lógico.
-* **TOCTOU residual:** é aceito porque o UID do agente não consegue alterar nenhuma das pastas base.
-* **Formato de `path_file`:** caminho relativo, com `/` como único separador. É recusado se começar com `/`, contiver `..`, `\` ou `:` (letra de drive), ou começar com `//`. O agente Windows converte `/` para o separador local ao resolver (§8.5, "Caminho no Windows").
-* **Validação no nó web (decisão de plataforma):** o nó web valida contra a **própria** árvore e plataforma.
-  * A etapa 1 (`validar_cadastro`: interpretador na allowlist, formato de `path_file`, formato de `pasta_base`) roda sempre.
-  * A etapa 2 (`resolver` contra o diretório local da pasta base) só roda se a plataforma do nó web suportar o interpretador (tabela acima) **e** se a pasta base estiver mapeada no nó web. Sem isso, a tela mostra um aviso e a validação fica com o agente:
-    * interpretador de outra plataforma (ex.: `POWERSHELL` num nó web Linux): "Caminho não verificado neste servidor: a validação ocorrerá no agente Windows";
-    * pasta não mapeada no nó web: "Pasta base não disponível neste servidor: a validação ocorrerá no agente".
-  * A lista de pastas oferecida no cadastro é a do nó web. Uma pasta que só existe nos agentes deve constar no `base_script_dirs` do nó web **sem caminho** (`NOME=`). Assim ela pode ser escolhida, e a etapa 2 fica com o aviso de "pasta não disponível neste servidor". `NOME=` só é aceito no nó web: o daemon recusa a subida se uma pasta base não tiver caminho.
-  * Em qualquer caso, a validação definitiva é a do agente, no claim (§8.4).
+  * `ck_tbsss_scr_path` exige `path_file` absoluto, sem `..`, `//` nem `\`.
+* **TOCTOU residual:** aceito, porque nem o arquivo nem nenhum diretório do caminho são graváveis pelo agente.
+* **Validação no nó web (CR-005, D4):**
+  * o formato, o interpretador e as pastas do sistema e do SSS são conferidos **sempre**;
+  * se o arquivo **existe** no nó web, as checagens de dono e permissão rodam e **bloqueiam** (em qualquer `sss_env`);
+  * se o arquivo **não existe** no nó web (`NAO_ENCONTRADO`), o cadastro e a criação do ticket seguem com o aviso "Arquivo não encontrado neste servidor: a validação ocorrerá no agente". O agente confere tudo no claim (§8.4) e, se o arquivo não existir lá, finaliza com `PRECHECK_FAILED`.
 * **Cadastro na UI** (`admin_scripts`, F4.5):
-  * a etapa 1 (`validar_cadastro`) e a etapa 2 (`resolver` contra o servidor local) rodam ao salvar, com os códigos traduzidos para português. A etapa 2 segue a regra de plataforma acima;
-  * na **edição**, a etapa 2 só roda quando `pasta_base`, `path_file` ou `interpretador` mudam, ou quando o script é reativado. Assim, um arquivo ausente no nó web não impede editar a descrição ou desativar o script;
-  * `pasta_base` é um select com os nomes de `base_script_dirs` do nó web, e o servidor exige um nome dessa lista. Ao editar um script cuja pasta não está mais mapeada, o valor gravado é mantido e aparece com o selo "não mapeada neste servidor";
-  * em `sss_env = DEV`, apenas `NAO_E_ARQUIVO` (o arquivo não existe localmente) vira **aviso** e permite salvar; os demais códigos bloqueiam;
-  * em HML/PROD, a etapa 2 sempre bloqueia;
+  * o formato e as checagens acima rodam ao salvar, com os códigos traduzidos para português;
+  * na **edição**, as checagens de arquivo (existência, dono e permissão) só rodam quando `path_file` ou `interpretador` mudam, ou quando o script é reativado. Assim, um arquivo ausente no nó web não impede editar a descrição ou desativar o script. O formato e as pastas do sistema valem sempre;
+  * `path_file` é um campo de texto com o caminho absoluto; a ajuda dá um exemplo (`/opt/automacoes/scripts/carga.py`);
   * a UI sempre informa que a validação definitiva ocorre também no agente;
   * `interpretador` é um select fixo da allowlist lógica, e o servidor exige o valor exato, mesmo que o HTML tenha sido adulterado;
-  * **caminho absoluto do servidor só para admin:** o diretório de cada pasta base aparece apenas para perfil admin. Na prévia do argv, quem não é admin vê `<NOME>/path_file` (ex.: `<ROTINAS>/carga.py`);
-  * o `nome` do script é texto livre de 1 a 60 caracteres (sem caracteres de controle), único e editável, porque o snapshot guarda o nome da época e tickets e agendamentos referenciam o `script_id`;
-  * a unicidade do `nome` **diferencia maiúsculas de minúsculas**, como a UK `uk_tbsss_scr_nome` no Oracle: `Carga` e `carga` são nomes distintos. O FAKE segue a mesma regra;
-  * depois de salvar com sucesso, a tela **volta ao formulário do script**, e não à lista, para mostrar os avisos de validação (DEV) e os atalhos de homologação e de vínculo de parâmetros. É uma exceção documentada ao `PADRAO_CRUD_ADMIN.md`.
+  * **caminho do servidor só para admin (R-f):** o caminho completo aparece só para perfil admin, no cadastro, na prévia do argv e no detalhe do ticket. Quem não é admin vê `…/<nome do arquivo>` (ex.: `…/carga.py`);
+  * **nome reservado (D7):** o nome cuja pasta de log (§8.4, passo 3) seria `app` é recusado: "Este nome é reservado pelo sistema. Escolha outro.";
+  * o `nome` do script é texto livre de 1 a 60 caracteres (sem caracteres de controle), único e editável, porque o snapshot guarda o nome da época e tickets e agendamentos referenciam o `script_id`. Renomear um script muda a pasta dos **próximos** logs de execução; os antigos ficam onde estão;
+  * a unicidade do `nome` **diferencia maiúsculas de minúsculas**, como a UK `uk_tbsss_scr_nome` no Oracle: `Carga` e `carga` são nomes distintos (e dividem a pasta de log `carga`, o que é aceito, porque o arquivo leva o número do ticket). O FAKE segue a mesma regra;
+  * depois de salvar com sucesso, a tela **volta ao formulário do script**, e não à lista, para mostrar os avisos de validação e os atalhos de homologação e de vínculo de parâmetros. É uma exceção documentada ao `PADRAO_CRUD_ADMIN.md`.
 
 ### 8.6 Ambiente do processo filho (`env_builder.py`)
 
@@ -1419,8 +1403,7 @@ Validações complementares:
 | `env_passthrough` | copiadas do ambiente do daemon (por exemplo, `ORACLE_HOME`, `TNS_ADMIN`, `NLS_LANG`, `LD_LIBRARY_PATH`) |
 
 * **Bloqueadas** mesmo se listadas em `env_passthrough`: `LD_PRELOAD`, `LD_AUDIT`, `PYTHONPATH`, `PYTHONHOME`, `PYTHONSTARTUP`, `PYTHONINSPECT`, `BASH_ENV`, `ENV`, `SHELLOPTS`, `BASHOPTS`, `IFS`, `PERL5LIB`, `PERL5OPT`. A configuração que as contiver é rejeitada na inicialização.
-* **Windows:** a base é `SystemRoot`, `PATH=%SystemRoot%\System32;%SystemRoot%`, `TEMP`/`TMP` e `USERPROFILE` = `work_dir\ticket_<id>`, `PATHEXT` e `COMSPEC` com os valores padrão fixos, mais as variáveis `PYTHON*`/`SSS_*` da tabela. `LANG`/`LC_ALL` não se aplicam. A lista de bloqueio inclui também `PSModulePath` e `__PSLockdownPolicy` quando vierem do `env_passthrough`.
-* **Risco residual documentado:** a credencial no ambiente é legível pelo mesmo usuário e por administradores (`/proc/<pid>/environ` no Linux; leitura da memória do processo no Windows). Mitigação: o agente roda com uma conta dedicada, sem login interativo nem privilégio administrativo.
+* **Risco residual documentado:** a credencial no ambiente é legível pelo mesmo usuário e pelo root (`/proc/<pid>/environ` no Linux). Mitigação: o agente roda com uma conta dedicada, sem login interativo nem privilégio administrativo.
 
 ### 8.7 Varredura própria, heartbeat, timeout e finalização
 
@@ -1505,11 +1488,11 @@ END;
   * A tela mantém no máximo cerca de 5 milhões de caracteres. Ao passar desse limite, descarta o início e mantém os últimos 4 milhões, com um aviso. O log completo fica disponível no **download**, que é feito em streaming.
   * Em erro transitório, o polling continua com intervalo três vezes maior. Sessão expirada interrompe o polling e pede um novo login.
 * **Lista de tickets:** ordenada por `created_at DESC`. A tela se atualiza sozinha a cada 10 s, valor fixo no código e fora do `config.ini`. A ordem da fila de execução (§5.3) é aplicada só pelo daemon.
-* Arquivos locais com mais de `local_log_retention_days` dias são removidos pelo `purge.py`.
+* Os logs de execução (§8.4, passo 3) com mais de `local_log_retention_days` dias são removidos pelo `purge.py` (§11.3).
 
 ### 8.11 Graceful shutdown do daemon
 
-* SIGTERM/SIGINT (POSIX), SIGBREAK/SIGINT (Windows) e o arquivo `work_dir/sss-<agent_id>.stop` apenas acionam uma flag; o laço trata o restante.
+* SIGTERM/SIGINT e o arquivo `work_dir/sss-<agent_id>.stop` apenas acionam uma flag; o laço trata o restante.
 * O daemon para de fazer desdobro e claim.
 
 | `shutdown_mode` | Comportamento |
@@ -1523,24 +1506,23 @@ Em seguida, o daemon faz o flush dos logs, grava `tbsss_agentes.status = 'PARADO
 
 O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualquer passo:
 
-1. **Usuário:** `plataforma.usuario_privilegiado()` precisa ser falso. É proibido rodar como root (POSIX) ou com token elevado/SYSTEM (Windows).
+1. **Usuário:** `plataforma.usuario_privilegiado()` precisa ser falso. É proibido rodar como root.
 2. **Configuração:** carregar e validar o `config.ini` (tipos, faixas, invariantes da §8.9 e `max_parallel_jobs <= max_parallel_hard_limit`), o `owner` e o `table_prefix` (regex do `AGENTS.md`), e `agent_id` contra `^[A-Za-z0-9._-]{1,30}$`.
 3. **Segredos:** validar o `secrets.cfg` (§4.1).
 4. **Diretórios e interpretadores:**
-   * cada pasta de `base_script_dirs` tem caminho, existe e passa na regra de ownership e permissão da §8.5; os nomes são únicos e os caminhos não são aninhados;
-   * `log_dir` e `work_dir` existem, são graváveis, **não** ficam sob nenhuma pasta base nem contêm uma pasta base (§8.5) e, no Windows, têm ACL restrita à conta do agente;
-   * cada entrada de `[agent] interpretadores` é válida para a plataforma (§8.5).
+   * `log_dir` e `work_dir` existem, são graváveis pelo agente e não ficam dentro das pastas do sistema (§8.5);
+   * cada entrada de `[agent] interpretadores` é uma chave da allowlist com caminho absoluto e executável (§8.5).
 5. **Instância única por host:** `plataforma.travar_instancia` em `work_dir/sss-<agent_id>.lock`.
 6. **Banco:** selecionar o driver (§2.3; a sondagem roda aqui), conectar e confirmar o relógio do banco (`SELECT SYSDATE FROM DUAL`).
 7. **Registro em `tbsss_agentes`:**
    * Se existir linha do mesmo `codigo` com `status = 'ATIVO'`, `heartbeat_at` recente (menor que `node_offline_timeout_s`) **e** `hostname` diferente, recusar a subida (`agent_id` duplicado).
-   * Caso contrário, executar `MERGE` com `status = 'ATIVO'`, `hostname`, `pid_daemon`, `versao`, `ambientes`, `plataforma`, `interpretadores`, `pastas_base` e `iniciado_em`.
+   * Caso contrário, executar `MERGE` com `status = 'ATIVO'`, `hostname`, `pid_daemon`, `versao`, `ambientes`, `plataforma`, `interpretadores` e `iniciado_em`.
    * Auditar `AGENTE_INICIO`.
 8. **Ambientes atendidos:** todos existem em `tbsss_ambientes` com `ativo = 'S'`. Um ambiente inexistente é ERROR fatal; um ambiente inativo gera WARN e é ignorado.
 9. **Startup check** de tickets `RUNNING` do próprio `agente_id`:
    * `process_id` nulo leva a `FAILED` com `ORPHAN_PROCESS`.
    * PID inexistente (`plataforma.processo_existe`) ou identidade diferente de `process_start` (PID reciclado) também leva a `ORPHAN_PROCESS`.
-   * PID vivo com a mesma identidade indica um filho de uma instância anterior do daemon. Como não pode ser adotado, ele é encerrado (`plataforma.encerrar_grupo`; no Windows, pelo Job nomeado `SSS-<agent_id>-<ticket_id>`, reaberto por nome) e finalizado com `ORPHAN_PROCESS`.
+   * PID vivo com a mesma identidade indica um filho de uma instância anterior do daemon. Como não pode ser adotado, ele é encerrado (`plataforma.encerrar_grupo`) e finalizado com `ORPHAN_PROCESS`.
 
 ---
 
@@ -1697,10 +1679,9 @@ END;
   * `ck_tbsss_scr_tparam (tipo_param IN ('NOMEADO','SEQUENCIAL','NENHUM'))`
   * `ck_tbsss_scr_ativo`
   * `ck_tbsss_scr_paral (max_qtd_parallel_env BETWEEN 1 AND 999)`
-  * `ck_tbsss_scr_int (interpretador IN ('PYTHON3','BASH','SH','POWERSHELL'))`
-  * `ck_tbsss_scr_path (SUBSTR(path_file, 1, 1) <> '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '\') = 0 AND INSTR(path_file, ':') = 0)` (formato do §8.5)
+  * `ck_tbsss_scr_int (interpretador IN ('PYTHON3','BASH','SH'))`
+  * `ck_tbsss_scr_path (SUBSTR(path_file, 1, 1) = '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\') = 0)` (formato do §8.5, CR-005)
   * `ck_tbsss_scr_tmout (timeout_seg IS NULL OR timeout_seg > 0)`
-  * `ck_tbsss_scr_pasta (REGEXP_LIKE(pasta_base, '^[A-Z][A-Z0-9_]{0,29}$'))`
 * **Colunas:**
   * `id`
   * `nome VARCHAR2(60 CHAR) NOT NULL`
@@ -1709,8 +1690,7 @@ END;
   * `categoria VARCHAR2(30 CHAR)`
   * `etapa VARCHAR2(30 CHAR)`
   * `interpretador VARCHAR2(15 CHAR) NOT NULL` (lógico; o executável é mapeado por agente, §8.5)
-  * `pasta_base VARCHAR2(30 CHAR) NOT NULL` (nome lógico da pasta base, mapeado por nó em `base_script_dirs`, §8.5)
-  * `path_file VARCHAR2(250 CHAR) NOT NULL` (relativo à pasta base)
+  * `path_file VARCHAR2(500 CHAR) NOT NULL` (caminho absoluto do script, §8.5, CR-005)
   * `tipo_param VARCHAR2(15 CHAR) DEFAULT 'NOMEADO' NOT NULL`
   * `max_qtd_parallel_env NUMBER(3) DEFAULT 1 NOT NULL`
   * `timeout_seg NUMBER(7)`
@@ -1895,9 +1875,8 @@ END;
   * `pid_daemon NUMBER(8)`
   * `versao VARCHAR2(20 CHAR)`
   * `ambientes VARCHAR2(500 CHAR)`
-  * `plataforma VARCHAR2(10 CHAR)`, com CK `ck_tbsss_agt_plat (plataforma IN ('LINUX','WINDOWS','UNIX'))`
+  * `plataforma VARCHAR2(10 CHAR)`, com CK `ck_tbsss_agt_plat (plataforma IN ('LINUX','UNIX'))`
   * `interpretadores VARCHAR2(100 CHAR)` (lista separada por vírgula dos interpretadores lógicos suportados)
-  * `pastas_base VARCHAR2(500 CHAR)` (lista separada por vírgula dos **nomes** das pastas base do agente, sem os caminhos)
   * `status VARCHAR2(10 CHAR) DEFAULT 'ATIVO' NOT NULL`
   * `iniciado_em DATE`
   * `heartbeat_at DATE`
@@ -1963,8 +1942,8 @@ END;
   Com `COMMIT` por lote, até `rowcount = 0`.
 * `tbsss_ticket_resp` é removida em cascata, e `parent_ticket_id` dos filhos vira `NULL`.
 * `tbsss_auditoria` usa `audit_retention_days` e o mesmo padrão de lote.
-* Os logs locais de ticket mais antigos que `local_log_retention_days` são removidos.
-* A execução é agendada pelo agendador do sistema operacional no servidor do agente (cron no POSIX; Agendador de Tarefas no Windows) e auditada como `PURGE`.
+* **Logs de execução** (§8.4, passo 3): remove as pastas de minuto `log_dir/<pasta do script>/AAAA/MM/DD/HH/MI/` cuja data é anterior a `local_log_retention_days` dias, e depois as pastas de hora, dia, mês, ano e script que ficarem vazias. A data vem do próprio caminho, não do `mtime`. A pasta `log_dir/app/` nunca é tocada pelo purge (§13). Só entram pastas cujo caminho tem o formato exato `<pasta>/AAAA/MM/DD/HH/MI`; qualquer outra coisa em `log_dir` é ignorada.
+* A execução é agendada pelo cron no servidor do agente e auditada como `PURGE`.
 
 ---
 
@@ -1983,7 +1962,7 @@ dsn = 10.0.0.1:1521/servico_homolog
 owner = gfcadastro
 table_prefix = tbsss_
 modo_driver = auto                ; auto (Thin → Thick → cx_Oracle) | thin | thick | cx_oracle (§2.3)
-oracle_client_lib_dir =           ; somente Windows/macOS; no Linux/Unix usar ldconfig/LD_LIBRARY_PATH
+oracle_client_lib_dir =           ; somente macOS (DEV); no Linux/Unix usar ldconfig/LD_LIBRARY_PATH
 call_timeout_ms = 30000
 pool_min = 1
 pool_max = 4
@@ -1994,14 +1973,9 @@ secrets_file = /etc/sss/secrets.cfg
 [agent]
 agent_id = srv-linux-prod-01
 ambientes_atendidos = PRODUCAO,HOMOLOGACAO
-base_script_dirs = ROTINAS=/opt/automacoes/scripts,BATCH=/home/batch/scripts
-                                  ; NOME=caminho; nomes ^[A-Z][A-Z0-9_]{0,29}$, caminhos absolutos e não aninhados (§8.5)
-                                  ; no nó web, NOME= (sem caminho) declara uma pasta que só existe nos agentes
 work_dir = /var/lib/sss/work
-script_owner_uids = 0             ; POSIX: UIDs donos da árvore de scripts
-script_owner_sids =               ; Windows: SIDs donos da árvore (ex.: S-1-5-32-544)
+script_owner_uids = 0             ; UIDs que podem ser donos dos scripts (§8.5); recomendado um UID dedicado, sem o 0
 interpretadores = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh
-                                  ; Windows ex.: PYTHON3=C:\Python36\python.exe,POWERSHELL=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
 max_parallel_jobs = 4
 max_parallel_hard_limit = 32
 claim_batch_size = 20
@@ -2018,14 +1992,14 @@ shutdown_grace_s = 30
 misfire_policy = RUN_ONCE         ; RUN_ONCE | SKIP
 misfire_tolerance_s = 300
 cron_horizon_days = 1461
-child_locale = C.UTF-8            ; somente POSIX
+child_locale = C.UTF-8
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 
 [logging]
 log_dir = /var/log/sss
 level = INFO                      ; DEBUG | INFO | WARN | ERROR
-app_log_max_bytes = 10485760
-app_log_backups = 10
+app_log_max_bytes = 10485760       ; troca de arquivo do log da aplicação (§13)
+app_log_retention_days = 30       ; pastas log_dir/app/AAAA/MM/DD mais antigas são apagadas (§13)
 max_log_size_bytes = 5242880
 max_local_log_size_bytes = 52428800
 local_log_retention_days = 30
@@ -2062,8 +2036,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[secrets]` | `secrets_file` | caminho | obrigatório |
 | `[agent]` | `agent_id` | texto | `^[A-Za-z0-9._-]{1,30}$` |
 | `[agent]` | `ambientes_atendidos`, `script_owner_uids` | lista CSV | obrigatória |
-| `[agent]` | `script_owner_sids`, `interpretadores` (F8.0) | lista CSV | conforme §8.5 |
-| `[agent]` | `base_script_dirs` | lista `NOME=caminho` | obrigatória, com ao menos uma pasta; nomes únicos `^[A-Z][A-Z0-9_]{0,29}$`; caminhos absolutos, distintos e não aninhados; caminho vazio só no nó web (§8.5) |
+| `[agent]` | `interpretadores` (F8.0) | lista `CHAVE=caminho` | conforme §8.5 |
 | `[agent]` | `work_dir` | caminho | obrigatório |
 | `[agent]` | `max_parallel_jobs`, `max_parallel_hard_limit` | inteiro | 1 a 999, com `max_parallel_jobs <= max_parallel_hard_limit` |
 | `[agent]` | `claim_batch_size`, `schedule_batch_size` | inteiro | 1 a 1.000 |
@@ -2079,8 +2052,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[logging]` | `level` | enum | `DEBUG`, `INFO`, `WARN`, `ERROR` |
 | `[logging]` | `app_log_max_bytes`, `max_log_size_bytes` | inteiro | 1.024 a 1.073.741.824 |
 | `[logging]` | `max_local_log_size_bytes` | inteiro | 1.024 a 10.737.418.240 |
-| `[logging]` | `app_log_backups` | inteiro | 1 a 100 |
-| `[logging]` | `local_log_retention_days` | inteiro | 1 a 3.650 |
+| `[logging]` | `app_log_retention_days`, `local_log_retention_days` | inteiro | 1 a 3.650 |
 | `[web]` | `session_idle_timeout_s`, `login_bloqueio_s` | inteiro | 1 a 86.400 |
 | `[web]` | `login_max_tentativas` | inteiro | **1 a 99** (a coluna `tentativas_falha` é `NUMBER(2)`) |
 | `[web]` | `log_poll_interval_s` | inteiro | 1 a 3.600 |
@@ -2091,10 +2063,10 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 
 **Falha de configuração (web e daemon):**
 * A subida é abortada com um registro **CRITICAL** contendo a seção, a chave e o motivo, sem nunca o valor de um segredo.
-* O CRITICAL vai para o log da aplicação (`sss_web.log` ou `sss_scheduler.log`) quando `[logging]` é válido. Quando não é (por exemplo, `log_dir` inválido), vai para o stderr do processo, no mesmo formato do §13.
+* O CRITICAL vai para o log da aplicação (§13, `<nome_log>` `sss_web` ou `sss_scheduler`) quando `[logging]` é válido. Quando não é (por exemplo, `log_dir` inválido), vai para o stderr do processo, no mesmo formato do §13.
 * No nó web, a requisição recebe a página de erro genérica (500), sem o detalhe.
 
-A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR-002); até lá, o código atual (backend FAKE) ainda lê as chaves antigas. As chaves `script_owner_sids` e `interpretadores` passam a ser lidas e validadas a partir do F8.0 (CR-001). A chave `base_script_dirs` substitui `base_script_dir` a partir do passo P6A do CR-003, porque o cadastro de scripts no nó web já a utiliza; a chave antiga deixa de ser aceita.
+A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR-002); até lá, o código atual (backend FAKE) ainda lê as chaves antigas. A chave `interpretadores` passa a ser lida e validada a partir do F8.0 (CR-001). **CR-005:** saem `base_script_dirs` (a antiga `base_script_dir` também continua recusada) e `script_owner_sids`; `app_log_backups` é substituída por `app_log_retention_days`. As chaves que saem passam a ser recusadas como desconhecidas.
 
 ### 12.2 Launchers
 
@@ -2106,15 +2078,9 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
 * fazer `exec` do processo Python, para que os sinais cheguem diretamente a ele;
 * iniciar **somente** o processo Python do SSS. O `sss-web.sh` aceita três formas: sem argumentos (servidor padrão), só opções (`-...`, repassadas ao `anyserver.py`) ou `<python3[.x]> web2py.py|anyserver.py [args]`. Qualquer outro comando é recusado com código 2; repassar um comando arbitrário (`exec "$@"` sem essas checagens) é proibido.
 
-`bin/sss-web.ps1` e `bin/sss-scheduler.ps1` (Windows) devem:
+`bin/sss-stop.sh` cria o arquivo `work_dir/sss-<agent_id>.stop`, para a parada controlada sem sinal (§8.11).
 
-* incluir o Instant Client 19 no `PATH` do processo e definir `TZ`;
-* recusar a execução com token elevado ou como SYSTEM;
-* iniciar o Python em primeiro plano, para que `CTRL_BREAK` e o arquivo `.stop` sejam tratados pelo próprio daemon.
-
-`bin/sss-stop.sh` e `bin/sss-stop.ps1` criam o arquivo `work_dir/sss-<agent_id>.stop`, para a parada controlada sem sinal (§8.11).
-
-**Pacote de implantação:** `scripts/empacotar.py` (biblioteca padrão, roda em Linux e Windows) gera `dist/sss-<versao>.tar.gz` e `dist/sss-<versao>.zip` com o mesmo conteúdo e um `SHA256SUMS`, e falha se encontrar segredo ou código de DEV no pacote (F9.1).
+**Pacote de implantação:** `scripts/empacotar.py` (biblioteca padrão) gera `dist/sss-<versao>.tar.gz` com um `SHA256SUMS`, e falha se encontrar segredo ou código de DEV no pacote (F9.1).
 
 **Pastas de runtime do web2py:** o web2py cria as pastas `applications/`, `deposit/`, `logs/` e `site-packages/` no diretório corrente quando é executado fora da raiz. Essas pastas nunca fazem parte da aplicação: o `.gitignore` as ignora dentro de `applications/script_scheduling_service/`, e os launchers e a documentação sempre executam a partir da raiz do web2py.
 
@@ -2127,8 +2093,14 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
 
 ## 13. Observabilidade
 
-* **Logs da aplicação:**
-  * Arquivos `log_dir/sss_web.log` e `log_dir/sss_scheduler.log`, com `RotatingFileHandler` (`app_log_max_bytes`, `app_log_backups`).
+* **Logs da aplicação (CR-005, D6):**
+  * Caminho: **`log_dir/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log`**. O `<nome_log>` é o do processo: `sss_web` (nó web), `sss_scheduler` (daemon), `purge` e `init_db` (CLIs). O `<PID>` é o do próprio processo. Ex.: `log_dir/app/2026/10/16/08/54/sss_web_4321.log`.
+  * O arquivo nasce na pasta do minuto em que o processo sobe, pelo relógio local do processo (com o `TZ` do launcher). Cada processo (cada worker do WSGI) tem o próprio arquivo.
+  * **Troca por tamanho:** ao atingir `app_log_max_bytes`, o processo fecha o arquivo e abre um novo na pasta do minuto **atual**. Se já existir um arquivo com o mesmo nome (mesmo minuto e mesmo PID), o novo ganha o sufixo `_<n>`: `sss_web_4321_2.log`.
+  * **Retenção:** o próprio processo apaga as pastas `log_dir/app/AAAA/MM/DD` com data anterior a `app_log_retention_days` dias, na subida e a cada troca de arquivo. Só entram pastas com o formato exato de data; o resto é ignorado. O `purge.py` nunca toca em `log_dir/app/`.
+  * Pastas criadas com `0750` e arquivos com `0640`, sob o `umask` do launcher.
+  * O log de acesso do próprio web2py (`httpserver.log`, na raiz do web2py) não segue este padrão; ele é do servidor embutido e fica fora do `log_dir`.
+  * **Logs de execução dos scripts** ficam em `log_dir/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log` (§8.4, passo 3). Por isso, nenhum script pode ter a pasta de log `app` (§8.5).
   * Formato: `%(asctime)s %(levelname)s [pid=%(process)d] [agente=<id>] [ticket=<id|->] [acao=<CLAIM|SPAWN|HB|...>] %(message)s`, com data ISO local e offset.
 * **Níveis:**
 
@@ -2153,7 +2125,7 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
     | `OFFLINE` | além disso, sem heartbeat ou com status `PARADO` | cinza, círculo cortado |
 
   * Cartões por agente com "há N s", lista expansível dos tickets `RUNNING` (com link para o detalhe), legenda dos estados e atualização automática a cada 15 s (fragmento `.load`, que preserva as listas abertas).
-  * Cada cartão mostra também a plataforma, os interpretadores e os **nomes** das pastas base do agente (`pastas_base`), sem os caminhos.
+  * Cada cartão mostra também a plataforma e os interpretadores do agente.
   * Backend FAKE (DEV): o `agt-host01` renova o heartbeat a cada leitura. O `agt-host02` nasce com o heartbeat congelado 30 s antes da carga do seed, então envelhece com o relógio: começa `ATRASADO`, passa a `EM_RISCO` cerca de 1 min depois e a `OFFLINE` cerca de 2,5 min depois.
 * **Painel inicial** (`default/index`), com cartões por permissão:
   * contagem por status dos tickets criados nas últimas 24 h e meus últimos 5 tickets (quem consulta tickets, no escopo da lista);
@@ -2166,12 +2138,11 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
 
 | Risco | Mitigação vigente |
 |---|---|
-| Credencial legível no ambiente do processo (`/proc/<pid>/environ` no Linux; memória do processo no Windows), pelo mesmo usuário ou por administradores | Conta dedicada, sem shell interativo nem privilégio administrativo, e servidor restrito |
+| Credencial legível no ambiente do processo (`/proc/<pid>/environ` no Linux), pelo mesmo usuário ou pelo root | Conta dedicada, sem shell interativo nem privilégio administrativo, e servidor restrito |
 | Argumentos visíveis em `ps`/lista de processos | Proibição de parâmetro de senha; parâmetros sensíveis apenas mascarados na UI e nos logs |
-| POSIX: script que faça `setsid`/double-fork escapa do `killpg` | Homologação do script no catálogo; política de revisão de código. No Windows, o Job Object cobre esse caso |
-| Windows: janela entre o spawn e a atribuição ao Job Object, em que o filho poderia criar um processo fora do Job | A atribuição ocorre imediatamente após o `Popen`; homologação e revisão dos scripts |
-| Windows: interpretadores com política de execução própria (PowerShell) | `-NoProfile -NonInteractive -ExecutionPolicy Bypass -File` fixos; perfis e módulos de usuário não são carregados |
-| TOCTOU entre a validação e o `exec` | Árvore de scripts não gravável pelo agente (§8.5) |
+| Script que faça `setsid`/double-fork escapa do `killpg` | Homologação do script no catálogo; política de revisão de código |
+| TOCTOU entre a validação e o `exec` | Arquivo e todos os diretórios do caminho não graváveis pelo agente (§8.5) |
+| Caminho livre (CR-005): com o root em `script_owner_uids`, qualquer arquivo de terceiros do root fora das pastas do sistema vira candidato a script | Pastas do sistema bloqueadas, interpretador da allowlist, cadastro só com `CAD_SCRIPTS` e auditado; recomendação de UID dono dedicado, sem o 0 (§12.1) |
 | Granularidade fina "perfil × script × ambiente" | Não suportada; a intersecção `perfil_amb ∩ script_amb` atende ao escopo atual |
 | Semântica de horário de verão | Horário de parede do servidor Oracle (§7.1) |
 | Lacunas em sequences | Aceitas por design |
