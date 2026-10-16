@@ -2,7 +2,7 @@
 
 Serviço web corporativo para gestão, agendamento e execução distribuída de rotinas em Python e Shell em servidores Unix/Linux restritos, integrado ao Oracle Database >= 11gR2 e com arquitetura multi-ambiente e multi-nó.
 
-> **Change requests aplicados:** CR-001 (agente multiplataforma), CR-002 (Oracle único e driver adaptativo) e CR-003 (correções da análise funcional pós-F6.1), em `docs/arquitetura/`. O texto abaixo já os incorpora.
+> **Change requests aplicados:** CR-001 (agente multiplataforma), CR-002 (Oracle único e driver adaptativo), CR-003 (correções da análise funcional pós-F6.1) e CR-004 (telas de consulta e linguagem clara), em `docs/arquitetura/`. O texto abaixo já os incorpora.
 >
 > **Autoridade documental:** este README é a autoridade máxima de **negócio, dados e algoritmos**. O `AGENTS.md` é a autoridade sobre **como codificar**. Em conflito sobre regra de negócio ou modelo de dados, prevalece este documento. Em caso de lacuna, o desenvolvedor ou agente deve **parar e perguntar**, sem presumir.
 
@@ -91,6 +91,66 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 * **Texto sem ponto de quebra** (caminhos, identificadores, argv) usa `overflow-wrap: anywhere`. Colunas flexíveis de grid usam `minmax(0, 1fr)`, nunca `1fr` puro.
 * **Barras de ações e de filtros** usam `flex-wrap`: nenhum botão ou campo fica fora da área visível.
 * **Verificação:** toda tela nova ou alterada é conferida nas cinco larguras acima antes da entrega, no DevTools ou com Playwright local. O Playwright fica fora do repositório (AGENTS §2.2).
+
+#### 2.4.2 Linguagem clara (CR-004)
+
+**Público de referência:** qualquer pessoa precisa entender a tela sem treinamento. A régua é **uma criança de 10 anos** que sabe ler: ela deve conseguir responder sozinha "o que eu posso fazer aqui?", "o que está acontecendo?" e "o que eu faço agora?".
+
+Regras para todo texto de interface (rótulos, títulos, mensagens, modais e ajuda):
+
+1. **Frases curtas e diretas**, em português, na voz do sistema falando com o usuário ("Você pode…", "Vamos rodar…"). Nada de jargão sem explicação.
+2. **Termo técnico sempre explicado no lugar:** na primeira vez que aparece numa tela (ticket, ambiente, script, agendamento, perfil), vem acompanhado de uma explicação curta no texto de ajuda do campo ou do título. Exemplos:
+   * "Ticket: o pedido para rodar um script";
+   * "Ambiente: onde o script vai rodar (por exemplo, produção ou homologação)";
+   * "Agendamento: uma regra que pede para rodar um script sozinho, de tempos em tempos".
+3. **Situação do ticket com nomes simples** (tabela do §5.2.1). O código técnico (`FAILED`, `TIMEOUT`) aparece só como informação secundária no detalhe, para o suporte.
+4. **Toda mensagem de erro tem duas partes:** *o que aconteceu* e *o que fazer agora*, nesta ordem e na mesma caixa. As mensagens-padrão estão na tabela abaixo; mensagens de campo dizem o formato esperado **com um exemplo** ("Use o formato AAAA-MM-DD, por exemplo 2026-10-16").
+5. **Nunca** mostrar detalhe técnico (ORA-, stack trace, SQL, caminho do servidor para quem não é admin); essa regra continua valendo (AGENTS §3.1).
+6. **Cor nunca é o único sinal:** status e avisos têm sempre ícone **e** texto, além da cor (contraste AA, §2.4).
+
+**Mensagens-padrão** (texto exato; `{…}` é preenchido pelo servidor):
+
+| Situação | O que aconteceu | O que fazer agora |
+|---|---|---|
+| Sem permissão (403) | "Você não tem permissão para abrir esta página." | "Veja em **O que eu posso fazer** o que já está liberado para você, ou peça acesso ao administrador." |
+| Não encontrado (404) | "Não encontramos o que você procurou." | "Confira o número ou volte para a lista." |
+| Falha interna (500) e falha de infraestrutura | "Algo deu errado do nosso lado." | "Tente de novo em alguns minutos. Se continuar, avise o suporte e informe o horário." |
+| Conflito de edição | "Outra pessoa mudou este registro enquanto você editava." | "Recarregue a página para ver a versão nova e faça a sua alteração de novo." |
+| Sessão expirada | "Você ficou um tempo sem usar o sistema e saiu por segurança." | "Entre de novo." |
+| Login ou senha incorretos | "Usuário ou senha incorretos." | "Confira o que digitou e tente de novo." |
+| Conta bloqueada | "Houve muitas tentativas com a senha errada." | "Espere {minutos} minutos ou peça ao administrador para desbloquear." |
+| Formulário com erro | "Alguns campos precisam de correção." | "Os campos estão marcados em vermelho, com a explicação embaixo de cada um." |
+| Último administrador | "Não pode ficar sem nenhum administrador ativo." | "Antes, dê acesso de administrador a outra pessoa." |
+
+A mensagem antiga de conflito, "O registro foi alterado por outra pessoa. Recarregue a página.", é substituída pela mensagem acima (§10).
+
+#### 2.4.3 Mapa de telas
+
+Todas as telas, quem pode abrir cada uma e para que servem. Telas marcadas com **(CR-004)** são novas ou mudam no CR-004.
+
+| Tela | Rota | Quem pode abrir | Para que serve |
+|---|---|---|---|
+| Entrar | `default/login` | Todos | Entrar no sistema |
+| Painel inicial | `default/index` | Logado | Resumo do que importa para o seu perfil (§13) |
+| Minha senha | `default/minha_senha` | Logado | Trocar a própria senha (§4.2) |
+| **O que eu posso fazer** (CR-004) | `default/permissoes` | Logado | Ver o que o seu perfil libera e por que algo não aparece (§4.3.E) |
+| **Rotinas disponíveis** (CR-004) | `tickets/catalogo` | `EXEC_SCRIPT` | Conhecer os scripts que você pode rodar, onde e como foram as últimas execuções (§5.8) |
+| **Histórico do script** (CR-004) | `tickets/historico/<script_id>` | `EXEC_SCRIPT` | Ver como o script se saiu nos últimos 30 dias (§5.8) |
+| Disparar script | `tickets/novo` | `EXEC_SCRIPT` | Pedir para rodar um script agora ou num horário (§5.4, **CR-004**: resumo em frase e exemplos) |
+| Tickets | `tickets/lista` | `EXEC_SCRIPT` ou `VER_LOGS` | Acompanhar os pedidos e o que está rodando (§4.3.C) |
+| Detalhe do ticket | `tickets/detalhe/<id>` | Quem pode ver o ticket | Saber o que aconteceu, ver o log, cancelar ou repetir (§5.7, **CR-004**: frase-resumo e etapas) |
+| Agendamentos | `agendamentos/lista`, `form` | `CAD_AGENDAMENTOS` | Criar e cuidar das regras que rodam sozinhas (§7.6) |
+| **Agenda** (CR-004) | `agendamentos/agenda` | `CAD_AGENDAMENTOS` | Ver o que vai rodar hoje e nos próximos 7 dias (§7.7) |
+| Ambientes | `admin_ambientes/*` | `CAD_AMBIENTES` | Cadastrar onde os scripts rodam |
+| Perfis e permissões | `admin_perfis/*` | `CAD_PERFIS` | Definir o que cada perfil pode fazer (§4.3.B.1) |
+| **Quem pode o quê** (CR-004) | `admin_perfis/quem_pode` | `CAD_PERFIS` | Descobrir quem pode rodar um script ou usar um ambiente (§4.3.B.2) |
+| Usuários | `admin_usuarios/*` | `CAD_USUARIOS` | Cadastrar pessoas, senhas e bloqueios |
+| Parâmetros | `admin_parametros/*` | `CAD_PARAMETROS` | Cadastrar as perguntas que os scripts fazem (§6.2) |
+| Scripts | `admin_scripts/*` | `CAD_SCRIPTS` | Cadastrar scripts, onde podem rodar e que perguntas fazem (§8.5) |
+| Auditoria | `auditoria/lista` | `VER_AUDITORIA` | Ver quem fez o quê e quando (§4.4) |
+| Agentes | `auditoria/agentes` | `VER_AUDITORIA` | Ver se os servidores que rodam os scripts estão bem (§13) |
+
+As telas novas do CR-004 são **somente de consulta**: não gravam nada, não auditam e usam `GET`. Elas seguem os mesmos guardas, o mesmo escopo de ambiente e o §2.4.1.
 
 ### 2.5 Backend de dados (estratégia UI-first)
 
@@ -382,6 +442,20 @@ As operações cobertas são: desativar usuário, trocar o perfil de usuário, d
 * **Perfil administrativo:** a matriz continua editável e registrada, com um aviso de que o perfil dispensa as dimensões 1 a 3 (mas não a homologação). Ela passa a valer se `is_admin` for removido.
 * **Desativar perfil:** o modal mostra a quantidade **e os logins** dos usuários ativos afetados (no máximo 20, seguidos de "e outros N"), que têm a sessão encerrada no próximo request pela revalidação (§4.2).
 
+#### B.2 Consulta "Quem pode o quê" (`admin_perfis/quem_pode`, CR-004)
+
+Responde às duas perguntas mais comuns do administrador, sem abrir perfil por perfil. A tela é só de consulta e exige `CAD_PERFIS`.
+
+* **Por script:** escolhe-se um script e a tela lista os **perfis ativos** que podem executá-lo. Para cada perfil, mostra:
+  * os **ambientes onde ele pode rodar** esse script: a interseção `perfil_amb ∩ homologação`, só com ambientes ativos. Para perfil admin, todos os ambientes ativos homologados;
+  * quantos **usuários ativos** o perfil tem;
+  * o motivo de cada perfil estar na lista: "administrador" ou "tem Disparar Scripts, o ambiente e o script".
+* **Por ambiente:** escolhe-se um ambiente e a tela lista os perfis ativos que o acessam e, para cada um, os scripts homologados ali que eles podem rodar.
+* Perfis **inativos** aparecem num bloco separado, "Não valem agora (perfil inativo)". Script ou ambiente **inativo** gera um aviso no topo: "Este script está inativo: ninguém consegue rodá-lo agora."
+* A regra usada é a mesma de `rbac.pode_executar` (§4.3.A), aplicada perfil a perfil. O cálculo é feito no service com as leituras que já existem no contrato (`perfis_listar`, `matriz_obter`, catálogo e homologações), sem método novo.
+* Cada perfil tem um link para a matriz dele (§4.3.B.1).
+* A tela de perfis ganha o botão "Quem pode o quê".
+
 #### C. Escopo das funcionalidades operacionais
 
 | Funcionalidade | Escopo |
@@ -409,6 +483,25 @@ As operações cobertas são: desativar usuário, trocar o perfil de usuário, d
 * O seed (FAKE e `init_db.py`) grava os nomes e as finalidades **exatamente** como nesta tabela, com acentuação. A matriz de perfis exibe esses textos.
 * **Não existe tela de cadastro de funcionalidades.** O catálogo é fixo: cada código está ligado a rotas e guardas no código (`ui_menu.py`, `_exigir_func`), então um código novo sem rota não teria efeito. Novas funcionalidades entram por change request, com seed e código no mesmo pacote.
 * A associação perfil × funcionalidade (`tbsss_perfil_func`) é editada **somente** na aba Funcionalidades da matriz de permissões (§4.3.B.1), no mesmo POST de ambientes e scripts.
+
+#### E. Tela "O que eu posso fazer" (`default/permissoes`, CR-004)
+
+Qualquer usuário logado pode abrir. Ela responde, em linguagem simples (§2.4.2), "o que eu posso fazer aqui?". O acesso fica no cabeçalho, ao lado de "Minha senha", e a mensagem de 403 aponta para ela.
+
+* **Meu perfil:** nome do perfil e, se for administrador, a frase "Seu perfil é de administrador: você pode usar todas as telas e rodar qualquer script ativo, nos ambientes ativos onde ele foi liberado."
+* **Telas que posso usar:** as funcionalidades do perfil, com o nome e a finalidade do §4.3.D e um link para cada tela.
+* **Onde posso rodar scripts:** os ambientes ativos do perfil, com a descrição de cada um.
+* **Scripts que posso rodar:** para cada script, os ambientes onde `rbac.pode_executar` é verdadeiro, com o botão "Rodar aqui" (abre o disparo já preenchido).
+* **Por que um script não aparece:** só para os scripts **associados ao perfil** (`perfil_scr`) que não podem rodar em nenhum ambiente. O motivo vem de `pode_executar` em frase simples:
+  * "o script está desativado";
+  * "o script não foi liberado em nenhum dos seus ambientes";
+  * "o ambiente está desativado";
+  * "seu perfil não tem Disparar Scripts".
+
+  Scripts fora do perfil **nunca** são listados, para não revelar o catálogo.
+* Sem `EXEC_SCRIPT`: a seção de scripts mostra "Você ainda não pode rodar scripts. Peça ao administrador, se precisar."
+* No fim da página: "Precisa de mais acesso? Fale com o administrador do sistema." Não há pedido de acesso pelo sistema.
+* Usa o contexto da sessão revalidado (§4.2) e as leituras do catálogo que já existem. Não grava nada e não audita.
 
 ### 4.4 Auditoria
 
@@ -511,6 +604,44 @@ Os estados `SUCCESS`, `FAILED` e `CANCELLED` são **terminais e imutáveis**. To
 * `OWNERSHIP_LOST` é um **evento de log** do agente. Ele nunca é gravado no ticket, que já foi finalizado por outro nó.
 * `Popen.returncode` negativo (morte por sinal) é convertido para `128 + abs(returncode)`.
 
+#### 5.2.1 Explicação ao usuário (CR-004)
+
+Na interface, a situação do ticket usa **nomes simples** (§2.4.2), sempre com ícone e cor. O código técnico fica como informação secundária no detalhe.
+
+| Status | Nome na tela | Antes do CR-004 |
+|---|---|---|
+| `PENDING` | Esperando | Pendente |
+| `RUNNING` | Rodando | Em execução |
+| `SUCCESS` | Deu certo | Sucesso |
+| `FAILED` | Deu erro | Falha |
+| `CANCELLED` | Cancelado | Cancelado |
+
+Os filtros da lista de tickets usam os mesmos nomes. A auditoria, o CSV e o banco continuam com os códigos.
+
+**Frase do que aconteceu e o que fazer** (exibida no topo do detalhe, §5.7; `{…}` é preenchido pelo servidor):
+
+| Situação | O que aconteceu | O que fazer agora |
+|---|---|---|
+| `PENDING`, `scheduled_at` no futuro | "Está agendado para começar em {data} às {hora}." | "Não precisa fazer nada. Se não quiser mais, cancele." |
+| `PENDING`, já pode rodar | "Está na fila, esperando um servidor livre." | "Não precisa fazer nada. Esta página se atualiza sozinha." |
+| `RUNNING` | "Está rodando agora. Começou há {tempo}." | "Acompanhe o log abaixo." |
+| `RUNNING` com cancelamento pedido | "O cancelamento foi pedido. O servidor está parando o script." | "Espere alguns segundos." |
+| `EXIT_OK` | "Terminou e deu certo." | — |
+| `EXIT_ERROR` | "O script rodou, mas terminou avisando que algo deu errado (código {n})." | "Veja o fim do log para entender o erro. Se não souber resolver, envie o número deste ticket ao responsável pelo script." |
+| `KILLED_SIGNAL` | "O script foi interrompido de repente pelo servidor." | "Tente de novo. Se acontecer outra vez, avise o suporte com o número deste ticket." |
+| `TIMEOUT` | "O script demorou mais do que o tempo máximo ({tempo}) e foi parado." | "Confira se as respostas estão certas e tente de novo. Se o script costuma demorar mais, peça ao administrador para aumentar o tempo máximo." |
+| `NODE_OFFLINE` | "O servidor que rodava o script parou de responder." | "Tente de novo: outro servidor pode assumir." |
+| `ORPHAN_PROCESS` | "O servidor foi reiniciado e perdeu o controle do script." | "Tente de novo." |
+| `FENCED` | "O servidor perdeu contato com o banco de dados e parou o script por segurança." | "Tente de novo em alguns minutos." |
+| `PRECHECK_FAILED` | "O script não pôde começar: o servidor não encontrou o arquivo, ou ele não está liberado." | "Avise o administrador com o número deste ticket." |
+| `SPAWN_ERROR` | "O servidor não conseguiu iniciar o script." | "Avise o administrador com o número deste ticket." |
+| `LOG_LIMIT` | "O script escreveu mensagens demais e foi parado, para não lotar o disco." | "Avise o responsável pelo script." |
+| `SHUTDOWN` | "O servidor foi desligado enquanto o script rodava." | "Tente de novo." |
+| `CANCEL_USER` | "A execução foi cancelada a pedido." | — |
+| Motivo desconhecido | "Terminou com um motivo que o sistema não conhece ({código})." | "Avise o suporte com o número deste ticket." |
+
+O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas views e testado por `test_ui_helpers.py`. Os textos técnicos atuais de `descricao_motivo` continuam existindo para o suporte e aparecem no detalhe como "Detalhe técnico".
+
 ### 5.3 Prioridade
 
 * Escala de **1 (mais alta) a 4 (mais baixa)**, padrão 2.
@@ -532,6 +663,37 @@ Os estados `SUCCESS`, `FAILED` e `CANCELLED` são **terminais e imutáveis**. To
 
 * **Caminho do script na criação:** o nó web valida `path_file` conforme a §8.5 ("Validação no nó web"). O `NAO_E_ARQUIVO` bloqueia a criação em qualquer `sss_env`, porque o ticket não poderia ser executado. A exceção é o interpretador que a plataforma do nó web não suporta: aí vale só a etapa 1, e a validação definitiva fica no claim (§8.4).
 * **`ticket_resp`:** respostas sem valor (`None`) não são gravadas. `CHECKBOX` é gravado como `"true"`/`"false"`.
+
+**Clareza no disparo (CR-004):**
+
+* **Explicação das etapas:** cada etapa diz em uma frase o que fazer.
+  * "1. Escolha o script, que é a rotina que você quer rodar."
+  * "2. Escolha o ambiente, que é onde ela vai rodar."
+  * "3. Responda às perguntas."
+* **Exemplo em cada pergunta**, gerado pelo tipo do parâmetro, sem coluna nova. Vem junto da `descricao` do parâmetro, se houver:
+
+  | Tipo | Texto de ajuda |
+  |---|---|
+  | `DATE` | "Use o formato AAAA-MM-DD, por exemplo {hoje}." |
+  | `NUMBER` | "Use só números, com ponto para decimais, por exemplo 10 ou 2.5." |
+  | `SELECT` | "Escolha uma das opções da lista." |
+  | `CHECKBOX` | "Marque para sim; deixe desmarcado para não." |
+  | `TEXT` com regex | "Siga o formato pedido pelo cadastro. {descricao}" |
+  | `TEXT` sem regex | A `descricao` do parâmetro, se houver |
+
+  Obrigatório aparece como "(obrigatório)" no rótulo, e não só com asterisco.
+* **Resumo em frase antes de confirmar:** o modal de confirmação abre com uma frase montada pelo servidor:
+
+  > "Vamos rodar **{script}** no ambiente **{ambiente}** {agora | em {data} às {hora}}, com prioridade {n}. Respostas: {rótulo} = {valor}; …"
+
+  * valores sensíveis aparecem como `****`;
+  * respostas vazias aparecem como "(sem resposta)";
+  * o comando lógico (argv, §6.4) continua no modal, abaixo da frase, com o título "Comando que será executado".
+* **"Usar as respostas da minha última execução":** o botão aparece na etapa 3 quando existe um ticket **do próprio usuário** para o mesmo script e o mesmo ambiente. Ele usa `listar` com os filtros `solicitante`, `script_id` e `ambiente`, `tamanho=1`, e depois `respostas`, sem método novo no contrato.
+  * Preenche só as respostas **não sensíveis**; os campos sensíveis ficam vazios, com a nota "por segurança, digite de novo".
+  * Uma resposta que não vale mais no catálogo atual (opção removida, formato novo) fica vazia, com o aviso "esta resposta mudou desde a última vez".
+  * Nada é gravado até a confirmação, que segue o fluxo normal (§5.4).
+* **Aviso de horário:** ao lado do campo de agendamento aparece "Horário do servidor do banco de dados" (§5.4, passo 4).
 
 ### 5.5 Reexecução
 
@@ -575,6 +737,55 @@ UPDATE {owner}.tbsss_tickets
   | `sem efeito: ticket encerrado` | Já era terminal | O ticket já estava encerrado |
 
   O botão some quando o cancelamento já foi solicitado, mas o servidor trata o POST repetido do mesmo modo.
+
+### 5.7 Detalhe do ticket: resumo e etapas (CR-004)
+
+O topo do detalhe (`tickets/detalhe/<id>`) responde "o que está acontecendo?" antes de qualquer dado técnico:
+
+1. **Frase-resumo:** um quadro com o nome simples da situação (§5.2.1), a frase "o que aconteceu" e a frase "o que fazer agora", com ícone e cor da situação.
+2. **Barra de etapas**, uma lista ordenada acessível, com `aria-current` na etapa atual:
+
+   | Etapa | Horário exibido | Concluída quando |
+   |---|---|---|
+   | Pedido criado | `created_at` | sempre |
+   | Na fila | `scheduled_at` ("agendado para…" se estiver no futuro) | o ticket saiu de `PENDING` |
+   | Rodando | `started_at` | o ticket saiu de `RUNNING` |
+   | Terminou | `finished_at`, com o nome simples do resultado | status terminal |
+
+   * Um ticket cancelado ainda na fila mostra a etapa "Rodando" como "não chegou a rodar" e a etapa final como "Cancelado".
+   * A etapa atual de um ticket `RUNNING` mostra "há {tempo}".
+3. Depois disso vêm, como hoje: resumo, linha do tempo, comando executado, respostas, reexecuções e log. A linha "Detalhe técnico" do resumo traz o status, o `status_motivo`, o `return_code` e a descrição técnica (`descricao_motivo`).
+4. **Botões com o efeito escrito:** "Cancelar este pedido" (com a consequência no modal) e "Rodar de novo com as mesmas respostas" (reexecução, §5.5).
+5. A página continua se atualizando sozinha enquanto o ticket não termina, e a frase e a barra acompanham.
+
+### 5.8 Rotinas disponíveis e histórico do script (CR-004)
+
+**Rotinas disponíveis** (`tickets/catalogo`, exige `EXEC_SCRIPT`): responde "o que eu posso rodar?".
+
+* Um cartão por script em que o usuário tem `pode_executar` em **pelo menos um** ambiente (admin: todo script ativo homologado em ambiente ativo). Cada cartão traz:
+  * nome, descrição, grupo e categoria;
+  * as **perguntas** que o script faz (rótulos, com "(obrigatório)" quando for o caso);
+  * os **ambientes** onde o usuário pode rodar, cada um com o botão "Rodar em {ambiente}", que abre o disparo já na etapa 3;
+  * a **última execução** que o usuário pode ver: o nome simples da situação, "há {tempo}" e o link para o ticket. Sem nenhuma: "Ainda não rodou";
+  * o link "Ver histórico".
+* Uma busca no topo filtra os cartões por nome, descrição, grupo e categoria, no navegador (Alpine, `static/js/app/`). A lista completa já vem do servidor. Os cartões ficam agrupados por grupo, como no disparo.
+* O **escopo da última execução** é o mesmo da lista de tickets (§4.3.C): com `VER_LOGS`, os tickets dos ambientes autorizados (admin: todos); sem `VER_LOGS`, só os próprios.
+* **Contrato (leitura nova):** `RepoTickets.ultimas_execucoes(script_ids, escopo_ambientes=None, solicitante=None)` devolve `{script_id: {id, status, status_motivo, created_at, finished_at}}` com o ticket mais recente (`created_at DESC, id DESC`) de cada script no escopo. No Oracle, a consulta usa `ix_tbsss_tck_scr` e um `ROW_NUMBER()` por script, que é sintaxe 11gR2 e não carrega `log_output`.
+* O menu Operação ganha o item "Rotinas disponíveis" (`EXEC_SCRIPT`), antes de "Disparar Scripts".
+
+**Histórico do script** (`tickets/historico/<script_id>`, exige `EXEC_SCRIPT`): responde "esse script costuma dar certo?".
+
+* Abre só para um script que aparece nas Rotinas disponíveis do usuário. Fora disso, 404.
+* Período fixo: **últimos 30 dias** pelo relógio do banco (`created_at >= SYSDATE - 30`), no mesmo escopo da última execução.
+* Mostra:
+  * total de pedidos e quantos **deram certo**, **deram erro**, **foram cancelados** e ainda estão **esperando ou rodando**;
+  * **taxa de acerto**: deram certo ÷ terminados, em porcentagem inteira, com a frase "De cada 10 vezes, {n} deram certo";
+  * **duração típica** (mediana) e **mais demorada**, só dos que terminaram com `started_at`, em linguagem simples ("cerca de 4 minutos");
+  * **gráfico de barras por dia**, empilhado por situação, como SVG gerado no servidor. As cores vêm por classe CSS e não há `style=` inline. Abaixo do gráfico fica a mesma informação em tabela, para leitores de tela;
+  * os principais motivos de erro, com a contagem por `status_motivo` e o nome simples;
+  * o link "Ver estes pedidos", que abre a lista de tickets filtrada por script e período.
+* **Contrato (leitura nova):** `RepoTickets.historico_script(script_id, desde, escopo_ambientes=None, solicitante=None, limite=5000)` devolve só `{id, status, status_motivo, created_at, started_at, finished_at}`, sem LOB, ordenado por `created_at`. A agregação é feita no service. Acima do limite, a tela avisa "mostrando os 5.000 mais recentes".
+* Não grava nada e não audita.
 
 **No agente dono:** a cada `cancel_poll_interval_s`, executa a varredura combinada da §8.7. Ao encontrar `cancel_requested = 'S'` em ticket próprio:
 
@@ -943,6 +1154,27 @@ Implementação: `controllers/agendamentos.py`, `modules/agendamentos_service.py
 * **Prévia:** um POST com CSRF devolve as próximas 5 execuções e a descrição em português, chamado com *debounce* de 500 ms. A ajuda da sintaxe CRON fica num bloco recolhível do próprio formulário (D6).
 
 ---
+
+### 7.7 Agenda: o que vai rodar (`agendamentos/agenda`, CR-004)
+
+Responde "o que vai rodar hoje e nos próximos dias?". Exige `CAD_AGENDAMENTOS` e mostra só as regras dos ambientes autorizados ao perfil (admin: todas), como a lista do §7.6.
+
+* **Período:** de agora até o fim do 7º dia seguinte, pelo relógio do banco (§7.1).
+* **Regras incluídas:** só as ativas. A tela avisa: "Regras pausadas não aparecem aqui."
+* **Ocorrências:** são calculadas pelo `recurrence.py`, a partir de `proxima_execucao` (inclusive), respeitando `data_fim`. Há dois limites:
+  * no máximo **20 por regra** no período; acima disso aparece "e mais {n} vezes neste período" (por exemplo, CRON a cada minuto);
+  * no máximo **500 no total**, com aviso quando passar.
+* **Apresentação:** agrupada por dia ("Hoje", "Amanhã", "sexta-feira, 18/10"), em ordem de horário. Cada linha mostra:
+  * a hora;
+  * o nome da regra;
+  * o script;
+  * o ambiente;
+  * a frase da recorrência (`descrever()` ou o tipo em português);
+  * o link para a regra.
+* `proxima_execucao` no passado (daemon atrasado) aparece em "Atrasado", no topo, com a frase "deveria ter rodado às {hora}; vai rodar assim que o servidor puder".
+* A tela traz a nota "É uma previsão: a execução real depende de um servidor livre."
+* Usa as leituras existentes de `RepoAgendamentos` (listagem com filtro de ativos). Não grava nada e não audita.
+* A lista de agendamentos ganha o botão "Ver agenda".
 
 ## 8. Motor de Execução (ciclo 2 do daemon)
 
@@ -1375,7 +1607,7 @@ END;
     * Campo **sensível** (`valor_padrao` de parâmetro sensível, `valor_padrao_sub` de vínculo sensível) entra no hash como um **marcador fixo** (`<sensivel:preenchido>` ou `<sensivel:vazio>`), nunca pelo valor. A versão vai para o HTML e não pode permitir adivinhar o segredo por força bruta. A alteração concorrente só desse valor é detectada pelo `esperado` do repositório, que compara o valor real.
     * Nas telas de conjunto (homologação, vínculos), a versão cobre só o conjunto lido. Uma mudança de estado de um item entre a leitura e o POST (por exemplo, ambiente desativado) aparece como a recusa específica ("item inativo"), não como conflito.
   * Ao salvar, o service relê o registro e compara a versão. Em seguida, repassa os valores lidos ao repositório, que executa `UPDATE ... WHERE id = :id AND <coluna = valor lido>` com comparação nula-segura ANSI `(c = :v OR (c IS NULL AND :v IS NULL))` e checa o `rowcount`.
-  * Se a versão divergir ou o `rowcount` for 0, o resultado é `RepoConflito`, sem alteração nem auditoria. A mensagem é "O registro foi alterado por outra pessoa. Recarregue a página."
+  * Se a versão divergir ou o `rowcount` for 0, o resultado é `RepoConflito`, sem alteração nem auditoria. A mensagem é a de conflito de edição do §2.4.2: "Outra pessoa mudou este registro enquanto você editava. Recarregue a página para ver a versão nova e faça a sua alteração de novo."
   * A linha de auditoria é gravada na mesma operação (transação) do `INSERT` ou `UPDATE`.
 * **Edição de agendamento:** ao salvar uma alteração, `usuario_id` passa a ser o **editor**, que precisa ter `pode_executar` vigente para o script e o ambiente da regra. A regra sempre roda sob os privilégios de quem a definiu por último, o que impede um usuário de reaproveitar privilégios de outro editando a regra dele. A alteração é auditada com o `usuario_id` anterior e o novo. Script e ambiente da regra não mudam na edição (§7.6).
 

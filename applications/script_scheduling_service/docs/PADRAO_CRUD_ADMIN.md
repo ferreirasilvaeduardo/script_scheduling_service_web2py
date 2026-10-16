@@ -34,7 +34,7 @@ As entidades mestras nunca são excluídas, apenas desativadas (README §10).
 1. O `form` envia em campo oculto a `versao`: o sha256 dos campos editáveis (`ativo` incluído) no momento da leitura. Campo sensível entra no hash como marcador fixo (`<sensivel:preenchido>` ou `<sensivel:vazio>`), nunca pelo valor (README §10).
 2. O `salvar` ou o `alternar_ativo` relê o registro. Se a `versao` enviada for diferente da atual, o resultado é conflito.
 3. O service repassa os valores lidos como `esperado=`. O repositório executa `UPDATE ... WHERE id = :id AND <coluna = valor lido ...>` e checa o `rowcount`. No ORACLE, as comparações são nulas-seguras, com `DECODE`. Se o `rowcount` for 0, o repositório lança `RepoConflito` e não altera nada. Com isso, não sobra janela entre a leitura e a escrita.
-4. Mensagem exibida: "O registro foi alterado por outra pessoa. Recarregue a página." O formulário volta com os dados atuais e uma nova versão.
+4. Mensagem exibida (README §2.4.2): "Outra pessoa mudou este registro enquanto você editava. Recarregue a página para ver a versão nova e faça a sua alteração de novo." O formulário volta com os dados atuais e uma nova versão.
 
 ## Erros
 

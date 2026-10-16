@@ -116,4 +116,4 @@ Cada passo segue o fluxo do projeto: plano, aprovação, implementação, testes
 | P10 | Higiene (pastas de runtime, launcher) |
 | P11 | Prompts F7.1, F7.3, F8.0, F8.3, F8.4 e F9.2 (inclui D16: DDL das colunas novas, filtro `pasta_base` no claim, validação das pastas na subida, `pastas_base` no registro do agente) |
 
-Depois do P11: refazer a homologação do UI Freeze (`docs/prompts/UI_FREEZE.md`) e criar a tag `ui-freeze-v1`.
+Depois do P11, vem o CR-004 (telas de consulta e linguagem clara, passos U1 a U8). Em seguida, o passo de fechamento **UF**: bateria completa de testes e validações e atualização da documentação de homologação (`docs/homologacao/`). Só então a homologação do UI Freeze (`docs/prompts/UI_FREEZE.md`) e a tag `ui-freeze-v1`.

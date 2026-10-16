@@ -8,6 +8,7 @@ O objetivo é congelar o comportamento visual e funcional das telas sobre o back
 - [ ] A suíte completa passa: `python -m unittest discover -s scripts -p "test_*.py"`.
 - [ ] `python scripts/check_env.py` retorna 0.
 - [ ] Todos os relatórios F0.1–F6.1 estão com `PASS` e sem lacunas abertas.
+- [ ] CR-003 (P1–P11, P6A) e CR-004 (U1–U8) concluídos, e o fechamento UF executado: bateria completa de testes e validações e `docs/homologacao/` atualizado.
 
 ## Segurança transversal (executar com o DevTools aberto)
 - [ ] Nenhuma requisição a domínio externo em nenhuma tela (aba Network com "preserve log").
@@ -32,11 +33,18 @@ O objetivo é congelar o comportamento visual e funcional das telas sobre o back
 | Ambientes / Perfis / Usuários / Parâmetros / Scripts | | | | | Somente admin, ou perfis com `CAD_*` |
 | Agendamentos | | | | | `CAD_AGENDAMENTOS` |
 | Auditoria e agentes | | | | | `VER_AUDITORIA` |
+| O que eu posso fazer (CR-004) | | | | | Todos logados; mostra só o próprio perfil e nunca scripts fora dele |
+| Rotinas disponíveis e histórico (CR-004) | | | | | `EXEC_SCRIPT`; última execução e histórico no escopo da lista de tickets |
+| Agenda (CR-004) | | | | | `CAD_AGENDAMENTOS`; só regras ativas dos ambientes autorizados |
+| Quem pode o quê (CR-004) | | | | | `CAD_PERFIS` |
 
 ## Usabilidade
 - [ ] Navegação completa por teclado nas telas de disparo, lista de tickets e matriz de perfis.
 - [ ] Temas claro e escuro legíveis (contraste AA nos badges de status).
-- [ ] Mensagens de erro em português, acentuadas e acionáveis.
+- [ ] Mensagens de erro em português, acentuadas e acionáveis: sempre "o que aconteceu" + "o que fazer agora" (README §2.4.2).
+- [ ] **Teste da criança de 10 anos** (README §2.4.2): uma pessoa sem treinamento consegue, sozinha, (1) descobrir o que pode fazer, (2) rodar um script, (3) dizer se ele deu certo e (4) saber o que fazer quando deu erro.
+- [ ] Situação do ticket com os nomes simples (Esperando, Rodando, Deu certo, Deu erro, Cancelado) e a frase do detalhe conforme o README §5.2.1.
+- [ ] Todas as telas do mapa (README §2.4.3) conferidas nas larguras do §2.4.1.
 - [ ] Largura de 1280 px e de 1920 px sem rolagem horizontal nas listas.
 
 ## Aceite
