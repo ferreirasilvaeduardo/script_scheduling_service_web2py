@@ -1,3 +1,215 @@
+Consegue fazer as alteração abaixo :
+- Mudar a arquitetura para que a web seja totalmente compativel plataforma windowns e POSIX e do back-end seja somente POSIX.
+- O path do script seja cadastrado em qualquer lugar do servidor 
+- O log do script sempre ficam na pasta com padrão : <nome_script>(minusculo)/<YYYY>(ano)/<MM>(mes)/DD(dia)/HH(hora)/MI(minuto)/<nome_log>_<PID>.log 
+- Qq outro log fica na pasta app/YYYY(ano)/MM(mes)/DD(dia)/HH(hora)/MI(minuto)/<nome_log>_<PID>.log
+
+atualizar readme de forma RIGOROSA.
+atualizar prompt de forma RIGOROSA.
+atualizar documentacao de forma RIGOROSA.
+
+
+
+
+
+============================================================
+Não consegui criar, porque o ambiente bloqueou o comando: ele exige a sua autorização para deixar um processo rodando direto num servidor compartilhado. Nada foi criado nem alterado no clone 7.
+
+Você pode fazer isso por conta própria. Leva um minuto e não precisa de senha, porque o clone 7 entra no 10.129.164.55 com a chave dele.
+
+### No clone 7 (uma vez só)
+Entre no clone 7 com o seu `ssh` de sempre e cole o bloco abaixo:
+```bash
+mkdir -p -m 700 ~/sss_tunel
+cat > ~/sss_tunel/tunel.sh <<'EOF'
+#!/bin/bash
+# Túnel fixo clone 7 -> 10.129.164.55 (SSS); reconecta sozinho se cair
+while true; do
+    ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes \
+        -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+        -L 127.0.0.1:18000:127.0.0.1:18000 mastersafgf@10.129.164.55
+    echo "$(date '+%F %T') túnel caiu (rc=$?); nova tentativa em 10 s"
+    sleep 10
+done
+EOF
+chmod 700 ~/sss_tunel/tunel.sh
+nohup setsid ~/sss_tunel/tunel.sh >> ~/sss_tunel/tunel.log 2>&1 < /dev/null &
+echo $! > ~/sss_tunel/tunel.pid
+sleep 3; netstat -ltn | grep 127.0.0.1:18000
+```
+Se a última linha mostrar `127.0.0.1:18000 ... LISTEN`, o túnel está no ar e você já pode sair do clone 7.
+
+- **Para parar:** `kill -- -$(cat ~/sss_tunel/tunel.pid)`
+- **Para ver o que aconteceu:** `cat ~/sss_tunel/tunel.log`
+- **Depois de um reboot do clone 7**, rode de novo só as linhas do `nohup`, do `echo $!` e do `netstat`. Não deixei início automático porque ele exigiria mexer no crontab.
+
+### Para todos, a partir de agora (um salto só)
+```bash
+ssh -N -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+    -L 18000:127.0.0.1:18000 mastersafgf@10.238.10.109
+```
+
+ssh -N -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -L 18000:127.0.0.1:18000 mastersafgf@10.238.10.109
+
+O navegador continua em `http://localhost:18000/script_scheduling_service`. Agora todo mundo usa o mesmo comando ao mesmo tempo, sem trocar porta: cada pessoa usa a porta 18000 do próprio notebook, e o clone 7 encaminha todos pelo túnel fixo.
+
+**Cuidado:** o clone 7 é compartilhado, e qualquer usuário logado nele também consegue chegar à tela de login do SSS por esse túnel. Ainda é preciso a senha do SSS para entrar, então o risco é baixo para um ambiente de demonstração.
+
+Se preferir que eu instale, autorize a ação quando eu tentar de novo. Também posso atualizar o `IMPLANTACAO.md` §22 com esse túnel fixo.
+
+
+
+
+
+
+
+Last login: Thu Oct 15 17:27:19 2026 from 10.238.101.44
+  Clone7  TESHUVA  APPL mastersafgf@brtlvlts1216pl ~]$ cpp
+Last login: Thu Oct 15 15:53:49 2026 from brtlvlts1216pl.redecorp.br
+ PreProd  TESHUVA  APPL mastersafgf@brtlvlty3067sl ~]$ cat ~/.sss/web.env
+SSS_DEV_SEED_PASSWORD=VHpV_zVcR4yCd0vToXnNXyKw
+SSS_TZ=America/Sao_Paulo
+ PreProd  TESHUVA  APPL mastersafgf@brtlvlty3067sl ~]$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=================================================================================
+
+O servidor aceita login por senha (`password` aparece entre os métodos permitidos). Então seu colega não precisa de chave: basta o túnel com usuário e senha.
+
+## Passo a passo para o seu colega
+
+**Linux, macOS ou Windows (PowerShell ou Prompt de Comando):**
+```bash
+ssh -N -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAuthentication=no -L 18000:127.0.0.1:18000 mastersafgf@10.238.10.109
+```
+1. Na primeira vez, o SSH pergunta se confia no servidor: responder `yes`.
+2. Quando pedir `password:`, digitar a senha da conta `mastersafgf`. Nada aparece enquanto digita; é normal.
+3. Depois disso a janela fica "parada", sem mostrar nada. **É o túnel funcionando:** deixe aberta durante o uso.
+4. No navegador: `http://localhost:18000/script_scheduling_service`.
+5. Entrar no SSS com `admin` (ou `op.prod`, `op.hml`, `consulta`) e a senha de demonstração do SSS. Essa é **outra senha**, que você vê com `cat ~/.sss/web.env` no servidor.
+SENHA ADMIN : KDPe3tBar4RCmqMroFxMwm5o
+SENHA OPERADOR PROD: KDPe3tBar4RCmqMroFxMwm5o
+SENHA OPERADOR HML: KDPe3tBar4RCmqMroFxMwm5o
+SENHA CONSULTA: KDPe3tBar4RCmqMroFxMwm5o
+
+6. Para encerrar: fechar a janela ou Ctrl+C.
+
+**Pelo PuTTY:**
+1. *Session*: Host `10.238.10.109`, porta `22`.
+2. *Connection → SSH → Tunnels*: Source port `18000`, Destination `127.0.0.1:18000`, clicar em **Add**.
+3. (Opcional) *Connection → SSH*: marcar "Don't start a shell or command at all", para abrir só o túnel.
+4. **Open**, usuário `mastersafgf` e a senha. Depois, o mesmo navegador do passo 4 acima.
+
+Se a porta 18000 já estiver em uso na máquina dele, ele troca só o lado dele: `-L 28000:127.0.0.1:18000` e `http://localhost:28000/script_scheduling_service`.
+
+## Cuidados com a senha
+- **A senha da conta ficou escrita nesta conversa.** Eu não a usei nem vou repetir. Para o colega, passe por um canal seguro (pessoalmente ou pelo cofre de senhas da empresa), não por e-mail ou chat.
+- **Com a senha, ele tem acesso completo à conta `mastersafgf`**, não só ao túnel. Isso inclui um shell no servidor, as pastas do outro sistema ("Sparta") e os seus arquivos em `~/.sss`. Por isso a opção da chave restrita, ou uma conta própria para ele, continua sendo a mais segura para uso prolongado.
+- Se a senha circulou para além de vocês dois, vale trocá-la depois com o responsável pelo servidor (`passwd`), lembrando que outras pessoas do outro sistema podem usar a mesma conta.
+
+
+=====================================================================
+
+O SSS está instalado e no ar no clone 7, na porta **18000**, aceitando conexões só do próprio servidor (`127.0.0.1`), em `/portaloptrib/TESHUVA/SSS`. Nada fora dessa pasta e do `~/.sss` foi alterado, e os processos "Sparta" que já rodavam no servidor não foram tocados.
+
+**Como acessar (da sua máquina):**
+```bash
+ssh -N -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -L 18000:127.0.0.1:18000 mastersafgf@10.238.10.109
+```
+Com essa janela aberta, use no navegador `http://localhost:18000/script_scheduling_service`. A senha de `admin`, `op.prod`, `op.hml` e `consulta` foi gerada no servidor e nunca passou por aqui; para ver: `cat ~/.sss/web.env`.
+
+SENHA ADMIN : KDPe3tBar4RCmqMroFxMwm5o
+SENHA OPERADOR PROD: KDPe3tBar4RCmqMroFxMwm5o
+SENHA OPERADOR HML: KDPe3tBar4RCmqMroFxMwm5o
+SENHA CONSULTA: KDPe3tBar4RCmqMroFxMwm5o
+
+
+**Operação no servidor:**
+- Subir: `/portaloptrib/TESHUVA/SSS/iniciar_sss.sh`
+- Parar: `/portaloptrib/TESHUVA/SSS/parar_sss.sh`
+- Acompanhar: `screen -r sss` (para sair sem parar: Ctrl+A e depois D)
+- Logs: `/portaloptrib/TESHUVA/SSS/logs/sss_web.log`
+
+**Não há início automático**, porque o servidor não tem `systemd` nem `crontab`. Se a máquina reiniciar, é preciso rodar o `iniciar_sss.sh` de novo. Reiniciar o SSS também volta os dados de demonstração ao estado original.
+
+**O que foi validado no servidor:**
+- pacote do commit `fdf6f35` com SHA-256 conferido;
+- `check_env.py` OK e **615 testes OK** com o Python 3.7 do servidor (sem `ssl` e sem `sqlite3`);
+- teste de carga da configuração OK;
+- cabeçalhos de segurança presentes, origem estranha recusada (403), painel administrativo do web2py desabilitado;
+- pelo túnel: login, disparo de ticket, painel de agentes e logout, sem erros. Depois reiniciei para entregar os dados de demonstração limpos.
+
+O `parar_sss.sh` liberava o terminal antes de o servidor terminar de encerrar; ajustei para esperar a porta ser liberada e testei de novo.
+
+**Documentação:** o `IMPLANTACAO.md` ganhou o §21, com o registro desta implantação como modelo para servidores sem `sudo`/`systemd` (commit `aca60b0`). Também corrigi o teste de Python do §6, que exigia o módulo `ssl` e teria falhado neste servidor sem necessidade.
+
+Cada pessoa da homologação precisa de uma conta com SSH no servidor para abrir o túnel. Se forem usar a conta `mastersafgf`, ela é compartilhada com o outro sistema, então vale combinar isso com o responsável pelo servidor.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===========================================================
 No **Antigravity** (assim como em ambientes de agentes de código baseados em VS Code / Cursor / Windsurf), as regras de workspace são configuradas definindo um arquivo de diretrizes na raiz do projeto que o agente lê automaticamente em cada conversa.
 
 Como você está com o terminal aberto em `/portaloptrib/TESHUVA/web2py`, há duas formas diretas de configurar isso:

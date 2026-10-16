@@ -680,7 +680,7 @@ Implantação feita em 2026-10-15 com o pacote do commit `aca60b0` (código do `
 
 | Item | Situação | Decisão |
 |---|---|---|
-| Acesso | Só pelo clone 7 (10.238.10.109); não há rota direta das estações | Cópia de arquivos e túnel em dois saltos (22.4) |
+| Acesso | Só pelo clone 7 (10.238.10.109); não há rota direta das estações | Cópia de arquivos e túnel pelo clone 7 (22.4) |
 | Sistema | Oracle Linux 6.10 | — |
 | Python | `/portaloptrib/TESHUVA/sparta/python3.8/bin/python3` (3.8.5), **sem `ssl`, sem `sqlite3` e sem `_hashlib`** | Usado como está: suíte completa OK, PBKDF2 em Python puro (0,28 s por login). **Risco:** esse Python pertence ao sistema Sparta; se for trocado ou removido, o SSS para |
 | Ferramentas | `git`, `crontab` e `nohup` disponíveis; **sem `screen`/`tmux`**, `sudo` ou `systemd` | Processo com `nohup` e arquivo de PID |
@@ -713,21 +713,61 @@ crontab -l      # conferir
 
 Para desativar: `crontab -e` e apagar a linha. Depois de um reboot, os dados de demonstração voltam ao seed.
 
-### 22.4 Acesso dos usuários (túnel com salto pelo clone 7)
+### 22.4 Acesso dos usuários (túnel pelo clone 7)
 
-Um único comando, na máquina do usuário (Linux, macOS ou Windows 10+):
+O 10.129.164.55 aceita o `mastersafgf` vindo do clone 7 **pela chave do clone 7**; a senha digitada da estação foi recusada (`Permission denied`). Por isso o segundo trecho do túnel sempre parte do clone 7, e o `ProxyCommand` com senha nos dois servidores **não funciona** aqui.
+
+**Forma recomendada: túnel fixo no clone 7** (um processo só, compartilhado por todos os usuários). Instalação, uma vez, no clone 7:
+
+```bash
+mkdir -p -m 700 ~/sss_tunel
+cat > ~/sss_tunel/tunel.sh <<'EOF'
+#!/bin/bash
+# Tunel fixo clone 7 -> 10.129.164.55 (SSS); reconecta sozinho se cair
+while true; do
+    ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes \
+        -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+        -L 127.0.0.1:18000:127.0.0.1:18000 mastersafgf@10.129.164.55
+    echo "$(date '+%F %T') tunel caiu (rc=$?); nova tentativa em 10 s"
+    sleep 10
+done
+EOF
+chmod 700 ~/sss_tunel/tunel.sh
+```
+
+Subir, conferir e parar (no clone 7):
+
+```bash
+nohup setsid ~/sss_tunel/tunel.sh >> ~/sss_tunel/tunel.log 2>&1 < /dev/null &
+echo $! > ~/sss_tunel/tunel.pid
+netstat -ltn | grep 127.0.0.1:18000          # deve mostrar LISTEN
+kill -- -$(cat ~/sss_tunel/tunel.pid)        # parar (mata o laco e o ssh)
+```
+
+Na estação de cada usuário (um salto só; vários usuários ao mesmo tempo, sem trocar porta):
 
 ```bash
 ssh -N -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
-    -o "ProxyCommand=ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -W %h:%p mastersafgf@10.238.10.109" \
-    -L 18000:127.0.0.1:18000 mastersafgf@10.129.164.55
+    -L 18000:127.0.0.1:18000 mastersafgf@10.238.10.109
 # navegador: http://localhost:18000/script_scheduling_service
 ```
 
-* A senha é pedida **duas vezes**: a primeira do clone 7, a segunda do 10.129.164.55 (ambos aceitam senha). Quem tiver chave autorizada nos dois servidores não digita nada.
-* Na primeira conexão, o SSH pede para confiar na chave do servidor novo. A impressão digital correta é `SHA256:Gpacuzn+pHDGaLIHMxMnl8l0UVGvNE5N7Dkp3VzHpcM` (RSA 2048, a mesma que o clone 7 já confia).
-* No Windows, o comando funciona no PowerShell (OpenSSH do Windows 10+). No PuTTY, use *Connection → Proxy* tipo "Local" com o comando `plink mastersafgf@10.238.10.109 -nc %host:%port` e o túnel de *Connection → SSH → Tunnels* (18000 → `127.0.0.1:18000`). **[não ensaiado]**
-* **Alternativa em dois trechos** (usada na validação): no clone 7, `ssh -f -N -L 18001:127.0.0.1:18000 mastersafgf@10.129.164.55 </dev/null >/dev/null 2>&1`; na estação, `ssh -N -o HostKeyAlgorithms=+ssh-rsa -L 18000:127.0.0.1:18001 mastersafgf@10.238.10.109`. Lembre de encerrar o trecho do clone 7 depois (`kill` no PID do `ssh -f`).
+* O túnel fixo escuta só em `127.0.0.1` do clone 7; como o clone 7 é compartilhado, qualquer usuário logado nele alcança a tela de login do SSS (a senha continua exigida).
+* Depois de um reboot do clone 7, suba o túnel de novo (início automático não ativado; exigiria `crontab`).
+* Se o `ssh` da estação for antigo e recusar `PubkeyAcceptedAlgorithms`, troque por `PubkeyAcceptedKeyTypes`.
+* **Não** abra o SSS na rede (`-i 0.0.0.0`) nem use `-L 0.0.0.0:...` na estação: o tráfego é HTTP sem TLS e o acesso ficaria exposto (§13).
+
+**Alternativa sem o túnel fixo: túnel em dois trechos, por usuário** (validado com HTTP 200):
+
+```bash
+ssh -t -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+    -L 127.0.0.1:18000:127.0.0.1:18000 mastersafgf@10.238.10.109 \
+    "ssh -N -L 18000:127.0.0.1:18000 mastersafgf@10.129.164.55"
+```
+
+* O `Ctrl+C` encerra os dois trechos. Pede só a senha do clone 7 (ou nenhuma, com chave).
+* A porta do meio (no clone 7) é única por usuário: com duas pessoas conectadas ao mesmo tempo, a segunda troca os dois números do meio (`...:127.0.0.1:18001` e `-L 18001:...`). Não pode coincidir com a do túnel fixo, se ele estiver no ar.
+* Impressão digital do 10.129.164.55 (para conferir no clone 7): `SHA256:Gpacuzn+pHDGaLIHMxMnl8l0UVGvNE5N7Dkp3VzHpcM` (RSA 2048).
 
 ### 22.5 Validação realizada
 
