@@ -683,7 +683,7 @@ ssh -N -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -L 180
 
 Implantação feita em 2026-10-15 com o pacote do commit `aca60b0` (código do `fdf6f35` mais documentação). **Este é o servidor ativo do SSS.**
 
-> **Atualização pendente (CR-003 e CR-004):** este servidor ainda roda o código do `fdf6f35`, sem as correções do CR-003 nem as telas do CR-004. O `config.ini` dele ainda usa a chave antiga `base_script_dir`. Para atualizar, siga o §16 com um pacote novo (§5.2) e, no passo 16.3, troque a chave por `base_script_dirs = ROTINAS=/portaloptrib/TESHUVA/SSS/scripts`. Depois, valide como no §22.5 (a suíte esperada passa a ser `OK (skipped=18)`) e faça o teste de fumaça do §12.
+> **Atualização pendente (CR-003 e CR-004):** este servidor ainda roda o código do `fdf6f35`, sem as correções do CR-003 nem as telas do CR-004. O `config.ini` dele ainda usa a chave antiga `base_script_dir`. O pacote da versão atual e o roteiro de atualização, já ensaiados, estão no §22.6.
 
 ### 22.1 Diferenças em relação ao clone 7
 
@@ -785,3 +785,99 @@ ssh -t -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
 * Escuta só em `127.0.0.1:18000`; cabeçalhos de segurança presentes; origem estranha → 403; painel do web2py desabilitado.
 * Processo vivo depois do fim da sessão SSH; reinício e idempotência dos scripts conferidos.
 * Pelo túnel em dois trechos: login do `admin`, disparo de ticket, painel de agentes e logout, sem erros. Depois, reinício para entregar os dados de demonstração limpos.
+
+### 22.6 Atualização para a versão `e8759e3` (CR-003 e CR-004) — [ensaiada; não executada no servidor]
+
+| Item | Valor |
+|---|---|
+| Pacote | `sss-e8759e3.tar.gz` (13,7 MB), gerado por `git archive` (§5.2) do commit `e8759e3` |
+| SHA-256 | `33348dd7ff9f91c1f1b8b80f0d6178341644befeeb29e8b8e4b4eb7f78ae3012` |
+| Onde está | Máquina de desenvolvimento: `/home/eduardof/sss_pacotes/` (pacote e `.sha256`) |
+| Mudança de configuração | Só uma: `base_script_dir = <caminho>` vira `base_script_dirs = ROTINAS=<caminho>`. `secrets.cfg`, `web.env` e a árvore de scripts não mudam |
+| Parada | Cerca de 1 minuto (passo 6). Os dados de demonstração voltam ao seed, como em todo reinício |
+
+**Ensaio (2026-10-16, na máquina de desenvolvimento, com o Python 3.8.5, a mesma versão do servidor):**
+* pacote extraído numa pasta limpa;
+* `check_env.py` com código 0 e suíte `Ran 697 tests ... OK (skipped=18)` (também na 3.6.0);
+* `config.ini` no formato do servidor, com a chave antiga:
+  * sem conversão, a subida é recusada com `ConfigErro` e a linha `CRITICAL` "Chave desconhecida na secao [agent]: base_script_dir" no `sss_web.log`;
+  * convertido pelo passo 2, o teste de carga do §10 responde `SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)`;
+* subida pelo `bin/sss-web.sh` com `-a '<recycle>' -i 127.0.0.1`:
+  * login HTTP 200, os 4 cabeçalhos de segurança e origem estranha recusada com 403;
+  * nenhum `CRITICAL` e painel do web2py desabilitado (`password=None`);
+* teste de fumaça do §12 no navegador: login, O que eu posso fazer, Rotinas disponíveis, disparo com o resumo ("Ticket #41 criado com sucesso."), agentes e saída;
+* varredura das telas nos 4 perfis, sem erros no console;
+* parada por SIGINT em 1 s.
+
+**0. Levar o pacote até o servidor** (dois saltos, como no §22.4):
+
+```bash
+# na estação, a partir da pasta onde estão os dois arquivos
+scp -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+    sss-e8759e3.tar.gz sss-e8759e3.tar.gz.sha256 mastersafgf@10.238.10.109:/tmp/
+# no clone 7
+scp /tmp/sss-e8759e3.tar.gz /tmp/sss-e8759e3.tar.gz.sha256 mastersafgf@10.129.164.55:/portaloptrib/TESHUVA/SSS/pacotes/
+rm -f /tmp/sss-e8759e3.tar.gz /tmp/sss-e8759e3.tar.gz.sha256
+```
+
+**No 10.129.164.55, como `mastersafgf`:**
+
+```bash
+SSS=/portaloptrib/TESHUVA/SSS
+PY=/portaloptrib/TESHUVA/sparta/python3.8/bin/python3
+APP=applications/script_scheduling_service
+NOVO=$SSS/web2py-e8759e3
+
+# 1. Conferir e extrair AO LADO da versão atual (o SSS continua no ar)
+cd $SSS/pacotes && sha256sum -c sss-e8759e3.tar.gz.sha256          # sss-e8759e3.tar.gz: OK
+mkdir -m 750 $NOVO && tar -xzf $SSS/pacotes/sss-e8759e3.tar.gz -C $NOVO
+ls $NOVO/applications                                                # somente script_scheduling_service
+
+# 2. config.ini: copiar o atual e trocar a chave
+cp $SSS/web2py/$APP/instance/config.ini $NOVO/$APP/instance/config.ini
+chmod 640 $NOVO/$APP/instance/config.ini
+sed -i 's|^base_script_dir *= *\(.*\)$|base_script_dirs = ROTINAS=\1|' $NOVO/$APP/instance/config.ini
+grep -n '^base_script' $NOVO/$APP/instance/config.ini
+# esperado: base_script_dirs = ROTINAS=/portaloptrib/TESHUVA/SSS/scripts
+diff <(grep -oE "^[a-z_]+ =" $NOVO/$APP/instance/config.ini.example | sort) \
+     <(grep -oE "^[a-z_]+ =" $NOVO/$APP/instance/config.ini | sort) && echo "chaves OK"
+
+# 3. Verificar o código novo (não usa a porta; o SSS atual segue no ar)
+cd $NOVO/$APP
+$PY scripts/check_env.py; echo "codigo: $?"                         # 0
+$PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran 697 tests ... OK (skipped=18)
+
+# 4. Teste de carga da configuração (§10) na pasta nova
+cd $NOVO && umask 077
+echo 'print("SSS: configuracao OK (sss_env=%s, backend=%s, agent_id=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.app.data_backend, current.sss_cfg.agent.agent_id))' > /tmp/sss_diag.py
+$PY web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E "^SSS:|ConfigErro"
+rm -f /tmp/sss_diag.py
+# esperado: SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)
+
+# 5. Conferir que os scripts de operação usam o caminho $SSS/web2py
+grep -n "web2py" $SSS/iniciar_sss.sh $SSS/parar_sss.sh
+
+# 6. Trocar a versão (parada de ~1 minuto)
+$SSS/parar_sss.sh
+mv $SSS/web2py $SSS/web2py-fdf6f35 && mv $NOVO $SSS/web2py
+$SSS/iniciar_sss.sh
+
+# 7. Validar
+curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:18000/script_scheduling_service/default/login     # 200
+curl -sI http://127.0.0.1:18000/script_scheduling_service/default/login | grep -icE "content-security-policy|x-frame-options|x-content-type-options|referrer-policy"   # 4
+curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://outro-host" http://127.0.0.1:18000/script_scheduling_service/default/login   # 403
+grep "$(date +%Y-%m-%d)" $SSS/logs/sss_web.log | grep -c CRITICAL       # 0 (linhas CRITICAL de hoje)
+tail -n 5 $SSS/logs/servidor.out
+```
+
+Depois, pelo túnel (§22.4), faça o teste de fumaça do §12: login, **O que eu posso fazer**, **Rotinas disponíveis**, disparo com o resumo, agentes e saída.
+
+**Retorno (rollback), se algo falhar no passo 7:**
+
+```bash
+$SSS/parar_sss.sh
+mv $SSS/web2py $SSS/web2py-e8759e3 && mv $SSS/web2py-fdf6f35 $SSS/web2py
+$SSS/iniciar_sss.sh
+```
+
+A versão anterior fica intacta em `$SSS/web2py-fdf6f35`, com o `config.ini` antigo. Apague essa pasta só depois do aceite da homologação. Depois da atualização, troque neste capítulo o commit do §22 para `e8759e3` e registre a validação no §22.5.
