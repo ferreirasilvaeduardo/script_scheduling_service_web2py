@@ -121,6 +121,8 @@ python web2py.py -a '<senha_administrador>' -i 127.0.0.1 -p 8000 --no_gui
 
 A aplicação fica no endereço local `127.0.0.1:8000/script_scheduling_service` (porta 8000, caminho `/script_scheduling_service`).
 
+Para subir como nos servidores, use o launcher `bin/sss-web.sh "$(command -v python)" web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui`: ele recusa root, aplica `umask 077` e exporta `TZ` a partir de `SSS_TZ` (`docs/IMPLANTACAO.md` §11.1).
+
 ### Senha dos usuários de demonstração (`SSS_DEV_SEED_PASSWORD`)
 
 * Com `data_backend = FAKE`, o seed define a senha de **todos** os usuários de demonstração (`admin`, `op.prod`, `op.hml`, `consulta`) a partir dessa variável de ambiente. `inativo` e `bloqueado` nunca conseguem entrar, de propósito.
@@ -150,6 +152,12 @@ Para executar os testes a partir da aplicação:
 ```bash
 cd applications/script_scheduling_service
 python -m unittest discover -s scripts -p "test_*.py"
+```
+
+Resultado esperado hoje: `Ran 697 tests ... OK (skipped=18)`. Os 18 ignorados dependem de Oracle real ou de Windows. Rode a suíte na **3.6.0** e na **3.6.8** (AGENTS §7.3); a validação do fechamento do CR-004 também passou na 3.13.2, o limite superior aceito pelo `check_env.py`:
+
+```bash
+for v in 3.6.0 3.6.8 3.13.2; do PYENV_VERSION=$v python -m unittest discover -s scripts -p "test_*.py"; done
 ```
 
 O módulo `scripts/_testenv.py` é responsável por configurar o `sys.path` dinamicamente para permitir a importação dos módulos da aplicação (`modules/`) e do web2py (`gluon`) sem caminhos fixos.
@@ -198,6 +206,11 @@ Em `instance/config.ini`, seção `[agent]`:
 base_script_dirs = ROTINAS=/home/<usuario>/sss_dev_scripts
 script_owner_uids = 0,<seu UID>
 ```
+
+* O nome `ROTINAS` é o da pasta base dos scripts do seed FAKE. No cadastro de scripts, a lista **Pasta base** mostra os nomes de `base_script_dirs`, e o **Arquivo do script** é relativo a ela (ex.: `carga_diaria.py` ou `faturamento/carga_faturas.py`).
+* Para testar várias pastas, liste `NOME=caminho` separados por vírgula (ex.: `ROTINAS=/home/<usuario>/sss_dev_scripts,BATCH=/home/<usuario>/sss_dev_batch`); cada pasta segue os mesmos modos acima.
+* `NOME=` sem caminho representa uma pasta que só existe nos agentes: o cadastro aceita o script com o aviso "Pasta base não disponível neste servidor" e a conferência do arquivo fica para o agente (README §8.5).
+* A chave antiga `base_script_dir = <caminho>` não é mais aceita (CR-003): a subida aborta com "Chave desconhecida na secao [agent]".
 
 Para alterar um script da cópia, devolva a escrita temporariamente (`chmod -R u+w "$BASE"`) e volte aos modos acima antes de executar. Executar como `root` não funciona com essa checagem, porque `os.access(W_OK)` é sempre verdadeiro para root.
 

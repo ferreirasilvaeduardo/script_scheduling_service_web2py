@@ -13,9 +13,9 @@ As regras de negócio estão no README §4.4 e §10 (padrões globais e tabela 1
 
 | Camada | Arquivo | Responsabilidade |
 |---|---|---|
-| Controller | `controllers/admin_<entidade>.py` | Aplica o guarda `_exigir_func('<FUNC>')`, restringe o método HTTP, lê e trunca `request.vars`, chama o service, define o flash e renderiza ou redireciona. Não contém regra de negócio. |
+| Controller | `controllers/admin_<entidade>.py` | Aplica o guarda `_exigir_func('<FUNC>')`, restringe o método HTTP, lê `request.vars` com um teto defensivo por campo (sempre **acima** do limite do campo, para que o service veja o excesso e o recuse; nada é cortado sem aviso), chama o service, define o flash e renderiza ou redireciona. Não contém regra de negócio. |
 | Service | `modules/admin_<entidade>_service.py` | Não importa `gluon` e recebe `ctx` e `ip` como parâmetros. Reconfirma a funcionalidade com `admin_crud.exigir_func`, valida os campos, calcula a versão e o detalhe de auditoria e chama o repositório. O serviço padrão do processo é obtido sob demanda (`_servico()`). |
-| Base comum | `modules/admin_crud.py` | Fornece `versao`, `esperado`, `detalhe_alteracoes`, `detalhe_insercao`, `auditoria`, `texto`, `AcessoNegado` e as mensagens padrão. |
+| Base comum | `modules/admin_crud.py` | Fornece `versao` (com `sensiveis=`), `esperado`, `texto`, `identificador`, `texto_livre`, `detalhe_alteracoes`, `detalhe_insercao`, `detalhe_livre`, `auditoria`, `AcessoNegado`, `OperacaoNegada` e as mensagens padrão (`MSG_CONFLITO` vem de `ui_helpers.MENSAGENS`). |
 | Repositório | `repo_<agregado>` | A inclusão e a alteração recebem `auditoria=` e gravam a linha de `tbsss_auditoria` na **mesma** operação. A alteração recebe `esperado=` e faz um `UPDATE` condicional. |
 
 ## Telas e ações
@@ -25,9 +25,17 @@ As regras de negócio estão no README §4.4 e §10 (padrões globais e tabela 1
 | `lista` | GET | Filtros com `components/filtros.html`, tabela com `components/tabela.html` (colunas `ativo` e `acao`) e paginação com `components/paginacao.html`. Ordenação definida pelo repositório. |
 | `form[/id]` | GET | Uma única view para inclusão (sem id) e edição. Campos com `components/form_campo.html`. Na edição, a chave natural fica `somente_leitura` e o servidor ignora o valor enviado. |
 | `salvar` | POST + CSRF | Em caso de sucesso, grava o flash e redireciona para a `lista`. A exceção é o cadastro de scripts, que volta ao `form` para mostrar avisos e atalhos (README §8.5). Em caso de erro, responde **200**, reapresenta o que foi digitado e destaca os campos. O primeiro campo inválido recebe `autofocus`. Valor acima do limite ou fora do formato é recusado, nunca truncado (README §10, "Texto nos cadastros"). |
-| `alternar_ativo` | POST + CSRF | O botão fica no **formulário de edição**, e não na lista, e abre `components/modal_confirmacao.html`. O modal mostra o impacto da ação (por exemplo, a quantidade de agendamentos ativos afetados). Depois redireciona de volta para o `form`. |
+| `alternar_ativo` | POST + CSRF | O botão fica no **formulário de edição**, e não na lista, e abre `components/modal_confirmacao.html`. O modal diz a consequência e o impacto da ação: no ambiente, os agendamentos ativos afetados e a quantidade de scripts homologados nele; no perfil, a quantidade e os logins dos usuários ativos afetados (README §4.3.B); no parâmetro vinculado a script ativo, a desativação é bloqueada e os scripts são listados. Depois redireciona de volta para o `form`. |
 
 As entidades mestras nunca são excluídas, apenas desativadas (README §10).
+
+## Texto dos campos (CR-003)
+
+| Tipo de campo | Função | Regra |
+|---|---|---|
+| **Identificador** (nome de ambiente, de perfil, login, código de parâmetro) | `admin_crud.identificador` | **Não** é limpo: espaço no início ou no fim é recusado com "Não use espaços no início nem no fim.". O formato (maiúsculas, dígitos, `_` etc.) é validado depois |
+| **Texto livre** (nome de usuário e de script, `label`, `descricao`, `grupo`, `categoria`, `etapa`) | `admin_crud.texto_livre` | Recebe `strip()` antes da validação e recusa caracteres de controle (`\x00-\x1f`, `\x7f`) com mensagem própria |
+| Qualquer campo | — | Acima do limite, é **recusado** com o tamanho máximo na mensagem; nunca é truncado (README §10, AGENTS §3.4). Só o `detalhe` da auditoria, que é gerado pelo sistema, é cortado em 1.000 caracteres com `...` |
 
 ## Concorrência na edição (sem coluna nova)
 
@@ -40,11 +48,11 @@ As entidades mestras nunca são excluídas, apenas desativadas (README §10).
 
 | Origem | Apresentação |
 |---|---|
-| Validação do service | Mensagem em português no campo (`erros['<campo>']`) |
+| Validação do service | Mensagem em português no campo (`erros['<campo>']`), e no topo a mensagem-padrão em duas partes: "Alguns campos precisam de correção. Os campos estão marcados em vermelho, com a explicação embaixo de cada um." (README §2.4.2) |
 | `RepoViolacao` | Mapeada por `constraint` para o campo. Exemplo: `uk_tbsss_amb_nome` vira "Já existe um ambiente com este nome." |
 | `RepoConflito` | `erros['_geral']`, com a mensagem de conflito |
 | Outra `RepoErro` | `erros['_geral']` com "Não foi possível salvar...". O detalhe técnico (ORA-, SQL, traceback) vai só para o log. |
-| Regra de negócio (ex.: último administrador) | `RepoViolacao` com constraint de aplicação (`sss_*`), traduzida para `erros['_geral']` ou `OperacaoNegada(mensagem)`, que o controller exibe no flash |
+| Regra de negócio (ex.: último administrador, desativar o próprio usuário, tirar o próprio perfil de administrador) | `RepoViolacao` com constraint de aplicação (`sss_*`), traduzida para `erros['_geral']` ou `OperacaoNegada(mensagem)`, que o controller exibe no flash |
 | Sem funcionalidade | 403 no controller (guarda) e `AcessoNegado` no service |
 | ID inexistente ou inválido | 404 |
 
@@ -64,7 +72,8 @@ O detalhe passa sempre pelo `masking` (segredos registrados e senha em connect s
 `scripts/test_admin_<entidade>_service.py`, sobre o FAKE, cobre:
 * inclusão;
 * chave duplicada;
-* campos inválidos;
+* campos inválidos, inclusive espaços em volta de identificador e caractere de controle em texto livre;
+* valor acima do limite recusado, sem truncar;
 * chave natural imutável;
 * edição concorrente, tanto pela versão quanto pelo `esperado` entre a leitura e a escrita;
 * desativação com impacto;
