@@ -44,7 +44,7 @@ Implementar o contrato do agregado em `modules/repo_oracle/` com SQL Oracle 11gR
       - Autoproteção de perfis (D10) e remoção de associações inativas da matriz (D9) ficam no service; o repositório só grava o conjunto recebido.
     - `CATALOGO`:
       - `scripts_executaveis` com uma única query, com joins/`EXISTS` sobre `perfil_scr`, `perfil_amb` e `script_amb` e o atalho para admin; `parametro_vinculos` para o bloqueio de desativação.
-      - `tbsss_scripts.pasta_base` (D16) em `scripts_inserir`, `scripts_alterar` (inclusive no `esperado`, com a comparação nula-segura), `scripts_obter` e `scripts_listar`. Violação de `ck_tbsss_scr_pasta` ou da `ck_tbsss_scr_path` endurecida (C4) vira `RepoViolacao` com o nome da CK.
+      - `tbsss_scripts.path_file` absoluto (`VARCHAR2(500 CHAR)`, CR-005) em `scripts_inserir`, `scripts_alterar` (inclusive no `esperado`, com a comparação nula-segura), `scripts_obter` e `scripts_listar`. Sem `pasta_base`. Violação da `ck_tbsss_scr_path` vira `RepoViolacao` com o nome da CK.
       - A UK `uk_tbsss_scr_nome` diferencia maiúsculas de minúsculas (`Carga` ≠ `carga`, README §8.5): nenhuma comparação com `UPPER`/`LOWER` na checagem de unicidade.
       - O `detalhe` da auditoria de inclusão (só campos preenchidos, referências pelo nome, C9) e o `masking` dos vínculos são montados pelo service; o repositório só grava a linha recebida, na mesma transação.
       - FKs e UKs com os mesmos nomes e efeitos do FAKE (`RepoViolacao.constraint`).

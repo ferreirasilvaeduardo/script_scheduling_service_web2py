@@ -1,70 +1,53 @@
-# SSS — Prompt F8.0: Camada de plataforma (POSIX e Windows)
+# SSS — Prompt F8.0: Camada de plataforma (somente POSIX, CR-005)
 
 ## Leitura obrigatória antes de planejar
-- `docs/arquitetura/CR-001-multiplataforma-e-sql-ansi.md` §2 (parte B, inteira)
+- `docs/arquitetura/CR-005-posix-caminho-livre-e-logs.md` (D1: somente POSIX; D2/D3: caminho livre do script e checagens; revoga Windows do CR-001 e pastas base do CR-003)
 - `AGENTS.md` §2.2, §3.2 (inteiro), §3.3, §7 (`test_plataforma.py`)
-- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D16: várias pastas base; C4: formato de `path_file`)
-- `README.md` §2.6, §4.1, §8.0 (inteiro), §8.5 (inteiro, em especial "Pastas base", "Caminho no Windows" e "Formato de `path_file`"), §8.11, §8.12 (passos 1, 4, 5 e 9), §12.1 (`[agent]`, inclusive `base_script_dirs`), §14
-- `AGENTS.md` §3.2 (pastas base)
-- Arquivos: `modules/path_guard.py` (`resolver_pasta`, `pasta_mapeada`, `PASTA_NAO_MAPEADA`), `modules/sss_config.py` (validação do `secrets.cfg`), `scripts/test_path_guard.py`, `scripts/test_config.py`, `scripts/test_py36_compat.py`
+- `README.md` §2.6, §4.1, §8.0 (inteiro), §8.5 (inteiro, caminho absoluto livre), §8.11, §8.12 (passos 1, 4, 5 e 9), §12.1 (`[agent]`), §14
+- Arquivos: `modules/path_guard.py` (`resolver`, checagens de cadeia até `/` e pastas do sistema), `modules/sss_config.py` (validação do `secrets.cfg`), `scripts/test_path_guard.py`, `scripts/test_config.py`, `scripts/test_py36_compat.py`
 
 ## Objetivo
-Concentrar em `modules/plataforma/` **toda** primitiva que depende do sistema operacional, com implementações POSIX (Linux e demais Unix) e Windows (APIs nativas via `ctypes`, sem dependência nova), para que o motor (F8.1–F8.4) não conheça o SO.
+Concentrar em `modules/plataforma/` **toda** primitiva que depende do sistema operacional, com implementação POSIX (Linux e demais Unix; CR-005: Windows não é suportado), para que o motor (F8.1–F8.4) não conheça o SO.
 
 ## Escopo
 **IN**
-- **`applications/script_scheduling_service/modules/plataforma/__init__.py`:** a interface do README §8.0 e a seleção da implementação **uma única vez** no import (`os.name`). Exporta `NOME` (`LINUX`, `UNIX` ou `WINDOWS`, gravado em `tbsss_agentes.plataforma`) e as funções:
-  - `iniciar_processo(argv, log_fd, cwd, env, rotulo) -> Processo` (rótulo = `SSS-<agent_id>-<ticket_id>`, usado no Windows como nome do Job);
+- **`applications/script_scheduling_service/modules/plataforma/__init__.py`:** a interface do README §8.0 para ambiente POSIX (`os.name == 'posix'`). Exporta `NOME` (`LINUX` ou `UNIX`, gravado em `tbsss_agentes.plataforma`) e as funções:
+  - `iniciar_processo(argv, log_fd, cwd, env, rotulo) -> Processo`;
   - `encerrar_grupo(processo, grace_s, relogio_monotonico)`: escalonado; **não bloqueia além de `grace_s + 1`**;
   - `identidade_processo(pid) -> int | None` e `processo_existe(pid) -> bool`;
   - `reabrir_grupo(pid, rotulo) -> Processo | None` (startup check, README §8.12 passo 9);
   - `travar_instancia(caminho) -> trava` e `liberar_instancia(trava)`;
   - `usuario_privilegiado() -> bool`;
   - `validar_arquivo_restrito(caminho)` (segredos, README §4.1) e `validar_dir_restrito(caminho)` (`log_dir`/`work_dir`, README §8.12 passo 4);
-  - `validar_item_arvore(caminho, donos, conta_agente=None) -> codigo | None` (um item da árvore de scripts, README §8.5). É a primitiva da linha `validar_arvore_scripts` da tabela do README §8.0;
-  - `validar_arvore_scripts(pastas, donos, conta_agente=None)`: aplica a regra de dono e permissão à raiz de **cada** pasta de `[agent] base_script_dirs` (README §8.5 "Pastas base": toda pasta base passa pelas mesmas checagens, na inicialização e a cada resolução) e devolve o primeiro problema com o **nome** da pasta. Usada pelo passo 4 da inicialização (F8.3);
-  - `caminho_final(caminho)` (`realpath` no POSIX; `GetFinalPathNameByHandleW` no Windows, em qualquer versão do Python, rejeitando *reparse points* não resolvidos);
-  - `criar_dir_trabalho(caminho)` (`0700` no POSIX; ACL só da conta do agente no Windows);
-  - `instalar_parada(flag)`: handlers de sinal que **apenas** setam a flag (SIGTERM/SIGINT no POSIX; SIGBREAK/SIGINT no Windows). O arquivo `.stop` é verificado pelo laço, não aqui.
+  - `validar_item_arvore(caminho, donos, conta_agente=None) -> codigo | None` (um item do caminho do script, README §8.5). Primitiva da tabela do README §8.0;
+  - `caminho_final(caminho)` (`realpath` no POSIX);
+  - `criar_dir_trabalho(caminho)` (`0700` no POSIX);
+  - `instalar_parada(flag)`: handlers de sinal que **apenas** setam a flag (SIGTERM/SIGINT no POSIX). O arquivo `.stop` é verificado pelo laço, não aqui.
 - **`modules/plataforma/posix.py`:** as colunas POSIX do README §8.0 e o Popen literal do AGENTS §3.2, com `_child_limits` (somente `os.umask(0o077)` e `resource.setrlimit`: `RLIMIT_CORE` 0 e `RLIMIT_NOFILE` 1024).
   - `identidade_processo`: Linux, campo 22 de `/proc/<pid>/stat` contado **depois do último `)`**; AIX/Solaris, `/proc/<pid>/psinfo`; macOS/BSD, `sysctl KERN_PROC` via `ctypes`. Plataforma sem suporte retorna `None` e o startup check trata `None` como identidade desconhecida (`ORPHAN_PROCESS`).
   - `encerrar_grupo`: `killpg(SIGTERM)` → `grace` (polling com `poll()` e `time.sleep(0.1)`) → `killpg(SIGKILL)` → `wait()`; `ProcessLookupError` = grupo encerrado.
-- **`modules/plataforma/windows.py`** (somente `ctypes` + `msvcrt` + `subprocess`; **sem** `pywin32` nem `psutil`):
-  - Popen com `CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW` e atribuição **imediata** a um Job Object nomeado (`rotulo`) com `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, `JOB_OBJECT_LIMIT_ACTIVE_PROCESS` e limite de memória;
-  - `encerrar_grupo`: `CTRL_BREAK_EVENT` → `grace` → `TerminateJobObject` → `wait()`;
-  - `identidade_processo`: `GetProcessTimes().CreationTime`; `processo_existe`: `OpenProcess` + `GetExitCodeProcess`;
-  - `travar_instancia`: `msvcrt.locking(LK_NBLCK)`;
-  - `usuario_privilegiado`: token elevado (membro de Administradores) ou SYSTEM;
-  - `validar_arquivo_restrito`/`validar_dir_restrito`: dono = SID do processo e DACL só com o dono e SYSTEM, sem herança de Users, Authenticated Users ou Everyone;
-  - `validar_item_arvore`: dono em `script_owner_sids` e **direitos efetivos** sem escrita para a conta do agente nem para os grupos amplos (`GetEffectiveRightsFromAclW`). `os.access` é proibido aqui (só olha o atributo "somente leitura").
-- **Migração do código existente** (sem mudar comportamento no Linux):
+- **Integração com o código existente:**
   - `modules/sss_config.py`: a checagem de dono e modo do `secrets.cfg` passa a chamar `plataforma.validar_arquivo_restrito`;
-  - `modules/path_guard.py`: a regra de dono/escrita por item (`_checar_dono_e_modo`, `_gravavel_pelo_agente`) passa a chamar `plataforma.validar_item_arvore`, e a resolução usa `plataforma.caminho_final`. Os códigos de retorno do `path_guard` (inclusive `PASTA_NAO_MAPEADA`) e as mensagens da UI (F4.5) não mudam.
-  - **Pastas base (README §8.5, D16):** a resolução do agente e do nó web passa **sempre** por `path_guard.resolver_pasta(pastas, pasta_base, path_file, ...)`, com o mapa `base_script_dirs` (nome lógico → diretório local). A base das checagens é o diretório da pasta base do script. `resolver` com uma base única continua só como peça interna de `resolver_pasta`.
-  - **Separador no Windows (README §8.5, "Formato de `path_file`"):** `path_file` usa só `/` (a etapa 1 recusa início com `/` ou `//`, `..`, `\` e `:`; a CK `ck_tbsss_scr_path` também recusa `\` e `:`). No Windows, o agente converte `/` para o separador local antes de juntar com a pasta base e de chamar `plataforma.caminho_final`; o `commonpath` é aplicado sobre `os.path.normcase` e um drive diferente do da base dá `FORA_DA_BASE`.
-- **Configuração (`sss_config.py`, `config.ini.example`):** `[agent] script_owner_sids` (lista de SIDs, `^S-1-[0-9-]+$`) e `[agent] interpretadores` (`LOGICO=caminho`, lógico na allowlist **da plataforma corrente**), conforme o README §12.1; `script_owner_uids` só é exigido no POSIX e `script_owner_sids` só no Windows. Atualize `test_config.py`.
+  - `modules/path_guard.py`: a regra de dono/escrita por item (`_checar_dono_e_modo`, `_gravavel_pelo_agente`) passa a chamar `plataforma.validar_item_arvore`, e a resolução usa `plataforma.caminho_final`.
+- **Configuração (`sss_config.py`, `config.ini.example`):** `[agent] script_owner_uids` e `[agent] interpretadores` (`LOGICO=caminho`, na allowlist `PYTHON3`, `BASH`, `SH`), conforme o README §12.1. Sem `script_owner_sids` nem `base_script_dirs`.
 - **`applications/script_scheduling_service/scripts/test_plataforma.py`:**
-  - **Plataforma corrente (real):** grupo e encerramento escalonado matando o **neto**; processo que ignora o término morre dentro de `grace + 1` s; identidade do processo estável e diferente para outro PID; PID inexistente; lock de instância (segunda trava falha); recusa de usuário privilegiado (com dublê); arquivo restrito OK e rejeitado; diretório de trabalho restrito; item da árvore gravável rejeitado; parada por sinal seta a flag.
-  - **Outra plataforma:** dublês da API nativa (módulo `ctypes` falso ou funções injetadas) cobrindo a lógica de decisão, marcados com `skipUnless(sys.platform ...)` para a execução real.
-  - **POSIX:** `/proc/<pid>/stat` com `)` no nome do comando.
-  - **Windows (dublês):** link e junction resolvidos por `caminho_final`; *reparse point* não resolvido rejeitado; drive diferente da base = `FORA_DA_BASE`; `path_file` `sub/carga.ps1` resolvido como `<base>\sub\carga.ps1` (conversão de `/`).
-  - **Pastas base:** duas pastas (ex.: `ROTINAS` e `BATCH`) resolvidas cada uma contra o próprio diretório; `pasta_base` fora do mapa = `PASTA_NAO_MAPEADA`; `validar_arvore_scripts` rejeita a segunda pasta quando só ela está fora do padrão de dono/permissão e informa o nome dela.
-- **`scripts/test_py36_compat.py`:** fora de `modules/plataforma/` é proibido `os.killpg`, `os.setsid`, `resource`, `fcntl`, `msvcrt`, `ctypes.windll`, `/proc` e `sys.platform` (AGENTS §3.2).
+  - grupo e encerramento escalonado matando o **neto**; processo que ignora o término morre dentro de `grace + 1` s; identidade do processo estável e diferente para outro PID; PID inexistente; lock de instância (segunda trava falha); recusa de usuário privilegiado (root, com dublê); arquivo restrito OK e rejeitado; diretório de trabalho restrito; item da árvore gravável rejeitado; parada por sinal seta a flag.
+  - `/proc/<pid>/stat` com `)` no nome do comando.
+- **`scripts/test_py36_compat.py`:** fora de `modules/plataforma/` é proibido `os.killpg`, `os.setsid`, `resource`, `fcntl`, `/proc` e `sys.platform` (AGENTS §3.2).
 
 **OUT**
-- Ambiente do filho, executor e motor (F8.1+). Launchers `.ps1` (F9.1).
+- Ambiente do filho, executor e motor (F8.1+).
+- Plataforma Windows (revogada pelo CR-005).
 
 ## Requisitos
-1. Nenhuma dependência nova: só biblioteca padrão (`ctypes`, `msvcrt`, `subprocess`, `signal`).
+1. Nenhuma dependência nova: só biblioteca padrão (`subprocess`, `signal`, `resource`, `fcntl`).
 2. Comportamento no Linux idêntico ao atual: `test_path_guard.py` e `test_config.py` continuam passando sem alteração de expectativa.
-3. Python 3.6: `ctypes.wintypes` disponível; nada de API 3.7+ (ex.: `subprocess` com `capture_output`).
-4. Sem runner Windows, a parte Windows real fica `NÃO TESTADO` (CR-001, D9); os dublês precisam passar em qualquer SO.
+3. Python 3.6: sintaxe e biblioteca padrão permitidas da versão 3.6.0.
 
 ## Critérios de aceite
 - [ ] `test_plataforma.py`, `test_path_guard.py` e `test_config.py` passam em 3.6.0, 3.6.8 e 3.13 no Linux.
 - [ ] Nenhum processo órfão após a suíte (`ps -u $USER -o pid,pgid,cmd | grep -c "sleep 300"` = 0).
 - [ ] A varredura do `test_py36_compat.py` não encontra primitivas de SO fora de `plataforma/`.
-- [ ] Windows real: executado num runner/VM Windows, ou `NÃO TESTADO` com o motivo.
 
 ## Verificação
 `python -m unittest discover -s scripts -p "test_plataforma.py" -v`, depois a suíte completa.

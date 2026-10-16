@@ -21,10 +21,10 @@ Gerar e aplicar o DDL Oracle 11gR2 de forma idempotente e auditável, **a partir
 
   Cada instrução vem acompanhada do tipo e do nome do objeto, para a checagem de existência.
 
-  **Modelo do CR-003 (já no registro `sql_ident`; gerar a partir dele, nunca escrever à mão):**
-  - `tbsss_scripts.pasta_base VARCHAR2(30 CHAR) NOT NULL` (nome lógico da pasta base, README §8.5 e §10 tabela 6), com a CK `ck_tbsss_scr_pasta (REGEXP_LIKE(pasta_base, '^[A-Z][A-Z0-9_]{0,29}$'))`;
-  - `ck_tbsss_scr_path` endurecida (C4): `SUBSTR(path_file, 1, 1) <> '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '\') = 0 AND INSTR(path_file, ':') = 0`. A barra invertida sai **literal** no DDL (`'\'`, um único caractere; no Oracle, `\` não é caractere de escape);
-  - `tbsss_agentes.pastas_base VARCHAR2(500 CHAR)` (nomes das pastas base do agente, sem caminhos; README §10 tabela 15);
+  **Modelo do CR-005 (já no registro `sql_ident`; gerar a partir dele, nunca escrever à mão):**
+  - `tbsss_scripts.path_file VARCHAR2(500 CHAR) NOT NULL` (caminho absoluto livre, README §8.5 e §10 tabela 6; sem `pasta_base`);
+  - `ck_tbsss_scr_path` (CR-005, R-g): `SUBSTR(path_file, 1, 1) = '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\') = 0`. A barra invertida sai **literal** no DDL (`'\'`, um único caractere; no Oracle, `\` não é caractere de escape);
+  - `tbsss_agentes`: sem `pastas_base`; `plataforma` com `ck_tbsss_agt_plat (plataforma IS NULL OR plataforma IN ('LINUX','UNIX'))` (CR-005, R-h);
   - `tbsss_usuarios.tentativas_falha NUMBER(2)` (por isso `login_max_tentativas` vai de 1 a 99, README §12.1).
 
   O banco ainda não existe, então não há migração (CR-003, "Modelo de dados"): as colunas entram no `CREATE TABLE` e as CKs na fase 3.
@@ -42,7 +42,7 @@ Gerar e aplicar o DDL Oracle 11gR2 de forma idempotente e auditável, **a partir
   - nenhuma ocorrência de `IDENTITY`, `FETCH FIRST`, `OFFSET`, `JSON_` ou `VARCHAR2(n)` sem `CHAR`;
   - toda trigger `_bi` igual ao template literal;
   - a ordem das fases está correta (FK depois de PK/UK; índice FBI depois da tabela);
-  - **CR-003:** o DDL contém `pasta_base VARCHAR2(30 CHAR) NOT NULL` em `tbsss_scripts`, a CK `ck_tbsss_scr_pasta` com o `REGEXP_LIKE` do README §10 tabela 6, a `ck_tbsss_scr_path` com `INSTR(path_file, '\') = 0` e `INSTR(path_file, ':') = 0` (texto exato) e `pastas_base VARCHAR2(500 CHAR)` em `tbsss_agentes`;
+  - **CR-005:** o DDL contém `path_file VARCHAR2(500 CHAR) NOT NULL` em `tbsss_scripts`, a `ck_tbsss_scr_path` absoluta (R-g) e `ck_tbsss_agt_plat` (R-h) em `tbsss_agentes` (sem `pasta_base` nem `pastas_base`);
   - `table_prefix` começando por dígito ou com mais de 8 caracteres é recusado antes de gerar DDL, com CRITICAL (`assertLogs`);
   - `--dry-run` executável sem driver.
 
@@ -57,7 +57,7 @@ Gerar e aplicar o DDL Oracle 11gR2 de forma idempotente e auditável, **a partir
 ## Critérios de aceite
 - [ ] `python scripts/init_db.py --dry-run` gera um DDL completo e revisável. Salve-o como `docs/ddl_gerado.sql`.
 - [ ] Os testes passam.
-- [ ] O `docs/ddl_gerado.sql` contém as colunas `pasta_base`/`pastas_base` e as CKs `ck_tbsss_scr_pasta` e `ck_tbsss_scr_path` endurecida (CR-003).
+- [ ] O `docs/ddl_gerado.sql` contém `path_file VARCHAR2(500 CHAR)` e as CKs `ck_tbsss_scr_path` absoluta e `ck_tbsss_agt_plat` (CR-005).
 - [ ] Com `SSS_TEST_DSN`: a primeira execução cria tudo e a segunda resulta em 100% SKIP. Sem `SSS_TEST_DSN`, o veredito dessa parte é `NÃO TESTADO`.
 
 ## Verificação

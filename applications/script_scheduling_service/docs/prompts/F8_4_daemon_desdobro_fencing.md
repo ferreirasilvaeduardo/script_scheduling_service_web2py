@@ -3,7 +3,7 @@
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §3.1 (binds de data), §3.2 (encerramento escalonado), §4.9–4.11, §6
 - `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D1, D2, D3, D7, D16 e os achados "Conclusão no desdobro", "Bind DATE com microssegundos" e "Contrato do desdobro incompleto")
-- `README.md` §4.4 (`AGD_PAUSAR`, `AGENTE_FIM`), §6.5 (snapshot versão 3), §7 (inteiro, **especialmente §7.4 e §7.5**, inclusive "Conclusão da regra", "Sobreposição numa regra que conclui", "Bind de datas" e "Contrato do repositório para o desdobro"), §8.0, §8.1, §8.8, §8.9 (inclusive "Mesmos tempos em todos os nós"), §8.11 (inclusive o arquivo `.stop`), §10 (tabela 12 e a desativação com dependência), §13
+- `README.md` §4.4 (`AGD_PAUSAR`, `AGENTE_FIM`), §6.5 (snapshot versão 4; CR-005), §7 (inteiro, **especialmente §7.4 e §7.5**, inclusive "Conclusão da regra", "Sobreposição numa regra que conclui", "Bind de datas" e "Contrato do repositório para o desdobro"), §8.0, §8.1, §8.8, §8.9 (inclusive "Mesmos tempos em todos os nós"), §8.11 (inclusive o arquivo `.stop`), §10 (tabela 12 e a desativação com dependência), §13
 - Arquivos: `modules/scheduler_loop.py`, `modules/repo_oracle/scheduler_fila.py`, `modules/recurrence.py`, `modules/params_compiler.py`, `modules/rbac.py`, `modules/plataforma/`, `modules/db_conn.py`
 
 ## Objetivo
@@ -30,7 +30,7 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
     - revalidação de privilégios (`USUARIO_INATIVO`, `SEM_PERMISSAO`, `SCRIPT_INATIVO`, `AMBIENTE_INATIVO`);
     - `recurrence.avaliar_disparo` com *misfire*;
     - sobreposição (`SKIP_OVERLAP`);
-    - compilação do **snapshot versão 3** a partir de `parametros_json`, com `params_compiler.compilar_snapshot` (inclui `pasta_base` e `path_file` do script; README §6.5) (`PARAM_INVALIDO`);
+    - compilação do **snapshot versão 4** a partir de `parametros_json`, com `params_compiler.compilar_snapshot` (inclui `path_file` absoluto do script, sem `pasta_base`; README §6.5, CR-005) (`PARAM_INVALIDO`);
     - `CRON_INVALIDO`;
     - reserva + `INSERT` do ticket + `ticket_resp` (passo 6);
     - pausa (passo 7), auditada como `AGD_PAUSAR` (`entidade = 'tbsss_agendamentos'`, `entidade_id` = id da regra, `ator = 'SYSTEM:<agent_id>'`) e registrada em WARN;
@@ -65,7 +65,7 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
     - conclusão por `data_fim` com o ticket da ocorrência atual;
     - sobreposição numa regra que conclui: conclui sem ticket, `perdidas` inclui a ocorrência atual, INFO `SKIP_OVERLAP`;
     - perdidas dentro da tolerância em INFO e fora dela em WARN (`assertLogs`);
-    - snapshot do ticket derivado na **versão 3**, com `pasta_base`;
+    - snapshot do ticket derivado na **versão 4**, com `path_file` absoluto (sem `pasta_base`);
     - nenhuma operação do `scheduler_agenda` chama `commit`/`rollback` (cursor/conexão mock); o `COMMIT` é um só por regra;
     - bind de data sem microssegundos (inspecionar os parâmetros passados ao cursor mock e o `setinputsizes` com `TIPO_DATE`);
     - fencing disparado no limiar e não antes;
@@ -76,7 +76,7 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
     - **teste obrigatório de microssegundos (README §7.5):** um desdobro real com `antiga_data`/`nova_data` contendo microssegundos não resulta em `rowcount = 0` (o tipo `DATE` declarado descarta a fração);
     - uma `UNICA` concluída no banco fica com `ativo = 'N'`, `pausa_motivo = 'CONCLUIDO'` e `proxima_execucao` igual à lida (não nula);
     - dois agentes e uma regra `CRON` `* * * * *` por 3 minutos, gerando exatamente 1 ticket por minuto (sem duplicatas, verificado por `COUNT` agrupado por minuto de `created_at`);
-    - encerrar um agente abruptamente durante uma execução (`kill -9` no POSIX; `taskkill /F /PID` no Windows): o outro agente marca `NODE_OFFLINE` depois de `node_offline_timeout_s`. No Windows, o Job com `KILL_ON_JOB_CLOSE` encerra o filho junto com o daemon; no POSIX, o filho órfão é tratado pelo startup check da religação.
+    - encerrar um agente abruptamente durante uma execução (`kill -9` no POSIX): o outro agente marca `NODE_OFFLINE` depois de `node_offline_timeout_s`; o filho órfão é tratado pelo startup check da religação.
 
 **OUT**
 - Sem purge (isso é o F9.1).

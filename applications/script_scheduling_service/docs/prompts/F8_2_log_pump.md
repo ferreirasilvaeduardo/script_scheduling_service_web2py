@@ -44,7 +44,7 @@ Transferir o log local do ticket para `log_output` de forma incremental, mascara
 1. É proibido reescrever o CLOB inteiro ou ler o CLOB para concatenar (AGENTS §4.13).
 2. O texto **nunca** chega ao banco sem passar pelo mascarador. Segredos com menos de 4 caracteres **não** são mascarados (README §4.1, risco aceito no §14): não crie regra própria para eles; o teste confirma que um valor curto passa intacto e que um de 4 ou mais é mascarado.
 3. Leitura de arquivo sempre em binário, com o offset controlado pela bomba.
-4. **Windows:** o arquivo é lido enquanto o filho ainda escreve nele. Abra para leitura sem bloquear a escrita do filho (o `open` padrão do Python já compartilha leitura e escrita) e trate `PermissionError` transitório como "nada novo neste ciclo". `\r\n` é preservado como veio do script.
+4. **Leitura concorrente (POSIX):** o arquivo é lido enquanto o filho ainda escreve nele. Abra para leitura sem bloquear a escrita do filho (o `open` padrão do Python compartilha leitura e escrita no POSIX). Trate arquivos em crescimento incremental mantendo o offset.
 5. O bloco PL/SQL é o mesmo nas três combinações de driver (CR-002); o tipo do bind de CLOB vem do `db_conn`.
 
 ## Critérios de aceite
