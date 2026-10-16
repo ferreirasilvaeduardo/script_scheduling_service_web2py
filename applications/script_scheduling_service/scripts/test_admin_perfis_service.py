@@ -175,5 +175,50 @@ class TestAutoprotecao(_Base):
         self.assertEqual(self.rbac_repo.perfis_obter(PERFIL_ADMIN)["descricao"], "Nova")
 
 
+
+class TestQuemPode(_Base):
+    """CR-004 U8 (README §4.3.B.2)."""
+
+    def _nomes(self, lista):
+        return dict((p["nome"], p) for p in lista)
+
+    def test_por_script_bate_com_pode_executar(self):
+        import rbac
+        q = self.svc.quem_pode(self.ctx["admin"], script_id="1")
+        perfis = self._nomes(q["perfis"])
+        self.assertEqual(perfis["ADMINISTRADOR"]["motivo"], u"administrador")
+        # Cada perfil listado tem um usuario cujo contexto pode_executar no ambiente indicado.
+        catalogo = self.svc._catalogo
+        script = catalogo.scripts_obter(1)
+        ambs = dict((a["nome"], a) for a in catalogo.ambientes_listar(pagina=1, tamanho=50)["itens"])
+        hom = catalogo.homologacao_obter(1)
+        for login in ("op.prod", "consulta"):
+            ctx = self.ctx[login]
+            podem = set(n for n, a in ambs.items() if rbac.pode_executar(ctx, script, a, hom)[0])
+            nome = self.rbac_repo.perfis_obter(ctx["perfil_id"])["nome"]
+            self.assertEqual(set(perfis[nome]["detalhes"]) if nome in perfis else set(), podem, login)
+
+    def test_por_ambiente_e_inativos(self):
+        self.rbac_repo.perfis_alterar(PERFIL_CONSULTA, {"is_admin": "S"})
+        self.rbac_repo.perfis_alterar(PERFIL_CONSULTA, {"ativo": "N"})
+        amb = [a for a in self.svc._catalogo.ambientes_listar(pagina=1, tamanho=50)["itens"]
+               if a["nome"] == "HOMOLOGACAO"][0]
+        q = self.svc.quem_pode(self.ctx["admin"], ambiente_id=str(amb["id"]))
+        self.assertIn("CONSULTA", self._nomes(q["inativos"]))
+        self.assertNotIn("CONSULTA", self._nomes(q["perfis"]))
+        self.assertTrue(self._nomes(q["perfis"])["ADMINISTRADOR"]["detalhes"])
+
+    def test_script_inativo_avisa_e_acesso(self):
+        self.svc._catalogo.scripts_alterar(5, {"ativo": "N"})
+        self.assertIn(u"inativo", self.svc.quem_pode(self.ctx["admin"], script_id="5")["aviso"])
+        with self.assertRaises(RepoNaoEncontrado):
+            self.svc.quem_pode(self.ctx["admin"], script_id="999")
+        with self.assertRaises(AcessoNegado):
+            self.svc.quem_pode(self.ctx["consulta"], script_id="1")
+        vazio = self.svc.quem_pode(self.ctx["admin"])
+        self.assertIsNone(vazio["script"])
+        self.assertTrue(vazio["scripts"])
+
+
 if __name__ == "__main__":
     unittest.main()

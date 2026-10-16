@@ -142,6 +142,21 @@ def alternar_ativo():
     redirect(URL(c="admin_perfis", f="form", args=[perfil_id]))
 
 
+def quem_pode():
+    """Quem pode o que (README §4.3.B.2): so leitura, por script ou por ambiente."""
+    _exigir_metodo("GET", "HEAD")
+    ctx = _exigir_func(_FUNC)
+    try:
+        dados = servico.quem_pode(ctx, _texto(request.get_vars.get("script"), 11),
+                                  _texto(request.get_vars.get("ambiente"), 11))
+    except RepoNaoEncontrado:
+        _nao_encontrado()
+    except AcessoNegado:
+        _negado()
+    response.title = u"Quem pode o quê — SSS"
+    return dict(q=dados)
+
+
 def matriz():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)

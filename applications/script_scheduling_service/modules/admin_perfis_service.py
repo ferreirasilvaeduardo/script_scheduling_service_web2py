@@ -259,6 +259,75 @@ class ServicoAdminPerfis(object):
                        ctx.get("login"), atual["nome"], extra={"acao": acao})
         return alterado
 
+    # ------------------------------------------------------------ quem pode
+
+    def quem_pode(self, ctx, script_id=None, ambiente_id=None):
+        """Consulta "Quem pode o que" (README §4.3.B.2, CR-004 T5): so leitura, sem metodo novo no contrato.
+
+        Por script: perfis ativos que podem roda-lo e em quais ambientes (perfil_amb ∩ homologacao, so
+        ambientes ativos; admin: todos os homologados ativos). Por ambiente: perfis que o acessam e os
+        scripts homologados ali que podem rodar. Perfis inativos vao para 'inativos'.
+        """
+        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
+        scripts = dict((s["id"], s) for s in self._catalogo.scripts_listar(pagina=1, tamanho=_CATALOGO_MAX)["itens"])
+        ambientes = dict((a["id"], a) for a in self._catalogo.ambientes_listar(pagina=1, tamanho=_CATALOGO_MAX)["itens"])
+        resultado = {"scripts": sorted(scripts.values(), key=lambda s: s["nome"]),
+                     "ambientes": sorted(ambientes.values(), key=lambda a: a["nome"]),
+                     "script": None, "ambiente": None, "perfis": [], "inativos": [], "aviso": None}
+        sid, aid = _id(script_id), _id(ambiente_id)
+        if sid is None and aid is None:
+            return resultado
+        exec_id = [f["id"] for f in self._rbac.funcionalidades_listar() if f["codigo"] == "EXEC_SCRIPT"]
+        perfis = self._rbac.perfis_listar(pagina=1, tamanho=_CATALOGO_MAX)["itens"]
+        homolog = {}
+
+        def homologados(script):
+            if script not in homolog:
+                homolog[script] = set(i for i in self._catalogo.homologacao_obter(script)
+                                      if ambientes.get(i, {}).get("ativo") == "S")
+            return homolog[script]
+
+        def linha(perfil, motivo, detalhes):
+            return {"id": perfil["id"], "nome": perfil["nome"], "is_admin": perfil["is_admin"] == "S",
+                    "motivo": motivo, "detalhes": detalhes, "usuarios_ativos": self.usuarios_ativos(perfil["id"])}
+
+        if sid is not None and sid in scripts:
+            script = scripts[sid]
+            resultado["script"] = script
+            if script.get("ativo") != "S":
+                resultado["aviso"] = u"Este script está inativo: ninguém consegue rodá-lo agora."
+            for p in perfis:
+                m = self._rbac.matriz_obter(p["id"])
+                if p["is_admin"] == "S":
+                    ambs, motivo = homologados(sid), u"administrador"
+                elif exec_id and exec_id[0] in m["funcs"] and sid in m["scrs"]:
+                    ambs, motivo = homologados(sid) & set(m["ambs"]), u"tem Disparar Scripts, o ambiente e o script"
+                else:
+                    continue
+                if not ambs:
+                    continue
+                item = linha(p, motivo, sorted(ambientes[a]["nome"] for a in ambs))
+                resultado["perfis" if p["ativo"] == "S" else "inativos"].append(item)
+        elif aid is not None and aid in ambientes:
+            amb = ambientes[aid]
+            resultado["ambiente"] = amb
+            if amb.get("ativo") != "S":
+                resultado["aviso"] = u"Este ambiente está inativo: nenhum script roda nele agora."
+            ativos = [s for s in scripts.values() if s.get("ativo") == "S" and aid in homologados(s["id"])]
+            for p in perfis:
+                m = self._rbac.matriz_obter(p["id"])
+                if p["is_admin"] == "S":
+                    lista, motivo = ativos, u"administrador"
+                elif exec_id and exec_id[0] in m["funcs"] and aid in m["ambs"]:
+                    lista, motivo = [s for s in ativos if s["id"] in m["scrs"]], u"tem Disparar Scripts e o ambiente"
+                else:
+                    continue
+                item = linha(p, motivo, sorted(s["nome"] for s in lista))
+                resultado["perfis" if p["ativo"] == "S" else "inativos"].append(item)
+        else:
+            raise RepoNaoEncontrado("script ou ambiente inexistente")
+        return resultado
+
     # --------------------------------------------------------------- matriz
 
     def _catalogo_matriz(self):
@@ -411,3 +480,8 @@ def matriz(ctx, perfil_id):
 def salvar_matriz(ctx, ip, perfil_id, funcs, ambs, scrs, perm_versao):
     """Gravacao da matriz de permissoes (servico padrao)."""
     return _servico().salvar_matriz(ctx, ip, perfil_id, funcs, ambs, scrs, perm_versao)
+
+
+def quem_pode(ctx, script_id=None, ambiente_id=None):
+    """Consulta "Quem pode o que" (servico padrao)."""
+    return _servico().quem_pode(ctx, script_id, ambiente_id)
