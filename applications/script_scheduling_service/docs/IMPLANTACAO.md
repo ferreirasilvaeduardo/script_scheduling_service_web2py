@@ -3,8 +3,8 @@
 | Campo | Valor |
 |---|---|
 | Público | Quem vai instalar e operar o SSS num servidor novo (infraestrutura, desenvolvimento, homologação) |
-| Versão do sistema | 0.1.0 — commit de referência `867390f` ou posterior (fases F0.1 a F6.1, CR-003 e CR-004 concluídos). Os servidores dos §21 e §22 foram implantados com o `fdf6f35`, anterior aos dois CRs |
-| Validação | Procedimento **ensaiado de ponta a ponta** em 2026-10-15 num clone limpo do repositório (Python 3.6.0 e 3.13) e **implantado** no mesmo dia no servidor clone 7 (Oracle Linux 6.9, Python 3.7 sem `ssl`, sem `sudo` nem `systemd` — registro no §21). A versão com o CR-003 e o CR-004 foi validada em 2026-10-16 na estação de desenvolvimento (suíte em Python 3.6.0, 3.6.8 e 3.13.2 e verificação das telas no navegador), mas ainda não foi reimplantada em servidor (§22). O que não foi ensaiado está marcado como **[não ensaiado]** |
+| Versão do sistema | 0.1.0 — commit de referência `f04699c` ou posterior (fases F0.1 a F6.1 e CR-003 a CR-005). Os servidores dos §21 e §22 foram implantados com o `fdf6f35`, anterior aos três CRs |
+| Validação | Procedimento **ensaiado de ponta a ponta** em 2026-10-15 num clone limpo do repositório (Python 3.6.0 e 3.13) e **implantado** no mesmo dia no servidor clone 7 (Oracle Linux 6.9, Python 3.7 sem `ssl`, sem `sudo` nem `systemd` — registro no §21). A versão com o CR-003 e o CR-004 foi validada em 2026-10-16 na estação de desenvolvimento (suíte em Python 3.6.0, 3.6.8 e 3.13.2 e verificação das telas no navegador), mas ainda não foi reimplantada em servidor (§22). A versão com o CR-005 (somente POSIX, caminho absoluto do script e logs em pastas por minuto) foi validada em 2026-10-16 na estação (suíte em 3.6.0, 3.6.8 e 3.13.2). O que não foi ensaiado está marcado como **[não ensaiado]** |
 | Documentos relacionados | `README.md` (regras de negócio e arquitetura), `AGENTS.md` (regras de desenvolvimento), `docs/AMBIENTE_DEV.md` (estação do desenvolvedor), `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx` (roteiro de homologação) |
 
 ---
@@ -53,7 +53,7 @@ Convenções deste guia:
 |---|---|---|---|
 | `/opt/sss/web2py` | Código (web2py + aplicação) | `sss` | `0750` |
 | `/etc/sss/secrets.cfg` | Segredos | `sss` | arquivo `0600`, diretório `0700` |
-| `/var/log/sss` | Logs da aplicação | `sss` | `0750` |
+| `/var/log/sss` | Logs da aplicação, em `app/AAAA/MM/DD/HH/MI/` (§15.2) | `sss` | `0750` |
 | `/var/lib/sss/work` | Diretório de trabalho do agente (reservado ao F8) | `sss` | `0700` |
 | `/opt/automacoes/scripts` | Árvore de scripts (somente leitura para o `sss`) | `root` | diretórios `0755`, arquivos `0644` |
 
@@ -193,7 +193,7 @@ $PYTHON scripts/check_env.py ; echo "codigo de saida: $?"
 
 # 7.2 Suíte de testes completa (não precisa de configuração nem de segredos)
 $PYTHON -m unittest discover -s scripts -p "test_*.py"
-# esperado no final: "Ran 697 tests ... OK (skipped=18)" (o total cresce com as versões)
+# esperado no final: "Ran 717 tests ... OK (skipped=18)" (o total cresce com as versões)
 # Os 18 "skipped" são testes contra banco Oracle real (SSS_TEST_DSN); é o resultado esperado.
 ```
 
@@ -205,7 +205,7 @@ Não prossiga se algum desses passos falhar.
 
 ### 8.1 Árvore de scripts de exemplo (necessária para disparar tickets)
 
-Ao criar um ticket, o servidor valida o script com o `path_guard` (README §8.5): o arquivo precisa existir dentro de uma das pastas base de `base_script_dirs`, e o script, **cada diretório** do caminho e a própria base precisam pertencer a um UID de `script_owner_uids`, sem escrita para grupo/outros e **sem escrita para o usuário `sss`**. O modelo correto é a árvore pertencer ao `root`:
+Os scripts do seed FAKE apontam para caminhos absolutos em `/opt/automacoes/scripts` (ex.: `/opt/automacoes/scripts/carga_diaria.py`). Com o CR-005 não há pastas base: o `path_guard` (README §8.5) confere o **arquivo** e **cada diretório até `/`**. O arquivo precisa pertencer a um UID de `script_owner_uids`; cada diretório, ao root ou a um UID de `script_owner_uids`; e nenhum deles pode ter escrita para grupo, para outros ou **para o usuário `sss`**. Pastas do sistema (`/bin`, `/usr`, `/etc`, ...) e as pastas `log_dir`/`work_dir` são recusadas. O modelo correto é a árvore pertencer ao `root`:
 
 ```bash
 sudo install -d -o root -g root -m 0755 /opt/automacoes
@@ -220,11 +220,11 @@ sudo -u sss test -r /opt/automacoes/scripts/carga_diaria.py && echo "leitura OK"
 sudo -u sss test -w /opt/automacoes/scripts/carga_diaria.py || echo "sem escrita OK"
 ```
 
-No `config.ini` (§9): `base_script_dirs = ROTINAS=/opt/automacoes/scripts` e `script_owner_uids = 0`. Para usar mais de uma pasta, liste `NOME=caminho` separados por vírgula (README §8.5); cada pasta segue o mesmo padrão de dono e modo acima.
+No `config.ini` (§9): `script_owner_uids = 0`.
 
-> **Atualização de instalações anteriores (CR-003):** a chave antiga `base_script_dir = <caminho>` deixou de ser aceita. Antes de atualizar o código, troque-a por `base_script_dirs = ROTINAS=<caminho>` no `config.ini`; senão a subida é abortada com CRITICAL na chave `base_script_dir`.
+> **Sem `sudo`:** uma árvore numa pasta do próprio `sss` (ou de qualquer usuário que rode o SSS) **não passa**, porque a pasta pessoal dele é gravável por ele (`GRAVAVEL_PELO_AGENTE`). Nesse caso, não instale a árvore: como os arquivos do seed não existem neste servidor, a **Gestão de Scripts** mostra o aviso "Arquivo não encontrado neste servidor: a validação ocorrerá no agente…" e o disparo cria o ticket normalmente, deixando a conferência para o agente (README §8.5, D4). Foi assim que o ensaio sem `sudo` funcionou (`docs/AMBIENTE_DEV.md` §6.1, opção B).
 
-> Sem `sudo` (árvore pertencente ao próprio `sss`), use a alternativa do `docs/AMBIENTE_DEV.md` §6.1: modos `0444`/`0555` e o UID do `sss` em `script_owner_uids`. Essa variante foi a usada no ensaio.
+> **Atualização de instalações anteriores (CR-005):** as chaves `[agent] base_script_dirs` e a antiga `base_script_dir` saíram, e `[logging] app_log_backups` foi trocada por `app_log_retention_days`. Antes de subir a versão nova, apague a linha da pasta base e troque a de backups (§16.3); senão a subida é abortada com CRITICAL "Chave desconhecida".
 
 ### 8.2 Segredos (`/etc/sss/secrets.cfg`)
 
@@ -270,11 +270,11 @@ O `config.ini` não contém segredos. **Toda chave é validada na subida**: chav
 | `[app]` | `data_backend` | `FAKE` | `ORACLE` ainda não está implementado |
 | `[secrets]` | `secrets_file` | `/etc/sss/secrets.cfg` | Caminho absoluto do §8.2 |
 | `[agent]` | `agent_id` | identificador do servidor, ex.: `srv-sss-hml-01` | Aparece em todas as linhas de log; `^[A-Za-z0-9._-]{1,30}$` |
-| `[agent]` | `base_script_dirs` | `ROTINAS=/opt/automacoes/scripts` (uma ou mais pastas `NOME=caminho`, README §8.5) | §8.1. Os nomes aparecem na lista "Pasta base" do cadastro de scripts. Uma pasta que só existe nos agentes entra **sem caminho** (`NOME=`): pode ser escolhida no cadastro, e a conferência do arquivo fica para o agente. `NOME=` só vale no nó web; o agente (F8) recusa a subida sem caminho |
-| `[agent]` | `script_owner_uids` | `0` | UID do dono da árvore (root). Na variante sem sudo, o UID do `sss` (`id -u sss`) |
+| `[agent]` | `script_owner_uids` | `0` | UID do dono da árvore do §8.1 (root). Os diretórios do caminho do script podem pertencer ao root mesmo sem o 0 na lista; com scripts reais, prefira um UID dedicado (README §8.5) |
 | `[agent]` | `work_dir` | `/var/lib/sss/work` | Reservado ao agente (F8) |
 | `[logging]` | `log_dir` | `/var/log/sss` | Criado com `0750` se não existir |
 | `[logging]` | `level` | `INFO` | `DEBUG` só para investigação |
+| `[logging]` | `app_log_retention_days` | `30` | Dias de log da aplicação mantidos; o próprio processo apaga as pastas de dia mais antigas (§15.2) |
 | `[web]` | `allowed_origins` | `http://127.0.0.1:8000` | Lista separada por vírgula. Em DEV, o próprio endereço acessado já é aceito automaticamente; com proxy reverso, inclua a URL pública (§13.2) |
 | `[web]` | `trusted_proxies` | vazio | Só com proxy reverso (§13.2) |
 
@@ -338,7 +338,7 @@ Na **primeira** subida aparece no terminal `New installation error: unable to cr
 |---|---|
 | `/opt/sss/web2py/parameters_8000.py` | Senha (hash) do painel do web2py; com `<recycle>` na primeira vez, `password=None` |
 | `/opt/sss/web2py/httpserver.log` | Log de acesso do servidor web (uma linha por requisição) |
-| `/var/log/sss/sss_web.log` | Log da aplicação (§15.2) |
+| `/var/log/sss/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` | Log da aplicação, na pasta do minuto da subida (§15.2) |
 | `APP/errors/` | "Tickets" de erro interno do web2py (§15.3) |
 
 ---
@@ -360,8 +360,8 @@ curl -sI http://127.0.0.1:8000/script_scheduling_service/default/login | grep -i
 curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://outro-host" http://127.0.0.1:8000/script_scheduling_service/default/login
 # esperado: origem estranha: HTTP 403
 
-# 12.4 Log da aplicação sendo escrito
-tail -n 5 /var/log/sss/sss_web.log
+# 12.4 Log da aplicação sendo escrito (arquivo mais recente, §15.2)
+tail -n 5 "$(find /var/log/sss/app -name 'sss_web_*.log' -type f | sort | tail -n 1)"
 ```
 
 Depois, pelo navegador (via túnel, §13.1), faça o **teste de fumaça**:
@@ -370,7 +370,7 @@ Depois, pelo navegador (via túnel, §13.1), faça o **teste de fumaça**:
 2. Entrar com `admin` e a senha do §8.3 → **Painel inicial** "Olá, Administrador Geral", com os cartões de tickets, agendamentos e saúde dos agentes.
    * No topo, **O que eu posso fazer** → lista as telas, os ambientes e os scripts liberados para o perfil.
    * No menu Operação, **Rotinas disponíveis** → um cartão por script, com a última execução.
-3. **Disparar script** → `carga_diaria` → `PRODUCAO` → **Criar ticket** → a confirmação mostra o resumo ("Vamos rodar carga_diaria no ambiente PRODUCAO agora…") e o comando com `<ROTINAS>/carga_diaria.py` → confirmar → mensagem "Ticket #41 criado com sucesso." (prova que a árvore de scripts do §8.1 e o `base_script_dirs` estão corretos).
+3. **Disparar script** → `carga_diaria` → `PRODUCAO` → **Criar ticket** → a confirmação mostra o resumo ("Vamos rodar carga_diaria no ambiente PRODUCAO agora…") e o comando com `/opt/automacoes/scripts/carga_diaria.py` → confirmar → mensagem "Ticket #41 criado com sucesso.". Com a árvore do §8.1 correta, o log **não** traz a linha `arquivo do script nao existe no no web`; sem a árvore, o ticket também é criado e essa linha aparece (a conferência fica para o agente).
 4. **Auditoria** → aba **Agentes** → dois cartões (`agt-host01` OK; `agt-host02` envelhecendo com o tempo).
 5. **Sair** → volta para **Entrar** com "Você saiu do sistema.".
 
@@ -473,7 +473,7 @@ journalctl -u sss-web -n 50 --no-pager
 
 | Log | Onde | Conteúdo |
 |---|---|---|
-| Aplicação | `/var/log/sss/sss_web.log` (rotação automática: 10 MB × 10 arquivos) | Formato `data nível [pid] [agente] [ticket] [acao] mensagem`. Login, logout, criação/cancelamento de ticket, negações de acesso, recusas de CSRF/origem. **Nunca** contém senhas nem valores sigilosos |
+| Aplicação | `/var/log/sss/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log`: um arquivo por processo, na pasta do minuto em que ele subiu; ao chegar a 10 MB (`app_log_max_bytes`) abre outro na pasta do minuto atual (no mesmo minuto, com sufixo `_2`, `_3`…); pastas de dia com mais de 30 dias (`app_log_retention_days`) são apagadas pelo próprio processo | Formato `data nível [pid] [agente] [ticket] [acao] mensagem`. Login, logout, criação/cancelamento de ticket, negações de acesso, recusas de CSRF/origem. **Nunca** contém senhas nem valores sigilosos |
 | Acesso HTTP | `/opt/sss/web2py/httpserver.log` | Uma linha por requisição (IP, método, caminho, status) |
 | Serviço | `journalctl -u sss-web` | Saída do processo quando rodando por systemd |
 | Erros internos | `APP/errors/` | Ver 15.3 |
@@ -481,9 +481,11 @@ journalctl -u sss-web -n 50 --no-pager
 Exemplos úteis:
 
 ```bash
-grep -E " (WARNING|ERROR|CRITICAL) " /var/log/sss/sss_web.log | tail -n 20     # problemas recentes
-grep "acao=LOGIN" /var/log/sss/sss_web.log | tail -n 20                        # logins e logouts
-grep "acao=CSRF\|acao=RBAC" /var/log/sss/sss_web.log | tail -n 20              # recusas de segurança
+applog() { find /var/log/sss/app -name 'sss_web_*.log' -type f | sort; }     # arquivos em ordem de data
+applog | tail -n 1                                                           # arquivo atual
+applog | xargs grep -h -E " (WARNING|ERROR|CRITICAL) " | tail -n 20          # problemas recentes
+applog | xargs grep -h "acao=LOGIN" | tail -n 20                             # logins e logouts
+applog | xargs grep -h "acao=CSRF\|acao=RBAC" | tail -n 20                   # recusas de segurança
 ```
 
 ### 15.3 Erro interno (HTTP 500 com "Ticket issued")
@@ -501,7 +503,7 @@ Erros de configuração aparecem melhor pelo teste do §10. Depois de resolver, 
 
 ### 15.4 Limpeza de disco
 
-* `sss_web.log` tem rotação própria. `httpserver.log` **não**: inclua-o no `logrotate` da empresa (`copytruncate`, semanal, 4 cópias) ou apague-o periodicamente com o serviço parado.
+* O log da aplicação tem troca por tamanho e retenção por dias próprias (§15.2); não o inclua no `logrotate`. `httpserver.log` **não** tem: inclua-o no `logrotate` da empresa (`copytruncate`, semanal, 4 cópias) ou apague-o periodicamente com o serviço parado.
 * `APP/errors/` só cresce quando há erro interno; limpe após a análise.
 
 ---
@@ -522,8 +524,8 @@ git fetch && git checkout <novo-commit-ou-tag>          # opção Git
 diff <(grep -oE "^[a-z_]+ =" applications/script_scheduling_service/instance/config.ini.example | sort) \
      <(grep -oE "^[a-z_]+ =" applications/script_scheduling_service/instance/config.ini | sort)
 # qualquer diferença precisa ser refletida no config.ini antes de subir
-# vindo de versão anterior ao CR-003: troque base_script_dir = <caminho> por
-# base_script_dirs = ROTINAS=<caminho> (§8.1); a chave antiga aborta a subida
+# vindo de versão anterior ao CR-005: apague a linha base_script_dir (ou base_script_dirs)
+# e troque app_log_backups = N por app_log_retention_days = 30 (§8.1); as chaves antigas abortam a subida
 
 # 16.4 Verificar e subir
 cd applications/script_scheduling_service
@@ -550,17 +552,17 @@ Mensagens reais, capturadas no ensaio. Para os erros de subida, use sempre o tes
 | Idem | `ConfigErro: Chave cookie_key obrigatoria ausente em [web]` | `secrets.cfg` incompleto | §8.2 |
 | Idem | `ConfigErro` citando `[secao] chave` e motivo | Chave ausente, desconhecida ou fora da faixa no `config.ini` | Compare com o `config.ini.example` (§16.3) |
 | Idem | `ConfigErro: [app]: data_backend: data_backend=FAKE exige sss_env=DEV (atual: HML)` | `sss_env` diferente de `DEV` com FAKE | `sss_env = DEV` |
-| Idem | `ConfigErro` citando `[agent] base_script_dir` | `config.ini` de versão anterior ao CR-003, com a chave antiga | Trocar por `base_script_dirs = ROTINAS=<caminho>` (§8.1, §16.3) |
-| Subida abortada sem o motivo no terminal | `log_dir/sss_web.log` (ou o stderr, se o `log_dir` não aceitar escrita): linha `CRITICAL` "Subida abortada: configuracao invalida: …" | Qualquer erro de configuração | Ler a linha `CRITICAL` (`grep CRITICAL /var/log/sss/sss_web.log`) e corrigir; o teste do §10 mostra o mesmo motivo |
-| Ninguém consegue entrar ("Usuário ou senha incorretos. Confira o que digitou e tente de novo.") | `sss_web.log`: `SSS_DEV_SEED_PASSWORD ausente: usuarios do seed FAKE sem senha utilizavel` (ou `fora da politica`) | Variável ausente ou com menos de 12 caracteres | §8.3 e reinicie |
+| Idem | `ConfigErro` "Chave desconhecida" citando `[agent] base_script_dir`, `[agent] base_script_dirs` ou `[logging] app_log_backups` | `config.ini` de versão anterior ao CR-005 | Apagar a linha da pasta base e trocar `app_log_backups` por `app_log_retention_days = 30` (§8.1, §16.3) |
+| Subida abortada sem o motivo no terminal | Log da aplicação do minuto da tentativa, `log_dir/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (ou o stderr, se o `log_dir` não aceitar escrita): linha `CRITICAL` "Subida abortada: configuracao invalida: …" | Qualquer erro de configuração | Ler a linha `CRITICAL` (`find /var/log/sss/app -name 'sss_web_*.log' \| sort \| xargs grep -h CRITICAL \| tail -n 3`) e corrigir; o teste do §10 mostra o mesmo motivo |
+| Ninguém consegue entrar ("Usuário ou senha incorretos. Confira o que digitou e tente de novo.") | Log da aplicação: `SSS_DEV_SEED_PASSWORD ausente: usuarios do seed FAKE sem senha utilizavel` (ou `fora da politica`) | Variável ausente ou com menos de 12 caracteres | §8.3 e reinicie |
 | Um usuário específico não entra | Tela: "Houve muitas tentativas com a senha errada. Espere 15 minutos ou peça ao administrador para desbloquear." | 5 senhas erradas seguidas: bloqueio de 15 minutos (`login_bloqueio_s`) | Aguarde, desbloqueie em **Gestão de Usuários**, ou reinicie o servidor (restaura o seed) |
 | Launcher aborta | `Erro: execucao como root nao e permitida.` | Executado como root | Use `sudo -u sss -H bash` |
 | Servidor não sobe: porta ocupada | Terminal: `Socket 127.0.0.1:8000 in use by other process and it won't share.` | Outro processo na porta 8000 | `ss -ltnp | grep 8000`; pare o outro processo ou troque a porta |
-| Formulários retornam "Requisição recusada." (HTTP 403) | `sss_web.log`: `requisicao rejeitada (motivo=origem ...)` | Acesso por endereço que não está em `allowed_origins` (típico com proxy reverso) | Incluir a URL pública em `allowed_origins` (§13.2) |
+| Formulários retornam "Requisição recusada." (HTTP 403) | Log da aplicação: `requisicao rejeitada (motivo=origem ...)` | Acesso por endereço que não está em `allowed_origins` (típico com proxy reverso) | Incluir a URL pública em `allowed_origins` (§13.2) |
 | Idem | `motivo=csrf` | Página aberta há muito tempo ou sessão expirada | Recarregar a página e repetir |
 | Sessão cai sozinha | "Você ficou um tempo sem usar o sistema e saiu por segurança. Entre de novo." | 30 min sem uso (`session_idle_timeout_s`) | Comportamento esperado |
-| Criar ticket falha com aviso de script indisponível | `sss_web.log`: `path_guard rejeitou o script (... codigo=...)` | Árvore de scripts fora do padrão do §8.1 (dono, modo, gravável pelo `sss`, ou `base_script_dirs` errado) | Refazer §8.1 e conferir `base_script_dirs`/`script_owner_uids` |
-| Ao salvar um script: "Pasta base não disponível neste servidor: a validação ocorrerá no agente." | Formulário de **Gestão de Scripts** | A pasta escolhida está no `base_script_dirs` sem caminho (`NOME=`), ou o caminho não existe neste servidor | Esperado para pasta que só existe nos agentes. Se a pasta deveria existir aqui, corrija o caminho no `config.ini` e reinicie |
+| Criar ticket falha com aviso de script indisponível | Log da aplicação: `path_guard rejeitou o script (... codigo=...)` | O arquivo existe neste servidor, mas ele ou uma pasta do caminho até `/` está fora do padrão do §8.1 (dono fora de `script_owner_uids`, escrita de grupo/outros ou do `sss`) | Refazer §8.1 e conferir `script_owner_uids` |
+| Ao salvar um script: "Arquivo não encontrado neste servidor: a validação ocorrerá no agente. Se o arquivo não existir lá, a execução será recusada." | Formulário de **Gestão de Scripts** | O caminho absoluto informado não existe neste servidor (README §8.5, D4) | Esperado para script que só existe nos agentes, e para o seed sem a árvore do §8.1. Se o arquivo deveria existir aqui, confira o caminho |
 | Raiz `http://localhost:8000/` dá 404 | — | A raiz aponta para a aplicação `welcome`, removida | Use `/script_scheduling_service` |
 | Aviso `unable to create welcome.w2p file` na subida | Terminal | Mesma causa acima | Ignorar |
 | Dados "sumiram" | — | O servidor foi reiniciado (FAKE em memória) | Comportamento esperado |
@@ -596,7 +598,7 @@ Ainda **não executável** (F7–F9). O `docs/RUNBOOK.md` será entregue no F9.1
 - [ ] §8.1 Árvore `/opt/automacoes/scripts` do root, sem escrita para o `sss`
 - [ ] §8.2 `/etc/sss/secrets.cfg` do `sss`, modo `0600`, com `cookie_key` gerado
 - [ ] §8.3 Senha de demonstração (≥ 12 caracteres) combinada com a equipe
-- [ ] §9 `config.ini` ajustado (DEV, FAKE, caminhos, `agent_id`, `base_script_dirs`, `allowed_origins`)
+- [ ] §9 `config.ini` ajustado (DEV, FAKE, caminhos, `agent_id`, `script_owner_uids`, `allowed_origins`), sem `base_script_dirs` nem `app_log_backups`
 - [ ] §10 Teste de carga: `SSS: configuracao OK`
 - [ ] §11 Subida pelo `bin/sss-web.sh` com `-a '<recycle>' -i 127.0.0.1`
 - [ ] §12 Validações por `curl` (200, cabeçalhos, 403) e teste de fumaça no navegador
@@ -621,6 +623,8 @@ O FAKE não deixa dados em banco. Antes de apagar `/var/log/sss`, guarde os logs
 ## 21. Variante: servidor compartilhado sem `sudo` nem `systemd` (registro do clone 7)
 
 Implantação feita em 2026-10-15 no servidor **clone 7** (`brtlvlts1216pl`, 10.238.10.109), que serve de modelo para servidores parecidos. **Situação atual:** removida no mesmo dia, a pedido do responsável (o SSS passou para o servidor do §22); o `~/.sss` do clone 7 também foi apagado.
+
+> **Registro histórico, anterior ao CR-005.** A árvore de scripts do próprio usuário (§21.2) e as chaves `base_script_dir(s)` e `app_log_backups` não valem mais: para a versão atual, siga o §8.1 (opção sem `sudo`) e o §16.3.
 
 ### 21.1 O que o servidor tinha
 
@@ -683,7 +687,7 @@ ssh -N -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -L 180
 
 Implantação feita em 2026-10-15 com o pacote do commit `aca60b0` (código do `fdf6f35` mais documentação). **Este é o servidor ativo do SSS.**
 
-> **Atualização pendente (CR-003 e CR-004):** este servidor ainda roda o código do `fdf6f35`, sem as correções do CR-003 nem as telas do CR-004. O `config.ini` dele ainda usa a chave antiga `base_script_dir`. O pacote da versão atual e o roteiro de atualização, já ensaiados, estão no §22.6.
+> **Atualização pendente (CR-003, CR-004 e CR-005):** este servidor ainda roda o código do `fdf6f35`. O `config.ini` dele ainda tem `base_script_dir` e `app_log_backups`, que a versão atual recusa, e o log da aplicação ainda é o arquivo único `logs/sss_web.log`. O roteiro de atualização está no §22.6. O pacote `e8759e3`, preparado antes do CR-005, foi **descartado** e não deve ser instalado.
 
 ### 22.1 Diferenças em relação ao clone 7
 
@@ -704,7 +708,8 @@ Implantação feita em 2026-10-15 com o pacote do commit `aca60b0` (código do `
 /portaloptrib/TESHUVA/SSS/iniciar_sss.sh    # sobe com nohup, grava o PID em SSS/work/sss_web.pid e confere o HTTP 200
 /portaloptrib/TESHUVA/SSS/parar_sss.sh      # SIGINT ao PID (só se o PID ainda for o do SSS), espera a porta ser liberada
 tail -f /portaloptrib/TESHUVA/SSS/logs/servidor.out     # saída do servidor (equivale ao "screen -r" do clone 7)
-tail -f /portaloptrib/TESHUVA/SSS/logs/sss_web.log      # log da aplicação
+tail -f /portaloptrib/TESHUVA/SSS/logs/sss_web.log      # log da aplicação (até a atualização do §22.6)
+# depois do §22.6: tail -f "$(find /portaloptrib/TESHUVA/SSS/logs/app -name 'sss_web_*.log' -type f | sort | tail -n 1)"
 cat ~/.sss/web.env                                      # senha dos usuários de demonstração
 ```
 
@@ -786,66 +791,60 @@ ssh -t -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
 * Processo vivo depois do fim da sessão SSH; reinício e idempotência dos scripts conferidos.
 * Pelo túnel em dois trechos: login do `admin`, disparo de ticket, painel de agentes e logout, sem erros. Depois, reinício para entregar os dados de demonstração limpos.
 
-### 22.6 Atualização para a versão `e8759e3` (CR-003 e CR-004) — [ensaiada; não executada no servidor]
+### 22.6 Atualização para a versão com o CR-005 — [roteiro revisado; pacote e ensaio no fechamento do CR-005]
+
+O pacote `e8759e3` (CR-003 e CR-004), ensaiado em 2026-10-16, foi descartado: a versão atual inclui o CR-005 e muda a configuração e os logs. O pacote novo (`sss-<VER>.tar.gz`, gerado por `git archive` como no §5.2) e o ensaio com o Python 3.8.5 são feitos no fechamento (UF) do CR-005, que preenche a tabela abaixo.
 
 | Item | Valor |
 |---|---|
-| Pacote | `sss-e8759e3.tar.gz` (13,7 MB), gerado por `git archive` (§5.2) do commit `e8759e3` |
-| SHA-256 | `33348dd7ff9f91c1f1b8b80f0d6178341644befeeb29e8b8e4b4eb7f78ae3012` |
+| Pacote | `sss-<VER>.tar.gz`, com `<VER>` = commit de fechamento do CR-005 (a preencher no UF) |
+| SHA-256 | a preencher no UF |
 | Onde está | Máquina de desenvolvimento: `/home/eduardof/sss_pacotes/` (pacote e `.sha256`) |
-| Mudança de configuração | Só uma: `base_script_dir = <caminho>` vira `base_script_dirs = ROTINAS=<caminho>`. `secrets.cfg`, `web.env` e a árvore de scripts não mudam |
+| Mudança de configuração | Duas, no `config.ini`: apagar a linha `base_script_dir = ...` e trocar `app_log_backups = 10` por `app_log_retention_days = 30`. `secrets.cfg` e `web.env` não mudam |
+| Árvore de scripts | `$SSS/scripts` deixa de ser usada: os scripts do seed apontam para `/opt/automacoes/scripts/...`, que não existe neste servidor (sem `sudo`). A **Gestão de Scripts** mostra o aviso "Arquivo não encontrado neste servidor…" e o disparo cria o ticket normalmente (§8.1, opção sem `sudo`). A pasta pode ficar onde está |
+| Logs | O log da aplicação passa para `$SSS/logs/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (§15.2). O `$SSS/logs/sss_web.log` antigo para de crescer e pode ser guardado como evidência |
 | Parada | Cerca de 1 minuto (passo 6). Os dados de demonstração voltam ao seed, como em todo reinício |
-
-**Ensaio (2026-10-16, na máquina de desenvolvimento, com o Python 3.8.5, a mesma versão do servidor):**
-* pacote extraído numa pasta limpa;
-* `check_env.py` com código 0 e suíte `Ran 697 tests ... OK (skipped=18)` (também na 3.6.0);
-* `config.ini` no formato do servidor, com a chave antiga:
-  * sem conversão, a subida é recusada com `ConfigErro` e a linha `CRITICAL` "Chave desconhecida na secao [agent]: base_script_dir" no `sss_web.log`;
-  * convertido pelo passo 2, o teste de carga do §10 responde `SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)`;
-* subida pelo `bin/sss-web.sh` com `-a '<recycle>' -i 127.0.0.1`:
-  * login HTTP 200, os 4 cabeçalhos de segurança e origem estranha recusada com 403;
-  * nenhum `CRITICAL` e painel do web2py desabilitado (`password=None`);
-* teste de fumaça do §12 no navegador: login, O que eu posso fazer, Rotinas disponíveis, disparo com o resumo ("Ticket #41 criado com sucesso."), agentes e saída;
-* varredura das telas nos 4 perfis, sem erros no console;
-* parada por SIGINT em 1 s.
 
 **0. Levar o pacote até o servidor** (dois saltos, como no §22.4):
 
 ```bash
+VER=<commit>        # o do pacote gerado no UF
 # na estação, a partir da pasta onde estão os dois arquivos
 scp -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
-    sss-e8759e3.tar.gz sss-e8759e3.tar.gz.sha256 mastersafgf@10.238.10.109:/tmp/
-# no clone 7
-scp /tmp/sss-e8759e3.tar.gz /tmp/sss-e8759e3.tar.gz.sha256 mastersafgf@10.129.164.55:/portaloptrib/TESHUVA/SSS/pacotes/
-rm -f /tmp/sss-e8759e3.tar.gz /tmp/sss-e8759e3.tar.gz.sha256
+    sss-$VER.tar.gz sss-$VER.tar.gz.sha256 mastersafgf@10.238.10.109:/tmp/
+# no clone 7 (defina VER de novo)
+scp /tmp/sss-$VER.tar.gz /tmp/sss-$VER.tar.gz.sha256 mastersafgf@10.129.164.55:/portaloptrib/TESHUVA/SSS/pacotes/
+rm -f /tmp/sss-$VER.tar.gz /tmp/sss-$VER.tar.gz.sha256
 ```
 
 **No 10.129.164.55, como `mastersafgf`:**
 
 ```bash
+VER=<commit>
 SSS=/portaloptrib/TESHUVA/SSS
 PY=/portaloptrib/TESHUVA/sparta/python3.8/bin/python3
 APP=applications/script_scheduling_service
-NOVO=$SSS/web2py-e8759e3
+NOVO=$SSS/web2py-$VER
 
 # 1. Conferir e extrair AO LADO da versão atual (o SSS continua no ar)
-cd $SSS/pacotes && sha256sum -c sss-e8759e3.tar.gz.sha256          # sss-e8759e3.tar.gz: OK
-mkdir -m 750 $NOVO && tar -xzf $SSS/pacotes/sss-e8759e3.tar.gz -C $NOVO
+cd $SSS/pacotes && sha256sum -c sss-$VER.tar.gz.sha256              # sss-<VER>.tar.gz: OK
+mkdir -m 750 $NOVO && tar -xzf $SSS/pacotes/sss-$VER.tar.gz -C $NOVO
 ls $NOVO/applications                                                # somente script_scheduling_service
 
-# 2. config.ini: copiar o atual e trocar a chave
+# 2. config.ini: copiar o atual, apagar a pasta base e trocar a retenção do log
 cp $SSS/web2py/$APP/instance/config.ini $NOVO/$APP/instance/config.ini
 chmod 640 $NOVO/$APP/instance/config.ini
-sed -i 's|^base_script_dir *= *\(.*\)$|base_script_dirs = ROTINAS=\1|' $NOVO/$APP/instance/config.ini
-grep -n '^base_script' $NOVO/$APP/instance/config.ini
-# esperado: base_script_dirs = ROTINAS=/portaloptrib/TESHUVA/SSS/scripts
+sed -i -e '/^base_script_dirs\{0,1\} *=/d' \
+       -e 's|^app_log_backups *=.*$|app_log_retention_days = 30|' $NOVO/$APP/instance/config.ini
+grep -nE '^(base_script|app_log_)' $NOVO/$APP/instance/config.ini
+# esperado: só app_log_max_bytes e app_log_retention_days = 30
 diff <(grep -oE "^[a-z_]+ =" $NOVO/$APP/instance/config.ini.example | sort) \
      <(grep -oE "^[a-z_]+ =" $NOVO/$APP/instance/config.ini | sort) && echo "chaves OK"
 
 # 3. Verificar o código novo (não usa a porta; o SSS atual segue no ar)
 cd $NOVO/$APP
 $PY scripts/check_env.py; echo "codigo: $?"                         # 0
-$PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran 697 tests ... OK (skipped=18)
+$PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran <N> tests ... OK (skipped=18)
 
 # 4. Teste de carga da configuração (§10) na pasta nova
 cd $NOVO && umask 077
@@ -854,8 +853,8 @@ $PY web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E
 rm -f /tmp/sss_diag.py
 # esperado: SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)
 
-# 5. Conferir que os scripts de operação usam o caminho $SSS/web2py
-grep -n "web2py" $SSS/iniciar_sss.sh $SSS/parar_sss.sh
+# 5. Conferir que os scripts de operação usam o caminho $SSS/web2py e não dependem do log antigo
+grep -n "web2py\|sss_web.log" $SSS/iniciar_sss.sh $SSS/parar_sss.sh
 
 # 6. Trocar a versão (parada de ~1 minuto)
 $SSS/parar_sss.sh
@@ -866,18 +865,21 @@ $SSS/iniciar_sss.sh
 curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:18000/script_scheduling_service/default/login     # 200
 curl -sI http://127.0.0.1:18000/script_scheduling_service/default/login | grep -icE "content-security-policy|x-frame-options|x-content-type-options|referrer-policy"   # 4
 curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://outro-host" http://127.0.0.1:18000/script_scheduling_service/default/login   # 403
-grep "$(date +%Y-%m-%d)" $SSS/logs/sss_web.log | grep -c CRITICAL       # 0 (linhas CRITICAL de hoje)
+find $SSS/logs/app -name 'sss_web_*.log' -type f | sort | tail -n 1     # log novo, na pasta do minuto da subida
+find $SSS/logs/app -name 'sss_web_*.log' -type f | xargs grep -c CRITICAL   # 0 em cada arquivo
 tail -n 5 $SSS/logs/servidor.out
 ```
 
-Depois, pelo túnel (§22.4), faça o teste de fumaça do §12: login, **O que eu posso fazer**, **Rotinas disponíveis**, disparo com o resumo, agentes e saída.
+Se no passo 4 aparecer `ConfigErro` com "Chave desconhecida", a linha citada ficou no `config.ini`: apague-a ou corrija-a e repita o passo 4.
+
+Depois, pelo túnel (§22.4), faça o teste de fumaça do §12: login, **O que eu posso fazer**, **Rotinas disponíveis**, disparo com o resumo (o comando mostra `/opt/automacoes/scripts/carga_diaria.py`), agentes e saída.
 
 **Retorno (rollback), se algo falhar no passo 7:**
 
 ```bash
 $SSS/parar_sss.sh
-mv $SSS/web2py $SSS/web2py-e8759e3 && mv $SSS/web2py-fdf6f35 $SSS/web2py
+mv $SSS/web2py $SSS/web2py-$VER && mv $SSS/web2py-fdf6f35 $SSS/web2py
 $SSS/iniciar_sss.sh
 ```
 
-A versão anterior fica intacta em `$SSS/web2py-fdf6f35`, com o `config.ini` antigo. Apague essa pasta só depois do aceite da homologação. Depois da atualização, troque neste capítulo o commit do §22 para `e8759e3` e registre a validação no §22.5.
+A versão anterior fica intacta em `$SSS/web2py-fdf6f35`, com o `config.ini` antigo. Apague essa pasta só depois do aceite da homologação. Depois da atualização, troque neste capítulo o commit do §22 para `<VER>` e registre a validação no §22.5.

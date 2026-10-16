@@ -177,42 +177,50 @@ A pasta `dev/scripts/` contém scripts de exemplo **sem lógica perigosa**, usad
 | `relatorios/exporta.sh` | Imprime os argumentos posicionais |
 | `carga_diaria.py`, `relatorio_mensal.py`, `validacao_fiscal.py`, `cleanup_tmp.sh`, `sync_tabelas.sh`, `backup_extra.sh` | Correspondem aos `path_file` do seed FAKE e imprimem os argumentos |
 
-### 6.1 Dono e permissões exigidos pelo `path_guard`
+### 6.1 Dono e permissões exigidos pelo `path_guard` (CR-005)
 
-O `path_guard` verifica o script, **cada diretório** entre a base e o script, e a própria base. Para cada um deles exige que:
+O script fica num **caminho absoluto** em qualquer lugar do servidor (`path_file`, README §8.5); não há pastas base. O `path_guard` confere o arquivo e **cada diretório até `/`**:
 
-* o dono seja um UID de `script_owner_uids`;
-* não haja escrita para grupo nem para outros (`st_mode & 0o022 == 0`);
-* o UID do agente **não** consiga escrever (`os.access(p, os.W_OK)` falso).
+* o dono do arquivo é um UID de `script_owner_uids`; o dono de cada diretório é o root ou um UID de `script_owner_uids`;
+* nenhum deles tem escrita para grupo ou outros (`st_mode & 0o022 == 0`), o que exclui `/tmp` e pastas compartilhadas;
+* o usuário que roda o SSS **não** consegue escrever em nenhum deles (`os.access(p, os.W_OK)` falso);
+* o caminho, digitado ou resolvido, não fica em pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`) nem dentro de `log_dir` ou `work_dir`.
 
-Em DEV, o agente roda com o **seu** UID, que também é o dono dos arquivos. Por isso, os modos `0644` (scripts) e `0755` (diretórios) **não** servem: o bit de escrita do dono torna `os.access(W_OK)` verdadeiro, e o `path_guard` rejeita com `GRAVAVEL_PELO_AGENTE`. Use modos somente leitura: **`0444` para scripts e `0555` para diretórios, inclusive a base.**
+Por causa da cadeia até `/`, **nenhuma pasta dentro do seu `$HOME` passa**: o próprio `$HOME` pertence a você e tem escrita do dono, então o `path_guard` recusa com `GRAVAVEL_PELO_AGENTE` ("O arquivo, ou uma pasta do caminho, é gravável pelo usuário do sistema; ajuste as permissões."). Executar como `root` também não resolve: o launcher recusa root, e `os.access(W_OK)` é sempre verdadeiro para ele.
 
-O Git não preserva esses modos. Por isso, aponte a pasta base `ROTINAS` de `base_script_dirs` para uma **cópia** da árvore:
+Os scripts do seed FAKE apontam para `/opt/automacoes/scripts/<arquivo>` (ex.: `/opt/automacoes/scripts/carga_diaria.py`). Há duas formas de trabalhar:
+
+**A. Com `sudo` (validação completa no nó web):** instale a árvore como root, no caminho do seed:
 
 ```bash
 cd applications/script_scheduling_service
-BASE="$HOME/sss_dev_scripts"
-rm -rf "$BASE" 2>/dev/null || { chmod -R u+w "$BASE" && rm -rf "$BASE"; }
-cp -r dev/scripts "$BASE"
-rm -f "$BASE/.gitkeep"
-find "$BASE" -type f -exec chmod 0444 {} +
-find "$BASE" -type d -exec chmod 0555 {} +
-id -u   # UID a incluir em script_owner_uids
+sudo install -d -o root -g root -m 0755 /opt/automacoes
+sudo rm -rf /opt/automacoes/scripts
+sudo cp -r dev/scripts /opt/automacoes/scripts
+sudo rm -f /opt/automacoes/scripts/.gitkeep
+sudo chown -R root:root /opt/automacoes/scripts
+sudo find /opt/automacoes/scripts -type d -exec chmod 0755 {} +
+sudo find /opt/automacoes/scripts -type f -exec chmod 0644 {} +
 ```
 
-Em `instance/config.ini`, seção `[agent]`:
+Em `instance/config.ini`, seção `[agent]`: `script_owner_uids = 0` (o padrão do exemplo). Para alterar um script, use `sudo` e mantenha os modos acima.
 
-```ini
-base_script_dirs = ROTINAS=/home/<usuario>/sss_dev_scripts
-script_owner_uids = 0,<seu UID>
-```
+**B. Sem `sudo`:** não instale nada. Como os arquivos do seed não existem na sua máquina, o nó web segue o README §8.5 (D4): ao salvar um script na **Gestão de Scripts** aparece o aviso "Arquivo não encontrado neste servidor: a validação ocorrerá no agente. Se o arquivo não existir lá, a execução será recusada.", e o disparo cria o ticket normalmente (o log registra `arquivo do script nao existe no no web; o agente confere`). Para ver uma recusa de permissão na tela, cadastre um caminho dentro do seu `$HOME`, por exemplo `$PWD/dev/scripts/carga_diaria.py`: o salvamento é bloqueado. Com `script_owner_uids = 0`, a recusa é `DONO_INVALIDO` ("O arquivo, ou uma pasta do caminho, pertence a um usuário não autorizado."); com o seu UID incluído, é `GRAVAVEL_PELO_AGENTE`.
 
-* O nome `ROTINAS` é o da pasta base dos scripts do seed FAKE. No cadastro de scripts, a lista **Pasta base** mostra os nomes de `base_script_dirs`, e o **Arquivo do script** é relativo a ela (ex.: `carga_diaria.py` ou `faturamento/carga_faturas.py`).
-* Para testar várias pastas, liste `NOME=caminho` separados por vírgula (ex.: `ROTINAS=/home/<usuario>/sss_dev_scripts,BATCH=/home/<usuario>/sss_dev_batch`); cada pasta segue os mesmos modos acima.
-* `NOME=` sem caminho representa uma pasta que só existe nos agentes: o cadastro aceita o script com o aviso "Pasta base não disponível neste servidor" e a conferência do arquivo fica para o agente (README §8.5).
-* A chave antiga `base_script_dir = <caminho>` não é mais aceita (CR-003): a subida aborta com "Chave desconhecida na secao [agent]".
+* As chaves `base_script_dirs` e a antiga `base_script_dir` foram retiradas (CR-005). Se ainda estiverem no seu `config.ini`, a subida aborta com "Chave desconhecida na secao [agent]". Apague a linha.
+* `app_log_backups` foi trocada por `app_log_retention_days` (dias de retenção do log da aplicação, README §13).
 
-Para alterar um script da cópia, devolva a escrita temporariamente (`chmod -R u+w "$BASE"`) e volte aos modos acima antes de executar. Executar como `root` não funciona com essa checagem, porque `os.access(W_OK)` é sempre verdadeiro para root.
+### 6.2 Onde ficam os logs (CR-005)
+
+* **Log da aplicação:** `log_dir/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log`. O arquivo nasce na pasta do minuto em que o processo sobe e troca para um novo, na pasta do minuto atual, ao atingir `app_log_max_bytes`. As pastas de dia mais antigas que `app_log_retention_days` são apagadas pelo próprio processo. Para seguir o arquivo mais recente:
+
+  ```bash
+  LOG_DIR=/var/log/sss     # o [logging] log_dir do seu config.ini
+  tail -f "$(find "$LOG_DIR/app" -name 'sss_web_*.log' -type f | sort | tail -n 1)"
+  ```
+
+  O `sort` funciona porque as pastas de data têm tamanho fixo (`AAAA/MM/DD/HH/MI`). Com vários processos no mesmo minuto, confira o PID no nome.
+* **Log de execução de cada ticket** (agente, a partir do F8): `log_dir/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log` (README §8.4).
 
 ---
 
