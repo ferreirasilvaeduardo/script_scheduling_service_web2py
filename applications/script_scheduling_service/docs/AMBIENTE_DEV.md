@@ -22,11 +22,11 @@ Recomenda-se o uso do `pyenv` para gerenciamento da versão do Python:
        libncursesw5-dev xz-utils curl
    ```
 
-2. Instale o **Python 3.6.8**, a versão de referência do projeto. É a do pacote `python36` do RHEL/Oracle Linux usado em produção. A versão **mínima suportada é a 3.6.0**, que se instala com a mesma receita trocando `3.6.8` por `3.6.0`. Rode a suíte nas duas (AGENTS §7.3).
+2. Instale o **Python 3.6.8**, a versão de referência do projeto. É a do pacote `python36` do RHEL/Oracle Linux usado em produção. A versão **mínima suportada é a 3.6.0**, que se instala com a mesma receita trocando `3.6.8` por `3.6.0`. Rode a suíte nas duas (AGENTS §7, item 3).
 
    Em distribuições recentes, a 3.6.8 **não compila direto** com `pyenv install 3.6.8`, por dois motivos:
    * **GCC 11 ou mais novo:** dá segfault no `ensurepip` durante a instalação, por um bug de alinhamento de memória (bpo-27987) que só foi corrigido na 3.6.15;
-   * **OpenSSL 3 do sistema:** a 3.6.8 não reconhece essa versão, e o `_hashlib` não é compilado. O projeto exige `hashlib.pbkdf2_hmac` via OpenSSL para as senhas.
+   * **OpenSSL 3 do sistema:** a 3.6.8 não reconhece essa versão, e o `_hashlib` não é compilado. Sem o `_hashlib`, o `hashlib.pbkdf2_hmac` das senhas cai numa implementação em Python puro: funciona (é o caso do servidor do `docs/IMPLANTACAO.md` §22), mas cada login fica mais lento. Na estação, a receita abaixo compila o `_hashlib` com OpenSSL 1.1.1w, para os testes rodarem na velocidade normal.
 
    Receita testada no Ubuntu 24.04 (GCC 13, OpenSSL 3), sem `sudo` e sem alterar o sistema:
    ```bash
@@ -52,12 +52,12 @@ Recomenda-se o uso do `pyenv` para gerenciamento da versão do Python:
 
    Em distribuições com GCC 10 ou anterior e OpenSSL 1.1 (ex.: Ubuntu 20.04, RHEL 8), basta `pyenv install 3.6.8`. A 3.6.15 compila direto com `pyenv install 3.6.15` e serve como alternativa, mas a referência de validação é a 3.6.8.
 
-3. Instale também a **3.6.0** (mínima suportada) com a mesma receita, trocando `3.6.8` por `3.6.0`, e escolha a versão padrão. Qualquer uma das duas serve como global; a suíte precisa passar **nas duas** (AGENTS §7.3). As demais versões podem ser chamadas pelo caminho completo (ex.: `~/.pyenv/versions/3.13.2/bin/python`):
+3. Instale também a **3.6.0** (mínima suportada) com a mesma receita, trocando `3.6.8` por `3.6.0`, e escolha a versão padrão. Qualquer uma das duas serve como global; a suíte precisa passar **nas duas** (AGENTS §7, item 3). As demais versões podem ser chamadas pelo caminho completo (ex.: `~/.pyenv/versions/3.13.2/bin/python`):
    ```bash
    pyenv global 3.6.0      # ou 3.6.8
    ```
 
-4. Valide a versão ativa e os módulos críticos:
+4. Valide a versão ativa e os módulos da receita (o SSS não exige `ssl` nem `sqlite3`; servem só para conferir que a compilação com o OpenSSL 1.1.1w deu certo):
    ```bash
    python --version
    # Saída esperada: Python 3.6.0 (ou 3.6.8)
@@ -105,7 +105,7 @@ cd applications/script_scheduling_service
 python scripts/check_env.py
 ```
 
-O script é somente leitura e exibirá uma tabela detalhada com o status `OK` ou `FALHA` de cada item. O código de retorno será `0` se todos os pré-requisitos forem atendidos, `1` em caso de falha de ativos/estrutura, e `2` se a versão do Python for anterior à 3.6.0. As versões 3.6.0 a 3.13 são aceitas (a sintaxe do código continua restrita à 3.6, AGENTS §2.1).
+O script é somente leitura e exibirá uma tabela detalhada com o status `OK` ou `FALHA` de cada item. O código de retorno será `0` se todos os pré-requisitos forem atendidos, `1` em caso de falha de ativos/estrutura, e `2` se a versão do Python for anterior à 3.6.0. O `check_env.py` confere só o mínimo; o projeto é validado da 3.6.0 à 3.13 (a sintaxe do código continua restrita à 3.6, AGENTS §2.1).
 
 ---
 
@@ -115,13 +115,17 @@ O servidor de desenvolvimento do web2py deve ser iniciado a partir da raiz do we
 
 ```bash
 cd /portaloptrib/TESHUVA/web2py
-export SSS_DEV_SEED_PASSWORD='<senha-de-demonstração>'
-python web2py.py -a '<senha_administrador>' -i 127.0.0.1 -p 8000 --no_gui
+read -s -p "SSS_DEV_SEED_PASSWORD: " SSS_DEV_SEED_PASSWORD && export SSS_DEV_SEED_PASSWORD && echo
+python web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui
 ```
+
+O `read -s` não deixa a senha no histórico do shell, e o `-a '<recycle>'` desabilita o painel do web2py sem pôr senha na lista de processos (`docs/IMPLANTACAO.md` §11.1).
+
+Antes da primeira subida, crie `instance/config.ini` a partir do `config.ini.example` (`sss_env = DEV`, `data_backend = FAKE`, `secrets_file`, `log_dir` e `work_dir` apontando para pastas suas) e o `secrets.cfg` com o `cookie_key`, dono você e modo `0600`. O passo a passo está no `docs/IMPLANTACAO.md` §8.2 e §9.
 
 A aplicação fica no endereço local `127.0.0.1:8000/script_scheduling_service` (porta 8000, caminho `/script_scheduling_service`).
 
-Para subir como nos servidores, use o launcher `bin/sss-web.sh "$(command -v python)" web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui`: ele recusa root, aplica `umask 077` e exporta `TZ` a partir de `SSS_TZ` (`docs/IMPLANTACAO.md` §11.1).
+Para subir como nos servidores, use o launcher `bin/sss-web.sh "$(command -v python3)" web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui` (o launcher só aceita interpretador chamado `python3` ou `python3.X`): ele recusa root, aplica `umask 077` e exporta `TZ` a partir de `SSS_TZ` (`docs/IMPLANTACAO.md` §11.1).
 
 ### Senha dos usuários de demonstração (`SSS_DEV_SEED_PASSWORD`)
 
@@ -154,7 +158,7 @@ cd applications/script_scheduling_service
 python -m unittest discover -s scripts -p "test_*.py"
 ```
 
-Resultado esperado hoje: `Ran 697 tests ... OK (skipped=18)`. Os 18 ignorados são do contrato contra Oracle real (`SSS_TEST_DSN`). Rode a suíte na **3.6.0** e na **3.6.8** (AGENTS §7.3); a validação do fechamento do CR-004 também passou na 3.13.2, o limite superior aceito pelo `check_env.py`:
+Resultado esperado hoje: `Ran 718 tests ... OK (skipped=18)`. Os 18 ignorados são do contrato contra Oracle real (`SSS_TEST_DSN`). Rode a suíte na **3.6.0** e na **3.6.8** (AGENTS §7, item 3); a validação do fechamento do CR-005 também passou na 3.13.2, a versão mais nova validada:
 
 ```bash
 for v in 3.6.0 3.6.8 3.13.2; do PYENV_VERSION=$v python -m unittest discover -s scripts -p "test_*.py"; done
@@ -216,10 +220,10 @@ Em `instance/config.ini`, seção `[agent]`: `script_owner_uids = 0` (o padrão 
 
   ```bash
   LOG_DIR=/var/log/sss     # o [logging] log_dir do seu config.ini
-  tail -f "$(find "$LOG_DIR/app" -name 'sss_web_*.log' -type f | sort | tail -n 1)"
+  tail -f "$(find "$LOG_DIR/app" -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
   ```
 
-  O `sort` funciona porque as pastas de data têm tamanho fixo (`AAAA/MM/DD/HH/MI`). Com vários processos no mesmo minuto, confira o PID no nome.
+  A ordem é pela última escrita (`%T@`), e não pelo nome: com dois processos no mesmo minuto, a ordem do nome segue o texto do PID e pode apontar o arquivo errado.
 * **Log de execução de cada ticket** (agente, a partir do F8): `log_dir/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log` (README §8.4).
 
 ---

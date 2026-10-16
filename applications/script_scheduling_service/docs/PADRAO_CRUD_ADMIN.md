@@ -25,7 +25,7 @@ As regras de negócio estão no README §4.4 e §10 (padrões globais e tabela 1
 | `lista` | GET | Filtros com `components/filtros.html`, tabela com `components/tabela.html` (colunas `ativo` e `acao`) e paginação com `components/paginacao.html`. Ordenação definida pelo repositório. |
 | `form[/id]` | GET | Uma única view para inclusão (sem id) e edição. Campos com `components/form_campo.html`. Na edição, a chave natural fica `somente_leitura` e o servidor ignora o valor enviado. |
 | `salvar` | POST + CSRF | Em caso de sucesso, grava o flash e redireciona para a `lista`. A exceção é o cadastro de scripts, que volta ao `form` para mostrar avisos e atalhos (README §8.5). Em caso de erro, responde **200**, reapresenta o que foi digitado e destaca os campos. O primeiro campo inválido recebe `autofocus`. Valor acima do limite ou fora do formato é recusado, nunca truncado (README §10, "Texto nos cadastros"). |
-| `alternar_ativo` | POST + CSRF | O botão fica no **formulário de edição**, e não na lista, e abre `components/modal_confirmacao.html`. O modal diz a consequência e o impacto da ação: no ambiente, os agendamentos ativos afetados e a quantidade de scripts homologados nele; no perfil, a quantidade e os logins dos usuários ativos afetados (README §4.3.B); no parâmetro vinculado a script ativo, a desativação é bloqueada e os scripts são listados. Depois redireciona de volta para o `form`. |
+| `alternar_ativo` | POST + CSRF | O botão fica no **formulário de edição**, e não na lista, e abre `components/modal_confirmacao.html`. O modal diz a consequência e o impacto da ação: no ambiente, os agendamentos ativos afetados e a quantidade de scripts homologados nele; no perfil, a quantidade e os logins dos usuários ativos afetados (README §4.3.B.1); no parâmetro vinculado a script ativo, a desativação é bloqueada e os scripts são listados. Depois redireciona de volta para o `form`. |
 
 As entidades mestras nunca são excluídas, apenas desativadas (README §10).
 
@@ -41,7 +41,7 @@ As entidades mestras nunca são excluídas, apenas desativadas (README §10).
 
 1. O `form` envia em campo oculto a `versao`: o sha256 dos campos editáveis (`ativo` incluído) no momento da leitura. Campo sensível entra no hash como marcador fixo (`<sensivel:preenchido>` ou `<sensivel:vazio>`), nunca pelo valor. Uma troca concorrente feita só no valor sensível não gera conflito (README §10, "Consequência aceita").
 2. O `salvar` ou o `alternar_ativo` relê o registro. Se a `versao` enviada for diferente da atual, o resultado é conflito.
-3. O service repassa os valores lidos como `esperado=`. O repositório executa `UPDATE ... WHERE id = :id AND <coluna = valor lido ...>` e checa o `rowcount`. No ORACLE, as comparações são nulas-seguras, com `DECODE`. Se o `rowcount` for 0, o repositório lança `RepoConflito` e não altera nada. Com isso, não sobra janela entre a leitura e a escrita.
+3. O service repassa os valores lidos como `esperado=`. O repositório executa `UPDATE ... WHERE id = :id AND <coluna = valor lido ...>` e checa o `rowcount`. No ORACLE, cada comparação é nula-segura na forma ANSI `(c = :v OR (c IS NULL AND :v IS NULL))` (README §10). Se o `rowcount` for 0, o repositório lança `RepoConflito` e não altera nada. Com isso, não sobra janela entre a leitura e a escrita.
 4. Mensagem exibida (README §2.4.2): "Outra pessoa mudou este registro enquanto você editava. Recarregue a página para ver a versão nova e faça a sua alteração de novo." O formulário volta com os dados atuais e uma nova versão.
 
 ## Erros

@@ -118,7 +118,7 @@ Escolha **uma** das opções, sempre fixando um commit ou tag conhecido.
 cd /opt/sss
 git clone https://github.com/ferreirasilvaeduardo/script_scheduling_service_web2py.git web2py
 cd web2py
-git checkout fdf6f35        # ou a tag/commit homologado
+git checkout fe5884c        # ou a tag/commit homologado
 git log --oneline -1
 ```
 
@@ -130,19 +130,19 @@ Na máquina que tem o repositório:
 
 ```bash
 cd /caminho/do/repositorio
-git archive --format=tar.gz -o sss-fdf6f35.tar.gz fdf6f35
-sha256sum sss-fdf6f35.tar.gz > sss-fdf6f35.tar.gz.sha256
+git archive --format=tar.gz -o sss-fe5884c.tar.gz fe5884c
+sha256sum sss-fe5884c.tar.gz > sss-fe5884c.tar.gz.sha256
 ```
 
 Copie os dois arquivos para o servidor (por exemplo, `scp` para `/tmp`) e:
 
 ```bash
 # como sss
-cd /tmp && sha256sum -c sss-fdf6f35.tar.gz.sha256      # deve responder "OK"
-mkdir -p /opt/sss/web2py && tar -xzf /tmp/sss-fdf6f35.tar.gz -C /opt/sss/web2py
+cd /tmp && sha256sum -c sss-fe5884c.tar.gz.sha256      # deve responder "OK"
+mkdir -p /opt/sss/web2py && tar -xzf /tmp/sss-fe5884c.tar.gz -C /opt/sss/web2py
 ```
 
-O pacote do `git archive` (~11 MB) não contém `config.ini`, `secrets.cfg`, logs nem arquivos de parâmetros do web2py: eles são criados nos passos seguintes.
+O pacote do `git archive` (~14 MB) não contém `config.ini`, `secrets.cfg`, logs nem arquivos de parâmetros do web2py: eles são criados nos passos seguintes.
 
 ### 5.3 Conferência
 
@@ -209,6 +209,7 @@ Os scripts do seed FAKE apontam para caminhos absolutos em `/opt/automacoes/scri
 
 ```bash
 sudo install -d -o root -g root -m 0755 /opt/automacoes
+sudo rm -rf /opt/automacoes/scripts          # ao repetir o passo, evita criar scripts/scripts
 sudo cp -r /opt/sss/web2py/applications/script_scheduling_service/dev/scripts /opt/automacoes/scripts
 sudo rm -f /opt/automacoes/scripts/.gitkeep
 sudo chown -R root:root /opt/automacoes/scripts
@@ -361,7 +362,7 @@ curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origi
 # esperado: origem estranha: HTTP 403
 
 # 12.4 Log da aplicação sendo escrito (arquivo mais recente, §15.2)
-tail -n 5 "$(find /var/log/sss/app -name 'sss_web_*.log' -type f | sort | tail -n 1)"
+tail -n 5 "$(find /var/log/sss/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
 ```
 
 Depois, pelo navegador (via túnel, §13.1), faça o **teste de fumaça**:
@@ -370,7 +371,7 @@ Depois, pelo navegador (via túnel, §13.1), faça o **teste de fumaça**:
 2. Entrar com `admin` e a senha do §8.3 → **Painel inicial** "Olá, Administrador Geral", com os cartões de tickets, agendamentos e saúde dos agentes.
    * No topo, **O que eu posso fazer** → lista as telas, os ambientes e os scripts liberados para o perfil.
    * No menu Operação, **Rotinas disponíveis** → um cartão por script, com a última execução.
-3. **Disparar script** → `carga_diaria` → `PRODUCAO` → **Criar ticket** → a confirmação mostra o resumo ("Vamos rodar carga_diaria no ambiente PRODUCAO agora…") e o comando com `/opt/automacoes/scripts/carga_diaria.py` → confirmar → mensagem "Ticket #41 criado com sucesso.". Com a árvore do §8.1 correta, o log **não** traz a linha `arquivo do script nao existe no no web`; sem a árvore, o ticket também é criado e essa linha aparece (a conferência fica para o agente).
+3. **Disparar Scripts** → `carga_diaria` → `PRODUCAO` → **Criar ticket** → a confirmação mostra o resumo ("Vamos rodar carga_diaria no ambiente PRODUCAO agora…") e o comando com `/opt/automacoes/scripts/carga_diaria.py` → confirmar → mensagem "Ticket #41 criado com sucesso.". Com a árvore do §8.1 correta, o log **não** traz a linha `arquivo do script nao existe no no web`; sem a árvore, o ticket também é criado e essa linha aparece (a conferência fica para o agente).
 4. **Auditoria** → aba **Agentes** → dois cartões (`agt-host01` OK; `agt-host02` envelhecendo com o tempo).
 5. **Sair** → volta para **Entrar** com "Você saiu do sistema.".
 
@@ -481,7 +482,7 @@ journalctl -u sss-web -n 50 --no-pager
 Exemplos úteis:
 
 ```bash
-applog() { find /var/log/sss/app -name 'sss_web_*.log' -type f | sort; }     # arquivos em ordem de data
+applog() { find /var/log/sss/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | cut -d' ' -f2-; }   # do mais antigo ao mais recente (última escrita)
 applog | tail -n 1                                                           # arquivo atual
 applog | xargs grep -h -E " (WARNING|ERROR|CRITICAL) " | tail -n 20          # problemas recentes
 applog | xargs grep -h "acao=LOGIN" | tail -n 20                             # logins e logouts
@@ -549,15 +550,15 @@ Mensagens reais, capturadas no ensaio. Para os erros de subida, use sempre o tes
 | Idem | `ConfigErro: Arquivo de segredos nao encontrado: /etc/sss/secrets.cfg` | Caminho de `secrets_file` errado ou arquivo ausente | §8.2 e §9 |
 | Idem | `ConfigErro: Arquivo de segredos possui permissoes inseguras (mode 644, esperado sem acesso grupo/outros)` | Modo diferente de `0600` | `chmod 600 /etc/sss/secrets.cfg` |
 | Idem | `ConfigErro: Arquivo de segredos deve pertencer ao usuario corrente (UID ..., atual ...)` | O processo roda com outro usuário, ou o arquivo foi criado pelo root | `sudo chown sss:sss /etc/sss/secrets.cfg` e suba como `sss` |
-| Idem | `ConfigErro: Chave cookie_key obrigatoria ausente em [web]` | `secrets.cfg` incompleto | §8.2 |
+| Idem | `ConfigErro: [web]: cookie_key: Chave cookie_key obrigatoria ausente em [web]` | `secrets.cfg` incompleto | §8.2 |
 | Idem | `ConfigErro` citando `[secao] chave` e motivo | Chave ausente, desconhecida ou fora da faixa no `config.ini` | Compare com o `config.ini.example` (§16.3) |
 | Idem | `ConfigErro: [app]: data_backend: data_backend=FAKE exige sss_env=DEV (atual: HML)` | `sss_env` diferente de `DEV` com FAKE | `sss_env = DEV` |
-| Idem | `ConfigErro` "Chave desconhecida" citando `[agent] base_script_dir`, `[agent] base_script_dirs` ou `[logging] app_log_backups` | `config.ini` de versão anterior ao CR-005 | Apagar a linha da pasta base e trocar `app_log_backups` por `app_log_retention_days = 30` (§8.1, §16.3) |
-| Subida abortada sem o motivo no terminal | Log da aplicação do minuto da tentativa, `log_dir/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (ou o stderr, se o `log_dir` não aceitar escrita): linha `CRITICAL` "Subida abortada: configuracao invalida: …" | Qualquer erro de configuração | Ler a linha `CRITICAL` (`find /var/log/sss/app -name 'sss_web_*.log' \| sort \| xargs grep -h CRITICAL \| tail -n 3`) e corrigir; o teste do §10 mostra o mesmo motivo |
+| Idem | `ConfigErro: [agent]: base_script_dir: Chave desconhecida na secao [agent]: base_script_dir` (ou `base_script_dirs`, ou `[logging]: app_log_backups: ...`) | `config.ini` de versão anterior ao CR-005 | Apagar a linha da pasta base e trocar `app_log_backups` por `app_log_retention_days = 30` (§8.1, §16.3) |
+| Subida abortada sem o motivo no terminal | Log da aplicação do minuto da tentativa, `log_dir/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (ou o stderr, se o `log_dir` não aceitar escrita): linha `CRITICAL` "Subida abortada: configuracao invalida: …" | Qualquer erro de configuração | Ler a linha `CRITICAL` com a função `applog` do §15.2 (`applog` seguido de `xargs grep -h CRITICAL`) e corrigir; o teste do §10 mostra o mesmo motivo |
 | Ninguém consegue entrar ("Usuário ou senha incorretos. Confira o que digitou e tente de novo.") | Log da aplicação: `SSS_DEV_SEED_PASSWORD ausente: usuarios do seed FAKE sem senha utilizavel` (ou `fora da politica`) | Variável ausente ou com menos de 12 caracteres | §8.3 e reinicie |
 | Um usuário específico não entra | Tela: "Houve muitas tentativas com a senha errada. Espere 15 minutos ou peça ao administrador para desbloquear." | 5 senhas erradas seguidas: bloqueio de 15 minutos (`login_bloqueio_s`) | Aguarde, desbloqueie em **Gestão de Usuários**, ou reinicie o servidor (restaura o seed) |
 | Launcher aborta | `Erro: execucao como root nao e permitida.` | Executado como root | Use `sudo -u sss -H bash` |
-| Servidor não sobe: porta ocupada | Terminal: `Socket 127.0.0.1:8000 in use by other process and it won't share.` | Outro processo na porta 8000 | `ss -ltnp | grep 8000`; pare o outro processo ou troque a porta |
+| Servidor não sobe: porta ocupada | Terminal: `Socket 127.0.0.1:8000 in use by other process and it won't share.` | Outro processo na porta 8000 | Rode `ss -ltnp` e procure `:8000`; pare o outro processo ou troque a porta |
 | Formulários retornam "Requisição recusada." (HTTP 403) | Log da aplicação: `requisicao rejeitada (motivo=origem ...)` | Acesso por endereço que não está em `allowed_origins` (típico com proxy reverso) | Incluir a URL pública em `allowed_origins` (§13.2) |
 | Idem | `motivo=csrf` | Página aberta há muito tempo ou sessão expirada | Recarregar a página e repetir |
 | Sessão cai sozinha | "Você ficou um tempo sem usar o sistema e saiu por segurança. Entre de novo." | 30 min sem uso (`session_idle_timeout_s`) | Comportamento esperado |
@@ -649,7 +650,7 @@ Implantação feita em 2026-10-15 no servidor **clone 7** (`brtlvlts1216pl`, 10.
 | `~/.sss/secrets.cfg` | `cookie_key` | `0600` |
 | `~/.sss/web.env` | `SSS_DEV_SEED_PASSWORD` (gerada no servidor) e `SSS_TZ` | `0600` |
 
-Diferenças do `config.ini` em relação ao exemplo: `secrets_file = /home/mastersafgf/.sss/secrets.cfg`, `agent_id = clone7-sss-hml`, `base_script_dirs = ROTINAS=/portaloptrib/TESHUVA/SSS/scripts`, `work_dir = /portaloptrib/TESHUVA/SSS/work`, `script_owner_uids = 4304` (UID do `mastersafgf`), `log_dir = /portaloptrib/TESHUVA/SSS/logs` e `allowed_origins = http://127.0.0.1:18000`.
+Diferenças do `config.ini` em relação ao exemplo: `secrets_file = /home/mastersafgf/.sss/secrets.cfg`, `agent_id = clone7-sss-hml`, `base_script_dir = /portaloptrib/TESHUVA/SSS/scripts`, `work_dir = /portaloptrib/TESHUVA/SSS/work`, `script_owner_uids = 4304` (UID do `mastersafgf`), `log_dir = /portaloptrib/TESHUVA/SSS/logs` e `allowed_origins = http://127.0.0.1:18000`.
 
 ### 21.3 Operação
 
@@ -709,7 +710,7 @@ Implantação feita em 2026-10-15 com o pacote do commit `aca60b0` (código do `
 /portaloptrib/TESHUVA/SSS/parar_sss.sh      # SIGINT ao PID (só se o PID ainda for o do SSS), espera a porta ser liberada
 tail -f /portaloptrib/TESHUVA/SSS/logs/servidor.out     # saída do servidor (equivale ao "screen -r" do clone 7)
 tail -f /portaloptrib/TESHUVA/SSS/logs/sss_web.log      # log da aplicação (até a atualização do §22.6)
-# depois do §22.6: tail -f "$(find /portaloptrib/TESHUVA/SSS/logs/app -name 'sss_web_*.log' -type f | sort | tail -n 1)"
+# depois do §22.6: tail -f "$(find /portaloptrib/TESHUVA/SSS/logs/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
 cat ~/.sss/web.env                                      # senha dos usuários de demonstração
 ```
 
@@ -873,7 +874,7 @@ $SSS/iniciar_sss.sh
 curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:18000/script_scheduling_service/default/login     # 200
 curl -sI http://127.0.0.1:18000/script_scheduling_service/default/login | grep -icE "content-security-policy|x-frame-options|x-content-type-options|referrer-policy"   # 4
 curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://outro-host" http://127.0.0.1:18000/script_scheduling_service/default/login   # 403
-find $SSS/logs/app -name 'sss_web_*.log' -type f | sort | tail -n 1     # log novo, na pasta do minuto da subida
+find $SSS/logs/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-   # log mais recente: o da subida
 find $SSS/logs/app -name 'sss_web_*.log' -type f | xargs grep -c CRITICAL   # 0 em cada arquivo (o do passo 4 e o da subida)
 tail -n 5 $SSS/logs/servidor.out
 ```
