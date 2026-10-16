@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Público | Quem vai instalar e operar o SSS num servidor novo (infraestrutura, desenvolvimento, homologação) |
-| Versão do sistema | 0.1.0 — commit de referência `f04699c` ou posterior (fases F0.1 a F6.1 e CR-003 a CR-005). Os servidores dos §21 e §22 foram implantados com o `fdf6f35`, anterior aos três CRs |
+| Versão do sistema | 0.1.0 — commit de referência `fe5884c` ou posterior (fases F0.1 a F6.1 e CR-003 a CR-005). Os servidores dos §21 e §22 foram implantados com o `fdf6f35`, anterior aos três CRs |
 | Validação | Procedimento **ensaiado de ponta a ponta** em 2026-10-15 num clone limpo do repositório (Python 3.6.0 e 3.13) e **implantado** no mesmo dia no servidor clone 7 (Oracle Linux 6.9, Python 3.7 sem `ssl`, sem `sudo` nem `systemd` — registro no §21). A versão com o CR-003 e o CR-004 foi validada em 2026-10-16 na estação de desenvolvimento (suíte em Python 3.6.0, 3.6.8 e 3.13.2 e verificação das telas no navegador), mas ainda não foi reimplantada em servidor (§22). A versão com o CR-005 (somente POSIX, caminho absoluto do script e logs em pastas por minuto) foi validada em 2026-10-16 na estação (suíte em 3.6.0, 3.6.8 e 3.13.2). O que não foi ensaiado está marcado como **[não ensaiado]** |
 | Documentos relacionados | `README.md` (regras de negócio e arquitetura), `AGENTS.md` (regras de desenvolvimento), `docs/AMBIENTE_DEV.md` (estação do desenvolvedor), `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx` (roteiro de homologação) |
 
@@ -193,7 +193,7 @@ $PYTHON scripts/check_env.py ; echo "codigo de saida: $?"
 
 # 7.2 Suíte de testes completa (não precisa de configuração nem de segredos)
 $PYTHON -m unittest discover -s scripts -p "test_*.py"
-# esperado no final: "Ran 717 tests ... OK (skipped=18)" (o total cresce com as versões)
+# esperado no final: "Ran 718 tests ... OK (skipped=18)" (o total cresce com as versões)
 # Os 18 "skipped" são testes contra banco Oracle real (SSS_TEST_DSN); é o resultado esperado.
 ```
 
@@ -687,7 +687,7 @@ ssh -N -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -L 180
 
 Implantação feita em 2026-10-15 com o pacote do commit `aca60b0` (código do `fdf6f35` mais documentação). **Este é o servidor ativo do SSS.**
 
-> **Atualização pendente (CR-003, CR-004 e CR-005):** este servidor ainda roda o código do `fdf6f35`. O `config.ini` dele ainda tem `base_script_dir` e `app_log_backups`, que a versão atual recusa, e o log da aplicação ainda é o arquivo único `logs/sss_web.log`. O roteiro de atualização está no §22.6. O pacote `e8759e3`, preparado antes do CR-005, foi **descartado** e não deve ser instalado.
+> **Atualização pendente (CR-003, CR-004 e CR-005):** este servidor ainda roda o código do `fdf6f35`. O `config.ini` dele ainda tem `base_script_dir` e `app_log_backups`, que a versão atual recusa, e o log da aplicação ainda é o arquivo único `logs/sss_web.log`. O pacote da versão atual (`fe5884c`) e o roteiro de atualização, já ensaiados, estão no §22.6. O pacote `e8759e3`, preparado antes do CR-005, foi **descartado** e não deve ser instalado.
 
 ### 22.1 Diferenças em relação ao clone 7
 
@@ -791,28 +791,36 @@ ssh -t -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
 * Processo vivo depois do fim da sessão SSH; reinício e idempotência dos scripts conferidos.
 * Pelo túnel em dois trechos: login do `admin`, disparo de ticket, painel de agentes e logout, sem erros. Depois, reinício para entregar os dados de demonstração limpos.
 
-### 22.6 Atualização para a versão com o CR-005 — [roteiro revisado; pacote e ensaio no fechamento do CR-005]
+### 22.6 Atualização para a versão `fe5884c` (CR-003, CR-004 e CR-005) — [ensaiada; não executada no servidor]
 
-O pacote `e8759e3` (CR-003 e CR-004), ensaiado em 2026-10-16, foi descartado: a versão atual inclui o CR-005 e muda a configuração e os logs. O pacote novo (`sss-<VER>.tar.gz`, gerado por `git archive` como no §5.2) e o ensaio com o Python 3.8.5 são feitos no fechamento (UF) do CR-005, que preenche a tabela abaixo.
+O pacote `e8759e3` (CR-003 e CR-004), ensaiado antes do CR-005, foi descartado: a versão atual também muda a configuração e os logs.
 
 | Item | Valor |
 |---|---|
-| Pacote | `sss-<VER>.tar.gz`, com `<VER>` = commit de fechamento do CR-005 (a preencher no UF) |
-| SHA-256 | a preencher no UF |
+| Pacote | `sss-fe5884c.tar.gz` (13,8 MB), gerado por `git archive` (§5.2) do commit `fe5884c` |
+| SHA-256 | `c68916bdff5e44ba4609c4e802326ff94b8f4bac7265bc10815debcd84616a60` |
 | Onde está | Máquina de desenvolvimento: `/home/eduardof/sss_pacotes/` (pacote e `.sha256`) |
 | Mudança de configuração | Duas, no `config.ini`: apagar a linha `base_script_dir = ...` e trocar `app_log_backups = 10` por `app_log_retention_days = 30`. `secrets.cfg` e `web.env` não mudam |
 | Árvore de scripts | `$SSS/scripts` deixa de ser usada: os scripts do seed apontam para `/opt/automacoes/scripts/...`, que não existe neste servidor (sem `sudo`). A **Gestão de Scripts** mostra o aviso "Arquivo não encontrado neste servidor…" e o disparo cria o ticket normalmente (§8.1, opção sem `sudo`). A pasta pode ficar onde está |
 | Logs | O log da aplicação passa para `$SSS/logs/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (§15.2). O `$SSS/logs/sss_web.log` antigo para de crescer e pode ser guardado como evidência |
 | Parada | Cerca de 1 minuto (passo 6). Os dados de demonstração voltam ao seed, como em todo reinício |
 
+**Ensaio (2026-10-16, na máquina de desenvolvimento, com o Python 3.8.5, a mesma versão do servidor, numa estrutura `$SSS` igual à do servidor):**
+* `config.ini` do servidor reproduzido a partir do exemplo do `fdf6f35` (com `base_script_dir` e `app_log_backups`): sem conversão, a carga é recusada com `ConfigErro` "Chave desconhecida na secao [agent]: base_script_dir";
+* passos 1 a 4 como abaixo: SHA-256 OK; só `script_scheduling_service` em `applications`; passo 2 deixa `app_log_max_bytes` e `app_log_retention_days = 30` e responde "chaves OK"; `check_env.py` com código 0; suíte `Ran 718 tests ... OK (skipped=18)`; teste de carga `SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)`;
+* subida pelo `bin/sss-web.sh` com `-a '<recycle>' -i 127.0.0.1`: login HTTP 200, os 4 cabeçalhos de segurança, origem estranha recusada com 403, painel do web2py desabilitado (`password=None`);
+* log em `$SSS/logs/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (o teste de carga do passo 4 deixa um arquivo próprio, do minuto em que rodou), com `[agente=srv3067-sss-hml]`, nenhum `CRITICAL`, pastas `0750` e arquivos `0640`;
+* teste de fumaça no navegador: login, O que eu posso fazer, Rotinas disponíveis (5 scripts), disparo do carga_diaria com o resumo e o comando `PYTHON3 -I /opt/automacoes/scripts/carga_diaria.py ...`, "Ticket #41 criado com sucesso." (o log registra `arquivo do script nao existe no no web; o agente confere`), agentes `agt-host01` e `agt-host02`, saída com "Você saiu do sistema."; nenhum erro no console;
+* parada por SIGINT, com a porta liberada.
+
 **0. Levar o pacote até o servidor** (dois saltos, como no §22.4):
 
 ```bash
-VER=<commit>        # o do pacote gerado no UF
+VER=fe5884c
 # na estação, a partir da pasta onde estão os dois arquivos
 scp -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
     sss-$VER.tar.gz sss-$VER.tar.gz.sha256 mastersafgf@10.238.10.109:/tmp/
-# no clone 7 (defina VER de novo)
+# no clone 7 (defina VER=fe5884c de novo)
 scp /tmp/sss-$VER.tar.gz /tmp/sss-$VER.tar.gz.sha256 mastersafgf@10.129.164.55:/portaloptrib/TESHUVA/SSS/pacotes/
 rm -f /tmp/sss-$VER.tar.gz /tmp/sss-$VER.tar.gz.sha256
 ```
@@ -820,14 +828,14 @@ rm -f /tmp/sss-$VER.tar.gz /tmp/sss-$VER.tar.gz.sha256
 **No 10.129.164.55, como `mastersafgf`:**
 
 ```bash
-VER=<commit>
+VER=fe5884c
 SSS=/portaloptrib/TESHUVA/SSS
 PY=/portaloptrib/TESHUVA/sparta/python3.8/bin/python3
 APP=applications/script_scheduling_service
 NOVO=$SSS/web2py-$VER
 
 # 1. Conferir e extrair AO LADO da versão atual (o SSS continua no ar)
-cd $SSS/pacotes && sha256sum -c sss-$VER.tar.gz.sha256              # sss-<VER>.tar.gz: OK
+cd $SSS/pacotes && sha256sum -c sss-$VER.tar.gz.sha256              # sss-fe5884c.tar.gz: OK
 mkdir -m 750 $NOVO && tar -xzf $SSS/pacotes/sss-$VER.tar.gz -C $NOVO
 ls $NOVO/applications                                                # somente script_scheduling_service
 
@@ -844,7 +852,7 @@ diff <(grep -oE "^[a-z_]+ =" $NOVO/$APP/instance/config.ini.example | sort) \
 # 3. Verificar o código novo (não usa a porta; o SSS atual segue no ar)
 cd $NOVO/$APP
 $PY scripts/check_env.py; echo "codigo: $?"                         # 0
-$PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran <N> tests ... OK (skipped=18)
+$PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran 718 tests ... OK (skipped=18)
 
 # 4. Teste de carga da configuração (§10) na pasta nova
 cd $NOVO && umask 077
@@ -866,7 +874,7 @@ curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:18000/scri
 curl -sI http://127.0.0.1:18000/script_scheduling_service/default/login | grep -icE "content-security-policy|x-frame-options|x-content-type-options|referrer-policy"   # 4
 curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://outro-host" http://127.0.0.1:18000/script_scheduling_service/default/login   # 403
 find $SSS/logs/app -name 'sss_web_*.log' -type f | sort | tail -n 1     # log novo, na pasta do minuto da subida
-find $SSS/logs/app -name 'sss_web_*.log' -type f | xargs grep -c CRITICAL   # 0 em cada arquivo
+find $SSS/logs/app -name 'sss_web_*.log' -type f | xargs grep -c CRITICAL   # 0 em cada arquivo (o do passo 4 e o da subida)
 tail -n 5 $SSS/logs/servidor.out
 ```
 
@@ -882,4 +890,4 @@ mv $SSS/web2py $SSS/web2py-$VER && mv $SSS/web2py-fdf6f35 $SSS/web2py
 $SSS/iniciar_sss.sh
 ```
 
-A versão anterior fica intacta em `$SSS/web2py-fdf6f35`, com o `config.ini` antigo. Apague essa pasta só depois do aceite da homologação. Depois da atualização, troque neste capítulo o commit do §22 para `<VER>` e registre a validação no §22.5.
+A versão anterior fica intacta em `$SSS/web2py-fdf6f35`, com o `config.ini` antigo. Apague essa pasta só depois do aceite da homologação. Depois da atualização, troque neste capítulo o commit do §22 para `fe5884c` e registre a validação no §22.5.
