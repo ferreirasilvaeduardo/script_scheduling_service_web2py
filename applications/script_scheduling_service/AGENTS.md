@@ -82,12 +82,22 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
   * `x-html` (use `x-text`);
   * expressões Alpine com lógica complexa no HTML (registre com `Alpine.data()` em `static/js/app/`).
 * Toda requisição `fetch` que altera estado envia o cabeçalho `X-CSRF-Token`.
+* **Gráficos** (README §5.8):
+  * SVG gerado no servidor (ex.: `ui_helpers.barras_empilhadas`), sem biblioteca de gráficos e sem `style=` inline;
+  * cor só por classe CSS, com tokens em `static/css/sss.css` (`--sss-graf-*`) e valores próprios para o modo escuro;
+  * a cor nunca é a única pista: legenda sempre presente, `<title>` em cada marca e uma tabela com os mesmos números.
 
 ### 2.4 Codificação e texto
 
 * **ASCII puro em:** identificadores, variáveis, rotas, nomes de arquivo e nomes de objetos de banco.
 * **Português com acentuação correta (UTF-8) em:** textos de interface (labels, mensagens, telas).
 * Arquivos-fonte em UTF-8. Arquivos `.py` com caracteres não ASCII em literais devem declarar `# -*- coding: utf-8 -*-`.
+* **Linguagem da interface** (README §2.4.2, CR-004; régua: uma pessoa sem treinamento entende sozinha):
+  * toda mensagem ao usuário tem duas partes, "o que aconteceu" e "o que fazer agora";
+  * as mensagens-padrão vêm **somente** do catálogo `ui_helpers.MENSAGENS` (`ui_helpers.mensagem` ou `mensagem_partes`). É proibido reescrevê-las em controller ou view;
+  * a situação do ticket aparece com o nome simples de `ui_helpers` (Esperando, Rodando, Deu certo, Deu erro, Cancelado). O código técnico (`PENDING`, `status_motivo`) fica só no "Detalhe técnico";
+  * botões dizem o efeito ("Cancelar este pedido", e não "OK"), e confirmações dizem a consequência;
+  * campo de formulário traz ajuda com um exemplo do formato esperado.
 
 ---
 
@@ -125,6 +135,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
   * **POSIX:** `os.killpg(pgid, SIGTERM)` → `kill_grace_s` → `os.killpg(pgid, SIGKILL)` → `Popen.wait()`. `ProcessLookupError` é tratado como "grupo encerrado".
   * **Windows:** `CTRL_BREAK_EVENT` ao grupo → `kill_grace_s` → `TerminateJobObject` → `Popen.wait()`.
   * O nó web nunca envia sinais nem encerra processos.
+* **Launcher do nó web:** `bin/sss-web.sh` recusa root, aplica `umask 077` e só inicia um interpretador `python3[.x]` seguido de `web2py.py` ou `anyserver.py` (README §12.2). Nunca o transforme em executor de comando arbitrário.
 
 ### 3.3 Segredos e PII
 
@@ -145,6 +156,14 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **Senha:** somente `modules/security.py` (PBKDF2-SHA256, 200.000 iterações, `hmac.compare_digest`).
 * **Validação de entrada:** valor acima do limite ou fora do formato é **recusado** com mensagem, nunca truncado nem convertido em silêncio (README §10, "Texto nos cadastros"). O corte de `request.vars` no controller é só proteção de memória: o limite do controller deve ser maior que o do service, para que o service veja o excesso e o recuse.
 * **Segredo fora do HTML:** nenhum valor sensível (nem hash, nem derivado dele) vai para o HTML. A versão de concorrência usa um marcador fixo no lugar do valor sensível (README §10).
+* **Texto de entrada nos cadastros** (README §10, CR-003):
+  * **identificador** (nome de ambiente e de perfil, login, código de parâmetro): `admin_crud.identificador`. Não é limpo; espaço no início ou no fim é recusado;
+  * **texto livre** (nomes de exibição, `label`, `descricao`, `grupo`, `categoria`, `etapa`): `admin_crud.texto_livre`. Recebe `strip()` e recusa caracteres de controle (`\x00-\x1f`, `\x7f`).
+* **Telas de consulta** (README §2.4.3; ex.: O que eu posso fazer, Rotinas disponíveis, Histórico, Agenda, Quem pode o quê):
+  * só `GET`; não gravam nada e não auditam;
+  * usam o mesmo guarda e o mesmo escopo de ambiente da lista de tickets. Item fora do escopo responde 404;
+  * nada fora do perfil do usuário vai para o HTML, nem escondido.
+* **Proteções de administração no service**, nunca só na tela: desativar o próprio usuário, tirar o próprio perfil de administrador ou deixar o sistema sem administrador ativo é negado (README §4.3.B).
 
 ---
 
@@ -236,13 +255,13 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **Exceções:**
   * Todo `except` registra o contexto (ticket, agente, ação), o código ORA- quando houver e o stack trace em ERROR.
   * É proibido `except:` ou `except Exception: pass` silenciosos.
-* **Configuração:** toda chave tem tipo e faixa validados. Chave ausente ou inválida interrompe a inicialização (fail-fast).
+* **Configuração:** toda chave tem tipo e faixa validados. Chave ausente, desconhecida ou inválida interrompe a inicialização (fail-fast). Antes de abortar, a falha é registrada em CRITICAL por `sss_logging.registrar_critico_inicial`, no `log_dir` quando ele aceita escrita e no stderr caso contrário (README §12.1).
 * **Graceful shutdown:**
   * Handlers de SIGTERM/SIGINT (POSIX) e SIGBREAK/SIGINT (Windows) apenas acionam uma flag. O arquivo `work_dir/sss-<agent_id>.stop`, verificado a cada ciclo, tem o mesmo efeito em todas as plataformas.
   * O fechamento de conexão, lock file e descritores ocorre em `finally`.
 * **Reconexão:** só o `db_conn.py` decide reconectar, seguindo a lista de erros (mapeada por driver e modo) e o *backoff* do README §2.3.
 * **Tempo:**
-  * Agendamento e tempo de negócio usam o relógio do banco (`SYSDATE`).
+  * Agendamento e tempo de negócio usam o relógio do banco (`SYSDATE`). No nó web, o horário vem de `agora()` do repositório (ex.: bloqueio de login em `repo_usuarios`); o relógio local do servidor web não decide regra de negócio.
   * Intervalos internos usam `time.monotonic()`.
   * É proibido `datetime.now()` em lógica de agendamento, heartbeat ou timeout.
 
@@ -273,6 +292,10 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 | `test_executor.py` | Spawn real de script de teste (`/bin/sh` no POSIX, `PYTHON3` no Windows) em diretório temporário; saída em arquivo sem PIPE; geração de mais de 1 MB de saída sem travar; timeout; encerramento escalonado matando também o neto; conversão de `returncode` negativo |
 | `test_plataforma.py` | Por plataforma: grupo e encerramento escalonado, identidade do processo (`starttime` ou `CreationTime`) contra PID reciclado, lock de instância, recusa de root ou de elevação, dono e permissão (modo ou ACL) de segredos e da árvore de scripts, resolução de link e junction no Windows |
 | `test_sql_oracle11g.py` | Varredura de `repo_oracle/` e `scripts/init_db.py`: nenhuma sintaxe 12c+ (§4.3); `FOR UPDATE` sempre com `WAIT n` (n ≤ 5); nenhum `SELECT *` |
+| `test_seed_fake.py` | Seed FAKE coerente com as regras (README §2.5): funcionalidades com os nomes do README, nenhum parâmetro de credencial, prioridade 1 só para admin, `created_at` nunca no futuro, snapshot e respostas compilados contra o script, agendamentos no minuto exato e alinhados à regra |
+| `test_ui_helpers.py` | Catálogo de mensagens em duas partes, nomes simples de situação e de motivo, frase e etapas do ticket, tempo em linguagem simples |
+| `test_catalogo_service.py` | Rotinas disponíveis e histórico: mesmo escopo da lista de tickets (com e sem `VER_LOGS`), script fora das rotinas dá 404, contrato sem LOB e limitado, números do resumo iguais aos do gráfico e geometria do gráfico |
+| `test_contraste_cores.py` | Todo par texto/fundo dos tokens de `sss.css` com contraste WCAG AA (≥ 4,5:1), nos modos claro e escuro |
 | `test_db_conn.py` | Com módulos falsos de driver: cadeia `auto` Thin → Thick → cx_Oracle, parada em erro de autenticação, valores forçados, senha fora de argv/ambiente/log, mapa de erros por driver e modo |
 
 5. Cada correção de defeito acompanha um teste de regressão.
@@ -289,6 +312,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 - [ ] Processos: primitivas de SO só em `plataforma/`; allowlist lógica (sem `cmd`/`.bat` no Windows), `path_guard`, `env_builder`, sem PIPE e encerramento escalonado.
 - [ ] Web: guarda de login/RBAC, CSRF em POST, saída escapada, sem `XML()` com dado.
 - [ ] Entrada recusada (nunca truncada) acima do limite; nenhum valor sensível, nem derivado, no HTML.
+- [ ] Mensagens ao usuário pelo catálogo de `ui_helpers`, em duas partes; telas de consulta só com `GET`, sem gravação nem auditoria.
 - [ ] Auditoria gravada pelo repositório na mesma operação da ação (`auditoria=`).
 - [ ] Logs sem segredos/PII; todo `except` com log.
 - [ ] Testes do §7 aplicáveis executados.
