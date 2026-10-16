@@ -576,6 +576,14 @@ class TestConfig(unittest.TestCase):
         res_sched = subprocess.run(["bash", "-n", scheduler_sh])
         self.assertEqual(res_sched.returncode, 0, "bash -n falhou em sss-scheduler.sh")
 
+    @unittest.skipIf(os.geteuid() == 0, "o launcher recusa root antes de checar os argumentos")
+    def test_launcher_web_recusa_comando_arbitrario(self):
+        """CR-003 P10 (README §12.2): so o processo Python do SSS; nada de exec de comando arbitrario."""
+        web_sh = os.path.join(self.web2py_root, "bin", "sss-web.sh")
+        for args in (["/bin/sh", "-c", "id"], ["/usr/bin/python3", "outro.py"], ["python3"]):
+            res = subprocess.run(["bash", web_sh] + args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.assertEqual(res.returncode, 2, args)
+
 
 if __name__ == "__main__":
     unittest.main()

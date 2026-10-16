@@ -2085,7 +2085,7 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
 * aplicar `umask 077`;
 * recusar a execução como root;
 * fazer `exec` do processo Python, para que os sinais cheguem diretamente a ele;
-* iniciar **somente** o processo Python do SSS (o web2py com os argumentos fixos do launcher). O launcher não executa um comando arbitrário recebido por argumento (`exec "$@"` é proibido).
+* iniciar **somente** o processo Python do SSS. O `sss-web.sh` aceita três formas: sem argumentos (servidor padrão), só opções (`-...`, repassadas ao `anyserver.py`) ou `<python3[.x]> web2py.py|anyserver.py [args]`. Qualquer outro comando é recusado com código 2; repassar um comando arbitrário (`exec "$@"` sem essas checagens) é proibido.
 
 `bin/sss-web.ps1` e `bin/sss-scheduler.ps1` (Windows) devem:
 

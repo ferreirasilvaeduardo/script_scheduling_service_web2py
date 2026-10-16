@@ -17,6 +17,14 @@ applications/script_scheduling_service/errors/
 applications/script_scheduling_service/cache/
 applications/script_scheduling_service/databases/
 applications/script_scheduling_service/log/
+# Pastas que o web2py cria no diretorio corrente quando roda fora da raiz (README §12.2)
+applications/script_scheduling_service/applications/
+applications/script_scheduling_service/deposit/
+applications/script_scheduling_service/site-packages/
+applications/script_scheduling_service/scripts/applications/
+applications/script_scheduling_service/scripts/deposit/
+applications/script_scheduling_service/scripts/logs/
+applications/script_scheduling_service/scripts/site-packages/
 
 # SSS instance configuration (only .example is tracked)
 applications/script_scheduling_service/instance/config.ini
