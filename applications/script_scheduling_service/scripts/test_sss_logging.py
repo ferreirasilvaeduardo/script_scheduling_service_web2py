@@ -194,6 +194,25 @@ class TestSSSLogging(unittest.TestCase):
             # Pasta sem formato de data (temp) deve ser ignorada
             self.assertTrue(os.path.exists(pasta_nao_data))
 
+    def test_todas_as_pastas_novas_com_0750_sob_umask_077(self):
+        """Regressao (README §13): app/, ano, mes, dia, hora e minuto com 0750, mesmo com a umask 077 do launcher."""
+        log_dir = os.path.join(self.tmp_dir, "logs")
+        os.makedirs(log_dir)
+        umask_antiga = os.umask(0o077)
+        try:
+            logger = sss_logging.configurar("sss_web", self._criar_cfg(log_dir))
+        finally:
+            os.umask(umask_antiga)
+        self.addCleanup(lambda: [h.close() for h in list(logger.handlers)])
+        pasta = os.path.dirname(logger.handlers[0].baseFilename)
+        niveis = []
+        while pasta != log_dir:
+            niveis.append(pasta)
+            pasta = os.path.dirname(pasta)
+        self.assertEqual(len(niveis), 6)
+        for nivel in niveis:
+            self.assertEqual(stat.S_IMODE(os.stat(nivel).st_mode), 0o750, nivel)
+
     def test_agent_id_aparece_nas_linhas(self):
         """Regressao do R4: o agent_id do config.ini entra em [agente=...] (README §13)."""
         log_dir = os.path.join(self.tmp_dir, "logs")
