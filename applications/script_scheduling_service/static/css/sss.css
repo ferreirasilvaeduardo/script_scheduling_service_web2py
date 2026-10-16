@@ -1503,3 +1503,27 @@
   gap: var(--sss-esp-2);
   margin-top: var(--sss-esp-1);
 }
+
+/* Rotinas disponiveis (README §5.8, CR-004). */
+.sss-cartoes-rotina {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: var(--sss-esp-3);
+  margin: 0 0 var(--sss-esp-4);
+  padding: 0;
+  list-style: none;
+}
+
+.sss-cartao-rotina {
+  min-width: 0;
+  padding: var(--sss-esp-3);
+  border: 1px solid var(--sss-border);
+  border-radius: var(--sss-raio);
+  background: var(--sss-surface);
+  overflow-wrap: anywhere;
+}
+
+.sss-cartao-rotina-titulo {
+  margin: 0 0 var(--sss-esp-2);
+  font-size: 1rem;
+}

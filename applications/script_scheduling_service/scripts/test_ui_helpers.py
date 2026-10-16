@@ -268,7 +268,7 @@ class TestMontarMenu(unittest.TestCase):
     def test_admin_ve_catalogo_completo_na_ordem(self):
         menu = ui_menu.montar_menu([], True)
         self.assertEqual(self._codigos(menu), [
-            ("OPERACAO", ["EXEC_SCRIPT", "VER_LOGS"]),
+            ("OPERACAO", ["EXEC_SCRIPT", "EXEC_SCRIPT", "VER_LOGS"]),
             ("ADMIN", ["CAD_USUARIOS", "CAD_PERFIS", "CAD_AMBIENTES", "CAD_SCRIPTS",
                        "CAD_PARAMETROS", "CAD_AGENDAMENTOS", "VER_AUDITORIA"]),
         ])
@@ -286,7 +286,7 @@ class TestMontarMenu(unittest.TestCase):
             ("ADMIN", ["CAD_AGENDAMENTOS"]),
         ])
         self.assertEqual(self._codigos(ui_menu.montar_menu(["EXEC_SCRIPT"], False)),
-                         [("OPERACAO", ["EXEC_SCRIPT"])])
+                         [("OPERACAO", ["EXEC_SCRIPT", "EXEC_SCRIPT"])])
 
     def test_codigo_desconhecido_ou_caixa_diferente_ignorado(self):
         self.assertEqual(ui_menu.montar_menu(["exec_script", "CANC_TICKET", "XYZ"], False), [])
@@ -295,14 +295,16 @@ class TestMontarMenu(unittest.TestCase):
         menu = ui_menu.montar_menu(["EXEC_SCRIPT", "VER_LOGS"], False, ("tickets", "lista"))
         itens = menu[0]["itens"]
         self.assertEqual(menu[0]["titulo"], u"Operação")
-        self.assertEqual(itens[0], {
+        # CR-004 U5 (README §5.8): "Rotinas disponíveis" vem antes de "Disparar Scripts".
+        self.assertEqual(itens[0]["rota"], ("tickets", "catalogo"))
+        self.assertEqual(itens[1], {
             "codigo": "EXEC_SCRIPT",
             "rotulo": u"Disparar Scripts",
             "rota": ("tickets", "novo"),
             "icone": "icon-play",
             "ativo": False,
         })
-        self.assertTrue(itens[1]["ativo"])
+        self.assertTrue(itens[2]["ativo"])
         self.assertEqual(ui_menu.montar_menu(["EXEC_SCRIPT"], False)[0]["itens"][0]["ativo"], False)
 
     def test_rotulos_do_catalogo_canonico(self):
@@ -322,7 +324,7 @@ class TestMontarMenu(unittest.TestCase):
     def test_resultado_independente_entre_chamadas(self):
         menu = ui_menu.montar_menu([], True)
         menu[0]["itens"][0]["rotulo"] = "alterado"
-        self.assertEqual(ui_menu.montar_menu([], True)[0]["itens"][0]["rotulo"], u"Disparar Scripts")
+        self.assertEqual(ui_menu.montar_menu([], True)[0]["itens"][0]["rotulo"], u"Rotinas disponíveis")
 
 
 class TestModulosPurosSemGluon(unittest.TestCase):

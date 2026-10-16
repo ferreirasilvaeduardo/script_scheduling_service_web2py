@@ -31,6 +31,15 @@ class RepoTickets(object):
         """
         raise NotImplementedError
 
+    def ultimas_execucoes(self, script_ids, escopo_ambientes=None, solicitante=None):
+        """Ticket mais recente (created_at DESC, id DESC) de cada script no escopo (README §5.8, CR-004).
+
+        Retorna {script_id: {id, status, status_motivo, created_at, finished_at}}; scripts sem ticket no
+        escopo ficam de fora. escopo_ambientes None nao restringe; solicitante restringe ao login.
+        Nunca le log_output (Oracle: ROW_NUMBER() por script sobre ix_tbsss_tck_scr).
+        """
+        raise NotImplementedError
+
     def respostas(self, ticket_id):
         """Retorna lista de dicts com as respostas resolvidas do ticket."""
         raise NotImplementedError

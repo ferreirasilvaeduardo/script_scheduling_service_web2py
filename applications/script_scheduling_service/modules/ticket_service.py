@@ -696,6 +696,42 @@ class ServicoTicket(object):
         repo_filtros["solicitante"] = ctx["login"]
         return True, None
 
+    def _escopo_execucoes(self, ctx):
+        """(escopo_ambientes, solicitante) da ultima execucao/historico: o mesmo da lista (README §5.8)."""
+        if rbac.tem_func(ctx, "VER_LOGS"):
+            return (None if ctx.get("is_admin") is True else sorted(ctx.get("ambientes") or ())), None
+        return None, ctx["login"]
+
+    def catalogo_rotinas(self, ctx):
+        """Rotinas disponiveis (README §5.8, CR-004 T2): cartoes por grupo dos scripts que o usuario pode rodar.
+
+        Cada cartao: id, nome, descricao, grupo, categoria, perguntas [{rotulo, obrigatorio}], ambientes
+        (nomes) e ultima (None ou {id, situacao, classe, icone, quando}). So leitura.
+        """
+        grupos = self.scripts_disponiveis(ctx)
+        ids = [s["id"] for g in grupos for s in g["scripts"]]
+        escopo, solicitante = self._escopo_execucoes(ctx)
+        ultimas = self._tickets.ultimas_execucoes(ids, escopo, solicitante) if ids else {}
+        agora = self._tickets.agora()
+        resultado = []
+        for g in grupos:
+            cartoes = []
+            for s in g["scripts"]:
+                _script, ambientes = self.ambientes_disponiveis(ctx, s["id"])
+                perguntas = [{"rotulo": v.get("label") or v["codigo"], "obrigatorio": v.get("obrigatorio") == "S"}
+                             for v in _ordenados(self._vinculos(s["id"]))]
+                ultima = None
+                if s["id"] in ultimas:
+                    u = ultimas[s["id"]]
+                    info = ui_helpers.status_info(u["status"])
+                    ultima = {"id": u["id"], "situacao": info["rotulo"], "classe": info["classe"],
+                              "icone": info["icone"],
+                              "quando": u"há %s" % ui_helpers.tempo_simples((agora - u["created_at"]).total_seconds())}
+                cartoes.append(dict(s, grupo=g["grupo"], categoria=g["categoria"], perguntas=perguntas,
+                                    ambientes=[a["nome"] for a in ambientes], ultima=ultima))
+            resultado.append({"grupo": g["grupo"], "categoria": g["categoria"], "cartoes": cartoes})
+        return resultado
+
     def resumo_inicial(self, ctx, horas=24, ultimos=5):
         """Cartoes do painel inicial no escopo da lista de tickets; None sem acesso a consulta.
 
@@ -1044,6 +1080,11 @@ def preparar_formulario(ctx, script_id, ambiente, valores=None, erros=None, avis
 def resumo_disparo(ctx, script_id, ambiente, respostas, prioridade=None, scheduled_at=None):
     """Resumo em frase do disparo (servico padrao)."""
     return _servico().resumo_disparo(ctx, script_id, ambiente, respostas, prioridade, scheduled_at)
+
+
+def catalogo_rotinas(ctx):
+    """Rotinas disponiveis (servico padrao)."""
+    return _servico().catalogo_rotinas(ctx)
 
 
 def tem_ultima_execucao(ctx, script_id, ambiente):

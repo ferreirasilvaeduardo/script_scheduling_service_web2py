@@ -200,6 +200,25 @@ class RepoTicketsFake(RepoTickets):
             lista.sort(key=lambda x: (x.get("created_at") or self._store.agora(), x["id"]), reverse=True)
             return paginar(lista, pagina=pagina, tamanho=tamanho)
 
+    def ultimas_execucoes(self, script_ids, escopo_ambientes=None, solicitante=None):
+        """Ultimo ticket de cada script no escopo, sem LOB (contrato RepoTickets)."""
+        ids = set(int(i) for i in script_ids)
+        ambs = None if escopo_ambientes is None else set(escopo_ambientes)
+        with self._store.lock_tickets:
+            melhores = {}
+            for t in self._store.tickets.values():
+                if t["script_id"] not in ids or (ambs is not None and t["ambiente"] not in ambs):
+                    continue
+                if solicitante is not None and t["solicitante"] != solicitante:
+                    continue
+                chave = (t["created_at"], t["id"])
+                atual = melhores.get(t["script_id"])
+                if atual is None or chave > (atual["created_at"], atual["id"]):
+                    melhores[t["script_id"]] = t
+            return dict((sid, {"id": t["id"], "status": t["status"], "status_motivo": t.get("status_motivo"),
+                               "created_at": t["created_at"], "finished_at": t.get("finished_at")})
+                        for sid, t in melhores.items())
+
     def respostas(self, ticket_id):
         """Retorna lista de dicts com respostas do ticket."""
         with self._store.lock_tickets:

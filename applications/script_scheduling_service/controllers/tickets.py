@@ -110,6 +110,19 @@ def novo():
         _negado()
 
 
+def catalogo():
+    """Rotinas disponiveis (README §5.8): so leitura, para quem tem EXEC_SCRIPT."""
+    _exigir_metodo("GET", "HEAD")
+    ctx = _exigir_func("EXEC_SCRIPT")
+    response.title = u"Rotinas disponíveis — SSS"
+    response.sss_scripts = [_JS_DISPARO]
+    try:
+        return dict(grupos=ticket_service.catalogo_rotinas(ctx), erro=None)
+    except RepoErro:
+        _log.exception("falha ao montar o catalogo de rotinas (login=%s)", ctx["login"], extra={"acao": "CATALOGO"})
+        return dict(grupos=[], erro=ui_helpers.mensagem("falha_interna"))
+
+
 def criar():
     _exigir_metodo("POST")
     ctx = _exigir_func("EXEC_SCRIPT")

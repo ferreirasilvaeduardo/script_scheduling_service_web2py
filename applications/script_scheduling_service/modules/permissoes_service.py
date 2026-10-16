@@ -36,7 +36,8 @@ class ServicoPermissoes(object):
         rotas = {}
         for secao in ui_menu.montar_menu(ctx.get("funcionalidades"), admin):
             for item in secao["itens"]:
-                rotas.setdefault(item["codigo"], item["rota"])
+                # Ultimo item vence: EXEC_SCRIPT ("Disparar Scripts") leva ao disparo, nao ao catalogo.
+                rotas[item["codigo"]] = item["rota"]
         telas = []
         for f in self._rbac.funcionalidades_listar():
             if f.get("ativo") != "S" or not (admin or f["codigo"] in (ctx.get("funcionalidades") or ())):
