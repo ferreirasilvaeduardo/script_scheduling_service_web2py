@@ -5,8 +5,15 @@
 class RepoAuditoria(object):
     """Contrato abstrato para registro e consulta de auditoria do sistema."""
 
-    def registrar(self, ator, ip, acao, entidade, entidade_id=None, detalhe=None):
-        """Registra uma linha na trilha de auditoria e retorna o registro criado."""
+    def reservar_id(self):
+        """Proximo id da trilha (seq.NEXTVAL, README §2.7), usado antes de gravar a linha (README §4.4)."""
+        raise NotImplementedError
+
+    def registrar(self, ator, ip, acao, entidade, entidade_id=None, detalhe=None, id=None):
+        """Registra uma linha na trilha de auditoria e retorna o registro criado.
+
+        id: opcional, o reservado por reservar_id (a aplicacao sempre informa o id, README §2.7).
+        """
         raise NotImplementedError
 
     def listar(self, filtros=None, pagina=1, tamanho=20):

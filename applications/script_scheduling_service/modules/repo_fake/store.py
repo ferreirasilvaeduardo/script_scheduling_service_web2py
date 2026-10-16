@@ -68,7 +68,7 @@ class FakeDataStore(object):
         self.seqs[tabela] += 1
         return self.seqs[tabela]
 
-    def registrar_auditoria_interno(self, ator, ip, acao, entidade, entidade_id=None, detalhe=None):
+    def registrar_auditoria_interno(self, ator, ip, acao, entidade, entidade_id=None, detalhe=None, id=None):
         """Grava registro de auditoria dentro do lock do agregado atual."""
         # Paridade com o Oracle (README §2.5): ator NOT NULL e limites de coluna, sem valor padrao.
         if not ator:
@@ -76,7 +76,9 @@ class FakeDataStore(object):
         if len(ator) > _ATOR_MAX or (detalhe is not None and len(detalhe) > _DETALHE_MAX):
             raise RepoViolacao("auditoria excede o tamanho da coluna (ORA-12899)")
         with self.lock_auditoria:
-            aid = self.proximo_id("tbsss_auditoria")
+            aid = id if id is not None else self.proximo_id("tbsss_auditoria")
+            if aid in self.auditoria:
+                raise RepoViolacao("id de auditoria ja usado", constraint="pk_tbsss_auditoria")
             reg = {
                 "id": aid,
                 "ator": ator,

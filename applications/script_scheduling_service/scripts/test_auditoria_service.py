@@ -268,6 +268,14 @@ class TestExportar(_Base):
         self.assertNotIn(str(reg["id"]), [r[0] for r in tabela[1:]])
         self.assertEqual(len(tabela) - 1, linhas)
 
+    def test_quantidade_registrada_e_a_do_recorte_exportado(self):
+        # CR-003 P9 (README §4.4): linhas gravadas depois da reserva do id nao entram nem na contagem nem no arquivo.
+        _nome, linhas, blocos = self.svc.exportar_csv(self.ctx["admin"], IP, {"ator": "admin"})
+        self.auditoria.registrar("admin", IP, "CAD_ALTERAR", "tbsss_ambientes", 1, "depois da exportacao")
+        _, tabela = _ler_csv(blocos)
+        self.assertEqual(len(tabela) - 1, linhas)
+        self.assertIn("linhas: %d" % linhas, self._exportacoes()[0]["detalhe"])
+
     def test_limite_de_linhas(self):
         for _ in range(auditoria_service.LIMITE_EXPORTACAO + 20):
             self._inserir(self.base)

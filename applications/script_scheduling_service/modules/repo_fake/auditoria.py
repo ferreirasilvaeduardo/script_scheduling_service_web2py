@@ -12,8 +12,13 @@ class RepoAuditoriaFake(RepoAuditoria):
     def __init__(self, store):
         self._store = store
 
-    def registrar(self, ator, ip, acao, entidade, entidade_id=None, detalhe=None):
-        """Registra um evento na trilha de auditoria."""
+    def reservar_id(self):
+        """Simula seq.NEXTVAL da trilha."""
+        with self._store.lock_auditoria:
+            return self._store.proximo_id("tbsss_auditoria")
+
+    def registrar(self, ator, ip, acao, entidade, entidade_id=None, detalhe=None, id=None):
+        """Registra um evento na trilha de auditoria (com o id reservado, se informado)."""
         return self._store.registrar_auditoria_interno(
             ator=ator,
             ip=ip,
@@ -21,6 +26,7 @@ class RepoAuditoriaFake(RepoAuditoria):
             entidade=entidade,
             entidade_id=entidade_id,
             detalhe=detalhe,
+            id=id,
         )
 
     def _filtrar(self, filtros):

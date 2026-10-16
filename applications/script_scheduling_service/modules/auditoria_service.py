@@ -292,12 +292,15 @@ class ServicoAuditoria(object):
         if erros:
             raise FiltrosInvalidos(erros)
         repo_filtros = filtros_repo(filtros)
+        # README §4.4 (D12): reserva o id, delimita id_max = id - 1, conta esse recorte e so entao grava a
+        # linha; a quantidade registrada e o arquivo correspondem ao mesmo conjunto.
+        aid = self._auditoria.reservar_id()
+        repo_filtros["id_max"] = aid - 1
         total = self._auditoria.listar(filtros=repo_filtros, pagina=1, tamanho=1)["total"]
         linhas = min(total, LIMITE_EXPORTACAO)
         detalhe = admin_crud.detalhe_livre(u"filtros: %s; linhas: %d (limite %d)" % (
             _descrever_filtros(filtros), linhas, LIMITE_EXPORTACAO))
-        registro = self._auditoria.registrar(ctx.get("login"), ip, ACAO_EXPORTAR, ENTIDADE_AUDITORIA, None, detalhe)
-        repo_filtros["id_max"] = registro["id"] - 1
+        self._auditoria.registrar(ctx.get("login"), ip, ACAO_EXPORTAR, ENTIDADE_AUDITORIA, None, detalhe, id=aid)
         self._log.info("auditoria exportada (login=%s linhas=%d total=%d)", ctx.get("login"), linhas, total,
                        extra={"acao": ACAO_EXPORTAR})
         nome = "auditoria_%s.csv" % self._relogio().strftime("%Y%m%d_%H%M%S")
