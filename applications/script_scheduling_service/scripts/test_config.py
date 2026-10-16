@@ -165,7 +165,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg.logging.log_dir, "/var/log/sss")
         self.assertEqual(cfg.logging.level, "INFO")
         self.assertEqual(cfg.logging.app_log_max_bytes, 10485760)
-        self.assertEqual(cfg.logging.app_log_backups, 10)
+        self.assertEqual(cfg.logging.app_log_retention_days, 30)
 
         # [web]
         self.assertEqual(cfg.web.session_idle_timeout_s, 1800)
@@ -256,6 +256,22 @@ class TestConfig(unittest.TestCase):
         ini3 = self._copiar_e_modificar_ini(alteracoes={"logging": {"app_log_max_bytes": "500"}})
         with self.assertRaises(sss_config.ConfigErro):
             sss_config.carregar(ini3)
+
+        # app_log_retention_days < 1
+        ini_ret_min = self._copiar_e_modificar_ini(alteracoes={"logging": {"app_log_retention_days": "0"}})
+        with self.assertRaises(sss_config.ConfigErro):
+            sss_config.carregar(ini_ret_min)
+
+        # app_log_retention_days > 3650
+        ini_ret_max = self._copiar_e_modificar_ini(alteracoes={"logging": {"app_log_retention_days": "3651"}})
+        with self.assertRaises(sss_config.ConfigErro):
+            sss_config.carregar(ini_ret_max)
+
+        # app_log_backups sai no CR-005 e passa a ser recusada como desconhecida
+        ini_antigo = self._copiar_e_modificar_ini(alteracoes={"logging": {"app_log_backups": "10"}})
+        with self.assertRaises(sss_config.ConfigErro) as ctx_antigo:
+            sss_config.carregar(ini_antigo)
+        self.assertEqual(ctx_antigo.exception.chave, "app_log_backups")
 
     def test_cada_invariante(self):
         """Verifica a validacao de cada invariante de integridade operacional."""
@@ -533,8 +549,9 @@ class TestConfig(unittest.TestCase):
         adapter = sss_logging.get_adapter(logger, agente="srv-prod-01", ticket="9876", acao="SPAWN")
         adapter.info("Processo filho instanciado com sucesso")
 
-        log_path = os.path.join(self.tmp_dir, "teste_formato.log")
+        log_path = logger.handlers[0].baseFilename
         self.assertTrue(os.path.isfile(log_path))
+        self.assertIn(os.path.join(self.tmp_dir, "app"), log_path)
 
         with open(log_path, "r", encoding="utf-8") as f:
             linhas = [linha.strip() for linha in f if linha.strip()]

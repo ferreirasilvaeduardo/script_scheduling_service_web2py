@@ -13,6 +13,8 @@ import os
 import sys
 import threading
 
+import pastas_log
+
 
 FMT_SSS = "%(asctime)s %(levelname)s [pid=%(process)d] [agente=%(agente)s] [ticket=%(ticket)s] [acao=%(acao)s] %(message)s"
 
@@ -69,8 +71,95 @@ def get_adapter(logger, agente="-", ticket="-", acao="-"):
     return SSSLoggerAdapter(logger, agente=agente, ticket=ticket, acao=acao)
 
 
+class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
+    """Handler rotativo para logs da aplicacao (CR-005 D6, R-c a R-e, README §13).
+
+    - Caminho: log_dir/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>[_<n>].log
+    - Nasce na pasta do minuto da subida pelo relogio local do processo.
+    - Troca de arquivo ao atingir max_bytes, abrindo no minuto atual com sufixo _<n> em colisao.
+    - Executa retencao apagando pastas app/AAAA/MM/DD anteriores a retention_days dias na subida
+      e a cada troca de arquivo.
+    - Diretorios sao criados com 0o750 e arquivos novos com 0o640.
+    """
+
+    def __init__(self, log_dir, nome_processo, max_bytes, retention_days,
+                 encoding="utf-8", pid=None, delay=False):
+        self.log_dir = log_dir
+        self.nome_processo = nome_processo[:-4] if nome_processo.endswith(".log") else nome_processo
+        self.max_bytes = max_bytes
+        self.maxBytes = max_bytes
+        self.retention_days = retention_days
+        self.pid = pid if pid is not None else os.getpid()
+        self.encoding = encoding
+        self._delay = delay
+
+        agora = datetime.datetime.now()
+        caminho_inicial = pastas_log.proximo_caminho_log_app(
+            self.log_dir, self.nome_processo, self.pid, agora
+        )
+        self._garantir_diretorio(os.path.dirname(caminho_inicial))
+
+        # Retencao na subida (CR-005, R-d)
+        self.executar_retencao(agora)
+
+        super(AppLogRotatingHandler, self).__init__(
+            caminho_inicial, mode="a", encoding=encoding, delay=delay
+        )
+        self.addFilter(SSSContextFilter())
+
+    def _garantir_diretorio(self, diretorio):
+        if not os.path.exists(diretorio):
+            os.makedirs(diretorio, mode=0o750, exist_ok=True)
+            try:
+                os.chmod(diretorio, 0o750)
+            except OSError:
+                pass
+
+    def executar_retencao(self, ref_dt=None):
+        try:
+            pastas_log.limpar_retencao_app(self.log_dir, self.retention_days, ref_dt=ref_dt)
+        except Exception:
+            pass
+
+    def _open(self):
+        self._garantir_diretorio(os.path.dirname(self.baseFilename))
+        arquivo_novo = not os.path.exists(self.baseFilename)
+        stream = open(self.baseFilename, self.mode, encoding=self.encoding)
+        if arquivo_novo:
+            try:
+                os.chmod(self.baseFilename, 0o640)
+            except OSError:
+                pass
+        return stream
+
+    def shouldRollover(self, record):
+        if self.stream is None:
+            self.stream = self._open()
+        if self.max_bytes > 0:
+            for f in self.filters:
+                f.filter(record)
+            msg = "%s\n" % self.format(record)
+            self.stream.seek(0, 2)
+            if self.stream.tell() + len(msg.encode(self.encoding or "utf-8")) >= self.max_bytes:
+                return 1
+        return 0
+
+    def doRollover(self):
+        if self.stream:
+            self.stream.close()
+            self.stream = None
+        agora = datetime.datetime.now()
+        novo_caminho = pastas_log.proximo_caminho_log_app(
+            self.log_dir, self.nome_processo, self.pid, agora
+        )
+        self.baseFilename = os.path.abspath(novo_caminho)
+        self.executar_retencao(agora)
+        if not self.delay:
+            self.stream = self._open()
+
+
 def configurar(nome_log, cfg):
-    """Cria um RotatingFileHandler em log_dir com o formato do README §13.
+    """Cria um AppLogRotatingHandler em log_dir/app/... com o formato do README §13.
 
     Aplica o nivel configurado e cria log_dir com permissao 0o750 se necessario.
     Retorna o logger configurado.
@@ -81,13 +170,11 @@ def configurar(nome_log, cfg):
         # makedirs aplica a umask ao mode; o chmod garante 0o750. Falha aqui aborta a subida.
         os.chmod(log_dir, 0o750)
 
-    filename = nome_log if nome_log.endswith(".log") else (nome_log + ".log")
-    filepath = os.path.join(log_dir, filename)
-
-    handler = logging.handlers.RotatingFileHandler(
-        filepath,
-        maxBytes=cfg.logging.app_log_max_bytes,
-        backupCount=cfg.logging.app_log_backups,
+    handler = AppLogRotatingHandler(
+        log_dir=log_dir,
+        nome_processo=nome_log,
+        max_bytes=cfg.logging.app_log_max_bytes,
+        retention_days=cfg.logging.app_log_retention_days,
         encoding="utf-8"
     )
 
@@ -108,13 +195,17 @@ def configurar(nome_log, cfg):
 
     # Evita acumular handlers para o mesmo arquivo em reinicializacoes
     for h in list(logger.handlers):
-        if isinstance(h, logging.handlers.RotatingFileHandler) and getattr(h, "_sss_path", None) == filepath:
+        if isinstance(h, (AppLogRotatingHandler, logging.handlers.RotatingFileHandler)):
             logger.removeHandler(h)
+            try:
+                h.close()
+            except Exception:
+                pass
 
-    handler._sss_path = filepath
     logger.addHandler(handler)
 
     return logger
+
 
 
 _LOGGERS = {}

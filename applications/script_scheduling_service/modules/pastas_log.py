@@ -6,6 +6,7 @@ Modulo puro: nao importa gluon (AGENTS §7.1). E o unico lugar que monta caminho
 import datetime
 import os
 import re
+import shutil
 import unicodedata
 
 # Pasta dos logs da aplicacao; nenhum script pode ter essa pasta de log (CR-005, D7).
@@ -143,3 +144,78 @@ def parse_data_minuto(ano_str, mes_str, dia_str, hora_str, min_str):
         return datetime.datetime(int(ano_str), int(mes_str), int(dia_str), int(hora_str), int(min_str))
     except (ValueError, OverflowError):
         return None
+
+
+def limpar_retencao_app(log_dir, retention_days, ref_dt=None):
+    """Apaga as pastas log_dir/app/AAAA/MM/DD anteriores a retention_days dias (CR-005, R-d, README §13).
+
+    So remove pastas cujo caminho casa perfeitamente com ano/mes/dia valido do calendario.
+    Apos remover os dias antigos, remove pastas de mes e ano que ficarem vazias.
+    Retorna a lista dos caminhos de dia removidos.
+    """
+    if retention_days is None or retention_days <= 0:
+        return []
+    pasta_app = os.path.join(log_dir, PASTA_APP)
+    if not os.path.isdir(pasta_app):
+        return []
+
+    if ref_dt is None:
+        ref_dt = datetime.datetime.now()
+    if callable(getattr(ref_dt, "date", None)):
+        ref_date = ref_dt.date()
+    else:
+        ref_date = ref_dt
+    limite = ref_date - datetime.timedelta(days=retention_days)
+
+    removidos = []
+    try:
+        anos = os.listdir(pasta_app)
+    except OSError:
+        return []
+
+    for ano_str in sorted(anos):
+        caminho_ano = os.path.join(pasta_app, ano_str)
+        if not os.path.isdir(caminho_ano):
+            continue
+        try:
+            meses = os.listdir(caminho_ano)
+        except OSError:
+            continue
+
+        for mes_str in sorted(meses):
+            caminho_mes = os.path.join(caminho_ano, mes_str)
+            if not os.path.isdir(caminho_mes):
+                continue
+            try:
+                dias = os.listdir(caminho_mes)
+            except OSError:
+                continue
+
+            for dia_str in sorted(dias):
+                caminho_dia = os.path.join(caminho_mes, dia_str)
+                if not os.path.isdir(caminho_dia):
+                    continue
+                data_dia = parse_data_dia(ano_str, mes_str, dia_str)
+                if data_dia is None:
+                    continue
+                if data_dia < limite:
+                    try:
+                        shutil.rmtree(caminho_dia)
+                        removidos.append(caminho_dia)
+                    except OSError:
+                        pass
+
+            try:
+                if os.path.isdir(caminho_mes) and not os.listdir(caminho_mes):
+                    os.rmdir(caminho_mes)
+            except OSError:
+                pass
+
+        try:
+            if os.path.isdir(caminho_ano) and not os.listdir(caminho_ano):
+                os.rmdir(caminho_ano)
+        except OSError:
+            pass
+
+    return removidos
+

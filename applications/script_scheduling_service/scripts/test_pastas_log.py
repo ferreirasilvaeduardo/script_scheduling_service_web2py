@@ -141,6 +141,31 @@ class TestPastasLog(unittest.TestCase):
         self.assertIsNone(pastas_log.parse_data_minuto("2026", "10", "16", "14", "60"))
         self.assertIsNone(pastas_log.parse_data_minuto("2026", "10", "16", "14", "cinco"))
 
+    def test_limpar_retencao_app(self):
+        hoje = datetime.date(2026, 10, 16)
+        # 30 dias de retencao: limite = 2026-09-16.
+        # 2026-09-15 deve ser removido.
+        # 2026-09-16 e 2026-10-01 devem ser preservados.
+        p_antiga = os.path.join(self.tmp, "app", "2026", "09", "15", "10", "00")
+        p_limite = os.path.join(self.tmp, "app", "2026", "09", "16", "10", "00")
+        p_recente = os.path.join(self.tmp, "app", "2026", "10", "01", "10", "00")
+        p_invalida = os.path.join(self.tmp, "app", "2026", "temp", "teste")
+
+        for p in (p_antiga, p_limite, p_recente, p_invalida):
+            os.makedirs(p, exist_ok=True)
+            with open(os.path.join(p, "teste.log"), "w") as f:
+                f.write("dados")
+
+        removidos = pastas_log.limpar_retencao_app(self.tmp, 30, ref_dt=hoje)
+        self.assertEqual(len(removidos), 1)
+        self.assertEqual(removidos[0], os.path.join(self.tmp, "app", "2026", "09", "15"))
+
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "app", "2026", "09", "15")))
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "app", "2026", "09", "16")))
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "app", "2026", "10", "01")))
+        self.assertTrue(os.path.exists(p_invalida))
+
 
 if __name__ == "__main__":
     unittest.main()
+

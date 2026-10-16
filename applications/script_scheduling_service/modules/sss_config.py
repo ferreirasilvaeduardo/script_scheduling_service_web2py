@@ -110,7 +110,7 @@ SCHEMA = collections.OrderedDict([
         ("log_dir", CampoDef("path", obrigatorio=True)),
         ("level", CampoDef("enum", obrigatorio=True, allowed_values=("DEBUG", "INFO", "WARN", "ERROR"))),
         ("app_log_max_bytes", CampoDef("int", obrigatorio=True, min_val=1024, max_val=1073741824)),
-        ("app_log_backups", CampoDef("int", obrigatorio=True, min_val=1, max_val=100)),
+        ("app_log_retention_days", CampoDef("int", obrigatorio=True, min_val=1, max_val=3650)),
         ("max_log_size_bytes", CampoDef("int", obrigatorio=True, min_val=1024, max_val=1073741824)),
         ("max_local_log_size_bytes", CampoDef("int", obrigatorio=True, min_val=1024, max_val=10737418240)),
         ("local_log_retention_days", CampoDef("int", obrigatorio=True, min_val=1, max_val=3650)),
@@ -173,7 +173,7 @@ class AgentConfig(_ItemAccessMixin, collections.namedtuple("AgentConfig", [
 
 
 class LoggingConfig(_ItemAccessMixin, collections.namedtuple("LoggingConfig", [
-    "log_dir", "level", "app_log_max_bytes", "app_log_backups",
+    "log_dir", "level", "app_log_max_bytes", "app_log_retention_days",
     "max_log_size_bytes", "max_local_log_size_bytes", "local_log_retention_days"
 ])):
     __slots__ = ()
