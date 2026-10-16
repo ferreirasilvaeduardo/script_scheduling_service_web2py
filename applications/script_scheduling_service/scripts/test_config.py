@@ -358,6 +358,22 @@ class TestConfig(unittest.TestCase):
         with mock.patch.object(sss_config, "caminho_config_padrao", return_value=ini):
             return sss_config.obter_config(nome_log)
 
+    def _ler_log_app(self, log_dir, nome_log):
+        """CR-005 D6: o CRITICAL inicial fica em log_dir/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log."""
+        esperado = "%s_%d.log" % (nome_log, os.getpid())
+        achados = []
+        for raiz, _dirs, arquivos in os.walk(log_dir):
+            achados.extend(os.path.join(raiz, a) for a in arquivos)
+        self.assertFalse(os.path.exists(os.path.join(log_dir, nome_log + ".log")))
+        self.assertEqual(len(achados), 1, achados)
+        self.assertEqual(os.path.basename(achados[0]), esperado)
+        partes = os.path.relpath(os.path.dirname(achados[0]), log_dir).split(os.sep)
+        self.assertEqual(partes[0], "app")
+        self.assertEqual(len(partes), 6)
+        self.assertEqual(stat.S_IMODE(os.stat(achados[0]).st_mode), 0o640)
+        with open(achados[0], encoding="utf-8") as f:
+            return f.read()
+
     def test_configuracao_invalida_gera_critical_no_log(self):
         """CR-003 P2: CRITICAL com secao, chave e motivo no log da aplicacao quando log_dir e utilizavel."""
         log_dir = os.path.join(self.tmp_dir, "logs")
@@ -366,11 +382,14 @@ class TestConfig(unittest.TestCase):
                                                        "web": {"login_max_tentativas": "100"}})
         with self.assertRaises(sss_config.ConfigErro):
             self._obter_com_ini(ini)
-        with open(os.path.join(log_dir, "sss_web.log"), encoding="utf-8") as f:
-            conteudo = f.read()
+        conteudo = self._ler_log_app(log_dir, "sss_web")
         self.assertIn(" CRITICAL ", conteudo)
         self.assertIn("login_max_tentativas", conteudo)
         self.assertIn("[acao=INICIO]", conteudo)
+        # Falha repetida no mesmo minuto e processo (nova requisicao) vai para o mesmo arquivo.
+        with self.assertRaises(sss_config.ConfigErro):
+            self._obter_com_ini(ini)
+        self.assertEqual(self._ler_log_app(log_dir, "sss_web").count(" CRITICAL "), 2)
 
     def test_configuracao_invalida_sem_log_dir_vai_para_stderr(self):
         """CR-003 P2: sem log_dir utilizavel, o CRITICAL vai para o stderr no mesmo formato."""
@@ -394,8 +413,7 @@ class TestConfig(unittest.TestCase):
         self.addCleanup(sss_config.reset_segredos_cache)
         with self.assertRaises(sss_config.ConfigErro):
             sss_config.obter_segredos("sss_web")
-        with open(os.path.join(log_dir, "sss_web.log"), encoding="utf-8") as f:
-            conteudo = f.read()
+        conteudo = self._ler_log_app(log_dir, "sss_web")
         self.assertIn(" CRITICAL ", conteudo)
         for valor in tokens.values():
             self.assertNotIn(valor, conteudo)

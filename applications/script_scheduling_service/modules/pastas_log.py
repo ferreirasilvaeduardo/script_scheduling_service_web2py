@@ -146,13 +146,18 @@ def parse_data_minuto(ano_str, mes_str, dia_str, hora_str, min_str):
         return None
 
 
-def limpar_retencao_app(log_dir, retention_days, ref_dt=None):
+def limpar_retencao_app(log_dir, retention_days, ref_dt=None, falhas=None):
     """Apaga as pastas log_dir/app/AAAA/MM/DD anteriores a retention_days dias (CR-005, R-d, README §13).
 
     So remove pastas cujo caminho casa perfeitamente com ano/mes/dia valido do calendario.
     Apos remover os dias antigos, remove pastas de mes e ano que ficarem vazias.
-    Retorna a lista dos caminhos de dia removidos.
+    Retorna a lista dos caminhos de dia removidos. Cada falha de leitura ou remocao segue para a
+    proxima pasta e, se `falhas` for uma lista, entra nela como texto (caminho e erro) para o log.
     """
+    def _falhou(caminho, exc):
+        if falhas is not None:
+            falhas.append("%s: %s" % (caminho, exc))
+
     if retention_days is None or retention_days <= 0:
         return []
     pasta_app = os.path.join(log_dir, PASTA_APP)
@@ -170,7 +175,8 @@ def limpar_retencao_app(log_dir, retention_days, ref_dt=None):
     removidos = []
     try:
         anos = os.listdir(pasta_app)
-    except OSError:
+    except OSError as exc:
+        _falhou(pasta_app, exc)
         return []
 
     for ano_str in sorted(anos):
@@ -179,7 +185,8 @@ def limpar_retencao_app(log_dir, retention_days, ref_dt=None):
             continue
         try:
             meses = os.listdir(caminho_ano)
-        except OSError:
+        except OSError as exc:
+            _falhou(caminho_ano, exc)
             continue
 
         for mes_str in sorted(meses):
@@ -188,7 +195,8 @@ def limpar_retencao_app(log_dir, retention_days, ref_dt=None):
                 continue
             try:
                 dias = os.listdir(caminho_mes)
-            except OSError:
+            except OSError as exc:
+                _falhou(caminho_mes, exc)
                 continue
 
             for dia_str in sorted(dias):
@@ -202,20 +210,20 @@ def limpar_retencao_app(log_dir, retention_days, ref_dt=None):
                     try:
                         shutil.rmtree(caminho_dia)
                         removidos.append(caminho_dia)
-                    except OSError:
-                        pass
+                    except OSError as exc:
+                        _falhou(caminho_dia, exc)
 
             try:
                 if os.path.isdir(caminho_mes) and not os.listdir(caminho_mes):
                     os.rmdir(caminho_mes)
-            except OSError:
-                pass
+            except OSError as exc:
+                _falhou(caminho_mes, exc)
 
         try:
             if os.path.isdir(caminho_ano) and not os.listdir(caminho_ano):
                 os.rmdir(caminho_ano)
-        except OSError:
-            pass
+        except OSError as exc:
+            _falhou(caminho_ano, exc)
 
     return removidos
 

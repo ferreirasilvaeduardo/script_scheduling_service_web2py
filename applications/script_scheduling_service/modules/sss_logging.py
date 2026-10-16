@@ -80,10 +80,11 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
     - Executa retencao apagando pastas app/AAAA/MM/DD anteriores a retention_days dias na subida
       e a cada troca de arquivo.
     - Diretorios sao criados com 0o750 e arquivos novos com 0o640.
+    - Falhas de retencao, chmod ou fechamento viram WARN no proprio arquivo, antes do proximo registro.
     """
 
     def __init__(self, log_dir, nome_processo, max_bytes, retention_days,
-                 encoding="utf-8", pid=None, delay=False):
+                 encoding="utf-8", pid=None, delay=False, default_agente="-"):
         self.log_dir = log_dir
         self.nome_processo = nome_processo[:-4] if nome_processo.endswith(".log") else nome_processo
         self.max_bytes = max_bytes
@@ -92,12 +93,13 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
         self.pid = pid if pid is not None else os.getpid()
         self.encoding = encoding
         self._delay = delay
+        self._avisos = []
 
         agora = datetime.datetime.now()
         caminho_inicial = pastas_log.proximo_caminho_log_app(
             self.log_dir, self.nome_processo, self.pid, agora
         )
-        self._garantir_diretorio(os.path.dirname(caminho_inicial))
+        _garantir_diretorio(os.path.dirname(caminho_inicial), self._avisos)
 
         # Retencao na subida (CR-005, R-d)
         self.executar_retencao(agora)
@@ -105,32 +107,37 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
         super(AppLogRotatingHandler, self).__init__(
             caminho_inicial, mode="a", encoding=encoding, delay=delay
         )
-        self.addFilter(SSSContextFilter())
+        # Filtro unico: um segundo SSSContextFilter depois deste nunca veria o agente vazio.
+        self.addFilter(SSSContextFilter(default_agente=default_agente))
 
-    def _garantir_diretorio(self, diretorio):
-        if not os.path.exists(diretorio):
-            os.makedirs(diretorio, mode=0o750, exist_ok=True)
-            try:
-                os.chmod(diretorio, 0o750)
-            except OSError:
-                pass
+    def registrar_aviso(self, acao, mensagem):
+        """Guarda um WARN para gravar neste arquivo antes do proximo registro."""
+        self._avisos.append((acao, mensagem))
 
     def executar_retencao(self, ref_dt=None):
-        try:
-            pastas_log.limpar_retencao_app(self.log_dir, self.retention_days, ref_dt=ref_dt)
-        except Exception:
-            pass
+        falhas = []
+        pastas_log.limpar_retencao_app(self.log_dir, self.retention_days, ref_dt=ref_dt, falhas=falhas)
+        for falha in falhas:
+            self.registrar_aviso("RETENCAO", "retencao do log da aplicacao nao removeu %s" % falha)
 
     def _open(self):
-        self._garantir_diretorio(os.path.dirname(self.baseFilename))
+        _garantir_diretorio(os.path.dirname(self.baseFilename), self._avisos)
         arquivo_novo = not os.path.exists(self.baseFilename)
         stream = open(self.baseFilename, self.mode, encoding=self.encoding)
         if arquivo_novo:
-            try:
-                os.chmod(self.baseFilename, 0o640)
-            except OSError:
-                pass
+            _chmod(self.baseFilename, 0o640, self._avisos)
         return stream
+
+    def emit(self, record):
+        if self._avisos:
+            pendentes, self._avisos = self._avisos, []
+            for acao, mensagem in pendentes:
+                aviso = logging.LogRecord(self.nome_processo, logging.WARNING, __file__, 0,
+                                          mensagem, None, None)
+                aviso.acao = acao
+                if aviso.levelno >= self.level and self.filter(aviso):
+                    super(AppLogRotatingHandler, self).emit(aviso)
+        super(AppLogRotatingHandler, self).emit(record)
 
     def shouldRollover(self, record):
         if self.stream is None:
@@ -158,6 +165,20 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
             self.stream = self._open()
 
 
+def _chmod(caminho, modo, avisos):
+    try:
+        os.chmod(caminho, modo)
+    except OSError as exc:
+        avisos.append(("LOG", "chmod %o falhou em %s: %s" % (modo, caminho, exc)))
+
+
+def _garantir_diretorio(diretorio, avisos):
+    if not os.path.exists(diretorio):
+        os.makedirs(diretorio, mode=0o750, exist_ok=True)
+        # makedirs aplica a umask ao mode; o chmod garante 0o750 na pasta do minuto.
+        _chmod(diretorio, 0o750, avisos)
+
+
 def configurar(nome_log, cfg):
     """Cria um AppLogRotatingHandler em log_dir/app/... com o formato do README §13.
 
@@ -170,21 +191,20 @@ def configurar(nome_log, cfg):
         # makedirs aplica a umask ao mode; o chmod garante 0o750. Falha aqui aborta a subida.
         os.chmod(log_dir, 0o750)
 
+    default_agente = "-"
+    if hasattr(cfg, "agent") and hasattr(cfg.agent, "agent_id") and cfg.agent.agent_id:
+        default_agente = cfg.agent.agent_id
+
     handler = AppLogRotatingHandler(
         log_dir=log_dir,
         nome_processo=nome_log,
         max_bytes=cfg.logging.app_log_max_bytes,
         retention_days=cfg.logging.app_log_retention_days,
-        encoding="utf-8"
+        encoding="utf-8",
+        default_agente=default_agente,
     )
 
     handler.setFormatter(SSSFormatter(FMT_SSS))
-
-    default_agente = "-"
-    if hasattr(cfg, "agent") and hasattr(cfg.agent, "agent_id") and cfg.agent.agent_id:
-        default_agente = cfg.agent.agent_id
-
-    handler.addFilter(SSSContextFilter(default_agente=default_agente))
 
     lvl_name = cfg.logging.level.upper()
     level = getattr(logging, lvl_name if lvl_name != "WARN" else "WARNING", logging.INFO)
@@ -199,8 +219,8 @@ def configurar(nome_log, cfg):
             logger.removeHandler(h)
             try:
                 h.close()
-            except Exception:
-                pass
+            except OSError as exc:
+                handler.registrar_aviso("LOG", "fechamento do handler anterior falhou: %s" % exc)
 
     logger.addHandler(handler)
 
@@ -215,18 +235,28 @@ _LOCK_LOGGERS = threading.Lock()
 def registrar_critico_inicial(nome_log, mensagem, log_dir=None, stream=None):
     """CRITICAL de falha na subida, antes de haver configuracao valida (README §12.1).
 
-    Grava em log_dir/<nome_log>.log quando o diretorio existe e aceita escrita; senao, no stderr,
-    sempre no formato do README §13. Retorna o destino usado ('arquivo' ou 'stderr').
+    Grava no log da aplicacao do minuto atual (log_dir/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log,
+    README §13) quando log_dir existe e aceita escrita; senao, no stderr, sempre no formato do
+    README §13. Retorna o destino usado ('arquivo' ou 'stderr').
     """
-    filename = nome_log if nome_log.endswith(".log") else (nome_log + ".log")
     handler = None
     destino = "stderr"
+    motivo_stderr = None
+    avisos = []
     if log_dir and os.path.isdir(log_dir) and os.access(log_dir, os.W_OK):
+        nome = nome_log[:-4] if nome_log.endswith(".log") else nome_log
+        # Sem sufixo _<n>: falhas repetidas no mesmo minuto e processo vao para o mesmo arquivo.
+        caminho = pastas_log.caminho_log_app(log_dir, nome, os.getpid(), datetime.datetime.now())
         try:
-            handler = logging.FileHandler(os.path.join(log_dir, filename), encoding="utf-8")
+            _garantir_diretorio(os.path.dirname(caminho), avisos)
+            arquivo_novo = not os.path.exists(caminho)
+            handler = logging.FileHandler(caminho, encoding="utf-8")
+            if arquivo_novo:
+                _chmod(caminho, 0o640, avisos)
             destino = "arquivo"
-        except OSError:
+        except OSError as exc:
             handler = None
+            motivo_stderr = "log da aplicacao indisponivel (%s): %s" % (caminho, exc)
     if handler is None:
         handler = logging.StreamHandler(stream or sys.stderr)
     handler.setFormatter(SSSFormatter(FMT_SSS))
@@ -235,6 +265,10 @@ def registrar_critico_inicial(nome_log, mensagem, log_dir=None, stream=None):
     logger.propagate = False
     logger.addHandler(handler)
     try:
+        if motivo_stderr:
+            logger.warning(motivo_stderr)
+        for _acao, aviso in avisos:
+            logger.warning(aviso)
         logger.critical(mensagem)
     finally:
         logger.removeHandler(handler)

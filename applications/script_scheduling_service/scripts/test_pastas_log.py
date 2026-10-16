@@ -7,6 +7,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 import pastas_log
 
@@ -164,6 +165,32 @@ class TestPastasLog(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.tmp, "app", "2026", "09", "16")))
         self.assertTrue(os.path.exists(os.path.join(self.tmp, "app", "2026", "10", "01")))
         self.assertTrue(os.path.exists(p_invalida))
+
+    def test_limpar_retencao_app_reporta_falhas(self):
+        """Regressao (AGENTS §6): falha na remocao segue adiante e volta em `falhas`, sem ser engolida."""
+        p_antiga = os.path.join(self.tmp, "app", "2026", "09", "01", "10", "00")
+        p_antiga_2 = os.path.join(self.tmp, "app", "2026", "09", "02", "10", "00")
+        for p in (p_antiga, p_antiga_2):
+            os.makedirs(p)
+        dia_1 = os.path.join(self.tmp, "app", "2026", "09", "01")
+        rmtree_real = shutil.rmtree
+
+        def rmtree_falha(caminho, *args, **kw):
+            if caminho == dia_1:
+                raise PermissionError(13, "Permission denied")
+            return rmtree_real(caminho, *args, **kw)
+
+        falhas = []
+        with mock.patch("pastas_log.shutil.rmtree", side_effect=rmtree_falha):
+            removidos = pastas_log.limpar_retencao_app(self.tmp, 30, ref_dt=datetime.date(2026, 10, 16),
+                                                       falhas=falhas)
+        self.assertEqual(removidos, [os.path.join(self.tmp, "app", "2026", "09", "02")])
+        self.assertEqual(len(falhas), 1)
+        self.assertIn(dia_1, falhas[0])
+        self.assertIn("Permission denied", falhas[0])
+        # Sem a lista, a falha nao interrompe a retencao.
+        with mock.patch("pastas_log.shutil.rmtree", side_effect=OSError(5, "I/O error")):
+            self.assertEqual(pastas_log.limpar_retencao_app(self.tmp, 30, ref_dt=datetime.date(2026, 10, 16)), [])
 
 
 if __name__ == "__main__":

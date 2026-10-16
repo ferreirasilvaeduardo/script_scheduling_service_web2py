@@ -194,6 +194,38 @@ class TestSSSLogging(unittest.TestCase):
             # Pasta sem formato de data (temp) deve ser ignorada
             self.assertTrue(os.path.exists(pasta_nao_data))
 
+    def test_agent_id_aparece_nas_linhas(self):
+        """Regressao do R4: o agent_id do config.ini entra em [agente=...] (README §13)."""
+        log_dir = os.path.join(self.tmp_dir, "logs")
+        logger = sss_logging.configurar("sss_web", self._criar_cfg(log_dir))
+        self.addCleanup(lambda: [h.close() for h in list(logger.handlers)])
+        logger.info("linha sem contexto")
+        sss_logging.get_adapter(logger, agente="agt-explicito", ticket=7, acao="CLAIM").info("com contexto")
+        logger.handlers[0].flush()
+        with open(logger.handlers[0].baseFilename, encoding="utf-8") as f:
+            linhas = f.read().splitlines()
+        self.assertIn("[agente=srv-test-01] [ticket=-] [acao=-] linha sem contexto", linhas[0])
+        self.assertIn("[agente=agt-explicito] [ticket=7] [acao=CLAIM] com contexto", linhas[1])
+
+    def test_falha_na_retencao_vira_warn_no_log(self):
+        """Regressao (AGENTS §6): falha da retencao nao e engolida; vira WARN [acao=RETENCAO]."""
+        log_dir = os.path.join(self.tmp_dir, "logs")
+        antiga = os.path.join(log_dir, "app", "2000", "01", "01", "00", "00")
+        os.makedirs(antiga)
+        with mock.patch("pastas_log.shutil.rmtree", side_effect=PermissionError(13, "Permission denied")):
+            logger = sss_logging.configurar("sss_web", self._criar_cfg(log_dir))
+        self.addCleanup(lambda: [h.close() for h in list(logger.handlers)])
+        logger.info("primeira linha")
+        logger.handlers[0].flush()
+        with open(logger.handlers[0].baseFilename, encoding="utf-8") as f:
+            linhas = f.read().splitlines()
+        self.assertEqual(len(linhas), 2)
+        self.assertIn(" WARNING ", linhas[0])
+        self.assertIn("[agente=srv-test-01] [ticket=-] [acao=RETENCAO]", linhas[0])
+        self.assertIn(os.path.join(log_dir, "app", "2000", "01", "01"), linhas[0])
+        self.assertIn("primeira linha", linhas[1])
+        self.assertTrue(os.path.isdir(antiga))
+
     def test_reconfigurar_idempotente_nao_duplica_handlers(self):
         """Chamar configurar() varias vezes nao acumula AppLogRotatingHandler."""
         log_dir = os.path.join(self.tmp_dir, "logs")
