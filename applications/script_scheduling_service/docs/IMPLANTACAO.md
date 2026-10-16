@@ -18,7 +18,7 @@ O SSS está sendo construído em fases (`docs/prompts/00_INDEX.md`). Hoje está 
 | **Servidor de homologação visual** (UI Freeze): web + backend FAKE, `sss_env = DEV` | **Sim** — é o que este guia instala | Tudo implementado e testado |
 | Homologação integrada ou produção (`sss_env = HML`/`PROD`) | **Não** | O backend FAKE é proibido fora de DEV (a subida aborta) e o backend ORACLE ainda não foi implementado (F7) |
 | Execução real de scripts | **Não** | O agente executor (`run_scheduler.py`) é o F8. No FAKE, os tickets "em execução" são simulados |
-| Nó web em Windows | **Não** | A camada de plataforma Windows é o F8.0. Hoje o nó web roda em **Linux** (x86_64) |
+| Nó web ou agente em Windows | **Não, por decisão** | O SSS é somente POSIX (CR-005): Linux x86_64 e, sob demanda, demais Unix |
 
 > **Consequências práticas do backend FAKE:**
 > * os dados ficam **na memória do processo**: reiniciar o servidor apaga tudo o que foi feito e restaura o seed;
@@ -194,7 +194,7 @@ $PYTHON scripts/check_env.py ; echo "codigo de saida: $?"
 # 7.2 Suíte de testes completa (não precisa de configuração nem de segredos)
 $PYTHON -m unittest discover -s scripts -p "test_*.py"
 # esperado no final: "Ran 697 tests ... OK (skipped=18)" (o total cresce com as versões)
-# Os 18 "skipped" são testes de banco Oracle real e de Windows; é o resultado esperado.
+# Os 18 "skipped" são testes contra banco Oracle real (SSS_TEST_DSN); é o resultado esperado.
 ```
 
 Não prossiga se algum desses passos falhar.
@@ -579,8 +579,8 @@ Ainda **não executável** (F7–F9). O `docs/RUNBOOK.md` será entregue no F9.1
 | Conectividade | Rota e firewall dos servidores web/agentes até o listener Oracle (porta 1521) | README §2.3 |
 | Oracle Instant Client 19 | Obrigatório se o banco for 11g (o modo Thin não conecta ao 11g); recomendado em todos os nós como contingência | README §2.3, CR-002 |
 | Driver Python | `python-oracledb` (`< 2.0` na 3.6; `2.x` na 3.7+) com `cryptography`, e `cx_Oracle 8.3` como contingência, **pré-instalados** pela infraestrutura | AGENTS §2.2 |
-| Servidores agentes | Linux e/ou Windows Server 2016+, com conta de serviço sem privilégio administrativo; interpretadores (`python3`, `bash`, `sh`, `powershell`) nos caminhos que serão mapeados | README §2.6, §8.5, CR-001 |
-| Árvore de scripts real | Dono root (Linux) ou Administradores (Windows), sem escrita para a conta do agente | README §8.5 |
+| Servidores agentes | Linux (ou outro Unix, sob demanda), com conta de serviço sem privilégio administrativo; interpretadores (`python3`, `bash`, `sh`) nos caminhos que serão mapeados | README §2.6, §8.5, CR-005 |
+| Scripts reais | Em qualquer pasta, fora das pastas do sistema; dono de preferência um usuário dedicado (em `script_owner_uids`), sem escrita para grupo, outros e a conta do agente no arquivo e em toda a cadeia de pastas | README §8.5, CR-005 |
 | HTTPS e DNS | Nome e certificado para o nó web em HML/PROD (`sss_env = HML/PROD` exige cookie `Secure`) | README §4.2 |
 | Credenciais | Senha do Oracle e credenciais por ambiente para o `secrets.cfg`, entregues por canal seguro | README §4.1 |
 

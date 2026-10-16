@@ -156,12 +156,8 @@ class TestValidacoesTextuais(unittest.TestCase):
         with self.assertRaises(PathGuardErro) as ctx:
             path_guard.resolver_pasta(pastas, "OUTRA", "a.py", (0,))
         self.assertEqual(ctx.exception.codigo, Codigo.PASTA_NAO_MAPEADA)
-        self.assertIsNone(path_guard.motivo_sem_etapa2(pastas, "ROTINAS", "PYTHON3", "POSIX"))
-        self.assertEqual(path_guard.motivo_sem_etapa2(pastas, "ROTINAS", "POWERSHELL", "POSIX"),
-                         path_guard.OUTRA_PLATAFORMA)
-        self.assertEqual(path_guard.motivo_sem_etapa2(pastas, "ROTINAS", "BASH", "WINDOWS"),
-                         path_guard.OUTRA_PLATAFORMA)
-        self.assertEqual(path_guard.motivo_sem_etapa2(pastas, "SO_AGENTE", "PYTHON3", "POSIX"),
+        self.assertIsNone(path_guard.motivo_sem_etapa2(pastas, "ROTINAS", "PYTHON3"))
+        self.assertEqual(path_guard.motivo_sem_etapa2(pastas, "SO_AGENTE", "PYTHON3"),
                          path_guard.PASTA_NAO_DISPONIVEL)
 
     def test_validar_cadastro(self):
@@ -178,9 +174,14 @@ class TestValidacoesTextuais(unittest.TestCase):
                 self.assertEqual(ctx.exception.codigo, codigo)
 
     def test_interpretador_na_allowlist(self):
-        for cmd in ("PYTHON3", "BASH", "SH", "POWERSHELL"):
+        for cmd in ("PYTHON3", "BASH", "SH"):
             path_guard.validar_interpretador(cmd)
-        self.assertEqual(path_guard.POR_PLATAFORMA["WINDOWS"], ("PYTHON3", "POWERSHELL"))
+        # CR-005: somente POSIX; POWERSHELL e cmd ficam fora da allowlist.
+        for cmd in ("POWERSHELL", "CMD", "python3"):
+            with self.assertRaises(PathGuardErro) as ctx:
+                path_guard.validar_interpretador(cmd)
+            self.assertEqual(ctx.exception.codigo, Codigo.INTERPRETADOR_NAO_PERMITIDO)
+        self.assertNotIn("POWERSHELL", path_guard.ARGS_FIXOS)
         self.assertEqual(path_guard.ARGS_FIXOS["PYTHON3"], ("-I",))
 
     def test_interpretador_fora_da_allowlist(self):

@@ -289,10 +289,6 @@ class TestMontarArgvAgente(unittest.TestCase):
         self.assertEqual(pc.montar_argv_agente("PYTHON3", EXE_PY, "/b/s.py", ["a"]), [EXE_PY, "-I", "/b/s.py", "a"])
         self.assertEqual(pc.montar_argv_agente("BASH", "/bin/bash", "/b/s.sh", ["a"]), ["/bin/bash", "/b/s.sh", "a"])
         self.assertEqual(pc.montar_argv_agente("SH", "/bin/sh", "/b/s.sh", []), ["/bin/sh", "/b/s.sh"])
-        ps = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
-        self.assertEqual(pc.montar_argv_agente("POWERSHELL", ps, "D:\\scripts\\s.ps1", ["-x"]),
-                         [ps, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
-                          "D:\\scripts\\s.ps1", "-x"])
 
     def test_fora_da_allowlist(self):
         import path_guard
@@ -436,7 +432,9 @@ class TestValidarSnapshot(unittest.TestCase):
 
     def test_interpretador_fora_da_allowlist_ou_indisponivel_no_agente(self):
         self.assertEqual(self._motivo(self._alterado(interpretador="/usr/bin/perl")), "INTERPRETADOR_NAO_PERMITIDO")
-        self.assertEqual(self._motivo(self._alterado(interpretador="POWERSHELL")), "INTERPRETADOR_NAO_DISPONIVEL")
+        self.assertEqual(self._motivo(self._alterado(interpretador="BASH")), "INTERPRETADOR_NAO_DISPONIVEL")
+        # CR-005: POWERSHELL saiu da allowlist (somente POSIX).
+        self.assertEqual(self._motivo(self._alterado(interpretador="POWERSHELL")), "INTERPRETADOR_NAO_PERMITIDO")
 
     def test_args_invalidos(self):
         self.assertEqual(self._motivo(self._alterado(args="--data x")), "ARGS_INVALIDOS")

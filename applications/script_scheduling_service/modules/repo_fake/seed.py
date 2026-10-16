@@ -272,7 +272,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 # ---------------------------------------------------------
                                 agentes = [
                                     {"id": 1, "codigo": "agt-host01", "hostname": "worker01.internal", "pid_daemon": 1001, "versao": "1.0.0", "ambientes": "PRODUCAO,HOMOLOGACAO", "plataforma": "LINUX", "interpretadores": "PYTHON3,BASH,SH", "pastas_base": "ROTINAS,BATCH", "status": "ATIVO", "iniciado_em": base_dt - datetime.timedelta(days=3), "heartbeat_at": base_dt, "created_at": base_dt - datetime.timedelta(days=3)},
-                                    {"id": 2, "codigo": "agt-host02", "hostname": "worker02.internal", "pid_daemon": 1002, "versao": "1.0.0", "ambientes": "HOMOLOGACAO,DESENV", "plataforma": "WINDOWS", "interpretadores": "PYTHON3,POWERSHELL", "pastas_base": "ROTINAS", "status": "ATIVO", "iniciado_em": base_dt - datetime.timedelta(days=2), "heartbeat_at": base_dt - datetime.timedelta(seconds=_HB_CONGELADO_S), "created_at": base_dt - datetime.timedelta(days=2)},
+                                    {"id": 2, "codigo": "agt-host02", "hostname": "worker02.internal", "pid_daemon": 1002, "versao": "1.0.0", "ambientes": "HOMOLOGACAO,DESENV", "plataforma": "UNIX", "interpretadores": "PYTHON3,SH", "pastas_base": "ROTINAS", "status": "ATIVO", "iniciado_em": base_dt - datetime.timedelta(days=2), "heartbeat_at": base_dt - datetime.timedelta(seconds=_HB_CONGELADO_S), "created_at": base_dt - datetime.timedelta(days=2)},
                                 ]
                                 for ag in agentes:
                                     store.agentes[ag["id"]] = ag

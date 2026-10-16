@@ -263,7 +263,7 @@ def _criar_registro_tabelas():
             ('tparam', {'sufixo': 'tparam', 'expr': "tipo_param IN ('NOMEADO','SEQUENCIAL','NENHUM')"}),
             ('ativo', {'sufixo': 'ativo', 'expr': "ativo IN ('S', 'N')"}),
             ('paral', {'sufixo': 'paral', 'expr': "max_qtd_parallel_env BETWEEN 1 AND 999"}),
-            ('int', {'sufixo': 'int', 'expr': "interpretador IN ('PYTHON3','BASH','SH','POWERSHELL')"}),
+            ('int', {'sufixo': 'int', 'expr': "interpretador IN ('PYTHON3','BASH','SH')"}),
             ('path', {'sufixo': 'path', 'expr': "SUBSTR(path_file, 1, 1) <> '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '\\') = 0 AND INSTR(path_file, ':') = 0"}),
             ('tmout', {'sufixo': 'tmout', 'expr': "timeout_seg IS NULL OR timeout_seg > 0"}),
             ('pasta', {'sufixo': 'pasta', 'expr': "REGEXP_LIKE(pasta_base, '^[A-Z][A-Z0-9_]{0,29}$')"}),
@@ -600,7 +600,7 @@ def _criar_registro_tabelas():
         ('fks', OrderedDict()),
         ('cks', OrderedDict([
             ('stat', {'sufixo': 'stat', 'expr': "status IN ('ATIVO','PARADO')"}),
-            ('plat', {'sufixo': 'plat', 'expr': "plataforma IS NULL OR plataforma IN ('LINUX','WINDOWS','UNIX')"}),
+            ('plat', {'sufixo': 'plat', 'expr': "plataforma IS NULL OR plataforma IN ('LINUX','UNIX')"}),
         ])),
         ('indices', OrderedDict()),
         ('trigger_bu', None),

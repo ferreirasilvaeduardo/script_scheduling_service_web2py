@@ -28,10 +28,9 @@ CAMPOS_INSERCAO = ("nome", "descricao", "grupo", "categoria", "etapa", "interpre
                    "tipo_param",
                    "max_qtd_parallel_env",
                    "timeout_seg")
-ROTULOS_INTERPRETADOR = (("PYTHON3", u"PYTHON3 — Python 3 (Linux, Unix e Windows)"),
-                         ("BASH", u"BASH — Bash (Linux e Unix)"),
-                         ("SH", u"SH — Shell POSIX (Linux e Unix)"),
-                         ("POWERSHELL", u"POWERSHELL — PowerShell (Windows)"))
+ROTULOS_INTERPRETADOR = (("PYTHON3", u"PYTHON3 — Python 3"),
+                         ("BASH", u"BASH — Bash"),
+                         ("SH", u"SH — Shell POSIX"))
 ROTULOS_TIPO_PARAM = (("NOMEADO", u"Por flag (NOMEADO)"), ("SEQUENCIAL", u"Posicional (SEQUENCIAL)"),
                       ("NENHUM", u"Sem argumentos (NENHUM)"))
 TAMANHOS = {"nome": 60, "descricao": 200, "grupo": 30, "categoria": 30, "etapa": 30, "path_file": 250}
@@ -66,8 +65,6 @@ OBS_VALIDACAO = u"A validação definitiva ocorre também no agente executor no 
 AVISO_DEV_ARQUIVO = (u"Ambiente DEV: o arquivo não existe neste servidor; o cadastro foi aceito, mas o agente "
                      u"recusará a execução se o arquivo não existir lá.")
 AVISOS_SEM_ETAPA2 = {
-    path_guard.OUTRA_PLATAFORMA: u"Caminho não verificado neste servidor: a validação ocorrerá no agente que "
-                                 u"executa este interpretador.",
     path_guard.PASTA_NAO_DISPONIVEL: u"Pasta base não disponível neste servidor: a validação ocorrerá no agente.",
 }
 MSG_NOME_OBRIGATORIO = u"Informe o nome do script."

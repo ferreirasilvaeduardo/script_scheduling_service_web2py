@@ -196,7 +196,7 @@ class RepoCatalogoFake(RepoCatalogo):
             raise RepoViolacao("Tipo de parametro invalido", constraint="ck_tbsss_scr_tparam")
         if base.get("ativo", "S") not in ("S", "N"):
             raise RepoViolacao("Flag ativo deve ser 'S' ou 'N'", constraint="ck_tbsss_scr_ativo")
-        if base.get("interpretador") not in ("PYTHON3", "BASH", "SH", "POWERSHELL"):
+        if base.get("interpretador") not in ("PYTHON3", "BASH", "SH"):
             raise RepoViolacao("Interpretador fora da allowlist", constraint="ck_tbsss_scr_int")
         if not _RE_PASTA.fullmatch(base.get("pasta_base") or ""):
             raise RepoViolacao("pasta_base fora do formato do nome logico", constraint="ck_tbsss_scr_pasta")

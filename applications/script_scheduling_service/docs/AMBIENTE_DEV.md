@@ -154,7 +154,7 @@ cd applications/script_scheduling_service
 python -m unittest discover -s scripts -p "test_*.py"
 ```
 
-Resultado esperado hoje: `Ran 697 tests ... OK (skipped=18)`. Os 18 ignorados dependem de Oracle real ou de Windows. Rode a suíte na **3.6.0** e na **3.6.8** (AGENTS §7.3); a validação do fechamento do CR-004 também passou na 3.13.2, o limite superior aceito pelo `check_env.py`:
+Resultado esperado hoje: `Ran 697 tests ... OK (skipped=18)`. Os 18 ignorados são do contrato contra Oracle real (`SSS_TEST_DSN`). Rode a suíte na **3.6.0** e na **3.6.8** (AGENTS §7.3); a validação do fechamento do CR-004 também passou na 3.13.2, o limite superior aceito pelo `check_env.py`:
 
 ```bash
 for v in 3.6.0 3.6.8 3.13.2; do PYENV_VERSION=$v python -m unittest discover -s scripts -p "test_*.py"; done
@@ -214,16 +214,6 @@ script_owner_uids = 0,<seu UID>
 
 Para alterar um script da cópia, devolva a escrita temporariamente (`chmod -R u+w "$BASE"`) e volte aos modos acima antes de executar. Executar como `root` não funciona com essa checagem, porque `os.access(W_OK)` é sempre verdadeiro para root.
 
-### 6.2 Windows (a partir do F8.0)
-
-No Windows, a checagem equivalente usa SIDs e ACL, não UID e modo (README §8.5):
-
-* o dono do script, de cada diretório e da base deve ser um SID de `script_owner_sids` (ex.: `S-1-5-32-544`, Administradores);
-* a conta do agente, Users, Authenticated Users e Everyone não podem ter direito de escrita **efetivo** na árvore;
-* o agente roda com uma conta dedicada, **sem** elevação (token de administrador é recusado).
-
-Em DEV, copie `dev/scripts` para uma pasta própria, transfira o dono para Administradores e remova a herança de escrita (`icacls <pasta> /setowner *S-1-5-32-544 /T` e `icacls <pasta> /inheritance:r /grant:r *S-1-5-32-544:(OI)(CI)F *S-1-5-18:(OI)(CI)F <conta-do-agente>:(OI)(CI)RX`). O roteiro definitivo fica no `RUNBOOK.md` (F9.1).
-
 ---
 
 ## 7. Banco Oracle real (a partir do F7)
@@ -233,7 +223,7 @@ O backend FAKE não precisa de banco. Para o F7 em diante (README §2.3, CR-002)
 * **Driver:** `python-oracledb` (`< 2.0` na 3.6; `2.x` na 3.7+) com `cryptography`, e `cx_Oracle 8.3` como contingência. São pré-instalados pela infraestrutura; não use `pip install` no projeto.
 * **Modo:** `[oracle] modo_driver = auto` tenta Thin → Thick → cx_Oracle por sondagem. Contra banco **11g**, só Thick e cx_Oracle conectam, então o **Instant Client 19** precisa estar instalado:
   * Linux/Unix: no `ldconfig` (preferencial) ou em `LD_LIBRARY_PATH` exportado **antes** de iniciar o Python;
-  * Windows/macOS: `oracle_client_lib_dir` no `config.ini`.
+  * macOS (só desenvolvimento): `oracle_client_lib_dir` no `config.ini`. Windows não é suportado (CR-005).
 * **Credencial:** só no `secrets.cfg` (`0600`, dono = usuário do processo), nunca no `config.ini`.
 * **Testes contra banco real:** defina `SSS_TEST_DSN` (e o usuário/senha de teste conforme o prompt do passo). Sem ela, as partes de banco ficam `NÃO TESTADO` no relatório.
 * `python scripts/check_env.py` mostra a combinação de driver escolhida (a partir do F7.0).

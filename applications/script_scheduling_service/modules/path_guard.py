@@ -1,24 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Validacao de interpretador logico e caminho de script (README §6.4, §8.5, AGENTS §3.2, CR-001).
+"""Validacao de interpretador logico e caminho de script (README §6.4, §8.5, AGENTS §3.2, CR-001, CR-005).
 
 Modulo puro: nao importa gluon (AGENTS §7.1).
 """
 import os
 import re
 
-# Interpretadores logicos (CR-001, D1/D2): o catalogo guarda a chave; cada agente a mapeia para o
-# executavel local ([agent] interpretadores). cmd.exe/.bat/.cmd sao proibidos (injecao de argumentos).
-ALLOWLIST = ('PYTHON3', 'BASH', 'SH', 'POWERSHELL')
-POR_PLATAFORMA = {
-    'POSIX': ('PYTHON3', 'BASH', 'SH'),
-    'WINDOWS': ('PYTHON3', 'POWERSHELL'),
-}
+# Interpretadores logicos (CR-001, D1/D2; CR-005: somente POSIX): o catalogo guarda a chave; cada agente
+# a mapeia para o executavel local ([agent] interpretadores).
+ALLOWLIST = ('PYTHON3', 'BASH', 'SH')
 # Argumentos fixos entre o executavel e o script (README §6.4); Python sempre com -I.
 ARGS_FIXOS = {
     'PYTHON3': ('-I',),
     'BASH': (),
     'SH': (),
-    'POWERSHELL': ('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File'),
 }
 
 
@@ -139,23 +134,15 @@ def resolver_pasta(pastas, pasta_base, path_file, owner_uids, uid_agente=None):
     return resolver(pastas[pasta_base], path_file, owner_uids, uid_agente)
 
 
-# Motivos para o no web nao executar a etapa 2 (README §8.5, "Validacao no no web"; CR-003 D4/D16).
-OUTRA_PLATAFORMA = 'OUTRA_PLATAFORMA'
+# Motivo para o no web nao executar a etapa 2 (README §8.5, "Validacao no no web"; CR-003 D4/D16).
 PASTA_NAO_DISPONIVEL = 'PASTA_NAO_DISPONIVEL'
 
 
-def plataforma_local():
-    """'WINDOWS' ou 'POSIX', so para escolher a etapa 2 no no web (primitivas de SO ficam em plataforma/)."""
-    return 'WINDOWS' if os.name == 'nt' else 'POSIX'
-
-
-def motivo_sem_etapa2(pastas, pasta_base, interpretador, plataforma=None):
+def motivo_sem_etapa2(pastas, pasta_base, interpretador):
     """None se o no web deve resolver o arquivo localmente; senao o motivo do aviso.
 
     A validacao definitiva e sempre a do agente, no claim (README §8.4).
     """
-    if interpretador not in POR_PLATAFORMA[plataforma or plataforma_local()]:
-        return OUTRA_PLATAFORMA
     if not pasta_mapeada(pastas, pasta_base):
         return PASTA_NAO_DISPONIVEL
     return None

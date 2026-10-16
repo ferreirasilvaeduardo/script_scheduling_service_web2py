@@ -194,8 +194,9 @@ class TestCadastro(_Base):
         sid, erros, aviso = self._incluir(svc, nome="Pasta remota", pasta_base="WINAGT", path_file="x.py")
         self.assertEqual((erros, aviso), ({}, scr_mod.AVISOS_SEM_ETAPA2[path_guard.PASTA_NAO_DISPONIVEL]))
         self.assertEqual(self.catalogo.scripts_obter(sid)["pasta_base"], "WINAGT")
-        _sid, erros, aviso = self._incluir(svc, nome="Script PS", interpretador="POWERSHELL", path_file="x.ps1")
-        self.assertEqual((erros, aviso), ({}, scr_mod.AVISOS_SEM_ETAPA2[path_guard.OUTRA_PLATAFORMA]))
+        # CR-005: POWERSHELL saiu da allowlist (somente POSIX).
+        _sid, erros, _aviso = self._incluir(svc, nome="Script PS", interpretador="POWERSHELL", path_file="x.ps1")
+        self.assertIn("interpretador", erros)
 
     def test_edicao_sem_mudar_caminho_nao_refaz_etapa2_mas_reativacao_refaz(self):
         # CR-003 C5 (README §8.5): arquivo ausente nao impede editar a descricao nem desativar.
@@ -427,7 +428,7 @@ class TestPrevia(_Base):
         self.assertIn("PRODUCAO", carga["ambientes_homologados"])
         self.assertTrue(all(s["interpretador"] == "PYTHON3" for s in pagina["itens"]))
         self.assertEqual(scr_mod.normalizar_filtros({"interpretador": "/bin/ls", "ativo": "S"}), {"ativo": "S"})
-        self.assertEqual(scr_mod.normalizar_filtros({"interpretador": "POWERSHELL"}), {"interpretador": "POWERSHELL"})
+        self.assertEqual(scr_mod.normalizar_filtros({"interpretador": "POWERSHELL"}), {})
 
 
 if __name__ == "__main__":
