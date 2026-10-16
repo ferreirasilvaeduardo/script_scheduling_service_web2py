@@ -18,7 +18,7 @@ import admin_scripts_service as scr_mod
 import auth_service
 import repo_factory
 import security
-from admin_crud import CAMPO_GERAL, AcessoNegado
+from admin_crud import CAMPO_GERAL, AcessoNegado, OperacaoNegada
 from admin_scripts_service import ServicoAdminScripts
 from path_guard import Codigo
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
@@ -179,6 +179,13 @@ class TestCadastro(_Base):
         self.assertEqual(erros, {"nome": scr_mod.MSG_CONTROLE})
 
     def test_pasta_base_da_lista_e_avisos_da_etapa2(self):
+        # CR-003 C4: so '/' como separador.
+        for ruim in ("dir\\x.py", "C:/x.py"):
+            _sid, erros, _a = self._incluir(nome="Sep %s" % ruim, path_file=ruim)
+            self.assertEqual(erros, {"path_file": scr_mod.MENSAGENS_PATH[Codigo.SEPARADOR_INVALIDO]}, ruim)
+        # Nome unico diferencia maiusculas (README §8.5), como a UK no Oracle.
+        _sid, erros, _a = self._incluir(nome="CARGA_DIARIA")
+        self.assertNotIn("nome", erros)
         # CR-003 D16/D4: pasta fora da lista recusada; pasta sem caminho ou outra plataforma viram aviso.
         _sid, erros, _a = self._incluir(pasta_base="NAO_EXISTE")
         self.assertEqual(erros, {"pasta_base": scr_mod.MENSAGENS_PATH[Codigo.PASTA_INVALIDA]})
@@ -190,7 +197,27 @@ class TestCadastro(_Base):
         _sid, erros, aviso = self._incluir(svc, nome="Script PS", interpretador="POWERSHELL", path_file="x.ps1")
         self.assertEqual((erros, aviso), ({}, scr_mod.AVISOS_SEM_ETAPA2[path_guard.OUTRA_PLATAFORMA]))
 
+    def test_edicao_sem_mudar_caminho_nao_refaz_etapa2_mas_reativacao_refaz(self):
+        # CR-003 C5 (README §8.5): arquivo ausente nao impede editar a descricao nem desativar.
+        svc = ServicoAdminScripts(self.catalogo, repo_factory.obter("agendamentos"), {"ROTINAS": self.base},
+                                  (os.geteuid(),), "HML", self.log, lambda: AGORA)
+        sid = self.catalogo.scripts_inserir({"nome": "Sem arquivo", "interpretador": "PYTHON3", "pasta_base": "ROTINAS",
+                                             "path_file": "nao_existe.py", "tipo_param": "SEQUENCIAL"})["id"]
+        f = svc.formulario(self.ctx["admin"], str(sid))
+        dados = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.CAMPOS_EDITAVEIS)
+        _sid, erros, _a = svc.salvar(self.ctx["admin"], IP, str(sid), dict(dados, versao=f["versao"], descricao="Nova"))
+        self.assertEqual(erros, {})
+        _sid, erros, _a = svc.salvar(self.ctx["admin"], IP, str(sid),
+                                     dict(dados, versao=svc.formulario(self.ctx["admin"], str(sid))["versao"],
+                                          path_file="outro_inexistente.py"))
+        self.assertEqual(erros, {"path_file": scr_mod.MENSAGENS_PATH[Codigo.NAO_E_ARQUIVO]})
+        svc.alternar_ativo(self.ctx["admin"], IP, str(sid), svc.formulario(self.ctx["admin"], str(sid))["versao"])
+        with self.assertRaises(OperacaoNegada):
+            svc.alternar_ativo(self.ctx["admin"], IP, str(sid), svc.formulario(self.ctx["admin"], str(sid))["versao"])
+        self.assertEqual(self.catalogo.scripts_obter(sid)["ativo"], "N")
+
     def test_pasta_gravada_e_mantida_mesmo_sem_mapeamento(self):
+        # CR-003 C5: sem mudar caminho, pasta ou interpretador, a edicao nao refaz a etapa 2.
         sid, erros, _a = self._incluir()
         self.assertEqual(erros, {})
         self.catalogo.scripts_alterar(sid, {"pasta_base": "ANTIGA"})
@@ -240,15 +267,25 @@ class TestHomologacao(_Base):
                                                    [str(AMB_PROD), str(AMB_DESENV)], tela["versao"])
         self.assertEqual(erros, {CAMPO_GERAL: scr_mod.MSG_HOMOLOG_INATIVO})
 
-    def test_homologacao_inativa_existente_e_preservada(self):
+    def test_homologacao_inativa_pode_sair_e_nao_volta(self):
+        # CR-003 D9: inativo ja homologado pode ser removido; nunca readicionado.
         self.catalogo.homologacao_salvar(S_CARGA, [AMB_PROD, AMB_DESENV])
         tela = self.svc.homologacao(self.ctx["admin"], str(S_CARGA))
         desenv = [a for a in tela["ambientes"] if a["nome"] == "DESENV"][0]
         self.assertTrue(desenv["marcado"] and desenv["inativo"])
-        diff, _ = self.svc.salvar_homologacao(self.ctx["admin"], IP, str(S_CARGA), [str(AMB_PROD), str(AMB_HML)],
-                                              tela["versao"])
+        diff, _ = self.svc.salvar_homologacao(self.ctx["admin"], IP, str(S_CARGA),
+                                              [str(AMB_PROD), str(AMB_HML), str(AMB_DESENV)], tela["versao"])
         self.assertEqual(diff, "+HOMOLOGACAO")
         self.assertEqual(self.catalogo.homologacao_obter(S_CARGA), [AMB_PROD, AMB_HML, AMB_DESENV])
+        tela = self.svc.homologacao(self.ctx["admin"], str(S_CARGA))
+        diff, _ = self.svc.salvar_homologacao(self.ctx["admin"], IP, str(S_CARGA), [str(AMB_PROD), str(AMB_HML)],
+                                              tela["versao"])
+        self.assertEqual(diff, "-DESENV")
+        self.assertEqual(self.catalogo.homologacao_obter(S_CARGA), [AMB_PROD, AMB_HML])
+        tela = self.svc.homologacao(self.ctx["admin"], str(S_CARGA))
+        _d, erros = self.svc.salvar_homologacao(self.ctx["admin"], IP, str(S_CARGA),
+                                                [str(AMB_PROD), str(AMB_HML), str(AMB_DESENV)], tela["versao"])
+        self.assertIn(CAMPO_GERAL, erros)
 
     def test_conflito_e_ids_invalidos(self):
         tela = self.svc.homologacao(self.ctx["admin"], str(S_CARGA))
@@ -263,6 +300,32 @@ class TestHomologacao(_Base):
 
 @_SKIP_ROOT
 class TestVinculos(_Base):
+
+    def test_sub_sigiloso_mantido_e_revalidado_e_pode_ser_removido(self):
+        # CR-003 P6 (README §6.5).
+        tela, itens = self._vinculos_json(S_CARGA)
+        self.catalogo.parametros_alterar(6, {"regex_validacao": "^x$"})  # chave_api: o sub gravado deixa de valer
+        _d, erros = self.svc.salvar_parametros(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens), tela["versao"])
+        self.assertEqual(erros, {"vinculo_6": scr_mod.MSG_SIGILOSO_INVALIDO})
+        for item in itens:
+            if item["parametro_id"] == 6:
+                item["manter_sigiloso"] = False  # "Remover valor"
+        _d, erros = self.svc.salvar_parametros(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens), tela["versao"])
+        self.assertEqual(erros, {})
+        sub = [v for v in self.catalogo.script_params_obter(S_CARGA) if v["parametro_id"] == 6][0]["valor_padrao_sub"]
+        self.assertIsNone(sub)
+
+    def test_detalhe_dos_vinculos_passa_pelo_masking(self):
+        import masking
+        masking.MASCARADOR.registrar("SEGREDO-DE-INFRA-9")
+        tela, itens = self._vinculos_json(S_CARGA)
+        for item in itens:
+            if item["parametro_id"] == 1:
+                item["valor_padrao_sub"] = None
+        itens.append({"parametro_id": 10, "obrigatorio": False, "valor_padrao_sub": "SEGREDO-DE-INFRA-9"})
+        _d, erros = self.svc.salvar_parametros(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens), tela["versao"])
+        self.assertEqual(erros, {})
+        self.assertNotIn("SEGREDO-DE-INFRA-9", self._auditorias("CAD_ALTERAR")[0]["detalhe"])
 
     def test_versao_dos_vinculos_nao_deriva_do_sub_sensivel(self):
         # CR-003 P1: o sub sensivel entra na versao pelo marcador, nunca pelo valor.

@@ -24,7 +24,8 @@ FUNCIONALIDADE = "CAD_SCRIPTS"
 CAMPOS_EDITAVEIS = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "pasta_base", "path_file",
                     "tipo_param",
                     "max_qtd_parallel_env", "timeout_seg", "ativo")
-CAMPOS_INSERCAO = ("nome", "grupo", "categoria", "interpretador", "pasta_base", "path_file", "tipo_param",
+CAMPOS_INSERCAO = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "pasta_base", "path_file",
+                   "tipo_param",
                    "max_qtd_parallel_env",
                    "timeout_seg")
 ROTULOS_INTERPRETADOR = (("PYTHON3", u"PYTHON3 — Python 3 (Linux, Unix e Windows)"),
@@ -59,6 +60,7 @@ MENSAGENS_PATH = {
     Codigo.GRAVAVEL_PELO_AGENTE: u"O arquivo, ou uma pasta do caminho, é gravável pelo usuário do sistema; "
                                  u"ajuste as permissões.",
     Codigo.INTERPRETADOR_NAO_PERMITIDO: u"Interpretador não permitido.",
+    Codigo.SEPARADOR_INVALIDO: u"Use só / para separar pastas; não use \\ nem : (letra de drive).",
 }
 OBS_VALIDACAO = u"A validação definitiva ocorre também no agente executor no momento da execução."
 AVISO_DEV_ARQUIVO = (u"Ambiente DEV: o arquivo não existe neste servidor; o cadastro foi aceito, mas o agente "
@@ -77,6 +79,8 @@ MSG_PARALELO = u"Informe um número de 1 a 999."
 MSG_TIMEOUT = u"Informe um número de segundos entre 1 e %d, ou deixe em branco." % TIMEOUT_MAXIMO
 MSG_NENHUM_VINCULADO = u"Este script tem parâmetros vinculados: remova-os antes de usar \"Sem argumentos\"."
 MSG_VINCULOS_INVALIDOS = u"A lista de parâmetros enviada é inválida. Recarregue a página e tente novamente."
+MSG_SIGILOSO_INVALIDO = (u"O valor sigiloso gravado não vale mais para este parâmetro. "
+                         u"Informe um novo valor ou use \"Remover valor\".")
 MSG_VINCULO_DUPLICADO = u"O parâmetro \"%s\" aparece mais de uma vez."
 MSG_VINCULO_INATIVO = u"O parâmetro \"%s\" está inativo e não pode ser vinculado."
 MSG_VINCULO_NENHUM = u"Scripts \"Sem argumentos\" não aceitam parâmetros."
@@ -259,7 +263,7 @@ class ServicoAdminScripts(object):
         reg["tipo_param"] = tipo
         return reg
 
-    def validar_caminho(self, path_file, erros, pasta_base=None, interpretador=None):
+    def validar_caminho(self, path_file, erros, pasta_base=None, interpretador=None, etapa2=True):
         """Etapas 1 (textual) e 2 (servidor local) do path_guard. Retorna aviso (str) ou None.
 
         A etapa 2 so roda se este no suporta o interpretador e tem a pasta base (README §8.5); senao,
@@ -269,6 +273,8 @@ class ServicoAdminScripts(object):
             return None
         try:
             path_guard.validar_cadastro(path_file)
+            if not etapa2:
+                return None
             motivo = path_guard.motivo_sem_etapa2(self._pastas, pasta_base, interpretador)
             if motivo is not None:
                 return AVISOS_SEM_ETAPA2[motivo]
@@ -306,7 +312,9 @@ class ServicoAdminScripts(object):
         erros = {}
         atual = None if script_id in (None, "") else self._obter(script_id)
         reg = self._validar(dados, erros, atual)
-        aviso = self.validar_caminho(reg["path_file"], erros, reg["pasta_base"], reg["interpretador"])
+        # C5 (README §8.5): na edicao, a etapa 2 so roda se pasta, caminho ou interpretador mudarem.
+        etapa2 = atual is None or any(reg[c] != atual.get(c) for c in ("pasta_base", "path_file", "interpretador"))
+        aviso = self.validar_caminho(reg["path_file"], erros, reg["pasta_base"], reg["interpretador"], etapa2)
         if script_id in (None, ""):
             if erros:
                 return None, erros, None
@@ -351,6 +359,12 @@ class ServicoAdminScripts(object):
         if admin_crud.texto(versao, 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
             raise RepoConflito("versao divergente")
         novo_ativo = "N" if atual["ativo"] == "S" else "S"
+        if novo_ativo == "S":
+            # Reativacao refaz a etapa 2 (README §8.5, C5).
+            erros = {}
+            self.validar_caminho(atual["path_file"], erros, atual.get("pasta_base"), atual["interpretador"])
+            if erros:
+                raise OperacaoNegada(u"Não foi possível reativar: %s" % u" ".join(erros.values()))
         detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, ativo=novo_ativo), ("ativo",))
         acao = "CAD_DESATIVAR" if novo_ativo == "N" else "CAD_ALTERAR"
         if novo_ativo == "N":
@@ -381,7 +395,7 @@ class ServicoAdminScripts(object):
                 "ambientes": ambientes, "versao": _hash(sorted(marcados))}
 
     def salvar_homologacao(self, ctx, ip, script_id, ambiente_ids, versao):
-        """Substitui a homologacao (so ambientes ativos podem ser adicionados; inativos existentes sao preservados).
+        """Substitui a homologacao (so ambientes ativos podem ser adicionados; inativos existentes podem sair, D9).
 
         Retorna (diff ou None, erros). Auditoria CAD_ALTERAR com +/- e agendamentos ativos afetados.
         """
@@ -404,7 +418,8 @@ class ServicoAdminScripts(object):
         inativos = set(i for i, a in ambientes.items() if a["ativo"] != "S")
         if (enviados - set(atuais)) & inativos:
             return None, {CAMPO_GERAL: MSG_HOMOLOG_INATIVO}
-        final = (enviados - inativos) | (set(atuais) & inativos)
+        # D9 (README §4.3.A): inativo ja homologado pode sair (desmarcado); nunca entra de novo (checado acima).
+        final = set(enviados)
         adicionados = sorted(ambientes[i]["nome"] for i in final - set(atuais))
         removidos = sorted(ambientes[i]["nome"] for i in set(atuais) - final)
         if not adicionados and not removidos:
@@ -412,7 +427,7 @@ class ServicoAdminScripts(object):
         partes = [u"+" + n for n in adicionados] + [u"-" + n for n in removidos]
         diff = u", ".join(partes)
         afetados = sum(self._agendamentos_ativos(script_id=script["id"], ambiente=n) for n in removidos)
-        detalhe = admin_crud.limitar(u"homologação: %s%s" % (
+        detalhe = admin_crud.detalhe_livre(u"homologação: %s%s" % (
             diff, (u"; agendamentos ativos afetados: %d" % afetados) if removidos else u""))
         try:
             self._catalogo.homologacao_salvar(script["id"], sorted(final), esperado=atuais,
@@ -482,6 +497,12 @@ class ServicoAdminScripts(object):
             sub = sub.strip() if isinstance(sub, str) else None
             if p.get("sensivel") == "S" and not sub and item.get("manter_sigiloso") is True and pid in atuais_por_id:
                 sub = atuais_por_id[pid].get("valor_padrao_sub")
+                # O valor mantido tambem e revalidado contra a configuracao atual (README §6.5).
+                if sub:
+                    try:
+                        params_compiler.validar_valor(p, sub)
+                    except ParamErro:
+                        erros["vinculo_%d" % pid] = MSG_SIGILOSO_INVALIDO
             elif sub:
                 try:
                     sub = params_compiler.validar_valor(p, sub)
@@ -531,7 +552,7 @@ class ServicoAdminScripts(object):
         if _lidos(final) == _lidos(atuais):
             return None, {}
         antes, depois = self._descrever(atuais), self._descrever(final)
-        detalhe = admin_crud.limitar(u"vínculos: %s → %s" % (antes, depois))
+        detalhe = admin_crud.detalhe_livre(u"vínculos: %s → %s" % (antes, depois))
         try:
             self._catalogo.script_params_salvar(
                 script["id"], [dict((k, v[k]) for k in ("parametro_id", "ordem", "obrigatorio", "valor_padrao_sub"))

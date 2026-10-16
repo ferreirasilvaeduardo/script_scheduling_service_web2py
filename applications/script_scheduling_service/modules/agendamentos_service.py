@@ -603,7 +603,7 @@ class ServicoAgendamentos(object):
         responsavel = u"usuario_id: %s (%s)%s%s (%s)" % (
             atual["usuario_id"], self._login(atual["usuario_id"]), _SETA,
             registro["usuario_id"], ctx.get("login"))
-        detalhe = admin_crud.limitar(responsavel if detalhe is None else u"%s; %s" % (responsavel, detalhe))
+        detalhe = admin_crud.detalhe_livre(responsavel if detalhe is None else u"%s; %s" % (responsavel, detalhe))
         try:
             self._agendamentos.alterar(atual["id"], registro,
                                        esperado=admin_crud.esperado(atual, _CAMPOS_ESPERADO),

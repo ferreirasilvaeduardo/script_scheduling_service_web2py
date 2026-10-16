@@ -46,6 +46,7 @@ _rotulo_tipo = {'NOMEADO': u'por flag (NOMEADO)', 'SEQUENCIAL': u'posicional (SE
               <label class="form-check-label" :for="linha.idObrig">Obrigatório</label>
             </div>
             <input class="form-control form-control-sm" maxlength="100" aria-label="Valor padrão específico" :data-i="i" :type="linha.tipoSub" :value="linha.sub" :placeholder="linha.dicaSub" @input="editarSub">
+            <button type="button" class="btn btn-sm btn-outline-secondary" x-show="linha.podeLimpar" :data-i="i" @click="limparSigiloso">Remover valor</button>
           </div>
           <div class="sss-vinculo-acoes">
             <button type="button" class="btn btn-sm btn-outline-secondary" :data-i="i" data-delta="-1" @click="mover" :aria-label="linha.rotuloSubir">Subir</button>

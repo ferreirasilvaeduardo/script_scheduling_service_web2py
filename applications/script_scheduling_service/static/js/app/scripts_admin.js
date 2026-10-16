@@ -22,11 +22,17 @@
     };
     l.idObrig = 'obrig-' + l.id;
     l.tipoSub = l.sensivel ? 'password' : 'text';
-    l.dicaSub = l.sensivel && l.temSub ? 'Valor sigiloso gravado (em branco mantém)' : 'Valor padrão específico (opcional)';
+    atualizarSigiloso(l);
     l.rotuloSubir = 'Subir ' + l.codigo;
     l.rotuloDescer = 'Descer ' + l.codigo;
     l.rotuloRemover = 'Remover ' + l.codigo;
     return l;
+  }
+
+  // Valor sigiloso gravado: em branco mantem; "Remover valor" apaga sem remover o vinculo (README §6.5).
+  function atualizarSigiloso(l) {
+    l.podeLimpar = l.sensivel && l.temSub;
+    l.dicaSub = l.podeLimpar ? 'Valor sigiloso gravado (em branco mantém)' : 'Valor padrão específico (opcional)';
   }
 
   function caixas(raiz, seletor) {
@@ -160,6 +166,12 @@
         },
         remover: function (evt) {
           this.linhas.splice(this.indice(evt), 1);
+        },
+        limparSigiloso: function (evt) {
+          var l = this.linhas[this.indice(evt)];
+          l.temSub = false;
+          l.sub = '';
+          atualizarSigiloso(l);
         },
         alternarObrigatorio: function (evt) {
           this.linhas[this.indice(evt)].obrigatorio = evt.currentTarget.checked;

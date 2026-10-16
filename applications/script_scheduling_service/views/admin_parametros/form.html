@@ -136,6 +136,7 @@ pass
     <div class="form-check mb-2">
       <input class="form-check-input" type="checkbox" id="campo-sensivel" name="sensivel" value="S" x-ref="sensivel" @change="trocarSensivel"{{if _sensivel:}} checked{{pass}}>
       <label class="form-check-label" for="campo-sensivel">Valor sigiloso (mascarado na tela e nos logs)</label>
+      {{if erros.get('sensivel'):}}<div class="invalid-feedback d-block" id="campo-sensivel-erro">{{=erros['sensivel']}}</div>{{pass}}
     </div>
     <div class="alert alert-warning sss-alerta" role="note" x-show="sensivel"{{if not _sensivel:}} x-cloak{{pass}}>
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icones}}#icon-alert"></use></svg>

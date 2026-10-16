@@ -294,7 +294,7 @@ class ServicoAuditoria(object):
         repo_filtros = filtros_repo(filtros)
         total = self._auditoria.listar(filtros=repo_filtros, pagina=1, tamanho=1)["total"]
         linhas = min(total, LIMITE_EXPORTACAO)
-        detalhe = admin_crud.limitar(u"filtros: %s; linhas: %d (limite %d)" % (
+        detalhe = admin_crud.detalhe_livre(u"filtros: %s; linhas: %d (limite %d)" % (
             _descrever_filtros(filtros), linhas, LIMITE_EXPORTACAO))
         registro = self._auditoria.registrar(ctx.get("login"), ip, ACAO_EXPORTAR, ENTIDADE_AUDITORIA, None, detalhe)
         repo_filtros["id_max"] = registro["id"] - 1

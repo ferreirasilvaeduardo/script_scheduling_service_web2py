@@ -8,7 +8,7 @@ import admin_crud
 import admin_scripts_service as servico
 import path_guard
 import ui_helpers
-from admin_crud import AcessoNegado
+from admin_crud import AcessoNegado, OperacaoNegada
 from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
 
 _FUNC = "CAD_SCRIPTS"
@@ -138,6 +138,8 @@ def alternar_ativo():
         _nao_encontrado()
     except AcessoNegado:
         _negado()
+    except OperacaoNegada as exc:
+        session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
     except RepoConflito:
         session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
     except RepoErro:

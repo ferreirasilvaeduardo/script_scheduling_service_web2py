@@ -33,6 +33,7 @@ class Codigo(object):
     GRAVAVEL_GRUPO_OUTROS = 'GRAVAVEL_GRUPO_OUTROS'
     GRAVAVEL_PELO_AGENTE = 'GRAVAVEL_PELO_AGENTE'
     INTERPRETADOR_NAO_PERMITIDO = 'INTERPRETADOR_NAO_PERMITIDO'
+    SEPARADOR_INVALIDO = 'SEPARADOR_INVALIDO'
     PASTA_INVALIDA = 'PASTA_INVALIDA'
     PASTA_NAO_MAPEADA = 'PASTA_NAO_MAPEADA'
 
@@ -56,11 +57,16 @@ def validar_interpretador(interpretador):
 
 
 def validar_cadastro(path_file):
-    """Checagens textuais equivalentes a ck_tbsss_scr_path (relativo e sem '..')."""
+    """Checagens textuais equivalentes a ck_tbsss_scr_path (README §8.5, CR-003 C4).
+
+    Relativo, com '/' como unico separador: recusa '/' no inicio, '..', '\\' e ':' (letra de drive).
+    """
     if not isinstance(path_file, str) or path_file == '' or path_file[0] == '/':
         raise PathGuardErro(Codigo.CAMINHO_ABSOLUTO)
     if '..' in path_file:
         raise PathGuardErro(Codigo.CONTEM_PONTOS)
+    if '\\' in path_file or ':' in path_file:
+        raise PathGuardErro(Codigo.SEPARADOR_INVALIDO)
 
 
 def validar_pasta(pasta_base):

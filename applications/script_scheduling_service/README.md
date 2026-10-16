@@ -933,7 +933,7 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
   * a lista inteira vai num único POST, e a ordem é renumerada pelo servidor (1..n, pela posição);
   * a lista é revalidada inteira: ID inexistente ou duplicado, `valor_padrao_sub` por `validar_valor` (com até 100 caracteres), `NENHUM` sem vínculos e `NOMEADO` com flag em todos os parâmetros;
   * as regras de `NENHUM`/`NOMEADO` também são garantidas pelo repositório na mesma operação (`sss_scr_nenhum_vinculado` e `sss_scr_nomeado_sem_flag`), inclusive ao trocar `tipo_param`;
-  * só parâmetros ativos podem ser adicionados; vínculos existentes a parâmetros inativos são preservados;
+  * só parâmetros ativos podem ser adicionados; vínculos existentes a parâmetros inativos aparecem com o selo "inativo" e podem ser removidos, mas nunca readicionados enquanto o parâmetro estiver inativo (D9);
   * o `valor_padrao_sub` de parâmetro sensível é só de escrita (em branco mantém o gravado) e aparece como `****` na auditoria e na prévia. Há uma opção explícita "remover valor" por vínculo, que apaga o valor gravado sem remover o vínculo;
   * o valor sensível **mantido** também é revalidado por `validar_valor` contra a configuração atual do parâmetro. Se tiver ficado inválido, a gravação é recusada com a orientação de informar um novo valor ou removê-lo;
   * o hash de versão dos vínculos troca o valor sensível por um marcador fixo (§6.2), para que o segredo não saia no HTML nem de forma derivada;

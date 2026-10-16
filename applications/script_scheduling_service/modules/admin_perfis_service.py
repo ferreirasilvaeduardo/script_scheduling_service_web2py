@@ -94,7 +94,7 @@ def diff_matriz(antes, depois, rotulos):
         mudancas = [(nomes.get(i, "#%s" % i), "+") for i in d - a] + [(nomes.get(i, "#%s" % i), "-") for i in a - d]
         for rotulo, sinal in sorted(mudancas):
             partes.append(u"%s%s%s" % (sinal, prefixo, rotulo))
-    return admin_crud.limitar(u", ".join(partes)) if partes else None
+    return admin_crud.detalhe_livre(u", ".join(partes)) if partes else None
 
 
 class ServicoAdminPerfis(object):
@@ -151,12 +151,12 @@ class ServicoAdminPerfis(object):
         }
 
     def _validar(self, dados, erros):
-        nome = admin_crud.texto(dados.get("nome"))
+        nome = admin_crud.identificador(dados.get("nome"), erros, "nome")
         if nome is None:
             erros["nome"] = MSG_NOME_OBRIGATORIO
-        elif not _RE_NOME.fullmatch(nome):
+        elif "nome" not in erros and not _RE_NOME.fullmatch(nome):
             erros["nome"] = MSG_NOME_INVALIDO
-        descricao = admin_crud.texto(dados.get("descricao"))
+        descricao = admin_crud.texto_livre(dados.get("descricao"), erros, "descricao")
         if descricao is not None and len(descricao) > TAMANHO_DESCRICAO:
             erros["descricao"] = MSG_DESCRICAO_TAMANHO
         is_admin = "S" if admin_crud.texto(dados.get("is_admin"), 1) == "S" else "N"

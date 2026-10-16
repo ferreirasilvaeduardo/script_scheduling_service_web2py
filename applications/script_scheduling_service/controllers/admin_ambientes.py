@@ -97,7 +97,7 @@ def salvar():
     try:
         dados = servico.formulario(ctx, ambiente_id) if ambiente_id else servico.formulario(ctx)
     except RepoErro:
-        dados = {"id": None, "nome": "", "ativo": "S", "versao": "", "agendamentos_ativos": 0}
+        dados = {"id": None, "nome": "", "ativo": "S", "versao": "", "agendamentos_ativos": 0, "scripts_homologados": 0}
     if admin_crud.CAMPO_GERAL not in erros:
         conexao = enviados["conexao"] or ""
         # Nunca devolve ao HTML um DSN com credencial digitado por engano.

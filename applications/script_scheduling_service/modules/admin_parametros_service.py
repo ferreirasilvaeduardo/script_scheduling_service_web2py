@@ -20,7 +20,7 @@ from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 FUNCIONALIDADE = "CAD_PARAMETROS"
 CAMPOS_EDITAVEIS = ("param_nomeado", "label", "descricao", "tipo_componente", "opcoes_json", "valor_padrao",
                     "regex_validacao", "sensivel", "ativo")
-CAMPOS_INSERCAO = ("codigo", "param_nomeado", "label", "tipo_componente", "opcoes_json", "valor_padrao",
+CAMPOS_INSERCAO = ("codigo", "param_nomeado", "label", "descricao", "tipo_componente", "opcoes_json", "valor_padrao",
                    "regex_validacao", "sensivel")
 TAMANHO_LABEL = 60
 TAMANHO_DESCRICAO = 150
@@ -38,6 +38,8 @@ MSG_CODIGO_OBRIGATORIO = u"Informe o código."
 MSG_CODIGO_INVALIDO = u"Use de 1 a 30 caracteres: letras minúsculas, dígitos e _ (ex.: data_ref)."
 MSG_CODIGO_DUPLICADO = u"Já existe um parâmetro com este código."
 MSG_LABEL_OBRIGATORIO = u"Informe o rótulo exibido ao usuário."
+MSG_SENSIVEL_GRAVADO = (u"Para deixar de ser sigiloso, remova antes %s; "
+                        u"assim nenhum segredo passa a aparecer em claro.")
 MSG_LABEL_TAMANHO = u"O rótulo deve ter no máximo %d caracteres." % TAMANHO_LABEL
 MSG_DESCRICAO_TAMANHO = u"A descrição deve ter no máximo %d caracteres." % TAMANHO_DESCRICAO
 MSG_TIPO_INVALIDO = u"Selecione o tipo do componente."
@@ -146,6 +148,22 @@ class ServicoAdminParametros(object):
             raise RepoNaoEncontrado("parametro invalido")
         return self._catalogo.parametros_obter(pid)
 
+    def _checar_sensivel_gravado(self, atual, dados, erros):
+        """Sensivel S -> N so sem valor sigiloso gravado (README §6.2): o segredo nunca passa a ser exibido."""
+        partes = []
+        if admin_crud.normalizar(atual.get("valor_padrao")) is not None \
+                and admin_crud.texto(dados.get("remover_padrao"), 1) != "S":
+            partes.append(u"o valor padrão")
+        scripts = []
+        for s in self._catalogo.parametro_vinculos(atual["id"]):
+            for v in self._catalogo.script_params_obter(s["id"]):
+                if v["parametro_id"] == atual["id"] and admin_crud.normalizar(v.get("valor_padrao_sub")) is not None:
+                    scripts.append(s["nome"])
+        if scripts:
+            partes.append(u"os valores específicos dos scripts %s" % u", ".join(sorted(scripts)))
+        if partes:
+            erros["sensivel"] = MSG_SENSIVEL_GRAVADO % u" e ".join(partes)
+
     def vinculos(self, parametro_id):
         """Scripts vinculados ao parametro: [{id, nome, tipo_param, ativo}] por nome."""
         return [{"id": s["id"], "nome": s["nome"], "tipo_param": s.get("tipo_param"), "ativo": s.get("ativo")}
@@ -237,9 +255,11 @@ class ServicoAdminParametros(object):
         """Registro candidato (campos editaveis + codigo na inclusao) e erros por campo."""
         reg = {}
         if atual is None:
-            codigo = admin_crud.texto(dados.get("codigo"))
+            codigo = admin_crud.identificador(dados.get("codigo"), erros, "codigo")
             if codigo is None:
                 erros["codigo"] = MSG_CODIGO_OBRIGATORIO
+            elif "codigo" in erros:
+                pass
             elif not _RE_CODIGO.fullmatch(codigo):
                 erros["codigo"] = MSG_CODIGO_INVALIDO
             reg["codigo"] = codigo
@@ -252,12 +272,12 @@ class ServicoAdminParametros(object):
                 params_compiler.validar_flag(flag)
             except ParamErro as exc:
                 erros["param_nomeado"] = exc.mensagem
-        label = admin_crud.texto(dados.get("label"))
+        label = admin_crud.texto_livre(dados.get("label"), erros, "label")
         if label is None:
             erros["label"] = MSG_LABEL_OBRIGATORIO
-        elif len(label) > TAMANHO_LABEL:
+        elif "label" not in erros and len(label) > TAMANHO_LABEL:
             erros["label"] = MSG_LABEL_TAMANHO
-        descricao = admin_crud.texto(dados.get("descricao"))
+        descricao = admin_crud.texto_livre(dados.get("descricao"), erros, "descricao")
         if descricao is not None and len(descricao) > TAMANHO_DESCRICAO:
             erros["descricao"] = MSG_DESCRICAO_TAMANHO
         tipo, opcoes, regex = self._config(ctx, dados, atual, erros)
@@ -275,6 +295,8 @@ class ServicoAdminParametros(object):
             bruto = padrao
         else:
             padrao = None
+        if atual is not None and atual.get("sensivel") == "S" and sensivel == "N":
+            self._checar_sensivel_gravado(atual, dados, erros)
         if bruto is not None and not any(k in erros for k in ("tipo_componente", "opcoes_json", "regex_validacao")):
             try:
                 padrao = _padrao_texto(params_compiler.validar_valor(dict(reg, codigo=reg["codigo"]), bruto))
@@ -302,7 +324,7 @@ class ServicoAdminParametros(object):
         if padrao_mudou and (atual.get("sensivel") == "S" or depois.get("sensivel") == "S") \
                 and (detalhe is None or "valor_padrao" not in detalhe):
             extra = u"valor_padrao: alterado (sigiloso)"
-            detalhe = admin_crud.limitar(extra if detalhe is None else u"%s; %s" % (detalhe, extra))
+            detalhe = admin_crud.detalhe_livre(extra if detalhe is None else u"%s; %s" % (detalhe, extra))
         return detalhe
 
     def _dependencias(self, atual, reg, erros):

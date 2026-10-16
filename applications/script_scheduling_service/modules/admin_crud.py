@@ -5,6 +5,7 @@ Modulo puro: nao importa gluon (testavel sem o framework).
 """
 import hashlib
 import json
+import re
 
 import masking
 import rbac
@@ -36,7 +37,11 @@ def exigir_func(ctx, codigo):
 
 
 def texto(valor, limite=None):
-    """Valor de formulario como str sem espacos nas pontas; lista vale o ultimo; vazio vira None."""
+    """Valor de formulario como str sem espacos nas pontas; lista vale o ultimo; vazio vira None.
+
+    Nunca trunca (README §10, AGENTS §3.4): acima de 'limite' devolve o valor inteiro, e a validacao
+    de quem chamou o recusa. 'limite' fica so como documentacao do tamanho esperado.
+    """
     if isinstance(valor, (list, tuple)):
         valor = valor[-1] if valor else None
     if not isinstance(valor, str):
@@ -44,7 +49,34 @@ def texto(valor, limite=None):
     valor = valor.strip()
     if not valor:
         return None
-    return valor[:limite] if limite else valor
+    return valor
+
+
+MSG_ESPACOS = u"Não use espaços no início nem no fim."
+MSG_CONTROLE = u"O campo contém caracteres de controle (como quebra de linha ou tabulação), que não são permitidos."
+_RE_CONTROLE = re.compile(u"[\x00-\x1f\x7f]")
+
+
+def identificador(valor, erros, campo):
+    """Identificador (nome de ambiente/perfil, login, codigo): sem strip; espaco nas pontas e recusado.
+
+    README §10, "Texto nos cadastros". Devolve o valor como veio (ou None se vazio).
+    """
+    if isinstance(valor, (list, tuple)):
+        valor = valor[-1] if valor else None
+    if not isinstance(valor, str) or not valor.strip():
+        return None
+    if valor != valor.strip():
+        erros[campo] = MSG_ESPACOS
+    return valor
+
+
+def texto_livre(valor, erros, campo):
+    """Texto livre (label, descricao...): strip e recusa de caracteres de controle (README §10)."""
+    valor = texto(valor)
+    if valor is not None and _RE_CONTROLE.search(valor):
+        erros[campo] = MSG_CONTROLE
+    return valor
 
 
 def normalizar(valor):
@@ -95,6 +127,11 @@ def limitar(detalhe):
     return detalhe[:LIMITE_DETALHE - 3] + u"..."
 
 
+def detalhe_livre(texto):
+    """Detalhe de auditoria montado pelo service, sempre mascarado e limitado (README §4.4)."""
+    return limitar(masking.MASCARADOR.mascarar(texto))
+
+
 def detalhe_alteracoes(antes, depois, campos):
     """'campo: antigo → novo' por campo alterado, mascarado e limitado a 1000 caracteres; None se nada mudou."""
     partes = []
@@ -106,8 +143,9 @@ def detalhe_alteracoes(antes, depois, campos):
 
 
 def detalhe_insercao(registro, campos):
-    """'campo: valor' dos campos informados na inclusao, mascarado e limitado."""
-    return limitar(u"; ".join(u"%s: %s" % (c, _exibir(registro.get(c))) for c in campos))
+    """'campo: valor' so dos campos preenchidos na inclusao (vazios omitidos), mascarado e limitado (README §4.4)."""
+    return limitar(u"; ".join(u"%s: %s" % (c, _exibir(registro.get(c))) for c in campos
+                              if normalizar(registro.get(c)) is not None))
 
 
 def auditoria(ctx, ip, acao, detalhe):

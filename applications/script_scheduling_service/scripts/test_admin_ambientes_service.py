@@ -65,6 +65,19 @@ class _Base(unittest.TestCase):
 
 class TestInclusao(_Base):
 
+    def test_identificador_com_espacos_e_descricao_com_controle_recusados(self):
+        # CR-003 C2 (README §10): identificador nao recebe strip; texto livre recusa controle.
+        _id, erros = self._incluir(nome=" QA_02 ")
+        self.assertEqual(erros, {"nome": admin_crud.MSG_ESPACOS})
+        _id, erros = self._incluir(nome="QA_02", descricao="linha 1\nlinha 2")
+        self.assertEqual(erros, {"descricao": admin_crud.MSG_CONTROLE})
+
+    def test_auditoria_de_inclusao_omite_campos_vazios(self):
+        # CR-003 P6 (README §4.4): so os campos preenchidos.
+        _id, erros = self._incluir(nome="QA_03", descricao="", conexao="")
+        self.assertEqual(erros, {})
+        self.assertEqual(self._auditorias("CAD_INSERIR")[0]["detalhe"], "nome: QA_03")
+
     def test_inclusao_com_auditoria(self):
         aid, erros = self._incluir()
         self.assertEqual(erros, {})
@@ -212,7 +225,9 @@ class TestDesativacao(_Base):
         self.assertEqual(alterado["ativo"], "N")
         aud = self._auditorias("CAD_DESATIVAR")
         self.assertEqual(len(aud), 1)
-        self.assertEqual(aud[0]["detalhe"], u"ativo: S%sN; agendamentos ativos afetados: 2" % SETA)
+        # CR-003 C6: o impacto tambem conta os scripts homologados no ambiente.
+        self.assertEqual(aud[0]["detalhe"],
+                         u"ativo: S%sN; agendamentos ativos afetados: 2; scripts homologados afetados: 4" % SETA)
 
         form = self.svc.formulario(self.ctx["admin"], str(AMB_PRODUCAO))
         self.assertEqual(self.svc.alternar_ativo(self.ctx["admin"], IP, str(AMB_PRODUCAO), form["versao"])["ativo"], "S")

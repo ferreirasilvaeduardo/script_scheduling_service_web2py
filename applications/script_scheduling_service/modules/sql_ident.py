@@ -264,7 +264,7 @@ def _criar_registro_tabelas():
             ('ativo', {'sufixo': 'ativo', 'expr': "ativo IN ('S', 'N')"}),
             ('paral', {'sufixo': 'paral', 'expr': "max_qtd_parallel_env BETWEEN 1 AND 999"}),
             ('int', {'sufixo': 'int', 'expr': "interpretador IN ('PYTHON3','BASH','SH','POWERSHELL')"}),
-            ('path', {'sufixo': 'path', 'expr': "SUBSTR(path_file, 1, 1) <> '/' AND INSTR(path_file, '..') = 0"}),
+            ('path', {'sufixo': 'path', 'expr': "SUBSTR(path_file, 1, 1) <> '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '\\') = 0 AND INSTR(path_file, ':') = 0"}),
             ('tmout', {'sufixo': 'tmout', 'expr': "timeout_seg IS NULL OR timeout_seg > 0"}),
             ('pasta', {'sufixo': 'pasta', 'expr': "REGEXP_LIKE(pasta_base, '^[A-Z][A-Z0-9_]{0,29}$')"}),
         ])),

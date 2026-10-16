@@ -73,6 +73,21 @@ class _Base(unittest.TestCase):
 
 class TestCadastro(_Base):
 
+    def test_sensivel_para_nao_sensivel_recusado_com_valor_gravado(self):
+        # CR-003 C1 (README §6.2): o segredo nunca passa a aparecer em claro.
+        self._editar(P_CHAVE_API, valor_padrao="tok-guardado-1234")
+        _pid, erros = self._editar(P_CHAVE_API, sensivel="N")
+        self.assertIn("valor padrão", erros["sensivel"])
+        self.assertIn("carga_diaria", erros["sensivel"])  # o seed tem valor_padrao_sub no vinculo do script 1
+        self.assertEqual(self.catalogo.parametros_obter(P_CHAVE_API)["sensivel"], "S")
+
+    def test_inclusao_audita_descricao_e_rotulo_sem_controle(self):
+        _pid, erros = self._incluir(label="Rotulo\tcom tab")
+        self.assertEqual(erros, {"label": admin_crud.MSG_CONTROLE})
+        pid, erros = self._incluir(descricao="Descricao do parametro")
+        self.assertEqual(erros, {})
+        self.assertIn("descricao: Descricao do parametro", self._auditorias("CAD_INSERIR")[0]["detalhe"])
+
     def test_versao_nao_deriva_do_valor_sensivel(self):
         # CR-003 P1: a versao vai ao HTML; um sha256 sem sal do segredo permitiria adivinha-lo.
         self._editar(P_CHAVE_API, valor_padrao="segredo-numero-um-111")

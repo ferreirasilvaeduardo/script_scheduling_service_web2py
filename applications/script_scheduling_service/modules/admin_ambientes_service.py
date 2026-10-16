@@ -16,6 +16,7 @@ CAMPOS_EDITAVEIS = ("descricao", "conexao", "ativo")
 CAMPOS_INSERCAO = ("nome", "descricao", "conexao")
 TAMANHO_DESCRICAO = 100
 TAMANHO_CONEXAO = 250
+_SCRIPTS_PAGINA = 500
 _TAMANHO_CONTAGEM = 1  # so o total interessa
 
 _RE_ID = re.compile(r"[0-9]{1,10}")
@@ -93,6 +94,16 @@ class ServicoAdminAmbientes(object):
         return self._agendamentos.listar(filtros={"ambiente": nome, "ativo": "S"}, pagina=1,
                                          tamanho=_TAMANHO_CONTAGEM)["total"]
 
+    def scripts_homologados(self, nome):
+        """Quantidade de scripts homologados no ambiente (deixam de poder rodar nele se for desativado)."""
+        total, pagina = 0, 1
+        while True:
+            itens = self._catalogo.scripts_listar(pagina=pagina, tamanho=_SCRIPTS_PAGINA)["itens"]
+            total += sum(1 for s in itens if nome in (s.get("ambientes_homologados") or ()))
+            if len(itens) < _SCRIPTS_PAGINA:
+                return total
+            pagina += 1
+
     def listar(self, ctx, filtros, pagina, tamanho):
         """Pagina de ambientes (ordem nome ASC) com a versao de cada linha."""
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
@@ -106,7 +117,7 @@ class ServicoAdminAmbientes(object):
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         if ambiente_id in (None, ""):
             return {"id": None, "nome": "", "descricao": "", "conexao": "", "ativo": "S", "versao": "",
-                    "agendamentos_ativos": 0}
+                    "agendamentos_ativos": 0, "scripts_homologados": 0}
         amb = self._obter(ambiente_id)
         return {
             "id": amb["id"],
@@ -116,10 +127,11 @@ class ServicoAdminAmbientes(object):
             "ativo": amb["ativo"],
             "versao": admin_crud.versao(amb, CAMPOS_EDITAVEIS),
             "agendamentos_ativos": self.agendamentos_ativos(amb["nome"]),
+            "scripts_homologados": self.scripts_homologados(amb["nome"]),
         }
 
     def _validar(self, dados, erros):
-        descricao = admin_crud.texto(dados.get("descricao"))
+        descricao = admin_crud.texto_livre(dados.get("descricao"), erros, "descricao")
         if descricao is not None and len(descricao) > TAMANHO_DESCRICAO:
             erros["descricao"] = MSG_DESCRICAO_TAMANHO
         conexao = admin_crud.texto(dados.get("conexao"))
@@ -144,9 +156,11 @@ class ServicoAdminAmbientes(object):
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         erros = {}
         if ambiente_id in (None, ""):
-            nome = admin_crud.texto(dados.get("nome"))
+            nome = admin_crud.identificador(dados.get("nome"), erros, "nome")
             if nome is None:
                 erros["nome"] = MSG_NOME_OBRIGATORIO
+            elif "nome" in erros:
+                pass
             elif not _RE_NOME.fullmatch(nome):
                 erros["nome"] = MSG_NOME_INVALIDO
             descricao, conexao = self._validar(dados, erros)
@@ -205,7 +219,8 @@ class ServicoAdminAmbientes(object):
         detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, ativo=novo_ativo), ("ativo",))
         acao = "CAD_DESATIVAR" if novo_ativo == "N" else "CAD_ALTERAR"
         if novo_ativo == "N":
-            detalhe = u"%s; agendamentos ativos afetados: %d" % (detalhe, self.agendamentos_ativos(atual["nome"]))
+            detalhe = u"%s; agendamentos ativos afetados: %d; scripts homologados afetados: %d" % (
+                detalhe, self.agendamentos_ativos(atual["nome"]), self.scripts_homologados(atual["nome"]))
         alterado = self._catalogo.ambientes_alterar(
             atual["id"], {"ativo": novo_ativo}, esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
             auditoria=admin_crud.auditoria(ctx, ip, acao, detalhe))

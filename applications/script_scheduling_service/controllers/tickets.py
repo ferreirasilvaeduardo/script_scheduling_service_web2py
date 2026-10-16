@@ -108,8 +108,8 @@ def criar():
     ctx = _exigir_func("EXEC_SCRIPT")
     script_id = _texto(request.post_vars.get("script_id"), 10)
     ambiente = _texto(request.post_vars.get("ambiente"), 30)
-    prioridade = _texto(request.post_vars.get("prioridade"), 2)
-    scheduled_at = _texto(request.post_vars.get("scheduled_at"), 19)
+    prioridade = _texto(request.post_vars.get("prioridade"), 10)
+    scheduled_at = _texto(request.post_vars.get("scheduled_at"), 40)
     reexecucao_de = _texto(request.post_vars.get("reexecucao_de"), 10)
     respostas = _respostas_post()
     try:

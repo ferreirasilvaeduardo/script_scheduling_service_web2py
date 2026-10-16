@@ -16,7 +16,7 @@ if not _novo:
     _desativar = amb.get('ativo') == 'S'
     _qtd = amb.get('agendamentos_ativos') or 0
     if _desativar:
-        _texto_modal = u'%s Agendamentos ativos afetados: %d.' % (aviso_desativacao, _qtd)
+        _texto_modal = u'%s Agendamentos ativos afetados: %d. Scripts homologados neste ambiente, que deixam de poder rodar nele: %d.' % (aviso_desativacao, _qtd, amb.get('scripts_homologados') or 0)
     else:
         _texto_modal = u'O ambiente voltará a aceitar tickets e agendamentos.'
     pass

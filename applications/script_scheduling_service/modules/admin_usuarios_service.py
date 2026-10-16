@@ -15,7 +15,8 @@ from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 
 FUNCIONALIDADE = "CAD_USUARIOS"
 CAMPOS_EDITAVEIS = ("nome", "perfil_id", "ativo")
-CAMPOS_INSERCAO = ("login", "nome", "perfil_id")
+# Referencias aparecem pelo nome na auditoria de inclusao (README §4.4): perfil, nao perfil_id.
+CAMPOS_INSERCAO = ("login", "nome", "perfil")
 TAMANHO_NOME = 60
 _PERFIS_MAX = 1000
 _CAMPOS_PUBLICOS = ("id", "login", "nome", "perfil_id", "tentativas_falha", "bloqueado_ate", "ultimo_login",
@@ -172,10 +173,10 @@ class ServicoAdminUsuarios(object):
         return senha
 
     def _nome(self, valor, erros):
-        nome = admin_crud.texto(valor)
+        nome = admin_crud.texto_livre(valor, erros, "nome")
         if nome is None:
             erros["nome"] = MSG_NOME_OBRIGATORIO
-        elif len(nome) > TAMANHO_NOME:
+        elif "nome" not in erros and len(nome) > TAMANHO_NOME:
             erros["nome"] = MSG_NOME_TAMANHO
         return nome
 
@@ -188,13 +189,15 @@ class ServicoAdminUsuarios(object):
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         erros = {}
         if usuario_id in (None, ""):
-            login = admin_crud.texto(dados.get("login"))
+            login = admin_crud.identificador(dados.get("login"), erros, "login")
             if login is None:
                 erros["login"] = MSG_LOGIN_OBRIGATORIO
+            elif "login" in erros:
+                pass
             elif not _RE_LOGIN.fullmatch(login):
                 erros["login"] = MSG_LOGIN_INVALIDO
             nome = self._nome(dados.get("nome"), erros)
-            perfil_id, _perfil = self._perfil_ativo(dados.get("perfil_id"), erros)
+            perfil_id, perfil = self._perfil_ativo(dados.get("perfil_id"), erros)
             senha = self._senha(dados.get("senha"), dados.get("confirmacao"), erros)
             if erros:
                 return None, erros
@@ -202,7 +205,8 @@ class ServicoAdminUsuarios(object):
             novo = {"login": login, "nome": nome, "perfil_id": perfil_id, "ativo": "S",
                     "senha_hash": security.hash_senha(senha), "senha_alterada_em": agora}
             auditoria = admin_crud.auditoria(ctx, ip, "CAD_INSERIR",
-                                             admin_crud.detalhe_insercao(novo, CAMPOS_INSERCAO))
+                                             admin_crud.detalhe_insercao(dict(novo, perfil=perfil["nome"]),
+                                                                         CAMPOS_INSERCAO))
             try:
                 criado = self._usuarios.inserir(novo, auditoria=auditoria)
             except RepoViolacao as exc:

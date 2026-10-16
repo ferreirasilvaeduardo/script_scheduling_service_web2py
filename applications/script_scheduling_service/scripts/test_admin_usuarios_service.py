@@ -87,6 +87,16 @@ class _Base(unittest.TestCase):
 
 class TestInclusao(_Base):
 
+    def test_auditoria_mostra_perfil_pelo_nome_e_login_sem_espacos(self):
+        # CR-003 P6 (README §4.4) e C2.
+        _id, erros = self._incluir(login=" maria.silva")
+        self.assertEqual(erros, {"login": admin_crud.MSG_ESPACOS})
+        uid, erros = self._incluir()
+        self.assertEqual(erros, {})
+        detalhe = [a for a in self._auditorias("CAD_INSERIR") if a["entidade_id"] == uid][0]["detalhe"]
+        self.assertIn("perfil: CONSULTA", detalhe)
+        self.assertNotIn("perfil_id", detalhe)
+
     def test_inclusao_ok_com_hash_e_auditoria_sem_senha(self):
         uid, erros = self._incluir()
         self.assertEqual(erros, {})

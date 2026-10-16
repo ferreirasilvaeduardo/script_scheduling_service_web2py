@@ -201,7 +201,7 @@ class RepoCatalogoFake(RepoCatalogo):
         if not _RE_PASTA.fullmatch(base.get("pasta_base") or ""):
             raise RepoViolacao("pasta_base fora do formato do nome logico", constraint="ck_tbsss_scr_pasta")
         pfile = base.get("path_file") or ""
-        if not pfile or pfile.startswith("/") or ".." in pfile:
+        if not pfile or pfile.startswith("/") or ".." in pfile or "\\" in pfile or ":" in pfile:
             raise RepoViolacao("path_file deve ser relativo e sem '..'", constraint="ck_tbsss_scr_path")
         if not (1 <= int(base.get("max_qtd_parallel_env", 1)) <= 999):
             raise RepoViolacao("max_qtd_parallel_env deve estar entre 1 e 999", constraint="ck_tbsss_scr_paral")
@@ -209,7 +209,8 @@ class RepoCatalogoFake(RepoCatalogo):
         if tmout is not None and int(tmout) <= 0:
             raise RepoViolacao("timeout_seg deve ser maior que zero", constraint="ck_tbsss_scr_tmout")
         for sid, s in self._store.scripts.items():
-            if (atual is None or sid != atual["id"]) and s["nome"].lower() == base["nome"].lower():
+            # UK do Oracle diferencia maiusculas (README §8.5): 'Carga' e 'carga' sao nomes distintos.
+            if (atual is None or sid != atual["id"]) and s["nome"] == base["nome"]:
                 raise RepoViolacao("Script com nome '%s' ja existe" % base["nome"], constraint="uk_tbsss_scr_nome")
 
     def scripts_inserir(self, dados, auditoria=None):
