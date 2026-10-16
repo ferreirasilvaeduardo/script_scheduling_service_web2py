@@ -136,8 +136,7 @@ class TestConfig(unittest.TestCase):
         # [agent]
         self.assertEqual(cfg.agent.agent_id, "srv-linux-prod-01")
         self.assertEqual(cfg.agent.ambientes_atendidos, ("PRODUCAO", "HOMOLOGACAO"))
-        self.assertEqual(list(cfg.agent.base_script_dirs.items()),
-                         [("ROTINAS", "/opt/automacoes/scripts"), ("BATCH", "/home/batch/scripts")])
+        self.assertFalse(hasattr(cfg.agent, "base_script_dirs"))
         self.assertEqual(cfg.agent.work_dir, "/var/lib/sss/work")
         self.assertEqual(cfg.agent.script_owner_uids, (0,))
         self.assertEqual(cfg.agent.max_parallel_jobs, 4)
@@ -317,17 +316,16 @@ class TestConfig(unittest.TestCase):
         ini_ok = self._copiar_e_modificar_ini(alteracoes={"oracle": {"table_prefix": "a1_"}})
         self.assertEqual(sss_config.carregar(ini_ok).oracle.table_prefix, "a1_")
 
-    def test_base_script_dirs(self):
-        """CR-003 D16 (README §8.5, §12.1): NOME=caminho, nomes unicos, caminhos absolutos e nao aninhados."""
-        ok = self._copiar_e_modificar_ini(alteracoes={"agent": {"base_script_dirs": "A=/opt/a, B_2=/srv/b ,SO_AGT="}})
-        pastas = sss_config.carregar(ok).agent.base_script_dirs
-        self.assertEqual(list(pastas.items()), [("A", "/opt/a"), ("B_2", "/srv/b"), ("SO_AGT", None)])
-        for valor in ("/opt/a", "a=/opt/a", "A=/opt/a,A=/srv/b", "A=rel/a", "A=/opt/a,B=/opt/a/sub",
-                      "A=/opt/a,B=/opt/a", "", "1A=/x"):
-            ini = self._copiar_e_modificar_ini(alteracoes={"agent": {"base_script_dirs": valor}})
-            with self.assertRaises(sss_config.ConfigErro, msg=valor) as ctx:
+    def test_pastas_base_recusadas(self):
+        """CR-005 (README §12.1): base_script_dirs e a antiga base_script_dir sao chaves desconhecidas."""
+        for chave, valor in (("base_script_dirs", "ROTINAS=/opt/automacoes/scripts"),
+                             ("base_script_dir", "/opt/automacoes/scripts"),
+                             ("script_owner_sids", "S-1-5-32-544")):
+            ini = self._copiar_e_modificar_ini(alteracoes={"agent": {chave: valor}})
+            with self.assertRaises(sss_config.ConfigErro, msg=chave) as ctx:
                 sss_config.carregar(ini)
-            self.assertEqual(ctx.exception.chave, "base_script_dirs", valor)
+            self.assertEqual(ctx.exception.chave, chave)
+            self.assertIn("desconhecida", ctx.exception.motivo)
 
     def test_login_max_tentativas_cabe_em_number_2(self):
         """CR-003 P2: tentativas_falha e NUMBER(2), entao o teto e 99."""

@@ -11,7 +11,7 @@ import re
 
 import path_guard
 
-VERSAO_SNAPSHOT = 3
+VERSAO_SNAPSHOT = 4
 TAMANHO_MAXIMO = 500
 MASCARA = '****'
 CHAVE_GERAL = '_geral'
@@ -28,8 +28,8 @@ TAMANHO_OPCOES = 500
 TAMANHO_CHAVE_OPCAO = 100
 TAMANHO_ROTULO_OPCAO = 100
 
-# Snapshot v2 (README §6.5, CR-001): sem caminho absoluto nem executavel do no que compilou.
-_CHAVES_SNAPSHOT = ('versao', 'script_id', 'script_nome', 'interpretador', 'pasta_base', 'path_file', 'tipo_param',
+# Snapshot v4 (README §6.5, CR-005): path_file absoluto; sem pasta base nem executavel do no que compilou.
+_CHAVES_SNAPSHOT = ('versao', 'script_id', 'script_nome', 'interpretador', 'path_file', 'tipo_param',
                     'args', 'respostas', 'sensiveis', 'compilado_em')
 
 
@@ -298,8 +298,8 @@ def montar_argv_agente(interpretador, executavel, script_real, args):
 def compilar_snapshot(script, vinculos, respostas, agora):
     """Compila o snapshot v3 (README §6.5) -> (json_str | None, resolvidos, erros_por_campo).
 
-    Guarda o interpretador logico, a pasta base logica, o path_file relativo e apenas os argumentos: o
-    argv real e montado pelo agente com o proprio executavel e diretorio. Erros sao acumulados.
+    Guarda o interpretador logico, o path_file absoluto e apenas os argumentos: o argv real e montado
+    pelo agente com o proprio executavel. Erros sao acumulados.
     """
     resolvidos, erros = _resolver(vinculos, respostas)
     args = _montar(script['tipo_param'], vinculos, resolvidos, erros)
@@ -315,7 +315,6 @@ def compilar_snapshot(script, vinculos, respostas, agora):
         'script_id': script['id'],
         'script_nome': script['nome'],
         'interpretador': script['interpretador'],
-        'pasta_base': script['pasta_base'],
         'path_file': script['path_file'],
         'tipo_param': script['tipo_param'],
         'args': args,
@@ -329,8 +328,8 @@ def compilar_snapshot(script, vinculos, respostas, agora):
 def validar_snapshot(json_str, cfg):
     """Pre-valida o snapshot no claim (README §8.4 passo 1) e devolve (snap, argv_real); lanca SnapshotErro.
 
-    cfg expoe base_script_dirs (nome logico -> diretorio local), script_owner_uids e interpretadores
-    (dict logico -> executavel do agente).
+    cfg expoe script_owner_uids, interpretadores (dict logico -> executavel do agente) e, opcional,
+    dirs_sss (log_dir e work_dir, onde nenhum script pode ficar).
     Status e homologacao do script ficam a cargo do chamador.
     """
     try:
@@ -352,8 +351,8 @@ def validar_snapshot(json_str, cfg):
         raise SnapshotErro('ARGS_INVALIDOS')
 
     try:
-        real = path_guard.resolver_pasta(cfg.base_script_dirs, snap['pasta_base'], snap['path_file'],
-                                         cfg.script_owner_uids)
+        real = path_guard.resolver(snap['path_file'], cfg.script_owner_uids,
+                                   dirs_sss=getattr(cfg, 'dirs_sss', None) or ())
     except path_guard.PathGuardErro as e:
         raise SnapshotErro('PATH_GUARD_' + e.codigo)
     return snap, montar_argv_agente(interpretador, executavel, real, args)
@@ -382,21 +381,13 @@ def _mascarar_args(args, segredos):
     return exibidos
 
 
-def base_oculta(pasta_base):
-    """Rotulo da pasta base no argv logico: '<NOME>' (README §6.4)."""
-    return '<%s>' % pasta_base
-
-
-def argv_para_exibicao(snapshot, bases=None):
+def argv_para_exibicao(snapshot, completo=False):
     """argv logico para a UI: interpretador, argumentos fixos, script e args com sensiveis em '****'.
 
-    bases: mapa nome logico -> diretorio a exibir (perfil admin); sem ele, ou com a pasta nao mapeada,
-    mostra '<NOME>' (README §8.5: caminho absoluto so para admin). Conservador: qualquer argumento
-    igual a um valor sensivel e mascarado.
+    completo=True mostra o caminho inteiro do script (admin ou cadastro); senao '…/arquivo'
+    (README §6.4, CR-005 R-f). Conservador: qualquer argumento igual a um valor sensivel e mascarado.
     """
     interpretador = snapshot['interpretador']
-    pasta = snapshot.get('pasta_base') or ''
-    diretorio = (bases or {}).get(pasta)
-    script = (diretorio.rstrip('/\\') if diretorio else base_oculta(pasta)) + '/' + snapshot['path_file']
+    script = path_guard.nome_exibicao(snapshot['path_file'], completo)
     return ([interpretador] + list(path_guard.ARGS_FIXOS.get(interpretador, ())) + [script]
             + _mascarar_args(list(snapshot['args']), _segredos(snapshot)))

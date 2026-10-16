@@ -42,7 +42,7 @@ class TestPermissoes(unittest.TestCase):
         auth = auth_service.ServicoAuth(repo_factory.obter("usuarios"), self.rbac_repo, self.catalogo,
                                         repo_factory.obter("auditoria"), 5, 900, log)
         self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
-        disparo = ServicoTicket(self.catalogo, repo_factory.obter("tickets"), {"ROTINAS": "/nao/usado"}, (0,), log)
+        disparo = ServicoTicket(self.catalogo, repo_factory.obter("tickets"), (0,), log)
         self.svc = ServicoPermissoes(self.rbac_repo, self.catalogo, disparo, log)
         self.disparo = disparo
         self.n_auditoria = repo_factory.obter("auditoria").listar(pagina=1, tamanho=1)["total"]
@@ -79,7 +79,7 @@ class TestPermissoes(unittest.TestCase):
         sid_inativo = sorted(ctx["scripts"])[0]
         self.catalogo.scripts_alterar(sid_inativo, {"ativo": "N"})
         novo = self.catalogo.scripts_inserir({"nome": "So em PRODUCAO", "interpretador": "PYTHON3",
-                                              "pasta_base": "ROTINAS", "path_file": "x.py",
+                                              "path_file": "/opt/scripts/x.py",
                                               "tipo_param": "NENHUM"})["id"]
         prod = [a for a in self.catalogo.ambientes_listar(pagina=1, tamanho=50)["itens"] if a["nome"] == "PRODUCAO"][0]
         self.catalogo.homologacao_salvar(novo, [prod["id"]])

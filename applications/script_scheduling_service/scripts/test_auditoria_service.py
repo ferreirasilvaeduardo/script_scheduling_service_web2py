@@ -384,7 +384,7 @@ class TestResumoInicial(_Base):
 
     def setUp(self):
         _Base.setUp(self)
-        self.svc_tickets = ServicoTicket(self.catalogo, self.tickets, {"ROTINAS": "/nao/usado"}, (0,), self.log)
+        self.svc_tickets = ServicoTicket(self.catalogo, self.tickets, (0,), self.log)
 
     def test_escopo_por_perfil(self):
         admin = self.svc_tickets.resumo_inicial(self.ctx["admin"])

@@ -104,7 +104,7 @@ Regras para todo texto de interface (rótulos, títulos, mensagens, modais e aju
    * "Agendamento: uma regra que pede para rodar um script sozinho, de tempos em tempos".
 3. **Situação do ticket com nomes simples** (tabela do §5.2.1). O código técnico (`FAILED`, `TIMEOUT`) aparece só como informação secundária no detalhe, para o suporte.
 4. **Toda mensagem de erro tem duas partes:** *o que aconteceu* e *o que fazer agora*, nesta ordem e na mesma caixa. As mensagens-padrão estão na tabela abaixo; mensagens de campo dizem o formato esperado **com um exemplo** ("Use o formato AAAA-MM-DD, por exemplo 2026-10-16").
-5. **Nunca** mostrar detalhe técnico (ORA-, stack trace, SQL, caminho do servidor para quem não é admin); essa regra continua valendo (AGENTS §3.1).
+5. **Nunca** mostrar detalhe técnico (ORA-, stack trace, SQL); essa regra continua valendo (AGENTS §3.1). O caminho do script (`path_file`) não é detalhe técnico oculto: aparece para todos que veem o script ou o ticket (CR-005, D8).
 6. **Cor nunca é o único sinal:** status e avisos têm sempre ícone **e** texto, além da cor (contraste AA, §2.4).
 
 **Mensagens-padrão** (texto exato; `{…}` é preenchido pelo servidor):
@@ -774,7 +774,7 @@ O topo do detalhe (`tickets/detalhe/<id>`) responde "o que está acontecendo?" a
 
    * Um ticket cancelado ainda na fila mostra a etapa "Rodando" como "não chegou a rodar" e a etapa final como "Cancelado".
    * A etapa atual de um ticket `RUNNING` mostra "há {tempo}".
-3. Depois disso vêm, como hoje: resumo, linha do tempo, comando executado, respostas, reexecuções e log. A linha "Detalhe técnico" do resumo traz o status, o `status_motivo`, o `return_code` e a descrição técnica (`descricao_motivo`). O bloco do snapshot mostra o **arquivo do script** (`path_file`, snapshot v4): o caminho completo para perfil admin e `…/<nome do arquivo>` para os demais (CR-005, R-f).
+3. Depois disso vêm, como hoje: resumo, linha do tempo, comando executado, respostas, reexecuções e log. A linha "Detalhe técnico" do resumo traz o status, o `status_motivo`, o `return_code` e a descrição técnica (`descricao_motivo`). O bloco do snapshot mostra o **arquivo do script** (`path_file`, snapshot v4), com o caminho completo para todos (CR-005, D8).
 4. **Botões com o efeito escrito:** "Cancelar este pedido" (com a consequência no modal) e "Rodar de novo com as mesmas respostas" (reexecução, §5.5).
 5. A página continua se atualizando sozinha enquanto o ticket não termina, e a frase e a barra acompanham. Quando o polling do log (§8.10) recebe uma situação diferente da que a página mostrou ao abrir, o visualizador para, mostra "A situação mudou; atualizando a página…" e recarrega a página após 1,5 s.
 
@@ -915,7 +915,7 @@ SH         -> [<exe SH>, <script_real>, ...args]
 
 * `<exe X>` vem de `[agent] interpretadores` do agente (§12.1).
 * `<script_real>` é o `realpath` de `path_file`, o caminho absoluto cadastrado (CR-005, D2), conferido pelo `path_guard` do agente (§8.5).
-* A UI mostra o `argv` **lógico**, por exemplo `PYTHON3 -I /opt/automacoes/scripts/carga.py --data 2026-10-13`. Quem não é admin vê só o nome do arquivo no lugar do diretório: `PYTHON3 -I …/carga.py --data 2026-10-13` (CR-005, R-f).
+* A UI mostra o `argv` **lógico**, por exemplo `PYTHON3 -I /opt/automacoes/scripts/carga.py --data 2026-10-13`, com o caminho completo para todos (CR-005, D8).
 
 ### 6.5 Snapshot imutável (`tbsss_tickets.parametros_enviados`)
 
@@ -1380,7 +1380,7 @@ if not os.path.isfile(real):
   * `path_file` é um campo de texto com o caminho absoluto; a ajuda dá um exemplo (`/opt/automacoes/scripts/carga.py`);
   * a UI sempre informa que a validação definitiva ocorre também no agente;
   * `interpretador` é um select fixo da allowlist lógica, e o servidor exige o valor exato, mesmo que o HTML tenha sido adulterado;
-  * **caminho do servidor só para admin (R-f):** o caminho completo aparece só para perfil admin, no cadastro, na prévia do argv e no detalhe do ticket. Quem não é admin vê `…/<nome do arquivo>` (ex.: `…/carga.py`);
+  * **caminho visível a todos (D8):** o caminho completo aparece no cadastro, na prévia do argv, no disparo e no detalhe do ticket, para todos que veem o script ou o ticket (a R-f foi revogada);
   * **nome reservado (D7):** o nome cuja pasta de log (§8.4, passo 3) seria `app` é recusado: "Este nome é reservado pelo sistema. Escolha outro.";
   * o `nome` do script é texto livre de 1 a 60 caracteres (sem caracteres de controle), único e editável, porque o snapshot guarda o nome da época e tickets e agendamentos referenciam o `script_id`. Renomear um script muda a pasta dos **próximos** logs de execução; os antigos ficam onde estão;
   * a unicidade do `nome` **diferencia maiúsculas de minúsculas**, como a UK `uk_tbsss_scr_nome` no Oracle: `Carga` e `carga` são nomes distintos (e dividem a pasta de log `carga`, o que é aceito, porque o arquivo leva o número do ticket). O FAKE segue a mesma regra;
@@ -1875,7 +1875,7 @@ END;
   * `pid_daemon NUMBER(8)`
   * `versao VARCHAR2(20 CHAR)`
   * `ambientes VARCHAR2(500 CHAR)`
-  * `plataforma VARCHAR2(10 CHAR)`, com CK `ck_tbsss_agt_plat (plataforma IN ('LINUX','UNIX'))`
+  * `plataforma VARCHAR2(10 CHAR)`, com CK `ck_tbsss_agt_plat (plataforma IS NULL OR plataforma IN ('LINUX','UNIX'))`
   * `interpretadores VARCHAR2(100 CHAR)` (lista separada por vírgula dos interpretadores lógicos suportados)
   * `status VARCHAR2(10 CHAR) DEFAULT 'ATIVO' NOT NULL`
   * `iniciado_em DATE`

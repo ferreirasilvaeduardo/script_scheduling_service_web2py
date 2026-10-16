@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Testes de path_guard.py (F3.1): README §8.5 e AGENTS §7.4, com arvore temporaria e symlinks reais."""
+"""Testes de path_guard.py: README §8.5 e AGENTS §7.4 (CR-005: caminho absoluto livre, somente POSIX),
+com arvore temporaria e symlinks reais."""
 import _testenv  # noqa: F401
 
 import os
 import shutil
 import tempfile
 import unittest
-from unittest import mock
 
 import path_guard
 from path_guard import Codigo, PathGuardErro
@@ -21,24 +21,22 @@ class TestResolver(unittest.TestCase):
     def setUp(self):
         self.raiz = tempfile.mkdtemp(prefix="sss_pg_")
         self.base = os.path.join(self.raiz, "scripts")
-        self.evil = os.path.join(self.raiz, "scripts_evil")
         self.fora = os.path.join(self.raiz, "fora.py")
         os.makedirs(os.path.join(self.base, "sub", "fundo"))
-        os.makedirs(self.evil)
         for p in (os.path.join(self.base, "sub", "ok.py"),
                   os.path.join(self.base, "sub", "fundo", "ok.sh"),
-                  os.path.join(self.evil, "x.py"),
                   self.fora):
             with open(p, "w") as f:
                 f.write("print(1)\n")
         os.symlink(self.fora, os.path.join(self.base, "link_fora.py"))
-        os.symlink(os.path.join(self.evil, "x.py"), os.path.join(self.base, "link_evil.py"))
-        os.symlink(self.base, os.path.join(self.base, "link_base"))
         os.symlink(os.path.join(self.base, "sub", "ok.py"), os.path.join(self.base, "link_ok.py"))
+        os.symlink("/etc/hostname", os.path.join(self.base, "link_etc.py"))
+        os.symlink("/usr", os.path.join(self.base, "link_usr"))
         self._travar(self.base)
         self.uids = (os.getuid(),)
 
     def tearDown(self):
+        os.chmod(self.raiz, 0o755)
         for raiz, dirs, files in os.walk(self.raiz):
             os.chmod(raiz, 0o755)
         shutil.rmtree(self.raiz)
@@ -51,50 +49,56 @@ class TestResolver(unittest.TestCase):
                 if not os.path.islink(p):
                     os.chmod(p, MODO_ARQ)
 
-    def _resolver(self, path_file, uids=None, uid_agente=None):
-        return path_guard.resolver(self.base, path_file, self.uids if uids is None else uids, uid_agente)
+    def _p(self, rel):
+        return os.path.join(self.base, rel)
 
-    def _codigo(self, path_file, **kw):
+    def _resolver(self, rel, uids=None, uid_agente=None, dirs_sss=(), parar_em=None):
+        # A arvore temporaria fica sob /tmp (escrita para todos): a cadeia para na base travada.
+        return path_guard.resolver(self._p(rel), self.uids if uids is None else uids, uid_agente,
+                                   dirs_sss, self.base if parar_em is None else parar_em)
+
+    def _codigo(self, rel, **kw):
         with self.assertRaises(PathGuardErro) as ctx:
-            self._resolver(path_file, **kw)
+            self._resolver(rel, **kw)
         return ctx.exception.codigo
 
     def test_caminho_valido(self):
-        esperado = os.path.realpath(os.path.join(self.base, "sub", "ok.py"))
-        self.assertEqual(self._resolver("sub/ok.py"), esperado)
-        self.assertEqual(self._resolver("sub/fundo/ok.sh"),
-                         os.path.realpath(os.path.join(self.base, "sub", "fundo", "ok.sh")))
+        self.assertEqual(self._resolver("sub/ok.py"), os.path.realpath(self._p("sub/ok.py")))
+        self.assertEqual(self._resolver("sub/fundo/ok.sh"), os.path.realpath(self._p("sub/fundo/ok.sh")))
 
-    def test_symlink_interno_resolve_para_alvo_real(self):
-        self.assertEqual(self._resolver("link_ok.py"),
-                         os.path.realpath(os.path.join(self.base, "sub", "ok.py")))
+    def test_symlink_resolve_para_alvo_real(self):
+        self.assertEqual(self._resolver("link_ok.py"), os.path.realpath(self._p("sub/ok.py")))
 
-    def test_escape_com_pontos(self):
-        self.assertEqual(self._codigo("../fora.py"), Codigo.CONTEM_PONTOS)
-        self.assertEqual(self._codigo("sub/../../fora.py"), Codigo.CONTEM_PONTOS)
+    def test_symlink_para_pasta_insegura_e_recusado(self):
+        # O alvo fica numa pasta gravavel pelo agente (a raiz temporaria): a cadeia do alvo real e conferida.
+        self.assertEqual(self._codigo("link_fora.py"), Codigo.GRAVAVEL_PELO_AGENTE)
 
-    def test_caminho_absoluto(self):
-        self.assertEqual(self._codigo(self.fora), Codigo.CAMINHO_ABSOLUTO)
-        self.assertEqual(self._codigo(""), Codigo.CAMINHO_ABSOLUTO)
+    def test_pastas_do_sistema_digitadas_e_via_symlink(self):
+        for caminho in ("/etc/passwd", "/usr/bin/python3", "/bin/sh", "/root/x.py", "/proc/self/status"):
+            with self.subTest(caminho=caminho):
+                with self.assertRaises(PathGuardErro) as ctx:
+                    path_guard.resolver(caminho, self.uids)
+                self.assertEqual(ctx.exception.codigo, Codigo.PASTA_DO_SISTEMA)
+        self.assertEqual(self._codigo("link_etc.py"), Codigo.PASTA_DO_SISTEMA)
+        self.assertEqual(self._codigo("link_usr/bin/env"), Codigo.PASTA_DO_SISTEMA)
 
-    def test_symlink_para_fora_da_base(self):
-        self.assertEqual(self._codigo("link_fora.py"), Codigo.FORA_DA_BASE)
+    def test_prefixo_irmao_nao_e_pasta_do_sistema(self):
+        # /usrx e /etcetera nao estao dentro de /usr e /etc (componente, nao prefixo de texto).
+        for caminho in ("/usrx/a.py", "/etcetera/a.py", "/binarios/a.sh"):
+            with self.subTest(caminho=caminho):
+                with self.assertRaises(PathGuardErro) as ctx:
+                    path_guard.resolver(caminho, self.uids)
+                self.assertEqual(ctx.exception.codigo, Codigo.NAO_ENCONTRADO)
 
-    def test_prefixo_irmao(self):
-        # /x/scripts_evil comeca com /x/scripts, mas nao esta dentro dele.
-        self.assertEqual(self._codigo("link_evil.py"), Codigo.FORA_DA_BASE)
+    def test_dentro_de_log_dir_ou_work_dir(self):
+        self.assertEqual(self._codigo("sub/ok.py", dirs_sss=(self._p("sub"),)), Codigo.PASTA_DO_SSS)
+        self.assertEqual(self._codigo("sub/fundo/ok.sh", dirs_sss=("/var/x", self._p("sub/fundo"))),
+                         Codigo.PASTA_DO_SSS)
+        self.assertTrue(self._resolver("sub/ok.py", dirs_sss=(self._p("sub/fundo"),)))
 
-    def test_commonpath_value_error_e_fora_da_base(self):
-        with mock.patch("path_guard.os.path.commonpath", side_effect=ValueError):
-            self.assertEqual(self._codigo("sub/ok.py"), Codigo.FORA_DA_BASE)
-
-    def test_igual_a_base(self):
-        self.assertEqual(self._codigo("."), Codigo.IGUAL_A_BASE)
-        self.assertEqual(self._codigo("link_base"), Codigo.IGUAL_A_BASE)
-
-    def test_diretorio_em_vez_de_arquivo(self):
+    def test_inexistente_e_diretorio(self):
+        self.assertEqual(self._codigo("inexistente.py"), Codigo.NAO_ENCONTRADO)
         self.assertEqual(self._codigo("sub"), Codigo.NAO_E_ARQUIVO)
-        self.assertEqual(self._codigo("inexistente.py"), Codigo.NAO_E_ARQUIVO)
 
     def test_dono_invalido(self):
         self.assertEqual(self._codigo("sub/ok.py", uids=(os.getuid() + 1,)), Codigo.DONO_INVALIDO)
@@ -108,28 +112,23 @@ class TestResolver(unittest.TestCase):
             os.chmod(alvo, original)
 
     def _alvos(self):
-        return (os.path.join(self.base, "sub", "fundo", "ok.sh"),
-                os.path.join(self.base, "sub", "fundo"),
-                os.path.join(self.base, "sub"),
-                self.base)
+        return (self._p("sub/fundo/ok.sh"), self._p("sub/fundo"), self._p("sub"), self.base)
 
-    def test_gravavel_por_grupo_ou_outros(self):
+    def test_gravavel_por_grupo_ou_outros_no_arquivo_e_na_cadeia(self):
         for alvo in self._alvos():
             base_modo = MODO_DIR if os.path.isdir(alvo) else MODO_ARQ
             for bit in (0o020, 0o002):
                 with self.subTest(alvo=alvo, bit=oct(bit)):
-                    self.assertEqual(self._codigo_com_modo(alvo, base_modo | bit),
-                                     Codigo.GRAVAVEL_GRUPO_OUTROS)
+                    self.assertEqual(self._codigo_com_modo(alvo, base_modo | bit), Codigo.GRAVAVEL_GRUPO_OUTROS)
 
-    def test_gravavel_pelo_agente(self):
+    def test_gravavel_pelo_agente_no_arquivo_e_na_cadeia(self):
         for alvo in self._alvos():
             base_modo = MODO_DIR if os.path.isdir(alvo) else MODO_ARQ
             with self.subTest(alvo=alvo):
-                self.assertEqual(self._codigo_com_modo(alvo, base_modo | 0o200),
-                                 Codigo.GRAVAVEL_PELO_AGENTE)
+                self.assertEqual(self._codigo_com_modo(alvo, base_modo | 0o200), Codigo.GRAVAVEL_PELO_AGENTE)
 
     def test_uid_agente_explicito(self):
-        arq = os.path.join(self.base, "sub", "ok.py")
+        arq = self._p("sub/ok.py")
         os.chmod(arq, 0o644)
         try:
             # Outro UID nao e dono e grupo/outros nao escrevem: aceito.
@@ -139,39 +138,60 @@ class TestResolver(unittest.TestCase):
             os.chmod(arq, MODO_ARQ)
         self.assertEqual(self._codigo("sub/ok.py", uid_agente=0), Codigo.GRAVAVEL_PELO_AGENTE)
 
+    def test_cadeia_vai_ate_a_raiz(self):
+        # Sem parar_em (producao), a cadeia sobe ate '/': a raiz temporaria do proprio agente e recusada.
+        self.assertEqual(self._codigo("sub/ok.py", parar_em="/"), Codigo.GRAVAVEL_PELO_AGENTE)
+        tmp = os.path.dirname(self.raiz)
+        st = os.stat(tmp)
+        if not (st.st_mode & 0o002 and st.st_uid == 0):
+            self.skipTest("pasta temporaria nao e do root com escrita para todos")
+        # Com a raiz temporaria travada, a proxima pasta (o /tmp, 1777) e recusada mesmo com sticky bit.
+        os.chmod(self.raiz, MODO_DIR)
+        self.assertEqual(self._codigo("sub/ok.py", parar_em="/"), Codigo.GRAVAVEL_GRUPO_OUTROS)
+
 
 class TestValidacoesTextuais(unittest.TestCase):
 
-    def test_pasta_base_e_regra_do_no_web(self):
-        # CR-003 D16/D4 (README §8.5).
-        path_guard.validar_pasta("ROTINAS")
-        for nome in ("rotinas", "1X", "", None, "A" * 31, "RO-TINAS"):
-            with self.assertRaises(PathGuardErro) as ctx:
-                path_guard.validar_pasta(nome)
-            self.assertEqual(ctx.exception.codigo, Codigo.PASTA_INVALIDA, nome)
-        pastas = {"ROTINAS": "/opt/x", "SO_AGENTE": None}
-        with self.assertRaises(PathGuardErro) as ctx:
-            path_guard.resolver_pasta(pastas, "SO_AGENTE", "a.py", (0,))
-        self.assertEqual(ctx.exception.codigo, Codigo.PASTA_NAO_MAPEADA)
-        with self.assertRaises(PathGuardErro) as ctx:
-            path_guard.resolver_pasta(pastas, "OUTRA", "a.py", (0,))
-        self.assertEqual(ctx.exception.codigo, Codigo.PASTA_NAO_MAPEADA)
-        self.assertIsNone(path_guard.motivo_sem_etapa2(pastas, "ROTINAS", "PYTHON3"))
-        self.assertEqual(path_guard.motivo_sem_etapa2(pastas, "SO_AGENTE", "PYTHON3"),
-                         path_guard.PASTA_NAO_DISPONIVEL)
-
     def test_validar_cadastro(self):
-        path_guard.validar_cadastro("faturamento/carga_faturas.py")
-        casos = (("/etc/passwd", Codigo.CAMINHO_ABSOLUTO),
-                 ("", Codigo.CAMINHO_ABSOLUTO),
-                 (None, Codigo.CAMINHO_ABSOLUTO),
-                 ("a/../b.py", Codigo.CONTEM_PONTOS),
-                 ("a..b.py", Codigo.CONTEM_PONTOS))
+        path_guard.validar_cadastro("/opt/automacoes/scripts/faturamento/carga_faturas.py")
+        path_guard.validar_cadastro("/opt/a b/script com espaço.py")
+        casos = (("faturamento/carga.py", Codigo.CAMINHO_RELATIVO),
+                 ("", Codigo.CAMINHO_RELATIVO),
+                 (None, Codigo.CAMINHO_RELATIVO),
+                 ("./a.py", Codigo.CAMINHO_RELATIVO),
+                 ("/opt/../etc/passwd", Codigo.CONTEM_PONTOS),
+                 ("/opt/a..b.py", Codigo.CONTEM_PONTOS),
+                 ("/opt\\a.py", Codigo.SEPARADOR_INVALIDO),
+                 ("/opt/a\x00.py", Codigo.CARACTERE_INVALIDO),
+                 ("/opt/a\n.py", Codigo.CARACTERE_INVALIDO),
+                 ("/opt//a.py", Codigo.CAMINHO_NAO_NORMALIZADO),
+                 ("//opt/a.py", Codigo.CAMINHO_NAO_NORMALIZADO),
+                 ("/opt/./a.py", Codigo.CAMINHO_NAO_NORMALIZADO),
+                 ("/opt/scripts/", Codigo.CAMINHO_NAO_NORMALIZADO),
+                 ("/", Codigo.CAMINHO_NAO_NORMALIZADO))
         for valor, codigo in casos:
             with self.subTest(valor=valor):
                 with self.assertRaises(PathGuardErro) as ctx:
                     path_guard.validar_cadastro(valor)
                 self.assertEqual(ctx.exception.codigo, codigo)
+
+    def test_checar_pastas_proibidas_sem_o_arquivo(self):
+        # Vale mesmo se o arquivo nao existe neste servidor (README §8.5, D4).
+        for caminho in ("/etc/nao_existe.py", "/lib64/x.sh", "/sys/x", "/dev/null", "/boot/a.py"):
+            with self.subTest(caminho=caminho):
+                with self.assertRaises(PathGuardErro) as ctx:
+                    path_guard.checar_pastas_proibidas(caminho)
+                self.assertEqual(ctx.exception.codigo, Codigo.PASTA_DO_SISTEMA)
+        path_guard.checar_pastas_proibidas("/opt/automacoes/nao_existe.py")
+        with self.assertRaises(PathGuardErro) as ctx:
+            path_guard.checar_pastas_proibidas("/var/log/sss/x.py", ("/var/log/sss", "/var/lib/sss/work"))
+        self.assertEqual(ctx.exception.codigo, Codigo.PASTA_DO_SSS)
+
+    def test_nome_exibicao(self):
+        caminho = "/opt/automacoes/scripts/carga.py"
+        self.assertEqual(path_guard.nome_exibicao(caminho, True), caminho)
+        self.assertEqual(path_guard.nome_exibicao(caminho, False), u"…/carga.py")
+        self.assertIsNone(path_guard.nome_exibicao(None, False))
 
     def test_interpretador_na_allowlist(self):
         for cmd in ("PYTHON3", "BASH", "SH"):

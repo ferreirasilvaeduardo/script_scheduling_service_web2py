@@ -10,7 +10,6 @@ from repo_fake.store import paginar
 _RE_AMB_NOME = re.compile(r"^[A-Z0-9_]{1,30}$")
 _RE_PRM_CODIGO = re.compile(r"^[a-z0-9_]{1,30}$")
 _RE_PRM_FLAG = re.compile(r"^-{1,2}[A-Za-z0-9][A-Za-z0-9_-]{0,27}$")
-_RE_PASTA = re.compile(r"^[A-Z][A-Z0-9_]{0,29}$")
 
 
 class RepoCatalogoFake(RepoCatalogo):
@@ -198,11 +197,11 @@ class RepoCatalogoFake(RepoCatalogo):
             raise RepoViolacao("Flag ativo deve ser 'S' ou 'N'", constraint="ck_tbsss_scr_ativo")
         if base.get("interpretador") not in ("PYTHON3", "BASH", "SH"):
             raise RepoViolacao("Interpretador fora da allowlist", constraint="ck_tbsss_scr_int")
-        if not _RE_PASTA.fullmatch(base.get("pasta_base") or ""):
-            raise RepoViolacao("pasta_base fora do formato do nome logico", constraint="ck_tbsss_scr_pasta")
         pfile = base.get("path_file") or ""
-        if not pfile or pfile.startswith("/") or ".." in pfile or "\\" in pfile or ":" in pfile:
-            raise RepoViolacao("path_file deve ser relativo e sem '..'", constraint="ck_tbsss_scr_path")
+        # ck_tbsss_scr_path (README §10, CR-005): absoluto, sem '..', '//' nem '\\'; ate 500 caracteres.
+        if (not pfile.startswith("/") or ".." in pfile or "//" in pfile or "\\" in pfile
+                or len(pfile) > 500):
+            raise RepoViolacao("path_file deve ser absoluto e sem '..'", constraint="ck_tbsss_scr_path")
         if not (1 <= int(base.get("max_qtd_parallel_env", 1)) <= 999):
             raise RepoViolacao("max_qtd_parallel_env deve estar entre 1 e 999", constraint="ck_tbsss_scr_paral")
         tmout = base.get("timeout_seg")
@@ -227,7 +226,6 @@ class RepoCatalogoFake(RepoCatalogo):
                 "categoria": dados.get("categoria"),
                 "etapa": dados.get("etapa"),
                 "interpretador": dados["interpretador"],
-                "pasta_base": dados["pasta_base"],
                 "path_file": dados["path_file"],
                 "tipo_param": dados.get("tipo_param", "NOMEADO"),
                 "max_qtd_parallel_env": int(dados.get("max_qtd_parallel_env", 1)),
@@ -247,7 +245,7 @@ class RepoCatalogoFake(RepoCatalogo):
             for campo, valor in (esperado or {}).items():
                 if atual.get(campo) != valor:
                     raise RepoConflito("Script ID %s alterado por outra operacao (%s)" % (id, campo))
-            campos = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "pasta_base", "path_file",
+            campos = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file",
                       "tipo_param", "max_qtd_parallel_env", "timeout_seg", "ativo")
             mudancas = dict((k, dados[k]) for k in campos if k in dados)
             self._validar_script(mudancas, atual)

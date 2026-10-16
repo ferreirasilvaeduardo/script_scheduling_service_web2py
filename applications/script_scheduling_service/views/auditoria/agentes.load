@@ -31,7 +31,6 @@ _ag_icones = URL('static', 'img/icons.svg')
         <dt>Versão</dt><dd>{{=_ag['versao'] or '-'}}{{if _ag['plataforma']:}} · {{=_ag['plataforma']}}{{pass}}</dd>
         <dt>Ambientes</dt><dd>{{=', '.join(_ag['ambientes']) or '-'}}</dd>
         <dt>Interpretadores</dt><dd>{{=', '.join(_ag['interpretadores']) or '-'}}</dd>
-        <dt>Pastas base</dt><dd>{{=', '.join(_ag['pastas_base']) or '-'}}</dd>
         <dt>Iniciado em</dt><dd>{{=ui_helpers.formatar_data(_ag['iniciado_em'])}}</dd>
       </dl>
       <details class="sss-agente-tickets" data-agente="{{=_ag['codigo']}}">

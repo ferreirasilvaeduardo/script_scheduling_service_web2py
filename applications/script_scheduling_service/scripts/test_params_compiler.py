@@ -9,13 +9,15 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 import params_compiler as pc
+import path_guard
 from params_compiler import ParamErro, SnapshotErro
 
 AGORA = datetime.datetime(2026, 10, 13, 10, 47, 0, 123456)
-CfgAgente = collections.namedtuple("CfgAgente", ["base_script_dirs", "script_owner_uids", "interpretadores"])
-CHAVES_6_5 = {"versao", "script_id", "script_nome", "interpretador", "pasta_base", "path_file", "tipo_param", "args",
+CfgAgente = collections.namedtuple("CfgAgente", ["script_owner_uids", "interpretadores"])
+CHAVES_6_5 = {"versao", "script_id", "script_nome", "interpretador", "path_file", "tipo_param", "args",
               "respostas", "sensiveis", "compilado_em"}
 EXE_PY = "/usr/bin/python3"
 
@@ -29,8 +31,8 @@ def prm(codigo, tipo="TEXT", ordem=1, obrigatorio="N", flag=None, opcoes=None, p
 
 
 def script(tipo_param="NOMEADO", interpretador="PYTHON3"):
-    return {"id": 12, "nome": "carga_faturas", "interpretador": interpretador, "pasta_base": "ROTINAS",
-            "path_file": "faturamento/carga_faturas.py", "tipo_param": tipo_param}
+    return {"id": 12, "nome": "carga_faturas", "interpretador": interpretador,
+            "path_file": REAL, "tipo_param": tipo_param}
 
 
 REAL = "/opt/automacoes/scripts/faturamento/carga_faturas.py"
@@ -308,14 +310,14 @@ class TestCompilarSnapshot(unittest.TestCase):
         js, resolvidos, erros = pc.compilar_snapshot(script(), self._vinculos()[:1], {"data_ref": "2026-10-13"}, AGORA)
         self.assertEqual(erros, {})
         esperado = {
-            "versao": 3, "script_id": 12, "script_nome": "carga_faturas", "interpretador": "PYTHON3",
-            "pasta_base": "ROTINAS", "path_file": "faturamento/carga_faturas.py", "tipo_param": "NOMEADO",
+            "versao": 4, "script_id": 12, "script_nome": "carga_faturas", "interpretador": "PYTHON3",
+            "path_file": REAL, "tipo_param": "NOMEADO",
             "args": ["--data", "2026-10-13"],
             "respostas": {"data_ref": "2026-10-13"}, "sensiveis": [], "compilado_em": "2026-10-13 10:47:00",
         }
         self.assertEqual(json.loads(js), esperado)
         self.assertEqual(js, json.dumps(esperado, ensure_ascii=False, sort_keys=True))
-        self.assertNotIn("/opt", js)
+        self.assertNotIn("pasta_base", js)
 
     def test_determinismo(self):
         v = self._vinculos()
@@ -365,16 +367,17 @@ class TestCompilarSnapshot(unittest.TestCase):
         snap = json.loads(pc.compilar_snapshot(
             script(), v, {"data_ref": "2026-10-13", "token": "-segredo", "seq": "outro_segredo"}, AGORA)[0])
         exib = pc.argv_para_exibicao(snap)
-        self.assertEqual(exib, ["PYTHON3", "-I", "<ROTINAS>/faturamento/carga_faturas.py", "--data", "2026-10-13",
+        self.assertEqual(exib, ["PYTHON3", "-I", u"\u2026/carga_faturas.py", "--data", "2026-10-13",
                                 "--token=****", "--modo", "A", "-s", "****"])
         self.assertNotIn("segredo", " ".join(exib))
         self.assertIn("-segredo", snap["args"][2])
-        admin = pc.argv_para_exibicao(snap, {"ROTINAS": "/opt/automacoes/scripts/"})
+        # CR-005 R-f: caminho completo so para admin ou no cadastro.
+        admin = pc.argv_para_exibicao(snap, completo=True)
         self.assertEqual(admin[2], REAL)
 
     def test_argv_para_exibicao_sem_sensiveis(self):
         snap = json.loads(pc.compilar_snapshot(script("SEQUENCIAL", "SH"), [prm("a", ordem=1)], {"a": "x"}, AGORA)[0])
-        self.assertEqual(pc.argv_para_exibicao(snap), ["SH", "<ROTINAS>/faturamento/carga_faturas.py", "x"])
+        self.assertEqual(pc.argv_para_exibicao(snap), ["SH", u"\u2026/carga_faturas.py", "x"])
 
 
 @unittest.skipIf(os.geteuid() == 0, "root sempre passa em os.access(W_OK)")
@@ -390,10 +393,18 @@ class TestValidarSnapshot(unittest.TestCase):
         os.chmod(self.arq, 0o444)
         os.chmod(os.path.join(self.base, "faturamento"), 0o555)
         os.chmod(self.base, 0o555)
-        self.cfg = CfgAgente({"ROTINAS": self.base}, (os.getuid(),), {"PYTHON3": EXE_PY, "SH": "/bin/sh"})
+        self.cfg = CfgAgente((os.getuid(),), {"PYTHON3": EXE_PY, "SH": "/bin/sh"})
         self.real = os.path.realpath(self.arq)
         v = [prm("data_ref", "DATE", ordem=1, obrigatorio="S", flag="--data")]
-        self.js = pc.compilar_snapshot(script(), v, {"data_ref": "2026-10-13"}, AGORA)[0]
+        scr = dict(script(), path_file=self.arq)
+        self.js = pc.compilar_snapshot(scr, v, {"data_ref": "2026-10-13"}, AGORA)[0]
+        # A arvore fica sob /tmp (escrita para todos): a cadeia de pastas para na base travada.
+        original = path_guard.resolver
+        patcher = mock.patch.object(path_guard, "resolver",
+                                    lambda p, u, uid_agente=None, dirs_sss=(), parar_em="/":
+                                    original(p, u, uid_agente, dirs_sss, self.base))
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         for raiz, _, _ in os.walk(self.raiz):
@@ -421,14 +432,10 @@ class TestValidarSnapshot(unittest.TestCase):
         self.assertEqual(self._motivo("[]"), "ESTRUTURA_INVALIDA")
         self.assertEqual(self._motivo('{"versao": 3}'), "ESTRUTURA_INVALIDA")
 
-    def test_versoes_1_e_2_rejeitadas(self):
-        # CR-003 D16: o snapshot v3 traz pasta_base; v1 e v2 so existiram em DEV/FAKE.
-        self.assertEqual(self._motivo(self._alterado(versao=1)), "VERSAO_NAO_SUPORTADA")
-        self.assertEqual(self._motivo(self._alterado(versao=2)), "VERSAO_NAO_SUPORTADA")
-
-    def test_pasta_base_invalida_ou_nao_mapeada_no_agente(self):
-        self.assertEqual(self._motivo(self._alterado(pasta_base="batch")), "PATH_GUARD_PASTA_INVALIDA")
-        self.assertEqual(self._motivo(self._alterado(pasta_base="BATCH")), "PATH_GUARD_PASTA_NAO_MAPEADA")
+    def test_versoes_1_a_3_rejeitadas(self):
+        # CR-005: o snapshot v4 traz path_file absoluto; v1 a v3 so existiram em DEV/FAKE.
+        for versao in (1, 2, 3):
+            self.assertEqual(self._motivo(self._alterado(versao=versao)), "VERSAO_NAO_SUPORTADA")
 
     def test_interpretador_fora_da_allowlist_ou_indisponivel_no_agente(self):
         self.assertEqual(self._motivo(self._alterado(interpretador="/usr/bin/perl")), "INTERPRETADOR_NAO_PERMITIDO")
@@ -441,11 +448,20 @@ class TestValidarSnapshot(unittest.TestCase):
         self.assertEqual(self._motivo(self._alterado(args=["--n", 1])), "ARGS_INVALIDOS")
 
     def test_path_guard_revalidado_no_agente(self):
-        self.assertEqual(self._motivo(self._alterado(path_file="../x.py")), "PATH_GUARD_CONTEM_PONTOS")
-        outro = CfgAgente({"ROTINAS": self.base}, (os.getuid() + 1,), self.cfg.interpretadores)
+        self.assertEqual(self._motivo(self._alterado(path_file="x.py")), "PATH_GUARD_CAMINHO_RELATIVO")
+        self.assertEqual(self._motivo(self._alterado(path_file="/opt/../x.py")), "PATH_GUARD_CONTEM_PONTOS")
+        self.assertEqual(self._motivo(self._alterado(path_file="/etc/passwd")), "PATH_GUARD_PASTA_DO_SISTEMA")
+        outro = CfgAgente((os.getuid() + 1,), self.cfg.interpretadores)
         self.assertEqual(self._motivo(self.js, outro), "PATH_GUARD_DONO_INVALIDO")
-        self.assertEqual(self._motivo(self._alterado(path_file="faturamento/nao_existe.py")),
+        self.assertEqual(self._motivo(self._alterado(path_file=os.path.join(self.base, "nao_existe.py"))),
+                         "PATH_GUARD_NAO_ENCONTRADO")
+        self.assertEqual(self._motivo(self._alterado(path_file=os.path.join(self.base, "faturamento"))),
                          "PATH_GUARD_NAO_E_ARQUIVO")
+
+    def test_log_dir_e_work_dir_do_agente(self):
+        cfg = collections.namedtuple("CfgDirs", ["script_owner_uids", "interpretadores", "dirs_sss"])(
+            (os.getuid(),), self.cfg.interpretadores, (os.path.join(self.base, "faturamento"),))
+        self.assertEqual(self._motivo(self.js, cfg), "PATH_GUARD_PASTA_DO_SSS")
 
 
 class TestSeedFake(unittest.TestCase):
@@ -485,11 +501,12 @@ class TestSeedFake(unittest.TestCase):
                 self.assertEqual(erros, {})
                 self.assertEqual(set(json.loads(js).keys()), CHAVES_6_5)
 
-    def test_snapshots_do_seed_sao_v3(self):
+    def test_snapshots_do_seed_sao_v4(self):
         tickets = self.repo_factory.obter("tickets")
         for tid in (1, 11, 17, 37):
             snap = json.loads(tickets.obter(tid)["parametros_enviados"])
-            self.assertEqual((snap["versao"], set(snap.keys())), (3, CHAVES_6_5), tid)
+            self.assertEqual((snap["versao"], set(snap.keys())), (4, CHAVES_6_5), tid)
+            self.assertTrue(snap["path_file"].startswith("/opt/automacoes/scripts/"), tid)
 
 
 if __name__ == "__main__":

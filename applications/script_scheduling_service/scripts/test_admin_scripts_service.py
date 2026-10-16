@@ -94,19 +94,29 @@ class _Base(unittest.TestCase):
         self.ctx["gestor"] = dict(self.ctx["op.prod"], funcionalidades=frozenset(["CAD_SCRIPTS"]))
         self.base = _arvore()
         self.addCleanup(_remover, self.base)
+        # A arvore fica sob /tmp (escrita para todos): a cadeia de pastas para na base travada.
+        original = path_guard.resolver
+        patcher = mock.patch.object(path_guard, "resolver",
+                                    lambda p, u, uid_agente=None, dirs_sss=(), parar_em="/":
+                                    original(p, u, uid_agente, dirs_sss, self.base))
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.svc = self._servico(self.ENV)
         self.aud_base = max([a["id"] for a in self.auditoria.listar(pagina=1, tamanho=1000)["itens"]] or [0])
 
-    def _servico(self, env):
-        return ServicoAdminScripts(self.catalogo, repo_factory.obter("agendamentos"), {"ROTINAS": self.base}, (os.geteuid(),), env,
-                                   self.log, lambda: AGORA)
+    def _servico(self, env, dirs_sss=()):
+        return ServicoAdminScripts(self.catalogo, repo_factory.obter("agendamentos"), (os.geteuid(),), env,
+                                   self.log, lambda: AGORA, dirs_sss)
+
+    def _p(self, nome):
+        return os.path.join(self.base, nome)
 
     def _auditorias(self, acao):
         return [a for a in self.auditoria.listar(filtros={"acao": acao}, pagina=1, tamanho=100)["itens"]
                 if a["entidade"] == "tbsss_scripts" and a["id"] > self.aud_base]
 
     def _incluir(self, svc=None, **mudancas):
-        dados = {"nome": "Novo script", "interpretador": "PYTHON3", "pasta_base": "ROTINAS", "path_file": "novo.py",
+        dados = {"nome": "Novo script", "interpretador": "PYTHON3", "path_file": self._p("novo.py"),
                  "tipo_param": "SEQUENCIAL", "max_qtd_parallel_env": "2", "timeout_seg": ""}
         dados.update(mudancas)
         return (svc or self.svc).salvar(self.ctx["admin"], IP, None, dados)
@@ -133,39 +143,49 @@ class TestCadastro(_Base):
         self.assertEqual((erros, aviso), ({}, None))
         s = self.catalogo.scripts_obter(sid)
         self.assertEqual((s["interpretador"], s["path_file"], s["max_qtd_parallel_env"], s["timeout_seg"]),
-                         ("PYTHON3", "novo.py", 2, None))
-        self.assertIn("path_file: novo.py", self._auditorias("CAD_INSERIR")[0]["detalhe"])
+                         ("PYTHON3", self._p("novo.py"), 2, None))
+        self.assertNotIn("pasta_base", s)
+        self.assertIn("path_file: %s" % self._p("novo.py"), self._auditorias("CAD_INSERIR")[0]["detalhe"])
 
     def test_interpretador_fora_da_allowlist(self):
-        for cmd in ("/bin/ls", "/usr/bin/python3", "PYTHON3 -c", "python3", "CMD", "", None):
+        for cmd in ("/bin/ls", "/usr/bin/python3", "PYTHON3 -c", "python3", "CMD", "POWERSHELL", "", None):
             _sid, erros, _ = self._incluir(interpretador=cmd)
             self.assertEqual(erros.get("interpretador"), scr_mod.MENSAGENS_PATH[Codigo.INTERPRETADOR_NAO_PERMITIDO], cmd)
 
     def test_path_file_invalidos(self):
-        casos = (("/etc/passwd", Codigo.CAMINHO_ABSOLUTO), ("../../etc/passwd", Codigo.CONTEM_PONTOS),
-                 ("sub/../novo.py", Codigo.CONTEM_PONTOS), ("gravavel.py", Codigo.GRAVAVEL_GRUPO_OUTROS),
-                 ("sub", Codigo.NAO_E_ARQUIVO))
-        svc_hml = self._servico("HML")
-        for path, codigo in casos:
-            _sid, erros, _ = self._incluir(svc=svc_hml, path_file=path)
-            self.assertEqual(erros.get("path_file"), scr_mod.MENSAGENS_PATH[codigo], path)
+        # CR-005 (README §8.5): caminho absoluto, normalizado e fora das pastas do sistema; vale em qualquer sss_env.
+        casos = (("novo.py", Codigo.CAMINHO_RELATIVO), ("/etc/passwd", Codigo.PASTA_DO_SISTEMA),
+                 ("/usr/local/bin/x.py", Codigo.PASTA_DO_SISTEMA), ("/etc/nao_existe.py", Codigo.PASTA_DO_SISTEMA),
+                 (self.base + "/../x.py", Codigo.CONTEM_PONTOS), (self.base + "//novo.py", Codigo.CAMINHO_NAO_NORMALIZADO),
+                 ("/opt\\x.py", Codigo.SEPARADOR_INVALIDO), (self._p("gravavel.py"), Codigo.GRAVAVEL_GRUPO_OUTROS),
+                 (self._p("sub"), Codigo.NAO_E_ARQUIVO))
+        for env in ("DEV", "HML"):
+            svc = self._servico(env)
+            for path, codigo in casos:
+                _sid, erros, _ = self._incluir(svc=svc, path_file=path)
+                self.assertEqual(erros.get("path_file"), scr_mod.MENSAGENS_PATH[codigo], (env, path))
+        _sid, erros, _ = self._incluir(path_file="/opt/" + "a" * 500)
+        self.assertEqual(erros.get("path_file"), u"Use no máximo 500 caracteres.")
 
-    def test_fora_da_base_por_symlink(self):
+    def test_symlink_para_pasta_do_sistema(self):
         os.chmod(self.base, stat.S_IRWXU)
-        os.symlink("/etc/hostname", os.path.join(self.base, "fuga.py"))
+        os.symlink("/etc/hostname", self._p("fuga.py"))
         os.chmod(self.base, 0o555)
-        _sid, erros, _ = self._incluir(path_file="fuga.py")
-        self.assertEqual(erros, {"path_file": scr_mod.MENSAGENS_PATH[Codigo.FORA_DA_BASE]})
+        _sid, erros, _ = self._incluir(path_file=self._p("fuga.py"))
+        self.assertEqual(erros, {"path_file": scr_mod.MENSAGENS_PATH[Codigo.PASTA_DO_SISTEMA]})
 
-    def test_aviso_dev_versus_hml(self):
-        sid, erros, aviso = self._incluir(path_file="inexistente.py")
-        self.assertEqual((erros, aviso), ({}, scr_mod.AVISO_DEV_ARQUIVO))
-        self.assertIsNotNone(sid)
-        _sid, erros, aviso = self._incluir(svc=self._servico("HML"), nome="Outro", path_file="inexistente.py")
-        self.assertEqual((erros, aviso), ({"path_file": scr_mod.MENSAGENS_PATH[Codigo.NAO_E_ARQUIVO]}, None))
-        # Em DEV, falhas que nao sao "arquivo inexistente" continuam bloqueando.
-        _sid, erros, _ = self._incluir(nome="Terceiro", path_file="gravavel.py")
-        self.assertIn("path_file", erros)
+    def test_arquivo_ausente_vira_aviso_em_qualquer_ambiente(self):
+        # CR-005 D4: se o arquivo nao existe neste servidor, salva com aviso; o agente confere no claim.
+        for env in ("DEV", "HML", "PROD"):
+            sid, erros, aviso = self._incluir(svc=self._servico(env), nome="Sem arquivo %s" % env,
+                                              path_file="/opt/automacoes/scripts/nao_existe_%s.py" % env)
+            self.assertEqual((erros, aviso), ({}, scr_mod.AVISO_NAO_ENCONTRADO), env)
+            self.assertIsNotNone(sid)
+
+    def test_pastas_de_log_e_trabalho_do_sss(self):
+        svc = self._servico("HML", dirs_sss=(self._p("sub"), "/var/lib/sss/work"))
+        _sid, erros, _ = self._incluir(svc=svc, path_file=self._p("sub/interno.sh"))
+        self.assertEqual(erros, {"path_file": scr_mod.MENSAGENS_PATH[Codigo.PASTA_DO_SSS]})
 
     def test_campos_numericos_e_nome(self):
         for valor in ("0", "1000", "x", ""):
@@ -177,53 +197,40 @@ class TestCadastro(_Base):
         self.assertEqual(erros, {"nome": scr_mod.MSG_NOME_DUPLICADO})
         _sid, erros, _ = self._incluir(nome="nome\x07estranho")
         self.assertEqual(erros, {"nome": scr_mod.MSG_CONTROLE})
-
-    def test_pasta_base_da_lista_e_avisos_da_etapa2(self):
-        # CR-003 C4: so '/' como separador.
-        for ruim in ("dir\\x.py", "C:/x.py"):
-            _sid, erros, _a = self._incluir(nome="Sep %s" % ruim, path_file=ruim)
-            self.assertEqual(erros, {"path_file": scr_mod.MENSAGENS_PATH[Codigo.SEPARADOR_INVALIDO]}, ruim)
         # Nome unico diferencia maiusculas (README §8.5), como a UK no Oracle.
         _sid, erros, _a = self._incluir(nome="CARGA_DIARIA")
         self.assertNotIn("nome", erros)
-        # CR-003 D16/D4: pasta fora da lista recusada; pasta sem caminho ou outra plataforma viram aviso.
-        _sid, erros, _a = self._incluir(pasta_base="NAO_EXISTE")
-        self.assertEqual(erros, {"pasta_base": scr_mod.MENSAGENS_PATH[Codigo.PASTA_INVALIDA]})
-        svc = ServicoAdminScripts(self.catalogo, repo_factory.obter("agendamentos"),
-                                  {"ROTINAS": self.base, "WINAGT": None}, (os.geteuid(),), "HML", self.log, lambda: AGORA)
-        sid, erros, aviso = self._incluir(svc, nome="Pasta remota", pasta_base="WINAGT", path_file="x.py")
-        self.assertEqual((erros, aviso), ({}, scr_mod.AVISOS_SEM_ETAPA2[path_guard.PASTA_NAO_DISPONIVEL]))
-        self.assertEqual(self.catalogo.scripts_obter(sid)["pasta_base"], "WINAGT")
-        # CR-005: POWERSHELL saiu da allowlist (somente POSIX).
-        _sid, erros, _aviso = self._incluir(svc, nome="Script PS", interpretador="POWERSHELL", path_file="x.ps1")
-        self.assertIn("interpretador", erros)
 
-    def test_edicao_sem_mudar_caminho_nao_refaz_etapa2_mas_reativacao_refaz(self):
-        # CR-003 C5 (README §8.5): arquivo ausente nao impede editar a descricao nem desativar.
-        svc = ServicoAdminScripts(self.catalogo, repo_factory.obter("agendamentos"), {"ROTINAS": self.base},
-                                  (os.geteuid(),), "HML", self.log, lambda: AGORA)
-        sid = self.catalogo.scripts_inserir({"nome": "Sem arquivo", "interpretador": "PYTHON3", "pasta_base": "ROTINAS",
-                                             "path_file": "nao_existe.py", "tipo_param": "SEQUENCIAL"})["id"]
+    def test_nome_reservado_app(self):
+        # CR-005 D7: a pasta de log do script nao pode ser 'app'.
+        for nome in ("app", "APP", "App.", "_app_", u"Áṕp"):
+            _sid, erros, _ = self._incluir(nome=nome)
+            self.assertEqual(erros.get("nome"), scr_mod.MSG_NOME_RESERVADO, nome)
+        for nome in ("app2", "minha app", "aplicacao"):
+            _sid, erros, _ = self._incluir(nome=nome)
+            self.assertNotIn("nome", erros, nome)
+
+    def test_edicao_sem_mudar_caminho_nao_reconfere_arquivo_mas_reativacao_reconfere(self):
+        # README §8.5: arquivo com problema nao impede editar a descricao nem desativar.
+        svc = self._servico("HML")
+        sid = self.catalogo.scripts_inserir({"nome": "Gravavel", "interpretador": "PYTHON3",
+                                             "path_file": self._p("gravavel.py"), "tipo_param": "SEQUENCIAL"})["id"]
         f = svc.formulario(self.ctx["admin"], str(sid))
         dados = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.CAMPOS_EDITAVEIS)
         _sid, erros, _a = svc.salvar(self.ctx["admin"], IP, str(sid), dict(dados, versao=f["versao"], descricao="Nova"))
         self.assertEqual(erros, {})
         _sid, erros, _a = svc.salvar(self.ctx["admin"], IP, str(sid),
                                      dict(dados, versao=svc.formulario(self.ctx["admin"], str(sid))["versao"],
-                                          path_file="outro_inexistente.py"))
-        self.assertEqual(erros, {"path_file": scr_mod.MENSAGENS_PATH[Codigo.NAO_E_ARQUIVO]})
+                                          interpretador="BASH"))
+        self.assertEqual(erros, {"path_file": scr_mod.MENSAGENS_PATH[Codigo.GRAVAVEL_GRUPO_OUTROS]})
         svc.alternar_ativo(self.ctx["admin"], IP, str(sid), svc.formulario(self.ctx["admin"], str(sid))["versao"])
         with self.assertRaises(OperacaoNegada):
             svc.alternar_ativo(self.ctx["admin"], IP, str(sid), svc.formulario(self.ctx["admin"], str(sid))["versao"])
         self.assertEqual(self.catalogo.scripts_obter(sid)["ativo"], "N")
-
-    def test_pasta_gravada_e_mantida_mesmo_sem_mapeamento(self):
-        # CR-003 C5: sem mudar caminho, pasta ou interpretador, a edicao nao refaz a etapa 2.
-        sid, erros, _a = self._incluir()
-        self.assertEqual(erros, {})
-        self.catalogo.scripts_alterar(sid, {"pasta_base": "ANTIGA"})
-        _sid, erros, _a = self._editar(sid, descricao="Mudou a descricao")
-        self.assertNotIn("pasta_base", erros)
+        # Arquivo ausente nao impede reativar: o agente confere (D4).
+        self.catalogo.scripts_alterar(sid, {"path_file": "/opt/automacoes/scripts/sumiu.py"})
+        svc.alternar_ativo(self.ctx["admin"], IP, str(sid), svc.formulario(self.ctx["admin"], str(sid))["versao"])
+        self.assertEqual(self.catalogo.scripts_obter(sid)["ativo"], "S")
 
     def test_troca_de_tipo_param_revalida_vinculos(self):
         _sid, erros, _ = self._editar(S_CARGA, tipo_param="NENHUM")
@@ -246,9 +253,12 @@ class TestCadastro(_Base):
         with self.assertRaises(RepoConflito):
             self.svc.alternar_ativo(self.ctx["admin"], IP, str(S_CARGA), f["versao"])
 
-    def test_base_e_caminho_absoluto_so_para_admin(self):
-        self.assertEqual(self.svc.formulario(self.ctx["admin"])["base_exibicao"], {"ROTINAS": self.base})
-        self.assertIsNone(self.svc.formulario(self.ctx["gestor"])["base_exibicao"])
+    def test_formulario_sem_pastas_base(self):
+        f = self.svc.formulario(self.ctx["admin"])
+        for chave in ("pasta_base", "pastas", "base_exibicao"):
+            self.assertNotIn(chave, f)
+        self.assertEqual(self.svc.formulario(self.ctx["gestor"], str(S_CARGA))["path_file"],
+                         "/opt/automacoes/scripts/carga_diaria.py")
 
 
 @_SKIP_ROOT
@@ -402,16 +412,17 @@ class TestPrevia(_Base):
 
     def test_previa_do_seed_gera_argv_esperado_e_mascara_sensivel(self):
         r = self.svc.previa(self.ctx["admin"], str(S_CARGA))
-        real = os.path.join(self.base, "carga_diaria.py")
-        self.assertEqual(r["erros"], {})
+        real = "/opt/automacoes/scripts/carga_diaria.py"
+        self.assertEqual((r["erros"], r["aviso"]), ({}, scr_mod.AVISO_NAO_ENCONTRADO))
         self.assertEqual(r["argv"], ["PYTHON3", "-I", real, "--data-ref", "2026-10-14", "-n", "5000",
                                      "--modo", "REAL", "--verbose", "--documento", "****"])
 
-    def test_previa_sem_admin_oculta_caminho_e_reflete_edicao(self):
+    def test_previa_no_cadastro_mostra_o_caminho_e_reflete_edicao(self):
+        # CR-005 R-f: no cadastro (CAD_SCRIPTS) o caminho aparece inteiro, porque e o que o usuario cadastra.
         _tela, itens = self._vinculos_json(S_CARGA)
         r = self.svc.previa(self.ctx["gestor"], str(S_CARGA), json.dumps(itens[:1]))
-        self.assertEqual(r["argv"], ["PYTHON3", "-I", "<ROTINAS>/carga_diaria.py", "--data-ref", "2026-10-14"])
-        self.assertNotIn(self.base, repr(r))
+        self.assertEqual(r["argv"], ["PYTHON3", "-I", "/opt/automacoes/scripts/carga_diaria.py",
+                                     "--data-ref", "2026-10-14"])
 
     def test_acesso_negado_e_nao_encontrado(self):
         for chamada in (lambda c: self.svc.listar(c, {}, 1, 20), lambda c: self.svc.homologacao(c, "1"),

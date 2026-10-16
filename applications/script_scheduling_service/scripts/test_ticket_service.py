@@ -14,6 +14,7 @@ from unittest import mock
 
 import auth_service
 import params_compiler
+import path_guard
 import repo_factory
 import security
 import ticket_service
@@ -82,7 +83,16 @@ class _BaseTicket(unittest.TestCase):
 
         self.base = _criar_arvore()
         self.addCleanup(_remover_arvore, self.base)
-        self.svc = ServicoTicket(self.catalogo, self.tickets, {"ROTINAS": self.base}, (os.geteuid(),), self.log)
+        for sid, nome in enumerate(ARQUIVOS, 1):
+            self.catalogo.scripts_alterar(sid, {"path_file": os.path.join(self.base, nome)})
+        # A arvore fica sob /tmp (escrita para todos): a cadeia de pastas para na base travada.
+        original = path_guard.resolver
+        patcher = mock.patch.object(path_guard, "resolver",
+                                    lambda p, u, uid_agente=None, dirs_sss=(), parar_em="/":
+                                    original(p, u, uid_agente, dirs_sss, self.base))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.svc = ServicoTicket(self.catalogo, self.tickets, (os.geteuid(),), self.log)
 
     def _total_tickets(self):
         return self.tickets.listar(pagina=1, tamanho=100)["total"]
@@ -116,13 +126,15 @@ class TestTicketService(_BaseTicket):
         snap = json.loads(bruto)
         self.assertEqual(bruto, json.dumps(snap, ensure_ascii=False, sort_keys=True))
         self.assertEqual(sorted(snap), sorted(params_compiler._CHAVES_SNAPSHOT))
-        self.assertEqual(snap["versao"], 3)
+        self.assertEqual(snap["versao"], 4)
         self.assertEqual(snap["script_nome"], "carga_diaria")
-        self.assertEqual((snap["interpretador"], snap["pasta_base"], snap["path_file"]),
-                         ("PYTHON3", "ROTINAS", "carga_diaria.py"))
+        caminho_esperado = os.path.join(self.base, "carga_diaria.py")
+        self.assertEqual((snap["interpretador"], snap["path_file"]),
+                         ("PYTHON3", caminho_esperado))
         self.assertEqual(snap["tipo_param"], "NOMEADO")
-        # Snapshot v3 (CR-001, CR-003): sem caminho absoluto do no web; o agente monta o argv real.
-        self.assertNotIn(self.base, bruto)
+        # Snapshot v4 (CR-005 D2): path_file e absoluto; sem pasta_base.
+        self.assertNotIn("pasta_base", snap)
+        self.assertIn(self.base, bruto)
         self.assertEqual(snap["args"], [
             "--data-ref", "2026-10-20", "-n", "5000", "--modo", "SIMULACAO",
             "--verbose", "--documento", SEGREDO,

@@ -40,7 +40,7 @@ class _Base(unittest.TestCase):
         auth = auth_service.ServicoAuth(repo_factory.obter("usuarios"), repo_factory.obter("rbac"), self.catalogo,
                                         repo_factory.obter("auditoria"), 5, 900, log)
         self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
-        self.svc = ServicoTicket(self.catalogo, self.tickets, {"ROTINAS": "/nao/usado"}, (0,), log)
+        self.svc = ServicoTicket(self.catalogo, self.tickets, (0,), log)
 
     def _sem(self, login, *funcs):
         ctx = dict(self.ctx[login])

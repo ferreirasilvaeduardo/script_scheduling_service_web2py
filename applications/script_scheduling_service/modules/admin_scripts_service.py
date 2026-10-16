@@ -3,17 +3,18 @@
 
 Segue docs/PADRAO_CRUD_ADMIN.md. O executavel e validado pelo path_guard no cadastro (a validacao
 definitiva repete-se no agente). Regras de tipo_param x vinculos sao reverificadas pelo repositorio na
-mesma operacao. Caminho absoluto do servidor so aparece para perfil admin. Nao importa gluon fora de _servico.
+mesma operacao. CR-005: path_file absoluto, em qualquer lugar fora das pastas do sistema; o arquivo ausente
+neste no vira aviso (o agente confere no claim). Nao importa gluon fora de _servico.
 """
 import collections
 import hashlib
 import json
-import os
 import re
 import threading
 
 import admin_crud
 import params_compiler
+import pastas_log
 import path_guard
 from admin_crud import CAMPO_GERAL, OperacaoNegada
 from params_compiler import ParamErro, TIPOS_PARAM
@@ -21,10 +22,10 @@ from path_guard import Codigo, PathGuardErro
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 
 FUNCIONALIDADE = "CAD_SCRIPTS"
-CAMPOS_EDITAVEIS = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "pasta_base", "path_file",
+CAMPOS_EDITAVEIS = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file",
                     "tipo_param",
                     "max_qtd_parallel_env", "timeout_seg", "ativo")
-CAMPOS_INSERCAO = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "pasta_base", "path_file",
+CAMPOS_INSERCAO = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file",
                    "tipo_param",
                    "max_qtd_parallel_env",
                    "timeout_seg")
@@ -33,7 +34,8 @@ ROTULOS_INTERPRETADOR = (("PYTHON3", u"PYTHON3 — Python 3"),
                          ("SH", u"SH — Shell POSIX"))
 ROTULOS_TIPO_PARAM = (("NOMEADO", u"Por flag (NOMEADO)"), ("SEQUENCIAL", u"Posicional (SEQUENCIAL)"),
                       ("NENHUM", u"Sem argumentos (NENHUM)"))
-TAMANHOS = {"nome": 60, "descricao": 200, "grupo": 30, "categoria": 30, "etapa": 30, "path_file": 250}
+TAMANHOS = {"nome": 60, "descricao": 200, "grupo": 30, "categoria": 30, "etapa": 30,
+            "path_file": path_guard.TAMANHO_MAXIMO}
 TIMEOUT_MAXIMO = 9999999
 VINCULOS_MAXIMO = 200
 TAMANHO_PADRAO_SUB = 100
@@ -47,30 +49,30 @@ _RE_CONTROLE = re.compile(r"[\x00-\x1f\x7f]")
 _RE_FILTRO = re.compile(r"[^\x00-\x1f\x7f<>]{1,60}")
 
 MENSAGENS_PATH = {
-    Codigo.CAMINHO_ABSOLUTO: u"Informe um caminho relativo à pasta base (sem / no início).",
+    Codigo.CAMINHO_RELATIVO: u"Informe o caminho completo do arquivo, começando por / (ex.: /opt/automacoes/scripts/carga.py).",
+    Codigo.CAMINHO_NAO_NORMALIZADO: u"Escreva o caminho sem // repetida, sem /./ e sem / no fim.",
     Codigo.CONTEM_PONTOS: u"O caminho não pode conter '..'.",
-    Codigo.FORA_DA_BASE: u"Arquivo fora da pasta base de scripts.",
-    Codigo.IGUAL_A_BASE: u"Informe o arquivo do script, não a pasta base.",
-    Codigo.NAO_E_ARQUIVO: u"Arquivo não encontrado na pasta base (ou não é um arquivo).",
-    Codigo.PASTA_INVALIDA: u"Escolha uma das pastas base da lista.",
-    Codigo.PASTA_NAO_MAPEADA: u"Esta pasta base não está configurada neste servidor.",
+    Codigo.SEPARADOR_INVALIDO: u"Use só / para separar pastas; não use \\.",
+    Codigo.CARACTERE_INVALIDO: u"O caminho contém caracteres de controle não permitidos.",
+    Codigo.PASTA_DO_SISTEMA: u"Scripts não podem ficar em pastas do sistema (/bin, /sbin, /usr, /lib, /etc, /boot, "
+                             u"/proc, /sys, /dev, /root). Use outra pasta.",
+    Codigo.PASTA_DO_SSS: u"Scripts não podem ficar nas pastas de log ou de trabalho do SSS. Use outra pasta.",
+    Codigo.NAO_E_ARQUIVO: u"O caminho aponta para uma pasta ou algo que não é um arquivo comum.",
     Codigo.DONO_INVALIDO: u"O arquivo, ou uma pasta do caminho, pertence a um usuário não autorizado.",
-    Codigo.GRAVAVEL_GRUPO_OUTROS: u"Arquivo gravável por outros usuários (ou pelo grupo); ajuste as permissões.",
+    Codigo.GRAVAVEL_GRUPO_OUTROS: u"O arquivo, ou uma pasta do caminho, pode ser alterado por outros usuários "
+                                  u"(ou pelo grupo); ajuste as permissões.",
     Codigo.GRAVAVEL_PELO_AGENTE: u"O arquivo, ou uma pasta do caminho, é gravável pelo usuário do sistema; "
                                  u"ajuste as permissões.",
     Codigo.INTERPRETADOR_NAO_PERMITIDO: u"Interpretador não permitido.",
-    Codigo.SEPARADOR_INVALIDO: u"Use só / para separar pastas; não use \\ nem : (letra de drive).",
 }
 OBS_VALIDACAO = u"A validação definitiva ocorre também no agente executor no momento da execução."
-AVISO_DEV_ARQUIVO = (u"Ambiente DEV: o arquivo não existe neste servidor; o cadastro foi aceito, mas o agente "
-                     u"recusará a execução se o arquivo não existir lá.")
-AVISOS_SEM_ETAPA2 = {
-    path_guard.PASTA_NAO_DISPONIVEL: u"Pasta base não disponível neste servidor: a validação ocorrerá no agente.",
-}
+AVISO_NAO_ENCONTRADO = (u"Arquivo não encontrado neste servidor: a validação ocorrerá no agente. "
+                        u"Se o arquivo não existir lá, a execução será recusada.")
 MSG_NOME_OBRIGATORIO = u"Informe o nome do script."
 MSG_NOME_DUPLICADO = u"Já existe um script com este nome."
 MSG_CONTROLE = u"O campo contém caracteres de controle não permitidos."
-MSG_PATH_OBRIGATORIO = u"Informe o caminho do arquivo, relativo à pasta base."
+MSG_PATH_OBRIGATORIO = u"Informe o caminho completo do arquivo do script."
+MSG_NOME_RESERVADO = u"Este nome é reservado pelo sistema. Escolha outro."
 MSG_TIPO_PARAM = u"Selecione como os argumentos são montados."
 MSG_PARALELO = u"Informe um número de 1 a 999."
 MSG_TIMEOUT = u"Informe um número de segundos entre 1 e %d, ou deixe em branco." % TIMEOUT_MAXIMO
@@ -88,7 +90,7 @@ AVISO_DESATIVACAO = u"Agendamentos que usam este script serão pausados no próx
 _CAMPO_POR_CONSTRAINT = {
     "uk_tbsss_scr_nome": ("nome", MSG_NOME_DUPLICADO),
     "ck_tbsss_scr_int": ("interpretador", MENSAGENS_PATH[Codigo.INTERPRETADOR_NAO_PERMITIDO]),
-    "ck_tbsss_scr_path": ("path_file", MENSAGENS_PATH[Codigo.CONTEM_PONTOS]),
+    "ck_tbsss_scr_path": ("path_file", MENSAGENS_PATH[Codigo.CAMINHO_NAO_NORMALIZADO]),
     "ck_tbsss_scr_paral": ("max_qtd_parallel_env", MSG_PARALELO),
     "ck_tbsss_scr_tmout": ("timeout_seg", MSG_TIMEOUT),
     "ck_tbsss_scr_tparam": ("tipo_param", MSG_TIPO_PARAM),
@@ -151,12 +153,12 @@ def _versao_vinculos(vinculos, dicionario):
 class ServicoAdminScripts(object):
     """Regras do cadastro de scripts com repositorios, configuracao do agente, relogio e log injetados."""
 
-    def __init__(self, catalogo, agendamentos, base_script_dirs, script_owner_uids, sss_env, log, relogio):
+    def __init__(self, catalogo, agendamentos, script_owner_uids, sss_env, log, relogio, dirs_sss=()):
         self._catalogo = catalogo
         self._agendamentos = agendamentos
-        # Pastas base deste no (CR-003 D16): nome logico -> diretorio local (None = so existe nos agentes).
-        self._pastas = dict(base_script_dirs or {})
         self._owner_uids = tuple(script_owner_uids)
+        # log_dir e work_dir deste no: nenhum script pode ficar dentro deles (README §8.5, CR-005 D3).
+        self._dirs_sss = tuple(d for d in dirs_sss if d)
         self._env = sss_env
         self._log = log
         self._relogio = relogio
@@ -171,16 +173,6 @@ class ServicoAdminScripts(object):
         filtros["ativo"] = "S"
         return self._agendamentos.listar(filtros=filtros, pagina=1, tamanho=_TAMANHO_CONTAGEM)["total"]
 
-    @staticmethod
-    def _admin(ctx):
-        return ctx.get("is_admin") is True
-
-    def bases_exibicao(self, ctx):
-        """Mapa nome -> diretorio real das pastas base, so para admin (README §8.5)."""
-        if not self._admin(ctx):
-            return None
-        return dict((n, os.path.realpath(c)) for n, c in self._pastas.items() if c)
-
     # ----------------------------------------------------------------- leitura
 
     def listar(self, ctx, filtros, pagina, tamanho):
@@ -189,14 +181,12 @@ class ServicoAdminScripts(object):
         return self._catalogo.scripts_listar(filtros=filtros, pagina=pagina, tamanho=tamanho)
 
     def formulario(self, ctx, script_id=None):
-        """Dados do formulario; diretorios das pastas base so para admin. Inclui agendamentos ativos na edicao."""
+        """Dados do formulario. Inclui agendamentos ativos na edicao."""
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        comum = {"base_exibicao": self.bases_exibicao(ctx), "pastas": list(self._pastas),
-                 "obs_validacao": OBS_VALIDACAO}
+        comum = {"obs_validacao": OBS_VALIDACAO}
         if script_id in (None, ""):
             return dict(comum, id=None, nome="", descricao="", grupo="", categoria="", etapa="",
-                        interpretador=path_guard.ALLOWLIST[0], pasta_base=(list(self._pastas) or [""])[0],
-                        path_file="", tipo_param="NOMEADO",
+                        interpretador=path_guard.ALLOWLIST[0], path_file="", tipo_param="NOMEADO",
                         max_qtd_parallel_env=1, timeout_seg="", ativo="S", versao="", agendamentos_ativos=0)
         s = self._obter(script_id)
         dados = dict((c, s.get(c)) for c in CAMPOS_EDITAVEIS)
@@ -249,36 +239,31 @@ class ServicoAdminScripts(object):
         except PathGuardErro as exc:
             erros["interpretador"] = MENSAGENS_PATH[exc.codigo]
         reg["interpretador"] = cmd
-        # Pasta base: nome da lista deste no; na edicao, o valor gravado e mantido mesmo sem mapeamento.
-        pasta = dados.get("pasta_base")
-        if pasta not in self._pastas and not (atual and pasta == atual.get("pasta_base")):
-            erros["pasta_base"] = MENSAGENS_PATH[Codigo.PASTA_INVALIDA]
-        reg["pasta_base"] = pasta
+        # D7 (README §8.5): a pasta de log do script nao pode ser a dos logs da aplicacao.
+        if reg["nome"] and "nome" not in erros and pastas_log.nome_reservado(reg["nome"]):
+            erros["nome"] = MSG_NOME_RESERVADO
         tipo = admin_crud.texto(dados.get("tipo_param"), 15)
         if tipo not in TIPOS_PARAM:
             erros["tipo_param"] = MSG_TIPO_PARAM
         reg["tipo_param"] = tipo
         return reg
 
-    def validar_caminho(self, path_file, erros, pasta_base=None, interpretador=None, etapa2=True):
-        """Etapas 1 (textual) e 2 (servidor local) do path_guard. Retorna aviso (str) ou None.
+    def validar_caminho(self, path_file, erros, checar_arquivo=True):
+        """Confere path_file neste no (README §8.5, CR-005 D3/D4). Retorna aviso (str) ou None.
 
-        A etapa 2 so roda se este no suporta o interpretador e tem a pasta base (README §8.5); senao,
-        aviso. Em sss_env=DEV, apenas 'arquivo inexistente' na etapa 2 vira aviso; o resto bloqueia.
+        Formato e pastas proibidas valem sempre. Com checar_arquivo, se o arquivo existe aqui, dono e
+        permissao bloqueiam; se nao existe, vira aviso e o agente confere no claim.
         """
-        if path_file is None or "path_file" in erros or "pasta_base" in erros:
+        if path_file is None or "path_file" in erros:
             return None
         try:
             path_guard.validar_cadastro(path_file)
-            if not etapa2:
-                return None
-            motivo = path_guard.motivo_sem_etapa2(self._pastas, pasta_base, interpretador)
-            if motivo is not None:
-                return AVISOS_SEM_ETAPA2[motivo]
-            path_guard.resolver_pasta(self._pastas, pasta_base, path_file, self._owner_uids)
+            path_guard.checar_pastas_proibidas(path_file, self._dirs_sss)
+            if checar_arquivo:
+                path_guard.resolver(path_file, self._owner_uids, dirs_sss=self._dirs_sss)
         except PathGuardErro as exc:
-            if exc.codigo == Codigo.NAO_E_ARQUIVO and self._env == "DEV":
-                return AVISO_DEV_ARQUIVO
+            if exc.codigo == Codigo.NAO_ENCONTRADO:
+                return AVISO_NAO_ENCONTRADO
             erros["path_file"] = MENSAGENS_PATH[exc.codigo]
         return None
 
@@ -309,9 +294,9 @@ class ServicoAdminScripts(object):
         erros = {}
         atual = None if script_id in (None, "") else self._obter(script_id)
         reg = self._validar(dados, erros, atual)
-        # C5 (README §8.5): na edicao, a etapa 2 so roda se pasta, caminho ou interpretador mudarem.
-        etapa2 = atual is None or any(reg[c] != atual.get(c) for c in ("pasta_base", "path_file", "interpretador"))
-        aviso = self.validar_caminho(reg["path_file"], erros, reg["pasta_base"], reg["interpretador"], etapa2)
+        # README §8.5: na edicao, as checagens de arquivo so rodam se o caminho ou o interpretador mudarem.
+        checar = atual is None or any(reg[c] != atual.get(c) for c in ("path_file", "interpretador"))
+        aviso = self.validar_caminho(reg["path_file"], erros, checar)
         if script_id in (None, ""):
             if erros:
                 return None, erros, None
@@ -357,9 +342,9 @@ class ServicoAdminScripts(object):
             raise RepoConflito("versao divergente")
         novo_ativo = "N" if atual["ativo"] == "S" else "S"
         if novo_ativo == "S":
-            # Reativacao refaz a etapa 2 (README §8.5, C5).
+            # Reativacao refaz as checagens de arquivo (README §8.5).
             erros = {}
-            self.validar_caminho(atual["path_file"], erros, atual.get("pasta_base"), atual["interpretador"])
+            self.validar_caminho(atual["path_file"], erros)
             if erros:
                 raise OperacaoNegada(u"Não foi possível reativar: %s" % u" ".join(erros.values()))
         detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, ativo=novo_ativo), ("ativo",))
@@ -586,19 +571,14 @@ class ServicoAdminScripts(object):
                 return {"argv": None, "erros": erros, "aviso": None}
         aviso = None
         try:
-            path_guard.validar_cadastro(script["path_file"])
-            motivo = path_guard.motivo_sem_etapa2(self._pastas, script.get("pasta_base"), script["interpretador"])
-            if motivo is None:
-                path_guard.resolver_pasta(self._pastas, script.get("pasta_base"), script["path_file"],
-                                          self._owner_uids)
-            else:
-                aviso = AVISOS_SEM_ETAPA2[motivo]
+            path_guard.resolver(script["path_file"], self._owner_uids, dirs_sss=self._dirs_sss)
         except PathGuardErro as exc:
-            aviso = MENSAGENS_PATH[exc.codigo]
+            aviso = AVISO_NAO_ENCONTRADO if exc.codigo == Codigo.NAO_ENCONTRADO else MENSAGENS_PATH[exc.codigo]
         snap, _resolvidos, erros = params_compiler.compilar_snapshot(script, vinculos, {}, self._relogio())
         if snap is None:
             return {"argv": None, "erros": erros, "aviso": aviso}
-        return {"argv": params_compiler.argv_para_exibicao(json.loads(snap), self.bases_exibicao(ctx)),
+        # No cadastro (CAD_SCRIPTS) o caminho aparece completo: e o que o usuario cadastrou (CR-005, R-f).
+        return {"argv": params_compiler.argv_para_exibicao(json.loads(snap), completo=True),
                 "erros": {}, "aviso": aviso}
 
 
@@ -618,11 +598,11 @@ def _servico():
             _padrao = ServicoAdminScripts(
                 catalogo=fabrica.obter("catalogo"),
                 agendamentos=fabrica.obter("agendamentos"),
-                base_script_dirs=cfg.agent.base_script_dirs,
                 script_owner_uids=cfg.agent.script_owner_uids,
                 sss_env=cfg.app.sss_env,
                 log=sss_logging.obter_logger("sss_web", cfg),
                 relogio=tickets.agora,
+                dirs_sss=(cfg.logging.log_dir, cfg.agent.work_dir),
             )
         return _padrao
 

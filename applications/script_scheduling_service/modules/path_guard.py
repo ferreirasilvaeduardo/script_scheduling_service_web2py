@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """Validacao de interpretador logico e caminho de script (README §6.4, §8.5, AGENTS §3.2, CR-001, CR-005).
 
-Modulo puro: nao importa gluon (AGENTS §7.1).
+CR-005: somente POSIX e caminho absoluto livre (sem pastas base). Modulo puro: nao importa gluon (AGENTS §7.1).
 """
 import os
-import re
 
 # Interpretadores logicos (CR-001, D1/D2; CR-005: somente POSIX): o catalogo guarda a chave; cada agente
 # a mapeia para o executavel local ([agent] interpretadores).
@@ -15,26 +14,28 @@ ARGS_FIXOS = {
     'BASH': (),
     'SH': (),
 }
+# Pastas do sistema onde nenhum script pode ficar (README §8.5, CR-005 D3).
+PASTAS_DO_SISTEMA = ('/bin', '/sbin', '/usr', '/lib', '/lib32', '/lib64', '/libx32',
+                     '/etc', '/boot', '/proc', '/sys', '/dev', '/root')
+# Tamanho maximo de path_file (coluna VARCHAR2(500 CHAR)).
+TAMANHO_MAXIMO = 500
 
 
 class Codigo(object):
-    """Codigos de rejeicao do path_guard."""
-    FORA_DA_BASE = 'FORA_DA_BASE'
-    NAO_E_ARQUIVO = 'NAO_E_ARQUIVO'
-    IGUAL_A_BASE = 'IGUAL_A_BASE'
-    CAMINHO_ABSOLUTO = 'CAMINHO_ABSOLUTO'
+    """Codigos de rejeicao do path_guard (README §8.5)."""
+    CAMINHO_RELATIVO = 'CAMINHO_RELATIVO'
+    CAMINHO_NAO_NORMALIZADO = 'CAMINHO_NAO_NORMALIZADO'
     CONTEM_PONTOS = 'CONTEM_PONTOS'
+    SEPARADOR_INVALIDO = 'SEPARADOR_INVALIDO'
+    CARACTERE_INVALIDO = 'CARACTERE_INVALIDO'
+    PASTA_DO_SISTEMA = 'PASTA_DO_SISTEMA'
+    PASTA_DO_SSS = 'PASTA_DO_SSS'
+    NAO_ENCONTRADO = 'NAO_ENCONTRADO'
+    NAO_E_ARQUIVO = 'NAO_E_ARQUIVO'
     DONO_INVALIDO = 'DONO_INVALIDO'
     GRAVAVEL_GRUPO_OUTROS = 'GRAVAVEL_GRUPO_OUTROS'
     GRAVAVEL_PELO_AGENTE = 'GRAVAVEL_PELO_AGENTE'
     INTERPRETADOR_NAO_PERMITIDO = 'INTERPRETADOR_NAO_PERMITIDO'
-    SEPARADOR_INVALIDO = 'SEPARADOR_INVALIDO'
-    PASTA_INVALIDA = 'PASTA_INVALIDA'
-    PASTA_NAO_MAPEADA = 'PASTA_NAO_MAPEADA'
-
-
-# Nome logico de pasta base (README §8.5, CR-003 D16), igual a ck_tbsss_scr_pasta.
-RE_PASTA = re.compile(r'[A-Z][A-Z0-9_]{0,29}')
 
 
 class PathGuardErro(Exception):
@@ -52,27 +53,33 @@ def validar_interpretador(interpretador):
 
 
 def validar_cadastro(path_file):
-    """Checagens textuais equivalentes a ck_tbsss_scr_path (README §8.5, CR-003 C4).
-
-    Relativo, com '/' como unico separador: recusa '/' no inicio, '..', '\\' e ':' (letra de drive).
-    """
-    if not isinstance(path_file, str) or path_file == '' or path_file[0] == '/':
-        raise PathGuardErro(Codigo.CAMINHO_ABSOLUTO)
+    """Formato de path_file (README §8.5, ck_tbsss_scr_path): absoluto, normalizado, sem '..', '\\' e controle."""
+    if not isinstance(path_file, str) or path_file[:1] != '/':
+        raise PathGuardErro(Codigo.CAMINHO_RELATIVO)
+    if any(ord(c) < 32 or ord(c) == 127 for c in path_file):
+        raise PathGuardErro(Codigo.CARACTERE_INVALIDO)
+    if '\\' in path_file:
+        raise PathGuardErro(Codigo.SEPARADOR_INVALIDO)
     if '..' in path_file:
         raise PathGuardErro(Codigo.CONTEM_PONTOS)
-    if '\\' in path_file or ':' in path_file:
-        raise PathGuardErro(Codigo.SEPARADOR_INVALIDO)
+    # normpath mantem '//' inicial (POSIX); a CK recusa '//' em qualquer ponto.
+    if path_file == '/' or '//' in path_file or os.path.normpath(path_file) != path_file:
+        raise PathGuardErro(Codigo.CAMINHO_NAO_NORMALIZADO)
 
 
-def validar_pasta(pasta_base):
-    """Exige um nome logico de pasta base valido (ck_tbsss_scr_pasta)."""
-    if not isinstance(pasta_base, str) or not RE_PASTA.fullmatch(pasta_base):
-        raise PathGuardErro(Codigo.PASTA_INVALIDA)
+def _dentro(caminho, pasta):
+    """True se caminho e a propria pasta ou fica abaixo dela (por componente, nunca prefixo de texto)."""
+    return os.path.commonpath([caminho, pasta]) == pasta
 
 
-def pasta_mapeada(pastas, pasta_base):
-    """True se o no tem um diretorio local para a pasta base (NOME= sem caminho nao conta)."""
-    return bool((pastas or {}).get(pasta_base))
+def checar_pastas_proibidas(path_file, dirs_sss=()):
+    """Recusa pastas do sistema e log_dir/work_dir, no caminho digitado e no resolvido (symlink)."""
+    sss = [os.path.realpath(d) for d in dirs_sss if d]
+    for alvo in (path_file, os.path.realpath(path_file)):
+        if any(_dentro(alvo, d) for d in PASTAS_DO_SISTEMA):
+            raise PathGuardErro(Codigo.PASTA_DO_SISTEMA)
+        if any(_dentro(alvo, d) for d in sss):
+            raise PathGuardErro(Codigo.PASTA_DO_SSS)
 
 
 def _gravavel_pelo_agente(caminho, st, uid_agente):
@@ -82,9 +89,9 @@ def _gravavel_pelo_agente(caminho, st, uid_agente):
     return uid_agente == 0 or (st.st_uid == uid_agente and bool(st.st_mode & 0o200))
 
 
-def _checar_dono_e_modo(caminho, owner_uids, uid_agente):
+def _checar_dono_e_modo(caminho, donos, uid_agente):
     st = os.stat(caminho)
-    if st.st_uid not in owner_uids:
+    if st.st_uid not in donos:
         raise PathGuardErro(Codigo.DONO_INVALIDO)
     if st.st_mode & 0o022:
         raise PathGuardErro(Codigo.GRAVAVEL_GRUPO_OUTROS)
@@ -92,57 +99,38 @@ def _checar_dono_e_modo(caminho, owner_uids, uid_agente):
         raise PathGuardErro(Codigo.GRAVAVEL_PELO_AGENTE)
 
 
-def resolver(base_script_dir, path_file, owner_uids, uid_agente=None):
-    """Resolve path_file sob a base e devolve script_real; lanca PathGuardErro.
+def resolver(path_file, owner_uids, uid_agente=None, dirs_sss=(), parar_em='/'):
+    """Confere o script no servidor local e devolve o caminho real (README §8.5, CR-005 D3).
 
+    - formato e pastas proibidas (digitado e resolvido);
+    - NAO_ENCONTRADO se nao existe; NAO_E_ARQUIVO se existe mas nao e arquivo regular;
+    - dono do arquivo em owner_uids; cada diretorio ate '/' com dono root ou em owner_uids;
+      arquivo e diretorios sem escrita de grupo/outros nem do agente.
     uid_agente=None avalia escrita com os.access do proprio processo (o agente).
+    parar_em limita a subida da cadeia (so testes; producao usa sempre '/').
     """
     validar_cadastro(path_file)
-    owner_uids = tuple(owner_uids)
-
-    base = os.path.realpath(base_script_dir)
-    real = os.path.realpath(os.path.join(base, path_file))
-    try:
-        dentro = os.path.commonpath([base, real]) == base
-    except ValueError:
-        dentro = False
-    if not dentro:
-        raise PathGuardErro(Codigo.FORA_DA_BASE)
-    if real == base:
-        raise PathGuardErro(Codigo.IGUAL_A_BASE)
+    checar_pastas_proibidas(path_file, dirs_sss)
+    real = os.path.realpath(path_file)
+    if not os.path.lexists(real):
+        raise PathGuardErro(Codigo.NAO_ENCONTRADO)
     if not os.path.isfile(real):
         raise PathGuardErro(Codigo.NAO_E_ARQUIVO)
-
-    # real esta estritamente dentro de base: subir por dirname termina em base.
-    _checar_dono_e_modo(real, owner_uids, uid_agente)
+    donos = tuple(owner_uids)
+    donos_dir = donos + ((0,) if 0 not in donos else ())
+    _checar_dono_e_modo(real, donos, uid_agente)
+    limite = os.path.realpath(parar_em)
     atual = os.path.dirname(real)
-    while atual != base:
-        _checar_dono_e_modo(atual, owner_uids, uid_agente)
+    while True:
+        _checar_dono_e_modo(atual, donos_dir, uid_agente)
+        if atual == limite or atual == '/':
+            break
         atual = os.path.dirname(atual)
-    _checar_dono_e_modo(base, owner_uids, uid_agente)
     return real
 
 
-def resolver_pasta(pastas, pasta_base, path_file, owner_uids, uid_agente=None):
-    """Resolve o script na pasta base do no (README §8.5, CR-003 D16); lanca PathGuardErro.
-
-    pastas: mapa nome logico -> diretorio local ([agent] base_script_dirs); None/vazio = nao mapeada.
-    """
-    validar_pasta(pasta_base)
-    if not pasta_mapeada(pastas, pasta_base):
-        raise PathGuardErro(Codigo.PASTA_NAO_MAPEADA)
-    return resolver(pastas[pasta_base], path_file, owner_uids, uid_agente)
-
-
-# Motivo para o no web nao executar a etapa 2 (README §8.5, "Validacao no no web"; CR-003 D4/D16).
-PASTA_NAO_DISPONIVEL = 'PASTA_NAO_DISPONIVEL'
-
-
-def motivo_sem_etapa2(pastas, pasta_base, interpretador):
-    """None se o no web deve resolver o arquivo localmente; senao o motivo do aviso.
-
-    A validacao definitiva e sempre a do agente, no claim (README §8.4).
-    """
-    if not pasta_mapeada(pastas, pasta_base):
-        return PASTA_NAO_DISPONIVEL
-    return None
+def nome_exibicao(path_file, completo):
+    """Caminho do script para a tela: completo para admin; '…/arquivo' para os demais (CR-005, R-f)."""
+    if not path_file:
+        return path_file
+    return path_file if completo else u'…/' + os.path.basename(path_file)

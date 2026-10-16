@@ -140,7 +140,6 @@ class ServicoAgentes(object):
                 "ambientes": [a for a in (ag.get("ambientes") or "").split(",") if a],
                 "interpretadores": [i for i in (ag.get("interpretadores") or "").split(",") if i],
                 # So os nomes logicos: os caminhos locais nunca vao para a tela (README §13).
-                "pastas_base": [p for p in (ag.get("pastas_base") or "").split(",") if p],
                 "iniciado_em": ag.get("iniciado_em"),
                 "heartbeat_at": hb,
                 "idade_s": idade,

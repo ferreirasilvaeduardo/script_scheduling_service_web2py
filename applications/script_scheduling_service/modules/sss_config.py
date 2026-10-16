@@ -85,7 +85,6 @@ SCHEMA = collections.OrderedDict([
     ("agent", collections.OrderedDict([
         ("agent_id", CampoDef("str", obrigatorio=True, regex=r"^[A-Za-z0-9._-]{1,30}$")),
         ("ambientes_atendidos", CampoDef("list_csv", obrigatorio=True)),
-        ("base_script_dirs", CampoDef("pastas", obrigatorio=True)),
         ("work_dir", CampoDef("path", obrigatorio=True)),
         ("script_owner_uids", CampoDef("list_csv", obrigatorio=True)),
         ("max_parallel_jobs", CampoDef("int", obrigatorio=True, min_val=1, max_val=999)),
@@ -161,7 +160,7 @@ class SecretsConfig(_ItemAccessMixin, collections.namedtuple("SecretsConfig", ["
 
 
 class AgentConfig(_ItemAccessMixin, collections.namedtuple("AgentConfig", [
-    "agent_id", "ambientes_atendidos", "base_script_dirs", "work_dir",
+    "agent_id", "ambientes_atendidos", "work_dir",
     "script_owner_uids", "max_parallel_jobs", "max_parallel_hard_limit",
     "claim_batch_size", "schedule_batch_size", "orchestrator_interval_s",
     "cancel_poll_interval_s", "heartbeat_interval_s", "fence_timeout_s",
@@ -197,41 +196,6 @@ class Config(_ItemAccessMixin, collections.namedtuple("Config", [
     "app", "oracle", "secrets", "agent", "logging", "web", "retencao"
 ])):
     __slots__ = ()
-
-
-_RE_PASTA = re.compile(r"[A-Z][A-Z0-9_]{0,29}")
-
-
-def _converter_pastas(secao, chave, val_str):
-    """[agent] base_script_dirs: 'NOME=caminho,...' -> OrderedDict nome -> caminho (None se vazio).
-
-    README §8.5/§12.1 (CR-003 D16): nomes unicos ^[A-Z][A-Z0-9_]{0,29}$; caminhos absolutos, distintos e
-    nao aninhados. Caminho vazio (pasta que so existe nos agentes) e aceito aqui; o daemon o recusa.
-    """
-    pastas = collections.OrderedDict()
-    for item in [p.strip() for p in (val_str or "").split(",") if p.strip()]:
-        if "=" not in item:
-            raise ConfigErro(secao, chave, "Item '%s' fora do formato NOME=caminho" % item)
-        nome, caminho = [x.strip() for x in item.split("=", 1)]
-        if not _RE_PASTA.fullmatch(nome):
-            raise ConfigErro(secao, chave, "Nome de pasta base invalido: '%s' (use ^[A-Z][A-Z0-9_]{0,29}$)" % nome)
-        if nome in pastas:
-            raise ConfigErro(secao, chave, "Nome de pasta base repetido: '%s'" % nome)
-        if caminho and not os.path.isabs(caminho):
-            raise ConfigErro(secao, chave, "Caminho da pasta base '%s' deve ser absoluto" % nome)
-        pastas[nome] = os.path.normpath(caminho) if caminho else None
-    if not pastas:
-        raise ConfigErro(secao, chave, "Informe ao menos uma pasta base (NOME=caminho)")
-    caminhos = [(n, os.path.normcase(c)) for n, c in pastas.items() if c]
-    for i, (n1, c1) in enumerate(caminhos):
-        for n2, c2 in caminhos[i + 1:]:
-            try:
-                comum = os.path.commonpath([c1, c2])
-            except ValueError:
-                continue
-            if comum in (c1, c2):
-                raise ConfigErro(secao, chave, "Pastas base '%s' e '%s' sao iguais ou aninhadas" % (n1, n2))
-    return pastas
 
 
 def _converter_valor(secao, chave, cdef, raw_val):
@@ -309,9 +273,6 @@ def _converter_valor(secao, chave, cdef, raw_val):
                 )
             )
         return val_str
-
-    elif cdef.tipo == "pastas":
-        return _converter_pastas(secao, chave, val_str)
 
     elif cdef.tipo == "list_csv":
         if not val_str:

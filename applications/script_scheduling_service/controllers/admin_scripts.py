@@ -13,7 +13,7 @@ from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
 
 _FUNC = "CAD_SCRIPTS"
 _TAMANHOS = (20, 50, 100)
-_CAMPOS = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "pasta_base", "path_file", "tipo_param",
+_CAMPOS = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file", "tipo_param",
            "max_qtd_parallel_env", "timeout_seg", "versao")
 _JS = "js/app/scripts_admin.js"
 _MAX_JSON = 50000
@@ -43,10 +43,10 @@ def _texto(valor, limite):
 def _vazio_form(ctx):
     # Fallback quando nem o formulario pode ser lido (falha de repositorio): so os campos que a view usa.
     return {"id": None, "nome": "", "descricao": "", "grupo": "", "categoria": "", "etapa": "",
-            "interpretador": path_guard.ALLOWLIST[0], "pasta_base": "", "pastas": [], "path_file": "",
+            "interpretador": path_guard.ALLOWLIST[0], "path_file": "",
             "tipo_param": "NOMEADO",
             "max_qtd_parallel_env": 1, "timeout_seg": "", "ativo": "S", "versao": "", "agendamentos_ativos": 0,
-            "base_exibicao": None, "obs_validacao": servico.OBS_VALIDACAO}
+            "obs_validacao": servico.OBS_VALIDACAO}
 
 
 def _pagina_form(ctx, dados, erros=None):
@@ -54,7 +54,7 @@ def _pagina_form(ctx, dados, erros=None):
     response.view = "admin_scripts/form.html"
     erros = erros or {}
     campos = [{"nome": n, "erro": erros.get(n)} for n in ("nome", "descricao", "grupo", "categoria", "etapa",
-                                                          "interpretador", "pasta_base", "path_file", "tipo_param",
+                                                          "interpretador", "path_file", "tipo_param",
                                                           "max_qtd_parallel_env", "timeout_seg")]
     return dict(scr=dados, erros=erros, erro_geral=erros.get(admin_crud.CAMPO_GERAL), interpretadores=servico.ROTULOS_INTERPRETADOR,
                 tipos_param=servico.ROTULOS_TIPO_PARAM, foco_campo=ui_helpers.primeiro_campo_invalido(campos),
@@ -97,7 +97,8 @@ def salvar():
     _exigir_metodo("POST")
     ctx = _exigir_func(_FUNC)
     script_id = _texto(request.post_vars.get("id"), 11)
-    enviados = dict((c, _texto(request.post_vars.get(c), 300)) for c in _CAMPOS)
+    # Teto acima do maior limite do service (path_file: 500), para que o excesso seja recusado (AGENTS §3.4).
+    enviados = dict((c, _texto(request.post_vars.get(c), 600)) for c in _CAMPOS)
     aviso = None
     try:
         salvo_id, erros, aviso = servico.salvar(ctx, _ip_origem(), script_id, enviados)

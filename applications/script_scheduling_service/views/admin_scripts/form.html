@@ -1,7 +1,7 @@
 {{extend 'layout.html'}}
 {{
 # Inclusão e edição de script. interpretador é um select fixo da allowlist lógica (o servidor revalida o valor exato);
-# o caminho é relativo a uma das pastas base (README §8.5, CR-003 D16); o diretório só é exibido para administradores.
+# o caminho é absoluto, em qualquer pasta fora das do sistema (README §8.5, CR-005).
 import ui_helpers
 _s = scr
 _novo = not _s.get('id')
@@ -15,19 +15,12 @@ _campos_b = [
     {'nome': 'categoria', 'rotulo': 'Categoria', 'valor': _s.get('categoria'), 'erro': erros.get('categoria'), 'maxlength': 30},
     {'nome': 'etapa', 'rotulo': 'Etapa', 'valor': _s.get('etapa'), 'erro': erros.get('etapa'), 'maxlength': 30},
 ]
-_ajuda_path = u'Relativo à pasta base escolhida, sem / no início e sem "..". ' + _s['obs_validacao']
-_pastas = list(_s.get('pastas') or [])
-_bases = _s.get('base_exibicao') or {}
-_opc_pastas = [(_p, (u'%s — %s' % (_p, _bases[_p])) if _p in _bases else _p) for _p in _pastas]
-if _s.get('pasta_base') and _s.get('pasta_base') not in _pastas:
-    _opc_pastas.append((_s['pasta_base'], u'%s (não mapeada neste servidor)' % _s['pasta_base']))
-pass
+_ajuda_path = (u'Caminho completo do arquivo, começando por / (ex.: /opt/automacoes/scripts/carga.py). '
+               u'Não pode ficar em pastas do sistema (/bin, /usr, /etc…). ' + _s['obs_validacao'])
 _campos_c = [
     {'nome': 'interpretador', 'rotulo': 'Interpretador', 'tipo': 'select', 'valor': _s.get('interpretador'), 'erro': erros.get('interpretador'), 'obrigatorio': True, 'opcoes': list(interpretadores),
-     'ajuda': u'Chave lógica: cada agente a traduz para o executável local. Cada agente só executa os interpretadores da plataforma dele.'},
-    {'nome': 'pasta_base', 'rotulo': 'Pasta base', 'tipo': 'select', 'valor': _s.get('pasta_base'), 'erro': erros.get('pasta_base'), 'obrigatorio': True, 'opcoes': _opc_pastas,
-     'ajuda': u'Pasta onde o script fica. Cada servidor traduz o nome para a pasta dele; o arquivo precisa existir lá.'},
-    {'nome': 'path_file', 'rotulo': 'Arquivo do script', 'valor': _s.get('path_file'), 'erro': erros.get('path_file'), 'obrigatorio': True, 'maxlength': 250, 'ajuda': _ajuda_path},
+     'ajuda': u'Chave lógica: cada agente a traduz para o executável local.'},
+    {'nome': 'path_file', 'rotulo': 'Arquivo do script', 'valor': _s.get('path_file'), 'erro': erros.get('path_file'), 'obrigatorio': True, 'maxlength': 500, 'ajuda': _ajuda_path},
     {'nome': 'tipo_param', 'rotulo': u'Montagem dos argumentos', 'tipo': 'select', 'valor': _s.get('tipo_param'), 'erro': erros.get('tipo_param'), 'obrigatorio': True, 'opcoes': list(tipos_param),
      'ajuda': u'Trocar a montagem revalida os parâmetros já vinculados.'},
 ]

@@ -101,16 +101,15 @@ class BaseRepoContractTest(object):
                 "nome": "carga_diaria",
                 "descricao": "Duplicado",
                 "interpretador": "PYTHON3",
-                "pasta_base": "ROTINAS",
-                "path_file": "carga_diaria.py",
+                "path_file": "/opt/scripts/carga_diaria.py",
             })
         self.assertIn("uk_tbsss_scr_nome", str(ctx.exception.constraint or ""))
 
-        # CK da pasta base (CR-003 D16)
+        # CK de path_file (CR-005 R-g): deve comecar com '/' e nao ter '..' ou '//' ou '\'
         with self.assertRaises(RepoViolacao) as ctx:
-            cat.scripts_inserir({"nome": "pasta_invalida", "interpretador": "PYTHON3", "pasta_base": "rotinas",
+            cat.scripts_inserir({"nome": "caminho_invalido", "interpretador": "PYTHON3",
                                  "path_file": "x.py"})
-        self.assertEqual(ctx.exception.constraint, "ck_tbsss_scr_pasta")
+        self.assertEqual(ctx.exception.constraint, "ck_tbsss_scr_path")
 
         # UK usuario
         with self.assertRaises(RepoViolacao) as ctx:
