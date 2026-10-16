@@ -7,6 +7,7 @@ from gluon import current
 import agendamentos_service
 import agentes_service
 import auth_service
+import permissoes_service
 import rbac
 import security
 import ticket_service
@@ -89,6 +90,21 @@ def logout():
 
 
 _CAMPOS_MINHA_SENHA = ("senha_atual", "nova", "confirmacao")
+
+
+def permissoes():
+    """O que eu posso fazer (README §4.3.E): so leitura, para qualquer usuario logado."""
+    if (request.env.request_method or "GET").upper() not in ("GET", "HEAD"):
+        raise HTTP(405, **response.headers)
+    ctx = _exigir_login()
+    response.title = u"O que eu posso fazer — SSS"
+    try:
+        dados = permissoes_service.montar(ctx)
+        erro = None
+    except RepoErro:
+        _log.exception("falha ao montar permissoes (login=%s)", ctx["login"], extra={"acao": "PERMISSOES"})
+        dados, erro = None, ui_helpers.mensagem("falha_interna")
+    return dict(dados=dados, erro=erro)
 
 
 def minha_senha():

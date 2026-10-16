@@ -1485,3 +1485,21 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* O que eu posso fazer (README §4.3.E, CR-004). */
+.sss-lista-permissoes {
+  margin: 0;
+  padding-left: calc(var(--sss-esp-4) + 1.25rem);
+}
+
+.sss-lista-permissoes li {
+  padding: var(--sss-esp-1) 0;
+  overflow-wrap: anywhere;
+}
+
+.sss-acoes-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sss-esp-2);
+  margin-top: var(--sss-esp-1);
+}

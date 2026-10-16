@@ -56,6 +56,7 @@
       <span>{{=_sss_ctx['login']}}</span>
       <span class="sss-usuario-perfil">{{=_sss_ctx['perfil_nome']}}</span>
     </span>
+    <a class="btn btn-sm btn-outline-light" href="{{=URL(c='default', f='permissoes')}}">O que eu posso fazer</a>
     <a class="btn btn-sm btn-outline-light" href="{{=URL(c='default', f='minha_senha')}}">Minha senha</a>
     <form method="post" action="{{=URL(c='default', f='logout')}}" class="sss-usuario-sair">
       {{=csrf_campo()}}
