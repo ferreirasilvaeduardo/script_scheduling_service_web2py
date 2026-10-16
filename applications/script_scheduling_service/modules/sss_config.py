@@ -52,7 +52,7 @@ class CampoDef(object):
 
     def __init__(self, tipo, obrigatorio=True, min_val=None, max_val=None,
                  allowed_values=None, regex=None, default=None):
-        self.tipo = tipo  # 'str', 'int', 'bool', 'enum', 'list_csv', 'path', 'pastas'
+        self.tipo = tipo  # 'str', 'int', 'bool', 'enum', 'list_csv', 'path'
         self.obrigatorio = obrigatorio
         self.min_val = min_val
         self.max_val = max_val

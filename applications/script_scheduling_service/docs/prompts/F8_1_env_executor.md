@@ -21,8 +21,8 @@ Implementar o spawn seguro dos scripts com ambiente limpo, saída direta em arqu
   - Variáveis bloqueadas (lista do README §8.6) geram `ValueError`.
 - **`applications/script_scheduling_service/modules/executor.py`** (o **único** chamador de `plataforma.iniciar_processo`):
   - `preparar_diretorio(work_dir, ticket_id) -> caminho`: cria `ticket_<id>/` e `tmp/` via `plataforma.criar_dir_trabalho`. Um diretório preexistente é removido antes, com validação de que fica sob `work_dir` (`plataforma.caminho_final` + `commonpath`).
-  - `abrir_log(log_dir, nome_script, started_at, ticket_id, script_id=None) -> (fd, caminho)`: abre `log_dir/<pasta_script>/AAAA/MM/DD/HH/MI/ticket_<id>.log.parcial` (`pastas_log.caminho_log_parcial`) com `O_WRONLY|O_CREAT|O_EXCL|O_APPEND` e `0o600`.
-  - `iniciar(argv, log_fd, cwd, env, rotulo) -> Execucao`: chama `plataforma.iniciar_processo`, renomeia o log para `ticket_<id>_<PID>.log` (`pastas_log.caminho_log_execucao`), e faz `os.close(log_fd)` no pai. Em caso de falha no spawn, renomeia o parcial para `ticket_<id>_0.log`. A `Execucao` guarda o processo, o PID e a identidade (`plataforma.identidade_processo`).
+  - `abrir_log(log_dir, nome_script, started_at, ticket_id, script_id=None) -> (fd, caminho)`: cria as pastas `log_dir/<pasta_script>/AAAA/MM/DD/HH/MI/` **nível a nível com `chmod 0750`** em cada pasta nova (README §8.4, passo 3: o `makedirs` só aplica o modo à pasta final, e sempre sob a `umask` 077). Mova a função privada `sss_logging._garantir_diretorio` para uma função pública de `pastas_log` e use-a nos dois lugares. Depois abre `ticket_<id>.log.parcial` (`pastas_log.caminho_log_parcial`) com `O_WRONLY|O_CREAT|O_EXCL|O_APPEND` e `0o600`. O `nome_script` é o `script_nome` do snapshot (o nome da época da criação do ticket, README §6.5).
+  - `iniciar(argv, log_fd, cwd, env, rotulo) -> Execucao`: chama `plataforma.iniciar_processo`, renomeia o log para `ticket_<id>_<PID>.log` (`pastas_log.caminho_log_execucao`), e faz `os.close(log_fd)` no pai. Em caso de falha no spawn, grava a causa no arquivo (sem segredos) e renomeia o parcial para `ticket_<id>_0.log` (README §8.4, passo 3). A `Execucao` guarda o processo, o PID e a identidade (`plataforma.identidade_processo`).
   - `encerrar(execucao, grace_s, relogio_monotonico)`: delega a `plataforma.encerrar_grupo`.
   - `verificar(execucao) -> None | returncode`.
   - `traduzir_retorno(returncode, plataforma_nome) -> (status, status_motivo, return_code)`, conforme o README §5.2: 0 → `SUCCESS/EXIT_OK`; positivo → `FAILED/EXIT_ERROR`; negativo (POSIX, sinal) → `FAILED/KILLED_SIGNAL` com `128 + abs`.
@@ -36,9 +36,11 @@ Implementar o spawn seguro dos scripts com ambiente limpo, saída direta em arqu
   - `encerrar` mata o **neto**;
   - processo que ignora o pedido de término morre dentro de `grace + 1` s;
   - tradução de `returncode`;
-  - arquivo de log com `O_EXCL` e modo `0600`;
+  - arquivo de log com `O_EXCL` e modo `0600`; cada pasta nova do caminho com `0750` sob `umask 077`;
+  - falha no spawn: a causa gravada e o arquivo `ticket_<id>_0.log`;
+  - timeout: o processo que passa do tempo é encerrado pelo `encerrar` (AGENTS §7);
   - renomeação atômica do parcial para `ticket_<id>_<PID>.log`;
-  - argv montado por `params_compiler.montar_argv_agente` (Python com `-I`), a partir de um **snapshot versão 4** (`interpretador`, `path_file`, `args`; README §6.5) passado por `params_compiler.validar_snapshot`; o executável vem de `[agent] interpretadores` e o `script_real` é o `path_file` absoluto;
+  - argv montado por `params_compiler.montar_argv_agente` (Python com `-I`), a partir de um **snapshot versão 4** (`interpretador`, `path_file`, `args`; README §6.5) passado por `params_compiler.validar_snapshot`; o executável vem de `[agent] interpretadores` e o `script_real` é o `path_file` absoluto resolvido. Estenda `validar_snapshot` para devolver `(snap, argv_real, script_real)`, porque o `env_builder` precisa do `script_real` (`SSS_SCRIPT_DIR`) e o caminho não deve ser resolvido duas vezes;
   - `SSS_SCRIPT_DIR` do filho é o diretório do script.
 
 **OUT**

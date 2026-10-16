@@ -53,8 +53,8 @@ Cada passo segue o fluxo do projeto: implementação, testes (3.6.0, 3.6.8 e 3.1
 |---|---|---|
 | R0 | Este documento; README, AGENTS, IMPLANTACAO e AMBIENTE_DEV com as decisões | Suíte completa (sem código novo) |
 | R1 | D1: `POWERSHELL` sai da allowlist, das CKs e dos rótulos; plataforma só `LINUX`/`UNIX`; sai `plataforma_local` | `test_path_guard.py`, `test_params_compiler.py`, `test_admin_scripts_service.py`, `test_db_schema.py` |
-| R2 | D2, D3, D4, D7, D8, R-g, R-h: `path_guard` (caminho absoluto, cadeia até `/`, pastas do sistema), `sss_config` sem `base_script_dirs`, `sql_ident` (colunas e CKs), snapshot v4, cadastro e detalhe, seed, contratos e FAKE | `test_path_guard.py`, `test_admin_scripts_service.py`, `test_params_compiler.py`, `test_ticket_service.py`, `test_repo_contract.py`, `test_seed_fake.py`, `test_sss_config.py` |
+| R2 | D2, D3, D4, D7, D8, R-g, R-h: `path_guard` (caminho absoluto, cadeia até `/`, pastas do sistema), `sss_config` sem `base_script_dirs`, `sql_ident` (colunas e CKs), snapshot v4, cadastro e detalhe, seed, contratos e FAKE | `test_path_guard.py`, `test_admin_scripts_service.py`, `test_params_compiler.py`, `test_ticket_service.py`, `test_repo_contract.py`, `test_seed_fake.py`, `test_config.py` |
 | R3 | D5, R-a, R-b: `modules/pastas_log.py` (pasta do script e caminho do log de execução), usado pelo cadastro (D7) e pelo agente no F8 | Novo `test_pastas_log.py` |
-| R4 | D6, R-c, R-d, R-e: `sss_logging` com o padrão `app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log`, troca por tamanho e retenção; `[logging] app_log_retention_days` | `test_sss_logging.py`, `test_sss_config.py` |
+| R4 | D6, R-c, R-d, R-e: `sss_logging` com o padrão `app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log`, troca por tamanho e retenção; `[logging] app_log_retention_days` | `test_sss_logging.py`, `test_config.py` |
 | R5 | Prompts F7 a F9, índice e manual de homologação (Gestão de Scripts, detalhe do ticket e figuras) | Suíte completa e capturas |
 | UF | Fechamento: bateria completa, telas nas cinco larguras, documentação de homologação e git | Suíte completa e roteiro manual |

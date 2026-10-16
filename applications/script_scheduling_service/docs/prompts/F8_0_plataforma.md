@@ -18,22 +18,22 @@ Concentrar em `modules/plataforma/` **toda** primitiva que depende do sistema op
   - `reabrir_grupo(pid, rotulo) -> Processo | None` (startup check, README §8.12 passo 9);
   - `travar_instancia(caminho) -> trava` e `liberar_instancia(trava)`;
   - `usuario_privilegiado() -> bool`;
-  - `validar_arquivo_restrito(caminho)` (segredos, README §4.1) e `validar_dir_restrito(caminho)` (`log_dir`/`work_dir`, README §8.12 passo 4);
-  - `validar_item_arvore(caminho, donos, conta_agente=None) -> codigo | None` (um item do caminho do script, README §8.5). Primitiva da tabela do README §8.0;
+  - `validar_arquivo_restrito(caminho)` (segredos, README §4.1: dono = euid e `mode & 0o077 == 0`) e `validar_dir_restrito(caminho)` (`log_dir`/`work_dir`, README §8.12 passo 4: existe, é diretório, é gravável pelo agente e fica fora das pastas do sistema; **não** exige `0700`, porque o `log_dir` e as pastas de log são `0750`, README §8.4 e §13);
+  - `validar_caminho_script(caminho_real, donos, conta_agente=None) -> codigo | None` (README §8.0 e §8.5): dono do arquivo em `donos`; cada diretório até `/` com dono root ou em `donos`; arquivo e diretórios sem escrita de grupo, outros ou do agente;
   - `caminho_final(caminho)` (`realpath` no POSIX);
   - `criar_dir_trabalho(caminho)` (`0700` no POSIX);
   - `instalar_parada(flag)`: handlers de sinal que **apenas** setam a flag (SIGTERM/SIGINT no POSIX). O arquivo `.stop` é verificado pelo laço, não aqui.
 - **`modules/plataforma/posix.py`:** as colunas POSIX do README §8.0 e o Popen literal do AGENTS §3.2, com `_child_limits` (somente `os.umask(0o077)` e `resource.setrlimit`: `RLIMIT_CORE` 0 e `RLIMIT_NOFILE` 1024).
-  - `identidade_processo`: Linux, campo 22 de `/proc/<pid>/stat` contado **depois do último `)`**; AIX/Solaris, `/proc/<pid>/psinfo`; macOS/BSD, `sysctl KERN_PROC` via `ctypes`. Plataforma sem suporte retorna `None` e o startup check trata `None` como identidade desconhecida (`ORPHAN_PROCESS`).
+  - `identidade_processo`: Linux, campo 22 de `/proc/<pid>/stat` contado **depois do último `)`**; AIX/Solaris, `/proc/<pid>/psinfo`; demais Unix, `sysctl KERN_PROC` **sem `ctypes`** (proibido em todo o projeto, AGENTS §3.2; README §8.0). Onde a leitura não for possível sem `ctypes` (por exemplo, macOS/BSD), retorna `None`. Plataforma sem suporte retorna `None` e o startup check trata `None` como identidade desconhecida (`ORPHAN_PROCESS`).
   - `encerrar_grupo`: `killpg(SIGTERM)` → `grace` (polling com `poll()` e `time.sleep(0.1)`) → `killpg(SIGKILL)` → `wait()`; `ProcessLookupError` = grupo encerrado.
 - **Integração com o código existente:**
   - `modules/sss_config.py`: a checagem de dono e modo do `secrets.cfg` passa a chamar `plataforma.validar_arquivo_restrito`;
-  - `modules/path_guard.py`: a regra de dono/escrita por item (`_checar_dono_e_modo`, `_gravavel_pelo_agente`) passa a chamar `plataforma.validar_item_arvore`, e a resolução usa `plataforma.caminho_final`.
+  - `modules/path_guard.py`: a regra de dono/escrita por item (`_checar_dono_e_modo`, `_gravavel_pelo_agente`) passa a chamar `plataforma.validar_caminho_script`, e a resolução usa `plataforma.caminho_final`.
 - **Configuração (`sss_config.py`, `config.ini.example`):** `[agent] script_owner_uids` e `[agent] interpretadores` (`LOGICO=caminho`, na allowlist `PYTHON3`, `BASH`, `SH`), conforme o README §12.1. Sem `script_owner_sids` nem `base_script_dirs`.
 - **`applications/script_scheduling_service/scripts/test_plataforma.py`:**
   - grupo e encerramento escalonado matando o **neto**; processo que ignora o término morre dentro de `grace + 1` s; identidade do processo estável e diferente para outro PID; PID inexistente; lock de instância (segunda trava falha); recusa de usuário privilegiado (root, com dublê); arquivo restrito OK e rejeitado; diretório de trabalho restrito; item da árvore gravável rejeitado; parada por sinal seta a flag.
   - `/proc/<pid>/stat` com `)` no nome do comando.
-- **`scripts/test_py36_compat.py`:** fora de `modules/plataforma/` é proibido `os.killpg`, `os.setsid`, `resource`, `fcntl`, `/proc` e `sys.platform` (AGENTS §3.2).
+- **`scripts/test_py36_compat.py`:** fora de `modules/plataforma/` é proibido `os.killpg`, `os.setsid`, `resource`, `fcntl`, `/proc` e `sys.platform`; em todo o projeto, inclusive em `plataforma/`, é proibido `ctypes` e `msvcrt` (AGENTS §3.2).
 
 **OUT**
 - Ambiente do filho, executor e motor (F8.1+).

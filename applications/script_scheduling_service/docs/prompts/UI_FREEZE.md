@@ -10,13 +10,16 @@ O objetivo é congelar o comportamento visual e funcional das telas sobre o back
 - [ ] Todos os relatórios F0.1–F6.1 estão com `PASS` e sem lacunas abertas.
 - [x] CR-003 (P1–P11, P6A), CR-004 (U1–U8) e CR-005 (R0–R5) concluídos, e o fechamento UF executado: bateria completa de testes e validações e `docs/homologacao/` atualizado (manual v2.1, 16/10/2026).
 
+- [ ] `instance/config.ini` sem `base_script_dirs` nem `app_log_backups` (recusados desde o CR-005) e com `[logging] app_log_retention_days`.
+
 ## Segurança transversal (executar com o DevTools aberto)
 - [ ] Nenhuma requisição a domínio externo em nenhuma tela (aba Network com "preserve log").
 - [ ] Nenhuma violação de CSP no console em nenhuma tela.
 - [ ] Todo POST sem `_csrf` retorna 403, e todo POST com `Origin` forjado também.
 - [ ] Logout é somente POST.
 - [ ] Cabeçalhos do README §4.2 presentes, inclusive nas páginas 403, 404 e 500.
-- [ ] Valores de parâmetro sensível não aparecem em URL, HTML após submit, logs do web2py nem `log_dir`.
+- [ ] Valores de parâmetro sensível não aparecem em URL, HTML após submit, logs do web2py, `log_dir` nem na auditoria.
+- [ ] Telas de consulta não vazam o catálogo: com op.hml, nenhum script fora do perfil aparece em O que eu posso fazer nem em Rotinas disponíveis, nem no código-fonte (AGENTS §3.4).
 - [ ] Log com `<script>` é exibido como texto.
 - [ ] URLs com IDs fora do escopo retornam 404 (tickets) ou 403 (cadastros).
 - [ ] O `next` externo no login é ignorado.
@@ -37,6 +40,12 @@ O objetivo é congelar o comportamento visual e funcional das telas sobre o back
 | Rotinas disponíveis e histórico (CR-004) | | | | | `EXEC_SCRIPT`; última execução e histórico no escopo da lista de tickets |
 | Agenda (CR-004) | | | | | `CAD_AGENDAMENTOS`; só regras ativas dos ambientes autorizados |
 | Quem pode o quê (CR-004) | | | | | `CAD_PERFIS` |
+
+## Caminho do script (CR-005, README §8.5)
+- [ ] O caminho completo do script aparece para todos os perfis no disparo (prévia e confirmação) e no detalhe do ticket (D8).
+- [ ] No cadastro, caminho relativo, com `..`, em pasta do sistema ou com barra no fim é recusado com explicação, sem gravar nada.
+- [ ] Arquivo que não existe neste servidor é salvo com o aviso "Arquivo não encontrado neste servidor: a validação ocorrerá no agente…" (D4).
+- [ ] O nome `App` é recusado como reservado (D7).
 
 ## Usabilidade
 - [ ] Navegação completa por teclado nas telas de disparo, lista de tickets e matriz de perfis.

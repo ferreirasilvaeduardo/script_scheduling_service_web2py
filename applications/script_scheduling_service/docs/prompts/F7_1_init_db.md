@@ -2,8 +2,8 @@
 
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §4 (inteiro)
-- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D5, D16 e C4: colunas e CKs novas, `table_prefix`, CRITICAL em configuração inválida)
-- `README.md` §9, §10 (inteiro; em especial as tabelas 6 `tbsss_scripts`, 9 `tbsss_usuarios`, 15 `tbsss_agentes` e 16 `tbsss_auditoria`), §11.1, §11.2, §4.3.D (seed de funcionalidades), §8.5 ("Pastas base" e "CKs de banco"), §12.1 (tabela de faixas e "Falha de configuração"), §13
+- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D5 e C4: colunas e CKs novas, `table_prefix`, CRITICAL em configuração inválida; a D16, várias pastas base, foi revogada pelo CR-005)
+- `README.md` §9, §10 (inteiro; em especial as tabelas 6 `tbsss_scripts`, 9 `tbsss_usuarios`, 15 `tbsss_agentes` e 16 `tbsss_auditoria`), §11.1, §11.2, §4.3.D (seed de funcionalidades), §8.5 ("CKs de banco"), §12.1 (tabela de faixas e "Falha de configuração"), §13
 - Arquivos: `modules/sql_ident.py` (fonte única do modelo; já contém as colunas e CKs do CR-003), `modules/sss_config.py` (`obter_config`/`carregar`, regex de `owner` e `table_prefix`)
 
 ## Objetivo
@@ -36,7 +36,7 @@ Gerar e aplicar o DDL Oracle 11gR2 de forma idempotente e auditável, **a partir
   - **Estatísticas:** `DBMS_STATS.GATHER_TABLE_STATS(ownname => :o, tabname => :t, cascade => TRUE)` por tabela.
   - **Usuário de aplicação diferente do owner:** com `--grants-para <usuario>`, imprime (sem executar) os `GRANT SELECT, INSERT, UPDATE, DELETE` necessários e o `GRANT SELECT` nas sequences, para o DBA aplicar.
   - O `--dry-run` imprime **todo** o DDL, em ordem, e não conecta. Quando não houver config de banco, usa o `owner` e o prefixo do config.
-  - **Configuração:** o `owner` segue `^[A-Za-z][A-Za-z0-9_]{0,29}$` e o `table_prefix` segue `^[A-Za-z][A-Za-z0-9_]{0,7}$` (começa com letra, até 8 caracteres; README §12.1, D5), validados por `sss_config`/`sql_ident` antes de gerar qualquer DDL. Configuração inválida aborta com um registro **CRITICAL** com a seção, a chave e o motivo (nunca o valor de um segredo), no formato do README §13, e código de saída diferente de zero, como na "Falha de configuração" do §12.1 (reaproveite o caminho de `sss_config.obter_config(nome_log=...)`; sem `[logging]` válido, o CRITICAL vai para o stderr). O `--dry-run` também aborta.
+  - **Configuração:** o `owner` segue `^[A-Za-z][A-Za-z0-9_]{0,29}$` e o `table_prefix` segue `^[A-Za-z][A-Za-z0-9_]{0,7}$` (começa com letra, até 8 caracteres; README §12.1, D5), validados por `sss_config`/`sql_ident` antes de gerar qualquer DDL. Configuração inválida aborta com um registro **CRITICAL** com a seção, a chave e o motivo (nunca o valor de um segredo), no formato do README §13, e código de saída diferente de zero, como na "Falha de configuração" do §12.1 (reaproveite o caminho de `sss_config.obter_config(nome_log=...)`; sem `log_dir` utilizável, o CRITICAL vai para o stderr). O `--dry-run` também aborta. O log do CLI segue o README §13, com `<nome_log>` `init_db`: `log_dir/app/AAAA/MM/DD/HH/MI/init_db_<PID>.log`, via `sss_logging.configurar('init_db', cfg)`.
 - **`applications/script_scheduling_service/scripts/test_db_schema.py` (ampliar)** e **`applications/script_scheduling_service/scripts/test_ddl_builder.py`:**
   - o DDL gerado contém todos os nomes do registro;
   - nenhuma ocorrência de `IDENTITY`, `FETCH FIRST`, `OFFSET`, `JSON_` ou `VARCHAR2(n)` sem `CHAR`;

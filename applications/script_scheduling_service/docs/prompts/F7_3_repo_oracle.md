@@ -11,8 +11,9 @@
 
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §3.1, §4 (inteiro)
-- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (inteiro: D6, D9, D11, D12, D16, C3, C4, C9 e a rastreabilidade) e `docs/arquitetura/CR-004-telas-de-consulta-e-linguagem-clara.md` ("Contrato": as duas leituras novas de `RepoTickets`)
-- `README.md` §2.5 (paridade: FKs, NOT NULL, limites, maiúsculas e cascatas), §2.7, §4.2 ("Proteções do login" e "Relógio do banco"), §4.3.A (`perm_versao`), §4.3.B, §4.4 (inteiro: tabela de entidade por ação, limites e "Quantidade registrada"), §5 (inteiro, em especial §5.6 e §5.8), §7.5 ("Bind de datas"), §7.6, §8.2, §8.3 (ordem de locks), §8.5 ("Pastas base" e "CKs de banco"), §8.10 ("UI `VER_LOGS`"), §10 (tabelas do agregado), §10 (política de exclusão e texto nos cadastros)
+- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (inteiro, menos a D16, revogada: D6, D9, D11, D12, C3, C4, C9 e a rastreabilidade) e `docs/arquitetura/CR-004-telas-de-consulta-e-linguagem-clara.md` ("Contrato": as duas leituras novas de `RepoTickets`)
+- `docs/arquitetura/CR-005-posix-caminho-livre-e-logs.md` (D2: `path_file` absoluto, sem `pasta_base` em `tbsss_scripts` nem `pastas_base` em `tbsss_agentes`; R-g e R-h: CKs)
+- `README.md` §2.5 (paridade: FKs, NOT NULL, limites, maiúsculas e cascatas), §2.7, §4.2 ("Proteções do login" e "Relógio do banco"), §4.3.A (`perm_versao`), §4.3.B, §4.4 (inteiro: tabela de entidade por ação, limites e "Quantidade registrada"), §5 (inteiro, em especial §5.6 e §5.8), §7.5 ("Bind de datas"), §7.6, §8.2, §8.3 (ordem de locks), §8.5 ("CKs de banco"), §8.10 ("UI `VER_LOGS`"), §10 (tabelas do agregado), §10 (política de exclusão e texto nos cadastros)
 - Arquivos: o contrato `modules/repo_<x>.py` do agregado, a implementação `modules/repo_fake/<x>.py` (e `repo_fake/store.py`, que emula FKs e limites), `modules/db_conn.py` (`definir_tipos_entrada`, `agora_banco`, `proximo_id`), `modules/sql_ident.py` e `scripts/test_repo_contract.py` (inclusive `test_06b_fks_e_limites_de_auditoria`)
 
 ## Objetivo
@@ -66,8 +67,9 @@ Implementar o contrato do agregado em `modules/repo_oracle/` com SQL Oracle 11gR
       - A `entidade` de cada ação segue a tabela do README §4.4 (o service a informa; o filtro "Entidade" oferece exatamente aquelas tabelas).
       - Exportação (README §4.4, "Quantidade registrada"): o service obtém `id = reservar_id()`, usa `id_max = id − 1` para contar e para `iterar`, e só então grava a linha `AUD_EXPORTAR` com esse `id`. `listar` e `iterar` aceitam `id_max` (inclusivo); `iterar` é um cursor com `arraysize`, sem paginação por offset.
       - O filtro de período sempre por intervalo, sem `TRUNC` (AGENTS §4.12); `tickets_running` usando a expressão `CASE` **idêntica** ao `ix_tbsss_tck_run`, importada do `sql_ident`.
-      - `RepoAgentes.listar` devolve também `plataforma`, `interpretadores` e `pastas_base` (só os nomes; README §10 tabela 15 e §13).
+      - `RepoAgentes.listar` devolve também `plataforma` e `interpretadores` (README §10 tabela 15 e §13; CR-005: sem `pastas_base`).
 - **`applications/script_scheduling_service/modules/repo_factory.py`:** registrar o agregado no backend `ORACLE`.
+- **`applications/script_scheduling_service/scripts/test_sql_oracle11g.py`** (criado na primeira sessão do F7.3 e ampliado nas seguintes; AGENTS §4.3 e §7): varredura de `modules/repo_oracle/` e `scripts/init_db.py` sem sintaxe 12c+, todo `FOR UPDATE` com `WAIT n` (n ≤ 5) e nenhum `SELECT *`.
 - **`applications/script_scheduling_service/scripts/test_repo_contract.py` (ampliar, sem `if backend == ...`):**
   - **Cascatas (README §2.5):** o contrato não expõe exclusão de mestres, então as `ON DELETE CASCADE` e `SET NULL` do §10 das tabelas do agregado são cobertas numa classe só do Oracle (`skipUnless(SSS_TEST_DSN)`), com `DELETE` direto no teste (ex.: `tbsss_ticket_resp` some com o ticket; `parent_ticket_id` e `agendamento_id` viram `NULL`; associações de perfil, script e ambiente somem com o mestre).
   - **Microssegundos no bind de datas (README §7.5, teste obrigatório):** uma operação otimista com `antiga_data` contendo microssegundos (por exemplo, `pausar` com o `proxima_execucao` lido mais uma fração) **não** resulta em `rowcount = 0`/`RepoConflito`.

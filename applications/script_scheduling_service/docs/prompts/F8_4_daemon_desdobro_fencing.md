@@ -2,7 +2,7 @@
 
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §3.1 (binds de data), §3.2 (encerramento escalonado), §4.9–4.11, §6
-- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D1, D2, D3, D7, D16 e os achados "Conclusão no desdobro", "Bind DATE com microssegundos" e "Contrato do desdobro incompleto")
+- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D1, D2, D3, D7 e os achados "Conclusão no desdobro", "Bind DATE com microssegundos" e "Contrato do desdobro incompleto"). A D16 (várias pastas base) foi revogada pelo CR-005: o desdobro grava o snapshot v4, com `path_file` absoluto
 - `README.md` §4.4 (`AGD_PAUSAR`, `AGENTE_FIM`), §6.5 (snapshot versão 4; CR-005), §7 (inteiro, **especialmente §7.4 e §7.5**, inclusive "Conclusão da regra", "Sobreposição numa regra que conclui", "Bind de datas" e "Contrato do repositório para o desdobro"), §8.0, §8.1, §8.8, §8.9 (inclusive "Mesmos tempos em todos os nós"), §8.11 (inclusive o arquivo `.stop`), §10 (tabela 12 e a desativação com dependência), §13
 - Arquivos: `modules/scheduler_loop.py`, `modules/repo_oracle/scheduler_fila.py`, `modules/recurrence.py`, `modules/params_compiler.py`, `modules/rbac.py`, `modules/plataforma/`, `modules/db_conn.py`
 

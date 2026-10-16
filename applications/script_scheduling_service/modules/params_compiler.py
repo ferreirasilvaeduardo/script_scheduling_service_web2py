@@ -296,7 +296,7 @@ def montar_argv_agente(interpretador, executavel, script_real, args):
 
 
 def compilar_snapshot(script, vinculos, respostas, agora):
-    """Compila o snapshot v3 (README §6.5) -> (json_str | None, resolvidos, erros_por_campo).
+    """Compila o snapshot v4 (README §6.5) -> (json_str | None, resolvidos, erros_por_campo).
 
     Guarda o interpretador logico, o path_file absoluto e apenas os argumentos: o argv real e montado
     pelo agente com o proprio executavel. Erros sao acumulados.

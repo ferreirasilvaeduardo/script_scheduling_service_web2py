@@ -13,7 +13,7 @@ Colocar o agente executor de pé: inicialização fail-fast, claim concorrente s
 **IN**
 - **`applications/script_scheduling_service/modules/repo_oracle/scheduler_fila.py`** (repositório interno do daemon), com o SQL do README **literal** e as expressões `CASE` importadas do `sql_ident`:
   - `candidatos(conn, ambientes, interpretadores, lote)` (§8.2), com os placeholders `:amb0..N` e `:int0..N` gerados por contagem (sem `pastas_base`). Os interpretadores são os **mapeados neste agente** (`PYTHON3`, `BASH`, `SH`);
-  - `claim(conn, ticket_id, script_id, ambiente, agente_id) -> (ok, max_parallel)`, com os 3 passos do §8.3 em **uma** transação. O ORA-30006/54 resulta em `ROLLBACK` e `(False, motivo)`;
+  - `claim(conn, ticket_id, script_id, ambiente, agente_id) -> (ok, motivo, started_at)`, com os 3 passos do §8.3 em **uma** transação e o `RETURNING started_at INTO :started_at` do passo 3 (README §8.3): com sucesso, `(True, None, started_at)`; o ORA-30006/54 resulta em `ROLLBACK` e `(False, 'LOCK', None)`; teto atingido ou `rowcount = 0`, `(False, 'TETO' | 'PERDIDO', None)`. O `started_at` dá a pasta do log de execução (README §8.4, passo 3);
   - `registrar_pid(...)` (§8.4, passo 5);
   - `varredura_propria(conn, agente_id)` (§8.7);
   - `heartbeat(conn, agente_id, ids) -> lista_ids_perdidos`, com `executemany` + `arraydmlrowcounts=True` e o update de `tbsss_agentes` na mesma transação;
@@ -34,8 +34,8 @@ Colocar o agente executor de pé: inicialização fail-fast, claim concorrente s
       4. `varredura_propria`: `cancel_requested = 'S'` leva a `encerrar` e `CANCELLED/CANCEL_USER` (se o processo já tiver terminado sozinho, prevalece o resultado real); um ticket ausente do resultado leva a `encerrar` sem gravar status e log ERROR `OWNERSHIP_LOST`.
     - **Ciclo de heartbeat:** `heartbeat` + `log_pump.coletar` + `anexar` em cada execução. Uma perda de posse vai para o tratamento `OWNERSHIP_LOST`. O instante do último heartbeat confirmado também é registrado, para uso pelo F8.4.
     - **Ciclo do orquestrador:** se `len(execucoes) < max_parallel_jobs`, busca `candidatos` e, para cada um, `claim`. Em caso de sucesso:
-      1. carregar o snapshot e rodar a pré-validação do README §8.4, passo 1: `validar_snapshot` (só `versao == 4`; versões anteriores são recusadas), interpretador na allowlist **e** mapeado neste agente, `path_guard.resolver` contra o caminho absoluto (que confere existência, dono e permissões na cadeia até `/` e pastas de sistema; fornece o `script_real`), `montar_argv_agente` e `script_ativo_homologado` (`PRECHECK_FAILED`, `-4`);
-      2. `preparar_diretorio`, `abrir_log` (em `pastas_log`), `env_builder.construir` e `executor.iniciar` com o rótulo `SSS-<agent_id>-<ticket_id>` (`SPAWN_ERROR`);
+      1. carregar o snapshot e rodar a pré-validação do README §8.4, passo 1, com **uma** chamada a `validar_snapshot`, que já faz tudo e devolve `(snap, argv_real, script_real)` (contrato estendido no F8.1): só `versao == 4` (versões anteriores são recusadas), interpretador na allowlist **e** mapeado neste agente, `path_guard.resolver` contra o caminho absoluto (existência, dono e permissões na cadeia até `/`, pastas do sistema e do SSS) e `montar_argv_agente`. Depois, `script_ativo_homologado`. Qualquer falha dá `PRECHECK_FAILED`, `-4`;
+      2. `preparar_diretorio`, `abrir_log` (com o `started_at` devolvido pelo claim e o `script_nome` do snapshot), `env_builder.construir` e `executor.iniciar` com o rótulo `SSS-<agent_id>-<ticket_id>` (`SPAWN_ERROR`);
       3. `registrar_pid` (perda de posse leva a `encerrar` + `OWNERSHIP_LOST`).
 
       Os espaços de NODE_OFFLINE e desdobro ficam como **pontos de extensão vazios**, com docstring "implementado no F8.4". Não é permitido usar `TODO` (AGENTS §1).

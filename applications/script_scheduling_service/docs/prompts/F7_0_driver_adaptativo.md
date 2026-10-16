@@ -17,7 +17,7 @@ Escolher, antes da primeira conexão do processo, a combinação de driver que f
   - `scripts/test_config.py` atualizado.
 - **`applications/script_scheduling_service/scripts/sondar_driver.py <candidato>`** (`thin`, `thick` ou `cx_oracle`):
   - lê o config, recebe a senha **pela entrada padrão** (nunca por argumento nem variável de ambiente);
-  - importa o driver; em `thick`/`cx_oracle`, chama `init_oracle_client` conforme a plataforma (sem `lib_dir` no Linux/Unix; com `oracle_client_lib_dir` no Windows/macOS);
+  - importa o driver; em `thick`/`cx_oracle`, chama `init_oracle_client` conforme a plataforma (sem `lib_dir` no Linux/Unix; com `oracle_client_lib_dir` só no macOS, em DEV; README §2.3 e AGENTS §2.2);
   - conecta, executa `SELECT SYSDATE FROM DUAL`, lê a versão do servidor, do driver e do cliente;
   - escreve em stdout **um** JSON: `{candidato, ok, versao_servidor, versao_driver, versao_cliente, codigo_erro, categoria}`, com `categoria` em `AUTENTICACAO`, `INCOMPATIVEL`, `BIBLIOTECA`, `REDE` ou `OUTRO`;
   - nunca escreve a senha nem o DSN com credencial; código de saída 0 mesmo em falha de conexão (o resultado vai no JSON).

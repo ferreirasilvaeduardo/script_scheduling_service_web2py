@@ -118,7 +118,8 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 ### 3.2 Execução de processos
 
 * **Proibido:** `shell=True`, `os.system`, `os.popen`, `subprocess.getoutput`/`getstatusoutput`, `eval`, `exec`, `compile` sobre dado externo, `pickle`/`marshal`/`shelve` em dado externo, `yaml.load`, `__import__` dinâmico e `importlib` com nome vindo de dado.
-* **Camada de plataforma:** toda primitiva dependente do sistema operacional (spawn, grupo e encerramento de processos, limites, identidade do processo, lock de instância, checagem de dono e permissão, sinais e parada) fica **somente** em `modules/plataforma/` (`posix.py`, para Linux e Unix; CR-005: Windows não é suportado). Fora dela é proibido `os.killpg`, `os.setsid`, `resource`, `fcntl`, `/proc` e `sys.platform` (README §8.0). Também é proibido `ctypes`, `msvcrt` ou qualquer API Windows em todo o projeto.
+* **Camada de plataforma:** toda primitiva dependente do sistema operacional (spawn, grupo e encerramento de processos, limites, identidade do processo, lock de instância, checagem de dono e permissão, sinais e parada) fica **somente** em `modules/plataforma/` (`posix.py`, para Linux e Unix; CR-005: Windows não é suportado). Fora dela é proibido `os.killpg`, `os.setsid`, `resource`, `fcntl`, `/proc` e `sys.platform` (README §8.0). Também é proibido `ctypes`, `msvcrt` ou qualquer API Windows em todo o projeto, inclusive em `plataforma/` (README §8.0: onde a identidade do processo não puder ser lida sem `ctypes`, `identidade_processo` devolve `None`).
+  * **Estado provisório até o F8.0:** a camada `plataforma/` ainda não existe. Hoje a checagem de dono e permissão do script fica em `path_guard` e a do `secrets.cfg` em `sss_config`; o F8.0 as move para `plataforma/` sem mudar a regra.
 * **Spawn único permitido** (`plataforma.iniciar_processo`, chamado só por `modules/executor.py`):
   * `subprocess.Popen(argv, shell=False, start_new_session=True, close_fds=True, stdin=DEVNULL, stdout=log_fd, stderr=STDOUT, cwd=..., env=clean_env, preexec_fn=_child_limits)`. `_child_limits` pode **somente** chamar `os.umask` e `resource.setrlimit`. É proibido criar threads no daemon, porque `preexec_fn` não é thread-safe.
   * **Proibido** `stdout=subprocess.PIPE` ou `stderr=subprocess.PIPE` para scripts executados. A saída vai sempre para arquivo.
@@ -138,7 +139,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 ### 3.3 Segredos e PII
 
 * Proibido segredo em código, `config.ini`, banco, testes ou fixtures.
-* Segredos são lidos **somente** via `modules/sss_config.py`, a partir de `secrets.cfg`, com checagem de dono e permissão pela camada de plataforma: dono = usuário do processo e modo `0600` (README §4.1).
+* Segredos são lidos **somente** via `modules/sss_config.py`, a partir de `secrets.cfg`, com checagem de dono e permissão pela camada de plataforma (até o F8.0, no próprio `sss_config`): dono = usuário do processo e modo `0600` (README §4.1).
 * Todo segredo carregado é registrado em `modules/masking.py`. Logs, mensagens de erro e `log_output` passam pelo mascaramento.
 * Proibido registrar em log: senhas, hashes de senha, `PADRAO_VALOR_RUN_CONEXAO_BD`, `cookie_key`, token CSRF, valores de parâmetros `sensivel = 'S'` e cabeçalho `Cookie`.
 
@@ -276,7 +277,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 2. Testes que dependem de banco real devem usar mocks da interface de `db_conn` **ou** se marcar com `@unittest.skipUnless(os.environ.get('SSS_TEST_DSN'), ...)`. Nesse caso, o veredito do relatório é `NÃO TESTADO` para a parte de banco.
    * **Plataforma:** a implementação POSIX é testada de verdade, no Linux (CR-005).
 3. Os testes rodam em Python real, no mínimo na **3.6.0** (mínima suportada) e na **3.6.8** (referência de produção). Recomenda-se rodar também na mais nova disponível (3.13). Sem nenhum Python 3.6.x no ambiente, o veredito máximo é `NÃO TESTADO`, e o motivo deve constar nas observações.
-4. **Testes obrigatórios mínimos:**
+4. **Testes obrigatórios mínimos** (os marcados com `[F7.x]`/`[F8.x]` são criados no prompt indicado e ainda não existem):
 
 | Arquivo | Cobertura obrigatória |
 |---|---|
@@ -284,21 +285,22 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 | `test_db_schema.py` | Todo identificador do registro com `len <= 30` usando o prefixo configurado **e** o pior caso de 8 caracteres; todo nome em ASCII; toda FK com índice de coluna líder; toda tabela com trigger no template condicional |
 | `test_py36_compat.py` | `ast.parse(..., feature_version)` ou compilação com 3.6 em todos os `.py`; busca por tokens proibidos (§2.1), `shell=True`, `os.system`, `eval(`, `exec(`, `pickle`, `XML(`, `x-html`, URLs `http(s)://` em `static/` e `views/` |
 | `test_path_guard.py` | Caminho relativo, não normalizado, com `..` ou `\`; pastas do sistema (digitadas e via symlink); prefixo irmão (`/usrx`, `/etcetera` aceitos); dentro de `log_dir`/`work_dir`; arquivo inexistente; diretório em vez de arquivo; dono fora de `script_owner_uids`; arquivo ou diretório ancestral gravável por grupo, outros ou pelo agente; interpretador fora da allowlist |
+| `test_sss_logging.py` | Log da aplicação (README §13): caminho por minuto, troca por tamanho com sufixo, retenção na subida e na troca, `agent_id` na linha, falhas da retenção como WARN, pastas `0750` em todos os níveis sob `umask 077` e arquivos `0640` |
 | `test_pastas_log.py` | Pasta do script (acento, espaço, `/`, maiúsculas, vazio, `app`); caminho do log de execução e do log da aplicação; sufixo na troca dentro do mesmo minuto; retenção só de pastas com formato de data |
 | `test_params_compiler.py` | Precedência; obrigatório ausente; `NOMEADO` com flag longa e curta; valor iniciado em `-`; `CHECKBOX`; `SEQUENCIAL` com opcional vazio intermediário; `NENHUM`; regex com `fullmatch`; rejeição de NUL e controle; `SELECT` fora de `opcoes_json`; serialização determinística do snapshot |
 | `test_cron_parser.py` | Listas, intervalos, passos, semântica OU de dia, dia 31 e fevereiro, ano bissexto, expressão sem ocorrência, rejeição de nomes e `L`/`W`/`#` |
 | `test_recurrence.py` | `DIARIA`, `SEMANAL`, `MENSAL` (mês curto), `UNICA`, `data_fim`, *misfire* `RUN_ONCE`/`SKIP`, datas sem microssegundos |
-| `test_env_builder.py` | Ambiente sem herança de `os.environ`; rejeição de variáveis bloqueadas; passthrough; ausência de DSN |
+| `test_env_builder.py` `[F8.1]` | Ambiente sem herança de `os.environ`; rejeição de variáveis bloqueadas; passthrough; ausência de DSN |
 | `test_masking.py` | Mascaramento de segredos, connect string e valores sensíveis, inclusive quando cortados entre blocos |
 | `test_rbac.py` | Matriz de `pode_executar` (admin, perfil inativo, sem homologação, sem `EXEC_SCRIPT`); proteção do último admin (mock) |
-| `test_executor.py` | Spawn real de script de teste (`/bin/sh`) em diretório temporário; log no caminho do CR-005, com o renome para `ticket_<id>_<PID>.log`; saída em arquivo sem PIPE; geração de mais de 1 MB de saída sem travar; timeout; encerramento escalonado matando também o neto; conversão de `returncode` negativo |
-| `test_plataforma.py` | Grupo e encerramento escalonado, identidade do processo (`starttime`) contra PID reciclado, lock de instância, recusa de root, dono e permissão de segredos e do caminho do script |
-| `test_sql_oracle11g.py` | Varredura de `repo_oracle/` e `scripts/init_db.py`: nenhuma sintaxe 12c+ (§4.3); `FOR UPDATE` sempre com `WAIT n` (n ≤ 5); nenhum `SELECT *` |
+| `test_executor.py` `[F8.1]` | Spawn real de script de teste (`/bin/sh`) em diretório temporário; log no caminho do CR-005, com o renome para `ticket_<id>_<PID>.log`; saída em arquivo sem PIPE; geração de mais de 1 MB de saída sem travar; timeout; encerramento escalonado matando também o neto; conversão de `returncode` negativo |
+| `test_plataforma.py` `[F8.0]` | Grupo e encerramento escalonado, identidade do processo (`starttime`) contra PID reciclado, lock de instância, recusa de root, dono e permissão de segredos e do caminho do script |
+| `test_sql_oracle11g.py` `[F7.3]` | Varredura de `repo_oracle/` e `scripts/init_db.py`: nenhuma sintaxe 12c+ (§4.3); `FOR UPDATE` sempre com `WAIT n` (n ≤ 5); nenhum `SELECT *` |
 | `test_seed_fake.py` | Seed FAKE coerente com as regras (README §2.5): funcionalidades com os nomes do README, nenhum parâmetro de credencial, prioridade 1 só para admin, `created_at` nunca no futuro, snapshot e respostas compilados contra o script, agendamentos no minuto exato e alinhados à regra |
 | `test_ui_helpers.py` | Catálogo de mensagens em duas partes, nomes simples de situação e de motivo, frase e etapas do ticket, tempo em linguagem simples |
 | `test_catalogo_service.py` | Rotinas disponíveis e histórico: mesmo escopo da lista de tickets (com e sem `VER_LOGS`), script fora das rotinas dá 404, contrato sem LOB e limitado, números do resumo iguais aos do gráfico e geometria do gráfico |
 | `test_contraste_cores.py` | Todo par texto/fundo dos tokens de `sss.css` com contraste WCAG AA (≥ 4,5:1), nos modos claro e escuro |
-| `test_db_conn.py` | Com módulos falsos de driver: cadeia `auto` Thin → Thick → cx_Oracle, parada em erro de autenticação, valores forçados, senha fora de argv/ambiente/log, mapa de erros por driver e modo |
+| `test_db_conn.py` `[F7.0]` | Com módulos falsos de driver: cadeia `auto` Thin → Thick → cx_Oracle, parada em erro de autenticação, valores forçados, senha fora de argv/ambiente/log, mapa de erros por driver e modo |
 
 5. Cada correção de defeito acompanha um teste de regressão.
 
