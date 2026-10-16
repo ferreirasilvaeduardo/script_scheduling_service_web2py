@@ -2,6 +2,8 @@
 
 Serviço web corporativo para gestão, agendamento e execução distribuída de rotinas em Python e Shell em servidores Unix/Linux restritos, integrado ao Oracle Database >= 11gR2 e com arquitetura multi-ambiente e multi-nó.
 
+> **Change requests aplicados:** CR-001 (agente multiplataforma), CR-002 (Oracle único e driver adaptativo) e CR-003 (correções da análise funcional pós-F6.1), em `docs/arquitetura/`. O texto abaixo já os incorpora.
+>
 > **Autoridade documental:** este README é a autoridade máxima de **negócio, dados e algoritmos**. O `AGENTS.md` é a autoridade sobre **como codificar**. Em conflito sobre regra de negócio ou modelo de dados, prevalece este documento. Em caso de lacuna, o desenvolvedor ou agente deve **parar e perguntar**, sem presumir.
 
 ---
@@ -101,7 +103,22 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 | `ORACLE` | Homologação e produção | `modules/repo_oracle/` (§2.7): único local com SQL |
 
 * Os controllers e services **não sabem** qual backend está ativo.
-* **Paridade obrigatória:** o FAKE emula a semântica do Oracle que o código consome. Isso inclui `UPDATE` condicional com `rowcount` (transição perdida gera `RepoConflito`), unicidade (`RepoViolacao`), `ON DELETE CASCADE`, triggers de imutabilidade, paginação e ordenação idênticas.
+* **Paridade obrigatória:** o FAKE emula a semântica do Oracle que o código consome. Isso inclui `UPDATE` condicional com `rowcount` (transição perdida gera `RepoConflito`), unicidade (`RepoViolacao`), `ON DELETE CASCADE`, triggers de imutabilidade, paginação e ordenação idênticas. Também inclui:
+  * **chaves estrangeiras e NOT NULL:** inclusões de ticket, `ticket_resp` e agendamento com script, ambiente (nome), solicitante (login), usuário ou parâmetro inexistente geram `RepoViolacao` com o nome da FK do §10. A UK de `ticket_resp` também é verificada;
+  * **limites de coluna** que o código grava, por exemplo `ator` (40) e `detalhe` (1.000) da auditoria;
+  * **comparação de texto** idêntica à do Oracle: UKs diferenciam maiúsculas de minúsculas;
+  * **cascatas** (`ON DELETE CASCADE` e `SET NULL` do §10) cobertas pelo `test_repo_contract.py` nos dois backends, mesmo que hoje só o `purge.py` apague linhas.
+* **Seed do FAKE coerente com as regras de negócio:** ele também serve de demonstração na homologação e precisa respeitar as regras:
+  * funcionalidades com os nomes do §4.3.D;
+  * nenhum parâmetro de senha ou credencial (§6.5); o exemplo sensível é um dado pessoal, como um documento;
+  * prioridade 1 só em tickets de solicitante admin;
+  * snapshot e `ticket_resp` compatíveis com o script e os vínculos de cada ticket;
+  * `created_at` nunca no futuro;
+  * `proxima_execucao` calculada pelo `recurrence.py`, alinhada ao minuto e à regra;
+  * `parametros_json` com as respostas resolvidas completas (§7.6).
+* **Relógio do FAKE:** `store.agora()` (hora local sem microssegundos) simula o `SYSDATE` e é o único uso permitido de `datetime.now()` (AGENTS §6).
+* **Simulação de execução no FAKE (somente DEV):** não há daemon. Um ticket `RUNNING` do seed avança e termina quando o log é lido pelo visualizador (`_simular_log`). Isso é só demonstração e não tem equivalente no Oracle.
+* **Concorrência das transições no FAKE:** as transições web de ticket rodam sob o lock do agregado, então o FAKE nunca chega a perder uma corrida. O tratamento de `rowcount = 0` (`RepoConflito`) nessas transições só é exercitado pelo `test_repo_contract.py` contra o Oracle (F7.3).
 * **Exceções de contrato** (`modules/repo_errors.py`): `RepoErro`, `RepoNaoEncontrado`, `RepoConflito`, `RepoViolacao` e `RepoIndisponivel`.
 * A suíte `scripts/test_repo_contract.py` roda **a mesma bateria** contra os dois backends. Contra ORACLE, ela só executa se `SSS_TEST_DSN` estiver definido.
 * **Trava de ambiente:**
@@ -145,6 +162,7 @@ Regras de topologia:
 
 * É proibido instanciar o scheduler em threads dos workers web.
 * O daemon é **single-threaded**: um laço de eventos com `time.sleep`/`select`. No POSIX, essa decisão torna seguro o uso de `preexec_fn` (§8.4).
+  * A regra vale para o **processo inteiro**, não só para o código do SSS. O daemon sobe via `web2py.py -S ... -M -R`, que carrega o web2py e os models. A inicialização do daemon confere que só existe a thread principal (`threading.active_count() == 1`) antes do primeiro spawn, e aborta com CRITICAL se houver outra.
 * O nó web **nunca** sinaliza nem encerra processos do sistema operacional.
 * No Windows, o daemon é um processo de console iniciado por um serviço ou pelo Agendador de Tarefas da infraestrutura. Ele para pelo arquivo `work_dir/sss-<agent_id>.stop` ou por `CTRL_BREAK` (§8.11).
 * `models/*.py` deve ser leve, pois é carregado pelo daemon com `-M`. Esses arquivos não podem executar DDL, abrir conexão no import nem fazer I/O pesado.
@@ -186,7 +204,8 @@ applications/script_scheduling_service/
     log_pump.py               # arquivo local -> CLOB com mascaramento (§8.10)
     masking.py                # mascaramento de segredos e PII
     scheduler_loop.py         # laço principal do daemon
-    audit.py                  # escrita em tbsss_auditoria
+    auditoria_service.py      # catálogo de ações, consulta e exportação da trilha (§4.4). A escrita de tbsss_auditoria
+                              # é feita pelo próprio repositório, na operação que recebe auditoria= (não existe audit.py)
   scripts/
     init_db.py                # bootstrap idempotente de DDL e seed (§11)
     sondar_driver.py          # sondagem isolada de um candidato de driver (Thin, Thick, cx_Oracle) (§2.3, CR-002)
@@ -232,6 +251,7 @@ password = ...
 
 * `tbsss_ambientes.conexao` armazena **somente o DSN** (Easy Connect `host:porta/servico` ou alias TNS), nunca credenciais. A CK `ck_tbsss_amb_conexao` rejeita qualquer valor contendo `@`.
 * Valores de segredo carregados são registrados no módulo `masking.py`. Eles são substituídos por `****` em todo log do daemon, do web e no `log_output`.
+  * Valores com menos de 4 caracteres não são registrados, porque mascará-los apagaria trechos comuns do texto. Segredos reais devem ter 12 caracteres ou mais (§4.2); o risco está aceito no §14.
 
 ### 4.2 Autenticação e sessão web
 
@@ -243,22 +263,35 @@ password = ...
 * **Política de senha:** mínimo de 12 caracteres. A senha nunca é registrada em log nem devolvida pela UI.
 * **Proteções do login:**
   * Mensagem de erro genérica.
+    * A conta bloqueada recebe uma mensagem própria de bloqueio. Para não revelar quais logins existem, um login inexistente que atinge o limite de tentativas recebe a mesma mensagem (bloqueio simulado).
+    * O bloqueio simulado de login inexistente fica na memória do processo web. Com vários nós, ou após um reinício, ele pode divergir do bloqueio real, que fica no banco (risco aceito no §14).
   * Para login inexistente, calcula-se um hash fictício, equalizando o tempo de resposta.
   * Após `login_max_tentativas` falhas consecutivas, a conta fica bloqueada (`bloqueado_ate = SYSDATE + login_bloqueio_s/86400`).
+    * **Relógio do banco:** o service informa ao repositório apenas `login_bloqueio_s`. O repositório calcula `bloqueado_ate` com `SYSDATE` e grava `ultimo_login = SYSDATE`. O relógio do nó web nunca é usado.
+    * Um bloqueio já expirado zera `tentativas_falha` antes de avaliar a nova tentativa, tanto no login quanto em "Minha senha".
   * Um sucesso zera `tentativas_falha` e grava `ultimo_login`.
-  * Login OK, falha e bloqueio são auditados.
+  * Usuário inativo com a senha correta recebe a mensagem genérica e gera `LOGIN_FALHA`, sem incrementar `tentativas_falha`. Com a senha errada, a falha conta normalmente.
+  * Login OK, falha e bloqueio são auditados **na mesma operação do repositório** que atualiza o usuário: os métodos `registrar_sucesso_login` e `registrar_falha_login` do contrato recebem `auditoria=` (mesma transação, §4.4).
+  * O rehash da senha (iterações abaixo do vigente) é gravado na mesma operação do sucesso do login.
+  * Senhas com mais de 1.024 caracteres são recusadas sem calcular o hash (proteção contra negação de serviço).
 * **Sessão:**
   * Armazenada em **cookie cifrado** do web2py (`session.connect(request, response, cookie_key=<secrets>)`). Isso dispensa DAL e funciona com N nós web sem sessão aderente.
   * O payload é mínimo: `usuario_id`, `login`, `perfil_id`, `perm_versao`, `csrf_token` e `ultimo_acesso`.
   * A sessão é renovada no login (`session.renew()`).
-  * O timeout por inatividade é `session_idle_timeout_s`.
+  * O timeout por inatividade é `session_idle_timeout_s`. A expiração por inatividade é registrada só no log (INFO), sem auditoria.
   * Cookies com `HttpOnly` e `Secure`.
+    * **Exceção de DEV:** com `sss_env = DEV` sobre HTTP (servidor de desenvolvimento), o atributo `Secure` é omitido, porque o navegador descartaria o cookie. Em HML e PROD, `Secure` é sempre enviado.
   * **`SameSite` no Python 3.6:** `http.cookies.Morsel` só aceita o atributo `samesite` a partir do 3.8. No 3.6, a proteção cross-site se apoia em duas camadas:
     * o token CSRF;
     * a checagem obrigatória de `Origin`, ou de `Referer` quando `Origin` estiver ausente, contra `[web] allowed_origins` em todo `POST`.
 
     Requisição sem nenhum dos dois cabeçalhos é rejeitada com 403.
-* **Revalidação a cada requisição:** uma única query por PK junta `tbsss_usuarios` e `tbsss_perfis` e verifica `usuario.ativo`, `perfil.ativo` e `perfil.perm_versao`. Se a versão divergir da sessão, as permissões são recarregadas. Se o usuário ou o perfil estiver inativo, a sessão é encerrada.
+
+    **Exceção de DEV:** com `sss_env = DEV`, a origem do próprio `Host` da requisição também é aceita, para permitir o acesso por `localhost`, por IP ou por túnel SSH sem editar `allowed_origins`. Em HML e PROD, vale só a lista configurada.
+* **Revalidação a cada requisição:** uma única query por PK junta `tbsss_usuarios` e `tbsss_perfis` e verifica `usuario.ativo`, `perfil.ativo` e `perfil.perm_versao`.
+  * Se a versão divergir da sessão, as permissões são recarregadas. O mesmo acontece quando o `perfil_id` do usuário difere do gravado na sessão.
+  * Se o usuário ou o perfil estiver inativo, a sessão é encerrada e auditada como `LOGOUT`, com o detalhe `sessão encerrada pela revalidação: <usuário inativo | perfil inativo>`.
+  * A revalidação **não** considera `bloqueado_ate`: o bloqueio só impede novos logins. Uma sessão aberta continua válida até expirar, até o logout ou até o usuário ou o perfil ser desativado.
 * **CSRF:** token sincronizador por sessão.
   * Formulários enviam o campo oculto `_csrf`.
   * Chamadas `fetch` do Alpine enviam o cabeçalho `X-CSRF-Token`.
@@ -273,7 +306,8 @@ password = ...
 * **Gestão de senhas pela UI** (F4.3):
   * **Inclusão de usuário:** a senha inicial passa pela política e exige confirmação. Grava `senha_hash` (nunca a senha) e `senha_alterada_em`.
   * **Redefinir senha** (administrador, `CAD_USUARIOS`): aplica a política com confirmação e zera `tentativas_falha` e `bloqueado_ate`. A auditoria é `CAD_ALTERAR` com detalhe `senha redefinida`, sem o valor. Não existe "trocar no próximo login".
-  * **Desbloquear:** zera tentativas e bloqueio, com auditoria `CAD_ALTERAR`.
+  * **Desbloquear:** zera tentativas e bloqueio, com auditoria `CAD_ALTERAR`. A ação é auditada mesmo quando a conta não estava bloqueada.
+  * **Nova senha igual à atual:** é aceita em todas as telas. Não há histórico de senhas.
   * **Minha senha** (`default/minha_senha`, qualquer usuário logado):
     * exige a senha atual. Uma senha atual errada **conta como falha de login**, com o mesmo limite e bloqueio do item "Proteções do login" e auditoria `LOGIN_FALHA`;
     * se a conta for bloqueada, a sessão é encerrada;
@@ -283,7 +317,8 @@ password = ...
     * trocar o próprio perfil administrativo por um não administrativo;
     * redefinir a própria senha (para isso existe "Minha senha", que exige a senha atual).
   * **Senhas não aparecem em lugar nenhum:** campos `type="password"`, nunca reapresentados. A listagem e o formulário recebem os registros sem `senha_hash`. Os controllers retiram as senhas de `request.vars` logo após a leitura, porque o ticket de erro do web2py grava as variáveis da requisição.
-* **IP de origem:** usa `request.env.remote_addr`. O `X-Forwarded-For` só é aceito se o `remote_addr` constar em `trusted_proxies`.
+* **IP de origem:** usa `request.env.remote_addr`. O `X-Forwarded-For` só é aceito se o `remote_addr` constar em `trusted_proxies`. Nesse caso, a lista é lida da direita para a esquerda, e o IP de origem é o primeiro endereço que não é um proxy confiável.
+* **Retorno após o login (`next`):** só caminhos locais da aplicação são aceitos; URL externa é ignorada. O `next` só é gerado quando a requisição sem sessão é um GET ou HEAD. Um POST sem sessão redireciona ao login sem `next`.
 * **XSS:**
   * Saída sempre escapada (`{{=valor}}`).
   * É proibido `XML()` com dado de usuário.
@@ -299,7 +334,8 @@ password = ...
   2. **Funcionalidade** (`tbsss_perfil_func`): telas e ações.
   3. **Script** (`tbsss_perfil_scr`): rotinas que o perfil pode executar.
   4. **Homologação** (`tbsss_script_amb`): em quais ambientes cada script **pode** rodar. Esta é uma propriedade do catálogo, não do perfil.
-     * Na UI (F4.5), só ambientes ativos podem ser homologados; homologações existentes a ambientes inativos são preservadas.
+     * Na UI (F4.5), só ambientes ativos podem ser **adicionados**. Homologações existentes a ambientes inativos aparecem marcadas com o selo "inativo" e **podem ser removidas** (desmarcadas), mas nunca readicionadas enquanto o ambiente estiver inativo.
+     * Script inativo pode ter a homologação editada: a regra vale para o caso de ele ser reativado.
      * A alteração é auditada (`CAD_ALTERAR`, `homologação: +A, -B`).
      * O modal mostra os agendamentos ativos afetados nos ambientes removidos.
 * **Decisão composta para executar** (`rbac.pode_executar(usuario, script, ambiente)`), verdadeira somente se todas as condições forem atendidas:
@@ -309,6 +345,7 @@ password = ...
 * **Perfis administrativos** (`is_admin = 'S'`) dispensam as dimensões 1, 2 e 3. Eles **não** dispensam as flags `ativo` nem a homologação (dimensão 4).
 * Toda ação do servidor reautoriza com os IDs recebidos. Campos ocultos e IDs do cliente nunca são confiáveis.
 * **`perm_versao`:** qualquer alteração em perfil, na matriz do perfil, em `is_admin` ou em `ativo` incrementa `tbsss_perfis.perm_versao` **na mesma transação**.
+  * Desativar um usuário ou trocar o perfil dele também incrementa o `perm_versao` dos perfis de origem e de destino. Por isso, uma edição de matriz aberta ao mesmo tempo nesses perfis recebe a mensagem de conflito e precisa ser recarregada.
 
 #### B. Proteção do último administrador
 
@@ -328,6 +365,8 @@ As operações cobertas são: desativar usuário, trocar o perfil de usuário, d
 * A rejeição é `RepoViolacao(constraint='sss_ultimo_admin')`, uma regra de aplicação e não uma constraint do banco. A UI exibe "Operação negada: não pode restar nenhum administrador ativo."
 * Um perfil `is_admin = 'S'` sem usuários ativos não conta como administrador ativo.
 * Para usuários (`repo_usuarios.alterar`), a proteção vale ao desativar o usuário ou ao movê-lo para um perfil não administrativo (ou inativo). No Oracle, é o mesmo `SELECT ... FOR UPDATE WAIT 5`, na mesma transação do `UPDATE`.
+* **Autoproteção no cadastro de perfis:** o usuário logado não pode remover `is_admin` nem desativar **o próprio perfil**. A tentativa é recusada com "Você não pode remover o acesso administrativo do seu próprio perfil." ou "Você não pode desativar o seu próprio perfil.", sem gravar nem auditar. Isso vale mesmo que existam outros administradores, e complementa a autoproteção da tela de usuários (§4.2).
+  * Não há proteção contra um perfil **não** administrativo retirar da própria matriz `CAD_PERFIS` ou `CAD_USUARIOS`. Quem fizer isso perde o acesso à tela no próximo clique, e um administrador pode restaurar a permissão.
 * **Filtro de situação na lista de usuários:** Ativos, Inativos e **Bloqueados**, que são os usuários com `bloqueado_ate` ainda vigente (filtro `bloqueado_em` do contrato).
 
 #### B.1 Matriz de permissões na UI (`admin_perfis`)
@@ -337,18 +376,19 @@ As operações cobertas são: desativar usuário, trocar o perfil de usuário, d
 * **Validação dos IDs:**
   * um ID inexistente ou não numérico rejeita a operação inteira;
   * só itens **ativos** podem ser adicionados;
-  * associações já existentes a itens **inativos** aparecem marcadas e desabilitadas e são **preservadas** pelo servidor.
+  * associações já existentes a itens **inativos** aparecem marcadas, com o selo "inativo", e **podem ser removidas** (desmarcadas). Elas nunca podem ser readicionadas enquanto o item estiver inativo. O servidor recusa a adição e aceita a remoção;
+  * **limite operacional:** a matriz trabalha com até 1.000 ambientes e 1.000 scripts cadastrados. Acima disso, IDs válidos ficariam de fora da validação, então o limite deve ser revisto antes de ser atingido.
 * **Auditoria `PERM_ALTERAR`:** o `detalhe` é o diff `+EXEC_SCRIPT, -VER_LOGS, +amb:PRODUCAO, -scr:carga_diaria` (por dimensão, rótulo e sinal). Salvar sem mudança não incrementa `perm_versao` nem audita. O resumo do modal de confirmação usa o mesmo formato.
 * **Perfil administrativo:** a matriz continua editável e registrada, com um aviso de que o perfil dispensa as dimensões 1 a 3 (mas não a homologação). Ela passa a valer se `is_admin` for removido.
-* **Desativar perfil:** o modal mostra os usuários ativos afetados, que têm a sessão encerrada no próximo request pela revalidação (§4.2).
+* **Desativar perfil:** o modal mostra a quantidade **e os logins** dos usuários ativos afetados (no máximo 20, seguidos de "e outros N"), que têm a sessão encerrada no próximo request pela revalidação (§4.2).
 
 #### C. Escopo das funcionalidades operacionais
 
 | Funcionalidade | Escopo |
 |---|---|
-| `EXEC_SCRIPT` | Criar tickets e reexecutar tickets próprios, sujeito a `pode_executar` |
-| `VER_LOGS` | Tickets de ambientes autorizados ao perfil (admin: todos). Respostas de parâmetros `sensivel = 'S'` aparecem mascaradas |
-| `CANC_TICKET` | Cancelar qualquer ticket de ambiente autorizado. **Sem** esta funcionalidade, o solicitante com `EXEC_SCRIPT` pode cancelar apenas os próprios tickets |
+| `EXEC_SCRIPT` | Criar tickets e reexecutar tickets próprios, sujeito a `pode_executar`. **Perfil admin** reexecuta qualquer ticket que consegue ver. O novo ticket registra o admin como solicitante, então não há uso de privilégio alheio |
+| `VER_LOGS` | Tickets de ambientes autorizados ao perfil (admin: todos). Respostas de parâmetros `sensivel = 'S'` aparecem mascaradas. **Sem** `VER_LOGS`, quem tem `EXEC_SCRIPT` vê, lista e lê o log apenas dos **próprios** tickets |
+| `CANC_TICKET` | Cancelar qualquer ticket de ambiente autorizado, **sem** exigir `VER_LOGS`: a decisão é só de `rbac.pode_cancelar`. **Sem** esta funcionalidade, o solicitante com `EXEC_SCRIPT` pode cancelar apenas os próprios tickets, mesmo que tenha perdido o acesso ao ambiente |
 | `CAD_AGENDAMENTOS` | Criar e editar regras. O `usuario_id` da regra é o criador, e cada desdobro roda sob os privilégios vigentes desse usuário |
 
 #### D. Catálogo canônico de funcionalidades (seed)
@@ -366,6 +406,10 @@ As operações cobertas são: desativar usuário, trocar o perfil de usuário, d
 | `ADMIN` | `CAD_AGENDAMENTOS` | Regras de Agendamento | Criar e gerenciar recorrências |
 | `ADMIN` | `VER_AUDITORIA` | Auditoria | Consultar a trilha de auditoria e os agentes |
 
+* O seed (FAKE e `init_db.py`) grava os nomes e as finalidades **exatamente** como nesta tabela, com acentuação. A matriz de perfis exibe esses textos.
+* **Não existe tela de cadastro de funcionalidades.** O catálogo é fixo: cada código está ligado a rotas e guardas no código (`ui_menu.py`, `_exigir_func`), então um código novo sem rota não teria efeito. Novas funcionalidades entram por change request, com seed e código no mesmo pacote.
+* A associação perfil × funcionalidade (`tbsss_perfil_func`) é editada **somente** na aba Funcionalidades da matriz de permissões (§4.3.B.1), no mesmo POST de ambientes e scripts.
+
 ### 4.4 Auditoria
 
 Toda ação sensível grava uma linha em `tbsss_auditoria` **na mesma transação** da ação:
@@ -380,16 +424,33 @@ Toda ação sensível grava uma linha em `tbsss_auditoria` **na mesma transaçã
 
 O campo `detalhe` nunca contém segredos nem valores de parâmetros sensíveis.
 
+* **Mesma transação:** a linha de auditoria é gravada pelo **próprio repositório**, na operação que recebe `auditoria=`. Isso vale também para o login (§4.2). O service nunca grava a auditoria numa chamada separada.
+* **Entidade de cada ação:**
+
+| Ação | `entidade` | `entidade_id` |
+|---|---|---|
+| `LOGIN_*`, `LOGOUT` | `tbsss_usuarios` | id do usuário (nulo para login inexistente) |
+| `TICKET_*` | `tbsss_tickets` | id do ticket |
+| `CAD_*` | tabela do cadastro | id do registro |
+| `PERM_ALTERAR` | `tbsss_perfis` | id do perfil |
+| `AGD_PAUSAR` | `tbsss_agendamentos` | id da regra |
+| `AGENTE_INICIO`, `AGENTE_FIM` | `tbsss_agentes` | id do agente |
+| `PURGE` | tabela purgada (`tbsss_tickets` ou `tbsss_auditoria`), uma linha por tabela | nulo |
+| `AUD_EXPORTAR` | `tbsss_auditoria` | nulo |
+
+  O filtro "Entidade" da consulta oferece exatamente as tabelas acima.
+* **Limites da coluna:** `ator` tem até 40 caracteres e é obrigatório (nunca é preenchido com um valor padrão). `detalhe` é cortado em 1.000 caracteres, com `...` no final. O FAKE recusa a gravação fora desses limites, como o Oracle.
+
 **Cadastros** (padrão em `docs/PADRAO_CRUD_ADMIN.md`):
 
 | Situação | Ação | `detalhe` |
 |---|---|---|
-| Inclusão | `CAD_INSERIR` | `campo: valor` dos campos informados |
+| Inclusão | `CAD_INSERIR` | `campo: valor` **somente dos campos preenchidos**: campos vazios são omitidos. Todos os campos do formulário entram, inclusive `descricao` (parâmetros e scripts) e `etapa` (scripts). Referências aparecem pelo nome: `perfil: OPERADOR_PROD` |
 | Alteração | `CAD_ALTERAR` | `campo: antigo → novo`, só dos campos que mudaram (salvar sem mudança não audita) |
 | Desativação | `CAD_DESATIVAR` | `ativo: S → N`, mais o impacto (ex.: `agendamentos ativos afetados: 2`) |
 | Reativação | `CAD_ALTERAR` | `ativo: N → S` (não existe ação `CAD_REATIVAR`) |
 
-Os valores passam pelo `masking.py` e o texto é limitado a 1.000 caracteres.
+Todo `detalhe` passa pelo `masking.py`, inclusive os de vínculos de parâmetros, homologação e matriz, e é limitado a 1.000 caracteres. Valores de parâmetros sensíveis aparecem sempre como `****`.
 
 **Consulta e exportação** (tela `auditoria/lista`, `VER_AUDITORIA`, decisões do F6.1):
 
@@ -404,6 +465,7 @@ Os valores passam pelo `masking.py` e o texto é limitado a 1.000 caracteres.
   * UTF-8 com BOM, separador `;`, cabeçalho em português e datas `AAAA-MM-DD HH:MM:SS`;
   * neutralização de *CSV injection*: texto iniciado por `=`, `+`, `-`, `@`, TAB ou CR recebe o prefixo `'`;
   * auditada com a ação `AUD_EXPORTAR` (entidade `tbsss_auditoria`, `detalhe` = filtros + quantidade de linhas), gravada antes do streaming. O arquivo para no ID anterior ao dessa linha.
+  * **Quantidade registrada:** o `id` da linha de auditoria é obtido primeiro (`seq.NEXTVAL`, §2.7), e `id_max = id − 1`. A quantidade é contada sobre os filtros com `id <= id_max` e limitada a 50.000. Só então a linha é gravada, com essa quantidade, e o streaming lê o mesmo conjunto. Assim, a contagem e o arquivo correspondem ao mesmo recorte.
 * Contrato: `RepoAuditoria.iterar(filtros, limite)` alimenta o streaming (no Oracle, um cursor com `arraysize`, sem paginação por offset). O filtro `id_max` delimita o conjunto exportado.
 
 ---
@@ -460,10 +522,16 @@ Os estados `SUCCESS`, `FAILED` e `CANCELLED` são **terminais e imutáveis**. To
 1. Validar o CSRF e `rbac.pode_executar(usuario, script_id, ambiente)`.
 2. Carregar o vínculo `tbsss_script_param` + `tbsss_parametros` (ativos) do script.
 3. Validar as respostas e compilar o snapshot (§6). Em caso de erro, retornar o erro por campo, sem gravar nada.
-4. Gravar o `scheduled_at` informado (opcional, `>= SYSDATE`, padrão `SYSDATE`).
+4. Gravar o `scheduled_at` informado (opcional, padrão `SYSDATE`).
+   * Ele deve ser `>= SYSDATE` **exato**, sem tolerância de minuto: um horário no minuto corrente, mas anterior ao `SYSDATE`, é recusado.
+   * Não há limite superior.
+   * O valor digitado no campo de data e hora do navegador é interpretado como horário de parede do servidor Oracle (§7.1). A tela informa isso ao lado do campo.
 5. `INSERT INTO tbsss_tickets (...) VALUES (...) RETURNING id INTO :out_id`, com `parametros_enviados` contendo o JSON do snapshot.
 6. `INSERT` em `tbsss_ticket_resp` via `executemany`, com os valores **resolvidos** (após a precedência).
 7. Auditoria `TICKET_CRIAR` e `COMMIT`. Em qualquer exceção, `ROLLBACK`.
+
+* **Caminho do script na criação:** o nó web valida `path_file` conforme a §8.5 ("Validação no nó web"). O `NAO_E_ARQUIVO` bloqueia a criação em qualquer `sss_env`, porque o ticket não poderia ser executado. A exceção é o interpretador que a plataforma do nó web não suporta: aí vale só a etapa 1, e a validação definitiva fica no claim (§8.4).
+* **`ticket_resp`:** respostas sem valor (`None`) não são gravadas. `CHECKBOX` é gravado como `"true"`/`"false"`.
 
 ### 5.5 Reexecução
 
@@ -471,6 +539,13 @@ Os estados `SUCCESS`, `FAILED` e `CANCELLED` são **terminais e imutáveis**. To
 * As respostas resolvidas do original (`tbsss_ticket_resp`) são **recompiladas contra o catálogo vigente**, gerando um novo snapshot.
 * A reexecução exige `pode_executar` vigente.
 * O snapshot original permanece intocado.
+* **Regras complementares:**
+  * só ticket **terminal** pode ser reexecutado;
+  * o novo ticket usa o **mesmo script e o mesmo ambiente** do original. Se o pedido divergir, a operação é recusada (`REEXECUCAO_DIVERGENTE`);
+  * a prioridade é herdada do original, e `scheduled_at` é `SYSDATE`. Se a prioridade herdada não for mais permitida (prioridade 1 e o usuário deixou de ser admin), a reexecução direta é recusada e o formulário de disparo abre preenchido para ajuste;
+  * valores sensíveis são reaproveitados do `ticket_resp` original, sem passar pela tela;
+  * se a recompilação falhar (por exemplo, o catálogo mudou), o formulário de disparo abre preenchido com as respostas não sensíveis. Um campo sensível deixado em branco recebe o **padrão vigente** (§6.1), não o valor original;
+  * códigos de resposta que não existem mais no catálogo vigente são descartados.
 
 ### 5.6 Cancelamento distribuído
 
@@ -490,6 +565,16 @@ UPDATE {owner}.tbsss_tickets
 * Se o primeiro `UPDATE` afetar 0 linhas, o ticket já é terminal e o sistema informa o usuário.
 * Se o segundo afetar 0 linhas, o ticket está `RUNNING` e o agente dono trata o cancelamento.
 * A operação é auditada e confirmada com `COMMIT`.
+* **Toda solicitação é auditada** (`TICKET_CANCELAR`), inclusive as que não mudam nada. O `detalhe` informa o resultado:
+
+  | Resultado | Situação | Mensagem ao usuário |
+  |---|---|---|
+  | `cancelado` | Era `PENDING` e virou `CANCELLED` | Ticket cancelado |
+  | `sinalizado` | Era `RUNNING`; o agente vai encerrar | Cancelamento solicitado ao agente |
+  | `já sinalizado` | `RUNNING` com `cancel_requested = 'S'` já gravado | O cancelamento já havia sido solicitado |
+  | `sem efeito: ticket encerrado` | Já era terminal | O ticket já estava encerrado |
+
+  O botão some quando o cancelamento já foi solicitado, mas o servidor trata o POST repetido do mesmo modo.
 
 **No agente dono:** a cada `cancel_poll_interval_s`, executa a varredura combinada da §8.7. Ao encontrar `cancel_requested = 'S'` em ticket próprio:
 
@@ -520,11 +605,11 @@ Os valores padrão (2 e 3) **também** passam pela validação da §6.2.
 
 ### 6.2 Validação por `tipo_componente`
 
-Para todos os tipos:
+Para todos os tipos, **nesta ordem**:
 
-* o valor é texto UTF-8 com até 500 caracteres;
-* rejeita NUL e caracteres de controle `\x00-\x1f` e `\x7f`;
-* recebe `strip()` antes da validação.
+1. o valor recebe `strip()`, que remove espaços, tabulações e quebras de linha das pontas;
+2. o resultado é texto UTF-8 com até 500 caracteres;
+3. o resultado não pode conter NUL nem caracteres de controle `\x00-\x1f` e `\x7f`. Um controle que estava só nas pontas já foi removido no passo 1 e não causa rejeição.
 
 | Tipo | Regra |
 |---|---|
@@ -533,6 +618,10 @@ Para todos os tipos:
 | `DATE` | `datetime.strptime(valor, '%Y-%m-%d')`, emitido como `YYYY-MM-DD` |
 | `SELECT` | O valor deve ser uma chave de `opcoes_json` (objeto JSON `{"valor": "Rótulo"}`, parseado em Python) |
 | `CHECKBOX` | Aceita `true`, `false`, `1` e `0` (sem distinção de maiúsculas), normalizados para booleano |
+
+**`CHECKBOX` na prática:**
+* `false` é um valor válido, inclusive em parâmetro obrigatório. Obrigatório significa "precisa ter resposta", não "precisa estar marcado".
+* No questionário da UI, a caixa sempre envia uma resposta explícita (`true` ou `false`). Por isso, os padrões (§6.1, itens 2 e 3) só se aplicam ao `CHECKBOX` em agendamentos (`parametros_json`) e em chamadas sem a resposta.
 
 **Governança de `regex_validacao`:**
 
@@ -560,8 +649,11 @@ Para todos os tipos:
 * **`valor_padrao` de parâmetro sensível é só de escrita:**
   * campo `password` nunca reapresentado; deixar em branco mantém o valor gravado, e "remover" apaga;
   * na auditoria aparece como `****`;
-  * na lista aparece mascarado;
-  * o "Testar valor" responde `****`.
+  * na lista, a coluna "Valor padrão" mostra `****` quando existe um valor sensível, o valor quando não é sensível e `-` quando está vazio;
+  * o "Testar valor" responde `****`;
+  * **o valor sensível nunca entra no HTML, nem de forma derivada:** o hash de versão usado na concorrência (§10) troca o valor sensível por um marcador fixo. A detecção de alteração concorrente desse valor fica com o `esperado` do repositório, que compara o valor real no servidor;
+  * **trocar `sensivel` de `S` para `N`** é recusado enquanto houver valor sensível gravado: o `valor_padrao` do parâmetro ou qualquer `valor_padrao_sub` dos vínculos. A mensagem pede para remover esses valores antes, para que um segredo não passe a ser exibido em claro. Trocar de `N` para `S` é sempre permitido.
+* **Textos livres** (`label` e `descricao`) seguem a regra global de texto dos cadastros (§10): sem caracteres de controle e sem truncamento silencioso.
 * **Regras de dependência**, verificadas antes (a mensagem lista os scripts) e garantidas na **mesma operação** do repositório (`RepoViolacao` com constraint de aplicação):
   * trocar `tipo_componente` com qualquer vínculo: `sss_prm_tipo_vinculado`;
   * alterar ou remover `param_nomeado` com vínculo a script `NOMEADO`, ativo ou não: `sss_prm_flag_nomeado`;
@@ -577,8 +669,8 @@ Para todos os tipos:
   * Flag longa (`--x`) emite dois tokens, `--x` e `valor`. Se o valor começar com `-`, emite um token único `--x=valor`.
   * Flag curta (`-x`) emite dois tokens, `-x` e `valor`. Valor iniciado em `-` é **rejeitado** na validação, porque não há forma segura universal.
 * **`SEQUENCIAL`**: argumentos posicionais ordenados por `ordem`, ignorando `param_nomeado`.
-  * Opcional sem valor emite `""`, preservando a posição.
-  * `CHECKBOX` emite `"1"` ou `"0"`.
+  * Opcional sem valor emite `""`, preservando a posição. Isso vale para todos os tipos, inclusive `CHECKBOX` opcional sem resposta (emite `""`, não `"0"`).
+  * `CHECKBOX` com resposta emite `"1"` ou `"0"`.
   * Valor iniciado em `-` é **rejeitado**, exceto `NUMBER` negativo.
 * **`NENHUM`**: nenhum argumento. Vincular parâmetros a esse script é rejeitado no cadastro.
 
@@ -595,8 +687,8 @@ POWERSHELL -> [<exe POWERSHELL>, "-NoProfile", "-NonInteractive",
 ```
 
 * `<exe X>` vem de `[agent] interpretadores` do agente (§12.1).
-* `<script_real>` é resolvido pelo agente a partir de `path_file` e do `base_script_dir` local (§8.5).
-* A UI mostra o `argv` **lógico**, por exemplo `PYTHON3 -I <base>/carga.py --data 2026-10-13`.
+* `<script_real>` é resolvido pelo agente a partir de `pasta_base` e `path_file`. O nome lógico da pasta é traduzido para o diretório local pelo mapeamento `[agent] base_script_dirs` do agente (§8.5).
+* A UI mostra o `argv` **lógico**, com o nome da pasta base no lugar do diretório, por exemplo `PYTHON3 -I <ROTINAS>/carga.py --data 2026-10-13`.
 
 ### 6.5 Snapshot imutável (`tbsss_tickets.parametros_enviados`)
 
@@ -604,10 +696,11 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 
 ```json
 {
-  "versao": 2,
+  "versao": 3,
   "script_id": 12,
   "script_nome": "carga_faturas",
   "interpretador": "PYTHON3",
+  "pasta_base": "ROTINAS",
   "path_file": "faturamento/carga_faturas.py",
   "tipo_param": "NOMEADO",
   "args": ["--data", "2026-10-13"],
@@ -617,8 +710,11 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 }
 ```
 
+* **Tipos em `respostas`:** os valores são os resolvidos e normalizados (§6.2). Opcional sem valor fica `null`, `CHECKBOX` é booleano JSON (`true`/`false`) e os demais tipos são string. Os valores sensíveis ficam no snapshot (o banco é o único lugar onde ficam visíveis, §6.5 "Parâmetros sensíveis").
+* **`sensiveis`:** lista os códigos de **todos** os parâmetros sensíveis vinculados, mesmo os que ficaram sem valor.
 * **Versão 2 (CR-001):** o snapshot não guarda mais caminho absoluto nem executável do nó que o compilou. O agente revalida `interpretador` contra a allowlist e o próprio mapeamento, resolve `path_file` pelo `path_guard` local e monta o `argv` (§6.4, §8.4).
-* Snapshots da versão 1, gerados antes do CR-001 apenas em DEV/FAKE, não são aceitos pelo agente. O claim os rejeita com `PRECHECK_FAILED`.
+* **Versão 3 (CR-003, várias pastas base):** acrescenta `pasta_base`, o nome lógico da pasta onde o script fica. O agente a traduz pelo próprio mapeamento `base_script_dirs` (§8.5).
+* Snapshots das versões 1 e 2 foram gerados apenas em DEV/FAKE e não são aceitos pelo agente. O claim os rejeita com `PRECHECK_FAILED`.
 
 * O snapshot é **compilado na criação do ticket** (manual ou desdobro). O agente **nunca** recompila nem lê `tbsss_script_param` e `tbsss_parametros` para executar.
 * **Defesa em profundidade no claim:** o agente revalida o snapshot (§8.4, passo 1).
@@ -627,13 +723,18 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
   * a lista é revalidada inteira: ID inexistente ou duplicado, `valor_padrao_sub` por `validar_valor` (com até 100 caracteres), `NENHUM` sem vínculos e `NOMEADO` com flag em todos os parâmetros;
   * as regras de `NENHUM`/`NOMEADO` também são garantidas pelo repositório na mesma operação (`sss_scr_nenhum_vinculado` e `sss_scr_nomeado_sem_flag`), inclusive ao trocar `tipo_param`;
   * só parâmetros ativos podem ser adicionados; vínculos existentes a parâmetros inativos são preservados;
-  * o `valor_padrao_sub` de parâmetro sensível é só de escrita (em branco mantém o gravado) e aparece como `****` na auditoria e na prévia;
+  * o `valor_padrao_sub` de parâmetro sensível é só de escrita (em branco mantém o gravado) e aparece como `****` na auditoria e na prévia. Há uma opção explícita "remover valor" por vínculo, que apaga o valor gravado sem remover o vínculo;
+  * o valor sensível **mantido** também é revalidado por `validar_valor` contra a configuração atual do parâmetro. Se tiver ficado inválido, a gravação é recusada com a orientação de informar um novo valor ou removê-lo;
+  * o hash de versão dos vínculos troca o valor sensível por um marcador fixo (§6.2), para que o segredo não saia no HTML nem de forma derivada;
   * a **prévia do argv** usa a configuração em edição, com os valores padrão (§6.1), e não grava nada;
-  * concorrência pelo estado lido (hash dos vínculos), com a mensagem de conflito.
+  * concorrência pelo estado lido (hash dos vínculos), com a mensagem de conflito;
+  * **limites operacionais:** até 200 vínculos por script, e a tela trabalha com até 1.000 parâmetros cadastrados (o mesmo vale para os 1.000 ambientes da homologação). Os limites devem ser revistos antes de serem atingidos;
+  * script inativo pode ter os vínculos editados, para o caso de ser reativado.
 * `tbsss_ticket_resp` é a cópia normalizada das respostas resolvidas, usada em relatórios, auditoria e reexecução. O executor não a utiliza.
 * **Parâmetros sensíveis** (`sensivel = 'S'`):
   * Os valores são listados em `"sensiveis"` (por `codigo`).
   * Ficam mascarados na UI, nos logs do daemon e no `log_output`.
+  * No `argv` exibido, todo token igual a um valor sensível do ticket vira `****`, mesmo que apareça em outro parâmetro. Na dúvida, o sistema prefere mascarar a mais.
   * **Continuam visíveis em `ps` no servidor e no banco.** Por isso, é **proibido** cadastrar parâmetro destinado a senha ou credencial, que deve vir do ambiente (§8.6).
 
 ---
@@ -660,6 +761,7 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 | `CRON` | `expressao_cron` | §7.3 |
 
 * `data_inicio` é o piso, e `data_fim` (opcional) é o teto.
+  * Em `UNICA`, `data_fim` **não se aplica**: o servidor ignora o valor enviado e grava `NULL`, e a tela esconde e limpa o campo.
 * Se a próxima ocorrência passar de `data_fim`, a regra recebe `ativo = 'N'` e `pausa_motivo = 'CONCLUIDO'`.
 * `proxima_execucao` é calculada no salvamento da regra pelo mesmo módulo `recurrence.py`.
 
@@ -681,12 +783,14 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 * Se `dia_mes` **e** `dia_semana` forem ambos restritos, vale a semântica **OU** (padrão Vixie cron).
   * Um campo cujo texto começa com `*` (inclusive `*/n`) **não** é restrito. Nesse caso, os dois campos precisam casar (E), como no Vixie. Exemplo: `0 0 */2 * 1` = dias ímpares que caiam numa segunda.
 * O cálculo da próxima ocorrência é feito campo a campo, não minuto a minuto, com horizonte de `cron_horizon_days`. Uma expressão sem ocorrência no horizonte é rejeitada no cadastro e pausa a regra (`CRON_INVALIDO`) no desdobro.
+  * O horizonte é contado a partir do instante de referência da busca: `data_inicio` no cadastro e na prévia, e o "agora" do banco no desdobro.
   * **Exceção:** se `data_fim` cair dentro do horizonte, a falta de ocorrência significa que a regra terminou (`CONCLUIDO`), não que a expressão é inválida.
 * O passo exige `*` ou intervalo (`*/5`, `0-30/5`). A forma `a/n` é rejeitada, e a expressão tem no máximo 60 caracteres.
 * `CronExpr.descrever()` gera a descrição em português exibida na UI. Exemplos:
   * `30 2 * * 1-5` → "às 02:30, de segunda a sexta";
   * `*/15 * * * *` → "a cada 15 minutos";
-  * `0 0 1 * 1` → "às 00:00, no dia 1 de cada mês ou às segundas".
+  * `0 0 1 * 1` → "às 00:00, no dia 1 de cada mês ou às segundas";
+  * passo no dia do mês: `0 0 */2 * *` → "às 00:00, a cada 2 dias a partir do dia 1"; `0 0 */2 * 1` → "às 00:00, a cada 2 dias a partir do dia 1, quando cair numa segunda". A descrição não repete "de cada mês" e não usa "nos dias do mês a cada".
 
 ### 7.4 Política de *misfire*
 
@@ -697,7 +801,10 @@ Se `SYSDATE - proxima_execucao > misfire_tolerance_s` (por exemplo, após um dow
 | `RUN_ONCE` (padrão) | Gera **um** ticket, coalescendo as ocorrências perdidas |
 | `SKIP` | Não gera ticket |
 
-Nos dois casos, `proxima_execucao` recebe a **primeira ocorrência futura** maior que `SYSDATE`. O número de ocorrências perdidas vai para o log em WARN.
+Nos dois casos, `proxima_execucao` recebe a **primeira ocorrência futura** maior que `SYSDATE`. O número de ocorrências perdidas vai para o log:
+
+* em **WARN** quando o atraso passa de `misfire_tolerance_s` (misfire de verdade);
+* em **INFO** quando há ocorrências coalescidas **dentro** da tolerância (por exemplo, CRON a cada minuto com o daemon 4 minutos atrasado gera 1 ticket e 4 perdidas em INFO).
 
 **Contrato de `recurrence.avaliar_disparo(regra, agora, misfire_policy, misfire_tolerance_s)`** (decisões do F5.1). A função devolve `Decisao(gerar_ticket, nova_data, perdidas, concluir)`:
 
@@ -760,15 +867,48 @@ Para cada regra, em **uma transação**:
    A pausa é registrada em `tbsss_auditoria` (`AGD_PAUSAR`) e no log em WARN.
 8. `COMMIT` único. Em qualquer exceção, `ROLLBACK`, log ERROR e continuação com a próxima regra.
 
+**Conclusão da regra (`concluir = True`, `nova_data = None`):**
+
+`proxima_execucao` é `NOT NULL`, então a conclusão **não** grava `NULL`. Ela substitui os passos 6 e 7 por um **único** `UPDATE` otimista, que mantém `proxima_execucao` com o valor lido:
+
+```sql
+UPDATE {owner}.tbsss_agendamentos
+   SET ativo = 'N', pausa_motivo = 'CONCLUIDO',
+       ultima_execucao  = SYSDATE,
+       ultimo_ticket_id = :ticket_id
+ WHERE id = :id
+   AND ativo = 'S'
+   AND proxima_execucao = :antiga_data
+```
+
+* **Com ticket** (a ocorrência atual ainda gera ticket): `:ticket_id` vem do `NEXTVAL` do passo 6. Se `rowcount = 1`, seguem o `INSERT` do ticket e o do `ticket_resp`, como no passo 6. Se `rowcount = 0`, `ROLLBACK` e próxima regra.
+* **Sem ticket** (`SKIP` fora da tolerância em `UNICA`, ou sobreposição): `ultima_execucao` e `ultimo_ticket_id` **não** são alterados. O `SET` fica só com `ativo` e `pausa_motivo`.
+* A conclusão é auditada como `AGD_PAUSAR`, com o detalhe `pausa_motivo: CONCLUIDO`, e registrada em INFO (não em WARN, porque não é uma falha).
+* O passo 7 (pausa) não se aplica à conclusão.
+
+**Sobreposição numa regra que conclui:** se, no passo 4, o `ultimo_ticket_id` ainda estiver `PENDING`/`RUNNING` e a decisão for `concluir = True`, a regra é concluída **sem ticket** (UPDATE acima, variante sem ticket). A ocorrência atual entra em `perdidas`, e o log registra INFO `SKIP_OVERLAP` com o total de perdidas.
+
 **Bind de datas:**
 
 * `:antiga_data` e `:nova_data` são declarados pelo `db_conn` com o tipo de data do driver (no Oracle, `setinputsizes` com `cx_Oracle.DATETIME` ou `oracledb.DB_TYPE_DATE`).
 * Um `datetime` com microssegundos **nunca** é comparado a uma coluna `DATE`. A regra travaria silenciosamente.
+* `:antiga_data` é usada **exatamente como retornada pelo banco** (passo 1), nunca recalculada nem convertida por fuso. `:nova_data` sai do `recurrence.py` já sem segundos nem microssegundos (§7.2).
+* **Teste obrigatório (F7.3/F8.4):** um desdobro com `antiga_data`/`nova_data` contendo microssegundos não pode resultar em `rowcount = 0`. O tipo `DATE` declarado no bind descarta a fração.
+
+**Contrato do repositório para o desdobro (F8.4):** `repo_oracle/scheduler_agenda.py` (processo batch, sem FAKE, §2.5) expõe operações distintas:
+* a leitura do lote vencido (SQL acima);
+* a leitura completa da regra;
+* a reserva otimista com a inclusão do ticket e do `ticket_resp` (passo 6), numa única operação;
+* a conclusão, com e sem ticket;
+* a pausa (passo 7).
+
+Todas recebem a conexão da transação do ciclo e nunca fazem `COMMIT` sozinhas; o `COMMIT` único é do passo 8.
 
 ### 7.6 Cadastro de regras na UI (decisões do F5.2)
 
 Implementação: `controllers/agendamentos.py`, `modules/agendamentos_service.py` e `views/agendamentos/`. O questionário de parâmetros é o mesmo do disparo (`views/components/questionario.html`).
 
+* **Validação estrita (sem truncamento):** todo campo recebido é validado no tamanho e no formato exatos. Um valor mais longo ou fora do formato é **recusado** com mensagem no campo, nunca cortado. Exemplos: dia do mês `100` ou `311`, hora `03:000`, data com segundos ou frações (`…T10:00:00.999`).
 * **Escolha de script e ambiente:** na inclusão, a escolha é feita em etapas e usa os mesmos filtros do disparo (§4.3.A): só aparecem scripts e ambientes em que o editor tem `pode_executar`. Por isso, quem não é admin precisa também de `EXEC_SCRIPT`.
 * **Edição (D2):** script e ambiente ficam **fixos**. Para usar outro script ou ambiente, cria-se uma nova regra.
 * **`usuario_id`:** a inclusão e a edição gravam o editor, que precisa ter `pode_executar` vigente (§10). Sem essa permissão, a operação é negada e a regra fica intacta. A tela de edição sempre avisa: "Ao salvar, esta regra passará a executar com as suas permissões."
@@ -786,6 +926,9 @@ Implementação: `controllers/agendamentos.py`, `modules/agendamentos_service.py
 * **Parâmetros sensíveis na edição:** o valor salvo nunca é reexibido. Um campo vazio mantém o valor anterior, e a tela indica isso. Na auditoria, o valor aparece como `******`, com `(alterado)` quando muda.
 * **Prioridade:** igual ao disparo (§5.3), com padrão 2. Na edição, quem não é admin não consegue manter a prioridade 1.
 * **Concorrência:** a edição usa o padrão de versão e `esperado` dos cadastros (§10). O `esperado` inclui `proxima_execucao`, então um desdobro feito entre a leitura e a gravação gera conflito.
+* **Efeito da edição na agenda:**
+  * salvar recalcula `proxima_execucao` a partir de agora. Uma ocorrência já vencida e ainda não desdobrada (daemon atrasado) é descartada, sem ticket;
+  * editar uma regra pausada ou `CONCLUIDO` **não** a reativa: ela continua pausada até a retomada explícita.
 * **Auditoria:**
   * A inclusão grava `CAD_INSERIR`.
   * A edição grava `CAD_ALTERAR` e **sempre** começa por `usuario_id: <anterior> (login) → <novo> (login)`, mesmo quando o editor não muda. Sem nenhuma mudança e com o mesmo editor, nada é gravado.
@@ -845,6 +988,7 @@ SELECT id, script_id, ambiente FROM (
      AND (CASE WHEN t.status = 'PENDING' THEN t.scheduled_at END) <= SYSDATE
      AND t.ambiente IN (:amb0, :amb1)
      AND s.interpretador IN (:int0, :int1)
+     AND s.pasta_base IN (:pb0, :pb1)
      AND t.cancel_requested = 'N'
    ORDER BY (CASE WHEN t.status = 'PENDING' THEN t.prioridade END),
             (CASE WHEN t.status = 'PENDING' THEN t.scheduled_at END),
@@ -855,6 +999,8 @@ SELECT id, script_id, ambiente FROM (
 As expressões `CASE` devem ser **textualmente idênticas** às do índice baseado em função `ix_tbsss_tck_fila`, que contém apenas os tickets `PENDING`.
 
 O filtro `s.interpretador IN (:int0..:intN)` usa os interpretadores que **este** agente suporta (§12.1). Assim, num ambiente com agentes Linux e Windows, cada um só pega os scripts que consegue executar. Os placeholders são gerados pelo código, e os valores vão sempre como binds.
+
+Do mesmo modo, o filtro `s.pasta_base IN (:pb0..:pbN)` usa os nomes lógicos de `[agent] base_script_dirs` **deste** agente. Assim, um agente nunca pega um script de uma pasta que ele não tem.
 
 ### 8.3 Claim em três passos (por candidato, uma transação)
 
@@ -892,8 +1038,9 @@ O filtro `s.interpretador IN (:int0..:intN)` usa os interpretadores que **este**
 
 1. **Pré-validação do snapshot.** Qualquer falha leva a `FAILED` com `PRECHECK_FAILED` e `-4`:
    * o JSON é válido e tem `versao` suportada;
-   * `versao == 2`, e `interpretador` consta na allowlist lógica **e** no mapeamento deste agente;
-   * `path_file` passa na §8.5 contra o `base_script_dir` local, que fornece o `script_real`;
+   * `versao == 3`, e `interpretador` consta na allowlist lógica **e** no mapeamento deste agente;
+   * `pasta_base` consta no mapeamento `base_script_dirs` deste agente;
+   * `path_file` passa na §8.5 contra o diretório local dessa pasta base, que fornece o `script_real`;
    * o `argv` é montado pelo agente (§6.4) a partir de `interpretador`, `script_real` e `args`;
    * o script segue `ativo = 'S'` e homologado para o ambiente.
 2. **Preparo do diretório de trabalho:**
@@ -939,11 +1086,24 @@ O filtro `s.interpretador IN (:int0..:intN)` usa os interpretadores que **este**
 * `cmd.exe`, `.bat` e `.cmd` são **proibidos**, porque reinterpretam argumentos e não há *quoting* seguro.
 * O executável de cada interpretador vem de `[agent] interpretadores`. Na inicialização, o agente valida que o caminho é absoluto, existe e é executável, e que a pasta dele não é gravável pelo agente.
 
+**Pastas base (CR-003): os scripts podem ficar em qualquer pasta cadastrada, desde que o arquivo exista**
+
+* Cada nó tem uma lista de pastas permitidas em `[agent] base_script_dirs`, no formato `NOME=caminho,NOME=caminho` (ex.: `ROTINAS=/opt/automacoes/scripts,BATCH=/home/batch/scripts,DADOS=/dados/rotinas`).
+  * O `NOME` é lógico, segue `^[A-Z][A-Z0-9_]{0,29}$` e é o mesmo em todos os nós que atendem o script. O caminho é o diretório **local** de cada nó, e um agente Windows mapeia o mesmo nome para o próprio diretório (ex.: `ROTINAS=D:\automacoes\scripts`).
+  * Os nomes são únicos na lista. Os caminhos são absolutos, distintos e **não aninhados**: nenhuma pasta base fica dentro de outra.
+* O cadastro do script grava `pasta_base` (o nome lógico) e `path_file` (o caminho relativo a essa pasta). O script pode ficar em qualquer subpasta de qualquer pasta base, e o arquivo precisa existir:
+  * no agente, sempre (claim, §8.4);
+  * no nó web, conforme a etapa 2 abaixo.
+* Toda pasta base passa pelas mesmas checagens de dono e permissão da antiga `base_script_dir`, na inicialização e a cada resolução.
+* Nenhuma pasta base pode conter `log_dir` ou `work_dir`, nem ficar dentro deles.
+* A tela de agentes (§13) mostra os nomes das pastas base de cada agente, gravados em `tbsss_agentes.pastas_base`.
+
 **Caminho (forma POSIX):**
 
 ```python
 ALLOWLIST = ('PYTHON3', 'BASH', 'SH', 'POWERSHELL')
 
+base_script_dir = base_script_dirs[pasta_base]   # KeyError -> PASTA_NAO_MAPEADA
 base = os.path.realpath(base_script_dir)
 real = os.path.realpath(os.path.join(base, path_file))
 try:
@@ -960,22 +1120,36 @@ ok = (interpretador in ALLOWLIST and dentro and real != base and os.path.isfile(
 
 Validações complementares:
 
-* **Ownership e permissão:** o script, **cada diretório** entre `base` e o script, e o próprio `base` são verificados:
+* **Pasta não mapeada:** `pasta_base` ausente do mapeamento do nó resulta em `PASTA_NAO_MAPEADA`. No agente, isso vira `PRECHECK_FAILED`; no nó web, ver a etapa 2.
+* **Ownership e permissão:** o script, **cada diretório** entre `base` (a pasta base do script) e o script, e o próprio `base` são verificados:
   * **POSIX:** pertencem a um UID de `script_owner_uids` (padrão: `0`, root); não têm escrita para grupo nem para outros (`st_mode & 0o022 == 0`); e o UID do agente não tem permissão de escrita (`os.access(p, os.W_OK)` falso).
   * **Windows:** pertencem a um SID de `script_owner_sids` (ex.: `S-1-5-32-544`, Administradores); a conta do agente, Users, Authenticated Users e Everyone não têm direito de escrita **efetivo** (`GetEffectiveRightsFromAclW`). `os.access` não serve no Windows, porque só olha o atributo "somente leitura".
 * **Momento:** a validação ocorre no cadastro (UI), na criação do ticket (snapshot) e novamente no claim (§8.4).
 * **CKs de banco** (defesa adicional):
   * `ck_tbsss_scr_int` restringe `interpretador` à allowlist lógica;
-  * `ck_tbsss_scr_path` exige `path_file` relativo e sem `..`.
-* **TOCTOU residual:** é aceito porque o UID do agente não consegue alterar a árvore de scripts.
+  * `ck_tbsss_scr_path` exige `path_file` relativo e sem `..`;
+  * `ck_tbsss_scr_pasta` exige `pasta_base` no formato do nome lógico.
+* **TOCTOU residual:** é aceito porque o UID do agente não consegue alterar nenhuma das pastas base.
+* **Formato de `path_file`:** caminho relativo, com `/` como único separador. É recusado se começar com `/`, contiver `..`, `\` ou `:` (letra de drive), ou começar com `//`. O agente Windows converte `/` para o separador local ao resolver (§8.5, "Caminho no Windows").
+* **Validação no nó web (decisão de plataforma):** o nó web valida contra a **própria** árvore e plataforma.
+  * A etapa 1 (`validar_cadastro`: interpretador na allowlist, formato de `path_file`, formato de `pasta_base`) roda sempre.
+  * A etapa 2 (`resolver` contra o diretório local da pasta base) só roda se a plataforma do nó web suportar o interpretador (tabela acima) **e** se a pasta base estiver mapeada no nó web. Sem isso, a tela mostra um aviso e a validação fica com o agente:
+    * interpretador de outra plataforma (ex.: `POWERSHELL` num nó web Linux): "Caminho não verificado neste servidor: a validação ocorrerá no agente Windows";
+    * pasta não mapeada no nó web: "Pasta base não disponível neste servidor: a validação ocorrerá no agente".
+  * A lista de pastas oferecida no cadastro é a do nó web. Uma pasta que só existe nos agentes deve constar no `base_script_dirs` do nó web **sem caminho** (`NOME=`). Assim ela pode ser escolhida, e a etapa 2 fica com o aviso de "pasta não disponível neste servidor". `NOME=` só é aceito no nó web: o daemon recusa a subida se uma pasta base não tiver caminho.
+  * Em qualquer caso, a validação definitiva é a do agente, no claim (§8.4).
 * **Cadastro na UI** (`admin_scripts`, F4.5):
-  * a etapa 1 (`validar_cadastro`) e a etapa 2 (`resolver` contra o servidor local) rodam ao salvar, com os códigos traduzidos para português;
+  * a etapa 1 (`validar_cadastro`) e a etapa 2 (`resolver` contra o servidor local) rodam ao salvar, com os códigos traduzidos para português. A etapa 2 segue a regra de plataforma acima;
+  * na **edição**, a etapa 2 só roda quando `pasta_base`, `path_file` ou `interpretador` mudam, ou quando o script é reativado. Assim, um arquivo ausente no nó web não impede editar a descrição ou desativar o script;
+  * `pasta_base` é um select com os nomes de `base_script_dirs` do nó web, e o servidor exige um nome dessa lista. Ao editar um script cuja pasta não está mais mapeada, o valor gravado é mantido e aparece com o selo "não mapeada neste servidor";
   * em `sss_env = DEV`, apenas `NAO_E_ARQUIVO` (o arquivo não existe localmente) vira **aviso** e permite salvar; os demais códigos bloqueiam;
   * em HML/PROD, a etapa 2 sempre bloqueia;
   * a UI sempre informa que a validação definitiva ocorre também no agente;
   * `interpretador` é um select fixo da allowlist lógica, e o servidor exige o valor exato, mesmo que o HTML tenha sido adulterado;
-  * **caminho absoluto do servidor só para admin:** o `base_script_dir` aparece apenas para perfil admin, e na prévia do argv quem não é admin vê `<base>/path_file`;
-  * o `nome` do script é texto livre de 1 a 60 caracteres (sem caracteres de controle), único e editável, porque o snapshot guarda o nome da época e tickets e agendamentos referenciam o `script_id`.
+  * **caminho absoluto do servidor só para admin:** o diretório de cada pasta base aparece apenas para perfil admin. Na prévia do argv, quem não é admin vê `<NOME>/path_file` (ex.: `<ROTINAS>/carga.py`);
+  * o `nome` do script é texto livre de 1 a 60 caracteres (sem caracteres de controle), único e editável, porque o snapshot guarda o nome da época e tickets e agendamentos referenciam o `script_id`;
+  * a unicidade do `nome` **diferencia maiúsculas de minúsculas**, como a UK `uk_tbsss_scr_nome` no Oracle: `Carga` e `carga` são nomes distintos. O FAKE segue a mesma regra;
+  * depois de salvar com sucesso, a tela **volta ao formulário do script**, e não à lista, para mostrar os avisos de validação (DEV) e os atalhos de homologação e de vínculo de parâmetros. É uma exceção documentada ao `PADRAO_CRUD_ADMIN.md`.
 
 ### 8.6 Ambiente do processo filho (`env_builder.py`)
 
@@ -1040,6 +1214,10 @@ O relógio de referência é sempre o `SYSDATE` do banco, nunca o relógio do n�
   3. registra CRITICAL `FENCED`.
 * Quando o banco volta, ele tenta `UPDATE ... SET status = 'FAILED', status_motivo = 'FENCED', return_code = -2 ... WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`. Se o ticket já estiver `NODE_OFFLINE`, o `rowcount = 0` é esperado.
 * **Invariante validada na inicialização:** `fence_timeout_s * 2 <= node_offline_timeout_s` e `heartbeat_interval_s * 3 <= fence_timeout_s`. Isso garante que o agente se cerca **antes** de outro nó declará-lo offline.
+* **Mesmos tempos em todos os nós:** quem declara um agente offline é **outro** agente, com o `node_offline_timeout_s` dele (§8.8). Por isso, `fence_timeout_s` e `node_offline_timeout_s` devem ser **idênticos em todos os agentes**; senão a invariante deixa de valer entre nós. Não há coluna nova para isso:
+  * cada agente registra os dois valores em INFO na inicialização;
+  * o pacote de implantação (F9.1) usa um único `config.ini` de referência para esses tempos;
+  * o roteiro E2E (F9.2) confere que todos os agentes usam os mesmos valores.
 * A medição usa `time.monotonic()`, imune a ajuste de relógio.
 
 ### 8.10 Coleta de log (`log_pump.py`)
@@ -1069,8 +1247,13 @@ END;
   * O arquivo local tem teto `max_local_log_size_bytes`. Ao excedê-lo, o processo é encerrado (SIGTERM → SIGKILL) com `FAILED`, `LOG_LIMIT` e `-5`, protegendo o disco.
 * **UI `VER_LOGS`:** polling a cada `log_poll_interval_s`.
   * O cliente envia o offset já recebido, e o servidor lê pelo locator (`lob.read(offset, amount)`).
+    * O offset da API web conta **caracteres a partir de 0**. O repositório Oracle converte para a posição 1 do LOB (`offset + 1`).
+    * Cada leitura devolve até 65.536 caracteres.
   * O texto é exibido com `x-text`.
   * A latência esperada é de cerca de `heartbeat_interval_s`.
+  * A tela mantém no máximo cerca de 5 milhões de caracteres. Ao passar desse limite, descarta o início e mantém os últimos 4 milhões, com um aviso. O log completo fica disponível no **download**, que é feito em streaming.
+  * Em erro transitório, o polling continua com intervalo três vezes maior. Sessão expirada interrompe o polling e pede um novo login.
+* **Lista de tickets:** ordenada por `created_at DESC`. A tela se atualiza sozinha a cada 10 s, valor fixo no código e fora do `config.ini`. A ordem da fila de execução (§5.3) é aplicada só pelo daemon.
 * Arquivos locais com mais de `local_log_retention_days` dias são removidos pelo `purge.py`.
 
 ### 8.11 Graceful shutdown do daemon
@@ -1093,14 +1276,14 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
 2. **Configuração:** carregar e validar o `config.ini` (tipos, faixas, invariantes da §8.9 e `max_parallel_jobs <= max_parallel_hard_limit`), o `owner` e o `table_prefix` (regex do `AGENTS.md`), e `agent_id` contra `^[A-Za-z0-9._-]{1,30}$`.
 3. **Segredos:** validar o `secrets.cfg` (§4.1).
 4. **Diretórios e interpretadores:**
-   * `base_script_dir` passa na regra de ownership e permissão da §8.5;
-   * `log_dir` e `work_dir` existem, são graváveis, **não** ficam sob `base_script_dir` e, no Windows, têm ACL restrita à conta do agente;
+   * cada pasta de `base_script_dirs` tem caminho, existe e passa na regra de ownership e permissão da §8.5; os nomes são únicos e os caminhos não são aninhados;
+   * `log_dir` e `work_dir` existem, são graváveis, **não** ficam sob nenhuma pasta base e, no Windows, têm ACL restrita à conta do agente;
    * cada entrada de `[agent] interpretadores` é válida para a plataforma (§8.5).
 5. **Instância única por host:** `plataforma.travar_instancia` em `work_dir/sss-<agent_id>.lock`.
 6. **Banco:** selecionar o driver (§2.3; a sondagem roda aqui), conectar e confirmar o relógio do banco (`SELECT SYSDATE FROM DUAL`).
 7. **Registro em `tbsss_agentes`:**
    * Se existir linha do mesmo `codigo` com `status = 'ATIVO'`, `heartbeat_at` recente (menor que `node_offline_timeout_s`) **e** `hostname` diferente, recusar a subida (`agent_id` duplicado).
-   * Caso contrário, executar `MERGE` com `status = 'ATIVO'`, `hostname`, `pid_daemon`, `versao`, `ambientes`, `plataforma`, `interpretadores` e `iniciado_em`.
+   * Caso contrário, executar `MERGE` com `status = 'ATIVO'`, `hostname`, `pid_daemon`, `versao`, `ambientes`, `plataforma`, `interpretadores`, `pastas_base` e `iniciado_em`.
    * Auditar `AGENTE_INICIO`.
 8. **Ambientes atendidos:** todos existem em `tbsss_ambientes` com `ativo = 'S'`. Um ambiente inexistente é ERROR fatal; um ambiente inativo gera WARN e é ignorado.
 9. **Startup check** de tickets `RUNNING` do próprio `agente_id`:
@@ -1182,8 +1365,15 @@ END;
   * Desativar um **parâmetro** vinculado a script ativo é bloqueado, e a UI lista os scripts afetados.
   * Desativar **script** ou **ambiente** pausa os agendamentos dependentes no próximo desdobro (§7.5).
   * Na UI, desativar e reativar ficam no **formulário de edição**, não na lista. A ação abre um modal de confirmação que mostra o impacto (ex.: quantidade de agendamentos ativos afetados).
+  * O impacto da desativação de um **ambiente** mostra os agendamentos ativos afetados **e** a quantidade de scripts homologados nele, que deixam de poder ser disparados ali. O mesmo texto vai para o `detalhe` de `CAD_DESATIVAR`.
+* **Texto nos cadastros (regra global):**
+  * O servidor valida tamanho e formato **exatos**. Valor maior que o limite, ou fora do formato, é **recusado** com mensagem no campo e nunca truncado em silêncio (vale para todas as telas, inclusive agendamentos, §7.6).
+  * Campos de **identificador** (nome de ambiente, nome de perfil, login, código de parâmetro e de funcionalidade) não recebem `strip()`. Espaço no início ou no fim é um caractere inválido e gera recusa, para seguir a CK à risca.
+  * Campos de **texto livre** (nome de script, `label`, `descricao`, `grupo`, `categoria`, `etapa`) recebem `strip()` e recusam caracteres de controle (`\x00-\x1f`, `\x7f`).
 * **Concorrência otimista nos cadastros (sem coluna de versão):**
   * O formulário de edição carrega uma `versao`: o sha256 dos campos editáveis, `ativo` incluído, calculado pelo servidor na leitura.
+    * Campo **sensível** (`valor_padrao` de parâmetro sensível, `valor_padrao_sub` de vínculo sensível) entra no hash como um **marcador fixo** (`<sensivel:preenchido>` ou `<sensivel:vazio>`), nunca pelo valor. A versão vai para o HTML e não pode permitir adivinhar o segredo por força bruta. A alteração concorrente só desse valor é detectada pelo `esperado` do repositório, que compara o valor real.
+    * Nas telas de conjunto (homologação, vínculos), a versão cobre só o conjunto lido. Uma mudança de estado de um item entre a leitura e o POST (por exemplo, ambiente desativado) aparece como a recusa específica ("item inativo"), não como conflito.
   * Ao salvar, o service relê o registro e compara a versão. Em seguida, repassa os valores lidos ao repositório, que executa `UPDATE ... WHERE id = :id AND <coluna = valor lido>` com comparação nula-segura ANSI `(c = :v OR (c IS NULL AND :v IS NULL))` e checa o `rowcount`.
   * Se a versão divergir ou o `rowcount` for 0, o resultado é `RepoConflito`, sem alteração nem auditoria. A mensagem é "O registro foi alterado por outra pessoa. Recarregue a página."
   * A linha de auditoria é gravada na mesma operação (transação) do `INSERT` ou `UPDATE`.
@@ -1201,15 +1391,15 @@ END;
   * `nome VARCHAR2(30 CHAR) NOT NULL`
   * `descricao VARCHAR2(100 CHAR)`
   * `conexao VARCHAR2(250 CHAR)` (somente DSN, opcional)
+  * `ativo CHAR(1) DEFAULT 'S' NOT NULL`
+  * `created_at DATE DEFAULT SYSDATE NOT NULL`
 * **Validação na UI** (`admin_ambientes_service.py`):
-  * `nome` segue a CK à risca. Letras minúsculas ou outros caracteres são **rejeitados** com mensagem, não convertidos. O `nome` é imutável depois de criado: o campo fica somente leitura e o servidor ignora o valor enviado.
+  * `nome` segue a CK à risca. Letras minúsculas, espaços (inclusive nas pontas) ou outros caracteres são **rejeitados** com mensagem, não convertidos. O `nome` é imutável depois de criado: o campo fica somente leitura e o servidor ignora o valor enviado.
   * `conexao` é opcional, como a coluna. Quando preenchida, aceita apenas:
     * Easy Connect: `^[A-Za-z0-9._-]+:[0-9]{1,5}/[A-Za-z0-9._-]+$`;
     * alias TNS: `^[A-Za-z0-9._-]{1,128}$`.
   * Um `@` é recusado com "Informe apenas o DSN; credenciais ficam no secrets.cfg."
-  * `descricao` é opcional, com até 100 caracteres.
-  * `ativo CHAR(1) DEFAULT 'S' NOT NULL`
-  * `created_at DATE DEFAULT SYSDATE NOT NULL`
+  * `descricao` é opcional, com até 100 caracteres e sem caracteres de controle.
 
 ### 2. `tbsss_perfis`
 * PK `pk_tbsss_perfis` · UK `uk_tbsss_per_nome (nome)`
@@ -1252,8 +1442,9 @@ END;
   * `ck_tbsss_scr_ativo`
   * `ck_tbsss_scr_paral (max_qtd_parallel_env BETWEEN 1 AND 999)`
   * `ck_tbsss_scr_int (interpretador IN ('PYTHON3','BASH','SH','POWERSHELL'))`
-  * `ck_tbsss_scr_path (SUBSTR(path_file, 1, 1) <> '/' AND INSTR(path_file, '..') = 0)`
+  * `ck_tbsss_scr_path (SUBSTR(path_file, 1, 1) <> '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '\') = 0 AND INSTR(path_file, ':') = 0)` (formato do §8.5)
   * `ck_tbsss_scr_tmout (timeout_seg IS NULL OR timeout_seg > 0)`
+  * `ck_tbsss_scr_pasta (REGEXP_LIKE(pasta_base, '^[A-Z][A-Z0-9_]{0,29}$'))`
 * **Colunas:**
   * `id`
   * `nome VARCHAR2(60 CHAR) NOT NULL`
@@ -1262,7 +1453,8 @@ END;
   * `categoria VARCHAR2(30 CHAR)`
   * `etapa VARCHAR2(30 CHAR)`
   * `interpretador VARCHAR2(15 CHAR) NOT NULL` (lógico; o executável é mapeado por agente, §8.5)
-  * `path_file VARCHAR2(250 CHAR) NOT NULL` (relativo a `base_script_dir`)
+  * `pasta_base VARCHAR2(30 CHAR) NOT NULL` (nome lógico da pasta base, mapeado por nó em `base_script_dirs`, §8.5)
+  * `path_file VARCHAR2(250 CHAR) NOT NULL` (relativo à pasta base)
   * `tipo_param VARCHAR2(15 CHAR) DEFAULT 'NOMEADO' NOT NULL`
   * `max_qtd_parallel_env NUMBER(3) DEFAULT 1 NOT NULL`
   * `timeout_seg NUMBER(7)`
@@ -1449,6 +1641,7 @@ END;
   * `ambientes VARCHAR2(500 CHAR)`
   * `plataforma VARCHAR2(10 CHAR)`, com CK `ck_tbsss_agt_plat (plataforma IN ('LINUX','WINDOWS','UNIX'))`
   * `interpretadores VARCHAR2(100 CHAR)` (lista separada por vírgula dos interpretadores lógicos suportados)
+  * `pastas_base VARCHAR2(500 CHAR)` (lista separada por vírgula dos **nomes** das pastas base do agente, sem os caminhos)
   * `status VARCHAR2(10 CHAR) DEFAULT 'ATIVO' NOT NULL`
   * `iniciado_em DATE`
   * `heartbeat_at DATE`
@@ -1545,7 +1738,9 @@ secrets_file = /etc/sss/secrets.cfg
 [agent]
 agent_id = srv-linux-prod-01
 ambientes_atendidos = PRODUCAO,HOMOLOGACAO
-base_script_dir = /opt/automacoes/scripts
+base_script_dirs = ROTINAS=/opt/automacoes/scripts,BATCH=/home/batch/scripts
+                                  ; NOME=caminho; nomes ^[A-Z][A-Z0-9_]{0,29}$, caminhos absolutos e não aninhados (§8.5)
+                                  ; no nó web, NOME= (sem caminho) declara uma pasta que só existe nos agentes
 work_dir = /var/lib/sss/work
 script_owner_uids = 0             ; POSIX: UIDs donos da árvore de scripts
 script_owner_sids =               ; Windows: SIDs donos da árvore (ex.: S-1-5-32-544)
@@ -1595,16 +1790,65 @@ purge_batch_size = 1000
 
 Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Chave desconhecida, ausente ou fora da faixa interrompe a subida com a chave e o motivo no log.
 
-A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR-002); até lá, o código atual (backend FAKE) ainda lê as chaves antigas. As chaves `script_owner_sids` e `interpretadores` passam a ser lidas e validadas a partir do F8.0 (CR-001).
+**Faixas de cada chave** (limites inclusivos; `enum` aceita só os valores listados no exemplo acima):
+
+| Seção | Chave | Tipo | Faixa / formato |
+|---|---|---|---|
+| `[app]` | `sss_env` | enum | `DEV`, `HML`, `PROD` |
+| `[app]` | `data_backend` | enum | `FAKE`, `ORACLE` |
+| `[oracle]` | `user`, `dsn` | texto | obrigatório, não vazio |
+| `[oracle]` | `owner` | texto | `^[A-Za-z][A-Za-z0-9_]{0,29}$` |
+| `[oracle]` | `table_prefix` | texto | `^[A-Za-z][A-Za-z0-9_]{0,7}$`: começa com letra, até 8 caracteres |
+| `[oracle]` | `modo_driver` (F7.0) | enum | `auto`, `thin`, `thick`, `cx_oracle` |
+| `[oracle]` | `oracle_client_lib_dir` | caminho | opcional |
+| `[oracle]` | `call_timeout_ms` | inteiro | 1 a 3.600.000 |
+| `[oracle]` | `pool_min`, `pool_max` | inteiro | 1 a 1.000, com `pool_min <= pool_max` |
+| `[secrets]` | `secrets_file` | caminho | obrigatório |
+| `[agent]` | `agent_id` | texto | `^[A-Za-z0-9._-]{1,30}$` |
+| `[agent]` | `ambientes_atendidos`, `script_owner_uids` | lista CSV | obrigatória |
+| `[agent]` | `script_owner_sids`, `interpretadores` (F8.0) | lista CSV | conforme §8.5 |
+| `[agent]` | `base_script_dirs` | lista `NOME=caminho` | obrigatória, com ao menos uma pasta; nomes únicos `^[A-Z][A-Z0-9_]{0,29}$`; caminhos absolutos, distintos e não aninhados; caminho vazio só no nó web (§8.5) |
+| `[agent]` | `work_dir` | caminho | obrigatório |
+| `[agent]` | `max_parallel_jobs`, `max_parallel_hard_limit` | inteiro | 1 a 999, com `max_parallel_jobs <= max_parallel_hard_limit` |
+| `[agent]` | `claim_batch_size`, `schedule_batch_size` | inteiro | 1 a 1.000 |
+| `[agent]` | `orchestrator_interval_s`, `cancel_poll_interval_s`, `heartbeat_interval_s`, `shutdown_grace_s` | inteiro | 1 a 3.600 |
+| `[agent]` | `fence_timeout_s`, `node_offline_timeout_s`, `misfire_tolerance_s` | inteiro | 1 a 86.400, com as invariantes do §8.9 |
+| `[agent]` | `kill_grace_s` | inteiro | 1 a 300 |
+| `[agent]` | `script_timeout_s` | inteiro | 1 a 86.400 (padrão global; o `timeout_seg` de cada script vai até 9.999.999, como a coluna) |
+| `[agent]` | `shutdown_mode`, `misfire_policy` | enum | conforme o exemplo |
+| `[agent]` | `cron_horizon_days` | inteiro | 1 a 36.500 |
+| `[agent]` | `child_locale` | texto | obrigatório |
+| `[agent]` | `env_passthrough` | lista CSV | opcional, sem as variáveis bloqueadas do §8.6 |
+| `[logging]` | `log_dir` | caminho | obrigatório |
+| `[logging]` | `level` | enum | `DEBUG`, `INFO`, `WARN`, `ERROR` |
+| `[logging]` | `app_log_max_bytes`, `max_log_size_bytes` | inteiro | 1.024 a 1.073.741.824 |
+| `[logging]` | `max_local_log_size_bytes` | inteiro | 1.024 a 10.737.418.240 |
+| `[logging]` | `app_log_backups` | inteiro | 1 a 100 |
+| `[logging]` | `local_log_retention_days` | inteiro | 1 a 3.650 |
+| `[web]` | `session_idle_timeout_s`, `login_bloqueio_s` | inteiro | 1 a 86.400 |
+| `[web]` | `login_max_tentativas` | inteiro | **1 a 99** (a coluna `tentativas_falha` é `NUMBER(2)`) |
+| `[web]` | `log_poll_interval_s` | inteiro | 1 a 3.600 |
+| `[web]` | `trusted_proxies` | lista CSV | opcional |
+| `[web]` | `allowed_origins` | lista CSV | obrigatória |
+| `[retencao]` | `ticket_retention_days`, `audit_retention_days` | inteiro | 1 a 3.650 |
+| `[retencao]` | `purge_batch_size` | inteiro | 1 a 100.000 |
+
+**Falha de configuração (web e daemon):**
+* A subida é abortada com um registro **CRITICAL** contendo a seção, a chave e o motivo, sem nunca o valor de um segredo.
+* O CRITICAL vai para o log da aplicação (`sss_web.log` ou `sss_scheduler.log`) quando `[logging]` é válido. Quando não é (por exemplo, `log_dir` inválido), vai para o stderr do processo, no mesmo formato do §13.
+* No nó web, a requisição recebe a página de erro genérica (500), sem o detalhe.
+
+A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR-002); até lá, o código atual (backend FAKE) ainda lê as chaves antigas. As chaves `script_owner_sids` e `interpretadores` passam a ser lidas e validadas a partir do F8.0 (CR-001). A chave `base_script_dirs` substitui `base_script_dir` a partir do passo P6A do CR-003, porque o cadastro de scripts no nó web já a utiliza; a chave antiga deixa de ser aceita.
 
 ### 12.2 Launchers
 
 `bin/sss-web.sh` e `bin/sss-scheduler.sh` (Linux/Unix) devem:
 
-* exportar `LD_LIBRARY_PATH` do Instant Client 19 (quando não houver `ldconfig`) e `TZ`;
+* exportar `LD_LIBRARY_PATH` do Instant Client 19 (quando não houver `ldconfig`) e `TZ`. Os valores vêm das variáveis `SSS_IC_DIR` (diretório do Instant Client) e `SSS_TZ` (fuso), definidas pela operação;
 * aplicar `umask 077`;
 * recusar a execução como root;
-* fazer `exec` do processo Python, para que os sinais cheguem diretamente a ele.
+* fazer `exec` do processo Python, para que os sinais cheguem diretamente a ele;
+* iniciar **somente** o processo Python do SSS (o web2py com os argumentos fixos do launcher). O launcher não executa um comando arbitrário recebido por argumento (`exec "$@"` é proibido).
 
 `bin/sss-web.ps1` e `bin/sss-scheduler.ps1` (Windows) devem:
 
@@ -1615,6 +1859,8 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
 `bin/sss-stop.sh` e `bin/sss-stop.ps1` criam o arquivo `work_dir/sss-<agent_id>.stop`, para a parada controlada sem sinal (§8.11).
 
 **Pacote de implantação:** `scripts/empacotar.py` (biblioteca padrão, roda em Linux e Windows) gera `dist/sss-<versao>.tar.gz` e `dist/sss-<versao>.zip` com o mesmo conteúdo e um `SHA256SUMS`, e falha se encontrar segredo ou código de DEV no pacote (F9.1).
+
+**Pastas de runtime do web2py:** o web2py cria as pastas `applications/`, `deposit/`, `logs/` e `site-packages/` no diretório corrente quando é executado fora da raiz. Essas pastas nunca fazem parte da aplicação: o `.gitignore` as ignora dentro de `applications/script_scheduling_service/`, e os launchers e a documentação sempre executam a partir da raiz do web2py.
 
 **Hardening do web2py em HML e PROD:**
 * As aplicações de exemplo `admin`, `welcome` e `examples` são **removidas** do pacote implantado.
@@ -1646,11 +1892,12 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
     | Saúde | Condição | Exibição |
     |---|---|---|
     | `OK` | idade < `2 × heartbeat_interval_s` | verde, ícone de confirmação |
-    | `ATRASADO` | até `fence_timeout_s` | âmbar, ampulheta |
-    | `EM_RISCO` | até `node_offline_timeout_s` | vermelho, alerta |
+    | `ATRASADO` | idade ≤ `fence_timeout_s` (limite inclusivo) | âmbar, ampulheta |
+    | `EM_RISCO` | idade ≤ `node_offline_timeout_s` (limite inclusivo) | vermelho, alerta |
     | `OFFLINE` | além disso, sem heartbeat ou com status `PARADO` | cinza, círculo cortado |
 
   * Cartões por agente com "há N s", lista expansível dos tickets `RUNNING` (com link para o detalhe), legenda dos estados e atualização automática a cada 15 s (fragmento `.load`, que preserva as listas abertas).
+  * Cada cartão mostra também a plataforma, os interpretadores e os **nomes** das pastas base do agente (`pastas_base`), sem os caminhos.
   * Backend FAKE (DEV): o `agt-host01` renova o heartbeat a cada leitura. O `agt-host02` nasce com o heartbeat congelado 30 s antes da carga do seed, então envelhece com o relógio: começa `ATRASADO`, passa a `EM_RISCO` cerca de 1 min depois e a `OFFLINE` cerca de 2,5 min depois.
 * **Painel inicial** (`default/index`), com cartões por permissão:
   * contagem por status dos tickets criados nas últimas 24 h e meus últimos 5 tickets (quem consulta tickets, no escopo da lista);
@@ -1672,3 +1919,7 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
 | Granularidade fina "perfil × script × ambiente" | Não suportada; a intersecção `perfil_amb ∩ script_amb` atende ao escopo atual |
 | Semântica de horário de verão | Horário de parede do servidor Oracle (§7.1) |
 | Lacunas em sequences | Aceitas por design |
+| Segredos com menos de 4 caracteres não são mascarados nos logs (§4.1) | Política de senha de 12 caracteres ou mais; segredos curtos não devem existir |
+| Bloqueio simulado de login inexistente fica na memória de cada processo web (§4.2) | Mensagem genérica e hash fictício; o bloqueio real das contas existentes fica no banco e vale para todos os nós |
+| Sessão aberta continua válida depois de um bloqueio por falhas de terceiros (§4.2) | O bloqueio impede novos logins; o administrador pode desativar o usuário, o que encerra a sessão na hora |
+| Tempos de fencing diferentes entre agentes anulam a garantia do §8.9 | Valores idênticos em todos os nós, registrados em INFO e conferidos no E2E (§8.9) |

@@ -114,6 +114,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
   * **Windows:** `subprocess.Popen(argv, shell=False, close_fds=True, stdin=DEVNULL, stdout=log_fd, stderr=STDOUT, cwd=..., env=clean_env, creationflags=CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW)`, seguido da atribuição imediata a um **Job Object** com `KILL_ON_JOB_CLOSE` e os limites configurados.
   * **Proibido** `stdout=subprocess.PIPE` ou `stderr=subprocess.PIPE` para scripts executados. A saída vai sempre para arquivo.
 * **Validação de caminho:** apenas por `modules/path_guard.py` (README §8.5). Prefixo por `str.startswith` é **proibido**.
+  * O script fica em uma das **pastas base** do nó (`[agent] base_script_dirs`, nome lógico → diretório local). A "base" das regras abaixo é a pasta base do script (`pasta_base`), e cada pasta base passa pelas mesmas checagens. Caminho absoluto livre no cadastro é proibido (CR-003).
   * **POSIX:** `realpath` na base e no script, `commonpath`, `isfile`, `real != base`, dono em `script_owners` (UIDs) e modo sem escrita de grupo ou outros nem do agente.
   * **Windows:** caminho final por `GetFinalPathNameByHandleW` em **qualquer** versão do Python (o `realpath` do Python < 3.8 não resolve links), `commonpath` sobre `normcase`, dono em `script_owners` (SIDs) e **direitos efetivos** pela ACL. `os.access(W_OK)` não serve no Windows.
 * **Allowlist de interpretadores lógicos:** `PYTHON3`, `BASH`, `SH` e `POWERSHELL`, mapeados por agente para o executável local (`[agent] interpretadores`).
@@ -142,6 +143,8 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **Saída:** sempre escapada com `{{=x}}`. **Proibido** `XML()` ou `{{=XML(...)}}` com qualquer dado de usuário ou de banco.
 * **Cabeçalhos de segurança** (CSP, `nosniff`, `frame-ancestors`, `no-store`) são aplicados em `models/10_security.py` para toda resposta.
 * **Senha:** somente `modules/security.py` (PBKDF2-SHA256, 200.000 iterações, `hmac.compare_digest`).
+* **Validação de entrada:** valor acima do limite ou fora do formato é **recusado** com mensagem, nunca truncado nem convertido em silêncio (README §10, "Texto nos cadastros"). O corte de `request.vars` no controller é só proteção de memória: o limite do controller deve ser maior que o do service, para que o service veja o excesso e o recuse.
+* **Segredo fora do HTML:** nenhum valor sensível (nem hash, nem derivado dele) vai para o HTML. A versão de concorrência usa um marcador fixo no lugar do valor sensível (README §10).
 
 ---
 
@@ -285,6 +288,8 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 - [ ] Nenhum identificador novo acima de 30 caracteres; registro de identificadores atualizado.
 - [ ] Processos: primitivas de SO só em `plataforma/`; allowlist lógica (sem `cmd`/`.bat` no Windows), `path_guard`, `env_builder`, sem PIPE e encerramento escalonado.
 - [ ] Web: guarda de login/RBAC, CSRF em POST, saída escapada, sem `XML()` com dado.
+- [ ] Entrada recusada (nunca truncada) acima do limite; nenhum valor sensível, nem derivado, no HTML.
+- [ ] Auditoria gravada pelo repositório na mesma operação da ação (`auditoria=`).
 - [ ] Logs sem segredos/PII; todo `except` com log.
 - [ ] Testes do §7 aplicáveis executados.
 
