@@ -8,7 +8,7 @@ O objetivo é congelar o comportamento visual e funcional das telas sobre o back
 - [ ] A suíte completa passa: `python -m unittest discover -s scripts -p "test_*.py"`.
 - [ ] `python scripts/check_env.py` retorna 0.
 - [ ] Todos os relatórios F0.1–F6.1 estão com `PASS` e sem lacunas abertas.
-- [x] CR-003 (P1–P11, P6A), CR-004 (U1–U8) e CR-005 (R0–R5) concluídos, e o fechamento UF executado: bateria completa de testes e validações e `docs/homologacao/` atualizado (manual v2.1, 16/10/2026).
+- [x] CR-003 (P1–P11, P6A), CR-004 (U1–U8) e CR-005 (R0–R5) concluídos, e o fechamento UF executado: bateria completa de testes e validações e `docs/homologacao/` atualizado (manual v2.2, 16/10/2026, revisado após a auditoria pós-CR-005).
 
 - [ ] `instance/config.ini` sem `base_script_dirs` nem `app_log_backups` (recusados desde o CR-005) e com `[logging] app_log_retention_days`.
 
