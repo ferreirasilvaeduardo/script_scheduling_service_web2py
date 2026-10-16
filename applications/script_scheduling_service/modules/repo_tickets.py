@@ -40,6 +40,14 @@ class RepoTickets(object):
         """
         raise NotImplementedError
 
+    def historico_script(self, script_id, desde, escopo_ambientes=None, solicitante=None, limite=5000):
+        """Tickets do script com created_at >= desde, no escopo, por created_at (README §5.8, CR-004).
+
+        Devolve no maximo `limite` itens (os mais recentes), cada um so com id, status, status_motivo,
+        created_at, started_at e finished_at, sem LOB, ordenados por created_at crescente.
+        """
+        raise NotImplementedError
+
     def respostas(self, ticket_id):
         """Retorna lista de dicts com as respostas resolvidas do ticket."""
         raise NotImplementedError

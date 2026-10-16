@@ -29,6 +29,8 @@ MSG_SCRIPT_INDISPONIVEL = (u"O script não está disponível para execução nes
                            u"Contate o administrador.")
 MSG_FALHA_CRIAR = u"Não foi possível criar o ticket. Tente novamente em instantes."
 
+HISTORICO_DIAS = 30
+HISTORICO_LIMITE = 5000
 MSG_ULTIMA_SENSIVEL = u"Por segurança, digite de novo."
 MSG_ULTIMA_MUDOU = u"Esta resposta mudou desde a última vez; preencha de novo."
 ROTULOS_PRIORIDADE = {
@@ -732,6 +734,61 @@ class ServicoTicket(object):
             resultado.append({"grupo": g["grupo"], "categoria": g["categoria"], "cartoes": cartoes})
         return resultado
 
+    def historico_script(self, ctx, script_id):
+        """Historico do script nos ultimos 30 dias (README §5.8, CR-004 T4). So leitura.
+
+        Abre so para um script das Rotinas disponiveis do usuario; senao RepoNaoEncontrado (404).
+        """
+        sid = _id(script_id)
+        disponiveis = dict((s["id"], s) for g in self.scripts_disponiveis(ctx) for s in g["scripts"])
+        if sid is None or sid not in disponiveis:
+            raise RepoNaoEncontrado("script fora das rotinas disponiveis")
+        agora = self._tickets.agora()
+        desde = agora - datetime.timedelta(days=HISTORICO_DIAS)
+        escopo, solicitante = self._escopo_execucoes(ctx)
+        itens = self._tickets.historico_script(sid, desde, escopo, solicitante, HISTORICO_LIMITE)
+        grupos = {"SUCCESS": "certo", "FAILED": "erro", "CANCELLED": "cancelado"}
+        contagem = dict((c, 0) for c, _r in ui_helpers.SERIES_HISTORICO)
+        dias = collections.OrderedDict()
+        for i in range(HISTORICO_DIAS - 1, -1, -1):
+            dia = (agora - datetime.timedelta(days=i)).date()
+            dias[dia] = dict((c, 0) for c, _r in ui_helpers.SERIES_HISTORICO)
+        duracoes, motivos = [], collections.Counter()
+        for t in itens:
+            chave = grupos.get(t["status"], "andamento")
+            contagem[chave] += 1
+            if t["created_at"].date() in dias:
+                dias[t["created_at"].date()][chave] += 1
+            if t["status"] == "FAILED":
+                motivos[t.get("status_motivo") or "-"] += 1
+            if chave != "andamento" and t.get("started_at") and t.get("finished_at"):
+                duracoes.append((t["finished_at"] - t["started_at"]).total_seconds())
+        terminados = contagem["certo"] + contagem["erro"] + contagem["cancelado"]
+        taxa = int(round(100.0 * contagem["certo"] / terminados)) if terminados else None
+        duracoes.sort()
+        mediana = None
+        if duracoes:
+            meio = len(duracoes) // 2
+            mediana = duracoes[meio] if len(duracoes) % 2 else (duracoes[meio - 1] + duracoes[meio]) / 2.0
+        serie = [dict(v, rotulo=d.strftime("%d/%m")) for d, v in dias.items()]
+        return {
+            "script": {"id": sid, "nome": disponiveis[sid]["nome"]},
+            "total": len(itens),
+            "contagem": contagem,
+            "taxa": taxa,
+            "frase_taxa": (u"De cada 10 vezes, %d deram certo." % int(round(taxa / 10.0))) if taxa is not None
+            else u"Ainda não há execuções terminadas no período.",
+            "duracao_tipica": (u"cerca de %s" % ui_helpers.tempo_simples(mediana)) if mediana is not None else u"-",
+            "duracao_maxima": ui_helpers.tempo_simples(duracoes[-1]) if duracoes else u"-",
+            "motivos": [{"motivo": m, "nome": ui_helpers.NOMES_MOTIVO.get(m, m), "quantidade": q}
+                        for m, q in sorted(motivos.items(), key=lambda x: (-x[1], x[0]))],
+            "dias": serie,
+            "grafico": ui_helpers.barras_empilhadas(serie),
+            "aviso_limite": (u"Mostrando os %d pedidos mais recentes." % HISTORICO_LIMITE)
+            if len(itens) >= HISTORICO_LIMITE else None,
+            "filtro_lista": {"script": sid, "criado_de": desde.strftime("%Y-%m-%d")},
+        }
+
     def resumo_inicial(self, ctx, horas=24, ultimos=5):
         """Cartoes do painel inicial no escopo da lista de tickets; None sem acesso a consulta.
 
@@ -1080,6 +1137,11 @@ def preparar_formulario(ctx, script_id, ambiente, valores=None, erros=None, avis
 def resumo_disparo(ctx, script_id, ambiente, respostas, prioridade=None, scheduled_at=None):
     """Resumo em frase do disparo (servico padrao)."""
     return _servico().resumo_disparo(ctx, script_id, ambiente, respostas, prioridade, scheduled_at)
+
+
+def historico_script(ctx, script_id):
+    """Historico de 30 dias do script (servico padrao)."""
+    return _servico().historico_script(ctx, script_id)
 
 
 def catalogo_rotinas(ctx):

@@ -123,6 +123,18 @@ def catalogo():
         return dict(grupos=[], erro=ui_helpers.mensagem("falha_interna"))
 
 
+def historico():
+    """Historico do script (README §5.8): so leitura, para quem tem EXEC_SCRIPT."""
+    _exigir_metodo("GET", "HEAD")
+    ctx = _exigir_func("EXEC_SCRIPT")
+    try:
+        dados = ticket_service.historico_script(ctx, _texto(request.args(0), 10))
+    except RepoNaoEncontrado:
+        _nao_encontrado()
+    response.title = u"Histórico de %s — SSS" % dados["script"]["nome"]
+    return dict(h=dados)
+
+
 def criar():
     _exigir_metodo("POST")
     ctx = _exigir_func("EXEC_SCRIPT")

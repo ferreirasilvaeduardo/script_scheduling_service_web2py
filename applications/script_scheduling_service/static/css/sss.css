@@ -160,6 +160,11 @@
   --sss-status-cancelled-bg: #f3f4f6;
   --sss-status-cancelled-fg: #374151;
   --sss-status-cancelled-bd: #9ca3af;
+  /* Grafico do historico (CR-004 U7): cores de situacao validadas (CVD e contraste) para marcas. */
+  --sss-graf-certo: #4daf9a;
+  --sss-graf-erro: #ef4444;
+  --sss-graf-cancelado: #9ca3af;
+  --sss-graf-andamento: #831fb2;
   --sss-status-unknown-bg: #ffffff;
   --sss-status-unknown-fg: #374151;
   --sss-status-unknown-bd: #6b7280;
@@ -210,6 +215,10 @@
     --sss-status-cancelled-bg: #23262d;
     --sss-status-cancelled-fg: #d1d5db;
     --sss-status-cancelled-bd: #6b7280;
+    --sss-graf-certo: #4daf9a;
+    --sss-graf-erro: #ef4444;
+    --sss-graf-cancelado: #8b939f;
+    --sss-graf-andamento: #b56ee0;
     --sss-status-unknown-bg: #181b21;
     --sss-status-unknown-fg: #d1d5db;
     --sss-status-unknown-bd: #9ca3af;
@@ -1543,3 +1552,69 @@
   font-family: var(--sss-font-mono);
   font-weight: 600;
 }
+
+/* Historico do script (README §5.8, CR-004 U7). */
+.sss-numeros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: var(--sss-esp-3);
+  margin: 0;
+}
+
+.sss-numero {
+  padding: var(--sss-esp-2) var(--sss-esp-3);
+  border: 1px solid var(--sss-border);
+  border-radius: var(--sss-raio);
+  background: var(--sss-surface);
+}
+
+.sss-numero dt {
+  font-size: var(--sss-fs-sm);
+  font-weight: 400;
+  color: var(--sss-text-muted);
+}
+
+.sss-numero dd {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.sss-grafico {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.sss-grafico-grade { stroke: var(--sss-border); stroke-width: 1; }
+.sss-grafico-eixo { fill: var(--sss-text-muted); font-size: 10px; font-family: var(--sss-font-sans); }
+.sss-graf-certo { fill: var(--sss-graf-certo); }
+.sss-graf-erro { fill: var(--sss-graf-erro); }
+.sss-graf-cancelado { fill: var(--sss-graf-cancelado); }
+.sss-graf-andamento { fill: var(--sss-graf-andamento); }
+.sss-grafico rect:hover { opacity: 0.8; }
+
+.sss-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sss-esp-2) var(--sss-esp-4);
+  margin: 0 0 var(--sss-esp-2);
+  padding: 0;
+  list-style: none;
+  font-size: var(--sss-fs-sm);
+}
+
+.sss-legenda-cor {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-right: var(--sss-esp-1);
+  border-radius: 2px;
+  vertical-align: -0.1rem;
+}
+
+.sss-legenda-cor.sss-graf-certo { background: var(--sss-graf-certo); }
+.sss-legenda-cor.sss-graf-erro { background: var(--sss-graf-erro); }
+.sss-legenda-cor.sss-graf-cancelado { background: var(--sss-graf-cancelado); }
+.sss-legenda-cor.sss-graf-andamento { background: var(--sss-graf-andamento); }

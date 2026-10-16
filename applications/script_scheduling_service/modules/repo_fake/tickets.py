@@ -219,6 +219,19 @@ class RepoTicketsFake(RepoTickets):
                                "created_at": t["created_at"], "finished_at": t.get("finished_at")})
                         for sid, t in melhores.items())
 
+    def historico_script(self, script_id, desde, escopo_ambientes=None, solicitante=None, limite=5000):
+        """Tickets do script desde a data, no escopo, sem LOB (contrato RepoTickets)."""
+        ambs = None if escopo_ambientes is None else set(escopo_ambientes)
+        with self._store.lock_tickets:
+            lista = [t for t in self._store.tickets.values()
+                     if t["script_id"] == int(script_id) and t["created_at"] >= desde
+                     and (ambs is None or t["ambiente"] in ambs)
+                     and (solicitante is None or t["solicitante"] == solicitante)]
+            lista.sort(key=lambda t: (t["created_at"], t["id"]))
+            lista = lista[-int(limite):] if limite else lista
+            return [dict((k, t.get(k)) for k in ("id", "status", "status_motivo", "created_at", "started_at",
+                                                 "finished_at")) for t in lista]
+
     def respostas(self, ticket_id):
         """Retorna lista de dicts com respostas do ticket."""
         with self._store.lock_tickets:

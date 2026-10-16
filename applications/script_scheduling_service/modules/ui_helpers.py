@@ -159,6 +159,57 @@ def etapas_ticket(ticket, agora):
     return [{"rotulo": r, "quando": q, "estado": e} for r, q, e in zip(rotulos, quandos, estados)]
 
 
+# Nomes curtos dos motivos de erro (historico do script, README §5.8).
+NOMES_MOTIVO = {
+    "EXIT_ERROR": u"O script avisou que algo deu errado", "KILLED_SIGNAL": u"Interrompido pelo servidor",
+    "TIMEOUT": u"Passou do tempo máximo", "NODE_OFFLINE": u"Servidor parou de responder",
+    "ORPHAN_PROCESS": u"Servidor reiniciado", "FENCED": u"Servidor sem contato com o banco",
+    "PRECHECK_FAILED": u"Arquivo não encontrado ou não liberado", "SPAWN_ERROR": u"Não conseguiu iniciar",
+    "LOG_LIMIT": u"Mensagens demais", "SHUTDOWN": u"Servidor desligado",
+}
+
+# Series do grafico do historico na ordem fixa de empilhamento (de baixo para cima).
+SERIES_HISTORICO = (("certo", u"Deu certo"), ("erro", u"Deu erro"), ("cancelado", u"Cancelado"),
+                    ("andamento", u"Esperando ou rodando"))
+
+
+def barras_empilhadas(dias, largura=1000, altura=240, margem_esq=28, margem_inf=22, vao=2):
+    """Geometria do grafico de barras empilhadas por dia (SVG gerado no servidor, README §5.8).
+
+    dias: [{'rotulo': 'dd/mm', 'certo': n, 'erro': n, 'cancelado': n, 'andamento': n}].
+    Retorna {largura, altura, base_y, maximo, grade: [{y, rotulo}], eixo_x: [{x, rotulo}],
+    barras: [{x, y, largura, altura, classe, titulo}]}. Cores so por classe CSS (sem style inline);
+    vao de 2px entre os segmentos; o titulo de cada segmento e a dica ao passar o mouse.
+    """
+    maximo = max([sum(d.get(c, 0) for c, _r in SERIES_HISTORICO) for d in dias] or [0])
+    escala_max = max(maximo, 1)
+    area_h = altura - margem_inf - 4
+    base_y = altura - margem_inf
+    n = max(len(dias), 1)
+    passo = float(largura - margem_esq) / n
+    larg_barra = max(2.0, passo * 0.7)
+    barras, eixo_x = [], []
+    for i, d in enumerate(dias):
+        x = margem_esq + i * passo + (passo - larg_barra) / 2.0
+        topo = base_y
+        for chave, rotulo in SERIES_HISTORICO:
+            qtd = d.get(chave, 0)
+            if not qtd:
+                continue
+            h = area_h * qtd / float(escala_max)
+            y = topo - h
+            barras.append({"x": round(x, 1), "y": round(y, 1), "largura": round(larg_barra, 1),
+                           "altura": round(max(h - vao, 1.0), 1), "classe": "sss-graf-" + chave,
+                           "titulo": u"%s: %s — %d" % (d["rotulo"], rotulo, qtd)})
+            topo = y
+        if i % 5 == 0 or i == n - 1:
+            eixo_x.append({"x": round(x + larg_barra / 2.0, 1), "rotulo": d["rotulo"]})
+    grade = [{"y": round(base_y - area_h * f, 1), "rotulo": str(int(round(escala_max * f)))}
+             for f in (0.5, 1.0) if maximo]
+    return {"largura": largura, "altura": altura, "base_y": base_y, "maximo": maximo, "grade": grade,
+            "eixo_x": eixo_x, "barras": barras, "margem_esq": margem_esq}
+
+
 # Mensagens-padrao em duas partes: o que aconteceu + o que fazer agora (README §2.4.2, texto exato).
 MENSAGENS = {
     "sem_permissao": (u"Você não tem permissão para abrir esta página.",

@@ -1,0 +1,91 @@
+{{extend 'layout.html'}}
+{{
+# Histórico do script (README §5.8, CR-004 T4): só leitura, últimos 30 dias, no escopo da lista de tickets.
+# Gráfico SVG gerado no servidor, cores só por classe CSS; a tabela abaixo traz os mesmos números.
+import ui_helpers
+_c = h['contagem']
+_g = h['grafico']
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">Histórico de <span class="sss-mono">{{=h['script']['nome']}}</span></h1>
+    <p class="sss-page-sub">Como este script se saiu nos últimos 30 dias, nos pedidos que você pode ver.</p>
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='catalogo')}}">Voltar às rotinas</a>
+    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='tickets', f='lista', vars=h['filtro_lista'])}}">Ver estes pedidos</a>
+  </div>
+</div>
+
+{{if h['aviso_limite']:}}<div class="alert alert-warning sss-alerta" role="status"><span>{{=h['aviso_limite']}}</span></div>{{pass}}
+
+<section class="sss-card" aria-labelledby="titulo-numeros">
+  <h2 class="sss-card-titulo" id="titulo-numeros">Resumo</h2>
+  <div class="sss-card-corpo">
+    <p class="mb-3"><strong>{{=h['frase_taxa']}}</strong>{{if h['taxa'] is not None:}} <span class="sss-texto-suave">(taxa de acerto: {{=h['taxa']}}%)</span>{{pass}}</p>
+    <dl class="sss-numeros">
+      <div class="sss-numero"><dt>Pedidos</dt><dd>{{=h['total']}}</dd></div>
+      <div class="sss-numero"><dt>Deram certo</dt><dd>{{=_c['certo']}}</dd></div>
+      <div class="sss-numero"><dt>Deram erro</dt><dd>{{=_c['erro']}}</dd></div>
+      <div class="sss-numero"><dt>Cancelados</dt><dd>{{=_c['cancelado']}}</dd></div>
+      <div class="sss-numero"><dt>Esperando ou rodando</dt><dd>{{=_c['andamento']}}</dd></div>
+      <div class="sss-numero"><dt>Duração típica</dt><dd>{{=h['duracao_tipica']}}</dd></div>
+      <div class="sss-numero"><dt>Mais demorada</dt><dd>{{=h['duracao_maxima']}}</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="sss-card" aria-labelledby="titulo-grafico">
+  <h2 class="sss-card-titulo" id="titulo-grafico">Pedidos por dia</h2>
+  <div class="sss-card-corpo">
+    {{if not h['total']:}}
+    <p class="sss-texto-suave mb-0">Nenhum pedido nos últimos 30 dias.</p>
+    {{else:}}
+    <ul class="sss-legenda" aria-label="Legenda">
+      {{for _k, _r in ui_helpers.SERIES_HISTORICO:}}
+      <li><span class="sss-legenda-cor sss-graf-{{=_k}}" aria-hidden="true"></span>{{=_r}}</li>
+      {{pass}}
+    </ul>
+    <svg class="sss-grafico" viewBox="0 0 {{=_g['largura']}} {{=_g['altura']}}" role="img" aria-labelledby="titulo-grafico" preserveAspectRatio="xMidYMid meet">
+      <line class="sss-grafico-grade" x1="{{=_g['margem_esq']}}" x2="{{=_g['largura']}}" y1="{{=_g['base_y']}}" y2="{{=_g['base_y']}}"></line>
+      {{for _l in _g['grade']:}}
+      <line class="sss-grafico-grade" x1="{{=_g['margem_esq']}}" x2="{{=_g['largura']}}" y1="{{=_l['y']}}" y2="{{=_l['y']}}"></line>
+      <text class="sss-grafico-eixo" x="{{=_g['margem_esq'] - 4}}" y="{{=_l['y'] + 3}}" text-anchor="end">{{=_l['rotulo']}}</text>
+      {{pass}}
+      {{for _b in _g['barras']:}}
+      <rect class="{{=_b['classe']}}" x="{{=_b['x']}}" y="{{=_b['y']}}" width="{{=_b['largura']}}" height="{{=_b['altura']}}" rx="2"><title>{{=_b['titulo']}}</title></rect>
+      {{pass}}
+      {{for _e in _g['eixo_x']:}}
+      <text class="sss-grafico-eixo" x="{{=_e['x']}}" y="{{=_g['altura'] - 6}}" text-anchor="middle">{{=_e['rotulo']}}</text>
+      {{pass}}
+    </svg>
+    <details class="mt-2">
+      <summary>Ver os números em tabela</summary>
+      <div class="table-responsive">
+        <table class="table table-sm sss-tabela mb-0">
+          <caption class="visually-hidden">Pedidos por dia e situação</caption>
+          <thead><tr><th scope="col">Dia</th>{{for _k, _r in ui_helpers.SERIES_HISTORICO:}}<th scope="col">{{=_r}}</th>{{pass}}</tr></thead>
+          <tbody>
+            {{for _d in h['dias']:}}
+            {{if sum(_d[_k] for _k, _r in ui_helpers.SERIES_HISTORICO):}}
+            <tr><th scope="row">{{=_d['rotulo']}}</th>{{for _k, _r in ui_helpers.SERIES_HISTORICO:}}<td>{{=_d[_k]}}</td>{{pass}}</tr>
+            {{pass}}
+            {{pass}}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    {{pass}}
+  </div>
+</section>
+
+{{if h['motivos']:}}
+<section class="sss-card" aria-labelledby="titulo-motivos">
+  <h2 class="sss-card-titulo" id="titulo-motivos">Principais motivos de erro</h2>
+  <ul class="sss-card-corpo sss-agenda-lista">
+    {{for _m in h['motivos']:}}
+    <li><strong>{{=_m['quantidade']}}</strong> — {{=_m['nome']}} <span class="sss-texto-suave sss-mono">({{=_m['motivo']}})</span></li>
+    {{pass}}
+  </ul>
+</section>
+{{pass}}
