@@ -71,3 +71,8 @@ pass
     </div>
   </form>
 </section>
+
+{{if not _novo and amb.get('registro'):}}
+{{registro = amb['registro']}}
+{{include 'components/registro.html'}}
+{{pass}}

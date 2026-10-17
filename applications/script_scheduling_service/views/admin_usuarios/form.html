@@ -74,6 +74,11 @@ pass
   </form>
 </section>
 
+{{if not _novo and _u.get('registro'):}}
+{{registro = _u['registro']}}
+{{include 'components/registro.html'}}
+{{pass}}
+
 {{if not _novo:}}
 <section class="sss-card" aria-labelledby="titulo-acesso">
   <h2 class="sss-card-titulo" id="titulo-acesso">Acesso e bloqueio</h2>

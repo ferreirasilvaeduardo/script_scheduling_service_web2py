@@ -76,3 +76,8 @@ pass
     </div>
   </form>
 </section>
+
+{{if not _novo and perfil.get('registro'):}}
+{{registro = perfil['registro']}}
+{{include 'components/registro.html'}}
+{{pass}}

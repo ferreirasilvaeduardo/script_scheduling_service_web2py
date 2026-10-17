@@ -97,6 +97,11 @@ _info = ui_helpers.status_info(_t['status'])
   </section>
 </div>
 
+{{if _t.get('registro'):}}
+{{registro = _t['registro']}}
+{{include 'components/registro.html'}}
+{{pass}}
+
 <section class="sss-card" aria-labelledby="titulo-comando">
   <h2 class="sss-card-titulo" id="titulo-comando">Comando executado</h2>
   <div class="sss-card-corpo">

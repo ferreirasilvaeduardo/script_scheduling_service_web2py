@@ -95,3 +95,8 @@ pass
     </div>
   </form>
 </section>
+
+{{if not _novo and _s.get('registro'):}}
+{{registro = _s['registro']}}
+{{include 'components/registro.html'}}
+{{pass}}

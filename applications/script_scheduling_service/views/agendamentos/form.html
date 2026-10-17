@@ -222,4 +222,8 @@ _ajuda_fim = u'Opcional. A última execução acontece até esta data e hora (in
     <a class="btn btn-outline-secondary" href="{{=URL(c='agendamentos', f='lista')}}">Cancelar</a>
   </div>
 </form>
+{{if edicao and _regra.get('registro'):}}
+{{registro = _regra['registro']}}
+{{include 'components/registro.html'}}
+{{pass}}
 {{pass}}
