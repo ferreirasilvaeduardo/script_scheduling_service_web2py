@@ -8,7 +8,7 @@ Cobertura obrigatoria (AGENTS.md §7.4):
 - Toda tabela com sequence, trigger _bi e id NUMBER(10) NOT NULL;
 - Toda coluna VARCHAR2 com CHAR explicito;
 - Toda flag CHAR(1) com CK IN ('S','N');
-- 16 tabelas exatas;
+- 17 tabelas exatas (CR-007: controle);
 - Teste negativo de identificador com 31 caracteres;
 - Colunas de registro do CR-006 e README §10 igual ao registro.
 """
@@ -51,8 +51,8 @@ class TestDbSchema(unittest.TestCase):
                     return val
         return "tbsss_"
 
-    def test_dezesseis_tabelas_exatas(self):
-        """Verifica presenca e contagem exata das 16 tabelas do README §9.2 e §10."""
+    def test_dezessete_tabelas_exatas(self):
+        """Verifica presenca e contagem exata das 17 tabelas do README §9.2 e §10 (CR-007: controle)."""
         entidades_esperadas = [
             "ambientes",
             "perfis",
@@ -70,8 +70,9 @@ class TestDbSchema(unittest.TestCase):
             "ticket_resp",
             "agentes",
             "auditoria",
+            "controle",
         ]
-        self.assertEqual(len(TABELAS), 16, "Devem existir exatamente 16 tabelas")
+        self.assertEqual(len(TABELAS), 17, "Devem existir exatamente 17 tabelas")
         self.assertEqual(list(TABELAS.keys()), entidades_esperadas)
 
     def test_reproducao_exata_readme_9_2(self):
@@ -94,6 +95,7 @@ class TestDbSchema(unittest.TestCase):
             ("ticket_resp", "trsp", "sq_tbsss_ticket_resp", "tr_tbsss_trsp_bi", "pk_tbsss_ticket_resp"),
             ("agentes", "agt", "sq_tbsss_agentes", "tr_tbsss_agt_bi", "pk_tbsss_agentes"),
             ("auditoria", "aud", "sq_tbsss_auditoria", "tr_tbsss_aud_bi", "pk_tbsss_auditoria"),
+            ("controle", "ctl", "sq_tbsss_controle", "tr_tbsss_ctl_bi", "pk_tbsss_controle"),
         ]
 
         esquema = nomes("tbsss_")
@@ -255,9 +257,34 @@ class TestDbSchema(unittest.TestCase):
             self.assertEqual(defn["cks"]["upd"]["expr"], sql_ident.CK_REGISTRO_EXPR)
             abrev = defn["abrev"]
             self.assertIn("ck_tbsss_{}_upd".format(abrev), esquema[entidade]["cks"])
-        self.assertEqual(sql_ident.TABELAS_SEM_REGISTRO, ("auditoria",))
+        self.assertEqual(sql_ident.TABELAS_SEM_REGISTRO, ("auditoria", "controle"))
         self.assertEqual(
             sum(1 for e in TABELAS if "upd" in TABELAS[e]["cks"]), 15)
+
+    def test_registro_cr007(self):
+        """CR-007: versao do esquema, controle de linha unica, indice unico da ocorrencia, colunas e tamanhos."""
+        self.assertIsInstance(sql_ident.VERSAO_ESQUEMA, int)
+        self.assertGreaterEqual(sql_ident.VERSAO_ESQUEMA, 1)
+        ctl = TABELAS["controle"]
+        self.assertEqual(ctl["cks"]["id"]["expr"], "id = 1")
+        self.assertEqual(list(ctl["colunas"]), ["id", "versao_esquema", "versao_aplicada_em", "versao_aplicada_por",
+                                                 "purge_dono", "purge_concessao_ate"])
+        esquema = nomes("tbsss_")
+        ocor = esquema["tickets"]["indices"]["ix_tbsss_tck_ocor"]
+        self.assertTrue(ocor["unico"] and ocor["fbi"])
+        self.assertEqual(ocor["expr"], sql_ident.FBI_TCK_OCOR_EXPR)
+        self.assertFalse(esquema["tickets"]["indices"]["ix_tbsss_tck_fila"]["unico"])
+        self.assertEqual(esquema["tickets"]["indices"]["ix_tbsss_tck_hist"]["colunas"], ("script_id", "created_at"))
+        self.assertEqual(esquema["agendamentos"]["indices"]["ix_tbsss_agd_prox"]["colunas"],
+                         ("ativo", "proxima_execucao", "id"))
+        self.assertIn("'ERRO_INTERNO'", TABELAS["agendamentos"]["cks"]["pausa"]["expr"])
+        self.assertEqual(TABELAS["tickets"]["colunas"]["process_id"]["tipo"], "NUMBER(10)")
+        self.assertEqual(TABELAS["agentes"]["colunas"]["hostname"]["tipo"], "VARCHAR2(255 CHAR)")
+        self.assertEqual(TABELAS["agentes"]["colunas"]["ambientes"]["tipo"], "VARCHAR2(1000 CHAR)")
+        self.assertIn("config_criticos", TABELAS["agentes"]["colunas"])
+        for ent, col in (("scripts", "sha256_homologado"), ("tickets", "arquivo_sha256")):
+            self.assertEqual(TABELAS[ent]["colunas"][col]["tipo"], "VARCHAR2(64 CHAR)")
+            self.assertIn(col, TABELAS[ent]["cks"]["sha"]["expr"])
 
     def test_readme_10_colunas_iguais_ao_registro(self):
         """README §10 lista exatamente as colunas do registro, na mesma ordem (fonte unica)."""

@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Público | Quem vai instalar e operar o SSS num servidor novo (infraestrutura, desenvolvimento, homologação) |
-| Versão do sistema | 0.1.0 — commit de referência `fe5884c` ou posterior (fases F0.1 a F6.1 e CR-003 a CR-005). Os servidores dos §21 e §22 foram implantados com o `fdf6f35`, anterior aos três CRs |
+| Versão do sistema | 0.1.0 — commit de referência `fe5884c` ou posterior (fases F0.1 a F6.1 e CR-003 a CR-005; o CR-006, colunas de registro, e o CR-007, robustez do scheduler, entram depois e trazem os pré-requisitos do §18). Os servidores dos §21 e §22 foram implantados com o `fdf6f35`, anterior aos três CRs |
 | Validação | Procedimento **ensaiado de ponta a ponta** em 2026-10-15 num clone limpo do repositório (Python 3.6.0 e 3.13) e **implantado** no mesmo dia no servidor clone 7 (Oracle Linux 6.9, Python 3.7 sem `ssl`, sem `sudo` nem `systemd` — registro no §21). A versão com o CR-003 e o CR-004 foi validada em 2026-10-16 na estação de desenvolvimento (suíte em Python 3.6.0, 3.6.8 e 3.13.2 e verificação das telas no navegador), mas ainda não foi reimplantada em servidor (§22). A versão com o CR-005 (somente POSIX, caminho absoluto do script e logs em pastas por minuto) foi validada em 2026-10-16 na estação (suíte em 3.6.0, 3.6.8 e 3.13.2). O que não foi ensaiado está marcado como **[não ensaiado]** |
 | Documentos relacionados | `README.md` (regras de negócio e arquitetura), `AGENTS.md` (regras de desenvolvimento), `docs/AMBIENTE_DEV.md` (estação do desenvolvedor), `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx` (roteiro de homologação) |
 
@@ -322,7 +322,7 @@ O que cada parte faz:
 
 | Parte | Função |
 |---|---|
-| `bin/sss-web.sh` | Launcher do projeto: **recusa root**, aplica `umask 077`, exporta `TZ` (de `SSS_TZ`) e substitui o próprio processo pelo comando (`exec`), para que os sinais de parada cheguem direto ao servidor |
+| `bin/sss-web.sh` | Launcher do projeto: **recusa root**, aplica `umask 077`, exporta `TZ` (de `SSS_TZ`) e `LANG`/`LC_ALL` (de `SSS_LOCALE`, padrão `C.UTF-8`; CR-007: o processo aborta sem codificação UTF-8) e substitui o próprio processo pelo comando (`exec`), para que os sinais de parada cheguem direto ao servidor |
 | `web2py.py` | Servidor web embutido do web2py (Rocket), multithread em **um único processo**, como o FAKE exige |
 | `-a '<recycle>'` | Senha do painel administrativo do web2py. `<recycle>` reaproveita a existente ou, na primeira vez, **desabilita** o painel (que nem é implantado). Assim nenhuma senha aparece na lista de processos (`ps`). **Não** use `-a 'senha'` |
 | `-i 127.0.0.1` | Escuta só local (regra do projeto em DEV). **Nunca** use `0.0.0.0` |
@@ -578,14 +578,58 @@ Ainda **não executável** (F7–F9). O `docs/RUNBOOK.md` será entregue no F9.1
 
 | Item | Detalhe | Referência |
 |---|---|---|
-| Banco Oracle | 11gR2 (11.2.0.4) ou superior, charset AL32UTF8; schema/owner da aplicação (ex.: `gfcadastro`), usuário de aplicação e *grants*; espaço para as 16 tabelas `tbsss_*` | README §2.2, §10, §11.1 |
+| Banco Oracle | 11gR2 (11.2.0.4) ou superior, charset AL32UTF8; schema/owner da aplicação (ex.: `gfcadastro`), usuário de aplicação e *grants*; espaço para as 17 tabelas `tbsss_*` (CR-007: inclui `tbsss_controle`) | README §2.2, §10, §11.1 |
 | Conectividade | Rota e firewall dos servidores web/agentes até o listener Oracle (porta 1521) | README §2.3 |
 | Oracle Instant Client 19 | Obrigatório se o banco for 11g (o modo Thin não conecta ao 11g); recomendado em todos os nós como contingência | README §2.3, CR-002 |
 | Driver Python | `python-oracledb` (`< 2.0` na 3.6; `2.x` na 3.7+) com `cryptography`, e `cx_Oracle 8.3` como contingência, **pré-instalados** pela infraestrutura | AGENTS §2.2 |
-| Servidores agentes | Linux (ou outro Unix, sob demanda), com conta de serviço sem privilégio administrativo; interpretadores (`python3`, `bash`, `sh`) nos caminhos que serão mapeados | README §2.6, §8.5, CR-005 |
-| Scripts reais | Em qualquer pasta, fora das pastas do sistema; dono de preferência um usuário dedicado (em `script_owner_uids`), sem escrita para grupo, outros e a conta do agente no arquivo e em toda a cadeia de pastas | README §8.5, CR-005 |
+| Servidores agentes | Linux (ou outro Unix, sob demanda), com conta de serviço sem privilégio administrativo; interpretadores (`python3`, `bash`, `sh`) nos caminhos que serão mapeados, com dono root e sem escrita de grupo ou outros (o agente confere a cadeia, CR-007) | README §2.6, §8.5, CR-005 |
+| Usuários de execução (CR-007, D1) | Um usuário do sistema operacional **por ambiente** (ex.: `sssprd`, `ssshml`), sem login interativo, sem senha, diferente da conta do agente e fora de `script_owner_uids`; pasta `exec_work_dir/<usuário>` com dono o próprio usuário e `0700`; cota de disco e limite de processos (`nproc`) para cada um; o helper e o `sudoers` do §18.1 | README §8.0, §8.4 |
+| Scripts reais | Em qualquer pasta, fora das pastas do sistema; dono de preferência um usuário dedicado (em `script_owner_uids`), sem escrita para grupo e outros, e **sem** pertencer à conta do agente nem a um usuário de execução, no arquivo e em toda a cadeia de pastas; sem link simbólico no caminho (CR-007) | README §8.5, CR-005, CR-007 |
+| Contas Oracle por papel (CR-007, D1b) | Quatro contas: dona do esquema (só para o `init_db.py`), `sss_web`, `sss_agente` e `sss_purge`, com os GRANTs do README §11.1 (o `init_db.py --grants-para` imprime o script) | README §4.1, §11.1 |
+| Banco: tempo e sessões (CR-007) | Fuso do servidor de banco **sem horário de verão** (UTC recomendado) e NTP em modo *slew* em todas as instâncias; `SQLNET.EXPIRE_TIME = 1` no `sqlnet.ora` do servidor de banco, para derrubar sessões mortas que seguram lock; job automático de estatísticas ativo para o esquema | README §7.1, §8.8, §11.1 |
 | HTTPS e DNS | Nome e certificado para o nó web em HML/PROD (`sss_env = HML/PROD` exige cookie `Secure`) | README §4.2 |
 | Credenciais | Senha do Oracle e credenciais por ambiente para o `secrets.cfg`, entregues por canal seguro | README §4.1 |
+
+### 18.1 Helper de execução e `sudoers` (CR-007, D1)
+
+```bash
+# como root, em cada agente, a partir do pacote descompactado
+install -o root -g root -m 0755 -d /opt/sss/bin
+install -o root -g root -m 0755 bin/sss-helper /opt/sss/bin/sss-helper
+useradd --system --shell /sbin/nologin --home-dir /var/lib/sss/exec/sssprd sssprd
+install -o sssprd -g sssprd -m 0700 -d /var/lib/sss/exec/sssprd
+visudo -f /etc/sudoers.d/sss        # conteúdo abaixo; uma linha por usuário de execução
+```
+
+```text
+Defaults:sssagente !requiretty
+sssagente ALL=(sssprd) NOPASSWD: /opt/sss/bin/sss-helper
+sssagente ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
+```
+
+* `sssagente` é a conta do agente; nenhuma outra regra de `sudo` é concedida a ela.
+* O agente confere tudo na subida (`sudo -n -l`, dono e modo do helper, usuários e pastas; README §8.0) e recusa subir com CRITICAL se algo faltar.
+* **Cota e limites por usuário de execução:** cota de disco na partição de `exec_work_dir` e `nproc`/`nofile` em `/etc/security/limits.d/`, para que um script não esgote o servidor.
+
+### 18.2 Conexão Oracle com failover (CR-007, R-12)
+
+* **RAC:** use o nome do serviço, nunca o SID, e um descritor com balanceamento e failover, por exemplo:
+  `(DESCRIPTION=(CONNECT_TIMEOUT=10)(RETRY_COUNT=3)(ADDRESS_LIST=(LOAD_BALANCE=on)(FAILOVER=on)(ADDRESS=(PROTOCOL=TCP)(HOST=scan.empresa.local)(PORT=1521)))(CONNECT_DATA=(SERVICE_NAME=sss_srv)))`.
+* **Data Guard:** um serviço de banco iniciado só no primário (`role = PRIMARY`) e o descritor com os dois endereços (primário e standby) em `ADDRESS_LIST` com `FAILOVER=on`.
+* `CONNECT_TIMEOUT` e `RETRY_COUNT` no descritor valem a partir do cliente 19c (Thick/cx_Oracle); no modo Thin, o `db_conn` usa `tcp_connect_timeout` e `retry_count`.
+* Todos os servidores do banco no mesmo fuso, sem horário de verão, com NTP em modo *slew* (README §7.1).
+
+### 18.3 Dimensionamento dos logs no banco (CR-007, R-29)
+
+* Num banco AL32UTF8, o CLOB guarda AL16UTF16: cerca de **2 bytes por caractere**.
+* Estimativa do segmento LOB de `tbsss_tickets`: `tickets por dia × tamanho médio do log em caracteres × 2 × ticket_retention_days × 1,3` (folga de 30%). Exemplo: 2.000 tickets/dia × 50.000 caracteres × 2 × 180 dias × 1,3 ≈ 47 GB.
+* `max_log_size_bytes` vai até 64 MiB por ticket (README §12.1). Depois do purge, o espaço volta ao segmento, não ao tablespace; para devolvê-lo, o DBA usa `ALTER TABLE ... MOVE LOB` ou redefinição online numa janela.
+
+### 18.4 Monitoração, backup e restauração (CR-007, R-18)
+
+* **Monitoração:** `scripts/saude.py` (F9.1) no monitoramento corporativo a cada 5 minutos, com alerta no código 2 (README §13). Alertas mínimos: agente parado, fila sem atendente, ticket rodando sem PID, configuração divergente entre agentes, purge sem rodar há 2 dias.
+* **Backup:** o esquema (RMAN ou Data Pump do owner), o `config.ini` e o `secrets.cfg` de cada servidor (cofre), e os logs locais conforme a política da empresa.
+* **Depois de restaurar o banco** (restore ou *flashback*): pare todos os agentes; finalize como `FAILED`/`ORPHAN_PROCESS` os tickets `RUNNING` restaurados (eles se referem a processos que não existem mais); religue os agentes, e o *misfire* trata os agendamentos vencidos (README §7.4). O startup check limpa as pastas locais.
 
 ---
 

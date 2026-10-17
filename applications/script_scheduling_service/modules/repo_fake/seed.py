@@ -9,6 +9,7 @@ import json
 import params_compiler
 import recurrence
 import security
+import sql_ident
 
 # Contas de demonstracao que permanecem sem senha utilizavel mesmo em DEV.
 _SEM_SENHA_DEV = ("inativo", "bloqueado")
@@ -576,3 +577,10 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 store.seqs["tbsss_auditoria"] = 30
 
                                 _carimbar_registro(store, base_dt)
+
+                                # Controle (tabela 17, CR-007 D4): o FAKE nasce na versao do esquema do codigo.
+                                store.controle[1] = {"id": 1, "versao_esquema": sql_ident.VERSAO_ESQUEMA,
+                                                     "versao_aplicada_em": base_dt - datetime.timedelta(days=90),
+                                                     "versao_aplicada_por": "SYSTEM:seed", "purge_dono": None,
+                                                     "purge_concessao_ate": None}
+                                store.seqs["tbsss_controle"] = 1

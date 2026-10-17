@@ -33,9 +33,19 @@ FBI_TCK_FILA_PRIO_CASE = "CASE WHEN status = 'PENDING' THEN prioridade END"
 FBI_TCK_FILA_SCHED_CASE = "CASE WHEN status = 'PENDING' THEN scheduled_at END"
 FBI_TCK_RUN_AGENTE_CASE = "CASE WHEN status = 'RUNNING' THEN agente_id END"
 
+# Indice unico da ocorrencia de agendamento (CR-007, R-27): so tickets de agendamento entram no indice.
+FBI_TCK_OCOR_EXPR = (
+    "((CASE WHEN agendamento_id IS NOT NULL THEN agendamento_id END), "
+    "(CASE WHEN agendamento_id IS NOT NULL THEN scheduled_at END))"
+)
+
+# Versao do esquema que o codigo espera em tbsss_controle (CR-007, D4). Toda mudanca de esquema a
+# incrementa e traz a migracao scripts/migracoes/m<NNNN>_*.py no mesmo pacote (AGENTS §4.16).
+VERSAO_ESQUEMA = 1
+
 # Colunas de registro (CR-006, README §10): todas as tabelas, exceto as listadas em TABELAS_SEM_REGISTRO.
 COLUNAS_REGISTRO = ("created_at", "created_by", "updated_at", "updated_by")
-TABELAS_SEM_REGISTRO = ("auditoria",)
+TABELAS_SEM_REGISTRO = ("auditoria", "controle")
 ATOR_MAX = 40
 CK_REGISTRO_EXPR = (
     "(updated_at IS NULL AND updated_by IS NULL) OR "
@@ -102,11 +112,11 @@ def qualificar(owner, nome, prefixo=None):
 
 
 # ---------------------------------------------------------------------------
-# Registro Declarativo das 16 Tabelas (README §10)
+# Registro Declarativo das 17 Tabelas (README §10)
 # ---------------------------------------------------------------------------
 
 def _criar_registro_tabelas():
-    """Constroi o registro declarativo ordenado das 16 tabelas do SSS."""
+    """Constroi o registro declarativo ordenado das 17 tabelas do SSS."""
     r = OrderedDict()
 
     # 1. Ambientes
@@ -261,6 +271,7 @@ def _criar_registro_tabelas():
             ('max_qtd_parallel_env', {'nome': 'max_qtd_parallel_env', 'tipo': 'NUMBER(3)', 'not_null': True, 'default': '1'}),
             ('timeout_seg', {'nome': 'timeout_seg', 'tipo': 'NUMBER(7)', 'not_null': False, 'default': None}),
             ('ativo', {'nome': 'ativo', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'S'"}),
+            ('sha256_homologado', {'nome': 'sha256_homologado', 'tipo': 'VARCHAR2(64 CHAR)', 'not_null': False, 'default': None}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
@@ -274,6 +285,7 @@ def _criar_registro_tabelas():
             ('int', {'sufixo': 'int', 'expr': "interpretador IN ('PYTHON3','BASH','SH')"}),
             ('path', {'sufixo': 'path', 'expr': "SUBSTR(path_file, 1, 1) = '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\\') = 0"}),
             ('tmout', {'sufixo': 'tmout', 'expr': "timeout_seg IS NULL OR timeout_seg > 0"}),
+            ('sha', {'sufixo': 'sha', 'expr': "sha256_homologado IS NULL OR REGEXP_LIKE(sha256_homologado, '^[0-9a-f]{64}$')"}),
         ])),
         ('indices', OrderedDict()),
         ('trigger_bu', None),
@@ -479,14 +491,14 @@ def _criar_registro_tabelas():
             ('hora', {'sufixo': 'hora', 'expr': "hora_execucao IS NULL OR REGEXP_LIKE(hora_execucao, '^([01][0-9]|2[0-3]):[0-5][0-9]$')"}),
             ('dsem', {'sufixo': 'dsem', 'expr': "dias_semana IS NULL OR REGEXP_LIKE(dias_semana, '^[1-7](,[1-7]){0,6}$')"}),
             ('fim', {'sufixo': 'fim', 'expr': "data_fim IS NULL OR data_fim >= data_inicio"}),
-            ('pausa', {'sufixo': 'pausa', 'expr': "pausa_motivo IS NULL OR pausa_motivo IN ('USUARIO_INATIVO','SEM_PERMISSAO','SCRIPT_INATIVO','AMBIENTE_INATIVO','PARAM_INVALIDO','CRON_INVALIDO','CONCLUIDO','MANUAL')"}),
+            ('pausa', {'sufixo': 'pausa', 'expr': "pausa_motivo IS NULL OR pausa_motivo IN ('USUARIO_INATIVO','SEM_PERMISSAO','SCRIPT_INATIVO','AMBIENTE_INATIVO','PARAM_INVALIDO','CRON_INVALIDO','CONCLUIDO','MANUAL','ERRO_INTERNO')"}),
             ('campos', {'sufixo': 'campos', 'expr': "(tipo_recorrencia = 'UNICA') OR (tipo_recorrencia = 'DIARIA' AND hora_execucao IS NOT NULL) OR (tipo_recorrencia = 'SEMANAL' AND hora_execucao IS NOT NULL AND dias_semana IS NOT NULL) OR (tipo_recorrencia = 'MENSAL' AND hora_execucao IS NOT NULL AND dia_mes IS NOT NULL) OR (tipo_recorrencia = 'CRON' AND expressao_cron IS NOT NULL)"}),
         ])),
         ('indices', OrderedDict([
             ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'expr': None, 'fbi': False}),
             ('usr', {'sufixo': 'usr', 'colunas': ('usuario_id',), 'expr': None, 'fbi': False}),
             ('amb', {'sufixo': 'amb', 'colunas': ('ambiente',), 'expr': None, 'fbi': False}),
-            ('prox', {'sufixo': 'prox', 'colunas': ('ativo', 'proxima_execucao'), 'expr': None, 'fbi': False}),
+            ('prox', {'sufixo': 'prox', 'colunas': ('ativo', 'proxima_execucao', 'id'), 'expr': None, 'fbi': False}),
         ])),
         ('trigger_bu', None),
         ('colunas_lob', ('parametros_json',)),
@@ -504,7 +516,7 @@ def _criar_registro_tabelas():
             ('solicitante', {'nome': 'solicitante', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
             ('ip_origem', {'nome': 'ip_origem', 'tipo': 'VARCHAR2(45 CHAR)', 'not_null': False, 'default': None}),
             ('agente_id', {'nome': 'agente_id', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
-            ('process_id', {'nome': 'process_id', 'tipo': 'NUMBER(8)', 'not_null': False, 'default': None}),
+            ('process_id', {'nome': 'process_id', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
             ('process_start', {'nome': 'process_start', 'tipo': 'NUMBER(20)', 'not_null': False, 'default': None}),
             ('status', {'nome': 'status', 'tipo': 'VARCHAR2(15 CHAR)', 'not_null': True, 'default': "'PENDING'"}),
             ('prioridade', {'nome': 'prioridade', 'tipo': 'NUMBER(1)', 'not_null': True, 'default': '2'}),
@@ -516,6 +528,7 @@ def _criar_registro_tabelas():
             ('log_output', {'nome': 'log_output', 'tipo': 'CLOB', 'not_null': False, 'default': None}),
             ('log_truncado', {'nome': 'log_truncado', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
             ('return_code', {'nome': 'return_code', 'tipo': 'NUMBER(6)', 'not_null': False, 'default': None}),
+            ('arquivo_sha256', {'nome': 'arquivo_sha256', 'tipo': 'VARCHAR2(64 CHAR)', 'not_null': False, 'default': None}),
             ('scheduled_at', {'nome': 'scheduled_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
             ('started_at', {'nome': 'started_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
             ('heartbeat_at', {'nome': 'heartbeat_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
@@ -537,6 +550,7 @@ def _criar_registro_tabelas():
             ('cancreq', {'sufixo': 'cancreq', 'expr': "cancel_requested IN ('S','N')"}),
             ('logtr', {'sufixo': 'logtr', 'expr': "log_truncado IN ('S','N')"}),
             ('motivo', {'sufixo': 'motivo', 'expr': "status_motivo IS NULL OR status_motivo IN ('EXIT_OK','EXIT_ERROR','KILLED_SIGNAL','TIMEOUT','NODE_OFFLINE','ORPHAN_PROCESS','FENCED','PRECHECK_FAILED','SPAWN_ERROR','LOG_LIMIT','SHUTDOWN','CANCEL_USER')"}),
+            ('sha', {'sufixo': 'sha', 'expr': "arquivo_sha256 IS NULL OR REGEXP_LIKE(arquivo_sha256, '^[0-9a-f]{64}$')"}),
         ])),
         ('indices', OrderedDict([
             ('scr', {'sufixo': 'scr', 'colunas': ('script_id', 'ambiente', 'status'), 'expr': None, 'fbi': False}),
@@ -545,8 +559,10 @@ def _criar_registro_tabelas():
             ('par', {'sufixo': 'par', 'colunas': ('parent_ticket_id',), 'expr': None, 'fbi': False}),
             ('agd', {'sufixo': 'agd', 'colunas': ('agendamento_id',), 'expr': None, 'fbi': False}),
             ('crt', {'sufixo': 'crt', 'colunas': ('created_at',), 'expr': None, 'fbi': False}),
+            ('hist', {'sufixo': 'hist', 'colunas': ('script_id', 'created_at'), 'expr': None, 'fbi': False}),
             ('fila', {'sufixo': 'fila', 'colunas': (), 'expr': FBI_TCK_FILA_EXPR, 'fbi': True}),
             ('run', {'sufixo': 'run', 'colunas': (), 'expr': FBI_TCK_RUN_EXPR, 'fbi': True}),
+            ('ocor', {'sufixo': 'ocor', 'colunas': (), 'expr': FBI_TCK_OCOR_EXPR, 'fbi': True, 'unico': True}),
         ])),
         ('trigger_bu', None),
         ('colunas_lob', ('parametros_enviados', 'log_output')),
@@ -588,15 +604,16 @@ def _criar_registro_tabelas():
         ('colunas', OrderedDict([
             ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
             ('codigo', {'nome': 'codigo', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
-            ('hostname', {'nome': 'hostname', 'tipo': 'VARCHAR2(64 CHAR)', 'not_null': True, 'default': None}),
+            ('hostname', {'nome': 'hostname', 'tipo': 'VARCHAR2(255 CHAR)', 'not_null': True, 'default': None}),
             ('pid_daemon', {'nome': 'pid_daemon', 'tipo': 'NUMBER(8)', 'not_null': False, 'default': None}),
             ('versao', {'nome': 'versao', 'tipo': 'VARCHAR2(20 CHAR)', 'not_null': False, 'default': None}),
-            ('ambientes', {'nome': 'ambientes', 'tipo': 'VARCHAR2(500 CHAR)', 'not_null': False, 'default': None}),
+            ('ambientes', {'nome': 'ambientes', 'tipo': 'VARCHAR2(1000 CHAR)', 'not_null': False, 'default': None}),
             ('plataforma', {'nome': 'plataforma', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': False, 'default': None}),
             ('interpretadores', {'nome': 'interpretadores', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': False, 'default': None}),
             ('status', {'nome': 'status', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': True, 'default': "'ATIVO'"}),
             ('iniciado_em', {'nome': 'iniciado_em', 'tipo': 'DATE', 'not_null': False, 'default': None}),
             ('heartbeat_at', {'nome': 'heartbeat_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('config_criticos', {'nome': 'config_criticos', 'tipo': 'VARCHAR2(400 CHAR)', 'not_null': False, 'default': None}),
             ('created_at', {'nome': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
@@ -637,6 +654,31 @@ def _criar_registro_tabelas():
             ('ent', {'sufixo': 'ent', 'colunas': ('entidade', 'entidade_id'), 'expr': None, 'fbi': False}),
             ('ator', {'sufixo': 'ator', 'colunas': ('ator',), 'expr': None, 'fbi': False}),
         ])),
+        ('trigger_bu', None),
+        ('colunas_lob', ()),
+    ])
+
+    # 17. Controle (CR-007, D4): linha unica com a versao do esquema e a concessao do purge.
+    r['controle'] = OrderedDict([
+        ('entidade', 'controle'),
+        ('abrev', 'ctl'),
+        ('rotulo', 'Controle'),
+        ('colunas', OrderedDict([
+            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('versao_esquema', {'nome': 'versao_esquema', 'tipo': 'NUMBER(6)', 'not_null': True, 'default': None}),
+            ('versao_aplicada_em', {'nome': 'versao_aplicada_em', 'tipo': 'DATE', 'not_null': True, 'default': None}),
+            ('versao_aplicada_por', {'nome': 'versao_aplicada_por', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': True, 'default': None}),
+            ('purge_dono', {'nome': 'purge_dono', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': False, 'default': None}),
+            ('purge_concessao_ate', {'nome': 'purge_concessao_ate', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+        ])),
+        ('pk', {'colunas': ('id',), 'sufixo': None}),
+        ('uks', OrderedDict()),
+        ('fks', OrderedDict()),
+        ('cks', OrderedDict([
+            ('id', {'sufixo': 'id', 'expr': "id = 1"}),
+            ('versao', {'sufixo': 'versao', 'expr': "versao_esquema >= 1"}),
+        ])),
+        ('indices', OrderedDict()),
         ('trigger_bu', None),
         ('colunas_lob', ()),
     ])
@@ -774,6 +816,7 @@ def nomes(prefixo, tabelas=None):
                 ('colunas', ix_def['colunas']),
                 ('expr', ix_def.get('expr')),
                 ('fbi', ix_def.get('fbi', False)),
+                ('unico', ix_def.get('unico', False)),
             ])
 
         info = OrderedDict([

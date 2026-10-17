@@ -109,7 +109,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **Proibido** concatenar ou formatar valores com `+`, `%`, `.format()` ou f-string.
 * **Identificadores dinâmicos** (owner, prefixo) só entram no SQL via `modules/sql_ident.py`, que os valida antes do uso:
   * `owner`: `^[A-Za-z][A-Za-z0-9_]{0,29}$`
-  * `table_prefix`: `^[A-Za-z][A-Za-z0-9_]{0,7}$` (começa com letra)
+  * `table_prefix`: `^[a-z][a-z0-9_]{0,7}$` (começa com letra minúscula; CR-007, R-31)
   * Nome final do objeto: validado contra o registro de identificadores e com `len <= 30`.
 * **Listas `IN`:** os placeholders (`:amb0, :amb1, ...`) são gerados pelo código com contagem controlada, e os valores sempre vão como binds.
 * **Binds de data** comparados a colunas de data são declarados pelo `db_conn` com o tipo de data do driver (`setinputsizes` no Oracle), sem microssegundos (README §7.5).
@@ -121,25 +121,31 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **Camada de plataforma:** toda primitiva dependente do sistema operacional (spawn, grupo e encerramento de processos, limites, identidade do processo, lock de instância, checagem de dono e permissão, sinais e parada) fica **somente** em `modules/plataforma/` (`posix.py`, para Linux e Unix; CR-005: Windows não é suportado). Fora dela é proibido `os.killpg`, `os.setsid`, `resource`, `fcntl`, `/proc` e `sys.platform` (README §8.0). Também é proibido `ctypes`, `msvcrt` ou qualquer API Windows em todo o projeto, inclusive em `plataforma/` (README §8.0: onde a identidade do processo não puder ser lida sem `ctypes`, `identidade_processo` devolve `None`).
   * **Estado provisório até o F8.0:** a camada `plataforma/` ainda não existe. Hoje a checagem de dono e permissão do script fica em `path_guard` e a do `secrets.cfg` em `sss_config`; o F8.0 as move para `plataforma/` sem mudar a regra.
 * **Spawn único permitido** (`plataforma.iniciar_processo`, chamado só por `modules/executor.py`):
-  * `subprocess.Popen(argv, shell=False, start_new_session=True, close_fds=True, stdin=DEVNULL, stdout=log_fd, stderr=STDOUT, cwd=..., env=clean_env, preexec_fn=_child_limits)`. `_child_limits` pode **somente** chamar `os.umask` e `resource.setrlimit`. É proibido criar threads no daemon, porque `preexec_fn` não é thread-safe.
+  * **Fora de DEV (CR-007, D1):** o script roda com o **usuário de execução** do ambiente, nunca com o usuário do agente: `subprocess.Popen(['/usr/bin/sudo', '-n', '-u', usuario, '--', '/opt/sss/bin/sss-helper', 'run'], shell=False, start_new_session=True, close_fds=True, stdin=PIPE, stdout=log_fd, stderr=STDOUT, env=<mínimo>)`, com a especificação (argv, env, limites) pela entrada padrão (README §8.0, §8.4). O helper é o **único** caminho para agir como o usuário de execução (`run`, `term`, `kill`, `limpar`); é proibido chamar `sudo` para qualquer outro comando.
+  * **Em DEV sem usuário de execução:** `subprocess.Popen(argv, shell=False, start_new_session=True, close_fds=True, stdin=DEVNULL, stdout=log_fd, stderr=STDOUT, cwd=..., env=clean_env, preexec_fn=_child_limits)`. `_child_limits` pode **somente** chamar `os.umask` e `resource.setrlimit`. É proibido criar threads no daemon, porque `preexec_fn` não é thread-safe.
+  * Qualquer exceção no spawn vira `SPAWN_ERROR` (não só `OSError`).
   * **Proibido** `stdout=subprocess.PIPE` ou `stderr=subprocess.PIPE` para scripts executados. A saída vai sempre para arquivo.
 * **Validação de caminho:** apenas por `modules/path_guard.py` (README §8.5). Prefixo por `str.startswith` é **proibido**.
   * **Caminho livre (CR-005):** `path_file` é o caminho **absoluto** do script, em qualquer lugar do servidor; não há pastas base. Formato: absoluto, normalizado, sem `..`, `\`, `//` nem caractere de controle.
-  * `realpath` do script; recusa em pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`) e dentro de `log_dir`/`work_dir`, conferidas por `commonpath` sobre o caminho digitado **e** o resolvido; `isfile`.
-  * Dono do arquivo em `script_owner_uids`; cada diretório até `/` com dono root ou em `script_owner_uids`; arquivo e diretórios sem escrita de grupo, outros ou do agente.
+  * `realpath` do script **igual** ao caminho digitado (nenhum link simbólico, `CAMINHO_COM_LINK`; CR-007, R-14); recusa em pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`) e dentro de `log_dir`/`work_dir`/`exec_work_dir`, conferidas por `commonpath`; `isfile`. `EACCES` é `SEM_ACESSO`, nunca `NAO_ENCONTRADO`.
+  * Dono do arquivo em `script_owner_uids`; cada diretório até `/` com dono root ou em `script_owner_uids`; arquivo e diretórios sem escrita de grupo, outros ou do agente, e **nenhum** pertencendo ao UID do agente nem a um usuário de execução (CR-007, R-15). O executável de cada interpretador passa pela mesma checagem de cadeia (`validar_interpretador`).
   * No nó web, arquivo inexistente localmente é aviso (o agente confere no claim); arquivo existente que falha nas checagens bloqueia (README §8.5).
 * **Allowlist de interpretadores lógicos:** `PYTHON3`, `BASH` e `SH`, mapeados por agente para o executável local (`[agent] interpretadores`).
   * Python é sempre invocado com `-I`.
 * **Ambiente do filho:** construído **somente** por `modules/env_builder.py` a partir de um dicionário novo, com a base por plataforma (README §8.6). É proibido usar `os.environ.copy()` como base.
-* **Encerramento escalonado** (`plataforma.encerrar_grupo`):
-  * `os.killpg(pgid, SIGTERM)` → `kill_grace_s` → `os.killpg(pgid, SIGKILL)` → `Popen.wait()`. `ProcessLookupError` é tratado como "grupo encerrado".
+* **Encerramento escalonado sem bloquear** (`plataforma.sinalizar_grupo`, CR-007 R-04):
+  * SIGTERM ao grupo → prazo `kill_grace_s` → SIGKILL → coleta, como **máquina de estados** do laço. É proibido `sleep`, `time.sleep` em laço de espera ou `Popen.wait()` com prazo dentro de uma operação. `ProcessLookupError`/`ESRCH` é tratado como "grupo encerrado".
+  * Ao fim de **todo** ticket, o grupo é encerrado, mesmo que o processo principal tenha saído sozinho (README §8.7, R-02).
+  * Fora de DEV, o sinal vai pelo helper (`term`/`kill`), porque o grupo pertence ao usuário de execução.
   * O nó web nunca envia sinais nem encerra processos.
+* **Estado local do agente (CR-007, R-01):** `work_dir/ticket_<id>/.sss_proc` (gravado depois do spawn e antes do banco) e `.sss_result` (antes do `UPDATE` de finalização) são a fonte de verdade do startup check. Grave sempre em arquivo temporário + `rename`, com `0600`.
 * **Launcher do nó web:** `bin/sss-web.sh` recusa root, aplica `umask 077` e só inicia um interpretador `python3[.x]` seguido de `web2py.py` ou `anyserver.py` (README §12.2). Nunca o transforme em executor de comando arbitrário.
 
 ### 3.3 Segredos e PII
 
 * Proibido segredo em código, `config.ini`, banco, testes ou fixtures.
 * Segredos são lidos **somente** via `modules/sss_config.py`, a partir de `secrets.cfg`, com checagem de dono e permissão pela camada de plataforma (até o F8.0, no próprio `sss_config`): dono = usuário do processo e modo `0600` (README §4.1).
+* **Segredos por papel (CR-007, D1b):** `sss_config.carregar_segredos(caminho, papel)` com `papel` em `web` ou `agente`. Cada papel só aceita as próprias seções (o agente nunca tem `[web] cookie_key`; o web nunca tem `[ambiente:*]` nem `[purge]`); fora de DEV, seção de outro papel recusa a subida. Cada papel usa a **sua** conta Oracle (web, agente, purge); a conta dona do esquema só é usada pelo `init_db.py`, com senha digitada.
 * Todo segredo carregado é registrado em `modules/masking.py`. Logs, mensagens de erro e `log_output` passam pelo mascaramento.
 * Proibido registrar em log: senhas, hashes de senha, `PADRAO_VALOR_RUN_CONEXAO_BD`, `cookie_key`, token CSRF, valores de parâmetros `sensivel = 'S'` e cabeçalho `Cookie`.
 
@@ -149,12 +155,14 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **CSRF** obrigatório em todo `POST`, validado com `hmac.compare_digest`. `GET` nunca altera estado.
 * **Autorização:**
   * Toda action pública começa por um guarda explícito (`_exigir_login()`, `_exigir_func('CODIGO')`) que reconsulta o estado do usuário (README §4.2).
-  * Decisões de execução sempre chamam `rbac.pode_executar`.
+  * Decisões de execução sempre chamam `rbac.pode_executar`. O agente também a chama na pré-validação do claim, para o solicitante do ticket (CR-007, D2).
 * **Saída:** sempre escapada com `{{=x}}`. **Proibido** `XML()` ou `{{=XML(...)}}` com qualquer dado de usuário ou de banco.
 * **Cabeçalhos de segurança** (CSP, `nosniff`, `frame-ancestors`, `no-store`) são aplicados em `models/10_security.py` para toda resposta.
 * **Senha:** somente `modules/security.py` (PBKDF2-SHA256, 200.000 iterações, `hmac.compare_digest`).
 * **Validação de entrada:** valor acima do limite ou fora do formato é **recusado** com mensagem, nunca truncado nem convertido em silêncio (README §10, "Texto nos cadastros"). O corte de `request.vars` no controller é só proteção de memória: o limite do controller deve ser maior que o do service, para que o service veja o excesso e o recuse.
-* **Segredo fora do HTML:** nenhum valor sensível (nem hash, nem derivado dele) vai para o HTML. A versão de concorrência usa um marcador fixo no lugar do valor sensível (README §10).
+* **Segredo fora do HTML:** nenhum valor sensível (nem hash, nem derivado dele) vai para o HTML. A versão de concorrência usa um marcador fixo no lugar do valor sensível (README §10). `sensivel` nunca volta de `S` para `N` (CR-007, R-20).
+* **Ator no quadro Registro (CR-007, D6):** o login de quem criou ou alterou só vai para o HTML de quem tem `VER_AUDITORIA` ou é administrador; para os demais, `ui_helpers.registro(reg, ctx)` troca por "você", "Sistema (…)" ou "outra pessoa" no servidor.
+* **Regex de parâmetro:** só no subconjunto seguro de `params_compiler.validar_regex_cadastro` (README §6.2, CR-007 D5). Nunca execute regex de usuário fora dele.
 * **Texto de entrada nos cadastros** (README §10, CR-003):
   * **identificador** (nome de ambiente e de perfil, login, código de parâmetro): `admin_crud.identificador`. Não é limpo; espaço no início ou no fim é recusado;
   * **texto livre** (nomes de exibição, `label`, `descricao`, `grupo`, `categoria`, `etapa`): `admin_crud.texto_livre`. Recebe `strip()` e recusa caracteres de controle (`\x00-\x1f`, `\x7f`).
@@ -170,7 +178,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 
 0. **SQL Oracle 11gR2 (CR-002):**
    * Todo SQL dos repositórios fica em `modules/repo_oracle/`, escrito diretamente na sintaxe aceita pelo **Oracle 11gR2**, e precisa rodar também nas versões superiores (12c a 23ai).
-   * Permitidos: `ROWNUM`, `SYSDATE`, `seq.NEXTVAL FROM DUAL`, `FOR UPDATE WAIT n`, `DBMS_LOB.*`, `EMPTY_CLOB()`, `MERGE`, `CASE`, `NVL` e `DECODE`. Prefira `CASE` quando ele deixar a intenção mais clara.
+   * Permitidos: `ROWNUM`, `SYSDATE`, `seq.NEXTVAL FROM DUAL`, `FOR UPDATE WAIT n`, `FOR UPDATE SKIP LOCKED` (CR-007: desdobro e NODE_OFFLINE), `DBMS_LOB.*`, `EMPTY_CLOB()`, `MERGE`, `CASE`, `NVL`, `DECODE`, `GREATEST` e `FLOOR`. Prefira `CASE` quando ele deixar a intenção mais clara.
 
 1. **30 caracteres:** todo identificador (tabela, coluna, sequence, trigger, constraint, índice) tem no máximo 30 caracteres **após a expansão do prefixo**. Os nomes vêm exclusivamente do registro em `modules/sql_ident.py`.
 2. **PK:** a aplicação **sempre informa o `id`**, obtido de `seq.NEXTVAL` antes do `INSERT`. Existe também uma `SEQUENCE` + trigger `BEFORE INSERT` condicional (defesa para inserções manuais), conforme este template **literal**:
@@ -208,9 +216,10 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
    * É proibido `COMMIT` dentro de laço de linhas, exceto nos lotes do `purge.py`.
    * É proibido manter transação aberta durante I/O externo ou espera (sleep, `Popen.wait`). O claim faz commit **antes** do spawn.
 10. **Locks:**
-    * Lock de linha sempre com `FOR UPDATE WAIT n`, com espera de no máximo 5 s.
+    * Lock de linha sempre com `FOR UPDATE WAIT n`, com espera de no máximo 5 s, ou com `FOR UPDATE SKIP LOCKED` onde o README manda pular linhas travadas (§7.5, §8.8).
+    * **Todo DML pode bloquear** numa linha travada por outra sessão (inclusive uma sessão morta): o limite efetivo é o `call_timeout_ms`, e o *call timeout* (DPY-4024, DPI-1067, ORA-03156) é mapeado pelo `db_conn` e tratado como o timeout de lock (CR-007, R-12). Nenhuma operação do daemon pode depender de uma espera mais longa que isso.
     * A ordem de aquisição é a do README §8.3 e não pode ser invertida.
-    * Timeout de lock e deadlock (ORA-00054, ORA-30006, ORA-00060, mapeados pelo `db_conn` para cada driver e modo) levam a `ROLLBACK`, log WARN e continuação.
+    * Timeout de lock, deadlock e *call timeout* (ORA-00054, ORA-30006, ORA-00060 e os do item acima, mapeados pelo `db_conn` para cada driver e modo) levam a `ROLLBACK`, log WARN **sem stack trace** e continuação.
 11. **Concorrência:**
     * Toda transição de estado é um `UPDATE` condicional (`WHERE status = ... AND agente_id = ...`), com checagem obrigatória de `rowcount`.
     * Ignorar `rowcount` é defeito.
@@ -218,18 +227,21 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
     * Proibido `SELECT *` em código de aplicação.
     * Proibido aplicar função em coluna indexada no `WHERE` (por exemplo, `TRUNC(created_at) = :d`). Use intervalo (`created_at >= :d AND created_at < :d + 1`).
     * Use `executemany` para inserções em lote.
-    * Toda query nova da fila, do claim, do heartbeat ou do purge tem o `EXPLAIN PLAN` registrado no PR, sem `TABLE ACCESS FULL` nas tabelas de ticket.
+    * Toda query nova da fila, do claim, do heartbeat, do desdobro, do NODE_OFFLINE, do purge **e das listagens e telas de consulta** (lista de tickets, histórico, últimas execuções) tem o `EXPLAIN PLAN` registrado no PR, sem `TABLE ACCESS FULL` nas tabelas de ticket e de auditoria (CR-007, R-29).
+    * O `COUNT` das listagens para em 10.001 (`ROWNUM <= 10001`); a tela mostra "mais de 10.000" (README §10).
 13. **LOB:**
     * Escrita incremental com `DBMS_LOB.WRITEAPPEND` (README §8.10).
     * Leitura com offset por locator ou `DBMS_LOB.SUBSTR`.
     * É proibido reescrever o CLOB inteiro e proibido carregar `log_output` completo em listagens.
 14. **DDL:** é gerada a partir do registro de `sql_ident` e executada exclusivamente por `scripts/init_db.py`, que é idempotente (README §11). Nenhum arquivo em `models/` ou `modules/` executa DDL.
-15. **Colunas de registro (CR-006, README §10):** toda tabela, exceto `tbsss_auditoria`, tem `created_at`, `created_by`, `updated_at` e `updated_by`.
+15. **Colunas de registro (CR-006, README §10):** toda tabela, exceto `tbsss_auditoria` e `tbsss_controle`, tem `created_at`, `created_by`, `updated_at` e `updated_by`.
     * Todo `INSERT` grava `created_at = SYSDATE` e `created_by = :ator`. Nenhum `UPDATE` toca `created_*`.
     * Todo `UPDATE` de **alteração de negócio** grava `updated_at = SYSDATE` e `updated_by = :ator`. Rotina técnica (heartbeat, log, PID, contadores do login, avanço do desdobro) **não** grava. A lista fechada das duas categorias está no README §10.
     * O ator vem de `auditoria['ator']` ou do parâmetro `ator=`: login, `SYSTEM:<agent_id>`, `SYSTEM:init_db` ou `SYSTEM:seed`. Sem ator, o repositório lança `RepoViolacao` sem gravar nada.
     * Vínculos de conjunto são gravados por diferença; `script_param` leva o `created_*` de cada parâmetro que continua.
     * As colunas não entram na `versao` do formulário, no `esperado` nem no `detalhe` da auditoria.
+16. **Versão do esquema (CR-007, D4):** `sql_ident.VERSAO_ESQUEMA` é a versão que o código espera. Toda mudança de esquema (tabela, coluna, CK, índice, trigger) **incrementa** `VERSAO_ESQUEMA` e traz a migração `scripts/migracoes/m<NNNN>_<descricao>.py`, idempotente, no mesmo pacote. Web e agente recusam subir se `tbsss_controle.versao_esquema` for diferente. O `init_db` compara o esquema real com o registro e aborta em divergência; nunca corrige sozinho.
+17. **Contas por papel (CR-007, D1b):** o código da aplicação nunca usa a conta dona do esquema. Os GRANTs de cada papel estão no README §11.1; uma query nova que precise de privilégio novo atualiza essa tabela no mesmo pacote.
 
 ---
 
@@ -259,6 +271,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * Use o módulo `logging` com o formato e os níveis do README §13. É proibido `print` em código de aplicação, exceto nos CLIs `init_db.py` e `purge.py` (stdout).
 * **Exceções:**
   * Todo `except` registra o contexto (ticket, agente, ação), o código ORA- quando houver e o stack trace em ERROR.
+  * **Exceção (CR-007):** situações esperadas e tratadas (timeout de lock, deadlock, *call timeout*, `rowcount = 0` de corrida perdida, linha pulada por `SKIP LOCKED`) vão em WARN com o código e **sem** stack trace (README §13).
   * É proibido `except:` ou `except Exception: pass` silenciosos.
 * **Caminhos de log (CR-005):** montados **somente** por `modules/pastas_log.py`, nunca à mão:
   * log da aplicação: `log_dir/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log`, com troca por tamanho e retenção por dias (README §13);
@@ -267,7 +280,9 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **Graceful shutdown:**
   * Handlers de SIGTERM/SIGINT apenas acionam uma flag. O arquivo `work_dir/sss-<agent_id>.stop`, verificado a cada ciclo, tem o mesmo efeito.
   * O fechamento de conexão, lock file e descritores ocorre em `finally`.
-* **Reconexão:** só o `db_conn.py` decide reconectar, seguindo a lista de erros (mapeada por driver e modo) e o *backoff* do README §2.3.
+* **Reconexão:** só o `db_conn.py` decide reconectar, seguindo a lista de erros (mapeada por driver e modo) e o *backoff* do README §2.3: **uma tentativa por ciclo**, com o *backoff* em prazos do relógio monotônico, nunca com `sleep` (CR-007, R-04).
+* **Orçamento do laço do daemon (CR-007, R-04):** nenhuma operação bloqueia além de `call_timeout_ms`; o fence é conferido a cada iteração e depois de cada chamada ao banco; claim e desdobro param ao gastar `heartbeat_interval_s / 2`. As invariantes I1 a I4 do README §8.9 são validadas pelo `sss_config`.
+* **Codificação:** web e daemon abortam se `sys.getfilesystemencoding()` não for UTF-8 (os launchers exportam `LANG`/`LC_ALL`; README §12.2).
 * **Tempo:**
   * Agendamento e tempo de negócio usam o relógio do banco (`SYSDATE`). No nó web, o horário vem de `agora()` do repositório (ex.: bloqueio de login em `repo_usuarios`); o relógio local do servidor web não decide regra de negócio.
   * Intervalos internos usam `time.monotonic()`.
@@ -288,25 +303,28 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 | Arquivo | Cobertura obrigatória |
 |---|---|
 | `test_repo_contract.py` | A mesma bateria contra FAKE (sempre) e ORACLE (com `SSS_TEST_DSN`), em cada combinação de driver disponível — Thin (banco 12.1+), Thick e cx_Oracle (CR-002, D5): CRUD, unicidade, transições condicionais com `RepoConflito`, cascatas, imutabilidade de `nome`/`login`, paginação e ordenação; colunas de registro (CR-006): `created_*` na inclusão, `updated_*` só na alteração de negócio, ator obrigatório, vínculos por diferença preservando `created_*` |
-| `test_db_schema.py` | Todo identificador do registro com `len <= 30` usando o prefixo configurado **e** o pior caso de 8 caracteres; todo nome em ASCII; toda FK com índice de coluna líder; toda tabela com trigger no template condicional |
+| `test_db_schema.py` | Todo identificador do registro com `len <= 30` usando o prefixo configurado **e** o pior caso de 8 caracteres; todo nome em ASCII; toda FK com índice de coluna líder; toda tabela com trigger no template condicional; as 17 tabelas e o README §10 igual ao registro; `VERSAO_ESQUEMA` declarada (CR-007) |
 | `test_py36_compat.py` | `ast.parse(..., feature_version)` ou compilação com 3.6 em todos os `.py`; busca por tokens proibidos (§2.1), `shell=True`, `os.system`, `eval(`, `exec(`, `pickle`, `XML(`, `x-html`, URLs `http(s)://` em `static/` e `views/` |
-| `test_path_guard.py` | Caminho relativo, não normalizado, com `..` ou `\`; pastas do sistema (digitadas e via symlink); prefixo irmão (`/usrx`, `/etcetera` aceitos); dentro de `log_dir`/`work_dir`; arquivo inexistente; diretório em vez de arquivo; dono fora de `script_owner_uids`; arquivo ou diretório ancestral gravável por grupo, outros ou pelo agente; interpretador fora da allowlist |
+| `test_path_guard.py` | Caminho relativo, não normalizado, com `..` ou `\`; link simbólico em qualquer componente (`CAMINHO_COM_LINK`); pastas do sistema; prefixo irmão (`/usrx`, `/etcetera` aceitos); dentro de `log_dir`/`work_dir`/`exec_work_dir`; arquivo inexistente; diretório sem acesso (`SEM_ACESSO`); diretório em vez de arquivo; dono fora de `script_owner_uids`; arquivo ou diretório ancestral gravável por grupo, outros ou pelo agente, ou pertencente ao agente ou a um usuário de execução mesmo sem escrita; interpretador fora da allowlist ou inseguro (`validar_interpretador`) |
 | `test_sss_logging.py` | Log da aplicação (README §13): caminho por minuto, troca por tamanho com sufixo, retenção na subida e na troca, `agent_id` na linha, falhas da retenção como WARN, pastas `0750` em todos os níveis sob `umask 077` e arquivos `0640` |
 | `test_pastas_log.py` | Pasta do script (acento, espaço, `/`, maiúsculas, vazio, `app`); caminho do log de execução e do log da aplicação; sufixo na troca dentro do mesmo minuto; retenção só de pastas com formato de data |
-| `test_params_compiler.py` | Precedência; obrigatório ausente; `NOMEADO` com flag longa e curta; valor iniciado em `-`; `CHECKBOX`; `SEQUENCIAL` com opcional vazio intermediário; `NENHUM`; regex com `fullmatch`; rejeição de NUL e controle; `SELECT` fora de `opcoes_json`; serialização determinística do snapshot |
+| `test_params_compiler.py` | Regex no subconjunto seguro (aceitas e recusadas do README §6.2, com tempo de `fullmatch` limitado); valor sensível com menos de 4 caracteres recusado; NUL e controle recusados também no snapshot; precedência; obrigatório ausente; `NOMEADO` com flag longa e curta; valor iniciado em `-`; `CHECKBOX`; `SEQUENCIAL` com opcional vazio intermediário; `NENHUM`; regex com `fullmatch`; rejeição de NUL e controle; `SELECT` fora de `opcoes_json`; serialização determinística do snapshot |
 | `test_cron_parser.py` | Listas, intervalos, passos, semântica OU de dia, dia 31 e fevereiro, ano bissexto, expressão sem ocorrência, rejeição de nomes e `L`/`W`/`#` |
-| `test_recurrence.py` | `DIARIA`, `SEMANAL`, `MENSAL` (mês curto), `UNICA`, `data_fim`, *misfire* `RUN_ONCE`/`SKIP`, datas sem microssegundos |
+| `test_recurrence.py` | `DIARIA`, `SEMANAL`, `MENSAL` (mês curto), `UNICA`, `data_fim`, *misfire* `RUN_ONCE`/`SKIP`, `ocorrencia` coberta (CR-007), conclusão sem ticket, mensagem de CRON com `data_fim`, datas sem microssegundos |
 | `test_env_builder.py` `[F8.1]` | Ambiente sem herança de `os.environ`; rejeição de variáveis bloqueadas; passthrough; ausência de DSN |
 | `test_masking.py` | Mascaramento de segredos, connect string e valores sensíveis, inclusive quando cortados entre blocos |
 | `test_rbac.py` | Matriz de `pode_executar` (admin, perfil inativo, sem homologação, sem `EXEC_SCRIPT`); proteção do último admin (mock) |
+| `test_sss_helper.py` `[F8.0]` | Helper de execução (CR-007, D1): uso inválido recusado (código 2); especificação inválida; `term`/`kill` com identidade divergente recusados (código 3) e com grupo vazio aceitos; `limpar` sem seguir links; `run` em DEV com o próprio usuário (sem `sudo`) executando um script de teste |
+| `test_saude.py` `[F9.1]` | `scripts/saude.py` com conexão mock: cada verificação do README §13 e o código de saída Nagios |
 | `test_executor.py` `[F8.1]` | Spawn real de script de teste (`/bin/sh`) em diretório temporário; log no caminho do CR-005, com o renome para `ticket_<id>_<PID>.log`; saída em arquivo sem PIPE; geração de mais de 1 MB de saída sem travar; timeout; encerramento escalonado matando também o neto; conversão de `returncode` negativo |
-| `test_plataforma.py` `[F8.0]` | Grupo e encerramento escalonado, identidade do processo (`starttime`) contra PID reciclado, lock de instância, recusa de root, dono e permissão de segredos e do caminho do script |
+| `test_plataforma.py` `[F8.0]` | Encerramento escalonado sem bloquear (máquina de estados), grupo encerrado mesmo após a saída do processo principal (netos), `.sss_proc`/`.sss_result` com escrita atômica, `validar_execucao` com dublê de `sudo`, grupo e encerramento escalonado, identidade do processo (`starttime`) contra PID reciclado, lock de instância, recusa de root, dono e permissão de segredos e do caminho do script |
 | `test_sql_oracle11g.py` `[F7.3]` | Varredura de `repo_oracle/` e `scripts/init_db.py`: nenhuma sintaxe 12c+ (§4.3); `FOR UPDATE` sempre com `WAIT n` (n ≤ 5); nenhum `SELECT *` |
-| `test_seed_fake.py` | Seed FAKE coerente com as regras (README §2.5): funcionalidades com os nomes do README, nenhum parâmetro de credencial, prioridade 1 só para admin, `created_at` nunca no futuro, colunas de registro coerentes com o README §10 (CR-006), snapshot e respostas compilados contra o script, agendamentos no minuto exato e alinhados à regra |
-| `test_ui_helpers.py` | Catálogo de mensagens em duas partes, nomes simples de situação e de motivo, frase e etapas do ticket, tempo em linguagem simples, nome do ator no quadro Registro (CR-006) |
+| `test_seed_fake.py` | Seed FAKE coerente com as regras (README §2.5), com a linha de `tbsss_controle` na versão do código: funcionalidades com os nomes do README, nenhum parâmetro de credencial, prioridade 1 só para admin, `created_at` nunca no futuro, colunas de registro coerentes com o README §10 (CR-006), snapshot e respostas compilados contra o script, agendamentos no minuto exato e alinhados à regra |
+| `test_ui_helpers.py` | Catálogo de mensagens em duas partes, nomes simples de situação e de motivo, frase e etapas do ticket, tempo em linguagem simples, nome do ator no quadro Registro (CR-006) e o mascaramento do ator para quem não tem `VER_AUDITORIA` (CR-007, D6) |
+| `test_config.py` | Tipos e faixas de toda chave; `table_prefix` só minúsculas; `agent_id` reservados (`init_db`, `seed`, `purge`); invariantes I1 a I4; `usuarios_execucao` cobrindo os ambientes fora de DEV; `audit_retention_days` ≥ 365 e ≥ `ticket_retention_days`; `env_passthrough` sem variáveis bloqueadas nem chaves fixas; segredos por papel (CR-007) |
 | `test_catalogo_service.py` | Rotinas disponíveis e histórico: mesmo escopo da lista de tickets (com e sem `VER_LOGS`), script fora das rotinas dá 404, contrato sem LOB e limitado, números do resumo iguais aos do gráfico e geometria do gráfico |
 | `test_contraste_cores.py` | Todo par texto/fundo dos tokens de `sss.css` com contraste WCAG AA (≥ 4,5:1), nos modos claro e escuro |
-| `test_db_conn.py` `[F7.0]` | Com módulos falsos de driver: cadeia `auto` Thin → Thick → cx_Oracle, parada em erro de autenticação, valores forçados, senha fora de argv/ambiente/log, mapa de erros por driver e modo |
+| `test_db_conn.py` `[F7.0]` | Com módulos falsos de driver: cadeia `auto` Thin → Thick → cx_Oracle, parada em erro de autenticação, valores forçados, senha fora de argv/ambiente/log, mapa de erros por driver e modo, inclusive *call timeout* e erros de failover (CR-007, R-12), reconexão sem `sleep` |
 
 5. Cada correção de defeito acompanha um teste de regressão.
 
@@ -325,6 +343,9 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 - [ ] Mensagens ao usuário pelo catálogo de `ui_helpers`, em duas partes; telas de consulta só com `GET`, sem gravação nem auditoria.
 - [ ] Auditoria gravada pelo repositório na mesma operação da ação (`auditoria=`).
 - [ ] Colunas de registro (§4.15): `created_*` em todo `INSERT`, `updated_*` só em alteração de negócio, ator obrigatório.
+- [ ] Mudança de esquema com `VERSAO_ESQUEMA` incrementada e migração no mesmo pacote (§4.16); privilégio novo na tabela de GRANTs por papel (§4.17).
+- [ ] Daemon: nenhuma espera dentro de operação, fence conferido depois de cada chamada ao banco, encerramento por máquina de estados, estado local antes do banco (§3.2, §6; README §8.1).
+- [ ] Script executado só pelo helper com o usuário de execução fora de DEV; regex de parâmetro só no subconjunto seguro (§3.2, §3.4).
 - [ ] Logs sem segredos/PII; todo `except` com log.
 - [ ] Testes do §7 aplicáveis executados.
 

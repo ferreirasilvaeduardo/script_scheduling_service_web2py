@@ -125,7 +125,11 @@ Antes da primeira subida, crie `instance/config.ini` a partir do `config.ini.exa
 
 A aplicação fica no endereço local `127.0.0.1:8000/script_scheduling_service` (porta 8000, caminho `/script_scheduling_service`).
 
-Para subir como nos servidores, use o launcher `bin/sss-web.sh "$(command -v python3)" web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui` (o launcher só aceita interpretador chamado `python3` ou `python3.X`): ele recusa root, aplica `umask 077` e exporta `TZ` a partir de `SSS_TZ` (`docs/IMPLANTACAO.md` §11.1).
+Para subir como nos servidores, use o launcher `bin/sss-web.sh "$(command -v python3)" web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui` (o launcher só aceita interpretador chamado `python3` ou `python3.X`): ele recusa root, aplica `umask 077`, exporta `TZ` a partir de `SSS_TZ` e `LANG`/`LC_ALL` a partir de `SSS_LOCALE` (padrão `C.UTF-8`) (`docs/IMPLANTACAO.md` §11.1).
+
+**Codificação (CR-007):** o processo web aborta se a codificação do sistema de arquivos não for UTF-8 (`sys.getfilesystemencoding()`). Subindo sem o launcher, exporte antes `LANG=C.UTF-8` e `LC_ALL=C.UTF-8` (ou outro locale UTF-8 da máquina, `locale -a`).
+
+**Segredos em DEV (CR-007, D1b):** o `secrets.cfg` do nó web leva só `[web] cookie_key` (e `[oracle] password` com Oracle). Seções do agente (`[ambiente:*]`, `[purge]`) no arquivo do web geram WARN em DEV e recusam a subida fora de DEV.
 
 ### Senha dos usuários de demonstração (`SSS_DEV_SEED_PASSWORD`)
 
@@ -187,7 +191,8 @@ O script fica num **caminho absoluto** em qualquer lugar do servidor (`path_file
 
 * o dono do arquivo é um UID de `script_owner_uids`; o dono de cada diretório é o root ou um UID de `script_owner_uids`;
 * nenhum deles tem escrita para grupo ou outros (`st_mode & 0o022 == 0`), o que exclui `/tmp` e pastas compartilhadas;
-* o usuário que roda o SSS **não** consegue escrever em nenhum deles (`os.access(p, os.W_OK)` falso);
+* o usuário que roda o SSS **não** consegue escrever em nenhum deles (`os.access(p, os.W_OK)` falso), e nenhum deles pertence a esse usuário nem a um usuário de execução (CR-007);
+* não há link simbólico em nenhum ponto do caminho (`CAMINHO_COM_LINK`, CR-007): o caminho cadastrado é igual ao `realpath`;
 * o caminho, digitado ou resolvido, não fica em pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`) nem dentro de `log_dir` ou `work_dir`.
 
 Por causa da cadeia até `/`, **nenhuma pasta dentro do seu `$HOME` passa**: o próprio `$HOME` pertence a você e tem escrita do dono, então o `path_guard` recusa com `GRAVAVEL_PELO_AGENTE` ("O arquivo, ou uma pasta do caminho, é gravável pelo usuário do sistema; ajuste as permissões."). Executar como `root` também não resolve: o launcher recusa root, e `os.access(W_OK)` é sempre verdadeiro para ele.
@@ -225,6 +230,11 @@ Em `instance/config.ini`, seção `[agent]`: `script_owner_uids = 0` (o padrão 
 
   A ordem é pela última escrita (`%T@`), e não pelo nome: com dois processos no mesmo minuto, a ordem do nome segue o texto do PID e pode apontar o arquivo errado.
 * **Log de execução de cada ticket** (agente, a partir do F8): `log_dir/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log` (README §8.4).
+
+### 6.3 Agente em DEV (a partir do F8, CR-007)
+
+* Em DEV, `[agent] usuarios_execucao` pode ficar vazio: o agente executa os scripts com o próprio usuário e registra WARN `SEM_USUARIO_EXECUCAO`. Para testar o helper e o `sudo` como nos servidores, siga o `IMPLANTACAO.md` §18.1 numa VM.
+* `cron_horizon_days` vai de 366 a 36.500, `max_log_size_bytes` até 64 MiB e `audit_retention_days` de 365 a 3.650 (e não menor que `ticket_retention_days`); o `table_prefix` só aceita minúsculas. Um `config.ini` antigo fora dessas faixas aborta a subida com a chave no log.
 
 ---
 

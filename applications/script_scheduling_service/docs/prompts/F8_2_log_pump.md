@@ -11,6 +11,7 @@ Transferir o log local do ticket para `log_output` de forma incremental, mascara
 ## Escopo
 **IN**
 - **`applications/script_scheduling_service/modules/log_pump.py`:**
+  - **Mascarador por ticket (CR-007, R-25):** cada `Bomba` recebe um `masking.Mascarador` próprio com os segredos carregados, o `PADRAO_VALOR_RUN_CONEXAO_BD` do ambiente e os valores das `respostas` cujos códigos estão em `sensiveis` no snapshot (README §8.10).
   - `class Bomba` (uma instância por ticket em execução). Estado: caminho, offset em bytes, `MascaradorFluxo`, sobra de bytes UTF-8 incompletos, caracteres já enviados e flag de truncado.
   - `coletar(max_bytes_leitura=1 MiB) -> texto_seguro`:
     - lê do offset;
@@ -29,6 +30,7 @@ Transferir o log local do ticket para `log_output` de forma incremental, mascara
   - texto ASCII;
   - texto com acentos e emoji (4 bytes) cortado em todas as posições de byte possíveis (o resultado final é igual ao original);
   - segredo cortado entre leituras é mascarado;
+  - valor sensível do snapshot de um ticket é mascarado no log dele e não interfere no mascarador de outro ticket;
   - segredo com menos de 4 caracteres não é mascarado (comportamento do `masking.py`, README §4.1);
   - teto do banco com o marcador;
   - teto local detectado;

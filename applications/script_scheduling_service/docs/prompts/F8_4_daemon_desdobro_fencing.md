@@ -3,6 +3,7 @@
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §3.1 (binds de data), §3.2 (encerramento escalonado), §4.9–4.11, §6
 - `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D1, D2, D3, D7 e os achados "Conclusão no desdobro", "Bind DATE com microssegundos" e "Contrato do desdobro incompleto"). A D16 (várias pastas base) foi revogada pelo CR-005: o desdobro grava o snapshot v4, com `path_file` absoluto
+- `docs/arquitetura/CR-007-robustez-do-scheduler.md` (R-04, R-05, R-08, R-10, R-12, R-19, R-23, R-26, R-27, R-32)
 - `docs/arquitetura/CR-006-colunas-de-registro.md` (R-b a R-g: ator `SYSTEM:<agent_id>`, o que grava `updated_*` no desdobro e no ticket)
 - `README.md` §4.4 (`AGD_PAUSAR`, `AGENTE_FIM`), §6.5 (snapshot versão 4; CR-005), §7 (inteiro, **especialmente §7.4 e §7.5**, inclusive "Conclusão da regra", "Sobreposição numa regra que conclui", "Bind de datas" e "Contrato do repositório para o desdobro"), §8.0, §8.1, §8.8, §8.9 (inclusive "Mesmos tempos em todos os nós"), §8.11 (inclusive o arquivo `.stop`), §10 (tabelas 12 e 13, a desativação com dependência e "Colunas de registro"), §13
 - Arquivos: `modules/scheduler_loop.py`, `modules/repo_oracle/scheduler_fila.py`, `modules/recurrence.py`, `modules/params_compiler.py`, `modules/rbac.py`, `modules/plataforma/`, `modules/db_conn.py`
@@ -13,17 +14,19 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
 ## Escopo
 **IN**
 - **`applications/script_scheduling_service/modules/repo_oracle/scheduler_agenda.py`** (repositório interno, processo batch, sem FAKE; README §2.5), com o SQL do README §7.5 **literal** e as operações **distintas** do "Contrato do repositório para o desdobro":
-  - `regras_vencidas(conn, lote)`: a leitura do lote vencido;
+  - `regras_vencidas(conn, lote, ult_prox, ult_id)`: a leitura **paginada** do README §7.5 (CR-007, R-08), e `travar_regra(conn, id) -> bool` com `FOR UPDATE SKIP LOCKED` (falso = outro agente a está processando);
   - `carregar_regra(conn, id)`: a leitura completa da regra, que guarda a `antiga_data` exatamente como lida;
   - `contexto_rbac_usuario(conn, usuario_id)` (para `rbac.pode_executar`);
   - `reservar_e_criar_ticket(conn, regra, antiga, nova, ticket) -> bool`: numa **única** operação, `NEXTVAL` de `sq_tbsss_tickets`, a reserva otimista do passo 6 (`rowcount`) e, se `rowcount = 1`, o `INSERT` do ticket com o `id` explícito (`agendamento_id`, `solicitante` = login do `usuario_id`, `ip_origem = NULL`, `scheduled_at = SYSDATE`, prioridade da regra) e o `INSERT` em `tbsss_ticket_resp`, os dois com `created_by = 'SYSTEM:<agent_id>'` (CR-006). A reserva é rotina técnica: **não** grava `updated_*` na regra;
   - `concluir_com_ticket(conn, regra, antiga, ticket) -> bool` e `concluir_sem_ticket(conn, id, antiga) -> bool`: o `UPDATE` único da conclusão (abaixo);
-  - `pausar(conn, id, antiga, motivo) -> bool` (passo 7);
+  - `pausar(conn, id, antiga, motivo, detalhe) -> bool` (passo 7, com `AND ativo = 'S'`, R-19);
+  - `avancar_sem_ticket(conn, id, antiga, nova) -> bool` (R-05: só `proxima_execucao`, sem `ultima_execucao`, `ultimo_ticket_id` nem `updated_*`);
+  - `pausar_erro_interno(conn_nova, id, detalhe) -> bool` (R-08: numa transação separada, depois do `ROLLBACK` da regra);
   - `status_ticket(conn, id)`.
 
   Os nomes acima são sugestões; o que é obrigatório são as operações distintas. **Nenhuma** delas faz `COMMIT` nem `ROLLBACK` sozinha: todas recebem a conexão da transação do ciclo, e o `COMMIT` único é do passo 8. Todos os binds de data (`:antiga_data`, `:nova_data`) são declarados com `TIPO_DATE` via `db_conn.definir_tipos_entrada` (`setinputsizes` com `oracledb.DB_TYPE_DATE` ou `cx_Oracle.DATETIME`; README §7.5 "Bind de datas"). A `antiga_data` nunca é recalculada nem convertida por fuso.
 - **`applications/script_scheduling_service/modules/repo_oracle/scheduler_fila.py` (ampliar):**
-  - `marcar_node_offline(conn, timeout_s) -> n` (§8.8, literal);
+  - `marcar_node_offline(conn, agente_id, timeout_s) -> ids` (§8.8, literal, em duas etapas com `FOR UPDATE SKIP LOCKED`, sem os tickets do próprio agente; CR-007, R-12);
   - `finalizar_fenced(...)`;
   - `agente_parar(conn, agente_id)`.
   - **Colunas de registro (CR-006, README §10):** `marcar_node_offline` (ator: o agente que detectou), `finalizar_fenced` e `agente_parar` gravam `updated_at = SYSDATE` e `updated_by = 'SYSTEM:<agent_id>'`. No `scheduler_agenda`, `pausar` e as duas conclusões gravam `updated_*` na regra com o mesmo ator; `reservar_e_criar_ticket` não.
@@ -34,7 +37,11 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
     - sobreposição (`SKIP_OVERLAP`);
     - compilação do **snapshot versão 4** a partir de `parametros_json`, com `params_compiler.compilar_snapshot` (inclui `path_file` absoluto do script, sem `pasta_base`; README §6.5, CR-005) (`PARAM_INVALIDO`);
     - `CRON_INVALIDO`;
-    - reserva + `INSERT` do ticket + `ticket_resp` (passo 6);
+    - reserva + `INSERT` do ticket (com `scheduled_at = ocorrencia`, R-27; violação de `ix_tbsss_tck_ocor` = `ROLLBACK` + WARN `OCORRENCIA_DUPLICADA`) + `ticket_resp` (passo 6); prioridade 1 rebaixada a 2 quando o responsável deixou de ser admin (WARN `PRIORIDADE_REBAIXADA`);
+    - **avanço sem ticket** na sobreposição e no *misfire* `SKIP` sem conclusão (R-05); `ultimo_ticket_id` nulo, inexistente ou terminal = livre; WARN `SKIP_OVERLAP_PRESO` quando o ticket que bloqueia passou do tempo máximo do script mais `node_offline_timeout_s` (R-26);
+    - `CronErro` com a regra vencida: ticket da ocorrência vencida e pausa `CRON_INVALIDO` na mesma transação (R-23); `PARAM_INVALIDO` e `CRON_INVALIDO` com o código e a mensagem no `detalhe` (R-26);
+    - **exceção inesperada:** `ROLLBACK`, ERROR com stack e `pausar_erro_interno` (R-08);
+    - **paginação e orçamento:** páginas até vir uma incompleta ou gastar `heartbeat_interval_s / 2`;
     - pausa (passo 7), auditada como `AGD_PAUSAR` (`entidade = 'tbsss_agendamentos'`, `entidade_id` = id da regra, `ator = 'SYSTEM:<agent_id>'`) e registrada em WARN;
     - `rowcount = 0` resulta em `ROLLBACK` e a próxima regra.
   - **Conclusão da regra (`concluir = True`, `nova_data = None`; README §7.5, D1):** `proxima_execucao` é `NOT NULL`, então a conclusão **não** grava `NULL`. Ela substitui os passos 6 e 7 por um **único** `UPDATE` otimista, literal do README, que mantém `proxima_execucao = antiga_data`:
@@ -45,15 +52,15 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
   - **Ocorrências perdidas (README §7.4, D3):** o número de `perdidas` de `recurrence.avaliar_disparo` vai para o log em **INFO** quando coalescidas **dentro** de `misfire_tolerance_s` e em **WARN** só quando o atraso passa da tolerância (misfire de verdade).
 
     A ordem de locks é `tbsss_agendamentos` → `tbsss_tickets`.
-  - **NODE_OFFLINE** (ciclo do orquestrador): `marcar_node_offline`, com log INFO com a contagem.
+  - **NODE_OFFLINE** (ciclo do orquestrador): `marcar_node_offline`, com log INFO dos ids; só roda com o heartbeat do próprio agente em dia (menos de `fence_timeout_s / 2`) e fora da suspensão por **salto de relógio** (CR-007, D3: diferença entre o avanço do `SYSDATE` do heartbeat e o do relógio monotônico acima de 30 s gera WARN `SALTO_RELOGIO` e suspende o NODE_OFFLINE por `node_offline_timeout_s`).
   - **Self-fencing** (README §8.9):
-    - a cada ciclo rápido, se `monotonic() - ultimo_hb_ok > fence_timeout_s`, o agente executa `encerrar` (`plataforma.encerrar_grupo`) em **todas** as execuções, suspende os claims, registra CRITICAL `FENCED` e entra em modo "cercado";
+    - a **cada iteração do laço e depois de cada chamada ao banco** (CR-007, R-04; unifica README §8.1 e §8.9), se `monotonic() - ultimo_hb_ok > fence_timeout_s`, o agente pede o encerramento de **todas** as execuções de uma vez (máquina de estados: SIGTERM em todos, SIGKILL nos restantes depois de `kill_grace_s`), suspende os claims, registra CRITICAL `FENCED` e entra em modo "cercado";
     - em modo cercado, só tenta reconectar, **reutilizando a combinação de driver escolhida na subida** (CR-002; não há nova sondagem sem reinício);
     - ao reconectar, executa `finalizar_fenced` em cada ticket (aceitando `rowcount = 0`), faz o flush dos logs possíveis e volta ao modo normal só depois de um heartbeat confirmado.
   - **Graceful shutdown completo** (§8.11), acionado por sinal (`plataforma.instalar_parada`) ou pelo arquivo `work_dir/sss-<agent_id>.stop` (removido ao final):
-    - `DRAIN`: para o claim e o desdobro e aguarda os filhos até `shutdown_grace_s`;
+    - `DRAIN`: para o claim e o desdobro e aguarda os filhos até `shutdown_grace_s`, **mantendo** heartbeat, varredura, log pump e fence (CR-007, R-04);
     - `TERMINATE`: `encerrar` + `FAILED/SHUTDOWN/-6`;
-    - em ambos: flush dos logs, `agente_parar`, auditoria `AGENTE_FIM` (`entidade = 'tbsss_agentes'`, `entidade_id` = id do agente; README §4.4), fechamento de recursos e saída com código 0.
+    - em ambos: flush dos logs, `agente_parar` (com o filtro de `hostname`/`pid_daemon`), remoção do `.stop`, auditoria `AGENTE_FIM` (`entidade = 'tbsss_agentes'`, `entidade_id` = id do agente; README §4.4), fechamento de recursos e saída com código 0.
 - **Testes:**
   - `applications/script_scheduling_service/scripts/test_scheduler_ha.py` (mock + relógio monotônico injetável). Cobre:
     - desdobro OK com `ticket_id` preservado;
@@ -71,10 +78,11 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
     - snapshot do ticket derivado na **versão 4**, com `path_file` absoluto (sem `pasta_base`);
     - nenhuma operação do `scheduler_agenda` chama `commit`/`rollback` (cursor/conexão mock); o `COMMIT` é um só por regra;
     - bind de data sem microssegundos (inspecionar os parâmetros passados ao cursor mock e o `setinputsizes` com `TIPO_DATE`);
-    - fencing disparado no limiar e não antes;
+    - fencing disparado no limiar e não antes, inclusive quando o limiar vence **durante** uma chamada ao banco travada até `call_timeout`;
+    - **CR-007:** paginação do desdobro com 3 páginas e orçamento estourado; regra travada por outro agente pulada (`SKIP LOCKED`); avanço sem ticket sem mexer em `ultimo_ticket_id`; `ultimo_ticket_id` inexistente tratado como livre; `SKIP_OVERLAP_PRESO`; `ERRO_INTERNO` numa transação separada; pausa sobre regra já concluída com `rowcount = 0`; `scheduled_at` = ocorrência coberta; `OCORRENCIA_DUPLICADA`; `PRIORIDADE_REBAIXADA`; `CronErro` gerando o ticket vencido antes de pausar; NODE_OFFLINE sem os próprios tickets, com linha travada pulada, suspenso por salto de relógio e quando o próprio heartbeat está velho; encerramento de 30 execuções no fencing sem bloquear o laço; `DRAIN` mantendo o heartbeat;
     - recuperação do fencing;
     - `DRAIN` e `TERMINATE`, acionados por sinal e pelo arquivo `.stop`;
-    - a invariante `fence * 2 <= offline` respeitada pelo config de teste.
+    - as invariantes I1 a I4 (README §8.9) respeitadas pelo config de teste.
   - Com `SSS_TEST_DSN`:
     - **teste obrigatório de microssegundos (README §7.5):** um desdobro real com `antiga_data`/`nova_data` contendo microssegundos não resulta em `rowcount = 0` (o tipo `DATE` declarado descarta a fração);
     - uma `UNICA` concluída no banco fica com `ativo = 'N'`, `pausa_motivo = 'CONCLUIDO'` e `proxima_execucao` igual à lida (não nula);
@@ -89,7 +97,7 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
 2. A `antiga_data` usada no `UPDATE` é o valor **lido do banco**, nunca recalculado (README §7.5, passo 1).
 3. Fencing medido **somente** com `time.monotonic()`.
 4. Nenhuma primitiva de SO fora de `plataforma/`.
-5. `fence_timeout_s` e `node_offline_timeout_s` vêm do config e devem ser idênticos em todos os agentes (README §8.9, D7); o F8.3 já os registra em INFO na subida. Não crie coluna nem checagem cruzada no banco para isso.
+5. `fence_timeout_s`, `node_offline_timeout_s` e os demais valores de `config_criticos` vêm do config e devem ser idênticos em todos os agentes (README §8.9 e §8.12). O F8.3 os registra em INFO, grava `config_criticos` e confere os outros agentes (CR-007, R-23).
 
 ## Critérios de aceite
 - [ ] Os testes com mock passam.

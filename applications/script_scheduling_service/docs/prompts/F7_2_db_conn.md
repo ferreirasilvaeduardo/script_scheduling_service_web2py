@@ -1,6 +1,7 @@
 # SSS — Prompt F7.2: Conexão Oracle (`db_conn`: API sobre o driver escolhido)
 
 ## Leitura obrigatória antes de planejar
+- `docs/arquitetura/CR-007-robustez-do-scheduler.md` (R-04, R-12, D1b e D4)
 - `docs/arquitetura/CR-002-oracle-unico-e-driver-adaptativo.md`
 - `AGENTS.md` §2.2, §4.9–4.11, §6 (reconexão)
 - `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D5, D6, D12 e o achado "Bind DATE com microssegundos")
@@ -28,8 +29,12 @@ Ter um ponto único, seguro e resiliente de acesso ao Oracle (11gR2 a 23ai), com
   - **Relógio e IDs do banco para os repositórios** (nomes sugeridos; registre os definitivos no relatório):
     - `agora_banco(conn)` (abaixo) é a base de `RepoUsuarios.agora()` e `RepoTickets.agora()` no Oracle. O relógio do nó nunca é usado para regra de negócio (README §4.2 "Relógio do banco", §7.1);
     - `proximo_id(conn, sequence_qualificada)`: `SELECT {owner}.sq_<...>.NEXTVAL FROM DUAL`, com o nome vindo de `sql_ident`. É a base de `RepoAuditoria.reservar_id()` (a exportação usa `id_max = id reservado − 1`, README §4.4 "Quantidade registrada") e de toda inclusão, porque a aplicação sempre informa o `id` (README §2.7).
-  - **Exceções:** `classificar_erro(exc) -> (prefixo, numero)` (`ORA`, `DPY` ou `DPI`). `eh_erro_rede(exc)` cobre a lista do README §2.3 **por modo** (incluindo os `DPY-*` do Thin); `eh_lock(exc)` cobre 54, 30006 e 60; `eh_violacao(exc)` cobre 1, 2290, 2291, 2292 e 1400, mais 12899 (valor maior que a coluna) e 1438 (número maior que a precisão), que o FAKE já recusa como `RepoViolacao` (limites de `ator`/`detalhe` da auditoria e `tentativas_falha NUMBER(2)`, README §2.5 e §4.4). Os demais erros são traduzidos para as exceções `repo_errors`.
-  - **Reconexão:** `ConexaoResiliente`, para o daemon. Em erro de rede, reconecta com *backoff* exponencial de 1 s a 60 s e WARN a cada tentativa; a operação em curso **não** é reexecutada automaticamente, e o chamador decide. A espera usa `time.monotonic()` e pode ser interrompida pela flag de shutdown.
+  - **Contas por papel (CR-007, D1b):** `[oracle] user` é a conta do papel deste processo (web ou agente); o `purge.py` usa `[retencao] purge_user` com `[purge] password`. A conta dona do esquema nunca é usada aqui (só pelo `init_db.py`).
+  - **Conexão com prazo (R-04):** a abertura da conexão respeita `call_timeout_ms` (Thin: `tcp_connect_timeout`; Thick e cx_Oracle: `CONNECT_TIMEOUT` no descritor ou `SQLNET.OUTBOUND_CONNECT_TIMEOUT`, documentado no RUNBOOK).
+  - **Pool do web:** `ping_interval` de 60 s (oracledb e cx_Oracle 8.3), para descartar sessões mortas depois de um failover (R-12).
+  - **Versão do esquema (CR-007, D4):** `conferir_versao_esquema(conn)`: `SELECT versao_esquema FROM {owner}.tbsss_controle WHERE id = 1` igual a `sql_ident.VERSAO_ESQUEMA`, senão `ErroVersaoEsquema` (CRITICAL na subida do web e do agente, com as duas versões).
+  - **Exceções:** `classificar_erro(exc) -> (prefixo, numero)` (`ORA`, `DPY` ou `DPI`). `eh_erro_rede(exc)` cobre a lista do README §2.3 **por modo** (incluindo os `DPY-*` do Thin e os erros de failover do CR-007: ORA-01033, ORA-01034, ORA-01089, ORA-12514, ORA-12528, ORA-12537, ORA-00028, ORA-01012, ORA-02396, ORA-25408); `eh_tempo_esgotado(exc)` cobre o *call timeout* (DPY-4024, DPI-1067, ORA-03156), tratado como timeout de lock (AGENTS §4.10); `eh_lock(exc)` cobre 54, 30006 e 60; `eh_violacao(exc)` cobre 1, 2290, 2291, 2292 e 1400, mais 12899 (valor maior que a coluna) e 1438 (número maior que a precisão), que o FAKE já recusa como `RepoViolacao` (limites de `ator`/`detalhe` da auditoria e `tentativas_falha NUMBER(2)`, README §2.5 e §4.4). Os demais erros são traduzidos para as exceções `repo_errors`.
+  - **Reconexão:** `ConexaoResiliente`, para o daemon. Em erro de rede, a conexão é descartada; `garantir()` faz **no máximo uma** tentativa de reconexão quando o prazo do *backoff* (1 s a 60 s, exponencial, em `time.monotonic()`) venceu, e devolve se há conexão, **sem `sleep`** (CR-007, R-04: o laço do daemon nunca espera dentro de uma operação). WARN a cada tentativa; a operação em curso **não** é reexecutada automaticamente, e o chamador decide.
   - **`saude(conn)`:** `SELECT SYSDATE FROM DUAL`, retornando o `SYSDATE` *naive*.
   - **`agora_banco(conn)`:** idem, sem microssegundos (README §7.1).
   - **Segredos:** a senha vem de `Segredos`, nunca aparece em `repr` nem em log, e o DSN é logado sem credencial.
@@ -41,7 +46,9 @@ Ter um ponto único, seguro e resiliente de acesso ao Oracle (11gR2 a 23ai), com
     - mesma API e mesmo comportamento nas três combinações;
     - `transacao` com commit e rollback;
     - classificação de erros por driver e modo (`ORA-`, `DPY-`, `DPI-`);
-    - *backoff* (tempos simulados);
+    - *backoff* (tempos simulados), sem nenhuma chamada a `time.sleep` em `garantir()` (CR-007);
+    - erros de failover e *call timeout* classificados por driver e modo;
+    - `conferir_versao_esquema` com versão igual, menor, maior e linha ausente;
     - `module`/`action` definidos;
     - ausência de senha em logs (captura com `assertLogs`);
     - falhas fatais registradas em CRITICAL no formato do §13 (`assertLogs` no nível CRITICAL);

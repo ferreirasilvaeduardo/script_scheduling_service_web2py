@@ -1,6 +1,7 @@
 # SSS — Prompt F7.0: Driver adaptativo (Thin → Thick → cx_Oracle)
 
 ## Leitura obrigatória antes de planejar
+- `docs/arquitetura/CR-007-robustez-do-scheduler.md` (R-04 e R-12: conexão com prazo e reconexão sem `sleep`)
 - `docs/arquitetura/CR-002-oracle-unico-e-driver-adaptativo.md` (inteiro)
 - `AGENTS.md` §2.2, §3.3, §6, §7
 - `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D5: CRITICAL em falha de configuração)
@@ -26,6 +27,7 @@ Escolher, antes da primeira conexão do processo, a combinação de driver que f
   - **Falhas fatais em CRITICAL (README §13, §12.1 "Falha de configuração"):** todos os candidatos falharam, erro de autenticação que interrompe a cadeia, candidato forçado que falha e `modo_driver` inválido geram **um** registro CRITICAL no formato do §13 (`%(asctime)s %(levelname)s [pid=...] [agente=...] [ticket=-] [acao=...] mensagem`), com o candidato e o código de erro de cada tentativa, sem senha nem DSN com credencial. Se o logging da aplicação ainda não estiver configurado (por exemplo, `log_dir` inválido), o CRITICAL vai para o stderr no mesmo formato, como em `sss_config.obter_config(nome_log=...)`.
   - `inicializar(selecao)`: importa o driver vencedor e, se for Thick/cx_Oracle, chama `init_oracle_client` **antes** de qualquer conexão. Registra INFO `driver=... modo=... servidor=... cliente=...`.
   - resultado mantido em memória por processo (thread-safe); nova sondagem só em reinício.
+- **Conexão com prazo (CR-007, R-04):** a sondagem de cada candidato também respeita `call_timeout_ms` na abertura da conexão (`tcp_connect_timeout` no Thin; `CONNECT_TIMEOUT`/`SQLNET.OUTBOUND_CONNECT_TIMEOUT` no Thick e no cx_Oracle) e o subprocesso é encerrado se passar de `2 × call_timeout_ms` (registrado como falha do candidato, não como autenticação).
 - **`scripts/check_env.py`:** exibe a cadeia e a combinação escolhida (sem segredo).
 - **`applications/script_scheduling_service/scripts/test_db_conn.py`** (com módulos falsos `oracledb` e `cx_Oracle` e sondagem simulada):
   - `auto` escolhe Thin quando o Thin conecta;

@@ -12,6 +12,7 @@
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §3.1, §4 (inteiro)
 - `docs/arquitetura/CR-003-correcoes-pos-analise.md` (inteiro, menos a D16, revogada: D6, D9, D11, D12, C3, C4, C9 e a rastreabilidade) e `docs/arquitetura/CR-004-telas-de-consulta-e-linguagem-clara.md` ("Contrato": as duas leituras novas de `RepoTickets`)
+- `docs/arquitetura/CR-007-robustez-do-scheduler.md` (R-19 a R-30 no que toca os repositórios da UI)
 - `docs/arquitetura/CR-006-colunas-de-registro.md` (inteiro: R-a a R-h; colunas de registro, ator obrigatório e vínculos por diferença)
 - `docs/arquitetura/CR-005-posix-caminho-livre-e-logs.md` (D2: `path_file` absoluto, sem `pasta_base` em `tbsss_scripts` nem `pastas_base` em `tbsss_agentes`; R-g e R-h: CKs)
 - `README.md` §2.5 (paridade: FKs, NOT NULL, limites, maiúsculas e cascatas), §2.7, §4.2 ("Proteções do login" e "Relógio do banco"), §4.3.A (`perm_versao`), §4.3.B, §4.4 (inteiro: tabela de entidade por ação, limites e "Quantidade registrada"), §5 (inteiro, em especial §5.6 e §5.8), §7.5 ("Bind de datas"), §7.6, §8.2, §8.3 (ordem de locks), §8.5 ("CKs de banco"), §8.10 ("UI `VER_LOGS`"), §10 (tabelas do agregado), §10 (política de exclusão, texto nos cadastros e "Colunas de registro")
@@ -24,10 +25,10 @@ Implementar o contrato do agregado em `modules/repo_oracle/` com SQL Oracle 11gR
 **IN**
 - **`applications/script_scheduling_service/modules/repo_oracle/<agregado>.py`:**
   - **SQL estático** em constantes no topo do módulo, montado **uma vez** na carga a partir de `sql_ident.qualificar(owner, nome)`. Nenhuma formatação de valores, somente binds.
-  - **Paginação** pelo padrão `ROWNUM` do AGENTS §4.4, com `total` via `COUNT(*)` na mesma transação de leitura e ordenação idêntica à do FAKE, com desempate por `id`.
+  - **Paginação** pelo padrão `ROWNUM` do AGENTS §4.4, com `total` via `COUNT(*)` na mesma transação de leitura, **limitado a 10.001** (`ROWNUM <= 10001`, devolvendo `total_limitado`; CR-007, R-29), e ordenação idêntica à do FAKE, com desempate por `id`.
   - **Filtros dinâmicos:** combinação de cláusulas **fixas** escolhidas por allowlist (`AND status IN (:s0, :s1)`, com placeholders gerados por contagem). Nunca concatene valores.
   - **Transições de status** com `UPDATE` condicional e `rowcount`, traduzindo `rowcount = 0` em `RepoConflito` conforme o contrato.
-  - **Inserção com ID:** `INSERT ... RETURNING id INTO :out_id`, com variável de saída do driver. Para lotes, `executemany`.
+  - **Inserção com ID:** o `id` vem de `db_conn.proximo_id` antes do `INSERT` (abaixo), sem `RETURNING` (CR-007, R-32: um único padrão). Para lotes, `executemany`.
   - **Datas (README §7.5, "Bind de datas"):** todo bind comparado ou gravado em coluna `DATE` é declarado como `TIPO_DATE` via `db_conn.definir_tipos_entrada` (`setinputsizes`), inclusive o `proxima_execucao = :antiga_data` otimista e os campos do `esperado`. A leitura de `DATE` vem sem microssegundos. O "agora" é sempre o `SYSDATE` do banco (`db_conn.agora_banco`), nunca o relógio do nó.
   - **IDs:** a aplicação sempre informa o `id` (`db_conn.proximo_id`, `seq.NEXTVAL` antes do `INSERT`, README §2.7); a trigger condicional fica só como defesa.
   - **Colunas de registro (CR-006, README §10, AGENTS §4.15):** todo `INSERT` grava `created_at = SYSDATE` e `created_by = :ator`; todo `UPDATE` de alteração de negócio grava `updated_at = SYSDATE` e `updated_by = :ator`; nenhum `UPDATE` toca `created_*`. Rotina técnica não grava `updated_*` (lista fechada no README §10). O `:ator` vem de `auditoria['ator']` ou do parâmetro `ator=` do contrato, exatamente como no FAKE; sem ator, `RepoViolacao` antes de qualquer SQL. As quatro colunas aparecem nas leituras por PK (`*_obter`) e ficam fora do `esperado`.
@@ -52,6 +53,7 @@ Implementar o contrato do agregado em `modules/repo_oracle/` com SQL Oracle 11gR
       - A UK `uk_tbsss_scr_nome` diferencia maiúsculas de minúsculas (`Carga` ≠ `carga`, README §8.5): nenhuma comparação com `UPPER`/`LOWER` na checagem de unicidade.
       - O `detalhe` da auditoria de inclusão (só campos preenchidos, referências pelo nome, C9) e o `masking` dos vínculos são montados pelo service; o repositório só grava a linha recebida, na mesma transação.
       - FKs e UKs com os mesmos nomes e efeitos do FAKE (`RepoViolacao.constraint`).
+      - **CR-007:** `sha256_homologado` nas leituras e gravações de scripts (com a `ck_tbsss_scr_sha`); `sensivel` nunca volta de `S` para `N` (a regra é do service, mas a gravação respeita o que recebe).
       - **Vínculos (CR-006, R-f):** `homologacao_salvar` grava por diferença (`DELETE` só dos removidos, `INSERT` só dos novos com `created_*`); `script_params_salvar` apaga e reinsere, mas cada `parametro_id` que continua leva o `created_at`/`created_by` lidos, e o `updated_*` dele só muda se `ordem`, `obrigatorio` ou `valor_padrao_sub` mudar. As duas operações gravam `updated_*` no script dono, na mesma transação.
     - `TICKETS`:
       - `criar` com o ticket mais as respostas (`executemany`) e auditoria em **uma** transação; FKs `fk_tbsss_tck_scr`, `fk_tbsss_tck_amb`, `fk_tbsss_tck_usr`, `fk_tbsss_trsp_prm` e a UK `uk_tbsss_trsp_tck_prm` com o nome da constraint, sem gravação parcial (como no `test_06b`).
@@ -61,9 +63,10 @@ Implementar o contrato do agregado em `modules/repo_oracle/` com SQL Oracle 11gR
         - `ultimas_execucoes(script_ids, escopo_ambientes=None, solicitante=None)` → `{script_id: {id, status, status_motivo, created_at, finished_at}}`, com o ticket mais recente (`created_at DESC, id DESC`) de cada script no escopo. Uma query com `ROW_NUMBER() OVER (PARTITION BY script_id ORDER BY created_at DESC, id DESC)` (sintaxe 11gR2), `script_id IN (:s0..:sN)` gerado por contagem, usando `ix_tbsss_tck_scr` e **sem** selecionar `log_output`. `escopo_ambientes` restringe por ambiente e `solicitante` restringe aos próprios tickets, com a mesma semântica do `listar` e do FAKE (§4.3.C).
         - `historico_script(script_id, desde, escopo_ambientes=None, solicitante=None, limite=5000)` → lista de `{id, status, status_motivo, created_at, started_at, finished_at}`, **sem** LOB, ordenada por `created_at`, com `created_at >= :desde` (bind `TIPO_DATE`; o service calcula `SYSDATE - 30`), o mesmo escopo e o limite pelo padrão `ROWNUM`. Quando houver mais que `limite`, devolva os mais recentes (a tela avisa "mostrando os 5.000 mais recentes", README §5.8).
       - A listagem com escopo de ambientes por bind.
+      - **CR-007:** `historico_script` e `ultimas_execucoes` usam `ix_tbsss_tck_hist (script_id, created_at)` (EXPLAIN registrado); `obter` devolve `arquivo_sha256`; a violação de `ix_tbsss_tck_ocor` vira `RepoViolacao(constraint='ix_tbsss_tck_ocor')`, como no FAKE.
       - **CR-006:** `criar(ticket, respostas, ator=None)` grava `created_*` no ticket e em cada `ticket_resp` com o mesmo ator (`ator=` ou, sem ele, o solicitante); `solicitar_cancelamento` usa os `UPDATE`s do README §5.6 já com `updated_at`/`updated_by`. O detalhe devolve as quatro colunas para o quadro Registro (README §5.7).
     - `AGENDAMENTOS`:
-      - `pausar` e `retomar` otimistas com `proxima_execucao = :antiga_data` (bind `TIPO_DATE`); `alterar` atualizando `usuario_id`. `inserir` grava `created_*` (o criador original, que nunca muda); `alterar`, `pausar` e `retomar` gravam `updated_*` com o ator (CR-006, R-g).
+      - `pausar` com `AND ativo = 'S' AND proxima_execucao = :antiga_data` (CR-007, R-19: `rowcount = 0` vira `RepoConflito`) e `retomar` otimista com `proxima_execucao = :antiga_data` (bind `TIPO_DATE`); `alterar` atualizando `usuario_id`. `inserir` grava `created_*` (o criador original, que nunca muda); `alterar`, `pausar` e `retomar` gravam `updated_*` com o ator (CR-006, R-g).
       - FKs `fk_tbsss_agd_scr`, `fk_tbsss_agd_usr` e `fk_tbsss_agd_amb` com o nome da constraint (como no `test_06b`); `ck_tbsss_agd_campos` como no FAKE.
       - A validação estrita (sem truncamento, D11) já está no service (README §7.6); o repositório grava o que recebe e não corta nada.
     - `AUDITORIA_AGENTES`:
@@ -73,6 +76,8 @@ Implementar o contrato do agregado em `modules/repo_oracle/` com SQL Oracle 11gR
       - Exportação (README §4.4, "Quantidade registrada"): o service obtém `id = reservar_id()`, usa `id_max = id − 1` para contar e para `iterar`, e só então grava a linha `AUD_EXPORTAR` com esse `id`. `listar` e `iterar` aceitam `id_max` (inclusivo); `iterar` é um cursor com `arraysize`, sem paginação por offset.
       - O filtro de período sempre por intervalo, sem `TRUNC` (AGENTS §4.12); `tickets_running` usando a expressão `CASE` **idêntica** ao `ix_tbsss_tck_run`, importada do `sql_ident`.
       - `tbsss_auditoria` **não** tem colunas de registro (CR-006, D1): `registrar` continua gravando só `ator` e `created_at`.
+      - **Leituras do painel de agentes (CR-007, R-18):** `fila_sem_atendente(agora, limiares)` e `rodando_sem_pid(agora, minutos)`, com o mesmo contrato do FAKE (R5), e `listar` devolvendo `config_criticos`.
+      - `ESQUEMA_MIGRAR` no catálogo de ações e `tbsss_controle` no filtro de entidade (README §4.4).
       - `RepoAgentes.listar` devolve também `plataforma` e `interpretadores` (README §10 tabela 15 e §13; CR-005: sem `pastas_base`).
 - **`applications/script_scheduling_service/modules/repo_factory.py`:** registrar o agregado no backend `ORACLE`.
 - **`applications/script_scheduling_service/scripts/test_sql_oracle11g.py`** (criado na primeira sessão do F7.3 e ampliado nas seguintes; AGENTS §4.3 e §7): varredura de `modules/repo_oracle/` e `scripts/init_db.py` sem sintaxe 12c+, todo `FOR UPDATE` com `WAIT n` (n ≤ 5) e nenhum `SELECT *`.
@@ -80,6 +85,7 @@ Implementar o contrato do agregado em `modules/repo_oracle/` com SQL Oracle 11gR
   - **Cascatas (README §2.5):** o contrato não expõe exclusão de mestres, então as `ON DELETE CASCADE` e `SET NULL` do §10 das tabelas do agregado são cobertas numa classe só do Oracle (`skipUnless(SSS_TEST_DSN)`), com `DELETE` direto no teste (ex.: `tbsss_ticket_resp` some com o ticket; `parent_ticket_id` e `agendamento_id` viram `NULL`; associações de perfil, script e ambiente somem com o mestre).
   - **Microssegundos no bind de datas (README §7.5, teste obrigatório):** uma operação otimista com `antiga_data` contendo microssegundos (por exemplo, `pausar` com o `proxima_execucao` lido mais uma fração) **não** resulta em `rowcount = 0`/`RepoConflito`.
   - **FKs, NOT NULL e limites da auditoria:** os casos do `test_06b` passam contra o Oracle com os mesmos nomes de constraint.
+  - **CR-007:** `total` limitado a 10.001; pausa só de regra ativa; índice único da ocorrência; leituras do painel de agentes.
   - **Colunas de registro (CR-006):** os casos do FAKE passam contra o Oracle: `created_*` na inclusão, `updated_*` nulos até a primeira alteração de negócio, rotina técnica sem `updated_*`, ator ausente recusado sem gravar, vínculos por diferença preservando o `created_*`, e violação da `ck_..._upd` com o nome da CK.
 - **`docs/explain/<agregado>.md`:** `EXPLAIN PLAN` (via `DBMS_XPLAN.DISPLAY`) de **cada** query de listagem, fila e transição, inclusive `ultimas_execucoes` e `historico_script` (uso de `ix_tbsss_tck_scr`). Registre o plano e confirme a ausência de `TABLE ACCESS FULL` em `tbsss_tickets` e `tbsss_auditoria`. Sem `SSS_TEST_DSN`, gere o arquivo com as queries e a seção "Plano: NÃO TESTADO".
 

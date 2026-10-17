@@ -46,6 +46,8 @@ class FakeDataStore(object):
         self.ticket_resp = collections.OrderedDict()
         self.agentes = collections.OrderedDict()
         self.auditoria = collections.OrderedDict()
+        # Linha unica de controle (tabela 17, CR-007 D4): versao do esquema e concessao do purge.
+        self.controle = collections.OrderedDict()
 
         self.seqs = collections.defaultdict(int)
         # Simulacao do log_pump por ticket RUNNING do seed: {ticket_id: {...}} (protegido por lock_tickets).
@@ -156,6 +158,7 @@ class FakeDataStore(object):
                                     self.ticket_resp.clear()
                                     self.agentes.clear()
                                     self.auditoria.clear()
+                                    self.controle.clear()
                                     self.seqs.clear()
                                     self.log_sim.clear()
                                     self.agentes_hb_sim.clear()

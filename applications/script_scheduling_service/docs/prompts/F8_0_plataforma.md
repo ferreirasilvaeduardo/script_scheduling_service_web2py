@@ -1,6 +1,7 @@
 # SSS — Prompt F8.0: Camada de plataforma (somente POSIX, CR-005)
 
 ## Leitura obrigatória antes de planejar
+- `docs/arquitetura/CR-007-robustez-do-scheduler.md` (D1: helper e usuário de execução; R-01, R-02, R-04, R-14, R-15)
 - `docs/arquitetura/CR-005-posix-caminho-livre-e-logs.md` (D1: somente POSIX; D2/D3: caminho livre do script e checagens; revoga Windows do CR-001 e pastas base do CR-003)
 - `AGENTS.md` §2.2, §3.2 (inteiro), §3.3, §7 (`test_plataforma.py`)
 - `README.md` §2.6, §4.1, §8.0 (inteiro), §8.5 (inteiro, caminho absoluto livre), §8.11, §8.12 (passos 1, 4, 5 e 9), §12.1 (`[agent]`), §14
@@ -12,27 +13,34 @@ Concentrar em `modules/plataforma/` **toda** primitiva que depende do sistema op
 ## Escopo
 **IN**
 - **`applications/script_scheduling_service/modules/plataforma/__init__.py`:** a interface do README §8.0 para ambiente POSIX (`os.name == 'posix'`). Exporta `NOME` (`LINUX` ou `UNIX`, gravado em `tbsss_agentes.plataforma`) e as funções:
-  - `iniciar_processo(argv, log_fd, cwd, env, rotulo) -> Processo`;
-  - `encerrar_grupo(processo, grace_s, relogio_monotonico)`: escalonado; **não bloqueia além de `grace_s + 1`**;
+  - `iniciar_processo(especificacao, log_fd, usuario_execucao) -> Processo`: com `usuario_execucao`, o `Popen` do `sudo -n -u <usuário> -- /opt/sss/bin/sss-helper run` com a especificação pela entrada padrão (README §8.0 e §8.4); sem ele (só DEV), o `Popen` direto do AGENTS §3.2;
+  - `sinalizar_grupo(processo, sinal) -> bool`: **não bloqueante** (CR-007, R-04). Com usuário de execução, pelo helper (`term`/`kill <pgid> <process_start>`); sem, `os.killpg`. `ESRCH` = grupo vazio. A escalada SIGTERM → prazo → SIGKILL é do executor (F8.1), como máquina de estados;
+  - `grupo_vivo(processo) -> bool`: o grupo ainda tem membros (inclusive netos depois da saída do líder, R-02);
+  - `validar_execucao(cfg)` (README §8.0): helper com dono root, `0755` e pasta só do root; `sudo -n -l` com a regra do helper para cada usuário de execução; usuários existentes, não root, diferentes do agente e fora de `script_owner_uids`; `exec_work_dir/<usuário>` do próprio usuário com `0700`. Falha: CRITICAL;
+  - `gravar_estado(caminho, dados)` e `ler_estado(caminho)`: JSON em arquivo temporário + `rename`, `0600` (`.sss_proc`, `.sss_result`, R-01);
   - `identidade_processo(pid) -> int | None` e `processo_existe(pid) -> bool`;
-  - `reabrir_grupo(pid, rotulo) -> Processo | None` (startup check, README §8.12 passo 9);
+  - `reabrir_grupo(estado_sss_proc) -> Processo | None` (startup check, README §8.12 passo 9): grupo que não é filho do daemon, acompanhado por `processo_existe` + identidade, sem `wait()`; identidade `None` com PID vivo devolve um `Processo` marcado `sem_identidade`, que **não** recebe sinal (WARN `ORFAO_SEM_IDENTIDADE`);
   - `travar_instancia(caminho) -> trava` e `liberar_instancia(trava)`;
   - `usuario_privilegiado() -> bool`;
   - `validar_arquivo_restrito(caminho)` (segredos, README §4.1: dono = euid e `mode & 0o077 == 0`) e `validar_dir_restrito(caminho)` (`log_dir`/`work_dir`, README §8.12 passo 4: existe, é diretório, é gravável pelo agente e fica fora das pastas do sistema; **não** exige `0700`, porque o `log_dir` e as pastas de log são `0750`, README §8.4 e §13);
-  - `validar_caminho_script(caminho_real, donos, conta_agente=None) -> codigo | None` (README §8.0 e §8.5): dono do arquivo em `donos`; cada diretório até `/` com dono root ou em `donos`; arquivo e diretórios sem escrita de grupo, outros ou do agente;
+  - `validar_caminho_script(caminho, donos, uids_proibidos) -> codigo | None` (README §8.0 e §8.5): caminho igual ao `realpath` (`CAMINHO_COM_LINK`); dono do arquivo em `donos`; cada diretório até `/` com dono root ou em `donos`; arquivo e diretórios sem escrita de grupo, outros ou do agente, e **sem** pertencer a um UID de `uids_proibidos` (agente e usuários de execução, R-15); `EACCES` vira `SEM_ACESSO`;
+  - `validar_interpretador(caminho, donos, uids_proibidos, pastas_sss)` (R-15): a mesma cadeia para o executável do interpretador, que pode ficar nas pastas do sistema;
   - `caminho_final(caminho)` (`realpath` no POSIX);
   - `criar_dir_trabalho(caminho)` (`0700` no POSIX);
   - `instalar_parada(flag)`: handlers de sinal que **apenas** setam a flag (SIGTERM/SIGINT no POSIX). O arquivo `.stop` é verificado pelo laço, não aqui.
 - **`modules/plataforma/posix.py`:** as colunas POSIX do README §8.0 e o Popen literal do AGENTS §3.2, com `_child_limits` (somente `os.umask(0o077)` e `resource.setrlimit`: `RLIMIT_CORE` 0 e `RLIMIT_NOFILE` 1024).
   - `identidade_processo`: Linux, campo 22 de `/proc/<pid>/stat` contado **depois do último `)`**; AIX/Solaris, `/proc/<pid>/psinfo`; demais Unix, `sysctl KERN_PROC` **sem `ctypes`** (proibido em todo o projeto, AGENTS §3.2; README §8.0). Onde a leitura não for possível sem `ctypes` (por exemplo, macOS/BSD), retorna `None`. Plataforma sem suporte retorna `None` e o startup check trata `None` como identidade desconhecida (`ORPHAN_PROCESS`).
-  - `encerrar_grupo`: `killpg(SIGTERM)` → `grace` (polling com `poll()` e `time.sleep(0.1)`) → `killpg(SIGKILL)` → `wait()`; `ProcessLookupError` = grupo encerrado.
+  - `sinalizar_grupo`: `killpg(pgid, sinal)` (DEV) ou o helper; nunca espera (CR-007: sem `time.sleep` nem `wait()` com prazo).
+- **`bin/sss-helper`** (Python 3.6, só biblioteca padrão, sem importar a aplicação; README §8.0): subcomandos `run`, `term`, `kill` e `limpar`, com a validação de argumentos, a checagem de identidade do grupo, a criação do diretório de trabalho do script e os códigos de saída 0/2/3/4. É copiado pelo root para `/opt/sss/bin/sss-helper` (`IMPLANTACAO.md` §18.1).
 - **Integração com o código existente:**
   - `modules/sss_config.py`: a checagem de dono e modo do `secrets.cfg` passa a chamar `plataforma.validar_arquivo_restrito`;
   - `modules/path_guard.py`: a regra de dono/escrita por item (`_checar_dono_e_modo`, `_gravavel_pelo_agente`) passa a chamar `plataforma.validar_caminho_script`, e a resolução usa `plataforma.caminho_final`.
 - **Configuração (`sss_config.py`, `config.ini.example`):** `[agent] script_owner_uids` e `[agent] interpretadores` (`LOGICO=caminho`, na allowlist `PYTHON3`, `BASH`, `SH`), conforme o README §12.1. Sem `script_owner_sids` nem `base_script_dirs`.
 - **`applications/script_scheduling_service/scripts/test_plataforma.py`:**
-  - grupo e encerramento escalonado matando o **neto**; processo que ignora o término morre dentro de `grace + 1` s; identidade do processo estável e diferente para outro PID; PID inexistente; lock de instância (segunda trava falha); recusa de usuário privilegiado (root, com dublê); arquivo restrito OK e rejeitado; diretório de trabalho restrito; item da árvore gravável rejeitado; parada por sinal seta a flag.
-  - `/proc/<pid>/stat` com `)` no nome do comando.
+  - sinalização sem bloquear (a chamada volta em menos de 0,5 s mesmo com um processo que ignora SIGTERM); grupo com o **neto** vivo depois da saída do líder detectado por `grupo_vivo` e encerrado; identidade do processo estável e diferente para outro PID; PID inexistente; lock de instância (segunda trava falha); recusa de usuário privilegiado (root, com dublê); arquivo restrito OK e rejeitado; diretório de trabalho restrito; item da árvore gravável rejeitado; parada por sinal seta a flag.
+  - `/proc/<pid>/stat` com `)` no nome do comando;
+  - `gravar_estado`/`ler_estado` atômicos; `validar_execucao` com dublês de `sudo -n -l`, do helper e dos usuários; `validar_caminho_script` com link simbólico, `EACCES` e dono proibido; `validar_interpretador`.
+- **`applications/script_scheduling_service/scripts/test_sss_helper.py`** (AGENTS §7.4): uso inválido (2); especificação inválida; `term`/`kill` com identidade divergente (3) e com grupo vazio (0); `limpar` sem seguir links; `run` executado direto (sem `sudo`, com o próprio usuário) num script de teste, com `cwd`, `umask` e entrada padrão nula.
 - **`scripts/test_py36_compat.py`:** fora de `modules/plataforma/` é proibido `os.killpg`, `os.setsid`, `resource`, `fcntl`, `/proc` e `sys.platform`; em todo o projeto, inclusive em `plataforma/`, é proibido `ctypes` e `msvcrt` (AGENTS §3.2).
 
 **OUT**
