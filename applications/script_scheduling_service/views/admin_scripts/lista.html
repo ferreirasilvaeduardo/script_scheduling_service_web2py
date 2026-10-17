@@ -1,6 +1,6 @@
 {{extend 'layout.html'}}
 {{
-# Lista de scripts (padrão de CRUD administrativo). Nenhum caminho absoluto do servidor é exibido.
+# Lista de scripts (padrão de CRUD administrativo). O caminho completo do arquivo é exibido (README §8.5, CR-005 D8).
 _opc_cmd = [('', 'Todos')] + [(_c, _c) for _c, _r in interpretadores]
 _opc_ativo = [('', 'Todos'), ('S', 'Ativos'), ('N', 'Inativos')]
 filtros = {'id': 'filtro-scripts', 'url_base': ('admin_scripts', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': [
@@ -31,7 +31,7 @@ tabela = {'legenda': 'Scripts cadastrados', 'erro': erro, 'linhas': _linhas, 'ms
     {'chave': 'nome', 'rotulo': 'Nome', 'tipo': 'mono'},
     {'chave': 'grupo', 'rotulo': 'Grupo / categoria'},
     {'chave': 'cmd', 'rotulo': 'Interpretador', 'tipo': 'mono'},
-    {'chave': 'path', 'rotulo': 'Arquivo (relativo)', 'tipo': 'mono'},
+    {'chave': 'path', 'rotulo': 'Caminho do arquivo', 'tipo': 'mono'},
     {'chave': 'ambientes', 'rotulo': 'Ambientes homologados'},
     {'chave': 'parametros', 'rotulo': u'Parâmetros'},
     {'chave': 'ativo', 'rotulo': u'Situação', 'tipo': 'ativo'},
