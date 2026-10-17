@@ -86,6 +86,6 @@ R-xx corrige F-xx. As regras são normativas e estão detalhadas nas seções do
 | Passo | Situação |
 |---|---|
 | P0 | Concluído: documentação aplicada (README, AGENTS, IMPLANTACAO, AMBIENTE_DEV, prompts F0.2, F7.1–F7.3, F8.0–F8.4, F9.1, índice e UI_FREEZE) |
-| R1 | Concluído: E1, R-06, E2, R-29; relatório em `RELATORIO-CR-008-P0-R1-R2.md` |
+| R1 | Commit `acb2d25`: E1, R-06, E2, R-29; relatório em `RELATORIO-CR-008-P0-R1-R2.md` |
 | R2 | Concluído: R-13, R-15, R-19, R-21, E4/R-24, R-25 (configuração), R-28, R-32, R-33, E5; mesmo relatório e mesmo commit do R1 (as mudanças se cruzam nos mesmos arquivos) |
-| UF | Próximo passo: manual v2.5 |
+| UF | Concluído: bateria nos três Pythons, 29 telas em cinco larguras, manual v2.5 (CT-25) e UI_FREEZE; relatório em `RELATORIO-CR-008-UF.md`. Com isso o CR-008 está concluído na parte web/FAKE |
