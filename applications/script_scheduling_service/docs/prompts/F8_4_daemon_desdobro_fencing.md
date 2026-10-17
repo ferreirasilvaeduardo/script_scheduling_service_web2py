@@ -3,7 +3,8 @@
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §3.1 (binds de data), §3.2 (encerramento escalonado), §4.9–4.11, §6
 - `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D1, D2, D3, D7 e os achados "Conclusão no desdobro", "Bind DATE com microssegundos" e "Contrato do desdobro incompleto"). A D16 (várias pastas base) foi revogada pelo CR-005: o desdobro grava o snapshot v4, com `path_file` absoluto
-- `README.md` §4.4 (`AGD_PAUSAR`, `AGENTE_FIM`), §6.5 (snapshot versão 4; CR-005), §7 (inteiro, **especialmente §7.4 e §7.5**, inclusive "Conclusão da regra", "Sobreposição numa regra que conclui", "Bind de datas" e "Contrato do repositório para o desdobro"), §8.0, §8.1, §8.8, §8.9 (inclusive "Mesmos tempos em todos os nós"), §8.11 (inclusive o arquivo `.stop`), §10 (tabela 12 e a desativação com dependência), §13
+- `docs/arquitetura/CR-006-colunas-de-registro.md` (R-b a R-g: ator `SYSTEM:<agent_id>`, o que grava `updated_*` no desdobro e no ticket)
+- `README.md` §4.4 (`AGD_PAUSAR`, `AGENTE_FIM`), §6.5 (snapshot versão 4; CR-005), §7 (inteiro, **especialmente §7.4 e §7.5**, inclusive "Conclusão da regra", "Sobreposição numa regra que conclui", "Bind de datas" e "Contrato do repositório para o desdobro"), §8.0, §8.1, §8.8, §8.9 (inclusive "Mesmos tempos em todos os nós"), §8.11 (inclusive o arquivo `.stop`), §10 (tabelas 12 e 13, a desativação com dependência e "Colunas de registro"), §13
 - Arquivos: `modules/scheduler_loop.py`, `modules/repo_oracle/scheduler_fila.py`, `modules/recurrence.py`, `modules/params_compiler.py`, `modules/rbac.py`, `modules/plataforma/`, `modules/db_conn.py`
 
 ## Objetivo
@@ -15,7 +16,7 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
   - `regras_vencidas(conn, lote)`: a leitura do lote vencido;
   - `carregar_regra(conn, id)`: a leitura completa da regra, que guarda a `antiga_data` exatamente como lida;
   - `contexto_rbac_usuario(conn, usuario_id)` (para `rbac.pode_executar`);
-  - `reservar_e_criar_ticket(conn, regra, antiga, nova, ticket) -> bool`: numa **única** operação, `NEXTVAL` de `sq_tbsss_tickets`, a reserva otimista do passo 6 (`rowcount`) e, se `rowcount = 1`, o `INSERT` do ticket com o `id` explícito (`agendamento_id`, `solicitante` = login do `usuario_id`, `ip_origem = NULL`, `scheduled_at = SYSDATE`, prioridade da regra) e o `INSERT` em `tbsss_ticket_resp`;
+  - `reservar_e_criar_ticket(conn, regra, antiga, nova, ticket) -> bool`: numa **única** operação, `NEXTVAL` de `sq_tbsss_tickets`, a reserva otimista do passo 6 (`rowcount`) e, se `rowcount = 1`, o `INSERT` do ticket com o `id` explícito (`agendamento_id`, `solicitante` = login do `usuario_id`, `ip_origem = NULL`, `scheduled_at = SYSDATE`, prioridade da regra) e o `INSERT` em `tbsss_ticket_resp`, os dois com `created_by = 'SYSTEM:<agent_id>'` (CR-006). A reserva é rotina técnica: **não** grava `updated_*` na regra;
   - `concluir_com_ticket(conn, regra, antiga, ticket) -> bool` e `concluir_sem_ticket(conn, id, antiga) -> bool`: o `UPDATE` único da conclusão (abaixo);
   - `pausar(conn, id, antiga, motivo) -> bool` (passo 7);
   - `status_ticket(conn, id)`.
@@ -25,6 +26,7 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
   - `marcar_node_offline(conn, timeout_s) -> n` (§8.8, literal);
   - `finalizar_fenced(...)`;
   - `agente_parar(conn, agente_id)`.
+  - **Colunas de registro (CR-006, README §10):** `marcar_node_offline` (ator: o agente que detectou), `finalizar_fenced` e `agente_parar` gravam `updated_at = SYSDATE` e `updated_by = 'SYSTEM:<agent_id>'`. No `scheduler_agenda`, `pausar` e as duas conclusões gravam `updated_*` na regra com o mesmo ator; `reservar_e_criar_ticket` não.
 - **`applications/script_scheduling_service/modules/scheduler_loop.py` (completar os pontos de extensão do F8.3):**
   - **Desdobro** (ciclo do orquestrador): para cada regra vencida, os passos 1–8 do README §7.5, **em uma transação por regra**:
     - revalidação de privilégios (`USUARIO_INATIVO`, `SEM_PERMISSAO`, `SCRIPT_INATIVO`, `AMBIENTE_INATIVO`);
@@ -36,8 +38,8 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
     - pausa (passo 7), auditada como `AGD_PAUSAR` (`entidade = 'tbsss_agendamentos'`, `entidade_id` = id da regra, `ator = 'SYSTEM:<agent_id>'`) e registrada em WARN;
     - `rowcount = 0` resulta em `ROLLBACK` e a próxima regra.
   - **Conclusão da regra (`concluir = True`, `nova_data = None`; README §7.5, D1):** `proxima_execucao` é `NOT NULL`, então a conclusão **não** grava `NULL`. Ela substitui os passos 6 e 7 por um **único** `UPDATE` otimista, literal do README, que mantém `proxima_execucao = antiga_data`:
-    - **com ticket** (a ocorrência atual ainda gera ticket): `SET ativo = 'N', pausa_motivo = 'CONCLUIDO', ultima_execucao = SYSDATE, ultimo_ticket_id = :ticket_id WHERE id = :id AND ativo = 'S' AND proxima_execucao = :antiga_data`, com o `:ticket_id` do `NEXTVAL`; se `rowcount = 1`, seguem o `INSERT` do ticket e o do `ticket_resp`; se 0, `ROLLBACK` e próxima regra;
-    - **sem ticket** (`SKIP` fora da tolerância em `UNICA`, ou sobreposição): o `SET` fica só com `ativo` e `pausa_motivo`; `ultima_execucao` e `ultimo_ticket_id` não mudam;
+    - **com ticket** (a ocorrência atual ainda gera ticket): `SET ativo = 'N', pausa_motivo = 'CONCLUIDO', ultima_execucao = SYSDATE, ultimo_ticket_id = :ticket_id, updated_at = SYSDATE, updated_by = :ator WHERE id = :id AND ativo = 'S' AND proxima_execucao = :antiga_data`, com o `:ticket_id` do `NEXTVAL`; se `rowcount = 1`, seguem o `INSERT` do ticket e o do `ticket_resp`; se 0, `ROLLBACK` e próxima regra;
+    - **sem ticket** (`SKIP` fora da tolerância em `UNICA`, ou sobreposição): o `SET` fica só com `ativo`, `pausa_motivo` e `updated_*`; `ultima_execucao` e `ultimo_ticket_id` não mudam;
     - auditada como `AGD_PAUSAR` com o detalhe `pausa_motivo: CONCLUIDO` e registrada em **INFO** (não WARN, porque não é falha). O passo 7 **não** se aplica à conclusão.
   - **Sobreposição numa regra que conclui (D2):** se o `ultimo_ticket_id` estiver `PENDING`/`RUNNING` e a decisão for `concluir = True`, a regra é concluída **sem ticket** (variante acima), a ocorrência atual entra em `perdidas` e o log registra INFO `SKIP_OVERLAP` com o total de perdidas. Sem conclusão, a sobreposição só avança a data (passo 6, sem ticket) com INFO `SKIP_OVERLAP`.
   - **Ocorrências perdidas (README §7.4, D3):** o número de `perdidas` de `recurrence.avaliar_disparo` vai para o log em **INFO** quando coalescidas **dentro** de `misfire_tolerance_s` e em **WARN** só quando o atraso passa da tolerância (misfire de verdade).
@@ -61,7 +63,8 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
     - *misfire* `RUN_ONCE` gera 1 ticket após downtime;
     - *misfire* `SKIP`;
     - conclusão da `UNICA` **com** ticket: um único `UPDATE` com `ativo = 'N'`, `CONCLUIDO`, `ultima_execucao` e `ultimo_ticket_id`, sem gravar `proxima_execucao = NULL` (o bind de `proxima_execucao` continua `antiga_data`), seguido do `INSERT` do ticket; `AGD_PAUSAR` com `pausa_motivo: CONCLUIDO` em INFO; nenhum `UPDATE` de pausa (passo 7);
-    - conclusão **sem** ticket (`SKIP` fora da tolerância em `UNICA`): `SET` só com `ativo` e `pausa_motivo`;
+    - conclusão **sem** ticket (`SKIP` fora da tolerância em `UNICA`): `SET` só com `ativo`, `pausa_motivo` e `updated_*`;
+    - colunas de registro (CR-006): ticket e `ticket_resp` do desdobro com `created_by = 'SYSTEM:<agent_id>'`; a reserva não grava `updated_*` na regra; pausa, conclusão, `NODE_OFFLINE`, `FENCED` e `agente_parar` gravam `updated_*` com o ator do agente;
     - conclusão por `data_fim` com o ticket da ocorrência atual;
     - sobreposição numa regra que conclui: conclui sem ticket, `perdidas` inclui a ocorrência atual, INFO `SKIP_OVERLAP`;
     - perdidas dentro da tolerância em INFO e fora dela em WARN (`assertLogs`);

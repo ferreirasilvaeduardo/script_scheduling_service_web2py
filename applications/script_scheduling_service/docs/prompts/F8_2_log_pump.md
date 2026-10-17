@@ -24,6 +24,7 @@ Transferir o log local do ticket para `log_output` de forma incremental, mascara
 - **`applications/script_scheduling_service/modules/repo_oracle/scheduler_log.py`** (repositório **interno** do daemon, fora do contrato da UI):
   - `anexar(conn, ticket_id, agente_id, bloco) -> bool`: o bloco PL/SQL do README §8.10, **literal**, com `FOR UPDATE WAIT 5` e as condições de posse. `NO_DATA_FOUND` retorna `False` (posse perdida). O `COMMIT` fica a cargo do chamador.
   - `marcar_truncado(conn, ticket_id, agente_id) -> bool`.
+  - Gravar o log é rotina técnica (CR-006, README §10): `anexar` e `marcar_truncado` **não** gravam `updated_at`/`updated_by`.
 - **`applications/script_scheduling_service/scripts/test_log_pump.py`:**
   - texto ASCII;
   - texto com acentos e emoji (4 bytes) cortado em todas as posições de byte possíveis (o resultado final é igual ao original);

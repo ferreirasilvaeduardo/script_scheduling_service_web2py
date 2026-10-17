@@ -224,6 +224,12 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
     * Leitura com offset por locator ou `DBMS_LOB.SUBSTR`.
     * É proibido reescrever o CLOB inteiro e proibido carregar `log_output` completo em listagens.
 14. **DDL:** é gerada a partir do registro de `sql_ident` e executada exclusivamente por `scripts/init_db.py`, que é idempotente (README §11). Nenhum arquivo em `models/` ou `modules/` executa DDL.
+15. **Colunas de registro (CR-006, README §10):** toda tabela, exceto `tbsss_auditoria`, tem `created_at`, `created_by`, `updated_at` e `updated_by`.
+    * Todo `INSERT` grava `created_at = SYSDATE` e `created_by = :ator`. Nenhum `UPDATE` toca `created_*`.
+    * Todo `UPDATE` de **alteração de negócio** grava `updated_at = SYSDATE` e `updated_by = :ator`. Rotina técnica (heartbeat, log, PID, contadores do login, avanço do desdobro) **não** grava. A lista fechada das duas categorias está no README §10.
+    * O ator vem de `auditoria['ator']` ou do parâmetro `ator=`: login, `SYSTEM:<agent_id>`, `SYSTEM:init_db` ou `SYSTEM:seed`. Sem ator, o repositório lança `RepoViolacao` sem gravar nada.
+    * Vínculos de conjunto são gravados por diferença; `script_param` leva o `created_*` de cada parâmetro que continua.
+    * As colunas não entram na `versao` do formulário, no `esperado` nem no `detalhe` da auditoria.
 
 ---
 
@@ -281,7 +287,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 
 | Arquivo | Cobertura obrigatória |
 |---|---|
-| `test_repo_contract.py` | A mesma bateria contra FAKE (sempre) e ORACLE (com `SSS_TEST_DSN`), em cada combinação de driver disponível — Thin (banco 12.1+), Thick e cx_Oracle (CR-002, D5): CRUD, unicidade, transições condicionais com `RepoConflito`, cascatas, imutabilidade de `nome`/`login`, paginação e ordenação |
+| `test_repo_contract.py` | A mesma bateria contra FAKE (sempre) e ORACLE (com `SSS_TEST_DSN`), em cada combinação de driver disponível — Thin (banco 12.1+), Thick e cx_Oracle (CR-002, D5): CRUD, unicidade, transições condicionais com `RepoConflito`, cascatas, imutabilidade de `nome`/`login`, paginação e ordenação; colunas de registro (CR-006): `created_*` na inclusão, `updated_*` só na alteração de negócio, ator obrigatório, vínculos por diferença preservando `created_*` |
 | `test_db_schema.py` | Todo identificador do registro com `len <= 30` usando o prefixo configurado **e** o pior caso de 8 caracteres; todo nome em ASCII; toda FK com índice de coluna líder; toda tabela com trigger no template condicional |
 | `test_py36_compat.py` | `ast.parse(..., feature_version)` ou compilação com 3.6 em todos os `.py`; busca por tokens proibidos (§2.1), `shell=True`, `os.system`, `eval(`, `exec(`, `pickle`, `XML(`, `x-html`, URLs `http(s)://` em `static/` e `views/` |
 | `test_path_guard.py` | Caminho relativo, não normalizado, com `..` ou `\`; pastas do sistema (digitadas e via symlink); prefixo irmão (`/usrx`, `/etcetera` aceitos); dentro de `log_dir`/`work_dir`; arquivo inexistente; diretório em vez de arquivo; dono fora de `script_owner_uids`; arquivo ou diretório ancestral gravável por grupo, outros ou pelo agente; interpretador fora da allowlist |
@@ -296,8 +302,8 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 | `test_executor.py` `[F8.1]` | Spawn real de script de teste (`/bin/sh`) em diretório temporário; log no caminho do CR-005, com o renome para `ticket_<id>_<PID>.log`; saída em arquivo sem PIPE; geração de mais de 1 MB de saída sem travar; timeout; encerramento escalonado matando também o neto; conversão de `returncode` negativo |
 | `test_plataforma.py` `[F8.0]` | Grupo e encerramento escalonado, identidade do processo (`starttime`) contra PID reciclado, lock de instância, recusa de root, dono e permissão de segredos e do caminho do script |
 | `test_sql_oracle11g.py` `[F7.3]` | Varredura de `repo_oracle/` e `scripts/init_db.py`: nenhuma sintaxe 12c+ (§4.3); `FOR UPDATE` sempre com `WAIT n` (n ≤ 5); nenhum `SELECT *` |
-| `test_seed_fake.py` | Seed FAKE coerente com as regras (README §2.5): funcionalidades com os nomes do README, nenhum parâmetro de credencial, prioridade 1 só para admin, `created_at` nunca no futuro, snapshot e respostas compilados contra o script, agendamentos no minuto exato e alinhados à regra |
-| `test_ui_helpers.py` | Catálogo de mensagens em duas partes, nomes simples de situação e de motivo, frase e etapas do ticket, tempo em linguagem simples |
+| `test_seed_fake.py` | Seed FAKE coerente com as regras (README §2.5): funcionalidades com os nomes do README, nenhum parâmetro de credencial, prioridade 1 só para admin, `created_at` nunca no futuro, colunas de registro coerentes com o README §10 (CR-006), snapshot e respostas compilados contra o script, agendamentos no minuto exato e alinhados à regra |
+| `test_ui_helpers.py` | Catálogo de mensagens em duas partes, nomes simples de situação e de motivo, frase e etapas do ticket, tempo em linguagem simples, nome do ator no quadro Registro (CR-006) |
 | `test_catalogo_service.py` | Rotinas disponíveis e histórico: mesmo escopo da lista de tickets (com e sem `VER_LOGS`), script fora das rotinas dá 404, contrato sem LOB e limitado, números do resumo iguais aos do gráfico e geometria do gráfico |
 | `test_contraste_cores.py` | Todo par texto/fundo dos tokens de `sss.css` com contraste WCAG AA (≥ 4,5:1), nos modos claro e escuro |
 | `test_db_conn.py` `[F7.0]` | Com módulos falsos de driver: cadeia `auto` Thin → Thick → cx_Oracle, parada em erro de autenticação, valores forçados, senha fora de argv/ambiente/log, mapa de erros por driver e modo |
@@ -318,6 +324,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 - [ ] Entrada recusada (nunca truncada) acima do limite; nenhum valor sensível, nem derivado, no HTML.
 - [ ] Mensagens ao usuário pelo catálogo de `ui_helpers`, em duas partes; telas de consulta só com `GET`, sem gravação nem auditoria.
 - [ ] Auditoria gravada pelo repositório na mesma operação da ação (`auditoria=`).
+- [ ] Colunas de registro (§4.15): `created_*` em todo `INSERT`, `updated_*` só em alteração de negócio, ator obrigatório.
 - [ ] Logs sem segredos/PII; todo `except` com log.
 - [ ] Testes do §7 aplicáveis executados.
 

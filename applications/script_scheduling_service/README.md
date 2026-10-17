@@ -165,6 +165,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 * **Paridade obrigatória:** o FAKE emula a semântica do Oracle que o código consome. Isso inclui `UPDATE` condicional com `rowcount` (transição perdida gera `RepoConflito`), unicidade (`RepoViolacao`), `ON DELETE CASCADE`, triggers de imutabilidade, paginação e ordenação idênticas. Também inclui:
   * **chaves estrangeiras e NOT NULL:** inclusões de ticket, `ticket_resp` e agendamento com script, ambiente (nome), solicitante (login), usuário ou parâmetro inexistente geram `RepoViolacao` com o nome da FK do §10. A UK de `ticket_resp` também é verificada;
   * **limites de coluna** que o código grava, por exemplo `ator` (40) e `detalhe` (1.000) da auditoria;
+  * **colunas de registro (CR-006):** `created_*` na inclusão e `updated_*` só nas alterações de negócio (§10), com `store.agora()` no lugar do `SYSDATE`. Gravação sem ator é recusada com `RepoViolacao`, como no Oracle;
   * **comparação de texto** idêntica à do Oracle: UKs diferenciam maiúsculas de minúsculas;
   * **cascatas** (`ON DELETE CASCADE` e `SET NULL` do §10): o contrato não expõe exclusão de registros mestres (só o `purge.py`, que é batch e não tem FAKE, apaga linhas). Por isso, não há cascata a emular no FAKE; o `test_repo_contract.py` as cobre **contra o Oracle** (F7.3), com `DELETE` direto no teste.
 * **Seed do FAKE coerente com as regras de negócio:** ele também serve de demonstração na homologação e precisa respeitar as regras:
@@ -173,10 +174,11 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
   * prioridade 1 só em tickets de solicitante admin;
   * snapshot e `ticket_resp` compatíveis com o script e os vínculos de cada ticket;
   * `created_at` nunca no futuro;
+  * colunas de registro coerentes com o §10 (CR-006): `created_by = 'SYSTEM:seed'` nos cadastros e vínculos; nos tickets, o login do solicitante (manual) ou `SYSTEM:<agente>` (desdobro); `updated_*` preenchidos só onde o estado do seed implica uma alteração (ticket fora de `PENDING`, regra pausada, registro inativo), sempre entre o `created_at` e o momento atual;
   * `proxima_execucao` calculada pelo `recurrence.py`, alinhada ao minuto e à regra;
   * `parametros_json` com as respostas resolvidas completas (§7.6).
 * **Relógio do FAKE:** `store.agora()` (hora local sem microssegundos) simula o `SYSDATE` e é o único uso permitido de `datetime.now()` (AGENTS §6).
-* **Simulação de execução no FAKE (somente DEV):** não há daemon. Um ticket `RUNNING` do seed avança e termina quando o log é lido pelo visualizador (`_simular_log`). Isso é só demonstração e não tem equivalente no Oracle.
+* **Simulação de execução no FAKE (somente DEV):** não há daemon. Um ticket `RUNNING` do seed avança e termina quando o log é lido pelo visualizador (`_simular_log`); a finalização simulada grava `updated_*` com `SYSTEM:<agente>` do ticket (§10). Isso é só demonstração e não tem equivalente no Oracle.
 * **Concorrência das transições no FAKE:** as transições web de ticket rodam sob o lock do agregado, então o FAKE nunca chega a perder uma corrida. O tratamento de `rowcount = 0` (`RepoConflito`) nessas transições só é exercitado pelo `test_repo_contract.py` contra o Oracle (F7.3).
 * **Exceções de contrato** (`modules/repo_errors.py`): `RepoErro`, `RepoNaoEncontrado`, `RepoConflito`, `RepoViolacao` e `RepoIndisponivel`.
 * A suíte `scripts/test_repo_contract.py` roda **a mesma bateria** contra os dois backends. Contra ORACLE, ela só executa se `SSS_TEST_DSN` estiver definido.
@@ -536,6 +538,7 @@ O campo `detalhe` nunca contém segredos nem valores de parâmetros sensíveis.
 
   O filtro "Entidade" da consulta oferece exatamente as tabelas acima.
 * **Limites da coluna:** `ator` tem até 40 caracteres e é obrigatório (nunca é preenchido com um valor padrão). `detalhe` é cortado em 1.000 caracteres, com `...` no final. O FAKE recusa a gravação fora desses limites, como o Oracle.
+* **Colunas de registro (CR-006):** cada tabela guarda só quem criou o registro e quem fez a **última** alteração de negócio (§10), com o mesmo ator da linha de auditoria e na mesma transação. O histórico completo fica aqui, dentro de `audit_retention_days`; as colunas de registro não são purgadas.
 
 **Cadastros** (padrão em `docs/PADRAO_CRUD_ADMIN.md`):
 
@@ -660,8 +663,8 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
    * Ele deve ser `>= SYSDATE` **exato**, sem tolerância de minuto: um horário no minuto corrente, mas anterior ao `SYSDATE`, é recusado.
    * Não há limite superior.
    * O valor digitado no campo de data e hora do navegador é interpretado como horário de parede do servidor Oracle (§7.1). A tela informa isso ao lado do campo.
-5. `INSERT INTO tbsss_tickets (...) VALUES (...) RETURNING id INTO :out_id`, com `parametros_enviados` contendo o JSON do snapshot.
-6. `INSERT` em `tbsss_ticket_resp` via `executemany`, com os valores **resolvidos** (após a precedência).
+5. `INSERT INTO tbsss_tickets (...) VALUES (...) RETURNING id INTO :out_id`, com `parametros_enviados` contendo o JSON do snapshot, `created_at = SYSDATE` e `created_by` = login do solicitante (§10, CR-006).
+6. `INSERT` em `tbsss_ticket_resp` via `executemany`, com os valores **resolvidos** (após a precedência) e o mesmo `created_by` do ticket.
 7. Auditoria `TICKET_CRIAR` e `COMMIT`. Em qualquer exceção, `ROLLBACK`.
 
 * **Caminho do script na criação (CR-005, D4):** o nó web valida `path_file` conforme a §8.5 ("Validação no nó web"). O formato e as pastas do sistema são conferidos sempre. Se o arquivo existe no nó web, as checagens de dono e permissão também rodam e bloqueiam a criação. Se não existe ali, o ticket é criado e a validação definitiva fica no claim (§8.4).
@@ -707,7 +710,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
 
 ### 5.5 Reexecução
 
-* Cria um novo ticket com `parent_ticket_id = <original>`.
+* Cria um novo ticket com `parent_ticket_id = <original>` e `created_by` = login de quem reexecutou, que também é o `solicitante` (§10, CR-006).
 * As respostas resolvidas do original (`tbsss_ticket_resp`) são **recompiladas contra o catálogo vigente**, gerando um novo snapshot.
 * A reexecução exige `pode_executar` vigente.
 * O snapshot original permanece intocado.
@@ -725,14 +728,18 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
 
 ```sql
 UPDATE {owner}.tbsss_tickets
-   SET cancel_requested = 'S'
+   SET cancel_requested = 'S',
+       updated_at = SYSDATE, updated_by = :ator
  WHERE id = :id AND status IN ('PENDING', 'RUNNING') AND cancel_requested = 'N';
 
 UPDATE {owner}.tbsss_tickets
    SET status = 'CANCELLED', status_motivo = 'CANCEL_USER',
-       return_code = -1, finished_at = SYSDATE
+       return_code = -1, finished_at = SYSDATE,
+       updated_at = SYSDATE, updated_by = :ator
  WHERE id = :id AND status = 'PENDING';
 ```
+
+* `:ator` é o login de quem pediu o cancelamento (§10, CR-006).
 
 * Se o primeiro `UPDATE` afetar 0 linhas, o ticket já é terminal **ou** o cancelamento já tinha sido pedido. Para saber qual, a mesma transação lê a linha pela PK (`SELECT status, cancel_requested FROM {owner}.tbsss_tickets WHERE id = :id FOR UPDATE WAIT 5`): terminal dá `sem efeito: ticket encerrado`; `RUNNING` com `cancel_requested = 'S'` dá `já sinalizado`. O sistema informa o usuário nos dois casos.
 * Se o segundo afetar 0 linhas, o ticket está `RUNNING` e o agente dono trata o cancelamento.
@@ -754,7 +761,7 @@ UPDATE {owner}.tbsss_tickets
 2. Aguardar até `kill_grace_s`, consultando `Popen.poll()`.
 3. Se o processo persistir, forçar o encerramento (`SIGKILL` ao grupo) e então `Popen.wait()`.
 4. Fazer o flush final do log (§8.10).
-5. `UPDATE ... SET status = 'CANCELLED', status_motivo = 'CANCEL_USER', return_code = -1, finished_at = SYSDATE WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`, seguido de `COMMIT`.
+5. `UPDATE ... SET status = 'CANCELLED', status_motivo = 'CANCEL_USER', return_code = -1, finished_at = SYSDATE, updated_at = SYSDATE, updated_by = :ator WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`, com `:ator = 'SYSTEM:<agent_id>'`, seguido de `COMMIT`.
 
 Se o processo terminou sozinho **antes** de o agente sinalizá-lo, prevalece o resultado real (`SUCCESS` ou `FAILED`).
 
@@ -778,7 +785,7 @@ O topo do detalhe (`tickets/detalhe/<id>`) responde "o que está acontecendo?" a
 
    * Um ticket cancelado ainda na fila mostra a etapa "Rodando" como "não chegou a rodar" e a etapa final como "Cancelado".
    * A etapa atual de um ticket `RUNNING` mostra "há {tempo}".
-3. Depois disso vêm, como hoje: resumo, linha do tempo, comando executado, respostas, reexecuções e log. A linha "Detalhe técnico" do resumo traz o status, o `status_motivo`, o `return_code` e a descrição técnica (`descricao_motivo`). O bloco do snapshot mostra o **arquivo do script** (`path_file`, snapshot v4), com o caminho completo para todos (CR-005, D8).
+3. Depois disso vêm, como hoje: resumo, linha do tempo, comando executado, respostas, reexecuções e log. A linha "Detalhe técnico" do resumo traz o status, o `status_motivo`, o `return_code` e a descrição técnica (`descricao_motivo`). O bloco do snapshot mostra o **arquivo do script** (`path_file`, snapshot v4), com o caminho completo para todos (CR-005, D8). Logo depois do resumo vem o quadro **Registro** (§10, CR-006): quem criou o pedido e quando, e a última alteração, que normalmente é a última mudança de situação feita pelo agente.
 4. **Botões com o efeito escrito:** "Cancelar este pedido" (com a consequência no modal) e "Rodar de novo com as mesmas respostas" (reexecução, §5.5).
 5. A página continua se atualizando sozinha enquanto o ticket não termina, e a frase e a barra acompanham. Quando o polling do log (§8.10) recebe uma situação diferente da que a página mostrou ao abrir, o visualizador para, mostra "A situação mudou; atualizando a página…" e recarrega a página após 1,5 s.
 
@@ -1087,13 +1094,17 @@ Para cada regra, em **uma transação**:
    * Se `rowcount = 1`, fazer o `INSERT` do ticket com `id = :ticket_id`, `agendamento_id = :id`, `solicitante = <login do usuario_id>`, `ip_origem = NULL`, `scheduled_at = SYSDATE` e a prioridade da regra. Em seguida, o `INSERT` em `tbsss_ticket_resp`.
    * Se `rowcount = 0`, outro nó processou a regra: fazer `ROLLBACK` e seguir para a próxima.
    * A trigger condicional (§10) preserva o `:ticket_id`. Valores de sequence descartados geram apenas lacunas inofensivas.
+   * A reserva é rotina técnica e **não** grava `updated_*` na regra (§10, CR-006). O ticket e o `ticket_resp` nascem com `created_by = 'SYSTEM:<agent_id>'`.
 7. **Pausa** (sempre otimista):
 
    ```sql
    UPDATE {owner}.tbsss_agendamentos
-      SET ativo = 'N', pausa_motivo = :motivo
+      SET ativo = 'N', pausa_motivo = :motivo,
+          updated_at = SYSDATE, updated_by = :ator
     WHERE id = :id AND proxima_execucao = :antiga_data
    ```
+
+   `:ator` é `SYSTEM:<agent_id>` no desdobro e o login de quem pausou na pausa manual (§7.6).
 
    A pausa é registrada em `tbsss_auditoria` (`AGD_PAUSAR`) e no log em WARN.
 8. `COMMIT` único. Em qualquer exceção, `ROLLBACK`, log ERROR e continuação com a próxima regra.
@@ -1106,14 +1117,16 @@ Para cada regra, em **uma transação**:
 UPDATE {owner}.tbsss_agendamentos
    SET ativo = 'N', pausa_motivo = 'CONCLUIDO',
        ultima_execucao  = SYSDATE,
-       ultimo_ticket_id = :ticket_id
+       ultimo_ticket_id = :ticket_id,
+       updated_at = SYSDATE, updated_by = :ator
  WHERE id = :id
    AND ativo = 'S'
    AND proxima_execucao = :antiga_data
 ```
 
 * **Com ticket** (a ocorrência atual ainda gera ticket): `:ticket_id` vem do `NEXTVAL` do passo 6. Se `rowcount = 1`, seguem o `INSERT` do ticket e o do `ticket_resp`, como no passo 6. Se `rowcount = 0`, `ROLLBACK` e próxima regra.
-* **Sem ticket** (`SKIP` fora da tolerância em `UNICA`, ou sobreposição): `ultima_execucao` e `ultimo_ticket_id` **não** são alterados. O `SET` fica só com `ativo` e `pausa_motivo`.
+* **Sem ticket** (`SKIP` fora da tolerância em `UNICA`, ou sobreposição): `ultima_execucao` e `ultimo_ticket_id` **não** são alterados. O `SET` fica só com `ativo`, `pausa_motivo` e `updated_*`.
+* Nos dois casos, `:ator = 'SYSTEM:<agent_id>'` (§10, CR-006).
 * A conclusão é auditada como `AGD_PAUSAR`, com o detalhe `pausa_motivo: CONCLUIDO`, e registrada em INFO (não em WARN, porque não é uma falha).
 * O passo 7 (pausa) não se aplica à conclusão.
 
@@ -1142,7 +1155,7 @@ Implementação: `controllers/agendamentos.py`, `modules/agendamentos_service.py
 * **Validação estrita (sem truncamento):** todo campo recebido é validado no tamanho e no formato exatos. Um valor mais longo ou fora do formato é **recusado** com mensagem no campo, nunca cortado. Exemplos: dia do mês `100` ou `311`, hora `03:000`, data com segundos ou frações (`…T10:00:00.999`).
 * **Escolha de script e ambiente:** na inclusão, a escolha é feita em etapas e usa os mesmos filtros do disparo (§4.3.A): só aparecem scripts e ambientes em que o editor tem `pode_executar`. Por isso, quem não é admin precisa também de `EXEC_SCRIPT`.
 * **Edição (D2):** script e ambiente ficam **fixos**. Para usar outro script ou ambiente, cria-se uma nova regra.
-* **`usuario_id`:** a inclusão e a edição gravam o editor, que precisa ter `pode_executar` vigente (§10). Sem essa permissão, a operação é negada e a regra fica intacta. A tela de edição sempre avisa: "Ao salvar, esta regra passará a executar com as suas permissões."
+* **`usuario_id`:** a inclusão e a edição gravam o editor, que precisa ter `pode_executar` vigente (§10). Sem essa permissão, a operação é negada e a regra fica intacta. A tela de edição sempre avisa: "Ao salvar, esta regra passará a executar com as suas permissões." O criador original fica em `created_by`, que nunca muda (§10, CR-006).
 * **Datas:**
   * O servidor valida as datas e as converte para `datetime` sem microssegundos.
   * `data_inicio` é obrigatória em `UNICA`. Nos demais tipos, vazio significa "agora" (relógio do banco, truncado ao minuto) (D3).
@@ -1168,6 +1181,7 @@ Implementação: `controllers/agendamentos.py`, `modules/agendamentos_service.py
   * Revalida `pode_executar` de **quem retoma**, recalcula `proxima_execucao` a partir de agora, limpa `pausa_motivo` e grava `ativo = 'S'`. Audita `CAD_ALTERAR`.
   * O responsável (`usuario_id`) não muda: os privilégios dele continuam sendo revalidados a cada desdobro (§7.5 passo 2).
   * Uma regra `CONCLUIDO` só é retomada se ainda houver próxima execução (D5). Pausar uma regra já pausada, ou retomar uma ativa, gera aviso sem gravar nem auditar.
+* **Colunas de registro (CR-006):** a inclusão grava `created_*`; edição, pausa manual e retomada gravam `updated_*` com o login de quem agiu. O formulário de edição mostra o quadro Registro (§10).
 * **Lista:**
   * Mostra as regras dos ambientes autorizados ao perfil (admin: todas). Uma regra fora do escopo é tratada como inexistente (404).
   * A situação aparece como "Ativo" ou "Pausado" mais o motivo (D4): Pausado manualmente, Concluída, Responsável inativo, Responsável sem permissão, Script inativo, Ambiente inativo, Parâmetros inválidos ou Expressão CRON inválida.
@@ -1274,10 +1288,12 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
    UPDATE {owner}.tbsss_tickets
       SET status = 'RUNNING', agente_id = :agente_id,
           started_at = SYSDATE, heartbeat_at = SYSDATE,
-          log_output = EMPTY_CLOB()
+          log_output = EMPTY_CLOB(),
+          updated_at = SYSDATE, updated_by = :ator
     WHERE id = :ticket_id AND status = 'PENDING' AND cancel_requested = 'N'
    RETURNING started_at INTO :started_at
    ```
+   `:ator = 'SYSTEM:<agent_id>'` (§10, CR-006).
    Se `rowcount = 1`, `COMMIT`; o claim devolve o `started_at` (relógio do banco), que dá a pasta do log de execução (§8.4, passo 3). Se for 0, `ROLLBACK` e próximo candidato.
 
 **Ordem de locks do sistema** (evita deadlock):
@@ -1326,7 +1342,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
       SET process_id = :pid, process_start = :process_start
     WHERE id = :ticket_id AND agente_id = :agente_id AND status = 'RUNNING'
    ```
-   Se `rowcount = 0`, a posse foi perdida (por exemplo, `NODE_OFFLINE` durante o spawn): `plataforma.encerrar_grupo` e ERROR `OWNERSHIP_LOST`.
+   Se `rowcount = 0`, a posse foi perdida (por exemplo, `NODE_OFFLINE` durante o spawn): `plataforma.encerrar_grupo` e ERROR `OWNERSHIP_LOST`. O registro do PID é rotina técnica e não grava `updated_*` (§10, CR-006).
 
 ### 8.5 Validação de interpretador e caminho (`path_guard.py`, CR-005)
 
@@ -1424,11 +1440,12 @@ SELECT id, cancel_requested
 * **Heartbeat** (a cada `heartbeat_interval_s`):
   * `executemany` de `UPDATE ... SET heartbeat_at = SYSDATE WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`, com `arraydmlrowcounts=True`;
   * linha com contagem 0 é tratada como `OWNERSHIP_LOST`;
-  * na mesma transação, atualiza `tbsss_agentes.heartbeat_at`.
+  * na mesma transação, atualiza `tbsss_agentes.heartbeat_at`;
+  * o heartbeat é rotina técnica: não grava `updated_*` no ticket nem no agente (§10, CR-006).
 * **Timeout:** `timeout = tbsss_scripts.timeout_seg` ou, se nulo, `script_timeout_s`. Ao expirar, `plataforma.encerrar_grupo` (escalonado), com finalização `FAILED`, `TIMEOUT` e `-3`.
 * **Finalização normal** (detectada por `Popen.poll()`):
   1. flush final do log;
-  2. `UPDATE ... SET status, status_motivo, return_code, finished_at = SYSDATE WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`;
+  2. `UPDATE ... SET status, status_motivo, return_code, finished_at = SYSDATE, updated_at = SYSDATE, updated_by = :ator WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`, com `:ator = 'SYSTEM:<agent_id>'`. Toda finalização de ticket pelo agente (timeout, `LOG_LIMIT`, `SHUTDOWN`, `ORPHAN_PROCESS`, `SPAWN_ERROR`, `PRECHECK_FAILED`) grava `updated_*` do mesmo jeito (§10, CR-006);
   3. `COMMIT`;
   4. remoção de `work_dir/ticket_<id>/`.
 
@@ -1437,10 +1454,13 @@ SELECT id, cancel_requested
 ```sql
 UPDATE {owner}.tbsss_tickets
    SET status = 'FAILED', status_motivo = 'NODE_OFFLINE',
-       return_code = -2, finished_at = SYSDATE
+       return_code = -2, finished_at = SYSDATE,
+       updated_at = SYSDATE, updated_by = :ator
  WHERE (CASE WHEN status = 'RUNNING' THEN agente_id END) IS NOT NULL
    AND heartbeat_at < SYSDATE - :node_offline_timeout_s * INTERVAL '1' SECOND
 ```
+
+`:ator` é `SYSTEM:<agent_id>` do agente que detectou (§10, CR-006).
 
 O relógio de referência é sempre o `SYSDATE` do banco, nunca o relógio do nó.
 
@@ -1451,7 +1471,7 @@ O relógio de referência é sempre o `SYSDATE` do banco, nunca o relógio do n�
   1. executa `plataforma.encerrar_grupo` em **todos** os grupos que possui;
   2. suspende novos claims;
   3. registra CRITICAL `FENCED`.
-* Quando o banco volta, ele tenta `UPDATE ... SET status = 'FAILED', status_motivo = 'FENCED', return_code = -2 ... WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`. Se o ticket já estiver `NODE_OFFLINE`, o `rowcount = 0` é esperado.
+* Quando o banco volta, ele tenta `UPDATE ... SET status = 'FAILED', status_motivo = 'FENCED', return_code = -2, ..., updated_at = SYSDATE, updated_by = :ator WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`, com `:ator = 'SYSTEM:<agent_id>'`. Se o ticket já estiver `NODE_OFFLINE`, o `rowcount = 0` é esperado.
 * **Invariante validada na inicialização:** `fence_timeout_s * 2 <= node_offline_timeout_s` e `heartbeat_interval_s * 3 <= fence_timeout_s`. Isso garante que o agente se cerca **antes** de outro nó declará-lo offline.
 * **Mesmos tempos em todos os nós:** quem declara um agente offline é **outro** agente, com o `node_offline_timeout_s` dele (§8.8). Por isso, `fence_timeout_s` e `node_offline_timeout_s` devem ser **idênticos em todos os agentes**; senão a invariante deixa de valer entre nós. Não há coluna nova para isso:
   * cada agente registra os dois valores em INFO na inicialização;
@@ -1480,6 +1500,7 @@ END;
 ```
 
   * Em seguida, `COMMIT`. `NO_DATA_FOUND` é tratado como `OWNERSHIP_LOST`.
+  * A gravação do log (`log_output` e `log_truncado`) é rotina técnica e não grava `updated_*` (§10, CR-006).
 * **Limites:**
   * O teto do CLOB é medido em **bytes UTF-8 do texto já enviado** (`len(texto.encode('utf-8'))` acumulado pelo agente), e o corte é feito em fronteira de caractere.
   * Ao atingir `max_log_size_bytes` no CLOB, o agente para de anexar, grava `log_truncado = 'S'` e anexa um marcador final `[SSS] log truncado no banco; arquivo integral no agente`.
@@ -1505,14 +1526,14 @@ END;
 | `DRAIN` | Aguarda os filhos por até `shutdown_grace_s` e então aplica `TERMINATE` aos restantes |
 | `TERMINATE` (padrão) | `plataforma.encerrar_grupo` (escalonado, §8.0). Finaliza com `FAILED`, `SHUTDOWN` e `-6` |
 
-Em seguida, o daemon faz o flush dos logs, grava `tbsss_agentes.status = 'PARADO'`, audita `AGENTE_FIM`, fecha a conexão e o lock file, e sai com código 0.
+Em seguida, o daemon faz o flush dos logs, grava `tbsss_agentes.status = 'PARADO'` (com `updated_*` de `SYSTEM:<agent_id>`, §10), audita `AGENTE_FIM`, fecha a conexão e o lock file, e sai com código 0.
 
 ### 8.12 Inicialização do daemon (fail-fast)
 
 O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualquer passo:
 
 1. **Usuário:** `plataforma.usuario_privilegiado()` precisa ser falso. É proibido rodar como root.
-2. **Configuração:** carregar e validar o `config.ini` (tipos, faixas, invariantes da §8.9 e `max_parallel_jobs <= max_parallel_hard_limit`), o `owner` e o `table_prefix` (regex do `AGENTS.md`), e `agent_id` contra `^[A-Za-z0-9._-]{1,30}$`.
+2. **Configuração:** carregar e validar o `config.ini` (tipos, faixas, invariantes da §8.9 e `max_parallel_jobs <= max_parallel_hard_limit`), o `owner` e o `table_prefix` (regex do `AGENTS.md`), e `agent_id` contra `^[A-Za-z0-9._-]{1,30}$`, sem ser `init_db` nem `seed` (reservados para o ator do sistema, §10, CR-006).
 3. **Segredos:** validar o `secrets.cfg` (§4.1).
 4. **Diretórios e interpretadores:**
    * `log_dir` e `work_dir` existem, são graváveis pelo agente e não ficam dentro das pastas do sistema (§8.5);
@@ -1521,7 +1542,7 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
 6. **Banco:** selecionar o driver (§2.3; a sondagem roda aqui), conectar e confirmar o relógio do banco (`SELECT SYSDATE FROM DUAL`).
 7. **Registro em `tbsss_agentes`:**
    * Se existir linha do mesmo `codigo` com `status = 'ATIVO'`, `heartbeat_at` recente (menor que `node_offline_timeout_s`) **e** `hostname` diferente, recusar a subida (`agent_id` duplicado).
-   * Caso contrário, executar `MERGE` com `status = 'ATIVO'`, `hostname`, `pid_daemon`, `versao`, `ambientes`, `plataforma`, `interpretadores` e `iniciado_em`.
+   * Caso contrário, executar `MERGE` com `status = 'ATIVO'`, `hostname`, `pid_daemon`, `versao`, `ambientes`, `plataforma`, `interpretadores` e `iniciado_em`. A inclusão grava `created_at = SYSDATE` e `created_by = 'SYSTEM:<agent_id>'`; a atualização grava `updated_*` com o mesmo ator (§10, CR-006).
    * Auditar `AGENTE_INICIO`.
 8. **Ambientes atendidos:** todos existem em `tbsss_ambientes` com `ativo = 'S'`. Um ambiente inexistente é ERROR fatal; um ambiente inativo gera WARN e é ignorado.
 9. **Startup check** de tickets `RUNNING` do próprio `agente_id`:
@@ -1595,6 +1616,25 @@ END;
 * `ativo` e demais flags são `CHAR(1)` com CK `IN ('S','N')`.
 * **FKs para chave natural** (`tbsss_ambientes.nome`, `tbsss_usuarios.login`) tornam essas colunas **imutáveis**. A imutabilidade é garantida pelas triggers `tr_tbsss_amb_bu` e `tr_tbsss_usr_bu`, que disparam `RAISE_APPLICATION_ERROR(-20001, ...)` se o valor mudar.
 * O ticket referencia `login` (fato de auditoria imutável), enquanto o agendamento referencia `usuario_id` (regra viva).
+* **Colunas de registro (CR-006):** todas as tabelas, **exceto `tbsss_auditoria`**, terminam com quatro colunas que dizem quem criou o registro e quando, e quem fez a última alteração de negócio:
+
+  | Coluna | Tipo | Gravação |
+  |---|---|---|
+  | `created_at` | `DATE DEFAULT SYSDATE NOT NULL` | `SYSDATE` no `INSERT`; nunca muda |
+  | `created_by` | `VARCHAR2(40 CHAR) NOT NULL`, sem `DEFAULT` | ator do `INSERT`; nunca muda |
+  | `updated_at` | `DATE` | `SYSDATE` em cada alteração de negócio; nulo até a primeira |
+  | `updated_by` | `VARCHAR2(40 CHAR)` | ator da alteração de negócio; nulo até a primeira |
+
+  * CK `ck_tbsss_<abrev>_upd`: `(updated_at IS NULL AND updated_by IS NULL) OR (updated_at IS NOT NULL AND updated_by IS NOT NULL)`. Sem FK, porque um ator `SYSTEM:` não é usuário e o registro sobrevive à desativação do usuário. Sem índice, porque nenhuma consulta filtra por essas colunas.
+  * `tbsss_auditoria` fica de fora: ela só recebe inclusões e já tem `ator` e `created_at`.
+  * **Ator:** o mesmo domínio de `tbsss_auditoria.ator`: o login da sessão; `SYSTEM:<agent_id>` no daemon; `SYSTEM:init_db` no `init_db.py`; `SYSTEM:seed` no seed FAKE. `init_db` e `seed` não podem ser usados como `agent_id` (§8.12).
+  * **Quem grava:** sempre a aplicação, no mesmo SQL da operação. Nenhum `UPDATE` toca `created_*`. O repositório recebe o ator por `auditoria['ator']` ou, nas operações sem auditoria, pelo parâmetro `ator=`. Sem ator, a operação é recusada com `RepoViolacao`, sem gravar nada (também no FAKE). Como `created_by` não tem `DEFAULT`, uma inserção manual precisa se identificar.
+  * **Alteração de negócio** (grava `updated_*`): edição de cadastro; desativar e reativar; matriz de permissões (grava no perfil); homologação e vínculo de parâmetros (gravam no script); desbloquear, redefinir senha e trocar a própria senha; editar, pausar e retomar agendamento; pausa e conclusão automáticas do desdobro (§7.5); toda transição de status do ticket e o pedido de cancelamento (§5.6, §8.3, §8.7 a §8.9, §8.12); registro e parada do agente (§8.11, §8.12).
+  * **Rotina técnica** (não grava `updated_*`): heartbeat do ticket e do agente; gravação do log (`log_output`, `log_truncado`); registro do PID (§8.4); contadores e bloqueio automático do login e o rehash da senha (§4.2); avanço de `proxima_execucao`, `ultima_execucao` e `ultimo_ticket_id` no desdobro.
+  * **Vínculos:** `perfil_func`, `perfil_amb`, `perfil_scr` e `script_amb` são gravados por **diferença** (só insere os novos e só apaga os removidos), e quem fica mantém o `created_*`. `script_param` é apagado e reinserido, porque a UK `(script_id, ordem)` não permite trocar a ordem com `UPDATE`, mas cada parâmetro que continua leva o `created_*` anterior, e o `updated_*` dele só muda se `ordem`, `obrigatorio` ou `valor_padrao_sub` mudar.
+  * **Tickets e agendamentos:** `tickets.created_by` é o login do solicitante na criação manual e na reexecução, e `SYSTEM:<agent_id>` no desdobro; o `ticket_resp` recebe o mesmo `created_by` do ticket. `agendamentos.created_by` guarda o criador original; `usuario_id` continua sendo quem salvou por último (§7.6).
+  * As quatro colunas **não** entram na `versao` do formulário, no `esperado` do repositório nem no `detalhe` da auditoria. A trilha completa continua na auditoria (§4.4). As colunas guardam só a criação e a **última** alteração, mas não são purgadas.
+  * **Na tela:** quadro **Registro** no formulário de edição de ambientes, perfis, usuários, parâmetros, scripts e agendamentos, e no detalhe do ticket (§5.7). Ele mostra "Criado em {data} por {ator}" e "Última alteração em {data} por {ator}" ou "Nunca alterado". `SYSTEM:<agent_id>` aparece como "Sistema (agente {agent_id})", `SYSTEM:init_db` como "Sistema (instalação)" e `SYSTEM:seed` como "Sistema (dados de demonstração)". As listas não mostram essas colunas.
 * **Política de exclusão:**
   * **Entidades mestras não são excluídas, apenas desativadas** (`ativo = 'N'`): ambientes, perfis, funcionalidades, usuários, scripts, parâmetros e agendamentos.
   * **Associações podem ser removidas fisicamente:** `perfil_func`, `perfil_amb`, `perfil_scr`, `script_amb` e `script_param`.
@@ -1628,6 +1668,7 @@ END;
   * `ck_tbsss_amb_ativo`
   * `ck_tbsss_amb_nome (REGEXP_LIKE(nome, '^[A-Z0-9_]{1,30}$'))`
   * `ck_tbsss_amb_conexao (conexao IS NULL OR INSTR(conexao, '@') = 0)`
+  * `ck_tbsss_amb_upd` (colunas de registro, CR-006)
 * Trigger extra: `tr_tbsss_amb_bu` (nome imutável)
 * **Colunas:**
   * `id`
@@ -1636,6 +1677,9 @@ END;
   * `conexao VARCHAR2(250 CHAR)` (somente DSN, opcional)
   * `ativo CHAR(1) DEFAULT 'S' NOT NULL`
   * `created_at DATE DEFAULT SYSDATE NOT NULL`
+  * `created_by VARCHAR2(40 CHAR) NOT NULL` (CR-006)
+  * `updated_at DATE` (CR-006)
+  * `updated_by VARCHAR2(40 CHAR)` (CR-006)
 * **Validação na UI** (`admin_ambientes_service.py`):
   * `nome` segue a CK à risca. Letras minúsculas, espaços (inclusive nas pontas) ou outros caracteres são **rejeitados** com mensagem, não convertidos. O `nome` é imutável depois de criado: o campo fica somente leitura e o servidor ignora o valor enviado.
   * `conexao` é opcional, como a coluna. Quando preenchida, aceita apenas:
@@ -1646,7 +1690,7 @@ END;
 
 ### 2. `tbsss_perfis`
 * PK `pk_tbsss_perfis` · UK `uk_tbsss_per_nome (nome)`
-* CK: `ck_tbsss_per_adm`, `ck_tbsss_per_ativo`, `ck_tbsss_per_versao (perm_versao >= 1)`
+* CK: `ck_tbsss_per_adm`, `ck_tbsss_per_ativo`, `ck_tbsss_per_versao (perm_versao >= 1)`, `ck_tbsss_per_upd`
 * **Colunas:**
   * `id`
   * `nome VARCHAR2(30 CHAR) NOT NULL` (na UI: `^[A-Z0-9_]{1,30}$`, mutável, único)
@@ -1654,10 +1698,14 @@ END;
   * `is_admin CHAR(1) DEFAULT 'N' NOT NULL`
   * `perm_versao NUMBER(10) DEFAULT 1 NOT NULL`
   * `ativo CHAR(1) DEFAULT 'S' NOT NULL`
+  * `created_at DATE DEFAULT SYSDATE NOT NULL` (CR-006)
+  * `created_by VARCHAR2(40 CHAR) NOT NULL` (CR-006)
+  * `updated_at DATE` (CR-006)
+  * `updated_by VARCHAR2(40 CHAR)` (CR-006)
 
 ### 3. `tbsss_funcionalidades`
 * PK `pk_tbsss_funcionalidades` · UK `uk_tbsss_fnc_codigo (codigo)`
-* CK: `ck_tbsss_fnc_ativo`
+* CK: `ck_tbsss_fnc_ativo`, `ck_tbsss_fnc_upd`
 * **Colunas:**
   * `id`
   * `codigo VARCHAR2(30 CHAR) NOT NULL`
@@ -1665,18 +1713,24 @@ END;
   * `modulo VARCHAR2(30 CHAR) NOT NULL`
   * `descricao VARCHAR2(150 CHAR)`
   * `ativo CHAR(1) DEFAULT 'S' NOT NULL`
+  * `created_at DATE DEFAULT SYSDATE NOT NULL` (CR-006)
+  * `created_by VARCHAR2(40 CHAR) NOT NULL` (CR-006)
+  * `updated_at DATE` (CR-006)
+  * `updated_by VARCHAR2(40 CHAR)` (CR-006)
 
 ### 4. `tbsss_perfil_func`
 * PK `pk_tbsss_perfil_func` · UK `uk_tbsss_pfnc_per_fnc (perfil_id, funcionalidade_id)`
 * FK `fk_tbsss_pfnc_per → tbsss_perfis(id) ON DELETE CASCADE` (coberta pela UK)
 * FK `fk_tbsss_pfnc_fnc → tbsss_funcionalidades(id) ON DELETE CASCADE` · IX `ix_tbsss_pfnc_fnc (funcionalidade_id)`
-* **Colunas:** `id`, `perfil_id NUMBER(10) NOT NULL`, `funcionalidade_id NUMBER(10) NOT NULL`
+* CK: `ck_tbsss_pfnc_upd` (colunas de registro, CR-006)
+* **Colunas:** `id`, `perfil_id NUMBER(10) NOT NULL`, `funcionalidade_id NUMBER(10) NOT NULL`, `created_at DATE DEFAULT SYSDATE NOT NULL`, `created_by VARCHAR2(40 CHAR) NOT NULL`, `updated_at DATE`, `updated_by VARCHAR2(40 CHAR)` (colunas de registro, CR-006)
 
 ### 5. `tbsss_perfil_amb`
 * PK `pk_tbsss_perfil_amb` · UK `uk_tbsss_pamb_per_amb (perfil_id, ambiente_id)`
 * FK `fk_tbsss_pamb_per → tbsss_perfis(id) ON DELETE CASCADE` (coberta pela UK)
 * FK `fk_tbsss_pamb_amb → tbsss_ambientes(id) ON DELETE CASCADE` · IX `ix_tbsss_pamb_amb (ambiente_id)`
-* **Colunas:** `id`, `perfil_id NUMBER(10) NOT NULL`, `ambiente_id NUMBER(10) NOT NULL`
+* CK: `ck_tbsss_pamb_upd` (colunas de registro, CR-006)
+* **Colunas:** `id`, `perfil_id NUMBER(10) NOT NULL`, `ambiente_id NUMBER(10) NOT NULL`, `created_at DATE DEFAULT SYSDATE NOT NULL`, `created_by VARCHAR2(40 CHAR) NOT NULL`, `updated_at DATE`, `updated_by VARCHAR2(40 CHAR)` (colunas de registro, CR-006)
 
 ### 6. `tbsss_scripts`
 * PK `pk_tbsss_scripts` · UK `uk_tbsss_scr_nome (nome)`
@@ -1687,6 +1741,7 @@ END;
   * `ck_tbsss_scr_int (interpretador IN ('PYTHON3','BASH','SH'))`
   * `ck_tbsss_scr_path (SUBSTR(path_file, 1, 1) = '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\') = 0)` (formato do §8.5, CR-005)
   * `ck_tbsss_scr_tmout (timeout_seg IS NULL OR timeout_seg > 0)`
+  * `ck_tbsss_scr_upd` (colunas de registro, CR-006)
 * **Colunas:**
   * `id`
   * `nome VARCHAR2(60 CHAR) NOT NULL`
@@ -1700,18 +1755,24 @@ END;
   * `max_qtd_parallel_env NUMBER(3) DEFAULT 1 NOT NULL`
   * `timeout_seg NUMBER(7)`
   * `ativo CHAR(1) DEFAULT 'S' NOT NULL`
+  * `created_at DATE DEFAULT SYSDATE NOT NULL` (CR-006)
+  * `created_by VARCHAR2(40 CHAR) NOT NULL` (CR-006)
+  * `updated_at DATE` (CR-006)
+  * `updated_by VARCHAR2(40 CHAR)` (CR-006)
 
 ### 7. `tbsss_perfil_scr`
 * PK `pk_tbsss_perfil_scr` · UK `uk_tbsss_pscr_per_scr (perfil_id, script_id)`
 * FK `fk_tbsss_pscr_per → tbsss_perfis(id) ON DELETE CASCADE` (coberta pela UK)
 * FK `fk_tbsss_pscr_scr → tbsss_scripts(id) ON DELETE CASCADE` · IX `ix_tbsss_pscr_scr (script_id)`
-* **Colunas:** `id`, `perfil_id NUMBER(10) NOT NULL`, `script_id NUMBER(10) NOT NULL`
+* CK: `ck_tbsss_pscr_upd` (colunas de registro, CR-006)
+* **Colunas:** `id`, `perfil_id NUMBER(10) NOT NULL`, `script_id NUMBER(10) NOT NULL`, `created_at DATE DEFAULT SYSDATE NOT NULL`, `created_by VARCHAR2(40 CHAR) NOT NULL`, `updated_at DATE`, `updated_by VARCHAR2(40 CHAR)` (colunas de registro, CR-006)
 
 ### 8. `tbsss_script_amb` (homologação de script por ambiente)
 * PK `pk_tbsss_script_amb` · UK `uk_tbsss_samb_scr_amb (script_id, ambiente_id)`
 * FK `fk_tbsss_samb_scr → tbsss_scripts(id) ON DELETE CASCADE` (coberta pela UK)
 * FK `fk_tbsss_samb_amb → tbsss_ambientes(id) ON DELETE CASCADE` · IX `ix_tbsss_samb_amb (ambiente_id)`
-* **Colunas:** `id`, `script_id NUMBER(10) NOT NULL`, `ambiente_id NUMBER(10) NOT NULL`
+* CK: `ck_tbsss_samb_upd` (colunas de registro, CR-006)
+* **Colunas:** `id`, `script_id NUMBER(10) NOT NULL`, `ambiente_id NUMBER(10) NOT NULL`, `created_at DATE DEFAULT SYSDATE NOT NULL`, `created_by VARCHAR2(40 CHAR) NOT NULL`, `updated_at DATE`, `updated_by VARCHAR2(40 CHAR)` (colunas de registro, CR-006)
 
 ### 9. `tbsss_usuarios`
 * PK `pk_tbsss_usuarios` · UK `uk_tbsss_usr_login (login)`
@@ -1720,6 +1781,7 @@ END;
   * `ck_tbsss_usr_ativo`
   * `ck_tbsss_usr_login (REGEXP_LIKE(login, '^[a-z0-9._-]{3,30}$'))`
   * `ck_tbsss_usr_tent (tentativas_falha >= 0)`
+  * `ck_tbsss_usr_upd` (colunas de registro, CR-006)
 * Trigger extra: `tr_tbsss_usr_bu` (login imutável)
 * **Colunas:**
   * `id`
@@ -1733,6 +1795,9 @@ END;
   * `senha_alterada_em DATE`
   * `ativo CHAR(1) DEFAULT 'S' NOT NULL`
   * `created_at DATE DEFAULT SYSDATE NOT NULL`
+  * `created_by VARCHAR2(40 CHAR) NOT NULL` (CR-006)
+  * `updated_at DATE` (CR-006)
+  * `updated_by VARCHAR2(40 CHAR)` (CR-006)
 
 ### 10. `tbsss_parametros`
 * PK `pk_tbsss_parametros` · UK `uk_tbsss_prm_codigo (codigo)`
@@ -1742,6 +1807,7 @@ END;
   * `ck_tbsss_prm_sens (sensivel IN ('S','N'))`
   * `ck_tbsss_prm_codigo (REGEXP_LIKE(codigo, '^[a-z0-9_]{1,30}$'))`
   * `ck_tbsss_prm_flag (param_nomeado IS NULL OR REGEXP_LIKE(param_nomeado, '^-{1,2}[A-Za-z0-9][A-Za-z0-9_-]{0,27}$'))`
+  * `ck_tbsss_prm_upd` (colunas de registro, CR-006)
 * **Colunas:**
   * `id`
   * `codigo VARCHAR2(30 CHAR) NOT NULL`
@@ -1754,12 +1820,16 @@ END;
   * `regex_validacao VARCHAR2(150 CHAR)`
   * `sensivel CHAR(1) DEFAULT 'N' NOT NULL`
   * `ativo CHAR(1) DEFAULT 'S' NOT NULL`
+  * `created_at DATE DEFAULT SYSDATE NOT NULL` (CR-006)
+  * `created_by VARCHAR2(40 CHAR) NOT NULL` (CR-006)
+  * `updated_at DATE` (CR-006)
+  * `updated_by VARCHAR2(40 CHAR)` (CR-006)
 
 ### 11. `tbsss_script_param`
 * PK `pk_tbsss_script_param` · UK `uk_tbsss_sprm_scr_prm (script_id, parametro_id)` · UK `uk_tbsss_sprm_scr_ord (script_id, ordem)`
 * FK `fk_tbsss_sprm_scr → tbsss_scripts(id) ON DELETE CASCADE` (coberta pela UK)
 * FK `fk_tbsss_sprm_prm → tbsss_parametros(id)` · IX `ix_tbsss_sprm_prm (parametro_id)`
-* CK: `ck_tbsss_sprm_obrig`, `ck_tbsss_sprm_ordem (ordem >= 1)`
+* CK: `ck_tbsss_sprm_obrig`, `ck_tbsss_sprm_ordem (ordem >= 1)`, `ck_tbsss_sprm_upd`
 * **Colunas:**
   * `id`
   * `script_id NUMBER(10) NOT NULL`
@@ -1767,6 +1837,10 @@ END;
   * `ordem NUMBER(3) NOT NULL`
   * `obrigatorio CHAR(1) DEFAULT 'S' NOT NULL`
   * `valor_padrao_sub VARCHAR2(100 CHAR)`
+  * `created_at DATE DEFAULT SYSDATE NOT NULL` (CR-006)
+  * `created_by VARCHAR2(40 CHAR) NOT NULL` (CR-006)
+  * `updated_at DATE` (CR-006)
+  * `updated_by VARCHAR2(40 CHAR)` (CR-006)
 
 ### 12. `tbsss_agendamentos`
 * PK `pk_tbsss_agendamentos`
@@ -1784,6 +1858,7 @@ END;
   * `ck_tbsss_agd_dsem (dias_semana IS NULL OR REGEXP_LIKE(dias_semana, '^[1-7](,[1-7]){0,6}$'))`
   * `ck_tbsss_agd_fim (data_fim IS NULL OR data_fim >= data_inicio)`
   * `ck_tbsss_agd_pausa (pausa_motivo IS NULL OR pausa_motivo IN ('USUARIO_INATIVO','SEM_PERMISSAO','SCRIPT_INATIVO','AMBIENTE_INATIVO','PARAM_INVALIDO','CRON_INVALIDO','CONCLUIDO','MANUAL'))`
+  * `ck_tbsss_agd_upd` (colunas de registro, CR-006)
   * `ck_tbsss_agd_campos`:
     ```sql
     (tipo_recorrencia = 'UNICA')
@@ -1813,6 +1888,9 @@ END;
   * `pausa_motivo VARCHAR2(30 CHAR)`
   * `ativo CHAR(1) DEFAULT 'S' NOT NULL`
   * `created_at DATE DEFAULT SYSDATE NOT NULL`
+  * `created_by VARCHAR2(40 CHAR) NOT NULL` (CR-006)
+  * `updated_at DATE` (CR-006)
+  * `updated_by VARCHAR2(40 CHAR)` (CR-006)
 * **Política de exclusão:** agendamentos não são excluídos, apenas desativados.
 
 ### 13. `tbsss_tickets`
@@ -1833,6 +1911,7 @@ END;
   * `ck_tbsss_tck_cancreq (cancel_requested IN ('S','N'))`
   * `ck_tbsss_tck_logtr (log_truncado IN ('S','N'))`
   * `ck_tbsss_tck_motivo (status_motivo IS NULL OR status_motivo IN ('EXIT_OK','EXIT_ERROR','KILLED_SIGNAL','TIMEOUT','NODE_OFFLINE','ORPHAN_PROCESS','FENCED','PRECHECK_FAILED','SPAWN_ERROR','LOG_LIMIT','SHUTDOWN','CANCEL_USER'))`
+  * `ck_tbsss_tck_upd` (colunas de registro, CR-006)
 * **Colunas:**
   * `id`
   * `script_id NUMBER(10) NOT NULL`
@@ -1857,22 +1936,29 @@ END;
   * `heartbeat_at DATE`
   * `finished_at DATE`
   * `created_at DATE DEFAULT SYSDATE NOT NULL`
+  * `created_by VARCHAR2(40 CHAR) NOT NULL` (CR-006)
+  * `updated_at DATE` (CR-006)
+  * `updated_by VARCHAR2(40 CHAR)` (CR-006)
 * **Armazenamento:** `LOB (parametros_enviados, log_output) STORE AS SECUREFILE (CACHE)`, que exige tablespace ASSM e `COMPATIBLE >= 11.1`. `init_db.py --lob-basicfile` aplica o fallback BASICFILE.
 
 ### 14. `tbsss_ticket_resp`
 * PK `pk_tbsss_ticket_resp` · UK `uk_tbsss_trsp_tck_prm (ticket_id, parametro_id)`
 * FK `fk_tbsss_trsp_tck → tbsss_tickets(id) ON DELETE CASCADE` (coberta pela UK)
 * FK `fk_tbsss_trsp_prm → tbsss_parametros(id)` · IX `ix_tbsss_trsp_prm (parametro_id)`
+* CK: `ck_tbsss_trsp_upd` (colunas de registro, CR-006)
 * **Colunas:**
   * `id`
   * `ticket_id NUMBER(10) NOT NULL`
   * `parametro_id NUMBER(10) NOT NULL`
   * `valor_resposta VARCHAR2(500 CHAR)`
   * `created_at DATE DEFAULT SYSDATE NOT NULL`
+  * `created_by VARCHAR2(40 CHAR) NOT NULL` (CR-006)
+  * `updated_at DATE` (CR-006)
+  * `updated_by VARCHAR2(40 CHAR)` (CR-006)
 
 ### 15. `tbsss_agentes`
 * PK `pk_tbsss_agentes` · UK `uk_tbsss_agt_codigo (codigo)`
-* CK: `ck_tbsss_agt_stat (status IN ('ATIVO','PARADO'))`
+* CK: `ck_tbsss_agt_stat (status IN ('ATIVO','PARADO'))`, `ck_tbsss_agt_upd` (colunas de registro, CR-006)
 * **Colunas:**
   * `id`
   * `codigo VARCHAR2(30 CHAR) NOT NULL` (= `agent_id`)
@@ -1886,6 +1972,9 @@ END;
   * `iniciado_em DATE`
   * `heartbeat_at DATE`
   * `created_at DATE DEFAULT SYSDATE NOT NULL`
+  * `created_by VARCHAR2(40 CHAR) NOT NULL` (CR-006)
+  * `updated_at DATE` (CR-006)
+  * `updated_by VARCHAR2(40 CHAR)` (CR-006)
 
 ### 16. `tbsss_auditoria`
 * PK `pk_tbsss_auditoria`
@@ -1927,8 +2016,8 @@ END;
   * `--lob-basicfile` aplica o fallback de LOB;
   * **não há** opção de DROP em produção. `--recreate` só é aceito com `SSS_ENV=DEV` e confirmação interativa.
 * Toda falha de fase aborta com código diferente de zero e com o objeto e o ORA- no log.
-* **Seed** via `MERGE` (idempotente): o catálogo de funcionalidades (§4.3.D) e o perfil `ADMINISTRADOR` (`is_admin = 'S'`).
-* **Administrador inicial:** o login vem de `--admin-login`, e a senha é lida de `getpass` ou de `SSS_BOOTSTRAP_ADMIN_PASSWORD`. Nunca há valor fixo no código.
+* **Seed** via `MERGE` (idempotente): o catálogo de funcionalidades (§4.3.D) e o perfil `ADMINISTRADOR` (`is_admin = 'S'`). A inclusão grava `created_by = 'SYSTEM:init_db'`; quando o `MERGE` muda uma linha existente, grava `updated_*` com o mesmo ator; uma linha igual ao seed não é tocada (§10, CR-006).
+* **Administrador inicial:** criado com `created_by = 'SYSTEM:init_db'`. O login vem de `--admin-login`, e a senha é lida de `getpass` ou de `SSS_BOOTSTRAP_ADMIN_PASSWORD`. Nunca há valor fixo no código.
 * Se o usuário de aplicação for diferente do `owner`, o script emite os `GRANT`s e documenta os sinônimos necessários. Todo SQL da aplicação já qualifica o `owner`.
 
 ### 11.2 Esquema e testes

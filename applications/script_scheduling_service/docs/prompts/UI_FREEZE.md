@@ -9,6 +9,7 @@ O objetivo é congelar o comportamento visual e funcional das telas sobre o back
 - [ ] `python scripts/check_env.py` retorna 0.
 - [ ] Todos os relatórios F0.1–F6.1 estão com `PASS` e sem lacunas abertas.
 - [x] CR-003 (P1–P11, P6A), CR-004 (U1–U8) e CR-005 (R0–R5) concluídos, e o fechamento UF executado: bateria completa de testes e validações e `docs/homologacao/` atualizado (manual v2.2, 16/10/2026, revisado após a auditoria pós-CR-005).
+- [ ] CR-006 (C0, P0, R1–R4) concluído, com o fechamento UF e o manual v2.3: colunas de registro e quadro Registro (`docs/arquitetura/CR-006-colunas-de-registro.md`).
 
 - [ ] `instance/config.ini` sem `base_script_dirs` nem `app_log_backups` (recusados desde o CR-005) e com `[logging] app_log_retention_days`.
 
@@ -46,6 +47,17 @@ O objetivo é congelar o comportamento visual e funcional das telas sobre o back
 - [ ] No cadastro, caminho relativo, com `..`, em pasta do sistema ou com barra no fim é recusado com explicação, sem gravar nada.
 - [ ] Arquivo que não existe neste servidor é salvo com o aviso "Arquivo não encontrado neste servidor: a validação ocorrerá no agente…" (D4).
 - [ ] O nome `App` é recusado como reservado (D7).
+- [ ] A lista de scripts mostra a coluna "Caminho do arquivo" com o caminho completo (CR-006, C0).
+
+## Colunas de registro (CR-006, README §10)
+- [ ] O formulário de edição de ambientes, perfis, usuários, parâmetros, scripts e agendamentos, e o detalhe do ticket, mostram o quadro Registro: "Criado em … por …" e "Última alteração em … por …" ou "Nunca alterado". Na inclusão, o quadro não aparece.
+- [ ] Um registro recém-incluído mostra "Nunca alterado"; depois de salvar uma alteração, mostra o seu login e o horário. Desativar e reativar também contam como alteração.
+- [ ] Salvar sem mudar nada não altera o quadro (nada é gravado nem auditado).
+- [ ] Salvar a matriz de permissões atualiza a última alteração do perfil; salvar a homologação ou os parâmetros de um script atualiza a do script.
+- [ ] Num agendamento editado por outro usuário, "Criado por" continua o criador original, e a última alteração mostra quem editou.
+- [ ] Registros do seed aparecem como "Sistema (dados de demonstração)"; tickets do seed finalizados pelo agente mostram "Sistema (agente …)" na última alteração.
+- [ ] Cancelar um ticket na fila mostra o seu login na última alteração do detalhe.
+- [ ] As listas continuam sem essas colunas e sem rolagem horizontal da página nas larguras do README §2.4.1.
 
 ## Usabilidade
 - [ ] Navegação completa por teclado nas telas de disparo, lista de tickets e matriz de perfis.
