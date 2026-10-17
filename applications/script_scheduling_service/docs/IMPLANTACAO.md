@@ -847,7 +847,7 @@ ssh -t -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
 * Processo vivo depois do fim da sessão SSH; reinício e idempotência dos scripts conferidos.
 * Pelo túnel em dois trechos: login do `admin`, disparo de ticket, painel de agentes e logout, sem erros. Depois, reinício para entregar os dados de demonstração limpos.
 
-### 22.6 Atualização para a versão `fe5884c` (CR-003, CR-004 e CR-005) — [ensaiada; não executada no servidor]
+### 22.6 Atualização para a versão `fe5884c` (CR-003, CR-004 e CR-005) — [substituída pelo §22.7; não executada]
 
 O pacote `e8759e3` (CR-003 e CR-004), ensaiado antes do CR-005, foi descartado: a versão atual também muda a configuração e os logs.
 
@@ -947,3 +947,109 @@ $SSS/iniciar_sss.sh
 ```
 
 A versão anterior fica intacta em `$SSS/web2py-fdf6f35`, com o `config.ini` antigo. Apague essa pasta só depois do aceite da homologação. Depois da atualização, troque neste capítulo o commit do §22 para `fe5884c` e registre a validação no §22.5.
+
+### 22.7 Atualização para a versão `17950fb` (CR-003 a CR-008) — [ensaiada; não executada no servidor]
+
+Substitui o §22.6: o pacote `fe5884c` não chegou a ser aplicado e fica descartado. O servidor continua no `fdf6f35`, e esta atualização sai dele direto para o `17950fb`.
+
+| Item | Valor |
+|---|---|
+| Pacote | `sss-17950fb.tar.gz` (14,6 MB), gerado por `git archive` (§5.2) do commit `17950fb` |
+| SHA-256 | `d8c47422a8c5055e5b1b5a4c9886ddee8aa5503aa8a3447d02ced944ccf57e72` |
+| Onde está | Máquina de desenvolvimento: `/home/eduardof/sss_pacotes/` (pacote, `.sha256` e o roteiro `ATUALIZAR-17950fb.txt`) |
+| Mudança de configuração | No `config.ini`: apagar `base_script_dir`, trocar `app_log_backups` por `app_log_retention_days = 30` e acrescentar as chaves opcionais novas com o valor padrão (CR-007 e CR-008; passo 2). `secrets.cfg` e `web.env` não mudam: as seções `[ambiente:*]` do `secrets.cfg` antigo só geram WARN em DEV ("não pertence ao papel 'web'") |
+| Árvore de scripts | Como no §22.6: os scripts do seed apontam para `/opt/automacoes/scripts/...`, que não existe neste servidor; a Gestão de Scripts avisa "Arquivo não encontrado neste servidor…" e o disparo funciona |
+| Logs | `$SSS/logs/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (§15.2); o `$SSS/logs/sss_web.log` antigo para de crescer |
+| Usuários | Todos precisam entrar de novo depois da troca (CR-008, E2: a sessão antiga não tem `sessao_epoch`). Os dados de demonstração voltam ao seed, como em todo reinício |
+| Parada | Cerca de 1 minuto (passo 6) |
+
+**Ensaio (2026-10-17, na máquina de desenvolvimento, com o Python 3.8.5, a mesma versão do servidor, numa estrutura `$SSS` igual à do servidor, partindo do `fdf6f35` com o `config.ini` e o `secrets.cfg` daquela versão):**
+* passo 1: SHA-256 OK; só `script_scheduling_service` em `applications`;
+* passo 2: "chaves OK" depois da conversão (sem as chaves opcionais, a conferência acusa as 7 chaves novas, embora a carga funcione);
+* passo 3: `check_env.py` com código 0; suíte `Ran 819 tests ... OK (skipped=23)`;
+* passo 4: `SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)`. Antes dela, o web2py imprime "New installation error: unable to create welcome.w2p file" com um *traceback* de `applications/welcome/models`: é esperado, porque a aplicação `welcome` fica fora do pacote de propósito (§5.3);
+* subida pelo `bin/sss-web.sh` com `-a '<recycle>' -i 127.0.0.1 -p 18000`: login HTTP 200, os 4 cabeçalhos de segurança, origem estranha recusada com 403, nenhum `CRITICAL` nos logs;
+* teste de fumaça no navegador: login, O que eu posso fazer, Rotinas disponíveis, lista de tickets, agentes, formulário de script (com o campo SHA-256 do CR-008), disparo do carga_diaria ("Ticket #41 criado com sucesso."), saída ("Você saiu do sistema."); nenhum erro no console;
+* retorno: com o `fdf6f35` de volta no lugar, login HTTP 200.
+
+**0. Levar o pacote até o servidor** (dois saltos, como no §22.4):
+
+```bash
+VER=17950fb
+# na estação, a partir da pasta onde estão os arquivos
+scp -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+    sss-$VER.tar.gz sss-$VER.tar.gz.sha256 mastersafgf@10.238.10.109:/tmp/
+# no clone 7 (defina VER=17950fb de novo)
+scp /tmp/sss-$VER.tar.gz /tmp/sss-$VER.tar.gz.sha256 mastersafgf@10.129.164.55:/portaloptrib/TESHUVA/SSS/pacotes/
+rm -f /tmp/sss-$VER.tar.gz /tmp/sss-$VER.tar.gz.sha256
+```
+
+**No 10.129.164.55, como `mastersafgf`:**
+
+```bash
+VER=17950fb
+SSS=/portaloptrib/TESHUVA/SSS
+PY=/portaloptrib/TESHUVA/sparta/python3.8/bin/python3
+APP=applications/script_scheduling_service
+NOVO=$SSS/web2py-$VER
+
+# 1. Conferir e extrair AO LADO da versão atual (o SSS continua no ar)
+cd $SSS/pacotes && sha256sum -c sss-$VER.tar.gz.sha256              # sss-17950fb.tar.gz: OK
+mkdir -m 750 $NOVO && tar -xzf $SSS/pacotes/sss-$VER.tar.gz -C $NOVO
+ls $NOVO/applications                                                # somente script_scheduling_service
+
+# 2. config.ini: copiar o atual e converter (chave removida, retenção do log e chaves opcionais novas)
+cp $SSS/web2py/$APP/instance/config.ini $NOVO/$APP/instance/config.ini
+chmod 640 $NOVO/$APP/instance/config.ini
+sed -i -e '/^base_script_dirs\{0,1\} *=/d' \
+       -e 's|^app_log_backups *=.*$|app_log_retention_days = 30|' \
+       -e '/^work_dir *=/a usuarios_execucao =\nexec_work_dir =' \
+       -e '/^cron_horizon_days *=/a fila_envelhecimento_min = 60\nambientes_exigem_hash =\nlog_dir_min_livre_mb = 1024' \
+       -e '/^session_idle_timeout_s *=/a sessao_max_horas = 12' \
+       -e '/^purge_batch_size *=/a purge_user =' $NOVO/$APP/instance/config.ini
+grep -nE '^(base_script|app_log_|cron_horizon_days)' $NOVO/$APP/instance/config.ini
+# esperado: app_log_max_bytes, app_log_retention_days = 30 e cron_horizon_days = 1461 (mínimo novo: 1461)
+diff <(grep -oE "^[a-z_]+ =" $NOVO/$APP/instance/config.ini.example | sort) \
+     <(grep -oE "^[a-z_]+ =" $NOVO/$APP/instance/config.ini | sort) && echo "chaves OK"
+
+# 3. Verificar o código novo (não usa a porta; o SSS atual segue no ar)
+cd $NOVO/$APP
+$PY scripts/check_env.py; echo "codigo: $?"                         # 0
+$PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran 819 tests ... OK (skipped=23)
+
+# 4. Teste de carga da configuração (§10) na pasta nova
+cd $NOVO && umask 077
+echo 'print("SSS: configuracao OK (sss_env=%s, backend=%s, agent_id=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.app.data_backend, current.sss_cfg.agent.agent_id))' > /tmp/sss_diag.py
+$PY web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E "^SSS:|ConfigErro"
+rm -f /tmp/sss_diag.py
+# esperado: SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)
+
+# 5. Conferir que os scripts de operação usam o caminho $SSS/web2py e exportam um locale UTF-8
+grep -n "web2py\|sss_web.log\|LANG\|LC_ALL\|sss-web.sh" $SSS/iniciar_sss.sh $SSS/parar_sss.sh
+# Se o iniciar_sss.sh não passar pelo bin/sss-web.sh nem exportar LANG/LC_ALL UTF-8, a subida é recusada
+# (CR-007, R-17): acrescente "export LANG=C.UTF-8 LC_ALL=C.UTF-8" antes do comando do web2py.
+
+# 6. Trocar a versão (parada de ~1 minuto)
+$SSS/parar_sss.sh
+mv $SSS/web2py $SSS/web2py-fdf6f35 && mv $NOVO $SSS/web2py
+$SSS/iniciar_sss.sh
+
+# 7. Validar
+curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:18000/script_scheduling_service/default/login     # 200
+curl -sI http://127.0.0.1:18000/script_scheduling_service/default/login | grep -icE "content-security-policy|x-frame-options|x-content-type-options|referrer-policy"   # 4
+curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://outro-host" http://127.0.0.1:18000/script_scheduling_service/default/login   # 403
+find $SSS/logs/app -name 'sss_web_*.log' -type f | xargs grep -c CRITICAL   # 0 em cada arquivo
+tail -n 5 $SSS/logs/servidor.out
+```
+
+Depois, pelo túnel (§22.4), faça o teste de fumaça do §12 e, se quiser, os casos CT-24 e CT-25 do manual v2.5 (reinicie o servidor no fim de cada um para restaurar o seed).
+
+**Retorno (rollback), se algo falhar no passo 7:**
+
+```bash
+$SSS/parar_sss.sh
+mv $SSS/web2py $SSS/web2py-$VER && mv $SSS/web2py-fdf6f35 $SSS/web2py
+$SSS/iniciar_sss.sh
+```
+
+A versão anterior fica intacta em `$SSS/web2py-fdf6f35`, com o `config.ini` antigo. Apague essa pasta só depois do aceite da homologação. Depois da atualização, troque neste capítulo o commit do §22 para `17950fb` e registre a validação no §22.5.
