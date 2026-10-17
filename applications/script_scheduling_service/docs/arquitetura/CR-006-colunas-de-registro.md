@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Aprovado** em 2026-10-17 pelo responsável pelo produto: D1 a D4, as regras R-a a R-h e o plano C0, P0, R1 a R4 + UF. Executar antes da homologação manual do UI Freeze |
+| Status | **Aprovado** em 2026-10-17 pelo responsável pelo produto: D1 a D4, as regras R-a a R-h e o plano C0, P0, R1 a R4 + UF. **Implementado** no mesmo dia: C0 `cd10c47`, P0 `3c89905`, R1 `e214c3a`, R2 `7c987bc`, R3 `4ab418a`, R4 `a0d6a90` e o fechamento UF: 737 testes OK em Python 3.6.0, 3.6.8 e 3.13.2 (22 pulados por dependerem do Oracle), sete telas sem rolagem horizontal nas cinco larguras e sem violação de CSP, e manual de homologação v2.3 (CT-23). Executar antes da homologação manual do UI Freeze |
 | Origem | Análise de 2026-10-17 (tabelas × telas): só 7 das 16 tabelas tinham `created_at`, nenhuma tinha `updated_at`, e nenhuma registrava quem criou ou alterou. Essa informação existia só em `tbsss_auditoria`, que o `purge.py` apaga após `audit_retention_days` (730 dias por padrão), e não aparecia nas telas de cadastro. O criador original de um agendamento se perdia na primeira edição (`usuario_id` passa a ser o editor) |
 | Restrições | Sem dependência nova. Nenhuma mudança na pilha (Python 3.6+, web2py, Oracle 11gR2, Alpine CSP). Identificadores com até 30 caracteres |
 | Afeta | README §2.5, §4.4, §5.4, §5.5, §5.6, §5.7, §7.5, §7.6, §8.3, §8.4, §8.7, §8.8, §8.9, §8.10, §8.12, §10 (padrões globais e as 15 tabelas) e §11.1. `AGENTS.md` §4, §7 e §8. `docs/PADRAO_CRUD_ADMIN.md`. Prompts F7.1, F7.3, F8.2, F8.3, F8.4, F9.2, UI_FREEZE e o índice. Manual de homologação (v2.3) |
