@@ -97,9 +97,9 @@ Em 2026-10-17, a retomada conferiu o histórico e as alterações locais:
 | R2 | Commit `76f1961` |
 | R3 | Commit `c69c988` |
 | R4 | Commit `0497e76`; relatório em `RELATORIO-CR-007-R4.md` |
-| R5 | Concluído: ator mascarado (D6), quadros de diagnóstico dos agentes, "mais de 10.000"; relatório em `RELATORIO-CR-007-R5.md` |
-| UF | Próximo passo: fechamento integrado e manual v2.4 |
-| FINAL | Pendente: nova auditoria nas quatro frentes sobre o estado final |
+| R5 | Commit `d1a262c`: ator mascarado (D6), quadros de diagnóstico dos agentes, "mais de 10.000"; relatório em `RELATORIO-CR-007-R5.md` |
+| UF | Concluído: bateria nos três Pythons, 29 telas em cinco larguras, manual v2.4 (CT-24) e UI_FREEZE; relatório em `RELATORIO-CR-007-UF.md` |
+| FINAL | Próximo passo: nova auditoria nas quatro frentes sobre o estado final |
 
 R4: 782 testes em cada Python 3.6.0, 3.6.8 e 3.13.2, com sucesso e 23 testes
 Oracle ignorados por ausência de `SSS_TEST_DSN`. Chromium: quatro telas em

@@ -9,8 +9,8 @@ O objetivo é congelar o comportamento visual e funcional das telas sobre o back
 - [ ] `python scripts/check_env.py` retorna 0.
 - [ ] Todos os relatórios F0.1–F6.1 estão com `PASS` e sem lacunas abertas.
 - [x] CR-003 (P1–P11, P6A), CR-004 (U1–U8) e CR-005 (R0–R5) concluídos, e o fechamento UF executado: bateria completa de testes e validações e `docs/homologacao/` atualizado (manual v2.2, 16/10/2026, revisado após a auditoria pós-CR-005).
-- [ ] CR-007 (P0, R1–R5) concluído, com o fechamento UF e o manual v2.4: robustez do scheduler (`docs/arquitetura/CR-007-robustez-do-scheduler.md`).
 - [x] CR-006 (C0, P0, R1–R4) concluído, com o fechamento UF e o manual v2.3 (17/10/2026, CT-23): colunas de registro e quadro Registro (`docs/arquitetura/CR-006-colunas-de-registro.md`).
+- [x] CR-007 (P0, R1–R5) concluído na parte web/FAKE, com o fechamento UF e o manual v2.4 (17/10/2026, CT-24): robustez do scheduler (`docs/arquitetura/CR-007-robustez-do-scheduler.md`, relatórios `RELATORIO-CR-007-R4.md`, `-R5.md` e `-UF.md`). O que é do Oracle e do agente segue especificado para o F7 e o F8; a nova auditoria (passo FINAL do CR-007) vem antes do aceite.
 
 - [ ] `instance/config.ini` sem `base_script_dirs` nem `app_log_backups` (recusados desde o CR-005) e com `[logging] app_log_retention_days`.
 
