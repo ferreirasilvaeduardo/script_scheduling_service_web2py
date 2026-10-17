@@ -86,3 +86,23 @@ Cada passo: implementação, testes (3.6.0, 3.6.8 e 3.13.2), navegador quando ho
 | R5 | Telas: quadro Registro com ator mascarado, painel de agentes com os três quadros novos, paginação "mais de 10.000"; testes e navegador |
 | UF | Bateria completa, telas nas cinco larguras, manual v2.4 e git |
 | FINAL | Nova auditoria rigorosa nas quatro frentes, sobre o estado final, com relatório |
+
+## 5. Acompanhamento da execução
+
+Em 2026-10-17, a retomada conferiu o histórico e as alterações locais:
+
+| Passo | Evidência / situação |
+|---|---|
+| P0 e R1 | Commit `de8db2a` |
+| R2 | Commit `76f1961` |
+| R3 | Commit `c69c988` |
+| R4 | Implementação e validação concluídas nesta retomada; relatório em `RELATORIO-CR-007-R4.md` |
+| R5 | Próximo passo: mascaramento do ator, diagnósticos dos agentes e apresentação do total limitado |
+| UF | Pendente: fechamento integrado e manual v2.4 |
+| FINAL | Pendente: nova auditoria nas quatro frentes sobre o estado final |
+
+R4: 782 testes em cada Python 3.6.0, 3.6.8 e 3.13.2, com sucesso e 23 testes
+Oracle ignorados por ausência de `SSS_TEST_DSN`. Chromium: quatro telas em
+360, 390, 768, 1366 e 1920 px, sem rolagem horizontal ou erro JavaScript.
+Oracle real permanece não testado; F7 e F8 continuam fora deste passo,
+conforme a dependência e o plano acima. O CR completo ainda não está encerrado.

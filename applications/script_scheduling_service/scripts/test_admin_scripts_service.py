@@ -447,5 +447,92 @@ class TestPrevia(_Base):
         self.assertEqual(scr_mod.normalizar_filtros({"interpretador": "POWERSHELL"}), {})
 
 
+@_SKIP_ROOT
+class TestSha256Homologado(_Base):
+
+    def test_inclusao_calcula_sha256_homologado_quando_arquivo_existe(self):
+        # CR-007 R-24: sha256_homologado gravado quando o arquivo existe localmente.
+        sid, erros, _a = self._incluir(path_file=self._p("novo.py"))
+        self.assertEqual(erros, {})
+        reg = self.catalogo.scripts_obter(sid)
+        esperado = scr_mod.calcular_sha256_arquivo(self._p("novo.py"))
+        self.assertTrue(esperado and len(esperado) == 64)
+        self.assertEqual(reg.get("sha256_homologado"), esperado)
+
+    def test_inclusao_sem_arquivo_local_deixa_sha256_nulo(self):
+        # Arquivo ausente no no web: sem bloqueio, sha256_homologado fica None.
+        sid, erros, _a = self._incluir(path_file="/opt/automacoes/scripts/inexistente.py")
+        self.assertEqual(erros, {})
+        reg = self.catalogo.scripts_obter(sid)
+        self.assertIsNone(reg.get("sha256_homologado"))
+
+    def test_edicao_mudando_caminho_ou_interpretador_recalcula_sha256(self):
+        sid, _e, _a = self._incluir(path_file=self._p("novo.py"))
+        _sid, erros, _a = self._editar(sid, path_file=self._p("carga_diaria.py"))
+        self.assertEqual(erros, {})
+        reg = self.catalogo.scripts_obter(sid)
+        esperado = scr_mod.calcular_sha256_arquivo(self._p("carga_diaria.py"))
+        self.assertEqual(reg.get("sha256_homologado"), esperado)
+
+    def test_edicao_com_registrar_conteudo_atual_recalcula_sha256(self):
+        sid, _e, _a = self._incluir(path_file=self._p("novo.py"))
+        sha_antigo = self.catalogo.scripts_obter(sid)["sha256_homologado"]
+        caminho = self._p("novo.py")
+        os.chmod(caminho, stat.S_IRUSR | stat.S_IWUSR)
+        with open(caminho, "w") as f:
+            f.write("# conteudo modificado pelo desenvolvedor\n")
+        os.chmod(caminho, stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
+        _sid, erros, _a = self._editar(sid, descricao="Descricao alterada")
+        self.assertEqual(erros, {})
+        self.assertEqual(self.catalogo.scripts_obter(sid)["sha256_homologado"], sha_antigo)
+        _sid, erros, _a = self._editar(sid, registrar_conteudo_atual="S")
+        self.assertEqual(erros, {})
+        novo_sha = self.catalogo.scripts_obter(sid)["sha256_homologado"]
+        self.assertNotEqual(novo_sha, sha_antigo)
+        self.assertEqual(novo_sha, scr_mod.calcular_sha256_arquivo(caminho))
+        aud = self._auditorias("CAD_ALTERAR")[0]
+        self.assertIn("sha256_homologado: alterado", aud["detalhe"])
+
+    def test_registrar_conteudo_recusa_arquivo_que_ficou_gravavel(self):
+        sid, _, _ = self._incluir(path_file=self._p("novo.py"))
+        antes = self.catalogo.scripts_obter(sid)
+        os.chmod(self._p("novo.py"), 0o666)
+        _, erros, _ = self._editar(sid, registrar_conteudo_atual="1")
+        self.assertIn("path_file", erros)
+        self.assertEqual(self.catalogo.scripts_obter(sid), antes)
+
+    def test_falha_de_leitura_nao_homologa_nem_grava(self):
+        sid, _, _ = self._incluir(path_file=self._p("novo.py"))
+        antes = self.catalogo.scripts_obter(sid)
+        with mock.patch.object(scr_mod, "calcular_sha256_arquivo", side_effect=PermissionError()):
+            with self.assertRaises(OperacaoNegada):
+                self._editar(sid, registrar_conteudo_atual="1")
+        self.assertEqual(self.catalogo.scripts_obter(sid), antes)
+
+    def test_caminho_ausente_preserva_hash_anterior(self):
+        sid, _, _ = self._incluir(path_file=self._p("novo.py"))
+        antes = self.catalogo.scripts_obter(sid)["sha256_homologado"]
+        _, erros, aviso = self._editar(sid, path_file="/opt/automacoes/scripts/inexistente.py")
+        self.assertEqual(erros, {})
+        self.assertTrue(aviso)
+        self.assertEqual(self.catalogo.scripts_obter(sid)["sha256_homologado"], antes)
+
+    def test_reativacao_recalcula_sha256_homologado(self):
+        sid, _e, _a = self._incluir(path_file=self._p("novo.py"))
+        f = self.svc.formulario(self.ctx["admin"], str(sid))
+        self.svc.alternar_ativo(self.ctx["admin"], IP, str(sid), f["versao"])
+        self.assertEqual(self.catalogo.scripts_obter(sid)["ativo"], "N")
+        caminho = self._p("novo.py")
+        os.chmod(caminho, stat.S_IRUSR | stat.S_IWUSR)
+        with open(caminho, "w") as f:
+            f.write("# conteudo para reativacao\n")
+        os.chmod(caminho, stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
+        f2 = self.svc.formulario(self.ctx["admin"], str(sid))
+        self.svc.alternar_ativo(self.ctx["admin"], IP, str(sid), f2["versao"])
+        reg = self.catalogo.scripts_obter(sid)
+        self.assertEqual(reg["ativo"], "S")
+        self.assertEqual(reg["sha256_homologado"], scr_mod.calcular_sha256_arquivo(caminho))
+
+
 if __name__ == "__main__":
     unittest.main()

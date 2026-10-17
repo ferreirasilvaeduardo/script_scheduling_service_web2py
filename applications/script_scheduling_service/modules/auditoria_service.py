@@ -296,7 +296,7 @@ class ServicoAuditoria(object):
         # linha; a quantidade registrada e o arquivo correspondem ao mesmo conjunto.
         aid = self._auditoria.reservar_id()
         repo_filtros["id_max"] = aid - 1
-        total = self._auditoria.listar(filtros=repo_filtros, pagina=1, tamanho=1)["total"]
+        total = sum(1 for _ in self._auditoria.iterar(filtros=repo_filtros, limite=LIMITE_EXPORTACAO))
         linhas = min(total, LIMITE_EXPORTACAO)
         detalhe = admin_crud.detalhe_livre(u"filtros: %s; linhas: %d (limite %d)" % (
             _descrever_filtros(filtros), linhas, LIMITE_EXPORTACAO))

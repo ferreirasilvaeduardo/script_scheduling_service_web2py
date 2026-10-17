@@ -164,9 +164,13 @@ class FakeDataStore(object):
                                     self.agentes_hb_sim.clear()
 
 
+LIMITE_TOTAL_PAGINACAO = 10001
+
+
 def paginar(itens, pagina=1, tamanho=20):
-    """Utilitario padrao para paginacao deterministica com retorno em dict."""
-    total = len(itens)
+    """Pagina deterministica com total limitado a 10.001 (README §10)."""
+    total_limitado = len(itens) >= LIMITE_TOTAL_PAGINACAO
+    total = min(len(itens), LIMITE_TOTAL_PAGINACAO)
     # Valor nao numerico propaga ValueError/TypeError: o controller valida a entrada antes.
     p = 1 if pagina is None else int(pagina)
     t = 20 if tamanho is None else int(tamanho)
@@ -184,4 +188,5 @@ def paginar(itens, pagina=1, tamanho=20):
         "total": total,
         "pagina": p,
         "tamanho": t,
+        "total_limitado": total_limitado,
     }

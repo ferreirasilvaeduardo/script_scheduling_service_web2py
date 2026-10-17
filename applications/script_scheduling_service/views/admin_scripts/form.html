@@ -89,6 +89,20 @@ pass
       {{include 'components/form_campo.html'}}
       {{pass}}
     </div>
+    {{if not _novo:}}
+    <div class="mb-3">
+      {{if _s.get('sha256_homologado'):}}
+      <p class="form-text mb-1">Conteúdo homologado (SHA-256): <code class="sss-mono">{{=_s['sha256_homologado']}}</code></p>
+      {{else:}}
+      <p class="form-text text-warning mb-1">Arquivo sem conteúdo registrado neste nó. O agente não vai conferir o conteúdo enquanto não houver registro.</p>
+      {{pass}}
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="campo-registrar_conteudo_atual" name="registrar_conteudo_atual" value="1">
+        <label class="form-check-label" for="campo-registrar_conteudo_atual">Registrar o conteúdo atual do arquivo</label>
+        <div class="form-text">Atualiza o hash do script com base no arquivo presente neste servidor.</div>
+      </div>
+    </div>
+    {{pass}}
     <div class="sss-form-acoes">
       <button type="submit" class="btn btn-primary">{{=u'Incluir script' if _novo else u'Salvar alterações'}}</button>
       <a class="btn btn-outline-secondary" href="{{=URL(c='admin_scripts', f='lista')}}">Cancelar</a>

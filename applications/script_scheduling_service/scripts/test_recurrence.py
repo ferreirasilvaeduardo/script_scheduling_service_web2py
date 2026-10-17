@@ -162,6 +162,16 @@ class TestProximaExecucao(unittest.TestCase):
         self.assertLess(segundos, 0.050)
 
 
+class TestValidarCronComFim(unittest.TestCase):
+
+    def test_cron_sem_ocorrencia_com_data_fim_no_horizonte(self):
+        # CR-007, R-32: a mensagem fica com o servico ("sem proxima execucao"), nao "nao ocorre nos proximos".
+        r = regra('CRON', expressao_cron='0 0 1 1 *', data_inicio=D(2026, 10, 1), data_fim=D(2026, 12, 1))
+        self.assertNotIn('expressao_cron', rec.validar_regra(r, 90))
+        r = dict(r, data_fim=None)
+        self.assertIn('expressao_cron', rec.validar_regra(r, 90))
+
+
 class TestAvaliarDisparo(unittest.TestCase):
 
     def test_nao_vencida(self):
@@ -171,13 +181,13 @@ class TestAvaliarDisparo(unittest.TestCase):
     def test_no_horario(self):
         r = diaria(proxima_execucao=D(2026, 10, 15, 3))
         decisao = rec.avaliar_disparo(r, D(2026, 10, 15, 3, 0, 4, 250), 'SKIP', 300)
-        self.assertEqual(decisao, rec.Decisao(True, D(2026, 10, 16, 3), 0, False))
+        self.assertEqual(decisao, rec.Decisao(True, D(2026, 10, 16, 3), 0, False, D(2026, 10, 15, 3)))
 
     def test_run_once_apos_3_dias_de_downtime(self):
         r = diaria(proxima_execucao=D(2026, 10, 12, 3))
         decisao = rec.avaliar_disparo(r, AGORA, 'RUN_ONCE', 300)
         # 12, 13, 14 e 15/10 venceram: 1 ticket coalescido e 3 perdidas.
-        self.assertEqual(decisao, rec.Decisao(True, D(2026, 10, 16, 3), 3, False))
+        self.assertEqual(decisao, rec.Decisao(True, D(2026, 10, 16, 3), 3, False, D(2026, 10, 15, 3)))
         self.assertGreater(decisao.nova_data, AGORA)
 
     def test_skip(self):
@@ -193,27 +203,48 @@ class TestAvaliarDisparo(unittest.TestCase):
     def test_atraso_tolerado_com_varias_vencidas(self):
         # Decisao 5: CRON a cada minuto com 4 min de atraso gera 1 ticket; nova_data e a primeira > agora.
         r = regra('CRON', expressao_cron='* * * * *', proxima_execucao=D(2026, 10, 15, 10, 3))
-        self.assertEqual(rec.avaliar_disparo(r, AGORA, 'SKIP', 300), rec.Decisao(True, D(2026, 10, 15, 10, 8), 4, False))
+        self.assertEqual(rec.avaliar_disparo(r, AGORA, 'SKIP', 300), rec.Decisao(True, D(2026, 10, 15, 10, 8), 4, False, D(2026, 10, 15, 10, 7)))
 
     def test_unica_no_passado(self):
         r = regra('UNICA', data_inicio=D(2026, 10, 1, 9), proxima_execucao=D(2026, 10, 1, 9))
-        self.assertEqual(rec.avaliar_disparo(r, AGORA, 'RUN_ONCE', 300), rec.Decisao(True, None, 0, True))
+        self.assertEqual(rec.avaliar_disparo(r, AGORA, 'RUN_ONCE', 300), rec.Decisao(True, None, 0, True, D(2026, 10, 1, 9)))
         self.assertEqual(rec.avaliar_disparo(r, AGORA, 'SKIP', 300), rec.Decisao(False, None, 1, True))
         r = dict(r, proxima_execucao=D(2026, 10, 15, 10, 5))
-        self.assertEqual(rec.avaliar_disparo(r, AGORA, 'SKIP', 300), rec.Decisao(True, None, 0, True))
+        self.assertEqual(rec.avaliar_disparo(r, AGORA, 'SKIP', 300), rec.Decisao(True, None, 0, True, D(2026, 10, 15, 10, 5)))
 
     def test_data_fim_atingido(self):
         r = diaria(proxima_execucao=D(2026, 10, 15, 3), data_fim=D(2026, 10, 15, 23, 59))
-        self.assertEqual(rec.avaliar_disparo(r, D(2026, 10, 15, 3), 'RUN_ONCE', 300), rec.Decisao(True, None, 0, True))
+        self.assertEqual(rec.avaliar_disparo(r, D(2026, 10, 15, 3), 'RUN_ONCE', 300),
+                         rec.Decisao(True, None, 0, True, D(2026, 10, 15, 3)))
         r = dict(r, data_fim=D(2026, 10, 16, 3))
         self.assertEqual(rec.avaliar_disparo(r, D(2026, 10, 15, 3), 'RUN_ONCE', 300),
-                         rec.Decisao(True, D(2026, 10, 16, 3), 0, False))
+                         rec.Decisao(True, D(2026, 10, 16, 3), 0, False, D(2026, 10, 15, 3)))
+
+    def test_conclusao_sem_ticket_fora_da_unica(self):
+        # CR-007, R-32: DIARIA com data_fim vencida durante a parada e SKIP conclui sem ticket.
+        r = diaria(proxima_execucao=D(2026, 10, 12, 3), data_fim=D(2026, 10, 14, 4))
+        self.assertEqual(rec.avaliar_disparo(r, AGORA, 'SKIP', 300), rec.Decisao(False, None, 3, True, None))
+
+    def test_ocorrencia_nunca_no_futuro(self):
+        r = regra('CRON', expressao_cron='*/5 * * * *', proxima_execucao=D(2026, 10, 15, 9, 50))
+        decisao = rec.avaliar_disparo(r, AGORA, 'RUN_ONCE', 3600)
+        self.assertEqual(decisao.ocorrencia, D(2026, 10, 15, 10, 5))
+        self.assertLessEqual(decisao.ocorrencia, AGORA)
 
     def test_perdidas_limitadas(self):
         r = regra('CRON', expressao_cron='* * * * *', proxima_execucao=D(2026, 9, 1))
         decisao = rec.avaliar_disparo(r, AGORA, 'SKIP', 300)
         self.assertEqual((decisao.gerar_ticket, decisao.perdidas), (False, rec.LIMITE_PERDIDAS))
         self.assertEqual(decisao.nova_data, D(2026, 10, 15, 10, 8))
+
+    def test_ocorrencia_mais_recente_apos_limite_de_contagem(self):
+        for fim, esperado in ((None, D(2026, 10, 15, 10, 5)),
+                              (D(2026, 10, 1, 10, 3), D(2026, 10, 1, 10, 0))):
+            r = regra('CRON', expressao_cron='*/5 * * * *',
+                      proxima_execucao=INICIO, data_fim=fim)
+            decisao = rec.avaliar_disparo(r, AGORA, 'RUN_ONCE', 300)
+            self.assertEqual(decisao.perdidas, rec.LIMITE_PERDIDAS)
+            self.assertEqual(decisao.ocorrencia, esperado)
 
     def test_cron_invalido_propaga(self):
         r = regra('CRON', expressao_cron='0 0 30 2 *', proxima_execucao=D(2026, 10, 1))

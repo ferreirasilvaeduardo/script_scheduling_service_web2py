@@ -9,7 +9,7 @@ from repo_fake.store import paginar
 
 _TIPOS = ("UNICA", "DIARIA", "SEMANAL", "MENSAL", "CRON")
 _MOTIVOS_PAUSA = ("USUARIO_INATIVO", "SEM_PERMISSAO", "SCRIPT_INATIVO", "AMBIENTE_INATIVO",
-                  "PARAM_INVALIDO", "CRON_INVALIDO", "CONCLUIDO", "MANUAL")
+                  "PARAM_INVALIDO", "CRON_INVALIDO", "CONCLUIDO", "MANUAL", "ERRO_INTERNO")
 _RE_HORA = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
 _RE_DSEM = re.compile(r"^[1-7](,[1-7]){0,6}$")
 _TAMANHO_NOME = 60
@@ -202,6 +202,8 @@ class RepoAgendamentosFake(RepoAgendamentos):
                 raise RepoViolacao("pausa_motivo invalido", constraint="ck_tbsss_agd_pausa")
 
             a = self._store.agendamentos[id]
+            if a.get("ativo") != "S":
+                raise RepoConflito("Agendamento %s nao esta ativo (ja pausado ou concluido)" % id)
             if antiga_data is not None:
                 prox = a.get("proxima_execucao")
                 if prox != antiga_data:

@@ -5,8 +5,8 @@ Modulo puro: nao importa gluon (AGENTS §7.1) e nunca chama datetime.now(); o "a
 chega por parametro (no daemon, SYSDATE do banco; AGENTS §6).
 
 Semantica de tempo: horario de parede, datetime naive, sem fuso nem tratamento de horario de
-verao (README §7.1). Um horario inexistente no avanco do relogio cai no misfire e executa uma
-vez; no recuo, proxima_execucao ja aponta adiante e nao ha reexecucao. Toda data devolvida tem
+verao (README §7.1). Saltos do relogio seguem a politica de misfire; o banco deve operar sem
+horario de verao. Toda data devolvida tem
 segundos e microssegundos zerados.
 
 Regras (decisoes do F5.1, README §7.2):
@@ -38,7 +38,9 @@ _UM_DIA = datetime.timedelta(days=1)
 _CACHE_CRON = {}
 _CACHE_MAXIMO = 256
 
-Decisao = collections.namedtuple('Decisao', ['gerar_ticket', 'nova_data', 'perdidas', 'concluir'])
+# ocorrencia (CR-007, R-27): a vencida mais recente coberta pelo ticket; None quando nao ha ticket.
+Decisao = collections.namedtuple('Decisao', ['gerar_ticket', 'nova_data', 'perdidas', 'concluir', 'ocorrencia'])
+Decisao.__new__.__defaults__ = (None,)
 
 
 def truncar_segundos(dt):
@@ -105,7 +107,11 @@ def validar_regra(regra, horizonte_dias=HORIZONTE_PADRAO):
             expr = cron_parser.parse(cron)
             if isinstance(inicio, datetime.datetime):
                 piso = truncar_segundos(inicio) - _UM_MINUTO
-                if expr.proxima(piso, horizonte_dias) is None:
+                # Com data_fim dentro do horizonte, a falta de ocorrencia e "sem proxima execucao" (o servico
+                # da a mensagem), e nao expressao invalida (README §7.3, CR-007 R-32).
+                fim_no_horizonte = (isinstance(fim, datetime.datetime)
+                                    and fim <= piso + datetime.timedelta(days=horizonte_dias))
+                if expr.proxima(piso, horizonte_dias) is None and not fim_no_horizonte:
                     erros['expressao_cron'] = ('A expressão não ocorre nos próximos %d dias a partir do início.'
                                                % horizonte_dias)
         except CronErro as erro:
@@ -204,17 +210,32 @@ def proximas(regra, apos, n, horizonte_dias=HORIZONTE_PADRAO):
 
 
 def _vencidas(regra, inicio, agora, horizonte_dias):
-    """Ocorrencias em [inicio, agora], contando `inicio`; para em LIMITE_PERDIDAS + 1."""
+    """(quantidade, ultima) das ocorrencias em [inicio, agora], contando `inicio`; para em LIMITE_PERDIDAS + 1."""
     total = 1
+    ultima = inicio
     if regra['tipo_recorrencia'] == 'UNICA':
-        return total
+        return total, ultima
     atual = inicio
     while total <= LIMITE_PERDIDAS:
         atual = proxima_execucao(regra, atual, horizonte_dias)
         if atual is None or atual > agora:
             break
         total += 1
-    return total
+        ultima = atual
+    if total > LIMITE_PERDIDAS:
+        # O limite da contagem nao pode limitar a ocorrencia coberta pelo ticket.
+        teto = truncar_segundos(min(agora, regra.get('data_fim') or agora))
+        esquerda, direita = ultima, teto
+        while esquerda < direita:
+            minutos = int((direita - esquerda).total_seconds() // 60)
+            meio = esquerda + datetime.timedelta(minutes=minutos // 2)
+            seguinte = proxima_execucao(regra, meio, horizonte_dias)
+            if seguinte is not None and seguinte <= teto:
+                ultima = seguinte
+                esquerda = seguinte
+            else:
+                direita = meio
+    return total, ultima
 
 
 def avaliar_disparo(regra, agora, misfire_policy, misfire_tolerance_s, horizonte_dias=HORIZONTE_PADRAO):
@@ -223,7 +244,9 @@ def avaliar_disparo(regra, agora, misfire_policy, misfire_tolerance_s, horizonte
     * nova_data: sempre a primeira ocorrencia > agora (None quando a regra terminou);
     * gerar_ticket: um ticket coalescendo as vencidas, exceto SKIP com atraso acima da tolerancia;
     * perdidas: vencidas que nao viraram ticket, limitada a LIMITE_PERDIDAS;
-    * concluir: UNICA apos a decisao, ou sem proxima ocorrencia ate data_fim.
+    * concluir: UNICA apos a decisao, ou sem proxima ocorrencia ate data_fim (sem ticket quando
+      gerar_ticket e falso);
+    * ocorrencia: a vencida mais recente, coberta pelo ticket (scheduled_at do ticket, CR-007 R-27).
     Lanca CronErro se a expressao CRON for invalida ou nao ocorrer no horizonte (CRON_INVALIDO).
     """
     if misfire_policy not in POLITICAS_MISFIRE:
@@ -231,9 +254,9 @@ def avaliar_disparo(regra, agora, misfire_policy, misfire_tolerance_s, horizonte
     agora = sem_microssegundos(agora)
     prevista = regra.get('proxima_execucao')
     if prevista is None or prevista > agora:
-        return Decisao(False, sem_microssegundos(prevista), 0, False)
+        return Decisao(False, sem_microssegundos(prevista), 0, False, None)
 
-    vencidas = _vencidas(regra, prevista, agora, horizonte_dias)
+    vencidas, ultima = _vencidas(regra, prevista, agora, horizonte_dias)
     atraso = (agora - prevista).total_seconds()
     if atraso > misfire_tolerance_s and misfire_policy == 'SKIP':
         gerar, perdidas = False, vencidas
@@ -244,4 +267,5 @@ def avaliar_disparo(regra, agora, misfire_policy, misfire_tolerance_s, horizonte
         nova_data = None
     else:
         nova_data = proxima_execucao(regra, agora, horizonte_dias)
-    return Decisao(gerar, nova_data, min(perdidas, LIMITE_PERDIDAS), nova_data is None)
+    return Decisao(gerar, nova_data, min(perdidas, LIMITE_PERDIDAS), nova_data is None,
+                   sem_microssegundos(ultima) if gerar else None)

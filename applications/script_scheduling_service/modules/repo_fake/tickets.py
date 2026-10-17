@@ -87,6 +87,12 @@ class RepoTicketsFake(RepoTickets):
             agora = self._store.agora()
             sched = ticket.get("scheduled_at") or agora
 
+            if ticket.get("agendamento_id") is not None:
+                agd_id = int(ticket["agendamento_id"])
+                for t in self._store.tickets.values():
+                    if t.get("agendamento_id") == agd_id and t.get("scheduled_at") == sched:
+                        raise RepoViolacao("ocorrencia duplicada para este agendamento", constraint="ix_tbsss_tck_ocor")
+
             novo_ticket = {
                 "id": tid,
                 "script_id": script_id,
@@ -110,6 +116,7 @@ class RepoTicketsFake(RepoTickets):
                 "started_at": ticket.get("started_at"),
                 "heartbeat_at": ticket.get("heartbeat_at"),
                 "finished_at": ticket.get("finished_at"),
+                "arquivo_sha256": ticket.get("arquivo_sha256"),
                 "created_at": ticket.get("created_at") or agora,
             }
             self._store.carimbar_inclusao(novo_ticket, ator)

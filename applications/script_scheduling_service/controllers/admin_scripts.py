@@ -14,7 +14,7 @@ from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
 _FUNC = "CAD_SCRIPTS"
 _TAMANHOS = (20, 50, 100)
 _CAMPOS = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file", "tipo_param",
-           "max_qtd_parallel_env", "timeout_seg", "versao")
+           "max_qtd_parallel_env", "timeout_seg", "versao", "registrar_conteudo_atual")
 _JS = "js/app/scripts_admin.js"
 _MAX_JSON = 50000
 _MAX_IDS = 1000
@@ -106,6 +106,8 @@ def salvar():
         _nao_encontrado()
     except AcessoNegado:
         _negado()
+    except OperacaoNegada as exc:
+        salvo_id, erros = None, {admin_crud.CAMPO_GERAL: str(exc)}
     except RepoErro:
         _log.exception("falha ao salvar script (login=%s id=%r)", ctx["login"], script_id, extra={"acao": _FUNC})
         salvo_id, erros = None, {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}

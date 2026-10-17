@@ -139,7 +139,10 @@ def detalhe_alteracoes(antes, depois, campos):
     for c in campos:
         a, d = normalizar(antes.get(c)), normalizar(depois.get(c))
         if a != d:
-            partes.append(u"%s: %s%s%s" % (c, _exibir(a), _SETA, _exibir(d)))
+            if c == "sha256_homologado":
+                partes.append(u"sha256_homologado: alterado")
+            else:
+                partes.append(u"%s: %s%s%s" % (c, _exibir(a), _SETA, _exibir(d)))
     return limitar(u"; ".join(partes)) if partes else None
 
 

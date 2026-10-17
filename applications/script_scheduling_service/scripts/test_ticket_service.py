@@ -264,6 +264,17 @@ class TestTicketService(_BaseTicket):
         tid, erros = self._criar(scheduled_at="2026-10-16T10:06")
         self.assertEqual(erros, {})
 
+    def test_scheduled_at_limite_366_dias(self):
+        # CR-007 D2 (README §5.4): scheduled_at no maximo 366 dias no futuro.
+        agora = self.tickets.agora()
+        mais_366 = (agora + datetime.timedelta(days=366)).strftime("%Y-%m-%dT%H:%M")
+        tid, erros = self._criar(scheduled_at=mais_366)
+        self.assertEqual(erros, {})
+        mais_367 = (agora + datetime.timedelta(days=367)).strftime("%Y-%m-%dT%H:%M")
+        tid, erros = self._criar(scheduled_at=mais_367)
+        self.assertIsNone(tid)
+        self.assertIn(u"Escolha uma data até", erros.get("scheduled_at", ""))
+
     def test_path_guard_rejeita_script(self):
         os.chmod(self.base, 0o775)
         tid, erros = self._criar()

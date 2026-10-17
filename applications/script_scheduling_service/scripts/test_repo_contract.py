@@ -43,6 +43,21 @@ from repo_usuarios import RepoUsuarios
 class BaseRepoContractTest(object):
     """Bateria de testes agnostica a backend, executada contra FAKE e ORACLE."""
 
+    def test_ocorrencia_duplicada_recusada_sem_alterar_ticket(self):
+        tickets = self.obter_repo("tickets")
+        agd = self.obter_repo("agendamentos").listar(tamanho=1)["itens"][0]
+        dados = {"script_id": agd["script_id"], "ambiente": agd["ambiente"], "solicitante": "admin",
+                 "agendamento_id": agd["id"], "scheduled_at": datetime.datetime(2030, 1, 2)}
+        primeiro_id = tickets.criar(dados, [], ator="teste")
+        primeiro = tickets.obter(primeiro_id)
+        with self.assertRaises(RepoViolacao) as erro:
+            tickets.criar(dados, [], ator="teste")
+        self.assertEqual(erro.exception.constraint, "ix_tbsss_tck_ocor")
+        self.assertEqual(tickets.obter(primeiro["id"]), primeiro)
+        tickets.criar(dict(dados, scheduled_at=datetime.datetime(2030, 1, 3)), [], ator="teste")
+        tickets.criar(dict(dados, agendamento_id=None), [], ator="teste")
+        tickets.criar(dict(dados, agendamento_id=None), [], ator="teste")
+
     def test_01_crud_ambientes(self):
         cat = self.obter_repo("catalogo")
         # Insercao
@@ -414,7 +429,7 @@ class BaseRepoContractTest(object):
 
     def test_07_transicao_concorrente_perdida_gerando_repo_conflito(self):
         agd = self.obter_repo("agendamentos")
-        regra = agd.listar()["itens"][0]
+        regra = [r for r in agd.listar()["itens"] if r["ativo"] == "S"][0]
         data_correta = regra["proxima_execucao"]
         data_divergente = data_correta + datetime.timedelta(days=10)
 
@@ -426,6 +441,10 @@ class BaseRepoContractTest(object):
         pausado = agd.pausar(regra["id"], motivo="MANUAL", antiga_data=data_correta, ator="teste")
         self.assertEqual(pausado["ativo"], "N")
         self.assertEqual(pausado["pausa_motivo"], "MANUAL")
+
+        # Pausar uma regra já pausada gera RepoConflito (CR-007 R-19)
+        with self.assertRaises(RepoConflito):
+            agd.pausar(regra["id"], motivo="MANUAL", antiga_data=data_correta, ator="teste")
 
     def test_06b_fks_e_limites_de_auditoria(self):
         """CR-003 P8 (README §2.5): FKs, UK de ticket_resp e limites da auditoria, sem gravacao parcial."""

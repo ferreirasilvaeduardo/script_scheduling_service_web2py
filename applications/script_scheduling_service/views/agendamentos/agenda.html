@@ -23,13 +23,28 @@
   <h2 class="sss-card-titulo" id="titulo-atrasados">Atrasado</h2>
   <ul class="sss-card-corpo sss-agenda-lista">
     {{for _a in dados['atrasados']:}}
-    <li><span class="sss-agenda-hora">{{=_a['hora']}}</span> <a href="{{=URL(c='agendamentos', f='form', args=[_a['regra_id']])}}">{{=_a['nome']}}</a> — <span class="sss-mono">{{=_a['script']}}</span> em <strong>{{=_a['ambiente']}}</strong>: {{=_a['frase']}}</li>
+    <li><span class="sss-agenda-hora">{{=_a['hora']}}</span> <a href="{{=URL(c='agendamentos', f='form', args=[_a['regra_id']])}}">{{=_a['nome']}}</a> — <span class="sss-mono">{{=_a['script']}}</span> em <strong>{{=_a['ambiente']}}</strong>: {{=_a['frase']}}{{if _a.get('aviso'):}} <span class="sss-texto-suave text-warning">({{=_a['aviso']}})</span>{{pass}}</li>
     {{pass}}
   </ul>
 </section>
 {{pass}}
 
-{{if not dados['dias']:}}
+{{if dados.get('problemas'):}}
+<section class="sss-card" aria-labelledby="titulo-problemas">
+  <h2 class="sss-card-titulo" id="titulo-problemas">Regras com problema</h2>
+  <ul class="sss-card-corpo sss-agenda-lista">
+    {{for _p in dados['problemas']:}}
+    <li>
+      <a href="{{=URL(c='agendamentos', f='form', args=[_p['regra_id']])}}">{{=_p['nome']}}</a>
+      — <span class="sss-mono">{{=_p['script']}}</span> em <strong>{{=_p['ambiente']}}</strong>:
+      <span class="text-danger">{{=_p.get('aviso') or _p.get('problema')}}</span>
+    </li>
+    {{pass}}
+  </ul>
+</section>
+{{pass}}
+
+{{if not dados['dias'] and not dados.get('problemas'):}}
 <section class="sss-card"><p class="sss-card-corpo mb-0">Nada previsto para os próximos 7 dias.</p></section>
 {{pass}}
 {{for _d in dados['dias']:}}
@@ -43,6 +58,7 @@
       — <span class="sss-mono">{{=_o['script']}}</span> em <strong>{{=_o['ambiente']}}</strong>
       <span class="sss-texto-suave">({{=_o['recorrencia']}})</span>
       {{if _o.get('mais'):}}<span class="sss-texto-suave"> e mais {{=_o['mais']}} vezes neste período</span>{{pass}}
+      {{if _o.get('aviso'):}} <span class="sss-texto-suave text-warning">({{=_o['aviso']}})</span>{{pass}}
     </li>
     {{pass}}
   </ul>

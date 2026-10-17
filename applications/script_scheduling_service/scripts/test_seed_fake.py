@@ -74,9 +74,12 @@ class TestSeedFake(unittest.TestCase):
             for codigo in obrigatorios:
                 self.assertIn(codigo, respostas, a["id"])
 
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_linha_de_controle_na_versao_do_codigo(self):
+        import sql_ident
+        self.assertIn(1, self.store.controle)
+        ctl = self.store.controle[1]
+        self.assertEqual(ctl["id"], 1)
+        self.assertEqual(ctl["versao_esquema"], sql_ident.VERSAO_ESQUEMA)
 
 
 class TestSeedColunasRegistro(unittest.TestCase):
@@ -120,3 +123,7 @@ class TestSeedColunasRegistro(unittest.TestCase):
                 self.assertEqual(t["updated_by"], "SYSTEM:%s" % t["agente_id"], t["id"])
         for r in self.store.ticket_resp.values():
             self.assertEqual(r["created_by"], self.store.tickets[r["ticket_id"]]["created_by"])
+
+
+if __name__ == "__main__":
+    unittest.main()

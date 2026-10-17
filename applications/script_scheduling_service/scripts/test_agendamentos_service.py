@@ -63,9 +63,11 @@ class _Base(unittest.TestCase):
             "consulta": self._ctx(4, "consulta", 4),
         }
         self.agora = AGORA
-        disparo = ServicoTicket(self.catalogo, repo_factory.obter("tickets"), (0,), self.log)
+        self.tickets = repo_factory.obter("tickets")
+        disparo = ServicoTicket(self.catalogo, self.tickets, (0,), self.log)
         self.svc = ServicoAgendamentos(self.agd, self.catalogo, repo_factory.obter("usuarios"), disparo,
-                                       lambda: self.agora, HORIZONTE, self.log)
+                                       lambda: self.agora, HORIZONTE, self.log,
+                                       tickets=self.tickets, rbac_repo=self.rbac)
         self.aud_base = max([a["id"] for a in self.auditoria.listar(pagina=1, tamanho=1000)["itens"]] or [0])
 
     def _ctx(self, usuario_id, login, perfil_id):
@@ -379,6 +381,13 @@ class TestEdicao(_Base):
 
 
 class TestAgenda(_Base):
+
+    def test_cron_valido_fora_da_semana_nao_e_problema(self):
+        aid, erros = self._salvar(tipo_recorrencia="CRON", expressao_cron="0 0 1 12 *")
+        self.assertEqual(erros, {})
+        agenda = self.svc.agenda(self.ctx["admin"])
+        self.assertFalse(any(item["regra_id"] == aid for item in agenda["problemas"]))
+
     """CR-004 U6 (README §7.7)."""
 
     def _regra(self, **campos):
@@ -425,6 +434,19 @@ class TestAgenda(_Base):
 
 
 class TestPausaRetomada(_Base):
+
+    def test_falha_de_rbac_nao_retoma_nem_audita(self):
+        aid, erros = self._salvar()
+        self.assertEqual(erros, {})
+        self.svc.pausar(self.ctx["admin"], IP, str(aid))
+        antes = self.agd.obter(aid)
+        auditorias = self._auditorias()
+        with mock.patch.object(self.rbac, "matriz_obter", side_effect=RuntimeError("indisponivel")):
+            with self.assertRaises(RuntimeError):
+                self.svc.retomar(self.ctx["admin"], IP, str(aid))
+        self.assertEqual(self.agd.obter(aid), antes)
+        self.assertEqual(self._auditorias(), auditorias)
+
 
     def test_pausar_e_retomar_com_recalculo(self):
         aid, _erros = self._salvar()
@@ -483,6 +505,42 @@ class TestPausaRetomada(_Base):
             self.svc.retomar(self.ctx["admin"], IP, str(aid))
         self.assertEqual(cm.exception.mensagem, svc_mod.MSG_RETOMAR_SEM_PROXIMA)
         self.assertEqual(self.agd.obter(aid)["ativo"], "N")
+
+    def test_retomar_reavalia_usuario_responsavel_inativo(self):
+        aid, _erros = self._salvar(login="op.hml", script_id="1",
+                                   respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
+        self.svc.pausar(self.ctx["admin"], IP, str(aid))
+        usuarios = repo_factory.obter("usuarios")
+        usuarios.alterar(3, {"ativo": "N"}, ator="teste")
+        with self.assertRaises(OperacaoNegada) as cm:
+            self.svc.retomar(self.ctx["admin"], IP, str(aid))
+        self.assertIn(svc_mod.MOTIVOS_PAUSA["USUARIO_INATIVO"], cm.exception.mensagem)
+        self.assertIn(svc_mod.MSG_ORIENTACAO_RETOMAR, cm.exception.mensagem)
+
+    def test_retomar_reavalia_script_inativo(self):
+        aid, _erros = self._salvar(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
+        self.svc.pausar(self.ctx["admin"], IP, str(aid))
+        self.catalogo.scripts_alterar(1, {"ativo": "N"}, ator="teste")
+        with self.assertRaises(OperacaoNegada) as cm:
+            self.svc.retomar(self.ctx["admin"], IP, str(aid))
+        self.assertIn(svc_mod.MOTIVOS_PAUSA["SCRIPT_INATIVO"], cm.exception.mensagem)
+
+    def test_retomar_reavalia_ambiente_inativo(self):
+        aid, _erros = self._salvar(ambiente="HOMOLOGACAO", script_id="1",
+                                   respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
+        self.svc.pausar(self.ctx["admin"], IP, str(aid))
+        self.catalogo.ambientes_alterar(2, {"ativo": "N"}, ator="teste")
+        with self.assertRaises(OperacaoNegada) as cm:
+            self.svc.retomar(self.ctx["admin"], IP, str(aid))
+        self.assertIn(svc_mod.MOTIVOS_PAUSA["AMBIENTE_INATIVO"], cm.exception.mensagem)
+
+    def test_retomar_reavalia_parametros_invalidos(self):
+        aid, _erros = self._salvar(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
+        self.svc.pausar(self.ctx["admin"], IP, str(aid))
+        self.agd.alterar(aid, {"parametros_json": json.dumps({"data_ref": "data-invalida"})}, ator="teste")
+        with self.assertRaises(OperacaoNegada) as cm:
+            self.svc.retomar(self.ctx["admin"], IP, str(aid))
+        self.assertIn(svc_mod.MOTIVOS_PAUSA["PARAM_INVALIDO"], cm.exception.mensagem)
 
 
 class TestListaPrevia(_Base):
@@ -546,6 +604,40 @@ class TestListaPrevia(_Base):
         res = self.svc.previa(self.ctx["admin"], {"tipo_recorrencia": "UNICA", "data_inicio": "2026-03-01T09:00"})
         self.assertEqual(res["datas"], [u"dom, 01/03/2026 09:00"])
         self.assertEqual(res["descricao"], u"Uma vez, em 01/03/2026 09:00")
+
+    def test_lista_aviso_sobreposicao(self):
+        tid = self.tickets.criar({"script_id": 1, "ambiente": "PRODUCAO", "solicitante": "admin",
+                                  "parametros_enviados": "{}", "prioridade": 2, "status": "PENDING"},
+                                 [], ator="admin")
+        self.agd.alterar(1, {"ultimo_ticket_id": tid}, ator="teste")
+        res = self.svc.listar(self.ctx["admin"], {}, 1, 20)
+        item1 = [i for i in res["itens"] if i["id"] == 1][0]
+        self.assertIsNotNone(item1.get("aviso"))
+        self.assertIn(u"pode ser pulada", item1["aviso"])
+        self.assertIn(str(tid), item1["aviso"])
+
+    def test_agenda_aviso_e_problemas(self):
+        aid_ativo, erros = self._salvar()
+        self.assertEqual(erros, {})
+        self.catalogo.scripts_alterar(1, {"ativo": "N"}, ator="teste")
+        dados = self.svc.agenda(self.ctx["admin"])
+        itens_r1 = [i for dia in dados["dias"] for i in dia["itens"] if i["regra_id"] == aid_ativo]
+        self.assertTrue(itens_r1)
+        self.assertIn(u"Será pausada", itens_r1[0].get("aviso", ""))
+        aid = self.agd.inserir({"nome": "CRON Problematico", "usuario_id": 1, "script_id": 1,
+                                "ambiente": "HOMOLOGACAO", "tipo_recorrencia": "CRON",
+                                "expressao_cron": "0 0 31 2 *", "prioridade": 2, "ativo": "S",
+                                "parametros_json": "{}"}, ator="teste")["id"]
+        dados2 = self.svc.agenda(self.ctx["admin"])
+        problemas = dados2.get("problemas", [])
+        self.assertIn(aid, [p["regra_id"] for p in problemas])
+
+    def test_formulario_regra_pausada_pausa_aviso(self):
+        aid, _erros = self._salvar(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
+        self.svc.pausar(self.ctx["admin"], IP, str(aid))
+        f = self.svc.formulario(self.ctx["admin"], str(aid))
+        self.assertIsNotNone(f["regra"].get("pausa_aviso"))
+        self.assertIn(u"Pausada", f["regra"]["pausa_aviso"])
 
 
 class TestAuditoriaInclusao(_Base):

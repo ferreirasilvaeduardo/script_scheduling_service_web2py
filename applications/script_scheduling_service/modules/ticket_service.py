@@ -455,6 +455,10 @@ class ServicoTicket(object):
             erros[CAMPO_AGENDAMENTO] = (u"O horário escolhido já passou. "
                                         u"Escolha um horário futuro, ou deixe em branco para rodar agora.")
             return None
+        limite = agora + datetime.timedelta(days=366)
+        if data > limite:
+            erros[CAMPO_AGENDAMENTO] = u"Escolha uma data até %s." % limite.strftime("%d/%m/%Y")
+            return None
         return data.replace(microsecond=0)
 
     def _compilar(self, ctx, script, amb, respostas, agora, erros):

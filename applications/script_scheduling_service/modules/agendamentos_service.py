@@ -56,6 +56,7 @@ MOTIVOS_PAUSA = {
     "AMBIENTE_INATIVO": u"Ambiente inativo",
     "PARAM_INVALIDO": u"Parâmetros inválidos",
     "CRON_INVALIDO": u"Expressão CRON inválida",
+    "ERRO_INTERNO": u"Erro interno",
 }
 
 MSG_NOME_OBRIGATORIO = u"Informe o nome da regra."
@@ -73,6 +74,8 @@ MSG_JA_PAUSADA = u"A regra já está pausada."
 MSG_JA_ATIVA = u"A regra já está ativa."
 MSG_RETOMAR_SEM_PROXIMA = (u"A regra não tem próxima execução e não pode ser retomada. "
                            u"Edite as datas ou a recorrência.")
+MSG_ORIENTACAO_RETOMAR = (u"Edite a regra para corrigir (ao salvar, ela passa a rodar com as suas permissões) "
+                          u"e depois retome.")
 
 # Campos editaveis que compoem a versao do formulario (concorrencia otimista, README §10).
 CAMPOS_VERSAO = ("nome", "prioridade", "tipo_recorrencia", "expressao_cron", "hora_execucao",
@@ -265,7 +268,8 @@ def versao(registro, sensiveis=()):
 class ServicoAgendamentos(object):
     """Regras de agendamento com repositorios, servico de disparo, relogio e log injetados."""
 
-    def __init__(self, agendamentos, catalogo, usuarios, disparo, relogio, horizonte_dias, log):
+    def __init__(self, agendamentos, catalogo, usuarios, disparo, relogio, horizonte_dias, log,
+                 tickets=None, rbac_repo=None, misfire_policy="RUN_ONCE", misfire_tolerance_s=300):
         self._agendamentos = agendamentos
         self._catalogo = catalogo
         self._usuarios = usuarios
@@ -273,8 +277,109 @@ class ServicoAgendamentos(object):
         self._relogio = relogio
         self._horizonte = horizonte_dias
         self._log = log
+        self._misfire_policy = (misfire_policy or "RUN_ONCE").upper()
+        self._misfire_tolerance_s = int(misfire_tolerance_s if misfire_tolerance_s is not None else 300)
+        if tickets is None or rbac_repo is None:
+            import repo_factory
+            if tickets is None:
+                tickets = repo_factory.obter("tickets")
+            if rbac_repo is None:
+                rbac_repo = repo_factory.obter("rbac")
+        self._tickets = tickets
+        self._rbac = rbac_repo
 
     # ------------------------------------------------------------- apoio
+
+    def _aviso_sobreposicao(self, reg, prefixo=u"A próxima vez pode ser pulada: a execução #"):
+        tid = reg.get("ultimo_ticket_id")
+        if not tid or not self._tickets:
+            return None
+        try:
+            tck = self._tickets.obter(tid)
+        except RepoNaoEncontrado:
+            return None
+        if tck and tck.get("status") in ("PENDING", "RUNNING"):
+            rotulo = ui_helpers.status_info(tck["status"])["rotulo"].lower()
+            return u"%s%s ainda está %s." % (prefixo, tid, rotulo)
+        return None
+
+    def _avaliar_problema_desdobro(self, reg, agora):
+        """Avalia se a regra sofreria pausa no desdobro (README §7.5 passos 2 e 5; CR-007 R-26).
+
+        Retorna (codigo_motivo, texto_motivo) ou None se estiver apta.
+        """
+        try:
+            estado = self._usuarios.obter_estado_sessao(reg["usuario_id"])
+        except RepoNaoEncontrado:
+            return "USUARIO_INATIVO", MOTIVOS_PAUSA["USUARIO_INATIVO"]
+        if estado.get("usuario_ativo") != "S":
+            return "USUARIO_INATIVO", MOTIVOS_PAUSA["USUARIO_INATIVO"]
+        if estado.get("perfil_ativo") != "S":
+            return "SEM_PERMISSAO", MOTIVOS_PAUSA["SEM_PERMISSAO"]
+
+        try:
+            script = self._catalogo.scripts_obter(reg["script_id"])
+        except RepoNaoEncontrado:
+            return "SCRIPT_INATIVO", MOTIVOS_PAUSA["SCRIPT_INATIVO"]
+        if script.get("ativo") != "S":
+            return "SCRIPT_INATIVO", MOTIVOS_PAUSA["SCRIPT_INATIVO"]
+
+        amb = None
+        for a in self._catalogo.ambientes_listar(tamanho=1000)["itens"]:
+            if a.get("nome") == reg.get("ambiente"):
+                amb = a
+                break
+        if amb is None or amb.get("ativo") != "S":
+            return "AMBIENTE_INATIVO", MOTIVOS_PAUSA["AMBIENTE_INATIVO"]
+
+        homologacoes = self._catalogo.homologacao_obter(script["id"])
+        if amb["id"] not in frozenset(homologacoes or ()):
+            return "SEM_PERMISSAO", MOTIVOS_PAUSA["SEM_PERMISSAO"]
+
+        rbac_repo = self._rbac
+        matriz = rbac_repo.matriz_obter(estado["perfil_id"])
+        codigos = dict(
+            (f["id"], f["codigo"]) for f in rbac_repo.funcionalidades_listar() if f.get("ativo") == "S"
+        )
+        funcs = frozenset(codigos[fid] for fid in matriz.get("funcs", ()) if fid in codigos)
+        ambs_nomes = []
+        for aid in matriz.get("ambs", ()):
+            try:
+                ambs_nomes.append(self._catalogo.ambientes_obter(aid)["nome"])
+            except RepoNaoEncontrado:
+                continue
+        dados_ctx = dict(estado, funcionalidades=funcs, ambientes=frozenset(ambs_nomes),
+                         scripts=frozenset(matriz.get("scrs", ())))
+        ctx_usuario = rbac.contexto_usuario(dados_ctx)
+        ok, motivo_rbac = rbac.pode_executar(ctx_usuario, script, amb, homologacoes)
+        if not ok:
+            if motivo_rbac == rbac.Motivo.USUARIO_INATIVO:
+                return "USUARIO_INATIVO", MOTIVOS_PAUSA["USUARIO_INATIVO"]
+            elif motivo_rbac == rbac.Motivo.SCRIPT_INATIVO:
+                return "SCRIPT_INATIVO", MOTIVOS_PAUSA["SCRIPT_INATIVO"]
+            elif motivo_rbac == rbac.Motivo.AMBIENTE_INATIVO:
+                return "AMBIENTE_INATIVO", MOTIVOS_PAUSA["AMBIENTE_INATIVO"]
+            return "SEM_PERMISSAO", MOTIVOS_PAUSA["SEM_PERMISSAO"]
+
+        try:
+            respostas = json.loads(reg.get("parametros_json") or "{}")
+        except (TypeError, ValueError):
+            return "PARAM_INVALIDO", MOTIVOS_PAUSA["PARAM_INVALIDO"]
+        if not isinstance(respostas, dict):
+            return "PARAM_INVALIDO", MOTIVOS_PAUSA["PARAM_INVALIDO"]
+
+        vinculos = self._vinculos(script["id"])
+        _snap, _resolv, erros_param = params_compiler.compilar_snapshot(script, vinculos, respostas, agora)
+        if erros_param:
+            return "PARAM_INVALIDO", MOTIVOS_PAUSA["PARAM_INVALIDO"]
+
+        if reg.get("tipo_recorrencia") == "CRON":
+            try:
+                recurrence.proxima_execucao(reg, agora, self._horizonte)
+            except CronErro:
+                return "CRON_INVALIDO", MOTIVOS_PAUSA["CRON_INVALIDO"]
+
+        return None
 
     def _agora(self):
         return recurrence.sem_microssegundos(self._relogio())
@@ -435,28 +540,39 @@ class ServicoAgendamentos(object):
                 break
             pagina += 1
         scripts = {}
-        atrasados, ocorrencias = [], []
+        atrasados, ocorrencias, problemas = [], [], []
         for reg in regras:
             if reg["script_id"] not in scripts:
                 try:
                     scripts[reg["script_id"]] = self._catalogo.scripts_obter(reg["script_id"])["nome"]
                 except RepoNaoEncontrado:
                     scripts[reg["script_id"]] = u"#%s" % reg["script_id"]
+            aviso_regra = self._aviso_sobreposicao(reg, prefixo=u"Pode ser pulada: a execução #")
+            if not aviso_regra:
+                prob = self._avaliar_problema_desdobro(reg, agora)
+                if prob:
+                    aviso_regra = u"Será pausada: %s." % prob[1]
             base = {"regra_id": reg["id"], "nome": reg["nome"], "script": scripts[reg["script_id"]],
-                    "ambiente": reg["ambiente"], "recorrencia": descrever_regra(reg)}
+                    "ambiente": reg["ambiente"], "recorrencia": descrever_regra(reg),
+                    "aviso": aviso_regra}
             prox = reg.get("proxima_execucao")
             if prox is None:
                 continue
             if prox < agora:
-                atrasados.append(dict(base, hora=prox.strftime("%d/%m %H:%M"),
-                                      frase=u"deveria ter rodado às %s; vai rodar assim que o servidor puder."
-                                      % prox.strftime("%H:%M")))
+                atraso_s = (agora - prox).total_seconds()
+                if self._misfire_policy == "SKIP" and atraso_s > self._misfire_tolerance_s:
+                    frase = u"passou do horário e será pulada (política de atraso: pular)"
+                else:
+                    frase = (u"deveria ter rodado às %s; vai rodar assim que o servidor puder."
+                             % prox.strftime("%H:%M"))
+                atrasados.append(dict(base, hora=prox.strftime("%d/%m %H:%M"), frase=frase))
             datas = []
             atual = prox if prox >= agora else None
             extra = 0
             try:
+                proxima_calculada = recurrence.proxima_execucao(reg, agora, self._horizonte)
                 if atual is None:
-                    atual = recurrence.proxima_execucao(reg, agora, self._horizonte)
+                    atual = proxima_calculada
                 while atual is not None and atual < fim:
                     if len(datas) < AGENDA_POR_REGRA:
                         datas.append(atual)
@@ -465,7 +581,9 @@ class ServicoAgendamentos(object):
                     else:
                         break
                     atual = recurrence.proxima_execucao(reg, atual, self._horizonte)
-            except CronErro:
+            except CronErro as exc:
+                if reg.get("tipo_recorrencia") == "CRON":
+                    problemas.append(dict(base, problema=exc.mensagem))
                 continue
             for i, quando in enumerate(datas):
                 item = dict(base, quando=quando, hora=quando.strftime("%H:%M"))
@@ -481,7 +599,8 @@ class ServicoAgendamentos(object):
         for o in ocorrencias:
             dias.setdefault(o["quando"].date(), []).append(o)
         return {"atrasados": atrasados, "aviso_total": aviso_total, "total": len(ocorrencias),
-                "dias": [{"rotulo": _rotulo_dia(d, agora.date()), "itens": itens} for d, itens in dias.items()]}
+                "dias": [{"rotulo": _rotulo_dia(d, agora.date()), "itens": itens} for d, itens in dias.items()],
+                "problemas": problemas}
 
     def listar(self, ctx, filtros, pagina, tamanho):
         """Pagina de regras dos ambientes autorizados (admin: todos), pronta para a tabela."""
@@ -504,6 +623,13 @@ class ServicoAgendamentos(object):
                 except RepoNaoEncontrado:
                     scripts[sid] = u"#%s" % sid
             rotulo, motivo = situacao(reg)
+            aviso = None
+            if reg.get("ativo") == "S":
+                aviso = self._aviso_sobreposicao(reg, prefixo=u"A próxima vez pode ser pulada: a execução #")
+                if not aviso:
+                    prob = self._avaliar_problema_desdobro(reg, self._agora())
+                    if prob:
+                        aviso = u"Será pausada: %s." % prob[1]
             itens.append({
                 "id": reg["id"],
                 "nome": reg["nome"],
@@ -519,6 +645,7 @@ class ServicoAgendamentos(object):
                 "ativo": reg["ativo"],
                 "situacao": rotulo,
                 "motivo": motivo,
+                "aviso": aviso,
             })
         return dict(resultado, itens=itens)
 
@@ -567,6 +694,16 @@ class ServicoAgendamentos(object):
 
     def _regra_form(self, ctx, atual, enviados):
         base = atual or {"tipo_recorrencia": "DIARIA", "prioridade": PRIORIDADE_PADRAO}
+        pausa_aviso = None
+        if atual and atual.get("ativo") == "N":
+            dt_pausa = formatar_data(atual.get("updated_at"))
+            ator_pausa = ui_helpers.nome_ator(atual.get("updated_by"))
+            motivo_txt = MOTIVOS_PAUSA.get(atual.get("pausa_motivo"), atual.get("pausa_motivo")) or u"Desconhecido"
+            pausa_aviso = (
+                u"Pausada em %s por %s: %s. "
+                u"Edite a regra para corrigir (ao salvar, ela passa a rodar com as suas permissões) e depois retome."
+                % (dt_pausa, ator_pausa, motivo_txt)
+            )
         regra = {
             "id": base.get("id"),
             "nome": base.get("nome") or "",
@@ -584,6 +721,7 @@ class ServicoAgendamentos(object):
             "responsavel": self._login(atual["usuario_id"]) if atual else None,
             "outro_responsavel": bool(atual) and atual["usuario_id"] != ctx.get("usuario_id"),
             "registro": ui_helpers.registro(atual) if atual else None,
+            "pausa_aviso": pausa_aviso,
         }
         for campo in ("nome", "tipo_recorrencia", "expressao_cron", "hora_execucao", "dia_mes",
                       "data_inicio", "data_fim", "prioridade", "versao"):
@@ -739,9 +877,14 @@ class ServicoAgendamentos(object):
         atual = self._obter_visivel(ctx, agendamento_id)
         if atual["ativo"] == "S":
             raise OperacaoNegada(MSG_JA_ATIVA)
+        agora = self._agora()
+        problema = self._avaliar_problema_desdobro(atual, agora)
+        if problema is not None:
+            _cod, causa = problema
+            raise OperacaoNegada(u"%s. %s" % (causa, MSG_ORIENTACAO_RETOMAR))
         self._autorizar(ctx, atual["script_id"], atual["ambiente"])
         try:
-            proxima = recurrence.proxima_execucao(atual, self._agora(), self._horizonte)
+            proxima = recurrence.proxima_execucao(atual, agora, self._horizonte)
         except CronErro as exc:
             raise OperacaoNegada(u"%s: %s" % (MOTIVOS_PAUSA["CRON_INVALIDO"], exc.mensagem))
         if proxima is None:
@@ -780,6 +923,10 @@ def _servico():
                 relogio=tickets.agora,
                 horizonte_dias=cfg.agent.cron_horizon_days,
                 log=sss_logging.obter_logger("sss_web", cfg),
+                tickets=tickets,
+                rbac_repo=fabrica.obter("rbac"),
+                misfire_policy=cfg.agent.misfire_policy,
+                misfire_tolerance_s=cfg.agent.misfire_tolerance_s,
             )
         return _padrao
 

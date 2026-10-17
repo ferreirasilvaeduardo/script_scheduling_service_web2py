@@ -65,6 +65,7 @@ url_base = ('agendamentos', 'lista')
           <td>
             <span class="sss-status {{=_sit['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_sit['icone']}}"></use></svg><span>{{=_r['situacao']}}</span></span>
             {{if _r['motivo']:}}<div class="sss-texto-suave">{{=_r['motivo']}}</div>{{pass}}
+            {{if _r.get('aviso'):}}<div class="sss-texto-suave text-warning"><small>{{=_r['aviso']}}</small></div>{{pass}}
           </td>
           <td class="sss-tabela-acoes">
             <div class="sss-acoes">

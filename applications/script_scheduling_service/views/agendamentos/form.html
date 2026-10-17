@@ -87,6 +87,12 @@ _ajuda_fim = u'Opcional. A última execução acontece até esta data e hora (in
   {{if edicao:}}
   <input type="hidden" name="id" value="{{=_regra['id']}}">
   <input type="hidden" name="versao" value="{{=_regra['versao']}}">
+  {{if _regra.get('pausa_aviso'):}}
+  <div class="alert alert-warning sss-alerta mb-3" role="alert">
+    <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
+    <span>{{=_regra['pausa_aviso']}}</span>
+  </div>
+  {{pass}}
   <div class="alert alert-warning sss-alerta" role="note">
     <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
     <span>Ao salvar, esta regra passará a executar com as suas permissões.{{if _regra['outro_responsavel']:}} Hoje ela roda com as permissões de <span class="sss-mono">{{=_regra['responsavel']}}</span>.{{pass}}</span>

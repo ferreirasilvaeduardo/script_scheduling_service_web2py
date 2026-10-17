@@ -24,12 +24,23 @@ from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 
 FUNCIONALIDADE = "CAD_SCRIPTS"
 CAMPOS_EDITAVEIS = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file",
-                    "tipo_param",
-                    "max_qtd_parallel_env", "timeout_seg", "ativo")
+                    "tipo_param", "max_qtd_parallel_env", "timeout_seg", "ativo", "sha256_homologado")
 CAMPOS_INSERCAO = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file",
-                   "tipo_param",
-                   "max_qtd_parallel_env",
-                   "timeout_seg")
+                   "tipo_param", "max_qtd_parallel_env", "timeout_seg", "sha256_homologado")
+
+
+def calcular_sha256_arquivo(caminho):
+    """Calcula o SHA-256 do arquivo validado, em blocos de 64 KiB."""
+    h = hashlib.sha256()
+    with open(caminho, "rb") as arquivo:
+        while True:
+            bloco = arquivo.read(65536)
+            if not bloco:
+                break
+            h.update(bloco)
+    return h.hexdigest()
+
+
 ROTULOS_INTERPRETADOR = (("PYTHON3", u"PYTHON3 — Python 3"),
                          ("BASH", u"BASH — Bash"),
                          ("SH", u"SH — Shell POSIX"))
@@ -197,7 +208,7 @@ class ServicoAdminScripts(object):
             return dict(comum, id=None, nome="", descricao="", grupo="", categoria="", etapa="",
                         interpretador=path_guard.ALLOWLIST[0], path_file="", tipo_param="NOMEADO",
                         max_qtd_parallel_env=1, timeout_seg="", ativo="S", versao="", agendamentos_ativos=0,
-                        registro=None)
+                        registro=None, sha256_homologado=None)
         s = self._obter(script_id)
         dados = dict((c, s.get(c)) for c in CAMPOS_EDITAVEIS)
         for c in ("descricao", "grupo", "categoria", "etapa"):
@@ -205,7 +216,8 @@ class ServicoAdminScripts(object):
         dados["timeout_seg"] = "" if s.get("timeout_seg") is None else s["timeout_seg"]
         dados.update(comum, id=s["id"], versao=admin_crud.versao(s, CAMPOS_EDITAVEIS),
                      agendamentos_ativos=self._agendamentos_ativos(script_id=s["id"]),
-                     registro=ui_helpers.registro(s))
+                     registro=ui_helpers.registro(s),
+                     sha256_homologado=s.get("sha256_homologado"))
         return dados
 
     # ------------------------------------------------------------- validacao
@@ -279,6 +291,15 @@ class ServicoAdminScripts(object):
             erros["path_file"] = MENSAGENS_PATH[exc.codigo]
         return None
 
+    def _hash_validado(self, caminho, aviso):
+        if aviso == AVISO_NAO_ENCONTRADO:
+            return None
+        try:
+            return calcular_sha256_arquivo(caminho)
+        except OSError:
+            self._log.exception("falha ao registrar conteudo do script", extra={"acao": FUNCIONALIDADE})
+            raise OperacaoNegada(admin_crud.MSG_FALHA)
+
     def _pre_tipo_param(self, script_id, tipo, erros):
         vinculos = self._catalogo.script_params_obter(script_id)
         if tipo == "NENHUM" and vinculos:
@@ -306,13 +327,16 @@ class ServicoAdminScripts(object):
         erros = {}
         atual = None if script_id in (None, "") else self._obter(script_id)
         reg = self._validar(dados, erros, atual)
-        # README §8.5: na edicao, as checagens de arquivo so rodam se o caminho ou o interpretador mudarem.
-        checar = atual is None or any(reg[c] != atual.get(c) for c in ("path_file", "interpretador"))
+        # Toda homologacao exige as checagens do caminho, inclusive a solicitada pelo checkbox.
+        checar = (atual is None or bool(dados.get("registrar_conteudo_atual"))
+                  or any(reg[c] != atual.get(c) for c in ("path_file", "interpretador")))
         aviso = self.validar_caminho(reg["path_file"], erros, checar)
         if script_id in (None, ""):
             if erros:
                 return None, erros, None
             novo = dict(reg, ativo="S")
+            sha = self._hash_validado(reg["path_file"], aviso)
+            novo["sha256_homologado"] = sha
             auditoria = admin_crud.auditoria(ctx, ip, "CAD_INSERIR", admin_crud.detalhe_insercao(novo, CAMPOS_INSERCAO))
             try:
                 criado = self._catalogo.scripts_inserir(novo, auditoria=auditoria)
@@ -330,7 +354,15 @@ class ServicoAdminScripts(object):
             return atual["id"], erros, None
         if admin_crud.texto(dados.get("versao"), 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
             return atual["id"], {CAMPO_GERAL: admin_crud.MSG_CONFLITO}, None
-        alteracoes = dict((c, reg[c]) for c in CAMPOS_EDITAVEIS if c != "ativo")
+        alteracoes = dict((c, reg[c]) for c in CAMPOS_EDITAVEIS if c not in ("ativo", "sha256_homologado"))
+        registrar_atual = bool(dados.get("registrar_conteudo_atual"))
+        mudou_arquivo = reg["path_file"] != atual.get("path_file") or reg["interpretador"] != atual.get("interpretador")
+        alteracoes["sha256_homologado"] = atual.get("sha256_homologado")
+        if mudou_arquivo or registrar_atual:
+            sha = self._hash_validado(reg["path_file"], aviso)
+            if sha is not None:
+                alteracoes["sha256_homologado"] = sha
+
         detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, **alteracoes), CAMPOS_EDITAVEIS)
         if detalhe is None:
             return atual["id"], {}, aviso
@@ -353,17 +385,21 @@ class ServicoAdminScripts(object):
         if admin_crud.texto(versao, 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
             raise RepoConflito("versao divergente")
         novo_ativo = "N" if atual["ativo"] == "S" else "S"
+        mudancas = {"ativo": novo_ativo}
         if novo_ativo == "S":
             # Reativacao refaz as checagens de arquivo (README §8.5).
             erros = {}
-            self.validar_caminho(atual["path_file"], erros)
+            aviso = self.validar_caminho(atual["path_file"], erros)
             if erros:
                 raise OperacaoNegada(u"Não foi possível reativar: %s" % u" ".join(erros.values()))
-        detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, ativo=novo_ativo), ("ativo",))
+            sha = self._hash_validado(atual["path_file"], aviso)
+            if sha:
+                mudancas["sha256_homologado"] = sha
+        detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, **mudancas), CAMPOS_EDITAVEIS)
         acao = "CAD_DESATIVAR" if novo_ativo == "N" else "CAD_ALTERAR"
         if novo_ativo == "N":
             detalhe = u"%s; agendamentos ativos afetados: %d" % (detalhe, self._agendamentos_ativos(script_id=atual["id"]))
-        alterado = self._catalogo.scripts_alterar(atual["id"], {"ativo": novo_ativo},
+        alterado = self._catalogo.scripts_alterar(atual["id"], mudancas,
                                                   esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
                                                   auditoria=admin_crud.auditoria(ctx, ip, acao, detalhe))
         self._log.info("script %s (login=%s script=%s)", "desativado" if novo_ativo == "N" else "reativado",

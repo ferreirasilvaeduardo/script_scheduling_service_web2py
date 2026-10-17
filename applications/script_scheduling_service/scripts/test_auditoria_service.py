@@ -279,6 +279,9 @@ class TestExportar(_Base):
     def test_limite_de_linhas(self):
         for _ in range(auditoria_service.LIMITE_EXPORTACAO + 20):
             self._inserir(self.base)
+        resultado = self.auditoria.listar(tamanho=1)
+        self.assertEqual(resultado["total"], 10001)
+        self.assertTrue(resultado["total_limitado"])
         _, linhas, blocos = self.svc.exportar_csv(self.ctx["admin"], IP, {})
         _, tabela = _ler_csv(blocos)
         self.assertEqual(linhas, auditoria_service.LIMITE_EXPORTACAO)
