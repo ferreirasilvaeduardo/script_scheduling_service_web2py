@@ -119,7 +119,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg.app.data_backend, "FAKE")
 
         # [oracle]
-        self.assertEqual(cfg.oracle.user, "gfcadastro")
+        self.assertEqual(cfg.oracle.user, "sss_web")
         self.assertEqual(cfg.oracle.dsn, "10.0.0.1:1521/servico_homolog")
         self.assertEqual(cfg.oracle.owner, "gfcadastro")
         self.assertEqual(cfg.oracle.table_prefix, "tbsss_")
@@ -629,3 +629,138 @@ class TestConfig(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestConfigCR007(unittest.TestCase):
+    """CR-007 (README §4.1, §8.6, §8.9, §12.1): chaves novas, invariantes I3/I4 e segredos por papel."""
+
+    setUp = TestConfig.setUp
+    tearDown = TestConfig.tearDown
+    _copiar_e_modificar_ini = TestConfig._copiar_e_modificar_ini
+    _criar_secrets_temporario = TestConfig._criar_secrets_temporario
+
+    def _carregar(self, **alteracoes):
+        return sss_config.carregar(self._copiar_e_modificar_ini(alteracoes=alteracoes))
+
+    def _recusa(self, chave, **alteracoes):
+        with self.assertRaises(sss_config.ConfigErro) as ctx:
+            self._carregar(**alteracoes)
+        self.assertEqual(ctx.exception.chave, chave, str(ctx.exception))
+        return ctx.exception
+
+    def test_padroes_das_chaves_novas(self):
+        cfg = self._carregar()
+        self.assertEqual(cfg.agent.usuarios_execucao, ())
+        self.assertIsNone(cfg.agent.exec_work_dir)
+        self.assertEqual(cfg.agent.fila_envelhecimento_min, 60)
+        self.assertIsNone(cfg.retencao.purge_user)
+
+    def test_prefixo_so_minusculas_e_agent_id_purge_reservado(self):
+        self._recusa("table_prefix", oracle={"table_prefix": "TBSSS_"})
+        self._recusa("agent_id", agent={"agent_id": "purge"})
+        self.assertEqual(self._carregar(agent={"agent_id": "purge01"}).agent.agent_id, "purge01")
+
+    def test_faixas_novas(self):
+        self._recusa("cron_horizon_days", agent={"cron_horizon_days": "365"})
+        self.assertEqual(self._carregar(agent={"cron_horizon_days": "366"}).agent.cron_horizon_days, 366)
+        self._recusa("max_log_size_bytes", logging={"max_log_size_bytes": str(64 * 1024 * 1024 + 1)})
+        self._recusa("audit_retention_days", retencao={"audit_retention_days": "364"})
+        self._recusa("audit_retention_days", retencao={"audit_retention_days": "400", "ticket_retention_days": "500"})
+        self._recusa("fila_envelhecimento_min", agent={"fila_envelhecimento_min": "1441"})
+        self.assertEqual(self._carregar(agent={"fila_envelhecimento_min": "0"}).agent.fila_envelhecimento_min, 0)
+
+    def test_invariantes_i3_e_i4(self):
+        # I3: heartbeat + 2*call <= fence (10 + 2*41 = 92 > 90).
+        self._recusa("fence_timeout_s", oracle={"call_timeout_ms": "41000"})
+        # I4: fence + call + kill + 2 <= offline (90 + 30 + 60 + 2 = 182 > 180).
+        self._recusa("node_offline_timeout_s", agent={"kill_grace_s": "60"})
+        self.assertEqual(sss_config.call_timeout_s(30001), 31)
+        self._carregar()  # o exemplo atende I3 = 70 <= 90 e I4 = 127 <= 180
+
+    def test_usuarios_execucao_e_exec_work_dir(self):
+        cfg = self._carregar(agent={"usuarios_execucao": "PRODUCAO=sssprd, HOMOLOGACAO=ssshml"})
+        self.assertEqual(cfg.agent.usuarios_execucao, (("PRODUCAO", "sssprd"), ("HOMOLOGACAO", "ssshml")))
+        self._recusa("usuarios_execucao", agent={"usuarios_execucao": "PRODUCAO=root"})
+        self._recusa("usuarios_execucao", agent={"usuarios_execucao": "OUTRO=sssx"})
+        self._recusa("usuarios_execucao", agent={"usuarios_execucao": "PRODUCAO"})
+        self._recusa("usuarios_execucao", agent={"usuarios_execucao": "PRODUCAO=a,PRODUCAO=b"})
+        # Fora de DEV: todo ambiente atendido precisa de usuario e exec_work_dir e obrigatoria.
+        base = {"sss_env": "HML", "data_backend": "ORACLE"}
+        ret = {"purge_user": "sss_purge"}
+        self._recusa("usuarios_execucao", app=base, retencao=ret, agent={"usuarios_execucao": "PRODUCAO=sssprd"})
+        self._recusa("exec_work_dir", app=base, retencao=ret,
+                     agent={"usuarios_execucao": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml"})
+        self._recusa("exec_work_dir", app=base, retencao=ret,
+                     agent={"usuarios_execucao": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
+                            "exec_work_dir": "/var/lib/sss/work/exec"})
+        cfg = self._carregar(app=base, retencao=ret, agent={"usuarios_execucao": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
+                                                            "exec_work_dir": "/var/lib/sss/exec"})
+        self.assertEqual(cfg.agent.exec_work_dir, "/var/lib/sss/exec")
+
+    def test_purge_user_com_oracle(self):
+        base = {"sss_env": "DEV", "data_backend": "ORACLE"}
+        self._recusa("purge_user", app=base)
+        self._recusa("purge_user", app=base, retencao={"purge_user": "SSS_WEB"})
+        self._recusa("purge_user", app=base, retencao={"purge_user": "gfcadastro"})
+        self.assertEqual(self._carregar(app=base, retencao={"purge_user": "sss_purge"}).retencao.purge_user, "sss_purge")
+
+    def test_env_passthrough_lista_de_bloqueio_e_chaves_fixas(self):
+        for var in ("BASH_FUNC_x%%", "LD_DEBUG", "MALLOC_ARENA_MAX", "GLIBC_TUNABLES", "PS4", "PATH", "LC_ALL",
+                    "SSS_TICKET_ID", "PYTHONIOENCODING", "PADRAO_VALOR_RUN_CONEXAO_BD", "lang"):
+            self._recusa("env_passthrough", agent={"env_passthrough": "ORACLE_HOME," + var})
+        cfg = self._carregar(agent={"env_passthrough": "ORACLE_HOME,LD_LIBRARY_PATH,NLS_LANG,TNS_ADMIN"})
+        self.assertIn("LD_LIBRARY_PATH", cfg.agent.env_passthrough)
+
+    def test_ambientes_atendidos_cabem_na_coluna(self):
+        nomes = ",".join("AMBIENTE_%04d_XXXXXXXXXXXXX" % i for i in range(40))
+        self._recusa("ambientes_atendidos", agent={"ambientes_atendidos": nomes})
+
+    def _secrets(self, secoes):
+        caminho = os.path.join(self.tmp_dir, "secrets_papel.cfg")
+        with open(caminho, "w", encoding="utf-8") as f:
+            for nome, chaves in secoes:
+                f.write("[%s]\n" % nome)
+                for k, v in chaves.items():
+                    f.write("%s = %s\n" % (k, v))
+        os.chmod(caminho, 0o600)
+        return caminho
+
+    def test_segredos_por_papel(self):
+        web = [("oracle", {"password": "senha-web-123"}), ("web", {"cookie_key": "chave-cookie-123"})]
+        agente = [("oracle", {"password": "senha-agt-123"}), ("purge", {"password": "senha-prg-123"}),
+                  ("ambiente:PRODUCAO", {"user": "app", "password": "senha-amb-123"})]
+        seg = sss_config.carregar_segredos(self._secrets(agente), sss_env="PROD", data_backend="ORACLE", papel="agente")
+        self.assertIsNone(seg.cookie_key)
+        self.assertEqual(seg.purge_password, "senha-prg-123")
+        self.assertIn("senha-prg-123", self.mascarados)
+        self.assertNotIn("senha-prg-123", repr(seg))
+        # Secao de outro papel: recusada em HML/PROD, so WARN em DEV.
+        with self.assertRaises(sss_config.ConfigErro):
+            sss_config.carregar_segredos(self._secrets(agente + [("web", {"cookie_key": "x" * 20})]),
+                                         sss_env="PROD", data_backend="ORACLE", papel="agente")
+        for extra in (("purge", {"password": "senha-prg-123"}), ("ambiente:PRODUCAO", {"user": "a", "password": "b"})):
+            with self.assertRaises(sss_config.ConfigErro):
+                sss_config.carregar_segredos(self._secrets(web + [extra]), sss_env="HML", data_backend="ORACLE")
+            with self.assertLogs("sss_config", level="WARNING"):
+                sss_config.carregar_segredos(self._secrets(web + [extra]), sss_env="DEV", data_backend="ORACLE")
+        with self.assertRaises(sss_config.ConfigErro):
+            sss_config.carregar_segredos(self._secrets(web), papel="agente_x")
+
+    def test_segredos_do_agente_cobrem_os_ambientes(self):
+        cfg = self._carregar(app={"sss_env": "HML", "data_backend": "ORACLE"}, retencao={"purge_user": "sss_purge"},
+                             agent={"usuarios_execucao": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
+                                    "exec_work_dir": "/var/lib/sss/exec"})
+        so_prod = [("oracle", {"password": "senha-agt-123"}),
+                   ("ambiente:PRODUCAO", {"user": "app", "password": "senha-amb-123"})]
+        with self.assertRaises(sss_config.ConfigErro) as ctx:
+            sss_config.carregar_segredos(self._secrets(so_prod), cfg=cfg, papel="agente")
+        self.assertIn("HOMOLOGACAO", str(ctx.exception))
+
+    def test_codificacao_utf8_obrigatoria(self):
+        with mock.patch.object(sss_config.sys, "getfilesystemencoding", return_value="ascii"):
+            with self.assertRaises(sss_config.ConfigErro) as ctx:
+                sss_config.verificar_codificacao()
+        self.assertIn("UTF-8", str(ctx.exception))
+        for cod in ("utf-8", "UTF8"):
+            with mock.patch.object(sss_config.sys, "getfilesystemencoding", return_value=cod):
+                sss_config.verificar_codificacao()

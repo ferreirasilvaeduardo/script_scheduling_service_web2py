@@ -3,7 +3,7 @@ sss_env = DEV                     ; DEV | HML | PROD
 data_backend = FAKE               ; FAKE (somente DEV) | ORACLE
 
 [oracle]
-user = gfcadastro
+user = sss_web                    ; conta do papel deste nó: sss_web no web, sss_agente no agente (README §4.1)
 dsn = 10.0.0.1:1521/servico_homolog
 owner = gfcadastro
 table_prefix = tbsss_
@@ -22,6 +22,8 @@ agent_id = srv-linux-prod-01
 ambientes_atendidos = PRODUCAO,HOMOLOGACAO
 work_dir = /var/lib/sss/work
 script_owner_uids = 0             ; UIDs donos dos scripts (README §8.5); recomendado um UID dedicado, sem o 0
+usuarios_execucao =               ; AMBIENTE=usuario do SO por ambiente (README §8.0); obrigatório fora de DEV, ex.: PRODUCAO=sssprd,HOMOLOGACAO=ssshml
+exec_work_dir =                   ; pasta base dos diretórios de trabalho dos scripts (obrigatória fora de DEV), ex.: /var/lib/sss/exec
 max_parallel_jobs = 4
 max_parallel_hard_limit = 32
 claim_batch_size = 20
@@ -38,6 +40,7 @@ shutdown_grace_s = 30
 misfire_policy = RUN_ONCE         ; RUN_ONCE | SKIP
 misfire_tolerance_s = 300
 cron_horizon_days = 1461
+fila_envelhecimento_min = 60       ; a cada N minutos na fila a prioridade sobe 1 nível (README §5.3); 0 desliga
 child_locale = C.UTF-8
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 
@@ -62,3 +65,4 @@ allowed_origins = https://sss.empresa.local   ; lista separada por vírgula, val
 ticket_retention_days = 180
 audit_retention_days = 730
 purge_batch_size = 1000
+purge_user =                      ; conta Oracle do papel purge (obrigatória com data_backend = ORACLE), ex.: sss_purge

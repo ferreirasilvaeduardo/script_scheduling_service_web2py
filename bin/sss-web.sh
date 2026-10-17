@@ -19,6 +19,10 @@ if [ -n "${SSS_TZ:-}" ]; then
     export TZ="${SSS_TZ}"
 fi
 
+# Codificacao UTF-8 obrigatoria (README §12.2, CR-007 R-17): o processo aborta sem ela.
+export LANG="${SSS_LOCALE:-C.UTF-8}"
+export LC_ALL="${SSS_LOCALE:-C.UTF-8}"
+
 # 4. Diretorio raiz do web2py
 WEB2PY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${WEB2PY_ROOT}"
