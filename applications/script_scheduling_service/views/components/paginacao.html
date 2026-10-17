@@ -1,39 +1,43 @@
 {{
 # Componente: paginação por links GET (funciona sem JavaScript).
 # Variáveis de entrada:
-#   pagina       -- página pedida (já saneada com ui_helpers.sanitizar_pagina);
-#   tamanho      -- tamanho da página (ui_helpers.sanitizar_tamanho);
-#   total        -- total de registros retornado pelo repositório;
-#   url_base     -- tupla (controller, funcao) da listagem;
-#   query_params -- dict com os filtros ativos, preservados em todos os links.
+# pagina -- página pedida (já saneada com ui_helpers.sanitizar_pagina);
+# tamanho -- tamanho da página (ui_helpers.sanitizar_tamanho);
+# total -- total de registros retornado pelo repositório;
+# url_base -- tupla (controller, funcao) da listagem;
+# query_params -- dict com os filtros ativos, preservados em todos os links.
 # 'pagina' e 'tamanho' em query_params são sobrescritos pelos valores do link. Os links nunca herdam
 # a extensão da requisição (o componente também é usado em fragmentos .load).
 import ui_helpers
-_lim = total_limitado if 'total_limitado' in locals() else False
-_qtd = quantidade_pagina if 'quantidade_pagina' in locals() else None
-_pag = ui_helpers.paginacao_info(pagina, tamanho, total, _lim, _qtd)
-_pag_vars = dict((k, v) for k, v in (query_params or {}).items() if k not in ('pagina', 'tamanho') and v not in (None, ''))
+_pag = ui_helpers.paginacao_info(pagina, tamanho, total, total_limitado, quantidade_pagina)
+_pag_vars = dict((k, v) for k, v in (query_params or {}).items() if k not in ('pagina', 'tamanho') and v not in (None,
+''))
 _pag_vars['tamanho'] = _pag['tamanho']
 _pag_links = (
-    ('Primeira', 1, _pag['tem_anterior'], 'Primeira página'),
-    ('Anterior', _pag['anterior'], _pag['tem_anterior'], 'Página anterior'),
-    ('Próxima', _pag['proxima'], _pag['tem_proxima'], 'Próxima página'),
-    ('Última', _pag['total_paginas'], _pag['tem_proxima'], 'Última página'),
+('Primeira', 1, _pag['tem_anterior'], 'Primeira página'),
+('Anterior', _pag['anterior'], _pag['tem_anterior'], 'Página anterior'),
+('Próxima', _pag['proxima'], _pag['tem_proxima'], 'Próxima página'),
+('Última', _pag['total_paginas'], _pag['tem_proxima'], 'Última página'),
 )
 if _pag['total_limitado']:
-    _pag_links = _pag_links[:-1]
+_pag_links = _pag_links[:-1]
 pass
 }}<nav class="sss-paginacao" aria-label="Paginação">
   <span class="sss-paginacao-total">
-    {{if _pag['total']:}}{{=_pag['primeiro_registro']}}–{{=_pag['ultimo_registro']}} de {{if _pag['total_limitado']:}}mais de 10.000 registros{{else:}}{{=_pag['total']}} {{='registro' if _pag['total'] == 1 else 'registros'}}{{pass}}{{else:}}0 registros{{pass}}
+    {{if _pag['total']:}}{{=_pag['primeiro_registro']}}–{{=_pag['ultimo_registro']}} de {{if
+    _pag['total_limitado']:}}mais de 10.000 registros{{else:}}{{=_pag['total']}} {{='registro' if _pag['total'] == 1
+    else 'registros'}}{{pass}}{{else:}}0 registros{{pass}}
   </span>
   <ul class="pagination pagination-sm mb-0">
     {{for _pag_i, (_pag_rotulo, _pag_num, _pag_ativo, _pag_aria) in enumerate(_pag_links):}}
     {{if _pag_i == 2:}}
-    <li class="page-item active" aria-current="page"><span class="page-link">Página {{=_pag['pagina']}}{{if not _pag['total_limitado']:}} de {{=_pag['total_paginas']}}{{pass}}</span></li>
+    <li class="page-item active" aria-current="page"><span class="page-link">Página {{=_pag['pagina']}}{{if not
+        _pag['total_limitado']:}} de {{=_pag['total_paginas']}}{{pass}}</span></li>
     {{pass}}
     {{if _pag_ativo:}}
-    <li class="page-item"><a class="page-link" href="{{=URL(c=url_base[0], f=url_base[1], vars=dict(_pag_vars, pagina=_pag_num), extension=False)}}" aria-label="{{=_pag_aria}}">{{=_pag_rotulo}}</a></li>
+    <li class="page-item"><a class="page-link"
+        href="{{=URL(c=url_base[0], f=url_base[1], vars=dict(_pag_vars, pagina=_pag_num), extension=False)}}"
+        aria-label="{{=_pag_aria}}">{{=_pag_rotulo}}</a></li>
     {{else:}}
     <li class="page-item disabled"><span class="page-link" aria-disabled="true">{{=_pag_rotulo}}</span></li>
     {{pass}}

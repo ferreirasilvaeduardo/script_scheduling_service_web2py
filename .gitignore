@@ -40,3 +40,8 @@ bin/sss-web-*_v*.sh
 /httpserver.pid
 /cron.master
 /welcome.w2p
+
+# Pacotes de implantacao gerados (binarios)
+/applications/script_scheduling_service/docs/sss_pacotes/*.tar.gz
+/applications/script_scheduling_service/docs/sss_pacotes/*.sha256
+/applications/script_scheduling_service/docs/sss_dev_scripts_exemplos/
