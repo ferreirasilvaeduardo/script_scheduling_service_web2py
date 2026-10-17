@@ -33,6 +33,15 @@ FBI_TCK_FILA_PRIO_CASE = "CASE WHEN status = 'PENDING' THEN prioridade END"
 FBI_TCK_FILA_SCHED_CASE = "CASE WHEN status = 'PENDING' THEN scheduled_at END"
 FBI_TCK_RUN_AGENTE_CASE = "CASE WHEN status = 'RUNNING' THEN agente_id END"
 
+# Colunas de registro (CR-006, README §10): todas as tabelas, exceto as listadas em TABELAS_SEM_REGISTRO.
+COLUNAS_REGISTRO = ("created_at", "created_by", "updated_at", "updated_by")
+TABELAS_SEM_REGISTRO = ("auditoria",)
+ATOR_MAX = 40
+CK_REGISTRO_EXPR = (
+    "(updated_at IS NULL AND updated_by IS NULL) OR "
+    "(updated_at IS NOT NULL AND updated_by IS NOT NULL)"
+)
+
 
 def _eco_seguro(valor):
     """Retorna representacao segura do valor sem expor dados que excedam 64 caracteres."""
@@ -632,7 +641,29 @@ def _criar_registro_tabelas():
         ('colunas_lob', ()),
     ])
 
+    for entidade, defn in r.items():
+        if entidade not in TABELAS_SEM_REGISTRO:
+            _aplicar_colunas_registro(defn)
+
     return r
+
+
+def _aplicar_colunas_registro(defn):
+    """Acrescenta as colunas de registro que faltam e a CK _upd (CR-006, README §10).
+
+    created_at ja existe no fim de algumas tabelas; as demais colunas entram depois dela.
+    """
+    colunas = defn['colunas']
+    novas = OrderedDict([
+        ('created_at', {'nome': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+        ('created_by', {'nome': 'created_by', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': True, 'default': None}),
+        ('updated_at', {'nome': 'updated_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+        ('updated_by', {'nome': 'updated_by', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': False, 'default': None}),
+    ])
+    for nome, coluna in novas.items():
+        if nome not in colunas:
+            colunas[nome] = coluna
+    defn['cks']['upd'] = {'sufixo': 'upd', 'expr': CK_REGISTRO_EXPR}
 
 
 # Instancia imutavel de referencia do catalogo

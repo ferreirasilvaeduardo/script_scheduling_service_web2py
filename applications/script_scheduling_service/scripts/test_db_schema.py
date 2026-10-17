@@ -9,7 +9,8 @@ Cobertura obrigatoria (AGENTS.md §7.4):
 - Toda coluna VARCHAR2 com CHAR explicito;
 - Toda flag CHAR(1) com CK IN ('S','N');
 - 16 tabelas exatas;
-- Teste negativo de identificador com 31 caracteres.
+- Teste negativo de identificador com 31 caracteres;
+- Colunas de registro do CR-006 e README §10 igual ao registro.
 """
 import copy
 import os
@@ -231,6 +232,54 @@ class TestDbSchema(unittest.TestCase):
                     defn["trigger_bu"],
                     "Tabela '{}' nao deve possuir trigger_bu".format(ent),
                 )
+
+    def test_colunas_registro_cr006(self):
+        """CR-006 (README §10): 15 tabelas com created/updated at/by no fim e CK _upd; auditoria sem."""
+        esperado = [
+            ("created_at", "DATE", True, "SYSDATE"),
+            ("created_by", "VARCHAR2(40 CHAR)", True, None),
+            ("updated_at", "DATE", False, None),
+            ("updated_by", "VARCHAR2(40 CHAR)", False, None),
+        ]
+        esquema = nomes("tbsss_")
+        for entidade, defn in TABELAS.items():
+            cols = list(defn["colunas"].items())
+            if entidade in sql_ident.TABELAS_SEM_REGISTRO:
+                nomes_cols = [c for c, _ in cols]
+                for c in ("created_by", "updated_at", "updated_by"):
+                    self.assertNotIn(c, nomes_cols, "{} nao recebe {}".format(entidade, c))
+                self.assertNotIn("upd", defn["cks"])
+                continue
+            obtido = [(n, c["tipo"], c["not_null"], c["default"]) for n, c in cols[-4:]]
+            self.assertEqual(obtido, esperado, "Colunas de registro em {}".format(entidade))
+            self.assertEqual(defn["cks"]["upd"]["expr"], sql_ident.CK_REGISTRO_EXPR)
+            abrev = defn["abrev"]
+            self.assertIn("ck_tbsss_{}_upd".format(abrev), esquema[entidade]["cks"])
+        self.assertEqual(sql_ident.TABELAS_SEM_REGISTRO, ("auditoria",))
+        self.assertEqual(
+            sum(1 for e in TABELAS if "upd" in TABELAS[e]["cks"]), 15)
+
+    def test_readme_10_colunas_iguais_ao_registro(self):
+        """README §10 lista exatamente as colunas do registro, na mesma ordem (fonte unica)."""
+        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(app_dir, "README.md"), "r", encoding="utf-8") as f:
+            texto = f.read()
+        secao = texto[texto.index("## 10. Modelo de Dados"):texto.index("## 11. Bootstrap")]
+        blocos = re.split(r"\n### \d+\. `tbsss_(\w+)`[^\n]*\n", secao)
+        lidas = {}
+        for i in range(1, len(blocos), 2):
+            corpo = blocos[i + 1]
+            m = re.search(r"\* \*\*Colunas:\*\*([^\n]*)\n((?:  \*[^\n]*\n)*)", corpo)
+            self.assertIsNotNone(m, "Bloco de colunas ausente em {}".format(blocos[i]))
+            if m.group(1).strip():
+                cols = re.findall(r"`(\w+)(?: [^`]*)?`", m.group(1))
+            else:
+                cols = re.findall(r"^  \* `(\w+)", m.group(2), re.M)
+            lidas[blocos[i]] = cols
+        self.assertEqual(list(lidas.keys()), list(TABELAS.keys()))
+        for entidade, defn in TABELAS.items():
+            self.assertEqual(lidas[entidade], list(defn["colunas"].keys()),
+                             "README §10 diverge do registro em {}".format(entidade))
 
     def test_colunas_lob_declaradas(self):
         """Verifica catalogacao de colunas LOB (CLOB)."""

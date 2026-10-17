@@ -83,7 +83,8 @@ SCHEMA = collections.OrderedDict([
         ("secrets_file", CampoDef("path", obrigatorio=True)),
     ])),
     ("agent", collections.OrderedDict([
-        ("agent_id", CampoDef("str", obrigatorio=True, regex=r"^[A-Za-z0-9._-]{1,30}$")),
+        # init_db e seed sao atores reservados do sistema (CR-006, README §8.12).
+        ("agent_id", CampoDef("str", obrigatorio=True, regex=r"^(?!(?:init_db|seed)$)[A-Za-z0-9._-]{1,30}$")),
         ("ambientes_atendidos", CampoDef("list_csv", obrigatorio=True)),
         ("work_dir", CampoDef("path", obrigatorio=True)),
         ("script_owner_uids", CampoDef("list_csv", obrigatorio=True)),

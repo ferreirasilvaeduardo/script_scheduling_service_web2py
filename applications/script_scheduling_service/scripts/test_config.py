@@ -441,6 +441,15 @@ class TestConfig(unittest.TestCase):
         with self.assertRaises(sss_config.ConfigErro):
             sss_config.carregar(ini_agent)
 
+        # init_db e seed sao atores reservados do sistema (CR-006, README §8.12)
+        for reservado in ("init_db", "seed"):
+            ini_res = self._copiar_e_modificar_ini(alteracoes={"agent": {"agent_id": reservado}})
+            with self.assertRaises(sss_config.ConfigErro) as ctx_res:
+                sss_config.carregar(ini_res)
+            self.assertEqual(ctx_res.exception.chave, "agent_id")
+        ini_ok = self._copiar_e_modificar_ini(alteracoes={"agent": {"agent_id": "seed01"}})
+        self.assertEqual(sss_config.carregar(ini_ok).agent.agent_id, "seed01")
+
     def test_env_passthrough_com_ld_preload(self):
         """Verifica rejeicao de variaveis perigosas bloqueadas no passthrough."""
         ini_preload = self._copiar_e_modificar_ini(alteracoes={
