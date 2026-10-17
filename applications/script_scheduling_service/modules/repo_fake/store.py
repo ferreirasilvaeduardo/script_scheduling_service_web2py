@@ -9,6 +9,7 @@ import datetime
 import threading
 
 from repo_errors import RepoViolacao
+from sql_ident import ATOR_MAX
 
 # Limites de tbsss_auditoria (README §4.4, §10 tabela 16).
 _ATOR_MAX = 40
@@ -91,6 +92,33 @@ class FakeDataStore(object):
             }
             self.auditoria[aid] = copy.deepcopy(reg)
             return copy.deepcopy(reg)
+
+    def ator_registro(self, auditoria=None, ator=None):
+        """Ator das colunas de registro (CR-006, README §10): auditoria['ator'] ou ator=, obrigatorio.
+
+        Chamado antes de qualquer gravacao: sem ator, nada e gravado (paridade com created_by NOT NULL).
+        """
+        valor = (auditoria or {}).get("ator") or ator
+        if not valor:
+            raise RepoViolacao("ator das colunas de registro e obrigatorio")
+        if len(valor) > ATOR_MAX:
+            raise RepoViolacao("ator excede o tamanho da coluna (ORA-12899)")
+        return valor
+
+    def carimbar_inclusao(self, reg, ator):
+        """created_at (o informado ou SYSDATE) e created_by; updated_* nulos ate a 1a alteracao."""
+        if not reg.get("created_at"):
+            reg["created_at"] = self.agora()
+        reg["created_by"] = ator
+        reg["updated_at"] = None
+        reg["updated_by"] = None
+        return reg
+
+    def carimbar_alteracao(self, reg, ator):
+        """updated_at = SYSDATE e updated_by em toda alteracao de negocio; created_* nunca muda."""
+        reg["updated_at"] = self.agora()
+        reg["updated_by"] = ator
+        return reg
 
     def checar_fk(self, existe, constraint):
         """FK do Oracle emulada: referencia inexistente vira RepoViolacao com o nome da FK (README §2.5)."""

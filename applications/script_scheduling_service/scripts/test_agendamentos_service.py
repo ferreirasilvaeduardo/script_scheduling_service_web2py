@@ -54,8 +54,8 @@ class _Base(unittest.TestCase):
             repo_factory.obter("usuarios"), self.rbac, self.catalogo, self.auditoria, 5, 900, self.log)
 
         # CAD_AGENDAMENTOS para os operadores (no seed, so o admin a tem).
-        self.rbac.matriz_salvar(PERFIL_OP_PROD, [FUNC_EXEC, FUNC_LOGS, FUNC_CANC, FUNC_CAD_AGD], [1, 2], [1, 2, 3, 6])
-        self.rbac.matriz_salvar(PERFIL_OP_HML, [FUNC_EXEC, FUNC_LOGS, FUNC_CANC, FUNC_CAD_AGD], [2, 3], [1, 2, 3, 4])
+        self.rbac.matriz_salvar(PERFIL_OP_PROD, [FUNC_EXEC, FUNC_LOGS, FUNC_CANC, FUNC_CAD_AGD], [1, 2], [1, 2, 3, 6], ator="teste")
+        self.rbac.matriz_salvar(PERFIL_OP_HML, [FUNC_EXEC, FUNC_LOGS, FUNC_CANC, FUNC_CAD_AGD], [2, 3], [1, 2, 3, 4], ator="teste")
         self.ctx = {
             "admin": self._ctx(1, "admin", 1),
             "op.prod": self._ctx(2, "op.prod", PERFIL_OP_PROD),
@@ -326,7 +326,7 @@ class TestEdicao(_Base):
         aid, _erros = self._salvar()
         reg = self.agd.obter(aid)
         versao = self._versao(reg)
-        self.agd.alterar(aid, {"nome": "Mudou por outro"})
+        self.agd.alterar(aid, {"nome": "Mudou por outro"}, ator="teste")
         _id, erros = self.svc.salvar(self.ctx["admin"], IP, self._dados(id=str(aid), versao=versao, nome="X"))
         self.assertEqual(erros, {CAMPO_GERAL: admin_crud.MSG_CONFLITO})
         # Mudanca entre a leitura e a escrita: o 'esperado' do repositorio barra.
@@ -334,7 +334,7 @@ class TestEdicao(_Base):
         original = self.agd.alterar
 
         def alterar_com_corrida(id, dados, esperado=None, auditoria=None):
-            original(id, {"hora_execucao": "07:00"})
+            original(id, {"hora_execucao": "07:00"}, ator="teste")
             return original(id, dados, esperado=esperado, auditoria=auditoria)
 
         with mock.patch.object(self.agd, "alterar", side_effect=alterar_com_corrida):
@@ -387,7 +387,7 @@ class TestAgenda(_Base):
                 "data_inicio": datetime.datetime(2026, 1, 1, 0, 0),
                 "proxima_execucao": datetime.datetime(2026, 1, 16, 3, 0)}
         base.update(campos)
-        return self.agd.inserir(base)["id"]
+        return self.agd.inserir(base, ator="teste")["id"]
 
     def _itens(self, dados, regra_id):
         return [o for d in dados["dias"] for o in d["itens"] if o["regra_id"] == regra_id]
@@ -458,7 +458,7 @@ class TestPausaRetomada(_Base):
         original = self.agd.pausar
 
         def pausar_com_corrida(id, motivo, antiga_data=None, auditoria=None):
-            self.agd.alterar(id, {"proxima_execucao": datetime.datetime(2026, 1, 17, 3, 0)})
+            self.agd.alterar(id, {"proxima_execucao": datetime.datetime(2026, 1, 17, 3, 0)}, ator="teste")
             return original(id, motivo, antiga_data=antiga_data, auditoria=auditoria)
 
         with mock.patch.object(self.agd, "pausar", side_effect=pausar_com_corrida):

@@ -57,9 +57,10 @@ class RepoCatalogoFake(RepoCatalogo):
                 detalhe=auditoria.get("detalhe"),
             )
 
-    def ambientes_inserir(self, dados, auditoria=None):
+    def ambientes_inserir(self, dados, auditoria=None, ator=None):
         """Insere novo ambiente com validacao de CKs, UK e DSN, auditando na mesma operacao."""
         with self._store.lock_catalogo:
+            ator = self._store.ator_registro(auditoria, ator)
             nome = dados.get("nome")
             if not nome or not _RE_AMB_NOME.fullmatch(nome):
                 raise RepoViolacao("Nome de ambiente invalido (esperado: 1-30 chars [A-Z0-9_])", constraint="ck_tbsss_amb_nome")
@@ -83,15 +84,17 @@ class RepoCatalogoFake(RepoCatalogo):
                 "descricao": dados.get("descricao", ""),
                 "conexao": conexao,
                 "ativo": ativo,
-                "created_at": dados.get("created_at") or self._store.agora(),
+                "created_at": dados.get("created_at"),
             }
+            self._store.carimbar_inclusao(novo, ator)
             self._store.ambientes[aid] = copy.deepcopy(novo)
             self._auditar_ambiente(auditoria, aid)
             return copy.deepcopy(novo)
 
-    def ambientes_alterar(self, id, dados, esperado=None, auditoria=None):
+    def ambientes_alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Altera ambiente (nome imutavel, trigger tr_tbsss_amb_bu), condicional a 'esperado'."""
         with self._store.lock_catalogo:
+            ator = self._store.ator_registro(auditoria, ator)
             if id not in self._store.ambientes:
                 raise RepoNaoEncontrado("Ambiente ID %s nao encontrado" % id)
 
@@ -124,6 +127,7 @@ class RepoCatalogoFake(RepoCatalogo):
 
             # Validacao completa antes de aplicar: um UPDATE rejeitado nao altera nenhuma coluna.
             atual.update(mudancas)
+            self._store.carimbar_alteracao(atual, ator)
             self._auditar_ambiente(auditoria, id)
             return copy.deepcopy(atual)
 
@@ -212,9 +216,10 @@ class RepoCatalogoFake(RepoCatalogo):
             if (atual is None or sid != atual["id"]) and s["nome"] == base["nome"]:
                 raise RepoViolacao("Script com nome '%s' ja existe" % base["nome"], constraint="uk_tbsss_scr_nome")
 
-    def scripts_inserir(self, dados, auditoria=None):
+    def scripts_inserir(self, dados, auditoria=None, ator=None):
         """Insere novo script com validacoes de seguranca e CKs, auditando na mesma operacao."""
         with self._store.lock_catalogo:
+            ator = self._store.ator_registro(auditoria, ator)
             self._validar_script(dados)
             sid = self._store.proximo_id("tbsss_scripts")
             tmout = dados.get("timeout_seg")
@@ -232,13 +237,15 @@ class RepoCatalogoFake(RepoCatalogo):
                 "timeout_seg": int(tmout) if tmout is not None else None,
                 "ativo": dados.get("ativo", "S"),
             }
+            self._store.carimbar_inclusao(novo, ator)
             self._store.scripts[sid] = copy.deepcopy(novo)
             self._auditar_script(auditoria, sid)
             return copy.deepcopy(novo)
 
-    def scripts_alterar(self, id, dados, esperado=None, auditoria=None):
+    def scripts_alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Altera script (CKs, esperado e regras de tipo_param x vinculos) na mesma operacao."""
         with self._store.lock_catalogo:
+            ator = self._store.ator_registro(auditoria, ator)
             if id not in self._store.scripts:
                 raise RepoNaoEncontrado("Script ID %s nao encontrado" % id)
             atual = self._store.scripts[id]
@@ -257,6 +264,7 @@ class RepoCatalogoFake(RepoCatalogo):
             if mudancas.get("timeout_seg") is not None:
                 mudancas["timeout_seg"] = int(mudancas["timeout_seg"])
             atual.update(mudancas)
+            self._store.carimbar_alteracao(atual, ator)
             self._auditar_script(auditoria, id)
             return copy.deepcopy(atual)
 
@@ -277,9 +285,13 @@ class RepoCatalogoFake(RepoCatalogo):
             ambs.sort()
             return copy.deepcopy(ambs)
 
-    def homologacao_salvar(self, script_id, ambiente_ids, esperado=None, auditoria=None):
-        """Substitui homologacoes do script (FK, esperado e auditoria na mesma operacao)."""
+    def homologacao_salvar(self, script_id, ambiente_ids, esperado=None, auditoria=None, ator=None):
+        """Substitui homologacoes do script por diferenca (FK, esperado e auditoria na mesma operacao).
+
+        Os vinculos que continuam mantem o created_*; havendo mudanca, o script recebe updated_* (CR-006).
+        """
         with self._store.lock_catalogo:
+            ator = self._store.ator_registro(auditoria, ator)
             if script_id not in self._store.scripts:
                 raise RepoNaoEncontrado("Script ID %s nao encontrado" % script_id)
             if esperado is not None and sorted(int(x) for x in esperado) != self.homologacao_obter(script_id):
@@ -290,11 +302,18 @@ class RepoCatalogoFake(RepoCatalogo):
                 if aid not in self._store.ambientes:
                     raise RepoViolacao("Ambiente ID %s nao existe" % aid, constraint="fk_tbsss_samb_amb")
 
-            for k in [k for k, v in self._store.script_amb.items() if v["script_id"] == script_id]:
-                del self._store.script_amb[k]
+            atuais = dict((v["ambiente_id"], k) for k, v in self._store.script_amb.items()
+                          if v["script_id"] == script_id)
+            for aid, k in atuais.items():
+                if aid not in ids:
+                    del self._store.script_amb[k]
             for aid in ids:
-                nid = self._store.proximo_id("tbsss_script_amb")
-                self._store.script_amb[nid] = {"id": nid, "script_id": script_id, "ambiente_id": aid}
+                if aid not in atuais:
+                    nid = self._store.proximo_id("tbsss_script_amb")
+                    self._store.script_amb[nid] = self._store.carimbar_inclusao(
+                        {"id": nid, "script_id": script_id, "ambiente_id": aid}, ator)
+            if set(atuais) != set(ids):
+                self._store.carimbar_alteracao(self._store.scripts[script_id], ator)
 
             self._auditar_script(auditoria, script_id)
             return copy.deepcopy(self.homologacao_obter(script_id))
@@ -350,9 +369,10 @@ class RepoCatalogoFake(RepoCatalogo):
                 detalhe=auditoria.get("detalhe"),
             )
 
-    def parametros_inserir(self, dados, auditoria=None):
+    def parametros_inserir(self, dados, auditoria=None, ator=None):
         """Insere novo parametro validando CKs e UK, auditando na mesma operacao."""
         with self._store.lock_catalogo:
+            ator = self._store.ator_registro(auditoria, ator)
             codigo = dados.get("codigo")
             if not codigo or not _RE_PRM_CODIGO.fullmatch(codigo):
                 raise RepoViolacao("Codigo de parametro invalido (esperado: 1-30 chars [a-z0-9_])", constraint="ck_tbsss_prm_codigo")
@@ -394,13 +414,15 @@ class RepoCatalogoFake(RepoCatalogo):
                 "sensivel": sens,
                 "ativo": ativo,
             }
+            self._store.carimbar_inclusao(novo, ator)
             self._store.parametros[pid] = copy.deepcopy(novo)
             self._auditar_parametro(auditoria, pid)
             return copy.deepcopy(novo)
 
-    def parametros_alterar(self, id, dados, esperado=None, auditoria=None):
+    def parametros_alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Altera parametro (CKs, dependencias de vinculo e 'esperado') na mesma operacao."""
         with self._store.lock_catalogo:
+            ator = self._store.ator_registro(auditoria, ator)
             if id not in self._store.parametros:
                 raise RepoNaoEncontrado("Parametro ID %s nao encontrado" % id)
 
@@ -438,6 +460,7 @@ class RepoCatalogoFake(RepoCatalogo):
                 raise RepoViolacao("Desativacao com vinculo a script ativo", constraint="sss_prm_vinculo_ativo")
 
             atual.update(mudancas)
+            self._store.carimbar_alteracao(atual, ator)
             self._auditar_parametro(auditoria, id)
             return copy.deepcopy(atual)
 
@@ -485,9 +508,14 @@ class RepoCatalogoFake(RepoCatalogo):
                     resultado.append(item)
             return copy.deepcopy(resultado)
 
-    def script_params_salvar(self, script_id, vinculos, esperado=None, auditoria=None):
-        """Substitui os vinculos do script (UKs, FK, regras de tipo_param, esperado e auditoria)."""
+    def script_params_salvar(self, script_id, vinculos, esperado=None, auditoria=None, ator=None):
+        """Substitui os vinculos do script (UKs, FK, regras de tipo_param, esperado e auditoria).
+
+        Apaga e reinsere (UK script_id + ordem), mas cada parametro que continua leva o created_*;
+        o updated_* do vinculo so muda se ordem, obrigatorio ou valor_padrao_sub mudar (CR-006).
+        """
         with self._store.lock_catalogo:
+            ator = self._store.ator_registro(auditoria, ator)
             if script_id not in self._store.scripts:
                 raise RepoNaoEncontrado("Script ID %s nao encontrado" % script_id)
             if esperado is not None:
@@ -529,12 +557,25 @@ class RepoCatalogoFake(RepoCatalogo):
             self._regras_tipo_param(self._store.scripts[script_id]["tipo_param"],
                                     [v["parametro_id"] for v in novos_vinculos])
 
+            anteriores = dict((v["parametro_id"], v) for v in self._vinculos_do_script(script_id))
             for k in [k for k, v in self._store.script_param.items() if v["script_id"] == script_id]:
                 del self._store.script_param[k]
+            mudou = set(anteriores) != set(v["parametro_id"] for v in novos_vinculos)
             for nv in novos_vinculos:
                 nid = self._store.proximo_id("tbsss_script_param")
                 nv["id"] = nid
+                velho = anteriores.get(nv["parametro_id"])
+                if velho is None:
+                    self._store.carimbar_inclusao(nv, ator)
+                else:
+                    for campo in ("created_at", "created_by", "updated_at", "updated_by"):
+                        nv[campo] = velho.get(campo)
+                    if any(nv[c] != velho.get(c) for c in ("ordem", "obrigatorio", "valor_padrao_sub")):
+                        self._store.carimbar_alteracao(nv, ator)
+                        mudou = True
                 self._store.script_param[nid] = nv
+            if mudou:
+                self._store.carimbar_alteracao(self._store.scripts[script_id], ator)
 
             self._auditar_script(auditoria, script_id)
             return copy.deepcopy(self.script_params_obter(script_id))

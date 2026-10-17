@@ -174,7 +174,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
   * prioridade 1 só em tickets de solicitante admin;
   * snapshot e `ticket_resp` compatíveis com o script e os vínculos de cada ticket;
   * `created_at` nunca no futuro;
-  * colunas de registro coerentes com o §10 (CR-006): `created_by = 'SYSTEM:seed'` nos cadastros e vínculos; nos tickets, o login do solicitante (manual) ou `SYSTEM:<agente>` (desdobro); `updated_*` preenchidos só onde o estado do seed implica uma alteração (ticket fora de `PENDING`, regra pausada, registro inativo), sempre entre o `created_at` e o momento atual;
+  * colunas de registro coerentes com o §10 (CR-006): `created_by = 'SYSTEM:seed'` nos cadastros e vínculos; `SYSTEM:<codigo>` nos agentes; nos tickets, o login do solicitante (manual) ou `SYSTEM:<agente>` (desdobro); `updated_*` preenchidos só onde o estado do seed implica uma alteração (ticket fora de `PENDING`, regra pausada, registro inativo), sempre entre o `created_at` e o momento atual;
   * `proxima_execucao` calculada pelo `recurrence.py`, alinhada ao minuto e à regra;
   * `parametros_json` com as respostas resolvidas completas (§7.6).
 * **Relógio do FAKE:** `store.agora()` (hora local sem microssegundos) simula o `SYSDATE` e é o único uso permitido de `datetime.now()` (AGENTS §6).
@@ -333,7 +333,7 @@ password = ...
   * Para login inexistente, calcula-se um hash fictício, equalizando o tempo de resposta.
   * Após `login_max_tentativas` falhas consecutivas, a conta fica bloqueada (`bloqueado_ate = SYSDATE + login_bloqueio_s/86400`).
     * **Relógio do banco:** o service informa ao repositório apenas `login_bloqueio_s`. O repositório calcula `bloqueado_ate` com `SYSDATE` e grava `ultimo_login = SYSDATE`. O relógio do nó web nunca é usado.
-    * Um bloqueio já expirado zera `tentativas_falha` antes de avaliar a nova tentativa, tanto no login quanto em "Minha senha".
+    * Um bloqueio já expirado zera `tentativas_falha` antes de avaliar a nova tentativa, tanto no login quanto em "Minha senha". É rotina técnica (`reiniciar_tentativas` no contrato): não audita nem grava `updated_*` (§10, CR-006). O desbloqueio feito pelo administrador (`desbloquear`) é alteração de negócio e grava `updated_*`.
   * Um sucesso zera `tentativas_falha` e grava `ultimo_login`.
   * Usuário inativo com a senha correta recebe a mensagem genérica e gera `LOGIN_FALHA`, sem incrementar `tentativas_falha`. Com a senha errada, a falha conta normalmente.
   * Login OK, falha e bloqueio são auditados **na mesma operação do repositório** que atualiza o usuário: os métodos `registrar_sucesso_login` e `registrar_falha_login` do contrato recebem `auditoria=` (mesma transação, §4.4).

@@ -3,7 +3,12 @@
 
 
 class RepoUsuarios(object):
-    """Contrato abstrato para gestao de usuarios e credenciais."""
+    """Contrato abstrato para gestao de usuarios e credenciais.
+
+    Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o ator, por
+    auditoria['ator'] ou pelo parametro ator=; o INSERT grava created_*, a alteracao grava updated_*.
+    Sem ator, RepoViolacao sem gravar nada.
+    """
 
     def obter_por_login(self, login):
         """Retorna dict com dados do usuario ou None se nao encontrado."""
@@ -25,7 +30,7 @@ class RepoUsuarios(object):
         """
         raise NotImplementedError
 
-    def inserir(self, dados, auditoria=None):
+    def inserir(self, dados, auditoria=None, ator=None):
         """Insere novo usuario e retorna dict com o registro criado.
 
         auditoria: opcional, {'ator', 'ip', 'acao', 'detalhe'}; gravada na mesma transacao
@@ -33,7 +38,7 @@ class RepoUsuarios(object):
         """
         raise NotImplementedError
 
-    def alterar(self, id, dados, esperado=None, auditoria=None):
+    def alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Atualiza campos do usuario pelo ID e retorna o registro. Login e imutavel.
 
         esperado: opcional, dict campo -> valor lido; divergencia lanca RepoConflito sem alterar nada.
@@ -48,7 +53,7 @@ class RepoUsuarios(object):
         raise NotImplementedError
 
     def registrar_falha_login(self, login, bloqueio_s=None, auditoria=None):
-        """Incrementa tentativas_falha numa unica operacao (README §4.2, §4.4).
+        """Incrementa tentativas_falha numa unica operacao (README §4.2, §4.4). Rotina tecnica: sem updated_*.
 
         bloqueio_s: se informado, bloqueado_ate = SYSDATE + bloqueio_s/86400 (relogio do banco).
         auditoria: dict ou lista de dicts {'ator', 'ip', 'acao', 'detalhe'} gravados na mesma transacao
@@ -59,16 +64,28 @@ class RepoUsuarios(object):
     def registrar_sucesso_login(self, login, novo_hash=None, auditoria=None):
         """Zera tentativas_falha e bloqueado_ate e grava ultimo_login = SYSDATE numa unica operacao.
 
+        Rotina tecnica do login: nao grava updated_* (CR-006).
+
         novo_hash: rehash da senha (iteracoes abaixo do vigente), gravado na mesma transacao.
         auditoria: dict ou lista (LOGIN_OK), na mesma transacao. Retorna o registro atualizado.
         """
         raise NotImplementedError
 
-    def desbloquear(self, id, auditoria=None):
-        """Zera tentativas_falha e remove bloqueado_ate do usuario pelo ID (auditoria opcional na mesma transacao)."""
+    def desbloquear(self, id, auditoria=None, ator=None):
+        """Desbloqueio pelo administrador: zera tentativas_falha e bloqueado_ate e grava updated_*.
+
+        auditoria: opcional, na mesma transacao. O ator (auditoria['ator'] ou ator=) e obrigatorio (CR-006).
+        """
         raise NotImplementedError
 
-    def definir_senha(self, id, senha_hash, agora=None, auditoria=None):
+    def reiniciar_tentativas(self, id):
+        """Rotina tecnica do login (README §4.2): bloqueio vencido zera tentativas_falha e bloqueado_ate.
+
+        Nao grava updated_* nem auditoria (CR-006, README §10). Retorna o registro atualizado.
+        """
+        raise NotImplementedError
+
+    def definir_senha(self, id, senha_hash, agora=None, auditoria=None, ator=None):
         """Atualiza senha_hash e senha_alterada_em, zera tentativas_falha e bloqueado_ate.
 
         auditoria: opcional, na mesma transacao; o detalhe nunca contem senha nem hash.

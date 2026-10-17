@@ -52,9 +52,10 @@ class RepoRbacFake(RepoRbac):
                 detalhe=auditoria.get("detalhe"),
             )
 
-    def perfis_inserir(self, dados, auditoria=None):
+    def perfis_inserir(self, dados, auditoria=None, ator=None):
         """Insere novo perfil com validacao de UK e CKs, auditando na mesma operacao."""
         with self._store.lock_rbac:
+            ator = self._store.ator_registro(auditoria, ator)
             nome = dados.get("nome")
             if not nome:
                 raise RepoViolacao("Nome de perfil e obrigatorio")
@@ -80,6 +81,7 @@ class RepoRbacFake(RepoRbac):
                 "perm_versao": int(dados.get("perm_versao", 1)),
                 "ativo": ativo,
             }
+            self._store.carimbar_inclusao(novo, ator)
             self._store.perfis[pid] = copy.deepcopy(novo)
             self._auditar(auditoria, pid)
             return copy.deepcopy(novo)
@@ -89,11 +91,12 @@ class RepoRbacFake(RepoRbac):
         return sorted(u["id"] for u in self._store.usuarios.values()
                       if u["ativo"] == "S" and u["perfil_id"] in admin)
 
-    def perfis_alterar(self, id, dados, esperado=None, auditoria=None):
+    def perfis_alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Altera perfil e incrementa perm_versao; protege o ultimo admin na mesma operacao (§4.3.B)."""
         # Ordem de locks igual a admins_ativos_bloquear: rbac e depois usuarios.
         with self._store.lock_rbac:
             with self._store.lock_usuarios:
+                ator = self._store.ator_registro(auditoria, ator)
                 if id not in self._store.perfis:
                     raise RepoNaoEncontrado("Perfil ID %s nao encontrado" % id)
 
@@ -132,6 +135,7 @@ class RepoRbacFake(RepoRbac):
                 atual.update(mudancas)
                 # Toda alteracao de perfil incrementa perm_versao (README §4.3.A)
                 atual["perm_versao"] = int(atual.get("perm_versao", 1)) + 1
+                self._store.carimbar_alteracao(atual, ator)
                 self._auditar(auditoria, id)
                 return copy.deepcopy(atual)
 
@@ -162,10 +166,15 @@ class RepoRbacFake(RepoRbac):
                 "scrs": copy.deepcopy(scrs),
             }
 
-    def matriz_salvar(self, perfil_id, funcs, ambs, scrs, perm_versao_esperada=None, auditoria=None):
-        """Substitui associacoes da matriz e incrementa perm_versao atomicamente (condicional a versao)."""
+    def matriz_salvar(self, perfil_id, funcs, ambs, scrs, perm_versao_esperada=None, auditoria=None, ator=None):
+        """Substitui associacoes da matriz e incrementa perm_versao atomicamente (condicional a versao).
+
+        Grava por diferenca: os vinculos que continuam mantem o created_*; havendo mudanca, o perfil
+        recebe updated_* (CR-006, README §10).
+        """
         with self._store.lock_rbac:
             with self._store.lock_catalogo:
+                ator = self._store.ator_registro(auditoria, ator)
                 if perfil_id not in self._store.perfis:
                     raise RepoNaoEncontrado("Perfil ID %s nao encontrado" % perfil_id)
                 perfil = self._store.perfis[perfil_id]
@@ -183,22 +192,26 @@ class RepoRbacFake(RepoRbac):
                         if x not in tabela:
                             raise RepoViolacao("ID %s inexistente" % x, constraint=fk)
 
-                for assoc in (self._store.perfil_func, self._store.perfil_amb, self._store.perfil_scr):
-                    for k in [k for k, v in assoc.items() if v["perfil_id"] == perfil_id]:
-                        del assoc[k]
-
-                for fid in funcs:
-                    nid = self._store.proximo_id("tbsss_perfil_func")
-                    self._store.perfil_func[nid] = {"id": nid, "perfil_id": perfil_id, "funcionalidade_id": fid}
-                for aid in ambs:
-                    nid = self._store.proximo_id("tbsss_perfil_amb")
-                    self._store.perfil_amb[nid] = {"id": nid, "perfil_id": perfil_id, "ambiente_id": aid}
-                for sid in scrs:
-                    nid = self._store.proximo_id("tbsss_perfil_scr")
-                    self._store.perfil_scr[nid] = {"id": nid, "perfil_id": perfil_id, "script_id": sid}
+                mudou = False
+                for assoc, seq, coluna, ids in (
+                        (self._store.perfil_func, "tbsss_perfil_func", "funcionalidade_id", funcs),
+                        (self._store.perfil_amb, "tbsss_perfil_amb", "ambiente_id", ambs),
+                        (self._store.perfil_scr, "tbsss_perfil_scr", "script_id", scrs)):
+                    atuais = dict((v[coluna], k) for k, v in assoc.items() if v["perfil_id"] == perfil_id)
+                    for x, k in atuais.items():
+                        if x not in ids:
+                            del assoc[k]
+                    for x in ids:
+                        if x not in atuais:
+                            nid = self._store.proximo_id(seq)
+                            assoc[nid] = self._store.carimbar_inclusao(
+                                {"id": nid, "perfil_id": perfil_id, coluna: x}, ator)
+                    mudou = mudou or set(atuais) != set(ids)
 
                 # Incrementa perm_versao atomicamente na mesma transacao
                 perfil["perm_versao"] += 1
+                if mudou:
+                    self._store.carimbar_alteracao(perfil, ator)
                 self._auditar(auditoria, perfil_id)
                 return copy.deepcopy(self.matriz_obter(perfil_id))
 

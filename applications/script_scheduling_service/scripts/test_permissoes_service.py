@@ -77,12 +77,12 @@ class TestPermissoes(unittest.TestCase):
         ctx = dict(self.ctx["op.hml"])
         # Script do perfil desativado e script do perfil sem homologacao nos ambientes dele.
         sid_inativo = sorted(ctx["scripts"])[0]
-        self.catalogo.scripts_alterar(sid_inativo, {"ativo": "N"})
+        self.catalogo.scripts_alterar(sid_inativo, {"ativo": "N"}, ator="teste")
         novo = self.catalogo.scripts_inserir({"nome": "So em PRODUCAO", "interpretador": "PYTHON3",
                                               "path_file": "/opt/scripts/x.py",
-                                              "tipo_param": "NENHUM"})["id"]
+                                              "tipo_param": "NENHUM"}, ator="teste")["id"]
         prod = [a for a in self.catalogo.ambientes_listar(pagina=1, tamanho=50)["itens"] if a["nome"] == "PRODUCAO"][0]
-        self.catalogo.homologacao_salvar(novo, [prod["id"]])
+        self.catalogo.homologacao_salvar(novo, [prod["id"]], ator="teste")
         ctx["scripts"] = frozenset(ctx["scripts"]) | frozenset([novo])
         ctx["ambientes"] = frozenset(a for a in ctx["ambientes"] if a != "PRODUCAO")
         d = self.svc.montar(ctx)

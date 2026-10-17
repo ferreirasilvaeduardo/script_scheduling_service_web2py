@@ -77,3 +77,46 @@ class TestSeedFake(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSeedColunasRegistro(unittest.TestCase):
+    """Colunas de registro do seed coerentes com o README §10 e §2.5 (CR-006)."""
+
+    setUp = TestSeedFake.setUp
+
+    def test_toda_linha_com_registro_coerente(self):
+        import sql_ident
+        for entidade in sql_ident.TABELAS:
+            linhas = list(getattr(self.store, entidade).values())
+            self.assertTrue(linhas, entidade)
+            for r in linhas:
+                if entidade in sql_ident.TABELAS_SEM_REGISTRO:
+                    self.assertNotIn("created_by", r)
+                    continue
+                self.assertTrue(r["created_by"] and len(r["created_by"]) <= sql_ident.ATOR_MAX, (entidade, r["id"]))
+                self.assertLessEqual(r["created_at"], self.agora, (entidade, r["id"]))
+                self.assertEqual(r["updated_at"] is None, r["updated_by"] is None, (entidade, r["id"]))
+                if r["updated_at"] is not None:
+                    self.assertTrue(r["created_at"] <= r["updated_at"] <= self.agora, (entidade, r["id"]))
+
+    def test_autoria_por_tipo_de_registro(self):
+        for nome in ("ambientes", "perfis", "funcionalidades", "scripts", "usuarios", "parametros",
+                     "perfil_func", "script_amb", "script_param"):
+            for r in getattr(self.store, nome).values():
+                self.assertEqual(r["created_by"], "SYSTEM:seed", nome)
+                self.assertEqual(r["updated_by"] is not None, r.get("ativo") == "N", (nome, r["id"]))
+        for a in self.store.agentes.values():
+            self.assertEqual(a["created_by"], "SYSTEM:%s" % a["codigo"])
+        for a in self.store.agendamentos.values():
+            if a["ativo"] == "N" and a["pausa_motivo"] == "MANUAL":
+                self.assertEqual(a["updated_by"], self.store.usuarios[a["usuario_id"]]["login"])
+        for t in self.store.tickets.values():
+            if t["agendamento_id"] is None:
+                self.assertEqual(t["created_by"], t["solicitante"], t["id"])
+            else:
+                self.assertTrue(t["created_by"].startswith("SYSTEM:agt-"), t["id"])
+            self.assertEqual(t["updated_by"] is None, t["status"] == "PENDING", t["id"])
+            if t["status"] in ("RUNNING", "SUCCESS", "FAILED"):
+                self.assertEqual(t["updated_by"], "SYSTEM:%s" % t["agente_id"], t["id"])
+        for r in self.store.ticket_resp.values():
+            self.assertEqual(r["created_by"], self.store.tickets[r["ticket_id"]]["created_by"])

@@ -7,7 +7,7 @@
 | Restrições | Sem dependência nova. Nenhuma mudança na pilha (Python 3.6+, web2py, Oracle 11gR2, Alpine CSP). Identificadores com até 30 caracteres |
 | Afeta | README §2.5, §4.4, §5.4, §5.5, §5.6, §5.7, §7.5, §7.6, §8.3, §8.4, §8.7, §8.8, §8.9, §8.10, §8.12, §10 (padrões globais e as 15 tabelas) e §11.1. `AGENTS.md` §4, §7 e §8. `docs/PADRAO_CRUD_ADMIN.md`. Prompts F7.1, F7.3, F8.2, F8.3, F8.4, F9.2, UI_FREEZE e o índice. Manual de homologação (v2.3) |
 | Revoga | Nada |
-| Contrato | 54 colunas novas e 15 CKs `ck_<prefixo><abrev>_upd`. Os repositórios passam a exigir o ator em toda gravação. Os vínculos de conjunto passam a ser gravados por diferença |
+| Contrato | 54 colunas novas e 15 CKs `ck_<prefixo><abrev>_upd`. Toda operação de gravação de negócio dos repositórios ganha o parâmetro `ator=` e passa a exigir o ator (por ele ou por `auditoria['ator']`); `RepoTickets.criar` usa o solicitante quando `ator=` não vem. `RepoUsuarios.reiniciar_tentativas(id)` é nova: rotina técnica do bloqueio vencido (README §4.2), sem `updated_*` nem auditoria. Os vínculos de conjunto passam a ser gravados por diferença |
 | Depende de | CR-005 concluído. O F7 (Oracle) e o F8 (agente) ainda não foram executados, então não há banco nem dado de produção a migrar: as colunas entram direto no `CREATE TABLE` |
 
 ---

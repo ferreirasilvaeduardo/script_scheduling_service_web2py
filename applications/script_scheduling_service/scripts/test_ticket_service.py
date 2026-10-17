@@ -84,7 +84,7 @@ class _BaseTicket(unittest.TestCase):
         self.base = _criar_arvore()
         self.addCleanup(_remover_arvore, self.base)
         for sid, nome in enumerate(ARQUIVOS, 1):
-            self.catalogo.scripts_alterar(sid, {"path_file": os.path.join(self.base, nome)})
+            self.catalogo.scripts_alterar(sid, {"path_file": os.path.join(self.base, nome)}, ator="teste")
         # A arvore fica sob /tmp (escrita para todos): a cadeia de pastas para na base travada.
         original = path_guard.resolver
         patcher = mock.patch.object(path_guard, "resolver",
@@ -218,7 +218,7 @@ class TestTicketService(_BaseTicket):
         vinculos = [{"parametro_id": v["parametro_id"], "ordem": v["ordem"], "obrigatorio": v["obrigatorio"],
                      "valor_padrao_sub": None if v["codigo"] == "data_ref" else v["valor_padrao_sub"]}
                     for v in self.catalogo.script_params_obter(1)]
-        self.catalogo.script_params_salvar(1, vinculos)
+        self.catalogo.script_params_salvar(1, vinculos, ator="teste")
         antes = self._total_tickets()
         tid, erros = self._criar(respostas={"data_ref": "   "})
         self.assertIsNone(tid)
@@ -337,7 +337,7 @@ class TestClarezaDisparo(_BaseTicket):
         self.assertNotIn("documento_cliente", valores)
         self.assertEqual(avisos["documento_cliente"], ticket_service.MSG_ULTIMA_SENSIVEL)
         # Opcao removida do catalogo: a resposta antiga deixa de valer e vem com aviso.
-        self.catalogo.parametros_alterar(3, {"opcoes_json": '{"REAL":"Execucao Real"}', "valor_padrao": "REAL"})
+        self.catalogo.parametros_alterar(3, {"opcoes_json": '{"REAL":"Execucao Real"}', "valor_padrao": "REAL"}, ator="teste")
         valores, avisos = self.svc.ultimas_respostas(ctx, "1", "HOMOLOGACAO")
         self.assertNotIn("modo_exec", valores)
         self.assertEqual(avisos["modo_exec"], ticket_service.MSG_ULTIMA_MUDOU)
@@ -525,7 +525,7 @@ class TestTicketConsulta(_BaseTicket):
         vinculos = [{"parametro_id": v["parametro_id"], "ordem": v["ordem"], "obrigatorio": v["obrigatorio"],
                      "valor_padrao_sub": v["valor_padrao_sub"]} for v in self.catalogo.script_params_obter(1)]
         vinculos.append({"parametro_id": 10, "ordem": 6, "obrigatorio": "S", "valor_padrao_sub": None})
-        self.catalogo.script_params_salvar(1, vinculos)
+        self.catalogo.script_params_salvar(1, vinculos, ator="teste")
         antes = self._total_tickets()
         with self.assertRaises(ErroReexecucao) as cm:
             self.svc.reexecutar(ctx, IP, str(original))

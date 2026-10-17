@@ -3,7 +3,12 @@
 
 
 class RepoCatalogo(object):
-    """Contrato abstrato para gestao de ambientes, scripts e parametros."""
+    """Contrato abstrato para gestao de ambientes, scripts e parametros.
+
+    Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o ator, por
+    auditoria['ator'] ou pelo parametro ator=; o INSERT grava created_*, a alteracao grava updated_*.
+    Sem ator, RepoViolacao sem gravar nada.
+    """
 
     def ambientes_listar(self, filtros=None, pagina=1, tamanho=20):
         """Lista ambientes paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}."""
@@ -13,7 +18,7 @@ class RepoCatalogo(object):
         """Retorna dict com dados do ambiente ou lanca RepoNaoEncontrado."""
         raise NotImplementedError
 
-    def ambientes_inserir(self, dados, auditoria=None):
+    def ambientes_inserir(self, dados, auditoria=None, ator=None):
         """Insere novo ambiente e retorna dict com o registro criado.
 
         auditoria: opcional, {'ator', 'ip', 'acao', 'detalhe'}; gravada na mesma transacao
@@ -21,7 +26,7 @@ class RepoCatalogo(object):
         """
         raise NotImplementedError
 
-    def ambientes_alterar(self, id, dados, esperado=None, auditoria=None):
+    def ambientes_alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Atualiza dados do ambiente e retorna o registro alterado. Nome e imutavel.
 
         esperado: opcional, dict campo -> valor lido pelo chamador; o UPDATE e condicional a esses
@@ -42,11 +47,11 @@ class RepoCatalogo(object):
         """Retorna dict com dados do script ou lanca RepoNaoEncontrado."""
         raise NotImplementedError
 
-    def scripts_inserir(self, dados, auditoria=None):
+    def scripts_inserir(self, dados, auditoria=None, ator=None):
         """Insere novo script e retorna dict com o registro criado (auditoria opcional na mesma transacao)."""
         raise NotImplementedError
 
-    def scripts_alterar(self, id, dados, esperado=None, auditoria=None):
+    def scripts_alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Atualiza o script e retorna o registro; esperado divergente lanca RepoConflito.
 
         Trocar tipo_param revalida os vinculos na mesma operacao: NENHUM com vinculo lanca
@@ -59,7 +64,7 @@ class RepoCatalogo(object):
         """Retorna lista de ambiente_id homologados para o script."""
         raise NotImplementedError
 
-    def homologacao_salvar(self, script_id, ambiente_ids, esperado=None, auditoria=None):
+    def homologacao_salvar(self, script_id, ambiente_ids, esperado=None, auditoria=None, ator=None):
         """Substitui os ambientes homologados do script e retorna a lista resultante.
 
         esperado: opcional, lista de ambiente_id lida; divergencia lanca RepoConflito.
@@ -79,7 +84,7 @@ class RepoCatalogo(object):
         """Retorna dict com dados do parametro ou lanca RepoNaoEncontrado."""
         raise NotImplementedError
 
-    def parametros_inserir(self, dados, auditoria=None):
+    def parametros_inserir(self, dados, auditoria=None, ator=None):
         """Insere novo parametro e retorna dict com o registro criado.
 
         auditoria: opcional, {'ator', 'ip', 'acao', 'detalhe'}; gravada na mesma transacao
@@ -87,7 +92,7 @@ class RepoCatalogo(object):
         """
         raise NotImplementedError
 
-    def parametros_alterar(self, id, dados, esperado=None, auditoria=None):
+    def parametros_alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Atualiza o parametro e retorna o registro, com as regras de dependencia na mesma operacao.
 
         Lanca RepoViolacao com constraint de aplicacao, sem alterar nada, quando:
@@ -106,7 +111,7 @@ class RepoCatalogo(object):
         """Retorna lista de vinculos ordenados por ordem com dados completos do parametro."""
         raise NotImplementedError
 
-    def script_params_salvar(self, script_id, vinculos, esperado=None, auditoria=None):
+    def script_params_salvar(self, script_id, vinculos, esperado=None, auditoria=None, ator=None):
         """Substitui os vinculos do script ({parametro_id, ordem, obrigatorio, valor_padrao_sub}).
 
         Regras na mesma operacao: script NENHUM nao aceita vinculo ('sss_scr_nenhum_vinculado');

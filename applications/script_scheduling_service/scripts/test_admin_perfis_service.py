@@ -73,7 +73,7 @@ class _Base(unittest.TestCase):
         novo_id, erros = self.svc.salvar(self.ctx["admin"], IP, None, {"nome": "ADMIN_RESERVA", "is_admin": "S"})
         self.assertEqual(erros, {})
         u = self.usuarios.obter_por_login("op.hml")
-        self.usuarios.alterar(u["id"], {"perfil_id": novo_id})
+        self.usuarios.alterar(u["id"], {"perfil_id": novo_id}, ator="teste")
         return novo_id
 
 
@@ -91,7 +91,7 @@ class TestCadastro(_Base):
 
     def test_conflito_pela_versao_e_pelo_esperado(self):
         form = self._form(PERFIL_CONSULTA)
-        self.rbac_repo.perfis_alterar(PERFIL_CONSULTA, {"descricao": "mudou por outro"})
+        self.rbac_repo.perfis_alterar(PERFIL_CONSULTA, {"descricao": "mudou por outro"}, ator="teste")
         _id, erros = self.svc.salvar(self.ctx["admin"], IP, str(PERFIL_CONSULTA), self._dados(form, descricao="minha"))
         self.assertEqual(erros, {CAMPO_GERAL: admin_crud.MSG_CONFLITO})
         form = self._form(PERFIL_CONSULTA)
@@ -99,7 +99,7 @@ class TestCadastro(_Base):
 
         def corrida(*args, **kwargs):
             self.rbac_repo.perfis_alterar = original
-            original(PERFIL_CONSULTA, {"descricao": "corrida"})
+            original(PERFIL_CONSULTA, {"descricao": "corrida"}, ator="teste")
             return original(*args, **kwargs)
         with mock.patch.object(self.rbac_repo, "perfis_alterar", side_effect=corrida):
             _id, erros = self.svc.salvar(self.ctx["admin"], IP, str(PERFIL_CONSULTA),
@@ -127,7 +127,7 @@ class TestDesativacaoComImpacto(_Base):
     def test_lista_limitada_a_vinte_logins(self):
         for i in range(perfis_mod.AFETADOS_MAX + 3):
             self.usuarios.inserir({"login": "usr.%02d" % i, "nome": "U %d" % i, "senha_hash": "x",
-                                   "perfil_id": PERFIL_CONSULTA, "ativo": "S"})
+                                   "perfil_id": PERFIL_CONSULTA, "ativo": "S"}, ator="teste")
         form = self._form(PERFIL_CONSULTA)
         self.assertEqual(form["usuarios_ativos"], perfis_mod.AFETADOS_MAX + 4)
         self.assertEqual(len(form["usuarios_afetados"]), perfis_mod.AFETADOS_MAX)
@@ -199,8 +199,8 @@ class TestQuemPode(_Base):
             self.assertEqual(set(perfis[nome]["detalhes"]) if nome in perfis else set(), podem, login)
 
     def test_por_ambiente_e_inativos(self):
-        self.rbac_repo.perfis_alterar(PERFIL_CONSULTA, {"is_admin": "S"})
-        self.rbac_repo.perfis_alterar(PERFIL_CONSULTA, {"ativo": "N"})
+        self.rbac_repo.perfis_alterar(PERFIL_CONSULTA, {"is_admin": "S"}, ator="teste")
+        self.rbac_repo.perfis_alterar(PERFIL_CONSULTA, {"ativo": "N"}, ator="teste")
         amb = [a for a in self.svc._catalogo.ambientes_listar(pagina=1, tamanho=50)["itens"]
                if a["nome"] == "HOMOLOGACAO"][0]
         q = self.svc.quem_pode(self.ctx["admin"], ambiente_id=str(amb["id"]))
@@ -209,7 +209,7 @@ class TestQuemPode(_Base):
         self.assertTrue(self._nomes(q["perfis"])["ADMINISTRADOR"]["detalhes"])
 
     def test_script_inativo_avisa_e_acesso(self):
-        self.svc._catalogo.scripts_alterar(5, {"ativo": "N"})
+        self.svc._catalogo.scripts_alterar(5, {"ativo": "N"}, ator="teste")
         self.assertIn(u"inativo", self.svc.quem_pode(self.ctx["admin"], script_id="5")["aviso"])
         with self.assertRaises(RepoNaoEncontrado):
             self.svc.quem_pode(self.ctx["admin"], script_id="999")

@@ -55,7 +55,7 @@ class _Base(unittest.TestCase):
                                              self.auditoria, 5, 900, self.log, relogio=lambda: AGORA)
         self.ctx = dict((login, self.auth.revalidar(sessao)) for login, sessao in SESSOES.items())
         # O seed usa o relogio real: o bloqueio do usuario 'bloqueado' e reposicionado a partir de AGORA.
-        self.usuarios.alterar(U_BLOQUEADO, {"bloqueado_ate": AGORA + datetime.timedelta(minutes=30)})
+        self.usuarios.alterar(U_BLOQUEADO, {"bloqueado_ate": AGORA + datetime.timedelta(minutes=30)}, ator="teste")
         self.svc = ServicoAdminUsuarios(self.usuarios, self.rbac_repo, self.log, relogio=lambda: AGORA)
         self.aud_base = max([a["id"] for a in self.auditoria.listar(pagina=1, tamanho=1000)["itens"]] or [0])
 
@@ -127,7 +127,7 @@ class TestInclusao(_Base):
 
     def test_perfil_inativo_ou_inexistente(self):
         form = self.rbac_repo.perfis_obter(P_CONSULTA)
-        self.rbac_repo.perfis_alterar(P_CONSULTA, {"ativo": "N"})
+        self.rbac_repo.perfis_alterar(P_CONSULTA, {"ativo": "N"}, ator="teste")
         _uid, erros = self._incluir()
         self.assertEqual(erros, {"perfil_id": usr_mod.MSG_PERFIL_INVALIDO})
         _uid, erros = self._incluir(perfil_id="999")
@@ -147,7 +147,7 @@ class TestEdicaoEUltimoAdmin(_Base):
     def test_troca_de_perfil_do_ultimo_admin_negada(self):
         # Outro administrador nao pode tirar o unico admin do perfil admin: novo admin cria o cenario.
         novo, _ = self._incluir(login="admin2", perfil_id=str(P_ADMIN))
-        self.usuarios.alterar(novo, {"ativo": "N"})
+        self.usuarios.alterar(novo, {"ativo": "N"}, ator="teste")
         ctx2 = dict(self.ctx["admin"], usuario_id=novo, login="admin2")
         f = self.svc.formulario(ctx2, str(U_ADMIN))
         _uid, erros = self.svc.salvar(ctx2, IP, str(U_ADMIN), {"nome": f["nome"], "perfil_id": str(P_CONSULTA),
@@ -200,10 +200,10 @@ class TestEdicaoEUltimoAdmin(_Base):
 
     def test_ultimo_admin_atomico_no_repositorio(self):
         with self.assertRaises(RepoViolacao) as cm:
-            self.usuarios.alterar(U_ADMIN, {"perfil_id": P_CONSULTA})
+            self.usuarios.alterar(U_ADMIN, {"perfil_id": P_CONSULTA}, ator="teste")
         self.assertEqual(cm.exception.constraint, "sss_ultimo_admin")
         with self.assertRaises(RepoViolacao):
-            self.usuarios.alterar(U_ADMIN, {"ativo": "N"})
+            self.usuarios.alterar(U_ADMIN, {"ativo": "N"}, ator="teste")
 
 
 class TestSenhaEBloqueio(_Base):

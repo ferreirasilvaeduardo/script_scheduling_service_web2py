@@ -105,11 +105,12 @@ class RepoUsuariosFake(RepoUsuarios):
         p = self._store.perfis.get(usuario["perfil_id"])
         return usuario["ativo"] == "S" and p is not None and p["ativo"] == "S" and p["is_admin"] == "S"
 
-    def inserir(self, dados, auditoria=None):
+    def inserir(self, dados, auditoria=None, ator=None):
         """Insere novo usuario com validacoes de integridade, auditando na mesma operacao."""
         # Ordem de locks unica no FAKE: rbac e depois usuarios (como admins_ativos_bloquear).
         with self._store.lock_rbac:
             with self._store.lock_usuarios:
+                ator = self._store.ator_registro(auditoria, ator)
                 login = dados.get("login")
                 if not login or not _RE_LOGIN.fullmatch(login):
                     raise RepoViolacao("Login invalido (esperado: 3-30 caracteres [a-z0-9._-])", constraint="ck_tbsss_usr_login")
@@ -142,16 +143,18 @@ class RepoUsuariosFake(RepoUsuarios):
                     "ultimo_login": dados.get("ultimo_login"),
                     "senha_alterada_em": dados.get("senha_alterada_em"),
                     "ativo": ativo,
-                    "created_at": dados.get("created_at") or self._store.agora(),
+                    "created_at": dados.get("created_at"),
                 }
+                self._store.carimbar_inclusao(novo, ator)
                 self._store.usuarios[uid] = copy.deepcopy(novo)
                 self._auditar(auditoria, uid)
                 return copy.deepcopy(novo)
 
-    def alterar(self, id, dados, esperado=None, auditoria=None):
+    def alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Altera usuario (login imutavel), condicional a 'esperado' e com protecao do ultimo admin."""
         with self._store.lock_rbac:
             with self._store.lock_usuarios:
+                ator = self._store.ator_registro(auditoria, ator)
                 if id not in self._store.usuarios:
                     raise RepoNaoEncontrado("Usuario ID %s nao encontrado" % id)
 
@@ -191,6 +194,7 @@ class RepoUsuariosFake(RepoUsuarios):
 
                 anterior = atual["perfil_id"]
                 atual.update(mudancas)
+                self._store.carimbar_alteracao(atual, ator)
 
                 # Incrementa perm_versao do perfil se houver alteracao de perfil ou ativo
                 if perfil_alterado or ativo_alterado:
@@ -233,20 +237,33 @@ class RepoUsuariosFake(RepoUsuarios):
             self._auditar(auditoria, u["id"])
             return copy.deepcopy(u)
 
-    def desbloquear(self, id, auditoria=None):
-        """Desbloqueia conta de usuario zerando tentativas."""
+    def desbloquear(self, id, auditoria=None, ator=None):
+        """Desbloqueia conta de usuario zerando tentativas (alteracao de negocio: grava updated_*)."""
+        with self._store.lock_usuarios:
+            ator = self._store.ator_registro(auditoria, ator)
+            if id not in self._store.usuarios:
+                raise RepoNaoEncontrado("Usuario ID %s nao encontrado" % id)
+            u = self._store.usuarios[id]
+            u["tentativas_falha"] = 0
+            u["bloqueado_ate"] = None
+            self._store.carimbar_alteracao(u, ator)
+            self._auditar(auditoria, id)
+            return copy.deepcopy(u)
+
+    def reiniciar_tentativas(self, id):
+        """Bloqueio vencido: novo ciclo de tentativas, sem updated_* nem auditoria (rotina tecnica)."""
         with self._store.lock_usuarios:
             if id not in self._store.usuarios:
                 raise RepoNaoEncontrado("Usuario ID %s nao encontrado" % id)
             u = self._store.usuarios[id]
             u["tentativas_falha"] = 0
             u["bloqueado_ate"] = None
-            self._auditar(auditoria, id)
             return copy.deepcopy(u)
 
-    def definir_senha(self, id, senha_hash, agora=None, auditoria=None):
-        """Atualiza a senha do usuario e zera contadores de bloqueio."""
+    def definir_senha(self, id, senha_hash, agora=None, auditoria=None, ator=None):
+        """Atualiza a senha do usuario e zera contadores de bloqueio (grava updated_*)."""
         with self._store.lock_usuarios:
+            ator = self._store.ator_registro(auditoria, ator)
             if id not in self._store.usuarios:
                 raise RepoNaoEncontrado("Usuario ID %s nao encontrado" % id)
             u = self._store.usuarios[id]
@@ -254,5 +271,6 @@ class RepoUsuariosFake(RepoUsuarios):
             u["senha_alterada_em"] = agora or self._store.agora()
             u["tentativas_falha"] = 0
             u["bloqueado_ate"] = None
+            self._store.carimbar_alteracao(u, ator)
             self._auditar(auditoria, id)
             return copy.deepcopy(u)

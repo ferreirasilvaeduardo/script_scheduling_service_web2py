@@ -66,6 +66,61 @@ def _parametros_json(resolvidos):
     return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+_ATOR_SEED = "SYSTEM:seed"
+_CADASTROS = ("ambientes", "perfis", "funcionalidades", "perfil_func", "perfil_amb", "scripts", "perfil_scr",
+              "script_amb", "usuarios", "parametros", "script_param", "agendamentos")
+
+
+def _entre(valor, minimo, maximo):
+    return max(minimo, min(valor, maximo))
+
+
+def _carimbar_registro(store, base_dt):
+    """Colunas de registro coerentes com o README §10 e §2.5 (CR-006).
+
+    Cadastros e vinculos: criados por SYSTEM:seed; updated_* so onde o estado implica alteracao
+    (registro inativo, regra pausada). Tickets: solicitante ou o agente do desdobro; fora de PENDING,
+    a ultima mudanca de situacao. Agentes: o proprio agente. Sempre entre created_at e base_dt.
+    """
+    for nome in _CADASTROS:
+        for reg in getattr(store, nome).values():
+            reg.setdefault("created_at", base_dt - datetime.timedelta(days=90))
+            reg.update(created_by=_ATOR_SEED, updated_at=None, updated_by=None)
+            if reg.get("ativo") == "N":
+                reg["updated_at"] = _entre(reg["created_at"] + datetime.timedelta(days=1), reg["created_at"], base_dt)
+                reg["updated_by"] = _ATOR_SEED
+    for a in store.agendamentos.values():
+        if a["ativo"] == "N":
+            if a.get("pausa_motivo") == "MANUAL":
+                a["updated_by"] = store.usuarios[a["usuario_id"]]["login"]
+            else:
+                a["updated_by"] = "SYSTEM:agt-host01"
+            a["updated_at"] = _entre(a.get("ultima_execucao") or a["created_at"], a["created_at"], base_dt)
+    for ag in store.agentes.values():
+        ag.update(created_by="SYSTEM:%s" % ag["codigo"], updated_at=None, updated_by=None)
+    for t in store.tickets.values():
+        if t.get("agendamento_id") is not None:
+            t["created_by"] = "SYSTEM:%s" % (t.get("agente_id") or "agt-host01")
+        else:
+            t["created_by"] = t["solicitante"]
+        t["updated_at"] = t["updated_by"] = None
+        if t["status"] == "PENDING":
+            continue
+        if t["status"] == "CANCELLED" and t.get("started_at") is None:
+            # Cancelado na fila pelo administrador (trilha do seed: TICKET_CANCELAR por admin).
+            t["updated_by"] = "admin"
+            quando = t.get("finished_at")
+        elif t["status"] == "RUNNING":
+            t["updated_by"] = "SYSTEM:%s" % t["agente_id"]
+            quando = t.get("started_at")
+        else:
+            t["updated_by"] = "SYSTEM:%s" % t["agente_id"]
+            quando = t.get("finished_at") or t.get("started_at")
+        t["updated_at"] = _entre(quando or t["created_at"], t["created_at"], base_dt)
+    for r in store.ticket_resp.values():
+        r.update(created_by=store.tickets[r["ticket_id"]]["created_by"], updated_at=None, updated_by=None)
+
+
 def carregar_seed(store, forcar=False, senha_dev=None):
     """Carrega dados iniciais deterministicos no store FAKE de forma idempotente.
 
@@ -519,3 +574,5 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                         "created_at": base_dt - datetime.timedelta(hours=35 - i),
                                     }
                                 store.seqs["tbsss_auditoria"] = 30
+
+                                _carimbar_registro(store, base_dt)

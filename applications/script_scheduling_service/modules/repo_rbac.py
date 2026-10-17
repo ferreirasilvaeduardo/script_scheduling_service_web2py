@@ -3,7 +3,12 @@
 
 
 class RepoRbac(object):
-    """Contrato abstrato para gestao de perfis, matrizes de permissao e RBAC."""
+    """Contrato abstrato para gestao de perfis, matrizes de permissao e RBAC.
+
+    Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o ator, por
+    auditoria['ator'] ou pelo parametro ator=; o INSERT grava created_*, a alteracao grava updated_*.
+    Sem ator, RepoViolacao sem gravar nada.
+    """
 
     def perfis_listar(self, filtros=None, pagina=1, tamanho=20):
         """Lista perfis paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}."""
@@ -13,7 +18,7 @@ class RepoRbac(object):
         """Retorna dict com dados do perfil ou lanca RepoNaoEncontrado."""
         raise NotImplementedError
 
-    def perfis_inserir(self, dados, auditoria=None):
+    def perfis_inserir(self, dados, auditoria=None, ator=None):
         """Insere novo perfil e retorna dict com o registro criado.
 
         auditoria: opcional, {'ator', 'ip', 'acao', 'detalhe'}; gravada na mesma transacao
@@ -21,7 +26,7 @@ class RepoRbac(object):
         """
         raise NotImplementedError
 
-    def perfis_alterar(self, id, dados, esperado=None, auditoria=None):
+    def perfis_alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Atualiza perfil, incrementa perm_versao e retorna o registro, tudo na mesma transacao.
 
         esperado: opcional, dict campo -> valor lido; divergencia lanca RepoConflito sem alterar nada.
@@ -36,7 +41,7 @@ class RepoRbac(object):
         """Retorna dict {'funcs': [...], 'ambs': [...], 'scrs': [...]} com IDs associados."""
         raise NotImplementedError
 
-    def matriz_salvar(self, perfil_id, funcs, ambs, scrs, perm_versao_esperada=None, auditoria=None):
+    def matriz_salvar(self, perfil_id, funcs, ambs, scrs, perm_versao_esperada=None, auditoria=None, ator=None):
         """Substitui a matriz do perfil e incrementa perm_versao atomicamente; retorna a nova matriz.
 
         perm_versao_esperada: opcional; se o perm_versao atual divergir, lanca RepoConflito sem alterar.

@@ -108,7 +108,7 @@ class TestCadastro(_Base):
     def test_sensivel_de_vazio_para_preenchido_gera_conflito(self):
         f = self.svc.formulario(self.ctx["admin"], str(P_CHAVE_API))
         self.assertFalse(f["tem_padrao"])
-        self.catalogo.parametros_alterar(P_CHAVE_API, {"valor_padrao": "colocado-por-outro-333"})
+        self.catalogo.parametros_alterar(P_CHAVE_API, {"valor_padrao": "colocado-por-outro-333"}, ator="teste")
         dados = dict((k, f[k]) for k in ("param_nomeado", "label", "descricao", "tipo_componente", "opcoes_json",
                                           "valor_padrao", "regex_validacao", "versao", "sensivel"))
         _pid, erros = self.svc.salvar(self.ctx["admin"], IP, str(P_CHAVE_API), dict(dados, label="Outro"))
@@ -221,7 +221,7 @@ class TestDependencias(_Base):
                                   ({"param_nomeado": "--outra"}, "sss_prm_flag_nomeado"),
                                   ({"ativo": "N"}, "sss_prm_vinculo_ativo")):
             with self.assertRaises(RepoViolacao) as cm:
-                self.catalogo.parametros_alterar(P_DATA_REF, dados)
+                self.catalogo.parametros_alterar(P_DATA_REF, dados, ator="teste")
             self.assertEqual(cm.exception.constraint, constraint)
 
     def test_conflito_de_edicao(self):

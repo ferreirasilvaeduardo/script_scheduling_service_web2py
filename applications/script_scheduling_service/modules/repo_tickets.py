@@ -3,16 +3,22 @@
 
 
 class RepoTickets(object):
-    """Contrato abstrato para gestao do ciclo de vida e logs dos tickets."""
+    """Contrato abstrato para gestao do ciclo de vida e logs dos tickets.
+
+    Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o ator, por
+    auditoria['ator'] ou pelo parametro ator=; o INSERT grava created_*, a alteracao grava updated_*.
+    Sem ator, RepoViolacao sem gravar nada.
+    """
 
     def agora(self):
         """Instante corrente do banco (SYSDATE), sem microssegundos, para regras de negocio."""
         raise NotImplementedError
 
-    def criar(self, ticket, respostas):
+    def criar(self, ticket, respostas, ator=None):
         """Cria ticket e respostas vinculadas em transacao unica e retorna o ID criado.
 
         Audita TICKET_CRIAR, ou TICKET_REEXECUTAR quando ticket['parent_ticket_id'] e informado.
+        created_by do ticket e das respostas: ator= ou, sem ele, o solicitante (CR-006).
         """
         raise NotImplementedError
 

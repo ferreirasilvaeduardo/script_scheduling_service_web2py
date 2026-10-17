@@ -187,7 +187,7 @@ class TestEdicao(_Base):
         def obter_e_concorrer(aid):
             lido = original(aid)
             # Outra sessao grava depois da leitura do service e antes do UPDATE condicional.
-            self.catalogo.ambientes_alterar(aid, {"descricao": "Concorrente"})
+            self.catalogo.ambientes_alterar(aid, {"descricao": "Concorrente"}, ator="teste")
             return lido
 
         with mock.patch.object(self.catalogo, "ambientes_obter", side_effect=obter_e_concorrer):

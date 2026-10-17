@@ -214,7 +214,7 @@ class TestCadastro(_Base):
         # README §8.5: arquivo com problema nao impede editar a descricao nem desativar.
         svc = self._servico("HML")
         sid = self.catalogo.scripts_inserir({"nome": "Gravavel", "interpretador": "PYTHON3",
-                                             "path_file": self._p("gravavel.py"), "tipo_param": "SEQUENCIAL"})["id"]
+                                             "path_file": self._p("gravavel.py"), "tipo_param": "SEQUENCIAL"}, ator="teste")["id"]
         f = svc.formulario(self.ctx["admin"], str(sid))
         dados = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.CAMPOS_EDITAVEIS)
         _sid, erros, _a = svc.salvar(self.ctx["admin"], IP, str(sid), dict(dados, versao=f["versao"], descricao="Nova"))
@@ -228,7 +228,7 @@ class TestCadastro(_Base):
             svc.alternar_ativo(self.ctx["admin"], IP, str(sid), svc.formulario(self.ctx["admin"], str(sid))["versao"])
         self.assertEqual(self.catalogo.scripts_obter(sid)["ativo"], "N")
         # Arquivo ausente nao impede reativar: o agente confere (D4).
-        self.catalogo.scripts_alterar(sid, {"path_file": "/opt/automacoes/scripts/sumiu.py"})
+        self.catalogo.scripts_alterar(sid, {"path_file": "/opt/automacoes/scripts/sumiu.py"}, ator="teste")
         svc.alternar_ativo(self.ctx["admin"], IP, str(sid), svc.formulario(self.ctx["admin"], str(sid))["versao"])
         self.assertEqual(self.catalogo.scripts_obter(sid)["ativo"], "S")
 
@@ -236,13 +236,13 @@ class TestCadastro(_Base):
         _sid, erros, _ = self._editar(S_CARGA, tipo_param="NENHUM")
         self.assertEqual(erros, {"tipo_param": scr_mod.MSG_NENHUM_VINCULADO})
         # Script SEQUENCIAL com parametro sem flag nao pode virar NOMEADO.
-        pid = self.catalogo.parametros_inserir({"codigo": "sem_flag", "label": "Sem flag", "tipo_componente": "TEXT"})["id"]
+        pid = self.catalogo.parametros_inserir({"codigo": "sem_flag", "label": "Sem flag", "tipo_componente": "TEXT"}, ator="teste")["id"]
         sid, _e, _a = self._incluir()
-        self.catalogo.script_params_salvar(sid, [{"parametro_id": pid, "ordem": 1, "obrigatorio": "N"}])
+        self.catalogo.script_params_salvar(sid, [{"parametro_id": pid, "ordem": 1, "obrigatorio": "N"}], ator="teste")
         _sid, erros, _ = self._editar(sid, tipo_param="NOMEADO")
         self.assertIn("sem_flag", erros["tipo_param"])
         with self.assertRaises(RepoViolacao) as cm:
-            self.catalogo.scripts_alterar(sid, {"tipo_param": "NOMEADO"})
+            self.catalogo.scripts_alterar(sid, {"tipo_param": "NOMEADO"}, ator="teste")
         self.assertEqual(cm.exception.constraint, "sss_scr_nomeado_sem_flag")
 
     def test_desativacao_com_agendamentos_e_conflito(self):
@@ -280,7 +280,7 @@ class TestHomologacao(_Base):
 
     def test_homologacao_inativa_pode_sair_e_nao_volta(self):
         # CR-003 D9: inativo ja homologado pode ser removido; nunca readicionado.
-        self.catalogo.homologacao_salvar(S_CARGA, [AMB_PROD, AMB_DESENV])
+        self.catalogo.homologacao_salvar(S_CARGA, [AMB_PROD, AMB_DESENV], ator="teste")
         tela = self.svc.homologacao(self.ctx["admin"], str(S_CARGA))
         desenv = [a for a in tela["ambientes"] if a["nome"] == "DESENV"][0]
         self.assertTrue(desenv["marcado"] and desenv["inativo"])
@@ -315,7 +315,7 @@ class TestVinculos(_Base):
     def test_sub_sigiloso_mantido_e_revalidado_e_pode_ser_removido(self):
         # CR-003 P6 (README §6.5).
         tela, itens = self._vinculos_json(S_CARGA)
-        self.catalogo.parametros_alterar(6, {"regex_validacao": "^x$"})  # documento_cliente: o sub gravado deixa de valer
+        self.catalogo.parametros_alterar(6, {"regex_validacao": "^x$"}, ator="teste")  # documento_cliente: o sub gravado deixa de valer
         _d, erros = self.svc.salvar_parametros(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens), tela["versao"])
         self.assertEqual(erros, {"vinculo_6": scr_mod.MSG_SIGILOSO_INVALIDO})
         for item in itens:
@@ -346,7 +346,7 @@ class TestVinculos(_Base):
         for v in lidos:
             if v["valor_padrao_sub"] == "00011122233":
                 v["valor_padrao_sub"] = "outro-segredo-456"
-        self.catalogo.script_params_salvar(S_CARGA, lidos)
+        self.catalogo.script_params_salvar(S_CARGA, lidos, ator="teste")
         tela = self.svc.parametros(self.ctx["admin"], str(S_CARGA))
         self.assertEqual(tela["versao"], v1)
         self.assertNotEqual(tela["versao"], scr_mod._hash(scr_mod._lidos(self.catalogo.script_params_obter(S_CARGA))))
@@ -374,13 +374,13 @@ class TestVinculos(_Base):
             self.assertIn(CAMPO_GERAL, erros, corpo[:30])
 
     def test_nomeado_com_parametro_sem_flag(self):
-        pid = self.catalogo.parametros_inserir({"codigo": "sem_flag", "label": "Sem flag", "tipo_componente": "TEXT"})["id"]
+        pid = self.catalogo.parametros_inserir({"codigo": "sem_flag", "label": "Sem flag", "tipo_componente": "TEXT"}, ator="teste")["id"]
         tela, itens = self._vinculos_json(S_CARGA)
         _d, erros = self.svc.salvar_parametros(self.ctx["admin"], IP, str(S_CARGA),
                                                json.dumps(itens + [{"parametro_id": pid}]), tela["versao"])
         self.assertIn("sem_flag", erros[CAMPO_GERAL])
         with self.assertRaises(RepoViolacao):
-            self.catalogo.script_params_salvar(S_CARGA, [{"parametro_id": pid, "ordem": 1, "obrigatorio": "N"}])
+            self.catalogo.script_params_salvar(S_CARGA, [{"parametro_id": pid, "ordem": 1, "obrigatorio": "N"}], ator="teste")
 
     def test_nenhum_com_vinculo(self):
         tela = self.svc.parametros(self.ctx["admin"], str(S_CLEANUP))
@@ -394,7 +394,7 @@ class TestVinculos(_Base):
         _d, erros = self.svc.salvar_parametros(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens), tela["versao"])
         self.assertIn("vinculo_1", erros)
         pid = self.catalogo.parametros_inserir({"codigo": "inativo_x", "label": "X", "tipo_componente": "TEXT",
-                                                "param_nomeado": "--x", "ativo": "N"})["id"]
+                                                "param_nomeado": "--x", "ativo": "N"}, ator="teste")["id"]
         tela, itens = self._vinculos_json(S_CARGA)
         _d, erros = self.svc.salvar_parametros(self.ctx["admin"], IP, str(S_CARGA),
                                                json.dumps(itens + [{"parametro_id": pid}]), tela["versao"])

@@ -42,12 +42,16 @@ class RepoTicketsFake(RepoTickets):
         """Emula SYSDATE com o relogio injetavel do armazem."""
         return self._store.agora()
 
-    def criar(self, ticket, respostas):
-        """Cria ticket e respostas vinculadas atomicamente, com auditoria TICKET_CRIAR ou TICKET_REEXECUTAR."""
+    def criar(self, ticket, respostas, ator=None):
+        """Cria ticket e respostas vinculadas atomicamente, com auditoria TICKET_CRIAR ou TICKET_REEXECUTAR.
+
+        created_by do ticket e das respostas: ator= ou, sem ele, o solicitante (CR-006, README §10).
+        """
         with self._store.lock_tickets:
             script_id = int(ticket.get("script_id", 0))
             ambiente = ticket.get("ambiente")
             solicitante = ticket.get("solicitante")
+            ator = self._store.ator_registro(ator=ator or solicitante)
 
             if not script_id:
                 raise RepoViolacao("script_id e obrigatorio")
@@ -108,6 +112,7 @@ class RepoTicketsFake(RepoTickets):
                 "finished_at": ticket.get("finished_at"),
                 "created_at": ticket.get("created_at") or agora,
             }
+            self._store.carimbar_inclusao(novo_ticket, ator)
             self._store.tickets[tid] = copy.deepcopy(novo_ticket)
 
             # Insercao das respostas
@@ -120,6 +125,7 @@ class RepoTicketsFake(RepoTickets):
                     "valor_resposta": resp.get("valor_resposta"),
                     "created_at": agora,
                 }
+                self._store.carimbar_inclusao(nresp, ator)
                 self._store.ticket_resp[rid] = copy.deepcopy(nresp)
 
             # Auditoria na mesma transacao (lock)
@@ -243,8 +249,12 @@ class RepoTicketsFake(RepoTickets):
             return copy.deepcopy(resps)
 
     def solicitar_cancelamento(self, id, ator, ip):
-        """Logica de cancelamento do no web (README §5.6), auditada em nome de quem cancelou."""
+        """Logica de cancelamento do no web (README §5.6), auditada em nome de quem cancelou.
+
+        Cancelar ou sinalizar grava updated_* com o ator; as solicitacoes sem efeito nao (CR-006).
+        """
         with self._store.lock_tickets:
+            ator = self._store.ator_registro(ator=ator)
             if id not in self._store.tickets:
                 raise RepoNaoEncontrado("Ticket ID %s nao encontrado" % id)
 
@@ -269,12 +279,14 @@ class RepoTicketsFake(RepoTickets):
                 t["status_motivo"] = "CANCEL_USER"
                 t["return_code"] = -1
                 t["finished_at"] = self._store.agora()
+                self._store.carimbar_alteracao(t, ator)
 
                 auditar(u"cancelado")
                 return "CANCELADO"
 
             if st == "RUNNING":
                 t["cancel_requested"] = "S"
+                self._store.carimbar_alteracao(t, ator)
 
                 auditar(u"sinalizado")
                 return "SINALIZADO"
@@ -328,6 +340,8 @@ class RepoTicketsFake(RepoTickets):
             t.update(status="SUCCESS", status_motivo="EXIT_OK", return_code=0)
         if t["status"] != "RUNNING":
             t["finished_at"] = agora
+            # A finalizacao e do agente dono (README §8.7); o heartbeat e o log nao gravam updated_*.
+            self._store.carimbar_alteracao(t, "SYSTEM:%s" % t.get("agente_id"))
             self._store.log_sim.pop(t["id"], None)
         t["heartbeat_at"] = agora
         t["log_output"] = (t.get("log_output") or "") + _mascarar_como_log_pump("".join(linhas), sim["sensiveis"])

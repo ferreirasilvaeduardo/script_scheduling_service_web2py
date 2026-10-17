@@ -374,7 +374,7 @@ class TestUltimoAdmin(_BasePerfis):
         novo_id, erros = self.svc.salvar(self.ctx["admin"], IP, None, {"nome": "ADMIN_RESERVA", "is_admin": "S"})
         self.assertEqual(erros, {})
         u = self.usuarios.obter_por_login("op.hml")
-        self.usuarios.alterar(u["id"], {"perfil_id": novo_id})
+        self.usuarios.alterar(u["id"], {"perfil_id": novo_id}, ator="teste")
         form = self._form(PERFIL_ADMIN)
         alterado = self.svc.alternar_ativo(self.ctx["gestor"], IP, str(PERFIL_ADMIN), form["versao"])
         self.assertEqual(alterado["ativo"], "N")
@@ -392,7 +392,7 @@ class TestUltimoAdmin(_BasePerfis):
 
     def test_protecao_e_atomica_no_repositorio(self):
         with self.assertRaises(RepoViolacao) as cm:
-            self.rbac_repo.perfis_alterar(PERFIL_ADMIN, {"ativo": "N"})
+            self.rbac_repo.perfis_alterar(PERFIL_ADMIN, {"ativo": "N"}, ator="teste")
         self.assertEqual(cm.exception.constraint, "sss_ultimo_admin")
         self.assertEqual(self.rbac_repo.admins_ativos_bloquear(), [1])
 

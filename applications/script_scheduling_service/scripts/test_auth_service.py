@@ -69,7 +69,7 @@ class TestAuthService(unittest.TestCase):
             usuarios=self.usuarios, rbac_repo=self.rbac, catalogo=repo_factory.obter("catalogo"),
             auditoria=self.auditoria, max_tentativas=MAX, bloqueio_s=BLOQUEIO_S, log=log,
         )
-        self.usuarios.alterar(5, {"senha_hash": security.hash_senha(self.senha)})
+        self.usuarios.alterar(5, {"senha_hash": security.hash_senha(self.senha)}, ator="teste")
         self.aud_base = max(a["id"] for a in self.auditoria.listar(tamanho=1000)["itens"])
 
     def _acoes(self, ator):
@@ -164,7 +164,7 @@ class TestAuthService(unittest.TestCase):
 
     def test_seed_bloqueado(self):
         self.usuarios.alterar(6, {"senha_hash": security.hash_senha(self.senha),
-                                  "bloqueado_ate": INICIO + datetime.timedelta(minutes=5)})
+                                  "bloqueado_ate": INICIO + datetime.timedelta(minutes=5)}, ator="teste")
         self.assertEqual(self.servico.autenticar("bloqueado", self.senha, "10.0.0.1"), (None, self.servico.msg_bloqueio))
 
     def test_usuario_inativo(self):
@@ -173,15 +173,15 @@ class TestAuthService(unittest.TestCase):
         self.assertEqual(self._acoes("inativo"), ["LOGIN_FALHA"])
 
     def test_perfil_inativo(self):
-        self.rbac.perfis_alterar(4, {"ativo": "N"})
+        self.rbac.perfis_alterar(4, {"ativo": "N"}, ator="teste")
         self.assertEqual(self.servico.autenticar("consulta", self.senha, "10.0.0.1"), (None, MSG_GENERICA))
 
     def test_hash_inutilizavel(self):
-        self.usuarios.alterar(3, {"senha_hash": "!"})
+        self.usuarios.alterar(3, {"senha_hash": "!"}, ator="teste")
         self.assertEqual(self.servico.autenticar("op.hml", "!", "10.0.0.1"), (None, MSG_GENERICA))
 
     def test_rehash(self):
-        self.usuarios.alterar(1, {"senha_hash": _hash_com_iteracoes(self.senha, ITER_TESTE // 2)})
+        self.usuarios.alterar(1, {"senha_hash": _hash_com_iteracoes(self.senha, ITER_TESTE // 2)}, ator="teste")
         antes = self.usuarios.obter_por_id(1)["senha_alterada_em"]
         ctx, msg = self.servico.autenticar("admin", self.senha, "10.0.0.1")
         self.assertIsNone(msg)
@@ -203,7 +203,7 @@ class TestAuthService(unittest.TestCase):
         self.assertEqual(acoes.count("LOGIN_BLOQUEIO"), 1)
 
     def test_rehash_na_mesma_operacao_do_sucesso(self):
-        self.usuarios.alterar(1, {"senha_hash": _hash_com_iteracoes(self.senha, ITER_TESTE // 2)})
+        self.usuarios.alterar(1, {"senha_hash": _hash_com_iteracoes(self.senha, ITER_TESTE // 2)}, ator="teste")
         with mock.patch.object(self.usuarios, "alterar", side_effect=AssertionError("rehash separado")):
             _ctx, msg = self.servico.autenticar("admin", self.senha, "10.0.0.1")
         self.assertIsNone(msg)
@@ -249,7 +249,7 @@ class TestAuthService(unittest.TestCase):
         sessao = self._sessao("consulta")
         self.assertNotIn("EXEC_SCRIPT", self.servico.revalidar(sessao)["funcionalidades"])
         matriz = self.rbac.matriz_obter(4)
-        self.rbac.matriz_salvar(4, list(matriz["funcs"]) + [1], matriz["ambs"], matriz["scrs"])
+        self.rbac.matriz_salvar(4, list(matriz["funcs"]) + [1], matriz["ambs"], matriz["scrs"], ator="teste")
         ctx = self.servico.revalidar(sessao)
         self.assertIn("EXEC_SCRIPT", ctx["funcionalidades"])
         self.assertGreater(ctx["perm_versao"], sessao["perm_versao"])
@@ -261,7 +261,7 @@ class TestAuthService(unittest.TestCase):
 
     def test_revalidar_usuario_inativo(self):
         sessao = self._sessao("op.prod")
-        self.usuarios.alterar(2, {"ativo": "N"})
+        self.usuarios.alterar(2, {"ativo": "N"}, ator="teste")
         self.assertIsNone(self.servico.revalidar(sessao, "10.9.9.9"))
         aud = self._ultimo_logout("op.prod")
         self.assertEqual(aud["detalhe"], u"sessão encerrada pela revalidação: usuário inativo")
@@ -269,7 +269,7 @@ class TestAuthService(unittest.TestCase):
 
     def test_revalidar_perfil_inativo(self):
         sessao = self._sessao("consulta")
-        self.rbac.perfis_alterar(4, {"ativo": "N"})
+        self.rbac.perfis_alterar(4, {"ativo": "N"}, ator="teste")
         self.assertIsNone(self.servico.revalidar(sessao))
         self.assertEqual(self._ultimo_logout("consulta")["detalhe"],
                          u"sessão encerrada pela revalidação: perfil inativo")

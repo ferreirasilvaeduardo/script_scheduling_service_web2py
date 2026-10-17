@@ -107,7 +107,7 @@ class RepoAgendamentosFake(RepoAgendamentos):
                 raise RepoNaoEncontrado("Agendamento ID %s nao encontrado" % id)
             return copy.deepcopy(self._store.agendamentos[id])
 
-    def _auditar(self, auditoria, id, acao_padrao=None, detalhe_padrao=None):
+    def _auditar(self, auditoria, id, acao_padrao=None, detalhe_padrao=None, ator=None):
         if auditoria:
             self._store.registrar_auditoria_interno(
                 ator=auditoria.get("ator"),
@@ -119,7 +119,7 @@ class RepoAgendamentosFake(RepoAgendamentos):
             )
         elif acao_padrao:
             self._store.registrar_auditoria_interno(
-                ator="SYSTEM", ip=None, acao=acao_padrao, entidade="tbsss_agendamentos",
+                ator=ator, ip=None, acao=acao_padrao, entidade="tbsss_agendamentos",
                 entidade_id=id, detalhe=detalhe_padrao,
             )
 
@@ -133,9 +133,10 @@ class RepoAgendamentosFake(RepoAgendamentos):
             if atual.get(campo) != valor:
                 raise RepoConflito("Agendamento ID %s alterado por outra operacao (%s)" % (id, campo))
 
-    def inserir(self, dados, auditoria=None):
+    def inserir(self, dados, auditoria=None, ator=None):
         """Insere novo agendamento com as CKs da tabela e auditoria na mesma operacao."""
         with self._store.lock_agendamentos:
+            ator = self._store.ator_registro(auditoria, ator)
             agora = self._store.agora()
             novo = {
                 "nome": dados.get("nome"),
@@ -158,6 +159,7 @@ class RepoAgendamentosFake(RepoAgendamentos):
                 "ativo": dados.get("ativo", "S"),
                 "created_at": dados.get("created_at") or agora,
             }
+            self._store.carimbar_inclusao(novo, ator)
             _checar_cks(novo)
             self._checar_fks(novo)
             aid = self._store.proximo_id("tbsss_agendamentos")
@@ -166,9 +168,13 @@ class RepoAgendamentosFake(RepoAgendamentos):
             self._auditar(auditoria, aid)
             return copy.deepcopy(novo)
 
-    def alterar(self, id, dados, esperado=None, auditoria=None):
-        """Altera agendamento (usuario_id do editor, README §10), condicional a 'esperado'."""
+    def alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
+        """Altera agendamento (usuario_id do editor, README §10), condicional a 'esperado'.
+
+        created_by guarda o criador original e nunca muda; updated_* recebe o editor (CR-006).
+        """
         with self._store.lock_agendamentos:
+            ator = self._store.ator_registro(auditoria, ator)
             if id not in self._store.agendamentos:
                 raise RepoNaoEncontrado("Agendamento ID %s nao encontrado" % id)
 
@@ -182,12 +188,14 @@ class RepoAgendamentosFake(RepoAgendamentos):
             _checar_cks(resultado)
             self._checar_fks(resultado)
             atual.update(resultado)
+            self._store.carimbar_alteracao(atual, ator)
             self._auditar(auditoria, id)
             return copy.deepcopy(atual)
 
-    def pausar(self, id, motivo, antiga_data=None, auditoria=None):
+    def pausar(self, id, motivo, antiga_data=None, auditoria=None, ator=None):
         """Pausa agendamento de forma otimista, validando antiga_data se informada."""
         with self._store.lock_agendamentos:
+            ator = self._store.ator_registro(auditoria, ator)
             if id not in self._store.agendamentos:
                 raise RepoNaoEncontrado("Agendamento ID %s nao encontrado" % id)
             if motivo not in _MOTIVOS_PAUSA:
@@ -204,12 +212,14 @@ class RepoAgendamentosFake(RepoAgendamentos):
 
             a["ativo"] = "N"
             a["pausa_motivo"] = motivo
-            self._auditar(auditoria, id, "AGD_PAUSAR", "Agendamento pausado: motivo=%s" % motivo)
+            self._store.carimbar_alteracao(a, ator)
+            self._auditar(auditoria, id, "AGD_PAUSAR", "Agendamento pausado: motivo=%s" % motivo, ator)
             return copy.deepcopy(a)
 
-    def retomar(self, id, nova_data, esperado=None, auditoria=None):
+    def retomar(self, id, nova_data, esperado=None, auditoria=None, ator=None):
         """Retoma agendamento pausado, limpando pausa_motivo e definindo proxima_execucao."""
         with self._store.lock_agendamentos:
+            ator = self._store.ator_registro(auditoria, ator)
             if id not in self._store.agendamentos:
                 raise RepoNaoEncontrado("Agendamento ID %s nao encontrado" % id)
 
@@ -220,8 +230,9 @@ class RepoAgendamentosFake(RepoAgendamentos):
             a["ativo"] = "S"
             a["pausa_motivo"] = None
             a["proxima_execucao"] = nova_data
+            self._store.carimbar_alteracao(a, ator)
             self._auditar(auditoria, id, "CAD_ALTERAR",
-                          "Agendamento retomado com proxima_execucao=%s" % nova_data)
+                          "Agendamento retomado com proxima_execucao=%s" % nova_data, ator)
             return copy.deepcopy(a)
 
     def ticket_status(self, ticket_id):

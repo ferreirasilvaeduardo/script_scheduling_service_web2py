@@ -106,7 +106,7 @@ class ServicoAuth(object):
     def _reiniciar_se_expirado(self, usuario):
         # Bloqueio expirado (ou contador no limite): novo ciclo de tentativas, no login e na troca de senha.
         if usuario.get("bloqueado_ate") is not None or int(usuario.get("tentativas_falha") or 0) >= self._max:
-            return self._usuarios.desbloquear(usuario["id"])
+            return self._usuarios.reiniciar_tentativas(usuario["id"])
         return usuario
 
     def _registrar_falha(self, usuario, ip, motivo):
