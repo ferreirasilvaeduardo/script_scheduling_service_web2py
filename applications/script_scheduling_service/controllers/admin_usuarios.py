@@ -50,7 +50,9 @@ def _pagina_form(ctx, dados, erros=None, erros_senha=None):
     response.view = "admin_usuarios/form.html"
     erros = erros or {}
     campos = [{"nome": n, "erro": erros.get(n)} for n in ("login", "nome", "perfil_id", "senha", "confirmacao")]
-    perfis = [p for p in servico.perfis() if p["ativo"] == "S" or p["id"] == dados.get("perfil_id")]
+    # Perfil de administrador so e oferecido a administrador (CR-008, E1), salvo o perfil atual.
+    perfis = [p for p in servico.perfis()
+              if p["id"] == dados.get("perfil_id") or (p["ativo"] == "S" and (ctx["is_admin"] or p["is_admin"] != "S"))]
     return dict(usuario=dados, erros=erros, erro_geral=erros.get(admin_crud.CAMPO_GERAL),
                 erros_senha=erros_senha or {}, perfis=perfis,
                 foco_campo=ui_helpers.primeiro_campo_invalido(campos), ajuda_senha=servico.AJUDA_POLITICA,
@@ -185,6 +187,8 @@ def desbloquear():
         _nao_encontrado()
     except AcessoNegado:
         _negado()
+    except OperacaoNegada as exc:
+        session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
     except RepoErro:
         _log.exception("falha ao desbloquear (login=%s id=%r)", ctx["login"], usuario_id, extra={"acao": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}

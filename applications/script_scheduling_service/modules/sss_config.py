@@ -137,8 +137,12 @@ SCHEMA = collections.OrderedDict([
         ("shutdown_grace_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=3600)),
         ("misfire_policy", CampoDef("enum", obrigatorio=True, allowed_values=("RUN_ONCE", "SKIP"))),
         ("misfire_tolerance_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=86400)),
-        ("cron_horizon_days", CampoDef("int", obrigatorio=True, min_val=366, max_val=36500)),
+        # Minimo 1461 (4 anos): cobre o 29/02 de regras CRON anuais (CR-008, R-32).
+        ("cron_horizon_days", CampoDef("int", obrigatorio=True, min_val=1461, max_val=36500)),
         ("fila_envelhecimento_min", CampoDef("int", obrigatorio=False, min_val=0, max_val=1440, default=60)),
+        # CR-008, E4 e R-25: ambientes que recusam script sem hash homologado; espaco minimo do log_dir.
+        ("ambientes_exigem_hash", CampoDef("list_csv", obrigatorio=False, default=())),
+        ("log_dir_min_livre_mb", CampoDef("int", obrigatorio=False, min_val=0, max_val=1048576, default=1024)),
         ("child_locale", CampoDef("str", obrigatorio=True)),
         ("env_passthrough", CampoDef("list_csv", obrigatorio=False, default=())),
     ])),
@@ -153,6 +157,7 @@ SCHEMA = collections.OrderedDict([
     ])),
     ("web", collections.OrderedDict([
         ("session_idle_timeout_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=86400)),
+        ("sessao_max_horas", CampoDef("int", obrigatorio=False, min_val=1, max_val=168, default=12)),
         ("login_max_tentativas", CampoDef("int", obrigatorio=True, min_val=1, max_val=99)),
         ("login_bloqueio_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=86400)),
         ("log_poll_interval_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=3600)),
@@ -204,7 +209,8 @@ class AgentConfig(_ItemAccessMixin, collections.namedtuple("AgentConfig", [
     "node_offline_timeout_s", "kill_grace_s", "script_timeout_s",
     "shutdown_mode", "shutdown_grace_s", "misfire_policy",
     "misfire_tolerance_s", "cron_horizon_days", "child_locale",
-    "env_passthrough", "usuarios_execucao", "exec_work_dir", "fila_envelhecimento_min"
+    "env_passthrough", "usuarios_execucao", "exec_work_dir", "fila_envelhecimento_min",
+    "ambientes_exigem_hash", "log_dir_min_livre_mb"
 ])):
     __slots__ = ()
 
@@ -217,7 +223,7 @@ class LoggingConfig(_ItemAccessMixin, collections.namedtuple("LoggingConfig", [
 
 
 class WebConfig(_ItemAccessMixin, collections.namedtuple("WebConfig", [
-    "session_idle_timeout_s", "login_max_tentativas", "login_bloqueio_s",
+    "session_idle_timeout_s", "sessao_max_horas", "login_max_tentativas", "login_bloqueio_s",
     "log_poll_interval_s", "trusted_proxies", "allowed_origins"
 ])):
     __slots__ = ()
@@ -539,6 +545,11 @@ def _validar_cr007(app, oracle, agent, logging_dict, retencao):
         raise ConfigErro(secao="retencao", chave="audit_retention_days",
                          motivo="audit_retention_days (%d) deve ser >= ticket_retention_days (%d)" % (
                              retencao["audit_retention_days"], retencao["ticket_retention_days"]))
+    if app["data_backend"] == "ORACLE" and app["sss_env"] != "DEV" \
+            and oracle["user"].upper() == oracle["owner"].upper():
+        # CR-008, R-29: a conta da aplicacao nunca e a dona do esquema fora de DEV (D1b do CR-007).
+        raise ConfigErro(secao="oracle", chave="user",
+                         motivo="Fora de DEV, a conta da aplicacao deve ser diferente do owner do esquema")
     if app["data_backend"] == "ORACLE":
         purge = retencao["purge_user"]
         if not purge:

@@ -41,6 +41,8 @@ misfire_policy = RUN_ONCE         ; RUN_ONCE | SKIP
 misfire_tolerance_s = 300
 cron_horizon_days = 1461
 fila_envelhecimento_min = 60       ; a cada N minutos na fila a prioridade sobe 1 nível (README §5.3); 0 desliga
+ambientes_exigem_hash =           ; ex.: PRODUCAO; script sem SHA-256 homologado é recusado nesses ambientes (CR-008, E4)
+log_dir_min_livre_mb = 1024       ; abaixo disso em log_dir o agente não reserva tickets (CR-008, R-25)
 child_locale = C.UTF-8
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 
@@ -55,6 +57,7 @@ local_log_retention_days = 30
 
 [web]
 session_idle_timeout_s = 1800
+sessao_max_horas = 12   ; vida máxima da sessão desde o login, mesmo com uso contínuo (CR-008, E2)
 login_max_tentativas = 5
 login_bloqueio_s = 900
 log_poll_interval_s = 3

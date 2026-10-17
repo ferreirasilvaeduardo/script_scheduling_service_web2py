@@ -54,6 +54,7 @@ class RepoUsuariosFake(RepoUsuarios):
                     "perfil_ativo": p["ativo"],
                     "is_admin": p["is_admin"],
                     "perm_versao": p["perm_versao"],
+                    "sessao_epoch": u.get("sessao_epoch", 0),
                 }
 
     def listar(self, filtros=None, pagina=1, tamanho=20):
@@ -142,6 +143,7 @@ class RepoUsuariosFake(RepoUsuarios):
                     "bloqueado_ate": dados.get("bloqueado_ate"),
                     "ultimo_login": dados.get("ultimo_login"),
                     "senha_alterada_em": dados.get("senha_alterada_em"),
+                    "sessao_epoch": 0,
                     "ativo": ativo,
                     "created_at": dados.get("created_at"),
                 }
@@ -194,6 +196,8 @@ class RepoUsuariosFake(RepoUsuarios):
 
                 anterior = atual["perfil_id"]
                 atual.update(mudancas)
+                if perfil_alterado or ativo_alterado:
+                    _revogar_sessoes(atual)
                 self._store.carimbar_alteracao(atual, ator)
 
                 # Incrementa perm_versao do perfil se houver alteracao de perfil ou ativo
@@ -271,6 +275,25 @@ class RepoUsuariosFake(RepoUsuarios):
             u["senha_alterada_em"] = agora or self._store.agora()
             u["tentativas_falha"] = 0
             u["bloqueado_ate"] = None
+            _revogar_sessoes(u)
             self._store.carimbar_alteracao(u, ator)
             self._auditar(auditoria, id)
             return copy.deepcopy(u)
+
+    def encerrar_sessoes(self, id, auditoria=None):
+        """Logout: incrementa sessao_epoch (rotina tecnica, sem updated_*), com a auditoria na mesma operacao."""
+        with self._store.lock_usuarios:
+            if id not in self._store.usuarios:
+                raise RepoNaoEncontrado("Usuario ID %s nao encontrado" % id)
+            u = self._store.usuarios[id]
+            _revogar_sessoes(u)
+            self._auditar(auditoria, id)
+            return copy.deepcopy(u)
+
+
+def _revogar_sessoes(usuario):
+    """Incrementa sessao_epoch: todas as sessoes abertas do usuario deixam de valer (CR-008, E2)."""
+    novo = int(usuario.get("sessao_epoch") or 0) + 1
+    if novo > 9999999999:
+        raise RepoViolacao("sessao_epoch excede NUMBER(10)", constraint="ck_tbsss_usr_epoch")
+    usuario["sessao_epoch"] = novo

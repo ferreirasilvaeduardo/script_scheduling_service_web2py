@@ -19,7 +19,7 @@ class RepoUsuarios(object):
         raise NotImplementedError
 
     def obter_estado_sessao(self, usuario_id):
-        """Retorna dict de sessao com usuario, perfil e perm_versao."""
+        """Retorna dict de sessao com usuario, perfil, perm_versao e sessao_epoch (CR-008, E2)."""
         raise NotImplementedError
 
     def listar(self, filtros=None, pagina=1, tamanho=20):
@@ -42,6 +42,7 @@ class RepoUsuarios(object):
         """Atualiza campos do usuario pelo ID e retorna o registro. Login e imutavel.
 
         esperado: opcional, dict campo -> valor lido; divergencia lanca RepoConflito sem alterar nada.
+        Mudar perfil_id ou ativo incrementa sessao_epoch (CR-008, E2): as sessoes abertas caem.
         Desativar o usuario ou mover para perfil nao administrativo bloqueia os admins ativos na
         mesma operacao (README §4.3.B); conjunto resultante vazio lanca
         RepoViolacao(constraint='sss_ultimo_admin'). auditoria: opcional, na mesma transacao.
@@ -86,8 +87,16 @@ class RepoUsuarios(object):
         raise NotImplementedError
 
     def definir_senha(self, id, senha_hash, agora=None, auditoria=None, ator=None):
-        """Atualiza senha_hash e senha_alterada_em, zera tentativas_falha e bloqueado_ate.
+        """Atualiza senha_hash e senha_alterada_em, zera tentativas_falha e bloqueado_ate e incrementa
+        sessao_epoch (CR-008, E2), tudo no mesmo UPDATE.
 
         auditoria: opcional, na mesma transacao; o detalhe nunca contem senha nem hash.
+        """
+        raise NotImplementedError
+
+    def encerrar_sessoes(self, id, auditoria=None):
+        """Logout (CR-008, E2): sessao_epoch = sessao_epoch + 1 num UPDATE, sem updated_* (rotina tecnica).
+
+        auditoria: opcional (LOGOUT), na mesma transacao. Retorna o registro atualizado.
         """
         raise NotImplementedError

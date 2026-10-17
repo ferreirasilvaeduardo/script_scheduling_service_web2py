@@ -18,7 +18,7 @@ Carregar e validar o `config.ini` e o `secrets.cfg` de forma tipada e fail-fast,
     - `fence_timeout_s * 2 <= node_offline_timeout_s`;
     - `heartbeat_interval_s * 3 <= fence_timeout_s`;
     - `data_backend == FAKE` exige `sss_env == DEV`.
-  - **Regex:** `owner` com `^[A-Za-z][A-Za-z0-9_]{0,29}$`, `table_prefix` com `^[a-zA-Z0-9_]{1,8}$` e `agent_id` com `^[A-Za-z0-9._-]{1,30}$`.
+  - **Regex:** `owner` com `^[A-Za-z][A-Za-z0-9_]{0,29}$`, `table_prefix` com `^[a-zA-Z0-9_]{1,8}$` (histórico; vigente: `^[a-z][a-z0-9_]{0,7}$`, só minúsculas, CR-007 R-31 e CR-008 R-28, README §12.1) e `agent_id` com `^[A-Za-z0-9._-]{1,30}$`.
   - `env_passthrough` contendo variável bloqueada (README §8.6) gera `ConfigErro`.
   - `carregar_segredos(caminho) -> Segredos`:
     - valida arquivo regular, dono igual a `os.geteuid()` e `mode & 0o077 == 0`;

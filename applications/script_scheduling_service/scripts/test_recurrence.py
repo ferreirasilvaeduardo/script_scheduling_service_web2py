@@ -234,8 +234,11 @@ class TestAvaliarDisparo(unittest.TestCase):
     def test_perdidas_limitadas(self):
         r = regra('CRON', expressao_cron='* * * * *', proxima_execucao=D(2026, 9, 1))
         decisao = rec.avaliar_disparo(r, AGORA, 'SKIP', 300)
-        self.assertEqual((decisao.gerar_ticket, decisao.perdidas), (False, rec.LIMITE_PERDIDAS))
+        # CR-008, R-21: a vencida mais recente (10:07) esta na tolerancia e gera o ticket.
+        self.assertEqual((decisao.gerar_ticket, decisao.perdidas), (True, rec.LIMITE_PERDIDAS))
         self.assertEqual(decisao.nova_data, D(2026, 10, 15, 10, 8))
+        decisao = rec.avaliar_disparo(r, D(2026, 10, 15, 10, 7, 50), 'SKIP', 30)
+        self.assertEqual((decisao.gerar_ticket, decisao.perdidas), (False, rec.LIMITE_PERDIDAS))
 
     def test_ocorrencia_mais_recente_apos_limite_de_contagem(self):
         for fim, esperado in ((None, D(2026, 10, 15, 10, 5)),
@@ -246,10 +249,24 @@ class TestAvaliarDisparo(unittest.TestCase):
             self.assertEqual(decisao.perdidas, rec.LIMITE_PERDIDAS)
             self.assertEqual(decisao.ocorrencia, esperado)
 
-    def test_cron_invalido_propaga(self):
+    def test_cron_sem_ocorrencia_no_horizonte_vira_cron_erro(self):
+        # CR-008, R-19: decisao completa com cron_erro; o daemon aplica sobreposicao e SKIP e pausa.
         r = regra('CRON', expressao_cron='0 0 30 2 *', proxima_execucao=D(2026, 10, 1))
+        decisao = rec.avaliar_disparo(r, AGORA, 'RUN_ONCE', 300)
+        self.assertEqual(decisao, rec.Decisao(True, None, 0, False, D(2026, 10, 1), True))
+        decisao = rec.avaliar_disparo(r, AGORA, 'SKIP', 300)
+        self.assertEqual(decisao, rec.Decisao(False, None, 1, False, None, True))
+
+    def test_cron_sintaxe_invalida_propaga(self):
+        r = regra('CRON', expressao_cron='0 0 99 2 *', proxima_execucao=D(2026, 10, 1))
         with self.assertRaises(CronErro):
             rec.avaliar_disparo(r, AGORA, 'RUN_ONCE', 300)
+
+    def test_skip_mede_pela_vencida_mais_recente(self):
+        # CR-008, R-21: */5 com proxima 10:00 e agora 10:06; a das 10:05 (1 min) gera o ticket.
+        r = regra('CRON', expressao_cron='*/5 * * * *', proxima_execucao=D(2026, 10, 15, 10, 0))
+        decisao = rec.avaliar_disparo(r, D(2026, 10, 15, 10, 6), 'SKIP', 300)
+        self.assertEqual(decisao, rec.Decisao(True, D(2026, 10, 15, 10, 10), 1, False, D(2026, 10, 15, 10, 5)))
 
     def test_politica_invalida(self):
         with self.assertRaises(ValueError):

@@ -37,6 +37,17 @@ def exigir_func(ctx, codigo):
         raise AcessoNegado(codigo)
 
 
+def exigir_admin(ctx, condicao, mensagem, log, operacao):
+    """Administrador so por administrador (CR-008, E1): com 'condicao' verdadeira, so admin prossegue.
+
+    Recusa com WARN no log (sem auditoria: nada foi gravado) e OperacaoNegada com 'mensagem'.
+    """
+    if condicao and ctx.get("is_admin") is not True:
+        log.warning("operacao reservada a administrador negada (login=%s operacao=%s)", ctx.get("login"),
+                    operacao, extra={"acao": "ACESSO_NEGADO"})
+        raise OperacaoNegada(mensagem)
+
+
 def texto(valor, limite=None):
     """Valor de formulario como str sem espacos nas pontas; lista vale o ultimo; vazio vira None.
 

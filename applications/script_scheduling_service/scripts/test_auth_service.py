@@ -238,7 +238,7 @@ class TestAuthService(unittest.TestCase):
     def _sessao(self, login):
         ctx, _ = self.servico.autenticar(login, self.senha, "10.0.0.1")
         return {"usuario_id": ctx["usuario_id"], "login": ctx["login"],
-                "perfil_id": ctx["perfil_id"], "perm_versao": ctx["perm_versao"]}
+                "perfil_id": ctx["perfil_id"], "perm_versao": ctx["perm_versao"], "sessao_epoch": ctx["sessao_epoch"]}
 
     def test_revalidar_ok(self):
         sessao = self._sessao("consulta")

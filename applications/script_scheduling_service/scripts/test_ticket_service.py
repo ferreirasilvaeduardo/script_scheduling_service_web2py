@@ -28,9 +28,9 @@ AGENTE_FALSO = 2 ** 31 - 3
 IP = "10.1.2.3"
 SEGREDO = "tok-ultra-secreto-42"
 SESSOES = {
-    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1},
-    "op.hml": {"usuario_id": 3, "login": "op.hml", "perfil_id": 3, "perm_versao": 1},
-    "consulta": {"usuario_id": 4, "login": "consulta", "perfil_id": 4, "perm_versao": 1},
+    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
+    "op.hml": {"usuario_id": 3, "login": "op.hml", "perfil_id": 3, "perm_versao": 1, "sessao_epoch": 0},
+    "consulta": {"usuario_id": 4, "login": "consulta", "perfil_id": 4, "perm_versao": 1, "sessao_epoch": 0},
 }
 ARQUIVOS = ("carga_diaria.py", "relatorio_mensal.py", "cleanup_tmp.sh", "sync_tabelas.sh",
             "validacao_fiscal.py")
@@ -394,8 +394,18 @@ class TestTicketConsulta(_BaseTicket):
         ctx = self._sem("op.hml", "VER_LOGS")
         itens = self.svc.listar(ctx, {}, 1, 100)["itens"]
         self.assertTrue(itens)
-        self.assertEqual(set(t["solicitante"] for t in itens), {"op.hml"})
+        # Sem VER_AUDITORIA o proprio login aparece como "você" (CR-008, E5).
+        self.assertEqual(set(t["solicitante"] for t in itens), {u"você"})
         self.assertEqual(self.svc.listar(ctx, {"solicitante": "admin"}, 1, 100)["total"], 0)
+
+    def test_solicitante_mascarado_sem_auditoria(self):
+        # CR-008, E5: consulta sem VER_AUDITORIA nao recebe login de terceiros; admin recebe.
+        ctx = self._sem("consulta", "VER_AUDITORIA")
+        itens = self.svc.listar(ctx, {}, 1, 100)["itens"]
+        self.assertTrue(itens)
+        self.assertEqual(set(t["solicitante"] for t in itens), {u"outra pessoa"})
+        self.assertEqual(self.svc.detalhe(ctx, 17)["solicitante"], u"outra pessoa")
+        self.assertEqual(self.svc.detalhe(self.ctx["admin"], 17)["solicitante"], "op.prod")
         sem_nada = self._sem("consulta", "VER_LOGS")
         with self.assertRaises(AcessoNegado):
             self.svc.listar(sem_nada, {}, 1, 20)

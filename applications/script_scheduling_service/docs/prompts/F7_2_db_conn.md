@@ -2,6 +2,7 @@
 
 ## Leitura obrigatória antes de planejar
 - `docs/arquitetura/CR-007-robustez-do-scheduler.md` (R-04, R-12, D1b e D4)
+- `docs/arquitetura/CR-008-auditoria-final.md` (E3: papel `monitor`; R-17: orçamento da abertura da conexão; R-29: `user` diferente do `owner`)
 - `docs/arquitetura/CR-002-oracle-unico-e-driver-adaptativo.md`
 - `AGENTS.md` §2.2, §4.9–4.11, §6 (reconexão)
 - `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D5, D6, D12 e o achado "Bind DATE com microssegundos")
@@ -29,8 +30,9 @@ Ter um ponto único, seguro e resiliente de acesso ao Oracle (11gR2 a 23ai), com
   - **Relógio e IDs do banco para os repositórios** (nomes sugeridos; registre os definitivos no relatório):
     - `agora_banco(conn)` (abaixo) é a base de `RepoUsuarios.agora()` e `RepoTickets.agora()` no Oracle. O relógio do nó nunca é usado para regra de negócio (README §4.2 "Relógio do banco", §7.1);
     - `proximo_id(conn, sequence_qualificada)`: `SELECT {owner}.sq_<...>.NEXTVAL FROM DUAL`, com o nome vindo de `sql_ident`. É a base de `RepoAuditoria.reservar_id()` (a exportação usa `id_max = id reservado − 1`, README §4.4 "Quantidade registrada") e de toda inclusão, porque a aplicação sempre informa o `id` (README §2.7).
-  - **Contas por papel (CR-007, D1b):** `[oracle] user` é a conta do papel deste processo (web ou agente); o `purge.py` usa `[retencao] purge_user` com `[purge] password`. A conta dona do esquema nunca é usada aqui (só pelo `init_db.py`).
+  - **Contas por papel (CR-007, D1b):** `[oracle] user` é a conta do papel deste processo (web ou agente); o `purge.py` usa `[retencao] purge_user` com `[purge] password`; o `saude.py` usa `[monitor] user` e `[monitor] password` (CR-008, E3). A conta dona do esquema nunca é usada aqui (só pelo `init_db.py`; `[oracle] user` igual ao `owner` já é recusado pelo `sss_config` fora de DEV, CR-008 R-29).
   - **Conexão com prazo (R-04):** a abertura da conexão respeita `call_timeout_ms` (Thin: `tcp_connect_timeout`; Thick e cx_Oracle: `CONNECT_TIMEOUT` no descritor ou `SQLNET.OUTBOUND_CONNECT_TIMEOUT`, documentado no RUNBOOK).
+  - **Orçamento da abertura (CR-008, R-17):** `orcamento_conexao_s(dsn, call_timeout_s) -> int` lê o DSN descritor (sem resolver alias TNS; Easy Connect conta 1 endereço) e devolve `CONNECT_TIMEOUT × (RETRY_COUNT + 1) × endereços` (`CONNECT_TIMEOUT` ausente = `call_timeout_s`; `RETRY_COUNT` ausente = 0). Se passar de `call_timeout_s`, a conexão registra WARN `CONEXAO_ACIMA_DO_PRAZO` uma vez por processo, com o valor; o `check_env.py` mostra o mesmo aviso.
   - **Pool do web:** `ping_interval` de 60 s (oracledb e cx_Oracle 8.3), para descartar sessões mortas depois de um failover (R-12).
   - **Versão do esquema (CR-007, D4):** `conferir_versao_esquema(conn)`: `SELECT versao_esquema FROM {owner}.tbsss_controle WHERE id = 1` igual a `sql_ident.VERSAO_ESQUEMA`, senão `ErroVersaoEsquema` (CRITICAL na subida do web e do agente, com as duas versões).
   - **Exceções:** `classificar_erro(exc) -> (prefixo, numero)` (`ORA`, `DPY` ou `DPI`). `eh_erro_rede(exc)` cobre a lista do README §2.3 **por modo** (incluindo os `DPY-*` do Thin e os erros de failover do CR-007: ORA-01033, ORA-01034, ORA-01089, ORA-12514, ORA-12528, ORA-12537, ORA-00028, ORA-01012, ORA-02396, ORA-25408); `eh_tempo_esgotado(exc)` cobre o *call timeout* (DPY-4024, DPI-1067, ORA-03156), tratado como timeout de lock (AGENTS §4.10); `eh_lock(exc)` cobre 54, 30006 e 60; `eh_violacao(exc)` cobre 1, 2290, 2291, 2292 e 1400, mais 12899 (valor maior que a coluna) e 1438 (número maior que a precisão), que o FAKE já recusa como `RepoViolacao` (limites de `ator`/`detalhe` da auditoria e `tentativas_falha NUMBER(2)`, README §2.5 e §4.4). Os demais erros são traduzidos para as exceções `repo_errors`.
@@ -47,6 +49,7 @@ Ter um ponto único, seguro e resiliente de acesso ao Oracle (11gR2 a 23ai), com
     - `transacao` com commit e rollback;
     - classificação de erros por driver e modo (`ORA-`, `DPY-`, `DPI-`);
     - *backoff* (tempos simulados), sem nenhuma chamada a `time.sleep` em `garantir()` (CR-007);
+    - `orcamento_conexao_s` com Easy Connect, descritor de um e de dois endereços, com e sem `CONNECT_TIMEOUT`/`RETRY_COUNT`, e o WARN `CONEXAO_ACIMA_DO_PRAZO` acima de `call_timeout_s` (CR-008, R-17);
     - erros de failover e *call timeout* classificados por driver e modo;
     - `conferir_versao_esquema` com versão igual, menor, maior e linha ausente;
     - `module`/`action` definidos;

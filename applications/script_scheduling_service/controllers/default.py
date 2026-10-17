@@ -73,7 +73,8 @@ def login():
             session.login = ctx["login"]
             session.perfil_id = ctx["perfil_id"]
             session.perm_versao = ctx["perm_versao"]
-            session.ultimo_acesso = time.time()
+            session.sessao_epoch = ctx["sessao_epoch"]
+            session.ultimo_acesso = session.login_em = time.time()
             redirect(destino or URL(c="default", f="index"))
     return dict(mensagem=mensagem, login_digitado=login_digitado, destino=destino or "")
 
@@ -131,7 +132,9 @@ def minha_senha():
             session.login = ctx["login"]
             session.perfil_id = ctx["perfil_id"]
             session.perm_versao = ctx["perm_versao"]
-            session.ultimo_acesso = time.time()
+            # A troca incrementou sessao_epoch (CR-008, E2): as outras sessoes caem, esta continua.
+            session.sessao_epoch = auth_service.sessao_epoch(ctx["usuario_id"])
+            session.ultimo_acesso = session.login_em = time.time()
             session.flash = {"tipo": "sucesso", "mensagem": u"Senha alterada com sucesso."}
             redirect(URL(c="default", f="index"))
         response.flash = {"tipo": "erro", "mensagem": u"A senha não foi alterada. Veja os campos destacados."}

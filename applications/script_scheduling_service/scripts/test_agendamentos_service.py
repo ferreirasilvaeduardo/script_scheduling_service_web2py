@@ -72,7 +72,7 @@ class _Base(unittest.TestCase):
 
     def _ctx(self, usuario_id, login, perfil_id):
         sessao = {"usuario_id": usuario_id, "login": login, "perfil_id": perfil_id,
-                  "perm_versao": self.rbac.perfis_obter(perfil_id)["perm_versao"]}
+                  "perm_versao": self.rbac.perfis_obter(perfil_id)["perm_versao"], "sessao_epoch": 0}
         return self.auth.revalidar(sessao)
 
     def _auditorias(self, acao=None):

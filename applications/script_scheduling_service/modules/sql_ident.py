@@ -12,7 +12,7 @@ from collections import OrderedDict
 
 # Regex oficiais de validacao (AGENTS.md §3.1)
 PADRAO_OWNER = r"^[A-Za-z][A-Za-z0-9_]{0,29}$"
-PADRAO_PREFIXO = r"^[A-Za-z][A-Za-z0-9_]{0,7}$"
+PADRAO_PREFIXO = r"^[a-z][a-z0-9_]{0,7}$"
 PADRAO_IDENTIFICADOR = r"^[a-zA-Z][a-zA-Z0-9_]{0,29}$"
 PADRAO_IDENT_ASCII_LOWER = r"^[a-z][a-z0-9_]*$"
 
@@ -359,6 +359,7 @@ def _criar_registro_tabelas():
             ('bloqueado_ate', {'nome': 'bloqueado_ate', 'tipo': 'DATE', 'not_null': False, 'default': None}),
             ('ultimo_login', {'nome': 'ultimo_login', 'tipo': 'DATE', 'not_null': False, 'default': None}),
             ('senha_alterada_em', {'nome': 'senha_alterada_em', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('sessao_epoch', {'nome': 'sessao_epoch', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': '0'}),
             ('ativo', {'nome': 'ativo', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'S'"}),
             ('created_at', {'nome': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
         ])),
@@ -373,6 +374,7 @@ def _criar_registro_tabelas():
             ('ativo', {'sufixo': 'ativo', 'expr': "ativo IN ('S', 'N')"}),
             ('login', {'sufixo': 'login', 'expr': "REGEXP_LIKE(login, '^[a-z0-9._-]{3,30}$')"}),
             ('tent', {'sufixo': 'tent', 'expr': "tentativas_falha >= 0"}),
+            ('epoch', {'sufixo': 'epoch', 'expr': "sessao_epoch >= 0"}),
         ])),
         ('indices', OrderedDict([
             ('per', {'sufixo': 'per', 'colunas': ('perfil_id',), 'expr': None, 'fbi': False}),
@@ -605,7 +607,7 @@ def _criar_registro_tabelas():
             ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
             ('codigo', {'nome': 'codigo', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
             ('hostname', {'nome': 'hostname', 'tipo': 'VARCHAR2(255 CHAR)', 'not_null': True, 'default': None}),
-            ('pid_daemon', {'nome': 'pid_daemon', 'tipo': 'NUMBER(8)', 'not_null': False, 'default': None}),
+            ('pid_daemon', {'nome': 'pid_daemon', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
             ('versao', {'nome': 'versao', 'tipo': 'VARCHAR2(20 CHAR)', 'not_null': False, 'default': None}),
             ('ambientes', {'nome': 'ambientes', 'tipo': 'VARCHAR2(1000 CHAR)', 'not_null': False, 'default': None}),
             ('plataforma', {'nome': 'plataforma', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': False, 'default': None}),

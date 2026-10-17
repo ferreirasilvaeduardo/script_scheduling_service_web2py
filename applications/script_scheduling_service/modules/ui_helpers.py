@@ -226,6 +226,7 @@ MENSAGENS = {
     "conflito": (u"Outra pessoa mudou este registro enquanto você editava.",
                  u"Recarregue a página para ver a versão nova e faça a sua alteração de novo."),
     "sessao_expirada": (u"Você ficou um tempo sem usar o sistema e saiu por segurança.", u"Entre de novo."),
+    "sessao_max": (u"A sua sessão chegou ao tempo máximo e foi encerrada por segurança.", u"Entre de novo."),
     "login_incorreto": (u"Usuário ou senha incorretos.", u"Confira o que digitou e tente de novo."),
     "conta_bloqueada": (u"Houve muitas tentativas com a senha errada.",
                         u"Espere {minutos} minutos ou peça ao administrador para desbloquear."),
@@ -269,15 +270,22 @@ _ATORES_SISTEMA = {"init_db": u"Sistema (instalação)", "seed": u"Sistema (dado
                    "purge": u"Sistema (limpeza)"}
 
 
+def ator_visivel(ator, ctx):
+    """Login de pessoa como o contexto pode ver (CR-007 D6, CR-008 E5): sem VER_AUDITORIA nem admin,
+    vira "você" ou "outra pessoa"; atores do sistema e vazio passam direto."""
+    ctx = ctx or {}
+    if not ator or ator == "SYSTEM" or ator.startswith(_PREFIXO_SISTEMA):
+        return ator
+    if ctx.get("is_admin") is True or "VER_AUDITORIA" in (ctx.get("funcionalidades") or ()):
+        return ator
+    return u"você" if ator == ctx.get("login") else u"outra pessoa"
+
+
 def registro(reg, ctx):
     """Colunas de registro com os atores permitidos ao contexto da sessao."""
     dados = dict((c, (reg or {}).get(c)) for c in COLUNAS_REGISTRO)
-    ctx = ctx or {}
-    if ctx.get("is_admin") is not True and "VER_AUDITORIA" not in (ctx.get("funcionalidades") or ()):
-        for campo in ("created_by", "updated_by"):
-            ator = dados[campo]
-            if ator and ator != "SYSTEM" and not ator.startswith(_PREFIXO_SISTEMA):
-                dados[campo] = u"você" if ator == ctx.get("login") else u"outra pessoa"
+    for campo in ("created_by", "updated_by"):
+        dados[campo] = ator_visivel(dados[campo], ctx)
     return dados
 
 

@@ -51,6 +51,7 @@ def contexto_usuario(estado):
         "ambientes": frozenset(estado.get("ambientes") or ()),
         "scripts": frozenset(estado.get("scripts") or ()),
         "perm_versao": estado["perm_versao"],
+        "sessao_epoch": estado.get("sessao_epoch", 0),
     }
 
 
@@ -115,6 +116,17 @@ def pode_executar(ctx, script, ambiente, homologacoes):
     if script["id"] not in ctx.get("scripts", ()):
         return False, Motivo.SEM_SCRIPT
     return True, Motivo.OK
+
+
+def motivo_pausa(motivo_rbac):
+    """Motivo de pausa da regra (tbsss_agendamentos.pausa_motivo) para um motivo de pode_executar.
+
+    Traducao unica para a web e o daemon (CR-008, R-33; README §7.5): USUARIO_INATIVO,
+    SCRIPT_INATIVO e AMBIENTE_INATIVO passam direto; os demais viram SEM_PERMISSAO.
+    """
+    if motivo_rbac in (Motivo.USUARIO_INATIVO, Motivo.SCRIPT_INATIVO, Motivo.AMBIENTE_INATIVO):
+        return motivo_rbac
+    return "SEM_PERMISSAO"
 
 
 def pode_ver_ticket(ctx, ticket):

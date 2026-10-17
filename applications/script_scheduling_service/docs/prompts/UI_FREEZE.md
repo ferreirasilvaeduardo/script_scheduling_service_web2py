@@ -10,7 +10,8 @@ O objetivo é congelar o comportamento visual e funcional das telas sobre o back
 - [ ] Todos os relatórios F0.1–F6.1 estão com `PASS` e sem lacunas abertas.
 - [x] CR-003 (P1–P11, P6A), CR-004 (U1–U8) e CR-005 (R0–R5) concluídos, e o fechamento UF executado: bateria completa de testes e validações e `docs/homologacao/` atualizado (manual v2.2, 16/10/2026, revisado após a auditoria pós-CR-005).
 - [x] CR-006 (C0, P0, R1–R4) concluído, com o fechamento UF e o manual v2.3 (17/10/2026, CT-23): colunas de registro e quadro Registro (`docs/arquitetura/CR-006-colunas-de-registro.md`).
-- [x] CR-007 (P0, R1–R5) concluído na parte web/FAKE, com o fechamento UF e o manual v2.4 (17/10/2026, CT-24): robustez do scheduler (`docs/arquitetura/CR-007-robustez-do-scheduler.md`, relatórios `RELATORIO-CR-007-R4.md`, `-R5.md` e `-UF.md`). O que é do Oracle e do agente segue especificado para o F7 e o F8; a nova auditoria (passo FINAL do CR-007) vem antes do aceite.
+- [x] CR-007 (P0, R1–R5) concluído na parte web/FAKE, com o fechamento UF e o manual v2.4 (17/10/2026, CT-24): robustez do scheduler (`docs/arquitetura/CR-007-robustez-do-scheduler.md`, relatórios `RELATORIO-CR-007-R4.md`, `-R5.md` e `-UF.md`). O que é do Oracle e do agente segue especificado para o F7 e o F8. A nova auditoria (passo FINAL do CR-007, `AUDITORIA-2026-10-17-final-pos-CR-007.md`) foi feita e originou o CR-008.
+- [ ] CR-008 (P0, R1, R2) concluído, com o fechamento UF e o manual v2.5: correções da auditoria final (`docs/arquitetura/CR-008-auditoria-final.md`).
 
 - [ ] `instance/config.ini` sem `base_script_dirs` nem `app_log_backups` (recusados desde o CR-005) e com `[logging] app_log_retention_days`.
 
@@ -70,6 +71,13 @@ O objetivo é congelar o comportamento visual e funcional das telas sobre o back
 - [ ] A regra pausada mostra "Pausada em … por …: motivo" no formulário; a agenda e a lista avisam a regra que será pulada ou pausada.
 - [ ] A tela de agentes mostra os quadros "Fila sem atendente", "Rodando sem PID" e "Configuração divergente" com os dados de demonstração.
 - [ ] Cadastrar um script por um caminho com link simbólico é recusado (`CAMINHO_COM_LINK`).
+
+## Correções da auditoria final (CR-008)
+- [ ] **Administrador só por administrador (E1):** com um usuário de um perfil **não** administrativo que tenha `CAD_USUARIOS` e `CAD_PERFIS` (crie um perfil de teste), a lista de perfis do formulário de usuários não oferece o ADMINISTRADOR; redefinir a senha, desbloquear ou desativar o `admin`, marcar `is_admin` num perfil, alterar o perfil ADMINISTRADOR ou a matriz do próprio perfil é recusado com a mensagem "Só um administrador pode …" e a orientação "Peça a um administrador." (README §2.4.2), sem gravar nada.
+- [ ] **Sessão revogável (E2):** com o mesmo usuário aberto em dois navegadores, sair em um encerra o outro no próximo clique (volta ao login); o mesmo vale para "Minha senha" (a sessão atual continua) e para a redefinição da senha pelo administrador.
+- [ ] **Hash homologado informado (E4):** num script cujo arquivo não existe neste servidor, o campo "SHA-256 homologado" aceita 64 caracteres hexadecimais e recusa outro formato; num arquivo que existe, um hash diferente do arquivo é recusado no campo; mudar o caminho para um arquivo ausente, sem informar hash, deixa o hash vazio (com o aviso).
+- [ ] **Ator mascarado também no solicitante e no responsável (E5):** com `consulta` ou `op.hml`, "solicitado por" no detalhe e na lista de tickets e "Responsável" nas regras mostram "você" ou "outra pessoa", nunca o login de terceiros; com `admin`, mostram o login.
+- [ ] **Regex com quantificadores largos (R-06):** `\w{0,100}\w{0,100}\w{0,100}x` é recusada com "mais de 2 quantificadores ilimitados (*, +, {n,} ou {m,n} com mais de 10 de diferença)"; `^[\w.]+@[\w.]+$` e `^\w{0,10}$` são aceitas.
 
 ## Usabilidade
 - [ ] Navegação completa por teclado nas telas de disparo, lista de tickets e matriz de perfis.

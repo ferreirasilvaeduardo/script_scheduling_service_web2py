@@ -18,8 +18,8 @@ from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 
 IP = "10.3.3.3"
 SESSOES = {
-    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1},
-    "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1},
+    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
+    "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1, "sessao_epoch": 0},
 }
 # Seed FAKE: 1 data_ref (DATE, carga_diaria NOMEADO e relatorio_mensal SEQUENCIAL), 5 codigo_filial
 # (TEXT com regex ^[0-9]{4}$, validacao_fiscal), 6 documento_cliente (TEXT sensivel), 10 descricao_lote (TEXT).

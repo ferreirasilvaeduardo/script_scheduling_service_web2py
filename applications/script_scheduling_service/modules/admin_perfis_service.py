@@ -32,6 +32,8 @@ MSG_DESCRICAO_TAMANHO = u"A descrição deve ter no máximo %d caracteres." % TA
 MSG_ULTIMO_ADMIN = ui_helpers.mensagem("ultimo_admin")
 MSG_AUTO_ADMIN = u"Você não pode remover o acesso administrativo do seu próprio perfil."
 MSG_AUTO_DESATIVAR = u"Você não pode desativar o seu próprio perfil."
+MSG_SO_ADMIN = (u"Só um administrador pode alterar um perfil de administrador, mudar o seu próprio perfil ou "
+                u"marcar um perfil como administrador. Peça a um administrador.")
 AFETADOS_MAX = 20
 MSG_MATRIZ_ID_INVALIDO = u"A seleção contém itens inexistentes. Recarregue a página e tente novamente."
 MSG_MATRIZ_INATIVO = u"Itens inativos não podem ser adicionados ao perfil. Recarregue a página e tente novamente."
@@ -173,6 +175,13 @@ class ServicoAdminPerfis(object):
         self._log.warning("cadastro de perfil rejeitado pelo repositorio (login=%s constraint=%s)",
                           ctx.get("login"), exc.constraint, extra={"acao": FUNCIONALIDADE})
 
+    def _exigir_admin(self, ctx, condicao, operacao):
+        admin_crud.exigir_admin(ctx, condicao, MSG_SO_ADMIN, self._log, operacao)
+
+    def _reservado(self, ctx, perfil):
+        """Perfil que so admin altera (CR-008, E1): perfil de administrador ou o proprio perfil."""
+        return perfil["is_admin"] == "S" or ctx.get("perfil_id") == perfil["id"]
+
     def salvar(self, ctx, ip, perfil_id, dados):
         """Inclui (perfil_id vazio) ou altera um perfil: nome, descricao, is_admin ('S' marcado).
 
@@ -185,6 +194,10 @@ class ServicoAdminPerfis(object):
             nome, descricao, is_admin = self._validar(dados, erros)
             if erros:
                 return None, erros
+            try:
+                self._exigir_admin(ctx, is_admin == "S", "CAD_INSERIR")
+            except OperacaoNegada as exc:
+                return None, {CAMPO_GERAL: exc.mensagem}
             novo = {"nome": nome, "descricao": descricao, "is_admin": is_admin, "ativo": "S"}
             auditoria = admin_crud.auditoria(ctx, ip, "CAD_INSERIR",
                                              admin_crud.detalhe_insercao(novo, CAMPOS_INSERCAO))
@@ -203,6 +216,11 @@ class ServicoAdminPerfis(object):
             return atual["id"], erros
         if admin_crud.texto(dados.get("versao"), 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
             erros[CAMPO_GERAL] = admin_crud.MSG_CONFLITO
+            return atual["id"], erros
+        try:
+            self._exigir_admin(ctx, is_admin == "S" or self._reservado(ctx, atual), "CAD_ALTERAR")
+        except OperacaoNegada as exc:
+            erros[CAMPO_GERAL] = exc.mensagem
             return atual["id"], erros
         if ctx.get("perfil_id") == atual["id"] and atual["is_admin"] == "S" and is_admin == "N":
             # Autoprotecao (README §4.3.B): vale mesmo havendo outros administradores.
@@ -238,6 +256,7 @@ class ServicoAdminPerfis(object):
         if admin_crud.texto(versao, 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
             raise RepoConflito("versao divergente")
         novo_ativo = "N" if atual["ativo"] == "S" else "S"
+        self._exigir_admin(ctx, atual["is_admin"] == "S" and ctx.get("perfil_id") != atual["id"], "CAD_DESATIVAR")
         if novo_ativo == "N" and ctx.get("perfil_id") == atual["id"]:
             self._log.warning("desativacao do proprio perfil negada (login=%s perfil=%s)",
                               ctx.get("login"), atual["nome"], extra={"acao": "CAD_DESATIVAR"})
@@ -392,6 +411,10 @@ class ServicoAdminPerfis(object):
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         perfil = self._obter(perfil_id)
+        try:
+            self._exigir_admin(ctx, self._reservado(ctx, perfil), "PERM_ALTERAR")
+        except OperacaoNegada as exc:
+            return None, {CAMPO_GERAL: exc.mensagem}
         enviados = {"funcs": _ids(funcs), "ambs": _ids(ambs), "scrs": _ids(scrs)}
         if any(v is None for v in enviados.values()):
             return None, {CAMPO_GERAL: MSG_MATRIZ_ID_INVALIDO}

@@ -17,8 +17,9 @@ class RepoAgentes(object):
         """PENDING com scheduled_at <= agora sem agente OK/ATRASADO para o par ambiente/interpretador.
 
         Retorna grupos ordenados por ambiente e interpretador: ambiente, interpretador,
-        quantidade e mais_antigo (menor scheduled_at). O interpretador vem do snapshot,
-        lido em Python; nenhum snapshot, resposta ou log e devolvido.
+        quantidade e mais_antigo (menor scheduled_at). O interpretador e o do cadastro
+        (tbsss_scripts.interpretador, join), o mesmo criterio do claim (CR-008, R-15); nenhum
+        CLOB e lido (nem parametros_enviados nem log_output).
         """
         raise NotImplementedError
 

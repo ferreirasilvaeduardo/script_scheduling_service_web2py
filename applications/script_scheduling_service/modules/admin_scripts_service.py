@@ -29,6 +29,12 @@ CAMPOS_INSERCAO = ("nome", "descricao", "grupo", "categoria", "etapa", "interpre
                    "tipo_param", "max_qtd_parallel_env", "timeout_seg", "sha256_homologado")
 
 
+_RE_SHA256 = re.compile(r"[0-9a-f]{64}")
+MSG_SHA256_FORMATO = (u"Informe os 64 caracteres hexadecimais do SHA-256 (a saída de sha256sum no servidor do agente).")
+MSG_SHA256_DIVERGE = (u"O SHA-256 informado é diferente do arquivo presente neste servidor. Confira o arquivo "
+                      u"ou deixe o campo vazio para usar o conteúdo daqui.")
+
+
 def calcular_sha256_arquivo(caminho):
     """Calcula o SHA-256 do arquivo validado, em blocos de 64 KiB."""
     h = hashlib.sha256()
@@ -291,6 +297,26 @@ class ServicoAdminScripts(object):
             erros["path_file"] = MENSAGENS_PATH[exc.codigo]
         return None
 
+    @staticmethod
+    def _sha256_informado(dados, erros):
+        """SHA-256 digitado pelo administrador (CR-008, E4): None se vazio; formato invalido vira erro."""
+        valor = admin_crud.texto(dados.get("sha256_informado"), 100)
+        if not valor:
+            return None
+        valor = valor.strip().lower()
+        if not _RE_SHA256.fullmatch(valor):
+            erros["sha256_informado"] = MSG_SHA256_FORMATO
+            return None
+        return valor
+
+    def _hash_homologado(self, caminho, aviso, informado, erros):
+        """Hash calculado neste no ou, sem o arquivo aqui, o informado; divergencia entre os dois e erro."""
+        sha = self._hash_validado(caminho, aviso)
+        if sha is not None and informado is not None and sha != informado:
+            erros["sha256_informado"] = MSG_SHA256_DIVERGE
+            return None
+        return sha if sha is not None else informado
+
     def _hash_validado(self, caminho, aviso):
         if aviso == AVISO_NAO_ENCONTRADO:
             return None
@@ -327,15 +353,18 @@ class ServicoAdminScripts(object):
         erros = {}
         atual = None if script_id in (None, "") else self._obter(script_id)
         reg = self._validar(dados, erros, atual)
+        informado = self._sha256_informado(dados, erros)
         # Toda homologacao exige as checagens do caminho, inclusive a solicitada pelo checkbox.
-        checar = (atual is None or bool(dados.get("registrar_conteudo_atual"))
+        checar = (atual is None or bool(dados.get("registrar_conteudo_atual")) or informado is not None
                   or any(reg[c] != atual.get(c) for c in ("path_file", "interpretador")))
         aviso = self.validar_caminho(reg["path_file"], erros, checar)
         if script_id in (None, ""):
             if erros:
                 return None, erros, None
             novo = dict(reg, ativo="S")
-            sha = self._hash_validado(reg["path_file"], aviso)
+            sha = self._hash_homologado(reg["path_file"], aviso, informado, erros)
+            if erros:
+                return None, erros, None
             novo["sha256_homologado"] = sha
             auditoria = admin_crud.auditoria(ctx, ip, "CAD_INSERIR", admin_crud.detalhe_insercao(novo, CAMPOS_INSERCAO))
             try:
@@ -358,9 +387,12 @@ class ServicoAdminScripts(object):
         registrar_atual = bool(dados.get("registrar_conteudo_atual"))
         mudou_arquivo = reg["path_file"] != atual.get("path_file") or reg["interpretador"] != atual.get("interpretador")
         alteracoes["sha256_homologado"] = atual.get("sha256_homologado")
-        if mudou_arquivo or registrar_atual:
-            sha = self._hash_validado(reg["path_file"], aviso)
-            if sha is not None:
+        if mudou_arquivo or registrar_atual or informado is not None:
+            sha = self._hash_homologado(reg["path_file"], aviso, informado, erros)
+            if erros:
+                return atual["id"], erros, None
+            if sha is not None or mudou_arquivo:
+                # Caminho novo sem hash calculado nem informado: o hash antigo nao vale mais (CR-008, R-24).
                 alteracoes["sha256_homologado"] = sha
 
         detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, **alteracoes), CAMPOS_EDITAVEIS)

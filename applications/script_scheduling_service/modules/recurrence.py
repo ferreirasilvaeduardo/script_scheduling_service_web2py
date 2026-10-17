@@ -39,8 +39,11 @@ _CACHE_CRON = {}
 _CACHE_MAXIMO = 256
 
 # ocorrencia (CR-007, R-27): a vencida mais recente coberta pelo ticket; None quando nao ha ticket.
-Decisao = collections.namedtuple('Decisao', ['gerar_ticket', 'nova_data', 'perdidas', 'concluir', 'ocorrencia'])
-Decisao.__new__.__defaults__ = (None,)
+# cron_erro (CR-008, R-19): a proxima ocorrencia nao existe no horizonte; nova_data fica None e o daemon
+# aplica sobreposicao e SKIP normalmente antes de pausar a regra com CRON_INVALIDO.
+Decisao = collections.namedtuple('Decisao', ['gerar_ticket', 'nova_data', 'perdidas', 'concluir', 'ocorrencia',
+                                             'cron_erro'])
+Decisao.__new__.__defaults__ = (None, False)
 
 
 def truncar_segundos(dt):
@@ -217,7 +220,10 @@ def _vencidas(regra, inicio, agora, horizonte_dias):
         return total, ultima
     atual = inicio
     while total <= LIMITE_PERDIDAS:
-        atual = proxima_execucao(regra, atual, horizonte_dias)
+        try:
+            atual = proxima_execucao(regra, atual, horizonte_dias)
+        except CronErro:
+            break  # sem ocorrencia no horizonte depois de 'atual': nao ha mais vencidas (CR-008, R-19)
         if atual is None or atual > agora:
             break
         total += 1
@@ -229,7 +235,10 @@ def _vencidas(regra, inicio, agora, horizonte_dias):
         while esquerda < direita:
             minutos = int((direita - esquerda).total_seconds() // 60)
             meio = esquerda + datetime.timedelta(minutes=minutos // 2)
-            seguinte = proxima_execucao(regra, meio, horizonte_dias)
+            try:
+                seguinte = proxima_execucao(regra, meio, horizonte_dias)
+            except CronErro:
+                seguinte = None
             if seguinte is not None and seguinte <= teto:
                 ultima = seguinte
                 esquerda = seguinte
@@ -242,12 +251,14 @@ def avaliar_disparo(regra, agora, misfire_policy, misfire_tolerance_s, horizonte
     """Decide o disparo de uma regra vencida (README §7.4 e passos 3-4 do §7.5).
 
     * nova_data: sempre a primeira ocorrencia > agora (None quando a regra terminou);
-    * gerar_ticket: um ticket coalescendo as vencidas, exceto SKIP com atraso acima da tolerancia;
+    * gerar_ticket: um ticket coalescendo as vencidas, exceto SKIP com a vencida mais recente atrasada
+      acima da tolerancia (CR-008, R-21: o atraso e medido pela mais recente);
     * perdidas: vencidas que nao viraram ticket, limitada a LIMITE_PERDIDAS;
     * concluir: UNICA apos a decisao, ou sem proxima ocorrencia ate data_fim (sem ticket quando
       gerar_ticket e falso);
-    * ocorrencia: a vencida mais recente, coberta pelo ticket (scheduled_at do ticket, CR-007 R-27).
-    Lanca CronErro se a expressao CRON for invalida ou nao ocorrer no horizonte (CRON_INVALIDO).
+    * ocorrencia: a vencida mais recente, coberta pelo ticket (scheduled_at do ticket, CR-007 R-27);
+    * cron_erro: CRON sem proxima ocorrencia no horizonte (CR-008, R-19); nova_data None, concluir falso.
+    Lanca CronErro so se a expressao CRON for invalida.
     """
     if misfire_policy not in POLITICAS_MISFIRE:
         raise ValueError('misfire_policy inválida: %r' % (misfire_policy,))
@@ -256,16 +267,22 @@ def avaliar_disparo(regra, agora, misfire_policy, misfire_tolerance_s, horizonte
     if prevista is None or prevista > agora:
         return Decisao(False, sem_microssegundos(prevista), 0, False, None)
 
+    if regra['tipo_recorrencia'] == 'CRON':
+        _expressao(regra['expressao_cron'])  # expressao invalida: CronErro (pausa CRON_INVALIDO)
     vencidas, ultima = _vencidas(regra, prevista, agora, horizonte_dias)
-    atraso = (agora - prevista).total_seconds()
+    atraso = (agora - ultima).total_seconds()
     if atraso > misfire_tolerance_s and misfire_policy == 'SKIP':
         gerar, perdidas = False, vencidas
     else:
         gerar, perdidas = True, vencidas - 1
 
+    cron_erro = False
     if regra['tipo_recorrencia'] == 'UNICA':
         nova_data = None
     else:
-        nova_data = proxima_execucao(regra, agora, horizonte_dias)
-    return Decisao(gerar, nova_data, min(perdidas, LIMITE_PERDIDAS), nova_data is None,
-                   sem_microssegundos(ultima) if gerar else None)
+        try:
+            nova_data = proxima_execucao(regra, agora, horizonte_dias)
+        except CronErro:
+            nova_data, cron_erro = None, True
+    return Decisao(gerar, nova_data, min(perdidas, LIMITE_PERDIDAS), nova_data is None and not cron_erro,
+                   sem_microssegundos(ultima) if gerar else None, cron_erro)

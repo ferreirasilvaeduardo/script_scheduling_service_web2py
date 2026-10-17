@@ -20,7 +20,7 @@ from agendamentos_service import ServicoAgendamentos
 from ticket_service import ServicoTicket
 
 IP = "10.9.8.7"
-SESSAO_ADMIN = {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1}
+SESSAO_ADMIN = {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0}
 
 
 class TestRegistroNosServicos(unittest.TestCase):

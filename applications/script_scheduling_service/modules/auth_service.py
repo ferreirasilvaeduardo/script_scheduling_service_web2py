@@ -187,6 +187,12 @@ class ServicoAuth(object):
             self._log.info("sessao encerrada: usuario ou perfil inativo (login=%s)", estado.get("login"),
                            extra={"acao": "SESSAO"})
             return None
+        if estado.get("sessao_epoch", 0) != sessao.get("sessao_epoch"):
+            # Sessao revogada (CR-008, E2): logout em outro lugar, senha trocada ou redefinida, perfil
+            # ou situacao do usuario alterados. Ja auditado na origem; aqui so o log.
+            self._log.info("sessao encerrada: sessao revogada (login=%s)", estado.get("login"),
+                           extra={"acao": "SESSAO"})
+            return None
         if estado.get("perm_versao") != sessao.get("perm_versao") \
                 or estado.get("perfil_id") != sessao.get("perfil_id"):
             self._log.info("permissoes recarregadas (login=%s perfil_id=%s perm_versao=%s)",
@@ -268,11 +274,15 @@ class ServicoAuth(object):
 
     # ----------------------------------------------------------------- logout
 
+    def sessao_epoch(self, usuario_id):
+        """sessao_epoch vigente do usuario, para a sessao nova depois da troca de senha (CR-008, E2)."""
+        return self._usuarios.obter_estado_sessao(usuario_id).get("sessao_epoch", 0)
+
     def logout(self, ctx, ip):
-        """Audita o encerramento voluntario da sessao."""
+        """Encerra todas as sessoes do usuario (sessao_epoch + 1) e audita LOGOUT na mesma operacao."""
         if not ctx:
             return
-        self._auditoria.registrar(ctx["login"], ip, "LOGOUT", ENTIDADE, ctx["usuario_id"], "Logout")
+        self._usuarios.encerrar_sessoes(ctx["usuario_id"], auditoria=_aud(ctx["login"], ip, "LOGOUT", "Logout"))
         self._log.info("logout (login=%s ip=%s)", ctx["login"], ip, extra={"acao": "LOGIN"})
 
 
@@ -308,6 +318,11 @@ def autenticar(login, senha, ip):
 def revalidar(sessao, ip=None):
     """Revalida a sessao pelo servico padrao do processo web."""
     return _servico().revalidar(sessao, ip)
+
+
+def sessao_epoch(usuario_id):
+    """sessao_epoch vigente pelo servico padrao do processo web."""
+    return _servico().sessao_epoch(usuario_id)
 
 
 def logout(ctx, ip):

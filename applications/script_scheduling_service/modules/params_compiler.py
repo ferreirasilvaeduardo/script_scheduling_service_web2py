@@ -26,6 +26,10 @@ TAMANHO_REGEX = 150
 SENSIVEL_MINIMO = 4
 MAX_ILIMITADOS = 2
 MAX_ESCOLHAS = 6
+# CR-008, R-06: {m,n} com n - m acima de AMPLITUDE_LARGA conta como ilimitado; com algum ilimitado,
+# no maximo MAX_ESCOLHAS_COM_ILIMITADO quantificadores de escolha (pior caso medido < 0,2 s em 500 caracteres).
+AMPLITUDE_LARGA = 10
+MAX_ESCOLHAS_COM_ILIMITADO = 4
 _CHECKBOX = {'true': True, '1': True, 'false': False, '0': False}
 _RE_FLAG = re.compile(r'-{1,2}[A-Za-z0-9][A-Za-z0-9_-]{0,27}')
 TAMANHO_OPCOES = 500
@@ -155,8 +159,10 @@ def validar_regex_cadastro(padrao):
     """Compila regex_validacao e exige o subconjunto seguro do README §6.2 (CR-007, D5); lanca ParamErro.
 
     Recusa grupo repetido por quantificador (exceto '?'), quantificador sobre quantificador, referencia a
-    grupo, lookaround, grupo condicional, mais de MAX_ILIMITADOS quantificadores ilimitados, mais de
-    MAX_ESCOLHAS quantificadores que criam escolha e mais de TAMANHO_REGEX caracteres. Assim o fullmatch fica no maximo quadratico no tamanho do valor.
+    grupo, lookaround, grupo condicional, mais de MAX_ILIMITADOS quantificadores ilimitados (*, +, {n,} e
+    {m,n} com n - m > AMPLITUDE_LARGA), mais de MAX_ESCOLHAS quantificadores que criam escolha (so
+    MAX_ESCOLHAS_COM_ILIMITADO se houver ilimitado) e mais de TAMANHO_REGEX caracteres. Assim o fullmatch
+    fica no maximo polinomial de grau 2 no tamanho do valor (CR-008, R-06).
     """
     try:
         re.compile(padrao)
@@ -217,16 +223,21 @@ def validar_regex_cadastro(padrao):
             _recusar_regex('quantificador aplicado a outro quantificador')
         if atomo == 'grupo' and quant not in ('?', '{0,1}'):
             _recusar_regex('grupo entre parênteses repetido por quantificador (use só ? depois de parênteses)')
-        if quant in ('*', '+') or (quant.startswith('{') and quant.endswith(',}')):
+        limites = quant[1:-1].split(',') if quant.startswith('{') else None
+        largo = (limites is not None and len(limites) == 2 and limites[1] != ''
+                 and int(limites[1]) - int(limites[0] or 0) > AMPLITUDE_LARGA)
+        if quant in ('*', '+') or (quant.startswith('{') and quant.endswith(',}')) or largo:
             ilimitados += 1
             if ilimitados > MAX_ILIMITADOS:
-                _recusar_regex('mais de %d quantificadores ilimitados (*, + ou {n,})' % MAX_ILIMITADOS)
-        limites = quant[1:-1].split(',') if quant.startswith('{') else None
+                _recusar_regex('mais de %d quantificadores ilimitados (*, +, {n,} ou {m,n} com mais de %d de '
+                               'diferença)' % (MAX_ILIMITADOS, AMPLITUDE_LARGA))
         if limites is None or len(limites) == 2 and limites[0] != limites[1]:
             # ?, *, + e {m,n} com m != n criam escolha; muitas escolhas seguidas explodem o tempo.
             escolhas += 1
-            if escolhas > MAX_ESCOLHAS:
-                _recusar_regex('mais de %d quantificadores que criam escolha (?, *, + ou {m,n})' % MAX_ESCOLHAS)
+            teto = MAX_ESCOLHAS_COM_ILIMITADO if ilimitados else MAX_ESCOLHAS
+            if escolhas > teto:
+                _recusar_regex('mais de %d quantificadores que criam escolha (?, *, + ou {m,n})%s'
+                               % (teto, ' quando há quantificador ilimitado' if ilimitados else ''))
         apos_quant, preguicoso, i = True, False, fim
 
 

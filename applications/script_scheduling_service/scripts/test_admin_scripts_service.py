@@ -29,8 +29,8 @@ AGENTE_FALSO = 2 ** 31 - 3
 IP = "10.5.5.5"
 AGORA = datetime.datetime(2026, 10, 15, 10, 0, 0)
 SESSOES = {
-    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1},
-    "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1},
+    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
+    "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1, "sessao_epoch": 0},
 }
 # Seed FAKE: script 1 carga_diaria (NOMEADO, python3, vinculos data_ref, limite_linhas, modo_exec, verbose,
 # documento_cliente sensivel), 3 cleanup_tmp (NENHUM). Ambientes 1 PRODUCAO, 2 HOMOLOGACAO, 3 DESENV (inativo).
@@ -509,13 +509,36 @@ class TestSha256Homologado(_Base):
                 self._editar(sid, registrar_conteudo_atual="1")
         self.assertEqual(self.catalogo.scripts_obter(sid), antes)
 
-    def test_caminho_ausente_preserva_hash_anterior(self):
+    def test_caminho_ausente_limpa_hash_anterior(self):
+        # CR-008, R-24: o hash do arquivo antigo nao vale para o caminho novo.
         sid, _, _ = self._incluir(path_file=self._p("novo.py"))
-        antes = self.catalogo.scripts_obter(sid)["sha256_homologado"]
+        self.assertIsNotNone(self.catalogo.scripts_obter(sid)["sha256_homologado"])
         _, erros, aviso = self._editar(sid, path_file="/opt/automacoes/scripts/inexistente.py")
         self.assertEqual(erros, {})
         self.assertTrue(aviso)
-        self.assertEqual(self.catalogo.scripts_obter(sid)["sha256_homologado"], antes)
+        self.assertIsNone(self.catalogo.scripts_obter(sid)["sha256_homologado"])
+
+    def test_sha256_informado_sem_arquivo_local(self):
+        # CR-008, E4: web e agentes em servidores separados.
+        sha = "AB" * 32
+        sid, erros, _ = self._incluir(path_file="/opt/automacoes/scripts/remoto.py", sha256_informado=sha)
+        self.assertEqual(erros, {})
+        self.assertEqual(self.catalogo.scripts_obter(sid)["sha256_homologado"], sha.lower())
+        _, erros, _ = self._editar(sid, sha256_informado="xyz")
+        self.assertEqual(erros, {"sha256_informado": scr_mod.MSG_SHA256_FORMATO})
+        _, erros, _ = self._editar(sid, sha256_informado="cd" * 32)
+        self.assertEqual(erros, {})
+        self.assertEqual(self.catalogo.scripts_obter(sid)["sha256_homologado"], "cd" * 32)
+        _, erros, _ = self._editar(sid, path_file="/opt/automacoes/scripts/outro.py", sha256_informado="ef" * 32)
+        self.assertEqual(self.catalogo.scripts_obter(sid)["sha256_homologado"], "ef" * 32)
+
+    def test_sha256_informado_divergente_do_arquivo_local(self):
+        sid, erros, _ = self._incluir(path_file=self._p("novo.py"), sha256_informado="00" * 32)
+        self.assertEqual((sid, erros), (None, {"sha256_informado": scr_mod.MSG_SHA256_DIVERGE}))
+        real = scr_mod.calcular_sha256_arquivo(self._p("novo.py"))
+        sid, erros, _ = self._incluir(path_file=self._p("novo.py"), sha256_informado=real.upper())
+        self.assertEqual(erros, {})
+        self.assertEqual(self.catalogo.scripts_obter(sid)["sha256_homologado"], real)
 
     def test_reativacao_recalcula_sha256_homologado(self):
         sid, _e, _a = self._incluir(path_file=self._p("novo.py"))

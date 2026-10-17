@@ -667,8 +667,14 @@ class TestConfigCR007(unittest.TestCase):
         self.assertEqual(self._carregar(agent={"agent_id": "purge01"}).agent.agent_id, "purge01")
 
     def test_faixas_novas(self):
-        self._recusa("cron_horizon_days", agent={"cron_horizon_days": "365"})
-        self.assertEqual(self._carregar(agent={"cron_horizon_days": "366"}).agent.cron_horizon_days, 366)
+        # CR-008, R-32: minimo de 1461 dias (cobre o 29/02).
+        self._recusa("cron_horizon_days", agent={"cron_horizon_days": "1460"})
+        self.assertEqual(self._carregar(agent={"cron_horizon_days": "1461"}).agent.cron_horizon_days, 1461)
+        cfg = self._carregar()
+        self.assertEqual((cfg.agent.ambientes_exigem_hash, cfg.agent.log_dir_min_livre_mb), ((), 1024))
+        cfg = self._carregar(agent={"ambientes_exigem_hash": "PRODUCAO", "log_dir_min_livre_mb": "0"})
+        self.assertEqual((cfg.agent.ambientes_exigem_hash, cfg.agent.log_dir_min_livre_mb), (("PRODUCAO",), 0))
+        self._recusa("log_dir_min_livre_mb", agent={"log_dir_min_livre_mb": "-1"})
         self._recusa("max_log_size_bytes", logging={"max_log_size_bytes": str(64 * 1024 * 1024 + 1)})
         self._recusa("audit_retention_days", retencao={"audit_retention_days": "364"})
         self._recusa("audit_retention_days", retencao={"audit_retention_days": "400", "ticket_retention_days": "500"})
@@ -709,6 +715,21 @@ class TestConfigCR007(unittest.TestCase):
         self._recusa("purge_user", app=base, retencao={"purge_user": "SSS_WEB"})
         self._recusa("purge_user", app=base, retencao={"purge_user": "gfcadastro"})
         self.assertEqual(self._carregar(app=base, retencao={"purge_user": "sss_purge"}).retencao.purge_user, "sss_purge")
+
+    def test_cr008_user_diferente_do_owner_fora_de_dev(self):
+        ret = {"purge_user": "sss_purge"}
+        agent = {"usuarios_execucao": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml", "exec_work_dir": "/var/lib/sss/exec"}
+        self._recusa("user", app={"sss_env": "HML", "data_backend": "ORACLE"}, retencao=ret, agent=agent,
+                     oracle={"user": "GFCADASTRO"})
+        cfg = self._carregar(app={"sss_env": "DEV", "data_backend": "ORACLE"}, retencao=ret,
+                             oracle={"user": "gfcadastro"})
+        self.assertEqual(cfg.oracle.user, "gfcadastro")
+
+    def test_cr008_sessao_max_horas(self):
+        self.assertEqual(self._carregar().web.sessao_max_horas, 12)
+        self.assertEqual(self._carregar(web={"sessao_max_horas": "168"}).web.sessao_max_horas, 168)
+        for valor in ("0", "169", "x"):
+            self._recusa("sessao_max_horas", web={"sessao_max_horas": valor})
 
     def test_env_passthrough_lista_de_bloqueio_e_chaves_fixas(self):
         for var in ("BASH_FUNC_x%%", "LD_DEBUG", "MALLOC_ARENA_MAX", "GLIBC_TUNABLES", "PS4", "PATH", "LC_ALL",

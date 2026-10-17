@@ -21,9 +21,9 @@ from repo_errors import RepoConflito, RepoNaoEncontrado
 
 IP = "10.7.7.7"
 SESSOES = {
-    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1},
-    "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1},
-    "consulta": {"usuario_id": 4, "login": "consulta", "perfil_id": 4, "perm_versao": 1},
+    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
+    "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1, "sessao_epoch": 0},
+    "consulta": {"usuario_id": 4, "login": "consulta", "perfil_id": 4, "perm_versao": 1, "sessao_epoch": 0},
 }
 # Seed FAKE: perfil 1 ADMINISTRADOR (unico admin, usuario admin), 4 CONSULTA (usuario consulta).
 PERFIL_ADMIN, PERFIL_CONSULTA = 1, 4
@@ -53,6 +53,7 @@ class _Base(unittest.TestCase):
                                         self.auditoria, 5, 900, self.log)
         self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
         self.ctx["gestor"] = dict(self.ctx["op.prod"], funcionalidades=frozenset(["CAD_PERFIS"]))
+        self.ctx["admin_externo"] = dict(self.ctx["admin"], perfil_id=999)
         self.svc = ServicoAdminPerfis(self.rbac_repo, repo_factory.obter("catalogo"), self.usuarios, self.log)
         self.aud_base = max([a["id"] for a in self.auditoria.listar(pagina=1, tamanho=1000)["itens"]] or [0])
 
@@ -164,7 +165,7 @@ class TestAutoprotecao(_Base):
     def test_outro_editor_pode_quando_ha_outro_admin(self):
         self._novo_admin_com_usuario()
         form = self._form(PERFIL_ADMIN)
-        _id, erros = self.svc.salvar(self.ctx["gestor"], IP, str(PERFIL_ADMIN), self._dados(form, is_admin=None))
+        _id, erros = self.svc.salvar(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), self._dados(form, is_admin=None))
         self.assertEqual(erros, {})
         self.assertEqual(self.rbac_repo.perfis_obter(PERFIL_ADMIN)["is_admin"], "N")
 

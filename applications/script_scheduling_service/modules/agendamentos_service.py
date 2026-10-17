@@ -353,13 +353,8 @@ class ServicoAgendamentos(object):
         ctx_usuario = rbac.contexto_usuario(dados_ctx)
         ok, motivo_rbac = rbac.pode_executar(ctx_usuario, script, amb, homologacoes)
         if not ok:
-            if motivo_rbac == rbac.Motivo.USUARIO_INATIVO:
-                return "USUARIO_INATIVO", MOTIVOS_PAUSA["USUARIO_INATIVO"]
-            elif motivo_rbac == rbac.Motivo.SCRIPT_INATIVO:
-                return "SCRIPT_INATIVO", MOTIVOS_PAUSA["SCRIPT_INATIVO"]
-            elif motivo_rbac == rbac.Motivo.AMBIENTE_INATIVO:
-                return "AMBIENTE_INATIVO", MOTIVOS_PAUSA["AMBIENTE_INATIVO"]
-            return "SEM_PERMISSAO", MOTIVOS_PAUSA["SEM_PERMISSAO"]
+            codigo = rbac.motivo_pausa(motivo_rbac)
+            return codigo, MOTIVOS_PAUSA[codigo]
 
         try:
             respostas = json.loads(reg.get("parametros_json") or "{}")
@@ -641,7 +636,7 @@ class ServicoAgendamentos(object):
                 "proxima_execucao": formatar_data(reg.get("proxima_execucao")) if reg["ativo"] == "S" else "-",
                 "ultima_execucao": formatar_data(reg.get("ultima_execucao")),
                 "ultimo_ticket_id": reg.get("ultimo_ticket_id"),
-                "responsavel": self._login(reg["usuario_id"], logins),
+                "responsavel": ui_helpers.ator_visivel(self._login(reg["usuario_id"], logins), ctx),
                 "ativo": reg["ativo"],
                 "situacao": rotulo,
                 "motivo": motivo,
@@ -718,7 +713,7 @@ class ServicoAgendamentos(object):
             "versao": versao(atual, self._codigos_sensiveis(atual["script_id"])) if atual else "",
             "ativo": base.get("ativo", "S"),
             "situacao": situacao(atual) if atual else None,
-            "responsavel": self._login(atual["usuario_id"]) if atual else None,
+            "responsavel": ui_helpers.ator_visivel(self._login(atual["usuario_id"]), ctx) if atual else None,
             "outro_responsavel": bool(atual) and atual["usuario_id"] != ctx.get("usuario_id"),
             "registro": ui_helpers.registro(atual, ctx) if atual else None,
             "pausa_aviso": pausa_aviso,

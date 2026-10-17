@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Público | Quem vai instalar e operar o SSS num servidor novo (infraestrutura, desenvolvimento, homologação) |
-| Versão do sistema | 0.1.0 — commit de referência `fe5884c` ou posterior (fases F0.1 a F6.1 e CR-003 a CR-005; o CR-006, colunas de registro, e o CR-007, robustez do scheduler, entram depois e trazem os pré-requisitos do §18). Os servidores dos §21 e §22 foram implantados com o `fdf6f35`, anterior aos três CRs |
+| Versão do sistema | 0.1.0 — commit de referência `fe5884c` ou posterior (fases F0.1 a F6.1 e CR-003 a CR-005; o CR-006, colunas de registro, o CR-007, robustez do scheduler, e o CR-008, correções da auditoria final, entram depois e trazem os pré-requisitos do §18). Os servidores dos §21 e §22 foram implantados com o `fdf6f35`, anterior aos três CRs |
 | Validação | Procedimento **ensaiado de ponta a ponta** em 2026-10-15 num clone limpo do repositório (Python 3.6.0 e 3.13) e **implantado** no mesmo dia no servidor clone 7 (Oracle Linux 6.9, Python 3.7 sem `ssl`, sem `sudo` nem `systemd` — registro no §21). A versão com o CR-003 e o CR-004 foi validada em 2026-10-16 na estação de desenvolvimento (suíte em Python 3.6.0, 3.6.8 e 3.13.2 e verificação das telas no navegador), mas ainda não foi reimplantada em servidor (§22). A versão com o CR-005 (somente POSIX, caminho absoluto do script e logs em pastas por minuto) foi validada em 2026-10-16 na estação (suíte em 3.6.0, 3.6.8 e 3.13.2). O que não foi ensaiado está marcado como **[não ensaiado]** |
 | Documentos relacionados | `README.md` (regras de negócio e arquitetura), `AGENTS.md` (regras de desenvolvimento), `docs/AMBIENTE_DEV.md` (estação do desenvolvedor), `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx` (roteiro de homologação) |
 
@@ -193,7 +193,7 @@ $PYTHON scripts/check_env.py ; echo "codigo de saida: $?"
 
 # 7.2 Suíte de testes completa (não precisa de configuração nem de segredos)
 $PYTHON -m unittest discover -s scripts -p "test_*.py"
-# esperado no final: "Ran 718 tests ... OK (skipped=18)" (o total cresce com as versões)
+# esperado no final: "Ran ... tests ... OK (skipped=23)" (o total cresce com as versões; os 23 ignorados dependem do Oracle real, SSS_TEST_DSN)
 # Os 18 "skipped" são testes contra banco Oracle real (SSS_TEST_DSN); é o resultado esperado.
 ```
 
@@ -585,7 +585,8 @@ Ainda **não executável** (F7–F9). O `docs/RUNBOOK.md` será entregue no F9.1
 | Servidores agentes | Linux (ou outro Unix, sob demanda), com conta de serviço sem privilégio administrativo; interpretadores (`python3`, `bash`, `sh`) nos caminhos que serão mapeados, com dono root e sem escrita de grupo ou outros (o agente confere a cadeia, CR-007) | README §2.6, §8.5, CR-005 |
 | Usuários de execução (CR-007, D1) | Um usuário do sistema operacional **por ambiente** (ex.: `sssprd`, `ssshml`), sem login interativo, sem senha, diferente da conta do agente e fora de `script_owner_uids`; pasta `exec_work_dir/<usuário>` com dono o próprio usuário e `0700`; cota de disco e limite de processos (`nproc`) para cada um; o helper e o `sudoers` do §18.1 | README §8.0, §8.4 |
 | Scripts reais | Em qualquer pasta, fora das pastas do sistema; dono de preferência um usuário dedicado (em `script_owner_uids`), sem escrita para grupo e outros, e **sem** pertencer à conta do agente nem a um usuário de execução, no arquivo e em toda a cadeia de pastas; sem link simbólico no caminho (CR-007) | README §8.5, CR-005, CR-007 |
-| Contas Oracle por papel (CR-007, D1b) | Quatro contas: dona do esquema (só para o `init_db.py`), `sss_web`, `sss_agente` e `sss_purge`, com os GRANTs do README §11.1 (o `init_db.py --grants-para` imprime o script) | README §4.1, §11.1 |
+| Contas Oracle por papel (CR-007, D1b; CR-008, E3) | Cinco contas: dona do esquema (só para o `init_db.py`), `sss_web`, `sss_agente`, `sss_purge` e `sss_monitor` (só leitura, para o `saude.py`), com os GRANTs do README §11.1 (o `init_db.py --grants-para` imprime o script). A conta da aplicação nunca é a dona do esquema (recusado fora de DEV, CR-008 R-29) | README §4.1, §11.1 |
+| Partição dos logs (CR-008, R-25) | `log_dir` num sistema de arquivos próprio nos agentes, com alerta de uso; a cota do usuário de execução não o protege (§18.1) | README §8.2, §14 |
 | Banco: tempo e sessões (CR-007) | Fuso do servidor de banco **sem horário de verão** (UTC recomendado) e NTP em modo *slew* em todas as instâncias; `SQLNET.EXPIRE_TIME = 1` no `sqlnet.ora` do servidor de banco, para derrubar sessões mortas que seguram lock; job automático de estatísticas ativo para o esquema | README §7.1, §8.8, §11.1 |
 | HTTPS e DNS | Nome e certificado para o nó web em HML/PROD (`sss_env = HML/PROD` exige cookie `Secure`) | README §4.2 |
 | Credenciais | Senha do Oracle e credenciais por ambiente para o `secrets.cfg`, entregues por canal seguro | README §4.1 |
@@ -610,12 +611,15 @@ sssagente ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 * `sssagente` é a conta do agente; nenhuma outra regra de `sudo` é concedida a ela.
 * O agente confere tudo na subida (`sudo -n -l`, dono e modo do helper, usuários e pastas; README §8.0) e recusa subir com CRITICAL se algo faltar.
 * **Cota e limites por usuário de execução:** cota de disco na partição de `exec_work_dir` e `nproc`/`nofile` em `/etc/security/limits.d/`, para que um script não esgote o servidor.
+* **Disco dos logs (CR-008, R-25):** a cota do usuário de execução **não** protege o `log_dir`: o arquivo de log de cada ticket pertence à conta do agente, e o script só escreve no descritor herdado. Por isso, `log_dir` fica numa **partição própria** (ou num volume lógico próprio), separada de `/`, `work_dir` e `exec_work_dir`, dimensionada para `local_log_retention_days` de logs. O agente para de fazer claim com menos de `[agent] log_dir_min_livre_mb` livres (padrão 1.024 MB, WARN `DISCO_LOG`, README §8.2); o monitoramento corporativo alerta antes disso (por exemplo, 80% de uso).
+* **Hash homologado (CR-008, E4):** com web e agentes em servidores separados, homologue o conteúdo de cada script informando no cadastro o SHA-256 obtido no servidor do agente: `sha256sum /caminho/do/script`. Configure `[agent] ambientes_exigem_hash = PRODUCAO` (e os demais ambientes produtivos) para que um script sem hash homologado seja recusado nesses ambientes.
 
 ### 18.2 Conexão Oracle com failover (CR-007, R-12)
 
-* **RAC:** use o nome do serviço, nunca o SID, e um descritor com balanceamento e failover, por exemplo:
-  `(DESCRIPTION=(CONNECT_TIMEOUT=10)(RETRY_COUNT=3)(ADDRESS_LIST=(LOAD_BALANCE=on)(FAILOVER=on)(ADDRESS=(PROTOCOL=TCP)(HOST=scan.empresa.local)(PORT=1521)))(CONNECT_DATA=(SERVICE_NAME=sss_srv)))`.
-* **Data Guard:** um serviço de banco iniciado só no primário (`role = PRIMARY`) e o descritor com os dois endereços (primário e standby) em `ADDRESS_LIST` com `FAILOVER=on`.
+* **Orçamento da abertura (CR-008, R-17):** `CONNECT_TIMEOUT × (RETRY_COUNT + 1) × endereços` precisa ser **menor ou igual** a `call_timeout_ms / 1000` (30 s no exemplo do README §12.1). Acima disso, uma reconexão bloqueia o laço do agente além do previsto nas invariantes do fencing; o agente, o nó web e o `check_env.py` avisam com WARN `CONEXAO_ACIMA_DO_PRAZO` (README §2.3).
+* **RAC:** use o nome do serviço, nunca o SID, e um descritor com balanceamento e failover, por exemplo (5 × 2 × 1 = 10 s com o SCAN, que é um endereço só):
+  `(DESCRIPTION=(CONNECT_TIMEOUT=5)(RETRY_COUNT=1)(ADDRESS_LIST=(LOAD_BALANCE=on)(FAILOVER=on)(ADDRESS=(PROTOCOL=TCP)(HOST=scan.empresa.local)(PORT=1521)))(CONNECT_DATA=(SERVICE_NAME=sss_srv)))`.
+* **Data Guard:** um serviço de banco iniciado só no primário (`role = PRIMARY`) e o descritor com os dois endereços (primário e standby) em `ADDRESS_LIST` com `FAILOVER=on`. Com dois endereços, use `CONNECT_TIMEOUT=5` e `RETRY_COUNT=1` (5 × 2 × 2 = 20 s ≤ 30 s).
 * `CONNECT_TIMEOUT` e `RETRY_COUNT` no descritor valem a partir do cliente 19c (Thick/cx_Oracle); no modo Thin, o `db_conn` usa `tcp_connect_timeout` e `retry_count`.
 * Todos os servidores do banco no mesmo fuso, sem horário de verão, com NTP em modo *slew* (README §7.1).
 
@@ -627,9 +631,16 @@ sssagente ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 
 ### 18.4 Monitoração, backup e restauração (CR-007, R-18)
 
+* **Conta de monitoração (CR-008, E3):** crie a conta Oracle `sss_monitor`, só com os `SELECT` do papel monitor (`init_db.py --grants-para ... monitor=sss_monitor`, README §11.1), e a seção `[monitor]` (`user` e `password`) no `secrets.cfg` do servidor que roda o `saude.py`. A conta do agente não serve: ela não lê `tbsss_auditoria`, e a checagem do purge falharia sempre.
 * **Monitoração:** `scripts/saude.py` (F9.1) no monitoramento corporativo a cada 5 minutos, com alerta no código 2 (README §13). Alertas mínimos: agente parado, fila sem atendente, ticket rodando sem PID, configuração divergente entre agentes, purge sem rodar há 2 dias.
 * **Backup:** o esquema (RMAN ou Data Pump do owner), o `config.ini` e o `secrets.cfg` de cada servidor (cofre), e os logs locais conforme a política da empresa.
-* **Depois de restaurar o banco** (restore ou *flashback*): pare todos os agentes; finalize como `FAILED`/`ORPHAN_PROCESS` os tickets `RUNNING` restaurados (eles se referem a processos que não existem mais); religue os agentes, e o *misfire* trata os agendamentos vencidos (README §7.4). O startup check limpa as pastas locais.
+* **Depois de restaurar o banco** (restore ou *flashback*; CR-008, R-18). O banco volta a um instante anterior, mas os scripts executados depois dele já produziram efeito. Antes de religar qualquer agente:
+  1. pare todos os agentes e anote o **instante de restauração** (o do backup ou do *flashback*);
+  2. finalize como `FAILED`/`ORPHAN_PROCESS` os tickets `RUNNING` restaurados que têm PID (eles se referem a processos que não existem mais);
+  3. **revise** os tickets `PENDING` e os `RUNNING` sem PID criados antes do instante de restauração: compare com os logs locais dos agentes (`log_dir/<script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log`, que sobrevivem à restauração). Os que já rodaram depois do backup são cancelados pela tela (Cancelar, auditado como `TICKET_CANCELAR` com o login do operador), nunca apagados;
+  4. para não repetir as ocorrências de agendamento já cumpridas, configure temporariamente `misfire_policy = SKIP` em **todos** os agentes (o `config_criticos` precisa ser igual em todos, README §8.12) para a primeira subida; volte a `RUN_ONCE` depois que o primeiro desdobro avançar as regras;
+  5. avance as sequences de `tbsss_tickets` e `tbsss_auditoria` acima do maior id visto nos logs locais e no log da aplicação (o DBA recria a sequence com `START WITH` maior; o 11g não tem `ALTER SEQUENCE ... RESTART`), para que nenhum id se repita entre o banco e os arquivos locais;
+  6. religue os agentes. O startup check limpa as pastas locais.
 
 ---
 
@@ -639,7 +650,7 @@ sssagente ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 - [ ] §4 Usuário `sss` (sem login) e diretórios com donos/modos da tabela do §2
 - [ ] §5 Código obtido por Git (commit fixado) ou pacote com SHA-256 conferido; só `script_scheduling_service` em `applications/`
 - [ ] §6 Python ≥ 3.6.0 com PBKDF2 OK
-- [ ] §7 `check_env.py` com código 0 e suíte com `OK (skipped=18)`
+- [ ] §7 `check_env.py` com código 0 e suíte com `OK (skipped=23)`
 - [ ] §8.1 Árvore `/opt/automacoes/scripts` do root, sem escrita para o `sss`
 - [ ] §8.2 `/etc/sss/secrets.cfg` do `sss`, modo `0600`, com `cookie_key` gerado
 - [ ] §8.3 Senha de demonstração (≥ 12 caracteres) combinada com a equipe
@@ -897,7 +908,7 @@ diff <(grep -oE "^[a-z_]+ =" $NOVO/$APP/instance/config.ini.example | sort) \
 # 3. Verificar o código novo (não usa a porta; o SSS atual segue no ar)
 cd $NOVO/$APP
 $PY scripts/check_env.py; echo "codigo: $?"                         # 0
-$PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran 718 tests ... OK (skipped=18)
+$PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran ... tests ... OK (skipped=23)
 
 # 4. Teste de carga da configuração (§10) na pasta nova
 cd $NOVO && umask 077

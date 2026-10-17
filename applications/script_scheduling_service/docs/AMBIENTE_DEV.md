@@ -162,7 +162,7 @@ cd applications/script_scheduling_service
 python -m unittest discover -s scripts -p "test_*.py"
 ```
 
-Resultado esperado hoje: `Ran 718 tests ... OK (skipped=18)`. Os 18 ignorados são do contrato contra Oracle real (`SSS_TEST_DSN`). Rode a suíte na **3.6.0** e na **3.6.8** (AGENTS §7, item 3); a validação do fechamento do CR-005 também passou na 3.13.2, a versão mais nova validada:
+Resultado esperado hoje: `Ran ... tests ... OK (skipped=23)` (794 testes no fechamento do CR-007; o total cresce a cada passo). Os 23 ignorados são do contrato contra Oracle real (`SSS_TEST_DSN`). Rode a suíte na **3.6.0** e na **3.6.8** (AGENTS §7, item 3); a validação do fechamento do CR-005 também passou na 3.13.2, a versão mais nova validada:
 
 ```bash
 for v in 3.6.0 3.6.8 3.13.2; do PYENV_VERSION=$v python -m unittest discover -s scripts -p "test_*.py"; done
@@ -234,7 +234,8 @@ Em `instance/config.ini`, seção `[agent]`: `script_owner_uids = 0` (o padrão 
 ### 6.3 Agente em DEV (a partir do F8, CR-007)
 
 * Em DEV, `[agent] usuarios_execucao` pode ficar vazio: o agente executa os scripts com o próprio usuário e registra WARN `SEM_USUARIO_EXECUCAO`. Para testar o helper e o `sudo` como nos servidores, siga o `IMPLANTACAO.md` §18.1 numa VM.
-* `cron_horizon_days` vai de 366 a 36.500, `max_log_size_bytes` até 64 MiB e `audit_retention_days` de 365 a 3.650 (e não menor que `ticket_retention_days`); o `table_prefix` só aceita minúsculas. Um `config.ini` antigo fora dessas faixas aborta a subida com a chave no log.
+* `cron_horizon_days` vai de 1.461 a 36.500 (CR-008, R-32), `max_log_size_bytes` até 64 MiB e `audit_retention_days` de 365 a 3.650 (e não menor que `ticket_retention_days`); o `table_prefix` só aceita minúsculas. Um `config.ini` antigo fora dessas faixas aborta a subida com a chave no log.
+* **CR-008:** `[web] sessao_max_horas` (padrão 12), `[agent] ambientes_exigem_hash` (vazio em DEV, sem aviso) e `[agent] log_dir_min_livre_mb` (padrão 1.024; 0 desliga, só em DEV) são opcionais. Em DEV, `[oracle] user` pode ser igual ao `owner`; fora de DEV, é recusado. O `scripts/saude.py` lê só a seção `[monitor]` do `secrets.cfg`.
 
 ---
 

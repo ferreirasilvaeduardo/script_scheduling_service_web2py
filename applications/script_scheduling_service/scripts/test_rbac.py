@@ -202,9 +202,9 @@ class TestPrioridade(unittest.TestCase):
 
 IP = "10.1.1.1"
 SESSOES = {
-    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1},
-    "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1},
-    "consulta": {"usuario_id": 4, "login": "consulta", "perfil_id": 4, "perm_versao": 1},
+    "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
+    "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1, "sessao_epoch": 0},
+    "consulta": {"usuario_id": 4, "login": "consulta", "perfil_id": 4, "perm_versao": 1, "sessao_epoch": 0},
 }
 # Seed FAKE: perfil 1 ADMINISTRADOR (unico admin), 3 OPERADOR_HML (ambiente DESENV inativo associado),
 # 4 CONSULTA (VER_LOGS; PRODUCAO e HOMOLOGACAO). Funcionalidades 1 EXEC_SCRIPT, 2 VER_LOGS, 3 CANC_TICKET.
@@ -239,6 +239,9 @@ class _BasePerfis(unittest.TestCase):
         self.ctx = dict((login, self.auth.revalidar(sessao)) for login, sessao in SESSOES.items())
         # Gestor: perfil nao admin com CAD_PERFIS; exercita o ultimo admin sem cair na autoprotecao.
         self.ctx["gestor"] = dict(self.ctx["op.prod"], funcionalidades=frozenset(["CAD_PERFIS"]))
+        # Administrador fora do perfil ADMINISTRADOR: exercita a protecao do ultimo admin pelo servico,
+        # ja que quem nao e admin nao altera perfil de admin (CR-008, E1).
+        self.ctx["admin_externo"] = dict(self.ctx["admin"], perfil_id=999)
         self.svc = ServicoAdminPerfis(self.rbac_repo, self.catalogo, self.usuarios, self.log)
         self.aud_base = max([a["id"] for a in self.auditoria.listar(pagina=1, tamanho=1000)["itens"]] or [0])
 
@@ -356,7 +359,7 @@ class TestUltimoAdmin(_BasePerfis):
     def test_desativar_unico_perfil_admin_e_negado(self):
         form = self._form(PERFIL_ADMIN)
         with self.assertRaises(OperacaoNegada) as cm:
-            self.svc.alternar_ativo(self.ctx["gestor"], IP, str(PERFIL_ADMIN), form["versao"])
+            self.svc.alternar_ativo(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["versao"])
         self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_ULTIMO_ADMIN)
         perfil = self.rbac_repo.perfis_obter(PERFIL_ADMIN)
         self.assertEqual((perfil["ativo"], perfil["perm_versao"]), ("S", 1))
@@ -364,7 +367,7 @@ class TestUltimoAdmin(_BasePerfis):
 
     def test_remover_is_admin_do_unico_perfil_admin_e_negado(self):
         form = self._form(PERFIL_ADMIN)
-        _id, erros = self.svc.salvar(self.ctx["gestor"], IP, str(PERFIL_ADMIN),
+        _id, erros = self.svc.salvar(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN),
                                      {"nome": form["nome"], "descricao": form["descricao"], "is_admin": None,
                                       "versao": form["versao"]})
         self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_ULTIMO_ADMIN})
@@ -376,7 +379,7 @@ class TestUltimoAdmin(_BasePerfis):
         u = self.usuarios.obter_por_login("op.hml")
         self.usuarios.alterar(u["id"], {"perfil_id": novo_id}, ator="teste")
         form = self._form(PERFIL_ADMIN)
-        alterado = self.svc.alternar_ativo(self.ctx["gestor"], IP, str(PERFIL_ADMIN), form["versao"])
+        alterado = self.svc.alternar_ativo(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["versao"])
         self.assertEqual(alterado["ativo"], "N")
         aud = self._auditorias("CAD_DESATIVAR")
         self.assertEqual(len(aud), 1)
@@ -387,8 +390,19 @@ class TestUltimoAdmin(_BasePerfis):
         self.svc.salvar(self.ctx["admin"], IP, None, {"nome": "ADMIN_VAZIO", "is_admin": "S"})
         form = self._form(PERFIL_ADMIN)
         with self.assertRaises(OperacaoNegada) as cm:
-            self.svc.alternar_ativo(self.ctx["gestor"], IP, str(PERFIL_ADMIN), form["versao"])
+            self.svc.alternar_ativo(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["versao"])
         self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_ULTIMO_ADMIN)
+
+    def test_quem_nao_e_admin_nao_altera_perfil_admin(self):
+        form = self._form(PERFIL_ADMIN)
+        with self.assertRaises(OperacaoNegada) as cm:
+            self.svc.alternar_ativo(self.ctx["gestor"], IP, str(PERFIL_ADMIN), form["versao"])
+        self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_SO_ADMIN)
+        _id, erros = self.svc.salvar(self.ctx["gestor"], IP, str(PERFIL_ADMIN),
+                                     {"nome": form["nome"], "descricao": form["descricao"], "is_admin": None,
+                                      "versao": form["versao"]})
+        self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_SO_ADMIN})
+        self.assertEqual(self.rbac_repo.perfis_obter(PERFIL_ADMIN)["is_admin"], "S")
 
     def test_protecao_e_atomica_no_repositorio(self):
         with self.assertRaises(RepoViolacao) as cm:

@@ -2,6 +2,7 @@
 
 ## Leitura obrigatória antes de planejar
 - `docs/arquitetura/CR-007-robustez-do-scheduler.md` (D1: helper e usuário de execução; R-01, R-02, R-04, R-14, R-15)
+- `docs/arquitetura/CR-008-auditoria-final.md` (R-01: `.sss_spawn` e helper `encerrar-ticket`; R-25: espaço livre em `log_dir`; R-36: `limpar` com `pasta_base`)
 - `docs/arquitetura/CR-005-posix-caminho-livre-e-logs.md` (D1: somente POSIX; D2/D3: caminho livre do script e checagens; revoga Windows do CR-001 e pastas base do CR-003)
 - `AGENTS.md` §2.2, §3.2 (inteiro), §3.3, §7 (`test_plataforma.py`)
 - `README.md` §2.6, §4.1, §8.0 (inteiro), §8.5 (inteiro, caminho absoluto livre), §8.11, §8.12 (passos 1, 4, 5 e 9), §12.1 (`[agent]`), §14
@@ -17,7 +18,9 @@ Concentrar em `modules/plataforma/` **toda** primitiva que depende do sistema op
   - `sinalizar_grupo(processo, sinal) -> bool`: **não bloqueante** (CR-007, R-04). Com usuário de execução, pelo helper (`term`/`kill <pgid> <process_start>`); sem, `os.killpg`. `ESRCH` = grupo vazio. A escalada SIGTERM → prazo → SIGKILL é do executor (F8.1), como máquina de estados;
   - `grupo_vivo(processo) -> bool`: o grupo ainda tem membros (inclusive netos depois da saída do líder, R-02);
   - `validar_execucao(cfg)` (README §8.0): helper com dono root, `0755` e pasta só do root; `sudo -n -l` com a regra do helper para cada usuário de execução; usuários existentes, não root, diferentes do agente e fora de `script_owner_uids`; `exec_work_dir/<usuário>` do próprio usuário com `0700`. Falha: CRITICAL;
-  - `gravar_estado(caminho, dados)` e `ler_estado(caminho)`: JSON em arquivo temporário + `rename`, `0600` (`.sss_proc`, `.sss_result`, R-01);
+  - `gravar_estado(caminho, dados)` e `ler_estado(caminho)`: JSON em arquivo temporário + `rename`, `0600` (`.sss_spawn`, `.sss_proc`, `.sss_result`; CR-007 R-01 e CR-008 R-01);
+  - `encerrar_ticket(pasta_base, ticket_id, usuario_execucao, kill_grace_s) -> 'OK' | 'NAO_SUPORTADO'` (CR-008, R-01): caso "talvez iniciado" do startup check e da varredura. Com usuário de execução, `sudo -n -u <usuário> -- /opt/sss/bin/sss-helper encerrar-ticket <pasta_base> <ticket_id> <kill_grace_s>`; em DEV, a mesma busca feita pelo próprio processo (processos do usuário cujo `/proc/<pid>/cwd` está em `<pasta_base>/ticket_<id>`). Código 5 do helper vira `NAO_SUPORTADO`;
+  - `espaco_livre_mb(caminho) -> int` (`os.statvfs`, `f_bavail × f_frsize`; CR-008, R-25);
   - `identidade_processo(pid) -> int | None` e `processo_existe(pid) -> bool`;
   - `reabrir_grupo(estado_sss_proc) -> Processo | None` (startup check, README §8.12 passo 9): grupo que não é filho do daemon, acompanhado por `processo_existe` + identidade, sem `wait()`; identidade `None` com PID vivo devolve um `Processo` marcado `sem_identidade`, que **não** recebe sinal (WARN `ORFAO_SEM_IDENTIDADE`);
   - `travar_instancia(caminho) -> trava` e `liberar_instancia(trava)`;
@@ -31,7 +34,7 @@ Concentrar em `modules/plataforma/` **toda** primitiva que depende do sistema op
 - **`modules/plataforma/posix.py`:** as colunas POSIX do README §8.0 e o Popen literal do AGENTS §3.2, com `_child_limits` (somente `os.umask(0o077)` e `resource.setrlimit`: `RLIMIT_CORE` 0 e `RLIMIT_NOFILE` 1024).
   - `identidade_processo`: Linux, campo 22 de `/proc/<pid>/stat` contado **depois do último `)`**; AIX/Solaris, `/proc/<pid>/psinfo`; demais Unix, `sysctl KERN_PROC` **sem `ctypes`** (proibido em todo o projeto, AGENTS §3.2; README §8.0). Onde a leitura não for possível sem `ctypes` (por exemplo, macOS/BSD), retorna `None`. Plataforma sem suporte retorna `None` e o startup check trata `None` como identidade desconhecida (`ORPHAN_PROCESS`).
   - `sinalizar_grupo`: `killpg(pgid, sinal)` (DEV) ou o helper; nunca espera (CR-007: sem `time.sleep` nem `wait()` com prazo).
-- **`bin/sss-helper`** (Python 3.6, só biblioteca padrão, sem importar a aplicação; README §8.0): subcomandos `run`, `term`, `kill` e `limpar`, com a validação de argumentos, a checagem de identidade do grupo, a criação do diretório de trabalho do script e os códigos de saída 0/2/3/4. É copiado pelo root para `/opt/sss/bin/sss-helper` (`IMPLANTACAO.md` §18.1).
+- **`bin/sss-helper`** (Python 3.6, só biblioteca padrão, sem importar a aplicação; README §8.0): subcomandos `run`, `term`, `kill`, `limpar <pasta_base> <ticket_id>` e `encerrar-ticket <pasta_base> <ticket_id> <kill_grace_s>` (CR-008, R-01 e R-36: a `pasta_base` é validada como absoluta, normalizada, sem link e de dono igual ao próprio usuário), com a validação de argumentos, a checagem de identidade do grupo, a criação do diretório de trabalho do script e os códigos de saída 0/2/3/4/5 (5 = não suportado nesta plataforma). É copiado pelo root para `/opt/sss/bin/sss-helper` (`IMPLANTACAO.md` §18.1).
 - **Integração com o código existente:**
   - `modules/sss_config.py`: a checagem de dono e modo do `secrets.cfg` passa a chamar `plataforma.validar_arquivo_restrito`;
   - `modules/path_guard.py`: a regra de dono/escrita por item (`_checar_dono_e_modo`, `_gravavel_pelo_agente`) passa a chamar `plataforma.validar_caminho_script`, e a resolução usa `plataforma.caminho_final`.
@@ -39,8 +42,8 @@ Concentrar em `modules/plataforma/` **toda** primitiva que depende do sistema op
 - **`applications/script_scheduling_service/scripts/test_plataforma.py`:**
   - sinalização sem bloquear (a chamada volta em menos de 0,5 s mesmo com um processo que ignora SIGTERM); grupo com o **neto** vivo depois da saída do líder detectado por `grupo_vivo` e encerrado; identidade do processo estável e diferente para outro PID; PID inexistente; lock de instância (segunda trava falha); recusa de usuário privilegiado (root, com dublê); arquivo restrito OK e rejeitado; diretório de trabalho restrito; item da árvore gravável rejeitado; parada por sinal seta a flag.
   - `/proc/<pid>/stat` com `)` no nome do comando;
-  - `gravar_estado`/`ler_estado` atômicos; `validar_execucao` com dublês de `sudo -n -l`, do helper e dos usuários; `validar_caminho_script` com link simbólico, `EACCES` e dono proibido; executável do interpretador por `validar_executavel`.
-- **`applications/script_scheduling_service/scripts/test_sss_helper.py`** (AGENTS §7.4): uso inválido (2); especificação inválida; `term`/`kill` com identidade divergente (3) e com grupo vazio (0); `limpar` sem seguir links; `run` executado direto (sem `sudo`, com o próprio usuário) num script de teste, com `cwd`, `umask` e entrada padrão nula.
+  - `gravar_estado`/`ler_estado` atômicos, inclusive `.sss_spawn` (CR-008, R-01); `encerrar_ticket` em DEV encerrando um processo de teste (e o neto) cujo diretório atual está na pasta do ticket, sem tocar em outro processo do mesmo usuário fora dela; `espaco_livre_mb` com `os.statvfs` simulado; `validar_execucao` com dublês de `sudo -n -l`, do helper e dos usuários; `validar_caminho_script` com link simbólico, `EACCES` e dono proibido; executável do interpretador por `validar_executavel`.
+- **`applications/script_scheduling_service/scripts/test_sss_helper.py`** (AGENTS §7.4): uso inválido (2); especificação inválida; `term`/`kill` com identidade divergente (3) e com grupo vazio (0); `limpar` e `encerrar-ticket` com `pasta_base` inválida (relativa, com `..`, com link, de outro dono) recusados com 2 e sem seguir links; `encerrar-ticket` com código 5 quando não há `/proc/<pid>/cwd` nem `pwdx` (dublê) (CR-008, R-01 e R-36); `run` executado direto (sem `sudo`, com o próprio usuário) num script de teste, com `cwd`, `umask` e entrada padrão nula.
 - **`scripts/test_py36_compat.py`:** fora de `modules/plataforma/` é proibido `os.killpg`, `os.setsid`, `resource`, `fcntl`, `/proc` e `sys.platform`; em todo o projeto, inclusive em `plataforma/`, é proibido `ctypes` e `msvcrt` (AGENTS §3.2).
 
 **OUT**

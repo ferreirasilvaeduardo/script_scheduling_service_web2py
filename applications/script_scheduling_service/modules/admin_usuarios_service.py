@@ -40,6 +40,8 @@ MSG_ULTIMO_ADMIN = ui_helpers.mensagem("ultimo_admin")
 MSG_AUTO_DESATIVAR = u"Operação negada: você não pode desativar o próprio usuário."
 MSG_AUTO_PERFIL = u"Operação negada: você não pode remover o próprio perfil administrativo."
 MSG_AUTO_SENHA = u"Para trocar a sua própria senha, use \"Minha senha\" (exige a senha atual)."
+MSG_SO_ADMIN = (u"Só um administrador pode alterar um usuário administrador ou dar o perfil de administrador. "
+                u"Peça a um administrador.")
 AJUDA_POLITICA = u"Mínimo de %d caracteres. A senha nunca é exibida nem registrada." % security.SENHA_MIN
 AVISO_DESATIVACAO = u"O usuário perde o acesso e tem a sessão encerrada no próximo clique."
 
@@ -101,6 +103,15 @@ class ServicoAdminUsuarios(object):
         itens = self._rbac.perfis_listar(filtros={"ativo": "S"} if apenas_ativos else None, pagina=1,
                                          tamanho=_PERFIS_MAX)["itens"]
         return [{"id": p["id"], "nome": p["nome"], "is_admin": p["is_admin"], "ativo": p["ativo"]} for p in itens]
+
+    def _perfil_admin(self, perfil_id):
+        try:
+            return self._rbac.perfis_obter(perfil_id).get("is_admin") == "S"
+        except RepoNaoEncontrado:
+            return False
+
+    def _exigir_admin(self, ctx, condicao, operacao):
+        admin_crud.exigir_admin(ctx, condicao, MSG_SO_ADMIN, self._log, operacao)
 
     def bloqueado(self, usuario):
         """True se o bloqueio por tentativas ainda vale agora."""
@@ -203,6 +214,10 @@ class ServicoAdminUsuarios(object):
             senha = self._senha(dados.get("senha"), dados.get("confirmacao"), erros)
             if erros:
                 return None, erros
+            try:
+                self._exigir_admin(ctx, perfil["is_admin"] == "S", "CAD_INSERIR")
+            except OperacaoNegada as exc:
+                return None, {"perfil_id": exc.mensagem}
             agora = self._relogio()
             novo = {"login": login, "nome": nome, "perfil_id": perfil_id, "ativo": "S",
                     "senha_hash": security.hash_senha(senha), "senha_alterada_em": agora}
@@ -225,6 +240,11 @@ class ServicoAdminUsuarios(object):
             return atual["id"], erros
         if atual["id"] == ctx.get("usuario_id") and ctx.get("is_admin") is True and perfil["is_admin"] != "S":
             return atual["id"], {CAMPO_GERAL: MSG_AUTO_PERFIL}
+        try:
+            self._exigir_admin(ctx, perfil["is_admin"] == "S" or self._perfil_admin(atual["perfil_id"]),
+                               "CAD_ALTERAR")
+        except OperacaoNegada as exc:
+            return atual["id"], {CAMPO_GERAL: exc.mensagem}
         if admin_crud.texto(dados.get("versao"), 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
             return atual["id"], {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
         depois = dict(atual, nome=nome, perfil_id=perfil_id)
@@ -255,6 +275,7 @@ class ServicoAdminUsuarios(object):
         novo_ativo = "N" if atual["ativo"] == "S" else "S"
         if novo_ativo == "N" and atual["id"] == ctx.get("usuario_id"):
             raise OperacaoNegada(MSG_AUTO_DESATIVAR)
+        self._exigir_admin(ctx, self._perfil_admin(atual["perfil_id"]), "CAD_DESATIVAR")
         if admin_crud.texto(versao, 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
             raise RepoConflito("versao divergente")
         detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, ativo=novo_ativo), ("ativo",))
@@ -283,6 +304,7 @@ class ServicoAdminUsuarios(object):
         atual = self._obter(usuario_id)
         if atual["id"] == ctx.get("usuario_id"):
             raise OperacaoNegada(MSG_AUTO_SENHA)
+        self._exigir_admin(ctx, self._perfil_admin(atual["perfil_id"]), "CAD_ALTERAR")
         erros = {}
         senha = self._senha(senha, confirmacao, erros)
         if erros:
@@ -297,6 +319,7 @@ class ServicoAdminUsuarios(object):
         """Zera tentativas e bloqueio do usuario, com auditoria CAD_ALTERAR."""
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         atual = self._obter(usuario_id)
+        self._exigir_admin(ctx, self._perfil_admin(atual["perfil_id"]), "CAD_ALTERAR")
         detalhe = u"desbloqueado (tentativas_falha: %s; bloqueado_ate: %s)" % (
             atual.get("tentativas_falha") or 0, atual.get("bloqueado_ate") or u"(vazio)")
         alterado = self._usuarios.desbloquear(atual["id"],

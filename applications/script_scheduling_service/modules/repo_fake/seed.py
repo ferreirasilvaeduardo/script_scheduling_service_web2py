@@ -204,6 +204,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 ]
                                 for u in usuarios:
                                     u["created_at"] = base_dt - datetime.timedelta(days=60)
+                                    u["sessao_epoch"] = 0
                                     if senha_dev is not None and u["login"] not in _SEM_SENHA_DEV:
                                         u["senha_hash"] = security.hash_senha(senha_dev)
                                     store.usuarios[u["id"]] = u

@@ -70,7 +70,7 @@ class _Base(unittest.TestCase):
         self.ctx = {}
         for uid, login, perfil_id in ((1, "admin", 1), (2, "op.prod", 2), (4, "consulta", 4)):
             sessao = {"usuario_id": uid, "login": login, "perfil_id": perfil_id,
-                      "perm_versao": self.rbac.perfis_obter(perfil_id)["perm_versao"]}
+                      "perm_versao": self.rbac.perfis_obter(perfil_id)["perm_versao"], "sessao_epoch": 0}
             self.ctx[login] = auth.revalidar(sessao)
         self.svc = ServicoAuditoria(self.auditoria, lambda: self.agora, self.log)
         self.svc_agentes = ServicoAgentes(self.agentes, self.catalogo, lambda: self.agora, LIMIARES, self.log, CONFIG_CRITICOS)
@@ -372,9 +372,10 @@ class TestPainelAgentes(_Base):
         self.store.agentes_hb_sim.clear()
         for tid, segundos, status in ((1, -300, "PENDING"), (2, 0, "PENDING"),
                                       (3, 1, "PENDING"), (4, -600, "SUCCESS")):
-            self.store.tickets[tid] = {"id": tid, "status": status, "ambiente": "PRODUCAO",
+            # Script 3 (cleanup_tmp) e BASH no cadastro; o snapshot diz outra coisa e e ignorado (CR-008, R-15).
+            self.store.tickets[tid] = {"id": tid, "status": status, "ambiente": "PRODUCAO", "script_id": 3,
                                       "scheduled_at": self.agora + datetime.timedelta(seconds=segundos),
-                                      "parametros_enviados": json.dumps({"interpretador": "BASH"}),
+                                      "parametros_enviados": json.dumps({"interpretador": "SH"}),
                                       "log_output": object()}
 
     def test_fila_exige_um_agente_para_o_par_e_ignora_futuro(self):
@@ -475,7 +476,7 @@ class TestResumoInicial(_Base):
         self.assertLessEqual(sum(q for _, q in prod["contagem"]), total_admin)
         self.assertLessEqual(len(admin["meus"]), 5)
         self.assertTrue(all(t["solicitante"] == "admin" for t in admin["meus"]))
-        self.assertTrue(all(t["solicitante"] == "op.prod" for t in prod["meus"]))
+        self.assertTrue(all(t["solicitante"] == u"você" for t in prod["meus"]))
         self.assertEqual(consulta["meus"], [])
 
     def test_contagem_igual_a_lista(self):

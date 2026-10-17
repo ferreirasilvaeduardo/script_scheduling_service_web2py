@@ -2,6 +2,7 @@
 
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §4.13, §6
+- `docs/arquitetura/CR-008-auditoria-final.md` (R-11: orçamento de tempo do pump e rodízio entre tickets)
 - `README.md` §4.1 (segredos com menos de 4 caracteres não são registrados no mascarador), §5.2 (`LOG_LIMIT`), §8.10 (inteiro, revisado no CR-003: medida do teto, marcador e leitura da UI), §12.1 (`[logging]`), §14 (risco aceito dos segredos curtos)
 - Arquivos: `modules/masking.py` (`MascaradorFluxo`), `modules/db_conn.py` (F7.0/F7.2, CR-002), `modules/executor.py`, `modules/plataforma/` (F8.0)
 
@@ -22,6 +23,7 @@ Transferir o log local do ticket para `log_output` de forma incremental, mascara
     - `excedeu_local() -> bool` verifica o tamanho do arquivo contra `max_local_log_size_bytes`;
     - `aplicar_teto_banco(texto) -> (texto_para_enviar, truncou)` corta pela medida exata do README §8.10: bytes UTF-8 acumulados já enviados (`len(t.encode('utf-8'))`) contra `max_log_size_bytes`. O corte nunca divide caractere (corta por caractere, não por byte). Ao truncar, anexa o marcador literal do README §8.10.
   - `blocos(texto, tamanho=8000)` divide para o `WRITEAPPEND`.
+  - **Orçamento e rodízio (CR-008, R-11):** `class Rodada(bombas, relogio_monotonico, orcamento_s)` coordena uma rodada do pump: começa pela bomba seguinte à última atendida na rodada anterior, chama `coletar` e o envio de blocos ticket a ticket e **para** assim que o tempo gasto passar de `orcamento_s` (`heartbeat_interval_s / 2`, README §8.1), mesmo no meio da fila; o que não foi lido fica para a rodada seguinte (o offset da bomba só avança com o que foi enviado). `finalizar()` de um ticket (flush final) não tem orçamento, mas o laço só faz um por iteração. O relógio é injetado (nada de `time.sleep`).
 - **`applications/script_scheduling_service/modules/repo_oracle/scheduler_log.py`** (repositório **interno** do daemon, fora do contrato da UI):
   - `anexar(conn, ticket_id, agente_id, bloco) -> bool`: o bloco PL/SQL do README §8.10, **literal**, com `FOR UPDATE WAIT 5` e as condições de posse. `NO_DATA_FOUND` retorna `False` (posse perdida). O `COMMIT` fica a cargo do chamador.
   - `marcar_truncado(conn, ticket_id, agente_id) -> bool`.
@@ -37,6 +39,7 @@ Transferir o log local do ticket para `log_output` de forma incremental, mascara
   - `blocos` com o tamanho exato;
   - arquivo que cresce entre coletas;
   - `anexar` com conexão mock retornando `NO_DATA_FOUND`, resultando em `False`.
+  - **Orçamento (CR-008, R-11):** com relógio simulado que avança a cada bloco, a rodada para ao passar de `orcamento_s`; a rodada seguinte começa pelo ticket seguinte (rodízio: nenhum ticket fica sem coleta por duas rodadas seguidas quando há 3 tickets verbosos e o orçamento cobre só 1); nenhum byte é perdido entre rodadas;
   - arquivo aberto para escrita por outro processo durante a coleta (simula o filho);
   - Com `SSS_TEST_DSN`: `WRITEAPPEND` real em um ticket de teste e leitura do CLOB idêntica ao texto mascarado esperado, em cada combinação de driver disponível.
 

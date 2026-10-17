@@ -2,6 +2,7 @@
 
 ## Leitura obrigatória antes de planejar
 - `docs/arquitetura/CR-007-robustez-do-scheduler.md` (D1, R-01 a R-04, R-17, R-32)
+- `docs/arquitetura/CR-008-auditoria-final.md` (R-01: `.sss_spawn` antes do `Popen` e grupo encerrado em exceção depois dele; R-36: `cwd` do script e `limpar` com `pasta_base`)
 - `AGENTS.md` §3.2 (inteiro), §6, §7.4 (`test_env_builder`, `test_executor`)
 - `docs/arquitetura/CR-005-posix-caminho-livre-e-logs.md` (D1: somente POSIX; D2: caminho livre; D5, R-a, R-b: pastas de log; snapshot v4)
 - `README.md` §5.2 (motivos e return codes), §6.4 (montagem do `argv`), §6.5 (snapshot versão 4), §8.0, §8.4 (passos 1–5), §8.5 (caminho livre e checagens), §8.6 (ambiente do processo filho POSIX), §8.7 (timeout e finalização), §14
@@ -16,7 +17,7 @@ Implementar o spawn seguro dos scripts com ambiente limpo, saída direta em arqu
   - `construir(cfg, segredos, ticket, ambiente, script_real, work_dir_ticket, environ_daemon, plataforma_nome) -> dict`, com as variáveis exatas do README §8.6 (ambiente POSIX):
     - `PATH=/usr/bin:/bin`, `HOME`, `TMPDIR`, `LANG`/`LC_ALL` = `child_locale`, `TZ` herdado;
     - `PYTHONDONTWRITEBYTECODE`, `PYTHONIOENCODING=utf-8`, `SSS_TICKET_ID`, `SSS_AMBIENTE`, `SSS_AGENTE_ID`, `SSS_SCRIPT_DIR`.
-    - `SSS_SCRIPT_DIR` = `os.path.dirname(script_real)`, onde `script_real` é o caminho absoluto resolvido pelo `path_guard.resolver` (README §8.5 e §8.6). Não é o `cwd` (que é `work_dir/ticket_<id>`).
+    - `SSS_SCRIPT_DIR` = `os.path.dirname(script_real)`, onde `script_real` é o caminho absoluto resolvido pelo `path_guard.resolver` (README §8.5 e §8.6). Não é o `cwd`, que é o diretório de trabalho do script: `exec_work_dir/<usuário de execução>/ticket_<id>` fora de DEV (criado pelo helper, CR-007 D1) e `work_dir/ticket_<id>/exec` em DEV sem usuário de execução (CR-008, R-36; README §8.4, passo 2).
   - O `PADRAO_VALOR_RUN_CONEXAO_BD` só é incluído quando o ambiente tem DSN **e** o `secrets.cfg` tem a seção `[ambiente:<NOME>]` com `user` e `password`. Se faltar algum dos dois, a variável é omitida e um WARN é registrado (sem valores). O valor é registrado no `Mascarador`.
   - O `env_passthrough` é copiado de `environ_daemon`, recebido por parâmetro; o módulo **nunca** lê `os.environ`.
   - Variáveis bloqueadas (lista do README §8.6) geram `ValueError`.
@@ -25,12 +26,12 @@ Implementar o spawn seguro dos scripts com ambiente limpo, saída direta em arqu
   - `preparar_diretorio(work_dir, ticket_id) -> caminho`: cria `ticket_<id>/` e `tmp/` via `plataforma.criar_dir_trabalho`. Um diretório preexistente é removido antes, com validação de que fica sob `work_dir` (`plataforma.caminho_final` + `commonpath`).
   - `abrir_log(log_dir, nome_script, started_at, ticket_id, script_id=None) -> (fd, caminho)`: cria as pastas `log_dir/<pasta_script>/AAAA/MM/DD/HH/MI/` **nível a nível com `chmod 0750`** em cada pasta nova (README §8.4, passo 3: o `makedirs` só aplica o modo à pasta final, e sempre sob a `umask` 077). Mova a função privada `sss_logging._garantir_diretorio` para uma função pública de `pastas_log` e use-a nos dois lugares. Depois abre `ticket_<id>.log.parcial` (`pastas_log.caminho_log_parcial`) com `O_WRONLY|O_CREAT|O_EXCL|O_APPEND` e `0o600`. O `nome_script` é o `script_nome` do snapshot (o nome da época da criação do ticket, README §6.5).
   - **Especificação para o helper (CR-007, D1):** `especificacao(ticket_id, argv, env, rlimits, pasta_base)` em JSON, entregue pela entrada padrão; o log aberto pelo agente vira stdout/stderr.
-  - `iniciar(argv, log_fd, cwd, env, rotulo) -> Execucao`: chama `plataforma.iniciar_processo`, renomeia o log para `ticket_<id>_<PID>.log` (`pastas_log.caminho_log_execucao`), e faz `os.close(log_fd)` no pai. Em caso de falha no spawn, grava a causa no arquivo (sem segredos) e renomeia o parcial para `ticket_<id>_0.log` (README §8.4, passo 3). A `Execucao` guarda o processo, o PID e a identidade (`plataforma.identidade_processo`).
+  - `iniciar(argv, log_fd, cwd, env, rotulo) -> Execucao`: grava `work_dir/ticket_<id>/.sss_spawn` (`plataforma.gravar_estado`; falha = `SPAWN_ERROR` sem spawn) **imediatamente antes** de chamar `plataforma.iniciar_processo` (CR-008, R-01); renomeia o log para `ticket_<id>_<PID>.log` (`pastas_log.caminho_log_execucao`), e faz `os.close(log_fd)` no pai. Em caso de falha no spawn, grava a causa no arquivo (sem segredos) e renomeia o parcial para `ticket_<id>_0.log` (README §8.4, passo 3). A `Execucao` guarda o processo, o PID e a identidade (`plataforma.identidade_processo`). **Exceção depois do `Popen`** (escrita da especificação, `rename` do log, identidade, `.sss_proc`): a `Execucao` é devolvida marcada `falhou_apos_spawn`, com o encerramento do grupo de `p.pid` já pedido (`pedir_encerramento`), para o laço coletar e finalizar `SPAWN_ERROR` (CR-008, R-01); o processo nunca fica sem registro local.
   - **Encerramento como máquina de estados (CR-007, R-04):** `pedir_encerramento(execucao, agora_monotonico)` envia SIGTERM e marca o prazo; `avancar_encerramento(execucao, agora_monotonico)` envia SIGKILL quando o prazo vence e diz se o grupo acabou. Nenhuma das duas espera. O grupo é encerrado em **toda** finalização, mesmo com o líder já terminado (R-02), e WARN `NETOS_ENCERRADOS` quando havia membros.
   - **Estado local (R-01):** `registrar_proc(execucao)` grava `.sss_proc` logo depois do spawn; `registrar_resultado(execucao, status, motivo, rc)` grava `.sss_result` antes do `UPDATE` de finalização.
   - `verificar(execucao) -> None | returncode`.
   - `traduzir_retorno(returncode, plataforma_nome) -> (status, status_motivo, return_code)`, conforme o README §5.2: 0 → `SUCCESS/EXIT_OK`; positivo → `FAILED/EXIT_ERROR`; negativo (POSIX, sinal) → `FAILED/KILLED_SIGNAL` com `128 + abs`.
-  - `limpar(execucao)`: remove `work_dir/ticket_<id>/` e, pelo helper (`limpar`), o diretório do script; chamado em todo encerramento.
+  - `limpar(execucao)`: remove `work_dir/ticket_<id>/` e, pelo helper (`limpar <pasta_base> <ticket_id>`, CR-008 R-36), o diretório do script; chamado em todo encerramento, **só depois** de o grupo estar vazio (CR-008, R-26).
   - **Qualquer** exceção no spawn (não só `OSError`, por exemplo `UnicodeEncodeError`) é traduzida para `SPAWN_ERROR`, com a linha `[SSS] falha ao iniciar: <classe>` no log (R-17).
 - **`applications/script_scheduling_service/scripts/test_env_builder.py`:** os casos do AGENTS §7.4 na base POSIX: o ambiente não contém `HOME` real nem `PATH` do daemon; a omissão sem a seção de segredos; o mascarador recebe a connect string; variáveis bloqueadas geram erro.
 - **`applications/script_scheduling_service/scripts/test_executor.py`** (spawn real no ambiente POSIX em diretório temporário):
@@ -38,7 +39,8 @@ Implementar o spawn seguro dos scripts com ambiente limpo, saída direta em arqu
   - script que gera **2 MB** de saída termina sem travar (prova de ausência de pipe);
   - `stdin` é nulo (um script que lê da entrada termina);
   - o encerramento (máquina de estados) mata o **neto**, inclusive quando o processo principal já saiu sozinho; nenhuma chamada bloqueia;
-  - `.sss_proc` existe logo depois de `iniciar` e `.sss_result` antes da finalização;
+  - `.sss_spawn` existe antes do `Popen` (dublê de `plataforma.iniciar_processo` que confere o arquivo), `.sss_proc` logo depois de `iniciar` e `.sss_result` antes da finalização;
+  - falha simulada na gravação do `.sss_proc` depois do `Popen` real: o grupo (com o neto) é encerrado e a `Execucao` volta `falhou_apos_spawn` (CR-008, R-01);
   - exceção que não é `OSError` no spawn vira `SPAWN_ERROR`;
   - processo que ignora o pedido de término morre dentro de `grace + 1` s;
   - tradução de `returncode`;
