@@ -256,6 +256,40 @@ def formatar_data(dt):
     return dt.strftime("%d/%m/%Y %H:%M:%S")
 
 
+# Colunas de registro (CR-006, README §10) e nomes simples dos atores do sistema (README §2.4.2).
+COLUNAS_REGISTRO = ("created_at", "created_by", "updated_at", "updated_by")
+_PREFIXO_SISTEMA = "SYSTEM:"
+_ATORES_SISTEMA = {"init_db": u"Sistema (instalação)", "seed": u"Sistema (dados de demonstração)"}
+
+
+def registro(reg):
+    """As quatro colunas de registro de um registro lido (valores crus, para o quadro Registro)."""
+    return dict((c, (reg or {}).get(c)) for c in COLUNAS_REGISTRO)
+
+
+def nome_ator(ator):
+    """Ator em linguagem simples: login como esta; SYSTEM:<agent_id> vira 'Sistema (agente <agent_id>)'."""
+    if not ator:
+        return "-"
+    if ator == "SYSTEM":
+        return u"Sistema"
+    if ator.startswith(_PREFIXO_SISTEMA):
+        resto = ator[len(_PREFIXO_SISTEMA):]
+        return _ATORES_SISTEMA.get(resto, u"Sistema (agente %s)" % resto)
+    return ator
+
+
+def registro_exibicao(reg):
+    """Textos do quadro Registro: {'criado': '<data> por <ator>', 'alterado': ... | 'Nunca alterado'}."""
+    reg = reg or {}
+    criado = u"%s por %s" % (formatar_data(reg.get("created_at")), nome_ator(reg.get("created_by")))
+    if reg.get("updated_at") is None:
+        alterado = u"Nunca alterado"
+    else:
+        alterado = u"%s por %s" % (formatar_data(reg.get("updated_at")), nome_ator(reg.get("updated_by")))
+    return {"criado": criado, "alterado": alterado}
+
+
 def formatar_duracao(inicio, fim):
     """Duracao entre dois datetimes ('42s', '5m 07s', '2h 15m 30s').
 

@@ -955,6 +955,7 @@ class ServicoTicket(object):
             "respostas": self._respostas_exibicao(ticket["id"], snap),
             "pai": pai,
             "filhos": filhos,
+            "registro": ui_helpers.registro(ticket),
             "pode_cancelar": pode_cancelar,
             "pode_reexecutar": pode_reexecutar,
         }

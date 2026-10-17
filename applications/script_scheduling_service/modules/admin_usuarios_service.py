@@ -133,11 +133,12 @@ class ServicoAdminUsuarios(object):
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         if usuario_id in (None, ""):
             return {"id": None, "login": "", "nome": "", "perfil_id": None, "ativo": "S", "versao": "",
-                    "bloqueado": False, "bloqueado_ate": None, "tentativas_falha": 0, "proprio": False}
+                    "bloqueado": False, "bloqueado_ate": None, "tentativas_falha": 0, "proprio": False,
+                    "registro": None}
         u = self._obter(usuario_id)
         dados = publico(u)
         dados.update(versao=admin_crud.versao(u, CAMPOS_EDITAVEIS), bloqueado=self.bloqueado(u),
-                     proprio=u["id"] == ctx.get("usuario_id"))
+                     proprio=u["id"] == ctx.get("usuario_id"), registro=ui_helpers.registro(u))
         return dados
 
     # ----------------------------------------------------------------- escrita

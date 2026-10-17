@@ -20,6 +20,7 @@ import cron_parser
 import params_compiler
 import rbac
 import recurrence
+import ui_helpers
 from admin_crud import CAMPO_GERAL, OperacaoNegada
 from cron_parser import CronErro
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
@@ -582,6 +583,7 @@ class ServicoAgendamentos(object):
             "situacao": situacao(atual) if atual else None,
             "responsavel": self._login(atual["usuario_id"]) if atual else None,
             "outro_responsavel": bool(atual) and atual["usuario_id"] != ctx.get("usuario_id"),
+            "registro": ui_helpers.registro(atual) if atual else None,
         }
         for campo in ("nome", "tipo_recorrencia", "expressao_cron", "hora_execucao", "dia_mes",
                       "data_inicio", "data_fim", "prioridade", "versao"):

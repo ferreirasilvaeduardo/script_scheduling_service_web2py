@@ -82,6 +82,29 @@ class TestDescricaoMotivo(unittest.TestCase):
         self.assertIn("OWNERSHIP_LOST", ui_helpers.descricao_motivo("OWNERSHIP_LOST"))
 
 
+class TestQuadroRegistro(unittest.TestCase):
+    """Quadro Registro (CR-006, README §10): ator em linguagem simples e as duas frases."""
+
+    def test_nome_ator(self):
+        self.assertEqual(ui_helpers.nome_ator("op.prod"), "op.prod")
+        self.assertEqual(ui_helpers.nome_ator("SYSTEM:agt-host01"), u"Sistema (agente agt-host01)")
+        self.assertEqual(ui_helpers.nome_ator("SYSTEM:init_db"), u"Sistema (instalação)")
+        self.assertEqual(ui_helpers.nome_ator("SYSTEM:seed"), u"Sistema (dados de demonstração)")
+        self.assertEqual(ui_helpers.nome_ator("SYSTEM"), u"Sistema")
+        self.assertEqual(ui_helpers.nome_ator(None), "-")
+
+    def test_registro_e_exibicao(self):
+        criado = datetime.datetime(2026, 10, 17, 9, 5, 0)
+        reg = ui_helpers.registro({"id": 1, "created_at": criado, "created_by": "SYSTEM:seed", "nome": "x"})
+        self.assertEqual(reg, {"created_at": criado, "created_by": "SYSTEM:seed", "updated_at": None,
+                               "updated_by": None})
+        self.assertEqual(ui_helpers.registro_exibicao(reg), {
+            "criado": u"17/10/2026 09:05:00 por Sistema (dados de demonstração)", "alterado": u"Nunca alterado"})
+        reg.update(updated_at=criado + datetime.timedelta(hours=1), updated_by="admin")
+        self.assertEqual(ui_helpers.registro_exibicao(reg)["alterado"], u"17/10/2026 10:05:00 por admin")
+        self.assertEqual(ui_helpers.registro(None), dict.fromkeys(ui_helpers.COLUNAS_REGISTRO))
+
+
 class TestFormatarData(unittest.TestCase):
 
     def test_formato(self):

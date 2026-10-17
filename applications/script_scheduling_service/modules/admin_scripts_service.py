@@ -16,6 +16,7 @@ import admin_crud
 import params_compiler
 import pastas_log
 import path_guard
+import ui_helpers
 from admin_crud import CAMPO_GERAL, OperacaoNegada
 from params_compiler import ParamErro, TIPOS_PARAM
 from path_guard import Codigo, PathGuardErro
@@ -187,14 +188,16 @@ class ServicoAdminScripts(object):
         if script_id in (None, ""):
             return dict(comum, id=None, nome="", descricao="", grupo="", categoria="", etapa="",
                         interpretador=path_guard.ALLOWLIST[0], path_file="", tipo_param="NOMEADO",
-                        max_qtd_parallel_env=1, timeout_seg="", ativo="S", versao="", agendamentos_ativos=0)
+                        max_qtd_parallel_env=1, timeout_seg="", ativo="S", versao="", agendamentos_ativos=0,
+                        registro=None)
         s = self._obter(script_id)
         dados = dict((c, s.get(c)) for c in CAMPOS_EDITAVEIS)
         for c in ("descricao", "grupo", "categoria", "etapa"):
             dados[c] = admin_crud.normalizar(dados[c]) or ""
         dados["timeout_seg"] = "" if s.get("timeout_seg") is None else s["timeout_seg"]
         dados.update(comum, id=s["id"], versao=admin_crud.versao(s, CAMPOS_EDITAVEIS),
-                     agendamentos_ativos=self._agendamentos_ativos(script_id=s["id"]))
+                     agendamentos_ativos=self._agendamentos_ativos(script_id=s["id"]),
+                     registro=ui_helpers.registro(s))
         return dados
 
     # ------------------------------------------------------------- validacao

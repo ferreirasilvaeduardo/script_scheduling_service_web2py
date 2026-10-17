@@ -8,6 +8,7 @@ import re
 import threading
 
 import admin_crud
+import ui_helpers
 from admin_crud import CAMPO_GERAL
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 
@@ -117,7 +118,7 @@ class ServicoAdminAmbientes(object):
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         if ambiente_id in (None, ""):
             return {"id": None, "nome": "", "descricao": "", "conexao": "", "ativo": "S", "versao": "",
-                    "agendamentos_ativos": 0, "scripts_homologados": 0}
+                    "agendamentos_ativos": 0, "scripts_homologados": 0, "registro": None}
         amb = self._obter(ambiente_id)
         return {
             "id": amb["id"],
@@ -128,6 +129,7 @@ class ServicoAdminAmbientes(object):
             "versao": admin_crud.versao(amb, CAMPOS_EDITAVEIS),
             "agendamentos_ativos": self.agendamentos_ativos(amb["nome"]),
             "scripts_homologados": self.scripts_homologados(amb["nome"]),
+            "registro": ui_helpers.registro(amb),
         }
 
     def _validar(self, dados, erros):

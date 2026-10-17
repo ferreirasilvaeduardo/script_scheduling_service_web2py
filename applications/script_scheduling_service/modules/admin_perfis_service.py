@@ -136,7 +136,7 @@ class ServicoAdminPerfis(object):
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         if perfil_id in (None, ""):
             return {"id": None, "nome": "", "descricao": "", "is_admin": "N", "ativo": "S", "versao": "",
-                    "usuarios_ativos": 0, "usuarios_afetados": [], "proprio": False}
+                    "usuarios_ativos": 0, "usuarios_afetados": [], "proprio": False, "registro": None}
         perfil = self._obter(perfil_id)
         total, logins = self.usuarios_afetados(perfil["id"])
         return {
@@ -149,6 +149,7 @@ class ServicoAdminPerfis(object):
             "usuarios_ativos": total,
             "usuarios_afetados": logins,
             "proprio": ctx.get("perfil_id") == perfil["id"],
+            "registro": ui_helpers.registro(perfil),
         }
 
     def _validar(self, dados, erros):

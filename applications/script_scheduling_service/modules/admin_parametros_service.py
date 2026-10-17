@@ -12,6 +12,7 @@ import threading
 
 import admin_crud
 import params_compiler
+import ui_helpers
 import rbac
 from admin_crud import CAMPO_GERAL, OperacaoNegada
 from params_compiler import ParamErro, TIPOS_COMPONENTE
@@ -191,7 +192,7 @@ class ServicoAdminParametros(object):
             return {"id": None, "codigo": "", "param_nomeado": "", "label": "", "descricao": "",
                     "tipo_componente": "TEXT", "opcoes_json": "", "valor_padrao": "", "tem_padrao": False,
                     "regex_validacao": "", "sensivel": "N", "ativo": "S", "versao": "", "vinculos": [],
-                    "pode_regex": pode_regex}
+                    "pode_regex": pode_regex, "registro": None}
         p = self._obter(parametro_id)
         sensivel = p.get("sensivel") == "S"
         return {
@@ -204,6 +205,7 @@ class ServicoAdminParametros(object):
             "regex_validacao": p.get("regex_validacao") or "", "sensivel": p.get("sensivel") or "N",
             "ativo": p["ativo"], "versao": _versao(p),
             "vinculos": self.vinculos(p["id"]), "pode_regex": pode_regex,
+            "registro": ui_helpers.registro(p),
         }
 
     # ------------------------------------------------------------- validacao
