@@ -258,7 +258,8 @@ class ServicoAuditoria(object):
             return vazio
         repo_filtros = filtros_repo(filtros)
         resultado = self._auditoria.listar(filtros=repo_filtros, pagina=pagina, tamanho=tamanho)
-        info = ui_helpers.paginacao_info(pagina, tamanho, resultado["total"])
+        info = ui_helpers.paginacao_info(pagina, tamanho, resultado["total"],
+                                         resultado.get("total_limitado", False), len(resultado["itens"]))
         if not resultado["itens"] and info["pagina"] != resultado["pagina"]:
             resultado = self._auditoria.listar(filtros=repo_filtros, pagina=info["pagina"], tamanho=tamanho)
         itens = []
@@ -277,7 +278,7 @@ class ServicoAuditoria(object):
                 "truncado": len(detalhe) > DETALHE_CURTO,
             })
         return dict(vazio, itens=itens, total=resultado["total"], pagina=resultado["pagina"],
-                    tamanho=resultado["tamanho"])
+                    tamanho=resultado["tamanho"], total_limitado=resultado.get("total_limitado", False))
 
     def exportar_csv(self, ctx, ip, entrada):
         """Exportacao com os filtros e o RBAC da tela: retorna (nome_arquivo, linhas, blocos).

@@ -2493,6 +2493,8 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
   * **Rodando sem PID:** tickets `RUNNING` com `process_id` nulo há mais de 2 minutos (o agente reservou e não iniciou).
   * **Configuração divergente:** agentes ativos com `config_criticos` diferente entre si ou dos valores do nó web (§8.12).
   * Os quadros só aparecem quando há algo a mostrar e ficam no topo da tela.
+  * Backend FAKE (DEV): o seed mostra os três quadros. O `agt-host02` tem `kill=10` (configuração divergente); o ticket 16 está `RUNNING` sem PID desde a carga; o ticket 4 (SH em `HOMOLOGACAO`, vencido 3 min antes da carga) só é atendido pelo `agt-host02` (o `agt-host01` mapeia `PYTHON3,BASH`) e entra na fila sem atendente quando ele passa a `EM_RISCO`, cerca de 1 min depois da carga.
+  * `config_criticos` do nó web: `sss_config.config_criticos(cfg)`, com `call` em segundos (`call_timeout_s`, arredondado para cima), igual ao texto do agente (§8.12).
 * **Monitoração externa (CR-007, R-18):** `scripts/saude.py` (F9.1) roda as consultas de saúde e devolve o código no padrão Nagios (0 OK, 1 WARN, 2 CRITICAL, 3 desconhecido), com uma linha por problema. Verifica: agente `ATIVO` sem heartbeat além de `node_offline_timeout_s`; ambiente ativo sem nenhum agente saudável; os três quadros acima; fila `PENDING` vencida acima de um limite; ausência de `PURGE` auditado em 2 dias; versão do esquema (§11.1). Os limites são argumentos com padrão, e o `IMPLANTACAO.md` traz o exemplo de agendamento no monitoramento corporativo.
 * **Painel inicial** (`default/index`), com cartões por permissão:
   * contagem por status dos tickets criados nas últimas 24 h e meus últimos 5 tickets (quem consulta tickets, no escopo da lista);

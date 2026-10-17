@@ -12,3 +12,19 @@ class RepoAgentes(object):
     def tickets_running(self, codigo):
         """Retorna lista de tickets em status RUNNING pertencentes ao agente informado."""
         raise NotImplementedError
+
+    def fila_sem_atendente(self, agora, limiares):
+        """PENDING com scheduled_at <= agora sem agente OK/ATRASADO para o par ambiente/interpretador.
+
+        Retorna grupos ordenados por ambiente e interpretador: ambiente, interpretador,
+        quantidade e mais_antigo (menor scheduled_at). O interpretador vem do snapshot,
+        lido em Python; nenhum snapshot, resposta ou log e devolvido.
+        """
+        raise NotImplementedError
+
+    def rodando_sem_pid(self, agora, minutos):
+        """RUNNING sem process_id com started_at < agora - minutos, por started_at e id.
+
+        Retorna apenas id, script_id, ambiente, agente_id e started_at, sem LOB.
+        """
+        raise NotImplementedError

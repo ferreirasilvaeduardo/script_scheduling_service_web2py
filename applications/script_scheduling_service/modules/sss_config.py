@@ -910,3 +910,15 @@ def reset_segredos_cache():
     """Descarta os segredos em cache (uso em testes)."""
     global _SEGREDOS_CACHE
     _SEGREDOS_CACHE = None
+
+
+def config_criticos(cfg):
+    """Texto canonico dos parametros que precisam coincidir nos nos (README §8.12)."""
+    campos = (("hb", "heartbeat_interval_s"), ("fence", "fence_timeout_s"),
+              ("offline", "node_offline_timeout_s"), ("call", None),
+              ("kill", "kill_grace_s"), ("misfire", "misfire_policy"),
+              ("tol", "misfire_tolerance_s"), ("horizonte", "cron_horizon_days"),
+              ("envelhecimento", "fila_envelhecimento_min"))
+    return ";".join("%s=%s" % (rotulo, call_timeout_s(cfg.oracle.call_timeout_ms) if chave is None
+                               else getattr(cfg.agent, chave))
+                    for rotulo, chave in campos)

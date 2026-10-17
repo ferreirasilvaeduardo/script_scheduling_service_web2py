@@ -83,12 +83,13 @@ def formatar_idade(segundos):
 class ServicoAgentes(object):
     """Painel de agentes com repositorios, relogio, limiares e log injetados."""
 
-    def __init__(self, agentes, catalogo, relogio, limiares, log):
+    def __init__(self, agentes, catalogo, relogio, limiares, log, config_criticos):
         self._agentes = agentes
         self._catalogo = catalogo
         self._relogio = relogio
         self._limiares = limiares
         self._log = log
+        self._config_criticos = config_criticos
 
     def _nomes_scripts(self):
         pagina = self._catalogo.scripts_listar(pagina=1, tamanho=1000)
@@ -125,7 +126,10 @@ class ServicoAgentes(object):
         nomes = self._nomes_scripts()
         resumo = collections.OrderedDict((c, 0) for c in ORDEM_SAUDE)
         agentes = []
+        divergentes = []
         for ag in self._agentes.listar():
+            if ag.get("status") == "ATIVO" and ag.get("config_criticos") != self._config_criticos:
+                divergentes.append({"codigo": ag["codigo"], "config_criticos": ag.get("config_criticos")})
             hb = ag.get("heartbeat_at")
             idade = None if hb is None else max(0, int((agora - hb).total_seconds()))
             codigo_saude = saude(ag, agora, self._limiares)
@@ -148,7 +152,10 @@ class ServicoAgentes(object):
                 "running": len(tickets),
                 "tickets": tickets,
             })
-        return {"agentes": agentes, "resumo": resumo, "agora": agora}
+        return {"agentes": agentes, "resumo": resumo, "agora": agora,
+                "fila_sem_atendente": self._agentes.fila_sem_atendente(agora, self._limiares),
+                "rodando_sem_pid": self._agentes.rodando_sem_pid(agora, 2),
+                "config_divergente": divergentes, "config_web": self._config_criticos}
 
 
 _padrao = None
@@ -161,6 +168,7 @@ def _servico():
         if _padrao is None:
             from gluon import current
             import sss_logging
+            import sss_config
             fabrica = current.repo_factory
             cfg = current.sss_cfg
             _padrao = ServicoAgentes(
@@ -170,6 +178,7 @@ def _servico():
                 limiares=Limiares(cfg.agent.heartbeat_interval_s, cfg.agent.fence_timeout_s,
                                   cfg.agent.node_offline_timeout_s),
                 log=sss_logging.obter_logger("sss_web", cfg),
+                config_criticos=sss_config.config_criticos(cfg),
             )
         return _padrao
 

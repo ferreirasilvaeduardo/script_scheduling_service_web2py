@@ -110,6 +110,12 @@ class TestConfig(unittest.TestCase):
         os.chmod(caminho, modo)
         return caminho, tokens
 
+    def test_config_criticos_canonica_com_timeout_oracle(self):
+        cfg = sss_config.carregar(self.example_ini)
+        self.assertEqual(sss_config.config_criticos(cfg),
+                         "hb=10;fence=90;offline=180;call=30;kill=5;"
+                         "misfire=RUN_ONCE;tol=300;horizonte=1461;envelhecimento=60")
+
     def test_config_valido(self):
         """Verifica carga do config.ini.example valido e integridade dos tipos."""
         cfg = sss_config.carregar(self.example_ini)

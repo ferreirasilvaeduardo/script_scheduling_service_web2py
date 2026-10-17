@@ -697,7 +697,7 @@ class ServicoAgendamentos(object):
         pausa_aviso = None
         if atual and atual.get("ativo") == "N":
             dt_pausa = formatar_data(atual.get("updated_at"))
-            ator_pausa = ui_helpers.nome_ator(atual.get("updated_by"))
+            ator_pausa = ui_helpers.nome_ator(ui_helpers.registro(atual, ctx)["updated_by"])
             motivo_txt = MOTIVOS_PAUSA.get(atual.get("pausa_motivo"), atual.get("pausa_motivo")) or u"Desconhecido"
             pausa_aviso = (
                 u"Pausada em %s por %s: %s. "
@@ -720,7 +720,7 @@ class ServicoAgendamentos(object):
             "situacao": situacao(atual) if atual else None,
             "responsavel": self._login(atual["usuario_id"]) if atual else None,
             "outro_responsavel": bool(atual) and atual["usuario_id"] != ctx.get("usuario_id"),
-            "registro": ui_helpers.registro(atual) if atual else None,
+            "registro": ui_helpers.registro(atual, ctx) if atual else None,
             "pausa_aviso": pausa_aviso,
         }
         for campo in ("nome", "tipo_recorrencia", "expressao_cron", "hora_execucao", "dia_mes",

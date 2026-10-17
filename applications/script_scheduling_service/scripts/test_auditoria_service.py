@@ -5,6 +5,7 @@ import _testenv  # noqa: F401
 import csv
 import datetime
 import io
+import json
 import logging
 import os
 import unittest
@@ -25,6 +26,8 @@ IP = "10.7.8.9"
 SENHA_DEV = "senha-dev-de-teste-123"
 SEGREDO = "tok-auditoria-secreto-91"
 LIMIARES = Limiares(10, 90, 180)
+CONFIG_CRITICOS = ("hb=10;fence=90;offline=180;call=30;kill=5;"
+                   "misfire=RUN_ONCE;tol=300;horizonte=1461;envelhecimento=60")
 HOJE = datetime.date(2026, 10, 15)
 
 
@@ -70,7 +73,7 @@ class _Base(unittest.TestCase):
                       "perm_versao": self.rbac.perfis_obter(perfil_id)["perm_versao"]}
             self.ctx[login] = auth.revalidar(sessao)
         self.svc = ServicoAuditoria(self.auditoria, lambda: self.agora, self.log)
-        self.svc_agentes = ServicoAgentes(self.agentes, self.catalogo, lambda: self.agora, LIMIARES, self.log)
+        self.svc_agentes = ServicoAgentes(self.agentes, self.catalogo, lambda: self.agora, LIMIARES, self.log, CONFIG_CRITICOS)
 
     def _inserir(self, created_at, ator="admin", acao="CAD_ALTERAR", entidade="tbsss_scripts",
                  entidade_id=1, detalhe="x", ip="127.0.0.1"):
@@ -363,6 +366,78 @@ class TestPainelAgentes(_Base):
         self.assertEqual(sum(painel["resumo"].values()), 2)
         segundo = [a for a in painel["agentes"] if a["codigo"] == "agt-host02"][0]
         self.assertEqual((segundo["idade_s"], segundo["ha"]), (30, u"há 30 s"))
+
+    def _fila_diagnostico(self):
+        self.store.tickets.clear()
+        self.store.agentes_hb_sim.clear()
+        for tid, segundos, status in ((1, -300, "PENDING"), (2, 0, "PENDING"),
+                                      (3, 1, "PENDING"), (4, -600, "SUCCESS")):
+            self.store.tickets[tid] = {"id": tid, "status": status, "ambiente": "PRODUCAO",
+                                      "scheduled_at": self.agora + datetime.timedelta(seconds=segundos),
+                                      "parametros_enviados": json.dumps({"interpretador": "BASH"}),
+                                      "log_output": object()}
+
+    def test_fila_exige_um_agente_para_o_par_e_ignora_futuro(self):
+        self._fila_diagnostico()
+        self.store.agentes[1].update(ambientes="PRODUCAO", interpretadores="PYTHON3")
+        self.store.agentes[2].update(ambientes="HOMOLOGACAO", interpretadores="BASH")
+        resultado = self.agentes.fila_sem_atendente(self.agora, LIMIARES)
+        self.assertEqual(resultado, [{"ambiente": "PRODUCAO", "interpretador": "BASH", "quantidade": 2,
+                                     "mais_antigo": self.agora - datetime.timedelta(seconds=300)}])
+        self.store.agentes[2]["ambientes"] = "PRODUCAO"
+        self.assertEqual(self.agentes.fila_sem_atendente(self.agora, LIMIARES), [])
+
+    def test_fila_limiares_e_agente_parado(self):
+        self._fila_diagnostico()
+        self.store.agentes[2]["status"] = "PARADO"
+        for idade, status, quantidade in ((19, "ATIVO", 0), (20, "ATIVO", 0), (90, "ATIVO", 0),
+                                          (91, "ATIVO", 1), (181, "ATIVO", 1), (0, "PARADO", 1)):
+            self.store.agentes[1].update(status=status,
+                                        heartbeat_at=self.agora - datetime.timedelta(seconds=idade))
+            self.assertEqual(len(self.agentes.fila_sem_atendente(self.agora, LIMIARES)), quantidade)
+        self.store.agentes[1].update(status="ATIVO", heartbeat_at=None)
+        self.assertEqual(len(self.agentes.fila_sem_atendente(self.agora, LIMIARES)), 1)
+
+    def test_sem_pid_usa_reserva_e_limite_estrito_sem_lob(self):
+        self.store.tickets.clear()
+        for tid, segundos, pid, status in ((1, 121, None, "RUNNING"), (2, 120, None, "RUNNING"),
+                                          (3, 119, None, "RUNNING"), (4, 600, 42, "RUNNING"),
+                                          (5, 600, None, "PENDING"), (6, 180, None, "RUNNING")):
+            self.store.tickets[tid] = {"id": tid, "script_id": 1, "ambiente": "PRODUCAO", "status": status,
+                                      "process_id": pid, "agente_id": "agt-host01",
+                                      "started_at": self.agora - datetime.timedelta(seconds=segundos),
+                                      "created_at": self.agora - datetime.timedelta(days=5),
+                                      "log_output": object(), "parametros_enviados": object()}
+        antes = dict(self.store.auditoria)
+        itens = self.agentes.rodando_sem_pid(self.agora, 2)
+        self.assertEqual([t["id"] for t in itens], [6, 1])
+        self.assertEqual(set(itens[0]), {"id", "script_id", "ambiente", "agente_id", "started_at"})
+        self.assertEqual(self.store.auditoria, antes)
+
+    def test_diagnosticos_do_seed(self):
+        """Dados de demonstracao: os tres quadros aparecem (UI_FREEZE, CR-007 R-18)."""
+        painel = self.svc_agentes.painel(self.ctx["admin"])
+        self.assertEqual([a["codigo"] for a in painel["config_divergente"]], ["agt-host02"])
+        self.assertIn("kill=10", painel["config_divergente"][0]["config_criticos"])
+        self.assertEqual([t["id"] for t in painel["rodando_sem_pid"]], [16])
+        self.assertEqual(painel["fila_sem_atendente"], [])  # agt-host02 ainda ATRASADO
+        self.agora = self.base + datetime.timedelta(seconds=61)  # agt-host02 EM_RISCO
+        fila = self.svc_agentes.painel(self.ctx["admin"])["fila_sem_atendente"]
+        self.assertEqual([(g["ambiente"], g["interpretador"], g["quantidade"]) for g in fila],
+                         [("HOMOLOGACAO", "SH", 1)])
+        self.assertEqual(fila[0]["mais_antigo"], self.store.tickets[4]["scheduled_at"])
+
+    def test_diagnosticos_config_divergente_e_parado(self):
+        self.store.agentes[2]["config_criticos"] = CONFIG_CRITICOS
+        self.assertEqual(self.svc_agentes.painel(self.ctx["admin"])["config_divergente"], [])
+        self.store.agentes[2]["config_criticos"] = CONFIG_CRITICOS.replace("hb=10", "hb=11")
+        painel = self.svc_agentes.painel(self.ctx["admin"])
+        self.assertEqual([a["codigo"] for a in painel["config_divergente"]], ["agt-host02"])
+        self.assertEqual(painel["config_web"], CONFIG_CRITICOS)
+        self.store.agentes[1]["config_criticos"] = self.store.agentes[2]["config_criticos"]
+        self.assertEqual(len(self.svc_agentes.painel(self.ctx["admin"])["config_divergente"]), 2)
+        self.store.agentes[2]["status"] = "PARADO"
+        self.assertEqual(len(self.svc_agentes.painel(self.ctx["admin"])["config_divergente"]), 1)
 
     def test_tickets_do_agente(self):
         itens = self.svc_agentes.tickets_do_agente(self.ctx["admin"], "agt-host01")

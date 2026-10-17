@@ -17,7 +17,7 @@ _SEM_SENHA_DEV = ("inativo", "bloqueado")
 # Marcador final do log truncado no banco (README §8.10).
 MARCADOR_TRUNCADO = "[SSS] log truncado no banco; arquivo integral no agente\n"
 
-# Segundos por etapa do log simulado dos RUNNING: na carga ja decorreram 5 min desde started_at;
+# Segundos por etapa do log simulado dos RUNNING (o 16 nao tem log, ver _TICKET_SEM_PID): na carga ja decorreram 5 min desde started_at;
 # o ticket 13 termina ~100 s depois e os demais entre 15 e 25 min depois.
 _PASSO_LOG_S = {11: 24, 12: 30, 13: 8, 14: 36, 15: 30, 16: 36}
 _LINHAS_LOG_VOLUMOSO = 27000
@@ -25,6 +25,11 @@ _LINHAS_LOG_VOLUMOSO = 27000
 # comeca ATRASADO, fica EM_RISCO ~1 min depois e OFFLINE ~2,5 min depois (README §13).
 _HB_CONGELADO_S = 30
 _TICKET_LOG_VOLUMOSO = 17
+# Quadros de atencao da tela de agentes (CR-007, R-18): o ticket 4 (SH em HOMOLOGACAO) ja venceu e
+# so o agt-host02 atende o par, entao aparece em "Fila sem atendente" quando ele sai de ATRASADO;
+# o RUNNING 16 foi reservado sem PID ("Rodando sem PID", sem log simulado).
+_TICKET_FILA_SEM_ATENDENTE = 4
+_TICKET_SEM_PID = 16
 
 
 def _log_volumoso(inicio):
@@ -327,10 +332,15 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 # 10. Agentes (2)
                                 # ---------------------------------------------------------
                                 agentes = [
-                                    {"id": 1, "codigo": "agt-host01", "hostname": "worker01.internal", "pid_daemon": 1001, "versao": "1.0.0", "ambientes": "PRODUCAO,HOMOLOGACAO", "plataforma": "LINUX", "interpretadores": "PYTHON3,BASH,SH", "status": "ATIVO", "iniciado_em": base_dt - datetime.timedelta(days=3), "heartbeat_at": base_dt, "created_at": base_dt - datetime.timedelta(days=3)},
+                                    {"id": 1, "codigo": "agt-host01", "hostname": "worker01.internal", "pid_daemon": 1001, "versao": "1.0.0", "ambientes": "PRODUCAO,HOMOLOGACAO", "plataforma": "LINUX", "interpretadores": "PYTHON3,BASH", "status": "ATIVO", "iniciado_em": base_dt - datetime.timedelta(days=3), "heartbeat_at": base_dt, "created_at": base_dt - datetime.timedelta(days=3)},
                                     {"id": 2, "codigo": "agt-host02", "hostname": "worker02.internal", "pid_daemon": 1002, "versao": "1.0.0", "ambientes": "HOMOLOGACAO,DESENV", "plataforma": "UNIX", "interpretadores": "PYTHON3,SH", "status": "ATIVO", "iniciado_em": base_dt - datetime.timedelta(days=2), "heartbeat_at": base_dt - datetime.timedelta(seconds=_HB_CONGELADO_S), "created_at": base_dt - datetime.timedelta(days=2)},
                                 ]
+                                # Quadros de atencao do painel (CR-007, R-18): o agt-host02 ficou com a configuracao
+                                # antiga (kill=10) e e o unico que atende SH em HOMOLOGACAO.
                                 for ag in agentes:
+                                    ag["config_criticos"] = ("hb=10;fence=90;offline=180;call=30;kill=%d;"
+                                                              "misfire=RUN_ONCE;tol=300;horizonte=1461;envelhecimento=60"
+                                                              % (10 if ag["id"] == 2 else 5))
                                     store.agentes[ag["id"]] = ag
                                 # agt-host01 renova o heartbeat; agt-host02 envelhece com o relogio (F6.1).
                                 store.agentes_hb_sim.add("agt-host01")
@@ -402,22 +412,25 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     if tid <= 10:
                                         status = "PENDING"
                                         sched = base_dt + datetime.timedelta(minutes=tid * 5)
+                                        if tid == _TICKET_FILA_SEM_ATENDENTE:
+                                            sched = base_dt - datetime.timedelta(minutes=3)
                                     elif tid <= 16:
                                         status = "RUNNING"
                                         sched = base_dt - datetime.timedelta(minutes=10)
                                         started = base_dt - datetime.timedelta(minutes=5)
                                         heartbeat = base_dt - datetime.timedelta(seconds=10)
                                         agente_id = "agt-host01" if tid % 2 == 1 else "agt-host02"
-                                        pid_proc = 2000 + tid
-                                        pstart = 1700000000 + tid
-                                        log_out = "[%s] Script %s iniciado em %s.\nEtapa 1 concluida com sucesso.\n" % (
-                                            str(started), scr["nome"], amb
-                                        )
-                                        store.log_sim[tid] = {
-                                            "passo_s": _PASSO_LOG_S[tid],
-                                            "emitidos": 0,
-                                            "sensiveis": list(sensiveis_por_script.get(script_id, [])),
-                                        }
+                                        if tid != _TICKET_SEM_PID:
+                                            pid_proc = 2000 + tid
+                                            pstart = 1700000000 + tid
+                                            log_out = "[%s] Script %s iniciado em %s.\nEtapa 1 concluida com sucesso.\n" % (
+                                                str(started), scr["nome"], amb
+                                            )
+                                            store.log_sim[tid] = {
+                                                "passo_s": _PASSO_LOG_S[tid],
+                                                "emitidos": 0,
+                                                "sensiveis": list(sensiveis_por_script.get(script_id, [])),
+                                            }
                                     elif tid <= 28:
                                         status = "SUCCESS"
                                         smotivo = "EXIT_OK"

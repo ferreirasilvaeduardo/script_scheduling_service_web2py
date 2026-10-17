@@ -212,6 +212,12 @@ def barras_empilhadas(dias, largura=1000, altura=240, margem_esq=28, margem_inf=
 
 # Mensagens-padrao em duas partes: o que aconteceu + o que fazer agora (README §2.4.2, texto exato).
 MENSAGENS = {
+    "fila_sem_atendente": (u"Há pedidos vencidos sem servidor disponível para o ambiente e o interpretador.",
+                           u"Confira os servidores e quais ambientes e interpretadores eles atendem."),
+    "rodando_sem_pid": (u"Há pedidos reservados há mais de dois minutos sem processo registrado.",
+                        u"Confira o servidor responsável e os logs antes de pedir outra execução."),
+    "config_divergente": (u"Há servidores ativos com configuração diferente da configuração deste nó web.",
+                          u"Peça ao administrador para conferir e igualar as configurações críticas dos nós."),
     "sem_permissao": (u"Você não tem permissão para abrir esta página.",
                       u"Veja em O que eu posso fazer o que já está liberado para você, ou peça acesso ao administrador."),
     "nao_encontrado": (u"Não encontramos o que você procurou.", u"Confira o número ou volte para a lista."),
@@ -259,12 +265,20 @@ def formatar_data(dt):
 # Colunas de registro (CR-006, README §10) e nomes simples dos atores do sistema (README §2.4.2).
 COLUNAS_REGISTRO = ("created_at", "created_by", "updated_at", "updated_by")
 _PREFIXO_SISTEMA = "SYSTEM:"
-_ATORES_SISTEMA = {"init_db": u"Sistema (instalação)", "seed": u"Sistema (dados de demonstração)"}
+_ATORES_SISTEMA = {"init_db": u"Sistema (instalação)", "seed": u"Sistema (dados de demonstração)",
+                   "purge": u"Sistema (limpeza)"}
 
 
-def registro(reg):
-    """As quatro colunas de registro de um registro lido (valores crus, para o quadro Registro)."""
-    return dict((c, (reg or {}).get(c)) for c in COLUNAS_REGISTRO)
+def registro(reg, ctx):
+    """Colunas de registro com os atores permitidos ao contexto da sessao."""
+    dados = dict((c, (reg or {}).get(c)) for c in COLUNAS_REGISTRO)
+    ctx = ctx or {}
+    if ctx.get("is_admin") is not True and "VER_AUDITORIA" not in (ctx.get("funcionalidades") or ()):
+        for campo in ("created_by", "updated_by"):
+            ator = dados[campo]
+            if ator and ator != "SYSTEM" and not ator.startswith(_PREFIXO_SISTEMA):
+                dados[campo] = u"você" if ator == ctx.get("login") else u"outra pessoa"
+    return dados
 
 
 def nome_ator(ator):
@@ -337,29 +351,36 @@ def sanitizar_tamanho(valor, permitidos=(20, 50, 100)):
     return n if n in permitidos else permitidos[0]
 
 
-def paginacao_info(pagina, tamanho, total):
-    """Dados de navegacao com a pagina limitada a [1, total_paginas].
+def paginacao_info(pagina, tamanho, total, total_limitado=False, quantidade=None):
+    """Navegacao por total exato ou por quantidade da pagina quando o total foi limitado.
 
     Com total 0 ha uma unica pagina, sem registros (faixa 0-0).
     """
     tamanho = _inteiro_positivo(tamanho) or 20
     total = total if isinstance(total, int) and not isinstance(total, bool) and total > 0 else 0
     total_paginas = max(1, (total + tamanho - 1) // tamanho)
-    pagina = min(max(sanitizar_pagina(pagina), 1), total_paginas)
+    pagina = max(sanitizar_pagina(pagina), 1)
+    if not total_limitado:
+        pagina = min(pagina, total_paginas)
     if total:
         primeiro = (pagina - 1) * tamanho + 1
-        ultimo = min(pagina * tamanho, total)
+        ultimo = (primeiro + quantidade - 1 if total_limitado and quantidade is not None
+                  else min(pagina * tamanho, total))
+        if total_limitado and quantidade == 0:
+            primeiro = ultimo = 0
     else:
         primeiro = ultimo = 0
     return {
         "pagina": pagina,
         "tamanho": tamanho,
         "total": total,
-        "total_paginas": total_paginas,
+        "total_paginas": None if total_limitado else total_paginas,
+        "total_limitado": bool(total_limitado),
         "tem_anterior": pagina > 1,
-        "tem_proxima": pagina < total_paginas,
+        "tem_proxima": (quantidade == tamanho if total_limitado and quantidade is not None
+                        else pagina < total_paginas),
         "anterior": max(pagina - 1, 1),
-        "proxima": min(pagina + 1, total_paginas),
+        "proxima": pagina + 1 if total_limitado else min(pagina + 1, total_paginas),
         "primeiro_registro": primeiro,
         "ultimo_registro": ultimo,
     }

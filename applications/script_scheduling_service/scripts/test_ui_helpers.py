@@ -93,16 +93,30 @@ class TestQuadroRegistro(unittest.TestCase):
         self.assertEqual(ui_helpers.nome_ator("SYSTEM"), u"Sistema")
         self.assertEqual(ui_helpers.nome_ator(None), "-")
 
+    def test_registro_mascara_sem_mudar_origem(self):
+        criado = datetime.datetime(2026, 10, 17, 9, 5)
+        bruto = {"created_at": criado, "created_by": "editor.privado",
+                 "updated_at": criado, "updated_by": "op.prod"}
+        for ctx, esperado in (({"login": "op.prod"}, (u"outra pessoa", u"você")),
+                              ({"is_admin": True}, ("editor.privado", "op.prod")),
+                              ({"funcionalidades": {"VER_AUDITORIA"}}, ("editor.privado", "op.prod")),
+                              (None, (u"outra pessoa", u"outra pessoa"))):
+            reg = ui_helpers.registro(bruto, ctx)
+            self.assertEqual((reg["created_by"], reg["updated_by"]), esperado)
+            self.assertEqual(reg["created_at"], criado)
+        self.assertEqual(bruto["created_by"], "editor.privado")
+        self.assertEqual(ui_helpers.nome_ator("SYSTEM:purge"), u"Sistema (limpeza)")
+
     def test_registro_e_exibicao(self):
         criado = datetime.datetime(2026, 10, 17, 9, 5, 0)
-        reg = ui_helpers.registro({"id": 1, "created_at": criado, "created_by": "SYSTEM:seed", "nome": "x"})
+        reg = ui_helpers.registro({"id": 1, "created_at": criado, "created_by": "SYSTEM:seed", "nome": "x"}, {})
         self.assertEqual(reg, {"created_at": criado, "created_by": "SYSTEM:seed", "updated_at": None,
                                "updated_by": None})
         self.assertEqual(ui_helpers.registro_exibicao(reg), {
             "criado": u"17/10/2026 09:05:00 por Sistema (dados de demonstração)", "alterado": u"Nunca alterado"})
         reg.update(updated_at=criado + datetime.timedelta(hours=1), updated_by="admin")
         self.assertEqual(ui_helpers.registro_exibicao(reg)["alterado"], u"17/10/2026 10:05:00 por admin")
-        self.assertEqual(ui_helpers.registro(None), dict.fromkeys(ui_helpers.COLUNAS_REGISTRO))
+        self.assertEqual(ui_helpers.registro(None, {}), dict.fromkeys(ui_helpers.COLUNAS_REGISTRO))
 
 
 class TestFormatarData(unittest.TestCase):
@@ -192,6 +206,23 @@ class TestPaginacaoInfo(unittest.TestCase):
         return (info["pagina"], info["total_paginas"], info["tem_anterior"], info["tem_proxima"],
                 info["anterior"], info["proxima"], info["primeiro_registro"], info["ultimo_registro"])
 
+    def test_total_limitado_nao_corta_navegacao(self):
+        info = ui_helpers.paginacao_info(502, 20, 10001, True, 20)
+        self.assertTrue(info["total_limitado"])
+        self.assertIsNone(info["total_paginas"])
+        self.assertEqual(info["pagina"], 502)
+        self.assertEqual(info["proxima"], 503)
+        self.assertTrue(info["tem_proxima"])
+        self.assertEqual((info["primeiro_registro"], info["ultimo_registro"]), (10021, 10040))
+        fim = ui_helpers.paginacao_info(503, 20, 10001, True, 7)
+        self.assertFalse(fim["tem_proxima"])
+        self.assertEqual(fim["ultimo_registro"], 10047)
+        vazio = ui_helpers.paginacao_info(504, 20, 10001, True, 0)
+        self.assertFalse(vazio["tem_proxima"])
+        self.assertTrue(vazio["tem_anterior"])
+        self.assertEqual((vazio["primeiro_registro"], vazio["ultimo_registro"]), (0, 0))
+        self.assertFalse(ui_helpers.paginacao_info(1, 20, 10000)["total_limitado"])
+
     def test_total_zero(self):
         info = ui_helpers.paginacao_info(1, 20, 0)
         self.assertEqual(self._resumo(info), (1, 1, False, False, 1, 1, 0, 0))
@@ -232,7 +263,7 @@ class TestPaginacaoInfo(unittest.TestCase):
 
     def test_chaves(self):
         self.assertEqual(sorted(ui_helpers.paginacao_info(1, 20, 5)), sorted([
-            "pagina", "tamanho", "total", "total_paginas", "tem_anterior", "tem_proxima",
+            "pagina", "tamanho", "total", "total_paginas", "total_limitado", "tem_anterior", "tem_proxima",
             "anterior", "proxima", "primeiro_registro", "ultimo_registro"]))
 
 

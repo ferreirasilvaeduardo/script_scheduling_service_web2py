@@ -96,9 +96,9 @@ Em 2026-10-17, a retomada conferiu o histórico e as alterações locais:
 | P0 e R1 | Commit `de8db2a` |
 | R2 | Commit `76f1961` |
 | R3 | Commit `c69c988` |
-| R4 | Implementação e validação concluídas nesta retomada; relatório em `RELATORIO-CR-007-R4.md` |
-| R5 | Próximo passo: mascaramento do ator, diagnósticos dos agentes e apresentação do total limitado |
-| UF | Pendente: fechamento integrado e manual v2.4 |
+| R4 | Commit `0497e76`; relatório em `RELATORIO-CR-007-R4.md` |
+| R5 | Concluído: ator mascarado (D6), quadros de diagnóstico dos agentes, "mais de 10.000"; relatório em `RELATORIO-CR-007-R5.md` |
+| UF | Próximo passo: fechamento integrado e manual v2.4 |
 | FINAL | Pendente: nova auditoria nas quatro frentes sobre o estado final |
 
 R4: 782 testes em cada Python 3.6.0, 3.6.8 e 3.13.2, com sucesso e 23 testes
@@ -106,3 +106,9 @@ Oracle ignorados por ausência de `SSS_TEST_DSN`. Chromium: quatro telas em
 360, 390, 768, 1366 e 1920 px, sem rolagem horizontal ou erro JavaScript.
 Oracle real permanece não testado; F7 e F8 continuam fora deste passo,
 conforme a dependência e o plano acima. O CR completo ainda não está encerrado.
+
+R5: 794 testes em cada Python 3.6.0, 3.6.8 e 3.13.2, com sucesso e 23 ignorados
+(Oracle). Chromium: agentes (na carga e 65 s depois) e detalhe do ticket com
+`op.prod` e `consulta`, em 360, 412, 768, 1024 e 1440 px, sem rolagem horizontal,
+erro JavaScript ou violação de CSP. Correção na revisão: `config_criticos` do nó
+web com `call` em segundos (README §8.12); o seed passou a exibir os três quadros.

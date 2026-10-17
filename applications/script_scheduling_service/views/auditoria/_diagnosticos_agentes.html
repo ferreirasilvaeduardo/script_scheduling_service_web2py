@@ -1,0 +1,46 @@
+{{if painel['fila_sem_atendente']:}}
+<section class="sss-card" aria-labelledby="titulo-fila-sem-atendente">
+  <h3 class="sss-card-titulo" id="titulo-fila-sem-atendente">Fila sem atendente</h3>
+  <div class="sss-card-corpo">
+    <p>{{=ui_helpers.mensagem('fila_sem_atendente')}}</p>
+    <div class="table-responsive">
+      <table class="table table-sm sss-tabela mb-0">
+        <caption class="visually-hidden">Pedidos vencidos sem servidor disponível</caption>
+        <thead><tr><th scope="col">Ambiente</th><th scope="col">Interpretador</th><th scope="col">Quantidade</th><th scope="col">Horário mais antigo</th></tr></thead>
+        <tbody>
+          {{for _fila in painel['fila_sem_atendente']:}}
+          <tr><td>{{=_fila['ambiente']}}</td><td>{{=_fila['interpretador']}}</td><td>{{=_fila['quantidade']}}</td><td>{{=ui_helpers.formatar_data(_fila['mais_antigo'])}}</td></tr>
+          {{pass}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{{pass}}
+{{if painel['rodando_sem_pid']:}}
+<section class="sss-card" aria-labelledby="titulo-rodando-sem-pid">
+  <h3 class="sss-card-titulo" id="titulo-rodando-sem-pid">Rodando sem PID</h3>
+  <div class="sss-card-corpo">
+    <p>{{=ui_helpers.mensagem('rodando_sem_pid')}}</p>
+    <ul>
+      {{for _sem_pid in painel['rodando_sem_pid']:}}
+      <li><a href="{{=URL(c='tickets', f='detalhe', args=[_sem_pid['id']], extension=False)}}">Pedido #{{=_sem_pid['id']}}</a> · {{=_sem_pid['ambiente']}} · servidor {{=_sem_pid['agente_id'] or '-'}} · reservado em {{=ui_helpers.formatar_data(_sem_pid['started_at'])}}</li>
+      {{pass}}
+    </ul>
+  </div>
+</section>
+{{pass}}
+{{if painel['config_divergente']:}}
+<section class="sss-card" aria-labelledby="titulo-config-divergente">
+  <h3 class="sss-card-titulo" id="titulo-config-divergente">Configuração divergente</h3>
+  <div class="sss-card-corpo">
+    <p>{{=ui_helpers.mensagem('config_divergente')}}</p>
+    <p>Nó web: <code class="text-break">{{=painel['config_web']}}</code></p>
+    <ul>
+      {{for _divergente in painel['config_divergente']:}}
+      <li>{{=_divergente['codigo']}}: <code class="text-break">{{=_divergente['config_criticos'] or 'Configuração não registrada'}}</code></li>
+      {{pass}}
+    </ul>
+  </div>
+</section>
+{{pass}}

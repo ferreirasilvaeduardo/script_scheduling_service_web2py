@@ -149,7 +149,7 @@ class ServicoAdminPerfis(object):
             "usuarios_ativos": total,
             "usuarios_afetados": logins,
             "proprio": ctx.get("perfil_id") == perfil["id"],
-            "registro": ui_helpers.registro(perfil),
+            "registro": ui_helpers.registro(perfil, ctx),
         }
 
     def _validar(self, dados, erros):

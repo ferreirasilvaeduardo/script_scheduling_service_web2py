@@ -6,6 +6,8 @@ import ui_helpers
 _lt_itens = resultado['itens']
 _lt_ncol = 10
 total = resultado['total']
+total_limitado = resultado.get('total_limitado', False)
+quantidade_pagina = len(resultado['itens'])
 url_base = ('tickets', 'lista')
 }}<div data-sss-fragmento="tickets">
   <div class="table-responsive">

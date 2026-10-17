@@ -13,6 +13,8 @@ filtros = {'id': 'filtro-agendamentos', 'url_base': ('agendamentos', 'lista'), '
 _colunas = ('Nome', 'Script', 'Ambiente', u'Recorrência', u'Próxima execução', u'Última execução', u'Responsável', u'Situação', u'Ações')
 pagina = resultado['pagina']
 total = resultado['total']
+total_limitado = resultado.get('total_limitado', False)
+quantidade_pagina = len(resultado['itens'])
 url_base = ('agendamentos', 'lista')
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">

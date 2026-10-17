@@ -65,8 +65,30 @@ class TestRegistroNosServicos(unittest.TestCase):
     def test_formularios_de_inclusao_sem_registro_e_de_edicao_com_as_quatro_colunas(self):
         for nome, (svc, rid, ler) in self.servicos.items():
             self.assertIsNone(svc.formulario(self.ctx)["registro"], nome)
-            self.assertEqual(svc.formulario(self.ctx, str(rid))["registro"], ui_helpers.registro(ler()), nome)
+            self.assertEqual(svc.formulario(self.ctx, str(rid))["registro"], ui_helpers.registro(ler(), self.ctx), nome)
             self.assertEqual(svc.formulario(self.ctx, str(rid))["registro"]["created_by"], "SYSTEM:seed", nome)
+
+    def test_registro_sem_auditoria_nos_servicos_e_aviso_de_pausa(self):
+        ctx = dict(self.ctx, is_admin=False, login="op.prod", usuario_id=2,
+                   funcionalidades=frozenset(f for f in self.ctx["funcionalidades"] if f != "VER_AUDITORIA"),
+                   ambientes=frozenset(("PRODUCAO", "HOMOLOGACAO")), scripts=frozenset((1, 2, 3, 4, 5, 6)))
+        store = repo_factory._fake_store
+        for tabela, rid in (("ambientes", 1), ("perfis", 2), ("usuarios", 2), ("parametros", 1),
+                            ("scripts", 1), ("agendamentos", 5), ("tickets", 17)):
+            registro = getattr(store, tabela)[rid]
+            registro["created_by"] = "editor.privado"
+            registro["updated_by"] = "op.prod"
+            registro["updated_at"] = store.agora()
+        for nome, (svc, rid, ler) in self.servicos.items():
+            registro = svc.formulario(ctx, str(rid))["registro"]
+            self.assertEqual((registro["created_by"], registro["updated_by"]),
+                             (u"outra pessoa", u"você"), nome)
+        regra = self.agendamentos.formulario(ctx, "5")["regra"]
+        self.assertEqual(regra["registro"]["created_by"], u"outra pessoa")
+        self.assertIn(u"por você", regra["pausa_aviso"])
+        detalhe = self.ticket.detalhe(ctx, 17)
+        self.assertEqual(detalhe["registro"]["created_by"], u"outra pessoa")
+        self.assertNotIn("editor.privado", str(detalhe["registro"]))
 
     def test_edicao_pela_tela_grava_o_editor(self):
         svc, rid, ler = self.servicos["ambientes"]
@@ -80,12 +102,12 @@ class TestRegistroNosServicos(unittest.TestCase):
 
     def test_agendamento_e_ticket(self):
         regra = self.agendamentos.formulario(self.ctx, "5")["regra"]
-        self.assertEqual(regra["registro"], ui_helpers.registro(self.r("agendamentos").obter(5)))
+        self.assertEqual(regra["registro"], ui_helpers.registro(self.r("agendamentos").obter(5), self.ctx))
         self.assertEqual(regra["registro"]["created_by"], "SYSTEM:seed")
         self.assertEqual(regra["registro"]["updated_by"], "admin")
         detalhe = self.ticket.detalhe(self.ctx, 17)
         bruto = self.r("tickets").obter(17)
-        self.assertEqual(detalhe["registro"], ui_helpers.registro(bruto))
+        self.assertEqual(detalhe["registro"], ui_helpers.registro(bruto, self.ctx))
         self.assertTrue(detalhe["registro"]["updated_by"].startswith("SYSTEM:agt-"))
 
 

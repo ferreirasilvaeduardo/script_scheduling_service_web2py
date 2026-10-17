@@ -138,7 +138,7 @@ class ServicoAdminUsuarios(object):
         u = self._obter(usuario_id)
         dados = publico(u)
         dados.update(versao=admin_crud.versao(u, CAMPOS_EDITAVEIS), bloqueado=self.bloqueado(u),
-                     proprio=u["id"] == ctx.get("usuario_id"), registro=ui_helpers.registro(u))
+                     proprio=u["id"] == ctx.get("usuario_id"), registro=ui_helpers.registro(u, ctx))
         return dados
 
     # ----------------------------------------------------------------- escrita

@@ -129,7 +129,7 @@ class ServicoAdminAmbientes(object):
             "versao": admin_crud.versao(amb, CAMPOS_EDITAVEIS),
             "agendamentos_ativos": self.agendamentos_ativos(amb["nome"]),
             "scripts_homologados": self.scripts_homologados(amb["nome"]),
-            "registro": ui_helpers.registro(amb),
+            "registro": ui_helpers.registro(amb, ctx),
         }
 
     def _validar(self, dados, erros):

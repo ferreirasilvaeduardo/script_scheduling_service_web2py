@@ -25,6 +25,8 @@ tabela = {'legenda': 'Ambientes cadastrados', 'erro': erro, 'linhas': _linhas, '
 ]}
 pagina = resultado['pagina']
 total = resultado['total']
+total_limitado = resultado.get('total_limitado', False)
+quantidade_pagina = len(resultado['itens'])
 url_base = ('admin_ambientes', 'lista')
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">

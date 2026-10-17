@@ -216,7 +216,7 @@ class ServicoAdminScripts(object):
         dados["timeout_seg"] = "" if s.get("timeout_seg") is None else s["timeout_seg"]
         dados.update(comum, id=s["id"], versao=admin_crud.versao(s, CAMPOS_EDITAVEIS),
                      agendamentos_ativos=self._agendamentos_ativos(script_id=s["id"]),
-                     registro=ui_helpers.registro(s),
+                     registro=ui_helpers.registro(s, ctx),
                      sha256_homologado=s.get("sha256_homologado"))
         return dados
 

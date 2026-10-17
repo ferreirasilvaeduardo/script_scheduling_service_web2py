@@ -19,6 +19,8 @@ _rotulos_campo = dict((_c['nome'], _c['rotulo']) for _c in filtros['campos'])
 _colunas = ('Data/hora', 'Ator', u'Ação', 'Entidade', 'ID', 'IP de origem', 'Detalhe')
 pagina = resultado['pagina']
 total = resultado['total']
+total_limitado = resultado.get('total_limitado', False)
+quantidade_pagina = len(resultado['itens'])
 url_base = ('auditoria', 'lista')
 aba_ativa = 'lista'
 }}

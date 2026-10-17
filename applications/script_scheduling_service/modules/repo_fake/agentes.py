@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 """Implementacao em memoria do repositorio de agentes (README §2.5, §8.7, §10)."""
 import copy
+import datetime
+import json
+import logging
 
 from repo_agentes import RepoAgentes
+from repo_errors import RepoViolacao
 
 
 class RepoAgentesFake(RepoAgentes):
@@ -31,3 +35,49 @@ class RepoAgentesFake(RepoAgentes):
             ]
             running.sort(key=lambda x: x["id"])
             return copy.deepcopy(running)
+
+    def fila_sem_atendente(self, agora, limiares):
+        """Agrupa a fila vencida sem agente saudavel para o ambiente e o interpretador."""
+        atendidos = set()
+        for ag in self.listar():
+            hb = ag.get("heartbeat_at")
+            if ag.get("status") != "ATIVO" or hb is None:
+                continue
+            idade = max(0, int((agora - hb).total_seconds()))  # mesmo arredondamento de agentes_service.saude
+            if idade >= 2 * limiares.heartbeat_interval_s and idade > limiares.fence_timeout_s:
+                continue
+            atendidos.update((a.strip(), i.strip()) for a in (ag.get("ambientes") or "").split(",")
+                             for i in (ag.get("interpretadores") or "").split(",") if a.strip() and i.strip())
+        grupos = {}
+        with self._store.lock_tickets:
+            for t in self._store.tickets.values():
+                if t["status"] != "PENDING" or t["scheduled_at"] > agora:
+                    continue
+                try:
+                    snapshot = json.loads(t["parametros_enviados"])
+                    interpretador = snapshot["interpretador"]
+                    if interpretador not in ("PYTHON3", "BASH", "SH"):
+                        raise ValueError("interpretador invalido")
+                except (ValueError, TypeError, KeyError):
+                    logging.getLogger("sss_web").exception(
+                        "snapshot invalido no diagnostico da fila (ticket=%s)", t["id"],
+                        extra={"acao": "VER_AUDITORIA"})
+                    raise RepoViolacao("snapshot invalido no diagnostico da fila")
+                chave = (t["ambiente"], interpretador)
+                if chave in atendidos:
+                    continue
+                grupo = grupos.setdefault(chave, {"ambiente": chave[0], "interpretador": chave[1],
+                                                  "quantidade": 0, "mais_antigo": t["scheduled_at"]})
+                grupo["quantidade"] += 1
+                grupo["mais_antigo"] = min(grupo["mais_antigo"], t["scheduled_at"])
+        return [grupos[chave] for chave in sorted(grupos)]
+
+    def rodando_sem_pid(self, agora, minutos):
+        """Tickets reservados ha mais de minutos, ainda sem PID, sem ler o log."""
+        limite = agora - datetime.timedelta(minutes=minutos)
+        campos = ("id", "script_id", "ambiente", "agente_id", "started_at")
+        with self._store.lock_tickets:
+            itens = [dict((c, t.get(c)) for c in campos) for t in self._store.tickets.values()
+                     if t["status"] == "RUNNING" and t.get("process_id") is None
+                     and t.get("started_at") is not None and t["started_at"] < limite]
+        return sorted(itens, key=lambda t: (t["started_at"], t["id"]))

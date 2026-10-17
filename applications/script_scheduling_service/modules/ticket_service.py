@@ -830,7 +830,8 @@ class ServicoTicket(object):
             return vazio
         resultado = self._tickets.listar(filtros=repo_filtros, pagina=pagina, tamanho=tamanho,
                                          escopo_ambientes=escopo)
-        info = ui_helpers.paginacao_info(pagina, tamanho, resultado["total"])
+        info = ui_helpers.paginacao_info(pagina, tamanho, resultado["total"],
+                                         resultado.get("total_limitado", False), len(resultado["itens"]))
         if not resultado["itens"] and info["pagina"] != resultado["pagina"]:
             resultado = self._tickets.listar(filtros=repo_filtros, pagina=info["pagina"], tamanho=tamanho,
                                              escopo_ambientes=escopo)
@@ -854,7 +855,7 @@ class ServicoTicket(object):
                 "duracao": _duracao(t, agora),
             })
         return {"itens": itens, "total": resultado["total"], "pagina": resultado["pagina"],
-                "tamanho": resultado["tamanho"]}
+                "tamanho": resultado["tamanho"], "total_limitado": resultado.get("total_limitado", False)}
 
     def _respostas_exibicao(self, ticket_id, snap):
         sensiveis = set((snap or {}).get("sensiveis") or ())
@@ -962,7 +963,7 @@ class ServicoTicket(object):
             "respostas": self._respostas_exibicao(ticket["id"], snap),
             "pai": pai,
             "filhos": filhos,
-            "registro": ui_helpers.registro(ticket),
+            "registro": ui_helpers.registro(ticket, ctx),
             "pode_cancelar": pode_cancelar,
             "pode_reexecutar": pode_reexecutar,
         }

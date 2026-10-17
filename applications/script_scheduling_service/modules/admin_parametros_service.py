@@ -189,7 +189,7 @@ class ServicoAdminParametros(object):
             "regex_validacao": p.get("regex_validacao") or "", "sensivel": p.get("sensivel") or "N",
             "ativo": p["ativo"], "versao": _versao(p),
             "vinculos": self.vinculos(p["id"]), "pode_regex": pode_regex,
-            "registro": ui_helpers.registro(p),
+            "registro": ui_helpers.registro(p, ctx),
         }
 
     # ------------------------------------------------------------- validacao
