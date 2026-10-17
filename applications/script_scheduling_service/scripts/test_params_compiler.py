@@ -5,6 +5,7 @@ import _testenv  # noqa: F401
 import collections
 import datetime
 import json
+import re
 import os
 import shutil
 import tempfile
@@ -14,6 +15,9 @@ from unittest import mock
 import params_compiler as pc
 import path_guard
 from params_compiler import ParamErro, SnapshotErro
+
+# UID fictício do agente: o dono dos arquivos de teste é o usuário do teste (CR-007, R-15).
+AGENTE_FALSO = 2 ** 31 - 3
 
 AGORA = datetime.datetime(2026, 10, 13, 10, 47, 0, 123456)
 CfgAgente = collections.namedtuple("CfgAgente", ["script_owner_uids", "interpretadores"])
@@ -145,7 +149,36 @@ class TestRegexCadastro(unittest.TestCase):
             with self.subTest(padrao=padrao):
                 with self.assertRaises(ParamErro) as ctx:
                     pc.validar_regex_cadastro(padrao)
-                self.assertIn("ReDoS", ctx.exception.mensagem)
+                self.assertIn("README §6.2", ctx.exception.mensagem)
+
+    def test_subconjunto_seguro_cr007(self):
+        """CR-007, D5: exemplos do README §6.2 e limite de tempo de fullmatch das regex aceitas."""
+        import time
+        aceitas = (r"^[A-Z]{2}\d{6}$", r"^\d{3}\.\d{3}\.\d{3}-\d{2}$", r"^(PF|PJ)$", r"^\d+(\.\d{1,2})?$",
+                   r"a+?b", r"(?P<n>a)b", r"[)a]+b", "a?" * 6 + "a" * 6, r"^(a|aa|aaa)?(a|aa)?\w+\w*!$")
+        recusadas = (r"(a|a)*b", r"^(\w|\d)+$", r"(a+)+", r"a{2}{3}", r"\d+\d+\d+x", r"(a)\1", r"(?=a)a",
+                     r"(?<!a)b", r"(?P<n>a)(?P=n)", r"(\d{2}){3}", r"(?:\w|\d)+x", r"([)a]+)+b",
+                     "a?" * 7 + "a" * 7, r"(?(1)a|b)", "x" * 151)
+        for padrao in aceitas:
+            with self.subTest(aceita=padrao):
+                pc.validar_regex_cadastro(padrao)
+                for valor in ("a" * 500, "a" * 499 + "!"):
+                    inicio = time.time()
+                    re.fullmatch(padrao, valor)
+                    self.assertLess(time.time() - inicio, 0.5)
+        for padrao in recusadas:
+            with self.subTest(recusada=padrao):
+                with self.assertRaises(ParamErro):
+                    pc.validar_regex_cadastro(padrao)
+
+    def test_valor_sensivel_minimo_de_4(self):
+        prm_s = {"codigo": "doc", "label": "Doc", "tipo_componente": "TEXT", "sensivel": "S"}
+        with self.assertRaises(ParamErro) as ctx:
+            pc.validar_valor(prm_s, "abc")
+        self.assertIn("pelo menos 4", ctx.exception.mensagem)
+        self.assertEqual(pc.validar_valor(prm_s, "abcd"), "abcd")
+        self.assertEqual(pc.validar_valor(prm_s, "  "), "")
+        self.assertEqual(pc.validar_valor(dict(prm_s, sensivel="N"), "abc"), "abc")
 
 
 class TestCadastroOpcoesEFlag(unittest.TestCase):
@@ -396,11 +429,13 @@ class TestValidarSnapshot(unittest.TestCase):
         v = [prm("data_ref", "DATE", ordem=1, obrigatorio="S", flag="--data")]
         scr = dict(script(), path_file=self.arq)
         self.js = pc.compilar_snapshot(scr, v, {"data_ref": "2026-10-13"}, AGORA)[0]
-        # A arvore fica sob /tmp (escrita para todos): a cadeia de pastas para na base travada.
+        # A arvore fica sob /tmp (escrita para todos): a cadeia de pastas para na base travada. Os arquivos
+        # sao do usuario do teste; o agente e simulado por outro UID (CR-007, R-15: o agente nunca e dono).
         original = path_guard.resolver
         patcher = mock.patch.object(path_guard, "resolver",
-                                    lambda p, u, uid_agente=None, dirs_sss=(), parar_em="/":
-                                    original(p, u, uid_agente, dirs_sss, self.base))
+                                    lambda p, u, uid_agente=None, dirs_sss=(), parar_em="/", uids_proibidos=():
+                                    original(p, u, AGENTE_FALSO if uid_agente is None else uid_agente,
+                                             dirs_sss, self.base, uids_proibidos))
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -413,6 +448,12 @@ class TestValidarSnapshot(unittest.TestCase):
         snap = json.loads(self.js)
         snap.update(mudancas)
         return json.dumps(snap)
+
+    def test_argumento_com_controle_no_snapshot(self):
+        # CR-007, R-32: o snapshot vem do banco; NUL ou controle nos args nunca chegam ao argv.
+        for ruim in ("a\x00b", "linha\nnova"):
+            with self.subTest(arg=repr(ruim)):
+                self.assertEqual(self._motivo(self._alterado(args=["--data", ruim])), "ARGS_INVALIDOS")
 
     def _motivo(self, js, cfg=None):
         with self.assertRaises(SnapshotErro) as ctx:

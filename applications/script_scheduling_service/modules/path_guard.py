@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
 """Validacao de interpretador logico e caminho de script (README §6.4, §8.5, AGENTS §3.2, CR-001, CR-005).
 
-CR-005: somente POSIX e caminho absoluto livre (sem pastas base). Modulo puro: nao importa gluon (AGENTS §7.1).
+CR-005: somente POSIX e caminho absoluto livre (sem pastas base). CR-007: sem link simbolico no caminho
+do script, donos proibidos (agente e usuarios de execucao) e checagem de cadeia do executavel do interpretador.
+Modulo puro: nao importa gluon (AGENTS §7.1).
 """
+import errno
 import os
+import pwd
 
 # Interpretadores logicos (CR-001, D1/D2; CR-005: somente POSIX): o catalogo guarda a chave; cada agente
 # a mapeia para o executavel local ([agent] interpretadores).
@@ -28,14 +32,18 @@ class Codigo(object):
     CONTEM_PONTOS = 'CONTEM_PONTOS'
     SEPARADOR_INVALIDO = 'SEPARADOR_INVALIDO'
     CARACTERE_INVALIDO = 'CARACTERE_INVALIDO'
+    CAMINHO_COM_LINK = 'CAMINHO_COM_LINK'
     PASTA_DO_SISTEMA = 'PASTA_DO_SISTEMA'
     PASTA_DO_SSS = 'PASTA_DO_SSS'
     NAO_ENCONTRADO = 'NAO_ENCONTRADO'
+    SEM_ACESSO = 'SEM_ACESSO'
     NAO_E_ARQUIVO = 'NAO_E_ARQUIVO'
     DONO_INVALIDO = 'DONO_INVALIDO'
     GRAVAVEL_GRUPO_OUTROS = 'GRAVAVEL_GRUPO_OUTROS'
     GRAVAVEL_PELO_AGENTE = 'GRAVAVEL_PELO_AGENTE'
+    GRAVAVEL_PELO_EXECUTOR = 'GRAVAVEL_PELO_EXECUTOR'
     INTERPRETADOR_NAO_PERMITIDO = 'INTERPRETADOR_NAO_PERMITIDO'
+    INTERPRETADOR_INSEGURO = 'INTERPRETADOR_INSEGURO'
 
 
 class PathGuardErro(Exception):
@@ -82,6 +90,27 @@ def checar_pastas_proibidas(path_file, dirs_sss=()):
             raise PathGuardErro(Codigo.PASTA_DO_SSS)
 
 
+def uids_de_usuarios(nomes):
+    """UIDs dos usuarios do SO existentes neste servidor (usuarios de execucao, CR-007); ausentes sao ignorados."""
+    uids = []
+    for nome in nomes or ():
+        try:
+            uids.append(pwd.getpwnam(nome).pw_uid)
+        except KeyError:
+            continue
+    return tuple(uids)
+
+
+def _stat(caminho, lstat=False):
+    """os.stat/lstat com EACCES -> SEM_ACESSO e ausente -> NAO_ENCONTRADO (README §8.5)."""
+    try:
+        return os.lstat(caminho) if lstat else os.stat(caminho)
+    except OSError as e:
+        if e.errno in (errno.EACCES, errno.EPERM):
+            raise PathGuardErro(Codigo.SEM_ACESSO)
+        raise PathGuardErro(Codigo.NAO_ENCONTRADO)
+
+
 def _gravavel_pelo_agente(caminho, st, uid_agente):
     if uid_agente is None:
         return os.access(caminho, os.W_OK)
@@ -89,42 +118,80 @@ def _gravavel_pelo_agente(caminho, st, uid_agente):
     return uid_agente == 0 or (st.st_uid == uid_agente and bool(st.st_mode & 0o200))
 
 
-def _checar_dono_e_modo(caminho, donos, uid_agente):
-    st = os.stat(caminho)
+def _checar_dono_e_modo(caminho, donos, uid_agente, uids_proibidos=()):
+    st = _stat(caminho)
     if st.st_uid not in donos:
         raise PathGuardErro(Codigo.DONO_INVALIDO)
     if st.st_mode & 0o022:
         raise PathGuardErro(Codigo.GRAVAVEL_GRUPO_OUTROS)
-    if _gravavel_pelo_agente(caminho, st, uid_agente):
+    # CR-007, R-15: o dono pode mudar o modo a qualquer momento, entao pertencer ao agente ja e proibido.
+    agente = os.geteuid() if uid_agente is None else uid_agente
+    if st.st_uid == agente or _gravavel_pelo_agente(caminho, st, uid_agente):
         raise PathGuardErro(Codigo.GRAVAVEL_PELO_AGENTE)
+    if st.st_uid in uids_proibidos:
+        raise PathGuardErro(Codigo.GRAVAVEL_PELO_EXECUTOR)
 
 
-def resolver(path_file, owner_uids, uid_agente=None, dirs_sss=(), parar_em='/'):
-    """Confere o script no servidor local e devolve o caminho real (README §8.5, CR-005 D3).
+def _checar_cadeia(real, donos, uid_agente, uids_proibidos, parar_em):
+    donos_dir = donos + ((0,) if 0 not in donos else ())
+    _checar_dono_e_modo(real, donos, uid_agente, uids_proibidos)
+    limite = os.path.realpath(parar_em)
+    atual = os.path.dirname(real)
+    while True:
+        _checar_dono_e_modo(atual, donos_dir, uid_agente, uids_proibidos)
+        if atual == limite or atual == '/':
+            break
+        atual = os.path.dirname(atual)
 
-    - formato e pastas proibidas (digitado e resolvido);
-    - NAO_ENCONTRADO se nao existe; NAO_E_ARQUIVO se existe mas nao e arquivo regular;
+
+def resolver(path_file, owner_uids, uid_agente=None, dirs_sss=(), parar_em='/', uids_proibidos=()):
+    """Confere o script no servidor local e devolve o caminho real (README §8.5, CR-005 D3, CR-007).
+
+    - formato; sem link simbolico em nenhum componente (CAMINHO_COM_LINK); pastas proibidas;
+    - NAO_ENCONTRADO se nao existe; SEM_ACESSO se uma pasta nao deixa passar; NAO_E_ARQUIVO se nao e arquivo;
     - dono do arquivo em owner_uids; cada diretorio ate '/' com dono root ou em owner_uids;
-      arquivo e diretorios sem escrita de grupo/outros nem do agente.
-    uid_agente=None avalia escrita com os.access do proprio processo (o agente).
-    parar_em limita a subida da cadeia (so testes; producao usa sempre '/').
+      arquivo e diretorios sem escrita de grupo/outros nem do agente, e sem pertencer ao agente
+      nem a um uid de uids_proibidos (usuarios de execucao).
+    uid_agente=None usa o proprio processo (o agente). parar_em limita a cadeia (so testes).
     """
     validar_cadastro(path_file)
     checar_pastas_proibidas(path_file, dirs_sss)
     real = os.path.realpath(path_file)
-    if not os.path.lexists(real):
-        raise PathGuardErro(Codigo.NAO_ENCONTRADO)
-    if not os.path.isfile(real):
+    if real != path_file:
+        raise PathGuardErro(Codigo.CAMINHO_COM_LINK)
+    st = _stat(real, lstat=True)
+    if not os.path.isfile(real) or os.path.islink(real):
         raise PathGuardErro(Codigo.NAO_E_ARQUIVO)
-    donos = tuple(owner_uids)
-    donos_dir = donos + ((0,) if 0 not in donos else ())
-    _checar_dono_e_modo(real, donos, uid_agente)
-    limite = os.path.realpath(parar_em)
-    atual = os.path.dirname(real)
-    while True:
-        _checar_dono_e_modo(atual, donos_dir, uid_agente)
-        if atual == limite or atual == '/':
-            break
-        atual = os.path.dirname(atual)
+    del st
+    _checar_cadeia(real, tuple(owner_uids), uid_agente, tuple(uids_proibidos), parar_em)
+    return real
+
+
+def validar_executavel(caminho, owner_uids, uid_agente=None, uids_proibidos=(), dirs_sss=(), parar_em='/'):
+    """Executavel de um interpretador de [agent] interpretadores (README §8.5, CR-007 R-15).
+
+    Pode ser link simbolico (ex.: /usr/bin/python3): a cadeia do proprio caminho e a do destino passam pela
+    mesma checagem do script (dono root ou de owner_uids, sem escrita de grupo/outros, sem pertencer ao agente
+    nem a um usuario de execucao), mas pode ficar nas pastas do sistema. Fora de log_dir/work_dir/exec_work_dir.
+    Devolve o caminho real; falha: NAO_ENCONTRADO ou INTERPRETADOR_INSEGURO.
+    """
+    if not isinstance(caminho, str) or caminho[:1] != '/' or os.path.normpath(caminho) != caminho:
+        raise PathGuardErro(Codigo.INTERPRETADOR_INSEGURO)
+    real = os.path.realpath(caminho)
+    donos = tuple(owner_uids) + ((0,) if 0 not in owner_uids else ())
+    try:
+        _stat(real)
+        sss = [os.path.realpath(d) for d in dirs_sss if d]
+        if any(_dentro(alvo, d) for alvo in (caminho, real) for d in sss):
+            raise PathGuardErro(Codigo.INTERPRETADOR_INSEGURO)
+        if not os.path.isfile(real) or not os.access(real, os.X_OK):
+            raise PathGuardErro(Codigo.INTERPRETADOR_INSEGURO)
+        _checar_cadeia(real, donos, uid_agente, tuple(uids_proibidos), parar_em)
+        if real != caminho:
+            _checar_cadeia(os.path.dirname(caminho), donos, uid_agente, tuple(uids_proibidos), parar_em)
+    except PathGuardErro as e:
+        if e.codigo == Codigo.NAO_ENCONTRADO:
+            raise
+        raise PathGuardErro(Codigo.INTERPRETADOR_INSEGURO)
     return real
 

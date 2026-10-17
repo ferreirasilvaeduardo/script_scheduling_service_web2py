@@ -73,12 +73,14 @@ class _Base(unittest.TestCase):
 
 class TestCadastro(_Base):
 
-    def test_sensivel_para_nao_sensivel_recusado_com_valor_gravado(self):
-        # CR-003 C1 (README §6.2): o segredo nunca passa a aparecer em claro.
+    def test_sensivel_nunca_volta_a_nao_sensivel(self):
+        # CR-007, R-20 (README §6.2): respostas ja gravadas passariam a aparecer em claro.
         self._editar(P_CHAVE_API, valor_padrao="tok-guardado-1234")
         _pid, erros = self._editar(P_CHAVE_API, sensivel="N")
-        self.assertIn("valor padrão", erros["sensivel"])
-        self.assertIn("carga_diaria", erros["sensivel"])  # o seed tem valor_padrao_sub no vinculo do script 1
+        self.assertEqual(erros["sensivel"], prm_mod.MSG_SENSIVEL_MONOTONICO)
+        self._editar(P_CHAVE_API, remover_padrao="S")
+        _pid, erros = self._editar(P_CHAVE_API, sensivel="N")
+        self.assertEqual(erros["sensivel"], prm_mod.MSG_SENSIVEL_MONOTONICO)
         self.assertEqual(self.catalogo.parametros_obter(P_CHAVE_API)["sensivel"], "S")
 
     def test_inclusao_audita_descricao_e_rotulo_sem_controle(self):
@@ -162,7 +164,9 @@ class TestCadastro(_Base):
 
     def test_regex_redos_e_regex_em_outro_tipo(self):
         _pid, erros = self._incluir(regex_validacao="(a+)+$")
-        self.assertIn("ReDoS", erros["regex_validacao"])
+        self.assertIn("recusada", erros["regex_validacao"])
+        _pid, erros = self._incluir(regex_validacao="(a|a)*b")
+        self.assertIn("grupo entre parênteses repetido", erros["regex_validacao"])
         _pid, erros = self._incluir(regex_validacao="[")
         self.assertIn("inválida", erros["regex_validacao"])
         _pid, erros = self._incluir(tipo_componente="NUMBER", regex_validacao="[0-9]+")
@@ -260,9 +264,10 @@ class TestSensivelETeste(_Base):
                          {"ok": True, "valor": "true"})
         self.assertEqual(self.svc.testar(self.ctx["admin"], None, {"tipo_componente": "DATE"}, "2026-02-30")["ok"], False)
         r = self.svc.testar(self.ctx["admin"], None, {"tipo_componente": "TEXT", "regex_validacao": "(a+)+$"}, "a")
-        self.assertIn("ReDoS", r["erro"])
-        self.assertEqual(self.svc.testar(self.ctx["admin"], None, {"tipo_componente": "TEXT", "sensivel": "S"}, "abc"),
+        self.assertIn("recusada", r["erro"])
+        self.assertEqual(self.svc.testar(self.ctx["admin"], None, {"tipo_componente": "TEXT", "sensivel": "S"}, "abcd"),
                          {"ok": True, "valor": "****"})
+        self.assertFalse(self.svc.testar(self.ctx["admin"], None, {"tipo_componente": "TEXT", "sensivel": "S"}, "abc")["ok"])
 
     def test_testar_com_regex_exige_admin(self):
         r = self.svc.testar(self.ctx["gestor"], str(P_FILIAL), {"tipo_componente": "TEXT"}, "1234")

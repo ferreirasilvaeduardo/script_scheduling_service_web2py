@@ -55,6 +55,8 @@ MENSAGENS_PATH = {
     Codigo.CONTEM_PONTOS: u"O caminho não pode conter '..'.",
     Codigo.SEPARADOR_INVALIDO: u"Use só / para separar pastas; não use \\.",
     Codigo.CARACTERE_INVALIDO: u"O caminho contém caracteres de controle não permitidos.",
+    Codigo.CAMINHO_COM_LINK: u"O caminho passa por um link simbólico. Informe o caminho real do arquivo, sem links.",
+    Codigo.SEM_ACESSO: u"Uma pasta do caminho não deixa o sistema passar; confira as permissões das pastas.",
     Codigo.PASTA_DO_SISTEMA: u"Scripts não podem ficar em pastas do sistema (/bin, /sbin, /usr, /lib, /etc, /boot, "
                              u"/proc, /sys, /dev, /root). Use outra pasta.",
     Codigo.PASTA_DO_SSS: u"Scripts não podem ficar nas pastas de log ou de trabalho do SSS. Use outra pasta.",
@@ -62,8 +64,11 @@ MENSAGENS_PATH = {
     Codigo.DONO_INVALIDO: u"O arquivo, ou uma pasta do caminho, pertence a um usuário não autorizado.",
     Codigo.GRAVAVEL_GRUPO_OUTROS: u"O arquivo, ou uma pasta do caminho, pode ser alterado por outros usuários "
                                   u"(ou pelo grupo); ajuste as permissões.",
-    Codigo.GRAVAVEL_PELO_AGENTE: u"O arquivo, ou uma pasta do caminho, é gravável pelo usuário do sistema; "
-                                 u"ajuste as permissões.",
+    Codigo.GRAVAVEL_PELO_AGENTE: u"O arquivo, ou uma pasta do caminho, é gravável pelo usuário do sistema "
+                                 u"ou pertence a ele; ajuste o dono e as permissões.",
+    Codigo.GRAVAVEL_PELO_EXECUTOR: u"O arquivo, ou uma pasta do caminho, pertence ao usuário que executa os "
+                                   u"scripts; o dono precisa ser outro usuário autorizado.",
+    Codigo.INTERPRETADOR_INSEGURO: u"O executável do interpretador não passou na checagem de segurança.",
     Codigo.INTERPRETADOR_NAO_PERMITIDO: u"Interpretador não permitido.",
 }
 OBS_VALIDACAO = u"A validação definitiva ocorre também no agente executor no momento da execução."
@@ -154,12 +159,15 @@ def _versao_vinculos(vinculos, dicionario):
 class ServicoAdminScripts(object):
     """Regras do cadastro de scripts com repositorios, configuracao do agente, relogio e log injetados."""
 
-    def __init__(self, catalogo, agendamentos, script_owner_uids, sss_env, log, relogio, dirs_sss=()):
+    def __init__(self, catalogo, agendamentos, script_owner_uids, sss_env, log, relogio, dirs_sss=(),
+                 uids_proibidos=()):
         self._catalogo = catalogo
         self._agendamentos = agendamentos
         self._owner_uids = tuple(script_owner_uids)
-        # log_dir e work_dir deste no: nenhum script pode ficar dentro deles (README §8.5, CR-005 D3).
+        # log_dir, work_dir e exec_work_dir deste no: nenhum script pode ficar dentro deles (README §8.5).
         self._dirs_sss = tuple(d for d in dirs_sss if d)
+        # UIDs dos usuarios de execucao que existem neste no: nao podem ser donos do caminho (CR-007, R-15).
+        self._uids_proibidos = tuple(uids_proibidos)
         self._env = sss_env
         self._log = log
         self._relogio = relogio
@@ -263,7 +271,8 @@ class ServicoAdminScripts(object):
             path_guard.validar_cadastro(path_file)
             path_guard.checar_pastas_proibidas(path_file, self._dirs_sss)
             if checar_arquivo:
-                path_guard.resolver(path_file, self._owner_uids, dirs_sss=self._dirs_sss)
+                path_guard.resolver(path_file, self._owner_uids, dirs_sss=self._dirs_sss,
+                                    uids_proibidos=self._uids_proibidos)
         except PathGuardErro as exc:
             if exc.codigo == Codigo.NAO_ENCONTRADO:
                 return AVISO_NAO_ENCONTRADO
@@ -574,7 +583,8 @@ class ServicoAdminScripts(object):
                 return {"argv": None, "erros": erros, "aviso": None}
         aviso = None
         try:
-            path_guard.resolver(script["path_file"], self._owner_uids, dirs_sss=self._dirs_sss)
+            path_guard.resolver(script["path_file"], self._owner_uids, dirs_sss=self._dirs_sss,
+                                uids_proibidos=self._uids_proibidos)
         except PathGuardErro as exc:
             aviso = AVISO_NAO_ENCONTRADO if exc.codigo == Codigo.NAO_ENCONTRADO else MENSAGENS_PATH[exc.codigo]
         snap, _resolvidos, erros = params_compiler.compilar_snapshot(script, vinculos, {}, self._relogio())
@@ -604,7 +614,8 @@ def _servico():
                 sss_env=cfg.app.sss_env,
                 log=sss_logging.obter_logger("sss_web", cfg),
                 relogio=tickets.agora,
-                dirs_sss=(cfg.logging.log_dir, cfg.agent.work_dir),
+                dirs_sss=(cfg.logging.log_dir, cfg.agent.work_dir, cfg.agent.exec_work_dir),
+                uids_proibidos=path_guard.uids_de_usuarios(u for _a, u in cfg.agent.usuarios_execucao),
             )
         return _padrao
 

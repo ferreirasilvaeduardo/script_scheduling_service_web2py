@@ -21,7 +21,11 @@ TIPOS_COMPONENTE = ('TEXT', 'NUMBER', 'DATE', 'SELECT', 'CHECKBOX')
 
 _RE_CONTROLE = re.compile(r'[\x00-\x1f\x7f]')
 _RE_NUMBER = re.compile(r'^-?\d{1,18}(\.\d{1,6})?$')
-_RE_REDOS = re.compile(r'\([^)]*[+*][^)]*\)[+*{]')
+_RE_QUANT_CHAVE = re.compile(r'\{(\d*)(,?)(\d*)\}')
+TAMANHO_REGEX = 150
+SENSIVEL_MINIMO = 4
+MAX_ILIMITADOS = 2
+MAX_ESCOLHAS = 6
 _CHECKBOX = {'true': True, '1': True, 'false': False, '0': False}
 _RE_FLAG = re.compile(r'-{1,2}[A-Za-z0-9][A-Za-z0-9_-]{0,27}')
 TAMANHO_OPCOES = 500
@@ -89,6 +93,9 @@ def validar_valor(parametro, valor_bruto):
         raise ParamErro(codigo, 'O campo "%s" excede o limite de %d caracteres.' % (rotulo, TAMANHO_MAXIMO))
     if _RE_CONTROLE.search(valor):
         raise ParamErro(codigo, 'O campo "%s" contém caracteres de controle não permitidos.' % rotulo)
+    # Valor sigiloso curto nao pode ser mascarado com seguranca (README §4.1 e §6.2, CR-007 R-25).
+    if _sensivel(parametro) and tipo != 'CHECKBOX' and 0 < len(valor) < SENSIVEL_MINIMO:
+        raise ParamErro(codigo, 'O valor sigiloso precisa ter pelo menos %d caracteres.' % SENSIVEL_MINIMO)
 
     if tipo == 'TEXT':
         padrao = parametro.get('regex_validacao')
@@ -123,15 +130,104 @@ def validar_valor(parametro, valor_bruto):
     raise ParamErro(codigo, 'O parâmetro "%s" tem um tipo de componente desconhecido.' % rotulo)
 
 
+def _recusar_regex(motivo):
+    raise ParamErro('regex_validacao', 'A expressão regular foi recusada: %s (README §6.2).' % motivo)
+
+
+def _fim_da_classe(padrao, i):
+    """Indice logo depois do ']' que fecha a classe aberta em padrao[i] == '['."""
+    j = i + 1
+    if j < len(padrao) and padrao[j] == '^':
+        j += 1
+    if j < len(padrao) and padrao[j] == ']':
+        j += 1
+    while j < len(padrao):
+        if padrao[j] == '\\':
+            j += 2
+            continue
+        if padrao[j] == ']':
+            return j + 1
+        j += 1
+    return len(padrao)
+
+
 def validar_regex_cadastro(padrao):
-    """Compila regex_validacao e rejeita quantificador aninhado (heuristica anti-ReDoS, README §6.2)."""
+    """Compila regex_validacao e exige o subconjunto seguro do README §6.2 (CR-007, D5); lanca ParamErro.
+
+    Recusa grupo repetido por quantificador (exceto '?'), quantificador sobre quantificador, referencia a
+    grupo, lookaround, grupo condicional, mais de MAX_ILIMITADOS quantificadores ilimitados, mais de
+    MAX_ESCOLHAS quantificadores que criam escolha e mais de TAMANHO_REGEX caracteres. Assim o fullmatch fica no maximo quadratico no tamanho do valor.
+    """
     try:
         re.compile(padrao)
-    except (re.error, TypeError):
+    except Exception:  # noqa: B902 - re.error, TypeError e erros internos do sre (ex.: grupo condicional invalido)
         raise ParamErro('regex_validacao', 'A expressão regular é inválida.')
-    if _RE_REDOS.search(padrao):
-        raise ParamErro('regex_validacao',
-                        'A expressão regular tem quantificador aninhado e foi rejeitada (risco de ReDoS).')
+    if len(padrao) > TAMANHO_REGEX:
+        _recusar_regex('tem mais de %d caracteres' % TAMANHO_REGEX)
+    ilimitados = 0
+    escolhas = 0
+    atomo = None          # 'simples' (caractere, escape, classe, '.'), 'grupo' ou None
+    apos_quant = False    # o ultimo token foi um quantificador
+    preguicoso = False    # e ele ja recebeu o modificador '?'
+    i = 0
+    n = len(padrao)
+    while i < n:
+        c = padrao[i]
+        if c == '\\':
+            prox = padrao[i + 1:i + 2]
+            if prox.isdigit() and prox != '0':
+                _recusar_regex('referência a grupo (\\%s) não é permitida' % prox)
+            atomo, apos_quant, i = 'simples', False, i + 2
+            continue
+        if c == '[':
+            atomo, apos_quant, i = 'simples', False, _fim_da_classe(padrao, i)
+            continue
+        if c == '(':
+            resto = padrao[i + 1:i + 5]
+            if resto.startswith(('?=', '?!', '?<=', '?<!')):
+                _recusar_regex('lookahead e lookbehind não são permitidos')
+            if resto.startswith('?('):
+                _recusar_regex('grupo condicional não é permitido')
+            if resto.startswith('?P='):
+                _recusar_regex('referência a grupo não é permitida')
+            atomo, apos_quant, i = None, False, i + 1
+            continue
+        if c == ')':
+            atomo, apos_quant, i = 'grupo', False, i + 1
+            continue
+        if c == '|':
+            atomo, apos_quant, i = None, False, i + 1
+            continue
+        quant = None
+        if c in '*+?':
+            quant, fim = c, i + 1
+        elif c == '{':
+            m = _RE_QUANT_CHAVE.match(padrao, i)
+            if m and (m.group(1) or m.group(3)):
+                quant, fim = m.group(0), m.end()
+        if quant is None:
+            # '{' literal, '^', '$', '.' e demais caracteres.
+            atomo = None if c in '^$' else 'simples'
+            apos_quant, i = False, i + 1
+            continue
+        if apos_quant:
+            if quant == '?' and not preguicoso:
+                preguicoso, i = True, fim
+                continue
+            _recusar_regex('quantificador aplicado a outro quantificador')
+        if atomo == 'grupo' and quant not in ('?', '{0,1}'):
+            _recusar_regex('grupo entre parênteses repetido por quantificador (use só ? depois de parênteses)')
+        if quant in ('*', '+') or (quant.startswith('{') and quant.endswith(',}')):
+            ilimitados += 1
+            if ilimitados > MAX_ILIMITADOS:
+                _recusar_regex('mais de %d quantificadores ilimitados (*, + ou {n,})' % MAX_ILIMITADOS)
+        limites = quant[1:-1].split(',') if quant.startswith('{') else None
+        if limites is None or len(limites) == 2 and limites[0] != limites[1]:
+            # ?, *, + e {m,n} com m != n criam escolha; muitas escolhas seguidas explodem o tempo.
+            escolhas += 1
+            if escolhas > MAX_ESCOLHAS:
+                _recusar_regex('mais de %d quantificadores que criam escolha (?, *, + ou {m,n})' % MAX_ESCOLHAS)
+        apos_quant, preguicoso, i = True, False, fim
 
 
 def validar_flag(flag):
@@ -349,10 +445,14 @@ def validar_snapshot(json_str, cfg):
     args = snap['args']
     if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
         raise SnapshotErro('ARGS_INVALIDOS')
+    # Defesa em profundidade (CR-007, R-32): o snapshot vem do banco; NUL ou controle nunca chegam ao argv.
+    if any(_RE_CONTROLE.search(a) for a in args):
+        raise SnapshotErro('ARGS_INVALIDOS')
 
     try:
         real = path_guard.resolver(snap['path_file'], cfg.script_owner_uids,
-                                   dirs_sss=getattr(cfg, 'dirs_sss', None) or ())
+                                   dirs_sss=getattr(cfg, 'dirs_sss', None) or (),
+                                   uids_proibidos=getattr(cfg, 'uids_proibidos', None) or ())
     except path_guard.PathGuardErro as e:
         raise SnapshotErro('PATH_GUARD_' + e.codigo)
     return snap, montar_argv_agente(interpretador, executavel, real, args)

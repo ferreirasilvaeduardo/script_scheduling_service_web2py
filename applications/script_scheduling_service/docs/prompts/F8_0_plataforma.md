@@ -24,7 +24,7 @@ Concentrar em `modules/plataforma/` **toda** primitiva que depende do sistema op
   - `usuario_privilegiado() -> bool`;
   - `validar_arquivo_restrito(caminho)` (segredos, README §4.1: dono = euid e `mode & 0o077 == 0`) e `validar_dir_restrito(caminho)` (`log_dir`/`work_dir`, README §8.12 passo 4: existe, é diretório, é gravável pelo agente e fica fora das pastas do sistema; **não** exige `0700`, porque o `log_dir` e as pastas de log são `0750`, README §8.4 e §13);
   - `validar_caminho_script(caminho, donos, uids_proibidos) -> codigo | None` (README §8.0 e §8.5): caminho igual ao `realpath` (`CAMINHO_COM_LINK`); dono do arquivo em `donos`; cada diretório até `/` com dono root ou em `donos`; arquivo e diretórios sem escrita de grupo, outros ou do agente, e **sem** pertencer a um UID de `uids_proibidos` (agente e usuários de execução, R-15); `EACCES` vira `SEM_ACESSO`;
-  - `validar_interpretador(caminho, donos, uids_proibidos, pastas_sss)` (R-15): a mesma cadeia para o executável do interpretador, que pode ficar nas pastas do sistema;
+  - o executável do interpretador usa `path_guard.validar_executavel(caminho, donos, uid_agente, uids_proibidos, dirs_sss)`, já existente desde o CR-007 (R-15: a mesma cadeia, pode ficar nas pastas do sistema e pode ser link, com o link e o destino conferidos); a plataforma só o envolve;
   - `caminho_final(caminho)` (`realpath` no POSIX);
   - `criar_dir_trabalho(caminho)` (`0700` no POSIX);
   - `instalar_parada(flag)`: handlers de sinal que **apenas** setam a flag (SIGTERM/SIGINT no POSIX). O arquivo `.stop` é verificado pelo laço, não aqui.
@@ -39,7 +39,7 @@ Concentrar em `modules/plataforma/` **toda** primitiva que depende do sistema op
 - **`applications/script_scheduling_service/scripts/test_plataforma.py`:**
   - sinalização sem bloquear (a chamada volta em menos de 0,5 s mesmo com um processo que ignora SIGTERM); grupo com o **neto** vivo depois da saída do líder detectado por `grupo_vivo` e encerrado; identidade do processo estável e diferente para outro PID; PID inexistente; lock de instância (segunda trava falha); recusa de usuário privilegiado (root, com dublê); arquivo restrito OK e rejeitado; diretório de trabalho restrito; item da árvore gravável rejeitado; parada por sinal seta a flag.
   - `/proc/<pid>/stat` com `)` no nome do comando;
-  - `gravar_estado`/`ler_estado` atômicos; `validar_execucao` com dublês de `sudo -n -l`, do helper e dos usuários; `validar_caminho_script` com link simbólico, `EACCES` e dono proibido; `validar_interpretador`.
+  - `gravar_estado`/`ler_estado` atômicos; `validar_execucao` com dublês de `sudo -n -l`, do helper e dos usuários; `validar_caminho_script` com link simbólico, `EACCES` e dono proibido; executável do interpretador por `validar_executavel`.
 - **`applications/script_scheduling_service/scripts/test_sss_helper.py`** (AGENTS §7.4): uso inválido (2); especificação inválida; `term`/`kill` com identidade divergente (3) e com grupo vazio (0); `limpar` sem seguir links; `run` executado direto (sem `sudo`, com o próprio usuário) num script de teste, com `cwd`, `umask` e entrada padrão nula.
 - **`scripts/test_py36_compat.py`:** fora de `modules/plataforma/` é proibido `os.killpg`, `os.setsid`, `resource`, `fcntl`, `/proc` e `sys.platform`; em todo o projeto, inclusive em `plataforma/`, é proibido `ctypes` e `msvcrt` (AGENTS §3.2).
 

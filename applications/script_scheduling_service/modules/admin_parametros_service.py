@@ -39,8 +39,8 @@ MSG_CODIGO_OBRIGATORIO = u"Informe o código."
 MSG_CODIGO_INVALIDO = u"Use de 1 a 30 caracteres: letras minúsculas, dígitos e _ (ex.: data_ref)."
 MSG_CODIGO_DUPLICADO = u"Já existe um parâmetro com este código."
 MSG_LABEL_OBRIGATORIO = u"Informe o rótulo exibido ao usuário."
-MSG_SENSIVEL_GRAVADO = (u"Para deixar de ser sigiloso, remova antes %s; "
-                        u"assim nenhum segredo passa a aparecer em claro.")
+MSG_SENSIVEL_MONOTONICO = (u"Um parâmetro sigiloso não pode deixar de ser sigiloso: respostas já gravadas "
+                           u"passariam a aparecer em claro. Se o dado não for mais sigiloso, crie outro parâmetro.")
 MSG_LABEL_TAMANHO = u"O rótulo deve ter no máximo %d caracteres." % TAMANHO_LABEL
 MSG_DESCRICAO_TAMANHO = u"A descrição deve ter no máximo %d caracteres." % TAMANHO_DESCRICAO
 MSG_TIPO_INVALIDO = u"Selecione o tipo do componente."
@@ -148,22 +148,6 @@ class ServicoAdminParametros(object):
         if pid is None:
             raise RepoNaoEncontrado("parametro invalido")
         return self._catalogo.parametros_obter(pid)
-
-    def _checar_sensivel_gravado(self, atual, dados, erros):
-        """Sensivel S -> N so sem valor sigiloso gravado (README §6.2): o segredo nunca passa a ser exibido."""
-        partes = []
-        if admin_crud.normalizar(atual.get("valor_padrao")) is not None \
-                and admin_crud.texto(dados.get("remover_padrao"), 1) != "S":
-            partes.append(u"o valor padrão")
-        scripts = []
-        for s in self._catalogo.parametro_vinculos(atual["id"]):
-            for v in self._catalogo.script_params_obter(s["id"]):
-                if v["parametro_id"] == atual["id"] and admin_crud.normalizar(v.get("valor_padrao_sub")) is not None:
-                    scripts.append(s["nome"])
-        if scripts:
-            partes.append(u"os valores específicos dos scripts %s" % u", ".join(sorted(scripts)))
-        if partes:
-            erros["sensivel"] = MSG_SENSIVEL_GRAVADO % u" e ".join(partes)
 
     def vinculos(self, parametro_id):
         """Scripts vinculados ao parametro: [{id, nome, tipo_param, ativo}] por nome."""
@@ -298,7 +282,8 @@ class ServicoAdminParametros(object):
         else:
             padrao = None
         if atual is not None and atual.get("sensivel") == "S" and sensivel == "N":
-            self._checar_sensivel_gravado(atual, dados, erros)
+            # CR-007, R-20: S nunca volta para N (README §6.2).
+            erros["sensivel"] = MSG_SENSIVEL_MONOTONICO
         if bruto is not None and not any(k in erros for k in ("tipo_componente", "opcoes_json", "regex_validacao")):
             try:
                 padrao = _padrao_texto(params_compiler.validar_valor(dict(reg, codigo=reg["codigo"]), bruto))
@@ -444,7 +429,8 @@ class ServicoAdminParametros(object):
             return {"ok": False, "erro": u"Corrija a configuração antes de testar: %s" % sorted(erros.values())[0]}
         config = {"codigo": (atual or {}).get("codigo") or "teste",
                   "label": admin_crud.texto(dados.get("label")) or u"Valor de teste",
-                  "tipo_componente": tipo, "opcoes_json": opcoes, "regex_validacao": regex}
+                  "tipo_componente": tipo, "opcoes_json": opcoes, "regex_validacao": regex,
+                  "sensivel": "S" if admin_crud.texto(dados.get("sensivel"), 1) == "S" else "N"}
         if not isinstance(valor, str):
             return {"ok": False, "erro": u"Informe um valor para testar."}
         try:

@@ -235,12 +235,14 @@ def _argv_exibicao(snap):
 class ServicoTicket(object):
     """Servico de disparo com dependencias injetadas (repositorios, arvore de scripts e log)."""
 
-    def __init__(self, catalogo, tickets, script_owner_uids, log, dirs_sss=()):
+    def __init__(self, catalogo, tickets, script_owner_uids, log, dirs_sss=(), uids_proibidos=()):
         self._catalogo = catalogo
         self._tickets = tickets
         self._owner_uids = tuple(script_owner_uids)
-        # log_dir e work_dir deste no: nenhum script pode ficar dentro deles (README §8.5, CR-005 D3).
+        # log_dir, work_dir e exec_work_dir deste no: nenhum script pode ficar dentro deles (README §8.5).
         self._dirs_sss = tuple(d for d in dirs_sss if d)
+        # Usuarios de execucao existentes neste no: nao podem ser donos do caminho (CR-007, R-15).
+        self._uids_proibidos = tuple(uids_proibidos)
         self._log = log
 
     # ------------------------------------------------------------ autorizacao
@@ -466,7 +468,8 @@ class ServicoTicket(object):
         # CR-005 D4 (README §5.4, §8.5): formato e pastas proibidas sempre; se o arquivo existe neste no,
         # dono e permissao bloqueiam; se nao existe, segue e o agente confere no claim (README §8.4).
         try:
-            path_guard.resolver(script["path_file"], self._owner_uids, dirs_sss=self._dirs_sss)
+            path_guard.resolver(script["path_file"], self._owner_uids, dirs_sss=self._dirs_sss,
+                                uids_proibidos=self._uids_proibidos)
         except path_guard.PathGuardErro as e:
             if e.codigo == path_guard.Codigo.NAO_ENCONTRADO:
                 self._log.info("arquivo do script nao existe no no web; o agente confere (script_id=%s)", script["id"],
@@ -1112,7 +1115,8 @@ def _servico():
                 tickets=fabrica.obter("tickets"),
                 script_owner_uids=cfg.agent.script_owner_uids,
                 log=sss_logging.obter_logger("sss_web", cfg),
-                dirs_sss=(cfg.logging.log_dir, cfg.agent.work_dir),
+                dirs_sss=(cfg.logging.log_dir, cfg.agent.work_dir, cfg.agent.exec_work_dir),
+                uids_proibidos=path_guard.uids_de_usuarios(u for _a, u in cfg.agent.usuarios_execucao),
             )
         return _padrao
 

@@ -22,6 +22,9 @@ import ui_helpers
 from repo_errors import RepoNaoEncontrado
 from ticket_service import AcessoNegado, ErroReexecucao, ServicoTicket
 
+# UID fictício do agente: o dono dos arquivos de teste é o usuário do teste (CR-007, R-15).
+AGENTE_FALSO = 2 ** 31 - 3
+
 IP = "10.1.2.3"
 SEGREDO = "tok-ultra-secreto-42"
 SESSOES = {
@@ -85,11 +88,13 @@ class _BaseTicket(unittest.TestCase):
         self.addCleanup(_remover_arvore, self.base)
         for sid, nome in enumerate(ARQUIVOS, 1):
             self.catalogo.scripts_alterar(sid, {"path_file": os.path.join(self.base, nome)}, ator="teste")
-        # A arvore fica sob /tmp (escrita para todos): a cadeia de pastas para na base travada.
+        # A arvore fica sob /tmp (escrita para todos): a cadeia de pastas para na base travada. Os arquivos
+        # sao do usuario do teste; o agente e simulado por outro UID (CR-007, R-15: o agente nunca e dono).
         original = path_guard.resolver
         patcher = mock.patch.object(path_guard, "resolver",
-                                    lambda p, u, uid_agente=None, dirs_sss=(), parar_em="/":
-                                    original(p, u, uid_agente, dirs_sss, self.base))
+                                    lambda p, u, uid_agente=None, dirs_sss=(), parar_em="/", uids_proibidos=():
+                                    original(p, u, AGENTE_FALSO if uid_agente is None else uid_agente,
+                                             dirs_sss, self.base, uids_proibidos))
         patcher.start()
         self.addCleanup(patcher.stop)
         self.svc = ServicoTicket(self.catalogo, self.tickets, (os.geteuid(),), self.log)
@@ -260,7 +265,7 @@ class TestTicketService(_BaseTicket):
         self.assertEqual(erros, {})
 
     def test_path_guard_rejeita_script(self):
-        os.chmod(self.base, 0o755)
+        os.chmod(self.base, 0o775)
         tid, erros = self._criar()
         self.assertIsNone(tid)
         self.assertEqual(erros, {ticket_service.CAMPO_GERAL: ticket_service.MSG_SCRIPT_INDISPONIVEL})

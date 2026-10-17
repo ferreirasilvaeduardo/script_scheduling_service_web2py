@@ -916,6 +916,7 @@ Para todos os tipos, **nesta ordem**:
   * quantificador logo depois de outro quantificador (`a{2}{3}`, `a**`); o modificador preguiçoso `?` (`a+?`) é permitido;
   * referência a grupo (`\1`, `(?P=nome)`), lookahead e lookbehind (`(?=`, `(?!`, `(?<=`, `(?<!`) e grupo condicional (`(?(`);
   * mais de 2 quantificadores ilimitados (`*`, `+`, `{n,}`) no padrão inteiro;
+  * mais de 6 quantificadores que criam escolha (`?`, `*`, `+`, `{m,n}` com `m ≠ n`, `{n,}`); `{n}` não cria escolha (por exemplo, `a?a?a?a?a?a?a?aaaaaaa` é recusado);
   * padrão com mais de 150 caracteres (tamanho da coluna).
 
   Exemplos aceitos: `^[A-Z]{2}\d{6}$`, `^\d{3}\.\d{3}\.\d{3}-\d{2}$`, `^(PF|PJ)$`, `^\d+(\.\d{1,2})?$`. Recusados: `(a|a)*b`, `^(\w|\d)+$`, `(a+)+`. Com essas regras, o tempo de `fullmatch` fica no máximo quadrático no tamanho do valor (até 500 caracteres). Uma regex gravada antes do CR-007 que não atenda continua valendo até a próxima gravação do parâmetro, que exige a correção; o `init_db`/migração não a altera.
@@ -1504,7 +1505,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
 
 **Interpretadores lógicos (somente POSIX):** `PYTHON3`, `BASH` e `SH`.
 
-* O executável de cada interpretador vem de `[agent] interpretadores`. Na inicialização, o agente valida que o caminho é absoluto, existe e é executável, e passa por `path_guard.validar_interpretador` (CR-007, R-15): sem link simbólico, arquivo e cada diretório até `/` com dono root ou de `script_owner_uids`, sem escrita de grupo, outros, do agente ou de um usuário de execução, e fora de `log_dir`, `work_dir` e `exec_work_dir`. Diferente do script, o interpretador pode ficar nas pastas do sistema. Falha: `INTERPRETADOR_INSEGURO`, CRITICAL.
+* O executável de cada interpretador vem de `[agent] interpretadores`. Na inicialização, o agente valida que o caminho é absoluto, existe e é executável, e passa por `path_guard.validar_executavel` (CR-007, R-15): arquivo e cada diretório até `/` com dono root ou de `script_owner_uids`, sem escrita de grupo, outros, do agente ou de um usuário de execução, e fora de `log_dir`, `work_dir` e `exec_work_dir`. Diferente do script, o interpretador pode ficar nas pastas do sistema e pode ser link simbólico (como `/usr/bin/python3`): nesse caso, a cadeia do próprio link e a do destino são conferidas, e trocar o link exige ser dono de uma pasta do caminho (root). Falha: `INTERPRETADOR_INSEGURO`, CRITICAL.
 
 **Caminho livre (CR-005, D2): o script pode ficar em qualquer lugar do servidor, desde que exista e passe nas checagens abaixo**
 
@@ -1730,7 +1731,7 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
 3. **Segredos:** validar o `secrets.cfg` (§4.1).
 4. **Diretórios e interpretadores:**
    * `log_dir` e `work_dir` existem, são graváveis pelo agente e não ficam dentro das pastas do sistema (§8.5);
-   * cada entrada de `[agent] interpretadores` é uma chave da allowlist com caminho absoluto e executável, que passa por `path_guard.validar_interpretador` (§8.5);
+   * cada entrada de `[agent] interpretadores` é uma chave da allowlist com caminho absoluto e executável, que passa por `path_guard.validar_executavel` (§8.5);
    * fora de DEV, `plataforma.validar_execucao()` (§8.0): helper, regra de sudoers, usuários de execução e `exec_work_dir`.
 5. **Instância única por host:** `plataforma.travar_instancia` em `work_dir/sss-<agent_id>.lock`. Um arquivo `.stop` antigo é removido com WARN, para o daemon não parar logo depois de subir (CR-007, R-32).
 6. **Banco:** selecionar o driver (§2.3; a sondagem roda aqui), conectar e confirmar o relógio do banco (`SELECT SYSDATE FROM DUAL`). WARN se o `SYSDATE` divergir do relógio local em mais de 60 s (§7.1). **Versão do esquema (CR-007, D4):** `SELECT versao_esquema FROM {owner}.tbsss_controle WHERE id = 1` precisa ser igual a `sql_ident.VERSAO_ESQUEMA`; diferente ou ausente, CRITICAL com as duas versões.
