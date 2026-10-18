@@ -32,10 +32,10 @@ Fechamento do produto para implantação manual em servidores air-gapped **POSIX
   - gera `dist/sss-<versao>.tar.gz` e o `dist/SHA256SUMS` (README §12.2; o `.zip` saiu com o Windows, CR-005);
   - **inclui:** `web2py` (sem `applications/admin`, `welcome` e `examples`), `APP` (sem `controllers/dev.py`, `views/dev/`, `dev/`, `modules/repo_fake/`, `instance/config.ini`, `log/`, `sessions/`, `errors/` e `cache/`), `routes.py` com a aplicação padrão única, `bin/*.sh` e `docs/`;
   - **não** inclui as pastas de runtime do web2py criadas dentro da aplicação (`applications/script_scheduling_service/applications/`, `deposit/`, `logs/`, `site-packages/`; README §12.2);
-  - inclui um **único `config.ini` de referência** (`instance/config.ini.example`) para os tempos `fence_timeout_s` e `node_offline_timeout_s`, idênticos para todos os agentes (README §8.9, D7). O RUNBOOK orienta copiar esses dois valores sem alteração em cada nó;
+  - inclui um **único `config.ini` de referência** (`instance/config.ini.example`) para os tempos `fence_timeout_s` e `node_offline_timeout_s`, idênticos para todos os agentes (README §8.9, D7). `docs/IMPLANTACAO.md` orienta copiar esses dois valores sem alteração em cada nó;
   - gera um `SHA256SUMS` do conteúdo;
   - **falha** se encontrar no pacote: `secrets.cfg`, `*.pyc`, `__pycache__`, `controllers/dev.py`, `repo_fake` ou o padrão `password\s*=\s*\S` em arquivos `.ini`/`.cfg`.
-- **`docs/RUNBOOK.md`** (inclui, do CR-007: helper e `sudoers`, usuários de execução com cota e `nproc`, contas Oracle por papel e GRANTs, DSN de RAC/Data Guard, `SQLNET.EXPIRE_TIME`, fuso e NTP, dimensionamento dos LOBs, job de estatísticas, monitoração com `saude.py` (conta `sss_monitor`, CR-008 E3), partição própria do `log_dir` (CR-008, R-25), hash homologado informado para web e agentes separados (CR-008, E4), orçamento da abertura da conexão (CR-008, R-17), backup e o procedimento depois de restaurar o banco, com os seis passos do CR-008 R-18; `docs/IMPLANTACAO.md` §18):
+- **`docs/IMPLANTACAO.md`** (artefato operacional canônico já referenciado pelo README; ampliar, sem criar um `RUNBOOK.md` duplicado. Deve incluir, do CR-007: helper e `sudoers`, usuários de execução com cota e `nproc`, contas Oracle por papel e GRANTs, DSN de RAC/Data Guard, `SQLNET.EXPIRE_TIME`, fuso e NTP, dimensionamento dos LOBs, job de estatísticas, monitoração com `saude.py` (conta `sss_monitor`, CR-008 E3), partição própria do `log_dir` (CR-008, R-25), hash homologado informado para web e agentes separados (CR-008, E4), orçamento da abertura da conexão (CR-008, R-17), backup e o procedimento depois de restaurar o banco, com os seis passos do CR-008 R-18; manter a seção de implantação existente):
   - **instalação Linux/Unix (POSIX):** usuário de SO dedicado sem shell, diretórios, donos e permissões conforme o README §8.5 (UIDs), `secrets.cfg` com `0600`, Instant Client 19 + `ldconfig` (obrigatório se algum banco for 11g; recomendado sempre como contingência da cadeia de driver), unit `systemd` de exemplo para o web e o scheduler (`KillMode=mixed`, `TimeoutStopSec` maior que `shutdown_grace_s + kill_grace_s`, `User=`, `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ReadWritePaths=` para `log_dir` e `work_dir`), apresentada **como exemplo a validar** com a infraestrutura;
   - **driver Oracle (CR-002):** `modo_driver`, como ler a linha INFO da combinação escolhida, `check_env.py`, quando forçar `thick`/`cx_oracle`;
   - `init_db.py --dry-run` revisado pelo DBA, depois a execução real;
@@ -59,12 +59,12 @@ Fechamento do produto para implantação manual em servidores air-gapped **POSIX
 3. Nenhuma primitiva de SO fora de `plataforma/` nos scripts Python.
 
 ## Critérios de aceite
-- [ ] `scripts/empacotar.py` gera os dois pacotes e falha quando um `secrets.cfg` de teste é colocado na árvore.
-- [ ] O `RUNBOOK.md` permite a instalação em Linux/Unix por alguém que não participou do desenvolvimento (revisão sua).
+- [ ] `scripts/empacotar.py` gera `dist/sss-<versao>.tar.gz` e `dist/SHA256SUMS`, cujos hashes correspondem, e falha quando um `secrets.cfg` de teste é colocado na árvore.
+- [ ] `docs/IMPLANTACAO.md` permite a instalação em Linux/Unix por alguém que não participou do desenvolvimento (revisão sua).
 - [ ] Os testes passam.
 
 ## Verificação
-- `python scripts/empacotar.py && tar -tzf dist/sss-*.tar.gz | grep -E "dev.py|repo_fake|secrets.cfg|/admin/"` sem nenhuma linha.
+- `python scripts/empacotar.py` e confira o conteúdo do `tar.gz` e o `SHA256SUMS`. A verificação de entradas proibidas (`dev.py`, `repo_fake`, `secrets.cfg`, `/admin/`) deve passar quando não houver correspondências; trate o código 1 de `grep` como “nenhuma correspondência” e distinga-o de falha de leitura/extração do `tar`.
 - `python -m unittest discover -s scripts -p "test_purge.py" -v` e `-p "test_empacotar.py"`.
 
 ## Saída

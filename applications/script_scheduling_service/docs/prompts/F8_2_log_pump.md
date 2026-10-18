@@ -13,17 +13,17 @@ Transferir o log local do ticket para `log_output` de forma incremental, mascara
 **IN**
 - **`applications/script_scheduling_service/modules/log_pump.py`:**
   - **Mascarador por ticket (CR-007, R-25):** cada `Bomba` recebe um `masking.Mascarador` próprio com os segredos carregados, o `PADRAO_VALOR_RUN_CONEXAO_BD` do ambiente e os valores das `respostas` cujos códigos estão em `sensiveis` no snapshot (README §8.10).
-  - `class Bomba` (uma instância por ticket em execução). Estado: caminho, offset em bytes, `MascaradorFluxo`, sobra de bytes UTF-8 incompletos, caracteres já enviados e flag de truncado.
+  - `class Bomba` (uma instância por ticket em execução). Separe explicitamente: offset de bytes lidos do arquivo; estado do decoder incremental e seus bytes incompletos; estado do `MascaradorFluxo`; fila de texto já mascarado ainda não confirmada no banco; total de bytes UTF-8 confirmados no CLOB; e flag de truncado. O cursor de leitura pode avançar antes do envio somente se todo o texto decodificado/mascarado que ainda não foi confirmado permanecer na fila pendente da bomba.
   - `coletar(max_bytes_leitura=1 MiB) -> texto_seguro`:
-    - lê do offset;
+    - lê do offset de bytes lidos, sem alterar o total confirmado no CLOB;
     - decodifica com um decoder incremental (`codecs.getincrementaldecoder('utf-8')(errors='replace')`), que resolve os multibytes cortados;
     - passa o texto pelo `MascaradorFluxo.alimentar`.
-  - `finalizar() -> texto_seguro`: drena o arquivo até o fim, faz `decoder.decode(b'', final=True)` e chama `MascaradorFluxo.finalizar()`.
+  - `finalizar() -> texto_seguro`: só depois que o processo terminou, drena o arquivo até o fim, faz `decoder.decode(b'', final=True)` e chama `MascaradorFluxo.finalizar()`. A saída final também entra na fila pendente e só é descartada após confirmação de gravação.
   - **Limites:**
     - `excedeu_local() -> bool` verifica o tamanho do arquivo contra `max_local_log_size_bytes`;
     - `aplicar_teto_banco(texto) -> (texto_para_enviar, truncou)` corta pela medida exata do README §8.10: bytes UTF-8 acumulados já enviados (`len(t.encode('utf-8'))`) contra `max_log_size_bytes`. O corte nunca divide caractere (corta por caractere, não por byte). Ao truncar, anexa o marcador literal do README §8.10.
   - `blocos(texto, tamanho=8000)` divide para o `WRITEAPPEND`.
-  - **Orçamento e rodízio (CR-008, R-11):** `class Rodada(bombas, relogio_monotonico, orcamento_s)` coordena uma rodada do pump: começa pela bomba seguinte à última atendida na rodada anterior, chama `coletar` e o envio de blocos ticket a ticket e **para** assim que o tempo gasto passar de `orcamento_s` (`heartbeat_interval_s / 2`, README §8.1), mesmo no meio da fila; o que não foi lido fica para a rodada seguinte (o offset da bomba só avança com o que foi enviado). `finalizar()` de um ticket (flush final) não tem orçamento, mas o laço só faz um por iteração. O relógio é injetado (nada de `time.sleep`).
+  - **Orçamento e rodízio (CR-008, R-11):** `class Rodada(bombas, relogio_monotonico, orcamento_s)` coordena uma rodada do pump: começa pela bomba seguinte à última atendida na rodada anterior, chama `coletar` e envia blocos ticket a ticket; **para** assim que o tempo gasto passar de `orcamento_s` (`heartbeat_interval_s / 2`, README §8.1), mesmo no meio da fila. A fila pendente de cada bomba preserva texto já lido e mascarado para as rodadas seguintes. Cada bloco só é removido da fila e somado ao total confirmado depois que `anexar` retorna `True` e o `COMMIT` do chamador tiver sucesso; em erro/timeout o bloco continua pendente e não é reenviado como se estivesse confirmado. Se `anexar` retorna `False`, a posse foi perdida: parar a coleta daquele ticket e encaminhar `OWNERSHIP_LOST` ao chamador, sem confirmar nem descartar o texto como gravado. Assim, o offset de leitura é independente do progresso confirmado no CLOB, sem perda nem duplicação. `finalizar()` de um ticket (flush final) não tem orçamento, mas o laço só faz um por iteração; também só descarta texto pendente após confirmação do banco. O relógio é injetado (nada de `time.sleep`).
 - **`applications/script_scheduling_service/modules/repo_oracle/scheduler_log.py`** (repositório **interno** do daemon, fora do contrato da UI):
   - `anexar(conn, ticket_id, agente_id, bloco) -> bool`: o bloco PL/SQL do README §8.10, **literal**, com `FOR UPDATE WAIT 5` e as condições de posse. `NO_DATA_FOUND` retorna `False` (posse perdida). O `COMMIT` fica a cargo do chamador.
   - `marcar_truncado(conn, ticket_id, agente_id) -> bool`.
@@ -38,8 +38,8 @@ Transferir o log local do ticket para `log_output` de forma incremental, mascara
   - teto local detectado;
   - `blocos` com o tamanho exato;
   - arquivo que cresce entre coletas;
-  - `anexar` com conexão mock retornando `NO_DATA_FOUND`, resultando em `False`.
-  - **Orçamento (CR-008, R-11):** com relógio simulado que avança a cada bloco, a rodada para ao passar de `orcamento_s`; a rodada seguinte começa pelo ticket seguinte (rodízio: nenhum ticket fica sem coleta por duas rodadas seguidas quando há 3 tickets verbosos e o orçamento cobre só 1); nenhum byte é perdido entre rodadas;
+  - `anexar` com conexão mock retornando `NO_DATA_FOUND`, resultando em `False`, `OWNERSHIP_LOST` para o chamador e nenhum avanço do texto confirmado.
+  - **Orçamento (CR-008, R-11):** com relógio simulado que avança a cada bloco, a rodada para ao passar de `orcamento_s`; a rodada seguinte começa pelo ticket seguinte (rodízio: nenhum ticket fica sem coleta por duas rodadas seguidas quando há 3 tickets verbosos e o orçamento cobre só 1); bytes lidos mas ainda não confirmados sobrevivem à rodada, e falha/timeout entre envio e commit não perde nem duplica o bloco;
   - arquivo aberto para escrita por outro processo durante a coleta (simula o filho);
   - Com `SSS_TEST_DSN`: `WRITEAPPEND` real em um ticket de teste e leitura do CLOB idêntica ao texto mascarado esperado, em cada combinação de driver disponível.
 

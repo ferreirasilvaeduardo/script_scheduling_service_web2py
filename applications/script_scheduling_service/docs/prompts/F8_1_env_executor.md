@@ -29,7 +29,7 @@ Implementar o spawn seguro dos scripts com ambiente limpo, saída direta em arqu
   - `iniciar(argv, log_fd, cwd, env, rotulo) -> Execucao`: grava `work_dir/ticket_<id>/.sss_spawn` (`plataforma.gravar_estado`; falha = `SPAWN_ERROR` sem spawn) **imediatamente antes** de chamar `plataforma.iniciar_processo` (CR-008, R-01); renomeia o log para `ticket_<id>_<PID>.log` (`pastas_log.caminho_log_execucao`), e faz `os.close(log_fd)` no pai. Em caso de falha no spawn, grava a causa no arquivo (sem segredos) e renomeia o parcial para `ticket_<id>_0.log` (README §8.4, passo 3). A `Execucao` guarda o processo, o PID e a identidade (`plataforma.identidade_processo`). **Exceção depois do `Popen`** (escrita da especificação, `rename` do log, identidade, `.sss_proc`): a `Execucao` é devolvida marcada `falhou_apos_spawn`, com o encerramento do grupo de `p.pid` já pedido (`pedir_encerramento`), para o laço coletar e finalizar `SPAWN_ERROR` (CR-008, R-01); o processo nunca fica sem registro local.
   - **Encerramento como máquina de estados (CR-007, R-04):** `pedir_encerramento(execucao, agora_monotonico)` envia SIGTERM e marca o prazo; `avancar_encerramento(execucao, agora_monotonico)` envia SIGKILL quando o prazo vence e diz se o grupo acabou. Nenhuma das duas espera. O grupo é encerrado em **toda** finalização, mesmo com o líder já terminado (R-02), e WARN `NETOS_ENCERRADOS` quando havia membros.
   - **Estado local (R-01):** `registrar_proc(execucao)` grava `.sss_proc` logo depois do spawn; `registrar_resultado(execucao, status, motivo, rc)` grava `.sss_result` antes do `UPDATE` de finalização.
-  - `verificar(execucao) -> None | returncode`.
+  - `verificar(execucao) -> Optional[int]` (`None` enquanto o processo direto continua em execução; `int` com o `returncode` depois que terminou).
   - `traduzir_retorno(returncode, plataforma_nome) -> (status, status_motivo, return_code)`, conforme o README §5.2: 0 → `SUCCESS/EXIT_OK`; positivo → `FAILED/EXIT_ERROR`; negativo (POSIX, sinal) → `FAILED/KILLED_SIGNAL` com `128 + abs`.
   - `limpar(execucao)`: remove `work_dir/ticket_<id>/` e, pelo helper (`limpar <pasta_base> <ticket_id>`, CR-008 R-36), o diretório do script; chamado em todo encerramento, **só depois** de o grupo estar vazio (CR-008, R-26).
   - **Qualquer** exceção no spawn (não só `OSError`, por exemplo `UnicodeEncodeError`) é traduzida para `SPAWN_ERROR`, com a linha `[SSS] falha ao iniciar: <classe>` no log (R-17).
@@ -38,15 +38,15 @@ Implementar o spawn seguro dos scripts com ambiente limpo, saída direta em arqu
   - saída em arquivo de log por minuto (`pastas_log`);
   - script que gera **2 MB** de saída termina sem travar (prova de ausência de pipe);
   - `stdin` é nulo (um script que lê da entrada termina);
-  - o encerramento (máquina de estados) mata o **neto**, inclusive quando o processo principal já saiu sozinho; nenhuma chamada bloqueia;
+  - o encerramento (máquina de estados) mata o **neto**, inclusive quando o processo principal já saiu sozinho; nenhuma chamada de produção bloqueia;
   - `.sss_spawn` existe antes do `Popen` (dublê de `plataforma.iniciar_processo` que confere o arquivo), `.sss_proc` logo depois de `iniciar` e `.sss_result` antes da finalização;
   - falha simulada na gravação do `.sss_proc` depois do `Popen` real: o grupo (com o neto) é encerrado e a `Execucao` volta `falhou_apos_spawn` (CR-008, R-01);
   - exceção que não é `OSError` no spawn vira `SPAWN_ERROR`;
-  - processo que ignora o pedido de término morre dentro de `grace + 1` s;
+  - processo que ignora o pedido de término morre dentro de `grace + 1` s, avançando a máquina de estados pelo laço; o teste pode aguardar o resultado com prazo limitado, mas esse mecanismo de espera não pode ser usado pelo executor em produção;
   - tradução de `returncode`;
   - arquivo de log com `O_EXCL` e modo `0600`; cada pasta nova do caminho com `0750` sob `umask 077`;
   - falha no spawn: a causa gravada e o arquivo `ticket_<id>_0.log`;
-  - timeout: o processo que passa do tempo é encerrado pelo `encerrar` (AGENTS §7);
+  - timeout: o processo que passa do tempo é encerrado por chamadas sucessivas a `pedir_encerramento`/`avancar_encerramento` (AGENTS §3.2; não criar uma função `encerrar` bloqueante);
   - renomeação atômica do parcial para `ticket_<id>_<PID>.log`;
   - argv montado por `params_compiler.montar_argv_agente` (Python com `-I`), a partir de um **snapshot versão 4** (`interpretador`, `path_file`, `args`; README §6.5) passado por `params_compiler.validar_snapshot`; o executável vem de `[agent] interpretadores` e o `script_real` é o `path_file` absoluto resolvido. Estenda `validar_snapshot` para devolver `(snap, argv_real, script_real)`, porque o `env_builder` precisa do `script_real` (`SSS_SCRIPT_DIR`) e o caminho não deve ser resolvido duas vezes;
   - `SSS_SCRIPT_DIR` do filho é o diretório do script.
@@ -58,8 +58,8 @@ Implementar o spawn seguro dos scripts com ambiente limpo, saída direta em arqu
 ## Requisitos
 1. É proibido `stdout=PIPE`, `shell=True` e `os.environ.copy()` (AGENTS §3.2).
 2. Nenhuma primitiva de SO fora de `plataforma/` (varredura do `test_py36_compat.py`).
-3. Nenhuma thread. A espera de `encerrar` é por `poll()` com `time.sleep(0.1)`.
-4. Os testes de processo limpam os processos em `tearDown` mesmo em caso de falha (`encerrar_grupo` defensivo).
+3. Nenhuma thread e nenhuma espera bloqueante no executor. O laço do daemon chama as funções da máquina de estados; não usar `time.sleep`, `Popen.wait()` com prazo nem uma função `encerrar` bloqueante no caminho de produção.
+4. Os testes de processo limpam os processos em `tearDown` mesmo em caso de falha, avançando a mesma máquina de estados e usando `plataforma.sinalizar_grupo`/`grupo_vivo`; qualquer espera limitada usada exclusivamente pelo harness de teste não pode ser chamada pela implementação de produção.
 
 ## Critérios de aceite
 - [ ] Os dois arquivos de teste passam no Linux em 3.6.0, 3.6.8 e 3.13.

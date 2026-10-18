@@ -46,12 +46,13 @@ Escolher, antes da primeira conexão do processo, a combinação de driver que f
 
 ## Requisitos
 1. Nenhum outro arquivo importa `oracledb` ou `cx_Oracle` além de `db_conn.py` e `sondar_driver.py`. Atualize a checagem do `test_py36_compat.py`.
-2. Confirme e registre no relatório os dois pontos em aberto do CR-002 §7: se uma tentativa Thin que falhou impede o Thick no mesmo processo, e se o `DPY-3010` ocorre antes da autenticação.
+2. Registre no relatório a evidência dos dois pontos em aberto do CR-002 §7: se uma tentativa Thin que falhou impede o Thick no mesmo processo, e se o `DPY-3010` ocorre antes da autenticação. Se o ambiente não permitir verificá-los, marque cada ponto como `NÃO TESTADO`, sem inferir o resultado; a sondagem isolada por subprocesso deve manter o desenho independente dessas respostas.
 3. Python 3.6: `oracledb < 2.0`; Python 3.7+: `oracledb 2.x`; `cx_Oracle 8.3`.
 
 ## Critérios de aceite
 - [ ] Os testes com módulos falsos passam em 3.6.0, 3.6.8 e 3.13.
 - [ ] Com `SSS_TEST_DSN`: a combinação escolhida e as versões aparecem no log e no `check_env.py`. Sem `SSS_TEST_DSN`, a parte real fica `NÃO TESTADO`.
+- [ ] Os dois pontos em aberto do CR-002 §7 têm evidência reproduzível ou estão explicitamente marcados `NÃO TESTADO`.
 
 ## Verificação
 `python -m unittest discover -s scripts -p "test_db_conn.py" -v`
