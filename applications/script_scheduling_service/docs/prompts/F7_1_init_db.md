@@ -23,6 +23,7 @@ Gerar e aplicar o DDL Oracle 11gR2 de forma idempotente e auditável, **a partir
   6. triggers `_bi` no template literal do AGENTS §4.2 e triggers `_bu` de imutabilidade (`IF :NEW.<col> <> :OLD.<col> THEN RAISE_APPLICATION_ERROR(-20001, '<col> é imutável'); END IF;`).
 
   **Modelo do CR-007 (já no registro `sql_ident`):** a 17ª tabela `tbsss_controle` (linha única, `ck_tbsss_ctl_id (id = 1)`, sem colunas de registro); `tbsss_scripts.sha256_homologado` e `tbsss_tickets.arquivo_sha256` com as CKs `_sha`; `tbsss_agentes.config_criticos`, `hostname VARCHAR2(255 CHAR)` e `ambientes VARCHAR2(1000 CHAR)`; `tbsss_tickets.process_id NUMBER(10)`; `ix_tbsss_agd_prox (ativo, proxima_execucao, id)`; `ix_tbsss_tck_hist (script_id, created_at)`; o índice **único** baseado em função `ix_tbsss_tck_ocor` (o registro marca `unico`, e o DDL usa `CREATE UNIQUE INDEX`); `ERRO_INTERNO` na `ck_tbsss_agd_pausa`. Cláusula LOB explícita para **todos** os CLOBs, inclusive `tbsss_agendamentos.parametros_json` (README §10).
+  **Log idempotente (modelo inicial, README §8.10):** `tbsss_tickets.log_offset_chars NUMBER(20) DEFAULT 0 NOT NULL` e `ck_tbsss_tck_logoff (log_offset_chars >= 0)`, já presentes no registro. A coluna conta caracteres CLOB confirmados, não bytes UTF-8; o claim zera o offset junto com `log_output`. Como o primeiro esquema Oracle ainda não foi criado, `sql_ident.VERSAO_ESQUEMA` continua em 1 e não há migração nesta fase. Se algum ambiente já tiver criado o esquema, pare e peça a decisão de migração prevista no AGENTS §4.16; não altere esquema existente silenciosamente.
 
   Cada instrução vem acompanhada do tipo e do nome do objeto, para a checagem de existência.
 
@@ -35,7 +36,7 @@ Gerar e aplicar o DDL Oracle 11gR2 de forma idempotente e auditável, **a partir
   **Modelo do CR-006 (já no registro `sql_ident`):** as tabelas, exceto `tbsss_auditoria` e `tbsss_controle` (CR-007), terminam com `created_at DATE DEFAULT SYSDATE NOT NULL`, `created_by VARCHAR2(40 CHAR) NOT NULL` (sem `DEFAULT`), `updated_at DATE` e `updated_by VARCHAR2(40 CHAR)`, e têm a CK `ck_<prefixo><abrev>_upd` (`updated_at` e `updated_by` nulos juntos ou preenchidos juntos). Sem FK nem índice nessas colunas (README §10, "Colunas de registro").
 
   O banco ainda não existe, então não há migração (CR-003, "Modelo de dados"): as colunas entram no `CREATE TABLE` e as CKs na fase 3.
-- **`applications/script_scheduling_service/scripts/init_db.py`** (CLI, `print` permitido), com as opções `--config`, `--dry-run`, `--lob-basicfile`, `--admin-login <login>`, `--admin-nome <nome>`, `--recreate` (só com `SSS_ENV=DEV` e confirmação digitada "RECRIAR <owner>") e `--stats` (padrão ligado). **`--recreate` (CR-007, R-32):** exige `[app] sss_env = DEV` **e** `SSS_ENV=DEV`, a confirmação digitada e nenhuma linha em `tbsss_tickets` nem `tbsss_agentes`. **Códigos de saída:** 0 sucesso, 1 falha de fase, 2 configuração inválida, 3 divergência de esquema ou versão:
+- **`applications/script_scheduling_service/scripts/init_db.py`** (CLI, `print` permitido), com as opções `--config`, `--dry-run`, `--lob-basicfile`, `--admin-login <login>`, `--admin-nome <nome>` e `--stats` (padrão ligado). Não implemente `--recreate`: o README §11.1 ainda não define quais objetos ou dados seriam removidos. Qualquer argumento desconhecido é recusado. **Códigos de saída:** 0 sucesso, 1 falha de fase, 2 configuração inválida, 3 divergência de esquema ou versão:
   - **Checagem de existência** em `ALL_OBJECTS`, `ALL_CONSTRAINTS` e `ALL_INDEXES`, com `owner` e nome como **binds** (`UPPER`). O que já existe é marcado `SKIP`.
   - **Execução fase a fase:** o DDL faz commit implícito no Oracle. A primeira falha **aborta**, com fase, objeto, ORA- e o SQL (sem segredos) no log e código de saída 1.
   - **Conexão como dono do esquema (CR-007, D1b):** `--usuario-dono` (padrão o `owner`), senha por `getpass` ou `SSS_INIT_DB_PASSWORD`, nunca de arquivo nem argumento (README §11.1).
@@ -58,7 +59,8 @@ Gerar e aplicar o DDL Oracle 11gR2 de forma idempotente e auditável, **a partir
   - `table_prefix` começando por dígito, com maiúscula ou com mais de 8 caracteres é recusado antes de gerar DDL, com CRITICAL (`assertLogs`);
   - `--dry-run` executável sem driver;
   - **CR-007:** o DDL contém `tbsss_controle` com as duas CKs e a linha de seed; `CREATE UNIQUE INDEX` para `ix_tbsss_tck_ocor`; as CKs `_sha`; a cláusula LOB de `parametros_json`; os GRANTs gerados por papel não dão `UPDATE`/`DELETE` em `tbsss_auditoria` a web nem agente; a conferência de esquema detecta coluna faltando, tamanho divergente, CK com texto diferente e trigger inválida (com conexão mock).
-  - **CR-008:** `sessao_epoch NUMBER(10) DEFAULT 0 NOT NULL` e `ck_tbsss_usr_epoch` em `tbsss_usuarios`; `pid_daemon NUMBER(10)`; GRANTs do papel monitor só com `SELECT`; `normalizar_expressao` com textos reais do 11gR2 (FBI `CASE WHEN "STATUS"='PENDING' THEN "PRIORIDADE" END`, `DATA_DEFAULT` `SYSDATE ` e `'N' ` com espaço e quebra final, CK `SYS_C0012345` de NOT NULL ignorada) dá zero divergências contra o registro; com `SSS_TEST_DSN`, `init_db` seguido da conferência dá zero divergências.
+  - **CR-008:** `sessao_epoch NUMBER(10) DEFAULT 0 NOT NULL` e `ck_tbsss_usr_epoch` em `tbsss_usuarios`; `pid_daemon NUMBER(10)`; GRANTs do papel monitor só com `SELECT`; `normalizar_expressao` com textos reais do 11gR2 (FBI `CASE WHEN "STATUS"='PENDING' THEN "PRIORIDADE" END`, `DATA_DEFAULT` `SYSDATE ` e `'N' ` com espaço e quebra final, CK `SYS_C0012345` de NOT NULL ignorada) dá zero divergências contra o registro. O ticket inclui `log_offset_chars` e `ck_tbsss_tck_logoff`; com `SSS_TEST_DSN`, `init_db` seguido da conferência dá zero divergências.
+  - **Schema descartável para DDL real:** exigir `[app] sss_env = DEV`, `SSS_TEST_DSN`, `SSS_TEST_OWNER` com prefixo `SSS_TEST_` e `SSS_TEST_SCHEMA_DISPOSABLE=1`. Antes de qualquer DDL, comparar `SSS_TEST_DSN` com `[oracle] dsn`, `SSS_TEST_OWNER` com o owner configurado e `SELECT USER FROM DUAL` com o usuário efetivamente usado por `--usuario-dono`; qualquer divergência ou variável ausente aborta antes da primeira escrita. O schema deve ser dedicado e vazio, nunca HML/produção ou compartilhado.
 
 **OUT**
 - Sem DROP em HML/PROD e sem migração de versões futuras (fora do escopo).
@@ -73,11 +75,11 @@ Gerar e aplicar o DDL Oracle 11gR2 de forma idempotente e auditável, **a partir
 - [ ] Os testes passam.
 - [ ] O `docs/ddl_gerado.sql` contém `path_file VARCHAR2(500 CHAR)` e as CKs `ck_tbsss_scr_path` absoluta e `ck_tbsss_agt_plat` (CR-005).
 - [ ] O `docs/ddl_gerado.sql` contém as colunas de registro e as CKs `_upd` (CR-006); a segunda execução do seed não altera `updated_*`.
-- [ ] O `docs/ddl_gerado.sql` contém os objetos do CR-007 (`tbsss_controle`, índice único da ocorrência, CKs `_sha`, LOB de `parametros_json`); com `SSS_TEST_DSN`, a segunda execução sai com 0 e a conferência de esquema passa, **com a normalização do CR-008 R-14** (nenhuma divergência falsa).
-- [ ] Com `SSS_TEST_DSN`: a primeira execução cria tudo e a segunda resulta em 100% SKIP. Sem `SSS_TEST_DSN`, o veredito dessa parte é `NÃO TESTADO`.
+- [ ] O `docs/ddl_gerado.sql` contém os objetos do CR-007 (`tbsss_controle`, índice único da ocorrência, CKs `_sha`, LOB de `parametros_json`), `log_offset_chars NUMBER(20) DEFAULT 0 NOT NULL` e `ck_tbsss_tck_logoff`; com `SSS_TEST_DSN`, `SSS_TEST_OWNER` e `SSS_TEST_SCHEMA_DISPOSABLE=1` validados, a segunda execução sai com 0 e a conferência de esquema passa, **com a normalização do CR-008 R-14** (nenhuma divergência falsa).
+- [ ] Com `SSS_TEST_DSN`, `SSS_TEST_OWNER` e `SSS_TEST_SCHEMA_DISPOSABLE=1`: a primeira execução no schema dedicado cria tudo e a segunda resulta em 100% SKIP; a validação `SELECT USER FROM DUAL` ocorre antes de DDL. Sem esses pré-requisitos, a parte real fica `NÃO TESTADO`.
 
 ## Verificação
-- `python scripts/init_db.py --dry-run > ../../docs/ddl_gerado.sql`
+- `python scripts/init_db.py --dry-run > docs/ddl_gerado.sql` (executado a partir de `APP`)
 - `python -m unittest discover -s scripts -p "test_d*.py"`
 - **Revisão humana sua (DBA):** leia o `docs/ddl_gerado.sql` antes de executar em qualquer base.
 

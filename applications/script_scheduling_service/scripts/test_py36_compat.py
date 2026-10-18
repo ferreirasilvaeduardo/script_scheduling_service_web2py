@@ -10,6 +10,7 @@ import ast
 import os
 import re
 import sys
+import tempfile
 import unittest
 
 import _testenv  # noqa: F401 - ajusta sys.path sem importar gluon
@@ -63,6 +64,8 @@ PADROES_PROIBIDOS = [
     (r"yaml\.load\s*\(", "'yaml.load' inseguro proibido"),
     (r"\b__import__\s*\(", "'__import__' dinamico proibido"),
     (r"\bimportlib\b", "'importlib' dinamico com dado proibido"),
+    (r"\bctypes\b", "modulo 'ctypes' proibido"),
+    (r"\bmsvcrt\b", "modulo 'msvcrt' proibido"),
     # Web / Frontend (AGENTS §2.3, §3.4)
     (r"\bXML\s*\(", "escape 'XML()' inseguro com dados proibido"),
     (r"x-html", "diretiva 'x-html' proibida (use x-text)"),
@@ -76,7 +79,7 @@ _RE_URL_EXTERNA = re.compile(r"https?://", re.IGNORECASE)
 
 
 def encontrar_arquivos_python(app_dir, web2py_root):
-    """Localiza todos os arquivos .py de APP (exceto dev/scripts/) e bin/."""
+    """Localiza fontes Python de APP e bin/, incluindo o helper sem extensao."""
     arquivos_py = []
     dev_scripts_dir = os.path.normpath(os.path.join(app_dir, "dev", "scripts"))
 
@@ -106,7 +109,101 @@ def encontrar_arquivos_python(app_dir, web2py_root):
                         if p not in arquivos_py:
                             arquivos_py.append(p)
 
+    helper = os.path.join(web2py_root, "bin", "sss-helper")
+    if os.path.isfile(helper) and helper not in arquivos_py:
+        arquivos_py.append(helper)
+
     return sorted(arquivos_py)
+
+
+def verificar_primitivas_so(caminho, app_dir, web2py_root):
+    """Rejeita primitivas POSIX fora da plataforma e da allowlist estrita do helper."""
+    plataforma_dir = os.path.normpath(os.path.join(app_dir, "modules", "plataforma"))
+    helper = os.path.normpath(os.path.join(web2py_root, "bin", "sss-helper"))
+    caminho = os.path.normpath(caminho)
+    if os.path.commonpath([caminho, plataforma_dir]) == plataforma_dir:
+        return []
+    if os.path.basename(caminho).startswith("test_"):
+        return []
+
+    if caminho == helper:
+        with open(caminho, "r", encoding="utf-8", errors="replace") as f:
+            source = f.read()
+        source_lines = source.splitlines()
+        violations = []
+
+        class HelperVisitor(ast.NodeVisitor):
+            def __init__(self):
+                self.functions = []
+
+            def _add(self, node):
+                line_number = getattr(node, "lineno", 1)
+                line = source_lines[line_number - 1].strip()
+                violations.append((caminho, line_number, line))
+
+            def visit_FunctionDef(self, node):
+                self.functions.append(node.name)
+                self.generic_visit(node)
+                self.functions.pop()
+
+            def visit_AsyncFunctionDef(self, node):
+                self.functions.append(node.name)
+                self.generic_visit(node)
+                self.functions.pop()
+
+            def visit_Import(self, node):
+                if any(alias.name == "fcntl" for alias in node.names):
+                    self._add(node)
+                self.generic_visit(node)
+
+            def visit_ImportFrom(self, node):
+                if node.module == "fcntl" or node.module == "resource":
+                    self._add(node)
+                self.generic_visit(node)
+
+            def visit_Attribute(self, node):
+                if isinstance(node.value, ast.Name):
+                    module = node.value.id
+                    function = self.functions[-1] if self.functions else None
+                    if module == "os" and node.attr == "setsid":
+                        self._add(node)
+                    elif module == "os" and node.attr == "killpg" and function not in ("_term", "_kill"):
+                        self._add(node)
+                    elif module == "resource" and node.attr == "setrlimit" and function != "_run":
+                        self._add(node)
+                    elif module == "resource" and node.attr != "setrlimit":
+                        self._add(node)
+                    elif module == "sys" and node.attr == "platform":
+                        self._add(node)
+                self.generic_visit(node)
+
+            def visit_Str(self, node):
+                function = self.functions[-1] if self.functions else None
+                if "/proc/" in node.s and function != "_encerrar_ticket":
+                    self._add(node)
+                elif "pwdx" in node.s and function != "_encerrar_ticket":
+                    self._add(node)
+
+        HelperVisitor().visit(ast.parse(source, filename=caminho))
+        return violations
+
+    padroes = [
+        re.compile(r"\bos\.killpg\s*\("),
+        re.compile(r"\bos\.setsid\s*\("),
+        re.compile(r"\bresource\b"),
+        re.compile(r"\bfcntl\b"),
+        re.compile(r"/proc/"),
+        re.compile(r"\bpwdx\b"),
+        re.compile(r"\bsys\.platform\b"),
+    ]
+    violacoes = []
+    with open(caminho, "r", encoding="utf-8", errors="replace") as f:
+        for num_linha, linha in enumerate(f, start=1):
+            for padrao in padroes:
+                if padrao.search(linha):
+                    violacoes.append((caminho, num_linha, linha.strip()))
+                    break
+    return violacoes
 
 
 def compilar_arquivo_py(caminho):
@@ -172,6 +269,21 @@ class TestPy36Compat(unittest.TestCase):
             "Arquivos com falha de sintaxe/compilacao em Python 3.6:\n{}".format(
                 "\n".join(falhas)
             ),
+        )
+
+    def test_primitivas_so_fora_da_plataforma(self):
+        """Permite apenas a allowlist de primitivas POSIX do helper isolado."""
+        arquivos = encontrar_arquivos_python(self.app_dir, self.web2py_root)
+        violacoes = []
+        for caminho in arquivos:
+            violacoes.extend(verificar_primitivas_so(caminho, self.app_dir, self.web2py_root))
+
+        mensagem = "\n".join(
+            ["{}:{}: {}".format(p, n, linha) for p, n, linha in violacoes]
+        )
+        self.assertEqual(
+            len(violacoes), 0,
+            "Primitivas POSIX fora da camada permitida:\n{}".format(mensagem),
         )
 
     def test_tokens_proibidos_arquivos_reais(self):
@@ -248,6 +360,36 @@ class TestPy36Compat(unittest.TestCase):
         self.assertTrue(_RE_URL_EXTERNA.search("https://cdn.jsdelivr.net/npm/bootstrap"))
         self.assertTrue(_RE_URL_EXTERNA.search("http://fonts.googleapis.com/css"))
         self.assertFalse(_RE_URL_EXTERNA.search("/static/js/app/bundle.js"))
+
+    def test_negativo_detector_primitivas_so(self):
+        """Detecta primitivas POSIX fora da plataforma e limita a excecao ao helper."""
+        with tempfile.TemporaryDirectory() as raiz:
+            app_dir = os.path.join(raiz, "app")
+            web2py_root = os.path.join(raiz, "web2py")
+            caminho_ruim = os.path.join(app_dir, "modules", "outro", "bad_source.py")
+            helper = os.path.join(web2py_root, "bin", "sss-helper")
+            plataforma = os.path.join(app_dir, "modules", "plataforma", "posix.py")
+            for caminho, conteudo in (
+                (caminho_ruim, "os.killpg(1, 15)\nos.setsid()\nimport resource\nimport fcntl\nproc = '/proc/1/cwd'\nsubprocess.Popen(['pwdx', '1'])\nvalor = sys.platform\n"),
+                (helper, "import os\nimport resource\nimport subprocess\ndef _run():\n    resource.setrlimit(1, (2, 3))\ndef _term():\n    os.killpg(1, 15)\ndef _kill():\n    os.killpg(1, 9)\ndef _encerrar_ticket():\n    proc = '/proc/1/cwd'\n    subprocess.Popen(['/usr/bin/pwdx', '1'])\n"),
+                (plataforma, "os.killpg(1, 15)\n"),
+            ):
+                os.makedirs(os.path.dirname(caminho), exist_ok=True)
+                with open(caminho, "w") as f:
+                    f.write(conteudo)
+
+            self.assertEqual(
+                len(verificar_primitivas_so(caminho_ruim, app_dir, web2py_root)), 7
+            )
+            self.assertEqual(verificar_primitivas_so(helper, app_dir, web2py_root), [])
+            helper_bad = "import os\nimport resource\nimport subprocess\ndef _run():\n    os.killpg(1, 15)\ndef _term():\n    resource.setrlimit(1, (2, 3))\ndef _encerrar_ticket():\n    pass\ndef _limpar():\n    proc = '/proc/1/cwd'\n    subprocess.Popen(['/usr/bin/pwdx', '1'])\n"
+            with open(helper, "w") as f:
+                f.write(helper_bad)
+            self.assertEqual(
+                len(verificar_primitivas_so(helper, app_dir, web2py_root)), 4,
+                repr(verificar_primitivas_so(helper, app_dir, web2py_root)),
+            )
+            self.assertEqual(verificar_primitivas_so(plataforma, app_dir, web2py_root), [])
 
 
 if __name__ == "__main__":

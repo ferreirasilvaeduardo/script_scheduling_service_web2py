@@ -1,6 +1,7 @@
 # SSS — Prompt F7.0: Driver adaptativo (Thin → Thick → cx_Oracle)
 
 ## Leitura obrigatória antes de planejar
+- `docs/prompts/UI_FREEZE.md`: aceite assinado, pré-condições concluídas e checklist visual/funcional registrado. Sem esse marco, pare antes de implementar F7.0.
 - `docs/arquitetura/CR-007-robustez-do-scheduler.md` (R-04 e R-12: conexão com prazo e reconexão sem `sleep`)
 - `docs/arquitetura/CR-002-oracle-unico-e-driver-adaptativo.md` (inteiro)
 - `AGENTS.md` §2.2, §3.3, §6, §7

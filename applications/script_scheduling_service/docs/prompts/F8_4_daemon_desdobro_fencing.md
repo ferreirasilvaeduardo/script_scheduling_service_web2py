@@ -83,7 +83,7 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
     - bind de data sem microssegundos (inspecionar os parâmetros passados ao cursor mock e o `setinputsizes` com `TIPO_DATE`);
     - fencing disparado no limiar e não antes, inclusive quando o limiar vence **durante** uma chamada ao banco travada até `call_timeout`;
     - **CR-007:** paginação do desdobro com 3 páginas e orçamento estourado; regra travada por outro agente pulada (`SKIP LOCKED`); avanço sem ticket sem mexer em `ultimo_ticket_id`; `ultimo_ticket_id` inexistente tratado como livre; `SKIP_OVERLAP_PRESO`; `ERRO_INTERNO` numa transação separada; pausa sobre regra já concluída com `rowcount = 0`; `scheduled_at` = ocorrência coberta; `OCORRENCIA_DUPLICADA`; `PRIORIDADE_REBAIXADA`; `CronErro` gerando o ticket vencido antes de pausar; NODE_OFFLINE sem os próprios tickets, com linha travada pulada, suspenso por salto de relógio e quando o próprio heartbeat está velho; encerramento de 30 execuções no fencing sem bloquear o laço; `DRAIN` mantendo o heartbeat;
-    - recuperação do fencing;
+    - recuperação do fencing; o flush após reconexão usa o offset idempotente do README §8.10 e não duplica bloco cujo `COMMIT` anterior teve resultado desconhecido;
     - **CR-008:**
       - **R-03:** o `INSERT` do desdobro recebe `scheduled_at = ocorrencia` (nunca `SYSDATE`) e a prioridade rebaixada;
       - **R-09:** fencing medido a partir do início da transação de heartbeat (transação com 3 chamadas lentas não adia o fence);
@@ -96,11 +96,11 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
       - **R-33:** todo `rbac.Motivo` vira um `pausa_motivo` aceito por `ck_tbsss_agd_pausa`;
     - `DRAIN` e `TERMINATE`, acionados por sinal e pelo arquivo `.stop`;
     - as invariantes I1 a I4 (README §8.9) respeitadas pelo config de teste.
-  - Com `SSS_TEST_DSN`:
+  - Com configuração `DEV` descartável e os três sinalizadores, após `preparar_schema_descartavel('agente')` de `_oracle_test_support` e antes de qualquer DML. Cada cenário cria agentes, regras e tickets com identificadores próprios da execução; registra todos os IDs retornados; em `finally`, para os agentes/processos iniciados, confirma que os filhos terminaram e remove apenas as regras/tickets/agentes criados pela fixture, na ordem compatível com as FKs. Se a limpeza falhar, o teste falha e informa somente os IDs restantes, sem limpeza ampla.
     - **teste obrigatório de microssegundos (README §7.5):** um desdobro real com `antiga_data`/`nova_data` contendo microssegundos não resulta em `rowcount = 0` (o tipo `DATE` declarado descarta a fração);
     - uma `UNICA` concluída no banco fica com `ativo = 'N'`, `pausa_motivo = 'CONCLUIDO'` e `proxima_execucao` igual à lida (não nula);
     - dois agentes e uma regra `CRON` `* * * * *` por 3 minutos, gerando exatamente 1 ticket por minuto (sem duplicatas, verificado por `COUNT` agrupado por minuto de `created_at`);
-    - encerrar um agente abruptamente durante uma execução (`kill -9` no POSIX): o outro agente marca `NODE_OFFLINE` depois de `node_offline_timeout_s`; o filho órfão é tratado pelo startup check da religação.
+    - encerrar um agente abruptamente durante uma execução (`kill -9` somente no PID criado pela fixture, em POSIX): o outro agente marca `NODE_OFFLINE` depois de `node_offline_timeout_s`; o filho órfão é tratado pelo startup check da religação e encerrado antes da limpeza da fixture.
 
 **OUT**
 - Sem purge (isso é o F9.1).
@@ -109,12 +109,12 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
 1. **Uma transação por regra.** Uma regra com erro não bloqueia as demais.
 2. A `antiga_data` usada no `UPDATE` é o valor **lido do banco**, nunca recalculado (README §7.5, passo 1).
 3. Fencing medido **somente** com `time.monotonic()`.
-4. Nenhuma primitiva de SO fora de `plataforma/`.
+4. `scheduler_loop.py` e `scheduler_fila.py` não usam primitivas de SO diretamente; usam `modules/plataforma/`. A exceção restrita do `bin/sss-helper` é definida em F8.0/AGENTS §3.2.
 5. `fence_timeout_s`, `node_offline_timeout_s` e os demais valores de `config_criticos` vêm do config e devem ser idênticos em todos os agentes (README §8.9 e §8.12). O F8.3 os registra em INFO, grava `config_criticos` e confere os outros agentes (CR-007, R-23).
 
 ## Critérios de aceite
 - [ ] Os testes com mock passam.
-- [ ] Os testes com 2 agentes passam com `SSS_TEST_DSN`. Sem ele, ficam `NÃO TESTADO`.
+- [ ] Os testes com 2 agentes passam apenas no schema descartável validado e limpam somente as fixtures próprias. Sem os pré-requisitos, ficam `NÃO TESTADO`; com DSN e schema inválido, falham antes de DML.
 - [ ] O log de um ciclo completo é legível e permite reconstruir as decisões sem acesso ao banco.
 
 ## Verificação

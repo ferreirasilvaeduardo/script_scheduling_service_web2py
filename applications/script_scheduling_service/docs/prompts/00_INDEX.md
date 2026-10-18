@@ -51,16 +51,18 @@
 | 7.0 | `F7_0_driver_adaptativo.md` | Driver adaptativo Thin → Thick → cx_Oracle (CR-002) | ◆ | `test_db_conn.py` |
 | 7.1 | `F7_1_init_db.md` | Bootstrap de DDL Oracle 11gR2 (`init_db.py`) | 7.0 | `test_db_schema.py` + `--dry-run` |
 | 7.2 | `F7_2_db_conn.md` | Conexão Oracle (`db_conn`: pool, transação, erros, reconexão) | 7.1 | `test_db_conn.py` |
-| 7.3 | `F7_3_repo_oracle.md` | Repositórios Oracle 11gR2 (**executar 1x por agregado**) | 7.2 | `test_repo_contract.py` (ORACLE, cada combinação de driver) + `test_sql_oracle11g.py` |
-| 8.0 | `F8_0_plataforma.md` | Camada de plataforma POSIX (Linux/Unix, CR-005) e helper de execução (CR-007) | 7.3 | `test_plataforma.py`, `test_sss_helper.py` |
+| 7.3 | `F7_3_repo_oracle.md` | Repositórios Oracle 11gR2 (**executar 1x por agregado**) | 7.2 | teste Oracle progressivo do agregado + `test_sql_oracle11g.py`; contrato Oracle integrado após o quinto agregado |
+| 8.0 | `F8_0_plataforma.md` | Camada de plataforma POSIX (Linux/Unix, CR-005) e helper de execução (CR-007) | 7.3 | `test_plataforma.py`, `test_sss_helper.py`, `test_py36_compat.py` |
 | 8.1 | `F8_1_env_executor.md` | Ambiente do filho e executor | 8.0 | `test_env_builder.py`, `test_executor.py` |
-| 8.2 | `F8_2_log_pump.md` | Coleta de log para CLOB | 8.1 | `test_log_pump.py` |
+| 8.2 | `F8_2_log_pump.md` | Coleta idempotente de log para CLOB | 8.1 | `test_log_pump.py` |
 | 8.3 | `F8_3_daemon_claim.md` | Daemon: inicialização, claim, heartbeat, cancelamento | 8.2 | `test_scheduler_claim.py` |
 | 8.4 | `F8_4_daemon_desdobro_fencing.md` | Daemon: desdobro, NODE_OFFLINE, fencing, shutdown | 8.3 | `test_scheduler_ha.py` |
 | 9.1 | `F9_1_purge_hardening.md` | Purge, saúde, launchers Linux/Unix, pacote e runbook | 8.4 | `test_purge.py`, `test_saude.py`, `test_empacotar.py` + revisão |
 | 9.2 | `F9_2_e2e.md` | Roteiro E2E com agentes Linux/Unix | 9.1 | Execução assistida |
 
 > **F7.3 é executado uma vez por agregado:** `RBAC_USUARIOS`, `CATALOGO`, `TICKETS`, `AGENDAMENTOS`, `AUDITORIA_AGENTES`. São 31 arquivos de prompt e **35 sessões** do Antigravity (o F7.3 conta 5 vezes), mais o marco manual de UI Freeze.
+
+> Em cada execução do F7.3, rode somente a classe Oracle do agregado selecionado em `test_repo_oracle_progressive.py`; a bateria integrada `test_repo_contract.py` contra Oracle é gate depois da quinta execução. A suíte FAKE continua sendo gate em todas as fases.
 
 > **Prompts já executados são histórico.** Eles refletem o README da época em que rodaram. Mudanças posteriores de arquitetura (CR-001: interpretador lógico, com a parte Windows revogada pelo CR-005; CR-002: Oracle único e driver adaptativo; CR-003: correções da análise funcional pós-F6.1, passos P0–P11 e P6A; CR-004: telas de consulta e linguagem clara, passos U1–U8 e o fechamento UF (testes completos e atualização de `docs/homologacao/`), todos a executar antes do UI Freeze; CR-005: somente POSIX, caminho absoluto livre do script e pastas de log por minuto, passos R0–R5 e UF, também antes do UI Freeze; CR-006: colunas de registro (`created_*`/`updated_*`) e quadro Registro, passos C0, P0, R1–R4 e UF, também antes do UI Freeze; CR-007: robustez do scheduler (usuário de execução por ambiente, estado local do agente, orçamento de tempo do laço, versão do esquema, fila e desdobro sem bloqueio, regex segura e os demais achados da auditoria de 2026-10-17), passos P0, R1–R5 e UF, também antes do UI Freeze; CR-008: correções da auditoria final pós-CR-007 (administrador só por administrador, sessão revogável por `sessao_epoch`, conta de monitoração, hash homologado informado, ator mascarado também no solicitante e no responsável, regex com quantificadores limitados largos contados como ilimitados, marcador `.sss_spawn`, devolução que respeita o cancelamento e os demais achados F-01 a F-36), passos P0, R1, R2 e UF, também antes do UI Freeze; todos em `docs/arquitetura/`) prevalecem e já estão no README, no AGENTS e nos prompts ainda não executados. Exemplo: o F3.1 e o F4.5 citam `comando_real` e caminhos Linux, substituídos pelo interpretador lógico no commit `c904ca3`; o F4.5 também esconde o caminho de quem não é admin, regra (R-f) revogada pela D8 do CR-005, que mostra o caminho completo a todos.
 

@@ -25,7 +25,8 @@ Ter um ponto único, seguro e resiliente de acesso ao Oracle (11gR2 a 23ai), com
     - `call_timeout` (`call_timeout_ms`);
     - `module`, `action` e `client_identifier` (README §2.3);
     - `current_schema` **não** é alterado (o SQL sempre qualifica o owner).
-  - **Tipos neutros:** `TIPO_DATE`, `TIPO_CLOB` e `TIPO_NUMBER`, mapeados para cada driver e modo, e `definir_tipos_entrada(cursor, **mapa)`.
+  - **Tipos neutros:** `TIPO_DATE`, `TIPO_CLOB`, `TIPO_NUMBER` e `TIPO_VARCHAR`, mapeados para cada driver e modo, e `definir_tipos_entrada(cursor, **mapa)`.
+  - **Binds de saída PL/SQL:** `variavel_saida(cursor, tipo, tamanho=None)` cria um OUT bind sem expor `cursor.var` ou constantes do driver; `valor_saida(variavel)` devolve o valor Python normalizado. `TIPO_VARCHAR` é obrigatório para `VARCHAR2` OUT. Código fora de `db_conn.py` não cria nem lê variáveis de saída do driver diretamente.
   - **Bind de datas (README §7.5 "Bind de datas", AGENTS §3.1):** todo bind comparado ou gravado numa coluna `DATE` é declarado por `definir_tipos_entrada` com `TIPO_DATE`, que vira `cursor.setinputsizes(...)` com `oracledb.DB_TYPE_DATE` (Thin e Thick) ou `cx_Oracle.DATETIME` (cx_Oracle). O tipo `DATE` declarado descarta a fração, então um `datetime` com microssegundos **nunca** é comparado como `TIMESTAMP` a uma coluna `DATE` (o `UPDATE` otimista travaria silenciosamente com `rowcount = 0`). Os repositórios (F7.3) e o daemon (F8.3/F8.4) não chamam `setinputsizes` direto: usam esta função.
   - **Relógio e IDs do banco para os repositórios** (nomes sugeridos; registre os definitivos no relatório):
     - `agora_banco(conn)` (abaixo) é a base de `RepoUsuarios.agora()` e `RepoTickets.agora()` no Oracle. O relógio do nó nunca é usado para regra de negócio (README §4.2 "Relógio do banco", §7.1);
@@ -40,6 +41,7 @@ Ter um ponto único, seguro e resiliente de acesso ao Oracle (11gR2 a 23ai), com
   - **`saude(conn)`:** `SELECT SYSDATE FROM DUAL`, retornando o `SYSDATE` *naive*.
   - **`agora_banco(conn)`:** idem, sem microssegundos (README §7.1).
   - **Segredos:** a senha vem de `Segredos`, nunca aparece em `repr` nem em log, e o DSN é logado sem credencial.
+- **`applications/script_scheduling_service/scripts/_oracle_test_support.py`:** criar neste prompt `validar_schema_descartavel(conn, owner_configurado, usuario_sessao_esperado)` e `preparar_schema_descartavel(papel)`, conforme o contrato detalhado no F7.3. O helper não importa drivers; abre conexão somente por `db_conn`; exige `[app] sss_env=DEV`, `data_backend=ORACLE`, `SSS_TEST_DSN` igual ao DSN configurado, `SSS_TEST_OWNER` igual ao owner configurado e com prefixo reservado `SSS_TEST_`, `SSS_TEST_SCHEMA_DISPOSABLE=1`, além de conta de teste diferente do owner. Consulta `SELECT USER FROM DUAL`, valida a conta de sessão do papel e fecha recursos. Testes com mock verificam pré-condições, DSN/owner/ambiente divergentes, identidade de sessão e fechamento.
 - **`applications/script_scheduling_service/scripts/init_db.py`:** substituir o `_conectar` provisório por `db_conn.conectar`.
 - **`applications/script_scheduling_service/scripts/test_db_conn.py` (ampliar):**
   - **Com mocks** (módulos falsos `oracledb` e `cx_Oracle` injetados em `sys.modules`):
@@ -56,8 +58,10 @@ Ter um ponto único, seguro e resiliente de acesso ao Oracle (11gR2 a 23ai), com
     - ausência de senha em logs (captura com `assertLogs`);
     - falhas fatais registradas em CRITICAL no formato do §13 (`assertLogs` no nível CRITICAL);
     - `definir_tipos_entrada` com `TIPO_DATE` chama `setinputsizes` com o tipo de data de cada driver (`DB_TYPE_DATE` ou `DATETIME`);
+    - `TIPO_VARCHAR`/`variavel_saida`/`valor_saida` mapeiam e leem um bind OUT `VARCHAR2` nos três modos, com cursor mock por driver;
+    - com `SSS_TEST_DSN`, `SSS_TEST_OWNER` e `SSS_TEST_SCHEMA_DISPOSABLE=1`, executar `preparar_schema_descartavel('web')` antes de qualquer teste real. O bloco PL/SQL `BEGIN :resultado := 'OK'; END;` lido por `valor_saida` devolve o mesmo `str` nas combinações disponíveis;
     - `proximo_id` monta o `NEXTVAL` com o nome qualificado do `sql_ident`.
-  - **Com `SSS_TEST_DSN`:** em cada combinação disponível, conexão real, `saude`, `agora_banco` sem microssegundos, `proximo_id` e roundtrip de bind DATE. **Teste obrigatório de microssegundos (README §7.5):** um `datetime` igual a um valor `DATE` lido do banco, mas com microssegundos acrescentados, declarado com `TIPO_DATE`, casa na comparação com a coluna (`WHERE col = :d` retorna a linha).
+  - **Com os três sinalizadores e configuração DEV descartável:** em cada combinação disponível, executar primeiro `preparar_schema_descartavel('web')`; então testar conexão real, `saude`, `agora_banco` sem microssegundos, `proximo_id` e roundtrip de bind DATE. O usuário configurado para a conexão de teste é distinto do owner e tem somente no schema descartável os grants de DML necessários às fixtures; não altere grants das contas de produção. O teste `WHERE col = :d` usa somente uma fixture identificada criada pelo teste no schema descartável, apagada ao final por ID próprio; não altera linhas preexistentes. **Teste obrigatório de microssegundos (README §7.5):** um `datetime` igual a um valor `DATE` lido do banco, mas com microssegundos acrescentados, declarado com `TIPO_DATE`, casa na comparação com a coluna (`WHERE col = :d` retorna a linha). Sem o gate completo, a parte real fica `NÃO TESTADO`; se o DSN existir mas não validar, falha antes de DML.
 
 **OUT**
 - Sem SQL de negócio (isso é o F7.3).
@@ -68,7 +72,7 @@ Ter um ponto único, seguro e resiliente de acesso ao Oracle (11gR2 a 23ai), com
 
 ## Critérios de aceite
 - [ ] Os testes com mock passam.
-- [ ] Com `SSS_TEST_DSN`: a conexão real funciona e `v$session` mostra o `module`/`action` (verificação manual sua, se tiver acesso). Sem `SSS_TEST_DSN`, a parte real fica `NÃO TESTADO`.
+- [ ] Com `[app] sss_env=DEV` e os três sinalizadores, após `preparar_schema_descartavel('web')`: a conexão real funciona e `v$session` mostra o `module`/`action` (verificação manual sua, se tiver acesso). Sem qualquer pré-requisito, a parte real fica `NÃO TESTADO`; se DSN/owner/usuário de sessão divergirem ou o owner não tiver o prefixo reservado, falha antes de DML.
 
 ## Verificação
 `python -m unittest discover -s scripts -p "test_db_conn.py" -v`

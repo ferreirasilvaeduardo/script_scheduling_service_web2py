@@ -62,7 +62,7 @@ Definir os contratos de persistência que toda a UI vai consumir e implementá-l
   - **Tickets (40):** distribuídos entre os 5 status e os motivos do README §5.2, com datas relativas ao relógio, 2 com `parent_ticket_id`, 5 vindos de agendamento, `parametros_enviados` com JSON no formato do README §6.5 e `log_output` curto.
   - **Agendamentos (5):** um de cada `tipo_recorrencia`, um pausado com `pausa_motivo`.
   - **Agentes (2)** e **auditoria (30 linhas).**
-- `applications/script_scheduling_service/scripts/test_repo_contract.py`: bateria parametrizada por backend, rodando FAKE sempre e ORACLE só com `SSS_TEST_DSN` (skip). Cobre:
+- `applications/script_scheduling_service/scripts/test_repo_contract.py`: bateria parametrizada por backend, rodando FAKE sempre e ORACLE somente depois do gate progressivo F7.3, com `sss_env=DEV`, `SSS_TEST_DSN`, owner `SSS_TEST_*`, `SSS_TEST_SCHEMA_DISPOSABLE=1` e validação da conta conectada via `SELECT USER FROM DUAL` pelo `_oracle_test_support` (skip se pré-requisitos não forem declarados; falha antes de DML se houver divergência). A conta de teste é distinta do owner e pode receber grants DML temporários apenas no schema descartável para cobrir cascatas; grants de produção não mudam. Cobre:
   - CRUD;
   - UK duplicada;
   - CK de conexão com `@`;

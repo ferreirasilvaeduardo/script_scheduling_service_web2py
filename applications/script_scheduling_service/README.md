@@ -1463,6 +1463,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
       SET status = 'RUNNING', agente_id = :agente_id,
           started_at = SYSDATE, heartbeat_at = SYSDATE,
           log_output = EMPTY_CLOB(),
+          log_offset_chars = 0,
           updated_at = SYSDATE, updated_by = :ator
     WHERE id = :ticket_id AND status = 'PENDING' AND cancel_requested = 'N'
    RETURNING started_at INTO :started_at
@@ -1753,20 +1754,46 @@ O relógio de referência é sempre o `SYSDATE` do banco, nunca o relógio do n�
 ```sql
 DECLARE
   v_lob CLOB;
+  v_offset NUMBER(20);
+  v_tamanho NUMBER(20) := LENGTH(:chunk);
 BEGIN
-  SELECT log_output INTO v_lob
+  SELECT log_output, log_offset_chars
+    INTO v_lob, v_offset
     FROM {owner}.tbsss_tickets
    WHERE id = :ticket_id AND agente_id = :agente_id AND status = 'RUNNING'
      FOR UPDATE WAIT 5;
-  DBMS_LOB.WRITEAPPEND(v_lob, LENGTH(:chunk), :chunk);
+  IF DBMS_LOB.GETLENGTH(v_lob) <> v_offset THEN
+    RAISE_APPLICATION_ERROR(-20002, 'LOG_OFFSET_DIVERGENTE');
+  ELSIF v_offset = :offset_esperado THEN
+    DBMS_LOB.WRITEAPPEND(v_lob, v_tamanho, :chunk);
+    UPDATE {owner}.tbsss_tickets
+       SET log_offset_chars = v_offset + v_tamanho
+     WHERE id = :ticket_id AND agente_id = :agente_id
+       AND status = 'RUNNING' AND log_offset_chars = v_offset;
+    IF SQL%ROWCOUNT <> 1 THEN
+      RAISE_APPLICATION_ERROR(-20002, 'LOG_OFFSET_DIVERGENTE');
+    END IF;
+    :resultado := 'GRAVADO';
+  ELSIF v_offset = :offset_esperado + v_tamanho
+        AND DBMS_LOB.COMPARE(v_lob, :chunk, v_tamanho,
+                             :offset_esperado + 1, 1) = 0 THEN
+    :resultado := 'JA_GRAVADO';
+  ELSE
+    RAISE_APPLICATION_ERROR(-20002, 'LOG_OFFSET_DIVERGENTE');
+  END IF;
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+    :resultado := 'POSSE_PERDIDA';
 END;
 ```
 
-  * Em seguida, `COMMIT`. `NO_DATA_FOUND` é tratado como `OWNERSHIP_LOST`.
+  * `log_offset_chars` é a posição confirmada em **caracteres CLOB**, não bytes UTF-8. Cada ticket tem no máximo um bloco de log em voo por vez. `:offset_esperado` é a posição conhecida pela bomba antes do bloco.
+  * O chamador confirma a transação. Se o `COMMIT` tiver desfecho desconhecido, mantém o bloco pendente e reapresenta exatamente o mesmo offset e bloco numa conexão nova. O SQL devolve `JA_GRAVADO` somente se o offset avançou exatamente pelo tamanho do bloco e o conteúdo nessa posição for idêntico; devolve `GRAVADO` se o bloco ainda não foi anexado. Assim, a repetição não reaplica o `WRITEAPPEND`.
+  * `NO_DATA_FOUND` devolve `POSSE_PERDIDA` (`OWNERSHIP_LOST`). Offset divergente ou conteúdo diferente é erro de integridade: não repetir nem descartar o bloco; interromper o pump daquele ticket e registrar ERROR com contexto.
   * A gravação do log (`log_output` e `log_truncado`) é rotina técnica e não grava `updated_*` (§10, CR-006).
 * **Limites:**
   * O teto do CLOB é medido em **bytes UTF-8 do texto já enviado** (`len(texto.encode('utf-8'))` acumulado pelo agente), e o corte é feito em fronteira de caractere.
-  * Ao atingir `max_log_size_bytes` no CLOB, o agente para de anexar, grava `log_truncado = 'S'` e anexa um marcador final `[SSS] log truncado no banco; arquivo integral no agente`.
+  * `max_log_size_bytes` limita o total de bytes UTF-8 no CLOB, **incluindo** o marcador final `[SSS] log truncado no banco; arquivo integral no agente`. Ao detectar conteúdo além do teto, o agente conserva um prefixo que caiba em `max_log_size_bytes - bytes_do_marcador`, grava `log_truncado = 'S'` e anexa o marcador uma única vez; o total, marcador incluído, nunca excede o teto. O pump mantém em buffer o sufixo necessário para decidir entre enviar o conteúdo integral (se o processo terminar sem exceder o teto) e truncar com marcador.
   * O arquivo local tem teto `max_local_log_size_bytes`. Ao excedê-lo, o processo é encerrado (SIGTERM → SIGKILL) com `FAILED`, `LOG_LIMIT` e `-5`, protegendo o disco. O tamanho é conferido a cada `cancel_poll_interval_s`; contra um script que escreva mais rápido que isso, a operação define cota de disco para o usuário de execução (`IMPLANTACAO.md`).
   * **Arquivo local sem máscara:** o arquivo é escrito pelo próprio script e não é mascarado. Ele pertence ao usuário do agente (`0600`), fica só no agente e é apagado pela retenção (§11.3).
 * **UI `VER_LOGS`:** polling a cada `log_poll_interval_s`.
@@ -2193,6 +2220,7 @@ END;
   * `ck_tbsss_tck_prio (prioridade BETWEEN 1 AND 4)`
   * `ck_tbsss_tck_cancreq (cancel_requested IN ('S','N'))`
   * `ck_tbsss_tck_logtr (log_truncado IN ('S','N'))`
+  * `ck_tbsss_tck_logoff (log_offset_chars >= 0)` (offset CLOB não negativo)
   * `ck_tbsss_tck_motivo (status_motivo IS NULL OR status_motivo IN ('EXIT_OK','EXIT_ERROR','KILLED_SIGNAL','TIMEOUT','NODE_OFFLINE','ORPHAN_PROCESS','FENCED','PRECHECK_FAILED','SPAWN_ERROR','LOG_LIMIT','SHUTDOWN','CANCEL_USER'))`
   * `ck_tbsss_tck_sha (arquivo_sha256 IS NULL OR REGEXP_LIKE(arquivo_sha256, '^[0-9a-f]{64}$'))` (CR-007)
   * `ck_tbsss_tck_upd` (colunas de registro, CR-006)
@@ -2213,6 +2241,7 @@ END;
   * `agendamento_id NUMBER(10)`
   * `parametros_enviados CLOB NOT NULL`
   * `log_output CLOB`
+  * `log_offset_chars NUMBER(20) DEFAULT 0 NOT NULL` (posição confirmada em caracteres CLOB, independente do teto em bytes UTF-8)
   * `log_truncado CHAR(1) DEFAULT 'N' NOT NULL`
   * `return_code NUMBER(6)`
   * `arquivo_sha256 VARCHAR2(64 CHAR)` (CR-007, R-24: sha256 do arquivo que o agente executou, §8.4)
@@ -2321,13 +2350,13 @@ END;
   * base com versão maior que a do código: aborta (aplicação mais antiga que o banco);
   * depois das fases, **conferência do esquema real contra o registro**: colunas (`ALL_TAB_COLUMNS`: tipo, tamanho, `NULLABLE`, `DATA_DEFAULT`), CKs (`SEARCH_CONDITION`), índices (colunas e expressões) e objetos inválidos (`ALL_OBJECTS.STATUS = 'INVALID'` e `ALL_ERRORS`, inclusive triggers compiladas com erro, que o modo Thin só reporta como aviso). Divergência aborta com a lista; o `init_db` nunca corrige sozinho um objeto existente.
   * **Normalização antes de comparar (CR-008, R-14):** o Oracle devolve os textos reescritos, então a comparação literal acusaria divergência sempre. Os dois lados (o do dicionário e o do registro `sql_ident`) passam pela mesma função `sql_ident.normalizar_expressao`: remove aspas duplas, converte para maiúsculas fora de literais entre aspas simples, colapsa espaços, tabulações e quebras de linha num espaço, remove espaços junto de `(`, `)` e `,`, e tira espaços nas pontas (o `DATA_DEFAULT` costuma vir com espaço ou quebra final). CKs de sistema `SYS_C%` cuja condição é só `"<COLUNA>" IS NOT NULL` são ignoradas (repetem o `NULLABLE`). Expressões de índice baseado em função são lidas de `ALL_IND_EXPRESSIONS.COLUMN_EXPRESSION` (`LONG`, lido como texto) e comparadas normalizadas, coluna a coluna, na ordem de `COLUMN_POSITION`. O F7.1 testa a normalização com textos reais do 11gR2 e, com `SSS_TEST_DSN`, cria o esquema e confere que a conferência dá zero divergências.
-* **`--recreate`:** só com `sss_env = DEV` no `config.ini` **e** `SSS_ENV=DEV` no ambiente, confirmação digitada e nenhuma linha em `tbsss_tickets` nem `tbsss_agentes` (CR-007, R-32).
+* **Recriação do esquema:** não há opção `--recreate` nesta versão. O CR-007 R-32 define pré-condições, mas não especifica quais objetos ou dados seriam removidos; a opção só poderá ser implementada após essa semântica ser definida nesta seção.
 * **Estatísticas (CR-007, R-29):** não são coletadas em tabela vazia (gerariam planos com 0 linhas). O `--stats` só coleta tabelas com linhas; o `IMPLANTACAO.md` exige o job automático de estatísticas do banco ativo, ou um job próprio, para o esquema.
 * **Códigos de saída:** 0 sucesso (inclusive tudo `SKIP`), 1 falha de fase, 2 configuração inválida, 3 divergência de esquema ou versão.
 * **Opções:**
   * `--dry-run` imprime o DDL sem executar;
   * `--lob-basicfile` aplica o fallback de LOB;
-  * **não há** opção de DROP em produção. `--recreate` só é aceito com `SSS_ENV=DEV` e confirmação interativa.
+  * não há opção de `DROP` nem `--recreate`, inclusive em DEV. Objetos existentes nunca são removidos automaticamente.
 * Toda falha de fase aborta com código diferente de zero e com o objeto e o ORA- no log.
 * **Seed** via `MERGE` (idempotente): o catálogo de funcionalidades (§4.3.D), o perfil `ADMINISTRADOR` (`is_admin = 'S'`) e a linha de `tbsss_controle` (D4). A inclusão grava `created_by = 'SYSTEM:init_db'`; quando o `MERGE` muda uma linha existente, grava `updated_*` com o mesmo ator; uma linha igual ao seed não é tocada (§10, CR-006).
 * **Administrador inicial:** criado com `created_by = 'SYSTEM:init_db'`. O login vem de `--admin-login`, e a senha é lida de `getpass` ou de `SSS_BOOTSTRAP_ADMIN_PASSWORD`. Nunca há valor fixo no código.
@@ -2357,6 +2386,7 @@ END;
      AND (purge_concessao_ate IS NULL OR purge_concessao_ate < SYSDATE OR purge_dono = :dono)
   ```
   Com `rowcount = 0`, outro nó está purgando: o purge pula tickets e auditoria, registra INFO e sai com 0. A concessão é renovada a cada lote e liberada no fim com `SET purge_dono = NULL, purge_concessao_ate = NULL WHERE id = 1 AND purge_dono = :dono` (CR-008, R-27: zerar só o dono deixava outro nó esperando até 1 h). `:dono` é o `agent_id` do servidor.
+* **`--dry-run` (F9.1):** não toma concessão nem lock local, não executa DML, não remove arquivos e não grava auditoria `PURGE`. Calcula os limites de retenção uma vez com `agora_banco()` e consulta as quantidades elegíveis de tickets, auditoria e pastas de logs locais; as consultas para identificar pastas de tickets `RUNNING` são somente leitura. O resumo identifica cada alvo e suas contagens como estimativas sujeitas a corrida.
 * Remove tickets terminais com `created_at < SYSDATE - :ticket_retention_days`, em lotes:
   ```sql
   DELETE FROM {owner}.tbsss_tickets
@@ -2613,3 +2643,84 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
 | Script que escreve mais rápido que a checagem do teto do log local (§8.10) | `log_dir` em partição própria (`IMPLANTACAO.md` §18.1), checagem do teto a cada `cancel_poll_interval_s` e claim suspenso com pouco espaço livre (`log_dir_min_livre_mb`, CR-008 R-25). A cota de disco do usuário de execução **não** protege o `log_dir`: o arquivo de log pertence ao agente, e a cota é cobrada do dono (correção do CR-008; a cota continua protegendo `exec_work_dir`) |
 | Regex gravada antes do CR-007 fora do subconjunto seguro (§6.2) | Continua valendo até a próxima gravação do parâmetro, que exige a correção; a revisão dos parâmetros com regex faz parte da implantação do CR-007 |
 | Host do agente fora do ar sem religar: o startup check não roda e um processo que tenha sobrevivido nele não é encerrado | O ticket vira `NODE_OFFLINE`; a operação recupera o host antes de religá-lo, e o startup check limpa na religação |
+
+## 15. Diagramas
+
+### 15.1 Arquitetura
+
+```mermaid
+flowchart LR
+    pessoa["Usuário"]
+    browser["Navegador"]
+
+    subgraph web["Nós Web (1..N)"]
+        wsgi["web2py / WSGI"]
+        controllers["Controllers"]
+        services["Services e regras de negócio<br/>RBAC, validação e compilação"]
+        factory["repo_factory"]
+        ui_repos["Contratos e repositórios da UI<br/>ORACLE ou FAKE em DEV"]
+        browser --> wsgi --> controllers --> services --> factory --> ui_repos
+    end
+
+    subgraph agente["Agente Scheduler (um por servidor executor)"]
+        entry["run_scheduler.py"]
+        loop["scheduler_loop.py<br/>desdobro, claim e monitoramento"]
+        batch["Repositórios batch Oracle<br/>agenda, fila e log"]
+        executor["executor.py"]
+        guards["path_guard.py<br/>env_builder.py"]
+        platform["plataforma POSIX<br/>spawn e encerramento"]
+        helper["sss-helper"]
+        script["Script homologado<br/>usuário de execução do ambiente"]
+        local_log["Arquivo local de saída"]
+        entry --> loop
+        loop --> batch
+        loop --> executor --> guards --> platform
+        platform -->|"fora de DEV"| helper --> script
+        platform -->|"DEV"| script
+        script --> local_log
+        local_log --> loop
+    end
+
+    oracle[("Oracle Database<br/>estado, tickets, agenda,<br/>auditoria e log")]
+    pessoa --> browser --> wsgi
+    ui_repos --> oracle
+    batch --> oracle
+```
+
+Os nós Web e os agentes são processos separados. O daemon é iniciado exclusivamente por `run_scheduler.py`; o nó Web não inicia nem sinaliza processos executados. O backend `FAKE` é restrito ao desenvolvimento da UI; o agente exige `ORACLE`.
+
+### 15.2 Fluxo de criação e execução de um ticket
+
+```mermaid
+flowchart TD
+    start["Solicitação manual na UI<br/>ou ocorrência de agendamento"]
+    manual{"Origem manual?"}
+    authorize["Validar sessão, RBAC,<br/>script e ambiente"]
+    manual_ticket["Criar ticket e snapshot<br/>imutável das respostas e do argv"]
+    schedule["Agente desdobra ocorrência<br/>e cria ticket com snapshot"]
+    pending["Ticket PENDING<br/>aguarda scheduled_at"]
+    select["Agente seleciona candidato<br/>compatível com ambiente e interpretador"]
+    claim["Claim transacional:<br/>lock, checagem de limite<br/>e transição condicional"]
+    claimed{"Claim confirmado?"}
+    precheck["Validar snapshot, caminho,<br/>interpretador e hash"]
+    valid{"Pré-validação aprovada?"}
+    spawn["Iniciar pelo mecanismo POSIX<br/>helper fora de DEV"]
+    spawned{"Spawn concluído?"}
+    monitor["Monitorar processo:<br/>heartbeat, cancelamento e timeout"]
+    finish["Encerrar grupo, coletar saída<br/>e finalizar ticket"]
+    precheck_failed["Finalizar como FAILED<br/>PRECHECK_FAILED"]
+    spawn_failed["Finalizar como FAILED<br/>SPAWN_ERROR"]
+    terminal["Ticket em estado terminal"]
+    wait["Aguardar próximo ciclo<br/>ou nova tentativa conforme estado"]
+
+    start --> manual
+    manual -- "Sim" --> authorize --> manual_ticket --> pending
+    manual -- "Não" --> schedule --> pending
+    pending --> select --> claim --> claimed
+    claimed -- "Não" --> wait
+    claimed -- "Sim" --> precheck --> valid
+    valid -- "Não" --> precheck_failed --> terminal
+    valid -- "Sim" --> spawn --> spawned
+    spawned -- "Não" --> spawn_failed --> terminal
+    spawned -- "Sim" --> monitor --> finish --> terminal
+```
