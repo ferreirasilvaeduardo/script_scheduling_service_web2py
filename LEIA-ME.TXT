@@ -1,14 +1,411 @@
-Consegue fazer as alteração abaixo :
-- Mudar a arquitetura para que a web seja totalmente compativel plataforma windowns e POSIX e do back-end seja somente POSIX.
+ PreProd  TESHUVA  APPL mastersafgf@brtlvlty3067sl ~]$ cat ~/.sss/web.env
+SSS_DEV_SEED_PASSWORD=VHpV_zVcR4yCd0vToXnNXyKw
+SSS_TZ=America/Sao_Paulo
+
+
+eduardof@kyros5425-NOTE:~$ ssh -N -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -L 18000:127.0.0.1:18000 mastersafgf@10.238.10.109
+
+
+Hoje a aplicação sobe só em modo de demonstração: interface completa sobre o backend FAKE (`sss_env = DEV`), com os dados na memória. O roteiro abaixo serve para qualquer máquina Linux, sem `sudo`, rodando com o seu próprio usuário. Ele foi montado a partir do `docs/IMPLANTACAO.md`, que tem a versão completa para servidor (usuário `sss`, systemd, túnel).
+
+## 1. Requisitos
+- Linux com **Python 3.6.0 ou superior** e um executável chamado `python3` ou `python3.X`. O launcher recusa outro nome, como `python`.
+- Não precisa de banco, internet nem `pip install`: o web2py e todas as bibliotecas vêm no repositório.
+- Não rode como root: o launcher recusa.
+
+```bash
+python3 --version
+python3 -c "import hashlib; hashlib.pbkdf2_hmac('sha256', b'x', b'y', 200000); print('pbkdf2 OK')"
+```
+
+## 2. Obter o código
+Use o web2py do repositório, não um download do site do web2py.
+
+```bash
+mkdir -p ~/sss && cd ~/sss
+git clone https://github.com/ferreirasilvaeduardo/script_scheduling_service_web2py.git web2py
+cd web2py && git checkout a670aa3
+```
+
+Sem acesso ao Git, gere um pacote na máquina que tem o repositório e copie-o para a máquina nova:
+
+```bash
+# na máquina com o repositório
+git archive --format=tar.gz -o sss.tar.gz a670aa3
+
+# na máquina nova, depois de copiar o sss.tar.gz para ~/
+mkdir -p ~/sss/web2py && tar -xzf ~/sss.tar.gz -C ~/sss/web2py
+```
+
+## 3. Conferir o código
+```bash
+cd ~/sss/web2py/applications/script_scheduling_service
+python3 scripts/check_env.py; echo "codigo: $?"            # esperado: 0
+python3 -m unittest discover -s scripts -p "test_*.py"     # esperado: Ran 718 tests ... OK (skipped=18)
+```
+
+## 4. Pastas e segredos
+O `secrets.cfg` precisa pertencer ao seu usuário e ter modo `0600`; senão a aplicação não sobe.
+
+```bash
+mkdir -p -m 700 ~/sss/work ~/.sss
+mkdir -p -m 750 ~/sss/logs
+( umask 077; python3 -c "import secrets; print('[web]'); print('cookie_key = ' + secrets.token_urlsafe(48))" > ~/.sss/secrets.cfg )
+ls -l ~/.sss/secrets.cfg      # -rw------- seu_usuario
+```
+
+## 5. Configuração (`instance/config.ini`)
+```bash
+cd ~/sss/web2py/applications/script_scheduling_service/instance
+cp config.ini.example config.ini && chmod 640 config.ini
+```
+
+Edite o arquivo e mude **só** estas chaves (troque `<usuario>` pelo seu usuário):
+
+```ini
+[app]
+sss_env = DEV
+data_backend = FAKE
+
+[secrets]
+secrets_file = /home/<usuario>/.sss/secrets.cfg
+
+[agent]
+agent_id = minha-maquina-dev
+work_dir = /home/<usuario>/sss/work
+
+[logging]
+log_dir = /home/<usuario>/sss/logs
+
+[web]
+allowed_origins = http://127.0.0.1:8000
+```
+
+As demais chaves ficam como no exemplo. Toda chave é validada: chave desconhecida ou fora da faixa impede a subida. Em especial, `base_script_dirs` e `app_log_backups` não podem aparecer.
+
+## 6. Teste de carga da configuração
+Este teste carrega a aplicação no terminal, sem subir o servidor, e mostra o motivo exato de qualquer erro:
+
+```bash
+cd ~/sss/web2py
+echo 'print("SSS: configuracao OK (sss_env=%s, backend=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.app.data_backend))' > /tmp/sss_diag.py
+python3 web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E "^SSS:|ConfigErro"
+rm -f /tmp/sss_diag.py
+```
+
+O esperado é `SSS: configuracao OK (sss_env=DEV, backend=FAKE)`. Se aparecer uma linha `ConfigErro`, ela traz a seção, a chave e o motivo.
+
+## 7. Subir o servidor
+```bash
+cd ~/sss/web2py
+read -s -p "SSS_DEV_SEED_PASSWORD: " SSS_DEV_SEED_PASSWORD && export SSS_DEV_SEED_PASSWORD && echo
+export SSS_TZ=America/Sao_Paulo
+bin/sss-web.sh "$(command -v python3)" web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui
+```
+
+- **Senha:** a que você digitar (mínimo de 12 caracteres) passa a valer para `admin`, `op.prod`, `op.hml` e `consulta`. Sem ela, o servidor sobe, mas nenhum login funciona.
+- **Pronto:** quando aparecer `please visit: http://127.0.0.1:8000/`.
+- **Aviso inofensivo:** na primeira subida aparece `unable to create welcome.w2p file`. É esperado, porque a aplicação de exemplo do web2py foi removida.
+- **Parar:** Ctrl+C. Reiniciar o servidor volta os dados ao estado inicial.
+
+## 8. Validar
+Num segundo terminal:
+
+```bash
+curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:8000/script_scheduling_service/default/login   # 200
+tail -n 5 "$(find ~/sss/logs/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
+```
+
+No navegador da própria máquina, abra `http://127.0.0.1:8000/script_scheduling_service` e entre com `admin`. A raiz `http://127.0.0.1:8000/` dá 404 de propósito; use sempre o caminho completo.
+
+Se a máquina for remota, acesse por túnel SSH a partir da sua estação:
+
+```bash
+ssh -N -L 8000:127.0.0.1:8000 <usuario>@<maquina>
+```
+
+Depois abra `http://localhost:8000/script_scheduling_service` no seu navegador. Nunca suba com `-i 0.0.0.0`.
+
+## O que esperar
+- **Scripts do seed:** apontam para `/opt/automacoes/scripts/...`, que não existe numa máquina nova. O disparo cria o ticket normalmente, e a Gestão de Scripts mostra o aviso "Arquivo não encontrado neste servidor…". É o comportamento previsto. Para a validação completa dos caminhos é preciso instalar essa árvore com `sudo` (`docs/AMBIENTE_DEV.md` §6.1).
+- **Um processo só:** o FAKE guarda os dados na memória do processo. Não use gunicorn nem uWSGI com vários workers.
+- **Para homologar:** siga o `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx` (v2.2).
+
+Para manter no ar como serviço (usuário `sss`, systemd, `/opt/sss`), siga o `docs/IMPLANTACAO.md` a partir do §4.
+
+
+
+
+
+==============================================
+Esse log não mostra erro de verdade. As duas mensagens são esperadas e inofensivas:
+
+Mensagem	O que é
+nohup: ignoring input	Aviso do próprio nohup quando a entrada do processo não foi redirecionada. Some com < /dev/null no comando, como no iniciar_sss.sh que te passei.
+New installation error: unable to create welcome.w2p file	Na primeira subida, o web2py tenta empacotar a aplicação de exemplo welcome, que foi removida de propósito. Está descrito no IMPLANTACAO §11.1 e não aparece de novo.
+Num servidor sem ssl (o caso do 3067) também é normal aparecer depois um aviso do Rocket sobre SSL. O que importa é se o servidor está respondendo. Confira no 3067:
+
+
+# troque PORTA pela porta que você usou no comando de subida
+PORTA=8000
+curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:$PORTA/script_scheduling_service/default/login   # esperado: 200
+ps -ef | grep "[w]eb2py.py"                       # processo(s) do web2py no ar
+tail -n 20 ~/sss-2026-10-16_15-26-42.log          # mensagens depois do welcome.w2p
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=======================
+Para apagar tudo o que o passo a passo criou, primeiro pare o servidor e depois remova as pastas.
+
+## 1. Parar o servidor
+No terminal onde ele está rodando, aperte **Ctrl+C**. Se esse terminal já foi fechado, procure o processo:
+
+```bash
+ps -ef | grep "[w]eb2py.py" | grep "8000"
+kill -INT <PID>          # o PID é a segunda coluna da linha acima
+```
+
+Confira que a porta ficou livre (o comando não deve mostrar nada):
+
+```bash
+ss -ltn | grep ":8000 "
+```
+
+## 2. Ver o que vai ser apagado
+O roteiro criou:
+- **`~/sss/`**: código (`web2py/`), `work/` e `logs/`;
+- **`~/.sss/`**: o `secrets.cfg`;
+- **`~/sss.tar.gz`**: só se você usou a opção de pacote no lugar do Git.
+
+Antes de apagar, confira o conteúdo:
+
+```bash
+ls -la ~/sss ~/.sss ~/sss.tar.gz 2>/dev/null
+```
+
+Se o `~/.sss` já existia antes e tem outros arquivos seus, apague só o `secrets.cfg` (item 3 abaixo).
+
+Se quiser guardar os logs da aplicação como evidência, copie-os antes:
+
+```bash
+cp -r ~/sss/logs ~/sss_logs_backup
+```
+
+## 3. Apagar
+```bash
+rm -rf ~/sss
+rm -f ~/.sss/secrets.cfg && rmdir ~/.sss 2>/dev/null
+rm -f ~/sss.tar.gz /tmp/sss_diag.py
+```
+
+O `rmdir` só remove o `~/.sss` se ele tiver ficado vazio; qualquer outro arquivo seu lá dentro é preservado.
+
+## 4. Conferir
+O comando abaixo deve responder "No such file or directory" para cada item:
+
+```bash
+ls -d ~/sss ~/.sss ~/sss.tar.gz
+```
+
+Isso apaga só a instalação em `~/sss`. O repositório em `/portaloptrib/TESHUVA/web2py` não é tocado. Como o backend FAKE guarda os dados na memória, não sobra banco nem dado em outro lugar.
+
+
+
+====================
+
+OBS :
+in : cd /portaloptrib/TESHUVA/web2py; VER=$(git rev-parse --short HEAD); git status --short | grep -v LEIA-ME; git archive --format=tar.gz -o ~/sss_pacotes/sss-$VER.tar.gz $VER && cd ~/sss_pacotes && sha256sum sss-$VER.tar.gz > sss-$VER.tar.gz.sha256 && cat sss-$VER.tar.gz.sha256 && ls -la sss-$VER.tar.gz* && tar -tzf sss-$VER.tar.gz | grep -cE "instance/(config.ini|secrets.cfg)$"; tar -tzf sss-$VER.tar.gz | grep -E "^applications/[^/]+/$"
+out : T
+?? applications/script_scheduling_service/docs/extras/
+a42e9acc4724558d652e81109e77019a1712b3375934407d915a369c69ac37aa  sss-a670aa3.tar.gz
+-rw-r--r-- 1 eduardof eduardof 13767316 Oct 16 14:47 sss-a670aa3.tar.gz
+
+
+================================
+
+O pacote está pronto em `/home/eduardof/sss_pacotes/`:
+
+| Arquivo | Detalhe |
+|---|---|
+| `sss-a670aa3.tar.gz` | 13,8 MB, versão atual com as correções da auditoria |
+| `sss-a670aa3.tar.gz.sha256` | SHA-256 `a42e9acc4724558d652e81109e77019a1712b3375934407d915a369c69ac37aa` |
+
+Conferi o conteúdo: só a aplicação `script_scheduling_service`, sem `config.ini` nem `secrets.cfg`. A pasta `docs/extras/` que aparece no seu repositório não está commitada, então ficou fora do pacote; se ela deve ir junto, faça o commit antes e eu gero o pacote de novo.
+
+## 1. Antes de copiar: Python no servidor
+É a única coisa que o servidor precisa ter. No servidor:
+
+```bash
+python3 --version     # precisa ser 3.6.0 ou superior
+python3 -c "import hashlib; hashlib.pbkdf2_hmac('sha256', b'x', b'y', 200000); print('pbkdf2 OK')"
+```
+
+Se o Python 3 não estiver no `PATH`, procure com `ls /usr/bin/python3* /usr/local/bin/python3*`. O nome do executável precisa ser `python3` ou `python3.X`, porque o launcher recusa outro nome.
+
+## 2. Copiar os dois arquivos para o servidor
+Use o caminho que você tiver:
+
+```bash
+# acesso direto por SSH
+scp ~/sss_pacotes/sss-a670aa3.tar.gz* <usuario>@<servidor>:/tmp/
+exemplo: scp -rp mastersafgf@10.238.10.109:/portaloptrib/TESHUVA/Backup/sss_pacotes /home/mastersafgf/sss
+
+# acesso por um servidor de salto (como o 3067, que só se alcança pelo clone 7)
+scp -J <usuario>@<salto> ~/sss_pacotes/sss-a670aa3.tar.gz* <usuario>@<servidor>:/tmp/
+```
+
+Sem SSH, um pen drive ou o compartilhamento que a infraestrutura liberar também serve. O importante é levar os dois arquivos.
+
+## 3. No servidor: conferir e extrair
+```bash
+cd /tmp && sha256sum -c sss-a670aa3.tar.gz.sha256     # deve responder "sss-a670aa3.tar.gz: OK"
+mkdir -p ~/sss/web2py && tar -xzf /tmp/sss-a670aa3.tar.gz -C ~/sss/web2py
+ls ~/sss/web2py/applications                          # somente script_scheduling_service
+rm -f /tmp/sss-a670aa3.tar.gz /tmp/sss-a670aa3.tar.gz.sha256
+```
+
+Se o `sha256sum` não responder "OK", o arquivo chegou corrompido: copie de novo antes de continuar.
+
+## 4. Daqui em diante, igual ao roteiro anterior
+Os passos 3 a 8 do roteiro que te passei antes valem sem mudança, porque nenhum deles usa internet ou Git:
+1. **Conferir o código:** `check_env.py` com código 0 e suíte com 718 testes.
+2. **Pastas e `secrets.cfg`**, com modo `0600`.
+3. **`config.ini`:** cuidado ao colar só os valores das chaves; foi um comando colado por engano que causou o erro de agora há pouco.
+4. **Teste de carga**, que deve responder `SSS: configuracao OK`.
+5. **Subida** pelo `bin/sss-web.sh`.
+6. **Validação** com `curl` e acesso pelo túnel SSH.
+
+Se o servidor tiver usuário de serviço, `sudo` ou `systemd`, o `docs/IMPLANTACAO.md` §4 em diante mostra a instalação definitiva em `/opt/sss`. Se não tiver nada disso, o §21 descreve exatamente esse caso, que é o modelo usado no clone 7 e no 3067.
+
+
+
+
+
+
+====================================================
+
+
+# 1. Garante que o diretório ~/sss existe
+mkdir -p ~/sss
+
+# 2. Cria o arquivo com o conteúdo especificado
+cat << 'EOF' > ~/sss/iniciar_sss.sh
+#!/bin/bash
+set -a; . ~/.sss/web.env; set +a
+cd ~/sss/web2py
+exec bin/sss-web.sh "$(command -v python3)" web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui
+EOF
+
+
+
+Próximo passo recomendado 💡
+
+Para que você consiga executar esse script diretamente no terminal, você precisa dar permissão de execução a ele. Para fazer isso, rode o seguinte comando:
+bash
+chmod +x ~/sss/iniciar_sss.sh
+Use o código com cuidado.
+Depois disso, você poderá iniciar o seu serviço a qualquer momento rodando:
+bash
+~/sss/iniciar_sss.sh
+Use o código com cuidado.
+Você quer ajuda para configurar esse script para iniciar automaticamente com o sistema (usando o systemd ou crontab) ou precisa ajustar alguma variável de ambiente dentro do arquivo web.env?
+
+em como ~/sss/iniciar_sss.sh com nohup ?
+
+Para executar o seu script ~/sss/iniciar_sss.sh em segundo plano usando o nohup (garantindo que ele continue rodando mesmo se você fechar o terminal), utilize o comando abaixo:
+bash
+nohup ~/sss/iniciar_sss.sh > ~/sss/sss.log 2>&1 &
+Use o código com cuidado.
+
+🔍 O que cada parte desse comando faz?
+
+• nohup: Ignora o sinal de desligamento (SIGHUP) quando o terminal é fechado.
+• ~/sss/iniciar_sss.sh: O caminho do seu script que será executado.
+• > ~/sss/sss.log: Redireciona a saída padrão (as mensagens de texto do script) para um arquivo de registro chamado sss.log dentro da sua pasta.
+• 2>&1: Redireciona também os erros (caso o script falhe) para o mesmo arquivo de log.
+• &: Envia todo o processo para rodar em segundo plano (background), liberando o seu terminal imediatamente.
+
+
+tem como colocar data ? nohup ~/sss/iniciar_sss.sh > ~/sss/sss.log 2>&1 &
+
+Sim, é totalmente possível adicionar a data e a hora atual. No Linux, a melhor estratégia para fazer isso com o nohup é injetar um comando date antes de rodar o script ou mudar o nome do arquivo de log para incluir a data.
+Aqui estão as duas formas mais eficientes de fazer isso:
+
+Opção 1: Log com a data e hora no nome do arquivo (Recomendado)
+
+Esta opção cria um arquivo de log único toda vez que você inicia o script (ex: sss-2026-10-16_15-25-00.log). Isso evita que um log apague o histórico do outro.
+bash
+nohup ~/sss/iniciar_sss.sh > ~/sss/sss-$(date +%F_%H-%M-%S).log 2>&1 &
+Use o código com cuidado.
+• $(date +%F_%H-%M-%S) vai gerar algo como 2026-10-16_15-25-00.
+
+Opção 2: Adicionar uma linha com a data DENTRO do log atual
+
+Se você prefere manter sempre o mesmo arquivo sss.log, mas quer que fique registrado nele o momento exato em que o comando foi disparado, use:
+bash
+(date && nohup ~/sss/iniciar_sss.sh) > ~/sss/sss.log 2>&1 &
+Use o código com cuidado.
+• Isso vai escrever a data atual na primeira linha do arquivo sss.log e, logo em seguida, começará a gravar a saída do seu script abaixo dela.
+
+💡 Dica de Ouro
+
+Se você escolher a Opção 1, você pode ver qual é o log mais recente criado na pasta usando o comando:
+bash
+ls -t ~/sss/*.log | head -n 1
+Use o código com cuidado.
+Você prefere automatizar isso criando um histórico de logs antigos compactados (logrotate) ou quer ajuda para fazer o próprio script iniciar_sss.sh colocar a data em cada linha de log gerada?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=========================================
+Consegue fazer as alteração abaixo ? :
+- Mudar a arquitetura para compativel somente com a plataforma POSIX 
 - O path do script seja cadastrado em qualquer lugar do servidor 
 - O log do script sempre ficam na pasta com padrão : <nome_script>(minusculo)/<YYYY>(ano)/<MM>(mes)/DD(dia)/HH(hora)/MI(minuto)/<nome_log>_<PID>.log 
 - Qq outro log fica na pasta app/YYYY(ano)/MM(mes)/DD(dia)/HH(hora)/MI(minuto)/<nome_log>_<PID>.log
 
-atualizar readme de forma RIGOROSA.
-atualizar prompt de forma RIGOROSA.
-atualizar documentacao de forma RIGOROSA.
+* atualizar AGENTS.md , README.md, IMPLANTACAO.md , AMBIENTE_DEV.md , PADRAO_CRUD_ADMIN.md de forma RIGOROSA.
+* atualizar prompt de forma RIGOROSA. /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/prompts
+*  atualizar documentacao de forma RIGOROSA.
+/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/homologacao
 
 
+* LEIA :> AGENTS.md , README.md, IMPLANTACAO.md , AMBIENTE_DEV.md , PADRAO_CRUD_ADMIN.md de forma RIGOROSA e valide se estão atualizados com as ultimas alterações aplicadas.
+A mesma coisa para:
+/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/homologacao
+/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/prompts
+
+
+Background command "cd /portaloptrib/TESHUVA/web2py; export SSS_DEV_SEED_PASSWORD='Homolog-CR005-2026' SSS_TZ=America/Sao_Paulo; bin/sss-web.sh ~/.pyenv/versions/3.6.0/bin/python3.6 web2py.py -a '<recycle>' -i 127.0.0.1 -p 8010 --no_gui > /tmp/claude-1000/-portaloptrib-TESHUVA-web2py/4d242b84-a2df-41eb-b992-8d572a3b4de5/scratchpad/srv8010.out 2>&1" failed with exit code 137
 
 
 
@@ -58,7 +455,7 @@ O navegador continua em `http://localhost:18000/script_scheduling_service`. Agor
 Se preferir que eu instale, autorize a ação quando eu tentar de novo. Também posso atualizar o `IMPLANTACAO.md` §22 com esse túnel fixo.
 
 
-
+======================
 
 
 
@@ -96,11 +493,54 @@ SSS_TZ=America/Sao_Paulo
 
 
 
+================================
 
 
 
+Consegui entrar e verifiquei os dois lados. O túnel **não está correto**, por dois motivos.
 
+## O que encontrei
+**No clone 7 (`brtlvlts1216pl`):**
+- **Túnel antigo (o que vale hoje):** um `ssh` de ontem (PID **7658**, desde 15/10) ocupa a porta `127.0.0.1:18000` e encaminha para a **porta 18000** do 3067.
+- **Seu `tunel.sh` novo:** está em laço desde 15:39 (PID **40694**) e falha a cada 10 s com `bind: Address already in use`, porque a porta 18000 já é do túnel antigo. O `tunel.log` cresce sem parar.
+- **Arquivo de PID:** o `tunel.pid` guarda 40690, mas o processo do laço é o 40694. O `kill -- -$(cat tunel.pid)` do roteiro não pegaria o processo certo.
+- **Teste pelo túnel:** a página de login não responde (o `curl` dá `000`).
 
+**No 3067 (`brtlvlty3067sl`):**
+- A sua instalação nova está no ar desde 15:26 na **porta 8000**, e o login responde **HTTP 200** localmente.
+- Na porta **18000** não há nada: o SSS antigo de `/portaloptrib/TESHUVA/SSS` não está rodando.
+
+Ou seja, o túnel aponta para a porta 18000 do 3067, mas a aplicação está na 8000.
+
+## Como corrigir
+O caminho mais simples é manter a porta 18000 na sua estação e no clone 7 e apontar o destino para a porta 8000 do 3067. No clone 7:
+
+```bash
+# 1. parar o túnel antigo e o laço que está falhando
+kill 7658
+kill 40694; pkill -f "ssh -N .*-L 127.0.0.1:18000" 2>/dev/null
+
+# 2. no tunel.sh, trocar o destino de :18000 para :8000
+sed -i 's|-L 127.0.0.1:18000:127.0.0.1:18000|-L 127.0.0.1:18000:127.0.0.1:8000|' ~/sss_tunel/tunel.sh
+grep -- "-L " ~/sss_tunel/tunel.sh       # esperado: -L 127.0.0.1:18000:127.0.0.1:8000
+
+# 3. subir de novo, com o PID do processo certo
+: > ~/sss_tunel/tunel.log
+nohup setsid ~/sss_tunel/tunel.sh >> ~/sss_tunel/tunel.log 2>&1 < /dev/null &
+sleep 3; pgrep -f "sss_tunel/tunel.sh" > ~/sss_tunel/tunel.pid
+
+# 4. conferir
+netstat -ltn | grep 127.0.0.1:18000                      # LISTEN
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:18000/script_scheduling_service/default/login   # 200
+```
+
+Na sua estação nada muda: o mesmo `ssh -N ... -L 18000:127.0.0.1:18000 mastersafgf@10.238.10.109` e `http://localhost:18000/script_scheduling_service`. Em DEV, o endereço `http://localhost:18000` é aceito automaticamente na checagem de origem.
+
+Para parar o túnel depois, use `kill $(cat ~/sss_tunel/tunel.pid)` e em seguida o `pkill` do passo 1, que encerra o `ssh` filho.
+
+A alternativa é subir o SSS na porta 18000 do 3067 e não mexer no túnel, mas aí é preciso parar a instância da 8000 e ajustar o `allowed_origins`. A troca no túnel dá menos trabalho.
+
+Não alterei nada nos servidores, só li. São processos num servidor compartilhado, então prefiro sua confirmação: quer que eu aplique a correção no clone 7 e confira o HTTP 200 pelo túnel?
 
 
 

@@ -28,11 +28,15 @@ applications/script_scheduling_service/scripts/site-packages/
 
 # SSS instance configuration (only .example is tracked)
 applications/script_scheduling_service/instance/config.ini
+applications/script_scheduling_service/instance/web.env
+applications/script_scheduling_service/logs/
+applications/script_scheduling_service/work/
 
 # Logs and secrets
 *.log
 secrets.cfg
 .env
+*.env
 # Launchers locais de desenvolvimento (podem conter dados da maquina do desenvolvedor)
 bin/sss-web-*_v*.sh
 # Artefatos de execucao do servidor web2py (parameters_<porta>.py guarda o hash da senha do admin)
