@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Público | Quem vai instalar e operar o SSS num servidor novo (infraestrutura, desenvolvimento, homologação) |
-| Versão do sistema | 0.1.0 — commit de referência `fe5884c` ou posterior (fases F0.1 a F6.1 e CR-003 a CR-005; o CR-006, colunas de registro, o CR-007, robustez do scheduler, e o CR-008, correções da auditoria final, entram depois e trazem os pré-requisitos do §18). Os servidores dos §21 e §22 foram implantados com o `fdf6f35`, anterior aos três CRs |
+| Versão do sistema | 0.1.0 — commit de referência `3b9a065` ou posterior (fases F0.1 a F6.1, CR-003 a CR-008; limpeza da raiz do web2py e scripts de controle local em `bin/`). Os servidores dos §21 e §22 foram implantados inicialmente com o `fdf6f35` |
 | Validação | Procedimento **ensaiado de ponta a ponta** em 2026-10-15 num clone limpo do repositório (Python 3.6.0 e 3.13) e **implantado** no mesmo dia no servidor clone 7 (Oracle Linux 6.9, Python 3.7 sem `ssl`, sem `sudo` nem `systemd` — registro no §21). A versão com o CR-003 e o CR-004 foi validada em 2026-10-16 na estação de desenvolvimento (suíte em Python 3.6.0, 3.6.8 e 3.13.2 e verificação das telas no navegador), mas ainda não foi reimplantada em servidor (§22). A versão com o CR-005 (somente POSIX, caminho absoluto do script e logs em pastas por minuto) foi validada em 2026-10-16 na estação (suíte em 3.6.0, 3.6.8 e 3.13.2). O que não foi ensaiado está marcado como **[não ensaiado]** |
 | Documentos relacionados | `README.md` (regras de negócio e arquitetura), `AGENTS.md` (regras de desenvolvimento), `docs/AMBIENTE_DEV.md` (estação do desenvolvedor), `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx` (roteiro de homologação) |
 
@@ -118,7 +118,7 @@ Escolha **uma** das opções, sempre fixando um commit ou tag conhecido.
 cd /opt/sss
 git clone https://github.com/ferreirasilvaeduardo/script_scheduling_service_web2py.git web2py
 cd web2py
-git checkout fe5884c        # ou a tag/commit homologado
+git checkout 3b9a065        # ou a tag/commit homologado
 git log --oneline -1
 ```
 
@@ -130,30 +130,30 @@ Na máquina que tem o repositório:
 
 ```bash
 cd /caminho/do/repositorio
-git archive --format=tar.gz -o sss-fe5884c.tar.gz fe5884c
-sha256sum sss-fe5884c.tar.gz > sss-fe5884c.tar.gz.sha256
+git archive --format=tar.gz -o sss-3b9a065.tar.gz 3b9a065
+sha256sum sss-3b9a065.tar.gz > sss-3b9a065.tar.gz.sha256
 ```
 
 Copie os dois arquivos para o servidor (por exemplo, `scp` para `/tmp`) e:
 
 ```bash
 # como sss
-cd /tmp && sha256sum -c sss-fe5884c.tar.gz.sha256      # deve responder "OK"
-mkdir -p /opt/sss/web2py && tar -xzf /tmp/sss-fe5884c.tar.gz -C /opt/sss/web2py
+cd /tmp && sha256sum -c sss-3b9a065.tar.gz.sha256      # deve responder "OK"
+mkdir -p /opt/sss/web2py && tar -xzf /tmp/sss-3b9a065.tar.gz -C /opt/sss/web2py
 ```
 
-O pacote do `git archive` (~14 MB) não contém `config.ini`, `secrets.cfg`, logs nem arquivos de parâmetros do web2py: eles são criados nos passos seguintes.
+O pacote do `git archive` (~13,8 MB) não contém `config.ini`, `secrets.cfg`, logs nem arquivos de parâmetros do web2py: eles são criados nos passos seguintes.
 
 ### 5.3 Conferência
 
 ```bash
 cd /opt/sss/web2py
-ls                      # deve listar web2py.py, gluon/, applications/, bin/, routes.py ...
+ls                      # deve listar web2py.py, anyserver.py, gluon/, applications/, bin/, routes.py
 ls applications         # deve listar SOMENTE script_scheduling_service
 ls applications/script_scheduling_service/instance   # config.ini.example e secrets.cfg.example
 ```
 
-As aplicações de exemplo do web2py (`admin`, `welcome`, `examples`) **não** vêm no repositório, por segurança. Isso é intencional.
+As aplicações de exemplo do web2py (`admin`, `welcome`, `examples`), bem como as pastas legadas dispensáveis da raiz (`examples/`, `extras/`, `handlers/`, `scripts/`, `site-packages/`), foram removidas no commit `3b9a065` para manter a árvore hermética, limpa e segura.
 
 ---
 
@@ -308,7 +308,20 @@ rm -f /tmp/sss_diag.py
 
 ## 11. Subir o servidor
 
-### 11.1 Subida interativa (primeira vez e testes)
+### 11.1 Subida interativa e scripts locais de controle
+
+Para subida local de desenvolvimento em segundo plano com geração de log carimbado com data/hora e verificação automática de HTTP 200:
+
+```bash
+# como sss
+cd /opt/sss/web2py
+bin/iniciar_local.sh               # sobe em segundo plano com nohup (porta 8000 padrao)
+# ou: bin/iniciar_local.sh 18000   # porta customizada
+# ou: bin/iniciar_local.sh -f      # em primeiro plano no terminal
+bin/parar_servico.sh               # encerra graciosamente (SIGINT) e libera a porta
+```
+
+Alternativamente, a chamada direta ao launcher:
 
 ```bash
 # como sss
@@ -322,6 +335,8 @@ O que cada parte faz:
 
 | Parte | Função |
 |---|---|
+| `bin/iniciar_local.sh` | Script de inicialização em segundo plano: carrega `instance/web.env`, dispara via `bin/sss-web.sh` com `nohup`, carimba a data no nome do arquivo de log (`servidor-AAAA-MM-DD_HH-MI-SS.log`) e no cabeçalho, cria o link `servidor.out` e valida a resposta HTTP 200 do login |
+| `bin/parar_servico.sh` | Script de parada graciosa: lê o PID de `work/sss_web.pid`, envia `SIGINT` ao web2py, aguarda a liberação da porta e registra o encerramento no log |
 | `bin/sss-web.sh` | Launcher do projeto: **recusa root**, aplica `umask 077`, exporta `TZ` (de `SSS_TZ`) e `LANG`/`LC_ALL` (de `SSS_LOCALE`, padrão `C.UTF-8`; CR-007: o processo aborta sem codificação UTF-8) e substitui o próprio processo pelo comando (`exec`), para que os sinais de parada cheguem direto ao servidor |
 | `web2py.py` | Servidor web embutido do web2py (Rocket), multithread em **um único processo**, como o FAKE exige |
 | `-a '<recycle>'` | Senha do painel administrativo do web2py. `<recycle>` reaproveita a existente ou, na primeira vez, **desabilita** o painel (que nem é implantado). Assim nenhuma senha aparece na lista de processos (`ps`). **Não** use `-a 'senha'` |
@@ -329,7 +344,7 @@ O que cada parte faz:
 | `-p 8000` | Porta. Se mudar, ajuste o túnel (§13) e `allowed_origins` |
 | `--no_gui` | Sem interface gráfica do web2py |
 
-A subida está pronta quando aparece `please visit: http://127.0.0.1:8000/`. Para parar: **Ctrl+C**.
+A subida está pronta quando aparece `please visit: http://127.0.0.1:8000/` (ou quando `iniciar_local.sh` confirma o HTTP 200). Para parar: **Ctrl+C** (em primeiro plano) ou `bin/parar_servico.sh` (em segundo plano).
 
 Na **primeira** subida aparece no terminal `New installation error: unable to create welcome.w2p file` com um traceback. É **esperado e inofensivo**: o web2py tenta empacotar a aplicação de exemplo `welcome`, que foi removida de propósito.
 

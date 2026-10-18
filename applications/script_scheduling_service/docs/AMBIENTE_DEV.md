@@ -125,7 +125,18 @@ Antes da primeira subida, crie `instance/config.ini` a partir do `config.ini.exa
 
 A aplicação fica no endereço local `127.0.0.1:8000/script_scheduling_service` (porta 8000, caminho `/script_scheduling_service`).
 
-Para subir como nos servidores, use o launcher `bin/sss-web.sh "$(command -v python3)" web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui` (o launcher só aceita interpretador chamado `python3` ou `python3.X`): ele recusa root, aplica `umask 077`, exporta `TZ` a partir de `SSS_TZ` e `LANG`/`LC_ALL` a partir de `SSS_LOCALE` (padrão `C.UTF-8`) (`docs/IMPLANTACAO.md` §11.1).
+Para subir de forma prática em segundo plano (com nohup, carimbo de data/hora no log e validação de subida):
+
+```bash
+cd /portaloptrib/TESHUVA/web2py
+bin/iniciar_local.sh               # sobe em background na porta 8000
+# ou: bin/iniciar_local.sh 18000   # porta customizada
+# ou: bin/iniciar_local.sh -f      # em primeiro plano no terminal
+bin/parar_servico.sh               # encerra graciosamente o processo e libera a porta
+```
+
+Para subir como nos servidores via launcher oficial:
+`bin/sss-web.sh "$(command -v python3)" web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui` (o launcher só aceita interpretador chamado `python3` ou `python3.X`): ele recusa root, aplica `umask 077`, exporta `TZ` a partir de `SSS_TZ` e `LANG`/`LC_ALL` a partir de `SSS_LOCALE` (padrão `C.UTF-8`) (`docs/IMPLANTACAO.md` §11.1).
 
 **Codificação (CR-007):** o processo web aborta se a codificação do sistema de arquivos não for UTF-8 (`sys.getfilesystemencoding()`). Subindo sem o launcher, exporte antes `LANG=C.UTF-8` e `LC_ALL=C.UTF-8` (ou outro locale UTF-8 da máquina, `locale -a`).
 
