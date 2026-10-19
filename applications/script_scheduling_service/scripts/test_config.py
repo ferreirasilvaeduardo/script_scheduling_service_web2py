@@ -126,24 +126,23 @@ class TestConfig(unittest.TestCase):
 
         # [oracle]
         self.assertEqual(cfg.oracle.user, "sss_web")
-        self.assertEqual(cfg.oracle.dsn, "10.0.0.1:1521/servico_homolog")
-        self.assertEqual(cfg.oracle.owner, "gfcadastro")
+        self.assertEqual(cfg.oracle.dsn, "localhost:2424/servico_homolog")
+        self.assertEqual(cfg.oracle.owner, "openrisow")
         self.assertEqual(cfg.oracle.table_prefix, "tbsss_")
-        self.assertEqual(cfg.oracle.driver, "oracledb")
-        self.assertTrue(cfg.oracle.use_thick_mode)
+        self.assertEqual(cfg.oracle.modo_driver, "auto")
         self.assertIsNone(cfg.oracle.oracle_client_lib_dir)
         self.assertEqual(cfg.oracle.call_timeout_ms, 30000)
         self.assertEqual(cfg.oracle.pool_min, 1)
         self.assertEqual(cfg.oracle.pool_max, 4)
 
         # [secrets]
-        self.assertEqual(cfg.secrets.secrets_file, "/etc/sss/secrets.cfg")
+        self.assertEqual(cfg.secrets.secrets_file, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance")
 
         # [agent]
         self.assertEqual(cfg.agent.agent_id, "srv-linux-prod-01")
         self.assertEqual(cfg.agent.ambientes_atendidos, ("PRODUCAO", "HOMOLOGACAO"))
         self.assertFalse(hasattr(cfg.agent, "base_script_dirs"))
-        self.assertEqual(cfg.agent.work_dir, "/var/lib/sss/work")
+        self.assertEqual(cfg.agent.work_dir, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work")
         self.assertEqual(cfg.agent.script_owner_uids, (0,))
         self.assertEqual(cfg.agent.max_parallel_jobs, 4)
         self.assertEqual(cfg.agent.max_parallel_hard_limit, 32)
@@ -168,7 +167,7 @@ class TestConfig(unittest.TestCase):
         )
 
         # [logging]
-        self.assertEqual(cfg.logging.log_dir, "/var/log/sss")
+        self.assertEqual(cfg.logging.log_dir, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs")
         self.assertEqual(cfg.logging.level, "INFO")
         self.assertEqual(cfg.logging.app_log_max_bytes, 10485760)
         self.assertEqual(cfg.logging.app_log_retention_days, 30)
@@ -179,7 +178,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg.web.login_bloqueio_s, 900)
         self.assertEqual(cfg.web.log_poll_interval_s, 3)
         self.assertEqual(cfg.web.trusted_proxies, ())
-        self.assertEqual(cfg.web.allowed_origins, ("https://sss.empresa.local",))
+        self.assertEqual(cfg.web.allowed_origins, ("http://127.0.0.1:18000",))
 
         # [retencao]
         self.assertEqual(cfg.retencao.ticket_retention_days, 180)
@@ -188,7 +187,7 @@ class TestConfig(unittest.TestCase):
 
         # Acesso via indexacao estilo dict
         self.assertEqual(cfg["app"]["sss_env"], "DEV")
-        self.assertEqual(cfg["oracle"]["owner"], "gfcadastro")
+        self.assertEqual(cfg["oracle"]["owner"], "openrisow")
 
         # Imutabilidade estrita
         with self.assertRaises(AttributeError):
@@ -217,6 +216,14 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(ctx.exception.secao, "oracle")
         self.assertEqual(ctx.exception.chave, "chave_fantasma")
 
+        # Chaves legadas driver e use_thick_mode removidas no F7.0
+        for chave_legada, val in (("driver", "oracledb"), ("use_thick_mode", "true")):
+            ini_leg = self._copiar_e_modificar_ini(alteracoes={"oracle": {chave_legada: val}})
+            with self.assertRaises(sss_config.ConfigErro) as ctx_leg:
+                sss_config.carregar(ini_leg)
+            self.assertEqual(ctx_leg.exception.secao, "oracle")
+            self.assertEqual(ctx_leg.exception.chave, chave_legada)
+
     def test_secao_desconhecida(self):
         """Verifica rejeicao de secao nao documentada no config.ini."""
         ini = self._copiar_e_modificar_ini(alteracoes={"secao_estranha": {"foo": "bar"}})
@@ -231,10 +238,10 @@ class TestConfig(unittest.TestCase):
         with self.assertRaises(sss_config.ConfigErro):
             sss_config.carregar(ini_int)
 
-        # bool invalido
-        ini_bool = self._copiar_e_modificar_ini(alteracoes={"oracle": {"use_thick_mode": "talvez"}})
+        # modo_driver invalido
+        ini_modo = self._copiar_e_modificar_ini(alteracoes={"oracle": {"modo_driver": "invalido"}})
         with self.assertRaises(sss_config.ConfigErro):
-            sss_config.carregar(ini_bool)
+            sss_config.carregar(ini_modo)
 
         # enum invalido
         ini_enum = self._copiar_e_modificar_ini(alteracoes={"app": {"sss_env": "STAGING"}})
@@ -704,26 +711,26 @@ class TestConfigCR007(unittest.TestCase):
                      agent={"usuarios_execucao": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml"})
         self._recusa("exec_work_dir", app=base, retencao=ret,
                      agent={"usuarios_execucao": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
-                            "exec_work_dir": "/var/lib/sss/work/exec"})
+                            "exec_work_dir": "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work/exec"})
         cfg = self._carregar(app=base, retencao=ret, agent={"usuarios_execucao": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
-                                                            "exec_work_dir": "/var/lib/sss/exec"})
-        self.assertEqual(cfg.agent.exec_work_dir, "/var/lib/sss/exec")
+                                                            "exec_work_dir": "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec"})
+        self.assertEqual(cfg.agent.exec_work_dir, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec")
 
     def test_purge_user_com_oracle(self):
         base = {"sss_env": "DEV", "data_backend": "ORACLE"}
         self._recusa("purge_user", app=base)
         self._recusa("purge_user", app=base, retencao={"purge_user": "SSS_WEB"})
-        self._recusa("purge_user", app=base, retencao={"purge_user": "gfcadastro"})
+        self._recusa("purge_user", app=base, retencao={"purge_user": "openrisow"})
         self.assertEqual(self._carregar(app=base, retencao={"purge_user": "sss_purge"}).retencao.purge_user, "sss_purge")
 
     def test_cr008_user_diferente_do_owner_fora_de_dev(self):
         ret = {"purge_user": "sss_purge"}
-        agent = {"usuarios_execucao": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml", "exec_work_dir": "/var/lib/sss/exec"}
+        agent = {"usuarios_execucao": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml", "exec_work_dir": "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec"}
         self._recusa("user", app={"sss_env": "HML", "data_backend": "ORACLE"}, retencao=ret, agent=agent,
-                     oracle={"user": "GFCADASTRO"})
+                     oracle={"user": "OPENRISOW"})
         cfg = self._carregar(app={"sss_env": "DEV", "data_backend": "ORACLE"}, retencao=ret,
-                             oracle={"user": "gfcadastro"})
-        self.assertEqual(cfg.oracle.user, "gfcadastro")
+                             oracle={"user": "openrisow"})
+        self.assertEqual(cfg.oracle.user, "openrisow")
 
     def test_cr008_sessao_max_horas(self):
         self.assertEqual(self._carregar().web.sessao_max_horas, 12)
@@ -773,10 +780,21 @@ class TestConfigCR007(unittest.TestCase):
         with self.assertRaises(sss_config.ConfigErro):
             sss_config.carregar_segredos(self._secrets(web), papel="agente_x")
 
+        # Papel monitor (CR-008, E3):
+        monitor = [("monitor", {"user": "sss_monitor", "password": "senha-mon-123"})]
+        seg_mon = sss_config.carregar_segredos(self._secrets(monitor), sss_env="PROD", data_backend="ORACLE", papel="monitor")
+        self.assertEqual(seg_mon.monitor_user, "sss_monitor")
+        self.assertEqual(seg_mon.monitor_password, "senha-mon-123")
+        self.assertIn("senha-mon-123", self.mascarados)
+        self.assertNotIn("senha-mon-123", repr(seg_mon))
+        with self.assertRaises(sss_config.ConfigErro):
+            sss_config.carregar_segredos(self._secrets(monitor + [("oracle", {"password": "x"})]),
+                                         sss_env="PROD", data_backend="ORACLE", papel="monitor")
+
     def test_segredos_do_agente_cobrem_os_ambientes(self):
         cfg = self._carregar(app={"sss_env": "HML", "data_backend": "ORACLE"}, retencao={"purge_user": "sss_purge"},
                              agent={"usuarios_execucao": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
-                                    "exec_work_dir": "/var/lib/sss/exec"})
+                                    "exec_work_dir": "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec"})
         so_prod = [("oracle", {"password": "senha-agt-123"}),
                    ("ambiente:PRODUCAO", {"user": "app", "password": "senha-amb-123"})]
         with self.assertRaises(sss_config.ConfigErro) as ctx:

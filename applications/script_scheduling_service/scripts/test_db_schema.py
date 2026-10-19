@@ -342,14 +342,14 @@ class TestDbSchema(unittest.TestCase):
     def test_validadores_owner_prefixo_e_qualificar(self):
         """Testa validacoes de owner, prefixo e qualificacao com casos validos e invalidos."""
         # Casos validos
-        self.assertEqual(validar_owner("gfcadastro"), "gfcadastro")
+        self.assertEqual(validar_owner("openrisow"), "openrisow")
         self.assertEqual(validar_owner("OWNER_123"), "OWNER_123")
         self.assertEqual(validar_prefixo("tbsss_"), "tbsss_")
         self.assertEqual(validar_prefixo("a1_"), "a1_")
-        self.assertEqual(qualificar("gfcadastro", "tbsss_tickets"), "gfcadastro.tbsss_tickets")
+        self.assertEqual(qualificar("openrisow", "tbsss_tickets"), "openrisow.tbsss_tickets")
         self.assertEqual(
-            qualificar("gfcadastro", "tbsss_tickets", prefixo="tbsss_"),
-            "gfcadastro.tbsss_tickets",
+            qualificar("openrisow", "tbsss_tickets", prefixo="tbsss_"),
+            "openrisow.tbsss_tickets",
         )
 
         # Casos invalidos em owner
@@ -372,7 +372,7 @@ class TestDbSchema(unittest.TestCase):
         with self.assertRaises(ValueError):
             qualificar("owner; DROP TABLE", "tbsss_tickets")
         with self.assertRaises(ValueError):
-            qualificar("gfcadastro", "tabela; DROP TABLE")
+            qualificar("openrisow", "tabela; DROP TABLE")
 
         # Nao ecoa se valor > 64 caracteres
         valor_longo = "x" * 70

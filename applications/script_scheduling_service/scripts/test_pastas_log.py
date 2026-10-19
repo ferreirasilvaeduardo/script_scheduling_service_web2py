@@ -53,8 +53,8 @@ class TestPastasLog(unittest.TestCase):
 
     def test_diretorio_log_execucao(self):
         dt = datetime.datetime(2026, 4, 5, 8, 9, 30)
-        d = pastas_log.diretorio_log_execucao("/var/log/sss", u"Carga Diária", dt)
-        self.assertEqual(d, "/var/log/sss/carga_diaria/2026/04/05/08/09")
+        d = pastas_log.diretorio_log_execucao("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", u"Carga Diária", dt)
+        self.assertEqual(d, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/carga_diaria/2026/04/05/08/09")
 
     def test_nomes_log_execucao_parcial_e_final(self):
         self.assertEqual(pastas_log.nome_log_parcial(101), "ticket_101.log.parcial")
@@ -66,14 +66,14 @@ class TestPastasLog(unittest.TestCase):
 
     def test_caminhos_completos_log_execucao(self):
         dt = datetime.datetime(2026, 10, 16, 14, 5, 0)
-        c_parcial = pastas_log.caminho_log_parcial("/var/log/sss", "carga", dt, 77)
-        self.assertEqual(c_parcial, "/var/log/sss/carga/2026/10/16/14/05/ticket_77.log.parcial")
+        c_parcial = pastas_log.caminho_log_parcial("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "carga", dt, 77)
+        self.assertEqual(c_parcial, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/carga/2026/10/16/14/05/ticket_77.log.parcial")
 
-        c_final = pastas_log.caminho_log_execucao("/var/log/sss", "carga", dt, 77, pid=1234)
-        self.assertEqual(c_final, "/var/log/sss/carga/2026/10/16/14/05/ticket_77_1234.log")
+        c_final = pastas_log.caminho_log_execucao("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "carga", dt, 77, pid=1234)
+        self.assertEqual(c_final, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/carga/2026/10/16/14/05/ticket_77_1234.log")
 
-        c_erro = pastas_log.caminho_log_execucao("/var/log/sss", "carga", dt, 77, pid=0)
-        self.assertEqual(c_erro, "/var/log/sss/carga/2026/10/16/14/05/ticket_77_0.log")
+        c_erro = pastas_log.caminho_log_execucao("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "carga", dt, 77, pid=0)
+        self.assertEqual(c_erro, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/carga/2026/10/16/14/05/ticket_77_0.log")
 
     # -----------------------------------------------------------------------
     # 3. Logs da aplicacao (CR-005 D6, R-c, R-d, R-e, README §13)
@@ -81,8 +81,8 @@ class TestPastasLog(unittest.TestCase):
 
     def test_diretorio_e_nome_log_app(self):
         dt = datetime.datetime(2026, 10, 16, 8, 54, 0)
-        d = pastas_log.diretorio_log_app("/var/log/sss", dt)
-        self.assertEqual(d, "/var/log/sss/app/2026/10/16/08/54")
+        d = pastas_log.diretorio_log_app("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", dt)
+        self.assertEqual(d, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/app/2026/10/16/08/54")
 
         self.assertEqual(pastas_log.nome_log_app("sss_web", 4321), "sss_web_4321.log")
         self.assertEqual(pastas_log.nome_log_app("sss_web.log", 4321), "sss_web_4321.log")
@@ -92,8 +92,8 @@ class TestPastasLog(unittest.TestCase):
 
     def test_caminho_log_app(self):
         dt = datetime.datetime(2026, 10, 16, 8, 54, 12)
-        c = pastas_log.caminho_log_app("/var/log/sss", "sss_web", 4321, dt)
-        self.assertEqual(c, "/var/log/sss/app/2026/10/16/08/54/sss_web_4321.log")
+        c = pastas_log.caminho_log_app("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "sss_web", 4321, dt)
+        self.assertEqual(c, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/app/2026/10/16/08/54/sss_web_4321.log")
 
     def test_proximo_caminho_log_app_com_sufixo_rotacao(self):
         # R-c: colisoes dentro do mesmo minuto e PID geram _2, _3, ...

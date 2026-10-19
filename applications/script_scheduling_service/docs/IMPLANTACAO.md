@@ -52,9 +52,9 @@ Convenções deste guia:
 | Caminho | Conteúdo | Dono | Modo |
 |---|---|---|---|
 | `/opt/sss/web2py` | Código (web2py + aplicação) | `sss` | `0750` |
-| `/etc/sss/secrets.cfg` | Segredos | `sss` | arquivo `0600`, diretório `0700` |
-| `/var/log/sss` | Logs da aplicação, em `app/AAAA/MM/DD/HH/MI/` (§15.2) | `sss` | `0750` |
-| `/var/lib/sss/work` | Diretório de trabalho do agente (reservado ao F8) | `sss` | `0700` |
+| `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance` | Segredos | `sss` | arquivo `0600`, diretório `0700` |
+| `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs` | Logs da aplicação, em `app/AAAA/MM/DD/HH/MI/` (§15.2) | `sss` | `0750` |
+| `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work` | Diretório de trabalho do agente (reservado ao F8) | `sss` | `0700` |
 | `/opt/automacoes/scripts` | Árvore de scripts (somente leitura para o `sss`) | `root` | diretórios `0755`, arquivos `0644` |
 
 * `APP` = `/opt/sss/web2py/applications/script_scheduling_service`.
@@ -82,14 +82,14 @@ O SSS **recusa rodar como root** (o launcher aborta). Crie um usuário dedicado,
 
 ```bash
 # 4.1 Usuário de serviço (sem shell de login; os comandos rodam via "sudo -u sss")
-sudo useradd --system --create-home --home-dir /var/lib/sss --shell /sbin/nologin sss
+sudo useradd --system --create-home --home-dir /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service --shell /sbin/nologin sss
 # Em Debian/Ubuntu, se /sbin/nologin não existir, use /usr/sbin/nologin
 
 # 4.2 Diretórios
 sudo install -d -o sss -g sss -m 0750 /opt/sss
 sudo install -d -o sss -g sss -m 0700 /etc/sss
-sudo install -d -o sss -g sss -m 0750 /var/log/sss
-sudo install -d -o sss -g sss -m 0700 /var/lib/sss/work
+sudo install -d -o sss -g sss -m 0750 /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs
+sudo install -d -o sss -g sss -m 0700 /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work
 
 # 4.3 Fuso horário do servidor (se ainda não estiver definido)
 sudo timedatectl set-timezone America/Sao_Paulo
@@ -227,16 +227,16 @@ No `config.ini` (§9): `script_owner_uids = 0`.
 
 > **Atualização de instalações anteriores (CR-005):** as chaves `[agent] base_script_dirs` e a antiga `base_script_dir` saíram, e `[logging] app_log_backups` foi trocada por `app_log_retention_days`. Antes de subir a versão nova, apague a linha da pasta base e troque a de backups (§16.3); senão a subida é abortada com CRITICAL "Chave desconhecida".
 
-### 8.2 Segredos (`/etc/sss/secrets.cfg`)
+### 8.2 Segredos (`/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance`)
 
 O arquivo precisa ser **regular, pertencer ao usuário que roda o processo (`sss`) e ter modo `0600`**; caso contrário a aplicação não sobe (§17). Com o backend FAKE, basta a chave do cookie de sessão:
 
 ```bash
 # como sss
 umask 077
-$PYTHON -c "import secrets; print('[web]'); print('cookie_key = ' + secrets.token_urlsafe(48))" > /etc/sss/secrets.cfg
-chmod 600 /etc/sss/secrets.cfg
-ls -l /etc/sss/secrets.cfg        # -rw------- 1 sss sss ...
+$PYTHON -c "import secrets; print('[web]'); print('cookie_key = ' + secrets.token_urlsafe(48))" > /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance
+chmod 600 /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance
+ls -l /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance        # -rw------- 1 sss sss ...
 ```
 
 * `cookie_key` assina e cifra o cookie de sessão. Trocar o valor desconecta todos os usuários.
@@ -269,11 +269,11 @@ O `config.ini` não contém segredos. **Toda chave é validada na subida**: chav
 |---|---|---|---|
 | `[app]` | `sss_env` | `DEV` | Obrigatório com FAKE. Também exibe a faixa amarela "AMBIENTE DEV" |
 | `[app]` | `data_backend` | `FAKE` | `ORACLE` ainda não está implementado |
-| `[secrets]` | `secrets_file` | `/etc/sss/secrets.cfg` | Caminho absoluto do §8.2 |
+| `[secrets]` | `secrets_file` | `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance` | Caminho absoluto do §8.2 |
 | `[agent]` | `agent_id` | identificador do servidor, ex.: `srv-sss-hml-01` | Aparece em todas as linhas de log; `^[A-Za-z0-9._-]{1,30}$` |
 | `[agent]` | `script_owner_uids` | `0` | UID do dono da árvore do §8.1 (root). Os diretórios do caminho do script podem pertencer ao root mesmo sem o 0 na lista; com scripts reais, prefira um UID dedicado (README §8.5) |
-| `[agent]` | `work_dir` | `/var/lib/sss/work` | Reservado ao agente (F8) |
-| `[logging]` | `log_dir` | `/var/log/sss` | Criado com `0750` se não existir |
+| `[agent]` | `work_dir` | `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work` | Reservado ao agente (F8) |
+| `[logging]` | `log_dir` | `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs` | Criado com `0750` se não existir |
 | `[logging]` | `level` | `INFO` | `DEBUG` só para investigação |
 | `[logging]` | `app_log_retention_days` | `30` | Dias de log da aplicação mantidos; o próprio processo apaga as pastas de dia mais antigas (§15.2) |
 | `[web]` | `allowed_origins` | `http://127.0.0.1:8000` | Lista separada por vírgula. Em DEV, o próprio endereço acessado já é aceito automaticamente; com proxy reverso, inclua a URL pública (§13.2) |
@@ -354,7 +354,7 @@ Na **primeira** subida aparece no terminal `New installation error: unable to cr
 |---|---|
 | `/opt/sss/web2py/parameters_8000.py` | Senha (hash) do painel do web2py; com `<recycle>` na primeira vez, `password=None` |
 | `/opt/sss/web2py/httpserver.log` | Log de acesso do servidor web (uma linha por requisição) |
-| `/var/log/sss/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` | Log da aplicação, na pasta do minuto da subida (§15.2) |
+| `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` | Log da aplicação, na pasta do minuto da subida (§15.2) |
 | `APP/errors/` | "Tickets" de erro interno do web2py (§15.3) |
 
 ---
@@ -377,7 +377,7 @@ curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origi
 # esperado: origem estranha: HTTP 403
 
 # 12.4 Log da aplicação sendo escrito (arquivo mais recente, §15.2)
-tail -n 5 "$(find /var/log/sss/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
+tail -n 5 "$(find /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
 ```
 
 Depois, pelo navegador (via túnel, §13.1), faça o **teste de fumaça**:
@@ -457,7 +457,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/opt/sss/web2py /var/log/sss /var/lib/sss
+ReadWritePaths=/opt/sss/web2py /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service
 
 [Install]
 WantedBy=multi-user.target
@@ -489,7 +489,7 @@ journalctl -u sss-web -n 50 --no-pager
 
 | Log | Onde | Conteúdo |
 |---|---|---|
-| Aplicação | `/var/log/sss/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log`: um arquivo por processo, na pasta do minuto em que ele subiu; ao chegar a 10 MB (`app_log_max_bytes`) abre outro na pasta do minuto atual (no mesmo minuto, com sufixo `_2`, `_3`…); pastas de dia com mais de 30 dias (`app_log_retention_days`) são apagadas pelo próprio processo | Formato `data nível [pid] [agente] [ticket] [acao] mensagem`. Login, logout, criação/cancelamento de ticket, negações de acesso, recusas de CSRF/origem. **Nunca** contém senhas nem valores sigilosos |
+| Aplicação | `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log`: um arquivo por processo, na pasta do minuto em que ele subiu; ao chegar a 10 MB (`app_log_max_bytes`) abre outro na pasta do minuto atual (no mesmo minuto, com sufixo `_2`, `_3`…); pastas de dia com mais de 30 dias (`app_log_retention_days`) são apagadas pelo próprio processo | Formato `data nível [pid] [agente] [ticket] [acao] mensagem`. Login, logout, criação/cancelamento de ticket, negações de acesso, recusas de CSRF/origem. **Nunca** contém senhas nem valores sigilosos |
 | Acesso HTTP | `/opt/sss/web2py/httpserver.log` | Uma linha por requisição (IP, método, caminho, status) |
 | Serviço | `journalctl -u sss-web` | Saída do processo quando rodando por systemd |
 | Erros internos | `APP/errors/` | Ver 15.3 |
@@ -497,7 +497,7 @@ journalctl -u sss-web -n 50 --no-pager
 Exemplos úteis:
 
 ```bash
-applog() { find /var/log/sss/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | cut -d' ' -f2-; }   # do mais antigo ao mais recente (última escrita)
+applog() { find /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | cut -d' ' -f2-; }   # do mais antigo ao mais recente (última escrita)
 applog | tail -n 1                                                           # arquivo atual
 applog | xargs grep -h -E " (WARNING|ERROR|CRITICAL) " | tail -n 20          # problemas recentes
 applog | xargs grep -h "acao=LOGIN" | tail -n 20                             # logins e logouts
@@ -528,7 +528,7 @@ Erros de configuração aparecem melhor pelo teste do §10. Depois de resolver, 
 
 ```bash
 # 16.1 Parar o servidor (§15.1) e guardar a configuração local
-cp /opt/sss/web2py/applications/script_scheduling_service/instance/config.ini /var/lib/sss/config.ini.bak
+cp /opt/sss/web2py/applications/script_scheduling_service/instance/config.ini /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/config.ini.bak
 
 # 16.2 Trocar o código
 cd /opt/sss/web2py
@@ -562,9 +562,9 @@ Mensagens reais, capturadas no ensaio. Para os erros de subida, use sempre o tes
 | Sintoma | Mensagem / onde ver | Causa | Solução |
 |---|---|---|---|
 | Página com "Internal error — Ticket issued" (HTTP 500) em qualquer tela | §10 ou §15.3: `ConfigErro: Arquivo de configuracao nao encontrado: .../instance/config.ini` | Falta o `config.ini` | §9 |
-| Idem | `ConfigErro: Arquivo de segredos nao encontrado: /etc/sss/secrets.cfg` | Caminho de `secrets_file` errado ou arquivo ausente | §8.2 e §9 |
-| Idem | `ConfigErro: Arquivo de segredos possui permissoes inseguras (mode 644, esperado sem acesso grupo/outros)` | Modo diferente de `0600` | `chmod 600 /etc/sss/secrets.cfg` |
-| Idem | `ConfigErro: Arquivo de segredos deve pertencer ao usuario corrente (UID ..., atual ...)` | O processo roda com outro usuário, ou o arquivo foi criado pelo root | `sudo chown sss:sss /etc/sss/secrets.cfg` e suba como `sss` |
+| Idem | `ConfigErro: Arquivo de segredos nao encontrado: /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance` | Caminho de `secrets_file` errado ou arquivo ausente | §8.2 e §9 |
+| Idem | `ConfigErro: Arquivo de segredos possui permissoes inseguras (mode 644, esperado sem acesso grupo/outros)` | Modo diferente de `0600` | `chmod 600 /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance` |
+| Idem | `ConfigErro: Arquivo de segredos deve pertencer ao usuario corrente (UID ..., atual ...)` | O processo roda com outro usuário, ou o arquivo foi criado pelo root | `sudo chown sss:sss /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance` e suba como `sss` |
 | Idem | `ConfigErro: [web]: cookie_key: Chave cookie_key obrigatoria ausente em [web]` | `secrets.cfg` incompleto | §8.2 |
 | Idem | `ConfigErro` citando `[secao] chave` e motivo | Chave ausente, desconhecida ou fora da faixa no `config.ini` | Compare com o `config.ini.example` (§16.3) |
 | Idem | `ConfigErro: [app]: data_backend: data_backend=FAKE exige sss_env=DEV (atual: HML)` | `sss_env` diferente de `DEV` com FAKE | `sss_env = DEV` |
@@ -593,7 +593,7 @@ Ainda **não executável** (F7–F9). O `docs/RUNBOOK.md` será entregue no F9.1
 
 | Item | Detalhe | Referência |
 |---|---|---|
-| Banco Oracle | 11gR2 (11.2.0.4) ou superior, charset AL32UTF8; schema/owner da aplicação (ex.: `gfcadastro`), usuário de aplicação e *grants*; espaço para as 17 tabelas `tbsss_*` (CR-007: inclui `tbsss_controle`) | README §2.2, §10, §11.1 |
+| Banco Oracle | 11gR2 (11.2.0.4) ou superior, charset AL32UTF8; schema/owner da aplicação (ex.: `openrisow`), usuário de aplicação e *grants*; espaço para as 17 tabelas `tbsss_*` (CR-007: inclui `tbsss_controle`) | README §2.2, §10, §11.1 |
 | Conectividade | Rota e firewall dos servidores web/agentes até o listener Oracle (porta 1521) | README §2.3 |
 | Oracle Instant Client 19 | Obrigatório se o banco for 11g (o modo Thin não conecta ao 11g); recomendado em todos os nós como contingência | README §2.3, CR-002 |
 | Driver Python | `python-oracledb` (`< 2.0` na 3.6; `2.x` na 3.7+) com `cryptography`, e `cx_Oracle 8.3` como contingência, **pré-instalados** pela infraestrutura | AGENTS §2.2 |
@@ -612,8 +612,8 @@ Ainda **não executável** (F7–F9). O `docs/RUNBOOK.md` será entregue no F9.1
 # como root, em cada agente, a partir do pacote descompactado
 install -o root -g root -m 0755 -d /opt/sss/bin
 install -o root -g root -m 0755 bin/sss-helper /opt/sss/bin/sss-helper
-useradd --system --shell /sbin/nologin --home-dir /var/lib/sss/exec/sssprd sssprd
-install -o sssprd -g sssprd -m 0700 -d /var/lib/sss/exec/sssprd
+useradd --system --shell /sbin/nologin --home-dir /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec/sssprd sssprd
+install -o sssprd -g sssprd -m 0700 -d /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec/sssprd
 visudo -f /etc/sudoers.d/sss        # conteúdo abaixo; uma linha por usuário de execução
 ```
 
@@ -667,7 +667,7 @@ sssagente ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 - [ ] §6 Python ≥ 3.6.0 com PBKDF2 OK
 - [ ] §7 `check_env.py` com código 0 e suíte com `OK (skipped=23)`
 - [ ] §8.1 Árvore `/opt/automacoes/scripts` do root, sem escrita para o `sss`
-- [ ] §8.2 `/etc/sss/secrets.cfg` do `sss`, modo `0600`, com `cookie_key` gerado
+- [ ] §8.2 `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance` do `sss`, modo `0600`, com `cookie_key` gerado
 - [ ] §8.3 Senha de demonstração (≥ 12 caracteres) combinada com a equipe
 - [ ] §9 `config.ini` ajustado (DEV, FAKE, caminhos, `agent_id`, `script_owner_uids`, `allowed_origins`), sem `base_script_dirs` nem `app_log_backups`
 - [ ] §10 Teste de carga: `SSS: configuracao OK`
@@ -683,11 +683,11 @@ sssagente ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 
 ```bash
 sudo systemctl disable --now sss-web 2>/dev/null; sudo rm -f /etc/systemd/system/sss-web.service; sudo systemctl daemon-reload
-sudo rm -rf /opt/sss /etc/sss /var/log/sss /var/lib/sss /opt/automacoes/scripts
+sudo rm -rf /opt/sss /etc/sss /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service /opt/automacoes/scripts
 sudo userdel sss
 ```
 
-O FAKE não deixa dados em banco. Antes de apagar `/var/log/sss`, guarde os logs se forem evidência de homologação.
+O FAKE não deixa dados em banco. Antes de apagar `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs`, guarde os logs se forem evidência de homologação.
 
 ---
 

@@ -237,7 +237,7 @@ class TestValidacoesTextuais(unittest.TestCase):
                 self.assertEqual(ctx.exception.codigo, Codigo.PASTA_DO_SISTEMA)
         path_guard.checar_pastas_proibidas("/opt/automacoes/nao_existe.py")
         with self.assertRaises(PathGuardErro) as ctx:
-            path_guard.checar_pastas_proibidas("/var/log/sss/x.py", ("/var/log/sss", "/var/lib/sss/work"))
+            path_guard.checar_pastas_proibidas("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/x.py", ("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work"))
         self.assertEqual(ctx.exception.codigo, Codigo.PASTA_DO_SSS)
 
     def test_interpretador_na_allowlist(self):

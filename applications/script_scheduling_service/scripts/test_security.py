@@ -138,21 +138,21 @@ class TestCsrf(unittest.TestCase):
 
 class TestOrigemPermitida(unittest.TestCase):
 
-    PERMITIDAS = ["https://sss.empresa.local", "http://127.0.0.1:8000"]
+    PERMITIDAS = ["http://127.0.0.1:18000", "http://127.0.0.1:8000"]
 
     def _ok(self, origin, referer=None):
         return security.origem_permitida(origin, referer, self.PERMITIDAS)
 
     def test_origem_igual(self):
-        self.assertTrue(self._ok("https://sss.empresa.local"))
-        self.assertTrue(self._ok("HTTPS://SSS.Empresa.Local"))
+        self.assertTrue(self._ok("http://127.0.0.1:18000"))
+        self.assertTrue(self._ok("http://127.0.0.1:18000"))
         self.assertTrue(self._ok("http://127.0.0.1:8000"))
 
     def test_porta_padrao_implicita_e_explicita(self):
-        self.assertTrue(self._ok("https://sss.empresa.local:443"))
+        self.assertTrue(self._ok("http://127.0.0.1:18000:443"))
 
     def test_porta_diferente(self):
-        self.assertFalse(self._ok("https://sss.empresa.local:8443"))
+        self.assertFalse(self._ok("http://127.0.0.1:18000:8443"))
         self.assertFalse(self._ok("http://127.0.0.1:8001"))
 
     def test_esquema_diferente(self):
@@ -160,13 +160,13 @@ class TestOrigemPermitida(unittest.TestCase):
         self.assertFalse(self._ok("ftp://sss.empresa.local"))
 
     def test_host_diferente(self):
-        self.assertFalse(self._ok("https://sss.empresa.local.evil.com"))
+        self.assertFalse(self._ok("http://127.0.0.1:18000.evil.com"))
         self.assertFalse(self._ok("https://evil.com"))
 
     def test_so_referer(self):
-        self.assertTrue(self._ok(None, "https://sss.empresa.local/script_scheduling_service/dev/componentes?x=1"))
+        self.assertTrue(self._ok(None, "http://127.0.0.1:18000/script_scheduling_service/dev/componentes?x=1"))
         self.assertTrue(self._ok("", "http://127.0.0.1:8000/a/b"))
-        self.assertFalse(self._ok(None, "https://evil.com/https://sss.empresa.local"))
+        self.assertFalse(self._ok(None, "https://evil.com/http://127.0.0.1:18000"))
 
     def test_nenhum_dos_dois(self):
         self.assertFalse(self._ok(None, None))
@@ -175,18 +175,18 @@ class TestOrigemPermitida(unittest.TestCase):
     def test_null_e_userinfo(self):
         self.assertFalse(self._ok("null"))
         self.assertFalse(self._ok("https://user@sss.empresa.local"))
-        self.assertFalse(self._ok(None, "https://sss.empresa.local@evil.com/"))
+        self.assertFalse(self._ok(None, "http://127.0.0.1:18000@evil.com/"))
 
     def test_origin_invalido_nao_cai_para_referer(self):
-        self.assertFalse(self._ok("https://evil.com", "https://sss.empresa.local/"))
-        self.assertFalse(self._ok("null", "https://sss.empresa.local/"))
+        self.assertFalse(self._ok("https://evil.com", "http://127.0.0.1:18000/"))
+        self.assertFalse(self._ok("null", "http://127.0.0.1:18000/"))
 
     def test_porta_invalida(self):
         self.assertFalse(self._ok("http://127.0.0.1:99999"))
         self.assertFalse(self._ok("http://127.0.0.1:abc"))
 
     def test_lista_vazia(self):
-        self.assertFalse(security.origem_permitida("https://sss.empresa.local", None, []))
+        self.assertFalse(security.origem_permitida("http://127.0.0.1:18000", None, []))
 
 
 class TestSessaoExpirada(unittest.TestCase):

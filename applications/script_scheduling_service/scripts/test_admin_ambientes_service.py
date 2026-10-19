@@ -129,7 +129,7 @@ class TestInclusao(_Base):
         self.assertEqual(erros, {"descricao": svc_mod.MSG_DESCRICAO_TAMANHO})
 
     def test_validar_conexao(self):
-        for ok in (None, "db01.local:1521/svc", "10.0.0.1:1521/servico_homolog", "ALIAS_TNS", "a.b-c_d"):
+        for ok in (None, "db01.local:1521/svc", "localhost:2424/servico_homolog", "ALIAS_TNS", "a.b-c_d"):
             self.assertIsNone(svc_mod.validar_conexao(ok), ok)
         for ruim in ("db01:1521", "db01:123456/svc", "db 01:1521/svc", "(DESCRIPTION=(ADDRESS=...))"):
             self.assertEqual(svc_mod.validar_conexao(ruim), svc_mod.MSG_CONEXAO_INVALIDA, ruim)

@@ -4,26 +4,25 @@ data_backend = FAKE               ; FAKE (somente DEV) | ORACLE
 
 [oracle]
 user = sss_web                    ; conta do papel deste nó: sss_web no web, sss_agente no agente (README §4.1)
-dsn = 10.0.0.1:1521/servico_homolog
-owner = gfcadastro
+dsn = localhost:2424/servico_homolog
+owner = openrisow
 table_prefix = tbsss_
-driver = oracledb                 ; oracledb | cx_Oracle
-use_thick_mode = true
+modo_driver = auto                ; auto | thin | thick | cx_oracle (README §2.3)
 oracle_client_lib_dir =           ; somente macOS (dev); no Linux/Unix usar ldconfig/LD_LIBRARY_PATH
 call_timeout_ms = 30000
 pool_min = 1
 pool_max = 4
 
 [secrets]
-secrets_file = /etc/sss/secrets.cfg
+secrets_file = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance
 
 [agent]
 agent_id = srv-linux-prod-01
 ambientes_atendidos = PRODUCAO,HOMOLOGACAO
-work_dir = /var/lib/sss/work
+work_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work
 script_owner_uids = 0             ; UIDs donos dos scripts (README §8.5); recomendado um UID dedicado, sem o 0
 usuarios_execucao =               ; AMBIENTE=usuario do SO por ambiente (README §8.0); obrigatório fora de DEV, ex.: PRODUCAO=sssprd,HOMOLOGACAO=ssshml
-exec_work_dir =                   ; pasta base dos diretórios de trabalho dos scripts (obrigatória fora de DEV), ex.: /var/lib/sss/exec
+exec_work_dir =                   ; pasta base dos diretórios de trabalho dos scripts (obrigatória fora de DEV), ex.: /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec
 max_parallel_jobs = 4
 max_parallel_hard_limit = 32
 claim_batch_size = 20
@@ -47,8 +46,8 @@ child_locale = C.UTF-8
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 
 [logging]
-log_dir = /var/log/sss
-level = INFO                      ; DEBUG | INFO | WARN | ERROR
+log_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs
+level = DEBUG                      ; DEBUG | INFO | WARN | ERROR
 app_log_max_bytes = 10485760
 app_log_retention_days = 30
 max_log_size_bytes = 5242880
@@ -62,7 +61,7 @@ login_max_tentativas = 5
 login_bloqueio_s = 900
 log_poll_interval_s = 3
 trusted_proxies =
-allowed_origins = https://sss.empresa.local   ; lista separada por vírgula, validada contra Origin/Referer
+allowed_origins = http://127.0.0.1:18000   ; Ex. https://sss.empresa.local lista separada por vírgula, validada contra Origin/Referer
 
 [retencao]
 ticket_retention_days = 180

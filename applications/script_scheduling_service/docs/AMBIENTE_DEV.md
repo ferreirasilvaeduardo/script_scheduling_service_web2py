@@ -235,7 +235,7 @@ Em `instance/config.ini`, seção `[agent]`: `script_owner_uids = 0` (o padrão 
 * **Log da aplicação:** `log_dir/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log`. O arquivo nasce na pasta do minuto em que o processo sobe e troca para um novo, na pasta do minuto atual, ao atingir `app_log_max_bytes`. As pastas de dia mais antigas que `app_log_retention_days` são apagadas pelo próprio processo. Para seguir o arquivo mais recente:
 
   ```bash
-  LOG_DIR=/var/log/sss     # o [logging] log_dir do seu config.ini
+  LOG_DIR=/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs     # o [logging] log_dir do seu config.ini
   tail -f "$(find "$LOG_DIR/app" -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
   ```
 

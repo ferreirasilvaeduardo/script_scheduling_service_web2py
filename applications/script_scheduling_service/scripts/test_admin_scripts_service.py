@@ -188,7 +188,7 @@ class TestCadastro(_Base):
             self.assertIsNotNone(sid)
 
     def test_pastas_de_log_e_trabalho_do_sss(self):
-        svc = self._servico("HML", dirs_sss=(self._p("sub"), "/var/lib/sss/work"))
+        svc = self._servico("HML", dirs_sss=(self._p("sub"), "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work"))
         _sid, erros, _ = self._incluir(svc=svc, path_file=self._p("sub/interno.sh"))
         self.assertEqual(erros, {"path_file": scr_mod.MENSAGENS_PATH[Codigo.PASTA_DO_SSS]})
 

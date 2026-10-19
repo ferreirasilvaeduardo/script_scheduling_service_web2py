@@ -243,6 +243,42 @@ def verificar_urls_externas_em_arquivo(caminho):
     return violacoes
 
 
+def verificar_imports_driver_oracle(caminho, app_dir):
+    """Verifica que apenas db_conn.py e sondar_driver.py importam oracledb ou cx_Oracle (AGENTS §2.2)."""
+    nome = os.path.basename(caminho)
+    if nome in ("db_conn.py", "sondar_driver.py") or nome.startswith("test_"):
+        return []
+
+    try:
+        with open(caminho, "r", encoding="utf-8", errors="replace") as f:
+            src = f.read()
+        tree = ast.parse(src, filename=caminho)
+    except Exception:
+        return []
+
+    violacoes = []
+    lines = src.splitlines()
+
+    class DriverImportVisitor(ast.NodeVisitor):
+        def visit_Import(self, node):
+            for alias in node.names:
+                if alias.name in ("oracledb", "cx_Oracle"):
+                    ln = getattr(node, "lineno", 1)
+                    ltext = lines[ln - 1].strip() if ln <= len(lines) else ""
+                    violacoes.append((caminho, ln, alias.name, ltext))
+            self.generic_visit(node)
+
+        def visit_ImportFrom(self, node):
+            if node.module in ("oracledb", "cx_Oracle"):
+                ln = getattr(node, "lineno", 1)
+                ltext = lines[ln - 1].strip() if ln <= len(lines) else ""
+                violacoes.append((caminho, ln, node.module, ltext))
+            self.generic_visit(node)
+
+    DriverImportVisitor().visit(tree)
+    return violacoes
+
+
 class TestPy36Compat(unittest.TestCase):
     """Testes automatizados de compatibilidade com Python 3.6 e hermeticidade."""
 
@@ -390,6 +426,49 @@ class TestPy36Compat(unittest.TestCase):
                 repr(verificar_primitivas_so(helper, app_dir, web2py_root)),
             )
             self.assertEqual(verificar_primitivas_so(plataforma, app_dir, web2py_root), [])
+
+    def test_imports_driver_oracle_apenas_em_db_conn_e_sondar(self):
+        """Garante que oracledb e cx_Oracle so sejam importados em db_conn.py, sondar_driver.py e testes."""
+        arquivos = encontrar_arquivos_python(self.app_dir, self.web2py_root)
+        violacoes = []
+        for caminho in arquivos:
+            violacoes.extend(verificar_imports_driver_oracle(caminho, self.app_dir))
+
+        mensagem = "\n".join(
+            ["{}:{}: importou '{}' ({})".format(p, n, mod, linha) for p, n, mod, linha in violacoes]
+        )
+        self.assertEqual(
+            len(violacoes),
+            0,
+            "Driver Oracle importado fora de db_conn.py e sondar_driver.py:\n{}".format(mensagem),
+        )
+
+    def test_negativo_detector_imports_driver_oracle(self):
+        """Verifica se detector de imports de oracledb e cx_Oracle identifica violacoes e respeita allowlist."""
+        with tempfile.TemporaryDirectory() as raiz:
+            ruim = os.path.join(raiz, "outro_modulo.py")
+            with open(ruim, "w", encoding="utf-8") as f:
+                f.write("import oracledb\nfrom cx_Oracle import connect\n")
+
+            violacoes = verificar_imports_driver_oracle(ruim, raiz)
+            self.assertEqual(len(violacoes), 2)
+            self.assertEqual(violacoes[0][2], "oracledb")
+            self.assertEqual(violacoes[1][2], "cx_Oracle")
+
+            permitido1 = os.path.join(raiz, "db_conn.py")
+            with open(permitido1, "w", encoding="utf-8") as f:
+                f.write("import oracledb\n")
+            self.assertEqual(verificar_imports_driver_oracle(permitido1, raiz), [])
+
+            permitido2 = os.path.join(raiz, "sondar_driver.py")
+            with open(permitido2, "w", encoding="utf-8") as f:
+                f.write("import cx_Oracle\n")
+            self.assertEqual(verificar_imports_driver_oracle(permitido2, raiz), [])
+
+            permitido3 = os.path.join(raiz, "test_algo.py")
+            with open(permitido3, "w", encoding="utf-8") as f:
+                f.write("import oracledb\n")
+            self.assertEqual(verificar_imports_driver_oracle(permitido3, raiz), [])
 
 
 if __name__ == "__main__":

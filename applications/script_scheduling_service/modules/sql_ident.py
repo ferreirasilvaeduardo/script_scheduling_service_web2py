@@ -927,3 +927,116 @@ def _checar_identificador(ident, tipo, entidade):
                 entidade,
             )
         )
+
+
+def normalizar_expressao(texto):
+    """Normaliza expressoes SQL (CK, FBI, DATA_DEFAULT) para comparacao (CR-008, R-14).
+
+    Regras:
+      1. Remove aspas duplas (o Oracle devolve "STATUS", "PRIORIDADE").
+      2. Converte para maiusculas fora de literais entre aspas simples.
+      3. Colapsa sequencias de espacos, tabs e quebras de linha em um unico espaco.
+      4. Remove espacos adjacentes a '(', ')' e ',' e operadores fora de literais.
+      5. Remove espacos nas pontas (strip) e parenteses mais externos se envolverem a expressao inteira.
+    """
+    if texto is None:
+        return ""
+    if not isinstance(texto, str):
+        texto = str(texto)
+
+    # 1. Remove aspas duplas
+    texto = texto.replace('"', '')
+
+    # 2. Converte para maiusculas fora de literais entre aspas simples
+    partes = []
+    em_literal = False
+    buffer = []
+    i = 0
+    n = len(texto)
+    while i < n:
+        c = texto[i]
+        if c == "'":
+            buffer.append(c)
+            # Escape de aspas simples em SQL eh ''
+            if em_literal and i + 1 < n and texto[i + 1] == "'":
+                buffer.append(texto[i + 1])
+                i += 2
+                continue
+            em_literal = not em_literal
+            i += 1
+        else:
+            if em_literal:
+                buffer.append(c)
+            else:
+                buffer.append(c.upper())
+            i += 1
+
+    texto_upper = "".join(buffer)
+
+    # 3 e 4. Colapsa espacos e remove espacos ao redor de pontuacoes/operadores fora de literais
+    tokens = []
+    i = 0
+    n = len(texto_upper)
+    em_literal = False
+    buf = []
+    while i < n:
+        c = texto_upper[i]
+        if c == "'":
+            if not em_literal:
+                trecho = "".join(buf)
+                trecho = re.sub(r"\s+", " ", trecho)
+                trecho = re.sub(r"\s*([(),]|<=|>=|<>|=|<|>)\s*", r"\1", trecho)
+                tokens.append(trecho)
+                buf = [c]
+                em_literal = True
+                i += 1
+            else:
+                buf.append(c)
+                if i + 1 < n and texto_upper[i + 1] == "'":
+                    buf.append(texto_upper[i + 1])
+                    i += 2
+                    continue
+                tokens.append("".join(buf))
+                buf = []
+                em_literal = False
+                i += 1
+        else:
+            buf.append(c)
+            i += 1
+
+    if buf:
+        trecho = "".join(buf)
+        if not em_literal:
+            trecho = re.sub(r"\s+", " ", trecho)
+            trecho = re.sub(r"\s*([(),]|<=|>=|<>|=|<|>)\s*", r"\1", trecho)
+        tokens.append(trecho)
+
+    res = "".join(tokens).strip()
+
+    # Desempacota parenteses externos se envolverem a expressao toda
+    while res.startswith("(") and res.endswith(")"):
+        nivel = 0
+        fechou_antes = False
+        for idx, ch in enumerate(res):
+            if ch == "(":
+                nivel += 1
+            elif ch == ")":
+                nivel -= 1
+                if nivel == 0 and idx < len(res) - 1:
+                    fechou_antes = True
+                    break
+        if not fechou_antes and nivel == 0:
+            res = res[1:-1].strip()
+        else:
+            break
+
+    return res
+
+
+def eh_ck_not_null_sistema(nome_ck, condicao):
+    """Indica se a CK eh uma constraint de sistema SYS_C% que apenas reforca NOT NULL."""
+    if not nome_ck or not nome_ck.upper().startswith("SYS_C"):
+        return False
+    # Para checar se eh NOT NULL, normalizamos apenas tirando aspas e espacos externos
+    c_limpa = condicao.replace('"', '').strip()
+    return bool(re.fullmatch(r"^[A-Za-z0-9_]+\s+IS\s+NOT\s+NULL$", c_limpa, re.IGNORECASE))

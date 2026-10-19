@@ -43,8 +43,8 @@ class TestMascarador(unittest.TestCase):
         self.assertEqual(self.m.mascarar("[a.b*c+(d)] axbbc"), "[****] axbbc")
 
     def test_connect_string(self):
-        self.assertEqual(self.m.mascarar("conectando app_prod/Xyz#9@10.0.0.1:1521/svc"),
-                         "conectando app_prod/****@10.0.0.1:1521/svc")
+        self.assertEqual(self.m.mascarar("conectando app_prod/Xyz#9@localhost:2424/svc"),
+                         "conectando app_prod/****@localhost:2424/svc")
         self.assertEqual(self.m.mascarar("sqlplus -s scott/tiger@ORCL"), "sqlplus -s scott/****@ORCL")
         self.assertEqual(self.m.mascarar("/opt/sss/scripts/carga.py"), "/opt/sss/scripts/carga.py")
 

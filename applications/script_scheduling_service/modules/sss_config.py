@@ -32,7 +32,7 @@ _PREFIXOS_FIXOS = ("LC_", "SSS_", "PYTHON")
 AGENT_IDS_RESERVADOS = ("init_db", "seed", "purge")
 _RE_USUARIO_EXECUCAO = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 _AMBIENTES_MAX = 1000
-PAPEIS = ("web", "agente")
+PAPEIS = ("web", "agente", "monitor")
 
 _log = logging.getLogger("sss_config")
 
@@ -102,8 +102,7 @@ SCHEMA = collections.OrderedDict([
         ("owner", CampoDef("str", obrigatorio=True, regex=r"^[A-Za-z][A-Za-z0-9_]{0,29}$")),
         # So minusculas: o registro de identificadores so aceita nomes em minusculas (CR-007, R-31).
         ("table_prefix", CampoDef("str", obrigatorio=True, regex=r"^[a-z][a-z0-9_]{0,7}$")),
-        ("driver", CampoDef("enum", obrigatorio=True, allowed_values=("oracledb", "cx_Oracle"))),
-        ("use_thick_mode", CampoDef("bool", obrigatorio=True)),
+        ("modo_driver", CampoDef("enum", obrigatorio=False, allowed_values=("auto", "thin", "thick", "cx_oracle"), default="auto")),
         ("oracle_client_lib_dir", CampoDef("path", obrigatorio=False, default=None)),
         ("call_timeout_ms", CampoDef("int", obrigatorio=True, min_val=1, max_val=3600000)),
         ("pool_min", CampoDef("int", obrigatorio=True, min_val=1, max_val=1000)),
@@ -190,8 +189,8 @@ class AppConfig(_ItemAccessMixin, collections.namedtuple("AppConfig", ["sss_env"
 
 
 class OracleConfig(_ItemAccessMixin, collections.namedtuple("OracleConfig", [
-    "user", "dsn", "owner", "table_prefix", "driver",
-    "use_thick_mode", "oracle_client_lib_dir", "call_timeout_ms",
+    "user", "dsn", "owner", "table_prefix", "modo_driver",
+    "oracle_client_lib_dir", "call_timeout_ms",
     "pool_min", "pool_max"
 ])):
     __slots__ = ()
@@ -635,13 +634,14 @@ class AmbienteSegredo(object):
 class Segredos(object):
     """Container seguro de segredos carregados do secrets.cfg."""
 
-    __slots__ = ("_oracle", "_web", "_ambientes", "_purge")
+    __slots__ = ("_oracle", "_web", "_ambientes", "_purge", "_monitor")
 
-    def __init__(self, oracle_password, cookie_key, ambientes, purge_password=None):
+    def __init__(self, oracle_password, cookie_key, ambientes, purge_password=None, monitor=None):
         self._oracle = OracleSegredo(oracle_password) if oracle_password is not None else None
         self._web = WebSegredo(cookie_key) if cookie_key is not None else None
         self._ambientes = dict(ambientes)
         self._purge = OracleSegredo(purge_password) if purge_password is not None else None
+        self._monitor = monitor  # AmbienteSegredo com user e password (CR-008, E3)
 
     @property
     def purge_password(self):
@@ -664,6 +664,18 @@ class Segredos(object):
         return self._web.cookie_key if self._web else None
 
     @property
+    def monitor(self):
+        return self._monitor
+
+    @property
+    def monitor_password(self):
+        return self._monitor.password if self._monitor else None
+
+    @property
+    def monitor_user(self):
+        return self._monitor.user if self._monitor else None
+
+    @property
     def ambientes(self):
         return self._ambientes
 
@@ -679,6 +691,10 @@ class Segredos(object):
             if self._web is None:
                 raise KeyError(item)
             return {"cookie_key": self.cookie_key}
+        elif item == "monitor":
+            if self._monitor is None:
+                raise KeyError(item)
+            return {"user": self.monitor_user, "password": self.monitor_password}
         elif item.startswith("ambiente:"):
             nome = item.split(":", 1)[1]
             amb = self.get_ambiente(nome)
@@ -691,8 +707,9 @@ class Segredos(object):
         raise KeyError(item)
 
     def __repr__(self):
-        return "<Segredos: oracle=%s, web=%s, ambientes=%r>" % (
+        return "<Segredos: oracle=%s, web=%s, monitor=%s, ambientes=%r>" % (
             "***" if self._oracle else "None", "***" if self._web else "None",
+            "***" if self._monitor else "None",
             sorted(list(self._ambientes.keys()))
         )
 
@@ -767,21 +784,25 @@ def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None, papel=
     elif "web" in cp.sections():
         _secao_de_outro_papel(papel, "web", env)
 
-    # [oracle] password: em DEV e FAKE e opcional; caso contrario, obrigatorio
+    # [oracle] password: em DEV e FAKE e opcional; obrigatorio para web e agente; proibido para monitor
     oracle_password = None
     is_dev_fake = (env == "DEV" and backend == "FAKE")
-    if "oracle" in cp.sections():
-        if "password" not in cp["oracle"]:
-            if not is_dev_fake:
-                raise ConfigErro(secao="oracle", chave="password", motivo="Chave password obrigatoria ausente em [oracle]")
-        else:
-            pwd = cp["oracle"]["password"].strip()
-            if not pwd and not is_dev_fake:
-                raise ConfigErro(secao="oracle", chave="password", motivo="password do oracle nao pode ser vazio")
-            oracle_password = pwd if pwd else None
+    if papel == "monitor":
+        if "oracle" in cp.sections():
+            _secao_de_outro_papel(papel, "oracle", env)
     else:
-        if not is_dev_fake:
-            raise ConfigErro(secao="oracle", chave=None, motivo="Secao [oracle] obrigatoria ausente em secrets.cfg")
+        if "oracle" in cp.sections():
+            if "password" not in cp["oracle"]:
+                if not is_dev_fake:
+                    raise ConfigErro(secao="oracle", chave="password", motivo="Chave password obrigatoria ausente em [oracle]")
+            else:
+                pwd = cp["oracle"]["password"].strip()
+                if not pwd and not is_dev_fake:
+                    raise ConfigErro(secao="oracle", chave="password", motivo="password do oracle nao pode ser vazio")
+                oracle_password = pwd if pwd else None
+        else:
+            if not is_dev_fake:
+                raise ConfigErro(secao="oracle", chave=None, motivo="Secao [oracle] obrigatoria ausente em secrets.cfg")
 
     # [purge] password: so no papel agente (o purge.py roda no servidor do agente)
     purge_password = None
@@ -793,10 +814,29 @@ def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None, papel=
             if purge_password is None:
                 raise ConfigErro(secao="purge", chave="password", motivo="password do purge nao pode ser vazio")
 
+    # [monitor]: so no papel monitor (CR-008, E3)
+    monitor = None
+    if papel == "monitor":
+        if "monitor" not in cp.sections():
+            raise ConfigErro(secao="monitor", chave=None, motivo="Secao [monitor] obrigatoria ausente em secrets.cfg")
+        if "user" not in cp["monitor"]:
+            raise ConfigErro(secao="monitor", chave="user", motivo="Chave user obrigatoria ausente em [monitor]")
+        if "password" not in cp["monitor"]:
+            raise ConfigErro(secao="monitor", chave="password", motivo="Chave password obrigatoria ausente em [monitor]")
+        mu = cp["monitor"]["user"].strip()
+        mp = cp["monitor"]["password"].strip()
+        if not mu:
+            raise ConfigErro(secao="monitor", chave="user", motivo="user nao pode ser vazio em [monitor]")
+        if not mp:
+            raise ConfigErro(secao="monitor", chave="password", motivo="password nao pode ser vazio em [monitor]")
+        monitor = AmbienteSegredo(user=mu, password=mp)
+    elif "monitor" in cp.sections():
+        _secao_de_outro_papel(papel, "monitor", env)
+
     # [ambiente:<NOME>]: so no papel agente
     ambientes = {}
     for sec in cp.sections():
-        if sec in ("oracle", "web", "purge"):
+        if sec in ("oracle", "web", "purge", "monitor"):
             continue
         if sec.startswith("ambiente:"):
             if papel != "agente":
@@ -827,7 +867,7 @@ def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None, papel=
                              motivo="Ambientes atendidos sem credencial em secrets.cfg: %s" % ", ".join(faltando))
 
     segredos = Segredos(oracle_password=oracle_password, cookie_key=cookie_key, ambientes=ambientes,
-                        purge_password=purge_password)
+                        purge_password=purge_password, monitor=monitor)
 
     # Import tardio para nao acoplar carregar() ao masking. Sem masking.py a carga de
     # segredos falha (ImportError): segredo sem mascaramento nunca chega aos logs (AGENTS §3.3).
@@ -839,6 +879,8 @@ def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None, papel=
         registrar_segredo(cookie_key)
     if purge_password:
         registrar_segredo(purge_password)
+    if monitor and monitor.password:
+        registrar_segredo(monitor.password)
     for amb in ambientes.values():
         registrar_segredo(amb.password)
 

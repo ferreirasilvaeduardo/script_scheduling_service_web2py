@@ -1,78 +1,165 @@
 # -*- coding: utf-8 -*-
-"""Preflight de seguranca para testes Oracle com escrita."""
+"""Suporte a testes reais e contratos Oracle com schemas descartaveis (F7.2, F7.3).
+
+Garante que nenhuma operacao real rode fora de DEV ou sobre esquemas nao descartaveis.
+O helper nao importa drivers diretamente: toda conexao passa por db_conn.
+"""
 import os
 import re
 
+try:
+    import _testenv  # noqa: F401
+except ImportError:
+    pass
 
-_RE_TEST_OWNER = re.compile(r"^SSS_TEST_[A-Z0-9_]{1,21}$", re.IGNORECASE)
+try:
+    import db_conn
+except ImportError:
+    from modules import db_conn
+
+PREFIXO_OWNER_RESERVADO = "SSS_TEST_"
 
 
-def _owner_esperado():
-    owner = os.environ.get("SSS_TEST_OWNER")
-    if os.environ.get("SSS_TEST_SCHEMA_DISPOSABLE") != "1" or not owner:
-        raise RuntimeError("Defina SSS_TEST_OWNER e SSS_TEST_SCHEMA_DISPOSABLE=1 para testes Oracle")
-    if not _RE_TEST_OWNER.match(owner):
-        raise RuntimeError("SSS_TEST_OWNER deve usar o prefixo reservado SSS_TEST_")
-    return owner.upper()
+class PrecondicaoSchemaErro(RuntimeError):
+    """Lancado quando um schema nao atende as garantias estritas de descartabilidade."""
+    pass
+
+
+def verificar_precondicoes_ambiente(cfg=None, owner_configurado=None):
+    """Verifica se as pre-condicoes de ambiente para testes Oracle estao atendidas.
+
+    Retorna tupla (bool, str).
+    """
+    dsn_env = os.environ.get("SSS_TEST_DSN")
+    owner_env = os.environ.get("SSS_TEST_OWNER")
+    disp_env = os.environ.get("SSS_TEST_SCHEMA_DISPOSABLE")
+
+    if not dsn_env or not owner_env or not disp_env:
+        return False, "Sinalizadores de teste ausentes ou incompletos (SSS_TEST_DSN/OWNER/DISPOSABLE)"
+
+    if disp_env != "1":
+        return False, "SSS_TEST_SCHEMA_DISPOSABLE deve ser exatamente '1'"
+
+    owner_limpo = owner_env.strip().upper()
+    if not owner_limpo.startswith(PREFIXO_OWNER_RESERVADO):
+        return False, (
+            "SSS_TEST_OWNER '%s' invalido: deve ter o prefixo reservado '%s'"
+            % (owner_env, PREFIXO_OWNER_RESERVADO)
+        )
+
+    if not re.match(r"^SSS_TEST_[A-Za-z0-9_]{1,21}$", owner_limpo):
+        return False, "SSS_TEST_OWNER '%s' invalido: caracteres invalidos ou comprimento excessivo" % owner_env
+
+    if owner_configurado:
+        if (owner_configurado or "").strip().upper() != owner_limpo:
+            return False, "Owner configurado '%s' difere de SSS_TEST_OWNER '%s'" % (owner_configurado, owner_env)
+
+    if cfg is not None:
+        if getattr(getattr(cfg, "app", None), "sss_env", None) != "DEV":
+            return False, "Ambiente deve ser DEV para testes Oracle descartaveis"
+        if getattr(getattr(cfg, "app", None), "data_backend", None) != "ORACLE":
+            return False, "data_backend deve ser ORACLE para testes Oracle descartaveis"
+
+        cfg_dsn = getattr(getattr(cfg, "oracle", None), "dsn", "").strip()
+        if cfg_dsn != dsn_env.strip():
+            return False, "DSN em cfg '%s' difere de SSS_TEST_DSN '%s'" % (cfg_dsn, dsn_env)
+
+        cfg_owner = getattr(getattr(cfg, "oracle", None), "owner", "").strip().upper()
+        if cfg_owner != owner_limpo:
+            return False, "Owner em cfg '%s' difere de SSS_TEST_OWNER '%s'" % (cfg_owner, owner_env)
+
+    return True, ""
 
 
 def validar_schema_descartavel(conn, owner_configurado, usuario_sessao_esperado):
-    """Confere o opt-in, o owner alvo e a conta Oracle efetivamente conectada."""
-    owner = _owner_esperado()
-    if str(owner_configurado).upper() != owner:
-        raise RuntimeError("SSS_TEST_OWNER difere do owner configurado")
-    if not usuario_sessao_esperado:
-        raise RuntimeError("Usuario Oracle esperado nao configurado para o teste")
+    """Valida as pre-condicoes e confere a identidade da sessao real contra o esperado."""
+    disposable = os.environ.get("SSS_TEST_SCHEMA_DISPOSABLE")
+    if disposable != "1":
+        raise PrecondicaoSchemaErro("SSS_TEST_SCHEMA_DISPOSABLE deve ser exatamente '1'")
 
-    cursor = conn.cursor()
+    owner_env = os.environ.get("SSS_TEST_OWNER")
+    if not owner_env:
+        raise PrecondicaoSchemaErro("Variavel de ambiente SSS_TEST_OWNER nao configurada")
+
+    owner_limpo = owner_env.strip().upper()
+    if not owner_limpo.startswith(PREFIXO_OWNER_RESERVADO) or not re.match(r"^SSS_TEST_[A-Za-z0-9_]{1,21}$", owner_limpo):
+        raise PrecondicaoSchemaErro(
+            "SSS_TEST_OWNER '%s' invalido: deve iniciar com '%s' e conter apenas caracteres seguros"
+            % (owner_env, PREFIXO_OWNER_RESERVADO)
+        )
+
+    if (owner_configurado or "").strip().upper() != owner_limpo:
+        raise PrecondicaoSchemaErro(
+            "Owner configurado '%s' difere de SSS_TEST_OWNER '%s'" % (owner_configurado, owner_env)
+        )
+
+    if (usuario_sessao_esperado or "").strip().upper() == owner_limpo:
+        raise PrecondicaoSchemaErro(
+            "Conta de sessao '%s' nao pode ser a conta dona do esquema '%s'"
+            % (usuario_sessao_esperado, owner_configurado)
+        )
+
+    cur = conn.cursor()
     try:
-        cursor.execute("SELECT USER FROM DUAL")
-        row = cursor.fetchone()
-        if row is None or not row[0]:
-            raise RuntimeError("Oracle nao retornou o usuario da sessao")
-        if str(row[0]).upper() != str(usuario_sessao_esperado).upper():
-            raise RuntimeError("Usuario Oracle da sessao difere da conta configurada")
+        cur.execute("SELECT USER FROM DUAL")
+        row = cur.fetchone()
+        if not row:
+            raise PrecondicaoSchemaErro("Nenhum usuario retornado por SELECT USER FROM DUAL")
+        user_sessao = str(row[0]).strip().upper()
+        if user_sessao != (usuario_sessao_esperado or "").strip().upper():
+            raise PrecondicaoSchemaErro(
+                "Usuario de sessao real '%s' difere do esperado '%s'"
+                % (user_sessao, usuario_sessao_esperado)
+            )
+        if user_sessao == owner_limpo:
+            raise PrecondicaoSchemaErro(
+                "Sessao Oracle real esta conectada como owner '%s'; exigida conta de teste distinta"
+                % owner_limpo
+            )
     finally:
-        cursor.close()
-    return owner
+        cur.close()
+
+    return owner_limpo
 
 
-def preparar_schema_descartavel(papel):
-    """Abre, valida e fecha uma conexao de preflight sem executar DML."""
-    if papel not in ("web", "agente", "purge"):
-        raise RuntimeError("Papel Oracle nao suportado para teste")
-    owner = _owner_esperado()
-    dsn_teste = os.environ.get("SSS_TEST_DSN")
-    if not dsn_teste:
-        raise RuntimeError("SSS_TEST_DSN obrigatorio para testes Oracle")
-
-    import db_conn
-    import sss_config
-
-    cfg = sss_config.obter_config()
-    if str(cfg.app.data_backend).upper() != "ORACLE":
-        raise RuntimeError("Testes Oracle exigem data_backend=ORACLE na configuracao")
-    if str(cfg.app.sss_env).upper() != "DEV":
-        raise RuntimeError("Testes Oracle com escrita exigem sss_env=DEV")
-    if str(cfg.oracle.owner).upper() != owner:
-        raise RuntimeError("SSS_TEST_OWNER difere do owner configurado")
-    if str(cfg.oracle.user).upper() == owner:
-        raise RuntimeError("Conta de teste deve ser distinta do owner do schema")
-    if cfg.oracle.dsn != dsn_teste:
-        raise RuntimeError("SSS_TEST_DSN difere do DSN configurado")
-
-    papel_segredos = "agente" if papel == "purge" else papel
-    segredos = sss_config.carregar_segredos(
-        cfg.secrets.secrets_file, cfg=cfg, papel=papel_segredos
-    )
-    if papel == "purge":
-        usuario_esperado = cfg.retencao.purge_user
-    else:
-        usuario_esperado = cfg.oracle.user
-
-    conn = db_conn.conectar(cfg, segredos, papel)
+def preparar_schema_descartavel(papel="web", cfg=None, segredos=None):
+    """Prepara e valida a conexao com o schema descartavel para o papel solicitado."""
     try:
-        validar_schema_descartavel(conn, cfg.oracle.owner, usuario_esperado)
+        import sss_config
+    except ImportError:
+        from modules import sss_config
+
+    if cfg is None:
+        cfg = sss_config.obter_config()
+
+    ok, motivo = verificar_precondicoes_ambiente(cfg=cfg)
+    if not ok:
+        raise PrecondicaoSchemaErro(motivo)
+
+    cfg_owner = getattr(getattr(cfg, "oracle", None), "owner", "").strip().upper()
+    usuario_esperado = getattr(getattr(cfg, "oracle", None), "user", None)
+    if papel == "purge":
+        usuario_esperado = getattr(getattr(cfg, "retencao", None), "purge_user", None)
+    elif papel == "monitor":
+        usuario_esperado = getattr(getattr(cfg, "monitor", None), "user", None)
+
+    if usuario_esperado and usuario_esperado.strip().upper() == cfg_owner:
+        raise PrecondicaoSchemaErro("Usuario de teste '%s' nao pode ser o owner do esquema" % usuario_esperado)
+
+    if segredos is None:
+        segredos = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel=papel)
+
+    import sys
+    try:
+        import db_conn
+    except ImportError:
+        from modules import db_conn
+    conn_mod = sys.modules.get("db_conn", db_conn)
+
+    conn = conn_mod.conectar(cfg, segredos, papel)
+    try:
+        validar_schema_descartavel(conn, cfg_owner, usuario_esperado)
     finally:
         conn.close()
+
     return cfg

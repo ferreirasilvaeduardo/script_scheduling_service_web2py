@@ -301,7 +301,7 @@ applications/script_scheduling_service/
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
 docs/
   prompts/                    # prompts de execução faseada (UI-first)
-/etc/sss/secrets.cfg          # segredos fora do repositório, modo 0600, um arquivo por papel (§4.1)
+/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance          # segredos fora do repositório, modo 0600, um arquivo por papel (§4.1)
 /opt/sss/bin/sss-helper       # cópia do bin/sss-helper, dono root, 0755 (§8.0)
 ```
 
@@ -312,7 +312,7 @@ docs/
 ### 4.1 Gestão de segredos
 
 * **Nenhum segredo** reside no `config.ini`, no repositório ou no banco.
-* Os segredos ficam em `secrets_file` (padrão `/etc/sss/secrets.cfg`). Cada servidor tem o **seu** arquivo, só com os segredos do papel do processo que roda nele (CR-007, D1b). Na inicialização, web e daemon validam o arquivo pela camada de plataforma e **recusam a subida** caso ele:
+* Os segredos ficam em `secrets_file` (padrão `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance`). Cada servidor tem o **seu** arquivo, só com os segredos do papel do processo que roda nele (CR-007, D1b). Na inicialização, web e daemon validam o arquivo pela camada de plataforma e **recusam a subida** caso ele:
   * não seja um arquivo regular;
   * tenha dono diferente de `os.geteuid()` ou `mode & 0o077 != 0`.
 
@@ -1896,7 +1896,7 @@ UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}   ix_tbsss_tck_fila
 
 **Padrões globais:**
 
-* O `owner` é parametrizado (`gfcadastro`), e todo SQL qualifica `{owner}.objeto`.
+* O `owner` é parametrizado (`openrisow`), e todo SQL qualifica `{owner}.objeto`.
 * Toda coluna `id` é `NUMBER(10) NOT NULL` (inteiro de 10 dígitos), PK. **A aplicação sempre informa o `id`** (`seq.NEXTVAL` lido antes do `INSERT`, §2.7). Existe também a trigger condicional abaixo, como defesa para inserções manuais:
 
 ```sql
@@ -2414,8 +2414,8 @@ data_backend = FAKE               ; FAKE (somente DEV) | ORACLE
 
 [oracle]
 user = sss_web                    ; conta do papel deste nó: sss_web no web, sss_agente no agente (§4.1, D1b)
-dsn = 10.0.0.1:1521/servico_homolog
-owner = gfcadastro
+dsn = localhost:2424/servico_homolog
+owner = openrisow
 table_prefix = tbsss_
 modo_driver = auto                ; auto (Thin → Thick → cx_Oracle) | thin | thick | cx_oracle (§2.3)
 oracle_client_lib_dir =           ; somente macOS (DEV); no Linux/Unix usar ldconfig/LD_LIBRARY_PATH
@@ -2424,15 +2424,15 @@ pool_min = 1
 pool_max = 4
 
 [secrets]
-secrets_file = /etc/sss/secrets.cfg
+secrets_file = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance
 
 [agent]
 agent_id = srv-linux-prod-01
 ambientes_atendidos = PRODUCAO,HOMOLOGACAO
-work_dir = /var/lib/sss/work
+work_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work
 script_owner_uids = 0             ; UIDs que podem ser donos dos scripts (§8.5); recomendado um UID dedicado, sem o 0
 usuarios_execucao = PRODUCAO=sssprd,HOMOLOGACAO=ssshml   ; usuário do SO de cada ambiente (§8.0, D1); vazio só em DEV
-exec_work_dir = /var/lib/sss/exec ; pasta base dos diretórios de trabalho dos scripts, uma subpasta por usuário de execução
+exec_work_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec ; pasta base dos diretórios de trabalho dos scripts, uma subpasta por usuário de execução
 interpretadores = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh
 max_parallel_jobs = 4
 max_parallel_hard_limit = 32
@@ -2457,7 +2457,7 @@ child_locale = C.UTF-8
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 
 [logging]
-log_dir = /var/log/sss
+log_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs
 level = INFO                      ; DEBUG | INFO | WARN | ERROR
 app_log_max_bytes = 10485760       ; troca de arquivo do log da aplicação (§13)
 app_log_retention_days = 30       ; pastas log_dir/app/AAAA/MM/DD mais antigas são apagadas (§13)
@@ -2472,7 +2472,7 @@ login_max_tentativas = 5
 login_bloqueio_s = 900
 log_poll_interval_s = 3
 trusted_proxies =
-allowed_origins = https://sss.empresa.local   ; lista separada por vírgula, validada contra Origin/Referer
+allowed_origins = http://127.0.0.1:18000   ; lista separada por vírgula, validada contra Origin/Referer
 
 [retencao]
 ticket_retention_days = 180
