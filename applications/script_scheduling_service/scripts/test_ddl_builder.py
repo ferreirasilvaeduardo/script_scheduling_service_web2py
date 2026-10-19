@@ -249,6 +249,36 @@ class TestGrantsPorPapel(unittest.TestCase):
         for t in tabelas_monitor:
             self.assertTrue(any(t in g for g in grants_monitor), "Faltou GRANT para %s" % t)
 
+    def test_nunca_concede_a_public(self):
+        """O script de implantacao nao concede nada a PUBLIC (tbsss_usuarios guarda senha_hash)."""
+        script = ddl_builder.gerar_script_implantacao_completo("openrisow", "tbsss_", papeis_usuarios=self.papeis)
+        self.assertNotIn("PUBLIC", script.upper().replace("NENHUM GRANT A PUBLIC", ""))
+        self.assertIn("GRANT SELECT ON openrisow.tbsss_agentes TO sss_monitor;", script)
+        self.assertFalse(hasattr(ddl_builder, "gerar_grants_public"))
+
+    def test_conta_igual_ao_owner_nao_recebe_grant(self):
+        """Papel que usa a conta dona do esquema vira comentario (GRANT a si mesmo e ORA-01749)."""
+        grants = ddl_builder.gerar_grants_por_papel(
+            "openrisow", "tbsss_", {"web": "OPENRISOW", "agente": "openrisow", "purge": "sss_purge"})
+        comandos = [g for g in grants if not g.startswith("--")]
+        self.assertTrue(comandos)
+        self.assertTrue(all(g.endswith("TO sss_purge;") for g in comandos))
+        self.assertIn("-- papel web: usa a conta dona do esquema (openrisow); nenhum GRANT necessario", grants)
+        self.assertIn("-- papel monitor: conta nao informada; nenhum GRANT gerado", grants)
+
+    def test_sem_contas_nenhum_grant(self):
+        grants = ddl_builder.gerar_grants_por_papel("openrisow", "tbsss_", {})
+        self.assertEqual(len(grants), 4)
+        self.assertTrue(all(g.startswith("-- papel ") for g in grants))
+
+    def test_conta_ou_papel_invalidos_recusados(self):
+        """A conta entra no texto do GRANT: so identificador Oracle valido; papel fora da lista e recusado."""
+        for usr in ("sss_web; DROP TABLE x", "1abc", "a" * 31, "PUBLIC x", "PUBLIC", "public"):
+            with self.assertRaises(ValueError):
+                ddl_builder.gerar_grants_por_papel("openrisow", "tbsss_", {"web": usr})
+        with self.assertRaises(ValueError):
+            ddl_builder.gerar_grants_por_papel("openrisow", "tbsss_", {"dba": "sss_dba"})
+
     def test_papel_purge_concessao_controle(self):
         """Papel purge recebe SELECT e UPDATE em controle somente nas colunas de concessao."""
         grants_purge = [g for g in self.grants if "TO sss_purge" in g]

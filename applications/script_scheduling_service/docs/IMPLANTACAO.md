@@ -668,7 +668,8 @@ O script [`docs/sql/01_implantar_sss.sql`](file:///portaloptrib/TESHUVA/web2py/a
 - Metadados de governança de dados (`COMMENT ON TABLE` e `COMMENT ON COLUMN` em todas as tabelas e colunas, além de comentários nas triggers).
 - Carga de seed DML idempotente com `MERGE INTO`: 10 funcionalidades, 5 ambientes, 19 parâmetros reutilizáveis, 14 scripts utilitários com 70 homologações em ambientes e 38 vínculos de parâmetros, 4 perfis operacionais e 4 usuários de homologação.
 - Coleta inicial de estatísticas pelo otimizador (`DBMS_STATS.GATHER_TABLE_STATS`).
-- Concessão de permissões de leitura com tolerância a falhas (`GRANT SELECT ... TO PUBLIC`).
+- GRANTs por papel (web, agente, purge e monitor; README §11.1), **sem GRANT a PUBLIC**. Papel cuja conta é a dona do esquema, ou sem conta informada, aparece como comentário no fim do script. Para contas separadas por papel, regere com `python3 scripts/gerar_scripts_sql.py --grants-para web=<conta>,agente=<conta>,purge=<conta>,monitor=<conta>`, o que também gera o `03_grants_sss.sql` avulso.
+- Atenção: o script termina com "concluída com sucesso!" mesmo se algum comando falhar (`WHENEVER SQLERROR CONTINUE`). Grave a saída com `SPOOL` e procure `ORA-`/`SP2-` no log antes de dar a implantação por concluída.
 
 Comando de execução via SQL*Plus:
 ```bash

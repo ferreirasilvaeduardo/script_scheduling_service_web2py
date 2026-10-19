@@ -38,11 +38,11 @@ def main(argv=None):
     parser.add_argument("--prefixo", dest="prefixo", default=None, help="Prefixo de tabelas (ex: tbsss_)")
     parser.add_argument("--lob-basicfile", dest="lob_basicfile", action="store_true", help="Fallback LOB BASICFILE")
     parser.add_argument("--out-dir", dest="out_dir", default="docs/sql", help="Diretorio de destino dos arquivos .sql")
-    parser.add_argument("--grants-para", dest="grants_para", default=None, help="web=u1,agente=u2,purge=u3,monitor=u4")
+    parser.add_argument("--grants-para", dest="grants_para", default=None,
+                        help="web=u1,agente=u2,purge=u3,monitor=u4 (padrao: contas do config.ini; nunca PUBLIC)")
     parser.add_argument("--admin-login", dest="admin_login", default=None, help="Login do administrador inicial no seed")
     parser.add_argument("--admin-nome", dest="admin_nome", default=None, help="Nome do administrador inicial")
     parser.add_argument("--admin-senha-hash", dest="admin_senha_hash", default=None, help="Hash PBKDF2 da senha admin")
-    parser.add_argument("--no-grant-public", dest="grant_public", action="store_false", default=True, help="Nao inclui grants para PUBLIC")
     parser.add_argument("--stdout", dest="stdout", choices=["implantar", "rollback", "grants"], default=None, help="Imprime no stdout")
 
     args = parser.parse_args(argv)
@@ -52,7 +52,9 @@ def main(argv=None):
     prefixo = args.prefixo
     lob_storage = "BASICFILE" if args.lob_basicfile else "SECUREFILE"
 
-    if args.config or (not owner or not prefixo):
+    cfg = None
+    # O config tambem fornece as contas dos papeis quando --grants-para nao e informado (README §11.1).
+    if args.config or (not owner or not prefixo) or not args.grants_para:
         caminho_cfg = args.config
         if not caminho_cfg:
             candidato = os.path.join(_BASE_DIR, "instance", "config.ini")
@@ -87,15 +89,31 @@ def main(argv=None):
         print("Erro de validacao em identificadores Oracle: %s" % exc, file=sys.stderr)
         return 2
 
-    papeis_grants = None
+    papeis_grants = {}
     if args.grants_para:
-        papeis_grants = {}
         for p in args.grants_para.split(","):
             p = p.strip()
-            if not p or "=" not in p:
+            if not p:
                 continue
+            if "=" not in p:
+                print("Formato invalido em --grants-para: use papel=usuario", file=sys.stderr)
+                return 2
             papel, usr = p.split("=", 1)
             papeis_grants[papel.strip().lower()] = usr.strip()
+    elif cfg is not None:
+        # web e agente usam [oracle] user (cada no le o seu config.ini); purge, [retencao] purge_user.
+        # A conta do monitor fica no secrets.cfg: so por --grants-para.
+        usr_app = getattr(getattr(cfg, "oracle", None), "user", None)
+        papeis_grants = {
+            "web": usr_app,
+            "agente": usr_app,
+            "purge": getattr(getattr(cfg, "retencao", None), "purge_user", None),
+        }
+    try:
+        ddl_builder.gerar_grants_por_papel(owner, prefixo, papeis_grants)
+    except ValueError as exc:
+        print("Erro nos GRANTs por papel: %s" % exc, file=sys.stderr)
+        return 2
 
     # 2. Geracao dos scripts
     script_implantar = ddl_builder.gerar_script_implantacao_completo(
@@ -106,7 +124,6 @@ def main(argv=None):
         admin_nome=args.admin_nome,
         admin_senha_hash=args.admin_senha_hash,
         papeis_usuarios=papeis_grants,
-        grant_public=args.grant_public,
     )
 
     script_rollback = ddl_builder.gerar_script_rollback(
@@ -115,7 +132,7 @@ def main(argv=None):
     )
 
     script_grants = ""
-    if papeis_grants:
+    if args.grants_para:
         grants = ddl_builder.gerar_grants_por_papel(owner, prefixo, papeis_grants)
         script_grants = "\n".join([
             "-- ==============================================================================",

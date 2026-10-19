@@ -648,16 +648,43 @@ def gerar_script_ddl(owner, prefixo, lob_storage="SECUREFILE", incluir_comentari
     return "\n".join(linhas)
 
 
+PAPEIS_GRANT = ("web", "agente", "purge", "monitor")
+
+
 def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
     """Gera comandos GRANT para os usuarios informados por papel (README §11.1).
 
     papeis_usuarios: dict com mapeamento papel -> usuario_oracle, ex:
       {'web': 'sss_web', 'agente': 'sss_agente', 'purge': 'sss_purge', 'monitor': 'sss_monitor'}
+
+    Nunca concede a PUBLIC. A conta de cada papel e validada como identificador Oracle (entra no
+    texto do GRANT). Papel sem conta ou cuja conta e a dona do esquema nao recebe GRANT: o owner ja
+    tem todos os privilegios e GRANT para si mesmo falha (ORA-01749); fica um comentario no lugar.
     """
     sql_ident.validar_owner(owner)
     sql_ident.validar_prefixo(prefixo)
     esquema = sql_ident.nomes(prefixo)
     comandos = []
+
+    desconhecidos = sorted(set(papeis_usuarios or {}) - set(PAPEIS_GRANT))
+    if desconhecidos:
+        raise ValueError("Papel de GRANT desconhecido: {}".format(", ".join(desconhecidos)))
+    papeis_usuarios = dict(papeis_usuarios or {})
+    for papel in PAPEIS_GRANT:
+        usr = papeis_usuarios.get(papel)
+        if not usr:
+            comandos.append("-- papel {}: conta nao informada; nenhum GRANT gerado".format(papel))
+            continue
+        try:
+            sql_ident.validar_owner(usr)
+        except ValueError:
+            raise ValueError("Conta Oracle invalida para o papel {}".format(papel))
+        if usr.upper() == "PUBLIC":
+            raise ValueError("PUBLIC nao pode receber GRANT (papel {})".format(papel))
+        if usr.upper() == owner.upper():
+            comandos.append("-- papel {}: usa a conta dona do esquema ({}); nenhum GRANT necessario".format(
+                papel, owner))
+            papeis_usuarios[papel] = None
 
     # 1. PAPEL: web
     usr_web = papeis_usuarios.get("web")
@@ -1294,31 +1321,14 @@ def gerar_script_rollback(owner, prefixo):
     return "\n".join(linhas)
 
 
-def gerar_grants_public(owner, prefixo):
-    """Gera comandos GRANT SELECT para todos (PUBLIC) em todas as tabelas e sequences do SSS."""
-    sql_ident.validar_owner(owner)
-    sql_ident.validar_prefixo(prefixo)
-    esquema = sql_ident.nomes(prefixo)
-    comandos = []
-
-    # Tabelas
-    for ent, t in esquema.items():
-        comandos.append("GRANT SELECT ON {}.{} TO PUBLIC;".format(owner, t["tabela"]))
-
-    # Sequences
-    for ent, t in esquema.items():
-        comandos.append("GRANT SELECT ON {}.{} TO PUBLIC;".format(owner, t["sequence"]))
-
-    return comandos
-
-
 def gerar_script_implantacao_completo(owner, prefixo, lob_storage="SECUREFILE",
                                       admin_login=None, admin_nome=None, admin_senha_hash=None,
-                                      papeis_usuarios=None, grant_public=True):
+                                      papeis_usuarios=None):
     """Gera script SQL autocontido com DDL, DML Seed, Estatisticas e Grants para execucao direta.
 
     Aplica fallback WHENEVER SQLERROR CONTINUE para que a execucao passe por cima de erros
-    caso objetos ou constraints ja existam no banco de dados.
+    caso objetos ou constraints ja existam no banco de dados. Os GRANTs seguem so os papeis do
+    README §11.1; nada e concedido a PUBLIC (tbsss_usuarios guarda senha_hash).
     """
     sql_ddl = gerar_script_ddl(owner, prefixo, lob_storage=lob_storage)
     sql_seed = gerar_script_seed(
@@ -1339,28 +1349,14 @@ def gerar_script_implantacao_completo(owner, prefixo, lob_storage="SECUREFILE",
         sql_seed,
     ]
 
-    if grant_public:
-        grants_pub = gerar_grants_public(owner, prefixo)
-        partes.extend([
-            "-- ==============================================================================",
-            "-- GRANTS DE LEITURA PARA TODOS (PUBLIC)",
-            "-- ==============================================================================",
-            "",
-        ])
-        partes.extend(grants_pub)
-        partes.append("")
-
-    if papeis_usuarios:
-        grants = gerar_grants_por_papel(owner, prefixo, papeis_usuarios)
-        if grants:
-            partes.extend([
-                "-- ==============================================================================",
-                "-- GRANTS POR PAPEL (README §11.1)",
-                "-- ==============================================================================",
-                "",
-            ])
-            partes.extend(grants)
-            partes.append("")
+    partes.extend([
+        "-- ==============================================================================",
+        "-- GRANTS POR PAPEL (README §11.1); nenhum GRANT a PUBLIC",
+        "-- ==============================================================================",
+        "",
+    ])
+    partes.extend(gerar_grants_por_papel(owner, prefixo, papeis_usuarios or {}))
+    partes.append("")
 
     partes.extend([
         "PROMPT Implantacao do SSS concluida com sucesso!",

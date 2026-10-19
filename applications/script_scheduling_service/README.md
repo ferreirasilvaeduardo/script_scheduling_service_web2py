@@ -2404,7 +2404,11 @@ END;
   * **Governança de Dados:** metadados descritivos aplicados via `COMMENT ON TABLE` e `COMMENT ON COLUMN` para todas as tabelas e colunas, além de comentários em todas as triggers de integridade.
   * **Atores de Auditoria:** a inclusão grava `created_by = 'SYSTEM:init_db'`; quando o `MERGE` muda uma linha existente, grava `updated_*` com o mesmo ator; uma linha igual ao seed não é tocada (§10, CR-006).
 * **Administrador inicial:** criado por padrão (`admin` / `ADMINISTRADOR`), ou customizado via `--admin-login` e senha lida de `getpass` ou de `SSS_BOOTSTRAP_ADMIN_PASSWORD`.
-* **Script SQL de Produção Autônomo:** gerado em `docs/sql/01_implantar_sss.sql` para implantação direta via SQL*Plus por DBAs, contendo DDL, comentários de governança, DML de seed completo, coleta de estatísticas pelo otimizador e concessões de leitura (`GRANT SELECT ... TO PUBLIC`) com tratamento de erro tolerante. Script de desinstalação total em `docs/sql/02_rollback_sss.sql`.
+* **Script SQL de Produção Autônomo:** gerado em `docs/sql/01_implantar_sss.sql` para implantação direta via SQL*Plus por DBAs, contendo DDL, comentários de governança, DML de seed completo, coleta de estatísticas pelo otimizador e os GRANTs por papel da tabela abaixo, com tratamento de erro tolerante. Script de desinstalação total em `docs/sql/02_rollback_sss.sql`.
+  * **Nenhum GRANT a PUBLIC:** `tbsss_usuarios` guarda `senha_hash`, e o banco pode ser compartilhado com outros sistemas.
+  * **Contas dos papéis:** sem `--grants-para`, o gerador usa o `config.ini`: web e agente vêm de `[oracle] user`, purge de `[retencao] purge_user`. A conta do monitor fica no `secrets.cfg`, então só entra por `--grants-para`. Cada conta é validada como identificador Oracle, e `PUBLIC` é recusado.
+  * Um papel sem conta, ou cuja conta é a dona do esquema, não recebe GRANT: o owner já tem todos os privilégios, e GRANT para si mesmo falha (ORA-01749). Cada caso fica registrado como comentário no script.
+  * Uma instalação antiga que já tenha GRANTs a PUBLIC os perde no rollback (o `DROP TABLE` remove as concessões). Sem rollback, o DBA precisa revogá-los à mão.
 
   | Papel | Privilégios no esquema |
   |---|---|

@@ -5028,43 +5028,13 @@ END;
 COMMIT;
 
 -- ==============================================================================
--- GRANTS DE LEITURA PARA TODOS (PUBLIC)
+-- GRANTS POR PAPEL (README §11.1); nenhum GRANT a PUBLIC
 -- ==============================================================================
 
-GRANT SELECT ON openrisow.tbsss_ambientes TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_perfis TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_funcionalidades TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_perfil_func TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_perfil_amb TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_scripts TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_perfil_scr TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_script_amb TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_usuarios TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_parametros TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_script_param TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_agendamentos TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_tickets TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_ticket_resp TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_agentes TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_auditoria TO PUBLIC;
-GRANT SELECT ON openrisow.tbsss_controle TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_ambientes TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_perfis TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_funcionalidades TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_perfil_func TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_perfil_amb TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_scripts TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_perfil_scr TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_script_amb TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_usuarios TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_parametros TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_script_param TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_agendamentos TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_tickets TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_ticket_resp TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_agentes TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_auditoria TO PUBLIC;
-GRANT SELECT ON openrisow.sq_tbsss_controle TO PUBLIC;
+-- papel web: usa a conta dona do esquema (openrisow); nenhum GRANT necessario
+-- papel agente: usa a conta dona do esquema (openrisow); nenhum GRANT necessario
+-- papel purge: conta nao informada; nenhum GRANT gerado
+-- papel monitor: conta nao informada; nenhum GRANT gerado
 
 PROMPT Implantacao do SSS concluida com sucesso!
 EXIT;
