@@ -108,6 +108,13 @@ def obter(nome, config=None):
                     _singletons_oracle["usuarios"] = RepoUsuariosOracle()
                     _singletons_oracle["rbac"] = RepoRbacOracle()
                 return _singletons_oracle[nome_norm]
+        # Agregado 2 (F7.3): CATALOGO
+        if nome_norm == "catalogo":
+            with _lock_fabrica:
+                if nome_norm not in _singletons_oracle:
+                    from repo_oracle.catalogo import RepoCatalogoOracle
+                    _singletons_oracle["catalogo"] = RepoCatalogoOracle()
+                return _singletons_oracle[nome_norm]
         raise NotImplementedError("Backend ORACLE ainda nao implementado")
 
     if backend != "FAKE":

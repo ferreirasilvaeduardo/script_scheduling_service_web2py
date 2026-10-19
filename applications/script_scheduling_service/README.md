@@ -455,6 +455,10 @@ password = ...
   * perfil admin, **ou** (funcionalidade `EXEC_SCRIPT` **e** ambiente em `perfil_amb` **e** script em `perfil_scr`).
 * **Perfis administrativos** (`is_admin = 'S'`) dispensam as dimensões 1, 2 e 3. Eles **não** dispensam as flags `ativo` nem a homologação (dimensão 4).
 * Toda ação do servidor reautoriza com os IDs recebidos. Campos ocultos e IDs do cliente nunca são confiáveis.
+* **`RepoCatalogo.scripts_executaveis` no Oracle (F7.3, CATALOGO):** uma única consulta.
+  * O não administrador precisa de `EXEC_SCRIPT` no contexto. A matriz é lida do banco pelo `perfil_id` do contexto, com `EXISTS` sobre `tbsss_perfil_scr` e `tbsss_perfil_amb`, e não pelos conjuntos `ambientes`/`scripts` do contexto.
+  * O administrador dispensa as dimensões 1 a 3, mas não a homologação em ambiente ativo.
+  * O resultado é o mesmo do FAKE quando o contexto está atualizado (`perm_versao`). Ele continua sendo só a lista de candidatos: a decisão por ambiente segue em `rbac.pode_executar`.
 * **`perm_versao`:** qualquer alteração em perfil, na matriz do perfil, em `is_admin` ou em `ativo` incrementa `tbsss_perfis.perm_versao` **na mesma transação**.
   * Desativar um usuário ou trocar o perfil dele também incrementa o `perm_versao` dos perfis de origem e de destino. Por isso, uma edição de matriz aberta ao mesmo tempo nesses perfis recebe a mensagem de conflito e precisa ser recarregada.
 * **Administrador só por administrador (CR-008, E1/R-05):** quem tem `CAD_USUARIOS` ou `CAD_PERFIS` sem ser administrador **não** pode:
