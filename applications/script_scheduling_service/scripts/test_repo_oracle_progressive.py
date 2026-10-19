@@ -10,6 +10,7 @@ Executa a validacao do agregado ativo selecionado por SSS_TEST_REPO_AGREGADO:
 """
 import datetime
 import os
+import sys
 import unittest
 from unittest import mock
 
@@ -21,6 +22,8 @@ import repo_factory
 from repo_catalogo import RepoCatalogo
 from repo_oracle.catalogo import RepoCatalogoOracle
 from repo_rbac import RepoRbac
+from repo_oracle.tickets import RepoTicketsOracle
+from repo_tickets import RepoTickets
 from repo_usuarios import RepoUsuarios
 from gluon import current
 
@@ -77,8 +80,8 @@ class TestOracleRbacUsuarios(unittest.TestCase):
         self.assertEqual(self.rbac.__class__.__name__, "RepoRbacOracle")
 
     def test_agregados_seguintes_ainda_nao_implementados(self):
-        """Garante que tickets, agendamentos e auditoria continuam bloqueados (catalogo: agregado 2)."""
-        for agg in ("tickets", "agendamentos", "auditoria", "agentes"):
+        """Agendamentos, auditoria e agentes continuam bloqueados (catalogo e tickets: agregados 2 e 3)."""
+        for agg in ("agendamentos", "auditoria", "agentes"):
             with self.assertRaises(NotImplementedError) as ctx:
                 repo_factory.obter(agg)
             self.assertIn("Backend ORACLE ainda nao implementado", str(ctx.exception))
@@ -246,8 +249,8 @@ class TestOracleCatalogo(unittest.TestCase):
         self.assertEqual(repo_factory.obter("usuarios").__class__.__name__, "RepoUsuariosOracle")
 
     def test_agregados_seguintes_ainda_nao_implementados(self):
-        """Tickets, agendamentos, auditoria e agentes continuam indisponiveis no ORACLE."""
-        for agg in ("tickets", "agendamentos", "auditoria", "agentes"):
+        """Agendamentos, auditoria e agentes continuam indisponiveis no ORACLE (tickets: agregado 3)."""
+        for agg in ("agendamentos", "auditoria", "agentes"):
             with self.assertRaises(NotImplementedError) as ctx:
                 repo_factory.obter(agg)
             self.assertIn("Backend ORACLE ainda nao implementado", str(ctx.exception))
@@ -509,13 +512,366 @@ class TestOracleCatalogo(unittest.TestCase):
             self._limpar(ids)
 
 
-class TestOracleTickets(unittest.TestCase):
-    """Testes para o agregado TICKETS no Oracle (passo 3 do F7.3)."""
+class _CursorRoteirizado(object):
+    """Cursor de mentira que responde por trecho do SQL: roteiro = [(trecho, rowcount, linhas)]."""
 
-    def test_pendente(self):
+    def __init__(self, conexao):
+        self._conexao = conexao
+        self.rowcount = 0
+        self._linhas = []
+
+    def execute(self, sql, binds=None):
+        self._conexao.executados.append((sql, binds))
+        if ".NEXTVAL FROM DUAL" in sql:
+            self._conexao.seq += 1
+            self.rowcount, self._linhas = 1, [(self._conexao.seq,)]
+            return
+        for trecho, rowcount, linhas in self._conexao.roteiro:
+            if trecho in sql:
+                self.rowcount, self._linhas = rowcount, list(linhas)
+                return
+        self.rowcount, self._linhas = 0, []
+
+    def setinputsizes(self, **tipos):
+        pass
+
+    def fetchone(self):
+        return self._linhas[0] if self._linhas else None
+
+    def fetchall(self):
+        return list(self._linhas)
+
+    def close(self):
+        pass
+
+
+class _ConexaoRoteirizada(object):
+    def __init__(self, roteiro):
+        self.roteiro = roteiro
+        self.executados = []
+        self.seq = 1000
+        self.commits = 0
+        self.rollbacks = 0
+
+    def cursor(self):
+        return _CursorRoteirizado(self)
+
+    def commit(self):
+        self.commits += 1
+
+    def rollback(self):
+        self.rollbacks += 1
+
+    def close(self):
+        pass
+
+    def auditorias(self):
+        return [b for sql, b in self.executados if sql.startswith("INSERT INTO") and "auditoria" in sql]
+
+
+class TestOracleTickets(unittest.TestCase):
+    """Testes de conformidade e integridade para o agregado TICKETS no Oracle (passo 3 do F7.3)."""
+
+    @classmethod
+    def setUpClass(cls):
         agregado = os.environ.get("SSS_TEST_REPO_AGREGADO")
         if agregado != "TICKETS":
-            self.skipTest("Agregado TICKETS sera implementado no passo 3 do F7.3")
+            raise unittest.SkipTest("Execucao restrita ao agregado TICKETS (atual: %s)" % agregado)
+        _preparar_banco_real(cls)
+
+    @classmethod
+    def tearDownClass(cls):
+        _restaurar_banco_real(cls)
+
+    def setUp(self):
+        repo_factory.reset_singletons()
+        self.tck = repo_factory.obter("tickets")
+
+    # ------------------------------------------------------------- sem banco
+
+    def test_instancia_correta_do_agregado(self):
+        """repo_factory devolve a implementacao Oracle de tickets; os agregados anteriores continuam."""
+        self.assertIsInstance(self.tck, RepoTickets)
+        self.assertEqual(self.tck.__class__.__name__, "RepoTicketsOracle")
+        self.assertEqual(repo_factory.obter("catalogo").__class__.__name__, "RepoCatalogoOracle")
+        self.assertEqual(repo_factory.obter("usuarios").__class__.__name__, "RepoUsuariosOracle")
+
+    def test_agregados_seguintes_ainda_nao_implementados(self):
+        """Agendamentos, auditoria e agentes continuam indisponiveis no ORACLE."""
+        for agg in ("agendamentos", "auditoria", "agentes"):
+            with self.assertRaises(NotImplementedError) as ctx:
+                repo_factory.obter(agg)
+            self.assertIn("Backend ORACLE ainda nao implementado", str(ctx.exception))
+
+    def test_owner_e_prefixo_parametrizados(self):
+        """SQL, sequences e constraints seguem owner e table_prefix da configuracao."""
+        cfg = mock.Mock()
+        cfg.oracle.owner = "SSS_TEST_TCK"
+        cfg.oracle.table_prefix = "abc_"
+        repo = RepoTicketsOracle(cfg=cfg, segredos={})
+        for nome, sql in repo._sql.items():
+            self.assertNotIn("tbsss_", sql, nome)
+            self.assertNotIn("SELECT *", sql, nome)
+        self.assertIn("SSS_TEST_TCK.abc_tickets", repo._sql["OBTER"])
+        self.assertEqual(repo._seq_tck, "SSS_TEST_TCK.sq_abc_tickets")
+        with mock.patch.object(repo, "_obter_conexao", side_effect=AssertionError("abriu conexao")):
+            with self.assertRaises(repo_errors.RepoViolacao) as ctx:
+                repo.criar({"script_id": 1, "ambiente": "X", "solicitante": "u", "prioridade": 9}, [])
+        self.assertEqual(ctx.exception.constraint, "ck_abc_tck_prio")
+
+    def test_cancelamento_usa_os_updates_literais_do_readme(self):
+        """README §5.6: os dois UPDATEs e a leitura pela PK com FOR UPDATE WAIT 5."""
+        tck = self.tck._idents["tck"]
+        self.assertEqual(self.tck._sql["CANCEL_SINALIZAR"],
+                         "UPDATE " + tck + " SET cancel_requested = 'S', updated_at = SYSDATE, updated_by = :ator "
+                         "WHERE id = :id AND status IN ('PENDING', 'RUNNING') AND cancel_requested = 'N'")
+        self.assertEqual(self.tck._sql["CANCEL_PENDENTE"],
+                         "UPDATE " + tck + " SET status = 'CANCELLED', status_motivo = 'CANCEL_USER', "
+                         "return_code = -1, finished_at = SYSDATE, updated_at = SYSDATE, updated_by = :ator "
+                         "WHERE id = :id AND status = 'PENDING'")
+        self.assertTrue(self.tck._sql["CANCEL_LER"].endswith("WHERE id = :id FOR UPDATE WAIT 5"))
+
+    def test_listagens_e_leituras_do_cr004_sem_clob(self):
+        """Nenhuma listagem le CLOB; obter traz parametros_enviados mas nunca log_output."""
+        for modelo in ("_SQL_LISTAR", "_SQL_CONTAR", "_SQL_ULTIMAS", "_SQL_HISTORICO", "_SQL_RESPOSTAS"):
+            sql = getattr(sys.modules[RepoTicketsOracle.__module__], modelo)
+            self.assertNotIn("log_output", sql, modelo)
+            self.assertNotIn("parametros_enviados", sql, modelo)
+        self.assertNotIn("log_output", self.tck._sql["OBTER"])
+        self.assertIn("parametros_enviados", self.tck._sql["OBTER"])
+        self.assertIn("ROW_NUMBER() OVER (PARTITION BY t.script_id ORDER BY t.created_at DESC, t.id DESC)",
+                      sys.modules[RepoTicketsOracle.__module__]._SQL_ULTIMAS)
+
+    def test_ator_obrigatorio_antes_de_qualquer_sql(self):
+        with mock.patch.object(self.tck, "_obter_conexao", side_effect=AssertionError("abriu conexao")):
+            for ator in (None, "", "   ", "x" * 41):
+                with self.assertRaises(repo_errors.RepoViolacao):
+                    self.tck.criar({"script_id": 1, "ambiente": "X", "solicitante": ator}, [], ator=ator)
+                with self.assertRaises(repo_errors.RepoViolacao):
+                    self.tck.solicitar_cancelamento(1, ator, "127.0.0.1")
+
+    def _cancelar_com(self, roteiro):
+        conn = _ConexaoRoteirizada(roteiro)
+        with mock.patch.object(self.tck, "_obter_conexao", return_value=conn):
+            retorno = self.tck.solicitar_cancelamento(7, "ana", "10.0.0.1")
+        return retorno, conn
+
+    def test_cancelamento_nos_quatro_resultados_e_residuo_pending(self):
+        """Cada desfecho do §5.6 audita TICKET_CANCELAR com o resultado, numa transacao confirmada."""
+        casos = (
+            # PENDING: sinaliza e cancela.
+            ([("cancel_requested = 'S', updated_at", 1, []), ("SET status = 'CANCELLED'", 1, [])],
+             "CANCELADO", u"resultado: cancelado"),
+            # RUNNING: so sinaliza.
+            ([("cancel_requested = 'S', updated_at", 1, []), ("SET status = 'CANCELLED'", 0, [])],
+             "SINALIZADO", u"resultado: sinalizado"),
+            # RUNNING ja sinalizado.
+            ([("FOR UPDATE WAIT 5", 1, [("RUNNING", "S")])], "JA_SINALIZADO", u"resultado: já sinalizado"),
+            # Terminal.
+            ([("FOR UPDATE WAIT 5", 1, [("SUCCESS", "N")])], "TERMINAL",
+             u"resultado: sem efeito: ticket encerrado"),
+            # Residuo PENDING com cancel_requested = 'S' (CR-008, R-02): cancelado pelo segundo UPDATE.
+            ([("FOR UPDATE WAIT 5", 1, [("PENDING", "S")]), ("SET status = 'CANCELLED'", 1, [])],
+             "CANCELADO", u"resultado: cancelado"),
+        )
+        for roteiro, esperado, detalhe in casos:
+            retorno, conn = self._cancelar_com(roteiro)
+            self.assertEqual(retorno, esperado)
+            auds = conn.auditorias()
+            self.assertEqual(len(auds), 1)
+            self.assertEqual((auds[0]["acao"], auds[0]["detalhe"], auds[0]["ator"], auds[0]["entidade_id"]),
+                             ("TICKET_CANCELAR", detalhe, "ana", 7))
+            self.assertEqual((conn.commits, conn.rollbacks), (1, 0))
+
+    def test_cancelamento_de_ticket_inexistente(self):
+        conn = _ConexaoRoteirizada([])
+        with mock.patch.object(self.tck, "_obter_conexao", return_value=conn):
+            with self.assertRaises(repo_errors.RepoNaoEncontrado):
+                self.tck.solicitar_cancelamento(7, "ana", "10.0.0.1")
+        self.assertEqual(conn.auditorias(), [])
+        self.assertEqual((conn.commits, conn.rollbacks), (0, 1))
+
+    def test_criar_sem_gravacao_parcial_com_fk_ausente(self):
+        """FK conferida antes de qualquer INSERT: nada e gravado e a transacao e desfeita."""
+        roteiro = [("WHERE id = :id", 1, [(1,)]), ("WHERE nome = :nome", 0, [])]
+        conn = _ConexaoRoteirizada(roteiro)
+        with mock.patch.object(self.tck, "_obter_conexao", return_value=conn):
+            with self.assertRaises(repo_errors.RepoViolacao) as ctx:
+                self.tck.criar({"script_id": 1, "ambiente": "NAO_EXISTE", "solicitante": "ana"}, [])
+        self.assertEqual(ctx.exception.constraint, "fk_tbsss_tck_amb")
+        self.assertFalse([s for s, _b in conn.executados if s.startswith("INSERT")])
+        self.assertEqual(conn.rollbacks, 1)
+
+    def test_listar_filtros_por_bind_e_escopo_vazio(self):
+        """Status e escopo por IN de placeholders; escopo vazio nao devolve nada; datas como bind."""
+        conn = _ConexaoRoteirizada([("SELECT COUNT(*)", 1, [(0,)])])
+        with mock.patch.object(self.tck, "_obter_conexao", return_value=conn):
+            self.tck.listar({"status": ["RUNNING", "PENDING"], "origem": "manual",
+                             "criado_inicio": datetime.datetime(2026, 1, 1)}, escopo_ambientes=["HML", "PROD"])
+            self.tck.listar({}, escopo_ambientes=[])
+        sql, binds = conn.executados[0]
+        self.assertIn("ROWNUM <= 10001", sql)
+        self.assertIn("status IN (:s0, :s1)", sql)
+        self.assertIn("ambiente IN (:e0, :e1)", sql)
+        self.assertIn("agendamento_id IS NULL", sql)
+        self.assertIn("created_at >= :criado_inicio", sql)
+        self.assertNotIn("RUNNING", sql)
+        self.assertEqual((binds["s0"], binds["s1"], binds["e0"]), ("PENDING", "RUNNING", "HML"))
+        self.assertIn("1 = 0", conn.executados[2][0])
+
+    # ------------------------------------------------------------- banco real
+
+    def _fixtures_do_seed(self):
+        """Cadastros existentes (somente leitura): um script, um ambiente, um parametro e um login."""
+        c = self.tck._obter_conexao()
+        try:
+            cur = c.cursor()
+            try:
+                cur.execute("SELECT MIN(id) FROM " + self.tck._idents["scr"])
+                script_id = cur.fetchone()[0]
+                cur.execute("SELECT MIN(nome) FROM " + self.tck._idents["amb"])
+                ambiente = cur.fetchone()[0]
+                cur.execute("SELECT MIN(id), MAX(id) FROM " + self.tck._idents["prm"])
+                prm1, prm2 = cur.fetchone()
+                cur.execute("SELECT MIN(login) FROM " + self.tck._idents["usr"])
+                login = cur.fetchone()[0]
+            finally:
+                cur.close()
+        finally:
+            c.close()
+        if None in (script_id, ambiente, prm1, login) or prm1 == prm2:
+            self.skipTest("Seed do catalogo ausente no banco real (implante o 01_implantar_sss.sql)")
+        return script_id, ambiente, prm1, prm2, login
+
+    def _limpar(self, ids, marca_ip):
+        """Remove so os tickets criados por este teste (respostas em cascata) e, no modo compartilhado,
+        a auditoria deles; falha se sobrar algo."""
+        c = self.tck._obter_conexao()
+        try:
+            cur = c.cursor()
+            try:
+                for tid in ids:
+                    cur.execute("DELETE FROM " + self.tck._idents["tck"] + " WHERE id = :id", {"id": tid})
+                    if _oracle_test_support.modo_schema() == _oracle_test_support.MODO_COMPARTILHADO:
+                        cur.execute("DELETE FROM " + self.tck._tbl_aud + " WHERE entidade = 'tbsss_tickets' "
+                                    "AND entidade_id = :id AND acao IN ('TICKET_CRIAR', 'TICKET_REEXECUTAR', "
+                                    "'TICKET_CANCELAR')", {"id": tid})
+                c.commit()
+                cur.execute("SELECT COUNT(*) FROM " + self.tck._idents["tck"] + " WHERE ip_origem = :ip",
+                            {"ip": marca_ip})
+                restantes = cur.fetchone()[0]
+            finally:
+                cur.close()
+        finally:
+            c.close()
+        if restantes:
+            self.fail("Limpeza incompleta: %d ticket(s) com ip_origem %s" % (restantes, marca_ip))
+
+    def _contar_por_ip(self, marca_ip):
+        c = self.tck._obter_conexao()
+        try:
+            cur = c.cursor()
+            try:
+                cur.execute("SELECT COUNT(*) FROM " + self.tck._idents["tck"] + " WHERE ip_origem = :ip",
+                            {"ip": marca_ip})
+                return cur.fetchone()[0]
+            finally:
+                cur.close()
+        finally:
+            c.close()
+
+    def test_banco_real_tickets(self):
+        """Ciclo no Oracle: criar com respostas, FKs sem gravacao parcial, cancelamento, log e leituras."""
+        if not self.tem_banco_real:
+            self.skipTest("Banco descartavel real nao configurado (marcado como NAO TESTADO)")
+        n = self.tck.nome_constraint
+        script_id, ambiente, prm1, prm2, login = self._fixtures_do_seed()
+        marca_ip = "tst-%s" % datetime.datetime.now().strftime("%H%M%S%f")
+        base = {"script_id": script_id, "ambiente": ambiente, "solicitante": login, "ip_origem": marca_ip,
+                "parametros_enviados": '{"args": ["--x"]}'}
+        ids = []
+        try:
+            agora = self.tck.agora()
+            self.assertEqual(agora.microsecond, 0)
+
+            # 1. criar: ticket + respostas; created_by = solicitante; obter sem log_output.
+            t1 = self.tck.criar(dict(base), [{"parametro_id": prm1, "valor_resposta": "a"},
+                                             {"parametro_id": prm2, "valor_resposta": "b"}])
+            ids.append(t1)
+            reg = self.tck.obter(t1)
+            self.assertNotIn("log_output", reg)
+            self.assertEqual(reg["parametros_enviados"], base["parametros_enviados"])
+            self.assertEqual((reg["status"], reg["created_by"], reg["updated_at"]), ("PENDING", login, None))
+            self.assertEqual([r["valor_resposta"] for r in self.tck.respostas(t1)], ["a", "b"])
+
+            # 2. FKs e UK: nenhuma linha gravada em caso de violacao.
+            antes = self._contar_por_ip(marca_ip)
+            for dados, resp, ck in (
+                (dict(base, script_id=999999999), [], n("fk", "tickets", "scr")),
+                (dict(base, ambiente="NAO_EXISTE_TST"), [], n("fk", "tickets", "amb")),
+                (dict(base, solicitante="nao.existe.tst"), [], n("fk", "tickets", "usr")),
+                (dict(base, parent_ticket_id=999999999), [], n("fk", "tickets", "parent")),
+                (dict(base), [{"parametro_id": 999999999}], n("fk", "ticket_resp", "prm")),
+                (dict(base), [{"parametro_id": prm1}, {"parametro_id": prm1}], n("uk", "ticket_resp", "tck_prm")),
+            ):
+                with self.assertRaises(repo_errors.RepoViolacao) as ctx:
+                    self.tck.criar(dados, resp)
+                self.assertEqual(ctx.exception.constraint, ck)
+            self.assertEqual(self._contar_por_ip(marca_ip), antes)
+
+            # 3. Cancelamento nos quatro resultados (README §5.6) e o residuo PENDING com 'S' (CR-008, R-02).
+            self.assertEqual(self.tck.solicitar_cancelamento(t1, "teste_tck", marca_ip), "CANCELADO")
+            cancelado = self.tck.obter(t1)
+            self.assertEqual((cancelado["status"], cancelado["status_motivo"], cancelado["return_code"]),
+                             ("CANCELLED", "CANCEL_USER", -1))
+            self.assertEqual((cancelado["updated_by"], cancelado["created_by"]), ("teste_tck", login))
+            self.assertEqual(self.tck.solicitar_cancelamento(t1, "teste_tck", marca_ip), "TERMINAL")
+            t2 = self.tck.criar(dict(base, status="RUNNING", agente_id="tst-agente", started_at=agora), [])
+            ids.append(t2)
+            self.assertEqual(self.tck.solicitar_cancelamento(t2, "teste_tck", marca_ip), "SINALIZADO")
+            self.assertEqual(self.tck.solicitar_cancelamento(t2, "teste_tck", marca_ip), "JA_SINALIZADO")
+            self.assertEqual(self.tck.obter(t2)["status"], "RUNNING")
+            t3 = self.tck.criar(dict(base, cancel_requested="S"), [])
+            ids.append(t3)
+            self.assertEqual(self.tck.solicitar_cancelamento(t3, "teste_tck", marca_ip), "CANCELADO")
+            with self.assertRaises(repo_errors.RepoNaoEncontrado):
+                self.tck.solicitar_cancelamento(999999999, "teste_tck", marca_ip)
+
+            # 4. log_ler por locator: base 0 na API, offset alem do fim, negativo e max_chars < 1.
+            log = "".join("linha %03d ção\n" % i for i in range(40))
+            t4 = self.tck.criar(dict(base, status="SUCCESS", log_output=log, finished_at=agora), [])
+            ids.append(t4)
+            texto, prox, terminal, truncado = self.tck.log_ler(t4, 0, 20)
+            self.assertEqual((texto, prox, terminal, truncado), (log[:20], 20, True, False))
+            self.assertEqual(self.tck.log_ler(t4, 20, 20)[0], log[20:40])
+            self.assertEqual(self.tck.log_ler(t4, -5, 10)[:2], (log[:10], 10))
+            self.assertEqual(self.tck.log_ler(t4, len(log) + 5, 10)[:2], ("", len(log) + 5))
+            self.assertEqual(self.tck.log_ler(t4, 0, 0)[0], log)
+            self.assertEqual(self.tck.log_ler(t1, 0, 10)[:3], ("", 0, True))
+
+            # 5. Leituras: listar sem CLOB, ultima execucao e historico (os mais recentes, crescente).
+            lista = self.tck.listar({"script_id": script_id, "criado_inicio": agora}, tamanho=50)
+            meus = [i["id"] for i in lista["itens"] if i["id"] in ids]
+            self.assertEqual(sorted(meus, reverse=True), meus)
+            self.assertEqual(set(meus), set(ids))
+            for item in lista["itens"]:
+                self.assertNotIn("log_output", item)
+                self.assertNotIn("parametros_enviados", item)
+            self.assertIn("total_limitado", lista)
+            so_cancelados = self.tck.listar({"script_id": script_id, "status": ["CANCELLED"],
+                                             "criado_inicio": agora}, escopo_ambientes=[ambiente])
+            self.assertEqual(sorted(i["id"] for i in so_cancelados["itens"] if i["id"] in ids), sorted([t1, t3]))
+            self.assertEqual(self.tck.listar({"script_id": script_id}, escopo_ambientes=[])["total"], 0)
+            ultima = self.tck.ultimas_execucoes([script_id], escopo_ambientes=[ambiente], solicitante=login)
+            self.assertEqual(ultima[script_id]["id"], max(ids))
+            self.assertEqual(sorted(ultima[script_id]), ["created_at", "finished_at", "id", "status", "status_motivo"])
+            self.assertEqual(self.tck.ultimas_execucoes([script_id], escopo_ambientes=[]), {})
+            hist = self.tck.historico_script(script_id, agora, escopo_ambientes=[ambiente], limite=2)
+            self.assertEqual([h["id"] for h in hist], sorted(ids)[-2:])
+            self.assertEqual(sorted(hist[0]), ["created_at", "finished_at", "id", "started_at", "status",
+                                               "status_motivo"])
+        finally:
+            self._limpar(ids, marca_ip)
 
 
 class TestOracleAgendamentos(unittest.TestCase):

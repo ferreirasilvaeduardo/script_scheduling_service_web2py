@@ -23,11 +23,17 @@ class RepoTickets(object):
         raise NotImplementedError
 
     def obter(self, id):
-        """Retorna dict com dados do ticket pelo ID ou lanca RepoNaoEncontrado."""
+        """Retorna dict com dados do ticket pelo ID ou lanca RepoNaoEncontrado.
+
+        Traz parametros_enviados (snapshot) e as colunas de registro, mas nunca log_output: o log so e
+        lido em fatias por log_ler (README §8.10, AGENTS §4.13).
+        """
         raise NotImplementedError
 
     def listar(self, filtros=None, pagina=1, tamanho=20, escopo_ambientes=None):
         """Lista tickets com paginacao e formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
+
+        Os itens nunca trazem CLOB (sem log_output e sem parametros_enviados; AGENTS §4.13).
 
         Ordem: created_at DESC, id DESC. Chaves de filtros (todas opcionais, combinadas com E):
         status (lista), ambiente, script_id, solicitante (igualdade exata), origem

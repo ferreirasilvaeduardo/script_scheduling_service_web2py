@@ -32,6 +32,14 @@ def _linhas_etapa(n, quando, sensiveis):
     return linhas
 
 
+_COLUNAS_CLOB = ("parametros_enviados", "log_output")
+
+
+def _sem(registro, colunas):
+    """Copia do registro sem as colunas indicadas (paridade com o Oracle, que nao as seleciona)."""
+    return dict((k, copy.deepcopy(v)) for k, v in registro.items() if k not in colunas)
+
+
 class RepoTicketsFake(RepoTickets):
     """Implementacao em memoria com semantica Oracle para tickets."""
 
@@ -158,7 +166,8 @@ class RepoTicketsFake(RepoTickets):
         with self._store.lock_tickets:
             if id not in self._store.tickets:
                 raise RepoNaoEncontrado("Ticket ID %s nao encontrado" % id)
-            return copy.deepcopy(self._store.tickets[id])
+            # O log so sai em fatias por log_ler (contrato RepoTickets.obter).
+            return _sem(self._store.tickets[id], ("log_output",))
 
     def listar(self, filtros=None, pagina=1, tamanho=20, escopo_ambientes=None):
         """Lista tickets com paginacao, filtros e escopo de ambientes."""
@@ -211,7 +220,8 @@ class RepoTicketsFake(RepoTickets):
 
             # Ordenacao estavel padrao: created_at DESC, id DESC
             lista.sort(key=lambda x: (x.get("created_at") or self._store.agora(), x["id"]), reverse=True)
-            return paginar(lista, pagina=pagina, tamanho=tamanho)
+            # Listagens nunca trazem CLOB (contrato RepoTickets.listar).
+            return paginar([_sem(t, _COLUNAS_CLOB) for t in lista], pagina=pagina, tamanho=tamanho)
 
     def ultimas_execucoes(self, script_ids, escopo_ambientes=None, solicitante=None):
         """Ultimo ticket de cada script no escopo, sem LOB (contrato RepoTickets)."""

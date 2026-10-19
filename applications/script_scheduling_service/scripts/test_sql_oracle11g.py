@@ -13,7 +13,9 @@ import unittest
 import _testenv  # noqa: F401
 
 _PADROES_12C = [
-    (re.compile(r"\bOFFSET\b", re.IGNORECASE), "OFFSET (paginacao 12c+)"),
+    # Sintaxe 12c "OFFSET <n|:bind> ROW[S]"; a palavra solta e o parametro offset do contrato
+    # RepoTickets.log_ler, nao SQL.
+    (re.compile(r"\bOFFSET\s+(\d+|:\w+)\s+ROWS?\b", re.IGNORECASE), "OFFSET (paginacao 12c+)"),
     (re.compile(r"\bFETCH\s+(FIRST|NEXT)\b", re.IGNORECASE), "FETCH FIRST/NEXT (12c+)"),
     (re.compile(r"\bGENERATED\s+ALWAYS\s+AS\s+IDENTITY\b", re.IGNORECASE), "IDENTITY (12c+)"),
     (re.compile(r"\bDEFAULT\s+[A-Za-z0-9_.]+\.NEXTVAL\b", re.IGNORECASE), "DEFAULT seq.NEXTVAL (12c+)"),
@@ -46,6 +48,15 @@ class TestSqlOracle11g(unittest.TestCase):
         if os.path.isfile(init_db):
             arquivos.append(init_db)
         return arquivos
+
+    def test_padroes_12c_detectam_a_sintaxe_proibida(self):
+        """Regressao: a regra de OFFSET pega a paginacao 12c e ignora o parametro offset do contrato."""
+        def acusa(texto):
+            return [d for p, d in _PADROES_12C if p.search(texto)]
+        self.assertTrue(acusa("SELECT id FROM t ORDER BY id OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY"))
+        self.assertTrue(acusa("SELECT id FROM t OFFSET :inicio ROWS"))
+        self.assertTrue(acusa("select id from t offset 1 row"))
+        self.assertEqual(acusa("def log_ler(self, id, offset, max_chars):\n    off = int(offset)"), [])
 
     def test_ausencia_sintaxe_12c(self):
         """Varre os arquivos do repositorio Oracle garantindo ausencia de recursos 12c+."""

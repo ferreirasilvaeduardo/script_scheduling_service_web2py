@@ -562,7 +562,9 @@ def _criar_registro_tabelas():
             ('usr', {'sufixo': 'usr', 'colunas': ('solicitante',), 'expr': None, 'fbi': False}),
             ('par', {'sufixo': 'par', 'colunas': ('parent_ticket_id',), 'expr': None, 'fbi': False}),
             ('agd', {'sufixo': 'agd', 'colunas': ('agendamento_id',), 'expr': None, 'fbi': False}),
-            ('crt', {'sufixo': 'crt', 'colunas': ('created_at',), 'expr': None, 'fbi': False}),
+            # (created_at, id): retencao e a ordem da lista de tickets (created_at DESC, id DESC) sem SORT
+            # da tabela inteira (F7.3, EXPLAIN com volume).
+            ('crt', {'sufixo': 'crt', 'colunas': ('created_at', 'id'), 'expr': None, 'fbi': False}),
             ('hist', {'sufixo': 'hist', 'colunas': ('script_id', 'created_at'), 'expr': None, 'fbi': False}),
             ('fila', {'sufixo': 'fila', 'colunas': (), 'expr': FBI_TCK_FILA_EXPR, 'fbi': True}),
             ('run', {'sufixo': 'run', 'colunas': (), 'expr': FBI_TCK_RUN_EXPR, 'fbi': True}),

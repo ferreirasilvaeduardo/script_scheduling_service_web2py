@@ -575,7 +575,7 @@ CREATE INDEX openrisow.ix_tbsss_tck_par ON openrisow.tbsss_tickets (parent_ticke
 
 CREATE INDEX openrisow.ix_tbsss_tck_agd ON openrisow.tbsss_tickets (agendamento_id);
 
-CREATE INDEX openrisow.ix_tbsss_tck_crt ON openrisow.tbsss_tickets (created_at);
+CREATE INDEX openrisow.ix_tbsss_tck_crt ON openrisow.tbsss_tickets (created_at, id);
 
 CREATE INDEX openrisow.ix_tbsss_tck_hist ON openrisow.tbsss_tickets (script_id, created_at);
 

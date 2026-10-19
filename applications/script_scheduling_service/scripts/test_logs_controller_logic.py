@@ -71,6 +71,15 @@ class _BaseLog(unittest.TestCase):
         self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
         self.svc = ServicoTicket(catalogo, self.tickets, (os.geteuid(),), self.log)
 
+    def _log_integral(self, ticket_id):
+        """Log inteiro lido do repositorio em fatias, pelo contrato (obter nao traz log_output)."""
+        partes, offset = [], 0
+        while True:
+            texto, offset, _terminal, _truncado = self.tickets.log_ler(ticket_id, offset, 65536)
+            if not texto:
+                return "".join(partes)
+            partes.append(texto)
+
     def _ler_tudo(self, login, ticket_id):
         partes = []
         offset = 0
@@ -125,7 +134,7 @@ class TestLerLogConteudo(_BaseLog):
         self.assertEqual(sorted(r), ["proximo_offset", "status", "terminal", "texto", "truncado"])
 
     def test_limite_de_64k_e_reconstrucao_do_log_de_2mb(self):
-        integral = self.tickets.obter(TCK_GRANDE)["log_output"]
+        integral = self._log_integral(TCK_GRANDE)
         self.assertGreaterEqual(len(integral.encode("utf-8")), 2 * 1024 * 1024)
         r = self.svc.ler_log(self.ctx["admin"], str(TCK_GRANDE), "0")
         self.assertEqual(len(r["texto"]), LOG_MAX_CHARS)
@@ -187,7 +196,7 @@ class TestLerLogConteudo(_BaseLog):
         texto, _ = self._ler_tudo("admin", TCK_RUNNING)
         self.assertIn("conectando com documento_cliente=****", texto)
         self.assertNotIn(SEGREDO_SEED, texto)
-        self.assertNotIn(SEGREDO_SEED, self.tickets.obter(TCK_RUNNING)["log_output"])
+        self.assertNotIn(SEGREDO_SEED, self._log_integral(TCK_RUNNING))
 
     def test_html_preservado_como_texto(self):
         # O servidor entrega o texto cru; o escape e responsabilidade do x-text no cliente.
@@ -198,7 +207,7 @@ class TestLerLogConteudo(_BaseLog):
 class TestBlocosLog(_BaseLog):
 
     def test_download_integro_do_log_de_2mb(self):
-        integral = self.tickets.obter(TCK_GRANDE)["log_output"]
+        integral = self._log_integral(TCK_GRANDE)
         tid, blocos = self.svc.blocos_log(self.ctx["admin"], str(TCK_GRANDE))
         self.assertEqual(tid, TCK_GRANDE)
         lista = list(blocos)
