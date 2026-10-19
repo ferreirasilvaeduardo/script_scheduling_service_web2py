@@ -122,6 +122,13 @@ def obter(nome, config=None):
                     from repo_oracle.tickets import RepoTicketsOracle
                     _singletons_oracle["tickets"] = RepoTicketsOracle()
                 return _singletons_oracle[nome_norm]
+        # Agregado 4 (F7.3): AGENDAMENTOS
+        if nome_norm == "agendamentos":
+            with _lock_fabrica:
+                if nome_norm not in _singletons_oracle:
+                    from repo_oracle.agendamentos import RepoAgendamentosOracle
+                    _singletons_oracle["agendamentos"] = RepoAgendamentosOracle()
+                return _singletons_oracle[nome_norm]
         raise NotImplementedError("Backend ORACLE ainda nao implementado")
 
     if backend != "FAKE":

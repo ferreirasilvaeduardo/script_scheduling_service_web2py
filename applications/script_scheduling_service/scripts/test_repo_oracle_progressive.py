@@ -22,6 +22,8 @@ import repo_factory
 from repo_catalogo import RepoCatalogo
 from repo_oracle.catalogo import RepoCatalogoOracle
 from repo_rbac import RepoRbac
+from repo_agendamentos import RepoAgendamentos
+from repo_oracle.agendamentos import RepoAgendamentosOracle
 from repo_oracle.tickets import RepoTicketsOracle
 from repo_tickets import RepoTickets
 from repo_usuarios import RepoUsuarios
@@ -80,8 +82,8 @@ class TestOracleRbacUsuarios(unittest.TestCase):
         self.assertEqual(self.rbac.__class__.__name__, "RepoRbacOracle")
 
     def test_agregados_seguintes_ainda_nao_implementados(self):
-        """Agendamentos, auditoria e agentes continuam bloqueados (catalogo e tickets: agregados 2 e 3)."""
-        for agg in ("agendamentos", "auditoria", "agentes"):
+        """Auditoria e agentes continuam bloqueados (catalogo, tickets e agendamentos: agregados 2 a 4)."""
+        for agg in ("auditoria", "agentes"):
             with self.assertRaises(NotImplementedError) as ctx:
                 repo_factory.obter(agg)
             self.assertIn("Backend ORACLE ainda nao implementado", str(ctx.exception))
@@ -180,6 +182,10 @@ class TestOracleRbacUsuarios(unittest.TestCase):
                 cur = conn.cursor()
                 try:
                     cur.execute("DELETE FROM " + self.usr._tabela() + " WHERE id = :id", {"id": uid})
+                    if _oracle_test_support.modo_schema() == _oracle_test_support.MODO_COMPARTILHADO:
+                        # encerrar_sessoes audita o LOGOUT do usuario do teste: so essa auditoria sai.
+                        cur.execute("DELETE FROM " + self.rbac._tabela_auditoria() + " WHERE entidade = "
+                                    "'tbsss_usuarios' AND entidade_id = :id", {"id": uid})
                     cur.execute("DELETE FROM " + self.rbac._tabela_perfis() + " WHERE id = :id", {"id": pid})
                     conn.commit()
                 finally:
@@ -249,8 +255,8 @@ class TestOracleCatalogo(unittest.TestCase):
         self.assertEqual(repo_factory.obter("usuarios").__class__.__name__, "RepoUsuariosOracle")
 
     def test_agregados_seguintes_ainda_nao_implementados(self):
-        """Agendamentos, auditoria e agentes continuam indisponiveis no ORACLE (tickets: agregado 3)."""
-        for agg in ("agendamentos", "auditoria", "agentes"):
+        """Auditoria e agentes continuam indisponiveis no ORACLE (tickets e agendamentos: agregados 3 e 4)."""
+        for agg in ("auditoria", "agentes"):
             with self.assertRaises(NotImplementedError) as ctx:
                 repo_factory.obter(agg)
             self.assertIn("Backend ORACLE ainda nao implementado", str(ctx.exception))
@@ -597,8 +603,8 @@ class TestOracleTickets(unittest.TestCase):
         self.assertEqual(repo_factory.obter("usuarios").__class__.__name__, "RepoUsuariosOracle")
 
     def test_agregados_seguintes_ainda_nao_implementados(self):
-        """Agendamentos, auditoria e agentes continuam indisponiveis no ORACLE."""
-        for agg in ("agendamentos", "auditoria", "agentes"):
+        """Auditoria e agentes continuam indisponiveis no ORACLE (agendamentos: agregado 4)."""
+        for agg in ("auditoria", "agentes"):
             with self.assertRaises(NotImplementedError) as ctx:
                 repo_factory.obter(agg)
             self.assertIn("Backend ORACLE ainda nao implementado", str(ctx.exception))
@@ -875,12 +881,261 @@ class TestOracleTickets(unittest.TestCase):
 
 
 class TestOracleAgendamentos(unittest.TestCase):
-    """Testes para o agregado AGENDAMENTOS no Oracle (passo 4 do F7.3)."""
+    """Testes de conformidade e integridade para o agregado AGENDAMENTOS no Oracle (passo 4 do F7.3)."""
 
-    def test_pendente(self):
+    @classmethod
+    def setUpClass(cls):
         agregado = os.environ.get("SSS_TEST_REPO_AGREGADO")
         if agregado != "AGENDAMENTOS":
-            self.skipTest("Agregado AGENDAMENTOS sera implementado no passo 4 do F7.3")
+            raise unittest.SkipTest("Execucao restrita ao agregado AGENDAMENTOS (atual: %s)" % agregado)
+        _preparar_banco_real(cls)
+
+    @classmethod
+    def tearDownClass(cls):
+        _restaurar_banco_real(cls)
+
+    def setUp(self):
+        repo_factory.reset_singletons()
+        self.agd = repo_factory.obter("agendamentos")
+
+    # ------------------------------------------------------------- sem banco
+
+    def test_instancia_correta_do_agregado(self):
+        self.assertIsInstance(self.agd, RepoAgendamentos)
+        self.assertEqual(self.agd.__class__.__name__, "RepoAgendamentosOracle")
+        self.assertEqual(repo_factory.obter("tickets").__class__.__name__, "RepoTicketsOracle")
+
+    def test_agregados_seguintes_ainda_nao_implementados(self):
+        for agg in ("auditoria", "agentes"):
+            with self.assertRaises(NotImplementedError) as ctx:
+                repo_factory.obter(agg)
+            self.assertIn("Backend ORACLE ainda nao implementado", str(ctx.exception))
+
+    def test_owner_e_prefixo_parametrizados(self):
+        cfg = mock.Mock()
+        cfg.oracle.owner = "SSS_TEST_AGD"
+        cfg.oracle.table_prefix = "abc_"
+        repo = RepoAgendamentosOracle(cfg=cfg, segredos={})
+        for nome, sql in repo._sql.items():
+            self.assertNotIn("tbsss_", sql, nome)
+            self.assertNotIn("SELECT *", sql, nome)
+        self.assertIn("SSS_TEST_AGD.abc_agendamentos", repo._sql["OBTER"])
+        self.assertEqual(repo._seq_agd, "SSS_TEST_AGD.sq_abc_agendamentos")
+        with self.assertRaises(repo_errors.RepoViolacao) as ctx:
+            repo._checar_cks({"nome": "x", "tipo_recorrencia": "ANUAL"})
+        self.assertEqual(ctx.exception.constraint, "ck_abc_agd_trec")
+
+    def test_pausar_condicional_a_regra_ativa_e_a_data_lida(self):
+        """CR-007, R-19: o UPDATE exige ativo = 'S' e, com antiga_data, a proxima_execucao lida."""
+        self.assertTrue(self.agd._sql["PAUSAR"].endswith("WHERE id = :id AND ativo = 'S'"))
+        self.assertTrue(self.agd._sql["PAUSAR_OTIMISTA"].endswith(
+            "WHERE id = :id AND ativo = 'S' AND proxima_execucao = :antiga_data"))
+        self.assertIn("updated_at = SYSDATE, updated_by = :ator", self.agd._sql["PAUSAR"])
+        self.assertIn("FOR UPDATE WAIT 5", self.agd._sql["OBTER_LOCK"])
+
+    def test_cks_com_os_nomes_do_fake(self):
+        n = lambda s: "ck_tbsss_agd_" + s  # noqa: E731
+        base = {"nome": "r", "tipo_recorrencia": "DIARIA", "prioridade": 2, "ativo": "S", "hora_execucao": "08:00",
+                "data_inicio": datetime.datetime(2026, 1, 1), "proxima_execucao": datetime.datetime(2026, 1, 2)}
+        casos = (
+            ({"tipo_recorrencia": "ANUAL"}, n("trec")), ({"prioridade": 5}, n("prio")), ({"prioridade": True}, n("prio")),
+            ({"ativo": "X"}, n("ativo")), ({"dia_mes": 32}, n("dia")), ({"hora_execucao": "24:00"}, n("hora")),
+            ({"dias_semana": "8"}, n("dsem")), ({"data_fim": datetime.datetime(2025, 1, 1)}, n("fim")),
+            ({"pausa_motivo": "OUTRO"}, n("pausa")), ({"hora_execucao": None}, n("campos")),
+            ({"tipo_recorrencia": "CRON"}, n("campos")),
+        )
+        for mudanca, ck in casos:
+            with self.assertRaises(repo_errors.RepoViolacao) as ctx:
+                self.agd._checar_cks(dict(base, **mudanca))
+            self.assertEqual(ctx.exception.constraint, ck, mudanca)
+        with self.assertRaises(repo_errors.RepoViolacao):
+            self.agd._checar_cks(dict(base, nome="x" * 61))
+
+    def test_ator_obrigatorio_antes_de_qualquer_sql(self):
+        with mock.patch.object(self.agd, "_obter_conexao", side_effect=AssertionError("abriu conexao")):
+            for ator in (None, "", "   ", "x" * 41):
+                for chamada in (
+                    lambda a: self.agd.inserir({"script_id": 1, "ambiente": "X", "usuario_id": 1}, ator=a),
+                    lambda a: self.agd.alterar(1, {"nome": "y"}, ator=a),
+                    lambda a: self.agd.pausar(1, "MANUAL", ator=a),
+                    lambda a: self.agd.retomar(1, datetime.datetime(2026, 1, 1), ator=a),
+                ):
+                    with self.assertRaises(repo_errors.RepoViolacao):
+                        chamada(ator)
+
+    def test_pausar_sem_linha_afetada_e_conflito(self):
+        """Regra existente, mas nao ativa (ou com outra proxima_execucao): RepoConflito e ROLLBACK."""
+        conn = _ConexaoRoteirizada([("WHERE id = :id AND ativo = 'S'", 0, []), ("SELECT id FROM", 1, [(7,)])])
+        with mock.patch.object(self.agd, "_obter_conexao", return_value=conn):
+            with self.assertRaises(repo_errors.RepoConflito):
+                self.agd.pausar(7, "MANUAL", antiga_data=datetime.datetime(2026, 1, 1, 8, 0, 0, 123456), ator="ana")
+        self.assertEqual((conn.commits, conn.rollbacks), (0, 1))
+        self.assertEqual(conn.auditorias(), [])
+
+    def test_listar_escopo_vazio_e_filtros_por_bind(self):
+        conn = _ConexaoRoteirizada([("SELECT COUNT(*)", 1, [(0,)])])
+        with mock.patch.object(self.agd, "_obter_conexao", return_value=conn):
+            self.agd.listar({"ativo": "S", "nome": "50%_x"}, escopo_ambientes=["HML"])
+            self.agd.listar({}, escopo_ambientes=[])
+        sql, binds = conn.executados[0]
+        self.assertIn("ambiente IN (:e0)", sql)
+        self.assertIn("ROWNUM <= 10001", sql)
+        self.assertEqual(binds["nome_f"], "%50\\%\\_x%")
+        self.assertIn("1 = 0", conn.executados[2][0])
+
+    # ------------------------------------------------------------- banco real
+
+    def _fixtures_do_seed(self):
+        c = self.agd._obter_conexao()
+        try:
+            cur = c.cursor()
+            try:
+                cur.execute("SELECT MIN(id) FROM " + self.agd._idents["scr"])
+                script_id = cur.fetchone()[0]
+                cur.execute("SELECT MIN(nome) FROM " + self.agd._idents["amb"])
+                ambiente = cur.fetchone()[0]
+                cur.execute("SELECT MIN(id), MIN(login) FROM " + self.agd._idents["usr"])
+                usuario_id, login = cur.fetchone()
+            finally:
+                cur.close()
+        finally:
+            c.close()
+        if None in (script_id, ambiente, usuario_id):
+            self.skipTest("Seed do catalogo ausente no banco real (implante o 01_implantar_sss.sql)")
+        return script_id, ambiente, usuario_id, login
+
+    def _limpar(self, agd_ids, tck_ids, marca):
+        """Remove so os registros criados por este teste e, no modo compartilhado, a auditoria deles."""
+        compartilhado = _oracle_test_support.modo_schema() == _oracle_test_support.MODO_COMPARTILHADO
+        tck = repo_factory.obter("tickets")
+        c = self.agd._obter_conexao()
+        try:
+            cur = c.cursor()
+            try:
+                for tid in tck_ids:
+                    cur.execute("DELETE FROM " + tck._idents["tck"] + " WHERE id = :id", {"id": tid})
+                    if compartilhado:
+                        cur.execute("DELETE FROM " + self.agd._tbl_aud + " WHERE entidade = 'tbsss_tickets' "
+                                    "AND entidade_id = :id", {"id": tid})
+                for aid in agd_ids:
+                    cur.execute("DELETE FROM " + self.agd._idents["agd"] + " WHERE id = :id", {"id": aid})
+                    if compartilhado:
+                        cur.execute("DELETE FROM " + self.agd._tbl_aud + " WHERE entidade = 'tbsss_agendamentos' "
+                                    "AND entidade_id = :id", {"id": aid})
+                c.commit()
+                cur.execute("SELECT COUNT(*) FROM " + self.agd._idents["agd"] + " WHERE nome LIKE :m",
+                            {"m": marca + "%"})
+                restantes = cur.fetchone()[0]
+            finally:
+                cur.close()
+        finally:
+            c.close()
+        if restantes:
+            self.fail("Limpeza incompleta: %d agendamento(s) com nome %s*" % (restantes, marca))
+
+    def _contar(self, marca):
+        c = self.agd._obter_conexao()
+        try:
+            cur = c.cursor()
+            try:
+                cur.execute("SELECT COUNT(*) FROM " + self.agd._idents["agd"] + " WHERE nome LIKE :m",
+                            {"m": marca + "%"})
+                return cur.fetchone()[0]
+            finally:
+                cur.close()
+        finally:
+            c.close()
+
+    def test_banco_real_agendamentos(self):
+        """Ciclo no Oracle: CRUD, CKs e FKs sem gravacao parcial, pausa otimista, microssegundos e ocorrencia."""
+        if not self.tem_banco_real:
+            self.skipTest("Testes Oracle reais desligados (marcado como NAO TESTADO)")
+        script_id, ambiente, usuario_id, login = self._fixtures_do_seed()
+        marca = "TST_AGD_%s" % datetime.datetime.now().strftime("%H%M%S%f")
+        agora = self.agd.agora() if hasattr(self.agd, "agora") else repo_factory.obter("tickets").agora()
+        amanha = agora + datetime.timedelta(days=1)
+        base = {"nome": marca + "_1", "script_id": script_id, "ambiente": ambiente, "usuario_id": usuario_id,
+                "tipo_recorrencia": "DIARIA", "hora_execucao": "08:00", "data_inicio": agora,
+                "proxima_execucao": amanha, "parametros_json": '{"p": "v"}'}
+        n = self.agd.nome_constraint
+        agd_ids, tck_ids = [], []
+        try:
+            # 1. inserir: created_* do criador; parametros_json no obter e no listar.
+            r1 = self.agd.inserir(dict(base), ator="teste_agd")
+            agd_ids.append(r1["id"])
+            self.assertEqual((r1["created_by"], r1["updated_at"], r1["parametros_json"]), ("teste_agd", None, '{"p": "v"}'))
+            self.assertEqual(r1["proxima_execucao"], amanha.replace(microsecond=0))
+
+            # 2. CKs e FKs: nada gravado em caso de violacao.
+            antes = self._contar(marca)
+            for dados, ck in (
+                (dict(base, tipo_recorrencia="ANUAL"), n("ck", "agendamentos", "trec")),
+                (dict(base, hora_execucao=None), n("ck", "agendamentos", "campos")),
+                (dict(base, data_fim=agora - datetime.timedelta(days=1)), n("ck", "agendamentos", "fim")),
+                (dict(base, script_id=999999999), n("fk", "agendamentos", "scr")),
+                (dict(base, usuario_id=999999999), n("fk", "agendamentos", "usr")),
+                (dict(base, ambiente="NAO_EXISTE_TST"), n("fk", "agendamentos", "amb")),
+            ):
+                with self.assertRaises(repo_errors.RepoViolacao) as ctx:
+                    self.agd.inserir(dados, ator="teste_agd")
+                self.assertEqual(ctx.exception.constraint, ck)
+            self.assertEqual(self._contar(marca), antes)
+
+            # 3. alterar condicional ao esperado; created_* preservado, updated_* com o editor.
+            with self.assertRaises(repo_errors.RepoConflito):
+                self.agd.alterar(r1["id"], {"hora_execucao": "09:00"}, esperado={"hora_execucao": "07:00"}, ator="bia")
+            r1b = self.agd.alterar(r1["id"], {"hora_execucao": "09:00"}, esperado={"hora_execucao": "08:00"}, ator="bia")
+            self.assertEqual((r1b["hora_execucao"], r1b["updated_by"], r1b["created_by"]), ("09:00", "bia", "teste_agd"))
+            with self.assertRaises(repo_errors.RepoViolacao):
+                self.agd.alterar(r1["id"], {"dias_semana": "9"}, ator="bia")
+            self.assertEqual(self.agd.obter(r1["id"])["dias_semana"], None)
+
+            # 4. pausar: microssegundos no bind nao dao conflito (README §7.5); regra ja pausada da conflito.
+            lida = self.agd.obter(r1["id"])["proxima_execucao"]
+            pausado = self.agd.pausar(r1["id"], "MANUAL", antiga_data=lida.replace(microsecond=543210), ator="bia")
+            self.assertEqual((pausado["ativo"], pausado["pausa_motivo"]), ("N", "MANUAL"))
+            with self.assertRaises(repo_errors.RepoConflito):
+                self.agd.pausar(r1["id"], "MANUAL", ator="bia")
+            r2 = self.agd.inserir(dict(base, nome=marca + "_2"), ator="teste_agd")
+            agd_ids.append(r2["id"])
+            with self.assertRaises(repo_errors.RepoConflito):
+                self.agd.pausar(r2["id"], "MANUAL", antiga_data=amanha + datetime.timedelta(minutes=5), ator="bia")
+            with self.assertRaises(repo_errors.RepoNaoEncontrado):
+                self.agd.pausar(999999999, "MANUAL", ator="bia")
+            with self.assertRaises(repo_errors.RepoViolacao) as ctx:
+                self.agd.pausar(r2["id"], "OUTRO", ator="bia")
+            self.assertEqual(ctx.exception.constraint, n("ck", "agendamentos", "pausa"))
+
+            # 5. retomar condicional ao esperado.
+            nova = amanha + datetime.timedelta(days=1)
+            with self.assertRaises(repo_errors.RepoConflito):
+                self.agd.retomar(r1["id"], nova, esperado={"ativo": "S"}, ator="bia")
+            retomado = self.agd.retomar(r1["id"], nova, esperado={"ativo": "N", "proxima_execucao": lida}, ator="bia")
+            self.assertEqual((retomado["ativo"], retomado["pausa_motivo"]), ("S", None))
+            self.assertEqual(retomado["proxima_execucao"], nova.replace(microsecond=0))
+
+            # 6. listar: filtro por trecho, escopo e parametros_json presente (excecao documentada).
+            lista = self.agd.listar({"nome": marca.lower()}, escopo_ambientes=[ambiente])
+            self.assertEqual(sorted(i["id"] for i in lista["itens"]), sorted(agd_ids))
+            self.assertTrue(all(i["parametros_json"] == '{"p": "v"}' for i in lista["itens"]))
+            self.assertEqual(self.agd.listar({"nome": marca.lower()}, escopo_ambientes=[])["total"], 0)
+            self.assertEqual([i["id"] for i in self.agd.listar({"nome": marca.lower(), "ativo": "N"})["itens"]], [])
+
+            # 7. ticket_status e a ocorrencia unica do agendamento (ix_<prefixo>tck_ocor, CR-007 R-27).
+            tck = repo_factory.obter("tickets")
+            self.assertIsNone(self.agd.ticket_status(None))
+            self.assertIsNone(self.agd.ticket_status(999999999))
+            ocorrencia = amanha.replace(second=0, microsecond=0)
+            t1 = tck.criar({"script_id": script_id, "ambiente": ambiente, "solicitante": login,
+                            "agendamento_id": r1["id"], "scheduled_at": ocorrencia}, [])
+            tck_ids.append(t1)
+            self.assertEqual(self.agd.ticket_status(t1), "PENDING")
+            with self.assertRaises(repo_errors.RepoViolacao) as ctx:
+                tck_ids.append(tck.criar({"script_id": script_id, "ambiente": ambiente, "solicitante": login,
+                                          "agendamento_id": r1["id"], "scheduled_at": ocorrencia}, []))
+            self.assertEqual(ctx.exception.constraint, tck.nome_constraint("ix", "tickets", "ocor"))
+        finally:
+            self._limpar(agd_ids, tck_ids, marca)
 
 
 class TestOracleAuditoriaAgentes(unittest.TestCase):

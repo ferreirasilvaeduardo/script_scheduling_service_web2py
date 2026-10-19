@@ -11,7 +11,11 @@ class RepoAgendamentos(object):
     """
 
     def listar(self, filtros=None, pagina=1, tamanho=20, escopo_ambientes=None):
-        """Lista agendamentos paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}."""
+        """Lista agendamentos paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
+
+        Ordem: proxima_execucao ASC, id ASC. Os itens trazem parametros_json (excecao documentada no
+        README §2.5: o service avalia cada regra com ele); nenhuma listagem traz log_output.
+        """
         raise NotImplementedError
 
     def obter(self, id):

@@ -195,6 +195,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 * **Leituras de tickets sem CLOB (F7.3, TICKETS), nos dois backends:**
   * `RepoTickets.listar` nunca devolve `log_output` nem `parametros_enviados`.
   * `RepoTickets.obter` devolve o `parametros_enviados` (o snapshot que o detalhe mostra), mas nunca o `log_output`. O log só sai em fatias por `log_ler` (AGENTS §4.13, §8.10).
+* **Exceção documentada (F7.3, AGENDAMENTOS):** `RepoAgendamentos.listar` traz o `parametros_json` (CLOB pequeno com as respostas da regra), porque o service avalia cada regra com ele (tela de regras e Agenda). Ler por `obter` faria uma consulta por regra ativa. Nenhuma listagem traz `log_output`.
 * **Concorrência das transições no FAKE:** as transições web de ticket rodam sob o lock do agregado, então o FAKE nunca chega a perder uma corrida. O tratamento de `rowcount = 0` (`RepoConflito`) nessas transições só é exercitado pelo `test_repo_contract.py` contra o Oracle (F7.3).
 * **Exceções de contrato** (`modules/repo_errors.py`): `RepoErro`, `RepoNaoEncontrado`, `RepoConflito`, `RepoViolacao` e `RepoIndisponivel`.
 * A suíte `scripts/test_repo_contract.py` roda **a mesma bateria** contra os dois backends. Contra ORACLE, ela só executa se `SSS_TEST_DSN` estiver definido.
@@ -210,7 +211,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
       * Os testes gravam só registros próprios (nomes `TST_`/`tst_`, IDs das sequences) e nunca alteram os que já existem.
       * A limpeza remove só os IDs criados pelo teste, sem `DROP` nem `TRUNCATE`; limpeza incompleta falha o teste e lista os IDs que sobraram.
       * Os únicos efeitos permanentes são o avanço das sequences e as linhas de auditoria de testes que passam `auditoria=` (a auditoria só recebe inclusões e só o purge remove linhas).
-      * **Exceção (F7.3, TICKETS):** `criar` e `solicitar_cancelamento` sempre auditam. Por isso, só no modo compartilhado, a limpeza do teste de tickets apaga a auditoria dos próprios tickets: `entidade = 'tbsss_tickets'`, `entidade_id` entre os IDs criados pelo teste e `acao` em `TICKET_CRIAR`, `TICKET_REEXECUTAR` ou `TICKET_CANCELAR`. Nenhuma outra linha de auditoria é tocada.
+      * **Exceção (F7.3):** algumas operações sempre auditam (`criar` e `solicitar_cancelamento` de tickets, as gravações e a pausa de agendamentos, o `encerrar_sessoes` de usuários). Por isso, só no modo compartilhado, a limpeza apaga a auditoria **dos próprios registros do teste**: `entidade` da tabela (`tbsss_tickets`, `tbsss_agendamentos` ou `tbsss_usuarios`) e `entidade_id` entre os IDs criados pelo teste. Nenhuma outra linha de auditoria é tocada.
   * **Bateria integrada contra o Oracle:** exige também `SSS_TEST_ORACLE_INTEGRATED=1`, gate liberado só depois do 5º agregado do F7.3.
 * **Trava de ambiente:**
   * `[app] sss_env` aceita `DEV`, `HML` ou `PROD`.
