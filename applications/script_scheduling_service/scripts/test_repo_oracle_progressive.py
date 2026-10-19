@@ -22,6 +22,31 @@ from repo_catalogo import RepoCatalogo
 from repo_oracle.catalogo import RepoCatalogoOracle
 from repo_rbac import RepoRbac
 from repo_usuarios import RepoUsuarios
+from gluon import current
+
+
+def _preparar_banco_real(cls):
+    """Valida o banco real (modo descartavel ou compartilhado) antes de qualquer DML.
+
+    Com banco real, o cfg validado vai para current.sss_cfg durante a classe (os repositorios Oracle
+    leem owner, prefixo, DSN e segredos dele) e e restaurado no tearDownClass.
+    """
+    cls.tem_banco_real = _oracle_test_support.banco_real_configurado()
+    cls._tinha_sss_cfg = hasattr(current, "sss_cfg")
+    cls._sss_cfg_anterior = getattr(current, "sss_cfg", None)
+    if cls.tem_banco_real:
+        cls.cfg = _oracle_test_support.preparar_schema_descartavel("web")
+        current.sss_cfg = cls.cfg
+    repo_factory.configurar({"app": {"data_backend": "ORACLE", "sss_env": "DEV"}})
+
+
+def _restaurar_banco_real(cls):
+    repo_factory.configurar(None)
+    repo_factory.reset_singletons()
+    if cls._tinha_sss_cfg:
+        current.sss_cfg = cls._sss_cfg_anterior
+    elif hasattr(current, "sss_cfg"):
+        delattr(current, "sss_cfg")
 
 
 class TestOracleRbacUsuarios(unittest.TestCase):
@@ -33,21 +58,11 @@ class TestOracleRbacUsuarios(unittest.TestCase):
         if agregado != "RBAC_USUARIOS":
             raise unittest.SkipTest("Execucao restrita ao agregado RBAC_USUARIOS (atual: %s)" % agregado)
 
-        cls.dsn = os.environ.get("SSS_TEST_DSN")
-        cls.owner = os.environ.get("SSS_TEST_OWNER")
-        cls.disp = os.environ.get("SSS_TEST_SCHEMA_DISPOSABLE")
-        cls.tem_banco_real = bool(cls.dsn and cls.owner and cls.disp == "1")
-
-        if cls.tem_banco_real:
-            cls.cfg = _oracle_test_support.preparar_schema_descartavel("web")
-            repo_factory.configurar({"app": {"data_backend": "ORACLE", "sss_env": "DEV"}})
-        else:
-            repo_factory.configurar({"app": {"data_backend": "ORACLE", "sss_env": "DEV"}})
+        _preparar_banco_real(cls)
 
     @classmethod
     def tearDownClass(cls):
-        repo_factory.configurar(None)
-        repo_factory.reset_singletons()
+        _restaurar_banco_real(cls)
 
     def setUp(self):
         repo_factory.reset_singletons()
@@ -212,18 +227,11 @@ class TestOracleCatalogo(unittest.TestCase):
         if agregado != "CATALOGO":
             raise unittest.SkipTest("Execucao restrita ao agregado CATALOGO (atual: %s)" % agregado)
 
-        cls.dsn = os.environ.get("SSS_TEST_DSN")
-        cls.owner = os.environ.get("SSS_TEST_OWNER")
-        cls.disp = os.environ.get("SSS_TEST_SCHEMA_DISPOSABLE")
-        cls.tem_banco_real = bool(cls.dsn and cls.owner and cls.disp == "1")
-        if cls.tem_banco_real:
-            cls.cfg = _oracle_test_support.preparar_schema_descartavel("web")
-        repo_factory.configurar({"app": {"data_backend": "ORACLE", "sss_env": "DEV"}})
+        _preparar_banco_real(cls)
 
     @classmethod
     def tearDownClass(cls):
-        repo_factory.configurar(None)
-        repo_factory.reset_singletons()
+        _restaurar_banco_real(cls)
 
     def setUp(self):
         repo_factory.reset_singletons()

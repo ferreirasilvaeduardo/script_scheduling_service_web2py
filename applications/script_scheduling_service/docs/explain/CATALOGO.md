@@ -111,7 +111,326 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é inv
 
 ## 4. Avaliação de execução do plano
 
-**Plano: NÃO TESTADO**
+**Plano: TESTADO em 2026-10-19**, Oracle 19.24 (banco `GFPR`), owner `openrisow` em modo compartilhado (`SSS_TEST_SCHEMA_COMPARTILHADO=1`, README §2.5), driver Thin (python-oracledb 1.4.2). Os planos saíram de `EXPLAIN PLAN SET STATEMENT_ID … FOR <query>` + `DBMS_XPLAN.DISPLAY`, sem executar os comandos. O texto `{owner}` substitui `OPENRISOW`.
 
-* **Motivo:** não há schema Oracle descartável `SSS_TEST_*` disponível nesta sessão. O túnel do `[oracle] dsn` responde, mas o owner configurado (`openrisow`) não é descartável, e a guarda `preparar_schema_descartavel` recusa usá-lo.
-* **Como gerar os planos:** com o schema descartável, rode `EXPLAIN PLAN FOR <query>` e depois `SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY)` para cada consulta acima. Registre a saída nesta seção, substituindo este aviso.
+* **Sem `TABLE ACCESS FULL` em `tbsss_tickets` nem em `tbsss_auditoria`:** conforme: o agregado não lê essas tabelas.
+* **`TABLE ACCESS FULL` aceitável:** aparece só no `COUNT` e na página das listagens de cadastro (`tbsss_ambientes`, `tbsss_scripts`, `tbsss_parametros`), com `COUNT STOPKEY`/`SORT ORDER BY STOPKEY`, e no ramo alternativo dos planos adaptativos (`STATISTICS COLLECTOR` + `HASH JOIN`), que o otimizador só usa se a cardinalidade real for maior.
+* **Leituras por chave e transições:** lock e `UPDATE` pela PK (`INDEX UNIQUE SCAN`); UK do nome do script por `INDEX UNIQUE SCAN`; vínculos por `UK_…_SPRM_SCR_ORD`/`UK_…_SAMB_SCR_AMB` (líder `script_id`); `scripts_executaveis` com semi-join e `INDEX UNIQUE SCAN` em `UK_…_PSCR_PER_SCR` e `UK_…_PAMB_PER_AMB`. Nas consultas por `parametro_id`, o otimizador escolheu `INDEX SKIP SCAN` em `UK_…_SPRM_SCR_PRM`, por causa do volume pequeno de hoje; `IX_…_SPRM_PRM` continua disponível e é usado em `qtd_scripts`.
+
+### Planos registrados
+
+### ambientes_listar (nome, ativo) [1]
+```text
+ 
+--------------------------------------------------------
+| Id  | Operation            | Name            | Rows  |
+--------------------------------------------------------
+|   0 | SELECT STATEMENT     |                 |     1 |
+|   1 |  SORT AGGREGATE      |                 |     1 |
+|   2 |   VIEW               |                 |     1 |
+|   3 |    COUNT STOPKEY     |                 |       |
+|   4 |     TABLE ACCESS FULL| TBSSS_AMBIENTES |     1 |
+--------------------------------------------------------
+```
+
+### ambientes_listar (nome, ativo) [2]
+```text
+ 
+------------------------------------------------------------
+| Id  | Operation                | Name            | Rows  |
+------------------------------------------------------------
+|   0 | SELECT STATEMENT         |                 |     1 |
+|   1 |  VIEW                    |                 |     1 |
+|   2 |   COUNT STOPKEY          |                 |       |
+|   3 |    VIEW                  |                 |     1 |
+|   4 |     SORT ORDER BY STOPKEY|                 |     1 |
+|   5 |      TABLE ACCESS FULL   | TBSSS_AMBIENTES |     1 |
+------------------------------------------------------------
+```
+
+### scripts_listar (nome, grupo) [1]
+```text
+ 
+------------------------------------------------------
+| Id  | Operation            | Name          | Rows  |
+------------------------------------------------------
+|   0 | SELECT STATEMENT     |               |     1 |
+|   1 |  SORT AGGREGATE      |               |     1 |
+|   2 |   VIEW               |               |     1 |
+|   3 |    COUNT STOPKEY     |               |       |
+|   4 |     TABLE ACCESS FULL| TBSSS_SCRIPTS |     1 |
+------------------------------------------------------
+```
+
+### scripts_listar (nome, grupo) [2]
+```text
+ 
+------------------------------------------------------------------
+| Id  | Operation                | Name                  | Rows  |
+------------------------------------------------------------------
+|   0 | SELECT STATEMENT         |                       |     1 |
+|   1 |  SORT AGGREGATE          |                       |     1 |
+|   2 |   INDEX RANGE SCAN       | UK_TBSSS_SPRM_SCR_ORD |     3 |
+|   3 |  VIEW                    |                       |     1 |
+|   4 |   COUNT STOPKEY          |                       |       |
+|   5 |    VIEW                  |                       |     1 |
+|   6 |     SORT ORDER BY STOPKEY|                       |     1 |
+|   7 |      TABLE ACCESS FULL   | TBSSS_SCRIPTS         |     1 |
+------------------------------------------------------------------
+```
+
+### parametros_listar (codigo) [1]
+```text
+ 
+----------------------------------------------------------
+| Id  | Operation          | Name                | Rows  |
+----------------------------------------------------------
+|   0 | SELECT STATEMENT   |                     |     1 |
+|   1 |  SORT AGGREGATE    |                     |     1 |
+|   2 |   VIEW             |                     |     1 |
+|   3 |    COUNT STOPKEY   |                     |       |
+|   4 |     INDEX FULL SCAN| UK_TBSSS_PRM_CODIGO |     1 |
+----------------------------------------------------------
+```
+
+### parametros_listar (codigo) [2]
+```text
+ 
+--------------------------------------------------------------
+| Id  | Operation                | Name              | Rows  |
+--------------------------------------------------------------
+|   0 | SELECT STATEMENT         |                   |     1 |
+|   1 |  SORT AGGREGATE          |                   |     1 |
+|   2 |   INDEX RANGE SCAN       | IX_TBSSS_SPRM_PRM |     2 |
+|   3 |  VIEW                    |                   |     1 |
+|   4 |   COUNT STOPKEY          |                   |       |
+|   5 |    VIEW                  |                   |     1 |
+|   6 |     SORT ORDER BY STOPKEY|                   |     1 |
+|   7 |      TABLE ACCESS FULL   | TBSSS_PARAMETROS  |     1 |
+--------------------------------------------------------------
+```
+
+### scripts_executaveis (perfil) [1]
+```text
+ 
+----------------------------------------------------------------------------
+| Id  | Operation                          | Name                  | Rows  |
+----------------------------------------------------------------------------
+|   0 | SELECT STATEMENT                   |                       |    10 |
+|   1 |  SORT ORDER BY                     |                       |    10 |
+|   2 |   NESTED LOOPS SEMI                |                       |    10 |
+|   3 |    MERGE JOIN SEMI                 |                       |    14 |
+|   4 |     TABLE ACCESS BY INDEX ROWID    | TBSSS_SCRIPTS         |    14 |
+|   5 |      INDEX FULL SCAN               | PK_TBSSS_SCRIPTS      |    14 |
+|   6 |     SORT UNIQUE                    |                       |    57 |
+|   7 |      VIEW                          | VW_SQ_1               |    57 |
+|   8 |       NESTED LOOPS SEMI            |                       |    57 |
+|   9 |        MERGE JOIN                  |                       |    63 |
+|  10 |         TABLE ACCESS BY INDEX ROWID| TBSSS_AMBIENTES       |     5 |
+|  11 |          INDEX FULL SCAN           | PK_TBSSS_AMBIENTES    |     5 |
+|  12 |         SORT JOIN                  |                       |    70 |
+|  13 |          INDEX FULL SCAN           | UK_TBSSS_SAMB_SCR_AMB |    70 |
+|  14 |        INDEX UNIQUE SCAN           | UK_TBSSS_PAMB_PER_AMB |     5 |
+|  15 |    INDEX UNIQUE SCAN               | UK_TBSSS_PSCR_PER_SCR |    10 |
+----------------------------------------------------------------------------
+```
+
+### scripts_executaveis (admin) [1]
+```text
+ 
+--------------------------------------------------------------------------
+| Id  | Operation                        | Name                  | Rows  |
+--------------------------------------------------------------------------
+|   0 | SELECT STATEMENT                 |                       |    14 |
+|   1 |  SORT ORDER BY                   |                       |    14 |
+|   2 |   MERGE JOIN SEMI                |                       |    14 |
+|   3 |    TABLE ACCESS BY INDEX ROWID   | TBSSS_SCRIPTS         |    14 |
+|   4 |     INDEX FULL SCAN              | PK_TBSSS_SCRIPTS      |    14 |
+|   5 |    SORT UNIQUE                   |                       |    63 |
+|   6 |     VIEW                         | VW_SQ_1               |    63 |
+|   7 |      MERGE JOIN                  |                       |    63 |
+|   8 |       TABLE ACCESS BY INDEX ROWID| TBSSS_AMBIENTES       |     5 |
+|   9 |        INDEX FULL SCAN           | PK_TBSSS_AMBIENTES    |     5 |
+|  10 |       SORT JOIN                  |                       |    70 |
+|  11 |        INDEX FULL SCAN           | UK_TBSSS_SAMB_SCR_AMB |    70 |
+--------------------------------------------------------------------------
+```
+
+### scripts_listar: homologados da pagina
+```text
+ 
+-------------------------------------------------------------------
+| Id  | Operation                 | Name                  | Rows  |
+-------------------------------------------------------------------
+|   0 | SELECT STATEMENT          |                       |    10 |
+|   1 |  HASH JOIN                |                       |    10 |
+|   2 |   NESTED LOOPS            |                       |    10 |
+|   3 |    STATISTICS COLLECTOR   |                       |       |
+|   4 |     VIEW                  | index$_join$_002      |     5 |
+|   5 |      HASH JOIN            |                       |       |
+|   6 |       INDEX FAST FULL SCAN| PK_TBSSS_AMBIENTES    |     5 |
+|   7 |       INDEX FAST FULL SCAN| UK_TBSSS_AMB_NOME     |     5 |
+|   8 |    INLIST ITERATOR        |                       |       |
+|   9 |     INDEX UNIQUE SCAN     | UK_TBSSS_SAMB_SCR_AMB |     2 |
+|  10 |   INLIST ITERATOR         |                       |       |
+|  11 |    INDEX RANGE SCAN       | UK_TBSSS_SAMB_SCR_AMB |    10 |
+-------------------------------------------------------------------
+```
+
+### PRM_VINCULOS
+```text
+ 
+------------------------------------------------------------------------
+| Id  | Operation                      | Name                  | Rows  |
+------------------------------------------------------------------------
+|   0 | SELECT STATEMENT               |                       |     2 |
+|   1 |  SORT ORDER BY                 |                       |     2 |
+|   2 |   HASH JOIN                    |                       |     2 |
+|   3 |    NESTED LOOPS                |                       |     2 |
+|   4 |     NESTED LOOPS               |                       |     2 |
+|   5 |      STATISTICS COLLECTOR      |                       |       |
+|   6 |       SORT UNIQUE              |                       |     2 |
+|   7 |        INDEX SKIP SCAN         | UK_TBSSS_SPRM_SCR_PRM |     2 |
+|   8 |      INDEX UNIQUE SCAN         | PK_TBSSS_SCRIPTS      |     1 |
+|   9 |     TABLE ACCESS BY INDEX ROWID| TBSSS_SCRIPTS         |     1 |
+|  10 |    TABLE ACCESS FULL           | TBSSS_SCRIPTS         |     1 |
+------------------------------------------------------------------------
+```
+
+### SPRM_OBTER
+```text
+ 
+----------------------------------------------------------------------------------
+| Id  | Operation                                | Name                  | Rows  |
+----------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT                         |                       |     3 |
+|   1 |  SORT ORDER BY                           |                       |     3 |
+|   2 |   HASH JOIN                              |                       |     3 |
+|   3 |    NESTED LOOPS                          |                       |     3 |
+|   4 |     NESTED LOOPS                         |                       |     3 |
+|   5 |      STATISTICS COLLECTOR                |                       |       |
+|   6 |       TABLE ACCESS BY INDEX ROWID BATCHED| TBSSS_SCRIPT_PARAM    |     3 |
+|   7 |        INDEX RANGE SCAN                  | UK_TBSSS_SPRM_SCR_ORD |     3 |
+|   8 |      INDEX UNIQUE SCAN                   | PK_TBSSS_PARAMETROS   |     1 |
+|   9 |     TABLE ACCESS BY INDEX ROWID          | TBSSS_PARAMETROS      |     1 |
+|  10 |    TABLE ACCESS FULL                     | TBSSS_PARAMETROS      |     1 |
+----------------------------------------------------------------------------------
+```
+
+### SPRM_DO_SCRIPT
+```text
+ 
+------------------------------------------------------------------------------
+| Id  | Operation                            | Name                  | Rows  |
+------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT                     |                       |     3 |
+|   1 |  SORT ORDER BY                       |                       |     3 |
+|   2 |   TABLE ACCESS BY INDEX ROWID BATCHED| TBSSS_SCRIPT_PARAM    |     3 |
+|   3 |    INDEX RANGE SCAN                  | UK_TBSSS_SPRM_SCR_ORD |     3 |
+------------------------------------------------------------------------------
+```
+
+### SAMB_DO_SCRIPT
+```text
+ 
+-----------------------------------------------------------------------------
+| Id  | Operation                           | Name                  | Rows  |
+-----------------------------------------------------------------------------
+|   0 | SELECT STATEMENT                    |                       |     5 |
+|   1 |  TABLE ACCESS BY INDEX ROWID BATCHED| TBSSS_SCRIPT_AMB      |     5 |
+|   2 |   INDEX RANGE SCAN                  | UK_TBSSS_SAMB_SCR_AMB |     5 |
+-----------------------------------------------------------------------------
+```
+
+### PRM_SCRIPTS_VINCULADOS
+```text
+ 
+-----------------------------------------------------------------------
+| Id  | Operation                     | Name                  | Rows  |
+-----------------------------------------------------------------------
+|   0 | SELECT STATEMENT              |                       |     2 |
+|   1 |  HASH JOIN                    |                       |     2 |
+|   2 |   NESTED LOOPS                |                       |     2 |
+|   3 |    NESTED LOOPS               |                       |     2 |
+|   4 |     STATISTICS COLLECTOR      |                       |       |
+|   5 |      INDEX SKIP SCAN          | UK_TBSSS_SPRM_SCR_PRM |     2 |
+|   6 |     INDEX UNIQUE SCAN         | PK_TBSSS_SCRIPTS      |     1 |
+|   7 |    TABLE ACCESS BY INDEX ROWID| TBSSS_SCRIPTS         |     1 |
+|   8 |   TABLE ACCESS FULL           | TBSSS_SCRIPTS         |     1 |
+-----------------------------------------------------------------------
+```
+
+### SCR_NOME_EM_USO
+```text
+ 
+-----------------------------------------------------------------
+| Id  | Operation                   | Name              | Rows  |
+-----------------------------------------------------------------
+|   0 | SELECT STATEMENT            |                   |     1 |
+|   1 |  TABLE ACCESS BY INDEX ROWID| TBSSS_SCRIPTS     |     1 |
+|   2 |   INDEX UNIQUE SCAN         | UK_TBSSS_SCR_NOME |     1 |
+-----------------------------------------------------------------
+```
+
+### SCR_OBTER_LOCK
+```text
+ 
+-----------------------------------------------------------------
+| Id  | Operation                    | Name             | Rows  |
+-----------------------------------------------------------------
+|   0 | SELECT STATEMENT             |                  |     1 |
+|   1 |  FOR UPDATE                  |                  |       |
+|   2 |   TABLE ACCESS BY INDEX ROWID| TBSSS_SCRIPTS    |     1 |
+|   3 |    INDEX UNIQUE SCAN         | PK_TBSSS_SCRIPTS |     1 |
+-----------------------------------------------------------------
+```
+
+### AMB_OBTER_LOCK
+```text
+ 
+-------------------------------------------------------------------
+| Id  | Operation                    | Name               | Rows  |
+-------------------------------------------------------------------
+|   0 | SELECT STATEMENT             |                    |     1 |
+|   1 |  FOR UPDATE                  |                    |       |
+|   2 |   TABLE ACCESS BY INDEX ROWID| TBSSS_AMBIENTES    |     1 |
+|   3 |    INDEX UNIQUE SCAN         | PK_TBSSS_AMBIENTES |     1 |
+-------------------------------------------------------------------
+```
+
+### PRM_OBTER_LOCK
+```text
+ 
+--------------------------------------------------------------------
+| Id  | Operation                    | Name                | Rows  |
+--------------------------------------------------------------------
+|   0 | SELECT STATEMENT             |                     |     1 |
+|   1 |  FOR UPDATE                  |                     |       |
+|   2 |   TABLE ACCESS BY INDEX ROWID| TBSSS_PARAMETROS    |     1 |
+|   3 |    INDEX UNIQUE SCAN         | PK_TBSSS_PARAMETROS |     1 |
+--------------------------------------------------------------------
+```
+
+### SCR_CARIMBAR
+```text
+ 
+-------------------------------------------------------
+| Id  | Operation          | Name             | Rows  |
+-------------------------------------------------------
+|   0 | UPDATE STATEMENT   |                  |     1 |
+|   1 |  UPDATE            | TBSSS_SCRIPTS    |       |
+|   2 |   INDEX UNIQUE SCAN| PK_TBSSS_SCRIPTS |     1 |
+-------------------------------------------------------
+```
+
+### SPRM_EXCLUIR_DO_SCRIPT
+```text
+ 
+-----------------------------------------------------------
+| Id  | Operation         | Name                  | Rows  |
+-----------------------------------------------------------
+|   0 | DELETE STATEMENT  |                       |     3 |
+|   1 |  DELETE           | TBSSS_SCRIPT_PARAM    |       |
+|   2 |   INDEX RANGE SCAN| UK_TBSSS_SPRM_SCR_ORD |     3 |
+-----------------------------------------------------------
+```

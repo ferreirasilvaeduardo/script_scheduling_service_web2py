@@ -265,6 +265,13 @@ O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-00
   * Via SQL*Plus (autônomo): `sqlplus usuario/senha@//host:porta/servico @docs/sql/01_implantar_sss.sql`
   * Rollback total: `sqlplus usuario/senha@//host:porta/servico @docs/sql/02_rollback_sss.sql`
 * **Testes contra banco real:** defina `SSS_TEST_DSN` (e o usuário/senha de teste conforme o prompt do passo). Sem ela, as partes de banco ficam `NÃO TESTADO` no relatório.
+  * **Owner existente (modo compartilhado, README §2.5):** no `GFPR`, onde não é possível criar um owner `SSS_TEST_*`, use o `openrisow`. O driver Oracle só está instalado no Python 3.6.15 desta máquina. Exemplo para um agregado do F7.3:
+    ```bash
+    SSS_TEST_CONFIG=<config.ini de teste com data_backend = ORACLE e [retencao] purge_user> \
+    SSS_TEST_DSN='<mesmo valor de [oracle] dsn>' SSS_TEST_OWNER=openrisow SSS_TEST_SCHEMA_COMPARTILHADO=1 \
+    SSS_TEST_REPO_AGREGADO=CATALOGO ~/.pyenv/versions/3.6.15/bin/python -m unittest discover -s scripts -p "test_repo_oracle_progressive.py" -v
+    ```
+  * **Produção:** só os scripts SQL de `docs/sql/` (`01_implantar_sss.sql`, `02_rollback_sss.sql`, `99_validar_implantacao.sql`), sem Python. Os testes acima são só para DEV.
 * `python scripts/check_env.py` mostra a combinação de driver escolhida.
 
 ---

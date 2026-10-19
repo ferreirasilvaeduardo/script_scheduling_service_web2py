@@ -195,6 +195,14 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 * **Concorrência das transições no FAKE:** as transições web de ticket rodam sob o lock do agregado, então o FAKE nunca chega a perder uma corrida. O tratamento de `rowcount = 0` (`RepoConflito`) nessas transições só é exercitado pelo `test_repo_contract.py` contra o Oracle (F7.3).
 * **Exceções de contrato** (`modules/repo_errors.py`): `RepoErro`, `RepoNaoEncontrado`, `RepoConflito`, `RepoViolacao` e `RepoIndisponivel`.
 * A suíte `scripts/test_repo_contract.py` roda **a mesma bateria** contra os dois backends. Contra ORACLE, ela só executa se `SSS_TEST_DSN` estiver definido.
+* **Testes Oracle reais: dois modos explícitos e exclusivos** (`scripts/_oracle_test_support.py`), sempre com `sss_env = DEV`, `data_backend = ORACLE` e `SSS_TEST_DSN`/`SSS_TEST_OWNER` iguais ao `[oracle] dsn`/`owner`. Declarar os dois modos, ou nenhum, recusa a execução antes de qualquer escrita.
+  * **Descartável** (`SSS_TEST_SCHEMA_DISPOSABLE=1`): owner dedicado `SSS_TEST_*` e conta de teste diferente do owner.
+  * **Compartilhado** (`SSS_TEST_SCHEMA_COMPARTILHADO=1`): para um owner existente, onde não há permissão para criar outro (ex.: `openrisow` no `GFPR`).
+    * A conta pode ser o próprio owner, mas o esquema SSS tem de estar implantado na versão do código (`tbsss_controle.versao_esquema = sql_ident.VERSAO_ESQUEMA`).
+    * Os testes gravam só registros próprios (nomes `TST_`/`tst_`, IDs das sequences) e nunca alteram os que já existem.
+    * A limpeza remove só os IDs criados pelo teste, sem `DROP` nem `TRUNCATE`; limpeza incompleta falha o teste e lista os IDs que sobraram.
+    * Os únicos efeitos permanentes são o avanço das sequences e as linhas de auditoria de testes que passam `auditoria=` (a auditoria só recebe inclusões e só o purge remove linhas).
+  * `SSS_TEST_CONFIG` (opcional) aponta um `config.ini` só para os testes (ex.: `data_backend = ORACLE`), sem alterar o `instance/config.ini`.
 * **Trava de ambiente:**
   * `[app] sss_env` aceita `DEV`, `HML` ou `PROD`.
   * `data_backend = FAKE` com `sss_env != DEV` **aborta a subida** com CRITICAL.

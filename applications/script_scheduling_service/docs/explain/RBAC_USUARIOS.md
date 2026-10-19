@@ -144,7 +144,197 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 
 ## 3. Avaliação de Execução do Plano
 
-**Plano: NÃO TESTADO**
+**Plano: TESTADO em 2026-10-19**, Oracle 19.24 (banco `GFPR`), owner `openrisow` em modo compartilhado (`SSS_TEST_SCHEMA_COMPARTILHADO=1`, README §2.5), driver Thin (python-oracledb 1.4.2). Os planos saíram de `EXPLAIN PLAN SET STATEMENT_ID … FOR <query>` + `DBMS_XPLAN.DISPLAY`, sem executar os comandos. O texto `{owner}` substitui `OPENRISOW`.
 
-* **Motivo:** A variável `SSS_TEST_DSN` não aponta para um banco Oracle com schema descartável configurado nesta sessão.
-* Todas as queries foram construídas estritamente com índices em suas colunas líderes (`id`, `login`, `nome`, `perfil_id`), ordenação determinística e proteção contra `TABLE ACCESS FULL` em tabelas com potencial de crescimento volumétrico.
+* **Sem `TABLE ACCESS FULL` em `tbsss_tickets` nem em `tbsss_auditoria`:** conforme: o agregado não lê `tbsss_tickets`. A auditoria só recebe `INSERT`, sem leitura.
+* **`TABLE ACCESS FULL` aceitável:** só nas listagens de cadastro (`tbsss_usuarios`, `tbsss_perfis`), com `COUNT STOPKEY`/`SORT ORDER BY STOPKEY`, no catálogo canônico `tbsss_funcionalidades` (10 linhas) e no lado `tbsss_perfis` do `admins_ativos_bloquear`.
+* **Leituras por chave e transições:** `obter_por_login` pela `UK_…_USR_LOGIN`; `obter_estado_sessao` e a matriz pelas PKs e pelas UKs de líder `perfil_id`.
+
+### Planos registrados
+
+### usuarios.obter_por_login [1]
+```text
+ 
+------------------------------------------------------------------
+| Id  | Operation                   | Name               | Rows  |
+------------------------------------------------------------------
+|   0 | SELECT STATEMENT            |                    |     1 |
+|   1 |  TABLE ACCESS BY INDEX ROWID| TBSSS_USUARIOS     |     1 |
+|   2 |   INDEX UNIQUE SCAN         | UK_TBSSS_USR_LOGIN |     1 |
+------------------------------------------------------------------
+```
+
+### usuarios.obter_estado_sessao [1]
+```text
+ 
+------------------------------------------------------------------
+| Id  | Operation                    | Name              | Rows  |
+------------------------------------------------------------------
+|   0 | SELECT STATEMENT             |                   |     1 |
+|   1 |  NESTED LOOPS                |                   |     1 |
+|   2 |   TABLE ACCESS BY INDEX ROWID| TBSSS_USUARIOS    |     1 |
+|   3 |    INDEX UNIQUE SCAN         | PK_TBSSS_USUARIOS |     1 |
+|   4 |   TABLE ACCESS BY INDEX ROWID| TBSSS_PERFIS      |     1 |
+|   5 |    INDEX UNIQUE SCAN         | PK_TBSSS_PERFIS   |     1 |
+------------------------------------------------------------------
+```
+
+### usuarios.listar (login, ativo) [1]
+```text
+ 
+-------------------------------------------------------
+| Id  | Operation            | Name           | Rows  |
+-------------------------------------------------------
+|   0 | SELECT STATEMENT     |                |     1 |
+|   1 |  SORT AGGREGATE      |                |     1 |
+|   2 |   VIEW               |                |     1 |
+|   3 |    COUNT STOPKEY     |                |       |
+|   4 |     TABLE ACCESS FULL| TBSSS_USUARIOS |     1 |
+-------------------------------------------------------
+```
+
+### usuarios.listar (login, ativo) [2]
+```text
+ 
+-----------------------------------------------------------
+| Id  | Operation                | Name           | Rows  |
+-----------------------------------------------------------
+|   0 | SELECT STATEMENT         |                |     1 |
+|   1 |  VIEW                    |                |     1 |
+|   2 |   COUNT STOPKEY          |                |       |
+|   3 |    VIEW                  |                |     1 |
+|   4 |     SORT ORDER BY STOPKEY|                |     1 |
+|   5 |      TABLE ACCESS FULL   | TBSSS_USUARIOS |     1 |
+-----------------------------------------------------------
+```
+
+### usuarios.listar (bloqueados) [1]
+```text
+ 
+-------------------------------------------------------
+| Id  | Operation            | Name           | Rows  |
+-------------------------------------------------------
+|   0 | SELECT STATEMENT     |                |     1 |
+|   1 |  SORT AGGREGATE      |                |     1 |
+|   2 |   VIEW               |                |     1 |
+|   3 |    COUNT STOPKEY     |                |       |
+|   4 |     TABLE ACCESS FULL| TBSSS_USUARIOS |     1 |
+-------------------------------------------------------
+```
+
+### usuarios.listar (bloqueados) [2]
+```text
+ 
+-----------------------------------------------------------
+| Id  | Operation                | Name           | Rows  |
+-----------------------------------------------------------
+|   0 | SELECT STATEMENT         |                |     1 |
+|   1 |  VIEW                    |                |     1 |
+|   2 |   COUNT STOPKEY          |                |       |
+|   3 |    VIEW                  |                |     1 |
+|   4 |     SORT ORDER BY STOPKEY|                |     1 |
+|   5 |      TABLE ACCESS FULL   | TBSSS_USUARIOS |     1 |
+-----------------------------------------------------------
+```
+
+### rbac.perfis_listar [1]
+```text
+ 
+--------------------------------------------------------
+| Id  | Operation          | Name              | Rows  |
+--------------------------------------------------------
+|   0 | SELECT STATEMENT   |                   |     1 |
+|   1 |  SORT AGGREGATE    |                   |     1 |
+|   2 |   VIEW             |                   |     1 |
+|   3 |    COUNT STOPKEY   |                   |       |
+|   4 |     INDEX FULL SCAN| UK_TBSSS_PER_NOME |     1 |
+--------------------------------------------------------
+```
+
+### rbac.perfis_listar [2]
+```text
+ 
+---------------------------------------------------------
+| Id  | Operation                | Name         | Rows  |
+---------------------------------------------------------
+|   0 | SELECT STATEMENT         |              |     1 |
+|   1 |  VIEW                    |              |     1 |
+|   2 |   COUNT STOPKEY          |              |       |
+|   3 |    VIEW                  |              |     1 |
+|   4 |     SORT ORDER BY STOPKEY|              |     1 |
+|   5 |      TABLE ACCESS FULL   | TBSSS_PERFIS |     1 |
+---------------------------------------------------------
+```
+
+### rbac.matriz_obter [1]
+```text
+ 
+-----------------------------------------------------
+| Id  | Operation         | Name            | Rows  |
+-----------------------------------------------------
+|   0 | SELECT STATEMENT  |                 |     1 |
+|   1 |  INDEX UNIQUE SCAN| PK_TBSSS_PERFIS |     1 |
+-----------------------------------------------------
+```
+
+### rbac.matriz_obter [2]
+```text
+ 
+----------------------------------------------------------
+| Id  | Operation        | Name                  | Rows  |
+----------------------------------------------------------
+|   0 | SELECT STATEMENT |                       |     4 |
+|   1 |  INDEX RANGE SCAN| UK_TBSSS_PFNC_PER_FNC |     4 |
+----------------------------------------------------------
+```
+
+### rbac.matriz_obter [3]
+```text
+ 
+----------------------------------------------------------
+| Id  | Operation        | Name                  | Rows  |
+----------------------------------------------------------
+|   0 | SELECT STATEMENT |                       |     5 |
+|   1 |  INDEX RANGE SCAN| UK_TBSSS_PAMB_PER_AMB |     5 |
+----------------------------------------------------------
+```
+
+### rbac.matriz_obter [4]
+```text
+ 
+----------------------------------------------------------
+| Id  | Operation        | Name                  | Rows  |
+----------------------------------------------------------
+|   0 | SELECT STATEMENT |                       |    14 |
+|   1 |  INDEX RANGE SCAN| UK_TBSSS_PSCR_PER_SCR |    14 |
+----------------------------------------------------------
+```
+
+### rbac.admins_ativos_bloquear [1]
+```text
+ 
+-------------------------------------------------------------------
+| Id  | Operation                      | Name             | Rows  |
+-------------------------------------------------------------------
+|   0 | SELECT STATEMENT               |                  |     1 |
+|   1 |  FOR UPDATE                    |                  |       |
+|   2 |   BUFFER SORT                  |                  |       |
+|   3 |    NESTED LOOPS                |                  |     1 |
+|   4 |     NESTED LOOPS               |                  |     1 |
+|   5 |      TABLE ACCESS FULL         | TBSSS_PERFIS     |     1 |
+|   6 |      INDEX RANGE SCAN          | IX_TBSSS_USR_PER |     1 |
+|   7 |     TABLE ACCESS BY INDEX ROWID| TBSSS_USUARIOS   |     1 |
+-------------------------------------------------------------------
+```
+
+### rbac.funcionalidades_listar [1]
+```text
+ 
+------------------------------------------------------------
+| Id  | Operation          | Name                  | Rows  |
+------------------------------------------------------------
+|   0 | SELECT STATEMENT   |                       |    10 |
+|   1 |  SORT ORDER BY     |                       |    10 |
+|   2 |   TABLE ACCESS FULL| TBSSS_FUNCIONALIDADES |    10 |
+------------------------------------------------------------
+```
