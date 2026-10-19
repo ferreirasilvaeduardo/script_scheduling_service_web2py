@@ -441,6 +441,37 @@ class TestDdlSeedERollback(unittest.TestCase):
         pos_amb = sql_rb.index("DROP TABLE openrisow.tbsss_ambientes")
         self.assertLess(pos_tck, pos_amb)
 
+    def test_validacao_sem_hash_e_com_owner_prefixo_parametrizados(self):
+        """99_validar: nao mostra senha_hash, nao fixa owner/prefixo e respeita o limite de linha do SQL*Plus."""
+        sql = ddl_builder.gerar_script_validacao("SSS_APP", "abc_")
+        self.assertNotIn("tbsss", sql.lower())
+        self.assertNotIn("openrisow", sql.lower())
+        self.assertNotIn("user_tables", sql.lower())
+        self.assertIn("SSS_APP.abc_usuarios", sql)
+        self.assertIn("owner = 'SSS_APP'", sql)
+        # senha_hash so aparece dentro do CASE que diz se a senha esta definida (AGENTS §3.3).
+        usos = [l for l in sql.splitlines() if "senha_hash" in l]
+        self.assertEqual(usos, ["       CASE WHEN u.senha_hash IS NULL THEN 'N' ELSE 'S' END AS senha_definida"])
+        self.assertLessEqual(max(len(l) for l in sql.splitlines()), 2499)
+        self.assertIn("GRANTS A PUBLIC", sql)
+        self.assertNotIn("SELECT *", sql)
+
+    def test_validacao_espera_o_registro_e_o_seed(self):
+        """Os esperados vem do registro (objetos) e do proprio seed (minimo de linhas)."""
+        sql = ddl_builder.gerar_script_validacao(self.owner, self.prefixo)
+        esquema = sql_ident.nomes(self.prefixo)
+        self.assertIn("'TABELAS' AS verificacao, '=' AS regra, {} AS esperado".format(len(esquema)), sql)
+        self.assertIn("'VERSAO DO ESQUEMA' AS verificacao, '=' AS regra, {} AS esperado".format(
+            sql_ident.VERSAO_ESQUEMA), sql)
+        seed = ddl_builder.gerar_instrucoes_seed(self.owner, self.prefixo)
+        contagem = ddl_builder._linhas_seed_por_tabela(self.owner, self.prefixo)
+        self.assertEqual(sum(contagem.values()), sum(1 for c in seed if c.lstrip().upper().startswith("MERGE INTO")))
+        self.assertEqual(contagem["usuarios"], 4)
+        self.assertIn("'LINHAS TBSSS_SCRIPT_AMB' AS verificacao, '>=' AS regra, {} AS esperado".format(
+            contagem["script_amb"]), sql)
+        # Resumo final com OK/FALHA em cada secao de verificacao.
+        self.assertEqual(sql.count("'OK: nenhuma falha'"), 2)
+
     def test_gerar_scripts_sql_cli_e_init_db_flag(self):
         """CLI gerar_scripts_sql e init_db --gerar-sql gravam arquivos validos em disco."""
         import gerar_scripts_sql
@@ -454,6 +485,7 @@ class TestDdlSeedERollback(unittest.TestCase):
             self.assertEqual(ret, 0)
             self.assertTrue(os.path.isfile(os.path.join(tmp_dir, "01_implantar_sss.sql")))
             self.assertTrue(os.path.isfile(os.path.join(tmp_dir, "02_rollback_sss.sql")))
+            self.assertTrue(os.path.isfile(os.path.join(tmp_dir, "99_validar_implantacao.sql")))
 
         with tempfile.TemporaryDirectory() as tmp_dir2:
             ret = init_db.main([

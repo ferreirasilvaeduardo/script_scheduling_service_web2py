@@ -676,10 +676,17 @@ Comando de execução via SQL*Plus:
 sqlplus usuario_owner/senha@//host:porta/servico @docs/sql/01_implantar_sss.sql
 ```
 
-Para desinstalação total (rollback limpo de todos os 51 objetos do esquema):
+Para desinstalação total (rollback limpo dos 53 objetos do esquema: 19 triggers, 17 tabelas e 17 sequences, com constraints, índices e GRANTs removidos junto das tabelas):
 ```bash
 sqlplus usuario_owner/senha@//host:porta/servico @docs/sql/02_rollback_sss.sql
 ```
+
+Validação, só de leitura, logo depois da implantação. Grave a saída e confira que as duas linhas de resumo dizem `OK: nenhuma falha` e que não há `ORA-`/`SP2-`:
+```sql
+SPOOL /tmp/sss_99_validar.log
+@docs/sql/99_validar_implantacao.sql
+```
+Os esperados (objetos, versão do esquema e mínimo de linhas do seed) saem do mesmo registro que gerou o `01`. Por isso o `99` precisa ser regerado junto com ele, por `python3 scripts/gerar_scripts_sql.py`. A listagem de usuários não mostra hash de senha.
 
 #### 18.5.2 Instalação dos Scripts Utilitários Físicos no Servidor
 

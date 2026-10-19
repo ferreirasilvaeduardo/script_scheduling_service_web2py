@@ -1321,6 +1321,202 @@ def gerar_script_rollback(owner, prefixo):
     return "\n".join(linhas)
 
 
+def _lista_literais(nomes):
+    """Lista IN de literais com nomes do registro sql_ident (ja validados), em maiusculas.
+
+    Quebra a cada 6 nomes: o SQL*Plus recusa linhas com mais de 2.499 caracteres (SP2-0027).
+    """
+    literais = ["'{}'".format(n.upper()) for n in nomes]
+    grupos = [", ".join(literais[i:i + 6]) for i in range(0, len(literais), 6)]
+    return ",\n      ".join(grupos)
+
+
+def _linhas_seed_por_tabela(owner, prefixo):
+    """Quantidade de MERGE do seed por tabela (minimo esperado logo apos a implantacao)."""
+    esquema = sql_ident.nomes(prefixo)
+    por_tabela = dict((t["tabela"].upper(), ent) for ent, t in esquema.items())
+    contagem = collections.OrderedDict((ent, 0) for ent in esquema)
+    marca = "MERGE INTO {}.".format(owner).upper()
+    for cmd in gerar_instrucoes_seed(owner, prefixo):
+        texto = cmd.lstrip()
+        if texto.upper().startswith(marca):
+            ent = por_tabela.get(texto[len(marca):].split(None, 1)[0].upper())
+            if ent:
+                contagem[ent] += 1
+    return contagem
+
+
+def gerar_script_validacao(owner, prefixo):
+    """Gera o 99_validar_implantacao.sql a partir do registro sql_ident (SQL*Plus, somente leitura).
+
+    Compara esperado x encontrado: objetos (tabelas, sequences, triggers, constraints e indices pelos
+    nomes do registro), objetos invalidos, GRANTs a PUBLIC (proibidos), versao do esquema e o minimo de
+    linhas do seed. Cada verificacao sai com OK ou FALHA e um resumo final. Owner e prefixo vem dos
+    parametros; nenhum hash de senha e exibido (AGENTS §3.3), so se a senha esta definida.
+    """
+    sql_ident.validar_owner(owner)
+    sql_ident.validar_prefixo(prefixo)
+    esquema = sql_ident.nomes(prefixo)
+    own = owner.upper()
+
+    tabelas = [t["tabela"] for t in esquema.values()]
+    sequences = [t["sequence"] for t in esquema.values()]
+    triggers = []
+    constraints = []
+    indices = []
+    for t in esquema.values():
+        triggers.extend(n for n in (t.get("trigger_bi"), t.get("trigger_bu")) if n)
+        constraints.append(t["pk"])
+        for grupo in ("uks", "fks", "cks"):
+            constraints.extend(t[grupo].keys())
+        indices.extend(t["indices"].keys())
+    objetos = tabelas + sequences + triggers + indices
+
+    def chk(ordem, rotulo, regra, valor, sql_contagem):
+        return ("SELECT {o} AS ordem, '{r}' AS verificacao, '{g}' AS regra, {v} AS esperado, "
+                "({s}) AS encontrado FROM DUAL").format(o=ordem, r=rotulo, g=regra, v=valor, s=sql_contagem)
+
+    dicionario = [
+        chk(1, "TABELAS", "=", len(tabelas),
+            "SELECT COUNT(*) FROM all_tables WHERE owner = '{}' AND table_name IN ({})".format(
+                own, _lista_literais(tabelas))),
+        chk(2, "SEQUENCES", "=", len(sequences),
+            "SELECT COUNT(*) FROM all_sequences WHERE sequence_owner = '{}' AND sequence_name IN ({})".format(
+                own, _lista_literais(sequences))),
+        chk(3, "TRIGGERS HABILITADAS", "=", len(triggers),
+            "SELECT COUNT(*) FROM all_triggers WHERE owner = '{}' AND status = 'ENABLED' "
+            "AND trigger_name IN ({})".format(own, _lista_literais(triggers))),
+        chk(4, "CONSTRAINTS HABILITADAS", "=", len(constraints),
+            "SELECT COUNT(*) FROM all_constraints WHERE owner = '{}' AND status = 'ENABLED' "
+            "AND constraint_name IN ({})".format(own, _lista_literais(constraints))),
+        chk(5, "INDICES VALIDOS", "=", len(indices),
+            "SELECT COUNT(*) FROM all_indexes WHERE owner = '{}' AND status = 'VALID' "
+            "AND index_name IN ({})".format(own, _lista_literais(indices))),
+        chk(6, "OBJETOS INVALIDOS", "=", 0,
+            "SELECT COUNT(*) FROM all_objects WHERE owner = '{}' AND status = 'INVALID' "
+            "AND object_name IN ({})".format(own, _lista_literais(objetos))),
+        chk(7, "GRANTS A PUBLIC", "=", 0,
+            "SELECT COUNT(*) FROM all_tab_privs WHERE table_schema = '{}' AND grantee = 'PUBLIC' "
+            "AND table_name IN ({})".format(own, _lista_literais(tabelas + sequences))),
+    ]
+
+    tab = dict((ent, "{}.{}".format(owner, t["tabela"])) for ent, t in esquema.items())
+    dados = [
+        chk(10, "VERSAO DO ESQUEMA", "=", sql_ident.VERSAO_ESQUEMA,
+            "SELECT MAX(versao_esquema) FROM {}".format(tab["controle"])),
+    ]
+    for n, (ent, minimo) in enumerate(_linhas_seed_por_tabela(owner, prefixo).items()):
+        dados.append(chk(11 + n, "LINHAS " + esquema[ent]["tabela"].upper(), ">=", minimo,
+                         "SELECT COUNT(*) FROM {}".format(tab[ent])))
+
+    def relatorio(partes):
+        uniao = "\n  UNION ALL ".join(partes)
+        detalhe = (
+            "WITH chk AS (\n  " + uniao + "\n)\n"
+            "SELECT verificacao, regra || ' ' || esperado AS esperado, encontrado,\n"
+            "       CASE WHEN (regra = '=' AND encontrado = esperado) OR (regra = '>=' AND encontrado >= esperado)\n"
+            "            THEN 'OK' ELSE 'FALHA' END AS resultado\n"
+            "  FROM chk ORDER BY ordem;"
+        )
+        resumo = (
+            "WITH chk AS (\n  " + uniao + "\n)\n"
+            "SELECT CASE WHEN COUNT(*) = 0 THEN 'OK: nenhuma falha'\n"
+            "            ELSE 'FALHA: ' || COUNT(*) || ' verificacao(oes) divergente(s)' END AS resumo\n"
+            "  FROM chk\n"
+            " WHERE NOT ((regra = '=' AND encontrado = esperado) OR (regra = '>=' AND encontrado >= esperado))\n"
+            "    OR encontrado IS NULL;"
+        )
+        return [detalhe, "", resumo]
+
+    linhas = [
+        "-- ==============================================================================",
+        "-- Script Scheduling Service (SSS) - Validacao da Implantacao Oracle 11gR2+",
+        "-- Gerado automaticamente a partir do registro sql_ident.py (somente leitura)",
+        "-- Owner: {}".format(owner),
+        "-- Prefixo: {}".format(prefixo),
+        "-- Cada verificacao mostra OK ou FALHA; procure tambem ORA-/SP2- no SPOOL.",
+        "-- ==============================================================================",
+        "SET DEFINE OFF;",
+        "SET LINESIZE 200 PAGESIZE 200 FEEDBACK OFF VERIFY OFF ECHO OFF TRIMSPOOL ON;",
+        "WHENEVER SQLERROR CONTINUE;",
+        "COLUMN verificacao FORMAT A40",
+        "COLUMN esperado FORMAT A12",
+        "COLUMN encontrado FORMAT 999999999",
+        "COLUMN resultado FORMAT A9",
+        "COLUMN resumo FORMAT A60",
+        "",
+        "PROMPT ==============================================================================",
+        "PROMPT 1. OBJETOS NO DICIONARIO (esperado pelo registro x encontrado)",
+        "PROMPT ==============================================================================",
+    ]
+    linhas.extend(relatorio(dicionario))
+    linhas.extend([
+        "",
+        "PROMPT ==============================================================================",
+        "PROMPT 2. VERSAO DO ESQUEMA E MINIMO DE LINHAS DO SEED",
+        "PROMPT (se as tabelas nao existirem, esta secao falha com ORA-00942: veja a secao 1)",
+        "PROMPT ==============================================================================",
+    ])
+    linhas.extend(relatorio(dados))
+    linhas.extend([
+        "",
+        "PROMPT ==============================================================================",
+        "PROMPT 3. USUARIOS E PERFIS (sem hash de senha)",
+        "PROMPT ==============================================================================",
+        "COLUMN login FORMAT A20",
+        "COLUMN nome FORMAT A30",
+        "COLUMN perfil FORMAT A20",
+        "COLUMN admin FORMAT A5",
+        "COLUMN ativo FORMAT A5",
+        "COLUMN senha_definida FORMAT A14",
+        "SELECT u.id, u.login, u.nome, p.nome AS perfil, p.is_admin AS admin, u.ativo,",
+        "       CASE WHEN u.senha_hash IS NULL THEN 'N' ELSE 'S' END AS senha_definida",
+        "  FROM {} u JOIN {} p ON p.id = u.perfil_id".format(tab["usuarios"], tab["perfis"]),
+        " ORDER BY u.id;",
+        "",
+        "PROMPT ==============================================================================",
+        "PROMPT 4. SCRIPTS CADASTRADOS",
+        "PROMPT ==============================================================================",
+        "COLUMN nome FORMAT A25",
+        "COLUMN interpretador FORMAT A8",
+        "COLUMN tipo_param FORMAT A10",
+        "COLUMN path_file FORMAT A70",
+        "SELECT id, nome, interpretador, tipo_param, max_qtd_parallel_env AS paral, timeout_seg AS tmout,",
+        "       ativo, path_file",
+        "  FROM {}".format(tab["scripts"]),
+        " ORDER BY id;",
+        "",
+        "PROMPT ==============================================================================",
+        "PROMPT 5. ACESSO POR PERFIL (funcionalidades, ambientes e scripts liberados)",
+        "PROMPT ==============================================================================",
+        "COLUMN perfil FORMAT A20",
+        "SELECT p.nome AS perfil, p.is_admin AS admin, p.ativo,",
+        "       (SELECT COUNT(*) FROM {} x WHERE x.perfil_id = p.id) AS funcionalidades,".format(tab["perfil_func"]),
+        "       (SELECT COUNT(*) FROM {} x WHERE x.perfil_id = p.id) AS ambientes,".format(tab["perfil_amb"]),
+        "       (SELECT COUNT(*) FROM {} x WHERE x.perfil_id = p.id) AS scripts".format(tab["perfil_scr"]),
+        "  FROM {} p".format(tab["perfis"]),
+        " ORDER BY p.nome;",
+        "",
+        "PROMPT ==============================================================================",
+        "PROMPT 6. GRANTS NOS OBJETOS DO SSS (README 11.1: so contas dos papeis; nunca PUBLIC)",
+        "PROMPT ==============================================================================",
+        "SET FEEDBACK ON",
+        "COLUMN grantee FORMAT A30",
+        "COLUMN privilege FORMAT A12",
+        "SELECT grantee, privilege, COUNT(*) AS objetos",
+        "  FROM all_tab_privs",
+        " WHERE table_schema = '{}' AND table_name IN ({})".format(own, _lista_literais(tabelas + sequences)),
+        " GROUP BY grantee, privilege",
+        " ORDER BY grantee, privilege;",
+        "SET FEEDBACK OFF",
+        "",
+        "PROMPT Fim da validacao do SSS.",
+        "EXIT;",
+        "",
+    ])
+    return "\n".join(linhas)
+
+
 def gerar_script_implantacao_completo(owner, prefixo, lob_storage="SECUREFILE",
                                       admin_login=None, admin_nome=None, admin_senha_hash=None,
                                       papeis_usuarios=None):

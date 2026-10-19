@@ -2390,7 +2390,7 @@ END;
 * **Opções:**
   * `--dry-run` imprime o DDL sem executar;
   * `--lob-basicfile` aplica o fallback de LOB;
-  * `--gerar-sql <pasta>` (ou via `scripts/gerar_scripts_sql.py`): gera scripts SQL puros e autocontidos (`01_implantar_sss.sql` com DDL/DML de seed/estatísticas e `02_rollback_sss.sql` para desinstalação total) para execução direta por DBAs via SQL*Plus em homologação/produção sem execução Python no servidor de banco;
+  * `--gerar-sql <pasta>` (ou via `scripts/gerar_scripts_sql.py`): gera scripts SQL puros e autocontidos (`01_implantar_sss.sql` com DDL/DML de seed/estatísticas, `02_rollback_sss.sql` para desinstalação total e `99_validar_implantacao.sql`, só de leitura) para execução direta por DBAs via SQL*Plus em homologação/produção sem execução Python no servidor de banco;
   * não há opção de `DROP` nem `--recreate`, inclusive em DEV. Objetos existentes nunca são removidos automaticamente por `init_db.py`.
 * **Seed Completo** via `MERGE` (idempotente):
   * **Funcionalidades e Controle:** catálogo canônico de 10 funcionalidades (§4.3.D) e a linha de `tbsss_controle` (versão do esquema e auditoria de versão).
@@ -2409,6 +2409,11 @@ END;
   * **Contas dos papéis:** sem `--grants-para`, o gerador usa o `config.ini`: web e agente vêm de `[oracle] user`, purge de `[retencao] purge_user`. A conta do monitor fica no `secrets.cfg`, então só entra por `--grants-para`. Cada conta é validada como identificador Oracle, e `PUBLIC` é recusado.
   * Um papel sem conta, ou cuja conta é a dona do esquema, não recebe GRANT: o owner já tem todos os privilégios, e GRANT para si mesmo falha (ORA-01749). Cada caso fica registrado como comentário no script.
   * Uma instalação antiga que já tenha GRANTs a PUBLIC os perde no rollback (o `DROP TABLE` remove as concessões). Sem rollback, o DBA precisa revogá-los à mão.
+* **Validação da implantação (`docs/sql/99_validar_implantacao.sql`):** gerada com os outros dois scripts, a partir do mesmo registro, com o owner e o prefixo do `config.ini` ou de `--owner`/`--prefixo`. Só faz leituras.
+  * **Dicionário:** confere, pelos nomes do registro, as tabelas, sequences, triggers habilitadas, constraints habilitadas e índices válidos; e exige zero objetos inválidos e zero GRANTs a PUBLIC.
+  * **Dados:** confere a versão do esquema contra `sql_ident.VERSAO_ESQUEMA` e o mínimo de linhas que o seed grava em cada tabela.
+  * Cada verificação sai como "esperado × encontrado" com OK ou FALHA, e cada seção termina com um resumo.
+  * As listagens de usuários, scripts, acesso por perfil e GRANTs **nunca** mostram `senha_hash`: só se a senha está definida (AGENTS §3.3).
 
   | Papel | Privilégios no esquema |
   |---|---|

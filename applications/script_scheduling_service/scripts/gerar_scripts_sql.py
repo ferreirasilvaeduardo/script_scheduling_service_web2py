@@ -43,7 +43,7 @@ def main(argv=None):
     parser.add_argument("--admin-login", dest="admin_login", default=None, help="Login do administrador inicial no seed")
     parser.add_argument("--admin-nome", dest="admin_nome", default=None, help="Nome do administrador inicial")
     parser.add_argument("--admin-senha-hash", dest="admin_senha_hash", default=None, help="Hash PBKDF2 da senha admin")
-    parser.add_argument("--stdout", dest="stdout", choices=["implantar", "rollback", "grants"], default=None, help="Imprime no stdout")
+    parser.add_argument("--stdout", dest="stdout", choices=["implantar", "rollback", "validar", "grants"], default=None, help="Imprime no stdout")
 
     args = parser.parse_args(argv)
 
@@ -131,6 +131,8 @@ def main(argv=None):
         prefixo=prefixo,
     )
 
+    script_validar = ddl_builder.gerar_script_validacao(owner=owner, prefixo=prefixo)
+
     script_grants = ""
     if args.grants_para:
         grants = ddl_builder.gerar_grants_por_papel(owner, prefixo, papeis_grants)
@@ -151,6 +153,9 @@ def main(argv=None):
     elif args.stdout == "rollback":
         print(script_rollback)
         return 0
+    elif args.stdout == "validar":
+        print(script_validar)
+        return 0
     elif args.stdout == "grants":
         print(script_grants)
         return 0
@@ -161,6 +166,7 @@ def main(argv=None):
 
     arq_implantar = os.path.join(out_dir, "01_implantar_sss.sql")
     arq_rollback = os.path.join(out_dir, "02_rollback_sss.sql")
+    arq_validar = os.path.join(out_dir, "99_validar_implantacao.sql")
 
     with open(arq_implantar, "w", encoding="utf-8") as f:
         f.write(script_implantar)
@@ -168,9 +174,13 @@ def main(argv=None):
     with open(arq_rollback, "w", encoding="utf-8") as f:
         f.write(script_rollback)
 
+    with open(arq_validar, "w", encoding="utf-8") as f:
+        f.write(script_validar)
+
     print("Scripts SQL gerados com sucesso:")
     print("  - Implantacao : {}".format(arq_implantar))
     print("  - Rollback    : {}".format(arq_rollback))
+    print("  - Validacao   : {}".format(arq_validar))
 
     if script_grants:
         arq_grants = os.path.join(out_dir, "03_grants_sss.sql")
