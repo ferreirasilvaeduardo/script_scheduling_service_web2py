@@ -25,6 +25,7 @@ from repo_fake.usuarios import RepoUsuariosFake
 
 _lock_fabrica = threading.RLock()
 _singletons = {}
+_singletons_oracle = {}
 _fake_store = None
 _config_override = None
 
@@ -43,6 +44,7 @@ def reset_singletons():
     global _fake_store
     with _lock_fabrica:
         _singletons.clear()
+        _singletons_oracle.clear()
         _fake_store = None
 
 
@@ -94,13 +96,22 @@ def obter(nome, config=None):
     if backend == "FAKE" and env != "DEV":
         raise RuntimeError("data_backend FAKE e proibido fora de DEV (sss_env=%s)" % env)
 
+    nome_norm = str(nome).lower().replace("repo_", "")
+
     if backend == "ORACLE":
+        # Agregado 1 (F7.3): RBAC_USUARIOS (usuarios e rbac)
+        if nome_norm in ("usuarios", "rbac"):
+            with _lock_fabrica:
+                if nome_norm not in _singletons_oracle:
+                    from repo_oracle.usuarios import RepoUsuariosOracle
+                    from repo_oracle.rbac import RepoRbacOracle
+                    _singletons_oracle["usuarios"] = RepoUsuariosOracle()
+                    _singletons_oracle["rbac"] = RepoRbacOracle()
+                return _singletons_oracle[nome_norm]
         raise NotImplementedError("Backend ORACLE ainda nao implementado")
 
     if backend != "FAKE":
         raise ValueError("Backend de persistencia desconhecido: %s" % backend)
-
-    nome_norm = str(nome).lower().replace("repo_", "")
 
     with _lock_fabrica:
         if _fake_store is None:

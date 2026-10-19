@@ -111,7 +111,7 @@ class TestInclusao(_Base):
             self.assertEqual(erros, {"nome": svc_mod.MSG_NOME_INVALIDO}, nome)
         aid, erros = self._incluir(nome="")
         self.assertEqual(erros, {"nome": svc_mod.MSG_NOME_OBRIGATORIO})
-        self.assertEqual(self.catalogo.ambientes_listar(pagina=1, tamanho=100)["total"], 3)
+        self.assertEqual(self.catalogo.ambientes_listar(pagina=1, tamanho=100)["total"], 8)
 
     def test_dsn_com_credencial_rejeitado(self):
         for dsn in ("usuario/senha@host", "app/s3cr3t@db01:1521/svc", "@db"):

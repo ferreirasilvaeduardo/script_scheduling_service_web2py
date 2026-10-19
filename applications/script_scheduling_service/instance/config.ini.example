@@ -47,7 +47,7 @@ env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 
 [logging]
 log_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs
-level = DEBUG                      ; DEBUG | INFO | WARN | ERROR
+level = INFO                      ; DEBUG | INFO | WARN | ERROR
 app_log_max_bytes = 10485760
 app_log_retention_days = 30
 max_log_size_bytes = 5242880

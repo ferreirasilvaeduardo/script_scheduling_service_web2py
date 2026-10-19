@@ -195,6 +195,7 @@ A pasta `dev/scripts/` contém scripts de exemplo **sem lógica perigosa**, usad
 | `infra/longo.py` | Dorme em ciclos e imprime progresso (`[ciclos] [intervalo_s]`), para testes de timeout e cancelamento |
 | `relatorios/exporta.sh` | Imprime os argumentos posicionais |
 | `carga_diaria.py`, `relatorio_mensal.py`, `validacao_fiscal.py`, `cleanup_tmp.sh`, `sync_tabelas.sh`, `backup_extra.sh` | Correspondem aos `path_file` do seed FAKE e imprimem os argumentos |
+| `utilitarios/*.py` e `utilitarios/*.sh` | 14 scripts utilitários de arquivos (zip, tar.gz, divisão, concatenação, encoding, substituição, deduplicação, hash, contagem, filtros, ordenação e limpeza). Detalhes em `docs/SCRIPTS_UTILITARIOS.md` |
 
 ### 6.1 Dono e permissões exigidos pelo `path_guard` (CR-005)
 
@@ -250,14 +251,35 @@ Em `instance/config.ini`, seção `[agent]`: `script_owner_uids = 0` (o padrão 
 
 ---
 
-## 7. Banco Oracle real (a partir do F7)
+## 7. Banco Oracle real (F7)
 
-O backend FAKE não precisa de banco. Para o F7 em diante (README §2.3, CR-002):
+O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-002):
 
 * **Driver:** `python-oracledb` (`< 2.0` na 3.6; `2.x` na 3.7+) com `cryptography`, e `cx_Oracle 8.3` como contingência. São pré-instalados pela infraestrutura; não use `pip install` no projeto.
 * **Modo:** `[oracle] modo_driver = auto` tenta Thin → Thick → cx_Oracle por sondagem. Contra banco **11g**, só Thick e cx_Oracle conectam, então o **Instant Client 19** precisa estar instalado:
   * Linux/Unix: no `ldconfig` (preferencial) ou em `LD_LIBRARY_PATH` exportado **antes** de iniciar o Python;
   * macOS (só desenvolvimento): `oracle_client_lib_dir` no `config.ini`. Windows não é suportado (CR-005).
 * **Credencial:** só no `secrets.cfg` (`0600`, dono = usuário do processo), nunca no `config.ini`.
+* **Inicialização e DDL/DML:**
+  * Via Python: `python3 scripts/init_db.py`
+  * Via SQL*Plus (autônomo): `sqlplus usuario/senha@//host:porta/servico @docs/sql/01_implantar_sss.sql`
+  * Rollback total: `sqlplus usuario/senha@//host:porta/servico @docs/sql/02_rollback_sss.sql`
 * **Testes contra banco real:** defina `SSS_TEST_DSN` (e o usuário/senha de teste conforme o prompt do passo). Sem ela, as partes de banco ficam `NÃO TESTADO` no relatório.
-* `python scripts/check_env.py` mostra a combinação de driver escolhida (a partir do F7.0).
+* `python scripts/check_env.py` mostra a combinação de driver escolhida.
+
+---
+
+## 8. Usuários Padrão para Desenvolvimento e Homologação
+
+Para testes interativos na interface web (tanto no backend FAKE quanto no backend ORACLE), utilize os usuários cadastrados no seed:
+
+| Login | Perfil | Permissões Principais | Escopo de Ambientes |
+|---|---|---|---|
+| `admin` | `ADMINISTRADOR` | Acesso irrestrito a todas as 10 funcionalidades | Todos os 5 ambientes |
+| `op.prod` | `OPERADOR_PROD` | `EXEC_SCRIPT`, `VER_LOGS`, `CANC_TICKET` | Todos os 5 ambientes |
+| `op.hml` | `OPERADOR_HML` | `EXEC_SCRIPT`, `VER_LOGS`, `CANC_TICKET` | `CLONE6`, `CLONE7`, `GFPREPROD` |
+| `consulta` | `CONSULTA` | Apenas consulta (`VER_LOGS`) | Todos os 5 ambientes |
+
+* **Senha Inicial Padrão:** `Sss@Homolog2026!` (hash PBKDF2-SHA256 com 200.000 iterações).
+* **Troca de Senha:** Disponível na interface em "Minha senha" no cabeçalho.
+

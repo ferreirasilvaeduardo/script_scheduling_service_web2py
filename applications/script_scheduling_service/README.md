@@ -542,6 +542,24 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 * **Não existe tela de cadastro de funcionalidades.** O catálogo é fixo: cada código está ligado a rotas e guardas no código (`ui_menu.py`, `_exigir_func`), então um código novo sem rota não teria efeito. Novas funcionalidades entram por change request, com seed e código no mesmo pacote.
 * A associação perfil × funcionalidade (`tbsss_perfil_func`) é editada **somente** na aba Funcionalidades da matriz de permissões (§4.3.B.1), no mesmo POST de ambientes e scripts.
 
+#### D.1 Perfis e Usuários Padrão Homologados (Seed Inicial)
+
+O processo de inicialização do banco (`init_db.py` e script SQL de implantação) cadastra de forma idempotente a matriz operacional inicial e os usuários para demonstração e homologação das telas (UI Freeze):
+
+1. **Perfis de Acesso (`tbsss_perfis`):**
+   * **`ADMINISTRADOR`:** Super Administrador (`is_admin = 'S'`). Acesso total a todas as 10 funcionalidades, a todos os ambientes atendidos e a todas as rotinas homologadas.
+   * **`OPERADOR_PROD`:** Operacional de Produção (`is_admin = 'N'`). Acesso a `EXEC_SCRIPT`, `VER_LOGS` e `CANC_TICKET` em todos os ambientes operacionais (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`).
+   * **`OPERADOR_HML`:** Operacional de Homologação (`is_admin = 'N'`). Acesso a `EXEC_SCRIPT`, `VER_LOGS` e `CANC_TICKET` restrito aos ambientes de teste e validação (`CLONE6`, `CLONE7`, `GFPREPROD`).
+   * **`CONSULTA`:** Auditoria e Consulta (`is_admin = 'N'`). Perfil de somente leitura, restrito a `VER_LOGS` em todos os ambientes, sem permissão de disparo ou alteração de cadastros.
+
+2. **Usuários Padrão Homologados (`tbsss_usuarios`):**
+   * **`admin`** (`Super Administrador`): vinculado ao perfil `ADMINISTRADOR`.
+   * **`op.prod`** (`Operador Producao`): vinculado ao perfil `OPERADOR_PROD`.
+   * **`op.hml`** (`Operador Homologacao`): vinculado ao perfil `OPERADOR_HML`.
+   * **`consulta`** (`Auditor e Consulta`): vinculado ao perfil `CONSULTA`.
+   * **Credencial Inicial de Homologação:** senha `Sss@Homolog2026!` (hash PBKDF2-SHA256, 200k iterações: `pbkdf2_sha256$200000$f9fb31dc39b754d083af236a880dfa6e$2229f3f8a694a9c45be82d9c3bd38110f8b474d2a0aa0ee7f691d405738a4cd8`).
+   * **Idempotência:** o `MERGE` do seed atualiza nome e perfil de acesso, mas preserva a senha existente caso tenha sido redefinida pelo operador.
+
 #### E. Tela "O que eu posso fazer" (`default/permissoes`, CR-004)
 
 Qualquer usuário logado pode abrir. Ela responde, em linguagem simples (§2.4.2), "o que eu posso fazer aqui?". O acesso fica no cabeçalho, ao lado de "Minha senha", e a mensagem de 403 aponta para ela.
@@ -1866,9 +1884,13 @@ UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}   ix_tbsss_tck_fila
 
 * `{prefixo}` vem de `table_prefix`, inclui o `_` final e obedece à regex `^[a-z][a-z0-9_]{0,7}$` (começa com letra minúscula, para gerar nome Oracle válido e casar com o registro, que só aceita identificadores em minúsculas; até 8 caracteres; CR-007, R-31).
 * O DDL é gerado por `init_db.py` a partir de um **registro único de identificadores** em `modules/sql_ident.py`, consumido também por `test_db_schema.py`.
+* O `owner` vem de `[oracle] owner` no `config.ini` (ex.: `openrisow`) e obedece à regex `^[A-Za-z][A-Za-z0-9_]{0,29}$`. Todo objeto no banco é qualificado como `{owner}.{prefixo}{entidade}`.
+* Os exemplos com `tbsss_` neste documento representam a expansão utilizando o prefixo padrão configurado (`table_prefix = tbsss_`).
 * **Pior caso com prefixo de 8 caracteres:** `sq_` + 8 + `funcionalidades` = **26** (conforme).
 
 ### 9.2 Tabela de abreviações
+
+*(os nomes de sequence, trigger e PK na tabela abaixo utilizam a expansão com o prefixo padrão `tbsss_`; se `table_prefix` for alterado na configuração, os identificadores são gerados com o prefixo correspondente pelo `sql_ident`)*
 
 | Entidade | Abrev. | Sequence | Trigger | PK |
 |---|---|---|---|---|
@@ -1896,7 +1918,7 @@ UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}   ix_tbsss_tck_fila
 
 **Padrões globais:**
 
-* O `owner` é parametrizado (`openrisow`), e todo SQL qualifica `{owner}.objeto`.
+* O `owner` e o `table_prefix` são parametrizados no `config.ini` (`owner = openrisow`, `table_prefix = tbsss_`; §9.1 e §12.1), e todo SQL qualifica `{owner}.{prefixo}objeto` (ex.: `{owner}.{prefixo}usuarios`). Os exemplos em SQL deste documento utilizam `tbsss_` como a expansão do prefixo padrão `{prefixo}`.
 * Toda coluna `id` é `NUMBER(10) NOT NULL` (inteiro de 10 dígitos), PK. **A aplicação sempre informa o `id`** (`seq.NEXTVAL` lido antes do `INSERT`, §2.7). Existe também a trigger condicional abaixo, como defesa para inserções manuais:
 
 ```sql
@@ -2356,11 +2378,21 @@ END;
 * **Opções:**
   * `--dry-run` imprime o DDL sem executar;
   * `--lob-basicfile` aplica o fallback de LOB;
-  * não há opção de `DROP` nem `--recreate`, inclusive em DEV. Objetos existentes nunca são removidos automaticamente.
-* Toda falha de fase aborta com código diferente de zero e com o objeto e o ORA- no log.
-* **Seed** via `MERGE` (idempotente): o catálogo de funcionalidades (§4.3.D), o perfil `ADMINISTRADOR` (`is_admin = 'S'`) e a linha de `tbsss_controle` (D4). A inclusão grava `created_by = 'SYSTEM:init_db'`; quando o `MERGE` muda uma linha existente, grava `updated_*` com o mesmo ator; uma linha igual ao seed não é tocada (§10, CR-006).
-* **Administrador inicial:** criado com `created_by = 'SYSTEM:init_db'`. O login vem de `--admin-login`, e a senha é lida de `getpass` ou de `SSS_BOOTSTRAP_ADMIN_PASSWORD`. Nunca há valor fixo no código.
-* **GRANTs por papel (CR-007, D1b; CR-008, E3):** `--grants-para web=<usuario>,agente=<usuario>,purge=<usuario>,monitor=<usuario>` imprime (sem executar) os `GRANT`s de cada papel, para o DBA aplicar. Todo SQL da aplicação qualifica o `owner`, então não há sinônimos.
+  * `--gerar-sql <pasta>` (ou via `scripts/gerar_scripts_sql.py`): gera scripts SQL puros e autocontidos (`01_implantar_sss.sql` com DDL/DML de seed/estatísticas e `02_rollback_sss.sql` para desinstalação total) para execução direta por DBAs via SQL*Plus em homologação/produção sem execução Python no servidor de banco;
+  * não há opção de `DROP` nem `--recreate`, inclusive em DEV. Objetos existentes nunca são removidos automaticamente por `init_db.py`.
+* **Seed Completo** via `MERGE` (idempotente):
+  * **Funcionalidades e Controle:** catálogo canônico de 10 funcionalidades (§4.3.D) e a linha de `tbsss_controle` (versão do esquema e auditoria de versão).
+  * **Ambientes Padrão (`tbsss_ambientes`):** os 5 ambientes homologados (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`).
+  * **Dicionário de Parâmetros (`tbsss_parametros`):** 19 parâmetros reutilizáveis (`TEXT`, `NUMBER`, `SELECT`).
+  * **Catálogo de Scripts Utilitários (`tbsss_scripts`):** 14 rotinas de manipulação de arquivos em Python 3 e Shell POSIX (`zipar_arquivos`, `descompactar_zip`, `quebrar_arquivo`, `juntar_arquivos`, `converter_encoding`, `substituir_texto`, `remover_duplicadas`, `gerar_hash_arquivo`, `compactar_targz`, `descompactar_targz`, `contar_linhas_arquivo`, `filtrar_linhas`, `ordenar_arquivo`, `limpar_linhas_vazias`). Especificação completa em `docs/SCRIPTS_UTILITARIOS.md`.
+  * **Homologação por Ambiente (`tbsss_script_amb`):** todas as 14 rotinas homologadas para os 5 ambientes (70 registros).
+  * **Parâmetros de Rotinas (`tbsss_script_param`):** 38 vínculos com ordens e valores padrão específicos.
+  * **Perfis de Acesso (`tbsss_perfis`):** os 4 perfis padrão (`ADMINISTRADOR`, `OPERADOR_PROD`, `OPERADOR_HML`, `CONSULTA`), suas matrizes funcionais (`tbsss_perfil_func`), escopos de ambiente (`tbsss_perfil_amb`) e a liberação das 14 rotinas para todos os perfis (`tbsss_perfil_scr`, total de 56 registros).
+  * **Usuários de Demonstração e Homologação (`tbsss_usuarios`):** os 4 operadores padrão do UI Freeze (`admin`, `op.prod`, `op.hml`, `consulta`) com senha padrão `Sss@Homolog2026!` (hash PBKDF2 com 200.000 iterações). O `MERGE` preserva senhas já trocadas.
+  * **Governança de Dados:** metadados descritivos aplicados via `COMMENT ON TABLE` e `COMMENT ON COLUMN` para todas as tabelas e colunas, além de comentários em todas as triggers de integridade.
+  * **Atores de Auditoria:** a inclusão grava `created_by = 'SYSTEM:init_db'`; quando o `MERGE` muda uma linha existente, grava `updated_*` com o mesmo ator; uma linha igual ao seed não é tocada (§10, CR-006).
+* **Administrador inicial:** criado por padrão (`admin` / `ADMINISTRADOR`), ou customizado via `--admin-login` e senha lida de `getpass` ou de `SSS_BOOTSTRAP_ADMIN_PASSWORD`.
+* **Script SQL de Produção Autônomo:** gerado em `docs/sql/01_implantar_sss.sql` para implantação direta via SQL*Plus por DBAs, contendo DDL, comentários de governança, DML de seed completo, coleta de estatísticas pelo otimizador e concessões de leitura (`GRANT SELECT ... TO PUBLIC`) com tratamento de erro tolerante. Script de desinstalação total em `docs/sql/02_rollback_sss.sql`.
 
   | Papel | Privilégios no esquema |
   |---|---|

@@ -211,38 +211,38 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
                 "descricao": desc,
             })
 
-        # 2. Perfil ADMINISTRADOR
+        # 2. Perfis padrao e matrizes de permissao (CATALOGO_PERFIS_PADRAO)
         tb_per = "{}.{}".format(owner, esquema["perfis"]["tabela"])
         sq_per = "{}.{}".format(owner, esquema["perfis"]["sequence"])
-        desc_perfil = "Perfil administrativo inicial do sistema"
+        tb_pfnc = "{}.{}".format(owner, esquema["perfil_func"]["tabela"])
+        sq_pfnc = "{}.{}".format(owner, esquema["perfil_func"]["sequence"])
+        tb_pamb = "{}.{}".format(owner, esquema["perfil_amb"]["tabela"])
+        sq_pamb = "{}.{}".format(owner, esquema["perfil_amb"]["sequence"])
+
         sql_merge_per = """
         MERGE INTO {tb_per} dst
-        USING (SELECT 'ADMINISTRADOR' AS nome FROM DUAL) src
+        USING (SELECT :nome AS nome FROM DUAL) src
         ON (dst.nome = src.nome)
         WHEN MATCHED THEN
           UPDATE SET dst.descricao = :descricao,
-                     dst.is_admin = 'S',
+                     dst.is_admin = :is_admin,
                      dst.ativo = 'S',
                      dst.updated_at = SYSDATE,
                      dst.updated_by = 'SYSTEM:init_db'
-          WHERE dst.is_admin <> 'S'
+          WHERE dst.is_admin <> :is_admin
              OR dst.ativo <> 'S'
-             OR NVL(dst.descricao, '~') <> NVL(:descricao, '~')
+             OR NVL(dst.descricao, '~') <> :descricao
         WHEN NOT MATCHED THEN
           INSERT (id, nome, descricao, is_admin, perm_versao, ativo, created_at, created_by)
-          VALUES ({sq_per}.NEXTVAL, 'ADMINISTRADOR', :descricao, 'S', 1, 'S', SYSDATE, 'SYSTEM:init_db')
+          VALUES ({sq_per}.NEXTVAL, :nome, :descricao, :is_admin, 1, 'S', SYSDATE, 'SYSTEM:init_db')
         """.format(tb_per=tb_per, sq_per=sq_per)
-        cursor.execute(sql_merge_per, {"descricao": desc_perfil})
 
-        # 3. Associações Perfil x Funcionalidades
-        tb_pfnc = "{}.{}".format(owner, esquema["perfil_func"]["tabela"])
-        sq_pfnc = "{}.{}".format(owner, esquema["perfil_func"]["sequence"])
         sql_merge_pfnc = """
         MERGE INTO {tb_pfnc} dst
         USING (
           SELECT p.id AS perfil_id, f.id AS funcionalidade_id
             FROM {tb_per} p, {tb_fnc} f
-           WHERE p.nome = 'ADMINISTRADOR' AND f.codigo = :codigo
+           WHERE p.nome = :per_nome AND f.codigo = :codigo
         ) src
         ON (dst.perfil_id = src.perfil_id AND dst.funcionalidade_id = src.funcionalidade_id)
         WHEN NOT MATCHED THEN
@@ -250,10 +250,219 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
           VALUES ({sq_pfnc}.NEXTVAL, src.perfil_id, src.funcionalidade_id, SYSDATE, 'SYSTEM:init_db')
         """.format(tb_pfnc=tb_pfnc, sq_pfnc=sq_pfnc, tb_per=tb_per, tb_fnc=tb_fnc)
 
-        for _, cod, _, _ in ddl_builder.CATALOGO_FUNCIONALIDADES:
-            cursor.execute(sql_merge_pfnc, {"codigo": cod})
+        sql_merge_pamb = """
+        MERGE INTO {tb_pamb} dst
+        USING (
+          SELECT p.id AS perfil_id, a.id AS ambiente_id
+            FROM {tb_per} p, {tb_amb} a
+           WHERE p.nome = :per_nome AND a.nome = :a_nome
+        ) src
+        ON (dst.perfil_id = src.perfil_id AND dst.ambiente_id = src.ambiente_id)
+        WHEN NOT MATCHED THEN
+          INSERT (id, perfil_id, ambiente_id, created_at, created_by)
+          VALUES ({sq_pamb}.NEXTVAL, src.perfil_id, src.ambiente_id, SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_pamb=tb_pamb, sq_pamb=sq_pamb, tb_per=tb_per, tb_amb=tb_amb)
 
-        # 4. Linha de tbsss_controle
+        for per_nome, per_desc, is_adm, per_funcs, per_ambs in ddl_builder.CATALOGO_PERFIS_PADRAO:
+            cursor.execute(sql_merge_per, {
+                "nome": per_nome,
+                "descricao": per_desc,
+                "is_admin": is_adm,
+            })
+            for f_cod in per_funcs:
+                cursor.execute(sql_merge_pfnc, {"per_nome": per_nome, "codigo": f_cod})
+            for a_nome in per_ambs:
+                cursor.execute(sql_merge_pamb, {"per_nome": per_nome, "a_nome": a_nome})
+
+        # 4. Ambientes padrão do sistema
+        tb_amb = "{}.{}".format(owner, esquema["ambientes"]["tabela"])
+        sq_amb = "{}.{}".format(owner, esquema["ambientes"]["sequence"])
+        sql_merge_amb = """
+        MERGE INTO {tb_amb} dst
+        USING (SELECT :nome AS nome FROM DUAL) src
+        ON (dst.nome = src.nome)
+        WHEN MATCHED THEN
+          UPDATE SET dst.descricao = :descricao,
+                     dst.conexao = :conexao,
+                     dst.ativo = 'S',
+                     dst.updated_at = SYSDATE,
+                     dst.updated_by = 'SYSTEM:init_db'
+          WHERE dst.ativo <> 'S'
+             OR NVL(dst.descricao, '~') <> NVL(:descricao, '~')
+             OR NVL(dst.conexao, '~') <> NVL(:conexao, '~')
+        WHEN NOT MATCHED THEN
+          INSERT (id, nome, descricao, conexao, ativo, created_at, created_by)
+          VALUES ({sq_amb}.NEXTVAL, :nome, :descricao, :conexao, 'S', SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_amb=tb_amb, sq_amb=sq_amb)
+
+        for amb_nome, amb_desc, amb_conn in ddl_builder.CATALOGO_AMBIENTES_PADRAO:
+            cursor.execute(sql_merge_amb, {
+                "nome": amb_nome,
+                "descricao": amb_desc,
+                "conexao": amb_conn,
+            })
+
+        # 5. Parametros padrao reutilizaveis
+        tb_prm = "{}.{}".format(owner, esquema["parametros"]["tabela"])
+        sq_prm = "{}.{}".format(owner, esquema["parametros"]["sequence"])
+        sql_merge_prm = """
+        MERGE INTO {tb_prm} dst
+        USING (SELECT :codigo AS codigo FROM DUAL) src
+        ON (dst.codigo = src.codigo)
+        WHEN MATCHED THEN
+          UPDATE SET dst.param_nomeado = :param_nomeado,
+                     dst.label = :label,
+                     dst.descricao = :descricao,
+                     dst.tipo_componente = :tipo_componente,
+                     dst.opcoes_json = :opcoes_json,
+                     dst.valor_padrao = :valor_padrao,
+                     dst.sensivel = 'N',
+                     dst.ativo = 'S',
+                     dst.updated_at = SYSDATE,
+                     dst.updated_by = 'SYSTEM:init_db'
+          WHERE dst.ativo <> 'S'
+             OR NVL(dst.param_nomeado, '~') <> NVL(:param_nomeado, '~')
+             OR dst.label <> :label
+             OR NVL(dst.descricao, '~') <> NVL(:descricao, '~')
+             OR dst.tipo_componente <> :tipo_componente
+             OR NVL(dst.opcoes_json, '~') <> NVL(:opcoes_json, '~')
+             OR NVL(dst.valor_padrao, '~') <> NVL(:valor_padrao, '~')
+        WHEN NOT MATCHED THEN
+          INSERT (id, codigo, param_nomeado, label, descricao, tipo_componente, opcoes_json, valor_padrao, regex_validacao, sensivel, ativo, created_at, created_by)
+          VALUES ({sq_prm}.NEXTVAL, :codigo, :param_nomeado, :label, :descricao, :tipo_componente, :opcoes_json, :valor_padrao, NULL, 'N', 'S', SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_prm=tb_prm, sq_prm=sq_prm)
+
+        for cod, p_nom, lbl, desc, tcomp, opc, vpad in ddl_builder.CATALOGO_PARAMETROS_PADRAO:
+            cursor.execute(sql_merge_prm, {
+                "codigo": cod,
+                "param_nomeado": p_nom,
+                "label": lbl,
+                "descricao": desc,
+                "tipo_componente": tcomp,
+                "opcoes_json": opc,
+                "valor_padrao": vpad,
+            })
+
+        # 6. Scripts utilitarios padrao e associacoes
+        tb_scr = "{}.{}".format(owner, esquema["scripts"]["tabela"])
+        sq_scr = "{}.{}".format(owner, esquema["scripts"]["sequence"])
+        tb_samb = "{}.{}".format(owner, esquema["script_amb"]["tabela"])
+        sq_samb = "{}.{}".format(owner, esquema["script_amb"]["sequence"])
+        tb_pscr = "{}.{}".format(owner, esquema["perfil_scr"]["tabela"])
+        sq_pscr = "{}.{}".format(owner, esquema["perfil_scr"]["sequence"])
+        tb_sprm = "{}.{}".format(owner, esquema["script_param"]["tabela"])
+        sq_sprm = "{}.{}".format(owner, esquema["script_param"]["sequence"])
+
+        sql_merge_scr = """
+        MERGE INTO {tb_scr} dst
+        USING (SELECT :nome AS nome FROM DUAL) src
+        ON (dst.nome = src.nome)
+        WHEN MATCHED THEN
+          UPDATE SET dst.descricao = :descricao,
+                     dst.grupo = :grupo,
+                     dst.categoria = :categoria,
+                     dst.etapa = :etapa,
+                     dst.interpretador = :interpretador,
+                     dst.path_file = :path_file,
+                     dst.tipo_param = :tipo_param,
+                     dst.max_qtd_parallel_env = :max_paral,
+                     dst.timeout_seg = :timeout_seg,
+                     dst.ativo = 'S',
+                     dst.updated_at = SYSDATE,
+                     dst.updated_by = 'SYSTEM:init_db'
+          WHERE dst.ativo <> 'S'
+             OR NVL(dst.descricao, '~') <> NVL(:descricao, '~')
+             OR NVL(dst.grupo, '~') <> NVL(:grupo, '~')
+             OR NVL(dst.categoria, '~') <> NVL(:categoria, '~')
+             OR NVL(dst.etapa, '~') <> NVL(:etapa, '~')
+             OR dst.interpretador <> :interpretador
+             OR dst.path_file <> :path_file
+             OR dst.tipo_param <> :tipo_param
+             OR dst.max_qtd_parallel_env <> :max_paral
+             OR NVL(dst.timeout_seg, 0) <> NVL(:timeout_seg, 0)
+        WHEN NOT MATCHED THEN
+          INSERT (id, nome, descricao, grupo, categoria, etapa, interpretador, path_file, tipo_param, max_qtd_parallel_env, timeout_seg, ativo, created_at, created_by)
+          VALUES ({sq_scr}.NEXTVAL, :nome, :descricao, :grupo, :categoria, :etapa, :interpretador, :path_file, :tipo_param, :max_paral, :timeout_seg, 'S', SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_scr=tb_scr, sq_scr=sq_scr)
+
+        sql_merge_samb = """
+        MERGE INTO {tb_samb} dst
+        USING (
+          SELECT s.id AS script_id, a.id AS ambiente_id
+            FROM {tb_scr} s, {tb_amb} a
+           WHERE s.nome = :s_nome AND a.nome = :amb_nome
+        ) src
+        ON (dst.script_id = src.script_id AND dst.ambiente_id = src.ambiente_id)
+        WHEN NOT MATCHED THEN
+          INSERT (id, script_id, ambiente_id, created_at, created_by)
+          VALUES ({sq_samb}.NEXTVAL, src.script_id, src.ambiente_id, SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_samb=tb_samb, sq_samb=sq_samb, tb_scr=tb_scr, tb_amb=tb_amb)
+
+        sql_merge_pscr = """
+        MERGE INTO {tb_pscr} dst
+        USING (
+          SELECT p.id AS perfil_id, s.id AS script_id
+            FROM {tb_per} p, {tb_scr} s
+           WHERE p.nome = :per_nome AND s.nome = :s_nome
+        ) src
+        ON (dst.perfil_id = src.perfil_id AND dst.script_id = src.script_id)
+        WHEN NOT MATCHED THEN
+          INSERT (id, perfil_id, script_id, created_at, created_by)
+          VALUES ({sq_pscr}.NEXTVAL, src.perfil_id, src.script_id, SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_pscr=tb_pscr, sq_pscr=sq_pscr, tb_per=tb_per, tb_scr=tb_scr)
+
+        sql_merge_sprm = """
+        MERGE INTO {tb_sprm} dst
+        USING (
+          SELECT s.id AS script_id, p.id AS parametro_id
+            FROM {tb_scr} s, {tb_prm} p
+           WHERE s.nome = :s_nome AND p.codigo = :p_cod
+        ) src
+        ON (dst.script_id = src.script_id AND dst.parametro_id = src.parametro_id)
+        WHEN MATCHED THEN
+          UPDATE SET dst.ordem = :ordem,
+                     dst.obrigatorio = :obrigatorio,
+                     dst.valor_padrao_sub = :vsub,
+                     dst.updated_at = SYSDATE,
+                     dst.updated_by = 'SYSTEM:init_db'
+          WHERE dst.ordem <> :ordem
+             OR dst.obrigatorio <> :obrigatorio
+             OR NVL(dst.valor_padrao_sub, '~') <> NVL(:vsub, '~')
+        WHEN NOT MATCHED THEN
+          INSERT (id, script_id, parametro_id, ordem, obrigatorio, valor_padrao_sub, created_at, created_by)
+          VALUES ({sq_sprm}.NEXTVAL, src.script_id, src.parametro_id, :ordem, :obrigatorio, :vsub, SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_sprm=tb_sprm, sq_sprm=sq_sprm, tb_scr=tb_scr, tb_prm=tb_prm)
+
+        for s_nome, s_desc, s_grp, s_cat, s_etp, s_int, s_path, s_tpar, s_paral, s_tmout, s_params in ddl_builder.CATALOGO_SCRIPTS_PADRAO:
+            cursor.execute(sql_merge_scr, {
+                "nome": s_nome,
+                "descricao": s_desc,
+                "grupo": s_grp,
+                "categoria": s_cat,
+                "etapa": s_etp,
+                "interpretador": s_int,
+                "path_file": s_path,
+                "tipo_param": s_tpar,
+                "max_paral": s_paral,
+                "timeout_seg": s_tmout,
+            })
+
+            for amb_nome, _, _ in ddl_builder.CATALOGO_AMBIENTES_PADRAO:
+                cursor.execute(sql_merge_samb, {"s_nome": s_nome, "amb_nome": amb_nome})
+
+            for per_nome, _, _, _, _ in ddl_builder.CATALOGO_PERFIS_PADRAO:
+                cursor.execute(sql_merge_pscr, {"per_nome": per_nome, "s_nome": s_nome})
+
+            for p_cod, p_ord, p_obrig, p_vsub in s_params:
+                cursor.execute(sql_merge_sprm, {
+                    "s_nome": s_nome,
+                    "p_cod": p_cod,
+                    "ordem": p_ord,
+                    "obrigatorio": p_obrig,
+                    "vsub": p_vsub,
+                })
+
+        # 7. Linha de tbsss_controle
         tb_ctl = "{}.{}".format(owner, esquema["controle"]["tabela"])
         sql_merge_ctl = """
         MERGE INTO {tb_ctl} dst
@@ -265,38 +474,46 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
         """.format(tb_ctl=tb_ctl)
         cursor.execute(sql_merge_ctl, {"versao_esquema": sql_ident.VERSAO_ESQUEMA})
 
-        # 5. Administrador inicial (se solicitado)
-        if admin_login:
-            tb_usr = "{}.{}".format(owner, esquema["usuarios"]["tabela"])
-            sq_usr = "{}.{}".format(owner, esquema["usuarios"]["sequence"])
+        # 8. Usuarios padrao da aplicacao e homologacao (CATALOGO_USUARIOS_PADRAO)
+        tb_usr = "{}.{}".format(owner, esquema["usuarios"]["tabela"])
+        sq_usr = "{}.{}".format(owner, esquema["usuarios"]["sequence"])
 
-            cursor.execute("SELECT id FROM {tb_usr} WHERE login = :login".format(tb_usr=tb_usr), {"login": admin_login})
-            usr_row = cursor.fetchone()
-            if usr_row is None:
-                cursor.execute("SELECT id FROM {tb_per} WHERE nome = 'ADMINISTRADOR'".format(tb_per=tb_per))
-                per_row = cursor.fetchone()
-                if not per_row:
-                    raise RuntimeError("Perfil ADMINISTRADOR nao localizado para criacao do usuario admin")
-                per_id = per_row[0]
+        sql_merge_usr = """
+        MERGE INTO {tb_usr} dst
+        USING (
+          SELECT :login AS login, p.id AS perfil_id
+            FROM {tb_per} p
+           WHERE p.nome = :perfil
+        ) src
+        ON (dst.login = src.login)
+        WHEN MATCHED THEN
+          UPDATE SET dst.nome = :nome,
+                     dst.perfil_id = src.perfil_id,
+                     dst.ativo = 'S',
+                     dst.updated_at = SYSDATE,
+                     dst.updated_by = 'SYSTEM:init_db'
+          WHERE dst.nome <> :nome
+             OR dst.perfil_id <> src.perfil_id
+             OR dst.ativo <> 'S'
+        WHEN NOT MATCHED THEN
+          INSERT (id, login, nome, senha_hash, perfil_id, ativo, sessao_epoch, tentativas_falha, created_at, created_by)
+          VALUES ({sq_usr}.NEXTVAL, :login, :nome, :senha_hash, src.perfil_id, 'S', 0, 0, SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_usr=tb_usr, sq_usr=sq_usr, tb_per=tb_per)
 
-                senha_hash = security.hash_senha(admin_senha)
-                nome_admin = admin_nome or admin_login
-                sql_ins_usr = """
-                INSERT INTO {tb_usr} (
-                  id, login, nome, senha_hash, perfil_id, ativo, sessao_epoch, tentativas_falha, created_at, created_by
-                ) VALUES (
-                  {sq_usr}.NEXTVAL, :login, :nome, :senha_hash, :perfil_id, 'S', 0, 0, SYSDATE, 'SYSTEM:init_db'
-                )
-                """.format(tb_usr=tb_usr, sq_usr=sq_usr)
-                cursor.execute(sql_ins_usr, {
-                    "login": admin_login,
-                    "nome": nome_admin,
-                    "senha_hash": senha_hash,
-                    "perfil_id": per_id,
-                })
-                log_fn("Usuario administrador inicial '%s' criado com sucesso" % admin_login)
+        for u_login, u_nome, u_perfil in ddl_builder.CATALOGO_USUARIOS_PADRAO:
+            nome_final = admin_nome if (u_login == "admin" and admin_nome) else u_nome
+            if u_login == "admin" and admin_senha:
+                hash_final = security.hash_senha(admin_senha)
             else:
-                log_fn("Usuario administrador '%s' ja existe (SKIP criacao)" % admin_login)
+                hash_final = ddl_builder.HASH_SENHA_PADRAO_HOMOLOGACAO
+
+            cursor.execute(sql_merge_usr, {
+                "login": u_login,
+                "nome": nome_final,
+                "perfil": u_perfil,
+                "senha_hash": hash_final,
+            })
+            log_fn("Usuario '%s' homologado no perfil '%s'" % (u_login, u_perfil))
 
         conn.commit()
         log_fn("Seed concluido com sucesso")
@@ -345,19 +562,22 @@ def _conferir_esquema(conn, owner, prefixo, log_fn=print):
     divergencias = []
 
     try:
-        # 1. Checagem de Objetos Invalidos
+        # 1. Checagem de Objetos Invalidos (apenas objetos pertencentes ao SSS)
+        idents_sss = {i.upper() for i in esquema.todos_identificadores(incluir_colunas=False)}
         cursor.execute(
             "SELECT OBJECT_TYPE, OBJECT_NAME FROM ALL_OBJECTS WHERE OWNER = :o AND STATUS = 'INVALID'",
             {"o": owner.upper()}
         )
         for obj_tipo, obj_nome in cursor.fetchall():
-            cursor.execute(
-                "SELECT LINE, POSITION, TEXT FROM ALL_ERRORS WHERE OWNER = :o AND NAME = :n",
-                {"o": owner.upper(), "n": obj_nome}
-            )
-            erros = [r[2].strip() for r in cursor.fetchall()]
-            detalhe_erros = "; ".join(erros) if erros else "Sem detalhes em ALL_ERRORS"
-            divergencias.append("Objeto invalido: {} {} ({})".format(obj_tipo, obj_nome, detalhe_erros))
+            nome_u = obj_nome.upper()
+            if nome_u in idents_sss or nome_u.startswith(prefixo.upper()) or nome_u.startswith("SQ_" + prefixo.upper()) or nome_u.startswith("TR_" + prefixo.upper()):
+                cursor.execute(
+                    "SELECT LINE, POSITION, TEXT FROM ALL_ERRORS WHERE OWNER = :o AND NAME = :n",
+                    {"o": owner.upper(), "n": obj_nome}
+                )
+                erros = [r[2].strip() for r in cursor.fetchall()]
+                detalhe_erros = "; ".join(erros) if erros else "Sem detalhes em ALL_ERRORS"
+                divergencias.append("Objeto invalido: {} {} ({})".format(obj_tipo, obj_nome, detalhe_erros))
 
         # 2. Checagem de Colunas e Tipos
         for entidade, t in esquema.items():
@@ -513,6 +733,8 @@ def main(argv=None):
     parser.add_argument("--stats", dest="stats", action="store_true", default=True, help="Coleta estatisticas")
     parser.add_argument("--no-stats", dest="stats", action="store_false", help="Nao coleta estatisticas")
     parser.add_argument("--grants-para", dest="grants_para", default=None, help="web=u1,agente=u2,purge=u3,monitor=u4")
+    parser.add_argument("--schema-real", dest="schema_real", action="store_true", default=False, help="Permite aplicacao em schema real de banco sem exigir prefixo SSS_TEST_")
+    parser.add_argument("--gerar-sql", dest="gerar_sql", default=None, help="Diretorio de saida para salvar os arquivos .sql de implantacao e rollback")
 
     # Rejeita argumentos desconhecidos
     try:
@@ -566,6 +788,24 @@ def main(argv=None):
             _registrar_critico_config(msg, cfg)
             print(msg, file=sys.stderr)
             return 2
+
+    # Modo GERAR-SQL: gera arquivos SQL em disco para aplicacao por DBA em producao
+    if args.gerar_sql:
+        import gerar_scripts_sql
+        args_gerar = [
+            "--owner", owner,
+            "--prefixo", prefixo,
+            "--out-dir", args.gerar_sql,
+        ]
+        if lob_storage == "BASICFILE":
+            args_gerar.append("--lob-basicfile")
+        if args.grants_para:
+            args_gerar.extend(["--grants-para", args.grants_para])
+        if args.admin_login:
+            args_gerar.extend(["--admin-login", args.admin_login])
+        if args.admin_nome:
+            args_gerar.extend(["--admin-nome", args.admin_nome])
+        return gerar_scripts_sql.main(args_gerar)
 
     # Modo DRY-RUN: imprime DDL e/ou GRANTs e sai com 0
     if args.dry_run:
@@ -621,8 +861,21 @@ def main(argv=None):
 
     try:
         # Validacao de protecao em DEV
-        if getattr(cfg.app, "sss_env", "DEV") == "DEV":
+        if getattr(cfg.app, "sss_env", "DEV") == "DEV" and not args.schema_real:
             _validar_schema_descartavel_dev(cfg, usuario_dono, conn)
+        elif args.schema_real:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SELECT USER FROM DUAL")
+                row = cursor.fetchone()
+                usuario_banco = row[0] if row else ""
+                if usuario_banco.upper() != usuario_dono.upper():
+                    raise RuntimeError(
+                        "Usuario conectado no Oracle ('%s') diverge do usuario dono ('%s')"
+                        % (usuario_banco, usuario_dono)
+                    )
+            finally:
+                cursor.close()
 
         # Checagem de versao do esquema atual
         esquema = sql_ident.nomes(prefixo)

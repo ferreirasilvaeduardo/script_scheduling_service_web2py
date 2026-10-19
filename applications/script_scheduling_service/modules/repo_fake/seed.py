@@ -153,11 +153,16 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     {"id": 1, "nome": "PRODUCAO", "descricao": "Ambiente de Producao Oficial", "conexao": "db-producao.local:1521/svc", "ativo": "S"},
                                     {"id": 2, "nome": "HOMOLOGACAO", "descricao": "Ambiente de Homologacao e Testes", "conexao": "db-homologacao.local:1521/svc", "ativo": "S"},
                                     {"id": 3, "nome": "DESENV", "descricao": "Ambiente de Desenvolvimento", "conexao": "db-desenv.local:1521/svc", "ativo": "N"},
+                                    {"id": 4, "nome": "CLONE2", "descricao": "BRTLVLTS1199PL (10.238.10.209)", "conexao": "10.238.55.146/gfprod", "ativo": "S"},
+                                    {"id": 5, "nome": "CLONE1", "descricao": "BRTLVLTS1198PL (10.238.10.208)", "conexao": "10.238.55.145/gfprod", "ativo": "S"},
+                                    {"id": 6, "nome": "CLONE6", "descricao": "BRTLVLTS3089SL (10.238.10.210)", "conexao": "10.238.45.230/svc_gfprodc6", "ativo": "S"},
+                                    {"id": 7, "nome": "CLONE7", "descricao": "BRTLVLTS1216PL (10.238.10.109)", "conexao": "10.238.45.230/svc_gfprodc7", "ativo": "S"},
+                                    {"id": 8, "nome": "GFPREPROD", "descricao": "BRTLVLTY3067SL (10.129.177.188)", "conexao": "10.129.177.188/GFPR", "ativo": "S"},
                                 ]
                                 for a in ambs:
                                     a["created_at"] = base_dt - datetime.timedelta(days=90)
                                     store.ambientes[a["id"]] = a
-                                store.seqs["tbsss_ambientes"] = 3
+                                store.seqs["tbsss_ambientes"] = 8
 
                                 # ---------------------------------------------------------
                                 # 2. Funcionalidades canonicas (10) - README §4.3.D

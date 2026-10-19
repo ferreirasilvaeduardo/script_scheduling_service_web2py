@@ -11,13 +11,13 @@
 
 ## 1. Leia antes: o que dá para implantar hoje
 
-O SSS está sendo construído em fases (`docs/prompts/00_INDEX.md`). Hoje está pronta a **interface web completa sobre o backend FAKE** (dados de demonstração em memória). O banco Oracle real (F7), o agente executor (F8) e o pacote de produção (F9) **ainda não existem**.
+O SSS está sendo construído em fases (`docs/prompts/00_INDEX.md`). Hoje está pronta a **interface web completa**, o **banco Oracle real com DDL/DML e scripts SQL autônomos (F7)** e a **árvore de scripts utilitários homologados**. O agente executor em produção (`run_scheduler.py`, F8) e o pacote de empacotamento (F9) estão no roadmap subsequente.
 
 | Cenário | Possível hoje? | Por quê |
 |---|---|---|
 | **Servidor de homologação visual** (UI Freeze): web + backend FAKE, `sss_env = DEV` | **Sim** — é o que este guia instala | Tudo implementado e testado |
-| Homologação integrada ou produção (`sss_env = HML`/`PROD`) | **Não** | O backend FAKE é proibido fora de DEV (a subida aborta) e o backend ORACLE ainda não foi implementado (F7) |
-| Execução real de scripts | **Não** | O agente executor (`run_scheduler.py`) é o F8. No FAKE, os tickets "em execução" são simulados |
+| **Implantação de Banco Oracle Real** (F7): DDL, DML, Governança, Seed e Estatísticas | **Sim** — via `01_implantar_sss.sql` ou `init_db.py` | 17 tabelas, sequences, triggers, 14 rotinas utilitárias, 4 perfis e 4 usuários criados e validados |
+| Execução real de scripts pelo daemon | **Em conclusão (F8)** | O executor do daemon (`run_scheduler.py`) é o F8. Em DEV/FAKE, tickets são simulados; os 14 scripts utilitários físicos já existem em `dev/scripts/utilitarios/` |
 | Nó web ou agente em Windows | **Não, por decisão** | O SSS é somente POSIX (CR-005): Linux x86_64 e, sob demanda, demais Unix |
 
 > **Consequências práticas do backend FAKE:**
@@ -25,7 +25,7 @@ O SSS está sendo construído em fases (`docs/prompts/00_INDEX.md`). Hoje está 
 > * ele exige **um único processo** web (o servidor embutido do web2py). Não use gunicorn/uWSGI com vários workers;
 > * por regra do projeto, o servidor DEV escuta **somente em `127.0.0.1`**. Os usuários acessam por túnel SSH (§13).
 
-O capítulo 18 lista o que preparar desde já para a implantação definitiva (Oracle + agentes).
+O capítulo 18 detalha o procedimento de implantação no banco Oracle real e o catálogo de scripts utilitários.
 
 ---
 
@@ -656,6 +656,56 @@ sssagente ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
   4. para não repetir as ocorrências de agendamento já cumpridas, configure temporariamente `misfire_policy = SKIP` em **todos** os agentes (o `config_criticos` precisa ser igual em todos, README §8.12) para a primeira subida; volte a `RUN_ONCE` depois que o primeiro desdobro avançar as regras;
   5. avance as sequences de `tbsss_tickets` e `tbsss_auditoria` acima do maior id visto nos logs locais e no log da aplicação (o DBA recria a sequence com `START WITH` maior; o 11g não tem `ALTER SEQUENCE ... RESTART`), para que nenhum id se repita entre o banco e os arquivos locais;
   6. religue os agentes. O startup check limpa as pastas locais.
+
+### 18.5 Implantação do Banco Oracle Real e Catálogo de Scripts (F7)
+
+O procedimento de implantação física do banco de dados e das rotinas operacionais homologadas é realizado de forma autônoma:
+
+#### 18.5.1 Execução do Script SQL no Banco Oracle (DBA)
+
+O script [`docs/sql/01_implantar_sss.sql`](file:///portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/sql/01_implantar_sss.sql) é totalmente autocontido e não requer Python no servidor de banco de dados. Ele aplica:
+- Criação das 17 sequences, tabelas (com LOB Basic/Securefile), constraints (PK, UK, CK, FK), índices e triggers.
+- Metadados de governança de dados (`COMMENT ON TABLE` e `COMMENT ON COLUMN` em todas as tabelas e colunas, além de comentários nas triggers).
+- Carga de seed DML idempotente com `MERGE INTO`: 10 funcionalidades, 5 ambientes, 19 parâmetros reutilizáveis, 14 scripts utilitários com 70 homologações em ambientes e 38 vínculos de parâmetros, 4 perfis operacionais e 4 usuários de homologação.
+- Coleta inicial de estatísticas pelo otimizador (`DBMS_STATS.GATHER_TABLE_STATS`).
+- Concessão de permissões de leitura com tolerância a falhas (`GRANT SELECT ... TO PUBLIC`).
+
+Comando de execução via SQL*Plus:
+```bash
+sqlplus usuario_owner/senha@//host:porta/servico @docs/sql/01_implantar_sss.sql
+```
+
+Para desinstalação total (rollback limpo de todos os 51 objetos do esquema):
+```bash
+sqlplus usuario_owner/senha@//host:porta/servico @docs/sql/02_rollback_sss.sql
+```
+
+#### 18.5.2 Instalação dos Scripts Utilitários Físicos no Servidor
+
+Copie os 14 scripts utilitários desenvolvidos em Python 3 e Shell POSIX para o caminho padrão de automações:
+
+```bash
+sudo install -d -o root -g root -m 0755 /opt/automacoes/scripts/utilitarios
+sudo cp dev/scripts/utilitarios/* /opt/automacoes/scripts/utilitarios/
+sudo chown -R root:root /opt/automacoes/scripts/utilitarios
+sudo chmod 0755 /opt/automacoes/scripts/utilitarios
+sudo chmod 0755 /opt/automacoes/scripts/utilitarios/*.sh
+sudo chmod 0755 /opt/automacoes/scripts/utilitarios/*.py
+```
+
+*Consulte a especificação detalhada de parâmetros e exemplos de execução em [`docs/SCRIPTS_UTILITARIOS.md`](file:///portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/SCRIPTS_UTILITARIOS.md).*
+
+#### 18.5.3 Usuários e Perfis Padrão para Homologação e Demonstração
+
+| Login | Perfil | Privilégio | Escopo de Acesso | Finalidade de Teste |
+|:---|:---|:---:|:---|:---|
+| `admin` | `ADMINISTRADOR` | Sim (`is_admin = 'S'`) | Todas as funcionalidades e todos os ambientes | Acesso irrestrito a cadastros, agendamentos, auditoria e execução |
+| `op.prod` | `OPERADOR_PROD` | Não (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VER_LOGS`, `CANC_TICKET` em todos os 5 ambientes | Operação padrão em produção e clones |
+| `op.hml` | `OPERADOR_HML` | Não (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VER_LOGS`, `CANC_TICKET` restrito a `CLONE6`, `CLONE7`, `GFPREPROD` | Teste de bloqueio de escopo de ambientes não autorizados |
+| `consulta` | `CONSULTA` | Não (`is_admin = 'N'`) | `VER_LOGS` em todos os ambientes | Teste de perfil somente leitura (sem disparo nem alteração) |
+
+* **Senha Padrão Inicial:** `Sss@Homolog2026!` (criptografada em PBKDF2-SHA256, 200k iterações).
+* **Proteção de Senha:** O `MERGE` preserva senhas customizadas alteradas posteriormente pelos operadores.
 
 ---
 

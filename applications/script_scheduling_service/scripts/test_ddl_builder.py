@@ -368,6 +368,73 @@ class TestInitDbConferenciaMock(unittest.TestCase):
         self.assertTrue(any("Objeto invalido" in d for d in divergencias))
 
 
+class TestDdlSeedERollback(unittest.TestCase):
+    """Testes unitarios da geracao de scripts DML Seed, Rollback e CLI de geracao SQL."""
+
+    def setUp(self):
+        self.owner = "openrisow"
+        self.prefixo = "tbsss_"
+
+    def test_gerar_script_seed(self):
+        """Script de seed contem MERGEs idempotentes, 5 ambientes, estatisticas e COMMIT."""
+        sql_seed = ddl_builder.gerar_script_seed(self.owner, self.prefixo)
+
+        self.assertIn("MERGE INTO openrisow.tbsss_funcionalidades", sql_seed)
+        self.assertIn("MERGE INTO openrisow.tbsss_perfis", sql_seed)
+        self.assertIn("MERGE INTO openrisow.tbsss_perfil_func", sql_seed)
+        self.assertIn("MERGE INTO openrisow.tbsss_ambientes", sql_seed)
+        self.assertIn("MERGE INTO openrisow.tbsss_controle", sql_seed)
+
+        # 5 ambientes padrao
+        for amb in ("CLONE2", "CLONE1", "CLONE6", "CLONE7", "GFPREPROD"):
+            self.assertIn("'%s'" % amb, sql_seed)
+
+        # Estatisticas e commit
+        self.assertIn("DBMS_STATS.GATHER_TABLE_STATS", sql_seed)
+        self.assertIn("COMMIT;", sql_seed)
+
+    def test_gerar_script_rollback(self):
+        """Script de rollback contem drop de 19 triggers, 17 tabelas CASCADE PURGE e 17 sequences."""
+        sql_rb = ddl_builder.gerar_script_rollback(self.owner, self.prefixo)
+
+        # 19 triggers
+        self.assertEqual(sql_rb.count("DROP TRIGGER openrisow.tr_"), 19)
+
+        # 17 tabelas
+        self.assertEqual(sql_rb.count("CASCADE CONSTRAINTS PURGE;"), 17)
+
+        # 17 sequences
+        self.assertEqual(sql_rb.count("DROP SEQUENCE openrisow.sq_"), 17)
+
+        # Ordem de remocao: ticket_resp e tickets antes de ambientes e perfis
+        pos_tck = sql_rb.index("DROP TABLE openrisow.tbsss_tickets")
+        pos_amb = sql_rb.index("DROP TABLE openrisow.tbsss_ambientes")
+        self.assertLess(pos_tck, pos_amb)
+
+    def test_gerar_scripts_sql_cli_e_init_db_flag(self):
+        """CLI gerar_scripts_sql e init_db --gerar-sql gravam arquivos validos em disco."""
+        import gerar_scripts_sql
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            ret = gerar_scripts_sql.main([
+                "--owner", self.owner,
+                "--prefixo", self.prefixo,
+                "--out-dir", tmp_dir,
+            ])
+            self.assertEqual(ret, 0)
+            self.assertTrue(os.path.isfile(os.path.join(tmp_dir, "01_implantar_sss.sql")))
+            self.assertTrue(os.path.isfile(os.path.join(tmp_dir, "02_rollback_sss.sql")))
+
+        with tempfile.TemporaryDirectory() as tmp_dir2:
+            ret = init_db.main([
+                "--usuario-dono", self.owner,
+                "--gerar-sql", tmp_dir2,
+            ])
+            self.assertEqual(ret, 0)
+            self.assertTrue(os.path.isfile(os.path.join(tmp_dir2, "01_implantar_sss.sql")))
+            self.assertTrue(os.path.isfile(os.path.join(tmp_dir2, "02_rollback_sss.sql")))
+
+
 class TestInitDbReal(unittest.TestCase):
     """Teste com conexao Oracle real caso SSS_TEST_DSN e SSS_TEST_OWNER estejam definidos."""
 
@@ -377,3 +444,4 @@ class TestInitDbReal(unittest.TestCase):
         disposable = os.environ.get("SSS_TEST_SCHEMA_DISPOSABLE")
         if not dsn or not owner or disposable != "1":
             self.skipTest("Schema descartavel real nao configurado (SSS_TEST_DSN/OWNER/DISPOSABLE); marcado como NAO TESTADO")
+
