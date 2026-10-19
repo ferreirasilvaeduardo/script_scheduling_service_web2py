@@ -58,7 +58,7 @@ Transferir o log local do ticket para `log_output` de forma incremental, mascara
 
 ## Critérios de aceite
 - [ ] Os testes passam. O teste de corte multibyte cobre todas as posições.
-- [ ] Sem `SSS_TEST_DSN`, a parte real fica `NÃO TESTADO`.
+- [ ] Sem `SSS_TEST_ORACLE=1` (README §2.5), a parte real fica `NÃO TESTADO`.
 
 ## Verificação
 `python -m unittest discover -s scripts -p "test_log_pump.py" -v`

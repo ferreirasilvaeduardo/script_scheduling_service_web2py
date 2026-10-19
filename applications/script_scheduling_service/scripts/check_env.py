@@ -260,7 +260,8 @@ def main():
         cadeia_desc = "auto (Thin -> Thick -> cx_Oracle)" if modo == "auto" else modo
 
         sel_desc = None
-        if os.environ.get("SSS_TEST_DSN"):
+        # Sondagem real do driver so com os testes Oracle ligados (SSS_TEST_ORACLE=1, README §2.5).
+        if os.environ.get("SSS_TEST_ORACLE") == "1":
             try:
                 import db_conn
                 segredos = sss_config.obter_segredos()

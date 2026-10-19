@@ -825,7 +825,7 @@ class TestRepoContractFake(unittest.TestCase, BaseRepoContractTest):
 
 
 @unittest.skipUnless(
-    os.environ.get("SSS_TEST_DSN") and os.environ.get("SSS_TEST_ORACLE_INTEGRATED") == "1",
+    os.environ.get("SSS_TEST_ORACLE") == "1" and os.environ.get("SSS_TEST_ORACLE_INTEGRATED") == "1",
     "Teste Oracle integrado habilitado somente apos os cinco agregados do F7.3",
 )
 class TestRepoContractOracle(unittest.TestCase, BaseRepoContractTest):
@@ -875,72 +875,18 @@ class TestRepoFactoryEIntegridade(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             repo_factory.obter("usuarios")
 
-    def test_oracle_integrado_exige_owner_e_schema_descartavel(self):
-        from _oracle_test_support import validar_schema_descartavel
-
-        class CursorFalso(object):
-            def __init__(self, usuario):
-                self.usuario = usuario
-                self.sql = None
-                self.fechado = False
-
-            def execute(self, sql):
-                self.sql = sql
-
-            def fetchone(self):
-                return (self.usuario,)
-
-            def close(self):
-                self.fechado = True
-
-        class ConexaoFalsa(object):
-            def __init__(self, usuario):
-                self.cursor_falso = CursorFalso(usuario)
-
-            def cursor(self):
-                return self.cursor_falso
-
-        with mock.patch.dict(os.environ, {}, clear=True):
-            with self.assertRaises(RuntimeError):
-                validar_schema_descartavel(ConexaoFalsa("SSS_APP"), "SSS_TESTE", "SSS_APP")
-        with mock.patch.dict(os.environ, {
-            "SSS_TEST_OWNER": "SSS_TEST_APP",
-            "SSS_TEST_SCHEMA_DISPOSABLE": "1",
-        }, clear=True):
-            conexao = ConexaoFalsa("sss_app")
-            self.assertEqual(
-                validar_schema_descartavel(conexao, "sss_test_app", "SSS_APP"), "SSS_TEST_APP"
-            )
-            self.assertEqual(conexao.cursor_falso.sql, "SELECT USER FROM DUAL")
-            self.assertTrue(conexao.cursor_falso.fechado)
-            with self.assertRaises(RuntimeError):
-                validar_schema_descartavel(ConexaoFalsa("OUTRA_CONTA"), "SSS_TEST_APP", "SSS_APP")
-            with self.assertRaises(RuntimeError):
-                validar_schema_descartavel(ConexaoFalsa("SSS_APP"), "OUTRO_OWNER", "SSS_APP")
-        with mock.patch.dict(os.environ, {
-            "SSS_TEST_OWNER": "SSS_TEST_APP;DROP",
-            "SSS_TEST_SCHEMA_DISPOSABLE": "1",
-        }, clear=True):
-            with self.assertRaises(RuntimeError):
-                validar_schema_descartavel(ConexaoFalsa("SSS_APP"), "SSS_TEST_APP;DROP", "SSS_APP")
-        with mock.patch.dict(os.environ, {
-            "SSS_TEST_OWNER": "PROD_OWNER",
-            "SSS_TEST_SCHEMA_DISPOSABLE": "1",
-        }, clear=True):
-            with self.assertRaises(RuntimeError):
-                validar_schema_descartavel(ConexaoFalsa("SSS_APP"), "PROD_OWNER", "SSS_APP")
-
-    def test_preflight_oracle_confere_dsn_e_fecha_conexao(self):
-        from _oracle_test_support import preparar_schema_descartavel
+    def test_oracle_integrado_exige_banco_autorizado(self):
+        """A bateria Oracle so roda com SSS_TEST_ORACLE=1, DEV e o esquema validado (detalhes no test_db_conn)."""
+        from _oracle_test_support import PrecondicaoSchemaErro, preparar_schema_descartavel
 
         cfg = mock.Mock()
-        cfg.app.data_backend = "ORACLE"
+        cfg.app.data_backend = "FAKE"
         cfg.app.sss_env = "DEV"
         cfg.oracle.owner = "SSS_TEST_APP"
         cfg.oracle.dsn = "dbtest.local/sss"
         cfg.oracle.user = "SSS_APP"
+        cfg.oracle.table_prefix = "tbsss_"
         cfg.secrets.secrets_file = "/tmp/secrets.cfg"
-        cfg.retencao.purge_user = "SSS_PURGE"
         segredos = object()
         conexao = mock.Mock()
         conexao.cursor.return_value.fetchone.return_value = ("SSS_APP",)
@@ -950,68 +896,25 @@ class TestRepoFactoryEIntegridade(unittest.TestCase):
         sss_config_mock.obter_config.return_value = cfg
         sss_config_mock.carregar_segredos.return_value = segredos
 
-        with mock.patch.dict(os.environ, {
-            "SSS_TEST_DSN": "dbtest.local/sss",
-            "SSS_TEST_OWNER": "SSS_TEST_APP",
-            "SSS_TEST_SCHEMA_DISPOSABLE": "1",
-        }, clear=True):
-            with mock.patch.dict("sys.modules", {
-                "db_conn": db_conn_mock,
-                "sss_config": sss_config_mock,
-            }):
-                self.assertIs(preparar_schema_descartavel("web"), cfg)
+        def preparar(env):
+            with mock.patch.dict(os.environ, env, clear=True):
+                with mock.patch.dict("sys.modules", {"db_conn": db_conn_mock, "sss_config": sss_config_mock}):
+                    return preparar_schema_descartavel("web")
 
-        sss_config_mock.carregar_segredos.assert_called_once_with(
-            "/tmp/secrets.cfg", cfg=cfg, papel="web"
-        )
+        # Ligado e autorizado: usa o config da aplicacao, confere a sessao e fecha a conexao.
+        self.assertIs(preparar({"SSS_TEST_ORACLE": "1"}), cfg)
         db_conn_mock.conectar.assert_called_once_with(cfg, segredos, "web")
         self.assertEqual(conexao.cursor.return_value.execute.call_args[0][0], "SELECT USER FROM DUAL")
-        conexao.cursor.return_value.close.assert_called_once_with()
         conexao.close.assert_called_once_with()
 
-        cfg.oracle.dsn = "db-prod.local/sss"
+        # Desligado, variavel antiga ou fora de DEV: recusa antes de conectar.
         db_conn_mock.conectar.reset_mock()
-        with mock.patch.dict(os.environ, {
-            "SSS_TEST_DSN": "dbtest.local/sss",
-            "SSS_TEST_OWNER": "SSS_TEST_APP",
-            "SSS_TEST_SCHEMA_DISPOSABLE": "1",
-        }, clear=True):
-            with mock.patch.dict("sys.modules", {
-                "db_conn": db_conn_mock,
-                "sss_config": sss_config_mock,
-            }):
-                with self.assertRaises(RuntimeError):
-                    preparar_schema_descartavel("web")
-        db_conn_mock.conectar.assert_not_called()
-
-        cfg.oracle.dsn = "dbtest.local/sss"
+        for env in ({}, {"SSS_TEST_ORACLE": "1", "SSS_TEST_DSN": "dbtest.local/sss"}):
+            with self.assertRaises(PrecondicaoSchemaErro):
+                preparar(env)
         cfg.app.sss_env = "HML"
-        with mock.patch.dict(os.environ, {
-            "SSS_TEST_DSN": "dbtest.local/sss",
-            "SSS_TEST_OWNER": "SSS_TEST_APP",
-            "SSS_TEST_SCHEMA_DISPOSABLE": "1",
-        }, clear=True):
-            with mock.patch.dict("sys.modules", {
-                "db_conn": db_conn_mock,
-                "sss_config": sss_config_mock,
-            }):
-                with self.assertRaises(RuntimeError):
-                    preparar_schema_descartavel("web")
-        db_conn_mock.conectar.assert_not_called()
-
-        cfg.app.sss_env = "DEV"
-        cfg.oracle.user = "SSS_TEST_APP"
-        with mock.patch.dict(os.environ, {
-            "SSS_TEST_DSN": "dbtest.local/sss",
-            "SSS_TEST_OWNER": "SSS_TEST_APP",
-            "SSS_TEST_SCHEMA_DISPOSABLE": "1",
-        }, clear=True):
-            with mock.patch.dict("sys.modules", {
-                "db_conn": db_conn_mock,
-                "sss_config": sss_config_mock,
-            }):
-                with self.assertRaises(RuntimeError):
-                    preparar_schema_descartavel("web")
+        with self.assertRaises(PrecondicaoSchemaErro):
+            preparar({"SSS_TEST_ORACLE": "1"})
         db_conn_mock.conectar.assert_not_called()
 
     def test_oracle_agregado_seguinte_ainda_nao_implementado(self):
