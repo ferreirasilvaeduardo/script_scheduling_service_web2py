@@ -116,7 +116,7 @@ O `test_repo_contract.py` atual é uma bateria integrada que chama vários agreg
 
 ## Critérios de aceite
 - [ ] Em cada execução, com DSN e owner descartáveis declarados e validados, passa a classe do agregado atual em `test_repo_oracle_progressive.py`; passa também a bateria FAKE completa.
-- [ ] Depois da quinta execução, com `SSS_TEST_ORACLE=1`, `SSS_TEST_ORACLE_INTEGRATED=1` e o banco validado pela guarda, `test_repo_contract.py` passa integralmente contra ORACLE e FAKE, inclusive cascatas, microssegundos e `test_06b`, em cada combinação de driver disponível.
+- [ ] Depois da quinta execução, com `SSS_TEST_ORACLE=1` e o banco validado pela guarda (o gate `SSS_TEST_ORACLE_INTEGRATED` saiu depois do 5º agregado), `test_repo_contract.py` passa integralmente contra ORACLE e FAKE, inclusive cascatas, microssegundos e `test_06b`, em cada combinação de driver disponível.
 - [ ] Nenhuma listagem ou leitura nova (`ultimas_execucoes`, `historico_script`) seleciona coluna CLOB.
 - [ ] O `docs/explain/<agregado>.md` foi gerado.
 - [ ] `test_py36_compat.py` passa.
@@ -131,7 +131,7 @@ Troque o valor pelo agregado atual. Rode `test_repo_contract.py` contra Oracle s
 
 Depois da quinta execução, rode também a bateria integrada:
 
-`SSS_TEST_ORACLE=1 SSS_TEST_ORACLE_INTEGRATED=1 python -m unittest discover -s scripts -p "test_repo_contract.py" -v`
+`SSS_TEST_ORACLE=1 python -m unittest discover -s scripts -p "test_repo_contract.py" -v`
 
 ## Saída
 Relatório AGENTS.md §9, informando o agregado no título das Observações.

@@ -94,6 +94,20 @@ class TestOracleRbacUsuarios(unittest.TestCase):
             with self.assertRaises(repo_errors.RepoViolacao):
                 self.usr.desbloquear(1, ator=ator_invalido)
 
+    def test_alterar_sem_data_nao_declara_bind_de_data_ausente(self):
+        """Regressao (F7.3): alterar so o nome declarava bloqueado_ate/ultimo_login e caia em DPY-4008."""
+        import repo_oracle.usuarios as mod
+        linha = tuple(1 if c in ("id", "perfil_id") else ("S" if c == "ativo" else
+                      ("tst.x" if c == "login" else (0 if c in ("tentativas_falha", "sessao_epoch") else None)))
+                      for c in mod._COLS_USUARIO)
+        conn = _ConexaoRoteirizada([("FOR UPDATE OF u.ativo WAIT 5", 1, [linha + ("S", "N")]), ("UPDATE", 1, []),
+                                    ("SELECT", 1, [linha])])
+        with mock.patch.object(self.usr, "_obter_conexao", return_value=conn):
+            self.usr.alterar(1, {"nome": "Novo nome"}, ator="ana")
+        upd = [sql for sql, _b in conn.executados if sql.startswith("UPDATE")]
+        self.assertTrue(upd and ":bloqueado_ate" not in upd[0])
+        self.assertEqual(conn.commits, 1)
+
     def test_login_invalido_recusado(self):
         """Valida regex de login em tbsss_usuarios."""
         for log_inv in ("ab", "AB_USER", "user com espaco", "u" * 31, "usr@dominio"):
@@ -517,6 +531,11 @@ class _CursorRoteirizado(object):
         self._linhas = []
 
     def execute(self, sql, binds=None):
+        # Como o python-oracledb (DPY-4008): tipo declarado para bind que nao existe no SQL.
+        for nome in getattr(self, "_tipos", {}):
+            if ":" + nome not in sql:
+                raise RuntimeError("DPY-4008: no bind placeholder named \":%s\" was found in the SQL text" % nome)
+        self._tipos = {}
         self._conexao.executados.append((sql, binds))
         if ".NEXTVAL FROM DUAL" in sql:
             self._conexao.seq += 1
@@ -529,7 +548,7 @@ class _CursorRoteirizado(object):
         self.rowcount, self._linhas = 0, []
 
     def setinputsizes(self, **tipos):
-        pass
+        self._tipos = tipos
 
     def fetchone(self):
         return self._linhas[0] if self._linhas else None

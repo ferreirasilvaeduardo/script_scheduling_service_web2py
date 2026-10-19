@@ -19,10 +19,12 @@ Valida requisitos do prompt F0.4, README §2.5 e AGENTS.md §4, §5.5, §7:
 15. Regressao fail-fast: repo_factory sem configuracao e FAKE com entrada nao numerica;
 16. Colunas de registro (CR-006): inclusao, alteracao, ator obrigatorio, rotina tecnica e vinculos por diferenca.
 """
+import collections
 import copy
 import datetime
 import os
 import re
+import time
 import unittest
 from unittest import mock
 
@@ -30,6 +32,7 @@ import _testenv  # noqa: F401
 from gluon import current
 
 import repo_factory
+import sql_ident
 from repo_agendamentos import RepoAgendamentos
 from repo_agentes import RepoAgentes
 from repo_auditoria import RepoAuditoria
@@ -40,289 +43,307 @@ from repo_tickets import RepoTickets
 from repo_usuarios import RepoUsuarios
 
 
+class _Massa(object):
+    """Dados proprios de um teste, criados pelos repositorios (sem depender do seed do FAKE).
+
+    Os nomes levam um sufixo unico; os IDs criados ficam anotados por entidade, na ordem de
+    remocao (tickets antes de agendamentos, usuarios antes de perfis, scripts antes de parametros).
+    """
+
+    ORDEM = ("tickets", "agendamentos", "usuarios", "perfis", "scripts", "parametros", "ambientes")
+
+    def __init__(self, obter_repo):
+        self._r = obter_repo
+        self.suf = "%08d" % (int(time.time() * 1000000) % 100000000)
+        self.ator = "tst" + self.suf
+        self.criados = collections.OrderedDict((ent, []) for ent in self.ORDEM)
+        self._cenario = None
+
+    def anotar(self, entidade, id):
+        self.criados[entidade].append(id)
+        return id
+
+    def ambiente(self, rotulo="A", **extra):
+        dados = dict({"nome": "TST_%s_%s" % (self.suf, rotulo), "descricao": "Ambiente de teste"}, **extra)
+        amb = self._r("catalogo").ambientes_inserir(dados, ator=self.ator)
+        self.anotar("ambientes", amb["id"])
+        return amb
+
+    def perfil(self, rotulo="P", **extra):
+        per = self._r("rbac").perfis_inserir(dict({"nome": "TST_%s_%s" % (self.suf, rotulo), "is_admin": "N"}, **extra),
+                                             ator=self.ator)
+        self.anotar("perfis", per["id"])
+        return per
+
+    def usuario(self, perfil_id, rotulo="u", **extra):
+        dados = dict({"login": "tst.%s.%s" % (self.suf, rotulo), "nome": "Usuario de teste",
+                      "senha_hash": "pbkdf2_sha256$1$00$00", "perfil_id": perfil_id, "ativo": "S"}, **extra)
+        u = self._r("usuarios").inserir(dados, ator=self.ator)
+        self.anotar("usuarios", u["id"])
+        return u
+
+    def parametro(self, rotulo="a", **extra):
+        dados = dict({"codigo": "tst_%s_%s" % (self.suf, rotulo), "label": "Parametro %s" % rotulo,
+                      "tipo_componente": "TEXT", "param_nomeado": "--tst%s%s" % (self.suf, rotulo)}, **extra)
+        prm = self._r("catalogo").parametros_inserir(dados, ator=self.ator)
+        self.anotar("parametros", prm["id"])
+        return prm
+
+    def script(self, rotulo="s", **extra):
+        dados = dict({"nome": "tst_scr_%s_%s" % (self.suf, rotulo), "interpretador": "SH", "tipo_param": "NOMEADO",
+                      "path_file": "/opt/tst/%s_%s.sh" % (self.suf, rotulo)}, **extra)
+        scr = self._r("catalogo").scripts_inserir(dados, ator=self.ator)
+        self.anotar("scripts", scr["id"])
+        return scr
+
+    def agendamento(self, script_id, ambiente, usuario_id, rotulo="r", **extra):
+        dados = dict({"nome": "TST %s %s" % (self.suf, rotulo), "script_id": script_id, "ambiente": ambiente,
+                      "usuario_id": usuario_id, "prioridade": 2, "tipo_recorrencia": "DIARIA",
+                      "hora_execucao": "03:00", "parametros_json": "{}",
+                      "data_inicio": datetime.datetime(2026, 1, 15, 10, 0),
+                      "proxima_execucao": datetime.datetime(2030, 1, 16, 3, 0)}, **extra)
+        regra = self._r("agendamentos").inserir(dados, ator=self.ator)
+        self.anotar("agendamentos", regra["id"])
+        return regra
+
+    def ticket(self, respostas=(), ator=None, **dados):
+        tid = self._r("tickets").criar(dados, list(respostas), ator=ator)
+        return self.anotar("tickets", tid)
+
+    def cenario(self):
+        """Dois ambientes, um perfil comum com dois usuarios, dois parametros com flag e um script
+        NOMEADO homologado no primeiro ambiente, com os dois parametros vinculados."""
+        if self._cenario is None:
+            c = {}
+            c["amb1"], c["amb2"] = self.ambiente("A"), self.ambiente("B")
+            c["perfil"] = self.perfil("P")
+            c["u1"], c["u2"] = self.usuario(c["perfil"]["id"], "u1"), self.usuario(c["perfil"]["id"], "u2")
+            c["prm_a"], c["prm_b"] = self.parametro("a"), self.parametro("b")
+            c["scr"] = self.script("s")
+            cat = self._r("catalogo")
+            cat.homologacao_salvar(c["scr"]["id"], [c["amb1"]["id"]], ator=self.ator)
+            cat.script_params_salvar(c["scr"]["id"], [
+                {"parametro_id": c["prm_a"]["id"], "ordem": 1, "obrigatorio": "S"},
+                {"parametro_id": c["prm_b"]["id"], "ordem": 2, "obrigatorio": "N"}], ator=self.ator)
+            c["login"] = c["u1"]["login"]
+            c["ticket_base"] = {"script_id": c["scr"]["id"], "ambiente": c["amb1"]["nome"],
+                                "solicitante": c["login"], "status": "PENDING", "prioridade": 2}
+            self._cenario = c
+        return self._cenario
+
+
 class BaseRepoContractTest(object):
-    """Bateria de testes agnostica a backend, executada contra FAKE e ORACLE."""
+    """Bateria agnostica a backend, executada contra FAKE e ORACLE com dados proprios de cada teste.
+
+    Nenhum teste usa nomes ou IDs do seed nem altera cadastros que nao criou. As auditorias sao
+    conferidas pela entidade e pelo id do proprio registro (imunes a outros usos do banco) e os nomes
+    de constraint seguem o prefixo configurado.
+    """
+
+    @property
+    def m(self):
+        if getattr(self, "_massa", None) is None:
+            self._massa = _Massa(self.obter_repo)
+        return self._massa
+
+    def cn(self, tipo, entidade, sufixo):
+        """Nome da constraint/indice/trigger com o prefixo do repositorio em uso (FAKE: tbsss_)."""
+        prefixo = getattr(self.obter_repo("catalogo"), "_prefixo", None) or "tbsss_"
+        return "%s_%s%s_%s" % (tipo, prefixo, sql_ident.TABELAS[entidade]["abrev"], sufixo)
+
+    def aud_total(self, acao, entidade, entidade_id):
+        return self.obter_repo("auditoria").listar(
+            filtros={"acao": acao, "entidade": entidade, "entidade_id": entidade_id}, pagina=1, tamanho=1)["total"]
+
+    def aud_ultima(self, acao, entidade, entidade_id):
+        return self.obter_repo("auditoria").listar(
+            filtros={"acao": acao, "entidade": entidade, "entidade_id": entidade_id}, pagina=1, tamanho=1)["itens"][0]
 
     def test_ocorrencia_duplicada_recusada_sem_alterar_ticket(self):
+        c = self.m.cenario()
         tickets = self.obter_repo("tickets")
-        agd = self.obter_repo("agendamentos").listar(tamanho=1)["itens"][0]
-        dados = {"script_id": agd["script_id"], "ambiente": agd["ambiente"], "solicitante": "admin",
-                 "agendamento_id": agd["id"], "scheduled_at": datetime.datetime(2030, 1, 2)}
-        primeiro_id = tickets.criar(dados, [], ator="teste")
+        regra = self.m.agendamento(c["scr"]["id"], c["amb1"]["nome"], c["u1"]["id"])
+        dados = {"script_id": c["scr"]["id"], "ambiente": c["amb1"]["nome"], "solicitante": c["login"],
+                 "agendamento_id": regra["id"], "scheduled_at": datetime.datetime(2030, 1, 2)}
+        primeiro_id = self.m.ticket(ator="teste", **dados)
         primeiro = tickets.obter(primeiro_id)
         with self.assertRaises(RepoViolacao) as erro:
-            tickets.criar(dados, [], ator="teste")
-        self.assertEqual(erro.exception.constraint, "ix_tbsss_tck_ocor")
+            self.m.ticket(ator="teste", **dados)
+        self.assertEqual(erro.exception.constraint, self.cn("ix", "tickets", "ocor"))
         self.assertEqual(tickets.obter(primeiro["id"]), primeiro)
-        tickets.criar(dict(dados, scheduled_at=datetime.datetime(2030, 1, 3)), [], ator="teste")
-        tickets.criar(dict(dados, agendamento_id=None), [], ator="teste")
-        tickets.criar(dict(dados, agendamento_id=None), [], ator="teste")
+        self.m.ticket(ator="teste", **dict(dados, scheduled_at=datetime.datetime(2030, 1, 3)))
+        self.m.ticket(ator="teste", **dict(dados, agendamento_id=None))
+        self.m.ticket(ator="teste", **dict(dados, agendamento_id=None))
 
     def test_01_crud_ambientes(self):
         cat = self.obter_repo("catalogo")
-        # Insercao
-        nome_amb = "TESTE_CRUD_%s" % int(datetime.datetime.now().timestamp() if hasattr(datetime.datetime.now(), 'timestamp') else 12345)
-        amb = cat.ambientes_inserir({
-            "nome": nome_amb,
-            "descricao": "Ambiente de Teste CRUD",
-            "conexao": "db-teste.local:1521/svc",
-            "ativo": "S",
-        }, ator="teste")
+        amb = self.m.ambiente("CRUD", conexao="db-teste.local:1521/svc")
         self.assertIsNotNone(amb.get("id"))
-        self.assertEqual(amb["nome"], nome_amb)
-
-        # Leitura
-        obtido = cat.ambientes_obter(amb["id"])
-        self.assertEqual(obtido["nome"], nome_amb)
-
-        # Alteracao
-        alterado = cat.ambientes_alterar(amb["id"], {
-            "descricao": "Descricao alterada",
-            "ativo": "N",
-        }, ator="teste")
-        self.assertEqual(alterado["descricao"], "Descricao alterada")
-        self.assertEqual(alterado["ativo"], "N")
-
-        # Listagem
-        lista = cat.ambientes_listar(filtros={"nome": nome_amb})
+        self.assertEqual(cat.ambientes_obter(amb["id"])["nome"], amb["nome"])
+        alterado = cat.ambientes_alterar(amb["id"], {"descricao": "Descricao alterada", "ativo": "N"}, ator="teste")
+        self.assertEqual((alterado["descricao"], alterado["ativo"]), ("Descricao alterada", "N"))
+        lista = cat.ambientes_listar(filtros={"nome": amb["nome"]})
         self.assertEqual(lista["total"], 1)
         self.assertEqual(lista["itens"][0]["id"], amb["id"])
 
     def test_02_uk_duplicada_ambiente_perfil_script_usuario(self):
-        cat = self.obter_repo("catalogo")
-        rbac = self.obter_repo("rbac")
-        usr = self.obter_repo("usuarios")
-
-        # UK ambiente
+        c = self.m.cenario()
+        cat, rbac, usr = self.obter_repo("catalogo"), self.obter_repo("rbac"), self.obter_repo("usuarios")
         with self.assertRaises(RepoViolacao) as ctx:
-            cat.ambientes_inserir({
-                "nome": "PRODUCAO",
-                "descricao": "Duplicado",
-                "conexao": "db-prod2.local:1521/svc",
-            }, ator="teste")
-        self.assertIn("uk_tbsss_amb_nome", str(ctx.exception.constraint or ""))
-
-        # UK perfil
+            cat.ambientes_inserir({"nome": c["amb1"]["nome"], "conexao": "db-prod2.local:1521/svc"}, ator="teste")
+        self.assertEqual(ctx.exception.constraint, self.cn("uk", "ambientes", "nome"))
         with self.assertRaises(RepoViolacao) as ctx:
-            rbac.perfis_inserir({
-                "nome": "ADMINISTRADOR",
-                "descricao": "Duplicado",
-                "is_admin": "S",
-            }, ator="teste")
-        self.assertIn("uk_tbsss_per_nome", str(ctx.exception.constraint or ""))
-
-        # UK script
+            rbac.perfis_inserir({"nome": c["perfil"]["nome"], "is_admin": "N"}, ator="teste")
+        self.assertEqual(ctx.exception.constraint, self.cn("uk", "perfis", "nome"))
         with self.assertRaises(RepoViolacao) as ctx:
-            cat.scripts_inserir({
-                "nome": "carga_diaria",
-                "descricao": "Duplicado",
-                "interpretador": "PYTHON3",
-                "path_file": "/opt/scripts/carga_diaria.py",
-            }, ator="teste")
-        self.assertIn("uk_tbsss_scr_nome", str(ctx.exception.constraint or ""))
-
-        # CK de path_file (CR-005 R-g): deve comecar com '/' e nao ter '..' ou '//' ou '\'
+            cat.scripts_inserir({"nome": c["scr"]["nome"], "interpretador": "PYTHON3",
+                                 "path_file": "/opt/tst/dup.py"}, ator="teste")
+        self.assertEqual(ctx.exception.constraint, self.cn("uk", "scripts", "nome"))
+        # CK de path_file (CR-005 R-g): absoluto, sem '..', '//' nem '\'.
         with self.assertRaises(RepoViolacao) as ctx:
-            cat.scripts_inserir({"nome": "caminho_invalido", "interpretador": "PYTHON3",
+            cat.scripts_inserir({"nome": "tst_%s_path" % self.m.suf, "interpretador": "PYTHON3",
                                  "path_file": "x.py"}, ator="teste")
-        self.assertEqual(ctx.exception.constraint, "ck_tbsss_scr_path")
-
-        # UK usuario
+        self.assertEqual(ctx.exception.constraint, self.cn("ck", "scripts", "path"))
         with self.assertRaises(RepoViolacao) as ctx:
-            usr.inserir({
-                "login": "admin",
-                "nome": "Duplicado",
-                "perfil_id": 1,
-            }, ator="teste")
-        self.assertIn("uk_tbsss_usr_login", str(ctx.exception.constraint or ""))
+            usr.inserir({"login": c["login"], "nome": "Duplicado", "senha_hash": "h",
+                         "perfil_id": c["perfil"]["id"]}, ator="teste")
+        self.assertEqual(ctx.exception.constraint, self.cn("uk", "usuarios", "login"))
 
     def test_03_ck_conexao_com_arroba(self):
         cat = self.obter_repo("catalogo")
-        # Insercao com @ deve falhar (CK ck_tbsss_amb_conexao)
         with self.assertRaises(RepoViolacao) as ctx:
-            cat.ambientes_inserir({
-                "nome": "AMB_ARROBA",
-                "descricao": "Invalido",
-                "conexao": "usr:pwd@host:1521/svc",
-            }, ator="teste")
-        self.assertIn("ck_tbsss_amb_conexao", str(ctx.exception.constraint or ""))
-
-        # Alteracao com @ tambem deve falhar
-        amb = cat.ambientes_listar(filtros={"nome": "HOMOLOGACAO"})["itens"][0]
+            cat.ambientes_inserir({"nome": "TST_%s_ARROBA" % self.m.suf, "conexao": "usr:pwd@host:1521/svc"},
+                                  ator="teste")
+        self.assertEqual(ctx.exception.constraint, self.cn("ck", "ambientes", "conexao"))
+        amb = self.m.ambiente("ARR")
         with self.assertRaises(RepoViolacao) as ctx:
             cat.ambientes_alterar(amb["id"], {"conexao": "app@host/svc"}, ator="teste")
-        self.assertIn("ck_tbsss_amb_conexao", str(ctx.exception.constraint or ""))
+        self.assertEqual(ctx.exception.constraint, self.cn("ck", "ambientes", "conexao"))
 
     def test_04_imutabilidade_nome_ambiente_e_login_usuario(self):
-        cat = self.obter_repo("catalogo")
-        usr = self.obter_repo("usuarios")
-
-        amb = cat.ambientes_listar(filtros={"nome": "HOMOLOGACAO"})["itens"][0]
+        c = self.m.cenario()
         with self.assertRaises(RepoViolacao) as ctx:
-            cat.ambientes_alterar(amb["id"], {"nome": "NOVO_NOME_AMB"}, ator="teste")
-        self.assertIn("tr_tbsss_amb_bu", str(ctx.exception.constraint or ""))
-
-        u = usr.obter_por_login("op.prod")
+            self.obter_repo("catalogo").ambientes_alterar(c["amb1"]["id"], {"nome": "TST_%s_NOVO" % self.m.suf},
+                                                          ator="teste")
+        self.assertEqual(ctx.exception.constraint, self.cn("tr", "ambientes", "bu"))
         with self.assertRaises(RepoViolacao) as ctx:
-            usr.alterar(u["id"], {"login": "novo.login"}, ator="teste")
-        self.assertIn("tr_tbsss_usr_bu", str(ctx.exception.constraint or ""))
+            self.obter_repo("usuarios").alterar(c["u1"]["id"], {"login": "tst.%s.novo" % self.m.suf}, ator="teste")
+        self.assertEqual(ctx.exception.constraint, self.cn("tr", "usuarios", "bu"))
 
     def test_04b_ambiente_alteracao_condicional_e_auditoria_na_mesma_operacao(self):
         cat = self.obter_repo("catalogo")
-        aud = self.obter_repo("auditoria")
-        amb = cat.ambientes_listar(filtros={"nome": "HOMOLOGACAO"})["itens"][0]
+        amb = self.m.ambiente("AUD")
         lido = {"descricao": amb["descricao"], "conexao": amb["conexao"], "ativo": amb["ativo"]}
-
-        def total_aud():
-            return aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=1)["total"]
-
-        antes = total_aud()
         alterado = cat.ambientes_alterar(amb["id"], {"descricao": "Contrato"}, esperado=lido,
                                          auditoria={"ator": "admin", "ip": "10.0.0.1", "acao": "CAD_ALTERAR",
                                                     "detalhe": "descricao: x -> Contrato"})
         self.assertEqual(alterado["descricao"], "Contrato")
-        self.assertEqual(total_aud(), antes + 1)
-        ultimo = aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=1)["itens"][0]
-        self.assertEqual((ultimo["entidade"], ultimo["entidade_id"], ultimo["ator"]),
-                         ("tbsss_ambientes", amb["id"], "admin"))
+        self.assertEqual(self.aud_total("CAD_ALTERAR", "tbsss_ambientes", amb["id"]), 1)
+        self.assertEqual(self.aud_ultima("CAD_ALTERAR", "tbsss_ambientes", amb["id"])["ator"], "admin")
 
         # 'lido' ficou obsoleto: o UPDATE condicional perde, nada muda e nada e auditado.
         with self.assertRaises(RepoConflito):
             cat.ambientes_alterar(amb["id"], {"descricao": "Perdedor"}, esperado=lido,
                                   auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "x"})
         self.assertEqual(cat.ambientes_obter(amb["id"])["descricao"], "Contrato")
-        self.assertEqual(total_aud(), antes + 1)
-
         # Violacao tambem nao grava auditoria nem altera colunas parcialmente.
         with self.assertRaises(RepoViolacao):
             cat.ambientes_alterar(amb["id"], {"descricao": "Parcial", "conexao": "a@b"},
                                   auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "x"})
         self.assertEqual(cat.ambientes_obter(amb["id"])["descricao"], "Contrato")
-        self.assertEqual(total_aud(), antes + 1)
+        self.assertEqual(self.aud_total("CAD_ALTERAR", "tbsss_ambientes", amb["id"]), 1)
 
-        novo = cat.ambientes_inserir({"nome": "CONTRATO_AUD", "conexao": "ALIAS"},
+        novo = cat.ambientes_inserir({"nome": "TST_%s_CAUD" % self.m.suf, "conexao": "ALIAS"},
                                      auditoria={"ator": "admin", "ip": None, "acao": "CAD_INSERIR", "detalhe": "y"})
-        ins = aud.listar(filtros={"acao": "CAD_INSERIR"}, pagina=1, tamanho=1)["itens"][0]
-        self.assertEqual((ins["entidade"], ins["entidade_id"]), ("tbsss_ambientes", novo["id"]))
+        self.m.anotar("ambientes", novo["id"])
+        self.assertEqual(self.aud_total("CAD_INSERIR", "tbsss_ambientes", novo["id"]), 1)
 
-    def test_04c_perfil_ultimo_admin_e_matriz_condicional(self):
+    def test_04c_perfil_conflito_e_matriz_condicional(self):
+        """Conflito sem incremento e matriz condicional (o ultimo admin fica em TestUltimoAdmin*)."""
+        c = self.m.cenario()
         rbac = self.obter_repo("rbac")
-        aud = self.obter_repo("auditoria")
-        admin = rbac.perfis_listar(filtros={"nome": "ADMINISTRADOR"})["itens"][0]
-        versao = admin["perm_versao"]
-        desativacoes = aud.listar(filtros={"acao": "CAD_DESATIVAR"}, pagina=1, tamanho=1)["total"]
+        per = c["perfil"]
+        func_ids = [f["id"] for f in rbac.funcionalidades_listar()][:2]
+        rbac.matriz_salvar(per["id"], func_ids, [c["amb1"]["id"]], [c["scr"]["id"]], ator="teste")
+        atual = rbac.perfis_obter(per["id"])
+        versao = atual["perm_versao"]
 
-        # Ultimo admin: a mesma operacao bloqueia, valida e rejeita, sem alterar nada.
-        for dados in ({"ativo": "N"}, {"is_admin": "N"}):
-            with self.assertRaises(RepoViolacao) as ctx:
-                rbac.perfis_alterar(admin["id"], dados,
-                                    auditoria={"ator": "admin", "ip": None, "acao": "CAD_DESATIVAR", "detalhe": "x"})
-            self.assertEqual(ctx.exception.constraint, "sss_ultimo_admin")
-        atual = rbac.perfis_obter(admin["id"])
-        self.assertEqual((atual["ativo"], atual["is_admin"], atual["perm_versao"]), ("S", "S", versao))
-        self.assertEqual(aud.listar(filtros={"acao": "CAD_DESATIVAR"}, pagina=1, tamanho=1)["total"], desativacoes)
-
-        # esperado divergente: conflito sem incremento de perm_versao.
         with self.assertRaises(RepoConflito):
-            rbac.perfis_alterar(admin["id"], {"descricao": "x"}, esperado={"descricao": "outra"}, ator="teste")
-        self.assertEqual(rbac.perfis_obter(admin["id"])["perm_versao"], versao)
+            rbac.perfis_alterar(per["id"], {"descricao": "x"}, esperado={"descricao": "outra"}, ator="teste")
+        self.assertEqual(rbac.perfis_obter(per["id"])["perm_versao"], versao)
 
-        consulta = rbac.perfis_listar(filtros={"nome": "CONSULTA"})["itens"][0]
-        matriz = rbac.matriz_obter(consulta["id"])
-        v0 = consulta["perm_versao"]
+        matriz = rbac.matriz_obter(per["id"])
         with self.assertRaises(RepoConflito):
-            rbac.matriz_salvar(consulta["id"], [], [], [], perm_versao_esperada=v0 + 7, ator="teste")
+            rbac.matriz_salvar(per["id"], [], [], [], perm_versao_esperada=versao + 7, ator="teste")
         with self.assertRaises(RepoViolacao):
-            rbac.matriz_salvar(consulta["id"], [999999], matriz["ambs"], matriz["scrs"], perm_versao_esperada=v0, ator="teste")
-        self.assertEqual(rbac.matriz_obter(consulta["id"]), matriz)
-        self.assertEqual(rbac.perfis_obter(consulta["id"])["perm_versao"], v0)
+            rbac.matriz_salvar(per["id"], [999999], matriz["ambs"], matriz["scrs"], perm_versao_esperada=versao,
+                               ator="teste")
+        self.assertEqual(rbac.matriz_obter(per["id"]), matriz)
+        self.assertEqual(rbac.perfis_obter(per["id"])["perm_versao"], versao)
 
-        antes = aud.listar(filtros={"acao": "PERM_ALTERAR"}, pagina=1, tamanho=1)["total"]
-        nova = rbac.matriz_salvar(consulta["id"], [], matriz["ambs"], matriz["scrs"], perm_versao_esperada=v0,
+        nova = rbac.matriz_salvar(per["id"], [], matriz["ambs"], matriz["scrs"], perm_versao_esperada=versao,
                                   auditoria={"ator": "admin", "ip": None, "acao": "PERM_ALTERAR", "detalhe": "-VER_LOGS"})
         self.assertEqual(nova["funcs"], [])
-        self.assertEqual(rbac.perfis_obter(consulta["id"])["perm_versao"], v0 + 1)
-        ultimo = aud.listar(filtros={"acao": "PERM_ALTERAR"}, pagina=1, tamanho=1)
-        self.assertEqual(ultimo["total"], antes + 1)
-        self.assertEqual((ultimo["itens"][0]["entidade"], ultimo["itens"][0]["entidade_id"]),
-                         ("tbsss_perfis", consulta["id"]))
+        self.assertEqual(rbac.perfis_obter(per["id"])["perm_versao"], versao + 1)
+        self.assertEqual(self.aud_total("PERM_ALTERAR", "tbsss_perfis", per["id"]), 1)
 
-    def test_04d_usuario_ultimo_admin_auditoria_e_filtro_bloqueio(self):
+    def test_04d_usuario_conflito_auditoria_login_e_filtro_bloqueio(self):
+        """Conflito, auditoria, login e filtro de bloqueio (o ultimo admin fica em TestUltimoAdmin*)."""
+        c = self.m.cenario()
         usr = self.obter_repo("usuarios")
-        aud = self.obter_repo("auditoria")
-        admin = usr.obter_por_login("admin")
-        consulta = usr.obter_por_login("consulta")
-        alteracoes = aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=1)["total"]
-
-        for dados in ({"ativo": "N"}, {"perfil_id": consulta["perfil_id"]}):
-            with self.assertRaises(RepoViolacao) as ctx:
-                usr.alterar(admin["id"], dados,
-                            auditoria={"ator": "x", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "x"})
-            self.assertEqual(ctx.exception.constraint, "sss_ultimo_admin")
-        atual = usr.obter_por_id(admin["id"])
-        self.assertEqual((atual["ativo"], atual["perfil_id"]), ("S", admin["perfil_id"]))
-        self.assertEqual(aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=1)["total"], alteracoes)
-
+        alvo = c["u2"]
         with self.assertRaises(RepoConflito):
-            usr.alterar(consulta["id"], {"nome": "X"}, esperado={"nome": "outro"}, ator="teste")
-        self.assertEqual(usr.obter_por_id(consulta["id"])["nome"], consulta["nome"])
+            usr.alterar(alvo["id"], {"nome": "X"}, esperado={"nome": "outro"}, ator="teste")
+        self.assertEqual(usr.obter_por_id(alvo["id"])["nome"], alvo["nome"])
 
-        usr.alterar(consulta["id"], {"nome": "Consulta Contrato"}, esperado={"nome": consulta["nome"]},
+        usr.alterar(alvo["id"], {"nome": "Consulta Contrato"}, esperado={"nome": alvo["nome"]},
                     auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "nome"})
-        usr.definir_senha(consulta["id"], "pbkdf2_sha256$1$00$00",
+        usr.definir_senha(alvo["id"], "pbkdf2_sha256$1$00$00",
                           auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "senha redefinida"})
-        usr.desbloquear(consulta["id"], auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "d"})
-        ultimos = aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=3)["itens"]
-        self.assertEqual(aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=1)["total"], alteracoes + 3)
-        self.assertEqual(set((a["entidade"], a["entidade_id"]) for a in ultimos), {("tbsss_usuarios", consulta["id"])})
+        usr.desbloquear(alvo["id"], auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "d"})
+        self.assertEqual(self.aud_total("CAD_ALTERAR", "tbsss_usuarios", alvo["id"]), 3)
 
         # CR-003 P3: falha/sucesso de login com auditoria na mesma operacao e bloqueio pelo relogio do banco.
-        antes_login = aud.listar(filtros={"acao": "LOGIN_FALHA"}, pagina=1, tamanho=1)["total"]
         inicio = usr.agora()
-        reg = usr.registrar_falha_login("consulta", bloqueio_s=60, auditoria=[
-            {"ator": "consulta", "ip": None, "acao": "LOGIN_FALHA", "detalhe": "f"},
-            {"ator": "consulta", "ip": None, "acao": "LOGIN_BLOQUEIO", "detalhe": "b"}])
+        reg = usr.registrar_falha_login(alvo["login"], bloqueio_s=60, auditoria=[
+            {"ator": alvo["login"], "ip": None, "acao": "LOGIN_FALHA", "detalhe": "f"},
+            {"ator": alvo["login"], "ip": None, "acao": "LOGIN_BLOQUEIO", "detalhe": "b"}])
         self.assertGreaterEqual(reg["bloqueado_ate"], inicio + datetime.timedelta(seconds=60))
-        self.assertEqual(aud.listar(filtros={"acao": "LOGIN_FALHA"}, pagina=1, tamanho=1)["total"], antes_login + 1)
-        self.assertEqual(aud.listar(filtros={"acao": "LOGIN_BLOQUEIO", "entidade_id": consulta["id"]},
-                                    pagina=1, tamanho=1)["total"], 1)
-        reg = usr.registrar_sucesso_login("consulta", novo_hash="pbkdf2_sha256$2$00$00",
-                                          auditoria={"ator": "consulta", "ip": None, "acao": "LOGIN_OK", "detalhe": "ok"})
+        self.assertEqual(self.aud_total("LOGIN_FALHA", "tbsss_usuarios", alvo["id"]), 1)
+        self.assertEqual(self.aud_total("LOGIN_BLOQUEIO", "tbsss_usuarios", alvo["id"]), 1)
+        reg = usr.registrar_sucesso_login(alvo["login"], novo_hash="pbkdf2_sha256$2$00$00",
+                                          auditoria={"ator": alvo["login"], "ip": None, "acao": "LOGIN_OK", "detalhe": "ok"})
         self.assertEqual((reg["tentativas_falha"], reg["bloqueado_ate"]), (0, None))
         self.assertEqual(reg["senha_hash"], "pbkdf2_sha256$2$00$00")
         self.assertGreaterEqual(reg["ultimo_login"], inicio)
         self.assertEqual(reg["ultimo_login"].microsecond, 0)
 
-        futuro = datetime.datetime(2999, 1, 1)
-        usr.alterar(consulta["id"], {"bloqueado_ate": futuro}, ator="teste")
-        bloqueados = usr.listar(filtros={"bloqueado_em": datetime.datetime(2998, 1, 1)}, pagina=1, tamanho=50)
-        self.assertEqual([u["login"] for u in bloqueados["itens"]], ["consulta"])
+        usr.alterar(alvo["id"], {"bloqueado_ate": datetime.datetime(2999, 1, 1)}, ator="teste")
+        bloqueados = usr.listar(filtros={"bloqueado_em": datetime.datetime(2998, 1, 1)}, pagina=1, tamanho=200)
+        self.assertIn(alvo["login"], [u["login"] for u in bloqueados["itens"]])
+        self.assertNotIn(c["u1"]["login"], [u["login"] for u in bloqueados["itens"]])
 
     def test_04e_parametro_dependencias_atomicas_qtd_scripts_e_auditoria(self):
+        c = self.m.cenario()
         cat = self.obter_repo("catalogo")
-        aud = self.obter_repo("auditoria")
-        data_ref = cat.parametros_listar(filtros={"codigo": "data_ref"})["itens"][0]
-        self.assertEqual(data_ref["qtd_scripts"], len(cat.parametro_vinculos(data_ref["id"])))
-        self.assertGreater(data_ref["qtd_scripts"], 0)
-
-        for dados, constraint in (({"tipo_componente": "TEXT"}, "sss_prm_tipo_vinculado"),
+        prm = cat.parametros_listar(filtros={"codigo": c["prm_a"]["codigo"]})["itens"][0]
+        self.assertEqual(prm["qtd_scripts"], len(cat.parametro_vinculos(prm["id"])))
+        self.assertEqual(prm["qtd_scripts"], 1)
+        for dados, constraint in (({"tipo_componente": "NUMBER"}, "sss_prm_tipo_vinculado"),
                                   ({"param_nomeado": "--outra-flag"}, "sss_prm_flag_nomeado"),
                                   ({"ativo": "N"}, "sss_prm_vinculo_ativo")):
             with self.assertRaises(RepoViolacao) as ctx:
-                cat.parametros_alterar(data_ref["id"], dict(dados, label="Nao deve gravar"), ator="teste")
+                cat.parametros_alterar(prm["id"], dict(dados, label="Nao deve gravar"), ator="teste")
             self.assertEqual(ctx.exception.constraint, constraint)
-        self.assertEqual(cat.parametros_obter(data_ref["id"])["label"], data_ref["label"])
-
+        self.assertEqual(cat.parametros_obter(prm["id"])["label"], prm["label"])
         with self.assertRaises(RepoConflito):
-            cat.parametros_alterar(data_ref["id"], {"label": "x"}, esperado={"label": "outro"}, ator="teste")
+            cat.parametros_alterar(prm["id"], {"label": "x"}, esperado={"label": "outro"}, ator="teste")
 
-        antes = aud.listar(filtros={"acao": "CAD_INSERIR"}, pagina=1, tamanho=1)["total"]
-        novo = cat.parametros_inserir({"codigo": "contrato_prm", "label": "Contrato", "tipo_componente": "TEXT"},
+        novo = cat.parametros_inserir({"codigo": "tst_%s_novo" % self.m.suf, "label": "Contrato",
+                                       "tipo_componente": "TEXT"},
                                       auditoria={"ator": "admin", "ip": None, "acao": "CAD_INSERIR", "detalhe": "x"})
-        ultimo = aud.listar(filtros={"acao": "CAD_INSERIR"}, pagina=1, tamanho=1)
-        self.assertEqual(ultimo["total"], antes + 1)
-        self.assertEqual((ultimo["itens"][0]["entidade"], ultimo["itens"][0]["entidade_id"]),
-                         ("tbsss_parametros", novo["id"]))
+        self.m.anotar("parametros", novo["id"])
+        self.assertEqual(self.aud_total("CAD_INSERIR", "tbsss_parametros", novo["id"]), 1)
         # Sem vinculo, tipo e flag mudam e a desativacao passa.
         alterado = cat.parametros_alterar(novo["id"], {"tipo_componente": "NUMBER", "param_nomeado": "--n",
                                                        "ativo": "N"}, ator="teste")
@@ -330,309 +351,241 @@ class BaseRepoContractTest(object):
                          ("NUMBER", "--n", "N"))
 
     def test_04f_script_regras_de_tipo_param_homologacao_e_vinculos_condicionais(self):
+        c = self.m.cenario()
         cat = self.obter_repo("catalogo")
-        aud = self.obter_repo("auditoria")
-        carga = cat.scripts_listar(filtros={"nome": "carga_diaria"})["itens"][0]
-        self.assertEqual(carga["qtd_parametros"], len(cat.script_params_obter(carga["id"])))
-        self.assertIsInstance(carga["ambientes_homologados"], list)
+        scr = cat.scripts_listar(filtros={"nome": c["scr"]["nome"]})["itens"][0]
+        self.assertEqual(scr["qtd_parametros"], len(cat.script_params_obter(scr["id"])))
+        self.assertEqual(scr["ambientes_homologados"], [c["amb1"]["nome"]])
 
         with self.assertRaises(RepoViolacao) as ctx:
-            cat.scripts_alterar(carga["id"], {"tipo_param": "NENHUM", "descricao": "Nao grava"}, ator="teste")
+            cat.scripts_alterar(scr["id"], {"tipo_param": "NENHUM", "descricao": "Nao grava"}, ator="teste")
         self.assertEqual(ctx.exception.constraint, "sss_scr_nenhum_vinculado")
-        self.assertEqual(cat.scripts_obter(carga["id"])["tipo_param"], "NOMEADO")
+        self.assertEqual(cat.scripts_obter(scr["id"])["tipo_param"], "NOMEADO")
         with self.assertRaises(RepoConflito):
-            cat.scripts_alterar(carga["id"], {"descricao": "x"}, esperado={"descricao": "outra"}, ator="teste")
+            cat.scripts_alterar(scr["id"], {"descricao": "x"}, esperado={"descricao": "outra"}, ator="teste")
 
-        sem_flag = cat.parametros_inserir({"codigo": "contrato_sem_flag", "label": "X", "tipo_componente": "TEXT"}, ator="teste")
+        sem_flag = self.m.parametro("semflag", param_nomeado=None)
         with self.assertRaises(RepoViolacao) as ctx:
-            cat.script_params_salvar(carga["id"], [{"parametro_id": sem_flag["id"], "ordem": 1, "obrigatorio": "N"}], ator="teste")
+            cat.script_params_salvar(scr["id"], [{"parametro_id": sem_flag["id"], "ordem": 1, "obrigatorio": "N"}],
+                                     ator="teste")
         self.assertEqual(ctx.exception.constraint, "sss_scr_nomeado_sem_flag")
 
-        homolog = cat.homologacao_obter(carga["id"])
+        homolog = cat.homologacao_obter(scr["id"])
         with self.assertRaises(RepoConflito):
-            cat.homologacao_salvar(carga["id"], [], esperado=homolog + [999], ator="teste")
-        antes = aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=1)["total"]
-        cat.homologacao_salvar(carga["id"], homolog, esperado=homolog,
+            cat.homologacao_salvar(scr["id"], [], esperado=homolog + [999], ator="teste")
+        cat.homologacao_salvar(scr["id"], homolog, esperado=homolog,
                                auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "h"})
-        vinc = cat.script_params_obter(carga["id"])
+        vinc = cat.script_params_obter(scr["id"])
         lidos = [(v["parametro_id"], v["ordem"], v["obrigatorio"], v.get("valor_padrao_sub")) for v in vinc]
         with self.assertRaises(RepoConflito):
-            cat.script_params_salvar(carga["id"], [], esperado=lidos[1:], ator="teste")
-        cat.script_params_salvar(carga["id"], [dict(parametro_id=x[0], ordem=x[1], obrigatorio=x[2],
-                                                    valor_padrao_sub=x[3]) for x in lidos], esperado=lidos,
+            cat.script_params_salvar(scr["id"], [], esperado=lidos[1:], ator="teste")
+        cat.script_params_salvar(scr["id"], [dict(parametro_id=x[0], ordem=x[1], obrigatorio=x[2],
+                                                  valor_padrao_sub=x[3]) for x in lidos], esperado=lidos,
                                  auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "v"})
-        ultimos = aud.listar(filtros={"acao": "CAD_ALTERAR"}, pagina=1, tamanho=2)
-        self.assertEqual(ultimos["total"], antes + 2)
-        self.assertEqual(set((a["entidade"], a["entidade_id"]) for a in ultimos["itens"]), {("tbsss_scripts", carga["id"])})
+        self.assertEqual(self.aud_total("CAD_ALTERAR", "tbsss_scripts", scr["id"]), 2)
 
     def test_05_cascata_associacao(self):
-        cat = self.obter_repo("catalogo")
-        rbac = self.obter_repo("rbac")
+        c = self.m.cenario()
+        cat, rbac = self.obter_repo("catalogo"), self.obter_repo("rbac")
+        sid = c["scr"]["id"]
+        cat.homologacao_salvar(sid, [c["amb1"]["id"]], ator="teste")
+        self.assertEqual(cat.homologacao_obter(sid), [c["amb1"]["id"]])
+        cat.homologacao_salvar(sid, [c["amb1"]["id"], c["amb2"]["id"]], ator="teste")
+        self.assertEqual(sorted(cat.homologacao_obter(sid)), sorted([c["amb1"]["id"], c["amb2"]["id"]]))
 
-        # Homologacao de script
-        s = cat.scripts_listar()["itens"][0]
-        cat.homologacao_salvar(s["id"], [1], ator="teste")
-        h1 = cat.homologacao_obter(s["id"])
-        self.assertEqual(h1, [1])
-
-        cat.homologacao_salvar(s["id"], [1, 2], ator="teste")
-        h2 = cat.homologacao_obter(s["id"])
-        self.assertEqual(sorted(h2), [1, 2])
-
-        # Matriz de permissoes
-        p = rbac.perfis_listar(filtros={"nome": "CONSULTA"})["itens"][0]
-        v_antes = p["perm_versao"]
-        rbac.matriz_salvar(p["id"], funcs=[1, 2], ambs=[1], scrs=[1, 2], ator="teste")
+        p = c["perfil"]
+        v_antes = rbac.perfis_obter(p["id"])["perm_versao"]
+        func_ids = sorted(f["id"] for f in rbac.funcionalidades_listar())[:2]
+        rbac.matriz_salvar(p["id"], funcs=func_ids, ambs=[c["amb1"]["id"]], scrs=[sid], ator="teste")
         m = rbac.matriz_obter(p["id"])
-        self.assertEqual(sorted(m["funcs"]), [1, 2])
-        self.assertEqual(sorted(m["ambs"]), [1])
-        self.assertEqual(sorted(m["scrs"]), [1, 2])
-
-        p_depois = rbac.perfis_obter(p["id"])
-        self.assertGreater(p_depois["perm_versao"], v_antes)
+        self.assertEqual((sorted(m["funcs"]), m["ambs"], m["scrs"]), (func_ids, [c["amb1"]["id"]], [sid]))
+        self.assertGreater(rbac.perfis_obter(p["id"])["perm_versao"], v_antes)
 
     def test_06_solicitar_cancelamento_nos_tres_retornos(self):
+        c = self.m.cenario()
         tck = self.obter_repo("tickets")
-
-        # 1. PENDING -> CANCELADO
-        tid_pend = tck.criar({
-            "script_id": 1,
-            "ambiente": "PRODUCAO",
-            "solicitante": "admin",
-            "status": "PENDING",
-            "prioridade": 2,
-        }, [])
-        res1 = tck.solicitar_cancelamento(tid_pend, "admin", "10.0.0.1")
-        self.assertEqual(res1, "CANCELADO")
+        tid_pend = self.m.ticket(**c["ticket_base"])
+        self.assertEqual(tck.solicitar_cancelamento(tid_pend, "admin", "10.0.0.1"), "CANCELADO")
         t1 = tck.obter(tid_pend)
-        self.assertEqual(t1["status"], "CANCELLED")
-        self.assertEqual(t1["cancel_requested"], "S")
-        self.assertEqual(t1["status_motivo"], "CANCEL_USER")
-
-        # 2. Já TERMINAL (CANCELLED) -> TERMINAL
-        res2 = tck.solicitar_cancelamento(tid_pend, "admin", "10.0.0.1")
-        self.assertEqual(res2, "TERMINAL")
-
-        # 3. RUNNING -> SINALIZADO
-        tid_run = tck.criar({
-            "script_id": 1,
-            "ambiente": "PRODUCAO",
-            "solicitante": "admin",
-            "status": "RUNNING",
-            "prioridade": 2,
-        }, [])
-        res3 = tck.solicitar_cancelamento(tid_run, "admin", "10.0.0.1")
-        self.assertEqual(res3, "SINALIZADO")
+        self.assertEqual((t1["status"], t1["cancel_requested"], t1["status_motivo"]), ("CANCELLED", "S", "CANCEL_USER"))
+        self.assertEqual(tck.solicitar_cancelamento(tid_pend, "admin", "10.0.0.1"), "TERMINAL")
+        tid_run = self.m.ticket(**dict(c["ticket_base"], status="RUNNING"))
+        self.assertEqual(tck.solicitar_cancelamento(tid_run, "admin", "10.0.0.1"), "SINALIZADO")
         t3 = tck.obter(tid_run)
-        self.assertEqual(t3["status"], "RUNNING")
-        self.assertEqual(t3["cancel_requested"], "S")
+        self.assertEqual((t3["status"], t3["cancel_requested"]), ("RUNNING", "S"))
 
     def test_07_transicao_concorrente_perdida_gerando_repo_conflito(self):
+        c = self.m.cenario()
         agd = self.obter_repo("agendamentos")
-        regra = [r for r in agd.listar()["itens"] if r["ativo"] == "S"][0]
+        regra = self.m.agendamento(c["scr"]["id"], c["amb1"]["nome"], c["u1"]["id"])
         data_correta = regra["proxima_execucao"]
-        data_divergente = data_correta + datetime.timedelta(days=10)
-
-        # Conflito otimista com proxima_execucao divergente
         with self.assertRaises(RepoConflito):
-            agd.pausar(regra["id"], motivo="MANUAL", antiga_data=data_divergente, ator="teste")
-
-        # Sucesso com proxima_execucao correta
+            agd.pausar(regra["id"], motivo="MANUAL", antiga_data=data_correta + datetime.timedelta(days=10),
+                       ator="teste")
         pausado = agd.pausar(regra["id"], motivo="MANUAL", antiga_data=data_correta, ator="teste")
-        self.assertEqual(pausado["ativo"], "N")
-        self.assertEqual(pausado["pausa_motivo"], "MANUAL")
-
-        # Pausar uma regra já pausada gera RepoConflito (CR-007 R-19)
+        self.assertEqual((pausado["ativo"], pausado["pausa_motivo"]), ("N", "MANUAL"))
+        # Pausar uma regra ja pausada gera RepoConflito (CR-007 R-19).
         with self.assertRaises(RepoConflito):
             agd.pausar(regra["id"], motivo="MANUAL", antiga_data=data_correta, ator="teste")
 
     def test_06b_fks_e_limites_de_auditoria(self):
         """CR-003 P8 (README §2.5): FKs, UK de ticket_resp e limites da auditoria, sem gravacao parcial."""
-        tck = self.obter_repo("tickets")
-        agd = self.obter_repo("agendamentos")
-        aud = self.obter_repo("auditoria")
-        base = {"script_id": 1, "ambiente": "PRODUCAO", "solicitante": "admin", "status": "PENDING", "prioridade": 2}
-        total = tck.listar(pagina=1, tamanho=1)["total"]
+        c = self.m.cenario()
+        tck, agd, aud = self.obter_repo("tickets"), self.obter_repo("agendamentos"), self.obter_repo("auditoria")
+        base = c["ticket_base"]
+        meus = lambda: tck.listar(filtros={"solicitante": c["login"]}, pagina=1, tamanho=1)["total"]  # noqa: E731
+        total = meus()
+        prm = c["prm_a"]["id"]
         casos = (
-            (dict(base, script_id=9999), [], "fk_tbsss_tck_scr"),
-            (dict(base, ambiente="NAO_EXISTE"), [], "fk_tbsss_tck_amb"),
-            (dict(base, solicitante="ninguem"), [], "fk_tbsss_tck_usr"),
-            (base, [{"parametro_id": 9999, "valor_resposta": "x"}], "fk_tbsss_trsp_prm"),
-            (base, [{"parametro_id": 1, "valor_resposta": "a"}, {"parametro_id": 1, "valor_resposta": "b"}],
-             "uk_tbsss_trsp_tck_prm"),
+            (dict(base, script_id=999999999), [], self.cn("fk", "tickets", "scr")),
+            (dict(base, ambiente="NAO_EXISTE_TST"), [], self.cn("fk", "tickets", "amb")),
+            (dict(base, solicitante="nao.existe.tst"), [], self.cn("fk", "tickets", "usr")),
+            (base, [{"parametro_id": 999999999, "valor_resposta": "x"}], self.cn("fk", "ticket_resp", "prm")),
+            (base, [{"parametro_id": prm, "valor_resposta": "a"}, {"parametro_id": prm, "valor_resposta": "b"}],
+             self.cn("uk", "ticket_resp", "tck_prm")),
         )
         for ticket, respostas, constraint in casos:
             with self.assertRaises(RepoViolacao) as ctx:
-                tck.criar(ticket, respostas)
+                self.m.ticket(respostas, **ticket)
             self.assertEqual(ctx.exception.constraint, constraint)
-        self.assertEqual(tck.listar(pagina=1, tamanho=1)["total"], total)
+        self.assertEqual(meus(), total)
 
-        regra = {"nome": "FK", "script_id": 1, "ambiente": "HOMOLOGACAO", "usuario_id": 1, "prioridade": 2,
-                 "tipo_recorrencia": "DIARIA", "hora_execucao": "03:00", "parametros_json": "{}",
-                 "data_inicio": datetime.datetime(2026, 1, 15, 10, 0),
-                 "proxima_execucao": datetime.datetime(2026, 1, 16, 3, 0)}
-        for mudanca, constraint in (({"script_id": 9999}, "fk_tbsss_agd_scr"), ({"usuario_id": 9999}, "fk_tbsss_agd_usr"),
-                                    ({"ambiente": "NAO_EXISTE"}, "fk_tbsss_agd_amb")):
+        for mudanca, constraint in (({"script_id": 999999999}, self.cn("fk", "agendamentos", "scr")),
+                                    ({"usuario_id": 999999999}, self.cn("fk", "agendamentos", "usr")),
+                                    ({"ambiente": "NAO_EXISTE_TST"}, self.cn("fk", "agendamentos", "amb"))):
             with self.assertRaises(RepoViolacao) as ctx:
-                agd.inserir(dict(regra, **mudanca), ator="teste")
+                self.m.agendamento(**dict({"script_id": c["scr"]["id"], "ambiente": c["amb1"]["nome"],
+                                           "usuario_id": c["u1"]["id"]}, **mudanca))
             self.assertEqual(ctx.exception.constraint, constraint)
 
+        amb_id = c["amb1"]["id"]
         for ator, detalhe in ((None, "x"), ("", "x"), ("a" * 41, "x"), ("admin", "d" * 1001)):
             with self.assertRaises(RepoViolacao):
-                aud.registrar(ator, None, "CAD_ALTERAR", "tbsss_ambientes", 1, detalhe)
-        aud.registrar("a" * 40, None, "CAD_ALTERAR", "tbsss_ambientes", 1, "d" * 1000)
+                aud.registrar(ator, None, "CAD_ALTERAR", "tbsss_ambientes", amb_id, detalhe)
+        aud.registrar("a" * 40, None, "CAD_ALTERAR", "tbsss_ambientes", amb_id, "d" * 1000)
 
     def test_07b_agendamento_cks_condicional_e_auditoria_na_mesma_operacao(self):
+        c = self.m.cenario()
         agd = self.obter_repo("agendamentos")
-        aud = self.obter_repo("auditoria")
         inicio = datetime.datetime(2026, 1, 15, 10, 0)
-        base = {"nome": "Contrato AGD", "script_id": 1, "ambiente": "HOMOLOGACAO", "usuario_id": 1,
-                "prioridade": 2, "tipo_recorrencia": "DIARIA", "hora_execucao": "03:00",
-                "parametros_json": "{}", "data_inicio": inicio,
-                "proxima_execucao": datetime.datetime(2026, 1, 16, 3, 0)}
-
-        def total_aud(acao):
-            return aud.listar(filtros={"acao": acao}, pagina=1, tamanho=1)["total"]
-
-        # CKs de tbsss_agendamentos (README §10, tabela 12): nada e gravado nem auditado.
+        base = {"nome": "TST %s CK" % self.m.suf, "script_id": c["scr"]["id"], "ambiente": c["amb1"]["nome"],
+                "usuario_id": c["u1"]["id"], "prioridade": 2, "tipo_recorrencia": "DIARIA", "hora_execucao": "03:00",
+                "parametros_json": "{}", "data_inicio": inicio, "proxima_execucao": datetime.datetime(2030, 1, 16, 3, 0)}
+        ck = lambda s: self.cn("ck", "agendamentos", s)  # noqa: E731
         violacoes = [
-            ({"tipo_recorrencia": "ANUAL"}, "ck_tbsss_agd_trec"),
-            ({"prioridade": 5}, "ck_tbsss_agd_prio"),
-            ({"ativo": "X"}, "ck_tbsss_agd_ativo"),
-            ({"tipo_recorrencia": "MENSAL", "dia_mes": 32}, "ck_tbsss_agd_dia"),
-            ({"hora_execucao": "24:00"}, "ck_tbsss_agd_hora"),
-            ({"tipo_recorrencia": "SEMANAL", "dias_semana": "1,8"}, "ck_tbsss_agd_dsem"),
-            ({"data_fim": inicio - datetime.timedelta(days=1)}, "ck_tbsss_agd_fim"),
-            ({"pausa_motivo": "OUTRO"}, "ck_tbsss_agd_pausa"),
-            ({"tipo_recorrencia": "SEMANAL"}, "ck_tbsss_agd_campos"),
-            ({"tipo_recorrencia": "CRON", "hora_execucao": None}, "ck_tbsss_agd_campos"),
+            ({"tipo_recorrencia": "ANUAL"}, ck("trec")),
+            ({"prioridade": 5}, ck("prio")),
+            ({"ativo": "X"}, ck("ativo")),
+            ({"tipo_recorrencia": "MENSAL", "dia_mes": 32}, ck("dia")),
+            ({"hora_execucao": "24:00"}, ck("hora")),
+            ({"tipo_recorrencia": "SEMANAL", "dias_semana": "1,8"}, ck("dsem")),
+            ({"data_fim": inicio - datetime.timedelta(days=1)}, ck("fim")),
+            ({"pausa_motivo": "OUTRO"}, ck("pausa")),
+            ({"tipo_recorrencia": "SEMANAL"}, ck("campos")),
+            ({"tipo_recorrencia": "CRON", "hora_execucao": None}, ck("campos")),
         ]
-        antes_ins = total_aud("CAD_INSERIR")
-        total_regras = agd.listar(pagina=1, tamanho=1)["total"]
+        minhas = lambda: agd.listar(filtros={"nome": self.m.suf}, pagina=1, tamanho=1)["total"]  # noqa: E731
+        total_regras = minhas()
         for extra, constraint in violacoes:
             with self.assertRaises(RepoViolacao) as cm:
                 agd.inserir(dict(base, **extra),
-                            auditoria={"ator": "admin", "ip": None, "acao": "CAD_INSERIR", "detalhe": "x"})
+                            auditoria={"ator": self.m.ator, "ip": None, "acao": "CAD_INSERIR", "detalhe": "x"})
             self.assertEqual(cm.exception.constraint, constraint, extra)
-        self.assertEqual(agd.listar(pagina=1, tamanho=1)["total"], total_regras)
-        self.assertEqual(total_aud("CAD_INSERIR"), antes_ins)
+        self.assertEqual(minhas(), total_regras)
+        self.assertEqual(self.obter_repo("auditoria").listar(
+            filtros={"acao": "CAD_INSERIR", "ator": self.m.ator}, pagina=1, tamanho=1)["total"], 0)
 
         novo = agd.inserir(base, auditoria={"ator": "admin", "ip": "10.0.0.1", "acao": "CAD_INSERIR",
                                             "detalhe": "nome: Contrato AGD"})
-        ins = aud.listar(filtros={"acao": "CAD_INSERIR"}, pagina=1, tamanho=1)["itens"][0]
-        self.assertEqual((ins["entidade"], ins["entidade_id"], ins["ator"]), ("tbsss_agendamentos", novo["id"], "admin"))
+        self.m.anotar("agendamentos", novo["id"])
+        self.assertEqual(self.aud_ultima("CAD_INSERIR", "tbsss_agendamentos", novo["id"])["ator"], "admin")
 
-        lido = {"nome": novo["nome"], "usuario_id": 1, "proxima_execucao": novo["proxima_execucao"]}
-        antes_alt = total_aud("CAD_ALTERAR")
-        alterado = agd.alterar(novo["id"], {"nome": "Contrato AGD 2", "usuario_id": 2}, esperado=lido,
+        lido = {"nome": novo["nome"], "usuario_id": c["u1"]["id"], "proxima_execucao": novo["proxima_execucao"]}
+        alterado = agd.alterar(novo["id"], {"nome": "TST %s CK2" % self.m.suf, "usuario_id": c["u2"]["id"]},
+                               esperado=lido,
                                auditoria={"ator": "op.prod", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "y"})
-        self.assertEqual((alterado["nome"], alterado["usuario_id"]), ("Contrato AGD 2", 2))
-        self.assertEqual(total_aud("CAD_ALTERAR"), antes_alt + 1)
-        # 'lido' ficou obsoleto: o UPDATE condicional perde, nada muda e nada e auditado.
+        self.assertEqual((alterado["nome"], alterado["usuario_id"]), ("TST %s CK2" % self.m.suf, c["u2"]["id"]))
+        self.assertEqual(self.aud_total("CAD_ALTERAR", "tbsss_agendamentos", novo["id"]), 1)
         with self.assertRaises(RepoConflito):
             agd.alterar(novo["id"], {"nome": "Perdedor"}, esperado=lido,
                         auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "z"})
-        # Violacao tambem nao altera colunas parcialmente.
         with self.assertRaises(RepoViolacao):
             agd.alterar(novo["id"], {"nome": "Parcial", "tipo_recorrencia": "MENSAL"}, ator="teste")
-        self.assertEqual(agd.obter(novo["id"])["nome"], "Contrato AGD 2")
-        self.assertEqual(total_aud("CAD_ALTERAR"), antes_alt + 1)
+        self.assertEqual(agd.obter(novo["id"])["nome"], "TST %s CK2" % self.m.suf)
+        self.assertEqual(self.aud_total("CAD_ALTERAR", "tbsss_agendamentos", novo["id"]), 1)
 
-        antes_pausa = total_aud("AGD_PAUSAR")
         agd.pausar(novo["id"], "MANUAL", antiga_data=novo["proxima_execucao"],
                    auditoria={"ator": "admin", "ip": "10.0.0.2", "acao": "AGD_PAUSAR", "detalhe": "p"})
-        pausa = aud.listar(filtros={"acao": "AGD_PAUSAR"}, pagina=1, tamanho=1)["itens"][0]
-        self.assertEqual((pausa["ator"], pausa["ip_origem"], pausa["entidade_id"]), ("admin", "10.0.0.2", novo["id"]))
-        self.assertEqual(total_aud("AGD_PAUSAR"), antes_pausa + 1)
+        pausa = self.aud_ultima("AGD_PAUSAR", "tbsss_agendamentos", novo["id"])
+        self.assertEqual((pausa["ator"], pausa["ip_origem"]), ("admin", "10.0.0.2"))
 
         pausado = {"ativo": "N", "pausa_motivo": "MANUAL", "proxima_execucao": novo["proxima_execucao"]}
-        nova = datetime.datetime(2026, 1, 20, 3, 0)
+        nova = datetime.datetime(2030, 1, 20, 3, 0)
         with self.assertRaises(RepoConflito):
             agd.retomar(novo["id"], nova, esperado=dict(pausado, pausa_motivo="CONCLUIDO"),
                         auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "r"})
         self.assertEqual(agd.obter(novo["id"])["ativo"], "N")
-        self.assertEqual(total_aud("CAD_ALTERAR"), antes_alt + 1)
         retomado = agd.retomar(novo["id"], nova, esperado=pausado,
                                auditoria={"ator": "admin", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "r"})
         self.assertEqual((retomado["ativo"], retomado["pausa_motivo"], retomado["proxima_execucao"]), ("S", None, nova))
-        self.assertEqual(total_aud("CAD_ALTERAR"), antes_alt + 2)
+        self.assertEqual(self.aud_total("CAD_ALTERAR", "tbsss_agendamentos", novo["id"]), 2)
 
     def test_08_perm_versao_incrementando(self):
-        rbac = self.obter_repo("rbac")
-        usr = self.obter_repo("usuarios")
-
-        p = rbac.perfis_listar(filtros={"nome": "OPERADOR_PROD"})["itens"][0]
-        v0 = p["perm_versao"]
-
-        # Alteracao no perfil
-        rbac.perfis_alterar(p["id"], {"descricao": "Nova descricao operacao"}, ator="teste")
+        c = self.m.cenario()
+        rbac, usr = self.obter_repo("rbac"), self.obter_repo("usuarios")
+        p = c["perfil"]
+        v0 = rbac.perfis_obter(p["id"])["perm_versao"]
+        rbac.perfis_alterar(p["id"], {"descricao": "Nova descricao"}, ator="teste")
         v1 = rbac.perfis_obter(p["id"])["perm_versao"]
         self.assertEqual(v1, v0 + 1)
-
-        # Alteracao na matriz
-        rbac.matriz_salvar(p["id"], funcs=[1], ambs=[1], scrs=[1], ator="teste")
+        func_ids = [f["id"] for f in rbac.funcionalidades_listar()][:1]
+        rbac.matriz_salvar(p["id"], funcs=func_ids, ambs=[c["amb1"]["id"]], scrs=[c["scr"]["id"]], ator="teste")
         v2 = rbac.perfis_obter(p["id"])["perm_versao"]
         self.assertEqual(v2, v1 + 1)
-
-        # Alteracao de usuario trocando perfil ou desativando
-        u = usr.obter_por_login("op.prod")
-        usr.alterar(u["id"], {"ativo": "N"}, ator="teste")
-        v3 = rbac.perfis_obter(p["id"])["perm_versao"]
-        self.assertGreaterEqual(v3, v2 + 1)
+        usr.alterar(c["u1"]["id"], {"ativo": "N"}, ator="teste")
+        self.assertGreaterEqual(rbac.perfis_obter(p["id"])["perm_versao"], v2 + 1)
 
     def test_09_paginacao_estavel_e_deterministica(self):
+        c = self.m.cenario()
         tck = self.obter_repo("tickets")
-        pag1 = tck.listar(pagina=1, tamanho=10)
-        pag2 = tck.listar(pagina=2, tamanho=10)
-
-        self.assertEqual(pag1["pagina"], 1)
-        self.assertEqual(pag1["tamanho"], 10)
-        self.assertEqual(len(pag1["itens"]), 10)
-        self.assertEqual(len(pag2["itens"]), 10)
-        self.assertGreaterEqual(pag1["total"], 40)
-
-        # Itens da pagina 1 nao devem sobrepor itens da pagina 2
-        ids_p1 = {item["id"] for item in pag1["itens"]}
-        ids_p2 = {item["id"] for item in pag2["itens"]}
-        self.assertTrue(ids_p1.isdisjoint(ids_p2))
-
-        # Repeticao da pagina 1 deve ser identica (estavel)
-        pag1_repetida = tck.listar(pagina=1, tamanho=10)
-        self.assertEqual(
-            [i["id"] for i in pag1["itens"]],
-            [i["id"] for i in pag1_repetida["itens"]]
-        )
+        for _ in range(25):
+            self.m.ticket(**c["ticket_base"])
+        filtros = {"script_id": c["scr"]["id"], "solicitante": c["login"]}
+        pag1 = tck.listar(filtros=filtros, pagina=1, tamanho=10)
+        pag2 = tck.listar(filtros=filtros, pagina=2, tamanho=10)
+        self.assertEqual((pag1["pagina"], pag1["tamanho"], pag1["total"]), (1, 10, 25))
+        self.assertEqual((len(pag1["itens"]), len(pag2["itens"])), (10, 10))
+        self.assertTrue({i["id"] for i in pag1["itens"]}.isdisjoint({i["id"] for i in pag2["itens"]}))
+        ordem = [(i["created_at"], i["id"]) for i in pag1["itens"] + pag2["itens"]]
+        self.assertEqual(ordem, sorted(ordem, reverse=True))
+        self.assertEqual([i["id"] for i in pag1["itens"]],
+                         [i["id"] for i in tck.listar(filtros=filtros, pagina=1, tamanho=10)["itens"]])
 
     def test_10_escopo_ambientes_na_listagem_tickets(self):
+        c = self.m.cenario()
         tck = self.obter_repo("tickets")
-
-        # Somente HOMOLOGACAO
-        lista_hml = tck.listar(escopo_ambientes=["HOMOLOGACAO"], pagina=1, tamanho=50)
-        for t in lista_hml["itens"]:
-            self.assertEqual(t["ambiente"], "HOMOLOGACAO")
-
-        # Somente PRODUCAO
-        lista_prod = tck.listar(escopo_ambientes=["PRODUCAO"], pagina=1, tamanho=50)
-        for t in lista_prod["itens"]:
-            self.assertEqual(t["ambiente"], "PRODUCAO")
-
-        # Total somado dos dois escopos disjuntos deve bater
-        self.assertEqual(lista_hml["total"] + lista_prod["total"], 40)
+        for _ in range(3):
+            self.m.ticket(**c["ticket_base"])
+        for _ in range(2):
+            self.m.ticket(**dict(c["ticket_base"], ambiente=c["amb2"]["nome"]))
+        filtros = {"script_id": c["scr"]["id"]}
+        lista_a = tck.listar(filtros=filtros, escopo_ambientes=[c["amb1"]["nome"]], pagina=1, tamanho=50)
+        lista_b = tck.listar(filtros=filtros, escopo_ambientes=[c["amb2"]["nome"]], pagina=1, tamanho=50)
+        self.assertEqual({t["ambiente"] for t in lista_a["itens"]}, {c["amb1"]["nome"]})
+        self.assertEqual({t["ambiente"] for t in lista_b["itens"]}, {c["amb2"]["nome"]})
+        self.assertEqual((lista_a["total"], lista_b["total"]), (3, 2))
+        self.assertEqual(tck.listar(filtros=filtros, escopo_ambientes=[], pagina=1, tamanho=50)["total"], 0)
 
     def test_11_log_ler_incremental(self):
+        c = self.m.cenario()
         tck = self.obter_repo("tickets")
-        # Ticket 11 possui log_output preenchido no seed
-        texto, prox_off, terminal, truncado = tck.log_ler(11, offset=0, max_chars=20)
-        self.assertEqual(len(texto), 20)
-        self.assertEqual(prox_off, 20)
-        self.assertFalse(terminal)
-        self.assertFalse(truncado)
-
-        # Leitura da segunda fatia
-        texto2, prox_off2, _, _ = tck.log_ler(11, offset=prox_off, max_chars=20)
-        self.assertNotEqual(texto, texto2)
-        self.assertEqual(prox_off2, 40)
-
+        log = "".join("linha %02d do log\n" % i for i in range(10))
+        tid = self.m.ticket(**dict(c["ticket_base"], status="RUNNING", log_output=log,
+                                   started_at=datetime.datetime(2026, 1, 1, 8, 0)))
+        texto, prox_off, terminal, truncado = tck.log_ler(tid, offset=0, max_chars=20)
+        self.assertEqual((texto, prox_off, terminal, truncado), (log[:20], 20, False, False))
+        texto2, prox_off2, _, _ = tck.log_ler(tid, offset=prox_off, max_chars=20)
+        self.assertEqual((texto2, prox_off2), (log[20:40], 40))
 
     # ------------------------------------------------------------------
     # Colunas de registro (CR-006, README §10, AGENTS §4.15)
@@ -651,43 +604,51 @@ class BaseRepoContractTest(object):
         self.assertEqual((depois["created_at"], depois["created_by"]), (antes["created_at"], antes["created_by"]))
 
     def test_12_registro_inclusao_e_alteracao_nos_cadastros(self):
-        cat = self.obter_repo("catalogo")
-        rbac = self.obter_repo("rbac")
-        usr = self.obter_repo("usuarios")
-        agd = self.obter_repo("agendamentos")
+        c = self.m.cenario()
+        cat, rbac, usr, agd = (self.obter_repo(n) for n in ("catalogo", "rbac", "usuarios", "agendamentos"))
         aud = {"ator": "carla", "ip": "10.0.0.9", "acao": "CAD_ALTERAR", "detalhe": "registro"}
+        suf = self.m.suf
 
-        amb = cat.ambientes_inserir({"nome": "REG_AMB", "descricao": "d"}, ator="ana")
+        amb = cat.ambientes_inserir({"nome": "TST_%s_REG" % suf, "descricao": "d"}, ator="ana")
+        self.m.anotar("ambientes", amb["id"])
         self._conferir_inclusao(amb, "ana")
         self._conferir_alteracao(amb, cat.ambientes_alterar(amb["id"], {"descricao": "e"}, ator="bia"), "bia")
         self._conferir_alteracao(amb, cat.ambientes_alterar(amb["id"], {"descricao": "f"}, auditoria=aud), "carla")
         self.assertEqual(cat.ambientes_obter(amb["id"])["updated_by"], "carla")
 
-        scr = cat.scripts_inserir({"nome": "reg_script", "interpretador": "SH", "path_file": "/opt/reg.sh",
-                                   "tipo_param": "NENHUM"}, ator="ana")
+        scr = cat.scripts_inserir({"nome": "tst_%s_reg" % suf, "interpretador": "SH",
+                                   "path_file": "/opt/tst/%s_reg.sh" % suf, "tipo_param": "NENHUM"}, ator="ana")
+        self.m.anotar("scripts", scr["id"])
         self._conferir_inclusao(scr, "ana")
         self._conferir_alteracao(scr, cat.scripts_alterar(scr["id"], {"ativo": "N"}, ator="bia"), "bia")
 
-        prm = cat.parametros_inserir({"codigo": "reg_prm", "label": "Reg", "tipo_componente": "TEXT"}, ator="ana")
+        prm = cat.parametros_inserir({"codigo": "tst_%s_reg" % suf, "label": "Reg", "tipo_componente": "TEXT"},
+                                     ator="ana")
+        self.m.anotar("parametros", prm["id"])
         self._conferir_inclusao(prm, "ana")
         self._conferir_alteracao(prm, cat.parametros_alterar(prm["id"], {"label": "Outro"}, ator="bia"), "bia")
 
-        per = rbac.perfis_inserir({"nome": "REG_PERFIL"}, ator="ana")
+        per = rbac.perfis_inserir({"nome": "TST_%s_REG" % suf}, ator="ana")
+        self.m.anotar("perfis", per["id"])
         self._conferir_inclusao(per, "ana")
         self._conferir_alteracao(per, rbac.perfis_alterar(per["id"], {"descricao": "x"}, ator="bia"), "bia")
 
-        u = usr.inserir({"login": "reg.usuario", "nome": "Reg", "perfil_id": per["id"]}, ator="ana")
+        u = usr.inserir({"login": "tst.%s.reg" % suf, "nome": "Reg", "senha_hash": "h", "perfil_id": per["id"]},
+                        ator="ana")
+        self.m.anotar("usuarios", u["id"])
         self._conferir_inclusao(u, "ana")
         self._conferir_alteracao(u, usr.alterar(u["id"], {"nome": "Reg 2"}, ator="bia"), "bia")
         self._conferir_alteracao(u, usr.definir_senha(u["id"], "hash-novo", ator="dora"), "dora")
         self._conferir_alteracao(u, usr.desbloquear(u["id"], ator="eva"), "eva")
 
-        base = agd.obter(2)
-        dados = dict((k, v) for k, v in base.items()
-                     if k not in ("id", "created_at", "created_by", "updated_at", "updated_by"))
-        regra = agd.inserir(dict(dados, nome="Regra registro"), ator="ana")
+        regra = agd.inserir({"nome": "TST %s REG" % suf, "script_id": c["scr"]["id"], "ambiente": c["amb1"]["nome"],
+                             "usuario_id": c["u1"]["id"], "prioridade": 2, "tipo_recorrencia": "DIARIA",
+                             "hora_execucao": "03:00", "parametros_json": "{}",
+                             "data_inicio": datetime.datetime(2026, 1, 15, 10, 0),
+                             "proxima_execucao": datetime.datetime(2030, 1, 16, 3, 0)}, ator="ana")
+        self.m.anotar("agendamentos", regra["id"])
         self._conferir_inclusao(regra, "ana")
-        editada = agd.alterar(regra["id"], {"nome": "Regra editada", "usuario_id": 3}, ator="op.hml")
+        editada = agd.alterar(regra["id"], {"nome": "TST %s REG2" % suf, "usuario_id": c["u2"]["id"]}, ator="op.hml")
         self._conferir_alteracao(regra, editada, "op.hml")
         self.assertEqual(editada["created_by"], "ana", "o criador original nunca muda (R-g)")
         pausada = agd.pausar(regra["id"], "MANUAL", antiga_data=editada["proxima_execucao"], ator="bia")
@@ -695,58 +656,89 @@ class BaseRepoContractTest(object):
         self._conferir_alteracao(regra, agd.retomar(regra["id"], editada["proxima_execucao"], ator="carla"), "carla")
 
     def test_12b_ator_obrigatorio_e_limitado_sem_gravacao_parcial(self):
-        cat = self.obter_repo("catalogo")
-        usr = self.obter_repo("usuarios")
-        tck = self.obter_repo("tickets")
-        total = cat.ambientes_listar(tamanho=100)["total"]
+        c = self.m.cenario()
+        cat, usr, tck = self.obter_repo("catalogo"), self.obter_repo("usuarios"), self.obter_repo("tickets")
         for ator in (None, "", "x" * 41):
             with self.assertRaises(RepoViolacao):
-                cat.ambientes_inserir({"nome": "SEM_ATOR"}, ator=ator)
-        self.assertEqual(cat.ambientes_listar(tamanho=100)["total"], total)
-        antes = cat.ambientes_obter(1)
+                cat.ambientes_inserir({"nome": "TST_%s_SEMATOR" % self.m.suf}, ator=ator)
+        self.assertEqual(cat.ambientes_listar(filtros={"nome": "TST_%s_SEMATOR" % self.m.suf})["total"], 0)
+        antes = cat.ambientes_obter(c["amb1"]["id"])
         with self.assertRaises(RepoViolacao):
-            cat.ambientes_alterar(1, {"descricao": "nao grava"})
-        self.assertEqual(cat.ambientes_obter(1), antes)
+            cat.ambientes_alterar(c["amb1"]["id"], {"descricao": "nao grava"})
+        self.assertEqual(cat.ambientes_obter(c["amb1"]["id"]), antes)
         with self.assertRaises(RepoViolacao):
-            usr.desbloquear(6)
+            usr.desbloquear(c["u1"]["id"])
+        tid = self.m.ticket(**c["ticket_base"])
         with self.assertRaises(RepoViolacao):
-            tck.solicitar_cancelamento(1, None, "10.0.0.1")
-        self.assertEqual(tck.obter(1)["status"], "PENDING")
-        self.assertEqual(cat.ambientes_inserir({"nome": "ATOR_40"}, ator="y" * 40)["created_by"], "y" * 40)
+            tck.solicitar_cancelamento(tid, None, "10.0.0.1")
+        self.assertEqual(tck.obter(tid)["status"], "PENDING")
+        amb40 = cat.ambientes_inserir({"nome": "TST_%s_ATOR40" % self.m.suf}, ator="y" * 40)
+        self.m.anotar("ambientes", amb40["id"])
+        self.assertEqual(amb40["created_by"], "y" * 40)
 
     def test_12c_rotina_tecnica_do_login_nao_grava_updated(self):
+        c = self.m.cenario()
         usr = self.obter_repo("usuarios")
-        antes = usr.obter_por_login("op.prod")
-        usr.registrar_falha_login("op.prod", bloqueio_s=60)
+        antes = usr.obter_por_login(c["login"])
+        usr.registrar_falha_login(c["login"], bloqueio_s=60)
         usr.reiniciar_tentativas(antes["id"])
-        usr.registrar_sucesso_login("op.prod", novo_hash=antes["senha_hash"])
-        depois = usr.obter_por_login("op.prod")
+        usr.registrar_sucesso_login(c["login"], novo_hash=antes["senha_hash"])
+        depois = usr.obter_por_login(c["login"])
         self.assertEqual((depois["updated_at"], depois["updated_by"]), (antes["updated_at"], antes["updated_by"]))
         self.assertEqual(depois["tentativas_falha"], 0)
 
     def test_12d_tickets_criacao_e_cancelamento(self):
+        c = self.m.cenario()
         tck = self.obter_repo("tickets")
-        tid = tck.criar({"script_id": 1, "ambiente": "PRODUCAO", "solicitante": "op.prod", "prioridade": 2},
-                        [{"parametro_id": 1, "valor_resposta": "2026-10-17"}])
+        base = dict(c["ticket_base"], solicitante=c["u2"]["login"])
+        tid = self.m.ticket([{"parametro_id": c["prm_a"]["id"], "valor_resposta": "2026-10-17"}], **base)
         t = tck.obter(tid)
-        self._conferir_inclusao(t, "op.prod")
-        self.assertEqual([r["created_by"] for r in tck.respostas(tid)], ["op.prod"])
-        tid_agd = tck.criar({"script_id": 1, "ambiente": "PRODUCAO", "solicitante": "op.prod", "prioridade": 2},
-                            [], ator="SYSTEM:agt-host01")
+        self._conferir_inclusao(t, c["u2"]["login"])
+        self.assertEqual([r["created_by"] for r in tck.respostas(tid)], [c["u2"]["login"]])
+        tid_agd = self.m.ticket(ator="SYSTEM:agt-host01", **base)
         self._conferir_inclusao(tck.obter(tid_agd), "SYSTEM:agt-host01")
 
         self.assertEqual(tck.solicitar_cancelamento(tid, "admin", "10.0.0.1"), "CANCELADO")
-        cancelado = tck.obter(tid)
-        self._conferir_alteracao(t, cancelado, "admin")
+        self._conferir_alteracao(t, tck.obter(tid), "admin")
         self.assertEqual(tck.solicitar_cancelamento(tid, "outro", "10.0.0.1"), "TERMINAL")
         self.assertEqual(tck.obter(tid)["updated_by"], "admin", "solicitacao sem efeito nao altera o registro")
 
-        tid_run = tck.criar({"script_id": 1, "ambiente": "PRODUCAO", "solicitante": "admin", "status": "RUNNING",
-                             "prioridade": 2}, [])
+        tid_run = self.m.ticket(**dict(c["ticket_base"], status="RUNNING"))
         self.assertEqual(tck.solicitar_cancelamento(tid_run, "admin", "10.0.0.1"), "SINALIZADO")
         self.assertEqual(tck.obter(tid_run)["updated_by"], "admin")
         self.assertEqual(tck.solicitar_cancelamento(tid_run, "outro", "10.0.0.1"), "JA_SINALIZADO")
         self.assertEqual(tck.obter(tid_run)["updated_by"], "admin")
+
+
+class BaseUltimoAdminTest(object):
+    """Protecao do ultimo administrador (README §4.3.B): exige que nao haja outro admin ativo no banco.
+
+    Roda no FAKE e no Oracle so com owner descartavel (SSS_TEST_*): num owner compartilhado ha admins
+    reais, e desativa-los para o teste seria perigoso.
+    """
+
+    def test_perfil_ultimo_admin_recusado_sem_alterar(self):
+        rbac = self.obter_repo("rbac")
+        admin = rbac.perfis_listar(filtros={"nome": "ADMINISTRADOR"})["itens"][0]
+        versao = admin["perm_versao"]
+        for dados in ({"ativo": "N"}, {"is_admin": "N"}):
+            with self.assertRaises(RepoViolacao) as ctx:
+                rbac.perfis_alterar(admin["id"], dados,
+                                    auditoria={"ator": "admin", "ip": None, "acao": "CAD_DESATIVAR", "detalhe": "x"})
+            self.assertEqual(ctx.exception.constraint, "sss_ultimo_admin")
+        atual = rbac.perfis_obter(admin["id"])
+        self.assertEqual((atual["ativo"], atual["is_admin"], atual["perm_versao"]), ("S", "S", versao))
+
+    def test_usuario_ultimo_admin_recusado_sem_alterar(self):
+        usr = self.obter_repo("usuarios")
+        admin = usr.obter_por_login("admin")
+        consulta = usr.obter_por_login("consulta")
+        for dados in ({"ativo": "N"}, {"perfil_id": consulta["perfil_id"]}):
+            with self.assertRaises(RepoViolacao) as ctx:
+                usr.alterar(admin["id"], dados, auditoria={"ator": "x", "ip": None, "acao": "CAD_ALTERAR", "detalhe": "x"})
+            self.assertEqual(ctx.exception.constraint, "sss_ultimo_admin")
+        atual = usr.obter_por_id(admin["id"])
+        self.assertEqual((atual["ativo"], atual["perfil_id"]), ("S", admin["perfil_id"]))
 
 
 class TestRepoContractFake(unittest.TestCase, BaseRepoContractTest):
@@ -824,12 +816,8 @@ class TestRepoContractFake(unittest.TestCase, BaseRepoContractTest):
         self.assertEqual(depois["created_by"], antes["created_by"])
 
 
-@unittest.skipUnless(
-    os.environ.get("SSS_TEST_ORACLE") == "1" and os.environ.get("SSS_TEST_ORACLE_INTEGRATED") == "1",
-    "Teste Oracle integrado habilitado somente apos os cinco agregados do F7.3",
-)
-class TestRepoContractOracle(unittest.TestCase, BaseRepoContractTest):
-    """Executa a mesma bateria contra o backend ORACLE quando DSN fornecido."""
+class _OracleContrato(object):
+    """Preparo e limpeza comuns as classes da bateria contra o Oracle real (SSS_TEST_ORACLE=1)."""
 
     @classmethod
     def setUpClass(cls):
@@ -849,11 +837,80 @@ class TestRepoContractOracle(unittest.TestCase, BaseRepoContractTest):
             delattr(current, "sss_cfg")
 
     def setUp(self):
-        repo_factory.configurar({"app": {"data_backend": "ORACLE", "sss_env": "DEV"}})
+        repo_factory.configurar({"app": {"sss_env": "DEV"}})
+        repo_factory.reset_singletons()
+        self._massa = None
+
+    def tearDown(self):
+        self._limpar_massa()
+
+    def obter_repo(self, nome):
+        return repo_factory.obter(nome)
+
+    def _limpar_massa(self):
+        """Remove so os registros criados pelo teste, em ordem de dependencia; no modo compartilhado,
+        tambem a auditoria deles (README §2.5). Limpeza incompleta falha o teste com os IDs restantes."""
+        import _oracle_test_support
+        massa = getattr(self, "_massa", None)
+        if massa is None or not any(massa.criados.values()):
+            return
+        repo = self.obter_repo("catalogo")
+        compartilhado = _oracle_test_support.modo_schema() == _oracle_test_support.MODO_COMPARTILHADO
+        tab_aud = repo.qualificar_tabela("auditoria")
+        conn = repo._obter_conexao()
+        restantes = []
+        try:
+            cur = conn.cursor()
+            try:
+                for entidade, ids in massa.criados.items():
+                    tabela = repo.qualificar_tabela(entidade)
+                    for rid in ids:
+                        cur.execute("DELETE FROM " + tabela + " WHERE id = :id", {"id": rid})
+                        if compartilhado:
+                            cur.execute("DELETE FROM " + tab_aud + " WHERE entidade = :ent AND entidade_id = :id",
+                                        {"ent": "tbsss_" + entidade, "id": rid})
+                conn.commit()
+                for entidade, ids in massa.criados.items():
+                    tabela = repo.qualificar_tabela(entidade)
+                    for rid in ids:
+                        cur.execute("SELECT id FROM " + tabela + " WHERE id = :id", {"id": rid})
+                        if cur.fetchone():
+                            restantes.append((entidade, rid))
+            finally:
+                cur.close()
+        finally:
+            conn.close()
+        if restantes:
+            self.fail("Limpeza incompleta no banco real: %s" % restantes)
+
+
+@unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")
+class TestRepoContractOracle(_OracleContrato, unittest.TestCase, BaseRepoContractTest):
+    """Executa a mesma bateria contra o Oracle do config.ini, com dados proprios de cada teste."""
+
+
+class TestUltimoAdminFake(unittest.TestCase, BaseUltimoAdminTest):
+    """Protecao do ultimo administrador no FAKE (seed com um unico admin ativo)."""
+
+    def setUp(self):
+        repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
         repo_factory.reset_singletons()
 
     def obter_repo(self, nome):
         return repo_factory.obter(nome)
+
+
+@unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")
+class TestUltimoAdminOracle(_OracleContrato, unittest.TestCase, BaseUltimoAdminTest):
+    """Protecao do ultimo administrador no Oracle: so com owner descartavel (o teste e dono do banco)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super(TestUltimoAdminOracle, cls).setUpClass()
+        import _oracle_test_support
+        if _oracle_test_support.modo_schema() != _oracle_test_support.MODO_DESCARTAVEL:
+            raise unittest.SkipTest("Owner compartilhado: ha administradores reais; a protecao do ultimo admin "
+                                    "so e exercida no FAKE e com owner SSS_TEST_* (README §2.5)")
 
 
 class TestRepoFactoryEIntegridade(unittest.TestCase):

@@ -211,7 +211,10 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
       * A limpeza remove só os IDs criados pelo teste, sem `DROP` nem `TRUNCATE`; limpeza incompleta falha o teste e lista os IDs que sobraram.
       * Os únicos efeitos permanentes são o avanço das sequences e as linhas de auditoria de testes que passam `auditoria=` (a auditoria só recebe inclusões e só o purge remove linhas).
       * **Exceção (F7.3):** algumas operações sempre auditam (`criar` e `solicitar_cancelamento` de tickets, as gravações e a pausa de agendamentos, o `encerrar_sessoes` de usuários). Por isso, só no modo compartilhado, a limpeza apaga a auditoria **dos próprios registros do teste**: `entidade` da tabela (`tbsss_tickets`, `tbsss_agendamentos` ou `tbsss_usuarios`) e `entidade_id` entre os IDs criados pelo teste. Nenhuma outra linha de auditoria é tocada.
-  * **Bateria integrada contra o Oracle:** exige também `SSS_TEST_ORACLE_INTEGRATED=1`, gate liberado só depois do 5º agregado do F7.3.
+  * **Bateria integrada contra o Oracle (`test_repo_contract.py`):** roda com a mesma chave `SSS_TEST_ORACLE=1`; o gate `SSS_TEST_ORACLE_INTEGRATED` saiu depois do 5º agregado. Cada teste cria a própria massa pelos repositórios (classe `_Massa`: ambientes, perfil, usuários, parâmetros, script, agendamento e tickets com sufixo único) e não usa nomes nem IDs do seed.
+    * A auditoria é conferida pela `entidade` e pelo `entidade_id` do próprio registro, e o nome das constraints segue o prefixo configurado.
+    * O `tearDown` remove só os IDs criados, em ordem de dependência (e, no modo compartilhado, a auditoria deles).
+    * A proteção do **último administrador** só é exercida no FAKE e com owner descartável (`SSS_TEST_*`): num owner compartilhado há administradores reais, e a classe fica pulada com o motivo.
 * **Trava de ambiente:**
   * `[app] sss_env` aceita `DEV`, `HML` ou `PROD`.
   * O FAKE (só de teste) pedido fora de `sss_env = DEV` é recusado pela factory.

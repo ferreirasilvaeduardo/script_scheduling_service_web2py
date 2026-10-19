@@ -425,12 +425,12 @@ class RepoUsuariosOracle(BaseRepoOracle, RepoUsuarios):
                     sets.append("sessao_epoch = sessao_epoch + 1")
 
                 sql_upd = "UPDATE " + self._tabela() + " SET " + ", ".join(sets) + " WHERE id = :id"
-                db_conn.definir_tipos_entrada(
-                    cur,
-                    bloqueado_ate=db_conn.TIPO_DATE,
-                    ultimo_login=db_conn.TIPO_DATE,
-                    senha_alterada_em=db_conn.TIPO_DATE,
-                )
+                # So os binds de data presentes no SET: o python-oracledb recusa tipo declarado para bind
+                # ausente do SQL (DPY-4008), o que quebrava toda alteracao sem data (F7.3, bateria integrada).
+                tipos = dict((c, db_conn.TIPO_DATE) for c in ("bloqueado_ate", "ultimo_login", "senha_alterada_em")
+                             if c in params)
+                if tipos:
+                    db_conn.definir_tipos_entrada(cur, **tipos)
                 cur.execute(sql_upd, params)
 
                 # Incrementa perm_versao do perfil de origem e destino se aplicavel
