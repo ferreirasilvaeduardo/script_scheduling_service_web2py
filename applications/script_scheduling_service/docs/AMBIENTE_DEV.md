@@ -115,13 +115,12 @@ O servidor de desenvolvimento do web2py deve ser iniciado a partir da raiz do we
 
 ```bash
 cd /portaloptrib/TESHUVA/web2py
-read -s -p "SSS_DEV_SEED_PASSWORD: " SSS_DEV_SEED_PASSWORD && export SSS_DEV_SEED_PASSWORD && echo
-python web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui
+~/.pyenv/versions/3.6.15/bin/python web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui
 ```
 
-O `read -s` não deixa a senha no histórico do shell, e o `-a '<recycle>'` desabilita o painel do web2py sem pôr senha na lista de processos (`docs/IMPLANTACAO.md` §11.1).
+**A aplicação usa sempre o Oracle** do `[oracle]` do `instance/config.ini` (owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, só o 3.6.15 tem; no `bin/iniciar_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3`. O `-a '<recycle>'` desabilita o painel do web2py sem pôr senha na lista de processos (`docs/IMPLANTACAO.md` §11.1).
 
-Antes da primeira subida, crie `instance/config.ini` a partir do `config.ini.example` (`sss_env = DEV`, `data_backend = FAKE`, `secrets_file`, `log_dir` e `work_dir` apontando para pastas suas) e o `secrets.cfg` com o `cookie_key`, dono você e modo `0600`. O passo a passo está no `docs/IMPLANTACAO.md` §8.2 e §9.
+Antes da primeira subida, crie `instance/config.ini` a partir do `config.ini.example` (`sss_env = DEV`, o `[oracle]` com owner, prefixo e DSN, `secrets_file`, `log_dir` e `work_dir` apontando para pastas suas) e o `secrets.cfg` com o `cookie_key`, dono você e modo `0600`. O passo a passo está no `docs/IMPLANTACAO.md` §8.2 e §9.
 
 A aplicação fica no endereço local `127.0.0.1:8000/script_scheduling_service` (porta 8000, caminho `/script_scheduling_service`).
 
@@ -142,23 +141,18 @@ Para subir como nos servidores via launcher oficial:
 
 **Segredos em DEV (CR-007, D1b):** o `secrets.cfg` do nó web leva só `[web] cookie_key` (e `[oracle] password` com Oracle). Seções do agente (`[ambiente:*]`, `[purge]`) no arquivo do web geram WARN em DEV e recusam a subida fora de DEV.
 
-### Senha dos usuários de demonstração (`SSS_DEV_SEED_PASSWORD`)
+### Usuários de homologação
 
-* Com `data_backend = FAKE`, o seed define a senha de **todos** os usuários de demonstração (`admin`, `op.prod`, `op.hml`, `consulta`) a partir dessa variável de ambiente. `inativo` e `bloqueado` nunca conseguem entrar, de propósito.
-* A senha precisa atender à política (mínimo de 12 caracteres). Sem a variável, ou fora da política, a aplicação sobe, registra um WARN e **nenhum login funciona**.
-* Nenhuma senha fica no código nem no `config.ini`. A variável é registrada no mascarador e não aparece nos logs.
-* O FAKE guarda tudo em memória: reiniciar o servidor restaura o seed (útil para repetir testes e a homologação).
-* Perfis, permissões e dados de apoio de cada usuário: `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx`, capítulo 3.
+* **No Oracle:** os usuários `admin`, `op.prod`, `op.hml` e `consulta` vêm do seed do `01_implantar_sss.sql`, com a senha padrão de homologação do README §11.1. Troque-as depois da implantação.
+* **`SSS_DEV_SEED_PASSWORD`:** só vale para o FAKE dos testes automáticos. A aplicação não usa mais essa variável.
+* **Perfis, permissões e dados de apoio de cada usuário:** `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx`, capítulo 3.
 
 ### Regras Mandatórias de Execução:
 
 1. **Escuta estrita em 127.0.0.1:**
    O parâmetro `-i 127.0.0.1` é obrigatório. Nunca utilize `0.0.0.0` em ambiente de desenvolvimento, garantindo isolamento na máquina local.
-2. **Processo único para backend FAKE (Aviso Crítico):**
-   * O backend em memória (`data_backend = FAKE` em `modules/repo_fake/`) mantém o estado e as tabelas na memória do processo em execução.
-   * Portanto, **o backend FAKE exige estritamente um servidor web de processo único**, que é o comportamento padrão do servidor embutido do web2py (`web2py.py`).
-   * Não execute o web2py com múltiplos workers (como via gunicorn ou uWSGI multiprocessado) durante o uso do backend FAKE, pois cada worker manteria um estado em memória diferente, quebrando a consistência das transações e dos dados.
-   * **Trava de segurança:** O backend FAKE só é aceito quando `sss_env = DEV`. Em ambientes `HML` e `PROD`, a aplicação aborta a inicialização imediatamente.
+2. **Sem FAKE na aplicação:** desde o F7.3, a aplicação usa sempre o Oracle (pool de conexões por processo). O FAKE em memória só existe nos testes automáticos.
+   * **Trava de segurança:** o FAKE dos testes só é aceito com `sss_env = DEV`; fora de DEV, a `repo_factory` o recusa.
 
 ---
 

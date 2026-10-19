@@ -441,6 +441,13 @@ class TestDdlSeedERollback(unittest.TestCase):
         pos_amb = sql_rb.index("DROP TABLE openrisow.tbsss_ambientes")
         self.assertLess(pos_tck, pos_amb)
 
+    def test_hash_do_seed_confere_com_a_senha_documentada(self):
+        """Regressao (F7.3): o hash do seed nao conferia com a senha do README §11.1 e nenhum usuario entrava."""
+        import security
+        self.assertTrue(security.verificar_senha("Sss@Homolog2026!", ddl_builder.HASH_SENHA_PADRAO_HOMOLOGACAO))
+        seed = "\n".join(ddl_builder.gerar_instrucoes_seed(self.owner, self.prefixo))
+        self.assertIn(ddl_builder.HASH_SENHA_PADRAO_HOMOLOGACAO, seed)
+
     def test_validacao_sem_hash_e_com_owner_prefixo_parametrizados(self):
         """99_validar: nao mostra senha_hash, nao fixa owner/prefixo e respeita o limite de linha do SQL*Plus."""
         sql = ddl_builder.gerar_script_validacao("SSS_APP", "abc_")

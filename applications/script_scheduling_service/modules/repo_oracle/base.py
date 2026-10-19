@@ -4,10 +4,12 @@
 Garante que nenhum modulo de repo_oracle importe oracledb ou cx_Oracle diretamente:
 todo acesso ao driver passa exclusivamente por db_conn.py (CR-002, AGENTS §2.2).
 """
+import atexit
 import collections
 import contextlib
 import datetime
 import re
+import threading
 
 from gluon import current
 
@@ -17,6 +19,38 @@ import sql_ident
 import sss_config
 
 _RE_CONSTRAINT = re.compile(r"\((?:[A-Za-z0-9_]+\.)?([A-Za-z0-9_]+)\)")
+
+# Um pool por processo para o papel web (README §2.3, CR-007 R-12): abrir conexao nova custa ~15x
+# mais que reaproveitar (medido no GFPR), e as telas fazem dezenas de leituras por requisicao.
+_POOLS = {}
+_POOLS_LOCK = threading.Lock()
+
+
+def _pool_web(cfg, segredos):
+    chave = (getattr(cfg.oracle, "dsn", ""), getattr(cfg.oracle, "user", ""))
+    with _POOLS_LOCK:
+        pool = _POOLS.get(chave)
+        if pool is None:
+            pool = db_conn.pool(cfg, segredos, papel="web")
+            _POOLS[chave] = pool
+        return pool
+
+
+def descartar_pools():
+    """Fecha e esquece os pools do processo (testes e troca de configuracao)."""
+    with _POOLS_LOCK:
+        pools = list(_POOLS.values())
+        _POOLS.clear()
+    for pool in pools:
+        try:
+            pool.close(force=True)
+        except Exception:
+            pass
+
+
+# O pool do python-oracledb (Thin) espera a propria thread no __del__ durante a finalizacao do
+# interpretador e o processo nunca termina; fechar no atexit (antes da finalizacao) evita o impasse.
+atexit.register(descartar_pools)
 
 
 def validar_ator_registro(auditoria=None, ator=None):
@@ -33,6 +67,18 @@ def validar_ator_registro(auditoria=None, ator=None):
     if not at or not isinstance(at, str) or not at.strip() or len(at) > 40:
         raise repo_errors.RepoViolacao("Ator obrigatorio e deve ter ate 40 caracteres")
     return at.strip()
+
+
+_ATOR_MAX = 40
+_DETALHE_MAX = 1000
+
+
+def validar_campos_auditoria(ator, detalhe):
+    """ator NOT NULL ate 40 e detalhe ate 1.000 (README §4.4), sem valor padrao nem corte."""
+    if not ator:
+        raise repo_errors.RepoViolacao("ator da auditoria e obrigatorio")
+    if len(ator) > _ATOR_MAX or (detalhe is not None and len(detalhe) > _DETALHE_MAX):
+        raise repo_errors.RepoViolacao("auditoria excede o tamanho da coluna (ORA-12899)")
 
 
 def traduzir_erro_oracle(exc, constraint_padrao=None, prefixo=None):
@@ -67,10 +113,19 @@ def traduzir_erro_oracle(exc, constraint_padrao=None, prefixo=None):
 
 
 def gravar_auditoria(conn, sql_tbl_aud, sql_seq_aud, auditoria, entidade, entidade_id):
-    """Grava linha(s) em tbsss_auditoria na mesma transacao (README §4.4, §10)."""
+    """Grava linha(s) em tbsss_auditoria na mesma transacao (README §4.4, §10).
+
+    Nunca corta nem completa valores (paridade com o FAKE e o test_06b): ator obrigatorio com ate 40
+    caracteres e detalhe com ate 1.000; fora disso, RepoViolacao antes do INSERT, e a transacao toda
+    e desfeita.
+    """
     if not auditoria:
         return
     itens = [auditoria] if isinstance(auditoria, dict) else auditoria
+    for item in itens:
+        if not isinstance(item, dict):
+            continue
+        validar_campos_auditoria(item.get("ator"), item.get("detalhe"))
     cur = conn.cursor()
     try:
         for item in itens:
@@ -83,12 +138,12 @@ def gravar_auditoria(conn, sql_tbl_aud, sql_seq_aud, auditoria, entidade, entida
                 "VALUES (:id, :ator, :ip_origem, :acao, :entidade, :entidade_id, :detalhe, SYSDATE)",
                 {
                     "id": aid,
-                    "ator": (item.get("ator") or "SYSTEM")[:40],
-                    "ip_origem": (item.get("ip") or item.get("ip_origem") or "")[:45],
-                    "acao": item["acao"][:30],
-                    "entidade": entidade[:30],
+                    "ator": item.get("ator"),
+                    "ip_origem": item.get("ip") or item.get("ip_origem"),
+                    "acao": item["acao"],
+                    "entidade": entidade,
                     "entidade_id": entidade_id,
-                    "detalhe": (item.get("detalhe") or "")[:1000] if item.get("detalhe") else None,
+                    "detalhe": item.get("detalhe"),
                 }
             )
     finally:
@@ -130,7 +185,9 @@ class BaseRepoOracle(object):
                 )
             except Exception:
                 pass
-        return db_conn.conectar(self._cfg, self._segredos, papel="web")
+        # Conexao do pool do processo; conn.close() a devolve ao pool.
+        conn = _pool_web(self._cfg, self._segredos).acquire()
+        return db_conn.configurar_sessao(conn, self._cfg, "web")
 
     @contextlib.contextmanager
     def transacao_escrita(self, conn=None):

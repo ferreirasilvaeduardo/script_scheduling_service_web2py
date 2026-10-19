@@ -868,7 +868,7 @@ class TestRepoFactoryEIntegridade(unittest.TestCase):
         repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "HML"}})
         with self.assertRaises(RuntimeError) as ctx:
             repo_factory.obter("usuarios")
-        self.assertIn("data_backend FAKE e proibido fora de DEV", str(ctx.exception))
+        self.assertIn("FAKE (so de teste) e proibido fora de DEV", str(ctx.exception))
 
         # FAKE com PROD tambem deve abortar
         repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "PROD"}})
@@ -1032,11 +1032,20 @@ class TestRegressaoFailFast(unittest.TestCase):
         self.assertIn("Configuracao ausente", str(ctx.exception))
 
     def test_configuracao_incompleta_falha(self):
-        for cfg in ({}, {"app": {"sss_env": "DEV"}}, {"app": {"data_backend": "FAKE"}}):
+        for cfg in ({}, {"app": {"data_backend": "FAKE"}}):
             with self.subTest(cfg=cfg):
                 repo_factory.configurar(cfg)
                 with self.assertRaises(KeyError):
                     repo_factory.obter("usuarios")
+
+    def test_sem_data_backend_a_aplicacao_e_oracle(self):
+        """F7.3: o config.ini nao tem mais data_backend; so o dict de teste pode pedir o FAKE."""
+        self.assertEqual(repo_factory._resolver_config({"app": {"sss_env": "DEV"}}), ("ORACLE", "DEV"))
+        self.assertEqual(repo_factory._resolver_config({"app": {"sss_env": "DEV", "data_backend": "FAKE"}}),
+                         ("FAKE", "DEV"))
+        import sss_config
+        cfg_app = sss_config.AppConfig(sss_env="PROD")
+        self.assertEqual(repo_factory._resolver_config({"app": cfg_app}), ("ORACLE", "PROD"))
 
     def test_usa_current_sss_cfg_quando_sem_override(self):
         current.sss_cfg = {"app": {"data_backend": "FAKE", "sss_env": "DEV"}}

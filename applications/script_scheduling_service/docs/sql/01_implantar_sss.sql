@@ -4944,7 +4944,7 @@ WHEN MATCHED THEN
      OR dst.ativo <> 'S'
 WHEN NOT MATCHED THEN
   INSERT (id, login, nome, senha_hash, perfil_id, ativo, sessao_epoch, tentativas_falha, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_usuarios.NEXTVAL, 'admin', 'Super Administrador', 'pbkdf2_sha256$200000$f9fb31dc39b754d083af236a880dfa6e$2229f3f8a694a9c45be82d9c3bd38110f8b474d2a0aa0ee7f691d405738a4cd8', src.perfil_id, 'S', 0, 0, SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_usuarios.NEXTVAL, 'admin', 'Super Administrador', 'pbkdf2_sha256$200000$8007db1bd770663178d0f1b1a129140c$9d9604af27e21326e982e5e7c64bfdd868c0995a97181b5a9695149755852d63', src.perfil_id, 'S', 0, 0, SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_usuarios dst
 USING (
@@ -4964,7 +4964,7 @@ WHEN MATCHED THEN
      OR dst.ativo <> 'S'
 WHEN NOT MATCHED THEN
   INSERT (id, login, nome, senha_hash, perfil_id, ativo, sessao_epoch, tentativas_falha, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_usuarios.NEXTVAL, 'op.prod', 'Operador Producao', 'pbkdf2_sha256$200000$f9fb31dc39b754d083af236a880dfa6e$2229f3f8a694a9c45be82d9c3bd38110f8b474d2a0aa0ee7f691d405738a4cd8', src.perfil_id, 'S', 0, 0, SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_usuarios.NEXTVAL, 'op.prod', 'Operador Producao', 'pbkdf2_sha256$200000$8007db1bd770663178d0f1b1a129140c$9d9604af27e21326e982e5e7c64bfdd868c0995a97181b5a9695149755852d63', src.perfil_id, 'S', 0, 0, SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_usuarios dst
 USING (
@@ -4984,7 +4984,7 @@ WHEN MATCHED THEN
      OR dst.ativo <> 'S'
 WHEN NOT MATCHED THEN
   INSERT (id, login, nome, senha_hash, perfil_id, ativo, sessao_epoch, tentativas_falha, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_usuarios.NEXTVAL, 'op.hml', 'Operador Homologacao', 'pbkdf2_sha256$200000$f9fb31dc39b754d083af236a880dfa6e$2229f3f8a694a9c45be82d9c3bd38110f8b474d2a0aa0ee7f691d405738a4cd8', src.perfil_id, 'S', 0, 0, SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_usuarios.NEXTVAL, 'op.hml', 'Operador Homologacao', 'pbkdf2_sha256$200000$8007db1bd770663178d0f1b1a129140c$9d9604af27e21326e982e5e7c64bfdd868c0995a97181b5a9695149755852d63', src.perfil_id, 'S', 0, 0, SYSDATE, 'SYSTEM:init_db');
 
 MERGE INTO openrisow.tbsss_usuarios dst
 USING (
@@ -5004,7 +5004,7 @@ WHEN MATCHED THEN
      OR dst.ativo <> 'S'
 WHEN NOT MATCHED THEN
   INSERT (id, login, nome, senha_hash, perfil_id, ativo, sessao_epoch, tentativas_falha, created_at, created_by)
-  VALUES (openrisow.sq_tbsss_usuarios.NEXTVAL, 'consulta', 'Auditor e Consulta', 'pbkdf2_sha256$200000$f9fb31dc39b754d083af236a880dfa6e$2229f3f8a694a9c45be82d9c3bd38110f8b474d2a0aa0ee7f691d405738a4cd8', src.perfil_id, 'S', 0, 0, SYSDATE, 'SYSTEM:init_db');
+  VALUES (openrisow.sq_tbsss_usuarios.NEXTVAL, 'consulta', 'Auditor e Consulta', 'pbkdf2_sha256$200000$8007db1bd770663178d0f1b1a129140c$9d9604af27e21326e982e5e7c64bfdd868c0995a97181b5a9695149755852d63', src.perfil_id, 'S', 0, 0, SYSDATE, 'SYSTEM:init_db');
 
 -- ------------------------------------------------------------------------------
 -- FASE 8: ESTATISTICAS INICIAIS DO OTIMIZADOR (CR-007, R-29)

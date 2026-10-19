@@ -6,11 +6,11 @@ class RepoAgentes(object):
     """Contrato abstrato para consulta de agentes e execucoes em andamento."""
 
     def listar(self):
-        """Retorna lista de dicts com todos os agentes registrados."""
+        """Todos os agentes, por codigo e id, com plataforma, interpretadores e config_criticos."""
         raise NotImplementedError
 
     def tickets_running(self, codigo):
-        """Retorna lista de tickets em status RUNNING pertencentes ao agente informado."""
+        """Tickets RUNNING do agente informado, por id, sem CLOB (sem log_output nem parametros_enviados)."""
         raise NotImplementedError
 
     def fila_sem_atendente(self, agora, limiares):

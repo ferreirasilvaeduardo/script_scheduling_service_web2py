@@ -579,17 +579,29 @@ def conectar(cfg, segredos, papel="web", user=None, password=None):
     else:
         conn = driver.connect(user=u, password=p, dsn=dsn)
 
-    # Configuracao obrigatoria de toda conexao (README §2.3)
+    return configurar_sessao(conn, cfg, papel, user=u)
+
+
+def configurar_sessao(conn, cfg, papel="web", user=None):
+    """Configuracao obrigatoria de toda conexao (README §2.3), nova ou tirada do pool.
+
+    autocommit desligado, call_timeout do config e module/action/client_identifier da sessao.
+    """
+    timeout_ms = getattr(cfg.oracle, "call_timeout_ms", 30000) if hasattr(cfg, "oracle") else 30000
+    try:
+        timeout_ms = int(timeout_ms)
+    except (TypeError, ValueError):
+        timeout_ms = 30000
     conn.autocommit = False
     if hasattr(conn, "call_timeout"):
-        conn.call_timeout = int(timeout_ms)
+        conn.call_timeout = timeout_ms
 
     conn.module = "SSS_%s" % papel.upper()
     conn.action = "INICIO"
 
+    u = user or (getattr(cfg.oracle, "user", None) if hasattr(cfg, "oracle") else None)
     agent_id = getattr(getattr(cfg, "agent", None), "agent_id", None) or getattr(cfg, "agent_id", None)
     conn.client_identifier = str(agent_id or u or "-")
-
     return conn
 
 

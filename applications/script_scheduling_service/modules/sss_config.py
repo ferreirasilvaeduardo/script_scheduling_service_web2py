@@ -94,7 +94,6 @@ class CampoDef(object):
 SCHEMA = collections.OrderedDict([
     ("app", collections.OrderedDict([
         ("sss_env", CampoDef("enum", obrigatorio=True, allowed_values=("DEV", "HML", "PROD"))),
-        ("data_backend", CampoDef("enum", obrigatorio=True, allowed_values=("FAKE", "ORACLE"))),
     ])),
     ("oracle", collections.OrderedDict([
         ("user", CampoDef("str", obrigatorio=True)),
@@ -184,7 +183,7 @@ class _ItemAccessMixin(object):
         return super(_ItemAccessMixin, self).__getitem__(item)
 
 
-class AppConfig(_ItemAccessMixin, collections.namedtuple("AppConfig", ["sss_env", "data_backend"])):
+class AppConfig(_ItemAccessMixin, collections.namedtuple("AppConfig", ["sss_env"])):
     __slots__ = ()
 
 
@@ -396,6 +395,11 @@ def carregar(caminho_ini):
 
         # Chaves desconhecidas na secao
         for k in cp_sec:
+            if sec_nome == "app" and k == "data_backend":
+                # Removida no F7.3: a aplicacao usa sempre o Oracle do [oracle]; o FAKE so existe nos testes.
+                raise ConfigErro(secao="app", chave="data_backend",
+                                 motivo="Chave removida: a aplicacao usa sempre o Oracle do [oracle] "
+                                        "(owner e table_prefix); apague a linha data_backend")
             if k not in sec_campos:
                 raise ConfigErro(secao=sec_nome, chave=k, motivo="Chave desconhecida na secao [%s]: %s" % (sec_nome, k))
 
@@ -426,12 +430,6 @@ def carregar(caminho_ini):
 
     # 4. Invariantes
     app_dict = dados_secoes["app"]
-    if app_dict["data_backend"] == "FAKE" and app_dict["sss_env"] != "DEV":
-        raise ConfigErro(
-            secao="app", chave="data_backend",
-            motivo="data_backend=FAKE exige sss_env=DEV (atual: %s)" % app_dict["sss_env"]
-        )
-
     oracle_dict = dados_secoes["oracle"]
     if oracle_dict["pool_min"] > oracle_dict["pool_max"]:
         raise ConfigErro(
@@ -544,16 +542,16 @@ def _validar_cr007(app, oracle, agent, logging_dict, retencao):
         raise ConfigErro(secao="retencao", chave="audit_retention_days",
                          motivo="audit_retention_days (%d) deve ser >= ticket_retention_days (%d)" % (
                              retencao["audit_retention_days"], retencao["ticket_retention_days"]))
-    if app["data_backend"] == "ORACLE" and app["sss_env"] != "DEV" \
-            and oracle["user"].upper() == oracle["owner"].upper():
+    if app["sss_env"] != "DEV" and oracle["user"].upper() == oracle["owner"].upper():
         # CR-008, R-29: a conta da aplicacao nunca e a dona do esquema fora de DEV (D1b do CR-007).
         raise ConfigErro(secao="oracle", chave="user",
                          motivo="Fora de DEV, a conta da aplicacao deve ser diferente do owner do esquema")
-    if app["data_backend"] == "ORACLE":
-        purge = retencao["purge_user"]
-        if not purge:
-            raise ConfigErro(secao="retencao", chave="purge_user", motivo="Obrigatorio com data_backend=ORACLE")
-        if purge.upper() in (oracle["user"].upper(), oracle["owner"].upper()):
+    purge = retencao["purge_user"]
+    if not purge:
+        # Em DEV, purge_user vazio significa purge desligado (scripts/purge.py recusa rodar; README §12.1).
+        if app["sss_env"] != "DEV":
+            raise ConfigErro(secao="retencao", chave="purge_user", motivo="Obrigatorio fora de DEV")
+    elif purge.upper() in (oracle["user"].upper(), oracle["owner"].upper()):
             raise ConfigErro(secao="retencao", chave="purge_user",
                              motivo="A conta de purge deve ser diferente da conta do processo e do owner")
 
@@ -729,6 +727,8 @@ def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None, papel=
     """Valida e carrega segredos de arquivo com modo 0600 e ownership restrito.
 
     papel ('web' ou 'agente', CR-007 D1b) define as secoes obrigatorias e as proibidas (README §4.1).
+    A aplicacao usa sempre o Oracle, entao [oracle] password e obrigatoria para web e agente.
+    data_backend='FAKE' so pode vir como parametro explicito de teste (DEV), nunca do config.ini.
     """
     if papel not in PAPEIS:
         raise ConfigErro(motivo="Papel de segredos invalido: %r" % (papel,))
@@ -759,7 +759,7 @@ def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None, papel=
 
     if cfg is not None:
         env = getattr(cfg.app, "sss_env", sss_env)
-        backend = getattr(cfg.app, "data_backend", data_backend)
+        backend = data_backend
     else:
         env = sss_env
         backend = data_backend

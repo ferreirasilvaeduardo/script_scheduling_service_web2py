@@ -1,6 +1,5 @@
 [app]
 sss_env = DEV                     ; DEV | HML | PROD
-data_backend = FAKE               ; FAKE (somente DEV) | ORACLE
 
 [oracle]
 user = sss_web                    ; conta do papel deste nó: sss_web no web, sss_agente no agente (README §4.1)
@@ -67,4 +66,4 @@ allowed_origins = http://127.0.0.1:18000   ; Ex. https://sss.empresa.local lista
 ticket_retention_days = 180
 audit_retention_days = 730
 purge_batch_size = 1000
-purge_user =                      ; conta Oracle do papel purge (obrigatória com data_backend = ORACLE), ex.: sss_purge
+purge_user =                      ; conta Oracle do papel purge, ex.: sss_purge (obrigatória fora de DEV; vazia em DEV = purge desligado)

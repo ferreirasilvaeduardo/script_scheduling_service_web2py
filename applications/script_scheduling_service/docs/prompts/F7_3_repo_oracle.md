@@ -123,7 +123,7 @@ O `test_repo_contract.py` atual é uma bateria integrada que chama vários agreg
 - [ ] Sem `SSS_TEST_ORACLE=1`: veredito `NÃO TESTADO`, com o motivo.
 
 ## Verificação
-Em cada execução, a partir de `APP`. Owner, prefixo, DSN e conta vêm do `instance/config.ini`; o `data_backend` da aplicação não importa para os testes (README §2.5):
+Em cada execução, a partir de `APP`. Owner, prefixo, DSN e conta vêm do `instance/config.ini`; a aplicação usa sempre o Oracle (sem `data_backend`, README §2.5):
 
 `SSS_TEST_ORACLE=1 SSS_TEST_REPO_AGREGADO=RBAC_USUARIOS python -m unittest discover -s scripts -p "test_repo_oracle_progressive.py" -v`
 

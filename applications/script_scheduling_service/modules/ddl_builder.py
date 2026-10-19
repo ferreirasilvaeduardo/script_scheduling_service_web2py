@@ -63,7 +63,7 @@ CATALOGO_USUARIOS_PADRAO = (
 )
 
 # Hash PBKDF2 da senha padrao de homologacao/demonstracao (senha: Sss@Homolog2026!)
-HASH_SENHA_PADRAO_HOMOLOGACAO = "pbkdf2_sha256$200000$f9fb31dc39b754d083af236a880dfa6e$2229f3f8a694a9c45be82d9c3bd38110f8b474d2a0aa0ee7f691d405738a4cd8"
+HASH_SENHA_PADRAO_HOMOLOGACAO = "pbkdf2_sha256$200000$8007db1bd770663178d0f1b1a129140c$9d9604af27e21326e982e5e7c64bfdd868c0995a97181b5a9695149755852d63"
 
 # Catalogo padrao de parametros reutilizaveis de utilitarios (codigo, param_nomeado, label, descricao, tipo, opcoes, vpadrao)
 CATALOGO_PARAMETROS_PADRAO = (

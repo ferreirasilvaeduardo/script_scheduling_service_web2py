@@ -165,12 +165,12 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 ### 2.5 Backend de dados (estratégia UI-first)
 
 * Toda persistência passa por **contratos de repositório** em `modules/repo_*.py`: classes abstratas por agregado, sem SQL.
-* O contrato tem duas implementações, selecionadas por `[app] data_backend` via `modules/repo_factory.py`:
+* O contrato tem duas implementações, escolhidas pela `modules/repo_factory.py`. **A aplicação usa sempre o Oracle** do `[oracle]` do config (owner e prefixo). A chave `[app] data_backend` foi removida no F7.3, e um config que ainda a tenha é recusado com a instrução de apagar a linha. O FAKE só existe quando um **teste** o injeta pelo gancho `repo_factory.configurar(...)`, e só com `sss_env = DEV`:
 
 | Backend | Uso | Implementação |
 |---|---|---|
-| `FAKE` | Desenvolvimento da UI e testes unitários | `modules/repo_fake/`: memória do processo, seed determinístico e `threading.Lock` por agregado |
-| `ORACLE` | Homologação e produção | `modules/repo_oracle/` (§2.7): único local com SQL |
+| `FAKE` | Só testes automáticos sem banco, por injeção (`repo_factory.configurar`) | `modules/repo_fake/`: memória do processo, seed determinístico e `threading.Lock` por agregado |
+| `ORACLE` | A aplicação, em DEV, HML e PROD | `modules/repo_oracle/` (§2.7): único local com SQL; conexões pelo pool do processo (`db_conn.pool`, fechado no `atexit`) |
 
 * Os controllers e services **não sabem** qual backend está ativo.
 * **Paridade obrigatória:** o FAKE emula a semântica do Oracle que o código consome. Isso inclui `UPDATE` condicional com `rowcount` (transição perdida gera `RepoConflito`), unicidade (`RepoViolacao`), `ON DELETE CASCADE`, triggers de imutabilidade, paginação e ordenação idênticas. Também inclui:
@@ -202,8 +202,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 * **Testes Oracle reais: uma chave só, `SSS_TEST_ORACLE=1`** (`scripts/_oracle_test_support.py`).
   * **Origem dos parâmetros:** owner, prefixo, DSN e conta vêm só do `instance/config.ini`, os mesmos da aplicação. Nada é repetido em variáveis de ambiente.
   * **Recusas antes de qualquer conexão:** sem a chave, os testes de banco ficam pulados (`NÃO TESTADO`). Fora de `sss_env = DEV`, ou com `[oracle] dsn`/`owner` inválidos, a execução é recusada. As variáveis da versão anterior (`SSS_TEST_DSN`, `SSS_TEST_OWNER`, `SSS_TEST_CONFIG`, `SSS_TEST_SCHEMA_DISPOSABLE`, `SSS_TEST_SCHEMA_COMPARTILHADO`) também são recusadas, para não serem ignoradas em silêncio.
-  * **Backend da aplicação:** o `data_backend` não importa para os testes. Ele é escolha da aplicação; os testes usam a seção `[oracle]`.
-  * **A partir do F7, aplicação e validações usam as tabelas reais** do owner e do prefixo do config. O FAKE fica só como dublê dos testes automáticos sem banco. A aplicação DEV passa a `data_backend = ORACLE` ao fim do F7.3, quando os cinco agregados existirem no Oracle.
+  * **A partir do F7, aplicação e validações usam as tabelas reais** do owner e do prefixo do config. O FAKE fica só como dublê dos testes automáticos sem banco (os casos que dá para mockar). Desde o fim do F7.3, a aplicação não tem mais `data_backend`: é sempre Oracle.
   * **Modo deduzido do owner:**
     * **Descartável** (owner `SSS_TEST_*`): owner dedicado e conta de teste diferente do owner.
     * **Compartilhado** (qualquer outro owner): para um owner existente, onde não há permissão para criar outro (ex.: `openrisow` no `GFPR`).
@@ -215,8 +214,9 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
   * **Bateria integrada contra o Oracle:** exige também `SSS_TEST_ORACLE_INTEGRATED=1`, gate liberado só depois do 5º agregado do F7.3.
 * **Trava de ambiente:**
   * `[app] sss_env` aceita `DEV`, `HML` ou `PROD`.
-  * `data_backend = FAKE` com `sss_env != DEV` **aborta a subida** com CRITICAL.
-  * O FAKE exige servidor web de processo único (o servidor de desenvolvimento do web2py). Com múltiplos workers, cada um teria um estado diferente.
+  * O FAKE (só de teste) pedido fora de `sss_env = DEV` é recusado pela factory.
+  * `sss_env` continua como trava de segurança da aplicação. Fora de DEV, o código recusa segredos de outro papel, a conta da aplicação igual ao owner, falta de usuário de execução ou de `exec_work_dir`, a galeria `/dev` e o hash não homologado, e exige `purge_user`.
+  * **DEV e PROD se separam pelo owner e pelo prefixo** do config: basta apontar para outro owner, ou outro prefixo no mesmo owner.
 * O daemon (`run_scheduler.py`) **exige** `ORACLE`. Com `FAKE`, ele aborta.
 
 ### 2.6 Plataformas suportadas (CR-005: somente POSIX)
@@ -2474,7 +2474,6 @@ END;
 ```ini
 [app]
 sss_env = DEV                     ; DEV | HML | PROD
-data_backend = FAKE               ; FAKE (somente DEV) | ORACLE
 
 [oracle]
 user = sss_web                    ; conta do papel deste nó: sss_web no web, sss_agente no agente (§4.1, D1b)
@@ -2552,8 +2551,8 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | Seção | Chave | Tipo | Faixa / formato |
 |---|---|---|---|
 | `[app]` | `sss_env` | enum | `DEV`, `HML`, `PROD` |
-| `[app]` | `data_backend` | enum | `FAKE`, `ORACLE` |
-| `[oracle]` | `user`, `dsn` | texto | obrigatório, não vazio; com `data_backend = ORACLE` e `sss_env` diferente de `DEV`, `user` diferente de `owner`, sem diferenciar maiúsculas (CR-008, R-29: a conta dona do esquema só faz DDL, D1b) |
+| `[app]` | `data_backend` | — | **removida no F7.3**: a aplicação usa sempre o Oracle; a presença da chave é recusada |
+| `[oracle]` | `user`, `dsn` | texto | obrigatório, não vazio; com `sss_env` diferente de `DEV`, `user` diferente de `owner`, sem diferenciar maiúsculas (CR-008, R-29: a conta dona do esquema só faz DDL, D1b) |
 | `[oracle]` | `owner` | texto | `^[A-Za-z][A-Za-z0-9_]{0,29}$` |
 | `[oracle]` | `table_prefix` | texto | `^[a-z][a-z0-9_]{0,7}$`: começa com letra minúscula, até 8 caracteres (CR-007, R-31) |
 | `[oracle]` | `modo_driver` (F7.0) | enum | `auto`, `thin`, `thick`, `cx_oracle` |
@@ -2595,7 +2594,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[web]` | `allowed_origins` | lista CSV | obrigatória |
 | `[retencao]` | `ticket_retention_days` | inteiro | 1 a 3.650 |
 | `[retencao]` | `audit_retention_days` | inteiro | 365 a 3.650, e `>= ticket_retention_days` (CR-007, R-22) |
-| `[retencao]` | `purge_user` (CR-007) | texto | obrigatório com `data_backend = ORACLE`; diferente de `[oracle] user` e de `owner` |
+| `[retencao]` | `purge_user` (CR-007) | texto | obrigatório fora de DEV; em `sss_env = DEV`, vazio significa **purge desligado** (o `scripts/purge.py` recusa rodar); quando informado, diferente de `[oracle] user` e de `owner` |
 | `[retencao]` | `purge_batch_size` | inteiro | 1 a 100.000 |
 
 **Falha de configuração (web e daemon):**

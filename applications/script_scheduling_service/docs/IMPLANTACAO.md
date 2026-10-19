@@ -11,6 +11,13 @@
 
 ## 1. Leia antes: o que dá para implantar hoje
 
+> **Mudança do F7.3: a aplicação usa sempre o Oracle.**
+> * **Sem FAKE na aplicação:** a chave `[app] data_backend` foi removida. Um `config.ini` que ainda a tenha é recusado com a instrução de apagar a linha. A aplicação lê e grava nas tabelas `{owner}.{prefixo}…` do `[oracle]`; DEV e PROD se separam pelo owner e pelo prefixo.
+> * **Senha do seed FAKE:** `SSS_DEV_SEED_PASSWORD` não é mais usada. Os usuários de homologação vêm do seed do `01_implantar_sss.sql`, com a senha do README §11.1.
+> * **Instalação:** o nó web precisa do Python com driver Oracle (`oracledb` ou `cx_Oracle`), de acesso ao banco e do `[oracle] password` no `secrets.cfg`. Em DEV, `[retencao] purge_user` vazio desliga o purge.
+> * **3067 (`brtlvlty3067sl`, §22):** ele roda hoje a versão FAKE. A próxima atualização exige DSN, owner, prefixo e conta Oracle acessíveis daquele servidor. Sem isso, a versão nova não sobe lá.
+> * **Seções antigas:** as partes deste guia que falam de FAKE e de `SSS_DEV_SEED_PASSWORD` (§8.3, §11, §14, §21, §22) descrevem as versões até `13102ef`.
+
 O SSS está sendo construído em fases (`docs/prompts/00_INDEX.md`). Hoje está pronta a **interface web completa**, o **banco Oracle real com DDL/DML e scripts SQL autônomos (F7)** e a **árvore de scripts utilitários homologados**. O agente executor em produção (`run_scheduler.py`, F8) e o pacote de empacotamento (F9) estão no roadmap subsequente.
 
 | Cenário | Possível hoje? | Por quê |
@@ -243,7 +250,7 @@ ls -l /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instan
 * As seções `[oracle]` e `[ambiente:<NOME>]` do `secrets.cfg.example` são opcionais em DEV/FAKE e passam a ser obrigatórias com o Oracle (F7).
 * **Nunca** copie o `secrets.cfg` de outra máquina por e-mail ou chat, nem o coloque dentro do diretório do código.
 
-### 8.3 Senha dos usuários de demonstração (`SSS_DEV_SEED_PASSWORD`)
+### 8.3 Senha dos usuários de demonstração (`SSS_DEV_SEED_PASSWORD`) — [só versões FAKE, até `13102ef`]
 
 No FAKE, os usuários `admin`, `op.prod`, `op.hml` e `consulta` recebem, a cada subida, a senha informada na variável de ambiente `SSS_DEV_SEED_PASSWORD` (`inativo` e `bloqueado` nunca entram, de propósito).
 
@@ -268,7 +275,7 @@ O `config.ini` não contém segredos. **Toda chave é validada na subida**: chav
 | Seção | Chave | Valor para este servidor | Observação |
 |---|---|---|---|
 | `[app]` | `sss_env` | `DEV` | Obrigatório com FAKE. Também exibe a faixa amarela "AMBIENTE DEV" |
-| `[app]` | `data_backend` | `FAKE` | `ORACLE` ainda não está implementado |
+| `[app]` | `data_backend` | — | **Removida no F7.3**: apague a linha; a aplicação usa sempre o Oracle do `[oracle]` |
 | `[secrets]` | `secrets_file` | `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance` | Caminho absoluto do §8.2 |
 | `[agent]` | `agent_id` | identificador do servidor, ex.: `srv-sss-hml-01` | Aparece em todas as linhas de log; `^[A-Za-z0-9._-]{1,30}$` |
 | `[agent]` | `script_owner_uids` | `0` | UID do dono da árvore do §8.1 (root). Os diretórios do caminho do script podem pertencer ao root mesmo sem o 0 na lista; com scripts reais, prefira um UID dedicado (README §8.5) |
@@ -295,7 +302,7 @@ Este teste carrega a aplicação no terminal, sem servidor, e mostra **a causa e
 # como sss
 cd /opt/sss/web2py
 umask 077
-echo 'print("SSS: configuracao OK (sss_env=%s, backend=%s, agent_id=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.app.data_backend, current.sss_cfg.agent.agent_id))' > /tmp/sss_diag.py
+echo 'print("SSS: configuracao OK (sss_env=%s, owner=%s, prefixo=%s, agent_id=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.oracle.owner, current.sss_cfg.oracle.table_prefix, current.sss_cfg.agent.agent_id))' > /tmp/sss_diag.py
 $PYTHON web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E "^SSS:|ConfigErro"
 rm -f /tmp/sss_diag.py
 ```
@@ -567,7 +574,7 @@ Mensagens reais, capturadas no ensaio. Para os erros de subida, use sempre o tes
 | Idem | `ConfigErro: Arquivo de segredos deve pertencer ao usuario corrente (UID ..., atual ...)` | O processo roda com outro usuário, ou o arquivo foi criado pelo root | `sudo chown sss:sss /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance` e suba como `sss` |
 | Idem | `ConfigErro: [web]: cookie_key: Chave cookie_key obrigatoria ausente em [web]` | `secrets.cfg` incompleto | §8.2 |
 | Idem | `ConfigErro` citando `[secao] chave` e motivo | Chave ausente, desconhecida ou fora da faixa no `config.ini` | Compare com o `config.ini.example` (§16.3) |
-| Idem | `ConfigErro: [app]: data_backend: data_backend=FAKE exige sss_env=DEV (atual: HML)` | `sss_env` diferente de `DEV` com FAKE | `sss_env = DEV` |
+| Idem | `ConfigErro: [app]: data_backend: Chave removida: a aplicacao usa sempre o Oracle do [oracle] …` | `config.ini` de versão anterior ao F7.3 | Apagar a linha `data_backend` e preencher o `[oracle]` (owner, prefixo e DSN) |
 | Idem | `ConfigErro: [agent]: base_script_dir: Chave desconhecida na secao [agent]: base_script_dir` (ou `base_script_dirs`, ou `[logging]: app_log_backups: ...`) | `config.ini` de versão anterior ao CR-005 | Apagar a linha da pasta base e trocar `app_log_backups` por `app_log_retention_days = 30` (§8.1, §16.3) |
 | Subida abortada sem o motivo no terminal | Log da aplicação do minuto da tentativa, `log_dir/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (ou o stderr, se o `log_dir` não aceitar escrita): linha `CRITICAL` "Subida abortada: configuracao invalida: …" | Qualquer erro de configuração | Ler a linha `CRITICAL` com a função `applog` do §15.2 (`applog` seguido de `xargs grep -h CRITICAL`) e corrigir; o teste do §10 mostra o mesmo motivo |
 | Ninguém consegue entrar ("Usuário ou senha incorretos. Confira o que digitou e tente de novo.") | Log da aplicação: `SSS_DEV_SEED_PASSWORD ausente: usuarios do seed FAKE sem senha utilizavel` (ou `fora da politica`) | Variável ausente ou com menos de 12 caracteres | §8.3 e reinicie |
@@ -985,7 +992,7 @@ $PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran ... 
 
 # 4. Teste de carga da configuração (§10) na pasta nova
 cd $NOVO && umask 077
-echo 'print("SSS: configuracao OK (sss_env=%s, backend=%s, agent_id=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.app.data_backend, current.sss_cfg.agent.agent_id))' > /tmp/sss_diag.py
+echo 'print("SSS: configuracao OK (sss_env=%s, owner=%s, prefixo=%s, agent_id=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.oracle.owner, current.sss_cfg.oracle.table_prefix, current.sss_cfg.agent.agent_id))' > /tmp/sss_diag.py
 $PY web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E "^SSS:|ConfigErro"
 rm -f /tmp/sss_diag.py
 # esperado: SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)
@@ -1092,7 +1099,7 @@ $PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran 819 
 
 # 4. Teste de carga da configuração (§10) na pasta nova
 cd $NOVO && umask 077
-echo 'print("SSS: configuracao OK (sss_env=%s, backend=%s, agent_id=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.app.data_backend, current.sss_cfg.agent.agent_id))' > /tmp/sss_diag.py
+echo 'print("SSS: configuracao OK (sss_env=%s, owner=%s, prefixo=%s, agent_id=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.oracle.owner, current.sss_cfg.oracle.table_prefix, current.sss_cfg.agent.agent_id))' > /tmp/sss_diag.py
 $PY web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E "^SSS:|ConfigErro"
 rm -f /tmp/sss_diag.py
 # esperado: SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)

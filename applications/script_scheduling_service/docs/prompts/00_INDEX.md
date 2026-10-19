@@ -62,7 +62,7 @@
 
 > **F7.3 é executado uma vez por agregado:** `RBAC_USUARIOS`, `CATALOGO`, `TICKETS`, `AGENDAMENTOS`, `AUDITORIA_AGENTES`. São 31 arquivos de prompt e **35 sessões** do Antigravity (o F7.3 conta 5 vezes), mais o marco manual de UI Freeze.
 
-> **A partir do F7, dados reais:** aplicação e validações usam as tabelas do owner e do prefixo do `instance/config.ini`; o FAKE fica só como dublê dos testes automáticos sem banco. Os testes de banco ligam com uma chave só, `SSS_TEST_ORACLE=1` (README §2.5). A aplicação DEV vira `data_backend = ORACLE` ao fim do F7.3, quando os cinco agregados existirem no Oracle.
+> **A partir do F7, dados reais:** aplicação e validações usam as tabelas do owner e do prefixo do `instance/config.ini`; o FAKE fica só como dublê dos testes automáticos sem banco. Os testes de banco ligam com uma chave só, `SSS_TEST_ORACLE=1` (README §2.5). Desde o fim do F7.3 (5º agregado), a aplicação usa sempre o Oracle: `[app] data_backend` foi removida e é recusada se aparecer; DEV e PROD se separam pelo owner e pelo prefixo.
 
 > Em cada execução do F7.3, rode somente a classe Oracle do agregado selecionado em `test_repo_oracle_progressive.py`; a bateria integrada `test_repo_contract.py` contra Oracle é gate depois da quinta execução. A suíte FAKE continua sendo gate em todas as fases.
 

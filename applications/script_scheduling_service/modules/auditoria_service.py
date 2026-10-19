@@ -26,14 +26,14 @@ ACOES = (
     "TICKET_CRIAR", "TICKET_CANCELAR", "TICKET_REEXECUTAR",
     "CAD_INSERIR", "CAD_ALTERAR", "CAD_DESATIVAR", "PERM_ALTERAR",
     "AGD_PAUSAR", "AGENTE_INICIO", "AGENTE_FIM", "PURGE",
-    "AUD_EXPORTAR",
+    "AUD_EXPORTAR", "ESQUEMA_MIGRAR",
 )
 ACAO_EXPORTAR = "AUD_EXPORTAR"
 ENTIDADE_AUDITORIA = "tbsss_auditoria"
 
 ENTIDADES = (
-    "tbsss_agendamentos", "tbsss_agentes", "tbsss_ambientes", "tbsss_auditoria", "tbsss_parametros",
-    "tbsss_perfis", "tbsss_scripts", "tbsss_tickets", "tbsss_usuarios",
+    "tbsss_agendamentos", "tbsss_agentes", "tbsss_ambientes", "tbsss_auditoria", "tbsss_controle",
+    "tbsss_parametros", "tbsss_perfis", "tbsss_scripts", "tbsss_tickets", "tbsss_usuarios",
 )
 
 # Rota da tela de cada entidade e funcionalidade exigida para exibir o link (decisao D6 do F6.1).

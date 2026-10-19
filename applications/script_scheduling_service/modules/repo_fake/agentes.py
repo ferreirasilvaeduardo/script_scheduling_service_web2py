@@ -31,7 +31,9 @@ class RepoAgentesFake(RepoAgentes):
                 if t.get("status") == "RUNNING" and t.get("agente_id") == codigo
             ]
             running.sort(key=lambda x: x["id"])
-            return copy.deepcopy(running)
+            # Sem CLOB, como no Oracle (contrato RepoAgentes.tickets_running).
+            return [dict((k, copy.deepcopy(v)) for k, v in t.items()
+                         if k not in ("parametros_enviados", "log_output")) for t in running]
 
     def fila_sem_atendente(self, agora, limiares):
         """Agrupa a fila vencida sem agente saudavel para o ambiente e o interpretador."""

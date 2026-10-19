@@ -122,7 +122,7 @@ class TestConfig(unittest.TestCase):
 
         # [app]
         self.assertEqual(cfg.app.sss_env, "DEV")
-        self.assertEqual(cfg.app.data_backend, "FAKE")
+        self.assertFalse(hasattr(cfg.app, "data_backend"))
 
         # [oracle]
         self.assertEqual(cfg.oracle.user, "sss_web")
@@ -320,20 +320,14 @@ class TestConfig(unittest.TestCase):
             sss_config.carregar(ini4)
         self.assertEqual(ctx4.exception.chave, "pool_min")
 
-    def test_fake_com_hml(self):
-        """Verifica a invariante: data_backend=FAKE exige sss_env=DEV."""
-        ini_hml = self._copiar_e_modificar_ini(alteracoes={
-            "app": {"sss_env": "HML", "data_backend": "FAKE"}
-        })
-        with self.assertRaises(sss_config.ConfigErro) as ctx_hml:
-            sss_config.carregar(ini_hml)
-        self.assertIn("data_backend=FAKE exige sss_env=DEV", str(ctx_hml.exception))
-
-        ini_prod = self._copiar_e_modificar_ini(alteracoes={
-            "app": {"sss_env": "PROD", "data_backend": "FAKE"}
-        })
-        with self.assertRaises(sss_config.ConfigErro):
-            sss_config.carregar(ini_prod)
+    def test_data_backend_removida(self):
+        """F7.3: a aplicacao usa sempre o Oracle; a chave antiga e recusada com mensagem clara."""
+        for valor in ("FAKE", "ORACLE"):
+            ini = self._copiar_e_modificar_ini(alteracoes={"app": {"data_backend": valor}})
+            with self.assertRaises(sss_config.ConfigErro) as ctx:
+                sss_config.carregar(ini)
+            self.assertEqual(ctx.exception.chave, "data_backend")
+            self.assertIn("apague a linha data_backend", str(ctx.exception))
 
     def test_prefixo_comeca_com_letra(self):
         """CR-003 P2: prefixo iniciado por digito ou _ geraria nome Oracle invalido."""
@@ -704,7 +698,7 @@ class TestConfigCR007(unittest.TestCase):
         self._recusa("usuarios_execucao", agent={"usuarios_execucao": "PRODUCAO"})
         self._recusa("usuarios_execucao", agent={"usuarios_execucao": "PRODUCAO=a,PRODUCAO=b"})
         # Fora de DEV: todo ambiente atendido precisa de usuario e exec_work_dir e obrigatoria.
-        base = {"sss_env": "HML", "data_backend": "ORACLE"}
+        base = {"sss_env": "HML"}
         ret = {"purge_user": "sss_purge"}
         self._recusa("usuarios_execucao", app=base, retencao=ret, agent={"usuarios_execucao": "PRODUCAO=sssprd"})
         self._recusa("exec_work_dir", app=base, retencao=ret,
@@ -716,19 +710,22 @@ class TestConfigCR007(unittest.TestCase):
                                                             "exec_work_dir": "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec"})
         self.assertEqual(cfg.agent.exec_work_dir, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec")
 
-    def test_purge_user_com_oracle(self):
-        base = {"sss_env": "DEV", "data_backend": "ORACLE"}
-        self._recusa("purge_user", app=base)
-        self._recusa("purge_user", app=base, retencao={"purge_user": "SSS_WEB"})
-        self._recusa("purge_user", app=base, retencao={"purge_user": "openrisow"})
-        self.assertEqual(self._carregar(app=base, retencao={"purge_user": "sss_purge"}).retencao.purge_user, "sss_purge")
+    def test_purge_user(self):
+        """Vazio em DEV = purge desligado; fora de DEV e obrigatorio; nunca igual a conta ou ao owner."""
+        self.assertFalse(self._carregar().retencao.purge_user)
+        self._recusa("purge_user", retencao={"purge_user": "SSS_WEB"})
+        self._recusa("purge_user", retencao={"purge_user": "openrisow"})
+        self.assertEqual(self._carregar(retencao={"purge_user": "sss_purge"}).retencao.purge_user, "sss_purge")
+        agent = {"usuarios_execucao": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
+                 "exec_work_dir": "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec"}
+        self._recusa("purge_user", app={"sss_env": "HML"}, agent=agent)
 
     def test_cr008_user_diferente_do_owner_fora_de_dev(self):
         ret = {"purge_user": "sss_purge"}
         agent = {"usuarios_execucao": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml", "exec_work_dir": "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec"}
-        self._recusa("user", app={"sss_env": "HML", "data_backend": "ORACLE"}, retencao=ret, agent=agent,
+        self._recusa("user", app={"sss_env": "HML"}, retencao=ret, agent=agent,
                      oracle={"user": "OPENRISOW"})
-        cfg = self._carregar(app={"sss_env": "DEV", "data_backend": "ORACLE"}, retencao=ret,
+        cfg = self._carregar(app={"sss_env": "DEV"}, retencao=ret,
                              oracle={"user": "openrisow"})
         self.assertEqual(cfg.oracle.user, "openrisow")
 
@@ -792,7 +789,7 @@ class TestConfigCR007(unittest.TestCase):
                                          sss_env="PROD", data_backend="ORACLE", papel="monitor")
 
     def test_segredos_do_agente_cobrem_os_ambientes(self):
-        cfg = self._carregar(app={"sss_env": "HML", "data_backend": "ORACLE"}, retencao={"purge_user": "sss_purge"},
+        cfg = self._carregar(app={"sss_env": "HML"}, retencao={"purge_user": "sss_purge"},
                              agent={"usuarios_execucao": "PRODUCAO=sssprd,HOMOLOGACAO=ssshml",
                                     "exec_work_dir": "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec"})
         so_prod = [("oracle", {"password": "senha-agt-123"}),

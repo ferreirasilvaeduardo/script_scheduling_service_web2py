@@ -2,7 +2,8 @@
 # ==============================================================================
 # Script Scheduling Service (SSS) - Inicializador de Ambiente Local (DEV)
 # ==============================================================================
-# Inicia o servidor web2py em modo local (DEV) com backend FAKE.
+# Inicia o servidor web2py em modo local (DEV) com o Oracle do [oracle] do config.ini
+# (owner e table_prefix). O Python precisa ter o driver Oracle: PYTHON=<python> bin/...
 #
 # Uso:
 #   bin/iniciar_local.sh               # Inicia em segundo plano na porta 8000
@@ -92,23 +93,6 @@ export TZ="${SSS_TZ}"
 export LANG="${SSS_LOCALE:-C.UTF-8}"
 export LC_ALL="${SSS_LOCALE:-C.UTF-8}"
 
-# Validar senha de seed para contas DEV
-if [ -z "${SSS_DEV_SEED_PASSWORD:-}" ]; then
-    if [ -t 0 ]; then
-        read -s -p "Informe SSS_DEV_SEED_PASSWORD (minimo 12 caracteres): " SSS_DEV_SEED_PASSWORD
-        echo
-        export SSS_DEV_SEED_PASSWORD
-    else
-        echo "Erro: SSS_DEV_SEED_PASSWORD nao definida. Configure em ${APP_DIR}/instance/web.env ou exporte a variavel." >&2
-        exit 1
-    fi
-fi
-
-if [ "${#SSS_DEV_SEED_PASSWORD}" -lt 12 ]; then
-    echo "Erro: SSS_DEV_SEED_PASSWORD deve ter no minimo 12 caracteres (atual: ${#SSS_DEV_SEED_PASSWORD})." >&2
-    exit 1
-fi
-
 PYTHON="${PYTHON:-python3}"
 if ! command -v "${PYTHON}" >/dev/null 2>&1; then
     echo "Erro: interpretador Python '${PYTHON}' nao encontrado no PATH." >&2
@@ -121,10 +105,17 @@ try:
     cfg = current.sss_cfg
     if cfg.app.sss_env != "DEV":
         print("ERRO: sss_env deve ser DEV para ambiente local.")
-    elif cfg.app.data_backend != "FAKE":
-        print("ERRO: data_backend deve ser FAKE para ambiente local.")
     else:
-        print("CONFIG_OK")
+        # A aplicacao usa sempre o Oracle: o Python escolhido precisa ter oracledb ou cx_Oracle.
+        try:
+            import oracledb  # noqa: F401
+            print("CONFIG_OK")
+        except ImportError:
+            try:
+                import cx_Oracle  # noqa: F401
+                print("CONFIG_OK")
+            except ImportError:
+                print("ERRO: driver Oracle (oracledb ou cx_Oracle) ausente neste Python; use PYTHON=<python com driver>")
 except Exception as e:
     print("ERRO: %s" % e)
 ') 2>&1 || true)"

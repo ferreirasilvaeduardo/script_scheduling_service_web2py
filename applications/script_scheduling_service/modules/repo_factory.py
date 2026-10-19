@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Fabrica de repositorios de persistencia (README §2.5, AGENTS §5.5).
 
-Seleciona e instancia os repositorios FAKE ou ORACLE conforme configuracao.
-Garante singletons por processo e aplica a trava de ambiente para o backend FAKE.
+A aplicacao usa sempre o Oracle do [oracle] do config.ini (owner e table_prefix). O FAKE so existe
+quando um teste o injeta explicitamente por configurar({"app": {"data_backend": "FAKE", ...}}), e so
+com sss_env = DEV. Garante singletons por processo.
 """
 import logging
 import os
@@ -49,10 +50,10 @@ def reset_singletons():
 
 
 def _resolver_config(config_param=None):
-    """Resolve (data_backend, sss_env) do parametro, do override ou de current.sss_cfg.
+    """Resolve (backend, sss_env) do parametro, do override ou de current.sss_cfg.
 
-    Sem configuracao, ou sem as chaves [app], falha: backend e ambiente nunca sao
-    presumidos, pois um padrao silencioso poderia ativar o FAKE fora de DEV.
+    O config.ini nao tem mais data_backend: sem a chave, o backend e ORACLE. So o dict de teste
+    passado a configurar() pode pedir FAKE. Sem configuracao, ou sem [app] sss_env, falha.
     """
     cfg = config_param
     if cfg is None:
@@ -63,7 +64,8 @@ def _resolver_config(config_param=None):
         raise RuntimeError("Configuracao ausente: informe config ou carregue models/00_config.py (current.sss_cfg)")
 
     app = cfg["app"]
-    return str(app["data_backend"]).upper(), str(app["sss_env"]).upper()
+    backend = app.get("data_backend", "ORACLE") if isinstance(app, dict) else "ORACLE"
+    return str(backend).upper(), str(app["sss_env"]).upper()
 
 
 def _senha_dev_seed():
@@ -82,11 +84,31 @@ def _senha_dev_seed():
     return senha
 
 
+def _classe_oracle(nome_norm):
+    """Classe Oracle do agregado (import tardio: o driver so e carregado quando usado)."""
+    if nome_norm == "catalogo":
+        from repo_oracle.catalogo import RepoCatalogoOracle
+        return RepoCatalogoOracle
+    if nome_norm == "tickets":
+        from repo_oracle.tickets import RepoTicketsOracle
+        return RepoTicketsOracle
+    if nome_norm == "agendamentos":
+        from repo_oracle.agendamentos import RepoAgendamentosOracle
+        return RepoAgendamentosOracle
+    if nome_norm == "auditoria":
+        from repo_oracle.auditoria import RepoAuditoriaOracle
+        return RepoAuditoriaOracle
+    if nome_norm == "agentes":
+        from repo_oracle.agentes import RepoAgentesOracle
+        return RepoAgentesOracle
+    return None
+
+
 def obter(nome, config=None):
     """Retorna a instancia singleton do repositorio solicitado.
 
-    Lanca RuntimeError se backend FAKE for utilizado fora de sss_env=DEV.
-    Lanca NotImplementedError se backend ORACLE for solicitado antes da sua implementacao.
+    Lanca RuntimeError se o FAKE (so de teste) for pedido fora de sss_env=DEV e ValueError para
+    um repositorio desconhecido.
     """
     global _fake_store
 
@@ -94,42 +116,24 @@ def obter(nome, config=None):
 
     # Trava de ambiente estrita (README §2.5 e AGENTS §5.5)
     if backend == "FAKE" and env != "DEV":
-        raise RuntimeError("data_backend FAKE e proibido fora de DEV (sss_env=%s)" % env)
+        raise RuntimeError("FAKE (so de teste) e proibido fora de DEV (sss_env=%s)" % env)
 
     nome_norm = str(nome).lower().replace("repo_", "")
 
     if backend == "ORACLE":
-        # Agregado 1 (F7.3): RBAC_USUARIOS (usuarios e rbac)
-        if nome_norm in ("usuarios", "rbac"):
-            with _lock_fabrica:
-                if nome_norm not in _singletons_oracle:
-                    from repo_oracle.usuarios import RepoUsuariosOracle
-                    from repo_oracle.rbac import RepoRbacOracle
-                    _singletons_oracle["usuarios"] = RepoUsuariosOracle()
-                    _singletons_oracle["rbac"] = RepoRbacOracle()
-                return _singletons_oracle[nome_norm]
-        # Agregado 2 (F7.3): CATALOGO
-        if nome_norm == "catalogo":
-            with _lock_fabrica:
-                if nome_norm not in _singletons_oracle:
-                    from repo_oracle.catalogo import RepoCatalogoOracle
-                    _singletons_oracle["catalogo"] = RepoCatalogoOracle()
-                return _singletons_oracle[nome_norm]
-        # Agregado 3 (F7.3): TICKETS
-        if nome_norm == "tickets":
-            with _lock_fabrica:
-                if nome_norm not in _singletons_oracle:
-                    from repo_oracle.tickets import RepoTicketsOracle
-                    _singletons_oracle["tickets"] = RepoTicketsOracle()
-                return _singletons_oracle[nome_norm]
-        # Agregado 4 (F7.3): AGENDAMENTOS
-        if nome_norm == "agendamentos":
-            with _lock_fabrica:
-                if nome_norm not in _singletons_oracle:
-                    from repo_oracle.agendamentos import RepoAgendamentosOracle
-                    _singletons_oracle["agendamentos"] = RepoAgendamentosOracle()
-                return _singletons_oracle[nome_norm]
-        raise NotImplementedError("Backend ORACLE ainda nao implementado")
+        with _lock_fabrica:
+            if nome_norm in ("usuarios", "rbac") and nome_norm not in _singletons_oracle:
+                # RBAC_USUARIOS: os dois repositorios compartilham o agregado.
+                from repo_oracle.usuarios import RepoUsuariosOracle
+                from repo_oracle.rbac import RepoRbacOracle
+                _singletons_oracle["usuarios"] = RepoUsuariosOracle()
+                _singletons_oracle["rbac"] = RepoRbacOracle()
+            elif nome_norm not in _singletons_oracle:
+                classe = _classe_oracle(nome_norm)
+                if classe is None:
+                    raise ValueError("Repositorio desconhecido: %s" % nome)
+                _singletons_oracle[nome_norm] = classe()
+            return _singletons_oracle[nome_norm]
 
     if backend != "FAKE":
         raise ValueError("Backend de persistencia desconhecido: %s" % backend)

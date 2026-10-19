@@ -22,6 +22,8 @@ import repo_factory
 from repo_catalogo import RepoCatalogo
 from repo_oracle.catalogo import RepoCatalogoOracle
 from repo_rbac import RepoRbac
+from repo_oracle.agentes import RepoAgentesOracle
+from repo_oracle.auditoria import RepoAuditoriaOracle
 from repo_agendamentos import RepoAgendamentos
 from repo_oracle.agendamentos import RepoAgendamentosOracle
 from repo_oracle.tickets import RepoTicketsOracle
@@ -81,12 +83,6 @@ class TestOracleRbacUsuarios(unittest.TestCase):
         self.assertEqual(self.usr.__class__.__name__, "RepoUsuariosOracle")
         self.assertEqual(self.rbac.__class__.__name__, "RepoRbacOracle")
 
-    def test_agregados_seguintes_ainda_nao_implementados(self):
-        """Auditoria e agentes continuam bloqueados (catalogo, tickets e agendamentos: agregados 2 a 4)."""
-        for agg in ("auditoria", "agentes"):
-            with self.assertRaises(NotImplementedError) as ctx:
-                repo_factory.obter(agg)
-            self.assertIn("Backend ORACLE ainda nao implementado", str(ctx.exception))
 
     def test_ator_obrigatorio_usuarios_e_perfis(self):
         """Valida que insercao e alteracao sem ator ou com ator longo lancam RepoViolacao."""
@@ -254,12 +250,6 @@ class TestOracleCatalogo(unittest.TestCase):
         self.assertEqual(self.cat.__class__.__name__, "RepoCatalogoOracle")
         self.assertEqual(repo_factory.obter("usuarios").__class__.__name__, "RepoUsuariosOracle")
 
-    def test_agregados_seguintes_ainda_nao_implementados(self):
-        """Auditoria e agentes continuam indisponiveis no ORACLE (tickets e agendamentos: agregados 3 e 4)."""
-        for agg in ("auditoria", "agentes"):
-            with self.assertRaises(NotImplementedError) as ctx:
-                repo_factory.obter(agg)
-            self.assertIn("Backend ORACLE ainda nao implementado", str(ctx.exception))
 
     def test_sql_qualificado_sem_marcadores_pendentes(self):
         """Todo SQL montado na carga usa o owner qualificado e nenhum marcador sobra."""
@@ -547,6 +537,10 @@ class _CursorRoteirizado(object):
     def fetchall(self):
         return list(self._linhas)
 
+    def fetchmany(self, n):
+        lote, self._linhas = self._linhas[:n], self._linhas[n:]
+        return lote
+
     def close(self):
         pass
 
@@ -602,12 +596,6 @@ class TestOracleTickets(unittest.TestCase):
         self.assertEqual(repo_factory.obter("catalogo").__class__.__name__, "RepoCatalogoOracle")
         self.assertEqual(repo_factory.obter("usuarios").__class__.__name__, "RepoUsuariosOracle")
 
-    def test_agregados_seguintes_ainda_nao_implementados(self):
-        """Auditoria e agentes continuam indisponiveis no ORACLE (agendamentos: agregado 4)."""
-        for agg in ("auditoria", "agentes"):
-            with self.assertRaises(NotImplementedError) as ctx:
-                repo_factory.obter(agg)
-            self.assertIn("Backend ORACLE ainda nao implementado", str(ctx.exception))
 
     def test_owner_e_prefixo_parametrizados(self):
         """SQL, sequences e constraints seguem owner e table_prefix da configuracao."""
@@ -905,11 +893,6 @@ class TestOracleAgendamentos(unittest.TestCase):
         self.assertEqual(self.agd.__class__.__name__, "RepoAgendamentosOracle")
         self.assertEqual(repo_factory.obter("tickets").__class__.__name__, "RepoTicketsOracle")
 
-    def test_agregados_seguintes_ainda_nao_implementados(self):
-        for agg in ("auditoria", "agentes"):
-            with self.assertRaises(NotImplementedError) as ctx:
-                repo_factory.obter(agg)
-            self.assertIn("Backend ORACLE ainda nao implementado", str(ctx.exception))
 
     def test_owner_e_prefixo_parametrizados(self):
         cfg = mock.Mock()
@@ -1139,12 +1122,194 @@ class TestOracleAgendamentos(unittest.TestCase):
 
 
 class TestOracleAuditoriaAgentes(unittest.TestCase):
-    """Testes para o agregado AUDITORIA_AGENTES no Oracle (passo 5 do F7.3)."""
+    """Testes de conformidade e integridade para o agregado AUDITORIA_AGENTES no Oracle (passo 5 do F7.3)."""
 
-    def test_pendente(self):
+    @classmethod
+    def setUpClass(cls):
         agregado = os.environ.get("SSS_TEST_REPO_AGREGADO")
         if agregado != "AUDITORIA_AGENTES":
-            self.skipTest("Agregado AUDITORIA_AGENTES sera implementado no passo 5 do F7.3")
+            raise unittest.SkipTest("Execucao restrita ao agregado AUDITORIA_AGENTES (atual: %s)" % agregado)
+        _preparar_banco_real(cls)
+
+    @classmethod
+    def tearDownClass(cls):
+        _restaurar_banco_real(cls)
+
+    def setUp(self):
+        repo_factory.reset_singletons()
+        self.aud = repo_factory.obter("auditoria")
+        self.agt = repo_factory.obter("agentes")
+
+    # ------------------------------------------------------------- sem banco
+
+    def test_todos_os_agregados_no_oracle(self):
+        """Com o 5o agregado, a aplicacao resolve todos os repositorios para o Oracle (sem FAKE)."""
+        esperados = {"usuarios": "RepoUsuariosOracle", "rbac": "RepoRbacOracle", "catalogo": "RepoCatalogoOracle",
+                     "tickets": "RepoTicketsOracle", "agendamentos": "RepoAgendamentosOracle",
+                     "auditoria": "RepoAuditoriaOracle", "agentes": "RepoAgentesOracle"}
+        for nome, classe in esperados.items():
+            self.assertEqual(repo_factory.obter(nome).__class__.__name__, classe, nome)
+        with self.assertRaises(ValueError):
+            repo_factory.obter("inexistente")
+
+    def test_owner_e_prefixo_parametrizados(self):
+        cfg = mock.Mock()
+        cfg.oracle.owner = "SSS_TEST_AUD"
+        cfg.oracle.table_prefix = "abc_"
+        aud = RepoAuditoriaOracle(cfg=cfg, segredos={})
+        agt = RepoAgentesOracle(cfg=cfg, segredos={})
+        for nome, sql in list(aud._sql.items()) + list(agt._sql.items()):
+            self.assertNotIn("tbsss_", sql, nome)
+        self.assertIn("SSS_TEST_AUD.abc_auditoria", aud._sql["INSERIR"])
+        self.assertEqual(aud._seq_aud, "SSS_TEST_AUD.sq_abc_auditoria")
+        self.assertIn("SSS_TEST_AUD.abc_scripts", agt._sql["FILA"])
+
+    def test_painel_usa_as_expressoes_dos_indices_e_nenhum_clob(self):
+        """AGENTS §4.8: CASE textualmente identico ao de ix_tck_run/ix_tck_fila; sem CLOB (CR-008, R-15)."""
+        import sql_ident
+        self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENTE_CASE + ") = :codigo", self.agt._sql["TICKETS_RUNNING"])
+        self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENTE_CASE + ") >= CHR(1)", self.agt._sql["RODANDO_SEM_PID"])
+        self.assertIn("(" + sql_ident.FBI_TCK_FILA_PRIO_CASE + ") BETWEEN 1 AND 4", self.agt._sql["FILA"])
+        self.assertIn("(" + sql_ident.FBI_TCK_FILA_SCHED_CASE + ") <= :agora", self.agt._sql["FILA"])
+        self.assertIn("JOIN " + self.agt._idents["scr"] + " s ON s.id = t.script_id", self.agt._sql["FILA"])
+        for nome in ("TICKETS_RUNNING", "FILA", "RODANDO_SEM_PID"):
+            self.assertNotIn("log_output", self.agt._sql[nome])
+            self.assertNotIn("parametros_enviados", self.agt._sql[nome])
+
+    def test_registrar_sem_corte_e_ator_obrigatorio_antes_do_sql(self):
+        """test_06b: ator nulo, vazio ou longo e detalhe longo viram RepoViolacao sem abrir conexao."""
+        with mock.patch.object(self.aud, "_obter_conexao", side_effect=AssertionError("abriu conexao")):
+            for ator, detalhe in ((None, None), ("", None), ("x" * 41, None), ("ana", "d" * 1001)):
+                with self.assertRaises(repo_errors.RepoViolacao):
+                    self.aud.registrar(ator, "1.2.3.4", "CAD_ALTERAR", "tbsss_scripts", 1, detalhe)
+
+    def test_gravacao_de_auditoria_dos_outros_agregados_sem_corte(self):
+        """base.gravar_auditoria recusa (nao corta) detalhe longo: a transacao toda e desfeita."""
+        from repo_oracle import base
+        with self.assertRaises(repo_errors.RepoViolacao):
+            base.gravar_auditoria(mock.MagicMock(), "t", "s", {"ator": "ana", "acao": "X", "detalhe": "d" * 1001},
+                                  "tbsss_scripts", 1)
+        with self.assertRaises(repo_errors.RepoViolacao):
+            base.gravar_auditoria(mock.MagicMock(), "t", "s", {"ator": None, "acao": "X"}, "tbsss_scripts", 1)
+
+    def test_listar_e_iterar_por_bind_com_periodo_e_id_max(self):
+        conn = _ConexaoRoteirizada([("SELECT COUNT(*)", 1, [(0,)])])
+        filtros = {"ator": "Ana_1", "data_inicio": datetime.datetime(2026, 1, 1),
+                   "data_fim": datetime.datetime(2026, 1, 31, 23, 59, 59), "id_max": 99, "ip_origem": "10.%"}
+        with mock.patch.object(self.aud, "_obter_conexao", return_value=conn):
+            self.aud.listar(filtros)
+            list(self.aud.iterar(filtros, limite=5))
+        sql, binds = conn.executados[0]
+        for trecho in ("LOWER(ator) LIKE :ator_f ESCAPE", "created_at >= :data_inicio", "created_at <= :data_fim",
+                       "id <= :id_max", "ROWNUM <= 10001"):
+            self.assertIn(trecho, sql)
+        self.assertNotIn("TRUNC", sql)
+        self.assertEqual((binds["ator_f"], binds["ip_f"]), ("%ana\\_1%", "%10.\\%%"))
+        sql_it, binds_it = conn.executados[-1]
+        self.assertIn("WHERE ROWNUM <= :limite", sql_it)
+        self.assertEqual(binds_it["limite"], 5)
+
+    # ------------------------------------------------------------- banco real
+
+    def _executar(self, sqls):
+        c = self.aud._obter_conexao()
+        try:
+            cur = c.cursor()
+            try:
+                for sql, binds in sqls:
+                    cur.execute(sql, binds)
+                c.commit()
+            finally:
+                cur.close()
+        finally:
+            c.close()
+
+    def test_banco_real_auditoria_e_agentes(self):
+        """Ciclo no Oracle: trilha (reservar, registrar, listar, iterar) e as quatro leituras do painel."""
+        if not self.tem_banco_real:
+            self.skipTest("Testes Oracle reais desligados (marcado como NAO TESTADO)")
+        tck = repo_factory.obter("tickets")
+        marca = "tst%s" % datetime.datetime.now().strftime("%H%M%S%f")
+        aud_ids, tck_ids, agt_id = [], [], None
+        tab_agt = self.agt._idents["agt"]
+        try:
+            agora = tck.agora()
+
+            # 1. Trilha: id reservado, id repetido recusado com o nome da PK, listar e iterar com filtros.
+            aid = self.aud.reservar_id()
+            reg = self.aud.registrar("teste_" + marca, "10.0.0.1", "ESQUEMA_MIGRAR", "tbsss_controle", 1,
+                                     u"versão 1 conferida", id=aid)
+            aud_ids.append(aid)
+            self.assertEqual((reg["id"], reg["ator"], reg["detalhe"]), (aid, "teste_" + marca, u"versão 1 conferida"))
+            self.assertEqual(reg["created_at"].microsecond, 0)
+            with self.assertRaises(repo_errors.RepoViolacao) as ctx:
+                self.aud.registrar("teste_" + marca, None, "CAD_ALTERAR", "tbsss_controle", 1, None, id=aid)
+            self.assertEqual(ctx.exception.constraint, "pk_" + self.aud._prefixo + "auditoria")
+            for _ in range(2):
+                aud_ids.append(self.aud.registrar("teste_" + marca, None, "CAD_ALTERAR", "tbsss_controle", 1)["id"])
+            filtros = {"ator": "TESTE_" + marca.upper(), "data_inicio": agora - datetime.timedelta(minutes=5),
+                       "data_fim": agora + datetime.timedelta(minutes=5)}
+            lista = self.aud.listar(filtros)
+            self.assertEqual([i["id"] for i in lista["itens"]], sorted(aud_ids, reverse=True))
+            self.assertEqual(self.aud.listar(dict(filtros, id_max=aid))["total"], 1)
+            self.assertEqual(self.aud.listar(dict(filtros, acao="ESQUEMA_MIGRAR", entidade="tbsss_controle",
+                                                  entidade_id=1))["total"], 1)
+            self.assertEqual([r["id"] for r in self.aud.iterar(filtros, limite=2)], sorted(aud_ids, reverse=True)[:2])
+
+            # 2. Painel: agente ATIVO com heartbeat agora atende (ambiente, interpretador) do proprio teste.
+            script = repo_factory.obter("catalogo").scripts_listar(tamanho=1)["itens"][0]
+            ambiente = repo_factory.obter("catalogo").ambientes_listar(tamanho=1)["itens"][0]["nome"]
+            login = repo_factory.obter("usuarios").listar(tamanho=1)["itens"][0]["login"]
+            c = self.aud._obter_conexao()
+            try:
+                agt_id = db_conn.proximo_id(c, self.agt.qualificar_sequence("agentes"))
+            finally:
+                c.close()
+            self._executar([(
+                "INSERT INTO " + tab_agt + " (id, codigo, hostname, status, ambientes, plataforma, interpretadores, "
+                "heartbeat_at, config_criticos, created_at, created_by) VALUES (:id, :codigo, 'host-tst', 'ATIVO', "
+                ":amb, 'LINUX', :interp, :hb, 'tst=1', SYSDATE, 'SYSTEM:teste')",
+                {"id": agt_id, "codigo": marca, "amb": ambiente, "interp": script["interpretador"], "hb": agora})])
+            ag = [a for a in self.agt.listar() if a["codigo"] == marca][0]
+            self.assertEqual((ag["plataforma"], ag["interpretadores"], ag["config_criticos"]),
+                             ("LINUX", script["interpretador"], "tst=1"))
+
+            antigo = agora - datetime.timedelta(minutes=30)
+            base = {"script_id": script["id"], "ambiente": ambiente, "solicitante": login, "ip_origem": marca}
+            t_run = tck.criar(dict(base, status="RUNNING", agente_id=marca, started_at=antigo), [])
+            tck_ids.append(t_run)
+            t_pend = tck.criar(dict(base, scheduled_at=antigo), [])
+            tck_ids.append(t_pend)
+
+            rodando = self.agt.tickets_running(marca)
+            self.assertEqual([t["id"] for t in rodando], [t_run])
+            self.assertNotIn("log_output", rodando[0])
+            self.assertNotIn("parametros_enviados", rodando[0])
+            sem_pid = [t for t in self.agt.rodando_sem_pid(agora, 2) if t["id"] == t_run]
+            self.assertEqual(sorted(sem_pid[0]), ["agente_id", "ambiente", "id", "script_id", "started_at"])
+            # Reservado ha 30 minutos: fica de fora com o limite de 60.
+            self.assertNotIn(t_run, [t["id"] for t in self.agt.rodando_sem_pid(agora, 60)])
+
+            limiares = mock.Mock(heartbeat_interval_s=30, fence_timeout_s=120)
+            chave = (ambiente, script["interpretador"])
+            self.assertNotIn(chave, [(g["ambiente"], g["interpretador"]) for g in self.agt.fila_sem_atendente(agora, limiares)])
+            # Agente parado: o mesmo par passa a aparecer na fila sem atendente, com o PENDING do teste.
+            self._executar([("UPDATE " + tab_agt + " SET status = 'PARADO', updated_at = SYSDATE, "
+                             "updated_by = 'SYSTEM:teste' WHERE id = :id", {"id": agt_id})])
+            grupos = dict(((g["ambiente"], g["interpretador"]), g) for g in self.agt.fila_sem_atendente(agora, limiares))
+            self.assertIn(chave, grupos)
+            self.assertGreaterEqual(grupos[chave]["quantidade"], 1)
+            self.assertLessEqual(grupos[chave]["mais_antigo"], antigo.replace(microsecond=0))
+        finally:
+            limpeza = [("DELETE FROM " + self.aud._idents["aud"] + " WHERE id = :id", {"id": i}) for i in aud_ids]
+            for tid in tck_ids:
+                limpeza.append(("DELETE FROM " + tck._idents["tck"] + " WHERE id = :id", {"id": tid}))
+                if _oracle_test_support.modo_schema() == _oracle_test_support.MODO_COMPARTILHADO:
+                    limpeza.append(("DELETE FROM " + self.aud._idents["aud"] + " WHERE entidade = 'tbsss_tickets' "
+                                    "AND entidade_id = :id", {"id": tid}))
+            if agt_id is not None:
+                limpeza.append(("DELETE FROM " + tab_agt + " WHERE id = :id", {"id": agt_id}))
+            self._executar(limpeza)
 
 
 if __name__ == "__main__":

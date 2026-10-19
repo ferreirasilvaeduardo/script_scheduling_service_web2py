@@ -269,7 +269,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
    * Controllers e services obtêm repositórios **somente** via `repo_factory`. É proibido importar `repo_fake` ou `repo_oracle` diretamente.
    * **Exceção — repositórios internos de processos batch:** `modules/repo_oracle/scheduler_*.py` (fila, agenda e log) e `modules/repo_oracle/purge.py` não fazem parte do contrato da UI e não têm versão FAKE. Eles são importados diretamente **apenas** por `scheduler_loop.py`, `log_pump.py` e `scripts/purge.py`, todos processos que exigem banco real (README §2.5).
    * Regras de negócio residem em `modules/` (rbac, params_compiler, recurrence, executor, *_service).
-   * **Trava de ambiente:** `data_backend = FAKE` fora de `sss_env = DEV` aborta a subida. O daemon aborta com FAKE.
+   * **Backend:** a aplicação usa sempre o Oracle do `[oracle]` (owner e prefixo); `[app] data_backend` foi removida no F7.3 e é recusada se aparecer. O FAKE só existe injetado por teste (`repo_factory.configurar`) e só com `sss_env = DEV`. DEV e PROD se separam pelo owner e pelo prefixo; `sss_env` continua como trava de segurança.
 6. **Daemon:** o `scripts/run_scheduler.py` é o único entrypoint do scheduler. É proibido iniciar threads, timers ou o scheduler a partir de controllers ou models.
 
 ---
