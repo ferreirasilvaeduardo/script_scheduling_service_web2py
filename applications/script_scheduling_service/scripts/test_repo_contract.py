@@ -751,6 +751,32 @@ class TestRepoContractFake(unittest.TestCase, BaseRepoContractTest):
     def obter_repo(self, nome):
         return repo_factory.obter(nome)
 
+    def test_saida_do_ticket_no_seed(self):
+        """CR-012: metadados sem o conteudo; fatias so do DISPONIVEL; o Oracle e testado em test_scheduler_saida."""
+        import io
+        import zipfile
+        tickets = self.obter_repo("tickets")
+        self.assertIsNone(tickets.saida_obter(1))
+        meta = tickets.saida_obter(17)
+        self.assertEqual((meta["situacao"], meta["qtd_arquivos"]), ("DISPONIVEL", 2))
+        self.assertNotIn("conteudo", meta)
+        lido, off = b"", 0
+        while True:
+            parte = tickets.saida_ler(17, off, 100)
+            if not parte:
+                break
+            lido, off = lido + parte, off + len(parte)
+        self.assertEqual(len(lido), meta["tamanho_bytes"])
+        self.assertEqual(sorted(zipfile.ZipFile(io.BytesIO(lido)).namelist()),
+                         ["rejeitados/linhas_rejeitadas.csv", "resumo.txt"])
+        self.assertEqual((tickets.saida_obter(29)["situacao"], tickets.saida_obter(29)["motivo"]), ("EXCEDEU", "ARQUIVOS"))
+        for tid in (29, 30, 1):
+            with self.assertRaises(RepoNaoEncontrado):
+                tickets.saida_ler(tid, 0, 10)
+        for off, tam in ((-1, 10), (0, 0), (0, 1024 * 1024 + 1)):
+            with self.assertRaises(RepoViolacao):
+                tickets.saida_ler(17, off, tam)
+
     # Vinculos por diferenca (CR-006, R-f): o contrato nao le as linhas de vinculo, entao o FAKE e
     # inspecionado direto; no Oracle, o F7.3 confere com SELECT nas tabelas de associacao.
     def _linhas(self, tabela, **filtro):

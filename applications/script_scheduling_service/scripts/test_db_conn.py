@@ -546,6 +546,14 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
                 db_conn.definir_tipos_entrada(mock_cur, dt=db_conn.TIPO_DATE)
                 mock_cur.setinputsizes.assert_called_with(dt="CX_DATETIME_TYPE")
 
+    def test_tipo_blob_por_driver(self):
+        """TIPO_BLOB (CR-012): DB_TYPE_BLOB no python-oracledb e BLOB no cx_Oracle."""
+        drv = mock.MagicMock(__name__="oracledb")
+        self.assertIs(db_conn.obter_tipo_driver(db_conn.TIPO_BLOB, driver=drv, candidato="thin"), drv.DB_TYPE_BLOB)
+        cx = mock.MagicMock(__name__="cx_Oracle")
+        self.assertIs(db_conn.obter_tipo_driver(db_conn.TIPO_BLOB, driver=cx, candidato="cx_oracle"), cx.BLOB)
+        self.assertIn(db_conn.TIPO_BLOB, db_conn.TIPOS_NEUTROS)
+
     def test_tipo_varchar_variavel_saida_e_valor_saida(self):
         """variavel_saida e valor_saida operam com OUT binds nos drivers sem expor cursor.var."""
         mock_cur = mock.MagicMock()

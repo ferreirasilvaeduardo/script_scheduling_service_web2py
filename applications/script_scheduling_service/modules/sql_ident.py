@@ -33,6 +33,10 @@ FBI_TCK_FILA_PRIO_CASE = "CASE WHEN status = 'PENDING' THEN prioridade END"
 FBI_TCK_FILA_SCHED_CASE = "CASE WHEN status = 'PENDING' THEN scheduled_at END"
 FBI_TCK_RUN_AGENTE_CASE = "CASE WHEN status = 'RUNNING' THEN agente_id END"
 
+# Saidas ainda em gravacao, por agente (CR-012): o startup check acha so as linhas GRAVANDO dele.
+FBI_TSAI_GRAV_EXPR = "((CASE WHEN situacao = 'GRAVANDO' THEN agente_id END))"
+FBI_TSAI_GRAV_CASE = "CASE WHEN situacao = 'GRAVANDO' THEN agente_id END"
+
 # Indice unico da ocorrencia de agendamento (CR-007, R-27): so tickets de agendamento entram no indice.
 FBI_TCK_OCOR_EXPR = (
     "((CASE WHEN agendamento_id IS NOT NULL THEN agendamento_id END), "
@@ -683,6 +687,41 @@ def _criar_registro_tabelas():
         ('indices', OrderedDict()),
         ('trigger_bu', None),
         ('colunas_lob', ()),
+    ])
+
+    # 18. Saida do ticket (CR-012): zip da pasta de saida do script, uma linha por ticket.
+    r['ticket_saida'] = OrderedDict([
+        ('entidade', 'ticket_saida'),
+        ('abrev', 'tsai'),
+        ('rotulo', 'Saida do ticket'),
+        ('colunas', OrderedDict([
+            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('ticket_id', {'nome': 'ticket_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('situacao', {'nome': 'situacao', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': True, 'default': None}),
+            ('motivo', {'nome': 'motivo', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': False, 'default': None}),
+            ('agente_id', {'nome': 'agente_id', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('qtd_arquivos', {'nome': 'qtd_arquivos', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
+            ('tamanho_bytes', {'nome': 'tamanho_bytes', 'tipo': 'NUMBER(12)', 'not_null': False, 'default': None}),
+            ('conteudo', {'nome': 'conteudo', 'tipo': 'BLOB', 'not_null': False, 'default': None}),
+            ('created_at', {'nome': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+        ])),
+        ('pk', {'colunas': ('id',), 'sufixo': None}),
+        ('uks', OrderedDict([
+            ('tck', {'sufixo': 'tck', 'colunas': ('ticket_id',)}),
+        ])),
+        ('fks', OrderedDict([
+            ('tck', {'sufixo': 'tck', 'colunas': ('ticket_id',), 'ref_tabela': 'tickets', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
+        ])),
+        ('cks', OrderedDict([
+            ('sit', {'sufixo': 'sit', 'expr': "situacao IN ('GRAVANDO','DISPONIVEL','EXCEDEU','FALHOU')"}),
+            ('mot', {'sufixo': 'mot', 'expr': "motivo IS NULL OR motivo IN ('ARQUIVOS','BYTES','PRAZO','ERRO')"}),
+            ('tam', {'sufixo': 'tam', 'expr': "(qtd_arquivos IS NULL OR qtd_arquivos >= 0) AND (tamanho_bytes IS NULL OR tamanho_bytes >= 0)"}),
+        ])),
+        ('indices', OrderedDict([
+            ('grav', {'sufixo': 'grav', 'colunas': (), 'expr': FBI_TSAI_GRAV_EXPR, 'fbi': True}),
+        ])),
+        ('trigger_bu', None),
+        ('colunas_lob', ('conteudo',)),
     ])
 
     for entidade, defn in r.items():

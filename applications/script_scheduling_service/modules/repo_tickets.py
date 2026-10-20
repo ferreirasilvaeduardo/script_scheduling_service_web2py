@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Contrato de persistencia para tickets e execucoes (tbsss_tickets, tbsss_ticket_resp)."""
+"""Contrato de persistencia para tickets e execucoes (tbsss_tickets, tbsss_ticket_resp, tbsss_ticket_saida)."""
 
 
 class RepoTickets(object):
@@ -75,4 +75,18 @@ class RepoTickets(object):
 
     def log_ler(self, id, offset, max_chars):
         """Leitura incremental de log, retornando (texto, novo_offset, terminal, truncado)."""
+        raise NotImplementedError
+
+    def saida_obter(self, ticket_id):
+        """Saida do ticket (CR-012, README §8.13) sem o conteudo, ou None se nao houver.
+
+        Dict com situacao, motivo, agente_id, qtd_arquivos, tamanho_bytes e as colunas de registro.
+        """
+        raise NotImplementedError
+
+    def saida_ler(self, ticket_id, offset, tamanho):
+        """Fatia do zip (bytes) a partir de offset (base 0), com ate `tamanho` bytes (1 a 1 MiB).
+
+        So para situacao DISPONIVEL; outra situacao, ou sem saida, lanca RepoNaoEncontrado. Fim do zip: b''.
+        """
         raise NotImplementedError

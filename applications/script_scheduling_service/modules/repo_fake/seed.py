@@ -4,7 +4,9 @@
 Totalmente deterministico, sem aleatoriedade, compativel com Python 3.6.
 """
 import datetime
+import io
 import json
+import zipfile
 
 import params_compiler
 import recurrence
@@ -125,6 +127,42 @@ def _carimbar_registro(store, base_dt):
         t["updated_at"] = _entre(quando or t["created_at"], t["created_at"], base_dt)
     for r in store.ticket_resp.values():
         r.update(created_by=store.tickets[r["ticket_id"]]["created_by"], updated_at=None, updated_by=None)
+    for sai in store.ticket_saida.values():
+        # A troca de GRAVANDO para a situacao final e alteracao de negocio do agente (README §10, tabela 18).
+        t = store.tickets[sai["ticket_id"]]
+        sai.update(created_at=t["finished_at"], created_by="SYSTEM:%s" % sai["agente_id"],
+                 updated_at=t["finished_at"], updated_by="SYSTEM:%s" % sai["agente_id"])
+
+
+def _zip_seed():
+    """Zip pequeno de demonstracao da pasta de saida (CR-012), gerado em memoria."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("resumo.txt", "Carga concluida: 1200 linhas processadas.\n")
+        z.writestr("rejeitados/linhas_rejeitadas.csv", "linha;motivo\n17;data invalida\n42;valor negativo\n")
+    return buf.getvalue()
+
+
+def _seed_saidas(store):
+    """Saidas do ticket (tabela 18, CR-012): uma de cada situacao final, em tickets terminados."""
+    conteudo = _zip_seed()
+    linhas = (
+        (17, "DISPONIVEL", None, 2, len(conteudo), conteudo),
+        (29, "EXCEDEU", "ARQUIVOS", None, None, None),
+        (30, "FALHOU", "PRAZO", None, None, None),
+    )
+    for sid, (ticket_id, situacao, motivo, qtd, tamanho, dados) in enumerate(linhas, 1):
+        store.ticket_saida[sid] = {
+            "id": sid,
+            "ticket_id": ticket_id,
+            "situacao": situacao,
+            "motivo": motivo,
+            "agente_id": store.tickets[ticket_id]["agente_id"],
+            "qtd_arquivos": qtd,
+            "tamanho_bytes": tamanho,
+            "conteudo": dados,
+        }
+    store.seqs["tbsss_ticket_saida"] = len(linhas)
 
 
 def carregar_seed(store, forcar=False, senha_dev=None):
@@ -546,6 +584,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                         }
 
                                 store.seqs["tbsss_tickets"] = 40
+                                _seed_saidas(store)
 
                                 # ---------------------------------------------------------
                                 # 13. Auditoria (30 linhas)

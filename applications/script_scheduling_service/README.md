@@ -1956,10 +1956,11 @@ UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}   ix_tbsss_tck_fila
 | Agentes | `agt` | `sq_tbsss_agentes` | `tr_tbsss_agt_bi` | `pk_tbsss_agentes` |
 | Auditoria | `aud` | `sq_tbsss_auditoria` | `tr_tbsss_aud_bi` | `pk_tbsss_auditoria` |
 | Controle (CR-007) | `ctl` | `sq_tbsss_controle` | `tr_tbsss_ctl_bi` | `pk_tbsss_controle` |
+| Saída do ticket (CR-012) | `tsai` | `sq_tbsss_ticket_saida` | `tr_tbsss_tsai_bi` | `pk_tbsss_ticket_saida` |
 
 ---
 
-## 10. Modelo de Dados Completo (17 tabelas)
+## 10. Modelo de Dados Completo (18 tabelas)
 
 **Padrões globais:**
 
@@ -2030,7 +2031,7 @@ END;
   * Se a versão divergir ou o `rowcount` for 0, o resultado é `RepoConflito`, sem alteração nem auditoria. A mensagem é a de conflito de edição do §2.4.2: "Outra pessoa mudou este registro enquanto você editava. Recarregue a página para ver a versão nova e faça a sua alteração de novo."
   * A linha de auditoria é gravada na mesma operação (transação) do `INSERT` ou `UPDATE`.
 * **Listagens com `total` limitado (CR-007, R-29):** o `COUNT` das listagens paginadas para em 10.001 (`ROWNUM <= 10001` no Oracle, o mesmo limite no FAKE). Acima de 10.000, a tela mostra "mais de 10.000 registros" e a paginação não oferece "Última". O repositório devolve `total_limitado = True` nesse caso.
-* **LOBs (CR-007, R-29):** todo CLOB (`tbsss_tickets.parametros_enviados`, `tbsss_tickets.log_output` e `tbsss_agendamentos.parametros_json`) tem cláusula de armazenamento explícita (`SECUREFILE (CACHE)` ou `BASICFILE`, §11.1). Num banco AL32UTF8, o CLOB guarda AL16UTF16, cerca de 2 bytes por caractere: a fórmula de dimensionamento está no `IMPLANTACAO.md`.
+* **LOBs (CR-007, R-29; CR-012):** todo LOB (os CLOBs `tbsss_tickets.parametros_enviados`, `tbsss_tickets.log_output` e `tbsss_agendamentos.parametros_json`, e o BLOB `tbsss_ticket_saida.conteudo`) tem cláusula de armazenamento explícita (`SECUREFILE (CACHE)` ou `BASICFILE`, §11.1). Num banco AL32UTF8, o CLOB guarda AL16UTF16, cerca de 2 bytes por caractere: a fórmula de dimensionamento está no `IMPLANTACAO.md`.
 * **Edição de agendamento:** ao salvar uma alteração, `usuario_id` passa a ser o **editor**, que precisa ter `pode_executar` vigente para o script e o ambiente da regra. A regra sempre roda sob os privilégios de quem a definiu por último, o que impede um usuário de reaproveitar privilégios de outro editando a regra dele. A alteração é auditada com o `usuario_id` anterior e o novo. Script e ambiente da regra não mudam na edição (§7.6).
 
 ### 1. `tbsss_ambientes`
@@ -2389,6 +2390,27 @@ END;
 * **Uso:** o `init_db.py` cria a linha e a atualiza a cada migração (§11.1); web e agente leem `versao_esquema` na subida e recusam versão diferente (§8.12); o `purge.py` usa a concessão (§11.3).
 * **Privilégios:** web e agente com `SELECT`; purge com `SELECT` e `UPDATE` (só as colunas `purge_*`).
 
+### 18. `tbsss_ticket_saida` (CR-012)
+* PK `pk_tbsss_ticket_saida` · UK `uk_tbsss_tsai_tck (ticket_id)`
+* FK `fk_tbsss_tsai_tck → tbsss_tickets(id) ON DELETE CASCADE` (coberta pela UK)
+* IX `ix_tbsss_tsai_grav` (função: `((CASE WHEN situacao = 'GRAVANDO' THEN agente_id END))`; só as linhas em gravação, para o startup check, §8.13)
+* CK: `ck_tbsss_tsai_sit (situacao IN ('GRAVANDO','DISPONIVEL','EXCEDEU','FALHOU'))`, `ck_tbsss_tsai_mot (motivo IS NULL OR motivo IN ('ARQUIVOS','BYTES','PRAZO','ERRO'))`, `ck_tbsss_tsai_tam` (contagens não negativas) e `ck_tbsss_tsai_upd` (colunas de registro, CR-006)
+* **Colunas:**
+  * `id`
+  * `ticket_id NUMBER(10) NOT NULL`
+  * `situacao VARCHAR2(10 CHAR) NOT NULL`
+  * `motivo VARCHAR2(10 CHAR)` (de `EXCEDEU` ou `FALHOU`)
+  * `agente_id VARCHAR2(30 CHAR) NOT NULL` (agente que executou; a pasta de saída que não foi para o banco fica no servidor dele)
+  * `qtd_arquivos NUMBER(10)`
+  * `tamanho_bytes NUMBER(12)`
+  * `conteudo BLOB` (o zip; nulo fora de `DISPONIVEL` e `GRAVANDO`)
+  * `created_at DATE DEFAULT SYSDATE NOT NULL`
+  * `created_by VARCHAR2(40 CHAR) NOT NULL` (`SYSTEM:<agent_id>`)
+  * `updated_at DATE`
+  * `updated_by VARCHAR2(40 CHAR)`
+* **Gravação:** só pelo agente, na fase de saída (§8.13). A troca de situação é alteração de negócio (grava `updated_*`); o envio das partes do zip é rotina técnica.
+* **Privilégios:** agente com `SELECT`, `INSERT` e `UPDATE` (e a sequence); web com `SELECT`; purge sem privilégio próprio (a linha sai em cascata com o ticket, §11.3).
+
 ---
 
 ## 11. Bootstrap, Seed e Retenção
@@ -2447,9 +2469,9 @@ END;
 
   | Papel | Privilégios no esquema |
   |---|---|
-  | web | `SELECT, INSERT, UPDATE` nos cadastros e agendamentos; `DELETE` só nas associações (`perfil_func`, `perfil_amb`, `perfil_scr`, `script_amb`, `script_param`); `SELECT, INSERT, UPDATE` em `tbsss_tickets`; `SELECT, INSERT` em `tbsss_ticket_resp` e `tbsss_auditoria`; `SELECT` em `tbsss_agentes` e `tbsss_controle`; `SELECT` nas sequences que usa |
-  | agente | `SELECT` nos cadastros e associações (RBAC, catálogo e compilação do snapshot); `SELECT, UPDATE` em `tbsss_agendamentos`; `SELECT, INSERT, UPDATE` em `tbsss_tickets` e `tbsss_agentes`; `SELECT, INSERT` em `tbsss_ticket_resp`; `INSERT` em `tbsss_auditoria`; `SELECT` em `tbsss_controle`; `SELECT` nas sequences de tickets, respostas, agentes e auditoria |
-  | purge | `SELECT, DELETE` em `tbsss_tickets` (a cascata remove `tbsss_ticket_resp`); `SELECT, INSERT, DELETE` em `tbsss_auditoria`; `SELECT, UPDATE (purge_dono, purge_concessao_ate)` em `tbsss_controle`; `SELECT` na sequence da auditoria |
+  | web | `SELECT, INSERT, UPDATE` nos cadastros e agendamentos; `DELETE` só nas associações (`perfil_func`, `perfil_amb`, `perfil_scr`, `script_amb`, `script_param`); `SELECT, INSERT, UPDATE` em `tbsss_tickets`; `SELECT, INSERT` em `tbsss_ticket_resp` e `tbsss_auditoria`; `SELECT` em `tbsss_agentes` e `tbsss_controle`; `SELECT` nas sequences que usa; `SELECT` em `tbsss_ticket_saida`, sem a sequence (CR-012) |
+  | agente | `SELECT` nos cadastros e associações (RBAC, catálogo e compilação do snapshot); `SELECT, UPDATE` em `tbsss_agendamentos`; `SELECT, INSERT, UPDATE` em `tbsss_tickets` e `tbsss_agentes`; `SELECT, INSERT` em `tbsss_ticket_resp`; `INSERT` em `tbsss_auditoria`; `SELECT` em `tbsss_controle`; `SELECT` nas sequences de tickets, respostas, agentes e auditoria; `SELECT, INSERT, UPDATE` em `tbsss_ticket_saida` e a sequence dela (CR-012) |
+  | purge | `SELECT, DELETE` em `tbsss_tickets` (a cascata remove `tbsss_ticket_resp` e `tbsss_ticket_saida`); `SELECT, INSERT, DELETE` em `tbsss_auditoria`; `SELECT, UPDATE (purge_dono, purge_concessao_ate)` em `tbsss_controle`; `SELECT` na sequence da auditoria |
   | monitor (CR-008, E3/R-04) | Só `SELECT`, e só nas tabelas que o `scripts/saude.py` consulta: `tbsss_agentes`, `tbsss_tickets`, `tbsss_agendamentos`, `tbsss_scripts`, `tbsss_ambientes`, `tbsss_controle` e `tbsss_auditoria`. Nenhum `INSERT`, `UPDATE` ou `DELETE`, e nenhuma sequence. Conta sugerida: `sss_monitor` |
 
   O papel agente lê `tbsss_usuarios` inteira, inclusive `senha_hash` (o Oracle 11g não tem `GRANT SELECT` por coluna). O risco é aceito no §14 (hash PBKDF2 com 200.000 iterações); restringir por view fica como melhoria (CR-008, R-30).

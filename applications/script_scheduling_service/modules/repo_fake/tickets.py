@@ -335,6 +335,26 @@ class RepoTicketsFake(RepoTickets):
 
             return (texto, novo_offset, terminal, truncado)
 
+    def saida_obter(self, ticket_id):
+        """Metadados da saida do ticket (CR-012), sem o conteudo; None sem saida."""
+        with self._store.lock_tickets:
+            for s in self._store.ticket_saida.values():
+                if s["ticket_id"] == int(ticket_id):
+                    return dict((k, v) for k, v in s.items() if k not in ("id", "ticket_id", "conteudo"))
+        return None
+
+    def saida_ler(self, ticket_id, offset, tamanho):
+        """Fatia do zip (offset base 0); so DISPONIVEL, como no Oracle."""
+        off = int(offset)
+        tam = int(tamanho)
+        if off < 0 or tam < 1 or tam > 1024 * 1024:
+            raise RepoViolacao("Fatia da saida invalida")
+        with self._store.lock_tickets:
+            for s in self._store.ticket_saida.values():
+                if s["ticket_id"] == int(ticket_id) and s["situacao"] == "DISPONIVEL" and s["conteudo"] is not None:
+                    return bytes(s["conteudo"][off:off + tam])
+        raise RepoNaoEncontrado("Saida do ticket %s indisponivel" % ticket_id)
+
     def _simular_log(self, t, sim):
         """Emula o log_pump e a finalizacao pelo agente em funcao do relogio injetavel (somente FAKE)."""
         agora = self._store.agora()

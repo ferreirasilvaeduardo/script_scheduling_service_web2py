@@ -682,6 +682,30 @@ class TestConfigCR007(unittest.TestCase):
         self._recusa("fila_envelhecimento_min", agent={"fila_envelhecimento_min": "1441"})
         self.assertEqual(self._carregar(agent={"fila_envelhecimento_min": "0"}).agent.fila_envelhecimento_min, 0)
 
+    def test_pasta_de_saida(self):
+        # CR-012 (README §8.13): opcional, com limites e sem sobrepor as pastas do SSS.
+        cfg = self._carregar()
+        self.assertIsNone(cfg.agent.saida_dir)
+        self.assertEqual((cfg.agent.saida_max_bytes, cfg.agent.saida_max_arquivos), (20971520, 1000))
+        self.assertEqual(cfg.logging.saida_retention_days, 7)
+        base = os.path.dirname(cfg.agent.work_dir)
+        ok = self._carregar(agent={"saida_dir": os.path.join(base, "saida_teste")})
+        self.assertEqual(ok.agent.saida_dir, os.path.join(base, "saida_teste"))
+        self._recusa("saida_dir", agent={"saida_dir": "relativa/saida"})
+        self._recusa("saida_dir", agent={"saida_dir": os.path.join(cfg.agent.work_dir, "saida")})
+        self._recusa("saida_dir", agent={"saida_dir": os.path.join(cfg.logging.log_dir, "saida")})
+        self._recusa("saida_dir", agent={"saida_dir": os.path.dirname(cfg.logging.log_dir)})
+        self._recusa("saida_dir", agent={"saida_dir": os.path.join(base, "s"),
+                                         "exec_work_dir": os.path.join(base, "s", "exec")})
+        for chave, ruins, bons in (("saida_max_bytes", ("1048575", "209715201"), ("1048576", "209715200")),
+                                   ("saida_max_arquivos", ("0", "10001"), ("1", "10000"))):
+            for v in ruins:
+                self._recusa(chave, agent={chave: v})
+            for v in bons:
+                self.assertEqual(getattr(self._carregar(agent={chave: v}).agent, chave), int(v))
+        self._recusa("saida_retention_days", logging={"saida_retention_days": "0"})
+        self._recusa("saida_retention_days", logging={"saida_retention_days": "366"})
+
     def test_invariantes_i3_e_i4(self):
         # I3: heartbeat + 2*call <= fence (10 + 2*41 = 92 > 90).
         self._recusa("fence_timeout_s", oracle={"call_timeout_ms": "41000"})

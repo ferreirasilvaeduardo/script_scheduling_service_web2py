@@ -96,6 +96,12 @@ _SQL_CANCEL_PENDENTE = (
 )
 _SQL_CANCEL_LER = "SELECT status, cancel_requested FROM {tck} WHERE id = :id FOR UPDATE WAIT 5"
 _SQL_LOG = "SELECT status, log_truncado, log_output FROM {tck} WHERE id = :id"
+# Saida do ticket (CR-012): metadados sem o BLOB; o conteudo so em fatias, como o log.
+_COLS_SAIDA = ("situacao", "motivo", "agente_id", "qtd_arquivos", "tamanho_bytes",
+               "created_at", "created_by", "updated_at", "updated_by")
+_SQL_SAIDA = "SELECT " + _lista(_COLS_SAIDA) + " FROM {sai} WHERE ticket_id = :ticket_id"
+_SQL_SAIDA_CONTEUDO = "SELECT situacao, conteudo FROM {sai} WHERE ticket_id = :ticket_id"
+SAIDA_FATIA_MAX = 1024 * 1024
 
 
 def _ler_lob(valor):
@@ -119,6 +125,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             "amb": self.qualificar_tabela("ambientes"),
             "usr": self.qualificar_tabela("usuarios"),
             "prm": self.qualificar_tabela("parametros"),
+            "sai": self.qualificar_tabela("ticket_saida"),
         }
         self._sql = {}
         for nome, modelo in globals().items():
@@ -361,6 +368,37 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             finally:
                 cur.close()
         return (texto, off + len(texto), (status or "").strip() in _TERMINAIS, (log_truncado or "").strip() == "S")
+
+    def saida_obter(self, ticket_id, conn=None):
+        """Metadados da saida do ticket (CR-012), sem ler o BLOB; None sem saida."""
+        with self.contexto_leitura(conn=conn) as c:
+            cur = c.cursor()
+            try:
+                cur.execute(self._sql["SAIDA"], {"ticket_id": int(ticket_id)})
+                row = cur.fetchone()
+            finally:
+                cur.close()
+        return self.tupla_para_dict(_COLS_SAIDA, row) if row else None
+
+    def saida_ler(self, ticket_id, offset, tamanho, conn=None):
+        """Fatia do zip por locator (offset base 0 na API, offset + 1 no LOB); so DISPONIVEL."""
+        off = int(offset)
+        tam = int(tamanho)
+        if off < 0 or tam < 1 or tam > SAIDA_FATIA_MAX:
+            raise repo_errors.RepoViolacao("Fatia da saida invalida")
+        with self.contexto_leitura(conn=conn) as c:
+            cur = c.cursor()
+            try:
+                cur.execute(self._sql["SAIDA_CONTEUDO"], {"ticket_id": int(ticket_id)})
+                row = cur.fetchone()
+                if not row or (row[0] or "").strip() != "DISPONIVEL" or row[1] is None:
+                    raise repo_errors.RepoNaoEncontrado("Saida do ticket %s indisponivel" % ticket_id)
+                lob = row[1]
+                if hasattr(lob, "read"):
+                    return (lob.read(off + 1, tam) or b"") if off < lob.size() else b""
+                return bytes(lob[off:off + tam])
+            finally:
+                cur.close()
 
     # -------------------------------------------------------------------------
     # Gravacoes

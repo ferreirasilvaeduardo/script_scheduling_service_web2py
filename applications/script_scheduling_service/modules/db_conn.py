@@ -40,9 +40,10 @@ CANDIDATOS_VALIDOS = ("thin", "thick", "cx_oracle")
 # Tipos neutros de bind para isolar diferencas entre oracledb e cx_Oracle (F7.2)
 TIPO_DATE = "TIPO_DATE"
 TIPO_CLOB = "TIPO_CLOB"
+TIPO_BLOB = "TIPO_BLOB"  # zip da saida do ticket (CR-012)
 TIPO_NUMBER = "TIPO_NUMBER"
 TIPO_VARCHAR = "TIPO_VARCHAR"
-TIPOS_NEUTROS = (TIPO_DATE, TIPO_CLOB, TIPO_NUMBER, TIPO_VARCHAR)
+TIPOS_NEUTROS = (TIPO_DATE, TIPO_CLOB, TIPO_BLOB, TIPO_NUMBER, TIPO_VARCHAR)
 
 SelecaoDriver = collections.namedtuple("SelecaoDriver", [
     "candidato", "versao_servidor", "versao_driver", "versao_cliente"
@@ -341,6 +342,11 @@ def obter_tipo_driver(tipo_neutro, driver=None, candidato=None):
         if cand == "cx_oracle" or (hasattr(drv, "__name__") and drv.__name__ == "cx_Oracle"):
             return getattr(drv, "CLOB", None)
         return getattr(drv, "DB_TYPE_CLOB", None)
+
+    if tipo_neutro == TIPO_BLOB:
+        if cand == "cx_oracle" or (hasattr(drv, "__name__") and drv.__name__ == "cx_Oracle"):
+            return getattr(drv, "BLOB", None)
+        return getattr(drv, "DB_TYPE_BLOB", None)
 
     if tipo_neutro == TIPO_NUMBER:
         if cand == "cx_oracle" or (hasattr(drv, "__name__") and drv.__name__ == "cx_Oracle"):

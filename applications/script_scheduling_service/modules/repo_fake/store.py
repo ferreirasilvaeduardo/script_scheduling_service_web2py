@@ -44,6 +44,8 @@ class FakeDataStore(object):
         self.agendamentos = collections.OrderedDict()
         self.tickets = collections.OrderedDict()
         self.ticket_resp = collections.OrderedDict()
+        # Saida do ticket (tabela 18, CR-012): {id: linha}, com o zip em bytes em 'conteudo'.
+        self.ticket_saida = collections.OrderedDict()
         self.agentes = collections.OrderedDict()
         self.auditoria = collections.OrderedDict()
         # Linha unica de controle (tabela 17, CR-007 D4): versao do esquema e concessao do purge.
@@ -156,6 +158,7 @@ class FakeDataStore(object):
                                     self.agendamentos.clear()
                                     self.tickets.clear()
                                     self.ticket_resp.clear()
+                                    self.ticket_saida.clear()
                                     self.agentes.clear()
                                     self.auditoria.clear()
                                     self.controle.clear()

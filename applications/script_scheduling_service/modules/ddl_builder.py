@@ -360,6 +360,16 @@ DICIONARIO_COLUNAS = {
         "purge_dono": "Identificador do no que detem a concessao de purga de dados",
         "purge_concessao_ate": "Data e hora limite de expiracao da concessao de purga",
     },
+    "ticket_saida": {
+        "id": "Identificador unico sequencial da saida (chave primaria)",
+        "ticket_id": "Ticket dono da saida (FK para tbsss_tickets, removida em cascata)",
+        "situacao": "Situacao do zip (GRAVANDO, DISPONIVEL, EXCEDEU, FALHOU)",
+        "motivo": "Motivo de EXCEDEU ou FALHOU (ARQUIVOS, BYTES, PRAZO, ERRO)",
+        "agente_id": "Agente que executou o ticket e em cujo servidor a pasta de saida ficou",
+        "qtd_arquivos": "Quantidade de arquivos no zip",
+        "tamanho_bytes": "Tamanho do zip em bytes",
+        "conteudo": "Zip da pasta de saida do script (BLOB)",
+    },
 }
 
 
@@ -720,10 +730,14 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
         comandos.append("GRANT SELECT ON {}.{} TO {};".format(
             owner, esquema["controle"]["tabela"], usr_web
         ))
+        # Saida do ticket (CR-012): a web so le o zip para o download
+        comandos.append("GRANT SELECT ON {}.{} TO {};".format(
+            owner, esquema["ticket_saida"]["tabela"], usr_web
+        ))
 
-        # Sequences para web (todas exceto agentes e controle)
+        # Sequences para web (todas exceto agentes, controle e ticket_saida, que a web nao insere)
         for ent, t in esquema.items():
-            if ent not in ("agentes", "controle"):
+            if ent not in ("agentes", "controle", "ticket_saida"):
                 comandos.append("GRANT SELECT ON {}.{} TO {};".format(
                     owner, t["sequence"], usr_web
                 ))
@@ -758,9 +772,12 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
         comandos.append("GRANT SELECT ON {}.{} TO {};".format(
             owner, esquema["controle"]["tabela"], usr_agt
         ))
+        comandos.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
+            owner, esquema["ticket_saida"]["tabela"], usr_agt
+        ))
 
-        # Sequences do agente: tickets, respostas, agentes e auditoria
-        for ent in ("tickets", "ticket_resp", "agentes", "auditoria"):
+        # Sequences do agente: tickets, respostas, agentes, auditoria e saida (CR-012)
+        for ent in ("tickets", "ticket_resp", "agentes", "auditoria", "ticket_saida"):
             comandos.append("GRANT SELECT ON {}.{} TO {};".format(
                 owner, esquema[ent]["sequence"], usr_agt
             ))
@@ -1216,6 +1233,7 @@ def gerar_script_seed(owner, prefixo, admin_login=None, admin_nome=None, admin_s
 
 
 ORDEM_ROLLBACK_ENTIDADES = (
+    "ticket_saida",
     "ticket_resp",
     "tickets",
     "agendamentos",

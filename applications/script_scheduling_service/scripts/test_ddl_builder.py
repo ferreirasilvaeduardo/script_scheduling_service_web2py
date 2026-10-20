@@ -62,10 +62,10 @@ class TestDdlBuilder(unittest.TestCase):
     def test_triggers_bi_e_bu_literais(self):
         """Valida que toda trigger _bi segue o template do AGENTS §4.2 e _bu aplica imutabilidade."""
         triggers = [item for item in self.instrucoes if item.tipo == "TRIGGER"]
-        self.assertEqual(len(triggers), 19, "Devem existir 17 triggers _bi e 2 _bu")
+        self.assertEqual(len(triggers), 20, "Devem existir 18 triggers _bi e 2 _bu")
 
         bi_triggers = [t for t in triggers if t.nome.endswith("_bi")]
-        self.assertEqual(len(bi_triggers), 17)
+        self.assertEqual(len(bi_triggers), 18)
 
         template_esperado = (
             "BEGIN\n"
@@ -249,6 +249,16 @@ class TestGrantsPorPapel(unittest.TestCase):
         for t in tabelas_monitor:
             self.assertTrue(any(t in g for g in grants_monitor), "Faltou GRANT para %s" % t)
 
+    def test_grants_da_saida_do_ticket(self):
+        """CR-012: web so le o zip; agente le, inclui e altera (com a sequence); purge e monitor nada."""
+        grants = ddl_builder.gerar_grants_por_papel("openrisow", "tbsss_", dict(self.papeis))
+        da_saida = [g for g in grants if "ticket_saida" in g]
+        self.assertEqual(sorted(da_saida), sorted([
+            "GRANT SELECT ON openrisow.tbsss_ticket_saida TO %s;" % self.papeis["web"],
+            "GRANT SELECT, INSERT, UPDATE ON openrisow.tbsss_ticket_saida TO %s;" % self.papeis["agente"],
+            "GRANT SELECT ON openrisow.sq_tbsss_ticket_saida TO %s;" % self.papeis["agente"],
+        ]))
+
     def test_nunca_concede_a_public(self):
         """O script de implantacao nao concede nada a PUBLIC (tbsss_usuarios guarda senha_hash)."""
         script = ddl_builder.gerar_script_implantacao_completo("openrisow", "tbsss_", papeis_usuarios=self.papeis)
@@ -424,17 +434,17 @@ class TestDdlSeedERollback(unittest.TestCase):
         self.assertIn("COMMIT;", sql_seed)
 
     def test_gerar_script_rollback(self):
-        """Script de rollback contem drop de 19 triggers, 17 tabelas CASCADE PURGE e 17 sequences."""
+        """Script de rollback contem drop de 20 triggers, 18 tabelas CASCADE PURGE e 18 sequences."""
         sql_rb = ddl_builder.gerar_script_rollback(self.owner, self.prefixo)
 
-        # 19 triggers
-        self.assertEqual(sql_rb.count("DROP TRIGGER openrisow.tr_"), 19)
+        # 20 triggers
+        self.assertEqual(sql_rb.count("DROP TRIGGER openrisow.tr_"), 20)
 
-        # 17 tabelas
-        self.assertEqual(sql_rb.count("CASCADE CONSTRAINTS PURGE;"), 17)
+        # 18 tabelas
+        self.assertEqual(sql_rb.count("CASCADE CONSTRAINTS PURGE;"), 18)
 
-        # 17 sequences
-        self.assertEqual(sql_rb.count("DROP SEQUENCE openrisow.sq_"), 17)
+        # 18 sequences
+        self.assertEqual(sql_rb.count("DROP SEQUENCE openrisow.sq_"), 18)
 
         # Ordem de remocao: ticket_resp e tickets antes de ambientes e perfis
         pos_tck = sql_rb.index("DROP TABLE openrisow.tbsss_tickets")

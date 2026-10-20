@@ -8,7 +8,7 @@ Cobertura obrigatoria (AGENTS.md §7.4):
 - Toda tabela com sequence, trigger _bi e id NUMBER(10) NOT NULL;
 - Toda coluna VARCHAR2 com CHAR explicito;
 - Toda flag CHAR(1) com CK IN ('S','N');
-- 17 tabelas exatas (CR-007: controle);
+- 18 tabelas exatas (CR-007: controle; CR-012: ticket_saida);
 - Teste negativo de identificador com 31 caracteres;
 - Colunas de registro do CR-006 e README §10 igual ao registro.
 """
@@ -52,7 +52,7 @@ class TestDbSchema(unittest.TestCase):
         return "tbsss_"
 
     def test_dezessete_tabelas_exatas(self):
-        """Verifica presenca e contagem exata das 17 tabelas do README §9.2 e §10 (CR-007: controle)."""
+        """Verifica presenca e contagem exata das 18 tabelas do README §9.2 e §10 (CR-007: controle; CR-012: ticket_saida)."""
         entidades_esperadas = [
             "ambientes",
             "perfis",
@@ -71,8 +71,9 @@ class TestDbSchema(unittest.TestCase):
             "agentes",
             "auditoria",
             "controle",
+            "ticket_saida",
         ]
-        self.assertEqual(len(TABELAS), 17, "Devem existir exatamente 17 tabelas")
+        self.assertEqual(len(TABELAS), 18, "Devem existir exatamente 18 tabelas")
         self.assertEqual(list(TABELAS.keys()), entidades_esperadas)
 
     def test_reproducao_exata_readme_9_2(self):
@@ -96,6 +97,7 @@ class TestDbSchema(unittest.TestCase):
             ("agentes", "agt", "sq_tbsss_agentes", "tr_tbsss_agt_bi", "pk_tbsss_agentes"),
             ("auditoria", "aud", "sq_tbsss_auditoria", "tr_tbsss_aud_bi", "pk_tbsss_auditoria"),
             ("controle", "ctl", "sq_tbsss_controle", "tr_tbsss_ctl_bi", "pk_tbsss_controle"),
+            ("ticket_saida", "tsai", "sq_tbsss_ticket_saida", "tr_tbsss_tsai_bi", "pk_tbsss_ticket_saida"),
         ]
 
         esquema = nomes("tbsss_")
@@ -259,7 +261,7 @@ class TestDbSchema(unittest.TestCase):
             self.assertIn("ck_tbsss_{}_upd".format(abrev), esquema[entidade]["cks"])
         self.assertEqual(sql_ident.TABELAS_SEM_REGISTRO, ("auditoria", "controle"))
         self.assertEqual(
-            sum(1 for e in TABELAS if "upd" in TABELAS[e]["cks"]), 15)
+            sum(1 for e in TABELAS if "upd" in TABELAS[e]["cks"]), 16)
 
     def test_registro_cr007(self):
         """CR-007: versao do esquema, controle de linha unica, indice unico da ocorrencia, colunas e tamanhos."""
@@ -310,14 +312,16 @@ class TestDbSchema(unittest.TestCase):
                              "README §10 diverge do registro em {}".format(entidade))
 
     def test_colunas_lob_declaradas(self):
-        """Verifica catalogacao de colunas LOB (CLOB)."""
+        """Verifica catalogacao de colunas LOB (CLOB e, na saida do ticket, BLOB; CR-012)."""
         self.assertEqual(TABELAS["agendamentos"]["colunas_lob"], ("parametros_json",))
         self.assertEqual(
             TABELAS["tickets"]["colunas_lob"],
             ("parametros_enviados", "log_output"),
         )
+        self.assertEqual(TABELAS["ticket_saida"]["colunas_lob"], ("conteudo",))
+        self.assertEqual(TABELAS["ticket_saida"]["colunas"]["conteudo"]["tipo"], "BLOB")
         for ent, defn in TABELAS.items():
-            if ent not in ("agendamentos", "tickets"):
+            if ent not in ("agendamentos", "tickets", "ticket_saida"):
                 self.assertEqual(
                     defn["colunas_lob"],
                     (),

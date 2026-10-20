@@ -51,6 +51,8 @@ CREATE SEQUENCE openrisow.sq_tbsss_auditoria START WITH 1 INCREMENT BY 1 CACHE 2
 
 CREATE SEQUENCE openrisow.sq_tbsss_controle START WITH 1 INCREMENT BY 1 CACHE 20 NOCYCLE;
 
+CREATE SEQUENCE openrisow.sq_tbsss_ticket_saida START WITH 1 INCREMENT BY 1 CACHE 20 NOCYCLE;
+
 -- ------------------------------------------------------------------------------
 -- FASE 2: TABELAS
 -- ------------------------------------------------------------------------------
@@ -309,6 +311,22 @@ CREATE TABLE openrisow.tbsss_controle (
     purge_concessao_ate DATE
 );
 
+CREATE TABLE openrisow.tbsss_ticket_saida (
+    id NUMBER(10) NOT NULL,
+    ticket_id NUMBER(10) NOT NULL,
+    situacao VARCHAR2(10 CHAR) NOT NULL,
+    motivo VARCHAR2(10 CHAR),
+    agente_id VARCHAR2(30 CHAR) NOT NULL,
+    qtd_arquivos NUMBER(10),
+    tamanho_bytes NUMBER(12),
+    conteudo BLOB,
+    created_at DATE DEFAULT SYSDATE NOT NULL,
+    created_by VARCHAR2(40 CHAR) NOT NULL,
+    updated_at DATE,
+    updated_by VARCHAR2(40 CHAR)
+)
+LOB (conteudo) STORE AS SECUREFILE (CACHE);
+
 -- ------------------------------------------------------------------------------
 -- FASE 3: CONSTRAINTS (PK, UK, CK)
 -- ------------------------------------------------------------------------------
@@ -491,6 +509,18 @@ ALTER TABLE openrisow.tbsss_controle ADD CONSTRAINT ck_tbsss_ctl_id CHECK (id = 
 
 ALTER TABLE openrisow.tbsss_controle ADD CONSTRAINT ck_tbsss_ctl_versao CHECK (versao_esquema >= 1);
 
+ALTER TABLE openrisow.tbsss_ticket_saida ADD CONSTRAINT pk_tbsss_ticket_saida PRIMARY KEY (id);
+
+ALTER TABLE openrisow.tbsss_ticket_saida ADD CONSTRAINT uk_tbsss_tsai_tck UNIQUE (ticket_id);
+
+ALTER TABLE openrisow.tbsss_ticket_saida ADD CONSTRAINT ck_tbsss_tsai_sit CHECK (situacao IN ('GRAVANDO','DISPONIVEL','EXCEDEU','FALHOU'));
+
+ALTER TABLE openrisow.tbsss_ticket_saida ADD CONSTRAINT ck_tbsss_tsai_mot CHECK (motivo IS NULL OR motivo IN ('ARQUIVOS','BYTES','PRAZO','ERRO'));
+
+ALTER TABLE openrisow.tbsss_ticket_saida ADD CONSTRAINT ck_tbsss_tsai_tam CHECK ((qtd_arquivos IS NULL OR qtd_arquivos >= 0) AND (tamanho_bytes IS NULL OR tamanho_bytes >= 0));
+
+ALTER TABLE openrisow.tbsss_ticket_saida ADD CONSTRAINT ck_tbsss_tsai_upd CHECK ((updated_at IS NULL AND updated_by IS NULL) OR (updated_at IS NOT NULL AND updated_by IS NOT NULL));
+
 -- ------------------------------------------------------------------------------
 -- FASE 4: CONSTRAINTS (FK)
 -- ------------------------------------------------------------------------------
@@ -536,6 +566,8 @@ ALTER TABLE openrisow.tbsss_tickets ADD CONSTRAINT fk_tbsss_tck_agd FOREIGN KEY 
 ALTER TABLE openrisow.tbsss_ticket_resp ADD CONSTRAINT fk_tbsss_trsp_tck FOREIGN KEY (ticket_id) REFERENCES openrisow.tbsss_tickets (id) ON DELETE CASCADE;
 
 ALTER TABLE openrisow.tbsss_ticket_resp ADD CONSTRAINT fk_tbsss_trsp_prm FOREIGN KEY (parametro_id) REFERENCES openrisow.tbsss_parametros (id);
+
+ALTER TABLE openrisow.tbsss_ticket_saida ADD CONSTRAINT fk_tbsss_tsai_tck FOREIGN KEY (ticket_id) REFERENCES openrisow.tbsss_tickets (id) ON DELETE CASCADE;
 
 -- ------------------------------------------------------------------------------
 -- FASE 5: INDICES
@@ -588,6 +620,8 @@ CREATE INDEX openrisow.ix_tbsss_aud_crt ON openrisow.tbsss_auditoria (created_at
 CREATE INDEX openrisow.ix_tbsss_aud_ent ON openrisow.tbsss_auditoria (entidade, entidade_id);
 
 CREATE INDEX openrisow.ix_tbsss_aud_ator ON openrisow.tbsss_auditoria (ator);
+
+CREATE INDEX openrisow.ix_tbsss_tsai_grav ON openrisow.tbsss_ticket_saida ((CASE WHEN situacao = 'GRAVANDO' THEN agente_id END));
 
 -- ------------------------------------------------------------------------------
 -- FASE 6: TRIGGERS
@@ -935,6 +969,24 @@ BEGIN
 END;
 /
 
+-- ==============================================================================
+-- TRIGGER: openrisow.tr_tbsss_tsai_bi
+-- TABELA ALVO: openrisow.tbsss_ticket_saida
+-- EVENTO: BEFORE INSERT ON openrisow.tbsss_ticket_saida FOR EACH ROW
+-- FINALIDADE DE GOVERNANCA: Atribuicao automatica condicional de PK via sequence
+-- openrisow.sq_tbsss_ticket_saida. Preserva ID explicitamente informado (migracoes/carga).
+-- REGRA: AGENTS.md §4.2 e README §10.
+-- ==============================================================================
+CREATE OR REPLACE TRIGGER openrisow.tr_tbsss_tsai_bi
+BEFORE INSERT ON openrisow.tbsss_ticket_saida
+FOR EACH ROW
+BEGIN
+    IF :NEW.id IS NULL THEN
+        SELECT openrisow.sq_tbsss_ticket_saida.NEXTVAL INTO :NEW.id FROM DUAL;
+    END IF;
+END;
+/
+
 -- ------------------------------------------------------------------------------
 -- FASE 7: DICIONARIO E GOVERNANCA DE DADOS (COMMENTS)
 -- ------------------------------------------------------------------------------
@@ -1157,6 +1209,19 @@ COMMENT ON COLUMN openrisow.tbsss_controle.versao_aplicada_em IS 'Data e hora de
 COMMENT ON COLUMN openrisow.tbsss_controle.versao_aplicada_por IS 'Identificador de quem realizou a aplicacao do esquema';
 COMMENT ON COLUMN openrisow.tbsss_controle.purge_dono IS 'Identificador do no que detem a concessao de purga de dados';
 COMMENT ON COLUMN openrisow.tbsss_controle.purge_concessao_ate IS 'Data e hora limite de expiracao da concessao de purga';
+COMMENT ON TABLE openrisow.tbsss_ticket_saida IS 'Tabela tbsss_ticket_saida';
+COMMENT ON COLUMN openrisow.tbsss_ticket_saida.id IS 'Identificador unico sequencial da saida (chave primaria)';
+COMMENT ON COLUMN openrisow.tbsss_ticket_saida.ticket_id IS 'Ticket dono da saida (FK para tbsss_tickets, removida em cascata)';
+COMMENT ON COLUMN openrisow.tbsss_ticket_saida.situacao IS 'Situacao do zip (GRAVANDO, DISPONIVEL, EXCEDEU, FALHOU)';
+COMMENT ON COLUMN openrisow.tbsss_ticket_saida.motivo IS 'Motivo de EXCEDEU ou FALHOU (ARQUIVOS, BYTES, PRAZO, ERRO)';
+COMMENT ON COLUMN openrisow.tbsss_ticket_saida.agente_id IS 'Agente que executou o ticket e em cujo servidor a pasta de saida ficou';
+COMMENT ON COLUMN openrisow.tbsss_ticket_saida.qtd_arquivos IS 'Quantidade de arquivos no zip';
+COMMENT ON COLUMN openrisow.tbsss_ticket_saida.tamanho_bytes IS 'Tamanho do zip em bytes';
+COMMENT ON COLUMN openrisow.tbsss_ticket_saida.conteudo IS 'Zip da pasta de saida do script (BLOB)';
+COMMENT ON COLUMN openrisow.tbsss_ticket_saida.created_at IS 'Data e hora da criacao do registro no banco de dados (imutavel)';
+COMMENT ON COLUMN openrisow.tbsss_ticket_saida.created_by IS 'Identificador do usuario ou servico responsavel pela criacao (imutavel)';
+COMMENT ON COLUMN openrisow.tbsss_ticket_saida.updated_at IS 'Data e hora da ultima alteracao de negocio (nulo ate a primeira alteracao)';
+COMMENT ON COLUMN openrisow.tbsss_ticket_saida.updated_by IS 'Identificador do usuario ou servico responsavel pela ultima alteracao';
 
 
 -- ------------------------------------------------------------------------------

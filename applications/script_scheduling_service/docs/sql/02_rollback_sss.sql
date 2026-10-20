@@ -11,6 +11,7 @@ WHENEVER SQLERROR CONTINUE;
 -- ------------------------------------------------------------------------------
 -- 1. DROP TRIGGERS
 -- ------------------------------------------------------------------------------
+DROP TRIGGER openrisow.tr_tbsss_tsai_bi;
 DROP TRIGGER openrisow.tr_tbsss_trsp_bi;
 DROP TRIGGER openrisow.tr_tbsss_tck_bi;
 DROP TRIGGER openrisow.tr_tbsss_agd_bi;
@@ -34,6 +35,7 @@ DROP TRIGGER openrisow.tr_tbsss_ctl_bi;
 -- ------------------------------------------------------------------------------
 -- 2. DROP TABELAS (CASCADE CONSTRAINTS PURGE)
 -- ------------------------------------------------------------------------------
+DROP TABLE openrisow.tbsss_ticket_saida CASCADE CONSTRAINTS PURGE;
 DROP TABLE openrisow.tbsss_ticket_resp CASCADE CONSTRAINTS PURGE;
 DROP TABLE openrisow.tbsss_tickets CASCADE CONSTRAINTS PURGE;
 DROP TABLE openrisow.tbsss_agendamentos CASCADE CONSTRAINTS PURGE;
@@ -55,6 +57,7 @@ DROP TABLE openrisow.tbsss_controle CASCADE CONSTRAINTS PURGE;
 -- ------------------------------------------------------------------------------
 -- 3. DROP SEQUENCES
 -- ------------------------------------------------------------------------------
+DROP SEQUENCE openrisow.sq_tbsss_ticket_saida;
 DROP SEQUENCE openrisow.sq_tbsss_ticket_resp;
 DROP SEQUENCE openrisow.sq_tbsss_tickets;
 DROP SEQUENCE openrisow.sq_tbsss_agendamentos;
