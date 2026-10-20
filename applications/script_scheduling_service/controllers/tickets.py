@@ -18,6 +18,7 @@ _TAMANHOS = (20, 50, 100)
 _EXTENSOES_LISTA = ("html", "load")
 _MSG_FALHA_LISTA = u"Não foi possível carregar os tickets. Tente novamente em instantes."
 _MSG_FALHA_CANCELAR = u"Não foi possível cancelar o ticket. Tente novamente em instantes."
+_MSG_FALHA_SAIDA = u"Não foi possível baixar a saída. Tente novamente em instantes."
 _MSG_REEXECUCAO_REVISAR = (u"Não foi possível reexecutar automaticamente: o cadastro do script pode ter mudado "
                            u"desde a execução original. Revise os campos destacados e crie o ticket novamente.")
 _TIPO_FLASH_CANCELAMENTO = {"TERMINAL": "aviso", "CANCELADO": "sucesso", "SINALIZADO": "sucesso",
@@ -226,6 +227,26 @@ def detalhe():
         "max_chars": ticket_service.LOG_MAX_CHARS,
     }
     return dict(ticket=ticket, visor_log=visor_log)
+
+
+def saida():
+    """Download do zip da pasta de saida (CR-012, README §8.13): GET, regra de leitura do log, so DISPONIVEL."""
+    _exigir_metodo("GET", "HEAD")
+    ctx = _exigir_consulta()
+    try:
+        ticket_id, tamanho, partes = ticket_service.blocos_saida(ctx, request.args(0))
+    except RepoNaoEncontrado:
+        _nao_encontrado()
+    except RepoErro:
+        _log.exception("falha ao iniciar o download da saida (login=%s ticket=%r)", ctx["login"], request.args(0),
+                       extra={"acao": "SAIDA_BAIXAR"})
+        raise HTTP(503, _MSG_FALHA_SAIDA, **response.headers)
+    response.headers["Content-Type"] = "application/zip"
+    response.headers["Content-Disposition"] = 'attachment; filename="ticket_%d_saida.zip"' % ticket_id
+    response.headers["Content-Length"] = str(tamanho)
+    response.headers["Cache-Control"] = "no-store"
+    # Iteravel: o web2py o devolve ao WSGI como corpo em streaming, fatia a fatia.
+    return partes
 
 
 def cancelar():

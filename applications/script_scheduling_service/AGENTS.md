@@ -179,7 +179,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **Texto de entrada nos cadastros** (README §10, CR-003):
   * **identificador** (nome de ambiente e de perfil, login, código de parâmetro): `admin_crud.identificador`. Não é limpo; espaço no início ou no fim é recusado;
   * **texto livre** (nomes de exibição, `label`, `descricao`, `grupo`, `categoria`, `etapa`): `admin_crud.texto_livre`. Recebe `strip()` e recusa caracteres de controle (`\x00-\x1f`, `\x7f`).
-* **Download da saída do ticket (CR-012, README §8.13):** `GET`, com a mesma regra de leitura do log do ticket; só situação `DISPONIVEL`; resposta `application/zip` como anexo, com `nosniff` e `no-store`, lida do BLOB em partes (nunca o zip inteiro em memória); sem auditoria. O nome do arquivo é fixo (`ticket_<id>_saida.zip`), nunca vindo de dado.
+* **Download da saída do ticket (CR-012, README §8.13):** `GET`, com a mesma regra de leitura do log do ticket; só situação `DISPONIVEL`; resposta `application/zip` como anexo, com `nosniff`, `no-store` e `Content-Length`, lida do BLOB em fatias (nunca o zip inteiro em memória); sem auditoria. O nome do arquivo é fixo (`ticket_<id>_saida.zip`), nunca vindo de dado.
 * **Telas de consulta** (README §2.4.3; ex.: O que eu posso fazer, Rotinas disponíveis, Histórico, Agenda, Quem pode o quê):
   * só `GET`; não gravam nada e não auditam;
   * usam o mesmo guarda e o mesmo escopo de ambiente da lista de tickets. Item fora do escopo responde 404;

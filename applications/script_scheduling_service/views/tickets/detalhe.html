@@ -199,3 +199,19 @@ _status_visor = dict((_s, {'rotulo': _i['rotulo'], 'classe': _i['classe']}) for 
     <pre class="sss-log" tabindex="0" aria-label="Log de execução do ticket #{{=_t['id']}}" x-ref="area" @scroll="aoRolar" x-text="texto"></pre>
   </div>
 </section>
+
+{{if _t.get('saida'):}}
+{{_s = _t['saida']}}
+<section class="sss-card" aria-labelledby="titulo-saida">
+  <h2 class="sss-card-titulo" id="titulo-saida">Saída</h2>
+  <div class="sss-card-corpo">
+    <div class="alert alert-{{=_s['classe']}} sss-alerta mb-2" role="status">
+      <p class="mb-1">{{=_s['aconteceu']}}</p>
+      <p class="mb-0">{{=_s['fazer']}}</p>
+    </div>
+    {{if _s['pode_baixar']:}}
+    <a class="btn btn-sm btn-primary" href="{{=URL(c='tickets', f='saida', args=[_t['id']])}}" download="ticket_{{=_t['id']}}_saida.zip">Baixar</a>
+    {{pass}}
+  </div>
+</section>
+{{pass}}

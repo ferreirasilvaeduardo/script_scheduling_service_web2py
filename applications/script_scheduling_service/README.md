@@ -1906,16 +1906,16 @@ Canal opcional para o script devolver arquivos ao usuário. O zip vai para o ban
 * **Startup check (§8.12, passo 9):** linhas `GRAVANDO` de tickets deste agente viram `FALHOU`.
 * **Retenção no disco:** pastas que ficaram (`EXCEDEU`, `FALHOU`, abandono) são removidas pelo `purge.py` depois de `saida_retention_days` (§11.3).
 * **Sem mascaramento:** o conteúdo da saída não passa pelo mascarador (risco aceito no §14).
-* **Download:** `tickets/saida/<id>`, `GET`, com a mesma regra de leitura do log do ticket (§4.3.C). Só com situação `DISPONIVEL`; resposta `application/zip`, `Content-Disposition: attachment; filename="ticket_<id>_saida.zip"`, `X-Content-Type-Options: nosniff` e `Cache-Control: no-store`, lida do BLOB em partes. Sem auditoria (consulta).
-* **Quadro Saída no detalhe do ticket (§5.7):**
+* **Download:** `tickets/saida/<id>`, `GET`, com a mesma regra de leitura do log do ticket (§4.3.C). Só com situação `DISPONIVEL`; resposta `application/zip`, `Content-Disposition: attachment; filename="ticket_<id>_saida.zip"`, `X-Content-Type-Options: nosniff`, `Cache-Control: no-store` e `Content-Length` (o tamanho gravado), lida do BLOB em fatias de 256 KiB (`ticket_service.blocos_saida`). Uma falha de leitura no meio encerra a resposta antes do tamanho anunciado, e o navegador acusa o download incompleto. Sem auditoria (consulta); o download fica no log da aplicação (`SAIDA_BAIXAR`).
+* **Quadro Saída no detalhe do ticket (§5.7; `ui_helpers.quadro_saida`, mensagem em duas partes):** o nó web não conhece os limites nem a retenção de cada agente, então as mensagens não citam números; o tamanho aparece em bytes, KB ou MB (`ui_helpers.tamanho_legivel`). O quadro nunca leva o conteúdo nem o caminho da pasta.
 
   | Situação | Mostra |
   |---|---|
   | sem linha | nada |
-  | `GRAVANDO` | "Saída em preparação." Com mais de 1 hora: "A saída não foi concluída. Os arquivos ficaram no servidor do agente `<agente>`." |
-  | `DISPONIVEL` | "Saída: N arquivos, X KB" e o botão **Baixar** |
-  | `EXCEDEU` | "Saída não disponível: passou do limite de <n> arquivos (ou de <n> MiB). Os arquivos ficaram no servidor do agente `<agente>` por <dias> dias." |
-  | `FALHOU` | "A saída não foi gravada. Os arquivos ficaram no servidor do agente `<agente>` por <dias> dias." |
+  | `GRAVANDO` | "A saída está em preparação. Atualize a página em alguns instantes." Com mais de 1 hora: "A saída não foi concluída. Os arquivos ficaram temporariamente no servidor do agente `<agente>`. Peça a quem administra o servidor." |
+  | `DISPONIVEL` | "O script deixou N arquivos na pasta de saída (X KB). Use o botão Baixar para salvar o zip." e o botão **Baixar** |
+  | `EXCEDEU` | "A saída passou do limite de quantidade de arquivos (ou de tamanho) e não foi empacotada. Os arquivos ficaram temporariamente no servidor do agente `<agente>`. Peça a quem administra o servidor." |
+  | `FALHOU` | "A saída não foi gravada. Os arquivos ficaram temporariamente no servidor do agente `<agente>`. Peça a quem administra o servidor." |
 
 ---
 

@@ -607,3 +607,64 @@ class TestTicketConsulta(_BaseTicket):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSaidaDoTicket(_BaseTicket):
+    """CR-012 (README §8.13): quadro Saida e download do zip, com a regra de leitura do log."""
+
+    def test_quadro_por_situacao(self):
+        disponivel = self.svc.detalhe(self.ctx["admin"], 17)["saida"]
+        self.assertEqual((disponivel["situacao"], disponivel["classe"], disponivel["pode_baixar"]),
+                         ("DISPONIVEL", "success", True))
+        self.assertIn(u"2 arquivos", disponivel["aconteceu"])
+        excedeu = self.svc.detalhe(self.ctx["admin"], 29)["saida"]
+        self.assertFalse(excedeu["pode_baixar"])
+        self.assertIn(u"quantidade de arquivos", excedeu["aconteceu"])
+        self.assertIn(u"agente agt-host02", excedeu["fazer"])
+        falhou = self.svc.detalhe(self.ctx["admin"], 30)["saida"]
+        self.assertEqual((falhou["situacao"], falhou["pode_baixar"]), ("FALHOU", False))
+        self.assertIn(u"agente agt-host01", falhou["fazer"])
+        self.assertIsNone(self.svc.detalhe(self.ctx["admin"], 18)["saida"], "sem saida, sem quadro")
+        for campo in ("conteudo", "base", "relativo"):
+            self.assertNotIn(campo, disponivel)
+
+    def test_gravando_ha_mais_de_uma_hora_e_tamanho_legivel(self):
+        agora = datetime.datetime(2026, 10, 20, 12, 0, 0)
+        recente = ui_helpers.quadro_saida({"situacao": "GRAVANDO", "agente_id": "a1",
+                                           "created_at": agora - datetime.timedelta(minutes=5)}, agora)
+        self.assertEqual((recente["classe"], recente["pode_baixar"]), ("info", False))
+        self.assertIn(u"em preparação", recente["aconteceu"])
+        parada = ui_helpers.quadro_saida({"situacao": "GRAVANDO", "agente_id": "a1",
+                                          "created_at": agora - datetime.timedelta(hours=2)}, agora)
+        self.assertIn(u"não foi concluída", parada["aconteceu"])
+        self.assertIn(u"agente a1", parada["fazer"])
+        bytes_ = ui_helpers.quadro_saida({"situacao": "EXCEDEU", "motivo": "BYTES", "agente_id": "a1"}, agora)
+        self.assertIn(u"limite de tamanho", bytes_["aconteceu"])
+        self.assertIsNone(ui_helpers.quadro_saida(None, agora))
+        self.assertEqual([ui_helpers.tamanho_legivel(n) for n in (None, 512, 12595, 4718592)],
+                         [u"-", u"512 bytes", u"12,3 KB", u"4,5 MB"])
+        um = ui_helpers.quadro_saida({"situacao": "DISPONIVEL", "qtd_arquivos": 1, "tamanho_bytes": 10}, agora)
+        self.assertIn(u"1 arquivo ", um["aconteceu"])
+
+    def test_download_em_fatias_so_disponivel_e_no_escopo(self):
+        import io
+        import zipfile
+        with mock.patch.object(ticket_service, "SAIDA_FATIA_BYTES", 100):
+            tid, tamanho, partes = self.svc.blocos_saida(self.ctx["consulta"], "17")
+            dados = b"".join(partes)
+        self.assertEqual((tid, len(dados)), (17, tamanho))
+        self.assertEqual(sorted(zipfile.ZipFile(io.BytesIO(dados)).namelist()),
+                         ["rejeitados/linhas_rejeitadas.csv", "resumo.txt"])
+        for login, alvo in (("op.hml", "17"), ("admin", "29"), ("admin", "30"), ("admin", "18"),
+                            ("admin", "abc"), ("admin", "99999")):
+            with self.assertRaises(RepoNaoEncontrado, msg=(login, alvo)):
+                self.svc.blocos_saida(self.ctx[login], alvo)
+
+    def test_falha_no_meio_do_download_encerra_sem_completar(self):
+        from repo_errors import RepoErro
+        with mock.patch.object(ticket_service, "SAIDA_FATIA_BYTES", 100):
+            _tid, tamanho, partes = self.svc.blocos_saida(self.ctx["admin"], 17)
+            primeira = next(partes)
+            with mock.patch.object(self.tickets, "saida_ler", side_effect=RepoErro("ORA-03113")):
+                resto = b"".join(partes)
+        self.assertLess(len(primeira) + len(resto), tamanho)

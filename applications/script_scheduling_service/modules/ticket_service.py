@@ -64,6 +64,8 @@ _FORMATO_DIA = "%Y-%m-%d"
 
 # Teto por chamada do visualizador e tamanho do bloco do download (README §8.10).
 LOG_MAX_CHARS = 65536
+# Fatia do download da saida (CR-012): 256 KiB por leitura do BLOB, nunca o zip inteiro em memoria.
+SAIDA_FATIA_BYTES = 256 * 1024
 _RE_OFFSET = re.compile(r"[0-9]{1,10}")
 MARCADOR_DOWNLOAD_INTERROMPIDO = u"\n[SSS] download interrompido por falha na leitura do log\n"
 
@@ -950,6 +952,8 @@ class ServicoTicket(object):
             "pai": pai,
             "filhos": filhos,
             "registro": ui_helpers.registro(ticket, ctx),
+            # CR-012 (README §8.13): quadro Saida, com a mesma regra de leitura do log (ticket visivel).
+            "saida": ui_helpers.quadro_saida(self._tickets.saida_obter(ticket["id"]), agora),
             "pode_cancelar": pode_cancelar,
             "pode_reexecutar": pode_reexecutar,
         }
@@ -971,6 +975,37 @@ class ServicoTicket(object):
             status = self._tickets.obter(ticket["id"])["status"]
         return {"texto": texto, "proximo_offset": proximo, "terminal": bool(terminal),
                 "truncado": bool(truncado), "status": status}
+
+    def blocos_saida(self, ctx, ticket_id):
+        """Valida o escopo (regra do log) e a situacao DISPONIVEL; retorna (id, tamanho, gerador de fatias).
+
+        Lanca RepoNaoEncontrado fora do escopo, sem saida ou fora de DISPONIVEL. Uma falha de leitura no meio
+        encerra o gerador: com Content-Length, o navegador acusa o download incompleto (o zip nao e reparado).
+        """
+        ticket = self._ticket_visivel(ctx, ticket_id, "SAIDA_BAIXAR")
+        tid = ticket["id"]
+        saida = self._tickets.saida_obter(tid)
+        if not saida or saida.get("situacao") != "DISPONIVEL" or not saida.get("tamanho_bytes"):
+            raise RepoNaoEncontrado("saida do ticket indisponivel")
+        tamanho = int(saida["tamanho_bytes"])
+        self._log.info("download da saida (login=%s ticket=%s bytes=%s)", ctx.get("login"), tid, tamanho,
+                       extra={"acao": "SAIDA_BAIXAR"})
+
+        def gerar():
+            off = 0
+            while off < tamanho:
+                try:
+                    parte = self._tickets.saida_ler(tid, off, SAIDA_FATIA_BYTES)
+                except RepoErro:
+                    self._log.exception("falha na leitura da saida para download (ticket=%s offset=%s)", tid, off,
+                                        extra={"acao": "SAIDA_BAIXAR"})
+                    return
+                if not parte:
+                    return
+                off += len(parte)
+                yield parte
+
+        return tid, tamanho, gerar()
 
     def blocos_log(self, ctx, ticket_id):
         """Valida o escopo e retorna (id, gerador de blocos do log integral via log_ler).
@@ -1213,3 +1248,8 @@ def ler_log(ctx, ticket_id, offset):
 def blocos_log(ctx, ticket_id):
     """Gerador do log integral do ticket visivel para download (servico padrao)."""
     return _servico().blocos_log(ctx, ticket_id)
+
+
+def blocos_saida(ctx, ticket_id):
+    """(id, tamanho, gerador) do zip da saida do ticket visivel e DISPONIVEL (servico padrao, CR-012)."""
+    return _servico().blocos_saida(ctx, ticket_id)

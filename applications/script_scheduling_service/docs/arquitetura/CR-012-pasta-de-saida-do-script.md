@@ -82,10 +82,10 @@ O quadro "Saída" do detalhe do ticket (§5.7):
 | Situação | Mostra |
 |---|---|
 | sem linha | nada (o script não gravou saída, ou o agente não tem `saida_dir`) |
-| `GRAVANDO` | "Saída em preparação." Depois de 1 hora: "A saída não foi concluída. Os arquivos ficaram no servidor do agente `<agente>`." |
-| `DISPONIVEL` | "Saída: N arquivos, X KB" e o botão **Baixar** (`ticket_<id>_saida.zip`) |
-| `EXCEDEU` | "Saída não disponível: passou do limite de <n> arquivos (ou de <n> MiB). Os arquivos ficaram no servidor do agente `<agente>` por <dias> dias." |
-| `FALHOU` | "A saída não foi gravada. Os arquivos ficaram no servidor do agente `<agente>` por <dias> dias." |
+| `GRAVANDO` | "A saída está em preparação. Atualize a página em alguns instantes." Com mais de 1 hora: "A saída não foi concluída. Os arquivos ficaram temporariamente no servidor do agente `<agente>`. Peça a quem administra o servidor." |
+| `DISPONIVEL` | "O script deixou N arquivos na pasta de saída (X KB). Use o botão Baixar para salvar o zip." e o botão **Baixar** |
+| `EXCEDEU` | "A saída passou do limite de quantidade de arquivos (ou de tamanho) e não foi empacotada. Os arquivos ficaram temporariamente no servidor do agente `<agente>`. Peça a quem administra o servidor." |
+| `FALHOU` | "A saída não foi gravada. Os arquivos ficaram temporariamente no servidor do agente `<agente>`. Peça a quem administra o servidor." |
 
 ## 8. Riscos aceitos
 

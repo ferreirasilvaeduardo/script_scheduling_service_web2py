@@ -237,6 +237,58 @@ MENSAGENS = {
 }
 
 
+# Quadro Saida do detalhe do ticket (CR-012, README §8.13): o que aconteceu + o que fazer agora.
+SAIDA_GRAVANDO_LIMITE_S = 3600
+_SAIDA_MENSAGENS = {
+    "GRAVANDO": (u"A saída está em preparação.", u"Atualize a página em alguns instantes."),
+    "PARADA": (u"A saída não foi concluída.",
+               u"Os arquivos ficaram temporariamente no servidor do agente {agente}. Peça a quem administra o servidor."),
+    "DISPONIVEL": (u"O script deixou {qtd} na pasta de saída ({tamanho}).", u"Use o botão Baixar para salvar o zip."),
+    "ARQUIVOS": (u"A saída passou do limite de quantidade de arquivos e não foi empacotada.",
+                 u"Os arquivos ficaram temporariamente no servidor do agente {agente}. Peça a quem administra o servidor."),
+    "BYTES": (u"A saída passou do limite de tamanho e não foi empacotada.",
+              u"Os arquivos ficaram temporariamente no servidor do agente {agente}. Peça a quem administra o servidor."),
+    "FALHOU": (u"A saída não foi gravada.",
+               u"Os arquivos ficaram temporariamente no servidor do agente {agente}. Peça a quem administra o servidor."),
+}
+_SAIDA_CLASSE = {"GRAVANDO": "info", "PARADA": "warning", "DISPONIVEL": "success", "ARQUIVOS": "warning",
+                 "BYTES": "warning", "FALHOU": "warning"}
+
+
+def tamanho_legivel(nbytes):
+    """Bytes em texto curto: '512 bytes', '12,3 KB', '4,5 MB' (virgula decimal, README §2.4.2)."""
+    if nbytes is None:
+        return u"-"
+    n = int(nbytes)
+    if n < 1024:
+        return u"%d bytes" % n
+    if n < 1024 * 1024:
+        return (u"%.1f KB" % (n / 1024.0)).replace(".", ",")
+    return (u"%.1f MB" % (n / (1024.0 * 1024.0))).replace(".", ",")
+
+
+def quadro_saida(saida, agora):
+    """Quadro Saida (CR-012) a partir de saida_obter, ou None sem saida. Nunca leva o conteudo nem o caminho."""
+    if not saida:
+        return None
+    situacao = saida.get("situacao")
+    chave = situacao
+    if situacao == "GRAVANDO":
+        desde = saida.get("updated_at") or saida.get("created_at")
+        if desde is not None and agora is not None and (agora - desde).total_seconds() > SAIDA_GRAVANDO_LIMITE_S:
+            chave = "PARADA"
+    elif situacao == "EXCEDEU":
+        chave = "BYTES" if saida.get("motivo") == "BYTES" else "ARQUIVOS"
+    elif situacao not in _SAIDA_MENSAGENS:
+        chave = "FALHOU"
+    qtd = saida.get("qtd_arquivos")
+    valores = {"agente": saida.get("agente_id") or u"-", "tamanho": tamanho_legivel(saida.get("tamanho_bytes")),
+               "qtd": (u"1 arquivo" if qtd == 1 else u"%s arquivos" % qtd)}
+    aconteceu, fazer = _SAIDA_MENSAGENS[chave]
+    return {"situacao": situacao, "classe": _SAIDA_CLASSE[chave], "aconteceu": aconteceu.format(**valores),
+            "fazer": fazer.format(**valores), "pode_baixar": situacao == "DISPONIVEL"}
+
+
 def mensagem(chave, **valores):
     """Mensagem-padrao completa ('o que aconteceu' + 'o que fazer agora')."""
     aconteceu, fazer = MENSAGENS[chave]
