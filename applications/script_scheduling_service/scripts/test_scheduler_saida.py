@@ -7,7 +7,10 @@ leitura pelo repositorio da web (saida_obter, saida_ler); tudo removido no fim (
 """
 import _testenv  # noqa: F401
 
+import json
 import os
+import subprocess
+import sys
 import unittest
 from unittest import mock
 
@@ -101,6 +104,36 @@ class TestSemBanco(unittest.TestCase):
         self.assertNotIn("tbsss_", conn.executados[0][0])
 
 
+# Processo filho com o driver forcado (o driver e escolhido uma vez por processo): BLOB por TIPO_BLOB.
+_FILHO = r'''
+import json, sys, warnings
+warnings.simplefilter("ignore")
+sys.path.insert(0, sys.argv[1])
+import sss_config, db_conn
+from repo_oracle.scheduler_saida import RepoSchedulerSaida
+cfg = sss_config.obter_config()
+cfg = cfg._replace(oracle=cfg.oracle._replace(modo_driver=sys.argv[2]))
+seg = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel="web")
+try:
+    conn = db_conn.conectar(cfg, seg, "web")
+except Exception as e:
+    print(json.dumps({"indisponivel": "%s: %s" % (e.__class__.__name__, str(e)[:120])}))
+    sys.exit(0)
+repo = RepoSchedulerSaida.da_config(cfg)
+tid, agente = int(sys.argv[3]), sys.argv[4]
+parte = bytes(bytearray(range(256))) * 1200
+r = [repo.iniciar(conn, tid, agente)]
+conn.commit()
+r.append(repo.anexar(conn, tid, agente, 0, parte))
+conn.commit()
+r.append(repo.anexar(conn, tid, agente, 0, parte))
+r.append(repo.concluir(conn, tid, agente, 1, len(parte)))
+conn.commit()
+print(json.dumps({"candidato": db_conn.obter_selecao().candidato, "r": r}))
+conn.close()
+'''
+
+
 @unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")
 class TestSchedulerSaidaOracle(unittest.TestCase):
     """Ciclo real da saida com massa propria; a web le pelo repositorio de tickets."""
@@ -186,6 +219,27 @@ class TestSchedulerSaidaOracle(unittest.TestCase):
                          "fora de GRAVANDO nada e anexado")
         self.assertFalse(self.repo.iniciar(self.conn, tid, self.agente), "situacao final nao reabre")
         self.conn.rollback()
+
+    def test_combinacoes_de_driver(self):
+        modulos = os.path.dirname(os.path.abspath(scheduler_saida.__file__))
+        modulos = os.path.dirname(modulos)
+        parte = bytes(bytearray(range(256))) * 1200
+        resultados = {}
+        for modo in ("thin", "thick", "cx_oracle"):
+            tid = self._ticket_do_agente()
+            p = subprocess.run([sys.executable, "-c", _FILHO, modulos, modo, str(tid), self.agente],
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180,
+                               cwd=os.path.dirname(modulos))
+            linhas = [x for x in p.stdout.decode("utf-8", "replace").splitlines() if x.startswith("{")]
+            self.assertTrue(linhas, "%s: %s" % (modo, p.stderr.decode("utf-8", "replace")[-500:]))
+            saida = json.loads(linhas[-1])
+            resultados[modo] = saida
+            if "indisponivel" in saida:
+                continue
+            self.assertEqual((saida["candidato"], saida["r"]), (modo, [True, "GRAVADO", "JA_GRAVADO", True]), modo)
+            self.assertEqual(self.tickets.saida_ler(tid, 0, len(parte)), parte, modo)
+        print("\n[saida] combinacoes de driver: %s" % json.dumps(resultados))
+        self.assertNotIn("indisponivel", resultados["thin"], "Thin e o driver padrao do ambiente")
 
     def test_excedeu_falhou_e_startup_check(self):
         t1, t2, t3 = self._ticket_do_agente(), self._ticket_do_agente(), self._ticket_do_agente()
