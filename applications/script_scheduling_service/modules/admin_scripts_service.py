@@ -24,27 +24,10 @@ from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 
 FUNCIONALIDADE = "CAD_SCRIPTS"
 CAMPOS_EDITAVEIS = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file",
-                    "tipo_param", "max_qtd_parallel_env", "timeout_seg", "ativo", "sha256_homologado")
+                    "tipo_param", "max_qtd_parallel_env", "timeout_seg", "ativo")
 CAMPOS_INSERCAO = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file",
-                   "tipo_param", "max_qtd_parallel_env", "timeout_seg", "sha256_homologado")
+                   "tipo_param", "max_qtd_parallel_env", "timeout_seg")
 
-
-_RE_SHA256 = re.compile(r"[0-9a-f]{64}")
-MSG_SHA256_FORMATO = (u"Informe os 64 caracteres hexadecimais do SHA-256 (a saída de sha256sum no servidor do agente).")
-MSG_SHA256_DIVERGE = (u"O SHA-256 informado é diferente do arquivo presente neste servidor. Confira o arquivo "
-                      u"ou deixe o campo vazio para usar o conteúdo daqui.")
-
-
-def calcular_sha256_arquivo(caminho):
-    """Calcula o SHA-256 do arquivo validado, em blocos de 64 KiB."""
-    h = hashlib.sha256()
-    with open(caminho, "rb") as arquivo:
-        while True:
-            bloco = arquivo.read(65536)
-            if not bloco:
-                break
-            h.update(bloco)
-    return h.hexdigest()
 
 
 ROTULOS_INTERPRETADOR = (("PYTHON3", u"PYTHON3 — Python 3"),
@@ -72,7 +55,6 @@ MENSAGENS_PATH = {
     Codigo.CONTEM_PONTOS: u"O caminho não pode conter '..'.",
     Codigo.SEPARADOR_INVALIDO: u"Use só / para separar pastas; não use \\.",
     Codigo.CARACTERE_INVALIDO: u"O caminho contém caracteres de controle não permitidos.",
-    Codigo.CAMINHO_COM_LINK: u"O caminho passa por um link simbólico. Informe o caminho real do arquivo, sem links.",
     Codigo.SEM_ACESSO: u"Uma pasta do caminho não deixa o sistema passar; confira as permissões das pastas.",
     Codigo.PASTA_DO_SISTEMA: u"Scripts não podem ficar em pastas do sistema (/bin, /sbin, /usr, /lib, /etc, /boot, "
                              u"/proc, /sys, /dev, /root). Use outra pasta.",
@@ -214,7 +196,7 @@ class ServicoAdminScripts(object):
             return dict(comum, id=None, nome="", descricao="", grupo="", categoria="", etapa="",
                         interpretador=path_guard.ALLOWLIST[0], path_file="", tipo_param="NOMEADO",
                         max_qtd_parallel_env=1, timeout_seg="", ativo="S", versao="", agendamentos_ativos=0,
-                        registro=None, sha256_homologado=None)
+                        registro=None)
         s = self._obter(script_id)
         dados = dict((c, s.get(c)) for c in CAMPOS_EDITAVEIS)
         for c in ("descricao", "grupo", "categoria", "etapa"):
@@ -222,8 +204,7 @@ class ServicoAdminScripts(object):
         dados["timeout_seg"] = "" if s.get("timeout_seg") is None else s["timeout_seg"]
         dados.update(comum, id=s["id"], versao=admin_crud.versao(s, CAMPOS_EDITAVEIS),
                      agendamentos_ativos=self._agendamentos_ativos(script_id=s["id"]),
-                     registro=ui_helpers.registro(s, ctx),
-                     sha256_homologado=s.get("sha256_homologado"))
+                     registro=ui_helpers.registro(s, ctx))
         return dados
 
     # ------------------------------------------------------------- validacao
@@ -297,35 +278,6 @@ class ServicoAdminScripts(object):
             erros["path_file"] = MENSAGENS_PATH[exc.codigo]
         return None
 
-    @staticmethod
-    def _sha256_informado(dados, erros):
-        """SHA-256 digitado pelo administrador (CR-008, E4): None se vazio; formato invalido vira erro."""
-        valor = admin_crud.texto(dados.get("sha256_informado"), 100)
-        if not valor:
-            return None
-        valor = valor.strip().lower()
-        if not _RE_SHA256.fullmatch(valor):
-            erros["sha256_informado"] = MSG_SHA256_FORMATO
-            return None
-        return valor
-
-    def _hash_homologado(self, caminho, aviso, informado, erros):
-        """Hash calculado neste no ou, sem o arquivo aqui, o informado; divergencia entre os dois e erro."""
-        sha = self._hash_validado(caminho, aviso)
-        if sha is not None and informado is not None and sha != informado:
-            erros["sha256_informado"] = MSG_SHA256_DIVERGE
-            return None
-        return sha if sha is not None else informado
-
-    def _hash_validado(self, caminho, aviso):
-        if aviso == AVISO_NAO_ENCONTRADO:
-            return None
-        try:
-            return calcular_sha256_arquivo(caminho)
-        except OSError:
-            self._log.exception("falha ao registrar conteudo do script", extra={"acao": FUNCIONALIDADE})
-            raise OperacaoNegada(admin_crud.MSG_FALHA)
-
     def _pre_tipo_param(self, script_id, tipo, erros):
         vinculos = self._catalogo.script_params_obter(script_id)
         if tipo == "NENHUM" and vinculos:
@@ -353,19 +305,14 @@ class ServicoAdminScripts(object):
         erros = {}
         atual = None if script_id in (None, "") else self._obter(script_id)
         reg = self._validar(dados, erros, atual)
-        informado = self._sha256_informado(dados, erros)
-        # Toda homologacao exige as checagens do caminho, inclusive a solicitada pelo checkbox.
-        checar = (atual is None or bool(dados.get("registrar_conteudo_atual")) or informado is not None
-                  or any(reg[c] != atual.get(c) for c in ("path_file", "interpretador")))
+        # CR-011: o conteudo do arquivo nao e registrado; as checagens do caminho valem na inclusao e quando
+        # o caminho ou o interpretador mudam.
+        checar = atual is None or any(reg[c] != atual.get(c) for c in ("path_file", "interpretador"))
         aviso = self.validar_caminho(reg["path_file"], erros, checar)
         if script_id in (None, ""):
             if erros:
                 return None, erros, None
             novo = dict(reg, ativo="S")
-            sha = self._hash_homologado(reg["path_file"], aviso, informado, erros)
-            if erros:
-                return None, erros, None
-            novo["sha256_homologado"] = sha
             auditoria = admin_crud.auditoria(ctx, ip, "CAD_INSERIR", admin_crud.detalhe_insercao(novo, CAMPOS_INSERCAO))
             try:
                 criado = self._catalogo.scripts_inserir(novo, auditoria=auditoria)
@@ -383,17 +330,7 @@ class ServicoAdminScripts(object):
             return atual["id"], erros, None
         if admin_crud.texto(dados.get("versao"), 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
             return atual["id"], {CAMPO_GERAL: admin_crud.MSG_CONFLITO}, None
-        alteracoes = dict((c, reg[c]) for c in CAMPOS_EDITAVEIS if c not in ("ativo", "sha256_homologado"))
-        registrar_atual = bool(dados.get("registrar_conteudo_atual"))
-        mudou_arquivo = reg["path_file"] != atual.get("path_file") or reg["interpretador"] != atual.get("interpretador")
-        alteracoes["sha256_homologado"] = atual.get("sha256_homologado")
-        if mudou_arquivo or registrar_atual or informado is not None:
-            sha = self._hash_homologado(reg["path_file"], aviso, informado, erros)
-            if erros:
-                return atual["id"], erros, None
-            if sha is not None or mudou_arquivo:
-                # Caminho novo sem hash calculado nem informado: o hash antigo nao vale mais (CR-008, R-24).
-                alteracoes["sha256_homologado"] = sha
+        alteracoes = dict((c, reg[c]) for c in CAMPOS_EDITAVEIS if c != "ativo")
 
         detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, **alteracoes), CAMPOS_EDITAVEIS)
         if detalhe is None:
@@ -421,12 +358,9 @@ class ServicoAdminScripts(object):
         if novo_ativo == "S":
             # Reativacao refaz as checagens de arquivo (README §8.5).
             erros = {}
-            aviso = self.validar_caminho(atual["path_file"], erros)
+            self.validar_caminho(atual["path_file"], erros)
             if erros:
                 raise OperacaoNegada(u"Não foi possível reativar: %s" % u" ".join(erros.values()))
-            sha = self._hash_validado(atual["path_file"], aviso)
-            if sha:
-                mudancas["sha256_homologado"] = sha
         detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, **mudancas), CAMPOS_EDITAVEIS)
         acao = "CAD_DESATIVAR" if novo_ativo == "N" else "CAD_ALTERAR"
         if novo_ativo == "N":

@@ -434,16 +434,18 @@ def checar_cadeia(real, donos, uid_agente=None, uids_proibidos=(), parar_em="/")
 
 
 def validar_caminho_script(caminho, donos, uids_proibidos=(), uid_agente=None, parar_em="/"):
-    """Script no servidor local (README §8.0, §8.5): caminho igual ao realpath (CAMINHO_COM_LINK), arquivo
-    regular e a cadeia de dono e escrita ate '/'. EACCES vira SEM_ACESSO. Devolve o codigo ou None."""
-    if caminho_final(caminho) != caminho:
-        return "CAMINHO_COM_LINK"
-    _st, codigo = _stat_codigo(caminho, lstat=True)
+    """Script no servidor local (README §8.0, §8.5; CR-011): o caminho pode ter link simbolico; vale o arquivo
+    real (realpath), que precisa ser regular e passar na cadeia de dono e escrita ate '/'. A pasta do link nao
+    e conferida (risco aceito no README §14). Ciclo de links: NAO_ENCONTRADO; EACCES: SEM_ACESSO."""
+    real = caminho_final(caminho)
+    if os.path.islink(real):
+        return "NAO_ENCONTRADO"  # realpath parou num link: ciclo ou destino inexistente
+    _st, codigo = _stat_codigo(real, lstat=True)
     if codigo:
         return codigo
-    if not os.path.isfile(caminho) or os.path.islink(caminho):
+    if not os.path.isfile(real):
         return "NAO_E_ARQUIVO"
-    return checar_cadeia(caminho, donos, uid_agente, tuple(uids_proibidos), parar_em)
+    return checar_cadeia(real, donos, uid_agente, tuple(uids_proibidos), parar_em)
 
 
 def validar_interpretador_executavel(caminho, donos, uid_agente=None, uids_proibidos=(), dirs_sss=()):

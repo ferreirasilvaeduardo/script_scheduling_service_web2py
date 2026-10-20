@@ -88,7 +88,7 @@ class _Banco(object):
 
     # -- massa
 
-    def script(self, corpo, sha=None, timeout=None, ativo="S", max_par=5, interpretador="SH", homologar=True):
+    def script(self, corpo, timeout=None, ativo="S", max_par=5, interpretador="SH", homologar=True):
         self.seq += 1
         sid = self.seq
         caminho = os.path.join(self.base, "s%d.sh" % sid)
@@ -96,7 +96,7 @@ class _Banco(object):
             f.write(corpo)
         os.chmod(caminho, 0o444)
         self.scripts[sid] = {"id": sid, "nome": "Script %d" % sid, "interpretador": interpretador,
-                             "path_file": caminho, "ativo": ativo, "sha256_homologado": sha, "timeout_seg": timeout,
+                             "path_file": caminho, "ativo": ativo, "timeout_seg": timeout,
                              "max_qtd_parallel_env": max_par}
         if homologar:
             self.homologados.add(sid)
@@ -115,7 +115,7 @@ class _Banco(object):
             "prioridade": 2, "cancel_requested": "N", "agente_id": None, "process_id": None, "process_start": None,
             "parent_ticket_id": None, "agendamento_id": agendamento_id, "scheduled_at": None, "started_at": None,
             "created_at": None, "log_offset_chars": 0, "parametros_enviados": json.dumps(snap), "log": "",
-            "status_motivo": None, "return_code": None, "arquivo_sha256": None, "updated_by": None}
+            "status_motivo": None, "return_code": None, "updated_by": None}
         return self.seq
 
     # -- contrato do RepoSchedulerFila
@@ -172,12 +172,12 @@ class _Banco(object):
         self._falhar("cancelamento_pedido")
         return self.tickets[tid]["cancel_requested"] == "S"
 
-    def registrar_pid(self, conn, tid, agente_id, pid, start, sha):
+    def registrar_pid(self, conn, tid, agente_id, pid, start):
         self._falhar("registrar_pid")
         t = self.tickets[tid]
         if t["status"] != "RUNNING" or t["agente_id"] != agente_id:
             return False
-        t.update(process_id=pid, process_start=start, arquivo_sha256=sha)
+        t.update(process_id=pid, process_start=start)
         return True
 
     def devolver(self, conn, tid, agente_id):
@@ -371,15 +371,29 @@ class TestExecucao(_Base):
         self.rodar(self.terminado(tid))
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
         t = self.banco.tickets[tid]
-        self.assertIn("[SSS] arquivo: sha256=", t["log"])
+        self.assertNotIn("sha256", t["log"], "CR-011: sem hash")
         self.assertIn("inicio\n", t["log"])
         self.assertIn("conexao=****\n", t["log"], "a connect string inteira e segredo do ticket (README §8.10)")
         self.assertNotIn(SENHA_AMB, t["log"])
         self.assertIn("%d\n" % tid, t["log"])
         self.assertIsNotNone(t["process_id"])
-        self.assertEqual(len(t["arquivo_sha256"]), 64)
         self.assertEqual(t["updated_by"], "SYSTEM:srv-t")
         self.assertFalse(os.path.exists(os.path.join(self.work, "ticket_%d" % tid)), "limpeza no fim")
+
+    def test_script_cadastrado_por_link_executa_o_real(self):
+        # CR-011: o caminho cadastrado e um link; o agente executa o arquivo real e informa os dois.
+        sid = self.banco.script("echo \"$SSS_SCRIPT_ARQUIVO|$SSS_SCRIPT_LINK\"\n")
+        real = self.banco.scripts[sid]["path_file"]
+        os.chmod(self.banco.base, 0o755)
+        link = os.path.join(self.banco.base, "atalho.sh")
+        os.symlink(real, link)
+        os.chmod(self.banco.base, 0o555)
+        self.banco.scripts[sid]["path_file"] = link
+        tid = self.banco.ticket(sid)
+        self.subir()
+        self.rodar(self.terminado(tid))
+        self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
+        self.assertIn("%s|%s\n" % (real, link), self.banco.tickets[tid]["log"])
 
     def test_exit_error(self):
         tid = self.banco.ticket(self.banco.script("echo falhou\nexit 3\n"))
@@ -502,22 +516,6 @@ class TestPrevalidacao(_Base):
         outro = self.banco.script("echo y\n")
         tid = self.banco.ticket(sid, path_file=self.banco.scripts[outro]["path_file"])
         self._recusa(tid, "CADASTRO_MUDOU")
-
-    def test_arquivo_alterado(self):
-        tid = self.banco.ticket(self.banco.script("echo x\n", sha="0" * 64))
-        self._recusa(tid, "ARQUIVO_ALTERADO")
-
-    def test_sem_hash_em_ambiente_que_exige(self):
-        tid = self.banco.ticket(self.banco.script("echo x\n"))
-        self._recusa(tid, "SEM_HASH", ambientes_exigem_hash=(AMB,))
-
-    def test_sem_hash_fora_da_lista_so_avisa(self):
-        tid = self.banco.ticket(self.banco.script("echo x\n"))
-        self.subir()
-        with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.rodar(self.terminado(tid))
-        self.assertEqual(self.final(tid)[0], "SUCCESS")
-        self.assertTrue(any("SEM_HASH" in x for x in logs.output))
 
     def test_sem_permissao(self):
         sid = self.banco.script("echo x\n")

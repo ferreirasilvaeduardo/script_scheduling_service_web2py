@@ -14,7 +14,7 @@ from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
 _FUNC = "CAD_SCRIPTS"
 _TAMANHOS = (20, 50, 100)
 _CAMPOS = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file", "tipo_param",
-           "max_qtd_parallel_env", "timeout_seg", "versao", "registrar_conteudo_atual", "sha256_informado")
+           "max_qtd_parallel_env", "timeout_seg", "versao")
 _JS = "js/app/scripts_admin.js"
 _MAX_JSON = 50000
 _MAX_IDS = 1000

@@ -219,7 +219,7 @@ class TestPassos(_Base):
         self.assertIsNotNone(ag.ultimo_hb_ok)
         texto = "\n".join(logs.output)
         self.assertIn("fence_timeout_s=40 node_offline_timeout_s=120", texto)
-        self.assertNotIn("SEM_EXIGENCIA_HASH", texto, "so fora de DEV")
+        self.assertNotIn("SEM_EXIGENCIA_HASH", texto, "CR-011: sem hash")
         r = self.repo.registro
         self.assertEqual((r["codigo"], r["hostname"], r["versao"], r["plataforma"], r["interpretadores"]),
                          ("srv-t", "host-t", sss_config.VERSAO_SSS, plataforma.NOME, "SH"))
@@ -237,13 +237,6 @@ class TestPassos(_Base):
         with mock.patch.object(sss_config.sys, "getfilesystemencoding", return_value="ascii"):
             self.falha(sl.SAIDA_CONFIG)
         self.falha(sl.SAIDA_CONFIG, self.agente(cfg=self.cfg(child_locale="xx_YY.UTF-8")))
-
-    def test_aviso_sem_exigencia_hash_fora_de_dev(self):
-        cfg = self.cfg(sss_env="HML", usuarios_execucao=(), exec_work_dir=self.raiz)
-        plat = _Plat(validar_execucao=lambda *a, **k: [])
-        with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.agente(cfg=cfg, plat=plat).inicializar()
-        self.assertTrue(any("SEM_EXIGENCIA_HASH" in x for x in logs.output))
 
     def test_diretorios_e_interpretadores(self):
         self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(log_dir="/usr/local/sss-logs")))

@@ -89,25 +89,6 @@ pass
       {{include 'components/form_campo.html'}}
       {{pass}}
     </div>
-    <div class="mb-3">
-      {{if not _novo:}}
-      {{if _s.get('sha256_homologado'):}}
-      <p class="form-text mb-1">Conteúdo homologado (SHA-256): <code class="sss-mono text-break">{{=_s['sha256_homologado']}}</code></p>
-      {{else:}}
-      <p class="form-text text-warning mb-1">Arquivo sem conteúdo registrado. O agente não confere o conteúdo enquanto não houver registro, e os ambientes que exigem o registro recusam a execução.</p>
-      {{pass}}
-      <div class="form-check mb-2">
-        <input class="form-check-input" type="checkbox" id="campo-registrar_conteudo_atual" name="registrar_conteudo_atual" value="1">
-        <label class="form-check-label" for="campo-registrar_conteudo_atual">Registrar o conteúdo atual do arquivo</label>
-        <div class="form-text">Atualiza o hash do script com base no arquivo presente neste servidor.</div>
-      </div>
-      {{pass}}
-      {{_erro_sha = (erros or {}).get('sha256_informado')}}
-      <label class="form-label" for="campo-sha256_informado">SHA-256 do arquivo no servidor do agente (opcional)</label>
-      <input class="form-control sss-mono{{=' is-invalid' if _erro_sha else ''}}" type="text" id="campo-sha256_informado" name="sha256_informado" value="{{=_s.get('sha256_informado') or ''}}" maxlength="64" autocomplete="off" spellcheck="false" aria-describedby="ajuda-sha256_informado{{=' erro-sha256_informado' if _erro_sha else ''}}"{{if _erro_sha:}} aria-invalid="true"{{pass}}>
-      {{if _erro_sha:}}<div class="invalid-feedback" id="erro-sha256_informado">{{=_erro_sha}}</div>{{pass}}
-      <div class="form-text" id="ajuda-sha256_informado">Use quando o arquivo não existe neste servidor: rode <code>sha256sum</code> no servidor do agente e cole o resultado. Mudar o caminho sem registrar o conteúdo apaga o registro anterior.</div>
-    </div>
     <div class="sss-form-acoes">
       <button type="submit" class="btn btn-primary">{{=u'Incluir script' if _novo else u'Salvar alterações'}}</button>
       <a class="btn btn-outline-secondary" href="{{=URL(c='admin_scripts', f='lista')}}">Cancelar</a>

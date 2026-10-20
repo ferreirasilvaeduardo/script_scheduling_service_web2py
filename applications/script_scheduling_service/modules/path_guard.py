@@ -33,7 +33,6 @@ class Codigo(object):
     CONTEM_PONTOS = 'CONTEM_PONTOS'
     SEPARADOR_INVALIDO = 'SEPARADOR_INVALIDO'
     CARACTERE_INVALIDO = 'CARACTERE_INVALIDO'
-    CAMINHO_COM_LINK = 'CAMINHO_COM_LINK'
     PASTA_DO_SISTEMA = 'PASTA_DO_SISTEMA'
     PASTA_DO_SSS = 'PASTA_DO_SSS'
     NAO_ENCONTRADO = 'NAO_ENCONTRADO'
@@ -122,7 +121,8 @@ def _checar_cadeia(real, donos, uid_agente, uids_proibidos, parar_em):
 def resolver(path_file, owner_uids, uid_agente=None, dirs_sss=(), parar_em='/', uids_proibidos=()):
     """Confere o script no servidor local e devolve o caminho real (README §8.5, CR-005 D3, CR-007).
 
-    - formato; sem link simbolico em nenhum componente (CAMINHO_COM_LINK); pastas proibidas;
+    - formato; pastas proibidas no caminho cadastrado e no real (CR-011: o caminho pode ter link simbolico,
+      e todas as checagens abaixo valem para o arquivo real, que e o executado);
     - NAO_ENCONTRADO se nao existe; SEM_ACESSO se uma pasta nao deixa passar; NAO_E_ARQUIVO se nao e arquivo;
     - dono do arquivo em owner_uids; cada diretorio ate '/' com dono root ou em owner_uids;
       arquivo e diretorios sem escrita de grupo/outros nem do agente, e sem pertencer ao agente
@@ -135,7 +135,10 @@ def resolver(path_file, owner_uids, uid_agente=None, dirs_sss=(), parar_em='/', 
                                                uid_agente=uid_agente, parar_em=parar_em)
     if codigo:
         raise PathGuardErro(codigo)
-    return plataforma.caminho_final(path_file)
+    real = plataforma.caminho_final(path_file)
+    if real != path_file:
+        checar_pastas_proibidas(real, dirs_sss)
+    return real
 
 
 def validar_executavel(caminho, owner_uids, uid_agente=None, uids_proibidos=(), dirs_sss=(), parar_em='/'):

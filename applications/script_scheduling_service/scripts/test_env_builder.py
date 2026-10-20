@@ -164,6 +164,15 @@ class TestEnvBuilder(unittest.TestCase):
                              "SSS_AMBIENTE_CONEXAO=****")
         self.assertEqual(env["SSS_AMBIENTE_USUARIO"], "fat_app")
 
+    def test_cr011_link_no_caminho_cadastrado(self):
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            env = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
+                                        snapshot={"path_file": "/opt/automacoes/atual/carga.py"})
+            sem_link = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
+                                             snapshot={"path_file": SCRIPT})
+        self.assertEqual((env["SSS_SCRIPT_ARQUIVO"], env["SSS_SCRIPT_LINK"]), (SCRIPT, "/opt/automacoes/atual/carga.py"))
+        self.assertNotIn("SSS_SCRIPT_LINK", sem_link)
+
     def test_entradas_invalidas(self):
         with self.assertRaises(ValueError):
             env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "WINDOWS")

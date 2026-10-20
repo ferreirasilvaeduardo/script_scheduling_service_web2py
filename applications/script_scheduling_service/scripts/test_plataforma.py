@@ -413,8 +413,11 @@ class TestValidacoesDeCaminho(unittest.TestCase):
     def test_script_valido(self):
         self.assertIsNone(self.validar(self.script))
 
-    def test_link_simbolico(self):
-        self.assertEqual(self.validar(os.path.join(self.base, "link.py")), "CAMINHO_COM_LINK")
+    def test_link_simbolico_vale_o_arquivo_real(self):
+        # CR-011: o link e aceito e as checagens valem para o destino.
+        self.assertIsNone(self.validar(os.path.join(self.base, "link.py")))
+        self.assertEqual(self.validar(os.path.join(self.base, "link.py"), donos=(AGENTE_FALSO - 1,)),
+                         "DONO_INVALIDO", "dono conferido no arquivo real")
 
     def test_sem_acesso(self):
         os.chmod(os.path.join(self.base, "sub"), 0o000)

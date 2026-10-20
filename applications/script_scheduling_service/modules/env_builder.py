@@ -132,6 +132,9 @@ def construir(cfg, segredos, ticket, ambiente, script_real, work_dir_ticket, env
         _definir(env, "SSS_AGENDAMENTO_NOME", (agendamento or {}).get("nome"))
         _definir(env, "SSS_RECORRENCIA", (agendamento or {}).get("tipo_recorrencia"))
     # Script, log e agente.
+    # CR-011: com link simbolico no caminho, o cadastrado vai em SSS_SCRIPT_LINK; o real nos demais.
+    if snap.get("path_file") and snap["path_file"] != script_real:
+        _definir(env, "SSS_SCRIPT_LINK", snap["path_file"])
     _definir(env, "SSS_SCRIPT_ID", snap.get("script_id"))
     _definir(env, "SSS_SCRIPT_NOME", snap.get("script_nome"))
     _definir(env, "SSS_INTERPRETADOR", snap.get("interpretador"))

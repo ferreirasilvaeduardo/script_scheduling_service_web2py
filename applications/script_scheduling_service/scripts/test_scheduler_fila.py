@@ -164,9 +164,9 @@ class TestSemBanco(unittest.TestCase):
 
     def test_registrar_pid_e_heartbeat_sem_updated(self):
         conn = _Conn([("SET process_id", (1, []))])
-        self.assertTrue(self.repo.registrar_pid(conn, 7, AGENTE, 4321, 99, "ab" * 32))
+        self.assertTrue(self.repo.registrar_pid(conn, 7, AGENTE, 4321, 99))
         self.assertNotIn("updated_", conn.executados[0][0])
-        self.assertFalse(self.repo.registrar_pid(_Conn([("SET process_id", (0, []))]), 7, AGENTE, 1, 1, None))
+        self.assertFalse(self.repo.registrar_pid(_Conn([("SET process_id", (0, []))]), 7, AGENTE, 1, 1))
         agora = datetime.datetime(2026, 10, 20, 15, 0, 0)
         conn = _Conn([("UPDATE OWN_X.pfx_agentes", (1, [])), ("SELECT SYSDATE", (1, [(agora,)]))], contagens={8: 0})
         self.assertEqual(self.repo.heartbeat(conn, AGENTE, "host", 77, [7, 8]), ([8], agora))
@@ -288,7 +288,7 @@ class TestSemBanco(unittest.TestCase):
 
     def test_contexto_execucao_monta_o_ctx_rbac(self):
         conn = _Conn([
-            ("FROM OWN_X.pfx_scripts WHERE id", (1, [(3, "carga", "SH", "/opt/x.sh", "S", None, 60)])),
+            ("FROM OWN_X.pfx_scripts WHERE id", (1, [(3, "carga", "SH", "/opt/x.sh", "S", 60)])),
             ("FROM OWN_X.pfx_ambientes WHERE nome", (1, [(5, "PRD", "Producao", "db:1/x", "S")])),
             ("SELECT ambiente_id FROM", (1, [(5,)])),
             ("JOIN OWN_X.pfx_perfis p", (1, [(9, "ana", "Ana", 2, "S", 0, "Op", "N", "S", 4)])),
@@ -389,7 +389,7 @@ class TestSchedulerFilaOracle(unittest.TestCase):
         ctx = self.repo.contexto_execucao(self.conn, self.repo.obter_ticket(self.conn, tid))
         self.assertEqual(ctx["ctx"]["login"], self.c["login"])
         self.assertTrue(self.repo.script_ativo_homologado(self.conn, self.c["scr"]["id"], self.amb))
-        self.assertTrue(self.repo.registrar_pid(self.conn, tid, self.agente, 4321, 777, "ab" * 32))
+        self.assertTrue(self.repo.registrar_pid(self.conn, tid, self.agente, 4321, 777))
         perdidos, agora = self.repo.heartbeat(self.conn, self.agente, "host-teste", os.getpid(), [tid])
         self.assertEqual(perdidos, [])
         self.assertIsInstance(agora, datetime.datetime)

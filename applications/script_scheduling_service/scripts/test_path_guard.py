@@ -35,6 +35,9 @@ class TestResolver(unittest.TestCase):
         os.symlink(os.path.join(self.base, "sub", "ok.py"), os.path.join(self.base, "link_ok.py"))
         os.symlink("/etc/hostname", os.path.join(self.base, "link_etc.py"))
         os.symlink("/usr", os.path.join(self.base, "link_usr"))
+        os.symlink(os.path.join(self.base, "sub"), os.path.join(self.base, "link_sub"))
+        os.symlink("ciclo_b", os.path.join(self.base, "ciclo_a"))
+        os.symlink("ciclo_a", os.path.join(self.base, "ciclo_b"))
         self._travar(self.base)
         self.uids = (os.getuid(),)
 
@@ -69,12 +72,18 @@ class TestResolver(unittest.TestCase):
         self.assertEqual(self._resolver("sub/ok.py"), os.path.realpath(self._p("sub/ok.py")))
         self.assertEqual(self._resolver("sub/fundo/ok.sh"), os.path.realpath(self._p("sub/fundo/ok.sh")))
 
-    def test_link_simbolico_e_recusado(self):
-        # CR-007, R-14: quem grava na pasta do link troca o destino; o caminho precisa ser o realpath.
-        self.assertEqual(self._codigo("link_ok.py"), Codigo.CAMINHO_COM_LINK)
+    def test_link_simbolico_aceito_pelo_arquivo_real(self):
+        # CR-011: o link e aceito; vale o arquivo real, que e o devolvido (e o executado).
+        real = os.path.realpath(self._p("sub/ok.py"))
+        self.assertEqual(self._resolver("link_ok.py"), real)
+        self.assertEqual(self._resolver("link_sub/ok.py"), real, "link numa pasta do caminho")
 
-    def test_symlink_para_pasta_insegura_e_recusado(self):
-        self.assertEqual(self._codigo("link_fora.py"), Codigo.CAMINHO_COM_LINK)
+    def test_link_para_destino_inseguro_e_recusado(self):
+        # O destino fica fora da arvore travada: a cadeia dele chega ao /tmp, gravavel por todos.
+        self.assertEqual(self._codigo("link_fora.py"), Codigo.GRAVAVEL_GRUPO_OUTROS)
+
+    def test_ciclo_de_links(self):
+        self.assertEqual(self._codigo("ciclo_a"), Codigo.NAO_ENCONTRADO)
 
     def test_pastas_do_sistema_digitadas_e_via_symlink(self):
         for caminho in ("/etc/passwd", "/usr/bin/python3", "/bin/sh", "/root/x.py", "/proc/self/status"):

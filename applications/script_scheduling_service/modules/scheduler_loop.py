@@ -11,7 +11,6 @@ do preexec_fn (README §3.1, C10). Toda primitiva de SO vem de `plataforma`; o b
 repositorios internos do daemon. Cada passo que falha registra CRITICAL e sai com um codigo proprio.
 """
 import datetime
-import hashlib
 import logging
 import os
 import pwd
@@ -186,8 +185,6 @@ class Agente(object):
             self._falhar(SAIDA_CONFIG, "%s", exc)
         if not self.plat.locale_disponivel(agente.child_locale):
             self._falhar(SAIDA_CONFIG, "child_locale %s nao consta em locale -a (CR-007, R-17)", agente.child_locale)
-        if self.cfg.app.sss_env != "DEV" and not agente.ambientes_exigem_hash:
-            self.log.warning("SEM_EXIGENCIA_HASH: [agent] ambientes_exigem_hash vazio fora de DEV (CR-008, E4)")
         db_conn.orcamento_conexao_s(self.cfg.oracle.dsn, sss_config.call_timeout_s(self.cfg.oracle.call_timeout_ms))
         # Conferencia entre nos no E2E (README §8.9, "Mesmos tempos em todos os nos").
         self.log.info("tempos do fencing: fence_timeout_s=%s node_offline_timeout_s=%s",
@@ -796,17 +793,18 @@ class Agente(object):
             return self._erro_antes_do_spawn(item, exc)
         if pre is None:
             return
-        snap, argv, script_real, contexto, sha256 = pre
+        snap, argv, script_real, contexto = pre
         try:
             if self.repo.cancelamento_pedido(self._conn(), item.tid):
                 return self._finalizar_sem_spawn(item, ("CANCELLED", "CANCEL_USER", -1), None)
         except Exception as exc:  # noqa: BLE001
             return self._erro_antes_do_spawn(item, exc)
-        self._spawn(item, snap, argv, script_real, contexto, sha256)
+        self._spawn(item, snap, argv, script_real, contexto)
 
     def _prevalidar(self, item):
-        """Devolve (snap, argv, script_real, contexto, sha256) ou None (ticket ja finalizado PRECHECK_FAILED)."""
-        agente = self.cfg.agent
+        """Devolve (snap, argv, script_real, contexto) ou None (ticket ja finalizado PRECHECK_FAILED).
+
+        CR-011: o conteudo do arquivo nao e conferido (sem hash); o caminho pode ter link simbolico."""
         conn = self._conn()
         ticket = self.repo.obter_ticket(conn, item.tid)
         item.ticket = ticket
@@ -820,14 +818,6 @@ class Agente(object):
             return self._recusar(item, codigo)
         if script is None or snap["path_file"] != script["path_file"] or snap["interpretador"] != script["interpretador"]:
             return self._recusar(item, "CADASTRO_MUDOU")
-        sha256 = _sha256_arquivo(script_real)
-        homologado = (script.get("sha256_homologado") or "").strip().lower()
-        if homologado and homologado != sha256:
-            return self._recusar(item, "ARQUIVO_ALTERADO")
-        if not homologado:
-            if ticket["ambiente"] in tuple(agente.ambientes_exigem_hash or ()):
-                return self._recusar(item, "SEM_HASH")
-            item.log.warning("SEM_HASH: script sem sha256 homologado (CR-008, E4)", extra={"acao": "PRECHECK"})
         if script.get("ativo") != "S":
             return self._recusar(item, "SCRIPT_INATIVO")
         if not self.repo.script_ativo_homologado(conn, script["id"], ticket["ambiente"]):
@@ -837,7 +827,7 @@ class Agente(object):
         ok, _motivo = rbac.pode_executar(contexto["ctx"], script, ambiente, contexto["homologacoes"])
         if not ok:
             return self._recusar(item, "SEM_PERMISSAO")
-        return snap, argv, script_real, contexto, sha256
+        return snap, argv, script_real, contexto
 
     def _cfg_snapshot(self):
         agente = self.cfg.agent
@@ -901,7 +891,7 @@ class Agente(object):
         if item.execucao is not None:
             self._limpar(item.tid, item.execucao.work_dir_ticket, item.execucao)
 
-    def _spawn(self, item, snap, argv, script_real, contexto, sha256):
+    def _spawn(self, item, snap, argv, script_real, contexto):
         agente = self.cfg.agent
         ticket = item.ticket
         usuario = env_builder.usuario_execucao(self.cfg, ticket["ambiente"])
@@ -923,19 +913,17 @@ class Agente(object):
                                         agendamento=contexto["agendamento"], caminho_log=caminho,
                                         timeout_seg=timeout, hostname=self.hostname, versao=sss_config.VERSAO_SSS)
             conexao = env.get(env_builder.VAR_CONEXAO)
-            os.write(fd, ("[SSS] arquivo: sha256=%s\n" % sha256).encode("ascii"))
         except Exception as exc:  # noqa: BLE001 - CR-007 R-17: SPAWN_ERROR
             ex = executor.falha_antes_do_spawn(fd, item.tid, exc, rotulo, work_dir_ticket)
-            return self._apos_iniciar(item, ex, snap, conexao, sha256)
+            return self._apos_iniciar(item, ex, snap, conexao)
         ex = executor.iniciar(item.tid, argv, fd, env, work_dir_ticket, usuario, agente.exec_work_dir,
                               dict(self.plat.RLIMITS_PADRAO), rotulo)
         item.timeout_s = timeout
-        self._apos_iniciar(item, ex, snap, conexao, sha256)
+        self._apos_iniciar(item, ex, snap, conexao)
 
-    def _apos_iniciar(self, item, ex, snap, conexao, sha256):
+    def _apos_iniciar(self, item, ex, snap, conexao):
         item.execucao = ex
         item.inicio = self.relogio()
-        item.sha256 = sha256
         if ex.caminho_log:
             item.bomba = log_pump.Bomba(
                 ex.caminho_log, item.tid, log_pump.mascarador_do_ticket(self._mascarador_fixo, conexao, snap),
@@ -958,7 +946,7 @@ class Agente(object):
     def _registrar_pid(self, item):
         ex = item.execucao
         try:
-            ok = self.repo.registrar_pid(self._conn(), item.tid, self.agente_id, ex.pid, ex.identidade, item.sha256)
+            ok = self.repo.registrar_pid(self._conn(), item.tid, self.agente_id, ex.pid, ex.identidade)
         except Exception as exc:  # noqa: BLE001 - PID pendente (CR-008, R-08)
             if not item.avisou_pid:
                 item.avisou_pid = True
@@ -997,14 +985,6 @@ class Agente(object):
         return 0
 
 
-def _sha256_arquivo(caminho):
-    """sha256 do arquivo lido em blocos (README §8.4 passo 1; CR-007 R-24)."""
-    h = hashlib.sha256()
-    with open(caminho, "rb") as f:
-        for bloco in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(bloco)
-    return h.hexdigest()
-
 
 class _Item(object):
     """Um ticket no mapa local do agente (README §8.7)."""
@@ -1026,7 +1006,6 @@ class _Item(object):
         self.resultado = None
         self.inicio = None
         self.timeout_s = None
-        self.sha256 = None
         self.flush_ok = False
         self.pid_pendente = False
         self.avisou_pid = False

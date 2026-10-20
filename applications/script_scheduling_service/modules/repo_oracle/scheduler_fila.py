@@ -223,11 +223,11 @@ class RepoSchedulerFila(object):
         nao existe), agendamento (None se manual ou inexistente)."""
         cur = conn.cursor()
         try:
-            cur.execute("SELECT id, nome, interpretador, path_file, ativo, sha256_homologado, timeout_seg "
+            cur.execute("SELECT id, nome, interpretador, path_file, ativo, timeout_seg "
                         "FROM " + self._scr + " WHERE id = :id", id=int(ticket["script_id"]))
             r = cur.fetchone()
             script = None if r is None else dict(zip(
-                ("id", "nome", "interpretador", "path_file", "ativo", "sha256_homologado", "timeout_seg"), r))
+                ("id", "nome", "interpretador", "path_file", "ativo", "timeout_seg"), r))
             cur.execute("SELECT id, nome, descricao, conexao, ativo FROM " + self._amb + " WHERE nome = :nome",
                         nome=ticket["ambiente"])
             r = cur.fetchone()
@@ -300,16 +300,15 @@ class RepoSchedulerFila(object):
     # Transicoes do ticket (§5.1, §8.4 passo 5, §8.7)
     # -------------------------------------------------------------------------
 
-    def registrar_pid(self, conn, ticket_id, agente_id, pid, process_start, sha256):
-        """PID, identidade e hash do arquivo (README §8.4 passo 5). Rotina tecnica, sem updated_*.
+    def registrar_pid(self, conn, ticket_id, agente_id, pid, process_start):
+        """PID e identidade do processo (README §8.4 passo 5). Rotina tecnica, sem updated_*.
         False = posse perdida (OWNERSHIP_LOST)."""
         with db_conn.transacao(conn):
             cur = conn.cursor()
             try:
-                cur.execute("UPDATE " + self._tck + " SET process_id = :pid, process_start = :process_start, "
-                            "arquivo_sha256 = :sha256 WHERE id = :ticket_id AND agente_id = :agente_id "
-                            "AND status = 'RUNNING'", pid=int(pid), process_start=process_start, sha256=sha256,
-                            ticket_id=int(ticket_id), agente_id=agente_id)
+                cur.execute("UPDATE " + self._tck + " SET process_id = :pid, process_start = :process_start "
+                            "WHERE id = :ticket_id AND agente_id = :agente_id AND status = 'RUNNING'",
+                            pid=int(pid), process_start=process_start, ticket_id=int(ticket_id), agente_id=agente_id)
                 return cur.rowcount == 1
             finally:
                 cur.close()
