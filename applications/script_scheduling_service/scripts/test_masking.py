@@ -4,6 +4,7 @@ import _testenv  # noqa: F401
 
 import io
 import logging
+import time
 import unittest
 
 import masking
@@ -51,6 +52,19 @@ class TestMascarador(unittest.TestCase):
     def test_nao_str(self):
         self.assertIsNone(self.m.mascarar(None))
         self.assertEqual(self.m.mascarar(""), "")
+
+
+class TestDesempenho(unittest.TestCase):
+
+    def test_linha_longa_sem_barra_em_tempo_linear(self):
+        # Regressao F8.2: _RE_CONNECT tentava a partir de cada posicao de uma sequencia longa (quadratico).
+        m = masking.Mascarador()
+        for texto in ("x" * 1048576, "a/" + "b" * 1048576, "ab/" * 300000):
+            inicio = time.monotonic()
+            m.mascarar(texto)
+            self.assertLess(time.monotonic() - inicio, 1.0)
+        self.assertEqual(m.mascarar("u=app/Pw12@db:1521/X fat.app/s3nh@//h:1/s x/y"),
+                         "u=app/****@db:1521/X fat.app/****@//h:1/s x/y")
 
 
 class TestMascaradorFluxo(unittest.TestCase):

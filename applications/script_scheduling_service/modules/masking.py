@@ -10,8 +10,10 @@ import threading
 MASCARA = "****"
 TAMANHO_MINIMO = 4
 
-# usuario/senha@dsn -> usuario/****@dsn
-_RE_CONNECT = re.compile(r"([A-Za-z0-9_$#.]+)/([^\s/@]+)@(?=\S)")
+# usuario/senha@dsn -> usuario/****@dsn. O lookbehind impede tentar a partir do meio de uma sequencia de
+# caracteres do usuario: sem ele, uma linha longa sem '/' custava tempo quadratico (F8.2, log_pump). O
+# resultado e o mesmo, porque o match mais a esquerda sempre comeca no inicio da sequencia.
+_RE_CONNECT = re.compile(r"(?<![A-Za-z0-9_$#.])([A-Za-z0-9_$#.]+)/([^\s/@]+)@(?=\S)")
 _MARCA_FILTRO = "_sss_filtro_masking"
 _RE_TOKEN_FINAL = re.compile(r"\S+\Z")
 MAX_TOKEN_RETIDO = 512
