@@ -317,6 +317,21 @@ def liberar_instancia(trava):
         os.close(trava.fd)
 
 
+def _normalizar_locale(nome):
+    return (nome or "").strip().lower().replace("-", "")
+
+
+def locale_disponivel(nome, executar=None):
+    """True se o locale consta em `locale -a` (README §8.12 passo 2; CR-007 R-17). C.UTF-8 = C.utf8."""
+    executar = executar or _executar_curto
+    try:
+        codigo, saida = executar(["/usr/bin/locale", "-a"])
+    except OSError:  # sem o comando locale: nao da para confirmar
+        return False
+    alvo = _normalizar_locale(nome)
+    return codigo == 0 and any(_normalizar_locale(l) == alvo for l in saida.splitlines())
+
+
 def usuario_privilegiado():
     return os.geteuid() == 0
 

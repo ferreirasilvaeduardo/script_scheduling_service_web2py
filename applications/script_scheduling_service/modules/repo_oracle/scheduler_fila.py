@@ -200,14 +200,15 @@ class RepoSchedulerFila(object):
         try:
             cur.execute("SELECT id, script_id, ambiente, solicitante, status, prioridade, cancel_requested, "
                         "agente_id, process_id, process_start, parent_ticket_id, agendamento_id, scheduled_at, "
-                        "started_at, created_at, parametros_enviados FROM " + self._tck + " WHERE id = :id",
+                        "started_at, created_at, log_offset_chars, parametros_enviados FROM " + self._tck +
+                        " WHERE id = :id",
                         id=int(ticket_id))
             r = cur.fetchone()
             if r is None:
                 return None
             nomes = ("id", "script_id", "ambiente", "solicitante", "status", "prioridade", "cancel_requested",
                      "agente_id", "process_id", "process_start", "parent_ticket_id", "agendamento_id",
-                     "scheduled_at", "started_at", "created_at", "parametros_enviados")
+                     "scheduled_at", "started_at", "created_at", "log_offset_chars", "parametros_enviados")
             dados = dict(zip(nomes, r))
             dados["parametros_enviados"] = _ler_lob(dados["parametros_enviados"])
             for chave in ("status", "cancel_requested"):

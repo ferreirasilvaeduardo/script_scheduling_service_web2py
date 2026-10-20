@@ -1877,6 +1877,8 @@ Em seguida, o daemon faz o flush dos logs, grava `tbsss_agentes.status = 'PARADO
 
 O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualquer passo:
 
+* **Códigos de saída por passo (F8.3b):** 10 usuário (root ou UID em `script_owner_uids`), 11 configuração (inclusive codificação e `child_locale`), 12 segredos, 13 diretórios, interpretadores e execução fora de DEV, 14 instância já em execução, 15 banco (driver, conexão, versão do esquema), 16 registro do agente (`agent_id` duplicado ou `config_criticos` divergente), 17 ambientes atendidos inexistentes, 18 startup check, 19 mais de uma thread antes do primeiro spawn. Em qualquer falha, a trava de instância e a conexão são liberadas antes da saída.
+
 1. **Usuário:** `plataforma.usuario_privilegiado()` precisa ser falso. É proibido rodar como root. O UID do agente não pode estar em `script_owner_uids` (CR-007, R-15).
 2. **Configuração:** carregar e validar o `config.ini` (tipos, faixas, invariantes da §8.9 e `max_parallel_jobs <= max_parallel_hard_limit`), o `owner` e o `table_prefix` (regex do `AGENTS.md`), e `agent_id` contra `^[A-Za-z0-9._-]{1,30}$`, sem ser `init_db`, `seed` nem `purge` (reservados para os atores do sistema, §4.4). Inclui as invariantes I1 a I4 (§8.9) e, fora de DEV, `usuarios_execucao` cobrindo todos os ambientes atendidos (CR-007, D1).
    **Avisos de configuração (CR-008):** fora de DEV, `[agent] ambientes_exigem_hash` vazio gera WARN `SEM_EXIGENCIA_HASH` (E4); um DSN descritor que passe da fórmula do §2.3 gera WARN `CONEXAO_ACIMA_DO_PRAZO` (R-17).

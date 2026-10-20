@@ -32,6 +32,7 @@ from plataforma.posix import (  # noqa: E402,F401
     ler_estado,
     liberar_instancia,
     limpar_dir_script,
+    locale_disponivel,
     processo_existe,
     reabrir_grupo,
     sinalizar_grupo,
