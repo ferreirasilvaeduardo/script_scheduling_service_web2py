@@ -433,7 +433,8 @@ def compilar_snapshot(script, vinculos, respostas, agora):
 
 
 def validar_snapshot(json_str, cfg):
-    """Pre-valida o snapshot no claim (README §8.4 passo 1) e devolve (snap, argv_real); lanca SnapshotErro.
+    """Pre-valida o snapshot no claim (README §8.4 passo 1) e devolve (snap, argv_real, script_real);
+    lanca SnapshotErro. script_real (o path_file resolvido) alimenta o SSS_SCRIPT_DIR do env_builder.
 
     cfg expoe script_owner_uids, interpretadores (dict logico -> executavel do agente) e, opcional,
     dirs_sss (log_dir e work_dir, onde nenhum script pode ficar).
@@ -466,7 +467,7 @@ def validar_snapshot(json_str, cfg):
                                    uids_proibidos=getattr(cfg, 'uids_proibidos', None) or ())
     except path_guard.PathGuardErro as e:
         raise SnapshotErro('PATH_GUARD_' + e.codigo)
-    return snap, montar_argv_agente(interpretador, executavel, real, args)
+    return snap, montar_argv_agente(interpretador, executavel, real, args), real
 
 
 def _segredos(snapshot):

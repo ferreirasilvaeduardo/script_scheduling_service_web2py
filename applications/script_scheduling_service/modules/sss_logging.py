@@ -173,22 +173,8 @@ def _chmod(caminho, modo, avisos):
 
 
 def _garantir_diretorio(diretorio, avisos):
-    # Nivel a nivel: makedirs so aplica o mode a pasta final (e sempre sob a umask 077 do
-    # launcher); app/, ano, mes, dia e hora tambem precisam de 0o750 (README §13).
-    faltando = []
-    atual = os.path.abspath(diretorio)
-    while not os.path.isdir(atual):
-        faltando.append(atual)
-        pai = os.path.dirname(atual)
-        if pai == atual:
-            break
-        atual = pai
-    for pasta in reversed(faltando):
-        try:
-            os.mkdir(pasta, 0o750)
-        except FileExistsError:
-            continue
-        _chmod(pasta, 0o750, avisos)
+    # Nivel a nivel com 0o750 (README §13): regra unica em pastas_log (F8.1).
+    pastas_log.garantir_diretorio(diretorio, avisos)
 
 
 def configurar(nome_log, cfg):

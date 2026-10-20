@@ -59,6 +59,35 @@ def diretorio_log_execucao(log_dir, nome_script, started_at, script_id=None):
     return os.path.join(log_dir, pasta, ano, mes, dia, hora, minuto)
 
 
+def garantir_diretorio(diretorio, avisos=None):
+    """Cria diretorio nivel a nivel com 0o750 em cada pasta nova (README §8.4 passo 3 e §13).
+
+    O makedirs so aplica o modo a pasta final, e sempre sob a umask 077 do launcher: cada nivel novo
+    (pasta do script ou app/, ano, mes, dia, hora e minuto) recebe chmod 0o750. Falha de chmod vai para
+    avisos (lista de pares (acao, mensagem)) quando informada; sem avisos, a excecao sobe.
+    """
+    faltando = []
+    atual = os.path.abspath(diretorio)
+    while not os.path.isdir(atual):
+        faltando.append(atual)
+        pai = os.path.dirname(atual)
+        if pai == atual:
+            break
+        atual = pai
+    for pasta in reversed(faltando):
+        try:
+            os.mkdir(pasta, 0o750)
+        except FileExistsError:
+            continue
+        try:
+            os.chmod(pasta, 0o750)
+        except OSError as exc:
+            if avisos is None:
+                raise
+            avisos.append(("LOG", "chmod 750 falhou em %s: %s" % (pasta, exc)))
+    return diretorio
+
+
 def nome_log_parcial(ticket_id):
     """Nome do log aberto antes do spawn: ticket_<id>.log.parcial (CR-005, R-b)."""
     return 'ticket_%s.log.parcial' % ticket_id

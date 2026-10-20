@@ -461,8 +461,9 @@ class TestValidarSnapshot(unittest.TestCase):
         return ctx.exception.motivo
 
     def test_ok_monta_argv_com_executavel_e_base_do_agente(self):
-        snap, argv = pc.validar_snapshot(self.js, self.cfg)
+        snap, argv, script_real = pc.validar_snapshot(self.js, self.cfg)
         self.assertEqual(argv, [EXE_PY, "-I", self.real, "--data", "2026-10-13"])
+        self.assertEqual(script_real, self.real)
         self.assertEqual(snap["interpretador"], "PYTHON3")
 
     def test_json_e_estrutura(self):

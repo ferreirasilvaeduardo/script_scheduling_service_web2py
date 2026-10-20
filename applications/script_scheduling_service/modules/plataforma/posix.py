@@ -27,8 +27,9 @@ HELPER = "/opt/sss/bin/sss-helper"
 SUDO = "/usr/bin/sudo"
 # Ambiente minimo do sudo/helper: nada herdado do agente (AGENTS §3.2, README §8.6).
 _ENV_HELPER = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
-# Limites aplicados no filho em DEV (README §8.4): sem core dump e com descritores limitados.
-_RLIMITS_PADRAO = {"RLIMIT_CORE": (0, 0), "RLIMIT_NOFILE": (1024, 1024)}
+# Politica fixa de limites do filho (README §8.4): sem core dump e com descritores limitados. O executor
+# a manda na especificacao (helper) e o DEV a aplica no preexec_fn.
+RLIMITS_PADRAO = {"RLIMIT_CORE": (0, 0), "RLIMIT_NOFILE": (1024, 1024)}
 _RLIMITS_PERMITIDOS = ("RLIMIT_CORE", "RLIMIT_NOFILE", "RLIMIT_CPU", "RLIMIT_AS", "RLIMIT_FSIZE",
                        "RLIMIT_NPROC", "RLIMIT_DATA", "RLIMIT_STACK")
 # Pastas do sistema (README §8.5): nem script nem log_dir/work_dir podem ficar nelas.
@@ -42,6 +43,16 @@ _pedidos_helper = []
 
 class InstanciaJaEmExecucao(RuntimeError):
     """Outra instancia do agente ja tem a trava (travar_instancia)."""
+
+
+class FalhaAposSpawn(RuntimeError):
+    """O Popen do sudo/helper retornou, mas a entrega da especificacao falhou (CR-008, R-01): o grupo
+    existe e vai em processo, para o executor encerra-lo sem esperar."""
+
+    def __init__(self, processo, causa):
+        RuntimeError.__init__(self, causa.__class__.__name__)
+        self.processo = processo
+        self.causa = causa
 
 
 class Processo(object):
@@ -65,7 +76,7 @@ class Processo(object):
 # -----------------------------------------------------------------------------
 
 def _rlimits(especificacao):
-    limites = dict(_RLIMITS_PADRAO)
+    limites = dict(RLIMITS_PADRAO)
     for nome, valor in (especificacao.get("rlimits") or {}).items():
         if nome not in _RLIMITS_PERMITIDOS:
             raise ValueError("Limite de recurso nao permitido: %s" % nome)
@@ -94,9 +105,13 @@ def iniciar_processo(especificacao, log_fd, usuario_execucao=None):
         p = subprocess.Popen(argv, shell=False, start_new_session=True, close_fds=True, stdin=subprocess.PIPE,
                              stdout=log_fd, stderr=subprocess.STDOUT, env=dict(_ENV_HELPER))
         try:
-            p.stdin.write(json.dumps(especificacao, sort_keys=True).encode("utf-8"))
-        finally:
-            p.stdin.close()
+            try:
+                p.stdin.write(json.dumps(especificacao, sort_keys=True).encode("utf-8"))
+            finally:
+                p.stdin.close()
+        except Exception as e:  # noqa: BLE001 - qualquer falha aqui deixa um grupo vivo sem registro
+            raise FalhaAposSpawn(Processo(p.pid, identidade_processo(p.pid), popen=p,
+                                          usuario_execucao=usuario_execucao), e)
     else:
         p = subprocess.Popen(list(especificacao["argv"]), shell=False, start_new_session=True, close_fds=True,
                              stdin=subprocess.DEVNULL, stdout=log_fd, stderr=subprocess.STDOUT,
@@ -479,6 +494,17 @@ def validar_execucao(usuarios_execucao, exec_work_dir, script_owner_uids, helper
         except OSError:
             falhas.append("%s nao existe" % pasta)
     return falhas
+
+
+def limpar_dir_script(pasta_base, ticket_id, usuario_execucao):
+    """Remove o diretorio de trabalho do script pelo helper limpar (CR-008, R-36; README §8.7 passo 6).
+
+    So fora de DEV (com usuario de execucao); em DEV a pasta fica dentro de work_dir/ticket_<id>/.
+    """
+    codigo, _saida = _executar_curto([SUDO, "-n", "-u", usuario_execucao, "--", HELPER, "limpar",
+                                      pasta_base, str(int(ticket_id))])
+    if codigo != 0:
+        raise RuntimeError("helper limpar falhou (codigo %s)" % codigo)
 
 
 # -----------------------------------------------------------------------------

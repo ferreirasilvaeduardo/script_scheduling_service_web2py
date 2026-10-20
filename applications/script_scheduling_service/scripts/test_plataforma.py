@@ -239,6 +239,26 @@ class TestDublesHelper(unittest.TestCase):
             posix._colher_pedidos_helper()
         self.assertEqual(posix._pedidos_helper, [])
 
+    def test_falha_ao_entregar_a_especificacao_devolve_o_processo(self):
+        falso = mock.MagicMock(pid=4322)
+        falso.stdin.write.side_effect = BrokenPipeError(32, "Broken pipe")
+        with mock.patch.object(posix.subprocess, "Popen", return_value=falso), \
+                mock.patch.object(posix, "identidade_processo", return_value=7):
+            with self.assertRaises(plataforma.FalhaAposSpawn) as ctx:
+                plataforma.iniciar_processo({"ticket_id": 3, "argv": ["/bin/true"]}, 7, usuario_execucao="exec1")
+        self.assertEqual((ctx.exception.processo.pid, ctx.exception.processo.identidade), (4322, 7))
+        self.assertIsInstance(ctx.exception.causa, BrokenPipeError)
+        falso.stdin.close.assert_called_once_with()
+
+    def test_limpar_dir_script_pelo_helper(self):
+        with mock.patch.object(posix, "_executar_curto", return_value=(0, "")) as ex:
+            plataforma.limpar_dir_script("/srv/exec/exec1", 9, "exec1")
+        self.assertEqual(ex.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "limpar",
+                                              "/srv/exec/exec1", "9"])
+        with mock.patch.object(posix, "_executar_curto", return_value=(2, "")):
+            with self.assertRaises(RuntimeError):
+                plataforma.limpar_dir_script("/srv/exec/exec1", 9, "exec1")
+
     def test_encerrar_ticket_pelo_helper(self):
         for codigo, esperado in ((0, "OK"), (5, "NAO_SUPORTADO")):
             with mock.patch.object(posix, "_executar_curto", return_value=(codigo, "")) as ex:
