@@ -929,15 +929,16 @@ def _abortar(nome_log, exc, log_dir):
     sss_logging.registrar_critico_inicial(nome_log, "Subida abortada: configuracao invalida: %s" % exc, log_dir)
 
 
-def obter_config(nome_log=None):
+def obter_config(nome_log=None, caminho=None):
     """Retorna a configuracao validada, carregada uma unica vez por processo.
 
     Com nome_log ('sss_web' ou 'sss_scheduler'), uma falha e registrada em CRITICAL antes de
-    ser relancada (README §12.1, "Falha de configuracao").
+    ser relancada (README §12.1, "Falha de configuracao"). caminho: outro config.ini (so o
+    agente, por --config do run_scheduler; README §12.2); sem ele, instance/config.ini.
     """
     global _CONFIG_CACHE
     if _CONFIG_CACHE is None:
-        caminho = caminho_config_padrao()
+        caminho = caminho or caminho_config_padrao()
         try:
             # Corrida entre threads do servidor web apenas recarrega o mesmo arquivo imutavel.
             _CONFIG_CACHE = carregar(caminho)

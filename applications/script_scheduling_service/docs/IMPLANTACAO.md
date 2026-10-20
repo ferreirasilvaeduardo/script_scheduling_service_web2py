@@ -639,6 +639,8 @@ sssagente ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 * **Cota e limites por usuário de execução:** cota de disco na partição de `exec_work_dir` e `nproc`/`nofile` em `/etc/security/limits.d/`, para que um script não esgote o servidor.
 * **Disco dos logs (CR-008, R-25):** a cota do usuário de execução **não** protege o `log_dir`: o arquivo de log de cada ticket pertence à conta do agente, e o script só escreve no descritor herdado. Por isso, `log_dir` fica numa **partição própria** (ou num volume lógico próprio), separada de `/`, `work_dir` e `exec_work_dir`, dimensionada para `local_log_retention_days` de logs. O agente para de fazer claim com menos de `[agent] log_dir_min_livre_mb` livres (padrão 1.024 MB, WARN `DISCO_LOG`, README §8.2); o monitoramento corporativo alerta antes disso (por exemplo, 80% de uso).
 
+* **Mais de um agente no mesmo servidor (F8.3d):** cada um com o seu `config.ini` (`agent_id`, `work_dir`, `log_dir` e `saida_dir` próprios) e iniciado com `python scripts/run_scheduler.py --config <arquivo>`. Os tempos do `config_criticos` (heartbeat, fence, offline, call, kill, misfire, horizonte, envelhecimento) precisam ser iguais em todos os agentes, senão a subida é recusada (README §8.12). Normalmente basta um agente por servidor com `max_parallel_jobs` maior.
+
 ### 18.2 Conexão Oracle com failover (CR-007, R-12)
 
 * **Orçamento da abertura (CR-008, R-17):** `CONNECT_TIMEOUT × (RETRY_COUNT + 1) × endereços` precisa ser **menor ou igual** a `call_timeout_ms / 1000` (30 s no exemplo do README §12.1). Acima disso, uma reconexão bloqueia o laço do agente além do previsto nas invariantes do fencing; o agente, o nó web e o `check_env.py` avisam com WARN `CONEXAO_ACIMA_DO_PRAZO` (README §2.3).

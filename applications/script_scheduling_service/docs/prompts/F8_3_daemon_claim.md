@@ -12,6 +12,8 @@
 
 > **CR-012 (2026-10-20):** a pasta de saída do script (README §8.13) é implementada pelo próprio CR-012, antes do F8.3d. O F8.3d inclui no teste com 2 agentes um script que grava em `SSS_SAIDA_DIR`, com `saida_dir` diferente em cada agente.
 
+> **F8.3 concluído (2026-10-20):** a (fe4be0f), b (1e6469f), c (a19261e) e d, a concorrência real com dois agentes (`scripts/test_concorrencia_agentes.py`, `run_scheduler.py --config`), depois do CR-011, do CR-012 e do CR-013.
+
 ## Objetivo
 Colocar o agente executor de pé: inicialização fail-fast, claim concorrente seguro, execução, heartbeat, coleta de log, cancelamento, timeout e finalização (somente POSIX).
 
