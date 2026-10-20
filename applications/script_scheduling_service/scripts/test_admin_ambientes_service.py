@@ -104,6 +104,16 @@ class TestInclusao(_Base):
         self.assertEqual(erros, {"nome": svc_mod.MSG_NOME_DUPLICADO})
         self.assertEqual(self._auditorias("CAD_INSERIR"), [])
 
+    def test_nome_interno_reservado(self):
+        # CR-009: 'interno' e a pasta de log sem ambiente (logs da aplicacao).
+        aid, erros = self._incluir(nome="INTERNO")
+        self.assertIsNone(aid)
+        self.assertEqual(erros, {"nome": svc_mod.MSG_NOME_RESERVADO})
+        self.assertEqual(self._auditorias("CAD_INSERIR"), [])
+        aid, erros = self._incluir(nome="INTERNO_2")
+        self.assertEqual(erros, {})
+        self.assertIsNotNone(aid)
+
     def test_nome_invalido(self):
         for nome in ("producao", "PROD-1", "PROD 1", "A" * 31, u"PRODUÇÃO"):
             aid, erros = self._incluir(nome=nome)

@@ -8,6 +8,7 @@ import re
 import threading
 
 import admin_crud
+import pastas_log
 import ui_helpers
 from admin_crud import CAMPO_GERAL
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
@@ -29,6 +30,7 @@ _RE_FILTRO_NOME = re.compile(r"[A-Za-z0-9_]{1,30}")
 MSG_NOME_OBRIGATORIO = u"Informe o nome do ambiente."
 MSG_NOME_INVALIDO = u"Use de 1 a 30 caracteres: letras maiúsculas, dígitos e _ (ex.: PRODUCAO)."
 MSG_NOME_DUPLICADO = u"Já existe um ambiente com este nome."
+MSG_NOME_RESERVADO = u"O nome INTERNO é reservado aos logs da aplicação. Escolha outro nome."
 MSG_CONEXAO_CREDENCIAL = u"Informe apenas o DSN; credenciais ficam no secrets.cfg."
 MSG_CONEXAO_INVALIDA = (u"Informe um DSN no formato host:porta/serviço (ex.: db01.local:1521/svc) "
                         u"ou um alias TNS.")
@@ -165,6 +167,9 @@ class ServicoAdminAmbientes(object):
                 pass
             elif not _RE_NOME.fullmatch(nome):
                 erros["nome"] = MSG_NOME_INVALIDO
+            elif pastas_log.ambiente_reservado(nome):
+                # CR-009: a pasta de log 'interno' e dos logs sem ambiente (aplicacao).
+                erros["nome"] = MSG_NOME_RESERVADO
             descricao, conexao = self._validar(dados, erros)
             if erros:
                 return None, erros

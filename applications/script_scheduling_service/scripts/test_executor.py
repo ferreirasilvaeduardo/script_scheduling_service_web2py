@@ -97,14 +97,14 @@ class _Base(unittest.TestCase):
 
     def iniciar(self, comando, ticket_id=1, argv=None, env=None, rotulo=None):
         wd = executor.preparar_diretorio(self.work, ticket_id)
-        fd, _parcial = executor.abrir_log(self.logs, "Teste Script", STARTED_AT, ticket_id)
+        fd, _parcial = executor.abrir_log(self.logs, "DEV", "Teste Script", STARTED_AT, ticket_id)
         ex = executor.iniciar(ticket_id, argv or [SH, "-c", comando], fd, env or {"PATH": "/usr/bin:/bin"}, wd,
                               None, None, plataforma.RLIMITS_PADRAO, rotulo or "SSS-srv-01-%d" % ticket_id)
         self.execs.append(ex)
         return ex
 
     def dir_log(self):
-        return os.path.join(self.logs, "teste_script", "2026", "10", "16", "14", "05")
+        return os.path.join(self.logs, "dev", "teste_script", "2026", "10", "16", "14", "05")
 
     def ate_sair(self, ex, prazo=10):
         self.assertTrue(_esperar(lambda: executor.verificar(ex) is not None, prazo), "o script nao terminou")
@@ -140,16 +140,16 @@ class TestLogESaida(_Base):
         self.assertFalse(os.path.exists(os.path.join(self.dir_log(), "ticket_1.log.parcial")), "rename atomico")
         self.assertEqual(os.stat(final).st_mode & 0o777, 0o600)
         pasta = self.logs
-        for nivel in ("teste_script", "2026", "10", "16", "14", "05"):
+        for nivel in ("dev", "teste_script", "2026", "10", "16", "14", "05"):
             pasta = os.path.join(pasta, nivel)
             self.assertEqual(os.stat(pasta).st_mode & 0o777, 0o750, pasta)
         self.encerrar(ex)
 
     def test_log_com_o_excl(self):
-        fd, caminho = executor.abrir_log(self.logs, "Teste Script", STARTED_AT, 9)
+        fd, caminho = executor.abrir_log(self.logs, "DEV", "Teste Script", STARTED_AT, 9)
         try:
             with self.assertRaises(FileExistsError):
-                executor.abrir_log(self.logs, "Teste Script", STARTED_AT, 9)
+                executor.abrir_log(self.logs, "DEV", "Teste Script", STARTED_AT, 9)
         finally:
             executor._logs_abertos.pop(fd, None)
             os.close(fd)
@@ -160,6 +160,12 @@ class TestLogESaida(_Base):
         self.assertEqual(self.ate_sair(ex, 20), 0)
         self.assertEqual(os.path.getsize(ex.caminho_log), 2097152)
         self.encerrar(ex)
+
+    def test_abrir_log_exige_ambiente(self):
+        for vazio in (None, "", "INTERNO"):
+            with self.assertRaises(ValueError):
+                executor.abrir_log(self.logs, vazio, "Teste Script", STARTED_AT, 30)
+        self.assertEqual(os.listdir(self.logs), [], "nada criado sem ambiente")
 
     def test_stdin_nulo(self):
         ex = self.iniciar("cat; echo fim")
@@ -377,7 +383,7 @@ class TestFalhasDeSpawn(_Base):
             raise RuntimeError("sem sudo no teste")
 
         wd = executor.preparar_diretorio(self.work, 15)
-        fd, _ = executor.abrir_log(self.logs, "Teste Script", STARTED_AT, 15)
+        fd, _ = executor.abrir_log(self.logs, "DEV", "Teste Script", STARTED_AT, 15)
         with mock.patch.object(plataforma, "iniciar_processo", side_effect=_captura), \
                 self.assertLogs("sss_scheduler", "ERROR"):
             ex = executor.iniciar(15, ["/usr/bin/python3", "-I", "/opt/s.py"], fd, {"PATH": "/usr/bin:/bin"}, wd,
@@ -423,14 +429,14 @@ class TestSnapshotV4(_Base):
         with self.assertLogs("sss_scheduler", "WARNING"):
             env = env_builder.construir(cfg, Segredos("x" * 8, None, {}), {"id": 21, "ambiente": "DEV"},
                                         {"nome": "DEV", "conexao": None}, script_real, wd, {}, plataforma.NOME)
-        fd, _ = executor.abrir_log(self.logs, snap["script_nome"], STARTED_AT, 21, snap["script_id"])
+        fd, _ = executor.abrir_log(self.logs, "DEV", snap["script_nome"], STARTED_AT, 21, snap["script_id"])
         ex = executor.iniciar(21, argv, fd, env, wd, None, None, plataforma.RLIMITS_PADRAO, "SSS-srv-01-21")
         self.execs.append(ex)
         self.assertEqual(self.ate_sair(ex), 0, _ler(ex.caminho_log))
         cwd = os.path.join(wd, "exec")
         with open(os.path.join(cwd, "saida.json")) as f:
             self.assertEqual(json.load(f), [cwd, os.path.dirname(script_real), cwd, 1, ["--data", "2026-10-13"]])
-        self.assertTrue(ex.caminho_log.startswith(os.path.join(self.logs, "carga_faturas", "2026")))
+        self.assertTrue(ex.caminho_log.startswith(os.path.join(self.logs, "dev", "carga_faturas", "2026")))
         self.encerrar(ex)
 
 

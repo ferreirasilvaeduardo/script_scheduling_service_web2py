@@ -53,8 +53,27 @@ class TestPastasLog(unittest.TestCase):
 
     def test_diretorio_log_execucao(self):
         dt = datetime.datetime(2026, 4, 5, 8, 9, 30)
-        d = pastas_log.diretorio_log_execucao("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", u"Carga Diária", dt)
-        self.assertEqual(d, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/carga_diaria/2026/04/05/08/09")
+        d = pastas_log.diretorio_log_execucao("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "PRODUCAO", u"Carga Diária", dt)
+        self.assertEqual(d, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/producao/carga_diaria/2026/04/05/08/09")
+
+    def test_ambiente_no_topo_obrigatorio_e_normalizado(self):
+        # CR-009: pasta do ambiente antes de qualquer outra; minusculo, sem espaco nem especial.
+        dt = datetime.datetime(2026, 4, 5, 8, 9, 30)
+        self.assertEqual(pastas_log.pasta_ambiente("PRODUCAO"), "producao")
+        self.assertEqual(pastas_log.pasta_ambiente("HOMOLOG_2"), "homolog_2")
+        self.assertEqual(pastas_log.pasta_ambiente(u" Pré Produção! "), "pre_producao")
+        for vazio in (None, "", "   ", "!!!", u"\u00a7"):
+            with self.assertRaises(ValueError):
+                pastas_log.pasta_ambiente(vazio)
+            with self.assertRaises(ValueError):
+                pastas_log.diretorio_log_execucao("/l", vazio, "carga", dt)
+        for reservado in ("INTERNO", "interno", " Interno "):
+            with self.assertRaises(ValueError):
+                pastas_log.pasta_ambiente(reservado)
+            self.assertTrue(pastas_log.ambiente_reservado(reservado))
+        self.assertFalse(pastas_log.ambiente_reservado("PRODUCAO"))
+        self.assertFalse(pastas_log.ambiente_reservado("INTERNO_2"))
+        self.assertFalse(pastas_log.ambiente_reservado(""))
 
     def test_nomes_log_execucao_parcial_e_final(self):
         self.assertEqual(pastas_log.nome_log_parcial(101), "ticket_101.log.parcial")
@@ -66,14 +85,14 @@ class TestPastasLog(unittest.TestCase):
 
     def test_caminhos_completos_log_execucao(self):
         dt = datetime.datetime(2026, 10, 16, 14, 5, 0)
-        c_parcial = pastas_log.caminho_log_parcial("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "carga", dt, 77)
-        self.assertEqual(c_parcial, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/carga/2026/10/16/14/05/ticket_77.log.parcial")
+        c_parcial = pastas_log.caminho_log_parcial("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77)
+        self.assertEqual(c_parcial, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/dev/carga/2026/10/16/14/05/ticket_77.log.parcial")
 
-        c_final = pastas_log.caminho_log_execucao("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "carga", dt, 77, pid=1234)
-        self.assertEqual(c_final, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/carga/2026/10/16/14/05/ticket_77_1234.log")
+        c_final = pastas_log.caminho_log_execucao("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77, pid=1234)
+        self.assertEqual(c_final, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/dev/carga/2026/10/16/14/05/ticket_77_1234.log")
 
-        c_erro = pastas_log.caminho_log_execucao("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "carga", dt, 77, pid=0)
-        self.assertEqual(c_erro, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/carga/2026/10/16/14/05/ticket_77_0.log")
+        c_erro = pastas_log.caminho_log_execucao("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77, pid=0)
+        self.assertEqual(c_erro, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/dev/carga/2026/10/16/14/05/ticket_77_0.log")
 
     # -----------------------------------------------------------------------
     # 3. Logs da aplicacao (CR-005 D6, R-c, R-d, R-e, README §13)
@@ -82,7 +101,7 @@ class TestPastasLog(unittest.TestCase):
     def test_diretorio_e_nome_log_app(self):
         dt = datetime.datetime(2026, 10, 16, 8, 54, 0)
         d = pastas_log.diretorio_log_app("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", dt)
-        self.assertEqual(d, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/app/2026/10/16/08/54")
+        self.assertEqual(d, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/interno/app/2026/10/16/08/54")
 
         self.assertEqual(pastas_log.nome_log_app("sss_web", 4321), "sss_web_4321.log")
         self.assertEqual(pastas_log.nome_log_app("sss_web.log", 4321), "sss_web_4321.log")
@@ -93,7 +112,7 @@ class TestPastasLog(unittest.TestCase):
     def test_caminho_log_app(self):
         dt = datetime.datetime(2026, 10, 16, 8, 54, 12)
         c = pastas_log.caminho_log_app("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "sss_web", 4321, dt)
-        self.assertEqual(c, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/app/2026/10/16/08/54/sss_web_4321.log")
+        self.assertEqual(c, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/interno/app/2026/10/16/08/54/sss_web_4321.log")
 
     def test_proximo_caminho_log_app_com_sufixo_rotacao(self):
         # R-c: colisoes dentro do mesmo minuto e PID geram _2, _3, ...
@@ -147,10 +166,10 @@ class TestPastasLog(unittest.TestCase):
         # 30 dias de retencao: limite = 2026-09-16.
         # 2026-09-15 deve ser removido.
         # 2026-09-16 e 2026-10-01 devem ser preservados.
-        p_antiga = os.path.join(self.tmp, "app", "2026", "09", "15", "10", "00")
-        p_limite = os.path.join(self.tmp, "app", "2026", "09", "16", "10", "00")
-        p_recente = os.path.join(self.tmp, "app", "2026", "10", "01", "10", "00")
-        p_invalida = os.path.join(self.tmp, "app", "2026", "temp", "teste")
+        p_antiga = os.path.join(self.tmp, "interno", "app", "2026", "09", "15", "10", "00")
+        p_limite = os.path.join(self.tmp, "interno", "app", "2026", "09", "16", "10", "00")
+        p_recente = os.path.join(self.tmp, "interno", "app", "2026", "10", "01", "10", "00")
+        p_invalida = os.path.join(self.tmp, "interno", "app", "2026", "temp", "teste")
 
         for p in (p_antiga, p_limite, p_recente, p_invalida):
             os.makedirs(p, exist_ok=True)
@@ -159,20 +178,20 @@ class TestPastasLog(unittest.TestCase):
 
         removidos = pastas_log.limpar_retencao_app(self.tmp, 30, ref_dt=hoje)
         self.assertEqual(len(removidos), 1)
-        self.assertEqual(removidos[0], os.path.join(self.tmp, "app", "2026", "09", "15"))
+        self.assertEqual(removidos[0], os.path.join(self.tmp, "interno", "app", "2026", "09", "15"))
 
-        self.assertFalse(os.path.exists(os.path.join(self.tmp, "app", "2026", "09", "15")))
-        self.assertTrue(os.path.exists(os.path.join(self.tmp, "app", "2026", "09", "16")))
-        self.assertTrue(os.path.exists(os.path.join(self.tmp, "app", "2026", "10", "01")))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "interno", "app", "2026", "09", "15")))
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "interno", "app", "2026", "09", "16")))
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "interno", "app", "2026", "10", "01")))
         self.assertTrue(os.path.exists(p_invalida))
 
     def test_limpar_retencao_app_reporta_falhas(self):
         """Regressao (AGENTS §6): falha na remocao segue adiante e volta em `falhas`, sem ser engolida."""
-        p_antiga = os.path.join(self.tmp, "app", "2026", "09", "01", "10", "00")
-        p_antiga_2 = os.path.join(self.tmp, "app", "2026", "09", "02", "10", "00")
+        p_antiga = os.path.join(self.tmp, "interno", "app", "2026", "09", "01", "10", "00")
+        p_antiga_2 = os.path.join(self.tmp, "interno", "app", "2026", "09", "02", "10", "00")
         for p in (p_antiga, p_antiga_2):
             os.makedirs(p)
-        dia_1 = os.path.join(self.tmp, "app", "2026", "09", "01")
+        dia_1 = os.path.join(self.tmp, "interno", "app", "2026", "09", "01")
         rmtree_real = shutil.rmtree
 
         def rmtree_falha(caminho, *args, **kw):
@@ -184,7 +203,7 @@ class TestPastasLog(unittest.TestCase):
         with mock.patch("pastas_log.shutil.rmtree", side_effect=rmtree_falha):
             removidos = pastas_log.limpar_retencao_app(self.tmp, 30, ref_dt=datetime.date(2026, 10, 16),
                                                        falhas=falhas)
-        self.assertEqual(removidos, [os.path.join(self.tmp, "app", "2026", "09", "02")])
+        self.assertEqual(removidos, [os.path.join(self.tmp, "interno", "app", "2026", "09", "02")])
         self.assertEqual(len(falhas), 1)
         self.assertIn(dia_1, falhas[0])
         self.assertIn("Permission denied", falhas[0])

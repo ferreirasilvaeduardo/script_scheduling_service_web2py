@@ -227,7 +227,7 @@ Em `instance/config.ini`, seção `[agent]`: `script_owner_uids = 0` (o padrão 
 
 ### 6.2 Onde ficam os logs (CR-005)
 
-* **Log da aplicação:** `log_dir/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log`. O arquivo nasce na pasta do minuto em que o processo sobe e troca para um novo, na pasta do minuto atual, ao atingir `app_log_max_bytes`. As pastas de dia mais antigas que `app_log_retention_days` são apagadas pelo próprio processo. Para seguir o arquivo mais recente:
+* **Log da aplicação:** `log_dir/interno/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (CR-009; até o F8.2 era `log_dir/app/...`, que pode ser apagada à mão). O arquivo nasce na pasta do minuto em que o processo sobe e troca para um novo, na pasta do minuto atual, ao atingir `app_log_max_bytes`. As pastas de dia mais antigas que `app_log_retention_days` são apagadas pelo próprio processo. Para seguir o arquivo mais recente:
 
   ```bash
   LOG_DIR=/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs     # o [logging] log_dir do seu config.ini
@@ -235,7 +235,7 @@ Em `instance/config.ini`, seção `[agent]`: `script_owner_uids = 0` (o padrão 
   ```
 
   A ordem é pela última escrita (`%T@`), e não pelo nome: com dois processos no mesmo minuto, a ordem do nome segue o texto do PID e pode apontar o arquivo errado.
-* **Log de execução de cada ticket** (agente, a partir do F8): `log_dir/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log` (README §8.4).
+* **Log de execução de cada ticket** (agente, a partir do F8): `log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log` (README §8.4; CR-009).
 
 ### 6.3 Agente em DEV (a partir do F8, CR-007)
 

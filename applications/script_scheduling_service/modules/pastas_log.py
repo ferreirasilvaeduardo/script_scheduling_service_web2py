@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Pastas e caminhos dos logs (README §8.4, §11.3, §13, CR-005 D5/D6/D7, R-a a R-e).
+"""Pastas e caminhos dos logs (README §8.4, §11.3, §13, CR-005 D5/D6/D7, R-a a R-e; CR-009).
+
+Todo log fica sob uma pasta de ambiente no topo de log_dir (CR-009): a do ambiente do ticket, obrigatoria
+nos logs de execucao dos scripts, ou 'interno' quando nao ha ambiente (logs da aplicacao).
 
 Modulo puro: nao importa gluon (AGENTS §7.1). E o unico lugar que monta caminho de log (AGENTS §6).
 """
@@ -11,6 +14,8 @@ import unicodedata
 
 # Pasta dos logs da aplicacao; nenhum script pode ter essa pasta de log (CR-005, D7).
 PASTA_APP = 'app'
+# Pasta de ambiente dos logs sem ambiente (CR-009); nenhum ambiente pode se chamar INTERNO.
+PASTA_INTERNA = 'interno'
 _RE_FORA = re.compile(r'[^a-z0-9._-]+')
 
 _RE_ANO = re.compile(r'^\d{4}$')
@@ -31,6 +36,29 @@ def pasta_script(nome, script_id=None):
     return texto
 
 
+def pasta_ambiente(nome):
+    """Pasta do ambiente no topo do caminho do log (CR-009): minusculo, sem acento, sem espaco e sem
+    caractere especial (mesma regra da pasta do script). Ambiente vazio ou sem nenhum caractere
+    aproveitavel: ValueError (nos logs de script o ambiente e obrigatorio). 'interno' e reservado."""
+    texto = unicodedata.normalize('NFKD', nome or u'')
+    texto = texto.encode('ascii', 'ignore').decode('ascii').lower()
+    texto = _RE_FORA.sub('_', texto).strip('._')
+    if not texto:
+        raise ValueError("Ambiente obrigatorio no caminho do log de execucao")
+    if texto == PASTA_INTERNA:
+        raise ValueError("O ambiente nao pode gerar a pasta reservada '%s'" % PASTA_INTERNA)
+    return texto
+
+
+def ambiente_reservado(nome):
+    """True se o nome do ambiente geraria a pasta reservada 'interno' (CR-009)."""
+    try:
+        pasta_ambiente(nome)
+    except ValueError:
+        return bool((nome or "").strip())
+    return False
+
+
 def nome_reservado(nome):
     """True se o nome do script geraria a pasta reservada 'app' (CR-005, D7)."""
     return pasta_script(nome) == PASTA_APP
@@ -49,14 +77,15 @@ def partes_minuto(dt):
 
 # ---------------------------------------------------------------------------
 # 1. Logs de execucao de cada ticket (CR-005 D5, R-a, R-b, README §8.4)
-#    log_dir/<pasta_do_script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log
+#    log_dir/<ambiente>/<pasta_do_script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log (CR-009)
 # ---------------------------------------------------------------------------
 
-def diretorio_log_execucao(log_dir, nome_script, started_at, script_id=None):
-    """Diretorio do log de execucao do script conforme started_at (banco)."""
+def diretorio_log_execucao(log_dir, ambiente, nome_script, started_at, script_id=None):
+    """Diretorio do log de execucao do script conforme o ambiente do ticket e started_at (banco)."""
+    amb = pasta_ambiente(ambiente)
     pasta = pasta_script(nome_script, script_id)
     ano, mes, dia, hora, minuto = partes_minuto(started_at)
-    return os.path.join(log_dir, pasta, ano, mes, dia, hora, minuto)
+    return os.path.join(log_dir, amb, pasta, ano, mes, dia, hora, minuto)
 
 
 def garantir_diretorio(diretorio, avisos=None):
@@ -99,27 +128,27 @@ def nome_log_execucao(ticket_id, pid=None):
     return 'ticket_%s_%s.log' % (ticket_id, pid_val)
 
 
-def caminho_log_parcial(log_dir, nome_script, started_at, ticket_id, script_id=None):
+def caminho_log_parcial(log_dir, ambiente, nome_script, started_at, ticket_id, script_id=None):
     """Caminho completo do arquivo parcial pre-spawn."""
-    diretorio = diretorio_log_execucao(log_dir, nome_script, started_at, script_id)
+    diretorio = diretorio_log_execucao(log_dir, ambiente, nome_script, started_at, script_id)
     return os.path.join(diretorio, nome_log_parcial(ticket_id))
 
 
-def caminho_log_execucao(log_dir, nome_script, started_at, ticket_id, pid=None, script_id=None):
+def caminho_log_execucao(log_dir, ambiente, nome_script, started_at, ticket_id, pid=None, script_id=None):
     """Caminho completo do arquivo de log final de execucao."""
-    diretorio = diretorio_log_execucao(log_dir, nome_script, started_at, script_id)
+    diretorio = diretorio_log_execucao(log_dir, ambiente, nome_script, started_at, script_id)
     return os.path.join(diretorio, nome_log_execucao(ticket_id, pid))
 
 
 # ---------------------------------------------------------------------------
 # 2. Logs da aplicacao (CR-005 D6, R-c, R-d, R-e, README §13)
-#    log_dir/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>[_<n>].log
+#    log_dir/interno/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>[_<n>].log (CR-009: sem ambiente)
 # ---------------------------------------------------------------------------
 
 def diretorio_log_app(log_dir, dt):
     """Diretorio de log da aplicacao no minuto de dt (relogio local do processo)."""
     ano, mes, dia, hora, minuto = partes_minuto(dt)
-    return os.path.join(log_dir, PASTA_APP, ano, mes, dia, hora, minuto)
+    return os.path.join(log_dir, PASTA_INTERNA, PASTA_APP, ano, mes, dia, hora, minuto)
 
 
 def nome_log_app(nome_processo, pid, seq=None):
@@ -176,7 +205,7 @@ def parse_data_minuto(ano_str, mes_str, dia_str, hora_str, min_str):
 
 
 def limpar_retencao_app(log_dir, retention_days, ref_dt=None, falhas=None):
-    """Apaga as pastas log_dir/app/AAAA/MM/DD anteriores a retention_days dias (CR-005, R-d, README §13).
+    """Apaga as pastas log_dir/interno/app/AAAA/MM/DD anteriores a retention_days dias (CR-005, R-d, README §13).
 
     So remove pastas cujo caminho casa perfeitamente com ano/mes/dia valido do calendario.
     Apos remover os dias antigos, remove pastas de mes e ano que ficarem vazias.
@@ -189,7 +218,7 @@ def limpar_retencao_app(log_dir, retention_days, ref_dt=None, falhas=None):
 
     if retention_days is None or retention_days <= 0:
         return []
-    pasta_app = os.path.join(log_dir, PASTA_APP)
+    pasta_app = os.path.join(log_dir, PASTA_INTERNA, PASTA_APP)
     if not os.path.isdir(pasta_app):
         return []
 

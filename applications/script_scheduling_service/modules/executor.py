@@ -115,13 +115,14 @@ def preparar_diretorio(work_dir, ticket_id, startup_concluido=False):
     return caminho
 
 
-def abrir_log(log_dir, nome_script, started_at, ticket_id, script_id=None):
-    """Abre log_dir/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>.log.parcial (O_EXCL, 0600) antes do spawn.
+def abrir_log(log_dir, ambiente, nome_script, started_at, ticket_id, script_id=None):
+    """Abre log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>.log.parcial (O_EXCL, 0600)
+    antes do spawn (CR-009: o ambiente do ticket e obrigatorio; vazio e ValueError).
 
     Cada pasta nova da cadeia recebe 0750 (pastas_log.garantir_diretorio). nome_script e o script_nome do
     snapshot (README §6.5). Devolve (fd, caminho).
     """
-    caminho = pastas_log.caminho_log_parcial(log_dir, nome_script, started_at, ticket_id, script_id)
+    caminho = pastas_log.caminho_log_parcial(log_dir, ambiente, nome_script, started_at, ticket_id, script_id)
     pastas_log.garantir_diretorio(os.path.dirname(caminho))
     fd = os.open(caminho, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_APPEND, 0o600)
     _logs_abertos[fd] = caminho

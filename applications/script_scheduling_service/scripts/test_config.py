@@ -375,8 +375,8 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(len(achados), 1, achados)
         self.assertEqual(os.path.basename(achados[0]), esperado)
         partes = os.path.relpath(os.path.dirname(achados[0]), log_dir).split(os.sep)
-        self.assertEqual(partes[0], "app")
-        self.assertEqual(len(partes), 6)
+        self.assertEqual(partes[:2], ["interno", "app"])  # CR-009
+        self.assertEqual(len(partes), 7)
         self.assertEqual(stat.S_IMODE(os.stat(achados[0]).st_mode), 0o640)
         with open(achados[0], encoding="utf-8") as f:
             return f.read()
@@ -585,7 +585,7 @@ class TestConfig(unittest.TestCase):
 
         log_path = logger.handlers[0].baseFilename
         self.assertTrue(os.path.isfile(log_path))
-        self.assertIn(os.path.join(self.tmp_dir, "app"), log_path)
+        self.assertIn(os.path.join(self.tmp_dir, "interno", "app"), log_path)
 
         with open(log_path, "r", encoding="utf-8") as f:
             linhas = [linha.strip() for linha in f if linha.strip()]
