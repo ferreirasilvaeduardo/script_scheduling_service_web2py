@@ -4,6 +4,7 @@ POSIX, sem heranca de os.environ, passthrough, bloqueio, omissao da conexao e ma
 import _testenv  # noqa: F401
 
 import collections
+import datetime
 import os
 import unittest
 from unittest import mock
@@ -50,6 +51,8 @@ class TestEnvBuilder(unittest.TestCase):
             "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8",
             "SSS_TICKET_ID": "41", "SSS_AMBIENTE": "PRODUCAO", "SSS_AGENTE_ID": "srv-01",
             "SSS_SCRIPT_DIR": "/opt/automacoes/scripts/faturamento",
+            "SSS_SCRIPT_ARQUIVO": SCRIPT, "SSS_PLATAFORMA": "LINUX", "SSS_TIPO_EXECUCAO": "MANUAL",
+            "SSS_AMBIENTE_DSN": "dbprod:1521/FAT",
             "ORACLE_HOME": "/opt/oracle", "NLS_LANG": "AMERICAN_AMERICA.AL32UTF8"})
 
     def test_sem_home_real_nem_path_do_daemon_nem_heranca(self):
@@ -104,6 +107,62 @@ class TestEnvBuilder(unittest.TestCase):
             self.assertNotIn("PADRAO_VALOR_RUN_CONEXAO_BD", env)
             self.assertIn(motivo, logs.output[0])
             self.assertNotIn("S3nh@Forte", logs.output[0], "WARN sem valores")
+
+    def test_cr010_execucao_agendada_completa(self):
+        cred = AmbienteSegredo("fat_app", "S3nh@Forte")
+        ticket = {"id": 41, "ambiente": "PRODUCAO", "parent_ticket_id": 7, "agendamento_id": 3, "prioridade": 2,
+                  "started_at": datetime.datetime(2026, 10, 20, 3, 0, 5),
+                  "scheduled_at": datetime.datetime(2026, 10, 20, 3, 0)}
+        snap = {"script_id": 12, "script_nome": "Carga Faturas", "interpretador": "PYTHON3"}
+        amb = dict(AMB, descricao="Produção faturamento")
+        log = "/srv/sss/logs/producao/carga_faturas/2026/10/20/03/00/ticket_41.log.parcial"
+        with mock.patch.object(masking, "MASCARADOR", masking.Mascarador()):
+            env = env_builder.construir(_cfg(), _segredos({"PRODUCAO": cred}), ticket, amb, SCRIPT, WORK,
+                                        dict(DAEMON), "LINUX", snapshot=snap,
+                                        agendamento={"nome": "Carga noturna", "tipo_recorrencia": "MENSAL"},
+                                        caminho_log=log, timeout_seg=3600, hostname="srv-linux-01", versao="1.0")
+        sss = dict((k, v) for k, v in env.items() if k.startswith("SSS_"))
+        self.assertEqual(sss, {
+            "SSS_TICKET_ID": "41", "SSS_TICKET_PAI_ID": "7", "SSS_TIPO_EXECUCAO": "AGENDADA",
+            "SSS_RECORRENCIA": "MENSAL", "SSS_AGENDAMENTO_ID": "3", "SSS_AGENDAMENTO_NOME": "Carga noturna",
+            "SSS_DATA_EXECUCAO": "2026-10-20 03:00:05", "SSS_DATA_AGENDADA": "2026-10-20 03:00:00",
+            "SSS_PRIORIDADE": "2", "SSS_TIMEOUT_SEG": "3600",
+            "SSS_AMBIENTE": "PRODUCAO", "SSS_AMBIENTE_DESCRICAO": "Produção faturamento",
+            "SSS_AMBIENTE_DSN": "dbprod:1521/FAT", "SSS_AMBIENTE_USUARIO": "fat_app",
+            "SSS_AMBIENTE_CONEXAO": "fat_app/S3nh@Forte@dbprod:1521/FAT",
+            "SSS_SCRIPT_ID": "12", "SSS_SCRIPT_NOME": "Carga Faturas", "SSS_INTERPRETADOR": "PYTHON3",
+            "SSS_SCRIPT_ARQUIVO": SCRIPT, "SSS_SCRIPT_DIR": "/opt/automacoes/scripts/faturamento",
+            "SSS_LOG_DIR": "/srv/sss/logs/producao/carga_faturas/2026/10/20/03/00",
+            "SSS_LOG_ARQUIVO": "ticket_41.log.parcial",
+            "SSS_AGENTE_ID": "srv-01", "SSS_AGENTE_HOST": "srv-linux-01", "SSS_PLATAFORMA": "LINUX",
+            "SSS_VERSAO": "1.0"})
+        self.assertEqual(env["PADRAO_VALOR_RUN_CONEXAO_BD"], env["SSS_AMBIENTE_CONEXAO"], "variavel antiga mantida")
+        self.assertNotIn("SSS_SOLICITANTE", env)
+        self.assertFalse([k for k in env if k.startswith("SSS_PARAM")])
+
+    def test_cr010_manual_sem_dados_de_agendamento_e_valores_vazios_ausentes(self):
+        ticket = {"id": 41, "ambiente": "PRODUCAO", "parent_ticket_id": None, "agendamento_id": None,
+                  "prioridade": None}
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            env = env_builder.construir(_cfg(), _segredos(), ticket, dict(AMB, descricao="  ", conexao=None),
+                                        SCRIPT, WORK, {}, "UNIX", snapshot={"script_nome": ""},
+                                        agendamento={"nome": "ignorado", "tipo_recorrencia": "DIARIA"},
+                                        hostname="", versao=None)
+        self.assertEqual(env["SSS_TIPO_EXECUCAO"], "MANUAL")
+        for ausente in ("SSS_RECORRENCIA", "SSS_AGENDAMENTO_ID", "SSS_AGENDAMENTO_NOME", "SSS_TICKET_PAI_ID",
+                        "SSS_PRIORIDADE", "SSS_AMBIENTE_DESCRICAO", "SSS_AMBIENTE_DSN", "SSS_AMBIENTE_USUARIO",
+                        "SSS_AMBIENTE_CONEXAO", "SSS_SCRIPT_NOME", "SSS_AGENTE_HOST", "SSS_VERSAO",
+                        "SSS_LOG_DIR", "SSS_LOG_ARQUIVO", "SSS_DATA_EXECUCAO", "PADRAO_VALOR_RUN_CONEXAO_BD"):
+            self.assertNotIn(ausente, env, ausente)
+        self.assertEqual(env["SSS_PLATAFORMA"], "UNIX")
+
+    def test_cr010_conexao_mascarada_nos_logs(self):
+        cred = AmbienteSegredo("fat_app", "S3nh@Forte")
+        with mock.patch.object(masking, "MASCARADOR", masking.Mascarador()) as masc:
+            env = self.construir(segredos=_segredos({"PRODUCAO": cred}))
+            self.assertEqual(masc.mascarar("SSS_AMBIENTE_CONEXAO=%s" % env["SSS_AMBIENTE_CONEXAO"]),
+                             "SSS_AMBIENTE_CONEXAO=****")
+        self.assertEqual(env["SSS_AMBIENTE_USUARIO"], "fat_app")
 
     def test_entradas_invalidas(self):
         with self.assertRaises(ValueError):

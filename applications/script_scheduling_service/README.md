@@ -377,7 +377,7 @@ password = ...
 
   Fora de DEV, uma seção proibida recusa a subida com CRITICAL (seção e motivo, nunca o valor): o segredo de um papel nunca fica legível no servidor de outro. Em DEV, a mesma situação só gera WARN, porque web e agente dividem a máquina.
 * **Contas Oracle por papel (D1b):** dono do esquema (só DDL, usado pelo `init_db.py` com senha digitada, §11.1), **web**, **agente**, **purge** e **monitor** (só leitura, CR-008 E3). Os GRANTs de cada papel estão no §11.1. Nenhuma conta de aplicação (web, agente) altera ou apaga `tbsss_auditoria`; só a de purge apaga, por retenção.
-* **Usuário de execução:** o script roda com outro usuário do sistema operacional (§8.0), que não lê o `secrets.cfg` (dono = usuário do agente, `0600`). A credencial do ambiente chega ao script só pela variável `PADRAO_VALOR_RUN_CONEXAO_BD` (§8.6).
+* **Usuário de execução:** o script roda com outro usuário do sistema operacional (§8.0), que não lê o `secrets.cfg` (dono = usuário do agente, `0600`). A credencial do ambiente chega ao script só pelas variáveis `SSS_AMBIENTE_CONEXAO` e `PADRAO_VALOR_RUN_CONEXAO_BD` (§8.6, CR-010).
 
 * `tbsss_ambientes.conexao` armazena **somente o DSN** (Easy Connect `host:porta/servico` ou alias TNS), nunca credenciais. A CK `ck_tbsss_amb_conexao` rejeita qualquer valor contendo `@`.
 * Valores de segredo carregados são registrados no módulo `masking.py`. Eles são substituídos por `****` em todo log do daemon, do web e no `log_output`.
@@ -1678,15 +1678,25 @@ if not os.path.isfile(real):
 | `TZ` | herdado do daemon (definido pelo launcher) |
 | `PYTHONDONTWRITEBYTECODE` | `1` (só tem efeito em BASH/SH que chamem `python` sem `-I`; o `PYTHON3` roda com `-I`, que ignora as variáveis `PYTHON*`, e o UTF-8 dele vem do `LC_ALL`; CR-007, R-17) |
 | `PYTHONIOENCODING` | `utf-8` (mesma observação) |
-| `SSS_TICKET_ID`, `SSS_AMBIENTE`, `SSS_AGENTE_ID` | metadados do ticket |
-| `SSS_SCRIPT_DIR` | `os.path.dirname(script_real)` |
-| `PADRAO_VALOR_RUN_CONEXAO_BD` | `user/password@dsn`, com credenciais de `secrets.cfg [ambiente:<NOME>]` e DSN de `tbsss_ambientes.conexao`. Omitida se o ambiente não tiver DSN |
+| `SSS_TICKET_ID`, `SSS_TICKET_PAI_ID` | id da execução e, na reexecução, o do ticket original (CR-010) |
+| `SSS_TIPO_EXECUCAO` | `MANUAL` ou `AGENDADA` (ticket com `agendamento_id`; CR-010) |
+| `SSS_RECORRENCIA`, `SSS_AGENDAMENTO_ID`, `SSS_AGENDAMENTO_NOME` | só na execução agendada: `UNICA`, `DIARIA`, `SEMANAL`, `MENSAL` ou `CRON`, o id e o nome da regra (CR-010) |
+| `SSS_DATA_EXECUCAO`, `SSS_DATA_AGENDADA` | `started_at` (relógio do banco, devolvido pelo claim) e `scheduled_at`, no formato `AAAA-MM-DD HH:MI:SS` (CR-010) |
+| `SSS_PRIORIDADE`, `SSS_TIMEOUT_SEG` | prioridade do ticket e prazo efetivo (`timeout_seg` do script ou `script_timeout_s`) (CR-010) |
+| `SSS_AMBIENTE`, `SSS_AMBIENTE_DESCRICAO` | nome e descrição do ambiente do ticket |
+| `SSS_AMBIENTE_DSN`, `SSS_AMBIENTE_USUARIO` | DSN de `tbsss_ambientes.conexao` (sem credencial) e o usuário de `secrets.cfg [ambiente:<NOME>]` (CR-010) |
+| `SSS_AMBIENTE_CONEXAO` e `PADRAO_VALOR_RUN_CONEXAO_BD` | o mesmo valor `user/password@dsn`, com credenciais de `secrets.cfg [ambiente:<NOME>]` e DSN de `tbsss_ambientes.conexao`; a segunda é o nome antigo, mantido para os scripts existentes (CR-010). Omitidas se o ambiente não tiver DSN ou credencial. Mascaradas em todo log |
+| `SSS_SCRIPT_ID`, `SSS_SCRIPT_NOME`, `SSS_INTERPRETADOR` | do snapshot (o nome da época da criação do ticket, §6.5) (CR-010) |
+| `SSS_SCRIPT_ARQUIVO`, `SSS_SCRIPT_DIR` | `script_real` e `os.path.dirname(script_real)` |
+| `SSS_LOG_DIR`, `SSS_LOG_ARQUIVO` | pasta do log da execução (§8.4, passo 3) e o nome do arquivo no início (`ticket_<id>.log.parcial`, renomeado para `ticket_<id>_<PID>.log` logo depois do spawn). Informativas: a saída do script já é o log, e fora de DEV o usuário de execução não abre o arquivo pelo caminho (CR-010) |
+| `SSS_AGENTE_ID`, `SSS_AGENTE_HOST`, `SSS_PLATAFORMA`, `SSS_VERSAO` | agente que executa, hostname, `LINUX` ou `UNIX` e versão do SSS (CR-010) |
 | `env_passthrough` | copiadas do ambiente do daemon (por exemplo, `ORACLE_HOME`, `TNS_ADMIN`, `NLS_LANG`, `LD_LIBRARY_PATH`) |
 
 * **Bloqueadas** mesmo se listadas em `env_passthrough` (a configuração que as contiver é rejeitada na inicialização):
   * `LD_PRELOAD`, `LD_AUDIT` e qualquer `LD_*` exceto `LD_LIBRARY_PATH`; `BASH_FUNC_*`; `GCONV_PATH`, `LOCPATH`, `NLSPATH`, `HOSTALIASES`, `GLIBC_TUNABLES`, `MALLOC_*`;
   * `PYTHONPATH`, `PYTHONHOME`, `PYTHONSTARTUP`, `PYTHONINSPECT`, `PERL5LIB`, `PERL5OPT`;
   * `BASH_ENV`, `ENV`, `SHELLOPTS`, `BASHOPTS`, `IFS`, `PS4`, `PROMPT_COMMAND`, `CDPATH`, `GLOBIGNORE`.
+* **CR-010:** o prefixo `SSS_` é reservado aos dados que o agente passa ao script. Variável sem valor não é definida (por exemplo, `SSS_RECORRENCIA` numa execução manual). O solicitante e os parâmetros **não** vão para o ambiente: os parâmetros chegam pelos argumentos (§6.4).
 * **Chaves fixas** também são recusadas no `env_passthrough`, porque o agente as define (CR-007, R-32): `PATH`, `HOME`, `TMPDIR`, `LANG`, `LC_*`, `TZ`, `SSS_*`, `PADRAO_VALOR_RUN_CONEXAO_BD` e `PYTHON*`.
 * **Isolamento (CR-007, D1):** o script roda com o usuário de execução do ambiente, que não lê o ambiente do agente nem de scripts de outros ambientes. Resta legível pelo próprio usuário de execução (outros scripts do **mesmo** ambiente) e pelo root (`/proc/<pid>/environ`), aceito no §14.
 
@@ -1791,7 +1801,7 @@ O relógio de referência é sempre o `SYSDATE` do banco, nunca o relógio do n�
   * **orçamento (CR-008, R-11):** a rodada para ao gastar `heartbeat_interval_s / 2` (§8.1), com rodízio entre tickets; o flush final de um ticket não tem orçamento, mas só um flush final roda por iteração do laço;
   * o agente lê os bytes novos do arquivo a partir do offset local;
   * decodifica com `utf-8`, `errors='replace'`, sem cortar caracteres multibyte (o resto incompleto fica para o próximo ciclo);
-  * aplica o **mascarador do ticket** (CR-007, R-25): uma instância de `masking.Mascarador` por ticket, com os segredos carregados, o `PADRAO_VALOR_RUN_CONEXAO_BD` do ambiente e os valores das `respostas` cujos códigos estão em `sensiveis` no snapshot. O mesmo mascarador filtra as linhas do log da aplicação que tratam do ticket;
+  * aplica o **mascarador do ticket** (CR-007, R-25): uma instância de `masking.Mascarador` por ticket, com os segredos carregados, o `PADRAO_VALOR_RUN_CONEXAO_BD` (= `SSS_AMBIENTE_CONEXAO`) do ambiente e os valores das `respostas` cujos códigos estão em `sensiveis` no snapshot. O mesmo mascarador filtra as linhas do log da aplicação que tratam do ticket;
   * anexa ao CLOB em blocos de até 8.000 caracteres:
 
 ```sql
@@ -2657,7 +2667,7 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
   | CRITICAL | Fencing e falhas de inicialização |
 
 * Todo `except` registra o código de erro do banco (ORA- no Oracle) e o stack trace em ERROR antes de qualquer `ROLLBACK`. **Exceção (CR-007, R-32):** situações esperadas e tratadas (timeout de lock, deadlock, *call timeout*, perda de corrida com `rowcount = 0` e `SKIP LOCKED`) registram WARN com o código do erro e sem stack trace, para não poluir o log (AGENTS §4.10).
-* É proibido registrar senhas, `PADRAO_VALOR_RUN_CONEXAO_BD`, `cookie_key`, o conteúdo de `secrets.cfg` e valores de parâmetros sensíveis.
+* É proibido registrar senhas, `PADRAO_VALOR_RUN_CONEXAO_BD`, `SSS_AMBIENTE_CONEXAO`, `cookie_key`, o conteúdo de `secrets.cfg` e valores de parâmetros sensíveis.
 * **Visão operacional:** a tela de agentes (`auditoria/agentes`, `VER_AUDITORIA`) lista `tbsss_agentes` com o heartbeat e os tickets `RUNNING` de cada agente. É **somente leitura**.
   * **Saúde derivada** da idade do heartbeat, medida pelo relógio do banco (`SYSDATE`), com os limiares do daemon:
 

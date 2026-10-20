@@ -406,7 +406,9 @@ class TestSnapshotV4(_Base):
         with open(self.script, "w") as f:
             f.write("import json, os, sys\n"
                     "json.dump([os.getcwd(), os.environ.get('SSS_SCRIPT_DIR'), os.environ.get('HOME'),\n"
-                    "           sys.flags.isolated, sys.argv[1:]], open('saida.json', 'w'))\n")
+                    "           sys.flags.isolated, sys.argv[1:],\n"
+                    "           dict((k, v) for k, v in os.environ.items() if k.startswith('SSS_'))],\n"
+                    "          open('saida.json', 'w'))\n")
         os.chmod(self.script, 0o444)
         os.chmod(os.path.join(self.base, "faturamento"), 0o555)
         os.chmod(self.base, 0o555)
@@ -426,16 +428,31 @@ class TestSnapshotV4(_Base):
         self.assertEqual(argv, [sys.executable, "-I", script_real, "--data", "2026-10-13"])
         wd = executor.preparar_diretorio(self.work, 21)
         cfg = _Cfg(_Agente("srv-01", "C.UTF-8", (), (), None))
+        fd, parcial = executor.abrir_log(self.logs, "DEV", snap["script_nome"], STARTED_AT, 21, snap["script_id"])
+        ticket = {"id": 21, "ambiente": "DEV", "agendamento_id": 5, "parent_ticket_id": None, "prioridade": 3,
+                  "started_at": STARTED_AT, "scheduled_at": STARTED_AT}
         with self.assertLogs("sss_scheduler", "WARNING"):
-            env = env_builder.construir(cfg, Segredos("x" * 8, None, {}), {"id": 21, "ambiente": "DEV"},
-                                        {"nome": "DEV", "conexao": None}, script_real, wd, {}, plataforma.NOME)
-        fd, _ = executor.abrir_log(self.logs, "DEV", snap["script_nome"], STARTED_AT, 21, snap["script_id"])
+            env = env_builder.construir(cfg, Segredos("x" * 8, None, {}), ticket,
+                                        {"nome": "DEV", "conexao": None, "descricao": "Desenvolvimento"},
+                                        script_real, wd, {}, plataforma.NOME, snapshot=snap,
+                                        agendamento={"nome": "Diario DEV", "tipo_recorrencia": "DIARIA"},
+                                        caminho_log=parcial, timeout_seg=60, hostname="host-dev", versao="t")
         ex = executor.iniciar(21, argv, fd, env, wd, None, None, plataforma.RLIMITS_PADRAO, "SSS-srv-01-21")
         self.execs.append(ex)
         self.assertEqual(self.ate_sair(ex), 0, _ler(ex.caminho_log))
         cwd = os.path.join(wd, "exec")
         with open(os.path.join(cwd, "saida.json")) as f:
-            self.assertEqual(json.load(f), [cwd, os.path.dirname(script_real), cwd, 1, ["--data", "2026-10-13"]])
+            saida = json.load(f)
+        self.assertEqual(saida[:5], [cwd, os.path.dirname(script_real), cwd, 1, ["--data", "2026-10-13"]])
+        # CR-010: o filho le os dados da execucao em SSS_*.
+        sss = saida[5]
+        self.assertEqual((sss["SSS_TICKET_ID"], sss["SSS_TIPO_EXECUCAO"], sss["SSS_RECORRENCIA"]),
+                         ("21", "AGENDADA", "DIARIA"))
+        self.assertEqual((sss["SSS_AMBIENTE"], sss["SSS_AMBIENTE_DESCRICAO"]), ("DEV", "Desenvolvimento"))
+        self.assertEqual(sss["SSS_DATA_EXECUCAO"], "2026-10-16 14:05:33")
+        self.assertEqual(sss["SSS_SCRIPT_ARQUIVO"], script_real)
+        self.assertEqual(os.path.join(sss["SSS_LOG_DIR"], sss["SSS_LOG_ARQUIVO"]), parcial)
+        self.assertEqual(os.path.dirname(ex.caminho_log), sss["SSS_LOG_DIR"])
         self.assertTrue(ex.caminho_log.startswith(os.path.join(self.logs, "dev", "carga_faturas", "2026")))
         self.encerrar(ex)
 
