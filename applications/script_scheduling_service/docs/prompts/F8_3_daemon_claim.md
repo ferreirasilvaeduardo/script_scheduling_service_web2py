@@ -10,6 +10,8 @@
 
 > **CR-011 (2026-10-20), vale para o que ainda falta deste passo (F8.3d):** o caminho do script pode ter link simbólico (o agente executa o arquivo real); o SSS não calcula nem confere hash (`sha256_homologado`, `arquivo_sha256`, `ARQUIVO_ALTERADO`, `SEM_HASH` e `ambientes_exigem_hash` saíram) nem o dono dos arquivos (`script_owner_uids` saiu). Os itens abaixo que citam hash ou dono ficam sem efeito (`docs/arquitetura/CR-011-link-simbolico-e-sem-hash.md`).
 
+> **CR-012 (2026-10-20):** a pasta de saída do script (README §8.13) é implementada pelo próprio CR-012, antes do F8.3d. O F8.3d inclui no teste com 2 agentes um script que grava em `SSS_SAIDA_DIR`, com `saida_dir` diferente em cada agente.
+
 ## Objetivo
 Colocar o agente executor de pé: inicialização fail-fast, claim concorrente seguro, execução, heartbeat, coleta de log, cancelamento, timeout e finalização (somente POSIX).
 

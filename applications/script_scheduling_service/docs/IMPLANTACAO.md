@@ -600,7 +600,7 @@ Ainda **não executável** (F7–F9). O `docs/RUNBOOK.md` será entregue no F9.1
 
 | Item | Detalhe | Referência |
 |---|---|---|
-| Banco Oracle | 11gR2 (11.2.0.4) ou superior, charset AL32UTF8; schema/owner da aplicação (ex.: `openrisow`), usuário de aplicação e *grants*; espaço para as 17 tabelas `tbsss_*` (CR-007: inclui `tbsss_controle`) | README §2.2, §10, §11.1 |
+| Banco Oracle | 11gR2 (11.2.0.4) ou superior, charset AL32UTF8; schema/owner da aplicação (ex.: `openrisow`), usuário de aplicação e *grants*; espaço para as 18 tabelas `tbsss_*` (CR-007: inclui `tbsss_controle`; CR-012: `tbsss_ticket_saida`, com BLOB, §18.3) | README §2.2, §10, §11.1 |
 | Conectividade | Rota e firewall dos servidores web/agentes até o listener Oracle (porta 1521) | README §2.3 |
 | Oracle Instant Client 19 | Obrigatório se o banco for 11g (o modo Thin não conecta ao 11g); recomendado em todos os nós como contingência | README §2.3, CR-002 |
 | Driver Python | `python-oracledb` (`< 2.0` na 3.6; `2.x` na 3.7+) com `cryptography`, e `cx_Oracle 8.3` como contingência, **pré-instalados** pela infraestrutura | AGENTS §2.2 |
@@ -621,6 +621,9 @@ install -o root -g root -m 0755 -d /opt/sss/bin
 install -o root -g root -m 0755 bin/sss-helper /opt/sss/bin/sss-helper
 useradd --system --shell /sbin/nologin --home-dir /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec/sssprd sssprd
 install -o sssprd -g sssprd -m 0700 -d /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec/sssprd
+# CR-012, só se [agent] saida_dir estiver preenchido: uma pasta por ambiente, do usuário de execução dele
+install -o sssagente -g sssagente -m 0755 -d /dados/sss/saida
+install -o sssprd -g sssprd -m 0700 -d /dados/sss/saida/producao     # nome do ambiente em minúsculo, como no log
 visudo -f /etc/sudoers.d/sss        # conteúdo abaixo; uma linha por usuário de execução
 ```
 
@@ -650,6 +653,8 @@ sssagente ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 * Num banco AL32UTF8, o CLOB guarda AL16UTF16: cerca de **2 bytes por caractere**.
 * Estimativa do segmento LOB de `tbsss_tickets`: `tickets por dia × tamanho médio do log em caracteres × 2 × ticket_retention_days × 1,3` (folga de 30%). Exemplo: 2.000 tickets/dia × 50.000 caracteres × 2 × 180 dias × 1,3 ≈ 47 GB.
 * `max_log_size_bytes` vai até 64 MiB por ticket (README §12.1). Depois do purge, o espaço volta ao segmento, não ao tablespace; para devolvê-lo, o DBA usa `ALTER TABLE ... MOVE LOB` ou redefinição online numa janela.
+
+* **Saída dos scripts (CR-012):** o zip fica no BLOB de `tbsss_ticket_saida` até o ticket sair pela retenção. Estimativa: `tickets com saída por dia × tamanho médio do zip × ticket_retention_days × 1,3`. O teto por ticket é `saida_max_bytes` (até 200 MiB). A pasta `saida_dir` de cada agente pode ficar na mesma partição do `log_dir`; ela guarda só o que não foi para o banco (excesso ou falha), por `saida_retention_days`.
 
 ### 18.4 Monitoração, backup e restauração (CR-007, R-18)
 
