@@ -25,11 +25,14 @@ import plataforma
 import scheduler_loop as sl
 import sss_config
 from repo_oracle.scheduler_fila import AgenteDuplicado
+from _saida_memoria import RepoSaidaMemoria
 
 _Agent = collections.namedtuple("_Agent", (
     "agent_id", "ambientes_atendidos", "work_dir", "interpretadores", "usuarios_execucao",
     "exec_work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
-    "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "fila_envelhecimento_min", "child_locale"))
+    "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "fila_envelhecimento_min", "child_locale",
+    "saida_dir"))
+_Agent.__new__.__defaults__ = (None,)  # CR-012: sem saida_dir por padrao
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
 _NS = collections.namedtuple("_NS", "log_dir")
 _App = collections.namedtuple("_App", "sss_env")
@@ -152,6 +155,7 @@ class _Base(unittest.TestCase):
         os.mkdir(self.logs, 0o750)
         self.repo = _Repo()
         self.repo_log = _RepoLog()
+        self.repo_saida = RepoSaidaMemoria()
         self.conexao = _Conexao()
         self.popens = []
         self.agentes = []
@@ -183,6 +187,7 @@ class _Base(unittest.TestCase):
                     _Oracle("db:1521/x", 30000, "OWN_X", "pfx_"), None)
 
     def agente(self, cfg=None, plat=None, **kw):
+        kw.setdefault("repo_saida", self.repo_saida)
         ag = sl.Agente(cfg=cfg or self.cfg(), segredos=object(), plat=plat, conexao=kw.pop("conexao", self.conexao),
                        repo=self.repo, repo_log=self.repo_log, hostname="host-t", pid=os.getpid(), **kw)
         self.agentes.append(ag)
@@ -246,6 +251,26 @@ class TestPassos(_Base):
         saida = self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=cfg, plat=plat))
         self.assertTrue(any("helper /opt/sss/bin/sss-helper nao encontrado" in x for x in saida))
 
+    def test_pasta_de_saida_na_subida(self):
+        # CR-012 (README §8.12 passo 4): saida_dir fora das pastas do sistema e existente.
+        self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(saida_dir="/usr/local/sss-saida")))
+        self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(saida_dir=os.path.join(self.raiz, "nao"))))
+        saida = os.path.join(self.raiz, "saida")
+        os.mkdir(saida, 0o755)
+        self.agente(cfg=self.cfg(saida_dir=saida)).inicializar()
+        # Fora de DEV: a pasta de cada ambiente atendido, do usuario de execucao dele.
+        vistos = []
+
+        def _pastas(pares):
+            vistos.extend(pares)
+            return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pares[0][0]]
+        plat = _Plat(validar_execucao=lambda *a, **k: [], validar_pastas_saida=_pastas)
+        cfg = self.cfg(sss_env="PROD", exec_work_dir=self.raiz, usuarios_execucao=(("DEV", "exec1"),),
+                       saida_dir=saida)
+        logs = self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=cfg, plat=plat))
+        self.assertEqual(vistos, [(os.path.join(saida, "dev"), "exec1")])
+        self.assertTrue(any("pasta de saida:" in x for x in logs))
+
     def test_instancia_unica_e_stop_antigo(self):
         stop = os.path.join(self.work, "sss-srv-t.stop")
         open(stop, "w").close()
@@ -300,6 +325,17 @@ class TestPassos(_Base):
 
 
 class TestStartupCheck(_Base):
+
+    def test_saida_em_gravacao_vira_falhou(self):
+        # CR-012 (README §8.13): queda durante a gravacao do zip; a pasta fica no disco.
+        self.repo_saida.linhas = {5: {"situacao": "GRAVANDO", "agente_id": "srv-t", "conteudo": b"PK"},
+                                  6: {"situacao": "GRAVANDO", "agente_id": "outro", "conteudo": b"PK"}}
+        with self.assertLogs("sss_scheduler", "WARNING") as logs:
+            self.agente().inicializar()
+        self.assertEqual(self.repo_saida.linhas[5]["situacao"], "FALHOU")
+        self.assertEqual(self.repo_saida.linhas[6]["situacao"], "GRAVANDO", "so as deste agente")
+        self.assertTrue(any("1 saida(s) em gravacao" in x for x in logs.output))
+
 
     def _pasta(self, tid, **estados):
         pasta = executor.preparar_diretorio(self.work, tid)

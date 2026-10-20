@@ -50,7 +50,7 @@ Em DEV sem usuário de execução, as mesmas funções rodam no agente, por `pla
 ## 5. Agente
 
 1. **Spawn (§8.4):** com `saida_dir`, monta `base` e `relativo` com as partes do caminho do log e passa à especificação e ao `SSS_SAIDA_DIR`.
-2. **Fase de saída**, nova, depois do passo 5 da finalização (§8.7) e antes da limpeza. É uma máquina de estados do laço, sem espera:
+2. **Fase de saída** (`modules/fase_saida.py`), máquina de estados do laço, sem espera, em duas etapas. **Ajuste do R3:** o log do ticket só aceita gravação com o ticket `RUNNING`, então o empacotamento acontece depois do grupo encerrado e **antes** do flush final (o ticket segue `RUNNING` e no heartbeat por até 120 s, e a linha `[SSS]` vai para o log local); a gravação no banco acontece depois da finalização, fora do mapa de execuções:
    1. inicia o `empacotar` (helper ou plataforma) com a saída padrão num arquivo `work_dir/ticket_<id>/saida.zip`, e acompanha com `poll()`. O prazo é fixo, de 120 s; ao vencer, o processo é encerrado e a saída fica `FALHOU`;
    2. código 6: remove a pasta e não grava nada;
    3. código 7 ou 8: grava a linha `EXCEDEU` (motivo `ARQUIVOS` ou `BYTES`) e anexa ao log a linha `[SSS] saída não empacotada: excede o limite de <n> arquivos (ou de <n> MiB) (agente <agent_id>)`;

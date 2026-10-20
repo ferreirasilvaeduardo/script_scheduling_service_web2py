@@ -29,6 +29,7 @@ import rbac
 import scheduler_loop as sl
 from repo_oracle.scheduler_fila import RegistroPerdido
 from sss_config import AmbienteSegredo, Segredos
+from _saida_memoria import RepoSaidaMemoria
 
 AGENTE_FALSO = 2 ** 31 - 3
 AMB = "DEV"
@@ -39,7 +40,9 @@ _Agent = collections.namedtuple("_Agent", (
     "exec_work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
     "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "fila_envelhecimento_min", "child_locale",
     "cancel_poll_interval_s", "orchestrator_interval_s", "max_parallel_jobs",
-    "log_dir_min_livre_mb", "script_timeout_s", "env_passthrough"))
+    "log_dir_min_livre_mb", "script_timeout_s", "env_passthrough", "saida_dir", "saida_max_bytes",
+    "saida_max_arquivos"))
+_Agent.__new__.__defaults__ = (None, 20971520, 1000)  # CR-012: sem saida_dir por padrao
 _Log = collections.namedtuple("_Log", "log_dir max_log_size_bytes max_local_log_size_bytes")
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
 _App = collections.namedtuple("_App", "sss_env")
@@ -336,8 +339,11 @@ class _Base(unittest.TestCase):
         segredos = Segredos("SenhaOracle#1", None, {AMB: AmbienteSegredo("app_dev", SENHA_AMB)})
         plat = mudancas.pop("plat", None)
         with mock.patch.object(sl.os, "geteuid", return_value=AGENTE_FALSO):
+            if getattr(self, "repo_saida", None) is None:
+                self.repo_saida = RepoSaidaMemoria(self.banco.tickets)
             self.ag = sl.Agente(cfg=self.cfg(**mudancas), segredos=segredos, plat=plat, conexao=self.conexao,
-                                repo=self.banco, repo_log=self.banco, hostname="host-t", pid=os.getpid())
+                                repo=self.banco, repo_log=self.banco, hostname="host-t", pid=os.getpid(),
+                                repo_saida=self.repo_saida)
             self.ag.inicializar()
         self.ag.preparar_laco(lambda s: self._espera.wait(min(s, 0.02)))
         return self.ag

@@ -5,6 +5,8 @@ R-17, R-23, R-28; CR-008 R-01, R-02, R-07, R-08, R-09, R-11, R-17, R-25, R-26, E
 Laco single-threaded com tres prazos monotonicos e nenhuma espera dentro das operacoes: a unica espera e a
 de entre iteracoes (injetada, no maximo 1 s). Encerramentos pela maquina de estados do executor. NODE_OFFLINE,
 desdobro, fencing completo e DRAIN ficam para o F8.4 (pontos de extensao).
+A pasta de saida do ticket (CR-012, README §8.13) passa pela maquina de fase_saida: empacotar antes do flush
+final e gravar depois da finalizacao, fora do mapa de execucoes.
 
 Python puro (sem web2py): o processo inteiro precisa de uma unica thread antes do primeiro spawn, por causa
 do preexec_fn (README §3.1, C10). Toda primitiva de SO vem de `plataforma`; o banco, do `db_conn` e dos
@@ -20,13 +22,16 @@ import time
 import db_conn
 import env_builder
 import executor
+import fase_saida
 import log_pump
 import params_compiler
+import pastas_log
 import plataforma
 import rbac
 import sss_config
 from repo_oracle.scheduler_fila import AgenteDuplicado, RegistroPerdido, RepoSchedulerFila
 from repo_oracle.scheduler_log import RepoSchedulerLog
+from repo_oracle.scheduler_saida import RepoSchedulerSaida
 
 _log = logging.getLogger("sss_scheduler")
 
@@ -90,13 +95,14 @@ class Agente(object):
 
     def __init__(self, cfg=None, segredos=None, plat=None, conexao=None, repo=None, repo_log=None,
                  relogio=None, relogio_parede=None, hostname=None, pid=None, carregar_config=None,
-                 carregar_segredos=None):
+                 carregar_segredos=None, repo_saida=None):
         self.cfg = cfg
         self.segredos = segredos
         self.plat = plat or plataforma
         self.conexao = conexao
         self.repo = repo
         self.repo_log = repo_log
+        self.repo_saida = repo_saida
         self.relogio = relogio or time.monotonic
         self.relogio_parede = relogio_parede or time.time
         self.hostname = hostname or socket.gethostname()
@@ -218,6 +224,26 @@ class Agente(object):
                 self.log.critical("execucao fora de DEV: %s", falha)
             if falhas:
                 self._falhar(SAIDA_DIRETORIOS, "%d falha(s) na conferencia do helper e do sudoers", len(falhas))
+        self._conferir_saida_dir()
+
+    def _conferir_saida_dir(self):
+        """CR-012 (README §8.12 passo 4): saida_dir fora das pastas do sistema; fora de DEV, a pasta de cada
+        ambiente atendido do usuario de execucao dele, sem escrita de grupo nem de outros."""
+        agente = self.cfg.agent
+        if not agente.saida_dir:
+            return
+        codigo = self.plat.validar_dir_restrito(agente.saida_dir)
+        if codigo:
+            self._falhar(SAIDA_DIRETORIOS, "saida_dir %s recusado: %s", agente.saida_dir, codigo)
+        if self.cfg.app.sss_env == "DEV" and not agente.usuarios_execucao:
+            return
+        pares = [(os.path.join(agente.saida_dir, pastas_log.pasta_ambiente(amb)), self._usuario_execucao(amb))
+                 for amb in agente.ambientes_atendidos if self._usuario_execucao(amb)]
+        falhas = self.plat.validar_pastas_saida(pares)
+        for falha in falhas:
+            self.log.critical("pasta de saida: %s", falha)
+        if falhas:
+            self._falhar(SAIDA_DIRETORIOS, "%d falha(s) nas pastas de saida (CR-012)", len(falhas))
 
     def _passo5_instancia(self):
         work = self.cfg.agent.work_dir
@@ -243,6 +269,8 @@ class Agente(object):
                 self.repo = RepoSchedulerFila.da_config(self.cfg)
             if self.repo_log is None:
                 self.repo_log = RepoSchedulerLog.da_config(self.cfg)
+            if self.repo_saida is None:
+                self.repo_saida = RepoSchedulerSaida.da_config(self.cfg)
             agora_banco = db_conn.agora_banco(conn)
             local = self.relogio_parede()
             divergencia = abs((datetime.datetime.fromtimestamp(local) - agora_banco).total_seconds())
@@ -361,6 +389,12 @@ class Agente(object):
             if tid in self.encerrando or tid in self.preservadas:
                 continue
             self._limpar_pasta(tid, pasta)
+        # CR-012 (README §8.13): saidas que ficaram em gravacao numa queda viram FALHOU; a pasta fica no disco.
+        falhadas = self.repo_saida.falhar_gravando_do_agente(conn, self.agente_id)
+        conn.commit()
+        if falhadas:
+            self.log.warning("%d saida(s) em gravacao marcada(s) FALHOU na subida", falhadas,
+                             extra={"acao": "STARTUP"})
 
     def _reabrir(self, tid, pasta, proc, usuario, log):
         processo = self.plat.reabrir_grupo(proc)
@@ -429,6 +463,9 @@ class Agente(object):
         self.execucoes = {}
         self.bombas = {}
         self.devolucoes_pendentes = set()
+        # CR-012: saidas a gravar depois da finalizacao do ticket {tid: (Saida, Execucao, log)}.
+        self.saidas = {}
+        self._parando = False
         self.rodada = log_pump.Rodada(self.bombas, self.relogio, agente.heartbeat_interval_s / 2.0)
         self._esperar = esperar
         agora = self.relogio()
@@ -521,8 +558,74 @@ class Agente(object):
                 if executor.avancar_encerramento(ex, agora):
                     item.fase = _Item.FINALIZAR
                 continue
+            if item.fase == _Item.FINALIZAR and not self._empacotar(item, agora):
+                continue
             if item.fase == _Item.FINALIZAR and not flush_feito:
                 flush_feito = self._finalizar_execucao(item)
+        self._avancar_saidas(agora)
+
+    # ---------------------------------------------------- saida (CR-012)
+
+    def _empacotar(self, item, agora):
+        """Etapa 1 da fase de saida, antes do flush final. True quando o ticket pode seguir para a finalizacao."""
+        saida = item.saida
+        if saida is None or saida.empacotada:
+            return True
+        if item.motivo in ("OWNERSHIP_LOST", "SHUTDOWN") or self._parando:
+            fase_saida.abandonar(saida, self.plat)
+            return True
+        agente = self.cfg.agent
+        if saida.processo is None:
+            fase_saida.iniciar_empacotar(saida, self.plat, agente.saida_max_bytes, agente.saida_max_arquivos, agora)
+            if not saida.empacotada:
+                return False
+        elif not fase_saida.avancar_empacotar(saida, self.plat, agora):
+            return False
+        linha = fase_saida.linha_log(saida, self.agente_id, agente.saida_max_arquivos, agente.saida_max_bytes)
+        if linha and item.execucao is not None and item.execucao.caminho_log:
+            try:
+                executor.anexar_linha_local(item.execucao, linha)
+            except OSError as exc:  # a linha e informativa; a fase segue
+                item.log.warning("linha [SSS] da saida nao gravada (%s)", exc.__class__.__name__,
+                                 extra={"acao": "SAIDA"})
+        if saida.resultado == fase_saida.EXCEDEU:
+            item.log.warning("saida acima do limite (%s): a pasta fica no disco", saida.motivo, extra={"acao": "SAIDA"})
+        return True
+
+    def _avancar_saidas(self, agora):
+        """Etapa 2, depois da finalizacao: grava a saida sem esperar, refazendo erro de banco a cada
+        cancel_poll_interval_s. Ao terminar, remove a pasta (ZIP ou vazia) e o work_dir do ticket."""
+        if not self.saidas or self._parando:
+            return
+        conn = self.conexao.obter_conexao()
+        if conn is None:
+            return
+        for tid, (saida, ex, log) in sorted(self.saidas.items()):
+            if agora < saida.proxima_tentativa:
+                continue
+            try:
+                desfecho = fase_saida.gravar(saida, conn, self.repo_saida, self.agente_id)
+            except Exception as exc:  # noqa: BLE001 - pendencia refeita no proximo prazo
+                saida.proxima_tentativa = agora + self.cfg.agent.cancel_poll_interval_s
+                if not saida.avisou_pendencia:
+                    saida.avisou_pendencia = True
+                    log.warning("gravacao da saida pendente (%s)", exc.__class__.__name__, extra={"acao": "SAIDA"})
+                self.conexao.notificar_erro(exc)
+                return
+            if desfecho == fase_saida.CONTINUA:
+                continue
+            del self.saidas[tid]
+            if desfecho == fase_saida.POSSE_PERDIDA:
+                log.error("OWNERSHIP_LOST na saida: nada gravado; a pasta fica no disco", extra={"acao": "SAIDA"})
+            else:
+                log.info("saida %s", saida.resultado, extra={"acao": "SAIDA"})
+                if fase_saida.deve_remover_pasta(saida):
+                    try:
+                        fase_saida.remover_pasta(saida, self.plat)
+                    except Exception as exc:  # noqa: BLE001 - fica para o purge (saida_retention_days)
+                        log.warning("pasta de saida nao removida (%s)", exc.__class__.__name__,
+                                    extra={"acao": "SAIDA"})
+            self._limpar(tid, ex.work_dir_ticket, ex)
 
     def _encerrar(self, item, motivo):
         """Pede o encerramento do grupo (SIGTERM, prazo, SIGKILL) sem esperar. motivo None: saida natural."""
@@ -579,6 +682,13 @@ class Agente(object):
             return fez_flush
         if gravou:
             item.log.info("ticket finalizado: %s/%s rc=%s", *item.resultado, extra={"acao": "FINALIZAR"})
+            saida = item.saida
+            if saida is not None and saida.resultado not in (None, fase_saida.ABANDONADA):
+                # CR-012: a gravacao da saida segue fora do mapa de execucoes (nao ocupa vaga de claim).
+                self.execucoes.pop(item.tid, None)
+                self.bombas.pop(item.tid, None)
+                self.saidas[item.tid] = (saida, item.execucao, item.log)
+                return fez_flush
         else:
             item.log.error("OWNERSHIP_LOST na finalizacao: o resultado fica so no log local",
                            extra={"acao": "FINALIZAR"})
@@ -750,6 +860,15 @@ class Agente(object):
                 self.log.warning("DISCO_LOG: %d MB livres em log_dir (minimo %d): sem claim", livre,
                                  agente.log_dir_min_livre_mb, extra={"acao": "CLAIM"})
             return
+        if agente.saida_dir:
+            livre_saida = self.plat.espaco_livre_mb(agente.saida_dir)
+            if livre_saida < agente.log_dir_min_livre_mb:
+                agora = self.relogio()
+                if self._ultimo_aviso_disco is None or agora - self._ultimo_aviso_disco >= INTERVALO_AVISO_DISCO_S:
+                    self._ultimo_aviso_disco = agora
+                    self.log.warning("DISCO_SAIDA: %d MB livres em saida_dir (minimo %d): sem claim", livre_saida,
+                                     agente.log_dir_min_livre_mb, extra={"acao": "CLAIM"})
+                return
         inicio = self.relogio()
         orcamento = agente.heartbeat_interval_s / 2.0
         conn = self._conn()
@@ -889,18 +1008,28 @@ class Agente(object):
                 exc.__class__.__name__, self.agente_id))
         timeout = contexto["script"].get("timeout_seg") or agente.script_timeout_s
         conexao = None
+        saida = None
         try:
+            if agente.saida_dir:
+                # CR-012 (README §8.13): pasta de saida com as partes do log e o mesmo minuto.
+                base, relativo = pastas_log.pasta_saida(agente.saida_dir, ticket["ambiente"], snap["script_nome"],
+                                                        item.started_at, item.tid, snap.get("script_id"))
+                saida = fase_saida.Saida(item.tid, base, relativo, usuario, work_dir_ticket)
             ticket_env = dict(ticket, started_at=item.started_at)
             env = env_builder.construir(self.cfg, self.segredos, ticket_env, contexto["ambiente"], script_real,
                                         work_dir_ticket, dict(os.environ), self.plat.NOME, snapshot=snap,
                                         agendamento=contexto["agendamento"], caminho_log=caminho,
-                                        timeout_seg=timeout, hostname=self.hostname, versao=sss_config.VERSAO_SSS)
+                                        timeout_seg=timeout, hostname=self.hostname, versao=sss_config.VERSAO_SSS,
+                                        pasta_saida=saida.pasta if saida else None)
             conexao = env.get(env_builder.VAR_CONEXAO)
         except Exception as exc:  # noqa: BLE001 - CR-007 R-17: SPAWN_ERROR
             ex = executor.falha_antes_do_spawn(fd, item.tid, exc, rotulo, work_dir_ticket)
             return self._apos_iniciar(item, ex, snap, conexao)
         ex = executor.iniciar(item.tid, argv, fd, env, work_dir_ticket, usuario, agente.exec_work_dir,
-                              dict(self.plat.RLIMITS_PADRAO), rotulo)
+                              dict(self.plat.RLIMITS_PADRAO), rotulo,
+                              saida=(saida.base, saida.relativo) if saida else None)
+        if not ex.spawn_error:
+            item.saida = saida
         item.timeout_s = timeout
         self._apos_iniciar(item, ex, snap, conexao)
 
@@ -948,6 +1077,13 @@ class Agente(object):
         """TERMINATE (README §8.11): encerra todos os grupos, finaliza SHUTDOWN, para o registro e sai 0."""
         self.log.warning("encerramento %s: %d execucao(oes) local(is)", modo, len(self.execucoes),
                          extra={"acao": "PARADA"})
+        # CR-012: a saida em andamento e abandonada (a pasta fica no disco; GRAVANDO vira FALHOU na subida).
+        self._parando = True
+        for tid, (_saida, ex, log) in sorted(getattr(self, "saidas", {}).items()):
+            log.warning("saida abandonada na parada", extra={"acao": "PARADA"})
+            self._limpar(tid, ex.work_dir_ticket, ex)
+        if hasattr(self, "saidas"):
+            self.saidas.clear()
         for item in list(self.execucoes.values()):
             self._encerrar(item, "SHUTDOWN")
         limite = self.relogio() + self.cfg.agent.kill_grace_s + 5
@@ -993,3 +1129,4 @@ class _Item(object):
         self.pid_pendente = False
         self.avisou_pid = False
         self.finalizacao_pendente = False
+        self.saida = None  # CR-012: fase_saida.Saida quando o agente tem saida_dir

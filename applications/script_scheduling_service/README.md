@@ -1711,11 +1711,12 @@ SELECT id, cancel_requested
 * **Timeout:** `timeout = tbsss_scripts.timeout_seg` ou, se nulo, `script_timeout_s`. Ao expirar, o agente inicia o encerramento escalonado do grupo (máquina de estados, §8.9) e, quando ele termina, finaliza com `FAILED`, `TIMEOUT` e `-3`.
 * **Finalização** (processo terminado, detectado por `Popen.poll()`, ou encerramento concluído por timeout, cancelamento, `LOG_LIMIT` ou `SHUTDOWN`):
   1. **encerrar o grupo** do ticket (CR-007, R-02): mesmo que o processo principal tenha saído sozinho, o agente sinaliza o grupo (SIGTERM, prazo, SIGKILL) antes do flush. Havendo processos remanescentes, WARN `NETOS_ENCERRADOS`. `ESRCH` (grupo vazio) é o caso normal;
+  1a. **empacotar a saída** (CR-012, §8.13, etapa 1), só com `saida_dir`: o ticket continua `RUNNING` e no heartbeat por até 120 s; a linha `[SSS]` de excesso ou falha vai para o arquivo de log local e chega ao banco no flush seguinte. Não acontece em `OWNERSHIP_LOST` nem em `SHUTDOWN`;
   2. flush final do log;
   3. gravar `.sss_result` (`status`, `status_motivo`, `return_code`) no `work_dir/ticket_<id>/` (R-01);
   4. `UPDATE ... SET status, status_motivo, return_code, finished_at = SYSDATE, updated_at = SYSDATE, updated_by = :ator WHERE id = :id AND agente_id = :agente_id AND status = 'RUNNING'`, com `:ator = 'SYSTEM:<agent_id>'`. Toda finalização de ticket pelo agente (timeout, `LOG_LIMIT`, `SHUTDOWN`, `ORPHAN_PROCESS`, `SPAWN_ERROR`, `PRECHECK_FAILED`) grava `updated_*` do mesmo jeito (§10, CR-006);
   5. `COMMIT`. Com erro de banco no passo 4 ou 5, o ticket fica em **finalização pendente** (R-03): continua no heartbeat, e o `UPDATE` é tentado de novo a cada `cancel_poll_interval_s` até `rowcount = 1` (concluído) ou `0` (`OWNERSHIP_LOST`; o resultado local fica só no log). `finished_at` é o `SYSDATE` do `UPDATE` bem-sucedido; o instante real do fim fica na linha `[SSS] terminou às <hora local>` do log;
-  6. **fase de saída** (CR-012, §8.13), com o ticket já finalizado: empacotar, gravar o zip no banco e remover a pasta de saída. Não altera o resultado do ticket;
+  6. **gravar a saída** (CR-012, §8.13, etapa 2), com o ticket já finalizado e fora do mapa de execuções (não ocupa vaga de claim): a linha de `tbsss_ticket_saida`, o zip em partes e a remoção da pasta. Não altera o resultado do ticket;
   7. limpeza de `work_dir/ticket_<id>/` e, pelo helper, de `exec_work_dir/<usuário>/ticket_<id>/`. A limpeza acontece em **todo** encerramento (inclusive `OWNERSHIP_LOST` e `FENCED`), e o startup check limpa o que sobrar (R-32).
 
 ### 8.8 Detecção de nó offline (qualquer agente, a cada `orchestrator_interval_s`)
@@ -1891,15 +1892,16 @@ Canal opcional para o script devolver arquivos ao usuário. O zip vai para o ban
 * **Ligado por agente:** `[agent] saida_dir` vazio desliga o recurso naquele agente (sem `SSS_SAIDA_DIR`, sem zip).
 * **Pasta do ticket:** `saida_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, com as partes do caminho do log (§8.4, passo 3). Usa o número do ticket, e não o PID.
 * **Dono:** fora de DEV, `saida_dir/<ambiente>/` é criada na implantação pelo root, com dono o usuário de execução do ambiente e `0700` (`IMPLANTACAO.md`). O helper `run`, como o usuário de execução, cria o resto do caminho nível a nível com `os.mkdir(..., 0o700)`, recusando link ou item que não seja diretório do próprio usuário. Uma falha aqui faz o helper sair com o código 2 ou 4 antes de executar o script, com a causa (`sss-helper: ...`) no log do ticket, como as demais falhas do preparo do `run`. O agente não lê o conteúdo. Em DEV sem usuário de execução, o agente cria tudo.
-* **Fase de saída** (§8.7, passo 6), máquina de estados do laço, sem espera, em todo fim de ticket (sucesso, erro, timeout, cancelamento, `LOG_LIMIT`), depois do grupo encerrado:
+* **Fase de saída**, máquina de estados do laço (`modules/fase_saida.py`), sem espera, em todo fim de ticket (sucesso, erro, timeout, cancelamento, `LOG_LIMIT`), em duas etapas: **empacotar** depois do grupo encerrado e antes do flush final (§8.7, passo 1a: o ticket segue `RUNNING`, e a linha `[SSS]` entra no log) e **gravar** depois da finalização (§8.7, passo 6):
   1. o agente inicia o `empacotar` (helper fora de DEV; `plataforma` em DEV) com a saída padrão no arquivo `work_dir/ticket_<id>/saida.zip` e acompanha com `poll()`. Prazo fixo de 120 s: ao vencer, o processo é encerrado e a saída fica `FALHOU` (`PRAZO`);
   2. o `empacotar` percorre a pasta sem seguir links; só entram arquivos regulares, com o nome relativo à pasta do ticket. Conta os arquivos antes de compactar (`ZIP_DEFLATED`) e interrompe ao passar de `saida_max_bytes`. **Não há zip parcial**;
   3. código 6 (pasta vazia ou inexistente): a pasta é removida e nada é gravado;
-  4. código 7 ou 8 (limite de arquivos ou de bytes): grava a linha `EXCEDEU` (motivo `ARQUIVOS` ou `BYTES`) e anexa ao log `[SSS] saída não empacotada: excede o limite de <n> arquivos (ou de <n> MiB) (agente <agent_id>)`. A pasta fica no disco;
+  4. código 7 ou 8 (limite de arquivos ou de bytes): grava a linha `EXCEDEU` (motivo `ARQUIVOS` ou `BYTES`) e anexa ao log local `[SSS] saida nao empacotada: excede o limite de <n> arquivos (ou de <n> MiB) (agente <agent_id>)`, que o flush final leva ao banco. A pasta fica no disco;
   5. código 0: grava a linha `GRAVANDO` com `EMPTY_BLOB()`, envia o zip em partes de 1 MiB (`DBMS_LOB.WRITEAPPEND`, até 4 partes por volta do laço) e, no fim, grava `DISPONIVEL` com `tamanho_bytes` e `qtd_arquivos`. Depois, remove a pasta (`limpar-saida`);
   6. todo `INSERT` e `UPDATE` exige que o ticket ainda seja deste agente (`agente_id = :agente_id`); `rowcount = 0` abandona a fase com ERROR `OWNERSHIP_LOST`, e a pasta fica no disco;
   7. erro de banco: a fase é refeita a cada `cancel_poll_interval_s`, como a finalização pendente (§8.7). No `SHUTDOWN`, é abandonada: a linha fica `GRAVANDO` e a pasta fica no disco;
-  8. outro código ou falha local: linha `FALHOU` (`ERRO`), pasta no disco.
+  8. outro código, zip ilegível ou falha local: linha `FALHOU` (`ERRO`), com `[SSS] saida nao empacotada: falha (agente <agent_id>)` no log; prazo esgotado: `FALHOU` (`PRAZO`). A pasta fica no disco;
+  9. no `SHUTDOWN` ou em `OWNERSHIP_LOST` antes do flush, o `empacotar` em andamento é encerrado e nada é gravado; a pasta fica no disco.
 * **O resultado do ticket nunca muda** por causa da saída.
 * **Startup check (§8.12, passo 9):** linhas `GRAVANDO` de tickets deste agente viram `FALHOU`.
 * **Retenção no disco:** pastas que ficaram (`EXCEDEU`, `FALHOU`, abandono) são removidas pelo `purge.py` depois de `saida_retention_days` (§11.3).
