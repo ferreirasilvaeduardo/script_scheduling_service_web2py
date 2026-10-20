@@ -91,7 +91,7 @@ Colocar o agente executor de pé: inicialização fail-fast, claim concorrente s
 
 ## Critérios de aceite
 - [ ] Os testes com mock passam.
-- [ ] O teste de concorrência com 2 agentes passa somente com schema descartável validado e limpa as próprias fixtures. Sem os pré-requisitos, fica `NÃO TESTADO`; com DSN e schema inválido, falha antes de DML.
+- [ ] O teste de concorrência com 2 agentes passa com `SSS_TEST_ORACLE=1` (esquema validado por `preparar_schema_descartavel`, modo descartável ou compartilhado, README §2.5) e limpa só as próprias fixtures. Sem a chave, fica `NÃO TESTADO`; com esquema inválido, falha antes de DML.
 - [ ] Nenhum processo órfão após os testes.
 
 ## Verificação
