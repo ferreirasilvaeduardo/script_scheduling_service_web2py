@@ -381,6 +381,40 @@ class TestProtocolo(_Base):
             self.assertEqual(log_pump.flush_final(bombas[t], conn, _RepoFalso(), "srv-01"), log_pump.OK)
             self.assertEqual(clobs[t].texto, "%d" % t * 8000 * 3 * 9)
 
+    def test_rodada_segue_com_arquivo_ausente(self):
+        # Revisao F8.0-F8.2 (A1): um log ilegivel nao para a coleta dos outros tickets.
+        clobs = {1: _ClobFalso(), 2: _ClobFalso()}
+        conn = _ConnFalsa(clobs)
+        bombas = {1: self.bomba(os.path.join(self.raiz, "sumiu.log"), ticket_id=1),
+                  2: self.bomba(self.arquivo(b"ok\n"), ticket_id=2)}
+        rodada = Rodada(bombas, _Relogio(), orcamento_s=100)
+        with self.assertLogs("sss_scheduler", "WARNING") as logs:
+            rodada.executar(conn, _RepoFalso(), "srv-01")
+            rodada.executar(conn, _RepoFalso(), "srv-01")
+        self.assertEqual(len([x for x in logs.output if "ilegivel" in x]), 1, "WARN uma vez")
+        self.assertTrue(bombas[1].erro_leitura)
+        self.assertEqual(log_pump.flush_final(bombas[2], conn, _RepoFalso(), "srv-01"), log_pump.OK)
+        self.assertEqual(clobs[2].texto, "ok\n")
+        self.assertEqual(log_pump.flush_final(bombas[1], conn, _RepoFalso(), "srv-01"), log_pump.OK)
+        self.assertEqual(clobs[1].texto, "")
+
+    def test_flush_final_le_em_blocos_e_para_ao_truncar(self):
+        # Revisao F8.0-F8.2 (M1): arquivo bem maior que o teto nao e lido inteiro para a memoria.
+        caminho = self.arquivo(b"x" * (5 * MB))
+        b = self.bomba(caminho, teto=4096)
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            clob = self.drenar(b)
+        self.assertLessEqual(b.offset_bytes, log_pump.LEITURA_PADRAO, "parou de ler no primeiro bloco")
+        self.assertTrue(clob.texto.endswith(MARCADOR))
+        self.assertLessEqual(len(clob.texto.encode("utf-8")), 4096)
+
+    def test_flush_final_sem_truncar_le_tudo_em_blocos(self):
+        conteudo = b"".join(("linha ação %06d\n" % i).encode("utf-8") for i in range(150000))
+        b = self.bomba(self.arquivo(conteudo))
+        clob = self.drenar(b)
+        self.assertGreater(len(conteudo), 2 * log_pump.LEITURA_PADRAO)
+        self.assertEqual(clob.texto, conteudo.decode("utf-8"))
+
     def test_rodada_com_commit_incerto_preserva_e_retoma(self):
         relogio = _Relogio()
         clobs = {1: _ClobFalso()}

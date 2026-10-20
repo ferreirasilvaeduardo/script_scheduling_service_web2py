@@ -149,7 +149,7 @@ def _identidade(pid):
         with open("/proc/%d/stat" % pid, "r") as f:
             conteudo = f.read()
         return int(conteudo[conteudo.rindex(")") + 2:].split()[19])
-    except (OSError, ValueError, IndexError):
+    except (OSError, ValueError, IndexError):  # processo saiu ou /proc ilegivel: identidade desconhecida
         return None
 
 
@@ -159,7 +159,7 @@ def _sinalizar(pgid, process_start, sinal):
     try:
         os.kill(pgid, 0)
         lider_vivo = True
-    except ProcessLookupError:
+    except ProcessLookupError:  # lider ja saiu; os membros do grupo seguem (R-02)
         lider_vivo = False
     except PermissionError:
         _erro(RECUSADO, "lider do grupo pertence a outro usuario")
@@ -174,7 +174,7 @@ def _term(pgid, process_start):
     sinal = _sinalizar(pgid, process_start, signal.SIGTERM)
     try:
         os.killpg(pgid, sinal)
-    except ProcessLookupError:
+    except ProcessLookupError:  # ESRCH = grupo vazio: sucesso
         return 0
     except PermissionError:
         _erro(RECUSADO, "grupo pertence a outro usuario")
@@ -185,7 +185,7 @@ def _kill(pgid, process_start):
     sinal = _sinalizar(pgid, process_start, signal.SIGKILL)
     try:
         os.killpg(pgid, sinal)
-    except ProcessLookupError:
+    except ProcessLookupError:  # ESRCH = grupo vazio: sucesso
         return 0
     except PermissionError:
         _erro(RECUSADO, "grupo pertence a outro usuario")
@@ -231,7 +231,7 @@ def _encerrar_ticket(pasta_base, ticket_id, kill_grace_s, listar=None):
                     continue
                 if _na_pasta(os.readlink("/proc/%s/cwd" % nome)):
                     pids.append(int(nome))
-            except OSError:
+            except OSError:  # processo saiu durante a varredura
                 continue
         return pids
 
@@ -260,7 +260,7 @@ def _encerrar_ticket(pasta_base, ticket_id, kill_grace_s, listar=None):
         for pid in pids:
             try:
                 os.kill(pid, sinal)
-            except ProcessLookupError:
+            except ProcessLookupError:  # processo ja saiu
                 pass
         if not pids or sinal == signal.SIGKILL:
             break

@@ -157,7 +157,7 @@ def sinalizar_grupo(processo, sinal):
     try:
         os.killpg(processo.pgid, sinal)
         return True
-    except ProcessLookupError:
+    except ProcessLookupError:  # fluxo previsto (AGENTS §6): ESRCH = grupo vazio
         return False
 
 
@@ -171,7 +171,7 @@ def grupo_vivo(processo):
     try:
         os.killpg(processo.pgid, 0)
         return True
-    except ProcessLookupError:
+    except ProcessLookupError:  # fluxo previsto: grupo sem membros
         return False
     except PermissionError:
         # Membros de outro usuario (usuario de execucao): o grupo existe.
@@ -220,7 +220,7 @@ def identidade_processo(pid):
     try:
         with open("/proc/%d/stat" % int(pid), "r") as f:
             return _starttime_linux(f.read())
-    except (OSError, ValueError, IndexError):
+    except (OSError, ValueError, IndexError):  # fluxo previsto: identidade desconhecida
         return None
 
 
@@ -229,9 +229,9 @@ def processo_existe(pid):
     try:
         os.kill(int(pid), 0)
         return True
-    except ProcessLookupError:
+    except ProcessLookupError:  # fluxo previsto: PID inexistente
         return False
-    except PermissionError:
+    except PermissionError:  # EPERM: processo de outro usuario existe
         return True
 
 
@@ -253,7 +253,7 @@ def gravar_estado(caminho, dados):
     except Exception:
         try:
             os.unlink(tmp)
-        except OSError:
+        except OSError:  # temporario ja ausente; a excecao original sobe
             pass
         raise
 
@@ -263,7 +263,7 @@ def ler_estado(caminho):
     try:
         with open(caminho, "r", encoding="utf-8") as f:
             return json.load(f)
-    except FileNotFoundError:
+    except FileNotFoundError:  # fluxo previsto: estado ainda nao gravado
         return None
 
 
@@ -522,7 +522,7 @@ def _pids_na_pasta(pasta):
             if os.stat("/proc/" + nome).st_uid != meu_uid:
                 continue
             cwd = os.readlink("/proc/%s/cwd" % nome)
-        except OSError:
+        except OSError:  # fluxo previsto: processo saiu durante a varredura
             continue
         if _dentro(os.path.normpath(cwd), pasta):
             pids.append(int(nome))
@@ -552,7 +552,7 @@ def encerrar_ticket(pasta_base, ticket_id, usuario_execucao, kill_grace_s):
         for pid in pids:
             try:
                 os.kill(pid, sinal)
-            except ProcessLookupError:
+            except ProcessLookupError:  # fluxo previsto: processo ja saiu
                 pass
         if not pids or sinal == signal.SIGKILL:
             break

@@ -222,6 +222,40 @@ class TestEncerramento(_Base):
         with self.assertRaises(RuntimeError):
             executor.avancar_encerramento(ex, time.monotonic())
 
+    def test_sem_identidade_nao_recebe_sinal_e_termina_a_maquina(self):
+        # Revisao F8.0-F8.2 (A2): ORFAO_SEM_IDENTIDADE nao fica preso em KILL; a pasta e preservada.
+        ex = self.iniciar("sleep 300", ticket_id=40)
+        ex.processo.sem_identidade = True
+        with self.assertLogs("sss_scheduler", "WARNING") as logs:
+            executor.pedir_encerramento(ex, time.monotonic(), grace_s=0)
+        self.assertIn("ORFAO_SEM_IDENTIDADE", logs.output[0])
+        self.assertTrue(ex.sem_identidade)
+        self.assertTrue(executor.avancar_encerramento(ex, time.monotonic() + 100))
+        self.assertTrue(_vivo(ex.pid), "nenhum sinal enviado")
+        with self.assertRaises(RuntimeError):
+            executor.limpar(ex)
+        self.assertTrue(os.path.isdir(ex.work_dir_ticket), "pasta preservada (CR-008, R-26)")
+        ex.processo.sem_identidade = False
+        ex.fase = None
+
+    def test_grupo_que_nao_morre_gera_erro_uma_vez(self):
+        # Revisao F8.0-F8.2 (M3): grupo vivo depois do SIGKILL e de mais um prazo.
+        ex = self.iniciar("sleep 300", ticket_id=41)
+        with mock.patch.object(plataforma, "grupo_vivo", return_value=True), \
+                mock.patch.object(plataforma, "sinalizar_grupo", return_value=True):
+            executor.pedir_encerramento(ex, 0.0, grace_s=2)
+            self.assertFalse(executor.avancar_encerramento(ex, 2.0))
+            self.assertEqual(ex.fase, executor.FASE_KILL)
+            self.assertFalse(executor.avancar_encerramento(ex, 3.0))
+            self.assertFalse(ex.travado)
+            with self.assertLogs("sss_scheduler", "ERROR") as logs:
+                self.assertFalse(executor.avancar_encerramento(ex, 4.0))
+                self.assertFalse(executor.avancar_encerramento(ex, 9.0))
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("GRUPO_NAO_ENCERRA", logs.output[0])
+        self.assertTrue(ex.travado)
+        ex.fase = None
+
     def test_traduzir_retorno(self):
         self.assertEqual(executor.traduzir_retorno(0, "LINUX"), ("SUCCESS", "EXIT_OK", 0))
         self.assertEqual(executor.traduzir_retorno(3, "LINUX"), ("FAILED", "EXIT_ERROR", 3))
@@ -338,6 +372,19 @@ class TestFalhasDeSpawn(_Base):
         if _ler(neto).strip().isdigit():
             self.assertTrue(_esperar(lambda: not _vivo(int(_ler(neto).strip()))))
         self.assertIn("[SSS] falha ao iniciar: OSError (agente srv-01)", _ler(ex.caminho_log))
+
+    def test_falha_antes_do_spawn_fecha_e_renomeia_o_log(self):
+        # Revisao F8.0-F8.2 (M2): falha entre abrir_log e iniciar (ex.: env_builder).
+        fd, parcial = executor.abrir_log(self.logs, "DEV", "Teste Script", STARTED_AT, 42)
+        with self.assertLogs("sss_scheduler", "ERROR"):
+            ex = executor.falha_antes_do_spawn(fd, 42, ValueError("x"), "SSS-srv-01-42")
+        self.assertEqual(ex.erro_spawn, "ValueError")
+        self.assertNotIn(fd, executor._logs_abertos)
+        with self.assertRaises(OSError):
+            os.fstat(fd)
+        self.assertFalse(os.path.exists(parcial))
+        self.assertEqual(_ler(os.path.join(self.dir_log(), "ticket_42_0.log")),
+                         "[SSS] falha ao iniciar: ValueError (agente srv-01)\n")
 
     def test_excecao_que_nao_e_oserror_vira_spawn_error(self):
         erro = UnicodeEncodeError("utf-8", "x", 0, 1, "surrogates not allowed")

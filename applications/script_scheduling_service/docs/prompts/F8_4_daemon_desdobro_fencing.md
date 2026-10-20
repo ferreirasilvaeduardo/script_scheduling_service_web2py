@@ -62,7 +62,7 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
     - ao reconectar, finaliza cada ticket que possuía: **pelo `.sss_result`** quando ele existe (o resultado real, CR-008 R-12), senão `finalizar_fenced` (aceitando `rowcount = 0` nos dois), faz o flush dos logs possíveis e volta ao modo normal só depois de um heartbeat confirmado (com `ultimo_hb_ok` medido no início da transação, CR-008 R-09).
   - **Graceful shutdown completo** (§8.11), acionado por sinal (`plataforma.instalar_parada`) ou pelo arquivo `work_dir/sss-<agent_id>.stop` (removido ao final):
     - `DRAIN`: para o claim e o desdobro e aguarda os filhos até `shutdown_grace_s`, **mantendo** heartbeat, varredura, log pump e fence (CR-007, R-04);
-    - `TERMINATE`: `encerrar` + `FAILED/SHUTDOWN/-6`;
+    - `TERMINATE`: encerramento pela máquina de estados do executor (`pedir_encerramento`/`avancar_encerramento`) + `FAILED/SHUTDOWN/-6`;
     - em ambos: flush dos logs, `agente_parar` (com o filtro de `hostname`/`pid_daemon`), remoção do `.stop`, auditoria `AGENTE_FIM` (`entidade = 'tbsss_agentes'`, `entidade_id` = id do agente; README §4.4), fechamento de recursos e saída com código 0.
 - **Testes:**
   - `applications/script_scheduling_service/scripts/test_scheduler_ha.py` (mock + relógio monotônico injetável). Cobre:
@@ -96,7 +96,7 @@ Completar o agente com a geração de tickets a partir dos agendamentos (desdobr
       - **R-33:** todo `rbac.Motivo` vira um `pausa_motivo` aceito por `ck_tbsss_agd_pausa`;
     - `DRAIN` e `TERMINATE`, acionados por sinal e pelo arquivo `.stop`;
     - as invariantes I1 a I4 (README §8.9) respeitadas pelo config de teste.
-  - Com configuração `DEV` descartável e os três sinalizadores, após `preparar_schema_descartavel('agente')` de `_oracle_test_support` e antes de qualquer DML. Cada cenário cria agentes, regras e tickets com identificadores próprios da execução; registra todos os IDs retornados; em `finally`, para os agentes/processos iniciados, confirma que os filhos terminaram e remove apenas as regras/tickets/agentes criados pela fixture, na ordem compatível com as FKs. Se a limpeza falhar, o teste falha e informa somente os IDs restantes, sem limpeza ampla.
+  - Com `SSS_TEST_ORACLE=1` (README §2.5; owner e prefixo do `instance/config.ini`), após `preparar_schema_descartavel('agente')` de `_oracle_test_support` e antes de qualquer DML. Cada cenário cria agentes, regras e tickets com identificadores próprios da execução; registra todos os IDs retornados; em `finally`, para os agentes/processos iniciados, confirma que os filhos terminaram e remove apenas as regras/tickets/agentes criados pela fixture, na ordem compatível com as FKs. Se a limpeza falhar, o teste falha e informa somente os IDs restantes, sem limpeza ampla.
     - **teste obrigatório de microssegundos (README §7.5):** um desdobro real com `antiga_data`/`nova_data` contendo microssegundos não resulta em `rowcount = 0` (o tipo `DATE` declarado descarta a fração);
     - uma `UNICA` concluída no banco fica com `ativo = 'N'`, `pausa_motivo = 'CONCLUIDO'` e `proxima_execucao` igual à lida (não nula);
     - dois agentes e uma regra `CRON` `* * * * *` por 3 minutos, gerando exatamente 1 ticket por minuto (sem duplicatas, verificado por `COUNT` agrupado por minuto de `created_at`);

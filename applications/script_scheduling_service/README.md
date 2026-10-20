@@ -1595,7 +1595,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
       SET process_id = :pid, process_start = :process_start, arquivo_sha256 = :sha256
     WHERE id = :ticket_id AND agente_id = :agente_id AND status = 'RUNNING'
    ```
-   Se `rowcount = 0`, a posse foi perdida (por exemplo, `NODE_OFFLINE` durante o spawn): `plataforma.encerrar_grupo` e ERROR `OWNERSHIP_LOST`. Se o `UPDATE` falhar por erro de banco, o ticket fica "PID pendente" no mapa local e o `UPDATE` é refeito a cada ciclo rápido até `rowcount` 1 ou 0 (CR-008, R-08); enquanto isso, o processo é acompanhado normalmente (heartbeat, cancelamento, timeout, fencing). O registro do PID é rotina técnica e não grava `updated_*` (§10, CR-006).
+   Se `rowcount = 0`, a posse foi perdida (por exemplo, `NODE_OFFLINE` durante o spawn): encerramento do grupo pela máquina de estados do executor (`pedir_encerramento`/`avancar_encerramento`, sem esperar) e ERROR `OWNERSHIP_LOST`. Se o `UPDATE` falhar por erro de banco, o ticket fica "PID pendente" no mapa local e o `UPDATE` é refeito a cada ciclo rápido até `rowcount` 1 ou 0 (CR-008, R-08); enquanto isso, o processo é acompanhado normalmente (heartbeat, cancelamento, timeout, fencing). O registro do PID é rotina técnica e não grava `updated_*` (§10, CR-006).
 
 ### 8.5 Validação de interpretador e caminho (`path_guard.py`, CR-005)
 
@@ -2719,6 +2719,7 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
 | Processo órfão com identidade desconhecida (Unix sem leitura de identidade) não é encerrado automaticamente (§8.12) | WARN `ORFAO_SEM_IDENTIDADE` para intervenção; o ticket é finalizado `ORPHAN_PROCESS` |
 | Script que escreve mais rápido que a checagem do teto do log local (§8.10) | `log_dir` em partição própria (`IMPLANTACAO.md` §18.1), checagem do teto a cada `cancel_poll_interval_s` e claim suspenso com pouco espaço livre (`log_dir_min_livre_mb`, CR-008 R-25). A cota de disco do usuário de execução **não** protege o `log_dir`: o arquivo de log pertence ao agente, e a cota é cobrada do dono (correção do CR-008; a cota continua protegendo `exec_work_dir`) |
 | Regex gravada antes do CR-007 fora do subconjunto seguro (§6.2) | Continua valendo até a próxima gravação do parâmetro, que exige a correção; a revisão dos parâmetros com regex faz parte da implantação do CR-007 |
+| Banco com charset `AL32UTF8`: o CLOB conta um caractere fora do BMP (emoji) como 2 posições, e a leitura da tela (`VER_LOGS`, offset em caracteres) ainda não foi validada nesse charset (revisão F8.0–F8.2). O GFPR é `WE8ISO8859P15` (o caractere vira `¿` e conta 1) | O agente mede a unidade no banco (`RepoSchedulerLog.unidade_suplementar`) e o pump grava no offset certo; validar a tela num banco `AL32UTF8` antes de produção nesse charset |
 | Host do agente fora do ar sem religar: o startup check não roda e um processo que tenha sobrevivido nele não é encerrado | O ticket vira `NODE_OFFLINE`; a operação recupera o host antes de religá-lo, e o startup check limpa na religação |
 
 ## 15. Diagramas

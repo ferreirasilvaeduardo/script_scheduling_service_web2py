@@ -100,6 +100,7 @@ class Bomba(object):
         self.finalizada = False
         self.parada = False
         self.posse_perdida = False
+        self.erro_leitura = False
 
     # -- leitura -------------------------------------------------------------
 
@@ -122,27 +123,40 @@ class Bomba(object):
         return enviar
 
     def finalizar(self):
-        """Depois do fim do processo: drena o arquivo, fecha decoder e mascarador e libera o sufixo retido
-        (sem marcador, se o teto nao foi excedido). Idempotente. Devolve o texto enfileirado."""
+        """Depois do fim do processo: drena o arquivo em blocos de 1 MiB (parando de ler ao truncar), fecha
+        decoder e mascarador e libera o sufixo retido (sem marcador, se o teto nao foi excedido).
+        Idempotente. Arquivo ilegivel: WARN e envia o que ja foi lido. Devolve o texto enfileirado."""
         if self.finalizada or self.parada:
             return ""
-        partes = []
-        if not self.truncado:
-            while True:
+        enfileirado = []
+        while not self.truncado:
+            try:
                 dados = self._ler(LEITURA_PADRAO)
-                partes.append(self._decoder.decode(dados))
-                if not dados:
-                    break
-        texto = "".join(partes) + self._decoder.decode(b"", final=True)
-        seguro = self._fluxo.alimentar(texto) + self._fluxo.finalizar()
-        enviar, _truncou = self.aplicar_teto_banco(seguro)
+            except OSError as e:
+                self._avisar_leitura(e)
+                break
+            if not dados:
+                break
+            enviar, _truncou = self.aplicar_teto_banco(self._fluxo.alimentar(self._decoder.decode(dados)))
+            enfileirado.append(enviar)
+        resto = self._decoder.decode(b"", final=True)
+        enviar, _truncou = self.aplicar_teto_banco(self._fluxo.alimentar(resto) + self._fluxo.finalizar())
         if not self.truncado:
             enviar += self._retido
             self._bytes_aceitos += _bytes(self._retido)
             self._retido = ""
-        self._fila += enviar
+        enfileirado.append(enviar)
+        texto = "".join(enfileirado)
+        self._fila += texto
         self.finalizada = True
-        return enviar
+        return texto
+
+    def _avisar_leitura(self, erro):
+        """WARN uma vez por bomba quando o arquivo de log some ou fica ilegivel."""
+        if not self.erro_leitura:
+            self.erro_leitura = True
+            _log.warning("log local ilegivel (%s); coleta do ticket suspensa", erro.__class__.__name__,
+                         extra={"ticket": self.ticket_id, "acao": "LOG"})
 
     # -- limites -------------------------------------------------------------
 
@@ -150,7 +164,7 @@ class Bomba(object):
         """Arquivo local acima de max_local_log_size_bytes (LOG_LIMIT, README §8.10)."""
         try:
             return os.path.getsize(self.caminho_log) > self.max_local_log_size_bytes
-        except OSError:
+        except OSError:  # arquivo ausente: nada a medir; a leitura registra o WARN
             return False
 
     def aplicar_teto_banco(self, texto):
@@ -283,7 +297,11 @@ class Rodada(object):
             bomba = self.bombas[ticket_id]
             if bomba.parada or bomba.posse_perdida or bomba.finalizada:
                 continue
-            bomba.coletar()
+            try:
+                bomba.coletar()
+            except OSError as e:
+                # Um arquivo ilegivel nao para a coleta dos outros tickets; o envio do que ja foi lido segue.
+                bomba._avisar_leitura(e)
             ativos.append(ticket_id)
         while True:
             com_pendencia = [t for t in ativos if self.bombas[t].pendente()]

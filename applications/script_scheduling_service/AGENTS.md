@@ -280,6 +280,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **Exceções:**
   * Todo `except` registra o contexto (ticket, agente, ação), o código ORA- quando houver e o stack trace em ERROR.
   * **Exceção (CR-007):** situações esperadas e tratadas (timeout de lock, deadlock, *call timeout*, `rowcount = 0` de corrida perdida, linha pulada por `SKIP LOCKED`) vão em WARN com o código e **sem** stack trace (README §13).
+  * **Exceção (revisão F8.0–F8.2):** `except` de fluxo previsto de SO, em que a condição é o próprio resultado esperado (`ProcessLookupError`/ESRCH de grupo já vazio, `FileNotFoundError`/ENOENT de arquivo de estado ainda inexistente, `OSError` ao ler `/proc/<pid>` de um processo que acabou de sair), pode não registrar nada, desde que tenha um comentário explicando o caso. Qualquer outra falha segue a regra acima.
   * É proibido `except:` ou `except Exception: pass` silenciosos.
 * **Caminhos de log (CR-005):** montados **somente** por `modules/pastas_log.py`, nunca à mão:
   * log da aplicação: `log_dir/interno/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log`, com troca por tamanho e retenção por dias (README §13);
@@ -357,7 +358,7 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 - [ ] Mudança de esquema com `VERSAO_ESQUEMA` incrementada e migração no mesmo pacote (§4.16); privilégio novo na tabela de GRANTs por papel (§4.17).
 - [ ] Daemon: nenhuma espera dentro de operação, fence conferido depois de cada chamada ao banco, encerramento por máquina de estados, estado local antes do banco (§3.2, §6; README §8.1).
 - [ ] Script executado só pelo helper com o usuário de execução fora de DEV; regex de parâmetro só no subconjunto seguro (§3.2, §3.4).
-- [ ] Logs sem segredos/PII; todo `except` com log.
+- [ ] Logs sem segredos/PII; todo `except` com log (salvo o fluxo previsto de SO comentado, §6).
 - [ ] Testes do §7 aplicáveis executados.
 
 ---

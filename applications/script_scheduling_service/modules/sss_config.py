@@ -27,6 +27,9 @@ _LD_PERMITIDA = "LD_LIBRARY_PATH"
 _CHAVES_FIXAS = frozenset(["PATH", "HOME", "TMPDIR", "LANG", "TZ", "PADRAO_VALOR_RUN_CONEXAO_BD"])
 _PREFIXOS_FIXOS = ("LC_", "SSS_", "PYTHON")
 
+# Versao do SSS: unico lugar (tbsss_agentes.versao e SSS_VERSAO do script, CR-010). Trocada a cada release.
+VERSAO_SSS = "1.0.0-dev"
+
 # Atores do sistema que nao podem ser agent_id (README §4.4 e §8.12).
 AGENT_IDS_RESERVADOS = ("init_db", "seed", "purge")
 _RE_USUARIO_EXECUCAO = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")

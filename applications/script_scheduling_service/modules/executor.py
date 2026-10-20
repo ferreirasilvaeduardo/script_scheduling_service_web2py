@@ -28,6 +28,8 @@ GRACE_PADRAO_S = 10
 FASE_TERM = "TERM"
 FASE_KILL = "KILL"
 FASE_FIM = "FIM"
+# Grupo vivo sem identidade legivel (ORFAO_SEM_IDENTIDADE): nunca recebe sinal; a pasta fica (CR-008, R-26).
+FASE_SEM_IDENTIDADE = "SEM_IDENTIDADE"
 
 # Logs abertos por abrir_log e ainda nao entregues a iniciar: fd -> caminho do .log.parcial.
 _logs_abertos = {}
@@ -55,6 +57,13 @@ class Execucao(object):
         self.returncode = None
         self.fase = None
         self.prazo_kill = None
+        self.grace_s = None
+        # GRUPO_NAO_ENCERRA ja registrado (grupo vivo depois do SIGKILL e de mais um prazo).
+        self.travado = False
+
+    @property
+    def sem_identidade(self):
+        return self.fase == FASE_SEM_IDENTIDADE
 
     @property
     def spawn_error(self):
@@ -165,6 +174,13 @@ def _falha_spawn(execucao, log_fd, erro, agente):
     return execucao
 
 
+def falha_antes_do_spawn(log_fd, ticket_id, erro, rotulo, work_dir_ticket=None):
+    """SPAWN_ERROR depois de abrir_log e antes de iniciar (ex.: excecao no env_builder): grava a linha [SSS],
+    fecha o descritor e renomeia o parcial para ticket_<id>_0.log, como em iniciar (README §8.4, passo 3)."""
+    execucao = Execucao(int(ticket_id), work_dir_ticket, None, None, _logs_abertos.pop(log_fd, None))
+    return _falha_spawn(execucao, log_fd, erro, _agente_do_rotulo(rotulo))
+
+
 def iniciar(ticket_id, argv, log_fd, env, work_dir_ticket, usuario_execucao, exec_work_dir, rlimits, rotulo):
     """Inicia o script e devolve a Execucao (README §8.4 passos 3 a 5; CR-008 R-01).
 
@@ -258,19 +274,29 @@ def pedir_encerramento(execucao, agora_monotonico, grace_s=GRACE_PADRAO_S):
     if processo is None or not plataforma.grupo_vivo(processo):
         execucao.fase = FASE_FIM
         return
+    if processo.sem_identidade:
+        # Sem identidade nao ha sinal seguro (PID pode ter sido reciclado): o chamador finaliza ORPHAN_PROCESS
+        # e o limpar preserva a pasta enquanto o grupo existir (CR-008, R-26).
+        _log.warning("ORFAO_SEM_IDENTIDADE: grupo vivo sem identidade, nenhum sinal enviado",
+                     extra={"ticket": execucao.ticket_id, "acao": "ENCERRAR"})
+        execucao.fase = FASE_SEM_IDENTIDADE
+        return
     if verificar(execucao) is not None:
         _log.warning("NETOS_ENCERRADOS: o grupo tinha processos depois da saida do principal",
                      extra={"ticket": execucao.ticket_id, "acao": "ENCERRAR"})
     plataforma.sinalizar_grupo(processo, signal.SIGTERM)
     execucao.fase = FASE_TERM
+    execucao.grace_s = grace_s
     execucao.prazo_kill = agora_monotonico + grace_s
 
 
 def avancar_encerramento(execucao, agora_monotonico):
-    """Avanca o encerramento sem esperar: SIGKILL quando o prazo vence. True quando o grupo acabou."""
+    """Avanca o encerramento sem esperar: SIGKILL quando o prazo vence. True quando o grupo acabou ou
+    quando nao ha mais o que fazer (FASE_SEM_IDENTIDADE). Grupo vivo depois do SIGKILL e de mais um prazo:
+    ERROR GRUPO_NAO_ENCERRA uma vez (travado), e o laco segue tentando a cada chamada."""
     if execucao.fase is None:
         raise RuntimeError("encerramento nao foi pedido")
-    if execucao.fase == FASE_FIM:
+    if execucao.fase in (FASE_FIM, FASE_SEM_IDENTIDADE):
         return True
     verificar(execucao)
     if not plataforma.grupo_vivo(execucao.processo):
@@ -279,6 +305,12 @@ def avancar_encerramento(execucao, agora_monotonico):
     if execucao.fase == FASE_TERM and agora_monotonico >= execucao.prazo_kill:
         plataforma.sinalizar_grupo(execucao.processo, signal.SIGKILL)
         execucao.fase = FASE_KILL
+    elif execucao.fase == FASE_KILL and not execucao.travado \
+            and agora_monotonico >= execucao.prazo_kill + (execucao.grace_s or 0):
+        execucao.travado = True
+        _log.error("GRUPO_NAO_ENCERRA: grupo vivo depois do SIGKILL", extra={"ticket": execucao.ticket_id,
+                                                                         "acao": "ENCERRAR"})
+        plataforma.sinalizar_grupo(execucao.processo, signal.SIGKILL)
     return False
 
 
