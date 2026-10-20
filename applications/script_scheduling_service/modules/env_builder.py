@@ -79,7 +79,8 @@ def _definir(env, nome, valor):
 
 
 def construir(cfg, segredos, ticket, ambiente, script_real, work_dir_ticket, environ_daemon, plataforma_nome,
-              snapshot=None, agendamento=None, caminho_log=None, timeout_seg=None, hostname=None, versao=None):
+              snapshot=None, agendamento=None, caminho_log=None, timeout_seg=None, hostname=None, versao=None,
+              pasta_saida=None):
     """Ambiente exato do filho (README §8.6, tabela POSIX; CR-010). Variavel bloqueada: ValueError.
 
     ticket: dict com id, ambiente e, quando houver, parent_ticket_id, agendamento_id, prioridade, started_at
@@ -87,7 +88,8 @@ def construir(cfg, segredos, ticket, ambiente, script_real, work_dir_ticket, env
     (tbsss_ambientes); script_real: o caminho resolvido pelo path_guard; environ_daemon: o ambiente do daemon
     (so para TZ e env_passthrough); snapshot: o snapshot v4 (script_id, script_nome, interpretador);
     agendamento: dict com nome e tipo_recorrencia da regra que gerou o ticket; caminho_log: o
-    .log.parcial aberto por executor.abrir_log; timeout_seg: o prazo efetivo; hostname e versao: do agente.
+    .log.parcial aberto por executor.abrir_log; timeout_seg: o prazo efetivo; hostname e versao: do agente;
+    pasta_saida: a pasta de saida do ticket (CR-012), so quando o agente tem saida_dir.
     """
     if plataforma_nome not in PLATAFORMAS:
         raise ValueError("Plataforma nao suportada: %s" % plataforma_nome)
@@ -141,6 +143,7 @@ def construir(cfg, segredos, ticket, ambiente, script_real, work_dir_ticket, env
     if caminho_log:
         _definir(env, "SSS_LOG_DIR", os.path.dirname(caminho_log))
         _definir(env, "SSS_LOG_ARQUIVO", os.path.basename(caminho_log))
+    _definir(env, "SSS_SAIDA_DIR", pasta_saida)
     _definir(env, "SSS_AGENTE_HOST", hostname)
     _definir(env, "SSS_VERSAO", versao)
     # Ambiente: descricao, DSN (sem credencial), usuario e a connect string (mascarada em todo log).

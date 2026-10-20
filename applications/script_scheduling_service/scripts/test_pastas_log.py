@@ -56,6 +56,16 @@ class TestPastasLog(unittest.TestCase):
         d = pastas_log.diretorio_log_execucao("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "PRODUCAO", u"Carga Diária", dt)
         self.assertEqual(d, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/producao/carga_diaria/2026/04/05/08/09")
 
+    def test_pasta_saida_com_as_partes_do_log(self):
+        # CR-012 (README §8.13): base por ambiente e relativo no formato que o helper confere.
+        dt = datetime.datetime(2026, 4, 5, 8, 9, 30)
+        base, rel = pastas_log.pasta_saida("/srv/sss/saida", "PRODUCAO", u"Carga Diária", dt, 41)
+        self.assertEqual((base, rel), ("/srv/sss/saida/producao", "carga_diaria/2026/04/05/08/09/ticket_41"))
+        self.assertEqual(os.path.join(base, os.path.dirname(rel)).replace("/srv/sss/saida", "/x"),
+                         pastas_log.diretorio_log_execucao("/x", "PRODUCAO", u"Carga Diária", dt))
+        self.assertEqual(pastas_log.pasta_saida("/s", "HML", u"!!!", dt, 7, script_id=3)[1],
+                         "script_3/2026/04/05/08/09/ticket_7")
+
     def test_ambiente_no_topo_obrigatorio_e_normalizado(self):
         # CR-009: pasta do ambiente antes de qualquer outra; minusculo, sem espaco nem especial.
         dt = datetime.datetime(2026, 4, 5, 8, 9, 30)

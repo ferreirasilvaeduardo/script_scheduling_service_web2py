@@ -88,6 +88,18 @@ def diretorio_log_execucao(log_dir, ambiente, nome_script, started_at, script_id
     return os.path.join(log_dir, amb, pasta, ano, mes, dia, hora, minuto)
 
 
+def pasta_saida(saida_dir, ambiente, nome_script, started_at, ticket_id, script_id=None):
+    """Pasta de saida do ticket (CR-012, README §8.13), com as mesmas partes do log de execucao.
+
+    Devolve (base, relativo): base = saida_dir/<ambiente> (do usuario de execucao fora de DEV) e
+    relativo = <pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>, o formato que o helper confere.
+    """
+    base = os.path.join(saida_dir, pasta_ambiente(ambiente))
+    relativo = "/".join((pasta_script(nome_script, script_id),) + partes_minuto(started_at)
+                        + ("ticket_%d" % int(ticket_id),))
+    return base, relativo
+
+
 def garantir_diretorio(diretorio, avisos=None):
     """Cria diretorio nivel a nivel com 0o750 em cada pasta nova (README §8.4 passo 3 e §13).
 

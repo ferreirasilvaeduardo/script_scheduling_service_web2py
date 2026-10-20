@@ -13,26 +13,48 @@ Subcomandos:
   limpar <pasta_base> <ticket_id>             remove <pasta_base>/ticket_<id>/ sem seguir links
   encerrar-ticket <pasta_base> <ticket_id> <kill_grace_s>
                                               encerra os processos do usuario cujo cwd esta na pasta do ticket
+  empacotar <base> <relativo> <max_bytes> <max_arquivos>
+                                              zip da pasta de saida do ticket na saida padrao (CR-012)
+  limpar-saida <base> <relativo>              remove a pasta de saida do ticket sem seguir links (CR-012)
+  purgar-saida <base> <dias>                  remove as pastas de minuto de saida mais antigas que <dias>
 
 Codigos de saida: 0 sucesso, 2 uso invalido, 3 recusado (identidade divergente), 4 erro do sistema,
-5 nao suportado nesta plataforma. Mensagens so no stderr, sem valores sensiveis.
+5 nao suportado nesta plataforma, 6 pasta de saida vazia ou inexistente, 7 saida acima do limite de
+arquivos, 8 saida acima do limite de bytes (empacotar). Mensagens so no stderr, sem valores sensiveis.
 
 Excecao estreita do AGENTS §3.2: limites de recurso so em _run, sinal a grupo so em _term/_kill, leitura do
 stat do processo so em _identidade, e consulta do cwd dos processos so em _encerrar_ticket.
 """
+import datetime
 import json
 import os
+import re
 import resource
 import signal
 import shutil
+import stat
 import subprocess
 import sys
 import time
+import zipfile
 
 USO_INVALIDO = 2
 RECUSADO = 3
 ERRO_SISTEMA = 4
 NAO_SUPORTADO = 5
+SAIDA_VAZIA = 6
+SAIDA_EXCEDE_ARQUIVOS = 7
+SAIDA_EXCEDE_BYTES = 8
+
+# Pasta de saida (CR-012, README §8.13): base = saida_dir/<ambiente>; relativo = pasta do script (forma
+# segura de pastas_log.pasta_script), AAAA/MM/DD/HH/MI e ticket_<id>.
+_RE_PASTA_SCRIPT = re.compile(r"^[a-z0-9-][a-z0-9._-]{0,199}$")
+_RE_RELATIVO_MINUTO = re.compile(r"^\d{4}/\d{2}/\d{2}/\d{2}/\d{2}$")
+_RE_TICKET = re.compile(r"^ticket_[1-9]\d{0,9}$")
+_BLOCO = 64 * 1024
+_MAX_BYTES_SAIDA = 209715200
+_MAX_ARQUIVOS_SAIDA = 10000
+_MTIME_MIN = 315705600  # 1980-01-03 UTC: o zip nao aceita datas anteriores a 1980 em nenhum fuso
 
 _MAX_ESPECIFICACAO = 1024 * 1024
 _RLIMITS_PERMITIDOS = ("RLIMIT_CORE", "RLIMIT_NOFILE", "RLIMIT_CPU", "RLIMIT_AS", "RLIMIT_FSIZE",
@@ -58,19 +80,64 @@ def _inteiro(texto, nome, minimo=0, maximo=None):
     return valor
 
 
-def _pasta_base(caminho):
-    """exec_work_dir/<usuario>: absoluta, normalizada, sem link e do proprio usuario (CR-008, R-36)."""
+def _pasta_base(caminho, nome="pasta_base"):
+    """exec_work_dir/<usuario> ou saida_dir/<ambiente>: absoluta, normalizada, sem link e do proprio usuario
+    (CR-008, R-36; CR-012)."""
     if not isinstance(caminho, str) or not caminho.startswith("/") or os.path.normpath(caminho) != caminho:
-        _erro(USO_INVALIDO, "pasta_base deve ser absoluta e normalizada")
+        _erro(USO_INVALIDO, "%s deve ser absoluta e normalizada" % nome)
     if os.path.realpath(caminho) != caminho:
-        _erro(USO_INVALIDO, "pasta_base nao pode ter link simbolico")
+        _erro(USO_INVALIDO, "%s nao pode ter link simbolico" % nome)
     try:
         st = os.lstat(caminho)
     except OSError:
-        _erro(USO_INVALIDO, "pasta_base inexistente")
-    if not os.path.isdir(caminho) or st.st_uid != os.geteuid():
-        _erro(USO_INVALIDO, "pasta_base deve ser um diretorio do proprio usuario")
+        _erro(USO_INVALIDO, "%s inexistente" % nome)
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid():
+        _erro(USO_INVALIDO, "%s deve ser um diretorio do proprio usuario" % nome)
     return caminho
+
+
+def _partes_relativo(relativo):
+    """<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id> com exatamente esse formato (CR-012)."""
+    if not isinstance(relativo, str):
+        _erro(USO_INVALIDO, "relativo invalido")
+    partes = relativo.split("/")
+    if len(partes) != 7 or not _RE_PASTA_SCRIPT.match(partes[0]) \
+            or not _RE_RELATIVO_MINUTO.match("/".join(partes[1:6])) or not _RE_TICKET.match(partes[6]):
+        _erro(USO_INVALIDO, "relativo fora do formato <script>/AAAA/MM/DD/HH/MI/ticket_<id>")
+    return partes
+
+
+def _diretorio_proprio(caminho):
+    """True se caminho e diretorio do proprio usuario (sem seguir link); False se nao existe."""
+    try:
+        st = os.lstat(caminho)
+    except FileNotFoundError:
+        return False
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid():
+        _erro(USO_INVALIDO, "item do caminho da saida nao e diretorio do proprio usuario")
+    return True
+
+
+def _pasta_saida(base, relativo, criar=False):
+    """Pasta de saida do ticket, conferida nivel a nivel sem seguir links; criar=True cria com 0700.
+
+    Devolve o caminho, ou None se algum nivel nao existir (e criar=False).
+    """
+    atual = _pasta_base(base, "base")
+    for parte in _partes_relativo(relativo):
+        atual = os.path.join(atual, parte)
+        if _diretorio_proprio(atual):
+            continue
+        if not criar:
+            return None
+        try:
+            os.mkdir(atual, 0o700)
+        except FileExistsError:  # criado por outro caminho entre o lstat e o mkdir: conferido abaixo
+            pass
+        if not _diretorio_proprio(atual):
+            _erro(ERRO_SISTEMA, "pasta de saida nao foi criada")
+        os.chmod(atual, 0o700)
+    return atual
 
 
 def _pasta_ticket(pasta_base, ticket_id):
@@ -111,12 +178,19 @@ def _ler_especificacao(entrada):
                 or not all(isinstance(x, int) and not isinstance(x, bool) for x in valor):
             _erro(USO_INVALIDO, "limite de recurso invalido")
         limites[nome] = (valor[0], valor[1])
-    return ticket_id, argv, env, limites, _pasta_base(spec.get("pasta_base"))
+    saida = spec.get("saida")
+    if saida is not None:
+        if not isinstance(saida, dict) or set(saida) != {"base", "relativo"}:
+            _erro(USO_INVALIDO, "saida invalida")
+        _pasta_base(saida["base"], "base")
+        if _partes_relativo(saida["relativo"])[6] != "ticket_%d" % ticket_id:
+            _erro(USO_INVALIDO, "saida de outro ticket")
+    return ticket_id, argv, env, limites, _pasta_base(spec.get("pasta_base")), saida
 
 
 def _run(entrada=None, executar=os.execve):
     """Cria <pasta_base>/ticket_<id>/ e tmp/ (0700), entra nela, aplica umask e limites e faz execve."""
-    ticket_id, argv, env, limites, pasta_base = _ler_especificacao(entrada or sys.stdin.buffer)
+    ticket_id, argv, env, limites, pasta_base, saida = _ler_especificacao(entrada or sys.stdin.buffer)
     pasta = _pasta_ticket(pasta_base, ticket_id)
     try:
         # O script nunca le a entrada padrao do helper (a especificacao ja foi consumida).
@@ -126,6 +200,9 @@ def _run(entrada=None, executar=os.execve):
         os.makedirs(os.path.join(pasta, "tmp"), mode=0o700, exist_ok=True)
         os.chmod(pasta, 0o700)
         os.chmod(os.path.join(pasta, "tmp"), 0o700)
+        if saida is not None:
+            # CR-012: a pasta de saida do ticket, do usuario de execucao, antes do script (README §8.13).
+            _pasta_saida(saida["base"], saida["relativo"], criar=True)
         os.chdir(pasta)
         os.umask(0o077)
         for nome, par in sorted(limites.items()):
@@ -273,6 +350,150 @@ def _encerrar_ticket(pasta_base, ticket_id, kill_grace_s, listar=None):
 
 
 # -----------------------------------------------------------------------------
+# Pasta de saida (CR-012)
+# -----------------------------------------------------------------------------
+
+class _SaidaContada(object):
+    """Saida padrao sem seek. Ao passar de max_bytes, marca excedeu e descarta o resto: o laco para e o zip
+    fecha normalmente (o zipfile da 3.6 nao fecha com um handle de escrita aberto apos erro)."""
+
+    def __init__(self, destino, max_bytes):
+        self.destino = destino
+        self.max_bytes = max_bytes
+        self.escritos = 0
+        self.excedeu = False
+
+    def write(self, dados):
+        if not self.excedeu:
+            self.escritos += len(dados)
+            if self.escritos > self.max_bytes:
+                self.excedeu = True
+            else:
+                self.destino.write(dados)
+        return len(dados)
+
+    def flush(self):
+        self.destino.flush()
+
+
+def _arquivos_da_saida(pasta, max_arquivos):
+    """[(caminho, nome_relativo)] dos arquivos regulares, sem seguir links; acima do limite: codigo 7."""
+    arquivos = []
+    for raiz, dirs, nomes in os.walk(pasta, followlinks=False):
+        dirs.sort()
+        for nome in sorted(nomes):
+            caminho = os.path.join(raiz, nome)
+            try:
+                if not stat.S_ISREG(os.lstat(caminho).st_mode):
+                    continue  # link, socket, fifo ou dispositivo: fora do zip
+            except OSError:  # o script apagou o arquivo durante a varredura
+                continue
+            arquivos.append((caminho, os.path.relpath(caminho, pasta)))
+            if len(arquivos) > max_arquivos:
+                _erro(SAIDA_EXCEDE_ARQUIVOS, "saida acima do limite de arquivos")
+    return arquivos
+
+
+def _empacotar(base, relativo, max_bytes, max_arquivos, destino=None):
+    """Zip (ZIP_DEFLATED) da pasta de saida na saida padrao. Vazia: 6; arquivos: 7; bytes: 8."""
+    pasta = _pasta_saida(base, relativo)
+    if pasta is None:
+        _erro(SAIDA_VAZIA, "pasta de saida inexistente")
+    arquivos = _arquivos_da_saida(pasta, max_arquivos)
+    if not arquivos:
+        _erro(SAIDA_VAZIA, "pasta de saida vazia")
+    saida = _SaidaContada(destino or sys.stdout.buffer, max_bytes)
+    try:
+        with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as z:
+            for caminho, nome in arquivos:
+                try:
+                    fd = os.open(caminho, os.O_RDONLY | os.O_NOFOLLOW)
+                except OSError:  # apagado ou trocado por link depois da varredura: fica de fora
+                    continue
+                with os.fdopen(fd, "rb") as f:
+                    st = os.fstat(f.fileno())
+                    if not stat.S_ISREG(st.st_mode):
+                        continue
+                    info = zipfile.ZipInfo(nome, time.localtime(max(st.st_mtime, _MTIME_MIN))[:6])
+                    info.compress_type = zipfile.ZIP_DEFLATED
+                    info.external_attr = 0o600 << 16
+                    with z.open(info, "w") as dst:
+                        while not saida.excedeu:
+                            bloco = f.read(_BLOCO)
+                            if not bloco:
+                                break
+                            dst.write(bloco)
+                if saida.excedeu:
+                    break
+        saida.flush()
+    except OSError as e:
+        _erro(ERRO_SISTEMA, "empacotamento falhou (%s)" % e.__class__.__name__)
+    if saida.excedeu:
+        _erro(SAIDA_EXCEDE_BYTES, "saida acima do limite de bytes")
+    return 0
+
+
+def _limpar_saida(base, relativo):
+    """Remove a pasta de saida do ticket sem seguir links simbolicos (as pastas acima ficam para o purge)."""
+    pasta = _pasta_saida(base, relativo)
+    if pasta is None:
+        return 0
+    try:
+        shutil.rmtree(pasta)  # rmtree nao segue links simbolicos internos (remove o proprio link)
+    except OSError as e:
+        _erro(ERRO_SISTEMA, "limpeza da saida falhou (%s)" % e.__class__.__name__)
+    return 0
+
+
+def _purgar_saida(base, dias, hoje=None):
+    """Remove <base>/<script>/AAAA/MM/DD/HH/MI anteriores a hoje - dias (data tirada do caminho) e as pastas
+    que ficarem vazias acima delas. Imprime 'removidas=<n>'. Itens fora do formato sao ignorados."""
+    base = _pasta_base(base, "base")
+    limite = (hoje or datetime.date.today()) - datetime.timedelta(days=dias)
+    removidas = 0
+
+    def _subpastas(pasta, regex):
+        try:
+            nomes = sorted(os.listdir(pasta))
+        except OSError:  # pasta removida durante a varredura
+            return []
+        return [os.path.join(pasta, n) for n in nomes
+                if regex.match(n) and _diretorio_proprio(os.path.join(pasta, n))]
+
+    def _remover_se_vazia(pasta):
+        try:
+            os.rmdir(pasta)
+        except OSError:  # nao vazia (ou ja removida): fica
+            pass
+
+    ano, dois = re.compile(r"^\d{4}$"), re.compile(r"^\d{2}$")
+    for p_scr in _subpastas(base, _RE_PASTA_SCRIPT):
+        for p_ano in _subpastas(p_scr, ano):
+            for p_mes in _subpastas(p_ano, dois):
+                for p_dia in _subpastas(p_mes, dois):
+                    a, m, d = (int(os.path.basename(x)) for x in (p_ano, p_mes, p_dia))
+                    try:
+                        data = datetime.date(a, m, d)
+                    except ValueError:  # data invalida no caminho: fora do formato
+                        continue
+                    if data < limite:
+                        for p_hora in _subpastas(p_dia, dois):
+                            for p_min in _subpastas(p_hora, dois):
+                                try:
+                                    shutil.rmtree(p_min)
+                                    removidas += 1
+                                except OSError as e:
+                                    _erro(ERRO_SISTEMA, "purga da saida falhou (%s)" % e.__class__.__name__)
+                            _remover_se_vazia(p_hora)
+                    _remover_se_vazia(p_dia)
+                _remover_se_vazia(p_mes)
+            _remover_se_vazia(p_ano)
+        _remover_se_vazia(p_scr)
+    sys.stdout.write("removidas=%d\n" % removidas)
+    return 0
+
+
+# -----------------------------------------------------------------------------
 # Entrada
 # -----------------------------------------------------------------------------
 
@@ -288,6 +509,13 @@ def principal(argv):
         return _term(pgid, inicio) if sub == "term" else _kill(pgid, inicio)
     if sub == "limpar" and len(args) == 2:
         return _limpar(args[0], _inteiro(args[1], "ticket_id", minimo=1))
+    if sub == "empacotar" and len(args) == 4:
+        return _empacotar(args[0], args[1], _inteiro(args[2], "max_bytes", minimo=1, maximo=_MAX_BYTES_SAIDA),
+                          _inteiro(args[3], "max_arquivos", minimo=1, maximo=_MAX_ARQUIVOS_SAIDA))
+    if sub == "limpar-saida" and len(args) == 2:
+        return _limpar_saida(args[0], args[1])
+    if sub == "purgar-saida" and len(args) == 2:
+        return _purgar_saida(args[0], _inteiro(args[1], "dias", minimo=1, maximo=3650))
     if sub == "encerrar-ticket" and len(args) == 3:
         return _encerrar_ticket(args[0], _inteiro(args[1], "ticket_id", minimo=1),
                                 _inteiro(args[2], "kill_grace_s", maximo=300))

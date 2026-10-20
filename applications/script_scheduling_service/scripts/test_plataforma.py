@@ -269,6 +269,96 @@ class TestDublesHelper(unittest.TestCase):
                 plataforma.encerrar_ticket("/srv/exec/exec1", 9, "exec1", 10)
 
 
+class TestPastaDeSaida(unittest.TestCase):
+    """CR-012 (README §8.13): fora de DEV pelo sudo + helper (dubles); em DEV a copia do pacote, real."""
+
+    def setUp(self):
+        self.raiz = os.path.realpath(tempfile.mkdtemp(prefix="sss_saida_"))
+        self.addCleanup(shutil.rmtree, self.raiz, True)
+        self.base = os.path.join(self.raiz, "saida", "producao")
+        self.rel = "carga/2026/10/20/14/05/ticket_5"
+
+    def test_argv_do_helper_com_e_sem_usuario(self):
+        self.assertEqual(posix._argv_helper("limpar-saida", ["/b", "r"], "exec1"),
+                         [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "limpar-saida", "/b", "r"])
+        self.assertEqual(posix._argv_helper("purgar-saida", ["/b", 7]),
+                         [sys.executable, "-I", posix.HELPER_PACOTE, "purgar-saida", "/b", "7"])
+        self.assertTrue(os.path.isfile(posix.HELPER_PACOTE), posix.HELPER_PACOTE)
+
+    def test_iniciar_empacotar_com_usuario_nao_espera(self):
+        falso = mock.MagicMock(pid=4400)
+        with mock.patch.object(posix.subprocess, "Popen", return_value=falso) as popen, \
+                mock.patch.object(posix, "identidade_processo", return_value=55):
+            proc = plataforma.iniciar_empacotar(self.base, self.rel, 1048576, 10, 9, usuario_execucao="exec1")
+        self.assertEqual(popen.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "empacotar",
+                                                 self.base, self.rel, "1048576", "10"])
+        kw = popen.call_args[1]
+        self.assertEqual((kw["shell"], kw["start_new_session"], kw["stdout"], kw["env"]),
+                         (False, True, 9, posix._ENV_HELPER))
+        falso.wait.assert_not_called()
+        self.assertEqual((proc.pid, proc.identidade, proc.usuario_execucao), (4400, 55, "exec1"))
+
+    def test_limpar_e_purgar_pelo_helper(self):
+        with mock.patch.object(posix, "_executar_curto", return_value=(0, "removidas=3\n")) as ex:
+            plataforma.limpar_saida(self.base, self.rel, "exec1")
+            self.assertEqual(plataforma.purgar_saida(self.base, 7, "exec1"), 3)
+        self.assertEqual(ex.call_args_list[0][0][0][-3:], ["limpar-saida", self.base, self.rel])
+        self.assertEqual(ex.call_args_list[1][0][0][-3:], ["purgar-saida", self.base, "7"])
+        for retorno in ((2, ""), (0, "sem contagem")):
+            with mock.patch.object(posix, "_executar_curto", return_value=retorno):
+                with self.assertRaises(RuntimeError):
+                    plataforma.purgar_saida(self.base, 7, "exec1")
+        with mock.patch.object(posix, "_executar_curto", return_value=(4, "")):
+            with self.assertRaises(RuntimeError):
+                plataforma.limpar_saida(self.base, self.rel, "exec1")
+
+    def test_dev_cria_empacota_e_limpa_com_o_proprio_usuario(self):
+        import io
+        import zipfile
+        pasta = plataforma.criar_pasta_saida(self.base, self.rel)
+        self.assertEqual(pasta, os.path.join(self.base, self.rel))
+        self.assertEqual(os.stat(pasta).st_mode & 0o777, 0o700)
+        self.assertEqual(plataforma.criar_pasta_saida(self.base, self.rel), pasta, "idempotente")
+        with open(os.path.join(pasta, "r.txt"), "w") as f:
+            f.write("resultado")
+        destino = os.path.join(self.raiz, "saida.zip")
+        fd = os.open(destino, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            proc = plataforma.iniciar_empacotar(self.base, self.rel, 1048576, 10, fd)
+        finally:
+            os.close(fd)
+        self.assertEqual(proc.popen.wait(30), 0)
+        with open(destino, "rb") as f:
+            self.assertEqual(zipfile.ZipFile(io.BytesIO(f.read())).read("r.txt"), b"resultado")
+        plataforma.limpar_saida(self.base, self.rel)
+        self.assertFalse(os.path.exists(pasta))
+        self.assertEqual(plataforma.purgar_saida(self.base, 7), 0)
+
+    def test_dev_recusa_link_no_caminho(self):
+        os.makedirs(self.base)
+        fora = os.path.join(self.raiz, "fora")
+        os.mkdir(fora)
+        os.symlink(fora, os.path.join(self.base, "carga"))
+        with self.assertRaises(RuntimeError):
+            plataforma.criar_pasta_saida(self.base, self.rel)
+        self.assertEqual(os.listdir(fora), [])
+
+    def test_validar_pastas_saida(self):
+        os.makedirs(self.base, 0o700)
+        eu = posix.pwd.getpwuid(os.geteuid()).pw_name
+        self.assertEqual(plataforma.validar_pastas_saida([(self.base, eu)]), [])
+        os.chmod(self.base, 0o770)
+        self.assertEqual(len(plataforma.validar_pastas_saida([(self.base, eu)])), 1)
+        os.chmod(self.base, 0o700)
+        link = os.path.join(self.raiz, "link")
+        os.symlink(self.base, link)
+        falhas = plataforma.validar_pastas_saida([(link, eu), (os.path.join(self.raiz, "nada"), eu),
+                                                  (self.base, "usuario_que_nao_existe_sss")])
+        self.assertEqual(len(falhas), 3, falhas)
+        with mock.patch.object(posix.pwd, "getpwnam", return_value=_Pw("exec1", os.geteuid() + 1)):
+            self.assertEqual(len(plataforma.validar_pastas_saida([(self.base, "exec1")])), 1, "dono diferente")
+
+
 class TestTravaParadaPrivilegio(unittest.TestCase):
 
     def setUp(self):
@@ -544,7 +634,9 @@ class TestInterface(unittest.TestCase):
                      "gravar_estado", "ler_estado", "encerrar_ticket", "espaco_livre_mb", "identidade_processo",
                      "processo_existe", "reabrir_grupo", "travar_instancia", "liberar_instancia",
                      "usuario_privilegiado", "validar_arquivo_restrito", "validar_dir_restrito",
-                     "validar_caminho_script", "caminho_final", "criar_dir_trabalho", "instalar_parada"):
+                     "validar_caminho_script", "caminho_final", "criar_dir_trabalho", "instalar_parada",
+                     "criar_pasta_saida", "iniciar_empacotar", "limpar_saida", "purgar_saida",
+                     "validar_pastas_saida"):
             self.assertTrue(hasattr(plataforma, nome), nome)
         self.assertIn(plataforma.NOME, ("LINUX", "UNIX"))
         self.assertFalse(hasattr(plataforma, "encerrar_grupo"), "encerramento escalonado e do executor (F8.1)")

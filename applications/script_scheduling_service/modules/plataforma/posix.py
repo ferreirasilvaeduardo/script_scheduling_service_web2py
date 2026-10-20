@@ -25,6 +25,14 @@ NOME = "UNIX" if not sys.platform.startswith("linux") else "LINUX"
 
 HELPER = "/opt/sss/bin/sss-helper"
 SUDO = "/usr/bin/sudo"
+# Copia do helper no pacote (bin/sss-helper): em DEV sem usuario de execucao, os subcomandos da saida
+# (CR-012) rodam com o proprio usuario do agente, pela mesma implementacao do servidor.
+HELPER_PACOTE = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                             "..", "..", "..", "..", "bin", "sss-helper"))
+# Codigos do helper empacotar (CR-012, README §8.0 e §8.13).
+SAIDA_VAZIA = 6
+SAIDA_EXCEDE_ARQUIVOS = 7
+SAIDA_EXCEDE_BYTES = 8
 # Ambiente minimo do sudo/helper: nada herdado do agente (AGENTS §3.2, README §8.6).
 _ENV_HELPER = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
 # Politica fixa de limites do filho (README §8.4): sem core dump e com descritores limitados. O executor
@@ -481,6 +489,90 @@ def limpar_dir_script(pasta_base, ticket_id, usuario_execucao):
                                       pasta_base, str(int(ticket_id))])
     if codigo != 0:
         raise RuntimeError("helper limpar falhou (codigo %s)" % codigo)
+
+
+# -----------------------------------------------------------------------------
+# Pasta de saida do ticket (CR-012, README §8.13)
+# -----------------------------------------------------------------------------
+
+def _argv_helper(subcomando, args, usuario_execucao=None):
+    """Fora de DEV: sudo -n -u <usuario> -- helper <sub>; em DEV: a copia do pacote com o proprio usuario."""
+    args = [str(a) for a in args]
+    if usuario_execucao:
+        return [SUDO, "-n", "-u", usuario_execucao, "--", HELPER, subcomando] + args
+    return [sys.executable, "-I", HELPER_PACOTE, subcomando] + args
+
+
+def criar_pasta_saida(base, relativo):
+    """So em DEV sem usuario de execucao: cria base e cada nivel do relativo com 0700, recusando link ou item
+    que nao seja diretorio do proprio usuario (fora de DEV, quem cria e o helper run)."""
+    atual = None
+    for parte in [base] + relativo.split("/"):
+        atual = parte if atual is None else os.path.join(atual, parte)
+        if atual == base:
+            os.makedirs(base, 0o700, exist_ok=True)
+        else:
+            try:
+                os.mkdir(atual, 0o700)
+            except FileExistsError:  # fluxo previsto: nivel ja criado por outro ticket do mesmo minuto
+                pass
+        st = os.lstat(atual)
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid():
+            raise RuntimeError("pasta de saida com item que nao e diretorio do agente")
+    os.chmod(atual, 0o700)
+    return atual
+
+
+def iniciar_empacotar(base, relativo, max_bytes, max_arquivos, destino_fd, usuario_execucao=None):
+    """Inicia o helper empacotar num grupo proprio, com o zip no descritor destino_fd; nao espera.
+
+    O agente acompanha por processo.popen.poll() e, no prazo, encerra com sinalizar_grupo (README §8.13).
+    """
+    argv = _argv_helper("empacotar", [base, relativo, int(max_bytes), int(max_arquivos)], usuario_execucao)
+    p = subprocess.Popen(argv, shell=False, start_new_session=True, close_fds=True, stdin=subprocess.DEVNULL,
+                         stdout=destino_fd, stderr=subprocess.DEVNULL, env=dict(_ENV_HELPER))
+    return Processo(p.pid, identidade_processo(p.pid), popen=p, usuario_execucao=usuario_execucao)
+
+
+def limpar_saida(base, relativo, usuario_execucao=None):
+    """Remove a pasta de saida do ticket pelo helper limpar-saida (sem seguir links)."""
+    codigo, _saida = _executar_curto(_argv_helper("limpar-saida", [base, relativo], usuario_execucao))
+    if codigo != 0:
+        raise RuntimeError("helper limpar-saida falhou (codigo %s)" % codigo)
+
+
+def purgar_saida(base, dias, usuario_execucao=None):
+    """Retencao das pastas de saida (purge.py, README §11.3): devolve quantas pastas de minuto sairam."""
+    codigo, saida = _executar_curto(_argv_helper("purgar-saida", [base, int(dias)], usuario_execucao))
+    if codigo != 0:
+        raise RuntimeError("helper purgar-saida falhou (codigo %s)" % codigo)
+    for linha in saida.splitlines():
+        if linha.startswith("removidas="):
+            return int(linha.split("=", 1)[1])
+    raise RuntimeError("helper purgar-saida sem contagem")
+
+
+def validar_pastas_saida(pastas_usuarios):
+    """Subida fora de DEV (README §8.12, passo 4): cada saida_dir/<ambiente> existe, e diretorio (sem link),
+    pertence ao usuario de execucao do ambiente e nao tem escrita de grupo nem de outros. Devolve as falhas.
+
+    pastas_usuarios: pares (pasta, usuario).
+    """
+    falhas = []
+    for pasta, usuario in pastas_usuarios:
+        try:
+            uid = pwd.getpwnam(usuario).pw_uid
+        except KeyError:
+            falhas.append("usuario de execucao %s nao existe" % usuario)
+            continue
+        try:
+            st = os.lstat(pasta)
+        except OSError:
+            falhas.append("%s nao existe" % pasta)
+            continue
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != uid or st.st_mode & 0o022:
+            falhas.append("%s deve ser diretorio de %s sem escrita de grupo nem de outros" % (pasta, usuario))
+    return falhas
 
 
 # -----------------------------------------------------------------------------

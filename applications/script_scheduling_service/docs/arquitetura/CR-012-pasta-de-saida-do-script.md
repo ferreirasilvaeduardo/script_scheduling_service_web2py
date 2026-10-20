@@ -40,8 +40,8 @@
 
 ## 4. Helper
 
-* **`run`:** a especificação ganha `saida` = `{"base": "<saida_dir>/<ambiente>", "relativo": "<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>"}`. O helper confere que `base` é absoluta, normalizada, sem link e do próprio usuário, e que `relativo` tem exatamente esse formato. Cria cada nível com `os.mkdir(..., 0o700)`, recusando link ou item que não seja diretório do próprio usuário. Falha aqui é `SPAWN_ERROR`.
-* **`empacotar <base> <relativo> <max_bytes> <max_arquivos>`** (novo): percorre a pasta sem seguir links. Só entram arquivos regulares, com nomes relativos à pasta do ticket; links e itens especiais são ignorados. Conta os arquivos antes de compactar e grava o zip (`ZIP_DEFLATED`) na saída padrão, interrompendo ao passar de `max_bytes`. Códigos novos: **6** pasta vazia ou inexistente; **7** limite excedido, com `ARQUIVOS` ou `BYTES` no stderr.
+* **`run`:** a especificação ganha `saida` = `{"base": "<saida_dir>/<ambiente>", "relativo": "<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>"}`. O helper confere que `base` é absoluta, normalizada, sem link e do próprio usuário, e que `relativo` tem exatamente esse formato. Cria cada nível com `os.mkdir(..., 0o700)`, recusando link ou item que não seja diretório do próprio usuário. Falha aqui faz o helper sair com 2 ou 4 antes do script, com a causa no log do ticket.
+* **`empacotar <base> <relativo> <max_bytes> <max_arquivos>`** (novo): percorre a pasta sem seguir links. Só entram arquivos regulares, com nomes relativos à pasta do ticket; links e itens especiais são ignorados. Conta os arquivos antes de compactar e grava o zip (`ZIP_DEFLATED`) na saída padrão, interrompendo ao passar de `max_bytes`. Códigos novos: **6** pasta vazia ou inexistente; **7** acima do limite de arquivos; **8** acima do limite de bytes.
 * **`limpar-saida <base> <relativo>`** (novo): remove a pasta do ticket sem seguir links.
 * **`purgar-saida <base> <dias>`** (novo, usado pelo `purge.py`): remove as pastas de minuto mais antigas que `<dias>`, com a data tirada do caminho, e depois as pastas vazias acima delas.
 
@@ -53,7 +53,7 @@ Em DEV sem usuário de execução, as mesmas funções rodam no agente, por `pla
 2. **Fase de saída**, nova, depois do passo 5 da finalização (§8.7) e antes da limpeza. É uma máquina de estados do laço, sem espera:
    1. inicia o `empacotar` (helper ou plataforma) com a saída padrão num arquivo `work_dir/ticket_<id>/saida.zip`, e acompanha com `poll()`. O prazo é fixo, de 120 s; ao vencer, o processo é encerrado e a saída fica `FALHOU`;
    2. código 6: remove a pasta e não grava nada;
-   3. código 7: grava a linha `EXCEDEU` (motivo `ARQUIVOS` ou `BYTES`) e anexa ao log a linha `[SSS] saída não empacotada: excede o limite de <n> arquivos (ou de <n> MiB) (agente <agent_id>)`;
+   3. código 7 ou 8: grava a linha `EXCEDEU` (motivo `ARQUIVOS` ou `BYTES`) e anexa ao log a linha `[SSS] saída não empacotada: excede o limite de <n> arquivos (ou de <n> MiB) (agente <agent_id>)`;
    4. código 0: grava a linha `GRAVANDO` com `EMPTY_BLOB()` e envia o zip por partes de 1 MiB (`DBMS_LOB.WRITEAPPEND`, até 4 partes por volta do laço). No fim, grava `DISPONIVEL`, com tamanho e quantidade de arquivos, e remove a pasta;
    5. todo `INSERT` ou `UPDATE` exige que o ticket ainda seja deste agente (`agente_id = :agente_id`). `rowcount = 0` abandona a fase (`OWNERSHIP_LOST`) e deixa a pasta no disco;
    6. erro de banco: a fase é tentada de novo a cada `cancel_poll_interval_s`, como a finalização pendente. No `SHUTDOWN`, a fase é abandonada: a linha fica `GRAVANDO` e a pasta fica no disco.

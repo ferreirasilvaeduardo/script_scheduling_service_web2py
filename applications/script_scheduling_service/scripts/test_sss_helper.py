@@ -279,6 +279,149 @@ class TestSssHelper(unittest.TestCase):
         self.assertEqual(codigo, 4)
         self.assertIn("execve falhou", erro)
 
+    # -- pasta de saida (CR-012) ------------------------------------------------
+
+    def _base_saida(self):
+        base = os.path.join(self.raiz, "saida", "producao")
+        os.makedirs(base, 0o700)
+        return base
+
+    def _helper_saida(self, *args):
+        """Executa o helper com a saida padrao capturada; devolve (codigo, stdout, stderr)."""
+        p = subprocess.run([sys.executable, HELPER] + [str(a) for a in args], stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, timeout=60)
+        return p.returncode, p.stdout, p.stderr.decode("utf-8", "replace")
+
+    def test_run_cria_a_pasta_de_saida_do_ticket(self):
+        base = self._base_saida()
+        rel = "carga_diaria/2026/10/20/14/05/ticket_12"
+        script = os.path.join(self.raiz, "grava.py")
+        with open(script, "w") as f:
+            f.write("import os\nopen(os.path.join(os.environ['SSS_SAIDA_DIR'], 'r.txt'), 'w').write('ok')\n")
+        alvo = os.path.join(base, rel)
+        spec = {"ticket_id": 12, "argv": [sys.executable, script], "env": {"SSS_SAIDA_DIR": alvo},
+                "pasta_base": self.base, "saida": {"base": base, "relativo": rel}}
+        codigo, erro = _helper("run", entrada=json.dumps(spec).encode("utf-8"))
+        self.assertEqual(codigo, 0, erro)
+        with open(os.path.join(alvo, "r.txt")) as f:
+            self.assertEqual(f.read(), "ok")
+        atual = base
+        for parte in rel.split("/"):
+            atual = os.path.join(atual, parte)
+            self.assertEqual(os.stat(atual).st_mode & 0o777, 0o700, atual)
+
+    def test_run_recusa_saida_invalida(self):
+        base = self._base_saida()
+        valida = {"ticket_id": 12, "argv": ["/bin/true"], "env": {}, "pasta_base": self.base}
+        for saida in ({"base": base}, {"base": base, "relativo": "x/2026/10/20/14/05/ticket_13"},
+                      {"base": base, "relativo": "../2026/10/20/14/05/ticket_12"},
+                      {"base": base, "relativo": "x/2026/10/20/14/ticket_12"},
+                      {"base": base, "relativo": ".x/2026/10/20/14/05/ticket_12"},
+                      {"base": "relativa", "relativo": "x/2026/10/20/14/05/ticket_12"},
+                      {"base": base + "/../producao", "relativo": "x/2026/10/20/14/05/ticket_12"}):
+            self.assertEqual(_helper("run", entrada=json.dumps(dict(valida, saida=saida)).encode("utf-8"))[0], 2,
+                             saida)
+        # Link no caminho da saida (criado por terceiro): recusado sem seguir o link.
+        fora = os.path.join(self.raiz, "fora")
+        os.mkdir(fora)
+        os.symlink(fora, os.path.join(base, "x"))
+        spec = dict(valida, saida={"base": base, "relativo": "x/2026/10/20/14/05/ticket_12"})
+        self.assertEqual(_helper("run", entrada=json.dumps(spec).encode("utf-8"))[0], 2)
+        self.assertEqual(os.listdir(fora), [])
+
+    def _preencher(self, base, rel, arquivos):
+        pasta = os.path.join(base, rel)
+        os.makedirs(pasta, 0o700)
+        for nome, dados in arquivos.items():
+            caminho = os.path.join(pasta, nome)
+            os.makedirs(os.path.dirname(caminho), exist_ok=True)
+            with open(caminho, "wb") as f:
+                f.write(dados)
+        return pasta
+
+    def test_relativo_de_pastas_log_passa_no_helper(self):
+        import datetime
+        import pastas_log
+        helper = _carregar_helper()
+        dt = datetime.datetime(2026, 1, 2, 3, 4)
+        for nome in (u"Carga Diária", u"-x-", u"a.b_c", u"!!!", u"x" * 60, u"Relatório 2026 (v2)"):
+            _base, rel = pastas_log.pasta_saida("/s", "PRODUCAO", nome, dt, 99, script_id=5)
+            self.assertEqual(len(helper._partes_relativo(rel)), 7, rel)
+
+    def test_empacotar_so_arquivos_regulares_sem_seguir_links(self):
+        import io
+        import zipfile
+        base = self._base_saida()
+        rel = "carga/2026/10/20/14/05/ticket_7"
+        pasta = self._preencher(base, rel, {"a.txt": b"um", "sub/b.csv": b"x;y\n" * 1000})
+        segredo = os.path.join(self.raiz, "segredo.txt")
+        with open(segredo, "w") as f:
+            f.write("nao pode sair")
+        os.symlink(segredo, os.path.join(pasta, "link.txt"))
+        os.symlink(self.raiz, os.path.join(pasta, "link_pasta"))
+        os.mkfifo(os.path.join(pasta, "fifo"))
+        codigo, zip_, erro = self._helper_saida("empacotar", base, rel, 1048576, 10)
+        self.assertEqual(codigo, 0, erro)
+        z = zipfile.ZipFile(io.BytesIO(zip_))
+        self.assertEqual(sorted(z.namelist()), ["a.txt", "sub/b.csv"])
+        self.assertEqual(z.read("sub/b.csv"), b"x;y\n" * 1000)
+        self.assertIsNone(z.testzip())
+
+    def test_empacotar_vazia_e_limites(self):
+        base = self._base_saida()
+        rel = "carga/2026/10/20/14/05/ticket_8"
+        self.assertEqual(self._helper_saida("empacotar", base, rel, 1048576, 10)[0], 6, "inexistente")
+        pasta = self._preencher(base, rel, {})
+        os.makedirs(os.path.join(pasta, "so_pastas"))
+        self.assertEqual(self._helper_saida("empacotar", base, rel, 1048576, 10)[0], 6, "vazia")
+        self._preencher(base, "carga/2026/10/20/14/05/ticket_9", dict(("f%02d" % i, b"x") for i in range(11)))
+        codigo, _zip, erro = self._helper_saida("empacotar", base, "carga/2026/10/20/14/05/ticket_9", 1048576, 10)
+        self.assertEqual(codigo, 7, erro)
+        self.assertIn("arquivos", erro)
+        self.assertEqual(self._helper_saida("empacotar", base, "carga/2026/10/20/14/05/ticket_9", 1048576, 11)[0], 0)
+        self._preencher(base, "carga/2026/10/20/14/05/ticket_10", {"grande.bin": os.urandom(2 * 1024 * 1024)})
+        codigo, _zip, erro = self._helper_saida("empacotar", base, "carga/2026/10/20/14/05/ticket_10", 1048576, 10)
+        self.assertEqual(codigo, 8, erro)
+        self.assertIn("bytes", erro)
+        for args in (("empacotar", base, rel, 0, 10), ("empacotar", base, rel, 1048576, 0),
+                     ("empacotar", base, rel, 209715201, 10), ("empacotar", base, rel, 1, 10001),
+                     ("empacotar", base, "../x/2026/10/20/14/05/ticket_8", 1048576, 10),
+                     ("empacotar", base, rel, 1048576), ("limpar-saida", base), ("purgar-saida", base, "0")):
+            self.assertEqual(self._helper_saida(*args)[0], 2, args)
+
+    def test_limpar_saida_sem_seguir_links(self):
+        base = self._base_saida()
+        rel = "carga/2026/10/20/14/05/ticket_11"
+        pasta = self._preencher(base, rel, {"a.txt": b"1"})
+        fora = os.path.join(self.raiz, "fora2")
+        os.mkdir(fora)
+        with open(os.path.join(fora, "manter.txt"), "w") as f:
+            f.write("x")
+        os.symlink(fora, os.path.join(pasta, "link"))
+        self.assertEqual(self._helper_saida("limpar-saida", base, rel)[0], 0)
+        self.assertFalse(os.path.exists(pasta))
+        self.assertTrue(os.path.exists(os.path.join(fora, "manter.txt")))
+        self.assertTrue(os.path.isdir(os.path.dirname(pasta)), "as pastas acima ficam para o purge")
+        self.assertEqual(self._helper_saida("limpar-saida", base, rel)[0], 0, "ja removida")
+
+    def test_purgar_saida_pela_data_do_caminho(self):
+        helper = _carregar_helper()
+        base = self._base_saida()
+        velha = self._preencher(base, "carga/2026/09/01/10/00/ticket_1", {"a": b"1"})
+        nova = self._preencher(base, "carga/2026/10/19/10/00/ticket_2", {"a": b"1"})
+        estranha = os.path.join(base, "carga", "2026", "09", "lixo")
+        os.makedirs(estranha)
+        import datetime
+        import io
+        saida = io.StringIO()
+        with mock.patch.object(helper.sys, "stdout", saida):
+            self.assertEqual(helper._purgar_saida(base, 7, hoje=datetime.date(2026, 10, 20)), 0)
+        self.assertEqual(saida.getvalue(), "removidas=1\n")
+        self.assertFalse(os.path.exists(os.path.join(base, "carga", "2026", "09", "01")))
+        self.assertTrue(os.path.exists(nova))
+        self.assertTrue(os.path.isdir(estranha), "fora do formato e ignorado")
+        self.assertFalse(os.path.exists(velha))
+
     def test_helper_compila_e_nao_importa_a_aplicacao(self):
         with open(HELPER, encoding="utf-8") as f:
             fonte = f.read()
