@@ -39,6 +39,18 @@ _COLS_USUARIO = (
 )
 
 
+
+def _auditoria_falha(auditoria, tentativas, max_tentativas, bloqueou, auditoria_bloqueio):
+    """Itens de auditoria da falha de login: a contagem vem do valor lido sob a trava (mesma regra do FAKE)."""
+    itens = [] if not auditoria else ([auditoria] if isinstance(auditoria, dict) else list(auditoria))
+    if max_tentativas is not None:
+        itens = [dict(item, detalhe=u"%s (tentativa %d de %d)" % (item.get("detalhe") or u"", tentativas,
+                                                                    int(max_tentativas)))
+                 if isinstance(item, dict) and item.get("acao") == "LOGIN_FALHA" else item for item in itens]
+    if bloqueou and auditoria_bloqueio:
+        itens.append(auditoria_bloqueio)
+    return itens
+
 class RepoUsuariosOracle(BaseRepoOracle, RepoUsuarios):
     """Repositorio de usuarios com SQL Oracle 11gR2."""
 
@@ -377,7 +389,9 @@ class RepoUsuariosOracle(BaseRepoOracle, RepoUsuarios):
                         "FROM " + self._tabela() + " u "
                         "JOIN " + self._tabela_perfis() + " p ON p.id = u.perfil_id "
                         "WHERE u.ativo = 'S' AND p.ativo = 'S' AND p.is_admin = 'S' "
-                        "FOR UPDATE OF u.ativo WAIT 5"
+                        # Trava tambem os perfis: quem espera releia o is_admin alterado por outra
+                        # transacao, e duas operacoes simultaneas nao deixam o sistema sem admin.
+                        "FOR UPDATE OF u.ativo, p.is_admin WAIT 5"
                     )
                     admins_restantes = [r[0] for r in cur.fetchall() if r[0] != int(id)]
                     if not admins_restantes:
@@ -457,8 +471,13 @@ class RepoUsuariosOracle(BaseRepoOracle, RepoUsuarios):
 
             return self.obter_por_id(id, conn=c)
 
-    def registrar_falha_login(self, login, bloqueio_s=None, auditoria=None, conn=None):
-        """Incrementa tentativas_falha (rotina tecnica, sem updated_*)."""
+    def registrar_falha_login(self, login, bloqueio_s=None, auditoria=None, max_tentativas=None,
+                              auditoria_bloqueio=None, conn=None):
+        """Incrementa tentativas_falha e decide o bloqueio sob a trava da linha (contrato em RepoUsuarios).
+
+        Rotina tecnica, sem updated_*. A contagem usada e a lida com a linha travada: tentativas
+        paralelas de login nunca escapam do limite (revisao de 2026-10-20).
+        """
         with self.transacao_escrita(conn=conn) as c:
             cur = c.cursor()
             try:
@@ -470,11 +489,15 @@ class RepoUsuariosOracle(BaseRepoOracle, RepoUsuarios):
                 if not row:
                     raise repo_errors.RepoNaoEncontrado("Usuario com login '%s' nao encontrado" % login)
 
-                uid, tentativas = row[0], row[1]
+                uid, tentativas = row[0], int(row[1] or 0)
                 if tentativas + 1 > 99:
                     raise repo_errors.RepoViolacao("tentativas_falha excede NUMBER(2)", constraint=self.nome_constraint("ck", "usuarios", "tent"))
+                if max_tentativas is not None:
+                    bloquear = tentativas + 1 >= int(max_tentativas)
+                else:
+                    bloquear = bloqueio_s is not None
 
-                if bloqueio_s is not None:
+                if bloquear:
                     cur.execute(
                         "UPDATE " + self._tabela() + " "
                         "SET tentativas_falha = tentativas_falha + 1, "
@@ -489,11 +512,14 @@ class RepoUsuariosOracle(BaseRepoOracle, RepoUsuarios):
                         "WHERE id = :id",
                         {"id": uid},
                     )
-                gravar_auditoria(c, self._tabela_auditoria(), self._seq_auditoria(), auditoria, "tbsss_usuarios", uid)
+                itens = _auditoria_falha(auditoria, tentativas + 1, max_tentativas, bloquear, auditoria_bloqueio)
+                gravar_auditoria(c, self._tabela_auditoria(), self._seq_auditoria(), itens, "tbsss_usuarios", uid)
             finally:
                 cur.close()
 
-            return self.obter_por_id(uid, conn=c)
+            registro = self.obter_por_id(uid, conn=c)
+            registro["bloqueou"] = bool(bloquear)
+            return registro
 
     def registrar_sucesso_login(self, login, novo_hash=None, auditoria=None, conn=None):
         """Zera falhas e grava ultimo_login (rotina tecnica, sem updated_*)."""

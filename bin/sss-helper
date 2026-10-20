@@ -162,7 +162,9 @@ def _sinalizar(pgid, process_start, sinal):
     except ProcessLookupError:  # lider ja saiu; os membros do grupo seguem (R-02)
         lider_vivo = False
     except PermissionError:
-        _erro(RECUSADO, "lider do grupo pertence a outro usuario")
+        # O lider do grupo e o sudo, que roda como root: EPERM e o caso normal. A identidade lida em
+        # /proc/<pid>/stat (legivel por todos) protege contra PID reciclado (revisao de 2026-10-20).
+        lider_vivo = True
     if lider_vivo:
         identidade = _identidade(pgid)
         if identidade is None or identidade != process_start:
@@ -176,8 +178,8 @@ def _term(pgid, process_start):
         os.killpg(pgid, sinal)
     except ProcessLookupError:  # ESRCH = grupo vazio: sucesso
         return 0
-    except PermissionError:
-        _erro(RECUSADO, "grupo pertence a outro usuario")
+    except PermissionError:  # so o sudo (root) resta no grupo: nada do usuario de execucao a sinalizar
+        return 0
     return 0
 
 
@@ -187,8 +189,8 @@ def _kill(pgid, process_start):
         os.killpg(pgid, sinal)
     except ProcessLookupError:  # ESRCH = grupo vazio: sucesso
         return 0
-    except PermissionError:
-        _erro(RECUSADO, "grupo pertence a outro usuario")
+    except PermissionError:  # so o sudo (root) resta no grupo: nada do usuario de execucao a sinalizar
+        return 0
     return 0
 
 

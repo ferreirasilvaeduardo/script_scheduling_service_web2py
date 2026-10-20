@@ -299,7 +299,9 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                         "FROM " + self._tabela_usuarios() + " u "
                         "JOIN " + self._tabela_perfis() + " p ON p.id = u.perfil_id "
                         "WHERE u.ativo = 'S' AND p.ativo = 'S' AND p.is_admin = 'S' "
-                        "FOR UPDATE OF u.ativo WAIT 5"
+                        # Trava tambem os perfis: quem espera releia o is_admin alterado por outra
+                        # transacao, e duas operacoes simultaneas nao deixam o sistema sem admin.
+                        "FOR UPDATE OF u.ativo, p.is_admin WAIT 5"
                     )
                     admins_outros = [r[0] for r in cur.fetchall() if r[1] != int(id)]
                     if not admins_outros:
@@ -504,7 +506,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
             "FROM " + self._tabela_usuarios() + " u "
             "JOIN " + self._tabela_perfis() + " p ON p.id = u.perfil_id "
             "WHERE u.ativo = 'S' AND p.ativo = 'S' AND p.is_admin = 'S' "
-            "FOR UPDATE OF u.ativo WAIT 5"
+            "FOR UPDATE OF u.ativo, p.is_admin WAIT 5"
         )
         with self.contexto_leitura(conn=conn) as c:
             cur = c.cursor()

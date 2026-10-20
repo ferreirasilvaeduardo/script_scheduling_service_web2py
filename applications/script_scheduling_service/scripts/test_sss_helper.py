@@ -143,15 +143,34 @@ class TestSssHelper(unittest.TestCase):
         for sub in ("term", "kill"):
             self.assertEqual(_helper(sub, p.pid, 12345)[0], 0, sub)
 
-    def test_term_kill_recusam_grupo_de_outro_usuario(self):
+    def test_lider_sudo_de_root_com_identidade_certa_recebe_o_sinal(self):
+        # Revisao de 2026-10-20: o lider do grupo e o sudo (root); EPERM na sondagem e o caso normal.
+        helper = _carregar_helper()
+        for sub, sinal in ((helper._term, signal.SIGTERM), (helper._kill, signal.SIGKILL)):
+            with mock.patch.object(helper.os, "kill", side_effect=PermissionError()), \
+                    mock.patch.object(helper, "_identidade", return_value=777), \
+                    mock.patch.object(helper.os, "killpg") as killpg:
+                self.assertEqual(sub(4242, 777), 0)
+            killpg.assert_called_once_with(4242, sinal)
+
+    def test_lider_de_root_com_identidade_divergente_e_recusado(self):
         helper = _carregar_helper()
         for sub in (helper._term, helper._kill):
             with mock.patch.object(helper.os, "kill", side_effect=PermissionError()), \
+                    mock.patch.object(helper, "_identidade", return_value=778), \
                     mock.patch.object(helper.os, "killpg") as killpg:
                 with self.assertRaises(helper.Falha) as ctx:
-                    sub(4242, 1)
+                    sub(4242, 777)
             self.assertEqual(ctx.exception.codigo, 3)
             killpg.assert_not_called()
+
+    def test_grupo_so_com_o_sudo_e_sucesso(self):
+        helper = _carregar_helper()
+        with mock.patch.object(helper.os, "kill", side_effect=PermissionError()), \
+                mock.patch.object(helper, "_identidade", return_value=777), \
+                mock.patch.object(helper.os, "killpg", side_effect=PermissionError()):
+            self.assertEqual(helper._term(4242, 777), 0)
+            self.assertEqual(helper._kill(4242, 777), 0)
 
     def test_identidade_com_parenteses_no_nome(self):
         helper = _carregar_helper()

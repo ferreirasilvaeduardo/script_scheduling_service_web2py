@@ -53,12 +53,17 @@ class RepoUsuarios(object):
         """Instante atual do banco (SYSDATE), sem microssegundos (README §4.2: relogio do banco)."""
         raise NotImplementedError
 
-    def registrar_falha_login(self, login, bloqueio_s=None, auditoria=None):
+    def registrar_falha_login(self, login, bloqueio_s=None, auditoria=None, max_tentativas=None,
+                              auditoria_bloqueio=None):
         """Incrementa tentativas_falha numa unica operacao (README §4.2, §4.4). Rotina tecnica: sem updated_*.
 
-        bloqueio_s: se informado, bloqueado_ate = SYSDATE + bloqueio_s/86400 (relogio do banco).
-        auditoria: dict ou lista de dicts {'ator', 'ip', 'acao', 'detalhe'} gravados na mesma transacao
-        (LOGIN_FALHA e, ao bloquear, LOGIN_BLOQUEIO). Retorna o registro atualizado.
+        Com max_tentativas (uso do login), a decisao de bloquear e tomada aqui, sobre a contagem lida sob a
+        trava da linha: tentativas paralelas nunca escapam do limite (revisao de 2026-10-20). Ao atingir o
+        limite, bloqueado_ate = SYSDATE + bloqueio_s/86400 (relogio do banco) e auditoria_bloqueio
+        (LOGIN_BLOQUEIO) e gravada; o detalhe de auditoria (LOGIN_FALHA) ganha " (tentativa N de M)".
+        Sem max_tentativas: bloqueia se bloqueio_s for informado (testes e rotinas tecnicas).
+        auditoria: dict ou lista de dicts {'ator', 'ip', 'acao', 'detalhe'} na mesma transacao.
+        Retorna o registro atualizado, com a chave 'bloqueou' (bool).
         """
         raise NotImplementedError
 

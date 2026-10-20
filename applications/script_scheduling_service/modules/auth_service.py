@@ -116,16 +116,16 @@ class ServicoAuth(object):
                           extra={"acao": "LOGIN"})
 
     def _falha_senha(self, usuario, ip):
-        tentativas = int(usuario.get("tentativas_falha") or 0) + 1
-        bloquear = tentativas >= self._max
+        # O repositorio conta e decide o bloqueio sob a trava da linha: a contagem lida aqui pode estar
+        # desatualizada quando ha tentativas em paralelo (revisao de 2026-10-20).
+        reg = self._usuarios.registrar_falha_login(
+            usuario["login"], self._bloqueio_s, max_tentativas=self._max,
+            auditoria=_aud(usuario["login"], ip, "LOGIN_FALHA", "Falha de login: senha incorreta"),
+            auditoria_bloqueio=_aud(usuario["login"], ip, "LOGIN_BLOQUEIO",
+                                    "Conta bloqueada por %d falhas consecutivas" % self._max))
+        tentativas = int(reg.get("tentativas_falha") or 0)
+        bloquear = bool(reg.get("bloqueou"))
         motivo = "senha incorreta (tentativa %d de %d)" % (tentativas, self._max)
-        auditorias = [_aud(usuario["login"], ip, "LOGIN_FALHA", "Falha de login: %s" % motivo)]
-        if bloquear:
-            auditorias.append(_aud(usuario["login"], ip, "LOGIN_BLOQUEIO",
-                                   "Conta bloqueada por %d falhas consecutivas" % tentativas))
-        # Falha, bloqueio (SYSDATE + segundos) e auditoria numa unica operacao do repositorio.
-        self._usuarios.registrar_falha_login(usuario["login"], self._bloqueio_s if bloquear else None,
-                                             auditoria=auditorias)
         self._log.warning("login falhou (login=%s ip=%s motivo=%s)", usuario["login"], ip, motivo,
                           extra={"acao": "LOGIN"})
         if not bloquear:

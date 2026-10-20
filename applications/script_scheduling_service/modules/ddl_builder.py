@@ -1522,9 +1522,10 @@ def gerar_script_implantacao_completo(owner, prefixo, lob_storage="SECUREFILE",
                                       papeis_usuarios=None):
     """Gera script SQL autocontido com DDL, DML Seed, Estatisticas e Grants para execucao direta.
 
-    Aplica fallback WHENEVER SQLERROR CONTINUE para que a execucao passe por cima de erros
-    caso objetos ou constraints ja existam no banco de dados. Os GRANTs seguem so os papeis do
-    README §11.1; nada e concedido a PUBLIC (tbsss_usuarios guarda senha_hash).
+    Para no primeiro erro (WHENEVER SQLERROR EXIT FAILURE ROLLBACK, revisao de 2026-10-20): um
+    esquema parcial nunca e anunciado como sucesso. Reaplicar exige o 02_rollback antes (ciclo
+    02 -> 01 -> 99). Os GRANTs seguem so os papeis do README §11.1; nada e concedido a PUBLIC
+    (tbsss_usuarios guarda senha_hash).
     """
     sql_ddl = gerar_script_ddl(owner, prefixo, lob_storage=lob_storage)
     sql_seed = gerar_script_seed(
@@ -1537,8 +1538,10 @@ def gerar_script_implantacao_completo(owner, prefixo, lob_storage="SECUREFILE",
     partes = [
         "SET DEFINE OFF;",
         "SET SERVEROUTPUT ON;",
-        "-- Em caso de erro (ex: objeto ou constraint ja existente), o SQL*Plus continua a execucao (fallback/passa por cima)",
-        "WHENEVER SQLERROR CONTINUE;",
+        "-- Qualquer erro interrompe a implantacao com codigo de saida diferente de zero e sem a mensagem de",
+        "-- sucesso. Para reaplicar sobre um esquema existente, rode antes o 02_rollback_sss.sql.",
+        "WHENEVER SQLERROR EXIT FAILURE ROLLBACK;",
+        "WHENEVER OSERROR EXIT FAILURE ROLLBACK;",
         "",
         sql_ddl,
         "",

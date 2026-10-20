@@ -240,9 +240,12 @@ class ServicoAdminUsuarios(object):
             return atual["id"], erros
         if atual["id"] == ctx.get("usuario_id") and ctx.get("is_admin") is True and perfil["is_admin"] != "S":
             return atual["id"], {CAMPO_GERAL: MSG_AUTO_PERFIL}
+        # Trocar o proprio perfil, mesmo por um nao administrativo, mudaria as proprias permissoes: so
+        # administrador (CR-008 E1, revisao de 2026-10-20).
+        troca_propria = atual["id"] == ctx.get("usuario_id") and perfil_id != atual["perfil_id"]
         try:
-            self._exigir_admin(ctx, perfil["is_admin"] == "S" or self._perfil_admin(atual["perfil_id"]),
-                               "CAD_ALTERAR")
+            self._exigir_admin(ctx, perfil["is_admin"] == "S" or self._perfil_admin(atual["perfil_id"])
+                               or troca_propria, "CAD_ALTERAR")
         except OperacaoNegada as exc:
             return atual["id"], {CAMPO_GERAL: exc.mensagem}
         if admin_crud.texto(dados.get("versao"), 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):

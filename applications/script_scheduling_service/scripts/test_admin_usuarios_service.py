@@ -144,6 +144,21 @@ class TestEdicaoEUltimoAdmin(_Base):
         self.assertEqual((u["login"], u["nome"]), ("op.prod", "Operador Prod Novo"))
         self.assertIn("nome: Operador Producao", self._auditorias("CAD_ALTERAR")[0]["detalhe"])
 
+    def test_nao_admin_nao_troca_o_proprio_perfil(self):
+        # Revisao de 2026-10-20 (CR-008 E1): CAD_USUARIOS sem admin nao muda as proprias permissoes.
+        gestor = dict(self.ctx["op.prod"], funcionalidades=frozenset({"CAD_USUARIOS"}))
+        f = self.svc.formulario(gestor, str(U_OPPROD))
+        _uid, erros = self.svc.salvar(gestor, IP, str(U_OPPROD),
+                                      {"nome": f["nome"], "perfil_id": str(P_CONSULTA), "versao": f["versao"]})
+        self.assertEqual(erros, {usr_mod.CAMPO_GERAL: usr_mod.MSG_SO_ADMIN})
+        self.assertEqual(self.usuarios.obter_por_id(U_OPPROD)["perfil_id"], P_OPPROD)
+        # O proprio nome, sem trocar de perfil, continua permitido.
+        _uid, erros = self.svc.salvar(gestor, IP, str(U_OPPROD),
+                                      {"nome": "Operador Producao", "perfil_id": str(P_OPPROD), "versao": f["versao"]})
+        self.assertEqual(erros, {})
+        # O administrador continua trocando o perfil de outros usuarios.
+        self.assertEqual(self._editar(U_BLOQUEADO, perfil_id=str(P_CONSULTA))[1], {})
+
     def test_troca_de_perfil_do_ultimo_admin_negada(self):
         # Outro administrador nao pode tirar o unico admin do perfil admin: novo admin cria o cenario.
         novo, _ = self._incluir(login="admin2", perfil_id=str(P_ADMIN))

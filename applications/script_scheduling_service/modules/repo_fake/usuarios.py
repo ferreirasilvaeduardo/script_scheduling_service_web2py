@@ -11,6 +11,18 @@ from repo_usuarios import RepoUsuarios
 _RE_LOGIN = re.compile(r"^[a-z0-9._-]{3,30}$")
 
 
+
+def _auditoria_falha(auditoria, tentativas, max_tentativas, bloqueou, auditoria_bloqueio):
+    """Itens de auditoria da falha de login: a contagem vem do valor lido sob o lock (mesma regra do Oracle)."""
+    itens = [] if not auditoria else ([auditoria] if isinstance(auditoria, dict) else list(auditoria))
+    if max_tentativas is not None:
+        itens = [dict(item, detalhe=u"%s (tentativa %d de %d)" % (item.get("detalhe") or u"", tentativas,
+                                                                    int(max_tentativas)))
+                 if isinstance(item, dict) and item.get("acao") == "LOGIN_FALHA" else item for item in itens]
+    if bloqueou and auditoria_bloqueio:
+        itens.append(auditoria_bloqueio)
+    return itens
+
 class RepoUsuariosFake(RepoUsuarios):
     """Implementacao em memoria com semantica Oracle para usuarios."""
 
@@ -216,18 +228,23 @@ class RepoUsuariosFake(RepoUsuarios):
                 return u
         raise RepoNaoEncontrado("Usuario com login '%s' nao encontrado" % login)
 
-    def registrar_falha_login(self, login, bloqueio_s=None, auditoria=None):
-        """Incrementa as falhas e, se pedido, bloqueia pelo relogio do banco; auditoria na mesma operacao."""
+    def registrar_falha_login(self, login, bloqueio_s=None, auditoria=None, max_tentativas=None,
+                              auditoria_bloqueio=None):
+        """Incrementa as falhas e decide o bloqueio sob o lock (contrato em RepoUsuarios); auditoria junto."""
         with self._store.lock_usuarios:
             u = self._por_login(login)
             tentativas = int(u.get("tentativas_falha", 0)) + 1
             if tentativas > 99:
                 raise RepoViolacao("tentativas_falha excede NUMBER(2)", constraint="ck_tbsss_usr_tent")
+            bloquear = (tentativas >= int(max_tentativas)) if max_tentativas is not None else bloqueio_s is not None
             u["tentativas_falha"] = tentativas
-            if bloqueio_s is not None:
+            if bloquear:
                 u["bloqueado_ate"] = self._store.agora() + datetime.timedelta(seconds=int(bloqueio_s))
-            self._auditar(auditoria, u["id"])
-            return copy.deepcopy(u)
+            self._auditar(_auditoria_falha(auditoria, tentativas, max_tentativas, bloquear, auditoria_bloqueio),
+                          u["id"])
+            registro = copy.deepcopy(u)
+            registro["bloqueou"] = bool(bloquear)
+            return registro
 
     def registrar_sucesso_login(self, login, novo_hash=None, auditoria=None):
         """Zera falhas, grava ultimo_login (SYSDATE) e o rehash, com a auditoria, numa operacao."""

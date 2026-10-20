@@ -7,6 +7,7 @@ import hashlib
 import logging
 import os
 import secrets
+import threading
 import unittest
 from unittest import mock
 
@@ -81,6 +82,41 @@ class TestAuthService(unittest.TestCase):
         for _ in range(vezes):
             resultado = self.servico.autenticar(login, "senha-errada-123", "10.0.0.1")
         return resultado
+
+    def test_rajada_paralela_nao_escapa_do_bloqueio(self):
+        # Revisao de 2026-10-20: 10 tentativas leem o usuario antes de qualquer gravacao; o repositorio
+        # decide o bloqueio sob a trava, e a conta fica bloqueada com a contagem certa.
+        barreira = threading.Barrier(10)
+        original = self.usuarios.obter_por_login
+
+        def _lento(login):
+            usuario = original(login)
+            barreira.wait(5)
+            return usuario
+
+        respostas = []
+        with mock.patch.object(self.usuarios, "obter_por_login", side_effect=_lento):
+            threads = [threading.Thread(target=lambda: respostas.append(
+                self.servico.autenticar("admin", "senha-errada-123", "10.0.0.1")[1])) for _ in range(10)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(10)
+        usuario = original("admin")
+        self.assertEqual(len(respostas), 10)
+        self.assertIsNotNone(usuario["bloqueado_ate"], "a rajada nao pode escapar do bloqueio")
+        self.assertEqual(usuario["tentativas_falha"], 10)
+        self.assertEqual(self._acoes("admin").count("LOGIN_BLOQUEIO"), 6, "uma por falha a partir do limite")
+        self.assertIn(self.servico.msg_bloqueio, respostas)
+        _ctx, msg = self.servico.autenticar("admin", self.senha, "10.0.0.1")
+        self.assertEqual(msg, self.servico.msg_bloqueio, "senha certa nao entra durante o bloqueio")
+
+    def test_detalhe_da_falha_com_a_contagem_do_repositorio(self):
+        self._errar("admin", 2)
+        itens = self.auditoria.listar({"ator": "admin"}, pagina=1, tamanho=100)["itens"]
+        detalhes = sorted(a["detalhe"] for a in itens if a["acao"] == "LOGIN_FALHA" and a["id"] > self.aud_base)
+        self.assertEqual(detalhes, ["Falha de login: senha incorreta (tentativa 1 de 5)",
+                                    "Falha de login: senha incorreta (tentativa 2 de 5)"])
 
     def test_sucesso(self):
         ctx, msg = self.servico.autenticar("admin", self.senha, "10.0.0.1")

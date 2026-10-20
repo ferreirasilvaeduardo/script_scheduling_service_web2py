@@ -1,7 +1,9 @@
 SET DEFINE OFF;
 SET SERVEROUTPUT ON;
--- Em caso de erro (ex: objeto ou constraint ja existente), o SQL*Plus continua a execucao (fallback/passa por cima)
-WHENEVER SQLERROR CONTINUE;
+-- Qualquer erro interrompe a implantacao com codigo de saida diferente de zero e sem a mensagem de
+-- sucesso. Para reaplicar sobre um esquema existente, rode antes o 02_rollback_sss.sql.
+WHENEVER SQLERROR EXIT FAILURE ROLLBACK;
+WHENEVER OSERROR EXIT FAILURE ROLLBACK;
 
 -- ==============================================================================
 -- Script Scheduling Service (SSS) - DDL Oracle 11gR2

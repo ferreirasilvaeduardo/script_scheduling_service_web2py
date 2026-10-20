@@ -447,6 +447,7 @@ password = ...
   * **Autoproteção:** pela administração, o usuário logado não pode:
     * desativar a si mesmo;
     * trocar o próprio perfil administrativo por um não administrativo;
+    * sem ser administrador, trocar o próprio perfil por qualquer outro (mudaria as próprias permissões; CR-008 E1, revisão de 2026-10-20). A recusa usa a mensagem "Só um administrador pode … mudar o seu próprio perfil";
     * redefinir a própria senha (para isso existe "Minha senha", que exige a senha atual).
   * **Senhas não aparecem em lugar nenhum:** campos `type="password"`, nunca reapresentados. A listagem e o formulário recebem os registros sem `senha_hash`. Os controllers retiram as senhas de `request.vars` logo após a leitura, porque o ticket de erro do web2py grava as variáveis da requisição.
 * **IP de origem:** usa `request.env.remote_addr`. O `X-Forwarded-For` só é aceito se o `remote_addr` constar em `trusted_proxies`. Nesse caso, a lista é lida da direita para a esquerda, e o IP de origem é o primeiro endereço que não é um proxy confiável.

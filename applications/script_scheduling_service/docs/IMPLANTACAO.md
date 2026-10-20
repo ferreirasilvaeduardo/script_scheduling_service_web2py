@@ -633,6 +633,7 @@ sssagente ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 ```
 
 * `sssagente` é a conta do agente; nenhuma outra regra de `sudo` é concedida a ela.
+* O agente inicia o `sudo` num grupo de processos próprio, sem terminal; o líder do grupo é o próprio `sudo` (root), e o script fica no mesmo grupo. O helper `term`/`kill` confere a identidade desse líder e sinaliza o grupo como usuário de execução, atingindo só os processos dele. Não use `Defaults use_pty` para essa regra: sem terminal ele não tem efeito, mas com um terminal o script iria para outro grupo e não receberia os sinais.
 * O agente confere tudo na subida (`sudo -n -l`, dono e modo do helper, usuários e pastas; README §8.0) e recusa subir com CRITICAL se algo faltar.
 * **Cota e limites por usuário de execução:** cota de disco na partição de `exec_work_dir` e `nproc`/`nofile` em `/etc/security/limits.d/`, para que um script não esgote o servidor.
 * **Disco dos logs (CR-008, R-25):** a cota do usuário de execução **não** protege o `log_dir`: o arquivo de log de cada ticket pertence à conta do agente, e o script só escreve no descritor herdado. Por isso, `log_dir` fica numa **partição própria** (ou num volume lógico próprio), separada de `/`, `work_dir` e `exec_work_dir`, dimensionada para `local_log_retention_days` de logs. O agente para de fazer claim com menos de `[agent] log_dir_min_livre_mb` livres (padrão 1.024 MB, WARN `DISCO_LOG`, README §8.2); o monitoramento corporativo alerta antes disso (por exemplo, 80% de uso).
