@@ -20,6 +20,7 @@ agent_id = srv-linux-prod-01
 ambientes_atendidos = PRODUCAO,HOMOLOGACAO
 work_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work
 script_owner_uids = 0             ; UIDs donos dos scripts (README §8.5); recomendado um UID dedicado, sem o 0
+interpretadores = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh ; executavel local de cada interpretador logico (README §8.5); o agente exige na subida (F8.3)
 usuarios_execucao =               ; AMBIENTE=usuario do SO por ambiente (README §8.0); obrigatório fora de DEV, ex.: PRODUCAO=sssprd,HOMOLOGACAO=ssshml
 exec_work_dir =                   ; pasta base dos diretórios de trabalho dos scripts (obrigatória fora de DEV), ex.: /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec
 max_parallel_jobs = 4

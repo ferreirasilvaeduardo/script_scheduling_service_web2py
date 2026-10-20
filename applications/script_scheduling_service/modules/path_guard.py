@@ -9,6 +9,8 @@ import errno
 import os
 import pwd
 
+import plataforma
+
 # Interpretadores logicos (CR-001, D1/D2; CR-005: somente POSIX): o catalogo guarda a chave; cada agente
 # a mapeia para o executavel local ([agent] interpretadores).
 ALLOWLIST = ('PYTHON3', 'BASH', 'SH')
@@ -19,8 +21,7 @@ ARGS_FIXOS = {
     'SH': (),
 }
 # Pastas do sistema onde nenhum script pode ficar (README §8.5, CR-005 D3).
-PASTAS_DO_SISTEMA = ('/bin', '/sbin', '/usr', '/lib', '/lib32', '/lib64', '/libx32',
-                     '/etc', '/boot', '/proc', '/sys', '/dev', '/root')
+PASTAS_DO_SISTEMA = plataforma.PASTAS_DO_SISTEMA
 # Tamanho maximo de path_file (coluna VARCHAR2(500 CHAR)).
 TAMANHO_MAXIMO = 500
 
@@ -82,8 +83,8 @@ def _dentro(caminho, pasta):
 
 def checar_pastas_proibidas(path_file, dirs_sss=()):
     """Recusa pastas do sistema e log_dir/work_dir, no caminho digitado e no resolvido (symlink)."""
-    sss = [os.path.realpath(d) for d in dirs_sss if d]
-    for alvo in (path_file, os.path.realpath(path_file)):
+    sss = [plataforma.caminho_final(d) for d in dirs_sss if d]
+    for alvo in (path_file, plataforma.caminho_final(path_file)):
         if any(_dentro(alvo, d) for d in PASTAS_DO_SISTEMA):
             raise PathGuardErro(Codigo.PASTA_DO_SISTEMA)
         if any(_dentro(alvo, d) for d in sss):
@@ -111,37 +112,11 @@ def _stat(caminho, lstat=False):
         raise PathGuardErro(Codigo.NAO_ENCONTRADO)
 
 
-def _gravavel_pelo_agente(caminho, st, uid_agente):
-    if uid_agente is None:
-        return os.access(caminho, os.W_OK)
-    # Escrita de grupo/outros ja foi rejeitada antes; resta dono ou root.
-    return uid_agente == 0 or (st.st_uid == uid_agente and bool(st.st_mode & 0o200))
-
-
-def _checar_dono_e_modo(caminho, donos, uid_agente, uids_proibidos=()):
-    st = _stat(caminho)
-    if st.st_uid not in donos:
-        raise PathGuardErro(Codigo.DONO_INVALIDO)
-    if st.st_mode & 0o022:
-        raise PathGuardErro(Codigo.GRAVAVEL_GRUPO_OUTROS)
-    # CR-007, R-15: o dono pode mudar o modo a qualquer momento, entao pertencer ao agente ja e proibido.
-    agente = os.geteuid() if uid_agente is None else uid_agente
-    if st.st_uid == agente or _gravavel_pelo_agente(caminho, st, uid_agente):
-        raise PathGuardErro(Codigo.GRAVAVEL_PELO_AGENTE)
-    if st.st_uid in uids_proibidos:
-        raise PathGuardErro(Codigo.GRAVAVEL_PELO_EXECUTOR)
-
-
 def _checar_cadeia(real, donos, uid_agente, uids_proibidos, parar_em):
-    donos_dir = donos + ((0,) if 0 not in donos else ())
-    _checar_dono_e_modo(real, donos, uid_agente, uids_proibidos)
-    limite = os.path.realpath(parar_em)
-    atual = os.path.dirname(real)
-    while True:
-        _checar_dono_e_modo(atual, donos_dir, uid_agente, uids_proibidos)
-        if atual == limite or atual == '/':
-            break
-        atual = os.path.dirname(atual)
+    """Cadeia de dono e escrita ate '/' pela camada de plataforma (README §8.0); falha vira PathGuardErro."""
+    codigo = plataforma.checar_cadeia(real, donos, uid_agente, uids_proibidos, parar_em)
+    if codigo:
+        raise PathGuardErro(codigo)
 
 
 def resolver(path_file, owner_uids, uid_agente=None, dirs_sss=(), parar_em='/', uids_proibidos=()):
@@ -156,15 +131,11 @@ def resolver(path_file, owner_uids, uid_agente=None, dirs_sss=(), parar_em='/', 
     """
     validar_cadastro(path_file)
     checar_pastas_proibidas(path_file, dirs_sss)
-    real = os.path.realpath(path_file)
-    if real != path_file:
-        raise PathGuardErro(Codigo.CAMINHO_COM_LINK)
-    st = _stat(real, lstat=True)
-    if not os.path.isfile(real) or os.path.islink(real):
-        raise PathGuardErro(Codigo.NAO_E_ARQUIVO)
-    del st
-    _checar_cadeia(real, tuple(owner_uids), uid_agente, tuple(uids_proibidos), parar_em)
-    return real
+    codigo = plataforma.validar_caminho_script(path_file, tuple(owner_uids), tuple(uids_proibidos),
+                                               uid_agente=uid_agente, parar_em=parar_em)
+    if codigo:
+        raise PathGuardErro(codigo)
+    return plataforma.caminho_final(path_file)
 
 
 def validar_executavel(caminho, owner_uids, uid_agente=None, uids_proibidos=(), dirs_sss=(), parar_em='/'):
@@ -177,11 +148,11 @@ def validar_executavel(caminho, owner_uids, uid_agente=None, uids_proibidos=(), 
     """
     if not isinstance(caminho, str) or caminho[:1] != '/' or os.path.normpath(caminho) != caminho:
         raise PathGuardErro(Codigo.INTERPRETADOR_INSEGURO)
-    real = os.path.realpath(caminho)
+    real = plataforma.caminho_final(caminho)
     donos = tuple(owner_uids) + ((0,) if 0 not in owner_uids else ())
     try:
         _stat(real)
-        sss = [os.path.realpath(d) for d in dirs_sss if d]
+        sss = [plataforma.caminho_final(d) for d in dirs_sss if d]
         if any(_dentro(alvo, d) for alvo in (caminho, real) for d in sss):
             raise PathGuardErro(Codigo.INTERPRETADOR_INSEGURO)
         if not os.path.isfile(real) or not os.access(real, os.X_OK):

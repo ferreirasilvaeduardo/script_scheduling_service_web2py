@@ -1,0 +1,307 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""sss-helper: unica forma de o agente do SSS agir como o usuario de execucao (README §8.0; CR-007, D1).
+
+Instalado pelo root em /opt/sss/bin/sss-helper (dono root, 0755, pasta so do root) e chamado so por
+"sudo -n -u <usuario de execucao> -- /opt/sss/bin/sss-helper <subcomando>". Python 3.6, so biblioteca
+padrao, sem importar a aplicacao nem ler o config.ini. Valida os proprios argumentos.
+
+Subcomandos:
+  run                                         especificacao JSON pela entrada padrao; execve do script
+  term <pgid> <process_start>                 SIGTERM ao grupo (identidade do lider conferida)
+  kill <pgid> <process_start>                 SIGKILL ao grupo (idem)
+  limpar <pasta_base> <ticket_id>             remove <pasta_base>/ticket_<id>/ sem seguir links
+  encerrar-ticket <pasta_base> <ticket_id> <kill_grace_s>
+                                              encerra os processos do usuario cujo cwd esta na pasta do ticket
+
+Codigos de saida: 0 sucesso, 2 uso invalido, 3 recusado (identidade divergente), 4 erro do sistema,
+5 nao suportado nesta plataforma. Mensagens so no stderr, sem valores sensiveis.
+
+Excecao estreita do AGENTS §3.2: limites de recurso so em _run, sinal a grupo so em _term/_kill, leitura do
+stat do processo so em _identidade, e consulta do cwd dos processos so em _encerrar_ticket.
+"""
+import json
+import os
+import resource
+import signal
+import shutil
+import subprocess
+import sys
+import time
+
+USO_INVALIDO = 2
+RECUSADO = 3
+ERRO_SISTEMA = 4
+NAO_SUPORTADO = 5
+
+_MAX_ESPECIFICACAO = 1024 * 1024
+_RLIMITS_PERMITIDOS = ("RLIMIT_CORE", "RLIMIT_NOFILE", "RLIMIT_CPU", "RLIMIT_AS", "RLIMIT_FSIZE",
+                       "RLIMIT_NPROC", "RLIMIT_DATA", "RLIMIT_STACK")
+
+
+class Falha(Exception):
+    def __init__(self, codigo, mensagem):
+        Exception.__init__(self, mensagem)
+        self.codigo = codigo
+
+
+def _erro(codigo, mensagem):
+    raise Falha(codigo, mensagem)
+
+
+def _inteiro(texto, nome, minimo=0, maximo=None):
+    if not isinstance(texto, str) or not texto.isdigit():
+        _erro(USO_INVALIDO, "%s invalido" % nome)
+    valor = int(texto)
+    if valor < minimo or (maximo is not None and valor > maximo):
+        _erro(USO_INVALIDO, "%s fora da faixa" % nome)
+    return valor
+
+
+def _pasta_base(caminho):
+    """exec_work_dir/<usuario>: absoluta, normalizada, sem link e do proprio usuario (CR-008, R-36)."""
+    if not isinstance(caminho, str) or not caminho.startswith("/") or os.path.normpath(caminho) != caminho:
+        _erro(USO_INVALIDO, "pasta_base deve ser absoluta e normalizada")
+    if os.path.realpath(caminho) != caminho:
+        _erro(USO_INVALIDO, "pasta_base nao pode ter link simbolico")
+    try:
+        st = os.lstat(caminho)
+    except OSError:
+        _erro(USO_INVALIDO, "pasta_base inexistente")
+    if not os.path.isdir(caminho) or st.st_uid != os.geteuid():
+        _erro(USO_INVALIDO, "pasta_base deve ser um diretorio do proprio usuario")
+    return caminho
+
+
+def _pasta_ticket(pasta_base, ticket_id):
+    return os.path.join(pasta_base, "ticket_%d" % ticket_id)
+
+
+# -----------------------------------------------------------------------------
+# run
+# -----------------------------------------------------------------------------
+
+def _ler_especificacao(entrada):
+    bruto = entrada.read(_MAX_ESPECIFICACAO + 1)
+    if len(bruto) > _MAX_ESPECIFICACAO:
+        _erro(USO_INVALIDO, "especificacao maior que 1 MiB")
+    try:
+        spec = json.loads(bruto.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        _erro(USO_INVALIDO, "especificacao nao e JSON valido")
+    if not isinstance(spec, dict):
+        _erro(USO_INVALIDO, "especificacao deve ser um objeto")
+    ticket_id = spec.get("ticket_id")
+    if not isinstance(ticket_id, int) or isinstance(ticket_id, bool) or ticket_id < 1:
+        _erro(USO_INVALIDO, "ticket_id invalido")
+    argv = spec.get("argv")
+    if not isinstance(argv, list) or not argv or not all(isinstance(a, str) for a in argv):
+        _erro(USO_INVALIDO, "argv invalido")
+    if not argv[0].startswith("/"):
+        _erro(USO_INVALIDO, "argv[0] deve ser absoluto")
+    env = spec.get("env") or {}
+    if not isinstance(env, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in env.items()):
+        _erro(USO_INVALIDO, "env invalido")
+    rlimits = spec.get("rlimits") or {}
+    if not isinstance(rlimits, dict):
+        _erro(USO_INVALIDO, "rlimits invalido")
+    limites = {"RLIMIT_CORE": (0, 0), "RLIMIT_NOFILE": (1024, 1024)}
+    for nome, valor in rlimits.items():
+        if nome not in _RLIMITS_PERMITIDOS or not isinstance(valor, list) or len(valor) != 2 \
+                or not all(isinstance(x, int) and not isinstance(x, bool) for x in valor):
+            _erro(USO_INVALIDO, "limite de recurso invalido")
+        limites[nome] = (valor[0], valor[1])
+    return ticket_id, argv, env, limites, _pasta_base(spec.get("pasta_base"))
+
+
+def _run(entrada=None, executar=os.execve):
+    """Cria <pasta_base>/ticket_<id>/ e tmp/ (0700), entra nela, aplica umask e limites e faz execve."""
+    ticket_id, argv, env, limites, pasta_base = _ler_especificacao(entrada or sys.stdin.buffer)
+    pasta = _pasta_ticket(pasta_base, ticket_id)
+    try:
+        # O script nunca le a entrada padrao do helper (a especificacao ja foi consumida).
+        nulo = os.open(os.devnull, os.O_RDONLY)
+        os.dup2(nulo, 0)
+        os.close(nulo)
+        os.makedirs(os.path.join(pasta, "tmp"), mode=0o700, exist_ok=True)
+        os.chmod(pasta, 0o700)
+        os.chmod(os.path.join(pasta, "tmp"), 0o700)
+        os.chdir(pasta)
+        os.umask(0o077)
+        for nome, par in sorted(limites.items()):
+            resource.setrlimit(getattr(resource, nome), par)
+    except OSError as e:
+        _erro(ERRO_SISTEMA, "preparo da execucao falhou (%s)" % e.__class__.__name__)
+    try:
+        executar(argv[0], argv, env)
+    except OSError as e:
+        _erro(ERRO_SISTEMA, "execve falhou (%s)" % e.__class__.__name__)
+    return 0
+
+
+# -----------------------------------------------------------------------------
+# term / kill
+# -----------------------------------------------------------------------------
+
+def _identidade(pid):
+    """starttime do processo (campo 22 de /proc/<pid>/stat, depois do ultimo ')'); None se ilegivel."""
+    try:
+        with open("/proc/%d/stat" % pid, "r") as f:
+            conteudo = f.read()
+        return int(conteudo[conteudo.rindex(")") + 2:].split()[19])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _sinalizar(pgid, process_start, sinal):
+    if pgid <= 1:
+        _erro(USO_INVALIDO, "pgid invalido")
+    try:
+        os.kill(pgid, 0)
+        lider_vivo = True
+    except ProcessLookupError:
+        lider_vivo = False
+    except PermissionError:
+        _erro(RECUSADO, "lider do grupo pertence a outro usuario")
+    if lider_vivo:
+        identidade = _identidade(pgid)
+        if identidade is None or identidade != process_start:
+            _erro(RECUSADO, "identidade do lider diverge (PID reciclado)")
+    return sinal
+
+
+def _term(pgid, process_start):
+    sinal = _sinalizar(pgid, process_start, signal.SIGTERM)
+    try:
+        os.killpg(pgid, sinal)
+    except ProcessLookupError:
+        return 0
+    except PermissionError:
+        _erro(RECUSADO, "grupo pertence a outro usuario")
+    return 0
+
+
+def _kill(pgid, process_start):
+    sinal = _sinalizar(pgid, process_start, signal.SIGKILL)
+    try:
+        os.killpg(pgid, sinal)
+    except ProcessLookupError:
+        return 0
+    except PermissionError:
+        _erro(RECUSADO, "grupo pertence a outro usuario")
+    return 0
+
+
+# -----------------------------------------------------------------------------
+# limpar / encerrar-ticket
+# -----------------------------------------------------------------------------
+
+def _limpar(pasta_base, ticket_id):
+    """Remove <pasta_base>/ticket_<id>/ sem seguir links simbolicos."""
+    pasta = _pasta_ticket(_pasta_base(pasta_base), ticket_id)
+    if not os.path.lexists(pasta):
+        return 0
+    if os.path.islink(pasta) or not os.path.isdir(pasta):
+        _erro(USO_INVALIDO, "pasta do ticket nao e um diretorio")
+    try:
+        shutil.rmtree(pasta)  # rmtree nao segue links simbolicos internos (remove o proprio link)
+    except OSError as e:
+        _erro(ERRO_SISTEMA, "limpeza falhou (%s)" % e.__class__.__name__)
+    return 0
+
+
+def _encerrar_ticket(pasta_base, ticket_id, kill_grace_s, listar=None):
+    """SIGTERM e, depois de kill_grace_s, SIGKILL aos processos do proprio usuario cujo cwd esta na pasta do
+    ticket (Linux: /proc/<pid>/cwd; outros Unix: pwdx). Sem meio de identificar: codigo 5."""
+    pasta = _pasta_ticket(_pasta_base(pasta_base), ticket_id)
+    meu_uid = os.geteuid()
+    pwdx = [p for p in ("/usr/bin/pwdx", "/bin/pwdx") if os.path.isfile(p)]
+
+    def _na_pasta(cwd):
+        cwd = os.path.normpath(cwd)
+        return os.path.commonpath([cwd, pasta]) == pasta
+
+    def _listar_proc():
+        pids = []
+        for nome in os.listdir("/proc/"):
+            if not nome.isdigit() or int(nome) == os.getpid():
+                continue
+            try:
+                if os.stat("/proc/" + nome).st_uid != meu_uid:
+                    continue
+                if _na_pasta(os.readlink("/proc/%s/cwd" % nome)):
+                    pids.append(int(nome))
+            except OSError:
+                continue
+        return pids
+
+    def _listar_pwdx():
+        saida = subprocess.run(["/bin/ps", "-U", str(meu_uid), "-o", "pid="], stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL, universal_newlines=True).stdout
+        pids = []
+        for pid in (int(x) for x in saida.split() if x.isdigit()):
+            linha = subprocess.run([pwdx[0], str(pid)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                   universal_newlines=True).stdout
+            partes = linha.split(":", 1)
+            if len(partes) == 2 and _na_pasta(partes[1].strip()):
+                pids.append(pid)
+        return pids
+
+    if listar is None:
+        if os.path.isdir("/proc/self") and os.path.exists("/proc/self/cwd"):
+            listar = _listar_proc
+        elif pwdx:
+            listar = _listar_pwdx
+        else:
+            _erro(NAO_SUPORTADO, "sem /proc/<pid>/cwd nem pwdx nesta plataforma")
+
+    for sinal in (signal.SIGTERM, signal.SIGKILL):
+        pids = listar()
+        for pid in pids:
+            try:
+                os.kill(pid, sinal)
+            except ProcessLookupError:
+                pass
+        if not pids or sinal == signal.SIGKILL:
+            break
+        limite = time.monotonic() + kill_grace_s
+        while time.monotonic() < limite and listar():
+            time.sleep(0.1)
+    return 0
+
+
+# -----------------------------------------------------------------------------
+# Entrada
+# -----------------------------------------------------------------------------
+
+def principal(argv):
+    if not argv:
+        _erro(USO_INVALIDO, "subcomando ausente")
+    sub, args = argv[0], argv[1:]
+    if sub == "run" and not args:
+        return _run()
+    if sub in ("term", "kill") and len(args) == 2:
+        pgid = _inteiro(args[0], "pgid", minimo=2)
+        inicio = _inteiro(args[1], "process_start")
+        return _term(pgid, inicio) if sub == "term" else _kill(pgid, inicio)
+    if sub == "limpar" and len(args) == 2:
+        return _limpar(args[0], _inteiro(args[1], "ticket_id", minimo=1))
+    if sub == "encerrar-ticket" and len(args) == 3:
+        return _encerrar_ticket(args[0], _inteiro(args[1], "ticket_id", minimo=1),
+                                _inteiro(args[2], "kill_grace_s", maximo=300))
+    _erro(USO_INVALIDO, "uso invalido")
+
+
+def main():
+    try:
+        return principal(sys.argv[1:])
+    except Falha as f:
+        sys.stderr.write("sss-helper: %s\n" % f)
+        return f.codigo
+    except Exception as e:  # noqa: BLE001 - nenhum traceback com dados sai do helper
+        sys.stderr.write("sss-helper: erro inesperado (%s)\n" % e.__class__.__name__)
+        return ERRO_SISTEMA
+
+
+if __name__ == "__main__":
+    sys.exit(main())

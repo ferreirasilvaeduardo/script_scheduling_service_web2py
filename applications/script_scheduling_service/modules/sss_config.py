@@ -9,7 +9,6 @@ import configparser
 import logging
 import os
 import re
-import stat
 import sys
 
 
@@ -119,6 +118,7 @@ SCHEMA = collections.OrderedDict([
         # Usuario do SO por ambiente e pasta base dos diretorios de trabalho dos scripts (CR-007, D1):
         # obrigatorios fora de DEV (validacao cruzada em carregar()).
         ("usuarios_execucao", CampoDef("map_csv", obrigatorio=False, default=())),
+        ("interpretadores", CampoDef("map_csv", obrigatorio=False, default=())),
         ("exec_work_dir", CampoDef("path", obrigatorio=False, default=None)),
         ("max_parallel_jobs", CampoDef("int", obrigatorio=True, min_val=1, max_val=999)),
         ("max_parallel_hard_limit", CampoDef("int", obrigatorio=True, min_val=1, max_val=999)),
@@ -207,7 +207,7 @@ class AgentConfig(_ItemAccessMixin, collections.namedtuple("AgentConfig", [
     "node_offline_timeout_s", "kill_grace_s", "script_timeout_s",
     "shutdown_mode", "shutdown_grace_s", "misfire_policy",
     "misfire_tolerance_s", "cron_horizon_days", "child_locale",
-    "env_passthrough", "usuarios_execucao", "exec_work_dir", "fila_envelhecimento_min",
+    "env_passthrough", "usuarios_execucao", "interpretadores", "exec_work_dir", "fila_envelhecimento_min",
     "ambientes_exigem_hash", "log_dir_min_livre_mb"
 ])):
     __slots__ = ()
@@ -515,6 +515,15 @@ def _validar_cr007(app, oracle, agent, logging_dict, retencao):
         raise ConfigErro(secao="agent", chave="ambientes_atendidos",
                          motivo="Lista com mais de %d caracteres (coluna tbsss_agentes.ambientes)" % _AMBIENTES_MAX)
 
+    for logico, executavel in agent["interpretadores"]:
+        # Allowlist do path_guard (README §6.4); o executavel e conferido pelo agente na subida (§8.5).
+        if logico not in ("PYTHON3", "BASH", "SH"):
+            raise ConfigErro(secao="agent", chave="interpretadores",
+                             motivo="Interpretador fora da allowlist (PYTHON3, BASH, SH): '%s'" % logico)
+        if not executavel.startswith("/") or os.path.normpath(executavel) != executavel:
+            raise ConfigErro(secao="agent", chave="interpretadores",
+                             motivo="Executavel de %s deve ser caminho absoluto e normalizado" % logico)
+
     dev = app["sss_env"] == "DEV"
     usuarios = dict(agent["usuarios_execucao"])
     for amb, usr in agent["usuarios_execucao"]:
@@ -735,22 +744,23 @@ def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None, papel=
     if not os.path.exists(caminho):
         raise ConfigErro(motivo="Arquivo de segredos nao encontrado: %s" % caminho)
 
+    import plataforma
     try:
-        st = os.stat(caminho)
+        codigo, st = plataforma.validar_arquivo_restrito(caminho)
     except OSError as e:
         raise ConfigErro(motivo="Erro ao obter informacoes do arquivo de segredos %s: %s" % (caminho, e))
 
-    if not stat.S_ISREG(st.st_mode):
+    if codigo == "NAO_REGULAR":
         raise ConfigErro(motivo="Arquivo de segredos deve ser um arquivo regular: %s" % caminho)
 
-    if st.st_uid != os.geteuid():
+    if codigo == "DONO_INVALIDO":
         raise ConfigErro(
             motivo="Arquivo de segredos deve pertencer ao usuario corrente (UID %d, atual %d)" % (
                 os.geteuid(), st.st_uid
             )
         )
 
-    if (st.st_mode & 0o077) != 0:
+    if codigo == "PERMISSAO_INSEGURA":
         raise ConfigErro(
             motivo="Arquivo de segredos possui permissoes inseguras (mode %o, esperado sem acesso grupo/outros)" % (
                 st.st_mode & 0o777

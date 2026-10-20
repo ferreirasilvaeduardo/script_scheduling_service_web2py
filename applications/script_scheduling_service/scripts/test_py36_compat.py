@@ -164,7 +164,8 @@ def verificar_primitivas_so(caminho, app_dir, web2py_root):
             def visit_Attribute(self, node):
                 if isinstance(node.value, ast.Name):
                     module = node.value.id
-                    function = self.functions[-1] if self.functions else None
+                    # Funcoes aninhadas contam como parte da funcao de topo que as define.
+                    function = self.functions[0] if self.functions else None
                     if module == "os" and node.attr == "setsid":
                         self._add(node)
                     elif module == "os" and node.attr == "killpg" and function not in ("_term", "_kill"):
@@ -178,8 +179,10 @@ def verificar_primitivas_so(caminho, app_dir, web2py_root):
                 self.generic_visit(node)
 
             def visit_Str(self, node):
-                function = self.functions[-1] if self.functions else None
-                if "/proc/" in node.s and function != "_encerrar_ticket":
+                function = self.functions[0] if self.functions else None
+                # /proc/<pid>/cwd so em _encerrar_ticket; a leitura de /proc/<pid>/stat (identidade do
+                # lider, README §8.0) so em _identidade, usada por term/kill (AGENTS §3.2).
+                if "/proc/" in node.s and function not in ("_encerrar_ticket", "_identidade"):
                     self._add(node)
                 elif "pwdx" in node.s and function != "_encerrar_ticket":
                     self._add(node)
