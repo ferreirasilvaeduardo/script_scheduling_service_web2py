@@ -758,7 +758,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
 
 * Escala de **1 (mais alta) a 4 (mais baixa)**, padrão 2.
 * Prioridade 1 é reservada a perfis admin. No desdobro, se o responsável pela regra deixou de ser admin, o ticket sai com prioridade 2 (§7.5, passo 2).
-* A fila ordena pela **prioridade efetiva**, depois `scheduled_at` e depois `id` (§8.2).
+* A fila ordena pela **prioridade efetiva**, depois pelo início da espera (`GREATEST(scheduled_at, created_at)`) e depois `id` (§8.2; CR-013: até lá o desempate era `scheduled_at`, que só difere para tickets criados já vencidos).
 * **Envelhecimento (CR-007, R-07):** a prioridade efetiva é `GREATEST(1, prioridade − FLOOR(minutos na fila / fila_envelhecimento_min))`, com os minutos contados desde `GREATEST(scheduled_at, created_at)` (CR-008, R-20): um ticket criado já vencido (desdobro atrasado, R-27 do CR-007, ou disparo com horário passado na fila) não herda a idade da ocorrência e não passa à frente de quem já esperava. Com `fila_envelhecimento_min = 60`, um ticket de prioridade 4 chega a 1 depois de 3 horas na fila; com `0`, o envelhecimento fica desligado. A prioridade gravada no ticket não muda.
 
 ### 5.4 Criação manual de ticket (transação única)
@@ -1459,35 +1459,38 @@ inicialização (§8.12) -> loop (uma coisa por vez, sem espera dentro das opera
 
 O agente só tenta o claim se `execucoes_locais < max_parallel_jobs`, com `max_parallel_jobs <= max_parallel_hard_limit`, **e** se o espaço livre no sistema de arquivos de `log_dir` for de pelo menos `[agent] log_dir_min_livre_mb` (CR-008, R-25; medido por `os.statvfs` a cada ciclo de claim). Abaixo disso, não faz claim e registra WARN `DISCO_LOG` uma vez por minuto; os tickets em execução continuam. Com `saida_dir` (CR-012), a mesma conferência vale para o sistema de arquivos dele (WARN `DISCO_SAIDA`). Os placeholders `:amb0..:ambN` são **gerados pelo código** a partir dos ambientes atendidos **ativos agora**; os valores sempre são binds.
 
+Três leituras curtas, sem varrer a fila (CR-013), com o índice `ix_tbsss_tck_fila (status, ambiente, prioridade, GREATEST(scheduled_at, created_at), id, script_id)`:
+
+1. **Scripts do agente:** `SELECT id, max_qtd_parallel_env FROM {owner}.tbsss_scripts WHERE interpretador IN (:int0, :int1)`.
+2. **Em execução por par:** `SELECT script_id, ambiente, COUNT(*) FROM {owner}.tbsss_tickets WHERE status = 'RUNNING' AND ambiente IN (:amb0, :amb1) GROUP BY script_id, ambiente` (faixa curta de `ix_tbsss_tck_fila`, que tem `status` na frente). O agente separa, por ambiente, os scripts **elegíveis**: os do seu interpretador abaixo do teto.
+3. **Janela:** para cada ambiente e cada prioridade original (1 a 4), os `:lote` primeiros da fila pela ordem do índice, só dos scripts elegíveis; os blocos são juntados e ordenados pela ordem da fila:
+
 ```sql
 SELECT id, script_id, ambiente FROM (
-  SELECT t.id, t.script_id, t.ambiente
-    FROM {owner}.tbsss_tickets t
-    JOIN {owner}.tbsss_scripts s ON s.id = t.script_id
-   WHERE (CASE WHEN status = 'PENDING' THEN prioridade END) IS NOT NULL
-     AND (CASE WHEN status = 'PENDING' THEN scheduled_at END) <= SYSDATE
-     AND t.ambiente IN (:amb0, :amb1)
-     AND s.interpretador IN (:int0, :int1)
-     AND t.cancel_requested = 'N'
-     AND s.max_qtd_parallel_env > (SELECT COUNT(*) FROM {owner}.tbsss_tickets r
-                                    WHERE r.script_id = t.script_id
-                                      AND r.ambiente = t.ambiente
-                                      AND r.status = 'RUNNING')
-   ORDER BY GREATEST(1, (CASE WHEN status = 'PENDING' THEN prioridade END)
-                        - CASE WHEN :env_min > 0
-                               THEN FLOOR((SYSDATE - GREATEST((CASE WHEN status = 'PENDING' THEN scheduled_at END), t.created_at)) * 1440 / :env_min)
-                               ELSE 0 END),
-            (CASE WHEN status = 'PENDING' THEN scheduled_at END),
-            t.id
+  SELECT j.id, j.script_id, j.ambiente FROM (
+    SELECT id, script_id, ambiente, prio, inicio FROM (
+                   SELECT id, script_id, :amb0 ambiente, 1 prio, GREATEST(scheduled_at, created_at) inicio
+                     FROM {owner}.tbsss_tickets
+                    WHERE status = 'PENDING' AND ambiente = :amb0 AND prioridade = 1
+                      AND GREATEST(scheduled_at, created_at) <= SYSDATE
+                      AND (script_id IN (:s0_0, :s0_1))
+                    ORDER BY GREATEST(scheduled_at, created_at), id) WHERE ROWNUM <= :lote
+    UNION ALL ...   -- um bloco por ambiente x prioridade (1 a 4)
+  ) j JOIN {owner}.tbsss_tickets c ON c.id = j.id
+   WHERE c.status = 'PENDING' AND c.cancel_requested = 'N'
+   ORDER BY GREATEST(1, j.prio - CASE WHEN :env_min > 0
+                                      THEN FLOOR((SYSDATE - j.inicio) * 1440 / :env_min) ELSE 0 END),
+            j.inicio, j.id
 ) WHERE ROWNUM <= :lote
 ```
 
-* As expressões `CASE` do `WHERE` são **textualmente idênticas** às do índice baseado em função `ix_tbsss_tck_fila`, que contém apenas os tickets `PENDING`, e ficam **sem alias de tabela**, como as constantes do `sql_ident` (CR-007, R-32). As colunas `status`, `prioridade` e `scheduled_at` só existem em `tbsss_tickets`, então não são ambíguas no join.
-* **Teto na própria seleção (CR-007, R-07):** a subconsulta exclui os pares (script, ambiente) que já estão no teto, usando `ix_tbsss_tck_scr`. Sem ela, um script saturado ocupava o lote inteiro e os demais nunca eram vistos. O claim (§8.3) continua com a checagem definitiva, sob lock.
-* **Ordem:** pela prioridade efetiva (§5.3, `:env_min` = `fila_envelhecimento_min`, idade contada desde `GREATEST(scheduled_at, created_at)`, CR-008 R-20), depois `scheduled_at` e `id`. A ordenação é feita sobre o conjunto `PENDING` vencido, já reduzido pelo índice; o `EXPLAIN PLAN` do F8.3 registra o plano.
+* **Por que é exato:** dentro de uma prioridade original, a prioridade efetiva só cai com a espera, então os `:lote` primeiros de cada prioridade por `(inicio, id)` contêm o lote exato da ordem completa. `inicio <= SYSDATE` equivale a `scheduled_at <= SYSDATE`, porque `created_at` nunca passa de agora.
+* **Por que é barato:** cada bloco é um `INDEX RANGE SCAN` sem sort e sem acesso à tabela, que para no `:lote` (4 leituras por bloco no GFPR); só os até `4 × ambientes × :lote` escolhidos voltam à tabela, pela PK, para conferir `cancel_requested`. Com 1 milhão de `PENDING` num ambiente, o ciclo caiu de 22.616 para 264 leituras lógicas e de 1,25 s para 0,18 s, com 1, 2 ou 5 agentes (CR-013). As colunas simples na frente do índice são o que permite ao Oracle parar no lote: um índice só com `CASE` (só dos `PENDING`) nunca eliminava o sort.
+* **Teto na própria seleção (CR-007, R-07):** os scripts no teto saem da janela pelo filtro `script_id IN (...)`, aplicado no próprio índice. Sem isso, um script saturado ocupava o lote inteiro e os demais nunca eram vistos. O claim (§8.3) continua com a checagem definitiva, sob lock. Os placeholders `:s<ambiente>_<n>` são gerados por contagem, em listas de até 900 (o Oracle recusa mais de 1.000 itens num `IN`).
+* **Ordem:** pela prioridade efetiva (§5.3, `:env_min` = `fila_envelhecimento_min`, idade contada desde `GREATEST(scheduled_at, created_at)`, CR-008 R-20), depois esse mesmo início da espera e `id`. O `EXPLAIN` está em `docs/explain/SCHEDULER.md`.
 * **Ambientes ativos (CR-007, D2):** o agente relê `tbsss_ambientes` a cada ciclo do orquestrador e usa só os ambientes atendidos que estão ativos. Desativar um ambiente para os claims sem reiniciar os agentes; reativá-lo volta a atendê-lo.
 
-O filtro `s.interpretador IN (:int0..:intN)` usa os interpretadores que **este** agente suporta (§12.1). Assim, cada agente só pega os scripts que consegue executar. Os placeholders são gerados pelo código, e os valores vão sempre como binds.
+O filtro `interpretador IN (:int0..:intN)` da leitura 1 usa os interpretadores que **este** agente suporta (§12.1). Assim, cada agente só pega os scripts que consegue executar. Os placeholders são gerados pelo código, e os valores vão sempre como binds.
 
 Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um agente que não tenha o arquivo, ou em que ele não passe na §8.5, finaliza o ticket com `PRECHECK_FAILED`.
 
@@ -2281,7 +2284,7 @@ END;
   * FK `fk_tbsss_tck_parent → tbsss_tickets(id) ON DELETE SET NULL` · IX `ix_tbsss_tck_par (parent_ticket_id)`
   * FK `fk_tbsss_tck_agd → tbsss_agendamentos(id) ON DELETE SET NULL` · IX `ix_tbsss_tck_agd (agendamento_id)`
 * **Índices baseados em função:**
-  * `ix_tbsss_tck_fila ((CASE WHEN status = 'PENDING' THEN prioridade END), (CASE WHEN status = 'PENDING' THEN scheduled_at END))` contém apenas os `PENDING`
+  * `ix_tbsss_tck_fila (status, ambiente, prioridade, GREATEST(scheduled_at, created_at), id, script_id)` (CR-013): a fila por ambiente e prioridade na ordem do início da espera, com o `script_id` para o filtro do teto no próprio índice; também serve às contagens de `RUNNING` por par e ao quadro de fila sem atendente. Substitui o índice só dos `PENDING` por `CASE`, com o qual o Oracle não parava no lote.
   * `ix_tbsss_tck_run ((CASE WHEN status = 'RUNNING' THEN agente_id END))` contém apenas os `RUNNING`
 * Retenção e ordem da lista de tickets: IX `ix_tbsss_tck_crt (created_at, id)`. O `id` no índice entrega o desempate de `created_at DESC, id DESC` sem ordenar a tabela inteira; o EXPLAIN com 1 milhão de tickets mostrava `TABLE ACCESS FULL` só com `created_at` (F7.3)
 * Histórico e últimas execuções (§5.8): IX `ix_tbsss_tck_hist (script_id, created_at)` (CR-007, R-29)
@@ -2719,7 +2722,7 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
   * Cada cartão mostra também a plataforma e os interpretadores do agente.
   * Backend FAKE (DEV): o `agt-host01` renova o heartbeat a cada leitura. O `agt-host02` nasce com o heartbeat congelado 30 s antes da carga do seed, então envelhece com o relógio: começa `ATRASADO`, passa a `EM_RISCO` cerca de 1 min depois e a `OFFLINE` cerca de 2,5 min depois.
 * **Quadros de atenção na tela de agentes (CR-007, R-18):**
-  * **Fila sem atendente:** tickets `PENDING` vencidos cujo par (ambiente, interpretador) não é atendido por nenhum agente com saúde `OK` ou `ATRASADO` (cruzando `tbsss_agentes.ambientes` e `interpretadores`). Mostra o ambiente, o interpretador, a quantidade e o mais antigo. **Critério do claim (CR-008, R-15):** o interpretador é o do cadastro (`tbsss_scripts.interpretador`, por join), o mesmo que a seleção de candidatos usa (§8.2); `parametros_enviados` (CLOB) nunca é lido. A consulta usa as expressões de `ix_tbsss_tck_fila` (`PENDING` vencidos) e agrupa por `t.ambiente, s.interpretador`; o par é comparado em Python com os agentes saudáveis.
+  * **Fila sem atendente:** tickets `PENDING` vencidos cujo par (ambiente, interpretador) não é atendido por nenhum agente com saúde `OK` ou `ATRASADO` (cruzando `tbsss_agentes.ambientes` e `interpretadores`). Mostra o ambiente, o interpretador, a quantidade e o mais antigo (o menor início da espera, `GREATEST(scheduled_at, created_at)`; CR-013). A consulta lê só `ix_tbsss_tck_fila` e agrupa por script antes do join com o catálogo. **Critério do claim (CR-008, R-15):** o interpretador é o do cadastro (`tbsss_scripts.interpretador`, por join), o mesmo que a seleção de candidatos usa (§8.2); `parametros_enviados` (CLOB) nunca é lido. A consulta usa as expressões de `ix_tbsss_tck_fila` (`PENDING` vencidos) e agrupa por `t.ambiente, s.interpretador`; o par é comparado em Python com os agentes saudáveis.
   * **Rodando sem PID:** tickets `RUNNING` com `process_id` nulo há mais de 2 minutos (o agente reservou e não iniciou). A consulta usa a expressão de `ix_tbsss_tck_run` e devolve só `id`, `script_id`, `ambiente`, `agente_id` e `started_at`, sem LOB (CR-008, R-15).
   * **Configuração divergente:** agentes ativos com `config_criticos` diferente entre si ou dos valores do nó web (§8.12).
   * Os quadros só aparecem quando há algo a mostrar e ficam no topo da tela.

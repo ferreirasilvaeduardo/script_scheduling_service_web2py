@@ -5,8 +5,8 @@ Leituras do painel de agentes com a mesma semantica do repo_fake/agentes.py (REA
 - tickets_running e rodando_sem_pid usam a expressao CASE textualmente identica a de ix_tck_run
   (AGENTS §4.8, importada do sql_ident) e nunca leem CLOB;
 - fila_sem_atendente agrupa os PENDING vencidos pelo interpretador do cadastro (JOIN em tbsss_scripts,
-  o mesmo criterio do claim; CR-008, R-15), pelas expressoes de ix_tck_fila; a comparacao com os
-  agentes saudaveis fica em Python, como no FAKE;
+  o mesmo criterio do claim; CR-008, R-15), lendo so ix_tck_fila (status, ambiente, script_id e o inicio
+  da espera; CR-013); a comparacao com os agentes saudaveis fica em Python, como no FAKE;
 - binds de DATE como TIPO_DATE (README §7.5).
 """
 import datetime
@@ -28,8 +28,7 @@ _COLS_TCK = ("id", "script_id", "ambiente", "solicitante", "ip_origem", "agente_
 _COLS_SEM_PID = ("id", "script_id", "ambiente", "agente_id", "started_at")
 
 _RUN = "(" + sql_ident.FBI_TCK_RUN_AGENTE_CASE + ")"
-_FILA_PRIO = "(" + sql_ident.FBI_TCK_FILA_PRIO_CASE + ")"
-_FILA_SCHED = "(" + sql_ident.FBI_TCK_FILA_SCHED_CASE + ")"
+_INICIO = sql_ident.FBI_TCK_FILA_INICIO
 
 
 def _lista(cols, alias=""):
@@ -41,13 +40,14 @@ _SQL_LISTAR = "SELECT " + _lista(_COLS_AGT) + " FROM {agt} ORDER BY codigo, id"
 _SQL_TICKETS_RUNNING = (
     "SELECT " + _lista(_COLS_TCK) + " FROM {tck} WHERE " + _RUN + " = :codigo ORDER BY id"
 )
-# A faixa de prioridade (1 a 4, ck_tck_prio) na coluna lider deixa o acesso por ix_tck_fila em RANGE SCAN;
-# a expressao de scheduled_at limita aos PENDING vencidos. Nenhum CLOB e lido.
+# status = 'PENDING' na coluna lider de ix_tck_fila (CR-013): faixa so dos PENDING, lida so no indice
+# (ambiente, script_id e o inicio da espera); o inicio <= :agora equivale a scheduled_at <= :agora, porque
+# created_at nunca passa de agora. Agrupa por script antes do JOIN com o catalogo. Nenhum CLOB e lido.
 _SQL_FILA = (
-    "SELECT t.ambiente, s.interpretador, COUNT(*), MIN(t.scheduled_at) "
-    "FROM {tck} t JOIN {scr} s ON s.id = t.script_id "
-    "WHERE " + _FILA_PRIO + " BETWEEN 1 AND 4 AND " + _FILA_SCHED + " <= :agora "
-    "GROUP BY t.ambiente, s.interpretador"
+    "SELECT g.ambiente, s.interpretador, SUM(g.n), MIN(g.inicio) FROM ("
+    "SELECT ambiente, script_id, COUNT(*) n, MIN(" + _INICIO + ") inicio FROM {tck} "
+    "WHERE status = 'PENDING' AND " + _INICIO + " <= :agora GROUP BY ambiente, script_id) g "
+    "JOIN {scr} s ON s.id = g.script_id GROUP BY g.ambiente, s.interpretador"
 )
 # ">= CHR(1)" equivale a IS NOT NULL para o agent_id ([A-Za-z0-9._-], todos acima de CHR(1)), mas vira
 # faixa de ix_tck_run (INDEX RANGE SCAN); com IS NOT NULL o otimizador varria a tabela (EXPLAIN, F7.3).

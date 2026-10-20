@@ -12,9 +12,11 @@ import db_conn
 import rbac
 import sql_ident
 
-_PRIO = sql_ident.FBI_TCK_FILA_PRIO_CASE
-_SCHED = sql_ident.FBI_TCK_FILA_SCHED_CASE
+_INICIO = sql_ident.FBI_TCK_FILA_INICIO
 _RUN = sql_ident.FBI_TCK_RUN_AGENTE_CASE
+PRIORIDADES = (1, 2, 3, 4)
+# Limite de itens de uma lista IN do Oracle (ORA-01795 acima de 1.000): listas maiores viram OR de listas.
+_IN_MAX = 900
 
 TERMINAIS = ("SUCCESS", "FAILED", "CANCELLED")
 DETALHE_MAX = 1000
@@ -111,35 +113,61 @@ class RepoSchedulerFila(object):
         return [n for n in nomes if achados.get(n) == "S"], [n for n in nomes if n not in achados]
 
     def candidatos(self, conn, ambientes, interpretadores, lote, envelhecimento_min):
-        """Lote de tickets PENDING vencidos, pela prioridade efetiva (README §8.2; CR-007 R-07; CR-008 R-20)."""
+        """Lote de tickets PENDING vencidos, pela prioridade efetiva (README §8.2; CR-007 R-07; CR-008 R-20;
+        CR-013).
+
+        Tres leituras curtas, sem varrer a fila: (1) os scripts dos interpretadores do agente e o teto;
+        (2) os RUNNING por script e ambiente; (3) a janela: para cada ambiente e prioridade original, os
+        `lote` primeiros por (inicio, id) em ix_tck_fila, so dos scripts abaixo do teto, juntados e ordenados
+        por (prioridade efetiva, inicio, id). Dentro de uma prioridade, a efetiva so cai com a espera, entao
+        a janela contem o lote exato da ordem completa (inicio = GREATEST(scheduled_at, created_at)).
+        """
         if not ambientes or not interpretadores or lote < 1:
             return []
-        ph_amb, binds = _placeholders("amb", list(ambientes))
-        ph_int, b_int = _placeholders("int", list(interpretadores))
-        binds.update(b_int)
-        binds.update(env_min=int(envelhecimento_min), lote=int(lote))
-        sql = (
-            "SELECT id, script_id, ambiente FROM ("
-            " SELECT t.id, t.script_id, t.ambiente"
-            " FROM " + self._tck + " t"
-            " JOIN " + self._scr + " s ON s.id = t.script_id"
-            " WHERE (" + _PRIO + ") IS NOT NULL"
-            " AND (" + _SCHED + ") <= SYSDATE"
-            " AND t.ambiente IN (" + ph_amb + ")"
-            " AND s.interpretador IN (" + ph_int + ")"
-            " AND t.cancel_requested = 'N'"
-            " AND s.max_qtd_parallel_env > (SELECT COUNT(*) FROM " + self._tck + " r"
-            " WHERE r.script_id = t.script_id AND r.ambiente = t.ambiente AND r.status = 'RUNNING')"
-            " ORDER BY GREATEST(1, (" + _PRIO + ")"
-            " - CASE WHEN :env_min > 0"
-            " THEN FLOOR((SYSDATE - GREATEST((" + _SCHED + "), t.created_at)) * 1440 / :env_min)"
-            " ELSE 0 END),"
-            " (" + _SCHED + "),"
-            " t.id"
-            ") WHERE ROWNUM <= :lote"
-        )
+        ambientes = list(ambientes)
         cur = conn.cursor()
         try:
+            ph_int, b_int = _placeholders("int", list(interpretadores))
+            cur.execute("SELECT id, max_qtd_parallel_env FROM " + self._scr + " WHERE interpretador IN ("
+                        + ph_int + ")", b_int)
+            tetos = dict((int(sid), int(teto or 0)) for sid, teto in cur.fetchall())
+            if not tetos:
+                return []
+            ph_amb, b_amb = _placeholders("amb", ambientes)
+            cur.execute("SELECT script_id, ambiente, COUNT(*) FROM " + self._tck + " WHERE status = 'RUNNING'"
+                        " AND ambiente IN (" + ph_amb + ") GROUP BY script_id, ambiente", b_amb)
+            rodando = dict(((int(sid), amb), int(n)) for sid, amb, n in cur.fetchall())
+            blocos, binds = [], {"lote": int(lote), "env_min": int(envelhecimento_min)}
+            for i, amb in enumerate(ambientes):
+                elegiveis = sorted(sid for sid, teto in tetos.items() if rodando.get((sid, amb), 0) < teto)
+                if not elegiveis:
+                    continue
+                binds["amb%d" % i] = amb
+                nomes = []
+                for k, sid in enumerate(elegiveis):
+                    binds["s%d_%d" % (i, k)] = sid
+                    nomes.append(":s%d_%d" % (i, k))
+                filtro = " OR ".join("script_id IN (" + ", ".join(nomes[x:x + _IN_MAX]) + ")"
+                                     for x in range(0, len(nomes), _IN_MAX))
+                for prio in PRIORIDADES:
+                    blocos.append(
+                        "SELECT id, script_id, ambiente, prio, inicio FROM ("
+                        "SELECT id, script_id, :amb%d ambiente, %d prio, %s inicio FROM %s"
+                        " WHERE status = 'PENDING' AND ambiente = :amb%d AND prioridade = %d AND %s <= SYSDATE"
+                        " AND (%s) ORDER BY %s, id) WHERE ROWNUM <= :lote"
+                        % (i, prio, _INICIO, self._tck, i, prio, _INICIO, filtro, _INICIO))
+            if not blocos:
+                return []
+            sql = (
+                "SELECT id, script_id, ambiente FROM ("
+                " SELECT j.id, j.script_id, j.ambiente FROM (" + " UNION ALL ".join(blocos) + ") j"
+                " JOIN " + self._tck + " c ON c.id = j.id"
+                " WHERE c.status = 'PENDING' AND c.cancel_requested = 'N'"
+                " ORDER BY GREATEST(1, j.prio - CASE WHEN :env_min > 0"
+                " THEN FLOOR((SYSDATE - j.inicio) * 1440 / :env_min) ELSE 0 END),"
+                " j.inicio, j.id"
+                ") WHERE ROWNUM <= :lote"
+            )
             cur.execute(sql, binds)
             return [{"id": r[0], "script_id": r[1], "ambiente": r[2]} for r in cur.fetchall()]
         finally:

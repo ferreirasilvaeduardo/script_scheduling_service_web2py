@@ -114,21 +114,51 @@ class TestSemBanco(unittest.TestCase):
         self.repo = RepoSchedulerFila("OWN_X", "pfx_")
 
     def test_candidatos_sql_literal_e_binds_gerados(self):
-        conn = _Conn([("ROWNUM <= :lote", (2, [(7, 3, "PRD"), (8, 4, "HML")]))])
+        # CR-013: catalogo do agente, RUNNING por par e a janela por ambiente x prioridade em ix_tck_fila.
+        conn = _Conn([("FROM OWN_X.pfx_scripts WHERE interpretador IN", (3, [(3, 2), (4, 1), (5, 1)])),
+                      ("WHERE status = 'RUNNING' AND ambiente IN", (1, [(4, "PRD", 1)])),
+                      ("UNION ALL", (2, [(7, 3, "PRD"), (8, 4, "HML")]))])
         itens = self.repo.candidatos(conn, ["PRD", "HML"], ["PYTHON3", "SH"], 10, 30)
         self.assertEqual(itens, [{"id": 7, "script_id": 3, "ambiente": "PRD"}, {"id": 8, "script_id": 4, "ambiente": "HML"}])
-        sql, binds = conn.executados[0]
-        self.assertIn("(" + sql_ident.FBI_TCK_FILA_PRIO_CASE + ") IS NOT NULL", sql)
-        self.assertIn("(" + sql_ident.FBI_TCK_FILA_SCHED_CASE + ") <= SYSDATE", sql)
-        self.assertIn("t.ambiente IN (:amb0, :amb1)", sql)
-        self.assertIn("s.interpretador IN (:int0, :int1)", sql)
-        self.assertIn("GREATEST((" + sql_ident.FBI_TCK_FILA_SCHED_CASE + "), t.created_at)", sql)
-        self.assertIn("OWN_X.pfx_tickets t", sql)
+        (sql_scr, b_scr), (sql_run, b_run), (sql, binds) = conn.executados
+        self.assertIn("interpretador IN (:int0, :int1)", sql_scr)
+        self.assertEqual(b_scr, {"int0": "PYTHON3", "int1": "SH"})
+        self.assertIn("ambiente IN (:amb0, :amb1) GROUP BY script_id, ambiente", sql_run)
+        self.assertEqual(b_run, {"amb0": "PRD", "amb1": "HML"})
+        inicio = sql_ident.FBI_TCK_FILA_INICIO
+        self.assertEqual(sql.count("SELECT id, script_id, ambiente, prio, inicio FROM (SELECT id, script_id"), 8,
+                         "2 ambientes x 4 prioridades")
+        self.assertNotIn("SELECT *", sql, "AGENTS §4.12")
+        for trecho in ("WHERE status = 'PENDING' AND ambiente = :amb0 AND prioridade = 1 AND %s <= SYSDATE" % inicio,
+                       "ORDER BY %s, id) WHERE ROWNUM <= :lote" % inicio,
+                       "c.status = 'PENDING' AND c.cancel_requested = 'N'",
+                       "j.inicio, j.id", "OWN_X.pfx_tickets"):
+            self.assertIn(trecho, sql)
         self.assertNotIn("tbsss_", sql)
-        self.assertEqual(binds, {"amb0": "PRD", "amb1": "HML", "int0": "PYTHON3", "int1": "SH", "env_min": 30,
-                                 "lote": 10})
+        # O script 4 esta no teto em PRD (1 de 1): fica fora so da janela de PRD.
+        self.assertIn("(script_id IN (:s0_0, :s0_1))", sql)
+        self.assertEqual((binds["s0_0"], binds["s0_1"]), (3, 5))
+        self.assertIn("(script_id IN (:s1_0, :s1_1, :s1_2))", sql)
+        self.assertEqual((binds["lote"], binds["env_min"], binds["amb0"], binds["amb1"]), (10, 30, "PRD", "HML"))
         self.assertEqual(self.repo.candidatos(conn, [], ["SH"], 10, 0), [])
         self.assertEqual(self.repo.candidatos(conn, ["PRD"], [], 10, 0), [])
+
+    def test_candidatos_sem_script_elegivel_nao_le_a_fila(self):
+        conn = _Conn([("FROM OWN_X.pfx_scripts WHERE interpretador IN", (1, [(4, 1)])),
+                      ("WHERE status = 'RUNNING' AND ambiente IN", (1, [(4, "PRD", 1)]))])
+        self.assertEqual(self.repo.candidatos(conn, ["PRD"], ["SH"], 10, 30), [])
+        self.assertEqual(len(conn.executados), 2, "todos no teto: sem a janela")
+        conn = _Conn([])
+        self.assertEqual(self.repo.candidatos(conn, ["PRD"], ["PERL"], 10, 30), [])
+        self.assertEqual(len(conn.executados), 1, "nenhum script do interpretador: so o catalogo")
+
+    def test_candidatos_lista_longa_vira_or_de_listas(self):
+        conn = _Conn([("FROM OWN_X.pfx_scripts WHERE interpretador IN", (1, [(i, 1) for i in range(1, 1902)])),
+                      ("UNION ALL", (0, []))])
+        self.repo.candidatos(conn, ["PRD"], ["SH"], 10, 30)
+        sql = conn.executados[-1][0]
+        bloco = sql[sql.index("AND (script_id IN"):sql.index(") ORDER BY")]
+        self.assertEqual(bloco.count("script_id IN ("), 3, "1.901 scripts: listas de ate 900 (ORA-01795)")
 
     def test_claim_ok(self):
         inicio = datetime.datetime(2026, 10, 20, 14, 5, 33)
@@ -373,6 +403,51 @@ class TestSchedulerFilaOracle(unittest.TestCase):
             "codigo": self.agente, "hostname": "host-teste", "pid": pid or os.getpid(), "versao": "teste",
             "ambientes": self.amb, "plataforma": "LINUX", "interpretadores": "SH", "config_criticos": "hb=10",
             "node_offline_timeout_s": 120}, lambda p: False)
+
+    def test_ordem_da_fila_igual_a_ordenacao_completa(self):
+        """CR-013: a janela por prioridade devolve o lote exato da ordem (efetiva, inicio, id), sem os scripts
+        no teto nem os de outro interpretador; inicio = GREATEST(scheduled_at, created_at) (misfire)."""
+        cat = self.catalogo
+        scr_sh = self.c["scr"]
+        scr_teto = self._massa.script("teto", max_qtd_parallel_env=1)
+        scr_py = self._massa.script("py", interpretador="PYTHON3", path_file="/opt/tst/%s_py.py" % self._massa.suf)
+        cur = self.conn.cursor()
+        tck = cat.qualificar_tabela("tickets")
+        casos = []
+        # (script, prioridade, minutos de scheduled_at atras, minutos de created_at atras)
+        for i, (sid, prio, sched, crt) in enumerate((
+                (scr_sh["id"], 4, 600, 601), (scr_sh["id"], 1, 5, 6), (scr_sh["id"], 2, 90, 91),
+                (scr_sh["id"], 3, 300, 2),      # misfire: agendado ha 5 h, criado ha 2 min (espera curta)
+                (scr_sh["id"], 2, 30, 31), (scr_sh["id"], 4, 30, 31), (scr_sh["id"], 1, 240, 241),
+                (scr_sh["id"], 3, 61, 62), (scr_sh["id"], 2, 120, 121), (scr_teto["id"], 1, 900, 901),
+                (scr_py["id"], 1, 900, 901), (scr_sh["id"], 3, -60, 1))):    # o ultimo e do futuro
+            tid = self._massa.ticket(ator="teste", script_id=sid, ambiente=self.amb, solicitante=self.c["login"],
+                                     prioridade=prio)
+            cur.execute("UPDATE " + tck + " SET scheduled_at = SYSDATE - :s / 1440, created_at = SYSDATE - :c / 1440"
+                        " WHERE id = :id", s=sched, c=crt, id=tid)
+            casos.append((tid, sid, prio, sched, crt))
+        # O script do teto ja tem um RUNNING no ambiente.
+        rodando = self._massa.ticket(ator="teste", script_id=scr_teto["id"], ambiente=self.amb,
+                                     solicitante=self.c["login"])
+        cur.execute("UPDATE " + tck + " SET status = 'RUNNING', agente_id = 'tst-outro' WHERE id = :id", id=rodando)
+        self.conn.commit()
+        env = 60
+
+        def chave(caso):
+            tid, _sid, prio, sched, crt = caso
+            espera = min(sched, crt)  # minutos desde GREATEST(scheduled_at, created_at)
+            return (max(1, prio - espera // env), -espera, tid)
+        esperado = [c[0] for c in sorted((c for c in casos if c[1] == scr_sh["id"] and c[3] >= 0), key=chave)]
+        for lote in (1, 3, 20):
+            obtidos = [x["id"] for x in self.repo.candidatos(self.conn, [self.amb], ["SH"], lote, env)]
+            self.assertEqual(obtidos, esperado[:lote], "lote %d" % lote)
+        sem_env = [x["id"] for x in self.repo.candidatos(self.conn, [self.amb], ["SH"], 20, 0)]
+        self.assertEqual(sem_env, [c[0] for c in sorted((c for c in casos if c[1] == scr_sh["id"] and c[3] >= 0),
+                                                        key=lambda c: (c[2], -min(c[3], c[4]), c[0]))])
+        com_py = [x["id"] for x in self.repo.candidatos(self.conn, [self.amb], ["SH", "PYTHON3"], 20, env)]
+        self.assertIn(casos[10][0], com_py, "PYTHON3 entra com o interpretador")
+        self.assertNotIn(casos[9][0], com_py, "script no teto fica fora")
+        self.assertNotIn(casos[11][0], com_py, "agendado no futuro fica fora")
 
     def test_ciclo_completo_do_ticket(self):
         aid = self._registrar()

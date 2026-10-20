@@ -607,7 +607,7 @@ CREATE INDEX openrisow.ix_tbsss_tck_crt ON openrisow.tbsss_tickets (created_at, 
 
 CREATE INDEX openrisow.ix_tbsss_tck_hist ON openrisow.tbsss_tickets (script_id, created_at);
 
-CREATE INDEX openrisow.ix_tbsss_tck_fila ON openrisow.tbsss_tickets ((CASE WHEN status = 'PENDING' THEN prioridade END), (CASE WHEN status = 'PENDING' THEN scheduled_at END));
+CREATE INDEX openrisow.ix_tbsss_tck_fila ON openrisow.tbsss_tickets (status, ambiente, prioridade, GREATEST(scheduled_at, created_at), id, script_id);
 
 CREATE INDEX openrisow.ix_tbsss_tck_run ON openrisow.tbsss_tickets ((CASE WHEN status = 'RUNNING' THEN agente_id END));
 

@@ -4,7 +4,7 @@ Consultas SQL estáticas do `RepoAuditoriaOracle` e do `RepoAgentesOracle` (`mod
 
 > **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix` (padrão `tbsss_`). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind, com as datas como `TIPO_DATE` (README §7.5).
 >
-> **Expressões dos índices por função (AGENTS §4.8):** `tickets_running`, `rodando_sem_pid` e `fila_sem_atendente` repetem as expressões `CASE` de `ix_{prefixo}tck_run` e `ix_{prefixo}tck_fila`, importadas do `sql_ident`. Nenhuma das três lê CLOB.
+> **Expressões dos índices por função (AGENTS §4.8):** `tickets_running`, `rodando_sem_pid` e `fila_sem_atendente` repetem as expressões de `ix_{prefixo}tck_run` (`CASE`) e `ix_{prefixo}tck_fila` (`GREATEST(scheduled_at, created_at)`, CR-013), importadas do `sql_ident`. Nenhuma das três lê CLOB.
 
 ---
 
@@ -17,7 +17,7 @@ Consultas SQL estáticas do `RepoAuditoriaOracle` e do `RepoAgentesOracle` (`mod
 | `auditoria.registrar` / `reservar_id` | `INSERT` pela PK; `NEXTVAL` da sequence | — |
 | `agentes.listar` | Todos os agentes por `codigo, id` (dezenas de linhas) | `TABLE ACCESS FULL` aceitável em `tbsss_agentes` |
 | `agentes.tickets_running` | `(CASE WHEN status = 'RUNNING' THEN agente_id END) = :codigo` | `ix_{prefixo}tck_run` |
-| `agentes.fila_sem_atendente` | `(CASE … prioridade END) BETWEEN 1 AND 4 AND (CASE … scheduled_at END) <= :agora`, `JOIN` com `{prefixo}scripts` pelo interpretador do cadastro (CR-008, R-15), `COUNT(*)` e `MIN(scheduled_at)` por ambiente e interpretador | `ix_{prefixo}tck_fila` |
+| `agentes.fila_sem_atendente` (CR-013) | `status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :agora`, `COUNT(*)` e `MIN(inicio)` por ambiente e script, depois `JOIN` com `{prefixo}scripts` pelo interpretador do cadastro (CR-008, R-15) | `ix_{prefixo}tck_fila` só (`INDEX FAST FULL SCAN`, sem tabela): com 1 milhão de `PENDING`, 8.346 leituras e 0,3 s (agregado de toda a fila, só no painel) |
 | `agentes.rodando_sem_pid` | `(CASE WHEN status = 'RUNNING' THEN agente_id END) >= CHR(1)` (equivale a `IS NOT NULL` para o `agent_id`), sem PID e `started_at < :limite` | `ix_{prefixo}tck_run` |
 
 ---

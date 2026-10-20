@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Registrado** em 2026-10-20 pelo responsável pelo produto. A executar depois do CR-012 e antes do F8.3d |
+| Status | **Concluído** em 2026-10-20 (aprovado pelo responsável pelo produto; medição e ciclo 02→01→99 no GFPR com aprovação) |
 | Origem | Pergunta do responsável pelo produto: com mais de 1 milhão de tickets abertos no mesmo ambiente, é possível colocar mais de um agente para atender? |
 | Restrições | Python 3.6. Oracle 11gR2 (sem sintaxe 12c+). A massa de teste no GFPR só com aprovação explícita, porque mexe no banco compartilhado de DEV |
 | Afeta | README §5.3, §8.2 e §14; `docs/explain/SCHEDULER.md`; `sql_ident` (índice da fila); `repo_oracle/scheduler_fila.candidatos` |
@@ -31,3 +31,17 @@
 * O ciclo de claim de um agente com 1 milhão pendentes fica dentro do orçamento de tempo do laço (CR-007), com plano sem `TABLE ACCESS FULL` em `tbsss_tickets` e sem ordenar a fila inteira.
 * Com 5 agentes, o tempo por ciclo não cresce de forma proporcional ao número de agentes.
 * A ordem efetiva da fila (prioridade, envelhecimento, `scheduled_at`, `id`) continua igual à do README §5.3 nos casos de teste existentes.
+
+## 4. Resultado
+
+* **Medição antes (1 milhão de `PENDING` num ambiente, GFPR 19.24, estatísticas reais):** `TABLE ACCESS FULL` + sort de toda a fila; 22.616 leituras lógicas e cerca de 1,25 s por ciclo, igual com 1, 2 e 5 agentes.
+* **Causa adicional achada:** o índice da fila só com `CASE` (para conter só os `PENDING`) nunca deixa o Oracle eliminar o sort, nem com dicas; e devolver a expressão por `CASE` força o acesso à tabela.
+* **Mudança:**
+  * índice `ix_tbsss_tck_fila (status, ambiente, prioridade, GREATEST(scheduled_at, created_at), id, script_id)`, com colunas simples na frente;
+  * `candidatos` em três leituras curtas (scripts do agente, `RUNNING` por par e a janela por ambiente × prioridade com `script_id IN` dos elegíveis e `ROWNUM <= :lote`);
+  * desempate pelo início da espera (`GREATEST(scheduled_at, created_at)`) no lugar de `scheduled_at`, o que torna a janela exata;
+  * `fila_sem_atendente` só no índice, com "mais antigo" = início da espera.
+* **Medição depois (mesma massa, código final):** cada bloco da janela com 3 leituras, sem sort nem tabela; 264 leituras e cerca de 0,18 s por ciclo, com 1, 2 e 5 agentes; resultado idêntico ao da ordenação completa (teste no Oracle real com prioridades, misfire, teto, interpretador e agendamento futuro).
+* **Registro:** README §5.3, §8.2 e §10; AGENTS §4.8; `docs/explain/SCHEDULER.md` §3 e `AUDITORIA_AGENTES.md`.
+* **Fora do escopo:** a contagem do painel "fila sem atendente" continua lendo o índice da fila inteira (agregado, 8.346 leituras com 1 milhão, só na tela de agentes).
+

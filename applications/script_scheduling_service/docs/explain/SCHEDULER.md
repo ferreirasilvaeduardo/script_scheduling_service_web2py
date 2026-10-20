@@ -4,7 +4,7 @@ Consultas do `RepoSchedulerFila` (`modules/repo_oracle/scheduler_fila.py`) no Or
 
 > **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix`, validados por `sql_ident` e qualificados uma vez, na criação do repositório. As listas `IN` (`:amb0..`, `:int0..`) são geradas por contagem e todo valor entra por bind.
 >
-> **Expressões dos índices de função:** `candidatos` usa as expressões de `ix_{prefixo}tck_fila` e `varredura_propria`/`tickets_running_do_agente` a de `ix_{prefixo}tck_run`, textualmente iguais às do `sql_ident` e sem alias de tabela (CR-007, R-32).
+> **Índices:** `candidatos` lê `ix_{prefixo}tck_fila (status, ambiente, prioridade, GREATEST(scheduled_at, created_at), id, script_id)` pela janela do CR-013 (README §8.2); `varredura_propria`/`tickets_running_do_agente` a de `ix_{prefixo}tck_run`, textualmente iguais às do `sql_ident` e sem alias de tabela (CR-007, R-32).
 
 ---
 
@@ -12,7 +12,7 @@ Consultas do `RepoSchedulerFila` (`modules/repo_oracle/scheduler_fila.py`) no Or
 
 | Método | Consulta | Acesso esperado |
 |---|---|---|
-| `candidatos` | `PENDING` vencidos dos ambientes ativos atendidos e dos interpretadores do agente, sem os pares no teto, pela prioridade efetiva (README §8.2; CR-007 R-07; CR-008 R-20), `ROWNUM <= :lote` | `ix_{prefixo}tck_fila` (só os `PENDING`); teto por `ix_{prefixo}tck_scr`; scripts pela PK |
+| `candidatos` (CR-013) | (1) scripts do agente por interpretador; (2) `RUNNING` por script e ambiente; (3) janela: por ambiente e prioridade 1 a 4, os `:lote` primeiros de `PENDING` vencidos por `(inicio, id)` dos scripts abaixo do teto, juntados e ordenados pela prioridade efetiva (README §8.2) | (1) `{prefixo}scripts` (catálogo); (2) faixa `status = 'RUNNING'` de `ix_{prefixo}tck_fila`; (3) `INDEX RANGE SCAN` de `ix_{prefixo}tck_fila` por bloco, sem sort e sem tabela, `COUNT STOPKEY`; só os escolhidos pela PK |
 | `claim` (3 passos) | `SELECT … FOR UPDATE WAIT 5` do script; contagem de `RUNNING` do par; `UPDATE … RETURNING started_at` (README §8.3) | `pk_{prefixo}scripts`; `ix_{prefixo}tck_scr`; `pk_{prefixo}tickets` |
 | `varredura_propria`, `tickets_running_do_agente` | `(CASE WHEN status = 'RUNNING' THEN agente_id END) = :agente_id` (README §8.7) | `ix_{prefixo}tck_run` |
 | `heartbeat` | `executemany` do `UPDATE` por PK dos tickets e `UPDATE` do agente por `codigo` | `pk_{prefixo}tickets`; `uk_{prefixo}agt_codigo` |
@@ -29,7 +29,54 @@ Consultas do `RepoSchedulerFila` (`modules/repo_oracle/scheduler_fila.py`) no Or
 * **`candidatos`:** os tickets vêm só de `INDEX FULL SCAN` em `ix_{prefixo}tck_fila`, que contém apenas os `PENDING` (as linhas dos outros status têm a expressão nula e não entram no índice); o teto usa `INDEX RANGE SCAN` em `ix_{prefixo}tck_scr`. O `TABLE ACCESS FULL` em `tbsss_scripts` é o ramo alternativo do plano **adaptativo** do Oracle 12c+ (`STATISTICS COLLECTOR` escolhe em execução entre nested loops pela PK e hash join); ele incide só sobre o catálogo de scripts. No 11gR2 não há plano adaptativo.
 * **Claim:** os três passos são por PK ou por `ix_{prefixo}tck_scr`; a ordem de locks é `tbsss_scripts` → `tbsss_tickets` (README §8.3).
 
-### Planos registrados (com volume simulado)
+---
+
+## 3. Volume real (CR-013)
+
+**Medido em 2026-10-20**, Oracle 19.24 (`GFPR`), owner `openrisow`, com **1.000.000 de tickets `PENDING` vencidos num único ambiente** (14 scripts, prioridades 1 a 4, espera de até 30 dias), estatísticas reais coletadas (`GATHER_TABLE_STATS`, `cascade`), `statistics_level = ALL` e `DBMS_XPLAN.DISPLAY_CURSOR(..., 'ALLSTATS LAST')`. A massa (`created_by = 'TST:cr013'`) foi removida no fim, e as estatísticas voltaram ao estado da implantação (tabela sem estatística, índices recoletados).
+
+* **Antes (índice só dos `PENDING` por `CASE` e ordenação de toda a fila):** `TABLE ACCESS FULL` de `tbsss_tickets` (1.000.000 de linhas), `INDEX FAST FULL SCAN` de `ix_tck_scr` para o teto e `SORT ORDER BY STOPKEY` sobre o milhão, para devolver 20 linhas. Com um índice de `CASE` em todas as colunas, o Oracle nunca elimina o sort (lê a faixa inteira), nem com dicas.
+* **Depois (CR-013):** cada bloco da janela é um `INDEX RANGE SCAN` de `ix_tbsss_tck_fila` com 3 leituras, sem sort e sem acesso à tabela; só os 80 escolhidos voltam à tabela pela PK. Resultado idêntico ao da ordenação completa da fila.
+
+| Agentes simultâneos | Antes: mediana / leituras | CR-013: mediana / leituras |
+|---|---|---|
+| 1 | 1,28 s / 22631 | 0,18 s / 275 |
+| 2 | 1,21 s / 22616 | 0,18 s / 264 |
+| 5 | 1,25 s / 22616 | 0,17 s / 264 |
+
+O tempo que resta é quase todo de ida e volta à rede (três consultas curtas). O custo da janela não depende do tamanho da fila: cresce com `ambientes atendidos × 4 × :lote`.
+
+### candidatos (CR-013, execução real com 1 milhão de PENDING)
+
+```text
+| Id  | Operation                       | Name              | Starts | A-Rows | Buffers |
+|   0 | SELECT STATEMENT                |                   |      1 |     20 |     254 |
+|*  1 |  COUNT STOPKEY                  |                   |      1 |     20 |     254 |
+|   2 |   VIEW                          |                   |      1 |     20 |     254 |
+|*  3 |    SORT ORDER BY STOPKEY        |                   |      1 |     20 |     254 |
+|   4 |     NESTED LOOPS                |                   |      1 |     80 |     254 |
+|   5 |      NESTED LOOPS               |                   |      1 |     80 |     174 |
+|   6 |       VIEW                      |                   |      1 |     80 |      12 |
+|   7 |        UNION-ALL                |                   |      1 |     80 |      12 |
+|*  8 |         COUNT STOPKEY           |                   |      1 |     20 |       3 |
+|   9 |          VIEW                   |                   |      1 |     20 |       3 |
+|* 10 |           INDEX RANGE SCAN      | IX_TBSSS_TCK_FILA |      1 |     20 |       3 |
+|* 11 |         COUNT STOPKEY           |                   |      1 |     20 |       3 |
+|  12 |          VIEW                   |                   |      1 |     20 |       3 |
+|* 13 |           INDEX RANGE SCAN      | IX_TBSSS_TCK_FILA |      1 |     20 |       3 |
+|* 14 |         COUNT STOPKEY           |                   |      1 |     20 |       3 |
+|  15 |          VIEW                   |                   |      1 |     20 |       3 |
+|* 16 |           INDEX RANGE SCAN      | IX_TBSSS_TCK_FILA |      1 |     20 |       3 |
+|* 17 |         COUNT STOPKEY           |                   |      1 |     20 |       3 |
+|  18 |          VIEW                   |                   |      1 |     20 |       3 |
+|* 19 |           INDEX RANGE SCAN      | IX_TBSSS_TCK_FILA |      1 |     20 |       3 |
+|* 20 |       INDEX UNIQUE SCAN         | PK_TBSSS_TICKETS  |     80 |     80 |     162 |
+|* 21 |      TABLE ACCESS BY INDEX ROWID| TBSSS_TICKETS     |     80 |     80 |      80 |
+```
+
+Pior caso conhecido: um script no teto com a fila inteira à frente dos demais. O filtro `script_id IN (...)` é aplicado no próprio índice, então o bloco percorre só entradas de índice (sem tabela) até achar o lote.
+
+### Planos registrados (com volume simulado, F8.3a; o de `candidatos` foi substituído pelo da seção 3)
 
 ### candidatos
 

@@ -1186,9 +1186,9 @@ class TestOracleAuditoriaAgentes(unittest.TestCase):
         import sql_ident
         self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENTE_CASE + ") = :codigo", self.agt._sql["TICKETS_RUNNING"])
         self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENTE_CASE + ") >= CHR(1)", self.agt._sql["RODANDO_SEM_PID"])
-        self.assertIn("(" + sql_ident.FBI_TCK_FILA_PRIO_CASE + ") BETWEEN 1 AND 4", self.agt._sql["FILA"])
-        self.assertIn("(" + sql_ident.FBI_TCK_FILA_SCHED_CASE + ") <= :agora", self.agt._sql["FILA"])
-        self.assertIn("JOIN " + self.agt._idents["scr"] + " s ON s.id = t.script_id", self.agt._sql["FILA"])
+        # CR-013: so ix_tck_fila (status lider e o inicio da espera), agrupado por script antes do JOIN.
+        self.assertIn("WHERE status = 'PENDING' AND " + sql_ident.FBI_TCK_FILA_INICIO + " <= :agora", self.agt._sql["FILA"])
+        self.assertIn("JOIN " + self.agt._idents["scr"] + " s ON s.id = g.script_id", self.agt._sql["FILA"])
         for nome in ("TICKETS_RUNNING", "FILA", "RODANDO_SEM_PID"):
             self.assertNotIn("log_output", self.agt._sql[nome])
             self.assertNotIn("parametros_enviados", self.agt._sql[nome])

@@ -53,14 +53,16 @@ class RepoAgentesFake(RepoAgentes):
             for t in self._store.tickets.values():
                 if t["status"] != "PENDING" or t["scheduled_at"] > agora:
                     continue
+                # Inicio da espera (CR-013): o mesmo de ix_tck_fila e do envelhecimento da fila.
+                inicio = max(t["scheduled_at"], t.get("created_at") or t["scheduled_at"])
                 # Mesmo criterio do claim: interpretador do cadastro, sem ler o snapshot (CR-008, R-15).
                 chave = (t["ambiente"], interpretadores.get(t["script_id"]))
                 if chave in atendidos:
                     continue
                 grupo = grupos.setdefault(chave, {"ambiente": chave[0], "interpretador": chave[1],
-                                                  "quantidade": 0, "mais_antigo": t["scheduled_at"]})
+                                                  "quantidade": 0, "mais_antigo": inicio})
                 grupo["quantidade"] += 1
-                grupo["mais_antigo"] = min(grupo["mais_antigo"], t["scheduled_at"])
+                grupo["mais_antigo"] = min(grupo["mais_antigo"], inicio)
         return [grupos[chave] for chave in sorted(grupos)]
 
     def rodando_sem_pid(self, agora, minutos):

@@ -22,15 +22,14 @@ _RE_IDENT = re.compile(PADRAO_IDENTIFICADOR)
 _RE_IDENT_ASCII_LOWER = re.compile(PADRAO_IDENT_ASCII_LOWER)
 
 # Expressoes literais de indices baseados em funcao (FBI) - README §10.13 e AGENTS §4.8
-FBI_TCK_FILA_EXPR = (
-    "((CASE WHEN status = 'PENDING' THEN prioridade END), "
-    "(CASE WHEN status = 'PENDING' THEN scheduled_at END))"
-)
+# Fila (CR-013): colunas simples na frente e o inicio da espera, para a janela por ambiente e prioridade
+# ler o indice ja na ordem da fila e parar no lote (INDEX RANGE SCAN sem sort, sem acesso a tabela).
+# Com CASE em todas as colunas (indice so dos PENDING) o Oracle nunca elimina o sort (medido no GFPR 19c).
+FBI_TCK_FILA_INICIO = "GREATEST(scheduled_at, created_at)"
+FBI_TCK_FILA_EXPR = "(status, ambiente, prioridade, " + FBI_TCK_FILA_INICIO + ", id, script_id)"
 FBI_TCK_RUN_EXPR = "((CASE WHEN status = 'RUNNING' THEN agente_id END))"
 
 # Cláusulas CASE individuais para composicao identica em queries (README §10.13, AGENTS §4.8)
-FBI_TCK_FILA_PRIO_CASE = "CASE WHEN status = 'PENDING' THEN prioridade END"
-FBI_TCK_FILA_SCHED_CASE = "CASE WHEN status = 'PENDING' THEN scheduled_at END"
 FBI_TCK_RUN_AGENTE_CASE = "CASE WHEN status = 'RUNNING' THEN agente_id END"
 
 # Saidas ainda em gravacao, por agente (CR-012): o startup check acha so as linhas GRAVANDO dele.

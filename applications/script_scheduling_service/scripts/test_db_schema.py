@@ -330,8 +330,9 @@ class TestDbSchema(unittest.TestCase):
 
     def test_expressoes_fbi_literais(self):
         """Verifica que as constantes de FBI sao strings unicas identicas ao README."""
-        self.assertIn("CASE WHEN status = 'PENDING' THEN prioridade END", FBI_TCK_FILA_EXPR)
-        self.assertIn("CASE WHEN status = 'PENDING' THEN scheduled_at END", FBI_TCK_FILA_EXPR)
+        # CR-013: colunas simples na frente e o inicio da espera (sem CASE: o Oracle elimina o sort).
+        self.assertEqual(FBI_TCK_FILA_EXPR,
+                         "(status, ambiente, prioridade, GREATEST(scheduled_at, created_at), id, script_id)")
         self.assertIn("CASE WHEN status = 'RUNNING' THEN agente_id END", FBI_TCK_RUN_EXPR)
 
         esquema = nomes("tbsss_")
