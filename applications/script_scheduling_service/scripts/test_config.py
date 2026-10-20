@@ -143,7 +143,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg.agent.ambientes_atendidos, ("PRODUCAO", "HOMOLOGACAO"))
         self.assertFalse(hasattr(cfg.agent, "base_script_dirs"))
         self.assertEqual(cfg.agent.work_dir, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work")
-        self.assertEqual(cfg.agent.script_owner_uids, (0,))
+        self.assertFalse(hasattr(cfg.agent, "script_owner_uids"), "CR-011")
         self.assertEqual(cfg.agent.max_parallel_jobs, 4)
         self.assertEqual(cfg.agent.max_parallel_hard_limit, 32)
         self.assertEqual(cfg.agent.claim_batch_size, 20)
@@ -248,10 +248,12 @@ class TestConfig(unittest.TestCase):
         with self.assertRaises(sss_config.ConfigErro):
             sss_config.carregar(ini_enum)
 
-        # UIDs invalidos
-        ini_uid = self._copiar_e_modificar_ini(alteracoes={"agent": {"script_owner_uids": "root"}})
-        with self.assertRaises(sss_config.ConfigErro):
-            sss_config.carregar(ini_uid)
+        # Chaves removidas no CR-011: recusadas com orientacao, nunca ignoradas.
+        for chave in ("script_owner_uids", "ambientes_exigem_hash"):
+            ini = self._copiar_e_modificar_ini(alteracoes={"agent": {chave: "0"}})
+            with self.assertRaises(sss_config.ConfigErro) as ctx:
+                sss_config.carregar(ini)
+            self.assertIn("apague a linha %s" % chave, str(ctx.exception))
 
     def test_fora_da_faixa(self):
         """Verifica rejeicao de valores fora das faixas minimas/maximas."""
@@ -671,10 +673,8 @@ class TestConfigCR007(unittest.TestCase):
         # CR-008, R-32: minimo de 1461 dias (cobre o 29/02).
         self._recusa("cron_horizon_days", agent={"cron_horizon_days": "1460"})
         self.assertEqual(self._carregar(agent={"cron_horizon_days": "1461"}).agent.cron_horizon_days, 1461)
-        cfg = self._carregar()
-        self.assertEqual((cfg.agent.ambientes_exigem_hash, cfg.agent.log_dir_min_livre_mb), ((), 1024))
-        cfg = self._carregar(agent={"ambientes_exigem_hash": "PRODUCAO", "log_dir_min_livre_mb": "0"})
-        self.assertEqual((cfg.agent.ambientes_exigem_hash, cfg.agent.log_dir_min_livre_mb), (("PRODUCAO",), 0))
+        self.assertEqual(self._carregar().agent.log_dir_min_livre_mb, 1024)
+        self.assertEqual(self._carregar(agent={"log_dir_min_livre_mb": "0"}).agent.log_dir_min_livre_mb, 0)
         self._recusa("log_dir_min_livre_mb", agent={"log_dir_min_livre_mb": "-1"})
         self._recusa("max_log_size_bytes", logging={"max_log_size_bytes": str(64 * 1024 * 1024 + 1)})
         self._recusa("audit_retention_days", retencao={"audit_retention_days": "364"})

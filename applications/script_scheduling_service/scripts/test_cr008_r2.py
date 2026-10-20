@@ -52,8 +52,7 @@ class TestResponsavelMascarado(unittest.TestCase):
         auth = auth_service.ServicoAuth(r("usuarios"), r("rbac"), r("catalogo"), r("auditoria"), 5, 900, log)
         self.admin = auth.revalidar(SESSAO_ADMIN)
         tickets = r("tickets")
-        ticket = ServicoTicket(catalogo=r("catalogo"), tickets=tickets, script_owner_uids=(0,), log=log,
-                               dirs_sss=("/nao/existe/log", "/nao/existe/work"))
+        ticket = ServicoTicket(catalogo=r("catalogo"), tickets=tickets, log=log)
         self.svc = ServicoAgendamentos(r("agendamentos"), r("catalogo"), r("usuarios"), ticket, tickets.agora, 1461, log)
         # op.prod com o necessario para ver as regras, mas sem VER_AUDITORIA.
         self.operador = dict(self.admin, usuario_id=2, login="op.prod", is_admin=False,

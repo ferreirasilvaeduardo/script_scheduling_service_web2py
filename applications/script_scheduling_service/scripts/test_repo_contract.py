@@ -831,6 +831,9 @@ class _OracleContrato(object):
     def tearDownClass(cls):
         repo_factory.configurar(None)
         repo_factory.reset_singletons()
+        # O pool Thin do papel web mantem uma thread viva; os testes do agente exigem thread unica.
+        from repo_oracle import base as base_oracle
+        base_oracle.descartar_pools()
         if cls._tinha_sss_cfg:
             current.sss_cfg = cls._sss_cfg_anterior
         elif hasattr(current, "sss_cfg"):

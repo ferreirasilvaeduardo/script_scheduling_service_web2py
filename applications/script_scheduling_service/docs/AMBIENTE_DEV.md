@@ -191,37 +191,28 @@ A pasta `dev/scripts/` contém scripts de exemplo **sem lógica perigosa**, usad
 | `carga_diaria.py`, `relatorio_mensal.py`, `validacao_fiscal.py`, `cleanup_tmp.sh`, `sync_tabelas.sh`, `backup_extra.sh` | Correspondem aos `path_file` do seed FAKE e imprimem os argumentos |
 | `utilitarios/*.py` e `utilitarios/*.sh` | 14 scripts utilitários de arquivos (zip, tar.gz, divisão, concatenação, encoding, substituição, deduplicação, hash, contagem, filtros, ordenação e limpeza). Detalhes em `docs/SCRIPTS_UTILITARIOS.md` |
 
-### 6.1 Dono e permissões exigidos pelo `path_guard` (CR-005)
+### 6.1 O que o `path_guard` confere (CR-005, CR-011)
 
-O script fica num **caminho absoluto** em qualquer lugar do servidor (`path_file`, README §8.5); não há pastas base. O `path_guard` confere o arquivo e **cada diretório até `/`**:
+O script fica num **caminho absoluto** em qualquer lugar do servidor (`path_file`, README §8.5); não há pastas base. O ambiente controla o conteúdo e a versão dos scripts (CR-011): não há hash nem conferência do dono.
 
-* o dono do arquivo é um UID de `script_owner_uids`; o dono de cada diretório é o root ou um UID de `script_owner_uids`;
-* nenhum deles tem escrita para grupo ou outros (`st_mode & 0o022 == 0`), o que exclui `/tmp` e pastas compartilhadas;
-* o usuário que roda o SSS **não** consegue escrever em nenhum deles (`os.access(p, os.W_OK)` falso), e nenhum deles pertence a esse usuário nem a um usuário de execução (CR-007);
-* não há link simbólico em nenhum ponto do caminho (`CAMINHO_COM_LINK`, CR-007): o caminho cadastrado é igual ao `realpath`;
-* o caminho, digitado ou resolvido, não fica em pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`) nem dentro de `log_dir` ou `work_dir`.
+* **No nó web** (cadastro e disparo): só o formato do caminho e as pastas do sistema. O arquivo não precisa existir na sua máquina, e não há aviso.
+* **No agente**, a cada execução:
+  * o caminho pode ser link simbólico; o agente resolve o caminho real e executa o arquivo real;
+  * o caminho, cadastrado ou real, não fica em pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`) nem dentro de `log_dir`, `work_dir` ou `exec_work_dir`;
+  * o arquivo real existe, é arquivo regular e não tem escrita para grupo nem para outros (`st_mode & 0o022 == 0`); as pastas do caminho não são conferidas.
 
-Por causa da cadeia até `/`, **nenhuma pasta dentro do seu `$HOME` passa**: o próprio `$HOME` pertence a você e tem escrita do dono, então o `path_guard` recusa com `GRAVAVEL_PELO_AGENTE` ("O arquivo, ou uma pasta do caminho, é gravável pelo usuário do sistema; ajuste as permissões."). Executar como `root` também não resolve: o launcher recusa root, e `os.access(W_OK)` é sempre verdadeiro para ele.
-
-Os scripts do seed FAKE apontam para `/opt/automacoes/scripts/<arquivo>` (ex.: `/opt/automacoes/scripts/carga_diaria.py`). Há duas formas de trabalhar:
-
-**A. Com `sudo` (validação completa no nó web):** instale a árvore como root, no caminho do seed:
+Em DEV, uma pasta do seu `$HOME` serve, desde que o arquivo tenha modo `0644` ou `0755`. Os scripts do seed FAKE apontam para `/opt/automacoes/scripts/<arquivo>` (ex.: `/opt/automacoes/scripts/carga_diaria.py`). Para o agente encontrá-los, crie o link uma vez:
 
 ```bash
 cd applications/script_scheduling_service
+chmod -R go-w dev/scripts
 sudo install -d -o root -g root -m 0755 /opt/automacoes
-sudo rm -rf /opt/automacoes/scripts
-sudo cp -r dev/scripts /opt/automacoes/scripts
-sudo rm -f /opt/automacoes/scripts/.gitkeep
-sudo chown -R root:root /opt/automacoes/scripts
-sudo find /opt/automacoes/scripts -type d -exec chmod 0755 {} +
-sudo find /opt/automacoes/scripts -type f -exec chmod 0644 {} +
+sudo ln -sfn "$PWD/dev/scripts" /opt/automacoes/scripts
 ```
 
-Em `instance/config.ini`, seção `[agent]`: `script_owner_uids = 0` (o padrão do exemplo). Para alterar um script, use `sudo` e mantenha os modos acima.
+Sem `sudo`, cadastre os scripts com o caminho real de `dev/scripts`.
 
-**B. Sem `sudo`:** não instale nada. Como os arquivos do seed não existem na sua máquina, o nó web segue o README §8.5 (D4): ao salvar um script na **Gestão de Scripts** aparece o aviso "Arquivo não encontrado neste servidor: a validação ocorrerá no agente. Se o arquivo não existir lá, a execução será recusada.", e o disparo cria o ticket normalmente (o log registra `arquivo do script nao existe no no web; o agente confere`). Para ver uma recusa de permissão na tela, cadastre um caminho dentro do seu `$HOME`, por exemplo `$PWD/dev/scripts/carga_diaria.py`: o salvamento é bloqueado. Com `script_owner_uids = 0`, a recusa é `DONO_INVALIDO` ("O arquivo, ou uma pasta do caminho, pertence a um usuário não autorizado."); com o seu UID incluído, é `GRAVAVEL_PELO_AGENTE`.
-
+* As chaves `script_owner_uids` e `ambientes_exigem_hash` foram retiradas (CR-011). Se ainda estiverem no seu `config.ini`, a subida aborta com "Chave removida: ...; apague a linha". Apague a linha.
 * As chaves `base_script_dirs` e a antiga `base_script_dir` foram retiradas (CR-005). Se ainda estiverem no seu `config.ini`, a subida aborta com "Chave desconhecida na secao [agent]". Apague a linha.
 * `app_log_backups` foi trocada por `app_log_retention_days` (dias de retenção do log da aplicação, README §13).
 
@@ -241,7 +232,7 @@ Em `instance/config.ini`, seção `[agent]`: `script_owner_uids = 0` (o padrão 
 
 * Em DEV, `[agent] usuarios_execucao` pode ficar vazio: o agente executa os scripts com o próprio usuário e registra WARN `SEM_USUARIO_EXECUCAO`. Para testar o helper e o `sudo` como nos servidores, siga o `IMPLANTACAO.md` §18.1 numa VM.
 * `cron_horizon_days` vai de 1.461 a 36.500 (CR-008, R-32), `max_log_size_bytes` até 64 MiB e `audit_retention_days` de 365 a 3.650 (e não menor que `ticket_retention_days`); o `table_prefix` só aceita minúsculas. Um `config.ini` antigo fora dessas faixas aborta a subida com a chave no log.
-* **CR-008:** `[web] sessao_max_horas` (padrão 12), `[agent] ambientes_exigem_hash` (vazio em DEV, sem aviso) e `[agent] log_dir_min_livre_mb` (padrão 1.024; 0 desliga, só em DEV) são opcionais. Em DEV, `[oracle] user` pode ser igual ao `owner`; fora de DEV, é recusado. O `scripts/saude.py` lê só a seção `[monitor]` do `secrets.cfg`.
+* **CR-008:** `[web] sessao_max_horas` (padrão 12) e `[agent] log_dir_min_livre_mb` (padrão 1.024; 0 desliga, só em DEV) são opcionais. Em DEV, `[oracle] user` pode ser igual ao `owner`; fora de DEV, é recusado. O `scripts/saude.py` lê só a seção `[monitor]` do `secrets.cfg`.
 
 ---
 

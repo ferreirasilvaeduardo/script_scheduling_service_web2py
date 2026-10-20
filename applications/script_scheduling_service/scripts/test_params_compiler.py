@@ -20,7 +20,7 @@ from params_compiler import ParamErro, SnapshotErro
 AGENTE_FALSO = 2 ** 31 - 3
 
 AGORA = datetime.datetime(2026, 10, 13, 10, 47, 0, 123456)
-CfgAgente = collections.namedtuple("CfgAgente", ["script_owner_uids", "interpretadores"])
+CfgAgente = collections.namedtuple("CfgAgente", ["interpretadores"])
 CHAVES_6_5 = {"versao", "script_id", "script_nome", "interpretador", "path_file", "tipo_param", "args",
               "respostas", "sensiveis", "compilado_em"}
 EXE_PY = "/usr/bin/python3"
@@ -424,20 +424,11 @@ class TestValidarSnapshot(unittest.TestCase):
         os.chmod(self.arq, 0o444)
         os.chmod(os.path.join(self.base, "faturamento"), 0o555)
         os.chmod(self.base, 0o555)
-        self.cfg = CfgAgente((os.getuid(),), {"PYTHON3": EXE_PY, "SH": "/bin/sh"})
+        self.cfg = CfgAgente({"PYTHON3": EXE_PY, "SH": "/bin/sh"})
         self.real = os.path.realpath(self.arq)
         v = [prm("data_ref", "DATE", ordem=1, obrigatorio="S", flag="--data")]
         scr = dict(script(), path_file=self.arq)
         self.js = pc.compilar_snapshot(scr, v, {"data_ref": "2026-10-13"}, AGORA)[0]
-        # A arvore fica sob /tmp (escrita para todos): a cadeia de pastas para na base travada. Os arquivos
-        # sao do usuario do teste; o agente e simulado por outro UID (CR-007, R-15: o agente nunca e dono).
-        original = path_guard.resolver
-        patcher = mock.patch.object(path_guard, "resolver",
-                                    lambda p, u, uid_agente=None, dirs_sss=(), parar_em="/", uids_proibidos=():
-                                    original(p, u, AGENTE_FALSO if uid_agente is None else uid_agente,
-                                             dirs_sss, self.base, uids_proibidos))
-        patcher.start()
-        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         for raiz, _, _ in os.walk(self.raiz):
@@ -491,16 +482,14 @@ class TestValidarSnapshot(unittest.TestCase):
         self.assertEqual(self._motivo(self._alterado(path_file="x.py")), "PATH_GUARD_CAMINHO_RELATIVO")
         self.assertEqual(self._motivo(self._alterado(path_file="/opt/../x.py")), "PATH_GUARD_CONTEM_PONTOS")
         self.assertEqual(self._motivo(self._alterado(path_file="/etc/passwd")), "PATH_GUARD_PASTA_DO_SISTEMA")
-        outro = CfgAgente((os.getuid() + 1,), self.cfg.interpretadores)
-        self.assertEqual(self._motivo(self.js, outro), "PATH_GUARD_DONO_INVALIDO")
         self.assertEqual(self._motivo(self._alterado(path_file=os.path.join(self.base, "nao_existe.py"))),
                          "PATH_GUARD_NAO_ENCONTRADO")
         self.assertEqual(self._motivo(self._alterado(path_file=os.path.join(self.base, "faturamento"))),
                          "PATH_GUARD_NAO_E_ARQUIVO")
 
     def test_log_dir_e_work_dir_do_agente(self):
-        cfg = collections.namedtuple("CfgDirs", ["script_owner_uids", "interpretadores", "dirs_sss"])(
-            (os.getuid(),), self.cfg.interpretadores, (os.path.join(self.base, "faturamento"),))
+        cfg = collections.namedtuple("CfgDirs", ["interpretadores", "dirs_sss"])(
+            self.cfg.interpretadores, (os.path.join(self.base, "faturamento"),))
         self.assertEqual(self._motivo(self.js, cfg), "PATH_GUARD_PASTA_DO_SSS")
 
 

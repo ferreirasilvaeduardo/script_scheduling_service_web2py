@@ -212,7 +212,7 @@ Não prossiga se algum desses passos falhar.
 
 ### 8.1 Árvore de scripts de exemplo (necessária para disparar tickets)
 
-Os scripts do seed FAKE apontam para caminhos absolutos em `/opt/automacoes/scripts` (ex.: `/opt/automacoes/scripts/carga_diaria.py`). Com o CR-005 não há pastas base: o `path_guard` (README §8.5) confere o **arquivo** e **cada diretório até `/`**. O arquivo precisa pertencer a um UID de `script_owner_uids`; cada diretório, ao root ou a um UID de `script_owner_uids`; e nenhum deles pode ter escrita para grupo, para outros ou **para o usuário `sss`**. Pastas do sistema (`/bin`, `/usr`, `/etc`, ...) e as pastas `log_dir`/`work_dir` são recusadas. O modelo correto é a árvore pertencer ao `root`:
+Os scripts do seed FAKE apontam para caminhos absolutos em `/opt/automacoes/scripts` (ex.: `/opt/automacoes/scripts/carga_diaria.py`). Com o CR-005 não há pastas base, e com o CR-011 o ambiente controla o conteúdo e a versão dos scripts. O agente (README §8.5) confere só o **arquivo real** (o caminho pode ser link simbólico): existe, é arquivo regular e não tem escrita para grupo nem para outros. Pastas do sistema (`/bin`, `/usr`, `/etc`, ...) e as pastas `log_dir`/`work_dir`/`exec_work_dir` são recusadas. Um modelo simples é a árvore pertencer ao `root`:
 
 ```bash
 sudo install -d -o root -g root -m 0755 /opt/automacoes
@@ -228,9 +228,7 @@ sudo -u sss test -r /opt/automacoes/scripts/carga_diaria.py && echo "leitura OK"
 sudo -u sss test -w /opt/automacoes/scripts/carga_diaria.py || echo "sem escrita OK"
 ```
 
-No `config.ini` (§9): `script_owner_uids = 0`.
-
-> **Sem `sudo`:** uma árvore numa pasta do próprio `sss` (ou de qualquer usuário que rode o SSS) **não passa**, porque a pasta pessoal dele é gravável por ele (`GRAVAVEL_PELO_AGENTE`). Nesse caso, não instale a árvore: como os arquivos do seed não existem neste servidor, a **Gestão de Scripts** mostra o aviso "Arquivo não encontrado neste servidor: a validação ocorrerá no agente…" e o disparo cria o ticket normalmente, deixando a conferência para o agente (README §8.5, D4). Foi assim que o ensaio sem `sudo` funcionou (`docs/AMBIENTE_DEV.md` §6.1, opção B).
+> **Sem `sudo`:** a árvore pode ficar numa pasta do próprio `sss`, desde que os arquivos não tenham escrita para grupo nem para outros (`chmod -R go-w`). O nó web não confere o arquivo (CR-011, S1); quem confere é o agente, no servidor onde o script roda.
 
 > **Atualização de instalações anteriores (CR-005):** as chaves `[agent] base_script_dirs` e a antiga `base_script_dir` saíram, e `[logging] app_log_backups` foi trocada por `app_log_retention_days`. Antes de subir a versão nova, apague a linha da pasta base e troque a de backups (§16.3); senão a subida é abortada com CRITICAL "Chave desconhecida".
 
@@ -278,7 +276,6 @@ O `config.ini` não contém segredos. **Toda chave é validada na subida**: chav
 | `[app]` | `data_backend` | — | **Removida no F7.3**: apague a linha; a aplicação usa sempre o Oracle do `[oracle]` |
 | `[secrets]` | `secrets_file` | `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance` | Caminho absoluto do §8.2 |
 | `[agent]` | `agent_id` | identificador do servidor, ex.: `srv-sss-hml-01` | Aparece em todas as linhas de log; `^[A-Za-z0-9._-]{1,30}$` |
-| `[agent]` | `script_owner_uids` | `0` | UID do dono da árvore do §8.1 (root). Os diretórios do caminho do script podem pertencer ao root mesmo sem o 0 na lista; com scripts reais, prefira um UID dedicado (README §8.5) |
 | `[agent]` | `work_dir` | `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work` | Reservado ao agente (F8) |
 | `[logging]` | `log_dir` | `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs` | Criado com `0750` se não existir |
 | `[logging]` | `level` | `INFO` | `DEBUG` só para investigação |
@@ -586,7 +583,8 @@ Mensagens reais, capturadas no ensaio. Para os erros de subida, use sempre o tes
 | Formulários retornam "Requisição recusada." (HTTP 403) | Log da aplicação: `requisicao rejeitada (motivo=origem ...)` | Acesso por endereço que não está em `allowed_origins` (típico com proxy reverso) | Incluir a URL pública em `allowed_origins` (§13.2) |
 | Idem | `motivo=csrf` | Página aberta há muito tempo ou sessão expirada | Recarregar a página e repetir |
 | Sessão cai sozinha | "Você ficou um tempo sem usar o sistema e saiu por segurança. Entre de novo." | 30 min sem uso (`session_idle_timeout_s`) | Comportamento esperado |
-| Criar ticket falha com aviso de script indisponível | Log da aplicação: `path_guard rejeitou o script (... codigo=...)` | O arquivo existe neste servidor, mas ele ou uma pasta do caminho até `/` está fora do padrão do §8.1 (dono fora de `script_owner_uids`, escrita de grupo/outros ou do `sss`) | Refazer §8.1 e conferir `script_owner_uids` |
+| Criar ticket falha com aviso de script indisponível | Log da aplicação: `path_guard rejeitou o script (... codigo=...)` | O caminho cadastrado está fora do formato ou numa pasta do sistema (o nó web não confere o arquivo, CR-011) | Corrigir o caminho na Gestão de Scripts |
+| Ticket termina em `PRECHECK_FAILED` com código do `path_guard` | Linha `[SSS] pré-validação recusada: <código>` no log do ticket | No servidor do agente, o arquivo real não existe (`NAO_ENCONTRADO`), não é acessível (`SEM_ACESSO`), não é arquivo regular ou é gravável por grupo ou outros (`GRAVAVEL_GRUPO_OUTROS`) | Ajustar o arquivo no servidor do agente (`chmod go-w`) |
 | Ao salvar um script: "Arquivo não encontrado neste servidor: a validação ocorrerá no agente. Se o arquivo não existir lá, a execução será recusada." | Formulário de **Gestão de Scripts** | O caminho absoluto informado não existe neste servidor (README §8.5, D4) | Esperado para script que só existe nos agentes, e para o seed sem a árvore do §8.1. Se o arquivo deveria existir aqui, confira o caminho |
 | Raiz `http://localhost:8000/` dá 404 | — | A raiz aponta para a aplicação `welcome`, removida | Use `/script_scheduling_service` |
 | Aviso `unable to create welcome.w2p file` na subida | Terminal | Mesma causa acima | Ignorar |
@@ -607,8 +605,8 @@ Ainda **não executável** (F7–F9). O `docs/RUNBOOK.md` será entregue no F9.1
 | Oracle Instant Client 19 | Obrigatório se o banco for 11g (o modo Thin não conecta ao 11g); recomendado em todos os nós como contingência | README §2.3, CR-002 |
 | Driver Python | `python-oracledb` (`< 2.0` na 3.6; `2.x` na 3.7+) com `cryptography`, e `cx_Oracle 8.3` como contingência, **pré-instalados** pela infraestrutura | AGENTS §2.2 |
 | Servidores agentes | Linux (ou outro Unix, sob demanda), com conta de serviço sem privilégio administrativo; interpretadores (`python3`, `bash`, `sh`) nos caminhos que serão mapeados, com dono root e sem escrita de grupo ou outros (o agente confere a cadeia, CR-007) | README §2.6, §8.5, CR-005 |
-| Usuários de execução (CR-007, D1) | Um usuário do sistema operacional **por ambiente** (ex.: `sssprd`, `ssshml`), sem login interativo, sem senha, diferente da conta do agente e fora de `script_owner_uids`; pasta `exec_work_dir/<usuário>` com dono o próprio usuário e `0700`; cota de disco e limite de processos (`nproc`) para cada um; o helper e o `sudoers` do §18.1 | README §8.0, §8.4 |
-| Scripts reais | Em qualquer pasta, fora das pastas do sistema; dono de preferência um usuário dedicado (em `script_owner_uids`), sem escrita para grupo e outros, e **sem** pertencer à conta do agente nem a um usuário de execução, no arquivo e em toda a cadeia de pastas; sem link simbólico no caminho (CR-007) | README §8.5, CR-005, CR-007 |
+| Usuários de execução (CR-007, D1) | Um usuário do sistema operacional **por ambiente** (ex.: `sssprd`, `ssshml`), sem login interativo, sem senha, diferente da conta do agente e do root; pasta `exec_work_dir/<usuário>` com dono o próprio usuário e `0700`; cota de disco e limite de processos (`nproc`) para cada um; o helper e o `sudoers` do §18.1 | README §8.0, §8.4 |
+| Scripts reais | Em qualquer pasta, fora das pastas do sistema e do SSS; o caminho pode ser link simbólico; o arquivo real sem escrita para grupo e outros. O conteúdo e a versão são controlados pelo ambiente: o SSS não confere hash nem dono (CR-011) | README §8.5, CR-005, CR-011 |
 | Contas Oracle por papel (CR-007, D1b; CR-008, E3) | Cinco contas: dona do esquema (só para o `init_db.py`), `sss_web`, `sss_agente`, `sss_purge` e `sss_monitor` (só leitura, para o `saude.py`), com os GRANTs do README §11.1 (o `init_db.py --grants-para` imprime o script). A conta da aplicação nunca é a dona do esquema (recusado fora de DEV, CR-008 R-29) | README §4.1, §11.1 |
 | Partição dos logs (CR-008, R-25) | `log_dir` num sistema de arquivos próprio nos agentes, com alerta de uso; a cota do usuário de execução não o protege (§18.1) | README §8.2, §14 |
 | Banco: tempo e sessões (CR-007) | Fuso do servidor de banco **sem horário de verão** (UTC recomendado) e NTP em modo *slew* em todas as instâncias; `SQLNET.EXPIRE_TIME = 1` no `sqlnet.ora` do servidor de banco, para derrubar sessões mortas que seguram lock; job automático de estatísticas ativo para o esquema | README §7.1, §8.8, §11.1 |
@@ -637,7 +635,6 @@ sssagente ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 * O agente confere tudo na subida (`sudo -n -l`, dono e modo do helper, usuários e pastas; README §8.0) e recusa subir com CRITICAL se algo faltar.
 * **Cota e limites por usuário de execução:** cota de disco na partição de `exec_work_dir` e `nproc`/`nofile` em `/etc/security/limits.d/`, para que um script não esgote o servidor.
 * **Disco dos logs (CR-008, R-25):** a cota do usuário de execução **não** protege o `log_dir`: o arquivo de log de cada ticket pertence à conta do agente, e o script só escreve no descritor herdado. Por isso, `log_dir` fica numa **partição própria** (ou num volume lógico próprio), separada de `/`, `work_dir` e `exec_work_dir`, dimensionada para `local_log_retention_days` de logs. O agente para de fazer claim com menos de `[agent] log_dir_min_livre_mb` livres (padrão 1.024 MB, WARN `DISCO_LOG`, README §8.2); o monitoramento corporativo alerta antes disso (por exemplo, 80% de uso).
-* **Hash homologado (CR-008, E4):** com web e agentes em servidores separados, homologue o conteúdo de cada script informando no cadastro o SHA-256 obtido no servidor do agente: `sha256sum /caminho/do/script`. Configure `[agent] ambientes_exigem_hash = PRODUCAO` (e os demais ambientes produtivos) para que um script sem hash homologado seja recusado nesses ambientes.
 
 ### 18.2 Conexão Oracle com failover (CR-007, R-12)
 
@@ -737,7 +734,7 @@ sudo chmod 0755 /opt/automacoes/scripts/utilitarios/*.py
 - [ ] §8.1 Árvore `/opt/automacoes/scripts` do root, sem escrita para o `sss`
 - [ ] §8.2 `/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance` do `sss`, modo `0600`, com `cookie_key` gerado
 - [ ] §8.3 Senha de demonstração (≥ 12 caracteres) combinada com a equipe
-- [ ] §9 `config.ini` ajustado (DEV, FAKE, caminhos, `agent_id`, `script_owner_uids`, `allowed_origins`), sem `base_script_dirs` nem `app_log_backups`
+- [ ] §9 `config.ini` ajustado (DEV, FAKE, caminhos, `agent_id`, `allowed_origins`), sem `base_script_dirs` nem `app_log_backups`
 - [ ] §10 Teste de carga: `SSS: configuracao OK`
 - [ ] §11 Subida pelo `bin/sss-web.sh` com `-a '<recycle>' -i 127.0.0.1`
 - [ ] §12 Validações por `curl` (200, cabeçalhos, 403) e teste de fumaça no navegador
@@ -839,7 +836,7 @@ Implantação feita em 2026-10-15 com o pacote do commit `aca60b0` (código do `
 | `/portaloptrib/TESHUVA` | Do próprio usuário, modo `755` (não compartilhado como no clone 7) | Mesma estrutura do §21.2, em `/portaloptrib/TESHUVA/SSS` |
 | Porta | 18000 livre | `127.0.0.1:18000` |
 
-`config.ini`: igual ao do clone 7, exceto `agent_id = srv3067-sss-hml` e `script_owner_uids = 4135` (UID do `mastersafgf` neste servidor). Segredos e senha de demonstração em `~/.sss` (`0600`), gerados no servidor.
+`config.ini`: igual ao do clone 7, exceto `agent_id = srv3067-sss-hml` (até o CR-011 também `script_owner_uids = 4135`, UID do `mastersafgf`; a linha é apagada na atualização, §16). Segredos e senha de demonstração em `~/.sss` (`0600`), gerados no servidor.
 
 ### 22.2 Operação
 
@@ -1087,7 +1084,8 @@ chmod 640 $NOVO/$APP/instance/config.ini
 sed -i -e '/^base_script_dirs\{0,1\} *=/d' \
        -e 's|^app_log_backups *=.*$|app_log_retention_days = 30|' \
        -e '/^work_dir *=/a usuarios_execucao =\nexec_work_dir =' \
-       -e '/^cron_horizon_days *=/a fila_envelhecimento_min = 60\nambientes_exigem_hash =\nlog_dir_min_livre_mb = 1024' \
+       -e '/^cron_horizon_days *=/a fila_envelhecimento_min = 60\nlog_dir_min_livre_mb = 1024' \
+       -e '/^script_owner_uids *=/d' -e '/^ambientes_exigem_hash *=/d' \
        -e '/^session_idle_timeout_s *=/a sessao_max_horas = 12' \
        -e '/^purge_batch_size *=/a purge_user =' $NOVO/$APP/instance/config.ini
 grep -nE '^(base_script|app_log_|cron_horizon_days)' $NOVO/$APP/instance/config.ini

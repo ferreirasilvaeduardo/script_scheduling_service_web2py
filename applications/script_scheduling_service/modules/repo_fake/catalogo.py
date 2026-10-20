@@ -211,9 +211,6 @@ class RepoCatalogoFake(RepoCatalogo):
         tmout = base.get("timeout_seg")
         if tmout is not None and int(tmout) <= 0:
             raise RepoViolacao("timeout_seg deve ser maior que zero", constraint="ck_tbsss_scr_tmout")
-        sha = base.get("sha256_homologado")
-        if sha is not None and not re.fullmatch(r"^[0-9a-f]{64}$", sha):
-            raise RepoViolacao("sha256_homologado invalido", constraint="ck_tbsss_scr_sha")
         for sid, s in self._store.scripts.items():
             # UK do Oracle diferencia maiusculas (README §8.5): 'Carga' e 'carga' sao nomes distintos.
             if (atual is None or sid != atual["id"]) and s["nome"] == base["nome"]:
@@ -239,7 +236,6 @@ class RepoCatalogoFake(RepoCatalogo):
                 "max_qtd_parallel_env": int(dados.get("max_qtd_parallel_env", 1)),
                 "timeout_seg": int(tmout) if tmout is not None else None,
                 "ativo": dados.get("ativo", "S"),
-                "sha256_homologado": dados.get("sha256_homologado"),
             }
             self._store.carimbar_inclusao(novo, ator)
             self._store.scripts[sid] = copy.deepcopy(novo)
@@ -257,7 +253,7 @@ class RepoCatalogoFake(RepoCatalogo):
                 if atual.get(campo) != valor:
                     raise RepoConflito("Script ID %s alterado por outra operacao (%s)" % (id, campo))
             campos = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file",
-                      "tipo_param", "max_qtd_parallel_env", "timeout_seg", "ativo", "sha256_homologado")
+                      "tipo_param", "max_qtd_parallel_env", "timeout_seg", "ativo")
             mudancas = dict((k, dados[k]) for k in campos if k in dados)
             self._validar_script(mudancas, atual)
             if "tipo_param" in mudancas and mudancas["tipo_param"] != atual["tipo_param"]:

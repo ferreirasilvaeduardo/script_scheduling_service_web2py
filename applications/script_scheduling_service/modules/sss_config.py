@@ -30,6 +30,13 @@ _PREFIXOS_FIXOS = ("LC_", "SSS_", "PYTHON")
 # Versao do SSS: unico lugar (tbsss_agentes.versao e SSS_VERSAO do script, CR-010). Trocada a cada release.
 VERSAO_SSS = "1.0.0-dev"
 
+# Chaves que existiram e foram retiradas: recusadas com orientacao, para nao serem ignoradas em silencio.
+CHAVES_REMOVIDAS = {
+    ("app", "data_backend"): "a aplicacao usa sempre o Oracle do [oracle] (owner e table_prefix) (F7.3)",
+    ("agent", "script_owner_uids"): "o SSS nao confere mais o dono dos scripts; o ambiente controla o conteudo (CR-011)",
+    ("agent", "ambientes_exigem_hash"): "o SSS nao confere mais o hash dos scripts (CR-011)",
+}
+
 # Atores do sistema que nao podem ser agent_id (README §4.4 e §8.12).
 AGENT_IDS_RESERVADOS = ("init_db", "seed", "purge")
 _RE_USUARIO_EXECUCAO = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
@@ -117,7 +124,6 @@ SCHEMA = collections.OrderedDict([
         ("agent_id", CampoDef("str", obrigatorio=True, regex=r"^(?!(?:init_db|seed|purge)$)[A-Za-z0-9._-]{1,30}$")),
         ("ambientes_atendidos", CampoDef("list_csv", obrigatorio=True)),
         ("work_dir", CampoDef("path", obrigatorio=True)),
-        ("script_owner_uids", CampoDef("list_csv", obrigatorio=True)),
         # Usuario do SO por ambiente e pasta base dos diretorios de trabalho dos scripts (CR-007, D1):
         # obrigatorios fora de DEV (validacao cruzada em carregar()).
         ("usuarios_execucao", CampoDef("map_csv", obrigatorio=False, default=())),
@@ -141,8 +147,7 @@ SCHEMA = collections.OrderedDict([
         # Minimo 1461 (4 anos): cobre o 29/02 de regras CRON anuais (CR-008, R-32).
         ("cron_horizon_days", CampoDef("int", obrigatorio=True, min_val=1461, max_val=36500)),
         ("fila_envelhecimento_min", CampoDef("int", obrigatorio=False, min_val=0, max_val=1440, default=60)),
-        # CR-008, E4 e R-25: ambientes que recusam script sem hash homologado; espaco minimo do log_dir.
-        ("ambientes_exigem_hash", CampoDef("list_csv", obrigatorio=False, default=())),
+        # CR-008, R-25: espaco minimo do log_dir.
         ("log_dir_min_livre_mb", CampoDef("int", obrigatorio=False, min_val=0, max_val=1048576, default=1024)),
         ("child_locale", CampoDef("str", obrigatorio=True)),
         ("env_passthrough", CampoDef("list_csv", obrigatorio=False, default=())),
@@ -204,14 +209,14 @@ class SecretsConfig(_ItemAccessMixin, collections.namedtuple("SecretsConfig", ["
 
 class AgentConfig(_ItemAccessMixin, collections.namedtuple("AgentConfig", [
     "agent_id", "ambientes_atendidos", "work_dir",
-    "script_owner_uids", "max_parallel_jobs", "max_parallel_hard_limit",
+    "max_parallel_jobs", "max_parallel_hard_limit",
     "claim_batch_size", "schedule_batch_size", "orchestrator_interval_s",
     "cancel_poll_interval_s", "heartbeat_interval_s", "fence_timeout_s",
     "node_offline_timeout_s", "kill_grace_s", "script_timeout_s",
     "shutdown_mode", "shutdown_grace_s", "misfire_policy",
     "misfire_tolerance_s", "cron_horizon_days", "child_locale",
     "env_passthrough", "usuarios_execucao", "interpretadores", "exec_work_dir", "fila_envelhecimento_min",
-    "ambientes_exigem_hash", "log_dir_min_livre_mb"
+    "log_dir_min_livre_mb"
 ])):
     __slots__ = ()
 
@@ -328,21 +333,6 @@ def _converter_valor(secao, chave, cdef, raw_val):
         if cdef.obrigatorio and not partes:
             raise ConfigErro(secao, chave, "Lista obrigatoria nao pode ser vazia")
 
-        if chave == "script_owner_uids":
-            uids = []
-            for item in partes:
-                try:
-                    uid = int(item)
-                    if uid < 0:
-                        raise ValueError()
-                    uids.append(uid)
-                except ValueError:
-                    raise ConfigErro(
-                        secao, chave,
-                        "UID invalido na lista de donos: '%s'" % item
-                    )
-            return tuple(uids)
-
         return tuple(partes)
 
     elif cdef.tipo == "map_csv":
@@ -398,11 +388,9 @@ def carregar(caminho_ini):
 
         # Chaves desconhecidas na secao
         for k in cp_sec:
-            if sec_nome == "app" and k == "data_backend":
-                # Removida no F7.3: a aplicacao usa sempre o Oracle do [oracle]; o FAKE so existe nos testes.
-                raise ConfigErro(secao="app", chave="data_backend",
-                                 motivo="Chave removida: a aplicacao usa sempre o Oracle do [oracle] "
-                                        "(owner e table_prefix); apague a linha data_backend")
+            if (sec_nome, k) in CHAVES_REMOVIDAS:
+                raise ConfigErro(secao=sec_nome, chave=k, motivo="Chave removida: %s; apague a linha %s" % (
+                    CHAVES_REMOVIDAS[(sec_nome, k)], k))
             if k not in sec_campos:
                 raise ConfigErro(secao=sec_nome, chave=k, motivo="Chave desconhecida na secao [%s]: %s" % (sec_nome, k))
 

@@ -19,7 +19,6 @@ import path_guard
 import plataforma
 from plataforma import posix
 
-AGENTE_FALSO = 2 ** 31 - 3
 PID_INEXISTENTE = 2 ** 31 - 2
 
 _Stat = collections.namedtuple("_Stat", "st_uid st_mode")
@@ -395,7 +394,6 @@ class TestValidacoesDeCaminho(unittest.TestCase):
         os.chmod(os.path.join(self.base, "sub"), 0o555)
         os.chmod(self.base, 0o555)
         os.chmod(self.raiz, 0o555)
-        self.eu = (os.getuid(),)
 
     def tearDown(self):
         for atual, dirs, _arqs in os.walk(self.raiz):
@@ -406,9 +404,8 @@ class TestValidacoesDeCaminho(unittest.TestCase):
         os.chmod(self.base, 0o700)
         shutil.rmtree(self.raiz, ignore_errors=True)
 
-    def validar(self, caminho, donos=None, uids_proibidos=()):
-        return plataforma.validar_caminho_script(caminho, donos or self.eu, uids_proibidos=uids_proibidos,
-                                                 uid_agente=AGENTE_FALSO, parar_em=self.raiz)
+    def validar(self, caminho):
+        return plataforma.validar_caminho_script(caminho)
 
     def test_script_valido(self):
         self.assertIsNone(self.validar(self.script))
@@ -416,37 +413,39 @@ class TestValidacoesDeCaminho(unittest.TestCase):
     def test_link_simbolico_vale_o_arquivo_real(self):
         # CR-011: o link e aceito e as checagens valem para o destino.
         self.assertIsNone(self.validar(os.path.join(self.base, "link.py")))
-        self.assertEqual(self.validar(os.path.join(self.base, "link.py"), donos=(AGENTE_FALSO - 1,)),
-                         "DONO_INVALIDO", "dono conferido no arquivo real")
+        os.chmod(self.script, 0o666)
+        self.assertEqual(self.validar(os.path.join(self.base, "link.py")), "GRAVAVEL_GRUPO_OUTROS",
+                         "modo conferido no arquivo real")
 
     def test_sem_acesso(self):
         os.chmod(os.path.join(self.base, "sub"), 0o000)
         self.assertEqual(self.validar(self.script), "SEM_ACESSO")
 
-    def test_dono_proibido_e_dono_fora_da_lista(self):
-        self.assertEqual(self.validar(self.script, uids_proibidos=self.eu), "GRAVAVEL_PELO_EXECUTOR")
-        self.assertEqual(self.validar(self.script, donos=(AGENTE_FALSO - 1,)), "DONO_INVALIDO")
-
-    def test_item_da_arvore_gravavel_rejeitado(self):
-        os.chmod(os.path.join(self.base, "sub"), 0o775)
+    def test_so_o_arquivo_e_conferido(self):
+        # CR-011 (S2): pasta gravavel nao e conferida; o arquivo gravavel por grupo ou outros e recusado.
+        os.chmod(os.path.join(self.base, "sub"), 0o777)
+        self.assertIsNone(self.validar(self.script))
+        os.chmod(self.script, 0o464)
         self.assertEqual(self.validar(self.script), "GRAVAVEL_GRUPO_OUTROS")
-        os.chmod(os.path.join(self.base, "sub"), 0o555)
-        self.assertEqual(plataforma.validar_caminho_script(self.script, self.eu, parar_em=self.raiz),
-                         "GRAVAVEL_PELO_AGENTE", "arquivo do proprio agente")
+
+    def test_ciclo_de_links(self):
+        os.chmod(self.base, 0o755)
+        os.symlink("ciclo_b", os.path.join(self.base, "ciclo_a"))
+        os.symlink("ciclo_a", os.path.join(self.base, "ciclo_b"))
+        self.assertEqual(self.validar(os.path.join(self.base, "ciclo_a")), "NAO_ENCONTRADO")
 
     def test_inexistente_e_nao_arquivo(self):
         self.assertEqual(self.validar(os.path.join(self.base, "nao.py")), "NAO_ENCONTRADO")
         self.assertEqual(self.validar(os.path.join(self.base, "sub")), "NAO_E_ARQUIVO")
 
     def test_interpretador_pelo_validar_executavel(self):
-        real = plataforma.validar_interpretador_executavel("/bin/sh", (0,), uid_agente=AGENTE_FALSO)
+        real = plataforma.validar_interpretador_executavel("/bin/sh")
         self.assertEqual(real, os.path.realpath("/bin/sh"))
         with mock.patch.object(path_guard, "validar_executavel", return_value="/x") as ve:
-            plataforma.validar_interpretador_executavel("/usr/bin/python3", (0, 5), uid_agente=9,
-                                                        uids_proibidos=(8,), dirs_sss=("/srv",))
-        ve.assert_called_once_with("/usr/bin/python3", (0, 5), uid_agente=9, uids_proibidos=(8,), dirs_sss=("/srv",))
+            plataforma.validar_interpretador_executavel("/usr/bin/python3", dirs_sss=("/srv",))
+        ve.assert_called_once_with("/usr/bin/python3", dirs_sss=("/srv",))
         with self.assertRaises(path_guard.PathGuardErro):
-            plataforma.validar_interpretador_executavel("bin/sh", (0,), uid_agente=AGENTE_FALSO)
+            plataforma.validar_interpretador_executavel("bin/sh")
 
 
 class TestArquivoRestrito(unittest.TestCase):
@@ -502,10 +501,10 @@ class TestValidarExecucao(unittest.TestCase):
         self.chamadas.append(argv)
         return self.sudo.get(argv[4], (1, "Sorry, user may not run sudo"))
 
-    def validar(self, usuarios=("exec1",), owner_uids=(1500,)):
+    def validar(self, usuarios=("exec1",)):
         with mock.patch.object(posix.os, "stat", side_effect=self._stat), \
                 mock.patch.object(posix.pwd, "getpwnam", side_effect=self._getpwnam):
-            return plataforma.validar_execucao([("PROD", u) for u in usuarios], self.EXEC, owner_uids,
+            return plataforma.validar_execucao([("PROD", u) for u in usuarios], self.EXEC,
                                                helper=self.HELPER, executar=self._executar, usuario_agente="agente")
 
     def test_tudo_certo(self):
@@ -527,7 +526,6 @@ class TestValidarExecucao(unittest.TestCase):
         self.assertIn("nao existe", " ".join(self.validar(usuarios=("fantasma",))))
         self.assertIn("nao pode ser root", " ".join(self.validar(usuarios=("root",))))
         self.assertIn("proprio usuario do agente", " ".join(self.validar(usuarios=("agente",))))
-        self.assertIn("script_owner_uids", " ".join(self.validar(owner_uids=(self.UID_EXEC,))))
 
     def test_sudo_sem_regra_e_pasta(self):
         self.sudo["exec1"] = (0, "/usr/bin/outro\n")

@@ -13,7 +13,6 @@ repositorios internos do daemon. Cada passo que falha registra CRITICAL e sai co
 import datetime
 import logging
 import os
-import pwd
 import socket
 import threading
 import time
@@ -177,8 +176,6 @@ class Agente(object):
                 raise FalhaInicializacao(SAIDA_CONFIG, str(exc))
         agente = self.cfg.agent
         self.log.extra["agente"] = agente.agent_id
-        if os.geteuid() in tuple(int(u) for u in agente.script_owner_uids or ()):
-            self._falhar(SAIDA_USUARIO, "o UID do agente nao pode estar em script_owner_uids (CR-007, R-15)")
         try:
             sss_config.verificar_codificacao()
         except sss_config.ConfigErro as exc:
@@ -206,33 +203,21 @@ class Agente(object):
             codigo = self.plat.validar_dir_restrito(caminho)
             if codigo:
                 self._falhar(SAIDA_DIRETORIOS, "%s %s recusado: %s", nome, caminho, codigo)
-        donos = tuple(int(u) for u in agente.script_owner_uids or ())
-        proibidos = self._uids_proibidos()
         dirs_sss = tuple(d for d in (self.cfg.logging.log_dir, agente.work_dir, agente.exec_work_dir) if d)
         if not agente.interpretadores:
             self._falhar(SAIDA_DIRETORIOS, "[agent] interpretadores vazio: o agente nao executaria nada")
         for logico, caminho in agente.interpretadores:
             try:
-                self.plat.validar_interpretador_executavel(caminho, donos, uids_proibidos=proibidos,
-                                                           dirs_sss=dirs_sss)
+                self.plat.validar_interpretador_executavel(caminho, dirs_sss=dirs_sss)
             except Exception as exc:  # noqa: BLE001 - PathGuardErro e afins: CRITICAL com o codigo
                 self._falhar(SAIDA_DIRETORIOS, "interpretador %s (%s) recusado: %s", logico, caminho,
                              getattr(exc, "codigo", exc.__class__.__name__))
         if self.cfg.app.sss_env != "DEV":
-            falhas = self.plat.validar_execucao(agente.usuarios_execucao, agente.exec_work_dir, donos)
+            falhas = self.plat.validar_execucao(agente.usuarios_execucao, agente.exec_work_dir)
             for falha in falhas:
                 self.log.critical("execucao fora de DEV: %s", falha)
             if falhas:
                 self._falhar(SAIDA_DIRETORIOS, "%d falha(s) na conferencia do helper e do sudoers", len(falhas))
-
-    def _uids_proibidos(self):
-        uids = [os.geteuid()]
-        for _amb, usuario in self.cfg.agent.usuarios_execucao or ():
-            try:
-                uids.append(pwd.getpwnam(usuario).pw_uid)
-            except KeyError:  # usuario inexistente: o validar_execucao registra a falha
-                continue
-        return tuple(uids)
 
     def _passo5_instancia(self):
         work = self.cfg.agent.work_dir
@@ -833,10 +818,8 @@ class Agente(object):
         agente = self.cfg.agent
 
         class _Cfg(object):
-            script_owner_uids = tuple(int(u) for u in agente.script_owner_uids or ())
             interpretadores = dict(agente.interpretadores)
             dirs_sss = tuple(d for d in (self.cfg.logging.log_dir, agente.work_dir, agente.exec_work_dir) if d)
-            uids_proibidos = self._uids_proibidos()
         return _Cfg()
 
     def _recusar(self, item, codigo):

@@ -713,7 +713,7 @@ Os estados `SUCCESS`, `FAILED` e `CANCELLED` são **terminais e imutáveis**. To
 
 * `OWNERSHIP_LOST` é um **evento de log** do agente. Ele nunca é gravado no ticket, que já foi finalizado por outro nó.
 * `Popen.returncode` negativo (morte por sinal) é convertido para `128 + abs(returncode)`.
-* **Motivo técnico no log (CR-007, R-18):** antes de gravar `PRECHECK_FAILED` ou `SPAWN_ERROR`, o agente anexa ao `log_output` a linha `[SSS] pré-validação recusada: <código> (agente <agent_id>)` ou `[SSS] falha ao iniciar: <classe do erro> (agente <agent_id>)`, sem o caminho do arquivo. Códigos da pré-validação: os do `path_guard` (§8.5), `VERSAO_NAO_SUPORTADA`, `INTERPRETADOR_NAO_DISPONIVEL`, `SCRIPT_INATIVO`, `NAO_HOMOLOGADO`, `AMBIENTE_INATIVO`, `SEM_PERMISSAO`, `CADASTRO_MUDOU` e `ARQUIVO_ALTERADO`. O mesmo vale para as finalizações pelo startup check, com `[SSS] <motivo>: <detalhe>`.
+* **Motivo técnico no log (CR-007, R-18):** antes de gravar `PRECHECK_FAILED` ou `SPAWN_ERROR`, o agente anexa ao `log_output` a linha `[SSS] pré-validação recusada: <código> (agente <agent_id>)` ou `[SSS] falha ao iniciar: <classe do erro> (agente <agent_id>)`, sem o caminho do arquivo. Códigos da pré-validação: os do `path_guard` (§8.5), `VERSAO_NAO_SUPORTADA`, `INTERPRETADOR_NAO_DISPONIVEL`, `SCRIPT_INATIVO`, `NAO_HOMOLOGADO`, `AMBIENTE_INATIVO`, `SEM_PERMISSAO` e `CADASTRO_MUDOU`. O mesmo vale para as finalizações pelo startup check, com `[SSS] <motivo>: <detalhe>`.
 
 #### 5.2.1 Explicação ao usuário (CR-004)
 
@@ -1076,7 +1076,7 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 * O snapshot é **compilado na criação do ticket** (manual ou desdobro). O agente **nunca** recompila nem lê `tbsss_script_param` e `tbsss_parametros` para executar.
 * **Defesa em profundidade no claim:** o agente revalida o snapshot (§8.4, passo 1).
 * **Snapshot × cadastro (CR-007, R-24):** se `path_file` ou `interpretador` do snapshot diferirem do cadastro atual do script, o agente recusa (`CADASTRO_MUDOU`): o ticket foi criado antes de uma mudança de cadastro e deve ser reexecutado, para ser compilado de novo.
-* **Conteúdo do arquivo (R-24):** o snapshot não guarda o hash. O agente confere o conteúdo do arquivo contra `tbsss_scripts.sha256_homologado` (quando preenchido) e registra o hash do que executou em `tbsss_tickets.arquivo_sha256` (§8.4).
+* **Conteúdo do arquivo (CR-011):** o SSS não guarda nem confere hash do arquivo; o ambiente controla o conteúdo e a versão do script (§8.5).
 * **Vínculo de parâmetros pela UI** (`admin_scripts/parametros`, F4.5):
   * a lista inteira vai num único POST, e a ordem é renumerada pelo servidor (1..n, pela posição);
   * a lista é revalidada inteira: ID inexistente ou duplicado, `valor_padrao_sub` por `validar_valor` (com até 100 caracteres), `NENHUM` sem vínculos e `NOMEADO` com flag em todos os parâmetros;
@@ -1408,8 +1408,8 @@ O daemon chama apenas a interface abaixo, implementada em `posix.py` (Linux e de
 | `travar_instancia(caminho)` | `fcntl.flock(LOCK_EX \| LOCK_NB)` |
 | `usuario_privilegiado()` | `os.geteuid() == 0` |
 | `validar_arquivo_restrito(caminho)` (segredos, §4.1) | Dono = euid e `mode & 0o077 == 0` |
-| `validar_caminho_script` (§8.5) | Dono do arquivo em `script_owner_uids`; arquivo e cada diretório até `/` sem escrita de grupo ou outros, sem link simbólico e sem pertencer ao agente nem a um usuário de execução |
-| `validar_execucao()` (CR-007, D1) | Na subida, fora de DEV: o helper existe, tem dono root, modo `0755` e pasta só gravável pelo root; `sudo -n -l` do usuário do agente mostra a regra do helper para cada usuário de execução; cada usuário de execução existe, não é root, não é o usuário do agente e não está em `script_owner_uids`; `exec_work_dir/<usuário>` existe, pertence ao usuário de execução e tem modo `0700` |
+| `validar_caminho_script` (§8.5, CR-011) | Arquivo real (o caminho pode ter link simbólico): existe, é regular e não é gravável por grupo nem por outros |
+| `validar_execucao()` (CR-007, D1) | Na subida, fora de DEV: o helper existe, tem dono root, modo `0755` e pasta só gravável pelo root; `sudo -n -l` do usuário do agente mostra a regra do helper para cada usuário de execução; cada usuário de execução existe, não é root e não é o usuário do agente; `exec_work_dir/<usuário>` existe, pertence ao usuário de execução e tem modo `0700` |
 | `criar_dir_trabalho` (§8.4) | `work_dir/ticket_<id>/` do agente com `0700` (estado local). O diretório de trabalho do script é criado pelo helper |
 | Parada | SIGTERM/SIGINT acionam a flag |
 
@@ -1530,7 +1530,6 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
    * `versao == 4`, e `interpretador` consta na allowlist lógica **e** no mapeamento deste agente (`INTERPRETADOR_NAO_DISPONIVEL`);
    * `path_file` e `interpretador` do snapshot são iguais aos do cadastro atual do script (`CADASTRO_MUDOU`, CR-007 R-24);
    * `path_file` (absoluto) passa na §8.5 neste agente, que fornece o `script_real` (códigos do `path_guard`);
-   * o sha256 do `script_real`, lido em blocos, é igual a `tbsss_scripts.sha256_homologado` quando ele está preenchido (`ARQUIVO_ALTERADO`, R-24). Se o hash homologado estiver vazio e o ambiente do ticket constar em `[agent] ambientes_exigem_hash`, a pré-validação falha com `SEM_HASH` (CR-008, E4); fora dessa lista, o ticket segue com WARN `SEM_HASH` no log da aplicação. O valor calculado vai para a linha `[SSS] arquivo: sha256=<valor>` do log e para `tbsss_tickets.arquivo_sha256` (passo 5);
    * o `argv` é montado pelo agente (§6.4) a partir de `interpretador`, `script_real` e `args`;
    * o script segue `ativo = 'S'` (`SCRIPT_INATIVO`) e homologado para o ambiente (`NAO_HOMOLOGADO`);
    * o ambiente do ticket segue ativo (`AMBIENTE_INATIVO`) e o **solicitante** ainda tem `rbac.pode_executar` para o script e o ambiente, com o mesmo contexto de RBAC do desdobro (`SEM_PERMISSAO`, CR-007 D2).
@@ -1593,80 +1592,49 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
 5. **Instante de início:** renomear o log (passo 3), ler `plataforma.identidade_processo(pid)` (`starttime` no Linux; §8.0), gravar **`work_dir/ticket_<id>/.sss_proc`** (JSON com `ticket_id`, `pid`, `pgid`, `process_start` e `usuario_execucao`; arquivo temporário + `rename`, `0600`) **antes** do banco (CR-007, R-01) e então:
    ```sql
    UPDATE {owner}.tbsss_tickets
-      SET process_id = :pid, process_start = :process_start, arquivo_sha256 = :sha256
+      SET process_id = :pid, process_start = :process_start
     WHERE id = :ticket_id AND agente_id = :agente_id AND status = 'RUNNING'
    ```
    Se `rowcount = 0`, a posse foi perdida (por exemplo, `NODE_OFFLINE` durante o spawn): encerramento do grupo pela máquina de estados do executor (`pedir_encerramento`/`avancar_encerramento`, sem esperar) e ERROR `OWNERSHIP_LOST`. Se o `UPDATE` falhar por erro de banco, o ticket fica "PID pendente" no mapa local e o `UPDATE` é refeito a cada ciclo rápido até `rowcount` 1 ou 0 (CR-008, R-08); enquanto isso, o processo é acompanhado normalmente (heartbeat, cancelamento, timeout, fencing). O registro do PID é rotina técnica e não grava `updated_*` (§10, CR-006).
 
-### 8.5 Validação de interpretador e caminho (`path_guard.py`, CR-005)
+### 8.5 Validação de interpretador e caminho (`path_guard.py`, CR-005, CR-011)
+
+**Princípio (CR-011):** o ambiente controla o conteúdo e a versão dos scripts; o SSS agenda e executa. O agente confere só o essencial do arquivo, no servidor onde o script roda. Não há hash do conteúdo nem conferência do dono dos arquivos.
 
 **Interpretadores lógicos (somente POSIX):** `PYTHON3`, `BASH` e `SH`.
 
-* O executável de cada interpretador vem de `[agent] interpretadores`. Na inicialização, o agente valida que o caminho é absoluto, existe e é executável, e passa por `path_guard.validar_executavel` (CR-007, R-15): arquivo e cada diretório até `/` com dono root ou de `script_owner_uids`, sem escrita de grupo, outros, do agente ou de um usuário de execução, e fora de `log_dir`, `work_dir` e `exec_work_dir`. Diferente do script, o interpretador pode ficar nas pastas do sistema e pode ser link simbólico (como `/usr/bin/python3`): nesse caso, a cadeia do próprio link e a do destino são conferidas, e trocar o link exige ser dono de uma pasta do caminho (root). Falha: `INTERPRETADOR_INSEGURO`, CRITICAL.
+* O executável de cada interpretador vem de `[agent] interpretadores`. Na inicialização, o agente confere, por `path_guard.validar_executavel`: caminho absoluto e normalizado, existe, é arquivo executável e fica fora de `log_dir`, `work_dir` e `exec_work_dir`. Pode ser link simbólico (como `/usr/bin/python3`) e pode ficar nas pastas do sistema. Falha: `INTERPRETADOR_INSEGURO` (ou `NAO_ENCONTRADO`), CRITICAL.
 
-**Caminho livre (CR-005, D2): o script pode ficar em qualquer lugar do servidor, desde que exista e passe nas checagens abaixo**
+**Caminho livre (CR-005, D2): o script pode ficar em qualquer lugar do servidor, fora das pastas do sistema e do SSS**
 
-* O cadastro grava em `path_file` o **caminho absoluto** do arquivo (ex.: `/opt/automacoes/scripts/faturamento/carga_faturas.py`). Não há pastas base nem mapeamento por nó: o mesmo caminho vale para o nó web e para todos os agentes que atendem o script.
+* O cadastro grava em `path_file` o **caminho absoluto** do arquivo (ex.: `/opt/automacoes/scripts/faturamento/carga_faturas.py`). O mesmo caminho vale para todos os agentes que atendem o script.
+* **Link simbólico (CR-011):** o `path_file` pode ser link, ou ter link em qualquer pasta do caminho. O agente resolve o caminho real (`os.path.realpath`) e **executa o arquivo real**; o script recebe os dois (`SSS_SCRIPT_ARQUIVO` e `SSS_SCRIPT_LINK`, §8.6). A pasta onde o link está não é conferida: quem puder gravar nela pode trocar o destino, risco aceito no §14.
 * **Formato** (`validar_cadastro`; parte dele também nas CKs, abaixo):
   * absoluto (começa com `/`) e normalizado (`os.path.normpath(p) == p`): sem `//`, sem `/./` e sem barra no fim;
   * sem `..` em nenhum ponto, sem `\` e sem caractere de controle;
   * até 500 caracteres.
-* **Resolução** (forma do código):
-
-```python
-ALLOWLIST = ('PYTHON3', 'BASH', 'SH')
-PASTAS_DO_SISTEMA = ('/bin', '/sbin', '/usr', '/lib', '/lib32', '/lib64', '/libx32',
-                     '/etc', '/boot', '/proc', '/sys', '/dev', '/root')
-
-def _dentro(caminho, pasta):
-    return os.path.commonpath([caminho, pasta]) == pasta     # por componente, nunca prefixo de texto
-
-real = os.path.realpath(path_file)
-if real != path_file:
-    raise PathGuardErro('CAMINHO_COM_LINK')          # CR-007, R-14: nenhum link simbólico no caminho
-for alvo in (path_file, real):
-    if any(_dentro(alvo, d) for d in PASTAS_DO_SISTEMA):
-        raise PathGuardErro('PASTA_DO_SISTEMA')
-    if any(_dentro(alvo, os.path.realpath(d)) for d in (log_dir, work_dir, exec_work_dir)):
-        raise PathGuardErro('PASTA_DO_SSS')
-if not os.path.lexists(real):
-    raise PathGuardErro('NAO_ENCONTRADO')            # no nó web, vira aviso (D4)
-if not os.path.isfile(real):
-    raise PathGuardErro('NAO_E_ARQUIVO')
-```
-
-* **Dono e permissão (D3), sobre o arquivo real e sobre cada diretório entre ele e `/`, inclusive `/`:**
-  * o **arquivo** pertence a um UID de `script_owner_uids`;
-  * cada **diretório** pertence ao root (0) ou a um UID de `script_owner_uids`;
-  * nenhum deles tem escrita para grupo nem para outros (`st_mode & 0o022 == 0`). Por isso, `/tmp` e pastas compartilhadas com escrita são recusadas;
-  * o UID do agente não tem permissão de escrita em nenhum deles (`os.access(p, os.W_OK)` falso);
-  * **nenhum** deles pertence ao UID do agente nem a um usuário de execução (CR-007, R-15), porque o dono pode mudar o modo a qualquer momento. No nó web, os usuários de execução considerados são os de `[agent] usuarios_execucao` que existem nele (`pwd.getpwnam`).
-* **Sem link simbólico (CR-007, R-14):** `path_file` precisa ser igual ao `os.path.realpath` dele. Um link em qualquer componente seria trocado por quem pode gravar na pasta dele, desviando a execução para outro arquivo. Código `CAMINHO_COM_LINK`.
-* **Sem acesso:** um diretório do caminho sem permissão de passagem para o processo (`EACCES`) é `SEM_ACESSO`, e não `NAO_ENCONTRADO`; no nó web, `SEM_ACESSO` bloqueia em vez de virar aviso.
-* **Pastas do sistema (D3):** um caminho, digitado ou resolvido, dentro de `/bin`, `/sbin`, `/usr`, `/lib`, `/lib32`, `/lib64`, `/libx32`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev` ou `/root` é recusado com `PASTA_DO_SISTEMA`. Também é recusado um caminho dentro de `log_dir` ou `work_dir` (`PASTA_DO_SSS`).
-* **Códigos de recusa:** `CAMINHO_RELATIVO`, `CAMINHO_NAO_NORMALIZADO`, `CONTEM_PONTOS`, `SEPARADOR_INVALIDO`, `CARACTERE_INVALIDO`, `CAMINHO_COM_LINK`, `PASTA_DO_SISTEMA`, `PASTA_DO_SSS`, `NAO_ENCONTRADO`, `SEM_ACESSO`, `NAO_E_ARQUIVO`, `DONO_INVALIDO`, `GRAVAVEL_GRUPO_OUTROS`, `GRAVAVEL_PELO_AGENTE`, `GRAVAVEL_PELO_EXECUTOR`, `INTERPRETADOR_NAO_PERMITIDO` e `INTERPRETADOR_INSEGURO`. A mensagem de erro nunca inclui o caminho.
-* **Momento:** a validação ocorre no cadastro (UI), na criação do ticket (snapshot) e novamente no claim (§8.4).
+* **Pastas proibidas**, no caminho cadastrado e no real: dentro de `/bin`, `/sbin`, `/usr`, `/lib`, `/lib32`, `/lib64`, `/libx32`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev` ou `/root` é `PASTA_DO_SISTEMA`; dentro de `log_dir`, `work_dir` ou `exec_work_dir` é `PASTA_DO_SSS`.
+* **O arquivo real** (`plataforma.validar_caminho_script`):
+  * existe (`NAO_ENCONTRADO`; um ciclo de links também dá `NAO_ENCONTRADO`);
+  * as pastas do caminho deixam o agente passar (`EACCES` é `SEM_ACESSO`, diferente de `NAO_ENCONTRADO`);
+  * é arquivo regular (`NAO_E_ARQUIVO`);
+  * não é gravável por grupo nem por outros (`st_mode & 0o022 == 0`; senão `GRAVAVEL_GRUPO_OUTROS`). As pastas do caminho não são conferidas.
+* **Códigos de recusa:** `CAMINHO_RELATIVO`, `CAMINHO_NAO_NORMALIZADO`, `CONTEM_PONTOS`, `SEPARADOR_INVALIDO`, `CARACTERE_INVALIDO`, `PASTA_DO_SISTEMA`, `PASTA_DO_SSS`, `NAO_ENCONTRADO`, `SEM_ACESSO`, `NAO_E_ARQUIVO`, `GRAVAVEL_GRUPO_OUTROS`, `INTERPRETADOR_NAO_PERMITIDO` e `INTERPRETADOR_INSEGURO`. A mensagem de erro nunca inclui o caminho.
+* **Onde cada coisa é conferida (CR-011, S1):**
+  * **no nó web** (cadastro, prévia e disparo): só o formato, o interpretador da allowlist e as pastas do sistema. O web pode nem ter o arquivo, e não emite aviso de arquivo ausente;
+  * **no agente**, a cada execução (§8.4, passo 1): tudo acima, inclusive o arquivo real. Falha: `PRECHECK_FAILED` com o código na linha `[SSS]` do log.
 * **CKs de banco** (defesa adicional):
   * `ck_tbsss_scr_int` restringe `interpretador` à allowlist lógica;
   * `ck_tbsss_scr_path` exige `path_file` absoluto, sem `..`, `//` nem `\`.
-* **TOCTOU residual:** aceito, porque nenhum componente do caminho é gravável pelo agente nem pelo usuário de execução, nenhum pertence a eles e links simbólicos são recusados. Resta só o dono legítimo do arquivo, que é quem o homologa (§14); o hash homologado (R-24) detecta a troca de conteúdo.
-* **Validação no nó web (CR-005, D4):**
-  * o formato, o interpretador e as pastas do sistema e do SSS são conferidos **sempre**;
-  * se o arquivo **existe** no nó web, as checagens de dono e permissão rodam e **bloqueiam** (em qualquer `sss_env`);
-  * se o arquivo **não existe** no nó web (`NAO_ENCONTRADO`), o cadastro e a criação do ticket seguem com o aviso "Arquivo não encontrado neste servidor: a validação ocorrerá no agente. Se o arquivo não existir lá, a execução será recusada.". O agente confere tudo no claim (§8.4) e, se o arquivo não existir lá, finaliza com `PRECHECK_FAILED`.
 * **Cadastro na UI** (`admin_scripts`, F4.5):
-  * o formato e as checagens acima rodam ao salvar, com os códigos traduzidos para português;
-  * **conteúdo homologado (CR-007, R-24):** quando o arquivo existe no nó web e passa nas checagens, o sha256 dele é gravado em `sha256_homologado` na inclusão, quando `path_file` ou `interpretador` mudam, na reativação, ou quando o admin marca "Registrar o conteúdo atual do arquivo" (o detalhe da auditoria diz `sha256_homologado: alterado`);
-  * **hash informado (CR-008, E4/R-24):** o formulário tem o campo opcional "SHA-256 homologado" (64 caracteres hexadecimais; maiúsculas são aceitas e gravadas em minúsculas; espaços nas pontas são removidos). Ele serve para quando o arquivo **não** existe no nó web (nós separados): o administrador obtém o valor com `sha256sum <caminho>` no servidor do agente e o cola. Ordem de precedência ao salvar: (1) se o arquivo existe no nó web e uma das situações acima pede o cálculo, vale o hash calculado, e um valor informado diferente é recusado no campo ("O SHA-256 informado é diferente do arquivo presente neste servidor. Confira o arquivo ou deixe o campo vazio para usar o conteúdo daqui."); formato inválido dá "Informe os 64 caracteres hexadecimais do SHA-256 (a saída de sha256sum no servidor do agente)."; (2) senão, vale o valor informado; (3) senão, se `path_file` mudou, o hash é **limpo** (nunca fica o hash do arquivo antigo); (4) senão, o valor gravado é mantido. Vazio continua significando "o agente não confere o conteúdo", com o aviso da tela; nos ambientes de `[agent] ambientes_exigem_hash`, o ticket falha com `SEM_HASH` (§8.4). A troca é auditada como `sha256_homologado: alterado` ou `sha256_homologado: removido`, nunca com o valor;
-  * na **edição**, as checagens de arquivo (existência, dono e permissão) só rodam quando `path_file` ou `interpretador` mudam, ou quando o script é reativado. Assim, um arquivo ausente no nó web não impede editar a descrição ou desativar o script. O formato e as pastas do sistema valem sempre;
-  * `path_file` é um campo de texto com o caminho absoluto; a ajuda dá um exemplo (`/opt/automacoes/scripts/carga.py`);
-  * a UI sempre informa que a validação definitiva ocorre também no agente;
+  * o formato e as pastas do sistema são conferidos ao salvar e ao reativar, com os códigos traduzidos para português; o estado do arquivo no nó web não impede salvar, editar, desativar nem reativar;
+  * `path_file` é um campo de texto com o caminho absoluto; a ajuda dá um exemplo (`/opt/automacoes/scripts/carga.py`) e informa que o arquivo é conferido pelo agente, no servidor onde o script roda, e que pode ser link simbólico;
   * `interpretador` é um select fixo da allowlist lógica, e o servidor exige o valor exato, mesmo que o HTML tenha sido adulterado;
   * **caminho visível a todos (D8):** o caminho completo aparece no cadastro, na prévia do argv, no disparo e no detalhe do ticket, para todos que veem o script ou o ticket (a R-f foi revogada);
   * **nome reservado (D7):** o nome cuja pasta de log (§8.4, passo 3) seria `app` é recusado: "Este nome é reservado pelo sistema. Escolha outro.";
   * o `nome` do script é texto livre de 1 a 60 caracteres (sem caracteres de controle), único e editável, porque o snapshot guarda o nome da época e tickets e agendamentos referenciam o `script_id`. Renomear um script muda a pasta dos **próximos** logs de execução; os antigos ficam onde estão;
   * a unicidade do `nome` **diferencia maiúsculas de minúsculas**, como a UK `uk_tbsss_scr_nome` no Oracle: `Carga` e `carga` são nomes distintos (e dividem a pasta de log `carga`, o que é aceito, porque o arquivo leva o número do ticket). O FAKE segue a mesma regra;
-  * depois de salvar com sucesso, a tela **volta ao formulário do script**, e não à lista, para mostrar os avisos de validação e os atalhos de homologação e de vínculo de parâmetros. É uma exceção documentada ao `PADRAO_CRUD_ADMIN.md`.
+  * depois de salvar com sucesso, a tela **volta ao formulário do script**, e não à lista, para mostrar os atalhos de homologação e de vínculo de parâmetros. É uma exceção documentada ao `PADRAO_CRUD_ADMIN.md`.
 
 ### 8.6 Ambiente do processo filho (`env_builder.py`)
 
@@ -1688,7 +1656,8 @@ if not os.path.isfile(real):
 | `SSS_AMBIENTE_DSN`, `SSS_AMBIENTE_USUARIO` | DSN de `tbsss_ambientes.conexao` (sem credencial) e o usuário de `secrets.cfg [ambiente:<NOME>]` (CR-010) |
 | `SSS_AMBIENTE_CONEXAO` e `PADRAO_VALOR_RUN_CONEXAO_BD` | o mesmo valor `user/password@dsn`, com credenciais de `secrets.cfg [ambiente:<NOME>]` e DSN de `tbsss_ambientes.conexao`; a segunda é o nome antigo, mantido para os scripts existentes (CR-010). Omitidas se o ambiente não tiver DSN ou credencial. Mascaradas em todo log |
 | `SSS_SCRIPT_ID`, `SSS_SCRIPT_NOME`, `SSS_INTERPRETADOR` | do snapshot (o nome da época da criação do ticket, §6.5) (CR-010) |
-| `SSS_SCRIPT_ARQUIVO`, `SSS_SCRIPT_DIR` | `script_real` e `os.path.dirname(script_real)` |
+| `SSS_SCRIPT_ARQUIVO`, `SSS_SCRIPT_DIR` | `script_real` (o arquivo real, que é o executado) e `os.path.dirname(script_real)` |
+| `SSS_SCRIPT_LINK` | o `path_file` cadastrado, só quando ele difere do real (há link simbólico no caminho; CR-011) |
 | `SSS_LOG_DIR`, `SSS_LOG_ARQUIVO` | pasta do log da execução (§8.4, passo 3) e o nome do arquivo no início (`ticket_<id>.log.parcial`, renomeado para `ticket_<id>_<PID>.log` logo depois do spawn). Informativas: a saída do script já é o log, e fora de DEV o usuário de execução não abre o arquivo pelo caminho (CR-010) |
 | `SSS_AGENTE_ID`, `SSS_AGENTE_HOST`, `SSS_PLATAFORMA`, `SSS_VERSAO` | agente que executa, hostname, `LINUX` ou `UNIX` e versão do SSS (CR-010) |
 | `env_passthrough` | copiadas do ambiente do daemon (por exemplo, `ORACLE_HOME`, `TNS_ADMIN`, `NLS_LANG`, `LD_LIBRARY_PATH`) |
@@ -1877,11 +1846,11 @@ Em seguida, o daemon faz o flush dos logs, grava `tbsss_agentes.status = 'PARADO
 
 O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualquer passo:
 
-* **Códigos de saída por passo (F8.3b):** 10 usuário (root ou UID em `script_owner_uids`), 11 configuração (inclusive codificação e `child_locale`), 12 segredos, 13 diretórios, interpretadores e execução fora de DEV, 14 instância já em execução, 15 banco (driver, conexão, versão do esquema), 16 registro do agente (`agent_id` duplicado ou `config_criticos` divergente), 17 ambientes atendidos inexistentes, 18 startup check, 19 mais de uma thread antes do primeiro spawn. Em qualquer falha, a trava de instância e a conexão são liberadas antes da saída.
+* **Códigos de saída por passo (F8.3b):** 10 usuário (root), 11 configuração (inclusive codificação e `child_locale`), 12 segredos, 13 diretórios, interpretadores e execução fora de DEV, 14 instância já em execução, 15 banco (driver, conexão, versão do esquema), 16 registro do agente (`agent_id` duplicado ou `config_criticos` divergente), 17 ambientes atendidos inexistentes, 18 startup check, 19 mais de uma thread antes do primeiro spawn. Em qualquer falha, a trava de instância e a conexão são liberadas antes da saída.
 
-1. **Usuário:** `plataforma.usuario_privilegiado()` precisa ser falso. É proibido rodar como root. O UID do agente não pode estar em `script_owner_uids` (CR-007, R-15).
+1. **Usuário:** `plataforma.usuario_privilegiado()` precisa ser falso. É proibido rodar como root.
 2. **Configuração:** carregar e validar o `config.ini` (tipos, faixas, invariantes da §8.9 e `max_parallel_jobs <= max_parallel_hard_limit`), o `owner` e o `table_prefix` (regex do `AGENTS.md`), e `agent_id` contra `^[A-Za-z0-9._-]{1,30}$`, sem ser `init_db`, `seed` nem `purge` (reservados para os atores do sistema, §4.4). Inclui as invariantes I1 a I4 (§8.9) e, fora de DEV, `usuarios_execucao` cobrindo todos os ambientes atendidos (CR-007, D1).
-   **Avisos de configuração (CR-008):** fora de DEV, `[agent] ambientes_exigem_hash` vazio gera WARN `SEM_EXIGENCIA_HASH` (E4); um DSN descritor que passe da fórmula do §2.3 gera WARN `CONEXAO_ACIMA_DO_PRAZO` (R-17).
+   **Aviso de configuração (CR-008):** um DSN descritor que passe da fórmula do §2.3 gera WARN `CONEXAO_ACIMA_DO_PRAZO` (R-17).
    **Codificação (CR-007, R-17):** `sys.getfilesystemencoding()` precisa ser UTF-8 (o launcher exporta `LANG`/`LC_ALL`, §12.2); `child_locale` precisa constar em `locale -a`. Falha: CRITICAL.
 3. **Segredos:** validar o `secrets.cfg` (§4.1).
 4. **Diretórios e interpretadores:**
@@ -2105,7 +2074,6 @@ END;
   * `ck_tbsss_scr_int (interpretador IN ('PYTHON3','BASH','SH'))`
   * `ck_tbsss_scr_path (SUBSTR(path_file, 1, 1) = '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\') = 0)` (formato do §8.5, CR-005)
   * `ck_tbsss_scr_tmout (timeout_seg IS NULL OR timeout_seg > 0)`
-  * `ck_tbsss_scr_sha (sha256_homologado IS NULL OR REGEXP_LIKE(sha256_homologado, '^[0-9a-f]{64}$'))` (CR-007)
   * `ck_tbsss_scr_upd` (colunas de registro, CR-006)
 * **Colunas:**
   * `id`
@@ -2120,7 +2088,6 @@ END;
   * `max_qtd_parallel_env NUMBER(3) DEFAULT 1 NOT NULL`
   * `timeout_seg NUMBER(7)`
   * `ativo CHAR(1) DEFAULT 'S' NOT NULL`
-  * `sha256_homologado VARCHAR2(64 CHAR)` (CR-007, R-24: conteúdo homologado do arquivo, em hexadecimal minúsculo; nulo = o agente não confere o conteúdo, §8.4)
   * `created_at DATE DEFAULT SYSDATE NOT NULL` (CR-006)
   * `created_by VARCHAR2(40 CHAR) NOT NULL` (CR-006)
   * `updated_at DATE` (CR-006)
@@ -2282,7 +2249,6 @@ END;
   * `ck_tbsss_tck_logtr (log_truncado IN ('S','N'))`
   * `ck_tbsss_tck_logoff (log_offset_chars >= 0)` (offset CLOB não negativo)
   * `ck_tbsss_tck_motivo (status_motivo IS NULL OR status_motivo IN ('EXIT_OK','EXIT_ERROR','KILLED_SIGNAL','TIMEOUT','NODE_OFFLINE','ORPHAN_PROCESS','FENCED','PRECHECK_FAILED','SPAWN_ERROR','LOG_LIMIT','SHUTDOWN','CANCEL_USER'))`
-  * `ck_tbsss_tck_sha (arquivo_sha256 IS NULL OR REGEXP_LIKE(arquivo_sha256, '^[0-9a-f]{64}$'))` (CR-007)
   * `ck_tbsss_tck_upd` (colunas de registro, CR-006)
 * **Colunas:**
   * `id`
@@ -2304,7 +2270,6 @@ END;
   * `log_offset_chars NUMBER(20) DEFAULT 0 NOT NULL` (posição confirmada em caracteres CLOB, independente do teto em bytes UTF-8)
   * `log_truncado CHAR(1) DEFAULT 'N' NOT NULL`
   * `return_code NUMBER(6)`
-  * `arquivo_sha256 VARCHAR2(64 CHAR)` (CR-007, R-24: sha256 do arquivo que o agente executou, §8.4)
   * `scheduled_at DATE DEFAULT SYSDATE NOT NULL`
   * `started_at DATE`
   * `heartbeat_at DATE`
@@ -2509,7 +2474,6 @@ secrets_file = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_servi
 agent_id = srv-linux-prod-01
 ambientes_atendidos = PRODUCAO,HOMOLOGACAO
 work_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work
-script_owner_uids = 0             ; UIDs que podem ser donos dos scripts (§8.5); recomendado um UID dedicado, sem o 0
 usuarios_execucao = PRODUCAO=sssprd,HOMOLOGACAO=ssshml   ; usuário do SO de cada ambiente (§8.0, D1); vazio só em DEV
 exec_work_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec ; pasta base dos diretórios de trabalho dos scripts, uma subpasta por usuário de execução
 interpretadores = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh
@@ -2530,7 +2494,6 @@ misfire_policy = RUN_ONCE         ; RUN_ONCE | SKIP
 misfire_tolerance_s = 300
 cron_horizon_days = 1461
 fila_envelhecimento_min = 60       ; envelhecimento da prioridade na fila (§5.3); 0 desliga
-ambientes_exigem_hash = PRODUCAO  ; CR-008, E4: script sem sha256_homologado é recusado nestes ambientes (§8.4)
 log_dir_min_livre_mb = 1024       ; CR-008, R-25: sem claim com menos espaço livre em log_dir (§8.2)
 child_locale = C.UTF-8
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
@@ -2581,7 +2544,6 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[agent]` | `usuarios_execucao` (CR-007) | lista `AMBIENTE=usuario` | obrigatória fora de DEV, cobrindo todos os `ambientes_atendidos`; usuário `^[a-z_][a-z0-9_-]{0,31}$`, diferente de `root`. Vazia em DEV = execução com o próprio usuário, com WARN |
 | `[agent]` | `exec_work_dir` (CR-007) | caminho | obrigatório fora de DEV; fora das pastas do sistema e diferente de `work_dir` e `log_dir` |
 | `[agent]` | `fila_envelhecimento_min` (CR-007) | inteiro | 0 a 1.440 (0 desliga) |
-| `[agent]` | `script_owner_uids` | lista CSV de inteiros | obrigatória; cada UID ≥ 0 |
 | `[agent]` | `interpretadores` (F8.0) | lista `CHAVE=caminho` | conforme §8.5 |
 | `[agent]` | `work_dir` | caminho | obrigatório |
 | `[agent]` | `max_parallel_jobs`, `max_parallel_hard_limit` | inteiro | 1 a 999, com `max_parallel_jobs <= max_parallel_hard_limit` |
@@ -2592,7 +2554,6 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[agent]` | `script_timeout_s` | inteiro | 1 a 86.400 (padrão global; o `timeout_seg` de cada script vai até 9.999.999, como a coluna) |
 | `[agent]` | `shutdown_mode`, `misfire_policy` | enum | conforme o exemplo |
 | `[agent]` | `cron_horizon_days` | inteiro | 1.461 a 36.500 (CR-008, R-32: quatro anos, para cobrir 29/02; o mínimo do CR-007 era 366) |
-| `[agent]` | `ambientes_exigem_hash` (CR-008) | lista CSV | opcional, padrão vazio; cada item `^[A-Z0-9_]{1,30}$`. Fora de DEV, vazio gera WARN `SEM_EXIGENCIA_HASH` (§8.12) |
 | `[agent]` | `log_dir_min_livre_mb` (CR-008) | inteiro | 0 a 1.048.576, padrão 1.024; 0 desliga a checagem (só em DEV) |
 | `[agent]` | `child_locale` | texto | obrigatório |
 | `[agent]` | `env_passthrough` | lista CSV | opcional, sem as variáveis bloqueadas nem as chaves fixas do §8.6 |
@@ -2618,7 +2579,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 * O CRITICAL vai para o log da aplicação do minuto atual (§13, `<nome_log>` `sss_web` ou `sss_scheduler`) sempre que o `[logging] log_dir` do `config.ini`, lido mesmo que outras chaves estejam inválidas, existe e aceita escrita. Falhas repetidas no mesmo minuto e no mesmo processo vão para o mesmo arquivo (sem sufixo `_<n>`). Sem `log_dir` utilizável, vai para o stderr do processo, no mesmo formato do §13.
 * No nó web, a requisição recebe a página de erro genérica (500), sem o detalhe.
 
-A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR-002); até lá, o código atual (backend FAKE) ainda lê as chaves antigas. A chave `interpretadores` passa a ser lida e validada a partir do F8.0 (CR-001). **CR-007:** entram `usuarios_execucao`, `exec_work_dir`, `fila_envelhecimento_min` e `purge_user`; `table_prefix` passa a aceitar só minúsculas; as faixas de `cron_horizon_days`, `max_log_size_bytes` e `audit_retention_days` sobem; as invariantes I3 e I4 passam a ser validadas. **CR-008:** entram `[web] sessao_max_horas`, `[agent] ambientes_exigem_hash` e `[agent] log_dir_min_livre_mb` (todas opcionais, com padrão); o mínimo de `cron_horizon_days` sobe para 1.461; `[oracle] user` igual ao `owner` passa a ser recusado fora de DEV. **CR-005:** saem `base_script_dirs` (a antiga `base_script_dir` também continua recusada) e `script_owner_sids`; `app_log_backups` é substituída por `app_log_retention_days`. As chaves que saem passam a ser recusadas como desconhecidas.
+A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR-002); até lá, o código atual (backend FAKE) ainda lê as chaves antigas. A chave `interpretadores` passa a ser lida e validada a partir do F8.0 (CR-001). **CR-007:** entram `usuarios_execucao`, `exec_work_dir`, `fila_envelhecimento_min` e `purge_user`; `table_prefix` passa a aceitar só minúsculas; as faixas de `cron_horizon_days`, `max_log_size_bytes` e `audit_retention_days` sobem; as invariantes I3 e I4 passam a ser validadas. **CR-008:** entram `[web] sessao_max_horas`, `[agent] ambientes_exigem_hash` (removida no CR-011) e `[agent] log_dir_min_livre_mb` (todas opcionais, com padrão); o mínimo de `cron_horizon_days` sobe para 1.461; `[oracle] user` igual ao `owner` passa a ser recusado fora de DEV. **CR-005:** saem `base_script_dirs` (a antiga `base_script_dir` também continua recusada) e `script_owner_sids`; `app_log_backups` é substituída por `app_log_retention_days`. As chaves que saem passam a ser recusadas como desconhecidas. **CR-011:** saem `[agent] script_owner_uids` e `ambientes_exigem_hash`; uma chave removida é recusada com a mensagem "apague a linha".
 
 ### 12.2 Launchers
 
@@ -2706,8 +2667,7 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
 | Credencial legível no ambiente do processo (`/proc/<pid>/environ` no Linux) pelo root e pelos scripts do **mesmo** ambiente (mesmo usuário de execução) | Um usuário de execução por ambiente, diferente do usuário do agente, que não lê segredos nem logs do agente (CR-007, D1); servidor restrito. O aceite anterior, que considerava o usuário do agente confiável, foi revogado pelo CR-007 |
 | Argumentos visíveis em `ps`/lista de processos | Proibição de parâmetro de senha; parâmetros sensíveis apenas mascarados na UI e nos logs |
 | Script que faça `setsid`/double-fork escapa do `killpg` | Homologação do script no catálogo; política de revisão de código; o processo fugido fica limitado ao usuário de execução do ambiente (D1), e os netos que ficam no grupo são encerrados sempre (§8.7, R-02) |
-| TOCTOU entre a validação e o `exec` | Nenhum componente do caminho é gravável pelo agente nem pelo usuário de execução, nenhum pertence a eles, links simbólicos são recusados (§8.5) e o conteúdo homologado é conferido por sha256 (R-24), inclusive com web e agentes em servidores separados (hash informado, CR-008 E4) e obrigatoriamente nos ambientes de `ambientes_exigem_hash`. Resta o dono legítimo do arquivo, que é quem o homologa |
-| Caminho livre (CR-005): com o root em `script_owner_uids`, qualquer arquivo de terceiros do root fora das pastas do sistema vira candidato a script | Pastas do sistema bloqueadas, interpretador da allowlist, cadastro só com `CAD_SCRIPTS` e auditado; recomendação de UID dono dedicado, sem o 0 (§12.1) |
+| Conteúdo e versão do script sob controle do ambiente (CR-011): sem hash nem conferência de dono, um arquivo alterado no disco, ou um link simbólico trocado por quem grava na pasta dele, executa o novo conteúdo sem aviso | O arquivo real não pode ser gravável por grupo nem por outros, nem ficar nas pastas do sistema ou do SSS (§8.5); o script roda com o usuário de execução do ambiente (D1); a gestão de versões e de permissões dos scripts é do ambiente |
 | Granularidade fina "perfil × script × ambiente" | Não suportada; a intersecção `perfil_amb ∩ script_amb` atende ao escopo atual |
 | Semântica de horário de verão | Horário de parede do servidor Oracle (§7.1), com o pré-requisito de banco sem horário de verão (D3). Se ele não for cumprido: com `SKIP`, a ocorrência que cai no avanço do relógio é perdida; o recuo atrasa a regra pelo tamanho do recuo; a detecção de nó offline é suspensa pela trava de salto de relógio (§8.8) |
 | Lacunas em sequences | Aceitas por design |

@@ -32,7 +32,7 @@ SELECT * FROM (SELECT a.*, ROWNUM rn FROM (
 ```sql
 SELECT * FROM (SELECT a.*, ROWNUM rn FROM (
   SELECT s.id, s.nome, s.descricao, s.grupo, s.categoria, s.etapa, s.interpretador, s.path_file,
-         s.tipo_param, s.max_qtd_parallel_env, s.timeout_seg, s.ativo, s.sha256_homologado,
+         s.tipo_param, s.max_qtd_parallel_env, s.timeout_seg, s.ativo,
          s.created_at, s.created_by, s.updated_at, s.updated_by,
          (SELECT COUNT(*) FROM {owner}.{prefixo}script_param sp WHERE sp.script_id = s.id) qtd_parametros
     FROM {owner}.{prefixo}scripts s

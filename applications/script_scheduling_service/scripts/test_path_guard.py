@@ -11,8 +11,7 @@ import unittest
 import path_guard
 from path_guard import Codigo, PathGuardErro
 
-# UID fictício do agente: os arquivos de teste são do usuário do teste (CR-007, R-15).
-AGENTE_FALSO = 2 ** 31 - 3
+
 
 MODO_ARQ = 0o444
 MODO_DIR = 0o555
@@ -39,7 +38,6 @@ class TestResolver(unittest.TestCase):
         os.symlink("ciclo_b", os.path.join(self.base, "ciclo_a"))
         os.symlink("ciclo_a", os.path.join(self.base, "ciclo_b"))
         self._travar(self.base)
-        self.uids = (os.getuid(),)
 
     def tearDown(self):
         os.chmod(self.raiz, 0o755)
@@ -58,10 +56,8 @@ class TestResolver(unittest.TestCase):
     def _p(self, rel):
         return os.path.join(self.base, rel)
 
-    def _resolver(self, rel, uids=None, uid_agente=AGENTE_FALSO, dirs_sss=(), parar_em=None):
-        # A arvore temporaria fica sob /tmp (escrita para todos): a cadeia para na base travada.
-        return path_guard.resolver(self._p(rel), self.uids if uids is None else uids, uid_agente,
-                                   dirs_sss, self.base if parar_em is None else parar_em)
+    def _resolver(self, rel, dirs_sss=()):
+        return path_guard.resolver(self._p(rel), dirs_sss)
 
     def _codigo(self, rel, **kw):
         with self.assertRaises(PathGuardErro) as ctx:
@@ -79,7 +75,9 @@ class TestResolver(unittest.TestCase):
         self.assertEqual(self._resolver("link_sub/ok.py"), real, "link numa pasta do caminho")
 
     def test_link_para_destino_inseguro_e_recusado(self):
-        # O destino fica fora da arvore travada: a cadeia dele chega ao /tmp, gravavel por todos.
+        # CR-011 (S2): vale o arquivo real; gravavel por grupo ou outros e recusado, mesmo via link.
+        self.assertTrue(self._resolver("link_fora.py"), "destino fora da arvore, mas nao gravavel: aceito")
+        os.chmod(self.fora, 0o666)
         self.assertEqual(self._codigo("link_fora.py"), Codigo.GRAVAVEL_GRUPO_OUTROS)
 
     def test_ciclo_de_links(self):
@@ -89,7 +87,7 @@ class TestResolver(unittest.TestCase):
         for caminho in ("/etc/passwd", "/usr/bin/python3", "/bin/sh", "/root/x.py", "/proc/self/status"):
             with self.subTest(caminho=caminho):
                 with self.assertRaises(PathGuardErro) as ctx:
-                    path_guard.resolver(caminho, self.uids)
+                    path_guard.resolver(caminho)
                 self.assertEqual(ctx.exception.codigo, Codigo.PASTA_DO_SISTEMA)
         self.assertEqual(self._codigo("link_etc.py"), Codigo.PASTA_DO_SISTEMA)
         self.assertEqual(self._codigo("link_usr/bin/env"), Codigo.PASTA_DO_SISTEMA)
@@ -99,7 +97,7 @@ class TestResolver(unittest.TestCase):
         for caminho in ("/usrx/a.py", "/etcetera/a.py", "/binarios/a.sh"):
             with self.subTest(caminho=caminho):
                 with self.assertRaises(PathGuardErro) as ctx:
-                    path_guard.resolver(caminho, self.uids)
+                    path_guard.resolver(caminho)
                 self.assertEqual(ctx.exception.codigo, Codigo.NAO_ENCONTRADO)
 
     def test_dentro_de_log_dir_ou_work_dir(self):
@@ -112,78 +110,36 @@ class TestResolver(unittest.TestCase):
         self.assertEqual(self._codigo("inexistente.py"), Codigo.NAO_ENCONTRADO)
         self.assertEqual(self._codigo("sub"), Codigo.NAO_E_ARQUIVO)
 
-    def test_dono_invalido(self):
-        self.assertEqual(self._codigo("sub/ok.py", uids=(os.getuid() + 1,)), Codigo.DONO_INVALIDO)
-
-    def _codigo_com_modo(self, alvo, modo, **kw):
-        original = os.stat(alvo).st_mode & 0o777
-        os.chmod(alvo, modo)
+    def test_gravavel_por_grupo_ou_outros_so_no_arquivo(self):
+        # CR-011 (S2): o ambiente controla o conteudo; o SSS confere so o proprio arquivo, nao as pastas.
+        arq = self._p("sub/fundo/ok.sh")
+        for bit in (0o020, 0o002):
+            os.chmod(arq, MODO_ARQ | bit)
+            try:
+                self.assertEqual(self._codigo("sub/fundo/ok.sh"), Codigo.GRAVAVEL_GRUPO_OUTROS, oct(bit))
+            finally:
+                os.chmod(arq, MODO_ARQ)
+        os.chmod(self._p("sub/fundo"), 0o777)
         try:
-            return self._codigo("sub/fundo/ok.sh", **kw)
+            self.assertTrue(self._resolver("sub/fundo/ok.sh"), "pasta gravavel nao e conferida")
         finally:
-            os.chmod(alvo, original)
+            os.chmod(self._p("sub/fundo"), MODO_DIR)
 
-    def _alvos(self):
-        return (self._p("sub/fundo/ok.sh"), self._p("sub/fundo"), self._p("sub"), self.base)
-
-    def test_gravavel_por_grupo_ou_outros_no_arquivo_e_na_cadeia(self):
-        for alvo in self._alvos():
-            base_modo = MODO_DIR if os.path.isdir(alvo) else MODO_ARQ
-            for bit in (0o020, 0o002):
-                with self.subTest(alvo=alvo, bit=oct(bit)):
-                    self.assertEqual(self._codigo_com_modo(alvo, base_modo | bit), Codigo.GRAVAVEL_GRUPO_OUTROS)
-
-    def test_gravavel_pelo_agente_no_arquivo_e_na_cadeia(self):
-        for alvo in self._alvos():
-            base_modo = MODO_DIR if os.path.isdir(alvo) else MODO_ARQ
-            with self.subTest(alvo=alvo):
-                # O agente e o proprio processo (dono dos arquivos de teste).
-                self.assertEqual(self._codigo_com_modo(alvo, base_modo | 0o200, uid_agente=None),
-                                 Codigo.GRAVAVEL_PELO_AGENTE)
-
-    def test_uid_agente_explicito(self):
-        arq = self._p("sub/ok.py")
-        os.chmod(arq, 0o644)
-        try:
-            # Outro UID nao e dono e grupo/outros nao escrevem: aceito.
-            self.assertTrue(self._resolver("sub/ok.py", uid_agente=os.getuid() + 1))
-            self.assertEqual(self._codigo("sub/ok.py", uid_agente=os.getuid()), Codigo.GRAVAVEL_PELO_AGENTE)
-        finally:
-            os.chmod(arq, MODO_ARQ)
-        self.assertEqual(self._codigo("sub/ok.py", uid_agente=0), Codigo.GRAVAVEL_PELO_AGENTE)
-
-    def test_cadeia_vai_ate_a_raiz(self):
-        # Sem parar_em (producao), a cadeia sobe ate '/': a raiz temporaria do proprio agente e recusada.
-        self.assertEqual(self._codigo("sub/ok.py", parar_em="/", uid_agente=None), Codigo.GRAVAVEL_PELO_AGENTE)
-        tmp = os.path.dirname(self.raiz)
-        st = os.stat(tmp)
-        if not (st.st_mode & 0o002 and st.st_uid == 0):
-            self.skipTest("pasta temporaria nao e do root com escrita para todos")
-        # Com a raiz temporaria travada, a proxima pasta (o /tmp, 1777) e recusada mesmo com sticky bit.
-        os.chmod(self.raiz, MODO_DIR)
-        self.assertEqual(self._codigo("sub/ok.py", parar_em="/"), Codigo.GRAVAVEL_GRUPO_OUTROS)
+    def test_dono_e_indiferente(self):
+        # Sem script_owner_uids (CR-011): o arquivo do proprio usuario, sem escrita de grupo/outros, e aceito.
+        self.assertTrue(self._resolver("sub/ok.py"))
 
 
-@unittest.skipIf(os.geteuid() == 0, "root sempre passa em os.access(W_OK)")
-class TestDonosProibidosEExecutavel(unittest.TestCase):
-    """CR-007, R-14/R-15: dono igual ao agente ou a um usuario de execucao, SEM_ACESSO e executavel do interpretador."""
+@unittest.skipIf(os.geteuid() == 0, "root sempre passa nas checagens de acesso")
+class TestAcessoEExecutavel(unittest.TestCase):
+    """SEM_ACESSO e o executavel do interpretador (CR-011, S3)."""
 
     setUp = TestResolver.setUp
     tearDown = TestResolver.tearDown
     _travar = TestResolver._travar
     _p = TestResolver._p
     _codigo = TestResolver._codigo
-
-    def test_dono_agente_mesmo_sem_escrita(self):
-        # Arquivo 0555 do proprio agente: o dono pode voltar o modo a qualquer momento.
-        self.assertEqual(self._codigo("sub/ok.py", uid_agente=os.getuid()), Codigo.GRAVAVEL_PELO_AGENTE)
-
-    def test_dono_usuario_de_execucao(self):
-        self.assertEqual(self._codigo("sub/ok.py", uids_proibidos=(os.getuid(),)), Codigo.GRAVAVEL_PELO_EXECUTOR)
-
-    def _resolver(self, rel, uids=None, uid_agente=AGENTE_FALSO, dirs_sss=(), parar_em=None, uids_proibidos=()):
-        return path_guard.resolver(self._p(rel), self.uids if uids is None else uids, uid_agente,
-                                   dirs_sss, self.base if parar_em is None else parar_em, uids_proibidos)
+    _resolver = TestResolver._resolver
 
     def test_sem_acesso_e_diferente_de_nao_encontrado(self):
         fundo = self._p("sub/fundo")
@@ -195,21 +151,16 @@ class TestDonosProibidosEExecutavel(unittest.TestCase):
 
     def test_executavel_do_interpretador(self):
         sh = os.path.realpath("/bin/sh")
-        self.assertEqual(path_guard.validar_executavel("/bin/sh", (0,), uid_agente=AGENTE_FALSO), sh)
+        self.assertEqual(path_guard.validar_executavel("/bin/sh"), sh)
         with self.assertRaises(PathGuardErro) as ctx:
-            path_guard.validar_executavel("/nao/existe/python3", (0,), uid_agente=AGENTE_FALSO)
+            path_guard.validar_executavel("/nao/existe/python3")
         self.assertEqual(ctx.exception.codigo, Codigo.NAO_ENCONTRADO)
         for caminho, kw in (("bin/sh", {}), ("/bin/sh", {"dirs_sss": (os.path.dirname(sh),)}),
-                            ("/bin/sh", {"uids_proibidos": (0,)}),
-                            (self._p("sub/ok.py"), {"parar_em": self.base})):
+                            (self._p("sub/ok.py"), {}), (self._p("sub"), {})):
             with self.subTest(caminho=caminho, kw=kw):
                 with self.assertRaises(PathGuardErro) as ctx:
-                    path_guard.validar_executavel(caminho, (0, os.getuid()), uid_agente=AGENTE_FALSO, **kw)
+                    path_guard.validar_executavel(caminho, **kw)
                 self.assertEqual(ctx.exception.codigo, Codigo.INTERPRETADOR_INSEGURO)
-
-    def test_uids_de_usuarios(self):
-        self.assertEqual(path_guard.uids_de_usuarios(["root", "usuario_que_nao_existe_sss"]), (0,))
-        self.assertEqual(path_guard.uids_de_usuarios(None), ())
 
 
 class TestValidacoesTextuais(unittest.TestCase):

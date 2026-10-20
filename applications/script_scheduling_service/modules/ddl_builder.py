@@ -322,7 +322,6 @@ DICIONARIO_COLUNAS = {
         "agendamento_id": "Identificador da regra de agendamento de origem (se houver)",
         "status_motivo": "Codigo tecnico do motivo de falha ou cancelamento",
         "parametros_enviados": "Copia fiel dos parametros de entrada fornecidos na solicitacao (CLOB)",
-        "script_sha256": "Hash criptografico SHA-256 do arquivo executavel na data do disparo",
     },
     "ticket_resp": {
         "id": "Identificador unico sequencial da resposta (chave primaria)",

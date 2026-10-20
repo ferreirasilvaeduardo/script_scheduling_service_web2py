@@ -19,7 +19,6 @@ secrets_file = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_servi
 agent_id = srv-linux-prod-01
 ambientes_atendidos = PRODUCAO,HOMOLOGACAO
 work_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work
-script_owner_uids = 0             ; UIDs donos dos scripts (README §8.5); recomendado um UID dedicado, sem o 0
 interpretadores = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh ; executavel local de cada interpretador logico (README §8.5); o agente exige na subida (F8.3)
 usuarios_execucao =               ; AMBIENTE=usuario do SO por ambiente (README §8.0); obrigatório fora de DEV, ex.: PRODUCAO=sssprd,HOMOLOGACAO=ssshml
 exec_work_dir =                   ; pasta base dos diretórios de trabalho dos scripts (obrigatória fora de DEV), ex.: /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec
@@ -40,7 +39,6 @@ misfire_policy = RUN_ONCE         ; RUN_ONCE | SKIP
 misfire_tolerance_s = 300
 cron_horizon_days = 1461
 fila_envelhecimento_min = 60       ; a cada N minutos na fila a prioridade sobe 1 nível (README §5.3); 0 desliga
-ambientes_exigem_hash =           ; ex.: PRODUCAO; script sem SHA-256 homologado é recusado nesses ambientes (CR-008, E4)
 log_dir_min_livre_mb = 1024       ; abaixo disso em log_dir o agente não reserva tickets (CR-008, R-25)
 child_locale = C.UTF-8
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH

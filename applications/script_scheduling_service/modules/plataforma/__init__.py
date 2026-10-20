@@ -19,8 +19,6 @@ from plataforma.posix import (  # noqa: E402,F401
     InstanciaJaEmExecucao,
     Processo,
     caminho_final,
-    checar_cadeia,
-    checar_item,
     criar_dir_trabalho,
     encerrar_ticket,
     espaco_livre_mb,

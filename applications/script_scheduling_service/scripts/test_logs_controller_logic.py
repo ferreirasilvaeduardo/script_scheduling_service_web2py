@@ -69,7 +69,7 @@ class _BaseLog(unittest.TestCase):
             repo_factory.obter("usuarios"), repo_factory.obter("rbac"), catalogo,
             repo_factory.obter("auditoria"), 5, 900, self.log)
         self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
-        self.svc = ServicoTicket(catalogo, self.tickets, (os.geteuid(),), self.log)
+        self.svc = ServicoTicket(catalogo, self.tickets, self.log)
 
     def _log_integral(self, ticket_id):
         """Log inteiro lido do repositorio em fatias, pelo contrato (obter nao traz log_output)."""

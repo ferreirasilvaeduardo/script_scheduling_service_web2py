@@ -126,7 +126,6 @@ CREATE TABLE openrisow.tbsss_scripts (
     max_qtd_parallel_env NUMBER(3) DEFAULT 1 NOT NULL,
     timeout_seg NUMBER(7),
     ativo CHAR(1) DEFAULT 'S' NOT NULL,
-    sha256_homologado VARCHAR2(64 CHAR),
     created_at DATE DEFAULT SYSDATE NOT NULL,
     created_by VARCHAR2(40 CHAR) NOT NULL,
     updated_at DATE,
@@ -249,7 +248,6 @@ CREATE TABLE openrisow.tbsss_tickets (
     log_offset_chars NUMBER(20) DEFAULT 0 NOT NULL,
     log_truncado CHAR(1) DEFAULT 'N' NOT NULL,
     return_code NUMBER(6),
-    arquivo_sha256 VARCHAR2(64 CHAR),
     scheduled_at DATE DEFAULT SYSDATE NOT NULL,
     started_at DATE,
     heartbeat_at DATE,
@@ -375,8 +373,6 @@ ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_path CHECK (SUBS
 
 ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_tmout CHECK (timeout_seg IS NULL OR timeout_seg > 0);
 
-ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_sha CHECK (sha256_homologado IS NULL OR REGEXP_LIKE(sha256_homologado, '^[0-9a-f]{64}$'));
-
 ALTER TABLE openrisow.tbsss_scripts ADD CONSTRAINT ck_tbsss_scr_upd CHECK ((updated_at IS NULL AND updated_by IS NULL) OR (updated_at IS NOT NULL AND updated_by IS NOT NULL));
 
 ALTER TABLE openrisow.tbsss_perfil_scr ADD CONSTRAINT pk_tbsss_perfil_scr PRIMARY KEY (id);
@@ -468,8 +464,6 @@ ALTER TABLE openrisow.tbsss_tickets ADD CONSTRAINT ck_tbsss_tck_logtr CHECK (log
 ALTER TABLE openrisow.tbsss_tickets ADD CONSTRAINT ck_tbsss_tck_logoff CHECK (log_offset_chars >= 0);
 
 ALTER TABLE openrisow.tbsss_tickets ADD CONSTRAINT ck_tbsss_tck_motivo CHECK (status_motivo IS NULL OR status_motivo IN ('EXIT_OK','EXIT_ERROR','KILLED_SIGNAL','TIMEOUT','NODE_OFFLINE','ORPHAN_PROCESS','FENCED','PRECHECK_FAILED','SPAWN_ERROR','LOG_LIMIT','SHUTDOWN','CANCEL_USER'));
-
-ALTER TABLE openrisow.tbsss_tickets ADD CONSTRAINT ck_tbsss_tck_sha CHECK (arquivo_sha256 IS NULL OR REGEXP_LIKE(arquivo_sha256, '^[0-9a-f]{64}$'));
 
 ALTER TABLE openrisow.tbsss_tickets ADD CONSTRAINT ck_tbsss_tck_upd CHECK ((updated_at IS NULL AND updated_by IS NULL) OR (updated_at IS NOT NULL AND updated_by IS NOT NULL));
 
@@ -1006,7 +1000,6 @@ COMMENT ON COLUMN openrisow.tbsss_scripts.tipo_param IS 'Coluna tipo_param da ta
 COMMENT ON COLUMN openrisow.tbsss_scripts.max_qtd_parallel_env IS 'Coluna max_qtd_parallel_env da tabela tbsss_scripts';
 COMMENT ON COLUMN openrisow.tbsss_scripts.timeout_seg IS 'Coluna timeout_seg da tabela tbsss_scripts';
 COMMENT ON COLUMN openrisow.tbsss_scripts.ativo IS 'Indicador de disponibilidade da rotina para novas execucoes (S/N)';
-COMMENT ON COLUMN openrisow.tbsss_scripts.sha256_homologado IS 'Coluna sha256_homologado da tabela tbsss_scripts';
 COMMENT ON COLUMN openrisow.tbsss_scripts.created_at IS 'Data e hora da criacao do registro no banco de dados (imutavel)';
 COMMENT ON COLUMN openrisow.tbsss_scripts.created_by IS 'Identificador do usuario ou servico responsavel pela criacao (imutavel)';
 COMMENT ON COLUMN openrisow.tbsss_scripts.updated_at IS 'Data e hora da ultima alteracao de negocio (nulo ate a primeira alteracao)';
@@ -1114,7 +1107,6 @@ COMMENT ON COLUMN openrisow.tbsss_tickets.log_output IS 'Saida completa de execu
 COMMENT ON COLUMN openrisow.tbsss_tickets.log_offset_chars IS 'Controle tecnico de caracteres confirmados gravados no log';
 COMMENT ON COLUMN openrisow.tbsss_tickets.log_truncado IS 'Indicador se o log excedeu o limite maximo de tamanho (S/N)';
 COMMENT ON COLUMN openrisow.tbsss_tickets.return_code IS 'Coluna return_code da tabela tbsss_tickets';
-COMMENT ON COLUMN openrisow.tbsss_tickets.arquivo_sha256 IS 'Coluna arquivo_sha256 da tabela tbsss_tickets';
 COMMENT ON COLUMN openrisow.tbsss_tickets.scheduled_at IS 'Data e hora agendadas para o processamento';
 COMMENT ON COLUMN openrisow.tbsss_tickets.started_at IS 'Data e hora efetivas do inicio da execucao pelo agente';
 COMMENT ON COLUMN openrisow.tbsss_tickets.heartbeat_at IS 'Data e hora da ultima confirmacao de atividade do processo';

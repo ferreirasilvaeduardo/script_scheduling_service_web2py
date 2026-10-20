@@ -64,7 +64,7 @@ class _Base(unittest.TestCase):
         }
         self.agora = AGORA
         self.tickets = repo_factory.obter("tickets")
-        disparo = ServicoTicket(self.catalogo, self.tickets, (0,), self.log)
+        disparo = ServicoTicket(self.catalogo, self.tickets, self.log)
         self.svc = ServicoAgendamentos(self.agd, self.catalogo, repo_factory.obter("usuarios"), disparo,
                                        lambda: self.agora, HORIZONTE, self.log,
                                        tickets=self.tickets, rbac_repo=self.rbac)

@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """Cadastro de scripts, homologacao por ambiente e vinculo de parametros (README §4.3.A, §6.3, §8.5, §10).
 
-Segue docs/PADRAO_CRUD_ADMIN.md. O executavel e validado pelo path_guard no cadastro (a validacao
-definitiva repete-se no agente). Regras de tipo_param x vinculos sao reverificadas pelo repositorio na
-mesma operacao. CR-005: path_file absoluto, em qualquer lugar fora das pastas do sistema; o arquivo ausente
-neste no vira aviso (o agente confere no claim). Nao importa gluon fora de _servico.
+Segue docs/PADRAO_CRUD_ADMIN.md. O cadastro confere so o formato do path_file e as pastas do sistema (CR-011,
+S1): o arquivo e conferido pelo agente, no servidor onde o script roda. Regras de tipo_param x vinculos sao
+reverificadas pelo repositorio na mesma operacao. Nao importa gluon fora de _servico.
 """
 import collections
 import hashlib
@@ -55,24 +54,14 @@ MENSAGENS_PATH = {
     Codigo.CONTEM_PONTOS: u"O caminho não pode conter '..'.",
     Codigo.SEPARADOR_INVALIDO: u"Use só / para separar pastas; não use \\.",
     Codigo.CARACTERE_INVALIDO: u"O caminho contém caracteres de controle não permitidos.",
-    Codigo.SEM_ACESSO: u"Uma pasta do caminho não deixa o sistema passar; confira as permissões das pastas.",
     Codigo.PASTA_DO_SISTEMA: u"Scripts não podem ficar em pastas do sistema (/bin, /sbin, /usr, /lib, /etc, /boot, "
                              u"/proc, /sys, /dev, /root). Use outra pasta.",
     Codigo.PASTA_DO_SSS: u"Scripts não podem ficar nas pastas de log ou de trabalho do SSS. Use outra pasta.",
-    Codigo.NAO_E_ARQUIVO: u"O caminho aponta para uma pasta ou algo que não é um arquivo comum.",
-    Codigo.DONO_INVALIDO: u"O arquivo, ou uma pasta do caminho, pertence a um usuário não autorizado.",
-    Codigo.GRAVAVEL_GRUPO_OUTROS: u"O arquivo, ou uma pasta do caminho, pode ser alterado por outros usuários "
-                                  u"(ou pelo grupo); ajuste as permissões.",
-    Codigo.GRAVAVEL_PELO_AGENTE: u"O arquivo, ou uma pasta do caminho, é gravável pelo usuário do sistema "
-                                 u"ou pertence a ele; ajuste o dono e as permissões.",
-    Codigo.GRAVAVEL_PELO_EXECUTOR: u"O arquivo, ou uma pasta do caminho, pertence ao usuário que executa os "
-                                   u"scripts; o dono precisa ser outro usuário autorizado.",
     Codigo.INTERPRETADOR_INSEGURO: u"O executável do interpretador não passou na checagem de segurança.",
     Codigo.INTERPRETADOR_NAO_PERMITIDO: u"Interpretador não permitido.",
 }
-OBS_VALIDACAO = u"A validação definitiva ocorre também no agente executor no momento da execução."
-AVISO_NAO_ENCONTRADO = (u"Arquivo não encontrado neste servidor: a validação ocorrerá no agente. "
-                        u"Se o arquivo não existir lá, a execução será recusada.")
+OBS_VALIDACAO = (u"O arquivo é conferido pelo agente, no servidor onde o script roda, no momento da execução "
+                 u"(pode ser link simbólico).")
 MSG_NOME_OBRIGATORIO = u"Informe o nome do script."
 MSG_NOME_DUPLICADO = u"Já existe um script com este nome."
 MSG_CONTROLE = u"O campo contém caracteres de controle não permitidos."
@@ -158,15 +147,9 @@ def _versao_vinculos(vinculos, dicionario):
 class ServicoAdminScripts(object):
     """Regras do cadastro de scripts com repositorios, configuracao do agente, relogio e log injetados."""
 
-    def __init__(self, catalogo, agendamentos, script_owner_uids, sss_env, log, relogio, dirs_sss=(),
-                 uids_proibidos=()):
+    def __init__(self, catalogo, agendamentos, sss_env, log, relogio):
         self._catalogo = catalogo
         self._agendamentos = agendamentos
-        self._owner_uids = tuple(script_owner_uids)
-        # log_dir, work_dir e exec_work_dir deste no: nenhum script pode ficar dentro deles (README §8.5).
-        self._dirs_sss = tuple(d for d in dirs_sss if d)
-        # UIDs dos usuarios de execucao que existem neste no: nao podem ser donos do caminho (CR-007, R-15).
-        self._uids_proibidos = tuple(uids_proibidos)
         self._env = sss_env
         self._log = log
         self._relogio = relogio
@@ -258,25 +241,16 @@ class ServicoAdminScripts(object):
         reg["tipo_param"] = tipo
         return reg
 
-    def validar_caminho(self, path_file, erros, checar_arquivo=True):
-        """Confere path_file neste no (README §8.5, CR-005 D3/D4). Retorna aviso (str) ou None.
-
-        Formato e pastas proibidas valem sempre. Com checar_arquivo, se o arquivo existe aqui, dono e
-        permissao bloqueiam; se nao existe, vira aviso e o agente confere no claim.
-        """
+    def validar_caminho(self, path_file, erros):
+        """Confere o formato de path_file e as pastas do sistema (README §8.5; CR-011, S1). O arquivo nao e
+        conferido aqui: o web pode nem ter o arquivo; o agente confere no servidor onde o script roda."""
         if path_file is None or "path_file" in erros:
-            return None
+            return
         try:
             path_guard.validar_cadastro(path_file)
-            path_guard.checar_pastas_proibidas(path_file, self._dirs_sss)
-            if checar_arquivo:
-                path_guard.resolver(path_file, self._owner_uids, dirs_sss=self._dirs_sss,
-                                    uids_proibidos=self._uids_proibidos)
+            path_guard.checar_pastas_proibidas(path_file)
         except PathGuardErro as exc:
-            if exc.codigo == Codigo.NAO_ENCONTRADO:
-                return AVISO_NAO_ENCONTRADO
             erros["path_file"] = MENSAGENS_PATH[exc.codigo]
-        return None
 
     def _pre_tipo_param(self, script_id, tipo, erros):
         vinculos = self._catalogo.script_params_obter(script_id)
@@ -305,10 +279,8 @@ class ServicoAdminScripts(object):
         erros = {}
         atual = None if script_id in (None, "") else self._obter(script_id)
         reg = self._validar(dados, erros, atual)
-        # CR-011: o conteudo do arquivo nao e registrado; as checagens do caminho valem na inclusao e quando
-        # o caminho ou o interpretador mudam.
-        checar = atual is None or any(reg[c] != atual.get(c) for c in ("path_file", "interpretador"))
-        aviso = self.validar_caminho(reg["path_file"], erros, checar)
+        self.validar_caminho(reg["path_file"], erros)
+        aviso = None
         if script_id in (None, ""):
             if erros:
                 return None, erros, None
@@ -584,11 +556,6 @@ class ServicoAdminScripts(object):
             if erros:
                 return {"argv": None, "erros": erros, "aviso": None}
         aviso = None
-        try:
-            path_guard.resolver(script["path_file"], self._owner_uids, dirs_sss=self._dirs_sss,
-                                uids_proibidos=self._uids_proibidos)
-        except PathGuardErro as exc:
-            aviso = AVISO_NAO_ENCONTRADO if exc.codigo == Codigo.NAO_ENCONTRADO else MENSAGENS_PATH[exc.codigo]
         snap, _resolvidos, erros = params_compiler.compilar_snapshot(script, vinculos, {}, self._relogio())
         if snap is None:
             return {"argv": None, "erros": erros, "aviso": aviso}
@@ -612,12 +579,9 @@ def _servico():
             _padrao = ServicoAdminScripts(
                 catalogo=fabrica.obter("catalogo"),
                 agendamentos=fabrica.obter("agendamentos"),
-                script_owner_uids=cfg.agent.script_owner_uids,
                 sss_env=cfg.app.sss_env,
                 log=sss_logging.obter_logger("sss_web", cfg),
                 relogio=tickets.agora,
-                dirs_sss=(cfg.logging.log_dir, cfg.agent.work_dir, cfg.agent.exec_work_dir),
-                uids_proibidos=path_guard.uids_de_usuarios(u for _a, u in cfg.agent.usuarios_execucao),
             )
         return _padrao
 

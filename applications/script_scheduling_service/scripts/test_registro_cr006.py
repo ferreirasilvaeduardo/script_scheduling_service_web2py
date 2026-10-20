@@ -44,8 +44,7 @@ class TestRegistroNosServicos(unittest.TestCase):
         auth = auth_service.ServicoAuth(r("usuarios"), r("rbac"), r("catalogo"), r("auditoria"), 5, 900, log)
         self.ctx = auth.revalidar(SESSAO_ADMIN)
         tickets = r("tickets")
-        self.ticket = ServicoTicket(catalogo=r("catalogo"), tickets=tickets, script_owner_uids=(0,), log=log,
-                                    dirs_sss=("/nao/existe/log", "/nao/existe/work"))
+        self.ticket = ServicoTicket(catalogo=r("catalogo"), tickets=tickets, log=log)
         self.servicos = {
             "ambientes": (ServicoAdminAmbientes(r("catalogo"), r("agendamentos"), log), 1,
                           lambda: r("catalogo").ambientes_obter(1)),
@@ -55,8 +54,7 @@ class TestRegistroNosServicos(unittest.TestCase):
                          lambda: r("usuarios").obter_por_id(2)),
             "parametros": (ServicoAdminParametros(r("catalogo"), log), 1,
                            lambda: r("catalogo").parametros_obter(1)),
-            "scripts": (ServicoAdminScripts(r("catalogo"), r("agendamentos"), (0,), "DEV", log, tickets.agora,
-                                            ("/nao/existe/log", "/nao/existe/work")), 1,
+            "scripts": (ServicoAdminScripts(r("catalogo"), r("agendamentos"), "DEV", log, tickets.agora), 1,
                         lambda: r("catalogo").scripts_obter(1)),
         }
         self.agendamentos = ServicoAgendamentos(r("agendamentos"), r("catalogo"), r("usuarios"), self.ticket,

@@ -25,7 +25,7 @@ _TERMINAIS = ("SUCCESS", "FAILED", "CANCELLED")
 _COLS_TCK = ("id", "script_id", "ambiente", "solicitante", "ip_origem", "agente_id", "process_id",
              "process_start", "status", "prioridade", "cancel_requested", "status_motivo",
              "parent_ticket_id", "agendamento_id", "log_offset_chars", "log_truncado", "return_code",
-             "arquivo_sha256", "scheduled_at", "started_at", "heartbeat_at", "finished_at",
+             "scheduled_at", "started_at", "heartbeat_at", "finished_at",
              "created_at", "created_by", "updated_at", "updated_by")
 _COLS_RESP = ("id", "ticket_id", "parametro_id", "valor_resposta",
               "created_at", "created_by", "updated_at", "updated_by")
@@ -73,11 +73,11 @@ _SQL_TCK_EXISTE = "SELECT id FROM {tck} WHERE id = :id"
 _SQL_INSERIR = (
     "INSERT INTO {tck} (id, script_id, ambiente, solicitante, ip_origem, agente_id, process_id, "
     "process_start, status, prioridade, cancel_requested, status_motivo, parent_ticket_id, agendamento_id, "
-    "parametros_enviados, log_output, log_truncado, return_code, arquivo_sha256, scheduled_at, started_at, "
+    "parametros_enviados, log_output, log_truncado, return_code, scheduled_at, started_at, "
     "heartbeat_at, finished_at, created_at, created_by, updated_at, updated_by) "
     "VALUES (:id, :script_id, :ambiente, :solicitante, :ip_origem, :agente_id, :process_id, "
     ":process_start, :status, :prioridade, :cancel_requested, :status_motivo, :parent_ticket_id, "
-    ":agendamento_id, :parametros_enviados, :log_output, :log_truncado, :return_code, :arquivo_sha256, "
+    ":agendamento_id, :parametros_enviados, :log_output, :log_truncado, :return_code, "
     "NVL(:scheduled_at, SYSDATE), :started_at, :heartbeat_at, :finished_at, SYSDATE, :ator, NULL, NULL)"
 )
 _SQL_INSERIR_RESP = (
@@ -417,7 +417,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
                 "parametros_enviados": ticket.get("parametros_enviados", "{}"),
                 "log_output": ticket.get("log_output") or None,
                 "log_truncado": ticket.get("log_truncado", "N"), "return_code": ticket.get("return_code"),
-                "arquivo_sha256": ticket.get("arquivo_sha256"), "ator": ator_limpo,
+                "ator": ator_limpo,
             }
             for campo in _DATAS_TCK:
                 binds[campo] = ticket.get(campo)

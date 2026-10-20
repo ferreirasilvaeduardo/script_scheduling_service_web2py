@@ -33,7 +33,7 @@ SH = "/bin/sh"
 
 _Agente = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough usuarios_execucao exec_work_dir")
 _Cfg = collections.namedtuple("_Cfg", "agent")
-_CfgSnap = collections.namedtuple("_CfgSnap", "script_owner_uids interpretadores")
+_CfgSnap = collections.namedtuple("_CfgSnap", "interpretadores")
 
 
 def _esperar(condicao, prazo=10.0):
@@ -459,19 +459,13 @@ class TestSnapshotV4(_Base):
         os.chmod(self.script, 0o444)
         os.chmod(os.path.join(self.base, "faturamento"), 0o555)
         os.chmod(self.base, 0o555)
-        original = path_guard.resolver
-        patcher = mock.patch.object(path_guard, "resolver",
-                                    lambda p, u, uid_agente=None, dirs_sss=(), parar_em="/", uids_proibidos=():
-                                    original(p, u, AGENTE_FALSO, dirs_sss, self.base, uids_proibidos))
-        patcher.start()
-        self.addCleanup(patcher.stop)
 
     def test_argv_do_snapshot_e_sss_script_dir(self):
         snap_js = json.dumps({"versao": 4, "script_id": 12, "script_nome": "Carga Faturas", "interpretador": "PYTHON3",
                               "path_file": self.script, "tipo_param": "NOMEADO", "args": ["--data", "2026-10-13"],
                               "respostas": {}, "sensiveis": [], "compilado_em": "2026-10-13 10:47:00"},
                              ensure_ascii=False, sort_keys=True)
-        snap, argv, script_real = pc.validar_snapshot(snap_js, _CfgSnap((os.getuid(),), {"PYTHON3": sys.executable}))
+        snap, argv, script_real = pc.validar_snapshot(snap_js, _CfgSnap({"PYTHON3": sys.executable}))
         self.assertEqual(argv, [sys.executable, "-I", script_real, "--data", "2026-10-13"])
         wd = executor.preparar_diretorio(self.work, 21)
         cfg = _Cfg(_Agente("srv-01", "C.UTF-8", (), (), None))

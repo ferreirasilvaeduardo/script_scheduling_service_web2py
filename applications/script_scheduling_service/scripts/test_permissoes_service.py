@@ -42,7 +42,7 @@ class TestPermissoes(unittest.TestCase):
         auth = auth_service.ServicoAuth(repo_factory.obter("usuarios"), self.rbac_repo, self.catalogo,
                                         repo_factory.obter("auditoria"), 5, 900, log)
         self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
-        disparo = ServicoTicket(self.catalogo, repo_factory.obter("tickets"), (0,), log)
+        disparo = ServicoTicket(self.catalogo, repo_factory.obter("tickets"), log)
         self.svc = ServicoPermissoes(self.rbac_repo, self.catalogo, disparo, log)
         self.disparo = disparo
         self.n_auditoria = repo_factory.obter("auditoria").listar(pagina=1, tamanho=1)["total"]

@@ -23,7 +23,7 @@ _COLS_AGT = ("id", "codigo", "hostname", "pid_daemon", "versao", "ambientes", "p
 _COLS_TCK = ("id", "script_id", "ambiente", "solicitante", "ip_origem", "agente_id", "process_id",
              "process_start", "status", "prioridade", "cancel_requested", "status_motivo",
              "parent_ticket_id", "agendamento_id", "log_offset_chars", "log_truncado", "return_code",
-             "arquivo_sha256", "scheduled_at", "started_at", "heartbeat_at", "finished_at",
+             "scheduled_at", "started_at", "heartbeat_at", "finished_at",
              "created_at", "created_by", "updated_at", "updated_by")
 _COLS_SEM_PID = ("id", "script_id", "ambiente", "agente_id", "started_at")
 

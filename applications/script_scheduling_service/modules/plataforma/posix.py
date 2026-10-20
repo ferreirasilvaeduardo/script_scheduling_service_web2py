@@ -384,75 +384,36 @@ def validar_dir_restrito(caminho):
     return None
 
 
-def _stat_codigo(caminho, lstat=False):
+def _stat_codigo(caminho):
     try:
-        return (os.lstat(caminho) if lstat else os.stat(caminho)), None
+        return os.stat(caminho), None
     except OSError as e:
         if e.errno in (errno.EACCES, errno.EPERM):
             return None, "SEM_ACESSO"
         return None, "NAO_ENCONTRADO"
 
 
-def checar_item(caminho, donos, uid_agente=None, uids_proibidos=()):
-    """Regra de dono e escrita de um item da cadeia (README §8.5, CR-007 R-15). Devolve o codigo ou None."""
-    st, codigo = _stat_codigo(caminho)
-    if codigo:
-        return codigo
-    if st.st_uid not in donos:
-        return "DONO_INVALIDO"
-    if st.st_mode & 0o022:
-        return "GRAVAVEL_GRUPO_OUTROS"
-    # O dono pode mudar o modo a qualquer momento: pertencer ao agente ja e proibido.
-    agente = os.geteuid() if uid_agente is None else uid_agente
-    if uid_agente is None:
-        gravavel = os.access(caminho, os.W_OK)
-    else:
-        gravavel = uid_agente == 0 or (st.st_uid == uid_agente and bool(st.st_mode & 0o200))
-    if st.st_uid == agente or gravavel:
-        return "GRAVAVEL_PELO_AGENTE"
-    if st.st_uid in uids_proibidos:
-        return "GRAVAVEL_PELO_EXECUTOR"
-    return None
-
-
-def checar_cadeia(real, donos, uid_agente=None, uids_proibidos=(), parar_em="/"):
-    """O item e cada diretorio ate '/' (diretorios aceitam tambem o root). Devolve o codigo ou None."""
-    donos = tuple(donos)
-    donos_dir = donos + ((0,) if 0 not in donos else ())
-    codigo = checar_item(real, donos, uid_agente, uids_proibidos)
-    if codigo:
-        return codigo
-    limite = os.path.realpath(parar_em)
-    atual = os.path.dirname(real)
-    while True:
-        codigo = checar_item(atual, donos_dir, uid_agente, uids_proibidos)
-        if codigo:
-            return codigo
-        if atual == limite or atual == "/":
-            return None
-        atual = os.path.dirname(atual)
-
-
-def validar_caminho_script(caminho, donos, uids_proibidos=(), uid_agente=None, parar_em="/"):
-    """Script no servidor local (README §8.0, §8.5; CR-011): o caminho pode ter link simbolico; vale o arquivo
-    real (realpath), que precisa ser regular e passar na cadeia de dono e escrita ate '/'. A pasta do link nao
-    e conferida (risco aceito no README §14). Ciclo de links: NAO_ENCONTRADO; EACCES: SEM_ACESSO."""
+def validar_caminho_script(caminho):
+    """Script no servidor do agente (README §8.0, §8.5; CR-011): vale o arquivo real (o caminho pode ter link
+    simbolico), que precisa existir, ser regular e nao ser gravavel por grupo nem por outros. Ciclo de links:
+    NAO_ENCONTRADO; EACCES: SEM_ACESSO. Devolve o codigo ou None."""
     real = caminho_final(caminho)
     if os.path.islink(real):
         return "NAO_ENCONTRADO"  # realpath parou num link: ciclo ou destino inexistente
-    _st, codigo = _stat_codigo(real, lstat=True)
+    st, codigo = _stat_codigo(real)
     if codigo:
         return codigo
-    if not os.path.isfile(real):
+    if not stat.S_ISREG(st.st_mode):
         return "NAO_E_ARQUIVO"
-    return checar_cadeia(real, donos, uid_agente, tuple(uids_proibidos), parar_em)
+    if st.st_mode & 0o022:
+        return "GRAVAVEL_GRUPO_OUTROS"
+    return None
 
 
-def validar_interpretador_executavel(caminho, donos, uid_agente=None, uids_proibidos=(), dirs_sss=()):
-    """Executavel do interpretador: envolve path_guard.validar_executavel (README §8.5, CR-007 R-15)."""
+def validar_interpretador_executavel(caminho, dirs_sss=()):
+    """Executavel do interpretador: envolve path_guard.validar_executavel (README §8.5, CR-011)."""
     import path_guard
-    return path_guard.validar_executavel(caminho, donos, uid_agente=uid_agente, uids_proibidos=uids_proibidos,
-                                         dirs_sss=dirs_sss)
+    return path_guard.validar_executavel(caminho, dirs_sss=dirs_sss)
 
 
 # -----------------------------------------------------------------------------
@@ -466,7 +427,7 @@ def _executar_curto(argv):
     return p.returncode, p.stdout or ""
 
 
-def validar_execucao(usuarios_execucao, exec_work_dir, script_owner_uids, helper=HELPER, executar=_executar_curto,
+def validar_execucao(usuarios_execucao, exec_work_dir, helper=HELPER, executar=_executar_curto,
                      usuario_agente=None):
     """Confere o helper, o sudoers e os usuarios de execucao (README §8.0). Devolve a lista de falhas
     (vazia = OK); o agente registra cada uma em CRITICAL e recusa subir.
@@ -497,8 +458,6 @@ def validar_execucao(usuarios_execucao, exec_work_dir, script_owner_uids, helper
             falhas.append("usuario de execucao %s nao pode ser root" % usuario)
         if usuario == agente or info.pw_uid == os.geteuid():
             falhas.append("usuario de execucao %s e o proprio usuario do agente" % usuario)
-        if info.pw_uid in tuple(int(x) for x in script_owner_uids):
-            falhas.append("usuario de execucao %s esta em script_owner_uids" % usuario)
         # O agente confere as proprias regras: "sudo -l <comando>" imprime o caminho se a regra existir.
         codigo, saida = executar([SUDO, "-n", "-l", "-u", usuario, helper])
         if codigo != 0 or helper not in saida:

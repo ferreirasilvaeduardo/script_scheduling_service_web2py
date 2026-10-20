@@ -22,7 +22,6 @@ from repo_oracle.base import BaseRepoOracle, gravar_auditoria, validar_ator_regi
 _RE_AMB_NOME = re.compile(r"^[A-Z0-9_]{1,30}$")
 _RE_PRM_CODIGO = re.compile(r"^[a-z0-9_]{1,30}$")
 _RE_PRM_FLAG = re.compile(r"^-{1,2}[A-Za-z0-9][A-Za-z0-9_-]{0,27}$")
-_RE_SHA = re.compile(r"^[0-9a-f]{64}$")
 
 _LIMITE_TOTAL = 10001
 _LOTE_IN = 500
@@ -30,7 +29,7 @@ _LOTE_IN = 500
 _COLS_AMB = ("id", "nome", "descricao", "conexao", "ativo",
              "created_at", "created_by", "updated_at", "updated_by")
 _COLS_SCR = ("id", "nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file",
-             "tipo_param", "max_qtd_parallel_env", "timeout_seg", "ativo", "sha256_homologado",
+             "tipo_param", "max_qtd_parallel_env", "timeout_seg", "ativo",
              "created_at", "created_by", "updated_at", "updated_by")
 _COLS_PRM = ("id", "codigo", "param_nomeado", "label", "descricao", "tipo_componente", "opcoes_json",
              "valor_padrao", "regex_validacao", "sensivel", "ativo",
@@ -39,7 +38,7 @@ _COLS_SPRM = ("id", "parametro_id", "ordem", "obrigatorio", "valor_padrao_sub",
               "created_at", "created_by", "updated_at", "updated_by")
 
 _CAMPOS_SCR_ALTERAVEIS = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file",
-                          "tipo_param", "max_qtd_parallel_env", "timeout_seg", "ativo", "sha256_homologado")
+                          "tipo_param", "max_qtd_parallel_env", "timeout_seg", "ativo")
 
 
 def _lista(cols, alias=""):
@@ -83,15 +82,15 @@ _SQL_SCR_LISTAR = (
 _SQL_SCR_CONTAR = "SELECT COUNT(*) FROM (SELECT s.id FROM {scr} s WHERE {where_count})"
 _SQL_SCR_INSERIR = (
     "INSERT INTO {scr} (id, nome, descricao, grupo, categoria, etapa, interpretador, path_file, tipo_param, "
-    "max_qtd_parallel_env, timeout_seg, ativo, sha256_homologado, created_at, created_by, updated_at, updated_by) "
+    "max_qtd_parallel_env, timeout_seg, ativo, created_at, created_by, updated_at, updated_by) "
     "VALUES (:id, :nome, :descricao, :grupo, :categoria, :etapa, :interpretador, :path_file, :tipo_param, "
-    ":max_qtd_parallel_env, :timeout_seg, :ativo, :sha256_homologado, SYSDATE, :ator, NULL, NULL)"
+    ":max_qtd_parallel_env, :timeout_seg, :ativo, SYSDATE, :ator, NULL, NULL)"
 )
 _SQL_SCR_ALTERAR = (
     "UPDATE {scr} SET nome = :nome, descricao = :descricao, grupo = :grupo, categoria = :categoria, "
     "etapa = :etapa, interpretador = :interpretador, path_file = :path_file, tipo_param = :tipo_param, "
     "max_qtd_parallel_env = :max_qtd_parallel_env, timeout_seg = :timeout_seg, ativo = :ativo, "
-    "sha256_homologado = :sha256_homologado, updated_at = SYSDATE, updated_by = :ator WHERE id = :id"
+    "updated_at = SYSDATE, updated_by = :ator WHERE id = :id"
 )
 _SQL_SCR_CARIMBAR = "UPDATE {scr} SET updated_at = SYSDATE, updated_by = :ator WHERE id = :id"
 _SQL_SCR_HOMOLOGADOS = (
@@ -501,9 +500,6 @@ class RepoCatalogoOracle(BaseRepoOracle, RepoCatalogo):
         if tmout is not None and int(tmout) <= 0:
             raise repo_errors.RepoViolacao("timeout_seg deve ser maior que zero",
                                            constraint=self._ck("scripts", "tmout"))
-        sha = base.get("sha256_homologado")
-        if sha is not None and not _RE_SHA.match(sha):
-            raise repo_errors.RepoViolacao("sha256_homologado invalido", constraint=self._ck("scripts", "sha"))
 
     def _nome_script_livre(self, conn, nome, id_atual):
         if self._existe(conn, self._sql["SCR_NOME_EM_USO"], {"nome": nome, "id": id_atual}):
@@ -545,7 +541,7 @@ class RepoCatalogoOracle(BaseRepoOracle, RepoCatalogo):
             "tipo_param": reg.get("tipo_param", "NOMEADO"),
             "max_qtd_parallel_env": int(reg.get("max_qtd_parallel_env", 1)),
             "timeout_seg": int(tmout) if tmout is not None else None,
-            "ativo": reg.get("ativo", "S"), "sha256_homologado": reg.get("sha256_homologado"),
+            "ativo": reg.get("ativo", "S"),
             "ator": ator,
         }
 

@@ -27,10 +27,9 @@ import sss_config
 from repo_oracle.scheduler_fila import AgenteDuplicado
 
 _Agent = collections.namedtuple("_Agent", (
-    "agent_id", "ambientes_atendidos", "work_dir", "script_owner_uids", "interpretadores", "usuarios_execucao",
+    "agent_id", "ambientes_atendidos", "work_dir", "interpretadores", "usuarios_execucao",
     "exec_work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
-    "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "fila_envelhecimento_min", "child_locale",
-    "ambientes_exigem_hash"))
+    "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "fila_envelhecimento_min", "child_locale"))
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
 _NS = collections.namedtuple("_NS", "log_dir")
 _App = collections.namedtuple("_App", "sss_env")
@@ -172,11 +171,11 @@ class _Base(unittest.TestCase):
         shutil.rmtree(self.raiz, ignore_errors=True)
 
     def cfg(self, **agente):
-        base = dict(agent_id="srv-t", ambientes_atendidos=("DEV",), work_dir=self.work, script_owner_uids=(),
+        base = dict(agent_id="srv-t", ambientes_atendidos=("DEV",), work_dir=self.work,
                     interpretadores=(("SH", "/bin/sh"),), usuarios_execucao=(), exec_work_dir=None,
                     heartbeat_interval_s=10, fence_timeout_s=40, node_offline_timeout_s=120, kill_grace_s=1,
                     misfire_policy="RUN_ONCE", misfire_tolerance_s=300, cron_horizon_days=366,
-                    fila_envelhecimento_min=30, child_locale="C.UTF-8", ambientes_exigem_hash=())
+                    fila_envelhecimento_min=30, child_locale="C.UTF-8")
         env = agente.pop("sss_env", "DEV")
         log_dir = agente.pop("log_dir", self.logs)
         base.update(agente)
@@ -230,9 +229,6 @@ class TestPassos(_Base):
     def test_root_recusado(self):
         self.falha(sl.SAIDA_USUARIO, self.agente(plat=_Plat(usuario_privilegiado=lambda: True)))
 
-    def test_uid_do_agente_em_script_owner_uids(self):
-        self.falha(sl.SAIDA_USUARIO, self.agente(cfg=self.cfg(script_owner_uids=(os.geteuid(),))))
-
     def test_codificacao_e_locale(self):
         with mock.patch.object(sss_config.sys, "getfilesystemencoding", return_value="ascii"):
             self.falha(sl.SAIDA_CONFIG)
@@ -245,7 +241,7 @@ class TestPassos(_Base):
         self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(interpretadores=())))
 
     def test_validar_execucao_fora_de_dev(self):
-        cfg = self.cfg(sss_env="PROD", exec_work_dir=self.raiz, ambientes_exigem_hash=("DEV",))
+        cfg = self.cfg(sss_env="PROD", exec_work_dir=self.raiz)
         plat = _Plat(validar_execucao=lambda *a, **k: ["helper /opt/sss/bin/sss-helper nao encontrado"])
         saida = self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=cfg, plat=plat))
         self.assertTrue(any("helper /opt/sss/bin/sss-helper nao encontrado" in x for x in saida))
@@ -469,7 +465,7 @@ class TestSubidaOracle(_Base):
             conn.close()
         self.assertTrue(ativos, "o seed precisa de um ambiente ativo")
         agente = cfg.agent._replace(agent_id=self.codigo, ambientes_atendidos=tuple(ativos[:1]), work_dir=self.work,
-                                    interpretadores=(("SH", "/bin/sh"),), script_owner_uids=())
+                                    interpretadores=(("SH", "/bin/sh"),))
         cfg = cfg._replace(agent=agente, logging=cfg.logging._replace(log_dir=self.logs))
         ag = sl.Agente(cfg=cfg, segredos=seg, hostname="host-tst", pid=os.getpid())
         self.agentes.append(ag)

@@ -174,9 +174,9 @@ class TestDdlBuilder(unittest.TestCase):
         self.assertTrue(indices["ix_tbsss_tck_ocor"].startswith("CREATE UNIQUE INDEX"))
         self.assertIn("agendamento_id IS NOT NULL", indices["ix_tbsss_tck_ocor"])
 
-        # CKs _sha
-        self.assertIn("ck_tbsss_scr_sha", constraints)
-        self.assertIn("ck_tbsss_tck_sha", constraints)
+        # CR-011: sem CKs de hash
+        self.assertNotIn("ck_tbsss_scr_sha", constraints)
+        self.assertNotIn("ck_tbsss_tck_sha", constraints)
 
         # LOB Securefile (padrao)
         self.assertIn("LOB (parametros_json) STORE AS SECUREFILE (CACHE)", tabelas["tbsss_agendamentos"])

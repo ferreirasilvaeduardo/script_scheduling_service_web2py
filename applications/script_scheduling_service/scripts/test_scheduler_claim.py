@@ -35,10 +35,10 @@ AMB = "DEV"
 SENHA_AMB = "SenhaDoAmbiente#2026"
 
 _Agent = collections.namedtuple("_Agent", (
-    "agent_id", "ambientes_atendidos", "work_dir", "script_owner_uids", "interpretadores", "usuarios_execucao",
+    "agent_id", "ambientes_atendidos", "work_dir", "interpretadores", "usuarios_execucao",
     "exec_work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
     "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "fila_envelhecimento_min", "child_locale",
-    "ambientes_exigem_hash", "cancel_poll_interval_s", "orchestrator_interval_s", "max_parallel_jobs",
+    "cancel_poll_interval_s", "orchestrator_interval_s", "max_parallel_jobs",
     "log_dir_min_livre_mb", "script_timeout_s", "env_passthrough"))
 _Log = collections.namedtuple("_Log", "log_dir max_log_size_bytes max_local_log_size_bytes")
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
@@ -301,13 +301,6 @@ class _Base(unittest.TestCase):
         self.parada = threading.Event()
         self._espera = threading.Event()
         self.ag = None
-        # A arvore fica sob /tmp (escrita para todos): a cadeia para na pasta dos scripts, e o agente e outro UID.
-        original = path_guard.resolver
-        patcher = mock.patch.object(path_guard, "resolver",
-                                    lambda p, u, uid_agente=None, dirs_sss=(), parar_em="/", uids_proibidos=():
-                                    original(p, u, AGENTE_FALSO, dirs_sss, self.banco.base, ()))
-        patcher.start()
-        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         if self.ag is not None:
@@ -327,11 +320,11 @@ class _Base(unittest.TestCase):
         shutil.rmtree(self.raiz, ignore_errors=True)
 
     def cfg(self, **mudancas):
-        base = dict(agent_id="srv-t", ambientes_atendidos=(AMB,), work_dir=self.work, script_owner_uids=(os.getuid(),),
+        base = dict(agent_id="srv-t", ambientes_atendidos=(AMB,), work_dir=self.work,
                     interpretadores=(("SH", "/bin/sh"),), usuarios_execucao=(), exec_work_dir=None,
                     heartbeat_interval_s=0.2, fence_timeout_s=40, node_offline_timeout_s=120, kill_grace_s=1,
                     misfire_policy="RUN_ONCE", misfire_tolerance_s=300, cron_horizon_days=366,
-                    fila_envelhecimento_min=30, child_locale="C.UTF-8", ambientes_exigem_hash=(),
+                    fila_envelhecimento_min=30, child_locale="C.UTF-8",
                     cancel_poll_interval_s=0.05, orchestrator_interval_s=0.05, max_parallel_jobs=4,
                     log_dir_min_livre_mb=1, script_timeout_s=60, env_passthrough=())
         local = mudancas.pop("max_local_log_size_bytes", 10 * 1024 * 1024)

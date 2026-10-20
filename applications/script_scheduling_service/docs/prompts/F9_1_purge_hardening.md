@@ -40,7 +40,7 @@ Fechamento do produto para implantação manual em servidores air-gapped **POSIX
   - **instalação Linux/Unix (POSIX):** usuário de SO dedicado sem shell, diretórios, donos e permissões conforme o README §8.5 (UIDs), `secrets.cfg` com `0600`, Instant Client 19 + `ldconfig` (obrigatório se algum banco for 11g; recomendado sempre como contingência da cadeia de driver), unit `systemd` de exemplo para o web e o scheduler (`KillMode=mixed`, `TimeoutStopSec` maior que `shutdown_grace_s + kill_grace_s`, `User=`, `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ReadWritePaths=` para `log_dir` e `work_dir`), apresentada **como exemplo a validar** com a infraestrutura;
   - **driver Oracle (CR-002):** `modo_driver`, como ler a linha INFO da combinação escolhida, `check_env.py`, quando forçar `thick`/`cx_oracle`;
   - `init_db.py --dry-run` revisado pelo DBA, depois a execução real;
-  - **caminho livre e permissões (CR-005):** caminho absoluto `path_file`, UIDs de execução em `script_owner_uids`, checagens de permissão de escrita e árvores de diretórios até a raiz;
+  - **caminho livre e permissões (CR-005):** caminho absoluto `path_file`, link simbólico aceito e arquivo real sem escrita de grupo e outros; conteúdo e versão dos scripts sob controle do ambiente, sem hash nem conferência de dono (CR-011);
   - **tempos de fencing:** `fence_timeout_s` e `node_offline_timeout_s` iguais em todos os agentes, conferidos pela linha INFO de cada um (README §8.9);
   - agendamento do purge (cron no POSIX);
   - local dos logs por minuto, troca por tamanho e retenção, com pastas `0750` e arquivos `0640` (log da aplicação) e `0600` (log de execução) (CR-005, README §8.4 e §13);

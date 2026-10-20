@@ -8,6 +8,8 @@
 - `README.md` §2.3 (seleção do driver), §3.1 (inclusive a regra de thread única do processo inteiro, C10), §4.4 (tabela de entidade por ação), §5.1, §5.2, §5.6 (parte do agente), §6.4, §6.5 (snapshot **versão 4**), §8.0–8.4 (em especial o passo 1 do §8.4), §8.5 (caminho livre e checagens), §8.9 ("Mesmos tempos em todos os nós"), §8.7, §8.10, §8.11 (apenas a parte de sinais e do arquivo `.stop`; o resto é F8.4), §8.12 (inteiro), §10 (tabelas 6, 13 e 15, e "Colunas de registro"), §12.1 ("Falha de configuração"), §13 (formato e níveis)
 - Arquivos: `modules/plataforma/`, `modules/pastas_log.py`, `modules/executor.py`, `modules/env_builder.py`, `modules/log_pump.py`, `modules/params_compiler.py` (`validar_snapshot`, `montar_argv_agente`), `modules/path_guard.py` (`resolver`), `modules/sss_config.py`, `modules/db_conn.py`, `modules/sql_ident.py`
 
+> **CR-011 (2026-10-20), vale para o que ainda falta deste passo (F8.3d):** o caminho do script pode ter link simbólico (o agente executa o arquivo real); o SSS não calcula nem confere hash (`sha256_homologado`, `arquivo_sha256`, `ARQUIVO_ALTERADO`, `SEM_HASH` e `ambientes_exigem_hash` saíram) nem o dono dos arquivos (`script_owner_uids` saiu). Os itens abaixo que citam hash ou dono ficam sem efeito (`docs/arquitetura/CR-011-link-simbolico-e-sem-hash.md`).
+
 ## Objetivo
 Colocar o agente executor de pé: inicialização fail-fast, claim concorrente seguro, execução, heartbeat, coleta de log, cancelamento, timeout e finalização (somente POSIX).
 

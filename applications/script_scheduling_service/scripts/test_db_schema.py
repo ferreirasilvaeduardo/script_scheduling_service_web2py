@@ -282,9 +282,10 @@ class TestDbSchema(unittest.TestCase):
         self.assertEqual(TABELAS["agentes"]["colunas"]["hostname"]["tipo"], "VARCHAR2(255 CHAR)")
         self.assertEqual(TABELAS["agentes"]["colunas"]["ambientes"]["tipo"], "VARCHAR2(1000 CHAR)")
         self.assertIn("config_criticos", TABELAS["agentes"]["colunas"])
+        # CR-011: sem hash do script.
         for ent, col in (("scripts", "sha256_homologado"), ("tickets", "arquivo_sha256")):
-            self.assertEqual(TABELAS[ent]["colunas"][col]["tipo"], "VARCHAR2(64 CHAR)")
-            self.assertIn(col, TABELAS[ent]["cks"]["sha"]["expr"])
+            self.assertNotIn(col, TABELAS[ent]["colunas"])
+            self.assertNotIn("sha", TABELAS[ent]["cks"])
 
     def test_readme_10_colunas_iguais_ao_registro(self):
         """README §10 lista exatamente as colunas do registro, na mesma ordem (fonte unica)."""

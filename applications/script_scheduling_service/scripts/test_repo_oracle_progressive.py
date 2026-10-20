@@ -310,7 +310,7 @@ class TestOracleCatalogo(unittest.TestCase):
                         chamada(ator_invalido)
 
     def test_cks_recusadas_antes_do_banco_com_nome_do_fake(self):
-        """CKs de nome, caminho, interpretador, sha e codigo devolvem o nome da constraint do FAKE."""
+        """CKs de nome, caminho, interpretador, paralelismo e codigo devolvem o nome da constraint do FAKE."""
         n = self.cat.nome_constraint
         with mock.patch.object(self.cat, "_obter_conexao", side_effect=AssertionError("abriu conexao")):
             casos = (
@@ -323,8 +323,6 @@ class TestOracleCatalogo(unittest.TestCase):
                                                    "path_file": "/" + "a" * 500}, ator="t"), n("ck", "scripts", "path")),
                 (lambda: self.cat.scripts_inserir({"nome": "s", "interpretador": "PERL",
                                                    "path_file": "/opt/s.pl"}, ator="t"), n("ck", "scripts", "int")),
-                (lambda: self.cat.scripts_inserir({"nome": "s", "interpretador": "SH", "path_file": "/opt/s.sh",
-                                                   "sha256_homologado": "ABC"}, ator="t"), n("ck", "scripts", "sha")),
                 (lambda: self.cat.scripts_inserir({"nome": "s", "interpretador": "SH", "path_file": "/opt/s.sh",
                                                    "max_qtd_parallel_env": 0}, ator="t"), n("ck", "scripts", "paral")),
                 (lambda: self.cat.parametros_inserir({"codigo": "Maiusc", "tipo_componente": "TEXT"},

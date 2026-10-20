@@ -124,7 +124,6 @@ class RepoTicketsFake(RepoTickets):
                 "started_at": ticket.get("started_at"),
                 "heartbeat_at": ticket.get("heartbeat_at"),
                 "finished_at": ticket.get("finished_at"),
-                "arquivo_sha256": ticket.get("arquivo_sha256"),
                 "created_at": ticket.get("created_at") or agora,
             }
             self._store.carimbar_inclusao(novo_ticket, ator)

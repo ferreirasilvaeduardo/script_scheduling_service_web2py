@@ -271,7 +271,6 @@ def _criar_registro_tabelas():
             ('max_qtd_parallel_env', {'nome': 'max_qtd_parallel_env', 'tipo': 'NUMBER(3)', 'not_null': True, 'default': '1'}),
             ('timeout_seg', {'nome': 'timeout_seg', 'tipo': 'NUMBER(7)', 'not_null': False, 'default': None}),
             ('ativo', {'nome': 'ativo', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'S'"}),
-            ('sha256_homologado', {'nome': 'sha256_homologado', 'tipo': 'VARCHAR2(64 CHAR)', 'not_null': False, 'default': None}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
@@ -285,7 +284,6 @@ def _criar_registro_tabelas():
             ('int', {'sufixo': 'int', 'expr': "interpretador IN ('PYTHON3','BASH','SH')"}),
             ('path', {'sufixo': 'path', 'expr': "SUBSTR(path_file, 1, 1) = '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\\') = 0"}),
             ('tmout', {'sufixo': 'tmout', 'expr': "timeout_seg IS NULL OR timeout_seg > 0"}),
-            ('sha', {'sufixo': 'sha', 'expr': "sha256_homologado IS NULL OR REGEXP_LIKE(sha256_homologado, '^[0-9a-f]{64}$')"}),
         ])),
         ('indices', OrderedDict()),
         ('trigger_bu', None),
@@ -531,7 +529,6 @@ def _criar_registro_tabelas():
             ('log_offset_chars', {'nome': 'log_offset_chars', 'tipo': 'NUMBER(20)', 'not_null': True, 'default': '0'}),
             ('log_truncado', {'nome': 'log_truncado', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
             ('return_code', {'nome': 'return_code', 'tipo': 'NUMBER(6)', 'not_null': False, 'default': None}),
-            ('arquivo_sha256', {'nome': 'arquivo_sha256', 'tipo': 'VARCHAR2(64 CHAR)', 'not_null': False, 'default': None}),
             ('scheduled_at', {'nome': 'scheduled_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
             ('started_at', {'nome': 'started_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
             ('heartbeat_at', {'nome': 'heartbeat_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
@@ -554,7 +551,6 @@ def _criar_registro_tabelas():
             ('logtr', {'sufixo': 'logtr', 'expr': "log_truncado IN ('S','N')"}),
             ('logoff', {'sufixo': 'logoff', 'expr': 'log_offset_chars >= 0'}),
             ('motivo', {'sufixo': 'motivo', 'expr': "status_motivo IS NULL OR status_motivo IN ('EXIT_OK','EXIT_ERROR','KILLED_SIGNAL','TIMEOUT','NODE_OFFLINE','ORPHAN_PROCESS','FENCED','PRECHECK_FAILED','SPAWN_ERROR','LOG_LIMIT','SHUTDOWN','CANCEL_USER')"}),
-            ('sha', {'sufixo': 'sha', 'expr': "arquivo_sha256 IS NULL OR REGEXP_LIKE(arquivo_sha256, '^[0-9a-f]{64}$')"}),
         ])),
         ('indices', OrderedDict([
             ('scr', {'sufixo': 'scr', 'colunas': ('script_id', 'ambiente', 'status'), 'expr': None, 'fbi': False}),
