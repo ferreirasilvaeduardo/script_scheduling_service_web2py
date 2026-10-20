@@ -1326,7 +1326,7 @@ UPDATE {owner}.tbsss_agendamentos
 * o avanço sem ticket;
 * a pausa (passo 7), inclusive a pausa por `ERRO_INTERNO` numa transação separada.
 
-Todas recebem a conexão da transação do ciclo e nunca fazem `COMMIT` sozinhas; o `COMMIT` único é do passo 8.
+Todas recebem a conexão da transação do ciclo e nunca fazem `COMMIT` sozinhas; o `COMMIT` único é do passo 8. Para montar a decisão, o repositório também lê o login do responsável, o script com os vínculos de parâmetros (para o snapshot v4) e a situação do `ultimo_ticket_id`. A violação de `ix_tbsss_tck_ocor` no `INSERT` do ticket chega a quem chama como `OcorrenciaDuplicada` (passo 6). As operações do §8.8 e do §8.9 (`marcar_node_offline`, `finalizar_fenced`) ficam em `repo_oracle/scheduler_fila.py` (F8.4a).
 
 ### 7.6 Cadastro de regras na UI (decisões do F5.2)
 

@@ -191,3 +191,45 @@ Pior caso conhecido: um script no teto com a fila inteira à frente dos demais. 
 |   3 |    INDEX UNIQUE SCAN         | PK_TBSSS_TICKETS |
 ---------------------------------------------------------
 ```
+
+---
+
+## 4. Desdobro e nó offline (F8.4a)
+
+**Plano: TESTADO em 2026-10-20**, Oracle 19.24 (`GFPR`), `EXPLAIN PLAN` + `DBMS_XPLAN.DISPLAY(..., 'BASIC')`. `tbsss_agendamentos` com as estatísticas da implantação; para o nó offline, estatísticas de `tbsss_tickets` simuladas só durante o `EXPLAIN` (1.000.000 de tickets, 2.000 em `ix_tck_run`) e restauradas em seguida (tabela sem estatística, índices recoletados).
+
+| Método | Consulta | Acesso |
+|---|---|---|
+| `scheduler_agenda.regras_vencidas` | README §7.5, paginada (R-08) | `INDEX RANGE SCAN` de `ix_{prefixo}agd_prox (ativo, proxima_execucao, id)` com `COUNT STOPKEY` |
+| `scheduler_agenda.travar_regra` | `FOR UPDATE SKIP LOCKED` pela regra | `ix_{prefixo}agd_prox` |
+| `scheduler_agenda.status_ticket` | sobreposição (passo 4) | `pk_{prefixo}tickets` |
+| `scheduler_fila.marcar_node_offline` | README §8.8, 1ª etapa, `FOR UPDATE SKIP LOCKED` | `ix_{prefixo}tck_run` (só os `RUNNING`), sem `TABLE ACCESS FULL` com volume; tabela vazia e sem estatística dá `TABLE ACCESS FULL`, que é o mais barato nesse caso |
+
+### regras_vencidas
+
+```text
+------------------------------------------------
+| Id  | Operation          | Name              |
+------------------------------------------------
+|   0 | SELECT STATEMENT   |                   |
+|   1 |  COUNT STOPKEY     |                   |
+|   2 |   VIEW             |                   |
+|   3 |    INDEX RANGE SCAN| IX_TBSSS_AGD_PROX |
+------------------------------------------------
+```
+
+### marcar_node_offline (1ª etapa, volume simulado)
+
+```text
+-----------------------------------------------------------------
+| Id  | Operation                            | Name             |
+-----------------------------------------------------------------
+|   0 | SELECT STATEMENT                     |                  |
+|   1 |  FOR UPDATE                          |                  |
+|   2 |   TABLE ACCESS BY INDEX ROWID BATCHED| TBSSS_TICKETS    |
+|   3 |    INDEX FULL SCAN                   | IX_TBSSS_TCK_RUN |
+-----------------------------------------------------------------
+```
+
+A forma `(CASE … agente_id END) >= CHR(1)`, usada no painel de agentes, dá `INDEX RANGE SCAN` do mesmo índice; com o índice só dos `RUNNING`, a diferença é pequena, e o SQL fica literal do README §8.8.
+

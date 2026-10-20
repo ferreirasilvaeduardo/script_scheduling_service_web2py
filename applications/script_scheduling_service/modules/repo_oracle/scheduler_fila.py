@@ -380,6 +380,43 @@ class RepoSchedulerFila(object):
             finally:
                 cur.close()
 
+    def marcar_node_offline(self, conn, agente_id, node_offline_timeout_s, salto_de_relogio):
+        """Deteccao de no offline (README §8.8, literal, em duas etapas; CR-007 R-12; CR-008 R-10).
+
+        Na mesma transacao: SYSDATE primeiro e salto_de_relogio(sysdate) -> True aborta sem marcar nada
+        (devolve None; quem chama ja iniciou a suspensao). Depois, os RUNNING de OUTROS agentes com heartbeat
+        vencido, FOR UPDATE SKIP LOCKED (linhas travadas ficam para o ciclo seguinte), e o UPDATE por
+        executemany com updated_* do agente que detectou (CR-006). Devolve os ids marcados.
+        """
+        ator = ator_sistema(agente_id)
+        with db_conn.transacao(conn):
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT SYSDATE FROM DUAL")
+                if salto_de_relogio(cur.fetchone()[0]):
+                    return None
+                cur.execute("SELECT id FROM " + self._tck + " WHERE (" + _RUN + ") IS NOT NULL"
+                            " AND (" + _RUN + ") <> :agente_id"
+                            " AND heartbeat_at < SYSDATE - :node_offline_timeout_s * INTERVAL '1' SECOND"
+                            " FOR UPDATE SKIP LOCKED",
+                            agente_id=agente_id, node_offline_timeout_s=int(node_offline_timeout_s))
+                ids = [int(r[0]) for r in cur.fetchall()]
+                if ids:
+                    cur.executemany("UPDATE " + self._tck + " SET status = 'FAILED', status_motivo = 'NODE_OFFLINE',"
+                                    " return_code = -2, finished_at = SYSDATE, updated_at = SYSDATE, updated_by = :ator"
+                                    " WHERE id = :id AND status = 'RUNNING'",
+                                    [{"ator": ator, "id": i} for i in ids], arraydmlrowcounts=True)
+                    contagens = cur.getarraydmlrowcounts()
+                    ids = [i for i, n in zip(ids, contagens) if n == 1]
+                return ids
+            finally:
+                cur.close()
+
+    def finalizar_fenced(self, conn, ticket_id, agente_id):
+        """Recuperacao do fencing sem .sss_result (README §8.9): FAILED/FENCED/-2 so se o ticket ainda for deste
+        agente e RUNNING. False e esperado se outro no ja o marcou NODE_OFFLINE."""
+        return self.finalizar(conn, ticket_id, agente_id, "FAILED", "FENCED", -2)
+
     def varredura_propria(self, conn, agente_id):
         """{ticket_id: cancel_requested} dos RUNNING deste agente (README §8.7; ix_tck_run)."""
         cur = conn.cursor()
