@@ -233,7 +233,7 @@ class AdminScriptsService(object):
             erros["interpreter"] = PATH_MESSAGES[exc.codigo]
         reg["interpreter"] = cmd
         # D7 (README §8.5): a pasta de log do script nao pode ser a dos logs da aplicacao.
-        if reg["name"] and "name" not in erros and log_paths.nome_reservado(reg["name"]):
+        if reg["name"] and "name" not in erros and log_paths.is_reserved_name(reg["name"]):
             erros["name"] = MSG_NAME_RESERVED
         tipo = admin_crud.text(dados.get("param_type"), 15)
         if tipo not in PARAM_TYPES:

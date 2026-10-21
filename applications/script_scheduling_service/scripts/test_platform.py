@@ -86,7 +86,7 @@ class _ComProcessos(unittest.TestCase):
         """Script Python em grupo proprio pela plataforma (DEV, sem usuario de execucao)."""
         log = open(os.path.join(self.raiz, "log_%d.txt" % len(self.grupos)), "wb")
         try:
-            proc = os_platform.iniciar_processo({"argv": [sys.executable, "-c", codigo], "cwd": cwd or self.raiz,
+            proc = os_platform.start_process({"argv": [sys.executable, "-c", codigo], "cwd": cwd or self.raiz,
                                                 "env": {}}, log.fileno())
         finally:
             log.close()
@@ -104,12 +104,12 @@ class TestProcessos(_ComProcessos):
                             "open(%r,'w').write('1')\ntime.sleep(300)\n" % pronto)
         self.assertTrue(_esperar(lambda: os.path.exists(pronto)))
         inicio = time.monotonic()
-        self.assertTrue(os_platform.sinalizar_grupo(proc, signal.SIGTERM))
+        self.assertTrue(os_platform.signal_group(proc, signal.SIGTERM))
         self.assertLess(time.monotonic() - inicio, 0.5)
         time.sleep(0.2)
-        self.assertTrue(os_platform.grupo_vivo(proc))
-        self.assertTrue(os_platform.sinalizar_grupo(proc, signal.SIGKILL))
-        self.assertTrue(_esperar(lambda: not os_platform.grupo_vivo(proc)))
+        self.assertTrue(os_platform.group_alive(proc))
+        self.assertTrue(os_platform.signal_group(proc, signal.SIGKILL))
+        self.assertTrue(_esperar(lambda: not os_platform.group_alive(proc)))
 
     def test_neto_vivo_depois_do_lider_e_ciclo_nao_bloqueante(self):
         neto_pid = os.path.join(self.raiz, "neto.pid")
@@ -117,61 +117,61 @@ class TestProcessos(_ComProcessos):
                             "open(%r,'w').write(str(p.pid))\n" % neto_pid)
         neto = _ler_pid(neto_pid)
         proc.popen.wait(10)
-        self.assertTrue(os_platform.grupo_vivo(proc), "o neto continua no grupo depois da saida do lider")
+        self.assertTrue(os_platform.group_alive(proc), "o neto continua no grupo depois da saida do lider")
         # Ciclo do executor (F8.1): SIGTERM, consultas sem esperar, SIGKILL se preciso.
         estado, limite = "TERM", time.monotonic() + 10
-        while os_platform.grupo_vivo(proc) and time.monotonic() < limite:
+        while os_platform.group_alive(proc) and time.monotonic() < limite:
             if estado == "TERM":
                 self.assertFalse(proc.popen.poll() is None)
                 inicio = time.monotonic()
-                os_platform.sinalizar_grupo(proc, signal.SIGTERM)
+                os_platform.signal_group(proc, signal.SIGTERM)
                 self.assertLess(time.monotonic() - inicio, 0.5)
                 estado, prazo = "AGUARDA", time.monotonic() + 2
             elif estado == "AGUARDA" and time.monotonic() > prazo:
-                os_platform.sinalizar_grupo(proc, signal.SIGKILL)
+                os_platform.signal_group(proc, signal.SIGKILL)
                 estado = "KILL"
             time.sleep(0.05)
-        self.assertFalse(os_platform.grupo_vivo(proc))
+        self.assertFalse(os_platform.group_alive(proc))
         self.assertFalse(_vivo(neto))
-        self.assertFalse(os_platform.sinalizar_grupo(proc, signal.SIGTERM), "ESRCH = grupo vazio")
+        self.assertFalse(os_platform.signal_group(proc, signal.SIGTERM), "ESRCH = grupo vazio")
 
     def test_identidade_estavel_e_diferente_para_outro_pid(self):
         proc = self.start("import time\ntime.sleep(300)\n")
-        minha = os_platform.identidade_processo(os.getpid())
+        minha = os_platform.process_identity(os.getpid())
         self.assertIsNotNone(minha)
-        self.assertEqual(minha, os_platform.identidade_processo(os.getpid()))
-        self.assertEqual(proc.identidade, os_platform.identidade_processo(proc.pid))
-        self.assertNotEqual((os.getpid(), minha), (proc.pid, proc.identidade))
-        self.assertTrue(os_platform.processo_existe(proc.pid))
+        self.assertEqual(minha, os_platform.process_identity(os.getpid()))
+        self.assertEqual(proc.identity, os_platform.process_identity(proc.pid))
+        self.assertNotEqual((os.getpid(), minha), (proc.pid, proc.identity))
+        self.assertTrue(os_platform.process_exists(proc.pid))
 
     def test_pid_inexistente(self):
-        self.assertFalse(os_platform.processo_existe(PID_INEXISTENTE))
-        self.assertIsNone(os_platform.identidade_processo(PID_INEXISTENTE))
-        self.assertIsNone(os_platform.reabrir_grupo({"pid": PID_INEXISTENTE, "process_start": 1}))
+        self.assertFalse(os_platform.process_exists(PID_INEXISTENTE))
+        self.assertIsNone(os_platform.process_identity(PID_INEXISTENTE))
+        self.assertIsNone(os_platform.reopen_group({"pid": PID_INEXISTENTE, "process_start": 1}))
 
     def test_starttime_com_parenteses_no_nome_do_comando(self):
         campos = ["Y"] + [str(i) for i in range(4, 60)]
         conteudo = "4242 (meu ) script) (x)) " + " ".join(campos)
-        self.assertEqual(posix._starttime_linux(conteudo), 22)
+        self.assertEqual(posix._linux_starttime(conteudo), 22)
 
     def test_identidade_divergente_nao_sinaliza(self):
         proc = self.start("import time\ntime.sleep(300)\n")
-        falso = os_platform.Processo(proc.pid, proc.identidade + 1)
-        self.assertFalse(os_platform.sinalizar_grupo(falso, signal.SIGTERM))
+        falso = os_platform.Process(proc.pid, proc.identity + 1)
+        self.assertFalse(os_platform.signal_group(falso, signal.SIGTERM))
         self.assertTrue(_vivo(proc.pid))
 
     def test_reabrir_grupo(self):
         proc = self.start("import time\ntime.sleep(300)\n")
-        estado = {"pid": proc.pid, "process_start": proc.identidade, "usuario_execucao": None}
-        reaberto = os_platform.reabrir_grupo(estado)
-        self.assertEqual((reaberto.pid, reaberto.identidade, reaberto.popen), (proc.pid, proc.identidade, None))
-        self.assertIsNone(os_platform.reabrir_grupo(dict(estado, process_start=proc.identidade + 1)))
-        with mock.patch.object(posix, "identidade_processo", return_value=None), \
+        estado = {"pid": proc.pid, "process_start": proc.identity, "exec_user": None}
+        reaberto = os_platform.reopen_group(estado)
+        self.assertEqual((reaberto.pid, reaberto.identity, reaberto.popen), (proc.pid, proc.identity, None))
+        self.assertIsNone(os_platform.reopen_group(dict(estado, process_start=proc.identity + 1)))
+        with mock.patch.object(posix, "process_identity", return_value=None), \
                 self.assertLogs("sss_scheduler", "WARNING") as logs:
-            sem = os_platform.reabrir_grupo(estado)
+            sem = os_platform.reopen_group(estado)
         self.assertIn("ORFAO_SEM_IDENTIDADE", logs.output[0])
-        self.assertTrue(sem.sem_identidade)
-        self.assertFalse(os_platform.sinalizar_grupo(sem, signal.SIGKILL), "sem identidade nunca recebe sinal")
+        self.assertTrue(sem.no_identity)
+        self.assertFalse(os_platform.signal_group(sem, signal.SIGKILL), "sem identidade nunca recebe sinal")
         self.assertTrue(_vivo(proc.pid))
 
     def test_encerrar_ticket_dev_so_na_pasta_do_ticket(self):
@@ -185,7 +185,7 @@ class TestProcessos(_ComProcessos):
         vizinha = os.path.join(self.raiz, "exec", "ticket_70")
         os.makedirs(vizinha)
         fora = self.start("import time\ntime.sleep(300)\n", cwd=vizinha)
-        self.assertEqual(os_platform.encerrar_ticket(os.path.join(self.raiz, "exec"), 7, None, 2), "OK")
+        self.assertEqual(os_platform.stop_ticket(os.path.join(self.raiz, "exec"), 7, None, 2), "OK")
         self.assertTrue(_esperar(lambda: not _vivo(dentro.pid) and not _vivo(neto)))
         self.assertTrue(_vivo(fora.pid), "processo do mesmo usuario fora da pasta do ticket")
 
@@ -197,20 +197,20 @@ class TestProcessos(_ComProcessos):
         proc.popen.wait(10)
         with open(saida) as f:
             self.assertEqual(f.read(), "77 0 1024 ''")
-        self.assertFalse(os_platform.grupo_vivo(proc))
+        self.assertFalse(os_platform.group_alive(proc))
 
 
 class TestDublesHelper(unittest.TestCase):
     """Usuario de execucao: o Popen e o do sudo + helper (dubles, sem sudo real)."""
 
     def setUp(self):
-        posix._pedidos_helper[:] = []
+        posix._helper_requests[:] = []
 
     def test_iniciar_processo_com_usuario_manda_especificacao_pela_entrada(self):
         falso = mock.MagicMock(pid=4321)
         with mock.patch.object(posix.subprocess, "Popen", return_value=falso) as popen, \
-                mock.patch.object(posix, "identidade_processo", return_value=99):
-            proc = os_platform.iniciar_processo({"ticket_id": 3, "argv": ["/bin/true"]}, 7, usuario_execucao="exec1")
+                mock.patch.object(posix, "process_identity", return_value=99):
+            proc = os_platform.start_process({"ticket_id": 3, "argv": ["/bin/true"]}, 7, usuario_execucao="exec1")
         argv = popen.call_args[0][0]
         self.assertEqual(argv, [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "run"])
         kw = popen.call_args[1]
@@ -219,54 +219,54 @@ class TestDublesHelper(unittest.TestCase):
         self.assertEqual(kw["env"], posix._ENV_HELPER)
         falso.stdin.write.assert_called_once_with(b'{"argv": ["/bin/true"], "ticket_id": 3}')
         falso.stdin.close.assert_called_once_with()
-        self.assertEqual((proc.pid, proc.identidade, proc.usuario_execucao), (4321, 99, "exec1"))
+        self.assertEqual((proc.pid, proc.identity, proc.exec_user), (4321, 99, "exec1"))
 
     def test_sinalizar_pelo_helper_nao_espera(self):
         lento = mock.MagicMock()
         lento.poll.return_value = None
         with mock.patch.object(posix.subprocess, "Popen", return_value=lento) as popen:
             inicio = time.monotonic()
-            ok = os_platform.sinalizar_grupo(os_platform.Processo(500, 77, usuario_execucao="exec1"), signal.SIGKILL)
+            ok = os_platform.signal_group(os_platform.Process(500, 77, usuario_execucao="exec1"), signal.SIGKILL)
             self.assertLess(time.monotonic() - inicio, 0.5)
         self.assertTrue(ok)
         self.assertEqual(popen.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "kill",
                                                  "500", "77"])
         lento.wait.assert_not_called()
-        self.assertEqual(len(posix._pedidos_helper), 1)
+        self.assertEqual(len(posix._helper_requests), 1)
         lento.poll.return_value = 3
         with self.assertLogs("sss_scheduler", "WARNING"):
-            posix._colher_pedidos_helper()
-        self.assertEqual(posix._pedidos_helper, [])
+            posix._reap_helper_requests()
+        self.assertEqual(posix._helper_requests, [])
 
     def test_falha_ao_entregar_a_especificacao_devolve_o_processo(self):
         falso = mock.MagicMock(pid=4322)
         falso.stdin.write.side_effect = BrokenPipeError(32, "Broken pipe")
         with mock.patch.object(posix.subprocess, "Popen", return_value=falso), \
-                mock.patch.object(posix, "identidade_processo", return_value=7):
-            with self.assertRaises(os_platform.FalhaAposSpawn) as ctx:
-                os_platform.iniciar_processo({"ticket_id": 3, "argv": ["/bin/true"]}, 7, usuario_execucao="exec1")
-        self.assertEqual((ctx.exception.processo.pid, ctx.exception.processo.identidade), (4322, 7))
-        self.assertIsInstance(ctx.exception.causa, BrokenPipeError)
+                mock.patch.object(posix, "process_identity", return_value=7):
+            with self.assertRaises(os_platform.FailureAfterSpawn) as ctx:
+                os_platform.start_process({"ticket_id": 3, "argv": ["/bin/true"]}, 7, usuario_execucao="exec1")
+        self.assertEqual((ctx.exception.process.pid, ctx.exception.process.identity), (4322, 7))
+        self.assertIsInstance(ctx.exception.cause, BrokenPipeError)
         falso.stdin.close.assert_called_once_with()
 
     def test_limpar_dir_script_pelo_helper(self):
-        with mock.patch.object(posix, "_executar_curto", return_value=(0, "")) as ex:
-            os_platform.limpar_dir_script("/srv/exec/exec1", 9, "exec1")
+        with mock.patch.object(posix, "_run_short", return_value=(0, "")) as ex:
+            os_platform.clean_script_dir("/srv/exec/exec1", 9, "exec1")
         self.assertEqual(ex.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "clean",
                                               "/srv/exec/exec1", "9"])
-        with mock.patch.object(posix, "_executar_curto", return_value=(2, "")):
+        with mock.patch.object(posix, "_run_short", return_value=(2, "")):
             with self.assertRaises(RuntimeError):
-                os_platform.limpar_dir_script("/srv/exec/exec1", 9, "exec1")
+                os_platform.clean_script_dir("/srv/exec/exec1", 9, "exec1")
 
     def test_encerrar_ticket_pelo_helper(self):
         for codigo, esperado in ((0, "OK"), (5, "NAO_SUPORTADO")):
-            with mock.patch.object(posix, "_executar_curto", return_value=(codigo, "")) as ex:
-                self.assertEqual(os_platform.encerrar_ticket("/srv/exec/exec1", 9, "exec1", 10), esperado)
+            with mock.patch.object(posix, "_run_short", return_value=(codigo, "")) as ex:
+                self.assertEqual(os_platform.stop_ticket("/srv/exec/exec1", 9, "exec1", 10), esperado)
             self.assertEqual(ex.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER,
                                                   "stop-ticket", "/srv/exec/exec1", "9", "10"])
-        with mock.patch.object(posix, "_executar_curto", return_value=(4, "")):
+        with mock.patch.object(posix, "_run_short", return_value=(4, "")):
             with self.assertRaises(RuntimeError):
-                os_platform.encerrar_ticket("/srv/exec/exec1", 9, "exec1", 10)
+                os_platform.stop_ticket("/srv/exec/exec1", 9, "exec1", 10)
 
 
 class TestPastaDeSaida(unittest.TestCase):
@@ -279,78 +279,78 @@ class TestPastaDeSaida(unittest.TestCase):
         self.rel = "carga/2026/10/20/14/05/ticket_5"
 
     def test_argv_do_helper_com_e_sem_usuario(self):
-        self.assertEqual(posix._argv_helper("clean-output", ["/b", "r"], "exec1"),
+        self.assertEqual(posix._helper_argv("clean-output", ["/b", "r"], "exec1"),
                          [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "clean-output", "/b", "r"])
-        self.assertEqual(posix._argv_helper("purge-output", ["/b", 7]),
-                         [sys.executable, "-I", posix.HELPER_PACOTE, "purge-output", "/b", "7"])
-        self.assertTrue(os.path.isfile(posix.HELPER_PACOTE), posix.HELPER_PACOTE)
+        self.assertEqual(posix._helper_argv("purge-output", ["/b", 7]),
+                         [sys.executable, "-I", posix.PACKAGE_HELPER, "purge-output", "/b", "7"])
+        self.assertTrue(os.path.isfile(posix.PACKAGE_HELPER), posix.PACKAGE_HELPER)
 
     def test_iniciar_empacotar_com_usuario_nao_espera(self):
         falso = mock.MagicMock(pid=4400)
         with mock.patch.object(posix.subprocess, "Popen", return_value=falso) as popen, \
-                mock.patch.object(posix, "identidade_processo", return_value=55):
-            proc = os_platform.iniciar_empacotar(self.base, self.rel, 1048576, 10, 9, usuario_execucao="exec1")
+                mock.patch.object(posix, "process_identity", return_value=55):
+            proc = os_platform.start_pack(self.base, self.rel, 1048576, 10, 9, usuario_execucao="exec1")
         self.assertEqual(popen.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "pack",
                                                  self.base, self.rel, "1048576", "10"])
         kw = popen.call_args[1]
         self.assertEqual((kw["shell"], kw["start_new_session"], kw["stdout"], kw["env"]),
                          (False, True, 9, posix._ENV_HELPER))
         falso.wait.assert_not_called()
-        self.assertEqual((proc.pid, proc.identidade, proc.usuario_execucao), (4400, 55, "exec1"))
+        self.assertEqual((proc.pid, proc.identity, proc.exec_user), (4400, 55, "exec1"))
 
     def test_limpar_e_purgar_pelo_helper(self):
-        with mock.patch.object(posix, "_executar_curto", return_value=(0, "removidas=3\n")) as ex:
-            os_platform.limpar_saida(self.base, self.rel, "exec1")
-            self.assertEqual(os_platform.purgar_saida(self.base, 7, "exec1"), 3)
-            self.assertEqual(os_platform.purgar_saida(self.base, 7, "exec1", contar=True), 3)
+        with mock.patch.object(posix, "_run_short", return_value=(0, "removidas=3\n")) as ex:
+            os_platform.clean_output(self.base, self.rel, "exec1")
+            self.assertEqual(os_platform.purge_output(self.base, 7, "exec1"), 3)
+            self.assertEqual(os_platform.purge_output(self.base, 7, "exec1", contar=True), 3)
         self.assertEqual(ex.call_args_list[0][0][0][-3:], ["clean-output", self.base, self.rel])
         self.assertEqual(ex.call_args_list[1][0][0][-3:], ["purge-output", self.base, "7"])
         self.assertEqual(ex.call_args_list[2][0][0][-4:], ["purge-output", self.base, "7", "count"])
         for retorno in ((2, ""), (0, "sem contagem")):
-            with mock.patch.object(posix, "_executar_curto", return_value=retorno):
+            with mock.patch.object(posix, "_run_short", return_value=retorno):
                 with self.assertRaises(RuntimeError):
-                    os_platform.purgar_saida(self.base, 7, "exec1")
-        with mock.patch.object(posix, "_executar_curto", return_value=(4, "")):
+                    os_platform.purge_output(self.base, 7, "exec1")
+        with mock.patch.object(posix, "_run_short", return_value=(4, "")):
             with self.assertRaises(RuntimeError):
-                os_platform.limpar_saida(self.base, self.rel, "exec1")
+                os_platform.clean_output(self.base, self.rel, "exec1")
 
     def test_dev_cria_empacota_e_limpa_com_o_proprio_usuario(self):
         import io
         import zipfile
-        pasta = os_platform.criar_pasta_saida(self.base, self.rel)
+        pasta = os_platform.create_output_dir(self.base, self.rel)
         self.assertEqual(pasta, os.path.join(self.base, self.rel))
         self.assertEqual(os.stat(pasta).st_mode & 0o777, 0o700)
-        self.assertEqual(os_platform.criar_pasta_saida(self.base, self.rel), pasta, "idempotente")
+        self.assertEqual(os_platform.create_output_dir(self.base, self.rel), pasta, "idempotente")
         with open(os.path.join(pasta, "r.txt"), "w") as f:
             f.write("resultado")
         destino = os.path.join(self.raiz, "saida.zip")
         fd = os.open(destino, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         try:
-            proc = os_platform.iniciar_empacotar(self.base, self.rel, 1048576, 10, fd)
+            proc = os_platform.start_pack(self.base, self.rel, 1048576, 10, fd)
         finally:
             os.close(fd)
         self.assertEqual(proc.popen.wait(30), 0)
         with open(destino, "rb") as f:
             self.assertEqual(zipfile.ZipFile(io.BytesIO(f.read())).read("r.txt"), b"resultado")
-        os_platform.limpar_saida(self.base, self.rel)
+        os_platform.clean_output(self.base, self.rel)
         self.assertFalse(os.path.exists(pasta))
-        self.assertEqual(os_platform.purgar_saida(self.base, 7), 0)
+        self.assertEqual(os_platform.purge_output(self.base, 7), 0)
 
     def test_cr014_dev_cria_a_entrada_e_preserva_a_existente(self):
         base = os.path.join(self.raiz, "input", "producao")
-        pasta = os_platform.criar_pasta_entrada(base, "carga")
+        pasta = os_platform.create_input_dir(base, "carga")
         self.assertEqual((pasta, os.stat(pasta).st_mode & 0o777), (os.path.join(base, "carga"), 0o700))
         with open(os.path.join(pasta, "lote.csv"), "w") as f:
             f.write("1;2\n")
         os.chmod(pasta, 0o750)
-        self.assertEqual(os_platform.criar_pasta_entrada(base, "carga"), pasta, "idempotente")
+        self.assertEqual(os_platform.create_input_dir(base, "carga"), pasta, "idempotente")
         self.assertEqual(os.stat(pasta).st_mode & 0o777, 0o750, "a existente fica como esta")
         self.assertEqual(os.listdir(pasta), ["lote.csv"], "conteudo permanente")
         fora = os.path.join(self.raiz, "fora_entrada")
         os.mkdir(fora)
         os.symlink(fora, os.path.join(base, "ligada"))
         with self.assertRaises(RuntimeError):
-            os_platform.criar_pasta_entrada(base, "ligada")
+            os_platform.create_input_dir(base, "ligada")
 
     def test_dev_recusa_link_no_caminho(self):
         os.makedirs(self.base)
@@ -358,23 +358,23 @@ class TestPastaDeSaida(unittest.TestCase):
         os.mkdir(fora)
         os.symlink(fora, os.path.join(self.base, "carga"))
         with self.assertRaises(RuntimeError):
-            os_platform.criar_pasta_saida(self.base, self.rel)
+            os_platform.create_output_dir(self.base, self.rel)
         self.assertEqual(os.listdir(fora), [])
 
     def test_validar_pastas_saida(self):
         os.makedirs(self.base, 0o700)
         eu = posix.pwd.getpwuid(os.geteuid()).pw_name
-        self.assertEqual(os_platform.validar_pastas_saida([(self.base, eu)]), [])
+        self.assertEqual(os_platform.validate_output_dirs([(self.base, eu)]), [])
         os.chmod(self.base, 0o770)
-        self.assertEqual(len(os_platform.validar_pastas_saida([(self.base, eu)])), 1)
+        self.assertEqual(len(os_platform.validate_output_dirs([(self.base, eu)])), 1)
         os.chmod(self.base, 0o700)
         link = os.path.join(self.raiz, "link")
         os.symlink(self.base, link)
-        falhas = os_platform.validar_pastas_saida([(link, eu), (os.path.join(self.raiz, "nada"), eu),
+        falhas = os_platform.validate_output_dirs([(link, eu), (os.path.join(self.raiz, "nada"), eu),
                                                   (self.base, "usuario_que_nao_existe_sss")])
         self.assertEqual(len(falhas), 3, falhas)
         with mock.patch.object(posix.pwd, "getpwnam", return_value=_Pw("exec1", os.geteuid() + 1)):
-            self.assertEqual(len(os_platform.validar_pastas_saida([(self.base, "exec1")])), 1, "dono diferente")
+            self.assertEqual(len(os_platform.validate_output_dirs([(self.base, "exec1")])), 1, "dono diferente")
 
 
 class TestTravaParadaPrivilegio(unittest.TestCase):
@@ -387,31 +387,31 @@ class TestTravaParadaPrivilegio(unittest.TestCase):
 
     def test_segunda_trava_falha(self):
         caminho = os.path.join(self.raiz, "agente.lock")
-        trava = os_platform.travar_instancia(caminho)
+        trava = os_platform.lock_instance(caminho)
         try:
             # Outro processo (flock e por descricao de arquivo aberto).
             codigo = ("import sys\nsys.path.insert(0, %r)\nfrom os_platform import posix\n"
-                      "try:\n    posix.travar_instancia(%r)\nexcept posix.InstanciaJaEmExecucao:\n    sys.exit(7)\n"
+                      "try:\n    posix.lock_instance(%r)\nexcept posix.InstanceAlreadyRunning:\n    sys.exit(7)\n"
                       % (os.path.dirname(os.path.dirname(posix.__file__)), caminho))
             self.assertEqual(subprocess.call([sys.executable, "-c", codigo]), 7)
-            with self.assertRaises(os_platform.InstanciaJaEmExecucao):
-                os_platform.travar_instancia(caminho)
+            with self.assertRaises(os_platform.InstanceAlreadyRunning):
+                os_platform.lock_instance(caminho)
         finally:
-            os_platform.liberar_instancia(trava)
-        os_platform.liberar_instancia(os_platform.travar_instancia(caminho))
+            os_platform.release_instance(trava)
+        os_platform.release_instance(os_platform.lock_instance(caminho))
 
     def test_usuario_privilegiado(self):
         with mock.patch.object(posix.os, "geteuid", return_value=0):
-            self.assertTrue(os_platform.usuario_privilegiado())
+            self.assertTrue(os_platform.is_privileged_user())
         with mock.patch.object(posix.os, "geteuid", return_value=1000):
-            self.assertFalse(os_platform.usuario_privilegiado())
+            self.assertFalse(os_platform.is_privileged_user())
 
     def test_parada_por_sinal_so_seta_a_flag(self):
         antigos = (signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGINT))
         try:
             for sinal in (signal.SIGTERM, signal.SIGINT):
                 flag = threading.Event()
-                os_platform.instalar_parada(flag)
+                os_platform.install_stop_handler(flag)
                 os.kill(os.getpid(), sinal)
                 self.assertTrue(_esperar(flag.is_set, 2))
         finally:
@@ -430,26 +430,26 @@ class TestEstadoEDiretorios(unittest.TestCase):
     def test_gravar_e_ler_estado_atomicos(self):
         for nome in (".sss_spawn", ".sss_proc", ".sss_result"):
             caminho = os.path.join(self.raiz, nome)
-            self.assertIsNone(os_platform.ler_estado(caminho))
-            os_platform.gravar_estado(caminho, {"ticket_id": 5, "fase": nome})
-            os_platform.gravar_estado(caminho, {"ticket_id": 5, "fase": nome, "v": 2})
-            self.assertEqual(os_platform.ler_estado(caminho), {"ticket_id": 5, "fase": nome, "v": 2})
+            self.assertIsNone(os_platform.read_state(caminho))
+            os_platform.write_state(caminho, {"ticket_id": 5, "fase": nome})
+            os_platform.write_state(caminho, {"ticket_id": 5, "fase": nome, "v": 2})
+            self.assertEqual(os_platform.read_state(caminho), {"ticket_id": 5, "fase": nome, "v": 2})
             self.assertEqual(os.stat(caminho).st_mode & 0o777, 0o600)
         self.assertEqual(sorted(os.listdir(self.raiz)), [".sss_proc", ".sss_result", ".sss_spawn"])
 
     def test_gravar_estado_com_falha_nao_deixa_temporario_nem_troca_o_anterior(self):
         caminho = os.path.join(self.raiz, ".sss_proc")
-        os_platform.gravar_estado(caminho, {"pid": 1})
+        os_platform.write_state(caminho, {"pid": 1})
         with self.assertRaises(TypeError):
-            os_platform.gravar_estado(caminho, {"pid": object()})
-        self.assertEqual(os_platform.ler_estado(caminho), {"pid": 1})
+            os_platform.write_state(caminho, {"pid": object()})
+        self.assertEqual(os_platform.read_state(caminho), {"pid": 1})
         self.assertEqual(os.listdir(self.raiz), [".sss_proc"])
 
     def test_criar_dir_trabalho_0700(self):
         caminho = os.path.join(self.raiz, "work", "ticket_1")
         old = os.umask(0)
         try:
-            os_platform.criar_dir_trabalho(caminho)
+            os_platform.create_work_dir(caminho)
         finally:
             os.umask(old)
         self.assertEqual(os.stat(caminho).st_mode & 0o777, 0o700)
@@ -457,32 +457,32 @@ class TestEstadoEDiretorios(unittest.TestCase):
     def test_espaco_livre_com_statvfs_simulado(self):
         st = mock.Mock(f_bavail=3 * 1024, f_frsize=4096)
         with mock.patch.object(posix.os, "statvfs", return_value=st) as sv:
-            self.assertEqual(os_platform.espaco_livre_mb("/srv/sss"), 12)
+            self.assertEqual(os_platform.free_space_mb("/srv/sss"), 12)
         sv.assert_called_once_with("/srv/sss")
 
     def test_caminho_final(self):
         alvo = os.path.join(self.raiz, "alvo")
         os.mkdir(alvo)
         os.symlink(alvo, os.path.join(self.raiz, "link"))
-        self.assertEqual(os_platform.caminho_final(os.path.join(self.raiz, "link")), os.path.realpath(alvo))
+        self.assertEqual(os_platform.final_path(os.path.join(self.raiz, "link")), os.path.realpath(alvo))
 
     @unittest.skipIf(os.geteuid() == 0, "root sempre tem escrita")
     def test_validar_dir_restrito(self):
-        self.assertIsNone(os_platform.validar_dir_restrito(self.raiz))
+        self.assertIsNone(os_platform.validate_restricted_dir(self.raiz))
         os.chmod(self.raiz, 0o750)
-        self.assertIsNone(os_platform.validar_dir_restrito(self.raiz), "0750 aceito (log_dir)")
-        self.assertEqual(os_platform.validar_dir_restrito("relativo/x"), "RELATIVE_PATH")
-        self.assertEqual(os_platform.validar_dir_restrito("/usr/local/sss"), "SYSTEM_DIR")
+        self.assertIsNone(os_platform.validate_restricted_dir(self.raiz), "0750 aceito (log_dir)")
+        self.assertEqual(os_platform.validate_restricted_dir("relativo/x"), "RELATIVE_PATH")
+        self.assertEqual(os_platform.validate_restricted_dir("/usr/local/sss"), "SYSTEM_DIR")
         os.symlink("/etc", os.path.join(self.raiz, "etc_link"))
-        self.assertEqual(os_platform.validar_dir_restrito(os.path.join(self.raiz, "etc_link")), "SYSTEM_DIR")
-        self.assertEqual(os_platform.validar_dir_restrito(os.path.join(self.raiz, "nao")), "NOT_FOUND")
+        self.assertEqual(os_platform.validate_restricted_dir(os.path.join(self.raiz, "etc_link")), "SYSTEM_DIR")
+        self.assertEqual(os_platform.validate_restricted_dir(os.path.join(self.raiz, "nao")), "NOT_FOUND")
         arq = os.path.join(self.raiz, "arq")
         open(arq, "w").close()
-        self.assertEqual(os_platform.validar_dir_restrito(arq), "NAO_E_DIRETORIO")
+        self.assertEqual(os_platform.validate_restricted_dir(arq), "NAO_E_DIRETORIO")
         so_leitura = os.path.join(self.raiz, "ro")
         os.mkdir(so_leitura, 0o500)
         try:
-            self.assertEqual(os_platform.validar_dir_restrito(so_leitura), "SEM_ESCRITA")
+            self.assertEqual(os_platform.validate_restricted_dir(so_leitura), "SEM_ESCRITA")
         finally:
             os.chmod(so_leitura, 0o700)
 
@@ -513,7 +513,7 @@ class TestValidacoesDeCaminho(unittest.TestCase):
         shutil.rmtree(self.raiz, ignore_errors=True)
 
     def validar(self, caminho):
-        return os_platform.validar_caminho_script(caminho)
+        return os_platform.validate_script_path(caminho)
 
     def test_script_valido(self):
         self.assertIsNone(self.validar(self.script))
@@ -547,36 +547,36 @@ class TestValidacoesDeCaminho(unittest.TestCase):
         self.assertEqual(self.validar(os.path.join(self.base, "sub")), "NOT_A_FILE")
 
     def test_interpretador_pelo_validar_executavel(self):
-        real = os_platform.validar_interpretador_executavel("/bin/sh")
+        real = os_platform.validate_interpreter_executable("/bin/sh")
         self.assertEqual(real, os.path.realpath("/bin/sh"))
         with mock.patch.object(path_guard, "validate_executable", return_value="/x") as ve:
-            os_platform.validar_interpretador_executavel("/usr/bin/python3", dirs_sss=("/srv",))
+            os_platform.validate_interpreter_executable("/usr/bin/python3", dirs_sss=("/srv",))
         ve.assert_called_once_with("/usr/bin/python3", dirs_sss=("/srv",))
         with self.assertRaises(path_guard.PathGuardError):
-            os_platform.validar_interpretador_executavel("bin/sh")
+            os_platform.validate_interpreter_executable("bin/sh")
 
 
 class TestArquivoRestrito(unittest.TestCase):
 
     def setUp(self):
-        fd, self.caminho = tempfile.mkstemp(prefix="sss_plat_")
+        fd, self.path = tempfile.mkstemp(prefix="sss_plat_")
         os.close(fd)
 
     def tearDown(self):
-        os.unlink(self.caminho)
+        os.unlink(self.path)
 
     def test_ok_e_rejeitado(self):
-        os.chmod(self.caminho, 0o600)
-        self.assertIsNone(os_platform.validar_arquivo_restrito(self.caminho)[0])
-        os.chmod(self.caminho, 0o400)
-        self.assertIsNone(os_platform.validar_arquivo_restrito(self.caminho)[0])
+        os.chmod(self.path, 0o600)
+        self.assertIsNone(os_platform.validate_restricted_file(self.path)[0])
+        os.chmod(self.path, 0o400)
+        self.assertIsNone(os_platform.validate_restricted_file(self.path)[0])
         for modo in (0o640, 0o604, 0o660):
-            os.chmod(self.caminho, modo)
-            self.assertEqual(os_platform.validar_arquivo_restrito(self.caminho)[0], "PERMISSAO_INSEGURA")
-        os.chmod(self.caminho, 0o600)
+            os.chmod(self.path, modo)
+            self.assertEqual(os_platform.validate_restricted_file(self.path)[0], "PERMISSAO_INSEGURA")
+        os.chmod(self.path, 0o600)
         with mock.patch.object(posix.os, "geteuid", return_value=os.geteuid() + 1):
-            self.assertEqual(os_platform.validar_arquivo_restrito(self.caminho)[0], "DONO_INVALIDO")
-        self.assertEqual(os_platform.validar_arquivo_restrito(os.path.dirname(self.caminho))[0], "NAO_REGULAR")
+            self.assertEqual(os_platform.validate_restricted_file(self.path)[0], "DONO_INVALIDO")
+        self.assertEqual(os_platform.validate_restricted_file(os.path.dirname(self.path))[0], "NAO_REGULAR")
 
 
 class TestValidarExecucao(unittest.TestCase):
@@ -612,7 +612,7 @@ class TestValidarExecucao(unittest.TestCase):
     def validar(self, usuarios=("exec1",)):
         with mock.patch.object(posix.os, "stat", side_effect=self._stat), \
                 mock.patch.object(posix.pwd, "getpwnam", side_effect=self._getpwnam):
-            return os_platform.validar_execucao([("PROD", u) for u in usuarios], self.EXEC,
+            return os_platform.validate_execution([("PROD", u) for u in usuarios], self.EXEC,
                                                helper=self.HELPER, executar=self._executar, usuario_agente="agente")
 
     def test_tudo_certo(self):
@@ -648,15 +648,15 @@ class TestValidarExecucao(unittest.TestCase):
 class TestInterface(unittest.TestCase):
 
     def test_exporta_a_interface_do_readme(self):
-        for nome in ("NOME", "Processo", "iniciar_processo", "sinalizar_grupo", "grupo_vivo", "validar_execucao",
-                     "gravar_estado", "ler_estado", "encerrar_ticket", "espaco_livre_mb", "identidade_processo",
-                     "processo_existe", "reabrir_grupo", "travar_instancia", "liberar_instancia",
-                     "usuario_privilegiado", "validar_arquivo_restrito", "validar_dir_restrito",
-                     "validar_caminho_script", "caminho_final", "criar_dir_trabalho", "instalar_parada",
-                     "criar_pasta_saida", "iniciar_empacotar", "limpar_saida", "purgar_saida",
-                     "validar_pastas_saida"):
+        for nome in ("NAME", "Process", "start_process", "signal_group", "group_alive", "validate_execution",
+                     "write_state", "read_state", "stop_ticket", "free_space_mb", "process_identity",
+                     "process_exists", "reopen_group", "lock_instance", "release_instance",
+                     "is_privileged_user", "validate_restricted_file", "validate_restricted_dir",
+                     "validate_script_path", "final_path", "create_work_dir", "install_stop_handler",
+                     "create_output_dir", "start_pack", "clean_output", "purge_output",
+                     "validate_output_dirs"):
             self.assertTrue(hasattr(os_platform, nome), nome)
-        self.assertIn(os_platform.NOME, ("LINUX", "UNIX"))
+        self.assertIn(os_platform.NAME, ("LINUX", "UNIX"))
         self.assertFalse(hasattr(os_platform, "encerrar_grupo"), "encerramento escalonado e do executor (F8.1)")
 
 

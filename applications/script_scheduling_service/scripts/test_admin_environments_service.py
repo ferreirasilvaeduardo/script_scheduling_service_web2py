@@ -105,12 +105,12 @@ class TestInclusao(_Base):
         self.assertEqual(self._auditorias("CREATE"), [])
 
     def test_nome_interno_reservado(self):
-        # CR-009: 'interno' e a pasta de log sem ambiente (logs da aplicacao).
-        aid, erros = self._insert(name="INTERNO")
+        # CR-009: 'internal' e a pasta de log sem ambiente (logs da aplicacao).
+        aid, erros = self._insert(name="INTERNAL")
         self.assertIsNone(aid)
         self.assertEqual(erros, {"name": svc_mod.MSG_NAME_RESERVED})
         self.assertEqual(self._auditorias("CREATE"), [])
-        aid, erros = self._insert(name="INTERNO_2")
+        aid, erros = self._insert(name="INTERNAL_2")
         self.assertEqual(erros, {})
         self.assertIsNotNone(aid)
 

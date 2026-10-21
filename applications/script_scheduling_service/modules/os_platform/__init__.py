@@ -11,57 +11,57 @@ if os.name != "posix":
     raise ImportError("SSS: somente POSIX e suportado (CR-005)")
 
 from os_platform.posix import (  # noqa: E402,F401
-    NOME,
+    NAME,
     HELPER,
-    HELPER_PACOTE,
-    PASTAS_DO_SISTEMA,
-    RLIMITS_PADRAO,
-    SAIDA_EXCEDE_ARQUIVOS,
-    SAIDA_EXCEDE_BYTES,
-    SAIDA_VAZIA,
-    FalhaAposSpawn,
-    InstanciaJaEmExecucao,
-    Processo,
-    caminho_final,
-    criar_dir_trabalho,
-    criar_pasta_entrada,
-    criar_pasta_saida,
-    encerrar_ticket,
-    espaco_livre_mb,
-    gravar_estado,
-    grupo_vivo,
-    identidade_processo,
-    iniciar_empacotar,
-    iniciar_processo,
-    instalar_parada,
-    ler_estado,
-    liberar_instancia,
-    limpar_dir_script,
-    limpar_saida,
-    locale_disponivel,
-    processo_existe,
-    purgar_saida,
-    reabrir_grupo,
-    sinalizar_grupo,
-    travar_instancia,
-    usuario_privilegiado,
-    validar_arquivo_restrito,
-    validar_caminho_script,
-    validar_dir_restrito,
-    validar_execucao,
-    validar_interpretador_executavel,
-    validar_pastas_saida,
+    PACKAGE_HELPER,
+    SYSTEM_DIRS,
+    DEFAULT_RLIMITS,
+    OUTPUT_TOO_MANY_FILES,
+    OUTPUT_TOO_MANY_BYTES,
+    OUTPUT_EMPTY,
+    FailureAfterSpawn,
+    InstanceAlreadyRunning,
+    Process,
+    final_path,
+    create_work_dir,
+    create_input_dir,
+    create_output_dir,
+    stop_ticket,
+    free_space_mb,
+    write_state,
+    group_alive,
+    process_identity,
+    start_pack,
+    start_process,
+    install_stop_handler,
+    read_state,
+    release_instance,
+    clean_script_dir,
+    clean_output,
+    locale_available,
+    process_exists,
+    purge_output,
+    reopen_group,
+    signal_group,
+    lock_instance,
+    is_privileged_user,
+    validate_restricted_file,
+    validate_script_path,
+    validate_restricted_dir,
+    validate_execution,
+    validate_interpreter_executable,
+    validate_output_dirs,
 )
 
 
-def eh_macos():
+def is_macos():
     # type: () -> bool
     """Indica se a plataforma atual eh macOS (Darwin)."""
     return sys.platform == "darwin"
 
 
-def obter_lib_dir_oracle(cfg):
+def get_oracle_lib_dir(cfg):
     """Retorna lib_dir do Instant Client apenas se estiver no macOS (dev) com config definido."""
-    if eh_macos() and cfg is not None and hasattr(cfg, "oracle") and cfg.oracle.oracle_client_lib_dir:
+    if is_macos() and cfg is not None and hasattr(cfg, "oracle") and cfg.oracle.oracle_client_lib_dir:
         return cfg.oracle.oracle_client_lib_dir
     return None

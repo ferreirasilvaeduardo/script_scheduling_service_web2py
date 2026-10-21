@@ -44,9 +44,9 @@ class Saida(object):
         self.ticket_id = int(ticket_id)
         self.base = base
         self.relativo = relativo
-        self.usuario_execucao = usuario_execucao
+        self.exec_user = usuario_execucao
         self.caminho_zip = os.path.join(work_dir_ticket, NOME_ZIP)
-        self.processo = None
+        self.process = None
         self.prazo = None
         self.morto = False
         self.resultado = None
@@ -73,8 +73,8 @@ def iniciar_empacotar(saida, plat, max_bytes, max_arquivos, agora):
     try:
         fd = os.open(saida.caminho_zip, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
-            saida.processo = plat.iniciar_empacotar(saida.base, saida.relativo, max_bytes, max_arquivos, fd,
-                                                    saida.usuario_execucao)
+            saida.process = plat.start_pack(saida.base, saida.relativo, max_bytes, max_arquivos, fd,
+                                                    saida.exec_user)
         finally:
             os.close(fd)
     except Exception as exc:  # noqa: BLE001 - qualquer falha local: FALHOU (o ticket segue)
@@ -89,11 +89,11 @@ def avancar_empacotar(saida, plat, agora):
     """Acompanha o empacotar sem esperar. True quando ha resultado (ZIP, VAZIA, EXCEDEU ou FALHOU)."""
     if saida.empacotada:
         return True
-    rc = saida.processo.popen.poll()
+    rc = saida.process.popen.poll()
     if rc is None:
         if agora >= saida.prazo and not saida.morto:
             saida.morto = True
-            plat.sinalizar_grupo(saida.processo, signal.SIGKILL)
+            plat.signal_group(saida.process, signal.SIGKILL)
             _log.warning("empacotamento da saida passou de %d s: encerrado", PRAZO_EMPACOTAR_S,
                          extra={"ticket": saida.ticket_id, "action": "SAIDA"})
         return False
@@ -101,11 +101,11 @@ def avancar_empacotar(saida, plat, agora):
         saida.resultado, saida.motivo = FALHOU, "DEADLINE"
     elif rc == 0:
         _conferir_zip(saida)
-    elif rc == plat.SAIDA_VAZIA:
+    elif rc == plat.OUTPUT_EMPTY:
         saida.resultado = VAZIA
-    elif rc == plat.SAIDA_EXCEDE_ARQUIVOS:
+    elif rc == plat.OUTPUT_TOO_MANY_FILES:
         saida.resultado, saida.motivo = EXCEDEU, "FILES"
-    elif rc == plat.SAIDA_EXCEDE_BYTES:
+    elif rc == plat.OUTPUT_TOO_MANY_BYTES:
         saida.resultado, saida.motivo = EXCEDEU, "BYTES"
     else:
         _log.warning("empacotamento da saida terminou com codigo %s", rc,
@@ -133,8 +133,8 @@ def _conferir_zip(saida):
 
 def abandonar(saida, plat):
     """Parada do agente durante o empacotamento: encerra o helper; a pasta fica no disco (README §8.13)."""
-    if saida.processo is not None and not saida.empacotada and saida.processo.popen.poll() is None:
-        plat.sinalizar_grupo(saida.processo, signal.SIGKILL)
+    if saida.process is not None and not saida.empacotada and saida.process.popen.poll() is None:
+        plat.signal_group(saida.process, signal.SIGKILL)
     saida.resultado, saida.motivo = ABANDONADA, None
 
 
@@ -203,7 +203,7 @@ def _ja_esta(conn, repo, saida, agente_id, situacao):
 
 def remover_pasta(saida, plat):
     """Com o zip gravado (ou a pasta vazia), a pasta de saida sai pelo helper; as de cima ficam para o purge."""
-    plat.limpar_saida(saida.base, saida.relativo, saida.usuario_execucao)
+    plat.clean_output(saida.base, saida.relativo, saida.exec_user)
 
 
 def deve_remover_pasta(saida):

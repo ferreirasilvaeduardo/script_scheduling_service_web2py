@@ -4,7 +4,7 @@ CR-008 R-16, R-27; CR-009; CR-012).
 
 Com um banco simulado em memoria (o SQL e o do RepoPurge real): lotes ate rowcount = 0, so tickets terminais,
 concessao tomada, renovada, liberada (dono e prazo), negada e perdida, PURGE com 0 linhas, --export-audit,
---dry-run so com SELECT e um agora_banco(), logs locais pela data do caminho (RUNNING mantido, interno/ intocada),
+--dry-run so com SELECT e um agora_banco(), logs locais pela data do caminho (RUNNING mantido, internal/ intocada),
 pastas de saida pelo helper, trava local e codigos de saida.
 
 Com SSS_TEST_ORACLE=1 (decisao 1a do F9.1): o purge real roda com a conta do owner e so quando nenhum ticket ou
@@ -167,26 +167,26 @@ class _Conn(object):
 
 
 class _Plat(object):
-    """Plataforma dos testes: caminho_final real; helper de saida, trava e liberacao registrados."""
+    """Plataforma dos testes: final_path real; helper de saida, trava e liberacao registrados."""
 
     def __init__(self, contagem=0, falhar=False):
         self.chamadas = []
         self.contagem, self.falhar = contagem, falhar
         self.travas = []
-        self.caminho_final = os_platform.caminho_final
+        self.final_path = os_platform.final_path
 
-    def purgar_saida(self, base, dias, usuario_execucao=None, contar=False):
+    def purge_output(self, base, dias, usuario_execucao=None, contar=False):
         self.chamadas.append((base, dias, usuario_execucao, contar))
         if self.falhar:
             raise RuntimeError("helper purge-output falhou (codigo 4)")
         return self.contagem
 
-    def travar_instancia(self, caminho):
+    def lock_instance(self, caminho):
         self.travas.append(caminho)
-        return os_platform.travar_instancia(caminho)
+        return os_platform.lock_instance(caminho)
 
-    def liberar_instancia(self, trava):
-        os_platform.liberar_instancia(trava)
+    def release_instance(self, trava):
+        os_platform.release_instance(trava)
 
 
 def _dias(n):
@@ -342,7 +342,7 @@ class TestLogsLocais(_Base):
         recente = self._minuto("producao/carga/2026/10/20/10/00")
         running = self._minuto("producao/extrator/2026/09/01/23/59", ("ticket_3.log.parcial",))
         sozinho = self._minuto("homologacao/outro/2025/12/31/08/15")
-        interno = self._minuto("interno/app/2020/01/01/00/00", ("sss_web_1.log",))
+        internal = self._minuto("internal/app/2020/01/01/00/00", ("sss_web_1.log",))
         estranho = os.path.join(self.cfg.logging.log_dir, "producao", "carga", "2026", "09", "lixo")
         os.makedirs(estranho)
         fora = os.path.join(self.raiz, "fora", "2026", "01", "01", "00", "00")
@@ -360,7 +360,7 @@ class TestLogsLocais(_Base):
         self.assertTrue(os.path.isdir(running), "log de ticket RUNNING mantido (CR-007, R-32)")
         self.assertFalse(os.path.exists(os.path.join(self.cfg.logging.log_dir, "homologacao")),
                          "vazias ate o ambiente")
-        self.assertTrue(os.path.isdir(interno), "interno/ intocada (CR-009)")
+        self.assertTrue(os.path.isdir(internal), "internal/ intocada (CR-009)")
         self.assertTrue(os.path.isdir(fora), "link nao e seguido")
         self.assertEqual(p.resumo, ["logs_locais: 2 pastas de minuto removidas"])
 
@@ -372,7 +372,7 @@ class TestLogsLocais(_Base):
     def test_caminho_real_fora_de_log_dir_nao_e_removido(self):
         velho = self._minuto("producao/carga/2026/01/01/10/00")
         plat = _Plat()
-        plat.caminho_final = lambda c: "/outro" + c if c != self.cfg.logging.log_dir else c
+        plat.final_path = lambda c: "/outro" + c if c != self.cfg.logging.log_dir else c
         self.assertEqual(self._purge(_Banco(), plat=plat).run(("logs_locais",)), purge_cli.SAIDA_LOCAIS)
         self.assertTrue(os.path.isdir(velho))
 
@@ -443,8 +443,8 @@ class TestMain(_Base):
         self.assertIn("dry-run: contagens estimadas", texto)
 
     def test_outro_purge_no_servidor(self):
-        trava = os_platform.travar_instancia(os.path.join(self.raiz, "work", "sss-purge.lock"))
-        self.addCleanup(os_platform.liberar_instancia, trava)
+        trava = os_platform.lock_instance(os.path.join(self.raiz, "work", "sss-purge.lock"))
+        self.addCleanup(os_platform.release_instance, trava)
         codigo, texto = self._main([])
         self.assertEqual((codigo, texto, self.conexoes), (0, "", []))
 

@@ -338,14 +338,14 @@ class _Base(unittest.TestCase):
     def tearDown(self):
         if self.ag is not None:
             for item in list(getattr(self.ag, "execucoes", {}).values()):
-                if item.execucao is not None and item.execucao.processo is not None:
+                if item.execucao is not None and item.execucao.process is not None:
                     try:
                         os.killpg(item.execucao.pgid if hasattr(item.execucao, "pgid") else item.execucao.pid,
                                   signal.SIGKILL)
                     except OSError:
                         pass
-                    if item.execucao.processo.popen is not None:
-                        item.execucao.processo.popen.wait(5)
+                    if item.execucao.process.popen is not None:
+                        item.execucao.process.popen.wait(5)
             self.ag.liberar_recursos()
         for atual, dirs, _arqs in os.walk(self.raiz):
             for d in dirs:
@@ -489,11 +489,11 @@ class TestExecucao(_Base):
     def test_processo_que_terminou_antes_do_cancelamento_prevalece(self):
         self.subir()
         item = sl._Item(1, None, self.ag.log)
-        item.fase = sl._Item.RODANDO
+        item.phase = sl._Item.RODANDO
         p = subprocess.Popen(["true"], start_new_session=True)
         p.wait()
-        item.execucao = executor.Execucao(1, self.work, None, None, None)
-        item.execucao.processo = os_platform.Processo(p.pid, None, popen=p)
+        item.execucao = executor.Execution(1, self.work, None, None, None)
+        item.execucao.process = os_platform.Process(p.pid, None, popen=p)
         item.execucao.pid = p.pid
         self.ag._encerrar(item, "CANCEL")
         self.assertIsNone(item.motivo)
@@ -659,13 +659,13 @@ class TestPendencias(_Base):
 
     def test_falha_no_proc_depois_do_spawn_e_spawn_error(self):
         tid = self.banco.ticket(self.banco.script("sleep 300\n"))
-        original = os_platform.gravar_estado
+        original = os_platform.write_state
         def _grava(caminho, dados):
             if caminho.endswith(executor.PROC):
                 raise OSError(28, "No space left on device")
             return original(caminho, dados)
         self.subir()
-        with mock.patch.object(os_platform, "gravar_estado", side_effect=_grava), \
+        with mock.patch.object(os_platform, "write_state", side_effect=_grava), \
                 self.assertLogs("sss_scheduler", "ERROR"):
             self.rodar(self.terminado(tid))
         self.assertEqual(self.final(tid), ("FAILED", "SPAWN_ERROR", -4))
@@ -740,7 +740,7 @@ class TestCiclos(_Base):
         self.subir()
         self.rodar(lambda: self.banco.tickets[tid]["process_id"] is not None)
         self.conexao.fora = True
-        self.rodar(lambda: self.ag.execucoes[tid].fase != sl._Item.RODANDO, limite=10)
+        self.rodar(lambda: self.ag.execucoes[tid].phase != sl._Item.RODANDO, limite=10)
         self.conexao.fora = False
         self.rodar(self.terminado(tid))
         self.assertEqual(self.final(tid), ("FAILED", "TIMEOUT", -3))
@@ -748,7 +748,7 @@ class TestCiclos(_Base):
 
 class _PlatDisco(object):
     def __getattr__(self, nome):
-        if nome == "espaco_livre_mb":
+        if nome == "free_space_mb":
             return lambda caminho: 10
         return getattr(os_platform, nome)
 

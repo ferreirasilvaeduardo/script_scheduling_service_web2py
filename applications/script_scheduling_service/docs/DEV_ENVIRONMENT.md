@@ -218,7 +218,7 @@ Sem `sudo`, cadastre os scripts com o caminho real de `dev/scripts`.
 
 ### 6.2 Onde ficam os logs (CR-005)
 
-* **Log da aplicação:** `log_dir/interno/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (CR-009; até o F8.2 era `log_dir/app/...`, que pode ser apagada à mão). O arquivo nasce na pasta do minuto em que o processo sobe e troca para um novo, na pasta do minuto atual, ao atingir `app_log_max_bytes`. As pastas de dia mais antigas que `app_log_retention_days` são apagadas pelo próprio processo. Para seguir o arquivo mais recente:
+* **Log da aplicação:** `log_dir/internal/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (CR-009; até o F8.2 era `log_dir/app/...`, que pode ser apagada à mão). O arquivo nasce na pasta do minuto em que o processo sobe e troca para um novo, na pasta do minuto atual, ao atingir `app_log_max_bytes`. As pastas de dia mais antigas que `app_log_retention_days` são apagadas pelo próprio processo. Para seguir o arquivo mais recente:
 
   ```bash
   LOG_DIR=/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs     # o [logging] log_dir do seu config.ini

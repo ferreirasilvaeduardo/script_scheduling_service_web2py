@@ -259,7 +259,7 @@ def initialize(selecao, cfg=None):
 
             driver = oracledb
             if candidato == "thick":
-                lib_dir = os_platform.obter_lib_dir_oracle(cfg)
+                lib_dir = os_platform.get_oracle_lib_dir(cfg)
                 try:
                     if lib_dir:
                         oracledb.init_oracle_client(lib_dir=lib_dir)
@@ -281,7 +281,7 @@ def initialize(selecao, cfg=None):
         elif candidato == "cx_oracle":
             import cx_Oracle
             driver = cx_Oracle
-            lib_dir = os_platform.obter_lib_dir_oracle(cfg)
+            lib_dir = os_platform.get_oracle_lib_dir(cfg)
             try:
                 if lib_dir:
                     cx_Oracle.init_oracle_client(lib_dir=lib_dir)

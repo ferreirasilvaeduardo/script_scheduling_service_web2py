@@ -488,7 +488,7 @@ class RepoSchedulerQueue(object):
         """Registro do agente sob FOR UPDATE WAIT 5 (README §8.12 passo 7; CR-007 R-11). Devolve o id.
 
         dados: code, hostname, pid, version, environments, platform, interpreters, critical_config,
-        node_offline_timeout_s. processo_existe: platform.processo_existe (o repositorio nao conhece o SO).
+        node_offline_timeout_s. process_exists: os_platform.process_exists (o repositorio nao conhece o SO).
         Duplicidade: DuplicateAgent. Corrida na inclusao (uk_<prefixo>agt_codigo): ROLLBACK e nova tentativa.
         """
         for tentativa in range(tentativas):

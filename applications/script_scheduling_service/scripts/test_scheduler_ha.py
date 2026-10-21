@@ -667,7 +667,7 @@ class TestFencing(tsc._Base):
         with self.assertLogs("sss_scheduler", "CRITICAL"):
             self.ag._conferir_fence()
         self.assertLess(_time.monotonic() - inicio, 1.0, "os 30 pedidos sem esperar nenhum grupo")
-        self.assertTrue(all(i.fase == "ENCERRANDO" for i in self.ag.execucoes.values()))
+        self.assertTrue(all(i.phase == "ENCERRANDO" for i in self.ag.execucoes.values()))
         self.conexao.fora = False
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.rodar(lambda: all(self.terminado(t)() for t in tids), limite=30)
@@ -799,6 +799,6 @@ class TestSinalDeParada(unittest.TestCase):
         self.addCleanup(_signal.signal, _signal.SIGINT, anteriores[1])
         for sinal in (_signal.SIGTERM, _signal.SIGINT):
             flag = _threading.Event()
-            _plataforma.instalar_parada(flag)
+            _plataforma.install_stop_handler(flag)
             _os.kill(_os.getpid(), sinal)
             self.assertTrue(flag.wait(2), sinal)

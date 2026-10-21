@@ -96,7 +96,7 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
         self._avisos = []
 
         agora = datetime.datetime.now()
-        caminho_inicial = log_paths.proximo_caminho_log_app(
+        caminho_inicial = log_paths.next_app_log_path(
             self.log_dir, self.nome_processo, self.pid, agora
         )
         _ensure_directory(os.path.dirname(caminho_inicial), self._avisos)
@@ -116,7 +116,7 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
 
     def executar_retencao(self, ref_dt=None):
         falhas = []
-        log_paths.limpar_retencao_app(self.log_dir, self.retention_days, ref_dt=ref_dt, falhas=falhas)
+        log_paths.clean_app_retention(self.log_dir, self.retention_days, ref_dt=ref_dt, falhas=falhas)
         for falha in falhas:
             self.registrar_aviso("RETENCAO", "retencao do log da aplicacao nao removeu %s" % falha)
 
@@ -156,7 +156,7 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
             self.stream.close()
             self.stream = None
         agora = datetime.datetime.now()
-        novo_caminho = log_paths.proximo_caminho_log_app(
+        novo_caminho = log_paths.next_app_log_path(
             self.log_dir, self.nome_processo, self.pid, agora
         )
         self.baseFilename = os.path.abspath(novo_caminho)
@@ -174,7 +174,7 @@ def _chmod(caminho, modo, avisos):
 
 def _ensure_directory(diretorio, avisos):
     # Nivel a nivel com 0o750 (README §13): regra unica em pastas_log (F8.1).
-    log_paths.garantir_diretorio(diretorio, avisos)
+    log_paths.ensure_directory(diretorio, avisos)
 
 
 def configure(nome_log, cfg):
@@ -244,7 +244,7 @@ def log_initial_critical(nome_log, mensagem, log_dir=None, stream=None):
     if log_dir and os.path.isdir(log_dir) and os.access(log_dir, os.W_OK):
         nome = nome_log[:-4] if nome_log.endswith(".log") else nome_log
         # Sem sufixo _<n>: falhas repetidas no mesmo minuto e processo vao para o mesmo arquivo.
-        caminho = log_paths.caminho_log_app(log_dir, nome, os.getpid(), datetime.datetime.now())
+        caminho = log_paths.app_log_path(log_dir, nome, os.getpid(), datetime.datetime.now())
         try:
             _ensure_directory(os.path.dirname(caminho), avisos)
             arquivo_novo = not os.path.exists(caminho)

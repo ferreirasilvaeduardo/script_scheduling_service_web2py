@@ -87,10 +87,10 @@ def build(cfg, segredos, ticket, ambiente, script_real, work_dir_ticket, environ
     (relogio do banco, devolvido pelo claim) e scheduled_at; ambiente: dict com nome, descricao e conexao
     (tbsss_environments); script_real: o caminho resolvido pelo path_guard; environ_daemon: o ambiente do daemon
     (so para TZ e env_passthrough); snapshot: o snapshot v4 (script_id, script_nome, interpretador);
-    agendamento: dict com nome e tipo_recorrencia da regra que gerou o ticket; caminho_log: o
-    .log.parcial aberto por executor.abrir_log; timeout_seg: o prazo efetivo; hostname e versao: do agente;
-    pasta_saida: a pasta de saida do ticket (CR-012), so quando o agente tem output_dir.
-    pasta_entrada: a pasta de entrada do script (CR-014), so quando o agente tem input_dir.
+    agendamento: dict com nome e tipo_recorrencia da regra que gerou o ticket; log_path: o
+    .log.parcial aberto por executor.open_log; timeout_seg: o prazo efetivo; hostname e versao: do agente;
+    output_dir: a pasta de saida do ticket (CR-012), so quando o agente tem output_dir.
+    input_dir: a pasta de entrada do script (CR-014), so quando o agente tem input_dir.
     """
     if plataforma_nome not in PLATFORMS:
         raise ValueError("Plataforma nao suportada: %s" % plataforma_nome)

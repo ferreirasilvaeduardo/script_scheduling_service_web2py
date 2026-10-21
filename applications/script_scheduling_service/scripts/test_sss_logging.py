@@ -38,7 +38,7 @@ class TestSSSLogging(unittest.TestCase):
         return cfg
 
     def test_handler_cria_caminho_por_minuto_e_permissoes(self):
-        """CR-005 D6 e CR-009: log em log_dir/interno/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log com 0750 e 0640."""
+        """CR-005 D6 e CR-009: log em log_dir/internal/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log com 0750 e 0640."""
         log_dir = os.path.join(self.tmp_dir, "logs")
         cfg = self._criar_cfg(log_dir)
 
@@ -58,9 +58,9 @@ class TestSSSLogging(unittest.TestCase):
         self.assertTrue(os.path.basename(log_path).startswith("sss_web_%d" % pid))
         self.assertTrue(log_path.endswith(".log"))
 
-        # Diretorio: interno/app/AAAA/MM/DD/HH/MI (CR-009: log sem ambiente fica em 'interno')
+        # Diretorio: internal/app/AAAA/MM/DD/HH/MI (CR-009: log sem ambiente fica em 'internal')
         partes = os.path.relpath(os.path.dirname(log_path), log_dir).split(os.sep)
-        self.assertEqual(partes[:2], ["interno", "app"])
+        self.assertEqual(partes[:2], ["internal", "app"])
         self.assertEqual(len(partes), 7)  # interno, app, AAAA, MM, DD, HH, MI
 
         # Permissoes: diretorio 0o750 e arquivo 0o640
@@ -151,17 +151,17 @@ class TestSSSLogging(unittest.TestCase):
             self.assertTrue(os.path.exists(caminho_1))
 
     def test_retencao_na_subida_e_na_troca(self):
-        """CR-005 R-d: apaga pastas interno/app/AAAA/MM/DD anteriores a retention_days dias."""
+        """CR-005 R-d: apaga pastas internal/app/AAAA/MM/DD anteriores a retention_days dias."""
         log_dir = os.path.join(self.tmp_dir, "logs")
         hoje = datetime.datetime(2026, 10, 16, 12, 0, 0)
 
-        # Cria estrutura de pastas antigas e recentes em log_dir/interno/app/
+        # Cria estrutura de pastas antigas e recentes em log_dir/internal/app/
         # Limite de 30 dias a partir de 2026-10-16 e 2026-09-16
-        pasta_expirada_1 = os.path.join(log_dir, "interno", "app", "2026", "08", "15", "10", "00")
-        pasta_expirada_2 = os.path.join(log_dir, "interno", "app", "2026", "09", "15", "23", "59")
-        pasta_limite = os.path.join(log_dir, "interno", "app", "2026", "09", "16", "00", "00")
-        pasta_recente = os.path.join(log_dir, "interno", "app", "2026", "10", "10", "12", "00")
-        pasta_nao_data = os.path.join(log_dir, "interno", "app", "2026", "temp", "teste")
+        pasta_expirada_1 = os.path.join(log_dir, "internal", "app", "2026", "08", "15", "10", "00")
+        pasta_expirada_2 = os.path.join(log_dir, "internal", "app", "2026", "09", "15", "23", "59")
+        pasta_limite = os.path.join(log_dir, "internal", "app", "2026", "09", "16", "00", "00")
+        pasta_recente = os.path.join(log_dir, "internal", "app", "2026", "10", "10", "12", "00")
+        pasta_nao_data = os.path.join(log_dir, "internal", "app", "2026", "temp", "teste")
 
         for p in (pasta_expirada_1, pasta_expirada_2, pasta_limite, pasta_recente, pasta_nao_data):
             os.makedirs(p, exist_ok=True)
@@ -186,7 +186,7 @@ class TestSSSLogging(unittest.TestCase):
             self.assertFalse(os.path.exists(pasta_expirada_1))
             self.assertFalse(os.path.exists(pasta_expirada_2))
             # Mes 08 ficou vazio, entao o diretorio do mes 08 deve sumir
-            self.assertFalse(os.path.exists(os.path.join(log_dir, "interno", "app", "2026", "08")))
+            self.assertFalse(os.path.exists(os.path.join(log_dir, "internal", "app", "2026", "08")))
 
             # Limite (30 dias exatos) e recente devem permanecer
             self.assertTrue(os.path.exists(pasta_limite))
@@ -230,7 +230,7 @@ class TestSSSLogging(unittest.TestCase):
     def test_falha_na_retencao_vira_warn_no_log(self):
         """Regressao (AGENTS §6): falha da retencao nao e engolida; vira WARN [action=RETENCAO]."""
         log_dir = os.path.join(self.tmp_dir, "logs")
-        antiga = os.path.join(log_dir, "interno", "app", "2000", "01", "01", "00", "00")
+        antiga = os.path.join(log_dir, "internal", "app", "2000", "01", "01", "00", "00")
         os.makedirs(antiga)
         with mock.patch("log_paths.shutil.rmtree", side_effect=PermissionError(13, "Permission denied")):
             logger = sss_logging.configure("sss_web", self._criar_cfg(log_dir))
@@ -242,7 +242,7 @@ class TestSSSLogging(unittest.TestCase):
         self.assertEqual(len(linhas), 2)
         self.assertIn(" WARNING ", linhas[0])
         self.assertIn("[agent=srv-test-01] [ticket=-] [action=RETENCAO]", linhas[0])
-        self.assertIn(os.path.join(log_dir, "interno", "app", "2000", "01", "01"), linhas[0])
+        self.assertIn(os.path.join(log_dir, "internal", "app", "2000", "01", "01"), linhas[0])
         self.assertIn("primeira linha", linhas[1])
         self.assertTrue(os.path.isdir(antiga))
 

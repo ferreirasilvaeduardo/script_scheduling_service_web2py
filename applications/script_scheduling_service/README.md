@@ -886,8 +886,8 @@ UPDATE {owner}.tbsss_tickets
 
 **No agente dono:** a cada `cancel_poll_interval_s`, executa a varredura combinada da §8.7. Ao encontrar `cancel_requested = 'Y'` em ticket próprio:
 
-1. Iniciar o encerramento do grupo pela máquina de estados do §8.7 (CR-007, R-02 e R-04): `sinalizar_grupo(execucao, SIGTERM)` pela camada de plataforma (§8.0; fora de DEV, pelo helper `term`), **sem esperar** no laço.
-2. Nos ciclos seguintes, conferir com `coletar` (`Popen.poll()`); passado `kill_grace_s` sem o processo terminar, `sinalizar_grupo(execucao, SIGKILL)` (helper `kill`). Nunca `Popen.wait()` bloqueante (AGENTS §3.2).
+1. Iniciar o encerramento do grupo pela máquina de estados do §8.7 (CR-007, R-02 e R-04): `signal_group(execucao, SIGTERM)` pela camada de plataforma (§8.0; fora de DEV, pelo helper `term`), **sem esperar** no laço.
+2. Nos ciclos seguintes, conferir com `coletar` (`Popen.poll()`); passado `kill_grace_s` sem o processo terminar, `signal_group(execucao, SIGKILL)` (helper `kill`). Nunca `Popen.wait()` bloqueante (AGENTS §3.2).
 3. Com o processo coletado, encerrar o restante do grupo (R-02 do CR-007) e gravar `.sss_result` antes do `UPDATE` (§8.7).
 4. Fazer o flush final do log (§8.10).
 5. `UPDATE ... SET status = 'CANCELLED', status_reason = 'CANCEL_USER', return_code = -1, finished_at = SYSDATE, updated_at = SYSDATE, updated_by = :actor WHERE id = :id AND agent_id = :agent_id AND status = 'RUNNING'`, com `:actor = 'SYSTEM:<agent_id>'`, seguido de `COMMIT`.
@@ -1091,8 +1091,8 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 * **Tipos em `respostas`:** os valores são os resolvidos e normalizados (§6.2). Opcional sem valor fica `null`, `CHECKBOX` é booleano JSON (`true`/`false`) e os demais tipos são string. Os valores sensíveis ficam no snapshot (o banco é o único lugar onde ficam visíveis, §6.5 "Parâmetros sensíveis").
 * **`sensiveis`:** lista os códigos de **todos** os parâmetros sensíveis vinculados, mesmo os que ficaram sem valor.
 * **Versão 2 (CR-001):** o snapshot não guarda mais caminho absoluto nem executável do nó que o compilou. O agente revalida `interpreter` contra a allowlist e o próprio mapeamento, resolve `path_file` pelo `path_guard` local e monta o `argv` (§6.4, §8.4).
-* **Versão 3 (CR-003, várias pastas base):** acrescentava `pasta_base`, o nome lógico da pasta onde o script ficava.
-* **Versão 4 (CR-005, caminho livre):** sai `pasta_base`; `path_file` é o caminho **absoluto** cadastrado. O agente o confere pelo `path_guard` local (§8.5) e monta o `argv` (§6.4, §8.4). O executável do interpretador continua fora do snapshot.
+* **Versão 3 (CR-003, várias pastas base):** acrescentava `base_dir`, o nome lógico da pasta onde o script ficava.
+* **Versão 4 (CR-005, caminho livre):** sai `base_dir`; `path_file` é o caminho **absoluto** cadastrado. O agente o confere pelo `path_guard` local (§8.5) e monta o `argv` (§6.4, §8.4). O executável do interpretador continua fora do snapshot.
 * Snapshots das versões 1 a 3 foram gerados apenas em DEV/FAKE e não são aceitos pelo agente. O claim os rejeita com `PRECHECK_FAILED`.
 
 * O snapshot é **compilado na criação do ticket** (manual ou desdobro). O agente **nunca** recompila nem lê `tbsss_script_param` e `tbsss_parameters` para executar.
@@ -1424,20 +1424,20 @@ O daemon chama apenas a interface abaixo, implementada em `posix.py` (Linux e de
 
 | Operação | Implementação POSIX |
 |---|---|
-| `iniciar_processo` (§8.4) | Fora de DEV: `Popen` do `sudo -n -u <usuário de execução> -- /opt/sss/bin/sss-helper run`, com `start_new_session=True`, a especificação da execução pela entrada padrão e o log como stdout/stderr. Em DEV sem usuário de execução: `Popen(argv, start_new_session=True, preexec_fn=_child_limits)`, com `umask(0o077)` e `setrlimit` |
-| `sinalizar_grupo(execucao, sinal)` (não bloqueante) | Fora de DEV: `sudo -n -u <usuário> -- /opt/sss/bin/sss-helper term|kill <pgid> <process_start>`. Em DEV: `os.killpg`. **Nunca espera:** a escalada SIGTERM → `kill_grace_s` → SIGKILL → coleta é uma máquina de estados do laço (§8.1, §8.9) |
-| `coletar(execucao)` | `Popen.poll()` para o filho direto. Grupo que **não** é filho do daemon (startup check) é acompanhado por `processo_existe` + identidade, sem `wait()` |
-| `identidade_processo(pid)` (contra PID reciclado) | Linux: `starttime` de `/proc/<pid>/stat` (campo 22, após o último `)`). Outros Unix: `/proc/<pid>/psinfo` ou `sysctl KERN_PROC`, sempre sem `ctypes` (AGENTS §3.2). Onde a leitura não for possível assim, devolve `None` (identidade desconhecida) |
-| `processo_existe(pid)` | `os.kill(pid, 0)`; `EPERM` (processo de outro usuário) conta como existente |
-| `travar_instancia(caminho)` | `fcntl.flock(LOCK_EX \| LOCK_NB)` |
-| `usuario_privilegiado()` | `os.geteuid() == 0` |
-| `validar_arquivo_restrito(caminho)` (segredos, §4.1) | Dono = euid e `mode & 0o077 == 0` |
-| `validar_caminho_script` (§8.5, CR-011) | Arquivo real (o caminho pode ter link simbólico): existe, é regular e não é gravável por grupo nem por outros |
-| `validar_execucao()` (CR-007, D1) | Na subida, fora de DEV: o helper existe, tem dono root, modo `0755` e pasta só gravável pelo root; `sudo -n -l` do usuário do agente mostra a regra do helper para cada usuário de execução; cada usuário de execução existe, não é root e não é o usuário do agente; `exec_work_dir/<usuário>` existe, pertence ao usuário de execução e tem modo `0700` |
-| `criar_dir_trabalho` (§8.4) | `work_dir/ticket_<id>/` do agente com `0700` (estado local). O diretório de trabalho do script é criado pelo helper |
-| `iniciar_empacotar`, `limpar_saida`, `purgar_saida` (CR-012, §8.13) | Subcomandos `pack`, `clean-output` e `purge-output` do helper: fora de DEV, pelo `sudo` com o usuário de execução; em DEV, a cópia do pacote (`bin/sss-helper`) com o próprio usuário, pela mesma implementação. `iniciar_empacotar` não espera: devolve o processo para o laço acompanhar |
-| `criar_pasta_saida` (CR-012) | Só em DEV sem usuário de execução: cria a pasta de saída do ticket nível a nível com `0700`, recusando link |
-| `validar_pastas_saida` (CR-012) | Na subida, fora de DEV: `output_dir/<ambiente>` de cada ambiente atendido existe, é diretório, pertence ao usuário de execução e não tem escrita de grupo nem de outros |
+| `start_process` (§8.4) | Fora de DEV: `Popen` do `sudo -n -u <usuário de execução> -- /opt/sss/bin/sss-helper run`, com `start_new_session=True`, a especificação da execução pela entrada padrão e o log como stdout/stderr. Em DEV sem usuário de execução: `Popen(argv, start_new_session=True, preexec_fn=_child_limits)`, com `umask(0o077)` e `setrlimit` |
+| `signal_group(execucao, sinal)` (não bloqueante) | Fora de DEV: `sudo -n -u <usuário> -- /opt/sss/bin/sss-helper term|kill <pgid> <process_start>`. Em DEV: `os.killpg`. **Nunca espera:** a escalada SIGTERM → `kill_grace_s` → SIGKILL → coleta é uma máquina de estados do laço (§8.1, §8.9) |
+| `coletar(execucao)` | `Popen.poll()` para o filho direto. Grupo que **não** é filho do daemon (startup check) é acompanhado por `process_exists` + identidade, sem `wait()` |
+| `process_identity(pid)` (contra PID reciclado) | Linux: `starttime` de `/proc/<pid>/stat` (campo 22, após o último `)`). Outros Unix: `/proc/<pid>/psinfo` ou `sysctl KERN_PROC`, sempre sem `ctypes` (AGENTS §3.2). Onde a leitura não for possível assim, devolve `None` (identidade desconhecida) |
+| `process_exists(pid)` | `os.kill(pid, 0)`; `EPERM` (processo de outro usuário) conta como existente |
+| `lock_instance(caminho)` | `fcntl.flock(LOCK_EX \| LOCK_NB)` |
+| `is_privileged_user()` | `os.geteuid() == 0` |
+| `validate_restricted_file(caminho)` (segredos, §4.1) | Dono = euid e `mode & 0o077 == 0` |
+| `validate_script_path` (§8.5, CR-011) | Arquivo real (o caminho pode ter link simbólico): existe, é regular e não é gravável por grupo nem por outros |
+| `validate_execution()` (CR-007, D1) | Na subida, fora de DEV: o helper existe, tem dono root, modo `0755` e pasta só gravável pelo root; `sudo -n -l` do usuário do agente mostra a regra do helper para cada usuário de execução; cada usuário de execução existe, não é root e não é o usuário do agente; `exec_work_dir/<usuário>` existe, pertence ao usuário de execução e tem modo `0700` |
+| `create_work_dir` (§8.4) | `work_dir/ticket_<id>/` do agente com `0700` (estado local). O diretório de trabalho do script é criado pelo helper |
+| `start_pack`, `clean_output`, `purge_output` (CR-012, §8.13) | Subcomandos `pack`, `clean-output` e `purge-output` do helper: fora de DEV, pelo `sudo` com o usuário de execução; em DEV, a cópia do pacote (`bin/sss-helper`) com o próprio usuário, pela mesma implementação. `start_pack` não espera: devolve o processo para o laço acompanhar |
+| `create_output_dir` (CR-012) | Só em DEV sem usuário de execução: cria a pasta de saída do ticket nível a nível com `0700`, recusando link |
+| `validate_output_dirs` (CR-012) | Na subida, fora de DEV: `output_dir/<ambiente>` de cada ambiente atendido existe, é diretório, pertence ao usuário de execução e não tem escrita de grupo nem de outros |
 | Parada | SIGTERM/SIGINT acionam a flag |
 
 **Helper `sss-helper` (CR-007, D1).** É a única forma de o agente agir como o usuário de execução:
@@ -1572,17 +1572,17 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
    * **pasta de entrada (CR-014):** com `[agent] input_dir`, `input_dir/<ambiente>/<pasta do script>/`, criada se não existir (§8.14).
    * **pasta de saída (CR-012):** com `[agent] output_dir`, `output_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, com as mesmas partes do passo 3. Fora de DEV, criada pelo helper `run` como o usuário de execução, com `0700` (§8.13); em DEV, pelo agente.
 3. **Arquivo de log de execução (CR-005, D5; CR-009):**
-   * pasta: `log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/`, com a data e a hora de `started_at` (relógio do banco, devolvido pelo claim), a **pasta do ambiente** (CR-009, obrigatória: o nome do ambiente do ticket em minúsculo, sem acento, sem espaço e sem caractere especial, `pastas_log.pasta_ambiente`; ambiente vazio impede o spawn) e a **pasta do script** = forma segura do nome do script (`pastas_log.pasta_script`: sem acento, minúsculo, cada sequência fora de `[a-z0-9._-]` vira `_`, sem `.` ou `_` nas pontas; vazio vira `script_<id>`). Ex.: `log_dir/producao/carga_diaria/2026/10/16/14/05/`;
+   * pasta: `log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/`, com a data e a hora de `started_at` (relógio do banco, devolvido pelo claim), a **pasta do ambiente** (CR-009, obrigatória: o nome do ambiente do ticket em minúsculo, sem acento, sem espaço e sem caractere especial, `log_paths.environment_dir`; ambiente vazio impede o spawn) e a **pasta do script** = forma segura do nome do script (`log_paths.script_dir`: sem acento, minúsculo, cada sequência fora de `[a-z0-9._-]` vira `_`, sem `.` ou `_` nas pontas; vazio vira `script_<id>`). Ex.: `log_dir/producao/carga_diaria/2026/10/16/14/05/`;
    * criada nível a nível com `0750` (cada pasta nova da cadeia `<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI` recebe `chmod 0750`, porque o `makedirs` só aplica o modo à pasta final e sempre sob a `umask` 077 do launcher; o mesmo vale para o log da aplicação, §13);
    * o arquivo é aberto **antes** do spawn como `ticket_<id>.log.parcial`, com `os.open(path, O_WRONLY | O_CREAT | O_EXCL | O_APPEND, 0o600)`;
    * logo depois do `Popen`, é renomeado (`os.rename`, atômico no mesmo diretório; o descritor continua válido) para **`ticket_<id>_<PID>.log`**, com o PID do processo do script. Ex.: `log_dir/producao/carga_diaria/2026/10/16/14/05/ticket_41_12345.log`;
    * se o spawn falhar (`SPAWN_ERROR`), o agente grava a causa no arquivo e o renomeia para `ticket_<id>_0.log`;
    * o arquivo pertence ao usuário do agente; o script recebe só o descritor, como stdout e stderr.
-4. **Spawn** (`platform.iniciar_processo`, §8.0).
+4. **Spawn** (`os_platform.start_process`, §8.0).
 
    **Releitura do cancelamento (CR-007, R-28):** imediatamente antes do spawn, o agente lê `cancel_requested` pela PK, sem lock. Se for `Y`, finaliza `CANCELLED`/`CANCEL_USER`/`-1` sem iniciar o script.
 
-   **Marcador de spawn (CR-008, R-01):** depois da releitura e **imediatamente antes** do `Popen`, o agente grava `work_dir/ticket_<id>/.sss_spawn` (JSON com `ticket_id`, `usuario_execucao` e o instante monotônico e de parede; arquivo temporário + `rename`, `0600`). A partir daí, o ticket é "talvez iniciado" até o `.sss_proc` existir: nunca volta à fila. Se a gravação do marcador falhar, o ticket é finalizado `SPAWN_ERROR` sem spawn.
+   **Marcador de spawn (CR-008, R-01):** depois da releitura e **imediatamente antes** do `Popen`, o agente grava `work_dir/ticket_<id>/.sss_spawn` (JSON com `ticket_id`, `exec_user` e o instante monotônico e de parede; arquivo temporário + `rename`, `0600`). A partir daí, o ticket é "talvez iniciado" até o `.sss_proc` existir: nunca volta à fila. Se a gravação do marcador falhar, o ticket é finalizado `SPAWN_ERROR` sem spawn.
 
    Fora de DEV, pelo helper e com o usuário de execução do ambiente:
 
@@ -1621,14 +1621,14 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
    ```
    **Qualquer** exceção no spawn (não só `OSError`; por exemplo, `UnicodeEncodeError` num processo sem UTF-8) leva a `FAILED` com `SPAWN_ERROR` e `-4`, com a linha `[SSS]` no log (CR-007, R-17).
 
-   **Exceção depois do `Popen` (CR-008, R-01):** se o `Popen` retornou e qualquer passo seguinte falhar antes do `register_pid` (escrita na entrada padrão do helper, `rename` do log, leitura da identidade, gravação do `.sss_proc`), o agente encerra o grupo de `p.pid` (`sinalizar_grupo` SIGTERM e, na máquina de estados, SIGKILL; o processo continua no mapa local até ser coletado) e só então finaliza `SPAWN_ERROR`. O script nunca fica vivo sem registro local.
-5. **Instante de início:** renomear o log (passo 3), ler `platform.identidade_processo(pid)` (`starttime` no Linux; §8.0), gravar **`work_dir/ticket_<id>/.sss_proc`** (JSON com `ticket_id`, `pid`, `pgid`, `process_start` e `usuario_execucao`; arquivo temporário + `rename`, `0600`) **antes** do banco (CR-007, R-01) e então:
+   **Exceção depois do `Popen` (CR-008, R-01):** se o `Popen` retornou e qualquer passo seguinte falhar antes do `register_pid` (escrita na entrada padrão do helper, `rename` do log, leitura da identidade, gravação do `.sss_proc`), o agente encerra o grupo de `p.pid` (`signal_group` SIGTERM e, na máquina de estados, SIGKILL; o processo continua no mapa local até ser coletado) e só então finaliza `SPAWN_ERROR`. O script nunca fica vivo sem registro local.
+5. **Instante de início:** renomear o log (passo 3), ler `os_platform.process_identity(pid)` (`starttime` no Linux; §8.0), gravar **`work_dir/ticket_<id>/.sss_proc`** (JSON com `ticket_id`, `pid`, `pgid`, `process_start` e `exec_user`; arquivo temporário + `rename`, `0600`) **antes** do banco (CR-007, R-01) e então:
    ```sql
    UPDATE {owner}.tbsss_tickets
       SET process_id = :pid, process_start = :process_start
     WHERE id = :ticket_id AND agent_id = :agent_id AND status = 'RUNNING'
    ```
-   Se `rowcount = 0`, a posse foi perdida (por exemplo, `NODE_OFFLINE` durante o spawn): encerramento do grupo pela máquina de estados do executor (`pedir_encerramento`/`avancar_encerramento`, sem esperar) e ERROR `OWNERSHIP_LOST`. Se o `UPDATE` falhar por erro de banco, o ticket fica "PID pendente" no mapa local e o `UPDATE` é refeito a cada ciclo rápido até `rowcount` 1 ou 0 (CR-008, R-08); enquanto isso, o processo é acompanhado normalmente (heartbeat, cancelamento, timeout, fencing). O registro do PID é rotina técnica e não grava `updated_*` (§10, CR-006).
+   Se `rowcount = 0`, a posse foi perdida (por exemplo, `NODE_OFFLINE` durante o spawn): encerramento do grupo pela máquina de estados do executor (`request_stop`/`advance_stop`, sem esperar) e ERROR `OWNERSHIP_LOST`. Se o `UPDATE` falhar por erro de banco, o ticket fica "PID pendente" no mapa local e o `UPDATE` é refeito a cada ciclo rápido até `rowcount` 1 ou 0 (CR-008, R-08); enquanto isso, o processo é acompanhado normalmente (heartbeat, cancelamento, timeout, fencing). O registro do PID é rotina técnica e não grava `updated_*` (§10, CR-006).
 
 ### 8.5 Validação de interpretador e caminho (`path_guard.py`, CR-005, CR-011)
 
@@ -1647,7 +1647,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
   * sem `..` em nenhum ponto, sem `\` e sem caractere de controle;
   * até 500 caracteres.
 * **Pastas proibidas**, no caminho cadastrado e no real: dentro de `/bin`, `/sbin`, `/usr`, `/lib`, `/lib32`, `/lib64`, `/libx32`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev` ou `/root` é `SYSTEM_DIR`; dentro de `log_dir`, `work_dir`, `exec_work_dir`, `output_dir` ou `input_dir` é `SSS_DIR` (CR-014: o usuário de execução grava nas duas últimas, e um script guardado ali poderia ser trocado por outro script).
-* **O arquivo real** (`platform.validar_caminho_script`):
+* **O arquivo real** (`os_platform.validate_script_path`):
   * existe (`NOT_FOUND`; um ciclo de links também dá `NOT_FOUND`);
   * as pastas do caminho deixam o agente passar (`EACCES` é `NO_ACCESS`, diferente de `NOT_FOUND`);
   * é arquivo regular (`NOT_A_FILE`);
@@ -1892,7 +1892,7 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
 
 * **Códigos de saída por passo (F8.3b):** 10 usuário (root), 11 configuração (inclusive codificação e `child_locale`), 12 segredos, 13 diretórios, interpretadores e execução fora de DEV, 14 instância já em execução, 15 banco (driver, conexão, versão do esquema), 16 registro do agente (`agent_id` duplicado ou `critical_config` divergente), 17 ambientes atendidos inexistentes, 18 startup check, 19 mais de uma thread antes do primeiro spawn. Em qualquer falha, a trava de instância e a conexão são liberadas antes da saída.
 
-1. **Usuário:** `platform.usuario_privilegiado()` precisa ser falso. É proibido rodar como root.
+1. **Usuário:** `os_platform.is_privileged_user()` precisa ser falso. É proibido rodar como root.
 2. **Configuração:** carregar e validar o `config.ini` (tipos, faixas, invariantes da §8.9 e `max_parallel_jobs <= max_parallel_hard_limit`), o `owner` e o `table_prefix` (regex do `AGENTS.md`), e `agent_id` contra `^[A-Za-z0-9._-]{1,30}$`, sem ser `init_db`, `seed` nem `purge` (reservados para os atores do sistema, §4.4). Inclui as invariantes I1 a I4 (§8.9) e, fora de DEV, `exec_users` cobrindo todos os ambientes atendidos (CR-007, D1).
    **Aviso de configuração (CR-008):** um DSN descritor que passe da fórmula do §2.3 gera WARN `CONEXAO_ACIMA_DO_PRAZO` (R-17).
    **Codificação (CR-007, R-17):** `sys.getfilesystemencoding()` precisa ser UTF-8 (o launcher exporta `LANG`/`LC_ALL`, §12.2); `child_locale` precisa constar em `locale -a`. Falha: CRITICAL.
@@ -1900,14 +1900,14 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
 4. **Diretórios e interpretadores:**
    * `log_dir` e `work_dir` existem, são graváveis pelo agente e não ficam dentro das pastas do sistema (§8.5);
    * cada entrada de `[agent] interpreters` é uma chave da allowlist com caminho absoluto e executável, que passa por `path_guard.validate_executable` (§8.5);
-   * fora de DEV, `platform.validar_execucao()` (§8.0): helper, regra de sudoers, usuários de execução e `exec_work_dir`;
+   * fora de DEV, `os_platform.validate_execution()` (§8.0): helper, regra de sudoers, usuários de execução e `exec_work_dir`;
    * com `output_dir` (CR-012): fora de DEV, `output_dir/<ambiente>/` de cada ambiente atendido existe, é diretório, pertence ao usuário de execução do ambiente e não tem escrita de grupo nem de outros; em DEV, `output_dir` existe e é gravável pelo agente.
    * com `input_dir` (CR-014): a mesma conferência, para `input_dir/<ambiente>/` (CRITICAL `pasta de entrada: <falha>`).
-5. **Instância única por host:** `platform.travar_instancia` em `work_dir/sss-<agent_id>.lock`. Um arquivo `.stop` antigo é removido com WARN, para o daemon não parar logo depois de subir (CR-007, R-32).
+5. **Instância única por host:** `os_platform.lock_instance` em `work_dir/sss-<agent_id>.lock`. Um arquivo `.stop` antigo é removido com WARN, para o daemon não parar logo depois de subir (CR-007, R-32).
 6. **Banco:** selecionar o driver (§2.3; a sondagem roda aqui), conectar e confirmar o relógio do banco (`SELECT SYSDATE FROM DUAL`). WARN se o `SYSDATE` divergir do relógio local em mais de 60 s (§7.1). **Versão do esquema (CR-007, D4):** `SELECT schema_version FROM {owner}.tbsss_control WHERE id = 1` precisa ser igual a `sql_ident.SCHEMA_VERSION`; diferente ou ausente, CRITICAL com as duas versões.
 7. **Registro em `tbsss_agents`**, numa transação (CR-007, R-11):
    * travar a linha do mesmo `code` com `SELECT ... FOR UPDATE WAIT 5`. Sem linha, a inclusão pode disputar com outro processo: a violação de `uk_tbsss_agt_code` leva a `ROLLBACK` e a uma nova tentativa, que encontra a linha;
-   * recusar a subida (`agent_id` duplicado) se a linha estiver `ACTIVE` com `heartbeat_at` recente (menor que `node_offline_timeout_s`) e: `hostname` diferente, **ou** o mesmo `hostname` com um `daemon_pid` diferente do próprio que ainda existe (`platform.processo_existe`). Mesmo host com o PID antigo morto é a religação depois de uma queda, e segue;
+   * recusar a subida (`agent_id` duplicado) se a linha estiver `ACTIVE` com `heartbeat_at` recente (menor que `node_offline_timeout_s`) e: `hostname` diferente, **ou** o mesmo `hostname` com um `daemon_pid` diferente do próprio que ainda existe (`os_platform.process_exists`). Mesmo host com o PID antigo morto é a religação depois de uma queda, e segue;
    * caso contrário, executar `MERGE` com `status = 'ACTIVE'`, `hostname`, `daemon_pid`, `version`, `ambientes`, `platform`, `interpreters`, `started_at` e **`critical_config`** (abaixo). A inclusão grava `created_at = SYSDATE` e `created_by = 'SYSTEM:<agent_id>'`; a atualização grava `updated_*` com o mesmo ator (§10, CR-006).
    * Auditar `AGENT_START`.
    * **Configuração crítica igual em todos os nós (CR-007, R-23):** `critical_config` é o texto canônico `hb=<heartbeat_interval_s>;fence=<fence_timeout_s>;offline=<node_offline_timeout_s>;call=<call_timeout_s>;kill=<kill_grace_s>;misfire=<misfire_policy>;tol=<misfire_tolerance_s>;horizonte=<cron_horizon_days>;envelhecimento=<queue_aging_min>`. Se outro agente `ACTIVE` com heartbeat recente tiver um valor diferente, a subida é recusada com CRITICAL (as duas configurações no log). A cada ciclo do orquestrador a conferência se repete: divergência é ERROR `CONFIG_DIVERGENTE`, e a tela de agentes mostra (§13).
@@ -2093,7 +2093,7 @@ END;
 * PK `pk_tbsss_environments` · UK `uk_tbsss_env_name (name)`
 * **CK:**
   * `ck_tbsss_env_active`
-  * `ck_tbsss_env_name (REGEXP_LIKE(name, '^[A-Z0-9_]{1,30}$'))`; o nome `INTERNO` é reservado à pasta dos logs sem ambiente (CR-009) e é recusado pelo cadastro (`admin_environments_service`), sem constraint no banco
+  * `ck_tbsss_env_name (REGEXP_LIKE(name, '^[A-Z0-9_]{1,30}$'))`; o nome `INTERNAL` é reservado à pasta dos logs sem ambiente (CR-009) e é recusado pelo cadastro (`admin_environments_service`), sem constraint no banco
   * `ck_tbsss_env_connection (connection IS NULL OR INSTR(connection, '@') = 0)`
   * `ck_tbsss_env_upd` (colunas de registro, CR-006)
 * Trigger extra: `tr_tbsss_env_bu` (nome imutável)
@@ -2539,8 +2539,8 @@ END;
 ### 11.3 `scripts/purge.py` (retenção)
 
 * Roda no servidor do agente, com a conta Oracle de purge (`[retention] purge_user` e `[purge] password`, §4.1), e audita com o ator `SYSTEM:purge` (CR-007, R-21). Com `purge_user` vazio (só aceito em DEV), recusa rodar com o código 2.
-* **Uso (F9.1):** `python scripts/purge.py [--config <config.ini>] [--dry-run] [--target tickets|auditoria|logs_locais|saida|todos] [--export-audit <pasta>]`. O padrão é `todos`. O resumo vai para o stdout, uma linha por alvo, e o log para `log_dir/interno/app/.../purge_<PID>.log` (§13).
-* **Trava local:** fora do `--dry-run`, `platform.travar_instancia` em `work_dir/sss-purge.lock`. Com outro purge em execução no mesmo servidor, registra INFO e sai com 0, sem conectar.
+* **Uso (F9.1):** `python scripts/purge.py [--config <config.ini>] [--dry-run] [--target tickets|auditoria|logs_locais|saida|todos] [--export-audit <pasta>]`. O padrão é `todos`. O resumo vai para o stdout, uma linha por alvo, e o log para `log_dir/internal/app/.../purge_<PID>.log` (§13).
+* **Trava local:** fora do `--dry-run`, `os_platform.lock_instance` em `work_dir/sss-purge.lock`. Com outro purge em execução no mesmo servidor, registra INFO e sai com 0, sem conectar.
 * **Concessão no banco:** só um nó purga tickets e auditoria por vez. Antes, o purge toma a concessão:
   ```sql
   UPDATE {owner}.tbsss_control
@@ -2560,7 +2560,7 @@ END;
   Com `COMMIT` por lote, até `rowcount = 0`. A renovação da concessão vai na mesma transação do lote: se ela não achar mais este nó como dono (outro nó a tomou depois de vencida), o lote é desfeito, o purge registra ERROR e sai com 1.
 * `tbsss_ticket_answer` é removida em cascata, e `parent_ticket_id` dos filhos vira `NULL`. `tbsss_schedules.last_ticket_id` pode apontar para um ticket removido: o desdobro o trata como livre (§7.5).
 * `tbsss_audit` usa `audit_retention_days` e o mesmo padrão de lote. Com `--export-audit <pasta>`, as linhas de cada lote são gravadas antes em CSV (mesmo formato da exportação do §4.4, arquivo `0600`), para arquivamento (CR-007, R-22). Nesse caso, cada lote é lido com `FOR UPDATE`, gravado e sincronizado no disco (`auditoria_purge_AAAAMMDD_HHMMSS.csv`, pelo `db_now()`), e só então apagado pelo `id` das linhas gravadas e confirmado. A pasta precisa existir (senão, código 2).
-* **Logs de execução** (§8.4, passo 3): remove as pastas de minuto `log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/` cuja data é anterior a `local_log_retention_days` dias, e depois as pastas de hora, dia, mês, ano, script e ambiente que ficarem vazias. A data vem do próprio caminho, não do `mtime`. A pasta `log_dir/interno/` (logs da aplicação) nunca é tocada pelo purge (§13, CR-009). Só entram pastas cujo caminho tem o formato exato `<ambiente>/<pasta>/AAAA/MM/DD/HH/MI`; qualquer outra coisa em `log_dir` é ignorada. **Uma pasta que contém o log de um ticket ainda `RUNNING` é mantida** (CR-007, R-32). Esta etapa roda em todo agente, sem concessão.
+* **Logs de execução** (§8.4, passo 3): remove as pastas de minuto `log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/` cuja data é anterior a `local_log_retention_days` dias, e depois as pastas de hora, dia, mês, ano, script e ambiente que ficarem vazias. A data vem do próprio caminho, não do `mtime`. A pasta `log_dir/internal/` (logs da aplicação) nunca é tocada pelo purge (§13, CR-009). Só entram pastas cujo caminho tem o formato exato `<ambiente>/<pasta>/AAAA/MM/DD/HH/MI`; qualquer outra coisa em `log_dir` é ignorada. **Uma pasta que contém o log de um ticket ainda `RUNNING` é mantida** (CR-007, R-32). Esta etapa roda em todo agente, sem concessão.
 * **Pastas de saída** (CR-012, §8.13): com `output_dir`, remove as pastas de minuto de `output_dir/<ambiente>/...` mais antigas que `output_retention_days`, pela mesma regra de data no caminho. Fora de DEV, pelo helper `purge-output`, com o usuário de execução de cada ambiente atendido; ambiente sem pasta é pulado. Sem concessão. O limite usa a data do servidor do agente (o helper não recebe o instante do banco). No `--dry-run`, o helper só conta (`purge-output <base> <dias> contar`).
 * A execução é agendada pelo cron no servidor do agente e auditada como `PURGE`: **sempre** que obtém a concessão, uma linha por tabela (`tbsss_tickets` e `tbsss_audit`), com a contagem no `detail`, inclusive `0 linhas` (CR-008, R-16). Sem a concessão, não audita (outro nó audita a sua execução).
 * **Códigos de saída:** 0 sucesso (inclusive "outro nó está purgando" e "outro purge neste servidor"), 1 falha de banco (inclusive concessão perdida), 2 configuração inválida, 3 falha na remoção de logs locais ou de pastas de saída (os demais alvos seguem). O `scripts/health.py` alerta se não houver `PURGE` auditado nos últimos 2 dias (§13).
@@ -2625,7 +2625,7 @@ env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 log_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs
 level = INFO                      ; DEBUG | INFO | WARN | ERROR
 app_log_max_bytes = 10485760       ; troca de arquivo do log da aplicação (§13)
-app_log_retention_days = 30       ; pastas log_dir/interno/app/AAAA/MM/DD mais antigas são apagadas (§13)
+app_log_retention_days = 30       ; pastas log_dir/internal/app/AAAA/MM/DD mais antigas são apagadas (§13)
 max_log_size_bytes = 5242880
 max_local_log_size_bytes = 52428800
 local_log_retention_days = 30
@@ -2748,16 +2748,16 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
 
 ## 13. Observabilidade
 
-* **Pasta de ambiente no topo (CR-009):** todo log fica sob uma pasta de ambiente em `log_dir`: a do ambiente do ticket nos logs de execução dos scripts (obrigatória, §8.4 passo 3) ou `interno` nos logs sem ambiente, os da aplicação. O nome de ambiente `INTERNO` é reservado (§10, tabela 1).
+* **Pasta de ambiente no topo (CR-009):** todo log fica sob uma pasta de ambiente em `log_dir`: a do ambiente do ticket nos logs de execução dos scripts (obrigatória, §8.4 passo 3) ou `internal` nos logs sem ambiente, os da aplicação. O nome de ambiente `INTERNAL` é reservado (§10, tabela 1).
 * **Logs da aplicação (CR-005, D6):**
-  * Caminho: **`log_dir/interno/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log`**. O `<nome_log>` é o do processo: `sss_web` (nó web), `sss_scheduler` (daemon), `purge` e `init_db` (CLIs). O `<PID>` é o do próprio processo. Ex.: `log_dir/interno/app/2026/10/16/08/54/sss_web_4321.log`.
+  * Caminho: **`log_dir/internal/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log`**. O `<nome_log>` é o do processo: `sss_web` (nó web), `sss_scheduler` (daemon), `purge` e `init_db` (CLIs). O `<PID>` é o do próprio processo. Ex.: `log_dir/internal/app/2026/10/16/08/54/sss_web_4321.log`.
   * O arquivo nasce na pasta do minuto em que o processo sobe, pelo relógio local do processo (com o `TZ` do launcher). Cada processo (cada worker do WSGI) tem o próprio arquivo.
   * **Troca por tamanho:** ao atingir `app_log_max_bytes`, o processo fecha o arquivo e abre um novo na pasta do minuto **atual**. Se já existir um arquivo com o mesmo nome (mesmo minuto e mesmo PID), o novo ganha o sufixo `_<n>`: `sss_web_4321_2.log`.
-  * **Retenção:** o próprio processo apaga as pastas `log_dir/interno/app/AAAA/MM/DD` com data anterior a `app_log_retention_days` dias, na subida e a cada troca de arquivo, e depois as pastas de mês e de ano que ficarem vazias. Só entram pastas com o formato exato de data; o resto é ignorado. O `purge.py` nunca toca em `log_dir/interno/`.
+  * **Retenção:** o próprio processo apaga as pastas `log_dir/internal/app/AAAA/MM/DD` com data anterior a `app_log_retention_days` dias, na subida e a cada troca de arquivo, e depois as pastas de mês e de ano que ficarem vazias. Só entram pastas com o formato exato de data; o resto é ignorado. O `purge.py` nunca toca em `log_dir/internal/`.
   * **Falhas do próprio log** (remoção na retenção, `chmod` ou fechamento do arquivo anterior) não interrompem o processo: viram uma linha WARN no próprio arquivo, com `[action=RETENCAO]` ou `[action=LOG]`, antes do registro seguinte.
-  * O `log_dir` é criado com `0750` se não existir. Pastas criadas com `0750` (todas as que o processo cria: `interno/`, `app/`, ano, mês, dia, hora e minuto) e arquivos com `0640`, com `chmod` explícito, porque o launcher aplica `umask 077`.
+  * O `log_dir` é criado com `0750` se não existir. Pastas criadas com `0750` (todas as que o processo cria: `internal/`, `app/`, ano, mês, dia, hora e minuto) e arquivos com `0640`, com `chmod` explícito, porque o launcher aplica `umask 077`.
   * O log de acesso do próprio web2py (`httpserver.log`, na raiz do web2py) não segue este padrão; ele é do servidor embutido e fica fora do `log_dir`.
-  * **Logs de execução dos scripts** ficam em `log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log` (§8.4, passo 3). Nenhum script pode ter a pasta de log `app` (§8.5), regra mantida do CR-005, e nenhum ambiente pode gerar a pasta `interno` (CR-009).
+  * **Logs de execução dos scripts** ficam em `log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log` (§8.4, passo 3). Nenhum script pode ter a pasta de log `app` (§8.5), regra mantida do CR-005, e nenhum ambiente pode gerar a pasta `internal` (CR-009).
   * Formato: `%(asctime)s %(levelname)s [pid=%(process)d] [agent=<id>] [ticket=<id|->] [action=<CLAIM|SPAWN|HB|...>] %(message)s`, com data ISO local e offset.
 * **Níveis:**
 

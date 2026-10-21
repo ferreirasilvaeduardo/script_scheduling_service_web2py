@@ -24,28 +24,28 @@ class TestPastasLog(unittest.TestCase):
 
     def test_pasta_script_sanitizacao(self):
         # Acentos NFKD -> ASCII, minusculas, espacos e especiais viram '_'
-        self.assertEqual(log_paths.pasta_script(u"Carga Diária"), "carga_diaria")
-        self.assertEqual(log_paths.pasta_script(u"EXTRATOR DE RELATÓRIOS"), "extrator_de_relatorios")
-        self.assertEqual(log_paths.pasta_script(u"Carga / Processamento (v1.0)"), "carga_processamento_v1.0")
+        self.assertEqual(log_paths.script_dir(u"Carga Diária"), "carga_diaria")
+        self.assertEqual(log_paths.script_dir(u"EXTRATOR DE RELATÓRIOS"), "extrator_de_relatorios")
+        self.assertEqual(log_paths.script_dir(u"Carga / Processamento (v1.0)"), "carga_processamento_v1.0")
 
     def test_pasta_script_pontas_e_vazio(self):
         # Sem '.' ou '_' nas pontas
-        self.assertEqual(log_paths.pasta_script(u"..._carga_diaria_..."), "carga_diaria")
-        self.assertEqual(log_paths.pasta_script(u"___"), "script")
-        self.assertEqual(log_paths.pasta_script(u"", script_id=42), "script_42")
-        self.assertEqual(log_paths.pasta_script(None, script_id=10), "script_10")
-        self.assertEqual(log_paths.pasta_script(u""), "script")
+        self.assertEqual(log_paths.script_dir(u"..._carga_diaria_..."), "carga_diaria")
+        self.assertEqual(log_paths.script_dir(u"___"), "script")
+        self.assertEqual(log_paths.script_dir(u"", script_id=42), "script_42")
+        self.assertEqual(log_paths.script_dir(None, script_id=10), "script_10")
+        self.assertEqual(log_paths.script_dir(u""), "script")
 
     def test_nome_reservado_app(self):
         # D7: pasta 'app' e reservada para os logs da aplicacao
-        self.assertTrue(log_paths.nome_reservado("app"))
-        self.assertTrue(log_paths.nome_reservado("APP"))
-        self.assertTrue(log_paths.nome_reservado("App"))
-        self.assertTrue(log_paths.nome_reservado(u"  Ápp  "))
-        self.assertTrue(log_paths.nome_reservado("..app.."))
-        self.assertFalse(log_paths.nome_reservado("app_web"))
-        self.assertFalse(log_paths.nome_reservado("aplicacao"))
-        self.assertFalse(log_paths.nome_reservado("carga_diaria"))
+        self.assertTrue(log_paths.is_reserved_name("app"))
+        self.assertTrue(log_paths.is_reserved_name("APP"))
+        self.assertTrue(log_paths.is_reserved_name("App"))
+        self.assertTrue(log_paths.is_reserved_name(u"  Ápp  "))
+        self.assertTrue(log_paths.is_reserved_name("..app.."))
+        self.assertFalse(log_paths.is_reserved_name("app_web"))
+        self.assertFalse(log_paths.is_reserved_name("aplicacao"))
+        self.assertFalse(log_paths.is_reserved_name("carga_diaria"))
 
     # -----------------------------------------------------------------------
     # 2. Logs de execucao de tickets (CR-005 D5, R-a, R-b, README §8.4)
@@ -53,63 +53,63 @@ class TestPastasLog(unittest.TestCase):
 
     def test_diretorio_log_execucao(self):
         dt = datetime.datetime(2026, 4, 5, 8, 9, 30)
-        d = log_paths.diretorio_log_execucao("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "PRODUCAO", u"Carga Diária", dt)
+        d = log_paths.run_log_dir("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "PRODUCAO", u"Carga Diária", dt)
         self.assertEqual(d, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/producao/carga_diaria/2026/04/05/08/09")
 
     def test_pasta_saida_com_as_partes_do_log(self):
         # CR-012 (README §8.13): base por ambiente e relativo no formato que o helper confere.
         dt = datetime.datetime(2026, 4, 5, 8, 9, 30)
-        base, rel = log_paths.pasta_saida("/srv/sss/output", "PRODUCAO", u"Carga Diária", dt, 41)
+        base, rel = log_paths.output_dir("/srv/sss/output", "PRODUCAO", u"Carga Diária", dt, 41)
         self.assertEqual((base, rel), ("/srv/sss/output/producao", "carga_diaria/2026/04/05/08/09/ticket_41"))
         self.assertEqual(os.path.join(base, os.path.dirname(rel)).replace("/srv/sss/output", "/x"),
-                         log_paths.diretorio_log_execucao("/x", "PRODUCAO", u"Carga Diária", dt))
-        self.assertEqual(log_paths.pasta_saida("/s", "HML", u"!!!", dt, 7, script_id=3)[1],
+                         log_paths.run_log_dir("/x", "PRODUCAO", u"Carga Diária", dt))
+        self.assertEqual(log_paths.output_dir("/s", "HML", u"!!!", dt, 7, script_id=3)[1],
                          "script_3/2026/04/05/08/09/ticket_7")
 
     def test_pasta_entrada_so_ambiente_e_script(self):
         # CR-014 (README §8.14): permanente, sem data nem ticket; nome do script minusculo, sem acento nem espaco.
-        self.assertEqual(log_paths.pasta_entrada("/srv/sss/input", "PRODUCAO", u"Carga Diária"),
+        self.assertEqual(log_paths.input_dir("/srv/sss/input", "PRODUCAO", u"Carga Diária"),
                          ("/srv/sss/input/producao", "carga_diaria"))
-        self.assertEqual(log_paths.pasta_entrada("/e", "HML", u"Extrator de Relatórios v2"),
+        self.assertEqual(log_paths.input_dir("/e", "HML", u"Extrator de Relatórios v2"),
                          ("/e/hml", "extrator_de_relatorios_v2"))
-        self.assertEqual(log_paths.pasta_entrada("/e", "HML", u"!!!", script_id=3), ("/e/hml", "script_3"))
+        self.assertEqual(log_paths.input_dir("/e", "HML", u"!!!", script_id=3), ("/e/hml", "script_3"))
 
     def test_ambiente_no_topo_obrigatorio_e_normalizado(self):
         # CR-009: pasta do ambiente antes de qualquer outra; minusculo, sem espaco nem especial.
         dt = datetime.datetime(2026, 4, 5, 8, 9, 30)
-        self.assertEqual(log_paths.pasta_ambiente("PRODUCAO"), "producao")
-        self.assertEqual(log_paths.pasta_ambiente("HOMOLOG_2"), "homolog_2")
-        self.assertEqual(log_paths.pasta_ambiente(u" Pré Produção! "), "pre_producao")
+        self.assertEqual(log_paths.environment_dir("PRODUCAO"), "producao")
+        self.assertEqual(log_paths.environment_dir("HOMOLOG_2"), "homolog_2")
+        self.assertEqual(log_paths.environment_dir(u" Pré Produção! "), "pre_producao")
         for vazio in (None, "", "   ", "!!!", u"\u00a7"):
             with self.assertRaises(ValueError):
-                log_paths.pasta_ambiente(vazio)
+                log_paths.environment_dir(vazio)
             with self.assertRaises(ValueError):
-                log_paths.diretorio_log_execucao("/l", vazio, "carga", dt)
-        for reservado in ("INTERNO", "interno", " Interno "):
+                log_paths.run_log_dir("/l", vazio, "carga", dt)
+        for reservado in ("INTERNAL", "internal", " Internal "):
             with self.assertRaises(ValueError):
-                log_paths.pasta_ambiente(reservado)
-            self.assertTrue(log_paths.ambiente_reservado(reservado))
-        self.assertFalse(log_paths.ambiente_reservado("PRODUCAO"))
-        self.assertFalse(log_paths.ambiente_reservado("INTERNO_2"))
-        self.assertFalse(log_paths.ambiente_reservado(""))
+                log_paths.environment_dir(reservado)
+            self.assertTrue(log_paths.is_reserved_environment(reservado))
+        self.assertFalse(log_paths.is_reserved_environment("PRODUCAO"))
+        self.assertFalse(log_paths.is_reserved_environment("INTERNAL_2"))
+        self.assertFalse(log_paths.is_reserved_environment(""))
 
     def test_nomes_log_execucao_parcial_e_final(self):
-        self.assertEqual(log_paths.nome_log_parcial(101), "ticket_101.log.parcial")
+        self.assertEqual(log_paths.partial_log_name(101), "ticket_101.log.parcial")
         # PID presente
-        self.assertEqual(log_paths.nome_log_execucao(101, pid=5432), "ticket_101_5432.log")
+        self.assertEqual(log_paths.run_log_name(101, pid=5432), "ticket_101_5432.log")
         # PID ausente ou zero (SPAWN_ERROR) -> ticket_<id>_0.log (R-b)
-        self.assertEqual(log_paths.nome_log_execucao(101, pid=0), "ticket_101_0.log")
-        self.assertEqual(log_paths.nome_log_execucao(101, pid=None), "ticket_101_0.log")
+        self.assertEqual(log_paths.run_log_name(101, pid=0), "ticket_101_0.log")
+        self.assertEqual(log_paths.run_log_name(101, pid=None), "ticket_101_0.log")
 
     def test_caminhos_completos_log_execucao(self):
         dt = datetime.datetime(2026, 10, 16, 14, 5, 0)
-        c_parcial = log_paths.caminho_log_parcial("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77)
+        c_parcial = log_paths.partial_log_path("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77)
         self.assertEqual(c_parcial, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/dev/carga/2026/10/16/14/05/ticket_77.log.parcial")
 
-        c_final = log_paths.caminho_log_execucao("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77, pid=1234)
+        c_final = log_paths.run_log_path("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77, pid=1234)
         self.assertEqual(c_final, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/dev/carga/2026/10/16/14/05/ticket_77_1234.log")
 
-        c_erro = log_paths.caminho_log_execucao("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77, pid=0)
+        c_erro = log_paths.run_log_path("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "DEV", "carga", dt, 77, pid=0)
         self.assertEqual(c_erro, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/dev/carga/2026/10/16/14/05/ticket_77_0.log")
 
     # -----------------------------------------------------------------------
@@ -118,28 +118,28 @@ class TestPastasLog(unittest.TestCase):
 
     def test_diretorio_e_nome_log_app(self):
         dt = datetime.datetime(2026, 10, 16, 8, 54, 0)
-        d = log_paths.diretorio_log_app("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", dt)
-        self.assertEqual(d, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/interno/app/2026/10/16/08/54")
+        d = log_paths.app_log_dir("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", dt)
+        self.assertEqual(d, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/internal/app/2026/10/16/08/54")
 
-        self.assertEqual(log_paths.nome_log_app("sss_web", 4321), "sss_web_4321.log")
-        self.assertEqual(log_paths.nome_log_app("sss_web.log", 4321), "sss_web_4321.log")
+        self.assertEqual(log_paths.app_log_name("sss_web", 4321), "sss_web_4321.log")
+        self.assertEqual(log_paths.app_log_name("sss_web.log", 4321), "sss_web_4321.log")
         # Sufixo de rotacao dentro do mesmo minuto (R-c)
-        self.assertEqual(log_paths.nome_log_app("sss_web", 4321, seq=2), "sss_web_4321_2.log")
-        self.assertEqual(log_paths.nome_log_app("sss_web", 4321, seq=3), "sss_web_4321_3.log")
+        self.assertEqual(log_paths.app_log_name("sss_web", 4321, seq=2), "sss_web_4321_2.log")
+        self.assertEqual(log_paths.app_log_name("sss_web", 4321, seq=3), "sss_web_4321_3.log")
 
     def test_caminho_log_app(self):
         dt = datetime.datetime(2026, 10, 16, 8, 54, 12)
-        c = log_paths.caminho_log_app("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "sss_web", 4321, dt)
-        self.assertEqual(c, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/interno/app/2026/10/16/08/54/sss_web_4321.log")
+        c = log_paths.app_log_path("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "sss_web", 4321, dt)
+        self.assertEqual(c, "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/internal/app/2026/10/16/08/54/sss_web_4321.log")
 
     def test_proximo_caminho_log_app_com_sufixo_rotacao(self):
         # R-c: colisoes dentro do mesmo minuto e PID geram _2, _3, ...
         dt = datetime.datetime(2026, 10, 16, 8, 54, 0)
-        d = log_paths.diretorio_log_app(self.tmp, dt)
+        d = log_paths.app_log_dir(self.tmp, dt)
         os.makedirs(d)
 
         # Sem arquivo existente -> nome padrao
-        c1 = log_paths.proximo_caminho_log_app(self.tmp, "sss_web", 4321, dt)
+        c1 = log_paths.next_app_log_path(self.tmp, "sss_web", 4321, dt)
         self.assertEqual(c1, os.path.join(d, "sss_web_4321.log"))
 
         # Cria o primeiro arquivo
@@ -147,7 +147,7 @@ class TestPastasLog(unittest.TestCase):
             f.write("log 1\n")
 
         # Proximo deve ser _2
-        c2 = log_paths.proximo_caminho_log_app(self.tmp, "sss_web", 4321, dt)
+        c2 = log_paths.next_app_log_path(self.tmp, "sss_web", 4321, dt)
         self.assertEqual(c2, os.path.join(d, "sss_web_4321_2.log"))
 
         # Cria o segundo arquivo
@@ -155,7 +155,7 @@ class TestPastasLog(unittest.TestCase):
             f.write("log 2\n")
 
         # Proximo deve ser _3
-        c3 = log_paths.proximo_caminho_log_app(self.tmp, "sss_web", 4321, dt)
+        c3 = log_paths.next_app_log_path(self.tmp, "sss_web", 4321, dt)
         self.assertEqual(c3, os.path.join(d, "sss_web_4321_3.log"))
 
     # -----------------------------------------------------------------------
@@ -163,53 +163,53 @@ class TestPastasLog(unittest.TestCase):
     # -----------------------------------------------------------------------
 
     def test_parse_data_dia(self):
-        self.assertEqual(log_paths.parse_data_dia("2026", "10", "16"), datetime.date(2026, 10, 16))
-        self.assertEqual(log_paths.parse_data_dia("2026", "02", "28"), datetime.date(2026, 2, 28))
+        self.assertEqual(log_paths.parse_day_date("2026", "10", "16"), datetime.date(2026, 10, 16))
+        self.assertEqual(log_paths.parse_day_date("2026", "02", "28"), datetime.date(2026, 2, 28))
         # Formatos invalidos ou datas inexistentes
-        self.assertIsNone(log_paths.parse_data_dia("26", "10", "16"))
-        self.assertIsNone(log_paths.parse_data_dia("2026", "13", "01"))
-        self.assertIsNone(log_paths.parse_data_dia("2026", "02", "30"))
-        self.assertIsNone(log_paths.parse_data_dia("ano", "10", "16"))
+        self.assertIsNone(log_paths.parse_day_date("26", "10", "16"))
+        self.assertIsNone(log_paths.parse_day_date("2026", "13", "01"))
+        self.assertIsNone(log_paths.parse_day_date("2026", "02", "30"))
+        self.assertIsNone(log_paths.parse_day_date("ano", "10", "16"))
 
     def test_parse_data_minuto(self):
-        dt = log_paths.parse_data_minuto("2026", "10", "16", "14", "05")
+        dt = log_paths.parse_minute_date("2026", "10", "16", "14", "05")
         self.assertEqual(dt, datetime.datetime(2026, 10, 16, 14, 5))
         # Invalidos
-        self.assertIsNone(log_paths.parse_data_minuto("2026", "10", "16", "25", "00"))
-        self.assertIsNone(log_paths.parse_data_minuto("2026", "10", "16", "14", "60"))
-        self.assertIsNone(log_paths.parse_data_minuto("2026", "10", "16", "14", "cinco"))
+        self.assertIsNone(log_paths.parse_minute_date("2026", "10", "16", "25", "00"))
+        self.assertIsNone(log_paths.parse_minute_date("2026", "10", "16", "14", "60"))
+        self.assertIsNone(log_paths.parse_minute_date("2026", "10", "16", "14", "cinco"))
 
     def test_limpar_retencao_app(self):
         hoje = datetime.date(2026, 10, 16)
         # 30 dias de retencao: limite = 2026-09-16.
         # 2026-09-15 deve ser removido.
         # 2026-09-16 e 2026-10-01 devem ser preservados.
-        p_antiga = os.path.join(self.tmp, "interno", "app", "2026", "09", "15", "10", "00")
-        p_limite = os.path.join(self.tmp, "interno", "app", "2026", "09", "16", "10", "00")
-        p_recente = os.path.join(self.tmp, "interno", "app", "2026", "10", "01", "10", "00")
-        p_invalida = os.path.join(self.tmp, "interno", "app", "2026", "temp", "teste")
+        p_antiga = os.path.join(self.tmp, "internal", "app", "2026", "09", "15", "10", "00")
+        p_limite = os.path.join(self.tmp, "internal", "app", "2026", "09", "16", "10", "00")
+        p_recente = os.path.join(self.tmp, "internal", "app", "2026", "10", "01", "10", "00")
+        p_invalida = os.path.join(self.tmp, "internal", "app", "2026", "temp", "teste")
 
         for p in (p_antiga, p_limite, p_recente, p_invalida):
             os.makedirs(p, exist_ok=True)
             with open(os.path.join(p, "teste.log"), "w") as f:
                 f.write("dados")
 
-        removidos = log_paths.limpar_retencao_app(self.tmp, 30, ref_dt=hoje)
+        removidos = log_paths.clean_app_retention(self.tmp, 30, ref_dt=hoje)
         self.assertEqual(len(removidos), 1)
-        self.assertEqual(removidos[0], os.path.join(self.tmp, "interno", "app", "2026", "09", "15"))
+        self.assertEqual(removidos[0], os.path.join(self.tmp, "internal", "app", "2026", "09", "15"))
 
-        self.assertFalse(os.path.exists(os.path.join(self.tmp, "interno", "app", "2026", "09", "15")))
-        self.assertTrue(os.path.exists(os.path.join(self.tmp, "interno", "app", "2026", "09", "16")))
-        self.assertTrue(os.path.exists(os.path.join(self.tmp, "interno", "app", "2026", "10", "01")))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "internal", "app", "2026", "09", "15")))
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "internal", "app", "2026", "09", "16")))
+        self.assertTrue(os.path.exists(os.path.join(self.tmp, "internal", "app", "2026", "10", "01")))
         self.assertTrue(os.path.exists(p_invalida))
 
     def test_limpar_retencao_app_reporta_falhas(self):
         """Regressao (AGENTS §6): falha na remocao segue adiante e volta em `falhas`, sem ser engolida."""
-        p_antiga = os.path.join(self.tmp, "interno", "app", "2026", "09", "01", "10", "00")
-        p_antiga_2 = os.path.join(self.tmp, "interno", "app", "2026", "09", "02", "10", "00")
+        p_antiga = os.path.join(self.tmp, "internal", "app", "2026", "09", "01", "10", "00")
+        p_antiga_2 = os.path.join(self.tmp, "internal", "app", "2026", "09", "02", "10", "00")
         for p in (p_antiga, p_antiga_2):
             os.makedirs(p)
-        dia_1 = os.path.join(self.tmp, "interno", "app", "2026", "09", "01")
+        dia_1 = os.path.join(self.tmp, "internal", "app", "2026", "09", "01")
         rmtree_real = shutil.rmtree
 
         def rmtree_falha(caminho, *args, **kw):
@@ -219,15 +219,15 @@ class TestPastasLog(unittest.TestCase):
 
         falhas = []
         with mock.patch("log_paths.shutil.rmtree", side_effect=rmtree_falha):
-            removidos = log_paths.limpar_retencao_app(self.tmp, 30, ref_dt=datetime.date(2026, 10, 16),
+            removidos = log_paths.clean_app_retention(self.tmp, 30, ref_dt=datetime.date(2026, 10, 16),
                                                        falhas=falhas)
-        self.assertEqual(removidos, [os.path.join(self.tmp, "interno", "app", "2026", "09", "02")])
+        self.assertEqual(removidos, [os.path.join(self.tmp, "internal", "app", "2026", "09", "02")])
         self.assertEqual(len(falhas), 1)
         self.assertIn(dia_1, falhas[0])
         self.assertIn("Permission denied", falhas[0])
         # Sem a lista, a falha nao interrompe a retencao.
         with mock.patch("log_paths.shutil.rmtree", side_effect=OSError(5, "I/O error")):
-            self.assertEqual(log_paths.limpar_retencao_app(self.tmp, 30, ref_dt=datetime.date(2026, 10, 16)), [])
+            self.assertEqual(log_paths.clean_app_retention(self.tmp, 30, ref_dt=datetime.date(2026, 10, 16)), [])
 
     # -----------------------------------------------------------------------
     # Retencao dos logs de execucao (purge.py, README §11.3; CR-007 R-32; CR-009)
@@ -242,22 +242,22 @@ class TestPastasLog(unittest.TestCase):
         limite = self._minuto_exec("prod/carga/2026/09/21/23/59")  # exatamente ref - 30 dias: fica
         velha = self._minuto_exec("prod/carga/2026/09/20/23/59")
         for ref in (datetime.date(2026, 10, 21), datetime.datetime(2026, 10, 21, 0, 0, 1)):
-            elegiveis = log_paths.limpar_retencao_execucao(self.tmp, 30, ref, dry_run=True)
+            elegiveis = log_paths.clean_run_retention(self.tmp, 30, ref, dry_run=True)
             self.assertEqual(elegiveis, [velha], ref)
         self.assertTrue(os.path.isdir(velha), "dry_run nao remove")
-        self.assertEqual(log_paths.limpar_retencao_execucao(self.tmp, 30, datetime.date(2026, 10, 21)), [velha])
+        self.assertEqual(log_paths.clean_run_retention(self.tmp, 30, datetime.date(2026, 10, 21)), [velha])
         self.assertTrue(os.path.isdir(limite))
 
     def test_retencao_execucao_mantem_running_e_interno(self):
         running = self._minuto_exec("prod/carga/2026/01/01/10/00")
-        interno = self._minuto_exec("interno/app/2026/01/01/10/00")
+        internal = self._minuto_exec("internal/app/2026/01/01/10/00")
         falhas = []
-        removidas = log_paths.limpar_retencao_execucao(self.tmp, 30, datetime.date(2026, 10, 21),
+        removidas = log_paths.clean_run_retention(self.tmp, 30, datetime.date(2026, 10, 21),
                                                         manter=[running + os.sep], falhas=falhas)
         self.assertEqual((removidas, falhas), ([], []))
         self.assertTrue(os.path.isdir(running))
-        self.assertTrue(os.path.isdir(interno))
-        self.assertEqual(log_paths.minutos_de_execucao(self.tmp), [(running, datetime.datetime(2026, 1, 1, 10, 0))])
+        self.assertTrue(os.path.isdir(internal))
+        self.assertEqual(log_paths.run_minutes(self.tmp), [(running, datetime.datetime(2026, 1, 1, 10, 0))])
 
 
 if __name__ == "__main__":

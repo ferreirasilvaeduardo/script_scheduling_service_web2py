@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Testes do bin/sss-helper (README §8.0, AGENTS §7.4; CR-008 R-01 e R-36), executado direto com o proprio
-usuario (sem sudo): validacao de argumentos, identidade do grupo, pasta_base, limpeza sem seguir links e
+usuario (sem sudo): validacao de argumentos, identidade do grupo, base_dir, limpeza sem seguir links e
 o run com cwd, umask e entrada padrao nula."""
 import _testenv  # noqa: F401
 
@@ -179,7 +179,7 @@ class TestSssHelper(unittest.TestCase):
             self.assertEqual(helper._identidade(77), 22)
         self.assertIsNone(helper._identidade(2 ** 31 - 2))
 
-    # -- pasta_base -------------------------------------------------------------
+    # -- base_dir -------------------------------------------------------------
 
     def _pastas_invalidas(self):
         link = os.path.join(self.raiz, "link_base")
@@ -380,7 +380,7 @@ class TestSssHelper(unittest.TestCase):
         helper = _carregar_helper()
         dt = datetime.datetime(2026, 1, 2, 3, 4)
         for nome in (u"Carga Diária", u"-x-", u"a.b_c", u"!!!", u"x" * 60, u"Relatório 2026 (v2)"):
-            _base, rel = log_paths.pasta_saida("/s", "PRODUCAO", nome, dt, 99, script_id=5)
+            _base, rel = log_paths.output_dir("/s", "PRODUCAO", nome, dt, 99, script_id=5)
             self.assertEqual(len(helper._partes_relativo(rel)), 7, rel)
 
     def test_empacotar_so_arquivos_regulares_sem_seguir_links(self):

@@ -46,9 +46,9 @@ class _Proc(object):
 
 
 class _Plat(object):
-    SAIDA_VAZIA = 6
-    SAIDA_EXCEDE_ARQUIVOS = 7
-    SAIDA_EXCEDE_BYTES = 8
+    OUTPUT_EMPTY = 6
+    OUTPUT_TOO_MANY_FILES = 7
+    OUTPUT_TOO_MANY_BYTES = 8
 
     def __init__(self, conteudo=None, rc=0):
         self.conteudo = conteudo
@@ -57,17 +57,17 @@ class _Plat(object):
         self.limpas = []
         self.proc = None
 
-    def iniciar_empacotar(self, base, relativo, max_bytes, max_arquivos, fd, usuario):
+    def start_pack(self, base, relativo, max_bytes, max_arquivos, fd, usuario):
         if self.conteudo is not None:
             os.write(fd, self.conteudo)
         self.proc = _Proc(None)
         return self.proc
 
-    def sinalizar_grupo(self, processo, sinal):
+    def signal_group(self, processo, sinal):
         self.sinais.append(sinal)
         return True
 
-    def limpar_saida(self, base, relativo, usuario):
+    def clean_output(self, base, relativo, usuario):
         self.limpas.append((base, relativo, usuario))
 
 

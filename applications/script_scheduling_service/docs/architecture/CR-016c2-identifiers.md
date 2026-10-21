@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras) e 3b (services) concluídos em 2026-10-21 |
+| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras), 3b (services) e 4a (camada de processo) concluídos em 2026-10-21 |
 | Origem | Regra do README §2.8 (CR-016): funções, classes, métodos, constantes e variáveis em inglês |
 | Restrições | Sem dependência nova. Python 3.6. Sem mudança de esquema |
-| Blocos | 1 base (`sql_ident`, `sss_config`, `db_conn`, `sss_logging` e formato do log); 2 repositórios e chaves lógicas das entidades; 3 regras (3a) e services (3b); 4 daemon; 5 scripts e testes; passada final de parâmetros e variáveis locais |
+| Blocos | 1 base (`sql_ident`, `sss_config`, `db_conn`, `sss_logging` e formato do log); 2 repositórios e chaves lógicas das entidades; 3 regras (3a) e services (3b); 4 daemon (4a camada de processo, 4b laço do agente, 4c helper); 5 scripts e testes; passada final de parâmetros e variáveis locais |
 
 ---
 
@@ -1662,4 +1662,178 @@ Métodos mudaram em todas as classes que os definem, inclusive fakes de teste e 
 ## 9. Validação do bloco 3b
 
 * Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, percurso real das telas e conferência de resíduos.
-* Achados na conferência e corrigidos: código Python nas views chamando service pelo nome antigo (`admin_parameters_service.opcoes_em_pares` em `admin_parametros/form.html`, que daria erro 500 na tela de parâmetros); nomes reexportados lidos por outro módulo nos testes (`usr_mod.CAMPO_GERAL`, `agents_service.Limiares`); o atributo de sessão `session.sessao_epoch`, que a renomeação de métodos tinha alcançado, restaurado.
+* Achados na conferência e corrigidos: código Python nas views chamando service pelo nome antigo (`admin_parameters_service.opcoes_em_pares` em `admin_parametros/form.html`, que daria erro 500 na tela de parâmetros); nomes reexportados lidos por outro módulo nos testes (`usr_mod.CAMPO_GERAL`, `agents_service.Limiares`); o atributo de sessão `session.sessao_epoch`, que a renomeação de métodos tinha alcançado, restaurado. A declaração `global _padrao` dos 11 services não acompanhou a renomeação para `_default` (`UnboundLocalError` no login): os testes injetam o service e não passam por `_service()`, e só o percurso real pegou.
+
+## 10. Bloco 4a (camada de processo)
+
+Módulos `os_platform` (pacote e `posix`), `executor` e `log_paths`, com os atributos de instância de `Execution`, `Process`, `FailureAfterSpawn` e `_Lock`.
+
+Decisões aprovadas (2026-10-21):
+
+| # | Decisão | Resumo |
+|---|---|---|
+| D9 | Valores internos | Fases do executor `FIM` → `END` e `SEM_IDENTIDADE` → `NO_IDENTITY` (no 4b: estados da fase de saída e resultados do `log_pump`). Nada disso vai para o banco |
+| D10 | Marcadores | Chaves de `.sss_spawn`/`.sss_proc`: `usuario_execucao` → `exec_user`, `monotonico` → `monotonic`, `parede` → `wall`. Troca direta: atualizar o agente sem tickets `RUNNING` (DEPLOYMENT §18) |
+| D11 | Nomes físicos | `log_dir/interno/` → `log_dir/internal/`; o nome de ambiente reservado passa de `INTERNO` a `INTERNAL` (CR-009). No 4b: `saida.zip` → `output.zip` no `work_dir`; o nome do download para o usuário fica para o CR-016d |
+| D12 | Atributos de instância | Entram no bloco, conferidos contra homônimos (`fase` do `DDLItem` e `caminho` do `purge.py` ficaram de fora) |
+| D13 | Helper | Bloco 4c, só nomes internos |
+| D14 | Fora | Scripts de linha de comando e testes no bloco 5; parâmetros, locais e binds na passada final |
+
+O `os_platform` é usado também por um objeto que guarda o módulo (`self.plat`, `plat`) e por plataformas falsas nos testes (`_Plat(**trocas)`, que resolve por `__getattr__`); os acessos e as chaves dessas trocas mudaram junto.
+
+### `os_platform`
+
+| Antes | Depois |
+|---|---|
+| `CODIGO_NAO_SUPORTADO` | `UNSUPPORTED_CODE` |
+| `FalhaAposSpawn` | `FailureAfterSpawn` |
+| `HELPER_PACOTE` | `PACKAGE_HELPER` |
+| `InstanciaJaEmExecucao` | `InstanceAlreadyRunning` |
+| `NOME` | `NAME` |
+| `PASTAS_DO_SISTEMA` | `SYSTEM_DIRS` |
+| `Processo` | `Process` |
+| `RLIMITS_PADRAO` | `DEFAULT_RLIMITS` |
+| `SAIDA_EXCEDE_ARQUIVOS` | `OUTPUT_TOO_MANY_FILES` |
+| `SAIDA_EXCEDE_BYTES` | `OUTPUT_TOO_MANY_BYTES` |
+| `SAIDA_VAZIA` | `OUTPUT_EMPTY` |
+| `_RLIMITS_PERMITIDOS` | `_ALLOWED_RLIMITS` |
+| `_Trava` | `_Lock` |
+| `_argv_helper` | `_helper_argv` |
+| `_colher_pedidos_helper` | `_reap_helper_requests` |
+| `_dentro` | `_inside` |
+| `_executar_curto` | `_run_short` |
+| `_limites_do_filho` | `_child_limits` |
+| `_normalizar_locale` | `_normalize_locale` |
+| `_pedidos_helper` | `_helper_requests` |
+| `_pids_na_pasta` | `_pids_in_dir` |
+| `_starttime_linux` | `_linux_starttime` |
+| `_stat_codigo` | `_stat_code` |
+| `caminho_final` | `final_path` |
+| `criar_dir_trabalho` | `create_work_dir` |
+| `criar_pasta_entrada` | `create_input_dir` |
+| `criar_pasta_saida` | `create_output_dir` |
+| `eh_macos` | `is_macos` |
+| `encerrar_ticket` | `stop_ticket` |
+| `espaco_livre_mb` | `free_space_mb` |
+| `gravar_estado` | `write_state` |
+| `grupo_vivo` | `group_alive` |
+| `identidade_processo` | `process_identity` |
+| `iniciar_empacotar` | `start_pack` |
+| `iniciar_processo` | `start_process` |
+| `instalar_parada` | `install_stop_handler` |
+| `ler_estado` | `read_state` |
+| `liberar_instancia` | `release_instance` |
+| `limpar_dir_script` | `clean_script_dir` |
+| `limpar_saida` | `clean_output` |
+| `locale_disponivel` | `locale_available` |
+| `obter_lib_dir_oracle` | `get_oracle_lib_dir` |
+| `processo_existe` | `process_exists` |
+| `purgar_saida` | `purge_output` |
+| `reabrir_grupo` | `reopen_group` |
+| `sinalizar_grupo` | `signal_group` |
+| `travar_instancia` | `lock_instance` |
+| `usuario_privilegiado` | `is_privileged_user` |
+| `validar_arquivo_restrito` | `validate_restricted_file` |
+| `validar_caminho_script` | `validate_script_path` |
+| `validar_dir_restrito` | `validate_restricted_dir` |
+| `validar_execucao` | `validate_execution` |
+| `validar_interpretador_executavel` | `validate_interpreter_executable` |
+| `validar_pastas_saida` | `validate_output_dirs` |
+
+### `executor`
+
+| Antes | Depois |
+|---|---|
+| `DiretorioPreservado` | `PreservedDirectory` |
+| `Execucao` | `Execution` |
+| `FASE_FIM` | `PHASE_END` |
+| `FASE_KILL` | `PHASE_KILL` |
+| `FASE_SEM_IDENTIDADE` | `PHASE_NO_IDENTITY` |
+| `FASE_TERM` | `PHASE_TERM` |
+| `FIM` | `END` |
+| `GRACE_PADRAO_S` | `DEFAULT_GRACE_S` |
+| `MARCADORES` | `MARKERS` |
+| `SEM_IDENTIDADE` | `NO_IDENTITY` |
+| `_agente_do_rotulo` | `_agent_from_label` |
+| `_apos_spawn_falhou` | `_after_spawn_failed` |
+| `_falha_spawn` | `_spawn_failure` |
+| `_linha_sss` | `_sss_line` |
+| `_logs_abertos` | `_open_logs` |
+| `abrir_log` | `open_log` |
+| `anexar_linha_local` | `append_local_line` |
+| `avancar_encerramento` | `advance_stop` |
+| `especificacao` | `build_spec` |
+| `falha_antes_do_spawn` | `failure_before_spawn` |
+| `iniciar` | `start` |
+| `limpar` | `clean` |
+| `pedir_encerramento` | `request_stop` |
+| `preparar_diretorio` | `prepare_directory` |
+| `registrar_resultado` | `record_result` |
+| `traduzir_retorno` | `translate_return` |
+| `verificar` | `check` |
+
+### `log_paths`
+
+| Antes | Depois |
+|---|---|
+| `INTERNO (ambiente reservado)` | `INTERNAL` |
+| `PASTA_APP` | `APP_DIR` |
+| `PASTA_INTERNA` | `INTERNAL_DIR` |
+| `_RE_ANO` | `_RE_YEAR` |
+| `_RE_DOIS_DIGITOS` | `_RE_TWO_DIGITS` |
+| `_RE_FORA` | `_RE_OUTSIDE` |
+| `_subpastas` | `_subdirs` |
+| `ambiente_reservado` | `is_reserved_environment` |
+| `caminho_log_app` | `app_log_path` |
+| `caminho_log_execucao` | `run_log_path` |
+| `caminho_log_parcial` | `partial_log_path` |
+| `diretorio_log_app` | `app_log_dir` |
+| `diretorio_log_execucao` | `run_log_dir` |
+| `garantir_diretorio` | `ensure_directory` |
+| `interno (pasta)` | `internal` |
+| `limpar_retencao_app` | `clean_app_retention` |
+| `limpar_retencao_execucao` | `clean_run_retention` |
+| `minutos_de_execucao` | `run_minutes` |
+| `nome_log_app` | `app_log_name` |
+| `nome_log_execucao` | `run_log_name` |
+| `nome_log_parcial` | `partial_log_name` |
+| `nome_reservado` | `is_reserved_name` |
+| `parse_data_dia` | `parse_day_date` |
+| `parse_data_minuto` | `parse_minute_date` |
+| `partes_minuto` | `minute_parts` |
+| `pasta_ambiente` | `environment_dir` |
+| `pasta_entrada` | `input_dir` |
+| `pasta_saida` | `output_dir` |
+| `pasta_script` | `script_dir` |
+| `proximo_caminho_log_app` | `next_app_log_path` |
+
+### Métodos e atributos de instância
+
+| Antes | Depois |
+|---|---|
+| `caminho` | `path` |
+| `caminho_log` | `log_path` |
+| `causa` | `cause` |
+| `erro_spawn` | `spawn_error_info` |
+| `falhou_apos_spawn` | `failed_after_spawn` |
+| `fase` | `phase` |
+| `identidade` | `identity` |
+| `pasta_base` | `base_dir` |
+| `prazo_kill` | `kill_deadline` |
+| `processo` | `process` |
+| `sem_identidade` | `no_identity` |
+| `travado` | `stuck` |
+| `usuario_execucao` | `exec_user` |
+
+### Chaves dos marcadores
+
+| Antes | Depois |
+|---|---|
+| `monotonico` | `monotonic` |
+| `parede` | `wall` |
+| `usuario_execucao` | `exec_user` |
+
+## 11. Validação do bloco 4a
+
+* Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, percurso real das telas e conferência de resíduos.
+* Achados na conferência e corrigidos: funções definidas em `os_platform/__init__.py` (o nome do arquivo não é o do pacote, e a ferramenta não as achou); código Python em string rodado em subprocesso nos testes de trava de instância; lista de nomes da interface em `test_platform`; atributos de classe e chaves de plataformas falsas.

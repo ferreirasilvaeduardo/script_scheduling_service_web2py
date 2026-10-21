@@ -11,7 +11,7 @@ Roda no servidor do agente, agendado pelo cron, com a conta Oracle de purge ([re
   (a excecao do AGENTS §4.9), concessao renovada a cada lote e liberada no fim; uma linha PURGE por tabela,
   inclusive com 0 linhas. Sem a concessao: INFO e saida 0.
 * logs_locais: pastas de minuto de log_dir/<environment>/<script>/AAAA/MM/DD/HH/MI vencidas, menos as de tickets
-  RUNNING; nunca log_dir/interno/. Em todo agente, sem concessao.
+  RUNNING; nunca log_dir/internal/. Em todo agente, sem concessao.
 * saida: pastas de minuto de output_dir/<environment>/... vencidas, pelo helper purge-output. Sem concessao.
 * --dry-run: so SELECT e listagem; um unico agora_banco() para todos os limites; nada e travado nem gravado.
 
@@ -200,12 +200,12 @@ class Purge(object):
 
     def _logs_locais(self, agora, dry_run):
         log_dir = self.cfg.logging.log_dir
-        manter = [log_paths.diretorio_log_execucao(log_dir, amb, nome, inicio, script_id=sid)
+        manter = [log_paths.run_log_dir(log_dir, amb, nome, inicio, script_id=sid)
                   for amb, nome, sid, inicio in self.repo.running_for_logs(self.conn) if nome]
         falhas = []
-        pastas = log_paths.limpar_retencao_execucao(log_dir, self.cfg.logging.local_log_retention_days, agora,
+        pastas = log_paths.clean_run_retention(log_dir, self.cfg.logging.local_log_retention_days, agora,
                                                      manter=manter, dry_run=dry_run, falhas=falhas,
-                                                     caminho_final=self.plat.caminho_final)
+                                                     caminho_final=self.plat.final_path)
         for falha in falhas:
             self.log.error("retencao dos logs locais: %s", falha, extra=_EXTRA)
         self.log.info("logs locais: %d pastas de minuto %s (%d mantidas por ticket RUNNING)", len(pastas),
@@ -222,11 +222,11 @@ class Purge(object):
         usuarios = dict(agente.exec_users or ())
         total, ok = 0, True
         for amb in agente.environments:
-            base = os.path.join(agente.output_dir, log_paths.pasta_ambiente(amb))
+            base = os.path.join(agente.output_dir, log_paths.environment_dir(amb))
             if not os.path.isdir(base):
                 continue
             try:
-                total += self.plat.purgar_saida(base, self.cfg.logging.output_retention_days,
+                total += self.plat.purge_output(base, self.cfg.logging.output_retention_days,
                                                 usuarios.get(amb) or None, contar=dry_run)
             except (RuntimeError, OSError) as exc:
                 ok = False
@@ -279,8 +279,8 @@ def main(argv=None, conectar=None, plat=os_platform, saida=None):
     trava = None
     if not args.dry_run:
         try:
-            trava = plat.travar_instancia(os.path.join(cfg.agent.work_dir, NOME_TRAVA))
-        except os_platform.InstanciaJaEmExecucao:
+            trava = plat.lock_instance(os.path.join(cfg.agent.work_dir, NOME_TRAVA))
+        except os_platform.InstanceAlreadyRunning:
             logger.info("outro purge ja esta em execucao neste servidor (%s)", NOME_TRAVA, extra=_EXTRA)
             return SAIDA_OK
     try:
@@ -302,7 +302,7 @@ def main(argv=None, conectar=None, plat=os_platform, saida=None):
         return codigo
     finally:
         if trava is not None:
-            plat.liberar_instancia(trava)
+            plat.release_instance(trava)
 
 
 def _conectar(cfg, segredos):

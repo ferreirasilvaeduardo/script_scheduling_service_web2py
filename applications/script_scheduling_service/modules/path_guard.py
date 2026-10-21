@@ -21,7 +21,7 @@ FIXED_ARGS = {
     'SH': (),
 }
 # Pastas do sistema onde nenhum script pode ficar (README §8.5, CR-005 D3).
-SYSTEM_DIRS = os_platform.PASTAS_DO_SISTEMA
+SYSTEM_DIRS = os_platform.SYSTEM_DIRS
 # Tamanho maximo de path_file (coluna VARCHAR2(500 CHAR)).
 MAX_LENGTH = 500
 
@@ -79,8 +79,8 @@ def _inside(caminho, pasta):
 
 def check_forbidden_dirs(path_file, dirs_sss=()):
     """Recusa pastas do sistema e log_dir/work_dir, no caminho digitado e no resolvido (symlink)."""
-    sss = [os_platform.caminho_final(d) for d in dirs_sss if d]
-    for alvo in (path_file, os_platform.caminho_final(path_file)):
+    sss = [os_platform.final_path(d) for d in dirs_sss if d]
+    for alvo in (path_file, os_platform.final_path(path_file)):
         if any(_inside(alvo, d) for d in SYSTEM_DIRS):
             raise PathGuardError(Code.SYSTEM_DIR)
         if any(_inside(alvo, d) for d in sss):
@@ -106,10 +106,10 @@ def resolve(path_file, dirs_sss=()):
     """
     validate_registration(path_file)
     check_forbidden_dirs(path_file, dirs_sss)
-    codigo = os_platform.validar_caminho_script(path_file)
+    codigo = os_platform.validate_script_path(path_file)
     if codigo:
         raise PathGuardError(codigo)
-    return os_platform.caminho_final(path_file)
+    return os_platform.final_path(path_file)
 
 
 def validate_executable(caminho, dirs_sss=()):
@@ -119,14 +119,14 @@ def validate_executable(caminho, dirs_sss=()):
     NOT_FOUND ou INTERPRETADOR_INSEGURO."""
     if not isinstance(caminho, str) or caminho[:1] != '/' or os.path.normpath(caminho) != caminho:
         raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
-    real = os_platform.caminho_final(caminho)
+    real = os_platform.final_path(caminho)
     try:
         _stat(real)
     except PathGuardError as e:
         if e.codigo == Code.NOT_FOUND:
             raise
         raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
-    sss = [os_platform.caminho_final(d) for d in dirs_sss if d]
+    sss = [os_platform.final_path(d) for d in dirs_sss if d]
     if any(_inside(alvo, d) for alvo in (caminho, real) for d in sss):
         raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
     if not os.path.isfile(real) or not os.access(real, os.X_OK):

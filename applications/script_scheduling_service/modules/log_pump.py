@@ -75,7 +75,7 @@ class Bomba(object):
 
     def __init__(self, caminho_log, ticket_id, mascarador, max_log_size_bytes, max_local_log_size_bytes,
                  offset_confirmado_chars=0, unidade_suplementar=2):
-        self.caminho_log = caminho_log
+        self.log_path = caminho_log
         self.ticket_id = ticket_id
         self.max_log_size_bytes = int(max_log_size_bytes)
         self.max_local_log_size_bytes = int(max_local_log_size_bytes)
@@ -106,7 +106,7 @@ class Bomba(object):
 
     def _ler(self, maximo):
         # open padrao do Python no POSIX nao bloqueia a escrita do filho (O_RDONLY, sem trava).
-        with open(self.caminho_log, "rb") as f:
+        with open(self.log_path, "rb") as f:
             f.seek(self.offset_bytes)
             dados = f.read(maximo) if maximo is not None else f.read()
         self.offset_bytes += len(dados)
@@ -163,7 +163,7 @@ class Bomba(object):
     def excedeu_local(self):
         """Arquivo local acima de max_local_log_size_bytes (LOG_LIMIT, README §8.10)."""
         try:
-            return os.path.getsize(self.caminho_log) > self.max_local_log_size_bytes
+            return os.path.getsize(self.log_path) > self.max_local_log_size_bytes
         except OSError:  # arquivo ausente: nada a medir; a leitura registra o WARN
             return False
 

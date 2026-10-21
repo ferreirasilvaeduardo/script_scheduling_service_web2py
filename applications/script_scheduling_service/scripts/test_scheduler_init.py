@@ -227,13 +227,13 @@ class TestPassos(_Base):
         self.assertNotIn("SEM_EXIGENCIA_HASH", texto, "CR-011: sem hash")
         r = self.repo.registro
         self.assertEqual((r["code"], r["hostname"], r["version"], r["platform"], r["interpreters"]),
-                         ("srv-t", "host-t", sss_config.SSS_VERSION, os_platform.NOME, "SH"))
+                         ("srv-t", "host-t", sss_config.SSS_VERSION, os_platform.NAME, "SH"))
         self.assertEqual(r["critical_config"], "hb=10;fence=40;offline=120;call=30;kill=1;misfire=RUN_ONCE;tol=300;"
                                                "horizonte=366;envelhecimento=30")
         self.assertTrue(os.path.exists(os.path.join(self.work, "sss-srv-t.lock")))
 
     def test_root_recusado(self):
-        self.falha(sl.SAIDA_USUARIO, self.agente(plat=_Plat(usuario_privilegiado=lambda: True)))
+        self.falha(sl.SAIDA_USUARIO, self.agente(plat=_Plat(is_privileged_user=lambda: True)))
 
     def test_codificacao_e_locale(self):
         with mock.patch.object(sss_config.sys, "getfilesystemencoding", return_value="ascii"):
@@ -248,7 +248,7 @@ class TestPassos(_Base):
 
     def test_validar_execucao_fora_de_dev(self):
         cfg = self.cfg(sss_env="PROD", exec_work_dir=self.raiz)
-        plat = _Plat(validar_execucao=lambda *a, **k: ["helper /opt/sss/bin/sss-helper nao encontrado"])
+        plat = _Plat(validate_execution=lambda *a, **k: ["helper /opt/sss/bin/sss-helper nao encontrado"])
         saida = self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=cfg, plat=plat))
         self.assertTrue(any("helper /opt/sss/bin/sss-helper nao encontrado" in x for x in saida))
 
@@ -265,7 +265,7 @@ class TestPassos(_Base):
         def _pastas(pares):
             vistos.extend(pares)
             return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pares[0][0]]
-        plat = _Plat(validar_execucao=lambda *a, **k: [], validar_pastas_saida=_pastas)
+        plat = _Plat(validate_execution=lambda *a, **k: [], validate_output_dirs=_pastas)
         cfg = self.cfg(sss_env="PROD", exec_work_dir=self.raiz, exec_users=(("DEV", "exec1"),),
                        input_dir=entrada)
         logs = self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=cfg, plat=plat))
@@ -285,7 +285,7 @@ class TestPassos(_Base):
         def _pastas(pares):
             vistos.extend(pares)
             return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pares[0][0]]
-        plat = _Plat(validar_execucao=lambda *a, **k: [], validar_pastas_saida=_pastas)
+        plat = _Plat(validate_execution=lambda *a, **k: [], validate_output_dirs=_pastas)
         cfg = self.cfg(sss_env="PROD", exec_work_dir=self.raiz, exec_users=(("DEV", "exec1"),),
                        output_dir=saida)
         logs = self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=cfg, plat=plat))
@@ -300,7 +300,7 @@ class TestPassos(_Base):
         self.assertFalse(os.path.exists(stop))
         self.assertTrue(any(".stop antigo" in x for x in logs.output))
         codigo = ("import sys\nsys.path.insert(0, %r)\nimport os_platform\n"
-                  "try:\n    os_platform.travar_instancia(%r)\nexcept os_platform.InstanciaJaEmExecucao:\n"
+                  "try:\n    os_platform.lock_instance(%r)\nexcept os_platform.InstanceAlreadyRunning:\n"
                   "    sys.exit(7)\n" % (os.path.dirname(os.path.abspath(os_platform.__file__)) + "/..",
                                         os.path.join(self.work, "sss-srv-t.lock")))
         self.assertEqual(subprocess.call([sys.executable, "-c", codigo]), 7, "segunda instancia recusada")
@@ -359,9 +359,9 @@ class TestStartupCheck(_Base):
 
 
     def _pasta(self, tid, **estados):
-        pasta = executor.preparar_diretorio(self.work, tid)
+        pasta = executor.prepare_directory(self.work, tid)
         for nome, dados in estados.items():
-            os_platform.gravar_estado(os.path.join(pasta, "." + nome), dados)
+            os_platform.write_state(os.path.join(pasta, "." + nome), dados)
         return pasta
 
     def _grupo(self, comando="sleep 300 & sleep 300"):
@@ -377,8 +377,8 @@ class TestStartupCheck(_Base):
 
     def test_grupo_vivo_e_encerrado_e_ticket_orfao(self):
         p = self._grupo()
-        pasta = self._pasta(5, sss_proc={"ticket_id": 5, "pid": p.pid, "pgid": p.pid, "usuario_execucao": None,
-                                         "process_start": os_platform.identidade_processo(p.pid)})
+        pasta = self._pasta(5, sss_proc={"ticket_id": 5, "pid": p.pid, "pgid": p.pid, "exec_user": None,
+                                         "process_start": os_platform.process_identity(p.pid)})
         self.repo.running = [{"id": 5, "process_id": p.pid, "process_start": None, "cancel_requested": "N"}]
         ag, _logs = self._subir()
         self.assertIn(("finalize", 5, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
@@ -387,24 +387,24 @@ class TestStartupCheck(_Base):
         self.assertTrue(os.path.isdir(pasta))
         ex = ag.encerrando[5]
         limite = time.monotonic() + 5
-        while not executor.avancar_encerramento(ex, time.monotonic() + 10) and time.monotonic() < limite:
+        while not executor.advance_stop(ex, time.monotonic() + 10) and time.monotonic() < limite:
             time.sleep(0.05)
         self.assertEqual(p.wait(5), -signal.SIGTERM)
 
     def test_ticket_ja_finalizado_por_outro_no_com_filho_vivo(self):
         # NODE_OFFLINE no banco com o filho vivo: o disco manda; o grupo e encerrado e nada e finalizado.
         p = self._grupo()
-        self._pasta(6, sss_proc={"ticket_id": 6, "pid": p.pid, "pgid": p.pid, "usuario_execucao": None,
-                                 "process_start": os_platform.identidade_processo(p.pid)})
+        self._pasta(6, sss_proc={"ticket_id": 6, "pid": p.pid, "pgid": p.pid, "exec_user": None,
+                                 "process_start": os_platform.process_identity(p.pid)})
         ag, _logs = self._subir()
         self.assertEqual(self.repo.chamadas, [])
         self.assertIn(6, ag.encerrando)
-        self.assertEqual(ag.encerrando[6].fase, executor.FASE_TERM)
+        self.assertEqual(ag.encerrando[6].phase, executor.PHASE_TERM)
 
     def test_pid_reciclado_nao_recebe_sinal(self):
         p = self._grupo("sleep 300")
-        pasta = self._pasta(7, sss_proc={"ticket_id": 7, "pid": p.pid, "pgid": p.pid, "usuario_execucao": None,
-                                         "process_start": os_platform.identidade_processo(p.pid) + 1})
+        pasta = self._pasta(7, sss_proc={"ticket_id": 7, "pid": p.pid, "pgid": p.pid, "exec_user": None,
+                                         "process_start": os_platform.process_identity(p.pid) + 1})
         self.repo.running = [{"id": 7, "process_id": p.pid, "process_start": None, "cancel_requested": "N"}]
         ag, _logs = self._subir()
         self.assertTrue(_vivo(p.pid), "PID reciclado: o processo de agora nao e o do ticket")
@@ -413,7 +413,7 @@ class TestStartupCheck(_Base):
 
     def test_resultado_local_prevalece(self):
         pasta = self._pasta(8, sss_proc={"ticket_id": 8, "pid": 2 ** 31 - 2, "pgid": 2 ** 31 - 2,
-                                         "usuario_execucao": None, "process_start": 1},
+                                         "exec_user": None, "process_start": 1},
                             sss_result={"ticket_id": 8, "status": "SUCCESS", "status_reason": "EXIT_OK",
                                         "return_code": 0})
         self.repo.running = [{"id": 8, "process_id": 1, "process_start": 1, "cancel_requested": "N"}]
@@ -423,10 +423,10 @@ class TestStartupCheck(_Base):
 
     def test_sem_identidade_preserva_a_pasta(self):
         p = self._grupo("sleep 300")
-        pasta = self._pasta(9, sss_proc={"ticket_id": 9, "pid": p.pid, "pgid": p.pid, "usuario_execucao": None,
+        pasta = self._pasta(9, sss_proc={"ticket_id": 9, "pid": p.pid, "pgid": p.pid, "exec_user": None,
                                          "process_start": None})
         self.repo.running = [{"id": 9, "process_id": p.pid, "process_start": None, "cancel_requested": "N"}]
-        plat = _Plat(reabrir_grupo=lambda estado: os_platform.Processo(p.pid, None, sem_identidade=True))
+        plat = _Plat(reopen_group=lambda estado: os_platform.Process(p.pid, None, sem_identidade=True))
         ag, logs = self._subir(plat=plat)
         self.assertIn("ORFAO_SEM_IDENTIDADE", logs)
         self.assertTrue(_vivo(p.pid), "sem identidade nunca recebe sinal")
@@ -435,7 +435,7 @@ class TestStartupCheck(_Base):
         self.assertIn(("finalize", 9, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
 
     def test_talvez_iniciado_nunca_volta_a_fila(self):
-        pasta = self._pasta(10, sss_spawn={"ticket_id": 10, "usuario_execucao": None})
+        pasta = self._pasta(10, sss_spawn={"ticket_id": 10, "exec_user": None})
         neto = subprocess.Popen(["sleep", "300"], cwd=os.path.join(pasta, "tmp"), start_new_session=True)
         self.popens.append(neto)
         self.repo.running = [{"id": 10, "process_id": None, "process_start": None, "cancel_requested": "N"}]
@@ -447,9 +447,9 @@ class TestStartupCheck(_Base):
         self.assertFalse(os.path.exists(pasta))
 
     def test_talvez_iniciado_nao_suportado_preserva(self):
-        pasta = self._pasta(11, sss_spawn={"ticket_id": 11, "usuario_execucao": None})
+        pasta = self._pasta(11, sss_spawn={"ticket_id": 11, "exec_user": None})
         self.repo.running = [{"id": 11, "process_id": None, "process_start": None, "cancel_requested": "N"}]
-        ag, logs = self._subir(plat=_Plat(encerrar_ticket=lambda *a: "NAO_SUPORTADO"))
+        ag, logs = self._subir(plat=_Plat(stop_ticket=lambda *a: "NAO_SUPORTADO"))
         self.assertIn("sem meio de encerrar", logs)
         self.assertIn(11, ag.preservadas)
         self.assertTrue(os.path.isdir(pasta))

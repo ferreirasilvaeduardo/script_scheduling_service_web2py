@@ -128,7 +128,7 @@ class TestTicketService(_BaseTicket):
         self.assertEqual((snap["interpreter"], snap["path_file"]),
                          ("PYTHON3", caminho_esperado))
         self.assertEqual(snap["param_type"], "NAMED")
-        # Snapshot v4 (CR-005 D2): path_file e absoluto; sem pasta_base.
+        # Snapshot v4 (CR-005 D2): path_file e absoluto; sem base_dir.
         self.assertNotIn("pasta_base", snap)
         self.assertIn(self.base, bruto)
         self.assertEqual(snap["args"], [

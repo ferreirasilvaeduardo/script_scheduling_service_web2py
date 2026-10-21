@@ -30,7 +30,7 @@ _RE_NAME_FILTER = re.compile(r"[A-Za-z0-9_]{1,30}")
 MSG_NAME_REQUIRED = u"Informe o nome do ambiente."
 MSG_NAME_INVALID = u"Use de 1 a 30 caracteres: letras maiúsculas, dígitos e _ (ex.: PRODUCAO)."
 MSG_NAME_DUPLICATE = u"Já existe um ambiente com este nome."
-MSG_NAME_RESERVED = u"O nome INTERNO é reservado aos logs da aplicação. Escolha outro nome."
+MSG_NAME_RESERVED = u"O nome INTERNAL é reservado aos logs da aplicação. Escolha outro nome."
 MSG_CONNECTION_CREDENTIAL = u"Informe apenas o DSN; credenciais ficam no secrets.cfg."
 MSG_CONNECTION_INVALID = (u"Informe um DSN no formato host:porta/serviço (ex.: db01.local:1521/svc) "
                         u"ou um alias TNS.")
@@ -167,8 +167,8 @@ class AdminEnvironmentsService(object):
                 pass
             elif not _RE_NAME.fullmatch(nome):
                 erros["name"] = MSG_NAME_INVALID
-            elif log_paths.ambiente_reservado(nome):
-                # CR-009: a pasta de log 'interno' e dos logs sem ambiente (aplicacao).
+            elif log_paths.is_reserved_environment(nome):
+                # CR-009: a pasta de log 'internal' e dos logs sem ambiente (aplicacao).
                 erros["name"] = MSG_NAME_RESERVED
             descricao, conexao = self._validate(dados, erros)
             if erros:

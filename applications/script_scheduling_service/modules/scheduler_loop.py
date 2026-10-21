@@ -100,7 +100,7 @@ def _dirs_sss(cfg):
 
 def _ler_estado(pasta, nome, plat):
     try:
-        return plat.ler_estado(os.path.join(pasta, nome))
+        return plat.read_state(os.path.join(pasta, nome))
     except (OSError, ValueError):  # estado ilegivel: tratado como ausente, com o rastro preservado
         return None
 
@@ -172,7 +172,7 @@ class Agente(object):
         if self.conexao is not None and hasattr(self.conexao, "close"):
             self.conexao.close()
         if self.trava is not None:
-            self.plat.liberar_instancia(self.trava)
+            self.plat.release_instance(self.trava)
             self.trava = None
 
     def _passos(self):
@@ -188,7 +188,7 @@ class Agente(object):
         self._conferir_thread_unica()
 
     def _passo1_usuario(self):
-        if self.plat.usuario_privilegiado():
+        if self.plat.is_privileged_user():
             self._falhar(SAIDA_USUARIO, "o agente nao pode rodar como root (README §8.12 passo 1)")
 
     def _passo2_config(self):
@@ -203,7 +203,7 @@ class Agente(object):
             sss_config.check_encoding()
         except sss_config.ConfigError as exc:
             self._falhar(SAIDA_CONFIG, "%s", exc)
-        if not self.plat.locale_disponivel(agente.child_locale):
+        if not self.plat.locale_available(agente.child_locale):
             self._falhar(SAIDA_CONFIG, "child_locale %s nao consta em locale -a (CR-007, R-17)", agente.child_locale)
         db_conn.connection_budget_s(self.cfg.oracle.dsn, sss_config.call_timeout_s(self.cfg.oracle.call_timeout_ms))
         # Conferencia entre nos no E2E (README §8.9, "Mesmos tempos em todos os nos").
@@ -223,7 +223,7 @@ class Agente(object):
     def _passo4_diretorios(self):
         agente = self.cfg.agent
         for nome, caminho in (("log_dir", self.cfg.logging.log_dir), ("work_dir", agente.work_dir)):
-            codigo = self.plat.validar_dir_restrito(caminho)
+            codigo = self.plat.validate_restricted_dir(caminho)
             if codigo:
                 self._falhar(SAIDA_DIRETORIOS, "%s %s recusado: %s", nome, caminho, codigo)
         dirs_sss = _dirs_sss(self.cfg)
@@ -231,12 +231,12 @@ class Agente(object):
             self._falhar(SAIDA_DIRETORIOS, "[agent] interpreters vazio: o agente nao executaria nada")
         for logico, caminho in agente.interpreters:
             try:
-                self.plat.validar_interpretador_executavel(caminho, dirs_sss=dirs_sss)
+                self.plat.validate_interpreter_executable(caminho, dirs_sss=dirs_sss)
             except Exception as exc:  # noqa: BLE001 - PathGuardError e afins: CRITICAL com o codigo
                 self._falhar(SAIDA_DIRETORIOS, "interpretador %s (%s) recusado: %s", logico, caminho,
                              getattr(exc, "codigo", exc.__class__.__name__))
         if self.cfg.app.sss_env != "DEV":
-            falhas = self.plat.validar_execucao(agente.exec_users, agente.exec_work_dir)
+            falhas = self.plat.validate_execution(agente.exec_users, agente.exec_work_dir)
             for falha in falhas:
                 self.log.critical("execucao fora de DEV: %s", falha)
             if falhas:
@@ -250,14 +250,14 @@ class Agente(object):
         agente = self.cfg.agent
         if not agente.input_dir:
             return
-        codigo = self.plat.validar_dir_restrito(agente.input_dir)
+        codigo = self.plat.validate_restricted_dir(agente.input_dir)
         if codigo:
             self._falhar(SAIDA_DIRETORIOS, "input_dir %s recusado: %s", agente.input_dir, codigo)
         if self.cfg.app.sss_env == "DEV" and not agente.exec_users:
             return
-        pares = [(os.path.join(agente.input_dir, log_paths.pasta_ambiente(amb)), self._usuario_execucao(amb))
+        pares = [(os.path.join(agente.input_dir, log_paths.environment_dir(amb)), self._usuario_execucao(amb))
                  for amb in agente.environments if self._usuario_execucao(amb)]
-        falhas = self.plat.validar_pastas_saida(pares)
+        falhas = self.plat.validate_output_dirs(pares)
         for falha in falhas:
             self.log.critical("pasta de entrada: %s", falha)
         if falhas:
@@ -269,14 +269,14 @@ class Agente(object):
         agente = self.cfg.agent
         if not agente.output_dir:
             return
-        codigo = self.plat.validar_dir_restrito(agente.output_dir)
+        codigo = self.plat.validate_restricted_dir(agente.output_dir)
         if codigo:
             self._falhar(SAIDA_DIRETORIOS, "output_dir %s recusado: %s", agente.output_dir, codigo)
         if self.cfg.app.sss_env == "DEV" and not agente.exec_users:
             return
-        pares = [(os.path.join(agente.output_dir, log_paths.pasta_ambiente(amb)), self._usuario_execucao(amb))
+        pares = [(os.path.join(agente.output_dir, log_paths.environment_dir(amb)), self._usuario_execucao(amb))
                  for amb in agente.environments if self._usuario_execucao(amb)]
-        falhas = self.plat.validar_pastas_saida(pares)
+        falhas = self.plat.validate_output_dirs(pares)
         for falha in falhas:
             self.log.critical("pasta de saida: %s", falha)
         if falhas:
@@ -285,8 +285,8 @@ class Agente(object):
     def _passo5_instancia(self):
         work = self.cfg.agent.work_dir
         try:
-            self.trava = self.plat.travar_instancia(os.path.join(work, "sss-%s.lock" % self.agente_id))
-        except self.plat.InstanciaJaEmExecucao as exc:
+            self.trava = self.plat.lock_instance(os.path.join(work, "sss-%s.lock" % self.agente_id))
+        except self.plat.InstanceAlreadyRunning as exc:
             self._falhar(SAIDA_INSTANCIA, "%s", exc)
         stop = os.path.join(work, "sss-%s.stop" % self.agente_id)
         if os.path.exists(stop):
@@ -331,9 +331,9 @@ class Agente(object):
             self.agente_db_id = self.repo.register_agent(self._conn(), {
                 "code": agente.agent_id, "hostname": self.hostname, "pid": self.pid,
                 "version": sss_config.SSS_VERSION, "environments": ",".join(agente.environments),
-                "platform": self.plat.NOME, "interpreters": ",".join(k for k, _v in agente.interpreters),
+                "platform": self.plat.NAME, "interpreters": ",".join(k for k, _v in agente.interpreters),
                 "critical_config": criticos, "node_offline_timeout_s": agente.node_offline_timeout_s,
-            }, self.plat.processo_existe)
+            }, self.plat.process_exists)
             divergentes = self.repo.check_config(self._conn(), agente.agent_id, criticos,
                                                     agente.node_offline_timeout_s)
         except DuplicateAgent as exc:
@@ -397,13 +397,13 @@ class Agente(object):
             proc = _ler_estado(pasta, executor.PROC, self.plat)
             spawn = _ler_estado(pasta, executor.SPAWN, self.plat)
             resultados[tid] = _ler_estado(pasta, executor.RESULT, self.plat)
-            usuario = (proc or spawn or {}).get("usuario_execucao")
+            usuario = (proc or spawn or {}).get("exec_user")
             if proc is not None:
                 self._reabrir(tid, pasta, proc, usuario, log)
             elif spawn is not None:
                 # Talvez iniciado (CR-008, R-01): nunca volta a fila. Unica espera da subida (kill_grace_s).
                 base = os.path.join(agente.exec_work_dir, usuario) if usuario else agente.work_dir
-                if self.plat.encerrar_ticket(base, tid, usuario, agente.kill_grace_s) == "NAO_SUPORTADO":
+                if self.plat.stop_ticket(base, tid, usuario, agente.kill_grace_s) == "NAO_SUPORTADO":
                     # O processo pode seguir vivo: a pasta fica como rastro (CR-008, R-26).
                     self.preservadas.add(tid)
                     log.warning("TALVEZ_INICIADO sem meio de encerrar nesta plataforma: o processo fica com o "
@@ -436,18 +436,18 @@ class Agente(object):
                              extra={"action": "STARTUP"})
 
     def _reabrir(self, tid, pasta, proc, usuario, log):
-        processo = self.plat.reabrir_grupo(proc)
+        processo = self.plat.reopen_group(proc)
         if processo is None:
             return
-        execucao = executor.Execucao(tid, pasta, usuario,
+        execucao = executor.Execution(tid, pasta, usuario,
                                      os.path.join(self.cfg.agent.exec_work_dir, usuario) if usuario else None, None)
-        execucao.processo = processo
+        execucao.process = processo
         execucao.pid = processo.pid
-        execucao.identidade = processo.identidade
-        executor.pedir_encerramento(execucao, self.relogio(), grace_s=self.cfg.agent.kill_grace_s)
-        if execucao.sem_identidade:
+        execucao.identity = processo.identity
+        executor.request_stop(execucao, self.relogio(), grace_s=self.cfg.agent.kill_grace_s)
+        if execucao.no_identity:
             self.preservadas.add(tid)  # CR-008, R-26: o unico rastro do processo fica
-        elif not executor.avancar_encerramento(execucao, self.relogio()):
+        elif not executor.advance_stop(execucao, self.relogio()):
             self.encerrando[tid] = execucao  # o laco avanca o encerramento e limpa a pasta depois
             log.warning("grupo do ticket em encerramento na subida (pid %s)", processo.pid)
 
@@ -476,14 +476,14 @@ class Agente(object):
                          extra={"agent": self.agente_id, "ticket": tid, "action": "STARTUP"})
 
     def _limpar_pasta(self, tid, pasta):
-        execucao = executor.Execucao(tid, pasta, None, None, None)
+        execucao = executor.Execution(tid, pasta, None, None, None)
         estado = _ler_estado(pasta, executor.PROC, self.plat) or _ler_estado(pasta, executor.SPAWN, self.plat) or {}
-        usuario = estado.get("usuario_execucao")
+        usuario = estado.get("exec_user")
         if usuario:
-            execucao.usuario_execucao = usuario
-            execucao.pasta_base = os.path.join(self.cfg.agent.exec_work_dir, usuario)
+            execucao.exec_user = usuario
+            execucao.base_dir = os.path.join(self.cfg.agent.exec_work_dir, usuario)
         try:
-            executor.limpar(execucao)
+            executor.clean(execucao)
         except Exception as exc:  # noqa: BLE001 - a pasta fica para a proxima subida
             self.preservadas.add(tid)
             _log.warning("pasta do ticket nao removida na subida (%s)", exc.__class__.__name__,
@@ -600,7 +600,7 @@ class Agente(object):
         if self.cercado or not self._fence_vencido():
             return
         self.cercado = True
-        rodando = [item for item in self.execucoes.values() if item.fase == _Item.RODANDO]
+        rodando = [item for item in self.execucoes.values() if item.phase == _Item.RODANDO]
         for item in rodando:
             self._encerrar(item, "FENCED")
         self.log.critical("FENCED: sem heartbeat confirmado ha %.0f s (fence_timeout_s %d); %d execucao(oes) "
@@ -654,24 +654,24 @@ class Agente(object):
         """Maquinas de encerramento, coleta dos processos que terminaram e no maximo um flush final."""
         agora = self.relogio()
         for tid, ex in list(self.encerrando.items()):
-            if executor.avancar_encerramento(ex, agora):
+            if executor.advance_stop(ex, agora):
                 del self.encerrando[tid]
                 self._limpar(tid, ex.work_dir_ticket)
         flush_feito = False
         for tid, item in sorted(self.execucoes.items()):
             ex = item.execucao
-            if item.fase == _Item.RODANDO:
-                if executor.verificar(ex) is not None:
+            if item.phase == _Item.RODANDO:
+                if executor.check(ex) is not None:
                     # Terminou sozinho: o grupo e encerrado mesmo assim (R-02), prevalece o resultado real.
                     self._encerrar(item, None)
                 continue
-            if item.fase == _Item.ENCERRANDO:
-                if executor.avancar_encerramento(ex, agora):
-                    item.fase = _Item.FINALIZAR
+            if item.phase == _Item.ENCERRANDO:
+                if executor.advance_stop(ex, agora):
+                    item.phase = _Item.FINALIZAR
                 continue
-            if item.fase == _Item.FINALIZAR and not self._empacotar(item, agora):
+            if item.phase == _Item.FINALIZAR and not self._empacotar(item, agora):
                 continue
-            if item.fase == _Item.FINALIZAR and not flush_feito:
+            if item.phase == _Item.FINALIZAR and not flush_feito:
                 flush_feito = self._finalizar_execucao(item)
         self._avancar_saidas(agora)
 
@@ -686,16 +686,16 @@ class Agente(object):
             output_phase.abandonar(saida, self.plat)
             return True
         agente = self.cfg.agent
-        if saida.processo is None:
+        if saida.process is None:
             output_phase.iniciar_empacotar(saida, self.plat, agente.output_max_bytes, agente.output_max_files, agora)
             if not saida.empacotada:
                 return False
         elif not output_phase.avancar_empacotar(saida, self.plat, agora):
             return False
         linha = output_phase.linha_log(saida, self.agente_id, agente.output_max_files, agente.output_max_bytes)
-        if linha and item.execucao is not None and item.execucao.caminho_log:
+        if linha and item.execucao is not None and item.execucao.log_path:
             try:
-                executor.anexar_linha_local(item.execucao, linha)
+                executor.append_local_line(item.execucao, linha)
             except OSError as exc:  # a linha e informativa; a fase segue
                 item.log.warning("linha [SSS] da saida nao gravada (%s)", exc.__class__.__name__,
                                  extra={"action": "SAIDA"})
@@ -740,25 +740,25 @@ class Agente(object):
 
     def _encerrar(self, item, motivo):
         """Pede o encerramento do grupo (SIGTERM, prazo, SIGKILL) sem esperar. motivo None: saida natural."""
-        if item.fase != _Item.RODANDO:
+        if item.phase != _Item.RODANDO:
             return
         ex = item.execucao
-        if motivo is not None and executor.verificar(ex) is not None:
+        if motivo is not None and executor.check(ex) is not None:
             motivo = None  # o processo ja tinha terminado: prevalece o resultado real (README §5.6)
         item.motivo = motivo
-        executor.pedir_encerramento(ex, self.relogio(), grace_s=self.cfg.agent.kill_grace_s)
-        item.fase = _Item.ENCERRANDO
+        executor.request_stop(ex, self.relogio(), grace_s=self.cfg.agent.kill_grace_s)
+        item.phase = _Item.ENCERRANDO
         if motivo is not None:
             item.log.warning("encerramento pedido: %s", motivo, extra={"action": "ENCERRAR"})
 
     def _resultado(self, item):
         if item.motivo in _FINAL:
             return _FINAL[item.motivo]
-        rc = executor.verificar(item.execucao)
+        rc = executor.check(item.execucao)
         if rc is None:
             # Lider reaberto ou coletado por outro caminho: sem returncode, o agente nao sabe o desfecho.
             return ("FAILED", "ORPHAN_PROCESS", -2)
-        return executor.traduzir_retorno(rc, self.plat.NOME)
+        return executor.translate_return(rc, self.plat.NAME)
 
     def _finalizar_execucao(self, item):
         """Passos 2 a 6 da finalizacao (README §8.7). True se fez um flush final nesta iteracao."""
@@ -782,7 +782,7 @@ class Agente(object):
             return fez_flush
         if item.resultado is None:
             item.resultado = self._resultado(item)
-            executor.registrar_resultado(item.execucao, *item.resultado)
+            executor.record_result(item.execucao, *item.resultado)
         try:
             gravou = self.repo.finalize(conn, item.tid, self.agente_id, *item.resultado)
         except Exception as exc:  # noqa: BLE001 - finalizacao pendente (CR-007 R-03), refeita no ciclo rapido
@@ -818,7 +818,7 @@ class Agente(object):
         if execucao is None:
             return self._limpar_pasta(tid, pasta)
         try:
-            executor.limpar(execucao)
+            executor.clean(execucao)
         except Exception as exc:  # noqa: BLE001 - a pasta fica para a proxima subida
             _log.warning("pasta do ticket nao removida (%s)", exc.__class__.__name__,
                          extra={"agent": self.agente_id, "ticket": tid, "action": "LIMPEZA"})
@@ -832,16 +832,16 @@ class Agente(object):
         conn = self._conn()
         proprios = self.repo.own_sweep(conn, self.agente_id)
         for tid, item in list(self.execucoes.items()):
-            if item.fase == _Item.RESERVADO:
+            if item.phase == _Item.RESERVADO:
                 continue
             if tid not in proprios:
-                if item.fase == _Item.RODANDO:
+                if item.phase == _Item.RODANDO:
                     self._encerrar(item, "OWNERSHIP_LOST")
-                elif item.fase in (_Item.ENCERRANDO, _Item.FINALIZAR) and item.motivo != "OWNERSHIP_LOST" \
+                elif item.phase in (_Item.ENCERRANDO, _Item.FINALIZAR) and item.motivo != "OWNERSHIP_LOST" \
                         and not item.finalizacao_pendente:
                     item.motivo = "OWNERSHIP_LOST"
                 continue
-            if proprios[tid] == "Y" and item.fase == _Item.RODANDO:
+            if proprios[tid] == "Y" and item.phase == _Item.RODANDO:
                 self._encerrar(item, "CANCEL")
         for tid in sorted(set(proprios) - set(self.execucoes) - set(self.encerrando) - self.devolucoes_pendentes):
             self._reconciliar(tid)
@@ -850,7 +850,7 @@ class Agente(object):
     def _conferir_limites(self):
         agora = self.relogio()
         for item in list(self.execucoes.values()):
-            if item.fase != _Item.RODANDO:
+            if item.phase != _Item.RODANDO:
                 continue
             if item.timeout_s and agora - item.inicio > item.timeout_s:
                 self._encerrar(item, "TIMEOUT")
@@ -868,11 +868,11 @@ class Agente(object):
             spawn = _ler_estado(pasta, executor.SPAWN, self.plat)
             res = _ler_estado(pasta, executor.RESULT, self.plat)
             if proc is not None:
-                self._reabrir(tid, pasta, proc, proc.get("usuario_execucao"), log)
+                self._reabrir(tid, pasta, proc, proc.get("exec_user"), log)
             elif spawn is not None:
-                usuario = spawn.get("usuario_execucao")
+                usuario = spawn.get("exec_user")
                 base = os.path.join(self.cfg.agent.exec_work_dir, usuario) if usuario else self.cfg.agent.work_dir
-                if self.plat.encerrar_ticket(base, tid, usuario, self.cfg.agent.kill_grace_s) == "NAO_SUPORTADO":
+                if self.plat.stop_ticket(base, tid, usuario, self.cfg.agent.kill_grace_s) == "NAO_SUPORTADO":
                     self.preservadas.add(tid)
                     log.warning("TALVEZ_INICIADO sem meio de encerrar nesta plataforma")
                 log.error("TALVEZ_INICIADO: .sss_spawn sem .sss_proc")
@@ -911,7 +911,7 @@ class Agente(object):
         for item in list(self.execucoes.values()):
             if item.pid_pendente:
                 self._registrar_pid(item)
-            if item.finalizacao_pendente and item.fase == _Item.FINALIZAR:
+            if item.finalizacao_pendente and item.phase == _Item.FINALIZAR:
                 self._finalizar_execucao(item)
 
     # ---------------------------------------------------- heartbeat e pump
@@ -927,7 +927,7 @@ class Agente(object):
             self._sair_do_cerco()
         for tid in perdidos:
             item = self.execucoes.get(tid)
-            if item is not None and item.fase == _Item.RODANDO:
+            if item is not None and item.phase == _Item.RODANDO:
                 self._encerrar(item, "OWNERSHIP_LOST")
             elif item is not None:
                 item.motivo = "OWNERSHIP_LOST"
@@ -937,7 +937,7 @@ class Agente(object):
             item = self.execucoes.get(tid)
             if item is None:
                 continue
-            if item.fase == _Item.RODANDO:
+            if item.phase == _Item.RODANDO:
                 self._encerrar(item, "OWNERSHIP_LOST")
             item.motivo = "OWNERSHIP_LOST"
         if res.conexao_incerta:
@@ -999,7 +999,7 @@ class Agente(object):
         vagas = agente.max_parallel_jobs - len(self.execucoes)
         if vagas <= 0 or not self.active_environments or not self._pode_seguir():
             return
-        livre = self.plat.espaco_livre_mb(self.cfg.logging.log_dir)
+        livre = self.plat.free_space_mb(self.cfg.logging.log_dir)
         if livre < agente.log_dir_min_free_mb:
             agora = self.relogio()
             if self._ultimo_aviso_disco is None or agora - self._ultimo_aviso_disco >= INTERVALO_AVISO_DISCO_S:
@@ -1008,7 +1008,7 @@ class Agente(object):
                                  agente.log_dir_min_free_mb, extra={"action": "CLAIM"})
             return
         if agente.output_dir:
-            livre_saida = self.plat.espaco_livre_mb(agente.output_dir)
+            livre_saida = self.plat.free_space_mb(agente.output_dir)
             if livre_saida < agente.log_dir_min_free_mb:
                 agora = self.relogio()
                 if self._ultimo_aviso_disco is None or agora - self._ultimo_aviso_disco >= INTERVALO_AVISO_DISCO_S:
@@ -1124,7 +1124,7 @@ class Agente(object):
         if linha_sss:
             self._linha_sss(conn, item.tid, linha_sss)
         item.resultado = resultado
-        item.fase = _Item.FINALIZAR
+        item.phase = _Item.FINALIZAR
         item.flush_ok = True
         self._finalizar_execucao_sem_processo(item)
 
@@ -1151,8 +1151,8 @@ class Agente(object):
         usuario = env_builder.exec_user(self.cfg, ticket["environment"])
         rotulo = "SSS-%s-%s" % (self.agente_id, item.tid)
         try:
-            work_dir_ticket = executor.preparar_diretorio(agente.work_dir, item.tid, startup_concluido=True)
-            fd, caminho = executor.abrir_log(self.cfg.logging.log_dir, ticket["environment"], snap["script_nome"],
+            work_dir_ticket = executor.prepare_directory(agente.work_dir, item.tid, startup_concluido=True)
+            fd, caminho = executor.open_log(self.cfg.logging.log_dir, ticket["environment"], snap["script_nome"],
                                              item.started_at, item.tid, snap.get("script_id"))
         except Exception as exc:  # noqa: BLE001 - CR-007 R-17: sem arquivo de log, a causa vai para o CLOB
             item.log.error("falha antes do spawn: %s", exc, extra={"action": "SPAWN"})
@@ -1165,26 +1165,26 @@ class Agente(object):
         try:
             if agente.input_dir:
                 # CR-014 (README §8.14): pasta permanente do script no ambiente, com o nome do snapshot.
-                entrada = log_paths.pasta_entrada(agente.input_dir, ticket["environment"], snap["script_nome"],
+                entrada = log_paths.input_dir(agente.input_dir, ticket["environment"], snap["script_nome"],
                                                    snap.get("script_id"))
             if agente.output_dir:
                 # CR-012 (README §8.13): pasta de saida com as partes do log e o mesmo minuto.
-                base, relativo = log_paths.pasta_saida(agente.output_dir, ticket["environment"], snap["script_nome"],
+                base, relativo = log_paths.output_dir(agente.output_dir, ticket["environment"], snap["script_nome"],
                                                         item.started_at, item.tid, snap.get("script_id"))
                 saida = output_phase.Saida(item.tid, base, relativo, usuario, work_dir_ticket)
             ticket_env = dict(ticket, started_at=item.started_at)
             env = env_builder.build(self.cfg, self.segredos, ticket_env, contexto["environment"], script_real,
-                                        work_dir_ticket, dict(os.environ), self.plat.NOME, snapshot=snap,
+                                        work_dir_ticket, dict(os.environ), self.plat.NAME, snapshot=snap,
                                         agendamento=contexto["agendamento"], caminho_log=caminho,
                                         timeout_seg=timeout, hostname=self.hostname, versao=sss_config.SSS_VERSION,
                                         pasta_saida=saida.pasta if saida else None,
                                         pasta_entrada=os.path.join(*entrada) if entrada else None)
             conexao = env.get(env_builder.CONNECTION_VAR)
         except Exception as exc:  # noqa: BLE001 - CR-007 R-17: SPAWN_ERROR
-            ex = executor.falha_antes_do_spawn(fd, item.tid, exc, rotulo, work_dir_ticket)
+            ex = executor.failure_before_spawn(fd, item.tid, exc, rotulo, work_dir_ticket)
             return self._apos_iniciar(item, ex, snap, conexao)
-        ex = executor.iniciar(item.tid, argv, fd, env, work_dir_ticket, usuario, agente.exec_work_dir,
-                              dict(self.plat.RLIMITS_PADRAO), rotulo,
+        ex = executor.start(item.tid, argv, fd, env, work_dir_ticket, usuario, agente.exec_work_dir,
+                              dict(self.plat.DEFAULT_RLIMITS), rotulo,
                               saida=(saida.base, saida.relativo) if saida else None, entrada=entrada)
         if not ex.spawn_error:
             item.saida = saida
@@ -1194,29 +1194,29 @@ class Agente(object):
     def _apos_iniciar(self, item, ex, snap, conexao):
         item.execucao = ex
         item.inicio = self.relogio()
-        if ex.caminho_log:
+        if ex.log_path:
             item.bomba = log_pump.Bomba(
-                ex.caminho_log, item.tid, log_pump.mascarador_do_ticket(self._mascarador_fixo, conexao, snap),
+                ex.log_path, item.tid, log_pump.mascarador_do_ticket(self._mascarador_fixo, conexao, snap),
                 self.cfg.logging.max_log_size_bytes, self.cfg.logging.max_local_log_size_bytes, 0,
                 self.supplementary_unit)
             self.bombas[item.tid] = item.bomba
-        if ex.spawn_error and not ex.falhou_apos_spawn:
+        if ex.spawn_error and not ex.failed_after_spawn:
             item.motivo = "SPAWN_ERROR"
-            item.fase = _Item.FINALIZAR
+            item.phase = _Item.FINALIZAR
             return
-        if ex.falhou_apos_spawn:
+        if ex.failed_after_spawn:
             # CR-008, R-01: o grupo ja recebeu SIGTERM; acompanhado ate morrer, sem registrar_pid.
             item.motivo = "SPAWN_ERROR"
-            item.fase = _Item.ENCERRANDO
+            item.phase = _Item.ENCERRANDO
             return
-        item.fase = _Item.RODANDO
+        item.phase = _Item.RODANDO
         item.pid_pendente = True
         self._registrar_pid(item)
 
     def _registrar_pid(self, item):
         ex = item.execucao
         try:
-            ok = self.repo.register_pid(self._conn(), item.tid, self.agente_id, ex.pid, ex.identidade)
+            ok = self.repo.register_pid(self._conn(), item.tid, self.agente_id, ex.pid, ex.identity)
         except Exception as exc:  # noqa: BLE001 - PID pendente (CR-008, R-08)
             if not item.avisou_pid:
                 item.avisou_pid = True
@@ -1278,7 +1278,7 @@ class _Item(object):
         self.tid = tid
         self.started_at = started_at
         self.log = log
-        self.fase = _Item.RESERVADO
+        self.phase = _Item.RESERVADO
         self.ticket = None
         self.execucao = None
         self.bomba = None

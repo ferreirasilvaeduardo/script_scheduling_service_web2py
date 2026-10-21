@@ -50,7 +50,7 @@ def main(argv=None):
             outro.addHandler(handler)
     masking.install_filter_on_handlers()
     parada = threading.Event()
-    os_platform.instalar_parada(parada)
+    os_platform.install_stop_handler(parada)
     agente = scheduler_loop.Agente(cfg=cfg)
     try:
         agente.inicializar()

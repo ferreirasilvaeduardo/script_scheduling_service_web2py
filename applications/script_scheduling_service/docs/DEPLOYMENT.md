@@ -149,7 +149,7 @@ O agente para de fazer claim com menos de `[agent] log_dir_min_free_mb` livres (
 ### 4.4 Permissões que o SSS cria
 
 O launcher aplica `umask 077`. O próprio SSS cria:
-* pastas de log com `0750` (todos os níveis: `interno/`, `app/`, ano, mês, dia, hora e minuto);
+* pastas de log com `0750` (todos os níveis: `internal/`, `app/`, ano, mês, dia, hora e minuto);
 * log da aplicação com `0640`;
 * log de execução de cada ticket com `0600`.
 
@@ -341,7 +341,7 @@ bin/sss-scheduler.sh                       # ou: bin/sss-scheduler.sh --config /
 ```
 
 * O launcher aceita só essas duas formas; qualquer outro argumento sai com código 2.
-* Subida bem-sucedida, no log da aplicação (`log_dir/interno/app/AAAA/MM/DD/HH/MI/sss_scheduler_<PID>.log`):
+* Subida bem-sucedida, no log da aplicação (`log_dir/internal/app/AAAA/MM/DD/HH/MI/sss_scheduler_<PID>.log`):
   ```text
   INFO ... [action=INICIO] tempos do fencing: fence_timeout_s=90 node_offline_timeout_s=180
   INFO ... [action=INICIO] driver=oracledb modo=thin servidor=19.24.0.0.0 cliente=-
@@ -481,7 +481,7 @@ Depois:
   ```text
   15 2 * * * cd /opt/sss/web2py && umask 077 && LANG=C.UTF-8 LC_ALL=C.UTF-8 /usr/bin/python3 applications/script_scheduling_service/scripts/purge.py > /dev/null
   ```
-  O resumo vai para o stdout; o registro completo vai para `log_dir/interno/app/.../purge_<PID>.log`.
+  O resumo vai para o stdout; o registro completo vai para `log_dir/internal/app/.../purge_<PID>.log`.
 * **Alvos:** `--target tickets|auditoria|logs_locais|saida|todos` (padrão `todos`).
 * **Arquivamento da auditoria:** `--export-audit <pasta>` grava antes de apagar um `auditoria_purge_AAAAMMDD_HHMMSS.csv` com `0600`. A pasta precisa existir.
 * **Códigos de saída:**
@@ -543,7 +543,7 @@ WARNING: nenhum PURGE auditado nos ultimos 2 dias (README §11.3)
 
 | Log | Caminho | Modo |
 |---|---|---|
-| Aplicação (web, agente, purge, `init_db`) | `log_dir/interno/app/AAAA/MM/DD/HH/MI/<nome>_<PID>.log`, com `<nome>` = `sss_web`, `sss_scheduler`, `purge` ou `init_db` | `0640` |
+| Aplicação (web, agente, purge, `init_db`) | `log_dir/internal/app/AAAA/MM/DD/HH/MI/<nome>_<PID>.log`, com `<nome>` = `sss_web`, `sss_scheduler`, `purge` ou `init_db` | `0640` |
 | Execução de cada ticket | `log_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log` (ambiente e script em minúsculo, sem acento) | `0600` |
 | Servidor web do web2py | `W/httpserver.log` | do web2py |
 
@@ -555,13 +555,13 @@ WARNING: nenhum PURGE auditado nos ultimos 2 dias (README §11.3)
 
 ```bash
 # log da aplicação mais recente de um processo
-find /var/log/sss/interno/app -name 'sss_scheduler_*.log' -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2-
+find /var/log/sss/internal/app -name 'sss_scheduler_*.log' -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2-
 # todas as linhas de um ticket no log do agente
-grep -h "\[ticket=1000929\]" $(find /var/log/sss/interno/app -name 'sss_scheduler_*.log')
+grep -h "\[ticket=1000929\]" $(find /var/log/sss/internal/app -name 'sss_scheduler_*.log')
 # o log de execução do ticket
-find /var/log/sss -path /var/log/sss/interno -prune -o -name 'ticket_1000929_*' -print
+find /var/log/sss -path /var/log/sss/internal -prune -o -name 'ticket_1000929_*' -print
 # falhas de subida
-grep -h "Subida abortada" $(find /var/log/sss/interno/app -name '*.log')
+grep -h "Subida abortada" $(find /var/log/sss/internal/app -name '*.log')
 ```
 
 ### 14.3 Linhas `[SSS]` no log do ticket
@@ -722,6 +722,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 2. Copie o `instance/config.ini` atual para a pasta nova e compare com o `config.ini.example` novo (`diff`). Chave nova obrigatória ou removida aparece na subida como `configuracao invalida` (§15.1).
    * **Chaves renomeadas (CR-015a):** `[agent] saida_dir` → `output_dir`, `saida_max_bytes` → `output_max_bytes`, `saida_max_arquivos` → `output_max_files`, `entrada_dir` → `input_dir` e `[logging] saida_retention_days` → `output_retention_days`. Com o nome antigo, a subida para com `Chave renomeada: <antiga> passou a se chamar <nova>`.
    * **Formato do log (CR-016c2):** as linhas passam a `[pid=…] [agent=…] [ticket=…] [action=…]` (antes `[agente=…]` e `[acao=…]`). Ajuste filtros de `grep`, coletores de log e alertas que procuravam `[acao=`.
+   * **Daemon em inglês (CR-016c2, bloco 4):** os logs da aplicação passam de `log_dir/interno/app/` para `log_dir/internal/app/`; a pasta antiga para de crescer e pode ser apagada à mão depois da retenção. O nome de ambiente reservado passa de `INTERNO` para `INTERNAL`. As chaves dos marcadores `.sss_spawn` e `.sss_proc` do `work_dir` mudaram (`exec_user`, `monotonic`, `wall`): **pare o agente sem tickets `RUNNING`** (parada normal, com a drenagem) antes de trocar a versão, porque o agente novo não lê os marcadores do antigo e não retoma processos deixados por ele.
    * **Configuração e operação em inglês (CR-016b):** no `config.ini`, `[oracle] modo_driver` → `driver_mode`; `[agent] ambientes_atendidos` → `environments`, `usuarios_execucao` → `exec_users`, `interpretadores` → `interpreters`, `fila_envelhecimento_min` → `queue_aging_min`, `log_dir_min_livre_mb` → `log_dir_min_free_mb`; `[web] sessao_max_horas` → `session_max_hours`, `login_max_tentativas` → `login_max_attempts`, `login_bloqueio_s` → `login_lockout_s`; a seção `[retencao]` → `[retention]`. No `secrets.cfg`, `[ambiente:<NOME>]` → `[environment:<NOME>]`. Com o nome antigo, a subida para com `Chave renomeada` ou `Secao renomeada`, citando o nome novo. Os scripts de operação mudaram de nome (`saude.py` → `health.py`, `empacotar.py` → `package.py`, `gerar_scripts_sql.py` → `generate_sql.py`, `sondar_driver.py` → `probe_driver.py`), assim como as opções de linha de comando (`--alvo` → `--target`, `--exportar-auditoria` → `--export-audit`, `--fila-warn` → `--queue-warn`…; de-para em `docs/architecture/CR-016b-config-and-operations.md`): ajuste o `cron`, os `timer`/`service` do systemd e o Nagios. Os subcomandos do helper mudaram (`clean`, `stop-ticket`, `pack`, `clean-output`, `purge-output`): troque o `sss-helper` junto com a aplicação (passo 4).
    * **Variáveis do script renomeadas (CR-015a):** os scripts recebem só os nomes em inglês (de-para em `docs/architecture/CR-015a-english-names.md`). Antes de atualizar, procure os nomes antigos nos scripts cadastrados, por exemplo: `grep -rnE 'SSS_(AMBIENTE|AGENTE|PLATAFORMA|VERSAO|SCRIPT_NOME|SCRIPT_ARQUIVO|INTERPRETADOR|TIPO_EXECUCAO|PRIORIDADE|DATA_|TIMEOUT_SEG|AGENDAMENTO|RECORRENCIA|LOG_ARQUIVO|SAIDA_DIR|ENTRADA_DIR|TICKET_PAI_ID)' <pastas dos scripts>`. Script que ainda lê um nome antigo recebe vazio.
 3. Se o esquema mudou (`SCHEMA_VERSION`), o DBA aplica a migração antes (§5.2). Web e agentes recusam subir com versão diferente (código 15).
@@ -876,7 +877,7 @@ Implantação feita em 2026-10-15 com o pacote do commit `aca60b0` (código do `
 /portaloptrib/TESHUVA/SSS/parar_sss.sh      # SIGINT ao PID (só se o PID ainda for o do SSS), espera a porta ser liberada
 tail -f /portaloptrib/TESHUVA/SSS/logs/servidor.out     # saída do servidor (equivale ao "screen -r" do clone 7)
 tail -f /portaloptrib/TESHUVA/SSS/logs/sss_web.log      # log da aplicação (até a atualização do §22.6)
-# depois do §22.6: tail -f "$(find /portaloptrib/TESHUVA/SSS/logs/interno/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
+# depois do §22.6: tail -f "$(find /portaloptrib/TESHUVA/SSS/logs/internal/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
 cat ~/.sss/web.env                                      # senha dos usuários de demonstração
 ```
 
@@ -969,14 +970,14 @@ O pacote `e8759e3` (CR-003 e CR-004), ensaiado antes do CR-005, foi descartado: 
 | Onde está | Máquina de desenvolvimento: `/home/eduardof/sss_packages/` (pacote e `.sha256`) |
 | Mudança de configuração | Duas, no `config.ini`: apagar a linha `base_script_dir = ...` e trocar `app_log_backups = 10` por `app_log_retention_days = 30`. `secrets.cfg` e `web.env` não mudam |
 | Árvore de scripts | `$SSS/scripts` deixa de ser usada: os scripts do seed apontam para `/opt/automacoes/scripts/...`, que não existe neste servidor (sem `sudo`). A **Gestão de Scripts** mostra o aviso "Arquivo não encontrado neste servidor…" e o disparo cria o ticket normalmente (§8.1, opção sem `sudo`). A pasta pode ficar onde está |
-| Logs | O log da aplicação passa para `$SSS/logs/interno/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (§15.2). O `$SSS/logs/sss_web.log` antigo para de crescer e pode ser guardado como evidência |
+| Logs | O log da aplicação passa para `$SSS/logs/internal/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (§15.2). O `$SSS/logs/sss_web.log` antigo para de crescer e pode ser guardado como evidência |
 | Parada | Cerca de 1 minuto (passo 6). Os dados de demonstração voltam ao seed, como em todo reinício |
 
 **Ensaio (2026-10-16, na máquina de desenvolvimento, com o Python 3.8.5, a mesma versão do servidor, numa estrutura `$SSS` igual à do servidor):**
 * `config.ini` do servidor reproduzido a partir do exemplo do `fdf6f35` (com `base_script_dir` e `app_log_backups`): sem conversão, a carga é recusada com `ConfigError` "Chave desconhecida na secao [agent]: base_script_dir";
 * passos 1 a 4 como abaixo: SHA-256 OK; só `script_scheduling_service` em `applications`; passo 2 deixa `app_log_max_bytes` e `app_log_retention_days = 30` e responde "chaves OK"; `check_env.py` com código 0; suíte `Ran 718 tests ... OK (skipped=18)`; teste de carga `SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)`;
 * subida pelo `bin/sss-web.sh` com `-a '<recycle>' -i 127.0.0.1`: login HTTP 200, os 4 cabeçalhos de segurança, origem estranha recusada com 403, painel do web2py desabilitado (`password=None`);
-* log em `$SSS/logs/interno/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (o teste de carga do passo 4 deixa um arquivo próprio, do minuto em que rodou), com `[agent=srv3067-sss-hml]`, nenhum `CRITICAL`, pastas `0750` e arquivos `0640`;
+* log em `$SSS/logs/internal/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (o teste de carga do passo 4 deixa um arquivo próprio, do minuto em que rodou), com `[agent=srv3067-sss-hml]`, nenhum `CRITICAL`, pastas `0750` e arquivos `0640`;
 * teste de fumaça no navegador: login, O que eu posso fazer, Rotinas disponíveis (5 scripts), disparo do carga_diaria com o resumo e o comando `PYTHON3 -I /opt/automacoes/scripts/carga_diaria.py ...`, "Ticket #41 criado com sucesso." (o log registra `arquivo do script nao existe no no web; o agente confere`), agentes `agt-host01` e `agt-host02`, saída com "Você saiu do sistema."; nenhum erro no console;
 * parada por SIGINT, com a porta liberada.
 
@@ -1040,8 +1041,8 @@ $SSS/iniciar_sss.sh
 curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:18000/script_scheduling_service/default/login     # 200
 curl -sI http://127.0.0.1:18000/script_scheduling_service/default/login | grep -icE "content-security-policy|x-frame-options|x-content-type-options|referrer-policy"   # 4
 curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://outro-host" http://127.0.0.1:18000/script_scheduling_service/default/login   # 403
-find $SSS/logs/interno/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-   # log mais recente: o da subida
-find $SSS/logs/interno/app -name 'sss_web_*.log' -type f | xargs grep -c CRITICAL   # 0 em cada arquivo (o do passo 4 e o da subida)
+find $SSS/logs/internal/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-   # log mais recente: o da subida
+find $SSS/logs/internal/app -name 'sss_web_*.log' -type f | xargs grep -c CRITICAL   # 0 em cada arquivo (o do passo 4 e o da subida)
 tail -n 5 $SSS/logs/servidor.out
 ```
 
@@ -1070,7 +1071,7 @@ Substitui o §22.6: o pacote `fe5884c` não chegou a ser aplicado e fica descart
 | Onde está | Máquina de desenvolvimento: `/home/eduardof/sss_packages/` (pacote, `.sha256` e o roteiro `UPDATE-17950fb.txt`) |
 | Mudança de configuração | No `config.ini`: apagar `base_script_dir`, trocar `app_log_backups` por `app_log_retention_days = 30` e acrescentar as chaves opcionais novas com o valor padrão (CR-007 e CR-008; passo 2). `secrets.cfg` e `web.env` não mudam: as seções `[environment:*]` do `secrets.cfg` antigo só geram WARN em DEV ("não pertence ao papel 'web'") |
 | Árvore de scripts | Como no §22.6: os scripts do seed apontam para `/opt/automacoes/scripts/...`, que não existe neste servidor; a Gestão de Scripts avisa "Arquivo não encontrado neste servidor…" e o disparo funciona |
-| Logs | `$SSS/logs/interno/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (§15.2); o `$SSS/logs/sss_web.log` antigo para de crescer |
+| Logs | `$SSS/logs/internal/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (§15.2); o `$SSS/logs/sss_web.log` antigo para de crescer |
 | Usuários | Todos precisam entrar de novo depois da troca (CR-008, E2: a sessão antiga não tem `session_epoch`). Os dados de demonstração voltam ao seed, como em todo reinício |
 | Parada | Cerca de 1 minuto (passo 6) |
 
@@ -1150,7 +1151,7 @@ $SSS/iniciar_sss.sh
 curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:18000/script_scheduling_service/default/login     # 200
 curl -sI http://127.0.0.1:18000/script_scheduling_service/default/login | grep -icE "content-security-policy|x-frame-options|x-content-type-options|referrer-policy"   # 4
 curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://outro-host" http://127.0.0.1:18000/script_scheduling_service/default/login   # 403
-find $SSS/logs/interno/app -name 'sss_web_*.log' -type f | xargs grep -c CRITICAL   # 0 em cada arquivo
+find $SSS/logs/internal/app -name 'sss_web_*.log' -type f | xargs grep -c CRITICAL   # 0 em cada arquivo
 tail -n 5 $SSS/logs/servidor.out
 ```
 

@@ -811,7 +811,7 @@ def load_secrets(caminho, cfg=None, sss_env=None, data_backend=None, papel="web"
 
     import os_platform
     try:
-        codigo, st = os_platform.validar_arquivo_restrito(caminho)
+        codigo, st = os_platform.validate_restricted_file(caminho)
     except OSError as e:
         raise ConfigError(reason="Erro ao obter informacoes do arquivo de segredos %s: %s" % (caminho, e))
 
