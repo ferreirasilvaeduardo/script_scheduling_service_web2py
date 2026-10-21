@@ -41,8 +41,9 @@ _Agent = collections.namedtuple("_Agent", (
     "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "fila_envelhecimento_min", "child_locale",
     "cancel_poll_interval_s", "orchestrator_interval_s", "max_parallel_jobs",
     "log_dir_min_livre_mb", "script_timeout_s", "env_passthrough", "saida_dir", "saida_max_bytes",
-    "saida_max_arquivos", "schedule_batch_size"))
-_Agent.__new__.__defaults__ = (None, 20971520, 1000, 50)  # CR-012: sem saida_dir por padrao; F8.4b: lote do desdobro
+    "saida_max_arquivos", "schedule_batch_size", "shutdown_mode", "shutdown_grace_s"))
+# CR-012: sem saida_dir por padrao; F8.4b: lote do desdobro; F8.4d: parada TERMINATE por padrao.
+_Agent.__new__.__defaults__ = (None, 20971520, 1000, 50, "TERMINATE", 30)
 _Log = collections.namedtuple("_Log", "log_dir max_log_size_bytes max_local_log_size_bytes")
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
 _App = collections.namedtuple("_App", "sss_env")

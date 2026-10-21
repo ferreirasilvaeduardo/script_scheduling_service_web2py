@@ -476,7 +476,11 @@ class Agente(object):
         self.devolucoes_pendentes = set()
         # CR-012: saidas a gravar depois da finalizacao do ticket {tid: (Saida, Execucao, log)}.
         self.saidas = {}
+        # Parada (README §8.11; F8.4d): _parando suspende claim e desdobro; _terminando abandona a saida em
+        # andamento. DRAIN liga so o primeiro ate shutdown_grace_s; TERMINATE liga os dois.
         self._parando = False
+        self._terminando = False
+        self._drenagem_ate = None
         # Self-fencing e NODE_OFFLINE (F8.4c; README §8.8 e §8.9).
         self.cercado = False
         self._ref_relogio = None          # (SYSDATE, monotonico) do ultimo SYSDATE lido
@@ -531,11 +535,29 @@ class Agente(object):
                 self.encerrar_tudo("TERMINATE", registro_perdido=True)
                 return SAIDA_REGISTRO_PERDIDO
             if parada.is_set() or os.path.exists(stop):
-                return self.encerrar_tudo("TERMINATE")
+                if agente.shutdown_mode != "DRAIN":
+                    return self.encerrar_tudo("TERMINATE")
+                if self._drenagem_ate is None:
+                    self._iniciar_drenagem()
+                if self._drenado() or self.relogio() >= self._drenagem_ate:
+                    return self.encerrar_tudo("DRAIN")
             if (ate is not None and ate()) or (fim is not None and self.relogio() >= fim):
                 return self.codigo_saida
             espera = min(self.prazos.values()) - self.relogio()
             self._esperar(max(0.0, min(INTERVALO_MAXIMO_ESPERA_S, espera)))
+
+    # ---------------------------------------------------- parada DRAIN (README §8.11)
+
+    def _iniciar_drenagem(self):
+        """DRAIN: para claim e desdobro e aguarda os filhos por ate shutdown_grace_s, mantendo heartbeat,
+        varredura, log pump, saida e fence pelo laco normal (CR-007, R-04)."""
+        self._parando = True
+        self._drenagem_ate = self.relogio() + self.cfg.agent.shutdown_grace_s
+        self.log.warning("DRAIN: parada pedida; sem claim nem desdobro, aguardando %d execucao(oes) por ate %d s",
+                         len(self.execucoes), self.cfg.agent.shutdown_grace_s, extra={"acao": "PARADA"})
+
+    def _drenado(self):
+        return not (self.execucoes or self.encerrando or getattr(self, "saidas", None))
 
     # ---------------------------------------------------- self-fencing (README §8.9)
 
@@ -632,7 +654,7 @@ class Agente(object):
         saida = item.saida
         if saida is None or saida.empacotada:
             return True
-        if item.motivo in ("OWNERSHIP_LOST", "SHUTDOWN") or self._parando:
+        if item.motivo in ("OWNERSHIP_LOST", "SHUTDOWN") or self._terminando:
             fase_saida.abandonar(saida, self.plat)
             return True
         agente = self.cfg.agent
@@ -656,7 +678,7 @@ class Agente(object):
     def _avancar_saidas(self, agora):
         """Etapa 2, depois da finalizacao: grava a saida sem esperar, refazendo erro de banco a cada
         cancel_poll_interval_s. Ao terminar, remove a pasta (ZIP ou vazia) e o work_dir do ticket."""
-        if not self.saidas or self._parando:
+        if not self.saidas or self._terminando:
             return
         conn = self.conexao.obter_conexao()
         if conn is None:
@@ -1172,11 +1194,14 @@ class Agente(object):
     # ---------------------------------------------------- parada
 
     def encerrar_tudo(self, modo, registro_perdido=False):
-        """TERMINATE (README §8.11): encerra todos os grupos, finaliza SHUTDOWN, para o registro e sai 0."""
+        """Fim da parada (README §8.11): TERMINATE nos grupos que restarem (todos, no TERMINATE; os que passaram
+        de shutdown_grace_s, no DRAIN), finalizados SHUTDOWN; flush dos logs, PARADO com AGENTE_FIM, remocao
+        do .stop, recursos liberados e saida 0."""
         self.log.warning("encerramento %s: %d execucao(oes) local(is)", modo, len(self.execucoes),
                          extra={"acao": "PARADA"})
         # CR-012: a saida em andamento e abandonada (a pasta fica no disco; GRAVANDO vira FALHOU na subida).
         self._parando = True
+        self._terminando = True
         for tid, (_saida, ex, log) in sorted(getattr(self, "saidas", {}).items()):
             log.warning("saida abandonada na parada", extra={"acao": "PARADA"})
             self._limpar(tid, ex.work_dir_ticket, ex)

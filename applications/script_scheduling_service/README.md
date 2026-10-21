@@ -1858,6 +1858,8 @@ END;
 | `DRAIN` | Aguarda os filhos por até `shutdown_grace_s`, mantendo heartbeat, varredura, log pump e fence (CR-007, R-04), e então aplica `TERMINATE` aos restantes |
 | `TERMINATE` (padrão) | Encerramento escalonado de todos os grupos de uma vez (§8.9). Finaliza com `FAILED`, `SHUTDOWN` e `-6` |
 
+**Implementação (F8.4d):** no `DRAIN`, a parada só suspende claim e desdobro; o laço normal segue (heartbeat, varredura, log pump, fence e também a pasta de saída, CR-012) até não restar execução, encerramento nem saída em gravação, ou até `shutdown_grace_s`. No fim da drenagem, e no `TERMINATE` desde o início, o que restar é encerrado e finalizado `SHUTDOWN`, e a saída em andamento é abandonada (a pasta fica no disco; `GRAVANDO` vira `FALHOU` na subida seguinte). O `detalhe` do `AGENTE_FIM` traz o modo (`Agente parado (DRAIN)`).
+
 Em seguida, o daemon faz o flush dos logs, grava `tbsss_agentes.status = 'PARADO'` (com `updated_*` de `SYSTEM:<agent_id>`, §10, e o mesmo filtro de `hostname`/`pid_daemon` do heartbeat), audita `AGENTE_FIM`, remove o arquivo `.stop` (se houver), fecha a conexão e o lock file, e sai com código 0.
 
 ### 8.12 Inicialização do daemon (fail-fast)

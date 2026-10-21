@@ -727,3 +727,78 @@ class TestNodeOffline(tsc._Base):
             self.ag._node_offline()
         self.assertEqual(self.banco.tickets[tid]["status"], "RUNNING")
         self.assertIsNotNone(self.ag._node_offline_suspenso_ate)
+
+
+# ---------------------------------------------------------------------------- F8.4d: parada DRAIN e TERMINATE
+
+import signal as _signal  # noqa: E402
+import threading as _threading  # noqa: E402
+
+import plataforma as _plataforma  # noqa: E402
+
+
+class TestParada(tsc._Base):
+    """README §8.11: DRAIN aguarda os filhos com o laco normal; TERMINATE encerra todos; os dois terminam com
+    PARADO, AGENTE_FIM (encerrar_agente), .stop removido e saida 0."""
+
+    def _stop(self):
+        caminho = _os.path.join(self.work, "sss-srv-t.stop")
+        open(caminho, "w").close()
+        return caminho
+
+    def test_drain_pelo_stop_termina_os_filhos_e_mantem_heartbeat_e_saida(self):
+        saida_dir = _os.path.join(self.raiz, "saida")
+        _os.mkdir(saida_dir, 0o755)
+        tid = self.banco.ticket(self.banco.script("echo r > \"$SSS_SAIDA_DIR/r.txt\"\nsleep 1\necho fim\n"))
+        self.subir(shutdown_mode="DRAIN", shutdown_grace_s=30, saida_dir=saida_dir, saida_max_bytes=1048576,
+                   saida_max_arquivos=10)
+        self.rodar(lambda: self.banco.tickets[tid]["status"] == "RUNNING" and self.banco.tickets[tid]["process_id"])
+        novo = self.banco.ticket(self.banco.script("echo novo\n"))
+        stop = self._stop()
+        heartbeats = len(self.banco.heartbeats)
+        with self.assertLogs("sss_scheduler", "WARNING") as logs:
+            codigo = self.rodar(lambda: False, limite=20)
+        self.assertEqual(codigo, 0)
+        self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0), "DRAIN deixa o script terminar")
+        self.assertEqual(self.banco.tickets[novo]["status"], "PENDING", "sem claim na drenagem")
+        self.assertGreater(len(self.banco.heartbeats), heartbeats, "heartbeat mantido")
+        self.assertEqual(self.repo_saida.linhas[tid]["situacao"], "DISPONIVEL", "a saida segue no DRAIN")
+        self.assertEqual(self.banco.encerrou, "DRAIN")
+        self.assertFalse(_os.path.exists(stop), ".stop removido")
+        self.assertTrue(any("DRAIN: parada pedida" in l for l in logs.output))
+
+    def test_drain_com_prazo_vencido_vira_terminate(self):
+        tid = self.banco.ticket(self.banco.script("sleep 300\n"))
+        self.subir(shutdown_mode="DRAIN", shutdown_grace_s=1)
+        self.rodar(lambda: self.banco.tickets[tid]["status"] == "RUNNING" and self.banco.tickets[tid]["process_id"])
+        pid = self.banco.tickets[tid]["process_id"]
+        self.parada.set()
+        inicio = _time.monotonic()
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            self.assertEqual(self.rodar(lambda: False, limite=20), 0)
+        self.assertGreaterEqual(_time.monotonic() - inicio, 1.0, "aguardou shutdown_grace_s")
+        self.assertEqual(self.final(tid), ("FAILED", "SHUTDOWN", -6))
+        self.assertFalse(tsc._vivo(pid))
+        self.assertEqual(self.banco.encerrou, "DRAIN")
+
+    def test_terminate_pela_flag(self):
+        tid = self.banco.ticket(self.banco.script("sleep 300\n"))
+        self.subir()
+        self.rodar(lambda: self.banco.tickets[tid]["status"] == "RUNNING" and self.banco.tickets[tid]["process_id"])
+        self.parada.set()
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            self.assertEqual(self.rodar(lambda: False, limite=20), 0)
+        self.assertEqual((self.final(tid), self.banco.encerrou), (("FAILED", "SHUTDOWN", -6), "TERMINATE"))
+
+
+class TestSinalDeParada(unittest.TestCase):
+
+    def test_sigterm_e_sigint_so_acionam_a_flag(self):
+        anteriores = (_signal.getsignal(_signal.SIGTERM), _signal.getsignal(_signal.SIGINT))
+        self.addCleanup(_signal.signal, _signal.SIGTERM, anteriores[0])
+        self.addCleanup(_signal.signal, _signal.SIGINT, anteriores[1])
+        for sinal in (_signal.SIGTERM, _signal.SIGINT):
+            flag = _threading.Event()
+            _plataforma.instalar_parada(flag)
+            _os.kill(_os.getpid(), sinal)
+            self.assertTrue(flag.wait(2), sinal)
