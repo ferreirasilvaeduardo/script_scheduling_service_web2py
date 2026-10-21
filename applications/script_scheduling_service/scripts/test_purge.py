@@ -503,12 +503,16 @@ class TestPurgeOracle(unittest.TestCase):
         self.addCleanup(self._limpar)
         self.tck, self.aud = self.cat.qualificar_tabela("tickets"), self.cat.qualificar_tabela("auditoria")
         self.aud_fixture = []
+        self.tck_fixture = []  # todos os tickets da fixture, inclusive o que o purge apaga (auditoria deles)
         self.purges = []
 
     def _limpar(self):
         cur = self.conn.cursor()
         for aid in self.aud_fixture + self.purges:
             cur.execute("DELETE FROM " + self.aud + " WHERE id = :id", {"id": aid})
+        # Auditoria dos tickets da fixture, inclusive o que o purge apagou (no compartilhado nao sobra nada).
+        for tid in self.tck_fixture:
+            cur.execute("DELETE FROM " + self.aud + " WHERE entity = 'tbsss_tickets' AND entity_id = :id", {"id": tid})
         self.conn.commit()
         self.contrato._limpar_massa(self)
 
@@ -529,6 +533,7 @@ class TestPurgeOracle(unittest.TestCase):
         base = {"script_id": scr["id"], "environment": amb["name"], "requested_by": login, "priority": 2,
                 "status": "PENDING", "submitted_params": "{}"}
         velho_ok, velho_pend, novo_ok = (m.ticket(actor=login, **base) for _ in range(3))
+        self.tck_fixture = [velho_ok, velho_pend, novo_ok]
         for tid, status, dias in ((velho_ok, "SUCCESS", 40), (velho_pend, "PENDING", 40), (novo_ok, "SUCCESS", 5)):
             self._executar("UPDATE " + self.tck + " SET status = :s, created_at = SYSDATE - :d WHERE id = :id",
                            s=status, d=dias, id=tid)
