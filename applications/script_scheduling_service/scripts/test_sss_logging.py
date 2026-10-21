@@ -29,7 +29,7 @@ class TestSSSLogging(unittest.TestCase):
             "max_log_size_bytes": 5242880,
             "max_local_log_size_bytes": 52428800,
             "local_log_retention_days": 30,
-            "saida_retention_days": 7,
+            "output_retention_days": 7,
         }
         logging_cfg = sss_config.LoggingConfig(**logging_dict)
         cfg = mock.MagicMock()

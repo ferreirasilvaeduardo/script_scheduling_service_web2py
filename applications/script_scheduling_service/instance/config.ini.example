@@ -40,10 +40,10 @@ misfire_tolerance_s = 300
 cron_horizon_days = 1461
 fila_envelhecimento_min = 60       ; a cada N minutos na fila a prioridade sobe 1 nível (README §5.3); 0 desliga
 log_dir_min_livre_mb = 1024       ; abaixo disso em log_dir o agente não reserva tickets (CR-008, R-25)
-saida_dir =                       ; CR-012: pasta de saida dos scripts (README §8.13); vazio desliga
-saida_max_bytes = 20971520        ; limite do zip da saida (1 MiB a 200 MiB)
-saida_max_arquivos = 1000         ; limite de arquivos da saida (1 a 10.000)
-entrada_dir =                     ; CR-014: pasta de entrada dos scripts (README §8.14); vazio desliga
+output_dir =                       ; CR-012: pasta de saida dos scripts (README §8.13); vazio desliga
+output_max_bytes = 20971520        ; limite do zip da saida (1 MiB a 200 MiB)
+output_max_files = 1000         ; limite de arquivos da saida (1 a 10.000)
+input_dir =                     ; CR-014: pasta de entrada dos scripts (README §8.14); vazio desliga
 child_locale = C.UTF-8
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 
@@ -55,7 +55,7 @@ app_log_retention_days = 30
 max_log_size_bytes = 5242880
 max_local_log_size_bytes = 52428800
 local_log_retention_days = 30
-saida_retention_days = 7          ; CR-012: pastas de saida que ficaram no disco
+output_retention_days = 7          ; CR-012: pastas de saida que ficaram no disco
 
 [web]
 session_idle_timeout_s = 1800

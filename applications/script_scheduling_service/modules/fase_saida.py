@@ -38,7 +38,7 @@ POSSE_PERDIDA = "POSSE_PERDIDA"
 
 
 class Saida(object):
-    """Pasta de saida de um ticket: base (saida_dir/<ambiente>), relativo e o estado das duas etapas."""
+    """Pasta de saida de um ticket: base (output_dir/<ambiente>), relativo e o estado das duas etapas."""
 
     def __init__(self, ticket_id, base, relativo, usuario_execucao, work_dir_ticket):
         self.ticket_id = int(ticket_id)

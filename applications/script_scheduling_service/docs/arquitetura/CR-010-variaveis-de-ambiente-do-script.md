@@ -3,6 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Status | **Aprovado** em 2026-10-20 pelo responsável pelo produto, com as recomendações das decisões D1 a D5 |
+| Renomeado | Pelo CR-015a (2026-10-21): as variáveis `SSS_*` deste CR passaram a ter nome em inglês (`SSS_AMBIENTE` → `SSS_ENVIRONMENT` etc.). O texto abaixo mantém os nomes da época |
 | Origem | Pedido do responsável pelo produto: todo script executado deve receber, por variáveis de ambiente com prefixo reservado, os dados do ambiente e da execução (id, conexão, ambiente, data, tipo de execução, log etc.), para usar se quiser |
 | Restrições | Sem dependência nova. Sem mudança de esquema. Python 3.6 |
 | Afeta | README §4.1, §8.6, §8.10 e §13. `AGENTS.md` §7.4. Prompt F8.3 (o claim passa os dados novos ao `env_builder`). Código: `env_builder.construir` |

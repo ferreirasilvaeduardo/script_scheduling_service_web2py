@@ -40,9 +40,9 @@ _Agent = collections.namedtuple("_Agent", (
     "exec_work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
     "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "fila_envelhecimento_min", "child_locale",
     "cancel_poll_interval_s", "orchestrator_interval_s", "max_parallel_jobs",
-    "log_dir_min_livre_mb", "script_timeout_s", "env_passthrough", "saida_dir", "saida_max_bytes",
-    "saida_max_arquivos", "schedule_batch_size", "shutdown_mode", "shutdown_grace_s", "entrada_dir"))
-# CR-012: sem saida_dir por padrao; F8.4b: lote do desdobro; F8.4d: parada TERMINATE; CR-014: sem entrada_dir.
+    "log_dir_min_livre_mb", "script_timeout_s", "env_passthrough", "output_dir", "output_max_bytes",
+    "output_max_files", "schedule_batch_size", "shutdown_mode", "shutdown_grace_s", "input_dir"))
+# CR-012: sem output_dir por padrao; F8.4b: lote do desdobro; F8.4d: parada TERMINATE; CR-014: sem input_dir.
 _Agent.__new__.__defaults__ = (None, 20971520, 1000, 50, "TERMINATE", 30, None)
 _Log = collections.namedtuple("_Log", "log_dir max_log_size_bytes max_local_log_size_bytes")
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
@@ -410,7 +410,7 @@ class TestExecucao(_Base):
 
     def test_script_cadastrado_por_link_executa_o_real(self):
         # CR-011: o caminho cadastrado e um link; o agente executa o arquivo real e informa os dois.
-        sid = self.banco.script("echo \"$SSS_SCRIPT_ARQUIVO|$SSS_SCRIPT_LINK\"\n")
+        sid = self.banco.script("echo \"$SSS_SCRIPT_FILE|$SSS_SCRIPT_LINK\"\n")
         real = self.banco.scripts[sid]["path_file"]
         os.chmod(self.banco.base, 0o755)
         link = os.path.join(self.banco.base, "atalho.sh")
@@ -424,14 +424,14 @@ class TestExecucao(_Base):
         self.assertIn("%s|%s\n" % (real, link), self.banco.tickets[tid]["log"])
 
     def test_cr014_pasta_de_entrada_permanente_por_ambiente_e_script(self):
-        # CR-014 (README §8.14): SSS_ENTRADA_DIR = entrada_dir/<ambiente>/<script>, criada sob demanda e mantida.
+        # CR-014 (README §8.14): SSS_INPUT_DIR = input_dir/<ambiente>/<script>, criada sob demanda e mantida.
         entrada = os.path.join(self.raiz, "entrada")
         os.mkdir(entrada, 0o700)
-        sid = self.banco.script('n=$(ls "$SSS_ENTRADA_DIR" | wc -l)\n'
-                                'echo "dir=$SSS_ENTRADA_DIR n=$n"\n'
-                                'echo ok > "$SSS_ENTRADA_DIR/lote_$SSS_TICKET_ID.txt"\n')
+        sid = self.banco.script('n=$(ls "$SSS_INPUT_DIR" | wc -l)\n'
+                                'echo "dir=$SSS_INPUT_DIR n=$n"\n'
+                                'echo ok > "$SSS_INPUT_DIR/lote_$SSS_TICKET_ID.txt"\n')
         primeiro = self.banco.ticket(sid)
-        self.subir(entrada_dir=entrada)
+        self.subir(input_dir=entrada)
         self.rodar(self.terminado(primeiro))
         segundo = self.banco.ticket(sid)
         self.rodar(self.terminado(segundo))
@@ -444,7 +444,7 @@ class TestExecucao(_Base):
         self.assertEqual(os.stat(pasta).st_mode & 0o777, 0o700)
 
     def test_cr014_sem_entrada_dir_sem_variavel(self):
-        tid = self.banco.ticket(self.banco.script('echo "entrada=[${SSS_ENTRADA_DIR:-}]"\n'))
+        tid = self.banco.ticket(self.banco.script('echo "entrada=[${SSS_INPUT_DIR:-}]"\n'))
         self.subir()
         self.rodar(self.terminado(tid))
         self.assertIn("entrada=[]", self.banco.tickets[tid]["log"])
@@ -550,8 +550,8 @@ class TestPrevalidacao(_Base):
         self.assertIsNone(self.banco.tickets[tid]["process_id"])
 
     def test_cr014_script_dentro_da_entrada_ou_da_saida_e_pasta_do_sss(self):
-        # CR-014: o usuario de execucao grava em entrada_dir e saida_dir; um script ali poderia ser trocado.
-        for chave in ("entrada_dir", "saida_dir"):
+        # CR-014: o usuario de execucao grava em input_dir e output_dir; um script ali poderia ser trocado.
+        for chave in ("input_dir", "output_dir"):
             pasta = os.path.join(self.raiz, chave)
             os.mkdir(pasta, 0o700)
             sid = self.banco.script("echo nao deveria rodar\n")

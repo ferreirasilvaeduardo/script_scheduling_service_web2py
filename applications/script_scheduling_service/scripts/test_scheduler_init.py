@@ -31,8 +31,8 @@ _Agent = collections.namedtuple("_Agent", (
     "agent_id", "ambientes_atendidos", "work_dir", "interpretadores", "usuarios_execucao",
     "exec_work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
     "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "fila_envelhecimento_min", "child_locale",
-    "saida_dir", "entrada_dir"))
-_Agent.__new__.__defaults__ = (None, None)  # CR-012 e CR-014: sem saida_dir nem entrada_dir por padrao
+    "output_dir", "input_dir"))
+_Agent.__new__.__defaults__ = (None, None)  # CR-012 e CR-014: sem output_dir nem input_dir por padrao
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
 _NS = collections.namedtuple("_NS", "log_dir")
 _App = collections.namedtuple("_App", "sss_env")
@@ -252,13 +252,13 @@ class TestPassos(_Base):
         self.assertTrue(any("helper /opt/sss/bin/sss-helper nao encontrado" in x for x in saida))
 
     def test_cr014_pasta_de_entrada_na_subida(self):
-        # CR-014 (README §8.12 passo 4): entrada_dir fora das pastas do sistema e existente; fora de DEV, a pasta
+        # CR-014 (README §8.12 passo 4): input_dir fora das pastas do sistema e existente; fora de DEV, a pasta
         # de cada ambiente atendido do usuario de execucao dele.
-        self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(entrada_dir="/usr/local/sss-entrada")))
-        self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(entrada_dir=os.path.join(self.raiz, "nao"))))
+        self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(input_dir="/usr/local/sss-entrada")))
+        self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(input_dir=os.path.join(self.raiz, "nao"))))
         entrada = os.path.join(self.raiz, "entrada")
         os.mkdir(entrada, 0o755)
-        self.agente(cfg=self.cfg(entrada_dir=entrada)).inicializar()
+        self.agente(cfg=self.cfg(input_dir=entrada)).inicializar()
         vistos = []
 
         def _pastas(pares):
@@ -266,18 +266,18 @@ class TestPassos(_Base):
             return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pares[0][0]]
         plat = _Plat(validar_execucao=lambda *a, **k: [], validar_pastas_saida=_pastas)
         cfg = self.cfg(sss_env="PROD", exec_work_dir=self.raiz, usuarios_execucao=(("DEV", "exec1"),),
-                       entrada_dir=entrada)
+                       input_dir=entrada)
         logs = self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=cfg, plat=plat))
         self.assertEqual(vistos, [(os.path.join(entrada, "dev"), "exec1")])
         self.assertTrue(any("pasta de entrada:" in x for x in logs))
 
     def test_pasta_de_saida_na_subida(self):
-        # CR-012 (README §8.12 passo 4): saida_dir fora das pastas do sistema e existente.
-        self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(saida_dir="/usr/local/sss-saida")))
-        self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(saida_dir=os.path.join(self.raiz, "nao"))))
+        # CR-012 (README §8.12 passo 4): output_dir fora das pastas do sistema e existente.
+        self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(output_dir="/usr/local/sss-saida")))
+        self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(output_dir=os.path.join(self.raiz, "nao"))))
         saida = os.path.join(self.raiz, "saida")
         os.mkdir(saida, 0o755)
-        self.agente(cfg=self.cfg(saida_dir=saida)).inicializar()
+        self.agente(cfg=self.cfg(output_dir=saida)).inicializar()
         # Fora de DEV: a pasta de cada ambiente atendido, do usuario de execucao dele.
         vistos = []
 
@@ -286,7 +286,7 @@ class TestPassos(_Base):
             return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pares[0][0]]
         plat = _Plat(validar_execucao=lambda *a, **k: [], validar_pastas_saida=_pastas)
         cfg = self.cfg(sss_env="PROD", exec_work_dir=self.raiz, usuarios_execucao=(("DEV", "exec1"),),
-                       saida_dir=saida)
+                       output_dir=saida)
         logs = self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=cfg, plat=plat))
         self.assertEqual(vistos, [(os.path.join(saida, "dev"), "exec1")])
         self.assertTrue(any("pasta de saida:" in x for x in logs))

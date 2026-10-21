@@ -572,7 +572,7 @@ def purgar_saida(base, dias, usuario_execucao=None, contar=False):
 
 
 def validar_pastas_saida(pastas_usuarios):
-    """Subida fora de DEV (README §8.12, passo 4): cada saida_dir/<ambiente> existe, e diretorio (sem link),
+    """Subida fora de DEV (README §8.12, passo 4): cada output_dir/<ambiente> existe, e diretorio (sem link),
     pertence ao usuario de execucao do ambiente e nao tem escrita de grupo nem de outros. Devolve as falhas.
 
     pastas_usuarios: pares (pasta, usuario).

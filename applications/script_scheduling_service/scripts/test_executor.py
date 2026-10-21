@@ -502,12 +502,12 @@ class TestSnapshotV4(_Base):
         self.assertEqual(saida[:5], [cwd, os.path.dirname(script_real), cwd, 1, ["--data", "2026-10-13"]])
         # CR-010: o filho le os dados da execucao em SSS_*.
         sss = saida[5]
-        self.assertEqual((sss["SSS_TICKET_ID"], sss["SSS_TIPO_EXECUCAO"], sss["SSS_RECORRENCIA"]),
+        self.assertEqual((sss["SSS_TICKET_ID"], sss["SSS_EXECUTION_TYPE"], sss["SSS_RECURRENCE"]),
                          ("21", "AGENDADA", "DIARIA"))
-        self.assertEqual((sss["SSS_AMBIENTE"], sss["SSS_AMBIENTE_DESCRICAO"]), ("DEV", "Desenvolvimento"))
-        self.assertEqual(sss["SSS_DATA_EXECUCAO"], "2026-10-16 14:05:33")
-        self.assertEqual(sss["SSS_SCRIPT_ARQUIVO"], script_real)
-        self.assertEqual(os.path.join(sss["SSS_LOG_DIR"], sss["SSS_LOG_ARQUIVO"]), parcial)
+        self.assertEqual((sss["SSS_ENVIRONMENT"], sss["SSS_ENVIRONMENT_DESCRIPTION"]), ("DEV", "Desenvolvimento"))
+        self.assertEqual(sss["SSS_STARTED_AT"], "2026-10-16 14:05:33")
+        self.assertEqual(sss["SSS_SCRIPT_FILE"], script_real)
+        self.assertEqual(os.path.join(sss["SSS_LOG_DIR"], sss["SSS_LOG_FILE"]), parcial)
         self.assertEqual(os.path.dirname(ex.caminho_log), sss["SSS_LOG_DIR"])
         self.assertTrue(ex.caminho_log.startswith(os.path.join(self.logs, "dev", "carga_faturas", "2026")))
         self.encerrar(ex)

@@ -214,18 +214,18 @@ class TestLacoComSaida(tsc._Base):
 
     def setUp(self):
         tsc._Base.setUp(self)
-        self.saida_dir = os.path.join(self.raiz, "saida")
-        os.mkdir(self.saida_dir, 0o755)
+        self.output_dir = os.path.join(self.raiz, "saida")
+        os.mkdir(self.output_dir, 0o755)
         self.repo_saida = RepoSaidaMemoria(self.banco.tickets)
 
     def subir(self, **mudancas):
-        mudancas.setdefault("saida_dir", self.saida_dir)
-        mudancas.setdefault("saida_max_arquivos", 5)
-        mudancas.setdefault("saida_max_bytes", 1048576)
+        mudancas.setdefault("output_dir", self.output_dir)
+        mudancas.setdefault("output_max_files", 5)
+        mudancas.setdefault("output_max_bytes", 1048576)
         return tsc._Base.subir(self, **mudancas)
 
     def _pasta_do_ticket(self, tid):
-        for raiz, dirs, _arqs in os.walk(self.saida_dir):
+        for raiz, dirs, _arqs in os.walk(self.output_dir):
             if "ticket_%d" % tid in dirs:
                 return os.path.join(raiz, "ticket_%d" % tid)
         return None
@@ -234,8 +234,8 @@ class TestLacoComSaida(tsc._Base):
         return lambda: self.terminado(tid)() and tid not in self.ag.saidas
 
     def test_saida_disponivel_e_pasta_removida(self):
-        sid = self.banco.script("echo resultado > \"$SSS_SAIDA_DIR/r.txt\"\nmkdir \"$SSS_SAIDA_DIR/sub\"\n"
-                                "echo x > \"$SSS_SAIDA_DIR/sub/y.csv\"\necho fim\n")
+        sid = self.banco.script("echo resultado > \"$SSS_OUTPUT_DIR/r.txt\"\nmkdir \"$SSS_OUTPUT_DIR/sub\"\n"
+                                "echo x > \"$SSS_OUTPUT_DIR/sub/y.csv\"\necho fim\n")
         tid = self.banco.ticket(sid)
         self.subir()
         self.rodar(self.concluido(tid))
@@ -249,16 +249,16 @@ class TestLacoComSaida(tsc._Base):
         self.assertFalse(os.path.exists(os.path.join(self.work, "ticket_%d" % tid)), "work_dir limpo no fim")
 
     def test_sem_arquivos_nada_e_gravado(self):
-        tid = self.banco.ticket(self.banco.script("echo \"[$SSS_SAIDA_DIR]\"\n"))
+        tid = self.banco.ticket(self.banco.script("echo \"[$SSS_OUTPUT_DIR]\"\n"))
         self.subir()
         self.rodar(self.concluido(tid))
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
         self.assertNotIn(tid, self.repo_saida.linhas)
         self.assertIsNone(self._pasta_do_ticket(tid))
-        self.assertIn("[%s/" % self.saida_dir, self.banco.tickets[tid]["log"])
+        self.assertIn("[%s/" % self.output_dir, self.banco.tickets[tid]["log"])
 
     def test_excesso_nao_muda_o_resultado_e_mantem_a_pasta(self):
-        sid = self.banco.script("for i in 1 2 3 4 5 6; do echo $i > \"$SSS_SAIDA_DIR/f$i\"; done\nexit 3\n")
+        sid = self.banco.script("for i in 1 2 3 4 5 6; do echo $i > \"$SSS_OUTPUT_DIR/f$i\"; done\nexit 3\n")
         tid = self.banco.ticket(sid)
         self.subir()
         with self.assertLogs("sss_scheduler", "WARNING"):
@@ -272,14 +272,14 @@ class TestLacoComSaida(tsc._Base):
         self.assertEqual(len(os.listdir(pasta)), 6, "a pasta fica no disco do agente")
 
     def test_sem_saida_dir_sem_variavel(self):
-        tid = self.banco.ticket(self.banco.script("echo \"[${SSS_SAIDA_DIR:-ausente}]\"\n"))
-        self.subir(saida_dir=None)
+        tid = self.banco.ticket(self.banco.script("echo \"[${SSS_OUTPUT_DIR:-ausente}]\"\n"))
+        self.subir(output_dir=None)
         self.rodar(self.terminado(tid))
         self.assertIn("[ausente]", self.banco.tickets[tid]["log"])
         self.assertEqual(self.repo_saida.linhas, {})
 
     def test_erro_de_banco_na_gravacao_e_refeito(self):
-        tid = self.banco.ticket(self.banco.script("echo r > \"$SSS_SAIDA_DIR/r.txt\"\n"))
+        tid = self.banco.ticket(self.banco.script("echo r > \"$SSS_OUTPUT_DIR/r.txt\"\n"))
         self.repo_saida.falhas = [("iniciar", RuntimeError("ORA-03113"))]
         self.subir()
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
@@ -288,7 +288,7 @@ class TestLacoComSaida(tsc._Base):
         self.assertEqual(self.repo_saida.linhas[tid]["situacao"], "DISPONIVEL")
 
     def test_parada_abandona_e_startup_marca_falhou(self):
-        tid = self.banco.ticket(self.banco.script("echo r > \"$SSS_SAIDA_DIR/r.txt\"\n"))
+        tid = self.banco.ticket(self.banco.script("echo r > \"$SSS_OUTPUT_DIR/r.txt\"\n"))
         self.repo_saida.falhas = [("anexar", RuntimeError("ORA-03113"))] * 50
         self.subir()
         with self.assertLogs("sss_scheduler", "WARNING"):

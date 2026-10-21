@@ -47,7 +47,7 @@ SAIDA_VAZIA = 6
 SAIDA_EXCEDE_ARQUIVOS = 7
 SAIDA_EXCEDE_BYTES = 8
 
-# Pasta de saida (CR-012, README §8.13): base = saida_dir/<ambiente>; relativo = pasta do script (forma
+# Pasta de saida (CR-012, README §8.13): base = output_dir/<ambiente>; relativo = pasta do script (forma
 # segura de pastas_log.pasta_script), AAAA/MM/DD/HH/MI e ticket_<id>.
 _RE_PASTA_SCRIPT = re.compile(r"^[a-z0-9-][a-z0-9._-]{0,199}$")
 _RE_RELATIVO_MINUTO = re.compile(r"^\d{4}/\d{2}/\d{2}/\d{2}/\d{2}$")
@@ -82,7 +82,7 @@ def _inteiro(texto, nome, minimo=0, maximo=None):
 
 
 def _pasta_base(caminho, nome="pasta_base"):
-    """exec_work_dir/<usuario> ou saida_dir/<ambiente>: absoluta, normalizada, sem link e do proprio usuario
+    """exec_work_dir/<usuario> ou output_dir/<ambiente>: absoluta, normalizada, sem link e do proprio usuario
     (CR-008, R-36; CR-012)."""
     if not isinstance(caminho, str) or not caminho.startswith("/") or os.path.normpath(caminho) != caminho:
         _erro(USO_INVALIDO, "%s deve ser absoluta e normalizada" % nome)
@@ -142,7 +142,7 @@ def _pasta_saida(base, relativo, criar=False):
 
 
 def _pasta_entrada(base, relativo):
-    """Pasta de entrada do script (CR-014, README §8.14): base = entrada_dir/<ambiente> e relativo = a pasta do
+    """Pasta de entrada do script (CR-014, README §8.14): base = input_dir/<ambiente> e relativo = a pasta do
     script, um nivel so. Permanente: criada com 0700 se nao existir, sem seguir link; a existente fica como esta."""
     if not isinstance(relativo, str) or not _RE_PASTA_SCRIPT.match(relativo):
         _erro(USO_INVALIDO, "entrada fora do formato <script>")

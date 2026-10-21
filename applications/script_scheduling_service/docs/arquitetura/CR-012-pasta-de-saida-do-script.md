@@ -3,6 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Status | **Concluído** em 2026-10-20 (P0 700e7e0, R1 191674d, R2 4034a26, R3 a9333d1, R4 f48f5fa e UF). Aprovado pelo responsável pelo produto, com as recomendações (a) a (d) e a regra de excesso (D6) |
+| Renomeado | Pelo CR-015a (2026-10-21): `saida_dir` → `output_dir`, `saida_max_bytes` → `output_max_bytes`, `saida_max_arquivos` → `output_max_files`, `saida_retention_days` → `output_retention_days` e `SSS_SAIDA_DIR` → `SSS_OUTPUT_DIR`. O texto abaixo mantém os nomes da época |
 | Origem | Pedido do responsável pelo produto: uma pasta de saída parametrizada, com a mesma estrutura do log e uma pasta final por execução, passada ao script por variável de ambiente; um canal alternativo para o script expurgar ou adicionar informações. O agente confere se há dados, gera um zip e deixa o arquivo para download na tela do usuário |
 | Restrições | Sem dependência nova (`zipfile` da biblioteca padrão). Python 3.6. Esquema v1 ainda aberto: a tabela nova entra no DDL, sem migração; GFPR recriado pelo ciclo 02→01→99 |
 | Afeta | README §2.4.3, §5.7, §8.0, §8.4, §8.6, §8.7, §8.12, §9.2, §10 (18 tabelas), §11.3, §12.1, §13 e §14. `AGENTS.md` (helper, testes). `docs/IMPLANTACAO.md`. Prompts F8.3 (parte d), F8.4, F9.1 e F9.2. Código: `sss_config`, `sql_ident`/`ddl_builder`, `pastas_log`, `env_builder`, helper, `plataforma`, `scheduler_loop`, `repo_oracle/scheduler_fila`, repositórios de tickets, `ticket_service`, controller e view do ticket |

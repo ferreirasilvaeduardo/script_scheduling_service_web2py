@@ -88,25 +88,25 @@ def diretorio_log_execucao(log_dir, ambiente, nome_script, started_at, script_id
     return os.path.join(log_dir, amb, pasta, ano, mes, dia, hora, minuto)
 
 
-def pasta_saida(saida_dir, ambiente, nome_script, started_at, ticket_id, script_id=None):
+def pasta_saida(output_dir, ambiente, nome_script, started_at, ticket_id, script_id=None):
     """Pasta de saida do ticket (CR-012, README §8.13), com as mesmas partes do log de execucao.
 
-    Devolve (base, relativo): base = saida_dir/<ambiente> (do usuario de execucao fora de DEV) e
+    Devolve (base, relativo): base = output_dir/<ambiente> (do usuario de execucao fora de DEV) e
     relativo = <pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>, o formato que o helper confere.
     """
-    base = os.path.join(saida_dir, pasta_ambiente(ambiente))
+    base = os.path.join(output_dir, pasta_ambiente(ambiente))
     relativo = "/".join((pasta_script(nome_script, script_id),) + partes_minuto(started_at)
                         + ("ticket_%d" % int(ticket_id),))
     return base, relativo
 
 
-def pasta_entrada(entrada_dir, ambiente, nome_script, script_id=None):
+def pasta_entrada(input_dir, ambiente, nome_script, script_id=None):
     """Pasta de entrada do script (CR-014, README §8.14): permanente, uma por ambiente e script, sem data nem ticket.
 
-    Devolve (base, relativo): base = entrada_dir/<ambiente> (do usuario de execucao fora de DEV) e relativo =
+    Devolve (base, relativo): base = input_dir/<ambiente> (do usuario de execucao fora de DEV) e relativo =
     <pasta do script>, com a mesma regra da pasta do log (minusculo, sem acento e sem espaco).
     """
-    return os.path.join(entrada_dir, pasta_ambiente(ambiente)), pasta_script(nome_script, script_id)
+    return os.path.join(input_dir, pasta_ambiente(ambiente)), pasta_script(nome_script, script_id)
 
 
 def garantir_diretorio(diretorio, avisos=None):

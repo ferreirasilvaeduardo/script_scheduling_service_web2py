@@ -49,10 +49,10 @@ class TestEnvBuilder(unittest.TestCase):
             "PATH": "/usr/bin:/bin", "HOME": home, "TMPDIR": os.path.join(home, "tmp"),
             "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "TZ": "America/Sao_Paulo",
             "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8",
-            "SSS_TICKET_ID": "41", "SSS_AMBIENTE": "PRODUCAO", "SSS_AGENTE_ID": "srv-01",
+            "SSS_TICKET_ID": "41", "SSS_ENVIRONMENT": "PRODUCAO", "SSS_AGENT_ID": "srv-01",
             "SSS_SCRIPT_DIR": "/opt/automacoes/scripts/faturamento",
-            "SSS_SCRIPT_ARQUIVO": SCRIPT, "SSS_PLATAFORMA": "LINUX", "SSS_TIPO_EXECUCAO": "MANUAL",
-            "SSS_AMBIENTE_DSN": "dbprod:1521/FAT",
+            "SSS_SCRIPT_FILE": SCRIPT, "SSS_PLATFORM": "LINUX", "SSS_EXECUTION_TYPE": "MANUAL",
+            "SSS_ENVIRONMENT_DSN": "dbprod:1521/FAT",
             "ORACLE_HOME": "/opt/oracle", "NLS_LANG": "AMERICAN_AMERICA.AL32UTF8"})
 
     def test_sem_home_real_nem_path_do_daemon_nem_heranca(self):
@@ -123,20 +123,21 @@ class TestEnvBuilder(unittest.TestCase):
                                         caminho_log=log, timeout_seg=3600, hostname="srv-linux-01", versao="1.0")
         sss = dict((k, v) for k, v in env.items() if k.startswith("SSS_"))
         self.assertEqual(sss, {
-            "SSS_TICKET_ID": "41", "SSS_TICKET_PAI_ID": "7", "SSS_TIPO_EXECUCAO": "AGENDADA",
-            "SSS_RECORRENCIA": "MENSAL", "SSS_AGENDAMENTO_ID": "3", "SSS_AGENDAMENTO_NOME": "Carga noturna",
-            "SSS_DATA_EXECUCAO": "2026-10-20 03:00:05", "SSS_DATA_AGENDADA": "2026-10-20 03:00:00",
-            "SSS_PRIORIDADE": "2", "SSS_TIMEOUT_SEG": "3600",
-            "SSS_AMBIENTE": "PRODUCAO", "SSS_AMBIENTE_DESCRICAO": "Produção faturamento",
-            "SSS_AMBIENTE_DSN": "dbprod:1521/FAT", "SSS_AMBIENTE_USUARIO": "fat_app",
-            "SSS_AMBIENTE_CONEXAO": "fat_app/S3nh@Forte@dbprod:1521/FAT",
-            "SSS_SCRIPT_ID": "12", "SSS_SCRIPT_NOME": "Carga Faturas", "SSS_INTERPRETADOR": "PYTHON3",
-            "SSS_SCRIPT_ARQUIVO": SCRIPT, "SSS_SCRIPT_DIR": "/opt/automacoes/scripts/faturamento",
+            "SSS_TICKET_ID": "41", "SSS_PARENT_TICKET_ID": "7", "SSS_EXECUTION_TYPE": "AGENDADA",
+            "SSS_RECURRENCE": "MENSAL", "SSS_SCHEDULE_ID": "3", "SSS_SCHEDULE_NAME": "Carga noturna",
+            "SSS_STARTED_AT": "2026-10-20 03:00:05", "SSS_SCHEDULED_AT": "2026-10-20 03:00:00",
+            "SSS_PRIORITY": "2", "SSS_TIMEOUT_SECONDS": "3600",
+            "SSS_ENVIRONMENT": "PRODUCAO", "SSS_ENVIRONMENT_DESCRIPTION": "Produção faturamento",
+            "SSS_ENVIRONMENT_DSN": "dbprod:1521/FAT", "SSS_ENVIRONMENT_USER": "fat_app",
+            "SSS_ENVIRONMENT_CONNECTION": "fat_app/S3nh@Forte@dbprod:1521/FAT",
+            "SSS_SCRIPT_ID": "12", "SSS_SCRIPT_NAME": "Carga Faturas", "SSS_INTERPRETER": "PYTHON3",
+            "SSS_SCRIPT_FILE": SCRIPT, "SSS_SCRIPT_DIR": "/opt/automacoes/scripts/faturamento",
             "SSS_LOG_DIR": "/srv/sss/logs/producao/carga_faturas/2026/10/20/03/00",
-            "SSS_LOG_ARQUIVO": "ticket_41.log.parcial",
-            "SSS_AGENTE_ID": "srv-01", "SSS_AGENTE_HOST": "srv-linux-01", "SSS_PLATAFORMA": "LINUX",
-            "SSS_VERSAO": "1.0"})
-        self.assertEqual(env["PADRAO_VALOR_RUN_CONEXAO_BD"], env["SSS_AMBIENTE_CONEXAO"], "variavel antiga mantida")
+            "SSS_LOG_FILE": "ticket_41.log.parcial",
+            "SSS_AGENT_ID": "srv-01", "SSS_AGENT_HOST": "srv-linux-01", "SSS_PLATFORM": "LINUX",
+            "SSS_VERSION": "1.0"})
+        self.assertEqual(env["PADRAO_VALOR_RUN_CONEXAO_BD"], env["SSS_ENVIRONMENT_CONNECTION"],
+                         "variavel antiga mantida")
         self.assertNotIn("SSS_SOLICITANTE", env)
         self.assertFalse([k for k in env if k.startswith("SSS_PARAM")])
 
@@ -148,21 +149,21 @@ class TestEnvBuilder(unittest.TestCase):
                                         SCRIPT, WORK, {}, "UNIX", snapshot={"script_nome": ""},
                                         agendamento={"nome": "ignorado", "tipo_recorrencia": "DIARIA"},
                                         hostname="", versao=None)
-        self.assertEqual(env["SSS_TIPO_EXECUCAO"], "MANUAL")
-        for ausente in ("SSS_RECORRENCIA", "SSS_AGENDAMENTO_ID", "SSS_AGENDAMENTO_NOME", "SSS_TICKET_PAI_ID",
-                        "SSS_PRIORIDADE", "SSS_AMBIENTE_DESCRICAO", "SSS_AMBIENTE_DSN", "SSS_AMBIENTE_USUARIO",
-                        "SSS_AMBIENTE_CONEXAO", "SSS_SCRIPT_NOME", "SSS_AGENTE_HOST", "SSS_VERSAO",
-                        "SSS_LOG_DIR", "SSS_LOG_ARQUIVO", "SSS_DATA_EXECUCAO", "PADRAO_VALOR_RUN_CONEXAO_BD"):
+        self.assertEqual(env["SSS_EXECUTION_TYPE"], "MANUAL")
+        for ausente in ("SSS_RECURRENCE", "SSS_SCHEDULE_ID", "SSS_SCHEDULE_NAME", "SSS_PARENT_TICKET_ID",
+                        "SSS_PRIORITY", "SSS_ENVIRONMENT_DESCRIPTION", "SSS_ENVIRONMENT_DSN", "SSS_ENVIRONMENT_USER",
+                        "SSS_ENVIRONMENT_CONNECTION", "SSS_SCRIPT_NAME", "SSS_AGENT_HOST", "SSS_VERSION",
+                        "SSS_LOG_DIR", "SSS_LOG_FILE", "SSS_STARTED_AT", "PADRAO_VALOR_RUN_CONEXAO_BD"):
             self.assertNotIn(ausente, env, ausente)
-        self.assertEqual(env["SSS_PLATAFORMA"], "UNIX")
+        self.assertEqual(env["SSS_PLATFORM"], "UNIX")
 
     def test_cr010_conexao_mascarada_nos_logs(self):
         cred = AmbienteSegredo("fat_app", "S3nh@Forte")
         with mock.patch.object(masking, "MASCARADOR", masking.Mascarador()) as masc:
             env = self.construir(segredos=_segredos({"PRODUCAO": cred}))
-            self.assertEqual(masc.mascarar("SSS_AMBIENTE_CONEXAO=%s" % env["SSS_AMBIENTE_CONEXAO"]),
-                             "SSS_AMBIENTE_CONEXAO=****")
-        self.assertEqual(env["SSS_AMBIENTE_USUARIO"], "fat_app")
+            self.assertEqual(masc.mascarar("SSS_ENVIRONMENT_CONNECTION=%s" % env["SSS_ENVIRONMENT_CONNECTION"]),
+                             "SSS_ENVIRONMENT_CONNECTION=****")
+        self.assertEqual(env["SSS_ENVIRONMENT_USER"], "fat_app")
 
     def test_cr011_link_no_caminho_cadastrado(self):
         with self.assertLogs("sss_scheduler", "WARNING"):
@@ -170,7 +171,7 @@ class TestEnvBuilder(unittest.TestCase):
                                         snapshot={"path_file": "/opt/automacoes/atual/carga.py"})
             sem_link = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
                                              snapshot={"path_file": SCRIPT})
-        self.assertEqual((env["SSS_SCRIPT_ARQUIVO"], env["SSS_SCRIPT_LINK"]), (SCRIPT, "/opt/automacoes/atual/carga.py"))
+        self.assertEqual((env["SSS_SCRIPT_FILE"], env["SSS_SCRIPT_LINK"]), (SCRIPT, "/opt/automacoes/atual/carga.py"))
         self.assertNotIn("SSS_SCRIPT_LINK", sem_link)
 
     def test_cr012_pasta_de_saida_so_quando_informada(self):
@@ -178,16 +179,38 @@ class TestEnvBuilder(unittest.TestCase):
             env = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
                                         pasta_saida="/srv/sss/saida/producao/carga/2026/10/20/03/00/ticket_41")
             sem = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
-        self.assertEqual(env["SSS_SAIDA_DIR"], "/srv/sss/saida/producao/carga/2026/10/20/03/00/ticket_41")
-        self.assertNotIn("SSS_SAIDA_DIR", sem)
+        self.assertEqual(env["SSS_OUTPUT_DIR"], "/srv/sss/saida/producao/carga/2026/10/20/03/00/ticket_41")
+        self.assertNotIn("SSS_OUTPUT_DIR", sem)
 
     def test_cr014_pasta_de_entrada_so_quando_informada(self):
         with self.assertLogs("sss_scheduler", "WARNING"):
             env = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
                                         pasta_entrada="/srv/sss/entrada/producao/carga")
             sem = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
-        self.assertEqual(env["SSS_ENTRADA_DIR"], "/srv/sss/entrada/producao/carga")
-        self.assertNotIn("SSS_ENTRADA_DIR", sem)
+        self.assertEqual(env["SSS_INPUT_DIR"], "/srv/sss/entrada/producao/carga")
+        self.assertNotIn("SSS_INPUT_DIR", sem)
+
+    def test_cr015a_so_nomes_em_ingles(self):
+        """Troca direta (CR-015a): nenhum nome antigo chega ao script, nem com todos os dados presentes."""
+        antigos = ("SSS_TICKET_PAI_ID", "SSS_AMBIENTE", "SSS_AMBIENTE_DESCRICAO", "SSS_AMBIENTE_DSN",
+                   "SSS_AMBIENTE_USUARIO", "SSS_AMBIENTE_CONEXAO", "SSS_AGENTE_ID", "SSS_AGENTE_HOST",
+                   "SSS_PLATAFORMA", "SSS_VERSAO", "SSS_SCRIPT_NOME", "SSS_SCRIPT_ARQUIVO", "SSS_INTERPRETADOR",
+                   "SSS_TIPO_EXECUCAO", "SSS_PRIORIDADE", "SSS_DATA_EXECUCAO", "SSS_DATA_AGENDADA", "SSS_TIMEOUT_SEG",
+                   "SSS_AGENDAMENTO_ID", "SSS_AGENDAMENTO_NOME", "SSS_RECORRENCIA", "SSS_LOG_ARQUIVO",
+                   "SSS_SAIDA_DIR", "SSS_ENTRADA_DIR")
+        ticket = {"id": 41, "ambiente": "PRODUCAO", "parent_ticket_id": 7, "agendamento_id": 3, "prioridade": 2,
+                  "started_at": datetime.datetime(2026, 10, 20, 3, 0, 5),
+                  "scheduled_at": datetime.datetime(2026, 10, 20, 3, 0)}
+        with mock.patch.object(masking, "MASCARADOR", masking.Mascarador()):
+            env = env_builder.construir(_cfg(), _segredos({"PRODUCAO": AmbienteSegredo("fat_app", "S3nh@Forte")}),
+                                        ticket, dict(AMB, descricao="x"), SCRIPT, WORK, dict(DAEMON), "LINUX",
+                                        snapshot={"script_id": 12, "script_nome": "C", "interpretador": "SH",
+                                                  "path_file": "/opt/automacoes/atual/carga.sh"},
+                                        agendamento={"nome": "N", "tipo_recorrencia": "CRON"},
+                                        caminho_log="/srv/sss/logs/x/ticket_41.log.parcial", timeout_seg=60,
+                                        hostname="h", versao="1.0", pasta_saida="/srv/s", pasta_entrada="/srv/e")
+        self.assertEqual([k for k in antigos if k in env], [])
+        self.assertTrue(set(("SSS_ENVIRONMENT", "SSS_OUTPUT_DIR", "SSS_INPUT_DIR", "SSS_SCHEDULE_NAME")) <= set(env))
 
     def test_entradas_invalidas(self):
         with self.assertRaises(ValueError):

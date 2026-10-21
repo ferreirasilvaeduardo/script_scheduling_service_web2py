@@ -255,6 +255,13 @@ class TestConfig(unittest.TestCase):
                 sss_config.carregar(ini)
             self.assertIn("apague a linha %s" % chave, str(ctx.exception))
 
+        # CR-015a: chaves com nome em ingles; a antiga e recusada com o nome novo, nunca aceita.
+        for (secao, antiga), nova in sss_config.CHAVES_RENOMEADAS.items():
+            ini = self._copiar_e_modificar_ini(alteracoes={secao: {antiga: "1"}})
+            with self.assertRaises(sss_config.ConfigErro) as ctx:
+                sss_config.carregar(ini)
+            self.assertIn("%s passou a se chamar %s" % (antiga, nova), str(ctx.exception))
+
     def test_fora_da_faixa(self):
         """Verifica rejeicao de valores fora das faixas minimas/maximas."""
         # pool_min < 1
@@ -685,36 +692,36 @@ class TestConfigCR007(unittest.TestCase):
     def test_pasta_de_saida(self):
         # CR-012 (README §8.13): opcional, com limites e sem sobrepor as pastas do SSS.
         cfg = self._carregar()
-        self.assertIsNone(cfg.agent.saida_dir)
-        self.assertEqual((cfg.agent.saida_max_bytes, cfg.agent.saida_max_arquivos), (20971520, 1000))
-        self.assertEqual(cfg.logging.saida_retention_days, 7)
+        self.assertIsNone(cfg.agent.output_dir)
+        self.assertEqual((cfg.agent.output_max_bytes, cfg.agent.output_max_files), (20971520, 1000))
+        self.assertEqual(cfg.logging.output_retention_days, 7)
         base = os.path.dirname(cfg.agent.work_dir)
-        ok = self._carregar(agent={"saida_dir": os.path.join(base, "saida_teste")})
-        self.assertEqual(ok.agent.saida_dir, os.path.join(base, "saida_teste"))
-        self._recusa("saida_dir", agent={"saida_dir": "relativa/saida"})
-        self._recusa("saida_dir", agent={"saida_dir": os.path.join(cfg.agent.work_dir, "saida")})
-        self._recusa("saida_dir", agent={"saida_dir": os.path.join(cfg.logging.log_dir, "saida")})
-        self._recusa("saida_dir", agent={"saida_dir": os.path.dirname(cfg.logging.log_dir)})
-        self._recusa("saida_dir", agent={"saida_dir": os.path.join(base, "s"),
+        ok = self._carregar(agent={"output_dir": os.path.join(base, "saida_teste")})
+        self.assertEqual(ok.agent.output_dir, os.path.join(base, "saida_teste"))
+        self._recusa("output_dir", agent={"output_dir": "relativa/saida"})
+        self._recusa("output_dir", agent={"output_dir": os.path.join(cfg.agent.work_dir, "saida")})
+        self._recusa("output_dir", agent={"output_dir": os.path.join(cfg.logging.log_dir, "saida")})
+        self._recusa("output_dir", agent={"output_dir": os.path.dirname(cfg.logging.log_dir)})
+        self._recusa("output_dir", agent={"output_dir": os.path.join(base, "s"),
                                          "exec_work_dir": os.path.join(base, "s", "exec")})
-        # CR-014 (README §8.14): entrada_dir opcional, sem sobrepor as pastas do SSS nem a de saida.
-        self.assertIsNone(cfg.agent.entrada_dir)
-        ok = self._carregar(agent={"entrada_dir": os.path.join(base, "entrada_teste")})
-        self.assertEqual(ok.agent.entrada_dir, os.path.join(base, "entrada_teste"))
-        self._recusa("entrada_dir", agent={"entrada_dir": "relativa/entrada"})
-        self._recusa("entrada_dir", agent={"entrada_dir": os.path.join(cfg.agent.work_dir, "entrada")})
-        self._recusa("entrada_dir", agent={"entrada_dir": os.path.join(cfg.logging.log_dir, "entrada")})
-        self._recusa("entrada_dir", agent={"entrada_dir": os.path.dirname(cfg.logging.log_dir)})
-        self._recusa("entrada_dir", agent={"entrada_dir": os.path.join(base, "s", "entrada"),
-                                           "saida_dir": os.path.join(base, "s")})
-        for chave, ruins, bons in (("saida_max_bytes", ("1048575", "209715201"), ("1048576", "209715200")),
-                                   ("saida_max_arquivos", ("0", "10001"), ("1", "10000"))):
+        # CR-014 (README §8.14): input_dir opcional, sem sobrepor as pastas do SSS nem a de saida.
+        self.assertIsNone(cfg.agent.input_dir)
+        ok = self._carregar(agent={"input_dir": os.path.join(base, "entrada_teste")})
+        self.assertEqual(ok.agent.input_dir, os.path.join(base, "entrada_teste"))
+        self._recusa("input_dir", agent={"input_dir": "relativa/entrada"})
+        self._recusa("input_dir", agent={"input_dir": os.path.join(cfg.agent.work_dir, "entrada")})
+        self._recusa("input_dir", agent={"input_dir": os.path.join(cfg.logging.log_dir, "entrada")})
+        self._recusa("input_dir", agent={"input_dir": os.path.dirname(cfg.logging.log_dir)})
+        self._recusa("input_dir", agent={"input_dir": os.path.join(base, "s", "entrada"),
+                                           "output_dir": os.path.join(base, "s")})
+        for chave, ruins, bons in (("output_max_bytes", ("1048575", "209715201"), ("1048576", "209715200")),
+                                   ("output_max_files", ("0", "10001"), ("1", "10000"))):
             for v in ruins:
                 self._recusa(chave, agent={chave: v})
             for v in bons:
                 self.assertEqual(getattr(self._carregar(agent={chave: v}).agent, chave), int(v))
-        self._recusa("saida_retention_days", logging={"saida_retention_days": "0"})
-        self._recusa("saida_retention_days", logging={"saida_retention_days": "366"})
+        self._recusa("output_retention_days", logging={"output_retention_days": "0"})
+        self._recusa("output_retention_days", logging={"output_retention_days": "366"})
 
     def test_invariantes_i3_e_i4(self):
         # I3: heartbeat + 2*call <= fence (10 + 2*41 = 92 > 90).

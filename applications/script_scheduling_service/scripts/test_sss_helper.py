@@ -297,9 +297,9 @@ class TestSssHelper(unittest.TestCase):
         rel = "carga_diaria/2026/10/20/14/05/ticket_12"
         script = os.path.join(self.raiz, "grava.py")
         with open(script, "w") as f:
-            f.write("import os\nopen(os.path.join(os.environ['SSS_SAIDA_DIR'], 'r.txt'), 'w').write('ok')\n")
+            f.write("import os\nopen(os.path.join(os.environ['SSS_OUTPUT_DIR'], 'r.txt'), 'w').write('ok')\n")
         alvo = os.path.join(base, rel)
-        spec = {"ticket_id": 12, "argv": [sys.executable, script], "env": {"SSS_SAIDA_DIR": alvo},
+        spec = {"ticket_id": 12, "argv": [sys.executable, script], "env": {"SSS_OUTPUT_DIR": alvo},
                 "pasta_base": self.base, "saida": {"base": base, "relativo": rel}}
         codigo, erro = _helper("run", entrada=json.dumps(spec).encode("utf-8"))
         self.assertEqual(codigo, 0, erro)
@@ -335,11 +335,11 @@ class TestSssHelper(unittest.TestCase):
         os.makedirs(base, 0o700)
         script = os.path.join(self.raiz, "consome.py")
         with open(script, "w") as f:
-            f.write("import os\nd = os.environ['SSS_ENTRADA_DIR']\n"
+            f.write("import os\nd = os.environ['SSS_INPUT_DIR']\n"
                     "n = len(os.listdir(d))\nopen(os.path.join(d, 'lido_%d.txt' % n), 'w').write('ok')\n")
         alvo = os.path.join(base, "carga_diaria")
         for ticket in (21, 22):
-            spec = {"ticket_id": ticket, "argv": [sys.executable, script], "env": {"SSS_ENTRADA_DIR": alvo},
+            spec = {"ticket_id": ticket, "argv": [sys.executable, script], "env": {"SSS_INPUT_DIR": alvo},
                     "pasta_base": self.base, "entrada": {"base": base, "relativo": "carga_diaria"}}
             codigo, erro = _helper("run", entrada=json.dumps(spec).encode("utf-8"))
             self.assertEqual(codigo, 0, erro)

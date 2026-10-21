@@ -3,6 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Status | **Concluído** em 2026-10-21. Aprovado pelo responsável pelo produto, com a estrutura por ambiente, acesso de leitura e gravação e criação sob demanda pelo agente |
+| Renomeado | Pelo CR-015a (2026-10-21): `entrada_dir` → `input_dir` e `SSS_ENTRADA_DIR` → `SSS_INPUT_DIR`. O texto abaixo mantém os nomes da época |
 | Origem | Pedido do responsável pelo produto: uma pasta de entrada parametrizada, com a estrutura só pelo nome do script (minúsculo e sem espaço), passada ao script por variável de ambiente |
 | Restrições | Sem dependência nova. Python 3.6. Sem mudança de esquema |
 | Afeta | README §8.0 (helper `run`), §8.4 (passo 3), §8.5 (`PASTA_DO_SSS`), §8.6 (variáveis), §8.12 (passo 4), §8.14 (nova) e §12.1. `AGENTS.md` (regras e testes). `docs/IMPLANTACAO.md`. Código: `sss_config`, `pastas_log`, `env_builder`, `executor`, `plataforma`, `bin/sss-helper` e `scheduler_loop` |

@@ -17,7 +17,7 @@ _log = logging.getLogger("sss_scheduler")
 
 PATH_FILHO = "/usr/bin:/bin"
 VAR_CONEXAO = "PADRAO_VALOR_RUN_CONEXAO_BD"
-VAR_CONEXAO_SSS = "SSS_AMBIENTE_CONEXAO"
+VAR_CONEXAO_SSS = "SSS_ENVIRONMENT_CONNECTION"
 _FMT_DATA = "%Y-%m-%d %H:%M:%S"
 PLATAFORMAS = ("LINUX", "UNIX")
 
@@ -89,8 +89,8 @@ def construir(cfg, segredos, ticket, ambiente, script_real, work_dir_ticket, env
     (so para TZ e env_passthrough); snapshot: o snapshot v4 (script_id, script_nome, interpretador);
     agendamento: dict com nome e tipo_recorrencia da regra que gerou o ticket; caminho_log: o
     .log.parcial aberto por executor.abrir_log; timeout_seg: o prazo efetivo; hostname e versao: do agente;
-    pasta_saida: a pasta de saida do ticket (CR-012), so quando o agente tem saida_dir.
-    pasta_entrada: a pasta de entrada do script (CR-014), so quando o agente tem entrada_dir.
+    pasta_saida: a pasta de saida do ticket (CR-012), so quando o agente tem output_dir.
+    pasta_entrada: a pasta de entrada do script (CR-014), so quando o agente tem input_dir.
     """
     if plataforma_nome not in PLATAFORMAS:
         raise ValueError("Plataforma nao suportada: %s" % plataforma_nome)
@@ -113,46 +113,46 @@ def construir(cfg, segredos, ticket, ambiente, script_real, work_dir_ticket, env
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONIOENCODING": "utf-8",
         "SSS_TICKET_ID": str(ticket_id),
-        "SSS_AMBIENTE": ambiente["nome"],
-        "SSS_AGENTE_ID": agente.agent_id,
+        "SSS_ENVIRONMENT": ambiente["nome"],
+        "SSS_AGENT_ID": agente.agent_id,
         "SSS_SCRIPT_DIR": os.path.dirname(script_real),
-        "SSS_SCRIPT_ARQUIVO": script_real,
-        "SSS_PLATAFORMA": plataforma_nome,
+        "SSS_SCRIPT_FILE": script_real,
+        "SSS_PLATFORM": plataforma_nome,
     })
     if environ_daemon.get("TZ"):
         env["TZ"] = environ_daemon["TZ"]
 
     # Execucao (CR-010).
     agendada = ticket.get("agendamento_id") is not None
-    env["SSS_TIPO_EXECUCAO"] = "AGENDADA" if agendada else "MANUAL"
-    _definir(env, "SSS_TICKET_PAI_ID", ticket.get("parent_ticket_id"))
-    _definir(env, "SSS_PRIORIDADE", ticket.get("prioridade"))
-    _definir(env, "SSS_DATA_EXECUCAO", _data(ticket.get("started_at")))
-    _definir(env, "SSS_DATA_AGENDADA", _data(ticket.get("scheduled_at")))
-    _definir(env, "SSS_TIMEOUT_SEG", timeout_seg)
+    env["SSS_EXECUTION_TYPE"] = "AGENDADA" if agendada else "MANUAL"
+    _definir(env, "SSS_PARENT_TICKET_ID", ticket.get("parent_ticket_id"))
+    _definir(env, "SSS_PRIORITY", ticket.get("prioridade"))
+    _definir(env, "SSS_STARTED_AT", _data(ticket.get("started_at")))
+    _definir(env, "SSS_SCHEDULED_AT", _data(ticket.get("scheduled_at")))
+    _definir(env, "SSS_TIMEOUT_SECONDS", timeout_seg)
     if agendada:
-        _definir(env, "SSS_AGENDAMENTO_ID", ticket.get("agendamento_id"))
-        _definir(env, "SSS_AGENDAMENTO_NOME", (agendamento or {}).get("nome"))
-        _definir(env, "SSS_RECORRENCIA", (agendamento or {}).get("tipo_recorrencia"))
+        _definir(env, "SSS_SCHEDULE_ID", ticket.get("agendamento_id"))
+        _definir(env, "SSS_SCHEDULE_NAME", (agendamento or {}).get("nome"))
+        _definir(env, "SSS_RECURRENCE", (agendamento or {}).get("tipo_recorrencia"))
     # Script, log e agente.
     # CR-011: com link simbolico no caminho, o cadastrado vai em SSS_SCRIPT_LINK; o real nos demais.
     if snap.get("path_file") and snap["path_file"] != script_real:
         _definir(env, "SSS_SCRIPT_LINK", snap["path_file"])
     _definir(env, "SSS_SCRIPT_ID", snap.get("script_id"))
-    _definir(env, "SSS_SCRIPT_NOME", snap.get("script_nome"))
-    _definir(env, "SSS_INTERPRETADOR", snap.get("interpretador"))
+    _definir(env, "SSS_SCRIPT_NAME", snap.get("script_nome"))
+    _definir(env, "SSS_INTERPRETER", snap.get("interpretador"))
     if caminho_log:
         _definir(env, "SSS_LOG_DIR", os.path.dirname(caminho_log))
-        _definir(env, "SSS_LOG_ARQUIVO", os.path.basename(caminho_log))
-    _definir(env, "SSS_SAIDA_DIR", pasta_saida)
-    _definir(env, "SSS_ENTRADA_DIR", pasta_entrada)
-    _definir(env, "SSS_AGENTE_HOST", hostname)
-    _definir(env, "SSS_VERSAO", versao)
+        _definir(env, "SSS_LOG_FILE", os.path.basename(caminho_log))
+    _definir(env, "SSS_OUTPUT_DIR", pasta_saida)
+    _definir(env, "SSS_INPUT_DIR", pasta_entrada)
+    _definir(env, "SSS_AGENT_HOST", hostname)
+    _definir(env, "SSS_VERSION", versao)
     # Ambiente: descricao, DSN (sem credencial), usuario e a connect string (mascarada em todo log).
-    _definir(env, "SSS_AMBIENTE_DESCRICAO", ambiente.get("descricao"))
-    _definir(env, "SSS_AMBIENTE_DSN", (ambiente.get("conexao") or "").strip() or None)
+    _definir(env, "SSS_ENVIRONMENT_DESCRIPTION", ambiente.get("descricao"))
+    _definir(env, "SSS_ENVIRONMENT_DSN", (ambiente.get("conexao") or "").strip() or None)
     usuario_bd, conexao = _conexao(segredos, ambiente, ticket_id)
-    _definir(env, "SSS_AMBIENTE_USUARIO", usuario_bd)
+    _definir(env, "SSS_ENVIRONMENT_USER", usuario_bd)
     if conexao is not None:
         env[VAR_CONEXAO] = conexao
         env[VAR_CONEXAO_SSS] = conexao

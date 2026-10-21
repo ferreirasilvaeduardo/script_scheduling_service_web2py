@@ -27,7 +27,7 @@ _LD_PERMITIDA = "LD_LIBRARY_PATH"
 _CHAVES_FIXAS = frozenset(["PATH", "HOME", "TMPDIR", "LANG", "TZ", "PADRAO_VALOR_RUN_CONEXAO_BD"])
 _PREFIXOS_FIXOS = ("LC_", "SSS_", "PYTHON")
 
-# Versao do SSS: unico lugar (tbsss_agentes.versao e SSS_VERSAO do script, CR-010). Trocada a cada release.
+# Versao do SSS: unico lugar (tbsss_agentes.versao e SSS_VERSION do script, CR-010). Trocada a cada release.
 VERSAO_SSS = "1.0.0-dev"
 
 # Chaves que existiram e foram retiradas: recusadas com orientacao, para nao serem ignoradas em silencio.
@@ -35,6 +35,15 @@ CHAVES_REMOVIDAS = {
     ("app", "data_backend"): "a aplicacao usa sempre o Oracle do [oracle] (owner e table_prefix) (F7.3)",
     ("agent", "script_owner_uids"): "o SSS nao confere mais o dono dos scripts; o ambiente controla o conteudo (CR-011)",
     ("agent", "ambientes_exigem_hash"): "o SSS nao confere mais o hash dos scripts (CR-011)",
+}
+
+# Chaves com nome novo (CR-015a): o config.ini antigo e recusado com o nome a usar, sem aceitar o antigo.
+CHAVES_RENOMEADAS = {
+    ("agent", "saida_dir"): "output_dir",
+    ("agent", "saida_max_bytes"): "output_max_bytes",
+    ("agent", "saida_max_arquivos"): "output_max_files",
+    ("agent", "entrada_dir"): "input_dir",
+    ("logging", "saida_retention_days"): "output_retention_days",
 }
 
 # Atores do sistema que nao podem ser agent_id (README §4.4 e §8.12).
@@ -150,11 +159,11 @@ SCHEMA = collections.OrderedDict([
         # CR-008, R-25: espaco minimo do log_dir.
         ("log_dir_min_livre_mb", CampoDef("int", obrigatorio=False, min_val=0, max_val=1048576, default=1024)),
         # CR-012: pasta de saida dos scripts (vazio desliga) e limites do zip (README §8.13).
-        ("saida_dir", CampoDef("path", obrigatorio=False, default=None)),
-        ("saida_max_bytes", CampoDef("int", obrigatorio=False, min_val=1048576, max_val=209715200, default=20971520)),
-        ("saida_max_arquivos", CampoDef("int", obrigatorio=False, min_val=1, max_val=10000, default=1000)),
+        ("output_dir", CampoDef("path", obrigatorio=False, default=None)),
+        ("output_max_bytes", CampoDef("int", obrigatorio=False, min_val=1048576, max_val=209715200, default=20971520)),
+        ("output_max_files", CampoDef("int", obrigatorio=False, min_val=1, max_val=10000, default=1000)),
         # CR-014: pasta de entrada dos scripts, permanente, uma por ambiente e script (vazio desliga; README §8.14).
-        ("entrada_dir", CampoDef("path", obrigatorio=False, default=None)),
+        ("input_dir", CampoDef("path", obrigatorio=False, default=None)),
         ("child_locale", CampoDef("str", obrigatorio=True)),
         ("env_passthrough", CampoDef("list_csv", obrigatorio=False, default=())),
     ])),
@@ -167,7 +176,7 @@ SCHEMA = collections.OrderedDict([
         ("max_local_log_size_bytes", CampoDef("int", obrigatorio=True, min_val=1024, max_val=10737418240)),
         ("local_log_retention_days", CampoDef("int", obrigatorio=True, min_val=1, max_val=3650)),
         # CR-012: pastas de saida que ficaram no disco (excesso ou falha).
-        ("saida_retention_days", CampoDef("int", obrigatorio=False, min_val=1, max_val=365, default=7)),
+        ("output_retention_days", CampoDef("int", obrigatorio=False, min_val=1, max_val=365, default=7)),
     ])),
     ("web", collections.OrderedDict([
         ("session_idle_timeout_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=86400)),
@@ -224,14 +233,14 @@ class AgentConfig(_ItemAccessMixin, collections.namedtuple("AgentConfig", [
     "shutdown_mode", "shutdown_grace_s", "misfire_policy",
     "misfire_tolerance_s", "cron_horizon_days", "child_locale",
     "env_passthrough", "usuarios_execucao", "interpretadores", "exec_work_dir", "fila_envelhecimento_min",
-    "log_dir_min_livre_mb", "saida_dir", "saida_max_bytes", "saida_max_arquivos", "entrada_dir"
+    "log_dir_min_livre_mb", "output_dir", "output_max_bytes", "output_max_files", "input_dir"
 ])):
     __slots__ = ()
 
 
 class LoggingConfig(_ItemAccessMixin, collections.namedtuple("LoggingConfig", [
     "log_dir", "level", "app_log_max_bytes", "app_log_retention_days",
-    "max_log_size_bytes", "max_local_log_size_bytes", "local_log_retention_days", "saida_retention_days"
+    "max_log_size_bytes", "max_local_log_size_bytes", "local_log_retention_days", "output_retention_days"
 ])):
     __slots__ = ()
 
@@ -399,6 +408,9 @@ def carregar(caminho_ini):
             if (sec_nome, k) in CHAVES_REMOVIDAS:
                 raise ConfigErro(secao=sec_nome, chave=k, motivo="Chave removida: %s; apague a linha %s" % (
                     CHAVES_REMOVIDAS[(sec_nome, k)], k))
+            if (sec_nome, k) in CHAVES_RENOMEADAS:
+                raise ConfigErro(secao=sec_nome, chave=k, motivo="Chave renomeada: %s passou a se chamar %s (CR-015a)"
+                                 % (k, CHAVES_RENOMEADAS[(sec_nome, k)]))
             if k not in sec_campos:
                 raise ConfigErro(secao=sec_nome, chave=k, motivo="Chave desconhecida na secao [%s]: %s" % (sec_nome, k))
 
@@ -545,23 +557,23 @@ def _validar_cr007(app, oracle, agent, logging_dict, retencao):
             if _dentro(agent["exec_work_dir"], outro) or _dentro(outro, agent["exec_work_dir"]):
                 raise ConfigErro(secao="agent", chave="exec_work_dir",
                                  motivo="Nao pode ficar dentro de %s nem conte-lo" % nome)
-    if agent["saida_dir"]:
+    if agent["output_dir"]:
         # CR-012: a pasta de saida nao se sobrepoe as pastas do SSS (README §8.13).
-        if not os.path.isabs(agent["saida_dir"]):
-            raise ConfigErro(secao="agent", chave="saida_dir", motivo="Deve ser um caminho absoluto")
+        if not os.path.isabs(agent["output_dir"]):
+            raise ConfigErro(secao="agent", chave="output_dir", motivo="Deve ser um caminho absoluto")
         for nome, outro in (("work_dir", agent["work_dir"]), ("log_dir", logging_dict["log_dir"]),
                             ("exec_work_dir", agent["exec_work_dir"])):
-            if outro and (_dentro(agent["saida_dir"], outro) or _dentro(outro, agent["saida_dir"])):
-                raise ConfigErro(secao="agent", chave="saida_dir",
+            if outro and (_dentro(agent["output_dir"], outro) or _dentro(outro, agent["output_dir"])):
+                raise ConfigErro(secao="agent", chave="output_dir",
                                  motivo="Nao pode ficar dentro de %s nem conte-lo" % nome)
-    if agent["entrada_dir"]:
+    if agent["input_dir"]:
         # CR-014: a pasta de entrada nao se sobrepoe as pastas do SSS nem a de saida (README §8.14).
-        if not os.path.isabs(agent["entrada_dir"]):
-            raise ConfigErro(secao="agent", chave="entrada_dir", motivo="Deve ser um caminho absoluto")
+        if not os.path.isabs(agent["input_dir"]):
+            raise ConfigErro(secao="agent", chave="input_dir", motivo="Deve ser um caminho absoluto")
         for nome, outro in (("work_dir", agent["work_dir"]), ("log_dir", logging_dict["log_dir"]),
-                            ("exec_work_dir", agent["exec_work_dir"]), ("saida_dir", agent["saida_dir"])):
-            if outro and (_dentro(agent["entrada_dir"], outro) or _dentro(outro, agent["entrada_dir"])):
-                raise ConfigErro(secao="agent", chave="entrada_dir",
+                            ("exec_work_dir", agent["exec_work_dir"]), ("output_dir", agent["output_dir"])):
+            if outro and (_dentro(agent["input_dir"], outro) or _dentro(outro, agent["input_dir"])):
+                raise ConfigErro(secao="agent", chave="input_dir",
                                  motivo="Nao pode ficar dentro de %s nem conte-lo" % nome)
 
     if retencao["audit_retention_days"] < retencao["ticket_retention_days"]:

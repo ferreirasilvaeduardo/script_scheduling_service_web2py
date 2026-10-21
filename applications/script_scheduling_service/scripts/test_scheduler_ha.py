@@ -747,11 +747,11 @@ class TestParada(tsc._Base):
         return caminho
 
     def test_drain_pelo_stop_termina_os_filhos_e_mantem_heartbeat_e_saida(self):
-        saida_dir = _os.path.join(self.raiz, "saida")
-        _os.mkdir(saida_dir, 0o755)
-        tid = self.banco.ticket(self.banco.script("echo r > \"$SSS_SAIDA_DIR/r.txt\"\nsleep 1\necho fim\n"))
-        self.subir(shutdown_mode="DRAIN", shutdown_grace_s=30, saida_dir=saida_dir, saida_max_bytes=1048576,
-                   saida_max_arquivos=10)
+        output_dir = _os.path.join(self.raiz, "saida")
+        _os.mkdir(output_dir, 0o755)
+        tid = self.banco.ticket(self.banco.script("echo r > \"$SSS_OUTPUT_DIR/r.txt\"\nsleep 1\necho fim\n"))
+        self.subir(shutdown_mode="DRAIN", shutdown_grace_s=30, output_dir=output_dir, output_max_bytes=1048576,
+                   output_max_files=10)
         self.rodar(lambda: self.banco.tickets[tid]["status"] == "RUNNING" and self.banco.tickets[tid]["process_id"])
         novo = self.banco.ticket(self.banco.script("echo novo\n"))
         stop = self._stop()

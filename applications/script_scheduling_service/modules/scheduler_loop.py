@@ -92,10 +92,10 @@ class _Log(logging.LoggerAdapter):
 
 def _dirs_sss(cfg):
     """Pastas do SSS onde nenhum script nem interpretador pode ficar (PASTA_DO_SSS, README §8.5). CR-014: inclui
-    saida_dir e entrada_dir, que o usuario de execucao grava (um script ali poderia ser trocado por outro)."""
+    output_dir e input_dir, que o usuario de execucao grava (um script ali poderia ser trocado por outro)."""
     agente = cfg.agent
     return tuple(d for d in (cfg.logging.log_dir, agente.work_dir, agente.exec_work_dir,
-                             getattr(agente, "saida_dir", None), getattr(agente, "entrada_dir", None)) if d)
+                             getattr(agente, "output_dir", None), getattr(agente, "input_dir", None)) if d)
 
 
 def _ler_estado(pasta, nome, plat):
@@ -245,17 +245,17 @@ class Agente(object):
         self._conferir_entrada_dir()
 
     def _conferir_entrada_dir(self):
-        """CR-014 (README §8.12 passo 4): entrada_dir fora das pastas do sistema; fora de DEV, a pasta de cada
+        """CR-014 (README §8.12 passo 4): input_dir fora das pastas do sistema; fora de DEV, a pasta de cada
         ambiente atendido do usuario de execucao dele, sem escrita de grupo nem de outros (como a de saida)."""
         agente = self.cfg.agent
-        if not agente.entrada_dir:
+        if not agente.input_dir:
             return
-        codigo = self.plat.validar_dir_restrito(agente.entrada_dir)
+        codigo = self.plat.validar_dir_restrito(agente.input_dir)
         if codigo:
-            self._falhar(SAIDA_DIRETORIOS, "entrada_dir %s recusado: %s", agente.entrada_dir, codigo)
+            self._falhar(SAIDA_DIRETORIOS, "input_dir %s recusado: %s", agente.input_dir, codigo)
         if self.cfg.app.sss_env == "DEV" and not agente.usuarios_execucao:
             return
-        pares = [(os.path.join(agente.entrada_dir, pastas_log.pasta_ambiente(amb)), self._usuario_execucao(amb))
+        pares = [(os.path.join(agente.input_dir, pastas_log.pasta_ambiente(amb)), self._usuario_execucao(amb))
                  for amb in agente.ambientes_atendidos if self._usuario_execucao(amb)]
         falhas = self.plat.validar_pastas_saida(pares)
         for falha in falhas:
@@ -264,17 +264,17 @@ class Agente(object):
             self._falhar(SAIDA_DIRETORIOS, "%d falha(s) nas pastas de entrada (CR-014)", len(falhas))
 
     def _conferir_saida_dir(self):
-        """CR-012 (README §8.12 passo 4): saida_dir fora das pastas do sistema; fora de DEV, a pasta de cada
+        """CR-012 (README §8.12 passo 4): output_dir fora das pastas do sistema; fora de DEV, a pasta de cada
         ambiente atendido do usuario de execucao dele, sem escrita de grupo nem de outros."""
         agente = self.cfg.agent
-        if not agente.saida_dir:
+        if not agente.output_dir:
             return
-        codigo = self.plat.validar_dir_restrito(agente.saida_dir)
+        codigo = self.plat.validar_dir_restrito(agente.output_dir)
         if codigo:
-            self._falhar(SAIDA_DIRETORIOS, "saida_dir %s recusado: %s", agente.saida_dir, codigo)
+            self._falhar(SAIDA_DIRETORIOS, "output_dir %s recusado: %s", agente.output_dir, codigo)
         if self.cfg.app.sss_env == "DEV" and not agente.usuarios_execucao:
             return
-        pares = [(os.path.join(agente.saida_dir, pastas_log.pasta_ambiente(amb)), self._usuario_execucao(amb))
+        pares = [(os.path.join(agente.output_dir, pastas_log.pasta_ambiente(amb)), self._usuario_execucao(amb))
                  for amb in agente.ambientes_atendidos if self._usuario_execucao(amb)]
         falhas = self.plat.validar_pastas_saida(pares)
         for falha in falhas:
@@ -687,12 +687,12 @@ class Agente(object):
             return True
         agente = self.cfg.agent
         if saida.processo is None:
-            fase_saida.iniciar_empacotar(saida, self.plat, agente.saida_max_bytes, agente.saida_max_arquivos, agora)
+            fase_saida.iniciar_empacotar(saida, self.plat, agente.output_max_bytes, agente.output_max_files, agora)
             if not saida.empacotada:
                 return False
         elif not fase_saida.avancar_empacotar(saida, self.plat, agora):
             return False
-        linha = fase_saida.linha_log(saida, self.agente_id, agente.saida_max_arquivos, agente.saida_max_bytes)
+        linha = fase_saida.linha_log(saida, self.agente_id, agente.output_max_files, agente.output_max_bytes)
         if linha and item.execucao is not None and item.execucao.caminho_log:
             try:
                 executor.anexar_linha_local(item.execucao, linha)
@@ -733,7 +733,7 @@ class Agente(object):
                 if fase_saida.deve_remover_pasta(saida):
                     try:
                         fase_saida.remover_pasta(saida, self.plat)
-                    except Exception as exc:  # noqa: BLE001 - fica para o purge (saida_retention_days)
+                    except Exception as exc:  # noqa: BLE001 - fica para o purge (output_retention_days)
                         log.warning("pasta de saida nao removida (%s)", exc.__class__.__name__,
                                     extra={"acao": "SAIDA"})
             self._limpar(tid, ex.work_dir_ticket, ex)
@@ -1007,13 +1007,13 @@ class Agente(object):
                 self.log.warning("DISCO_LOG: %d MB livres em log_dir (minimo %d): sem claim", livre,
                                  agente.log_dir_min_livre_mb, extra={"acao": "CLAIM"})
             return
-        if agente.saida_dir:
-            livre_saida = self.plat.espaco_livre_mb(agente.saida_dir)
+        if agente.output_dir:
+            livre_saida = self.plat.espaco_livre_mb(agente.output_dir)
             if livre_saida < agente.log_dir_min_livre_mb:
                 agora = self.relogio()
                 if self._ultimo_aviso_disco is None or agora - self._ultimo_aviso_disco >= INTERVALO_AVISO_DISCO_S:
                     self._ultimo_aviso_disco = agora
-                    self.log.warning("DISCO_SAIDA: %d MB livres em saida_dir (minimo %d): sem claim", livre_saida,
+                    self.log.warning("DISCO_SAIDA: %d MB livres em output_dir (minimo %d): sem claim", livre_saida,
                                      agente.log_dir_min_livre_mb, extra={"acao": "CLAIM"})
                 return
         inicio = self.relogio()
@@ -1163,13 +1163,13 @@ class Agente(object):
         saida = None
         entrada = None
         try:
-            if agente.entrada_dir:
+            if agente.input_dir:
                 # CR-014 (README §8.14): pasta permanente do script no ambiente, com o nome do snapshot.
-                entrada = pastas_log.pasta_entrada(agente.entrada_dir, ticket["ambiente"], snap["script_nome"],
+                entrada = pastas_log.pasta_entrada(agente.input_dir, ticket["ambiente"], snap["script_nome"],
                                                    snap.get("script_id"))
-            if agente.saida_dir:
+            if agente.output_dir:
                 # CR-012 (README §8.13): pasta de saida com as partes do log e o mesmo minuto.
-                base, relativo = pastas_log.pasta_saida(agente.saida_dir, ticket["ambiente"], snap["script_nome"],
+                base, relativo = pastas_log.pasta_saida(agente.output_dir, ticket["ambiente"], snap["script_nome"],
                                                         item.started_at, item.tid, snap.get("script_id"))
                 saida = fase_saida.Saida(item.tid, base, relativo, usuario, work_dir_ticket)
             ticket_env = dict(ticket, started_at=item.started_at)
@@ -1290,4 +1290,4 @@ class _Item(object):
         self.pid_pendente = False
         self.avisou_pid = False
         self.finalizacao_pendente = False
-        self.saida = None  # CR-012: fase_saida.Saida quando o agente tem saida_dir
+        self.saida = None  # CR-012: fase_saida.Saida quando o agente tem output_dir

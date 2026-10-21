@@ -34,12 +34,12 @@ TERMINAIS = ("SUCCESS", "FAILED", "CANCELLED")
 
 
 def _cfg(raiz, **extra):
-    agente = dict(agent_id="srv-a", work_dir=os.path.join(raiz, "work"), saida_dir=None,
+    agente = dict(agent_id="srv-a", work_dir=os.path.join(raiz, "work"), output_dir=None,
                   ambientes_atendidos=("PRODUCAO",), usuarios_execucao=())
     agente.update(extra.get("agent", {}))
     return NS(app=NS(sss_env="DEV"), oracle=NS(owner="openrisow", table_prefix="tbsss_"),
               secrets=NS(secrets_file=os.path.join(raiz, "secrets.cfg")), agent=NS(**agente),
-              logging=NS(log_dir=os.path.join(raiz, "logs"), local_log_retention_days=30, saida_retention_days=7),
+              logging=NS(log_dir=os.path.join(raiz, "logs"), local_log_retention_days=30, output_retention_days=7),
               retencao=NS(ticket_retention_days=90, audit_retention_days=365, purge_batch_size=2,
                           purge_user=extra.get("purge_user", "sss_purge")))
 
@@ -316,7 +316,7 @@ class TestDryRun(_Base):
     def test_so_select_um_agora_e_nada_alterado(self):
         antigo = self._minuto("producao/carga/2026/01/10/03/00")
         plat = _Plat(contagem=4)
-        cfg = _cfg(self.raiz, agent={"saida_dir": os.path.join(self.raiz, "saida")})
+        cfg = _cfg(self.raiz, agent={"output_dir": os.path.join(self.raiz, "saida")})
         os.makedirs(os.path.join(self.raiz, "saida", "producao"))
         banco = _Banco(tickets=[(1, _dias(100), "SUCCESS"), (2, _dias(100), "PENDING")],
                        auditoria=[(5, _dias(400))])
@@ -382,7 +382,7 @@ class TestSaida(_Base):
     def test_por_ambiente_com_o_usuario_de_execucao(self):
         base = os.path.join(self.raiz, "saida")
         os.makedirs(os.path.join(base, "producao"))
-        cfg = _cfg(self.raiz, agent={"saida_dir": base, "ambientes_atendidos": ("PRODUCAO", "HOMOLOGACAO"),
+        cfg = _cfg(self.raiz, agent={"output_dir": base, "ambientes_atendidos": ("PRODUCAO", "HOMOLOGACAO"),
                                      "usuarios_execucao": (("PRODUCAO", "sssprd"), ("HOMOLOGACAO", "ssshml"))})
         plat = _Plat(contagem=2)
         p = self._purge(_Banco(), plat=plat, cfg=cfg)
@@ -394,10 +394,10 @@ class TestSaida(_Base):
     def test_desligada_e_falha(self):
         p = self._purge(_Banco())
         self.assertEqual(p.executar(("saida",)), 0)
-        self.assertEqual(p.resumo, ["saida: desligada (saida_dir vazio)"])
+        self.assertEqual(p.resumo, ["saida: desligada (output_dir vazio)"])
         base = os.path.join(self.raiz, "saida")
         os.makedirs(os.path.join(base, "producao"))
-        cfg = _cfg(self.raiz, agent={"saida_dir": base})
+        cfg = _cfg(self.raiz, agent={"output_dir": base})
         self.assertEqual(self._purge(_Banco(), plat=_Plat(falhar=True), cfg=cfg).executar(("saida",)),
                          purge_cli.SAIDA_LOCAIS)
 

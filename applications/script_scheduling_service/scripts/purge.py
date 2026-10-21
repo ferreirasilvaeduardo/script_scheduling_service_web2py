@@ -12,7 +12,7 @@ Roda no servidor do agente, agendado pelo cron, com a conta Oracle de purge ([re
   inclusive com 0 linhas. Sem a concessao: INFO e saida 0.
 * logs_locais: pastas de minuto de log_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI vencidas, menos as de tickets
   RUNNING; nunca log_dir/interno/. Em todo agente, sem concessao.
-* saida: pastas de minuto de saida_dir/<ambiente>/... vencidas, pelo helper purgar-saida. Sem concessao.
+* saida: pastas de minuto de output_dir/<ambiente>/... vencidas, pelo helper purgar-saida. Sem concessao.
 * --dry-run: so SELECT e listagem; um unico agora_banco() para todos os limites; nada e travado nem gravado.
 
 Saida: 0 sucesso (inclusive "outro no esta purgando"), 1 falha de banco, 2 configuracao invalida, 3 falha na
@@ -212,17 +212,17 @@ class Purge(object):
 
     def _saida(self, dry_run):
         agente = self.cfg.agent
-        if not agente.saida_dir:
-            self.resumo.append("saida: desligada (saida_dir vazio)")
+        if not agente.output_dir:
+            self.resumo.append("saida: desligada (output_dir vazio)")
             return True
         usuarios = dict(agente.usuarios_execucao or ())
         total, ok = 0, True
         for amb in agente.ambientes_atendidos:
-            base = os.path.join(agente.saida_dir, pastas_log.pasta_ambiente(amb))
+            base = os.path.join(agente.output_dir, pastas_log.pasta_ambiente(amb))
             if not os.path.isdir(base):
                 continue
             try:
-                total += self.plat.purgar_saida(base, self.cfg.logging.saida_retention_days,
+                total += self.plat.purgar_saida(base, self.cfg.logging.output_retention_days,
                                                 usuarios.get(amb) or None, contar=dry_run)
             except (RuntimeError, OSError) as exc:
                 ok = False

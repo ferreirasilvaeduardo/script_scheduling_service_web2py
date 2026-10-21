@@ -3,7 +3,7 @@
 
 Com SSS_TEST_ORACLE=1 (README §2.5): esquema validado por preparar_schema_descartavel('agente') antes de DML;
 ambiente, perfil, usuario, scripts e tickets so da fixture; cada agente com o proprio config.ini temporario
-(agent_id, work_dir, log_dir e saida_dir proprios). Confere: nunca mais de 2 RUNNING do script de teto 2
+(agent_id, work_dir, log_dir e output_dir proprios). Confere: nunca mais de 2 RUNNING do script de teto 2
 (polling no banco), todos SUCCESS, cada ticket executado uma vez, saida DISPONIVEL gravada pelo agente dono,
 cancelamento pela web encerrado pelo agente dono, heartbeat e parada pelo .stop, e nenhum processo orfao.
 Limpa so os IDs criados (tickets, saidas em cascata, cadastros, agentes de teste e a auditoria deles).
@@ -73,8 +73,8 @@ class _DoisAgentesBase(unittest.TestCase):
         os.mkdir(scripts_dir, 0o755)
         self.execucoes = os.path.join(self.raiz, "execucoes.txt")
         curto = self._arquivo(scripts_dir, "curto.sh",
-                              "echo \"$SSS_TICKET_ID $SSS_AGENTE_ID\" >> %s\n"
-                              "echo \"ticket $SSS_TICKET_ID\" > \"$SSS_SAIDA_DIR/resultado.txt\"\n"
+                              "echo \"$SSS_TICKET_ID $SSS_AGENT_ID\" >> %s\n"
+                              "echo \"ticket $SSS_TICKET_ID\" > \"$SSS_OUTPUT_DIR/resultado.txt\"\n"
                               "sleep 2\necho fim\n" % self.execucoes)
         longo = self._arquivo(scripts_dir, "longo.sh", "echo inicio\nsleep %d\n" % MARCA_LONGO)
         self.scr = m.script("curto", path_file=curto, max_qtd_parallel_env=TETO)
@@ -136,7 +136,7 @@ class _DoisAgentesBase(unittest.TestCase):
         cp["agent"].update({"agent_id": agente, "ambientes_atendidos": self.amb["nome"], "work_dir": pastas["work"],
                             "usuarios_execucao": "", "exec_work_dir": "", "interpretadores": "SH=/bin/sh",
                             "max_parallel_jobs": "4", "orchestrator_interval_s": "1", "cancel_poll_interval_s": "1",
-                            "saida_dir": pastas["saida"], "log_dir_min_livre_mb": "0"})
+                            "output_dir": pastas["saida"], "log_dir_min_livre_mb": "0"})
         for secao, valores in self.CONFIG_EXTRA.items():
             cp[secao].update(valores)
         cp["logging"]["log_dir"] = pastas["logs"]
