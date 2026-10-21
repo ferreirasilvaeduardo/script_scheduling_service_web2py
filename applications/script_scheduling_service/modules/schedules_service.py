@@ -21,19 +21,19 @@ import params_compiler
 import rbac
 import recurrence
 import ui_helpers
-from admin_crud import CAMPO_GERAL, OperacaoNegada
+from admin_crud import GENERAL_FIELD, OperationDenied
 from cron_parser import CronError
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
-from ticket_service import AcessoNegado as DisparoNegado
+from ticket_service import AccessDenied as DisparoNegado
 
-FUNCIONALIDADE = "MANAGE_SCHEDULES"
-TAMANHO_NOME = 60
-QTD_PREVIA = 5
-PRIORIDADE_PADRAO = 2
-MASCARA = u"******"
-FORMATO_CAMPO_DATA = "%Y-%m-%dT%H:%M"
+FEATURE = "MANAGE_SCHEDULES"
+NAME_MAX_LENGTH = 60
+PREVIEW_COUNT = 5
+DEFAULT_PRIORITY = 2
+MASK = u"******"
+DATE_FIELD_FORMAT = "%Y-%m-%dT%H:%M"
 
-ROTULOS_TIPO = collections.OrderedDict((
+TYPE_LABELS = collections.OrderedDict((
     ("ONCE", u"Única"),
     ("DAILY", u"Diária"),
     ("WEEKLY", u"Semanal"),
@@ -41,13 +41,13 @@ ROTULOS_TIPO = collections.OrderedDict((
     ("CRON", u"Expressão CRON"),
 ))
 # ISO 1-7 (1 = segunda), README §7.2.
-DIAS_SEMANA = ((1, u"seg", u"Segunda"), (2, u"ter", u"Terça"), (3, u"qua", u"Quarta"),
+WEEKDAYS = ((1, u"seg", u"Segunda"), (2, u"ter", u"Terça"), (3, u"qua", u"Quarta"),
                (4, u"qui", u"Quinta"), (5, u"sex", u"Sexta"), (6, u"sáb", u"Sábado"),
                (7, u"dom", u"Domingo"))
-_ABREV_DIA = dict((n, abrev) for n, abrev, _nome in DIAS_SEMANA)
+_DAY_ABBREV = dict((n, abrev) for n, abrev, _nome in WEEKDAYS)
 
 # Textos dos motivos de pausa (decisao D4 do F5.2; README §7.5).
-MOTIVOS_PAUSA = {
+PAUSE_REASONS = {
     "MANUAL": u"Pausado manualmente",
     "COMPLETED": u"Concluída",
     "USER_INACTIVE": u"Responsável inativo",
@@ -59,64 +59,64 @@ MOTIVOS_PAUSA = {
     "INTERNAL_ERROR": u"Erro interno",
 }
 
-MSG_NOME_OBRIGATORIO = u"Informe o nome da regra."
-MSG_NOME_TAMANHO = u"O nome deve ter no máximo %d caracteres." % TAMANHO_NOME
-MSG_TIPO = u"Selecione o tipo de recorrência."
-MSG_DATA_INVALIDA = u"Informe uma data e hora válidas."
-MSG_INICIO_UNICA = u"Informe a data e hora da execução."
-MSG_PRIORIDADE = u"Selecione uma prioridade entre 1 e 4."
-MSG_PRIORIDADE_ADMIN = u"A prioridade 1 é exclusiva de administradores."
-MSG_SEM_PROXIMA = (u"A regra não tem próxima execução. Confira a data de início, a data de fim "
+MSG_NAME_REQUIRED = u"Informe o nome da regra."
+MSG_NAME_LENGTH = u"O nome deve ter no máximo %d caracteres." % NAME_MAX_LENGTH
+MSG_TYPE = u"Selecione o tipo de recorrência."
+MSG_DATE_INVALID = u"Informe uma data e hora válidas."
+MSG_ONCE_START = u"Informe a data e hora da execução."
+MSG_PRIORITY = u"Selecione uma prioridade entre 1 e 4."
+MSG_PRIORITY_ADMIN = u"A prioridade 1 é exclusiva de administradores."
+MSG_NO_NEXT_RUN = (u"A regra não tem próxima execução. Confira a data de início, a data de fim "
                    u"e a recorrência.")
-MSG_SEM_PERMISSAO = (u"Você não tem permissão para executar este script neste ambiente. "
+MSG_NO_PERMISSION = (u"Você não tem permissão para executar este script neste ambiente. "
                      u"A regra roda com as permissões de quem a salva; ela não foi alterada.")
-MSG_JA_PAUSADA = u"A regra já está pausada."
-MSG_JA_ATIVA = u"A regra já está ativa."
-MSG_RETOMAR_SEM_PROXIMA = (u"A regra não tem próxima execução e não pode ser retomada. "
+MSG_ALREADY_PAUSED = u"A regra já está pausada."
+MSG_ALREADY_ACTIVE = u"A regra já está ativa."
+MSG_RESUME_NO_NEXT_RUN = (u"A regra não tem próxima execução e não pode ser retomada. "
                            u"Edite as datas ou a recorrência.")
-MSG_ORIENTACAO_RETOMAR = (u"Edite a regra para corrigir (ao salvar, ela passa a rodar com as suas permissões) "
+MSG_RESUME_GUIDANCE = (u"Edite a regra para corrigir (ao salvar, ela passa a rodar com as suas permissões) "
                           u"e depois retome.")
 
 # Campos editaveis que compoem a versao do formulario (concorrencia otimista, README §10).
-CAMPOS_VERSAO = ("name", "priority", "recurrence_type", "cron_expression", "run_time",
+VERSION_FIELDS = ("name", "priority", "recurrence_type", "cron_expression", "run_time",
                  "week_days", "month_day", "params_json", "start_date", "end_date",
                  "user_id", "active", "pause_reason")
-_CAMPOS_ESPERADO = CAMPOS_VERSAO + ("next_run_at",)
-CAMPOS_AUDITORIA = ("name", "script_id", "environment", "priority", "recurrence_type",
+_EXPECTED_FIELDS = VERSION_FIELDS + ("next_run_at",)
+AUDIT_FIELDS = ("name", "script_id", "environment", "priority", "recurrence_type",
                     "cron_expression", "run_time", "week_days", "month_day", "parameters",
                     "start_date", "end_date")
-_CAMPOS_INSERCAO = CAMPOS_AUDITORIA + ("user_id", "next_run_at")
+_INSERT_FIELDS = AUDIT_FIELDS + ("user_id", "next_run_at")
 
 _RE_ID = re.compile(r"[0-9]{1,10}")
-_RE_AMBIENTE = re.compile(r"[A-Z0-9_]{1,30}")
+_RE_ENVIRONMENT = re.compile(r"[A-Z0-9_]{1,30}")
 # Precisao de minuto (README §7.2/§7.6): segundos ou fracoes sao recusados, nunca cortados.
-_FORMATOS_DATA = ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M")
-_SETA = u" → "
+_DATE_FORMATS = ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M")
+_ARROW = u" → "
 
 
 def _id(valor):
-    valor = admin_crud.texto(valor, 11)
+    valor = admin_crud.text(valor, 11)
     if valor is None or not _RE_ID.fullmatch(valor) or int(valor) < 1:
         return None
     return int(valor)
 
 
-def _ultimo(valor):
+def _last(valor):
     if isinstance(valor, (list, tuple)):
         return valor[-1] if valor else None
     return valor
 
 
-def _vazio(valor):
+def _empty(valor):
     return valor is None or (isinstance(valor, str) and valor.strip() == "")
 
 
-def _data(valor):
+def _date(valor):
     """(datetime sem microssegundos | None, invalido). Vazio e (None, False)."""
-    texto = admin_crud.texto(valor)
+    texto = admin_crud.text(valor)
     if texto is None:
         return None, False
-    for formato in _FORMATOS_DATA:
+    for formato in _DATE_FORMATS:
         try:
             return datetime.datetime.strptime(texto, formato).replace(microsecond=0), False
         except ValueError:
@@ -124,7 +124,7 @@ def _data(valor):
     return None, True
 
 
-def _dias_semana(valor):
+def _weekdays(valor):
     """Checkboxes (lista) ou texto '1,3,5' -> texto ISO ordenado sem repeticao; lixo segue para a validacao."""
     if isinstance(valor, (list, tuple)):
         itens = [v for v in valor if isinstance(v, str)]
@@ -140,87 +140,87 @@ def _dias_semana(valor):
     return ",".join(itens)[:20]
 
 
-def formatar_data(dt):
+def format_date(dt):
     """dd/mm/aaaa HH:MM; None vira '-'."""
     return dt.strftime("%d/%m/%Y %H:%M") if dt is not None else "-"
 
 
-def formatar_previa(dt):
+def format_preview(dt):
     """Data da previa com o dia da semana (ex.: 'qui, 30/04/2026 03:00')."""
-    return u"%s, %s" % (_ABREV_DIA[dt.isoweekday()], formatar_data(dt))
+    return u"%s, %s" % (_DAY_ABBREV[dt.isoweekday()], format_date(dt))
 
 
-def _valor_campo_data(dt):
-    return dt.strftime(FORMATO_CAMPO_DATA) if dt is not None else ""
+def _date_field_value(dt):
+    return dt.strftime(DATE_FIELD_FORMAT) if dt is not None else ""
 
 
-AGENDA_POR_REGRA = 20
+AGENDA_PER_RULE = 20
 AGENDA_TOTAL = 500
-_AGENDA_PAGINA = 100
-_AGENDA_CONTAGEM_MAX = 5000
-_NOMES_DIA = (u"segunda-feira", u"terça-feira", u"quarta-feira", u"quinta-feira", u"sexta-feira", u"sábado",
+_AGENDA_PAGE = 100
+_AGENDA_COUNT_MAX = 5000
+_DAY_NAMES = (u"segunda-feira", u"terça-feira", u"quarta-feira", u"quinta-feira", u"sexta-feira", u"sábado",
               u"domingo")
 
 
-def _rotulo_dia(dia, hoje):
+def _day_label(dia, hoje):
     """'Hoje', 'Amanhã' ou 'sexta-feira, 18/10' (README §7.7)."""
     if dia == hoje:
         return u"Hoje"
     if dia == hoje + datetime.timedelta(days=1):
         return u"Amanhã"
-    return u"%s, %s" % (_NOMES_DIA[dia.weekday()], dia.strftime("%d/%m"))
+    return u"%s, %s" % (_DAY_NAMES[dia.weekday()], dia.strftime("%d/%m"))
 
 
-def descrever_regra(regra):
+def describe_rule(regra):
     """Descricao da recorrencia em portugues para a lista e a previa."""
     tipo = regra.get("recurrence_type")
     hora = regra.get("run_time")
     if tipo == "ONCE":
-        return u"Uma vez, em %s" % formatar_data(regra.get("start_date"))
+        return u"Uma vez, em %s" % format_date(regra.get("start_date"))
     if tipo == "DAILY":
         return u"Todos os dias às %s" % hora
     if tipo == "WEEKLY":
         dias = [int(d) for d in (regra.get("week_days") or "").split(",") if d.strip().isdigit()]
-        return u"Às %s, %s" % (hora, u", ".join(_ABREV_DIA.get(d, "?") for d in dias))
+        return u"Às %s, %s" % (hora, u", ".join(_DAY_ABBREV.get(d, "?") for d in dias))
     if tipo == "MONTHLY":
         return u"Às %s, no dia %s de cada mês" % (hora, regra.get("month_day"))
     if tipo == "CRON":
         try:
             texto = cron_parser.parse(regra.get("cron_expression")).describe()
         except CronError:
-            return MOTIVOS_PAUSA["INVALID_CRON"]
+            return PAUSE_REASONS["INVALID_CRON"]
         return texto[:1].upper() + texto[1:]
     return u"-"
 
 
-def situacao(registro):
+def rule_state(registro):
     """(rotulo, motivo traduzido | None) da regra: Ativo ou Pausado + motivo."""
     if registro.get("active") == "Y":
         return u"Ativo", None
     motivo = registro.get("pause_reason")
     if not motivo:
         return u"Pausado", None
-    return u"Pausado", MOTIVOS_PAUSA.get(motivo, u"Motivo não catalogado (%s)" % motivo)
+    return u"Pausado", PAUSE_REASONS.get(motivo, u"Motivo não catalogado (%s)" % motivo)
 
 
-def normalizar_filtros(entrada):
+def normalize_filters(entrada):
     """Filtros da lista vindos de request.vars: nome (trecho), ambiente e ativo ('S' | 'N')."""
     entrada = entrada or {}
     filtros = {}
-    nome = admin_crud.texto(entrada.get("name"), TAMANHO_NOME)
+    nome = admin_crud.text(entrada.get("name"), NAME_MAX_LENGTH)
     if nome:
         filtros["name"] = nome
-    ambiente = admin_crud.texto(entrada.get("environment"), 30)
+    ambiente = admin_crud.text(entrada.get("environment"), 30)
     ambiente = ambiente.upper() if ambiente else None
-    if ambiente and _RE_AMBIENTE.fullmatch(ambiente):
+    if ambiente and _RE_ENVIRONMENT.fullmatch(ambiente):
         filtros["environment"] = ambiente
-    ativo = admin_crud.texto(entrada.get("active"), 1)
+    ativo = admin_crud.text(entrada.get("active"), 1)
     if ativo in ("Y", "N"):
         filtros["active"] = ativo
     return filtros
 
 
-def _parametros(registro):
+def _parameters(registro):
     try:
         obj = json.loads(registro.get("params_json") or "{}")
     except ValueError:
@@ -228,7 +228,7 @@ def _parametros(registro):
     return obj if isinstance(obj, dict) else {}
 
 
-def _serializar(resolvidos):
+def _serialize(resolvidos):
     """JSON objeto {codigo: valor} com sort_keys; CHECKBOX vira 'true'/'false', como o formulario envia."""
     obj = {}
     for codigo, valor in resolvidos.items():
@@ -240,32 +240,32 @@ def _serializar(resolvidos):
     return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def _estado(registro, sensiveis=()):
+def _state(registro, sensiveis=()):
     """Projecao serializavel dos campos da versao (datetime nao e serializavel em JSON).
 
     Respostas de parametros sensiveis em parametros_json entram pelo marcador (README §7.6, §10).
     """
     estado = {}
-    for campo in CAMPOS_VERSAO:
+    for campo in VERSION_FIELDS:
         valor = registro.get(campo)
         if isinstance(valor, datetime.datetime):
             valor = valor.strftime("%Y-%m-%d %H:%M:%S")
         estado[campo] = valor
     if sensiveis:
-        respostas = _parametros(registro)
+        respostas = _parameters(registro)
         for codigo in sensiveis:
             if codigo in respostas:
-                respostas[codigo] = admin_crud.marcador_sensivel(respostas[codigo])
+                respostas[codigo] = admin_crud.sensitive_marker(respostas[codigo])
         estado["params_json"] = json.dumps(respostas, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return estado
 
 
-def versao(registro, sensiveis=()):
+def version(registro, sensiveis=()):
     """Versao do formulario de edicao (sha256 dos campos editaveis, sem valor sensivel)."""
-    return admin_crud.versao(_estado(registro, sensiveis), CAMPOS_VERSAO)
+    return admin_crud.version(_state(registro, sensiveis), VERSION_FIELDS)
 
 
-class ServicoAgendamentos(object):
+class SchedulesService(object):
     """Regras de agendamento com repositorios, servico de disparo, relogio e log injetados."""
 
     def __init__(self, agendamentos, catalogo, usuarios, disparo, relogio, horizonte_dias, log,
@@ -290,7 +290,7 @@ class ServicoAgendamentos(object):
 
     # ------------------------------------------------------------- apoio
 
-    def _aviso_sobreposicao(self, reg, prefixo=u"A próxima vez pode ser pulada: a execução #"):
+    def _overlap_warning(self, reg, prefixo=u"A próxima vez pode ser pulada: a execução #"):
         tid = reg.get("last_ticket_id")
         if not tid or not self._tickets:
             return None
@@ -303,7 +303,7 @@ class ServicoAgendamentos(object):
             return u"%s%s ainda está %s." % (prefixo, tid, rotulo)
         return None
 
-    def _avaliar_problema_desdobro(self, reg, agora):
+    def _check_expansion_problem(self, reg, agora):
         """Avalia se a regra sofreria pausa no desdobro (README §7.5 passos 2 e 5; CR-007 R-26).
 
         Retorna (codigo_motivo, texto_motivo) ou None se estiver apta.
@@ -311,18 +311,18 @@ class ServicoAgendamentos(object):
         try:
             estado = self._usuarios.get_session_state(reg["user_id"])
         except RepoNotFound:
-            return "USER_INACTIVE", MOTIVOS_PAUSA["USER_INACTIVE"]
+            return "USER_INACTIVE", PAUSE_REASONS["USER_INACTIVE"]
         if estado.get("usuario_ativo") != "Y":
-            return "USER_INACTIVE", MOTIVOS_PAUSA["USER_INACTIVE"]
+            return "USER_INACTIVE", PAUSE_REASONS["USER_INACTIVE"]
         if estado.get("perfil_ativo") != "Y":
-            return "NO_PERMISSION", MOTIVOS_PAUSA["NO_PERMISSION"]
+            return "NO_PERMISSION", PAUSE_REASONS["NO_PERMISSION"]
 
         try:
             script = self._catalogo.scripts_get(reg["script_id"])
         except RepoNotFound:
-            return "SCRIPT_INACTIVE", MOTIVOS_PAUSA["SCRIPT_INACTIVE"]
+            return "SCRIPT_INACTIVE", PAUSE_REASONS["SCRIPT_INACTIVE"]
         if script.get("active") != "Y":
-            return "SCRIPT_INACTIVE", MOTIVOS_PAUSA["SCRIPT_INACTIVE"]
+            return "SCRIPT_INACTIVE", PAUSE_REASONS["SCRIPT_INACTIVE"]
 
         amb = None
         for a in self._catalogo.environments_list(tamanho=1000)["itens"]:
@@ -330,11 +330,11 @@ class ServicoAgendamentos(object):
                 amb = a
                 break
         if amb is None or amb.get("active") != "Y":
-            return "ENVIRONMENT_INACTIVE", MOTIVOS_PAUSA["ENVIRONMENT_INACTIVE"]
+            return "ENVIRONMENT_INACTIVE", PAUSE_REASONS["ENVIRONMENT_INACTIVE"]
 
         homologacoes = self._catalogo.homologation_get(script["id"])
         if amb["id"] not in frozenset(homologacoes or ()):
-            return "NO_PERMISSION", MOTIVOS_PAUSA["NO_PERMISSION"]
+            return "NO_PERMISSION", PAUSE_REASONS["NO_PERMISSION"]
 
         rbac_repo = self._rbac
         matriz = rbac_repo.matrix_get(estado["profile_id"])
@@ -354,32 +354,32 @@ class ServicoAgendamentos(object):
         ok, motivo_rbac = rbac.can_execute(ctx_usuario, script, amb, homologacoes)
         if not ok:
             codigo = rbac.pause_reason_for(motivo_rbac)
-            return codigo, MOTIVOS_PAUSA[codigo]
+            return codigo, PAUSE_REASONS[codigo]
 
         try:
             respostas = json.loads(reg.get("params_json") or "{}")
         except (TypeError, ValueError):
-            return "INVALID_PARAM", MOTIVOS_PAUSA["INVALID_PARAM"]
+            return "INVALID_PARAM", PAUSE_REASONS["INVALID_PARAM"]
         if not isinstance(respostas, dict):
-            return "INVALID_PARAM", MOTIVOS_PAUSA["INVALID_PARAM"]
+            return "INVALID_PARAM", PAUSE_REASONS["INVALID_PARAM"]
 
-        vinculos = self._vinculos(script["id"])
+        vinculos = self._links(script["id"])
         _snap, _resolv, erros_param = params_compiler.compile_snapshot(script, vinculos, respostas, agora)
         if erros_param:
-            return "INVALID_PARAM", MOTIVOS_PAUSA["INVALID_PARAM"]
+            return "INVALID_PARAM", PAUSE_REASONS["INVALID_PARAM"]
 
         if reg.get("recurrence_type") == "CRON":
             try:
                 recurrence.next_run(reg, agora, self._horizonte)
             except CronError:
-                return "INVALID_CRON", MOTIVOS_PAUSA["INVALID_CRON"]
+                return "INVALID_CRON", PAUSE_REASONS["INVALID_CRON"]
 
         return None
 
-    def _agora(self):
+    def _now(self):
         return recurrence.without_microseconds(self._relogio())
 
-    def _obter_visivel(self, ctx, agendamento_id):
+    def _get_visible(self, ctx, agendamento_id):
         """Regra existente e de ambiente autorizado; fora do escopo e tratada como inexistente (404)."""
         aid = _id(agendamento_id)
         if aid is None:
@@ -387,17 +387,17 @@ class ServicoAgendamentos(object):
         registro = self._agendamentos.get(aid)
         if not rbac.can_view_environment(ctx, registro.get("environment")):
             self._log.warning("agendamento fora do escopo (login=%s agendamento=%s environment=%s)",
-                              ctx.get("login"), aid, registro.get("environment"), extra={"action": FUNCIONALIDADE})
+                              ctx.get("login"), aid, registro.get("environment"), extra={"action": FEATURE})
             raise RepoNotFound("agendamento fora do escopo")
         return registro
 
-    def _autorizar(self, ctx, script_id, ambiente):
+    def _authorize(self, ctx, script_id, ambiente):
         try:
-            return self._disparo.autorizar(ctx, script_id, ambiente)
+            return self._disparo.authorize(ctx, script_id, ambiente)
         except DisparoNegado as exc:
             self._log.warning("agendamento negado ao editor (login=%s script_id=%r environment=%r reason=%s)",
-                              ctx.get("login"), script_id, ambiente, exc.motivo, extra={"action": FUNCIONALIDADE})
-            raise OperacaoNegada(MSG_SEM_PERMISSAO)
+                              ctx.get("login"), script_id, ambiente, exc.motivo, extra={"action": FEATURE})
+            raise OperationDenied(MSG_NO_PERMISSION)
 
     def _login(self, usuario_id, cache=None):
         if cache is not None and usuario_id in cache:
@@ -410,107 +410,107 @@ class ServicoAgendamentos(object):
             cache[usuario_id] = login
         return login
 
-    def _vinculos(self, script_id):
+    def _links(self, script_id):
         return [v for v in self._catalogo.script_params_get(script_id) if v.get("active") == "Y"]
 
-    def _codigos_sensiveis(self, script_id):
+    def _sensitive_codes(self, script_id):
         # Todos os vinculos, ativos ou nao: parametros_json pode guardar resposta de parametro ja desativado.
         return frozenset(v["code"] for v in self._catalogo.script_params_get(script_id)
                          if v.get("sensitive") == "Y")
 
-    def _regra(self, dados, agora, erros):
+    def _rule(self, dados, agora, erros):
         """Campos de recorrencia validados (README §7.2); so os do tipo escolhido sao mantidos."""
-        tipo = admin_crud.texto(dados.get("recurrence_type"), 10)
+        tipo = admin_crud.text(dados.get("recurrence_type"), 10)
         regra = {"recurrence_type": tipo, "cron_expression": None, "run_time": None,
                  "week_days": None, "month_day": None}
-        if tipo not in ROTULOS_TIPO:
-            erros["recurrence_type"] = MSG_TIPO
+        if tipo not in TYPE_LABELS:
+            erros["recurrence_type"] = MSG_TYPE
         if tipo in ("DAILY", "WEEKLY", "MONTHLY"):
-            regra["run_time"] = admin_crud.texto(dados.get("run_time"), 5)
+            regra["run_time"] = admin_crud.text(dados.get("run_time"), 5)
         if tipo == "WEEKLY":
-            regra["week_days"] = _dias_semana(dados.get("week_days"))
+            regra["week_days"] = _weekdays(dados.get("week_days"))
         if tipo == "MONTHLY":
-            regra["month_day"] = admin_crud.texto(dados.get("month_day"), 2)
+            regra["month_day"] = admin_crud.text(dados.get("month_day"), 2)
         if tipo == "CRON":
-            regra["cron_expression"] = admin_crud.texto(dados.get("cron_expression"), 100)
+            regra["cron_expression"] = admin_crud.text(dados.get("cron_expression"), 100)
 
-        inicio, invalido = _data(dados.get("start_date"))
+        inicio, invalido = _date(dados.get("start_date"))
         if invalido:
-            erros["start_date"] = MSG_DATA_INVALIDA
+            erros["start_date"] = MSG_DATE_INVALID
         elif inicio is None:
             if tipo == "ONCE":
-                erros["start_date"] = MSG_INICIO_UNICA
+                erros["start_date"] = MSG_ONCE_START
             else:
                 # Decisao D3 do F5.2: sem inicio informado, a regra vale a partir de agora.
                 inicio = recurrence.truncate_seconds(agora)
-        fim, invalido = _data(dados.get("end_date"))
+        fim, invalido = _date(dados.get("end_date"))
         if tipo == "ONCE":
             # data_fim nao se aplica a UNICA (README §7.2): ignorada e gravada nula.
             fim, invalido = None, False
         if invalido:
-            erros["end_date"] = MSG_DATA_INVALIDA
+            erros["end_date"] = MSG_DATE_INVALID
         regra["start_date"] = inicio
         regra["end_date"] = fim
 
-        if tipo in ROTULOS_TIPO:
+        if tipo in TYPE_LABELS:
             for campo, mensagem in recurrence.validate_rule(regra, self._horizonte).items():
                 erros.setdefault(campo, mensagem)
         if regra["month_day"] is not None and "month_day" not in erros:
             regra["month_day"] = int(regra["month_day"])
         return regra
 
-    def _proxima(self, regra, agora, erros):
+    def _next_run(self, regra, agora, erros):
         try:
             proxima = recurrence.next_run(regra, agora, self._horizonte)
         except CronError as exc:
             erros["cron_expression"] = exc.mensagem
             return None
         if proxima is None:
-            erros[CAMPO_GERAL] = MSG_SEM_PROXIMA
+            erros[GENERAL_FIELD] = MSG_NO_NEXT_RUN
         return proxima
 
-    def _prioridade(self, ctx, valor, erros):
-        texto = admin_crud.texto(_ultimo(valor), 2)
+    def _priority(self, ctx, valor, erros):
+        texto = admin_crud.text(_last(valor), 2)
         if texto is None:
-            prioridade = PRIORIDADE_PADRAO
+            prioridade = DEFAULT_PRIORITY
         else:
             prioridade = int(texto) if texto.isdigit() else None
         if prioridade is not None and rbac.allowed_priority(ctx, prioridade):
             return prioridade
-        erros["priority"] = MSG_PRIORIDADE_ADMIN if prioridade == rbac.ADMIN_PRIORITY else MSG_PRIORIDADE
+        erros["priority"] = MSG_PRIORITY_ADMIN if prioridade == rbac.ADMIN_PRIORITY else MSG_PRIORITY
         return None
 
-    def _respostas(self, vinculos, respostas, anteriores):
+    def _answers(self, vinculos, respostas, anteriores):
         """Respostas dos vinculos ativos; na edicao, sensivel vazio mantem o valor salvo (requisito 2)."""
         codigos = set(v["code"] for v in vinculos)
         if not isinstance(respostas, dict):
             respostas = {}
-        limpas = dict((k, _ultimo(v)) for k, v in respostas.items() if k in codigos)
+        limpas = dict((k, _last(v)) for k, v in respostas.items() if k in codigos)
         for v in vinculos:
             codigo = v["code"]
-            if v.get("sensitive") == "Y" and _vazio(limpas.get(codigo)) and codigo in anteriores:
+            if v.get("sensitive") == "Y" and _empty(limpas.get(codigo)) and codigo in anteriores:
                 limpas[codigo] = anteriores[codigo]
         return limpas
 
-    def _parametros_auditoria(self, registro, sensiveis, comparar_com=None):
+    def _audit_params(self, registro, sensiveis, comparar_com=None):
         """Texto 'codigo=valor' ordenado com os sensiveis mascarados (README §4.4)."""
-        params = _parametros(registro)
-        anteriores = _parametros(comparar_com) if comparar_com is not None else None
+        params = _parameters(registro)
+        anteriores = _parameters(comparar_com) if comparar_com is not None else None
         partes = []
         for codigo in sorted(params):
             valor = params[codigo]
             if codigo in sensiveis:
                 alterado = anteriores is not None and anteriores.get(codigo) != valor
-                valor = MASCARA + (u" (alterado)" if alterado else u"")
+                valor = MASK + (u" (alterado)" if alterado else u"")
             partes.append(u"%s=%s" % (codigo, valor))
         return u", ".join(partes)
 
-    def _auditavel(self, registro, sensiveis, comparar_com=None):
+    def _auditable(self, registro, sensiveis, comparar_com=None):
         aud = dict(registro)
-        aud["parameters"] = self._parametros_auditoria(registro, sensiveis, comparar_com)
+        aud["parameters"] = self._audit_params(registro, sensiveis, comparar_com)
         for campo in ("start_date", "end_date", "next_run_at"):
             if registro.get(campo) is not None:
-                aud[campo] = formatar_data(registro[campo])
+                aud[campo] = format_date(registro[campo])
         return aud
 
     # ------------------------------------------------------------ consulta
@@ -520,18 +520,18 @@ class ServicoAgendamentos(object):
 
         Retorna {atrasados: [...], dias: [{rotulo, itens}], aviso_total, ocorrencias}. Cada item:
         hora, regra_id, nome, script, ambiente, recorrencia e, no ultimo item de uma regra com mais de
-        AGENDA_POR_REGRA ocorrencias, 'mais' (quantas a mais no periodo). So leitura.
+        AGENDA_PER_RULE ocorrencias, 'mais' (quantas a mais no periodo). So leitura.
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        agora = recurrence.truncate_seconds(self._agora())
+        admin_crud.require_feature(ctx, FEATURE)
+        agora = recurrence.truncate_seconds(self._now())
         fim = datetime.datetime.combine(agora.date() + datetime.timedelta(days=8), datetime.time())
         escopo = None if ctx.get("is_admin") is True else sorted(ctx.get("environments") or ())
         regras, pagina = [], 1
         while escopo != []:
-            res = self._agendamentos.list(filtros={"active": "Y"}, pagina=pagina, tamanho=_AGENDA_PAGINA,
+            res = self._agendamentos.list(filtros={"active": "Y"}, pagina=pagina, tamanho=_AGENDA_PAGE,
                                             escopo_ambientes=escopo)
             regras.extend(res["itens"])
-            if len(res["itens"]) < _AGENDA_PAGINA:
+            if len(res["itens"]) < _AGENDA_PAGE:
                 break
             pagina += 1
         scripts = {}
@@ -542,13 +542,13 @@ class ServicoAgendamentos(object):
                     scripts[reg["script_id"]] = self._catalogo.scripts_get(reg["script_id"])["name"]
                 except RepoNotFound:
                     scripts[reg["script_id"]] = u"#%s" % reg["script_id"]
-            aviso_regra = self._aviso_sobreposicao(reg, prefixo=u"Pode ser pulada: a execução #")
+            aviso_regra = self._overlap_warning(reg, prefixo=u"Pode ser pulada: a execução #")
             if not aviso_regra:
-                prob = self._avaliar_problema_desdobro(reg, agora)
+                prob = self._check_expansion_problem(reg, agora)
                 if prob:
                     aviso_regra = u"Será pausada: %s." % prob[1]
             base = {"regra_id": reg["id"], "name": reg["name"], "script": scripts[reg["script_id"]],
-                    "environment": reg["environment"], "recorrencia": descrever_regra(reg),
+                    "environment": reg["environment"], "recorrencia": describe_rule(reg),
                     "aviso": aviso_regra}
             prox = reg.get("next_run_at")
             if prox is None:
@@ -569,9 +569,9 @@ class ServicoAgendamentos(object):
                 if atual is None:
                     atual = proxima_calculada
                 while atual is not None and atual < fim:
-                    if len(datas) < AGENDA_POR_REGRA:
+                    if len(datas) < AGENDA_PER_RULE:
                         datas.append(atual)
-                    elif extra < _AGENDA_CONTAGEM_MAX:
+                    elif extra < _AGENDA_COUNT_MAX:
                         extra += 1
                     else:
                         break
@@ -594,12 +594,12 @@ class ServicoAgendamentos(object):
         for o in ocorrencias:
             dias.setdefault(o["quando"].date(), []).append(o)
         return {"atrasados": atrasados, "aviso_total": aviso_total, "total": len(ocorrencias),
-                "dias": [{"rotulo": _rotulo_dia(d, agora.date()), "itens": itens} for d, itens in dias.items()],
+                "dias": [{"rotulo": _day_label(d, agora.date()), "itens": itens} for d, itens in dias.items()],
                 "problemas": problemas}
 
     def list(self, ctx, filtros, pagina, tamanho):
         """Pagina de regras dos ambientes autorizados (admin: todos), pronta para a tabela."""
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
+        admin_crud.require_feature(ctx, FEATURE)
         escopo = None
         if ctx.get("is_admin") is not True:
             escopo = sorted(ctx.get("environments") or ())
@@ -617,12 +617,12 @@ class ServicoAgendamentos(object):
                     scripts[sid] = self._catalogo.scripts_get(sid)["name"]
                 except RepoNotFound:
                     scripts[sid] = u"#%s" % sid
-            rotulo, motivo = situacao(reg)
+            rotulo, motivo = rule_state(reg)
             aviso = None
             if reg.get("active") == "Y":
-                aviso = self._aviso_sobreposicao(reg, prefixo=u"A próxima vez pode ser pulada: a execução #")
+                aviso = self._overlap_warning(reg, prefixo=u"A próxima vez pode ser pulada: a execução #")
                 if not aviso:
-                    prob = self._avaliar_problema_desdobro(reg, self._agora())
+                    prob = self._check_expansion_problem(reg, self._now())
                     if prob:
                         aviso = u"Será pausada: %s." % prob[1]
             itens.append({
@@ -630,11 +630,11 @@ class ServicoAgendamentos(object):
                 "name": reg["name"],
                 "script": scripts[sid],
                 "environment": reg["environment"],
-                "tipo": ROTULOS_TIPO.get(reg["recurrence_type"], reg["recurrence_type"]),
-                "recorrencia": descrever_regra(reg),
+                "tipo": TYPE_LABELS.get(reg["recurrence_type"], reg["recurrence_type"]),
+                "recorrencia": describe_rule(reg),
                 "cron_expression": reg.get("cron_expression") if reg["recurrence_type"] == "CRON" else None,
-                "next_run_at": formatar_data(reg.get("next_run_at")) if reg["active"] == "Y" else "-",
-                "last_run_at": formatar_data(reg.get("last_run_at")),
+                "next_run_at": format_date(reg.get("next_run_at")) if reg["active"] == "Y" else "-",
+                "last_run_at": format_date(reg.get("last_run_at")),
                 "last_ticket_id": reg.get("last_ticket_id"),
                 "responsavel": ui_helpers.ator_visivel(self._login(reg["user_id"], logins), ctx),
                 "active": reg["active"],
@@ -644,56 +644,56 @@ class ServicoAgendamentos(object):
             })
         return dict(resultado, itens=itens)
 
-    def formulario(self, ctx, agendamento_id=None, script_id=None, ambiente=None, enviados=None,
+    def form(self, ctx, agendamento_id=None, script_id=None, ambiente=None, enviados=None,
                    valores=None, erros=None):
         """Dados do formulario. Inclusao em etapas (script -> ambiente -> regra) com os filtros do F3.2;
         na edicao, script e ambiente sao fixos (decisao D2 do F5.2).
 
         enviados/valores/erros (opcionais) reapresentam um POST com erro: campos da regra,
-        respostas do questionario e mensagens por campo. Lanca RepoNotFound, AcessoNegado
-        e OperacaoNegada (editor sem can_execute).
+        respostas do questionario e mensagens por campo. Lanca RepoNotFound, AccessDenied
+        e OperationDenied (editor sem can_execute).
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
+        admin_crud.require_feature(ctx, FEATURE)
         erros = erros or {}
         enviados = enviados or {}
         dados = {"edicao": False, "etapa": 1, "grupos": [], "script": None, "ambientes": [], "form": None,
                  "regra": None, "erros": erros}
         atual = None
         if agendamento_id not in (None, ""):
-            atual = self._obter_visivel(ctx, agendamento_id)
+            atual = self._get_visible(ctx, agendamento_id)
             script_id, ambiente = atual["script_id"], atual["environment"]
             dados["edicao"] = True
         elif not script_id:
-            dados["grupos"] = self._disparo.scripts_disponiveis(ctx)
+            dados["grupos"] = self._disparo.available_scripts(ctx)
             return dados
         try:
             if not dados["edicao"]:
-                script, ambientes = self._disparo.ambientes_disponiveis(ctx, script_id)
+                script, ambientes = self._disparo.available_environments(ctx, script_id)
                 dados.update(etapa=2, script=script, ambientes=ambientes)
                 if not ambiente:
                     return dados
-            anteriores = _parametros(atual) if atual else {}
+            anteriores = _parameters(atual) if atual else {}
             if valores is None:
                 valores = anteriores
-            form = self._disparo.preparar_formulario(ctx, script_id, ambiente, valores, erros)
+            form = self._disparo.prepare_form(ctx, script_id, ambiente, valores, erros)
         except DisparoNegado as exc:
             if dados["edicao"]:
                 self._log.warning("edicao de agendamento negada (login=%s agendamento=%s reason=%s)",
-                                  ctx.get("login"), atual["id"], exc.motivo, extra={"action": FUNCIONALIDADE})
-                raise OperacaoNegada(MSG_SEM_PERMISSAO)
+                                  ctx.get("login"), atual["id"], exc.motivo, extra={"action": FEATURE})
+                raise OperationDenied(MSG_NO_PERMISSION)
             raise
         for campo in form["campos"]:
             campo["mantido"] = campo["sensitive"] and campo["code"] in anteriores
-        dados.update(etapa=3, form=form, regra=self._regra_form(ctx, atual, enviados))
+        dados.update(etapa=3, form=form, regra=self._form_rule(ctx, atual, enviados))
         return dados
 
-    def _regra_form(self, ctx, atual, enviados):
-        base = atual or {"recurrence_type": "DAILY", "priority": PRIORIDADE_PADRAO}
+    def _form_rule(self, ctx, atual, enviados):
+        base = atual or {"recurrence_type": "DAILY", "priority": DEFAULT_PRIORITY}
         pausa_aviso = None
         if atual and atual.get("active") == "N":
-            dt_pausa = formatar_data(atual.get("updated_at"))
+            dt_pausa = format_date(atual.get("updated_at"))
             ator_pausa = ui_helpers.nome_ator(ui_helpers.registro(atual, ctx)["updated_by"])
-            motivo_txt = MOTIVOS_PAUSA.get(atual.get("pause_reason"), atual.get("pause_reason")) or u"Desconhecido"
+            motivo_txt = PAUSE_REASONS.get(atual.get("pause_reason"), atual.get("pause_reason")) or u"Desconhecido"
             pausa_aviso = (
                 u"Pausada em %s por %s: %s. "
                 u"Edite a regra para corrigir (ao salvar, ela passa a rodar com as suas permissões) e depois retome."
@@ -707,12 +707,12 @@ class ServicoAgendamentos(object):
             "run_time": base.get("run_time") or "",
             "week_days": [int(d) for d in (base.get("week_days") or "").split(",") if d.isdigit()],
             "month_day": base.get("month_day") or "",
-            "start_date": _valor_campo_data(base.get("start_date")) if atual else "",
-            "end_date": _valor_campo_data(base.get("end_date")),
-            "priority": base.get("priority") or PRIORIDADE_PADRAO,
-            "version": versao(atual, self._codigos_sensiveis(atual["script_id"])) if atual else "",
+            "start_date": _date_field_value(base.get("start_date")) if atual else "",
+            "end_date": _date_field_value(base.get("end_date")),
+            "priority": base.get("priority") or DEFAULT_PRIORITY,
+            "version": version(atual, self._sensitive_codes(atual["script_id"])) if atual else "",
             "active": base.get("active", "Y"),
-            "state": situacao(atual) if atual else None,
+            "state": rule_state(atual) if atual else None,
             "responsavel": ui_helpers.ator_visivel(self._login(atual["user_id"]), ctx) if atual else None,
             "outro_responsavel": bool(atual) and atual["user_id"] != ctx.get("user_id"),
             "registro": ui_helpers.registro(atual, ctx) if atual else None,
@@ -723,61 +723,61 @@ class ServicoAgendamentos(object):
             if campo in enviados and enviados[campo] is not None:
                 regra[campo] = enviados[campo]
         if "week_days" in enviados:
-            texto = _dias_semana(enviados["week_days"]) or ""
+            texto = _weekdays(enviados["week_days"]) or ""
             regra["week_days"] = [int(d) for d in texto.split(",") if d.isdigit()]
         return regra
 
-    def previa(self, ctx, dados):
-        """Proximas QTD_PREVIA execucoes e a descricao da regra, sem gravar.
+    def preview(self, ctx, dados):
+        """Proximas PREVIEW_COUNT execucoes e a descricao da regra, sem gravar.
 
         Retorna {datas: [texto], descricao: texto | None, erros: {campo: mensagem}}.
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
+        admin_crud.require_feature(ctx, FEATURE)
         erros = collections.OrderedDict()
-        agora = self._agora()
-        regra = self._regra(dados or {}, agora, erros)
+        agora = self._now()
+        regra = self._rule(dados or {}, agora, erros)
         if erros:
             return {"datas": [], "description": None, "erros": dict(erros)}
         try:
-            datas = recurrence.next_runs(regra, agora, QTD_PREVIA, self._horizonte)
+            datas = recurrence.next_runs(regra, agora, PREVIEW_COUNT, self._horizonte)
         except CronError as exc:
             return {"datas": [], "description": None, "erros": {"cron_expression": exc.mensagem}}
         if not datas:
-            return {"datas": [], "description": descrever_regra(regra), "erros": {CAMPO_GERAL: MSG_SEM_PROXIMA}}
-        return {"datas": [formatar_previa(d) for d in datas], "description": descrever_regra(regra), "erros": {}}
+            return {"datas": [], "description": describe_rule(regra), "erros": {GENERAL_FIELD: MSG_NO_NEXT_RUN}}
+        return {"datas": [format_preview(d) for d in datas], "description": describe_rule(regra), "erros": {}}
 
     # ----------------------------------------------------------- gravacao
 
-    def salvar(self, ctx, ip, dados):
+    def save(self, ctx, ip, dados):
         """Inclui (sem 'id') ou altera uma regra. Retorna (id | None, erros_por_campo).
 
         dados: id, versao, nome, script_id e ambiente (so na inclusao), tipo_recorrencia,
         expressao_cron, hora_execucao, dias_semana, dia_mes, data_inicio, data_fim, prioridade e
-        respostas ({codigo: valor}). Lanca RepoNotFound, AcessoNegado e OperacaoNegada
+        respostas ({codigo: valor}). Lanca RepoNotFound, AccessDenied e OperationDenied
         (editor sem can_execute).
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
+        admin_crud.require_feature(ctx, FEATURE)
         atual = None
         if dados.get("id") not in (None, ""):
-            atual = self._obter_visivel(ctx, dados.get("id"))
-            script, amb = self._autorizar(ctx, atual["script_id"], atual["environment"])
+            atual = self._get_visible(ctx, dados.get("id"))
+            script, amb = self._authorize(ctx, atual["script_id"], atual["environment"])
         else:
-            script, amb = self._autorizar(ctx, admin_crud.texto(dados.get("script_id"), 10),
-                                          admin_crud.texto(dados.get("environment"), 30))
-        agora = self._agora()
+            script, amb = self._authorize(ctx, admin_crud.text(dados.get("script_id"), 10),
+                                          admin_crud.text(dados.get("environment"), 30))
+        agora = self._now()
         erros = collections.OrderedDict()
 
-        nome = admin_crud.texto(dados.get("name"))
+        nome = admin_crud.text(dados.get("name"))
         if nome is None:
-            erros["name"] = MSG_NOME_OBRIGATORIO
-        elif len(nome) > TAMANHO_NOME:
-            erros["name"] = MSG_NOME_TAMANHO
-        regra = self._regra(dados, agora, erros)
-        prioridade = self._prioridade(ctx, dados.get("priority"), erros)
+            erros["name"] = MSG_NAME_REQUIRED
+        elif len(nome) > NAME_MAX_LENGTH:
+            erros["name"] = MSG_NAME_LENGTH
+        regra = self._rule(dados, agora, erros)
+        prioridade = self._priority(ctx, dados.get("priority"), erros)
 
-        vinculos = self._vinculos(script["id"])
-        anteriores = _parametros(atual) if atual else {}
-        respostas = self._respostas(vinculos, dados.get("respostas"), anteriores)
+        vinculos = self._links(script["id"])
+        anteriores = _parameters(atual) if atual else {}
+        respostas = self._answers(vinculos, dados.get("respostas"), anteriores)
         # Compila o snapshot completo so para validar: o daemon recompila a cada desdobro (README §7.5 passo 5).
         _snapshot, resolvidos, erros_param = params_compiler.compile_snapshot(script, vinculos, respostas, agora)
         for codigo, mensagem in erros_param.items():
@@ -785,60 +785,60 @@ class ServicoAgendamentos(object):
 
         proxima = None
         if not erros:
-            proxima = self._proxima(regra, agora, erros)
+            proxima = self._next_run(regra, agora, erros)
         if erros:
             self._log.info("validacao do agendamento com erros (login=%s agendamento=%s campos=%s)",
                            ctx.get("login"), atual["id"] if atual else None, ",".join(sorted(erros)),
-                           extra={"action": FUNCIONALIDADE})
+                           extra={"action": FEATURE})
             return (atual["id"] if atual else None), dict(erros)
 
         registro = dict(regra, name=nome, script_id=script["id"], environment=amb["name"],
                         user_id=ctx["user_id"], priority=prioridade,
-                        params_json=_serializar(resolvidos), next_run_at=proxima)
+                        params_json=_serialize(resolvidos), next_run_at=proxima)
         sensiveis = set(v["code"] for v in vinculos if v.get("sensitive") == "Y")
         if atual is None:
-            return self._incluir(ctx, ip, registro, sensiveis)
-        if admin_crud.texto(dados.get("version"), 64) != versao(atual, self._codigos_sensiveis(atual["script_id"])):
-            return atual["id"], {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
-        return self._alterar(ctx, ip, atual, registro, sensiveis)
+            return self._insert(ctx, ip, registro, sensiveis)
+        if admin_crud.text(dados.get("version"), 64) != version(atual, self._sensitive_codes(atual["script_id"])):
+            return atual["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
+        return self._update(ctx, ip, atual, registro, sensiveis)
 
-    def _incluir(self, ctx, ip, registro, sensiveis):
+    def _insert(self, ctx, ip, registro, sensiveis):
         novo = dict(registro, active="Y", pause_reason=None)
-        detalhe = admin_crud.detalhe_insercao(self._auditavel(novo, sensiveis), _CAMPOS_INSERCAO)
+        detalhe = admin_crud.insert_detail(self._auditable(novo, sensiveis), _INSERT_FIELDS)
         try:
-            criado = self._agendamentos.insert(novo, auditoria=admin_crud.auditoria(ctx, ip, "CREATE", detalhe))
+            criado = self._agendamentos.insert(novo, auditoria=admin_crud.audit_entry(ctx, ip, "CREATE", detalhe))
         except RepoViolation as exc:
             self._log.error("agendamento rejeitado pelo repositorio (login=%s constraint=%s)",
                             ctx.get("login"), exc.constraint, extra={"action": "CREATE"})
-            return None, {CAMPO_GERAL: admin_crud.MSG_FALHA}
+            return None, {GENERAL_FIELD: admin_crud.MSG_FAILURE}
         self._log.info("agendamento incluido (login=%s agendamento=%s script_id=%s environment=%s tipo=%s)",
                        ctx.get("login"), criado["id"], criado["script_id"], criado["environment"],
                        criado["recurrence_type"], extra={"action": "CREATE"})
         return criado["id"], {}
 
-    def _alterar(self, ctx, ip, atual, registro, sensiveis):
+    def _update(self, ctx, ip, atual, registro, sensiveis):
         depois = dict(atual, **registro)
-        detalhe = admin_crud.detalhe_alteracoes(self._auditavel(atual, sensiveis),
-                                                self._auditavel(depois, sensiveis, atual), CAMPOS_AUDITORIA)
+        detalhe = admin_crud.changes_detail(self._auditable(atual, sensiveis),
+                                                self._auditable(depois, sensiveis, atual), AUDIT_FIELDS)
         trocou_responsavel = atual["user_id"] != registro["user_id"]
         if detalhe is None and not trocou_responsavel:
             return atual["id"], {}
         # README §10: a edicao sempre registra o usuario_id anterior e o novo.
         responsavel = u"user_id: %s (%s)%s%s (%s)" % (
-            atual["user_id"], self._login(atual["user_id"]), _SETA,
+            atual["user_id"], self._login(atual["user_id"]), _ARROW,
             registro["user_id"], ctx.get("login"))
-        detalhe = admin_crud.detalhe_livre(responsavel if detalhe is None else u"%s; %s" % (responsavel, detalhe))
+        detalhe = admin_crud.free_detail(responsavel if detalhe is None else u"%s; %s" % (responsavel, detalhe))
         try:
             self._agendamentos.update(atual["id"], registro,
-                                       esperado=admin_crud.esperado(atual, _CAMPOS_ESPERADO),
-                                       auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
+                                       esperado=admin_crud.expected(atual, _EXPECTED_FIELDS),
+                                       auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         except RepoConflict:
-            return atual["id"], {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
+            return atual["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
         except RepoViolation as exc:
             self._log.error("alteracao de agendamento rejeitada pelo repositorio (login=%s agendamento=%s "
                             "constraint=%s)", ctx.get("login"), atual["id"], exc.constraint,
                             extra={"action": "UPDATE"})
-            return atual["id"], {CAMPO_GERAL: admin_crud.MSG_FALHA}
+            return atual["id"], {GENERAL_FIELD: admin_crud.MSG_FAILURE}
         self._log.info("agendamento alterado (login=%s agendamento=%s user_id=%s->%s)",
                        ctx.get("login"), atual["id"], atual["user_id"], registro["user_id"],
                        extra={"action": "UPDATE"})
@@ -847,16 +847,16 @@ class ServicoAgendamentos(object):
     def pause(self, ctx, ip, agendamento_id):
         """Pausa manual (pause_reason = 'MANUAL'), otimista sobre next_run (README §7.5 passo 7).
 
-        Audita SCHEDULE_PAUSE. Lanca OperacaoNegada (ja pausada), RepoConflict, RepoNotFound e AcessoNegado.
+        Audita SCHEDULE_PAUSE. Lanca OperationDenied (ja pausada), RepoConflict, RepoNotFound e AccessDenied.
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        atual = self._obter_visivel(ctx, agendamento_id)
+        admin_crud.require_feature(ctx, FEATURE)
+        atual = self._get_visible(ctx, agendamento_id)
         if atual["active"] != "Y":
-            raise OperacaoNegada(MSG_JA_PAUSADA)
-        detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, active="N", pause_reason="MANUAL"),
+            raise OperationDenied(MSG_ALREADY_PAUSED)
+        detalhe = admin_crud.changes_detail(atual, dict(atual, active="N", pause_reason="MANUAL"),
                                                 ("active", "pause_reason"))
         alterado = self._agendamentos.pause(atual["id"], "MANUAL", antiga_data=atual["next_run_at"],
-                                             auditoria=admin_crud.auditoria(ctx, ip, "SCHEDULE_PAUSE", detalhe))
+                                             auditoria=admin_crud.audit_entry(ctx, ip, "SCHEDULE_PAUSE", detalhe))
         self._log.info("agendamento pausado (login=%s agendamento=%s reason=MANUAL)", ctx.get("login"),
                        atual["id"], extra={"action": "SCHEDULE_PAUSE"})
         return alterado
@@ -865,56 +865,56 @@ class ServicoAgendamentos(object):
         """Retoma a regra: revalida can_execute de quem retoma, recalcula next_run a partir
         de agora, limpa pausa_motivo e reativa. O responsavel (usuario_id) nao muda.
 
-        Audita UPDATE. Lanca OperacaoNegada (ja ativa, sem permissao ou sem proxima execucao),
-        RepoConflict, RepoNotFound e AcessoNegado.
+        Audita UPDATE. Lanca OperationDenied (ja ativa, sem permissao ou sem proxima execucao),
+        RepoConflict, RepoNotFound e AccessDenied.
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        atual = self._obter_visivel(ctx, agendamento_id)
+        admin_crud.require_feature(ctx, FEATURE)
+        atual = self._get_visible(ctx, agendamento_id)
         if atual["active"] == "Y":
-            raise OperacaoNegada(MSG_JA_ATIVA)
-        agora = self._agora()
-        problema = self._avaliar_problema_desdobro(atual, agora)
+            raise OperationDenied(MSG_ALREADY_ACTIVE)
+        agora = self._now()
+        problema = self._check_expansion_problem(atual, agora)
         if problema is not None:
             _cod, causa = problema
-            raise OperacaoNegada(u"%s. %s" % (causa, MSG_ORIENTACAO_RETOMAR))
-        self._autorizar(ctx, atual["script_id"], atual["environment"])
+            raise OperationDenied(u"%s. %s" % (causa, MSG_RESUME_GUIDANCE))
+        self._authorize(ctx, atual["script_id"], atual["environment"])
         try:
             proxima = recurrence.next_run(atual, agora, self._horizonte)
         except CronError as exc:
-            raise OperacaoNegada(u"%s: %s" % (MOTIVOS_PAUSA["INVALID_CRON"], exc.mensagem))
+            raise OperationDenied(u"%s: %s" % (PAUSE_REASONS["INVALID_CRON"], exc.mensagem))
         if proxima is None:
-            raise OperacaoNegada(MSG_RETOMAR_SEM_PROXIMA)
+            raise OperationDenied(MSG_RESUME_NO_NEXT_RUN)
         antes = {"active": atual["active"], "pause_reason": atual.get("pause_reason"),
-                 "next_run_at": formatar_data(atual.get("next_run_at"))}
-        depois = {"active": "Y", "pause_reason": None, "next_run_at": formatar_data(proxima)}
-        detalhe = admin_crud.detalhe_alteracoes(antes, depois, ("active", "pause_reason", "next_run_at"))
+                 "next_run_at": format_date(atual.get("next_run_at"))}
+        depois = {"active": "Y", "pause_reason": None, "next_run_at": format_date(proxima)}
+        detalhe = admin_crud.changes_detail(antes, depois, ("active", "pause_reason", "next_run_at"))
         alterado = self._agendamentos.resume(
-            atual["id"], proxima, esperado=admin_crud.esperado(atual, ("active", "pause_reason", "next_run_at")),
-            auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
+            atual["id"], proxima, esperado=admin_crud.expected(atual, ("active", "pause_reason", "next_run_at")),
+            auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         self._log.info("agendamento retomado (login=%s agendamento=%s proxima=%s)", ctx.get("login"),
-                       atual["id"], formatar_data(proxima), extra={"action": "UPDATE"})
+                       atual["id"], format_date(proxima), extra={"action": "UPDATE"})
         return alterado
 
 
-_padrao = None
-_lock_padrao = threading.Lock()
+_default = None
+_default_lock = threading.Lock()
 
 
-def _servico():
-    global _padrao
-    with _lock_padrao:
-        if _padrao is None:
+def _service():
+    global _default
+    with _default_lock:
+        if _default is None:
             from gluon import current
             import sss_logging
             import ticket_service
             fabrica = current.repo_factory
             cfg = current.sss_cfg
             tickets = fabrica.get("tickets")
-            _padrao = ServicoAgendamentos(
+            _default = SchedulesService(
                 agendamentos=fabrica.get("schedules"),
                 catalogo=fabrica.get("catalog"),
                 usuarios=fabrica.get("users"),
-                disparo=ticket_service._servico(),
+                disparo=ticket_service._service(),
                 relogio=tickets.now,
                 horizonte_dias=cfg.agent.cron_horizon_days,
                 log=sss_logging.get_logger("sss_web", cfg),
@@ -923,39 +923,39 @@ def _servico():
                 misfire_policy=cfg.agent.misfire_policy,
                 misfire_tolerance_s=cfg.agent.misfire_tolerance_s,
             )
-        return _padrao
+        return _default
 
 
-def listar(ctx, filtros, pagina, tamanho):
+def list_page(ctx, filtros, pagina, tamanho):
     """Pagina de regras (servico padrao)."""
-    return _servico().list(ctx, filtros, pagina, tamanho)
+    return _service().list(ctx, filtros, pagina, tamanho)
 
 
 def agenda(ctx):
     """Agenda dos proximos 7 dias (servico padrao)."""
-    return _servico().agenda(ctx)
+    return _service().agenda(ctx)
 
 
-def formulario(ctx, agendamento_id=None, script_id=None, ambiente=None, enviados=None, valores=None, erros=None):
+def form(ctx, agendamento_id=None, script_id=None, ambiente=None, enviados=None, valores=None, erros=None):
     """Dados do formulario de regra (servico padrao)."""
-    return _servico().formulario(ctx, agendamento_id, script_id, ambiente, enviados, valores, erros)
+    return _service().form(ctx, agendamento_id, script_id, ambiente, enviados, valores, erros)
 
 
-def previa(ctx, dados):
+def preview(ctx, dados):
     """Proximas execucoes e descricao da regra (servico padrao)."""
-    return _servico().previa(ctx, dados)
+    return _service().preview(ctx, dados)
 
 
-def salvar(ctx, ip, dados):
+def save(ctx, ip, dados):
     """Inclusao ou alteracao de regra (servico padrao)."""
-    return _servico().salvar(ctx, ip, dados)
+    return _service().save(ctx, ip, dados)
 
 
-def pausar(ctx, ip, agendamento_id):
+def pause(ctx, ip, agendamento_id):
     """Pausa manual (servico padrao)."""
-    return _servico().pause(ctx, ip, agendamento_id)
+    return _service().pause(ctx, ip, agendamento_id)
 
 
-def retomar(ctx, ip, agendamento_id):
+def resume(ctx, ip, agendamento_id):
     """Retomada (servico padrao)."""
-    return _servico().resume(ctx, ip, agendamento_id)
+    return _service().resume(ctx, ip, agendamento_id)

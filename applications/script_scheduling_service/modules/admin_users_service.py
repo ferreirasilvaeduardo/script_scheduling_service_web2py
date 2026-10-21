@@ -11,78 +11,78 @@ import admin_crud
 import auth_service
 import security
 import ui_helpers
-from admin_crud import CAMPO_GERAL, OperacaoNegada
+from admin_crud import GENERAL_FIELD, OperationDenied
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
-FUNCIONALIDADE = "MANAGE_USERS"
-CAMPOS_EDITAVEIS = ("name", "profile_id", "active")
+FEATURE = "MANAGE_USERS"
+EDITABLE_FIELDS = ("name", "profile_id", "active")
 # Referencias aparecem pelo nome na auditoria de inclusao (README §4.4): perfil, nao perfil_id.
-CAMPOS_INSERCAO = ("login", "name", "perfil")
-TAMANHO_NOME = 60
-_PERFIS_MAX = 1000
-_CAMPOS_PUBLICOS = ("id", "login", "name", "profile_id", "failed_attempts", "locked_until", "last_login_at",
+INSERT_FIELDS = ("login", "name", "perfil")
+NAME_MAX_LENGTH = 60
+_PROFILES_MAX = 1000
+_PUBLIC_FIELDS = ("id", "login", "name", "profile_id", "failed_attempts", "locked_until", "last_login_at",
                     "password_changed_at", "active", "created_at")
 
 _RE_ID = re.compile(r"[0-9]{1,10}")
 _RE_LOGIN = re.compile(r"[a-z0-9._-]{3,30}")
-_RE_FILTRO = re.compile(r"[A-Za-z0-9._ -]{1,60}")
+_RE_FILTER = re.compile(r"[A-Za-z0-9._ -]{1,60}")
 
-MSG_LOGIN_OBRIGATORIO = u"Informe o login."
-MSG_LOGIN_INVALIDO = u"Use de 3 a 30 caracteres: letras minúsculas, dígitos, ponto, _ ou - (ex.: maria.silva)."
-MSG_LOGIN_DUPLICADO = u"Já existe um usuário com este login."
-MSG_NOME_OBRIGATORIO = u"Informe o nome."
-MSG_NOME_TAMANHO = u"O nome deve ter no máximo %d caracteres." % TAMANHO_NOME
-MSG_PERFIL_INVALIDO = u"Selecione um perfil ativo."
-MSG_SENHA_OBRIGATORIA = u"Informe a senha."
-MSG_SENHA_LONGA = u"A senha deve ter no máximo %d caracteres." % auth_service.SENHA_MAX
-MSG_CONFIRMACAO = auth_service.MSG_CONFIRMACAO
-MSG_ULTIMO_ADMIN = ui_helpers.mensagem("ultimo_admin")
-MSG_AUTO_DESATIVAR = u"Operação negada: você não pode desativar o próprio usuário."
-MSG_AUTO_PERFIL = u"Operação negada: você não pode remover o próprio perfil administrativo."
-MSG_AUTO_SENHA = u"Para trocar a sua própria senha, use \"Minha senha\" (exige a senha atual)."
-MSG_SO_ADMIN = (u"Só um administrador pode alterar um usuário administrador ou dar o perfil de administrador. "
+MSG_LOGIN_REQUIRED = u"Informe o login."
+MSG_LOGIN_INVALID = u"Use de 3 a 30 caracteres: letras minúsculas, dígitos, ponto, _ ou - (ex.: maria.silva)."
+MSG_LOGIN_DUPLICATE = u"Já existe um usuário com este login."
+MSG_NAME_REQUIRED = u"Informe o nome."
+MSG_NAME_LENGTH = u"O nome deve ter no máximo %d caracteres." % NAME_MAX_LENGTH
+MSG_PROFILE_INVALID = u"Selecione um perfil ativo."
+MSG_PASSWORD_REQUIRED = u"Informe a senha."
+MSG_PASSWORD_TOO_LONG = u"A senha deve ter no máximo %d caracteres." % auth_service.PASSWORD_MAX
+MSG_CONFIRMATION = auth_service.MSG_CONFIRMATION
+MSG_LAST_ADMIN = ui_helpers.mensagem("ultimo_admin")
+MSG_SELF_DEACTIVATE = u"Operação negada: você não pode desativar o próprio usuário."
+MSG_SELF_PROFILE = u"Operação negada: você não pode remover o próprio perfil administrativo."
+MSG_SELF_PASSWORD = u"Para trocar a sua própria senha, use \"Minha senha\" (exige a senha atual)."
+MSG_ADMIN_ONLY = (u"Só um administrador pode alterar um usuário administrador ou dar o perfil de administrador. "
                 u"Peça a um administrador.")
-AJUDA_POLITICA = u"Mínimo de %d caracteres. A senha nunca é exibida nem registrada." % security.PASSWORD_MIN
-AVISO_DESATIVACAO = u"O usuário perde o acesso e tem a sessão encerrada no próximo clique."
+POLICY_HELP = u"Mínimo de %d caracteres. A senha nunca é exibida nem registrada." % security.PASSWORD_MIN
+DEACTIVATION_WARNING = u"O usuário perde o acesso e tem a sessão encerrada no próximo clique."
 
-_CAMPO_POR_CONSTRAINT = {
-    "uk_tbsss_usr_login": ("login", MSG_LOGIN_DUPLICADO),
-    "ck_tbsss_usr_login": ("login", MSG_LOGIN_INVALIDO),
-    "fk_tbsss_usr_prf": ("profile_id", MSG_PERFIL_INVALIDO),
-    "sss_ultimo_admin": (CAMPO_GERAL, MSG_ULTIMO_ADMIN),
+_FIELD_BY_CONSTRAINT = {
+    "uk_tbsss_usr_login": ("login", MSG_LOGIN_DUPLICATE),
+    "ck_tbsss_usr_login": ("login", MSG_LOGIN_INVALID),
+    "fk_tbsss_usr_prf": ("profile_id", MSG_PROFILE_INVALID),
+    "sss_ultimo_admin": (GENERAL_FIELD, MSG_LAST_ADMIN),
 }
 
 
 def _id(valor):
-    valor = admin_crud.texto(valor, 11)
+    valor = admin_crud.text(valor, 11)
     if valor is None or not _RE_ID.fullmatch(valor) or int(valor) < 1:
         return None
     return int(valor)
 
 
-def publico(usuario):
+def public_view(usuario):
     """Copia do usuario sem senha_hash (e sem qualquer campo nao listado)."""
-    return dict((c, usuario.get(c)) for c in _CAMPOS_PUBLICOS)
+    return dict((c, usuario.get(c)) for c in _PUBLIC_FIELDS)
 
 
-def normalizar_filtros(entrada):
+def normalize_filters(entrada):
     """Filtros da lista: login, nome (trechos), perfil_id e situacao ('S' | 'N' | 'B' bloqueados)."""
     entrada = entrada or {}
     filtros = {}
     for chave in ("login", "name"):
-        valor = admin_crud.texto(entrada.get(chave), 60)
-        if valor and _RE_FILTRO.fullmatch(valor):
+        valor = admin_crud.text(entrada.get(chave), 60)
+        if valor and _RE_FILTER.fullmatch(valor):
             filtros[chave] = valor
     perfil = _id(entrada.get("profile_id"))
     if perfil is not None:
         filtros["profile_id"] = perfil
-    situacao = admin_crud.texto(entrada.get("state"), 1)
+    situacao = admin_crud.text(entrada.get("state"), 1)
     if situacao in ("Y", "N", "B"):
         filtros["state"] = situacao
     return filtros
 
 
-class ServicoAdminUsuarios(object):
+class AdminUsersService(object):
     """Regras do cadastro de usuarios com repositorios, relogio e log injetados."""
 
     def __init__(self, usuarios, rbac_repo, log, relogio=None):
@@ -92,7 +92,7 @@ class ServicoAdminUsuarios(object):
         # Relogio do banco (README §4.2): bloqueio vigente e filtro "Bloqueados" comparam com SYSDATE.
         self._relogio = relogio or usuarios.now
 
-    def _obter(self, usuario_id):
+    def _get(self, usuario_id):
         uid = _id(usuario_id)
         if uid is None:
             raise RepoNotFound("usuario invalido")
@@ -101,19 +101,19 @@ class ServicoAdminUsuarios(object):
     def profiles(self, apenas_ativos=False):
         """Perfis para selecao: lista de {id, nome, is_admin, ativo} ordenada por nome."""
         itens = self._rbac.profiles_list(filtros={"active": "Y"} if apenas_ativos else None, pagina=1,
-                                         tamanho=_PERFIS_MAX)["itens"]
+                                         tamanho=_PROFILES_MAX)["itens"]
         return [{"id": p["id"], "name": p["name"], "is_admin": p["is_admin"], "active": p["active"]} for p in itens]
 
-    def _perfil_admin(self, perfil_id):
+    def _admin_profile(self, perfil_id):
         try:
             return self._rbac.profiles_get(perfil_id).get("is_admin") == "Y"
         except RepoNotFound:
             return False
 
-    def _exigir_admin(self, ctx, condicao, operacao):
-        admin_crud.exigir_admin(ctx, condicao, MSG_SO_ADMIN, self._log, operacao)
+    def _require_admin(self, ctx, condicao, operacao):
+        admin_crud.require_admin(ctx, condicao, MSG_ADMIN_ONLY, self._log, operacao)
 
-    def bloqueado(self, usuario):
+    def is_locked(self, usuario):
         """True se o bloqueio por tentativas ainda vale agora."""
         ate = usuario.get("locked_until")
         return ate is not None and ate > self._relogio()
@@ -122,7 +122,7 @@ class ServicoAdminUsuarios(object):
 
     def list(self, ctx, filtros, pagina, tamanho):
         """Pagina de usuarios (login ASC) sem senha_hash, com perfil_nome e bloqueado."""
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
+        admin_crud.require_feature(ctx, FEATURE)
         repo_filtros = dict((k, v) for k, v in filtros.items() if k != "state")
         situacao = filtros.get("state")
         if situacao in ("Y", "N"):
@@ -133,254 +133,254 @@ class ServicoAdminUsuarios(object):
         nomes = dict((p["id"], p["name"]) for p in self.profiles())
         itens = []
         for u in resultado["itens"]:
-            item = publico(u)
+            item = public_view(u)
             item["perfil_nome"] = nomes.get(u["profile_id"], "#%s" % u["profile_id"])
-            item["bloqueado"] = self.bloqueado(u)
+            item["bloqueado"] = self.is_locked(u)
             itens.append(item)
         return dict(resultado, itens=itens)
 
-    def formulario(self, ctx, usuario_id=None):
+    def form(self, ctx, usuario_id=None):
         """Dados do formulario sem senha_hash; na edicao inclui versao, bloqueio e se e o proprio usuario."""
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
+        admin_crud.require_feature(ctx, FEATURE)
         if usuario_id in (None, ""):
             return {"id": None, "login": "", "name": "", "profile_id": None, "active": "Y", "version": "",
                     "bloqueado": False, "locked_until": None, "failed_attempts": 0, "proprio": False,
                     "registro": None}
-        u = self._obter(usuario_id)
-        dados = publico(u)
-        dados.update(version=admin_crud.versao(u, CAMPOS_EDITAVEIS), bloqueado=self.bloqueado(u),
+        u = self._get(usuario_id)
+        dados = public_view(u)
+        dados.update(version=admin_crud.version(u, EDITABLE_FIELDS), bloqueado=self.is_locked(u),
                      proprio=u["id"] == ctx.get("user_id"), registro=ui_helpers.registro(u, ctx))
         return dados
 
     # ----------------------------------------------------------------- escrita
 
-    def _violacao(self, ctx, exc, erros):
-        campo, mensagem = _CAMPO_POR_CONSTRAINT.get(exc.constraint, (CAMPO_GERAL, admin_crud.MSG_FALHA))
+    def _violation(self, ctx, exc, erros):
+        campo, mensagem = _FIELD_BY_CONSTRAINT.get(exc.constraint, (GENERAL_FIELD, admin_crud.MSG_FAILURE))
         erros[campo] = mensagem
         self._log.warning("cadastro de usuario rejeitado pelo repositorio (login=%s constraint=%s)",
-                          ctx.get("login"), exc.constraint, extra={"action": FUNCIONALIDADE})
+                          ctx.get("login"), exc.constraint, extra={"action": FEATURE})
 
-    def _perfil_ativo(self, valor, erros, atual=None):
+    def _active_profile(self, valor, erros, atual=None):
         """Perfil escolhido: precisa estar ativo, exceto quando a edicao mantem o perfil atual."""
         pid = _id(valor)
         todos = dict((p["id"], p) for p in self.profiles())
         if pid not in todos or (todos[pid]["active"] != "Y" and pid != atual):
-            erros["profile_id"] = MSG_PERFIL_INVALIDO
+            erros["profile_id"] = MSG_PROFILE_INVALID
             return None, None
         return pid, todos[pid]
 
-    def _senha(self, senha, confirmacao, erros, campo="senha"):
+    def _password(self, senha, confirmacao, erros, campo="senha"):
         if not isinstance(senha, str) or not senha:
-            erros[campo] = MSG_SENHA_OBRIGATORIA
+            erros[campo] = MSG_PASSWORD_REQUIRED
             return None
-        if len(senha) > auth_service.SENHA_MAX:
-            erros[campo] = MSG_SENHA_LONGA
+        if len(senha) > auth_service.PASSWORD_MAX:
+            erros[campo] = MSG_PASSWORD_TOO_LONG
             return None
         problemas = security.validate_password_policy(senha)
         if problemas:
             erros[campo] = problemas[0]
             return None
         if confirmacao != senha:
-            erros["confirmacao"] = MSG_CONFIRMACAO
+            erros["confirmacao"] = MSG_CONFIRMATION
             return None
         return senha
 
-    def _nome(self, valor, erros):
-        nome = admin_crud.texto_livre(valor, erros, "name")
+    def _name(self, valor, erros):
+        nome = admin_crud.free_text(valor, erros, "name")
         if nome is None:
-            erros["name"] = MSG_NOME_OBRIGATORIO
-        elif "name" not in erros and len(nome) > TAMANHO_NOME:
-            erros["name"] = MSG_NOME_TAMANHO
+            erros["name"] = MSG_NAME_REQUIRED
+        elif "name" not in erros and len(nome) > NAME_MAX_LENGTH:
+            erros["name"] = MSG_NAME_LENGTH
         return nome
 
-    def salvar(self, ctx, ip, usuario_id, dados):
+    def save(self, ctx, ip, usuario_id, dados):
         """Inclui (login, nome, perfil_id, senha, confirmacao) ou altera (nome, perfil_id, versao).
 
         Retorna (id, erros). Na edicao o login e a senha enviados sao ignorados. Lanca
-        RepoNotFound e AcessoNegado.
+        RepoNotFound e AccessDenied.
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
+        admin_crud.require_feature(ctx, FEATURE)
         erros = {}
         if usuario_id in (None, ""):
-            login = admin_crud.identificador(dados.get("login"), erros, "login")
+            login = admin_crud.identifier(dados.get("login"), erros, "login")
             if login is None:
-                erros["login"] = MSG_LOGIN_OBRIGATORIO
+                erros["login"] = MSG_LOGIN_REQUIRED
             elif "login" in erros:
                 pass
             elif not _RE_LOGIN.fullmatch(login):
-                erros["login"] = MSG_LOGIN_INVALIDO
-            nome = self._nome(dados.get("name"), erros)
-            perfil_id, perfil = self._perfil_ativo(dados.get("profile_id"), erros)
-            senha = self._senha(dados.get("senha"), dados.get("confirmacao"), erros)
+                erros["login"] = MSG_LOGIN_INVALID
+            nome = self._name(dados.get("name"), erros)
+            perfil_id, perfil = self._active_profile(dados.get("profile_id"), erros)
+            senha = self._password(dados.get("senha"), dados.get("confirmacao"), erros)
             if erros:
                 return None, erros
             try:
-                self._exigir_admin(ctx, perfil["is_admin"] == "Y", "CREATE")
-            except OperacaoNegada as exc:
+                self._require_admin(ctx, perfil["is_admin"] == "Y", "CREATE")
+            except OperationDenied as exc:
                 return None, {"profile_id": exc.mensagem}
             agora = self._relogio()
             novo = {"login": login, "name": nome, "profile_id": perfil_id, "active": "Y",
                     "password_hash": security.hash_password(senha), "password_changed_at": agora}
-            auditoria = admin_crud.auditoria(ctx, ip, "CREATE",
-                                             admin_crud.detalhe_insercao(dict(novo, perfil=perfil["name"]),
-                                                                         CAMPOS_INSERCAO))
+            auditoria = admin_crud.audit_entry(ctx, ip, "CREATE",
+                                             admin_crud.insert_detail(dict(novo, perfil=perfil["name"]),
+                                                                         INSERT_FIELDS))
             try:
                 criado = self._usuarios.insert(novo, auditoria=auditoria)
             except RepoViolation as exc:
-                self._violacao(ctx, exc, erros)
+                self._violation(ctx, exc, erros)
                 return None, erros
             self._log.info("usuario incluido (login=%s usuario=%s)", ctx.get("login"), login,
                            extra={"action": "CREATE"})
             return criado["id"], {}
 
-        atual = self._obter(usuario_id)
-        nome = self._nome(dados.get("name"), erros)
-        perfil_id, perfil = self._perfil_ativo(dados.get("profile_id"), erros, atual["profile_id"])
+        atual = self._get(usuario_id)
+        nome = self._name(dados.get("name"), erros)
+        perfil_id, perfil = self._active_profile(dados.get("profile_id"), erros, atual["profile_id"])
         if erros:
             return atual["id"], erros
         if atual["id"] == ctx.get("user_id") and ctx.get("is_admin") is True and perfil["is_admin"] != "Y":
-            return atual["id"], {CAMPO_GERAL: MSG_AUTO_PERFIL}
+            return atual["id"], {GENERAL_FIELD: MSG_SELF_PROFILE}
         # Trocar o proprio perfil, mesmo por um nao administrativo, mudaria as proprias permissoes: so
         # administrador (CR-008 E1, revisao de 2026-10-20).
         troca_propria = atual["id"] == ctx.get("user_id") and perfil_id != atual["profile_id"]
         try:
-            self._exigir_admin(ctx, perfil["is_admin"] == "Y" or self._perfil_admin(atual["profile_id"])
+            self._require_admin(ctx, perfil["is_admin"] == "Y" or self._admin_profile(atual["profile_id"])
                                or troca_propria, "UPDATE")
-        except OperacaoNegada as exc:
-            return atual["id"], {CAMPO_GERAL: exc.mensagem}
-        if admin_crud.texto(dados.get("version"), 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
-            return atual["id"], {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
+        except OperationDenied as exc:
+            return atual["id"], {GENERAL_FIELD: exc.mensagem}
+        if admin_crud.text(dados.get("version"), 64) != admin_crud.version(atual, EDITABLE_FIELDS):
+            return atual["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
         depois = dict(atual, name=nome, profile_id=perfil_id)
-        detalhe = admin_crud.detalhe_alteracoes(atual, depois, CAMPOS_EDITAVEIS)
+        detalhe = admin_crud.changes_detail(atual, depois, EDITABLE_FIELDS)
         if detalhe is None:
             return atual["id"], {}
         try:
             self._usuarios.update(atual["id"], {"name": nome, "profile_id": perfil_id},
-                                   esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
-                                   auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
+                                   esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
+                                   auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         except RepoConflict:
-            return atual["id"], {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
+            return atual["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
         except RepoViolation as exc:
-            self._violacao(ctx, exc, erros)
+            self._violation(ctx, exc, erros)
             return atual["id"], erros
         self._log.info("usuario alterado (login=%s usuario=%s)", ctx.get("login"), atual["login"],
                        extra={"action": "UPDATE"})
         return atual["id"], {}
 
-    def alternar_ativo(self, ctx, ip, usuario_id, versao):
+    def toggle_active(self, ctx, ip, usuario_id, versao):
         """Desativa (DEACTIVATE) ou reativa (UPDATE) o usuario.
 
-        Lanca OperacaoNegada (proprio usuario ou ultimo administrador), RepoConflict,
-        RepoNotFound e AcessoNegado.
+        Lanca OperationDenied (proprio usuario ou ultimo administrador), RepoConflict,
+        RepoNotFound e AccessDenied.
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        atual = self._obter(usuario_id)
+        admin_crud.require_feature(ctx, FEATURE)
+        atual = self._get(usuario_id)
         novo_ativo = "N" if atual["active"] == "Y" else "Y"
         if novo_ativo == "N" and atual["id"] == ctx.get("user_id"):
-            raise OperacaoNegada(MSG_AUTO_DESATIVAR)
-        self._exigir_admin(ctx, self._perfil_admin(atual["profile_id"]), "DEACTIVATE")
-        if admin_crud.texto(versao, 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
+            raise OperationDenied(MSG_SELF_DEACTIVATE)
+        self._require_admin(ctx, self._admin_profile(atual["profile_id"]), "DEACTIVATE")
+        if admin_crud.text(versao, 64) != admin_crud.version(atual, EDITABLE_FIELDS):
             raise RepoConflict("versao divergente")
-        detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, active=novo_ativo), ("active",))
+        detalhe = admin_crud.changes_detail(atual, dict(atual, active=novo_ativo), ("active",))
         acao = "DEACTIVATE" if novo_ativo == "N" else "UPDATE"
         try:
             alterado = self._usuarios.update(atual["id"], {"active": novo_ativo},
-                                              esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
-                                              auditoria=admin_crud.auditoria(ctx, ip, acao, detalhe))
+                                              esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
+                                              auditoria=admin_crud.audit_entry(ctx, ip, acao, detalhe))
         except RepoViolation as exc:
             if exc.constraint == "sss_ultimo_admin":
                 self._log.warning("desativacao do ultimo admin negada (login=%s usuario=%s)", ctx.get("login"),
                                   atual["login"], extra={"action": acao})
-                raise OperacaoNegada(MSG_ULTIMO_ADMIN)
+                raise OperationDenied(MSG_LAST_ADMIN)
             raise
         self._log.info("usuario %s (login=%s usuario=%s)", "desativado" if novo_ativo == "N" else "reativado",
                        ctx.get("login"), atual["login"], extra={"action": acao})
-        return publico(alterado)
+        return public_view(alterado)
 
-    def redefinir_senha(self, ctx, ip, usuario_id, senha, confirmacao):
+    def reset_password(self, ctx, ip, usuario_id, senha, confirmacao):
         """Define nova senha (politica + confirmacao), zera tentativas e bloqueio; audita sem o valor.
 
-        Retorna erros por campo ({} no sucesso). Lanca OperacaoNegada (propria senha: usar
-        'Minha senha'), RepoNotFound e AcessoNegado.
+        Retorna erros por campo ({} no sucesso). Lanca OperationDenied (propria senha: usar
+        'Minha senha'), RepoNotFound e AccessDenied.
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        atual = self._obter(usuario_id)
+        admin_crud.require_feature(ctx, FEATURE)
+        atual = self._get(usuario_id)
         if atual["id"] == ctx.get("user_id"):
-            raise OperacaoNegada(MSG_AUTO_SENHA)
-        self._exigir_admin(ctx, self._perfil_admin(atual["profile_id"]), "UPDATE")
+            raise OperationDenied(MSG_SELF_PASSWORD)
+        self._require_admin(ctx, self._admin_profile(atual["profile_id"]), "UPDATE")
         erros = {}
-        senha = self._senha(senha, confirmacao, erros)
+        senha = self._password(senha, confirmacao, erros)
         if erros:
             return erros
         self._usuarios.set_password(atual["id"], security.hash_password(senha), self._relogio(),
-                                     auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", u"senha redefinida"))
+                                     auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", u"senha redefinida"))
         self._log.info("senha redefinida (login=%s usuario=%s)", ctx.get("login"), atual["login"],
                        extra={"action": "UPDATE"})
         return {}
 
     def unlock(self, ctx, ip, usuario_id):
         """Zera tentativas e bloqueio do usuario, com auditoria UPDATE."""
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        atual = self._obter(usuario_id)
-        self._exigir_admin(ctx, self._perfil_admin(atual["profile_id"]), "UPDATE")
+        admin_crud.require_feature(ctx, FEATURE)
+        atual = self._get(usuario_id)
+        self._require_admin(ctx, self._admin_profile(atual["profile_id"]), "UPDATE")
         detalhe = u"desbloqueado (failed_attempts: %s; locked_until: %s)" % (
             atual.get("failed_attempts") or 0, atual.get("locked_until") or u"(vazio)")
         alterado = self._usuarios.unlock(atual["id"],
-                                              auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
+                                              auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         self._log.info("usuario desbloqueado (login=%s usuario=%s)", ctx.get("login"), atual["login"],
                        extra={"action": "UPDATE"})
-        return publico(alterado)
+        return public_view(alterado)
 
 
-_padrao = None
-_lock_padrao = threading.Lock()
+_default = None
+_default_lock = threading.Lock()
 
 
-def _servico():
-    global _padrao
-    with _lock_padrao:
-        if _padrao is None:
+def _service():
+    global _default
+    with _default_lock:
+        if _default is None:
             from gluon import current
             import sss_logging
             fabrica = current.repo_factory
-            _padrao = ServicoAdminUsuarios(
+            _default = AdminUsersService(
                 usuarios=fabrica.get("users"),
                 rbac_repo=fabrica.get("rbac"),
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
-        return _padrao
+        return _default
 
 
-def listar(ctx, filtros, pagina, tamanho):
+def list_page(ctx, filtros, pagina, tamanho):
     """Pagina de usuarios sem senha_hash (servico padrao)."""
-    return _servico().list(ctx, filtros, pagina, tamanho)
+    return _service().list(ctx, filtros, pagina, tamanho)
 
 
-def formulario(ctx, usuario_id=None):
+def form(ctx, usuario_id=None):
     """Dados do formulario de usuario (servico padrao)."""
-    return _servico().formulario(ctx, usuario_id)
+    return _service().form(ctx, usuario_id)
 
 
-def perfis(apenas_ativos=False):
+def profiles(apenas_ativos=False):
     """Perfis para selecao e filtro (servico padrao)."""
-    return _servico().profiles(apenas_ativos)
+    return _service().profiles(apenas_ativos)
 
 
-def salvar(ctx, ip, usuario_id, dados):
+def save(ctx, ip, usuario_id, dados):
     """Inclusao ou alteracao de usuario (servico padrao)."""
-    return _servico().salvar(ctx, ip, usuario_id, dados)
+    return _service().save(ctx, ip, usuario_id, dados)
 
 
-def alternar_ativo(ctx, ip, usuario_id, versao):
+def toggle_active(ctx, ip, usuario_id, versao):
     """Desativacao/reativacao de usuario (servico padrao)."""
-    return _servico().alternar_ativo(ctx, ip, usuario_id, versao)
+    return _service().toggle_active(ctx, ip, usuario_id, versao)
 
 
-def redefinir_senha(ctx, ip, usuario_id, senha, confirmacao):
+def reset_password(ctx, ip, usuario_id, senha, confirmacao):
     """Redefinicao de senha pelo administrador (servico padrao)."""
-    return _servico().redefinir_senha(ctx, ip, usuario_id, senha, confirmacao)
+    return _service().reset_password(ctx, ip, usuario_id, senha, confirmacao)
 
 
-def desbloquear(ctx, ip, usuario_id):
+def unlock(ctx, ip, usuario_id):
     """Desbloqueio do usuario (servico padrao)."""
-    return _servico().unlock(ctx, ip, usuario_id)
+    return _service().unlock(ctx, ip, usuario_id)

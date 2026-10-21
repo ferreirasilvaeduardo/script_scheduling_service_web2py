@@ -11,7 +11,7 @@ from unittest import mock
 import auth_service
 import repo_factory
 import security
-from ticket_service import ServicoTicket
+from ticket_service import TicketService
 
 SESSOES = {
     "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
@@ -37,10 +37,10 @@ class _Base(unittest.TestCase):
         log = logging.getLogger("sss_teste_catalogo")
         log.addHandler(logging.NullHandler())
         log.propagate = False
-        auth = auth_service.ServicoAuth(repo_factory.get("users"), repo_factory.get("rbac"), self.catalog,
+        auth = auth_service.AuthService(repo_factory.get("users"), repo_factory.get("rbac"), self.catalog,
                                         repo_factory.get("audit"), 5, 900, log)
-        self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
-        self.svc = ServicoTicket(self.catalog, self.tickets, log)
+        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSOES.items())
+        self.svc = TicketService(self.catalog, self.tickets, log)
 
     def _sem(self, login, *funcs):
         ctx = dict(self.ctx[login])
@@ -71,9 +71,9 @@ class TestCatalogoRotinas(_Base):
 
     def test_cartoes_iguais_ao_disparo_e_ultima_no_escopo(self):
         ctx = self.ctx["op.hml"]
-        grupos = self.svc.catalogo_rotinas(ctx)
+        grupos = self.svc.routine_catalog(ctx)
         ids = sorted(c["id"] for g in grupos for c in g["cartoes"])
-        self.assertEqual(ids, sorted(s["id"] for g in self.svc.scripts_disponiveis(ctx) for s in g["scripts"]))
+        self.assertEqual(ids, sorted(s["id"] for g in self.svc.available_scripts(ctx) for s in g["scripts"]))
         for g in grupos:
             for c in g["cartoes"]:
                 self.assertTrue(c["environments"])
@@ -84,18 +84,18 @@ class TestCatalogoRotinas(_Base):
 
     def test_sem_ver_logs_so_os_proprios(self):
         ctx = self._sem("op.hml", "VIEW_LOGS")
-        for g in self.svc.catalogo_rotinas(ctx):
+        for g in self.svc.routine_catalog(ctx):
             for c in g["cartoes"]:
                 if c["ultima"]:
                     self.assertEqual(self.tickets.get(c["ultima"]["id"])["requested_by"], "op.hml")
 
     def test_perguntas_com_obrigatorio(self):
-        cartoes = dict((c["name"], c) for g in self.svc.catalogo_rotinas(self.ctx["admin"]) for c in g["cartoes"])
+        cartoes = dict((c["name"], c) for g in self.svc.routine_catalog(self.ctx["admin"]) for c in g["cartoes"])
         perguntas = cartoes["carga_diaria"]["perguntas"]
         self.assertIn({"rotulo": u"Data de Referencia", "required": True}, perguntas)
 
     def test_sem_exec_script_vazio(self):
-        self.assertEqual(self.svc.catalogo_rotinas(self._sem("op.hml", "EXEC_SCRIPT")), [])
+        self.assertEqual(self.svc.routine_catalog(self._sem("op.hml", "EXEC_SCRIPT")), [])
 
 
 

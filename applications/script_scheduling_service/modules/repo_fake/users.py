@@ -298,7 +298,7 @@ class RepoUsersFake(RepoUsers):
             return copy.deepcopy(u)
 
     def end_sessions(self, id, auditoria=None):
-        """Logout: incrementa sessao_epoch (rotina tecnica, sem updated_*), com a auditoria na mesma operacao."""
+        """Logout: incrementa session_epoch (rotina tecnica, sem updated_*), com a auditoria na mesma operacao."""
         with self._store.lock_usuarios:
             if id not in self._store.users:
                 raise RepoNotFound("Usuario ID %s nao encontrado" % id)
@@ -309,7 +309,7 @@ class RepoUsersFake(RepoUsers):
 
 
 def _revoke_sessions(usuario):
-    """Incrementa sessao_epoch: todas as sessoes abertas do usuario deixam de valer (CR-008, E2)."""
+    """Incrementa session_epoch: todas as sessoes abertas do usuario deixam de valer (CR-008, E2)."""
     novo = int(usuario.get("session_epoch") or 0) + 1
     if novo > 9999999999:
         raise RepoViolation("sessao_epoch excede NUMBER(10)", constraint="ck_tbsss_usr_epoch")

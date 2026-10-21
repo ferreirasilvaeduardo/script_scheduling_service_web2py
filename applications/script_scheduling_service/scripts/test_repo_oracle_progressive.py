@@ -158,7 +158,7 @@ class TestOracleRbacUsuarios(unittest.TestCase):
             self.assertEqual(sess["profile_id"], pid)
             self.assertEqual(sess["session_epoch"], 0)
 
-            # 5. Logout incrementa sessao_epoch
+            # 5. Logout incrementa session_epoch
             self.usr.end_sessions(uid, auditoria={"actor": ator_teste, "action": "LOGOUT"})
             sess2 = self.usr.get_session_state(uid)
             self.assertEqual(sess2["session_epoch"], 1)

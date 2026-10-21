@@ -10,47 +10,47 @@ import threading
 
 import admin_crud
 import ui_helpers
-from admin_crud import CAMPO_GERAL, OperacaoNegada
+from admin_crud import GENERAL_FIELD, OperationDenied
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
-FUNCIONALIDADE = "MANAGE_PROFILES"
-CAMPOS_EDITAVEIS = ("name", "description", "is_admin", "active")
-CAMPOS_INSERCAO = ("name", "description", "is_admin")
-TAMANHO_DESCRICAO = 100
-_CATALOGO_MAX = 1000
-_TAMANHO_CONTAGEM = 1  # so o total interessa
-_SEM_GRUPO = u"Sem grupo"
+FEATURE = "MANAGE_PROFILES"
+EDITABLE_FIELDS = ("name", "description", "is_admin", "active")
+INSERT_FIELDS = ("name", "description", "is_admin")
+DESCRIPTION_MAX_LENGTH = 100
+_CATALOG_MAX = 1000
+_COUNT_PAGE_SIZE = 1  # so o total interessa
+_NO_GROUP = u"Sem grupo"
 
 _RE_ID = re.compile(r"[0-9]{1,10}")
-_RE_NOME = re.compile(r"[A-Z0-9_]{1,30}")
-_RE_FILTRO_NOME = re.compile(r"[A-Za-z0-9_]{1,30}")
+_RE_NAME = re.compile(r"[A-Z0-9_]{1,30}")
+_RE_NAME_FILTER = re.compile(r"[A-Za-z0-9_]{1,30}")
 
-MSG_NOME_OBRIGATORIO = u"Informe o nome do perfil."
-MSG_NOME_INVALIDO = u"Use de 1 a 30 caracteres: letras maiúsculas, dígitos e _ (ex.: OPERATOR_PROD)."
-MSG_NOME_DUPLICADO = u"Já existe um perfil com este nome."
-MSG_DESCRICAO_TAMANHO = u"A descrição deve ter no máximo %d caracteres." % TAMANHO_DESCRICAO
-MSG_ULTIMO_ADMIN = ui_helpers.mensagem("ultimo_admin")
-MSG_AUTO_ADMIN = u"Você não pode remover o acesso administrativo do seu próprio perfil."
-MSG_AUTO_DESATIVAR = u"Você não pode desativar o seu próprio perfil."
-MSG_SO_ADMIN = (u"Só um administrador pode alterar um perfil de administrador, mudar o seu próprio perfil ou "
+MSG_NAME_REQUIRED = u"Informe o nome do perfil."
+MSG_NAME_INVALID = u"Use de 1 a 30 caracteres: letras maiúsculas, dígitos e _ (ex.: OPERATOR_PROD)."
+MSG_NAME_DUPLICATE = u"Já existe um perfil com este nome."
+MSG_DESCRIPTION_LENGTH = u"A descrição deve ter no máximo %d caracteres." % DESCRIPTION_MAX_LENGTH
+MSG_LAST_ADMIN = ui_helpers.mensagem("ultimo_admin")
+MSG_SELF_ADMIN = u"Você não pode remover o acesso administrativo do seu próprio perfil."
+MSG_SELF_DEACTIVATE = u"Você não pode desativar o seu próprio perfil."
+MSG_ADMIN_ONLY = (u"Só um administrador pode alterar um perfil de administrador, mudar o seu próprio perfil ou "
                 u"marcar um perfil como administrador. Peça a um administrador.")
-AFETADOS_MAX = 20
-MSG_MATRIZ_ID_INVALIDO = u"A seleção contém itens inexistentes. Recarregue a página e tente novamente."
-MSG_MATRIZ_INATIVO = u"Itens inativos não podem ser adicionados ao perfil. Recarregue a página e tente novamente."
-AVISO_DESATIVACAO = u"Os usuários deste perfil perdem o acesso e têm a sessão encerrada no próximo clique."
-AVISO_ADMIN = (u"Perfil administrativo: dispensa funcionalidades, ambientes e scripts, mas não a homologação "
+AFFECTED_MAX = 20
+MSG_MATRIX_ID_INVALID = u"A seleção contém itens inexistentes. Recarregue a página e tente novamente."
+MSG_MATRIX_INACTIVE = u"Itens inativos não podem ser adicionados ao perfil. Recarregue a página e tente novamente."
+DEACTIVATION_WARNING = u"Os usuários deste perfil perdem o acesso e têm a sessão encerrada no próximo clique."
+ADMIN_WARNING = (u"Perfil administrativo: dispensa funcionalidades, ambientes e scripts, mas não a homologação "
                u"do script no ambiente nem as flags de ativo. A matriz abaixo fica registrada e passa a valer "
                u"se o perfil deixar de ser administrativo.")
 
-_CAMPO_POR_CONSTRAINT = {
-    "uk_tbsss_prf_name": ("name", MSG_NOME_DUPLICADO),
+_FIELD_BY_CONSTRAINT = {
+    "uk_tbsss_prf_name": ("name", MSG_NAME_DUPLICATE),
 }
 # Prefixo de cada dimensao no diff auditado (README §4.4 PERM_UPDATE).
-_PREFIXOS = (("funcs", ""), ("ambs", "amb:"), ("scrs", "scr:"))
+_PREFIXES = (("funcs", ""), ("ambs", "amb:"), ("scrs", "scr:"))
 
 
 def _id(valor):
-    valor = admin_crud.texto(valor, 11)
+    valor = admin_crud.text(valor, 11)
     if valor is None or not _RE_ID.fullmatch(valor) or int(valor) < 1:
         return None
     return int(valor)
@@ -71,36 +71,36 @@ def _ids(valores):
     return ids
 
 
-def normalizar_filtros(entrada):
+def normalize_filters(entrada):
     """Filtros da lista vindos de request.vars: nome (trecho), ativo e is_admin ('S' | 'N')."""
     entrada = entrada or {}
     filtros = {}
-    nome = admin_crud.texto(entrada.get("name"), 30)
-    if nome and _RE_FILTRO_NOME.fullmatch(nome):
+    nome = admin_crud.text(entrada.get("name"), 30)
+    if nome and _RE_NAME_FILTER.fullmatch(nome):
         filtros["name"] = nome
     for chave in ("active", "is_admin"):
-        valor = admin_crud.texto(entrada.get(chave), 1)
+        valor = admin_crud.text(entrada.get(chave), 1)
         if valor in ("Y", "N"):
             filtros[chave] = valor
     return filtros
 
 
-def diff_matriz(antes, depois, rotulos):
+def matrix_diff(antes, depois, rotulos):
     """'+EXEC_SCRIPT, -VIEW_LOGS, +amb:PRODUCAO, -scr:carga_diaria' (ordem: dimensao, rotulo); None se igual.
 
     antes/depois: {'funcs': set, 'ambs': set, 'scrs': set}; rotulos: {dimensao: {id: rotulo}}.
     """
     partes = []
-    for dim, prefixo in _PREFIXOS:
+    for dim, prefixo in _PREFIXES:
         a, d = set(antes.get(dim) or ()), set(depois.get(dim) or ())
         nomes = rotulos.get(dim, {})
         mudancas = [(nomes.get(i, "#%s" % i), "+") for i in d - a] + [(nomes.get(i, "#%s" % i), "-") for i in a - d]
         for rotulo, sinal in sorted(mudancas):
             partes.append(u"%s%s%s" % (sinal, prefixo, rotulo))
-    return admin_crud.detalhe_livre(u", ".join(partes)) if partes else None
+    return admin_crud.free_detail(u", ".join(partes)) if partes else None
 
 
-class ServicoAdminPerfis(object):
+class AdminProfilesService(object):
     """Regras do cadastro de perfis e da matriz de permissoes com repositorios injetados."""
 
     def __init__(self, rbac_repo, catalogo, usuarios, log):
@@ -109,171 +109,171 @@ class ServicoAdminPerfis(object):
         self._usuarios = usuarios
         self._log = log
 
-    def _obter(self, perfil_id):
+    def _get(self, perfil_id):
         pid = _id(perfil_id)
         if pid is None:
             raise RepoNotFound("perfil invalido")
         return self._rbac.profiles_get(pid)
 
-    def usuarios_ativos(self, perfil_id):
+    def active_users(self, perfil_id):
         """Quantidade de usuarios ativos do perfil (perdem o acesso se o perfil for desativado)."""
         return self._usuarios.list(filtros={"profile_id": perfil_id, "active": "Y"}, pagina=1,
-                                     tamanho=_TAMANHO_CONTAGEM)["total"]
+                                     tamanho=_COUNT_PAGE_SIZE)["total"]
 
-    def usuarios_afetados(self, perfil_id):
-        """(total, logins) dos usuarios ativos do perfil; no maximo AFETADOS_MAX logins (README §4.3.B.1)."""
+    def affected_users(self, perfil_id):
+        """(total, logins) dos usuarios ativos do perfil; no maximo AFFECTED_MAX logins (README §4.3.B.1)."""
         pagina = self._usuarios.list(filtros={"profile_id": perfil_id, "active": "Y"}, pagina=1,
-                                       tamanho=AFETADOS_MAX)
+                                       tamanho=AFFECTED_MAX)
         return pagina["total"], [u["login"] for u in pagina["itens"]]
 
     # ------------------------------------------------------------- cadastro
 
     def list(self, ctx, filtros, pagina, tamanho):
         """Pagina de perfis (ordem nome ASC)."""
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
+        admin_crud.require_feature(ctx, FEATURE)
         return self._rbac.profiles_list(filtros=filtros, pagina=pagina, tamanho=tamanho)
 
-    def formulario(self, ctx, perfil_id=None):
+    def form(self, ctx, perfil_id=None):
         """Dados do formulario: vazio para inclusao; registro, versao e usuarios ativos na edicao."""
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
+        admin_crud.require_feature(ctx, FEATURE)
         if perfil_id in (None, ""):
             return {"id": None, "name": "", "description": "", "is_admin": "N", "active": "Y", "version": "",
                     "usuarios_ativos": 0, "usuarios_afetados": [], "proprio": False, "registro": None}
-        perfil = self._obter(perfil_id)
-        total, logins = self.usuarios_afetados(perfil["id"])
+        perfil = self._get(perfil_id)
+        total, logins = self.affected_users(perfil["id"])
         return {
             "id": perfil["id"],
             "name": perfil["name"],
-            "description": admin_crud.normalizar(perfil.get("description")) or "",
+            "description": admin_crud.normalize(perfil.get("description")) or "",
             "is_admin": perfil["is_admin"],
             "active": perfil["active"],
-            "version": admin_crud.versao(perfil, CAMPOS_EDITAVEIS),
+            "version": admin_crud.version(perfil, EDITABLE_FIELDS),
             "usuarios_ativos": total,
             "usuarios_afetados": logins,
             "proprio": ctx.get("profile_id") == perfil["id"],
             "registro": ui_helpers.registro(perfil, ctx),
         }
 
-    def _validar(self, dados, erros):
-        nome = admin_crud.identificador(dados.get("name"), erros, "name")
+    def _validate(self, dados, erros):
+        nome = admin_crud.identifier(dados.get("name"), erros, "name")
         if nome is None:
-            erros["name"] = MSG_NOME_OBRIGATORIO
-        elif "name" not in erros and not _RE_NOME.fullmatch(nome):
-            erros["name"] = MSG_NOME_INVALIDO
-        descricao = admin_crud.texto_livre(dados.get("description"), erros, "description")
-        if descricao is not None and len(descricao) > TAMANHO_DESCRICAO:
-            erros["description"] = MSG_DESCRICAO_TAMANHO
-        is_admin = "Y" if admin_crud.texto(dados.get("is_admin"), 1) == "Y" else "N"
+            erros["name"] = MSG_NAME_REQUIRED
+        elif "name" not in erros and not _RE_NAME.fullmatch(nome):
+            erros["name"] = MSG_NAME_INVALID
+        descricao = admin_crud.free_text(dados.get("description"), erros, "description")
+        if descricao is not None and len(descricao) > DESCRIPTION_MAX_LENGTH:
+            erros["description"] = MSG_DESCRIPTION_LENGTH
+        is_admin = "Y" if admin_crud.text(dados.get("is_admin"), 1) == "Y" else "N"
         return nome, descricao, is_admin
 
-    def _violacao(self, ctx, exc, erros):
+    def _violation(self, ctx, exc, erros):
         if exc.constraint == "sss_ultimo_admin":
-            erros[CAMPO_GERAL] = MSG_ULTIMO_ADMIN
+            erros[GENERAL_FIELD] = MSG_LAST_ADMIN
         else:
-            campo, mensagem = _CAMPO_POR_CONSTRAINT.get(exc.constraint, (CAMPO_GERAL, admin_crud.MSG_FALHA))
+            campo, mensagem = _FIELD_BY_CONSTRAINT.get(exc.constraint, (GENERAL_FIELD, admin_crud.MSG_FAILURE))
             erros[campo] = mensagem
         self._log.warning("cadastro de perfil rejeitado pelo repositorio (login=%s constraint=%s)",
-                          ctx.get("login"), exc.constraint, extra={"action": FUNCIONALIDADE})
+                          ctx.get("login"), exc.constraint, extra={"action": FEATURE})
 
-    def _exigir_admin(self, ctx, condicao, operacao):
-        admin_crud.exigir_admin(ctx, condicao, MSG_SO_ADMIN, self._log, operacao)
+    def _require_admin(self, ctx, condicao, operacao):
+        admin_crud.require_admin(ctx, condicao, MSG_ADMIN_ONLY, self._log, operacao)
 
-    def _reservado(self, ctx, perfil):
+    def _reserved(self, ctx, perfil):
         """Perfil que so admin altera (CR-008, E1): perfil de administrador ou o proprio perfil."""
         return perfil["is_admin"] == "Y" or ctx.get("profile_id") == perfil["id"]
 
-    def salvar(self, ctx, ip, perfil_id, dados):
+    def save(self, ctx, ip, perfil_id, dados):
         """Inclui (perfil_id vazio) ou altera um perfil: nome, descricao, is_admin ('S' marcado).
 
         Retorna (id, erros). Remover is_admin do ultimo perfil admin ativo gera erro geral.
-        Lanca RepoNotFound e AcessoNegado.
+        Lanca RepoNotFound e AccessDenied.
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
+        admin_crud.require_feature(ctx, FEATURE)
         erros = {}
         if perfil_id in (None, ""):
-            nome, descricao, is_admin = self._validar(dados, erros)
+            nome, descricao, is_admin = self._validate(dados, erros)
             if erros:
                 return None, erros
             try:
-                self._exigir_admin(ctx, is_admin == "Y", "CREATE")
-            except OperacaoNegada as exc:
-                return None, {CAMPO_GERAL: exc.mensagem}
+                self._require_admin(ctx, is_admin == "Y", "CREATE")
+            except OperationDenied as exc:
+                return None, {GENERAL_FIELD: exc.mensagem}
             novo = {"name": nome, "description": descricao, "is_admin": is_admin, "active": "Y"}
-            auditoria = admin_crud.auditoria(ctx, ip, "CREATE",
-                                             admin_crud.detalhe_insercao(novo, CAMPOS_INSERCAO))
+            auditoria = admin_crud.audit_entry(ctx, ip, "CREATE",
+                                             admin_crud.insert_detail(novo, INSERT_FIELDS))
             try:
                 criado = self._rbac.profiles_insert(novo, auditoria=auditoria)
             except RepoViolation as exc:
-                self._violacao(ctx, exc, erros)
+                self._violation(ctx, exc, erros)
                 return None, erros
             self._log.info("perfil incluido (login=%s perfil=%s)", ctx.get("login"), criado["name"],
                            extra={"action": "CREATE"})
             return criado["id"], {}
 
-        atual = self._obter(perfil_id)
-        nome, descricao, is_admin = self._validar(dados, erros)
+        atual = self._get(perfil_id)
+        nome, descricao, is_admin = self._validate(dados, erros)
         if erros:
             return atual["id"], erros
-        if admin_crud.texto(dados.get("version"), 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
-            erros[CAMPO_GERAL] = admin_crud.MSG_CONFLITO
+        if admin_crud.text(dados.get("version"), 64) != admin_crud.version(atual, EDITABLE_FIELDS):
+            erros[GENERAL_FIELD] = admin_crud.MSG_CONFLICT
             return atual["id"], erros
         try:
-            self._exigir_admin(ctx, is_admin == "Y" or self._reservado(ctx, atual), "UPDATE")
-        except OperacaoNegada as exc:
-            erros[CAMPO_GERAL] = exc.mensagem
+            self._require_admin(ctx, is_admin == "Y" or self._reserved(ctx, atual), "UPDATE")
+        except OperationDenied as exc:
+            erros[GENERAL_FIELD] = exc.mensagem
             return atual["id"], erros
         if ctx.get("profile_id") == atual["id"] and atual["is_admin"] == "Y" and is_admin == "N":
             # Autoprotecao (README §4.3.B): vale mesmo havendo outros administradores.
             self._log.warning("remocao de is_admin do proprio perfil negada (login=%s perfil=%s)",
                               ctx.get("login"), atual["name"], extra={"action": "UPDATE"})
-            erros[CAMPO_GERAL] = MSG_AUTO_ADMIN
+            erros[GENERAL_FIELD] = MSG_SELF_ADMIN
             return atual["id"], erros
         depois = dict(atual, name=nome, description=descricao, is_admin=is_admin)
-        detalhe = admin_crud.detalhe_alteracoes(atual, depois, CAMPOS_EDITAVEIS)
+        detalhe = admin_crud.changes_detail(atual, depois, EDITABLE_FIELDS)
         if detalhe is None:
             return atual["id"], {}
         try:
             self._rbac.profiles_update(
                 atual["id"], {"name": nome, "description": descricao, "is_admin": is_admin},
-                esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
-                auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
+                esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
+                auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         except RepoConflict:
-            erros[CAMPO_GERAL] = admin_crud.MSG_CONFLITO
+            erros[GENERAL_FIELD] = admin_crud.MSG_CONFLICT
             return atual["id"], erros
         except RepoViolation as exc:
-            self._violacao(ctx, exc, erros)
+            self._violation(ctx, exc, erros)
             return atual["id"], erros
         self._log.info("perfil alterado (login=%s perfil=%s)", ctx.get("login"), nome, extra={"action": "UPDATE"})
         return atual["id"], {}
 
-    def alternar_ativo(self, ctx, ip, perfil_id, versao):
+    def toggle_active(self, ctx, ip, perfil_id, versao):
         """Desativa (DEACTIVATE, com usuarios afetados) ou reativa (UPDATE) o perfil.
 
-        Lanca OperacaoNegada (ultimo administrador), RepoConflict, RepoNotFound e AcessoNegado.
+        Lanca OperationDenied (ultimo administrador), RepoConflict, RepoNotFound e AccessDenied.
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        atual = self._obter(perfil_id)
-        if admin_crud.texto(versao, 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
+        admin_crud.require_feature(ctx, FEATURE)
+        atual = self._get(perfil_id)
+        if admin_crud.text(versao, 64) != admin_crud.version(atual, EDITABLE_FIELDS):
             raise RepoConflict("versao divergente")
         novo_ativo = "N" if atual["active"] == "Y" else "Y"
-        self._exigir_admin(ctx, atual["is_admin"] == "Y" and ctx.get("profile_id") != atual["id"], "DEACTIVATE")
+        self._require_admin(ctx, atual["is_admin"] == "Y" and ctx.get("profile_id") != atual["id"], "DEACTIVATE")
         if novo_ativo == "N" and ctx.get("profile_id") == atual["id"]:
             self._log.warning("desativacao do proprio perfil negada (login=%s perfil=%s)",
                               ctx.get("login"), atual["name"], extra={"action": "DEACTIVATE"})
-            raise OperacaoNegada(MSG_AUTO_DESATIVAR)
-        detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, active=novo_ativo), ("active",))
+            raise OperationDenied(MSG_SELF_DEACTIVATE)
+        detalhe = admin_crud.changes_detail(atual, dict(atual, active=novo_ativo), ("active",))
         acao = "DEACTIVATE" if novo_ativo == "N" else "UPDATE"
         if novo_ativo == "N":
-            detalhe = u"%s; usuários ativos afetados: %d" % (detalhe, self.usuarios_ativos(atual["id"]))
+            detalhe = u"%s; usuários ativos afetados: %d" % (detalhe, self.active_users(atual["id"]))
         try:
             alterado = self._rbac.profiles_update(
-                atual["id"], {"active": novo_ativo}, esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
-                auditoria=admin_crud.auditoria(ctx, ip, acao, detalhe))
+                atual["id"], {"active": novo_ativo}, esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
+                auditoria=admin_crud.audit_entry(ctx, ip, acao, detalhe))
         except RepoViolation as exc:
             if exc.constraint == "sss_ultimo_admin":
                 self._log.warning("desativacao do ultimo perfil admin negada (login=%s perfil=%s)",
                                   ctx.get("login"), atual["name"], extra={"action": acao})
-                raise OperacaoNegada(MSG_ULTIMO_ADMIN)
+                raise OperationDenied(MSG_LAST_ADMIN)
             raise
         self._log.info("perfil %s (login=%s perfil=%s)", "desativado" if novo_ativo == "N" else "reativado",
                        ctx.get("login"), atual["name"], extra={"action": acao})
@@ -281,16 +281,16 @@ class ServicoAdminPerfis(object):
 
     # ------------------------------------------------------------ quem pode
 
-    def quem_pode(self, ctx, script_id=None, ambiente_id=None):
+    def who_can(self, ctx, script_id=None, ambiente_id=None):
         """Consulta "Quem pode o que" (README §4.3.B.2, CR-004 T5): so leitura, sem metodo novo no contrato.
 
         Por script: perfis ativos que podem roda-lo e em quais ambientes (perfil_amb ∩ homologacao, so
         ambientes ativos; admin: todos os homologados ativos). Por ambiente: perfis que o acessam e os
         scripts homologados ali que podem rodar. Perfis inativos vao para 'inativos'.
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        scripts = dict((s["id"], s) for s in self._catalogo.scripts_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"])
-        ambientes = dict((a["id"], a) for a in self._catalogo.environments_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"])
+        admin_crud.require_feature(ctx, FEATURE)
+        scripts = dict((s["id"], s) for s in self._catalogo.scripts_list(pagina=1, tamanho=_CATALOG_MAX)["itens"])
+        ambientes = dict((a["id"], a) for a in self._catalogo.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"])
         resultado = {"scripts": sorted(scripts.values(), key=lambda s: s["name"]),
                      "environments": sorted(ambientes.values(), key=lambda a: a["name"]),
                      "script": None, "environment": None, "profiles": [], "inativos": [], "aviso": None}
@@ -298,7 +298,7 @@ class ServicoAdminPerfis(object):
         if sid is None and aid is None:
             return resultado
         exec_id = [f["id"] for f in self._rbac.features_list() if f["code"] == "EXEC_SCRIPT"]
-        perfis = self._rbac.profiles_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"]
+        perfis = self._rbac.profiles_list(pagina=1, tamanho=_CATALOG_MAX)["itens"]
         homolog = {}
 
         def homologados(script):
@@ -309,7 +309,7 @@ class ServicoAdminPerfis(object):
 
         def linha(perfil, motivo, detalhes):
             return {"id": perfil["id"], "name": perfil["name"], "is_admin": perfil["is_admin"] == "Y",
-                    "reason": motivo, "detalhes": detalhes, "usuarios_ativos": self.usuarios_ativos(perfil["id"])}
+                    "reason": motivo, "detalhes": detalhes, "usuarios_ativos": self.active_users(perfil["id"])}
 
         if sid is not None and sid in scripts:
             script = scripts[sid]
@@ -350,30 +350,30 @@ class ServicoAdminPerfis(object):
 
     # --------------------------------------------------------------- matriz
 
-    def _catalogo_matriz(self):
+    def _matrix_catalog(self):
         funcs = self._rbac.features_list()
-        ambs = self._catalogo.environments_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"]
-        scrs = self._catalogo.scripts_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"]
+        ambs = self._catalogo.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"]
+        scrs = self._catalogo.scripts_list(pagina=1, tamanho=_CATALOG_MAX)["itens"]
         return {"funcs": dict((f["id"], f) for f in funcs), "ambs": dict((a["id"], a) for a in ambs),
                 "scrs": dict((s["id"], s) for s in scrs)}
 
     @staticmethod
-    def _rotulos(cat):
+    def _labels(cat):
         return {"funcs": dict((i, f["code"]) for i, f in cat["funcs"].items()),
                 "ambs": dict((i, a["name"]) for i, a in cat["ambs"].items()),
                 "scrs": dict((i, s["name"]) for i, s in cat["scrs"].items())}
 
-    def matriz(self, ctx, perfil_id):
+    def matrix(self, ctx, perfil_id):
         """Matriz do perfil para a tela: itens ativos e os inativos ja associados (somente leitura).
 
         Retorna {perfil, perm_versao, aviso_admin, funcs: [{grupo, itens}], ambs: [{grupo, itens}],
         scrs: [{grupo, itens}]}; cada item tem id, rotulo, detalhe, marcado, inativo e rotulo_diff.
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        perfil = self._obter(perfil_id)
+        admin_crud.require_feature(ctx, FEATURE)
+        perfil = self._get(perfil_id)
         atual = self._rbac.matrix_get(perfil["id"])
-        cat = self._catalogo_matriz()
-        marcados = dict((dim, set(atual[dim])) for dim, _p in _PREFIXOS)
+        cat = self._matrix_catalog()
+        marcados = dict((dim, set(atual[dim])) for dim, _p in _PREFIXES)
 
         def item(dim, reg, rotulo, detalhe, prefixo):
             return {"id": reg["id"], "rotulo": rotulo, "detail": detalhe or "",
@@ -393,119 +393,119 @@ class ServicoAdminPerfis(object):
             "perfil": {"id": perfil["id"], "name": perfil["name"], "is_admin": perfil["is_admin"],
                        "active": perfil["active"]},
             "perm_version": perfil["perm_version"],
-            "aviso_admin": AVISO_ADMIN if perfil["is_admin"] == "Y" else None,
-            "funcs": agrupar("funcs", lambda r: r.get("module") or _SEM_GRUPO,
+            "aviso_admin": ADMIN_WARNING if perfil["is_admin"] == "Y" else None,
+            "funcs": agrupar("funcs", lambda r: r.get("module") or _NO_GROUP,
                              lambda r: item("funcs", r, r["code"], r.get("name"), "")),
             "ambs": agrupar("ambs", lambda r: u"Ambientes",
                             lambda r: item("ambs", r, r["name"], r.get("description"), "amb:")),
-            "scrs": agrupar("scrs", lambda r: u"%s / %s" % (r.get("script_group") or _SEM_GRUPO, r.get("category") or "-"),
+            "scrs": agrupar("scrs", lambda r: u"%s / %s" % (r.get("script_group") or _NO_GROUP, r.get("category") or "-"),
                             lambda r: item("scrs", r, r["name"], r.get("description"), "scr:")),
         }
 
-    def salvar_matriz(self, ctx, ip, perfil_id, funcs, ambs, scrs, perm_versao):
+    def save_matrix(self, ctx, ip, perfil_id, funcs, ambs, scrs, perm_versao):
         """Substitui a matriz do perfil (um unico POST com as tres listas) e audita PERM_UPDATE com o diff.
 
         Associacoes existentes a itens inativos podem ser removidas, nunca readicionadas (README §4.3.B.1);
         so itens ativos podem ser adicionados; ID inexistente rejeita a operacao inteira. Retorna (diff ou None se nada mudou, erros).
-        Lanca RepoNotFound e AcessoNegado.
+        Lanca RepoNotFound e AccessDenied.
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        perfil = self._obter(perfil_id)
+        admin_crud.require_feature(ctx, FEATURE)
+        perfil = self._get(perfil_id)
         try:
-            self._exigir_admin(ctx, self._reservado(ctx, perfil), "PERM_UPDATE")
-        except OperacaoNegada as exc:
-            return None, {CAMPO_GERAL: exc.mensagem}
+            self._require_admin(ctx, self._reserved(ctx, perfil), "PERM_UPDATE")
+        except OperationDenied as exc:
+            return None, {GENERAL_FIELD: exc.mensagem}
         enviados = {"funcs": _ids(funcs), "ambs": _ids(ambs), "scrs": _ids(scrs)}
         if any(v is None for v in enviados.values()):
-            return None, {CAMPO_GERAL: MSG_MATRIZ_ID_INVALIDO}
+            return None, {GENERAL_FIELD: MSG_MATRIX_ID_INVALID}
         versao = _id(perm_versao)
         if versao is None or versao != perfil["perm_version"]:
-            return None, {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
+            return None, {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
 
-        cat = self._catalogo_matriz()
+        cat = self._matrix_catalog()
         atual = dict((dim, set(ids)) for dim, ids in self._rbac.matrix_get(perfil["id"]).items())
         final = {}
-        for dim, _prefixo in _PREFIXOS:
+        for dim, _prefixo in _PREFIXES:
             desconhecidos = enviados[dim] - set(cat[dim])
             if desconhecidos:
                 self._log.warning("matriz rejeitada: IDs inexistentes (login=%s perfil=%s dimensao=%s ids=%s)",
                                   ctx.get("login"), perfil["name"], dim, sorted(desconhecidos),
                                   extra={"action": "PERM_UPDATE"})
-                return None, {CAMPO_GERAL: MSG_MATRIZ_ID_INVALIDO}
+                return None, {GENERAL_FIELD: MSG_MATRIX_ID_INVALID}
             inativos = set(i for i, r in cat[dim].items() if r.get("active") != "Y")
             if (enviados[dim] - atual[dim]) & inativos:
-                return None, {CAMPO_GERAL: MSG_MATRIZ_INATIVO}
+                return None, {GENERAL_FIELD: MSG_MATRIX_INACTIVE}
             # Inativo ja associado pode sair (desmarcado); nunca entra de novo (checado acima).
             final[dim] = set(enviados[dim])
 
-        diff = diff_matriz(atual, final, self._rotulos(cat))
+        diff = matrix_diff(atual, final, self._labels(cat))
         if diff is None:
             return None, {}
         try:
             self._rbac.matrix_save(perfil["id"], sorted(final["funcs"]), sorted(final["ambs"]),
                                      sorted(final["scrs"]), perm_versao_esperada=versao,
-                                     auditoria=admin_crud.auditoria(ctx, ip, "PERM_UPDATE", diff))
+                                     auditoria=admin_crud.audit_entry(ctx, ip, "PERM_UPDATE", diff))
         except RepoConflict:
-            return None, {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
+            return None, {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
         except RepoViolation:
             self._log.warning("matriz rejeitada pelo repositorio (login=%s perfil=%s)", ctx.get("login"),
                               perfil["name"], extra={"action": "PERM_UPDATE"})
-            return None, {CAMPO_GERAL: MSG_MATRIZ_ID_INVALIDO}
+            return None, {GENERAL_FIELD: MSG_MATRIX_ID_INVALID}
         self._log.info("matriz de permissoes alterada (login=%s perfil=%s)", ctx.get("login"), perfil["name"],
                        extra={"action": "PERM_UPDATE"})
         return diff, {}
 
 
-_padrao = None
-_lock_padrao = threading.Lock()
+_default = None
+_default_lock = threading.Lock()
 
 
-def _servico():
-    global _padrao
-    with _lock_padrao:
-        if _padrao is None:
+def _service():
+    global _default
+    with _default_lock:
+        if _default is None:
             from gluon import current
             import sss_logging
             fabrica = current.repo_factory
-            _padrao = ServicoAdminPerfis(
+            _default = AdminProfilesService(
                 rbac_repo=fabrica.get("rbac"),
                 catalogo=fabrica.get("catalog"),
                 usuarios=fabrica.get("users"),
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
-        return _padrao
+        return _default
 
 
-def listar(ctx, filtros, pagina, tamanho):
+def list_page(ctx, filtros, pagina, tamanho):
     """Pagina de perfis (servico padrao)."""
-    return _servico().list(ctx, filtros, pagina, tamanho)
+    return _service().list(ctx, filtros, pagina, tamanho)
 
 
-def formulario(ctx, perfil_id=None):
+def form(ctx, perfil_id=None):
     """Dados do formulario de perfil (servico padrao)."""
-    return _servico().formulario(ctx, perfil_id)
+    return _service().form(ctx, perfil_id)
 
 
-def salvar(ctx, ip, perfil_id, dados):
+def save(ctx, ip, perfil_id, dados):
     """Inclusao ou alteracao de perfil (servico padrao)."""
-    return _servico().salvar(ctx, ip, perfil_id, dados)
+    return _service().save(ctx, ip, perfil_id, dados)
 
 
-def alternar_ativo(ctx, ip, perfil_id, versao):
+def toggle_active(ctx, ip, perfil_id, versao):
     """Desativacao/reativacao de perfil (servico padrao)."""
-    return _servico().alternar_ativo(ctx, ip, perfil_id, versao)
+    return _service().toggle_active(ctx, ip, perfil_id, versao)
 
 
-def matriz(ctx, perfil_id):
+def matrix(ctx, perfil_id):
     """Matriz de permissoes do perfil para a tela (servico padrao)."""
-    return _servico().matriz(ctx, perfil_id)
+    return _service().matrix(ctx, perfil_id)
 
 
-def salvar_matriz(ctx, ip, perfil_id, funcs, ambs, scrs, perm_versao):
+def save_matrix(ctx, ip, perfil_id, funcs, ambs, scrs, perm_versao):
     """Gravacao da matriz de permissoes (servico padrao)."""
-    return _servico().salvar_matriz(ctx, ip, perfil_id, funcs, ambs, scrs, perm_versao)
+    return _service().save_matrix(ctx, ip, perfil_id, funcs, ambs, scrs, perm_versao)
 
 
-def quem_pode(ctx, script_id=None, ambiente_id=None):
+def who_can(ctx, script_id=None, ambiente_id=None):
     """Consulta "Quem pode o que" (servico padrao)."""
-    return _servico().quem_pode(ctx, script_id, ambiente_id)
+    return _service().who_can(ctx, script_id, ambiente_id)

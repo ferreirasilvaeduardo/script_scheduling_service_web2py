@@ -13,8 +13,8 @@ import repo_factory
 import security
 import sql_ident
 import ui_helpers
-from schedules_service import ServicoAgendamentos
-from ticket_service import ServicoTicket
+from schedules_service import SchedulesService
+from ticket_service import TicketService
 
 SESSAO_ADMIN = {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0}
 
@@ -49,11 +49,11 @@ class TestResponsavelMascarado(unittest.TestCase):
         log.addHandler(logging.NullHandler())
         log.propagate = False
         r = repo_factory.get
-        auth = auth_service.ServicoAuth(r("users"), r("rbac"), r("catalog"), r("audit"), 5, 900, log)
-        self.admin = auth.revalidar(SESSAO_ADMIN)
+        auth = auth_service.AuthService(r("users"), r("rbac"), r("catalog"), r("audit"), 5, 900, log)
+        self.admin = auth.revalidate(SESSAO_ADMIN)
         tickets = r("tickets")
-        ticket = ServicoTicket(catalogo=r("catalog"), tickets=tickets, log=log)
-        self.svc = ServicoAgendamentos(r("schedules"), r("catalog"), r("users"), ticket, tickets.now, 1461, log)
+        ticket = TicketService(catalogo=r("catalog"), tickets=tickets, log=log)
+        self.svc = SchedulesService(r("schedules"), r("catalog"), r("users"), ticket, tickets.now, 1461, log)
         # op.prod com o necessario para ver as regras, mas sem VIEW_AUDIT.
         self.operador = dict(self.admin, user_id=2, login="op.prod", is_admin=False,
                              features=frozenset(f for f in self.admin["features"] if f != "VIEW_AUDIT"))
@@ -62,8 +62,8 @@ class TestResponsavelMascarado(unittest.TestCase):
         responsaveis = set(i["responsavel"] for i in self.svc.list(self.operador, {}, 1, 100)["itens"])
         self.assertTrue(responsaveis)
         self.assertTrue(responsaveis <= {u"você", u"outra pessoa"}, responsaveis)
-        self.assertEqual(self.svc.formulario(self.operador, "2")["regra"]["responsavel"], u"você")
-        self.assertEqual(self.svc.formulario(self.admin, "2")["regra"]["responsavel"], "op.prod")
+        self.assertEqual(self.svc.form(self.operador, "2")["regra"]["responsavel"], u"você")
+        self.assertEqual(self.svc.form(self.admin, "2")["regra"]["responsavel"], "op.prod")
 
 
 class TestMotivoPausa(unittest.TestCase):

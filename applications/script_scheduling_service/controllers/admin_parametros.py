@@ -7,7 +7,7 @@ models/10_security.py. O editor de opcoes do cliente e conveniencia: o servidor 
 import admin_crud
 import admin_parameters_service as servico
 import ui_helpers
-from admin_crud import AcessoNegado, OperacaoNegada
+from admin_crud import AccessDenied, OperationDenied
 from repo_errors import RepoConflict, RepoError, RepoNotFound
 
 _FUNC = "MANAGE_PARAMETERS"
@@ -49,28 +49,28 @@ def _pagina_form(ctx, dados, erros=None):
     campos = [{"name": n, "erro": erros.get(n)} for n in ("code", "param_flag", "label", "description",
                                                           "component_type", "options_json", "validation_regex",
                                                           "default_value")]
-    return dict(prm=dados, erros=erros, erro_geral=erros.get(admin_crud.CAMPO_GERAL),
-                foco_campo=ui_helpers.primeiro_campo_invalido(campos), tipos=servico.ROTULOS_TIPO,
-                aviso_sensivel=servico.AVISO_SENSIVEL)
+    return dict(prm=dados, erros=erros, erro_geral=erros.get(admin_crud.GENERAL_FIELD),
+                foco_campo=ui_helpers.primeiro_campo_invalido(campos), tipos=servico.TYPE_LABELS,
+                aviso_sensivel=servico.SENSITIVE_WARNING)
 
 
 def lista():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
-    filtros = servico.normalizar_filtros(request.get_vars)
+    filtros = servico.normalize_filters(request.get_vars)
     pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("pagina"), 9))
     tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("tamanho"), 3), _TAMANHOS)
     erro = None
     try:
-        resultado = servico.listar(ctx, filtros, pagina, tamanho)
-    except AcessoNegado:
+        resultado = servico.list_page(ctx, filtros, pagina, tamanho)
+    except AccessDenied:
         _negado()
     except RepoError:
         _log.exception("falha ao listar parametros (login=%s)", ctx["login"], extra={"action": _FUNC})
         resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
     response.title = u"Parâmetros — SSS"
-    return dict(resultado=resultado, erro=erro, filtros_ativos=filtros, tamanho=tamanho, tipos=servico.ROTULOS_TIPO,
+    return dict(resultado=resultado, erro=erro, filtros_ativos=filtros, tamanho=tamanho, tipos=servico.TYPE_LABELS,
                 query_params=dict(filtros, tamanho=tamanho))
 
 
@@ -78,10 +78,10 @@ def form():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
     try:
-        dados = servico.formulario(ctx, _texto(request.args(0), 11))
+        dados = servico.form(ctx, _texto(request.args(0), 11))
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
     return _pagina_form(ctx, dados)
 
@@ -92,25 +92,25 @@ def salvar():
     parametro_id = _texto(request.post_vars.get("id"), 11)
     enviados = _enviados()
     try:
-        _salvo, erros = servico.salvar(ctx, _ip_origem(), parametro_id, enviados)
+        _salvo, erros = servico.save(ctx, _ip_origem(), parametro_id, enviados)
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
     except RepoError:
         _log.exception("falha ao salvar parametro (login=%s id=%r)", ctx["login"], parametro_id, extra={"action": _FUNC})
-        erros = {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}
+        erros = {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
     if not erros:
         session.flash = {"tipo": "sucesso", "mensagem": u"Parâmetro salvo com sucesso."}
         redirect(URL(c="admin_parametros", f="lista"))
     try:
-        dados = servico.formulario(ctx, parametro_id) if parametro_id else servico.formulario(ctx)
+        dados = servico.form(ctx, parametro_id) if parametro_id else servico.form(ctx)
     except RepoError:
         dados = {"id": None, "code": "", "param_flag": "", "label": "", "description": "",
                  "component_type": "TEXT", "options_json": "", "default_value": "", "tem_padrao": False,
                  "validation_regex": "", "sensitive": "N", "active": "Y", "version": "", "vinculos": [],
                  "pode_regex": ctx.get("is_admin") is True}
-    if admin_crud.CAMPO_GERAL not in erros:
+    if admin_crud.GENERAL_FIELD not in erros:
         reapresentar = dict((c, enviados[c] or "") for c in ("param_flag", "label", "description", "component_type",
                                                              "options_json", "validation_regex"))
         reapresentar["sensitive"] = "Y" if enviados["sensitive"] == "Y" else "N"
@@ -124,7 +124,7 @@ def salvar():
         else:
             dados["version"] = enviados["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-    response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.CAMPO_GERAL)
+    response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.GENERAL_FIELD)
                       or ui_helpers.mensagem("formulario")}
     return _pagina_form(ctx, dados, erros)
 
@@ -134,17 +134,17 @@ def alternar_ativo():
     ctx = _exigir_func(_FUNC)
     parametro_id = _texto(request.post_vars.get("id"), 11)
     try:
-        alterado = servico.alternar_ativo(ctx, _ip_origem(), parametro_id, _texto(request.post_vars.get("version"), 64))
+        alterado = servico.toggle_active(ctx, _ip_origem(), parametro_id, _texto(request.post_vars.get("version"), 64))
         acao = u"desativado" if alterado["active"] == "N" else u"reativado"
         session.flash = {"tipo": "sucesso", "mensagem": u"Parâmetro %s %s." % (alterado["code"], acao)}
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
-    except OperacaoNegada as exc:
+    except OperationDenied as exc:
         session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
     except RepoConflict:
-        session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
+        session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLICT}
     except RepoError:
         _log.exception("falha ao alternar parametro (login=%s id=%r)", ctx["login"], parametro_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
@@ -157,12 +157,12 @@ def testar():
     ctx = _exigir_func(_FUNC)
     response.headers["Cache-Control"] = "no-store"
     try:
-        resultado = servico.testar(ctx, _texto(request.post_vars.get("id"), 11), _enviados(),
+        resultado = servico.test_regex(ctx, _texto(request.post_vars.get("id"), 11), _enviados(),
                                    _texto(request.post_vars.get("valor_teste"), 1000))
     except RepoNotFound:
         response.status = 404
         return response.json({"ok": False, "erro": u"Parâmetro não encontrado."})
-    except AcessoNegado:
+    except AccessDenied:
         response.status = 403
         return response.json({"ok": False, "erro": u"Acesso negado."})
     return response.json(resultado)

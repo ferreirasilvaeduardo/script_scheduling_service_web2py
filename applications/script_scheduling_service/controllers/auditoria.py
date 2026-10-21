@@ -10,8 +10,8 @@ import agents_service
 import audit_service
 import ticket_service
 import ui_helpers
-from admin_crud import AcessoNegado
-from audit_service import FiltrosInvalidos
+from admin_crud import AccessDenied
+from audit_service import InvalidFilters
 from repo_errors import RepoError
 
 _FUNC = "VIEW_AUDIT"
@@ -41,7 +41,7 @@ def _texto(valor, limite):
 
 
 def _entrada(fonte):
-    return dict((c, _texto(fonte.get(c), 50)) for c in audit_service.CAMPOS_FILTRO)
+    return dict((c, _texto(fonte.get(c), 50)) for c in audit_service.FILTER_FIELDS)
 
 
 def lista():
@@ -52,26 +52,26 @@ def lista():
     entrada = _entrada(request.get_vars)
     erro = None
     try:
-        resultado = audit_service.listar(ctx, entrada, pagina, tamanho)
-    except AcessoNegado:
+        resultado = audit_service.list_page(ctx, entrada, pagina, tamanho)
+    except AccessDenied:
         _negado()
     except RepoError:
         _log.exception("falha ao listar a auditoria (login=%s)", ctx["login"], extra={"action": _FUNC})
-        filtros, erros = audit_service.filtros_padrao(entrada)
+        filtros, erros = audit_service.default_filters(entrada)
         resultado = {"filtros": filtros, "erros": erros, "itens": [], "total": 0, "pagina": 1,
                      "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
     if resultado["erros"] and not erro:
         response.flash = {"tipo": "erro", "mensagem": u"Corrija os filtros destacados."}
-    pode_ver_tickets = ticket_service.pode_consultar(ctx)
+    pode_ver_tickets = ticket_service.can_query(ctx)
     for item in resultado["itens"]:
-        item["link"] = audit_service.link_entidade(ctx, item["entity"], item["entity_id"],
+        item["link"] = audit_service.entity_link(ctx, item["entity"], item["entity_id"],
                                                        pode_ver_tickets)
     response.title = u"Auditoria — SSS"
     return dict(resultado=resultado, erro=erro, tamanho=tamanho, filtros_ativos=resultado["filtros"],
                 query_params=dict(resultado["filtros"], tamanho=tamanho),
-                acoes=audit_service.ACOES, entidades=audit_service.ENTIDADES,
-                limite_exportacao=audit_service.LIMITE_EXPORTACAO)
+                acoes=audit_service.ACTIONS, entidades=audit_service.ENTITIES,
+                limite_exportacao=audit_service.EXPORT_LIMIT)
 
 
 def exportar():
@@ -81,10 +81,10 @@ def exportar():
     entrada = _entrada(request.post_vars)
     voltar = URL(c="auditoria", f="lista", vars=dict((k, v) for k, v in entrada.items() if v))
     try:
-        nome, linhas, blocos = audit_service.exportar_csv(ctx, _ip_origem(), entrada)
-    except AcessoNegado:
+        nome, linhas, blocos = audit_service.export_csv(ctx, _ip_origem(), entrada)
+    except AccessDenied:
         _negado()
-    except FiltrosInvalidos:
+    except InvalidFilters:
         session.flash = {"tipo": "erro", "mensagem": _MSG_FILTROS_EXPORTAR}
         redirect(voltar)
     except RepoError:
@@ -105,8 +105,8 @@ def agentes():
     ctx = _exigir_func(_FUNC)
     erro = None
     try:
-        painel = agents_service.painel(ctx)
-    except AcessoNegado:
+        painel = agents_service.dashboard(ctx)
+    except AccessDenied:
         _negado()
     except RepoError:
         _log.exception("falha ao montar o painel de agentes (login=%s)", ctx["login"], extra={"action": _FUNC})
@@ -123,6 +123,6 @@ def agentes():
         for item in secao["itens"]:
             if item["rota"] == ("auditoria", "lista"):
                 item["active"] = True
-    dados["legenda"] = agents_service.legenda()
+    dados["legenda"] = agents_service.legend()
     dados["limiares"] = current.sss_cfg.agent
     return dados

@@ -19,7 +19,7 @@ class RepoUsers(object):
         raise NotImplementedError
 
     def get_session_state(self, usuario_id):
-        """Retorna dict de sessao com usuario, perfil, perm_versao e sessao_epoch (CR-008, E2)."""
+        """Retorna dict de sessao com usuario, perfil, perm_versao e session_epoch (CR-008, E2)."""
         raise NotImplementedError
 
     def list(self, filtros=None, pagina=1, tamanho=20):
@@ -42,7 +42,7 @@ class RepoUsers(object):
         """Atualiza campos do usuario pelo ID e retorna o registro. Login e imutavel.
 
         esperado: opcional, dict campo -> valor lido; divergencia lanca RepoConflict sem alterar nada.
-        Mudar perfil_id ou ativo incrementa sessao_epoch (CR-008, E2): as sessoes abertas caem.
+        Mudar perfil_id ou ativo incrementa session_epoch (CR-008, E2): as sessoes abertas caem.
         Desativar o usuario ou mover para perfil nao administrativo bloqueia os admins ativos na
         mesma operacao (README §4.3.B); conjunto resultante vazio lanca
         RepoViolation(constraint='sss_ultimo_admin'). auditoria: opcional, na mesma transacao.

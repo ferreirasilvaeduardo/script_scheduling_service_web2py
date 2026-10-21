@@ -10,7 +10,7 @@ _situacao = ui_helpers.ativo_info(_p.get('active'))
 _icones = URL('static', 'img/icons.svg')
 import json
 import admin_parameters_service
-_pares = admin_parameters_service.opcoes_em_pares(_p['options_json'])
+_pares = admin_parameters_service.options_as_pairs(_p['options_json'])
 if not _novo:
     _desativar = _p.get('active') == 'Y'
     _ativos = [_s['name'] for _s in _p['vinculos'] if _s['active'] == 'Y']

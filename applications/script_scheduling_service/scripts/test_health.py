@@ -287,7 +287,7 @@ class TestSqlRepoSaude(unittest.TestCase):
         self.assertIs(agentes_oracle._SQL_RUNNING_NO_PID, saude_sql.SQL_RUNNING_NO_PID)
 
     def test_pares_atendidos_ignoram_em_risco_e_parados(self):
-        lim = saude_cli.agents_service.Limiares(10, 90, 180)
+        lim = saude_cli.agents_service.Thresholds(10, 90, 180)
         agentes = [_agente("a", 5, interpreters="SH"), _agente("b", 91, interpreters="BASH"),
                    _agente("c", 5, status="STOPPED", interpreters="PYTHON3")]
         self.assertEqual(saude_sql.served_pairs(agentes, AGORA, lim), {("PRODUCAO", "SH")})

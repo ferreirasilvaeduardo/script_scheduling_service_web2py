@@ -185,8 +185,8 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **Ator no quadro Registro (CR-007, D6):** o login de quem criou ou alterou só vai para o HTML de quem tem `VIEW_AUDIT` ou é administrador; para os demais, `ui_helpers.registro(reg, ctx)` troca por "você", "Sistema (…)" ou "outra pessoa" no servidor. **CR-008, E5:** a regra vale também para o solicitante do ticket e o responsável da regra (`ui_helpers.ator_visivel(login, ctx)`).
 * **Regex de parâmetro:** só no subconjunto seguro de `params_compiler.validate_registry_regex` (README §6.2, CR-007 D5), em que `{m,n}` com `n − m > 10` conta como ilimitado e, com algum ilimitado, valem no máximo 4 quantificadores de escolha (CR-008, R-06). Nunca execute regex de usuário fora dele.
 * **Texto de entrada nos cadastros** (README §10, CR-003):
-  * **identificador** (nome de ambiente e de perfil, login, código de parâmetro): `admin_crud.identificador`. Não é limpo; espaço no início ou no fim é recusado;
-  * **texto livre** (nomes de exibição, `label`, `description`, `script_group`, `category`, `stage`): `admin_crud.texto_livre`. Recebe `strip()` e recusa caracteres de controle (`\x00-\x1f`, `\x7f`).
+  * **identificador** (nome de ambiente e de perfil, login, código de parâmetro): `admin_crud.identifier`. Não é limpo; espaço no início ou no fim é recusado;
+  * **texto livre** (nomes de exibição, `label`, `description`, `script_group`, `category`, `stage`): `admin_crud.free_text`. Recebe `strip()` e recusa caracteres de controle (`\x00-\x1f`, `\x7f`).
 * **Download da saída do ticket (CR-012, README §8.13):** `GET`, com a mesma regra de leitura do log do ticket; só situação `AVAILABLE`; resposta `application/zip` como anexo, com `nosniff`, `no-store` e `Content-Length`, lida do BLOB em fatias (nunca o zip inteiro em memória); sem auditoria. O nome do arquivo é fixo (`ticket_<id>_saida.zip`), nunca vindo de dado.
 * **Telas de consulta** (README §2.4.3; ex.: O que eu posso fazer, Rotinas disponíveis, Histórico, Agenda, Quem pode o quê):
   * só `GET`; não gravam nada e não auditam;

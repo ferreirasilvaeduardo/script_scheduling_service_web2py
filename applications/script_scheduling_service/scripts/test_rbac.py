@@ -14,8 +14,8 @@ import auth_service
 import rbac
 import repo_factory
 import security
-from admin_crud import CAMPO_GERAL, AcessoNegado, OperacaoNegada
-from admin_profiles_service import ServicoAdminPerfis
+from admin_crud import GENERAL_FIELD, AccessDenied, OperationDenied
+from admin_profiles_service import AdminProfilesService
 from rbac import Reason
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
@@ -234,15 +234,15 @@ class _BasePerfis(unittest.TestCase):
         self.log = logging.getLogger("sss_teste_perfis")
         self.log.addHandler(logging.NullHandler())
         self.log.propagate = False
-        self.auth = auth_service.ServicoAuth(self.users, self.rbac_repo, self.catalog, self.audit,
+        self.auth = auth_service.AuthService(self.users, self.rbac_repo, self.catalog, self.audit,
                                              5, 900, self.log)
-        self.ctx = dict((login, self.auth.revalidar(sessao)) for login, sessao in SESSOES.items())
+        self.ctx = dict((login, self.auth.revalidate(sessao)) for login, sessao in SESSOES.items())
         # Gestor: perfil nao admin com MANAGE_PROFILES; exercita o ultimo admin sem cair na autoprotecao.
         self.ctx["gestor"] = dict(self.ctx["op.prod"], features=frozenset(["MANAGE_PROFILES"]))
         # Administrador fora do perfil ADMINISTRADOR: exercita a protecao do ultimo admin pelo servico,
         # ja que quem nao e admin nao altera perfil de admin (CR-008, E1).
         self.ctx["admin_externo"] = dict(self.ctx["admin"], profile_id=999)
-        self.svc = ServicoAdminPerfis(self.rbac_repo, self.catalog, self.users, self.log)
+        self.svc = AdminProfilesService(self.rbac_repo, self.catalog, self.users, self.log)
         self.aud_base = max([a["id"] for a in self.audit.list(pagina=1, tamanho=1000)["itens"]] or [0])
 
     def _auditorias(self, acao):
@@ -254,10 +254,10 @@ class _BasePerfis(unittest.TestCase):
 
     def _salvar_matriz(self, perfil_id, funcs, ambs, scrs, versao=None):
         versao = self._versao(perfil_id) if versao is None else versao
-        return self.svc.salvar_matriz(self.ctx["admin"], IP, str(perfil_id), [str(x) for x in funcs],
+        return self.svc.save_matrix(self.ctx["admin"], IP, str(perfil_id), [str(x) for x in funcs],
                                       [str(x) for x in ambs], [str(x) for x in scrs], str(versao))
 
-    def _matriz(self, perfil_id):
+    def _matrix(self, perfil_id):
         return self.rbac_repo.matrix_get(perfil_id)
 
 
@@ -265,26 +265,26 @@ class TestMatriz(_BasePerfis):
 
     def test_diff_formato(self):
         rotulos = {"funcs": {1: "EXEC_SCRIPT", 2: "VIEW_LOGS"}, "ambs": {1: "PRODUCAO"}, "scrs": {7: "carga"}}
-        diff = perfis_mod.diff_matriz({"funcs": {2}, "ambs": set(), "scrs": {7}},
+        diff = perfis_mod.matrix_diff({"funcs": {2}, "ambs": set(), "scrs": {7}},
                                       {"funcs": {1}, "ambs": {1}, "scrs": set()}, rotulos)
         self.assertEqual(diff, "+EXEC_SCRIPT, -VIEW_LOGS, +amb:PRODUCAO, -scr:carga")
-        self.assertIsNone(perfis_mod.diff_matriz({"funcs": {1}}, {"funcs": {1}}, rotulos))
+        self.assertIsNone(perfis_mod.matrix_diff({"funcs": {1}}, {"funcs": {1}}, rotulos))
 
     def test_salvar_matriz_incrementa_versao_e_audita_diff(self):
-        antes = self._matriz(PERFIL_CONSULTA)
+        antes = self._matrix(PERFIL_CONSULTA)
         versao = self._versao(PERFIL_CONSULTA)
         scrs = [x for x in antes["scrs"] if x != 3]
         diff, erros = self._salvar_matriz(PERFIL_CONSULTA, [F_EXEC], antes["ambs"], scrs)
         self.assertEqual(erros, {})
         self.assertEqual(diff, "+EXEC_SCRIPT, -VIEW_LOGS, -scr:cleanup_tmp")
         self.assertEqual(self._versao(PERFIL_CONSULTA), versao + 1)
-        self.assertEqual(sorted(self._matriz(PERFIL_CONSULTA)["funcs"]), [F_EXEC])
+        self.assertEqual(sorted(self._matrix(PERFIL_CONSULTA)["funcs"]), [F_EXEC])
         aud = self._auditorias("PERM_UPDATE")
         self.assertEqual(len(aud), 1)
         self.assertEqual((aud[0]["detail"], aud[0]["entity_id"], aud[0]["actor"]), (diff, PERFIL_CONSULTA, "admin"))
 
     def test_sem_mudanca_nao_incrementa_nem_audita(self):
-        m = self._matriz(PERFIL_CONSULTA)
+        m = self._matrix(PERFIL_CONSULTA)
         versao = self._versao(PERFIL_CONSULTA)
         diff, erros = self._salvar_matriz(PERFIL_CONSULTA, m["funcs"], m["ambs"], m["scrs"])
         self.assertEqual((diff, erros), (None, {}))
@@ -293,93 +293,93 @@ class TestMatriz(_BasePerfis):
 
     def test_efeito_imediato_na_revalidacao(self):
         self.assertIn("VIEW_LOGS", self.ctx["consulta"]["features"])
-        m = self._matriz(PERFIL_CONSULTA)
+        m = self._matrix(PERFIL_CONSULTA)
         self._salvar_matriz(PERFIL_CONSULTA, [], m["ambs"], m["scrs"])
         sessao = dict(SESSOES["consulta"])
-        ctx = self.auth.revalidar(sessao)
+        ctx = self.auth.revalidate(sessao)
         self.assertNotIn("VIEW_LOGS", ctx["features"])
         self.assertEqual(ctx["perm_version"], self._versao(PERFIL_CONSULTA))
 
     def test_id_inexistente_ou_invalido_rejeita_tudo(self):
-        m = self._matriz(PERFIL_CONSULTA)
+        m = self._matrix(PERFIL_CONSULTA)
         versao = self._versao(PERFIL_CONSULTA)
         for funcs, ambs, scrs in (([F_EXEC, 999], m["ambs"], m["scrs"]), (m["funcs"], [AMB_PRODUCAO, 77], m["scrs"]),
                                   (m["funcs"], m["ambs"], [1, 404])):
             diff, erros = self._salvar_matriz(PERFIL_CONSULTA, funcs, ambs, scrs)
-            self.assertEqual((diff, erros), (None, {CAMPO_GERAL: perfis_mod.MSG_MATRIZ_ID_INVALIDO}))
-        diff, erros = self.svc.salvar_matriz(self.ctx["admin"], IP, str(PERFIL_CONSULTA), ["1", "x"], [], [],
+            self.assertEqual((diff, erros), (None, {GENERAL_FIELD: perfis_mod.MSG_MATRIX_ID_INVALID}))
+        diff, erros = self.svc.save_matrix(self.ctx["admin"], IP, str(PERFIL_CONSULTA), ["1", "x"], [], [],
                                              str(versao))
-        self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_MATRIZ_ID_INVALIDO})
-        self.assertEqual(self._matriz(PERFIL_CONSULTA), m)
+        self.assertEqual(erros, {GENERAL_FIELD: perfis_mod.MSG_MATRIX_ID_INVALID})
+        self.assertEqual(self._matrix(PERFIL_CONSULTA), m)
         self.assertEqual(self._versao(PERFIL_CONSULTA), versao)
 
     def test_inativo_associado_pode_sair_e_novo_inativo_rejeitado(self):
         # CR-003 D9: associacao a item inativo pode ser removida; nunca readicionada.
-        m = self._matriz(PERFIL_HML)
+        m = self._matrix(PERFIL_HML)
         self.assertIn(AMB_DESENV, m["ambs"])
         diff, erros = self._salvar_matriz(PERFIL_HML, m["funcs"], m["ambs"] + [AMB_PRODUCAO], m["scrs"])
         self.assertEqual((diff, erros), ("+amb:PRODUCAO", {}))
-        self.assertIn(AMB_DESENV, self._matriz(PERFIL_HML)["ambs"])
-        m = self._matriz(PERFIL_HML)
+        self.assertIn(AMB_DESENV, self._matrix(PERFIL_HML)["ambs"])
+        m = self._matrix(PERFIL_HML)
         sem_desenv = [a for a in m["ambs"] if a != AMB_DESENV]
         diff, erros = self._salvar_matriz(PERFIL_HML, m["funcs"], sem_desenv, m["scrs"])
         self.assertEqual((diff, erros), ("-amb:DESENV", {}))
-        self.assertNotIn(AMB_DESENV, self._matriz(PERFIL_HML)["ambs"])
+        self.assertNotIn(AMB_DESENV, self._matrix(PERFIL_HML)["ambs"])
         diff, erros = self._salvar_matriz(PERFIL_HML, m["funcs"], sem_desenv + [AMB_DESENV], m["scrs"])
-        self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_MATRIZ_INATIVO})
-        m = self._matriz(PERFIL_CONSULTA)
+        self.assertEqual(erros, {GENERAL_FIELD: perfis_mod.MSG_MATRIX_INACTIVE})
+        m = self._matrix(PERFIL_CONSULTA)
         diff, erros = self._salvar_matriz(PERFIL_CONSULTA, m["funcs"], m["ambs"] + [AMB_DESENV], m["scrs"])
-        self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_MATRIZ_INATIVO})
+        self.assertEqual(erros, {GENERAL_FIELD: perfis_mod.MSG_MATRIX_INACTIVE})
 
     def test_versao_desatualizada_gera_conflito(self):
-        m = self._matriz(PERFIL_CONSULTA)
+        m = self._matrix(PERFIL_CONSULTA)
         antiga = self._versao(PERFIL_CONSULTA)
         self._salvar_matriz(PERFIL_CONSULTA, [F_EXEC, F_VER_LOGS], m["ambs"], m["scrs"])
         diff, erros = self._salvar_matriz(PERFIL_CONSULTA, [], m["ambs"], m["scrs"], versao=antiga)
-        self.assertEqual(erros, {CAMPO_GERAL: admin_crud.MSG_CONFLITO})
-        self.assertEqual(sorted(self._matriz(PERFIL_CONSULTA)["funcs"]), [F_EXEC, F_VER_LOGS])
+        self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
+        self.assertEqual(sorted(self._matrix(PERFIL_CONSULTA)["funcs"]), [F_EXEC, F_VER_LOGS])
 
     def test_tela_da_matriz(self):
-        tela = self.svc.matriz(self.ctx["admin"], str(PERFIL_HML))
+        tela = self.svc.matrix(self.ctx["admin"], str(PERFIL_HML))
         ambs = [i for g in tela["ambs"] for i in g["itens"]]
         desenv = [i for i in ambs if i["rotulo"] == "DESENV"][0]
         self.assertTrue(desenv["marcado"] and desenv["inativo"])
         self.assertEqual([g["script_group"] for g in tela["funcs"]], ["ADMIN", "OPERATION"])
         self.assertIsNone(tela["aviso_admin"])
-        self.assertEqual(self.svc.matriz(self.ctx["admin"], str(PERFIL_ADMIN))["aviso_admin"], perfis_mod.AVISO_ADMIN)
-        tela_consulta = self.svc.matriz(self.ctx["admin"], str(PERFIL_CONSULTA))
+        self.assertEqual(self.svc.matrix(self.ctx["admin"], str(PERFIL_ADMIN))["aviso_admin"], perfis_mod.ADMIN_WARNING)
+        tela_consulta = self.svc.matrix(self.ctx["admin"], str(PERFIL_CONSULTA))
         self.assertNotIn("DESENV", [i["rotulo"] for g in tela_consulta["ambs"] for i in g["itens"]])
 
 
 class TestUltimoAdmin(_BasePerfis):
 
     def _form(self, perfil_id):
-        return self.svc.formulario(self.ctx["admin"], str(perfil_id))
+        return self.svc.form(self.ctx["admin"], str(perfil_id))
 
     def test_desativar_unico_perfil_admin_e_negado(self):
         form = self._form(PERFIL_ADMIN)
-        with self.assertRaises(OperacaoNegada) as cm:
-            self.svc.alternar_ativo(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
-        self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_ULTIMO_ADMIN)
+        with self.assertRaises(OperationDenied) as cm:
+            self.svc.toggle_active(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
+        self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_LAST_ADMIN)
         perfil = self.rbac_repo.profiles_get(PERFIL_ADMIN)
         self.assertEqual((perfil["active"], perfil["perm_version"]), ("Y", 1))
         self.assertEqual(self._auditorias("DEACTIVATE"), [])
 
     def test_remover_is_admin_do_unico_perfil_admin_e_negado(self):
         form = self._form(PERFIL_ADMIN)
-        _id, erros = self.svc.salvar(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN),
+        _id, erros = self.svc.save(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN),
                                      {"name": form["name"], "description": form["description"], "is_admin": None,
                                       "version": form["version"]})
-        self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_ULTIMO_ADMIN})
+        self.assertEqual(erros, {GENERAL_FIELD: perfis_mod.MSG_LAST_ADMIN})
         self.assertEqual(self.rbac_repo.profiles_get(PERFIL_ADMIN)["is_admin"], "Y")
 
     def test_com_outro_admin_ativo_a_operacao_passa(self):
-        novo_id, erros = self.svc.salvar(self.ctx["admin"], IP, None, {"name": "ADMIN_RESERVA", "is_admin": "Y"})
+        novo_id, erros = self.svc.save(self.ctx["admin"], IP, None, {"name": "ADMIN_RESERVA", "is_admin": "Y"})
         self.assertEqual(erros, {})
         u = self.users.get_by_login("op.hml")
         self.users.update(u["id"], {"profile_id": novo_id}, ator="teste")
         form = self._form(PERFIL_ADMIN)
-        alterado = self.svc.alternar_ativo(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
+        alterado = self.svc.toggle_active(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
         self.assertEqual(alterado["active"], "N")
         aud = self._auditorias("DEACTIVATE")
         self.assertEqual(len(aud), 1)
@@ -387,21 +387,21 @@ class TestUltimoAdmin(_BasePerfis):
 
     def test_perfil_admin_sem_usuarios_nao_conta_como_admin_ativo(self):
         # Um segundo perfil admin sem usuarios nao livra o ultimo admin real.
-        self.svc.salvar(self.ctx["admin"], IP, None, {"name": "ADMIN_VAZIO", "is_admin": "Y"})
+        self.svc.save(self.ctx["admin"], IP, None, {"name": "ADMIN_VAZIO", "is_admin": "Y"})
         form = self._form(PERFIL_ADMIN)
-        with self.assertRaises(OperacaoNegada) as cm:
-            self.svc.alternar_ativo(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
-        self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_ULTIMO_ADMIN)
+        with self.assertRaises(OperationDenied) as cm:
+            self.svc.toggle_active(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
+        self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_LAST_ADMIN)
 
     def test_quem_nao_e_admin_nao_altera_perfil_admin(self):
         form = self._form(PERFIL_ADMIN)
-        with self.assertRaises(OperacaoNegada) as cm:
-            self.svc.alternar_ativo(self.ctx["gestor"], IP, str(PERFIL_ADMIN), form["version"])
-        self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_SO_ADMIN)
-        _id, erros = self.svc.salvar(self.ctx["gestor"], IP, str(PERFIL_ADMIN),
+        with self.assertRaises(OperationDenied) as cm:
+            self.svc.toggle_active(self.ctx["gestor"], IP, str(PERFIL_ADMIN), form["version"])
+        self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_ADMIN_ONLY)
+        _id, erros = self.svc.save(self.ctx["gestor"], IP, str(PERFIL_ADMIN),
                                      {"name": form["name"], "description": form["description"], "is_admin": None,
                                       "version": form["version"]})
-        self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_SO_ADMIN})
+        self.assertEqual(erros, {GENERAL_FIELD: perfis_mod.MSG_ADMIN_ONLY})
         self.assertEqual(self.rbac_repo.profiles_get(PERFIL_ADMIN)["is_admin"], "Y")
 
     def test_protecao_e_atomica_no_repositorio(self):
@@ -414,53 +414,53 @@ class TestUltimoAdmin(_BasePerfis):
 class TestCadastroPerfil(_BasePerfis):
 
     def test_inclusao_validacoes_e_auditoria(self):
-        for nome, msg in (("", perfis_mod.MSG_NOME_OBRIGATORIO), ("auditor", perfis_mod.MSG_NOME_INVALIDO),
-                          ("READ_ONLY", perfis_mod.MSG_NOME_DUPLICADO)):
-            _id, erros = self.svc.salvar(self.ctx["admin"], IP, None, {"name": nome})
+        for nome, msg in (("", perfis_mod.MSG_NAME_REQUIRED), ("auditor", perfis_mod.MSG_NAME_INVALID),
+                          ("READ_ONLY", perfis_mod.MSG_NAME_DUPLICATE)):
+            _id, erros = self.svc.save(self.ctx["admin"], IP, None, {"name": nome})
             self.assertEqual(erros, {"name": msg}, nome)
-        pid, erros = self.svc.salvar(self.ctx["admin"], IP, None, {"name": "AUDITOR", "description": "Leitura"})
+        pid, erros = self.svc.save(self.ctx["admin"], IP, None, {"name": "AUDITOR", "description": "Leitura"})
         self.assertEqual(erros, {})
         perfil = self.rbac_repo.profiles_get(pid)
         self.assertEqual((perfil["is_admin"], perfil["active"], perfil["perm_version"]), ("N", "Y", 1))
         self.assertIn("name: AUDITOR", self._auditorias("CREATE")[0]["detail"])
 
     def test_alteracao_concorrente_e_auditoria(self):
-        aba1 = self.svc.formulario(self.ctx["admin"], str(PERFIL_CONSULTA))
-        aba2 = self.svc.formulario(self.ctx["admin"], str(PERFIL_CONSULTA))
+        aba1 = self.svc.form(self.ctx["admin"], str(PERFIL_CONSULTA))
+        aba2 = self.svc.form(self.ctx["admin"], str(PERFIL_CONSULTA))
         self.assertEqual(aba1["usuarios_ativos"], 1)
-        _id, erros = self.svc.salvar(self.ctx["admin"], IP, str(PERFIL_CONSULTA),
+        _id, erros = self.svc.save(self.ctx["admin"], IP, str(PERFIL_CONSULTA),
                                      {"name": "CONSULTA_GERAL", "description": aba2["description"], "version": aba2["version"]})
         self.assertEqual(erros, {})
-        _id, erros = self.svc.salvar(self.ctx["admin"], IP, str(PERFIL_CONSULTA),
+        _id, erros = self.svc.save(self.ctx["admin"], IP, str(PERFIL_CONSULTA),
                                      {"name": "READ_ONLY", "description": "x", "version": aba1["version"]})
-        self.assertEqual(erros, {CAMPO_GERAL: admin_crud.MSG_CONFLITO})
+        self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
         aud = self._auditorias("UPDATE")
         self.assertEqual(len(aud), 1)
         self.assertIn(u"name: READ_ONLY \u2192 CONSULTA_GERAL", aud[0]["detail"])
         self.assertEqual(self._versao(PERFIL_CONSULTA), 2)
 
     def test_reativar(self):
-        form = self.svc.formulario(self.ctx["admin"], str(PERFIL_CONSULTA))
-        self.svc.alternar_ativo(self.ctx["admin"], IP, str(PERFIL_CONSULTA), form["version"])
-        form = self.svc.formulario(self.ctx["admin"], str(PERFIL_CONSULTA))
+        form = self.svc.form(self.ctx["admin"], str(PERFIL_CONSULTA))
+        self.svc.toggle_active(self.ctx["admin"], IP, str(PERFIL_CONSULTA), form["version"])
+        form = self.svc.form(self.ctx["admin"], str(PERFIL_CONSULTA))
         with self.assertRaises(RepoConflict):
-            self.svc.alternar_ativo(self.ctx["admin"], IP, str(PERFIL_CONSULTA), "x")
-        self.assertEqual(self.svc.alternar_ativo(self.ctx["admin"], IP, str(PERFIL_CONSULTA), form["version"])["active"], "Y")
+            self.svc.toggle_active(self.ctx["admin"], IP, str(PERFIL_CONSULTA), "x")
+        self.assertEqual(self.svc.toggle_active(self.ctx["admin"], IP, str(PERFIL_CONSULTA), form["version"])["active"], "Y")
 
     def test_acesso_negado_e_nao_encontrado(self):
-        for chamada in (lambda c: self.svc.list(c, {}, 1, 20), lambda c: self.svc.matriz(c, "1"),
-                        lambda c: self.svc.salvar_matriz(c, IP, "4", [], [], [], "1"),
-                        lambda c: self.svc.alternar_ativo(c, IP, "4", "x")):
-            with self.assertRaises(AcessoNegado):
+        for chamada in (lambda c: self.svc.list(c, {}, 1, 20), lambda c: self.svc.matrix(c, "1"),
+                        lambda c: self.svc.save_matrix(c, IP, "4", [], [], [], "1"),
+                        lambda c: self.svc.toggle_active(c, IP, "4", "x")):
+            with self.assertRaises(AccessDenied):
                 chamada(self.ctx["op.prod"])
         for pid in ("999", "abc", "0"):
             with self.assertRaises(RepoNotFound):
-                self.svc.matriz(self.ctx["admin"], pid)
+                self.svc.matrix(self.ctx["admin"], pid)
 
     def test_filtros(self):
-        self.assertEqual(perfis_mod.normalizar_filtros({"name": "OPER", "active": "Y", "is_admin": "N"}),
+        self.assertEqual(perfis_mod.normalize_filters({"name": "OPER", "active": "Y", "is_admin": "N"}),
                          {"name": "OPER", "active": "Y", "is_admin": "N"})
-        self.assertEqual(perfis_mod.normalizar_filtros({"name": "<x>", "active": "?"}), {})
+        self.assertEqual(perfis_mod.normalize_filters({"name": "<x>", "active": "?"}), {})
 
 
 if __name__ == "__main__":

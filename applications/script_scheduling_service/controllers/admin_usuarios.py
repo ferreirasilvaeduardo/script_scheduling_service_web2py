@@ -9,7 +9,7 @@ import admin_crud
 import admin_users_service as servico
 import security
 import ui_helpers
-from admin_crud import AcessoNegado, OperacaoNegada
+from admin_crud import AccessDenied, OperationDenied
 from repo_errors import RepoConflict, RepoError, RepoNotFound
 
 _FUNC = "MANAGE_USERS"
@@ -51,26 +51,26 @@ def _pagina_form(ctx, dados, erros=None, erros_senha=None):
     erros = erros or {}
     campos = [{"name": n, "erro": erros.get(n)} for n in ("login", "name", "profile_id", "senha", "confirmacao")]
     # Perfil de administrador so e oferecido a administrador (CR-008, E1), salvo o perfil atual.
-    perfis = [p for p in servico.perfis()
+    perfis = [p for p in servico.profiles()
               if p["id"] == dados.get("profile_id") or (p["active"] == "Y" and (ctx["is_admin"] or p["is_admin"] != "Y"))]
-    return dict(usuario=dados, erros=erros, erro_geral=erros.get(admin_crud.CAMPO_GERAL),
+    return dict(usuario=dados, erros=erros, erro_geral=erros.get(admin_crud.GENERAL_FIELD),
                 erros_senha=erros_senha or {}, perfis=perfis,
-                foco_campo=ui_helpers.primeiro_campo_invalido(campos), ajuda_senha=servico.AJUDA_POLITICA,
-                aviso_desativacao=servico.AVISO_DESATIVACAO)
+                foco_campo=ui_helpers.primeiro_campo_invalido(campos), ajuda_senha=servico.POLICY_HELP,
+                aviso_desativacao=servico.DEACTIVATION_WARNING)
 
 
 def lista():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
-    filtros = servico.normalizar_filtros(request.get_vars)
+    filtros = servico.normalize_filters(request.get_vars)
     pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("pagina"), 9))
     tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("tamanho"), 3), _TAMANHOS)
     erro = None
     perfis = []
     try:
-        resultado = servico.listar(ctx, filtros, pagina, tamanho)
-        perfis = servico.perfis()
-    except AcessoNegado:
+        resultado = servico.list_page(ctx, filtros, pagina, tamanho)
+        perfis = servico.profiles()
+    except AccessDenied:
         _negado()
     except RepoError:
         _log.exception("falha ao listar usuarios (login=%s)", ctx["login"], extra={"action": _FUNC})
@@ -85,10 +85,10 @@ def form():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
     try:
-        dados = servico.formulario(ctx, _texto(request.args(0), 11))
+        dados = servico.form(ctx, _texto(request.args(0), 11))
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
     return _pagina_form(ctx, dados)
 
@@ -101,30 +101,30 @@ def salvar():
     enviados = dict((c, _texto(request.post_vars.get(c), 300)) for c in ("login", "name", "profile_id", "version"))
     enviados.update(senhas)
     try:
-        _salvo, erros = servico.salvar(ctx, _ip_origem(), usuario_id, enviados)
+        _salvo, erros = servico.save(ctx, _ip_origem(), usuario_id, enviados)
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
     except RepoError:
         _log.exception("falha ao salvar usuario (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
-        erros = {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}
+        erros = {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
     if not erros:
         session.flash = {"tipo": "sucesso", "mensagem": u"Usuário salvo com sucesso."}
         redirect(URL(c="admin_usuarios", f="lista"))
     try:
-        dados = servico.formulario(ctx, usuario_id) if usuario_id else servico.formulario(ctx)
+        dados = servico.form(ctx, usuario_id) if usuario_id else servico.form(ctx)
     except RepoError:
         dados = {"id": None, "login": "", "name": "", "profile_id": None, "active": "Y", "version": "",
                  "bloqueado": False, "locked_until": None, "failed_attempts": 0, "proprio": False}
-    if admin_crud.CAMPO_GERAL not in erros:
+    if admin_crud.GENERAL_FIELD not in erros:
         dados = dict(dados, name=enviados["name"] or "", profile_id=_inteiro(enviados["profile_id"]))
         if not usuario_id:
             dados["login"] = enviados["login"] or ""
         else:
             dados["version"] = enviados["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-    response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.CAMPO_GERAL)
+    response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.GENERAL_FIELD)
                       or ui_helpers.mensagem("formulario")}
     return _pagina_form(ctx, dados, erros)
 
@@ -134,17 +134,17 @@ def alternar_ativo():
     ctx = _exigir_func(_FUNC)
     usuario_id = _texto(request.post_vars.get("id"), 11)
     try:
-        alterado = servico.alternar_ativo(ctx, _ip_origem(), usuario_id, _texto(request.post_vars.get("version"), 64))
+        alterado = servico.toggle_active(ctx, _ip_origem(), usuario_id, _texto(request.post_vars.get("version"), 64))
         acao = u"desativado" if alterado["active"] == "N" else u"reativado"
         session.flash = {"tipo": "sucesso", "mensagem": u"Usuário %s %s." % (alterado["login"], acao)}
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
-    except OperacaoNegada as exc:
+    except OperationDenied as exc:
         session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
     except RepoConflict:
-        session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
+        session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLICT}
     except RepoError:
         _log.exception("falha ao alternar usuario (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
@@ -157,12 +157,12 @@ def redefinir_senha():
     senhas = _retirar_senhas()
     usuario_id = _texto(request.post_vars.get("id"), 11)
     try:
-        erros = servico.redefinir_senha(ctx, _ip_origem(), usuario_id, senhas["senha"], senhas["confirmacao"])
+        erros = servico.reset_password(ctx, _ip_origem(), usuario_id, senhas["senha"], senhas["confirmacao"])
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
-    except OperacaoNegada as exc:
+    except OperationDenied as exc:
         session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
         redirect(URL(c="admin_usuarios", f="form", args=[usuario_id]))
     except RepoError:
@@ -173,7 +173,7 @@ def redefinir_senha():
         session.flash = {"tipo": "sucesso", "mensagem": u"Senha redefinida. Tentativas e bloqueio foram zerados."}
         redirect(URL(c="admin_usuarios", f="form", args=[usuario_id]))
     response.flash = {"tipo": "erro", "mensagem": u"A nova senha não foi aceita. Veja o campo destacado."}
-    return _pagina_form(ctx, servico.formulario(ctx, usuario_id), erros_senha=erros)
+    return _pagina_form(ctx, servico.form(ctx, usuario_id), erros_senha=erros)
 
 
 def desbloquear():
@@ -181,13 +181,13 @@ def desbloquear():
     ctx = _exigir_func(_FUNC)
     usuario_id = _texto(request.post_vars.get("id"), 11)
     try:
-        alterado = servico.desbloquear(ctx, _ip_origem(), usuario_id)
+        alterado = servico.unlock(ctx, _ip_origem(), usuario_id)
         session.flash = {"tipo": "sucesso", "mensagem": u"Usuário %s desbloqueado." % alterado["login"]}
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
-    except OperacaoNegada as exc:
+    except OperationDenied as exc:
         session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
     except RepoError:
         _log.exception("falha ao desbloquear (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})

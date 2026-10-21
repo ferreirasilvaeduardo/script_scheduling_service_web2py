@@ -229,7 +229,7 @@ class TestAgendaOracle(unittest.TestCase):
         self.conn.commit()
         self.contrato.tearDown(self)
 
-    def _regra(self, minutos_atras=10, **extra):
+    def _rule(self, minutos_atras=10, **extra):
         proxima = datetime.datetime.now().replace(second=0, microsecond=0) - datetime.timedelta(minutes=minutos_atras)
         return self._massa.agendamento(self.c["scr"]["id"], self.c["amb1"]["name"], self.c["u1"]["id"],
                                        next_run_at=proxima, **extra)
@@ -243,7 +243,7 @@ class TestAgendaOracle(unittest.TestCase):
 
     def test_microssegundos_nao_travam_a_reserva(self):
         """Teste obrigatorio (README §7.5): antiga/nova com microssegundos nao resultam em rowcount 0."""
-        regra = self._regra()
+        regra = self._rule()
         lida = self._linha(regra["id"])
         antiga = lida["next_run_at"].replace(microsecond=654321)
         nova = (lida["next_run_at"] + datetime.timedelta(days=1)).replace(microsecond=123456)
@@ -267,7 +267,7 @@ class TestAgendaOracle(unittest.TestCase):
         self.conn.rollback()
 
     def test_unica_concluida_mantem_a_data(self):
-        regra = self._regra(recurrence_type="ONCE", run_time=None)
+        regra = self._rule(recurrence_type="ONCE", run_time=None)
         lida = self._linha(regra["id"])
         tid = self.repo.next_ticket_id(self.conn)
         self.assertTrue(self.repo.lock_rule(self.conn, regra["id"]))
@@ -284,7 +284,7 @@ class TestAgendaOracle(unittest.TestCase):
         self.conn.rollback()
 
     def test_pausa_avanco_cron_erro_e_erro_interno(self):
-        r1, r2, r3, r4 = self._regra(), self._regra(), self._regra(), self._regra()
+        r1, r2, r3, r4 = self._rule(), self._rule(), self._rule(), self._rule()
         l1, l2, l3 = self._linha(r1["id"]), self._linha(r2["id"]), self._linha(r3["id"])
         nova = l2["next_run_at"] + datetime.timedelta(days=1)
         self.assertTrue(self.repo.pause(self.conn, r1["id"], l1["next_run_at"], "INVALID_PARAM",

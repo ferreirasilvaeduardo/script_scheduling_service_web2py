@@ -66,7 +66,7 @@ if session.usuario_id:
         _log.info("sessao encerrada pela vida maxima (login=%s)", session.login, extra={"action": "SESSAO"})
         _encerrar_sessao(ui_helpers.mensagem("sessao_max"))
     try:
-        _ctx = auth_service.revalidar(session, security.client_ip(
+        _ctx = auth_service.revalidate(session, security.client_ip(
             request.env.remote_addr, request.env.http_x_forwarded_for, _cfg.web.trusted_proxies))
     except RepoUnavailable:
         _log.exception("revalidacao de sessao indisponivel (usuario_id=%s caminho=%s)",

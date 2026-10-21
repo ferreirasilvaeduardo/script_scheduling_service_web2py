@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios) e 3a (regras) concluídos em 2026-10-21 |
+| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras) e 3b (services) concluídos em 2026-10-21 |
 | Origem | Regra do README §2.8 (CR-016): funções, classes, métodos, constantes e variáveis em inglês |
 | Restrições | Sem dependência nova. Python 3.6. Sem mudança de esquema |
 | Blocos | 1 base (`sql_ident`, `sss_config`, `db_conn`, `sss_logging` e formato do log); 2 repositórios e chaves lógicas das entidades; 3 regras (3a) e services (3b); 4 daemon; 5 scripts e testes; passada final de parâmetros e variáveis locais |
@@ -1030,3 +1030,636 @@ Métodos com nome genérico mudaram em todas as classes que os definem, depois d
 
 * Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, percurso real das telas e conferência de resíduos.
 * Achados na conferência e corrigidos: nome reexportado (`recurrence.CronErro`, em `schedule_expansion`) que a ferramenta por escopo não alcança; módulo falso de teste (`masking_stub`) com o nome antigo; códigos compostos (`PATH_GUARD_<código>`) que a troca por palavra inteira não pega.
+
+## 8. Bloco 3b (services)
+
+Módulos `admin_crud`, `admin_*_service`, `agents_service`, `audit_service`, `auth_service`, `permissions_service`, `schedules_service` e `ticket_service`. Classes `Servico*` → `*Service`; a fábrica por módulo `_servico`/`_padrao`/`_lock_padrao` → `_service`/`_default`/`_default_lock`; a função de módulo `listar` → `list_page` (D7). Os controllers só tiveram as chamadas atualizadas; nomes das funções de controller (URLs), variáveis de tela e atributos de sessão (`session.sessao_epoch`) ficam para o CR-016d.
+
+Métodos mudaram em todas as classes que os definem, inclusive fakes de teste e `RepoSchedulerOutput._incluir`, `health.Verificacao._ambientes`, conferido que nenhuma classe já tinha o nome novo.
+
+### Nomes de módulo
+
+#### `admin_crud`
+
+| Antes | Depois |
+|---|---|
+| `AcessoNegado` | `AccessDenied` |
+| `CAMPO_GERAL` | `GENERAL_FIELD` |
+| `LIMITE_DETALHE` | `DETAIL_LIMIT` |
+| `MARCADOR_PREENCHIDO` | `FILLED_MARKER` |
+| `MARCADOR_VAZIO` | `EMPTY_MARKER` |
+| `MSG_CONFLITO` | `MSG_CONFLICT` |
+| `MSG_CONTROLE` | `MSG_CONTROL_CHARS` |
+| `MSG_ESPACOS` | `MSG_SPACES` |
+| `MSG_FALHA` | `MSG_FAILURE` |
+| `OperacaoNegada` | `OperationDenied` |
+| `_RE_CONTROLE` | `_RE_CONTROL` |
+| `_SETA` | `_ARROW` |
+| `_VAZIO` | `_EMPTY` |
+| `_exibir` | `_display` |
+| `auditoria` | `audit_entry` |
+| `detalhe_alteracoes` | `changes_detail` |
+| `detalhe_insercao` | `insert_detail` |
+| `detalhe_livre` | `free_detail` |
+| `esperado` | `expected` |
+| `exigir_admin` | `require_admin` |
+| `exigir_func` | `require_feature` |
+| `hash_estado` | `state_hash` |
+| `identificador` | `identifier` |
+| `limitar` | `truncate_detail` |
+| `marcador_sensivel` | `sensitive_marker` |
+| `normalizar` | `normalize` |
+| `texto` | `text` |
+| `texto_livre` | `free_text` |
+| `versao` | `version` |
+
+#### `admin_environments_service`
+
+| Antes | Depois |
+|---|---|
+| `AVISO_DESATIVACAO` | `DEACTIVATION_WARNING` |
+| `CAMPOS_EDITAVEIS` | `EDITABLE_FIELDS` |
+| `CAMPOS_INSERCAO` | `INSERT_FIELDS` |
+| `FUNCIONALIDADE` | `FEATURE` |
+| `MSG_CONEXAO_CREDENCIAL` | `MSG_CONNECTION_CREDENTIAL` |
+| `MSG_CONEXAO_INVALIDA` | `MSG_CONNECTION_INVALID` |
+| `MSG_CONEXAO_TAMANHO` | `MSG_CONNECTION_LENGTH` |
+| `MSG_DESCRICAO_TAMANHO` | `MSG_DESCRIPTION_LENGTH` |
+| `MSG_NOME_DUPLICADO` | `MSG_NAME_DUPLICATE` |
+| `MSG_NOME_INVALIDO` | `MSG_NAME_INVALID` |
+| `MSG_NOME_OBRIGATORIO` | `MSG_NAME_REQUIRED` |
+| `MSG_NOME_RESERVADO` | `MSG_NAME_RESERVED` |
+| `ServicoAdminAmbientes` | `AdminEnvironmentsService` |
+| `TAMANHO_CONEXAO` | `CONNECTION_MAX_LENGTH` |
+| `TAMANHO_DESCRICAO` | `DESCRIPTION_MAX_LENGTH` |
+| `_CAMPO_POR_CONSTRAINT` | `_FIELD_BY_CONSTRAINT` |
+| `_RE_ALIAS_TNS` | `_RE_TNS_ALIAS` |
+| `_RE_FILTRO_NOME` | `_RE_NAME_FILTER` |
+| `_RE_NOME` | `_RE_NAME` |
+| `_SCRIPTS_PAGINA` | `_SCRIPTS_PAGE` |
+| `_TAMANHO_CONTAGEM` | `_COUNT_PAGE_SIZE` |
+| `_lock_padrao` | `_default_lock` |
+| `_padrao` | `_default` |
+| `_servico` | `_service` |
+| `alternar_ativo` | `toggle_active` |
+| `formulario` | `form` |
+| `listar` | `list_page` |
+| `normalizar_filtros` | `normalize_filters` |
+| `salvar` | `save` |
+| `validar_conexao` | `validate_connection` |
+
+#### `admin_parameters_service`
+
+| Antes | Depois |
+|---|---|
+| `AVISO_SENSIVEL` | `SENSITIVE_WARNING` |
+| `CAMPOS_EDITAVEIS` | `EDITABLE_FIELDS` |
+| `CAMPOS_INSERCAO` | `INSERT_FIELDS` |
+| `FUNCIONALIDADE` | `FEATURE` |
+| `MASCARA` | `MASK` |
+| `MSG_CODIGO_DUPLICADO` | `MSG_CODE_DUPLICATE` |
+| `MSG_CODIGO_INVALIDO` | `MSG_CODE_INVALID` |
+| `MSG_CODIGO_OBRIGATORIO` | `MSG_CODE_REQUIRED` |
+| `MSG_DESCRICAO_TAMANHO` | `MSG_DESCRIPTION_LENGTH` |
+| `MSG_LABEL_OBRIGATORIO` | `MSG_LABEL_REQUIRED` |
+| `MSG_LABEL_TAMANHO` | `MSG_LABEL_LENGTH` |
+| `MSG_OPCOES_PROIBIDAS` | `MSG_OPTIONS_FORBIDDEN` |
+| `MSG_PADRAO_TAMANHO` | `MSG_DEFAULT_LENGTH` |
+| `MSG_REGEX_SO_ADMIN` | `MSG_REGEX_ADMIN_ONLY` |
+| `MSG_REGEX_SO_TEXTO` | `MSG_REGEX_TEXT_ONLY` |
+| `MSG_REGEX_TAMANHO` | `MSG_REGEX_LENGTH` |
+| `MSG_SENSIVEL_MONOTONICO` | `MSG_SENSITIVE_ONE_WAY` |
+| `MSG_TESTE_REGEX_ADMIN` | `MSG_REGEX_TEST_ADMIN` |
+| `MSG_TIPO_COM_REGEX` | `MSG_TYPE_WITH_REGEX` |
+| `MSG_TIPO_INVALIDO` | `MSG_TYPE_INVALID` |
+| `ROTULOS_TIPO` | `TYPE_LABELS` |
+| `ServicoAdminParametros` | `AdminParametersService` |
+| `TAMANHO_DESCRICAO` | `DESCRIPTION_MAX_LENGTH` |
+| `TAMANHO_LABEL` | `LABEL_MAX_LENGTH` |
+| `TAMANHO_PADRAO` | `DEFAULT_MAX_LENGTH` |
+| `TAMANHO_REGEX` | `REGEX_MAX_LENGTH` |
+| `_CAMPO_POR_CONSTRAINT` | `_FIELD_BY_CONSTRAINT` |
+| `_RE_CODIGO` | `_RE_CODE` |
+| `_RE_FILTRO` | `_RE_FILTER` |
+| `_lista_scripts` | `_script_list` |
+| `_lock_padrao` | `_default_lock` |
+| `_padrao` | `_default` |
+| `_padrao_texto` | `_default_text` |
+| `_servico` | `_service` |
+| `_versao` | `_version` |
+| `alternar_ativo` | `toggle_active` |
+| `formulario` | `form` |
+| `listar` | `list_page` |
+| `msg_flag_nomeado` | `msg_named_flag` |
+| `msg_tipo_vinculado` | `msg_linked_type` |
+| `msg_vinculo_ativo` | `msg_active_link` |
+| `normalizar_filtros` | `normalize_filters` |
+| `opcoes_em_pares` | `options_as_pairs` |
+| `salvar` | `save` |
+| `testar` | `test_regex` |
+
+#### `admin_profiles_service`
+
+| Antes | Depois |
+|---|---|
+| `AFETADOS_MAX` | `AFFECTED_MAX` |
+| `AVISO_ADMIN` | `ADMIN_WARNING` |
+| `AVISO_DESATIVACAO` | `DEACTIVATION_WARNING` |
+| `CAMPOS_EDITAVEIS` | `EDITABLE_FIELDS` |
+| `CAMPOS_INSERCAO` | `INSERT_FIELDS` |
+| `FUNCIONALIDADE` | `FEATURE` |
+| `MSG_AUTO_ADMIN` | `MSG_SELF_ADMIN` |
+| `MSG_AUTO_DESATIVAR` | `MSG_SELF_DEACTIVATE` |
+| `MSG_DESCRICAO_TAMANHO` | `MSG_DESCRIPTION_LENGTH` |
+| `MSG_MATRIZ_ID_INVALIDO` | `MSG_MATRIX_ID_INVALID` |
+| `MSG_MATRIZ_INATIVO` | `MSG_MATRIX_INACTIVE` |
+| `MSG_NOME_DUPLICADO` | `MSG_NAME_DUPLICATE` |
+| `MSG_NOME_INVALIDO` | `MSG_NAME_INVALID` |
+| `MSG_NOME_OBRIGATORIO` | `MSG_NAME_REQUIRED` |
+| `MSG_SO_ADMIN` | `MSG_ADMIN_ONLY` |
+| `MSG_ULTIMO_ADMIN` | `MSG_LAST_ADMIN` |
+| `ServicoAdminPerfis` | `AdminProfilesService` |
+| `TAMANHO_DESCRICAO` | `DESCRIPTION_MAX_LENGTH` |
+| `_CAMPO_POR_CONSTRAINT` | `_FIELD_BY_CONSTRAINT` |
+| `_CATALOGO_MAX` | `_CATALOG_MAX` |
+| `_PREFIXOS` | `_PREFIXES` |
+| `_RE_FILTRO_NOME` | `_RE_NAME_FILTER` |
+| `_RE_NOME` | `_RE_NAME` |
+| `_SEM_GRUPO` | `_NO_GROUP` |
+| `_TAMANHO_CONTAGEM` | `_COUNT_PAGE_SIZE` |
+| `_lock_padrao` | `_default_lock` |
+| `_padrao` | `_default` |
+| `_servico` | `_service` |
+| `alternar_ativo` | `toggle_active` |
+| `diff_matriz` | `matrix_diff` |
+| `formulario` | `form` |
+| `listar` | `list_page` |
+| `matriz` | `matrix` |
+| `normalizar_filtros` | `normalize_filters` |
+| `quem_pode` | `who_can` |
+| `salvar` | `save` |
+| `salvar_matriz` | `save_matrix` |
+
+#### `admin_scripts_service`
+
+| Antes | Depois |
+|---|---|
+| `AVISO_DESATIVACAO` | `DEACTIVATION_WARNING` |
+| `CAMPOS_EDITAVEIS` | `EDITABLE_FIELDS` |
+| `CAMPOS_INSERCAO` | `INSERT_FIELDS` |
+| `FUNCIONALIDADE` | `FEATURE` |
+| `MASCARA` | `MASK` |
+| `MENSAGENS_PATH` | `PATH_MESSAGES` |
+| `MSG_CONTROLE` | `MSG_CONTROL_CHARS` |
+| `MSG_HOMOLOG_INATIVO` | `MSG_HOMOLOG_INACTIVE` |
+| `MSG_HOMOLOG_INVALIDA` | `MSG_HOMOLOG_INVALID` |
+| `MSG_NENHUM_VINCULADO` | `MSG_NONE_LINKED` |
+| `MSG_NOME_DUPLICADO` | `MSG_NAME_DUPLICATE` |
+| `MSG_NOME_OBRIGATORIO` | `MSG_NAME_REQUIRED` |
+| `MSG_NOME_RESERVADO` | `MSG_NAME_RESERVED` |
+| `MSG_PARALELO` | `MSG_PARALLEL` |
+| `MSG_PATH_OBRIGATORIO` | `MSG_PATH_REQUIRED` |
+| `MSG_SIGILOSO_INVALIDO` | `MSG_SENSITIVE_INVALID` |
+| `MSG_TIPO_PARAM` | `MSG_PARAM_TYPE` |
+| `MSG_VINCULOS_INVALIDOS` | `MSG_LINKS_INVALID` |
+| `MSG_VINCULO_DUPLICADO` | `MSG_LINK_DUPLICATE` |
+| `MSG_VINCULO_INATIVO` | `MSG_LINK_INACTIVE` |
+| `MSG_VINCULO_NENHUM` | `MSG_LINK_NONE` |
+| `OBS_VALIDACAO` | `VALIDATION_NOTE` |
+| `ROTULOS_INTERPRETADOR` | `INTERPRETER_LABELS` |
+| `ROTULOS_TIPO_PARAM` | `PARAM_TYPE_LABELS` |
+| `ServicoAdminScripts` | `AdminScriptsService` |
+| `TAMANHOS` | `MAX_LENGTHS` |
+| `TAMANHO_PADRAO_SUB` | `SUB_DEFAULT_MAX_LENGTH` |
+| `TIMEOUT_MAXIMO` | `MAX_TIMEOUT` |
+| `VINCULOS_MAXIMO` | `MAX_LINKS` |
+| `_CAMPO_POR_CONSTRAINT` | `_FIELD_BY_CONSTRAINT` |
+| `_CATALOGO_MAX` | `_CATALOG_MAX` |
+| `_RE_CONTROLE` | `_RE_CONTROL` |
+| `_RE_FILTRO` | `_RE_FILTER` |
+| `_RE_INTEIRO` | `_RE_INTEGER` |
+| `_TAMANHO_CONTAGEM` | `_COUNT_PAGE_SIZE` |
+| `_lidos` | `_read_back` |
+| `_lock_padrao` | `_default_lock` |
+| `_padrao` | `_default` |
+| `_servico` | `_service` |
+| `_versao_vinculos` | `_links_version` |
+| `alternar_ativo` | `toggle_active` |
+| `formulario` | `form` |
+| `homologacao` | `homologation` |
+| `listar` | `list_page` |
+| `msg_nomeado_sem_flag` | `msg_named_without_flag` |
+| `normalizar_filtros` | `normalize_filters` |
+| `parametros` | `parameters` |
+| `previa` | `preview` |
+| `salvar` | `save` |
+| `salvar_homologacao` | `save_homologation` |
+| `salvar_parametros` | `save_parameters` |
+
+#### `admin_users_service`
+
+| Antes | Depois |
+|---|---|
+| `AJUDA_POLITICA` | `POLICY_HELP` |
+| `AVISO_DESATIVACAO` | `DEACTIVATION_WARNING` |
+| `CAMPOS_EDITAVEIS` | `EDITABLE_FIELDS` |
+| `CAMPOS_INSERCAO` | `INSERT_FIELDS` |
+| `FUNCIONALIDADE` | `FEATURE` |
+| `MSG_AUTO_DESATIVAR` | `MSG_SELF_DEACTIVATE` |
+| `MSG_AUTO_PERFIL` | `MSG_SELF_PROFILE` |
+| `MSG_AUTO_SENHA` | `MSG_SELF_PASSWORD` |
+| `MSG_CONFIRMACAO` | `MSG_CONFIRMATION` |
+| `MSG_LOGIN_DUPLICADO` | `MSG_LOGIN_DUPLICATE` |
+| `MSG_LOGIN_INVALIDO` | `MSG_LOGIN_INVALID` |
+| `MSG_LOGIN_OBRIGATORIO` | `MSG_LOGIN_REQUIRED` |
+| `MSG_NOME_OBRIGATORIO` | `MSG_NAME_REQUIRED` |
+| `MSG_NOME_TAMANHO` | `MSG_NAME_LENGTH` |
+| `MSG_PERFIL_INVALIDO` | `MSG_PROFILE_INVALID` |
+| `MSG_SENHA_LONGA` | `MSG_PASSWORD_TOO_LONG` |
+| `MSG_SENHA_OBRIGATORIA` | `MSG_PASSWORD_REQUIRED` |
+| `MSG_SO_ADMIN` | `MSG_ADMIN_ONLY` |
+| `MSG_ULTIMO_ADMIN` | `MSG_LAST_ADMIN` |
+| `ServicoAdminUsuarios` | `AdminUsersService` |
+| `TAMANHO_NOME` | `NAME_MAX_LENGTH` |
+| `_CAMPOS_PUBLICOS` | `_PUBLIC_FIELDS` |
+| `_CAMPO_POR_CONSTRAINT` | `_FIELD_BY_CONSTRAINT` |
+| `_PERFIS_MAX` | `_PROFILES_MAX` |
+| `_RE_FILTRO` | `_RE_FILTER` |
+| `_lock_padrao` | `_default_lock` |
+| `_padrao` | `_default` |
+| `_servico` | `_service` |
+| `alternar_ativo` | `toggle_active` |
+| `desbloquear` | `unlock` |
+| `formulario` | `form` |
+| `listar` | `list_page` |
+| `normalizar_filtros` | `normalize_filters` |
+| `perfis` | `profiles` |
+| `publico` | `public_view` |
+| `redefinir_senha` | `reset_password` |
+| `salvar` | `save` |
+
+#### `agents_service`
+
+| Antes | Depois |
+|---|---|
+| `FUNCIONALIDADE` | `FEATURE` |
+| `Limiares` | `Thresholds` |
+| `ORDEM_SAUDE` | `HEALTH_ORDER` |
+| `ServicoAgentes` | `AgentsService` |
+| `_SAUDE` | `_HEALTH` |
+| `_lock_padrao` | `_default_lock` |
+| `_padrao` | `_default` |
+| `_servico` | `_service` |
+| `formatar_idade` | `format_age` |
+| `legenda` | `legend` |
+| `painel` | `dashboard` |
+| `saude` | `health` |
+| `saude_info` | `health_info` |
+| `tickets_do_agente` | `agent_tickets` |
+
+#### `audit_service`
+
+| Antes | Depois |
+|---|---|
+| `ACAO_EXPORTAR` | `EXPORT_ACTION` |
+| `ACOES` | `ACTIONS` |
+| `CABECALHO_CSV` | `CSV_HEADER` |
+| `CAMPOS_FILTRO` | `FILTER_FIELDS` |
+| `DETALHE_CURTO` | `SHORT_DETAIL` |
+| `ENTIDADES` | `ENTITIES` |
+| `ENTIDADE_AUDITORIA` | `AUDIT_ENTITY` |
+| `FUNCIONALIDADE` | `FEATURE` |
+| `FiltrosInvalidos` | `InvalidFilters` |
+| `LIMITE_EXPORTACAO` | `EXPORT_LIMIT` |
+| `MSG_ACAO` | `MSG_ACTION` |
+| `MSG_ATOR` | `MSG_ACTOR` |
+| `MSG_DATA` | `MSG_DATE` |
+| `MSG_ENTIDADE` | `MSG_ENTITY` |
+| `MSG_ENTIDADE_ID` | `MSG_ENTITY_ID` |
+| `MSG_INTERVALO` | `MSG_RANGE` |
+| `MSG_PERIODO` | `MSG_PERIOD` |
+| `MSG_PERIODO_SELETIVO` | `MSG_SELECTIVE_PERIOD` |
+| `PERIODO_MAX_DIAS` | `MAX_PERIOD_DAYS` |
+| `PERIODO_MAX_SELETIVO_DIAS` | `MAX_SELECTIVE_PERIOD_DAYS` |
+| `PERIODO_PADRAO_DIAS` | `DEFAULT_PERIOD_DAYS` |
+| `ServicoAuditoria` | `AuditService` |
+| `TAMANHO_MAX` | `MAX_LENGTH` |
+| `TELAS_ENTIDADE` | `ENTITY_SCREENS` |
+| `_FORMATO_CSV` | `_CSV_FORMAT` |
+| `_FORMATO_DIA` | `_DAY_FORMAT` |
+| `_LINHAS_POR_BLOCO` | `_LINES_PER_CHUNK` |
+| `_PREFIXOS_PERIGOSOS` | `_DANGEROUS_PREFIXES` |
+| `_RE_ATOR` | `_RE_ACTOR` |
+| `_RE_DIA` | `_RE_DAY` |
+| `_descrever_filtros` | `_describe_filters` |
+| `_dia` | `_day` |
+| `_lock_padrao` | `_default_lock` |
+| `_mascarar` | `_mask` |
+| `_padrao` | `_default` |
+| `_servico` | `_service` |
+| `_texto` | `_text` |
+| `exportar_csv` | `export_csv` |
+| `filtros_padrao` | `default_filters` |
+| `filtros_repo` | `repo_filters` |
+| `linha_csv` | `csv_row` |
+| `link_entidade` | `entity_link` |
+| `listar` | `list_page` |
+| `neutralizar_csv` | `neutralize_csv` |
+| `normalizar_filtros` | `normalize_filters` |
+
+#### `auth_service`
+
+| Antes | Depois |
+|---|---|
+| `CACHE_MATRIZ_MAX` | `MATRIX_CACHE_MAX` |
+| `ENTIDADE` | `ENTITY` |
+| `MSG_CONFIRMACAO` | `MSG_CONFIRMATION` |
+| `MSG_GENERICA` | `MSG_GENERIC` |
+| `MSG_SENHA_ATUAL` | `MSG_CURRENT_PASSWORD` |
+| `SENHA_MAX` | `PASSWORD_MAX` |
+| `SIMULADOS_MAX` | `SIMULATED_MAX` |
+| `ServicoAuth` | `AuthService` |
+| `_lock_padrao` | `_default_lock` |
+| `_padrao` | `_default` |
+| `_servico` | `_service` |
+| `autenticar` | `authenticate` |
+| `revalidar` | `revalidate` |
+| `sessao_epoch` | `session_epoch` |
+| `trocar_senha` | `change_password` |
+
+#### `permissions_service`
+
+| Antes | Depois |
+|---|---|
+| `FRASE_ADMIN` | `ADMIN_PHRASE` |
+| `FRASE_MAIS_ACESSO` | `MORE_ACCESS_PHRASE` |
+| `FRASE_SEM_EXEC` | `NO_EXEC_PHRASE` |
+| `MOTIVO_AMBIENTE_INATIVO` | `REASON_ENVIRONMENT_INACTIVE` |
+| `MOTIVO_SCRIPT_INATIVO` | `REASON_SCRIPT_INACTIVE` |
+| `MOTIVO_SEM_FUNC` | `REASON_NO_FEATURE` |
+| `MOTIVO_SEM_HOMOLOGACAO` | `REASON_NOT_HOMOLOGATED` |
+| `ServicoPermissoes` | `PermissionsService` |
+| `_CATALOGO_MAX` | `_CATALOG_MAX` |
+| `_lock_padrao` | `_default_lock` |
+| `_padrao` | `_default` |
+| `_servico` | `_service` |
+| `montar` | `build` |
+
+#### `schedules_service`
+
+| Antes | Depois |
+|---|---|
+| `AGENDA_POR_REGRA` | `AGENDA_PER_RULE` |
+| `CAMPOS_AUDITORIA` | `AUDIT_FIELDS` |
+| `CAMPOS_VERSAO` | `VERSION_FIELDS` |
+| `DIAS_SEMANA` | `WEEKDAYS` |
+| `FORMATO_CAMPO_DATA` | `DATE_FIELD_FORMAT` |
+| `FUNCIONALIDADE` | `FEATURE` |
+| `MASCARA` | `MASK` |
+| `MOTIVOS_PAUSA` | `PAUSE_REASONS` |
+| `MSG_DATA_INVALIDA` | `MSG_DATE_INVALID` |
+| `MSG_INICIO_UNICA` | `MSG_ONCE_START` |
+| `MSG_JA_ATIVA` | `MSG_ALREADY_ACTIVE` |
+| `MSG_JA_PAUSADA` | `MSG_ALREADY_PAUSED` |
+| `MSG_NOME_OBRIGATORIO` | `MSG_NAME_REQUIRED` |
+| `MSG_NOME_TAMANHO` | `MSG_NAME_LENGTH` |
+| `MSG_ORIENTACAO_RETOMAR` | `MSG_RESUME_GUIDANCE` |
+| `MSG_PRIORIDADE` | `MSG_PRIORITY` |
+| `MSG_PRIORIDADE_ADMIN` | `MSG_PRIORITY_ADMIN` |
+| `MSG_RETOMAR_SEM_PROXIMA` | `MSG_RESUME_NO_NEXT_RUN` |
+| `MSG_SEM_PERMISSAO` | `MSG_NO_PERMISSION` |
+| `MSG_SEM_PROXIMA` | `MSG_NO_NEXT_RUN` |
+| `MSG_TIPO` | `MSG_TYPE` |
+| `PRIORIDADE_PADRAO` | `DEFAULT_PRIORITY` |
+| `QTD_PREVIA` | `PREVIEW_COUNT` |
+| `ROTULOS_TIPO` | `TYPE_LABELS` |
+| `ServicoAgendamentos` | `SchedulesService` |
+| `TAMANHO_NOME` | `NAME_MAX_LENGTH` |
+| `_ABREV_DIA` | `_DAY_ABBREV` |
+| `_AGENDA_CONTAGEM_MAX` | `_AGENDA_COUNT_MAX` |
+| `_AGENDA_PAGINA` | `_AGENDA_PAGE` |
+| `_CAMPOS_ESPERADO` | `_EXPECTED_FIELDS` |
+| `_CAMPOS_INSERCAO` | `_INSERT_FIELDS` |
+| `_FORMATOS_DATA` | `_DATE_FORMATS` |
+| `_NOMES_DIA` | `_DAY_NAMES` |
+| `_RE_AMBIENTE` | `_RE_ENVIRONMENT` |
+| `_SETA` | `_ARROW` |
+| `_data` | `_date` |
+| `_dias_semana` | `_weekdays` |
+| `_estado` | `_state` |
+| `_lock_padrao` | `_default_lock` |
+| `_padrao` | `_default` |
+| `_parametros` | `_parameters` |
+| `_rotulo_dia` | `_day_label` |
+| `_serializar` | `_serialize` |
+| `_servico` | `_service` |
+| `_ultimo` | `_last` |
+| `_valor_campo_data` | `_date_field_value` |
+| `_vazio` | `_empty` |
+| `descrever_regra` | `describe_rule` |
+| `formatar_data` | `format_date` |
+| `formatar_previa` | `format_preview` |
+| `formulario` | `form` |
+| `listar` | `list_page` |
+| `normalizar_filtros` | `normalize_filters` |
+| `pausar` | `pause` |
+| `previa` | `preview` |
+| `retomar` | `resume` |
+| `salvar` | `save` |
+| `situacao` | `rule_state` |
+| `versao` | `version` |
+
+#### `ticket_service`
+
+| Antes | Depois |
+|---|---|
+| `AMBIENTE_PRODUCAO` | `PRODUCTION_ENVIRONMENT` |
+| `AcessoNegado` | `AccessDenied` |
+| `CAMPO_AGENDAMENTO` | `SCHEDULED_AT_FIELD` |
+| `CAMPO_GERAL` | `GENERAL_FIELD` |
+| `CAMPO_PRIORIDADE` | `PRIORITY_FIELD` |
+| `ErroReexecucao` | `RerunError` |
+| `FILTROS` | `FILTERS` |
+| `HISTORICO_DIAS` | `HISTORY_DAYS` |
+| `HISTORICO_LIMITE` | `HISTORY_LIMIT` |
+| `MARCADOR_DOWNLOAD_INTERROMPIDO` | `DOWNLOAD_INTERRUPTED_MARKER` |
+| `MSG_CANCELAMENTO` | `MSG_CANCEL` |
+| `MSG_FALHA_CRIAR` | `MSG_CREATE_FAILED` |
+| `MSG_SCRIPT_INDISPONIVEL` | `MSG_SCRIPT_UNAVAILABLE` |
+| `MSG_ULTIMA_MUDOU` | `MSG_LAST_CHANGED` |
+| `MSG_ULTIMA_SENSIVEL` | `MSG_LAST_SENSITIVE` |
+| `ORIGENS` | `SOURCES` |
+| `OffsetInvalido` | `InvalidOffset` |
+| `PRIORIDADE_PADRAO` | `DEFAULT_PRIORITY` |
+| `ROTULOS_PRIORIDADE` | `PRIORITY_LABELS` |
+| `SAIDA_FATIA_BYTES` | `OUTPUT_SLICE_BYTES` |
+| `STATUS_CANCELAVEIS` | `CANCELLABLE_STATUSES` |
+| `STATUS_TERMINAIS` | `TERMINAL_STATUSES` |
+| `ServicoTicket` | `TicketService` |
+| `_AMBIENTES_MAX` | `_ENVIRONMENTS_MAX` |
+| `_FILHOS_MAX` | `_CHILDREN_MAX` |
+| `_FORMATOS_AGENDAMENTO` | `_SCHEDULED_AT_FORMATS` |
+| `_FORMATO_DIA` | `_DAY_FORMAT` |
+| `_RE_AMBIENTE` | `_RE_ENVIRONMENT` |
+| `_argv_exibicao` | `_display_argv` |
+| `_dia` | `_day` |
+| `_duracao` | `_duration` |
+| `_filtros_repo` | `_repo_filters` |
+| `_lock_padrao` | `_default_lock` |
+| `_opcoes` | `_options` |
+| `_ordenados` | `_sorted_items` |
+| `_padrao` | `_default` |
+| `_servico` | `_service` |
+| `_texto_resposta` | `_answer_text` |
+| `_ultimo` | `_last` |
+| `ambientes_disponiveis` | `available_environments` |
+| `blocos_log` | `log_chunks` |
+| `blocos_saida` | `output_chunks` |
+| `cancelar` | `cancel` |
+| `catalogo_rotinas` | `routine_catalog` |
+| `criar_ticket` | `create_ticket` |
+| `detalhe` | `detail` |
+| `historico_script` | `script_history` |
+| `ler_log` | `read_log` |
+| `listar` | `list_page` |
+| `normalizar_filtros` | `normalize_filters` |
+| `opcoes_filtro` | `filter_options` |
+| `pode_consultar` | `can_query` |
+| `preparar_formulario` | `prepare_form` |
+| `preparar_reexecucao` | `prepare_rerun` |
+| `previa` | `preview` |
+| `reexecutar` | `rerun` |
+| `resumo_disparo` | `trigger_summary` |
+| `resumo_inicial` | `home_summary` |
+| `scripts_disponiveis` | `available_scripts` |
+| `tem_ultima_execucao` | `has_last_run` |
+| `ultimas_respostas` | `last_answers` |
+| `visivel` | `is_visible` |
+
+### Métodos
+
+| Antes | Depois |
+|---|---|
+| `_agendamento` | `_scheduled_at` |
+| `_agendamentos_ativos` | `_active_schedules` |
+| `_agora` | `_now` |
+| `_alterar` | `_update` |
+| `_ambiente_por_nome` | `_environment_by_name` |
+| `_ambientes` | `_environments` |
+| `_ambientes_executaveis` | `_executable_environments` |
+| `_auditavel` | `_auditable` |
+| `_autorizar` | `_authorize` |
+| `_avaliar_problema_desdobro` | `_check_expansion_problem` |
+| `_aviso_sobreposicao` | `_overlap_warning` |
+| `_blocos` | `_chunks` |
+| `_bloqueado` | `_is_locked` |
+| `_catalogo_matriz` | `_matrix_catalog` |
+| `_codigos_sensiveis` | `_sensitive_codes` |
+| `_compilar` | `_compile` |
+| `_dependencias` | `_dependencies` |
+| `_descrever` | `_describe` |
+| `_detalhe_alteracao` | `_change_detail` |
+| `_dicionario` | `_dictionary` |
+| `_escopo_consulta` | `_query_scope` |
+| `_escopo_execucoes` | `_runs_scope` |
+| `_exemplo` | `_example` |
+| `_exigir_admin` | `_require_admin` |
+| `_falha_inexistente` | `_unknown_login` |
+| `_falha_senha` | `_wrong_password` |
+| `_gravar` | `_save` |
+| `_hoje` | `_today` |
+| `_incluir` | `_insert` |
+| `_inteiro` | `_integer` |
+| `_matriz` | `_matrix` |
+| `_montar_ctx` | `_build_ctx` |
+| `_montar_vinculos` | `_build_links` |
+| `_motivo` | `_reason` |
+| `_negar` | `_deny` |
+| `_nome` | `_name` |
+| `_nomes_scripts` | `_script_names` |
+| `_obter` | `_get` |
+| `_obter_visivel` | `_get_visible` |
+| `_padrao_exibicao` | `_display_default` |
+| `_para_auditoria` | `_for_audit` |
+| `_parametros_auditoria` | `_audit_params` |
+| `_perfil_admin` | `_admin_profile` |
+| `_perfil_ativo` | `_active_profile` |
+| `_pode_executar_vigente` | `_can_execute_now` |
+| `_pode_reexecutar_regra` | `_can_rerun_by_rule` |
+| `_pode_ver` | `_can_view` |
+| `_pre_tipo_param` | `_param_type_precheck` |
+| `_prioridade` | `_priority` |
+| `_proprio` | `_is_own` |
+| `_proxima` | `_next_run` |
+| `_recompilar` | `_recompile` |
+| `_registrar_falha` | `_record_failure` |
+| `_regra` | `_rule` |
+| `_regra_form` | `_form_rule` |
+| `_reiniciar_se_expirado` | `_reset_if_expired` |
+| `_reservado` | `_reserved` |
+| `_respostas` | `_answers` |
+| `_respostas_exibicao` | `_display_answers` |
+| `_respostas_originais` | `_original_answers` |
+| `_rotulos` | `_labels` |
+| `_senha` | `_password` |
+| `_telas` | `_screens` |
+| `_texto_campo` | `_field_text` |
+| `_ticket_reexecutavel` | `_rerunnable_ticket` |
+| `_ticket_visivel` | `_visible_ticket` |
+| `_ultimo_ticket` | `_last_ticket` |
+| `_validar` | `_validate` |
+| `_vinculos` | `_links` |
+| `_violacao` | `_violation` |
+| `agendamentos_ativos` | `active_schedules` |
+| `alternar_ativo` | `toggle_active` |
+| `ambientes_disponiveis` | `available_environments` |
+| `autenticar` | `authenticate` |
+| `autorizar` | `authorize` |
+| `blocos_log` | `log_chunks` |
+| `blocos_saida` | `output_chunks` |
+| `bloqueado` | `is_locked` |
+| `cancelar` | `cancel` |
+| `catalogo_rotinas` | `routine_catalog` |
+| `criar_ticket` | `create_ticket` |
+| `detalhe` | `detail` |
+| `exportar_csv` | `export_csv` |
+| `formulario` | `form` |
+| `homologacao` | `homologation` |
+| `ler_log` | `read_log` |
+| `matriz` | `matrix` |
+| `montar` | `build` |
+| `normalizar_filtros` | `normalize_filters` |
+| `opcoes_filtro` | `filter_options` |
+| `painel` | `dashboard` |
+| `pode_consultar` | `can_query` |
+| `preparar_formulario` | `prepare_form` |
+| `preparar_reexecucao` | `prepare_rerun` |
+| `previa` | `preview` |
+| `quem_pode` | `who_can` |
+| `redefinir_senha` | `reset_password` |
+| `reexecutar` | `rerun` |
+| `resumo_disparo` | `trigger_summary` |
+| `resumo_inicial` | `home_summary` |
+| `revalidar` | `revalidate` |
+| `salvar` | `save` |
+| `salvar_homologacao` | `save_homologation` |
+| `salvar_matriz` | `save_matrix` |
+| `salvar_parametros` | `save_parameters` |
+| `scripts_disponiveis` | `available_scripts` |
+| `scripts_homologados` | `homologated_scripts` |
+| `sessao_epoch` | `session_epoch` |
+| `tem_ultima_execucao` | `has_last_run` |
+| `testar` | `test_regex` |
+| `tickets_do_agente` | `agent_tickets` |
+| `trocar_senha` | `change_password` |
+| `ultimas_respostas` | `last_answers` |
+| `usuarios_afetados` | `affected_users` |
+| `usuarios_ativos` | `active_users` |
+| `validar_caminho` | `validate_path` |
+| `vinculos` | `links` |
+| `visivel` | `is_visible` |
+
+## 9. Validação do bloco 3b
+
+* Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, percurso real das telas e conferência de resíduos.
+* Achados na conferência e corrigidos: código Python nas views chamando service pelo nome antigo (`admin_parameters_service.opcoes_em_pares` em `admin_parametros/form.html`, que daria erro 500 na tela de parâmetros); nomes reexportados lidos por outro módulo nos testes (`usr_mod.CAMPO_GERAL`, `agents_service.Limiares`); o atributo de sessão `session.sessao_epoch`, que a renomeação de métodos tinha alcançado, restaurado.

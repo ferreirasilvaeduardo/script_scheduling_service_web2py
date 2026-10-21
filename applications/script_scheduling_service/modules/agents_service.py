@@ -9,18 +9,18 @@ import threading
 
 import admin_crud
 import ui_helpers
-from admin_crud import AcessoNegado  # noqa: F401  (reexportado para o controller)
+from admin_crud import AccessDenied  # noqa: F401  (reexportado para o controller)
 
-FUNCIONALIDADE = "VIEW_AUDIT"
+FEATURE = "VIEW_AUDIT"
 
 OK = "OK"
 DELAYED = "DELAYED"
 AT_RISK = "AT_RISK"
 OFFLINE = "OFFLINE"
-ORDEM_SAUDE = (OK, DELAYED, AT_RISK, OFFLINE)
+HEALTH_ORDER = (OK, DELAYED, AT_RISK, OFFLINE)
 
 # codigo -> (rotulo, classe do badge, icone, explicacao da legenda); cor + icone + texto.
-_SAUDE = {
+_HEALTH = {
     OK: (u"OK", "sss-status-success", "status-success",
          u"Heartbeat recente: menos de 2 intervalos de heartbeat."),
     DELAYED: (u"Atrasado", "sss-status-pending", "status-pending",
@@ -32,10 +32,10 @@ _SAUDE = {
               u"Sem heartbeat além do limite de nó offline, ou agente parado."),
 }
 
-Limiares = collections.namedtuple("Limiares", "heartbeat_interval_s fence_timeout_s node_offline_timeout_s")
+Thresholds = collections.namedtuple("Limiares", "heartbeat_interval_s fence_timeout_s node_offline_timeout_s")
 
 
-def saude(agente, agora, limiares):
+def health(agente, agora, limiares):
     """Codigo de saude do agente: OK, DELAYED, AT_RISK ou OFFLINE.
 
     OK: idade < 2 x heartbeat_interval_s; DELAYED: ate fence_timeout_s; AT_RISK: ate
@@ -56,18 +56,18 @@ def saude(agente, agora, limiares):
     return OFFLINE
 
 
-def saude_info(codigo):
+def health_info(codigo):
     """{codigo, rotulo, classe, icone, descricao} da saude, para badge e legenda."""
-    rotulo, classe, icone, descricao = _SAUDE[codigo]
+    rotulo, classe, icone, descricao = _HEALTH[codigo]
     return {"code": codigo, "rotulo": rotulo, "classe": classe, "icone": icone, "description": descricao}
 
 
-def legenda():
+def legend():
     """Estados de saude na ordem do melhor para o pior."""
-    return [saude_info(c) for c in ORDEM_SAUDE]
+    return [health_info(c) for c in HEALTH_ORDER]
 
 
-def formatar_idade(segundos):
+def format_age(segundos):
     """'há N s' ate 2 min; depois minutos, horas ou dias inteiros; None vira 'sem heartbeat'."""
     if segundos is None:
         return u"sem heartbeat"
@@ -80,7 +80,7 @@ def formatar_idade(segundos):
     return u"há %d dias" % (segundos // 86400)
 
 
-class ServicoAgentes(object):
+class AgentsService(object):
     """Painel de agentes com repositorios, relogio, limiares e log injetados."""
 
     def __init__(self, agentes, catalogo, relogio, limiares, log, config_criticos):
@@ -91,7 +91,7 @@ class ServicoAgentes(object):
         self._log = log
         self._config_criticos = config_criticos
 
-    def _nomes_scripts(self):
+    def _script_names(self):
         pagina = self._catalogo.scripts_list(pagina=1, tamanho=1000)
         return dict((s["id"], s["name"]) for s in pagina["itens"])
 
@@ -106,25 +106,25 @@ class ServicoAgentes(object):
                 "requested_by": t.get("requested_by"),
                 "started_at": t.get("started_at"),
                 "duracao": ui_helpers.formatar_duracao(t.get("started_at"), agora),
-                "heartbeat": formatar_idade(None if hb is None else max(0, int((agora - hb).total_seconds()))),
+                "heartbeat": format_age(None if hb is None else max(0, int((agora - hb).total_seconds()))),
             })
         return itens
 
-    def tickets_do_agente(self, ctx, codigo, agora=None):
+    def agent_tickets(self, ctx, codigo, agora=None):
         """Tickets RUNNING do agente, prontos para a lista com link para o detalhe."""
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
+        admin_crud.require_feature(ctx, FEATURE)
         agora = agora or self._relogio()
-        return self._tickets(codigo, agora, self._nomes_scripts())
+        return self._tickets(codigo, agora, self._script_names())
 
-    def painel(self, ctx, agora=None):
+    def dashboard(self, ctx, agora=None):
         """Agentes com saude derivada, idade do heartbeat e tickets RUNNING (somente leitura).
 
         Retorna {"agents": [...], "resumo": {codigo_saude: quantidade}, "agora": datetime}.
         """
-        admin_crud.exigir_func(ctx, FUNCIONALIDADE)
+        admin_crud.require_feature(ctx, FEATURE)
         agora = agora or self._relogio()
-        nomes = self._nomes_scripts()
-        resumo = collections.OrderedDict((c, 0) for c in ORDEM_SAUDE)
+        nomes = self._script_names()
+        resumo = collections.OrderedDict((c, 0) for c in HEALTH_ORDER)
         agentes = []
         divergentes = []
         for ag in self._agentes.list():
@@ -132,7 +132,7 @@ class ServicoAgentes(object):
                 divergentes.append({"code": ag["code"], "critical_config": ag.get("critical_config")})
             hb = ag.get("heartbeat_at")
             idade = None if hb is None else max(0, int((agora - hb).total_seconds()))
-            codigo_saude = saude(ag, agora, self._limiares)
+            codigo_saude = health(ag, agora, self._limiares)
             resumo[codigo_saude] += 1
             tickets = self._tickets(ag["code"], agora, nomes)
             agentes.append({
@@ -147,8 +147,8 @@ class ServicoAgentes(object):
                 "started_at": ag.get("started_at"),
                 "heartbeat_at": hb,
                 "idade_s": idade,
-                "ha": formatar_idade(idade),
-                "saude": saude_info(codigo_saude),
+                "ha": format_age(idade),
+                "saude": health_info(codigo_saude),
                 "running": len(tickets),
                 "tickets": tickets,
             })
@@ -158,36 +158,36 @@ class ServicoAgentes(object):
                 "config_divergente": divergentes, "config_web": self._config_criticos}
 
 
-_padrao = None
-_lock_padrao = threading.Lock()
+_default = None
+_default_lock = threading.Lock()
 
 
-def _servico():
-    global _padrao
-    with _lock_padrao:
-        if _padrao is None:
+def _service():
+    global _default
+    with _default_lock:
+        if _default is None:
             from gluon import current
             import sss_logging
             import sss_config
             fabrica = current.repo_factory
             cfg = current.sss_cfg
-            _padrao = ServicoAgentes(
+            _default = AgentsService(
                 agentes=fabrica.get("agents"),
                 catalogo=fabrica.get("catalog"),
                 relogio=fabrica.get("tickets").now,
-                limiares=Limiares(cfg.agent.heartbeat_interval_s, cfg.agent.fence_timeout_s,
+                limiares=Thresholds(cfg.agent.heartbeat_interval_s, cfg.agent.fence_timeout_s,
                                   cfg.agent.node_offline_timeout_s),
                 log=sss_logging.get_logger("sss_web", cfg),
                 config_criticos=sss_config.critical_config(cfg),
             )
-        return _padrao
+        return _default
 
 
-def painel(ctx, agora=None):
+def dashboard(ctx, agora=None):
     """Painel de agentes (servico padrao)."""
-    return _servico().painel(ctx, agora)
+    return _service().dashboard(ctx, agora)
 
 
-def tickets_do_agente(ctx, codigo, agora=None):
+def agent_tickets(ctx, codigo, agora=None):
     """Tickets RUNNING do agente (servico padrao)."""
-    return _servico().tickets_do_agente(ctx, codigo, agora)
+    return _service().agent_tickets(ctx, codigo, agora)

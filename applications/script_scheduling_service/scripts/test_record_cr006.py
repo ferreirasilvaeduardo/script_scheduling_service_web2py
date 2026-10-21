@@ -11,13 +11,13 @@ import auth_service
 import repo_factory
 import security
 import ui_helpers
-from admin_environments_service import ServicoAdminAmbientes
-from admin_parameters_service import ServicoAdminParametros
-from admin_profiles_service import ServicoAdminPerfis
-from admin_scripts_service import ServicoAdminScripts
-from admin_users_service import ServicoAdminUsuarios
-from schedules_service import ServicoAgendamentos
-from ticket_service import ServicoTicket
+from admin_environments_service import AdminEnvironmentsService
+from admin_parameters_service import AdminParametersService
+from admin_profiles_service import AdminProfilesService
+from admin_scripts_service import AdminScriptsService
+from admin_users_service import AdminUsersService
+from schedules_service import SchedulesService
+from ticket_service import TicketService
 
 IP = "10.9.8.7"
 SESSAO_ADMIN = {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0}
@@ -41,30 +41,30 @@ class TestRegistroNosServicos(unittest.TestCase):
         log.propagate = False
         r = repo_factory.get
         self.r = r
-        auth = auth_service.ServicoAuth(r("users"), r("rbac"), r("catalog"), r("audit"), 5, 900, log)
-        self.ctx = auth.revalidar(SESSAO_ADMIN)
+        auth = auth_service.AuthService(r("users"), r("rbac"), r("catalog"), r("audit"), 5, 900, log)
+        self.ctx = auth.revalidate(SESSAO_ADMIN)
         tickets = r("tickets")
-        self.ticket = ServicoTicket(catalogo=r("catalog"), tickets=tickets, log=log)
+        self.ticket = TicketService(catalogo=r("catalog"), tickets=tickets, log=log)
         self.servicos = {
-            "environments": (ServicoAdminAmbientes(r("catalog"), r("schedules"), log), 1,
+            "environments": (AdminEnvironmentsService(r("catalog"), r("schedules"), log), 1,
                           lambda: r("catalog").environments_get(1)),
-            "profiles": (ServicoAdminPerfis(r("rbac"), r("catalog"), r("users"), log), 2,
+            "profiles": (AdminProfilesService(r("rbac"), r("catalog"), r("users"), log), 2,
                        lambda: r("rbac").profiles_get(2)),
-            "users": (ServicoAdminUsuarios(r("users"), r("rbac"), log), 2,
+            "users": (AdminUsersService(r("users"), r("rbac"), log), 2,
                          lambda: r("users").get_by_id(2)),
-            "parameters": (ServicoAdminParametros(r("catalog"), log), 1,
+            "parameters": (AdminParametersService(r("catalog"), log), 1,
                            lambda: r("catalog").parameters_get(1)),
-            "scripts": (ServicoAdminScripts(r("catalog"), r("schedules"), "DEV", log, tickets.now), 1,
+            "scripts": (AdminScriptsService(r("catalog"), r("schedules"), "DEV", log, tickets.now), 1,
                         lambda: r("catalog").scripts_get(1)),
         }
-        self.schedules = ServicoAgendamentos(r("schedules"), r("catalog"), r("users"), self.ticket,
+        self.schedules = SchedulesService(r("schedules"), r("catalog"), r("users"), self.ticket,
                                                 tickets.now, 1461, log)
 
     def test_formularios_de_inclusao_sem_registro_e_de_edicao_com_as_quatro_colunas(self):
         for nome, (svc, rid, ler) in self.servicos.items():
-            self.assertIsNone(svc.formulario(self.ctx)["registro"], nome)
-            self.assertEqual(svc.formulario(self.ctx, str(rid))["registro"], ui_helpers.registro(ler(), self.ctx), nome)
-            self.assertEqual(svc.formulario(self.ctx, str(rid))["registro"]["created_by"], "SYSTEM:seed", nome)
+            self.assertIsNone(svc.form(self.ctx)["registro"], nome)
+            self.assertEqual(svc.form(self.ctx, str(rid))["registro"], ui_helpers.registro(ler(), self.ctx), nome)
+            self.assertEqual(svc.form(self.ctx, str(rid))["registro"]["created_by"], "SYSTEM:seed", nome)
 
     def test_registro_sem_auditoria_nos_servicos_e_aviso_de_pausa(self):
         ctx = dict(self.ctx, is_admin=False, login="op.prod", user_id=2,
@@ -78,32 +78,32 @@ class TestRegistroNosServicos(unittest.TestCase):
             registro["updated_by"] = "op.prod"
             registro["updated_at"] = store.now()
         for nome, (svc, rid, ler) in self.servicos.items():
-            registro = svc.formulario(ctx, str(rid))["registro"]
+            registro = svc.form(ctx, str(rid))["registro"]
             self.assertEqual((registro["created_by"], registro["updated_by"]),
                              (u"outra pessoa", u"você"), nome)
-        regra = self.schedules.formulario(ctx, "5")["regra"]
+        regra = self.schedules.form(ctx, "5")["regra"]
         self.assertEqual(regra["registro"]["created_by"], u"outra pessoa")
         self.assertIn(u"por você", regra["pausa_aviso"])
-        detalhe = self.ticket.detalhe(ctx, 17)
+        detalhe = self.ticket.detail(ctx, 17)
         self.assertEqual(detalhe["registro"]["created_by"], u"outra pessoa")
         self.assertNotIn("editor.privado", str(detalhe["registro"]))
 
     def test_edicao_pela_tela_grava_o_editor(self):
         svc, rid, ler = self.servicos["environments"]
-        form = svc.formulario(self.ctx, str(rid))
-        _id, erros = svc.salvar(self.ctx, IP, str(rid), {"description": "Editada", "connection": form["connection"],
+        form = svc.form(self.ctx, str(rid))
+        _id, erros = svc.save(self.ctx, IP, str(rid), {"description": "Editada", "connection": form["connection"],
                                                          "version": form["version"]})
         self.assertEqual(erros, {})
-        reg = svc.formulario(self.ctx, str(rid))["registro"]
+        reg = svc.form(self.ctx, str(rid))["registro"]
         self.assertEqual((reg["created_by"], reg["updated_by"]), ("SYSTEM:seed", "admin"))
-        self.assertEqual(svc.formulario(self.ctx, str(rid))["version"] != form["version"], True)
+        self.assertEqual(svc.form(self.ctx, str(rid))["version"] != form["version"], True)
 
     def test_agendamento_e_ticket(self):
-        regra = self.schedules.formulario(self.ctx, "5")["regra"]
+        regra = self.schedules.form(self.ctx, "5")["regra"]
         self.assertEqual(regra["registro"], ui_helpers.registro(self.r("schedules").get(5), self.ctx))
         self.assertEqual(regra["registro"]["created_by"], "SYSTEM:seed")
         self.assertEqual(regra["registro"]["updated_by"], "admin")
-        detalhe = self.ticket.detalhe(self.ctx, 17)
+        detalhe = self.ticket.detail(self.ctx, 17)
         bruto = self.r("tickets").get(17)
         self.assertEqual(detalhe["registro"], ui_helpers.registro(bruto, self.ctx))
         self.assertTrue(detalhe["registro"]["updated_by"].startswith("SYSTEM:agt-"))

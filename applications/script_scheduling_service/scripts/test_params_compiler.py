@@ -334,13 +334,13 @@ class TestMontarArgvAgente(unittest.TestCase):
 
 class TestCompilarSnapshot(unittest.TestCase):
 
-    def _vinculos(self):
+    def _links(self):
         return [prm("data_ref", "DATE", ordem=1, obrigatorio="Y", flag="--data"),
                 prm("token", ordem=2, flag="--token", sensivel="Y"),
                 prm("modo", "SELECT", ordem=3, flag="--modo", opcoes='{"A":"Ação","B":"Bê"}', padrao="A")]
 
     def test_formato_6_5(self):
-        js, resolvidos, erros = pc.compile_snapshot(script(), self._vinculos()[:1], {"data_ref": "2026-10-13"}, AGORA)
+        js, resolvidos, erros = pc.compile_snapshot(script(), self._links()[:1], {"data_ref": "2026-10-13"}, AGORA)
         self.assertEqual(erros, {})
         esperado = {
             "version": 4, "script_id": 12, "script_nome": "carga_faturas", "interpreter": "PYTHON3",
@@ -353,7 +353,7 @@ class TestCompilarSnapshot(unittest.TestCase):
         self.assertNotIn("pasta_base", js)
 
     def test_determinismo(self):
-        v = self._vinculos()
+        v = self._links()
         r1 = collections.OrderedDict([("data_ref", "2026-10-13"), ("token", "abc123"), ("modo", "B")])
         r2 = collections.OrderedDict([("modo", "B"), ("token", "abc123"), ("data_ref", "2026-10-13")])
         js1 = pc.compile_snapshot(script(), v, r1, AGORA)[0]
@@ -374,7 +374,7 @@ class TestCompilarSnapshot(unittest.TestCase):
         self.assertEqual(snap["respostas"], {"c": True, "o": None})
 
     def test_erros_acumulados(self):
-        v = self._vinculos() + [prm("n", "NUMBER", ordem=4, flag="-n")]
+        v = self._links() + [prm("n", "NUMBER", ordem=4, flag="-n")]
         js, resolvidos, erros = pc.compile_snapshot(script(), v, {"token": "a\x00b", "modo": "Z", "n": "-3"}, AGORA)
         self.assertIsNone(js)
         self.assertEqual(list(erros.keys()), ["data_ref", "token", "modo", "n"])
@@ -396,7 +396,7 @@ class TestCompilarSnapshot(unittest.TestCase):
         self.assertEqual((snap["interpreter"], snap["args"]), ("BASH", []))
 
     def test_argv_para_exibicao(self):
-        v = self._vinculos() + [prm("seq", ordem=4, flag="-s", sensivel="Y")]
+        v = self._links() + [prm("seq", ordem=4, flag="-s", sensivel="Y")]
         snap = json.loads(pc.compile_snapshot(
             script(), v, {"data_ref": "2026-10-13", "token": "-segredo", "seq": "outro_segredo"}, AGORA)[0])
         exib = pc.display_argv(snap)
@@ -444,9 +444,9 @@ class TestValidarSnapshot(unittest.TestCase):
         # CR-007, R-32: o snapshot vem do banco; NUL ou controle nos args nunca chegam ao argv.
         for ruim in ("a\x00b", "linha\nnova"):
             with self.subTest(arg=repr(ruim)):
-                self.assertEqual(self._motivo(self._alterado(args=["--data", ruim])), "ARGS_INVALIDOS")
+                self.assertEqual(self._reason(self._alterado(args=["--data", ruim])), "ARGS_INVALIDOS")
 
-    def _motivo(self, js, cfg=None):
+    def _reason(self, js, cfg=None):
         with self.assertRaises(SnapshotError) as ctx:
             pc.validate_snapshot(js, cfg or self.cfg)
         return ctx.exception.motivo
@@ -458,39 +458,39 @@ class TestValidarSnapshot(unittest.TestCase):
         self.assertEqual(snap["interpreter"], "PYTHON3")
 
     def test_json_e_estrutura(self):
-        self.assertEqual(self._motivo("{x"), "JSON_INVALIDO")
-        self.assertEqual(self._motivo(None), "JSON_INVALIDO")
-        self.assertEqual(self._motivo("[]"), "ESTRUTURA_INVALIDA")
-        self.assertEqual(self._motivo('{"versao": 3}'), "ESTRUTURA_INVALIDA")
+        self.assertEqual(self._reason("{x"), "JSON_INVALIDO")
+        self.assertEqual(self._reason(None), "JSON_INVALIDO")
+        self.assertEqual(self._reason("[]"), "ESTRUTURA_INVALIDA")
+        self.assertEqual(self._reason('{"versao": 3}'), "ESTRUTURA_INVALIDA")
 
     def test_versoes_1_a_3_rejeitadas(self):
         # CR-005: o snapshot v4 traz path_file absoluto; v1 a v3 so existiram em DEV/FAKE.
         for versao in (1, 2, 3):
-            self.assertEqual(self._motivo(self._alterado(version=versao)), "VERSAO_NAO_SUPORTADA")
+            self.assertEqual(self._reason(self._alterado(version=versao)), "VERSAO_NAO_SUPORTADA")
 
     def test_interpretador_fora_da_allowlist_ou_indisponivel_no_agente(self):
-        self.assertEqual(self._motivo(self._alterado(interpreter="/usr/bin/perl")), "INTERPRETADOR_NAO_PERMITIDO")
-        self.assertEqual(self._motivo(self._alterado(interpreter="BASH")), "INTERPRETADOR_NAO_DISPONIVEL")
+        self.assertEqual(self._reason(self._alterado(interpreter="/usr/bin/perl")), "INTERPRETADOR_NAO_PERMITIDO")
+        self.assertEqual(self._reason(self._alterado(interpreter="BASH")), "INTERPRETADOR_NAO_DISPONIVEL")
         # CR-005: POWERSHELL saiu da allowlist (somente POSIX).
-        self.assertEqual(self._motivo(self._alterado(interpreter="POWERSHELL")), "INTERPRETADOR_NAO_PERMITIDO")
+        self.assertEqual(self._reason(self._alterado(interpreter="POWERSHELL")), "INTERPRETADOR_NAO_PERMITIDO")
 
     def test_args_invalidos(self):
-        self.assertEqual(self._motivo(self._alterado(args="--data x")), "ARGS_INVALIDOS")
-        self.assertEqual(self._motivo(self._alterado(args=["--n", 1])), "ARGS_INVALIDOS")
+        self.assertEqual(self._reason(self._alterado(args="--data x")), "ARGS_INVALIDOS")
+        self.assertEqual(self._reason(self._alterado(args=["--n", 1])), "ARGS_INVALIDOS")
 
     def test_path_guard_revalidado_no_agente(self):
-        self.assertEqual(self._motivo(self._alterado(path_file="x.py")), "PATH_GUARD_RELATIVE_PATH")
-        self.assertEqual(self._motivo(self._alterado(path_file="/opt/../x.py")), "PATH_GUARD_HAS_DOTS")
-        self.assertEqual(self._motivo(self._alterado(path_file="/etc/passwd")), "PATH_GUARD_SYSTEM_DIR")
-        self.assertEqual(self._motivo(self._alterado(path_file=os.path.join(self.base, "nao_existe.py"))),
+        self.assertEqual(self._reason(self._alterado(path_file="x.py")), "PATH_GUARD_RELATIVE_PATH")
+        self.assertEqual(self._reason(self._alterado(path_file="/opt/../x.py")), "PATH_GUARD_HAS_DOTS")
+        self.assertEqual(self._reason(self._alterado(path_file="/etc/passwd")), "PATH_GUARD_SYSTEM_DIR")
+        self.assertEqual(self._reason(self._alterado(path_file=os.path.join(self.base, "nao_existe.py"))),
                          "PATH_GUARD_NOT_FOUND")
-        self.assertEqual(self._motivo(self._alterado(path_file=os.path.join(self.base, "faturamento"))),
+        self.assertEqual(self._reason(self._alterado(path_file=os.path.join(self.base, "faturamento"))),
                          "PATH_GUARD_NOT_A_FILE")
 
     def test_log_dir_e_work_dir_do_agente(self):
         cfg = collections.namedtuple("CfgDirs", ["interpreters", "dirs_sss"])(
             self.cfg.interpreters, (os.path.join(self.base, "faturamento"),))
-        self.assertEqual(self._motivo(self.js, cfg), "PATH_GUARD_SSS_DIR")
+        self.assertEqual(self._reason(self.js, cfg), "PATH_GUARD_SSS_DIR")
 
 
 class TestSeedFake(unittest.TestCase):

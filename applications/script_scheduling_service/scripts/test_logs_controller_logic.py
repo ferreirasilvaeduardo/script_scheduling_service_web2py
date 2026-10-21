@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Testes da logica por tras de logs/chunk e logs/baixar (F3.4): ticket_service.ler_log e blocos_log."""
+"""Testes da logica por tras de logs/chunk e logs/baixar (F3.4): ticket_service.read_log e log_chunks."""
 import _testenv  # noqa: F401
 
 import datetime
@@ -12,7 +12,7 @@ import auth_service
 import repo_factory
 import security
 from repo_errors import RepoUnavailable, RepoNotFound
-from ticket_service import LOG_MAX_CHARS, MARCADOR_DOWNLOAD_INTERROMPIDO, OffsetInvalido, ServicoTicket
+from ticket_service import LOG_MAX_CHARS, DOWNLOAD_INTERRUPTED_MARKER, InvalidOffset, TicketService
 
 SESSOES = {
     "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
@@ -65,11 +65,11 @@ class _BaseLog(unittest.TestCase):
         self.log = logging.getLogger("sss_teste_logs")
         self.log.addHandler(logging.NullHandler())
         self.log.propagate = False
-        auth = auth_service.ServicoAuth(
+        auth = auth_service.AuthService(
             repo_factory.get("users"), repo_factory.get("rbac"), catalogo,
             repo_factory.get("audit"), 5, 900, self.log)
-        self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
-        self.svc = ServicoTicket(catalogo, self.tickets, self.log)
+        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSOES.items())
+        self.svc = TicketService(catalogo, self.tickets, self.log)
 
     def _log_integral(self, ticket_id):
         """Log inteiro lido do repositorio em fatias, pelo contrato (obter nao traz log_output)."""
@@ -84,7 +84,7 @@ class _BaseLog(unittest.TestCase):
         partes = []
         offset = 0
         while True:
-            r = self.svc.ler_log(self.ctx[login], str(ticket_id), str(offset))
+            r = self.svc.read_log(self.ctx[login], str(ticket_id), str(offset))
             self.assertLessEqual(len(r["texto"]), LOG_MAX_CHARS)
             self.assertEqual(r["proximo_offset"], offset + len(r["texto"]))
             if not r["texto"]:
@@ -97,32 +97,32 @@ class TestLerLogValidacao(_BaseLog):
 
     def test_offset_invalido(self):
         for invalido in ("-1", "x", "", "1.5", " 1", "12345678901", None, -1, True, 1.0, ["a"]):
-            with self.assertRaises(OffsetInvalido, msg=repr(invalido)):
-                self.svc.ler_log(self.ctx["admin"], "17", invalido)
+            with self.assertRaises(InvalidOffset, msg=repr(invalido)):
+                self.svc.read_log(self.ctx["admin"], "17", invalido)
 
     def test_offset_valido_em_lista_vale_o_ultimo(self):
-        r = self.svc.ler_log(self.ctx["admin"], "17", ["0", "10"])
+        r = self.svc.read_log(self.ctx["admin"], "17", ["0", "10"])
         self.assertEqual(r["proximo_offset"], 10 + len(r["texto"]))
 
     def test_ticket_inexistente_ou_id_invalido_e_404(self):
         for tid in ("999", "0", "abc", None, "-3"):
             with self.assertRaises(RepoNotFound, msg=repr(tid)):
-                self.svc.ler_log(self.ctx["admin"], tid, "0")
+                self.svc.read_log(self.ctx["admin"], tid, "0")
 
     def test_fora_do_escopo_e_404(self):
         # op.hml enxerga HOMOLOGACAO/DESENV e seus proprios; o 13 e PRODUCAO de op.prod.
         with self.assertRaises(RepoNotFound):
-            self.svc.ler_log(self.ctx["op.hml"], str(TCK_RUNNING), "0")
+            self.svc.read_log(self.ctx["op.hml"], str(TCK_RUNNING), "0")
         with self.assertRaises(RepoNotFound):
-            self.svc.blocos_log(self.ctx["op.hml"], str(TCK_RUNNING))
+            self.svc.log_chunks(self.ctx["op.hml"], str(TCK_RUNNING))
 
     def test_dentro_do_escopo(self):
-        r = self.svc.ler_log(self.ctx["consulta"], str(TCK_RUNNING), "0")
+        r = self.svc.read_log(self.ctx["consulta"], str(TCK_RUNNING), "0")
         self.assertEqual(r["status"], "RUNNING")
         self.assertTrue(r["texto"])
 
     def test_offset_alem_do_fim_retorna_vazio(self):
-        r = self.svc.ler_log(self.ctx["admin"], "35", "999999")
+        r = self.svc.read_log(self.ctx["admin"], "35", "999999")
         self.assertEqual((r["texto"], r["proximo_offset"]), ("", 999999))
         self.assertTrue(r["terminal"])
 
@@ -130,13 +130,13 @@ class TestLerLogValidacao(_BaseLog):
 class TestLerLogConteudo(_BaseLog):
 
     def test_formato_da_resposta(self):
-        r = self.svc.ler_log(self.ctx["admin"], "17", "0")
+        r = self.svc.read_log(self.ctx["admin"], "17", "0")
         self.assertEqual(sorted(r), ["proximo_offset", "status", "terminal", "texto", "truncado"])
 
     def test_limite_de_64k_e_reconstrucao_do_log_de_2mb(self):
         integral = self._log_integral(TCK_GRANDE)
         self.assertGreaterEqual(len(integral.encode("utf-8")), 2 * 1024 * 1024)
-        r = self.svc.ler_log(self.ctx["admin"], str(TCK_GRANDE), "0")
+        r = self.svc.read_log(self.ctx["admin"], str(TCK_GRANDE), "0")
         self.assertEqual(len(r["texto"]), LOG_MAX_CHARS)
         self.assertEqual(LOG_MAX_CHARS, 65536)
         self.assertTrue(r["terminal"])
@@ -150,7 +150,7 @@ class TestLerLogConteudo(_BaseLog):
         self.assertTrue(ultima["truncado"])
         self.assertTrue(ultima["terminal"])
         self.assertTrue(texto.endswith(MARKER_TRUNCATED))
-        self.assertFalse(self.svc.ler_log(self.ctx["admin"], "17", "0")["truncado"])
+        self.assertFalse(self.svc.read_log(self.ctx["admin"], "17", "0")["truncado"])
 
     def test_running_cresce_com_o_relogio_e_termina(self):
         texto1, r1 = self._ler_tudo("admin", TCK_RUNNING)
@@ -161,16 +161,16 @@ class TestLerLogConteudo(_BaseLog):
         self.assertNotIn("etapa %d/%d" % (etapa_atual + 1, ETAPAS), texto1)
 
         # Sem avanco do relogio, nada novo.
-        r = self.svc.ler_log(self.ctx["admin"], str(TCK_RUNNING), str(r1["proximo_offset"]))
+        r = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r1["proximo_offset"]))
         self.assertEqual(r["texto"], "")
 
         self.relogio.avancar(PASSO_13_S)
-        r2 = self.svc.ler_log(self.ctx["admin"], str(TCK_RUNNING), str(r1["proximo_offset"]))
+        r2 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r1["proximo_offset"]))
         self.assertIn("etapa %d/%d processada" % (etapa_atual + 1, ETAPAS), r2["texto"])
         self.assertFalse(r2["terminal"])
 
         self.relogio.avancar(ETAPAS * PASSO_13_S)
-        r3 = self.svc.ler_log(self.ctx["admin"], str(TCK_RUNNING), str(r2["proximo_offset"]))
+        r3 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r2["proximo_offset"]))
         self.assertTrue(r3["terminal"])
         self.assertEqual(r3["status"], "SUCCESS")
         self.assertIn("etapa %d/%d processada" % (ETAPAS, ETAPAS), r3["texto"])
@@ -181,7 +181,7 @@ class TestLerLogConteudo(_BaseLog):
 
         # Terminal e imutavel: o log nao cresce mais.
         self.relogio.avancar(3600)
-        r4 = self.svc.ler_log(self.ctx["admin"], str(TCK_RUNNING), str(r3["proximo_offset"]))
+        r4 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r3["proximo_offset"]))
         self.assertEqual((r4["texto"], r4["terminal"]), ("", True))
 
     def test_running_com_cancelamento_sinalizado_termina_cancelado(self):
@@ -208,7 +208,7 @@ class TestBlocosLog(_BaseLog):
 
     def test_download_integro_do_log_de_2mb(self):
         integral = self._log_integral(TCK_GRANDE)
-        tid, blocos = self.svc.blocos_log(self.ctx["admin"], str(TCK_GRANDE))
+        tid, blocos = self.svc.log_chunks(self.ctx["admin"], str(TCK_GRANDE))
         self.assertEqual(tid, TCK_GRANDE)
         lista = list(blocos)
         self.assertGreater(len(lista), 1)
@@ -219,7 +219,7 @@ class TestBlocosLog(_BaseLog):
     def test_escopo_validado_antes_do_streaming(self):
         with mock.patch.object(self.tickets, "log_read") as log_ler:
             with self.assertRaises(RepoNotFound):
-                self.svc.blocos_log(self.ctx["op.hml"], str(TCK_RUNNING))
+                self.svc.log_chunks(self.ctx["op.hml"], str(TCK_RUNNING))
             log_ler.assert_not_called()
 
     def test_falha_no_meio_encerra_com_marcador(self):
@@ -232,11 +232,11 @@ class TestBlocosLog(_BaseLog):
                 raise RepoUnavailable("indisponivel")
             return original(*args, **kwargs)
 
-        _tid, blocos = self.svc.blocos_log(self.ctx["admin"], str(TCK_GRANDE))
+        _tid, blocos = self.svc.log_chunks(self.ctx["admin"], str(TCK_GRANDE))
         with mock.patch.object(self.tickets, "log_read", side_effect=falhar_na_segunda):
             lista = list(blocos)
         self.assertEqual(len(lista), 2)
-        self.assertEqual(lista[-1], MARCADOR_DOWNLOAD_INTERROMPIDO)
+        self.assertEqual(lista[-1], DOWNLOAD_INTERRUPTED_MARKER)
 
 
 if __name__ == "__main__":

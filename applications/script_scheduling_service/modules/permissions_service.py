@@ -11,18 +11,18 @@ import rbac
 import ui_menu
 from repo_errors import RepoNotFound
 
-FRASE_ADMIN = (u"Seu perfil é de administrador: você pode usar todas as telas e rodar qualquer script ativo, "
+ADMIN_PHRASE = (u"Seu perfil é de administrador: você pode usar todas as telas e rodar qualquer script ativo, "
                u"nos ambientes ativos onde ele foi liberado.")
-FRASE_SEM_EXEC = u"Você ainda não pode rodar scripts. Peça ao administrador, se precisar."
-FRASE_MAIS_ACESSO = u"Precisa de mais acesso? Fale com o administrador do sistema."
-MOTIVO_SCRIPT_INATIVO = u"o script está desativado"
-MOTIVO_SEM_HOMOLOGACAO = u"o script não foi liberado em nenhum dos seus ambientes"
-MOTIVO_AMBIENTE_INATIVO = u"o ambiente está desativado"
-MOTIVO_SEM_FUNC = u"seu perfil não tem Disparar Scripts"
-_CATALOGO_MAX = 1000
+NO_EXEC_PHRASE = u"Você ainda não pode rodar scripts. Peça ao administrador, se precisar."
+MORE_ACCESS_PHRASE = u"Precisa de mais acesso? Fale com o administrador do sistema."
+REASON_SCRIPT_INACTIVE = u"o script está desativado"
+REASON_NOT_HOMOLOGATED = u"o script não foi liberado em nenhum dos seus ambientes"
+REASON_ENVIRONMENT_INACTIVE = u"o ambiente está desativado"
+REASON_NO_FEATURE = u"seu perfil não tem Disparar Scripts"
+_CATALOG_MAX = 1000
 
 
-class ServicoPermissoes(object):
+class PermissionsService(object):
     """Monta a tela a partir do contexto revalidado da sessao e das leituras do catalogo."""
 
     def __init__(self, rbac_repo, catalogo, disparo, log):
@@ -31,7 +31,7 @@ class ServicoPermissoes(object):
         self._disparo = disparo
         self._log = log
 
-    def _telas(self, ctx):
+    def _screens(self, ctx):
         admin = ctx.get("is_admin") is True
         rotas = {}
         for secao in ui_menu.montar_menu(ctx.get("features"), admin):
@@ -46,30 +46,30 @@ class ServicoPermissoes(object):
                           "rota": rotas.get(f["code"])})
         return telas
 
-    def _ambientes(self, ctx):
+    def _environments(self, ctx):
         admin = ctx.get("is_admin") is True
         meus = ctx.get("environments") or ()
         return [{"name": a["name"], "description": a.get("description") or ""}
-                for a in self._catalogo.environments_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"]
+                for a in self._catalogo.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"]
                 if a["active"] == "Y" and (admin or a["name"] in meus)]
 
     def _scripts(self, ctx):
         scripts = []
-        for grupo in self._disparo.scripts_disponiveis(ctx):
+        for grupo in self._disparo.available_scripts(ctx):
             for s in grupo["scripts"]:
-                _script, ambientes = self._disparo.ambientes_disponiveis(ctx, s["id"])
+                _script, ambientes = self._disparo.available_environments(ctx, s["id"])
                 scripts.append({"id": s["id"], "name": s["name"], "description": s["description"],
                                 "environments": [a["name"] for a in ambientes]})
         return scripts
 
-    def _motivo(self, ctx, script_id):
+    def _reason(self, ctx, script_id):
         """Motivo simples de um script do perfil nao aparecer (README §4.3.E)."""
         try:
             script = self._catalogo.scripts_get(script_id)
         except RepoNotFound:
             return None, None
         if script.get("active") != "Y":
-            return script, MOTIVO_SCRIPT_INATIVO
+            return script, REASON_SCRIPT_INACTIVE
         meus = set(ctx.get("environments") or ())
         homologados = []
         for aid in self._catalogo.homologation_get(script["id"]):
@@ -79,12 +79,12 @@ class ServicoPermissoes(object):
                 continue
         nos_meus = [a for a in homologados if a["name"] in meus]
         if not nos_meus:
-            return script, MOTIVO_SEM_HOMOLOGACAO
+            return script, REASON_NOT_HOMOLOGATED
         if all(a.get("active") != "Y" for a in nos_meus):
-            return script, MOTIVO_AMBIENTE_INATIVO
-        return script, MOTIVO_SCRIPT_INATIVO if script.get("active") != "Y" else None
+            return script, REASON_ENVIRONMENT_INACTIVE
+        return script, REASON_SCRIPT_INACTIVE if script.get("active") != "Y" else None
 
-    def montar(self, ctx):
+    def build(self, ctx):
         """Dados da tela. Scripts fora do perfil nunca sao listados (nao revela o catalogo)."""
         admin = ctx.get("is_admin") is True
         pode_exec = rbac.has_feature(ctx, "EXEC_SCRIPT")
@@ -95,45 +95,45 @@ class ServicoPermissoes(object):
             for sid in sorted(ctx.get("scripts") or ()):
                 if sid in disponiveis:
                     continue
-                script, motivo = self._motivo(ctx, sid)
+                script, motivo = self._reason(ctx, sid)
                 if script is None:
                     continue
                 ausentes.append({"name": script["name"],
-                                 "reason": MOTIVO_SEM_FUNC if not pode_exec else (motivo or MOTIVO_SEM_HOMOLOGACAO)})
+                                 "reason": REASON_NO_FEATURE if not pode_exec else (motivo or REASON_NOT_HOMOLOGATED)})
         return {
             "perfil": ctx.get("perfil_nome"),
-            "frase_admin": FRASE_ADMIN if admin else None,
-            "telas": self._telas(ctx),
-            "environments": self._ambientes(ctx),
+            "frase_admin": ADMIN_PHRASE if admin else None,
+            "telas": self._screens(ctx),
+            "environments": self._environments(ctx),
             "pode_executar": pode_exec,
-            "frase_sem_exec": None if pode_exec else FRASE_SEM_EXEC,
+            "frase_sem_exec": None if pode_exec else NO_EXEC_PHRASE,
             "scripts": scripts,
             "ausentes": ausentes,
-            "frase_mais_acesso": FRASE_MAIS_ACESSO,
+            "frase_mais_acesso": MORE_ACCESS_PHRASE,
         }
 
 
-_padrao = None
-_lock_padrao = threading.Lock()
+_default = None
+_default_lock = threading.Lock()
 
 
-def _servico():
-    global _padrao
-    with _lock_padrao:
-        if _padrao is None:
+def _service():
+    global _default
+    with _default_lock:
+        if _default is None:
             from gluon import current
             import sss_logging
             import ticket_service
             fabrica = current.repo_factory
-            _padrao = ServicoPermissoes(
+            _default = PermissionsService(
                 rbac_repo=fabrica.get("rbac"),
                 catalogo=fabrica.get("catalog"),
-                disparo=ticket_service._servico(),
+                disparo=ticket_service._service(),
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
-        return _padrao
+        return _default
 
 
-def montar(ctx):
+def build(ctx):
     """Dados da tela "O que eu posso fazer" (servico padrao)."""
-    return _servico().montar(ctx)
+    return _service().build(ctx)

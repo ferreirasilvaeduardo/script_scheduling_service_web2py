@@ -111,7 +111,7 @@ class RepoSchedulerOutput(object):
         cur.execute("SELECT %s.NEXTVAL FROM DUAL" % self._seq)
         return int(cur.fetchone()[0])
 
-    def _incluir(self, cur, sql, ticket_id, agente_id, situacao, reason=None, file_count=None):
+    def _insert(self, cur, sql, ticket_id, agente_id, situacao, reason=None, file_count=None):
         cur.execute(sql, id=self._proximo_id(cur), ticket_id=int(ticket_id), agent_id=agente_id,
                     state=situacao, reason=reason, file_count=file_count, actor=_actor(agente_id))
         return cur.rowcount == 1
@@ -126,7 +126,7 @@ class RepoSchedulerOutput(object):
             cur.execute(self._sql_reiniciar, ticket_id=int(ticket_id), agent_id=agente_id)
             if cur.rowcount == 1:
                 return True
-            return self._incluir(cur, self._sql_incluir_gravando, ticket_id, agente_id, "WRITING")
+            return self._insert(cur, self._sql_incluir_gravando, ticket_id, agente_id, "WRITING")
         finally:
             cur.close()
 
@@ -178,7 +178,7 @@ class RepoSchedulerOutput(object):
                         reason=motivo, file_count=qtd_arquivos, actor=_actor(agente_id))
             if cur.rowcount == 1:
                 return True
-            return self._incluir(cur, self._sql_incluir_sem_conteudo, ticket_id, agente_id, situacao,
+            return self._insert(cur, self._sql_incluir_sem_conteudo, ticket_id, agente_id, situacao,
                                  reason=motivo, file_count=qtd_arquivos)
         finally:
             cur.close()

@@ -7,7 +7,7 @@ em models/10_security.py. Nenhuma permissao e decidida no cliente: o POST da mat
 import admin_crud
 import admin_profiles_service as servico
 import ui_helpers
-from admin_crud import AcessoNegado, OperacaoNegada
+from admin_crud import AccessDenied, OperationDenied
 from repo_errors import RepoConflict, RepoError, RepoNotFound
 
 _FUNC = "MANAGE_PROFILES"
@@ -50,21 +50,21 @@ def _pagina_form(ctx, dados, erros=None):
     response.view = "admin_perfis/form.html"
     erros = erros or {}
     campos = [{"name": n, "erro": erros.get(n)} for n in ("name", "description")]
-    return dict(perfil=dados, erros=erros, erro_geral=erros.get(admin_crud.CAMPO_GERAL),
+    return dict(perfil=dados, erros=erros, erro_geral=erros.get(admin_crud.GENERAL_FIELD),
                 foco_campo=ui_helpers.primeiro_campo_invalido(campos),
-                aviso_desativacao=servico.AVISO_DESATIVACAO)
+                aviso_desativacao=servico.DEACTIVATION_WARNING)
 
 
 def lista():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
-    filtros = servico.normalizar_filtros(request.get_vars)
+    filtros = servico.normalize_filters(request.get_vars)
     pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("pagina"), 9))
     tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("tamanho"), 3), _TAMANHOS)
     erro = None
     try:
-        resultado = servico.listar(ctx, filtros, pagina, tamanho)
-    except AcessoNegado:
+        resultado = servico.list_page(ctx, filtros, pagina, tamanho)
+    except AccessDenied:
         _negado()
     except RepoError:
         _log.exception("falha ao listar perfis (login=%s)", ctx["login"], extra={"action": _FUNC})
@@ -79,10 +79,10 @@ def form():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
     try:
-        dados = servico.formulario(ctx, _texto(request.args(0), 11))
+        dados = servico.form(ctx, _texto(request.args(0), 11))
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
     return _pagina_form(ctx, dados)
 
@@ -93,29 +93,29 @@ def salvar():
     perfil_id = _texto(request.post_vars.get("id"), 11)
     enviados = dict((c, _texto(request.post_vars.get(c), 300)) for c in ("name", "description", "is_admin", "version"))
     try:
-        salvo_id, erros = servico.salvar(ctx, _ip_origem(), perfil_id, enviados)
+        salvo_id, erros = servico.save(ctx, _ip_origem(), perfil_id, enviados)
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
     except RepoError:
         _log.exception("falha ao salvar perfil (login=%s id=%r)", ctx["login"], perfil_id, extra={"action": _FUNC})
-        salvo_id, erros = None, {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}
+        salvo_id, erros = None, {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
     if not erros:
         session.flash = {"tipo": "sucesso", "mensagem": u"Perfil salvo com sucesso."}
         redirect(URL(c="admin_perfis", f="lista"))
     try:
-        dados = servico.formulario(ctx, perfil_id) if perfil_id else servico.formulario(ctx)
+        dados = servico.form(ctx, perfil_id) if perfil_id else servico.form(ctx)
     except RepoError:
         dados = {"id": None, "name": "", "description": "", "is_admin": "N", "active": "Y", "version": "",
                  "usuarios_ativos": 0}
-    if admin_crud.CAMPO_GERAL not in erros:
+    if admin_crud.GENERAL_FIELD not in erros:
         dados = dict(dados, name=enviados["name"] or "", description=enviados["description"] or "",
                      is_admin="Y" if enviados["is_admin"] == "Y" else "N")
         if perfil_id:
             dados["version"] = enviados["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-    response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.CAMPO_GERAL)
+    response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.GENERAL_FIELD)
                       or ui_helpers.mensagem("formulario")}
     return _pagina_form(ctx, dados, erros)
 
@@ -125,17 +125,17 @@ def alternar_ativo():
     ctx = _exigir_func(_FUNC)
     perfil_id = _texto(request.post_vars.get("id"), 11)
     try:
-        alterado = servico.alternar_ativo(ctx, _ip_origem(), perfil_id, _texto(request.post_vars.get("version"), 64))
+        alterado = servico.toggle_active(ctx, _ip_origem(), perfil_id, _texto(request.post_vars.get("version"), 64))
         acao = u"desativado" if alterado["active"] == "N" else u"reativado"
         session.flash = {"tipo": "sucesso", "mensagem": u"Perfil %s %s." % (alterado["name"], acao)}
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
-    except OperacaoNegada as exc:
+    except OperationDenied as exc:
         session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
     except RepoConflict:
-        session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
+        session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLICT}
     except RepoError:
         _log.exception("falha ao alternar perfil (login=%s id=%r)", ctx["login"], perfil_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ALTERNAR}
@@ -147,11 +147,11 @@ def quem_pode():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
     try:
-        dados = servico.quem_pode(ctx, _texto(request.get_vars.get("script"), 11),
+        dados = servico.who_can(ctx, _texto(request.get_vars.get("script"), 11),
                                   _texto(request.get_vars.get("environment"), 11))
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
     response.title = u"Quem pode o quê — SSS"
     return dict(q=dados)
@@ -161,10 +161,10 @@ def matriz():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
     try:
-        dados = servico.matriz(ctx, _texto(request.args(0), 11))
+        dados = servico.matrix(ctx, _texto(request.args(0), 11))
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
     response.title = u"Permissões de %s — SSS" % dados["perfil"]["name"]
     response.sss_scripts = [_JS_MATRIZ]
@@ -176,17 +176,17 @@ def salvar_matriz():
     ctx = _exigir_func(_FUNC)
     perfil_id = _texto(request.post_vars.get("id"), 11)
     try:
-        diff, erros = servico.salvar_matriz(ctx, _ip_origem(), perfil_id, _lista("funcs"), _lista("ambs"),
+        diff, erros = servico.save_matrix(ctx, _ip_origem(), perfil_id, _lista("funcs"), _lista("ambs"),
                                             _lista("scrs"), _texto(request.post_vars.get("perm_version"), 11))
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
     except RepoError:
         _log.exception("falha ao salvar matriz (login=%s id=%r)", ctx["login"], perfil_id, extra={"action": "PERM_UPDATE"})
-        diff, erros = None, {admin_crud.CAMPO_GERAL: _MSG_FALHA_MATRIZ}
+        diff, erros = None, {admin_crud.GENERAL_FIELD: _MSG_FALHA_MATRIZ}
     if erros:
-        session.flash = {"tipo": "erro", "mensagem": erros[admin_crud.CAMPO_GERAL]}
+        session.flash = {"tipo": "erro", "mensagem": erros[admin_crud.GENERAL_FIELD]}
     elif diff:
         session.flash = {"tipo": "sucesso", "mensagem": u"Permissões salvas: %s" % diff}
     else:

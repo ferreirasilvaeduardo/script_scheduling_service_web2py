@@ -39,13 +39,13 @@ def index():
     response.title = u"Início — SSS"
     cartoes = {}
     # Cada cartao so existe para quem tem a funcionalidade (F6.1); o escopo e o das telas de origem.
-    if ticket_service.pode_consultar(ctx):
-        cartoes["tickets"] = _cartao(ctx, "tickets", lambda: ticket_service.resumo_inicial(ctx))
+    if ticket_service.can_query(ctx):
+        cartoes["tickets"] = _cartao(ctx, "tickets", lambda: ticket_service.home_summary(ctx))
     if rbac.has_feature(ctx, "MANAGE_SCHEDULES"):
         cartoes["schedules"] = _cartao(
-            ctx, "schedules", lambda: schedules_service.listar(ctx, {"active": "Y"}, 1, 5)["itens"])
+            ctx, "schedules", lambda: schedules_service.list_page(ctx, {"active": "Y"}, 1, 5)["itens"])
     if rbac.has_feature(ctx, "VIEW_AUDIT"):
-        cartoes["agents"] = _cartao(ctx, "agents", lambda: agents_service.painel(ctx))
+        cartoes["agents"] = _cartao(ctx, "agents", lambda: agents_service.dashboard(ctx))
     return dict(ctx=ctx, menu=response.sss_menu, pode_disparar=rbac.has_feature(ctx, "EXEC_SCRIPT"),
                 cartoes=cartoes)
 
@@ -64,7 +64,7 @@ def login():
     if metodo == "POST":
         login_digitado = _texto_post("login", 30).strip()
         senha = security.strip_passwords((request.post_vars, request.vars), ("senha",))["senha"]
-        ctx, mensagem = auth_service.autenticar(login_digitado, senha, _ip_origem())
+        ctx, mensagem = auth_service.authenticate(login_digitado, senha, _ip_origem())
         if ctx is not None:
             # Em sessao por cookie, renew() apenas limpa: o cookie e regravado com conteudo novo.
             session.renew(clear_session=True)
@@ -100,7 +100,7 @@ def permissoes():
     ctx = _exigir_login()
     response.title = u"O que eu posso fazer — SSS"
     try:
-        dados = permissions_service.montar(ctx)
+        dados = permissions_service.build(ctx)
         erro = None
     except RepoError:
         _log.exception("falha ao montar permissoes (login=%s)", ctx["login"], extra={"action": "PERMISSOES"})
@@ -117,7 +117,7 @@ def minha_senha():
     erros = {}
     if metodo == "POST":
         senhas = security.strip_passwords((request.post_vars, request.vars), _CAMPOS_MINHA_SENHA)
-        resultado, erros = auth_service.trocar_senha(ctx, _ip_origem(), senhas["senha_atual"], senhas["nova"],
+        resultado, erros = auth_service.change_password(ctx, _ip_origem(), senhas["senha_atual"], senhas["nova"],
                                                      senhas["confirmacao"])
         if resultado == "BLOQUEADO":
             session.clear()
@@ -132,8 +132,8 @@ def minha_senha():
             session.login = ctx["login"]
             session.perfil_id = ctx["profile_id"]
             session.perm_versao = ctx["perm_version"]
-            # A troca incrementou sessao_epoch (CR-008, E2): as outras sessoes caem, esta continua.
-            session.sessao_epoch = auth_service.sessao_epoch(ctx["user_id"])
+            # A troca incrementou session_epoch (CR-008, E2): as outras sessoes caem, esta continua.
+            session.sessao_epoch = auth_service.session_epoch(ctx["user_id"])
             session.ultimo_acesso = session.login_em = time.time()
             session.flash = {"tipo": "sucesso", "mensagem": u"Senha alterada com sucesso."}
             redirect(URL(c="default", f="index"))

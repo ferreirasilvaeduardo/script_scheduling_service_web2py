@@ -15,14 +15,14 @@ import ui_helpers
 from repo_errors import RepoNotFound
 
 # Mensagens-padrao em duas partes (README §2.4.2); o bloqueio informa os minutos configurados.
-MSG_GENERICA = ui_helpers.mensagem("login_incorreto")
+MSG_GENERIC = ui_helpers.mensagem("login_incorreto")
 
-ENTIDADE = "tbsss_users"
-MSG_SENHA_ATUAL = u"A senha atual está incorreta."
-MSG_CONFIRMACAO = u"A confirmação não confere com a nova senha."
-SENHA_MAX = 1024
-CACHE_MATRIZ_MAX = 64
-SIMULADOS_MAX = 1024
+ENTITY = "tbsss_users"
+MSG_CURRENT_PASSWORD = u"A senha atual está incorreta."
+MSG_CONFIRMATION = u"A confirmação não confere com a nova senha."
+PASSWORD_MAX = 1024
+MATRIX_CACHE_MAX = 64
+SIMULATED_MAX = 1024
 
 _RE_LOGIN = re.compile(r"[a-z0-9._-]{3,30}")
 
@@ -31,7 +31,7 @@ def _aud(login, ip, acao, detalhe):
     return {"actor": login, "ip": ip, "action": acao, "detail": detalhe}
 
 
-class ServicoAuth(object):
+class AuthService(object):
     """Servico de autenticacao com dependencias injetadas (repositorios, limites, relogio e log)."""
 
     def __init__(self, usuarios, rbac_repo, catalogo, auditoria, max_tentativas, bloqueio_s,
@@ -54,18 +54,18 @@ class ServicoAuth(object):
 
     # ------------------------------------------------------------------ login
 
-    def autenticar(self, login, senha, ip):
+    def authenticate(self, login, senha, ip):
         """Autentica login/senha. Retorna (ctx, None) no sucesso ou (None, mensagem_generica)."""
         agora = self._relogio()
         login_norm = login.strip().lower() if isinstance(login, str) else ""
-        senha_ok_tipo = isinstance(senha, str) and 0 < len(senha) <= SENHA_MAX
+        senha_ok_tipo = isinstance(senha, str) and 0 < len(senha) <= PASSWORD_MAX
         senha_txt = senha if senha_ok_tipo else ""
         login_valido = bool(_RE_LOGIN.fullmatch(login_norm))
 
         usuario = self._usuarios.get_by_login(login_norm) if login_valido else None
         if usuario is None:
             security.verify_password(senha_txt, security.dummy_hash())
-            return self._falha_inexistente(login_norm if login_valido else "?", ip, agora)
+            return self._unknown_login(login_norm if login_valido else "?", ip, agora)
 
         armazenado = usuario.get("password_hash")
         if security.is_known_hash(armazenado):
@@ -74,18 +74,18 @@ class ServicoAuth(object):
             security.verify_password(senha_txt, security.dummy_hash())
             senha_confere = False
 
-        if self._bloqueado(usuario, agora):
-            self._registrar_falha(usuario, ip, "conta bloqueada")
+        if self._is_locked(usuario, agora):
+            self._record_failure(usuario, ip, "conta bloqueada")
             return None, self.msg_bloqueio
-        usuario = self._reiniciar_se_expirado(usuario)
+        usuario = self._reset_if_expired(usuario)
 
         if not senha_confere:
-            return self._falha_senha(usuario, ip)
+            return self._wrong_password(usuario, ip)
 
         estado = self._usuarios.get_session_state(usuario["id"])
         if estado.get("usuario_ativo") != "Y" or estado.get("perfil_ativo") != "Y":
-            self._registrar_falha(usuario, ip, "usuario ou perfil inativo")
-            return None, MSG_GENERICA
+            self._record_failure(usuario, ip, "usuario ou perfil inativo")
+            return None, MSG_GENERIC
 
         novo_hash = security.hash_password(senha_txt) if security.needs_rehash(armazenado) else None
         # Sucesso, rehash e auditoria numa unica operacao do repositorio (README §4.2, §4.4).
@@ -96,26 +96,26 @@ class ServicoAuth(object):
             self._log.info("hash de senha atualizado para as iteracoes vigentes (login=%s)",
                            usuario["login"], extra={"action": "LOGIN"})
         self._log.info("login ok (login=%s ip=%s)", usuario["login"], ip, extra={"action": "LOGIN"})
-        return self._montar_ctx(estado), None
+        return self._build_ctx(estado), None
 
     @staticmethod
-    def _bloqueado(usuario, agora):
+    def _is_locked(usuario, agora):
         bloqueado_ate = usuario.get("locked_until")
         return bloqueado_ate is not None and bloqueado_ate > agora
 
-    def _reiniciar_se_expirado(self, usuario):
+    def _reset_if_expired(self, usuario):
         # Bloqueio expirado (ou contador no limite): novo ciclo de tentativas, no login e na troca de senha.
         if usuario.get("locked_until") is not None or int(usuario.get("failed_attempts") or 0) >= self._max:
             return self._usuarios.reset_attempts(usuario["id"])
         return usuario
 
-    def _registrar_falha(self, usuario, ip, motivo):
-        self._auditoria.register(usuario["login"], ip, "LOGIN_FAILED", ENTIDADE, usuario["id"],
+    def _record_failure(self, usuario, ip, motivo):
+        self._auditoria.register(usuario["login"], ip, "LOGIN_FAILED", ENTITY, usuario["id"],
                                   "Falha de login: %s" % motivo)
         self._log.warning("login falhou (login=%s ip=%s reason=%s)", usuario["login"], ip, motivo,
                           extra={"action": "LOGIN"})
 
-    def _falha_senha(self, usuario, ip):
+    def _wrong_password(self, usuario, ip):
         # O repositorio conta e decide o bloqueio sob a trava da linha: a contagem lida aqui pode estar
         # desatualizada quando ha tentativas em paralelo (revisao de 2026-10-20).
         reg = self._usuarios.register_login_failure(
@@ -129,11 +129,11 @@ class ServicoAuth(object):
         self._log.warning("login falhou (login=%s ip=%s reason=%s)", usuario["login"], ip, motivo,
                           extra={"action": "LOGIN"})
         if not bloquear:
-            return None, MSG_GENERICA
+            return None, MSG_GENERIC
         self._log.warning("conta bloqueada (login=%s ip=%s)", usuario["login"], ip, extra={"action": "LOGIN"})
         return None, self.msg_bloqueio
 
-    def _falha_inexistente(self, login, ip, agora):
+    def _unknown_login(self, login, ip, agora):
         with self._lock:
             falhas, bloqueado_ate = self._simulados.pop(login, (0, None))
             if bloqueado_ate is not None and bloqueado_ate > agora:
@@ -146,23 +146,23 @@ class ServicoAuth(object):
                 bloqueado_ate = agora + self._bloqueio if falhas >= self._max else None
                 self._simulados[login] = (falhas, bloqueado_ate)
                 resultado = "bloqueou" if bloqueado_ate is not None else "falha"
-            while len(self._simulados) > SIMULADOS_MAX:
+            while len(self._simulados) > SIMULATED_MAX:
                 self._simulados.popitem(last=False)
 
-        self._auditoria.register(login, ip, "LOGIN_FAILED", ENTIDADE, None,
+        self._auditoria.register(login, ip, "LOGIN_FAILED", ENTITY, None,
                                   "Falha de login: usuario inexistente")
         self._log.warning("login falhou (login=%s ip=%s reason=usuario inexistente)", login, ip,
                           extra={"action": "LOGIN"})
         if resultado == "falha":
-            return None, MSG_GENERICA
+            return None, MSG_GENERIC
         if resultado == "bloqueou":
-            self._auditoria.register(login, ip, "LOGIN_LOCKED", ENTIDADE, None,
+            self._auditoria.register(login, ip, "LOGIN_LOCKED", ENTITY, None,
                                       "Bloqueio simulado de login inexistente")
         return None, self.msg_bloqueio
 
     # ------------------------------------------------------------ revalidacao
 
-    def revalidar(self, sessao, ip=None):
+    def revalidate(self, sessao, ip=None):
         """Reconsulta usuario e perfil (README §4.2). Retorna ctx ou None se a sessao deve encerrar.
 
         Encerramento por usuario ou perfil inativo e auditado como LOGOUT (README §4.2, D13).
@@ -182,7 +182,7 @@ class ServicoAuth(object):
             return None
         if estado.get("usuario_ativo") != "Y" or estado.get("perfil_ativo") != "Y":
             motivo = u"usuário inativo" if estado.get("usuario_ativo") != "Y" else u"perfil inativo"
-            self._auditoria.register(estado.get("login"), ip, "LOGOUT", ENTIDADE, usuario_id,
+            self._auditoria.register(estado.get("login"), ip, "LOGOUT", ENTITY, usuario_id,
                                       u"sessão encerrada pela revalidação: %s" % motivo)
             self._log.info("sessao encerrada: usuario ou perfil inativo (login=%s)", estado.get("login"),
                            extra={"action": "SESSAO"})
@@ -198,15 +198,15 @@ class ServicoAuth(object):
             self._log.info("permissoes recarregadas (login=%s profile_id=%s perm_version=%s)",
                            estado.get("login"), estado.get("profile_id"), estado.get("perm_version"),
                            extra={"action": "SESSAO"})
-        return self._montar_ctx(estado)
+        return self._build_ctx(estado)
 
-    def _montar_ctx(self, estado):
-        funcs, ambs, scrs = self._matriz(estado["profile_id"], estado["perm_version"])
+    def _build_ctx(self, estado):
+        funcs, ambs, scrs = self._matrix(estado["profile_id"], estado["perm_version"])
         dados = dict(estado)
         dados.update(features=funcs, environments=ambs, scripts=scrs)
         return rbac.user_context(dados)
 
-    def _matriz(self, perfil_id, perm_versao):
+    def _matrix(self, perfil_id, perm_versao):
         # perm_versao muda em toda alteracao de matriz/perfil (README §4.3.A): a chave invalida o cache.
         chave = (perfil_id, perm_versao)
         with self._lock:
@@ -230,13 +230,13 @@ class ServicoAuth(object):
 
         with self._lock:
             self._cache_matriz[chave] = valor
-            while len(self._cache_matriz) > CACHE_MATRIZ_MAX:
+            while len(self._cache_matriz) > MATRIX_CACHE_MAX:
                 self._cache_matriz.popitem(last=False)
         return valor
 
     # ------------------------------------------------------- troca de senha
 
-    def trocar_senha(self, ctx, ip, atual, nova, confirmacao):
+    def change_password(self, ctx, ip, atual, nova, confirmacao):
         """Troca da propria senha (exige a atual). Retorna (resultado, erros por campo).
 
         resultado: 'OK' | 'ERRO' | 'BLOQUEADO'. Senha atual errada conta como falha de login
@@ -244,25 +244,25 @@ class ServicoAuth(object):
         """
         agora = self._relogio()
         usuario = self._usuarios.get_by_id(ctx["user_id"])
-        if self._bloqueado(usuario, agora):
-            self._registrar_falha(usuario, ip, "troca de senha com conta bloqueada")
+        if self._is_locked(usuario, agora):
+            self._record_failure(usuario, ip, "troca de senha com conta bloqueada")
             return "BLOQUEADO", {"senha_atual": self.msg_bloqueio}
-        usuario = self._reiniciar_se_expirado(usuario)
+        usuario = self._reset_if_expired(usuario)
         armazenado = usuario.get("password_hash")
-        atual_ok = (isinstance(atual, str) and 0 < len(atual) <= SENHA_MAX
+        atual_ok = (isinstance(atual, str) and 0 < len(atual) <= PASSWORD_MAX
                     and security.is_known_hash(armazenado) and security.verify_password(atual, armazenado))
         if not atual_ok:
-            _ctx, mensagem = self._falha_senha(usuario, ip)
+            _ctx, mensagem = self._wrong_password(usuario, ip)
             if mensagem == self.msg_bloqueio:
                 return "BLOQUEADO", {"senha_atual": self.msg_bloqueio}
-            return "ERRO", {"senha_atual": MSG_SENHA_ATUAL}
+            return "ERRO", {"senha_atual": MSG_CURRENT_PASSWORD}
         erros = {}
-        problemas = security.validate_password_policy(nova) if isinstance(nova, str) and len(nova) <= SENHA_MAX \
+        problemas = security.validate_password_policy(nova) if isinstance(nova, str) and len(nova) <= PASSWORD_MAX \
             else [u"Informe a nova senha."]
         if problemas:
             erros["nova"] = problemas[0]
         elif confirmacao != nova:
-            erros["confirmacao"] = MSG_CONFIRMACAO
+            erros["confirmacao"] = MSG_CONFIRMATION
         if erros:
             return "ERRO", erros
         self._usuarios.set_password(usuario["id"], security.hash_password(nova), agora,
@@ -274,31 +274,31 @@ class ServicoAuth(object):
 
     # ----------------------------------------------------------------- logout
 
-    def sessao_epoch(self, usuario_id):
+    def session_epoch(self, usuario_id):
         """sessao_epoch vigente do usuario, para a sessao nova depois da troca de senha (CR-008, E2)."""
         return self._usuarios.get_session_state(usuario_id).get("session_epoch", 0)
 
     def logout(self, ctx, ip):
-        """Encerra todas as sessoes do usuario (sessao_epoch + 1) e audita LOGOUT na mesma operacao."""
+        """Encerra todas as sessoes do usuario (session_epoch + 1) e audita LOGOUT na mesma operacao."""
         if not ctx:
             return
         self._usuarios.end_sessions(ctx["user_id"], auditoria=_aud(ctx["login"], ip, "LOGOUT", "Logout"))
         self._log.info("logout (login=%s ip=%s)", ctx["login"], ip, extra={"action": "LOGIN"})
 
 
-_padrao = None
-_lock_padrao = threading.Lock()
+_default = None
+_default_lock = threading.Lock()
 
 
-def _servico():
-    global _padrao
-    with _lock_padrao:
-        if _padrao is None:
+def _service():
+    global _default
+    with _default_lock:
+        if _default is None:
             from gluon import current
             import sss_logging
             fabrica = current.repo_factory
             cfg = current.sss_cfg
-            _padrao = ServicoAuth(
+            _default = AuthService(
                 usuarios=fabrica.get("users"),
                 rbac_repo=fabrica.get("rbac"),
                 catalogo=fabrica.get("catalog"),
@@ -307,29 +307,29 @@ def _servico():
                 bloqueio_s=cfg.web.login_lockout_s,
                 log=sss_logging.get_logger("sss_web", cfg),
             )
-        return _padrao
+        return _default
 
 
-def autenticar(login, senha, ip):
+def authenticate(login, senha, ip):
     """Autentica pelo servico padrao do processo web."""
-    return _servico().autenticar(login, senha, ip)
+    return _service().authenticate(login, senha, ip)
 
 
-def revalidar(sessao, ip=None):
+def revalidate(sessao, ip=None):
     """Revalida a sessao pelo servico padrao do processo web."""
-    return _servico().revalidar(sessao, ip)
+    return _service().revalidate(sessao, ip)
 
 
-def sessao_epoch(usuario_id):
+def session_epoch(usuario_id):
     """sessao_epoch vigente pelo servico padrao do processo web."""
-    return _servico().sessao_epoch(usuario_id)
+    return _service().session_epoch(usuario_id)
 
 
 def logout(ctx, ip):
     """Audita o logout pelo servico padrao do processo web."""
-    return _servico().logout(ctx, ip)
+    return _service().logout(ctx, ip)
 
 
-def trocar_senha(ctx, ip, atual, nova, confirmacao):
+def change_password(ctx, ip, atual, nova, confirmacao):
     """Troca da propria senha pelo servico padrao do processo web."""
-    return _servico().trocar_senha(ctx, ip, atual, nova, confirmacao)
+    return _service().change_password(ctx, ip, atual, nova, confirmacao)

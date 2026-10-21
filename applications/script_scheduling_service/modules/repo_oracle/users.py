@@ -2,7 +2,7 @@
 """Implementacao Oracle 11gR2 do repositorio de usuarios (F7.3, AGENTS §4).
 
 SQL estatico com binds, paginacao via ROWNUM, protecao de ultimo admin,
-colunas de registro (CR-006) e revogacao de sessao via sessao_epoch (CR-008, E2).
+colunas de registro (CR-006) e revogacao de sessao via session_epoch (CR-008, E2).
 """
 import copy
 import datetime
@@ -598,7 +598,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
             return self.get_by_id(id, conn=c)
 
     def set_password(self, id, senha_hash, agora=None, auditoria=None, ator=None, conn=None):
-        """Atualiza a senha do usuario e incrementa sessao_epoch (grava updated_*)."""
+        """Atualiza a senha do usuario e incrementa session_epoch (grava updated_*)."""
         ator_limpo = validate_record_actor(auditoria, ator)
         with self.write_transaction(conn=conn) as c:
             cur = c.cursor()
@@ -625,7 +625,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
             return self.get_by_id(id, conn=c)
 
     def end_sessions(self, id, auditoria=None, conn=None):
-        """Logout: incrementa sessao_epoch (rotina tecnica, sem updated_*)."""
+        """Logout: incrementa session_epoch (rotina tecnica, sem updated_*)."""
         with self.write_transaction(conn=conn) as c:
             cur = c.cursor()
             try:

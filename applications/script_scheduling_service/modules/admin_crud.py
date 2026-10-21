@@ -11,19 +11,19 @@ import masking
 import rbac
 import ui_helpers
 
-CAMPO_GERAL = "_geral"
-MSG_CONFLITO = ui_helpers.mensagem("conflito")
-MSG_FALHA = u"Não foi possível salvar. Tente novamente em instantes."
-LIMITE_DETALHE = 1000
-_VAZIO = u"(vazio)"
-_SETA = u" → "
+GENERAL_FIELD = "_geral"
+MSG_CONFLICT = ui_helpers.mensagem("conflito")
+MSG_FAILURE = u"Não foi possível salvar. Tente novamente em instantes."
+DETAIL_LIMIT = 1000
+_EMPTY = u"(vazio)"
+_ARROW = u" → "
 
 
-class AcessoNegado(Exception):
+class AccessDenied(Exception):
     """Perfil sem a funcionalidade de cadastro exigida."""
 
 
-class OperacaoNegada(Exception):
+class OperationDenied(Exception):
     """Regra de negocio impede a operacao; 'mensagem' e segura para exibicao."""
 
     def __init__(self, mensagem):
@@ -31,24 +31,24 @@ class OperacaoNegada(Exception):
         self.mensagem = mensagem
 
 
-def exigir_func(ctx, codigo):
+def require_feature(ctx, codigo):
     """Defesa em profundidade: o controller ja exige a funcionalidade, o service reconfirma."""
     if not rbac.has_feature(ctx, codigo):
-        raise AcessoNegado(codigo)
+        raise AccessDenied(codigo)
 
 
-def exigir_admin(ctx, condicao, mensagem, log, operacao):
+def require_admin(ctx, condicao, mensagem, log, operacao):
     """Administrador so por administrador (CR-008, E1): com 'condicao' verdadeira, so admin prossegue.
 
-    Recusa com WARN no log (sem auditoria: nada foi gravado) e OperacaoNegada com 'mensagem'.
+    Recusa com WARN no log (sem auditoria: nada foi gravado) e OperationDenied com 'mensagem'.
     """
     if condicao and ctx.get("is_admin") is not True:
         log.warning("operacao reservada a administrador negada (login=%s operacao=%s)", ctx.get("login"),
                     operacao, extra={"action": "ACESSO_NEGADO"})
-        raise OperacaoNegada(mensagem)
+        raise OperationDenied(mensagem)
 
 
-def texto(valor, limite=None):
+def text(valor, limite=None):
     """Valor de formulario como str sem espacos nas pontas; lista vale o ultimo; vazio vira None.
 
     Nunca trunca (README §10, AGENTS §3.4): acima de 'limite' devolve o valor inteiro, e a validacao
@@ -64,12 +64,12 @@ def texto(valor, limite=None):
     return valor
 
 
-MSG_ESPACOS = u"Não use espaços no início nem no fim."
-MSG_CONTROLE = u"O campo contém caracteres de controle (como quebra de linha ou tabulação), que não são permitidos."
-_RE_CONTROLE = re.compile(u"[\x00-\x1f\x7f]")
+MSG_SPACES = u"Não use espaços no início nem no fim."
+MSG_CONTROL_CHARS = u"O campo contém caracteres de controle (como quebra de linha ou tabulação), que não são permitidos."
+_RE_CONTROL = re.compile(u"[\x00-\x1f\x7f]")
 
 
-def identificador(valor, erros, campo):
+def identifier(valor, erros, campo):
     """Identificador (nome de ambiente/perfil, login, codigo): sem strip; espaco nas pontas e recusado.
 
     README §10, "Texto nos cadastros". Devolve o valor como veio (ou None se vazio).
@@ -79,87 +79,87 @@ def identificador(valor, erros, campo):
     if not isinstance(valor, str) or not valor.strip():
         return None
     if valor != valor.strip():
-        erros[campo] = MSG_ESPACOS
+        erros[campo] = MSG_SPACES
     return valor
 
 
-def texto_livre(valor, erros, campo):
+def free_text(valor, erros, campo):
     """Texto livre (label, descricao...): strip e recusa de caracteres de controle (README §10)."""
-    valor = texto(valor)
-    if valor is not None and _RE_CONTROLE.search(valor):
-        erros[campo] = MSG_CONTROLE
+    valor = text(valor)
+    if valor is not None and _RE_CONTROL.search(valor):
+        erros[campo] = MSG_CONTROL_CHARS
     return valor
 
 
-def normalizar(valor):
+def normalize(valor):
     # O Oracle grava '' como NULL: vazio e None sao o mesmo estado.
     return None if valor in (None, "") else valor
 
 
-MARCADOR_PREENCHIDO = u"<sensivel:preenchido>"
-MARCADOR_VAZIO = u"<sensivel:vazio>"
+FILLED_MARKER = u"<sensivel:preenchido>"
+EMPTY_MARKER = u"<sensivel:vazio>"
 
 
-def marcador_sensivel(valor):
+def sensitive_marker(valor):
     """Marcador fixo que substitui um valor sensivel em tudo que vai ao HTML (README §10)."""
-    return MARCADOR_VAZIO if normalizar(valor) is None else MARCADOR_PREENCHIDO
+    return EMPTY_MARKER if normalize(valor) is None else FILLED_MARKER
 
 
-def versao(registro, campos, sensiveis=()):
+def version(registro, campos, sensiveis=()):
     """Hash dos campos editaveis lidos agora; o formulario devolve-o para detectar edicao concorrente.
 
     Campos em 'sensiveis' entram pelo marcador, nunca pelo valor: a versao vai ao HTML e um sha256
     sem sal do segredo permitiria adivinha-lo. A troca concorrente so do segredo fica com o esperado.
     """
-    estado = [[c, marcador_sensivel(registro.get(c)) if c in sensiveis else normalizar(registro.get(c))]
+    estado = [[c, sensitive_marker(registro.get(c)) if c in sensiveis else normalize(registro.get(c))]
               for c in campos]
-    return hash_estado(estado)
+    return state_hash(estado)
 
 
-def hash_estado(estado):
+def state_hash(estado):
     """sha256 do JSON deterministico de um estado serializavel."""
     bruto = json.dumps(estado, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(bruto.encode("utf-8")).hexdigest()
 
 
-def esperado(registro, campos):
+def expected(registro, campos):
     """Valores lidos que condicionam o UPDATE (o repositorio lanca RepoConflict se divergirem)."""
     return dict((c, registro.get(c)) for c in campos)
 
 
-def _exibir(valor):
-    valor = normalizar(valor)
-    return _VAZIO if valor is None else masking.MASKER.mask(str(valor))
+def _display(valor):
+    valor = normalize(valor)
+    return _EMPTY if valor is None else masking.MASKER.mask(str(valor))
 
 
-def limitar(detalhe):
-    """Corta o detalhe de auditoria em LIMITE_DETALHE caracteres (coluna VARCHAR2(1000 CHAR))."""
-    if len(detalhe) <= LIMITE_DETALHE:
+def truncate_detail(detalhe):
+    """Corta o detalhe de auditoria em DETAIL_LIMIT caracteres (coluna VARCHAR2(1000 CHAR))."""
+    if len(detalhe) <= DETAIL_LIMIT:
         return detalhe
-    return detalhe[:LIMITE_DETALHE - 3] + u"..."
+    return detalhe[:DETAIL_LIMIT - 3] + u"..."
 
 
-def detalhe_livre(texto):
+def free_detail(texto):
     """Detalhe de auditoria montado pelo service, sempre mascarado e limitado (README §4.4)."""
-    return limitar(masking.MASKER.mask(texto))
+    return truncate_detail(masking.MASKER.mask(texto))
 
 
-def detalhe_alteracoes(antes, depois, campos):
+def changes_detail(antes, depois, campos):
     """'campo: antigo → novo' por campo alterado, mascarado e limitado a 1000 caracteres; None se nada mudou."""
     partes = []
     for c in campos:
-        a, d = normalizar(antes.get(c)), normalizar(depois.get(c))
+        a, d = normalize(antes.get(c)), normalize(depois.get(c))
         if a != d:
-            partes.append(u"%s: %s%s%s" % (c, _exibir(a), _SETA, _exibir(d)))
-    return limitar(u"; ".join(partes)) if partes else None
+            partes.append(u"%s: %s%s%s" % (c, _display(a), _ARROW, _display(d)))
+    return truncate_detail(u"; ".join(partes)) if partes else None
 
 
-def detalhe_insercao(registro, campos):
+def insert_detail(registro, campos):
     """'campo: valor' so dos campos preenchidos na inclusao (vazios omitidos), mascarado e limitado (README §4.4)."""
-    return limitar(u"; ".join(u"%s: %s" % (c, _exibir(registro.get(c))) for c in campos
-                              if normalizar(registro.get(c)) is not None))
+    return truncate_detail(u"; ".join(u"%s: %s" % (c, _display(registro.get(c))) for c in campos
+                              if normalize(registro.get(c)) is not None))
 
 
-def auditoria(ctx, ip, acao, detalhe):
+def audit_entry(ctx, ip, acao, detalhe):
     """Dicionario de auditoria repassado ao repositorio (gravado na mesma operacao)."""
     return {"actor": ctx.get("login"), "ip": ip, "action": acao, "detail": detalhe}

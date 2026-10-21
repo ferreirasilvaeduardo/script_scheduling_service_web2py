@@ -71,7 +71,7 @@ class _Agenda(object):
         self.seq = 1000
         self._antes = None
         self.scripts = {}
-        self.vinculos = {}
+        self.links = {}
 
     def _escrever(self, nome):
         if self.falhas and self.falhas[0][0] == nome:
@@ -99,7 +99,7 @@ class _Agenda(object):
         return LOGIN
 
     def script_and_links(self, conn, script_id):
-        return copy.deepcopy(self.scripts.get(script_id)), copy.deepcopy(self.vinculos.get(script_id, []))
+        return copy.deepcopy(self.scripts.get(script_id)), copy.deepcopy(self.links.get(script_id, []))
 
     def get_ticket_status(self, conn, tid):
         t = self.tickets.get(tid)
@@ -214,7 +214,7 @@ class _Base(unittest.TestCase):
         self.fila = _Fila()
         self.agenda.scripts[3] = {"id": 3, "name": "carga", "interpreter": "SH", "path_file": "/opt/x/carga.sh",
                                   "param_type": "NAMED", "max_parallel_env": 2, "timeout_s": 600, "active": "Y"}
-        self.agenda.vinculos[3] = [_vinculo()]
+        self.agenda.links[3] = [_vinculo()]
         self.conn = _Conn(self.agenda)
         self.now = AGORA
         p = mock.patch.object(db_conn, "db_now", lambda conn: self.now)
@@ -574,7 +574,7 @@ class TestDesdobroOracle(unittest.TestCase):
         self.rbac.matrix_save(self.c["perfil"]["id"], [], [], [], ator=self._massa.ator)
         self.contrato.tearDown(self)
 
-    def _regra(self, respostas):
+    def _rule(self, respostas):
         proxima = datetime.datetime.now().replace(second=0, microsecond=0) - datetime.timedelta(minutes=2)
         return self._massa.agendamento(self.c["scr"]["id"], self.c["amb1"]["name"], self.c["u1"]["id"],
                                        recurrence_type="DAILY", run_time=proxima.strftime("%H:%M"),
@@ -583,8 +583,8 @@ class TestDesdobroOracle(unittest.TestCase):
 
     def test_ticket_real_e_pausa_param_invalido(self):
         prm_a = self.c["prm_a"]["code"]
-        ok = self._regra({prm_a: "valor-a"})
-        ruim = self._regra({})
+        ok = self._rule({prm_a: "valor-a"})
+        ruim = self._rule({})
         with self.assertLogs("sss_scheduler", "INFO"):
             self.assertEqual(self.des.process(self.conn, ok["id"]), "TICKET")
             self.assertEqual(self.des.process(self.conn, ruim["id"]), "PAUSADA")

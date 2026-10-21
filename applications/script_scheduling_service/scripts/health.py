@@ -38,7 +38,7 @@ class Verificacao(object):
         self.args = args
         self.repo = repo or saude_sql.RepoHealth.from_config(cfg)
         agente = cfg.agent
-        self.limiares = agents_service.Limiares(agente.heartbeat_interval_s, agente.fence_timeout_s,
+        self.limiares = agents_service.Thresholds(agente.heartbeat_interval_s, agente.fence_timeout_s,
                                                  agente.node_offline_timeout_s)
         self.problemas = []  # (nivel, texto)
         self.desempenho = []
@@ -51,7 +51,7 @@ class Verificacao(object):
         self._versao()
         agentes = self.repo.agents(self.conn)
         self._agentes(agentes, agora)
-        self._ambientes(agentes, agora)
+        self._environments(agentes, agora)
         self._fila(agentes, agora)
         self._sem_pid(agora)
         self._config(agentes)
@@ -69,7 +69,7 @@ class Verificacao(object):
         for ag in agentes:
             if ag["status"] != "ACTIVE":
                 continue
-            saude = agents_service.saude(ag, agora, self.limiares)
+            saude = agents_service.health(ag, agora, self.limiares)
             if saude in _SAUDAVEIS:
                 saudaveis += 1
             elif saude == agents_service.AT_RISK:
@@ -85,10 +85,10 @@ class Verificacao(object):
         hb = ag.get("heartbeat_at")
         return "-" if hb is None else "%d s" % max(0, int((agora - hb).total_seconds()))
 
-    def _ambientes(self, agentes, agora):
+    def _environments(self, agentes, agora):
         atendidos = set()
         for ag in agentes:
-            if ag["status"] == "ACTIVE" and agents_service.saude(ag, agora, self.limiares) in _SAUDAVEIS:
+            if ag["status"] == "ACTIVE" and agents_service.health(ag, agora, self.limiares) in _SAUDAVEIS:
                 atendidos.update(a.strip() for a in (ag.get("environments") or "").split(",") if a.strip())
         for nome in self.repo.active_environments(self.conn):
             if nome not in atendidos:

@@ -11,8 +11,8 @@ import auth_service
 import permissions_service as svc_mod
 import repo_factory
 import security
-from permissions_service import ServicoPermissoes
-from ticket_service import ServicoTicket
+from permissions_service import PermissionsService
+from ticket_service import TicketService
 
 SESSOES = {
     "admin": {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0},
@@ -39,17 +39,17 @@ class TestPermissoes(unittest.TestCase):
         log = logging.getLogger("sss_teste_permissoes")
         log.addHandler(logging.NullHandler())
         log.propagate = False
-        auth = auth_service.ServicoAuth(repo_factory.get("users"), self.rbac_repo, self.catalog,
+        auth = auth_service.AuthService(repo_factory.get("users"), self.rbac_repo, self.catalog,
                                         repo_factory.get("audit"), 5, 900, log)
-        self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
-        disparo = ServicoTicket(self.catalog, repo_factory.get("tickets"), log)
-        self.svc = ServicoPermissoes(self.rbac_repo, self.catalog, disparo, log)
+        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSOES.items())
+        disparo = TicketService(self.catalog, repo_factory.get("tickets"), log)
+        self.svc = PermissionsService(self.rbac_repo, self.catalog, disparo, log)
         self.disparo = disparo
         self.n_auditoria = repo_factory.get("audit").list(pagina=1, tamanho=1)["total"]
 
     def test_admin_ve_frase_e_todas_as_telas(self):
-        d = self.svc.montar(self.ctx["admin"])
-        self.assertEqual(d["frase_admin"], svc_mod.FRASE_ADMIN)
+        d = self.svc.build(self.ctx["admin"])
+        self.assertEqual(d["frase_admin"], svc_mod.ADMIN_PHRASE)
         self.assertEqual(len(d["telas"]), 10)
         self.assertEqual(d["ausentes"], [])
         rotas = dict((t["code"], t["rota"]) for t in d["telas"])
@@ -57,17 +57,17 @@ class TestPermissoes(unittest.TestCase):
         self.assertIsNone(rotas["CANCEL_TICKET"])  # acao, nao tela
 
     def test_sem_exec_script_mostra_frase_e_motivo(self):
-        d = self.svc.montar(self.ctx["consulta"])
+        d = self.svc.build(self.ctx["consulta"])
         self.assertFalse(d["pode_executar"])
-        self.assertEqual(d["frase_sem_exec"], svc_mod.FRASE_SEM_EXEC)
+        self.assertEqual(d["frase_sem_exec"], svc_mod.NO_EXEC_PHRASE)
         self.assertEqual(d["scripts"], [])
-        self.assertTrue(all(a["reason"] == svc_mod.MOTIVO_SEM_FUNC for a in d["ausentes"]))
+        self.assertTrue(all(a["reason"] == svc_mod.REASON_NO_FEATURE for a in d["ausentes"]))
         self.assertEqual([t["code"] for t in d["telas"]], ["VIEW_LOGS"])
 
     def test_scripts_e_ambientes_iguais_aos_do_disparo(self):
         ctx = self.ctx["op.hml"]
-        d = self.svc.montar(ctx)
-        esperado = sorted(s["id"] for g in self.disparo.scripts_disponiveis(ctx) for s in g["scripts"])
+        d = self.svc.build(ctx)
+        esperado = sorted(s["id"] for g in self.disparo.available_scripts(ctx) for s in g["scripts"])
         self.assertEqual(sorted(s["id"] for s in d["scripts"]), esperado)
         for s in d["scripts"]:
             self.assertTrue(s["environments"])
@@ -85,18 +85,18 @@ class TestPermissoes(unittest.TestCase):
         self.catalog.homologation_save(novo, [prod["id"]], ator="teste")
         ctx["scripts"] = frozenset(ctx["scripts"]) | frozenset([novo])
         ctx["environments"] = frozenset(a for a in ctx["environments"] if a != "PRODUCAO")
-        d = self.svc.montar(ctx)
+        d = self.svc.build(ctx)
         motivos = dict((a["name"], a["reason"]) for a in d["ausentes"])
         nome_inativo = self.catalog.scripts_get(sid_inativo)["name"]
-        self.assertEqual(motivos[nome_inativo], svc_mod.MOTIVO_SCRIPT_INATIVO)
-        self.assertEqual(motivos["So em PRODUCAO"], svc_mod.MOTIVO_SEM_HOMOLOGACAO)
+        self.assertEqual(motivos[nome_inativo], svc_mod.REASON_SCRIPT_INACTIVE)
+        self.assertEqual(motivos["So em PRODUCAO"], svc_mod.REASON_NOT_HOMOLOGATED)
         fora = set(s["name"] for s in self.catalog.scripts_list(pagina=1, tamanho=100)["itens"]
                    if s["id"] not in ctx["scripts"])
         self.assertFalse(fora & set(motivos))
         self.assertFalse(fora & set(s["name"] for s in d["scripts"]))
 
     def test_nao_grava_nem_audita(self):
-        self.svc.montar(self.ctx["op.hml"])
+        self.svc.build(self.ctx["op.hml"])
         self.assertEqual(repo_factory.get("audit").list(pagina=1, tamanho=1)["total"], self.n_auditoria)
 
 

@@ -67,12 +67,12 @@ class ExportacaoAuditoria(object):
         self._arquivo = io.open(fd, "w", encoding="utf-8", newline="")
         self._escritor = csv.writer(self._arquivo, delimiter=";", lineterminator="\r\n")
         self._arquivo.write(u"﻿")
-        self._escritor.writerow(audit_service.CABECALHO_CSV)
+        self._escritor.writerow(audit_service.CSV_HEADER)
         self.linhas = 0
 
     def gravar(self, registros):
         for reg in registros:
-            self._escritor.writerow(audit_service.linha_csv(reg))
+            self._escritor.writerow(audit_service.csv_row(reg))
         self._arquivo.flush()
         os.fsync(self._arquivo.fileno())
         self.linhas += len(registros)

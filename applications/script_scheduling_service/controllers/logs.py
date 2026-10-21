@@ -5,7 +5,7 @@ Regras de escopo ficam em modules/ticket_service.py; aqui so se valida a requisi
 """
 import ticket_service
 from repo_errors import RepoError, RepoNotFound
-from ticket_service import OffsetInvalido
+from ticket_service import InvalidOffset
 
 _MSG_FALHA_LOG = u"Não foi possível ler o log. Tente novamente em instantes."
 
@@ -17,7 +17,7 @@ def _exigir_get():
 
 def _exigir_consulta():
     ctx = _exigir_login()
-    if not ticket_service.pode_consultar(ctx):
+    if not ticket_service.can_query(ctx):
         _log.warning("acesso negado (login=%s funcionalidade=VIEW_LOGS|EXEC_SCRIPT caminho=%s ip=%s)",
                      ctx["login"], request.env.path_info, _ip_origem(), extra={"action": "RBAC"})
         raise HTTP(403, u"Acesso negado.", **response.headers)
@@ -35,8 +35,8 @@ def chunk():
     ctx = _exigir_consulta()
     response.headers["Cache-Control"] = "no-store"
     try:
-        dados = ticket_service.ler_log(ctx, _ticket_id(), request.get_vars.get("offset"))
-    except OffsetInvalido:
+        dados = ticket_service.read_log(ctx, _ticket_id(), request.get_vars.get("offset"))
+    except InvalidOffset:
         raise HTTP(400, u"Offset inválido.", **response.headers)
     except RepoNotFound:
         raise HTTP(404, u"Ticket não encontrado.", **response.headers)
@@ -51,7 +51,7 @@ def baixar():
     _exigir_get()
     ctx = _exigir_consulta()
     try:
-        ticket_id, blocos = ticket_service.blocos_log(ctx, _ticket_id())
+        ticket_id, blocos = ticket_service.log_chunks(ctx, _ticket_id())
     except RepoNotFound:
         raise HTTP(404, u"Ticket não encontrado.", **response.headers)
     except RepoError:

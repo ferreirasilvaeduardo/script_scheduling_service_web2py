@@ -7,9 +7,9 @@ CSRF e Origin de todo POST sao validados em models/10_security.py.
 import admin_crud
 import schedules_service as servico
 import ui_helpers
-from admin_crud import AcessoNegado, OperacaoNegada
+from admin_crud import AccessDenied, OperationDenied
 from repo_errors import RepoConflict, RepoError, RepoNotFound
-from ticket_service import AcessoNegado as DisparoNegado
+from ticket_service import AccessDenied as DisparoNegado
 
 _FUNC = "MANAGE_SCHEDULES"
 _PREFIXO_PARAM = "p_"
@@ -80,8 +80,8 @@ def _pagina_form(dados):
         campos.extend({"name": c["name"], "erro": c["erro"]} for c in dados["form"]["campos"])
         campos.append({"name": "priority", "erro": erros.get("priority")})
         foco = ui_helpers.primeiro_campo_invalido(campos)
-    return dict(dados, erro_geral=erros.get(admin_crud.CAMPO_GERAL), foco_campo=foco,
-                rotulos_tipo=servico.ROTULOS_TIPO, dias_semana=servico.DIAS_SEMANA)
+    return dict(dados, erro_geral=erros.get(admin_crud.GENERAL_FIELD), foco_campo=foco,
+                rotulos_tipo=servico.TYPE_LABELS, dias_semana=servico.WEEKDAYS)
 
 
 def _redirecionar_lista(tipo, mensagem):
@@ -92,13 +92,13 @@ def _redirecionar_lista(tipo, mensagem):
 def lista():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
-    filtros = servico.normalizar_filtros(request.get_vars)
+    filtros = servico.normalize_filters(request.get_vars)
     pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("pagina"), 9))
     tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("tamanho"), 3), _TAMANHOS)
     erro = None
     try:
-        resultado = servico.listar(ctx, filtros, pagina, tamanho)
-    except AcessoNegado:
+        resultado = servico.list_page(ctx, filtros, pagina, tamanho)
+    except AccessDenied:
         _negado()
     except RepoError:
         _log.exception("falha ao listar agendamentos (login=%s)", ctx["login"], extra={"action": _FUNC})
@@ -117,7 +117,7 @@ def agenda():
     response.title = u"Agenda — SSS"
     try:
         return dict(dados=servico.agenda(ctx), erro=None)
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
     except RepoError:
         _log.exception("falha ao montar a agenda (login=%s)", ctx["login"], extra={"action": _FUNC})
@@ -128,14 +128,14 @@ def form():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
     try:
-        dados = servico.formulario(ctx, _texto(request.args(0), 11),
+        dados = servico.form(ctx, _texto(request.args(0), 11),
                                    _texto(request.get_vars.get("script_id"), 10),
                                    _texto(request.get_vars.get("environment"), 30))
     except RepoNotFound:
         _nao_encontrado()
-    except (AcessoNegado, DisparoNegado):
+    except (AccessDenied, DisparoNegado):
         _negado()
-    except OperacaoNegada as exc:
+    except OperationDenied as exc:
         _redirecionar_lista("erro", exc.mensagem)
     return _pagina_form(dados)
 
@@ -149,34 +149,34 @@ def salvar():
     enviados = _regra_post(request.post_vars)
     respostas = _respostas_post()
     try:
-        salvo_id, erros = servico.salvar(ctx, _ip_origem(), dict(enviados, id=agendamento_id, script_id=script_id,
+        salvo_id, erros = servico.save(ctx, _ip_origem(), dict(enviados, id=agendamento_id, script_id=script_id,
                                                                   environment=ambiente, respostas=respostas))
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
-    except OperacaoNegada as exc:
+    except OperationDenied as exc:
         _redirecionar_lista("erro", exc.mensagem)
     except RepoError:
         _log.exception("falha ao salvar agendamento (login=%s id=%r)", ctx["login"], agendamento_id,
                        extra={"action": _FUNC})
-        salvo_id, erros = None, {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}
+        salvo_id, erros = None, {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
     if not erros:
         _redirecionar_lista("sucesso", u"Regra de agendamento salva com sucesso.")
-    conflito = erros.get(admin_crud.CAMPO_GERAL) == admin_crud.MSG_CONFLITO
+    conflito = erros.get(admin_crud.GENERAL_FIELD) == admin_crud.MSG_CONFLICT
     try:
         # No conflito, o formulario volta com os dados atuais e uma nova versao (PADRAO_CRUD_ADMIN).
-        dados = servico.formulario(ctx, agendamento_id, script_id, ambiente,
+        dados = servico.form(ctx, agendamento_id, script_id, ambiente,
                                    enviados=None if conflito else enviados,
                                    valores=None if conflito else respostas, erros=erros)
     except RepoNotFound:
         _nao_encontrado()
-    except (AcessoNegado, DisparoNegado):
+    except (AccessDenied, DisparoNegado):
         _negado()
-    except OperacaoNegada as exc:
+    except OperationDenied as exc:
         _redirecionar_lista("erro", exc.mensagem)
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-    response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.CAMPO_GERAL)
+    response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.GENERAL_FIELD)
                       or ui_helpers.mensagem("formulario")}
     return _pagina_form(dados)
 
@@ -190,12 +190,12 @@ def _acao_estado(funcao, sucesso):
         session.flash = {"tipo": "sucesso", "mensagem": sucesso % alterado["name"]}
     except RepoNotFound:
         _nao_encontrado()
-    except AcessoNegado:
+    except AccessDenied:
         _negado()
-    except OperacaoNegada as exc:
+    except OperationDenied as exc:
         session.flash = {"tipo": "aviso", "mensagem": exc.mensagem}
     except RepoConflict:
-        session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
+        session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLICT}
     except RepoError:
         _log.exception("falha ao alterar a situacao do agendamento (login=%s id=%r)", ctx["login"],
                        agendamento_id, extra={"action": _FUNC})
@@ -204,11 +204,11 @@ def _acao_estado(funcao, sucesso):
 
 
 def pausar():
-    _acao_estado(servico.pausar, u"Regra %s pausada.")
+    _acao_estado(servico.pause, u"Regra %s pausada.")
 
 
 def retomar():
-    _acao_estado(servico.retomar, u"Regra %s retomada.")
+    _acao_estado(servico.resume, u"Regra %s retomada.")
 
 
 def previa():
@@ -216,8 +216,8 @@ def previa():
     ctx = _exigir_func(_FUNC)
     dados = _regra_post(request.post_vars)
     try:
-        resultado = servico.previa(ctx, dados)
-    except AcessoNegado:
+        resultado = servico.preview(ctx, dados)
+    except AccessDenied:
         response.status = 403
         return response.json({"erro": u"Acesso negado."})
     return response.json(resultado)
