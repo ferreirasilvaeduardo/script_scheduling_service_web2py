@@ -53,7 +53,7 @@ class TestViewsCR007(unittest.TestCase):
 
     def test_diagnosticos_aparecem_sem_agentes_e_escapam_conteudo(self):
         agora = datetime.datetime(2026, 10, 17)
-        painel = {"agentes": [], "resumo": {}, "agora": agora, "config_web": "hb=10",
+        painel = {"agents": [], "resumo": {}, "agora": agora, "config_web": "hb=10",
                   "fila_sem_atendente": [{"environment": "HOMOLOGACAO", "interpreter": "BASH",
                                           "quantidade": 2, "mais_antigo": agora}],
                   "rodando_sem_pid": [{"id": 1, "environment": "HOMOLOGACAO", "agent_id": "agt01",

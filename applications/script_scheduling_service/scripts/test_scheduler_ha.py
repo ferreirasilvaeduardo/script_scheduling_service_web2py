@@ -2,7 +2,7 @@
 """Agente em alta disponibilidade (F8.4): desdobro dos agendamentos (F8.4b; README §7.4 e §7.5).
 
 Repositorio da agenda em memoria com a semantica do contrato (rowcount pela antiga_data, SKIP LOCKED, ROLLBACK
-que desfaz a regra, OcorrenciaDuplicada), contexto RBAC em memoria e as funcoes reais de recurrence, rbac e
+que desfaz a regra, DuplicateOccurrence), contexto RBAC em memoria e as funcoes reais de recurrence, rbac e
 params_compiler. Relogio do banco (agora_banco) e monotonico injetaveis.
 """
 import _testenv  # noqa: F401
@@ -18,7 +18,7 @@ import db_conn
 import schedule_expansion
 import rbac
 import sql_ident
-from repo_oracle.scheduler_schedules import OcorrenciaDuplicada
+from repo_oracle.scheduler_schedules import DuplicateOccurrence
 from test_scheduler_queue import _Erro
 
 AGENTE = "srv-ha"
@@ -54,17 +54,17 @@ class _Conn(object):
     def rollback(self):
         self.rollbacks += 1
         if self.agenda._antes is not None:
-            self.agenda.regras, self.agenda.tickets, self.agenda.auditoria = self.agenda._antes
+            self.agenda.regras, self.agenda.tickets, self.agenda.audit = self.agenda._antes
             self.agenda._antes = None
 
 
 class _Agenda(object):
-    """Contrato do RepoSchedulerAgenda em memoria."""
+    """Contrato do RepoSchedulerSchedules em memoria."""
 
     def __init__(self):
         self.regras = {}
         self.tickets = {}
-        self.auditoria = []
+        self.audit = []
         self.travadas_por_outro = set()
         self.falhas = []
         self.duplicar = set()
@@ -77,35 +77,35 @@ class _Agenda(object):
         if self.falhas and self.falhas[0][0] == nome:
             raise self.falhas.pop(0)[1]
         if self._antes is None:
-            self._antes = (copy.deepcopy(self.regras), copy.deepcopy(self.tickets), list(self.auditoria))
+            self._antes = (copy.deepcopy(self.regras), copy.deepcopy(self.tickets), list(self.audit))
 
-    def regras_vencidas(self, conn, lote, ult_prox=None, ult_id=0):
+    def due_rules(self, conn, lote, ult_prox=None, ult_id=0):
         vencidas = sorted((r["next_run_at"], r["id"]) for r in self.regras.values()
                           if r["active"] == "Y" and r["next_run_at"] <= AGORA)
         if ult_prox is not None:
             vencidas = [v for v in vencidas if v > (ult_prox, ult_id)]
         return [(rid, prox) for prox, rid in vencidas[:lote]]
 
-    def travar_regra(self, conn, rid):
+    def lock_rule(self, conn, rid):
         r = self.regras.get(rid)
         return rid not in self.travadas_por_outro and r is not None and r["active"] == "Y"
 
-    def carregar_regra(self, conn, rid):
-        if self.falhas and self.falhas[0][0] == "carregar_regra":
+    def load_rule(self, conn, rid):
+        if self.falhas and self.falhas[0][0] == "load_rule":
             raise self.falhas.pop(0)[1]
         return copy.deepcopy(self.regras.get(rid))
 
-    def login_do_usuario(self, conn, usuario_id):
+    def user_login(self, conn, usuario_id):
         return LOGIN
 
-    def script_e_vinculos(self, conn, script_id):
+    def script_and_links(self, conn, script_id):
         return copy.deepcopy(self.scripts.get(script_id)), copy.deepcopy(self.vinculos.get(script_id, []))
 
-    def status_ticket(self, conn, tid):
+    def get_ticket_status(self, conn, tid):
         t = self.tickets.get(tid)
         return (t["status"], t["created_at"]) if t else None
 
-    def proximo_ticket_id(self, conn):
+    def next_ticket_id(self, conn):
         self.seq += 1
         return self.seq
 
@@ -116,11 +116,11 @@ class _Agenda(object):
     def _ticket(self, regra, tid, ticket, linhas):
         self._escrever("inserir_ticket")
         if (regra["id"], ticket["scheduled_at"]) in self.duplicar:
-            raise OcorrenciaDuplicada("ix_tck_ocor")
+            raise DuplicateOccurrence("ix_tck_ocor")
         self.tickets[tid] = dict(ticket, id=tid, status="PENDING", schedule_id=regra["id"], created_at=AGORA,
                                  created_by="SYSTEM:%s" % AGENTE, respostas=list(linhas))
 
-    def reservar_e_criar_ticket(self, conn, regra, antiga, nova, tid, ticket, linhas, agente_id):
+    def reserve_and_create_ticket(self, conn, regra, antiga, nova, tid, ticket, linhas, agente_id):
         self._escrever("reservar")
         if not self._regra_ok(regra["id"], antiga):
             return False
@@ -128,41 +128,41 @@ class _Agenda(object):
         self._ticket(regra, tid, ticket, linhas)
         return True
 
-    def concluir_com_ticket(self, conn, regra, antiga, tid, ticket, linhas, agente_id):
+    def complete_with_ticket(self, conn, regra, antiga, tid, ticket, linhas, agente_id):
         self._escrever("concluir")
         if not self._regra_ok(regra["id"], antiga):
             return False
         self.regras[regra["id"]].update(active="N", pause_reason="COMPLETED", last_run_at=AGORA,
                                         last_ticket_id=tid, updated_by="SYSTEM:%s" % agente_id)
         self._ticket(regra, tid, ticket, linhas)
-        self.auditoria.append((regra["id"], "pause_reason: COMPLETED"))
+        self.audit.append((regra["id"], "pause_reason: COMPLETED"))
         return True
 
-    def concluir_sem_ticket(self, conn, rid, antiga, agente_id):
+    def complete_without_ticket(self, conn, rid, antiga, agente_id):
         self._escrever("concluir")
         if not self._regra_ok(rid, antiga):
             return False
         self.regras[rid].update(active="N", pause_reason="COMPLETED", updated_by="SYSTEM:%s" % agente_id)
-        self.auditoria.append((rid, "pause_reason: COMPLETED"))
+        self.audit.append((rid, "pause_reason: COMPLETED"))
         return True
 
-    def avancar_sem_ticket(self, conn, rid, antiga, nova):
+    def advance_without_ticket(self, conn, rid, antiga, nova):
         self._escrever("avancar")
         if not self._regra_ok(rid, antiga):
             return False
         self.regras[rid]["next_run_at"] = nova
         return True
 
-    def pausar(self, conn, rid, antiga, motivo, detalhe, agente_id):
-        self._escrever("pausar")
+    def pause(self, conn, rid, antiga, motivo, detalhe, agente_id):
+        self._escrever("pause")
         if not self._regra_ok(rid, antiga):
             return False
         self.regras[rid].update(active="N", pause_reason=motivo, updated_by="SYSTEM:%s" % agente_id)
-        self.auditoria.append((rid, "pause_reason: %s%s" % (motivo, "; " + detalhe if detalhe else "")))
+        self.audit.append((rid, "pause_reason: %s%s" % (motivo, "; " + detalhe if detalhe else "")))
         return True
 
-    def pausar_cron_erro(self, conn, regra, antiga, tid, ticket, linhas, detalhe, agente_id):
-        self._escrever("pausar")
+    def pause_cron_error(self, conn, regra, antiga, tid, ticket, linhas, detalhe, agente_id):
+        self._escrever("pause")
         if not self._regra_ok(regra["id"], antiga):
             return False
         r = self.regras[regra["id"]]
@@ -170,32 +170,32 @@ class _Agenda(object):
         if tid is not None:
             r.update(last_run_at=AGORA, last_ticket_id=tid)
             self._ticket(regra, tid, ticket, linhas)
-        self.auditoria.append((regra["id"], "pause_reason: INVALID_CRON"))
+        self.audit.append((regra["id"], "pause_reason: INVALID_CRON"))
         return True
 
-    def pausar_erro_interno(self, conn, rid, detalhe, agente_id):
-        self._escrever("pausar_erro_interno")
+    def pause_internal_error(self, conn, rid, detalhe, agente_id):
+        self._escrever("pause_internal_error")
         r = self.regras[rid]
         if r["active"] != "Y":
             return False
         r.update(active="N", pause_reason="INTERNAL_ERROR", updated_by="SYSTEM:%s" % agente_id)
-        self.auditoria.append((rid, "pause_reason: INTERNAL_ERROR; %s" % detalhe))
+        self.audit.append((rid, "pause_reason: INTERNAL_ERROR; %s" % detalhe))
         return True
 
 
 class _Fila(object):
-    """contexto_execucao do RepoSchedulerFila em memoria (o mesmo ctx RBAC da web)."""
+    """contexto_execucao do RepoSchedulerQueue em memoria (o mesmo ctx RBAC da web)."""
 
     def __init__(self):
         self.usuario = {"user_id": 7, "login": LOGIN, "profile_id": 2, "usuario_ativo": "Y", "perfil_ativo": "Y",
-                        "is_admin": "N", "perm_version": 1, "funcionalidades": ["EXEC_SCRIPT"], "ambientes": ["PRD"],
+                        "is_admin": "N", "perm_version": 1, "features": ["EXEC_SCRIPT"], "environments": ["PRD"],
                         "scripts": [3]}
         self.script = {"id": 3, "name": "carga", "interpreter": "SH", "path_file": "/opt/x/carga.sh", "active": "Y",
                        "timeout_s": 600}
         self.ambiente = {"id": 1, "name": "PRD", "description": "Producao", "connection": None, "active": "Y"}
         self.homologacoes = frozenset([1])
 
-    def contexto_execucao(self, conn, ticket):
+    def execution_context(self, conn, ticket):
         return {"script": dict(self.script), "environment": dict(self.ambiente), "homologacoes": self.homologacoes,
                 "ctx": rbac.contexto_usuario(dict(self.usuario)) if self.usuario else None, "agendamento": None}
 
@@ -216,8 +216,8 @@ class _Base(unittest.TestCase):
                                   "param_type": "NAMED", "max_parallel_env": 2, "timeout_s": 600, "active": "Y"}
         self.agenda.vinculos[3] = [_vinculo()]
         self.conn = _Conn(self.agenda)
-        self.agora = AGORA
-        p = mock.patch.object(db_conn, "db_now", lambda conn: self.agora)
+        self.now = AGORA
+        p = mock.patch.object(db_conn, "db_now", lambda conn: self.now)
         p.start()
         self.addCleanup(p.stop)
         self.monotonico = [0.0]
@@ -264,7 +264,7 @@ class TestDesdobro(_Base):
 
     def test_corrida_e_outro_agente(self):
         self.regra()
-        self.agenda.reservar_e_criar_ticket = lambda *a: False
+        self.agenda.reserve_and_create_ticket = lambda *a: False
         self.assertEqual(self.processar(), "CORRIDA")
         self.assertEqual((self.agenda.tickets, self.conn.commits), ({}, 0))
         self.agenda.travadas_por_outro.add(1)
@@ -272,8 +272,8 @@ class TestDesdobro(_Base):
 
     def test_pausas_pelo_rbac_com_a_traducao_unica(self):
         casos = (("usuario_ativo", "N", "USER_INACTIVE"), ("perfil_ativo", "N", "NO_PERMISSION"),
-                 ("scripts", [], "NO_PERMISSION"), ("ambientes", [], "NO_PERMISSION"),
-                 ("funcionalidades", [], "NO_PERMISSION"))
+                 ("scripts", [], "NO_PERMISSION"), ("environments", [], "NO_PERMISSION"),
+                 ("features", [], "NO_PERMISSION"))
         for i, (campo, valor, motivo) in enumerate(casos, 1):
             self.setUp()
             self.regra(i)
@@ -291,7 +291,7 @@ class TestDesdobro(_Base):
             self.assertEqual(self.agenda.regras[1]["pause_reason"], motivo)
 
     def test_r33_todo_motivo_do_rbac_cabe_na_ck(self):
-        aceitos = sql_ident.TABLES["agendamentos"]["cks"]["pause"]["expr"]
+        aceitos = sql_ident.TABLES["schedules"]["cks"]["pause"]["expr"]
         for nome in dir(rbac.Motivo):
             if nome.startswith("_") or nome == "OK":
                 continue
@@ -370,7 +370,7 @@ class TestDesdobro(_Base):
         self.assertEqual((r["active"], r["pause_reason"], r["next_run_at"]),
                          ("N", "COMPLETED", datetime.datetime(2026, 10, 20, 9, 55)), "proxima_execucao mantida (D1)")
         self.assertEqual(len(self.agenda.tickets), 1)
-        self.assertEqual(self.agenda.auditoria, [(1, "pause_reason: COMPLETED")])
+        self.assertEqual(self.agenda.audit, [(1, "pause_reason: COMPLETED")])
         self.assertFalse(any("WARNING" in l for l in logs.output), "conclusao e INFO")
         self.setUp()
         self.cfg = _Cfg(misfire_policy="SKIP")
@@ -398,7 +398,7 @@ class TestDesdobro(_Base):
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.assertEqual(self.processar(), "PAUSADA")
         self.assertEqual(self.agenda.regras[1]["pause_reason"], "INVALID_PARAM")
-        detalhe = self.agenda.auditoria[0][1]
+        detalhe = self.agenda.audit[0][1]
         self.assertTrue(detalhe.startswith("pause_reason: INVALID_PARAM; data_ref: "), detalhe)
         self.setUp()
         self.regra(params_json="{nao json")
@@ -440,7 +440,7 @@ class TestDesdobro(_Base):
         self.assertEqual((r["next_run_at"], r["last_ticket_id"]), (datetime.datetime(2026, 10, 21, 9, 55), None))
         self.assertEqual((self.conn.rollbacks, self.conn.commits), (1, 1))
         self.assertTrue(any("OCORRENCIA_DUPLICADA" in l for l in logs.output))
-        self.assertEqual(self.agenda.regras_vencidas(self.conn, 50), [], "nao e reprocessada no ciclo seguinte")
+        self.assertEqual(self.agenda.due_rules(self.conn, 50), [], "nao e reprocessada no ciclo seguinte")
 
     def test_r22_erro_de_banco_tres_vezes_e_erro_interno(self):
         self.regra()
@@ -456,7 +456,7 @@ class TestDesdobro(_Base):
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.assertEqual(d.processar(self.conn, 1), "INTERNAL_ERROR")
         self.assertEqual(self.agenda.regras[1]["pause_reason"], "INTERNAL_ERROR")
-        self.assertIn("3 falhas seguidas de banco (ORA-01653)", self.agenda.auditoria[-1][1])
+        self.assertIn("3 falhas seguidas de banco (ORA-01653)", self.agenda.audit[-1][1])
         # Sucesso zera o contador.
         self.setUp()
         self.regra()
@@ -469,16 +469,16 @@ class TestDesdobro(_Base):
         # Excecao que nao e de banco pausa na primeira, em transacao separada (R-08).
         self.setUp()
         self.regra()
-        self.agenda.falhas = [("carregar_regra", ValueError("dado incoerente"))]
+        self.agenda.falhas = [("load_rule", ValueError("dado incoerente"))]
         with self.assertLogs("sss_scheduler", "ERROR"):
             self.assertEqual(self.processar(), "INTERNAL_ERROR")
         self.assertEqual(self.agenda.regras[1]["pause_reason"], "INTERNAL_ERROR")
-        self.assertEqual(self.agenda.auditoria[-1][1], "pause_reason: INTERNAL_ERROR; ValueError")
+        self.assertEqual(self.agenda.audit[-1][1], "pause_reason: INTERNAL_ERROR; ValueError")
 
     def test_pausa_que_falha_ignora_a_regra_no_ciclo(self):
         self.regra(1)
         self.regra(2, next_run_at=datetime.datetime(2026, 10, 20, 9, 56))
-        self.agenda.falhas = [("carregar_regra", ValueError("x")), ("pausar_erro_interno", ValueError("y"))]
+        self.agenda.falhas = [("load_rule", ValueError("x")), ("pause_internal_error", ValueError("y"))]
         with self.assertLogs("sss_scheduler", "ERROR"):
             stats = self.des().executar(self.conn)
         self.assertEqual(stats["tickets"], 1, "a regra 2 segue")
@@ -489,8 +489,8 @@ class TestDesdobro(_Base):
             self.regra(i, next_run_at=datetime.datetime(2026, 10, 20, 9, 50 + i))
         self.cfg = _Cfg(schedule_batch_size=2)
         paginas = []
-        original = self.agenda.regras_vencidas
-        self.agenda.regras_vencidas = lambda *a: paginas.append(a[2:]) or original(*a)
+        original = self.agenda.due_rules
+        self.agenda.due_rules = lambda *a: paginas.append(a[2:]) or original(*a)
         self.assertEqual(self.des().executar(self.conn)["tickets"], 5)
         self.assertEqual(len(paginas), 3, "2 + 2 + 1")
         self.assertEqual(paginas[0], (None, 0))
@@ -544,19 +544,19 @@ class TestDesdobroOracle(unittest.TestCase):
         return self.contrato._limpar_massa(self)
 
     def setUp(self):
-        from repo_oracle.scheduler_schedules import RepoSchedulerAgenda
-        from repo_oracle.scheduler_queue import RepoSchedulerFila
+        from repo_oracle.scheduler_schedules import RepoSchedulerSchedules
+        from repo_oracle.scheduler_queue import RepoSchedulerQueue
         self.contrato.setUp(self)
         self._massa = self.trc._Massa(self.obter_repo)
         self.c = self._massa.cenario()
-        cat, self.rbac = self.obter_repo("catalogo"), self.obter_repo("rbac")
+        cat, self.rbac = self.obter_repo("catalog"), self.obter_repo("rbac")
         self.cat = cat
-        funcs = [f["id"] for f in self.rbac.funcionalidades_listar() if f["code"] == "EXEC_SCRIPT"]
-        self.rbac.matriz_salvar(self.c["perfil"]["id"], funcs, [self.c["amb1"]["id"]], [self.c["scr"]["id"]],
+        funcs = [f["id"] for f in self.rbac.features_list() if f["code"] == "EXEC_SCRIPT"]
+        self.rbac.matrix_save(self.c["perfil"]["id"], funcs, [self.c["amb1"]["id"]], [self.c["scr"]["id"]],
                                 ator=self._massa.ator)
         self.agente = "tst-ha-%s" % self._massa.suf
-        self.des = schedule_expansion.Desdobro(RepoSchedulerAgenda(cat._owner, cat._prefixo),
-                                     RepoSchedulerFila(cat._owner, cat._prefixo), self.agente, _Cfg(),
+        self.des = schedule_expansion.Desdobro(RepoSchedulerSchedules(cat._owner, cat._prefixo),
+                                     RepoSchedulerQueue(cat._owner, cat._prefixo), self.agente, _Cfg(),
                                      lambda: 0.0)
         self.conn = cat._obter_conexao()
         self.addCleanup(self.conn.close)
@@ -564,14 +564,14 @@ class TestDesdobroOracle(unittest.TestCase):
     def tearDown(self):
         self.conn.rollback()
         cur = self.conn.cursor()
-        agd, aud, tck = (self.cat.qualificar_tabela(t) for t in ("agendamentos", "auditoria", "tickets"))
-        for rid in self._massa.criados["agendamentos"]:
+        agd, aud, tck = (self.cat.qualify_table(t) for t in ("schedules", "audit", "tickets"))
+        for rid in self._massa.criados["schedules"]:
             cur.execute("SELECT id FROM " + tck + " WHERE schedule_id = :id", id=rid)
             for (tid,) in cur.fetchall():
                 self._massa.anotar("tickets", tid)
             cur.execute("DELETE FROM " + aud + " WHERE entity = 'tbsss_schedules' AND entity_id = :id", id=rid)
         self.conn.commit()
-        self.rbac.matriz_salvar(self.c["perfil"]["id"], [], [], [], ator=self._massa.ator)
+        self.rbac.matrix_save(self.c["perfil"]["id"], [], [], [], ator=self._massa.ator)
         self.contrato.tearDown(self)
 
     def _regra(self, respostas):
@@ -588,19 +588,19 @@ class TestDesdobroOracle(unittest.TestCase):
         with self.assertLogs("sss_scheduler", "INFO"):
             self.assertEqual(self.des.processar(self.conn, ok["id"]), "TICKET")
             self.assertEqual(self.des.processar(self.conn, ruim["id"]), "PAUSADA")
-        agd = self.obter_repo("agendamentos")
-        r_ok, r_ruim = agd.obter(ok["id"]), agd.obter(ruim["id"])
+        agd = self.obter_repo("schedules")
+        r_ok, r_ruim = agd.get(ok["id"]), agd.get(ruim["id"])
         self.assertGreater(r_ok["next_run_at"], ok["next_run_at"])
-        t = self.obter_repo("tickets").obter(r_ok["last_ticket_id"])
+        t = self.obter_repo("tickets").get(r_ok["last_ticket_id"])
         self.assertEqual((t["schedule_id"], t["requested_by"], t["created_by"], t["scheduled_at"], t["status"]),
                          (ok["id"], self.c["login"], "SYSTEM:%s" % self.agente, ok["next_run_at"], "PENDING"))
         snap = json.loads(t["submitted_params"])
         self.assertEqual((snap["version"], snap["path_file"]), (4, self.c["scr"]["path_file"]))
-        self.assertEqual([x["answer_value"] for x in self.obter_repo("tickets").respostas(t["id"])], ["valor-a"])
+        self.assertEqual([x["answer_value"] for x in self.obter_repo("tickets").answers(t["id"])], ["valor-a"])
         self.assertEqual((r_ruim["active"], r_ruim["pause_reason"], r_ruim["updated_by"]),
                          ("N", "INVALID_PARAM", "SYSTEM:%s" % self.agente))
         # A regra ja avancada nao e mais vencida; a pausada tambem nao.
-        vencidas = [rid for rid, _p in self.des.agenda.regras_vencidas(self.conn, 1000)]
+        vencidas = [rid for rid, _p in self.des.agenda.due_rules(self.conn, 1000)]
         self.conn.rollback()
         self.assertNotIn(ok["id"], vencidas)
         self.assertNotIn(ruim["id"], vencidas)

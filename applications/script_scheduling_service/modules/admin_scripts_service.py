@@ -19,7 +19,7 @@ import ui_helpers
 from admin_crud import CAMPO_GERAL, OperacaoNegada
 from params_compiler import ParamErro, TIPOS_PARAM
 from path_guard import Codigo, PathGuardErro
-from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
+from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FUNCIONALIDADE = "MANAGE_SCRIPTS"
 CAMPOS_EDITAVEIS = ("name", "description", "script_group", "category", "stage", "interpreter", "path_file",
@@ -157,19 +157,19 @@ class ServicoAdminScripts(object):
     def _obter(self, script_id):
         sid = _id(script_id)
         if sid is None:
-            raise RepoNaoEncontrado("script invalido")
-        return self._catalogo.scripts_obter(sid)
+            raise RepoNotFound("script invalido")
+        return self._catalogo.scripts_get(sid)
 
     def _agendamentos_ativos(self, **filtros):
         filtros["active"] = "Y"
-        return self._agendamentos.listar(filtros=filtros, pagina=1, tamanho=_TAMANHO_CONTAGEM)["total"]
+        return self._agendamentos.list(filtros=filtros, pagina=1, tamanho=_TAMANHO_CONTAGEM)["total"]
 
     # ----------------------------------------------------------------- leitura
 
-    def listar(self, ctx, filtros, pagina, tamanho):
+    def list(self, ctx, filtros, pagina, tamanho):
         """Pagina de scripts (nome ASC) com ambientes homologados e quantidade de parametros."""
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        return self._catalogo.scripts_listar(filtros=filtros, pagina=pagina, tamanho=tamanho)
+        return self._catalogo.scripts_list(filtros=filtros, pagina=pagina, tamanho=tamanho)
 
     def formulario(self, ctx, script_id=None):
         """Dados do formulario. Inclui agendamentos ativos na edicao."""
@@ -253,7 +253,7 @@ class ServicoAdminScripts(object):
             erros["path_file"] = MENSAGENS_PATH[exc.codigo]
 
     def _pre_tipo_param(self, script_id, tipo, erros):
-        vinculos = self._catalogo.script_params_obter(script_id)
+        vinculos = self._catalogo.script_params_get(script_id)
         if tipo == "NONE" and vinculos:
             erros["param_type"] = MSG_NENHUM_VINCULADO
         elif tipo == "NAMED":
@@ -264,7 +264,7 @@ class ServicoAdminScripts(object):
     def _violacao(self, ctx, exc, erros, script_id=None):
         if exc.constraint == "sss_scr_nomeado_sem_flag" and script_id:
             erros["param_type"] = msg_nomeado_sem_flag(
-                [v["code"] for v in self._catalogo.script_params_obter(script_id) if not v.get("param_flag")])
+                [v["code"] for v in self._catalogo.script_params_get(script_id) if not v.get("param_flag")])
         else:
             campo, mensagem = _CAMPO_POR_CONSTRAINT.get(exc.constraint, (CAMPO_GERAL, admin_crud.MSG_FALHA))
             erros[campo] = mensagem
@@ -274,7 +274,7 @@ class ServicoAdminScripts(object):
     # ----------------------------------------------------------------- escrita
 
     def salvar(self, ctx, ip, script_id, dados):
-        """Inclui ou altera um script. Retorna (id, erros, aviso). Lanca RepoNaoEncontrado e AcessoNegado."""
+        """Inclui ou altera um script. Retorna (id, erros, aviso). Lanca RepoNotFound e AcessoNegado."""
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         erros = {}
         atual = None if script_id in (None, "") else self._obter(script_id)
@@ -287,8 +287,8 @@ class ServicoAdminScripts(object):
             novo = dict(reg, active="Y")
             auditoria = admin_crud.auditoria(ctx, ip, "CREATE", admin_crud.detalhe_insercao(novo, CAMPOS_INSERCAO))
             try:
-                criado = self._catalogo.scripts_inserir(novo, auditoria=auditoria)
-            except RepoViolacao as exc:
+                criado = self._catalogo.scripts_insert(novo, auditoria=auditoria)
+            except RepoViolation as exc:
                 self._violacao(ctx, exc, erros)
                 return None, erros, None
             self._log.info("script incluido (login=%s script=%s)", ctx.get("login"), criado["name"],
@@ -308,11 +308,11 @@ class ServicoAdminScripts(object):
         if detalhe is None:
             return atual["id"], {}, aviso
         try:
-            self._catalogo.scripts_alterar(atual["id"], alteracoes, esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
+            self._catalogo.scripts_update(atual["id"], alteracoes, esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
                                            auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
-        except RepoConflito:
+        except RepoConflict:
             return atual["id"], {CAMPO_GERAL: admin_crud.MSG_CONFLITO}, None
-        except RepoViolacao as exc:
+        except RepoViolation as exc:
             self._violacao(ctx, exc, erros, atual["id"])
             return atual["id"], erros, None
         self._log.info("script alterado (login=%s script=%s)", ctx.get("login"), reg["name"],
@@ -324,7 +324,7 @@ class ServicoAdminScripts(object):
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         atual = self._obter(script_id)
         if admin_crud.texto(versao, 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
-            raise RepoConflito("versao divergente")
+            raise RepoConflict("versao divergente")
         novo_ativo = "N" if atual["active"] == "Y" else "Y"
         mudancas = {"active": novo_ativo}
         if novo_ativo == "Y":
@@ -337,7 +337,7 @@ class ServicoAdminScripts(object):
         acao = "DEACTIVATE" if novo_ativo == "N" else "UPDATE"
         if novo_ativo == "N":
             detalhe = u"%s; agendamentos ativos afetados: %d" % (detalhe, self._agendamentos_ativos(script_id=atual["id"]))
-        alterado = self._catalogo.scripts_alterar(atual["id"], mudancas,
+        alterado = self._catalogo.scripts_update(atual["id"], mudancas,
                                                   esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
                                                   auditoria=admin_crud.auditoria(ctx, ip, acao, detalhe))
         self._log.info("script %s (login=%s script=%s)", "desativado" if novo_ativo == "N" else "reativado",
@@ -350,9 +350,9 @@ class ServicoAdminScripts(object):
         """Tela de homologacao: ambientes ativos e inativos ja homologados, com agendamentos ativos por ambiente."""
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         script = self._obter(script_id)
-        marcados = set(self._catalogo.homologacao_obter(script["id"]))
+        marcados = set(self._catalogo.homologation_get(script["id"]))
         ambientes = []
-        for a in self._catalogo.ambientes_listar(pagina=1, tamanho=_CATALOGO_MAX)["itens"]:
+        for a in self._catalogo.environments_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"]:
             if a["active"] != "Y" and a["id"] not in marcados:
                 continue
             ambientes.append({"id": a["id"], "name": a["name"], "description": a.get("description") or "",
@@ -360,7 +360,7 @@ class ServicoAdminScripts(object):
                               "agendamentos_ativos": self._agendamentos_ativos(script_id=script["id"],
                                                                                environment=a["name"])})
         return {"script": {"id": script["id"], "name": script["name"], "active": script["active"]},
-                "ambientes": ambientes, "version": _hash(sorted(marcados))}
+                "environments": ambientes, "version": _hash(sorted(marcados))}
 
     def salvar_homologacao(self, ctx, ip, script_id, ambiente_ids, versao):
         """Substitui a homologacao (so ambientes ativos podem ser adicionados; inativos existentes podem sair, D9).
@@ -377,10 +377,10 @@ class ServicoAdminScripts(object):
             if aid is None:
                 return None, {CAMPO_GERAL: MSG_HOMOLOG_INVALIDA}
             enviados.add(aid)
-        atuais = self._catalogo.homologacao_obter(script["id"])
+        atuais = self._catalogo.homologation_get(script["id"])
         if admin_crud.texto(versao, 64) != _hash(sorted(atuais)):
             return None, {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
-        ambientes = dict((a["id"], a) for a in self._catalogo.ambientes_listar(pagina=1, tamanho=_CATALOGO_MAX)["itens"])
+        ambientes = dict((a["id"], a) for a in self._catalogo.environments_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"])
         if enviados - set(ambientes):
             return None, {CAMPO_GERAL: MSG_HOMOLOG_INVALIDA}
         inativos = set(i for i, a in ambientes.items() if a["active"] != "Y")
@@ -398,9 +398,9 @@ class ServicoAdminScripts(object):
         detalhe = admin_crud.detalhe_livre(u"homologação: %s%s" % (
             diff, (u"; agendamentos ativos afetados: %d" % afetados) if removidos else u""))
         try:
-            self._catalogo.homologacao_salvar(script["id"], sorted(final), esperado=atuais,
+            self._catalogo.homologation_save(script["id"], sorted(final), esperado=atuais,
                                               auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
-        except RepoConflito:
+        except RepoConflict:
             return None, {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
         self._log.info("homologacao alterada (login=%s script=%s)", ctx.get("login"), script["name"],
                        extra={"action": "UPDATE"})
@@ -409,13 +409,13 @@ class ServicoAdminScripts(object):
     # -------------------------------------------------------------- vinculos
 
     def _dicionario(self):
-        return dict((p["id"], p) for p in self._catalogo.parametros_listar(pagina=1, tamanho=_CATALOGO_MAX)["itens"])
+        return dict((p["id"], p) for p in self._catalogo.parameters_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"])
 
-    def parametros(self, ctx, script_id):
+    def parameters(self, ctx, script_id):
         """Tela de vinculos: vinculos atuais (sub sigiloso nunca devolvido), dicionario para busca e versao."""
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         script = self._obter(script_id)
-        atuais = self._catalogo.script_params_obter(script["id"])
+        atuais = self._catalogo.script_params_get(script["id"])
         dicionario = self._dicionario()
 
         def resumo(p):
@@ -510,7 +510,7 @@ class ServicoAdminScripts(object):
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         script = self._obter(script_id)
-        atuais = self._catalogo.script_params_obter(script["id"])
+        atuais = self._catalogo.script_params_get(script["id"])
         if admin_crud.texto(versao, 64) != _versao_vinculos(atuais, self._dicionario()):
             return None, {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
         erros = {}
@@ -522,13 +522,13 @@ class ServicoAdminScripts(object):
         antes, depois = self._descrever(atuais), self._descrever(final)
         detalhe = admin_crud.detalhe_livre(u"vínculos: %s → %s" % (antes, depois))
         try:
-            self._catalogo.script_params_salvar(
+            self._catalogo.script_params_save(
                 script["id"], [dict((k, v[k]) for k in ("parameter_id", "sort_order", "required", "default_value_override"))
                                for v in final],
                 esperado=_lidos(atuais), auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
-        except RepoConflito:
+        except RepoConflict:
             return None, {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
-        except RepoViolacao as exc:
+        except RepoViolation as exc:
             self._log.warning("vinculos rejeitados pelo repositorio (login=%s script=%s constraint=%s)",
                               ctx.get("login"), script["name"], exc.constraint, extra={"action": FUNCIONALIDADE})
             if exc.constraint == "sss_scr_nomeado_sem_flag":
@@ -547,7 +547,7 @@ class ServicoAdminScripts(object):
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         script = self._obter(script_id)
-        atuais = self._catalogo.script_params_obter(script["id"])
+        atuais = self._catalogo.script_params_get(script["id"])
         erros = {}
         if vinculos_json is None:
             vinculos = atuais
@@ -575,20 +575,20 @@ def _servico():
             import sss_logging
             fabrica = current.repo_factory
             cfg = current.sss_cfg
-            tickets = fabrica.obter("tickets")
+            tickets = fabrica.get("tickets")
             _padrao = ServicoAdminScripts(
-                catalogo=fabrica.obter("catalogo"),
-                agendamentos=fabrica.obter("agendamentos"),
+                catalogo=fabrica.get("catalog"),
+                agendamentos=fabrica.get("schedules"),
                 sss_env=cfg.app.sss_env,
                 log=sss_logging.get_logger("sss_web", cfg),
-                relogio=tickets.agora,
+                relogio=tickets.now,
             )
         return _padrao
 
 
 def listar(ctx, filtros, pagina, tamanho):
     """Pagina de scripts (servico padrao)."""
-    return _servico().listar(ctx, filtros, pagina, tamanho)
+    return _servico().list(ctx, filtros, pagina, tamanho)
 
 
 def formulario(ctx, script_id=None):
@@ -618,7 +618,7 @@ def salvar_homologacao(ctx, ip, script_id, ambiente_ids, versao):
 
 def parametros(ctx, script_id):
     """Tela de vinculos de parametros (servico padrao)."""
-    return _servico().parametros(ctx, script_id)
+    return _servico().parameters(ctx, script_id)
 
 
 def salvar_parametros(ctx, ip, script_id, vinculos_json, versao):

@@ -31,13 +31,13 @@ def _hash_com_iteracoes(senha, iteracoes):
 class _Relogio(object):
 
     def __init__(self, agora):
-        self.agora = agora
+        self.now = agora
 
     def __call__(self):
-        return self.agora
+        return self.now
 
     def avancar(self, segundos):
-        self.agora += datetime.timedelta(seconds=segundos)
+        self.now += datetime.timedelta(seconds=segundos)
 
 
 class TestAuthService(unittest.TestCase):
@@ -48,33 +48,33 @@ class TestAuthService(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.senha = secrets.token_urlsafe(16)
-        env = mock.patch.dict(os.environ, {repo_factory.ENV_SENHA_DEV: self.senha})
+        env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: self.senha})
         env.start()
         self.addCleanup(env.stop)
 
-        repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
-        self.addCleanup(repo_factory.configurar, None)
+        self.addCleanup(repo_factory.configure, None)
 
-        self.usuarios = repo_factory.obter("usuarios")
-        self.rbac = repo_factory.obter("rbac")
-        self.auditoria = repo_factory.obter("auditoria")
+        self.users = repo_factory.get("users")
+        self.rbac = repo_factory.get("rbac")
+        self.audit = repo_factory.get("audit")
         self.relogio = _Relogio(INICIO)
         # O bloqueio usa o relogio do banco (README §4.2): o relogio de teste e o SYSDATE do FAKE.
-        repo_factory._fake_store.definir_relogio(self.relogio)
+        repo_factory._fake_store.set_clock(self.relogio)
         log = logging.getLogger("test_auth_service")
         log.addHandler(logging.NullHandler())
         log.propagate = False
         self.servico = auth_service.ServicoAuth(
-            usuarios=self.usuarios, rbac_repo=self.rbac, catalogo=repo_factory.obter("catalogo"),
-            auditoria=self.auditoria, max_tentativas=MAX, bloqueio_s=BLOQUEIO_S, log=log,
+            usuarios=self.users, rbac_repo=self.rbac, catalogo=repo_factory.get("catalog"),
+            auditoria=self.audit, max_tentativas=MAX, bloqueio_s=BLOQUEIO_S, log=log,
         )
-        self.usuarios.alterar(5, {"password_hash": security.hash_senha(self.senha)}, ator="teste")
-        self.aud_base = max(a["id"] for a in self.auditoria.listar(tamanho=1000)["itens"])
+        self.users.update(5, {"password_hash": security.hash_senha(self.senha)}, ator="teste")
+        self.aud_base = max(a["id"] for a in self.audit.list(tamanho=1000)["itens"])
 
     def _acoes(self, ator):
-        itens = self.auditoria.listar({"actor": ator}, pagina=1, tamanho=100)["itens"]
+        itens = self.audit.list({"actor": ator}, pagina=1, tamanho=100)["itens"]
         return [a["action"] for a in itens if a["actor"] == ator and a["id"] > self.aud_base]
 
     def _errar(self, login, vezes):
@@ -87,7 +87,7 @@ class TestAuthService(unittest.TestCase):
         # Revisao de 2026-10-20: 10 tentativas leem o usuario antes de qualquer gravacao; o repositorio
         # decide o bloqueio sob a trava, e a conta fica bloqueada com a contagem certa.
         barreira = threading.Barrier(10)
-        original = self.usuarios.obter_por_login
+        original = self.users.get_by_login
 
         def _lento(login):
             usuario = original(login)
@@ -95,7 +95,7 @@ class TestAuthService(unittest.TestCase):
             return usuario
 
         respostas = []
-        with mock.patch.object(self.usuarios, "obter_por_login", side_effect=_lento):
+        with mock.patch.object(self.users, "get_by_login", side_effect=_lento):
             threads = [threading.Thread(target=lambda: respostas.append(
                 self.servico.autenticar("admin", "senha-errada-123", "10.0.0.1")[1])) for _ in range(10)]
             for t in threads:
@@ -113,7 +113,7 @@ class TestAuthService(unittest.TestCase):
 
     def test_detalhe_da_falha_com_a_contagem_do_repositorio(self):
         self._errar("admin", 2)
-        itens = self.auditoria.listar({"actor": "admin"}, pagina=1, tamanho=100)["itens"]
+        itens = self.audit.list({"actor": "admin"}, pagina=1, tamanho=100)["itens"]
         detalhes = sorted(a["detail"] for a in itens if a["action"] == "LOGIN_FAILED" and a["id"] > self.aud_base)
         self.assertEqual(detalhes, ["Falha de login: senha incorreta (tentativa 1 de 5)",
                                     "Falha de login: senha incorreta (tentativa 2 de 5)"])
@@ -123,8 +123,8 @@ class TestAuthService(unittest.TestCase):
         self.assertIsNone(msg)
         self.assertEqual(ctx["login"], "admin")
         self.assertTrue(ctx["is_admin"])
-        self.assertIn("MANAGE_USERS", ctx["funcionalidades"])
-        u = self.usuarios.obter_por_id(1)
+        self.assertIn("MANAGE_USERS", ctx["features"])
+        u = self.users.get_by_id(1)
         self.assertEqual(u["last_login_at"], INICIO)
         self.assertEqual(u["failed_attempts"], 0)
         self.assertEqual(self._acoes("admin"), ["LOGIN_OK"])
@@ -141,14 +141,14 @@ class TestAuthService(unittest.TestCase):
     def test_ctx_nao_admin(self):
         ctx, _ = self.servico.autenticar("consulta", self.senha, "10.0.0.1")
         self.assertFalse(ctx["is_admin"])
-        self.assertEqual(ctx["funcionalidades"], frozenset(["VIEW_LOGS"]))
-        self.assertEqual(ctx["ambientes"], frozenset(["PRODUCAO", "HOMOLOGACAO"]))
+        self.assertEqual(ctx["features"], frozenset(["VIEW_LOGS"]))
+        self.assertEqual(ctx["environments"], frozenset(["PRODUCAO", "HOMOLOGACAO"]))
 
     def test_senha_errada(self):
         ctx, msg = self.servico.autenticar("admin", "senha-errada-123", "10.0.0.1")
         self.assertIsNone(ctx)
         self.assertEqual(msg, MSG_GENERICA)
-        self.assertEqual(self.usuarios.obter_por_id(1)["failed_attempts"], 1)
+        self.assertEqual(self.users.get_by_id(1)["failed_attempts"], 1)
         self.assertEqual(self._acoes("admin"), ["LOGIN_FAILED"])
 
     def test_inexistente_mesma_mensagem(self):
@@ -165,7 +165,7 @@ class TestAuthService(unittest.TestCase):
     def test_bloqueio_na_enesima_falha(self):
         self.assertEqual(self._errar("op.prod", MAX - 1), (None, MSG_GENERICA))
         self.assertEqual(self._errar("op.prod", 1), (None, self.servico.msg_bloqueio))
-        u = self.usuarios.obter_por_id(2)
+        u = self.users.get_by_id(2)
         self.assertEqual(u["failed_attempts"], MAX)
         self.assertEqual(u["locked_until"], INICIO + datetime.timedelta(seconds=BLOQUEIO_S))
         acoes = self._acoes("op.prod")
@@ -177,17 +177,17 @@ class TestAuthService(unittest.TestCase):
         self.relogio.avancar(BLOQUEIO_S - 1)
         self.assertEqual(self.servico.autenticar("op.prod", self.senha, "10.0.0.1"), (None, self.servico.msg_bloqueio))
         # Tentativas durante o bloqueio nao o prolongam.
-        u = self.usuarios.obter_por_id(2)
+        u = self.users.get_by_id(2)
         self.assertEqual(u["locked_until"], INICIO + datetime.timedelta(seconds=BLOQUEIO_S))
 
     def test_desbloqueio_por_tempo(self):
         self._errar("op.prod", MAX)
         self.relogio.avancar(BLOQUEIO_S)
         self.assertEqual(self._errar("op.prod", 1), (None, MSG_GENERICA))
-        self.assertEqual(self.usuarios.obter_por_id(2)["failed_attempts"], 1)
+        self.assertEqual(self.users.get_by_id(2)["failed_attempts"], 1)
         ctx, msg = self.servico.autenticar("op.prod", self.senha, "10.0.0.1")
         self.assertIsNone(msg)
-        u = self.usuarios.obter_por_id(2)
+        u = self.users.get_by_id(2)
         self.assertEqual((u["failed_attempts"], u["locked_until"]), (0, None))
 
     def test_inexistente_bloqueio_simulado(self):
@@ -199,29 +199,29 @@ class TestAuthService(unittest.TestCase):
         self.assertIn("LOGIN_LOCKED", self._acoes("fantasma"))
 
     def test_seed_bloqueado(self):
-        self.usuarios.alterar(6, {"password_hash": security.hash_senha(self.senha),
+        self.users.update(6, {"password_hash": security.hash_senha(self.senha),
                                   "locked_until": INICIO + datetime.timedelta(minutes=5)}, ator="teste")
         self.assertEqual(self.servico.autenticar("bloqueado", self.senha, "10.0.0.1"), (None, self.servico.msg_bloqueio))
 
     def test_usuario_inativo(self):
         self.assertEqual(self.servico.autenticar("inativo", self.senha, "10.0.0.1"), (None, MSG_GENERICA))
-        self.assertEqual(self.usuarios.obter_por_id(5)["failed_attempts"], 0)
+        self.assertEqual(self.users.get_by_id(5)["failed_attempts"], 0)
         self.assertEqual(self._acoes("inativo"), ["LOGIN_FAILED"])
 
     def test_perfil_inativo(self):
-        self.rbac.perfis_alterar(4, {"active": "N"}, ator="teste")
+        self.rbac.profiles_update(4, {"active": "N"}, ator="teste")
         self.assertEqual(self.servico.autenticar("consulta", self.senha, "10.0.0.1"), (None, MSG_GENERICA))
 
     def test_hash_inutilizavel(self):
-        self.usuarios.alterar(3, {"password_hash": "!"}, ator="teste")
+        self.users.update(3, {"password_hash": "!"}, ator="teste")
         self.assertEqual(self.servico.autenticar("op.hml", "!", "10.0.0.1"), (None, MSG_GENERICA))
 
     def test_rehash(self):
-        self.usuarios.alterar(1, {"password_hash": _hash_com_iteracoes(self.senha, ITER_TESTE // 2)}, ator="teste")
-        antes = self.usuarios.obter_por_id(1)["password_changed_at"]
+        self.users.update(1, {"password_hash": _hash_com_iteracoes(self.senha, ITER_TESTE // 2)}, ator="teste")
+        antes = self.users.get_by_id(1)["password_changed_at"]
         ctx, msg = self.servico.autenticar("admin", self.senha, "10.0.0.1")
         self.assertIsNone(msg)
-        u = self.usuarios.obter_por_id(1)
+        u = self.users.get_by_id(1)
         self.assertTrue(u["password_hash"].startswith("pbkdf2_sha256$%d$" % ITER_TESTE))
         self.assertFalse(security.precisa_rehash(u["password_hash"]))
         self.assertTrue(security.verificar_senha(self.senha, u["password_hash"]))
@@ -229,7 +229,7 @@ class TestAuthService(unittest.TestCase):
 
     def test_login_e_auditoria_numa_operacao_do_repositorio(self):
         # CR-003 P3: LOGIN_OK, LOGIN_FAILED e LOGIN_LOCKED vao pelo repositorio de usuarios, na mesma operacao.
-        with mock.patch.object(self.auditoria, "registrar", side_effect=AssertionError("auditoria separada")):
+        with mock.patch.object(self.audit, "register", side_effect=AssertionError("auditoria separada")):
             ctx, msg = self.servico.autenticar("admin", self.senha, "10.0.0.1")
             self.assertIsNone(msg)
             self.assertEqual(self._errar("op.prod", MAX), (None, self.servico.msg_bloqueio))
@@ -239,11 +239,11 @@ class TestAuthService(unittest.TestCase):
         self.assertEqual(acoes.count("LOGIN_LOCKED"), 1)
 
     def test_rehash_na_mesma_operacao_do_sucesso(self):
-        self.usuarios.alterar(1, {"password_hash": _hash_com_iteracoes(self.senha, ITER_TESTE // 2)}, ator="teste")
-        with mock.patch.object(self.usuarios, "alterar", side_effect=AssertionError("rehash separado")):
+        self.users.update(1, {"password_hash": _hash_com_iteracoes(self.senha, ITER_TESTE // 2)}, ator="teste")
+        with mock.patch.object(self.users, "update", side_effect=AssertionError("rehash separado")):
             _ctx, msg = self.servico.autenticar("admin", self.senha, "10.0.0.1")
         self.assertIsNone(msg)
-        self.assertFalse(security.precisa_rehash(self.usuarios.obter_por_id(1)["password_hash"]))
+        self.assertFalse(security.precisa_rehash(self.users.get_by_id(1)["password_hash"]))
 
     def test_minha_senha_reinicia_ciclo_apos_bloqueio_expirado(self):
         # CR-003 P3: bloqueio expirado zera as tentativas tambem em "Minha senha" (README §4.2).
@@ -252,14 +252,14 @@ class TestAuthService(unittest.TestCase):
         self.relogio.avancar(BLOQUEIO_S + 1)
         resultado, _erros = self.servico.trocar_senha(ctx, "10.0.0.1", "senha-errada-123", "x", "x")
         self.assertEqual(resultado, "ERRO")
-        u = self.usuarios.obter_por_id(2)
+        u = self.users.get_by_id(2)
         self.assertEqual(u["failed_attempts"], 1)
         self.assertIsNone(u["locked_until"])
 
     def test_auditoria_sem_senha(self):
         self.servico.autenticar("admin", self.senha, "10.0.0.1")
         self.servico.autenticar("admin", "senha-errada-123", "10.0.0.1")
-        for reg in self.auditoria.listar(tamanho=1000)["itens"]:
+        for reg in self.audit.list(tamanho=1000)["itens"]:
             self.assertNotIn(self.senha, reg.get("detail") or "")
             self.assertNotIn("senha-errada-123", reg.get("detail") or "")
             self.assertNotIn("pbkdf2", reg.get("detail") or "")
@@ -279,25 +279,25 @@ class TestAuthService(unittest.TestCase):
     def test_revalidar_ok(self):
         sessao = self._sessao("consulta")
         ctx = self.servico.revalidar(sessao)
-        self.assertEqual(ctx["funcionalidades"], frozenset(["VIEW_LOGS"]))
+        self.assertEqual(ctx["features"], frozenset(["VIEW_LOGS"]))
 
     def test_revalidar_recarrega_com_perm_versao(self):
         sessao = self._sessao("consulta")
-        self.assertNotIn("EXEC_SCRIPT", self.servico.revalidar(sessao)["funcionalidades"])
-        matriz = self.rbac.matriz_obter(4)
-        self.rbac.matriz_salvar(4, list(matriz["funcs"]) + [1], matriz["ambs"], matriz["scrs"], ator="teste")
+        self.assertNotIn("EXEC_SCRIPT", self.servico.revalidar(sessao)["features"])
+        matriz = self.rbac.matrix_get(4)
+        self.rbac.matrix_save(4, list(matriz["funcs"]) + [1], matriz["ambs"], matriz["scrs"], ator="teste")
         ctx = self.servico.revalidar(sessao)
-        self.assertIn("EXEC_SCRIPT", ctx["funcionalidades"])
+        self.assertIn("EXEC_SCRIPT", ctx["features"])
         self.assertGreater(ctx["perm_version"], sessao["perm_versao"])
 
     def _ultimo_logout(self, ator):
-        itens = [r for r in self.auditoria.listar({"action": "LOGOUT"}, pagina=1, tamanho=10)["itens"]
+        itens = [r for r in self.audit.list({"action": "LOGOUT"}, pagina=1, tamanho=10)["itens"]
                  if r["actor"] == ator and r["id"] > self.aud_base]
         return itens[0] if itens else None
 
     def test_revalidar_usuario_inativo(self):
         sessao = self._sessao("op.prod")
-        self.usuarios.alterar(2, {"active": "N"}, ator="teste")
+        self.users.update(2, {"active": "N"}, ator="teste")
         self.assertIsNone(self.servico.revalidar(sessao, "10.9.9.9"))
         aud = self._ultimo_logout("op.prod")
         self.assertEqual(aud["detail"], u"sessão encerrada pela revalidação: usuário inativo")
@@ -305,7 +305,7 @@ class TestAuthService(unittest.TestCase):
 
     def test_revalidar_perfil_inativo(self):
         sessao = self._sessao("consulta")
-        self.rbac.perfis_alterar(4, {"active": "N"}, ator="teste")
+        self.rbac.profiles_update(4, {"active": "N"}, ator="teste")
         self.assertIsNone(self.servico.revalidar(sessao))
         self.assertEqual(self._ultimo_logout("consulta")["detail"],
                          u"sessão encerrada pela revalidação: perfil inativo")
@@ -326,28 +326,28 @@ class TestAuthService(unittest.TestCase):
 class TestSeedDev(unittest.TestCase):
 
     def setUp(self):
-        repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
-        self.addCleanup(repo_factory.configurar, None)
+        self.addCleanup(repo_factory.configure, None)
         patcher = mock.patch.object(security, "ITERACOES", ITER_TESTE)
         patcher.start()
         self.addCleanup(patcher.stop)
 
     def _hashes(self):
-        repo = repo_factory.obter("usuarios")
-        return dict((u["login"], u["password_hash"]) for u in repo.listar(tamanho=100)["itens"])
+        repo = repo_factory.get("users")
+        return dict((u["login"], u["password_hash"]) for u in repo.list(tamanho=100)["itens"])
 
     def test_sem_variavel_logins_impossiveis(self):
         with mock.patch.dict(os.environ):
-            os.environ.pop(repo_factory.ENV_SENHA_DEV, None)
+            os.environ.pop(repo_factory.ENV_DEV_PASSWORD, None)
             with self.assertLogs("sss_web", level="WARNING"):
                 hashes = self._hashes()
         self.assertTrue(all(h == "!" for h in hashes.values()))
 
     def test_com_variavel(self):
         senha = secrets.token_urlsafe(16)
-        with mock.patch.dict(os.environ, {repo_factory.ENV_SENHA_DEV: senha}):
+        with mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: senha}):
             hashes = self._hashes()
         for login in ("admin", "op.prod", "op.hml", "consulta"):
             self.assertTrue(security.verificar_senha(senha, hashes[login]), login)
@@ -356,7 +356,7 @@ class TestSeedDev(unittest.TestCase):
         self.assertNotEqual(hashes["admin"], hashes["consulta"])
 
     def test_variavel_fora_da_politica(self):
-        with mock.patch.dict(os.environ, {repo_factory.ENV_SENHA_DEV: "curta"}):
+        with mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: "curta"}):
             with self.assertLogs("sss_web", level="WARNING"):
                 hashes = self._hashes()
         self.assertTrue(all(h == "!" for h in hashes.values()))

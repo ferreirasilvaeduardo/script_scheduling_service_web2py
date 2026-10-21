@@ -6,7 +6,7 @@ entrada (script, ambiente, ticket) devem vir do repositorio, nunca do cliente.
 """
 
 PRIORIDADE_ADMIN = 1
-PRIORIDADES = (1, 2, 3, 4)
+PRIORITIES = (1, 2, 3, 4)
 
 
 class Motivo(object):
@@ -35,8 +35,8 @@ def _id_valido(valor):
 def contexto_usuario(estado):
     """Monta o contexto de autorizacao a partir do estado de sessao e da matriz do perfil.
 
-    estado: dict de RepoUsuarios.obter_estado_sessao acrescido de 'funcionalidades'
-    (codigos), 'ambientes' (nomes) e 'scripts' (ids).
+    estado: dict de RepoUsers.obter_estado_sessao acrescido de 'features'
+    (codigos), 'environments' (nomes) e 'scripts' (ids).
     """
     return {
         "user_id": estado["user_id"],
@@ -47,8 +47,8 @@ def contexto_usuario(estado):
         "is_admin": _flag(estado.get("is_admin")),
         "usuario_ativo": _flag(estado.get("usuario_ativo")),
         "perfil_ativo": _flag(estado.get("perfil_ativo")),
-        "funcionalidades": frozenset(estado.get("funcionalidades") or ()),
-        "ambientes": frozenset(estado.get("ambientes") or ()),
+        "features": frozenset(estado.get("features") or ()),
+        "environments": frozenset(estado.get("environments") or ()),
         "scripts": frozenset(estado.get("scripts") or ()),
         "perm_version": estado["perm_version"],
         "session_epoch": estado.get("session_epoch", 0),
@@ -65,7 +65,7 @@ def tem_func(ctx, codigo):
         return False
     if ctx.get("is_admin") is True:
         return True
-    return codigo in ctx.get("funcionalidades", ())
+    return codigo in ctx.get("features", ())
 
 
 def _nome_ambiente(ambiente):
@@ -83,7 +83,7 @@ def pode_ver_ambiente(ctx, ambiente):
         return False
     if ctx.get("is_admin") is True:
         return True
-    return nome in ctx.get("ambientes", ())
+    return nome in ctx.get("environments", ())
 
 
 def pode_executar(ctx, script, ambiente, homologacoes):
@@ -109,9 +109,9 @@ def pode_executar(ctx, script, ambiente, homologacoes):
         return False, Motivo.SEM_HOMOLOGACAO
     if ctx.get("is_admin") is True:
         return True, Motivo.OK
-    if "EXEC_SCRIPT" not in ctx.get("funcionalidades", ()):
+    if "EXEC_SCRIPT" not in ctx.get("features", ()):
         return False, Motivo.SEM_FUNC
-    if ambiente["name"] not in ctx.get("ambientes", ()):
+    if ambiente["name"] not in ctx.get("environments", ()):
         return False, Motivo.SEM_AMBIENTE
     if script["id"] not in ctx.get("scripts", ()):
         return False, Motivo.SEM_SCRIPT
@@ -151,7 +151,7 @@ def pode_cancelar(ctx, ticket):
 
 def prioridade_permitida(ctx, prioridade):
     """Prioridade entre 1 e 4; a prioridade 1 e exclusiva de admin (README §5.3)."""
-    if not _ativo(ctx) or not _id_valido(prioridade) or prioridade not in PRIORIDADES:
+    if not _ativo(ctx) or not _id_valido(prioridade) or prioridade not in PRIORITIES:
         return False
     if prioridade == PRIORIDADE_ADMIN:
         return ctx.get("is_admin") is True

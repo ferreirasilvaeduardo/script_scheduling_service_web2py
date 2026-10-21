@@ -41,7 +41,7 @@ As entidades mestras nunca são excluídas, apenas desativadas (README §10).
 
 1. O `form` envia em campo oculto a `version`: o sha256 dos campos editáveis (`active` incluído) no momento da leitura. As colunas de registro (CR-006) não entram na versão nem no `esperado`. Campo sensível entra no hash como marcador fixo (`<sensitive:preenchido>` ou `<sensitive:vazio>`), nunca pelo valor. Uma troca concorrente feita só no valor sensível não gera conflito (README §10, "Consequência aceita").
 2. O `salvar` ou o `alternar_ativo` relê o registro. Se a `version` enviada for diferente da atual, o resultado é conflito.
-3. O service repassa os valores lidos como `esperado=`. O repositório executa `UPDATE ... WHERE id = :id AND <coluna = valor lido ...>` e checa o `rowcount`. No ORACLE, cada comparação é nula-segura na forma ANSI `(c = :v OR (c IS NULL AND :v IS NULL))` (README §10). Se o `rowcount` for 0, o repositório lança `RepoConflito` e não altera nada. Com isso, não sobra janela entre a leitura e a escrita.
+3. O service repassa os valores lidos como `esperado=`. O repositório executa `UPDATE ... WHERE id = :id AND <coluna = valor lido ...>` e checa o `rowcount`. No ORACLE, cada comparação é nula-segura na forma ANSI `(c = :v OR (c IS NULL AND :v IS NULL))` (README §10). Se o `rowcount` for 0, o repositório lança `RepoConflict` e não altera nada. Com isso, não sobra janela entre a leitura e a escrita.
 4. Mensagem exibida (README §2.4.2): "Outra pessoa mudou este registro enquanto você editava. Recarregue a página para ver a versão nova e faça a sua alteração de novo." O formulário volta com os dados atuais e uma nova versão.
 
 ## Erros
@@ -49,10 +49,10 @@ As entidades mestras nunca são excluídas, apenas desativadas (README §10).
 | Origem | Apresentação |
 |---|---|
 | Validação do service | Mensagem em português no campo (`erros['<campo>']`), e no topo a mensagem-padrão em duas partes: "Alguns campos precisam de correção. Os campos estão marcados em vermelho, com a explicação embaixo de cada um." (README §2.4.2) |
-| `RepoViolacao` | Mapeada por `constraint` para o campo. Exemplo: `uk_tbsss_env_name` vira "Já existe um ambiente com este nome." |
-| `RepoConflito` | `erros['_geral']`, com a mensagem de conflito |
-| Outra `RepoErro` | `erros['_geral']` com "Não foi possível salvar...". O detalhe técnico (ORA-, SQL, traceback) vai só para o log. |
-| Regra de negócio (ex.: último administrador, desativar o próprio usuário, tirar o próprio perfil de administrador) | `RepoViolacao` com constraint de aplicação (`sss_*`), traduzida para `erros['_geral']` ou `OperacaoNegada(mensagem)`, que o controller exibe no flash |
+| `RepoViolation` | Mapeada por `constraint` para o campo. Exemplo: `uk_tbsss_env_name` vira "Já existe um ambiente com este nome." |
+| `RepoConflict` | `erros['_geral']`, com a mensagem de conflito |
+| Outra `RepoError` | `erros['_geral']` com "Não foi possível salvar...". O detalhe técnico (ORA-, SQL, traceback) vai só para o log. |
+| Regra de negócio (ex.: último administrador, desativar o próprio usuário, tirar o próprio perfil de administrador) | `RepoViolation` com constraint de aplicação (`sss_*`), traduzida para `erros['_geral']` ou `OperacaoNegada(mensagem)`, que o controller exibe no flash |
 | Sem funcionalidade | 403 no controller (guarda) e `AcessoNegado` no service |
 | ID inexistente ou inválido | 404 |
 

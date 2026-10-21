@@ -23,7 +23,7 @@ import recurrence
 import ui_helpers
 from admin_crud import CAMPO_GERAL, OperacaoNegada
 from cron_parser import CronErro
-from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
+from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 from ticket_service import AcessoNegado as DisparoNegado
 
 FUNCIONALIDADE = "MANAGE_SCHEDULES"
@@ -83,7 +83,7 @@ CAMPOS_VERSAO = ("name", "priority", "recurrence_type", "cron_expression", "run_
                  "user_id", "active", "pause_reason")
 _CAMPOS_ESPERADO = CAMPOS_VERSAO + ("next_run_at",)
 CAMPOS_AUDITORIA = ("name", "script_id", "environment", "priority", "recurrence_type",
-                    "cron_expression", "run_time", "week_days", "month_day", "parametros",
+                    "cron_expression", "run_time", "week_days", "month_day", "parameters",
                     "start_date", "end_date")
 _CAMPOS_INSERCAO = CAMPOS_AUDITORIA + ("user_id", "next_run_at")
 
@@ -282,9 +282,9 @@ class ServicoAgendamentos(object):
         if tickets is None or rbac_repo is None:
             import repo_factory
             if tickets is None:
-                tickets = repo_factory.obter("tickets")
+                tickets = repo_factory.get("tickets")
             if rbac_repo is None:
-                rbac_repo = repo_factory.obter("rbac")
+                rbac_repo = repo_factory.get("rbac")
         self._tickets = tickets
         self._rbac = rbac_repo
 
@@ -295,8 +295,8 @@ class ServicoAgendamentos(object):
         if not tid or not self._tickets:
             return None
         try:
-            tck = self._tickets.obter(tid)
-        except RepoNaoEncontrado:
+            tck = self._tickets.get(tid)
+        except RepoNotFound:
             return None
         if tck and tck.get("status") in ("PENDING", "RUNNING"):
             rotulo = ui_helpers.status_info(tck["status"])["rotulo"].lower()
@@ -309,8 +309,8 @@ class ServicoAgendamentos(object):
         Retorna (codigo_motivo, texto_motivo) ou None se estiver apta.
         """
         try:
-            estado = self._usuarios.obter_estado_sessao(reg["user_id"])
-        except RepoNaoEncontrado:
+            estado = self._usuarios.get_session_state(reg["user_id"])
+        except RepoNotFound:
             return "USER_INACTIVE", MOTIVOS_PAUSA["USER_INACTIVE"]
         if estado.get("usuario_ativo") != "Y":
             return "USER_INACTIVE", MOTIVOS_PAUSA["USER_INACTIVE"]
@@ -318,37 +318,37 @@ class ServicoAgendamentos(object):
             return "NO_PERMISSION", MOTIVOS_PAUSA["NO_PERMISSION"]
 
         try:
-            script = self._catalogo.scripts_obter(reg["script_id"])
-        except RepoNaoEncontrado:
+            script = self._catalogo.scripts_get(reg["script_id"])
+        except RepoNotFound:
             return "SCRIPT_INACTIVE", MOTIVOS_PAUSA["SCRIPT_INACTIVE"]
         if script.get("active") != "Y":
             return "SCRIPT_INACTIVE", MOTIVOS_PAUSA["SCRIPT_INACTIVE"]
 
         amb = None
-        for a in self._catalogo.ambientes_listar(tamanho=1000)["itens"]:
+        for a in self._catalogo.environments_list(tamanho=1000)["itens"]:
             if a.get("name") == reg.get("environment"):
                 amb = a
                 break
         if amb is None or amb.get("active") != "Y":
             return "ENVIRONMENT_INACTIVE", MOTIVOS_PAUSA["ENVIRONMENT_INACTIVE"]
 
-        homologacoes = self._catalogo.homologacao_obter(script["id"])
+        homologacoes = self._catalogo.homologation_get(script["id"])
         if amb["id"] not in frozenset(homologacoes or ()):
             return "NO_PERMISSION", MOTIVOS_PAUSA["NO_PERMISSION"]
 
         rbac_repo = self._rbac
-        matriz = rbac_repo.matriz_obter(estado["profile_id"])
+        matriz = rbac_repo.matrix_get(estado["profile_id"])
         codigos = dict(
-            (f["id"], f["code"]) for f in rbac_repo.funcionalidades_listar() if f.get("active") == "Y"
+            (f["id"], f["code"]) for f in rbac_repo.features_list() if f.get("active") == "Y"
         )
         funcs = frozenset(codigos[fid] for fid in matriz.get("funcs", ()) if fid in codigos)
         ambs_nomes = []
         for aid in matriz.get("ambs", ()):
             try:
-                ambs_nomes.append(self._catalogo.ambientes_obter(aid)["name"])
-            except RepoNaoEncontrado:
+                ambs_nomes.append(self._catalogo.environments_get(aid)["name"])
+            except RepoNotFound:
                 continue
-        dados_ctx = dict(estado, funcionalidades=funcs, ambientes=frozenset(ambs_nomes),
+        dados_ctx = dict(estado, features=funcs, environments=frozenset(ambs_nomes),
                          scripts=frozenset(matriz.get("scrs", ())))
         ctx_usuario = rbac.contexto_usuario(dados_ctx)
         ok, motivo_rbac = rbac.pode_executar(ctx_usuario, script, amb, homologacoes)
@@ -383,12 +383,12 @@ class ServicoAgendamentos(object):
         """Regra existente e de ambiente autorizado; fora do escopo e tratada como inexistente (404)."""
         aid = _id(agendamento_id)
         if aid is None:
-            raise RepoNaoEncontrado("agendamento invalido")
-        registro = self._agendamentos.obter(aid)
+            raise RepoNotFound("agendamento invalido")
+        registro = self._agendamentos.get(aid)
         if not rbac.pode_ver_ambiente(ctx, registro.get("environment")):
             self._log.warning("agendamento fora do escopo (login=%s agendamento=%s environment=%s)",
                               ctx.get("login"), aid, registro.get("environment"), extra={"action": FUNCIONALIDADE})
-            raise RepoNaoEncontrado("agendamento fora do escopo")
+            raise RepoNotFound("agendamento fora do escopo")
         return registro
 
     def _autorizar(self, ctx, script_id, ambiente):
@@ -403,19 +403,19 @@ class ServicoAgendamentos(object):
         if cache is not None and usuario_id in cache:
             return cache[usuario_id]
         try:
-            login = self._usuarios.obter_por_id(usuario_id)["login"]
-        except RepoNaoEncontrado:
+            login = self._usuarios.get_by_id(usuario_id)["login"]
+        except RepoNotFound:
             login = u"#%s" % usuario_id
         if cache is not None:
             cache[usuario_id] = login
         return login
 
     def _vinculos(self, script_id):
-        return [v for v in self._catalogo.script_params_obter(script_id) if v.get("active") == "Y"]
+        return [v for v in self._catalogo.script_params_get(script_id) if v.get("active") == "Y"]
 
     def _codigos_sensiveis(self, script_id):
         # Todos os vinculos, ativos ou nao: parametros_json pode guardar resposta de parametro ja desativado.
-        return frozenset(v["code"] for v in self._catalogo.script_params_obter(script_id)
+        return frozenset(v["code"] for v in self._catalogo.script_params_get(script_id)
                          if v.get("sensitive") == "Y")
 
     def _regra(self, dados, agora, erros):
@@ -507,7 +507,7 @@ class ServicoAgendamentos(object):
 
     def _auditavel(self, registro, sensiveis, comparar_com=None):
         aud = dict(registro)
-        aud["parametros"] = self._parametros_auditoria(registro, sensiveis, comparar_com)
+        aud["parameters"] = self._parametros_auditoria(registro, sensiveis, comparar_com)
         for campo in ("start_date", "end_date", "next_run_at"):
             if registro.get(campo) is not None:
                 aud[campo] = formatar_data(registro[campo])
@@ -525,10 +525,10 @@ class ServicoAgendamentos(object):
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         agora = recurrence.truncar_segundos(self._agora())
         fim = datetime.datetime.combine(agora.date() + datetime.timedelta(days=8), datetime.time())
-        escopo = None if ctx.get("is_admin") is True else sorted(ctx.get("ambientes") or ())
+        escopo = None if ctx.get("is_admin") is True else sorted(ctx.get("environments") or ())
         regras, pagina = [], 1
         while escopo != []:
-            res = self._agendamentos.listar(filtros={"active": "Y"}, pagina=pagina, tamanho=_AGENDA_PAGINA,
+            res = self._agendamentos.list(filtros={"active": "Y"}, pagina=pagina, tamanho=_AGENDA_PAGINA,
                                             escopo_ambientes=escopo)
             regras.extend(res["itens"])
             if len(res["itens"]) < _AGENDA_PAGINA:
@@ -539,8 +539,8 @@ class ServicoAgendamentos(object):
         for reg in regras:
             if reg["script_id"] not in scripts:
                 try:
-                    scripts[reg["script_id"]] = self._catalogo.scripts_obter(reg["script_id"])["name"]
-                except RepoNaoEncontrado:
+                    scripts[reg["script_id"]] = self._catalogo.scripts_get(reg["script_id"])["name"]
+                except RepoNotFound:
                     scripts[reg["script_id"]] = u"#%s" % reg["script_id"]
             aviso_regra = self._aviso_sobreposicao(reg, prefixo=u"Pode ser pulada: a execução #")
             if not aviso_regra:
@@ -597,15 +597,15 @@ class ServicoAgendamentos(object):
                 "dias": [{"rotulo": _rotulo_dia(d, agora.date()), "itens": itens} for d, itens in dias.items()],
                 "problemas": problemas}
 
-    def listar(self, ctx, filtros, pagina, tamanho):
+    def list(self, ctx, filtros, pagina, tamanho):
         """Pagina de regras dos ambientes autorizados (admin: todos), pronta para a tabela."""
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         escopo = None
         if ctx.get("is_admin") is not True:
-            escopo = sorted(ctx.get("ambientes") or ())
+            escopo = sorted(ctx.get("environments") or ())
             if not escopo:
                 return {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
-        resultado = self._agendamentos.listar(filtros=filtros, pagina=pagina, tamanho=tamanho,
+        resultado = self._agendamentos.list(filtros=filtros, pagina=pagina, tamanho=tamanho,
                                               escopo_ambientes=escopo)
         scripts = {}
         logins = {}
@@ -614,8 +614,8 @@ class ServicoAgendamentos(object):
             sid = reg["script_id"]
             if sid not in scripts:
                 try:
-                    scripts[sid] = self._catalogo.scripts_obter(sid)["name"]
-                except RepoNaoEncontrado:
+                    scripts[sid] = self._catalogo.scripts_get(sid)["name"]
+                except RepoNotFound:
                     scripts[sid] = u"#%s" % sid
             rotulo, motivo = situacao(reg)
             aviso = None
@@ -650,7 +650,7 @@ class ServicoAgendamentos(object):
         na edicao, script e ambiente sao fixos (decisao D2 do F5.2).
 
         enviados/valores/erros (opcionais) reapresentam um POST com erro: campos da regra,
-        respostas do questionario e mensagens por campo. Lanca RepoNaoEncontrado, AcessoNegado
+        respostas do questionario e mensagens por campo. Lanca RepoNotFound, AcessoNegado
         e OperacaoNegada (editor sem pode_executar).
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
@@ -753,7 +753,7 @@ class ServicoAgendamentos(object):
 
         dados: id, versao, nome, script_id e ambiente (so na inclusao), tipo_recorrencia,
         expressao_cron, hora_execucao, dias_semana, dia_mes, data_inicio, data_fim, prioridade e
-        respostas ({codigo: valor}). Lanca RepoNaoEncontrado, AcessoNegado e OperacaoNegada
+        respostas ({codigo: valor}). Lanca RepoNotFound, AcessoNegado e OperacaoNegada
         (editor sem pode_executar).
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
@@ -806,8 +806,8 @@ class ServicoAgendamentos(object):
         novo = dict(registro, active="Y", pause_reason=None)
         detalhe = admin_crud.detalhe_insercao(self._auditavel(novo, sensiveis), _CAMPOS_INSERCAO)
         try:
-            criado = self._agendamentos.inserir(novo, auditoria=admin_crud.auditoria(ctx, ip, "CREATE", detalhe))
-        except RepoViolacao as exc:
+            criado = self._agendamentos.insert(novo, auditoria=admin_crud.auditoria(ctx, ip, "CREATE", detalhe))
+        except RepoViolation as exc:
             self._log.error("agendamento rejeitado pelo repositorio (login=%s constraint=%s)",
                             ctx.get("login"), exc.constraint, extra={"action": "CREATE"})
             return None, {CAMPO_GERAL: admin_crud.MSG_FALHA}
@@ -829,12 +829,12 @@ class ServicoAgendamentos(object):
             registro["user_id"], ctx.get("login"))
         detalhe = admin_crud.detalhe_livre(responsavel if detalhe is None else u"%s; %s" % (responsavel, detalhe))
         try:
-            self._agendamentos.alterar(atual["id"], registro,
+            self._agendamentos.update(atual["id"], registro,
                                        esperado=admin_crud.esperado(atual, _CAMPOS_ESPERADO),
                                        auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
-        except RepoConflito:
+        except RepoConflict:
             return atual["id"], {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
-        except RepoViolacao as exc:
+        except RepoViolation as exc:
             self._log.error("alteracao de agendamento rejeitada pelo repositorio (login=%s agendamento=%s "
                             "constraint=%s)", ctx.get("login"), atual["id"], exc.constraint,
                             extra={"action": "UPDATE"})
@@ -844,10 +844,10 @@ class ServicoAgendamentos(object):
                        extra={"action": "UPDATE"})
         return atual["id"], {}
 
-    def pausar(self, ctx, ip, agendamento_id):
+    def pause(self, ctx, ip, agendamento_id):
         """Pausa manual (pause_reason = 'MANUAL'), otimista sobre proxima_execucao (README §7.5 passo 7).
 
-        Audita SCHEDULE_PAUSE. Lanca OperacaoNegada (ja pausada), RepoConflito, RepoNaoEncontrado e AcessoNegado.
+        Audita SCHEDULE_PAUSE. Lanca OperacaoNegada (ja pausada), RepoConflict, RepoNotFound e AcessoNegado.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         atual = self._obter_visivel(ctx, agendamento_id)
@@ -855,18 +855,18 @@ class ServicoAgendamentos(object):
             raise OperacaoNegada(MSG_JA_PAUSADA)
         detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, active="N", pause_reason="MANUAL"),
                                                 ("active", "pause_reason"))
-        alterado = self._agendamentos.pausar(atual["id"], "MANUAL", antiga_data=atual["next_run_at"],
+        alterado = self._agendamentos.pause(atual["id"], "MANUAL", antiga_data=atual["next_run_at"],
                                              auditoria=admin_crud.auditoria(ctx, ip, "SCHEDULE_PAUSE", detalhe))
         self._log.info("agendamento pausado (login=%s agendamento=%s reason=MANUAL)", ctx.get("login"),
                        atual["id"], extra={"action": "SCHEDULE_PAUSE"})
         return alterado
 
-    def retomar(self, ctx, ip, agendamento_id):
+    def resume(self, ctx, ip, agendamento_id):
         """Retoma a regra: revalida pode_executar de quem retoma, recalcula proxima_execucao a partir
         de agora, limpa pausa_motivo e reativa. O responsavel (usuario_id) nao muda.
 
         Audita UPDATE. Lanca OperacaoNegada (ja ativa, sem permissao ou sem proxima execucao),
-        RepoConflito, RepoNaoEncontrado e AcessoNegado.
+        RepoConflict, RepoNotFound e AcessoNegado.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         atual = self._obter_visivel(ctx, agendamento_id)
@@ -888,7 +888,7 @@ class ServicoAgendamentos(object):
                  "next_run_at": formatar_data(atual.get("next_run_at"))}
         depois = {"active": "Y", "pause_reason": None, "next_run_at": formatar_data(proxima)}
         detalhe = admin_crud.detalhe_alteracoes(antes, depois, ("active", "pause_reason", "next_run_at"))
-        alterado = self._agendamentos.retomar(
+        alterado = self._agendamentos.resume(
             atual["id"], proxima, esperado=admin_crud.esperado(atual, ("active", "pause_reason", "next_run_at")),
             auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
         self._log.info("agendamento retomado (login=%s agendamento=%s proxima=%s)", ctx.get("login"),
@@ -909,17 +909,17 @@ def _servico():
             import ticket_service
             fabrica = current.repo_factory
             cfg = current.sss_cfg
-            tickets = fabrica.obter("tickets")
+            tickets = fabrica.get("tickets")
             _padrao = ServicoAgendamentos(
-                agendamentos=fabrica.obter("agendamentos"),
-                catalogo=fabrica.obter("catalogo"),
-                usuarios=fabrica.obter("usuarios"),
+                agendamentos=fabrica.get("schedules"),
+                catalogo=fabrica.get("catalog"),
+                usuarios=fabrica.get("users"),
                 disparo=ticket_service._servico(),
-                relogio=tickets.agora,
+                relogio=tickets.now,
                 horizonte_dias=cfg.agent.cron_horizon_days,
                 log=sss_logging.get_logger("sss_web", cfg),
                 tickets=tickets,
-                rbac_repo=fabrica.obter("rbac"),
+                rbac_repo=fabrica.get("rbac"),
                 misfire_policy=cfg.agent.misfire_policy,
                 misfire_tolerance_s=cfg.agent.misfire_tolerance_s,
             )
@@ -928,7 +928,7 @@ def _servico():
 
 def listar(ctx, filtros, pagina, tamanho):
     """Pagina de regras (servico padrao)."""
-    return _servico().listar(ctx, filtros, pagina, tamanho)
+    return _servico().list(ctx, filtros, pagina, tamanho)
 
 
 def agenda(ctx):
@@ -953,9 +953,9 @@ def salvar(ctx, ip, dados):
 
 def pausar(ctx, ip, agendamento_id):
     """Pausa manual (servico padrao)."""
-    return _servico().pausar(ctx, ip, agendamento_id)
+    return _servico().pause(ctx, ip, agendamento_id)
 
 
 def retomar(ctx, ip, agendamento_id):
     """Retomada (servico padrao)."""
-    return _servico().retomar(ctx, ip, agendamento_id)
+    return _servico().resume(ctx, ip, agendamento_id)

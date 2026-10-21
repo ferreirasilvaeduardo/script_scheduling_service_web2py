@@ -2,10 +2,10 @@
 """Contrato de persistencia para monitoramento de agentes (tbsss_agents)."""
 
 
-class RepoAgentes(object):
+class RepoAgents(object):
     """Contrato abstrato para consulta de agentes e execucoes em andamento."""
 
-    def listar(self):
+    def list(self):
         """Todos os agentes, por codigo e id, com plataforma, interpretadores e config_criticos."""
         raise NotImplementedError
 
@@ -13,7 +13,7 @@ class RepoAgentes(object):
         """Tickets RUNNING do agente informado, por id, sem CLOB (sem log_output nem parametros_enviados)."""
         raise NotImplementedError
 
-    def fila_sem_atendente(self, agora, limiares):
+    def unattended_queue(self, agora, limiares):
         """PENDING com scheduled_at <= agora sem agente OK/ATRASADO para o par ambiente/interpretador.
 
         Retorna grupos ordenados por ambiente e interpretador: ambiente, interpretador,
@@ -23,7 +23,7 @@ class RepoAgentes(object):
         """
         raise NotImplementedError
 
-    def rodando_sem_pid(self, agora, minutos):
+    def running_without_pid(self, agora, minutos):
         """RUNNING sem process_id com started_at < agora - minutos, por started_at e id.
 
         Retorna apenas id, script_id, ambiente, agente_id e started_at, sem LOB.

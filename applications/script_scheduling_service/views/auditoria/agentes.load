@@ -12,12 +12,12 @@ _ag_icones = URL('static', 'img/icons.svg')
   </div>
   {{else:}}
   {{include 'auditoria/_diagnosticos_agentes.html'}}
-  {{if not painel['agentes']:}}
+  {{if not painel['agents']:}}
   <p class="sss-tabela-vazia mb-0">Nenhum agente registrado.</p>
   {{else:}}
   <p class="sss-texto-suave">Referência: {{=ui_helpers.formatar_data(painel['agora'])}} (relógio do banco).</p>
   <div class="sss-agentes">
-    {{for _ag in painel['agentes']:}}
+    {{for _ag in painel['agents']:}}
     <article class="sss-agente" aria-labelledby="agente-{{=_ag['code']}}">
       <header class="sss-agente-cabecalho">
         <h3 class="sss-agente-titulo sss-mono" id="agente-{{=_ag['code']}}">{{=_ag['code']}}</h3>

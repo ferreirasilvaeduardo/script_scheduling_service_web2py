@@ -44,9 +44,9 @@ SAIDA_BANCO = 1
 SAIDA_CONFIG = 2
 SAIDA_LOCAIS = 3
 
-ALVOS = ("tickets", "auditoria", "logs_locais", "saida")
+ALVOS = ("tickets", "audit", "logs_locais", "saida")
 # Valores do --target (CR-016b) -> alvo interno.
-ALVOS_CLI = collections.OrderedDict([("tickets", "tickets"), ("audit", "auditoria"), ("local_logs", "logs_locais"),
+ALVOS_CLI = collections.OrderedDict([("tickets", "tickets"), ("audit", "audit"), ("local_logs", "logs_locais"),
                                      ("output", "saida"), ("all", "todos")])
 NOME_TRAVA = "sss-purge.lock"
 _LOGGERS_DO_PURGE = ("sss_db_conn", "sss_config")
@@ -87,7 +87,7 @@ class Purge(object):
     def __init__(self, cfg, conn, repo=None, plat=os_platform, logger=None):
         self.cfg = cfg
         self.conn = conn
-        self.repo = repo or RepoPurge.da_config(cfg)
+        self.repo = repo or RepoPurge.from_config(cfg)
         self.plat = plat
         self.log = logger or logging.getLogger("purge")
         self.dono = cfg.agent.agent_id
@@ -97,7 +97,7 @@ class Purge(object):
         agora = db_conn.db_now(self.conn)  # uma vez: todos os limites partem deste instante
         self.log.info("purge iniciado (alvos=%s dry_run=%s agora_banco=%s)", ",".join(alvos), dry_run,
                       agora.strftime("%Y-%m-%d %H:%M:%S"), extra=_EXTRA)
-        tabelas = [a for a in ("tickets", "auditoria") if a in alvos]
+        tabelas = [a for a in ("tickets", "audit") if a in alvos]
         try:
             if tabelas:
                 if dry_run:
@@ -135,12 +135,12 @@ class Purge(object):
 
     def _contar_tabelas(self, tabelas, agora):
         for tabela in tabelas:
-            contar = self.repo.contar_tickets if tabela == "tickets" else self.repo.contar_auditoria
+            contar = self.repo.count_tickets if tabela == "tickets" else self.repo.count_audit
             n = contar(self.conn, self._limite(tabela, agora))
             self.resumo.append("%s: %d linhas elegiveis (estimativa)" % (tabela, n))
 
     def _purgar_tabelas(self, tabelas, agora, exportar):
-        if not self.repo.tomar_concessao(self.conn, self.dono):
+        if not self.repo.take_lease(self.conn, self.dono):
             self._desfazer()
             self.log.info("outro no esta purgando (concessao em tbsss_control); tickets e auditoria pulados",
                           extra=_EXTRA)
@@ -150,13 +150,13 @@ class Purge(object):
         self.conn.commit()
         try:
             for tabela in tabelas:
-                arquivo = ExportacaoAuditoria(exportar, agora) if tabela == "auditoria" and exportar else None
+                arquivo = ExportacaoAuditoria(exportar, agora) if tabela == "audit" and exportar else None
                 try:
                     total = self._purgar_tabela(tabela, self._limite(tabela, agora), arquivo)
                 finally:
                     if arquivo is not None:
                         arquivo.fechar()
-                self.repo.auditar(self.conn, tabela, total)
+                self.repo.audit(self.conn, tabela, total)
                 self.conn.commit()
                 self.log.info("purge de tbsss_%s: %d linhas", tabela, total, extra=_EXTRA)
                 self.resumo.append("%s: %d linhas apagadas" % (tabela, total))
@@ -173,17 +173,17 @@ class Purge(object):
         total = 0
         while True:
             if arquivo is not None:
-                registros = self.repo.ler_e_apagar_auditoria(self.conn, limite, lote)
+                registros = self.repo.read_and_delete_audit(self.conn, limite, lote)
                 arquivo.gravar(registros)  # no disco antes do COMMIT que apaga
                 n = len(registros)
             elif tabela == "tickets":
-                n = self.repo.apagar_tickets(self.conn, limite, lote)
+                n = self.repo.delete_tickets(self.conn, limite, lote)
             else:
-                n = self.repo.apagar_auditoria(self.conn, limite, lote)
+                n = self.repo.delete_audit(self.conn, limite, lote)
             if not n:
                 self.conn.rollback()
                 return total
-            if not self.repo.tomar_concessao(self.conn, self.dono):  # renovada a cada lote, na mesma transacao
+            if not self.repo.take_lease(self.conn, self.dono):  # renovada a cada lote, na mesma transacao
                 self.conn.rollback()
                 raise ConcessaoPerdida()
             self.conn.commit()
@@ -191,7 +191,7 @@ class Purge(object):
 
     def _liberar(self):
         try:
-            self.repo.liberar_concessao(self.conn, self.dono)
+            self.repo.release_lease(self.conn, self.dono)
             self.conn.commit()
         except Exception as exc:  # vence sozinha em 1 hora
             self.log.warning("concessao do purge nao liberada: %s", exc, extra=_EXTRA)
@@ -201,7 +201,7 @@ class Purge(object):
     def _logs_locais(self, agora, dry_run):
         log_dir = self.cfg.logging.log_dir
         manter = [log_paths.diretorio_log_execucao(log_dir, amb, nome, inicio, script_id=sid)
-                  for amb, nome, sid, inicio in self.repo.running_para_logs(self.conn) if nome]
+                  for amb, nome, sid, inicio in self.repo.running_for_logs(self.conn) if nome]
         falhas = []
         pastas = log_paths.limpar_retencao_execucao(log_dir, self.cfg.logging.local_log_retention_days, agora,
                                                      manter=manter, dry_run=dry_run, falhas=falhas,

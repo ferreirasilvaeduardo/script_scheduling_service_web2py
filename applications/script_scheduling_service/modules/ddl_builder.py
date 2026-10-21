@@ -169,34 +169,34 @@ COLUNAS_REGISTRO_DESCRICOES = {
 }
 
 DICIONARIO_TABELAS = {
-    "ambientes": "Cadastro de ambientes operacionais para execucao de rotinas (PRODUCAO, HOMOLOGACAO, CLONES)",
-    "perfis": "Perfis de acesso para autorizacao baseada em papeis (RBAC)",
-    "funcionalidades": "Catalogo canonico de permissoes e operacoes controladas pelo sistema",
-    "perfil_func": "Matriz associativa de permissoes que vincula perfis a funcionalidades autorizadas",
-    "perfil_amb": "Associacao que delimita os ambientes onde cada perfil possui autorizacao",
+    "environments": "Cadastro de ambientes operacionais para execucao de rotinas (PRODUCAO, HOMOLOGACAO, CLONES)",
+    "profiles": "Perfis de acesso para autorizacao baseada em papeis (RBAC)",
+    "features": "Catalogo canonico de permissoes e operacoes controladas pelo sistema",
+    "profile_feature": "Matriz associativa de permissoes que vincula perfis a funcionalidades autorizadas",
+    "profile_env": "Associacao que delimita os ambientes onde cada perfil possui autorizacao",
     "scripts": "Catalogo de rotinas e scripts homologados para execucao automatizada",
-    "perfil_scr": "Associacao que define quais rotinas cada perfil tem permissao para disparar",
-    "script_amb": "Homologacao tecnica que associa rotinas aos ambientes onde podem rodar",
-    "usuarios": "Cadastro de operadores do sistema, credenciais e controle de sessao",
-    "parametros": "Dicionario de perguntas, variaveis e flags reutilizaveis em scripts",
+    "profile_script": "Associacao que define quais rotinas cada perfil tem permissao para disparar",
+    "script_env": "Homologacao tecnica que associa rotinas aos ambientes onde podem rodar",
+    "users": "Cadastro de operadores do sistema, credenciais e controle de sessao",
+    "parameters": "Dicionario de perguntas, variaveis e flags reutilizaveis em scripts",
     "script_param": "Composicao e ordenacao dos parametros exigidos por cada rotina",
-    "agendamentos": "Regras de execucao periodica automatica ou avulsa de rotinas",
+    "schedules": "Regras de execucao periodica automatica ou avulsa de rotinas",
     "tickets": "Fila de execucao, ciclo de vida e historico de execucao de scripts",
-    "ticket_resp": "Valores individuais preenchidos para cada parametro no disparo do ticket",
-    "agentes": "Registro, versao e sinais de vida dos daemons executores instalados",
-    "auditoria": "Trilha de auditoria imutavel para conformidade e rastreabilidade",
-    "controle": "Parametros de controle global, versao de esquema e concessao de limpeza",
+    "ticket_answer": "Valores individuais preenchidos para cada parametro no disparo do ticket",
+    "agents": "Registro, versao e sinais de vida dos daemons executores instalados",
+    "audit": "Trilha de auditoria imutavel para conformidade e rastreabilidade",
+    "control": "Parametros de controle global, versao de esquema e concessao de limpeza",
 }
 
 DICIONARIO_COLUNAS = {
-    "ambientes": {
+    "environments": {
         "id": "Identificador unico sequencial do ambiente (chave primaria)",
         "name": "Nome mnemonico unico do ambiente em maiusculas (chave natural imutavel)",
         "description": "Descricao detalhada do ambiente, servidor host e finalidade",
         "connection": "String de conexao ou alias DSN/TNS sugerido para o banco de dados do ambiente",
         "active": "Indicador de vigencia do ambiente (Y=Ativo, N=Inativo)",
     },
-    "perfis": {
+    "profiles": {
         "id": "Identificador unico sequencial do perfil (chave primaria)",
         "name": "Nome unico de identificacao do perfil (ex: ADMINISTRATOR, OPERADOR)",
         "description": "Finalidade e escopo de atuacao dos usuarios vinculados ao perfil",
@@ -204,7 +204,7 @@ DICIONARIO_COLUNAS = {
         "perm_version": "Versao incremental das permissoes para invalidacao de sessoes ativas",
         "active": "Indicador de vigencia do perfil no sistema (Y=Ativo, N=Inativo)",
     },
-    "funcionalidades": {
+    "features": {
         "id": "Identificador unico sequencial da funcionalidade (chave primaria)",
         "code": "Codigo mnemonico unico da operacao (ex: EXEC_SCRIPT, VIEW_LOGS, CANCEL_TICKET)",
         "module": "Modulo funcional do sistema ao qual a operacao pertence (OPERATION, ADMIN)",
@@ -212,12 +212,12 @@ DICIONARIO_COLUNAS = {
         "description": "Descricao clara das acoes permitidas por esta funcionalidade",
         "active": "Indicador de vigencia da funcionalidade no sistema (Y/N)",
     },
-    "perfil_func": {
+    "profile_feature": {
         "id": "Identificador unico sequencial do vinculo (chave primaria)",
         "profile_id": "Identificador do perfil associado (FK para tbsss_profiles)",
         "feature_id": "Identificador da funcionalidade autorizada (FK para tbsss_features)",
     },
-    "perfil_amb": {
+    "profile_env": {
         "id": "Identificador unico sequencial do vinculo (chave primaria)",
         "profile_id": "Identificador do perfil autorizado (FK para tbsss_profiles)",
         "environment_id": "Identificador do ambiente autorizado (FK para tbsss_environments)",
@@ -233,17 +233,17 @@ DICIONARIO_COLUNAS = {
         "category": "Categoria de negocio ou agrupador funcional da rotina",
         "active": "Indicador de disponibilidade da rotina para novas execucoes (Y/N)",
     },
-    "perfil_scr": {
+    "profile_script": {
         "id": "Identificador unico sequencial do vinculo (chave primaria)",
         "profile_id": "Identificador do perfil autorizado (FK para tbsss_profiles)",
         "script_id": "Identificador da rotina homologada (FK para tbsss_scripts)",
     },
-    "script_amb": {
+    "script_env": {
         "id": "Identificador unico sequencial da homologacao (chave primaria)",
         "script_id": "Identificador do script homologado (FK para tbsss_scripts)",
         "environment_id": "Identificador do ambiente onde a rotina e permitida (FK para tbsss_environments)",
     },
-    "usuarios": {
+    "users": {
         "id": "Identificador unico sequencial do usuario (chave primaria)",
         "login": "Identificador de login do usuario (chave natural imutavel)",
         "name": "Nome completo do operador para identificacao",
@@ -255,7 +255,7 @@ DICIONARIO_COLUNAS = {
         "failed_attempts": "Numero de tentativas consecutivas de autenticacao incorretas",
         "locked_until": "Data e hora limite de bloqueio temporario por excesso de falhas",
     },
-    "parametros": {
+    "parameters": {
         "id": "Identificador unico sequencial do parametro (chave primaria)",
         "code": "Codigo mnemonico unico do parametro (ex: DATA_REF, FORMATO)",
         "label": "Rotulo de exibicao amigavel apresentado no formulario ao usuario",
@@ -278,7 +278,7 @@ DICIONARIO_COLUNAS = {
         "script_group": "Agrupador ou secao visual no formulario",
         "stage": "Etapa de preenchimento em formularios com multiplos passos",
     },
-    "agendamentos": {
+    "schedules": {
         "id": "Identificador unico sequencial do agendamento (chave primaria)",
         "name": "Titulo descritivo da regra de agendamento",
         "script_id": "Identificador da rotina a ser executada (FK para tbsss_scripts)",
@@ -323,13 +323,13 @@ DICIONARIO_COLUNAS = {
         "status_reason": "Codigo tecnico do motivo de falha ou cancelamento",
         "submitted_params": "Copia fiel dos parametros de entrada fornecidos na solicitacao (CLOB)",
     },
-    "ticket_resp": {
+    "ticket_answer": {
         "id": "Identificador unico sequencial da resposta (chave primaria)",
         "ticket_id": "Identificador do ticket correspondente (FK para tbsss_tickets)",
         "parameter_id": "Identificador do parametro respondido (FK para tbsss_parameters)",
         "valor": "Valor fornecido pelo operador para este parametro",
     },
-    "agentes": {
+    "agents": {
         "id": "Identificador unico sequencial do agente (chave primaria)",
         "code": "Codigo identificador unico do agente (ex: agt-node01)",
         "hostname": "Nome de rede (hostname) da maquina servidora do agente",
@@ -342,7 +342,7 @@ DICIONARIO_COLUNAS = {
         "started_at": "Data e hora de inicializacao do daemon",
         "heartbeat_at": "Data e hora do sinal periodico de disponibilidade mais recente",
     },
-    "auditoria": {
+    "audit": {
         "id": "Identificador unico sequencial do evento de auditoria (chave primaria)",
         "created_at": "Data e hora exatas da realizacao do evento auditado",
         "actor": "Identificador do operador ou servico que executou a acao",
@@ -352,7 +352,7 @@ DICIONARIO_COLUNAS = {
         "entity_id": "Identificador numerico do registro alvo afetado",
         "detail": "Texto descritivo ou dados em formato estruturado sobre o evento",
     },
-    "controle": {
+    "control": {
         "id": "Identificador unico da linha de controle global (sempre 1)",
         "schema_version": "Numero da versao estrutural do banco de dados atualmente instalada",
         "version_applied_at": "Data e hora de aplicacao da versao de esquema atual",
@@ -360,7 +360,7 @@ DICIONARIO_COLUNAS = {
         "purge_owner": "Identificador do no que detem a concessao de purga de dados",
         "purge_lease_until": "Data e hora limite de expiracao da concessao de purga",
     },
-    "ticket_saida": {
+    "ticket_output": {
         "id": "Identificador unico sequencial da saida (chave primaria)",
         "ticket_id": "Ticket dono da saida (FK para tbsss_tickets, removida em cascata)",
         "state": "Situacao do zip (WRITING, AVAILABLE, EXCEEDED, FAILED)",
@@ -699,8 +699,8 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
     usr_web = papeis_usuarios.get("web")
     if usr_web:
         cadastros_e_agendamentos = (
-            "ambientes", "perfis", "funcionalidades", "scripts",
-            "usuarios", "parametros", "agendamentos"
+            "environments", "profiles", "features", "scripts",
+            "users", "parameters", "schedules"
         )
         for ent in cadastros_e_agendamentos:
             comandos.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
@@ -708,7 +708,7 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
             ))
 
         associacoes = (
-            "perfil_func", "perfil_amb", "perfil_scr", "script_amb", "script_param"
+            "profile_feature", "profile_env", "profile_script", "script_env", "script_param"
         )
         for ent in associacoes:
             comandos.append("GRANT SELECT, INSERT, UPDATE, DELETE ON {}.{} TO {};".format(
@@ -719,25 +719,25 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
             owner, esquema["tickets"]["tabela"], usr_web
         ))
         comandos.append("GRANT SELECT, INSERT ON {}.{} TO {};".format(
-            owner, esquema["ticket_resp"]["tabela"], usr_web
+            owner, esquema["ticket_answer"]["tabela"], usr_web
         ))
         comandos.append("GRANT SELECT, INSERT ON {}.{} TO {};".format(
-            owner, esquema["auditoria"]["tabela"], usr_web
+            owner, esquema["audit"]["tabela"], usr_web
         ))
         comandos.append("GRANT SELECT ON {}.{} TO {};".format(
-            owner, esquema["agentes"]["tabela"], usr_web
+            owner, esquema["agents"]["tabela"], usr_web
         ))
         comandos.append("GRANT SELECT ON {}.{} TO {};".format(
-            owner, esquema["controle"]["tabela"], usr_web
+            owner, esquema["control"]["tabela"], usr_web
         ))
         # Saida do ticket (CR-012): a web so le o zip para o download
         comandos.append("GRANT SELECT ON {}.{} TO {};".format(
-            owner, esquema["ticket_saida"]["tabela"], usr_web
+            owner, esquema["ticket_output"]["tabela"], usr_web
         ))
 
         # Sequences para web (todas exceto agentes, controle e ticket_saida, que a web nao insere)
         for ent, t in esquema.items():
-            if ent not in ("agentes", "controle", "ticket_saida"):
+            if ent not in ("agents", "control", "ticket_output"):
                 comandos.append("GRANT SELECT ON {}.{} TO {};".format(
                     owner, t["sequence"], usr_web
                 ))
@@ -746,8 +746,8 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
     usr_agt = papeis_usuarios.get("agent")
     if usr_agt:
         cadastros_e_assoc = (
-            "ambientes", "perfis", "funcionalidades", "perfil_func", "perfil_amb",
-            "scripts", "perfil_scr", "script_amb", "usuarios", "parametros", "script_param"
+            "environments", "profiles", "features", "profile_feature", "profile_env",
+            "scripts", "profile_script", "script_env", "users", "parameters", "script_param"
         )
         for ent in cadastros_e_assoc:
             comandos.append("GRANT SELECT ON {}.{} TO {};".format(
@@ -755,29 +755,29 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
             ))
 
         comandos.append("GRANT SELECT, UPDATE ON {}.{} TO {};".format(
-            owner, esquema["agendamentos"]["tabela"], usr_agt
+            owner, esquema["schedules"]["tabela"], usr_agt
         ))
         comandos.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
             owner, esquema["tickets"]["tabela"], usr_agt
         ))
         comandos.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
-            owner, esquema["agentes"]["tabela"], usr_agt
+            owner, esquema["agents"]["tabela"], usr_agt
         ))
         comandos.append("GRANT SELECT, INSERT ON {}.{} TO {};".format(
-            owner, esquema["ticket_resp"]["tabela"], usr_agt
+            owner, esquema["ticket_answer"]["tabela"], usr_agt
         ))
         comandos.append("GRANT INSERT ON {}.{} TO {};".format(
-            owner, esquema["auditoria"]["tabela"], usr_agt
+            owner, esquema["audit"]["tabela"], usr_agt
         ))
         comandos.append("GRANT SELECT ON {}.{} TO {};".format(
-            owner, esquema["controle"]["tabela"], usr_agt
+            owner, esquema["control"]["tabela"], usr_agt
         ))
         comandos.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
-            owner, esquema["ticket_saida"]["tabela"], usr_agt
+            owner, esquema["ticket_output"]["tabela"], usr_agt
         ))
 
         # Sequences do agente: tickets, respostas, agentes, auditoria e saida (CR-012)
-        for ent in ("tickets", "ticket_resp", "agentes", "auditoria", "ticket_saida"):
+        for ent in ("tickets", "ticket_answer", "agents", "audit", "ticket_output"):
             comandos.append("GRANT SELECT ON {}.{} TO {};".format(
                 owner, esquema[ent]["sequence"], usr_agt
             ))
@@ -789,13 +789,13 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
             owner, esquema["tickets"]["tabela"], usr_purge
         ))
         comandos.append("GRANT SELECT, INSERT, DELETE ON {}.{} TO {};".format(
-            owner, esquema["auditoria"]["tabela"], usr_purge
+            owner, esquema["audit"]["tabela"], usr_purge
         ))
         comandos.append("GRANT SELECT, UPDATE (purge_owner, purge_lease_until) ON {}.{} TO {};".format(
-            owner, esquema["controle"]["tabela"], usr_purge
+            owner, esquema["control"]["tabela"], usr_purge
         ))
         comandos.append("GRANT SELECT ON {}.{} TO {};".format(
-            owner, esquema["auditoria"]["sequence"], usr_purge
+            owner, esquema["audit"]["sequence"], usr_purge
         ))
 
     # 4. PAPEL: monitor (CR-008, E3/R-04)
@@ -803,8 +803,8 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
     usr_mon = papeis_usuarios.get("monitor")
     if usr_mon:
         tabelas_monitor = (
-            "agentes", "tickets", "agendamentos", "scripts",
-            "ambientes", "controle", "auditoria"
+            "agents", "tickets", "schedules", "scripts",
+            "environments", "control", "audit"
         )
         for ent in tabelas_monitor:
             comandos.append("GRANT SELECT ON {}.{} TO {};".format(
@@ -833,8 +833,8 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
     comandos = []
 
     # 1. Funcionalidades canonicas
-    tb_fnc = "{}.{}".format(owner, esquema["funcionalidades"]["tabela"])
-    sq_fnc = "{}.{}".format(owner, esquema["funcionalidades"]["sequence"])
+    tb_fnc = "{}.{}".format(owner, esquema["features"]["tabela"])
+    sq_fnc = "{}.{}".format(owner, esquema["features"]["sequence"])
     for mod, cod, nome_exib, finalidade in CATALOGO_FUNCIONALIDADES:
         sql = (
             "MERGE INTO {tb} dst\n"
@@ -865,8 +865,8 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
         comandos.append(sql)
 
     # 2. Ambientes padrao (inseridos antes dos perfis para permitir vinculo de perfil_amb)
-    tb_amb = "{}.{}".format(owner, esquema["ambientes"]["tabela"])
-    sq_amb = "{}.{}".format(owner, esquema["ambientes"]["sequence"])
+    tb_amb = "{}.{}".format(owner, esquema["environments"]["tabela"])
+    sq_amb = "{}.{}".format(owner, esquema["environments"]["sequence"])
     for amb_nome, amb_desc, amb_conn in CATALOGO_AMBIENTES_PADRAO:
         sql_amb = (
             "MERGE INTO {tb} dst\n"
@@ -894,12 +894,12 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
         comandos.append(sql_amb)
 
     # 3. Perfis padrao e matrizes de permissao (CATALOGO_PERFIS_PADRAO)
-    tb_per = "{}.{}".format(owner, esquema["perfis"]["tabela"])
-    sq_per = "{}.{}".format(owner, esquema["perfis"]["sequence"])
-    tb_pfnc = "{}.{}".format(owner, esquema["perfil_func"]["tabela"])
-    sq_pfnc = "{}.{}".format(owner, esquema["perfil_func"]["sequence"])
-    tb_pamb = "{}.{}".format(owner, esquema["perfil_amb"]["tabela"])
-    sq_pamb = "{}.{}".format(owner, esquema["perfil_amb"]["sequence"])
+    tb_per = "{}.{}".format(owner, esquema["profiles"]["tabela"])
+    sq_per = "{}.{}".format(owner, esquema["profiles"]["sequence"])
+    tb_pfnc = "{}.{}".format(owner, esquema["profile_feature"]["tabela"])
+    sq_pfnc = "{}.{}".format(owner, esquema["profile_feature"]["sequence"])
+    tb_pamb = "{}.{}".format(owner, esquema["profile_env"]["tabela"])
+    sq_pamb = "{}.{}".format(owner, esquema["profile_env"]["sequence"])
 
     for per_nome, per_desc, is_adm, per_funcs, per_ambs in CATALOGO_PERFIS_PADRAO:
         sql_per = (
@@ -963,8 +963,8 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
             comandos.append(sql_pamb)
 
     # 4. Parametros padrao reutilizaveis
-    tb_prm = "{}.{}".format(owner, esquema["parametros"]["tabela"])
-    sq_prm = "{}.{}".format(owner, esquema["parametros"]["sequence"])
+    tb_prm = "{}.{}".format(owner, esquema["parameters"]["tabela"])
+    sq_prm = "{}.{}".format(owner, esquema["parameters"]["sequence"])
     for cod, p_nom, lbl, desc, tcomp, opc, vpad in CATALOGO_PARAMETROS_PADRAO:
         pnom_sql = "'{}'".format(_escape_sql(p_nom)) if p_nom else "NULL"
         opc_sql = "'{}'".format(_escape_sql(opc)) if opc else "NULL"
@@ -1004,10 +1004,10 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
     # 5. Scripts utilitarios padrao
     tb_scr = "{}.{}".format(owner, esquema["scripts"]["tabela"])
     sq_scr = "{}.{}".format(owner, esquema["scripts"]["sequence"])
-    tb_samb = "{}.{}".format(owner, esquema["script_amb"]["tabela"])
-    sq_samb = "{}.{}".format(owner, esquema["script_amb"]["sequence"])
-    tb_pscr = "{}.{}".format(owner, esquema["perfil_scr"]["tabela"])
-    sq_pscr = "{}.{}".format(owner, esquema["perfil_scr"]["sequence"])
+    tb_samb = "{}.{}".format(owner, esquema["script_env"]["tabela"])
+    sq_samb = "{}.{}".format(owner, esquema["script_env"]["sequence"])
+    tb_pscr = "{}.{}".format(owner, esquema["profile_script"]["tabela"])
+    sq_pscr = "{}.{}".format(owner, esquema["profile_script"]["sequence"])
     tb_sprm = "{}.{}".format(owner, esquema["script_param"]["tabela"])
     sq_sprm = "{}.{}".format(owner, esquema["script_param"]["sequence"])
 
@@ -1119,7 +1119,7 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
             comandos.append(sql_sprm)
 
     # 6. Controle de versao
-    tb_ctl = "{}.{}".format(owner, esquema["controle"]["tabela"])
+    tb_ctl = "{}.{}".format(owner, esquema["control"]["tabela"])
     sql_ctl = (
         "MERGE INTO {tb} dst\n"
         "USING (SELECT 1 AS id FROM DUAL) src\n"
@@ -1131,8 +1131,8 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
     comandos.append(sql_ctl)
 
     # 7. Usuarios padrao da aplicacao e homologacao (CATALOGO_USUARIOS_PADRAO)
-    tb_usr = "{}.{}".format(owner, esquema["usuarios"]["tabela"])
-    sq_usr = "{}.{}".format(owner, esquema["usuarios"]["sequence"])
+    tb_usr = "{}.{}".format(owner, esquema["users"]["tabela"])
+    sq_usr = "{}.{}".format(owner, esquema["users"]["sequence"])
 
     for u_login, u_nome, u_perfil in CATALOGO_USUARIOS_PADRAO:
         nome_final = admin_nome if (u_login == "admin" and admin_nome) else u_nome
@@ -1183,18 +1183,18 @@ def gerar_script_seed(owner, prefixo, admin_login=None, admin_nome=None, admin_s
     owner_u = owner.upper()
 
     tabelas_stats = [
-        esquema["funcionalidades"]["tabela"].upper(),
-        esquema["perfis"]["tabela"].upper(),
-        esquema["perfil_func"]["tabela"].upper(),
-        esquema["perfil_amb"]["tabela"].upper(),
-        esquema["ambientes"]["tabela"].upper(),
-        esquema["parametros"]["tabela"].upper(),
+        esquema["features"]["tabela"].upper(),
+        esquema["profiles"]["tabela"].upper(),
+        esquema["profile_feature"]["tabela"].upper(),
+        esquema["profile_env"]["tabela"].upper(),
+        esquema["environments"]["tabela"].upper(),
+        esquema["parameters"]["tabela"].upper(),
         esquema["scripts"]["tabela"].upper(),
-        esquema["script_amb"]["tabela"].upper(),
-        esquema["perfil_scr"]["tabela"].upper(),
+        esquema["script_env"]["tabela"].upper(),
+        esquema["profile_script"]["tabela"].upper(),
         esquema["script_param"]["tabela"].upper(),
-        esquema["controle"]["tabela"].upper(),
-        esquema["usuarios"]["tabela"].upper(),
+        esquema["control"]["tabela"].upper(),
+        esquema["users"]["tabela"].upper(),
     ]
 
     linhas_stats = [
@@ -1233,24 +1233,24 @@ def gerar_script_seed(owner, prefixo, admin_login=None, admin_nome=None, admin_s
 
 
 ORDEM_ROLLBACK_ENTIDADES = (
-    "ticket_saida",
-    "ticket_resp",
+    "ticket_output",
+    "ticket_answer",
     "tickets",
-    "agendamentos",
+    "schedules",
     "script_param",
-    "parametros",
-    "script_amb",
-    "perfil_scr",
-    "perfil_amb",
-    "perfil_func",
+    "parameters",
+    "script_env",
+    "profile_script",
+    "profile_env",
+    "profile_feature",
     "scripts",
-    "usuarios",
-    "funcionalidades",
-    "perfis",
-    "ambientes",
-    "agentes",
-    "auditoria",
-    "controle",
+    "users",
+    "features",
+    "profiles",
+    "environments",
+    "agents",
+    "audit",
+    "control",
 )
 
 
@@ -1420,7 +1420,7 @@ def gerar_script_validacao(owner, prefixo):
     tab = dict((ent, "{}.{}".format(owner, t["tabela"])) for ent, t in esquema.items())
     dados = [
         chk(10, "VERSAO DO ESQUEMA", "=", sql_ident.SCHEMA_VERSION,
-            "SELECT MAX(schema_version) FROM {}".format(tab["controle"])),
+            "SELECT MAX(schema_version) FROM {}".format(tab["control"])),
     ]
     for n, (ent, minimo) in enumerate(_linhas_seed_por_tabela(owner, prefixo).items()):
         dados.append(chk(11 + n, "LINHAS " + esquema[ent]["tabela"].upper(), ">=", minimo,
@@ -1488,7 +1488,7 @@ def gerar_script_validacao(owner, prefixo):
         "COLUMN senha_definida FORMAT A14",
         "SELECT u.id, u.login, u.name, p.name AS perfil, p.is_admin AS admin, u.active,",
         "       CASE WHEN u.password_hash IS NULL THEN 'N' ELSE 'Y' END AS senha_definida",
-        "  FROM {} u JOIN {} p ON p.id = u.profile_id".format(tab["usuarios"], tab["perfis"]),
+        "  FROM {} u JOIN {} p ON p.id = u.profile_id".format(tab["users"], tab["profiles"]),
         " ORDER BY u.id;",
         "",
         "PROMPT ==============================================================================",
@@ -1508,10 +1508,10 @@ def gerar_script_validacao(owner, prefixo):
         "PROMPT ==============================================================================",
         "COLUMN perfil FORMAT A20",
         "SELECT p.name AS perfil, p.is_admin AS admin, p.active,",
-        "       (SELECT COUNT(*) FROM {} x WHERE x.profile_id = p.id) AS funcionalidades,".format(tab["perfil_func"]),
-        "       (SELECT COUNT(*) FROM {} x WHERE x.profile_id = p.id) AS environments,".format(tab["perfil_amb"]),
-        "       (SELECT COUNT(*) FROM {} x WHERE x.profile_id = p.id) AS scripts".format(tab["perfil_scr"]),
-        "  FROM {} p".format(tab["perfis"]),
+        "       (SELECT COUNT(*) FROM {} x WHERE x.profile_id = p.id) AS funcionalidades,".format(tab["profile_feature"]),
+        "       (SELECT COUNT(*) FROM {} x WHERE x.profile_id = p.id) AS environments,".format(tab["profile_env"]),
+        "       (SELECT COUNT(*) FROM {} x WHERE x.profile_id = p.id) AS scripts".format(tab["profile_script"]),
+        "  FROM {} p".format(tab["profiles"]),
         " ORDER BY p.name;",
         "",
         "PROMPT ==============================================================================",

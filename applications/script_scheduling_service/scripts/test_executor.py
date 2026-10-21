@@ -95,7 +95,7 @@ class _Base(unittest.TestCase):
                 os.chmod(os.path.join(atual, d), 0o700)
         shutil.rmtree(self.raiz, ignore_errors=True)
 
-    def iniciar(self, comando, ticket_id=1, argv=None, env=None, rotulo=None):
+    def start(self, comando, ticket_id=1, argv=None, env=None, rotulo=None):
         wd = executor.preparar_diretorio(self.work, ticket_id)
         fd, _parcial = executor.abrir_log(self.logs, "DEV", "Teste Script", STARTED_AT, ticket_id)
         ex = executor.iniciar(ticket_id, argv or [SH, "-c", comando], fd, env or {"PATH": "/usr/bin:/bin"}, wd,
@@ -130,7 +130,7 @@ class TestLogESaida(_Base):
     def test_log_por_minuto_rename_e_permissoes(self):
         antiga = os.umask(0o077)
         try:
-            ex = self.iniciar("echo ola")
+            ex = self.start("echo ola")
         finally:
             os.umask(antiga)
         self.assertEqual(self.ate_sair(ex), 0)
@@ -156,7 +156,7 @@ class TestLogESaida(_Base):
         self.assertTrue(caminho.endswith("/ticket_9.log.parcial"))
 
     def test_saida_de_2_mb_sem_travar(self):
-        ex = self.iniciar("head -c 2097152 /dev/zero | tr '\\000' a")
+        ex = self.start("head -c 2097152 /dev/zero | tr '\\000' a")
         self.assertEqual(self.ate_sair(ex, 20), 0)
         self.assertEqual(os.path.getsize(ex.caminho_log), 2097152)
         self.encerrar(ex)
@@ -168,7 +168,7 @@ class TestLogESaida(_Base):
         self.assertEqual(os.listdir(self.logs), [], "nada criado sem ambiente")
 
     def test_stdin_nulo(self):
-        ex = self.iniciar("cat; echo fim")
+        ex = self.start("cat; echo fim")
         self.assertEqual(self.ate_sair(ex), 0)
         self.assertEqual(_ler(ex.caminho_log), "fim\n")
         self.encerrar(ex)
@@ -178,7 +178,7 @@ class TestEncerramento(_Base):
 
     def test_neto_morre_com_o_principal_ja_terminado(self):
         neto = os.path.join(self.raiz, "neto.pid")
-        ex = self.iniciar("sleep 300 & echo $! > %s" % neto)
+        ex = self.start("sleep 300 & echo $! > %s" % neto)
         self.assertEqual(self.ate_sair(ex), 0)
         pid_neto = int(_ler(neto).strip())
         self.assertTrue(_vivo(pid_neto))
@@ -189,7 +189,7 @@ class TestEncerramento(_Base):
 
     def test_neto_morre_com_o_principal_vivo(self):
         neto = os.path.join(self.raiz, "neto.pid")
-        ex = self.iniciar("sleep 300 & echo $! > %s; sleep 300" % neto)
+        ex = self.start("sleep 300 & echo $! > %s; sleep 300" % neto)
         self.assertTrue(_esperar(lambda: _ler(neto).strip().isdigit()))
         pid_neto = int(_ler(neto).strip())
         self.encerrar(ex)
@@ -199,7 +199,7 @@ class TestEncerramento(_Base):
 
     def test_grupo_que_ignora_sigterm_morre_dentro_de_grace_mais_1(self):
         pronto = os.path.join(self.raiz, "pronto")
-        ex = self.iniciar("trap '' TERM; touch %s; sleep 300 & sleep 300" % pronto)
+        ex = self.start("trap '' TERM; touch %s; sleep 300 & sleep 300" % pronto)
         self.assertTrue(_esperar(lambda: os.path.exists(pronto)))
         duracao = self.encerrar(ex, grace_s=1, prazo=5)
         self.assertLess(duracao, 2.0)
@@ -207,7 +207,7 @@ class TestEncerramento(_Base):
         self.assertEqual(executor.verificar(ex), -signal.SIGKILL)
 
     def test_timeout_pelo_laco(self):
-        ex = self.iniciar("sleep 300")
+        ex = self.start("sleep 300")
         limite = time.monotonic() + 0.3
         # Laco do daemon: verificar a cada volta; passou do tempo, pede o encerramento.
         while executor.verificar(ex) is None and ex.fase is None:
@@ -218,13 +218,13 @@ class TestEncerramento(_Base):
         self.assertEqual(executor.verificar(ex), -signal.SIGTERM)
 
     def test_avancar_sem_pedido(self):
-        ex = self.iniciar("sleep 300")
+        ex = self.start("sleep 300")
         with self.assertRaises(RuntimeError):
             executor.avancar_encerramento(ex, time.monotonic())
 
     def test_sem_identidade_nao_recebe_sinal_e_termina_a_maquina(self):
         # Revisao F8.0-F8.2 (A2): ORFAO_SEM_IDENTIDADE nao fica preso em KILL; a pasta e preservada.
-        ex = self.iniciar("sleep 300", ticket_id=40)
+        ex = self.start("sleep 300", ticket_id=40)
         ex.processo.sem_identidade = True
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             executor.pedir_encerramento(ex, time.monotonic(), grace_s=0)
@@ -240,7 +240,7 @@ class TestEncerramento(_Base):
 
     def test_grupo_que_nao_morre_gera_erro_uma_vez(self):
         # Revisao F8.0-F8.2 (M3): grupo vivo depois do SIGKILL e de mais um prazo.
-        ex = self.iniciar("sleep 300", ticket_id=41)
+        ex = self.start("sleep 300", ticket_id=41)
         with mock.patch.object(os_platform, "grupo_vivo", return_value=True), \
                 mock.patch.object(os_platform, "sinalizar_grupo", return_value=True):
             executor.pedir_encerramento(ex, 0.0, grace_s=2)
@@ -279,7 +279,7 @@ class TestEstadoLocal(_Base):
             return original(spec, log_fd, usuario)
 
         with mock.patch.object(os_platform, "iniciar_processo", side_effect=_confere):
-            ex = self.iniciar("sleep 300", ticket_id=3)
+            ex = self.start("sleep 300", ticket_id=3)
         self.assertEqual((vistos["spawn"]["ticket_id"], vistos["spawn"]["usuario_execucao"]), (3, None))
         self.assertIn("monotonico", vistos["spawn"])
         self.assertFalse(vistos["proc"], ".sss_proc so depois do Popen")
@@ -331,7 +331,7 @@ class TestEstadoLocal(_Base):
         self.assertTrue(os.path.isdir(fora))
 
     def test_limpar_com_grupo_vivo_recusa(self):
-        ex = self.iniciar("sleep 300", ticket_id=4)
+        ex = self.start("sleep 300", ticket_id=4)
         with self.assertRaises(RuntimeError):
             executor.limpar(ex)
         self.assertTrue(os.path.isdir(ex.work_dir_ticket))
@@ -361,7 +361,7 @@ class TestFalhasDeSpawn(_Base):
 
         with mock.patch.object(os_platform, "gravar_estado", side_effect=_grava), \
                 self.assertLogs("sss_scheduler", "ERROR"):
-            ex = self.iniciar("sleep 300 & echo $! > %s; sleep 300" % neto, ticket_id=7)
+            ex = self.start("sleep 300 & echo $! > %s; sleep 300" % neto, ticket_id=7)
         self.assertTrue(ex.falhou_apos_spawn)
         self.assertEqual(ex.erro_spawn, "OSError")
         self.assertIn(ex.fase, (executor.FASE_TERM, executor.FASE_FIM), "encerramento ja iniciado")
@@ -390,7 +390,7 @@ class TestFalhasDeSpawn(_Base):
         erro = UnicodeEncodeError("utf-8", "x", 0, 1, "surrogates not allowed")
         with mock.patch.object(os_platform, "iniciar_processo", side_effect=erro), \
                 self.assertLogs("sss_scheduler", "ERROR"):
-            ex = self.iniciar("echo nunca", ticket_id=12, rotulo="SSS-srv-linux-prod-01-12")
+            ex = self.start("echo nunca", ticket_id=12, rotulo="SSS-srv-linux-prod-01-12")
         self.assertTrue(ex.spawn_error)
         self.assertFalse(ex.falhou_apos_spawn)
         self.assertIsNone(ex.processo)
@@ -404,7 +404,7 @@ class TestFalhasDeSpawn(_Base):
         with mock.patch.object(os_platform, "gravar_estado", side_effect=PermissionError(13, "negado")), \
                 mock.patch.object(os_platform, "iniciar_processo") as inicia, \
                 self.assertLogs("sss_scheduler", "ERROR"):
-            ex = self.iniciar("echo nunca", ticket_id=13)
+            ex = self.start("echo nunca", ticket_id=13)
         inicia.assert_not_called()
         self.assertEqual(ex.erro_spawn, "PermissionError")
         self.assertTrue(ex.caminho_log.endswith("ticket_13_0.log"))
@@ -416,7 +416,7 @@ class TestFalhasDeSpawn(_Base):
         falha = os_platform.FalhaAposSpawn(processo, BrokenPipeError(32, "Broken pipe"))
         with mock.patch.object(os_platform, "iniciar_processo", side_effect=falha), \
                 self.assertLogs("sss_scheduler", "ERROR"):
-            ex = self.iniciar("ignorado", ticket_id=14)
+            ex = self.start("ignorado", ticket_id=14)
         self.execs.remove(ex)
         self.assertTrue(ex.falhou_apos_spawn)
         self.assertEqual((ex.pid, ex.erro_spawn, ex.fase), (lider.pid, "BrokenPipeError", executor.FASE_TERM))

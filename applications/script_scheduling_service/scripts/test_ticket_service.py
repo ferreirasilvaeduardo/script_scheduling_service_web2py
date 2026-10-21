@@ -19,7 +19,7 @@ import repo_factory
 import security
 import ticket_service
 import ui_helpers
-from repo_errors import RepoNaoEncontrado
+from repo_errors import RepoNotFound
 from ticket_service import AcessoNegado, ErroReexecucao, ServicoTicket
 
 # UID fictício do agente: o dono dos arquivos de teste é o usuário do teste (CR-007, R-15).
@@ -65,33 +65,33 @@ class _BaseTicket(unittest.TestCase):
         patcher = mock.patch.object(security, "ITERACOES", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
-        env = mock.patch.dict(os.environ, {repo_factory.ENV_SENHA_DEV: "senha-dev-de-teste-123"})
+        env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: "senha-dev-de-teste-123"})
         env.start()
         self.addCleanup(env.stop)
-        repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
-        self.addCleanup(repo_factory.configurar, None)
+        self.addCleanup(repo_factory.configure, None)
 
-        self.catalogo = repo_factory.obter("catalogo")
-        self.tickets = repo_factory.obter("tickets")
-        self.auditoria = repo_factory.obter("auditoria")
+        self.catalog = repo_factory.get("catalog")
+        self.tickets = repo_factory.get("tickets")
+        self.audit = repo_factory.get("audit")
         self.log = logging.getLogger("sss_teste_ticket")
         self.log.addHandler(logging.NullHandler())
         self.log.propagate = False
         auth = auth_service.ServicoAuth(
-            repo_factory.obter("usuarios"), repo_factory.obter("rbac"), self.catalogo, self.auditoria,
+            repo_factory.get("users"), repo_factory.get("rbac"), self.catalog, self.audit,
             5, 900, self.log)
         self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
 
         self.base = _criar_arvore()
         self.addCleanup(_remover_arvore, self.base)
         for sid, nome in enumerate(ARQUIVOS, 1):
-            self.catalogo.scripts_alterar(sid, {"path_file": os.path.join(self.base, nome)}, ator="teste")
-        self.svc = ServicoTicket(self.catalogo, self.tickets, self.log)
+            self.catalog.scripts_update(sid, {"path_file": os.path.join(self.base, nome)}, ator="teste")
+        self.svc = ServicoTicket(self.catalog, self.tickets, self.log)
 
     def _total_tickets(self):
-        return self.tickets.listar(pagina=1, tamanho=100)["total"]
+        return self.tickets.list(pagina=1, tamanho=100)["total"]
 
     def _criar(self, login="op.hml", script_id="1", ambiente="HOMOLOGACAO", respostas=None,
                prioridade="2", scheduled_at=""):
@@ -110,7 +110,7 @@ class TestTicketService(_BaseTicket):
         self.assertEqual(erros, {})
         self.assertIsNotNone(tid)
 
-        ticket = self.tickets.obter(tid)
+        ticket = self.tickets.get(tid)
         self.assertEqual(ticket["status"], "PENDING")
         self.assertEqual(ticket["script_id"], 1)
         self.assertEqual(ticket["environment"], "HOMOLOGACAO")
@@ -143,14 +143,14 @@ class TestTicketService(_BaseTicket):
 
     def test_ticket_resp_com_valores_resolvidos(self):
         tid, _ = self._criar(respostas={"data_ref": "2026-10-20", "documento_cliente": SEGREDO})
-        valores = dict((r["parameter_id"], r["answer_value"]) for r in self.tickets.respostas(tid))
+        valores = dict((r["parameter_id"], r["answer_value"]) for r in self.tickets.answers(tid))
         # limite_linhas, modo_exec e verbose vieram dos padroes (precedencia §6.1).
         self.assertEqual(valores, {PRM_DATA_REF: "2026-10-20", PRM_LIMITE: "5000", PRM_MODO: "REAL",
                                    PRM_VERBOSE: "true", PRM_CHAVE_API: SEGREDO})
 
     def test_auditoria_gravada_sem_valor_sensivel(self):
         tid, _ = self._criar(respostas={"documento_cliente": SEGREDO})
-        regs = self.auditoria.listar(filtros={"action": "TICKET_CREATE", "entity_id": tid})["itens"]
+        regs = self.audit.list(filtros={"action": "TICKET_CREATE", "entity_id": tid})["itens"]
         self.assertEqual(len(regs), 1)
         self.assertEqual(regs[0]["actor"], "op.hml")
         self.assertEqual(regs[0]["source_ip"], IP)
@@ -158,21 +158,21 @@ class TestTicketService(_BaseTicket):
         self.assertNotIn(SEGREDO, regs[0]["detail"] or "")
 
     def test_scheduled_at_futuro_e_admin_prioridade_1(self):
-        futuro = (self.tickets.agora() + datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
+        futuro = (self.tickets.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
         tid, erros = self._criar(login="admin", script_id="6", ambiente="PRODUCAO", prioridade="1",
                                  scheduled_at=futuro)
         self.assertEqual(erros, {})
-        ticket = self.tickets.obter(tid)
+        ticket = self.tickets.get(tid)
         self.assertEqual(ticket["priority"], 1)
         self.assertEqual(ticket["scheduled_at"], datetime.datetime.strptime(futuro, "%Y-%m-%dT%H:%M"))
 
     def test_checkbox_desmarcado_vence_padrao_verdadeiro(self):
         # hidden "false" + checkbox ausente: vale "false" e a flag e omitida.
         tid, _ = self._criar(respostas={"verbose": ["false"]})
-        snap = json.loads(self.tickets.obter(tid)["submitted_params"])
+        snap = json.loads(self.tickets.get(tid)["submitted_params"])
         self.assertNotIn("--verbose", snap["args"])
         tid2, _ = self._criar(respostas={"verbose": ["false", "true"]})
-        self.assertIn("--verbose", json.loads(self.tickets.obter(tid2)["submitted_params"])["args"])
+        self.assertIn("--verbose", json.loads(self.tickets.get(tid2)["submitted_params"])["args"])
 
     # ---------------------------------------------------------- autorizacao
 
@@ -213,8 +213,8 @@ class TestTicketService(_BaseTicket):
     def test_obrigatorio_faltando(self):
         vinculos = [{"parameter_id": v["parameter_id"], "sort_order": v["sort_order"], "required": v["required"],
                      "default_value_override": None if v["code"] == "data_ref" else v["default_value_override"]}
-                    for v in self.catalogo.script_params_obter(1)]
-        self.catalogo.script_params_salvar(1, vinculos, ator="teste")
+                    for v in self.catalog.script_params_get(1)]
+        self.catalog.script_params_save(1, vinculos, ator="teste")
         antes = self._total_tickets()
         tid, erros = self._criar(respostas={"data_ref": "   "})
         self.assertIsNone(tid)
@@ -223,7 +223,7 @@ class TestTicketService(_BaseTicket):
 
     def test_regex_invalida_e_todos_os_erros_de_uma_vez(self):
         antes = self._total_tickets()
-        passado = (self.tickets.agora() - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
+        passado = (self.tickets.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
         tid, erros = self._criar(login="admin", script_id="6", ambiente="PRODUCAO",
                                  respostas={"codigo_filial": "ABC", "taxa_ajuste": "x"},
                                  prioridade="9", scheduled_at=passado)
@@ -239,7 +239,7 @@ class TestTicketService(_BaseTicket):
             self.ctx["op.hml"], "1", "HOMOLOGACAO")["prioridades"]])
 
     def test_scheduled_at_no_passado(self):
-        passado = (self.tickets.agora() - datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M")
+        passado = (self.tickets.now() - datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M")
         tid, erros = self._criar(scheduled_at=passado)
         self.assertIsNone(tid)
         self.assertEqual(list(erros), ["scheduled_at"])
@@ -248,7 +248,7 @@ class TestTicketService(_BaseTicket):
 
     def test_scheduled_at_exato_sem_tolerancia_de_minuto(self):
         # CR-003 P5 (README §5.4): o minuto corrente, ja passado, e recusado.
-        repo_factory._fake_store.definir_relogio(lambda: datetime.datetime(2026, 10, 16, 10, 5, 30))
+        repo_factory._fake_store.set_clock(lambda: datetime.datetime(2026, 10, 16, 10, 5, 30))
         tid, erros = self._criar(scheduled_at="2026-10-16T10:05")
         self.assertIsNone(tid)
         self.assertIn(u"deixe em branco para rodar agora", erros["scheduled_at"])
@@ -257,7 +257,7 @@ class TestTicketService(_BaseTicket):
 
     def test_scheduled_at_limite_366_dias(self):
         # CR-007 D2 (README §5.4): scheduled_at no maximo 366 dias no futuro.
-        agora = self.tickets.agora()
+        agora = self.tickets.now()
         mais_366 = (agora + datetime.timedelta(days=366)).strftime("%Y-%m-%dT%H:%M")
         tid, erros = self._criar(scheduled_at=mais_366)
         self.assertEqual(erros, {})
@@ -268,7 +268,7 @@ class TestTicketService(_BaseTicket):
 
     def test_caminho_em_pasta_do_sistema_rejeita_o_disparo(self):
         # CR-011 (S1): o web confere so o formato e as pastas do sistema; o arquivo e conferido pelo agente.
-        self.catalogo.scripts_alterar(1, {"path_file": "/etc/carga.py"}, ator="teste")
+        self.catalog.scripts_update(1, {"path_file": "/etc/carga.py"}, ator="teste")
         tid, erros = self._criar()
         self.assertIsNone(tid)
         self.assertEqual(erros, {ticket_service.CAMPO_GERAL: ticket_service.MSG_SCRIPT_INDISPONIVEL})
@@ -318,7 +318,7 @@ class TestClarezaDisparo(_BaseTicket):
         self.assertTrue(r["argv"])
 
     def test_resumo_com_horario_e_erros(self):
-        futuro = (self.tickets.agora() + datetime.timedelta(days=1)).replace(second=0)
+        futuro = (self.tickets.now() + datetime.timedelta(days=1)).replace(second=0)
         r = self.svc.resumo_disparo(self.ctx["op.hml"], "1", "HOMOLOGACAO", {}, "2", futuro.strftime("%Y-%m-%dT%H:%M"))
         self.assertEqual(r["resumo"]["quando"], u"em %s às %s" % (futuro.strftime("%d/%m/%Y"), futuro.strftime("%H:%M")))
         r = self.svc.resumo_disparo(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"data_ref": "31/12/2026"}, "2", "")
@@ -345,7 +345,7 @@ class TestClarezaDisparo(_BaseTicket):
         self.assertNotIn("documento_cliente", valores)
         self.assertEqual(avisos["documento_cliente"], ticket_service.MSG_ULTIMA_SENSIVEL)
         # Opcao removida do catalogo: a resposta antiga deixa de valer e vem com aviso.
-        self.catalogo.parametros_alterar(3, {"options_json": '{"REAL":"Execucao Real"}', "default_value": "REAL"}, ator="teste")
+        self.catalog.parameters_update(3, {"options_json": '{"REAL":"Execucao Real"}', "default_value": "REAL"}, ator="teste")
         valores, avisos = self.svc.ultimas_respostas(ctx, "1", "HOMOLOGACAO")
         self.assertNotIn("modo_exec", valores)
         self.assertEqual(avisos["modo_exec"], ticket_service.MSG_ULTIMA_MUDOU)
@@ -357,23 +357,23 @@ class TestTicketConsulta(_BaseTicket):
 
     def _sem(self, login, *funcs):
         ctx = dict(self.ctx[login])
-        ctx["funcionalidades"] = frozenset(ctx["funcionalidades"] - set(funcs))
+        ctx["features"] = frozenset(ctx["features"] - set(funcs))
         return ctx
 
     def _inserir(self, **campos):
         ticket = {"script_id": 1, "environment": "HOMOLOGACAO", "requested_by": "admin", "status": "PENDING",
                   "priority": 2, "submitted_params": "{}"}
         ticket.update(campos)
-        return self.tickets.criar(ticket, [])
+        return self.tickets.create(ticket, [])
 
     def _ids(self, ctx, filtros=None):
-        return set(t["id"] for t in self.svc.listar(ctx, filtros or {}, 1, 100)["itens"])
+        return set(t["id"] for t in self.svc.list(ctx, filtros or {}, 1, 100)["itens"])
 
     # ------------------------------------------------------------- escopo
 
     def test_escopo_da_lista_por_perfil(self):
         desenv = self._inserir(environment="DESENV")
-        por_amb = dict((t["id"], t["environment"]) for t in self.tickets.listar(pagina=1, tamanho=1000)["itens"])
+        por_amb = dict((t["id"], t["environment"]) for t in self.tickets.list(pagina=1, tamanho=1000)["itens"])
         self.assertEqual(self._ids(self.ctx["admin"]), set(por_amb))
         consulta = self._ids(self.ctx["consulta"])
         self.assertNotIn(desenv, consulta)
@@ -384,31 +384,31 @@ class TestTicketConsulta(_BaseTicket):
 
     def test_sem_ver_logs_lista_apenas_proprios(self):
         ctx = self._sem("op.hml", "VIEW_LOGS")
-        itens = self.svc.listar(ctx, {}, 1, 100)["itens"]
+        itens = self.svc.list(ctx, {}, 1, 100)["itens"]
         self.assertTrue(itens)
         # Sem VIEW_AUDIT o proprio login aparece como "você" (CR-008, E5).
         self.assertEqual(set(t["requested_by"] for t in itens), {u"você"})
-        self.assertEqual(self.svc.listar(ctx, {"requested_by": "admin"}, 1, 100)["total"], 0)
+        self.assertEqual(self.svc.list(ctx, {"requested_by": "admin"}, 1, 100)["total"], 0)
 
     def test_solicitante_mascarado_sem_auditoria(self):
         # CR-008, E5: consulta sem VIEW_AUDIT nao recebe login de terceiros; admin recebe.
         ctx = self._sem("consulta", "VIEW_AUDIT")
-        itens = self.svc.listar(ctx, {}, 1, 100)["itens"]
+        itens = self.svc.list(ctx, {}, 1, 100)["itens"]
         self.assertTrue(itens)
         self.assertEqual(set(t["requested_by"] for t in itens), {u"outra pessoa"})
         self.assertEqual(self.svc.detalhe(ctx, 17)["requested_by"], u"outra pessoa")
         self.assertEqual(self.svc.detalhe(self.ctx["admin"], 17)["requested_by"], "op.prod")
         sem_nada = self._sem("consulta", "VIEW_LOGS")
         with self.assertRaises(AcessoNegado):
-            self.svc.listar(sem_nada, {}, 1, 20)
+            self.svc.list(sem_nada, {}, 1, 20)
 
     def test_detalhe_fora_do_escopo_e_inexistente(self):
         desenv = self._inserir(environment="DESENV")
         for login, tid in (("consulta", desenv), ("op.hml", 1), ("admin", 99999)):
-            with self.assertRaises(RepoNaoEncontrado):
+            with self.assertRaises(RepoNotFound):
                 self.svc.detalhe(self.ctx[login], str(tid))
         for invalido in ("abc", "-1", "0", None, "1; DROP"):
-            with self.assertRaises(RepoNaoEncontrado):
+            with self.assertRaises(RepoNotFound):
                 self.svc.detalhe(self.ctx["admin"], invalido)
         self.assertEqual(self.svc.detalhe(self.ctx["op.hml"], str(desenv))["id"], desenv)
 
@@ -445,14 +445,14 @@ class TestTicketConsulta(_BaseTicket):
         admin = self.ctx["admin"]
         rodando = self._ids(admin, {"status": ["RUNNING"], "environment": "PRODUCAO"})
         self.assertTrue(rodando)
-        for t in self.svc.listar(admin, {"status": ["RUNNING"], "environment": "PRODUCAO"}, 1, 100)["itens"]:
+        for t in self.svc.list(admin, {"status": ["RUNNING"], "environment": "PRODUCAO"}, 1, 100)["itens"]:
             self.assertEqual((t["status"], t["environment"]), ("RUNNING", "PRODUCAO"))
-        agend = self.svc.listar(admin, {"origem": "agendamento"}, 1, 100)["itens"]
+        agend = self.svc.list(admin, {"origem": "agendamento"}, 1, 100)["itens"]
         self.assertTrue(agend)
         self.assertTrue(all(t["origem"] == "agendamento" for t in agend))
-        pagina2 = self.svc.listar(admin, {"status": ["SUCCESS"]}, 2, 5)
+        pagina2 = self.svc.list(admin, {"status": ["SUCCESS"]}, 2, 5)
         self.assertEqual((pagina2["pagina"], len(pagina2["itens"])), (2, 5))
-        alem = self.svc.listar(admin, {"status": ["SUCCESS"]}, 99, 5)
+        alem = self.svc.list(admin, {"status": ["SUCCESS"]}, 99, 5)
         self.assertEqual(alem["pagina"], (alem["total"] + 4) // 5)
         self.assertTrue(alem["itens"])
 
@@ -462,22 +462,22 @@ class TestTicketConsulta(_BaseTicket):
         ctx = self.ctx["op.hml"]
         pendente, _ = self._criar()
         self.assertEqual(self.svc.cancelar(ctx, IP, str(pendente)), "CANCELADO")
-        t = self.tickets.obter(pendente)
+        t = self.tickets.get(pendente)
         self.assertEqual((t["status"], t["status_reason"], t["return_code"]), ("CANCELLED", "CANCEL_USER", -1))
         self.assertEqual(self.svc.cancelar(ctx, IP, str(pendente)), "TERMINAL")
 
         rodando = self._inserir(status="RUNNING", requested_by="op.hml", agent_id="agt-x")
         self.assertEqual(self.svc.cancelar(ctx, IP, str(rodando)), "SINALIZADO")
-        t = self.tickets.obter(rodando)
+        t = self.tickets.get(rodando)
         self.assertEqual((t["status"], t["cancel_requested"]), ("RUNNING", "Y"))
         self.assertFalse(self.svc.detalhe(ctx, str(rodando))["pode_cancelar"])
 
         # CR-003 P5 (README §5.6): pedido repetido e ticket encerrado tambem sao auditados, com o resultado.
         self.assertEqual(self.svc.cancelar(ctx, IP, str(rodando)), "JA_SINALIZADO")
-        regs = self.auditoria.listar(filtros={"action": "TICKET_CANCEL", "entity_id": rodando})["itens"]
+        regs = self.audit.list(filtros={"action": "TICKET_CANCEL", "entity_id": rodando})["itens"]
         self.assertEqual([(r["actor"], r["source_ip"], r["detail"]) for r in regs],
                          [("op.hml", IP, u"resultado: já sinalizado"), ("op.hml", IP, u"resultado: sinalizado")])
-        regs = self.auditoria.listar(filtros={"action": "TICKET_CANCEL", "entity_id": pendente})["itens"]
+        regs = self.audit.list(filtros={"action": "TICKET_CANCEL", "entity_id": pendente})["itens"]
         self.assertEqual([r["detail"] for r in regs],
                          [u"resultado: sem efeito: ticket encerrado", u"resultado: cancelado"])
         self.assertEqual(set(ticket_service.MSG_CANCELAMENTO),
@@ -496,11 +496,11 @@ class TestTicketConsulta(_BaseTicket):
         self.assertFalse(self.svc.detalhe(ctx, str(terceiro))["pode_cancelar"])
         with self.assertRaises(AcessoNegado):
             self.svc.cancelar(ctx, IP, str(terceiro))
-        self.assertEqual(self.tickets.obter(terceiro)["status"], "PENDING")
+        self.assertEqual(self.tickets.get(terceiro)["status"], "PENDING")
         proprio, _ = self._criar()
         self.assertEqual(self.svc.cancelar(ctx, IP, str(proprio)), "CANCELADO")
         self.assertEqual(self.svc.cancelar(self.ctx["op.hml"], IP, str(terceiro)), "CANCELADO")
-        with self.assertRaises(RepoNaoEncontrado):
+        with self.assertRaises(RepoNotFound):
             self.svc.cancelar(self.ctx["op.hml"], IP, "1")
 
     # ---------------------------------------------------------- reexecucao
@@ -515,13 +515,13 @@ class TestTicketConsulta(_BaseTicket):
         self.assertTrue(self.svc.detalhe(ctx, str(original))["pode_reexecutar"])
 
         novo = self.svc.reexecutar(ctx, IP, str(original))
-        t_orig, t_novo = self.tickets.obter(original), self.tickets.obter(novo)
+        t_orig, t_novo = self.tickets.get(original), self.tickets.get(novo)
         self.assertEqual(t_novo["parent_ticket_id"], original)
         self.assertEqual((t_novo["status"], t_novo["priority"], t_novo["requested_by"]), ("PENDING", 3, "op.hml"))
         snap_orig, snap_novo = json.loads(t_orig["submitted_params"]), json.loads(t_novo["submitted_params"])
         self.assertEqual(snap_novo["args"], snap_orig["args"])
         self.assertEqual(snap_novo["respostas"], snap_orig["respostas"])
-        regs = self.auditoria.listar(filtros={"action": "TICKET_RERUN", "entity_id": novo})["itens"]
+        regs = self.audit.list(filtros={"action": "TICKET_RERUN", "entity_id": novo})["itens"]
         self.assertEqual(len(regs), 1)
         self.assertNotIn(SEGREDO, regs[0]["detail"] or "")
 
@@ -533,7 +533,7 @@ class TestTicketConsulta(_BaseTicket):
         with self.assertRaises(AcessoNegado):
             self.svc.reexecutar(self.ctx["op.hml"], IP, str(terceiro))
         self.assertFalse(self.svc.detalhe(self.ctx["op.hml"], str(terceiro))["pode_reexecutar"])
-        with self.assertRaises(RepoNaoEncontrado):
+        with self.assertRaises(RepoNotFound):
             self.svc.reexecutar(self.ctx["consulta"], IP, str(self._inserir(environment="DESENV", status="FAILED")))
 
     def test_reexecucao_com_catalogo_alterado_gera_erro_tratado(self):
@@ -541,9 +541,9 @@ class TestTicketConsulta(_BaseTicket):
         original, _ = self._criar(respostas={"documento_cliente": SEGREDO})
         self.svc.cancelar(ctx, IP, str(original))
         vinculos = [{"parameter_id": v["parameter_id"], "sort_order": v["sort_order"], "required": v["required"],
-                     "default_value_override": v["default_value_override"]} for v in self.catalogo.script_params_obter(1)]
+                     "default_value_override": v["default_value_override"]} for v in self.catalog.script_params_get(1)]
         vinculos.append({"parameter_id": 10, "sort_order": 6, "required": "Y", "default_value_override": None})
-        self.catalogo.script_params_salvar(1, vinculos, ator="teste")
+        self.catalog.script_params_save(1, vinculos, ator="teste")
         antes = self._total_tickets()
         with self.assertRaises(ErroReexecucao) as cm:
             self.svc.reexecutar(ctx, IP, str(original))
@@ -560,7 +560,7 @@ class TestTicketConsulta(_BaseTicket):
         novo, erros = self.svc.criar_ticket(ctx, IP, "1", "HOMOLOGACAO", dict(prep["valores"], descricao_lote="x"),
                                             prep["priority"], "", reexecucao_de=str(original))
         self.assertEqual(erros, {})
-        self.assertEqual(self.tickets.obter(novo)["parent_ticket_id"], original)
+        self.assertEqual(self.tickets.get(novo)["parent_ticket_id"], original)
         with self.assertRaises(AcessoNegado):
             self.svc.criar_ticket(ctx, IP, "2", "HOMOLOGACAO", {}, "2", "", reexecucao_de=str(original))
 
@@ -657,14 +657,14 @@ class TestSaidaDoTicket(_BaseTicket):
                          ["rejeitados/linhas_rejeitadas.csv", "resumo.txt"])
         for login, alvo in (("op.hml", "17"), ("admin", "29"), ("admin", "30"), ("admin", "18"),
                             ("admin", "abc"), ("admin", "99999")):
-            with self.assertRaises(RepoNaoEncontrado, msg=(login, alvo)):
+            with self.assertRaises(RepoNotFound, msg=(login, alvo)):
                 self.svc.blocos_saida(self.ctx[login], alvo)
 
     def test_falha_no_meio_do_download_encerra_sem_completar(self):
-        from repo_errors import RepoErro
+        from repo_errors import RepoError
         with mock.patch.object(ticket_service, "SAIDA_FATIA_BYTES", 100):
             _tid, tamanho, partes = self.svc.blocos_saida(self.ctx["admin"], 17)
             primeira = next(partes)
-            with mock.patch.object(self.tickets, "saida_ler", side_effect=RepoErro("ORA-03113")):
+            with mock.patch.object(self.tickets, "output_read", side_effect=RepoError("ORA-03113")):
                 resto = b"".join(partes)
         self.assertLess(len(primeira) + len(resto), tamanho)

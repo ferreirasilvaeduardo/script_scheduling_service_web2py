@@ -11,7 +11,7 @@ import threading
 import admin_crud
 import ui_helpers
 from admin_crud import CAMPO_GERAL, OperacaoNegada
-from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
+from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FUNCIONALIDADE = "MANAGE_PROFILES"
 CAMPOS_EDITAVEIS = ("name", "description", "is_admin", "active")
@@ -112,26 +112,26 @@ class ServicoAdminPerfis(object):
     def _obter(self, perfil_id):
         pid = _id(perfil_id)
         if pid is None:
-            raise RepoNaoEncontrado("perfil invalido")
-        return self._rbac.perfis_obter(pid)
+            raise RepoNotFound("perfil invalido")
+        return self._rbac.profiles_get(pid)
 
     def usuarios_ativos(self, perfil_id):
         """Quantidade de usuarios ativos do perfil (perdem o acesso se o perfil for desativado)."""
-        return self._usuarios.listar(filtros={"profile_id": perfil_id, "active": "Y"}, pagina=1,
+        return self._usuarios.list(filtros={"profile_id": perfil_id, "active": "Y"}, pagina=1,
                                      tamanho=_TAMANHO_CONTAGEM)["total"]
 
     def usuarios_afetados(self, perfil_id):
         """(total, logins) dos usuarios ativos do perfil; no maximo AFETADOS_MAX logins (README §4.3.B.1)."""
-        pagina = self._usuarios.listar(filtros={"profile_id": perfil_id, "active": "Y"}, pagina=1,
+        pagina = self._usuarios.list(filtros={"profile_id": perfil_id, "active": "Y"}, pagina=1,
                                        tamanho=AFETADOS_MAX)
         return pagina["total"], [u["login"] for u in pagina["itens"]]
 
     # ------------------------------------------------------------- cadastro
 
-    def listar(self, ctx, filtros, pagina, tamanho):
+    def list(self, ctx, filtros, pagina, tamanho):
         """Pagina de perfis (ordem nome ASC)."""
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        return self._rbac.perfis_listar(filtros=filtros, pagina=pagina, tamanho=tamanho)
+        return self._rbac.profiles_list(filtros=filtros, pagina=pagina, tamanho=tamanho)
 
     def formulario(self, ctx, perfil_id=None):
         """Dados do formulario: vazio para inclusao; registro, versao e usuarios ativos na edicao."""
@@ -186,7 +186,7 @@ class ServicoAdminPerfis(object):
         """Inclui (perfil_id vazio) ou altera um perfil: nome, descricao, is_admin ('S' marcado).
 
         Retorna (id, erros). Remover is_admin do ultimo perfil admin ativo gera erro geral.
-        Lanca RepoNaoEncontrado e AcessoNegado.
+        Lanca RepoNotFound e AcessoNegado.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         erros = {}
@@ -202,8 +202,8 @@ class ServicoAdminPerfis(object):
             auditoria = admin_crud.auditoria(ctx, ip, "CREATE",
                                              admin_crud.detalhe_insercao(novo, CAMPOS_INSERCAO))
             try:
-                criado = self._rbac.perfis_inserir(novo, auditoria=auditoria)
-            except RepoViolacao as exc:
+                criado = self._rbac.profiles_insert(novo, auditoria=auditoria)
+            except RepoViolation as exc:
                 self._violacao(ctx, exc, erros)
                 return None, erros
             self._log.info("perfil incluido (login=%s perfil=%s)", ctx.get("login"), criado["name"],
@@ -233,14 +233,14 @@ class ServicoAdminPerfis(object):
         if detalhe is None:
             return atual["id"], {}
         try:
-            self._rbac.perfis_alterar(
+            self._rbac.profiles_update(
                 atual["id"], {"name": nome, "description": descricao, "is_admin": is_admin},
                 esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
                 auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
-        except RepoConflito:
+        except RepoConflict:
             erros[CAMPO_GERAL] = admin_crud.MSG_CONFLITO
             return atual["id"], erros
-        except RepoViolacao as exc:
+        except RepoViolation as exc:
             self._violacao(ctx, exc, erros)
             return atual["id"], erros
         self._log.info("perfil alterado (login=%s perfil=%s)", ctx.get("login"), nome, extra={"action": "UPDATE"})
@@ -249,12 +249,12 @@ class ServicoAdminPerfis(object):
     def alternar_ativo(self, ctx, ip, perfil_id, versao):
         """Desativa (DEACTIVATE, com usuarios afetados) ou reativa (UPDATE) o perfil.
 
-        Lanca OperacaoNegada (ultimo administrador), RepoConflito, RepoNaoEncontrado e AcessoNegado.
+        Lanca OperacaoNegada (ultimo administrador), RepoConflict, RepoNotFound e AcessoNegado.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         atual = self._obter(perfil_id)
         if admin_crud.texto(versao, 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
-            raise RepoConflito("versao divergente")
+            raise RepoConflict("versao divergente")
         novo_ativo = "N" if atual["active"] == "Y" else "Y"
         self._exigir_admin(ctx, atual["is_admin"] == "Y" and ctx.get("profile_id") != atual["id"], "DEACTIVATE")
         if novo_ativo == "N" and ctx.get("profile_id") == atual["id"]:
@@ -266,10 +266,10 @@ class ServicoAdminPerfis(object):
         if novo_ativo == "N":
             detalhe = u"%s; usuários ativos afetados: %d" % (detalhe, self.usuarios_ativos(atual["id"]))
         try:
-            alterado = self._rbac.perfis_alterar(
+            alterado = self._rbac.profiles_update(
                 atual["id"], {"active": novo_ativo}, esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
                 auditoria=admin_crud.auditoria(ctx, ip, acao, detalhe))
-        except RepoViolacao as exc:
+        except RepoViolation as exc:
             if exc.constraint == "sss_ultimo_admin":
                 self._log.warning("desativacao do ultimo perfil admin negada (login=%s perfil=%s)",
                                   ctx.get("login"), atual["name"], extra={"action": acao})
@@ -289,21 +289,21 @@ class ServicoAdminPerfis(object):
         scripts homologados ali que podem rodar. Perfis inativos vao para 'inativos'.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        scripts = dict((s["id"], s) for s in self._catalogo.scripts_listar(pagina=1, tamanho=_CATALOGO_MAX)["itens"])
-        ambientes = dict((a["id"], a) for a in self._catalogo.ambientes_listar(pagina=1, tamanho=_CATALOGO_MAX)["itens"])
+        scripts = dict((s["id"], s) for s in self._catalogo.scripts_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"])
+        ambientes = dict((a["id"], a) for a in self._catalogo.environments_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"])
         resultado = {"scripts": sorted(scripts.values(), key=lambda s: s["name"]),
-                     "ambientes": sorted(ambientes.values(), key=lambda a: a["name"]),
-                     "script": None, "environment": None, "perfis": [], "inativos": [], "aviso": None}
+                     "environments": sorted(ambientes.values(), key=lambda a: a["name"]),
+                     "script": None, "environment": None, "profiles": [], "inativos": [], "aviso": None}
         sid, aid = _id(script_id), _id(ambiente_id)
         if sid is None and aid is None:
             return resultado
-        exec_id = [f["id"] for f in self._rbac.funcionalidades_listar() if f["code"] == "EXEC_SCRIPT"]
-        perfis = self._rbac.perfis_listar(pagina=1, tamanho=_CATALOGO_MAX)["itens"]
+        exec_id = [f["id"] for f in self._rbac.features_list() if f["code"] == "EXEC_SCRIPT"]
+        perfis = self._rbac.profiles_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"]
         homolog = {}
 
         def homologados(script):
             if script not in homolog:
-                homolog[script] = set(i for i in self._catalogo.homologacao_obter(script)
+                homolog[script] = set(i for i in self._catalogo.homologation_get(script)
                                       if ambientes.get(i, {}).get("active") == "Y")
             return homolog[script]
 
@@ -317,7 +317,7 @@ class ServicoAdminPerfis(object):
             if script.get("active") != "Y":
                 resultado["aviso"] = u"Este script está inativo: ninguém consegue rodá-lo agora."
             for p in perfis:
-                m = self._rbac.matriz_obter(p["id"])
+                m = self._rbac.matrix_get(p["id"])
                 if p["is_admin"] == "Y":
                     ambs, motivo = homologados(sid), u"administrador"
                 elif exec_id and exec_id[0] in m["funcs"] and sid in m["scrs"]:
@@ -327,7 +327,7 @@ class ServicoAdminPerfis(object):
                 if not ambs:
                     continue
                 item = linha(p, motivo, sorted(ambientes[a]["name"] for a in ambs))
-                resultado["perfis" if p["active"] == "Y" else "inativos"].append(item)
+                resultado["profiles" if p["active"] == "Y" else "inativos"].append(item)
         elif aid is not None and aid in ambientes:
             amb = ambientes[aid]
             resultado["environment"] = amb
@@ -335,7 +335,7 @@ class ServicoAdminPerfis(object):
                 resultado["aviso"] = u"Este ambiente está inativo: nenhum script roda nele agora."
             ativos = [s for s in scripts.values() if s.get("active") == "Y" and aid in homologados(s["id"])]
             for p in perfis:
-                m = self._rbac.matriz_obter(p["id"])
+                m = self._rbac.matrix_get(p["id"])
                 if p["is_admin"] == "Y":
                     lista, motivo = ativos, u"administrador"
                 elif exec_id and exec_id[0] in m["funcs"] and aid in m["ambs"]:
@@ -343,17 +343,17 @@ class ServicoAdminPerfis(object):
                 else:
                     continue
                 item = linha(p, motivo, sorted(s["name"] for s in lista))
-                resultado["perfis" if p["active"] == "Y" else "inativos"].append(item)
+                resultado["profiles" if p["active"] == "Y" else "inativos"].append(item)
         else:
-            raise RepoNaoEncontrado("script ou ambiente inexistente")
+            raise RepoNotFound("script ou ambiente inexistente")
         return resultado
 
     # --------------------------------------------------------------- matriz
 
     def _catalogo_matriz(self):
-        funcs = self._rbac.funcionalidades_listar()
-        ambs = self._catalogo.ambientes_listar(pagina=1, tamanho=_CATALOGO_MAX)["itens"]
-        scrs = self._catalogo.scripts_listar(pagina=1, tamanho=_CATALOGO_MAX)["itens"]
+        funcs = self._rbac.features_list()
+        ambs = self._catalogo.environments_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"]
+        scrs = self._catalogo.scripts_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"]
         return {"funcs": dict((f["id"], f) for f in funcs), "ambs": dict((a["id"], a) for a in ambs),
                 "scrs": dict((s["id"], s) for s in scrs)}
 
@@ -371,7 +371,7 @@ class ServicoAdminPerfis(object):
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         perfil = self._obter(perfil_id)
-        atual = self._rbac.matriz_obter(perfil["id"])
+        atual = self._rbac.matrix_get(perfil["id"])
         cat = self._catalogo_matriz()
         marcados = dict((dim, set(atual[dim])) for dim, _p in _PREFIXOS)
 
@@ -407,7 +407,7 @@ class ServicoAdminPerfis(object):
 
         Associacoes existentes a itens inativos podem ser removidas, nunca readicionadas (README §4.3.B.1);
         so itens ativos podem ser adicionados; ID inexistente rejeita a operacao inteira. Retorna (diff ou None se nada mudou, erros).
-        Lanca RepoNaoEncontrado e AcessoNegado.
+        Lanca RepoNotFound e AcessoNegado.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         perfil = self._obter(perfil_id)
@@ -423,7 +423,7 @@ class ServicoAdminPerfis(object):
             return None, {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
 
         cat = self._catalogo_matriz()
-        atual = dict((dim, set(ids)) for dim, ids in self._rbac.matriz_obter(perfil["id"]).items())
+        atual = dict((dim, set(ids)) for dim, ids in self._rbac.matrix_get(perfil["id"]).items())
         final = {}
         for dim, _prefixo in _PREFIXOS:
             desconhecidos = enviados[dim] - set(cat[dim])
@@ -442,12 +442,12 @@ class ServicoAdminPerfis(object):
         if diff is None:
             return None, {}
         try:
-            self._rbac.matriz_salvar(perfil["id"], sorted(final["funcs"]), sorted(final["ambs"]),
+            self._rbac.matrix_save(perfil["id"], sorted(final["funcs"]), sorted(final["ambs"]),
                                      sorted(final["scrs"]), perm_versao_esperada=versao,
                                      auditoria=admin_crud.auditoria(ctx, ip, "PERM_UPDATE", diff))
-        except RepoConflito:
+        except RepoConflict:
             return None, {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
-        except RepoViolacao:
+        except RepoViolation:
             self._log.warning("matriz rejeitada pelo repositorio (login=%s perfil=%s)", ctx.get("login"),
                               perfil["name"], extra={"action": "PERM_UPDATE"})
             return None, {CAMPO_GERAL: MSG_MATRIZ_ID_INVALIDO}
@@ -468,9 +468,9 @@ def _servico():
             import sss_logging
             fabrica = current.repo_factory
             _padrao = ServicoAdminPerfis(
-                rbac_repo=fabrica.obter("rbac"),
-                catalogo=fabrica.obter("catalogo"),
-                usuarios=fabrica.obter("usuarios"),
+                rbac_repo=fabrica.get("rbac"),
+                catalogo=fabrica.get("catalog"),
+                usuarios=fabrica.get("users"),
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _padrao
@@ -478,7 +478,7 @@ def _servico():
 
 def listar(ctx, filtros, pagina, tamanho):
     """Pagina de perfis (servico padrao)."""
-    return _servico().listar(ctx, filtros, pagina, tamanho)
+    return _servico().list(ctx, filtros, pagina, tamanho)
 
 
 def formulario(ctx, perfil_id=None):

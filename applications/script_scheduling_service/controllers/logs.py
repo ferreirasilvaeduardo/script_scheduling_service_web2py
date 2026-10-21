@@ -4,7 +4,7 @@
 Regras de escopo ficam em modules/ticket_service.py; aqui so se valida a requisicao e se responde.
 """
 import ticket_service
-from repo_errors import RepoErro, RepoNaoEncontrado
+from repo_errors import RepoError, RepoNotFound
 from ticket_service import OffsetInvalido
 
 _MSG_FALHA_LOG = u"Não foi possível ler o log. Tente novamente em instantes."
@@ -38,9 +38,9 @@ def chunk():
         dados = ticket_service.ler_log(ctx, _ticket_id(), request.get_vars.get("offset"))
     except OffsetInvalido:
         raise HTTP(400, u"Offset inválido.", **response.headers)
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         raise HTTP(404, u"Ticket não encontrado.", **response.headers)
-    except RepoErro:
+    except RepoError:
         _log.exception("falha na leitura incremental do log (login=%s ticket=%r)", ctx["login"], _ticket_id(),
                        extra={"action": "LOG_LER"})
         raise HTTP(503, _MSG_FALHA_LOG, **response.headers)
@@ -52,9 +52,9 @@ def baixar():
     ctx = _exigir_consulta()
     try:
         ticket_id, blocos = ticket_service.blocos_log(ctx, _ticket_id())
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         raise HTTP(404, u"Ticket não encontrado.", **response.headers)
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao iniciar o download do log (login=%s ticket=%r)", ctx["login"], _ticket_id(),
                        extra={"action": "LOG_BAIXAR"})
         raise HTTP(503, _MSG_FALHA_LOG, **response.headers)

@@ -37,9 +37,9 @@ _d = dados
 
 <section class="sss-card" aria-labelledby="titulo-ambientes">
   <h2 class="sss-card-titulo" id="titulo-ambientes">Onde posso rodar scripts</h2>
-  {{if _d['ambientes']:}}
+  {{if _d['environments']:}}
   <ul class="sss-card-corpo sss-lista-permissoes">
-    {{for _a in _d['ambientes']:}}
+    {{for _a in _d['environments']:}}
     <li><strong class="sss-mono">{{=_a['name']}}</strong>{{if _a['description']:}}<span class="sss-texto-suave"> — {{=_a['description']}}</span>{{pass}}</li>
     {{pass}}
   </ul>
@@ -61,7 +61,7 @@ _d = dados
       <li>
         <strong class="sss-mono">{{=_s['name']}}</strong>{{if _s['description']:}}<span class="sss-texto-suave"> — {{=_s['description']}}</span>{{pass}}
         <div class="sss-acoes-inline">
-          {{for _amb in _s['ambientes']:}}
+          {{for _amb in _s['environments']:}}
           <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='tickets', f='novo', vars=dict(script_id=_s['id'], environment=_amb))}}">Rodar em {{=_amb}}</a>
           {{pass}}
         </div>

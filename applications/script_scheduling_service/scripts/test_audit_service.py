@@ -43,47 +43,47 @@ class _Base(unittest.TestCase):
         patcher = mock.patch.object(security, "ITERACOES", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
-        env = mock.patch.dict(os.environ, {repo_factory.ENV_SENHA_DEV: SENHA_DEV})
+        env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: SENHA_DEV})
         env.start()
         self.addCleanup(env.stop)
-        repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
-        self.addCleanup(repo_factory.configurar, None)
+        self.addCleanup(repo_factory.configure, None)
 
-        self.auditoria = repo_factory.obter("auditoria")
-        self.agentes = repo_factory.obter("agentes")
-        self.catalogo = repo_factory.obter("catalogo")
-        self.tickets = repo_factory.obter("tickets")
-        self.rbac = repo_factory.obter("rbac")
+        self.audit = repo_factory.get("audit")
+        self.agents = repo_factory.get("agents")
+        self.catalog = repo_factory.get("catalog")
+        self.tickets = repo_factory.get("tickets")
+        self.rbac = repo_factory.get("rbac")
         self.store = repo_factory._fake_store
         # Instante da carga do seed: o agt-host02 nasce com heartbeat congelado 30 s antes dele.
-        self.base = self.store.agentes[2]["heartbeat_at"] + datetime.timedelta(seconds=30)
-        self.agora = self.base
-        self.store.definir_relogio(lambda: self.agora)
+        self.base = self.store.agents[2]["heartbeat_at"] + datetime.timedelta(seconds=30)
+        self.now = self.base
+        self.store.set_clock(lambda: self.now)
 
         self.log = logging.getLogger("sss_teste_aud")
         self.log.addHandler(logging.NullHandler())
         self.log.propagate = False
         auth = auth_service.ServicoAuth(
-            repo_factory.obter("usuarios"), self.rbac, self.catalogo, self.auditoria, 5, 900, self.log)
+            repo_factory.get("users"), self.rbac, self.catalog, self.audit, 5, 900, self.log)
         self.ctx = {}
         for uid, login, perfil_id in ((1, "admin", 1), (2, "op.prod", 2), (4, "consulta", 4)):
             sessao = {"usuario_id": uid, "login": login, "perfil_id": perfil_id,
-                      "perm_versao": self.rbac.perfis_obter(perfil_id)["perm_version"], "sessao_epoch": 0}
+                      "perm_versao": self.rbac.profiles_get(perfil_id)["perm_version"], "sessao_epoch": 0}
             self.ctx[login] = auth.revalidar(sessao)
-        self.svc = ServicoAuditoria(self.auditoria, lambda: self.agora, self.log)
-        self.svc_agentes = ServicoAgentes(self.agentes, self.catalogo, lambda: self.agora, LIMIARES, self.log, CONFIG_CRITICOS)
+        self.svc = ServicoAuditoria(self.audit, lambda: self.now, self.log)
+        self.svc_agentes = ServicoAgentes(self.agents, self.catalog, lambda: self.now, LIMIARES, self.log, CONFIG_CRITICOS)
 
     def _inserir(self, created_at, actor="admin", acao="UPDATE", entidade="tbsss_scripts",
                  entidade_id=1, detail="x", ip="127.0.0.1"):
-        aid = self.store.proximo_id("tbsss_audit")
-        self.store.auditoria[aid] = {"id": aid, "actor": actor, "source_ip": ip, "action": acao, "entity": entidade,
+        aid = self.store.next_id("tbsss_audit")
+        self.store.audit[aid] = {"id": aid, "actor": actor, "source_ip": ip, "action": acao, "entity": entidade,
                                      "entity_id": entidade_id, "detail": detail, "created_at": created_at}
         return aid
 
     def _exportacoes(self):
-        return self.auditoria.listar(filtros={"action": "AUDIT_EXPORT"}, pagina=1, tamanho=100)["itens"]
+        return self.audit.list(filtros={"action": "AUDIT_EXPORT"}, pagina=1, tamanho=100)["itens"]
 
 
 class TestFiltros(unittest.TestCase):
@@ -160,7 +160,7 @@ class TestNeutralizacaoCsv(unittest.TestCase):
 class TestListar(_Base):
 
     def test_seed_nos_ultimos_7_dias_e_ordenacao(self):
-        res = self.svc.listar(self.ctx["admin"], {}, 1, 100)
+        res = self.svc.list(self.ctx["admin"], {}, 1, 100)
         self.assertEqual(res["erros"], {})
         self.assertEqual(res["total"], 30)
         chaves = [(i["created_at"], i["id"]) for i in res["itens"]]
@@ -168,10 +168,10 @@ class TestListar(_Base):
 
     def test_periodo_padrao_exclui_antigos(self):
         antigo = self._inserir(self.base - datetime.timedelta(days=8))
-        ids = [i["id"] for i in self.svc.listar(self.ctx["admin"], {}, 1, 100)["itens"]]
+        ids = [i["id"] for i in self.svc.list(self.ctx["admin"], {}, 1, 100)["itens"]]
         self.assertNotIn(antigo, ids)
         de = (self.base - datetime.timedelta(days=8)).strftime("%Y-%m-%d")
-        ids = [i["id"] for i in self.svc.listar(self.ctx["admin"], {"de": de}, 1, 100)["itens"]]
+        ids = [i["id"] for i in self.svc.list(self.ctx["admin"], {"de": de}, 1, 100)["itens"]]
         self.assertIn(antigo, ids)
 
     def test_filtros(self):
@@ -185,17 +185,17 @@ class TestListar(_Base):
         )
         for entrada, total in casos:
             with self.subTest(entrada=entrada):
-                self.assertEqual(self.svc.listar(self.ctx["admin"], entrada, 1, 100)["total"], total)
+                self.assertEqual(self.svc.list(self.ctx["admin"], entrada, 1, 100)["total"], total)
 
     def test_tamanho_maximo_100(self):
         for _ in range(130):
             self._inserir(self.base)
-        res = self.svc.listar(self.ctx["admin"], {}, 1, 500)
+        res = self.svc.list(self.ctx["admin"], {}, 1, 500)
         self.assertEqual((res["tamanho"], len(res["itens"])), (100, 100))
 
     def test_filtro_invalido_nao_consulta(self):
-        with mock.patch.object(self.auditoria, "listar") as listar:
-            res = self.svc.listar(self.ctx["admin"], {"action": "XPTO"}, 1, 20)
+        with mock.patch.object(self.audit, "list") as listar:
+            res = self.svc.list(self.ctx["admin"], {"action": "XPTO"}, 1, 20)
         listar.assert_not_called()
         self.assertEqual((res["total"], sorted(res["erros"])), (0, ["action"]))
 
@@ -203,21 +203,21 @@ class TestListar(_Base):
         for login in ("consulta", "op.prod"):
             with self.subTest(login=login):
                 with self.assertRaises(AcessoNegado):
-                    self.svc.listar(self.ctx[login], {}, 1, 20)
+                    self.svc.list(self.ctx[login], {}, 1, 20)
 
     def test_detalhe_truncado_e_mascarado(self):
         masking.registrar_segredo(SEGREDO)
         longo = u"campo: " + u"á" * 120
         aid_longo = self._inserir(self.base, detail=longo)
         aid_seg = self._inserir(self.base, detail=u"valor vazado %s" % SEGREDO)
-        itens = dict((i["id"], i) for i in self.svc.listar(self.ctx["admin"], {}, 1, 100)["itens"])
+        itens = dict((i["id"], i) for i in self.svc.list(self.ctx["admin"], {}, 1, 100)["itens"])
         self.assertTrue(itens[aid_longo]["truncado"])
         self.assertEqual(len(itens[aid_longo]["detalhe_curto"]), audit_service.DETALHE_CURTO)
         self.assertEqual(itens[aid_longo]["detail"], longo)
         self.assertNotIn(SEGREDO, itens[aid_seg]["detail"])
 
     def test_seed_sem_segredos(self):
-        res = self.svc.listar(self.ctx["admin"], {}, 1, 100)
+        res = self.svc.list(self.ctx["admin"], {}, 1, 100)
         for item in res["itens"]:
             for valor in item.values():
                 if isinstance(valor, str):
@@ -274,7 +274,7 @@ class TestExportar(_Base):
     def test_quantidade_registrada_e_a_do_recorte_exportado(self):
         # CR-003 P9 (README §4.4): linhas gravadas depois da reserva do id nao entram nem na contagem nem no arquivo.
         _nome, linhas, blocos = self.svc.exportar_csv(self.ctx["admin"], IP, {"actor": "admin"})
-        self.auditoria.registrar("admin", IP, "UPDATE", "tbsss_environments", 1, "depois da exportacao")
+        self.audit.register("admin", IP, "UPDATE", "tbsss_environments", 1, "depois da exportacao")
         _, tabela = _ler_csv(blocos)
         self.assertEqual(len(tabela) - 1, linhas)
         self.assertIn("linhas: %d" % linhas, self._exportacoes()[0]["detail"])
@@ -282,7 +282,7 @@ class TestExportar(_Base):
     def test_limite_de_linhas(self):
         for _ in range(audit_service.LIMITE_EXPORTACAO + 20):
             self._inserir(self.base)
-        resultado = self.auditoria.listar(tamanho=1)
+        resultado = self.audit.list(tamanho=1)
         self.assertEqual(resultado["total"], 10001)
         self.assertTrue(resultado["total_limitado"])
         _, linhas, blocos = self.svc.exportar_csv(self.ctx["admin"], IP, {})
@@ -343,28 +343,28 @@ class TestPainelAgentes(_Base):
 
     def _saudes(self, agora=None):
         painel = self.svc_agentes.painel(self.ctx["admin"], agora)
-        return dict((a["code"], a["saude"]["code"]) for a in painel["agentes"])
+        return dict((a["code"], a["saude"]["code"]) for a in painel["agents"])
 
     def test_seed_em_estados_diferentes_mudando_com_o_relogio(self):
         self.assertEqual(self._saudes(), {"agt-host01": OK, "agt-host02": ATRASADO})
-        self.agora = self.base + datetime.timedelta(seconds=70)
+        self.now = self.base + datetime.timedelta(seconds=70)
         self.assertEqual(self._saudes(), {"agt-host01": OK, "agt-host02": EM_RISCO})
-        self.agora = self.base + datetime.timedelta(seconds=160)
+        self.now = self.base + datetime.timedelta(seconds=160)
         self.assertEqual(self._saudes(), {"agt-host01": OK, "agt-host02": OFFLINE})
 
     def test_campos_e_tickets_running(self):
         painel = self.svc_agentes.painel(self.ctx["admin"])
         self.assertEqual(painel["agora"], self.base)
-        ag = painel["agentes"][0]
+        ag = painel["agents"][0]
         for campo in ("code", "hostname", "status", "version", "environments", "started_at", "heartbeat_at",
                       "saude", "running", "ha"):
             self.assertIn(campo, ag)
-        for ag in painel["agentes"]:
-            esperado = [t["id"] for t in self.agentes.tickets_running(ag["code"])]
+        for ag in painel["agents"]:
+            esperado = [t["id"] for t in self.agents.tickets_running(ag["code"])]
             self.assertEqual([t["id"] for t in ag["tickets"]], esperado)
             self.assertEqual(ag["running"], len(esperado))
         self.assertEqual(sum(painel["resumo"].values()), 2)
-        segundo = [a for a in painel["agentes"] if a["code"] == "agt-host02"][0]
+        segundo = [a for a in painel["agents"] if a["code"] == "agt-host02"][0]
         self.assertEqual((segundo["idade_s"], segundo["ha"]), (30, u"há 30 s"))
 
     def _fila_diagnostico(self):
@@ -374,30 +374,30 @@ class TestPainelAgentes(_Base):
                                       (3, 1, "PENDING"), (4, -600, "SUCCESS")):
             # Script 3 (cleanup_tmp) e BASH no cadastro; o snapshot diz outra coisa e e ignorado (CR-008, R-15).
             self.store.tickets[tid] = {"id": tid, "status": status, "environment": "PRODUCAO", "script_id": 3,
-                                      "scheduled_at": self.agora + datetime.timedelta(seconds=segundos),
+                                      "scheduled_at": self.now + datetime.timedelta(seconds=segundos),
                                       "submitted_params": json.dumps({"interpreter": "SH"}),
                                       "log_output": object()}
 
     def test_fila_exige_um_agente_para_o_par_e_ignora_futuro(self):
         self._fila_diagnostico()
-        self.store.agentes[1].update(environments="PRODUCAO", interpreters="PYTHON3")
-        self.store.agentes[2].update(environments="HOMOLOGACAO", interpreters="BASH")
-        resultado = self.agentes.fila_sem_atendente(self.agora, LIMIARES)
+        self.store.agents[1].update(environments="PRODUCAO", interpreters="PYTHON3")
+        self.store.agents[2].update(environments="HOMOLOGACAO", interpreters="BASH")
+        resultado = self.agents.unattended_queue(self.now, LIMIARES)
         self.assertEqual(resultado, [{"environment": "PRODUCAO", "interpreter": "BASH", "quantidade": 2,
-                                     "mais_antigo": self.agora - datetime.timedelta(seconds=300)}])
-        self.store.agentes[2]["environments"] = "PRODUCAO"
-        self.assertEqual(self.agentes.fila_sem_atendente(self.agora, LIMIARES), [])
+                                     "mais_antigo": self.now - datetime.timedelta(seconds=300)}])
+        self.store.agents[2]["environments"] = "PRODUCAO"
+        self.assertEqual(self.agents.unattended_queue(self.now, LIMIARES), [])
 
     def test_fila_limiares_e_agente_parado(self):
         self._fila_diagnostico()
-        self.store.agentes[2]["status"] = "STOPPED"
+        self.store.agents[2]["status"] = "STOPPED"
         for idade, status, quantidade in ((19, "ACTIVE", 0), (20, "ACTIVE", 0), (90, "ACTIVE", 0),
                                           (91, "ACTIVE", 1), (181, "ACTIVE", 1), (0, "STOPPED", 1)):
-            self.store.agentes[1].update(status=status,
-                                        heartbeat_at=self.agora - datetime.timedelta(seconds=idade))
-            self.assertEqual(len(self.agentes.fila_sem_atendente(self.agora, LIMIARES)), quantidade)
-        self.store.agentes[1].update(status="ACTIVE", heartbeat_at=None)
-        self.assertEqual(len(self.agentes.fila_sem_atendente(self.agora, LIMIARES)), 1)
+            self.store.agents[1].update(status=status,
+                                        heartbeat_at=self.now - datetime.timedelta(seconds=idade))
+            self.assertEqual(len(self.agents.unattended_queue(self.now, LIMIARES)), quantidade)
+        self.store.agents[1].update(status="ACTIVE", heartbeat_at=None)
+        self.assertEqual(len(self.agents.unattended_queue(self.now, LIMIARES)), 1)
 
     def test_sem_pid_usa_reserva_e_limite_estrito_sem_lob(self):
         self.store.tickets.clear()
@@ -406,14 +406,14 @@ class TestPainelAgentes(_Base):
                                           (5, 600, None, "PENDING"), (6, 180, None, "RUNNING")):
             self.store.tickets[tid] = {"id": tid, "script_id": 1, "environment": "PRODUCAO", "status": status,
                                       "process_id": pid, "agent_id": "agt-host01",
-                                      "started_at": self.agora - datetime.timedelta(seconds=segundos),
-                                      "created_at": self.agora - datetime.timedelta(days=5),
+                                      "started_at": self.now - datetime.timedelta(seconds=segundos),
+                                      "created_at": self.now - datetime.timedelta(days=5),
                                       "log_output": object(), "submitted_params": object()}
-        antes = dict(self.store.auditoria)
-        itens = self.agentes.rodando_sem_pid(self.agora, 2)
+        antes = dict(self.store.audit)
+        itens = self.agents.running_without_pid(self.now, 2)
         self.assertEqual([t["id"] for t in itens], [6, 1])
         self.assertEqual(set(itens[0]), {"id", "script_id", "environment", "agent_id", "started_at"})
-        self.assertEqual(self.store.auditoria, antes)
+        self.assertEqual(self.store.audit, antes)
 
     def test_diagnosticos_do_seed(self):
         """Dados de demonstracao: os tres quadros aparecem (UI_FREEZE, CR-007 R-18)."""
@@ -422,22 +422,22 @@ class TestPainelAgentes(_Base):
         self.assertIn("kill=10", painel["config_divergente"][0]["critical_config"])
         self.assertEqual([t["id"] for t in painel["rodando_sem_pid"]], [16])
         self.assertEqual(painel["fila_sem_atendente"], [])  # agt-host02 ainda ATRASADO
-        self.agora = self.base + datetime.timedelta(seconds=61)  # agt-host02 EM_RISCO
+        self.now = self.base + datetime.timedelta(seconds=61)  # agt-host02 EM_RISCO
         fila = self.svc_agentes.painel(self.ctx["admin"])["fila_sem_atendente"]
         self.assertEqual([(g["environment"], g["interpreter"], g["quantidade"]) for g in fila],
                          [("HOMOLOGACAO", "SH", 1)])
         self.assertEqual(fila[0]["mais_antigo"], self.store.tickets[4]["scheduled_at"])
 
     def test_diagnosticos_config_divergente_e_parado(self):
-        self.store.agentes[2]["critical_config"] = CONFIG_CRITICOS
+        self.store.agents[2]["critical_config"] = CONFIG_CRITICOS
         self.assertEqual(self.svc_agentes.painel(self.ctx["admin"])["config_divergente"], [])
-        self.store.agentes[2]["critical_config"] = CONFIG_CRITICOS.replace("hb=10", "hb=11")
+        self.store.agents[2]["critical_config"] = CONFIG_CRITICOS.replace("hb=10", "hb=11")
         painel = self.svc_agentes.painel(self.ctx["admin"])
         self.assertEqual([a["code"] for a in painel["config_divergente"]], ["agt-host02"])
         self.assertEqual(painel["config_web"], CONFIG_CRITICOS)
-        self.store.agentes[1]["critical_config"] = self.store.agentes[2]["critical_config"]
+        self.store.agents[1]["critical_config"] = self.store.agents[2]["critical_config"]
         self.assertEqual(len(self.svc_agentes.painel(self.ctx["admin"])["config_divergente"]), 2)
-        self.store.agentes[2]["status"] = "STOPPED"
+        self.store.agents[2]["status"] = "STOPPED"
         self.assertEqual(len(self.svc_agentes.painel(self.ctx["admin"])["config_divergente"]), 1)
 
     def test_tickets_do_agente(self):
@@ -447,9 +447,9 @@ class TestPainelAgentes(_Base):
         self.assertEqual(self.svc_agentes.tickets_do_agente(self.ctx["admin"], "inexistente"), [])
 
     def test_somente_leitura_e_rbac(self):
-        antes = [dict(a) for a in self.store.agentes.values() if a["code"] == "agt-host02"]
+        antes = [dict(a) for a in self.store.agents.values() if a["code"] == "agt-host02"]
         self.svc_agentes.painel(self.ctx["admin"])
-        depois = [dict(a) for a in self.store.agentes.values() if a["code"] == "agt-host02"]
+        depois = [dict(a) for a in self.store.agents.values() if a["code"] == "agt-host02"]
         self.assertEqual(antes, depois)
         for login in ("consulta", "op.prod"):
             with self.subTest(login=login):
@@ -463,7 +463,7 @@ class TestResumoInicial(_Base):
 
     def setUp(self):
         _Base.setUp(self)
-        self.svc_tickets = ServicoTicket(self.catalogo, self.tickets, self.log)
+        self.svc_tickets = ServicoTicket(self.catalog, self.tickets, self.log)
 
     def test_escopo_por_perfil(self):
         admin = self.svc_tickets.resumo_inicial(self.ctx["admin"])
@@ -482,14 +482,14 @@ class TestResumoInicial(_Base):
     def test_contagem_igual_a_lista(self):
         resumo = self.svc_tickets.resumo_inicial(self.ctx["op.prod"])
         desde = resumo["desde"]
-        itens = self.tickets.listar(filtros={"criado_inicio": desde}, pagina=1, tamanho=1000,
+        itens = self.tickets.list(filtros={"criado_inicio": desde}, pagina=1, tamanho=1000,
                                     escopo_ambientes=["HOMOLOGACAO", "PRODUCAO"])["itens"]
         for status, qtd in resumo["contagem"]:
             with self.subTest(status=status):
                 self.assertEqual(qtd, len([t for t in itens if t["status"] == status]))
 
     def test_sem_consulta_retorna_none(self):
-        sem_func = dict(self.ctx["consulta"], funcionalidades=frozenset())
+        sem_func = dict(self.ctx["consulta"], features=frozenset())
         self.assertIsNone(self.svc_tickets.resumo_inicial(sem_func))
 
 

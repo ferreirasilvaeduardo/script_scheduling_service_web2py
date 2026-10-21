@@ -25,46 +25,46 @@ class _Base(unittest.TestCase):
         patcher = mock.patch.object(security, "ITERACOES", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
-        env = mock.patch.dict(os.environ, {repo_factory.ENV_SENHA_DEV: "senha-dev-de-teste-123"})
+        env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: "senha-dev-de-teste-123"})
         env.start()
         self.addCleanup(env.stop)
-        repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
-        self.addCleanup(repo_factory.configurar, None)
-        self.catalogo = repo_factory.obter("catalogo")
-        self.tickets = repo_factory.obter("tickets")
+        self.addCleanup(repo_factory.configure, None)
+        self.catalog = repo_factory.get("catalog")
+        self.tickets = repo_factory.get("tickets")
         log = logging.getLogger("sss_teste_catalogo")
         log.addHandler(logging.NullHandler())
         log.propagate = False
-        auth = auth_service.ServicoAuth(repo_factory.obter("usuarios"), repo_factory.obter("rbac"), self.catalogo,
-                                        repo_factory.obter("auditoria"), 5, 900, log)
+        auth = auth_service.ServicoAuth(repo_factory.get("users"), repo_factory.get("rbac"), self.catalog,
+                                        repo_factory.get("audit"), 5, 900, log)
         self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
-        self.svc = ServicoTicket(self.catalogo, self.tickets, log)
+        self.svc = ServicoTicket(self.catalog, self.tickets, log)
 
     def _sem(self, login, *funcs):
         ctx = dict(self.ctx[login])
-        ctx["funcionalidades"] = frozenset(ctx["funcionalidades"] - set(funcs))
+        ctx["features"] = frozenset(ctx["features"] - set(funcs))
         return ctx
 
 
 class TestUltimasExecucoes(_Base):
 
     def test_contrato_ultimo_por_script_no_escopo(self):
-        todos = self.tickets.listar(pagina=1, tamanho=100)["itens"]
+        todos = self.tickets.list(pagina=1, tamanho=100)["itens"]
         esperado = {}
         for t in todos:
             if t["environment"] == "HOMOLOGACAO":
                 atual = esperado.get(t["script_id"])
                 if atual is None or (t["created_at"], t["id"]) > (atual["created_at"], atual["id"]):
                     esperado[t["script_id"]] = t
-        r = self.tickets.ultimas_execucoes([1, 2, 3, 4], ["HOMOLOGACAO"])
+        r = self.tickets.last_runs([1, 2, 3, 4], ["HOMOLOGACAO"])
         self.assertEqual(dict((k, v["id"]) for k, v in r.items()), dict((k, v["id"]) for k, v in esperado.items()))
         self.assertNotIn("log_output", list(r.values())[0])
-        so_meus = self.tickets.ultimas_execucoes([1, 2, 3, 4], None, "op.hml")
+        so_meus = self.tickets.last_runs([1, 2, 3, 4], None, "op.hml")
         for sid, u in so_meus.items():
-            self.assertEqual(self.tickets.obter(u["id"])["requested_by"], "op.hml")
-        self.assertEqual(self.tickets.ultimas_execucoes([], None), {})
+            self.assertEqual(self.tickets.get(u["id"])["requested_by"], "op.hml")
+        self.assertEqual(self.tickets.last_runs([], None), {})
 
 
 class TestCatalogoRotinas(_Base):
@@ -76,10 +76,10 @@ class TestCatalogoRotinas(_Base):
         self.assertEqual(ids, sorted(s["id"] for g in self.svc.scripts_disponiveis(ctx) for s in g["scripts"]))
         for g in grupos:
             for c in g["cartoes"]:
-                self.assertTrue(c["ambientes"])
+                self.assertTrue(c["environments"])
                 if c["ultima"]:
-                    t = self.tickets.obter(c["ultima"]["id"])
-                    self.assertIn(t["environment"], ctx["ambientes"])
+                    t = self.tickets.get(c["ultima"]["id"])
+                    self.assertIn(t["environment"], ctx["environments"])
                     self.assertTrue(c["ultima"]["quando"].startswith(u"há "))
 
     def test_sem_ver_logs_so_os_proprios(self):
@@ -87,7 +87,7 @@ class TestCatalogoRotinas(_Base):
         for g in self.svc.catalogo_rotinas(ctx):
             for c in g["cartoes"]:
                 if c["ultima"]:
-                    self.assertEqual(self.tickets.obter(c["ultima"]["id"])["requested_by"], "op.hml")
+                    self.assertEqual(self.tickets.get(c["ultima"]["id"])["requested_by"], "op.hml")
 
     def test_perguntas_com_obrigatorio(self):
         cartoes = dict((c["name"], c) for g in self.svc.catalogo_rotinas(self.ctx["admin"]) for c in g["cartoes"])
@@ -103,17 +103,17 @@ class TestHistoricoScript(_Base):
     """CR-004 U7 (README §5.8)."""
 
     def test_contrato_sem_lob_ordenado_e_limitado(self):
-        desde = self.tickets.agora() - datetime.timedelta(days=30)
-        itens = self.tickets.historico_script(1, desde)
+        desde = self.tickets.now() - datetime.timedelta(days=30)
+        itens = self.tickets.script_history(1, desde)
         self.assertTrue(itens)
         self.assertEqual(set(itens[0]), {"id", "status", "status_reason", "created_at", "started_at", "finished_at"})
         self.assertEqual(itens, sorted(itens, key=lambda t: (t["created_at"], t["id"])))
-        self.assertEqual(len(self.tickets.historico_script(1, desde, limite=2)), 2)
-        self.assertTrue(all(self.tickets.obter(t["id"])["environment"] == "HOMOLOGACAO"
-                            for t in self.tickets.historico_script(1, desde, ["HOMOLOGACAO"])))
+        self.assertEqual(len(self.tickets.script_history(1, desde, limite=2)), 2)
+        self.assertTrue(all(self.tickets.get(t["id"])["environment"] == "HOMOLOGACAO"
+                            for t in self.tickets.script_history(1, desde, ["HOMOLOGACAO"])))
 
     def test_numeros_batem_com_o_grafico_e_a_taxa(self):
-        h = self.svc.historico_script(self.ctx["admin"], "1")
+        h = self.svc.script_history(self.ctx["admin"], "1")
         c = h["contagem"]
         self.assertEqual(sum(c.values()), h["total"])
         por_dia = sum(sum(d[k] for k in c) for d in h["dias"])
@@ -126,16 +126,16 @@ class TestHistoricoScript(_Base):
         self.assertEqual(h["filtro_lista"]["script"], 1)
 
     def test_fora_das_rotinas_e_404(self):
-        from repo_errors import RepoNaoEncontrado
-        with self.assertRaises(RepoNaoEncontrado):
-            self.svc.historico_script(self.ctx["op.hml"], "5")  # backup_extra: inativo
-        with self.assertRaises(RepoNaoEncontrado):
-            self.svc.historico_script(self._sem("op.hml", "EXEC_SCRIPT"), "1")
+        from repo_errors import RepoNotFound
+        with self.assertRaises(RepoNotFound):
+            self.svc.script_history(self.ctx["op.hml"], "5")  # backup_extra: inativo
+        with self.assertRaises(RepoNotFound):
+            self.svc.script_history(self._sem("op.hml", "EXEC_SCRIPT"), "1")
 
     def test_escopo_sem_ver_logs_so_os_proprios(self):
-        h = self.svc.historico_script(self._sem("op.hml", "VIEW_LOGS"), "1")
-        desde = self.tickets.agora() - datetime.timedelta(days=30)
-        self.assertEqual(h["total"], len(self.tickets.historico_script(1, desde, None, "op.hml")))
+        h = self.svc.script_history(self._sem("op.hml", "VIEW_LOGS"), "1")
+        desde = self.tickets.now() - datetime.timedelta(days=30)
+        self.assertEqual(h["total"], len(self.tickets.script_history(1, desde, None, "op.hml")))
 
 
 class TestBarrasEmpilhadas(unittest.TestCase):

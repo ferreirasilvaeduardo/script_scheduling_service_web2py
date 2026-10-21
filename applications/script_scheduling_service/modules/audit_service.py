@@ -245,7 +245,7 @@ class ServicoAuditoria(object):
         """Filtros e erros com o periodo padrao calculado pelo relogio do banco."""
         return normalizar_filtros(entrada, self._hoje())
 
-    def listar(self, ctx, entrada, pagina, tamanho):
+    def list(self, ctx, entrada, pagina, tamanho):
         """Pagina da trilha (tamanho <= 100), ordenada por created_at DESC, id DESC.
 
         Retorna dict com filtros, erros, itens, total, pagina e tamanho. Com erros de filtro
@@ -258,11 +258,11 @@ class ServicoAuditoria(object):
         if erros:
             return vazio
         repo_filtros = filtros_repo(filtros)
-        resultado = self._auditoria.listar(filtros=repo_filtros, pagina=pagina, tamanho=tamanho)
+        resultado = self._auditoria.list(filtros=repo_filtros, pagina=pagina, tamanho=tamanho)
         info = ui_helpers.paginacao_info(pagina, tamanho, resultado["total"],
                                          resultado.get("total_limitado", False), len(resultado["itens"]))
         if not resultado["itens"] and info["pagina"] != resultado["pagina"]:
-            resultado = self._auditoria.listar(filtros=repo_filtros, pagina=info["pagina"], tamanho=tamanho)
+            resultado = self._auditoria.list(filtros=repo_filtros, pagina=info["pagina"], tamanho=tamanho)
         itens = []
         for reg in resultado["itens"]:
             detalhe = _mascarar(reg.get("detail")) or u""
@@ -296,13 +296,13 @@ class ServicoAuditoria(object):
         repo_filtros = filtros_repo(filtros)
         # README §4.4 (D12): reserva o id, delimita id_max = id - 1, conta esse recorte e so entao grava a
         # linha; a quantidade registrada e o arquivo correspondem ao mesmo conjunto.
-        aid = self._auditoria.reservar_id()
+        aid = self._auditoria.reserve_id()
         repo_filtros["id_max"] = aid - 1
-        total = sum(1 for _ in self._auditoria.iterar(filtros=repo_filtros, limite=LIMITE_EXPORTACAO))
+        total = sum(1 for _ in self._auditoria.iterate(filtros=repo_filtros, limite=LIMITE_EXPORTACAO))
         linhas = min(total, LIMITE_EXPORTACAO)
         detalhe = admin_crud.detalhe_livre(u"filtros: %s; linhas: %d (limite %d)" % (
             _descrever_filtros(filtros), linhas, LIMITE_EXPORTACAO))
-        self._auditoria.registrar(ctx.get("login"), ip, ACAO_EXPORTAR, ENTIDADE_AUDITORIA, None, detalhe, id=aid)
+        self._auditoria.register(ctx.get("login"), ip, ACAO_EXPORTAR, ENTIDADE_AUDITORIA, None, detalhe, id=aid)
         self._log.info("auditoria exportada (login=%s linhas=%d total=%d)", ctx.get("login"), linhas, total,
                        extra={"action": ACAO_EXPORTAR})
         nome = "auditoria_%s.csv" % self._relogio().strftime("%Y%m%d_%H%M%S")
@@ -317,7 +317,7 @@ class ServicoAuditoria(object):
         buffer.truncate(0)
         pendentes = 0
         try:
-            for reg in self._auditoria.iterar(filtros=repo_filtros, limite=LIMITE_EXPORTACAO):
+            for reg in self._auditoria.iterate(filtros=repo_filtros, limite=LIMITE_EXPORTACAO):
                 escritor.writerow(linha_csv(reg))
                 pendentes += 1
                 if pendentes >= _LINHAS_POR_BLOCO:
@@ -346,8 +346,8 @@ def _servico():
             import sss_logging
             fabrica = current.repo_factory
             _padrao = ServicoAuditoria(
-                auditoria=fabrica.obter("auditoria"),
-                relogio=fabrica.obter("tickets").agora,
+                auditoria=fabrica.get("audit"),
+                relogio=fabrica.get("tickets").now,
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _padrao
@@ -360,7 +360,7 @@ def filtros_padrao(entrada):
 
 def listar(ctx, entrada, pagina, tamanho):
     """Pagina da trilha de auditoria (servico padrao)."""
-    return _servico().listar(ctx, entrada, pagina, tamanho)
+    return _servico().list(ctx, entrada, pagina, tamanho)
 
 
 def exportar_csv(ctx, ip, entrada):

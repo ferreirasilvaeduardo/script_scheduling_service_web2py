@@ -1,10 +1,10 @@
 # SSS — Explain Plan: repositório do daemon (F8.3a)
 
-Consultas do `RepoSchedulerFila` (`modules/repo_oracle/scheduler_queue.py`) no Oracle 11gR2+.
+Consultas do `RepoSchedulerQueue` (`modules/repo_oracle/scheduler_queue.py`) no Oracle 11gR2+.
 
 > **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix`, validados por `sql_ident` e qualificados uma vez, na criação do repositório. As listas `IN` (`:amb0..`, `:int0..`) são geradas por contagem e todo valor entra por bind.
 >
-> **Índices:** `candidatos` lê `ix_{prefixo}tck_fila (status, environment, priority, GREATEST(scheduled_at, created_at), id, script_id)` pela janela do CR-013 (README §8.2); `varredura_propria`/`tickets_running_do_agente` a de `ix_{prefixo}tck_run`, textualmente iguais às do `sql_ident` e sem alias de tabela (CR-007, R-32).
+> **Índices:** `candidates` lê `ix_{prefixo}tck_queue (status, environment, priority, GREATEST(scheduled_at, created_at), id, script_id)` pela janela do CR-013 (README §8.2); `own_sweep`/`tickets_running_do_agente` a de `ix_{prefixo}tck_run`, textualmente iguais às do `sql_ident` e sem alias de tabela (CR-007, R-32).
 
 ---
 
@@ -12,11 +12,11 @@ Consultas do `RepoSchedulerFila` (`modules/repo_oracle/scheduler_queue.py`) no O
 
 | Método | Consulta | Acesso esperado |
 |---|---|---|
-| `candidatos` (CR-013) | (1) scripts do agente por interpretador; (2) `RUNNING` por script e ambiente; (3) janela: por ambiente e prioridade 1 a 4, os `:lote` primeiros de `PENDING` vencidos por `(inicio, id)` dos scripts abaixo do teto, juntados e ordenados pela prioridade efetiva (README §8.2) | (1) `{prefixo}scripts` (catálogo); (2) faixa `status = 'RUNNING'` de `ix_{prefixo}tck_fila`; (3) `INDEX RANGE SCAN` de `ix_{prefixo}tck_fila` por bloco, sem sort e sem tabela, `COUNT STOPKEY`; só os escolhidos pela PK |
+| `candidates` (CR-013) | (1) scripts do agente por interpretador; (2) `RUNNING` por script e ambiente; (3) janela: por ambiente e prioridade 1 a 4, os `:lote` primeiros de `PENDING` vencidos por `(inicio, id)` dos scripts abaixo do teto, juntados e ordenados pela prioridade efetiva (README §8.2) | (1) `{prefixo}scripts` (catálogo); (2) faixa `status = 'RUNNING'` de `ix_{prefixo}tck_queue`; (3) `INDEX RANGE SCAN` de `ix_{prefixo}tck_queue` por bloco, sem sort e sem tabela, `COUNT STOPKEY`; só os escolhidos pela PK |
 | `claim` (3 passos) | `SELECT … FOR UPDATE WAIT 5` do script; contagem de `RUNNING` do par; `UPDATE … RETURNING started_at` (README §8.3) | `pk_{prefixo}scripts`; `ix_{prefixo}tck_scr`; `pk_{prefixo}tickets` |
-| `varredura_propria`, `tickets_running_do_agente` | `(CASE WHEN status = 'RUNNING' THEN agent_id END) = :agent_id` (README §8.7) | `ix_{prefixo}tck_run` |
-| `heartbeat` | `executemany` do `UPDATE` por PK dos tickets e `UPDATE` do agente por `code` | `pk_{prefixo}tickets`; `uk_{prefixo}agt_codigo` |
-| `registrar_pid`, `finalizar`, `devolver` | `UPDATE` pela PK com `agent_id` e `status` | `pk_{prefixo}tickets` |
+| `own_sweep`, `tickets_running_do_agente` | `(CASE WHEN status = 'RUNNING' THEN agent_id END) = :agent_id` (README §8.7) | `ix_{prefixo}tck_run` |
+| `heartbeat` | `executemany` do `UPDATE` por PK dos tickets e `UPDATE` do agente por `code` | `pk_{prefixo}tickets`; `uk_{prefixo}agt_code` |
+| `register_pid`, `finalize`, `return_to_queue` | `UPDATE` pela PK com `agent_id` e `status` | `pk_{prefixo}tickets` |
 
 ---
 
@@ -26,7 +26,7 @@ Consultas do `RepoSchedulerFila` (`modules/repo_oracle/scheduler_queue.py`) no O
 
 * **Volume simulado:** `tbsss_tickets` e `tbsss_agents` estão vazias depois do ciclo 02 → 01 → 99. Só durante o `EXPLAIN`, as estatísticas foram trocadas por valores fictícios (`DBMS_STATS.SET_TABLE_STATS`/`SET_COLUMN_STATS`/`SET_INDEX_STATS`): 1 milhão de tickets, 2.000 deles nos índices de função `tck_fila` e `tck_run` (inclusive as colunas ocultas `SYS_NC` desses índices), e 50 agentes. Em seguida, as estatísticas das duas tabelas foram apagadas e as dos índices recoletadas (nenhuma das duas é coletada pelo `01_implantar`). O estado antes e depois foi conferido e é idêntico; nenhuma linha foi gravada.
 * **Sem `TABLE ACCESS FULL` em `tbsss_tickets` em nenhuma consulta:** conforme.
-* **`candidatos`:** os tickets vêm só de `INDEX FULL SCAN` em `ix_{prefixo}tck_fila`, que contém apenas os `PENDING` (as linhas dos outros status têm a expressão nula e não entram no índice); o teto usa `INDEX RANGE SCAN` em `ix_{prefixo}tck_scr`. O `TABLE ACCESS FULL` em `tbsss_scripts` é o ramo alternativo do plano **adaptativo** do Oracle 12c+ (`STATISTICS COLLECTOR` escolhe em execução entre nested loops pela PK e hash join); ele incide só sobre o catálogo de scripts. No 11gR2 não há plano adaptativo.
+* **`candidates`:** os tickets vêm só de `INDEX FULL SCAN` em `ix_{prefixo}tck_queue`, que contém apenas os `PENDING` (as linhas dos outros status têm a expressão nula e não entram no índice); o teto usa `INDEX RANGE SCAN` em `ix_{prefixo}tck_scr`. O `TABLE ACCESS FULL` em `tbsss_scripts` é o ramo alternativo do plano **adaptativo** do Oracle 12c+ (`STATISTICS COLLECTOR` escolhe em execução entre nested loops pela PK e hash join); ele incide só sobre o catálogo de scripts. No 11gR2 não há plano adaptativo.
 * **Claim:** os três passos são por PK ou por `ix_{prefixo}tck_scr`; a ordem de locks é `tbsss_scripts` → `tbsss_tickets` (README §8.3).
 
 ---
@@ -76,7 +76,7 @@ O tempo que resta é quase todo de ida e volta à rede (três consultas curtas).
 
 Pior caso conhecido: um script no teto com a fila inteira à frente dos demais. O filtro `script_id IN (...)` é aplicado no próprio índice, então o bloco percorre só entradas de índice (sem tabela) até achar o lote.
 
-### Planos registrados (com volume simulado, F8.3a; o de `candidatos` foi substituído pelo da seção 3)
+### Planos registrados (com volume simulado, F8.3a; o de `candidates` foi substituído pelo da seção 3)
 
 ### candidatos
 
@@ -200,10 +200,10 @@ Pior caso conhecido: um script no teto com a fila inteira à frente dos demais. 
 
 | Método | Consulta | Acesso |
 |---|---|---|
-| `scheduler_agenda.regras_vencidas` | README §7.5, paginada (R-08) | `INDEX RANGE SCAN` de `ix_{prefixo}agd_prox (active, next_run_at, id)` com `COUNT STOPKEY` |
-| `scheduler_agenda.travar_regra` | `FOR UPDATE SKIP LOCKED` pela regra | `ix_{prefixo}agd_prox` |
-| `scheduler_agenda.status_ticket` | sobreposição (passo 4) | `pk_{prefixo}tickets` |
-| `scheduler_fila.marcar_node_offline` | README §8.8, 1ª etapa, `FOR UPDATE SKIP LOCKED` | `ix_{prefixo}tck_run` (só os `RUNNING`), sem `TABLE ACCESS FULL` com volume; tabela vazia e sem estatística dá `TABLE ACCESS FULL`, que é o mais barato nesse caso |
+| `scheduler_agenda.due_rules` | README §7.5, paginada (R-08) | `INDEX RANGE SCAN` de `ix_{prefixo}sch_next (active, next_run_at, id)` com `COUNT STOPKEY` |
+| `scheduler_agenda.lock_rule` | `FOR UPDATE SKIP LOCKED` pela regra | `ix_{prefixo}sch_next` |
+| `scheduler_agenda.get_ticket_status` | sobreposição (passo 4) | `pk_{prefixo}tickets` |
+| `scheduler_fila.mark_node_offline` | README §8.8, 1ª etapa, `FOR UPDATE SKIP LOCKED` | `ix_{prefixo}tck_run` (só os `RUNNING`), sem `TABLE ACCESS FULL` com volume; tabela vazia e sem estatística dá `TABLE ACCESS FULL`, que é o mais barato nesse caso |
 
 ### regras_vencidas
 

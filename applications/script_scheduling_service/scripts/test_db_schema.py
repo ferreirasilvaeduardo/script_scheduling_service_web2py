@@ -54,24 +54,24 @@ class TestDbSchema(unittest.TestCase):
     def test_dezessete_tabelas_exatas(self):
         """Verifica presenca e contagem exata das 18 tabelas do README §9.2 e §10 (CR-007: controle; CR-012: ticket_saida)."""
         entidades_esperadas = [
-            "ambientes",
-            "perfis",
-            "funcionalidades",
-            "perfil_func",
-            "perfil_amb",
+            "environments",
+            "profiles",
+            "features",
+            "profile_feature",
+            "profile_env",
             "scripts",
-            "perfil_scr",
-            "script_amb",
-            "usuarios",
-            "parametros",
+            "profile_script",
+            "script_env",
+            "users",
+            "parameters",
             "script_param",
-            "agendamentos",
+            "schedules",
             "tickets",
-            "ticket_resp",
-            "agentes",
-            "auditoria",
-            "controle",
-            "ticket_saida",
+            "ticket_answer",
+            "agents",
+            "audit",
+            "control",
+            "ticket_output",
         ]
         self.assertEqual(len(TABLES), 18, "Devem existir exatamente 18 tabelas")
         self.assertEqual(list(TABLES.keys()), entidades_esperadas)
@@ -80,24 +80,24 @@ class TestDbSchema(unittest.TestCase):
         """Verifica que nomes('tbsss_') reproduz exatamente a tabela do README §9.2."""
         esperado_readme = [
             # (entidade, abrev, sequence, trigger, pk)
-            ("ambientes", "env", "sq_tbsss_environments", "tr_tbsss_env_bi", "pk_tbsss_environments"),
-            ("perfis", "prf", "sq_tbsss_profiles", "tr_tbsss_prf_bi", "pk_tbsss_profiles"),
-            ("funcionalidades", "fea", "sq_tbsss_features", "tr_tbsss_fea_bi", "pk_tbsss_features"),
-            ("perfil_func", "pfea", "sq_tbsss_profile_feature", "tr_tbsss_pfea_bi", "pk_tbsss_profile_feature"),
-            ("perfil_amb", "penv", "sq_tbsss_profile_env", "tr_tbsss_penv_bi", "pk_tbsss_profile_env"),
+            ("environments", "env", "sq_tbsss_environments", "tr_tbsss_env_bi", "pk_tbsss_environments"),
+            ("profiles", "prf", "sq_tbsss_profiles", "tr_tbsss_prf_bi", "pk_tbsss_profiles"),
+            ("features", "fea", "sq_tbsss_features", "tr_tbsss_fea_bi", "pk_tbsss_features"),
+            ("profile_feature", "pfea", "sq_tbsss_profile_feature", "tr_tbsss_pfea_bi", "pk_tbsss_profile_feature"),
+            ("profile_env", "penv", "sq_tbsss_profile_env", "tr_tbsss_penv_bi", "pk_tbsss_profile_env"),
             ("scripts", "scr", "sq_tbsss_scripts", "tr_tbsss_scr_bi", "pk_tbsss_scripts"),
-            ("perfil_scr", "pscr", "sq_tbsss_profile_script", "tr_tbsss_pscr_bi", "pk_tbsss_profile_script"),
-            ("script_amb", "senv", "sq_tbsss_script_env", "tr_tbsss_senv_bi", "pk_tbsss_script_env"),
-            ("usuarios", "usr", "sq_tbsss_users", "tr_tbsss_usr_bi", "pk_tbsss_users"),
-            ("parametros", "prm", "sq_tbsss_parameters", "tr_tbsss_prm_bi", "pk_tbsss_parameters"),
+            ("profile_script", "pscr", "sq_tbsss_profile_script", "tr_tbsss_pscr_bi", "pk_tbsss_profile_script"),
+            ("script_env", "senv", "sq_tbsss_script_env", "tr_tbsss_senv_bi", "pk_tbsss_script_env"),
+            ("users", "usr", "sq_tbsss_users", "tr_tbsss_usr_bi", "pk_tbsss_users"),
+            ("parameters", "prm", "sq_tbsss_parameters", "tr_tbsss_prm_bi", "pk_tbsss_parameters"),
             ("script_param", "sprm", "sq_tbsss_script_param", "tr_tbsss_sprm_bi", "pk_tbsss_script_param"),
-            ("agendamentos", "sch", "sq_tbsss_schedules", "tr_tbsss_sch_bi", "pk_tbsss_schedules"),
+            ("schedules", "sch", "sq_tbsss_schedules", "tr_tbsss_sch_bi", "pk_tbsss_schedules"),
             ("tickets", "tck", "sq_tbsss_tickets", "tr_tbsss_tck_bi", "pk_tbsss_tickets"),
-            ("ticket_resp", "tans", "sq_tbsss_ticket_answer", "tr_tbsss_tans_bi", "pk_tbsss_ticket_answer"),
-            ("agentes", "agt", "sq_tbsss_agents", "tr_tbsss_agt_bi", "pk_tbsss_agents"),
-            ("auditoria", "aud", "sq_tbsss_audit", "tr_tbsss_aud_bi", "pk_tbsss_audit"),
-            ("controle", "ctl", "sq_tbsss_control", "tr_tbsss_ctl_bi", "pk_tbsss_control"),
-            ("ticket_saida", "tout", "sq_tbsss_ticket_output", "tr_tbsss_tout_bi", "pk_tbsss_ticket_output"),
+            ("ticket_answer", "tans", "sq_tbsss_ticket_answer", "tr_tbsss_tans_bi", "pk_tbsss_ticket_answer"),
+            ("agents", "agt", "sq_tbsss_agents", "tr_tbsss_agt_bi", "pk_tbsss_agents"),
+            ("audit", "aud", "sq_tbsss_audit", "tr_tbsss_aud_bi", "pk_tbsss_audit"),
+            ("control", "ctl", "sq_tbsss_control", "tr_tbsss_ctl_bi", "pk_tbsss_control"),
+            ("ticket_output", "tout", "sq_tbsss_ticket_output", "tr_tbsss_tout_bi", "pk_tbsss_ticket_output"),
         ]
 
         esquema = names("tbsss_")
@@ -224,14 +224,14 @@ class TestDbSchema(unittest.TestCase):
 
     def test_triggers_extras_imutabilidade(self):
         """Verifica configuracao de triggers _bu para chaves naturais imutaveis."""
-        self.assertIsNotNone(TABLES["ambientes"]["trigger_bu"])
-        self.assertEqual(TABLES["ambientes"]["trigger_bu"]["coluna_imutavel"], "name")
-        self.assertIsNotNone(TABLES["usuarios"]["trigger_bu"])
-        self.assertEqual(TABLES["usuarios"]["trigger_bu"]["coluna_imutavel"], "login")
+        self.assertIsNotNone(TABLES["environments"]["trigger_bu"])
+        self.assertEqual(TABLES["environments"]["trigger_bu"]["coluna_imutavel"], "name")
+        self.assertIsNotNone(TABLES["users"]["trigger_bu"])
+        self.assertEqual(TABLES["users"]["trigger_bu"]["coluna_imutavel"], "login")
 
         # Nenhuma outra tabela deve ter trigger_bu
         for ent, defn in TABLES.items():
-            if ent not in ("ambientes", "usuarios"):
+            if ent not in ("environments", "users"):
                 self.assertIsNone(
                     defn["trigger_bu"],
                     "Tabela '{}' nao deve possuir trigger_bu".format(ent),
@@ -259,7 +259,7 @@ class TestDbSchema(unittest.TestCase):
             self.assertEqual(defn["cks"]["upd"]["expr"], sql_ident.CK_RECORD_EXPR)
             abrev = defn["abrev"]
             self.assertIn("ck_tbsss_{}_upd".format(abrev), esquema[entidade]["cks"])
-        self.assertEqual(sql_ident.TABLES_WITHOUT_RECORD, ("auditoria", "controle"))
+        self.assertEqual(sql_ident.TABLES_WITHOUT_RECORD, ("audit", "control"))
         self.assertEqual(
             sum(1 for e in TABLES if "upd" in TABLES[e]["cks"]), 16)
 
@@ -267,7 +267,7 @@ class TestDbSchema(unittest.TestCase):
         """CR-007: versao do esquema, controle de linha unica, indice unico da ocorrencia, colunas e tamanhos."""
         self.assertIsInstance(sql_ident.SCHEMA_VERSION, int)
         self.assertGreaterEqual(sql_ident.SCHEMA_VERSION, 1)
-        ctl = TABLES["controle"]
+        ctl = TABLES["control"]
         self.assertEqual(ctl["cks"]["id"]["expr"], "id = 1")
         self.assertEqual(list(ctl["colunas"]), ["id", "schema_version", "version_applied_at", "version_applied_by",
                                                  "purge_owner", "purge_lease_until"])
@@ -277,13 +277,13 @@ class TestDbSchema(unittest.TestCase):
         self.assertEqual(ocor["expr"], sql_ident.FBI_TCK_OCCUR_EXPR)
         self.assertFalse(esquema["tickets"]["indices"]["ix_tbsss_tck_queue"]["unico"])
         self.assertEqual(esquema["tickets"]["indices"]["ix_tbsss_tck_hist"]["colunas"], ("script_id", "created_at"))
-        self.assertEqual(esquema["agendamentos"]["indices"]["ix_tbsss_sch_next"]["colunas"],
+        self.assertEqual(esquema["schedules"]["indices"]["ix_tbsss_sch_next"]["colunas"],
                          ("active", "next_run_at", "id"))
-        self.assertIn("'INTERNAL_ERROR'", TABLES["agendamentos"]["cks"]["pause"]["expr"])
+        self.assertIn("'INTERNAL_ERROR'", TABLES["schedules"]["cks"]["pause"]["expr"])
         self.assertEqual(TABLES["tickets"]["colunas"]["process_id"]["tipo"], "NUMBER(10)")
-        self.assertEqual(TABLES["agentes"]["colunas"]["hostname"]["tipo"], "VARCHAR2(255 CHAR)")
-        self.assertEqual(TABLES["agentes"]["colunas"]["environments"]["tipo"], "VARCHAR2(1000 CHAR)")
-        self.assertIn("critical_config", TABLES["agentes"]["colunas"])
+        self.assertEqual(TABLES["agents"]["colunas"]["hostname"]["tipo"], "VARCHAR2(255 CHAR)")
+        self.assertEqual(TABLES["agents"]["colunas"]["environments"]["tipo"], "VARCHAR2(1000 CHAR)")
+        self.assertIn("critical_config", TABLES["agents"]["colunas"])
         # CR-011: sem hash do script.
         for ent, col in (("scripts", "sha256_homologado"), ("tickets", "arquivo_sha256")):
             self.assertNotIn(col, TABLES[ent]["colunas"])
@@ -313,15 +313,15 @@ class TestDbSchema(unittest.TestCase):
 
     def test_colunas_lob_declaradas(self):
         """Verifica catalogacao de colunas LOB (CLOB e, na saida do ticket, BLOB; CR-012)."""
-        self.assertEqual(TABLES["agendamentos"]["colunas_lob"], ("params_json",))
+        self.assertEqual(TABLES["schedules"]["colunas_lob"], ("params_json",))
         self.assertEqual(
             TABLES["tickets"]["colunas_lob"],
             ("submitted_params", "log_output"),
         )
-        self.assertEqual(TABLES["ticket_saida"]["colunas_lob"], ("content",))
-        self.assertEqual(TABLES["ticket_saida"]["colunas"]["content"]["tipo"], "BLOB")
+        self.assertEqual(TABLES["ticket_output"]["colunas_lob"], ("content",))
+        self.assertEqual(TABLES["ticket_output"]["colunas"]["content"]["tipo"], "BLOB")
         for ent, defn in TABLES.items():
-            if ent not in ("agendamentos", "tickets", "ticket_saida"):
+            if ent not in ("schedules", "tickets", "ticket_output"):
                 self.assertEqual(
                     defn["colunas_lob"],
                     (),
@@ -394,7 +394,7 @@ class TestDbSchema(unittest.TestCase):
         reg_col_invalida = copy.deepcopy(TABLES)
         col_31 = "coluna_com_trinta_e_um_chars_xy"  # len = 31
         self.assertEqual(len(col_31), 31)
-        reg_col_invalida["ambientes"]["colunas"][col_31] = {
+        reg_col_invalida["environments"]["colunas"][col_31] = {
             "name": col_31,
             "tipo": "VARCHAR2(10 CHAR)",
             "not_null": False,
@@ -409,7 +409,7 @@ class TestDbSchema(unittest.TestCase):
         # uk_ + tbsss_ (6) + amb (3) + _ (1) = 13. Se sufixo tiver 18 chars -> total 31 chars
         sufixo_18 = "sufixo_com_18_char"  # len = 18
         self.assertEqual(len("uk_tbsss_amb_" + sufixo_18), 31)
-        reg_uk_invalida["ambientes"]["uks"]["invalido"] = {
+        reg_uk_invalida["environments"]["uks"]["invalido"] = {
             "sufixo": sufixo_18,
             "colunas": ("name",),
         }

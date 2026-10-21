@@ -10,7 +10,7 @@ import admin_users_service as servico
 import security
 import ui_helpers
 from admin_crud import AcessoNegado, OperacaoNegada
-from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
+from repo_errors import RepoConflict, RepoError, RepoNotFound
 
 _FUNC = "MANAGE_USERS"
 _TAMANHOS = (20, 50, 100)
@@ -72,7 +72,7 @@ def lista():
         perfis = servico.perfis()
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao listar usuarios (login=%s)", ctx["login"], extra={"action": _FUNC})
         resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
@@ -86,7 +86,7 @@ def form():
     ctx = _exigir_func(_FUNC)
     try:
         dados = servico.formulario(ctx, _texto(request.args(0), 11))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
@@ -102,11 +102,11 @@ def salvar():
     enviados.update(senhas)
     try:
         _salvo, erros = servico.salvar(ctx, _ip_origem(), usuario_id, enviados)
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao salvar usuario (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
         erros = {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}
     if not erros:
@@ -114,7 +114,7 @@ def salvar():
         redirect(URL(c="admin_usuarios", f="lista"))
     try:
         dados = servico.formulario(ctx, usuario_id) if usuario_id else servico.formulario(ctx)
-    except RepoErro:
+    except RepoError:
         dados = {"id": None, "login": "", "name": "", "profile_id": None, "active": "Y", "version": "",
                  "bloqueado": False, "locked_until": None, "failed_attempts": 0, "proprio": False}
     if admin_crud.CAMPO_GERAL not in erros:
@@ -137,15 +137,15 @@ def alternar_ativo():
         alterado = servico.alternar_ativo(ctx, _ip_origem(), usuario_id, _texto(request.post_vars.get("version"), 64))
         acao = u"desativado" if alterado["active"] == "N" else u"reativado"
         session.flash = {"tipo": "sucesso", "mensagem": u"Usuário %s %s." % (alterado["login"], acao)}
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
     except OperacaoNegada as exc:
         session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
-    except RepoConflito:
+    except RepoConflict:
         session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao alternar usuario (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
     redirect(URL(c="admin_usuarios", f="form", args=[usuario_id]))
@@ -158,14 +158,14 @@ def redefinir_senha():
     usuario_id = _texto(request.post_vars.get("id"), 11)
     try:
         erros = servico.redefinir_senha(ctx, _ip_origem(), usuario_id, senhas["senha"], senhas["confirmacao"])
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
     except OperacaoNegada as exc:
         session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
         redirect(URL(c="admin_usuarios", f="form", args=[usuario_id]))
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao redefinir senha (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
         redirect(URL(c="admin_usuarios", f="form", args=[usuario_id]))
@@ -183,13 +183,13 @@ def desbloquear():
     try:
         alterado = servico.desbloquear(ctx, _ip_origem(), usuario_id)
         session.flash = {"tipo": "sucesso", "mensagem": u"Usuário %s desbloqueado." % alterado["login"]}
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
     except OperacaoNegada as exc:
         session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao desbloquear (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
     redirect(URL(c="admin_usuarios", f="form", args=[usuario_id]))

@@ -48,7 +48,7 @@ SCHEMA_VERSION = 1  # aberta ate a primeira producao (AGENTS §4.16): o CR-016a 
 
 # Colunas de registro (CR-006, README §10): todas as tabelas, exceto as listadas em TABELAS_SEM_REGISTRO.
 RECORD_COLUMNS = ("created_at", "created_by", "updated_at", "updated_by")
-TABLES_WITHOUT_RECORD = ("auditoria", "controle")
+TABLES_WITHOUT_RECORD = ("audit", "control")
 ACTOR_MAX = 40
 CK_RECORD_EXPR = (
     "(updated_at IS NULL AND updated_by IS NULL) OR "
@@ -142,8 +142,8 @@ def _build_table_registry():
     r = OrderedDict()
 
     # 1. Ambientes
-    r['ambientes'] = OrderedDict([
-        ('entity', 'ambientes'),
+    r['environments'] = OrderedDict([
+        ('entity', 'environments'),
         ('fisico', 'environments'),
         ('abrev', 'env'),
         ('rotulo', 'Ambientes'),
@@ -171,8 +171,8 @@ def _build_table_registry():
     ])
 
     # 2. Perfis
-    r['perfis'] = OrderedDict([
-        ('entity', 'perfis'),
+    r['profiles'] = OrderedDict([
+        ('entity', 'profiles'),
         ('fisico', 'profiles'),
         ('abrev', 'prf'),
         ('rotulo', 'Perfis'),
@@ -200,8 +200,8 @@ def _build_table_registry():
     ])
 
     # 3. Funcionalidades
-    r['funcionalidades'] = OrderedDict([
-        ('entity', 'funcionalidades'),
+    r['features'] = OrderedDict([
+        ('entity', 'features'),
         ('fisico', 'features'),
         ('abrev', 'fea'),
         ('rotulo', 'Funcionalidades'),
@@ -227,8 +227,8 @@ def _build_table_registry():
     ])
 
     # 4. Perfil x Funcionalidade
-    r['perfil_func'] = OrderedDict([
-        ('entity', 'perfil_func'),
+    r['profile_feature'] = OrderedDict([
+        ('entity', 'profile_feature'),
         ('fisico', 'profile_feature'),
         ('abrev', 'pfea'),
         ('rotulo', 'Perfil x Funcionalidade'),
@@ -242,8 +242,8 @@ def _build_table_registry():
             ('prf_fea', {'sufixo': 'prf_fea', 'colunas': ('profile_id', 'feature_id')}),
         ])),
         ('fks', OrderedDict([
-            ('prf', {'sufixo': 'prf', 'colunas': ('profile_id',), 'ref_tabela': 'perfis', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
-            ('fea', {'sufixo': 'fea', 'colunas': ('feature_id',), 'ref_tabela': 'funcionalidades', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
+            ('prf', {'sufixo': 'prf', 'colunas': ('profile_id',), 'ref_tabela': 'profiles', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
+            ('fea', {'sufixo': 'fea', 'colunas': ('feature_id',), 'ref_tabela': 'features', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
         ])),
         ('cks', OrderedDict()),
         ('indices', OrderedDict([
@@ -254,8 +254,8 @@ def _build_table_registry():
     ])
 
     # 5. Perfil x Ambiente
-    r['perfil_amb'] = OrderedDict([
-        ('entity', 'perfil_amb'),
+    r['profile_env'] = OrderedDict([
+        ('entity', 'profile_env'),
         ('fisico', 'profile_env'),
         ('abrev', 'penv'),
         ('rotulo', 'Perfil x Ambiente'),
@@ -269,8 +269,8 @@ def _build_table_registry():
             ('prf_env', {'sufixo': 'prf_env', 'colunas': ('profile_id', 'environment_id')}),
         ])),
         ('fks', OrderedDict([
-            ('prf', {'sufixo': 'prf', 'colunas': ('profile_id',), 'ref_tabela': 'perfis', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
-            ('env', {'sufixo': 'env', 'colunas': ('environment_id',), 'ref_tabela': 'ambientes', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
+            ('prf', {'sufixo': 'prf', 'colunas': ('profile_id',), 'ref_tabela': 'profiles', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
+            ('env', {'sufixo': 'env', 'colunas': ('environment_id',), 'ref_tabela': 'environments', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
         ])),
         ('cks', OrderedDict()),
         ('indices', OrderedDict([
@@ -319,8 +319,8 @@ def _build_table_registry():
     ])
 
     # 7. Perfil x Script
-    r['perfil_scr'] = OrderedDict([
-        ('entity', 'perfil_scr'),
+    r['profile_script'] = OrderedDict([
+        ('entity', 'profile_script'),
         ('fisico', 'profile_script'),
         ('abrev', 'pscr'),
         ('rotulo', 'Perfil x Script'),
@@ -334,7 +334,7 @@ def _build_table_registry():
             ('prf_scr', {'sufixo': 'prf_scr', 'colunas': ('profile_id', 'script_id')}),
         ])),
         ('fks', OrderedDict([
-            ('prf', {'sufixo': 'prf', 'colunas': ('profile_id',), 'ref_tabela': 'perfis', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
+            ('prf', {'sufixo': 'prf', 'colunas': ('profile_id',), 'ref_tabela': 'profiles', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
             ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'ref_tabela': 'scripts', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
         ])),
         ('cks', OrderedDict()),
@@ -346,8 +346,8 @@ def _build_table_registry():
     ])
 
     # 8. Script x Ambiente
-    r['script_amb'] = OrderedDict([
-        ('entity', 'script_amb'),
+    r['script_env'] = OrderedDict([
+        ('entity', 'script_env'),
         ('fisico', 'script_env'),
         ('abrev', 'senv'),
         ('rotulo', 'Script x Ambiente'),
@@ -362,7 +362,7 @@ def _build_table_registry():
         ])),
         ('fks', OrderedDict([
             ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'ref_tabela': 'scripts', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
-            ('env', {'sufixo': 'env', 'colunas': ('environment_id',), 'ref_tabela': 'ambientes', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
+            ('env', {'sufixo': 'env', 'colunas': ('environment_id',), 'ref_tabela': 'environments', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
         ])),
         ('cks', OrderedDict()),
         ('indices', OrderedDict([
@@ -373,8 +373,8 @@ def _build_table_registry():
     ])
 
     # 9. Usuarios
-    r['usuarios'] = OrderedDict([
-        ('entity', 'usuarios'),
+    r['users'] = OrderedDict([
+        ('entity', 'users'),
         ('fisico', 'users'),
         ('abrev', 'usr'),
         ('rotulo', 'Usuários'),
@@ -397,7 +397,7 @@ def _build_table_registry():
             ('login', {'sufixo': 'login', 'colunas': ('login',)}),
         ])),
         ('fks', OrderedDict([
-            ('prf', {'sufixo': 'prf', 'colunas': ('profile_id',), 'ref_tabela': 'perfis', 'ref_colunas': ('id',), 'on_delete': None}),
+            ('prf', {'sufixo': 'prf', 'colunas': ('profile_id',), 'ref_tabela': 'profiles', 'ref_colunas': ('id',), 'on_delete': None}),
         ])),
         ('cks', OrderedDict([
             ('active', {'sufixo': 'active', 'expr': "active IN ('Y', 'N')"}),
@@ -413,8 +413,8 @@ def _build_table_registry():
     ])
 
     # 10. Parametros
-    r['parametros'] = OrderedDict([
-        ('entity', 'parametros'),
+    r['parameters'] = OrderedDict([
+        ('entity', 'parameters'),
         ('fisico', 'parameters'),
         ('abrev', 'prm'),
         ('rotulo', 'Parâmetros'),
@@ -469,7 +469,7 @@ def _build_table_registry():
         ])),
         ('fks', OrderedDict([
             ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'ref_tabela': 'scripts', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
-            ('prm', {'sufixo': 'prm', 'colunas': ('parameter_id',), 'ref_tabela': 'parametros', 'ref_colunas': ('id',), 'on_delete': None}),
+            ('prm', {'sufixo': 'prm', 'colunas': ('parameter_id',), 'ref_tabela': 'parameters', 'ref_colunas': ('id',), 'on_delete': None}),
         ])),
         ('cks', OrderedDict([
             ('req', {'sufixo': 'req', 'expr': "required IN ('Y', 'N')"}),
@@ -483,8 +483,8 @@ def _build_table_registry():
     ])
 
     # 12. Agendamentos
-    r['agendamentos'] = OrderedDict([
-        ('entity', 'agendamentos'),
+    r['schedules'] = OrderedDict([
+        ('entity', 'schedules'),
         ('fisico', 'schedules'),
         ('abrev', 'sch'),
         ('rotulo', 'Agendamentos'),
@@ -514,8 +514,8 @@ def _build_table_registry():
         ('uks', OrderedDict()),
         ('fks', OrderedDict([
             ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'ref_tabela': 'scripts', 'ref_colunas': ('id',), 'on_delete': None}),
-            ('usr', {'sufixo': 'usr', 'colunas': ('user_id',), 'ref_tabela': 'usuarios', 'ref_colunas': ('id',), 'on_delete': None}),
-            ('env', {'sufixo': 'env', 'colunas': ('environment',), 'ref_tabela': 'ambientes', 'ref_colunas': ('name',), 'on_delete': None}),
+            ('usr', {'sufixo': 'usr', 'colunas': ('user_id',), 'ref_tabela': 'users', 'ref_colunas': ('id',), 'on_delete': None}),
+            ('env', {'sufixo': 'env', 'colunas': ('environment',), 'ref_tabela': 'environments', 'ref_colunas': ('name',), 'on_delete': None}),
         ])),
         ('cks', OrderedDict([
             ('rtype', {'sufixo': 'rtype', 'expr': "recurrence_type IN ('ONCE','DAILY','WEEKLY','MONTHLY','CRON')"}),
@@ -574,10 +574,10 @@ def _build_table_registry():
         ('uks', OrderedDict()),
         ('fks', OrderedDict([
             ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'ref_tabela': 'scripts', 'ref_colunas': ('id',), 'on_delete': None}),
-            ('env', {'sufixo': 'env', 'colunas': ('environment',), 'ref_tabela': 'ambientes', 'ref_colunas': ('name',), 'on_delete': None}),
-            ('usr', {'sufixo': 'usr', 'colunas': ('requested_by',), 'ref_tabela': 'usuarios', 'ref_colunas': ('login',), 'on_delete': None}),
+            ('env', {'sufixo': 'env', 'colunas': ('environment',), 'ref_tabela': 'environments', 'ref_colunas': ('name',), 'on_delete': None}),
+            ('usr', {'sufixo': 'usr', 'colunas': ('requested_by',), 'ref_tabela': 'users', 'ref_colunas': ('login',), 'on_delete': None}),
             ('parent', {'sufixo': 'parent', 'colunas': ('parent_ticket_id',), 'ref_tabela': 'tickets', 'ref_colunas': ('id',), 'on_delete': 'SET NULL'}),
-            ('sch', {'sufixo': 'sch', 'colunas': ('schedule_id',), 'ref_tabela': 'agendamentos', 'ref_colunas': ('id',), 'on_delete': 'SET NULL'}),
+            ('sch', {'sufixo': 'sch', 'colunas': ('schedule_id',), 'ref_tabela': 'schedules', 'ref_colunas': ('id',), 'on_delete': 'SET NULL'}),
         ])),
         ('cks', OrderedDict([
             ('stat', {'sufixo': 'stat', 'expr': "status IN ('PENDING','RUNNING','SUCCESS','FAILED','CANCELLED')"}),
@@ -606,8 +606,8 @@ def _build_table_registry():
     ])
 
     # 14. Ticket x Resposta
-    r['ticket_resp'] = OrderedDict([
-        ('entity', 'ticket_resp'),
+    r['ticket_answer'] = OrderedDict([
+        ('entity', 'ticket_answer'),
         ('fisico', 'ticket_answer'),
         ('abrev', 'tans'),
         ('rotulo', 'Ticket x Resposta'),
@@ -624,7 +624,7 @@ def _build_table_registry():
         ])),
         ('fks', OrderedDict([
             ('tck', {'sufixo': 'tck', 'colunas': ('ticket_id',), 'ref_tabela': 'tickets', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
-            ('prm', {'sufixo': 'prm', 'colunas': ('parameter_id',), 'ref_tabela': 'parametros', 'ref_colunas': ('id',), 'on_delete': None}),
+            ('prm', {'sufixo': 'prm', 'colunas': ('parameter_id',), 'ref_tabela': 'parameters', 'ref_colunas': ('id',), 'on_delete': None}),
         ])),
         ('cks', OrderedDict()),
         ('indices', OrderedDict([
@@ -635,8 +635,8 @@ def _build_table_registry():
     ])
 
     # 15. Agentes
-    r['agentes'] = OrderedDict([
-        ('entity', 'agentes'),
+    r['agents'] = OrderedDict([
+        ('entity', 'agents'),
         ('fisico', 'agents'),
         ('abrev', 'agt'),
         ('rotulo', 'Agentes'),
@@ -670,8 +670,8 @@ def _build_table_registry():
     ])
 
     # 16. Auditoria
-    r['auditoria'] = OrderedDict([
-        ('entity', 'auditoria'),
+    r['audit'] = OrderedDict([
+        ('entity', 'audit'),
         ('fisico', 'audit'),
         ('abrev', 'aud'),
         ('rotulo', 'Auditoria'),
@@ -699,8 +699,8 @@ def _build_table_registry():
     ])
 
     # 17. Controle (CR-007, D4): linha unica com a versao do esquema e a concessao do purge.
-    r['controle'] = OrderedDict([
-        ('entity', 'controle'),
+    r['control'] = OrderedDict([
+        ('entity', 'control'),
         ('fisico', 'control'),
         ('abrev', 'ctl'),
         ('rotulo', 'Controle'),
@@ -725,8 +725,8 @@ def _build_table_registry():
     ])
 
     # 18. Saida do ticket (CR-012): zip da pasta de saida do script, uma linha por ticket.
-    r['ticket_saida'] = OrderedDict([
-        ('entity', 'ticket_saida'),
+    r['ticket_output'] = OrderedDict([
+        ('entity', 'ticket_output'),
         ('fisico', 'ticket_output'),
         ('abrev', 'tout'),
         ('rotulo', 'Saida do ticket'),

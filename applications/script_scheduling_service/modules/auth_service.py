@@ -12,7 +12,7 @@ import threading
 import rbac
 import security
 import ui_helpers
-from repo_errors import RepoNaoEncontrado
+from repo_errors import RepoNotFound
 
 # Mensagens-padrao em duas partes (README §2.4.2); o bloqueio informa os minutos configurados.
 MSG_GENERICA = ui_helpers.mensagem("login_incorreto")
@@ -46,7 +46,7 @@ class ServicoAuth(object):
         self.msg_bloqueio = ui_helpers.mensagem("conta_bloqueada", minutos=max(1, -(-self._bloqueio_s // 60)))
         self._log = log
         # Relogio do banco (README §4.2): o bloqueio nunca depende do relogio do no web.
-        self._relogio = relogio or usuarios.agora
+        self._relogio = relogio or usuarios.now
         self._lock = threading.Lock()
         self._cache_matriz = collections.OrderedDict()
         # Falhas de logins inexistentes: replica o bloqueio para nao revelar a existencia da conta.
@@ -62,7 +62,7 @@ class ServicoAuth(object):
         senha_txt = senha if senha_ok_tipo else ""
         login_valido = bool(_RE_LOGIN.fullmatch(login_norm))
 
-        usuario = self._usuarios.obter_por_login(login_norm) if login_valido else None
+        usuario = self._usuarios.get_by_login(login_norm) if login_valido else None
         if usuario is None:
             security.verificar_senha(senha_txt, security.hash_ficticio())
             return self._falha_inexistente(login_norm if login_valido else "?", ip, agora)
@@ -82,14 +82,14 @@ class ServicoAuth(object):
         if not senha_confere:
             return self._falha_senha(usuario, ip)
 
-        estado = self._usuarios.obter_estado_sessao(usuario["id"])
+        estado = self._usuarios.get_session_state(usuario["id"])
         if estado.get("usuario_ativo") != "Y" or estado.get("perfil_ativo") != "Y":
             self._registrar_falha(usuario, ip, "usuario ou perfil inativo")
             return None, MSG_GENERICA
 
         novo_hash = security.hash_senha(senha_txt) if security.precisa_rehash(armazenado) else None
         # Sucesso, rehash e auditoria numa unica operacao do repositorio (README §4.2, §4.4).
-        self._usuarios.registrar_sucesso_login(
+        self._usuarios.register_login_success(
             usuario["login"], novo_hash=novo_hash,
             auditoria=_aud(usuario["login"], ip, "LOGIN_OK", "Login bem-sucedido"))
         if novo_hash is not None:
@@ -106,11 +106,11 @@ class ServicoAuth(object):
     def _reiniciar_se_expirado(self, usuario):
         # Bloqueio expirado (ou contador no limite): novo ciclo de tentativas, no login e na troca de senha.
         if usuario.get("locked_until") is not None or int(usuario.get("failed_attempts") or 0) >= self._max:
-            return self._usuarios.reiniciar_tentativas(usuario["id"])
+            return self._usuarios.reset_attempts(usuario["id"])
         return usuario
 
     def _registrar_falha(self, usuario, ip, motivo):
-        self._auditoria.registrar(usuario["login"], ip, "LOGIN_FAILED", ENTIDADE, usuario["id"],
+        self._auditoria.register(usuario["login"], ip, "LOGIN_FAILED", ENTIDADE, usuario["id"],
                                   "Falha de login: %s" % motivo)
         self._log.warning("login falhou (login=%s ip=%s reason=%s)", usuario["login"], ip, motivo,
                           extra={"action": "LOGIN"})
@@ -118,7 +118,7 @@ class ServicoAuth(object):
     def _falha_senha(self, usuario, ip):
         # O repositorio conta e decide o bloqueio sob a trava da linha: a contagem lida aqui pode estar
         # desatualizada quando ha tentativas em paralelo (revisao de 2026-10-20).
-        reg = self._usuarios.registrar_falha_login(
+        reg = self._usuarios.register_login_failure(
             usuario["login"], self._bloqueio_s, max_tentativas=self._max,
             auditoria=_aud(usuario["login"], ip, "LOGIN_FAILED", "Falha de login: senha incorreta"),
             auditoria_bloqueio=_aud(usuario["login"], ip, "LOGIN_LOCKED",
@@ -149,14 +149,14 @@ class ServicoAuth(object):
             while len(self._simulados) > SIMULADOS_MAX:
                 self._simulados.popitem(last=False)
 
-        self._auditoria.registrar(login, ip, "LOGIN_FAILED", ENTIDADE, None,
+        self._auditoria.register(login, ip, "LOGIN_FAILED", ENTIDADE, None,
                                   "Falha de login: usuario inexistente")
         self._log.warning("login falhou (login=%s ip=%s reason=usuario inexistente)", login, ip,
                           extra={"action": "LOGIN"})
         if resultado == "falha":
             return None, MSG_GENERICA
         if resultado == "bloqueou":
-            self._auditoria.registrar(login, ip, "LOGIN_LOCKED", ENTIDADE, None,
+            self._auditoria.register(login, ip, "LOGIN_LOCKED", ENTIDADE, None,
                                       "Bloqueio simulado de login inexistente")
         return None, self.msg_bloqueio
 
@@ -171,8 +171,8 @@ class ServicoAuth(object):
         if not isinstance(usuario_id, int) or isinstance(usuario_id, bool):
             return None
         try:
-            estado = self._usuarios.obter_estado_sessao(usuario_id)
-        except RepoNaoEncontrado:
+            estado = self._usuarios.get_session_state(usuario_id)
+        except RepoNotFound:
             self._log.warning("sessao encerrada: usuario inexistente (user_id=%s)", usuario_id,
                               extra={"action": "SESSAO"})
             return None
@@ -182,7 +182,7 @@ class ServicoAuth(object):
             return None
         if estado.get("usuario_ativo") != "Y" or estado.get("perfil_ativo") != "Y":
             motivo = u"usuário inativo" if estado.get("usuario_ativo") != "Y" else u"perfil inativo"
-            self._auditoria.registrar(estado.get("login"), ip, "LOGOUT", ENTIDADE, usuario_id,
+            self._auditoria.register(estado.get("login"), ip, "LOGOUT", ENTIDADE, usuario_id,
                                       u"sessão encerrada pela revalidação: %s" % motivo)
             self._log.info("sessao encerrada: usuario ou perfil inativo (login=%s)", estado.get("login"),
                            extra={"action": "SESSAO"})
@@ -203,7 +203,7 @@ class ServicoAuth(object):
     def _montar_ctx(self, estado):
         funcs, ambs, scrs = self._matriz(estado["profile_id"], estado["perm_version"])
         dados = dict(estado)
-        dados.update(funcionalidades=funcs, ambientes=ambs, scripts=scrs)
+        dados.update(features=funcs, environments=ambs, scripts=scrs)
         return rbac.contexto_usuario(dados)
 
     def _matriz(self, perfil_id, perm_versao):
@@ -214,16 +214,16 @@ class ServicoAuth(object):
                 self._cache_matriz.move_to_end(chave)
                 return self._cache_matriz[chave]
 
-        matriz = self._rbac.matriz_obter(perfil_id)
+        matriz = self._rbac.matrix_get(perfil_id)
         codigos = dict(
-            (f["id"], f["code"]) for f in self._rbac.funcionalidades_listar() if f.get("active") == "Y"
+            (f["id"], f["code"]) for f in self._rbac.features_list() if f.get("active") == "Y"
         )
         funcs = frozenset(codigos[fid] for fid in matriz.get("funcs", ()) if fid in codigos)
         nomes = []
         for aid in matriz.get("ambs", ()):
             try:
-                nomes.append(self._catalogo.ambientes_obter(aid)["name"])
-            except RepoNaoEncontrado:
+                nomes.append(self._catalogo.environments_get(aid)["name"])
+            except RepoNotFound:
                 self._log.warning("ambiente da matriz inexistente (profile_id=%s environment_id=%s)",
                                   perfil_id, aid, extra={"action": "SESSAO"})
         valor = (funcs, frozenset(nomes), frozenset(matriz.get("scrs", ())))
@@ -243,7 +243,7 @@ class ServicoAuth(object):
         (mesmo limite e bloqueio do §4.2); ao bloquear, o chamador encerra a sessao.
         """
         agora = self._relogio()
-        usuario = self._usuarios.obter_por_id(ctx["user_id"])
+        usuario = self._usuarios.get_by_id(ctx["user_id"])
         if self._bloqueado(usuario, agora):
             self._registrar_falha(usuario, ip, "troca de senha com conta bloqueada")
             return "BLOQUEADO", {"senha_atual": self.msg_bloqueio}
@@ -265,7 +265,7 @@ class ServicoAuth(object):
             erros["confirmacao"] = MSG_CONFIRMACAO
         if erros:
             return "ERRO", erros
-        self._usuarios.definir_senha(usuario["id"], security.hash_senha(nova), agora,
+        self._usuarios.set_password(usuario["id"], security.hash_senha(nova), agora,
                                      auditoria={"actor": usuario["login"], "ip": ip, "action": "UPDATE",
                                                 "detail": u"senha alterada pelo próprio usuário"})
         self._log.info("senha alterada pelo proprio usuario (login=%s ip=%s)", usuario["login"], ip,
@@ -276,13 +276,13 @@ class ServicoAuth(object):
 
     def sessao_epoch(self, usuario_id):
         """sessao_epoch vigente do usuario, para a sessao nova depois da troca de senha (CR-008, E2)."""
-        return self._usuarios.obter_estado_sessao(usuario_id).get("session_epoch", 0)
+        return self._usuarios.get_session_state(usuario_id).get("session_epoch", 0)
 
     def logout(self, ctx, ip):
         """Encerra todas as sessoes do usuario (sessao_epoch + 1) e audita LOGOUT na mesma operacao."""
         if not ctx:
             return
-        self._usuarios.encerrar_sessoes(ctx["user_id"], auditoria=_aud(ctx["login"], ip, "LOGOUT", "Logout"))
+        self._usuarios.end_sessions(ctx["user_id"], auditoria=_aud(ctx["login"], ip, "LOGOUT", "Logout"))
         self._log.info("logout (login=%s ip=%s)", ctx["login"], ip, extra={"action": "LOGIN"})
 
 
@@ -299,10 +299,10 @@ def _servico():
             fabrica = current.repo_factory
             cfg = current.sss_cfg
             _padrao = ServicoAuth(
-                usuarios=fabrica.obter("usuarios"),
-                rbac_repo=fabrica.obter("rbac"),
-                catalogo=fabrica.obter("catalogo"),
-                auditoria=fabrica.obter("auditoria"),
+                usuarios=fabrica.get("users"),
+                rbac_repo=fabrica.get("rbac"),
+                catalogo=fabrica.get("catalog"),
+                auditoria=fabrica.get("audit"),
                 max_tentativas=cfg.web.login_max_attempts,
                 bloqueio_s=cfg.web.login_lockout_s,
                 log=sss_logging.get_logger("sss_web", cfg),

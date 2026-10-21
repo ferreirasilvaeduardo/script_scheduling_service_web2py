@@ -21,7 +21,7 @@ _log = logging.getLogger("sss_scheduler")
 
 PRAZO_EMPACOTAR_S = 120
 PARTES_POR_VOLTA = 4
-TAMANHO_PARTE = scheduler_output.PARTE_MAX
+TAMANHO_PARTE = scheduler_output.PART_MAX
 NOME_ZIP = "saida.zip"
 
 # Resultados do empacotamento.
@@ -34,7 +34,7 @@ ABANDONADA = "ABANDONADA"
 # Desfechos da gravacao.
 CONTINUA = "CONTINUA"
 CONCLUIDA = "CONCLUIDA"
-POSSE_PERDIDA = "POSSE_PERDIDA"
+OWNERSHIP_LOST = "OWNERSHIP_LOST"
 
 
 class Saida(object):
@@ -151,20 +151,20 @@ def linha_log(saida, agente_id, max_arquivos, max_bytes):
 
 
 def gravar(saida, conn, repo, agente_id):
-    """Uma volta da gravacao: devolve CONTINUA, CONCLUIDA ou POSSE_PERDIDA. Erro de banco: ROLLBACK e
+    """Uma volta da gravacao: devolve CONTINUA, CONCLUIDA ou OWNERSHIP_LOST. Erro de banco: ROLLBACK e
     excecao (o chamador refaz a cada cancel_poll_interval_s). Nenhuma espera; ate PARTES_POR_VOLTA partes."""
     if saida.resultado == VAZIA:
         return CONCLUIDA
     try:
         if saida.resultado in (EXCEDEU, FALHOU):
-            ok = repo.registrar_sem_conteudo(conn, saida.ticket_id, agente_id, saida.resultado, saida.motivo,
+            ok = repo.register_without_content(conn, saida.ticket_id, agente_id, saida.resultado, saida.motivo,
                                              saida.qtd_arquivos)
             conn.commit()
-            return CONCLUIDA if ok or _ja_esta(conn, repo, saida, agente_id, saida.resultado) else POSSE_PERDIDA
+            return CONCLUIDA if ok or _ja_esta(conn, repo, saida, agente_id, saida.resultado) else OWNERSHIP_LOST
         if not saida.iniciada:
-            if not repo.iniciar(conn, saida.ticket_id, agente_id):
+            if not repo.start(conn, saida.ticket_id, agente_id):
                 conn.rollback()
-                return CONCLUIDA if _ja_esta(conn, repo, saida, agente_id, "AVAILABLE") else POSSE_PERDIDA
+                return CONCLUIDA if _ja_esta(conn, repo, saida, agente_id, "AVAILABLE") else OWNERSHIP_LOST
             conn.commit()
             saida.iniciada, saida.offset = True, 0
         with open(saida.caminho_zip, "rb") as f:
@@ -173,10 +173,10 @@ def gravar(saida, conn, repo, agente_id):
                     break
                 f.seek(saida.offset)
                 parte = f.read(TAMANHO_PARTE)
-                desfecho = repo.anexar(conn, saida.ticket_id, agente_id, saida.offset, parte)
-                if desfecho == scheduler_output.POSSE_PERDIDA:
+                desfecho = repo.append_chunk(conn, saida.ticket_id, agente_id, saida.offset, parte)
+                if desfecho == scheduler_output.OWNERSHIP_LOST:
                     conn.rollback()
-                    return CONCLUIDA if _ja_esta(conn, repo, saida, agente_id, "AVAILABLE") else POSSE_PERDIDA
+                    return CONCLUIDA if _ja_esta(conn, repo, saida, agente_id, "AVAILABLE") else OWNERSHIP_LOST
                 conn.commit()
                 saida.offset += len(parte)
         if saida.offset < saida.tamanho:
@@ -185,8 +185,8 @@ def gravar(saida, conn, repo, agente_id):
             conn.commit()
             return CONCLUIDA
         conn.rollback()
-        return CONCLUIDA if _ja_esta(conn, repo, saida, agente_id, "AVAILABLE") else POSSE_PERDIDA
-    except scheduler_output.SaidaOffsetInconsistente:
+        return CONCLUIDA if _ja_esta(conn, repo, saida, agente_id, "AVAILABLE") else OWNERSHIP_LOST
+    except scheduler_output.OutputOffsetMismatch:
         conn.rollback()
         saida.iniciada = False  # o proximo iniciar zera a gravacao deste agente e recomeca do inicio
         raise
@@ -197,7 +197,7 @@ def gravar(saida, conn, repo, agente_id):
 
 def _ja_esta(conn, repo, saida, agente_id, situacao):
     """COMMIT anterior sem resposta: a linha ja tem a situacao final deste agente?"""
-    atual = repo.situacao(conn, saida.ticket_id)
+    atual = repo.output_state(conn, saida.ticket_id)
     return atual == (situacao, agente_id)
 
 

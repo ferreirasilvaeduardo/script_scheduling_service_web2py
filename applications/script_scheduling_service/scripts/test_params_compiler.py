@@ -499,17 +499,17 @@ class TestSeedFake(unittest.TestCase):
     def setUp(self):
         import repo_factory
         self.repo_factory = repo_factory
-        repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
         repo_factory.reset_singletons()
-        self.catalogo = repo_factory.obter("catalogo")
+        self.catalog = repo_factory.get("catalog")
 
     def tearDown(self):
-        self.repo_factory.configurar(None)
+        self.repo_factory.configure(None)
         self.repo_factory.reset_singletons()
 
     def test_carga_diaria(self):
-        scr = self.catalogo.scripts_obter(1)
-        vinculos = self.catalogo.script_params_obter(1)
+        scr = self.catalog.scripts_get(1)
+        vinculos = self.catalog.script_params_get(1)
         js, resolvidos, erros = pc.compilar_snapshot(scr, vinculos, {}, AGORA)
         self.assertEqual(erros, {})
         snap = json.loads(js)
@@ -524,16 +524,16 @@ class TestSeedFake(unittest.TestCase):
     def test_todos_os_scripts_do_seed_compilam(self):
         for sid in (1, 2, 3, 4, 6):
             with self.subTest(script_id=sid):
-                scr = self.catalogo.scripts_obter(sid)
-                vinculos = self.catalogo.script_params_obter(sid)
+                scr = self.catalog.scripts_get(sid)
+                vinculos = self.catalog.script_params_get(sid)
                 js, _, erros = pc.compilar_snapshot(scr, vinculos, {}, AGORA)
                 self.assertEqual(erros, {})
                 self.assertEqual(set(json.loads(js).keys()), CHAVES_6_5)
 
     def test_snapshots_do_seed_sao_v4(self):
-        tickets = self.repo_factory.obter("tickets")
+        tickets = self.repo_factory.get("tickets")
         for tid in (1, 11, 17, 37):
-            snap = json.loads(tickets.obter(tid)["submitted_params"])
+            snap = json.loads(tickets.get(tid)["submitted_params"])
             self.assertEqual((snap["version"], set(snap.keys())), (4, CHAVES_6_5), tid)
             self.assertTrue(snap["path_file"].startswith("/opt/automacoes/scripts/"), tid)
 

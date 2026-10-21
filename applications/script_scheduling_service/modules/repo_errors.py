@@ -5,29 +5,29 @@ Hierarquia de erros comuns consumida por UI, services, repo_fake e repo_oracle.
 """
 
 
-class RepoErro(Exception):
+class RepoError(Exception):
     """Excecao base para erros da camada de persistencia."""
     pass
 
 
-class RepoNaoEncontrado(RepoErro):
+class RepoNotFound(RepoError):
     """Entidade ou registro nao localizado pelo identificador fornecido."""
     pass
 
 
-class RepoConflito(RepoErro):
+class RepoConflict(RepoError):
     """Conflito de concorrencia otimista ou transicao de estado perdida (rowcount = 0)."""
     pass
 
 
-class RepoViolacao(RepoErro):
+class RepoViolation(RepoError):
     """Violacao de constraint (UK, CK, FK) ou regra de imutabilidade."""
 
     def __init__(self, mensagem, constraint=None):
-        super(RepoViolacao, self).__init__(mensagem)
+        super(RepoViolation, self).__init__(mensagem)
         self.constraint = constraint
 
 
-class RepoIndisponivel(RepoErro):
+class RepoUnavailable(RepoError):
     """Banco de dados inacessivel, timeout de conexao ou queda de sessao."""
     pass

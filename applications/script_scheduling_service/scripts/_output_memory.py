@@ -4,7 +4,7 @@ from repo_oracle import scheduler_output
 
 
 class RepoSaidaMemoria(object):
-    """Contrato do RepoSchedulerSaida em memoria. tickets: {id: {'agente_id': ...}} para a posse."""
+    """Contrato do RepoSchedulerOutput em memoria. tickets: {id: {'agente_id': ...}} para a posse."""
 
     def __init__(self, tickets=None):
         self.tickets = tickets if tickets is not None else {}
@@ -21,8 +21,8 @@ class RepoSaidaMemoria(object):
         if self.falhas and self.falhas[0][0] == nome:
             raise self.falhas.pop(0)[1]
 
-    def iniciar(self, conn, tid, agente_id):
-        self._falhar("iniciar")
+    def start(self, conn, tid, agente_id):
+        self._falhar("start")
         linha = self.linhas.get(tid)
         if linha is not None:
             if linha["state"] == "WRITING" and linha["agent_id"] == agente_id:
@@ -35,18 +35,18 @@ class RepoSaidaMemoria(object):
                             "file_count": None, "size_bytes": None}
         return True
 
-    def anexar(self, conn, tid, agente_id, offset, parte):
-        self._falhar("anexar")
+    def append_chunk(self, conn, tid, agente_id, offset, parte):
+        self._falhar("append_chunk")
         linha = self.linhas.get(tid)
         if linha is None or linha["state"] != "WRITING" or linha["agent_id"] != agente_id:
-            return scheduler_output.POSSE_PERDIDA
+            return scheduler_output.OWNERSHIP_LOST
         atual = len(linha["content"])
         if atual == offset:
             linha["content"] += parte
-            return scheduler_output.GRAVADO
+            return scheduler_output.WRITTEN
         if atual == offset + len(parte) and linha["content"][offset:] == parte:
-            return scheduler_output.JA_GRAVADO
-        raise scheduler_output.SaidaOffsetInconsistente(tid, offset, len(parte))
+            return scheduler_output.ALREADY_WRITTEN
+        raise scheduler_output.OutputOffsetMismatch(tid, offset, len(parte))
 
     def concluir(self, conn, tid, agente_id, qtd, tamanho):
         self._falhar("concluir")
@@ -57,8 +57,8 @@ class RepoSaidaMemoria(object):
         linha.update(state="AVAILABLE", file_count=qtd, size_bytes=tamanho)
         return True
 
-    def registrar_sem_conteudo(self, conn, tid, agente_id, situacao, motivo, qtd=None):
-        self._falhar("registrar_sem_conteudo")
+    def register_without_content(self, conn, tid, agente_id, situacao, motivo, qtd=None):
+        self._falhar("register_without_content")
         linha = self.linhas.get(tid)
         if linha is not None:
             if linha["state"] != "WRITING" or linha["agent_id"] != agente_id:
@@ -69,8 +69,8 @@ class RepoSaidaMemoria(object):
                             "file_count": qtd, "size_bytes": None}
         return True
 
-    def falhar_gravando_do_agente(self, conn, agente_id):
-        self._falhar("falhar_gravando_do_agente")
+    def fail_agent_writing(self, conn, agente_id):
+        self._falhar("fail_agent_writing")
         n = 0
         for linha in self.linhas.values():
             if linha["state"] == "WRITING" and linha["agent_id"] == agente_id:
@@ -78,6 +78,6 @@ class RepoSaidaMemoria(object):
                 n += 1
         return n
 
-    def situacao(self, conn, tid):
+    def output_state(self, conn, tid):
         linha = self.linhas.get(tid)
         return (linha["state"], linha["agent_id"]) if linha else None

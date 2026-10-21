@@ -8,7 +8,7 @@ import admin_crud
 import schedules_service as servico
 import ui_helpers
 from admin_crud import AcessoNegado, OperacaoNegada
-from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
+from repo_errors import RepoConflict, RepoError, RepoNotFound
 from ticket_service import AcessoNegado as DisparoNegado
 
 _FUNC = "MANAGE_SCHEDULES"
@@ -100,7 +100,7 @@ def lista():
         resultado = servico.listar(ctx, filtros, pagina, tamanho)
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao listar agendamentos (login=%s)", ctx["login"], extra={"action": _FUNC})
         resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
@@ -119,7 +119,7 @@ def agenda():
         return dict(dados=servico.agenda(ctx), erro=None)
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao montar a agenda (login=%s)", ctx["login"], extra={"action": _FUNC})
         return dict(dados=None, erro=ui_helpers.mensagem("falha_interna"))
 
@@ -131,7 +131,7 @@ def form():
         dados = servico.formulario(ctx, _texto(request.args(0), 11),
                                    _texto(request.get_vars.get("script_id"), 10),
                                    _texto(request.get_vars.get("environment"), 30))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except (AcessoNegado, DisparoNegado):
         _negado()
@@ -151,13 +151,13 @@ def salvar():
     try:
         salvo_id, erros = servico.salvar(ctx, _ip_origem(), dict(enviados, id=agendamento_id, script_id=script_id,
                                                                   environment=ambiente, respostas=respostas))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
     except OperacaoNegada as exc:
         _redirecionar_lista("erro", exc.mensagem)
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao salvar agendamento (login=%s id=%r)", ctx["login"], agendamento_id,
                        extra={"action": _FUNC})
         salvo_id, erros = None, {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}
@@ -169,7 +169,7 @@ def salvar():
         dados = servico.formulario(ctx, agendamento_id, script_id, ambiente,
                                    enviados=None if conflito else enviados,
                                    valores=None if conflito else respostas, erros=erros)
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except (AcessoNegado, DisparoNegado):
         _negado()
@@ -188,15 +188,15 @@ def _acao_estado(funcao, sucesso):
     try:
         alterado = funcao(ctx, _ip_origem(), agendamento_id)
         session.flash = {"tipo": "sucesso", "mensagem": sucesso % alterado["name"]}
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
     except OperacaoNegada as exc:
         session.flash = {"tipo": "aviso", "mensagem": exc.mensagem}
-    except RepoConflito:
+    except RepoConflict:
         session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao alterar a situacao do agendamento (login=%s id=%r)", ctx["login"],
                        agendamento_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}

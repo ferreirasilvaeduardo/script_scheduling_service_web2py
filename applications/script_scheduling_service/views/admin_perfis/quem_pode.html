@@ -30,7 +30,7 @@ _alvo = q['script'] or q['environment']
       <label class="form-label" for="campo-ambiente">Por ambiente</label>
       <div class="sss-acoes-inline">
         <select class="form-select form-select-sm" id="campo-ambiente" name="environment">
-          {{for _a in q['ambientes']:}}
+          {{for _a in q['environments']:}}
           <option value="{{=_a['id']}}"{{if q['environment'] and q['environment']['id'] == _a['id']:}} selected{{pass}}>{{=_a['name']}}{{if _a.get('active') != 'Y':}} (inativo){{pass}}</option>
           {{pass}}
         </select>
@@ -42,7 +42,7 @@ _alvo = q['script'] or q['environment']
 
 {{if _alvo:}}
 {{if q['aviso']:}}<div class="alert alert-warning sss-alerta" role="status"><span>{{=q['aviso']}}</span></div>{{pass}}
-{{for _titulo, _lista in ((u'Perfis ativos', q['perfis']), (u'Não valem agora (perfil inativo)', q['inativos'])):}}
+{{for _titulo, _lista in ((u'Perfis ativos', q['profiles']), (u'Não valem agora (perfil inativo)', q['inativos'])):}}
 {{if _lista or _titulo == u'Perfis ativos':}}
 <section class="sss-card">
   <h2 class="sss-card-titulo">{{=_titulo}}</h2>

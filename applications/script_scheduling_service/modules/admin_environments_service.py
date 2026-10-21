@@ -11,7 +11,7 @@ import admin_crud
 import log_paths
 import ui_helpers
 from admin_crud import CAMPO_GERAL
-from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
+from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FUNCIONALIDADE = "MANAGE_ENVIRONMENTS"
 CAMPOS_EDITAVEIS = ("description", "connection", "active")
@@ -89,33 +89,33 @@ class ServicoAdminAmbientes(object):
     def _obter(self, ambiente_id):
         aid = _id(ambiente_id)
         if aid is None:
-            raise RepoNaoEncontrado("ambiente invalido")
-        return self._catalogo.ambientes_obter(aid)
+            raise RepoNotFound("ambiente invalido")
+        return self._catalogo.environments_get(aid)
 
     def agendamentos_ativos(self, nome):
         """Quantidade de agendamentos ativos do ambiente (pausados no proximo desdobro se desativado)."""
-        return self._agendamentos.listar(filtros={"environment": nome, "active": "Y"}, pagina=1,
+        return self._agendamentos.list(filtros={"environment": nome, "active": "Y"}, pagina=1,
                                          tamanho=_TAMANHO_CONTAGEM)["total"]
 
     def scripts_homologados(self, nome):
         """Quantidade de scripts homologados no ambiente (deixam de poder rodar nele se for desativado)."""
         total, pagina = 0, 1
         while True:
-            itens = self._catalogo.scripts_listar(pagina=pagina, tamanho=_SCRIPTS_PAGINA)["itens"]
+            itens = self._catalogo.scripts_list(pagina=pagina, tamanho=_SCRIPTS_PAGINA)["itens"]
             total += sum(1 for s in itens if nome in (s.get("ambientes_homologados") or ()))
             if len(itens) < _SCRIPTS_PAGINA:
                 return total
             pagina += 1
 
-    def listar(self, ctx, filtros, pagina, tamanho):
+    def list(self, ctx, filtros, pagina, tamanho):
         """Pagina de ambientes (ordem nome ASC) com a versao de cada linha."""
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        return self._catalogo.ambientes_listar(filtros=filtros, pagina=pagina, tamanho=tamanho)
+        return self._catalogo.environments_list(filtros=filtros, pagina=pagina, tamanho=tamanho)
 
     def formulario(self, ctx, ambiente_id=None):
         """Dados do formulario: vazio para inclusao; registro, versao e agendamentos ativos na edicao.
 
-        Lanca RepoNaoEncontrado para id inexistente ou invalido.
+        Lanca RepoNotFound para id inexistente ou invalido.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         if ambiente_id in (None, ""):
@@ -155,7 +155,7 @@ class ServicoAdminAmbientes(object):
 
         dados: nome, descricao, conexao e versao (edicao). Na edicao o nome enviado e ignorado.
         Retorna (id, erros); erros e dict campo -> mensagem (CAMPO_GERAL para conflito/falha).
-        Lanca RepoNaoEncontrado (edicao de id inexistente) e AcessoNegado.
+        Lanca RepoNotFound (edicao de id inexistente) e AcessoNegado.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         erros = {}
@@ -177,8 +177,8 @@ class ServicoAdminAmbientes(object):
             auditoria = admin_crud.auditoria(ctx, ip, "CREATE",
                                              admin_crud.detalhe_insercao(novo, CAMPOS_INSERCAO))
             try:
-                criado = self._catalogo.ambientes_inserir(novo, auditoria=auditoria)
-            except RepoViolacao as exc:
+                criado = self._catalogo.environments_insert(novo, auditoria=auditoria)
+            except RepoViolation as exc:
                 self._violacao(ctx, exc, erros)
                 return None, erros
             self._log.info("ambiente incluido (login=%s environment=%s)", ctx.get("login"), criado["name"],
@@ -197,14 +197,14 @@ class ServicoAdminAmbientes(object):
         if detalhe is None:
             return atual["id"], {}
         try:
-            self._catalogo.ambientes_alterar(
+            self._catalogo.environments_update(
                 atual["id"], {"description": descricao, "connection": conexao},
                 esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
                 auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
-        except RepoConflito:
+        except RepoConflict:
             erros[CAMPO_GERAL] = admin_crud.MSG_CONFLITO
             return atual["id"], erros
-        except RepoViolacao as exc:
+        except RepoViolation as exc:
             self._violacao(ctx, exc, erros)
             return atual["id"], erros
         self._log.info("ambiente alterado (login=%s environment=%s)", ctx.get("login"), atual["name"],
@@ -215,20 +215,20 @@ class ServicoAdminAmbientes(object):
         """Desativa ou reativa o ambiente; retorna o registro alterado.
 
         Desativar audita DEACTIVATE com a quantidade de agendamentos ativos afetados;
-        reativar audita UPDATE. Lanca RepoConflito (versao divergente),
-        RepoNaoEncontrado e AcessoNegado.
+        reativar audita UPDATE. Lanca RepoConflict (versao divergente),
+        RepoNotFound e AcessoNegado.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         atual = self._obter(ambiente_id)
         if admin_crud.texto(versao, 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
-            raise RepoConflito("versao divergente")
+            raise RepoConflict("versao divergente")
         novo_ativo = "N" if atual["active"] == "Y" else "Y"
         detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, active=novo_ativo), ("active",))
         acao = "DEACTIVATE" if novo_ativo == "N" else "UPDATE"
         if novo_ativo == "N":
             detalhe = u"%s; agendamentos ativos afetados: %d; scripts homologados afetados: %d" % (
                 detalhe, self.agendamentos_ativos(atual["name"]), self.scripts_homologados(atual["name"]))
-        alterado = self._catalogo.ambientes_alterar(
+        alterado = self._catalogo.environments_update(
             atual["id"], {"active": novo_ativo}, esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
             auditoria=admin_crud.auditoria(ctx, ip, acao, detalhe))
         self._log.info("ambiente %s (login=%s environment=%s)", "desativado" if novo_ativo == "N" else "reativado",
@@ -248,8 +248,8 @@ def _servico():
             import sss_logging
             fabrica = current.repo_factory
             _padrao = ServicoAdminAmbientes(
-                catalogo=fabrica.obter("catalogo"),
-                agendamentos=fabrica.obter("agendamentos"),
+                catalogo=fabrica.get("catalog"),
+                agendamentos=fabrica.get("schedules"),
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _padrao
@@ -257,7 +257,7 @@ def _servico():
 
 def listar(ctx, filtros, pagina, tamanho):
     """Pagina de ambientes (servico padrao)."""
-    return _servico().listar(ctx, filtros, pagina, tamanho)
+    return _servico().list(ctx, filtros, pagina, tamanho)
 
 
 def formulario(ctx, ambiente_id=None):

@@ -2,7 +2,7 @@
 """Testes do scripts/health.py e do repo_oracle/health.py (README §13; F9.1b; CR-007 R-18; CR-008 E3, R-15, R-16).
 
 Com repositorio simulado: cada verificacao no limiar e fora dele e o codigo Nagios agregado (o pior vence);
-segredos pelo papel monitor; UNKNOWN em configuracao, conexao e erro de banco; o SQL do RepoSaude (indices da
+segredos pelo papel monitor; UNKNOWN em configuracao, conexao e erro de banco; o SQL do RepoHealth (indices da
 fila e do RUNNING, sem LOB, interpretador do cadastro). Com SSS_TEST_ORACLE=1: as consultas rodam no Oracle real
 pela conta do owner (so leitura; o GFPR nao tem a conta sss_monitor) e o EXPLAIN PLAN nao varre tickets nem
 auditoria.
@@ -45,34 +45,34 @@ def _agente(codigo, idade_s=5, status="ACTIVE", ambientes="PRODUCAO", interprete
 
 
 class _Repo(object):
-    """RepoSaude simulado: tudo saudavel por padrao."""
+    """RepoHealth simulado: tudo saudavel por padrao."""
 
     def __init__(self, **kw):
-        self.d = dict(version=sql_ident.SCHEMA_VERSION, agentes=[_agente("srv-a")], ambientes=["PRODUCAO"],
+        self.d = dict(version=sql_ident.SCHEMA_VERSION, agents=[_agente("srv-a")], environments=["PRODUCAO"],
                       fila=[], vencida=(0, None), sem_pid=[], purge=AGORA - datetime.timedelta(hours=20))
         self.d.update(kw)
         self.chamadas = []
 
-    def versao_esquema(self, conn):
+    def schema_version(self, conn):
         return self.d["version"]
 
-    def agentes(self, conn):
-        return self.d["agentes"]
+    def agents(self, conn):
+        return self.d["agents"]
 
-    def ambientes_ativos(self, conn):
-        return self.d["ambientes"]
+    def active_environments(self, conn):
+        return self.d["environments"]
 
-    def fila_por_par(self, conn, agora):
+    def queue_by_pair(self, conn, agora):
         return self.d["fila"]
 
-    def fila_vencida(self, conn, agora):
+    def overdue_queue(self, conn, agora):
         return self.d["vencida"]
 
-    def rodando_sem_pid(self, conn, agora, minutos):
+    def running_without_pid(self, conn, agora, minutos):
         self.chamadas.append(("sem_pid", minutos))
         return self.d["sem_pid"]
 
-    def ultimo_purge(self, conn, agora, dias):
+    def last_purge(self, conn, agora, dias):
         self.chamadas.append(("purge", dias))
         return self.d["purge"]
 
@@ -126,21 +126,21 @@ class TestVerificacoes(unittest.TestCase):
         self.assertIn(("purge", 2), repo.chamadas)
 
     def test_heartbeat_por_faixa(self):
-        self.assertEqual(self._rodar(agentes=[_agente("srv-a", 90)])[0], saude_cli.OK, "ATRASADO ainda atende")
-        codigo, texto, _r = self._rodar(agentes=[_agente("srv-a", 91), _agente("srv-b")])
+        self.assertEqual(self._rodar(agents=[_agente("srv-a", 90)])[0], saude_cli.OK, "ATRASADO ainda atende")
+        codigo, texto, _r = self._rodar(agents=[_agente("srv-a", 91), _agente("srv-b")])
         self.assertEqual(codigo, saude_cli.WARNING)
         self.assertIn("WARNING: agente srv-a em risco: heartbeat ha 91 s", texto)
-        codigo, texto, _r = self._rodar(agentes=[_agente("srv-a", 181), _agente("srv-b")])
+        codigo, texto, _r = self._rodar(agents=[_agente("srv-a", 181), _agente("srv-b")])
         self.assertEqual(codigo, saude_cli.CRITICAL)
         self.assertIn("CRITICAL: agente srv-a ATIVO sem heartbeat ha 181 s", texto)
-        codigo, texto, _r = self._rodar(agentes=[_agente("srv-a", None), _agente("srv-b")])
+        codigo, texto, _r = self._rodar(agents=[_agente("srv-a", None), _agente("srv-b")])
         self.assertIn("agente srv-a ATIVO sem heartbeat ha -", texto)
-        self.assertEqual(self._rodar(agentes=[_agente("srv-a", None, status="STOPPED"), _agente("srv-b")])[0],
+        self.assertEqual(self._rodar(agents=[_agente("srv-a", None, status="STOPPED"), _agente("srv-b")])[0],
                          saude_cli.OK, "agente PARADO nao e problema")
 
     def test_ambiente_sem_agente_saudavel(self):
-        codigo, texto, _r = self._rodar(ambientes=["PRODUCAO", "HOMOLOGACAO"],
-                                        agentes=[_agente("srv-a"), _agente("srv-b", 120, ambientes="HOMOLOGACAO")])
+        codigo, texto, _r = self._rodar(environments=["PRODUCAO", "HOMOLOGACAO"],
+                                        agents=[_agente("srv-a"), _agente("srv-b", 120, ambientes="HOMOLOGACAO")])
         self.assertEqual(codigo, saude_cli.CRITICAL)
         self.assertIn("CRITICAL: ambiente HOMOLOGACAO ativo sem nenhum agente saudavel", texto)
 
@@ -174,7 +174,7 @@ class TestVerificacoes(unittest.TestCase):
 
     def test_configuracao_divergente(self):
         outro = CRITICOS.replace("kill=5", "kill=10")
-        codigo, texto, _r = self._rodar(agentes=[_agente("srv-a"), _agente("srv-b", cfg=outro),
+        codigo, texto, _r = self._rodar(agents=[_agente("srv-a"), _agente("srv-b", cfg=outro),
                                                  _agente("srv-c", status="STOPPED", cfg=outro)])
         self.assertEqual(codigo, saude_cli.WARNING)
         self.assertIn("agente srv-b com configuracao divergente", texto)
@@ -210,7 +210,7 @@ class TestMain(unittest.TestCase):
                              return_value=object())
         with mock.patch.object(saude_cli.sss_config, "get_config", obter), \
                 mock.patch.object(saude_cli.sss_config, "load_secrets", carregar), \
-                mock.patch.object(saude_cli.saude_sql.RepoSaude, "da_config", return_value=_Repo()):
+                mock.patch.object(saude_cli.saude_sql.RepoHealth, "from_config", return_value=_Repo()):
             codigo = saude_cli.main(list(argv), conectar=conectar, saida=saida)
         self.carregar = carregar
         return codigo, saida.getvalue()
@@ -237,7 +237,7 @@ class TestMain(unittest.TestCase):
         self.assertEqual(codigo, 3)
         self.assertIn("falha ao conectar no Oracle", texto)
         conn = _ConnAgora()
-        with mock.patch.object(_Repo, "agentes", side_effect=RuntimeError("ORA-03113: end-of-file")):
+        with mock.patch.object(_Repo, "agents", side_effect=RuntimeError("ORA-03113: end-of-file")):
             codigo, texto = self._main(conectar=lambda c, s: conn)
         self.assertEqual(codigo, 3)
         self.assertIn("falha de banco", texto)
@@ -264,17 +264,17 @@ class TestMain(unittest.TestCase):
 class TestSqlRepoSaude(unittest.TestCase):
 
     def setUp(self):
-        self.repo = saude_sql.RepoSaude("openrisow", "tbsss_")
+        self.repo = saude_sql.RepoHealth("openrisow", "tbsss_")
 
     def test_indices_sem_lob_e_interpretador_do_cadastro(self):
-        fila = self.repo.sql("fila")
+        fila = self.repo.sql("queue")
         self.assertIn("JOIN openrisow.tbsss_scripts s ON s.id = g.script_id", fila)
         self.assertIn("status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :agora", fila)
         self.assertIn("status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :agora",
-                      self.repo.sql("fila_vencida"))
-        self.assertIn("(CASE WHEN status = 'RUNNING' THEN agent_id END) >= CHR(1)", self.repo.sql("sem_pid"))
+                      self.repo.sql("overdue_queue"))
+        self.assertIn("(CASE WHEN status = 'RUNNING' THEN agent_id END) >= CHR(1)", self.repo.sql("running_no_pid"))
         self.assertIn("actor = 'SYSTEM:purge' AND action = 'PURGE'", self.repo.sql("purge"))
-        for nome in ("agentes", "ambientes", "fila", "fila_vencida", "sem_pid", "purge", "version"):
+        for nome in ("agents", "environments", "queue", "overdue_queue", "running_no_pid", "purge", "version"):
             sql = self.repo.sql(nome)
             self.assertTrue(sql.startswith("SELECT "), nome)
             self.assertNotIn("submitted_params", sql)
@@ -283,19 +283,19 @@ class TestSqlRepoSaude(unittest.TestCase):
 
     def test_tela_de_agentes_usa_o_mesmo_sql(self):
         import repo_oracle.agents as agentes_oracle
-        self.assertIs(agentes_oracle._SQL_FILA, saude_sql.SQL_FILA)
-        self.assertIs(agentes_oracle._SQL_RODANDO_SEM_PID, saude_sql.SQL_RODANDO_SEM_PID)
+        self.assertIs(agentes_oracle._SQL_QUEUE, saude_sql.SQL_QUEUE)
+        self.assertIs(agentes_oracle._SQL_RUNNING_NO_PID, saude_sql.SQL_RUNNING_NO_PID)
 
     def test_pares_atendidos_ignoram_em_risco_e_parados(self):
         lim = saude_cli.agents_service.Limiares(10, 90, 180)
         agentes = [_agente("a", 5, interpreters="SH"), _agente("b", 91, interpreters="BASH"),
                    _agente("c", 5, status="STOPPED", interpreters="PYTHON3")]
-        self.assertEqual(saude_sql.pares_atendidos(agentes, AGORA, lim), {("PRODUCAO", "SH")})
+        self.assertEqual(saude_sql.served_pairs(agentes, AGORA, lim), {("PRODUCAO", "SH")})
 
 
 @unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")
 class TestSaudeOracle(unittest.TestCase):
-    """As consultas do RepoSaude no Oracle real, so leitura, pela conta do owner (decisao 1a do F9.1)."""
+    """As consultas do RepoHealth no Oracle real, so leitura, pela conta do owner (decisao 1a do F9.1)."""
 
     @classmethod
     def setUpClass(cls):
@@ -304,7 +304,7 @@ class TestSaudeOracle(unittest.TestCase):
         cls.cfg = preparar_schema_descartavel("agent")
         segredos = sss_config.load_secrets(cls.cfg.secrets.secrets_file, cfg=cls.cfg, papel="agent")
         cls.conn = db_conn.connect(cls.cfg, segredos, papel="agent")
-        cls.repo = saude_sql.RepoSaude.da_config(cls.cfg)
+        cls.repo = saude_sql.RepoHealth.from_config(cls.cfg)
 
     @classmethod
     def tearDownClass(cls):
@@ -314,13 +314,13 @@ class TestSaudeOracle(unittest.TestCase):
     def test_consultas_e_verificacao_completa(self):
         import db_conn
         agora = db_conn.db_now(self.conn)
-        self.assertEqual(self.repo.versao_esquema(self.conn), sql_ident.SCHEMA_VERSION)
-        self.assertIsInstance(self.repo.agentes(self.conn), list)
-        self.assertIsInstance(self.repo.ambientes_ativos(self.conn), list)
-        qtd, _antigo = self.repo.fila_vencida(self.conn, agora)
-        self.assertEqual(qtd, sum(int(r[2]) for r in self.repo.fila_por_par(self.conn, agora)))
-        self.repo.rodando_sem_pid(self.conn, agora, 2)
-        self.repo.ultimo_purge(self.conn, agora, 2)
+        self.assertEqual(self.repo.schema_version(self.conn), sql_ident.SCHEMA_VERSION)
+        self.assertIsInstance(self.repo.agents(self.conn), list)
+        self.assertIsInstance(self.repo.active_environments(self.conn), list)
+        qtd, _antigo = self.repo.overdue_queue(self.conn, agora)
+        self.assertEqual(qtd, sum(int(r[2]) for r in self.repo.queue_by_pair(self.conn, agora)))
+        self.repo.running_without_pid(self.conn, agora, 2)
+        self.repo.last_purge(self.conn, agora, 2)
         v = saude_cli.Verificacao(self.cfg, self.conn, _args(), repo=self.repo)
         codigo = v.executar()
         self.assertIn(codigo, (0, 1, 2))
@@ -329,7 +329,7 @@ class TestSaudeOracle(unittest.TestCase):
     def test_explain_sem_varredura_de_tickets_e_auditoria(self):
         import db_conn
         agora = db_conn.db_now(self.conn)
-        binds = {"fila": {"agora": agora}, "fila_vencida": {"agora": agora}, "sem_pid": {"limite": agora},
+        binds = {"queue": {"agora": agora}, "overdue_queue": {"agora": agora}, "running_no_pid": {"limite": agora},
                  "purge": {"limite": agora}}
         for nome, valores in binds.items():
             cur = self.conn.cursor()

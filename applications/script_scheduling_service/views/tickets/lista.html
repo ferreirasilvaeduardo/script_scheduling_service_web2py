@@ -3,7 +3,7 @@
 # Lista de tickets com filtros (GET) e atualização automática opcional da tabela.
 import ui_helpers
 _opc_status = [(_st, ui_helpers.status_info(_st)['rotulo']) for _st in opcoes['status']]
-_opc_ambientes = [('', 'Todos')] + [(_a, _a) for _a in opcoes['ambientes']]
+_opc_ambientes = [('', 'Todos')] + [(_a, _a) for _a in opcoes['environments']]
 _opc_scripts = [('', 'Todos')] + list(opcoes['scripts'])
 _opc_origens = [('', 'Todas')] + list(opcoes['origens'])
 _campos = []

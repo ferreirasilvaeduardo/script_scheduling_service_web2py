@@ -17,8 +17,8 @@ for _s in resultado['itens']:
         'script_group': ' / '.join([_x for _x in (_s.get('script_group'), _s.get('category')) if _x]) or '-',
         'cmd': _s['interpreter'],
         'path': _s['path_file'],
-        'ambientes': ', '.join(_s.get('ambientes_homologados') or []) or u'Nenhum',
-        'parametros': str(_s.get('qtd_parametros') or 0),
+        'environments': ', '.join(_s.get('ambientes_homologados') or []) or u'Nenhum',
+        'parameters': str(_s.get('qtd_parametros') or 0),
         'active': _s['active'],
         'acao': [
             {'href': URL(c='admin_scripts', f='form', args=[_s['id']]), 'rotulo': 'Editar', 'description': u'Editar script %s' % _s['name']},
@@ -32,8 +32,8 @@ tabela = {'legenda': 'Scripts cadastrados', 'erro': erro, 'linhas': _linhas, 'ms
     {'chave': 'script_group', 'rotulo': 'Grupo / categoria'},
     {'chave': 'cmd', 'rotulo': 'Interpretador', 'tipo': 'mono'},
     {'chave': 'path', 'rotulo': 'Caminho do arquivo', 'tipo': 'mono'},
-    {'chave': 'ambientes', 'rotulo': 'Ambientes homologados'},
-    {'chave': 'parametros', 'rotulo': u'Parâmetros'},
+    {'chave': 'environments', 'rotulo': 'Ambientes homologados'},
+    {'chave': 'parameters', 'rotulo': u'Parâmetros'},
     {'chave': 'active', 'rotulo': u'Situação', 'tipo': 'active'},
     {'chave': 'acao', 'rotulo': u'Ações', 'tipo': 'acao'},
 ]}

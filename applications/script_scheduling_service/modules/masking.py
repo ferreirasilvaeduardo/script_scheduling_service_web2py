@@ -28,7 +28,7 @@ class Mascarador(object):
         self._regex = None
         self.max_len = 0
 
-    def registrar(self, valor):
+    def register(self, valor):
         """Registra um segredo; valores nao str ou com menos de 4 caracteres sao ignorados."""
         if not isinstance(valor, str) or len(valor) < TAMANHO_MINIMO:
             return
@@ -97,7 +97,7 @@ class MascaradorFluxo(object):
         self._pendente = texto[corte:]
         return self._mascarador.mascarar("".join(pedacos))
 
-    def finalizar(self):
+    def finalize(self):
         """Mascara e devolve o restante retido."""
         resto, self._pendente = self._pendente, ""
         return self._mascarador.mascarar(resto)
@@ -146,7 +146,7 @@ MASCARADOR = Mascarador()
 
 def registrar_segredo(valor):
     """Registra um segredo no mascarador global do processo."""
-    MASCARADOR.registrar(valor)
+    MASCARADOR.register(valor)
 
 
 def instalar_filtro_em_handlers(mascarador=None):

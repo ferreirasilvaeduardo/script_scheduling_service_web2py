@@ -8,7 +8,7 @@ import admin_crud
 import admin_profiles_service as servico
 import ui_helpers
 from admin_crud import AcessoNegado, OperacaoNegada
-from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
+from repo_errors import RepoConflict, RepoError, RepoNotFound
 
 _FUNC = "MANAGE_PROFILES"
 _TAMANHOS = (20, 50, 100)
@@ -66,7 +66,7 @@ def lista():
         resultado = servico.listar(ctx, filtros, pagina, tamanho)
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao listar perfis (login=%s)", ctx["login"], extra={"action": _FUNC})
         resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
@@ -80,7 +80,7 @@ def form():
     ctx = _exigir_func(_FUNC)
     try:
         dados = servico.formulario(ctx, _texto(request.args(0), 11))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
@@ -94,11 +94,11 @@ def salvar():
     enviados = dict((c, _texto(request.post_vars.get(c), 300)) for c in ("name", "description", "is_admin", "version"))
     try:
         salvo_id, erros = servico.salvar(ctx, _ip_origem(), perfil_id, enviados)
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao salvar perfil (login=%s id=%r)", ctx["login"], perfil_id, extra={"action": _FUNC})
         salvo_id, erros = None, {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}
     if not erros:
@@ -106,7 +106,7 @@ def salvar():
         redirect(URL(c="admin_perfis", f="lista"))
     try:
         dados = servico.formulario(ctx, perfil_id) if perfil_id else servico.formulario(ctx)
-    except RepoErro:
+    except RepoError:
         dados = {"id": None, "name": "", "description": "", "is_admin": "N", "active": "Y", "version": "",
                  "usuarios_ativos": 0}
     if admin_crud.CAMPO_GERAL not in erros:
@@ -128,15 +128,15 @@ def alternar_ativo():
         alterado = servico.alternar_ativo(ctx, _ip_origem(), perfil_id, _texto(request.post_vars.get("version"), 64))
         acao = u"desativado" if alterado["active"] == "N" else u"reativado"
         session.flash = {"tipo": "sucesso", "mensagem": u"Perfil %s %s." % (alterado["name"], acao)}
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
     except OperacaoNegada as exc:
         session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
-    except RepoConflito:
+    except RepoConflict:
         session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao alternar perfil (login=%s id=%r)", ctx["login"], perfil_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ALTERNAR}
     redirect(URL(c="admin_perfis", f="form", args=[perfil_id]))
@@ -149,7 +149,7 @@ def quem_pode():
     try:
         dados = servico.quem_pode(ctx, _texto(request.get_vars.get("script"), 11),
                                   _texto(request.get_vars.get("environment"), 11))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
@@ -162,7 +162,7 @@ def matriz():
     ctx = _exigir_func(_FUNC)
     try:
         dados = servico.matriz(ctx, _texto(request.args(0), 11))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
@@ -178,11 +178,11 @@ def salvar_matriz():
     try:
         diff, erros = servico.salvar_matriz(ctx, _ip_origem(), perfil_id, _lista("funcs"), _lista("ambs"),
                                             _lista("scrs"), _texto(request.post_vars.get("perm_version"), 11))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao salvar matriz (login=%s id=%r)", ctx["login"], perfil_id, extra={"action": "PERM_UPDATE"})
         diff, erros = None, {admin_crud.CAMPO_GERAL: _MSG_FALHA_MATRIZ}
     if erros:

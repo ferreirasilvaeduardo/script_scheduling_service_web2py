@@ -8,7 +8,7 @@ import admin_crud
 import admin_parameters_service as servico
 import ui_helpers
 from admin_crud import AcessoNegado, OperacaoNegada
-from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
+from repo_errors import RepoConflict, RepoError, RepoNotFound
 
 _FUNC = "MANAGE_PARAMETERS"
 _TAMANHOS = (20, 50, 100)
@@ -65,7 +65,7 @@ def lista():
         resultado = servico.listar(ctx, filtros, pagina, tamanho)
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao listar parametros (login=%s)", ctx["login"], extra={"action": _FUNC})
         resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
@@ -79,7 +79,7 @@ def form():
     ctx = _exigir_func(_FUNC)
     try:
         dados = servico.formulario(ctx, _texto(request.args(0), 11))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
@@ -93,11 +93,11 @@ def salvar():
     enviados = _enviados()
     try:
         _salvo, erros = servico.salvar(ctx, _ip_origem(), parametro_id, enviados)
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao salvar parametro (login=%s id=%r)", ctx["login"], parametro_id, extra={"action": _FUNC})
         erros = {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}
     if not erros:
@@ -105,7 +105,7 @@ def salvar():
         redirect(URL(c="admin_parametros", f="lista"))
     try:
         dados = servico.formulario(ctx, parametro_id) if parametro_id else servico.formulario(ctx)
-    except RepoErro:
+    except RepoError:
         dados = {"id": None, "code": "", "param_flag": "", "label": "", "description": "",
                  "component_type": "TEXT", "options_json": "", "default_value": "", "tem_padrao": False,
                  "validation_regex": "", "sensitive": "N", "active": "Y", "version": "", "vinculos": [],
@@ -137,15 +137,15 @@ def alternar_ativo():
         alterado = servico.alternar_ativo(ctx, _ip_origem(), parametro_id, _texto(request.post_vars.get("version"), 64))
         acao = u"desativado" if alterado["active"] == "N" else u"reativado"
         session.flash = {"tipo": "sucesso", "mensagem": u"Parâmetro %s %s." % (alterado["code"], acao)}
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
     except OperacaoNegada as exc:
         session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
-    except RepoConflito:
+    except RepoConflict:
         session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao alternar parametro (login=%s id=%r)", ctx["login"], parametro_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
     redirect(URL(c="admin_parametros", f="form", args=[parametro_id]))
@@ -159,7 +159,7 @@ def testar():
     try:
         resultado = servico.testar(ctx, _texto(request.post_vars.get("id"), 11), _enviados(),
                                    _texto(request.post_vars.get("valor_teste"), 1000))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         response.status = 404
         return response.json({"ok": False, "erro": u"Parâmetro não encontrado."})
     except AcessoNegado:

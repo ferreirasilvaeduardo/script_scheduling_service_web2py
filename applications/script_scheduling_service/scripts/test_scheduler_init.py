@@ -25,7 +25,7 @@ import os_platform
 import scheduler_loop as sl
 import sql_ident
 import sss_config
-from repo_oracle.scheduler_queue import AgenteDuplicado
+from repo_oracle.scheduler_queue import DuplicateAgent
 from _output_memory import RepoSaidaMemoria
 
 _Agent = collections.namedtuple("_Agent", (
@@ -94,33 +94,33 @@ class _Repo(object):
         self.chamadas = []
         self.duplicado = False
         self.divergentes = []
-        self.ambientes = None
+        self.environments = None
         self.registro = None
 
-    def registrar_agente(self, conn, dados, processo_existe):
+    def register_agent(self, conn, dados, processo_existe):
         self.registro = dados
         if self.duplicado:
-            raise AgenteDuplicado("agent_id ativo em outro-host")
+            raise DuplicateAgent("agent_id ativo em outro-host")
         return 42
 
-    def conferir_config(self, conn, agente_id, criticos, offline):
+    def check_config(self, conn, agente_id, criticos, offline):
         return self.divergentes
 
-    def ambientes_ativos(self, conn, atendidos):
-        return self.ambientes or (list(atendidos), [])
+    def active_environments(self, conn, atendidos):
+        return self.environments or (list(atendidos), [])
 
     def tickets_running_do_agente(self, conn, agente_id):
         return list(self.running)
 
-    def devolver(self, conn, tid, agente_id):
-        self.chamadas.append(("devolver", tid))
+    def return_to_queue(self, conn, tid, agente_id):
+        self.chamadas.append(("return_to_queue", tid))
         return "DEVOLVIDO"
 
-    def finalizar(self, conn, tid, agente_id, status, motivo, rc):
-        self.chamadas.append(("finalizar", tid, status, motivo, rc))
+    def finalize(self, conn, tid, agente_id, status, motivo, rc):
+        self.chamadas.append(("finalize", tid, status, motivo, rc))
         return True
 
-    def obter_ticket(self, conn, tid):
+    def get_ticket(self, conn, tid):
         return {"id": tid, "log_offset_chars": 0}
 
 
@@ -128,12 +128,12 @@ class _RepoLog(object):
     def __init__(self):
         self.linhas = []
 
-    def unidade_suplementar(self, conn):
+    def supplementary_unit(self, conn):
         return 1
 
-    def anexar(self, conn, tid, agente_id, offset, bloco):
+    def append_chunk(self, conn, tid, agente_id, offset, bloco):
         self.linhas.append((tid, bloco))
-        return "GRAVADO"
+        return "WRITTEN"
 
 
 def _vivo(pid):
@@ -159,10 +159,10 @@ class _Base(unittest.TestCase):
         self.repo_saida = RepoSaidaMemoria()
         self.conexao = _Conexao()
         self.popens = []
-        self.agentes = []
+        self.agents = []
 
     def tearDown(self):
-        for ag in self.agentes:
+        for ag in self.agents:
             ag.liberar_recursos()
         for p in self.popens:
             try:
@@ -191,7 +191,7 @@ class _Base(unittest.TestCase):
         kw.setdefault("repo_saida", self.repo_saida)
         ag = sl.Agente(cfg=cfg or self.cfg(), segredos=object(), plat=plat, conexao=kw.pop("connection", self.conexao),
                        repo=self.repo, repo_log=self.repo_log, hostname="host-t", pid=os.getpid(), **kw)
-        self.agentes.append(ag)
+        self.agents.append(ag)
         return ag
 
     def falha(self, codigo, ag=None):
@@ -219,8 +219,8 @@ class TestPassos(_Base):
         with self.assertLogs("sss_scheduler", "INFO") as logs:
             ag = self.agente().inicializar()
         self.assertEqual(ag.agente_db_id, 42)
-        self.assertEqual(ag.unidade_suplementar, 1)
-        self.assertEqual(ag.ambientes_ativos, ["DEV"])
+        self.assertEqual(ag.supplementary_unit, 1)
+        self.assertEqual(ag.active_environments, ["DEV"])
         self.assertIsNotNone(ag.ultimo_hb_ok)
         texto = "\n".join(logs.output)
         self.assertIn("fence_timeout_s=40 node_offline_timeout_s=120", texto)
@@ -325,12 +325,12 @@ class TestPassos(_Base):
         self.assertTrue(any("srv-02" in x and "hb=20" in x for x in saida), "as duas configuracoes no log")
 
     def test_ambientes(self):
-        self.repo.ambientes = ([], ["DEV"])
+        self.repo.environments = ([], ["DEV"])
         self.falha(sl.SAIDA_AMBIENTES)
-        self.repo.ambientes = ([], [])
+        self.repo.environments = ([], [])
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             ag = self.agente().inicializar()
-        self.assertEqual(ag.ambientes_ativos, [])
+        self.assertEqual(ag.active_environments, [])
         self.assertTrue(any("DEV inativo" in x for x in logs.output))
 
     def test_thread_unica(self):
@@ -381,7 +381,7 @@ class TestStartupCheck(_Base):
                                          "process_start": os_platform.identidade_processo(p.pid)})
         self.repo.running = [{"id": 5, "process_id": p.pid, "process_start": None, "cancel_requested": "N"}]
         ag, _logs = self._subir()
-        self.assertIn(("finalizar", 5, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
+        self.assertIn(("finalize", 5, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
         self.assertTrue(self.repo_log.linhas[0][1].startswith("[SSS] ORPHAN_PROCESS: "))
         self.assertIn(5, ag.encerrando, "o laco termina o encerramento e so entao limpa")
         self.assertTrue(os.path.isdir(pasta))
@@ -408,7 +408,7 @@ class TestStartupCheck(_Base):
         self.repo.running = [{"id": 7, "process_id": p.pid, "process_start": None, "cancel_requested": "N"}]
         ag, _logs = self._subir()
         self.assertTrue(_vivo(p.pid), "PID reciclado: o processo de agora nao e o do ticket")
-        self.assertIn(("finalizar", 7, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
+        self.assertIn(("finalize", 7, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
         self.assertFalse(os.path.exists(pasta))
 
     def test_resultado_local_prevalece(self):
@@ -418,7 +418,7 @@ class TestStartupCheck(_Base):
                                         "return_code": 0})
         self.repo.running = [{"id": 8, "process_id": 1, "process_start": 1, "cancel_requested": "N"}]
         self._subir()
-        self.assertIn(("finalizar", 8, "SUCCESS", "EXIT_OK", 0), self.repo.chamadas)
+        self.assertIn(("finalize", 8, "SUCCESS", "EXIT_OK", 0), self.repo.chamadas)
         self.assertFalse(os.path.exists(pasta))
 
     def test_sem_identidade_preserva_a_pasta(self):
@@ -432,7 +432,7 @@ class TestStartupCheck(_Base):
         self.assertTrue(_vivo(p.pid), "sem identidade nunca recebe sinal")
         self.assertIn(9, ag.preservadas)
         self.assertTrue(os.path.isdir(pasta), "CR-008, R-26: o unico rastro do processo fica")
-        self.assertIn(("finalizar", 9, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
+        self.assertIn(("finalize", 9, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
 
     def test_talvez_iniciado_nunca_volta_a_fila(self):
         pasta = self._pasta(10, sss_spawn={"ticket_id": 10, "usuario_execucao": None})
@@ -441,8 +441,8 @@ class TestStartupCheck(_Base):
         self.repo.running = [{"id": 10, "process_id": None, "process_start": None, "cancel_requested": "N"}]
         _ag, logs = self._subir()
         self.assertIn("TALVEZ_INICIADO", logs)
-        self.assertNotIn(("devolver", 10), self.repo.chamadas)
-        self.assertIn(("finalizar", 10, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
+        self.assertNotIn(("return_to_queue", 10), self.repo.chamadas)
+        self.assertIn(("finalize", 10, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
         self.assertEqual(neto.wait(5), -signal.SIGTERM, "encerrado pelo diretorio atual na pasta do ticket")
         self.assertFalse(os.path.exists(pasta))
 
@@ -453,14 +453,14 @@ class TestStartupCheck(_Base):
         self.assertIn("sem meio de encerrar", logs)
         self.assertIn(11, ag.preservadas)
         self.assertTrue(os.path.isdir(pasta))
-        self.assertIn(("finalizar", 11, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
+        self.assertIn(("finalize", 11, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
 
     def test_running_sem_pasta(self):
         self.repo.running = [{"id": 12, "process_id": None, "process_start": None, "cancel_requested": "N"},
                              {"id": 13, "process_id": 999, "process_start": 1, "cancel_requested": "N"}]
         self._subir()
-        self.assertIn(("devolver", 12), self.repo.chamadas)
-        self.assertIn(("finalizar", 13, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
+        self.assertIn(("return_to_queue", 12), self.repo.chamadas)
+        self.assertIn(("finalize", 13, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
 
     def test_pasta_vazia_e_removida_e_link_ignorado(self):
         pasta = self._pasta(14)
@@ -497,8 +497,8 @@ class TestSubidaOracle(_Base):
         conn = db_conn.connect(self.cfg_real, seg, "agent")
         try:
             o, p = self.cfg_real.oracle.owner.strip(), self.cfg_real.oracle.table_prefix.strip()
-            agt = sql_ident.table(o, p, "agentes")
-            aud = sql_ident.table(o, p, "auditoria")
+            agt = sql_ident.table(o, p, "agents")
+            aud = sql_ident.table(o, p, "audit")
             cur = conn.cursor()
             cur.execute("SELECT id FROM " + agt + " WHERE code = :c", c=self.codigo)
             for (aid,) in cur.fetchall():
@@ -510,13 +510,13 @@ class TestSubidaOracle(_Base):
 
     def test_subida_real_e_parada(self):
         import db_conn
-        from repo_oracle.scheduler_queue import RepoSchedulerFila
+        from repo_oracle.scheduler_queue import RepoSchedulerQueue
         cfg = self.cfg_real
         seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel="agent")
         conn = db_conn.connect(cfg, seg, "agent")
         try:
             import ddl_builder
-            ativos, _ = RepoSchedulerFila.da_config(cfg).ambientes_ativos(
+            ativos, _ = RepoSchedulerQueue.from_config(cfg).active_environments(
                 conn, [a[0] for a in ddl_builder.CATALOGO_AMBIENTES_PADRAO])
         finally:
             conn.close()
@@ -525,19 +525,19 @@ class TestSubidaOracle(_Base):
                                     interpreters=(("SH", "/bin/sh"),))
         cfg = cfg._replace(agent=agente, logging=cfg.logging._replace(log_dir=self.logs))
         ag = sl.Agente(cfg=cfg, segredos=seg, hostname="host-tst", pid=os.getpid())
-        self.agentes.append(ag)
+        self.agents.append(ag)
         with self.assertLogs("sss_scheduler", "INFO"):
             ag.inicializar()
         self.assertIsInstance(ag.agente_db_id, int)
-        self.assertIn(ag.unidade_suplementar, (1, 2))
-        self.assertEqual(ag.ambientes_ativos, list(ativos[:1]))
+        self.assertIn(ag.supplementary_unit, (1, 2))
+        self.assertEqual(ag.active_environments, list(ativos[:1]))
         # Segunda subida do mesmo agent_id, de outro host, enquanto o primeiro esta ativo: recusada.
         outro = sl.Agente(cfg=cfg._replace(agent=agente._replace(work_dir=self.raiz)), segredos=seg,
                           hostname="outro-host", pid=os.getpid())
-        self.agentes.append(outro)
+        self.agents.append(outro)
         os.makedirs(os.path.join(self.raiz, "logs2"), exist_ok=True)
         self.falha(sl.SAIDA_REGISTRO, outro)
-        self.assertTrue(ag.repo.encerrar_agente(ag.conexao.get_connection(), self.codigo, "host-tst", os.getpid(),
+        self.assertTrue(ag.repo.stop_agent(ag.conexao.get_connection(), self.codigo, "host-tst", os.getpid(),
                                                 "TERMINATE"))
 
 

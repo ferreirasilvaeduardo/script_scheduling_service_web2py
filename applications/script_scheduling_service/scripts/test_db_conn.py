@@ -647,20 +647,20 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
                     self.assertEqual(db_conn.output_value(v), "RESULTADO_OK")
 
     def test_traduzir_erro(self):
-        """traduzir_erro mapeia corretamente para RepoViolacao, RepoConflito, RepoIndisponivel e RepoErro."""
+        """traduzir_erro mapeia corretamente para RepoViolation, RepoConflict, RepoUnavailable e RepoError."""
         import repo_errors
         # Violacao
         e1 = db_conn.translate_error(Exception("ORA-00001: unique constraint violated"))
-        self.assertIsInstance(e1, repo_errors.RepoViolacao)
+        self.assertIsInstance(e1, repo_errors.RepoViolation)
         # Lock / Conflito
         e2 = db_conn.translate_error(Exception("ORA-00054: resource busy"))
-        self.assertIsInstance(e2, repo_errors.RepoConflito)
+        self.assertIsInstance(e2, repo_errors.RepoConflict)
         # Rede / Indisponivel
         e3 = db_conn.translate_error(Exception("ORA-03113: end-of-file"))
-        self.assertIsInstance(e3, repo_errors.RepoIndisponivel)
+        self.assertIsInstance(e3, repo_errors.RepoUnavailable)
         # Generico
         e4 = db_conn.translate_error(Exception("ORA-00942: table does not exist"))
-        self.assertIsInstance(e4, repo_errors.RepoErro)
+        self.assertIsInstance(e4, repo_errors.RepoError)
 
     def test_pool_web_ping_interval_60(self):
         """pool cria pool com ping_interval=60 para oracledb e cx_Oracle (CR-007, R-12)."""

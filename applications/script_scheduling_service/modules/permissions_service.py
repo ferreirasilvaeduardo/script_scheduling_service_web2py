@@ -9,7 +9,7 @@ import threading
 
 import rbac
 import ui_menu
-from repo_errors import RepoNaoEncontrado
+from repo_errors import RepoNotFound
 
 FRASE_ADMIN = (u"Seu perfil é de administrador: você pode usar todas as telas e rodar qualquer script ativo, "
                u"nos ambientes ativos onde ele foi liberado.")
@@ -34,13 +34,13 @@ class ServicoPermissoes(object):
     def _telas(self, ctx):
         admin = ctx.get("is_admin") is True
         rotas = {}
-        for secao in ui_menu.montar_menu(ctx.get("funcionalidades"), admin):
+        for secao in ui_menu.montar_menu(ctx.get("features"), admin):
             for item in secao["itens"]:
                 # Ultimo item vence: EXEC_SCRIPT ("Disparar Scripts") leva ao disparo, nao ao catalogo.
                 rotas[item["code"]] = item["rota"]
         telas = []
-        for f in self._rbac.funcionalidades_listar():
-            if f.get("active") != "Y" or not (admin or f["code"] in (ctx.get("funcionalidades") or ())):
+        for f in self._rbac.features_list():
+            if f.get("active") != "Y" or not (admin or f["code"] in (ctx.get("features") or ())):
                 continue
             telas.append({"code": f["code"], "name": f["name"], "finalidade": f.get("description") or "",
                           "rota": rotas.get(f["code"])})
@@ -48,9 +48,9 @@ class ServicoPermissoes(object):
 
     def _ambientes(self, ctx):
         admin = ctx.get("is_admin") is True
-        meus = ctx.get("ambientes") or ()
+        meus = ctx.get("environments") or ()
         return [{"name": a["name"], "description": a.get("description") or ""}
-                for a in self._catalogo.ambientes_listar(pagina=1, tamanho=_CATALOGO_MAX)["itens"]
+                for a in self._catalogo.environments_list(pagina=1, tamanho=_CATALOGO_MAX)["itens"]
                 if a["active"] == "Y" and (admin or a["name"] in meus)]
 
     def _scripts(self, ctx):
@@ -59,23 +59,23 @@ class ServicoPermissoes(object):
             for s in grupo["scripts"]:
                 _script, ambientes = self._disparo.ambientes_disponiveis(ctx, s["id"])
                 scripts.append({"id": s["id"], "name": s["name"], "description": s["description"],
-                                "ambientes": [a["name"] for a in ambientes]})
+                                "environments": [a["name"] for a in ambientes]})
         return scripts
 
     def _motivo(self, ctx, script_id):
         """Motivo simples de um script do perfil nao aparecer (README §4.3.E)."""
         try:
-            script = self._catalogo.scripts_obter(script_id)
-        except RepoNaoEncontrado:
+            script = self._catalogo.scripts_get(script_id)
+        except RepoNotFound:
             return None, None
         if script.get("active") != "Y":
             return script, MOTIVO_SCRIPT_INATIVO
-        meus = set(ctx.get("ambientes") or ())
+        meus = set(ctx.get("environments") or ())
         homologados = []
-        for aid in self._catalogo.homologacao_obter(script["id"]):
+        for aid in self._catalogo.homologation_get(script["id"]):
             try:
-                homologados.append(self._catalogo.ambientes_obter(aid))
-            except RepoNaoEncontrado:
+                homologados.append(self._catalogo.environments_get(aid))
+            except RepoNotFound:
                 continue
         nos_meus = [a for a in homologados if a["name"] in meus]
         if not nos_meus:
@@ -104,7 +104,7 @@ class ServicoPermissoes(object):
             "perfil": ctx.get("perfil_nome"),
             "frase_admin": FRASE_ADMIN if admin else None,
             "telas": self._telas(ctx),
-            "ambientes": self._ambientes(ctx),
+            "environments": self._ambientes(ctx),
             "pode_executar": pode_exec,
             "frase_sem_exec": None if pode_exec else FRASE_SEM_EXEC,
             "scripts": scripts,
@@ -126,8 +126,8 @@ def _servico():
             import ticket_service
             fabrica = current.repo_factory
             _padrao = ServicoPermissoes(
-                rbac_repo=fabrica.obter("rbac"),
-                catalogo=fabrica.obter("catalogo"),
+                rbac_repo=fabrica.get("rbac"),
+                catalogo=fabrica.get("catalog"),
                 disparo=ticket_service._servico(),
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )

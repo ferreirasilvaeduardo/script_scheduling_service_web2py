@@ -39,27 +39,27 @@ class _Base(unittest.TestCase):
         patcher = mock.patch.object(security, "ITERACOES", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
-        env = mock.patch.dict(os.environ, {repo_factory.ENV_SENHA_DEV: SENHA_DEV})
+        env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: SENHA_DEV})
         env.start()
         self.addCleanup(env.stop)
-        repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
-        self.addCleanup(repo_factory.configurar, None)
-        self.usuarios = repo_factory.obter("usuarios")
-        self.rbac_repo = repo_factory.obter("rbac")
-        self.auditoria = repo_factory.obter("auditoria")
+        self.addCleanup(repo_factory.configure, None)
+        self.users = repo_factory.get("users")
+        self.rbac_repo = repo_factory.get("rbac")
+        self.audit = repo_factory.get("audit")
         self.log = logging.getLogger("sss_teste_cr008")
         self.log.addHandler(logging.NullHandler())
         self.log.propagate = False
-        self.auth = auth_service.ServicoAuth(self.usuarios, self.rbac_repo, repo_factory.obter("catalogo"),
-                                             self.auditoria, 5, 900, self.log, relogio=lambda: AGORA)
+        self.auth = auth_service.ServicoAuth(self.users, self.rbac_repo, repo_factory.get("catalog"),
+                                             self.audit, 5, 900, self.log, relogio=lambda: AGORA)
         self.ctx = {"admin": self.auth.revalidar(_sessao(U_ADMIN, "admin", P_ADMIN)),
                     "op.prod": self.auth.revalidar(_sessao(U_OPPROD, "op.prod", P_OPPROD))}
         # Gestor sem perfil de administrador, com as funcionalidades de cadastro (CR-008, F-05).
-        self.ctx["gestor"] = dict(self.ctx["op.prod"], funcionalidades=frozenset(["MANAGE_USERS", "MANAGE_PROFILES"]))
-        self.svc_usr = ServicoAdminUsuarios(self.usuarios, self.rbac_repo, self.log, relogio=lambda: AGORA)
-        self.svc_per = ServicoAdminPerfis(self.rbac_repo, repo_factory.obter("catalogo"), self.usuarios, self.log)
+        self.ctx["gestor"] = dict(self.ctx["op.prod"], features=frozenset(["MANAGE_USERS", "MANAGE_PROFILES"]))
+        self.svc_usr = ServicoAdminUsuarios(self.users, self.rbac_repo, self.log, relogio=lambda: AGORA)
+        self.svc_per = ServicoAdminPerfis(self.rbac_repo, repo_factory.get("catalog"), self.users, self.log)
 
 
 class TestAdminSoPorAdmin(_Base):
@@ -69,7 +69,7 @@ class TestAdminSoPorAdmin(_Base):
                  "senha": SENHA_NOVA, "confirmacao": SENHA_NOVA}
         uid, erros = self.svc_usr.salvar(self.ctx["gestor"], IP, None, dados)
         self.assertEqual((uid, erros), (None, {"profile_id": usr_mod.MSG_SO_ADMIN}))
-        self.assertIsNone(self.usuarios.obter_por_login("novo.admin"))
+        self.assertIsNone(self.users.get_by_login("novo.admin"))
         uid, erros = self.svc_usr.salvar(self.ctx["gestor"], IP, None, dict(dados, profile_id=str(P_CONSULTA)))
         self.assertEqual(erros, {})
 
@@ -78,18 +78,18 @@ class TestAdminSoPorAdmin(_Base):
         _id, erros = self.svc_usr.salvar(self.ctx["gestor"], IP, str(U_OPPROD),
                                          {"name": form["name"], "profile_id": str(P_ADMIN), "version": form["version"]})
         self.assertEqual(erros, {CAMPO_GERAL: usr_mod.MSG_SO_ADMIN})
-        self.assertEqual(self.usuarios.obter_por_id(U_OPPROD)["profile_id"], P_OPPROD)
+        self.assertEqual(self.users.get_by_id(U_OPPROD)["profile_id"], P_OPPROD)
         form = self.svc_usr.formulario(self.ctx["gestor"], str(U_ADMIN))
         _id, erros = self.svc_usr.salvar(self.ctx["gestor"], IP, str(U_ADMIN),
                                          {"name": "Outro", "profile_id": str(P_ADMIN), "version": form["version"]})
         self.assertEqual(erros, {CAMPO_GERAL: usr_mod.MSG_SO_ADMIN})
         for acao in (lambda: self.svc_usr.redefinir_senha(self.ctx["gestor"], IP, str(U_ADMIN), SENHA_NOVA, SENHA_NOVA),
-                     lambda: self.svc_usr.desbloquear(self.ctx["gestor"], IP, str(U_ADMIN)),
+                     lambda: self.svc_usr.unlock(self.ctx["gestor"], IP, str(U_ADMIN)),
                      lambda: self.svc_usr.alternar_ativo(self.ctx["gestor"], IP, str(U_ADMIN), form["version"])):
             with self.assertRaises(OperacaoNegada) as cm:
                 acao()
             self.assertEqual(cm.exception.mensagem, usr_mod.MSG_SO_ADMIN)
-        admin = self.usuarios.obter_por_id(U_ADMIN)
+        admin = self.users.get_by_id(U_ADMIN)
         self.assertEqual((admin["active"], admin["session_epoch"]), ("Y", 0))
 
     def test_gestor_altera_usuario_comum_e_admin_altera_admin(self):
@@ -106,13 +106,13 @@ class TestAdminSoPorAdmin(_Base):
         _id, erros = self.svc_per.salvar(self.ctx["gestor"], IP, str(P_OPPROD),
                                          {"name": form["name"], "description": "nova", "version": form["version"]})
         self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_SO_ADMIN})
-        matriz = self.rbac_repo.matriz_obter(P_OPPROD)
-        todas = [f["id"] for f in self.rbac_repo.funcionalidades_listar()]
+        matriz = self.rbac_repo.matrix_get(P_OPPROD)
+        todas = [f["id"] for f in self.rbac_repo.features_list()]
         diff, erros = self.svc_per.salvar_matriz(self.ctx["gestor"], IP, str(P_OPPROD), [str(i) for i in todas],
                                                  [str(i) for i in matriz["ambs"]], [str(i) for i in matriz["scrs"]],
-                                                 str(self.rbac_repo.perfis_obter(P_OPPROD)["perm_version"]))
+                                                 str(self.rbac_repo.profiles_get(P_OPPROD)["perm_version"]))
         self.assertEqual((diff, erros), (None, {CAMPO_GERAL: perfis_mod.MSG_SO_ADMIN}))
-        self.assertEqual(self.rbac_repo.matriz_obter(P_OPPROD), matriz)
+        self.assertEqual(self.rbac_repo.matrix_get(P_OPPROD), matriz)
         # Perfil comum de outra pessoa continua editavel pelo gestor.
         form = self.svc_per.formulario(self.ctx["gestor"], str(P_CONSULTA))
         _id, erros = self.svc_per.salvar(self.ctx["gestor"], IP, str(P_CONSULTA),
@@ -123,7 +123,7 @@ class TestAdminSoPorAdmin(_Base):
 class TestSessaoRevogavel(_Base):
 
     def _epoch(self, uid):
-        return self.usuarios.obter_por_id(uid)["session_epoch"]
+        return self.users.get_by_id(uid)["session_epoch"]
 
     def test_eventos_que_revogam(self):
         sessao = _sessao(U_OPHML, "op.hml", 3)
@@ -147,15 +147,15 @@ class TestSessaoRevogavel(_Base):
         self.auth.logout(self.ctx["op.prod"], IP)
         self.assertEqual(self._epoch(U_OPPROD), 1)
         self.assertIsNone(self.auth.revalidar(outra))
-        logout = [a for a in self.auditoria.listar(filtros={"action": "LOGOUT"}, pagina=1, tamanho=10)["itens"]
+        logout = [a for a in self.audit.list(filtros={"action": "LOGOUT"}, pagina=1, tamanho=10)["itens"]
                   if a["actor"] == "op.prod"]
         self.assertEqual((logout[0]["entity"], logout[0]["entity_id"], logout[0]["source_ip"]),
                          ("tbsss_users", U_OPPROD, IP))
-        u = self.usuarios.obter_por_id(U_OPPROD)
+        u = self.users.get_by_id(U_OPPROD)
         self.assertIsNone(u.get("updated_by"), "logout e rotina tecnica, sem updated_*")
 
     def test_troca_da_propria_senha_mantem_a_sessao_nova(self):
-        self.usuarios.definir_senha(U_OPPROD, security.hash_senha(SENHA_DEV), AGORA, ator="teste")
+        self.users.set_password(U_OPPROD, security.hash_senha(SENHA_DEV), AGORA, ator="teste")
         epoch = self._epoch(U_OPPROD)
         resultado, erros = self.auth.trocar_senha(self.ctx["op.prod"], IP, SENHA_DEV, SENHA_NOVA, SENHA_NOVA)
         self.assertEqual((resultado, erros), ("OK", {}))

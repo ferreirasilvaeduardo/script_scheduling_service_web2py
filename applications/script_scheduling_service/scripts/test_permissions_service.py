@@ -27,25 +27,25 @@ class TestPermissoes(unittest.TestCase):
         patcher = mock.patch.object(security, "ITERACOES", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
-        env = mock.patch.dict(os.environ, {repo_factory.ENV_SENHA_DEV: "senha-dev-de-teste-123"})
+        env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: "senha-dev-de-teste-123"})
         env.start()
         self.addCleanup(env.stop)
-        repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
-        self.addCleanup(repo_factory.configurar, None)
-        self.catalogo = repo_factory.obter("catalogo")
-        self.rbac_repo = repo_factory.obter("rbac")
+        self.addCleanup(repo_factory.configure, None)
+        self.catalog = repo_factory.get("catalog")
+        self.rbac_repo = repo_factory.get("rbac")
         log = logging.getLogger("sss_teste_permissoes")
         log.addHandler(logging.NullHandler())
         log.propagate = False
-        auth = auth_service.ServicoAuth(repo_factory.obter("usuarios"), self.rbac_repo, self.catalogo,
-                                        repo_factory.obter("auditoria"), 5, 900, log)
+        auth = auth_service.ServicoAuth(repo_factory.get("users"), self.rbac_repo, self.catalog,
+                                        repo_factory.get("audit"), 5, 900, log)
         self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
-        disparo = ServicoTicket(self.catalogo, repo_factory.obter("tickets"), log)
-        self.svc = ServicoPermissoes(self.rbac_repo, self.catalogo, disparo, log)
+        disparo = ServicoTicket(self.catalog, repo_factory.get("tickets"), log)
+        self.svc = ServicoPermissoes(self.rbac_repo, self.catalog, disparo, log)
         self.disparo = disparo
-        self.n_auditoria = repo_factory.obter("auditoria").listar(pagina=1, tamanho=1)["total"]
+        self.n_auditoria = repo_factory.get("audit").list(pagina=1, tamanho=1)["total"]
 
     def test_admin_ve_frase_e_todas_as_telas(self):
         d = self.svc.montar(self.ctx["admin"])
@@ -70,34 +70,34 @@ class TestPermissoes(unittest.TestCase):
         esperado = sorted(s["id"] for g in self.disparo.scripts_disponiveis(ctx) for s in g["scripts"])
         self.assertEqual(sorted(s["id"] for s in d["scripts"]), esperado)
         for s in d["scripts"]:
-            self.assertTrue(s["ambientes"])
-            self.assertTrue(set(s["ambientes"]) <= set(ctx["ambientes"]))
+            self.assertTrue(s["environments"])
+            self.assertTrue(set(s["environments"]) <= set(ctx["environments"]))
 
     def test_motivos_e_catalogo_nao_vazado(self):
         ctx = dict(self.ctx["op.hml"])
         # Script do perfil desativado e script do perfil sem homologacao nos ambientes dele.
         sid_inativo = sorted(ctx["scripts"])[0]
-        self.catalogo.scripts_alterar(sid_inativo, {"active": "N"}, ator="teste")
-        novo = self.catalogo.scripts_inserir({"name": "So em PRODUCAO", "interpreter": "PYTHON3",
+        self.catalog.scripts_update(sid_inativo, {"active": "N"}, ator="teste")
+        novo = self.catalog.scripts_insert({"name": "So em PRODUCAO", "interpreter": "PYTHON3",
                                               "path_file": "/opt/scripts/x.py",
                                               "param_type": "NONE"}, ator="teste")["id"]
-        prod = [a for a in self.catalogo.ambientes_listar(pagina=1, tamanho=50)["itens"] if a["name"] == "PRODUCAO"][0]
-        self.catalogo.homologacao_salvar(novo, [prod["id"]], ator="teste")
+        prod = [a for a in self.catalog.environments_list(pagina=1, tamanho=50)["itens"] if a["name"] == "PRODUCAO"][0]
+        self.catalog.homologation_save(novo, [prod["id"]], ator="teste")
         ctx["scripts"] = frozenset(ctx["scripts"]) | frozenset([novo])
-        ctx["ambientes"] = frozenset(a for a in ctx["ambientes"] if a != "PRODUCAO")
+        ctx["environments"] = frozenset(a for a in ctx["environments"] if a != "PRODUCAO")
         d = self.svc.montar(ctx)
         motivos = dict((a["name"], a["reason"]) for a in d["ausentes"])
-        nome_inativo = self.catalogo.scripts_obter(sid_inativo)["name"]
+        nome_inativo = self.catalog.scripts_get(sid_inativo)["name"]
         self.assertEqual(motivos[nome_inativo], svc_mod.MOTIVO_SCRIPT_INATIVO)
         self.assertEqual(motivos["So em PRODUCAO"], svc_mod.MOTIVO_SEM_HOMOLOGACAO)
-        fora = set(s["name"] for s in self.catalogo.scripts_listar(pagina=1, tamanho=100)["itens"]
+        fora = set(s["name"] for s in self.catalog.scripts_list(pagina=1, tamanho=100)["itens"]
                    if s["id"] not in ctx["scripts"])
         self.assertFalse(fora & set(motivos))
         self.assertFalse(fora & set(s["name"] for s in d["scripts"]))
 
     def test_nao_grava_nem_audita(self):
         self.svc.montar(self.ctx["op.hml"])
-        self.assertEqual(repo_factory.obter("auditoria").listar(pagina=1, tamanho=1)["total"], self.n_auditoria)
+        self.assertEqual(repo_factory.get("audit").list(pagina=1, tamanho=1)["total"], self.n_auditoria)
 
 
 if __name__ == "__main__":

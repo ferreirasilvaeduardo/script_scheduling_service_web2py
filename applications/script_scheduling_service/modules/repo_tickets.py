@@ -7,14 +7,14 @@ class RepoTickets(object):
 
     Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o actor, por
     auditoria['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
-    Sem actor, RepoViolacao sem gravar nada.
+    Sem actor, RepoViolation sem gravar nada.
     """
 
-    def agora(self):
+    def now(self):
         """Instante corrente do banco (SYSDATE), sem microssegundos, para regras de negocio."""
         raise NotImplementedError
 
-    def criar(self, ticket, respostas, ator=None):
+    def create(self, ticket, respostas, ator=None):
         """Cria ticket e respostas vinculadas em transacao unica e retorna o ID criado.
 
         Audita TICKET_CREATE, ou TICKET_RERUN quando ticket['parent_ticket_id'] e informado.
@@ -22,15 +22,15 @@ class RepoTickets(object):
         """
         raise NotImplementedError
 
-    def obter(self, id):
-        """Retorna dict com dados do ticket pelo ID ou lanca RepoNaoEncontrado.
+    def get(self, id):
+        """Retorna dict com dados do ticket pelo ID ou lanca RepoNotFound.
 
         Traz parametros_enviados (snapshot) e as colunas de registro, mas nunca log_output: o log so e
         lido em fatias por log_ler (README §8.10, AGENTS §4.13).
         """
         raise NotImplementedError
 
-    def listar(self, filtros=None, pagina=1, tamanho=20, escopo_ambientes=None):
+    def list(self, filtros=None, pagina=1, tamanho=20, escopo_ambientes=None):
         """Lista tickets com paginacao e formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
 
         Os itens nunca trazem CLOB (sem log_output e sem parametros_enviados; AGENTS §4.13).
@@ -43,7 +43,7 @@ class RepoTickets(object):
         """
         raise NotImplementedError
 
-    def ultimas_execucoes(self, script_ids, escopo_ambientes=None, solicitante=None):
+    def last_runs(self, script_ids, escopo_ambientes=None, solicitante=None):
         """Ticket mais recente (created_at DESC, id DESC) de cada script no escopo (README §5.8, CR-004).
 
         Retorna {script_id: {id, status, status_motivo, created_at, finished_at}}; scripts sem ticket no
@@ -52,7 +52,7 @@ class RepoTickets(object):
         """
         raise NotImplementedError
 
-    def historico_script(self, script_id, desde, escopo_ambientes=None, solicitante=None, limite=5000):
+    def script_history(self, script_id, desde, escopo_ambientes=None, solicitante=None, limite=5000):
         """Tickets do script com created_at >= desde, no escopo, por created_at (README §5.8, CR-004).
 
         Devolve no maximo `limite` itens (os mais recentes), cada um so com id, status, status_motivo,
@@ -60,33 +60,33 @@ class RepoTickets(object):
         """
         raise NotImplementedError
 
-    def respostas(self, ticket_id):
+    def answers(self, ticket_id):
         """Retorna lista de dicts com as respostas resolvidas do ticket."""
         raise NotImplementedError
 
-    def solicitar_cancelamento(self, id, ator, ip):
+    def request_cancel(self, id, ator, ip):
         """Cancelamento do no web (README §5.6) e auditoria TICKET_CANCEL na mesma transacao.
 
         Retorna 'TERMINAL' | 'CANCELADO' | 'SINALIZADO' | 'JA_SINALIZADO'. Toda solicitacao grava
         TICKET_CANCEL, inclusive as sem efeito, com detalhe 'resultado: <cancelado | sinalizado |
-        ja sinalizado | sem efeito: ticket encerrado>'. Lanca RepoNaoEncontrado se nao existir.
+        ja sinalizado | sem efeito: ticket encerrado>'. Lanca RepoNotFound se nao existir.
         """
         raise NotImplementedError
 
-    def log_ler(self, id, offset, max_chars):
+    def log_read(self, id, offset, max_chars):
         """Leitura incremental de log, retornando (texto, novo_offset, terminal, truncado)."""
         raise NotImplementedError
 
-    def saida_obter(self, ticket_id):
+    def output_get(self, ticket_id):
         """Saida do ticket (CR-012, README §8.13) sem o conteudo, ou None se nao houver.
 
         Dict com situacao, motivo, agente_id, qtd_arquivos, tamanho_bytes e as colunas de registro.
         """
         raise NotImplementedError
 
-    def saida_ler(self, ticket_id, offset, tamanho):
+    def output_read(self, ticket_id, offset, tamanho):
         """Fatia do zip (bytes) a partir de offset (base 0), com ate `tamanho` bytes (1 a 1 MiB).
 
-        So para situacao DISPONIVEL; outra situacao, ou sem saida, lanca RepoNaoEncontrado. Fim do zip: b''.
+        So para situacao DISPONIVEL; outra situacao, ou sem saida, lanca RepoNotFound. Fim do zip: b''.
         """
         raise NotImplementedError

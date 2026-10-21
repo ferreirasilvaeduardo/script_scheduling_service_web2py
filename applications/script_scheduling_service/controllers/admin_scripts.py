@@ -9,7 +9,7 @@ import admin_scripts_service as servico
 import path_guard
 import ui_helpers
 from admin_crud import AcessoNegado, OperacaoNegada
-from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
+from repo_errors import RepoConflict, RepoError, RepoNotFound
 
 _FUNC = "MANAGE_SCRIPTS"
 _TAMANHOS = (20, 50, 100)
@@ -72,7 +72,7 @@ def lista():
         resultado = servico.listar(ctx, filtros, pagina, tamanho)
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao listar scripts (login=%s)", ctx["login"], extra={"action": _FUNC})
         resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
@@ -86,7 +86,7 @@ def form():
     ctx = _exigir_func(_FUNC)
     try:
         dados = servico.formulario(ctx, _texto(request.args(0), 11))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
@@ -102,13 +102,13 @@ def salvar():
     aviso = None
     try:
         salvo_id, erros, aviso = servico.salvar(ctx, _ip_origem(), script_id, enviados)
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
     except OperacaoNegada as exc:
         salvo_id, erros = None, {admin_crud.CAMPO_GERAL: str(exc)}
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao salvar script (login=%s id=%r)", ctx["login"], script_id, extra={"action": _FUNC})
         salvo_id, erros = None, {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}
     if not erros:
@@ -117,7 +117,7 @@ def salvar():
         redirect(URL(c="admin_scripts", f="form", args=[salvo_id]))
     try:
         dados = servico.formulario(ctx, script_id) if script_id else servico.formulario(ctx)
-    except RepoErro:
+    except RepoError:
         dados = _vazio_form(ctx)
     if admin_crud.CAMPO_GERAL not in erros:
         dados = dict(dados, **dict((c, enviados[c] or "") for c in _CAMPOS if c != "version"))
@@ -137,15 +137,15 @@ def alternar_ativo():
         alterado = servico.alternar_ativo(ctx, _ip_origem(), script_id, _texto(request.post_vars.get("version"), 64))
         acao = u"desativado" if alterado["active"] == "N" else u"reativado"
         session.flash = {"tipo": "sucesso", "mensagem": u"Script %s %s." % (alterado["name"], acao)}
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
     except OperacaoNegada as exc:
         session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
-    except RepoConflito:
+    except RepoConflict:
         session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao alternar script (login=%s id=%r)", ctx["login"], script_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
     redirect(URL(c="admin_scripts", f="form", args=[script_id]))
@@ -156,7 +156,7 @@ def homologacao():
     ctx = _exigir_func(_FUNC)
     try:
         dados = servico.homologacao(ctx, _texto(request.args(0), 11))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
@@ -169,16 +169,16 @@ def salvar_homologacao():
     _exigir_metodo("POST")
     ctx = _exigir_func(_FUNC)
     script_id = _texto(request.post_vars.get("id"), 11)
-    ids = request.post_vars.get("ambientes")
+    ids = request.post_vars.get("environments")
     ids = (ids if isinstance(ids, list) else ([] if ids is None else [ids]))[:_MAX_IDS]
     try:
         diff, erros = servico.salvar_homologacao(ctx, _ip_origem(), script_id, ids,
                                                  _texto(request.post_vars.get("version"), 64))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao salvar homologacao (login=%s id=%r)", ctx["login"], script_id, extra={"action": _FUNC})
         diff, erros = None, {admin_crud.CAMPO_GERAL: _MSG_FALHA_ACAO}
     if erros:
@@ -195,7 +195,7 @@ def parametros():
     ctx = _exigir_func(_FUNC)
     try:
         dados = servico.parametros(ctx, _texto(request.args(0), 11))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
@@ -212,11 +212,11 @@ def salvar_parametros():
         descricao, erros = servico.salvar_parametros(ctx, _ip_origem(), script_id,
                                                      _texto(request.post_vars.get("vinculos_json"), _MAX_JSON),
                                                      _texto(request.post_vars.get("version"), 64))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao salvar vinculos (login=%s id=%r)", ctx["login"], script_id, extra={"action": _FUNC})
         descricao, erros = None, {admin_crud.CAMPO_GERAL: _MSG_FALHA_ACAO}
     if erros:
@@ -238,7 +238,7 @@ def previa():
     try:
         resultado = servico.previa(ctx, _texto(request.post_vars.get("id"), 11),
                                    _texto(vinculos_json, _MAX_JSON) if vinculos_json is not None else None)
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         response.status = 404
         return response.json({"argv": None, "erros": {admin_crud.CAMPO_GERAL: u"Script não encontrado."}})
     except AcessoNegado:

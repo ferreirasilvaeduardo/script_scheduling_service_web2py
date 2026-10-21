@@ -21,7 +21,7 @@ import log_pump
 import masking
 from log_pump import MARCADOR, Bomba, Rodada
 from repo_oracle import scheduler_log
-from repo_oracle.scheduler_log import (GRAVADO, JA_GRAVADO, POSSE_PERDIDA, LogOffsetInconsistente,
+from repo_oracle.scheduler_log import (WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST, LogOffsetMismatch,
                                        RepoSchedulerLog)
 
 TEXTO_MB = "Ação concluída: café ☕ e emoji \U0001F600 \U0001F4A9 ok; ñ ü ß ç ã é\n" * 3
@@ -55,31 +55,31 @@ class _ClobFalso(object):
 
 
 class _RepoFalso(object):
-    """Mesma semantica de RepoSchedulerLog.anexar sobre _ClobFalso (conn = _ConnFalsa)."""
+    """Mesma semantica de RepoSchedulerLog.append_chunk sobre _ClobFalso (conn = _ConnFalsa)."""
 
     def __init__(self):
         self.chamadas = []
 
-    def anexar(self, conn, ticket_id, agente_id, offset_esperado, bloco):
+    def append_chunk(self, conn, ticket_id, agente_id, offset_esperado, bloco):
         self.chamadas.append((ticket_id, offset_esperado, bloco))
         conn.contar()
         clob = conn.clobs[ticket_id]
         if clob.dono != (agente_id, "RUNNING"):
-            return POSSE_PERDIDA
+            return OWNERSHIP_LOST
         clob.iniciar_tx()
         tam = log_pump.unidades_clob(bloco)
         if log_pump.unidades_clob(clob.texto) != clob.offset:
-            raise LogOffsetInconsistente(ticket_id, offset_esperado, tam)
+            raise LogOffsetMismatch(ticket_id, offset_esperado, tam)
         if clob.offset == offset_esperado:
             clob.texto += bloco
             clob.offset += tam
-            return GRAVADO
+            return WRITTEN
         if clob.offset == offset_esperado + tam and clob.texto.encode("utf-16-le")[2 * offset_esperado:] == \
                 bloco.encode("utf-16-le"):
-            return JA_GRAVADO
-        raise LogOffsetInconsistente(ticket_id, offset_esperado, tam)
+            return ALREADY_WRITTEN
+        raise LogOffsetMismatch(ticket_id, offset_esperado, tam)
 
-    def marcar_truncado(self, conn, ticket_id, agente_id):
+    def mark_truncated(self, conn, ticket_id, agente_id):
         clob = conn.clobs[ticket_id]
         if clob.dono != (agente_id, "RUNNING"):
             return False
@@ -183,7 +183,7 @@ class TestLeituraEMascara(_Base):
 
     def test_segredo_cortado_entre_leituras(self):
         m = masking.Mascarador()
-        m.registrar("SenhaSuperSecreta")
+        m.register("SenhaSuperSecreta")
         caminho = self.arquivo(b"conectando com Senha")
         b = self.bomba(caminho, m)
         b.coletar()
@@ -314,7 +314,7 @@ class TestProtocolo(_Base):
         clob = _ClobFalso()
         clob.dono = ("outro", "FAILED")
         conn = _ConnFalsa({1: clob})
-        self.assertEqual(log_pump.flush_final(b, conn, _RepoFalso(), "srv-01"), POSSE_PERDIDA)
+        self.assertEqual(log_pump.flush_final(b, conn, _RepoFalso(), "srv-01"), OWNERSHIP_LOST)
         self.assertEqual((b.offset_confirmado_chars, b.bytes_confirmados), (0, 0))
         self.assertTrue(b.posse_perdida)
         self.assertEqual(b.proximo_bloco(), ("texto\n", 0), "texto nao descartado como gravado")
@@ -457,7 +457,7 @@ class _CursorAnexar(object):
 
 
 class _ConnAnexar(object):
-    def __init__(self, resultado="GRAVADO", erro=None, rowcount=1):
+    def __init__(self, resultado="WRITTEN", erro=None, rowcount=1):
         self.resultado = resultado
         self.erro = erro
         self.rowcount = rowcount
@@ -475,7 +475,7 @@ class TestRepoSchedulerLog(unittest.TestCase):
 
     def test_bloco_plsql_literal_com_owner_e_prefixo(self):
         conn = _ConnAnexar()
-        self.assertEqual(self.repo.anexar(conn, 7, "srv-01", 0, "abc"), GRAVADO)
+        self.assertEqual(self.repo.append_chunk(conn, 7, "srv-01", 0, "abc"), WRITTEN)
         sql, binds, tipos = conn.execucoes[0]
         # Literal do README §8.10, com o owner e o prefixo da configuracao no lugar de {owner}.tbsss_.
         with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "README.md"),
@@ -494,20 +494,20 @@ class TestRepoSchedulerLog(unittest.TestCase):
         self.assertEqual(tipos, {"chunk": db_conn.get_driver_type(db_conn.TIPO_CLOB)})
 
     def test_resultados_e_posse_perdida(self):
-        for r in (GRAVADO, JA_GRAVADO, POSSE_PERDIDA):
-            self.assertEqual(self.repo.anexar(_ConnAnexar(resultado=r), 7, "srv-01", 0, "abc"), r)
+        for r in (WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST):
+            self.assertEqual(self.repo.append_chunk(_ConnAnexar(resultado=r), 7, "srv-01", 0, "abc"), r)
         with self.assertRaises(RuntimeError):
-            self.repo.anexar(_ConnAnexar(resultado=None), 7, "srv-01", 0, "abc")
+            self.repo.append_chunk(_ConnAnexar(resultado=None), 7, "srv-01", 0, "abc")
         with self.assertRaises(ValueError):
-            self.repo.anexar(_ConnAnexar(), 7, "srv-01", 0, "")
+            self.repo.append_chunk(_ConnAnexar(), 7, "srv-01", 0, "")
 
     def test_ora_20002_vira_log_offset_inconsistente(self):
         erro = Exception("ORA-20002: LOG_OFFSET_DIVERGENTE\nORA-06512: at line 13")
-        with self.assertRaises(LogOffsetInconsistente):
-            self.repo.anexar(_ConnAnexar(erro=erro), 7, "srv-01", 0, "abc")
+        with self.assertRaises(LogOffsetMismatch):
+            self.repo.append_chunk(_ConnAnexar(erro=erro), 7, "srv-01", 0, "abc")
         with self.assertRaises(Exception) as ctx:
-            self.repo.anexar(_ConnAnexar(erro=Exception("ORA-00054: resource busy")), 7, "srv-01", 0, "abc")
-        self.assertNotIsInstance(ctx.exception, LogOffsetInconsistente)
+            self.repo.append_chunk(_ConnAnexar(erro=Exception("ORA-00054: resource busy")), 7, "srv-01", 0, "abc")
+        self.assertNotIsInstance(ctx.exception, LogOffsetMismatch)
 
     def test_bind_out_pelos_tres_drivers(self):
         """variavel_saida/valor_saida escolhem o tipo VARCHAR de cada combinacao (Thin/Thick: oracledb;
@@ -518,21 +518,21 @@ class TestRepoSchedulerLog(unittest.TestCase):
                                                   ("thick", oracledb, "ODB_VARCHAR", "ODB_CLOB"),
                                                   ("cx_oracle", cx, "CX_STRING", "CX_CLOB")):
             selecao = mock.Mock(candidato=candidato)
-            conn = _ConnAnexar(resultado=JA_GRAVADO)
+            conn = _ConnAnexar(resultado=ALREADY_WRITTEN)
             with mock.patch.object(db_conn, "_DRIVER_INITIALIZED", driver), \
                     mock.patch.object(db_conn, "_DRIVER_SELECTION", selecao):
-                self.assertEqual(self.repo.anexar(conn, 7, "srv-01", 3, "abc"), JA_GRAVADO, candidato)
+                self.assertEqual(self.repo.append_chunk(conn, 7, "srv-01", 3, "abc"), ALREADY_WRITTEN, candidato)
             self.assertEqual(conn.vars, [(esperado, 20)], candidato)
             self.assertEqual(conn.execucoes[0][2], {"chunk": clob}, candidato)
 
     def test_marcar_truncado(self):
         conn = _ConnAnexar(rowcount=1)
-        self.assertTrue(self.repo.marcar_truncado(conn, 7, "srv-01"))
+        self.assertTrue(self.repo.mark_truncated(conn, 7, "srv-01"))
         sql = conn.execucoes[0][0]
         self.assertIn("log_truncated = 'Y'", sql)
         self.assertIn("OWN_X.pfx_tickets", sql)
         self.assertNotIn("updated_", sql)
-        self.assertFalse(self.repo.marcar_truncado(_ConnAnexar(rowcount=0), 7, "srv-01"))
+        self.assertFalse(self.repo.mark_truncated(_ConnAnexar(rowcount=0), 7, "srv-01"))
 
     def test_modulos_sem_commit_nem_sleep(self):
         for mod in (scheduler_log, log_pump):
@@ -561,11 +561,11 @@ try:
 except Exception as e:
     print(json.dumps({"indisponivel": "%s: %s" % (e.__class__.__name__, str(e)[:120])}))
     sys.exit(0)
-repo = RepoSchedulerLog.da_config(cfg)
+repo = RepoSchedulerLog.from_config(cfg)
 ticket_id, agente, offset, bloco = int(sys.argv[3]), sys.argv[4], int(sys.argv[5]), sys.argv[6]
-r1 = repo.anexar(conn, ticket_id, agente, offset, bloco)
+r1 = repo.append_chunk(conn, ticket_id, agente, offset, bloco)
 conn.commit()
-r2 = repo.anexar(conn, ticket_id, agente, offset, bloco)
+r2 = repo.append_chunk(conn, ticket_id, agente, offset, bloco)
 conn.commit()
 print(json.dumps({"candidato": db_conn.get_selection().candidato, "r": [r1, r2]}))
 conn.close()
@@ -595,12 +595,12 @@ class TestSchedulerLogOracle(unittest.TestCase):
         c = self._massa.cenario()
         self.ticket_id = self._massa.ticket(actor="teste", script_id=c["scr"]["id"], environment=c["amb1"]["name"],
                                             requested_by=c["login"])
-        self.catalogo = self.obter_repo("catalogo")
-        self.repo = RepoSchedulerLog(self.catalogo._owner, self.catalogo._prefixo)
-        self.tck = self.catalogo.qualificar_tabela("tickets")
-        conn = self.catalogo._obter_conexao()
+        self.catalog = self.obter_repo("catalog")
+        self.repo = RepoSchedulerLog(self.catalog._owner, self.catalog._prefixo)
+        self.tck = self.catalog.qualify_table("tickets")
+        conn = self.catalog._obter_conexao()
         try:
-            self.unidade = self.repo.unidade_suplementar(conn)
+            self.unidade = self.repo.supplementary_unit(conn)
         finally:
             conn.close()
         # Estado que o claim (F8.3) deixa: RUNNING deste agente, CLOB vazio e offset 0.
@@ -618,7 +618,7 @@ class TestSchedulerLogOracle(unittest.TestCase):
         return self.contrato._limpar_massa(self)
 
     def _sql(self, sql, **binds):
-        conn = self.catalogo._obter_conexao()
+        conn = self.catalog._obter_conexao()
         try:
             cur = conn.cursor()
             cur.execute(sql, **binds)
@@ -628,7 +628,7 @@ class TestSchedulerLogOracle(unittest.TestCase):
 
     def _como_banco(self, texto):
         """O texto como o charset do banco o guarda (caractere fora dele vira o de substituicao)."""
-        conn = self.catalogo._obter_conexao()
+        conn = self.catalog._obter_conexao()
         try:
             cur = conn.cursor()
             db_conn.set_input_types(cur, x=db_conn.TIPO_CLOB)
@@ -638,7 +638,7 @@ class TestSchedulerLogOracle(unittest.TestCase):
             conn.close()
 
     def _estado(self):
-        conn = self.catalogo._obter_conexao()
+        conn = self.catalog._obter_conexao()
         try:
             cur = conn.cursor()
             cur.execute("SELECT log_output, log_offset_chars, log_truncated FROM " + self.tck + " WHERE id = :id",
@@ -649,30 +649,30 @@ class TestSchedulerLogOracle(unittest.TestCase):
             conn.close()
 
     def test_append_idempotente_rollback_e_divergencia(self):
-        conn = self.catalogo._obter_conexao()
+        conn = self.catalog._obter_conexao()
         try:
             bloco = "ação \U0001F600 linha 1\n"
             unidades = log_pump.unidades_clob(bloco, self.unidade)
             guardado = self._como_banco(bloco)
-            # Rollback antes do primeiro COMMIT: a nova tentativa grava (GRAVADO).
-            self.assertEqual(self.repo.anexar(conn, self.ticket_id, self.AGENTE, 0, bloco), GRAVADO)
+            # Rollback antes do primeiro COMMIT: a nova tentativa grava (WRITTEN).
+            self.assertEqual(self.repo.append_chunk(conn, self.ticket_id, self.AGENTE, 0, bloco), WRITTEN)
             conn.rollback()
-            self.assertEqual(self.repo.anexar(conn, self.ticket_id, self.AGENTE, 0, bloco), GRAVADO)
+            self.assertEqual(self.repo.append_chunk(conn, self.ticket_id, self.AGENTE, 0, bloco), WRITTEN)
             conn.commit()
-            # Mesma operacao depois do COMMIT: JA_GRAVADO, sem segundo WRITEAPPEND.
-            self.assertEqual(self.repo.anexar(conn, self.ticket_id, self.AGENTE, 0, bloco), JA_GRAVADO)
+            # Mesma operacao depois do COMMIT: ALREADY_WRITTEN, sem segundo WRITEAPPEND.
+            self.assertEqual(self.repo.append_chunk(conn, self.ticket_id, self.AGENTE, 0, bloco), ALREADY_WRITTEN)
             conn.commit()
             self.assertEqual(self._estado(), (guardado, unidades, "N"))
-            # Offset divergente e conteudo diferente: LogOffsetInconsistente sem alterar o CLOB.
+            # Offset divergente e conteudo diferente: LogOffsetMismatch sem alterar o CLOB.
             for offset, outro in ((unidades + 5, "x"), (0, "ação \U0001F600 linha 2\n"), (1, bloco)):
-                with self.assertRaises(LogOffsetInconsistente):
-                    self.repo.anexar(conn, self.ticket_id, self.AGENTE, offset, outro)
+                with self.assertRaises(LogOffsetMismatch):
+                    self.repo.append_chunk(conn, self.ticket_id, self.AGENTE, offset, outro)
                 conn.rollback()
             self.assertEqual(self._estado(), (guardado, unidades, "N"))
-            # Outro agente: POSSE_PERDIDA.
-            self.assertEqual(self.repo.anexar(conn, self.ticket_id, "outro-agente", unidades, "z"), POSSE_PERDIDA)
+            # Outro agente: OWNERSHIP_LOST.
+            self.assertEqual(self.repo.append_chunk(conn, self.ticket_id, "outro-agente", unidades, "z"), OWNERSHIP_LOST)
             conn.rollback()
-            self.assertTrue(self.repo.marcar_truncado(conn, self.ticket_id, self.AGENTE))
+            self.assertTrue(self.repo.mark_truncated(conn, self.ticket_id, self.AGENTE))
             conn.commit()
             self.assertEqual(self._estado()[2], "Y")
         finally:
@@ -687,7 +687,7 @@ class TestSchedulerLogOracle(unittest.TestCase):
             f.write(linhas.encode("utf-8"))
         m = log_pump.mascarador_do_ticket(["SegredoDoTicket"])
         b = Bomba(caminho, self.ticket_id, m, 5 * MB, 50 * MB, unidade_suplementar=self.unidade)
-        conn = self.catalogo._obter_conexao()
+        conn = self.catalog._obter_conexao()
         try:
             self.assertEqual(log_pump.flush_final(b, conn, self.repo, self.AGENTE), log_pump.OK)
         finally:
@@ -717,7 +717,7 @@ class TestSchedulerLogOracle(unittest.TestCase):
             resultados[modo] = saida
             if "indisponivel" in saida:
                 continue
-            self.assertEqual((saida["candidato"], saida["r"]), (modo, [GRAVADO, JA_GRAVADO]), modo)
+            self.assertEqual((saida["candidato"], saida["r"]), (modo, [WRITTEN, ALREADY_WRITTEN]), modo)
             offset += log_pump.unidades_clob(bloco, self.unidade)
         print("\n[log_pump] combinacoes de driver: %s" % json.dumps(resultados, ensure_ascii=False))
         texto, off, _trunc = self._estado()

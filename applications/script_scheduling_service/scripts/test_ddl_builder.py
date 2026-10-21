@@ -142,7 +142,7 @@ class TestDdlBuilder(unittest.TestCase):
             abrev = t["abrev"]
             sql_t = tabelas[t_nome]
 
-            if ent in ("auditoria", "controle"):
+            if ent in ("audit", "control"):
                 self.assertNotIn("created_by", sql_t)
                 self.assertNotIn("updated_at", sql_t)
                 self.assertNotIn("updated_by", sql_t)
@@ -494,9 +494,9 @@ class TestDdlSeedERollback(unittest.TestCase):
         seed = ddl_builder.gerar_instrucoes_seed(self.owner, self.prefixo)
         contagem = ddl_builder._linhas_seed_por_tabela(self.owner, self.prefixo)
         self.assertEqual(sum(contagem.values()), sum(1 for c in seed if c.lstrip().upper().startswith("MERGE INTO")))
-        self.assertEqual(contagem["usuarios"], 4)
+        self.assertEqual(contagem["users"], 4)
         self.assertIn("'LINHAS TBSSS_SCRIPT_ENV' AS verificacao, '>=' AS regra, {} AS esperado".format(
-            contagem["script_amb"]), sql)
+            contagem["script_env"]), sql)
         # Resumo final com OK/FALHA em cada secao de verificacao.
         self.assertEqual(sql.count("'OK: nenhuma falha'"), 2)
 

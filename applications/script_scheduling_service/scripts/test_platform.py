@@ -82,7 +82,7 @@ class _ComProcessos(unittest.TestCase):
                 os.chmod(os.path.join(atual, d), 0o700)
         shutil.rmtree(self.raiz, ignore_errors=True)
 
-    def iniciar(self, codigo, cwd=None):
+    def start(self, codigo, cwd=None):
         """Script Python em grupo proprio pela plataforma (DEV, sem usuario de execucao)."""
         log = open(os.path.join(self.raiz, "log_%d.txt" % len(self.grupos)), "wb")
         try:
@@ -100,7 +100,7 @@ class TestProcessos(_ComProcessos):
 
     def test_sinalizar_nao_bloqueia_com_processo_que_ignora_sigterm(self):
         pronto = os.path.join(self.raiz, "pronto")
-        proc = self.iniciar("import signal,time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        proc = self.start("import signal,time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
                             "open(%r,'w').write('1')\ntime.sleep(300)\n" % pronto)
         self.assertTrue(_esperar(lambda: os.path.exists(pronto)))
         inicio = time.monotonic()
@@ -113,7 +113,7 @@ class TestProcessos(_ComProcessos):
 
     def test_neto_vivo_depois_do_lider_e_ciclo_nao_bloqueante(self):
         neto_pid = os.path.join(self.raiz, "neto.pid")
-        proc = self.iniciar("import subprocess\np = subprocess.Popen(['sleep', '300'])\n"
+        proc = self.start("import subprocess\np = subprocess.Popen(['sleep', '300'])\n"
                             "open(%r,'w').write(str(p.pid))\n" % neto_pid)
         neto = _ler_pid(neto_pid)
         proc.popen.wait(10)
@@ -136,7 +136,7 @@ class TestProcessos(_ComProcessos):
         self.assertFalse(os_platform.sinalizar_grupo(proc, signal.SIGTERM), "ESRCH = grupo vazio")
 
     def test_identidade_estavel_e_diferente_para_outro_pid(self):
-        proc = self.iniciar("import time\ntime.sleep(300)\n")
+        proc = self.start("import time\ntime.sleep(300)\n")
         minha = os_platform.identidade_processo(os.getpid())
         self.assertIsNotNone(minha)
         self.assertEqual(minha, os_platform.identidade_processo(os.getpid()))
@@ -155,13 +155,13 @@ class TestProcessos(_ComProcessos):
         self.assertEqual(posix._starttime_linux(conteudo), 22)
 
     def test_identidade_divergente_nao_sinaliza(self):
-        proc = self.iniciar("import time\ntime.sleep(300)\n")
+        proc = self.start("import time\ntime.sleep(300)\n")
         falso = os_platform.Processo(proc.pid, proc.identidade + 1)
         self.assertFalse(os_platform.sinalizar_grupo(falso, signal.SIGTERM))
         self.assertTrue(_vivo(proc.pid))
 
     def test_reabrir_grupo(self):
-        proc = self.iniciar("import time\ntime.sleep(300)\n")
+        proc = self.start("import time\ntime.sleep(300)\n")
         estado = {"pid": proc.pid, "process_start": proc.identidade, "usuario_execucao": None}
         reaberto = os_platform.reabrir_grupo(estado)
         self.assertEqual((reaberto.pid, reaberto.identidade, reaberto.popen), (proc.pid, proc.identidade, None))
@@ -178,20 +178,20 @@ class TestProcessos(_ComProcessos):
         pasta = os.path.join(self.raiz, "exec", "ticket_7")
         os.makedirs(os.path.join(pasta, "tmp"))
         neto_pid = os.path.join(self.raiz, "neto.pid")
-        dentro = self.iniciar("import subprocess,time,os\nos.chdir('tmp')\n"
+        dentro = self.start("import subprocess,time,os\nos.chdir('tmp')\n"
                               "p = subprocess.Popen(['sleep', '300'])\n"
                               "open(%r,'w').write(str(p.pid))\ntime.sleep(300)\n" % neto_pid, cwd=pasta)
         neto = _ler_pid(neto_pid)
         vizinha = os.path.join(self.raiz, "exec", "ticket_70")
         os.makedirs(vizinha)
-        fora = self.iniciar("import time\ntime.sleep(300)\n", cwd=vizinha)
+        fora = self.start("import time\ntime.sleep(300)\n", cwd=vizinha)
         self.assertEqual(os_platform.encerrar_ticket(os.path.join(self.raiz, "exec"), 7, None, 2), "OK")
         self.assertTrue(_esperar(lambda: not _vivo(dentro.pid) and not _vivo(neto)))
         self.assertTrue(_vivo(fora.pid), "processo do mesmo usuario fora da pasta do ticket")
 
     def test_iniciar_processo_aplica_umask_limites_e_entrada_nula(self):
         saida = os.path.join(self.raiz, "saida.txt")
-        proc = self.iniciar("import os,resource,sys\nm = os.umask(0)\n"
+        proc = self.start("import os,resource,sys\nm = os.umask(0)\n"
                             "open(%r,'w').write('%%o %%d %%d %%r' %% (m, resource.getrlimit(resource.RLIMIT_CORE)[0],"
                             " resource.getrlimit(resource.RLIMIT_NOFILE)[0], sys.stdin.read()))\n" % saida)
         proc.popen.wait(10)
@@ -592,7 +592,7 @@ class TestValidarExecucao(unittest.TestCase):
             "/opt/sss/bin": _Stat(0, 0o040755),
             os.path.join(self.EXEC, "exec1"): _Stat(self.UID_EXEC, 0o040700),
         }
-        self.usuarios = {"exec1": _Pw("exec1", self.UID_EXEC), "root": _Pw("root", 0),
+        self.users = {"exec1": _Pw("exec1", self.UID_EXEC), "root": _Pw("root", 0),
                          "agente": _Pw("agente", os.geteuid())}
         self.sudo = {"exec1": (0, "%s\n" % self.HELPER)}
         self.chamadas = []
@@ -603,7 +603,7 @@ class TestValidarExecucao(unittest.TestCase):
         raise FileNotFoundError(caminho)
 
     def _getpwnam(self, nome):
-        return self.usuarios[nome]
+        return self.users[nome]
 
     def _executar(self, argv):
         self.chamadas.append(argv)

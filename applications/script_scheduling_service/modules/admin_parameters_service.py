@@ -16,7 +16,7 @@ import ui_helpers
 import rbac
 from admin_crud import CAMPO_GERAL, OperacaoNegada
 from params_compiler import ParamErro, TIPOS_COMPONENTE
-from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
+from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FUNCIONALIDADE = "MANAGE_PARAMETERS"
 CAMPOS_EDITAVEIS = ("param_flag", "label", "description", "component_type", "options_json", "default_value",
@@ -146,20 +146,20 @@ class ServicoAdminParametros(object):
     def _obter(self, parametro_id):
         pid = _id(parametro_id)
         if pid is None:
-            raise RepoNaoEncontrado("parametro invalido")
-        return self._catalogo.parametros_obter(pid)
+            raise RepoNotFound("parametro invalido")
+        return self._catalogo.parameters_get(pid)
 
     def vinculos(self, parametro_id):
         """Scripts vinculados ao parametro: [{id, nome, tipo_param, ativo}] por nome."""
         return [{"id": s["id"], "name": s["name"], "param_type": s.get("param_type"), "active": s.get("active")}
-                for s in self._catalogo.parametro_vinculos(parametro_id)]
+                for s in self._catalogo.parameter_links(parametro_id)]
 
     # ----------------------------------------------------------------- leitura
 
-    def listar(self, ctx, filtros, pagina, tamanho):
+    def list(self, ctx, filtros, pagina, tamanho):
         """Pagina de parametros (codigo ASC) com qtd_scripts; padrao de sensivel mascarado."""
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        resultado = self._catalogo.parametros_listar(filtros=filtros, pagina=pagina, tamanho=tamanho)
+        resultado = self._catalogo.parameters_list(filtros=filtros, pagina=pagina, tamanho=tamanho)
         itens = []
         for p in resultado["itens"]:
             item = dict(p)
@@ -339,7 +339,7 @@ class ServicoAdminParametros(object):
     def salvar(self, ctx, ip, parametro_id, dados):
         """Inclui ou altera um parametro. Retorna (id, erros). codigo e imutavel depois de criado.
 
-        Lanca RepoNaoEncontrado e AcessoNegado.
+        Lanca RepoNotFound e AcessoNegado.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         erros = {}
@@ -351,8 +351,8 @@ class ServicoAdminParametros(object):
             auditoria = admin_crud.auditoria(ctx, ip, "CREATE",
                                              admin_crud.detalhe_insercao(self._para_auditoria(novo), CAMPOS_INSERCAO))
             try:
-                criado = self._catalogo.parametros_inserir(novo, auditoria=auditoria)
-            except RepoViolacao as exc:
+                criado = self._catalogo.parameters_insert(novo, auditoria=auditoria)
+            except RepoViolation as exc:
                 self._violacao(ctx, exc, erros)
                 return None, erros
             self._log.info("parametro incluido (login=%s code=%s)", ctx.get("login"), criado["code"],
@@ -373,12 +373,12 @@ class ServicoAdminParametros(object):
         if detalhe is None:
             return atual["id"], {}
         try:
-            self._catalogo.parametros_alterar(atual["id"], alteracoes,
+            self._catalogo.parameters_update(atual["id"], alteracoes,
                                               esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
                                               auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
-        except RepoConflito:
+        except RepoConflict:
             return atual["id"], {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
-        except RepoViolacao as exc:
+        except RepoViolation as exc:
             self._violacao(ctx, exc, erros, atual["id"])
             return atual["id"], erros
         self._log.info("parametro alterado (login=%s code=%s)", ctx.get("login"), atual["code"],
@@ -388,12 +388,12 @@ class ServicoAdminParametros(object):
     def alternar_ativo(self, ctx, ip, parametro_id, versao):
         """Desativa (bloqueado com script ativo vinculado) ou reativa o parametro.
 
-        Lanca OperacaoNegada (mensagem lista os scripts), RepoConflito, RepoNaoEncontrado e AcessoNegado.
+        Lanca OperacaoNegada (mensagem lista os scripts), RepoConflict, RepoNotFound e AcessoNegado.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         atual = self._obter(parametro_id)
         if admin_crud.texto(versao, 64) != _versao(atual):
-            raise RepoConflito("versao divergente")
+            raise RepoConflict("versao divergente")
         novo_ativo = "N" if atual["active"] == "Y" else "Y"
         if novo_ativo == "N":
             ativos = [s for s in self.vinculos(atual["id"]) if s["active"] == "Y"]
@@ -402,10 +402,10 @@ class ServicoAdminParametros(object):
         detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, active=novo_ativo), ("active",))
         acao = "DEACTIVATE" if novo_ativo == "N" else "UPDATE"
         try:
-            alterado = self._catalogo.parametros_alterar(
+            alterado = self._catalogo.parameters_update(
                 atual["id"], {"active": novo_ativo}, esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
                 auditoria=admin_crud.auditoria(ctx, ip, acao, detalhe))
-        except RepoViolacao as exc:
+        except RepoViolation as exc:
             if exc.constraint == "sss_prm_vinculo_ativo":
                 raise OperacaoNegada(msg_vinculo_ativo([s for s in self.vinculos(atual["id"]) if s["active"] == "Y"]))
             raise
@@ -417,7 +417,7 @@ class ServicoAdminParametros(object):
         """Valida 'valor' contra a configuracao em edicao (nao salva). Retorna {ok, valor | erro}.
 
         Regex na configuracao exige perfil admin. Parametro sensivel devolve o valor mascarado.
-        Lanca RepoNaoEncontrado (id informado e inexistente) e AcessoNegado.
+        Lanca RepoNotFound (id informado e inexistente) e AcessoNegado.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         atual = self._obter(parametro_id) if parametro_id not in (None, "") else None
@@ -453,7 +453,7 @@ def _servico():
             from gluon import current
             import sss_logging
             _padrao = ServicoAdminParametros(
-                catalogo=current.repo_factory.obter("catalogo"),
+                catalogo=current.repo_factory.get("catalog"),
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _padrao
@@ -461,7 +461,7 @@ def _servico():
 
 def listar(ctx, filtros, pagina, tamanho):
     """Pagina de parametros (servico padrao)."""
-    return _servico().listar(ctx, filtros, pagina, tamanho)
+    return _servico().list(ctx, filtros, pagina, tamanho)
 
 
 def formulario(ctx, parametro_id=None):

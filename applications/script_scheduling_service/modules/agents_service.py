@@ -92,7 +92,7 @@ class ServicoAgentes(object):
         self._config_criticos = config_criticos
 
     def _nomes_scripts(self):
-        pagina = self._catalogo.scripts_listar(pagina=1, tamanho=1000)
+        pagina = self._catalogo.scripts_list(pagina=1, tamanho=1000)
         return dict((s["id"], s["name"]) for s in pagina["itens"])
 
     def _tickets(self, codigo, agora, nomes):
@@ -119,7 +119,7 @@ class ServicoAgentes(object):
     def painel(self, ctx, agora=None):
         """Agentes com saude derivada, idade do heartbeat e tickets RUNNING (somente leitura).
 
-        Retorna {"agentes": [...], "resumo": {codigo_saude: quantidade}, "agora": datetime}.
+        Retorna {"agents": [...], "resumo": {codigo_saude: quantidade}, "agora": datetime}.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         agora = agora or self._relogio()
@@ -127,7 +127,7 @@ class ServicoAgentes(object):
         resumo = collections.OrderedDict((c, 0) for c in ORDEM_SAUDE)
         agentes = []
         divergentes = []
-        for ag in self._agentes.listar():
+        for ag in self._agentes.list():
             if ag.get("status") == "ACTIVE" and ag.get("critical_config") != self._config_criticos:
                 divergentes.append({"code": ag["code"], "critical_config": ag.get("critical_config")})
             hb = ag.get("heartbeat_at")
@@ -152,9 +152,9 @@ class ServicoAgentes(object):
                 "running": len(tickets),
                 "tickets": tickets,
             })
-        return {"agentes": agentes, "resumo": resumo, "agora": agora,
-                "fila_sem_atendente": self._agentes.fila_sem_atendente(agora, self._limiares),
-                "rodando_sem_pid": self._agentes.rodando_sem_pid(agora, 2),
+        return {"agents": agentes, "resumo": resumo, "agora": agora,
+                "fila_sem_atendente": self._agentes.unattended_queue(agora, self._limiares),
+                "rodando_sem_pid": self._agentes.running_without_pid(agora, 2),
                 "config_divergente": divergentes, "config_web": self._config_criticos}
 
 
@@ -172,9 +172,9 @@ def _servico():
             fabrica = current.repo_factory
             cfg = current.sss_cfg
             _padrao = ServicoAgentes(
-                agentes=fabrica.obter("agentes"),
-                catalogo=fabrica.obter("catalogo"),
-                relogio=fabrica.obter("tickets").agora,
+                agentes=fabrica.get("agents"),
+                catalogo=fabrica.get("catalog"),
+                relogio=fabrica.get("tickets").now,
                 limiares=Limiares(cfg.agent.heartbeat_interval_s, cfg.agent.fence_timeout_s,
                                   cfg.agent.node_offline_timeout_s),
                 log=sss_logging.get_logger("sss_web", cfg),

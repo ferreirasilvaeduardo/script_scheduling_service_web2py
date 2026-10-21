@@ -16,7 +16,7 @@ import params_compiler
 import path_guard
 import rbac
 import ui_helpers
-from repo_errors import RepoErro, RepoNaoEncontrado
+from repo_errors import RepoError, RepoNotFound
 
 CAMPO_GERAL = params_compiler.CHAVE_GERAL
 CAMPO_PRIORIDADE = "priority"
@@ -255,14 +255,14 @@ class ServicoTicket(object):
         if sid is None:
             self._negar(ctx, rbac.Motivo.DADO_INVALIDO, script_id, None)
         try:
-            return self._catalogo.scripts_obter(sid)
-        except RepoNaoEncontrado:
+            return self._catalogo.scripts_get(sid)
+        except RepoNotFound:
             self._negar(ctx, rbac.Motivo.DADO_INVALIDO, script_id, None)
 
     def _ambiente_por_nome(self, nome):
         if not isinstance(nome, str) or not _RE_AMBIENTE.fullmatch(nome):
             return None
-        pagina = self._catalogo.ambientes_listar(filtros={"name": nome}, pagina=1, tamanho=_AMBIENTES_MAX)
+        pagina = self._catalogo.environments_list(filtros={"name": nome}, pagina=1, tamanho=_AMBIENTES_MAX)
         for amb in pagina["itens"]:
             if amb.get("name") == nome:
                 return amb
@@ -274,7 +274,7 @@ class ServicoTicket(object):
         amb = self._ambiente_por_nome(ambiente)
         if amb is None:
             self._negar(ctx, rbac.Motivo.DADO_INVALIDO, script_id, ambiente)
-        homologacoes = self._catalogo.homologacao_obter(script["id"])
+        homologacoes = self._catalogo.homologation_get(script["id"])
         ok, motivo = rbac.pode_executar(ctx, script, amb, homologacoes)
         if not ok:
             self._negar(ctx, motivo, script["id"], amb["name"])
@@ -286,10 +286,10 @@ class ServicoTicket(object):
 
     def _ambientes_executaveis(self, ctx, script):
         ambientes = []
-        for aid in self._catalogo.homologacao_obter(script["id"]):
+        for aid in self._catalogo.homologation_get(script["id"]):
             try:
-                amb = self._catalogo.ambientes_obter(aid)
-            except RepoNaoEncontrado:
+                amb = self._catalogo.environments_get(aid)
+            except RepoNotFound:
                 continue
             ok, _motivo = rbac.pode_executar(ctx, script, amb, (aid,))
             if ok:
@@ -307,7 +307,7 @@ class ServicoTicket(object):
         if not rbac.tem_func(ctx, "EXEC_SCRIPT"):
             return []
         grupos = collections.OrderedDict()
-        candidatos = sorted(self._catalogo.scripts_executaveis(ctx),
+        candidatos = sorted(self._catalogo.executable_scripts(ctx),
                             key=lambda s: ((s.get("script_group") or ""), (s.get("category") or ""), s["name"]))
         for script in candidatos:
             if not self._ambientes_executaveis(ctx, script):
@@ -331,7 +331,7 @@ class ServicoTicket(object):
                         for a in ambientes]
 
     def _vinculos(self, script_id):
-        return [v for v in self._catalogo.script_params_obter(script_id) if v.get("active") == "Y"]
+        return [v for v in self._catalogo.script_params_get(script_id) if v.get("active") == "Y"]
 
     def _padrao_exibicao(self, vinculo):
         for fonte in (vinculo.get("default_value_override"), vinculo.get("default_value")):
@@ -347,7 +347,7 @@ class ServicoTicket(object):
         """Texto de ajuda gerado pelo tipo (README §5.4, "Clareza no disparo"); sem coluna nova."""
         tipo = vinculo.get("component_type")
         if tipo == "DATE":
-            return u"Use o formato AAAA-MM-DD, por exemplo %s." % self._tickets.agora().strftime("%Y-%m-%d")
+            return u"Use o formato AAAA-MM-DD, por exemplo %s." % self._tickets.now().strftime("%Y-%m-%d")
         if tipo == "NUMBER":
             return u"Use só números, com ponto para decimais, por exemplo 10 ou 2.5."
         if tipo == "SELECT":
@@ -406,7 +406,7 @@ class ServicoTicket(object):
                 "exemplo": self._exemplo(v),
                 "aviso": avisos.get(codigo),
             })
-        prioridades = [(p, ROTULOS_PRIORIDADE[p]) for p in rbac.PRIORIDADES if rbac.prioridade_permitida(ctx, p)]
+        prioridades = [(p, ROTULOS_PRIORIDADE[p]) for p in rbac.PRIORITIES if rbac.prioridade_permitida(ctx, p)]
         return {
             "script": {"id": script["id"], "name": script["name"], "description": script.get("description") or "",
                        "param_type": script["param_type"]},
@@ -494,7 +494,7 @@ class ServicoTicket(object):
         script, amb = self._autorizar(ctx, script_id, ambiente)
         erros = collections.OrderedDict()
         snapshot, _resolvidos, _vinculos = self._compilar(ctx, script, amb, respostas,
-                                                          self._tickets.agora(), erros)
+                                                          self._tickets.now(), erros)
         if snapshot is None:
             return None, dict(erros)
         return params_compiler.argv_para_exibicao(json.loads(snapshot)), {}
@@ -506,7 +506,7 @@ class ServicoTicket(object):
         [{rotulo, valor}], frase}. Sensiveis aparecem como '****'; vazios como '(sem resposta)'.
         """
         script, amb = self._autorizar(ctx, script_id, ambiente)
-        agora = self._tickets.agora()
+        agora = self._tickets.now()
         erros = collections.OrderedDict()
         prio = self._prioridade(ctx, prioridade, erros)
         sched = self._agendamento(scheduled_at, agora, erros)
@@ -538,7 +538,7 @@ class ServicoTicket(object):
         sid = _id(script_id)
         if sid is None or not ambiente:
             return None
-        itens = self._tickets.listar(filtros={"requested_by": ctx.get("login"), "script_id": sid,
+        itens = self._tickets.list(filtros={"requested_by": ctx.get("login"), "script_id": sid,
                                               "environment": ambiente}, pagina=1, tamanho=1)["itens"]
         return itens[0] if itens else None
 
@@ -557,7 +557,7 @@ class ServicoTicket(object):
         valores, avisos = {}, {}
         if ticket is None:
             return valores, avisos
-        por_id = dict((r["parameter_id"], r.get("answer_value")) for r in self._tickets.respostas(ticket["id"]))
+        por_id = dict((r["parameter_id"], r.get("answer_value")) for r in self._tickets.answers(ticket["id"]))
         for v in self._vinculos(script["id"]):
             if v["parameter_id"] not in por_id:
                 continue
@@ -588,7 +588,7 @@ class ServicoTicket(object):
                 self._negar(ctx, "REEXECUCAO_DIVERGENTE", script_id, ambiente)
             parent_id = original["id"]
         script, amb = self._autorizar(ctx, script_id, ambiente)
-        agora = self._tickets.agora()
+        agora = self._tickets.now()
         erros = collections.OrderedDict()
         prio = self._prioridade(ctx, prioridade, erros)
         sched = self._agendamento(scheduled_at, agora, erros)
@@ -616,8 +616,8 @@ class ServicoTicket(object):
             if valor is not None:
                 linhas.append({"parameter_id": v["parameter_id"], "answer_value": _texto_resposta(valor)})
         try:
-            ticket_id = self._tickets.criar(ticket, linhas)
-        except RepoErro:
+            ticket_id = self._tickets.create(ticket, linhas)
+        except RepoError:
             self._log.exception("falha ao gravar ticket (login=%s script_id=%s environment=%s pai=%s)",
                                 ctx["login"], script["id"], amb["name"], parent_id, extra={"action": acao})
             return None, {CAMPO_GERAL: MSG_FALHA_CRIAR}
@@ -642,35 +642,35 @@ class ServicoTicket(object):
         """True se o ticket existe e pode ser visto (destino do redirecionamento apos cancelar)."""
         tid = _id(ticket_id)
         try:
-            return tid is not None and self._pode_ver(ctx, self._tickets.obter(tid))
-        except RepoNaoEncontrado:
+            return tid is not None and self._pode_ver(ctx, self._tickets.get(tid))
+        except RepoNotFound:
             return False
 
     def _ticket_visivel(self, ctx, ticket_id, acao):
         """Ticket existente e visivel; fora do escopo e tratado como inexistente (404, nao 403)."""
         tid = _id(ticket_id)
         if tid is None:
-            raise RepoNaoEncontrado("ticket invalido")
-        ticket = self._tickets.obter(tid)
+            raise RepoNotFound("ticket invalido")
+        ticket = self._tickets.get(tid)
         if not self._pode_ver(ctx, ticket):
             self._log.warning("ticket fora do escopo (login=%s ticket=%s environment=%s)",
                               ctx.get("login"), tid, ticket.get("environment"), extra={"action": acao})
-            raise RepoNaoEncontrado("ticket fora do escopo")
+            raise RepoNotFound("ticket fora do escopo")
         return ticket
 
     def _nomes_scripts(self):
-        pagina = self._catalogo.scripts_listar(pagina=1, tamanho=_SCRIPTS_MAX)
+        pagina = self._catalogo.scripts_list(pagina=1, tamanho=_SCRIPTS_MAX)
         return dict((s["id"], s["name"]) for s in pagina["itens"])
 
     def opcoes_filtro(self, ctx):
         """Opcoes dos selects de filtro: ambientes visiveis ao perfil e scripts do catalogo."""
         if rbac.tem_func(ctx, "VIEW_LOGS") and ctx.get("is_admin") is True:
-            pagina = self._catalogo.ambientes_listar(pagina=1, tamanho=_AMBIENTES_MAX)
+            pagina = self._catalogo.environments_list(pagina=1, tamanho=_AMBIENTES_MAX)
             ambientes = sorted(a["name"] for a in pagina["itens"])
         else:
-            ambientes = sorted(ctx.get("ambientes") or ())
+            ambientes = sorted(ctx.get("environments") or ())
         scripts = sorted(self._nomes_scripts().items(), key=lambda par: (par[1], par[0]))
-        return {"ambientes": ambientes, "scripts": scripts, "status": list(STATUS_TICKET),
+        return {"environments": ambientes, "scripts": scripts, "status": list(STATUS_TICKET),
                 "origens": list(ORIGENS)}
 
     def _escopo_consulta(self, ctx, repo_filtros):
@@ -682,7 +682,7 @@ class ServicoTicket(object):
         if rbac.tem_func(ctx, "VIEW_LOGS"):
             if ctx.get("is_admin") is True:
                 return True, None
-            escopo = sorted(ctx.get("ambientes") or ())
+            escopo = sorted(ctx.get("environments") or ())
             return bool(escopo), escopo
         if repo_filtros.get("requested_by", ctx["login"]) != ctx["login"]:
             return False, None
@@ -692,7 +692,7 @@ class ServicoTicket(object):
     def _escopo_execucoes(self, ctx):
         """(escopo_ambientes, solicitante) da ultima execucao/historico: o mesmo da lista (README §5.8)."""
         if rbac.tem_func(ctx, "VIEW_LOGS"):
-            return (None if ctx.get("is_admin") is True else sorted(ctx.get("ambientes") or ())), None
+            return (None if ctx.get("is_admin") is True else sorted(ctx.get("environments") or ())), None
         return None, ctx["login"]
 
     def catalogo_rotinas(self, ctx):
@@ -704,8 +704,8 @@ class ServicoTicket(object):
         grupos = self.scripts_disponiveis(ctx)
         ids = [s["id"] for g in grupos for s in g["scripts"]]
         escopo, solicitante = self._escopo_execucoes(ctx)
-        ultimas = self._tickets.ultimas_execucoes(ids, escopo, solicitante) if ids else {}
-        agora = self._tickets.agora()
+        ultimas = self._tickets.last_runs(ids, escopo, solicitante) if ids else {}
+        agora = self._tickets.now()
         resultado = []
         for g in grupos:
             cartoes = []
@@ -721,23 +721,23 @@ class ServicoTicket(object):
                               "icone": info["icone"],
                               "quando": u"há %s" % ui_helpers.tempo_simples((agora - u["created_at"]).total_seconds())}
                 cartoes.append(dict(s, script_group=g["script_group"], category=g["category"], perguntas=perguntas,
-                                    ambientes=[a["name"] for a in ambientes], ultima=ultima))
+                                    environments=[a["name"] for a in ambientes], ultima=ultima))
             resultado.append({"script_group": g["script_group"], "category": g["category"], "cartoes": cartoes})
         return resultado
 
-    def historico_script(self, ctx, script_id):
+    def script_history(self, ctx, script_id):
         """Historico do script nos ultimos 30 dias (README §5.8, CR-004 T4). So leitura.
 
-        Abre so para um script das Rotinas disponiveis do usuario; senao RepoNaoEncontrado (404).
+        Abre so para um script das Rotinas disponiveis do usuario; senao RepoNotFound (404).
         """
         sid = _id(script_id)
         disponiveis = dict((s["id"], s) for g in self.scripts_disponiveis(ctx) for s in g["scripts"])
         if sid is None or sid not in disponiveis:
-            raise RepoNaoEncontrado("script fora das rotinas disponiveis")
-        agora = self._tickets.agora()
+            raise RepoNotFound("script fora das rotinas disponiveis")
+        agora = self._tickets.now()
         desde = agora - datetime.timedelta(days=HISTORICO_DIAS)
         escopo, solicitante = self._escopo_execucoes(ctx)
-        itens = self._tickets.historico_script(sid, desde, escopo, solicitante, HISTORICO_LIMITE)
+        itens = self._tickets.script_history(sid, desde, escopo, solicitante, HISTORICO_LIMITE)
         grupos = {"SUCCESS": "certo", "FAILED": "erro", "CANCELLED": "cancelado"}
         contagem = dict((c, 0) for c, _r in ui_helpers.SERIES_HISTORICO)
         dias = collections.OrderedDict()
@@ -789,7 +789,7 @@ class ServicoTicket(object):
         """
         if not self.pode_consultar(ctx):
             return None
-        agora = self._tickets.agora()
+        agora = self._tickets.now()
         desde = agora - datetime.timedelta(hours=horas)
         contagem = []
         for status in STATUS_TICKET:
@@ -797,13 +797,13 @@ class ServicoTicket(object):
             visivel, escopo = self._escopo_consulta(ctx, repo_filtros)
             total = 0
             if visivel:
-                total = self._tickets.listar(filtros=repo_filtros, pagina=1, tamanho=1,
+                total = self._tickets.list(filtros=repo_filtros, pagina=1, tamanho=1,
                                              escopo_ambientes=escopo)["total"]
             contagem.append((status, total))
-        meus = self.listar(ctx, {"requested_by": ctx["login"]}, 1, ultimos)["itens"]
+        meus = self.list(ctx, {"requested_by": ctx["login"]}, 1, ultimos)["itens"]
         return {"contagem": contagem, "desde": desde, "meus": meus}
 
-    def listar(self, ctx, filtros, pagina, tamanho):
+    def list(self, ctx, filtros, pagina, tamanho):
         """Lista paginada no escopo do perfil (README §4.3.C).
 
         Com VIEW_LOGS: ambientes autorizados (admin: todos). Sem VIEW_LOGS: apenas os
@@ -816,14 +816,14 @@ class ServicoTicket(object):
         visivel, escopo = self._escopo_consulta(ctx, repo_filtros)
         if not visivel:
             return vazio
-        resultado = self._tickets.listar(filtros=repo_filtros, pagina=pagina, tamanho=tamanho,
+        resultado = self._tickets.list(filtros=repo_filtros, pagina=pagina, tamanho=tamanho,
                                          escopo_ambientes=escopo)
         info = ui_helpers.paginacao_info(pagina, tamanho, resultado["total"],
                                          resultado.get("total_limitado", False), len(resultado["itens"]))
         if not resultado["itens"] and info["pagina"] != resultado["pagina"]:
-            resultado = self._tickets.listar(filtros=repo_filtros, pagina=info["pagina"], tamanho=tamanho,
+            resultado = self._tickets.list(filtros=repo_filtros, pagina=info["pagina"], tamanho=tamanho,
                                              escopo_ambientes=escopo)
-        agora = self._tickets.agora()
+        agora = self._tickets.now()
         nomes = self._nomes_scripts()
         itens = []
         for t in resultado["itens"]:
@@ -848,12 +848,12 @@ class ServicoTicket(object):
     def _respostas_exibicao(self, ticket_id, snap):
         sensiveis = set((snap or {}).get("sensiveis") or ())
         linhas = []
-        for r in self._tickets.respostas(ticket_id):
+        for r in self._tickets.answers(ticket_id):
             try:
-                prm = self._catalogo.parametros_obter(r["parameter_id"])
+                prm = self._catalogo.parameters_get(r["parameter_id"])
                 codigo, rotulo = prm["code"], prm.get("label") or prm["code"]
                 sensivel = prm.get("sensitive") == "Y" or codigo in sensiveis
-            except RepoNaoEncontrado:
+            except RepoNotFound:
                 codigo = rotulo = "#%s" % r["parameter_id"]
                 sensivel = True
             valor = r.get("answer_value")
@@ -867,37 +867,37 @@ class ServicoTicket(object):
 
     def _pode_executar_vigente(self, ctx, ticket):
         try:
-            script = self._catalogo.scripts_obter(ticket["script_id"])
-        except RepoNaoEncontrado:
+            script = self._catalogo.scripts_get(ticket["script_id"])
+        except RepoNotFound:
             return False
         amb = self._ambiente_por_nome(ticket["environment"])
         if amb is None:
             return False
-        ok, _motivo = rbac.pode_executar(ctx, script, amb, self._catalogo.homologacao_obter(script["id"]))
+        ok, _motivo = rbac.pode_executar(ctx, script, amb, self._catalogo.homologation_get(script["id"]))
         return ok
 
     def detalhe(self, ctx, ticket_id):
         """Ticket visivel com snapshot (sensiveis mascarados), respostas, cadeia e acoes permitidas.
 
-        Lanca RepoNaoEncontrado se nao existir ou estiver fora do escopo do perfil.
+        Lanca RepoNotFound se nao existir ou estiver fora do escopo do perfil.
         """
         ticket = self._ticket_visivel(ctx, ticket_id, "TICKET_DETALHE")
         snap = _snapshot(ticket)
         try:
-            script_nome = self._catalogo.scripts_obter(ticket["script_id"])["name"]
-        except RepoNaoEncontrado:
+            script_nome = self._catalogo.scripts_get(ticket["script_id"])["name"]
+        except RepoNotFound:
             script_nome = (snap or {}).get("script_nome") or "#%s" % ticket["script_id"]
 
         pai = None
         if ticket.get("parent_ticket_id") is not None:
             try:
-                original = self._tickets.obter(ticket["parent_ticket_id"])
-            except RepoNaoEncontrado:
+                original = self._tickets.get(ticket["parent_ticket_id"])
+            except RepoNotFound:
                 original = None
             if original is not None and self._pode_ver(ctx, original):
                 pai = {"id": original["id"], "status": original["status"]}
         filhos = [{"id": f["id"], "status": f["status"]}
-                  for f in self._tickets.listar(filtros={"parent_ticket_id": ticket["id"]}, pagina=1,
+                  for f in self._tickets.list(filtros={"parent_ticket_id": ticket["id"]}, pagina=1,
                                                 tamanho=_FILHOS_MAX)["itens"]
                   if self._pode_ver(ctx, f)]
         filhos.sort(key=lambda f: f["id"])
@@ -909,10 +909,10 @@ class ServicoTicket(object):
         pode_reexecutar = (status in STATUS_TERMINAIS and self._pode_reexecutar_regra(ctx, ticket)
                            and self._pode_executar_vigente(ctx, ticket))
         argv = _argv_exibicao(snap)
-        agora = self._tickets.agora()
+        agora = self._tickets.now()
         try:
-            timeout_s = self._catalogo.scripts_obter(ticket["script_id"]).get("timeout_s")
-        except RepoNaoEncontrado:
+            timeout_s = self._catalogo.scripts_get(ticket["script_id"]).get("timeout_s")
+        except RepoNotFound:
             timeout_s = None
         snapshot = None
         if snap is not None:
@@ -953,7 +953,7 @@ class ServicoTicket(object):
             "filhos": filhos,
             "registro": ui_helpers.registro(ticket, ctx),
             # CR-012 (README §8.13): quadro Saida, com a mesma regra de leitura do log (ticket visivel).
-            "saida": ui_helpers.quadro_saida(self._tickets.saida_obter(ticket["id"]), agora),
+            "saida": ui_helpers.quadro_saida(self._tickets.output_get(ticket["id"]), agora),
             "pode_cancelar": pode_cancelar,
             "pode_reexecutar": pode_reexecutar,
         }
@@ -964,29 +964,29 @@ class ServicoTicket(object):
         """Bloco do log a partir de offset (caracteres, base 0), no maximo LOG_MAX_CHARS.
 
         Retorna {texto, proximo_offset, terminal, truncado, status}. Lanca OffsetInvalido e
-        RepoNaoEncontrado (inexistente ou fora do escopo do perfil).
+        RepoNotFound (inexistente ou fora do escopo do perfil).
         """
         off = _offset(offset)
         ticket = self._ticket_visivel(ctx, ticket_id, "LOG_LER")
-        texto, proximo, terminal, truncado = self._tickets.log_ler(ticket["id"], off, LOG_MAX_CHARS)
+        texto, proximo, terminal, truncado = self._tickets.log_read(ticket["id"], off, LOG_MAX_CHARS)
         status = ticket["status"]
         if terminal and status not in STATUS_TERMINAIS:
             # O ticket terminou entre a checagem de escopo e a leitura.
-            status = self._tickets.obter(ticket["id"])["status"]
+            status = self._tickets.get(ticket["id"])["status"]
         return {"texto": texto, "proximo_offset": proximo, "terminal": bool(terminal),
                 "truncado": bool(truncado), "status": status}
 
     def blocos_saida(self, ctx, ticket_id):
         """Valida o escopo (regra do log) e a situacao DISPONIVEL; retorna (id, tamanho, gerador de fatias).
 
-        Lanca RepoNaoEncontrado fora do escopo, sem saida ou fora de DISPONIVEL. Uma falha de leitura no meio
+        Lanca RepoNotFound fora do escopo, sem saida ou fora de DISPONIVEL. Uma falha de leitura no meio
         encerra o gerador: com Content-Length, o navegador acusa o download incompleto (o zip nao e reparado).
         """
         ticket = self._ticket_visivel(ctx, ticket_id, "SAIDA_BAIXAR")
         tid = ticket["id"]
-        saida = self._tickets.saida_obter(tid)
+        saida = self._tickets.output_get(tid)
         if not saida or saida.get("state") != "AVAILABLE" or not saida.get("size_bytes"):
-            raise RepoNaoEncontrado("saida do ticket indisponivel")
+            raise RepoNotFound("saida do ticket indisponivel")
         tamanho = int(saida["size_bytes"])
         self._log.info("download da saida (login=%s ticket=%s bytes=%s)", ctx.get("login"), tid, tamanho,
                        extra={"action": "SAIDA_BAIXAR"})
@@ -995,8 +995,8 @@ class ServicoTicket(object):
             off = 0
             while off < tamanho:
                 try:
-                    parte = self._tickets.saida_ler(tid, off, SAIDA_FATIA_BYTES)
-                except RepoErro:
+                    parte = self._tickets.output_read(tid, off, SAIDA_FATIA_BYTES)
+                except RepoError:
                     self._log.exception("falha na leitura da saida para download (ticket=%s offset=%s)", tid, off,
                                         extra={"action": "SAIDA_BAIXAR"})
                     return
@@ -1022,8 +1022,8 @@ class ServicoTicket(object):
             off = 0
             while True:
                 try:
-                    texto, off, _terminal, _truncado = self._tickets.log_ler(tid, off, LOG_MAX_CHARS)
-                except RepoErro:
+                    texto, off, _terminal, _truncado = self._tickets.log_read(tid, off, LOG_MAX_CHARS)
+                except RepoError:
                     self._log.exception("falha na leitura do log para download (ticket=%s offset=%s)", tid, off,
                                         extra={"action": "LOG_BAIXAR"})
                     yield MARCADOR_DOWNLOAD_INTERROMPIDO
@@ -1041,21 +1041,21 @@ class ServicoTicket(object):
 
         Retorna 'TERMINAL' | 'CANCELADO' | 'SINALIZADO' | 'JA_SINALIZADO' (mensagens em MSG_CANCELAMENTO);
         toda solicitacao e auditada (README §5.6). CANCEL_TICKET nao exige VIEW_LOGS (README §4.3.C).
-        Lanca RepoNaoEncontrado (fora do escopo) e AcessoNegado (sem CANCEL_TICKET/proprio).
+        Lanca RepoNotFound (fora do escopo) e AcessoNegado (sem CANCEL_TICKET/proprio).
         """
         tid = _id(ticket_id)
         if tid is None:
-            raise RepoNaoEncontrado("ticket invalido")
-        ticket = self._tickets.obter(tid)
+            raise RepoNotFound("ticket invalido")
+        ticket = self._tickets.get(tid)
         if not (self._pode_ver(ctx, ticket) or rbac.pode_cancelar(ctx, ticket)):
             self._log.warning("ticket fora do escopo (login=%s ticket=%s environment=%s)",
                               ctx.get("login"), tid, ticket.get("environment"), extra={"action": "TICKET_CANCEL"})
-            raise RepoNaoEncontrado("ticket fora do escopo")
+            raise RepoNotFound("ticket fora do escopo")
         if not rbac.pode_cancelar(ctx, ticket):
             self._negar(ctx, "SEM_CANCELAMENTO", ticket["script_id"], ticket["environment"])
         try:
-            resultado = self._tickets.solicitar_cancelamento(ticket["id"], ctx["login"], ip)
-        except RepoErro:
+            resultado = self._tickets.request_cancel(ticket["id"], ctx["login"], ip)
+        except RepoError:
             self._log.exception("falha ao cancelar ticket (ticket=%s login=%s)", ticket["id"], ctx["login"],
                                 extra={"action": "TICKET_CANCEL"})
             raise
@@ -1075,7 +1075,7 @@ class ServicoTicket(object):
         """Respostas resolvidas do original (tbsss_ticket_answer) indexadas pelo codigo vigente."""
         codigos = dict((v["parameter_id"], v["code"]) for v in vinculos)
         respostas = {}
-        for r in self._tickets.respostas(ticket["id"]):
+        for r in self._tickets.answers(ticket["id"]):
             codigo = codigos.get(r["parameter_id"])
             if codigo is not None and r.get("answer_value") is not None:
                 respostas[codigo] = r["answer_value"]
@@ -1084,7 +1084,7 @@ class ServicoTicket(object):
     def _recompilar(self, ctx, ticket):
         script, amb = self._autorizar(ctx, ticket["script_id"], ticket["environment"])
         respostas = self._respostas_originais(ticket, self._vinculos(script["id"]))
-        agora = self._tickets.agora()
+        agora = self._tickets.now()
         erros = collections.OrderedDict()
         prio = self._prioridade(ctx, str(ticket["priority"]), erros)
         snapshot, resolvidos, vinculos = self._compilar(ctx, script, amb, respostas, agora, erros)
@@ -1093,7 +1093,7 @@ class ServicoTicket(object):
     def reexecutar(self, ctx, ip, ticket_id):
         """Novo ticket com parent_ticket_id, recompilado contra o catalogo vigente (README §5.5).
 
-        Retorna o novo ID. Lanca RepoNaoEncontrado (fora do escopo), AcessoNegado (regra de
+        Retorna o novo ID. Lanca RepoNotFound (fora do escopo), AcessoNegado (regra de
         reexecucao ou pode_executar vigente) e ErroReexecucao (recompilacao ou gravacao).
         """
         original = self._ticket_reexecutavel(ctx, ticket_id)
@@ -1137,8 +1137,8 @@ def _servico():
             fabrica = current.repo_factory
             cfg = current.sss_cfg
             _padrao = ServicoTicket(
-                catalogo=fabrica.obter("catalogo"),
-                tickets=fabrica.obter("tickets"),
+                catalogo=fabrica.get("catalog"),
+                tickets=fabrica.get("tickets"),
                 log=sss_logging.get_logger("sss_web", cfg),
             )
         return _padrao
@@ -1166,7 +1166,7 @@ def resumo_disparo(ctx, script_id, ambiente, respostas, prioridade=None, schedul
 
 def historico_script(ctx, script_id):
     """Historico de 30 dias do script (servico padrao)."""
-    return _servico().historico_script(ctx, script_id)
+    return _servico().script_history(ctx, script_id)
 
 
 def catalogo_rotinas(ctx):
@@ -1207,7 +1207,7 @@ def opcoes_filtro(ctx):
 
 def listar(ctx, filtros, pagina, tamanho):
     """Lista de tickets no escopo do perfil (servico padrao)."""
-    return _servico().listar(ctx, filtros, pagina, tamanho)
+    return _servico().list(ctx, filtros, pagina, tamanho)
 
 
 def resumo_inicial(ctx):

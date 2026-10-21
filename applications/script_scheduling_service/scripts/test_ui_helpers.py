@@ -99,7 +99,7 @@ class TestQuadroRegistro(unittest.TestCase):
                  "updated_at": criado, "updated_by": "op.prod"}
         for ctx, esperado in (({"login": "op.prod"}, (u"outra pessoa", u"você")),
                               ({"is_admin": True}, ("editor.privado", "op.prod")),
-                              ({"funcionalidades": {"VIEW_AUDIT"}}, ("editor.privado", "op.prod")),
+                              ({"features": {"VIEW_AUDIT"}}, ("editor.privado", "op.prod")),
                               (None, (u"outra pessoa", u"outra pessoa"))):
             reg = ui_helpers.registro(bruto, ctx)
             self.assertEqual((reg["created_by"], reg["updated_by"]), esperado)

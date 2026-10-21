@@ -3,7 +3,7 @@
 CR-008 R-01, R-02, R-07, R-08, R-09, R-11, R-25, E4).
 
 Plataforma, executor, env_builder e log_pump reais em DEV (scripts /bin/sh numa arvore temporaria travada);
-banco em memoria com o contrato do RepoSchedulerFila e do RepoSchedulerLog e falhas injetaveis por metodo. A
+banco em memoria com o contrato do RepoSchedulerQueue e do RepoSchedulerLog e falhas injetaveis por metodo. A
 unica espera e a do harness (Event.wait), injetada no laco: o dublê de time.sleep falha se o laco o chamar.
 """
 import _testenv  # noqa: F401
@@ -28,7 +28,7 @@ import os_platform
 import rbac
 import scheduler_loop as sl
 import sql_ident
-from repo_oracle.scheduler_queue import RegistroPerdido
+from repo_oracle.scheduler_queue import RegistrationLost
 from sss_config import EnvironmentSecret, Secrets
 from _output_memory import RepoSaidaMemoria
 
@@ -72,7 +72,7 @@ class _Banco(object):
         self.homologados = set()
         self.ctx = rbac.contexto_usuario({
             "user_id": 9, "login": "ana", "profile_id": 2, "usuario_ativo": "Y", "perfil_ativo": "Y",
-            "is_admin": "N", "perm_version": 1, "funcionalidades": ["EXEC_SCRIPT"], "ambientes": [AMB],
+            "is_admin": "N", "perm_version": 1, "features": ["EXEC_SCRIPT"], "environments": [AMB],
             "scripts": []})
         self.falhas = collections.defaultdict(list)
         self.chamadas = collections.defaultdict(int)
@@ -127,18 +127,18 @@ class _Banco(object):
             "status_reason": None, "return_code": None, "updated_by": None}
         return self.seq
 
-    # -- contrato do RepoSchedulerFila
+    # -- contrato do RepoSchedulerQueue
 
-    def ambientes_ativos(self, conn, atendidos):
-        self._falhar("ambientes_ativos")
+    def active_environments(self, conn, atendidos):
+        self._falhar("active_environments")
         return ([AMB] if self.ambiente["active"] == "Y" and AMB in atendidos else []), []
 
-    def conferir_config(self, conn, agente_id, criticos, offline):
-        self._falhar("conferir_config")
+    def check_config(self, conn, agente_id, criticos, offline):
+        self._falhar("check_config")
         return []
 
-    def candidatos(self, conn, ambientes, interpretadores, lote, env_min):
-        self._falhar("candidatos")
+    def candidates(self, conn, ambientes, interpretadores, lote, env_min):
+        self._falhar("candidates")
         with self.lock:
             return [{"id": t["id"], "script_id": t["script_id"], "environment": t["environment"]}
                     for t in sorted(self.tickets.values(), key=lambda x: x["id"])
@@ -163,34 +163,34 @@ class _Banco(object):
             self.max_running = max(self.max_running, sum(1 for x in self.tickets.values() if x["status"] == "RUNNING"))
             return True, None, t["started_at"]
 
-    def obter_ticket(self, conn, tid):
-        self._falhar("obter_ticket")
+    def get_ticket(self, conn, tid):
+        self._falhar("get_ticket")
         return dict(self.tickets[tid]) if tid in self.tickets else None
 
-    def contexto_execucao(self, conn, ticket):
-        self._falhar("contexto_execucao")
+    def execution_context(self, conn, ticket):
+        self._falhar("execution_context")
         s = self.scripts.get(ticket["script_id"])
         return {"script": dict(s) if s else None, "environment": dict(self.ambiente),
                 "homologacoes": frozenset({1}) if ticket["script_id"] in self.homologados else frozenset(),
                 "ctx": self.ctx, "agendamento": None}
 
-    def script_ativo_homologado(self, conn, sid, ambiente):
+    def active_homologated_script(self, conn, sid, ambiente):
         return self.scripts[sid]["active"] == "Y" and sid in self.homologados
 
-    def cancelamento_pedido(self, conn, tid):
-        self._falhar("cancelamento_pedido")
+    def is_cancel_requested(self, conn, tid):
+        self._falhar("is_cancel_requested")
         return self.tickets[tid]["cancel_requested"] == "Y"
 
-    def registrar_pid(self, conn, tid, agente_id, pid, start):
-        self._falhar("registrar_pid")
+    def register_pid(self, conn, tid, agente_id, pid, start):
+        self._falhar("register_pid")
         t = self.tickets[tid]
         if t["status"] != "RUNNING" or t["agent_id"] != agente_id:
             return False
         t.update(process_id=pid, process_start=start)
         return True
 
-    def devolver(self, conn, tid, agente_id):
-        self._falhar("devolver")
+    def return_to_queue(self, conn, tid, agente_id):
+        self._falhar("return_to_queue")
         t = self.tickets[tid]
         if t["status"] == "RUNNING" and t["agent_id"] == agente_id and t["process_id"] is None:
             if t["cancel_requested"] == "N":
@@ -200,16 +200,16 @@ class _Banco(object):
             return "CANCELADO"
         return "PERDIDO"
 
-    def finalizar(self, conn, tid, agente_id, status, motivo, rc):
-        self._falhar("finalizar")
+    def finalize(self, conn, tid, agente_id, status, motivo, rc):
+        self._falhar("finalize")
         t = self.tickets[tid]
         if t["status"] != "RUNNING" or t["agent_id"] != agente_id:
             return False
         t.update(status=status, status_reason=motivo, return_code=rc, updated_by="SYSTEM:%s" % agente_id)
         return True
 
-    def varredura_propria(self, conn, agente_id):
-        self._falhar("varredura_propria")
+    def own_sweep(self, conn, agente_id):
+        self._falhar("own_sweep")
         return dict((t["id"], t["cancel_requested"]) for t in self.tickets.values()
                     if t["status"] == "RUNNING" and t["agent_id"] == agente_id)
 
@@ -221,7 +221,7 @@ class _Banco(object):
     def heartbeat(self, conn, agente_id, hostname, pid, ids):
         self._falhar("heartbeat")
         if not self.agente_ativo:
-            raise RegistroPerdido("registro assumido")
+            raise RegistrationLost("registro assumido")
         self.heartbeats.append(list(ids))
         perdidos = [i for i in ids if self.tickets[i]["status"] != "RUNNING" or self.tickets[i]["agent_id"] != agente_id]
         return perdidos, self.sysdate()
@@ -229,8 +229,8 @@ class _Banco(object):
     def sysdate(self):
         return datetime.datetime.now() + datetime.timedelta(seconds=self.sysdate_deslocamento_s)
 
-    def marcar_node_offline(self, conn, agente_id, timeout_s, salto_de_relogio):
-        self._falhar("marcar_node_offline")
+    def mark_node_offline(self, conn, agente_id, timeout_s, salto_de_relogio):
+        self._falhar("mark_node_offline")
         self.node_offline_chamadas += 1
         if salto_de_relogio(self.sysdate()):
             return None
@@ -243,37 +243,37 @@ class _Banco(object):
                 marcados.append(tid)
         return marcados
 
-    def registrar_agente(self, conn, dados, processo_existe):
+    def register_agent(self, conn, dados, processo_existe):
         return 1
 
-    def encerrar_agente(self, conn, agente_id, hostname, pid, modo):
+    def stop_agent(self, conn, agente_id, hostname, pid, modo):
         self.encerrou = modo
         return True
 
     # -- contrato do RepoSchedulerLog
 
-    def unidade_suplementar(self, conn):
+    def supplementary_unit(self, conn):
         return self.unidade
 
-    def anexar(self, conn, tid, agente_id, offset, bloco):
-        self._falhar("anexar")
+    def append_chunk(self, conn, tid, agente_id, offset, bloco):
+        self._falhar("append_chunk")
         t = self.tickets[tid]
         if t["status"] != "RUNNING" or t["agent_id"] != agente_id:
-            return "POSSE_PERDIDA"
+            return "OWNERSHIP_LOST"
         if t["log_offset_chars"] != offset:
-            return "JA_GRAVADO"
+            return "ALREADY_WRITTEN"
         t["log"] += bloco
         t["log_offset_chars"] += log_pump.unidades_clob(bloco, self.unidade)
-        return "GRAVADO"
+        return "WRITTEN"
 
-    def marcar_truncado(self, conn, tid, agente_id):
+    def mark_truncated(self, conn, tid, agente_id):
         return True
 
 
 class _AgendaVazia(object):
     """Sem regras vencidas: o desdobro (F8.4b) e testado no test_scheduler_ha."""
 
-    def regras_vencidas(self, conn, lote, ult_prox=None, ult_id=0):
+    def due_rules(self, conn, lote, ult_prox=None, ult_id=0):
         return []
 
 
@@ -476,11 +476,11 @@ class TestExecucao(_Base):
 
     def test_cancelamento_entre_o_claim_e_o_spawn(self):
         tid = self.banco.ticket(self.banco.script("echo nunca\n"))
-        original = self.banco.cancelamento_pedido
+        original = self.banco.is_cancel_requested
         def _pedido(conn, t):
             self.banco.tickets[t]["cancel_requested"] = "Y"
             return original(conn, t)
-        self.banco.cancelamento_pedido = _pedido
+        self.banco.is_cancel_requested = _pedido
         self.subir()
         self.rodar(self.terminado(tid))
         self.assertEqual(self.final(tid), ("CANCELLED", "CANCEL_USER", -1))
@@ -575,7 +575,7 @@ class TestPrevalidacao(_Base):
     def test_interpretador_nao_mapeado(self):
         # O script e BASH, mas este agente so mapeia SH; a fila de teste entrega o ticket mesmo assim.
         tid = self.banco.ticket(self.banco.script("echo x\n", interpreter="BASH"))
-        self.banco.candidatos = lambda conn, a, i, lote, env: [
+        self.banco.candidates = lambda conn, a, i, lote, env: [
             {"id": tid, "script_id": self.banco.tickets[tid]["script_id"], "environment": AMB}
         ] if self.banco.tickets[tid]["status"] == "PENDING" else []
         self._recusa(tid, "INTERPRETADOR_NAO_DISPONIVEL")
@@ -607,15 +607,15 @@ class TestPrevalidacao(_Base):
 
     def test_erro_de_rede_antes_do_spawn_devolve(self):
         tid = self.banco.ticket(self.banco.script("echo x\n"))
-        self.banco.falhas["contexto_execucao"] = [_ErroRede()]
+        self.banco.falhas["execution_context"] = [_ErroRede()]
         self.subir()
         self.rodar(self.terminado(tid))
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0), "devolvido e executado no ciclo seguinte")
-        self.assertGreaterEqual(self.banco.chamadas["devolver"], 1)
+        self.assertGreaterEqual(self.banco.chamadas["return_to_queue"], 1)
 
     def test_erro_de_banco_nao_transitorio_e_precheck(self):
         tid = self.banco.ticket(self.banco.script("echo x\n"))
-        self.banco.falhas["contexto_execucao"] = [_ErroPrivilegio()]
+        self.banco.falhas["execution_context"] = [_ErroPrivilegio()]
         self.subir()
         with self.assertLogs("sss_scheduler", "ERROR"):
             self.rodar(self.terminado(tid))
@@ -627,18 +627,18 @@ class TestPendencias(_Base):
 
     def test_finalizacao_pendente_ate_gravar(self):
         tid = self.banco.ticket(self.banco.script("echo ok\n"))
-        self.banco.falhas["finalizar"] = [_ErroRede(), _ErroRede()]
+        self.banco.falhas["finalize"] = [_ErroRede(), _ErroRede()]
         self.subir()
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             self.rodar(self.terminado(tid))
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
-        self.assertEqual(self.banco.chamadas["finalizar"], 3)
+        self.assertEqual(self.banco.chamadas["finalize"], 3)
         self.assertTrue(any("finalizacao pendente" in x for x in logs.output))
 
     def test_pid_pendente_recebe_heartbeat(self):
         pronto = os.path.join(self.raiz, "pronto")
         tid = self.banco.ticket(self.banco.script("touch %s\nsleep 1\n" % pronto))
-        self.banco.falhas["registrar_pid"] = [_ErroRede()]
+        self.banco.falhas["register_pid"] = [_ErroRede()]
         self.subir()
         self.rodar(self.terminado(tid))
         self.assertEqual(self.final(tid)[0], "SUCCESS")
@@ -647,14 +647,14 @@ class TestPendencias(_Base):
 
     def test_posse_perdida_no_registrar_pid(self):
         tid = self.banco.ticket(self.banco.script("sleep 300\n"))
-        original = self.banco.registrar_pid
+        original = self.banco.register_pid
         def _perdeu(conn, t, *a):
             self.banco.tickets[t]["agent_id"] = "outro"
             return original(conn, t, *a)
-        self.banco.registrar_pid = _perdeu
+        self.banco.register_pid = _perdeu
         self.subir()
         with self.assertLogs("sss_scheduler", "ERROR"):
-            self.rodar(lambda: tid not in self.ag.execucoes and self.banco.chamadas["varredura_propria"] > 0)
+            self.rodar(lambda: tid not in self.ag.execucoes and self.banco.chamadas["own_sweep"] > 0)
         self.assertEqual(self.banco.tickets[tid]["status"], "RUNNING", "nenhum status gravado pelo agente")
 
     def test_falha_no_proc_depois_do_spawn_e_spawn_error(self):
@@ -669,7 +669,7 @@ class TestPendencias(_Base):
                 self.assertLogs("sss_scheduler", "ERROR"):
             self.rodar(self.terminado(tid))
         self.assertEqual(self.final(tid), ("FAILED", "SPAWN_ERROR", -4))
-        self.assertEqual(self.banco.chamadas["registrar_pid"], 0)
+        self.assertEqual(self.banco.chamadas["register_pid"], 0)
         self.assertIn("[SSS] falha ao iniciar: OSError (agente srv-t)", self.banco.tickets[tid]["log"])
 
     def test_reconciliacao_de_ticket_fora_do_mapa(self):
@@ -678,7 +678,7 @@ class TestPendencias(_Base):
         self.subir()
         for tid, pid in ((sem_pid, None), (com_pid, 4242)):
             self.banco.tickets[tid].update(status="RUNNING", agent_id="srv-t", process_id=pid)
-        self.banco.candidatos = lambda *a: []
+        self.banco.candidates = lambda *a: []
         self.rodar(lambda: self.banco.tickets[com_pid]["status"] == "FAILED"
                    and self.banco.tickets[sem_pid]["status"] == "PENDING")
         self.assertEqual(self.final(com_pid), ("FAILED", "ORPHAN_PROCESS", -2))
@@ -712,7 +712,7 @@ class TestCiclos(_Base):
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             self.rodar(lambda: False, limite=0.5)
         self.assertEqual(self.banco.tickets[tid]["status"], "PENDING")
-        self.assertEqual(self.banco.chamadas["candidatos"], 0)
+        self.assertEqual(self.banco.chamadas["candidates"], 0)
         self.assertEqual(len([x for x in logs.output if "DISCO_LOG" in x]), 1, "uma vez por minuto")
 
     def test_pump_com_tres_tickets_verbosos(self):

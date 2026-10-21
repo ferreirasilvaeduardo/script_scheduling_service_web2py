@@ -36,7 +36,7 @@ class Verificacao(object):
         self.cfg = cfg
         self.conn = conn
         self.args = args
-        self.repo = repo or saude_sql.RepoSaude.da_config(cfg)
+        self.repo = repo or saude_sql.RepoHealth.from_config(cfg)
         agente = cfg.agent
         self.limiares = agents_service.Limiares(agente.heartbeat_interval_s, agente.fence_timeout_s,
                                                  agente.node_offline_timeout_s)
@@ -49,7 +49,7 @@ class Verificacao(object):
     def executar(self):
         agora = db_conn.db_now(self.conn)
         self._versao()
-        agentes = self.repo.agentes(self.conn)
+        agentes = self.repo.agents(self.conn)
         self._agentes(agentes, agora)
         self._ambientes(agentes, agora)
         self._fila(agentes, agora)
@@ -59,7 +59,7 @@ class Verificacao(object):
         return max([nivel for nivel, _t in self.problemas] or [OK])
 
     def _versao(self):
-        versao = self.repo.versao_esquema(self.conn)
+        versao = self.repo.schema_version(self.conn)
         if versao != sql_ident.SCHEMA_VERSION:
             self._problema(CRITICAL, "versao do esquema %s, esperada %d (README §11.1)"
                            % (versao, sql_ident.SCHEMA_VERSION))
@@ -90,16 +90,16 @@ class Verificacao(object):
         for ag in agentes:
             if ag["status"] == "ACTIVE" and agents_service.saude(ag, agora, self.limiares) in _SAUDAVEIS:
                 atendidos.update(a.strip() for a in (ag.get("environments") or "").split(",") if a.strip())
-        for nome in self.repo.ambientes_ativos(self.conn):
+        for nome in self.repo.active_environments(self.conn):
             if nome not in atendidos:
                 self._problema(CRITICAL, "ambiente %s ativo sem nenhum agente saudavel" % nome)
 
     def _fila(self, agentes, agora):
-        atendidos = saude_sql.pares_atendidos(agentes, agora, self.limiares)
-        for g in saude_sql.fila_sem_atendente(self.repo.fila_por_par(self.conn, agora), atendidos):
+        atendidos = saude_sql.served_pairs(agentes, agora, self.limiares)
+        for g in saude_sql.unattended_queue(self.repo.queue_by_pair(self.conn, agora), atendidos):
             self._problema(CRITICAL, "fila sem atendente: %d tickets de %s/%s, o mais antigo desde %s" % (
                 g["quantidade"], g["environment"], g["interpreter"], g["mais_antigo"].strftime("%Y-%m-%d %H:%M:%S")))
-        qtd, antigo = self.repo.fila_vencida(self.conn, agora)
+        qtd, antigo = self.repo.overdue_queue(self.conn, agora)
         espera_min = 0 if antigo is None else max(0, int((agora - antigo).total_seconds()) // 60)
         a = self.args
         if qtd >= a.fila_crit or espera_min >= a.espera_crit_min:
@@ -114,7 +114,7 @@ class Verificacao(object):
         self.desempenho.append("max_wait_min=%d;%d;%d" % (espera_min, a.espera_warn_min, a.espera_crit_min))
 
     def _sem_pid(self, agora):
-        for t in self.repo.rodando_sem_pid(self.conn, agora, self.args.sem_pid_min):
+        for t in self.repo.running_without_pid(self.conn, agora, self.args.sem_pid_min):
             self._problema(WARNING, "ticket %d RUNNING sem PID no agente %s desde %s" % (
                 t["id"], t["agent_id"], t["started_at"].strftime("%Y-%m-%d %H:%M:%S")))
 
@@ -126,7 +126,7 @@ class Verificacao(object):
                     ag["code"], ag["critical_config"], local))
 
     def _purge(self, agora):
-        if self.repo.ultimo_purge(self.conn, agora, self.args.purge_dias) is None:
+        if self.repo.last_purge(self.conn, agora, self.args.purge_dias) is None:
             self._problema(WARNING, "nenhum PURGE auditado nos ultimos %d dias (README §11.3)" % self.args.purge_dias)
 
     def saida(self, codigo):

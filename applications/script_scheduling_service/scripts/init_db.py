@@ -181,8 +181,8 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
     cursor = conn.cursor()
     try:
         # 1. Catálogo de Funcionalidades
-        tb_fnc = "{}.{}".format(owner, esquema["funcionalidades"]["tabela"])
-        sq_fnc = "{}.{}".format(owner, esquema["funcionalidades"]["sequence"])
+        tb_fnc = "{}.{}".format(owner, esquema["features"]["tabela"])
+        sq_fnc = "{}.{}".format(owner, esquema["features"]["sequence"])
         sql_merge_fnc = """
         MERGE INTO {tb_fnc} dst
         USING (SELECT :code AS code FROM DUAL) src
@@ -212,12 +212,12 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
             })
 
         # 2. Perfis padrao e matrizes de permissao (CATALOGO_PERFIS_PADRAO)
-        tb_per = "{}.{}".format(owner, esquema["perfis"]["tabela"])
-        sq_per = "{}.{}".format(owner, esquema["perfis"]["sequence"])
-        tb_pfnc = "{}.{}".format(owner, esquema["perfil_func"]["tabela"])
-        sq_pfnc = "{}.{}".format(owner, esquema["perfil_func"]["sequence"])
-        tb_pamb = "{}.{}".format(owner, esquema["perfil_amb"]["tabela"])
-        sq_pamb = "{}.{}".format(owner, esquema["perfil_amb"]["sequence"])
+        tb_per = "{}.{}".format(owner, esquema["profiles"]["tabela"])
+        sq_per = "{}.{}".format(owner, esquema["profiles"]["sequence"])
+        tb_pfnc = "{}.{}".format(owner, esquema["profile_feature"]["tabela"])
+        sq_pfnc = "{}.{}".format(owner, esquema["profile_feature"]["sequence"])
+        tb_pamb = "{}.{}".format(owner, esquema["profile_env"]["tabela"])
+        sq_pamb = "{}.{}".format(owner, esquema["profile_env"]["sequence"])
 
         sql_merge_per = """
         MERGE INTO {tb_per} dst
@@ -275,8 +275,8 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
                 cursor.execute(sql_merge_pamb, {"per_nome": per_nome, "a_nome": a_nome})
 
         # 4. Ambientes padrão do sistema
-        tb_amb = "{}.{}".format(owner, esquema["ambientes"]["tabela"])
-        sq_amb = "{}.{}".format(owner, esquema["ambientes"]["sequence"])
+        tb_amb = "{}.{}".format(owner, esquema["environments"]["tabela"])
+        sq_amb = "{}.{}".format(owner, esquema["environments"]["sequence"])
         sql_merge_amb = """
         MERGE INTO {tb_amb} dst
         USING (SELECT :name AS name FROM DUAL) src
@@ -303,8 +303,8 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
             })
 
         # 5. Parametros padrao reutilizaveis
-        tb_prm = "{}.{}".format(owner, esquema["parametros"]["tabela"])
-        sq_prm = "{}.{}".format(owner, esquema["parametros"]["sequence"])
+        tb_prm = "{}.{}".format(owner, esquema["parameters"]["tabela"])
+        sq_prm = "{}.{}".format(owner, esquema["parameters"]["sequence"])
         sql_merge_prm = """
         MERGE INTO {tb_prm} dst
         USING (SELECT :code AS code FROM DUAL) src
@@ -346,10 +346,10 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
         # 6. Scripts utilitarios padrao e associacoes
         tb_scr = "{}.{}".format(owner, esquema["scripts"]["tabela"])
         sq_scr = "{}.{}".format(owner, esquema["scripts"]["sequence"])
-        tb_samb = "{}.{}".format(owner, esquema["script_amb"]["tabela"])
-        sq_samb = "{}.{}".format(owner, esquema["script_amb"]["sequence"])
-        tb_pscr = "{}.{}".format(owner, esquema["perfil_scr"]["tabela"])
-        sq_pscr = "{}.{}".format(owner, esquema["perfil_scr"]["sequence"])
+        tb_samb = "{}.{}".format(owner, esquema["script_env"]["tabela"])
+        sq_samb = "{}.{}".format(owner, esquema["script_env"]["sequence"])
+        tb_pscr = "{}.{}".format(owner, esquema["profile_script"]["tabela"])
+        sq_pscr = "{}.{}".format(owner, esquema["profile_script"]["sequence"])
         tb_sprm = "{}.{}".format(owner, esquema["script_param"]["tabela"])
         sq_sprm = "{}.{}".format(owner, esquema["script_param"]["sequence"])
 
@@ -463,7 +463,7 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
                 })
 
         # 7. Linha de tbsss_control
-        tb_ctl = "{}.{}".format(owner, esquema["controle"]["tabela"])
+        tb_ctl = "{}.{}".format(owner, esquema["control"]["tabela"])
         sql_merge_ctl = """
         MERGE INTO {tb_ctl} dst
         USING (SELECT 1 AS id FROM DUAL) src
@@ -475,8 +475,8 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
         cursor.execute(sql_merge_ctl, {"schema_version": sql_ident.SCHEMA_VERSION})
 
         # 8. Usuarios padrao da aplicacao e homologacao (CATALOGO_USUARIOS_PADRAO)
-        tb_usr = "{}.{}".format(owner, esquema["usuarios"]["tabela"])
-        sq_usr = "{}.{}".format(owner, esquema["usuarios"]["sequence"])
+        tb_usr = "{}.{}".format(owner, esquema["users"]["tabela"])
+        sq_usr = "{}.{}".format(owner, esquema["users"]["sequence"])
 
         sql_merge_usr = """
         MERGE INTO {tb_usr} dst
@@ -891,7 +891,7 @@ def main(argv=None):
         # Checagem de versao do esquema atual
         esquema = sql_ident.names(prefixo)
         cursor = conn.cursor()
-        tb_ctl = "{}.{}".format(owner, esquema["controle"]["tabela"])
+        tb_ctl = "{}.{}".format(owner, esquema["control"]["tabela"])
         versao_banco = 0
         try:
             cursor.execute("SELECT schema_version FROM {} WHERE id = 1".format(tb_ctl))

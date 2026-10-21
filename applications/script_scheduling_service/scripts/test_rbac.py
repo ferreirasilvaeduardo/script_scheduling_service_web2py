@@ -17,7 +17,7 @@ import security
 from admin_crud import CAMPO_GERAL, AcessoNegado, OperacaoNegada
 from admin_profiles_service import ServicoAdminPerfis
 from rbac import Motivo
-from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
+from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 
 def _ctx(is_admin=False, usuario_ativo="Y", perfil_ativo="Y", funcs=("EXEC_SCRIPT",),
@@ -26,7 +26,7 @@ def _ctx(is_admin=False, usuario_ativo="Y", perfil_ativo="Y", funcs=("EXEC_SCRIP
         "user_id": 2, "login": login, "name": "Operador", "usuario_ativo": usuario_ativo,
         "profile_id": 2, "perfil_nome": "OPERADOR", "perfil_ativo": perfil_ativo,
         "is_admin": "Y" if is_admin else "N", "perm_version": 1,
-        "funcionalidades": funcs, "ambientes": ambs, "scripts": scrs,
+        "features": funcs, "environments": ambs, "scripts": scrs,
     })
 
 
@@ -39,10 +39,10 @@ class TestContexto(unittest.TestCase):
 
     def test_formato(self):
         ctx = _ctx()
-        for chave in ("user_id", "login", "profile_id", "is_admin", "funcionalidades",
-                      "ambientes", "scripts", "perm_version"):
+        for chave in ("user_id", "login", "profile_id", "is_admin", "features",
+                      "environments", "scripts", "perm_version"):
             self.assertIn(chave, ctx)
-        self.assertIsInstance(ctx["funcionalidades"], frozenset)
+        self.assertIsInstance(ctx["features"], frozenset)
         self.assertIs(ctx["is_admin"], False)
 
     def test_flag_n_nao_e_verdadeira(self):
@@ -219,38 +219,38 @@ class _BasePerfis(unittest.TestCase):
         patcher = mock.patch.object(security, "ITERACOES", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
-        env = mock.patch.dict(os.environ, {repo_factory.ENV_SENHA_DEV: "senha-dev-de-teste-123"})
+        env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: "senha-dev-de-teste-123"})
         env.start()
         self.addCleanup(env.stop)
-        repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
-        self.addCleanup(repo_factory.configurar, None)
+        self.addCleanup(repo_factory.configure, None)
 
-        self.rbac_repo = repo_factory.obter("rbac")
-        self.catalogo = repo_factory.obter("catalogo")
-        self.usuarios = repo_factory.obter("usuarios")
-        self.auditoria = repo_factory.obter("auditoria")
+        self.rbac_repo = repo_factory.get("rbac")
+        self.catalog = repo_factory.get("catalog")
+        self.users = repo_factory.get("users")
+        self.audit = repo_factory.get("audit")
         self.log = logging.getLogger("sss_teste_perfis")
         self.log.addHandler(logging.NullHandler())
         self.log.propagate = False
-        self.auth = auth_service.ServicoAuth(self.usuarios, self.rbac_repo, self.catalogo, self.auditoria,
+        self.auth = auth_service.ServicoAuth(self.users, self.rbac_repo, self.catalog, self.audit,
                                              5, 900, self.log)
         self.ctx = dict((login, self.auth.revalidar(sessao)) for login, sessao in SESSOES.items())
         # Gestor: perfil nao admin com MANAGE_PROFILES; exercita o ultimo admin sem cair na autoprotecao.
-        self.ctx["gestor"] = dict(self.ctx["op.prod"], funcionalidades=frozenset(["MANAGE_PROFILES"]))
+        self.ctx["gestor"] = dict(self.ctx["op.prod"], features=frozenset(["MANAGE_PROFILES"]))
         # Administrador fora do perfil ADMINISTRADOR: exercita a protecao do ultimo admin pelo servico,
         # ja que quem nao e admin nao altera perfil de admin (CR-008, E1).
         self.ctx["admin_externo"] = dict(self.ctx["admin"], profile_id=999)
-        self.svc = ServicoAdminPerfis(self.rbac_repo, self.catalogo, self.usuarios, self.log)
-        self.aud_base = max([a["id"] for a in self.auditoria.listar(pagina=1, tamanho=1000)["itens"]] or [0])
+        self.svc = ServicoAdminPerfis(self.rbac_repo, self.catalog, self.users, self.log)
+        self.aud_base = max([a["id"] for a in self.audit.list(pagina=1, tamanho=1000)["itens"]] or [0])
 
     def _auditorias(self, acao):
-        return [a for a in self.auditoria.listar(filtros={"action": acao}, pagina=1, tamanho=100)["itens"]
+        return [a for a in self.audit.list(filtros={"action": acao}, pagina=1, tamanho=100)["itens"]
                 if a["entity"] == "tbsss_profiles" and a["id"] > self.aud_base]
 
     def _versao(self, perfil_id):
-        return self.rbac_repo.perfis_obter(perfil_id)["perm_version"]
+        return self.rbac_repo.profiles_get(perfil_id)["perm_version"]
 
     def _salvar_matriz(self, perfil_id, funcs, ambs, scrs, versao=None):
         versao = self._versao(perfil_id) if versao is None else versao
@@ -258,7 +258,7 @@ class _BasePerfis(unittest.TestCase):
                                       [str(x) for x in ambs], [str(x) for x in scrs], str(versao))
 
     def _matriz(self, perfil_id):
-        return self.rbac_repo.matriz_obter(perfil_id)
+        return self.rbac_repo.matrix_get(perfil_id)
 
 
 class TestMatriz(_BasePerfis):
@@ -292,12 +292,12 @@ class TestMatriz(_BasePerfis):
         self.assertEqual(self._auditorias("PERM_UPDATE"), [])
 
     def test_efeito_imediato_na_revalidacao(self):
-        self.assertIn("VIEW_LOGS", self.ctx["consulta"]["funcionalidades"])
+        self.assertIn("VIEW_LOGS", self.ctx["consulta"]["features"])
         m = self._matriz(PERFIL_CONSULTA)
         self._salvar_matriz(PERFIL_CONSULTA, [], m["ambs"], m["scrs"])
         sessao = dict(SESSOES["consulta"])
         ctx = self.auth.revalidar(sessao)
-        self.assertNotIn("VIEW_LOGS", ctx["funcionalidades"])
+        self.assertNotIn("VIEW_LOGS", ctx["features"])
         self.assertEqual(ctx["perm_version"], self._versao(PERFIL_CONSULTA))
 
     def test_id_inexistente_ou_invalido_rejeita_tudo(self):
@@ -361,7 +361,7 @@ class TestUltimoAdmin(_BasePerfis):
         with self.assertRaises(OperacaoNegada) as cm:
             self.svc.alternar_ativo(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
         self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_ULTIMO_ADMIN)
-        perfil = self.rbac_repo.perfis_obter(PERFIL_ADMIN)
+        perfil = self.rbac_repo.profiles_get(PERFIL_ADMIN)
         self.assertEqual((perfil["active"], perfil["perm_version"]), ("Y", 1))
         self.assertEqual(self._auditorias("DEACTIVATE"), [])
 
@@ -371,13 +371,13 @@ class TestUltimoAdmin(_BasePerfis):
                                      {"name": form["name"], "description": form["description"], "is_admin": None,
                                       "version": form["version"]})
         self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_ULTIMO_ADMIN})
-        self.assertEqual(self.rbac_repo.perfis_obter(PERFIL_ADMIN)["is_admin"], "Y")
+        self.assertEqual(self.rbac_repo.profiles_get(PERFIL_ADMIN)["is_admin"], "Y")
 
     def test_com_outro_admin_ativo_a_operacao_passa(self):
         novo_id, erros = self.svc.salvar(self.ctx["admin"], IP, None, {"name": "ADMIN_RESERVA", "is_admin": "Y"})
         self.assertEqual(erros, {})
-        u = self.usuarios.obter_por_login("op.hml")
-        self.usuarios.alterar(u["id"], {"profile_id": novo_id}, ator="teste")
+        u = self.users.get_by_login("op.hml")
+        self.users.update(u["id"], {"profile_id": novo_id}, ator="teste")
         form = self._form(PERFIL_ADMIN)
         alterado = self.svc.alternar_ativo(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
         self.assertEqual(alterado["active"], "N")
@@ -402,13 +402,13 @@ class TestUltimoAdmin(_BasePerfis):
                                      {"name": form["name"], "description": form["description"], "is_admin": None,
                                       "version": form["version"]})
         self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_SO_ADMIN})
-        self.assertEqual(self.rbac_repo.perfis_obter(PERFIL_ADMIN)["is_admin"], "Y")
+        self.assertEqual(self.rbac_repo.profiles_get(PERFIL_ADMIN)["is_admin"], "Y")
 
     def test_protecao_e_atomica_no_repositorio(self):
-        with self.assertRaises(RepoViolacao) as cm:
-            self.rbac_repo.perfis_alterar(PERFIL_ADMIN, {"active": "N"}, ator="teste")
+        with self.assertRaises(RepoViolation) as cm:
+            self.rbac_repo.profiles_update(PERFIL_ADMIN, {"active": "N"}, ator="teste")
         self.assertEqual(cm.exception.constraint, "sss_ultimo_admin")
-        self.assertEqual(self.rbac_repo.admins_ativos_bloquear(), [1])
+        self.assertEqual(self.rbac_repo.lock_active_admins(), [1])
 
 
 class TestCadastroPerfil(_BasePerfis):
@@ -420,7 +420,7 @@ class TestCadastroPerfil(_BasePerfis):
             self.assertEqual(erros, {"name": msg}, nome)
         pid, erros = self.svc.salvar(self.ctx["admin"], IP, None, {"name": "AUDITOR", "description": "Leitura"})
         self.assertEqual(erros, {})
-        perfil = self.rbac_repo.perfis_obter(pid)
+        perfil = self.rbac_repo.profiles_get(pid)
         self.assertEqual((perfil["is_admin"], perfil["active"], perfil["perm_version"]), ("N", "Y", 1))
         self.assertIn("name: AUDITOR", self._auditorias("CREATE")[0]["detail"])
 
@@ -443,18 +443,18 @@ class TestCadastroPerfil(_BasePerfis):
         form = self.svc.formulario(self.ctx["admin"], str(PERFIL_CONSULTA))
         self.svc.alternar_ativo(self.ctx["admin"], IP, str(PERFIL_CONSULTA), form["version"])
         form = self.svc.formulario(self.ctx["admin"], str(PERFIL_CONSULTA))
-        with self.assertRaises(RepoConflito):
+        with self.assertRaises(RepoConflict):
             self.svc.alternar_ativo(self.ctx["admin"], IP, str(PERFIL_CONSULTA), "x")
         self.assertEqual(self.svc.alternar_ativo(self.ctx["admin"], IP, str(PERFIL_CONSULTA), form["version"])["active"], "Y")
 
     def test_acesso_negado_e_nao_encontrado(self):
-        for chamada in (lambda c: self.svc.listar(c, {}, 1, 20), lambda c: self.svc.matriz(c, "1"),
+        for chamada in (lambda c: self.svc.list(c, {}, 1, 20), lambda c: self.svc.matriz(c, "1"),
                         lambda c: self.svc.salvar_matriz(c, IP, "4", [], [], [], "1"),
                         lambda c: self.svc.alternar_ativo(c, IP, "4", "x")):
             with self.assertRaises(AcessoNegado):
                 chamada(self.ctx["op.prod"])
         for pid in ("999", "abc", "0"):
-            with self.assertRaises(RepoNaoEncontrado):
+            with self.assertRaises(RepoNotFound):
                 self.svc.matriz(self.ctx["admin"], pid)
 
     def test_filtros(self):

@@ -17,32 +17,32 @@ import security
 # O repo_fake nao vai no pacote de implantacao (README §12.2): e importado so no ramo FAKE, que so um teste
 # em DEV liga (F9.1d).
 
-_lock_fabrica = threading.RLock()
+_factory_lock = threading.RLock()
 _singletons = {}
 _singletons_oracle = {}
 _fake_store = None
 _config_override = None
 
-ENV_SENHA_DEV = "SSS_DEV_SEED_PASSWORD"
+ENV_DEV_PASSWORD = "SSS_DEV_SEED_PASSWORD"
 
 
-def configurar(cfg):
+def configure(cfg):
     """Permite injetar uma configuracao explicita (usado em testes ou bootstrap)."""
     global _config_override
-    with _lock_fabrica:
+    with _factory_lock:
         _config_override = cfg
 
 
 def reset_singletons():
     """Reseta instancias singleton e estado de seed (usado em testes)."""
     global _fake_store
-    with _lock_fabrica:
+    with _factory_lock:
         _singletons.clear()
         _singletons_oracle.clear()
         _fake_store = None
 
 
-def _resolver_config(config_param=None):
+def _resolve_config(config_param=None):
     """Resolve (backend, sss_env) do parametro, do override ou de current.sss_cfg.
 
     O config.ini nao tem mais data_backend: sem a chave, o backend e ORACLE. So o dict de teste
@@ -61,43 +61,43 @@ def _resolver_config(config_param=None):
     return str(backend).upper(), str(app["sss_env"]).upper()
 
 
-def _senha_dev_seed():
+def _dev_seed_password():
     """Senha DEV do seed FAKE, lida do ambiente; ausente ou fora da politica deixa os logins impossiveis."""
     log = logging.getLogger("sss_web")
-    senha = os.environ.get(ENV_SENHA_DEV)
+    senha = os.environ.get(ENV_DEV_PASSWORD)
     if not senha:
         log.warning("%s ausente: usuarios do seed FAKE sem senha utilizavel (logins DEV impossiveis)",
-                    ENV_SENHA_DEV, extra={"action": "SEED"})
+                    ENV_DEV_PASSWORD, extra={"action": "SEED"})
         return None
     masking.registrar_segredo(senha)
     if security.validar_politica_senha(senha):
         log.warning("%s fora da politica de senha: usuarios do seed FAKE sem senha utilizavel",
-                    ENV_SENHA_DEV, extra={"action": "SEED"})
+                    ENV_DEV_PASSWORD, extra={"action": "SEED"})
         return None
     return senha
 
 
-def _classe_oracle(nome_norm):
+def _oracle_class(nome_norm):
     """Classe Oracle do agregado (import tardio: o driver so e carregado quando usado)."""
-    if nome_norm == "catalogo":
-        from repo_oracle.catalog import RepoCatalogoOracle
-        return RepoCatalogoOracle
+    if nome_norm == "catalog":
+        from repo_oracle.catalog import RepoCatalogOracle
+        return RepoCatalogOracle
     if nome_norm == "tickets":
         from repo_oracle.tickets import RepoTicketsOracle
         return RepoTicketsOracle
-    if nome_norm == "agendamentos":
-        from repo_oracle.schedules import RepoAgendamentosOracle
-        return RepoAgendamentosOracle
-    if nome_norm == "auditoria":
-        from repo_oracle.audit import RepoAuditoriaOracle
-        return RepoAuditoriaOracle
-    if nome_norm == "agentes":
-        from repo_oracle.agents import RepoAgentesOracle
-        return RepoAgentesOracle
+    if nome_norm == "schedules":
+        from repo_oracle.schedules import RepoSchedulesOracle
+        return RepoSchedulesOracle
+    if nome_norm == "audit":
+        from repo_oracle.audit import RepoAuditOracle
+        return RepoAuditOracle
+    if nome_norm == "agents":
+        from repo_oracle.agents import RepoAgentsOracle
+        return RepoAgentsOracle
     return None
 
 
-def obter(nome, config=None):
+def get(nome, config=None):
     """Retorna a instancia singleton do repositorio solicitado.
 
     Lanca RuntimeError se o FAKE (so de teste) for pedido fora de sss_env=DEV e ValueError para
@@ -105,7 +105,7 @@ def obter(nome, config=None):
     """
     global _fake_store
 
-    backend, env = _resolver_config(config)
+    backend, env = _resolve_config(config)
 
     # Trava de ambiente estrita (README §2.5 e AGENTS §5.5)
     if backend == "FAKE" and env != "DEV":
@@ -114,15 +114,15 @@ def obter(nome, config=None):
     nome_norm = str(nome).lower().replace("repo_", "")
 
     if backend == "ORACLE":
-        with _lock_fabrica:
-            if nome_norm in ("usuarios", "rbac") and nome_norm not in _singletons_oracle:
+        with _factory_lock:
+            if nome_norm in ("users", "rbac") and nome_norm not in _singletons_oracle:
                 # RBAC_USUARIOS: os dois repositorios compartilham o agregado.
-                from repo_oracle.users import RepoUsuariosOracle
+                from repo_oracle.users import RepoUsersOracle
                 from repo_oracle.rbac import RepoRbacOracle
-                _singletons_oracle["usuarios"] = RepoUsuariosOracle()
+                _singletons_oracle["users"] = RepoUsersOracle()
                 _singletons_oracle["rbac"] = RepoRbacOracle()
             elif nome_norm not in _singletons_oracle:
-                classe = _classe_oracle(nome_norm)
+                classe = _oracle_class(nome_norm)
                 if classe is None:
                     raise ValueError("Repositorio desconhecido: %s" % nome)
                 _singletons_oracle[nome_norm] = classe()
@@ -131,27 +131,27 @@ def obter(nome, config=None):
     if backend != "FAKE":
         raise ValueError("Backend de persistencia desconhecido: %s" % backend)
 
-    with _lock_fabrica:
+    with _factory_lock:
         if _fake_store is None:
-            from repo_fake.schedules import RepoAgendamentosFake
-            from repo_fake.agents import RepoAgentesFake
-            from repo_fake.audit import RepoAuditoriaFake
-            from repo_fake.catalog import RepoCatalogoFake
+            from repo_fake.schedules import RepoSchedulesFake
+            from repo_fake.agents import RepoAgentsFake
+            from repo_fake.audit import RepoAuditFake
+            from repo_fake.catalog import RepoCatalogFake
             from repo_fake.rbac import RepoRbacFake
-            from repo_fake.seed import carregar_seed
+            from repo_fake.seed import load_seed
             from repo_fake.store import FakeDataStore
             from repo_fake.tickets import RepoTicketsFake
-            from repo_fake.users import RepoUsuariosFake
+            from repo_fake.users import RepoUsersFake
             _fake_store = FakeDataStore()
-            carregar_seed(_fake_store, senha_dev=_senha_dev_seed())
+            load_seed(_fake_store, senha_dev=_dev_seed_password())
 
-            _singletons["usuarios"] = RepoUsuariosFake(_fake_store)
+            _singletons["users"] = RepoUsersFake(_fake_store)
             _singletons["rbac"] = RepoRbacFake(_fake_store)
-            _singletons["catalogo"] = RepoCatalogoFake(_fake_store)
+            _singletons["catalog"] = RepoCatalogFake(_fake_store)
             _singletons["tickets"] = RepoTicketsFake(_fake_store)
-            _singletons["agendamentos"] = RepoAgendamentosFake(_fake_store)
-            _singletons["auditoria"] = RepoAuditoriaFake(_fake_store)
-            _singletons["agentes"] = RepoAgentesFake(_fake_store)
+            _singletons["schedules"] = RepoSchedulesFake(_fake_store)
+            _singletons["audit"] = RepoAuditFake(_fake_store)
+            _singletons["agents"] = RepoAgentsFake(_fake_store)
 
         if nome_norm not in _singletons:
             raise ValueError("Repositorio desconhecido: %s" % nome)

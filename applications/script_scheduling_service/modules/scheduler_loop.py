@@ -30,10 +30,10 @@ import log_paths
 import os_platform
 import rbac
 import sss_config
-from repo_oracle.scheduler_schedules import RepoSchedulerAgenda
-from repo_oracle.scheduler_queue import AgenteDuplicado, RegistroPerdido, RepoSchedulerFila
+from repo_oracle.scheduler_schedules import RepoSchedulerSchedules
+from repo_oracle.scheduler_queue import DuplicateAgent, RegistrationLost, RepoSchedulerQueue
 from repo_oracle.scheduler_log import RepoSchedulerLog
-from repo_oracle.scheduler_output import RepoSchedulerSaida
+from repo_oracle.scheduler_output import RepoSchedulerOutput
 
 _log = logging.getLogger("sss_scheduler")
 
@@ -130,8 +130,8 @@ class Agente(object):
         self.trava = None
         self.agente_db_id = None
         self.ultimo_hb_ok = None
-        self.unidade_suplementar = 2
-        self.ambientes_ativos = []
+        self.supplementary_unit = 2
+        self.active_environments = []
         # Startup check: grupos ainda em encerramento (o laco avanca e limpa) e pastas preservadas.
         self.encerrando = {}
         self.preservadas = set()
@@ -169,7 +169,7 @@ class Agente(object):
 
     def liberar_recursos(self):
         """Fecha a conexao e solta a trava de instancia (falha na subida e parada)."""
-        if self.conexao is not None and hasattr(self.conexao, "fechar"):
+        if self.conexao is not None and hasattr(self.conexao, "close"):
             self.conexao.close()
         if self.trava is not None:
             self.plat.liberar_instancia(self.trava)
@@ -303,13 +303,13 @@ class Agente(object):
                 self._falhar(SAIDA_BANCO, "sem conexao com o Oracle")
             conn = self._conn()
             if self.repo is None:
-                self.repo = RepoSchedulerFila.da_config(self.cfg)
+                self.repo = RepoSchedulerQueue.from_config(self.cfg)
             if self.repo_log is None:
-                self.repo_log = RepoSchedulerLog.da_config(self.cfg)
+                self.repo_log = RepoSchedulerLog.from_config(self.cfg)
             if self.repo_saida is None:
-                self.repo_saida = RepoSchedulerSaida.da_config(self.cfg)
+                self.repo_saida = RepoSchedulerOutput.from_config(self.cfg)
             if self.repo_agenda is None:
-                self.repo_agenda = RepoSchedulerAgenda.da_config(self.cfg)
+                self.repo_agenda = RepoSchedulerSchedules.from_config(self.cfg)
             agora_banco = db_conn.db_now(conn)
             local = self.relogio_parede()
             divergencia = abs((datetime.datetime.fromtimestamp(local) - agora_banco).total_seconds())
@@ -317,7 +317,7 @@ class Agente(object):
                 self.log.warning("relogio local diverge do SYSDATE em %d s (README §7.1)", divergencia)
             db_conn.check_schema_version(conn, owner=self.cfg.oracle.owner.strip(),
                                             prefixo=self.cfg.oracle.table_prefix.strip())
-            self.unidade_suplementar = self.repo_log.unidade_suplementar(conn)
+            self.supplementary_unit = self.repo_log.supplementary_unit(conn)
         except FalhaInicializacao:
             raise
         except Exception as exc:  # noqa: BLE001 - driver, versao do esquema ou leitura: CRITICAL
@@ -328,15 +328,15 @@ class Agente(object):
         criticos = sss_config.critical_config(self.cfg)
         inicio = self.relogio()
         try:
-            self.agente_db_id = self.repo.registrar_agente(self._conn(), {
+            self.agente_db_id = self.repo.register_agent(self._conn(), {
                 "code": agente.agent_id, "hostname": self.hostname, "pid": self.pid,
                 "version": sss_config.SSS_VERSION, "environments": ",".join(agente.environments),
                 "platform": self.plat.NOME, "interpreters": ",".join(k for k, _v in agente.interpreters),
                 "critical_config": criticos, "node_offline_timeout_s": agente.node_offline_timeout_s,
             }, self.plat.processo_existe)
-            divergentes = self.repo.conferir_config(self._conn(), agente.agent_id, criticos,
+            divergentes = self.repo.check_config(self._conn(), agente.agent_id, criticos,
                                                     agente.node_offline_timeout_s)
-        except AgenteDuplicado as exc:
+        except DuplicateAgent as exc:
             self._falhar(SAIDA_REGISTRO, "agent_id duplicado: %s", exc)
         except Exception as exc:  # noqa: BLE001
             self._falhar(SAIDA_REGISTRO, "registro do agente: %s", exc)
@@ -348,14 +348,14 @@ class Agente(object):
 
     def _passo8_ambientes(self):
         try:
-            ativos, inexistentes = self.repo.ambientes_ativos(self._conn(), self.cfg.agent.environments)
+            ativos, inexistentes = self.repo.active_environments(self._conn(), self.cfg.agent.environments)
         except Exception as exc:  # noqa: BLE001
             self._falhar(SAIDA_AMBIENTES, "leitura dos ambientes: %s", exc)
         if inexistentes:
             self._falhar(SAIDA_AMBIENTES, "ambientes atendidos inexistentes: %s", ", ".join(inexistentes))
         for nome in sorted(set(self.cfg.agent.environments) - set(ativos)):
             self.log.warning("ambiente atendido %s inativo: ignorado ate ser reativado", nome)
-        self.ambientes_ativos = ativos
+        self.active_environments = ativos
 
     def _conferir_thread_unica(self):
         if threading.active_count() != 1:
@@ -419,7 +419,7 @@ class Agente(object):
                 else:
                     self._finalizar(tid, "FAILED", "ORPHAN_PROCESS", -2, log, "processo sem acompanhamento")
             elif ticket["process_id"] is None:
-                desfecho = self.repo.devolver(conn, tid, self.agente_id)
+                desfecho = self.repo.return_to_queue(conn, tid, self.agente_id)
                 (log.warning if desfecho != "PERDIDO" else log.info)("ticket sem pasta local e sem PID: %s",
                                                                      desfecho)
             else:
@@ -429,7 +429,7 @@ class Agente(object):
                 continue
             self._limpar_pasta(tid, pasta)
         # CR-012 (README §8.13): saidas que ficaram em gravacao numa queda viram FALHOU; a pasta fica no disco.
-        falhadas = self.repo_saida.falhar_gravando_do_agente(conn, self.agente_id)
+        falhadas = self.repo_saida.fail_agent_writing(conn, self.agente_id)
         conn.commit()
         if falhadas:
             self.log.warning("%d saida(s) em gravacao marcada(s) FALHOU na subida", falhadas,
@@ -455,7 +455,7 @@ class Agente(object):
         """Finaliza o ticket RUNNING deste agente com a linha [SSS] no log (README §5.2)."""
         conn = self._conn()
         self._linha_sss(conn, tid, "%s: %s (agente %s)" % (motivo, detalhe, self.agente_id))
-        if not self.repo.finalizar(conn, tid, self.agente_id, status, motivo, rc):
+        if not self.repo.finalize(conn, tid, self.agente_id, status, motivo, rc):
             log.warning("OWNERSHIP_LOST na subida: o ticket ja nao era deste agente")
         elif status == "SUCCESS":
             log.info("ticket finalizado na subida pelo resultado local: %s/%s", status, motivo)
@@ -463,11 +463,11 @@ class Agente(object):
             log.error("ticket finalizado na subida: %s/%s (%s)", status, motivo, detalhe)
 
     def _linha_sss(self, conn, tid, texto):
-        ticket = self.repo.obter_ticket(conn, tid)
+        ticket = self.repo.get_ticket(conn, tid)
         if ticket is None:
             return
         try:
-            self.repo_log.anexar(conn, tid, self.agente_id, int(ticket.get("log_offset_chars") or 0),
+            self.repo_log.append_chunk(conn, tid, self.agente_id, int(ticket.get("log_offset_chars") or 0),
                                  "[SSS] %s\n" % texto)
             conn.commit()
         except Exception as exc:  # noqa: BLE001 - a linha e informativa; a finalizacao segue
@@ -558,7 +558,7 @@ class Agente(object):
                     if not self.cercado:
                         self._ciclo("orquestrador", self._ciclo_orquestrador)
                         self._conferir_fence()
-            except RegistroPerdido as exc:
+            except RegistrationLost as exc:
                 self.log.critical("REGISTRO_PERDIDO: %s; encerramento TERMINATE", exc, extra={"action": "HB"})
                 self.encerrar_tudo("TERMINATE", registro_perdido=True)
                 return SAIDA_REGISTRO_PERDIDO
@@ -637,7 +637,7 @@ class Agente(object):
             return
         try:
             funcao()
-        except RegistroPerdido:
+        except RegistrationLost:
             raise
         except Exception as exc:  # noqa: BLE001 - o laco nunca cai por um ciclo
             self.log.error("ciclo %s falhou: %s", nome, exc, exc_info=not db_conn.is_network_error(exc),
@@ -726,7 +726,7 @@ class Agente(object):
             if desfecho == output_phase.CONTINUA:
                 continue
             del self.saidas[tid]
-            if desfecho == output_phase.POSSE_PERDIDA:
+            if desfecho == output_phase.OWNERSHIP_LOST:
                 log.error("OWNERSHIP_LOST na saida: nada gravado; a pasta fica no disco", extra={"action": "SAIDA"})
             else:
                 log.info("saida %s", saida.resultado, extra={"action": "SAIDA"})
@@ -772,7 +772,7 @@ class Agente(object):
             if desfecho == log_pump.CONEXAO_INCERTA:
                 self.conexao.close()
                 return True
-            if desfecho == log_pump.POSSE_PERDIDA:
+            if desfecho == log_pump.OWNERSHIP_LOST:
                 item.motivo = "OWNERSHIP_LOST"
             item.flush_ok = True
         if item.motivo == "OWNERSHIP_LOST":
@@ -784,7 +784,7 @@ class Agente(object):
             item.resultado = self._resultado(item)
             executor.registrar_resultado(item.execucao, *item.resultado)
         try:
-            gravou = self.repo.finalizar(conn, item.tid, self.agente_id, *item.resultado)
+            gravou = self.repo.finalize(conn, item.tid, self.agente_id, *item.resultado)
         except Exception as exc:  # noqa: BLE001 - finalizacao pendente (CR-007 R-03), refeita no ciclo rapido
             if not item.finalizacao_pendente:
                 item.log.warning("finalizacao pendente (%s)", exc.__class__.__name__, extra={"action": "FINALIZAR"})
@@ -830,7 +830,7 @@ class Agente(object):
         if self.cercado:
             return  # em modo cercado, so o heartbeat tenta o banco (README §8.9)
         conn = self._conn()
-        proprios = self.repo.varredura_propria(conn, self.agente_id)
+        proprios = self.repo.own_sweep(conn, self.agente_id)
         for tid, item in list(self.execucoes.items()):
             if item.fase == _Item.RESERVADO:
                 continue
@@ -884,7 +884,7 @@ class Agente(object):
             if tid not in self.encerrando and tid not in self.preservadas:
                 self._limpar_pasta(tid, pasta)
             return
-        ticket = self.repo.obter_ticket(conn, tid)
+        ticket = self.repo.get_ticket(conn, tid)
         if ticket is not None and ticket.get("process_id") is None:
             self._devolver(tid, log)
         else:
@@ -892,7 +892,7 @@ class Agente(object):
 
     def _devolver(self, tid, log):
         try:
-            desfecho = self.repo.devolver(self._conn(), tid, self.agente_id)
+            desfecho = self.repo.return_to_queue(self._conn(), tid, self.agente_id)
         except Exception as exc:  # noqa: BLE001 - devolucao pendente (CR-008, R-08)
             self.devolucoes_pendentes.add(tid)
             log.warning("devolucao pendente (%s)", exc.__class__.__name__, extra={"action": "DEVOLVER"})
@@ -948,9 +948,9 @@ class Agente(object):
     def _ciclo_orquestrador(self):
         agente = self.cfg.agent
         conn = self._conn()
-        self.ambientes_ativos, _inexistentes = self.repo.ambientes_ativos(conn, agente.environments)
+        self.active_environments, _inexistentes = self.repo.active_environments(conn, agente.environments)
         criticos = sss_config.critical_config(self.cfg)
-        for codigo, outra in self.repo.conferir_config(conn, self.agente_id, criticos, agente.node_offline_timeout_s):
+        for codigo, outra in self.repo.check_config(conn, self.agente_id, criticos, agente.node_offline_timeout_s):
             self.log.error("CONFIG_DIVERGENTE: agente %s local=%s remoto=%s", codigo, criticos, outra,
                            extra={"action": "CONFIG"})
         self._node_offline()
@@ -969,7 +969,7 @@ class Agente(object):
             if agora < self._node_offline_suspenso_ate:
                 return
             self._node_offline_suspenso_ate = None
-        marcados = self.repo.marcar_node_offline(self._conn(), self.agente_id, agente.node_offline_timeout_s,
+        marcados = self.repo.mark_node_offline(self._conn(), self.agente_id, agente.node_offline_timeout_s,
                                                  self._salto_de_relogio)
         if marcados:
             self.log.info("NODE_OFFLINE: ticket(s) %s marcado(s) (heartbeat de outro agente vencido ha mais de %d s)",
@@ -997,7 +997,7 @@ class Agente(object):
     def _claims(self):
         agente = self.cfg.agent
         vagas = agente.max_parallel_jobs - len(self.execucoes)
-        if vagas <= 0 or not self.ambientes_ativos or not self._pode_seguir():
+        if vagas <= 0 or not self.active_environments or not self._pode_seguir():
             return
         livre = self.plat.espaco_livre_mb(self.cfg.logging.log_dir)
         if livre < agente.log_dir_min_free_mb:
@@ -1020,7 +1020,7 @@ class Agente(object):
         orcamento = agente.heartbeat_interval_s / 2.0
         conn = self._conn()
         interpretadores = [k for k, _v in agente.interpreters]
-        for cand in self.repo.candidatos(conn, self.ambientes_ativos, interpretadores, vagas,
+        for cand in self.repo.candidates(conn, self.active_environments, interpretadores, vagas,
                                          agente.queue_aging_min):
             if len(self.execucoes) >= agente.max_parallel_jobs or self.relogio() - inicio > orcamento \
                     or not self._pode_seguir():
@@ -1051,7 +1051,7 @@ class Agente(object):
             return
         snap, argv, script_real, contexto = pre
         try:
-            if self.repo.cancelamento_pedido(self._conn(), item.tid):
+            if self.repo.is_cancel_requested(self._conn(), item.tid):
                 return self._finalizar_sem_spawn(item, ("CANCELLED", "CANCEL_USER", -1), None)
         except Exception as exc:  # noqa: BLE001
             return self._erro_antes_do_spawn(item, exc)
@@ -1062,9 +1062,9 @@ class Agente(object):
 
         CR-011: o conteudo do arquivo nao e conferido (sem hash); o caminho pode ter link simbolico."""
         conn = self._conn()
-        ticket = self.repo.obter_ticket(conn, item.tid)
+        ticket = self.repo.get_ticket(conn, item.tid)
         item.ticket = ticket
-        contexto = self.repo.contexto_execucao(conn, ticket)
+        contexto = self.repo.execution_context(conn, ticket)
         script, ambiente = contexto["script"], contexto["environment"]
         try:
             snap, argv, script_real = params_compiler.validar_snapshot(ticket["submitted_params"],
@@ -1076,7 +1076,7 @@ class Agente(object):
             return self._recusar(item, "CADASTRO_MUDOU")
         if script.get("active") != "Y":
             return self._recusar(item, "SCRIPT_INACTIVE")
-        if not self.repo.script_ativo_homologado(conn, script["id"], ticket["environment"]):
+        if not self.repo.active_homologated_script(conn, script["id"], ticket["environment"]):
             return self._recusar(item, "NAO_HOMOLOGADO")
         if ambiente is None or ambiente.get("active") != "Y":
             return self._recusar(item, "ENVIRONMENT_INACTIVE")
@@ -1130,7 +1130,7 @@ class Agente(object):
 
     def _finalizar_execucao_sem_processo(self, item):
         try:
-            gravou = self.repo.finalizar(self._conn(), item.tid, self.agente_id, *item.resultado)
+            gravou = self.repo.finalize(self._conn(), item.tid, self.agente_id, *item.resultado)
         except Exception as exc:  # noqa: BLE001 - finalizacao pendente
             item.finalizacao_pendente = True
             item.log.warning("finalizacao pendente (%s)", exc.__class__.__name__, extra={"action": "FINALIZAR"})
@@ -1198,7 +1198,7 @@ class Agente(object):
             item.bomba = log_pump.Bomba(
                 ex.caminho_log, item.tid, log_pump.mascarador_do_ticket(self._mascarador_fixo, conexao, snap),
                 self.cfg.logging.max_log_size_bytes, self.cfg.logging.max_local_log_size_bytes, 0,
-                self.unidade_suplementar)
+                self.supplementary_unit)
             self.bombas[item.tid] = item.bomba
         if ex.spawn_error and not ex.falhou_apos_spawn:
             item.motivo = "SPAWN_ERROR"
@@ -1216,7 +1216,7 @@ class Agente(object):
     def _registrar_pid(self, item):
         ex = item.execucao
         try:
-            ok = self.repo.registrar_pid(self._conn(), item.tid, self.agente_id, ex.pid, ex.identidade)
+            ok = self.repo.register_pid(self._conn(), item.tid, self.agente_id, ex.pid, ex.identidade)
         except Exception as exc:  # noqa: BLE001 - PID pendente (CR-008, R-08)
             if not item.avisou_pid:
                 item.avisou_pid = True
@@ -1255,7 +1255,7 @@ class Agente(object):
         conn = self._conn() if self.conexao.ensure() else None
         if conn is not None and not registro_perdido:
             try:
-                self.repo.encerrar_agente(conn, self.agente_id, self.hostname, self.pid, modo)
+                self.repo.stop_agent(conn, self.agente_id, self.hostname, self.pid, modo)
             except Exception as exc:  # noqa: BLE001 - a parada segue
                 self.log.error("registro de parada falhou: %s", exc, extra={"action": "PARADA"})
         stop = os.path.join(self.cfg.agent.work_dir, "sss-%s.stop" % self.agente_id)

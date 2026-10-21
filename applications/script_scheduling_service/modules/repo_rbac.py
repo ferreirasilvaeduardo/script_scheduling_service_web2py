@@ -7,18 +7,18 @@ class RepoRbac(object):
 
     Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o actor, por
     auditoria['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
-    Sem actor, RepoViolacao sem gravar nada.
+    Sem actor, RepoViolation sem gravar nada.
     """
 
-    def perfis_listar(self, filtros=None, pagina=1, tamanho=20):
+    def profiles_list(self, filtros=None, pagina=1, tamanho=20):
         """Lista perfis paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}."""
         raise NotImplementedError
 
-    def perfis_obter(self, id):
-        """Retorna dict com dados do perfil ou lanca RepoNaoEncontrado."""
+    def profiles_get(self, id):
+        """Retorna dict com dados do perfil ou lanca RepoNotFound."""
         raise NotImplementedError
 
-    def perfis_inserir(self, dados, auditoria=None, ator=None):
+    def profiles_insert(self, dados, auditoria=None, ator=None):
         """Insere novo perfil e retorna dict com o registro criado.
 
         auditoria: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
@@ -26,33 +26,33 @@ class RepoRbac(object):
         """
         raise NotImplementedError
 
-    def perfis_alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
+    def profiles_update(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Atualiza perfil, incrementa perm_versao e retorna o registro, tudo na mesma transacao.
 
-        esperado: opcional, dict campo -> valor lido; divergencia lanca RepoConflito sem alterar nada.
+        esperado: opcional, dict campo -> valor lido; divergencia lanca RepoConflict sem alterar nada.
         Se a alteracao reduz administradores (ativo ou is_admin de 'S' para 'N'), a mesma operacao
         bloqueia os admins ativos (README §4.3.B) e, se o conjunto resultante ficar vazio, lanca
-        RepoViolacao(constraint='sss_ultimo_admin') com ROLLBACK.
+        RepoViolation(constraint='sss_ultimo_admin') com ROLLBACK.
         auditoria: opcional, como em perfis_inserir.
         """
         raise NotImplementedError
 
-    def matriz_obter(self, perfil_id):
+    def matrix_get(self, perfil_id):
         """Retorna dict {'funcs': [...], 'ambs': [...], 'scrs': [...]} com IDs associados."""
         raise NotImplementedError
 
-    def matriz_salvar(self, perfil_id, funcs, ambs, scrs, perm_versao_esperada=None, auditoria=None, ator=None):
+    def matrix_save(self, perfil_id, funcs, ambs, scrs, perm_versao_esperada=None, auditoria=None, ator=None):
         """Substitui a matriz do perfil e incrementa perm_versao atomicamente; retorna a nova matriz.
 
-        perm_versao_esperada: opcional; se o perm_versao atual divergir, lanca RepoConflito sem alterar.
-        IDs inexistentes violam as FKs (RepoViolacao). auditoria: opcional, gravada na mesma transacao.
+        perm_versao_esperada: opcional; se o perm_versao atual divergir, lanca RepoConflict sem alterar.
+        IDs inexistentes violam as FKs (RepoViolation). auditoria: opcional, gravada na mesma transacao.
         """
         raise NotImplementedError
 
-    def admins_ativos_bloquear(self):
+    def lock_active_admins(self):
         """Executa lock dos usuarios administradores ativos e retorna lista de IDs (README §4.3.B)."""
         raise NotImplementedError
 
-    def funcionalidades_listar(self):
+    def features_list(self):
         """Retorna lista de dicts com o catalogo canonico de funcionalidades ativas."""
         raise NotImplementedError

@@ -2,24 +2,24 @@
 """Implementacao em memoria do repositorio de auditoria (README §2.5, §4.4, §10)."""
 import copy
 
-from repo_audit import RepoAuditoria
-from repo_fake.store import paginar
+from repo_audit import RepoAudit
+from repo_fake.store import paginate
 
 
-class RepoAuditoriaFake(RepoAuditoria):
+class RepoAuditFake(RepoAudit):
     """Implementacao em memoria com semantica Oracle para auditoria."""
 
     def __init__(self, store):
         self._store = store
 
-    def reservar_id(self):
+    def reserve_id(self):
         """Simula seq.NEXTVAL da trilha."""
         with self._store.lock_auditoria:
-            return self._store.proximo_id("tbsss_audit")
+            return self._store.next_id("tbsss_audit")
 
-    def registrar(self, ator, ip, acao, entidade, entidade_id=None, detalhe=None, id=None):
+    def register(self, ator, ip, acao, entidade, entidade_id=None, detalhe=None, id=None):
         """Registra um evento na trilha de auditoria (com o id reservado, se informado)."""
-        return self._store.registrar_auditoria_interno(
+        return self._store.register_internal_audit(
             ator=ator,
             ip=ip,
             acao=acao,
@@ -32,7 +32,7 @@ class RepoAuditoriaFake(RepoAuditoria):
     def _filtrar(self, filtros):
         """Registros que atendem aos filtros, ordenados por created_at DESC, id DESC (chamar sob o lock)."""
         filtros = filtros or {}
-        lista = list(self._store.auditoria.values())
+        lista = list(self._store.audit.values())
 
         ator_f = filtros.get("actor")
         if ator_f:
@@ -66,15 +66,15 @@ class RepoAuditoriaFake(RepoAuditoria):
         if id_max is not None:
             lista = [a for a in lista if a["id"] <= int(id_max)]
 
-        lista.sort(key=lambda x: (x.get("created_at") or self._store.agora(), x["id"]), reverse=True)
+        lista.sort(key=lambda x: (x.get("created_at") or self._store.now(), x["id"]), reverse=True)
         return lista
 
-    def listar(self, filtros=None, pagina=1, tamanho=20):
+    def list(self, filtros=None, pagina=1, tamanho=20):
         """Lista registros de auditoria ordenados por created_at DESC, id DESC."""
         with self._store.lock_auditoria:
-            return paginar(self._filtrar(filtros), pagina=pagina, tamanho=tamanho)
+            return paginate(self._filtrar(filtros), pagina=pagina, tamanho=tamanho)
 
-    def iterar(self, filtros=None, limite=50000):
+    def iterate(self, filtros=None, limite=50000):
         """Iterador de copias, no maximo `limite` registros (no Oracle: cursor com arraysize, sem offset)."""
         with self._store.lock_auditoria:
             lista = copy.deepcopy(self._filtrar(filtros)[:max(0, int(limite))])

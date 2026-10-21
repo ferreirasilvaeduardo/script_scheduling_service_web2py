@@ -3,23 +3,23 @@
 import copy
 import datetime
 
-from repo_agents import RepoAgentes
+from repo_agents import RepoAgents
 
 
-class RepoAgentesFake(RepoAgentes):
+class RepoAgentsFake(RepoAgents):
     """Implementacao em memoria com semantica Oracle para agentes."""
 
     def __init__(self, store):
         self._store = store
 
-    def listar(self):
+    def list(self):
         """Retorna lista de todos os agentes ordenados por codigo ASC, id ASC."""
         with self._store.lock_agentes:
-            agora = self._store.agora()
-            for ag in self._store.agentes.values():
+            agora = self._store.now()
+            for ag in self._store.agents.values():
                 if ag.get("code") in self._store.agentes_hb_sim and ag.get("status") == "ACTIVE":
                     ag["heartbeat_at"] = agora
-            lista = list(self._store.agentes.values())
+            lista = list(self._store.agents.values())
             lista.sort(key=lambda x: (x.get("code", ""), x["id"]))
             return copy.deepcopy(lista)
 
@@ -31,14 +31,14 @@ class RepoAgentesFake(RepoAgentes):
                 if t.get("status") == "RUNNING" and t.get("agent_id") == codigo
             ]
             running.sort(key=lambda x: x["id"])
-            # Sem CLOB, como no Oracle (contrato RepoAgentes.tickets_running).
+            # Sem CLOB, como no Oracle (contrato RepoAgents.tickets_running).
             return [dict((k, copy.deepcopy(v)) for k, v in t.items()
                          if k not in ("submitted_params", "log_output")) for t in running]
 
-    def fila_sem_atendente(self, agora, limiares):
+    def unattended_queue(self, agora, limiares):
         """Agrupa a fila vencida sem agente saudavel para o ambiente e o interpretador."""
         atendidos = set()
-        for ag in self.listar():
+        for ag in self.list():
             hb = ag.get("heartbeat_at")
             if ag.get("status") != "ACTIVE" or hb is None:
                 continue
@@ -65,7 +65,7 @@ class RepoAgentesFake(RepoAgentes):
                 grupo["mais_antigo"] = min(grupo["mais_antigo"], inicio)
         return [grupos[chave] for chave in sorted(grupos)]
 
-    def rodando_sem_pid(self, agora, minutos):
+    def running_without_pid(self, agora, minutos):
         """Tickets reservados ha mais de minutos, ainda sem PID, sem ler o log."""
         limite = agora - datetime.timedelta(minutes=minutos)
         campos = ("id", "script_id", "environment", "agent_id", "started_at")

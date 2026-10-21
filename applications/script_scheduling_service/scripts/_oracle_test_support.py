@@ -134,7 +134,7 @@ def _conferir_esquema_sss(cur, owner, prefixo):
         import sql_ident
     except ImportError:
         from modules import sql_ident
-    tabela = sql_ident.table(owner, prefixo or "tbsss_", "controle")
+    tabela = sql_ident.table(owner, prefixo or "tbsss_", "control")
     try:
         cur.execute("SELECT schema_version FROM " + tabela)
         row = cur.fetchone()

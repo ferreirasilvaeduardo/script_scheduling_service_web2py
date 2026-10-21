@@ -14,7 +14,7 @@ import logging
 import os
 
 import masking
-from repo_oracle.scheduler_log import GRAVADO, JA_GRAVADO, POSSE_PERDIDA, LogOffsetInconsistente
+from repo_oracle.scheduler_log import WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST, LogOffsetMismatch
 
 _log = logging.getLogger("sss_scheduler")
 
@@ -59,13 +59,13 @@ def mascarador_do_ticket(segredos, conexao=None, snapshot=None):
     de 4 caracteres nao sao registrados (regra do masking, README §4.1; risco aceito no §14)."""
     m = masking.Mascarador()
     for valor in segredos or ():
-        m.registrar(valor)
+        m.register(valor)
     if conexao:
-        m.registrar(conexao)
+        m.register(conexao)
     snap = snapshot or {}
     respostas = snap.get("respostas") or {}
     for codigo in snap.get("sensiveis") or ():
-        m.registrar(respostas.get(codigo))
+        m.register(respostas.get(codigo))
     return m
 
 
@@ -96,7 +96,7 @@ class Bomba(object):
         self._em_voo = None
         self.bytes_confirmados = 0
         self.offset_confirmado_chars = int(offset_confirmado_chars)
-        self.unidade_suplementar = unidade_suplementar
+        self.supplementary_unit = unidade_suplementar
         self.finalizada = False
         self.parada = False
         self.posse_perdida = False
@@ -122,7 +122,7 @@ class Bomba(object):
         self._fila += enviar
         return enviar
 
-    def finalizar(self):
+    def finalize(self):
         """Depois do fim do processo: drena o arquivo em blocos de 1 MiB (parando de ler ao truncar), fecha
         decoder e mascarador e libera o sufixo retido (sem marcador, se o teto nao foi excedido).
         Idempotente. Arquivo ilegivel: WARN e envia o que ja foi lido. Devolve o texto enfileirado."""
@@ -140,7 +140,7 @@ class Bomba(object):
             enviar, _truncou = self.aplicar_teto_banco(self._fluxo.alimentar(self._decoder.decode(dados)))
             enfileirado.append(enviar)
         resto = self._decoder.decode(b"", final=True)
-        enviar, _truncou = self.aplicar_teto_banco(self._fluxo.alimentar(resto) + self._fluxo.finalizar())
+        enviar, _truncou = self.aplicar_teto_banco(self._fluxo.alimentar(resto) + self._fluxo.finalize())
         if not self.truncado:
             enviar += self._retido
             self._bytes_aceitos += _bytes(self._retido)
@@ -206,10 +206,10 @@ class Bomba(object):
         return self._em_voo
 
     def confirmar(self):
-        """O bloco em voo foi confirmado (GRAVADO ou JA_GRAVADO seguido de COMMIT)."""
+        """O bloco em voo foi confirmado (WRITTEN ou ALREADY_WRITTEN seguido de COMMIT)."""
         bloco, _offset = self._em_voo
         self._fila = self._fila[len(bloco):]
-        self.offset_confirmado_chars += unidades_clob(bloco, self.unidade_suplementar)
+        self.offset_confirmado_chars += unidades_clob(bloco, self.supplementary_unit)
         self.bytes_confirmados += _bytes(bloco)
         self._em_voo = None
 
@@ -222,15 +222,15 @@ def _rollback(conn):
 
 
 def _enviar_um(bomba, conn, repo, agente_id):
-    """Envia o proximo passo pendente da bomba: OK, POSSE_PERDIDA, INCONSISTENTE ou CONEXAO_INCERTA."""
+    """Envia o proximo passo pendente da bomba: OK, OWNERSHIP_LOST, INCONSISTENTE ou CONEXAO_INCERTA."""
     item = bomba.proximo_bloco()
     try:
         if item is not None:
             bloco, offset = item
-            resultado = repo.anexar(conn, bomba.ticket_id, agente_id, offset, bloco)
+            resultado = repo.append_chunk(conn, bomba.ticket_id, agente_id, offset, bloco)
         else:
-            resultado = GRAVADO if repo.marcar_truncado(conn, bomba.ticket_id, agente_id) else POSSE_PERDIDA
-    except LogOffsetInconsistente as e:
+            resultado = WRITTEN if repo.mark_truncated(conn, bomba.ticket_id, agente_id) else OWNERSHIP_LOST
+    except LogOffsetMismatch as e:
         _rollback(conn)
         bomba.parada = True
         _log.error("pump interrompido: %s", e, extra={"ticket": bomba.ticket_id, "action": "LOG"})
@@ -240,13 +240,13 @@ def _enviar_um(bomba, conn, repo, agente_id):
         _log.warning("envio do log falhou (%s); bloco mantido", e.__class__.__name__,
                      extra={"ticket": bomba.ticket_id, "action": "LOG"})
         return CONEXAO_INCERTA
-    if resultado == POSSE_PERDIDA:
+    if resultado == OWNERSHIP_LOST:
         _rollback(conn)
         bomba.posse_perdida = True
-        return POSSE_PERDIDA
+        return OWNERSHIP_LOST
     try:
         conn.commit()
-    except Exception as e:  # noqa: BLE001 - desfecho desconhecido: a repeticao reconcilia (JA_GRAVADO)
+    except Exception as e:  # noqa: BLE001 - desfecho desconhecido: a repeticao reconcilia (ALREADY_WRITTEN)
         _log.warning("COMMIT do log incerto (%s); bloco mantido", e.__class__.__name__,
                      extra={"ticket": bomba.ticket_id, "action": "LOG"})
         return CONEXAO_INCERTA
@@ -318,22 +318,22 @@ class Rodada(object):
                 if desfecho == CONEXAO_INCERTA:
                     res.conexao_incerta = True
                     return res
-                if desfecho in (POSSE_PERDIDA, INCONSISTENTE):
-                    (res.posse_perdida if desfecho == POSSE_PERDIDA else res.inconsistentes).append(ticket_id)
+                if desfecho in (OWNERSHIP_LOST, INCONSISTENTE):
+                    (res.posse_perdida if desfecho == OWNERSHIP_LOST else res.inconsistentes).append(ticket_id)
                     ativos.remove(ticket_id)
 
 
 def flush_final(bomba, conn, repo, agente_id):
     """Flush final de um ticket terminado, sem orcamento (o laco faz um por iteracao).
 
-    Devolve OK (tudo confirmado), POSSE_PERDIDA, INCONSISTENTE ou CONEXAO_INCERTA (repetir na proxima
+    Devolve OK (tudo confirmado), OWNERSHIP_LOST, INCONSISTENTE ou CONEXAO_INCERTA (repetir na proxima
     iteracao com a mesma bomba: nada confirmado se perde nem se duplica).
     """
     if bomba.parada:
         return INCONSISTENTE
     if bomba.posse_perdida:
-        return POSSE_PERDIDA
-    bomba.finalizar()
+        return OWNERSHIP_LOST
+    bomba.finalize()
     while bomba.pendente():
         desfecho = _enviar_um(bomba, conn, repo, agente_id)
         if desfecho != OK:

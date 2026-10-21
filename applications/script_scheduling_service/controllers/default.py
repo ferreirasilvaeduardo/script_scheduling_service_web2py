@@ -12,7 +12,7 @@ import rbac
 import security
 import ticket_service
 import ui_helpers
-from repo_errors import RepoErro
+from repo_errors import RepoError
 
 _MSG_FALHA_CARTAO = u"Não foi possível carregar este quadro. Tente novamente em instantes."
 
@@ -28,7 +28,7 @@ def _cartao(ctx, nome, funcao):
     """Executa a consulta de um cartao; falha de repositorio vira mensagem no proprio cartao."""
     try:
         return funcao(), None
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao montar o cartao %s do painel inicial (login=%s)", nome, ctx["login"],
                        extra={"action": "PAINEL"})
         return None, _MSG_FALHA_CARTAO
@@ -42,10 +42,10 @@ def index():
     if ticket_service.pode_consultar(ctx):
         cartoes["tickets"] = _cartao(ctx, "tickets", lambda: ticket_service.resumo_inicial(ctx))
     if rbac.tem_func(ctx, "MANAGE_SCHEDULES"):
-        cartoes["agendamentos"] = _cartao(
-            ctx, "agendamentos", lambda: schedules_service.listar(ctx, {"active": "Y"}, 1, 5)["itens"])
+        cartoes["schedules"] = _cartao(
+            ctx, "schedules", lambda: schedules_service.listar(ctx, {"active": "Y"}, 1, 5)["itens"])
     if rbac.tem_func(ctx, "VIEW_AUDIT"):
-        cartoes["agentes"] = _cartao(ctx, "agentes", lambda: agents_service.painel(ctx))
+        cartoes["agents"] = _cartao(ctx, "agents", lambda: agents_service.painel(ctx))
     return dict(ctx=ctx, menu=response.sss_menu, pode_disparar=rbac.tem_func(ctx, "EXEC_SCRIPT"),
                 cartoes=cartoes)
 
@@ -102,7 +102,7 @@ def permissoes():
     try:
         dados = permissions_service.montar(ctx)
         erro = None
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao montar permissoes (login=%s)", ctx["login"], extra={"action": "PERMISSOES"})
         dados, erro = None, ui_helpers.mensagem("falha_interna")
     return dict(dados=dados, erro=erro)

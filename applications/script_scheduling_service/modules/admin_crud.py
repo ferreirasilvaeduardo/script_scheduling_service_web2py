@@ -123,7 +123,7 @@ def hash_estado(estado):
 
 
 def esperado(registro, campos):
-    """Valores lidos que condicionam o UPDATE (o repositorio lanca RepoConflito se divergirem)."""
+    """Valores lidos que condicionam o UPDATE (o repositorio lanca RepoConflict se divergirem)."""
     return dict((c, registro.get(c)) for c in campos)
 
 

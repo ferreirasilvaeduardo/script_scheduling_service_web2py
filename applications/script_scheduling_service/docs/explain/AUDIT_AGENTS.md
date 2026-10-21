@@ -1,10 +1,10 @@
 # SSS — Explain Plan: Agregado AUDITORIA_AGENTES (F7.3)
 
-Consultas SQL estáticas do `RepoAuditoriaOracle` e do `RepoAgentesOracle` (`modules/repo_oracle/audit.py` e `agentes.py`) no Oracle 11gR2+.
+Consultas SQL estáticas do `RepoAuditOracle` e do `RepoAgentsOracle` (`modules/repo_oracle/audit.py` e `agentes.py`) no Oracle 11gR2+.
 
 > **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix` (padrão `tbsss_`). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind, com as datas como `TIPO_DATE` (README §7.5).
 >
-> **Expressões dos índices por função (AGENTS §4.8):** `tickets_running`, `rodando_sem_pid` e `fila_sem_atendente` repetem as expressões de `ix_{prefixo}tck_run` (`CASE`) e `ix_{prefixo}tck_fila` (`GREATEST(scheduled_at, created_at)`, CR-013), importadas do `sql_ident`. Nenhuma das três lê CLOB.
+> **Expressões dos índices por função (AGENTS §4.8):** `tickets_running`, `running_without_pid` e `unattended_queue` repetem as expressões de `ix_{prefixo}tck_run` (`CASE`) e `ix_{prefixo}tck_queue` (`GREATEST(scheduled_at, created_at)`, CR-013), importadas do `sql_ident`. Nenhuma das três lê CLOB.
 
 ---
 
@@ -12,13 +12,13 @@ Consultas SQL estáticas do `RepoAuditoriaOracle` e do `RepoAgentesOracle` (`mod
 
 | Método | Consulta | Acesso esperado |
 |---|---|---|
-| `auditoria.listar` | `COUNT(*)` com `ROWNUM <= 10001` e página `ROWNUM`, ordem `created_at DESC, id DESC`. O service sempre envia o período (`created_at >= :start_date AND created_at <= :end_date`, sem `TRUNC`, até 31 dias, ou 366 com filtro seletivo); filtros de ator e IP por trecho, ação, entidade, `entity_id` e `id_max` | `ix_{prefixo}aud_crt` no período; `ix_{prefixo}aud_ent` com entidade + id |
-| `auditoria.iterar` | Os mesmos filtros e ordem, `ROWNUM <= :limite`, cursor com `arraysize` (exportação, sem offset) | idem |
-| `auditoria.registrar` / `reservar_id` | `INSERT` pela PK; `NEXTVAL` da sequence | — |
-| `agentes.listar` | Todos os agentes por `codigo, id` (dezenas de linhas) | `TABLE ACCESS FULL` aceitável em `tbsss_agents` |
+| `auditoria.list` | `COUNT(*)` com `ROWNUM <= 10001` e página `ROWNUM`, ordem `created_at DESC, id DESC`. O service sempre envia o período (`created_at >= :start_date AND created_at <= :end_date`, sem `TRUNC`, até 31 dias, ou 366 com filtro seletivo); filtros de ator e IP por trecho, ação, entidade, `entity_id` e `id_max` | `ix_{prefixo}aud_crt` no período; `ix_{prefixo}aud_ent` com entidade + id |
+| `auditoria.iterate` | Os mesmos filtros e ordem, `ROWNUM <= :limite`, cursor com `arraysize` (exportação, sem offset) | idem |
+| `auditoria.register` / `reserve_id` | `INSERT` pela PK; `NEXTVAL` da sequence | — |
+| `agentes.list` | Todos os agentes por `codigo, id` (dezenas de linhas) | `TABLE ACCESS FULL` aceitável em `tbsss_agents` |
 | `agentes.tickets_running` | `(CASE WHEN status = 'RUNNING' THEN agent_id END) = :code` | `ix_{prefixo}tck_run` |
-| `agentes.fila_sem_atendente` (CR-013) | `status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :agora`, `COUNT(*)` e `MIN(inicio)` por ambiente e script, depois `JOIN` com `{prefixo}scripts` pelo interpretador do cadastro (CR-008, R-15) | `ix_{prefixo}tck_fila` só (`INDEX FAST FULL SCAN`, sem tabela): com 1 milhão de `PENDING`, 8.346 leituras e 0,3 s (agregado de toda a fila, só no painel) |
-| `agentes.rodando_sem_pid` | `(CASE WHEN status = 'RUNNING' THEN agent_id END) >= CHR(1)` (equivale a `IS NOT NULL` para o `agent_id`), sem PID e `started_at < :limite` | `ix_{prefixo}tck_run` |
+| `agentes.unattended_queue` (CR-013) | `status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :agora`, `COUNT(*)` e `MIN(inicio)` por ambiente e script, depois `JOIN` com `{prefixo}scripts` pelo interpretador do cadastro (CR-008, R-15) | `ix_{prefixo}tck_queue` só (`INDEX FAST FULL SCAN`, sem tabela): com 1 milhão de `PENDING`, 8.346 leituras e 0,3 s (agregado de toda a fila, só no painel) |
+| `agentes.running_without_pid` | `(CASE WHEN status = 'RUNNING' THEN agent_id END) >= CHR(1)` (equivale a `IS NOT NULL` para o `agent_id`), sem PID e `started_at < :limite` | `ix_{prefixo}tck_run` |
 
 ---
 
@@ -30,7 +30,7 @@ Consultas SQL estáticas do `RepoAuditoriaOracle` e do `RepoAgentesOracle` (`mod
   * Logo depois, as estatísticas foram restauradas ao estado anterior: as das tabelas apagadas e as dos índices vazios recoletadas.
   * O estado antes e depois foi conferido e é idêntico. Nenhuma linha foi gravada.
 * **Sem `TABLE ACCESS FULL` em `tbsss_tickets` e `tbsss_audit`:** conforme. O `TABLE ACCESS FULL` restante é em `tbsss_agents`, que tem dezenas de linhas, e o ramo alternativo do plano adaptativo em `tbsss_scripts`.
-* **Correção feita no F7.3:** `rodando_sem_pid` com `(CASE …) IS NOT NULL` varria `tbsss_tickets` inteira, mesmo com a coluna oculta indicando só os `RUNNING`, porque o otimizador não transforma `IS NOT NULL` em faixa do índice. Com `>= CHR(1)`, equivalente para qualquer `agent_id` válido (`[A-Za-z0-9._-]`), a consulta passou a `INDEX RANGE SCAN` em `ix_{prefixo}tck_run`.
+* **Correção feita no F7.3:** `running_without_pid` com `(CASE …) IS NOT NULL` varria `tbsss_tickets` inteira, mesmo com a coluna oculta indicando só os `RUNNING`, porque o otimizador não transforma `IS NOT NULL` em faixa do índice. Com `>= CHR(1)`, equivalente para qualquer `agent_id` válido (`[A-Za-z0-9._-]`), a consulta passou a `INDEX RANGE SCAN` em `ix_{prefixo}tck_run`.
 * **Lista da auditoria:** usa `ix_{prefixo}aud_crt` no período e ordena as linhas do período (`SORT ORDER BY STOPKEY`), limitado ao intervalo máximo do service. Se o volume diário crescer muito, a melhoria é o índice `(created_at, id)`, como em `ix_{prefixo}tck_crt`.
 
 ### Planos registrados (com volume simulado)

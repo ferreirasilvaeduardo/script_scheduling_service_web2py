@@ -328,7 +328,7 @@ def ator_visivel(ator, ctx):
     ctx = ctx or {}
     if not ator or ator == "SYSTEM" or ator.startswith(_PREFIXO_SISTEMA):
         return ator
-    if ctx.get("is_admin") is True or "VIEW_AUDIT" in (ctx.get("funcionalidades") or ()):
+    if ctx.get("is_admin") is True or "VIEW_AUDIT" in (ctx.get("features") or ()):
         return ator
     return u"você" if ator == ctx.get("login") else u"outra pessoa"
 

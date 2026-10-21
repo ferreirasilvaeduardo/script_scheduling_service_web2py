@@ -8,7 +8,7 @@ import admin_environments_service as servico
 import admin_crud
 import ui_helpers
 from admin_crud import AcessoNegado
-from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
+from repo_errors import RepoConflict, RepoError, RepoNotFound
 
 _FUNC = "MANAGE_ENVIRONMENTS"
 _TAMANHOS = (20, 50, 100)
@@ -55,7 +55,7 @@ def lista():
         resultado = servico.listar(ctx, filtros, pagina, tamanho)
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao listar ambientes (login=%s)", ctx["login"], extra={"action": _FUNC})
         resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
@@ -69,7 +69,7 @@ def form():
     ctx = _exigir_func(_FUNC)
     try:
         dados = servico.formulario(ctx, _texto(request.args(0), 11))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
@@ -83,11 +83,11 @@ def salvar():
     enviados = dict((c, _texto(request.post_vars.get(c), 300)) for c in ("name", "description", "connection", "version"))
     try:
         salvo_id, erros = servico.salvar(ctx, _ip_origem(), ambiente_id, enviados)
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao salvar ambiente (login=%s id=%r)", ctx["login"], ambiente_id, extra={"action": _FUNC})
         salvo_id, erros = None, {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}
     if not erros:
@@ -96,7 +96,7 @@ def salvar():
     # Reapresenta o que foi digitado; na edicao o nome e a versao continuam os do registro.
     try:
         dados = servico.formulario(ctx, ambiente_id) if ambiente_id else servico.formulario(ctx)
-    except RepoErro:
+    except RepoError:
         dados = {"id": None, "name": "", "active": "Y", "version": "", "agendamentos_ativos": 0, "scripts_homologados": 0}
     if admin_crud.CAMPO_GERAL not in erros:
         conexao = enviados["connection"] or ""
@@ -122,13 +122,13 @@ def alternar_ativo():
             session.flash = {"tipo": "sucesso", "mensagem": u"Ambiente %s desativado." % alterado["name"]}
         else:
             session.flash = {"tipo": "sucesso", "mensagem": u"Ambiente %s reativado." % alterado["name"]}
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
-    except RepoConflito:
+    except RepoConflict:
         session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao alternar ambiente (login=%s id=%r)", ctx["login"], ambiente_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ALTERNAR}
     redirect(URL(c="admin_ambientes", f="form", args=[ambiente_id]))

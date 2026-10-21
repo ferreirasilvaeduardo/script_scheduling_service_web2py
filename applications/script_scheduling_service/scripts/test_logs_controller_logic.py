@@ -11,7 +11,7 @@ from unittest import mock
 import auth_service
 import repo_factory
 import security
-from repo_errors import RepoIndisponivel, RepoNaoEncontrado
+from repo_errors import RepoUnavailable, RepoNotFound
 from ticket_service import LOG_MAX_CHARS, MARCADOR_DOWNLOAD_INTERROMPIDO, OffsetInvalido, ServicoTicket
 
 SESSOES = {
@@ -26,7 +26,7 @@ PASSO_13_S = 8
 ETAPAS = 50
 SEGREDO_SEED = "00011122233"
 # README §8.10.
-MARCADOR_TRUNCADO = "[SSS] log truncado no banco; arquivo integral no agente\n"
+MARKER_TRUNCATED = "[SSS] log truncado no banco; arquivo integral no agente\n"
 
 
 class _Relogio(object):
@@ -47,27 +47,27 @@ class _BaseLog(unittest.TestCase):
         patcher = mock.patch.object(security, "ITERACOES", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
-        env = mock.patch.dict(os.environ, {repo_factory.ENV_SENHA_DEV: "senha-dev-de-teste-123"})
+        env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: "senha-dev-de-teste-123"})
         env.start()
         self.addCleanup(env.stop)
-        repo_factory.configurar({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
+        repo_factory.configure({"app": {"data_backend": "FAKE", "sss_env": "DEV"}})
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
-        self.addCleanup(repo_factory.configurar, None)
+        self.addCleanup(repo_factory.configure, None)
 
-        catalogo = repo_factory.obter("catalogo")
-        self.tickets = repo_factory.obter("tickets")
+        catalogo = repo_factory.get("catalog")
+        self.tickets = repo_factory.get("tickets")
         # Congela o relogio no instante da carga do seed (started_at do RUNNING + 5 min).
-        inicio = self.tickets.obter(TCK_RUNNING)["started_at"]
+        inicio = self.tickets.get(TCK_RUNNING)["started_at"]
         self.relogio = _Relogio(inicio + datetime.timedelta(minutes=5))
-        repo_factory._fake_store.definir_relogio(self.relogio)
+        repo_factory._fake_store.set_clock(self.relogio)
 
         self.log = logging.getLogger("sss_teste_logs")
         self.log.addHandler(logging.NullHandler())
         self.log.propagate = False
         auth = auth_service.ServicoAuth(
-            repo_factory.obter("usuarios"), repo_factory.obter("rbac"), catalogo,
-            repo_factory.obter("auditoria"), 5, 900, self.log)
+            repo_factory.get("users"), repo_factory.get("rbac"), catalogo,
+            repo_factory.get("audit"), 5, 900, self.log)
         self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
         self.svc = ServicoTicket(catalogo, self.tickets, self.log)
 
@@ -75,7 +75,7 @@ class _BaseLog(unittest.TestCase):
         """Log inteiro lido do repositorio em fatias, pelo contrato (obter nao traz log_output)."""
         partes, offset = [], 0
         while True:
-            texto, offset, _terminal, _truncado = self.tickets.log_ler(ticket_id, offset, 65536)
+            texto, offset, _terminal, _truncado = self.tickets.log_read(ticket_id, offset, 65536)
             if not texto:
                 return "".join(partes)
             partes.append(texto)
@@ -106,14 +106,14 @@ class TestLerLogValidacao(_BaseLog):
 
     def test_ticket_inexistente_ou_id_invalido_e_404(self):
         for tid in ("999", "0", "abc", None, "-3"):
-            with self.assertRaises(RepoNaoEncontrado, msg=repr(tid)):
+            with self.assertRaises(RepoNotFound, msg=repr(tid)):
                 self.svc.ler_log(self.ctx["admin"], tid, "0")
 
     def test_fora_do_escopo_e_404(self):
         # op.hml enxerga HOMOLOGACAO/DESENV e seus proprios; o 13 e PRODUCAO de op.prod.
-        with self.assertRaises(RepoNaoEncontrado):
+        with self.assertRaises(RepoNotFound):
             self.svc.ler_log(self.ctx["op.hml"], str(TCK_RUNNING), "0")
-        with self.assertRaises(RepoNaoEncontrado):
+        with self.assertRaises(RepoNotFound):
             self.svc.blocos_log(self.ctx["op.hml"], str(TCK_RUNNING))
 
     def test_dentro_do_escopo(self):
@@ -149,7 +149,7 @@ class TestLerLogConteudo(_BaseLog):
         texto, ultima = self._ler_tudo("admin", TCK_TRUNCADO)
         self.assertTrue(ultima["truncado"])
         self.assertTrue(ultima["terminal"])
-        self.assertTrue(texto.endswith(MARCADOR_TRUNCADO))
+        self.assertTrue(texto.endswith(MARKER_TRUNCATED))
         self.assertFalse(self.svc.ler_log(self.ctx["admin"], "17", "0")["truncado"])
 
     def test_running_cresce_com_o_relogio_e_termina(self):
@@ -175,7 +175,7 @@ class TestLerLogConteudo(_BaseLog):
         self.assertEqual(r3["status"], "SUCCESS")
         self.assertIn("etapa %d/%d processada" % (ETAPAS, ETAPAS), r3["texto"])
         self.assertIn("Script concluido com retorno 0.", r3["texto"])
-        ticket = self.tickets.obter(TCK_RUNNING)
+        ticket = self.tickets.get(TCK_RUNNING)
         self.assertEqual((ticket["status_reason"], ticket["return_code"]), ("EXIT_OK", 0))
         self.assertEqual(ticket["finished_at"], self.relogio())
 
@@ -185,12 +185,12 @@ class TestLerLogConteudo(_BaseLog):
         self.assertEqual((r4["texto"], r4["terminal"]), ("", True))
 
     def test_running_com_cancelamento_sinalizado_termina_cancelado(self):
-        self.assertEqual(self.tickets.solicitar_cancelamento(TCK_RUNNING, "admin", "10.0.0.1"), "SINALIZADO")
+        self.assertEqual(self.tickets.request_cancel(TCK_RUNNING, "admin", "10.0.0.1"), "SINALIZADO")
         texto, ultima = self._ler_tudo("admin", TCK_RUNNING)
         self.assertTrue(ultima["terminal"])
         self.assertEqual(ultima["status"], "CANCELLED")
         self.assertIn("cancelamento", texto)
-        self.assertEqual(self.tickets.obter(TCK_RUNNING)["status_reason"], "CANCEL_USER")
+        self.assertEqual(self.tickets.get(TCK_RUNNING)["status_reason"], "CANCEL_USER")
 
     def test_segredo_mascarado(self):
         texto, _ = self._ler_tudo("admin", TCK_RUNNING)
@@ -217,23 +217,23 @@ class TestBlocosLog(_BaseLog):
         self.assertEqual(bruto.decode("utf-8"), integral)
 
     def test_escopo_validado_antes_do_streaming(self):
-        with mock.patch.object(self.tickets, "log_ler") as log_ler:
-            with self.assertRaises(RepoNaoEncontrado):
+        with mock.patch.object(self.tickets, "log_read") as log_ler:
+            with self.assertRaises(RepoNotFound):
                 self.svc.blocos_log(self.ctx["op.hml"], str(TCK_RUNNING))
             log_ler.assert_not_called()
 
     def test_falha_no_meio_encerra_com_marcador(self):
-        original = self.tickets.log_ler
+        original = self.tickets.log_read
         chamadas = []
 
         def falhar_na_segunda(*args, **kwargs):
             chamadas.append(args)
             if len(chamadas) == 2:
-                raise RepoIndisponivel("indisponivel")
+                raise RepoUnavailable("indisponivel")
             return original(*args, **kwargs)
 
         _tid, blocos = self.svc.blocos_log(self.ctx["admin"], str(TCK_GRANDE))
-        with mock.patch.object(self.tickets, "log_ler", side_effect=falhar_na_segunda):
+        with mock.patch.object(self.tickets, "log_read", side_effect=falhar_na_segunda):
             lista = list(blocos)
         self.assertEqual(len(lista), 2)
         self.assertEqual(lista[-1], MARCADOR_DOWNLOAD_INTERROMPIDO)

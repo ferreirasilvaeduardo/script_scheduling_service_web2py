@@ -14,57 +14,57 @@ import security
 import sql_ident
 
 # Contas de demonstracao que permanecem sem senha utilizavel mesmo em DEV.
-_SEM_SENHA_DEV = ("inativo", "bloqueado")
+_NO_PASSWORD_DEV = ("inativo", "bloqueado")
 
 # Marcador final do log truncado no banco (README §8.10).
-MARCADOR_TRUNCADO = "[SSS] log truncado no banco; arquivo integral no agente\n"
+MARKER_TRUNCATED = "[SSS] log truncado no banco; arquivo integral no agente\n"
 
-# Segundos por etapa do log simulado dos RUNNING (o 16 nao tem log, ver _TICKET_SEM_PID): na carga ja decorreram 5 min desde started_at;
+# Segundos por etapa do log simulado dos RUNNING (o 16 nao tem log, ver _TICKET_NO_PID): na carga ja decorreram 5 min desde started_at;
 # o ticket 13 termina ~100 s depois e os demais entre 15 e 25 min depois.
-_PASSO_LOG_S = {11: 24, 12: 30, 13: 8, 14: 36, 15: 30, 16: 36}
-_LINHAS_LOG_VOLUMOSO = 27000
+_STEP_LOG_S = {11: 24, 12: 30, 13: 8, 14: 36, 15: 30, 16: 36}
+_LINES_LOG_LARGE = 27000
 # Idade inicial do heartbeat congelado do agt-host02: com os limiares padrao (10/90/180 s) ele
 # comeca ATRASADO, fica EM_RISCO ~1 min depois e OFFLINE ~2,5 min depois (README §13).
-_HB_CONGELADO_S = 30
-_TICKET_LOG_VOLUMOSO = 17
+_HB_FROZEN_S = 30
+_TICKET_LOG_LARGE = 17
 # Quadros de atencao da tela de agentes (CR-007, R-18): o ticket 4 (SH em HOMOLOGACAO) ja venceu e
 # so o agt-host02 atende o par, entao aparece em "Fila sem atendente" quando ele sai de ATRASADO;
 # o RUNNING 16 foi reservado sem PID ("Rodando sem PID", sem log simulado).
-_TICKET_FILA_SEM_ATENDENTE = 4
-_TICKET_SEM_PID = 16
+_TICKET_QUEUE_NO_SERVER = 4
+_TICKET_NO_PID = 16
 
 
-def _log_volumoso(inicio):
+def _large_log(inicio):
     # ~2 MB em UTF-8, com acentos, para exercitar a leitura por offset e o download.
     linhas = []
-    for i in range(1, _LINHAS_LOG_VOLUMOSO + 1):
+    for i in range(1, _LINES_LOG_LARGE + 1):
         quando = inicio + datetime.timedelta(seconds=i // 100)
         linhas.append(u"[%s] lote %06d/%06d: registros validados \u2014 situa\u00e7\u00e3o OK\n"
-                      % (quando, i, _LINHAS_LOG_VOLUMOSO))
+                      % (quando, i, _LINES_LOG_LARGE))
     return u"".join(linhas)
 
 
-def _vinculos_compilador(store, script_id):
+def _compiler_links(store, script_id):
     """Vinculos ativos do script no formato do compilador (parametro + ordem, obrigatorio e sub)."""
     vinculos = []
     for v in sorted((v for v in store.script_param.values() if v["script_id"] == script_id), key=lambda v: v["sort_order"]):
-        prm = store.parametros[v["parameter_id"]]
+        prm = store.parameters[v["parameter_id"]]
         if prm["active"] == "Y":
             vinculos.append(dict(prm, parameter_id=prm["id"], sort_order=v["sort_order"], required=v["required"],
                                  default_value_override=v.get("default_value_override")))
     return vinculos
 
 
-def _compilar_seed(store, script_id, agora):
+def _compile_seed(store, script_id, agora):
     """Snapshot e respostas resolvidas reais do script (README §2.5: seed coerente com as regras)."""
-    vinculos = _vinculos_compilador(store, script_id)
+    vinculos = _compiler_links(store, script_id)
     snapshot, resolvidos, erros = params_compiler.compilar_snapshot(store.scripts[script_id], vinculos, {}, agora)
     if erros:
         raise ValueError("seed incoerente: script %s nao compila (%s)" % (script_id, sorted(erros)))
     return snapshot, resolvidos, vinculos
 
 
-def _parametros_json(resolvidos):
+def _params_json(resolvidos):
     """parametros_json de agendamento: respostas resolvidas, nulos omitidos, CHECKBOX como texto (README §7.6)."""
     obj = {}
     for codigo, valor in resolvidos.items():
@@ -74,37 +74,37 @@ def _parametros_json(resolvidos):
     return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-_ATOR_SEED = "SYSTEM:seed"
-_CADASTROS = ("ambientes", "perfis", "funcionalidades", "perfil_func", "perfil_amb", "scripts", "perfil_scr",
-              "script_amb", "usuarios", "parametros", "script_param", "agendamentos")
+_ACTOR_SEED = "SYSTEM:seed"
+_REGISTRIES = ("environments", "profiles", "features", "profile_feature", "profile_env", "scripts", "profile_script",
+              "script_env", "users", "parameters", "script_param", "schedules")
 
 
-def _entre(valor, minimo, maximo):
+def _between(valor, minimo, maximo):
     return max(minimo, min(valor, maximo))
 
 
-def _carimbar_registro(store, base_dt):
+def _stamp_record(store, base_dt):
     """Colunas de registro coerentes com o README §10 e §2.5 (CR-006).
 
     Cadastros e vinculos: criados por SYSTEM:seed; updated_* so onde o estado implica alteracao
     (registro inativo, regra pausada). Tickets: solicitante ou o agente do desdobro; fora de PENDING,
     a ultima mudanca de situacao. Agentes: o proprio agente. Sempre entre created_at e base_dt.
     """
-    for nome in _CADASTROS:
+    for nome in _REGISTRIES:
         for reg in getattr(store, nome).values():
             reg.setdefault("created_at", base_dt - datetime.timedelta(days=90))
-            reg.update(created_by=_ATOR_SEED, updated_at=None, updated_by=None)
+            reg.update(created_by=_ACTOR_SEED, updated_at=None, updated_by=None)
             if reg.get("active") == "N":
-                reg["updated_at"] = _entre(reg["created_at"] + datetime.timedelta(days=1), reg["created_at"], base_dt)
-                reg["updated_by"] = _ATOR_SEED
-    for a in store.agendamentos.values():
+                reg["updated_at"] = _between(reg["created_at"] + datetime.timedelta(days=1), reg["created_at"], base_dt)
+                reg["updated_by"] = _ACTOR_SEED
+    for a in store.schedules.values():
         if a["active"] == "N":
             if a.get("pause_reason") == "MANUAL":
-                a["updated_by"] = store.usuarios[a["user_id"]]["login"]
+                a["updated_by"] = store.users[a["user_id"]]["login"]
             else:
                 a["updated_by"] = "SYSTEM:agt-host01"
-            a["updated_at"] = _entre(a.get("last_run_at") or a["created_at"], a["created_at"], base_dt)
-    for ag in store.agentes.values():
+            a["updated_at"] = _between(a.get("last_run_at") or a["created_at"], a["created_at"], base_dt)
+    for ag in store.agents.values():
         ag.update(created_by="SYSTEM:%s" % ag["code"], updated_at=None, updated_by=None)
     for t in store.tickets.values():
         if t.get("schedule_id") is not None:
@@ -124,17 +124,17 @@ def _carimbar_registro(store, base_dt):
         else:
             t["updated_by"] = "SYSTEM:%s" % t["agent_id"]
             quando = t.get("finished_at") or t.get("started_at")
-        t["updated_at"] = _entre(quando or t["created_at"], t["created_at"], base_dt)
-    for r in store.ticket_resp.values():
+        t["updated_at"] = _between(quando or t["created_at"], t["created_at"], base_dt)
+    for r in store.ticket_answer.values():
         r.update(created_by=store.tickets[r["ticket_id"]]["created_by"], updated_at=None, updated_by=None)
-    for sai in store.ticket_saida.values():
+    for sai in store.ticket_output.values():
         # A troca de GRAVANDO para a situacao final e alteracao de negocio do agente (README §10, tabela 18).
         t = store.tickets[sai["ticket_id"]]
         sai.update(created_at=t["finished_at"], created_by="SYSTEM:%s" % sai["agent_id"],
                  updated_at=t["finished_at"], updated_by="SYSTEM:%s" % sai["agent_id"])
 
 
-def _zip_seed():
+def _seed_zip():
     """Zip pequeno de demonstracao da pasta de saida (CR-012), gerado em memoria."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
@@ -143,16 +143,16 @@ def _zip_seed():
     return buf.getvalue()
 
 
-def _seed_saidas(store):
+def _seed_outputs(store):
     """Saidas do ticket (tabela 18, CR-012): uma de cada situacao final, em tickets terminados."""
-    conteudo = _zip_seed()
+    conteudo = _seed_zip()
     linhas = (
         (17, "AVAILABLE", None, 2, len(conteudo), conteudo),
         (29, "EXCEEDED", "FILES", None, None, None),
         (30, "FAILED", "DEADLINE", None, None, None),
     )
     for sid, (ticket_id, situacao, motivo, qtd, tamanho, dados) in enumerate(linhas, 1):
-        store.ticket_saida[sid] = {
+        store.ticket_output[sid] = {
             "id": sid,
             "ticket_id": ticket_id,
             "state": situacao,
@@ -165,7 +165,7 @@ def _seed_saidas(store):
     store.seqs["tbsss_ticket_output"] = len(linhas)
 
 
-def carregar_seed(store, forcar=False, senha_dev=None):
+def load_seed(store, forcar=False, senha_dev=None):
     """Carrega dados iniciais deterministicos no store FAKE de forma idempotente.
 
     senha_dev: senha comum dos usuarios de demonstracao (exceto inativo e bloqueado),
@@ -178,11 +178,11 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                     with store.lock_agendamentos:
                         with store.lock_auditoria:
                             with store.lock_agentes:
-                                if store.ambientes and not forcar:
+                                if store.environments and not forcar:
                                     return
 
                                 store.reset()
-                                base_dt = store.agora()
+                                base_dt = store.now()
 
                                 # ---------------------------------------------------------
                                 # 1. Ambientes (3)
@@ -199,7 +199,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 ]
                                 for a in ambs:
                                     a["created_at"] = base_dt - datetime.timedelta(days=90)
-                                    store.ambientes[a["id"]] = a
+                                    store.environments[a["id"]] = a
                                 store.seqs["tbsss_environments"] = 8
 
                                 # ---------------------------------------------------------
@@ -218,7 +218,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     {"id": 10, "code": "VIEW_AUDIT", "name": "Auditoria", "module": "ADMIN", "description": "Consultar a trilha de auditoria e os agentes", "active": "Y"},
                                 ]
                                 for f in funcs:
-                                    store.funcionalidades[f["id"]] = f
+                                    store.features[f["id"]] = f
                                 store.seqs["tbsss_features"] = 10
 
                                 # ---------------------------------------------------------
@@ -231,7 +231,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     {"id": 4, "name": "READ_ONLY", "description": "Perfil de Apenas Leitura e Consulta", "is_admin": "N", "perm_version": 1, "active": "Y"},
                                 ]
                                 for p in perfis:
-                                    store.perfis[p["id"]] = p
+                                    store.profiles[p["id"]] = p
                                 store.seqs["tbsss_profiles"] = 4
 
                                 # ---------------------------------------------------------
@@ -248,9 +248,9 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 for u in usuarios:
                                     u["created_at"] = base_dt - datetime.timedelta(days=60)
                                     u["session_epoch"] = 0
-                                    if senha_dev is not None and u["login"] not in _SEM_SENHA_DEV:
+                                    if senha_dev is not None and u["login"] not in _NO_PASSWORD_DEV:
                                         u["password_hash"] = security.hash_senha(senha_dev)
-                                    store.usuarios[u["id"]] = u
+                                    store.users[u["id"]] = u
                                 store.seqs["tbsss_users"] = 6
 
                                 # ---------------------------------------------------------
@@ -280,54 +280,54 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     (6, 1),                # validacao_fiscal -> PRODUCAO
                                 ]
                                 for sid, aid in homols:
-                                    nid = store.proximo_id("tbsss_script_env")
-                                    store.script_amb[nid] = {"id": nid, "script_id": sid, "environment_id": aid}
+                                    nid = store.next_id("tbsss_script_env")
+                                    store.script_env[nid] = {"id": nid, "script_id": sid, "environment_id": aid}
 
                                 # ---------------------------------------------------------
                                 # 7. Matrizes de Perfil (tbsss_profile_feature, amb, scr)
                                 # ---------------------------------------------------------
                                 # ADMINISTRADOR (id 1)
                                 for f in funcs:
-                                    nid = store.proximo_id("tbsss_profile_feature")
-                                    store.perfil_func[nid] = {"id": nid, "profile_id": 1, "feature_id": f["id"]}
+                                    nid = store.next_id("tbsss_profile_feature")
+                                    store.profile_feature[nid] = {"id": nid, "profile_id": 1, "feature_id": f["id"]}
                                 for a in ambs:
-                                    nid = store.proximo_id("tbsss_profile_env")
-                                    store.perfil_amb[nid] = {"id": nid, "profile_id": 1, "environment_id": a["id"]}
+                                    nid = store.next_id("tbsss_profile_env")
+                                    store.profile_env[nid] = {"id": nid, "profile_id": 1, "environment_id": a["id"]}
                                 for s in scripts:
-                                    nid = store.proximo_id("tbsss_profile_script")
-                                    store.perfil_scr[nid] = {"id": nid, "profile_id": 1, "script_id": s["id"]}
+                                    nid = store.next_id("tbsss_profile_script")
+                                    store.profile_script[nid] = {"id": nid, "profile_id": 1, "script_id": s["id"]}
 
                                 # OPERATOR_PROD (id 2) -> EXEC_SCRIPT(1), VIEW_LOGS(2), CANCEL_TICKET(3)
                                 for fid in (1, 2, 3):
-                                    nid = store.proximo_id("tbsss_profile_feature")
-                                    store.perfil_func[nid] = {"id": nid, "profile_id": 2, "feature_id": fid}
+                                    nid = store.next_id("tbsss_profile_feature")
+                                    store.profile_feature[nid] = {"id": nid, "profile_id": 2, "feature_id": fid}
                                 for aid in (1, 2):
-                                    nid = store.proximo_id("tbsss_profile_env")
-                                    store.perfil_amb[nid] = {"id": nid, "profile_id": 2, "environment_id": aid}
+                                    nid = store.next_id("tbsss_profile_env")
+                                    store.profile_env[nid] = {"id": nid, "profile_id": 2, "environment_id": aid}
                                 for sid in (1, 2, 3, 6):
-                                    nid = store.proximo_id("tbsss_profile_script")
-                                    store.perfil_scr[nid] = {"id": nid, "profile_id": 2, "script_id": sid}
+                                    nid = store.next_id("tbsss_profile_script")
+                                    store.profile_script[nid] = {"id": nid, "profile_id": 2, "script_id": sid}
 
                                 # OPERATOR_HML (id 3) -> EXEC_SCRIPT(1), VIEW_LOGS(2), CANCEL_TICKET(3)
                                 for fid in (1, 2, 3):
-                                    nid = store.proximo_id("tbsss_profile_feature")
-                                    store.perfil_func[nid] = {"id": nid, "profile_id": 3, "feature_id": fid}
+                                    nid = store.next_id("tbsss_profile_feature")
+                                    store.profile_feature[nid] = {"id": nid, "profile_id": 3, "feature_id": fid}
                                 for aid in (2, 3):
-                                    nid = store.proximo_id("tbsss_profile_env")
-                                    store.perfil_amb[nid] = {"id": nid, "profile_id": 3, "environment_id": aid}
+                                    nid = store.next_id("tbsss_profile_env")
+                                    store.profile_env[nid] = {"id": nid, "profile_id": 3, "environment_id": aid}
                                 for sid in (1, 2, 3, 4):
-                                    nid = store.proximo_id("tbsss_profile_script")
-                                    store.perfil_scr[nid] = {"id": nid, "profile_id": 3, "script_id": sid}
+                                    nid = store.next_id("tbsss_profile_script")
+                                    store.profile_script[nid] = {"id": nid, "profile_id": 3, "script_id": sid}
 
                                 # CONSULTA (id 4) -> VIEW_LOGS(2)
-                                nid = store.proximo_id("tbsss_profile_feature")
-                                store.perfil_func[nid] = {"id": nid, "profile_id": 4, "feature_id": 2}
+                                nid = store.next_id("tbsss_profile_feature")
+                                store.profile_feature[nid] = {"id": nid, "profile_id": 4, "feature_id": 2}
                                 for aid in (1, 2):
-                                    nid = store.proximo_id("tbsss_profile_env")
-                                    store.perfil_amb[nid] = {"id": nid, "profile_id": 4, "environment_id": aid}
+                                    nid = store.next_id("tbsss_profile_env")
+                                    store.profile_env[nid] = {"id": nid, "profile_id": 4, "environment_id": aid}
                                 for sid in (1, 2, 3, 4, 6):
-                                    nid = store.proximo_id("tbsss_profile_script")
-                                    store.perfil_scr[nid] = {"id": nid, "profile_id": 4, "script_id": sid}
+                                    nid = store.next_id("tbsss_profile_script")
+                                    store.profile_script[nid] = {"id": nid, "profile_id": 4, "script_id": sid}
 
                                 # ---------------------------------------------------------
                                 # 8. Parametros (10)
@@ -345,7 +345,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     {"id": 10, "code": "descricao_lote", "param_flag": "--description", "label": "Descricao do Lote", "description": "Anotacao textual para rastreabilidade", "component_type": "TEXT", "options_json": None, "default_value": None, "validation_regex": None, "sensitive": "N", "active": "Y"},
                                 ]
                                 for p in params:
-                                    store.parametros[p["id"]] = p
+                                    store.parameters[p["id"]] = p
                                 store.seqs["tbsss_parameters"] = 10
 
                                 # ---------------------------------------------------------
@@ -368,7 +368,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     {"script_id": 6, "parameter_id": 10, "sort_order": 3, "required": "N", "default_value_override": "Lote Outubro 2026"},
                                 ]
                                 for v in vinculos:
-                                    nid = store.proximo_id("tbsss_script_param")
+                                    nid = store.next_id("tbsss_script_param")
                                     v["id"] = nid
                                     store.script_param[nid] = v
 
@@ -377,7 +377,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 # ---------------------------------------------------------
                                 agentes = [
                                     {"id": 1, "code": "agt-host01", "hostname": "worker01.internal", "daemon_pid": 1001, "version": "1.0.0", "environments": "PRODUCAO,HOMOLOGACAO", "platform": "LINUX", "interpreters": "PYTHON3,BASH", "status": "ACTIVE", "started_at": base_dt - datetime.timedelta(days=3), "heartbeat_at": base_dt, "created_at": base_dt - datetime.timedelta(days=3)},
-                                    {"id": 2, "code": "agt-host02", "hostname": "worker02.internal", "daemon_pid": 1002, "version": "1.0.0", "environments": "HOMOLOGACAO,DESENV", "platform": "UNIX", "interpreters": "PYTHON3,SH", "status": "ACTIVE", "started_at": base_dt - datetime.timedelta(days=2), "heartbeat_at": base_dt - datetime.timedelta(seconds=_HB_CONGELADO_S), "created_at": base_dt - datetime.timedelta(days=2)},
+                                    {"id": 2, "code": "agt-host02", "hostname": "worker02.internal", "daemon_pid": 1002, "version": "1.0.0", "environments": "HOMOLOGACAO,DESENV", "platform": "UNIX", "interpreters": "PYTHON3,SH", "status": "ACTIVE", "started_at": base_dt - datetime.timedelta(days=2), "heartbeat_at": base_dt - datetime.timedelta(seconds=_HB_FROZEN_S), "created_at": base_dt - datetime.timedelta(days=2)},
                                 ]
                                 # Quadros de atencao do painel (CR-007, R-18): o agt-host02 ficou com a configuracao
                                 # antiga (kill=10) e e o unico que atende SH em HOMOLOGACAO.
@@ -385,7 +385,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     ag["critical_config"] = ("hb=10;fence=90;offline=180;call=30;kill=%d;"
                                                               "misfire=RUN_ONCE;tol=300;horizonte=1461;envelhecimento=60"
                                                               % (10 if ag["id"] == 2 else 5))
-                                    store.agentes[ag["id"]] = ag
+                                    store.agents[ag["id"]] = ag
                                 # agt-host01 renova o heartbeat; agt-host02 envelhece com o relogio (F6.1).
                                 store.agentes_hb_sim.add("agt-host01")
                                 store.seqs["tbsss_agents"] = 2
@@ -407,12 +407,12 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     # recurrence e parametros_json com as respostas resolvidas completas.
                                     a["start_date"] = recurrence.truncar_segundos(a["start_date"])
                                     a["next_run_at"] = recurrence.proxima_execucao(a, agora_agd, 1461)
-                                    _snap, resolvidos, _v = _compilar_seed(store, a["script_id"], agora_agd)
+                                    _snap, resolvidos, _v = _compile_seed(store, a["script_id"], agora_agd)
                                     respostas = dict(json.loads(a["params_json"]))
                                     for codigo, valor in resolvidos.items():
                                         respostas.setdefault(codigo, valor)
-                                    a["params_json"] = _parametros_json(respostas)
-                                    store.agendamentos[a["id"]] = a
+                                    a["params_json"] = _params_json(respostas)
+                                    store.schedules[a["id"]] = a
                                 store.seqs["tbsss_schedules"] = 5
 
                                 # ---------------------------------------------------------
@@ -426,7 +426,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 compilados = {}
                                 sensiveis_por_script = {}
                                 for v in store.script_param.values():
-                                    prm = store.parametros.get(v["parameter_id"])
+                                    prm = store.parameters.get(v["parameter_id"])
                                     if prm and prm["sensitive"] == "Y" and v.get("default_value_override"):
                                         sensiveis_por_script.setdefault(v["script_id"], []).append(
                                             (prm["code"], v["default_value_override"]))
@@ -456,7 +456,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     if tid <= 10:
                                         status = "PENDING"
                                         sched = base_dt + datetime.timedelta(minutes=tid * 5)
-                                        if tid == _TICKET_FILA_SEM_ATENDENTE:
+                                        if tid == _TICKET_QUEUE_NO_SERVER:
                                             sched = base_dt - datetime.timedelta(minutes=3)
                                     elif tid <= 16:
                                         status = "RUNNING"
@@ -464,14 +464,14 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                         started = base_dt - datetime.timedelta(minutes=5)
                                         heartbeat = base_dt - datetime.timedelta(seconds=10)
                                         agente_id = "agt-host01" if tid % 2 == 1 else "agt-host02"
-                                        if tid != _TICKET_SEM_PID:
+                                        if tid != _TICKET_NO_PID:
                                             pid_proc = 2000 + tid
                                             pstart = 1700000000 + tid
                                             log_out = "[%s] Script %s iniciado em %s.\nEtapa 1 concluida com sucesso.\n" % (
                                                 str(started), scr["name"], amb
                                             )
                                             store.log_sim[tid] = {
-                                                "passo_s": _PASSO_LOG_S[tid],
+                                                "passo_s": _STEP_LOG_S[tid],
                                                 "emitidos": 0,
                                                 "sensiveis": list(sensiveis_por_script.get(script_id, [])),
                                             }
@@ -487,8 +487,8 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                         pid_proc = 3000 + tid
                                         pstart = 1700000000 + tid
                                         log_out = "[%s] Script concluido com retorno 0.\n" % str(finished)
-                                        if tid == _TICKET_LOG_VOLUMOSO:
-                                            log_out = _log_volumoso(started) + log_out
+                                        if tid == _TICKET_LOG_LARGE:
+                                            log_out = _large_log(started) + log_out
                                     elif tid <= 36:
                                         status = "FAILED"
                                         sched = base_dt - datetime.timedelta(hours=tid * 2)
@@ -515,7 +515,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                             str(finished), smotivo, ret_code
                                         )
                                         if trunc == "Y":
-                                            log_out += MARCADOR_TRUNCADO
+                                            log_out += MARKER_TRUNCATED
                                     else:
                                         status = "CANCELLED"
                                         smotivo = "CANCEL_USER"
@@ -537,7 +537,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
 
                                     # Snapshot v3 e respostas compilados de verdade (README §6.5, §2.5).
                                     if script_id not in compilados:
-                                        compilados[script_id] = _compilar_seed(
+                                        compilados[script_id] = _compile_seed(
                                             store, script_id, base_dt - datetime.timedelta(minutes=30))
                                     snapshot_json, resolvidos, vinc_scr = compilados[script_id]
 
@@ -574,8 +574,8 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                         valor = resolvidos.get(v["code"])
                                         if valor is None:
                                             continue
-                                        rid = store.proximo_id("tbsss_ticket_answer")
-                                        store.ticket_resp[rid] = {
+                                        rid = store.next_id("tbsss_ticket_answer")
+                                        store.ticket_answer[rid] = {
                                             "id": rid,
                                             "ticket_id": tid,
                                             "parameter_id": v["parameter_id"],
@@ -584,7 +584,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                         }
 
                                 store.seqs["tbsss_tickets"] = 40
-                                _seed_saidas(store)
+                                _seed_outputs(store)
 
                                 # ---------------------------------------------------------
                                 # 13. Auditoria (30 linhas)
@@ -622,7 +622,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     ("admin", "UPDATE", "tbsss_users", 6, "Conta desbloqueada pelo administrador"),
                                 ]
                                 for i, (ator, acao, ent, ent_id, det) in enumerate(acoes, 1):
-                                    store.auditoria[i] = {
+                                    store.audit[i] = {
                                         "id": i,
                                         "actor": ator,
                                         "source_ip": "127.0.0.1",
@@ -634,10 +634,10 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                     }
                                 store.seqs["tbsss_audit"] = 30
 
-                                _carimbar_registro(store, base_dt)
+                                _stamp_record(store, base_dt)
 
                                 # Controle (tabela 17, CR-007 D4): o FAKE nasce na versao do esquema do codigo.
-                                store.controle[1] = {"id": 1, "schema_version": sql_ident.SCHEMA_VERSION,
+                                store.control[1] = {"id": 1, "schema_version": sql_ident.SCHEMA_VERSION,
                                                      "version_applied_at": base_dt - datetime.timedelta(days=90),
                                                      "version_applied_by": "SYSTEM:seed", "purge_owner": None,
                                                      "purge_lease_until": None}

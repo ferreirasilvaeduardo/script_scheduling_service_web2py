@@ -1,10 +1,10 @@
 # SSS — Explain Plan: Agregado AGENDAMENTOS (F7.3)
 
-Consultas SQL estáticas do `RepoAgendamentosOracle` (`modules/repo_oracle/schedules.py`) no Oracle 11gR2+.
+Consultas SQL estáticas do `RepoSchedulesOracle` (`modules/repo_oracle/schedules.py`) no Oracle 11gR2+.
 
 > **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix` (padrão `tbsss_`). Os dois são validados por `sql_ident` e qualificados **uma vez**, na criação do repositório. Todo valor entra por bind; as datas usam `TIPO_DATE` (README §7.5) e o `params_json`, bind CLOB.
 >
-> **`params_json` na listagem (exceção documentada, README §2.5):** o service avalia cada regra com as respostas gravadas (tela de regras e Agenda), então `listar` traz esse CLOB pequeno. O `log_output` nunca entra em listagem.
+> **`params_json` na listagem (exceção documentada, README §2.5):** o service avalia cada regra com as respostas gravadas (tela de regras e Agenda), então `list` traz esse CLOB pequeno. O `log_output` nunca entra em listagem.
 
 ---
 
@@ -12,9 +12,9 @@ Consultas SQL estáticas do `RepoAgendamentosOracle` (`modules/repo_oracle/sched
 
 | Método | Consulta | Acesso esperado |
 |---|---|---|
-| `listar` | `COUNT(*)` com `ROWNUM <= 10001` e página `ROWNUM`, ordem `proxima_execucao, id`; filtros `active`, `script_id`, `environment`, `user_id`, `name` (trecho, `ESCAPE`) e escopo por `IN` | `ix_{prefixo}agd_prox (active, next_run_at, id)` com `active = 'Y'` (Agenda); `ix_{prefixo}agd_scr`/`amb`/`usr` nos filtros |
-| `obter`, `alterar`, `retomar` | Leitura pela PK; lock `FOR UPDATE WAIT 5`; `UPDATE` pela PK | `pk_{prefixo}agendamentos` |
-| `pausar` | `UPDATE … WHERE id = :id AND active = 'Y' [AND next_run_at = :antiga_data]` (CR-007, R-19), com `rowcount` conferido | `pk_{prefixo}agendamentos` |
+| `list` | `COUNT(*)` com `ROWNUM <= 10001` e página `ROWNUM`, ordem `proxima_execucao, id`; filtros `active`, `script_id`, `environment`, `user_id`, `name` (trecho, `ESCAPE`) e escopo por `IN` | `ix_{prefixo}sch_next (active, next_run_at, id)` com `active = 'Y'` (Agenda); `ix_{prefixo}sch_scr`/`amb`/`usr` nos filtros |
+| `get`, `update`, `resume` | Leitura pela PK; lock `FOR UPDATE WAIT 5`; `UPDATE` pela PK | `pk_{prefixo}schedules` |
+| `pause` | `UPDATE … WHERE id = :id AND active = 'Y' [AND next_run_at = :antiga_data]` (CR-007, R-19), com `rowcount` conferido | `pk_{prefixo}schedules` |
 | `ticket_status` | `SELECT status FROM {prefixo}tickets WHERE id = :id` | `pk_{prefixo}tickets` |
 
 ---
@@ -27,7 +27,7 @@ Consultas SQL estáticas do `RepoAgendamentosOracle` (`modules/repo_oracle/sched
   * Logo depois, foram restauradas ao estado anterior: as da tabela apagadas e as dos índices vazios recoletadas.
   * O estado antes e depois foi conferido e é idêntico. Nenhuma linha foi gravada.
 * **`tbsss_tickets`/`tbsss_audit`:** só `ticket_status` lê tickets, pela PK; a auditoria só recebe `INSERT`. Conforme.
-* **Agenda, filtros e transições:** todos por índice; a Agenda (`active = 'Y'`) lê `ix_{prefixo}agd_prox` na ordem do índice.
+* **Agenda, filtros e transições:** todos por índice; a Agenda (`active = 'Y'`) lê `ix_{prefixo}sch_next` na ordem do índice.
 * **Lista do administrador sem filtro:** `TABLE ACCESS FULL` em `tbsss_schedules` + `SORT ORDER BY STOPKEY`, porque a ordem `proxima_execucao, id` não começa por `active`.
   * Fica registrado, sem mudança de esquema: a tabela é de escala de cadastro (centenas de regras) e não está no critério do F7.3 (tickets e auditoria).
   * Se o volume real crescer, a correção é um índice `(next_run_at, id)`.

@@ -14,7 +14,7 @@ import sss_config
 import sss_logging
 import ui_helpers
 import ui_menu
-from repo_errors import RepoIndisponivel
+from repo_errors import RepoUnavailable
 
 _cfg = current.sss_cfg
 _segredos = sss_config.get_secrets("sss_web")
@@ -68,7 +68,7 @@ if session.usuario_id:
     try:
         _ctx = auth_service.revalidar(session, security.ip_origem(
             request.env.remote_addr, request.env.http_x_forwarded_for, _cfg.web.trusted_proxies))
-    except RepoIndisponivel:
+    except RepoUnavailable:
         _log.exception("revalidacao de sessao indisponivel (usuario_id=%s caminho=%s)",
                        session.usuario_id, request.env.path_info, extra={"action": "SESSAO"})
         raise HTTP(503)
@@ -80,7 +80,7 @@ if session.usuario_id:
     session.ultimo_acesso = _agora
     response.headers["Cache-Control"] = "no-store"
     response.sss_menu = ui_menu.montar_menu(
-        _ctx["funcionalidades"], _ctx["is_admin"], (request.controller, request.function))
+        _ctx["features"], _ctx["is_admin"], (request.controller, request.function))
 
 if not session.csrf_token:
     session.csrf_token = security.gerar_token_csrf()

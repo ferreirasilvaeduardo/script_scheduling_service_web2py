@@ -2,8 +2,8 @@
 """Implementacao em memoria do repositorio de RBAC e perfis (README §2.5, §4.3, §10)."""
 import copy
 
-from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
-from repo_fake.store import paginar
+from repo_errors import RepoConflict, RepoNotFound, RepoViolation
+from repo_fake.store import paginate
 from repo_rbac import RepoRbac
 
 
@@ -13,11 +13,11 @@ class RepoRbacFake(RepoRbac):
     def __init__(self, store):
         self._store = store
 
-    def perfis_listar(self, filtros=None, pagina=1, tamanho=20):
+    def profiles_list(self, filtros=None, pagina=1, tamanho=20):
         """Lista perfis com paginacao e desempate deterministico por id."""
         filtros = filtros or {}
         with self._store.lock_rbac:
-            lista = list(self._store.perfis.values())
+            lista = list(self._store.profiles.values())
 
             nome_f = filtros.get("name")
             if nome_f:
@@ -32,18 +32,18 @@ class RepoRbacFake(RepoRbac):
                 lista = [p for p in lista if p["is_admin"] == is_admin_f]
 
             lista.sort(key=lambda x: (x.get("name", ""), x["id"]))
-            return paginar(lista, pagina=pagina, tamanho=tamanho)
+            return paginate(lista, pagina=pagina, tamanho=tamanho)
 
-    def perfis_obter(self, id):
-        """Retorna dict com dados do perfil pelo ID ou lanca RepoNaoEncontrado."""
+    def profiles_get(self, id):
+        """Retorna dict com dados do perfil pelo ID ou lanca RepoNotFound."""
         with self._store.lock_rbac:
-            if id not in self._store.perfis:
-                raise RepoNaoEncontrado("Perfil ID %s nao encontrado" % id)
-            return copy.deepcopy(self._store.perfis[id])
+            if id not in self._store.profiles:
+                raise RepoNotFound("Perfil ID %s nao encontrado" % id)
+            return copy.deepcopy(self._store.profiles[id])
 
     def _auditar(self, auditoria, perfil_id):
         if auditoria:
-            self._store.registrar_auditoria_interno(
+            self._store.register_internal_audit(
                 ator=auditoria.get("actor"),
                 ip=auditoria.get("ip"),
                 acao=auditoria["action"],
@@ -52,27 +52,27 @@ class RepoRbacFake(RepoRbac):
                 detalhe=auditoria.get("detail"),
             )
 
-    def perfis_inserir(self, dados, auditoria=None, ator=None):
+    def profiles_insert(self, dados, auditoria=None, ator=None):
         """Insere novo perfil com validacao de UK e CKs, auditando na mesma operacao."""
         with self._store.lock_rbac:
-            ator = self._store.ator_registro(auditoria, ator)
+            ator = self._store.record_actor(auditoria, ator)
             nome = dados.get("name")
             if not nome:
-                raise RepoViolacao("Nome de perfil e obrigatorio")
+                raise RepoViolation("Nome de perfil e obrigatorio")
 
-            for p in self._store.perfis.values():
+            for p in self._store.profiles.values():
                 if p["name"].upper() == nome.upper():
-                    raise RepoViolacao("Perfil com nome '%s' ja existe" % nome, constraint="uk_tbsss_prf_name")
+                    raise RepoViolation("Perfil com nome '%s' ja existe" % nome, constraint="uk_tbsss_prf_name")
 
             is_admin = dados.get("is_admin", "N")
             if is_admin not in ("Y", "N"):
-                raise RepoViolacao("Flag is_admin deve ser 'Y' ou 'N'", constraint="ck_tbsss_prf_adm")
+                raise RepoViolation("Flag is_admin deve ser 'Y' ou 'N'", constraint="ck_tbsss_prf_adm")
 
             ativo = dados.get("active", "Y")
             if ativo not in ("Y", "N"):
-                raise RepoViolacao("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_prf_active")
+                raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_prf_active")
 
-            pid = self._store.proximo_id("tbsss_profiles")
+            pid = self._store.next_id("tbsss_profiles")
             novo = {
                 "id": pid,
                 "name": nome,
@@ -81,36 +81,36 @@ class RepoRbacFake(RepoRbac):
                 "perm_version": int(dados.get("perm_version", 1)),
                 "active": ativo,
             }
-            self._store.carimbar_inclusao(novo, ator)
-            self._store.perfis[pid] = copy.deepcopy(novo)
+            self._store.stamp_insert(novo, ator)
+            self._store.profiles[pid] = copy.deepcopy(novo)
             self._auditar(auditoria, pid)
             return copy.deepcopy(novo)
 
     def _admins_ativos(self, perfis):
         admin = set(pid for pid, p in perfis.items() if p["active"] == "Y" and p["is_admin"] == "Y")
-        return sorted(u["id"] for u in self._store.usuarios.values()
+        return sorted(u["id"] for u in self._store.users.values()
                       if u["active"] == "Y" and u["profile_id"] in admin)
 
-    def perfis_alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
+    def profiles_update(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Altera perfil e incrementa perm_versao; protege o ultimo admin na mesma operacao (§4.3.B)."""
         # Ordem de locks igual a admins_ativos_bloquear: rbac e depois usuarios.
         with self._store.lock_rbac:
             with self._store.lock_usuarios:
-                ator = self._store.ator_registro(auditoria, ator)
-                if id not in self._store.perfis:
-                    raise RepoNaoEncontrado("Perfil ID %s nao encontrado" % id)
+                ator = self._store.record_actor(auditoria, ator)
+                if id not in self._store.profiles:
+                    raise RepoNotFound("Perfil ID %s nao encontrado" % id)
 
-                atual = self._store.perfis[id]
+                atual = self._store.profiles[id]
                 for campo, valor in (esperado or {}).items():
                     if atual.get(campo) != valor:
-                        raise RepoConflito("Perfil ID %s alterado por outra operacao (%s)" % (id, campo))
+                        raise RepoConflict("Perfil ID %s alterado por outra operacao (%s)" % (id, campo))
 
                 mudancas = {}
                 novo_nome = dados.get("name")
                 if novo_nome and novo_nome != atual["name"]:
-                    for pid, p in self._store.perfis.items():
+                    for pid, p in self._store.profiles.items():
                         if pid != id and p["name"].upper() == novo_nome.upper():
-                            raise RepoViolacao("Perfil com nome '%s' ja existe" % novo_nome,
+                            raise RepoViolation("Perfil com nome '%s' ja existe" % novo_nome,
                                                constraint="uk_tbsss_prf_name")
                     mudancas["name"] = novo_nome
 
@@ -120,44 +120,44 @@ class RepoRbacFake(RepoRbac):
                 for campo, ck in (("is_admin", "ck_tbsss_prf_adm"), ("active", "ck_tbsss_prf_active")):
                     if campo in dados:
                         if dados[campo] not in ("Y", "N"):
-                            raise RepoViolacao("Flag %s deve ser 'Y' ou 'N'" % campo, constraint=ck)
+                            raise RepoViolation("Flag %s deve ser 'Y' ou 'N'" % campo, constraint=ck)
                         mudancas[campo] = dados[campo]
 
                 reduz_admin = atual["is_admin"] == "Y" and atual["active"] == "Y" and (
                     mudancas.get("is_admin") == "N" or mudancas.get("active") == "N")
                 if reduz_admin:
-                    resultantes = dict(self._store.perfis)
+                    resultantes = dict(self._store.profiles)
                     resultantes[id] = dict(atual, **mudancas)
                     if not self._admins_ativos(resultantes):
-                        raise RepoViolacao("Operacao deixaria o sistema sem administrador ativo",
+                        raise RepoViolation("Operacao deixaria o sistema sem administrador ativo",
                                            constraint="sss_ultimo_admin")
 
                 atual.update(mudancas)
                 # Toda alteracao de perfil incrementa perm_versao (README §4.3.A)
                 atual["perm_version"] = int(atual.get("perm_version", 1)) + 1
-                self._store.carimbar_alteracao(atual, ator)
+                self._store.stamp_update(atual, ator)
                 self._auditar(auditoria, id)
                 return copy.deepcopy(atual)
 
-    def matriz_obter(self, perfil_id):
+    def matrix_get(self, perfil_id):
         """Retorna {'funcs': [...], 'ambs': [...], 'scrs': [...]} com os IDs associados."""
         with self._store.lock_rbac:
-            if perfil_id not in self._store.perfis:
-                raise RepoNaoEncontrado("Perfil ID %s nao encontrado" % perfil_id)
+            if perfil_id not in self._store.profiles:
+                raise RepoNotFound("Perfil ID %s nao encontrado" % perfil_id)
 
             funcs = [
                 v["feature_id"]
-                for v in self._store.perfil_func.values()
+                for v in self._store.profile_feature.values()
                 if v["profile_id"] == perfil_id
             ]
             ambs = [
                 v["environment_id"]
-                for v in self._store.perfil_amb.values()
+                for v in self._store.profile_env.values()
                 if v["profile_id"] == perfil_id
             ]
             scrs = [
                 v["script_id"]
-                for v in self._store.perfil_scr.values()
+                for v in self._store.profile_script.values()
                 if v["profile_id"] == perfil_id
             ]
             return {
@@ -166,7 +166,7 @@ class RepoRbacFake(RepoRbac):
                 "scrs": copy.deepcopy(scrs),
             }
 
-    def matriz_salvar(self, perfil_id, funcs, ambs, scrs, perm_versao_esperada=None, auditoria=None, ator=None):
+    def matrix_save(self, perfil_id, funcs, ambs, scrs, perm_versao_esperada=None, auditoria=None, ator=None):
         """Substitui associacoes da matriz e incrementa perm_versao atomicamente (condicional a versao).
 
         Grava por diferenca: os vinculos que continuam mantem o created_*; havendo mudanca, o perfil
@@ -174,56 +174,56 @@ class RepoRbacFake(RepoRbac):
         """
         with self._store.lock_rbac:
             with self._store.lock_catalogo:
-                ator = self._store.ator_registro(auditoria, ator)
-                if perfil_id not in self._store.perfis:
-                    raise RepoNaoEncontrado("Perfil ID %s nao encontrado" % perfil_id)
-                perfil = self._store.perfis[perfil_id]
+                ator = self._store.record_actor(auditoria, ator)
+                if perfil_id not in self._store.profiles:
+                    raise RepoNotFound("Perfil ID %s nao encontrado" % perfil_id)
+                perfil = self._store.profiles[perfil_id]
                 if perm_versao_esperada is not None and perfil["perm_version"] != int(perm_versao_esperada):
-                    raise RepoConflito("Matriz do perfil ID %s alterada por outra operacao" % perfil_id)
+                    raise RepoConflict("Matriz do perfil ID %s alterada por outra operacao" % perfil_id)
 
                 # FKs (paridade com o Oracle): valida tudo antes de remover qualquer associacao.
                 funcs = sorted(set(int(x) for x in (funcs or [])))
                 ambs = sorted(set(int(x) for x in (ambs or [])))
                 scrs = sorted(set(int(x) for x in (scrs or [])))
-                for ids, tabela, fk in ((funcs, self._store.funcionalidades, "fk_tbsss_pfea_fea"),
-                                        (ambs, self._store.ambientes, "fk_tbsss_penv_env"),
+                for ids, tabela, fk in ((funcs, self._store.features, "fk_tbsss_pfea_fea"),
+                                        (ambs, self._store.environments, "fk_tbsss_penv_env"),
                                         (scrs, self._store.scripts, "fk_tbsss_pscr_scr")):
                     for x in ids:
                         if x not in tabela:
-                            raise RepoViolacao("ID %s inexistente" % x, constraint=fk)
+                            raise RepoViolation("ID %s inexistente" % x, constraint=fk)
 
                 mudou = False
                 for assoc, seq, coluna, ids in (
-                        (self._store.perfil_func, "tbsss_profile_feature", "feature_id", funcs),
-                        (self._store.perfil_amb, "tbsss_profile_env", "environment_id", ambs),
-                        (self._store.perfil_scr, "tbsss_profile_script", "script_id", scrs)):
+                        (self._store.profile_feature, "tbsss_profile_feature", "feature_id", funcs),
+                        (self._store.profile_env, "tbsss_profile_env", "environment_id", ambs),
+                        (self._store.profile_script, "tbsss_profile_script", "script_id", scrs)):
                     atuais = dict((v[coluna], k) for k, v in assoc.items() if v["profile_id"] == perfil_id)
                     for x, k in atuais.items():
                         if x not in ids:
                             del assoc[k]
                     for x in ids:
                         if x not in atuais:
-                            nid = self._store.proximo_id(seq)
-                            assoc[nid] = self._store.carimbar_inclusao(
+                            nid = self._store.next_id(seq)
+                            assoc[nid] = self._store.stamp_insert(
                                 {"id": nid, "profile_id": perfil_id, coluna: x}, ator)
                     mudou = mudou or set(atuais) != set(ids)
 
                 # Incrementa perm_versao atomicamente na mesma transacao
                 perfil["perm_version"] += 1
                 if mudou:
-                    self._store.carimbar_alteracao(perfil, ator)
+                    self._store.stamp_update(perfil, ator)
                 self._auditar(auditoria, perfil_id)
-                return copy.deepcopy(self.matriz_obter(perfil_id))
+                return copy.deepcopy(self.matrix_get(perfil_id))
 
-    def admins_ativos_bloquear(self):
+    def lock_active_admins(self):
         """Retorna IDs dos administradores ativos conforme semantica do README §4.3.B."""
         with self._store.lock_rbac:
             with self._store.lock_usuarios:
-                return self._admins_ativos(self._store.perfis)
+                return self._admins_ativos(self._store.profiles)
 
-    def funcionalidades_listar(self):
+    def features_list(self):
         """Retorna lista do catalogo canonico de funcionalidades."""
         with self._store.lock_rbac:
-            lista = list(self._store.funcionalidades.values())
+            lista = list(self._store.features.values())
             lista.sort(key=lambda x: (x.get("module", ""), x.get("code", ""), x["id"]))
             return copy.deepcopy(lista)

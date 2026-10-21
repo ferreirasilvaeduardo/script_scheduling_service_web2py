@@ -498,12 +498,12 @@ def translate_error(exc):
         from modules import repo_errors
 
     if is_violation(exc):
-        return repo_errors.RepoViolacao(str(exc))
+        return repo_errors.RepoViolation(str(exc))
     if is_lock(exc) or is_timeout(exc):
-        return repo_errors.RepoConflito(str(exc))
+        return repo_errors.RepoConflict(str(exc))
     if is_network_error(exc):
-        return repo_errors.RepoIndisponivel(str(exc))
-    return repo_errors.RepoErro(str(exc))
+        return repo_errors.RepoUnavailable(str(exc))
+    return repo_errors.RepoError(str(exc))
 
 
 # ==============================================================================
@@ -730,9 +730,9 @@ def next_id(conn, sequence_qualificada):
 def check_schema_version(conn, owner=None, prefixo="tbsss_"):
     """Confere se versao_esquema em tbsss_control e igual a VERSAO_ESQUEMA (CR-007, D4)."""
     if owner:
-        tabela = sql_ident.qualify(owner, prefixo + sql_ident.physical("controle"))
+        tabela = sql_ident.qualify(owner, prefixo + sql_ident.physical("control"))
     else:
-        tabela = prefixo + sql_ident.physical("controle")
+        tabela = prefixo + sql_ident.physical("control")
 
     cur = conn.cursor()
     try:

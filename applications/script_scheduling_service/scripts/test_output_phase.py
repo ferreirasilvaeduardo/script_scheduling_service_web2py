@@ -164,7 +164,7 @@ class TestMaquina(unittest.TestCase):
         plat = _Plat(_zip({"a": b"1"}))
         self._empacotar(plat, 0)
         self.repo.tickets[7]["agent_id"] = "outro"
-        self.assertEqual(output_phase.gravar(self.saida, self.conn, self.repo, AGENTE), output_phase.POSSE_PERDIDA)
+        self.assertEqual(output_phase.gravar(self.saida, self.conn, self.repo, AGENTE), output_phase.OWNERSHIP_LOST)
         # COMMIT do concluir sem resposta: a linha ja esta DISPONIVEL deste agente -> CONCLUIDA.
         self.repo.tickets[7]["agent_id"] = AGENTE
         self.repo.linhas[7] = {"state": "AVAILABLE", "agent_id": AGENTE}
@@ -173,7 +173,7 @@ class TestMaquina(unittest.TestCase):
     def test_erro_de_banco_rollback_e_retomada(self):
         conteudo = _zip({"a.txt": os.urandom(3 * 1024 * 1024)})
         self._empacotar(_Plat(conteudo), 0)
-        self.repo.falhas = [("anexar", RuntimeError("ORA-03113"))]
+        self.repo.falhas = [("append_chunk", RuntimeError("ORA-03113"))]
         with self.assertRaises(RuntimeError):
             output_phase.gravar(self.saida, self.conn, self.repo, AGENTE)
         self.assertEqual(self.conn.rollbacks, 1)
@@ -182,7 +182,7 @@ class TestMaquina(unittest.TestCase):
         # Divergencia de offset: recomeca do inicio (o iniciar zera a gravacao deste agente).
         self.saida.iniciada, self.saida.offset = True, 0
         self.repo.linhas[7] = {"state": "WRITING", "agent_id": AGENTE, "content": b"xx"}
-        with self.assertRaises(scheduler_output.SaidaOffsetInconsistente):
+        with self.assertRaises(scheduler_output.OutputOffsetMismatch):
             output_phase.gravar(self.saida, self.conn, self.repo, AGENTE)
         self.assertFalse(self.saida.iniciada)
         self.assertEqual(output_phase.gravar(self.saida, self.conn, self.repo, AGENTE), output_phase.CONCLUIDA)
@@ -280,7 +280,7 @@ class TestLacoComSaida(tsc._Base):
 
     def test_erro_de_banco_na_gravacao_e_refeito(self):
         tid = self.banco.ticket(self.banco.script("echo r > \"$SSS_OUTPUT_DIR/r.txt\"\n"))
-        self.repo_saida.falhas = [("iniciar", RuntimeError("ORA-03113"))]
+        self.repo_saida.falhas = [("start", RuntimeError("ORA-03113"))]
         self.subir()
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             self.rodar(self.concluido(tid))
@@ -289,7 +289,7 @@ class TestLacoComSaida(tsc._Base):
 
     def test_parada_abandona_e_startup_marca_falhou(self):
         tid = self.banco.ticket(self.banco.script("echo r > \"$SSS_OUTPUT_DIR/r.txt\"\n"))
-        self.repo_saida.falhas = [("anexar", RuntimeError("ORA-03113"))] * 50
+        self.repo_saida.falhas = [("append_chunk", RuntimeError("ORA-03113"))] * 50
         self.subir()
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.rodar(lambda: self.terminado(tid)() and tid in self.repo_saida.linhas)
@@ -297,7 +297,7 @@ class TestLacoComSaida(tsc._Base):
             self.ag.encerrar_tudo("TERMINATE")
         self.assertEqual(self.ag.saidas, {})
         self.assertIsNotNone(self._pasta_do_ticket(tid), "pasta fica no disco")
-        self.assertEqual(self.repo_saida.falhar_gravando_do_agente(None, "srv-t"), 1)
+        self.assertEqual(self.repo_saida.fail_agent_writing(None, "srv-t"), 1)
         self.assertEqual(self.repo_saida.linhas[tid]["state"], "FAILED")
 
 

@@ -31,8 +31,8 @@ POLITICAS_MISFIRE = ('RUN_ONCE', 'SKIP')
 LIMITE_PERDIDAS = 10000
 HORIZONTE_PADRAO = cron_parser.HORIZONTE_PADRAO
 
-_RE_HORA = re.compile(r'^([01][0-9]|2[0-3]):[0-5][0-9]$')
-_RE_DSEM = re.compile(r'^[1-7](,[1-7]){0,6}$')
+_RE_TIME = re.compile(r'^([01][0-9]|2[0-3]):[0-5][0-9]$')
+_RE_WDAY = re.compile(r'^[1-7](,[1-7]){0,6}$')
 _UM_MINUTO = datetime.timedelta(minutes=1)
 _UM_DIA = datetime.timedelta(days=1)
 _CACHE_CRON = {}
@@ -87,9 +87,9 @@ def validar_regra(regra, horizonte_dias=HORIZONTE_PADRAO):
             erros['end_date'] = 'Data de fim inválida.'
         elif isinstance(inicio, datetime.datetime) and fim < inicio:
             erros['end_date'] = 'A data de fim não pode ser anterior à de início.'
-    if not _vazio(hora) and not (isinstance(hora, str) and _RE_HORA.match(hora)):
+    if not _vazio(hora) and not (isinstance(hora, str) and _RE_TIME.match(hora)):
         erros['run_time'] = 'Horário inválido; use HH:MM (00:00 a 23:59).'
-    if not _vazio(dsem) and not (isinstance(dsem, str) and _RE_DSEM.match(dsem)):
+    if not _vazio(dsem) and not (isinstance(dsem, str) and _RE_WDAY.match(dsem)):
         erros['week_days'] = 'Dias da semana inválidos; use números de 1 (segunda) a 7 (domingo), ex.: 1,3,5.'
     if not _vazio(dia):
         try:

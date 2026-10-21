@@ -7,7 +7,7 @@ from gluon import current
 
 import ticket_service
 import ui_helpers
-from repo_errors import RepoErro, RepoNaoEncontrado
+from repo_errors import RepoError, RepoNotFound
 from ticket_service import AcessoNegado, ErroReexecucao
 
 _PREFIXO_PARAM = "p_"
@@ -105,7 +105,7 @@ def novo():
             valores, avisos = ticket_service.ultimas_respostas(ctx, script_id, ambiente)
             return _pagina_novo(ctx, script_id, ambiente, valores, avisos=avisos)
         return _pagina_novo(ctx, script_id, ambiente)
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
@@ -119,7 +119,7 @@ def catalogo():
     response.sss_scripts = [_JS_DISPARO]
     try:
         return dict(grupos=ticket_service.catalogo_rotinas(ctx), erro=None)
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao montar o catalogo de rotinas (login=%s)", ctx["login"], extra={"action": "CATALOGO"})
         return dict(grupos=[], erro=ui_helpers.mensagem("falha_interna"))
 
@@ -130,7 +130,7 @@ def historico():
     ctx = _exigir_func("EXEC_SCRIPT")
     try:
         dados = ticket_service.historico_script(ctx, _texto(request.args(0), 10))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     response.title = u"Histórico de %s — SSS" % dados["script"]["name"]
     return dict(h=dados)
@@ -156,7 +156,7 @@ def criar():
         response.view = "tickets/novo.html"
         return _pagina_novo(ctx, script_id, ambiente, respostas, erros, prioridade, scheduled_at,
                             reexecucao_de or None)
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
@@ -193,7 +193,7 @@ def lista():
         resultado = ticket_service.listar(ctx, filtros, pagina, tamanho)
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao listar tickets (login=%s)", ctx["login"], extra={"action": "TICKET_LISTAR"})
         resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
@@ -216,7 +216,7 @@ def detalhe():
     ctx = _exigir_consulta()
     try:
         ticket = ticket_service.detalhe(ctx, request.args(0))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     response.title = u"Ticket #%s — SSS" % ticket["id"]
     response.sss_scripts = [_JS_TICKETS, _JS_LOG]
@@ -235,9 +235,9 @@ def saida():
     ctx = _exigir_consulta()
     try:
         ticket_id, tamanho, partes = ticket_service.blocos_saida(ctx, request.args(0))
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
-    except RepoErro:
+    except RepoError:
         _log.exception("falha ao iniciar o download da saida (login=%s ticket=%r)", ctx["login"], request.args(0),
                        extra={"action": "SAIDA_BAIXAR"})
         raise HTTP(503, _MSG_FALHA_SAIDA, **response.headers)
@@ -257,11 +257,11 @@ def cancelar():
         resultado = ticket_service.cancelar(ctx, _ip_origem(), ticket_id)
         session.flash = {"tipo": _TIPO_FLASH_CANCELAMENTO[resultado],
                          "mensagem": ticket_service.MSG_CANCELAMENTO[resultado]}
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()
-    except RepoErro:
+    except RepoError:
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_CANCELAR}
     # CANCEL_TICKET sem VIEW_LOGS cancela sem poder ver o ticket (README §4.3.C): volta ao painel.
     if ticket_service.visivel(ctx, ticket_id):
@@ -275,7 +275,7 @@ def reexecutar():
     ticket_id = _texto(request.post_vars.get("ticket_id"), 10)
     try:
         novo_id = ticket_service.reexecutar(ctx, _ip_origem(), ticket_id)
-    except RepoNaoEncontrado:
+    except RepoNotFound:
         _nao_encontrado()
     except AcessoNegado:
         _negado()

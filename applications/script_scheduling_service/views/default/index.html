@@ -62,8 +62,8 @@ icones = URL('static', 'img/icons.svg')
     </div>
   </section>
   {{pass}}
-  {{if 'agendamentos' in cartoes:}}
-  {{_c_dados, _c_erro = cartoes['agendamentos']}}
+  {{if 'schedules' in cartoes:}}
+  {{_c_dados, _c_erro = cartoes['schedules']}}
   <section class="sss-card" aria-labelledby="painel-agendamentos">
     <h2 class="sss-card-titulo" id="painel-agendamentos">Próximos agendamentos</h2>
     <div class="sss-card-corpo">
@@ -82,14 +82,14 @@ icones = URL('static', 'img/icons.svg')
     </div>
   </section>
   {{pass}}
-  {{if 'agentes' in cartoes:}}
-  {{_c_dados, _c_erro = cartoes['agentes']}}
+  {{if 'agents' in cartoes:}}
+  {{_c_dados, _c_erro = cartoes['agents']}}
   <section class="sss-card" aria-labelledby="painel-agentes">
     <h2 class="sss-card-titulo" id="painel-agentes">Saúde dos agentes</h2>
     <div class="sss-card-corpo">
-      {{if _c_erro:}}<p class="mb-0" role="alert">{{=_c_erro}}</p>{{elif not _c_dados['agentes']:}}<p class="sss-texto-suave mb-0">Nenhum agente registrado.</p>{{else:}}
+      {{if _c_erro:}}<p class="mb-0" role="alert">{{=_c_erro}}</p>{{elif not _c_dados['agents']:}}<p class="sss-texto-suave mb-0">Nenhum agente registrado.</p>{{else:}}
       <ul class="sss-lista-simples">
-        {{for _ag in _c_dados['agentes']:}}
+        {{for _ag in _c_dados['agents']:}}
         <li>
           <span class="sss-mono">{{=_ag['code']}}</span>
           <span class="sss-status {{=_ag['saude']['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_ag['saude']['icone']}}"></use></svg><span>{{=_ag['saude']['rotulo']}}</span></span>

@@ -38,7 +38,7 @@ icones = URL('static', 'img/icons.svg')
             {{else:}}Ainda não rodou{{pass}}
           </p>
           <div class="sss-acoes-inline">
-            {{for _amb in _c['ambientes']:}}
+            {{for _amb in _c['environments']:}}
             <a class="btn btn-sm btn-primary" href="{{=URL(c='tickets', f='novo', vars=dict(script_id=_c['id'], environment=_amb))}}">Rodar em {{=_amb}}</a>
             {{pass}}
             <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='historico', args=[_c['id']])}}">Ver histórico</a>

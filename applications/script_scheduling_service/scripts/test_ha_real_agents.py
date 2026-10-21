@@ -54,7 +54,7 @@ class TestHaDoisAgentes(_DoisAgentesBase):
         regra = self._massa.agendamento(self.scr["id"], self.amb["name"], self.usuario_id, recurrence_type="CRON",
                                         cron_expression="* * * * *", run_time=None, params_json="{}",
                                         start_date=agora - datetime.timedelta(minutes=1), next_run_at=primeira)
-        for agente in self.agentes:
+        for agente in self.agents:
             self._subir(agente)
         fim = primeira + datetime.timedelta(minutes=MINUTOS - 1)
 
@@ -70,17 +70,17 @@ class TestHaDoisAgentes(_DoisAgentesBase):
                          "uma ocorrencia por minuto, sem buracos")
         self.assertEqual(set(n for _s, n in linhas), {1}, "sem duplicata entre os dois agentes")
         criadores = self._consulta("SELECT DISTINCT created_by FROM {tck} WHERE schedule_id = :r", r=regra["id"])
-        self.assertTrue(set(c for (c,) in criadores) <= set("SYSTEM:%s" % a for a in self.agentes))
+        self.assertTrue(set(c for (c,) in criadores) <= set("SYSTEM:%s" % a for a in self.agents))
         print("\n[F8.4e] CRON: %d ocorrencias, criadores %s" % (len(linhas), sorted(c for (c,) in criadores)))
 
     def test_kill_9_node_offline_e_orfao_encerrado_na_religacao(self):
         tid = self._ticket(self.scr_longo)
-        for agente in self.agentes:
+        for agente in self.agents:
             self._subir(agente)
         self.assertTrue(self._esperar(lambda: (self._tickets({tid}).get(tid) or ("",))[0] == "RUNNING"
                                       and self._tickets({tid})[tid][4] is not None, 60), "longo RUNNING com PID")
         dono = self._tickets({tid})[tid][3]
-        outro = [a for a in self.agentes if a != dono][0]
+        outro = [a for a in self.agents if a != dono][0]
         orfaos = _pids_do_longo()
         self.assertEqual(len(orfaos), 1)
         agente_dono, processo_dono, _pastas = [x for x in self.processos if x[0] == dono][0]
@@ -101,8 +101,8 @@ class TestHaDoisAgentes(_DoisAgentesBase):
         self._subir(dono)
         self.assertTrue(self._esperar(lambda: not _vivo(orfaos[0]), 60), "filho encerrado na religacao")
         ativos = self._consulta("SELECT code, status FROM {agt} WHERE code IN (:a, :b)",
-                                a=self.agentes[0], b=self.agentes[1])
-        self.assertEqual(sorted(ativos), [(a, "ACTIVE") for a in sorted(self.agentes)], "religacao aceita (PID antigo morto)")
+                                a=self.agents[0], b=self.agents[1])
+        self.assertEqual(sorted(ativos), [(a, "ACTIVE") for a in sorted(self.agents)], "religacao aceita (PID antigo morto)")
         print("\n[F8.4e] kill -9 em %s: NODE_OFFLINE por %s em %.0f s; filho %d encerrado na religacao"
               % (dono, outro, decorrido, orfaos[0]))
         self.assertEqual(_pids_do_longo(), [])
