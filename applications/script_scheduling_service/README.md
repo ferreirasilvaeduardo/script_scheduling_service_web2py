@@ -252,7 +252,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
 | Processo | Execução | Responsabilidade |
 |---|---|---|
 | **Web** (1..N nós) | web2py sob WSGI corporativo | UI, autenticação, RBAC, criação e cancelamento de tickets, cadastros |
-| **Scheduler/Agente** (1 por servidor executor) | `python web2py.py -S script_scheduling_service -M -R applications/script_scheduling_service/scripts/run_scheduler.py` | Desdobro de agendamentos, claim, execução, heartbeat, cancelamento, coleta de log |
+| **Scheduler/Agente** (1 por servidor executor) | `bin/sss-scheduler.sh [--config <config.ini>]`, que faz `exec python applications/script_scheduling_service/scripts/run_scheduler.py` da raiz do web2py (Python puro, sem o ambiente do web2py: thread única, §12.2) | Desdobro de agendamentos, claim, execução, heartbeat, cancelamento, coleta de log |
 
 Regras de topologia:
 
@@ -269,9 +269,10 @@ Os itens marcados com `[F7.x]`, `[F8.x]` ou `[F9.x]` ainda não existem: são cr
 
 ```text
 bin/
-  sss-web.sh                  # ambiente do Instant Client/TZ e subida do WSGI
-  sss-scheduler.sh            # ambiente e subida do daemon
-  sss-stop.sh                 # [F9.1] parada controlada do daemon pelo arquivo .stop (§8.11)
+  sss-web.sh                  # ambiente do Instant Client/TZ e subida do WSGI (§12.2)
+  sss-scheduler.sh            # ambiente e subida do daemon: só run_scheduler.py [--config] (§12.2)
+  sss-stop.sh                 # [F9.1] parada controlada do daemon pelo arquivo .stop (§8.11, §12.2)
+  iniciar_local.sh, parar_servico.sh  # somente DEV; fora do pacote
   sss-helper                  # [F8.0] helper de execução com o usuário de execução (run/term/kill/limpar), instalado pelo root em /opt/sss/bin (§8.0, CR-007)
 applications/script_scheduling_service/
   controllers/                # default.py (login), tickets.py, logs.py, agendamentos.py, admin_*.py, auditoria.py, dev.py (somente DEV)
@@ -2670,20 +2671,29 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
 
 `bin/sss-web.sh` e `bin/sss-scheduler.sh` (Linux/Unix) devem:
 
-* exportar `LD_LIBRARY_PATH` do Instant Client 19 (quando não houver `ldconfig`) e `TZ`. Os valores vêm das variáveis `SSS_IC_DIR` (diretório do Instant Client) e `SSS_TZ` (fuso), definidas pela operação;
+* exportar `LD_LIBRARY_PATH` do Instant Client 19 (quando não houver `ldconfig`) e `TZ`. Os valores vêm das variáveis `SSS_IC_DIR` (diretório do Instant Client) e `SSS_TZ` (fuso), definidas pela operação. O `LD_LIBRARY_PATH` só é exportado com `SSS_IC_DIR` definido **e** sem `libclntsh` no `ldconfig -p` (o launcher procura o `ldconfig` no `PATH`, em `/sbin` e em `/usr/sbin`);
 * exportar `LANG` e `LC_ALL` com `SSS_LOCALE` (padrão `C.UTF-8`), porque o processo precisa de codificação UTF-8 no sistema de arquivos e no spawn (CR-007, R-17); o processo aborta se ela não for UTF-8 (§8.12);
 * aplicar `umask 077`;
 * recusar a execução como root;
 * fazer `exec` do processo Python, para que os sinais cheguem diretamente a ele;
 * iniciar **somente** o processo Python do SSS. O `sss-web.sh` aceita três formas: sem argumentos (servidor padrão), só opções (`-...`, repassadas ao `anyserver.py`) ou `<python3[.x]> web2py.py|anyserver.py [args]`. Qualquer outro comando é recusado com código 2; repassar um comando arbitrário (`exec "$@"` sem essas checagens) é proibido.
 
-`bin/sss-stop.sh` cria o arquivo `work_dir/sss-<agent_id>.stop`, para a parada controlada sem sinal (§8.11).
+* executar a partir da raiz do web2py, qualquer que seja o diretório corrente de quem o chama.
+
+O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <arquivo>`, e faz `exec <python> applications/script_scheduling_service/scripts/run_scheduler.py [--config <arquivo>]`. Qualquer outro argumento é recusado com código 2. O Python vem da variável `PYTHON` (padrão `python3`) nos dois launchers.
+
+`bin/sss-stop.sh [--config <config.ini>]` (padrão: `instance/config.ini` da aplicação) cria o arquivo `work_dir/sss-<agent_id>.stop` com `0600`, para a parada controlada sem sinal (§8.11), e imprime o caminho. Recusa root. Lê só `[agent] agent_id` e `work_dir` com a biblioteca padrão (sem importar a aplicação), com a mesma regra de `agent_id` do §12.1 e o `work_dir` absoluto e existente; senão, sai com código 2. O daemon remove o arquivo ao parar.
 
 **Daemon do agente:** `python scripts/run_scheduler.py [--config <config.ini>]` (F8.3). Sem `--config`, lê `instance/config.ini`, como a aplicação; com ele, o arquivo informado, o que permite **mais de um agente no mesmo servidor**, cada um com o seu `config.ini` (`agent_id`, `work_dir`, `log_dir` e `saida_dir` próprios; a trava de instância é `work_dir/sss-<agent_id>.lock`). Os tempos do `config_criticos` precisam ser iguais em todos os agentes (§8.12). Saída: 0 na parada normal, 10 a 19 na falha de um passo da subida, 20 em `REGISTRO_PERDIDO`. O teste com dois agentes reais contra o Oracle (`scripts/test_concorrencia_agentes.py`, F8.3d) usa essa forma.
 
 `bin/sss-helper` (CR-007, D1) é o helper de execução do §8.0. O pacote o leva, mas ele só vale depois de copiado pelo root para `/opt/sss/bin/sss-helper` (dono root, `0755`), com a regra de sudoers do `IMPLANTACAO.md`.
 
-**Pacote de implantação:** `scripts/empacotar.py` (biblioteca padrão) gera `dist/sss-<versao>.tar.gz` com um `SHA256SUMS`, e falha se encontrar segredo ou código de DEV no pacote (F9.1).
+**Pacote de implantação (F9.1):** `python scripts/empacotar.py [--origem <raiz do web2py>] [--saida <pasta>]`, só com a biblioteca padrão.
+* Gera `<saida>/sss-<versao>.tar.gz` (padrão `<origem>/dist/`; versão `sss_config.VERSAO_SSS`), com tudo sob `sss-<versao>/` e um `SHA256SUMS` de cada arquivo dentro do pacote, e `<saida>/SHA256SUMS` com o hash do `tar.gz` (`sha256sum -c SHA256SUMS`). O tar é reprodutível: ordem, dono (0), data e modos fixos (`0755` no `bin/`, `0644` nos demais arquivos).
+* **Entram:** `web2py.py`, `anyserver.py`, `gluon/` (sem `tests/`, `test-venv/`, `.pytest_cache/` e `ci/` do upstream), um `routes.py` **gerado** com `default_application = "script_scheduling_service"` e o `routes_onerror` da aplicação (o `routes.py` do repositório não muda, para não alterar as URLs do DEV), `bin/sss-web.sh`, `bin/sss-scheduler.sh`, `bin/sss-stop.sh`, `bin/sss-helper` e a aplicação com `docs/` e os `instance/*.example`. As pastas `sessions`, `errors`, `cache`, `databases`, `uploads`, `private` e `cron` entram vazias.
+* **Não entram:** `controllers/dev.py`, `views/dev/`, `dev/`, `modules/repo_fake/`, `instance/config.ini`, `instance/web.env`, `log/`, `logs/`, `work/`, `exec/`, os testes (`scripts/test_*.py` e os auxiliares `_testenv.py`, `_oracle_test_support.py`, `_saida_memoria.py`), as pastas de runtime do web2py dentro da aplicação (abaixo), os launchers de DEV e os arquivos da raiz que não são do web2py.
+* **Recusa** (código 1, sem gravar nada) se o pacote tiver um `secrets.cfg` real, `*.pyc`, `__pycache__`, `controllers/dev.py`, `repo_fake`, outra aplicação (`/admin/`, `welcome`, `examples`), pasta de runtime do web2py, link simbólico, ou `password`/`cookie_key` com valor em `.ini`, `.cfg`, `.ini.example` ou `.cfg.example` (pelo nome do arquivo). A única exceção é o valor exato `CHANGE_ME` em `instance/secrets.cfg.example`. A mensagem cita arquivo e linha, nunca o valor.
+* Uma árvore de desenvolvimento sempre tem `__pycache__` e o `secrets.cfg` local, então o pacote é gerado de uma cópia limpa: `git archive HEAD | tar -x -C <pasta>` e `python <pasta>/applications/script_scheduling_service/scripts/empacotar.py --origem <pasta>`.
 
 **Pastas de runtime do web2py:** o web2py cria as pastas `applications/`, `deposit/`, `logs/` e `site-packages/` no diretório corrente quando é executado fora da raiz. Essas pastas nunca fazem parte da aplicação: o `.gitignore` as ignora dentro de `applications/script_scheduling_service/`, e os launchers e a documentação sempre executam a partir da raiz do web2py.
 

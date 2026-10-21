@@ -1,4 +1,5 @@
 #!/bin/bash
+# Launcher do no web do SSS (README §12.2): inicia somente o processo Python do web2py.
 set -euo pipefail
 
 # 1. Recusar execucao como root
@@ -10,8 +11,18 @@ fi
 # 2. Mascara de criacao restritiva
 umask 077
 
-# 3. Exportar bibliotecas Oracle Instant Client e Timezone
-if [ -n "${SSS_IC_DIR:-}" ]; then
+# 3. Instant Client 19 (so quando nao estiver no ldconfig) e fuso (README §12.2)
+_ic_no_ldconfig() {
+    local cmd
+    for cmd in ldconfig /sbin/ldconfig /usr/sbin/ldconfig; do
+        if command -v "${cmd}" >/dev/null 2>&1; then
+            "${cmd}" -p 2>/dev/null | grep 'libclntsh\.so' >/dev/null && return 0
+            return 1
+        fi
+    done
+    return 1
+}
+if [ -n "${SSS_IC_DIR:-}" ] && ! _ic_no_ldconfig; then
     export LD_LIBRARY_PATH="${SSS_IC_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 fi
 
@@ -23,7 +34,7 @@ fi
 export LANG="${SSS_LOCALE:-C.UTF-8}"
 export LC_ALL="${SSS_LOCALE:-C.UTF-8}"
 
-# 4. Diretorio raiz do web2py
+# 4. Sempre a partir da raiz do web2py (README §12.2, "Pastas de runtime do web2py")
 WEB2PY_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${WEB2PY_ROOT}"
 
