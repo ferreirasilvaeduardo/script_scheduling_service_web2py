@@ -162,5 +162,30 @@ class TestEmpacotar(unittest.TestCase):
         self.assertIn(APP + "/modules/repo_oracle/purge.py", arquivos)
 
 
+class TestPacoteSobeSemODev(unittest.TestCase):
+    """F9.1d (ensaio a partir do pacote): o repo_factory importava o repo_fake no topo e a aplicacao nao subia sem
+    ele. Nenhum arquivo que vai no pacote importa no nivel do modulo algo que o pacote exclui."""
+
+    def test_sem_import_de_topo_do_que_fica_fora(self):
+        import ast
+        arquivos, _p = empacotar.coletar(empacotar.RAIZ_PADRAO)
+        excluidos = ("repo_fake", "dev", "_testenv", "_oracle_test_support", "_saida_memoria")
+        violacoes = []
+        for rel in arquivos:
+            if not rel.startswith(APP + "/") or not rel.endswith(".py"):
+                continue
+            with open(os.path.join(empacotar.RAIZ_PADRAO, rel), encoding="utf-8") as f:
+                arvore = ast.parse(f.read(), rel)
+            for no in arvore.body:  # so o nivel do modulo; import tardio dentro de funcao e permitido
+                nomes = []
+                if isinstance(no, ast.Import):
+                    nomes = [a.name for a in no.names]
+                elif isinstance(no, ast.ImportFrom) and no.module:
+                    nomes = [no.module]
+                violacoes.extend("%s: %s" % (rel, n) for n in nomes
+                                 if n.split(".")[0] in excluidos or n.startswith("test_"))
+        self.assertEqual(violacoes, [])
+
+
 if __name__ == "__main__":
     unittest.main()

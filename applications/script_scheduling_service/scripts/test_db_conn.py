@@ -810,6 +810,47 @@ class TestOracleTestSupportMocks(unittest.TestCase):
         conectar.assert_not_called()
 
 
+class TestSondagemComAContaDoPapel(unittest.TestCase):
+    """F9.1d (ensaio a partir do pacote): a sondagem usa a conta do papel que conecta (monitor, purge), nao a do
+    [oracle]; o usuario vai no argv e a senha so pela entrada padrao."""
+
+    def setUp(self):
+        db_conn.reset_selecao()
+        self.addCleanup(db_conn.reset_selecao)
+
+    def test_subprocesso_recebe_o_usuario_no_argv_e_a_senha_no_stdin(self):
+        processo = mock.Mock(returncode=0)
+        processo.communicate.return_value = (b'{"candidato": "thin", "ok": true}', b"")
+        with mock.patch.object(db_conn.subprocess, "Popen", return_value=processo) as popen:
+            db_conn.selecionar_driver(_FakeConfig(modo_driver="thin"), _FakeSegredos(password="x"),
+                                      usuario="sss_monitor", senha="senha-mon-77")
+        cmd = popen.call_args[0][0]
+        self.assertEqual(cmd[-2:], ["--usuario", "sss_monitor"])
+        self.assertNotIn("senha-mon-77", " ".join(cmd))
+        self.assertEqual(processo.communicate.call_args[1]["input"], b"senha-mon-77")
+
+    def test_conectar_monitor_sonda_com_a_conta_do_monitor(self):
+        segredos = mock.Mock(monitor=mock.Mock(user="sss_monitor", password="senha-mon-77"))
+        capturado = {}
+
+        def selecionar(cfg, seg, usuario=None, senha=None):
+            capturado.update(usuario=usuario, senha=senha)
+            raise RuntimeError("parar aqui")
+        with mock.patch.object(db_conn, "selecionar_driver", side_effect=selecionar), \
+                mock.patch.object(db_conn, "orcamento_conexao_s"):
+            with self.assertRaises(RuntimeError):
+                db_conn.conectar(_FakeConfig(modo_driver="thin"), segredos, papel="monitor")
+        self.assertEqual(capturado, {"usuario": "sss_monitor", "senha": "senha-mon-77"})
+
+    def test_sondar_driver_usa_o_usuario_informado(self):
+        cfg = _FakeConfig(modo_driver="thin")
+        falso = mock.Mock()
+        falso.connect.side_effect = RuntimeError("ORA-01017: invalid username/password")
+        with mock.patch.dict(sys.modules, {"oracledb": falso}):
+            sondar_driver.sondar("thin", cfg, "s", usuario="sss_monitor")
+        self.assertEqual(falso.connect.call_args[1]["user"], "sss_monitor")
+
+
 class TestSondarDriverScript(unittest.TestCase):
     """Testes unitarios do scripts/sondar_driver.py."""
 

@@ -62,9 +62,11 @@ Fechamento do produto para implantação manual em servidores air-gapped **POSIX
 3. Nenhuma primitiva de SO fora de `modules/plataforma/`, salvo a allowlist estrita do `bin/sss-helper`: `resource.setrlimit` em `run`, `os.killpg` em `term`/`kill` e `/proc/<pid>/cwd`/`pwdx` em `encerrar-ticket` (AGENTS §3.2).
 
 ## Critérios de aceite
-- [ ] `scripts/empacotar.py` gera `dist/sss-<versao>.tar.gz` e `dist/SHA256SUMS`, cujos hashes correspondem, e falha quando um `secrets.cfg` de teste é colocado na árvore.
-- [ ] `docs/IMPLANTACAO.md` permite a instalação em Linux/Unix por alguém que não participou do desenvolvimento (revisão sua).
-- [ ] Os testes passam.
+- [x] `scripts/empacotar.py` gera `dist/sss-<versao>.tar.gz` e `dist/SHA256SUMS`, cujos hashes correspondem, e falha quando um `secrets.cfg` de teste é colocado na árvore.
+- [x] `docs/IMPLANTACAO.md` permite a instalação em Linux/Unix por alguém que não participou do desenvolvimento (revisão sua).
+- [x] Os testes passam.
+
+Concluído em 2026-10-21: F9.1a (purge, `7c9be76`), F9.1b (`saude.py`, `f86f8a7`), F9.1c (launchers e pacote, `5ee058f`) e F9.1d (`IMPLANTACAO.md` e ensaio a partir do pacote). O ensaio do F9.1d achou e corrigiu dois defeitos: o `repo_factory` importava o `repo_fake` no topo (o pacote não subia) e a sondagem de driver usava a conta do `[oracle]` em vez da do papel (o `saude.py` não conectava).
 
 ## Verificação
 - `python scripts/empacotar.py` e confira o conteúdo do `tar.gz` e o `SHA256SUMS`. A verificação de entradas proibidas (`dev.py`, `repo_fake`, `secrets.cfg`, `/admin/`) deve passar quando não houver correspondências; trate o código 1 de `grep` como “nenhuma correspondência” e distinga-o de falha de leitura/extração do `tar`.

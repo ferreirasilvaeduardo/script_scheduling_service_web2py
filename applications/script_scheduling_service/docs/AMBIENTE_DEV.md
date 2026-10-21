@@ -26,7 +26,7 @@ Recomenda-se o uso do `pyenv` para gerenciamento da versão do Python:
 
    Em distribuições recentes, a 3.6.8 **não compila direto** com `pyenv install 3.6.8`, por dois motivos:
    * **GCC 11 ou mais novo:** dá segfault no `ensurepip` durante a instalação, por um bug de alinhamento de memória (bpo-27987) que só foi corrigido na 3.6.15;
-   * **OpenSSL 3 do sistema:** a 3.6.8 não reconhece essa versão, e o `_hashlib` não é compilado. Sem o `_hashlib`, o `hashlib.pbkdf2_hmac` das senhas cai numa implementação em Python puro: funciona (é o caso do servidor do `docs/IMPLANTACAO.md` §22), mas cada login fica mais lento. Na estação, a receita abaixo compila o `_hashlib` com OpenSSL 1.1.1w, para os testes rodarem na velocidade normal.
+   * **OpenSSL 3 do sistema:** a 3.6.8 não reconhece essa versão, e o `_hashlib` não é compilado. Sem o `_hashlib`, o `hashlib.pbkdf2_hmac` das senhas cai numa implementação em Python puro: funciona (é o caso do servidor do `docs/IMPLANTACAO.md` Apêndice B.2), mas cada login fica mais lento. Na estação, a receita abaixo compila o `_hashlib` com OpenSSL 1.1.1w, para os testes rodarem na velocidade normal.
 
    Receita testada no Ubuntu 24.04 (GCC 13, OpenSSL 3), sem `sudo` e sem alterar o sistema:
    ```bash
@@ -118,9 +118,9 @@ cd /portaloptrib/TESHUVA/web2py
 ~/.pyenv/versions/3.6.15/bin/python web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui
 ```
 
-**A aplicação usa sempre o Oracle** do `[oracle]` do `instance/config.ini` (owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, só o 3.6.15 tem; no `bin/iniciar_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3`. O `-a '<recycle>'` desabilita o painel do web2py sem pôr senha na lista de processos (`docs/IMPLANTACAO.md` §11.1).
+**A aplicação usa sempre o Oracle** do `[oracle]` do `instance/config.ini` (owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, só o 3.6.15 tem; no `bin/iniciar_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3`. O `-a '<recycle>'` desabilita o painel do web2py sem pôr senha na lista de processos (`docs/IMPLANTACAO.md` §10.1 e Apêndice A).
 
-Antes da primeira subida, crie `instance/config.ini` a partir do `config.ini.example` (`sss_env = DEV`, o `[oracle]` com owner, prefixo e DSN, `secrets_file`, `log_dir` e `work_dir` apontando para pastas suas) e o `secrets.cfg` com o `cookie_key`, dono você e modo `0600`. O passo a passo está no `docs/IMPLANTACAO.md` §8.2 e §9.
+Antes da primeira subida, crie `instance/config.ini` a partir do `config.ini.example` (`sss_env = DEV`, o `[oracle]` com owner, prefixo e DSN, `secrets_file`, `log_dir` e `work_dir` apontando para pastas suas) e o `secrets.cfg` com o `cookie_key`, dono você e modo `0600`. O passo a passo está no `docs/IMPLANTACAO.md` §7.2 e §7.1.
 
 A aplicação fica no endereço local `127.0.0.1:8000/script_scheduling_service` (porta 8000, caminho `/script_scheduling_service`).
 
@@ -135,7 +135,7 @@ bin/parar_servico.sh               # encerra graciosamente o processo e libera a
 ```
 
 Para subir como nos servidores via launcher oficial:
-`bin/sss-web.sh "$(command -v python3)" web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui` (o launcher só aceita interpretador chamado `python3` ou `python3.X`): ele recusa root, aplica `umask 077`, exporta `TZ` a partir de `SSS_TZ` e `LANG`/`LC_ALL` a partir de `SSS_LOCALE` (padrão `C.UTF-8`) (`docs/IMPLANTACAO.md` §11.1).
+`bin/sss-web.sh "$(command -v python3)" web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui` (o launcher só aceita interpretador chamado `python3` ou `python3.X`): ele recusa root, aplica `umask 077`, exporta `TZ` a partir de `SSS_TZ` e `LANG`/`LC_ALL` a partir de `SSS_LOCALE` (padrão `C.UTF-8`) (`docs/IMPLANTACAO.md` §10.1 e Apêndice A).
 
 **Codificação (CR-007):** o processo web aborta se a codificação do sistema de arquivos não for UTF-8 (`sys.getfilesystemencoding()`). Subindo sem o launcher, exporte antes `LANG=C.UTF-8` e `LC_ALL=C.UTF-8` (ou outro locale UTF-8 da máquina, `locale -a`).
 
@@ -230,7 +230,7 @@ Sem `sudo`, cadastre os scripts com o caminho real de `dev/scripts`.
 
 ### 6.3 Agente em DEV (a partir do F8, CR-007)
 
-* Em DEV, `[agent] usuarios_execucao` pode ficar vazio: o agente executa os scripts com o próprio usuário e registra WARN `SEM_USUARIO_EXECUCAO`. Para testar o helper e o `sudo` como nos servidores, siga o `IMPLANTACAO.md` §18.1 numa VM.
+* Em DEV, `[agent] usuarios_execucao` pode ficar vazio: o agente executa os scripts com o próprio usuário e registra WARN `SEM_USUARIO_EXECUCAO`. Para testar o helper e o `sudo` como nos servidores, siga o `IMPLANTACAO.md` §8 numa VM.
 * `cron_horizon_days` vai de 1.461 a 36.500 (CR-008, R-32), `max_log_size_bytes` até 64 MiB e `audit_retention_days` de 365 a 3.650 (e não menor que `ticket_retention_days`); o `table_prefix` só aceita minúsculas. Um `config.ini` antigo fora dessas faixas aborta a subida com a chave no log.
 * **CR-008:** `[web] sessao_max_horas` (padrão 12) e `[agent] log_dir_min_livre_mb` (padrão 1.024; 0 desliga, só em DEV) são opcionais. Em DEV, `[oracle] user` pode ser igual ao `owner`; fora de DEV, é recusado. O `scripts/saude.py` lê só a seção `[monitor]` do `secrets.cfg`.
 

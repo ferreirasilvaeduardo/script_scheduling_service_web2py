@@ -89,8 +89,11 @@ def _registrar_critico(msg, cfg=None):
         sss_logging.registrar_critico_inicial("sss_db_conn", msg, log_dir)
 
 
-def _executar_sondagem_subprocesso(candidato, cfg, senha):
-    """Executa scripts/sondar_driver.py em subprocesso isolado com sys.executable -I."""
+def _executar_sondagem_subprocesso(candidato, cfg, senha, usuario=None):
+    """Executa scripts/sondar_driver.py em subprocesso isolado com sys.executable -I.
+
+    usuario: a conta do papel que vai conectar (F9.1d; sem ele, [oracle] user). Nao e segredo e vai no argv; a
+    senha vai so pela entrada padrao."""
     scripts_dir = os.path.dirname(os.path.abspath(__file__))
     app_dir = os.path.dirname(scripts_dir)
     sondar_script = os.path.join(app_dir, "scripts", "sondar_driver.py")
@@ -99,6 +102,8 @@ def _executar_sondagem_subprocesso(candidato, cfg, senha):
     caminho_cfg = getattr(cfg, "caminho_arquivo", None)
     if caminho_cfg and os.path.isfile(caminho_cfg):
         cmd.extend(["--config", caminho_cfg])
+    if usuario:
+        cmd.extend(["--usuario", usuario])
 
     timeout_ms = getattr(cfg.oracle, "call_timeout_ms", 30000) if hasattr(cfg, "oracle") else 30000
     timeout_s = (2.0 * float(timeout_ms)) / 1000.0
@@ -156,10 +161,11 @@ def _executar_sondagem_subprocesso(candidato, cfg, senha):
         }
 
 
-def selecionar_driver(cfg, segredos, executor_sondagem=None):
+def selecionar_driver(cfg, segredos, executor_sondagem=None, usuario=None, senha=None):
     """Sonda e seleciona a combinacao de driver Oracle apropriada.
 
-    Em 'auto': Thin -> Thick -> cx_Oracle.
+    Em 'auto': Thin -> Thick -> cx_Oracle. usuario e senha: as credenciais do papel que vai conectar (F9.1d:
+    o monitor e o purge nao usam a conta do [oracle]); sem eles, [oracle] user e password.
     Interrompe a cadeia imediatamente em falhas de AUTENTICACAO.
     Falhas fatais geram registro em CRITICAL e RuntimeError.
     """
@@ -179,9 +185,13 @@ def selecionar_driver(cfg, segredos, executor_sondagem=None):
         else:
             candidatos = [modo]
 
-        senha = _obter_senha(segredos)
+        if senha is None:
+            senha = _obter_senha(segredos)
         tentativas = []
-        sondador = executor_sondagem or _executar_sondagem_subprocesso
+        sondador = executor_sondagem
+        if sondador is None:
+            def sondador(cand, cfg_sondagem, senha_sondagem):
+                return _executar_sondagem_subprocesso(cand, cfg_sondagem, senha_sondagem, usuario=usuario)
 
         for cand in candidatos:
             res = sondador(cand, cfg, senha)
@@ -576,7 +586,7 @@ def conectar(cfg, segredos, papel="web", user=None, password=None):
 
     selecao = obter_selecao()
     if selecao is None:
-        selecao = selecionar_driver(cfg, segredos)
+        selecao = selecionar_driver(cfg, segredos, usuario=u, senha=p)
     driver = inicializar(selecao, cfg)
 
     candidato = selecao.candidato

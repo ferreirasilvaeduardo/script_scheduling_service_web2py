@@ -64,8 +64,10 @@ def _formatar_versao_cliente(val):
     return str(val)
 
 
-def sondar(candidato, cfg, senha):
-    """Executa a tentativa de conexao para o candidato especificado."""
+def sondar(candidato, cfg, senha, usuario=None):
+    """Executa a tentativa de conexao para o candidato especificado, com a conta do papel (usuario) ou, sem ela,
+    [oracle] user."""
+    usuario = usuario or cfg.oracle.user
     driver = None
     versao_servidor = None
     versao_driver = None
@@ -77,7 +79,7 @@ def sondar(candidato, cfg, senha):
             driver = oracledb
             timeout_s = float(cfg.oracle.call_timeout_ms) / 1000.0 if cfg.oracle.call_timeout_ms else 30.0
             conn = oracledb.connect(
-                user=cfg.oracle.user,
+                user=usuario,
                 password=senha,
                 dsn=cfg.oracle.dsn,
                 tcp_connect_timeout=timeout_s,
@@ -95,7 +97,7 @@ def sondar(candidato, cfg, senha):
                 if "already been initialized" not in str(e_init):
                     raise
             conn = oracledb.connect(
-                user=cfg.oracle.user,
+                user=usuario,
                 password=senha,
                 dsn=cfg.oracle.dsn,
             )
@@ -110,7 +112,7 @@ def sondar(candidato, cfg, senha):
                 if "already been initialized" not in str(e_init):
                     pass
             conn = cx_Oracle.connect(
-                user=cfg.oracle.user,
+                user=usuario,
                 password=senha,
                 dsn=cfg.oracle.dsn,
             )
@@ -167,6 +169,7 @@ def main():
     parser = argparse.ArgumentParser(description="Sondador isolado de driver Oracle")
     parser.add_argument("candidato", choices=["thin", "thick", "cx_oracle"])
     parser.add_argument("--config", dest="config", default=None)
+    parser.add_argument("--usuario", dest="usuario", default=None, help="conta do papel (padrao: [oracle] user)")
     args = parser.parse_args()
 
     # Senha estritamente pela entrada padrao (stdin)
@@ -181,7 +184,7 @@ def main():
     else:
         cfg = sss_config.obter_config()
 
-    resultado = sondar(args.candidato, cfg, senha)
+    resultado = sondar(args.candidato, cfg, senha, usuario=args.usuario)
     sys.stdout.write(json.dumps(resultado) + "\n")
     sys.stdout.flush()
     sys.exit(0)

@@ -14,15 +14,8 @@ from gluon import current
 import masking
 import security
 
-from repo_fake.agendamentos import RepoAgendamentosFake
-from repo_fake.agentes import RepoAgentesFake
-from repo_fake.auditoria import RepoAuditoriaFake
-from repo_fake.catalogo import RepoCatalogoFake
-from repo_fake.rbac import RepoRbacFake
-from repo_fake.seed import carregar_seed
-from repo_fake.store import FakeDataStore
-from repo_fake.tickets import RepoTicketsFake
-from repo_fake.usuarios import RepoUsuariosFake
+# O repo_fake nao vai no pacote de implantacao (README §12.2): e importado so no ramo FAKE, que so um teste
+# em DEV liga (F9.1d).
 
 _lock_fabrica = threading.RLock()
 _singletons = {}
@@ -140,6 +133,15 @@ def obter(nome, config=None):
 
     with _lock_fabrica:
         if _fake_store is None:
+            from repo_fake.agendamentos import RepoAgendamentosFake
+            from repo_fake.agentes import RepoAgentesFake
+            from repo_fake.auditoria import RepoAuditoriaFake
+            from repo_fake.catalogo import RepoCatalogoFake
+            from repo_fake.rbac import RepoRbacFake
+            from repo_fake.seed import carregar_seed
+            from repo_fake.store import FakeDataStore
+            from repo_fake.tickets import RepoTicketsFake
+            from repo_fake.usuarios import RepoUsuariosFake
             _fake_store = FakeDataStore()
             carregar_seed(_fake_store, senha_dev=_senha_dev_seed())
 
