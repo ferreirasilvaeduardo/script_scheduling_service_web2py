@@ -9,6 +9,8 @@
 - `README.md` §4.4 (`AGD_PAUSAR`, `AGENTE_FIM`), §6.5 (snapshot versão 4; CR-005), §7 (inteiro, **especialmente §7.4 e §7.5**, inclusive "Conclusão da regra", "Sobreposição numa regra que conclui", "Bind de datas" e "Contrato do repositório para o desdobro"), §8.0, §8.1, §8.8, §8.9 (inclusive "Mesmos tempos em todos os nós"), §8.11 (inclusive o arquivo `.stop`), §10 (tabelas 12 e 13, a desativação com dependência e "Colunas de registro"), §13
 - Arquivos: `modules/scheduler_loop.py`, `modules/repo_oracle/scheduler_fila.py`, `modules/recurrence.py`, `modules/params_compiler.py`, `modules/rbac.py`, `modules/plataforma/`, `modules/db_conn.py`
 
+> **F8.4 concluído (2026-10-20)** em cinco subpassos: a (repositórios, 233732d), b (desdobro, 71a5100), c (self-fencing e `NODE_OFFLINE`, 08d0895), d (`DRAIN`/`TERMINATE`, 29b90fd) e e (dois agentes reais). O teste real roda em modo compartilhado (o próprio owner do `config.ini`), com dados só da fixture, como no F8.3d (decisão do responsável pelo produto): não há schema descartável no GFPR.
+
 ## Objetivo
 Completar o agente com a geração de tickets a partir dos agendamentos (desdobro otimista), a detecção de nós caídos, o self-fencing contra split-brain e o desligamento controlado.
 

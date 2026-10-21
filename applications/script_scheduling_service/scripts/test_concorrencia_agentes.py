@@ -30,8 +30,11 @@ TETO = 2
 MARCA_LONGO = 3017  # sleep exclusivo do script longo, para achar orfaos pelo argv
 
 
-@unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")
-class TestConcorrenciaDoisAgentes(unittest.TestCase):
+class _DoisAgentesBase(unittest.TestCase):
+    """Fixture de dois agentes reais (F8.3d, reaproveitada no F8.4e por test_ha_agentes_reais)."""
+
+    PREFIXO_AGENTE = "tst-f83d"
+    CONFIG_EXTRA = {}
 
     @classmethod
     def setUpClass(cls):
@@ -83,7 +86,8 @@ class TestConcorrenciaDoisAgentes(unittest.TestCase):
         funcs = [f["id"] for f in rbac.funcionalidades_listar() if f["codigo"] in ("EXEC_SCRIPT", "VER_LOGS", "CANC_TICKET")]
         rbac.matriz_salvar(perfil["id"], funcs, [self.amb["id"]], [self.scr["id"], self.scr_longo["id"]], ator=m.ator)
         self.login = m.usuario(perfil["id"], "u")["login"]
-        self.agentes = ["tst-f83d-%s-a" % m.suf, "tst-f83d-%s-b" % m.suf]
+        self.usuario_id = [u for u in m.criados["usuarios"]][-1]
+        self.agentes = ["%s-%s-a" % (self.PREFIXO_AGENTE, m.suf), "%s-%s-b" % (self.PREFIXO_AGENTE, m.suf)]
 
     def tearDown(self):
         pass  # a limpeza e o _limpar_tudo (addCleanup), depois de derrubar os agentes
@@ -97,6 +101,11 @@ class TestConcorrenciaDoisAgentes(unittest.TestCase):
             rbac.matriz_salvar(self.perfil["id"], [], [], [], ator=m.ator)
         for sid in m.criados["scripts"]:
             cat.homologacao_salvar(sid, [], ator=m.ator)
+        # Tickets gerados pelo desdobro das regras da fixture (F8.4e) entram na limpeza antes do usuario.
+        for rid in m.criados["agendamentos"]:
+            for (tid,) in self._consulta("SELECT id FROM {tck} WHERE agendamento_id = :r", r=rid):
+                if tid not in m.criados["tickets"]:
+                    m.anotar("tickets", tid)
         self._limpar_massa()
 
     def _arquivo(self, pasta, nome, corpo):
@@ -121,13 +130,15 @@ class TestConcorrenciaDoisAgentes(unittest.TestCase):
         base = os.path.join(self.raiz, agente)
         pastas = dict((n, os.path.join(base, n)) for n in ("work", "logs", "saida"))
         for p in pastas.values():
-            os.makedirs(p, 0o750)
+            os.makedirs(p, 0o750, exist_ok=True)
         cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
         cp.read(os.path.join(APP, "instance", "config.ini"), encoding="utf-8")
         cp["agent"].update({"agent_id": agente, "ambientes_atendidos": self.amb["nome"], "work_dir": pastas["work"],
                             "usuarios_execucao": "", "exec_work_dir": "", "interpretadores": "SH=/bin/sh",
                             "max_parallel_jobs": "4", "orchestrator_interval_s": "1", "cancel_poll_interval_s": "1",
                             "saida_dir": pastas["saida"], "log_dir_min_livre_mb": "0"})
+        for secao, valores in self.CONFIG_EXTRA.items():
+            cp[secao].update(valores)
         cp["logging"]["log_dir"] = pastas["logs"]
         caminho = os.path.join(base, "config.ini")
         with open(caminho, "w", encoding="utf-8") as f:
@@ -201,7 +212,9 @@ class TestConcorrenciaDoisAgentes(unittest.TestCase):
             time.sleep(passo)
         return condicao()
 
-    # ------------------------------------------------------------------ teste
+
+@unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")
+class TestConcorrenciaDoisAgentes(_DoisAgentesBase):
 
     def test_dois_agentes_teto_saida_cancelamento_e_parada(self):
         curtos = [self._ticket(self.scr) for _i in range(N_TICKETS)]
