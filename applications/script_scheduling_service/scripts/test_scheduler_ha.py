@@ -604,3 +604,126 @@ class TestDesdobroOracle(unittest.TestCase):
         self.conn.rollback()
         self.assertNotIn(ok["id"], vencidas)
         self.assertNotIn(ruim["id"], vencidas)
+
+
+# ---------------------------------------------------------------------------- F8.4c: fencing e NODE_OFFLINE
+
+import os as _os  # noqa: E402
+import time as _time  # noqa: E402
+
+import test_scheduler_claim as tsc  # noqa: E402
+
+
+class TestFencing(tsc._Base):
+    """Self-fencing (README §8.9) com o laco real, scripts /bin/sh e o banco em memoria do test_scheduler_claim."""
+
+    def _rodando(self, tid):
+        return lambda: self.banco.tickets[tid]["status"] == "RUNNING" and self.banco.tickets[tid]["process_id"]
+
+    def test_fence_no_limiar_encerra_e_recupera_como_fenced(self):
+        tid = self.banco.ticket(self.banco.script("sleep 300\n"))
+        self.subir(fence_timeout_s=1.5)
+        self.rodar(self._rodando(tid))
+        pid = self.banco.tickets[tid]["process_id"]
+        self.conexao.fora = True
+        inicio = _time.monotonic()
+        with self.assertLogs("sss_scheduler", "CRITICAL") as logs:
+            self.rodar(lambda: self.ag.cercado, limite=10)
+        self.assertGreaterEqual(_time.monotonic() - inicio, 1.0, "nao antes do limiar")
+        self.assertTrue(any("FENCED: sem heartbeat confirmado" in l for l in logs.output))
+        # Em modo cercado: sem claims nem desdobro, mesmo com ticket novo na fila.
+        novo = self.banco.ticket(self.banco.script("echo novo\n"))
+        self.rodar(lambda: not tsc._vivo(pid), limite=10)
+        self.assertFalse(tsc._vivo(pid), "o grupo foi encerrado no fence")
+        self.assertEqual(self.banco.tickets[novo]["status"], "PENDING")
+        self.conexao.fora = False
+        with self.assertLogs("sss_scheduler", "WARNING") as logs:
+            self.rodar(lambda: self.terminado(tid)() and not self.ag.cercado, limite=10)
+        self.assertEqual(self.final(tid), ("FAILED", "FENCED", -2))
+        self.assertTrue(any("FENCED encerrado" in l for l in logs.output))
+        self.rodar(self.terminado(novo), limite=15)
+        self.assertEqual(self.final(novo), ("SUCCESS", "EXIT_OK", 0), "claims voltam depois do heartbeat")
+
+    def test_r12_resultado_local_prevalece_sobre_fenced(self):
+        tid = self.banco.ticket(self.banco.script("sleep 0.5\nexit 0\n"))
+        self.subir(fence_timeout_s=2.0)
+        self.rodar(self._rodando(tid))
+        self.conexao.fora = True
+        with self.assertLogs("sss_scheduler", "CRITICAL"):
+            self.rodar(lambda: self.ag.cercado, limite=10)
+        self.conexao.fora = False
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            self.rodar(lambda: self.terminado(tid)() and not self.ag.cercado, limite=10)
+        self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0), "o script terminou antes do fence")
+
+    def test_30_execucoes_encerradas_de_uma_vez_sem_bloquear(self):
+        sid = self.banco.script("sleep 300\n", max_par=30)
+        tids = [self.banco.ticket(sid) for _i in range(30)]
+        self.subir(fence_timeout_s=1.5, max_parallel_jobs=30)
+        self.rodar(lambda: all(self._rodando(t)() for t in tids), limite=30)
+        self.conexao.fora = True
+        _time.sleep(1.6)
+        inicio = _time.monotonic()
+        with self.assertLogs("sss_scheduler", "CRITICAL"):
+            self.ag._conferir_fence()
+        self.assertLess(_time.monotonic() - inicio, 1.0, "os 30 pedidos sem esperar nenhum grupo")
+        self.assertTrue(all(i.fase == "ENCERRANDO" for i in self.ag.execucoes.values()))
+        self.conexao.fora = False
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            self.rodar(lambda: all(self.terminado(t)() for t in tids), limite=30)
+        self.assertEqual(set(self.final(t) for t in tids), {("FAILED", "FENCED", -2)})
+
+
+class TestNodeOffline(tsc._Base):
+    """NODE_OFFLINE (README §8.8): marca os tickets de outro agente; nunca com o proprio heartbeat velho nem
+    durante a suspensao por salto de relogio (CR-007 D3, CR-008 R-10)."""
+
+    def _ticket_de_outro(self):
+        tid = self.banco.ticket(self.banco.script("echo x\n"))
+        self.banco.tickets[tid].update(status="RUNNING", agente_id="outro-agente")
+        self.banco.offline.add(tid)
+        return tid
+
+    def test_marca_os_de_outro_agente(self):
+        tid = self._ticket_de_outro()
+        self.subir()
+        with self.assertLogs("sss_scheduler", "INFO") as logs:
+            self.rodar(lambda: self.banco.tickets[tid]["status"] == "FAILED", limite=10)
+        self.assertEqual((self.banco.tickets[tid]["status_motivo"], self.banco.tickets[tid]["updated_by"]),
+                         ("NODE_OFFLINE", "SYSTEM:srv-t"))
+        self.assertTrue(any("NODE_OFFLINE: ticket(s) %d marcado(s)" % tid in l for l in logs.output))
+
+    def test_heartbeat_proprio_velho_nao_detecta(self):
+        self._ticket_de_outro()
+        self.subir()
+        self.ag.ultimo_hb_ok = self.ag.relogio() - 25  # fence 40: 25 > 20 (fence / 2)
+        self.ag._node_offline()
+        self.assertEqual(self.banco.node_offline_chamadas, 0)
+
+    def test_salto_de_relogio_suspende_a_deteccao(self):
+        tid = self._ticket_de_outro()
+        self.banco.offline.clear()
+        self.subir()
+        self.rodar(lambda: self.banco.heartbeats, limite=5)
+        self.banco.sysdate_deslocamento_s = 120  # o SYSDATE saltou 2 minutos
+        with self.assertLogs("sss_scheduler", "WARNING") as logs:
+            self.rodar(lambda: self.ag._node_offline_suspenso_ate is not None, limite=5)
+        self.assertTrue(any("SALTO_RELOGIO" in l for l in logs.output))
+        self.banco.offline.add(tid)
+        chamadas = self.banco.node_offline_chamadas
+        self.rodar(lambda: False, limite=1)
+        self.assertEqual(self.banco.node_offline_chamadas, chamadas, "suspenso por node_offline_timeout_s")
+        self.assertEqual(self.banco.tickets[tid]["status"], "RUNNING")
+
+    def test_salto_detectado_na_propria_transacao(self):
+        # R-10: o salto chega entre dois heartbeats; a transacao do NODE_OFFLINE nao marca nada.
+        tid = self._ticket_de_outro()
+        self.banco.offline.clear()
+        self.subir()
+        self.rodar(lambda: self.banco.heartbeats, limite=5)
+        self.banco.offline.add(tid)
+        self.ag._ref_relogio = (self.banco.sysdate() - datetime.timedelta(seconds=300), self.ag.relogio())
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            self.ag._node_offline()
+        self.assertEqual(self.banco.tickets[tid]["status"], "RUNNING")
+        self.assertIsNotNone(self.ag._node_offline_suspenso_ate)

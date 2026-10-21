@@ -1753,6 +1753,8 @@ UPDATE {owner}.tbsss_tickets
 
 O relógio de referência é sempre o `SYSDATE` do banco, nunca o relógio do nó.
 
+**Implementação (F8.4c):** `Agente._node_offline` no ciclo do orquestrador, com `scheduler_fila.marcar_node_offline`; a referência do salto de relógio é o par (`SYSDATE`, monotônico) do último `SYSDATE` lido, no heartbeat ou na própria transação da detecção (`SALTO_RELOGIO_S = 30`).
+
 ### 8.9 Self-fencing (prevenção de split-brain)
 
 * O agente registra o instante do último heartbeat **confirmado** (commit OK), medido no **início** da transação de heartbeat (§8.7, CR-008 R-09).
@@ -1779,6 +1781,7 @@ O relógio de referência é sempre o `SYSDATE` do banco, nunca o relógio do n�
   * o pacote de implantação (F9.1) usa um único `config.ini` de referência para esses tempos;
   * o roteiro E2E (F9.2) confere que todos os agentes usam os mesmos valores.
 * A medição usa `time.monotonic()`, imune a ajuste de relógio.
+* **Implementação (F8.4c):** `Agente._conferir_fence` roda a cada iteração, depois de cada ciclo e entre as chamadas do claim e do desdobro. O encerramento pedido pelo fence finaliza `FAILED`/`FENCED`/`-2`; quem já tinha terminado ou estava sendo encerrado por outro motivo (timeout, cancelamento) fica com o resultado próprio, gravado no `.sss_result` (CR-008, R-12). Em modo cercado, os ciclos rápido e do orquestrador não usam o banco (claim, desdobro, varredura e `NODE_OFFLINE` suspensos); o heartbeat continua tentando e, ao ser confirmado, encerra o modo cercado (WARN `FENCED encerrado`), e as finalizações pendentes seguem pelo laço normal.
 
 ### 8.10 Coleta de log (`log_pump.py`)
 

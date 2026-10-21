@@ -57,12 +57,17 @@ _FINAL = {
     "CANCEL": ("CANCELLED", "CANCEL_USER", -1),
     "SHUTDOWN": ("FAILED", "SHUTDOWN", -6),
     "SPAWN_ERROR": ("FAILED", "SPAWN_ERROR", -4),
+    # Self-fencing (README §8.9): o encerramento pedido pelo fence. Quem ja tinha resultado (o .sss_result,
+    # CR-008 R-12) ou outro motivo de encerramento fica com o seu.
+    "FENCED": ("FAILED", "FENCED", -2),
 }
 _PRECHECK = ("FAILED", "PRECHECK_FAILED", -4)
 INTERVALO_MAXIMO_ESPERA_S = 1.0
 INTERVALO_AVISO_DISCO_S = 60
 
 DIVERGENCIA_RELOGIO_S = 60
+# Salto de relogio (CR-007 D3, CR-008 R-10): avanco do SYSDATE diferente do monotonico em mais que isso.
+SALTO_RELOGIO_S = 30
 _PREFIXO_PASTA = "ticket_"
 
 
@@ -472,6 +477,10 @@ class Agente(object):
         # CR-012: saidas a gravar depois da finalizacao do ticket {tid: (Saida, Execucao, log)}.
         self.saidas = {}
         self._parando = False
+        # Self-fencing e NODE_OFFLINE (F8.4c; README §8.8 e §8.9).
+        self.cercado = False
+        self._ref_relogio = None          # (SYSDATE, monotonico) do ultimo SYSDATE lido
+        self._node_offline_suspenso_ate = None
         self.rodada = log_pump.Rodada(self.bombas, self.relogio, agente.heartbeat_interval_s / 2.0)
         self._esperar = esperar
         agora = self.relogio()
@@ -501,17 +510,22 @@ class Agente(object):
         fim = None if limite_s is None else self.relogio() + limite_s
         while True:
             self._iteracao()
+            self._conferir_fence()
             agora = self.relogio()
             try:
                 if agora >= self.prazos["rapido"]:
                     self.prazos["rapido"] = agora + agente.cancel_poll_interval_s
                     self._ciclo("rapido", self._ciclo_rapido)
+                    self._conferir_fence()
                 if agora >= self.prazos["heartbeat"]:
                     self.prazos["heartbeat"] = agora + agente.heartbeat_interval_s
                     self._ciclo("heartbeat", self._ciclo_heartbeat)
+                    self._conferir_fence()
                 if agora >= self.prazos["orquestrador"]:
                     self.prazos["orquestrador"] = agora + agente.orchestrator_interval_s
-                    self._ciclo("orquestrador", self._ciclo_orquestrador)
+                    if not self.cercado:
+                        self._ciclo("orquestrador", self._ciclo_orquestrador)
+                        self._conferir_fence()
             except RegistroPerdido as exc:
                 self.log.critical("REGISTRO_PERDIDO: %s; encerramento TERMINATE", exc, extra={"acao": "HB"})
                 self.encerrar_tudo("TERMINATE", registro_perdido=True)
@@ -522,6 +536,47 @@ class Agente(object):
                 return self.codigo_saida
             espera = min(self.prazos.values()) - self.relogio()
             self._esperar(max(0.0, min(INTERVALO_MAXIMO_ESPERA_S, espera)))
+
+    # ---------------------------------------------------- self-fencing (README §8.9)
+
+    def _fence_vencido(self):
+        return self.ultimo_hb_ok is not None and self.relogio() - self.ultimo_hb_ok > self.cfg.agent.fence_timeout_s
+
+    def _conferir_fence(self):
+        """A cada iteracao e depois de cada chamada ao banco (CR-007, R-04): sem heartbeat confirmado ha mais de
+        fence_timeout_s (medido do inicio da transacao, CR-008 R-09), encerra TODAS as execucoes de uma vez pela
+        maquina de estados (SIGTERM em todas, SIGKILL nas restantes depois de kill_grace_s), suspende claims,
+        desdobro e NODE_OFFLINE e registra CRITICAL FENCED. Sai do modo cercado so com um heartbeat confirmado."""
+        if self.cercado or not self._fence_vencido():
+            return
+        self.cercado = True
+        rodando = [item for item in self.execucoes.values() if item.fase == _Item.RODANDO]
+        for item in rodando:
+            self._encerrar(item, "FENCED")
+        self.log.critical("FENCED: sem heartbeat confirmado ha %.0f s (fence_timeout_s %d); %d execucao(oes) "
+                          "encerrada(s), claims e desdobro suspensos ate o banco voltar",
+                          self.relogio() - self.ultimo_hb_ok, self.cfg.agent.fence_timeout_s, len(rodando),
+                          extra={"acao": "FENCE"})
+
+    def _sair_do_cerco(self):
+        self.cercado = False
+        self.log.warning("FENCED encerrado: heartbeat confirmado; os tickets que o agente possuia sao finalizados "
+                         "pelo resultado local ou como FENCED", extra={"acao": "FENCE"})
+
+    def _salto_de_relogio(self, sysdate):
+        """CR-007 D3 / CR-008 R-10: True (e inicia a suspensao do NODE_OFFLINE) se o avanco do SYSDATE diferir do
+        avanco do monotonico em mais de SALTO_RELOGIO_S desde o ultimo SYSDATE lido."""
+        agora = self.relogio()
+        ref, self._ref_relogio = self._ref_relogio, (sysdate, agora)
+        if ref is None or sysdate is None:
+            return False
+        diferenca = (sysdate - ref[0]).total_seconds() - (agora - ref[1])
+        if abs(diferenca) <= SALTO_RELOGIO_S:
+            return False
+        self._node_offline_suspenso_ate = agora + self.cfg.agent.node_offline_timeout_s
+        self.log.warning("SALTO_RELOGIO: o SYSDATE andou %.0f s diferente do relogio monotonico; NODE_OFFLINE "
+                         "suspenso por %d s", diferenca, self.cfg.agent.node_offline_timeout_s, extra={"acao": "HB"})
+        return True
 
     def _ciclo(self, nome, funcao):
         """Um ciclo isolado: erro registrado com contexto; erro de rede descarta a conexao (reconexao no
@@ -722,6 +777,8 @@ class Agente(object):
 
     def _ciclo_rapido(self):
         self._conferir_limites()
+        if self.cercado:
+            return  # em modo cercado, so o heartbeat tenta o banco (README §8.9)
         conn = self._conn()
         proprios = self.repo.varredura_propria(conn, self.agente_id)
         for tid, item in list(self.execucoes.items()):
@@ -813,8 +870,11 @@ class Agente(object):
         conn = self._conn()
         ids = sorted(set(self.execucoes) | self.devolucoes_pendentes)
         inicio = self.relogio()  # CR-008, R-09: instante antes do primeiro UPDATE
-        perdidos, _sysdate = self.repo.heartbeat(conn, self.agente_id, self.hostname, self.pid, ids)
+        perdidos, sysdate = self.repo.heartbeat(conn, self.agente_id, self.hostname, self.pid, ids)
         self.ultimo_hb_ok = inicio
+        self._salto_de_relogio(sysdate)
+        if self.cercado:
+            self._sair_do_cerco()
         for tid in perdidos:
             item = self.execucoes.get(tid)
             if item is not None and item.fase == _Item.RODANDO:
@@ -848,25 +908,46 @@ class Agente(object):
         self._claims()
 
     def _node_offline(self):
-        """Deteccao de no offline (README §8.8): implementado no F8.4."""
+        """Deteccao de no offline (README §8.8; F8.4c): so com o proprio heartbeat em dia (menos de
+        fence_timeout_s / 2), fora do modo cercado e fora da suspensao por salto de relogio, que tambem e
+        conferido na propria transacao (CR-008, R-10)."""
+        agente = self.cfg.agent
+        agora = self.relogio()
+        if self.cercado or self.ultimo_hb_ok is None or agora - self.ultimo_hb_ok >= agente.fence_timeout_s / 2.0:
+            return
+        if self._node_offline_suspenso_ate is not None:
+            if agora < self._node_offline_suspenso_ate:
+                return
+            self._node_offline_suspenso_ate = None
+        marcados = self.repo.marcar_node_offline(self._conn(), self.agente_id, agente.node_offline_timeout_s,
+                                                 self._salto_de_relogio)
+        if marcados:
+            self.log.info("NODE_OFFLINE: ticket(s) %s marcado(s) (heartbeat de outro agente vencido ha mais de %d s)",
+                          ", ".join(str(i) for i in marcados), agente.node_offline_timeout_s,
+                          extra={"acao": "NODE_OFFLINE"})
 
     def _desdobro(self):
         """Desdobro dos agendamentos (README §7.5; F8.4b): uma transacao por regra, com orcamento de tempo.
         Suspenso na parada (e, no F8.4c, em modo cercado)."""
-        if self._parando:
+        if self._parando or self.cercado:
             return
         if self.desdobro is None:
             self.desdobro = desdobro.Desdobro(self.repo_agenda, self.repo, self.agente_id, self.cfg.agent,
                                               self.relogio)
-        stats = self.desdobro.executar(self._conn(), continuar=lambda: not self._parando)
+        stats = self.desdobro.executar(self._conn(), continuar=self._pode_seguir)
         if stats["regras"]:
             self.log.info("desdobro: %(regras)d regra(s), %(tickets)d ticket(s), %(pausas)d pausa(s), "
                           "%(puladas)d com outro agente", stats, extra={"acao": "DESDOBRO"})
 
+    def _pode_seguir(self):
+        """Entre chamadas ao banco do desdobro e do claim: para se o fence venceu (e cerca) ou se ha parada."""
+        self._conferir_fence()
+        return not (self._parando or self.cercado)
+
     def _claims(self):
         agente = self.cfg.agent
         vagas = agente.max_parallel_jobs - len(self.execucoes)
-        if vagas <= 0 or not self.ambientes_ativos:
+        if vagas <= 0 or not self.ambientes_ativos or not self._pode_seguir():
             return
         livre = self.plat.espaco_livre_mb(self.cfg.logging.log_dir)
         if livre < agente.log_dir_min_livre_mb:
@@ -891,7 +972,8 @@ class Agente(object):
         interpretadores = [k for k, _v in agente.interpretadores]
         for cand in self.repo.candidatos(conn, self.ambientes_ativos, interpretadores, vagas,
                                          agente.fila_envelhecimento_min):
-            if len(self.execucoes) >= agente.max_parallel_jobs or self.relogio() - inicio > orcamento:
+            if len(self.execucoes) >= agente.max_parallel_jobs or self.relogio() - inicio > orcamento \
+                    or not self._pode_seguir():
                 break
             ok, motivo, started_at = self.repo.claim(conn, cand["id"], cand["script_id"], cand["ambiente"],
                                                      self.agente_id)

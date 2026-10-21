@@ -81,6 +81,10 @@ class _Banco(object):
         self.max_running = 0
         self.seq = 100
         self.unidade = 2
+        # F8.4c: tickets de outro agente que o NODE_OFFLINE deve marcar, chamadas e o deslocamento do SYSDATE.
+        self.offline = set()
+        self.node_offline_chamadas = 0
+        self.sysdate_deslocamento_s = 0
 
     def _falhar(self, metodo):
         self.chamadas[metodo] += 1
@@ -218,7 +222,24 @@ class _Banco(object):
             raise RegistroPerdido("registro assumido")
         self.heartbeats.append(list(ids))
         perdidos = [i for i in ids if self.tickets[i]["status"] != "RUNNING" or self.tickets[i]["agente_id"] != agente_id]
-        return perdidos, datetime.datetime.now()
+        return perdidos, self.sysdate()
+
+    def sysdate(self):
+        return datetime.datetime.now() + datetime.timedelta(seconds=self.sysdate_deslocamento_s)
+
+    def marcar_node_offline(self, conn, agente_id, timeout_s, salto_de_relogio):
+        self._falhar("marcar_node_offline")
+        self.node_offline_chamadas += 1
+        if salto_de_relogio(self.sysdate()):
+            return None
+        marcados = []
+        for tid in sorted(self.offline):
+            t = self.tickets[tid]
+            if t["status"] == "RUNNING" and t["agente_id"] != agente_id:
+                t.update(status="FAILED", status_motivo="NODE_OFFLINE", return_code=-2,
+                         updated_by="SYSTEM:%s" % agente_id)
+                marcados.append(tid)
+        return marcados
 
     def registrar_agente(self, conn, dados, processo_existe):
         return 1
