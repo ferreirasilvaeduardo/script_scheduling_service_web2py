@@ -312,7 +312,7 @@ applications/script_scheduling_service/
   scripts/
     init_db.py                # [F7.1] bootstrap idempotente de DDL e seed, versão do esquema e migrações (§11)
     migracoes/                # [F7.1] migrações numeradas m<NNNN>_<descricao>.py (§11.1, CR-007)
-    saude.py                  # [F9.1] verificação de saúde no padrão Nagios (§13, CR-007)
+    saude.py                  # [F9.1] verificação de saúde no padrão Nagios (§13, CR-007); consultas em repo_oracle/saude.py
     sondar_driver.py          # [F7.0] sondagem isolada de um candidato de driver (Thin, Thick, cx_Oracle) (§2.3, CR-002)
     run_scheduler.py          # [F8.3] entrypoint do daemon
     purge.py                  # [F9.1] retenção (§11.3)
@@ -2740,6 +2740,21 @@ A chave `modo_driver` substitui `driver` e `use_thick_mode` a partir do F7.0 (CR
   * Backend FAKE (DEV): o seed mostra os três quadros. O `agt-host02` tem `kill=10` (configuração divergente); o ticket 16 está `RUNNING` sem PID desde a carga; o ticket 4 (SH em `HOMOLOGACAO`, vencido 3 min antes da carga) só é atendido pelo `agt-host02` (o `agt-host01` mapeia `PYTHON3,BASH`) e entra na fila sem atendente quando ele passa a `EM_RISCO`, cerca de 1 min depois da carga.
   * `config_criticos` do nó web: `sss_config.config_criticos(cfg)`, com `call` em segundos (`call_timeout_s`, arredondado para cima), igual ao texto do agente (§8.12).
 * **Monitoração externa (CR-007, R-18):** `scripts/saude.py` (F9.1) roda, com a conta só de leitura do papel **monitor** (`[monitor]` no `secrets.cfg`, §4.1 e §11.1, CR-008 E3; a conta do agente não lê `tbsss_auditoria`), as consultas de saúde e devolve o código no padrão Nagios (0 OK, 1 WARN, 2 CRITICAL, 3 desconhecido), com uma linha por problema. Verifica: agente `ATIVO` sem heartbeat além de `node_offline_timeout_s`; ambiente ativo sem nenhum agente saudável; os três quadros acima; fila `PENDING` vencida acima de um limite; ausência de `PURGE` auditado em 2 dias; versão do esquema (§11.1). Os limites são argumentos com padrão, e o `IMPLANTACAO.md` traz o exemplo de agendamento no monitoramento corporativo.
+  * **Uso (F9.1):** `python scripts/saude.py [--config <config.ini>] [--sem-pid-min 2] [--fila-warn 500] [--fila-crit 5000] [--espera-warn-min 30] [--espera-crit-min 120] [--purge-dias 2]`. Todas as verificações usam um único `agora_banco()`. As consultas ficam em `repo_oracle/saude.py` (sem gluon), que também fornece à tela de agentes o SQL da fila sem atendente e do rodando sem PID: a tela e o monitoramento não divergem. Nenhum LOB é lido, e o plano não varre `tbsss_tickets` nem `tbsss_auditoria` (`ix_tbsss_tck_fila`, `ix_tbsss_tck_run`, `ix_tbsss_aud_ator`).
+
+    | Verificação | Nível |
+    |---|---|
+    | Versão do esquema diferente da do código (§11.1) | CRITICAL |
+    | Agente `ATIVO` sem heartbeat além de `node_offline_timeout_s` (ou sem heartbeat) | CRITICAL |
+    | Agente `ATIVO` em risco (heartbeat além de `fence_timeout_s`) | WARNING |
+    | Ambiente ativo sem nenhum agente `OK` ou `ATRASADO` que o atenda | CRITICAL |
+    | Fila sem atendente, por ambiente e interpretador do cadastro (o quadro da tela de agentes) | CRITICAL |
+    | `PENDING` vencidos ≥ `--fila-warn`/`--fila-crit`, ou espera máxima ≥ `--espera-warn-min`/`--espera-crit-min` | WARNING / CRITICAL |
+    | Ticket `RUNNING` sem PID há mais de `--sem-pid-min` minutos | WARNING |
+    | Agente ativo com `config_criticos` diferente do `config.ini` local (§8.12) | WARNING |
+    | Nenhum `PURGE` auditado em `--purge-dias` dias (`0 linhas` conta, CR-008 R-16) | WARNING |
+
+  * **Saída:** a primeira linha é `SSS <OK|WARNING|CRITICAL|UNKNOWN> - <n> problema(s) | agentes_saudaveis=<n> fila_vencida=<n>;<warn>;<crit> espera_max_min=<n>;<warn>;<crit>`, seguida de uma linha `<NÍVEL>: <problema>` por problema, os críticos primeiro. O código é o pior nível encontrado. Configuração ou segredos inválidos, falha de conexão e erro de banco dão UNKNOWN (3), com uma linha só. O `saude.py` não grava log em arquivo: a saída do plugin fica registrada pelo monitoramento.
 * **Painel inicial** (`default/index`), com cartões por permissão:
   * contagem por status dos tickets criados nas últimas 24 h e meus últimos 5 tickets (quem consulta tickets, no escopo da lista);
   * próximos 5 agendamentos ativos (`CAD_AGENDAMENTOS`);

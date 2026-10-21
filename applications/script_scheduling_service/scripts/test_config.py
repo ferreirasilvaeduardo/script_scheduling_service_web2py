@@ -808,8 +808,19 @@ class TestConfigCR007(unittest.TestCase):
         self.assertEqual(seg_mon.monitor_password, "senha-mon-123")
         self.assertIn("senha-mon-123", self.mascarados)
         self.assertNotIn("senha-mon-123", repr(seg_mon))
+        # F9.1b (README §4.1): no servidor do agente, as secoes dos outros papeis sao ignoradas, sem masking.
+        outros = [("oracle", {"password": "senha-agt-999"}), ("purge", {"password": "senha-prg-999"}),
+                  ("ambiente:PRODUCAO", {"user": "app", "password": "senha-amb-999"})]
+        seg_mon = sss_config.carregar_segredos(self._secrets(monitor + outros), sss_env="PROD",
+                                               data_backend="ORACLE", papel="monitor")
+        self.assertEqual((seg_mon.monitor_user, seg_mon.oracle_password, seg_mon.ambientes), ("sss_monitor", None, {}))
+        for valor in ("senha-agt-999", "senha-prg-999", "senha-amb-999"):
+            self.assertNotIn(valor, self.mascarados)
         with self.assertRaises(sss_config.ConfigErro):
-            sss_config.carregar_segredos(self._secrets(monitor + [("oracle", {"password": "x"})]),
+            sss_config.carregar_segredos(self._secrets(monitor + [("web", {"cookie_key": "k" * 40})]),
+                                         sss_env="PROD", data_backend="ORACLE", papel="monitor")
+        with self.assertRaises(sss_config.ConfigErro):
+            sss_config.carregar_segredos(self._secrets([("oracle", {"password": "x"})]),
                                          sss_env="PROD", data_backend="ORACLE", papel="monitor")
 
     def test_segredos_do_agente_cobrem_os_ambientes(self):

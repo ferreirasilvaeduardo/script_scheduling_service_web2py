@@ -7,6 +7,8 @@ Leituras do painel de agentes com a mesma semantica do repo_fake/agentes.py (REA
 - fila_sem_atendente agrupa os PENDING vencidos pelo interpretador do cadastro (JOIN em tbsss_scripts,
   o mesmo criterio do claim; CR-008, R-15), lendo so ix_tck_fila (status, ambiente, script_id e o inicio
   da espera; CR-013); a comparacao com os agentes saudaveis fica em Python, como no FAKE;
+- o SQL da fila e do rodando sem PID e o calculo dos pares atendidos vem do repo_oracle/saude.py (F9.1b),
+  o mesmo do scripts/saude.py: a tela e o monitoramento nao divergem;
 - binds de DATE como TIPO_DATE (README §7.5).
 """
 import datetime
@@ -14,6 +16,7 @@ import datetime
 import db_conn
 import sql_ident
 from repo_agentes import RepoAgentes
+from repo_oracle import saude as saude_sql
 from repo_oracle.base import BaseRepoOracle
 
 _COLS_AGT = ("id", "codigo", "hostname", "pid_daemon", "versao", "ambientes", "plataforma", "interpretadores",
@@ -25,10 +28,9 @@ _COLS_TCK = ("id", "script_id", "ambiente", "solicitante", "ip_origem", "agente_
              "parent_ticket_id", "agendamento_id", "log_offset_chars", "log_truncado", "return_code",
              "scheduled_at", "started_at", "heartbeat_at", "finished_at",
              "created_at", "created_by", "updated_at", "updated_by")
-_COLS_SEM_PID = ("id", "script_id", "ambiente", "agente_id", "started_at")
+_COLS_SEM_PID = saude_sql.COLS_SEM_PID
 
 _RUN = "(" + sql_ident.FBI_TCK_RUN_AGENTE_CASE + ")"
-_INICIO = sql_ident.FBI_TCK_FILA_INICIO
 
 
 def _lista(cols, alias=""):
@@ -40,22 +42,8 @@ _SQL_LISTAR = "SELECT " + _lista(_COLS_AGT) + " FROM {agt} ORDER BY codigo, id"
 _SQL_TICKETS_RUNNING = (
     "SELECT " + _lista(_COLS_TCK) + " FROM {tck} WHERE " + _RUN + " = :codigo ORDER BY id"
 )
-# status = 'PENDING' na coluna lider de ix_tck_fila (CR-013): faixa so dos PENDING, lida so no indice
-# (ambiente, script_id e o inicio da espera); o inicio <= :agora equivale a scheduled_at <= :agora, porque
-# created_at nunca passa de agora. Agrupa por script antes do JOIN com o catalogo. Nenhum CLOB e lido.
-_SQL_FILA = (
-    "SELECT g.ambiente, s.interpretador, SUM(g.n), MIN(g.inicio) FROM ("
-    "SELECT ambiente, script_id, COUNT(*) n, MIN(" + _INICIO + ") inicio FROM {tck} "
-    "WHERE status = 'PENDING' AND " + _INICIO + " <= :agora GROUP BY ambiente, script_id) g "
-    "JOIN {scr} s ON s.id = g.script_id GROUP BY g.ambiente, s.interpretador"
-)
-# ">= CHR(1)" equivale a IS NOT NULL para o agent_id ([A-Za-z0-9._-], todos acima de CHR(1)), mas vira
-# faixa de ix_tck_run (INDEX RANGE SCAN); com IS NOT NULL o otimizador varria a tabela (EXPLAIN, F7.3).
-_SQL_RODANDO_SEM_PID = (
-    "SELECT " + _lista(_COLS_SEM_PID) + " FROM {tck} "
-    "WHERE " + _RUN + " >= CHR(1) AND status = 'RUNNING' AND process_id IS NULL "
-    "AND started_at < :limite ORDER BY started_at, id"
-)
+_SQL_FILA = saude_sql.SQL_FILA
+_SQL_RODANDO_SEM_PID = saude_sql.SQL_RODANDO_SEM_PID
 
 
 class RepoAgentesOracle(BaseRepoOracle, RepoAgentes):
@@ -98,25 +86,9 @@ class RepoAgentesOracle(BaseRepoOracle, RepoAgentes):
 
     def fila_sem_atendente(self, agora, limiares, conn=None):
         """Grupos de PENDING vencidos sem agente OK/ATRASADO para o par ambiente/interpretador."""
-        atendidos = set()
-        for ag in self.listar(conn=conn):
-            hb = ag.get("heartbeat_at")
-            if ag.get("status") != "ATIVO" or hb is None:
-                continue
-            idade = max(0, int((agora - hb).total_seconds()))  # mesmo arredondamento de agentes_service.saude
-            if idade >= 2 * limiares.heartbeat_interval_s and idade > limiares.fence_timeout_s:
-                continue
-            atendidos.update((a.strip(), i.strip()) for a in (ag.get("ambientes") or "").split(",")
-                             for i in (ag.get("interpretadores") or "").split(",") if a.strip() and i.strip())
-        grupos = []
-        for ambiente, interpretador, quantidade, mais_antigo in self._ler(
-                self._sql["FILA"], {"agora": agora}, {"agora": db_conn.TIPO_DATE}, conn=conn):
-            if (ambiente, interpretador) in atendidos:
-                continue
-            grupos.append({"ambiente": ambiente, "interpretador": interpretador,
-                           "quantidade": int(quantidade), "mais_antigo": mais_antigo.replace(microsecond=0)})
-        grupos.sort(key=lambda g: (g["ambiente"], g["interpretador"]))
-        return grupos
+        atendidos = saude_sql.pares_atendidos(self.listar(conn=conn), agora, limiares)
+        linhas = self._ler(self._sql["FILA"], {"agora": agora}, {"agora": db_conn.TIPO_DATE}, conn=conn)
+        return saude_sql.fila_sem_atendente(linhas, atendidos)
 
     def rodando_sem_pid(self, agora, minutos, conn=None):
         """RUNNING sem process_id ha mais de `minutos`, por started_at e id; so as colunas do contrato."""
