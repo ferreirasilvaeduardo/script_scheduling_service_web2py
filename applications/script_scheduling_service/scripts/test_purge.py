@@ -3,7 +3,7 @@
 CR-008 R-16, R-27; CR-009; CR-012).
 
 Com um banco simulado em memoria (o SQL e o do RepoPurge real): lotes ate rowcount = 0, so tickets terminais,
-concessao tomada, renovada, liberada (dono e prazo), negada e perdida, PURGE com 0 linhas, --exportar-auditoria,
+concessao tomada, renovada, liberada (dono e prazo), negada e perdida, PURGE com 0 linhas, --export-audit,
 --dry-run so com SELECT e um agora_banco(), logs locais pela data do caminho (RUNNING mantido, interno/ intocada),
 pastas de saida pelo helper, trava local e codigos de saida.
 
@@ -35,12 +35,12 @@ TERMINAIS = ("SUCCESS", "FAILED", "CANCELLED")
 
 def _cfg(raiz, **extra):
     agente = dict(agent_id="srv-a", work_dir=os.path.join(raiz, "work"), output_dir=None,
-                  ambientes_atendidos=("PRODUCAO",), usuarios_execucao=())
+                  environments=("PRODUCAO",), exec_users=())
     agente.update(extra.get("agent", {}))
     return NS(app=NS(sss_env="DEV"), oracle=NS(owner="openrisow", table_prefix="tbsss_"),
               secrets=NS(secrets_file=os.path.join(raiz, "secrets.cfg")), agent=NS(**agente),
               logging=NS(log_dir=os.path.join(raiz, "logs"), local_log_retention_days=30, output_retention_days=7),
-              retencao=NS(ticket_retention_days=90, audit_retention_days=365, purge_batch_size=2,
+              retention=NS(ticket_retention_days=90, audit_retention_days=365, purge_batch_size=2,
                           purge_user=extra.get("purge_user", "sss_purge")))
 
 
@@ -178,7 +178,7 @@ class _Plat(object):
     def purgar_saida(self, base, dias, usuario_execucao=None, contar=False):
         self.chamadas.append((base, dias, usuario_execucao, contar))
         if self.falhar:
-            raise RuntimeError("helper purgar-saida falhou (codigo 4)")
+            raise RuntimeError("helper purge-output falhou (codigo 4)")
         return self.contagem
 
     def travar_instancia(self, caminho):
@@ -382,8 +382,8 @@ class TestSaida(_Base):
     def test_por_ambiente_com_o_usuario_de_execucao(self):
         base = os.path.join(self.raiz, "saida")
         os.makedirs(os.path.join(base, "producao"))
-        cfg = _cfg(self.raiz, agent={"output_dir": base, "ambientes_atendidos": ("PRODUCAO", "HOMOLOGACAO"),
-                                     "usuarios_execucao": (("PRODUCAO", "sssprd"), ("HOMOLOGACAO", "ssshml"))})
+        cfg = _cfg(self.raiz, agent={"output_dir": base, "environments": ("PRODUCAO", "HOMOLOGACAO"),
+                                     "exec_users": (("PRODUCAO", "sssprd"), ("HOMOLOGACAO", "ssshml"))})
         plat = _Plat(contagem=2)
         p = self._purge(_Banco(), plat=plat, cfg=cfg)
         self.assertEqual(p.executar(("saida",)), 0)
@@ -427,16 +427,16 @@ class TestMain(_Base):
     def test_execucao_real_com_trava_e_resumo(self):
         plat = _Plat()
         banco = _Banco(tickets=[(1, _dias(100), "CANCELLED")])
-        codigo, texto = self._main(["--alvo", "tickets"], banco=banco, plat=plat)
+        codigo, texto = self._main(["--target", "tickets"], banco=banco, plat=plat)
         self.assertEqual(codigo, 0)
         self.assertEqual(plat.travas, [os.path.join(self.raiz, "work", "sss-purge.lock")])
         self.assertEqual(texto, "tickets: 1 linhas apagadas\n")
         self.assertEqual(banco.fechada, 1)
-        self.assertEqual(self.carregar.call_args[1]["papel"], "agente", "[purge] password so no papel agente")
+        self.assertEqual(self.carregar.call_args[1]["papel"], "agent", "[purge] password so no papel agente")
 
     def test_dry_run_sem_trava_e_com_aviso(self):
         plat = _Plat()
-        codigo, texto = self._main(["--dry-run", "--alvo", "auditoria"], plat=plat)
+        codigo, texto = self._main(["--dry-run", "--target", "audit"], plat=plat)
         self.assertEqual(codigo, 0)
         self.assertEqual(plat.travas, [])
         self.assertFalse(os.path.exists(os.path.join(self.raiz, "work", "sss-purge.lock")))
@@ -453,7 +453,7 @@ class TestMain(_Base):
                                side_effect=purge_cli.sss_config.ConfigErro(motivo="x")):
             self.assertEqual(purge_cli.main([], conectar=None), purge_cli.SAIDA_CONFIG)
         self.assertEqual(self._main([], cfg=_cfg(self.raiz, purge_user=None))[0], purge_cli.SAIDA_CONFIG)
-        self.assertEqual(self._main(["--exportar-auditoria", os.path.join(self.raiz, "nao_existe")])[0],
+        self.assertEqual(self._main(["--export-audit", os.path.join(self.raiz, "nao_existe")])[0],
                          purge_cli.SAIDA_CONFIG)
         self.assertEqual(self._main([], segredos_erro=True)[0], purge_cli.SAIDA_CONFIG)
         self.assertEqual(self.conexoes, [])
@@ -469,7 +469,7 @@ class TestMain(_Base):
 
     def test_alvo_invalido(self):
         with self.assertRaises(SystemExit), mock.patch("sys.stderr", io.StringIO()):
-            purge_cli._argumentos(["--alvo", "tudo"])
+            purge_cli._argumentos(["--target", "tudo"])
 
 
 @unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")
@@ -485,7 +485,7 @@ class TestPurgeOracle(unittest.TestCase):
         cls.contrato = trc._OracleContrato
         cls.contrato.setUpClass.__func__(cls)
         from _oracle_test_support import preparar_schema_descartavel
-        preparar_schema_descartavel("agente")
+        preparar_schema_descartavel("agent")
 
     @classmethod
     def tearDownClass(cls):
@@ -548,7 +548,7 @@ class TestPurgeOracle(unittest.TestCase):
         dono = "tst-f91a-%s" % m.suf
         cfg_purge = types.SimpleNamespace(
             agent=types.SimpleNamespace(agent_id=dono), oracle=cfg.oracle,
-            retencao=types.SimpleNamespace(ticket_retention_days=self.DIAS, audit_retention_days=365,
+            retention=types.SimpleNamespace(ticket_retention_days=self.DIAS, audit_retention_days=365,
                                            purge_batch_size=1))
         marca = self._um("SELECT NVL(MAX(id), 0) FROM " + self.aud)
         logger = logging.getLogger("sss_test_purge_oracle")

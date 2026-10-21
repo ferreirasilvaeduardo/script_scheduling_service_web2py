@@ -252,7 +252,7 @@ class TestDublesHelper(unittest.TestCase):
     def test_limpar_dir_script_pelo_helper(self):
         with mock.patch.object(posix, "_executar_curto", return_value=(0, "")) as ex:
             plataforma.limpar_dir_script("/srv/exec/exec1", 9, "exec1")
-        self.assertEqual(ex.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "limpar",
+        self.assertEqual(ex.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "clean",
                                               "/srv/exec/exec1", "9"])
         with mock.patch.object(posix, "_executar_curto", return_value=(2, "")):
             with self.assertRaises(RuntimeError):
@@ -263,7 +263,7 @@ class TestDublesHelper(unittest.TestCase):
             with mock.patch.object(posix, "_executar_curto", return_value=(codigo, "")) as ex:
                 self.assertEqual(plataforma.encerrar_ticket("/srv/exec/exec1", 9, "exec1", 10), esperado)
             self.assertEqual(ex.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER,
-                                                  "encerrar-ticket", "/srv/exec/exec1", "9", "10"])
+                                                  "stop-ticket", "/srv/exec/exec1", "9", "10"])
         with mock.patch.object(posix, "_executar_curto", return_value=(4, "")):
             with self.assertRaises(RuntimeError):
                 plataforma.encerrar_ticket("/srv/exec/exec1", 9, "exec1", 10)
@@ -275,14 +275,14 @@ class TestPastaDeSaida(unittest.TestCase):
     def setUp(self):
         self.raiz = os.path.realpath(tempfile.mkdtemp(prefix="sss_saida_"))
         self.addCleanup(shutil.rmtree, self.raiz, True)
-        self.base = os.path.join(self.raiz, "saida", "producao")
+        self.base = os.path.join(self.raiz, "output", "producao")
         self.rel = "carga/2026/10/20/14/05/ticket_5"
 
     def test_argv_do_helper_com_e_sem_usuario(self):
-        self.assertEqual(posix._argv_helper("limpar-saida", ["/b", "r"], "exec1"),
-                         [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "limpar-saida", "/b", "r"])
-        self.assertEqual(posix._argv_helper("purgar-saida", ["/b", 7]),
-                         [sys.executable, "-I", posix.HELPER_PACOTE, "purgar-saida", "/b", "7"])
+        self.assertEqual(posix._argv_helper("clean-output", ["/b", "r"], "exec1"),
+                         [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "clean-output", "/b", "r"])
+        self.assertEqual(posix._argv_helper("purge-output", ["/b", 7]),
+                         [sys.executable, "-I", posix.HELPER_PACOTE, "purge-output", "/b", "7"])
         self.assertTrue(os.path.isfile(posix.HELPER_PACOTE), posix.HELPER_PACOTE)
 
     def test_iniciar_empacotar_com_usuario_nao_espera(self):
@@ -290,7 +290,7 @@ class TestPastaDeSaida(unittest.TestCase):
         with mock.patch.object(posix.subprocess, "Popen", return_value=falso) as popen, \
                 mock.patch.object(posix, "identidade_processo", return_value=55):
             proc = plataforma.iniciar_empacotar(self.base, self.rel, 1048576, 10, 9, usuario_execucao="exec1")
-        self.assertEqual(popen.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "empacotar",
+        self.assertEqual(popen.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "pack",
                                                  self.base, self.rel, "1048576", "10"])
         kw = popen.call_args[1]
         self.assertEqual((kw["shell"], kw["start_new_session"], kw["stdout"], kw["env"]),
@@ -303,9 +303,9 @@ class TestPastaDeSaida(unittest.TestCase):
             plataforma.limpar_saida(self.base, self.rel, "exec1")
             self.assertEqual(plataforma.purgar_saida(self.base, 7, "exec1"), 3)
             self.assertEqual(plataforma.purgar_saida(self.base, 7, "exec1", contar=True), 3)
-        self.assertEqual(ex.call_args_list[0][0][0][-3:], ["limpar-saida", self.base, self.rel])
-        self.assertEqual(ex.call_args_list[1][0][0][-3:], ["purgar-saida", self.base, "7"])
-        self.assertEqual(ex.call_args_list[2][0][0][-4:], ["purgar-saida", self.base, "7", "contar"])
+        self.assertEqual(ex.call_args_list[0][0][0][-3:], ["clean-output", self.base, self.rel])
+        self.assertEqual(ex.call_args_list[1][0][0][-3:], ["purge-output", self.base, "7"])
+        self.assertEqual(ex.call_args_list[2][0][0][-4:], ["purge-output", self.base, "7", "count"])
         for retorno in ((2, ""), (0, "sem contagem")):
             with mock.patch.object(posix, "_executar_curto", return_value=retorno):
                 with self.assertRaises(RuntimeError):
@@ -337,7 +337,7 @@ class TestPastaDeSaida(unittest.TestCase):
         self.assertEqual(plataforma.purgar_saida(self.base, 7), 0)
 
     def test_cr014_dev_cria_a_entrada_e_preserva_a_existente(self):
-        base = os.path.join(self.raiz, "entrada", "producao")
+        base = os.path.join(self.raiz, "input", "producao")
         pasta = plataforma.criar_pasta_entrada(base, "carga")
         self.assertEqual((pasta, os.stat(pasta).st_mode & 0o777), (os.path.join(base, "carga"), 0o700))
         with open(os.path.join(pasta, "lote.csv"), "w") as f:

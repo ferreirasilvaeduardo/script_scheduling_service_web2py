@@ -451,7 +451,7 @@ def validar_snapshot(json_str, cfg):
     interpretador = snap['interpreter']
     if interpretador not in path_guard.ALLOWLIST:
         raise SnapshotErro('INTERPRETADOR_NAO_PERMITIDO')
-    executavel = (cfg.interpretadores or {}).get(interpretador)
+    executavel = (cfg.interpreters or {}).get(interpretador)
     if not executavel:
         raise SnapshotErro('INTERPRETADOR_NAO_DISPONIVEL')
     args = snap['args']

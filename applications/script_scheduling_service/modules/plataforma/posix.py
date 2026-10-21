@@ -435,12 +435,12 @@ def _executar_curto(argv):
     return p.returncode, p.stdout or ""
 
 
-def validar_execucao(usuarios_execucao, exec_work_dir, helper=HELPER, executar=_executar_curto,
+def validar_execucao(exec_users, exec_work_dir, helper=HELPER, executar=_executar_curto,
                      usuario_agente=None):
     """Confere o helper, o sudoers e os usuarios de execucao (README §8.0). Devolve a lista de falhas
     (vazia = OK); o agente registra cada uma em CRITICAL e recusa subir.
 
-    usuarios_execucao: pares (ambiente, usuario) do [agent] usuarios_execucao.
+    exec_users: pares (ambiente, usuario) do [agent] exec_users.
     """
     falhas = []
     try:
@@ -456,7 +456,7 @@ def validar_execucao(usuarios_execucao, exec_work_dir, helper=HELPER, executar=_
         falhas.append("helper %s nao encontrado" % helper)
 
     agente = usuario_agente or pwd.getpwuid(os.geteuid()).pw_name
-    for usuario in sorted(set(u for _amb, u in usuarios_execucao)):
+    for usuario in sorted(set(u for _amb, u in exec_users)):
         try:
             info = pwd.getpwnam(usuario)
         except KeyError:
@@ -485,7 +485,7 @@ def limpar_dir_script(pasta_base, ticket_id, usuario_execucao):
 
     So fora de DEV (com usuario de execucao); em DEV a pasta fica dentro de work_dir/ticket_<id>/.
     """
-    codigo, _saida = _executar_curto([SUDO, "-n", "-u", usuario_execucao, "--", HELPER, "limpar",
+    codigo, _saida = _executar_curto([SUDO, "-n", "-u", usuario_execucao, "--", HELPER, "clean",
                                       pasta_base, str(int(ticket_id))])
     if codigo != 0:
         raise RuntimeError("helper limpar falhou (codigo %s)" % codigo)
@@ -545,30 +545,30 @@ def iniciar_empacotar(base, relativo, max_bytes, max_arquivos, destino_fd, usuar
 
     O agente acompanha por processo.popen.poll() e, no prazo, encerra com sinalizar_grupo (README §8.13).
     """
-    argv = _argv_helper("empacotar", [base, relativo, int(max_bytes), int(max_arquivos)], usuario_execucao)
+    argv = _argv_helper("pack", [base, relativo, int(max_bytes), int(max_arquivos)], usuario_execucao)
     p = subprocess.Popen(argv, shell=False, start_new_session=True, close_fds=True, stdin=subprocess.DEVNULL,
                          stdout=destino_fd, stderr=subprocess.DEVNULL, env=dict(_ENV_HELPER))
     return Processo(p.pid, identidade_processo(p.pid), popen=p, usuario_execucao=usuario_execucao)
 
 
 def limpar_saida(base, relativo, usuario_execucao=None):
-    """Remove a pasta de saida do ticket pelo helper limpar-saida (sem seguir links)."""
-    codigo, _saida = _executar_curto(_argv_helper("limpar-saida", [base, relativo], usuario_execucao))
+    """Remove a pasta de saida do ticket pelo helper clean-output (sem seguir links)."""
+    codigo, _saida = _executar_curto(_argv_helper("clean-output", [base, relativo], usuario_execucao))
     if codigo != 0:
-        raise RuntimeError("helper limpar-saida falhou (codigo %s)" % codigo)
+        raise RuntimeError("helper clean-output falhou (codigo %s)" % codigo)
 
 
 def purgar_saida(base, dias, usuario_execucao=None, contar=False):
     """Retencao das pastas de saida (purge.py, README §11.3): devolve quantas pastas de minuto sairam (ou, com
     contar=True, quantas sairiam: o --dry-run, sem remover nada)."""
-    args = [base, int(dias)] + (["contar"] if contar else [])
-    codigo, saida = _executar_curto(_argv_helper("purgar-saida", args, usuario_execucao))
+    args = [base, int(dias)] + (["count"] if contar else [])
+    codigo, saida = _executar_curto(_argv_helper("purge-output", args, usuario_execucao))
     if codigo != 0:
-        raise RuntimeError("helper purgar-saida falhou (codigo %s)" % codigo)
+        raise RuntimeError("helper purge-output falhou (codigo %s)" % codigo)
     for linha in saida.splitlines():
         if linha.startswith("removidas="):
             return int(linha.split("=", 1)[1])
-    raise RuntimeError("helper purgar-saida sem contagem")
+    raise RuntimeError("helper purge-output sem contagem")
 
 
 def validar_pastas_saida(pastas_usuarios):
@@ -620,16 +620,16 @@ def encerrar_ticket(pasta_base, ticket_id, usuario_execucao, kill_grace_s):
     """Encerra os processos do ticket "talvez iniciado" (.sss_spawn sem .sss_proc). Devolve 'OK' ou
     'NAO_SUPORTADO'. Unica operacao que espera (kill_grace_s), porque roda so antes do laco.
 
-    Com usuario de execucao: helper encerrar-ticket (codigo 5 = nao suportado). Em DEV: os processos do
+    Com usuario de execucao: helper stop-ticket (codigo 5 = nao suportado). Em DEV: os processos do
     proprio usuario cujo diretorio atual esta em <pasta_base>/ticket_<id>.
     """
     if usuario_execucao:
-        codigo, saida = _executar_curto([SUDO, "-n", "-u", usuario_execucao, "--", HELPER, "encerrar-ticket",
+        codigo, saida = _executar_curto([SUDO, "-n", "-u", usuario_execucao, "--", HELPER, "stop-ticket",
                                          pasta_base, str(int(ticket_id)), str(int(kill_grace_s))])
         if codigo == CODIGO_NAO_SUPORTADO:
             return "NAO_SUPORTADO"
         if codigo != 0:
-            raise RuntimeError("helper encerrar-ticket falhou (codigo %s)" % codigo)
+            raise RuntimeError("helper stop-ticket falhou (codigo %s)" % codigo)
         return "OK"
     if NOME != "LINUX" or not os.path.isdir("/proc/self"):
         return "NAO_SUPORTADO"

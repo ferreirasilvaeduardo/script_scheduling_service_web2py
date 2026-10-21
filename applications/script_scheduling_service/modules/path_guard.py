@@ -12,7 +12,7 @@ import os
 import plataforma
 
 # Interpretadores logicos (CR-001, D1/D2; CR-005: somente POSIX): o catalogo guarda a chave; cada agente
-# a mapeia para o executavel local ([agent] interpretadores).
+# a mapeia para o executavel local ([agent] interpreters).
 ALLOWLIST = ('PYTHON3', 'BASH', 'SH')
 # Argumentos fixos entre o executavel e o script (README §6.4); Python sempre com -I.
 ARGS_FIXOS = {
@@ -113,7 +113,7 @@ def resolver(path_file, dirs_sss=()):
 
 
 def validar_executavel(caminho, dirs_sss=()):
-    """Executavel de um interpretador de [agent] interpretadores (README §8.5, CR-011): caminho absoluto e
+    """Executavel de um interpretador de [agent] interpreters (README §8.5, CR-011): caminho absoluto e
     normalizado, existe, e arquivo executavel e fica fora de log_dir/work_dir/exec_work_dir. Pode ser link
     simbolico (ex.: /usr/bin/python3) e ficar nas pastas do sistema. Devolve o caminho real; falha:
     NAO_ENCONTRADO ou INTERPRETADOR_INSEGURO."""

@@ -29,9 +29,9 @@ from repo_oracle.scheduler_fila import AgenteDuplicado
 from _saida_memoria import RepoSaidaMemoria
 
 _Agent = collections.namedtuple("_Agent", (
-    "agent_id", "ambientes_atendidos", "work_dir", "interpretadores", "usuarios_execucao",
+    "agent_id", "environments", "work_dir", "interpreters", "exec_users",
     "exec_work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
-    "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "fila_envelhecimento_min", "child_locale",
+    "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "queue_aging_min", "child_locale",
     "output_dir", "input_dir"))
 _Agent.__new__.__defaults__ = (None, None)  # CR-012 e CR-014: sem output_dir nem input_dir por padrao
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
@@ -176,11 +176,11 @@ class _Base(unittest.TestCase):
         shutil.rmtree(self.raiz, ignore_errors=True)
 
     def cfg(self, **agente):
-        base = dict(agent_id="srv-t", ambientes_atendidos=("DEV",), work_dir=self.work,
-                    interpretadores=(("SH", "/bin/sh"),), usuarios_execucao=(), exec_work_dir=None,
+        base = dict(agent_id="srv-t", environments=("DEV",), work_dir=self.work,
+                    interpreters=(("SH", "/bin/sh"),), exec_users=(), exec_work_dir=None,
                     heartbeat_interval_s=10, fence_timeout_s=40, node_offline_timeout_s=120, kill_grace_s=1,
                     misfire_policy="RUN_ONCE", misfire_tolerance_s=300, cron_horizon_days=366,
-                    fila_envelhecimento_min=30, child_locale="C.UTF-8")
+                    queue_aging_min=30, child_locale="C.UTF-8")
         env = agente.pop("sss_env", "DEV")
         log_dir = agente.pop("log_dir", self.logs)
         base.update(agente)
@@ -243,8 +243,8 @@ class TestPassos(_Base):
     def test_diretorios_e_interpretadores(self):
         self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(log_dir="/usr/local/sss-logs")))
         self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(work_dir=os.path.join(self.raiz, "nao"))))
-        self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(interpretadores=(("SH", "bin/sh"),))))
-        self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(interpretadores=())))
+        self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(interpreters=(("SH", "bin/sh"),))))
+        self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=self.cfg(interpreters=())))
 
     def test_validar_execucao_fora_de_dev(self):
         cfg = self.cfg(sss_env="PROD", exec_work_dir=self.raiz)
@@ -266,7 +266,7 @@ class TestPassos(_Base):
             vistos.extend(pares)
             return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pares[0][0]]
         plat = _Plat(validar_execucao=lambda *a, **k: [], validar_pastas_saida=_pastas)
-        cfg = self.cfg(sss_env="PROD", exec_work_dir=self.raiz, usuarios_execucao=(("DEV", "exec1"),),
+        cfg = self.cfg(sss_env="PROD", exec_work_dir=self.raiz, exec_users=(("DEV", "exec1"),),
                        input_dir=entrada)
         logs = self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=cfg, plat=plat))
         self.assertEqual(vistos, [(os.path.join(entrada, "dev"), "exec1")])
@@ -286,7 +286,7 @@ class TestPassos(_Base):
             vistos.extend(pares)
             return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pares[0][0]]
         plat = _Plat(validar_execucao=lambda *a, **k: [], validar_pastas_saida=_pastas)
-        cfg = self.cfg(sss_env="PROD", exec_work_dir=self.raiz, usuarios_execucao=(("DEV", "exec1"),),
+        cfg = self.cfg(sss_env="PROD", exec_work_dir=self.raiz, exec_users=(("DEV", "exec1"),),
                        output_dir=saida)
         logs = self.falha(sl.SAIDA_DIRETORIOS, self.agente(cfg=cfg, plat=plat))
         self.assertEqual(vistos, [(os.path.join(saida, "dev"), "exec1")])
@@ -486,15 +486,15 @@ class TestSubidaOracle(_Base):
     def setUp(self):
         _Base.setUp(self)
         from _oracle_test_support import preparar_schema_descartavel
-        self.cfg_real = preparar_schema_descartavel("agente")
+        self.cfg_real = preparar_schema_descartavel("agent")
         self.codigo = "tst-f83b-%d" % (int(time.time() * 1000) % 100000000)
         self.addCleanup(self._limpar_registro)
 
     def _limpar_registro(self):
         import db_conn
         import sql_ident
-        seg = sss_config.carregar_segredos(self.cfg_real.secrets.secrets_file, cfg=self.cfg_real, papel="agente")
-        conn = db_conn.conectar(self.cfg_real, seg, "agente")
+        seg = sss_config.carregar_segredos(self.cfg_real.secrets.secrets_file, cfg=self.cfg_real, papel="agent")
+        conn = db_conn.conectar(self.cfg_real, seg, "agent")
         try:
             o, p = self.cfg_real.oracle.owner.strip(), self.cfg_real.oracle.table_prefix.strip()
             agt = sql_ident.tabela(o, p, "agentes")
@@ -512,8 +512,8 @@ class TestSubidaOracle(_Base):
         import db_conn
         from repo_oracle.scheduler_fila import RepoSchedulerFila
         cfg = self.cfg_real
-        seg = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel="agente")
-        conn = db_conn.conectar(cfg, seg, "agente")
+        seg = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel="agent")
+        conn = db_conn.conectar(cfg, seg, "agent")
         try:
             import ddl_builder
             ativos, _ = RepoSchedulerFila.da_config(cfg).ambientes_ativos(
@@ -521,8 +521,8 @@ class TestSubidaOracle(_Base):
         finally:
             conn.close()
         self.assertTrue(ativos, "o seed precisa de um ambiente ativo")
-        agente = cfg.agent._replace(agent_id=self.codigo, ambientes_atendidos=tuple(ativos[:1]), work_dir=self.work,
-                                    interpretadores=(("SH", "/bin/sh"),))
+        agente = cfg.agent._replace(agent_id=self.codigo, environments=tuple(ativos[:1]), work_dir=self.work,
+                                    interpreters=(("SH", "/bin/sh"),))
         cfg = cfg._replace(agent=agente, logging=cfg.logging._replace(log_dir=self.logs))
         ag = sl.Agente(cfg=cfg, segredos=seg, hostname="host-tst", pid=os.getpid())
         self.agentes.append(ag)

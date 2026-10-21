@@ -1,6 +1,6 @@
 const puppeteer = require('puppeteer');
-// Senha do admin do DEV: so pela variavel SSS_HOMOLOG_SENHA, nunca no codigo.
-if (!process.env.SSS_HOMOLOG_SENHA) { console.error('Defina SSS_HOMOLOG_SENHA.'); process.exit(2); }
+// Senha do admin do DEV: so pela variavel SSS_HOMOLOG_PASSWORD, nunca no codigo.
+if (!process.env.SSS_HOMOLOG_PASSWORD) { console.error('Defina SSS_HOMOLOG_PASSWORD.'); process.exit(2); }
 
 (async () => {
     const browser = await puppeteer.launch({
@@ -12,7 +12,7 @@ if (!process.env.SSS_HOMOLOG_SENHA) { console.error('Defina SSS_HOMOLOG_SENHA.')
     // Login admin
     await page.goto('http://127.0.0.1:8000/script_scheduling_service/default/login', { waitUntil: 'networkidle0' });
     await page.type('#campo-login', 'admin');
-    await page.type('#campo-senha', process.env.SSS_HOMOLOG_SENHA);
+    await page.type('#campo-senha', process.env.SSS_HOMOLOG_PASSWORD);
     await Promise.all([
         page.waitForNavigation({ waitUntil: 'networkidle0' }),
         page.click('button[type="submit"]')

@@ -151,7 +151,7 @@ class Agente(object):
         return self.conexao.obter_conexao()
 
     def _usuario_execucao(self, ambiente):
-        return dict(self.cfg.agent.usuarios_execucao or ()).get(ambiente) or None
+        return dict(self.cfg.agent.exec_users or ()).get(ambiente) or None
 
     # --------------------------------------------------------------- passos
 
@@ -215,7 +215,7 @@ class Agente(object):
             return
         try:
             carregar = self._carregar_segredos or (
-                lambda: sss_config.carregar_segredos(self.cfg.secrets.secrets_file, cfg=self.cfg, papel="agente"))
+                lambda: sss_config.carregar_segredos(self.cfg.secrets.secrets_file, cfg=self.cfg, papel="agent"))
             self.segredos = carregar()
         except sss_config.ConfigErro as exc:
             self._falhar(SAIDA_SEGREDOS, "secrets.cfg invalido: %s", exc)
@@ -227,16 +227,16 @@ class Agente(object):
             if codigo:
                 self._falhar(SAIDA_DIRETORIOS, "%s %s recusado: %s", nome, caminho, codigo)
         dirs_sss = _dirs_sss(self.cfg)
-        if not agente.interpretadores:
-            self._falhar(SAIDA_DIRETORIOS, "[agent] interpretadores vazio: o agente nao executaria nada")
-        for logico, caminho in agente.interpretadores:
+        if not agente.interpreters:
+            self._falhar(SAIDA_DIRETORIOS, "[agent] interpreters vazio: o agente nao executaria nada")
+        for logico, caminho in agente.interpreters:
             try:
                 self.plat.validar_interpretador_executavel(caminho, dirs_sss=dirs_sss)
             except Exception as exc:  # noqa: BLE001 - PathGuardErro e afins: CRITICAL com o codigo
                 self._falhar(SAIDA_DIRETORIOS, "interpretador %s (%s) recusado: %s", logico, caminho,
                              getattr(exc, "codigo", exc.__class__.__name__))
         if self.cfg.app.sss_env != "DEV":
-            falhas = self.plat.validar_execucao(agente.usuarios_execucao, agente.exec_work_dir)
+            falhas = self.plat.validar_execucao(agente.exec_users, agente.exec_work_dir)
             for falha in falhas:
                 self.log.critical("execucao fora de DEV: %s", falha)
             if falhas:
@@ -253,10 +253,10 @@ class Agente(object):
         codigo = self.plat.validar_dir_restrito(agente.input_dir)
         if codigo:
             self._falhar(SAIDA_DIRETORIOS, "input_dir %s recusado: %s", agente.input_dir, codigo)
-        if self.cfg.app.sss_env == "DEV" and not agente.usuarios_execucao:
+        if self.cfg.app.sss_env == "DEV" and not agente.exec_users:
             return
         pares = [(os.path.join(agente.input_dir, pastas_log.pasta_ambiente(amb)), self._usuario_execucao(amb))
-                 for amb in agente.ambientes_atendidos if self._usuario_execucao(amb)]
+                 for amb in agente.environments if self._usuario_execucao(amb)]
         falhas = self.plat.validar_pastas_saida(pares)
         for falha in falhas:
             self.log.critical("pasta de entrada: %s", falha)
@@ -272,10 +272,10 @@ class Agente(object):
         codigo = self.plat.validar_dir_restrito(agente.output_dir)
         if codigo:
             self._falhar(SAIDA_DIRETORIOS, "output_dir %s recusado: %s", agente.output_dir, codigo)
-        if self.cfg.app.sss_env == "DEV" and not agente.usuarios_execucao:
+        if self.cfg.app.sss_env == "DEV" and not agente.exec_users:
             return
         pares = [(os.path.join(agente.output_dir, pastas_log.pasta_ambiente(amb)), self._usuario_execucao(amb))
-                 for amb in agente.ambientes_atendidos if self._usuario_execucao(amb)]
+                 for amb in agente.environments if self._usuario_execucao(amb)]
         falhas = self.plat.validar_pastas_saida(pares)
         for falha in falhas:
             self.log.critical("pasta de saida: %s", falha)
@@ -298,7 +298,7 @@ class Agente(object):
             if self.conexao is None:
                 selecao = db_conn.selecionar_driver(self.cfg, self.segredos)
                 db_conn.inicializar(selecao, self.cfg)
-                self.conexao = db_conn.ConexaoResiliente(self.cfg, self.segredos, papel="agente")
+                self.conexao = db_conn.ConexaoResiliente(self.cfg, self.segredos, papel="agent")
             if not self.conexao.garantir():
                 self._falhar(SAIDA_BANCO, "sem conexao com o Oracle")
             conn = self._conn()
@@ -330,8 +330,8 @@ class Agente(object):
         try:
             self.agente_db_id = self.repo.registrar_agente(self._conn(), {
                 "code": agente.agent_id, "hostname": self.hostname, "pid": self.pid,
-                "version": sss_config.VERSAO_SSS, "environments": ",".join(agente.ambientes_atendidos),
-                "platform": self.plat.NOME, "interpreters": ",".join(k for k, _v in agente.interpretadores),
+                "version": sss_config.VERSAO_SSS, "environments": ",".join(agente.environments),
+                "platform": self.plat.NOME, "interpreters": ",".join(k for k, _v in agente.interpreters),
                 "critical_config": criticos, "node_offline_timeout_s": agente.node_offline_timeout_s,
             }, self.plat.processo_existe)
             divergentes = self.repo.conferir_config(self._conn(), agente.agent_id, criticos,
@@ -348,12 +348,12 @@ class Agente(object):
 
     def _passo8_ambientes(self):
         try:
-            ativos, inexistentes = self.repo.ambientes_ativos(self._conn(), self.cfg.agent.ambientes_atendidos)
+            ativos, inexistentes = self.repo.ambientes_ativos(self._conn(), self.cfg.agent.environments)
         except Exception as exc:  # noqa: BLE001
             self._falhar(SAIDA_AMBIENTES, "leitura dos ambientes: %s", exc)
         if inexistentes:
             self._falhar(SAIDA_AMBIENTES, "ambientes atendidos inexistentes: %s", ", ".join(inexistentes))
-        for nome in sorted(set(self.cfg.agent.ambientes_atendidos) - set(ativos)):
+        for nome in sorted(set(self.cfg.agent.environments) - set(ativos)):
             self.log.warning("ambiente atendido %s inativo: ignorado ate ser reativado", nome)
         self.ambientes_ativos = ativos
 
@@ -948,7 +948,7 @@ class Agente(object):
     def _ciclo_orquestrador(self):
         agente = self.cfg.agent
         conn = self._conn()
-        self.ambientes_ativos, _inexistentes = self.repo.ambientes_ativos(conn, agente.ambientes_atendidos)
+        self.ambientes_ativos, _inexistentes = self.repo.ambientes_ativos(conn, agente.environments)
         criticos = sss_config.config_criticos(self.cfg)
         for codigo, outra in self.repo.conferir_config(conn, self.agente_id, criticos, agente.node_offline_timeout_s):
             self.log.error("CONFIG_DIVERGENTE: agente %s local=%s remoto=%s", codigo, criticos, outra,
@@ -1000,28 +1000,28 @@ class Agente(object):
         if vagas <= 0 or not self.ambientes_ativos or not self._pode_seguir():
             return
         livre = self.plat.espaco_livre_mb(self.cfg.logging.log_dir)
-        if livre < agente.log_dir_min_livre_mb:
+        if livre < agente.log_dir_min_free_mb:
             agora = self.relogio()
             if self._ultimo_aviso_disco is None or agora - self._ultimo_aviso_disco >= INTERVALO_AVISO_DISCO_S:
                 self._ultimo_aviso_disco = agora
                 self.log.warning("DISCO_LOG: %d MB livres em log_dir (minimo %d): sem claim", livre,
-                                 agente.log_dir_min_livre_mb, extra={"acao": "CLAIM"})
+                                 agente.log_dir_min_free_mb, extra={"acao": "CLAIM"})
             return
         if agente.output_dir:
             livre_saida = self.plat.espaco_livre_mb(agente.output_dir)
-            if livre_saida < agente.log_dir_min_livre_mb:
+            if livre_saida < agente.log_dir_min_free_mb:
                 agora = self.relogio()
                 if self._ultimo_aviso_disco is None or agora - self._ultimo_aviso_disco >= INTERVALO_AVISO_DISCO_S:
                     self._ultimo_aviso_disco = agora
                     self.log.warning("DISCO_SAIDA: %d MB livres em output_dir (minimo %d): sem claim", livre_saida,
-                                     agente.log_dir_min_livre_mb, extra={"acao": "CLAIM"})
+                                     agente.log_dir_min_free_mb, extra={"acao": "CLAIM"})
                 return
         inicio = self.relogio()
         orcamento = agente.heartbeat_interval_s / 2.0
         conn = self._conn()
-        interpretadores = [k for k, _v in agente.interpretadores]
+        interpretadores = [k for k, _v in agente.interpreters]
         for cand in self.repo.candidatos(conn, self.ambientes_ativos, interpretadores, vagas,
-                                         agente.fila_envelhecimento_min):
+                                         agente.queue_aging_min):
             if len(self.execucoes) >= agente.max_parallel_jobs or self.relogio() - inicio > orcamento \
                     or not self._pode_seguir():
                 break
@@ -1089,7 +1089,7 @@ class Agente(object):
         agente = self.cfg.agent
 
         class _Cfg(object):
-            interpretadores = dict(agente.interpretadores)
+            interpreters = dict(agente.interpreters)
             dirs_sss = _dirs_sss(self.cfg)
         return _Cfg()
 

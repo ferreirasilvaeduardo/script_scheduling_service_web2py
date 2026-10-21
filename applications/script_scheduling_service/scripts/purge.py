@@ -1,24 +1,25 @@
 # -*- coding: utf-8 -*-
 """Retencao de dados (README §11.3; F9.1a; CR-005; CR-007 R-21, R-22, R-32; CR-008 R-16, R-27; CR-012).
 
-Roda no servidor do agente, agendado pelo cron, com a conta Oracle de purge ([retencao] purge_user e
+Roda no servidor do agente, agendado pelo cron, com a conta Oracle de purge ([retention] purge_user e
 [purge] password). Uso:
 
-    python scripts/purge.py [--config <config.ini>] [--dry-run] [--alvo tickets|auditoria|logs_locais|saida|todos]
-                            [--exportar-auditoria <pasta>]
+    python scripts/purge.py [--config <config.ini>] [--dry-run] [--target tickets|auditoria|logs_locais|saida|todos]
+                            [--export-audit <pasta>]
 
 * tickets e auditoria: so com a concessao em tbsss_control (um no por vez), DELETE em lotes com COMMIT por lote
   (a excecao do AGENTS §4.9), concessao renovada a cada lote e liberada no fim; uma linha PURGE por tabela,
   inclusive com 0 linhas. Sem a concessao: INFO e saida 0.
 * logs_locais: pastas de minuto de log_dir/<environment>/<script>/AAAA/MM/DD/HH/MI vencidas, menos as de tickets
   RUNNING; nunca log_dir/interno/. Em todo agente, sem concessao.
-* saida: pastas de minuto de output_dir/<environment>/... vencidas, pelo helper purgar-saida. Sem concessao.
+* saida: pastas de minuto de output_dir/<environment>/... vencidas, pelo helper purge-output. Sem concessao.
 * --dry-run: so SELECT e listagem; um unico agora_banco() para todos os limites; nada e travado nem gravado.
 
 Saida: 0 sucesso (inclusive "outro no esta purgando"), 1 falha de banco, 2 configuracao invalida, 3 falha na
 remocao de logs locais ou de pastas de saida.
 """
 import argparse
+import collections
 import csv
 import datetime
 import io
@@ -44,6 +45,9 @@ SAIDA_CONFIG = 2
 SAIDA_LOCAIS = 3
 
 ALVOS = ("tickets", "auditoria", "logs_locais", "saida")
+# Valores do --target (CR-016b) -> alvo interno.
+ALVOS_CLI = collections.OrderedDict([("tickets", "tickets"), ("audit", "auditoria"), ("local_logs", "logs_locais"),
+                                     ("output", "saida"), ("all", "todos")])
 NOME_TRAVA = "sss-purge.lock"
 _LOGGERS_DO_PURGE = ("sss_db_conn", "sss_config")
 _EXTRA = {"agente": "-", "ticket": "-", "acao": "PURGE"}
@@ -54,7 +58,7 @@ class ConcessaoPerdida(Exception):
 
 
 class ExportacaoAuditoria(object):
-    """CSV 0600 do --exportar-auditoria (mesmo formato da exportacao do README §4.4). Cada lote e gravado e
+    """CSV 0600 do --export-audit (mesmo formato da exportacao do README §4.4). Cada lote e gravado e
     sincronizado no disco antes do COMMIT que apaga as linhas (CR-007, R-22)."""
 
     def __init__(self, pasta, agora):
@@ -125,8 +129,8 @@ class Purge(object):
     # ------------------------------------------------------------------ tickets e auditoria
 
     def _limite(self, tabela, agora):
-        dias = (self.cfg.retencao.ticket_retention_days if tabela == "tickets"
-                else self.cfg.retencao.audit_retention_days)
+        dias = (self.cfg.retention.ticket_retention_days if tabela == "tickets"
+                else self.cfg.retention.audit_retention_days)
         return agora - datetime.timedelta(days=dias)
 
     def _contar_tabelas(self, tabelas, agora):
@@ -165,7 +169,7 @@ class Purge(object):
             self._liberar()
 
     def _purgar_tabela(self, tabela, limite, arquivo):
-        lote = self.cfg.retencao.purge_batch_size
+        lote = self.cfg.retention.purge_batch_size
         total = 0
         while True:
             if arquivo is not None:
@@ -215,9 +219,9 @@ class Purge(object):
         if not agente.output_dir:
             self.resumo.append("saida: desligada (output_dir vazio)")
             return True
-        usuarios = dict(agente.usuarios_execucao or ())
+        usuarios = dict(agente.exec_users or ())
         total, ok = 0, True
-        for amb in agente.ambientes_atendidos:
+        for amb in agente.environments:
             base = os.path.join(agente.output_dir, pastas_log.pasta_ambiente(amb))
             if not os.path.isdir(base):
                 continue
@@ -236,10 +240,12 @@ def _argumentos(argv):
     parser = argparse.ArgumentParser(description="Retencao de dados do SSS (README §11.3)")
     parser.add_argument("--config", default=None, help="config.ini do agente (padrao: instance/)")
     parser.add_argument("--dry-run", action="store_true", help="so conta (estimativas), sem gravar nem remover")
-    parser.add_argument("--alvo", choices=ALVOS + ("todos",), default="todos")
-    parser.add_argument("--exportar-auditoria", default=None, metavar="PASTA",
+    parser.add_argument("--target", dest="alvo", choices=tuple(ALVOS_CLI), default="all")
+    parser.add_argument("--export-audit", dest="exportar_auditoria", default=None, metavar="PASTA",
                         help="grava as linhas da auditoria em CSV 0600 antes de apaga-las")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    args.alvo = ALVOS_CLI[args.alvo]
+    return args
 
 
 def main(argv=None, conectar=None, plat=plataforma, saida=None):
@@ -258,14 +264,14 @@ def main(argv=None, conectar=None, plat=plataforma, saida=None):
         for handler in logger.handlers:
             outro.addHandler(handler)
     masking.instalar_filtro_em_handlers()
-    if not cfg.retencao.purge_user:
-        logger.critical("purge desligado: [retencao] purge_user vazio (README §12.1)", extra=_EXTRA)
+    if not cfg.retention.purge_user:
+        logger.critical("purge desligado: [retention] purge_user vazio (README §12.1)", extra=_EXTRA)
         return SAIDA_CONFIG
     if args.exportar_auditoria and not os.path.isdir(args.exportar_auditoria):
-        logger.critical("--exportar-auditoria: pasta inexistente: %s", args.exportar_auditoria, extra=_EXTRA)
+        logger.critical("--export-audit: pasta inexistente: %s", args.exportar_auditoria, extra=_EXTRA)
         return SAIDA_CONFIG
     try:
-        segredos = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel="agente")
+        segredos = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel="agent")
     except sss_config.ConfigErro as exc:
         logger.critical("segredos invalidos: %s", exc, extra=_EXTRA)
         return SAIDA_CONFIG

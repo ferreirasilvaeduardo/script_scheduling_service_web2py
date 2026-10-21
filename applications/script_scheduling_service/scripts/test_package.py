@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Testes do scripts/empacotar.py (README §12.2; F9.1c; CR-005; CR-003 P10).
+"""Testes do scripts/package.py (README §12.2; F9.1c; CR-005; CR-003 P10).
 
 Arvore falsa do web2py em diretorio temporario: pacote gerado, SHA256SUMS de fora conferindo com o tar.gz e o de
 dentro com cada arquivo, tar reprodutivel, routes.py gerado, bin/sss-helper executavel, pastas de runtime do
@@ -16,7 +16,7 @@ import tarfile
 import tempfile
 import unittest
 
-import empacotar
+import package as empacotar
 
 APP = empacotar.APP
 SEGREDO = "valor-de-teste-nao-placeholder"
@@ -40,7 +40,7 @@ class TestEmpacotar(unittest.TestCase):
             APP + "/views/dev/index.html": "x", APP + "/dev/scripts/a.py": "x",
             APP + "/modules/repo_fake/__init__.py": "x", APP + "/modules/sss_config.py": "x",
             APP + "/instance/config.ini": "[oracle]\nuser = sss_web\n",
-            APP + "/instance/config.ini.example": "[retencao]\npurge_user =                 ; vazio em DEV\n",
+            APP + "/instance/config.ini.example": "[retention]\npurge_user =                 ; vazio em DEV\n",
             APP + "/instance/secrets.cfg.example": "[oracle]\npassword = CHANGE_ME\n[web]\ncookie_key = CHANGE_ME\n"
                                                    "[purge]\npassword = ...\n",
             APP + "/scripts/purge.py": "x", APP + "/scripts/test_purge.py": "x", APP + "/scripts/_testenv.py": "x",
@@ -61,7 +61,7 @@ class TestEmpacotar(unittest.TestCase):
 
     def _main(self):
         texto = io.StringIO()
-        codigo = empacotar.main(["--origem", self.origem, "--saida", self.saida], saida_texto=texto)
+        codigo = empacotar.main(["--source", self.origem, "--out-dir", self.saida], saida_texto=texto)
         return codigo, texto.getvalue()
 
     def _pacote(self):

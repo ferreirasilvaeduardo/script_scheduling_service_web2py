@@ -90,20 +90,20 @@ def _registrar_critico(msg, cfg=None):
 
 
 def _executar_sondagem_subprocesso(candidato, cfg, senha, usuario=None):
-    """Executa scripts/sondar_driver.py em subprocesso isolado com sys.executable -I.
+    """Executa scripts/probe_driver.py em subprocesso isolado com sys.executable -I.
 
     usuario: a conta do papel que vai conectar (F9.1d; sem ele, [oracle] user). Nao e segredo e vai no argv; a
     senha vai so pela entrada padrao."""
     scripts_dir = os.path.dirname(os.path.abspath(__file__))
     app_dir = os.path.dirname(scripts_dir)
-    sondar_script = os.path.join(app_dir, "scripts", "sondar_driver.py")
+    sondar_script = os.path.join(app_dir, "scripts", "probe_driver.py")
 
     cmd = [sys.executable, "-I", sondar_script, candidato]
     caminho_cfg = getattr(cfg, "caminho_arquivo", None)
     if caminho_cfg and os.path.isfile(caminho_cfg):
         cmd.extend(["--config", caminho_cfg])
     if usuario:
-        cmd.extend(["--usuario", usuario])
+        cmd.extend(["--user", usuario])
 
     timeout_ms = getattr(cfg.oracle, "call_timeout_ms", 30000) if hasattr(cfg, "oracle") else 30000
     timeout_s = (2.0 * float(timeout_ms)) / 1000.0
@@ -174,9 +174,9 @@ def selecionar_driver(cfg, segredos, executor_sondagem=None, usuario=None, senha
         if _SELECAO_DRIVER is not None:
             return _SELECAO_DRIVER
 
-        modo = getattr(cfg.oracle, "modo_driver", "auto") if hasattr(cfg, "oracle") else "auto"
+        modo = getattr(cfg.oracle, "driver_mode", "auto") if hasattr(cfg, "oracle") else "auto"
         if modo not in ("auto", "thin", "thick", "cx_oracle"):
-            msg = "Falha de configuracao: modo_driver '%s' invalido. Valores aceitos: auto, thin, thick, cx_oracle" % modo
+            msg = "Falha de configuracao: driver_mode '%s' invalido. Valores aceitos: auto, thin, thick, cx_oracle" % modo
             _registrar_critico(msg, cfg)
             raise RuntimeError(msg)
 
@@ -557,11 +557,11 @@ def conectar(cfg, segredos, papel="web", user=None, password=None):
     if user is not None and password is not None:
         u = user
         p = password
-    elif papel in ("web", "agente"):
+    elif papel in ("web", "agent"):
         u = getattr(cfg.oracle, "user", None)
         p = _obter_senha(segredos)
     elif papel == "purge":
-        u = getattr(getattr(cfg, "retencao", None), "purge_user", None) or getattr(cfg.oracle, "user", None)
+        u = getattr(getattr(cfg, "retention", None), "purge_user", None) or getattr(cfg.oracle, "user", None)
         p = getattr(segredos, "purge_password", None) or _obter_senha(segredos)
     elif papel == "monitor":
         mon = getattr(segredos, "monitor", None)
@@ -760,7 +760,7 @@ def conferir_versao_esquema(conn, owner=None, prefixo="tbsss_"):
 class ConexaoResiliente(object):
     """Gerencia conexao persistente com reconexao monotonica sem sleep (CR-007, R-04)."""
 
-    def __init__(self, cfg, segredos, papel="agente"):
+    def __init__(self, cfg, segredos, papel="agent"):
         self.cfg = cfg
         self.segredos = segredos
         self.papel = papel

@@ -92,8 +92,8 @@ class TestSssHelper(unittest.TestCase):
 
     def test_uso_invalido(self):
         for args in ((), ("xyz",), ("term",), ("term", "abc", "1"), ("term", "1", "1"), ("kill", "-5", "1"),
-                     ("term", "100", "1", "extra"), ("limpar", self.base), ("limpar", self.base, "0"),
-                     ("encerrar-ticket", self.base, "1"), ("encerrar-ticket", self.base, "1", "999"),
+                     ("term", "100", "1", "extra"), ("clean", self.base), ("clean", self.base, "0"),
+                     ("stop-ticket", self.base, "1"), ("stop-ticket", self.base, "1", "999"),
                      ("run", "extra")):
             codigo, erro = _helper(*args)
             self.assertEqual(codigo, 2, args)
@@ -101,15 +101,15 @@ class TestSssHelper(unittest.TestCase):
             self.assertNotIn("Traceback", erro)
 
     def test_especificacao_invalida(self):
-        valida = {"ticket_id": 1, "argv": ["/bin/true"], "env": {}, "pasta_base": self.base}
+        valida = {"ticket_id": 1, "argv": ["/bin/true"], "env": {}, "base_dir": self.base}
         casos = [b"nao e json", b"[1, 2]", b"\xff\xfe",
                  json.dumps(dict(valida, ticket_id=0)), json.dumps(dict(valida, ticket_id=True)),
                  json.dumps(dict(valida, argv=[])), json.dumps(dict(valida, argv=["true"])),
                  json.dumps(dict(valida, argv=["/bin/true", 3])), json.dumps(dict(valida, env={"A": 1})),
                  json.dumps(dict(valida, rlimits={"RLIMIT_RTPRIO": [0, 0]})),
                  json.dumps(dict(valida, rlimits={"RLIMIT_CORE": [0]})),
-                 json.dumps(dict(valida, pasta_base="relativa")),
-                 json.dumps(dict(valida, pasta_base=self.base + "/../exec1")),
+                 json.dumps(dict(valida, base_dir="relativa")),
+                 json.dumps(dict(valida, base_dir=self.base + "/../exec1")),
                  b"{" + b" " * (1024 * 1024) + b"}"]
         for entrada in casos:
             entrada = entrada if isinstance(entrada, bytes) else entrada.encode("utf-8")
@@ -193,8 +193,8 @@ class TestSssHelper(unittest.TestCase):
         alvo = os.path.join(self.base, "ticket_4")
         os.mkdir(alvo)
         for pasta in self._pastas_invalidas():
-            self.assertEqual(_helper("limpar", pasta, 4)[0], 2, pasta)
-            self.assertEqual(_helper("encerrar-ticket", pasta, 4, 1)[0], 2, pasta)
+            self.assertEqual(_helper("clean", pasta, 4)[0], 2, pasta)
+            self.assertEqual(_helper("stop-ticket", pasta, 4, 1)[0], 2, pasta)
         self.assertTrue(os.path.isdir(alvo), "nada removido pela pasta recusada")
 
     def test_pasta_base_de_outro_dono(self):
@@ -213,15 +213,15 @@ class TestSssHelper(unittest.TestCase):
         os.makedirs(os.path.join(pasta, "tmp"))
         os.symlink(fora, os.path.join(pasta, "tmp", "link_fora"))
         os.symlink(os.path.join(fora, "precioso.txt"), os.path.join(pasta, "link_arq"))
-        self.assertEqual(_helper("limpar", self.base, 9)[0], 0)
+        self.assertEqual(_helper("clean", self.base, 9)[0], 0)
         self.assertFalse(os.path.lexists(pasta))
         self.assertTrue(os.path.isfile(os.path.join(fora, "precioso.txt")))
-        self.assertEqual(_helper("limpar", self.base, 9)[0], 0, "pasta ja ausente")
+        self.assertEqual(_helper("clean", self.base, 9)[0], 0, "pasta ja ausente")
         os.symlink(fora, os.path.join(self.base, "ticket_10"))
-        self.assertEqual(_helper("limpar", self.base, 10)[0], 2, "ticket_<id> que e link")
+        self.assertEqual(_helper("clean", self.base, 10)[0], 2, "ticket_<id> que e link")
         self.assertTrue(os.path.isfile(os.path.join(fora, "precioso.txt")))
 
-    # -- encerrar-ticket --------------------------------------------------------
+    # -- stop-ticket --------------------------------------------------------
 
     def test_encerrar_ticket_so_na_pasta_do_ticket(self):
         pasta = os.path.join(self.base, "ticket_3", "tmp")
@@ -230,7 +230,7 @@ class TestSssHelper(unittest.TestCase):
         os.mkdir(vizinha)
         dentro, fora = self.grupo(cwd=pasta), self.grupo(cwd=vizinha)
         self.assertTrue(_esperar(lambda: os.path.realpath("/proc/%d/cwd" % dentro.pid) == pasta))
-        self.assertEqual(_helper("encerrar-ticket", self.base, 3, 2)[0], 0)
+        self.assertEqual(_helper("stop-ticket", self.base, 3, 2)[0], 0)
         dentro.wait(10)
         self.assertEqual(dentro.returncode, -signal.SIGTERM)
         self.assertTrue(_vivo(fora.pid))
@@ -246,7 +246,7 @@ class TestSssHelper(unittest.TestCase):
         with mock.patch.object(helper.os.path, "isdir", _sem_proc(isdir)), \
                 mock.patch.object(helper.os.path, "exists", _sem_proc(exists)), \
                 mock.patch.object(helper.os.path, "isfile", _sem_proc(isfile)), \
-                mock.patch.object(helper.sys, "argv", ["sss-helper", "encerrar-ticket", self.base, "5", "1"]), \
+                mock.patch.object(helper.sys, "argv", ["sss-helper", "stop-ticket", self.base, "5", "1"]), \
                 mock.patch.object(helper.sys, "stderr") as stderr:
             self.assertEqual(helper.main(), 5)
         self.assertIn("nem pwdx", "".join(c[0][0] for c in stderr.write.call_args_list))
@@ -263,7 +263,7 @@ class TestSssHelper(unittest.TestCase):
                     "    resource.getrlimit(resource.RLIMIT_CORE)[0], resource.getrlimit(resource.RLIMIT_NOFILE)[0],\n"
                     "    os.environ.get('SSS_X'), sys.argv[1:]]))\n")
         spec = {"ticket_id": 12, "argv": [sys.executable, script, "a b"], "env": {"SSS_X": "1"},
-                "rlimits": {"RLIMIT_NOFILE": [512, 512]}, "pasta_base": self.base}
+                "rlimits": {"RLIMIT_NOFILE": [512, 512]}, "base_dir": self.base}
         codigo, erro = _helper("run", entrada=json.dumps(spec).encode("utf-8"))
         self.assertEqual(codigo, 0, erro)
         pasta = os.path.join(self.base, "ticket_12")
@@ -274,7 +274,7 @@ class TestSssHelper(unittest.TestCase):
         self.assertEqual(os.stat(os.path.join(pasta, "tmp")).st_mode & 0o777, 0o700)
 
     def test_run_execve_falho(self):
-        spec = {"ticket_id": 2, "argv": [os.path.join(self.raiz, "nao_existe")], "env": {}, "pasta_base": self.base}
+        spec = {"ticket_id": 2, "argv": [os.path.join(self.raiz, "nao_existe")], "env": {}, "base_dir": self.base}
         codigo, erro = _helper("run", entrada=json.dumps(spec).encode("utf-8"))
         self.assertEqual(codigo, 4)
         self.assertIn("execve falhou", erro)
@@ -282,7 +282,7 @@ class TestSssHelper(unittest.TestCase):
     # -- pasta de saida (CR-012) ------------------------------------------------
 
     def _base_saida(self):
-        base = os.path.join(self.raiz, "saida", "producao")
+        base = os.path.join(self.raiz, "output", "producao")
         os.makedirs(base, 0o700)
         return base
 
@@ -300,7 +300,7 @@ class TestSssHelper(unittest.TestCase):
             f.write("import os\nopen(os.path.join(os.environ['SSS_OUTPUT_DIR'], 'r.txt'), 'w').write('ok')\n")
         alvo = os.path.join(base, rel)
         spec = {"ticket_id": 12, "argv": [sys.executable, script], "env": {"SSS_OUTPUT_DIR": alvo},
-                "pasta_base": self.base, "saida": {"base": base, "relativo": rel}}
+                "base_dir": self.base, "output": {"base": base, "relativo": rel}}
         codigo, erro = _helper("run", entrada=json.dumps(spec).encode("utf-8"))
         self.assertEqual(codigo, 0, erro)
         with open(os.path.join(alvo, "r.txt")) as f:
@@ -312,26 +312,26 @@ class TestSssHelper(unittest.TestCase):
 
     def test_run_recusa_saida_invalida(self):
         base = self._base_saida()
-        valida = {"ticket_id": 12, "argv": ["/bin/true"], "env": {}, "pasta_base": self.base}
+        valida = {"ticket_id": 12, "argv": ["/bin/true"], "env": {}, "base_dir": self.base}
         for saida in ({"base": base}, {"base": base, "relativo": "x/2026/10/20/14/05/ticket_13"},
                       {"base": base, "relativo": "../2026/10/20/14/05/ticket_12"},
                       {"base": base, "relativo": "x/2026/10/20/14/ticket_12"},
                       {"base": base, "relativo": ".x/2026/10/20/14/05/ticket_12"},
                       {"base": "relativa", "relativo": "x/2026/10/20/14/05/ticket_12"},
                       {"base": base + "/../producao", "relativo": "x/2026/10/20/14/05/ticket_12"}):
-            self.assertEqual(_helper("run", entrada=json.dumps(dict(valida, saida=saida)).encode("utf-8"))[0], 2,
+            self.assertEqual(_helper("run", entrada=json.dumps(dict(valida, output=saida)).encode("utf-8"))[0], 2,
                              saida)
         # Link no caminho da saida (criado por terceiro): recusado sem seguir o link.
         fora = os.path.join(self.raiz, "fora")
         os.mkdir(fora)
         os.symlink(fora, os.path.join(base, "x"))
-        spec = dict(valida, saida={"base": base, "relativo": "x/2026/10/20/14/05/ticket_12"})
+        spec = dict(valida, output={"base": base, "relativo": "x/2026/10/20/14/05/ticket_12"})
         self.assertEqual(_helper("run", entrada=json.dumps(spec).encode("utf-8"))[0], 2)
         self.assertEqual(os.listdir(fora), [])
 
     def test_run_cria_a_pasta_de_entrada_e_preserva_o_conteudo(self):
         # CR-014 (README §8.14): permanente; o script le, grava e apaga; a existente fica como esta.
-        base = os.path.join(self.raiz, "entrada", "producao")
+        base = os.path.join(self.raiz, "input", "producao")
         os.makedirs(base, 0o700)
         script = os.path.join(self.raiz, "consome.py")
         with open(script, "w") as f:
@@ -340,7 +340,7 @@ class TestSssHelper(unittest.TestCase):
         alvo = os.path.join(base, "carga_diaria")
         for ticket in (21, 22):
             spec = {"ticket_id": ticket, "argv": [sys.executable, script], "env": {"SSS_INPUT_DIR": alvo},
-                    "pasta_base": self.base, "entrada": {"base": base, "relativo": "carga_diaria"}}
+                    "base_dir": self.base, "input": {"base": base, "relativo": "carga_diaria"}}
             codigo, erro = _helper("run", entrada=json.dumps(spec).encode("utf-8"))
             self.assertEqual(codigo, 0, erro)
             if ticket == 21:
@@ -350,18 +350,18 @@ class TestSssHelper(unittest.TestCase):
         self.assertEqual(os.stat(alvo).st_mode & 0o777, 0o750, "a existente fica como esta")
 
     def test_run_recusa_entrada_invalida(self):
-        base = os.path.join(self.raiz, "entrada", "producao")
+        base = os.path.join(self.raiz, "input", "producao")
         os.makedirs(base, 0o700)
-        valida = {"ticket_id": 12, "argv": ["/bin/true"], "env": {}, "pasta_base": self.base}
+        valida = {"ticket_id": 12, "argv": ["/bin/true"], "env": {}, "base_dir": self.base}
         for entrada in ({"base": base}, {"base": base, "relativo": "a/b"}, {"base": base, "relativo": ".."},
                         {"base": base, "relativo": ".x"}, {"base": base, "relativo": "Maiuscula"},
                         {"base": "relativa", "relativo": "x"}, {"base": base + "/../producao", "relativo": "x"}):
-            self.assertEqual(_helper("run", entrada=json.dumps(dict(valida, entrada=entrada)).encode("utf-8"))[0],
+            self.assertEqual(_helper("run", entrada=json.dumps(dict(valida, input=entrada)).encode("utf-8"))[0],
                              2, entrada)
         fora = os.path.join(self.raiz, "fora_entrada")
         os.mkdir(fora)
         os.symlink(fora, os.path.join(base, "x"))
-        spec = dict(valida, entrada={"base": base, "relativo": "x"})
+        spec = dict(valida, input={"base": base, "relativo": "x"})
         self.assertEqual(_helper("run", entrada=json.dumps(spec).encode("utf-8"))[0], 2, "link recusado")
 
     def _preencher(self, base, rel, arquivos):
@@ -395,7 +395,7 @@ class TestSssHelper(unittest.TestCase):
         os.symlink(segredo, os.path.join(pasta, "link.txt"))
         os.symlink(self.raiz, os.path.join(pasta, "link_pasta"))
         os.mkfifo(os.path.join(pasta, "fifo"))
-        codigo, zip_, erro = self._helper_saida("empacotar", base, rel, 1048576, 10)
+        codigo, zip_, erro = self._helper_saida("pack", base, rel, 1048576, 10)
         self.assertEqual(codigo, 0, erro)
         z = zipfile.ZipFile(io.BytesIO(zip_))
         self.assertEqual(sorted(z.namelist()), ["a.txt", "sub/b.csv"])
@@ -405,24 +405,24 @@ class TestSssHelper(unittest.TestCase):
     def test_empacotar_vazia_e_limites(self):
         base = self._base_saida()
         rel = "carga/2026/10/20/14/05/ticket_8"
-        self.assertEqual(self._helper_saida("empacotar", base, rel, 1048576, 10)[0], 6, "inexistente")
+        self.assertEqual(self._helper_saida("pack", base, rel, 1048576, 10)[0], 6, "inexistente")
         pasta = self._preencher(base, rel, {})
         os.makedirs(os.path.join(pasta, "so_pastas"))
-        self.assertEqual(self._helper_saida("empacotar", base, rel, 1048576, 10)[0], 6, "vazia")
+        self.assertEqual(self._helper_saida("pack", base, rel, 1048576, 10)[0], 6, "vazia")
         self._preencher(base, "carga/2026/10/20/14/05/ticket_9", dict(("f%02d" % i, b"x") for i in range(11)))
-        codigo, _zip, erro = self._helper_saida("empacotar", base, "carga/2026/10/20/14/05/ticket_9", 1048576, 10)
+        codigo, _zip, erro = self._helper_saida("pack", base, "carga/2026/10/20/14/05/ticket_9", 1048576, 10)
         self.assertEqual(codigo, 7, erro)
         self.assertIn("arquivos", erro)
-        self.assertEqual(self._helper_saida("empacotar", base, "carga/2026/10/20/14/05/ticket_9", 1048576, 11)[0], 0)
+        self.assertEqual(self._helper_saida("pack", base, "carga/2026/10/20/14/05/ticket_9", 1048576, 11)[0], 0)
         self._preencher(base, "carga/2026/10/20/14/05/ticket_10", {"grande.bin": os.urandom(2 * 1024 * 1024)})
-        codigo, _zip, erro = self._helper_saida("empacotar", base, "carga/2026/10/20/14/05/ticket_10", 1048576, 10)
+        codigo, _zip, erro = self._helper_saida("pack", base, "carga/2026/10/20/14/05/ticket_10", 1048576, 10)
         self.assertEqual(codigo, 8, erro)
         self.assertIn("bytes", erro)
-        for args in (("empacotar", base, rel, 0, 10), ("empacotar", base, rel, 1048576, 0),
-                     ("empacotar", base, rel, 209715201, 10), ("empacotar", base, rel, 1, 10001),
-                     ("empacotar", base, "../x/2026/10/20/14/05/ticket_8", 1048576, 10),
-                     ("empacotar", base, rel, 1048576), ("limpar-saida", base), ("purgar-saida", base, "0"),
-                     ("purgar-saida", base, "7", "remover")):
+        for args in (("pack", base, rel, 0, 10), ("pack", base, rel, 1048576, 0),
+                     ("pack", base, rel, 209715201, 10), ("pack", base, rel, 1, 10001),
+                     ("pack", base, "../x/2026/10/20/14/05/ticket_8", 1048576, 10),
+                     ("pack", base, rel, 1048576), ("clean-output", base), ("purge-output", base, "0"),
+                     ("purge-output", base, "7", "remover")):
             self.assertEqual(self._helper_saida(*args)[0], 2, args)
 
     def test_limpar_saida_sem_seguir_links(self):
@@ -434,11 +434,11 @@ class TestSssHelper(unittest.TestCase):
         with open(os.path.join(fora, "manter.txt"), "w") as f:
             f.write("x")
         os.symlink(fora, os.path.join(pasta, "link"))
-        self.assertEqual(self._helper_saida("limpar-saida", base, rel)[0], 0)
+        self.assertEqual(self._helper_saida("clean-output", base, rel)[0], 0)
         self.assertFalse(os.path.exists(pasta))
         self.assertTrue(os.path.exists(os.path.join(fora, "manter.txt")))
         self.assertTrue(os.path.isdir(os.path.dirname(pasta)), "as pastas acima ficam para o purge")
-        self.assertEqual(self._helper_saida("limpar-saida", base, rel)[0], 0, "ja removida")
+        self.assertEqual(self._helper_saida("clean-output", base, rel)[0], 0, "ja removida")
 
     def test_purgar_saida_pela_data_do_caminho(self):
         helper = _carregar_helper()

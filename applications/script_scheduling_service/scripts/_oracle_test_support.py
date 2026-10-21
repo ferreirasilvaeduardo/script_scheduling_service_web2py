@@ -168,7 +168,7 @@ def preparar_schema_descartavel(papel="web", cfg=None, segredos=None):
     modo = modo_do_owner(cfg_owner)
     usuario_esperado = getattr(getattr(cfg, "oracle", None), "user", None)
     if papel == "purge":
-        usuario_esperado = getattr(getattr(cfg, "retencao", None), "purge_user", None)
+        usuario_esperado = getattr(getattr(cfg, "retention", None), "purge_user", None)
     elif papel == "monitor":
         usuario_esperado = getattr(getattr(cfg, "monitor", None), "user", None)
 

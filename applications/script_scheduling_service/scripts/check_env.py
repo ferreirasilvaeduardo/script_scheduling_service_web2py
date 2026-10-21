@@ -249,14 +249,14 @@ def main():
         except Exception as e:
             results.append(("Build CSP do Alpine.js", "FALHA", "Erro ao ler arquivo: %s" % str(e)))
 
-    # Item 7: Driver Oracle (modo_driver e cadeia adaptativa)
+    # Item 7: Driver Oracle (driver_mode e cadeia adaptativa)
     try:
         modules_dir = os.path.join(app_dir, "modules")
         if modules_dir not in sys.path:
             sys.path.insert(0, modules_dir)
         import sss_config
         cfg = sss_config.obter_config()
-        modo = getattr(cfg.oracle, "modo_driver", "auto")
+        modo = getattr(cfg.oracle, "driver_mode", "auto")
         cadeia_desc = "auto (Thin -> Thick -> cx_Oracle)" if modo == "auto" else modo
 
         sel_desc = None
@@ -275,9 +275,9 @@ def main():
         detalhe_driver = cadeia_desc
         if sel_desc:
             detalhe_driver = "%s | Selecionado: %s" % (cadeia_desc, sel_desc)
-        results.append(("Driver Oracle (modo_driver)", "OK", detalhe_driver))
+        results.append(("Driver Oracle (driver_mode)", "OK", detalhe_driver))
     except Exception as exc:
-        results.append(("Driver Oracle (modo_driver)", "FALHA", "Erro ao carregar configuracao: %s" % exc))
+        results.append(("Driver Oracle (driver_mode)", "FALHA", "Erro ao carregar configuracao: %s" % exc))
 
     # Renderizacao da tabela OK/FALHA
     col1_w = max([len(r[0]) for r in results] + [4]) + 2

@@ -15,14 +15,14 @@ RELATÓRIO DE EXECUÇÃO — CR-008 / P0, R1 e R2
      - modules/admin_perfis_service.py (E1);
      - modules/params_compiler.py (R-06);
      - modules/auth_service.py, controllers/default.py, models/10_security.py, modules/repo_usuarios.py, modules/repo_fake/usuarios.py, modules/repo_fake/seed.py e modules/rbac.py (E2);
-     - modules/sss_config.py e instance/config.ini.example (sessao_max_horas, R-29);
+     - modules/sss_config.py e instance/config.ini.example (session_max_hours, R-29);
      - modules/ui_helpers.py (mensagem sessao_max).
    - R2 (dados e agendamento):
      - modules/sql_ident.py (sessao_epoch, pid_daemon NUMBER(10), prefixo minúsculo);
      - modules/repo_agentes.py e modules/repo_fake/agentes.py (R-15);
      - modules/recurrence.py (R-19, R-21);
      - modules/admin_scripts_service.py, controllers/admin_scripts.py e views/admin_scripts/form.html (E4);
-     - modules/sss_config.py (R-32, ambientes_exigem_hash, log_dir_min_livre_mb);
+     - modules/sss_config.py (R-32, ambientes_exigem_hash, log_dir_min_free_mb);
      - modules/rbac.py e modules/agendamentos_service.py (R-33);
      - modules/ui_helpers.py, modules/ticket_service.py e modules/agendamentos_service.py (E5).
    - Testes:

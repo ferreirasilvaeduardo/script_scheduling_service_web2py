@@ -6,7 +6,7 @@ user = sss_web                    ; conta do papel deste nó: sss_web no web, ss
 dsn = localhost:2424/servico_homolog
 owner = openrisow
 table_prefix = tbsss_
-modo_driver = auto                ; auto | thin | thick | cx_oracle (README §2.3)
+driver_mode = auto                ; auto | thin | thick | cx_oracle (README §2.3)
 oracle_client_lib_dir =           ; somente macOS (dev); no Linux/Unix usar ldconfig/LD_LIBRARY_PATH
 call_timeout_ms = 30000
 pool_min = 1
@@ -17,10 +17,10 @@ secrets_file = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_servi
 
 [agent]
 agent_id = srv-linux-prod-01
-ambientes_atendidos = PRODUCAO,HOMOLOGACAO
+environments = PRODUCAO,HOMOLOGACAO
 work_dir = /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work
-interpretadores = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh ; executavel local de cada interpretador logico (README §8.5); o agente exige na subida (F8.3)
-usuarios_execucao =               ; AMBIENTE=usuario do SO por ambiente (README §8.0); obrigatório fora de DEV, ex.: PRODUCAO=sssprd,HOMOLOGACAO=ssshml
+interpreters = PYTHON3=/usr/bin/python3,BASH=/bin/bash,SH=/bin/sh ; executavel local de cada interpretador logico (README §8.5); o agente exige na subida (F8.3)
+exec_users =               ; AMBIENTE=usuario do SO por ambiente (README §8.0); obrigatório fora de DEV, ex.: PRODUCAO=sssprd,HOMOLOGACAO=ssshml
 exec_work_dir =                   ; pasta base dos diretórios de trabalho dos scripts (obrigatória fora de DEV), ex.: /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/exec
 max_parallel_jobs = 4
 max_parallel_hard_limit = 32
@@ -38,8 +38,8 @@ shutdown_grace_s = 30
 misfire_policy = RUN_ONCE         ; RUN_ONCE | SKIP
 misfire_tolerance_s = 300
 cron_horizon_days = 1461
-fila_envelhecimento_min = 60       ; a cada N minutos na fila a prioridade sobe 1 nível (README §5.3); 0 desliga
-log_dir_min_livre_mb = 1024       ; abaixo disso em log_dir o agente não reserva tickets (CR-008, R-25)
+queue_aging_min = 60       ; a cada N minutos na fila a prioridade sobe 1 nível (README §5.3); 0 desliga
+log_dir_min_free_mb = 1024       ; abaixo disso em log_dir o agente não reserva tickets (CR-008, R-25)
 output_dir =                       ; CR-012: pasta de saida dos scripts (README §8.13); vazio desliga
 output_max_bytes = 20971520        ; limite do zip da saida (1 MiB a 200 MiB)
 output_max_files = 1000         ; limite de arquivos da saida (1 a 10.000)
@@ -59,14 +59,14 @@ output_retention_days = 7          ; CR-012: pastas de saida que ficaram no disc
 
 [web]
 session_idle_timeout_s = 1800
-sessao_max_horas = 12   ; vida máxima da sessão desde o login, mesmo com uso contínuo (CR-008, E2)
-login_max_tentativas = 5
-login_bloqueio_s = 900
+session_max_hours = 12   ; vida máxima da sessão desde o login, mesmo com uso contínuo (CR-008, E2)
+login_max_attempts = 5
+login_lockout_s = 900
 log_poll_interval_s = 3
 trusted_proxies =
 allowed_origins = http://127.0.0.1:18000   ; Ex. https://sss.empresa.local lista separada por vírgula, validada contra Origin/Referer
 
-[retencao]
+[retention]
 ticket_retention_days = 180
 audit_retention_days = 730
 purge_batch_size = 1000

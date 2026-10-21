@@ -10,18 +10,18 @@ Subcomandos:
   run                                         especificacao JSON pela entrada padrao; execve do script
   term <pgid> <process_start>                 SIGTERM ao grupo (identidade do lider conferida)
   kill <pgid> <process_start>                 SIGKILL ao grupo (idem)
-  limpar <pasta_base> <ticket_id>             remove <pasta_base>/ticket_<id>/ sem seguir links
-  encerrar-ticket <pasta_base> <ticket_id> <kill_grace_s>
+  clean <base_dir> <ticket_id>                remove <base_dir>/ticket_<id>/ sem seguir links
+  stop-ticket <base_dir> <ticket_id> <kill_grace_s>
                                               encerra os processos do usuario cujo cwd esta na pasta do ticket
-  empacotar <base> <relativo> <max_bytes> <max_arquivos>
+  pack <base> <relativo> <max_bytes> <max_arquivos>
                                               zip da pasta de saida do ticket na saida padrao (CR-012)
-  limpar-saida <base> <relativo>              remove a pasta de saida do ticket sem seguir links (CR-012)
-  purgar-saida <base> <dias> [contar]         remove as pastas de minuto de saida mais antigas que <dias>
-                                              (com "contar", so conta: --dry-run do purge)
+  clean-output <base> <relativo>              remove a pasta de saida do ticket sem seguir links (CR-012)
+  purge-output <base> <dias> [count]          remove as pastas de minuto de saida mais antigas que <dias>
+                                              (com "count", so conta: --dry-run do purge)
 
 Codigos de saida: 0 sucesso, 2 uso invalido, 3 recusado (identidade divergente), 4 erro do sistema,
 5 nao suportado nesta plataforma, 6 pasta de saida vazia ou inexistente, 7 saida acima do limite de
-arquivos, 8 saida acima do limite de bytes (empacotar). Mensagens so no stderr, sem valores sensiveis.
+arquivos, 8 saida acima do limite de bytes (pack). Mensagens so no stderr, sem valores sensiveis.
 
 Excecao estreita do AGENTS §3.2: limites de recurso so em _run, sinal a grupo so em _term/_kill, leitura do
 stat do processo so em _identidade, e consulta do cwd dos processos so em _encerrar_ticket.
@@ -81,7 +81,7 @@ def _inteiro(texto, nome, minimo=0, maximo=None):
     return valor
 
 
-def _pasta_base(caminho, nome="pasta_base"):
+def _pasta_base(caminho, nome="base_dir"):
     """exec_work_dir/<usuario> ou output_dir/<ambiente>: absoluta, normalizada, sem link e do proprio usuario
     (CR-008, R-36; CR-012)."""
     if not isinstance(caminho, str) or not caminho.startswith("/") or os.path.normpath(caminho) != caminho:
@@ -195,21 +195,21 @@ def _ler_especificacao(entrada):
                 or not all(isinstance(x, int) and not isinstance(x, bool) for x in valor):
             _erro(USO_INVALIDO, "limite de recurso invalido")
         limites[nome] = (valor[0], valor[1])
-    saida = spec.get("saida")
+    saida = spec.get("output")
     if saida is not None:
         if not isinstance(saida, dict) or set(saida) != {"base", "relativo"}:
             _erro(USO_INVALIDO, "saida invalida")
         _pasta_base(saida["base"], "base")
         if _partes_relativo(saida["relativo"])[6] != "ticket_%d" % ticket_id:
             _erro(USO_INVALIDO, "saida de outro ticket")
-    entrada = spec.get("entrada")
+    entrada = spec.get("input")
     if entrada is not None:
         if not isinstance(entrada, dict) or set(entrada) != {"base", "relativo"}:
             _erro(USO_INVALIDO, "entrada invalida")
         _pasta_base(entrada["base"], "base")
         if not isinstance(entrada["relativo"], str) or not _RE_PASTA_SCRIPT.match(entrada["relativo"]):
             _erro(USO_INVALIDO, "entrada fora do formato <script>")
-    return ticket_id, argv, env, limites, _pasta_base(spec.get("pasta_base")), saida, entrada
+    return ticket_id, argv, env, limites, _pasta_base(spec.get("base_dir")), saida, entrada
 
 
 def _run(entrada=None, executar=os.execve):
@@ -300,7 +300,7 @@ def _kill(pgid, process_start):
 
 
 # -----------------------------------------------------------------------------
-# limpar / encerrar-ticket
+# limpar / stop-ticket
 # -----------------------------------------------------------------------------
 
 def _limpar(pasta_base, ticket_id):
@@ -544,16 +544,16 @@ def principal(argv):
         pgid = _inteiro(args[0], "pgid", minimo=2)
         inicio = _inteiro(args[1], "process_start")
         return _term(pgid, inicio) if sub == "term" else _kill(pgid, inicio)
-    if sub == "limpar" and len(args) == 2:
+    if sub == "clean" and len(args) == 2:
         return _limpar(args[0], _inteiro(args[1], "ticket_id", minimo=1))
-    if sub == "empacotar" and len(args) == 4:
+    if sub == "pack" and len(args) == 4:
         return _empacotar(args[0], args[1], _inteiro(args[2], "max_bytes", minimo=1, maximo=_MAX_BYTES_SAIDA),
                           _inteiro(args[3], "max_arquivos", minimo=1, maximo=_MAX_ARQUIVOS_SAIDA))
-    if sub == "limpar-saida" and len(args) == 2:
+    if sub == "clean-output" and len(args) == 2:
         return _limpar_saida(args[0], args[1])
-    if sub == "purgar-saida" and (len(args) == 2 or (len(args) == 3 and args[2] == "contar")):
+    if sub == "purge-output" and (len(args) == 2 or (len(args) == 3 and args[2] == "count")):
         return _purgar_saida(args[0], _inteiro(args[1], "dias", minimo=1, maximo=3650), contar=len(args) == 3)
-    if sub == "encerrar-ticket" and len(args) == 3:
+    if sub == "stop-ticket" and len(args) == 3:
         return _encerrar_ticket(args[0], _inteiro(args[1], "ticket_id", minimo=1),
                                 _inteiro(args[2], "kill_grace_s", maximo=300))
     _erro(USO_INVALIDO, "uso invalido")

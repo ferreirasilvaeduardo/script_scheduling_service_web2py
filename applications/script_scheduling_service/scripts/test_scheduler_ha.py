@@ -747,7 +747,7 @@ class TestParada(tsc._Base):
         return caminho
 
     def test_drain_pelo_stop_termina_os_filhos_e_mantem_heartbeat_e_saida(self):
-        output_dir = _os.path.join(self.raiz, "saida")
+        output_dir = _os.path.join(self.raiz, "output")
         _os.mkdir(output_dir, 0o755)
         tid = self.banco.ticket(self.banco.script("echo r > \"$SSS_OUTPUT_DIR/r.txt\"\nsleep 1\necho fim\n"))
         self.subir(shutdown_mode="DRAIN", shutdown_grace_s=30, output_dir=output_dir, output_max_bytes=1048576,

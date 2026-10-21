@@ -303,8 +303,8 @@ def _servico():
                 rbac_repo=fabrica.obter("rbac"),
                 catalogo=fabrica.obter("catalogo"),
                 auditoria=fabrica.obter("auditoria"),
-                max_tentativas=cfg.web.login_max_tentativas,
-                bloqueio_s=cfg.web.login_bloqueio_s,
+                max_tentativas=cfg.web.login_max_attempts,
+                bloqueio_s=cfg.web.login_lockout_s,
                 log=sss_logging.obter_logger("sss_web", cfg),
             )
         return _padrao

@@ -35,15 +35,15 @@ def main(argv=None):
     )
     parser.add_argument("--config", dest="config", default=None, help="Caminho do config.ini (opcional)")
     parser.add_argument("--owner", dest="owner", default=None, help="Owner do esquema Oracle (ex: OPENRISOW)")
-    parser.add_argument("--prefixo", dest="prefixo", default=None, help="Prefixo de tabelas (ex: tbsss_)")
+    parser.add_argument("--prefix", dest="prefixo", default=None, help="Prefixo de tabelas (ex: tbsss_)")
     parser.add_argument("--lob-basicfile", dest="lob_basicfile", action="store_true", help="Fallback LOB BASICFILE")
     parser.add_argument("--out-dir", dest="out_dir", default="docs/sql", help="Diretorio de destino dos arquivos .sql")
-    parser.add_argument("--grants-para", dest="grants_para", default=None,
-                        help="web=u1,agente=u2,purge=u3,monitor=u4 (padrao: contas do config.ini; nunca PUBLIC)")
+    parser.add_argument("--grants-to", dest="grants_para", default=None,
+                        help="web=u1,agent=u2,purge=u3,monitor=u4 (padrao: contas do config.ini; nunca PUBLIC)")
     parser.add_argument("--admin-login", dest="admin_login", default=None, help="Login do administrador inicial no seed")
-    parser.add_argument("--admin-nome", dest="admin_nome", default=None, help="Nome do administrador inicial")
-    parser.add_argument("--admin-senha-hash", dest="admin_senha_hash", default=None, help="Hash PBKDF2 da senha admin")
-    parser.add_argument("--stdout", dest="stdout", choices=["implantar", "rollback", "validar", "grants"], default=None, help="Imprime no stdout")
+    parser.add_argument("--admin-name", dest="admin_nome", default=None, help="Nome do administrador inicial")
+    parser.add_argument("--admin-password-hash", dest="admin_senha_hash", default=None, help="Hash PBKDF2 da senha admin")
+    parser.add_argument("--stdout", dest="stdout", choices=["deploy", "rollback", "validate", "grants"], default=None, help="Imprime no stdout")
 
     args = parser.parse_args(argv)
 
@@ -53,7 +53,7 @@ def main(argv=None):
     lob_storage = "BASICFILE" if args.lob_basicfile else "SECUREFILE"
 
     cfg = None
-    # O config tambem fornece as contas dos papeis quando --grants-para nao e informado (README §11.1).
+    # O config tambem fornece as contas dos papeis quando --grants-to nao e informado (README §11.1).
     if args.config or (not owner or not prefixo) or not args.grants_para:
         caminho_cfg = args.config
         if not caminho_cfg:
@@ -96,18 +96,18 @@ def main(argv=None):
             if not p:
                 continue
             if "=" not in p:
-                print("Formato invalido em --grants-para: use papel=usuario", file=sys.stderr)
+                print("Formato invalido em --grants-to: use papel=usuario", file=sys.stderr)
                 return 2
             papel, usr = p.split("=", 1)
             papeis_grants[papel.strip().lower()] = usr.strip()
     elif cfg is not None:
-        # web e agente usam [oracle] user (cada no le o seu config.ini); purge, [retencao] purge_user.
-        # A conta do monitor fica no secrets.cfg: so por --grants-para.
+        # web e agente usam [oracle] user (cada no le o seu config.ini); purge, [retention] purge_user.
+        # A conta do monitor fica no secrets.cfg: so por --grants-to.
         usr_app = getattr(getattr(cfg, "oracle", None), "user", None)
         papeis_grants = {
             "web": usr_app,
-            "agente": usr_app,
-            "purge": getattr(getattr(cfg, "retencao", None), "purge_user", None),
+            "agent": usr_app,
+            "purge": getattr(getattr(cfg, "retention", None), "purge_user", None),
         }
     try:
         ddl_builder.gerar_grants_por_papel(owner, prefixo, papeis_grants)
@@ -147,13 +147,13 @@ def main(argv=None):
         ] + grants + ["", "PROMPT Grants aplicados com sucesso.", ""])
 
     # 3. Saida stdout se solicitada
-    if args.stdout == "implantar":
+    if args.stdout == "deploy":
         print(script_implantar)
         return 0
     elif args.stdout == "rollback":
         print(script_rollback)
         return 0
-    elif args.stdout == "validar":
+    elif args.stdout == "validate":
         print(script_validar)
         return 0
     elif args.stdout == "grants":

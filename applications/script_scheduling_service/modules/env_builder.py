@@ -23,8 +23,8 @@ PLATAFORMAS = ("LINUX", "UNIX")
 
 
 def usuario_execucao(cfg, ambiente_nome):
-    """Usuario do SO do ambiente em [agent] usuarios_execucao, ou None (so DEV, validado no config)."""
-    return dict(cfg.agent.usuarios_execucao or ()).get(ambiente_nome) or None
+    """Usuario do SO do ambiente em [agent] exec_users, ou None (so DEV, validado no config)."""
+    return dict(cfg.agent.exec_users or ()).get(ambiente_nome) or None
 
 
 def dir_trabalho_script(ticket_id, usuario, exec_work_dir, work_dir_ticket):
@@ -54,7 +54,7 @@ def _conexao(segredos, ambiente, ticket_id):
     usuario = cred.user if cred is not None else None
     if not dsn or cred is None:
         _log.warning("%s omitida: ambiente %s sem %s", VAR_CONEXAO, nome,
-                     "DSN" if not dsn else "credencial [ambiente:%s] no secrets.cfg" % nome,
+                     "DSN" if not dsn else "credencial [environment:%s] no secrets.cfg" % nome,
                      extra={"ticket": ticket_id, "acao": "SPAWN"})
         return usuario, None
     valor = "%s/%s@%s" % (cred.user, cred.password, dsn)

@@ -59,17 +59,17 @@ class TestPastasLog(unittest.TestCase):
     def test_pasta_saida_com_as_partes_do_log(self):
         # CR-012 (README §8.13): base por ambiente e relativo no formato que o helper confere.
         dt = datetime.datetime(2026, 4, 5, 8, 9, 30)
-        base, rel = pastas_log.pasta_saida("/srv/sss/saida", "PRODUCAO", u"Carga Diária", dt, 41)
-        self.assertEqual((base, rel), ("/srv/sss/saida/producao", "carga_diaria/2026/04/05/08/09/ticket_41"))
-        self.assertEqual(os.path.join(base, os.path.dirname(rel)).replace("/srv/sss/saida", "/x"),
+        base, rel = pastas_log.pasta_saida("/srv/sss/output", "PRODUCAO", u"Carga Diária", dt, 41)
+        self.assertEqual((base, rel), ("/srv/sss/output/producao", "carga_diaria/2026/04/05/08/09/ticket_41"))
+        self.assertEqual(os.path.join(base, os.path.dirname(rel)).replace("/srv/sss/output", "/x"),
                          pastas_log.diretorio_log_execucao("/x", "PRODUCAO", u"Carga Diária", dt))
         self.assertEqual(pastas_log.pasta_saida("/s", "HML", u"!!!", dt, 7, script_id=3)[1],
                          "script_3/2026/04/05/08/09/ticket_7")
 
     def test_pasta_entrada_so_ambiente_e_script(self):
         # CR-014 (README §8.14): permanente, sem data nem ticket; nome do script minusculo, sem acento nem espaco.
-        self.assertEqual(pastas_log.pasta_entrada("/srv/sss/entrada", "PRODUCAO", u"Carga Diária"),
-                         ("/srv/sss/entrada/producao", "carga_diaria"))
+        self.assertEqual(pastas_log.pasta_entrada("/srv/sss/input", "PRODUCAO", u"Carga Diária"),
+                         ("/srv/sss/input/producao", "carga_diaria"))
         self.assertEqual(pastas_log.pasta_entrada("/e", "HML", u"Extrator de Relatórios v2"),
                          ("/e/hml", "extrator_de_relatorios_v2"))
         self.assertEqual(pastas_log.pasta_entrada("/e", "HML", u"!!!", script_id=3), ("/e/hml", "script_3"))

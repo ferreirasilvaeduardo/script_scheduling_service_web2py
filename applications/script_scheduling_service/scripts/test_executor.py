@@ -31,9 +31,9 @@ AGENTE_FALSO = 2 ** 31 - 3
 STARTED_AT = datetime.datetime(2026, 10, 16, 14, 5, 33)
 SH = "/bin/sh"
 
-_Agente = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough usuarios_execucao exec_work_dir")
+_Agente = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough exec_users exec_work_dir")
 _Cfg = collections.namedtuple("_Cfg", "agent")
-_CfgSnap = collections.namedtuple("_CfgSnap", "interpretadores")
+_CfgSnap = collections.namedtuple("_CfgSnap", "interpreters")
 
 
 def _esperar(condicao, prazo=10.0):
@@ -438,17 +438,17 @@ class TestFalhasDeSpawn(_Base):
         self.assertEqual(capturado["usuario"], "sssprd")
         self.assertEqual(capturado["spec"], {
             "ticket_id": 15, "argv": ["/usr/bin/python3", "-I", "/opt/s.py"], "env": {"PATH": "/usr/bin:/bin"},
-            "rlimits": {"RLIMIT_CORE": [0, 0], "RLIMIT_NOFILE": [1024, 1024]}, "pasta_base": "/srv/exec/sssprd"})
+            "rlimits": {"RLIMIT_CORE": [0, 0], "RLIMIT_NOFILE": [1024, 1024]}, "base_dir": "/srv/exec/sssprd"})
         self.assertFalse(os.path.exists(os.path.join(wd, "exec")), "fora de DEV o cwd e criado pelo helper")
         self.assertEqual((ex.pasta_base, ex.erro_spawn), ("/srv/exec/sssprd", "RuntimeError"))
 
 
     def test_cr014_entrada_na_especificacao_e_criada_em_dev(self):
         self.assertEqual(executor.especificacao(15, ["/bin/true"], {}, {}, "/srv/exec/sssprd",
-                                                entrada=("/srv/sss/entrada/producao", "carga"))["entrada"],
-                         {"base": "/srv/sss/entrada/producao", "relativo": "carga"})
-        self.assertNotIn("entrada", executor.especificacao(15, ["/bin/true"], {}, {}, "/srv/exec/sssprd"))
-        base = os.path.join(self.raiz, "entrada", "dev")
+                                                entrada=("/srv/sss/input/producao", "carga"))["input"],
+                         {"base": "/srv/sss/input/producao", "relativo": "carga"})
+        self.assertNotIn("input", executor.especificacao(15, ["/bin/true"], {}, {}, "/srv/exec/sssprd"))
+        base = os.path.join(self.raiz, "input", "dev")
         wd = executor.preparar_diretorio(self.work, 16)
         fd, _ = executor.abrir_log(self.logs, "DEV", "Teste Script", STARTED_AT, 16)
         with mock.patch.object(plataforma, "iniciar_processo", side_effect=RuntimeError("parar")), \

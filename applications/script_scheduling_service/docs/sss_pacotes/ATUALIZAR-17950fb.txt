@@ -24,9 +24,9 @@ cp $SSS/web2py/$APP/instance/config.ini $NOVO/$APP/instance/config.ini
 chmod 640 $NOVO/$APP/instance/config.ini
 sed -i -e '/^base_script_dirs\{0,1\} *=/d' \
        -e 's|^app_log_backups *=.*$|app_log_retention_days = 30|' \
-       -e '/^work_dir *=/a usuarios_execucao =\nexec_work_dir =' \
-       -e '/^cron_horizon_days *=/a fila_envelhecimento_min = 60\nambientes_exigem_hash =\nlog_dir_min_livre_mb = 1024' \
-       -e '/^session_idle_timeout_s *=/a sessao_max_horas = 12' \
+       -e '/^work_dir *=/a exec_users =\nexec_work_dir =' \
+       -e '/^cron_horizon_days *=/a queue_aging_min = 60\nambientes_exigem_hash =\nlog_dir_min_livre_mb = 1024' \
+       -e '/^session_idle_timeout_s *=/a session_max_hours = 12' \
        -e '/^purge_batch_size *=/a purge_user =' $NOVO/$APP/instance/config.ini
 grep -nE '^(base_script|app_log_|cron_horizon_days)' $NOVO/$APP/instance/config.ini
 # esperado: app_log_max_bytes, app_log_retention_days = 30 e cron_horizon_days = 1461 (mínimo novo: 1461)

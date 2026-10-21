@@ -16,9 +16,9 @@ Uso, com o servidor de DEV em `http://127.0.0.1:8000`:
 
 ```bash
 cd dev/homologacao/ferramentas
-read -s -p "Senha do admin do DEV: " SSS_HOMOLOG_SENHA && export SSS_HOMOLOG_SENHA && echo
+read -s -p "Senha do admin do DEV: " SSS_HOMOLOG_PASSWORD && export SSS_HOMOLOG_PASSWORD && echo
 node capture_all_screens.js
 python3 update_docx_images.py && python3 verify_docx_images.py
 ```
 
-A senha nunca fica no código: sem `SSS_HOMOLOG_SENHA`, os scripts param com código 2. O caminho do Chrome do Puppeteer está fixo nos `.js` (`executablePath`); ajuste-o na sua máquina.
+A senha nunca fica no código: sem `SSS_HOMOLOG_PASSWORD`, os scripts param com código 2. O caminho do Chrome do Puppeteer está fixo nos `.js` (`executablePath`); ajuste-o na sua máquina.

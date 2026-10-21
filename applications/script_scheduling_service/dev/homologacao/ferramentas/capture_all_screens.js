@@ -13,8 +13,8 @@ if (!fs.existsSync(OUT_DIR)) {
 
 const BASE_URL = 'http://127.0.0.1:8000/script_scheduling_service';
 // Senha do admin do DEV: so pela variavel de ambiente, nunca no codigo.
-const PASS_SEED = process.env.SSS_HOMOLOG_SENHA;
-if (!PASS_SEED) { console.error('Defina SSS_HOMOLOG_SENHA com a senha do admin do DEV.'); process.exit(2); }
+const PASS_SEED = process.env.SSS_HOMOLOG_PASSWORD;
+if (!PASS_SEED) { console.error('Defina SSS_HOMOLOG_PASSWORD com a senha do admin do DEV.'); process.exit(2); }
 
 async function sleep(ms) {
     return new Promise(r => setTimeout(r, ms));

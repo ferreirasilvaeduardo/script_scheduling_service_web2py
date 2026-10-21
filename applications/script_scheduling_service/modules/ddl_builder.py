@@ -657,14 +657,14 @@ def gerar_script_ddl(owner, prefixo, lob_storage="SECUREFILE", incluir_comentari
     return "\n".join(linhas)
 
 
-PAPEIS_GRANT = ("web", "agente", "purge", "monitor")
+PAPEIS_GRANT = ("web", "agent", "purge", "monitor")
 
 
 def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
     """Gera comandos GRANT para os usuarios informados por papel (README §11.1).
 
     papeis_usuarios: dict com mapeamento papel -> usuario_oracle, ex:
-      {'web': 'sss_web', 'agente': 'sss_agente', 'purge': 'sss_purge', 'monitor': 'sss_monitor'}
+      {'web': 'sss_web', 'agent': 'sss_agente', 'purge': 'sss_purge', 'monitor': 'sss_monitor'}
 
     Nunca concede a PUBLIC. A conta de cada papel e validada como identificador Oracle (entra no
     texto do GRANT). Papel sem conta ou cuja conta e a dona do esquema nao recebe GRANT: o owner ja
@@ -743,7 +743,7 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
                 ))
 
     # 2. PAPEL: agente
-    usr_agt = papeis_usuarios.get("agente")
+    usr_agt = papeis_usuarios.get("agent")
     if usr_agt:
         cadastros_e_assoc = (
             "ambientes", "perfis", "funcionalidades", "perfil_func", "perfil_amb",
@@ -799,7 +799,7 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
         ))
 
     # 4. PAPEL: monitor (CR-008, E3/R-04)
-    # Somente SELECT nas 7 tabelas que saude.py consulta, zero sequences
+    # Somente SELECT nas 7 tabelas que health.py consulta, zero sequences
     usr_mon = papeis_usuarios.get("monitor")
     if usr_mon:
         tabelas_monitor = (

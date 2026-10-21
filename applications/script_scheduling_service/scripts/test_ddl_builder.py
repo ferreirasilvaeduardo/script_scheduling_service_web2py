@@ -213,7 +213,7 @@ class TestGrantsPorPapel(unittest.TestCase):
     def setUp(self):
         self.papeis = {
             "web": "sss_web",
-            "agente": "sss_agente",
+            "agent": "sss_agente",
             "purge": "sss_purge",
             "monitor": "sss_monitor",
         }
@@ -255,8 +255,8 @@ class TestGrantsPorPapel(unittest.TestCase):
         da_saida = [g for g in grants if "ticket_output" in g]
         self.assertEqual(sorted(da_saida), sorted([
             "GRANT SELECT ON openrisow.tbsss_ticket_output TO %s;" % self.papeis["web"],
-            "GRANT SELECT, INSERT, UPDATE ON openrisow.tbsss_ticket_output TO %s;" % self.papeis["agente"],
-            "GRANT SELECT ON openrisow.sq_tbsss_ticket_output TO %s;" % self.papeis["agente"],
+            "GRANT SELECT, INSERT, UPDATE ON openrisow.tbsss_ticket_output TO %s;" % self.papeis["agent"],
+            "GRANT SELECT ON openrisow.sq_tbsss_ticket_output TO %s;" % self.papeis["agent"],
         ]))
 
     def test_nunca_concede_a_public(self):
@@ -269,7 +269,7 @@ class TestGrantsPorPapel(unittest.TestCase):
     def test_conta_igual_ao_owner_nao_recebe_grant(self):
         """Papel que usa a conta dona do esquema vira comentario (GRANT a si mesmo e ORA-01749)."""
         grants = ddl_builder.gerar_grants_por_papel(
-            "openrisow", "tbsss_", {"web": "OPENRISOW", "agente": "openrisow", "purge": "sss_purge"})
+            "openrisow", "tbsss_", {"web": "OPENRISOW", "agent": "openrisow", "purge": "sss_purge"})
         comandos = [g for g in grants if not g.startswith("--")]
         self.assertTrue(comandos)
         self.assertTrue(all(g.endswith("TO sss_purge;") for g in comandos))
@@ -501,13 +501,13 @@ class TestDdlSeedERollback(unittest.TestCase):
         self.assertEqual(sql.count("'OK: nenhuma falha'"), 2)
 
     def test_gerar_scripts_sql_cli_e_init_db_flag(self):
-        """CLI gerar_scripts_sql e init_db --gerar-sql gravam arquivos validos em disco."""
-        import gerar_scripts_sql
+        """CLI gerar_scripts_sql e init_db --generate-sql gravam arquivos validos em disco."""
+        import generate_sql as gerar_scripts_sql
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             ret = gerar_scripts_sql.main([
                 "--owner", self.owner,
-                "--prefixo", self.prefixo,
+                "--prefix", self.prefixo,
                 "--out-dir", tmp_dir,
             ])
             self.assertEqual(ret, 0)
@@ -517,8 +517,8 @@ class TestDdlSeedERollback(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp_dir2:
             ret = init_db.main([
-                "--usuario-dono", self.owner,
-                "--gerar-sql", tmp_dir2,
+                "--owner-user", self.owner,
+                "--generate-sql", tmp_dir2,
             ])
             self.assertEqual(ret, 0)
             self.assertTrue(os.path.isfile(os.path.join(tmp_dir2, "01_deploy_sss.sql")))

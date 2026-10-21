@@ -89,7 +89,7 @@ class RepoPurge(object):
                               {"limite": limite, "lote": int(lote)}, datas=("limite",))
 
     def ler_e_apagar_auditoria(self, conn, limite, lote):
-        """Com --exportar-auditoria (CR-007, R-22): trava e devolve as linhas do lote e as apaga pelo id, para o
+        """Com --export-audit (CR-007, R-22): trava e devolve as linhas do lote e as apaga pelo id, para o
         CSV ter exatamente o que saiu. Devolve a lista de dicts (vazia no fim). Sem COMMIT."""
         cur = conn.cursor()
         try:

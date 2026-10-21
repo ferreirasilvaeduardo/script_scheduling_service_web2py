@@ -169,7 +169,7 @@ def main():
     parser = argparse.ArgumentParser(description="Sondador isolado de driver Oracle")
     parser.add_argument("candidato", choices=["thin", "thick", "cx_oracle"])
     parser.add_argument("--config", dest="config", default=None)
-    parser.add_argument("--usuario", dest="usuario", default=None, help="conta do papel (padrao: [oracle] user)")
+    parser.add_argument("--user", dest="usuario", default=None, help="conta do papel (padrao: [oracle] user)")
     args = parser.parse_args()
 
     # Senha estritamente pela entrada padrao (stdin)

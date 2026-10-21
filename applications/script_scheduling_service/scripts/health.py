@@ -4,8 +4,8 @@
 Roda com a conta so de leitura do papel monitor ([monitor] user e password no secrets.cfg; a conta do agente
 nao le tbsss_audit). Uso:
 
-    python scripts/saude.py [--config <config.ini>] [--sem-pid-min 2] [--fila-warn 500] [--fila-crit 5000]
-                            [--espera-warn-min 30] [--espera-crit-min 120] [--purge-dias 2]
+    python scripts/health.py [--config <config.ini>] [--no-pid-min 2] [--queue-warn 500] [--queue-crit 5000]
+                            [--wait-warn-min 30] [--wait-crit-min 120] [--purge-days 2]
 
 Saida: a primeira linha e "SSS <ESTADO> - <n> problema(s) | <dados de desempenho>", depois uma linha por
 problema. Codigo: 0 OK, 1 WARNING, 2 CRITICAL, 3 UNKNOWN (configuracao, segredos, conexao ou erro de banco).
@@ -78,7 +78,7 @@ class Verificacao(object):
             else:
                 self._problema(CRITICAL, "agente %s ATIVO sem heartbeat ha %s (node_offline %d s)" % (
                     ag["code"], self._idade(ag, agora), self.limiares.node_offline_timeout_s))
-        self.desempenho.append("agentes_saudaveis=%d" % saudaveis)
+        self.desempenho.append("healthy_agents=%d" % saudaveis)
 
     @staticmethod
     def _idade(ag, agora):
@@ -110,8 +110,8 @@ class Verificacao(object):
             nivel = OK
         if nivel != OK:
             self._problema(nivel, "fila vencida: %d tickets PENDING, espera maxima %d min" % (qtd, espera_min))
-        self.desempenho.append("fila_vencida=%d;%d;%d" % (qtd, a.fila_warn, a.fila_crit))
-        self.desempenho.append("espera_max_min=%d;%d;%d" % (espera_min, a.espera_warn_min, a.espera_crit_min))
+        self.desempenho.append("overdue_queue=%d;%d;%d" % (qtd, a.fila_warn, a.fila_crit))
+        self.desempenho.append("max_wait_min=%d;%d;%d" % (espera_min, a.espera_warn_min, a.espera_crit_min))
 
     def _sem_pid(self, agora):
         for t in self.repo.rodando_sem_pid(self.conn, agora, self.args.sem_pid_min):
@@ -141,12 +141,12 @@ class Verificacao(object):
 def _argumentos(argv):
     parser = argparse.ArgumentParser(description="Saude do SSS no padrao Nagios (README §13)")
     parser.add_argument("--config", default=None, help="config.ini (padrao: instance/)")
-    parser.add_argument("--sem-pid-min", type=int, default=2, help="RUNNING sem PID ha mais de N minutos")
-    parser.add_argument("--fila-warn", type=int, default=500, help="PENDING vencidos para WARNING")
-    parser.add_argument("--fila-crit", type=int, default=5000, help="PENDING vencidos para CRITICAL")
-    parser.add_argument("--espera-warn-min", type=int, default=30, help="espera maxima (min) para WARNING")
-    parser.add_argument("--espera-crit-min", type=int, default=120, help="espera maxima (min) para CRITICAL")
-    parser.add_argument("--purge-dias", type=int, default=2, help="dias sem PURGE auditado para WARNING")
+    parser.add_argument("--no-pid-min", dest="sem_pid_min", type=int, default=2, help="RUNNING sem PID ha mais de N minutos")
+    parser.add_argument("--queue-warn", dest="fila_warn", type=int, default=500, help="PENDING vencidos para WARNING")
+    parser.add_argument("--queue-crit", dest="fila_crit", type=int, default=5000, help="PENDING vencidos para CRITICAL")
+    parser.add_argument("--wait-warn-min", dest="espera_warn_min", type=int, default=30, help="espera maxima (min) para WARNING")
+    parser.add_argument("--wait-crit-min", dest="espera_crit_min", type=int, default=120, help="espera maxima (min) para CRITICAL")
+    parser.add_argument("--purge-days", dest="purge_dias", type=int, default=2, help="dias sem PURGE auditado para WARNING")
     return parser.parse_args(argv)
 
 
@@ -160,7 +160,7 @@ def main(argv=None, conectar=None, saida=None):
     saida = saida or sys.stdout
     args = _argumentos(argv)
     try:
-        cfg = sss_config.obter_config(nome_log="saude", caminho=args.config)
+        cfg = sss_config.obter_config(nome_log="health", caminho=args.config)
         segredos = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel="monitor")
     except sss_config.ConfigErro as exc:
         return _desconhecido(saida, "configuracao invalida: %s" % exc)

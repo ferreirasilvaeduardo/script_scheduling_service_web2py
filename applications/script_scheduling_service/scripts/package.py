@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Pacote de implantacao (README §12.2; F9.1c; CR-005; CR-003 P10). Biblioteca padrao apenas.
 
-Uso: python scripts/empacotar.py [--origem <raiz do web2py>] [--saida <pasta>]
+Uso: python scripts/package.py [--source <raiz do web2py>] [--out-dir <pasta>]
 
 Gera <saida>/sss-<versao>.tar.gz (tudo sob sss-<versao>/, com um SHA256SUMS de cada arquivo) e <saida>/SHA256SUMS
 com o hash do tar.gz. A versao e sss_config.VERSAO_SSS. O tar e deterministico (ordem, dono, data e modos fixos).
@@ -50,7 +50,7 @@ _PLACEHOLDER = "CHANGE_ME"
 MTIME = 1767225600  # 2026-01-01 00:00:00 UTC: tar reprodutivel
 
 ROUTES = '''# -*- coding: utf-8 -*-
-# Gerado por scripts/empacotar.py (README §12.2): script_scheduling_service e a aplicacao padrao e unica.
+# Gerado por scripts/package.py (README §12.2): script_scheduling_service e a aplicacao padrao e unica.
 default_application = "script_scheduling_service"
 default_controller = "default"
 default_function = "index"
@@ -231,8 +231,8 @@ def empacotar(origem, saida, versao=None):
 def main(argv=None, saida_texto=None):
     saida_texto = saida_texto or sys.stdout
     parser = argparse.ArgumentParser(description="Pacote de implantacao do SSS (README §12.2)")
-    parser.add_argument("--origem", default=RAIZ_PADRAO, help="raiz do web2py a empacotar (padrao: esta arvore)")
-    parser.add_argument("--saida", default=None, help="pasta de saida (padrao: <origem>/dist)")
+    parser.add_argument("--source", dest="origem", default=RAIZ_PADRAO, help="raiz do web2py a empacotar (padrao: esta arvore)")
+    parser.add_argument("--out-dir", dest="saida", default=None, help="pasta de saida (padrao: <origem>/dist)")
     args = parser.parse_args(argv)
     try:
         destino, somas = empacotar(args.origem, args.saida or os.path.join(args.origem, "dist"))

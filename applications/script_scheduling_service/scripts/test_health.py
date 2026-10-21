@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Testes do scripts/saude.py e do repo_oracle/saude.py (README §13; F9.1b; CR-007 R-18; CR-008 E3, R-15, R-16).
+"""Testes do scripts/health.py e do repo_oracle/saude.py (README §13; F9.1b; CR-007 R-18; CR-008 E3, R-15, R-16).
 
 Com repositorio simulado: cada verificacao no limiar e fora dele e o codigo Nagios agregado (o pior vence);
 segredos pelo papel monitor; UNKNOWN em configuracao, conexao e erro de banco; o SQL do RepoSaude (indices da
@@ -18,7 +18,7 @@ import types
 import unittest
 from unittest import mock
 
-import saude as saude_cli  # scripts/saude.py (o repositorio e repo_oracle.saude)
+import health as saude_cli  # scripts/health.py (o repositorio e repo_oracle.saude)
 import sql_ident
 import sss_config
 from repo_oracle import saude as saude_sql
@@ -30,7 +30,7 @@ NS = types.SimpleNamespace
 def _cfg():
     agente = NS(heartbeat_interval_s=10, fence_timeout_s=90, node_offline_timeout_s=180, kill_grace_s=5,
                 misfire_policy="RUN_ONCE", misfire_tolerance_s=300, cron_horizon_days=1461,
-                fila_envelhecimento_min=60)
+                queue_aging_min=60)
     return NS(oracle=NS(owner="openrisow", table_prefix="tbsss_", call_timeout_ms=30000), agent=agente,
               secrets=NS(secrets_file="/x/secrets.cfg"))
 
@@ -38,10 +38,10 @@ def _cfg():
 CRITICOS = sss_config.config_criticos(_cfg())
 
 
-def _agente(codigo, idade_s=5, status="ACTIVE", ambientes="PRODUCAO", interpretadores="SH,PYTHON3", cfg=CRITICOS):
+def _agente(codigo, idade_s=5, status="ACTIVE", ambientes="PRODUCAO", interpreters="SH,PYTHON3", cfg=CRITICOS):
     hb = None if idade_s is None else AGORA - datetime.timedelta(seconds=idade_s)
     return {"code": codigo, "status": status, "heartbeat_at": hb, "environments": ambientes,
-            "interpreters": interpretadores, "critical_config": cfg}
+            "interpreters": interpreters, "critical_config": cfg}
 
 
 class _Repo(object):
@@ -120,8 +120,8 @@ class TestVerificacoes(unittest.TestCase):
     def test_tudo_saudavel(self):
         codigo, texto, repo = self._rodar()
         self.assertEqual(codigo, saude_cli.OK)
-        self.assertEqual(texto, "SSS OK - 0 problemas | agentes_saudaveis=1 fila_vencida=0;500;5000"
-                                " espera_max_min=0;30;120\n")
+        self.assertEqual(texto, "SSS OK - 0 problemas | healthy_agents=1 overdue_queue=0;500;5000"
+                                " max_wait_min=0;30;120\n")
         self.assertIn(("sem_pid", 2), repo.chamadas)
         self.assertIn(("purge", 2), repo.chamadas)
 
@@ -159,15 +159,15 @@ class TestVerificacoes(unittest.TestCase):
         self.assertEqual(self._rodar(vencida=(500, um_min))[0], saude_cli.WARNING)
         codigo, texto, _r = self._rodar(vencida=(5000, um_min))
         self.assertEqual(codigo, saude_cli.CRITICAL)
-        self.assertIn("fila_vencida=5000;500;5000", texto)
+        self.assertIn("overdue_queue=5000;500;5000", texto)
         self.assertEqual(self._rodar(vencida=(1, AGORA - datetime.timedelta(minutes=30)))[0], saude_cli.WARNING)
         self.assertEqual(self._rodar(vencida=(1, AGORA - datetime.timedelta(minutes=120)))[0], saude_cli.CRITICAL)
-        self.assertEqual(self._rodar(["--fila-warn", "10"], vencida=(10, um_min))[0], saude_cli.WARNING)
+        self.assertEqual(self._rodar(["--queue-warn", "10"], vencida=(10, um_min))[0], saude_cli.WARNING)
 
     def test_rodando_sem_pid(self):
         sem_pid = [{"id": 77, "script_id": 3, "environment": "PRODUCAO", "agent_id": "srv-a",
                     "started_at": datetime.datetime(2026, 10, 21, 9, 55)}]
-        codigo, texto, repo = self._rodar(["--sem-pid-min", "5"], sem_pid=sem_pid)
+        codigo, texto, repo = self._rodar(["--no-pid-min", "5"], sem_pid=sem_pid)
         self.assertEqual(codigo, saude_cli.WARNING)
         self.assertIn("WARNING: ticket 77 RUNNING sem PID no agente srv-a desde 2026-10-21 09:55:00", texto)
         self.assertIn(("sem_pid", 5), repo.chamadas)
@@ -181,7 +181,7 @@ class TestVerificacoes(unittest.TestCase):
         self.assertNotIn("srv-c", texto, "so agentes ativos")
 
     def test_purge_ausente(self):
-        codigo, texto, repo = self._rodar(["--purge-dias", "3"], purge=None)
+        codigo, texto, repo = self._rodar(["--purge-days", "3"], purge=None)
         self.assertEqual(codigo, saude_cli.WARNING)
         self.assertIn("nenhum PURGE auditado nos ultimos 3 dias", texto)
         self.assertIn(("purge", 3), repo.chamadas)
@@ -244,13 +244,13 @@ class TestMain(unittest.TestCase):
         self.assertTrue(conn.fechada)
 
     def test_segredos_do_monitor_sem_os_outros_papeis(self):
-        # Integracao com o sss_config real: o arquivo do servidor do agente, com [oracle], [purge] e [ambiente:*].
+        # Integracao com o sss_config real: o arquivo do servidor do agente, com [oracle], [purge] e [environment:*].
         pasta = tempfile.mkdtemp(prefix="sss_test_saude_")
         self.addCleanup(shutil.rmtree, pasta, True)
         caminho = os.path.join(pasta, "secrets.cfg")
         with open(caminho, "w") as f:
             f.write("[oracle]\npassword = senha-agt-1\n[purge]\npassword = senha-prg-1\n"
-                    "[ambiente:PRODUCAO]\nuser = app\npassword = senha-amb-1\n"
+                    "[environment:PRODUCAO]\nuser = app\npassword = senha-amb-1\n"
                     "[monitor]\nuser = sss_monitor\npassword = senha-mon-1\n")
         os.chmod(caminho, 0o600)
         registrados = []
@@ -288,8 +288,8 @@ class TestSqlRepoSaude(unittest.TestCase):
 
     def test_pares_atendidos_ignoram_em_risco_e_parados(self):
         lim = saude_cli.agentes_service.Limiares(10, 90, 180)
-        agentes = [_agente("a", 5, interpretadores="SH"), _agente("b", 91, interpretadores="BASH"),
-                   _agente("c", 5, status="STOPPED", interpretadores="PYTHON3")]
+        agentes = [_agente("a", 5, interpreters="SH"), _agente("b", 91, interpreters="BASH"),
+                   _agente("c", 5, status="STOPPED", interpreters="PYTHON3")]
         self.assertEqual(saude_sql.pares_atendidos(agentes, AGORA, lim), {("PRODUCAO", "SH")})
 
 
@@ -301,9 +301,9 @@ class TestSaudeOracle(unittest.TestCase):
     def setUpClass(cls):
         from _oracle_test_support import preparar_schema_descartavel
         import db_conn
-        cls.cfg = preparar_schema_descartavel("agente")
-        segredos = sss_config.carregar_segredos(cls.cfg.secrets.secrets_file, cfg=cls.cfg, papel="agente")
-        cls.conn = db_conn.conectar(cls.cfg, segredos, papel="agente")
+        cls.cfg = preparar_schema_descartavel("agent")
+        segredos = sss_config.carregar_segredos(cls.cfg.secrets.secrets_file, cfg=cls.cfg, papel="agent")
+        cls.conn = db_conn.conectar(cls.cfg, segredos, papel="agent")
         cls.repo = saude_sql.RepoSaude.da_config(cls.cfg)
 
     @classmethod

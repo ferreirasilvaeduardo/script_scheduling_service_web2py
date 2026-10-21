@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """F8.3d: dois agentes reais (scripts/run_scheduler.py) contra o Oracle do instance/config.ini.
 
-Com SSS_TEST_ORACLE=1 (README §2.5): esquema validado por preparar_schema_descartavel('agente') antes de DML;
+Com SSS_TEST_ORACLE=1 (README §2.5): esquema validado por preparar_schema_descartavel('agent') antes de DML;
 ambiente, perfil, usuario, scripts e tickets so da fixture; cada agente com o proprio config.ini temporario
 (agent_id, work_dir, log_dir e output_dir proprios). Confere: nunca mais de 2 RUNNING do script de teto 2
 (polling no banco), todos SUCCESS, cada ticket executado uma vez, saida DISPONIVEL gravada pelo agente dono,
@@ -40,7 +40,7 @@ class _DoisAgentesBase(unittest.TestCase):
     def setUpClass(cls):
         import test_repo_contract as trc
         from _oracle_test_support import preparar_schema_descartavel
-        preparar_schema_descartavel("agente")
+        preparar_schema_descartavel("agent")
         cls.trc = trc
         cls.contrato = trc._OracleContrato
         cls.contrato.setUpClass.__func__(cls)
@@ -128,15 +128,16 @@ class _DoisAgentesBase(unittest.TestCase):
 
     def _config(self, agente):
         base = os.path.join(self.raiz, agente)
-        pastas = dict((n, os.path.join(base, n)) for n in ("work", "logs", "saida"))
+        pastas = dict((n, os.path.join(base, n)) for n in ("work", "logs", "output", "input"))
         for p in pastas.values():
             os.makedirs(p, 0o750, exist_ok=True)
         cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
         cp.read(os.path.join(APP, "instance", "config.ini"), encoding="utf-8")
-        cp["agent"].update({"agent_id": agente, "ambientes_atendidos": self.amb["name"], "work_dir": pastas["work"],
-                            "usuarios_execucao": "", "exec_work_dir": "", "interpretadores": "SH=/bin/sh",
+        cp["agent"].update({"agent_id": agente, "environments": self.amb["name"], "work_dir": pastas["work"],
+                            "exec_users": "", "exec_work_dir": "", "interpreters": "SH=/bin/sh",
                             "max_parallel_jobs": "4", "orchestrator_interval_s": "1", "cancel_poll_interval_s": "1",
-                            "output_dir": pastas["saida"], "log_dir_min_livre_mb": "0"})
+                            "output_dir": pastas["output"], "input_dir": pastas["input"],
+                            "log_dir_min_free_mb": "0"})
         for secao, valores in self.CONFIG_EXTRA.items():
             cp[secao].update(valores)
         cp["logging"]["log_dir"] = pastas["logs"]
@@ -202,7 +203,7 @@ class _DoisAgentesBase(unittest.TestCase):
     def _pastas_de_saida(self, ids):
         nomes = set("ticket_%d" % t for t in ids)
         return [os.path.join(r, d) for _a, _p, pastas in self.processos
-                for r, ds, _arqs in os.walk(pastas["saida"]) for d in ds if d in nomes]
+                for r, ds, _arqs in os.walk(pastas["output"]) for d in ds if d in nomes]
 
     def _esperar(self, condicao, prazo, passo=0.2):
         limite = time.monotonic() + prazo

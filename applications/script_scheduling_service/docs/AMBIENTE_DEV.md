@@ -139,7 +139,7 @@ Para subir como nos servidores via launcher oficial:
 
 **Codificação (CR-007):** o processo web aborta se a codificação do sistema de arquivos não for UTF-8 (`sys.getfilesystemencoding()`). Subindo sem o launcher, exporte antes `LANG=C.UTF-8` e `LC_ALL=C.UTF-8` (ou outro locale UTF-8 da máquina, `locale -a`).
 
-**Segredos em DEV (CR-007, D1b):** o `secrets.cfg` do nó web leva só `[web] cookie_key` (e `[oracle] password` com Oracle). Seções do agente (`[ambiente:*]`, `[purge]`) no arquivo do web geram WARN em DEV e recusam a subida fora de DEV.
+**Segredos em DEV (CR-007, D1b):** o `secrets.cfg` do nó web leva só `[web] cookie_key` (e `[oracle] password` com Oracle). Seções do agente (`[environment:*]`, `[purge]`) no arquivo do web geram WARN em DEV e recusam a subida fora de DEV.
 
 ### Usuários de homologação
 
@@ -230,9 +230,9 @@ Sem `sudo`, cadastre os scripts com o caminho real de `dev/scripts`.
 
 ### 6.3 Agente em DEV (a partir do F8, CR-007)
 
-* Em DEV, `[agent] usuarios_execucao` pode ficar vazio: o agente executa os scripts com o próprio usuário e registra WARN `SEM_USUARIO_EXECUCAO`. Para testar o helper e o `sudo` como nos servidores, siga o `IMPLANTACAO.md` §8 numa VM.
+* Em DEV, `[agent] exec_users` pode ficar vazio: o agente executa os scripts com o próprio usuário e registra WARN `SEM_USUARIO_EXECUCAO`. Para testar o helper e o `sudo` como nos servidores, siga o `IMPLANTACAO.md` §8 numa VM.
 * `cron_horizon_days` vai de 1.461 a 36.500 (CR-008, R-32), `max_log_size_bytes` até 64 MiB e `audit_retention_days` de 365 a 3.650 (e não menor que `ticket_retention_days`); o `table_prefix` só aceita minúsculas. Um `config.ini` antigo fora dessas faixas aborta a subida com a chave no log.
-* **CR-008:** `[web] sessao_max_horas` (padrão 12) e `[agent] log_dir_min_livre_mb` (padrão 1.024; 0 desliga, só em DEV) são opcionais. Em DEV, `[oracle] user` pode ser igual ao `owner`; fora de DEV, é recusado. O `scripts/saude.py` lê só a seção `[monitor]` do `secrets.cfg`.
+* **CR-008:** `[web] session_max_hours` (padrão 12) e `[agent] log_dir_min_free_mb` (padrão 1.024; 0 desliga, só em DEV) são opcionais. Em DEV, `[oracle] user` pode ser igual ao `owner`; fora de DEV, é recusado. O `scripts/health.py` lê só a seção `[monitor]` do `secrets.cfg`.
 
 ---
 
@@ -241,7 +241,7 @@ Sem `sudo`, cadastre os scripts com o caminho real de `dev/scripts`.
 O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-002):
 
 * **Driver:** `python-oracledb` (`< 2.0` na 3.6; `2.x` na 3.7+) com `cryptography`, e `cx_Oracle 8.3` como contingência. São pré-instalados pela infraestrutura; não use `pip install` no projeto.
-* **Modo:** `[oracle] modo_driver = auto` tenta Thin → Thick → cx_Oracle por sondagem. Contra banco **11g**, só Thick e cx_Oracle conectam, então o **Instant Client 19** precisa estar instalado:
+* **Modo:** `[oracle] driver_mode = auto` tenta Thin → Thick → cx_Oracle por sondagem. Contra banco **11g**, só Thick e cx_Oracle conectam, então o **Instant Client 19** precisa estar instalado:
   * Linux/Unix: no `ldconfig` (preferencial) ou em `LD_LIBRARY_PATH` exportado **antes** de iniciar o Python;
   * macOS (só desenvolvimento): `oracle_client_lib_dir` no `config.ini`. Windows não é suportado (CR-005).
 * **Credencial:** só no `secrets.cfg` (`0600`, dono = usuário do processo), nunca no `config.ini`.
@@ -255,7 +255,7 @@ O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-00
     SSS_TEST_ORACLE=1 SSS_TEST_REPO_AGREGADO=TICKETS \
       ~/.pyenv/versions/3.6.15/bin/python -m unittest discover -s scripts -p "test_repo_oracle_progressive.py" -v
     ```
-  * **Outro driver:** os testes usam o `[oracle] modo_driver` do config (`auto`, `thin`, `thick` ou `cx_oracle`).
+  * **Outro driver:** os testes usam o `[oracle] driver_mode` do config (`auto`, `thin`, `thick` ou `cx_oracle`).
   * **Produção:** só os scripts SQL de `docs/sql/` (`01_deploy_sss.sql`, `02_rollback_sss.sql`, `99_validate_deploy.sql`), sem Python. Os testes acima são só para DEV.
 * `python scripts/check_env.py` mostra a combinação de driver escolhida.
 

@@ -20,7 +20,7 @@ from params_compiler import ParamErro, SnapshotErro
 AGENTE_FALSO = 2 ** 31 - 3
 
 AGORA = datetime.datetime(2026, 10, 13, 10, 47, 0, 123456)
-CfgAgente = collections.namedtuple("CfgAgente", ["interpretadores"])
+CfgAgente = collections.namedtuple("CfgAgente", ["interpreters"])
 CHAVES_6_5 = {"version", "script_id", "script_nome", "interpreter", "path_file", "param_type", "args",
               "respostas", "sensiveis", "compilado_em"}
 EXE_PY = "/usr/bin/python3"
@@ -488,8 +488,8 @@ class TestValidarSnapshot(unittest.TestCase):
                          "PATH_GUARD_NAO_E_ARQUIVO")
 
     def test_log_dir_e_work_dir_do_agente(self):
-        cfg = collections.namedtuple("CfgDirs", ["interpretadores", "dirs_sss"])(
-            self.cfg.interpretadores, (os.path.join(self.base, "faturamento"),))
+        cfg = collections.namedtuple("CfgDirs", ["interpreters", "dirs_sss"])(
+            self.cfg.interpreters, (os.path.join(self.base, "faturamento"),))
         self.assertEqual(self._motivo(self.js, cfg), "PATH_GUARD_PASTA_DO_SSS")
 
 

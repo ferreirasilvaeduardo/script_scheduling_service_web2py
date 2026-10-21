@@ -37,11 +37,11 @@ AMB = "DEV"
 SENHA_AMB = "SenhaDoAmbiente#2026"
 
 _Agent = collections.namedtuple("_Agent", (
-    "agent_id", "ambientes_atendidos", "work_dir", "interpretadores", "usuarios_execucao",
+    "agent_id", "environments", "work_dir", "interpreters", "exec_users",
     "exec_work_dir", "heartbeat_interval_s", "fence_timeout_s", "node_offline_timeout_s", "kill_grace_s",
-    "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "fila_envelhecimento_min", "child_locale",
+    "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "queue_aging_min", "child_locale",
     "cancel_poll_interval_s", "orchestrator_interval_s", "max_parallel_jobs",
-    "log_dir_min_livre_mb", "script_timeout_s", "env_passthrough", "output_dir", "output_max_bytes",
+    "log_dir_min_free_mb", "script_timeout_s", "env_passthrough", "output_dir", "output_max_bytes",
     "output_max_files", "schedule_batch_size", "shutdown_mode", "shutdown_grace_s", "input_dir"))
 # CR-012: sem output_dir por padrao; F8.4b: lote do desdobro; F8.4d: parada TERMINATE; CR-014: sem input_dir.
 _Agent.__new__.__defaults__ = (None, 20971520, 1000, 50, "TERMINATE", 30, None)
@@ -353,13 +353,13 @@ class _Base(unittest.TestCase):
         shutil.rmtree(self.raiz, ignore_errors=True)
 
     def cfg(self, **mudancas):
-        base = dict(agent_id="srv-t", ambientes_atendidos=(AMB,), work_dir=self.work,
-                    interpretadores=(("SH", "/bin/sh"),), usuarios_execucao=(), exec_work_dir=None,
+        base = dict(agent_id="srv-t", environments=(AMB,), work_dir=self.work,
+                    interpreters=(("SH", "/bin/sh"),), exec_users=(), exec_work_dir=None,
                     heartbeat_interval_s=0.2, fence_timeout_s=40, node_offline_timeout_s=120, kill_grace_s=1,
                     misfire_policy="RUN_ONCE", misfire_tolerance_s=300, cron_horizon_days=366,
-                    fila_envelhecimento_min=30, child_locale="C.UTF-8",
+                    queue_aging_min=30, child_locale="C.UTF-8",
                     cancel_poll_interval_s=0.05, orchestrator_interval_s=0.05, max_parallel_jobs=4,
-                    log_dir_min_livre_mb=1, script_timeout_s=60, env_passthrough=())
+                    log_dir_min_free_mb=1, script_timeout_s=60, env_passthrough=())
         local = mudancas.pop("max_local_log_size_bytes", 10 * 1024 * 1024)
         base.update(mudancas)
         return _Cfg(_Agent(**base), _Log(self.logs, 5 * 1024 * 1024, local), _App("DEV"),
@@ -426,7 +426,7 @@ class TestExecucao(_Base):
 
     def test_cr014_pasta_de_entrada_permanente_por_ambiente_e_script(self):
         # CR-014 (README §8.14): SSS_INPUT_DIR = input_dir/<ambiente>/<script>, criada sob demanda e mantida.
-        entrada = os.path.join(self.raiz, "entrada")
+        entrada = os.path.join(self.raiz, "input")
         os.mkdir(entrada, 0o700)
         sid = self.banco.script('n=$(ls "$SSS_INPUT_DIR" | wc -l)\n'
                                 'echo "dir=$SSS_INPUT_DIR n=$n"\n'
@@ -708,7 +708,7 @@ class TestCiclos(_Base):
     def test_disco_baixo_sem_claim(self):
         tid = self.banco.ticket(self.banco.script("echo x\n"))
         plat = _PlatDisco()
-        self.subir(plat=plat, log_dir_min_livre_mb=1024)
+        self.subir(plat=plat, log_dir_min_free_mb=1024)
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             self.rodar(lambda: False, limite=0.5)
         self.assertEqual(self.banco.tickets[tid]["status"], "PENDING")

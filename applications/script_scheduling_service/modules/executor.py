@@ -149,12 +149,12 @@ def especificacao(ticket_id, argv, env, rlimits, pasta_base, saida=None, entrada
         "argv": list(argv),
         "env": dict(env),
         "rlimits": dict((nome, [int(par[0]), int(par[1])]) for nome, par in (rlimits or {}).items()),
-        "pasta_base": pasta_base,
+        "base_dir": pasta_base,
     }
     if saida is not None:
-        spec["saida"] = {"base": saida[0], "relativo": saida[1]}
+        spec["output"] = {"base": saida[0], "relativo": saida[1]}
     if entrada is not None:
-        spec["entrada"] = {"base": entrada[0], "relativo": entrada[1]}
+        spec["input"] = {"base": entrada[0], "relativo": entrada[1]}
     return spec
 
 

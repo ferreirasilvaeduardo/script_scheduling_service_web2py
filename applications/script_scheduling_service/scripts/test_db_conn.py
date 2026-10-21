@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Testes unitarios para db_conn.py, scripts/sondar_driver.py e _oracle_test_support.py (F7.0, F7.2).
+"""Testes unitarios para db_conn.py, scripts/probe_driver.py e _oracle_test_support.py (F7.0, F7.2).
 
 Cobre a selecao adaptativa de driver, conexao por papel, pool, gerenciamento transacional,
 classificacao de erros, tipos neutros, binds de data, orcamento de abertura de conexao,
@@ -21,15 +21,15 @@ import _testenv  # noqa: F401
 import _oracle_test_support
 import db_conn
 import plataforma
-import sondar_driver
+import probe_driver as sondar_driver
 import sql_ident
 
 
 class _FakeOracleConfig(object):
-    def __init__(self, modo_driver="auto", user="sss_web", dsn="localhost:2424/GFPR",
+    def __init__(self, driver_mode="auto", user="sss_web", dsn="localhost:2424/GFPR",
                  owner="openrisow", table_prefix="tbsss_", call_timeout_ms=5000,
                  oracle_client_lib_dir=None, pool_min=1, pool_max=4):
-        self.modo_driver = modo_driver
+        self.driver_mode = driver_mode
         self.user = user
         self.dsn = dsn
         self.owner = owner
@@ -41,14 +41,14 @@ class _FakeOracleConfig(object):
 
 
 class _FakeConfig(object):
-    def __init__(self, modo_driver="auto", user="sss_web", dsn="localhost:2424/GFPR",
+    def __init__(self, driver_mode="auto", user="sss_web", dsn="localhost:2424/GFPR",
                  owner="openrisow", table_prefix="tbsss_", call_timeout_ms=5000,
                  oracle_client_lib_dir=None, sss_env="DEV", data_backend="ORACLE"):
         self.app = collections.namedtuple("AppConfig", ["sss_env", "data_backend"])(
             sss_env=sss_env, data_backend=data_backend
         )
         self.oracle = _FakeOracleConfig(
-            modo_driver=modo_driver,
+            driver_mode=driver_mode,
             user=user,
             dsn=dsn,
             owner=owner,
@@ -91,7 +91,7 @@ class TestDbConnSelecaoMocks(unittest.TestCase):
 
     def setUp(self):
         db_conn.reset_selecao()
-        self.cfg = _FakeConfig(modo_driver="auto")
+        self.cfg = _FakeConfig(driver_mode="auto")
         self.segredos = _FakeSegredos(password="teste_pwd_123")
 
     def tearDown(self):
@@ -211,7 +211,7 @@ class TestDbConnSelecaoMocks(unittest.TestCase):
         """Quando o candidato forcado falha, gera CRITICAL e nao testa os demais."""
         for modo in ("thin", "thick", "cx_oracle"):
             db_conn.reset_selecao()
-            cfg = _FakeConfig(modo_driver=modo)
+            cfg = _FakeConfig(driver_mode=modo)
             chamadas = []
 
             def executor_sondagem(candidato, cfg, senha):
@@ -229,7 +229,7 @@ class TestDbConnSelecaoMocks(unittest.TestCase):
         """Quando candidato forcado tem sucesso, nao sonda outros."""
         for modo in ("thin", "thick", "cx_oracle"):
             db_conn.reset_selecao()
-            cfg = _FakeConfig(modo_driver=modo)
+            cfg = _FakeConfig(driver_mode=modo)
             chamadas = []
 
             def executor_sondagem(candidato, cfg, senha):
@@ -248,11 +248,11 @@ class TestDbConnSelecaoMocks(unittest.TestCase):
 
     def test_modo_driver_invalido_critical(self):
         """Modo driver invalido aborta com CRITICAL."""
-        cfg = _FakeConfig(modo_driver="invalido_xyz")
+        cfg = _FakeConfig(driver_mode="invalido_xyz")
         with self.assertLogs("sss_db_conn", level="CRITICAL") as cm:
             with self.assertRaises(RuntimeError) as ctx:
                 db_conn.selecionar_driver(cfg, self.segredos)
-        self.assertIn("modo_driver 'invalido_xyz' invalido", str(ctx.exception))
+        self.assertIn("driver_mode 'invalido_xyz' invalido", str(ctx.exception))
         self.assertTrue(any("CRITICAL" in msg and "invalido_xyz" in msg for msg in cm.output))
 
     def test_cache_em_memoria_thread_safe(self):
@@ -435,7 +435,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
 
     def test_backoff_sem_sleep_em_garantir(self):
         """ConexaoResiliente gerencia backoff exponencial (1s a 60s) via monotonic() sem time.sleep."""
-        resiliente = db_conn.ConexaoResiliente(self.cfg, self.segredos, papel="agente")
+        resiliente = db_conn.ConexaoResiliente(self.cfg, self.segredos, papel="agent")
         self.assertIsNone(resiliente.obter_conexao())
 
         t_atual = 1000.0
@@ -825,11 +825,11 @@ class TestPrimeiraConexaoNaoEReconexao(unittest.TestCase):
             with self.assertLogs("sss_db_conn", "INFO") as segunda:
                 self.assertTrue(resiliente.garantir())
         self.assertEqual([(r.levelname, r.getMessage()) for r in primeira.records],
-                         [("INFO", "Conectando ao Oracle (papel=agente)..."),
-                          ("INFO", "Conexao estabelecida (papel=agente)")])
+                         [("INFO", "Conectando ao Oracle (papel=agent)..."),
+                          ("INFO", "Conexao estabelecida (papel=agent)")])
         self.assertEqual([(r.levelname, r.getMessage()) for r in segunda.records],
-                         [("WARNING", "Tentando reconexao com o Oracle (papel=agente)..."),
-                          ("INFO", "Reconexao bem-sucedida (papel=agente)")])
+                         [("WARNING", "Tentando reconexao com o Oracle (papel=agent)..."),
+                          ("INFO", "Reconexao bem-sucedida (papel=agent)")])
 
     def test_falha_na_primeira_conexao(self):
         resiliente = db_conn.ConexaoResiliente(_FakeConfig(), _FakeSegredos(password="x"))
@@ -851,10 +851,10 @@ class TestSondagemComAContaDoPapel(unittest.TestCase):
         processo = mock.Mock(returncode=0)
         processo.communicate.return_value = (b'{"candidato": "thin", "ok": true}', b"")
         with mock.patch.object(db_conn.subprocess, "Popen", return_value=processo) as popen:
-            db_conn.selecionar_driver(_FakeConfig(modo_driver="thin"), _FakeSegredos(password="x"),
+            db_conn.selecionar_driver(_FakeConfig(driver_mode="thin"), _FakeSegredos(password="x"),
                                       usuario="sss_monitor", senha="senha-mon-77")
         cmd = popen.call_args[0][0]
-        self.assertEqual(cmd[-2:], ["--usuario", "sss_monitor"])
+        self.assertEqual(cmd[-2:], ["--user", "sss_monitor"])
         self.assertNotIn("senha-mon-77", " ".join(cmd))
         self.assertEqual(processo.communicate.call_args[1]["input"], b"senha-mon-77")
 
@@ -868,11 +868,11 @@ class TestSondagemComAContaDoPapel(unittest.TestCase):
         with mock.patch.object(db_conn, "selecionar_driver", side_effect=selecionar), \
                 mock.patch.object(db_conn, "orcamento_conexao_s"):
             with self.assertRaises(RuntimeError):
-                db_conn.conectar(_FakeConfig(modo_driver="thin"), segredos, papel="monitor")
+                db_conn.conectar(_FakeConfig(driver_mode="thin"), segredos, papel="monitor")
         self.assertEqual(capturado, {"usuario": "sss_monitor", "senha": "senha-mon-77"})
 
     def test_sondar_driver_usa_o_usuario_informado(self):
-        cfg = _FakeConfig(modo_driver="thin")
+        cfg = _FakeConfig(driver_mode="thin")
         falso = mock.Mock()
         falso.connect.side_effect = RuntimeError("ORA-01017: invalid username/password")
         with mock.patch.dict(sys.modules, {"oracledb": falso}):
@@ -881,7 +881,7 @@ class TestSondagemComAContaDoPapel(unittest.TestCase):
 
 
 class TestSondarDriverScript(unittest.TestCase):
-    """Testes unitarios do scripts/sondar_driver.py."""
+    """Testes unitarios do scripts/probe_driver.py."""
 
     def test_categorizacao_erros(self):
         """Valida que codigos Oracle/DPY/DPI sao categorizados corretamente."""

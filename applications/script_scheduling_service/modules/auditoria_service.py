@@ -197,7 +197,7 @@ def _mascarar(texto):
 
 
 def linha_csv(reg):
-    """Uma linha da exportacao (README §4.4); tambem a do --exportar-auditoria do purge (CR-007, R-22)."""
+    """Uma linha da exportacao (README §4.4); tambem a do --export-audit do purge (CR-007, R-22)."""
     criado = reg.get("created_at")
     valores = (
         reg["id"],

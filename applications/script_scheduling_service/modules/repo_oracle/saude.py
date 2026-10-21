@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Repositorio interno do scripts/saude.py (README §13; F9.1b; CR-007 R-18; CR-008 E3, R-15).
+"""Repositorio interno do scripts/health.py (README §13; F9.1b; CR-007 R-18; CR-008 E3, R-15).
 
-Importado so pelo scripts/saude.py e, pelo SQL e pelo calculo dos pares atendidos, pelo repo_oracle/agentes.py
+Importado so pelo scripts/health.py e, pelo SQL e pelo calculo dos pares atendidos, pelo repo_oracle/agentes.py
 (a tela de agentes e o monitoramento nao divergem). Sem gluon (excecao do AGENTS §5.5). So leituras, nas
 tabelas que a conta do papel monitor le (README §11.1); nenhum LOB e lido.
 """

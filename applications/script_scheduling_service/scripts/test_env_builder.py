@@ -13,7 +13,7 @@ import env_builder
 import masking
 from sss_config import AmbienteSegredo, Segredos
 
-_Agente = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough usuarios_execucao exec_work_dir")
+_Agente = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough exec_users exec_work_dir")
 _Cfg = collections.namedtuple("_Cfg", "agent")
 
 WORK = "/srv/sss/work/ticket_41"
@@ -177,17 +177,17 @@ class TestEnvBuilder(unittest.TestCase):
     def test_cr012_pasta_de_saida_so_quando_informada(self):
         with self.assertLogs("sss_scheduler", "WARNING"):
             env = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
-                                        pasta_saida="/srv/sss/saida/producao/carga/2026/10/20/03/00/ticket_41")
+                                        pasta_saida="/srv/sss/output/producao/carga/2026/10/20/03/00/ticket_41")
             sem = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
-        self.assertEqual(env["SSS_OUTPUT_DIR"], "/srv/sss/saida/producao/carga/2026/10/20/03/00/ticket_41")
+        self.assertEqual(env["SSS_OUTPUT_DIR"], "/srv/sss/output/producao/carga/2026/10/20/03/00/ticket_41")
         self.assertNotIn("SSS_OUTPUT_DIR", sem)
 
     def test_cr014_pasta_de_entrada_so_quando_informada(self):
         with self.assertLogs("sss_scheduler", "WARNING"):
             env = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
-                                        pasta_entrada="/srv/sss/entrada/producao/carga")
+                                        pasta_entrada="/srv/sss/input/producao/carga")
             sem = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
-        self.assertEqual(env["SSS_INPUT_DIR"], "/srv/sss/entrada/producao/carga")
+        self.assertEqual(env["SSS_INPUT_DIR"], "/srv/sss/input/producao/carga")
         self.assertNotIn("SSS_INPUT_DIR", sem)
 
     def test_cr015a_so_nomes_em_ingles(self):

@@ -696,7 +696,7 @@ def _conferir_esquema(conn, owner, prefixo, log_fn=print):
 
 
 def _parse_grants_arg(arg_str):
-    """Faz o parse do argumento --grants-para web=u1,agente=u2,..."""
+    """Faz o parse do argumento --grants-to web=u1,agente=u2,..."""
     papeis = {}
     if not arg_str:
         return papeis
@@ -706,12 +706,12 @@ def _parse_grants_arg(arg_str):
         if not p:
             continue
         if "=" not in p:
-            raise ValueError("Formato invalido para --grants-para: '%s'. Use papel=usuario" % p)
+            raise ValueError("Formato invalido para --grants-to: '%s'. Use papel=usuario" % p)
         papel, usr = p.split("=", 1)
         papel = papel.strip().lower()
         usr = usr.strip()
-        if papel not in ("web", "agente", "purge", "monitor"):
-            raise ValueError("Papel desconhecido em --grants-para: '%s'" % papel)
+        if papel not in ("web", "agent", "purge", "monitor"):
+            raise ValueError("Papel desconhecido em --grants-to: '%s'" % papel)
         papeis[papel] = usr
     return papeis
 
@@ -738,14 +738,14 @@ def main(argv=None):
     parser.add_argument("--config", dest="config", default=None, help="Caminho do config.ini")
     parser.add_argument("--dry-run", dest="dry_run", action="store_true", help="Imprime o DDL sem conectar")
     parser.add_argument("--lob-basicfile", dest="lob_basicfile", action="store_true", help="Fallback LOB BASICFILE")
-    parser.add_argument("--usuario-dono", dest="usuario_dono", default=None, help="Usuario dono do esquema")
+    parser.add_argument("--owner-user", dest="usuario_dono", default=None, help="Usuario dono do esquema")
     parser.add_argument("--admin-login", dest="admin_login", default=None, help="Login do administrador inicial")
-    parser.add_argument("--admin-nome", dest="admin_nome", default=None, help="Nome do administrador inicial")
+    parser.add_argument("--admin-name", dest="admin_nome", default=None, help="Nome do administrador inicial")
     parser.add_argument("--stats", dest="stats", action="store_true", default=True, help="Coleta estatisticas")
     parser.add_argument("--no-stats", dest="stats", action="store_false", help="Nao coleta estatisticas")
-    parser.add_argument("--grants-para", dest="grants_para", default=None, help="web=u1,agente=u2,purge=u3,monitor=u4")
-    parser.add_argument("--schema-real", dest="schema_real", action="store_true", default=False, help="Permite aplicacao em schema real de banco sem exigir prefixo SSS_TEST_")
-    parser.add_argument("--gerar-sql", dest="gerar_sql", default=None, help="Diretorio de saida para salvar os arquivos .sql de implantacao e rollback")
+    parser.add_argument("--grants-to", dest="grants_para", default=None, help="web=u1,agent=u2,purge=u3,monitor=u4")
+    parser.add_argument("--real-schema", dest="schema_real", action="store_true", default=False, help="Permite aplicacao em schema real de banco sem exigir prefixo SSS_TEST_")
+    parser.add_argument("--generate-sql", dest="gerar_sql", default=None, help="Diretorio de saida para salvar os arquivos .sql de implantacao e rollback")
 
     # Rejeita argumentos desconhecidos
     try:
@@ -789,7 +789,7 @@ def main(argv=None):
         print(msg, file=sys.stderr)
         return 2
 
-    # Trata --grants-para se fornecido
+    # Trata --grants-to se fornecido
     papeis_grants = None
     if args.grants_para:
         try:
@@ -802,20 +802,20 @@ def main(argv=None):
 
     # Modo GERAR-SQL: gera arquivos SQL em disco para aplicacao por DBA em producao
     if args.gerar_sql:
-        import gerar_scripts_sql
+        import generate_sql as gerar_scripts_sql
         args_gerar = [
             "--owner", owner,
-            "--prefixo", prefixo,
+            "--prefix", prefixo,
             "--out-dir", args.gerar_sql,
         ]
         if lob_storage == "BASICFILE":
             args_gerar.append("--lob-basicfile")
         if args.grants_para:
-            args_gerar.extend(["--grants-para", args.grants_para])
+            args_gerar.extend(["--grants-to", args.grants_para])
         if args.admin_login:
             args_gerar.extend(["--admin-login", args.admin_login])
         if args.admin_nome:
-            args_gerar.extend(["--admin-nome", args.admin_nome])
+            args_gerar.extend(["--admin-name", args.admin_nome])
         return gerar_scripts_sql.main(args_gerar)
 
     # Modo DRY-RUN: imprime DDL e/ou GRANTs e sai com 0

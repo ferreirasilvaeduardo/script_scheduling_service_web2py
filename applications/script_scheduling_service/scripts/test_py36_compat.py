@@ -247,9 +247,9 @@ def verificar_urls_externas_em_arquivo(caminho):
 
 
 def verificar_imports_driver_oracle(caminho, app_dir):
-    """Verifica que apenas db_conn.py e sondar_driver.py importam oracledb ou cx_Oracle (AGENTS §2.2)."""
+    """Verifica que apenas db_conn.py e probe_driver.py importam oracledb ou cx_Oracle (AGENTS §2.2)."""
     nome = os.path.basename(caminho)
-    if nome in ("db_conn.py", "sondar_driver.py") or nome.startswith("test_"):
+    if nome in ("db_conn.py", "probe_driver.py") or nome.startswith("test_"):
         return []
 
     try:
@@ -431,7 +431,7 @@ class TestPy36Compat(unittest.TestCase):
             self.assertEqual(verificar_primitivas_so(plataforma, app_dir, web2py_root), [])
 
     def test_imports_driver_oracle_apenas_em_db_conn_e_sondar(self):
-        """Garante que oracledb e cx_Oracle so sejam importados em db_conn.py, sondar_driver.py e testes."""
+        """Garante que oracledb e cx_Oracle so sejam importados em db_conn.py, probe_driver.py e testes."""
         arquivos = encontrar_arquivos_python(self.app_dir, self.web2py_root)
         violacoes = []
         for caminho in arquivos:
@@ -443,7 +443,7 @@ class TestPy36Compat(unittest.TestCase):
         self.assertEqual(
             len(violacoes),
             0,
-            "Driver Oracle importado fora de db_conn.py e sondar_driver.py:\n{}".format(mensagem),
+            "Driver Oracle importado fora de db_conn.py e probe_driver.py:\n{}".format(mensagem),
         )
 
     def test_negativo_detector_imports_driver_oracle(self):
@@ -463,7 +463,7 @@ class TestPy36Compat(unittest.TestCase):
                 f.write("import oracledb\n")
             self.assertEqual(verificar_imports_driver_oracle(permitido1, raiz), [])
 
-            permitido2 = os.path.join(raiz, "sondar_driver.py")
+            permitido2 = os.path.join(raiz, "probe_driver.py")
             with open(permitido2, "w", encoding="utf-8") as f:
                 f.write("import cx_Oracle\n")
             self.assertEqual(verificar_imports_driver_oracle(permitido2, raiz), [])

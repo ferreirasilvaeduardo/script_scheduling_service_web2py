@@ -112,7 +112,7 @@ sys.path.insert(0, sys.argv[1])
 import sss_config, db_conn
 from repo_oracle.scheduler_saida import RepoSchedulerSaida
 cfg = sss_config.obter_config()
-cfg = cfg._replace(oracle=cfg.oracle._replace(modo_driver=sys.argv[2]))
+cfg = cfg._replace(oracle=cfg.oracle._replace(driver_mode=sys.argv[2]))
 seg = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel="web")
 try:
     conn = db_conn.conectar(cfg, seg, "web")

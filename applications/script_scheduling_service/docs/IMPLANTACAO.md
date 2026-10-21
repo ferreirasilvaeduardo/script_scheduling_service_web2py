@@ -18,13 +18,13 @@ O README.md é a especificação. Quando este guia e o README divergirem, vale o
  usuários ── HTTPS ──> proxy reverso ──> nó web (web2py, bin/sss-web.sh) ──┐
                                                                            ├──> Oracle (owner do esquema, tabelas tbsss_*)
  cron ──> scripts/purge.py ──┐                                             │
- monitoramento ──> saude.py ─┼──> agente (bin/sss-scheduler.sh) ───────────┘
+ monitoramento ──> health.py ─┼──> agente (bin/sss-scheduler.sh) ───────────┘
                              │       └── sudo ──> /opt/sss/bin/sss-helper ──> script do usuário (usuário de execução do ambiente)
 ```
 
 * **Nó web:** telas, cadastros e disparo de tickets. Não executa scripts.
 * **Agente:** daemon (`scripts/run_scheduler.py`) que desdobra os agendamentos, reserva os tickets (claim), executa os scripts pelo helper, coleta o log e mantém o heartbeat. Pode haver vários agentes; cada ticket roda em um só.
-* **Purge** (`scripts/purge.py`) e **saúde** (`scripts/saude.py`): linhas de comando chamadas pelo `cron` e pelo monitoramento.
+* **Purge** (`scripts/purge.py`) e **saúde** (`scripts/health.py`): linhas de comando chamadas pelo `cron` e pelo monitoramento.
 
 ### 1.2 Contas Oracle por papel
 
@@ -34,7 +34,7 @@ O README.md é a especificação. Quando este guia e o README divergirem, vale o
 | web | `sss_web` | Nó web | `[oracle] password` do `secrets.cfg` do web |
 | agente | `sss_agente` | Agente | `[oracle] password` do `secrets.cfg` do agente |
 | purge | `sss_purge` | `purge.py` | `[purge] password` do `secrets.cfg` do agente que roda o purge |
-| monitor | `sss_monitor` | `saude.py` (só leitura) | `[monitor] user` e `password` do `secrets.cfg` de quem roda o `saude.py` |
+| monitor | `sss_monitor` | `health.py` (só leitura) | `[monitor] user` e `password` do `secrets.cfg` de quem roda o `health.py` |
 
 Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008, R-29). Os privilégios de cada papel estão no README §11.1 e saem do gerador de scripts SQL (§5.2).
 
@@ -64,8 +64,8 @@ Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008
 | `/var/log/sss` | Logs da aplicação e dos scripts, **em partição própria** (§4.3) | `sss` | `0750` | `[logging] log_dir` |
 | `/var/lib/sss/work` | Trabalho do agente (trava, `.stop`, pastas dos tickets) | `sss` | `0700` | `[agent] work_dir` |
 | `/var/lib/sss/exec/<usuário>` | Diretório de trabalho dos scripts, um por usuário de execução | o usuário de execução | `0700` | `[agent] exec_work_dir` = `/var/lib/sss/exec` |
-| `/var/lib/sss/saida/<ambiente>` | Saída dos scripts (opcional, CR-012) | o usuário de execução | `0700` (pai `0755`, do `sss`) | `[agent] output_dir` |
-| `/var/lib/sss/entrada/<ambiente>` | Entrada dos scripts, uma subpasta permanente por script (opcional, CR-014) | o usuário de execução | `0700` (pai `0755`, do `sss`) | `[agent] input_dir` |
+| `/var/lib/sss/output/<ambiente>` | Saída dos scripts (opcional, CR-012) | o usuário de execução | `0700` (pai `0755`, do `sss`) | `[agent] output_dir` |
+| `/var/lib/sss/input/<ambiente>` | Entrada dos scripts, uma subpasta permanente por script (opcional, CR-014) | o usuário de execução | `0700` (pai `0755`, do `sss`) | `[agent] input_dir` |
 | `/opt/sss/bin/sss-helper` | Helper de execução (agentes) | `root` | `0755` (pasta só do root) | — |
 
 ---
@@ -87,12 +87,12 @@ Fora de DEV, a conta da aplicação igual à dona do esquema é recusada (CR-008
 
 ## 3. Pacote de implantação [ensaiado]
 
-O pacote é gerado na máquina de desenvolvimento, a partir de uma cópia **limpa** do repositório. Uma árvore de trabalho sempre tem `__pycache__` e o `secrets.cfg` local, e o `empacotar.py` a recusa (README §12.2).
+O pacote é gerado na máquina de desenvolvimento, a partir de uma cópia **limpa** do repositório. Uma árvore de trabalho sempre tem `__pycache__` e o `secrets.cfg` local, e o `package.py` a recusa (README §12.2).
 
 ```bash
 # na máquina de desenvolvimento, no commit a implantar
 git archive HEAD | tar -x -C /tmp/sss-limpo
-python3 /tmp/sss-limpo/applications/script_scheduling_service/scripts/empacotar.py --origem /tmp/sss-limpo --saida /tmp/sss-dist
+python3 /tmp/sss-limpo/applications/script_scheduling_service/scripts/package.py --source /tmp/sss-limpo --out-dir /tmp/sss-dist
 # esperado: "Pacote: .../sss-<versao>.tar.gz" e "SHA256SUMS: .../SHA256SUMS"; código 0
 ```
 
@@ -138,13 +138,13 @@ install -o sssprd -g sssprd -m 0700 -d /var/lib/sss/exec/sssprd
 ```
 
 * **Cota e limites:** cota de disco na partição de `/var/lib/sss/exec`, e `nproc` e `nofile` por usuário em `/etc/security/limits.d/sss.conf` (por exemplo, `sssprd hard nproc 256`), para que um script não esgote o servidor.
-* No `config.ini` do agente: `usuarios_execucao = PRODUCAO=sssprd,HOMOLOGACAO=ssshml` e `exec_work_dir = /var/lib/sss/exec`.
+* No `config.ini` do agente: `exec_users = PRODUCAO=sssprd,HOMOLOGACAO=ssshml` e `exec_work_dir = /var/lib/sss/exec`.
 
 ### 4.3 Partição dos logs (CR-008, R-25)
 
 O `log_dir` (`/var/log/sss`) fica num **sistema de arquivos próprio**, separado de `/`, de `work_dir` e de `exec_work_dir`, e dimensionado para `local_log_retention_days` dias de logs. A cota do usuário de execução não protege o `log_dir`, porque o arquivo de log de cada ticket pertence ao `sss`.
 
-O agente para de fazer claim com menos de `[agent] log_dir_min_livre_mb` livres (padrão 1.024 MB; linha `DISCO_LOG` no log, §15). O monitoramento corporativo deve alertar antes, por exemplo com 80% de uso.
+O agente para de fazer claim com menos de `[agent] log_dir_min_free_mb` livres (padrão 1.024 MB; linha `DISCO_LOG` no log, §15). O monitoramento corporativo deve alertar antes, por exemplo com 80% de uso.
 
 ### 4.4 Permissões que o SSS cria
 
@@ -171,7 +171,7 @@ Os três scripts saem do mesmo registro de identificadores, com o owner e o pref
 ```bash
 # na máquina de desenvolvimento ou num servidor com o pacote
 cd /opt/sss/web2py/applications/script_scheduling_service
-python3 scripts/gerar_scripts_sql.py --grants-para web=sss_web,agente=sss_agente,purge=sss_purge,monitor=sss_monitor
+python3 scripts/generate_sql.py --grants-to web=sss_web,agent=sss_agente,purge=sss_purge,monitor=sss_monitor
 # gera docs/sql/01_deploy_sss.sql, 02_rollback_sss.sql, 99_validate_deploy.sql e 03_grants_sss.sql
 ```
 
@@ -214,14 +214,14 @@ O seed cria os usuários de homologação `admin`, `op.prod`, `op.hml` e `consul
 
 ## 6. Driver Oracle (CR-002) [ensaiado]
 
-* `[oracle] modo_driver = auto` (padrão) tenta, na ordem, **Thin → Thick → cx_Oracle**, cada um numa sondagem isolada, e usa o primeiro que conectar. A sondagem usa a conta do papel que está conectando: `[oracle] user` no web e no agente, `[monitor] user` no `saude.py`.
+* `[oracle] driver_mode = auto` (padrão) tenta, na ordem, **Thin → Thick → cx_Oracle**, cada um numa sondagem isolada, e usa o primeiro que conectar. A sondagem usa a conta do papel que está conectando: `[oracle] user` no web e no agente, `[monitor] user` no `health.py`.
 * **Linha da combinação escolhida**, no log da aplicação de cada processo (ensaio, banco 19c):
   `INFO ... [action=INICIO] driver=oracledb modo=thin servidor=19.24.0.0.0 cliente=-`
   Com Thick ou cx_Oracle, `cliente=` mostra a versão do Instant Client (precisa ser 19). Registre essa linha no checklist (§19).
 * **Conferência antes de subir:** `python3 applications/script_scheduling_service/scripts/check_env.py`, a partir de `W`. Ela confere os pré-requisitos (código 0 = tudo OK, 1 = falta arquivo, 2 = Python menor que 3.6.0).
 * **Quando forçar:**
-  * `modo_driver = thick` quando o banco é 11g. O Thin recusa com `DPY-3010` e a cadeia já pula para o Thick, mas forçar evita a sondagem a cada subida.
-  * `modo_driver = cx_oracle` quando o `python-oracledb` não estiver disponível ou falhar nesse servidor.
+  * `driver_mode = thick` quando o banco é 11g. O Thin recusa com `DPY-3010` e a cadeia já pula para o Thick, mas forçar evita a sondagem a cada subida.
+  * `driver_mode = cx_oracle` quando o `python-oracledb` não estiver disponível ou falhar nesse servidor.
 * **Instant Client:** no Linux/Unix, ele precisa estar no `ldconfig` **antes** de o processo subir. Sem ele no `ldconfig`, defina `SSS_IC_DIR`: o launcher exporta `LD_LIBRARY_PATH` só nesse caso (README §12.2).
 
 ---
@@ -238,9 +238,9 @@ cd /opt/sss/web2py/applications/script_scheduling_service/instance
 cp config.ini.example config.ini && chmod 0640 config.ini
 ```
 
-Ajuste em cada servidor: `[app] sss_env`, `[oracle]` (`user` do papel do servidor, `dsn`, `owner`, `table_prefix`, `modo_driver`), `[secrets] secrets_file = /etc/sss/secrets.cfg`, `[logging] log_dir`, `[web] allowed_origins` e `trusted_proxies` (nó web) e `[agent]` (agentes: `agent_id` único, `ambientes_atendidos`, `usuarios_execucao`, `exec_work_dir`, `work_dir`, `interpretadores`). A descrição de cada chave está no README §12.1.
+Ajuste em cada servidor: `[app] sss_env`, `[oracle]` (`user` do papel do servidor, `dsn`, `owner`, `table_prefix`, `driver_mode`), `[secrets] secrets_file = /etc/sss/secrets.cfg`, `[logging] log_dir`, `[web] allowed_origins` e `trusted_proxies` (nó web) e `[agent]` (agentes: `agent_id` único, `environments`, `exec_users`, `exec_work_dir`, `work_dir`, `interpreters`). A descrição de cada chave está no README §12.1.
 
-**Tempos que precisam ser idênticos em todos os agentes (README §8.9, D7):** copie `fence_timeout_s` e `node_offline_timeout_s` do arquivo de referência **sem alterar**, assim como os outros valores do `critical_config` (`heartbeat_interval_s`, `call_timeout_ms`, `kill_grace_s`, `misfire_policy`, `misfire_tolerance_s`, `cron_horizon_days`, `fila_envelhecimento_min`). Cada agente registra na subida:
+**Tempos que precisam ser idênticos em todos os agentes (README §8.9, D7):** copie `fence_timeout_s` e `node_offline_timeout_s` do arquivo de referência **sem alterar**, assim como os outros valores do `critical_config` (`heartbeat_interval_s`, `call_timeout_ms`, `kill_grace_s`, `misfire_policy`, `misfire_tolerance_s`, `cron_horizon_days`, `queue_aging_min`). Cada agente registra na subida:
 
 `INFO ... [acao=INICIO] tempos do fencing: fence_timeout_s=90 node_offline_timeout_s=180`
 
@@ -255,8 +255,8 @@ Um arquivo por servidor, só com as seções do papel dele (README §4.1). Dono 
 | Servidor | Seções |
 |---|---|
 | Nó web | `[oracle] password` (conta `sss_web`) e `[web] cookie_key` (igual em todos os nós web) |
-| Agente | `[oracle] password` (conta `sss_agente`), `[ambiente:<NOME>]` com `user` e `password` de cada ambiente atendido e, onde rodar o purge, `[purge] password` (conta `sss_purge`) |
-| Quem roda o `saude.py` | `[monitor] user` e `password` (conta `sss_monitor`). No servidor do agente, a seção `[monitor]` pode ficar no mesmo arquivo: o papel monitor ignora as outras seções e só recusa `[web]` |
+| Agente | `[oracle] password` (conta `sss_agente`), `[environment:<NOME>]` com `user` e `password` de cada ambiente atendido e, onde rodar o purge, `[purge] password` (conta `sss_purge`) |
+| Quem roda o `health.py` | `[monitor] user` e `password` (conta `sss_monitor`). No servidor do agente, a seção `[monitor]` pode ficar no mesmo arquivo: o papel monitor ignora as outras seções e só recusa `[web]` |
 
 ```bash
 # como sss
@@ -276,11 +276,11 @@ Fora de DEV, uma seção de outro papel recusa a subida com CRITICAL (seção e 
 install -o root -g root -m 0755 -d /opt/sss/bin
 install -o root -g root -m 0755 /opt/sss/web2py/bin/sss-helper /opt/sss/bin/sss-helper
 # CR-012, só com [agent] output_dir preenchido: uma pasta por ambiente, do usuário de execução dele
-install -o sss -g sss -m 0755 -d /var/lib/sss/saida
-install -o sssprd -g sssprd -m 0700 -d /var/lib/sss/saida/producao    # nome do ambiente em minúsculo, como no log
+install -o sss -g sss -m 0755 -d /var/lib/sss/output
+install -o sssprd -g sssprd -m 0700 -d /var/lib/sss/output/producao    # nome do ambiente em minúsculo, como no log
 # CR-014, só com [agent] input_dir preenchido: idem para a entrada (a pasta de cada script o helper cria)
-install -o sss -g sss -m 0755 -d /var/lib/sss/entrada
-install -o sssprd -g sssprd -m 0700 -d /var/lib/sss/entrada/producao
+install -o sss -g sss -m 0755 -d /var/lib/sss/input
+install -o sssprd -g sssprd -m 0700 -d /var/lib/sss/input/producao
 visudo -f /etc/sudoers.d/sss
 ```
 
@@ -302,11 +302,11 @@ sss ALL=(ssshml) NOPASSWD: /opt/sss/bin/sss-helper
 ## 9. Scripts cadastrados (CR-005, CR-011)
 
 * O caminho cadastrado (`path_file`) é **absoluto**, em qualquer pasta fora das pastas do sistema (`/bin`, `/sbin`, `/usr`, `/lib*`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev`, `/root`) e fora das pastas do SSS (`log_dir`, `work_dir`, `exec_work_dir`, `output_dir` e `input_dir`).
-* **Pasta de entrada (CR-014):** com `[agent] input_dir`, cada script recebe `SSS_INPUT_DIR` = `input_dir/<ambiente>/<nome do script em minúsculo, sem acento nem espaço>/` (ex.: "Carga Diária" em `PRODUCAO` → `/var/lib/sss/entrada/producao/carga_diaria/`). A pasta é criada na primeira execução e **nunca** é limpa pelo SSS: quem deposita os arquivos e o próprio script cuidam do conteúdo. Para depositar arquivos de fora, use o usuário de execução do ambiente (ou um processo dele).
+* **Pasta de entrada (CR-014):** com `[agent] input_dir`, cada script recebe `SSS_INPUT_DIR` = `input_dir/<ambiente>/<nome do script em minúsculo, sem acento nem espaço>/` (ex.: "Carga Diária" em `PRODUCAO` → `/var/lib/sss/input/producao/carga_diaria/`). A pasta é criada na primeira execução e **nunca** é limpa pelo SSS: quem deposita os arquivos e o próprio script cuidam do conteúdo. Para depositar arquivos de fora, use o usuário de execução do ambiente (ou um processo dele).
 * Pode ser um link simbólico. O arquivo **real** precisa existir no servidor do agente, ser arquivo regular, ser legível pelo usuário de execução e **não** ter escrita de grupo nem de outros (`chmod go-w`).
 * O conteúdo e a versão do script são controlados pelo ambiente: o SSS não confere hash nem dono (CR-011). Quem grava na pasta do script muda o que vai rodar.
 * O nó web confere só o formato do caminho. A conferência do arquivo é feita pelo agente, antes de cada execução; uma recusa aparece como `PRECHECK_FAILED` (§15).
-* O interpretador do script (`PYTHON3`, `BASH`, `SH`) precisa estar mapeado em `[agent] interpretadores` de pelo menos um agente saudável do ambiente. Senão, o ticket fica `PENDING` (§15, "fila sem atendente").
+* O interpretador do script (`PYTHON3`, `BASH`, `SH`) precisa estar mapeado em `[agent] interpreters` de pelo menos um agente saudável do ambiente. Senão, o ticket fica `PENDING` (§15, "fila sem atendente").
 
 ---
 
@@ -462,14 +462,14 @@ Depois:
    INFO ... [ticket=1000929] [acao=SPAWN] script iniciado (pid 151505)
    INFO ... [ticket=1000929] [acao=FINALIZAR] ticket finalizado: SUCCESS/EXIT_OK rc=0
    ```
-4. Rode o `saude.py` (§13). O esperado é o código 0 depois da primeira execução do purge.
+4. Rode o `health.py` (§13). O esperado é o código 0 depois da primeira execução do purge.
 
 ---
 
 ## 12. Purge (retenção; README §11.3)
 
-* **Conta:** `[retencao] purge_user = sss_purge` no `config.ini` e `[purge] password` no `secrets.cfg` do agente que roda o purge. Com `purge_user` vazio (aceito só em DEV), o purge recusa rodar [ensaiado]:
-  `CRITICAL ... [action=PURGE] purge desligado: [retencao] purge_user vazio (README §12.1)` e código 2.
+* **Conta:** `[retention] purge_user = sss_purge` no `config.ini` e `[purge] password` no `secrets.cfg` do agente que roda o purge. Com `purge_user` vazio (aceito só em DEV), o purge recusa rodar [ensaiado]:
+  `CRITICAL ... [action=PURGE] purge desligado: [retention] purge_user vazio (README §12.1)` e código 2.
 * **Primeiro, `--dry-run`:** só conta (estimativas), sem gravar nem apagar nada:
   ```bash
   # como sss
@@ -482,42 +482,42 @@ Depois:
   15 2 * * * cd /opt/sss/web2py && umask 077 && LANG=C.UTF-8 LC_ALL=C.UTF-8 /usr/bin/python3 applications/script_scheduling_service/scripts/purge.py > /dev/null
   ```
   O resumo vai para o stdout; o registro completo vai para `log_dir/interno/app/.../purge_<PID>.log`.
-* **Alvos:** `--alvo tickets|auditoria|logs_locais|saida|todos` (padrão `todos`).
-* **Arquivamento da auditoria:** `--exportar-auditoria <pasta>` grava antes de apagar um `auditoria_purge_AAAAMMDD_HHMMSS.csv` com `0600`. A pasta precisa existir.
+* **Alvos:** `--target tickets|auditoria|logs_locais|saida|todos` (padrão `todos`).
+* **Arquivamento da auditoria:** `--export-audit <pasta>` grava antes de apagar um `auditoria_purge_AAAAMMDD_HHMMSS.csv` com `0600`. A pasta precisa existir.
 * **Códigos de saída:**
   * 0: sucesso, inclusive "outro nó está purgando" ou "outro purge neste servidor";
   * 1: falha de banco, inclusive concessão perdida;
   * 2: configuração inválida;
   * 3: falha ao remover logs locais ou pastas de saída.
-* A cada execução com a concessão, o purge audita uma linha `PURGE` por tabela, inclusive com `0 linhas`. O `saude.py` alerta sem `PURGE` em 2 dias.
+* A cada execução com a concessão, o purge audita uma linha `PURGE` por tabela, inclusive com `0 linhas`. O `health.py` alerta sem `PURGE` em 2 dias.
 
 ---
 
-## 13. Monitoração (`saude.py`; README §13)
+## 13. Monitoração (`health.py`; README §13)
 
 ```bash
 # como o usuário que lê o secrets.cfg com a seção [monitor] (no servidor do agente: o sss)
 cd /opt/sss/web2py
-python3 applications/script_scheduling_service/scripts/saude.py      # [ensaiado]
+python3 applications/script_scheduling_service/scripts/health.py      # [ensaiado]
 ```
 
 Saída do ensaio (um agente saudável e outros ambientes sem agente):
 
 ```text
-SSS CRITICAL - 6 problemas | agentes_saudaveis=1 fila_vencida=0;500;5000 espera_max_min=0;30;120
+SSS CRITICAL - 6 problemas | healthy_agents=1 overdue_queue=0;500;5000 max_wait_min=0;30;120
 CRITICAL: ambiente CLONE1 ativo sem nenhum agente saudavel
 ...
 WARNING: nenhum PURGE auditado nos ultimos 2 dias (README §11.3)
 ```
 
 * **Códigos (padrão Nagios):** 0 OK, 1 WARNING, 2 CRITICAL e 3 UNKNOWN (configuração, segredos, conexão ou erro de banco). A primeira linha traz os dados de desempenho; depois vem uma linha por problema, os críticos primeiro.
-* **Limites:** `--sem-pid-min 2`, `--fila-warn 500`, `--fila-crit 5000`, `--espera-warn-min 30`, `--espera-crit-min 120` e `--purge-dias 2`.
-* **Agendamento:** a cada 5 minutos no monitoramento corporativo, com alerta no código 2. Exemplo de NRPE [não ensaiado], com o `saude.py` rodando como `sss` por uma regra de `sudo` só para ele:
+* **Limites:** `--no-pid-min 2`, `--queue-warn 500`, `--queue-crit 5000`, `--wait-warn-min 30`, `--wait-crit-min 120` e `--purge-days 2`.
+* **Agendamento:** a cada 5 minutos no monitoramento corporativo, com alerta no código 2. Exemplo de NRPE [não ensaiado], com o `health.py` rodando como `sss` por uma regra de `sudo` só para ele:
   ```text
   # /etc/sudoers.d/sss-monitor
-  nagios ALL=(sss) NOPASSWD: /usr/bin/python3 /opt/sss/web2py/applications/script_scheduling_service/scripts/saude.py
+  nagios ALL=(sss) NOPASSWD: /usr/bin/python3 /opt/sss/web2py/applications/script_scheduling_service/scripts/health.py
   # nrpe.cfg
-  command[check_sss]=/usr/bin/sudo -n -u sss /usr/bin/python3 /opt/sss/web2py/applications/script_scheduling_service/scripts/saude.py
+  command[check_sss]=/usr/bin/sudo -n -u sss /usr/bin/python3 /opt/sss/web2py/applications/script_scheduling_service/scripts/health.py
   ```
   Num servidor de monitoração separado, use um `config.ini` próprio com `--config` (mesmos tempos do de referência, para a checagem de configuração divergente) e um `secrets.cfg` só com `[monitor]`.
 
@@ -528,8 +528,8 @@ WARNING: nenhum PURGE auditado nos ultimos 2 dias (README §11.3)
 | `versao do esquema N, esperada M` | O banco e o pacote estão em versões diferentes: aplique a migração ou volte o pacote (§18) |
 | `agente X ATIVO sem heartbeat ha N s` | O agente caiu ou perdeu o banco: veja o log dele (§14) e o §15.3. Depois de `node_offline_timeout_s`, outro agente finaliza os tickets dele como `NODE_OFFLINE` |
 | `agente X em risco` | Heartbeat atrasado além do fence: o agente já deve ter se isolado (`FENCED`) |
-| `ambiente X ativo sem nenhum agente saudavel` | Nenhum agente saudável atende o ambiente: suba um agente com o ambiente em `ambientes_atendidos`, ou desative o ambiente |
-| `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável do ambiente mapeia o interpretador: ajuste `[agent] interpretadores` |
+| `ambiente X ativo sem nenhum agente saudavel` | Nenhum agente saudável atende o ambiente: suba um agente com o ambiente em `environments`, ou desative o ambiente |
+| `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável do ambiente mapeia o interpretador: ajuste `[agent] interpreters` |
 | `fila vencida: N tickets PENDING, espera maxima M min` | Agentes sem vaga: veja `max_parallel_jobs` e o teto por script, e os scripts presos em `RUNNING` |
 | `ticket N RUNNING sem PID` | O agente reservou e não iniciou: veja o log do agente para esse ticket |
 | `agente X com configuracao divergente` | Tempos diferentes do `config.ini` de referência: corrija e reinicie o agente |
@@ -598,15 +598,15 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | 11 | `configuracao invalida: [secao] chave: <motivo>` | Chave ausente, desconhecida ou fora da faixa | Compare com o `config.ini.example`; uma chave removida pede "apague a linha" |
 | 11 | `child_locale <x> nao consta em locale -a (CR-007, R-17)` | Locale do filho não instalado | Instale o locale ou ajuste `[agent] child_locale` |
 | 12 | `secrets.cfg invalido: <reason>` (ex.: `Arquivo de segredos possui permissoes inseguras (mode 644, ...)`, `... deve pertencer ao usuario corrente`, `Secao [web] nao pertence ao papel 'agente'`) | Modo, dono ou seções do `secrets.cfg` | `chmod 0600`, `chown sss`, e só as seções do papel (§7.2) |
-| 13 | `interpreter SH (/bin/sh) recusado: <código>` | Interpretador mapeado inexistente ou inseguro | Ajuste `[agent] interpretadores` (caminho absoluto, executável, fora das pastas do SSS) |
-| 13 | `[agent] interpretadores vazio: o agente nao executaria nada` | Chave vazia | Preencha |
+| 13 | `interpreter SH (/bin/sh) recusado: <código>` | Interpretador mapeado inexistente ou inseguro | Ajuste `[agent] interpreters` (caminho absoluto, executável, fora das pastas do SSS) |
+| 13 | `[agent] interpreters vazio: o agente nao executaria nada` | Chave vazia | Preencha |
 | 13 | Linhas `execucao fora de DEV: <falha>` e depois `N falha(s) na conferencia do helper e do sudoers` | Helper ou `sudoers` incompletos: `helper ... nao pertence ao root`, `... deve ter modo 0755`, `sudo -n -l sem a regra do helper para <usuário>`, `<pasta> deve pertencer a <usuário> com modo 0700`, `usuario de execucao <x> nao existe` | §8 e §4.2 |
 | 13 | `<nome> <caminho> recusado: <código>` (`log_dir`, `work_dir`...), `output_dir ... recusado` / `pasta de saida: <falha>` e `input_dir ... recusado` / `pasta de entrada: <falha>` | Pasta ausente, sem escrita ou nas pastas do sistema | §4 e §8 |
 | 14 | `Outra instancia do agente ja esta em execucao (<work_dir>/sss-<agent_id>.lock)` | Outro agente com o mesmo `work_dir` e `agent_id` | Pare o outro, ou use `config.ini` próprio (§7.1) |
 | 15 | `sem conexao com o Oracle` ou `banco: <erro>` (ex.: `Versao do esquema incompativel: esperada N, encontrada M`) | Banco inacessível, driver (§15.2) ou versão do esquema | §15.2, §15.3 ou a migração (§18) |
 | 16 | `agent_id duplicado: ...` | Outro agente ativo com o mesmo `agent_id` | `agent_id` único por agente |
 | 16 | `config_criticos diverge do agente X: local=... remoto=...` e `configuracao critica diferente da dos outros agentes (CR-007, R-23)` | Tempos diferentes entre agentes | §7.1: copie do arquivo de referência |
-| 17 | `ambientes atendidos inexistentes: X` | Nome em `ambientes_atendidos` não cadastrado | Corrija o nome ou cadastre o ambiente. Ambiente inativo só gera `WARNING ambiente atendido X inativo: ignorado ate ser reativado` |
+| 17 | `ambientes atendidos inexistentes: X` | Nome em `environments` não cadastrado | Corrija o nome ou cadastre o ambiente. Ambiente inativo só gera `WARNING ambiente atendido X inativo: ignorado ate ser reativado` |
 | 18 | `startup check: <erro>` | Falha ao conferir o que ficou da execução anterior | Veja as linhas `TALVEZ_INICIADO`, `ORPHAN_PROCESS` e `pasta do ticket nao removida` logo antes |
 | 19 | `o processo tem N threads antes do primeiro spawn (...)` | Algo criou uma thread antes do primeiro script | Suba só pelo `bin/sss-scheduler.sh` (Python puro); não use `web2py.py -S ... -R` |
 | 20 | `REGISTRO_PERDIDO: <motivo>; encerramento TERMINATE` (com o agente já no ar) | A linha do agente em `tbsss_agents` sumiu ou mudou de dono | Veja se alguém apagou a linha ou subiu outro agente com o mesmo `agent_id`; reinicie |
@@ -615,13 +615,13 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 
 | Linha | Causa provável | Ação |
 |---|---|---|
-| `Sondagem do candidato Oracle 'thin' falhou: codigo=DPY-3010 categoria=INCOMPATIVEL` | Banco 11g (o Thin não conecta) | Normal se o Thick conectar em seguida; para evitar a tentativa, `modo_driver = thick` |
+| `Sondagem do candidato Oracle 'thin' falhou: codigo=DPY-3010 categoria=INCOMPATIVEL` | Banco 11g (o Thin não conecta) | Normal se o Thick conectar em seguida; para evitar a tentativa, `driver_mode = thick` |
 | `Sondagem do candidato Oracle 'thick' falhou: codigo=DPI-1047 categoria=BIBLIOTECA` | Instant Client ausente ou fora do `ldconfig` | Instale o IC 19 e registre no `ldconfig`, ou defina `SSS_IC_DIR` (§6) |
 | `Falha fatal de autenticacao Oracle com candidato 'thin' (codigo=ORA-01017). Cadeia interrompida para proteger a conta.` | Usuário ou senha errados, ou conta bloqueada (`ORA-28000`) | Corrija a senha do papel no `secrets.cfg`. A cadeia para de propósito, para não bloquear a conta |
 | `Falha fatal: todos os candidatos de driver Oracle falharam (thin (REDE: DPY-6005); thick (REDE: ORA-12541); cx_oracle (REDE: ORA-12541))` (capturada no ensaio, com o túnel do banco fora) | Listener inacessível: rede, firewall, DSN ou banco parado | `tnsping`/`nc -z <host> 1521` a partir do servidor; confira o `dsn` |
-| `Falha de configuracao: python-oracledb 2.x nao e compativel com Python 3.6 ...` | Driver errado para o Python | Instale `python-oracledb < 2.0` ou use `modo_driver = cx_oracle` |
+| `Falha de configuracao: python-oracledb 2.x nao e compativel com Python 3.6 ...` | Driver errado para o Python | Instale `python-oracledb < 2.0` ou use `driver_mode = cx_oracle` |
 | `Falha de configuracao: Oracle Instant Client versao X invalida. Exigido major 19 ...` | Outro Instant Client no `ldconfig` | Deixe só o 19 no caminho de bibliotecas |
-| `Falha de configuracao: modo_driver '<x>' invalido ...` | Valor errado no `config.ini` | `auto`, `thin`, `thick` ou `cx_oracle` |
+| `Falha de configuracao: driver_mode '<x>' invalido ...` | Valor errado no `config.ini` | `auto`, `thin`, `thick` ou `cx_oracle` |
 
 ### 15.3 Banco durante a operação
 
@@ -638,13 +638,13 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 
 | Status/motivo | Linha no log do agente (e `[SSS]` no log do ticket) | Causa provável | Ação |
 |---|---|---|---|
-| `PENDING` que nunca sai | Nenhuma linha. No `saude.py` e na tela de agentes: `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável do ambiente mapeia o interpretador do script (o do cadastro, CR-008 R-15) | Mapeie o interpretador em `[agent] interpretadores` ou suba um agente para o ambiente |
+| `PENDING` que nunca sai | Nenhuma linha. No `health.py` e na tela de agentes: `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável do ambiente mapeia o interpretador do script (o do cadastro, CR-008 R-15) | Mapeie o interpretador em `[agent] interpreters` ou suba um agente para o ambiente |
 | `PENDING` que demora | `DISCO_LOG: N MB livres em log_dir (minimo M): sem claim` ou `DISCO_SAIDA: ...` | Disco quase cheio | Libere espaço (purge, §12) ou aumente a partição |
 | `FAILED` / `PRECHECK_FAILED` | `pre-validacao recusada: <código>` e `[SSS] pre-validacao recusada: <código> (agente X)` | Ver os códigos abaixo | Ver abaixo |
 | ↳ `NAO_ENCONTRADO`, `SEM_ACESSO`, `NAO_E_ARQUIVO` | | O arquivo real não existe, não é legível ou não é arquivo, no servidor do agente | Corrija o arquivo no agente (§9) |
 | ↳ `GRAVAVEL_GRUPO_OUTROS` | | Arquivo real com escrita de grupo ou outros | `chmod go-w <arquivo>` |
 | ↳ `PASTA_DO_SISTEMA`, `PASTA_DO_SSS` | | Script nas pastas do sistema ou nas do SSS (inclusive `output_dir` e `input_dir`, CR-014) | Mova o script e corrija o cadastro |
-| ↳ `INTERPRETADOR_NAO_DISPONIVEL` | | O interpretador do script não está mapeado **neste** agente | `[agent] interpretadores` |
+| ↳ `INTERPRETADOR_NAO_DISPONIVEL` | | O interpretador do script não está mapeado **neste** agente | `[agent] interpreters` |
 | ↳ `VERSAO_NAO_SUPORTADA` | | Ticket criado por uma versão anterior (snapshot antes da versão 4) | Dispare de novo pela tela |
 | ↳ `CADASTRO_MUDOU`, `SCRIPT_INACTIVE`, `NAO_HOMOLOGADO`, `ENVIRONMENT_INACTIVE`, `NO_PERMISSION` | | O cadastro mudou entre o disparo e a execução | Confira o cadastro e dispare de novo |
 | ↳ `ERRO_BANCO: ORA-nnnnn` | `falha antes do spawn: ERRO_BANCO: ...` | Erro de banco na pré-validação | Veja o código ORA |
@@ -677,21 +677,21 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | "Requisição recusada." (HTTP 403) nos formulários | `requisicao rejeitada (reason=origem ...)` | URL de acesso fora de `allowed_origins` | §10.4 |
 | Idem | `reason=csrf` | Página aberta há muito tempo | Recarregue e repita |
 | Ninguém entra com HTTPS ausente | — | `sss_env = HML/PROD` exige cookie `Secure` | Acesse por HTTPS (§10.4) |
-| Um usuário não entra: "Houve muitas tentativas com a senha errada..." | — | Bloqueio após `login_max_tentativas` | Aguarde `login_bloqueio_s` ou desbloqueie em Gestão de Usuários |
+| Um usuário não entra: "Houve muitas tentativas com a senha errada..." | — | Bloqueio após `login_max_attempts` | Aguarde `login_lockout_s` ou desbloqueie em Gestão de Usuários |
 | `Socket 127.0.0.1:8000 in use by other process` | Terminal | Porta ocupada | `ss -ltnp \| grep :8000` |
 
 ### 15.7 Purge, saúde e pacote
 
 | Linha | Causa | Ação |
 |---|---|---|
-| `purge desligado: [retencao] purge_user vazio (README §12.1)` (código 2) | Sem conta de purge | §12 |
+| `purge desligado: [retention] purge_user vazio (README §12.1)` (código 2) | Sem conta de purge | §12 |
 | `outro no esta purgando (concessao em tbsss_control); tickets e auditoria pulados` | Outro agente purgando | Normal; código 0 |
 | `outro purge ja esta em execucao neste servidor (sss-purge.lock)` | Duas execuções no mesmo servidor | Normal; código 0 |
 | `concessao do purge perdida durante a execucao; parado` (código 1) | Uma execução passou de 1 hora e outro nó tomou a concessão | Reduza `purge_batch_size` ou rode com mais frequência |
 | `retencao dos logs locais: <pasta>: <erro>` (código 3) | Sem permissão para apagar | Dono das pastas de log deve ser o `sss` |
-| `SSS UNKNOWN - falha ao conectar no Oracle: ...` (`saude.py`) | Conta `sss_monitor` ou rede | §15.2 |
+| `SSS UNKNOWN - falha ao conectar no Oracle: ...` (`health.py`) | Conta `sss_monitor` ou rede | §15.2 |
 | `SSS UNKNOWN - configuracao invalida: Secao [monitor] obrigatoria ausente em secrets.cfg` | Falta a seção | §7.2 |
-| `Pacote recusado:` (`empacotar.py`, código 1) | Segredo, bytecode ou código de DEV na árvore | Gere de uma cópia limpa (§3) |
+| `Pacote recusado:` (`package.py`, código 1) | Segredo, bytecode ou código de DEV na árvore | Gere de uma cópia limpa (§3) |
 
 ---
 
@@ -699,7 +699,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 
 * **`cookie_key`** (nó web): gere um novo (§7.2), grave em todos os nós web e reinicie todos juntos. **Todas as sessões são invalidadas**; os usuários entram de novo.
 * **Senha de uma conta Oracle** (`sss_web`, `sss_agente`, `sss_purge`, `sss_monitor`): o DBA troca a senha; grave a nova no `secrets.cfg` dos servidores daquele papel e reinicie os processos. Com a senha antiga, a cadeia de driver para em `ORA-01017` (§15.2).
-* **Senha de ambiente** (`[ambiente:X]`): grave a nova em todos os agentes que atendem o ambiente e reinicie-os. A senha chega ao script pela variável `PADRAO_VALOR_RUN_CONEXAO_BD`, só na próxima execução.
+* **Senha de ambiente** (`[environment:X]`): grave a nova em todos os agentes que atendem o ambiente e reinicie-os. A senha chega ao script pela variável `PADRAO_VALOR_RUN_CONEXAO_BD`, só na próxima execução.
 
 ---
 
@@ -721,6 +721,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 1. Gere e confira o pacote novo (§3) e extraia **ao lado** do atual: `/opt/sss/web2py-<versao>`.
 2. Copie o `instance/config.ini` atual para a pasta nova e compare com o `config.ini.example` novo (`diff`). Chave nova obrigatória ou removida aparece na subida como `configuracao invalida` (§15.1).
    * **Chaves renomeadas (CR-015a):** `[agent] saida_dir` → `output_dir`, `saida_max_bytes` → `output_max_bytes`, `saida_max_arquivos` → `output_max_files`, `entrada_dir` → `input_dir` e `[logging] saida_retention_days` → `output_retention_days`. Com o nome antigo, a subida para com `Chave renomeada: <antiga> passou a se chamar <nova>`.
+   * **Configuração e operação em inglês (CR-016b):** no `config.ini`, `[oracle] modo_driver` → `driver_mode`; `[agent] ambientes_atendidos` → `environments`, `usuarios_execucao` → `exec_users`, `interpretadores` → `interpreters`, `fila_envelhecimento_min` → `queue_aging_min`, `log_dir_min_livre_mb` → `log_dir_min_free_mb`; `[web] sessao_max_horas` → `session_max_hours`, `login_max_tentativas` → `login_max_attempts`, `login_bloqueio_s` → `login_lockout_s`; a seção `[retencao]` → `[retention]`. No `secrets.cfg`, `[ambiente:<NOME>]` → `[environment:<NOME>]`. Com o nome antigo, a subida para com `Chave renomeada` ou `Secao renomeada`, citando o nome novo. Os scripts de operação mudaram de nome (`saude.py` → `health.py`, `empacotar.py` → `package.py`, `gerar_scripts_sql.py` → `generate_sql.py`, `sondar_driver.py` → `probe_driver.py`), assim como as opções de linha de comando (`--alvo` → `--target`, `--exportar-auditoria` → `--export-audit`, `--fila-warn` → `--queue-warn`…; de-para em `docs/arquitetura/CR-016b-config-e-operacao.md`): ajuste o `cron`, os `timer`/`service` do systemd e o Nagios. Os subcomandos do helper mudaram (`clean`, `stop-ticket`, `pack`, `clean-output`, `purge-output`): troque o `sss-helper` junto com a aplicação (passo 4).
    * **Variáveis do script renomeadas (CR-015a):** os scripts recebem só os nomes em inglês (de-para em `docs/arquitetura/CR-015a-nomes-em-ingles.md`). Antes de atualizar, procure os nomes antigos nos scripts cadastrados, por exemplo: `grep -rnE 'SSS_(AMBIENTE|AGENTE|PLATAFORMA|VERSAO|SCRIPT_NOME|SCRIPT_ARQUIVO|INTERPRETADOR|TIPO_EXECUCAO|PRIORIDADE|DATA_|TIMEOUT_SEG|AGENDAMENTO|RECORRENCIA|LOG_ARQUIVO|SAIDA_DIR|ENTRADA_DIR|TICKET_PAI_ID)' <pastas dos scripts>`. Script que ainda lê um nome antigo recebe vazio.
 3. Se o esquema mudou (`VERSAO_ESQUEMA`), o DBA aplica a migração antes (§5.2). Web e agentes recusam subir com versão diferente (código 15).
    * **Nomes em inglês no banco (CR-016a), sem migração:** a atualização de um banco com o esquema anterior (tabelas `tbsss_ambientes`, `tbsss_controle`…) **apaga os dados do SSS**. Faça o backup (§17), aplique o `02_rollback_sss.sql` **gerado pela versão anterior** e depois o `01_deploy_sss.sql` e o `99_validate_deploy.sql` da versão nova (§5.2). O `init_db` recusa criar o esquema novo com a `tbsss_controle` antiga presente.
@@ -735,7 +736,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 - [ ] `[app] sss_env = PROD` (ou `HML`) em todos os servidores
 - [ ] Nenhuma linha `data_backend` no `config.ini` (removida no F7.3; a aplicação usa sempre o Oracle)
 - [ ] `[oracle] user` de cada servidor é a conta do papel, nunca a dona do esquema
-- [ ] `[retencao] purge_user` informado e `[purge] password` no agente do purge; `purge.py --dry-run` com código 0
+- [ ] `[retention] purge_user` informado e `[purge] password` no agente do purge; `purge.py --dry-run` com código 0
 - [ ] `[web] allowed_origins` com a URL pública e `trusted_proxies` com o proxy
 - [ ] `[logging] level = INFO`
 - [ ] `fence_timeout_s` e `node_offline_timeout_s` iguais em todos os agentes, conferidos pela linha `tempos do fencing` de cada um
@@ -746,7 +747,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 - [ ] Com `output_dir` ou `input_dir`: a pasta de cada ambiente atendido criada pelo root, do usuário de execução, `0700` (§8)
 - [ ] `log_dir` em partição própria, com alerta de uso (§4.3)
 - [ ] Senha inicial do seed trocada (§5.3)
-- [ ] `cron` do purge e `saude.py` no monitoramento (§12, §13)
+- [ ] `cron` do purge e `health.py` no monitoramento (§12, §13)
 - [ ] `httpserver.log` no `logrotate` (§14.4)
 - [ ] Backup do esquema e dos arquivos de configuração (§17)
 
@@ -771,8 +772,8 @@ O esquema do banco é removido pelo DBA com o `02_rollback_sss.sql` (§5.2), **d
 
 Para demonstração ou homologação interna, web e agente podem ficar no mesmo servidor, com `[app] sss_env = DEV`:
 
-* `[agent] usuarios_execucao` vazio: os scripts rodam com o próprio `sss`, sem helper nem `sudo` (§8 não se aplica).
-* Um único `secrets.cfg` pode ter `[oracle]`, `[web]`, `[ambiente:*]` e `[monitor]`. Em DEV, a seção de outro papel só gera `WARNING ... Secao [x] nao pertence ao papel '...'; ignorada fora de HML/PROD`.
+* `[agent] exec_users` vazio: os scripts rodam com o próprio `sss`, sem helper nem `sudo` (§8 não se aplica).
+* Um único `secrets.cfg` pode ter `[oracle]`, `[web]`, `[environment:*]` e `[monitor]`. Em DEV, a seção de outro papel só gera `WARNING ... Secao [x] nao pertence ao papel '...'; ignorada fora de HML/PROD`.
 * A conta Oracle pode ser a dona do esquema (recusado fora de DEV).
 * `purge_user` vazio desliga o purge (código 2, §12).
 * Siga o §3 (pacote), o §7 (configuração), o §10.1 e o §10.2 (subida), o §10.4 (túnel SSH) e o §11 (validação). **Esse é o cenário ensaiado em 2026-10-21.**
@@ -1066,7 +1067,7 @@ Substitui o §22.6: o pacote `fe5884c` não chegou a ser aplicado e fica descart
 | Pacote | `sss-17950fb.tar.gz` (14,6 MB), gerado por `git archive` (§5.2) do commit `17950fb` |
 | SHA-256 | `d8c47422a8c5055e5b1b5a4c9886ddee8aa5503aa8a3447d02ced944ccf57e72` |
 | Onde está | Máquina de desenvolvimento: `/home/eduardof/sss_pacotes/` (pacote, `.sha256` e o roteiro `ATUALIZAR-17950fb.txt`) |
-| Mudança de configuração | No `config.ini`: apagar `base_script_dir`, trocar `app_log_backups` por `app_log_retention_days = 30` e acrescentar as chaves opcionais novas com o valor padrão (CR-007 e CR-008; passo 2). `secrets.cfg` e `web.env` não mudam: as seções `[ambiente:*]` do `secrets.cfg` antigo só geram WARN em DEV ("não pertence ao papel 'web'") |
+| Mudança de configuração | No `config.ini`: apagar `base_script_dir`, trocar `app_log_backups` por `app_log_retention_days = 30` e acrescentar as chaves opcionais novas com o valor padrão (CR-007 e CR-008; passo 2). `secrets.cfg` e `web.env` não mudam: as seções `[environment:*]` do `secrets.cfg` antigo só geram WARN em DEV ("não pertence ao papel 'web'") |
 | Árvore de scripts | Como no §22.6: os scripts do seed apontam para `/opt/automacoes/scripts/...`, que não existe neste servidor; a Gestão de Scripts avisa "Arquivo não encontrado neste servidor…" e o disparo funciona |
 | Logs | `$SSS/logs/interno/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (§15.2); o `$SSS/logs/sss_web.log` antigo para de crescer |
 | Usuários | Todos precisam entrar de novo depois da troca (CR-008, E2: a sessão antiga não tem `session_epoch`). Os dados de demonstração voltam ao seed, como em todo reinício |
@@ -1112,10 +1113,10 @@ cp $SSS/web2py/$APP/instance/config.ini $NOVO/$APP/instance/config.ini
 chmod 640 $NOVO/$APP/instance/config.ini
 sed -i -e '/^base_script_dirs\{0,1\} *=/d' \
        -e 's|^app_log_backups *=.*$|app_log_retention_days = 30|' \
-       -e '/^work_dir *=/a usuarios_execucao =\nexec_work_dir =' \
-       -e '/^cron_horizon_days *=/a fila_envelhecimento_min = 60\nlog_dir_min_livre_mb = 1024' \
+       -e '/^work_dir *=/a exec_users =\nexec_work_dir =' \
+       -e '/^cron_horizon_days *=/a queue_aging_min = 60\nlog_dir_min_livre_mb = 1024' \
        -e '/^script_owner_uids *=/d' -e '/^ambientes_exigem_hash *=/d' \
-       -e '/^session_idle_timeout_s *=/a sessao_max_horas = 12' \
+       -e '/^session_idle_timeout_s *=/a session_max_hours = 12' \
        -e '/^purge_batch_size *=/a purge_user =' $NOVO/$APP/instance/config.ini
 grep -nE '^(base_script|app_log_|cron_horizon_days)' $NOVO/$APP/instance/config.ini
 # esperado: app_log_max_bytes, app_log_retention_days = 30 e cron_horizon_days = 1461 (mínimo novo: 1461)

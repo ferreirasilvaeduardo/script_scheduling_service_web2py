@@ -8,7 +8,7 @@ Leituras do painel de agentes com a mesma semantica do repo_fake/agentes.py (REA
   o mesmo criterio do claim; CR-008, R-15), lendo so ix_tck_fila (status, ambiente, script_id e o inicio
   da espera; CR-013); a comparacao com os agentes saudaveis fica em Python, como no FAKE;
 - o SQL da fila e do rodando sem PID e o calculo dos pares atendidos vem do repo_oracle/saude.py (F9.1b),
-  o mesmo do scripts/saude.py: a tela e o monitoramento nao divergem;
+  o mesmo do scripts/health.py: a tela e o monitoramento nao divergem;
 - binds de DATE como TIPO_DATE (README §7.5).
 """
 import datetime

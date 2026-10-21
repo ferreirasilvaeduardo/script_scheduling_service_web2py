@@ -61,7 +61,7 @@ if session.usuario_id:
         # Expiracao por inatividade: so log, sem auditoria (README §4.2).
         _log.info("sessao expirada por inatividade (login=%s)", session.login, extra={"acao": "SESSAO"})
         _encerrar_sessao(ui_helpers.mensagem("sessao_expirada"))
-    if security.sessao_expirada(session.login_em, _agora, _cfg.web.sessao_max_horas * 3600):
+    if security.sessao_expirada(session.login_em, _agora, _cfg.web.session_max_hours * 3600):
         # Vida maxima desde o login (CR-008, E2), mesmo com uso continuo: so log.
         _log.info("sessao encerrada pela vida maxima (login=%s)", session.login, extra={"acao": "SESSAO"})
         _encerrar_sessao(ui_helpers.mensagem("sessao_max"))
