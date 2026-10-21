@@ -541,9 +541,11 @@ def limpar_saida(base, relativo, usuario_execucao=None):
         raise RuntimeError("helper limpar-saida falhou (codigo %s)" % codigo)
 
 
-def purgar_saida(base, dias, usuario_execucao=None):
-    """Retencao das pastas de saida (purge.py, README §11.3): devolve quantas pastas de minuto sairam."""
-    codigo, saida = _executar_curto(_argv_helper("purgar-saida", [base, int(dias)], usuario_execucao))
+def purgar_saida(base, dias, usuario_execucao=None, contar=False):
+    """Retencao das pastas de saida (purge.py, README §11.3): devolve quantas pastas de minuto sairam (ou, com
+    contar=True, quantas sairiam: o --dry-run, sem remover nada)."""
+    args = [base, int(dias)] + (["contar"] if contar else [])
+    codigo, saida = _executar_curto(_argv_helper("purgar-saida", args, usuario_execucao))
     if codigo != 0:
         raise RuntimeError("helper purgar-saida falhou (codigo %s)" % codigo)
     for linha in saida.splitlines():

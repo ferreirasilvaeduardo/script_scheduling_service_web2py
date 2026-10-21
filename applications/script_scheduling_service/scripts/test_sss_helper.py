@@ -386,7 +386,8 @@ class TestSssHelper(unittest.TestCase):
         for args in (("empacotar", base, rel, 0, 10), ("empacotar", base, rel, 1048576, 0),
                      ("empacotar", base, rel, 209715201, 10), ("empacotar", base, rel, 1, 10001),
                      ("empacotar", base, "../x/2026/10/20/14/05/ticket_8", 1048576, 10),
-                     ("empacotar", base, rel, 1048576), ("limpar-saida", base), ("purgar-saida", base, "0")):
+                     ("empacotar", base, rel, 1048576), ("limpar-saida", base), ("purgar-saida", base, "0"),
+                     ("purgar-saida", base, "7", "remover")):
             self.assertEqual(self._helper_saida(*args)[0], 2, args)
 
     def test_limpar_saida_sem_seguir_links(self):
@@ -413,6 +414,11 @@ class TestSssHelper(unittest.TestCase):
         os.makedirs(estranha)
         import datetime
         import io
+        contagem = io.StringIO()
+        with mock.patch.object(helper.sys, "stdout", contagem):  # --dry-run do purge: so conta
+            self.assertEqual(helper._purgar_saida(base, 7, hoje=datetime.date(2026, 10, 20), contar=True), 0)
+        self.assertEqual(contagem.getvalue(), "removidas=1\n")
+        self.assertTrue(os.path.exists(velha), "contar nao remove")
         saida = io.StringIO()
         with mock.patch.object(helper.sys, "stdout", saida):
             self.assertEqual(helper._purgar_saida(base, 7, hoje=datetime.date(2026, 10, 20)), 0)

@@ -16,7 +16,8 @@ Subcomandos:
   empacotar <base> <relativo> <max_bytes> <max_arquivos>
                                               zip da pasta de saida do ticket na saida padrao (CR-012)
   limpar-saida <base> <relativo>              remove a pasta de saida do ticket sem seguir links (CR-012)
-  purgar-saida <base> <dias>                  remove as pastas de minuto de saida mais antigas que <dias>
+  purgar-saida <base> <dias> [contar]         remove as pastas de minuto de saida mais antigas que <dias>
+                                              (com "contar", so conta: --dry-run do purge)
 
 Codigos de saida: 0 sucesso, 2 uso invalido, 3 recusado (identidade divergente), 4 erro do sistema,
 5 nao suportado nesta plataforma, 6 pasta de saida vazia ou inexistente, 7 saida acima do limite de
@@ -445,9 +446,10 @@ def _limpar_saida(base, relativo):
     return 0
 
 
-def _purgar_saida(base, dias, hoje=None):
+def _purgar_saida(base, dias, hoje=None, contar=False):
     """Remove <base>/<script>/AAAA/MM/DD/HH/MI anteriores a hoje - dias (data tirada do caminho) e as pastas
-    que ficarem vazias acima delas. Imprime 'removidas=<n>'. Itens fora do formato sao ignorados."""
+    que ficarem vazias acima delas. Imprime 'removidas=<n>'. Itens fora do formato sao ignorados.
+    contar=True so conta (nada e removido)."""
     base = _pasta_base(base, "base")
     limite = (hoje or datetime.date.today()) - datetime.timedelta(days=dias)
     removidas = 0
@@ -479,16 +481,24 @@ def _purgar_saida(base, dias, hoje=None):
                     if data < limite:
                         for p_hora in _subpastas(p_dia, dois):
                             for p_min in _subpastas(p_hora, dois):
+                                if contar:
+                                    removidas += 1
+                                    continue
                                 try:
                                     shutil.rmtree(p_min)
                                     removidas += 1
                                 except OSError as e:
                                     _erro(ERRO_SISTEMA, "purga da saida falhou (%s)" % e.__class__.__name__)
-                            _remover_se_vazia(p_hora)
-                    _remover_se_vazia(p_dia)
-                _remover_se_vazia(p_mes)
-            _remover_se_vazia(p_ano)
-        _remover_se_vazia(p_scr)
+                            if not contar:
+                                _remover_se_vazia(p_hora)
+                    if not contar:
+                        _remover_se_vazia(p_dia)
+                if not contar:
+                    _remover_se_vazia(p_mes)
+            if not contar:
+                _remover_se_vazia(p_ano)
+        if not contar:
+            _remover_se_vazia(p_scr)
     sys.stdout.write("removidas=%d\n" % removidas)
     return 0
 
@@ -514,8 +524,8 @@ def principal(argv):
                           _inteiro(args[3], "max_arquivos", minimo=1, maximo=_MAX_ARQUIVOS_SAIDA))
     if sub == "limpar-saida" and len(args) == 2:
         return _limpar_saida(args[0], args[1])
-    if sub == "purgar-saida" and len(args) == 2:
-        return _purgar_saida(args[0], _inteiro(args[1], "dias", minimo=1, maximo=3650))
+    if sub == "purgar-saida" and (len(args) == 2 or (len(args) == 3 and args[2] == "contar")):
+        return _purgar_saida(args[0], _inteiro(args[1], "dias", minimo=1, maximo=3650), contar=len(args) == 3)
     if sub == "encerrar-ticket" and len(args) == 3:
         return _encerrar_ticket(args[0], _inteiro(args[1], "ticket_id", minimo=1),
                                 _inteiro(args[2], "kill_grace_s", maximo=300))

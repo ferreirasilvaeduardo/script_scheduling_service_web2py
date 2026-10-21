@@ -196,7 +196,8 @@ def _mascarar(texto):
     return masking.MASCARADOR.mascarar(texto) if texto else texto
 
 
-def _linha_csv(reg):
+def linha_csv(reg):
+    """Uma linha da exportacao (README §4.4); tambem a do --exportar-auditoria do purge (CR-007, R-22)."""
     criado = reg.get("created_at")
     valores = (
         reg["id"],
@@ -317,7 +318,7 @@ class ServicoAuditoria(object):
         pendentes = 0
         try:
             for reg in self._auditoria.iterar(filtros=repo_filtros, limite=LIMITE_EXPORTACAO):
-                escritor.writerow(_linha_csv(reg))
+                escritor.writerow(linha_csv(reg))
                 pendentes += 1
                 if pendentes >= _LINHAS_POR_BLOCO:
                     yield buffer.getvalue().encode("utf-8")

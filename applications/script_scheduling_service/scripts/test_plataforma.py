@@ -302,8 +302,10 @@ class TestPastaDeSaida(unittest.TestCase):
         with mock.patch.object(posix, "_executar_curto", return_value=(0, "removidas=3\n")) as ex:
             plataforma.limpar_saida(self.base, self.rel, "exec1")
             self.assertEqual(plataforma.purgar_saida(self.base, 7, "exec1"), 3)
+            self.assertEqual(plataforma.purgar_saida(self.base, 7, "exec1", contar=True), 3)
         self.assertEqual(ex.call_args_list[0][0][0][-3:], ["limpar-saida", self.base, self.rel])
         self.assertEqual(ex.call_args_list[1][0][0][-3:], ["purgar-saida", self.base, "7"])
+        self.assertEqual(ex.call_args_list[2][0][0][-4:], ["purgar-saida", self.base, "7", "contar"])
         for retorno in ((2, ""), (0, "sem contagem")):
             with mock.patch.object(posix, "_executar_curto", return_value=retorno):
                 with self.assertRaises(RuntimeError):

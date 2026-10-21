@@ -1,0 +1,136 @@
+# -*- coding: utf-8 -*-
+"""Repositorio interno do purge (README §11.3; F9.1a; CR-007 R-21, R-22, R-32; CR-008 R-16, R-27).
+
+Importado so pelo scripts/purge.py (excecao do AGENTS §5.5), sem gluon. SQL literal do README §11.3, com owner e
+prefixo da configuracao e identificadores por sql_ident. As operacoes de lote NAO fazem COMMIT: o purge confirma
+um lote por vez junto com a renovacao da concessao (a excecao de COMMIT em laco do AGENTS §4.9). Ator de toda
+gravacao: 'SYSTEM:purge'.
+"""
+import json
+
+import db_conn
+import sql_ident
+
+ATOR = "SYSTEM:purge"
+TERMINAIS = ("SUCCESS", "FAILED", "CANCELLED")
+_COLS_AUD = ("id", "created_at", "ator", "ip_origem", "acao", "entidade", "entidade_id", "detalhe")
+
+
+def _ler_lob(valor):
+    return valor.read() if hasattr(valor, "read") else valor
+
+
+class RepoPurge(object):
+    """Owner e prefixo vem da configuracao (nunca fixos); os nomes passam por sql_ident."""
+
+    def __init__(self, owner, prefixo):
+        t = lambda nome: sql_ident.qualificar(owner, prefixo + nome, prefixo=prefixo)  # noqa: E731
+        self._tck, self._aud, self._ctl, self._scr = t("tickets"), t("auditoria"), t("controle"), t("scripts")
+        self._seq_aud = sql_ident.qualificar(owner, "sq_%sauditoria" % prefixo, prefixo=prefixo)
+        self._prefixo = prefixo
+
+    @classmethod
+    def da_config(cls, cfg):
+        return cls(cfg.oracle.owner.strip(), cfg.oracle.table_prefix.strip())
+
+    def _executar(self, conn, sql, binds, datas=()):
+        cur = conn.cursor()
+        try:
+            if datas:
+                db_conn.definir_tipos_entrada(cur, **dict((d, db_conn.TIPO_DATE) for d in datas))
+            cur.execute(sql, binds)
+            return cur.rowcount
+        finally:
+            cur.close()
+
+    def _contar(self, conn, sql, binds):
+        cur = conn.cursor()
+        try:
+            db_conn.definir_tipos_entrada(cur, limite=db_conn.TIPO_DATE)
+            cur.execute(sql, binds)
+            return int(cur.fetchone()[0])
+        finally:
+            cur.close()
+
+    # ------------------------------------------------------------------ concessao (tbsss_controle)
+
+    def tomar_concessao(self, conn, dono):
+        """Toma ou renova a concessao por 1 hora (README §11.3). False: outro no esta purgando. Sem COMMIT."""
+        return self._executar(conn, "UPDATE " + self._ctl + " SET purge_dono = :dono, purge_concessao_ate = SYSDATE + 1/24"
+                              " WHERE id = 1 AND (purge_concessao_ate IS NULL OR purge_concessao_ate < SYSDATE"
+                              " OR purge_dono = :dono)", {"dono": dono}) == 1
+
+    def liberar_concessao(self, conn, dono):
+        """Libera dono e prazo (CR-008, R-27), so se a concessao ainda for deste no. Sem COMMIT."""
+        return self._executar(conn, "UPDATE " + self._ctl + " SET purge_dono = NULL, purge_concessao_ate = NULL"
+                              " WHERE id = 1 AND purge_dono = :dono", {"dono": dono}) == 1
+
+    # ------------------------------------------------------------------ tickets
+
+    def contar_tickets(self, conn, limite):
+        return self._contar(conn, "SELECT COUNT(*) FROM " + self._tck + " WHERE created_at < :limite"
+                            " AND status IN ('SUCCESS','FAILED','CANCELLED')", {"limite": limite})
+
+    def apagar_tickets(self, conn, limite, lote):
+        """Um lote do DELETE literal do README §11.3 (so terminais; respostas e saidas em cascata). Sem COMMIT."""
+        return self._executar(conn, "DELETE FROM " + self._tck + " WHERE created_at < :limite"
+                              " AND status IN ('SUCCESS','FAILED','CANCELLED') AND ROWNUM <= :lote",
+                              {"limite": limite, "lote": int(lote)}, datas=("limite",))
+
+    # ------------------------------------------------------------------ auditoria
+
+    def contar_auditoria(self, conn, limite):
+        return self._contar(conn, "SELECT COUNT(*) FROM " + self._aud + " WHERE created_at < :limite",
+                            {"limite": limite})
+
+    def apagar_auditoria(self, conn, limite, lote):
+        """Um lote do DELETE da auditoria (mesmo padrao, audit_retention_days). Sem COMMIT."""
+        return self._executar(conn, "DELETE FROM " + self._aud + " WHERE created_at < :limite AND ROWNUM <= :lote",
+                              {"limite": limite, "lote": int(lote)}, datas=("limite",))
+
+    def ler_e_apagar_auditoria(self, conn, limite, lote):
+        """Com --exportar-auditoria (CR-007, R-22): trava e devolve as linhas do lote e as apaga pelo id, para o
+        CSV ter exatamente o que saiu. Devolve a lista de dicts (vazia no fim). Sem COMMIT."""
+        cur = conn.cursor()
+        try:
+            db_conn.definir_tipos_entrada(cur, limite=db_conn.TIPO_DATE)
+            cur.execute("SELECT " + ", ".join(_COLS_AUD) + " FROM " + self._aud + " WHERE created_at < :limite"
+                        " AND ROWNUM <= :lote FOR UPDATE WAIT 5", {"limite": limite, "lote": int(lote)})
+            linhas = [dict(zip(_COLS_AUD, r)) for r in cur.fetchall()]
+            if linhas:
+                cur.executemany("DELETE FROM " + self._aud + " WHERE id = :id", [{"id": l["id"]} for l in linhas])
+            return linhas
+        finally:
+            cur.close()
+
+    def auditar(self, conn, tabela, apagadas):
+        """PURGE com uma linha por tabela purgada, entidade = a tabela, entidade_id nulo (README §4.4; CR-008 R-16:
+        tambem com 0 linhas). Sem COMMIT."""
+        self._executar(conn, "INSERT INTO " + self._aud + " (id, ator, ip_origem, acao, entidade, entidade_id, detalhe,"
+                       " created_at) VALUES (:id, :ator, NULL, 'PURGE', :entidade, NULL, :detalhe, SYSDATE)",
+                       {"id": db_conn.proximo_id(conn, self._seq_aud), "ator": ATOR,
+                        "entidade": self._prefixo_padrao(tabela), "detalhe": "%d linhas" % int(apagadas)})
+
+    def _prefixo_padrao(self, tabela):
+        # A entidade da auditoria usa o nome logico tbsss_<tabela> (README §4.4), como as demais acoes.
+        return "tbsss_%s" % tabela
+
+    # ------------------------------------------------------------------ logs de tickets RUNNING
+
+    def running_para_logs(self, conn):
+        """(ambiente, script_nome, script_id, started_at) dos RUNNING, para manter a pasta de minuto do log deles
+        (CR-007, R-32). O nome vem do snapshot (o da epoca do disparo), como no caminho do log (README §8.4)."""
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT t.ambiente, t.script_id, t.started_at, t.parametros_enviados FROM " + self._tck + " t"
+                        " WHERE t.status = 'RUNNING' AND t.started_at IS NOT NULL")
+            saida = []
+            for amb, sid, inicio, snap in cur.fetchall():
+                try:
+                    nome = json.loads(_ler_lob(snap) or "{}").get("script_nome")
+                except ValueError:
+                    nome = None
+                saida.append((amb, nome, sid, inicio))
+            return saida
+        finally:
+            cur.close()

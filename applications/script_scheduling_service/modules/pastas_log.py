@@ -297,3 +297,86 @@ def limpar_retencao_app(log_dir, retention_days, ref_dt=None, falhas=None):
 
     return removidos
 
+
+
+# ---------------------------------------------------------------------------
+# 3. Retencao dos logs de execucao (purge.py, README §11.3; CR-005; CR-007 R-32; CR-009)
+#    log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI, nunca log_dir/interno/
+# ---------------------------------------------------------------------------
+
+def _subpastas(pasta, falhas):
+    try:
+        nomes = sorted(os.listdir(pasta))
+    except OSError as exc:
+        falhas.append("%s: %s" % (pasta, exc))
+        return []
+    return [(n, os.path.join(pasta, n)) for n in nomes
+            if os.path.isdir(os.path.join(pasta, n)) and not os.path.islink(os.path.join(pasta, n))]
+
+
+def minutos_de_execucao(log_dir, falhas=None):
+    """[(caminho, datetime)] das pastas de minuto com o formato exato <ambiente>/<script>/AAAA/MM/DD/HH/MI.
+
+    O resto e ignorado; links nao sao seguidos; a pasta interno/ (logs da aplicacao) nunca entra.
+    """
+    falhas = falhas if falhas is not None else []
+    achados = []
+    for amb, p_amb in _subpastas(log_dir, falhas):
+        if amb == PASTA_INTERNA:
+            continue
+        for _scr, p_scr in _subpastas(p_amb, falhas):
+            for a, p_a in _subpastas(p_scr, falhas):
+                for m, p_m in _subpastas(p_a, falhas):
+                    for d, p_d in _subpastas(p_m, falhas):
+                        for h, p_h in _subpastas(p_d, falhas):
+                            for mi, p_mi in _subpastas(p_h, falhas):
+                                instante = parse_data_minuto(a, m, d, h, mi)
+                                if instante is not None:
+                                    achados.append((p_mi, instante))
+    return achados
+
+
+def limpar_retencao_execucao(log_dir, retention_days, ref_date, manter=(), dry_run=False, falhas=None,
+                             caminho_final=os.path.realpath):
+    """Pastas de minuto anteriores a ref_date - retention_days (data tirada do caminho, nao do mtime), menos as de
+    `manter` (log de ticket RUNNING); depois as pastas de hora, dia, mes, ano, script e ambiente vazias.
+
+    Cada pasta e conferida sob log_dir pelo caminho real (caminho_final + commonpath). dry_run so lista.
+    Devolve a lista das pastas de minuto removidas (ou elegiveis, no dry_run).
+    """
+    falhas = falhas if falhas is not None else []
+    if retention_days is None or retention_days <= 0 or not os.path.isdir(log_dir):
+        return []
+    limite = ref_date - datetime.timedelta(days=retention_days)
+    if isinstance(limite, datetime.datetime):  # agora_banco() do purge: compara so a data do caminho
+        limite = limite.date()
+    raiz = caminho_final(log_dir)
+    manter = set(os.path.normpath(p) for p in manter)
+    removidas = []
+    for caminho, instante in minutos_de_execucao(log_dir, falhas):
+        if instante.date() >= limite or os.path.normpath(caminho) in manter:
+            continue
+        real = caminho_final(caminho)
+        if os.path.commonpath([real, raiz]) != raiz or real == raiz:
+            falhas.append("%s: fora de log_dir" % caminho)
+            continue
+        if dry_run:
+            removidas.append(caminho)
+            continue
+        try:
+            shutil.rmtree(caminho)
+            removidas.append(caminho)
+        except OSError as exc:
+            falhas.append("%s: %s" % (caminho, exc))
+            continue
+        pasta = os.path.dirname(caminho)
+        for _nivel in range(6):  # hora, dia, mes, ano, script e ambiente
+            try:
+                if os.path.normpath(pasta) == os.path.normpath(log_dir) or os.listdir(pasta):
+                    break
+                os.rmdir(pasta)
+            except OSError as exc:
+                falhas.append("%s: %s" % (pasta, exc))
+                break
+            pasta = os.path.dirname(pasta)
+    return removidas

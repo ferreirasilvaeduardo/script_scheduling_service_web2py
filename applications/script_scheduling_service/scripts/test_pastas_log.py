@@ -221,6 +221,36 @@ class TestPastasLog(unittest.TestCase):
         with mock.patch("pastas_log.shutil.rmtree", side_effect=OSError(5, "I/O error")):
             self.assertEqual(pastas_log.limpar_retencao_app(self.tmp, 30, ref_dt=datetime.date(2026, 10, 16)), [])
 
+    # -----------------------------------------------------------------------
+    # Retencao dos logs de execucao (purge.py, README §11.3; CR-007 R-32; CR-009)
+    # -----------------------------------------------------------------------
+
+    def _minuto_exec(self, rel):
+        pasta = os.path.join(self.tmp, *rel.split("/"))
+        os.makedirs(pasta)
+        return pasta
+
+    def test_retencao_execucao_referencia_date_ou_datetime(self):
+        limite = self._minuto_exec("prod/carga/2026/09/21/23/59")  # exatamente ref - 30 dias: fica
+        velha = self._minuto_exec("prod/carga/2026/09/20/23/59")
+        for ref in (datetime.date(2026, 10, 21), datetime.datetime(2026, 10, 21, 0, 0, 1)):
+            elegiveis = pastas_log.limpar_retencao_execucao(self.tmp, 30, ref, dry_run=True)
+            self.assertEqual(elegiveis, [velha], ref)
+        self.assertTrue(os.path.isdir(velha), "dry_run nao remove")
+        self.assertEqual(pastas_log.limpar_retencao_execucao(self.tmp, 30, datetime.date(2026, 10, 21)), [velha])
+        self.assertTrue(os.path.isdir(limite))
+
+    def test_retencao_execucao_mantem_running_e_interno(self):
+        running = self._minuto_exec("prod/carga/2026/01/01/10/00")
+        interno = self._minuto_exec("interno/app/2026/01/01/10/00")
+        falhas = []
+        removidas = pastas_log.limpar_retencao_execucao(self.tmp, 30, datetime.date(2026, 10, 21),
+                                                        manter=[running + os.sep], falhas=falhas)
+        self.assertEqual((removidas, falhas), ([], []))
+        self.assertTrue(os.path.isdir(running))
+        self.assertTrue(os.path.isdir(interno))
+        self.assertEqual(pastas_log.minutos_de_execucao(self.tmp), [(running, datetime.datetime(2026, 1, 1, 10, 0))])
+
 
 if __name__ == "__main__":
     unittest.main()
