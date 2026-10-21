@@ -19,16 +19,16 @@ import _testenv  # noqa: F401
 import db_conn
 import repo_errors
 import repo_factory
-from repo_catalogo import RepoCatalogo
-from repo_oracle.catalogo import RepoCatalogoOracle
+from repo_catalog import RepoCatalogo
+from repo_oracle.catalog import RepoCatalogoOracle
 from repo_rbac import RepoRbac
-from repo_oracle.agentes import RepoAgentesOracle
-from repo_oracle.auditoria import RepoAuditoriaOracle
-from repo_agendamentos import RepoAgendamentos
-from repo_oracle.agendamentos import RepoAgendamentosOracle
+from repo_oracle.agents import RepoAgentesOracle
+from repo_oracle.audit import RepoAuditoriaOracle
+from repo_schedules import RepoAgendamentos
+from repo_oracle.schedules import RepoAgendamentosOracle
 from repo_oracle.tickets import RepoTicketsOracle
 from repo_tickets import RepoTickets
-from repo_usuarios import RepoUsuarios
+from repo_users import RepoUsuarios
 from gluon import current
 
 
@@ -96,7 +96,7 @@ class TestOracleRbacUsuarios(unittest.TestCase):
 
     def test_alterar_sem_data_nao_declara_bind_de_data_ausente(self):
         """Regressao (F7.3): alterar so o nome declarava bloqueado_ate/ultimo_login e caia em DPY-4008."""
-        import repo_oracle.usuarios as mod
+        import repo_oracle.users as mod
         linha = tuple(1 if c in ("id", "profile_id") else ("Y" if c == "active" else
                       ("tst.x" if c == "login" else (0 if c in ("failed_attempts", "session_epoch") else None)))
                       for c in mod._COLS_USUARIO)

@@ -80,7 +80,7 @@ Exemplo do conteúdo gerado no arquivo de log:
 Listed directory web2py
 Listed directory applications
 Searched for "somente script_scheduling_service"
-Viewed IMPLANTACAO.md:130-190
+Viewed DEPLOYMENT.md:130-190
 Ran command: `for d in deposit examples extras handlers logs scripts site-packages; do
     echo "=== $d ==="
     ls -la "$d"

@@ -20,9 +20,9 @@ import time
 import sss_config
 import sss_logging
 try:
-    import plataforma
+    import os_platform
 except ImportError:
-    from modules import plataforma
+    from modules import os_platform
 try:
     import sql_ident
 except ImportError:
@@ -259,7 +259,7 @@ def inicializar(selecao, cfg=None):
 
             driver = oracledb
             if candidato == "thick":
-                lib_dir = plataforma.obter_lib_dir_oracle(cfg)
+                lib_dir = os_platform.obter_lib_dir_oracle(cfg)
                 try:
                     if lib_dir:
                         oracledb.init_oracle_client(lib_dir=lib_dir)
@@ -281,7 +281,7 @@ def inicializar(selecao, cfg=None):
         elif candidato == "cx_oracle":
             import cx_Oracle
             driver = cx_Oracle
-            lib_dir = plataforma.obter_lib_dir_oracle(cfg)
+            lib_dir = os_platform.obter_lib_dir_oracle(cfg)
             try:
                 if lib_dir:
                     cx_Oracle.init_oracle_client(lib_dir=lib_dir)

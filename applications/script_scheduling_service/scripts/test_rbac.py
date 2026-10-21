@@ -9,13 +9,13 @@ import unittest
 from unittest import mock
 
 import admin_crud
-import admin_perfis_service as perfis_mod
+import admin_profiles_service as perfis_mod
 import auth_service
 import rbac
 import repo_factory
 import security
 from admin_crud import CAMPO_GERAL, AcessoNegado, OperacaoNegada
-from admin_perfis_service import ServicoAdminPerfis
+from admin_profiles_service import ServicoAdminPerfis
 from rbac import Motivo
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 

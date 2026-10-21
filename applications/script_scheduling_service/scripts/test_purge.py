@@ -24,7 +24,7 @@ import types
 import unittest
 from unittest import mock
 
-import plataforma
+import os_platform
 import purge as purge_cli  # scripts/purge.py (o repositorio e repo_oracle.purge)
 from repo_oracle.purge import RepoPurge
 
@@ -173,7 +173,7 @@ class _Plat(object):
         self.chamadas = []
         self.contagem, self.falhar = contagem, falhar
         self.travas = []
-        self.caminho_final = plataforma.caminho_final
+        self.caminho_final = os_platform.caminho_final
 
     def purgar_saida(self, base, dias, usuario_execucao=None, contar=False):
         self.chamadas.append((base, dias, usuario_execucao, contar))
@@ -183,10 +183,10 @@ class _Plat(object):
 
     def travar_instancia(self, caminho):
         self.travas.append(caminho)
-        return plataforma.travar_instancia(caminho)
+        return os_platform.travar_instancia(caminho)
 
     def liberar_instancia(self, trava):
-        plataforma.liberar_instancia(trava)
+        os_platform.liberar_instancia(trava)
 
 
 def _dias(n):
@@ -366,7 +366,7 @@ class TestLogsLocais(_Base):
 
     def test_falha_na_remocao_sai_com_3(self):
         self._minuto("producao/carga/2026/01/01/10/00")
-        with mock.patch("pastas_log.shutil.rmtree", side_effect=OSError(13, "Permission denied")):
+        with mock.patch("log_paths.shutil.rmtree", side_effect=OSError(13, "Permission denied")):
             self.assertEqual(self._purge(_Banco()).executar(("logs_locais",)), purge_cli.SAIDA_LOCAIS)
 
     def test_caminho_real_fora_de_log_dir_nao_e_removido(self):
@@ -443,8 +443,8 @@ class TestMain(_Base):
         self.assertIn("dry-run: contagens estimadas", texto)
 
     def test_outro_purge_no_servidor(self):
-        trava = plataforma.travar_instancia(os.path.join(self.raiz, "work", "sss-purge.lock"))
-        self.addCleanup(plataforma.liberar_instancia, trava)
+        trava = os_platform.travar_instancia(os.path.join(self.raiz, "work", "sss-purge.lock"))
+        self.addCleanup(os_platform.liberar_instancia, trava)
         codigo, texto = self._main([])
         self.assertEqual((codigo, texto, self.conexoes), (0, "", []))
 

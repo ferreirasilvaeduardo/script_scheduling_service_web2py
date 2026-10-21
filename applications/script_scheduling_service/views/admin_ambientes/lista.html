@@ -1,6 +1,6 @@
 {{extend 'layout.html'}}
 {{
-# Lista de ambientes (padrão de CRUD administrativo, docs/PADRAO_CRUD_ADMIN.md).
+# Lista de ambientes (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
 filtros = {'id': 'filtro-ambientes', 'url_base': ('admin_ambientes', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': [
     {'name': 'name', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('name')},

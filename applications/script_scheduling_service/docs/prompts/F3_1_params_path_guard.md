@@ -42,7 +42,7 @@ Implementar a lógica pura que valida o questionário e compila o snapshot imut�
   - `infra/longo.py`: dorme em ciclos e imprime progresso, para os testes de timeout e cancelamento;
   - `relatorios/exporta.sh` (posicional).
 
-  Documente em `docs/AMBIENTE_DEV.md` que, em DEV, `script_owner_uids` deve conter o seu UID e os arquivos precisam de modo `0644` (scripts) e `0755` (diretórios).
+  Documente em `docs/DEV_ENVIRONMENT.md` que, em DEV, `script_owner_uids` deve conter o seu UID e os arquivos precisam de modo `0644` (scripts) e `0755` (diretórios).
 - **Testes:**
   - `applications/script_scheduling_service/scripts/test_path_guard.py`: todos os casos do AGENTS §7.4, com árvore temporária (`tempfile`) e symlinks reais. O caso de dono inválido é testado passando `owner_uids` sem o UID atual.
   - `applications/script_scheduling_service/scripts/test_params_compiler.py`: todos os casos do AGENTS §7.4, mais `SELECT` com `opcoes_json` inválido, regex ReDoS rejeitada no cadastro, determinismo (duas compilações iguais produzem a mesma string) e `argv_para_exibicao`.

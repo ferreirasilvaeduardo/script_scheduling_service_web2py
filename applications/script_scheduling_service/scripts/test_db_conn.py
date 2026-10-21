@@ -20,7 +20,7 @@ from unittest import mock
 import _testenv  # noqa: F401
 import _oracle_test_support
 import db_conn
-import plataforma
+import os_platform
 import probe_driver as sondar_driver
 import sql_ident
 

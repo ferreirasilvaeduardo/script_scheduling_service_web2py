@@ -46,7 +46,7 @@ class TestEmpacotar(unittest.TestCase):
             APP + "/scripts/purge.py": "x", APP + "/scripts/test_purge.py": "x", APP + "/scripts/_testenv.py": "x",
             APP + "/scripts/logs/a.log": "x", APP + "/applications/x.txt": "x", APP + "/deposit/x": "x",
             APP + "/logs/x": "x", APP + "/site-packages/x": "x", APP + "/sessions/abc": "x", APP + "/errors/e": "x",
-            APP + "/work/sss-a.lock": "x", APP + "/docs/IMPLANTACAO.md": "# Implantacao\n",
+            APP + "/work/sss-a.lock": "x", APP + "/docs/DEPLOYMENT.md": "# Implantacao\n",
         }
         for rel, texto in arquivos.items():
             self._escrever(rel, texto)
@@ -98,7 +98,7 @@ class TestEmpacotar(unittest.TestCase):
         for rel in ("web2py.py", "anyserver.py", "gluon/main.py", "bin/sss-web.sh", "bin/sss-scheduler.sh",
                     "bin/sss-stop.sh", APP + "/controllers/default.py", APP + "/scripts/purge.py",
                     APP + "/instance/config.ini.example", APP + "/instance/secrets.cfg.example",
-                    APP + "/docs/IMPLANTACAO.md"):
+                    APP + "/docs/DEPLOYMENT.md"):
             self.assertIn(rel, arquivos)
         for pasta in empacotar.RUNTIME_VAZIAS:
             self.assertTrue(membros[APP + "/" + pasta].isdir(), pasta)
@@ -169,7 +169,7 @@ class TestPacoteSobeSemODev(unittest.TestCase):
     def test_sem_import_de_topo_do_que_fica_fora(self):
         import ast
         arquivos, _p = empacotar.coletar(empacotar.RAIZ_PADRAO)
-        excluidos = ("repo_fake", "dev", "_testenv", "_oracle_test_support", "_saida_memoria")
+        excluidos = ("repo_fake", "dev", "_testenv", "_oracle_test_support", "_output_memory")
         violacoes = []
         for rel in arquivos:
             if not rel.startswith(APP + "/") or not rel.endswith(".py"):

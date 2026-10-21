@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Cadastro de ambientes (README §4.3.D MANAGE_ENVIRONMENTS). Padrao em docs/PADRAO_CRUD_ADMIN.md.
+"""Cadastro de ambientes (README §4.3.D MANAGE_ENVIRONMENTS). Padrao em docs/ADMIN_CRUD_PATTERN.md.
 
-Regras ficam em modules/admin_ambientes_service.py; CSRF e Origin de todo POST sao validados
+Regras ficam em modules/admin_environments_service.py; CSRF e Origin de todo POST sao validados
 em models/10_security.py.
 """
-import admin_ambientes_service as servico
+import admin_environments_service as servico
 import admin_crud
 import ui_helpers
 from admin_crud import AcessoNegado

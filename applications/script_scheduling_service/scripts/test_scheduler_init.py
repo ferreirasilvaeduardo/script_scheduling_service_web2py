@@ -21,12 +21,12 @@ import unittest
 from unittest import mock
 
 import executor
-import plataforma
+import os_platform
 import scheduler_loop as sl
 import sql_ident
 import sss_config
-from repo_oracle.scheduler_fila import AgenteDuplicado
-from _saida_memoria import RepoSaidaMemoria
+from repo_oracle.scheduler_queue import AgenteDuplicado
+from _output_memory import RepoSaidaMemoria
 
 _Agent = collections.namedtuple("_Agent", (
     "agent_id", "environments", "work_dir", "interpreters", "exec_users",
@@ -210,7 +210,7 @@ class _Plat(object):
         self._troca = troca
 
     def __getattr__(self, nome):
-        return self._troca[nome] if nome in self._troca else getattr(plataforma, nome)
+        return self._troca[nome] if nome in self._troca else getattr(os_platform, nome)
 
 
 class TestPassos(_Base):
@@ -227,7 +227,7 @@ class TestPassos(_Base):
         self.assertNotIn("SEM_EXIGENCIA_HASH", texto, "CR-011: sem hash")
         r = self.repo.registro
         self.assertEqual((r["code"], r["hostname"], r["version"], r["platform"], r["interpreters"]),
-                         ("srv-t", "host-t", sss_config.VERSAO_SSS, plataforma.NOME, "SH"))
+                         ("srv-t", "host-t", sss_config.VERSAO_SSS, os_platform.NOME, "SH"))
         self.assertEqual(r["critical_config"], "hb=10;fence=40;offline=120;call=30;kill=1;misfire=RUN_ONCE;tol=300;"
                                                "horizonte=366;envelhecimento=30")
         self.assertTrue(os.path.exists(os.path.join(self.work, "sss-srv-t.lock")))
@@ -299,9 +299,9 @@ class TestPassos(_Base):
             self.agente().inicializar()
         self.assertFalse(os.path.exists(stop))
         self.assertTrue(any(".stop antigo" in x for x in logs.output))
-        codigo = ("import sys\nsys.path.insert(0, %r)\nimport plataforma\n"
-                  "try:\n    plataforma.travar_instancia(%r)\nexcept plataforma.InstanciaJaEmExecucao:\n"
-                  "    sys.exit(7)\n" % (os.path.dirname(os.path.abspath(plataforma.__file__)) + "/..",
+        codigo = ("import sys\nsys.path.insert(0, %r)\nimport os_platform\n"
+                  "try:\n    os_platform.travar_instancia(%r)\nexcept os_platform.InstanciaJaEmExecucao:\n"
+                  "    sys.exit(7)\n" % (os.path.dirname(os.path.abspath(os_platform.__file__)) + "/..",
                                         os.path.join(self.work, "sss-srv-t.lock")))
         self.assertEqual(subprocess.call([sys.executable, "-c", codigo]), 7, "segunda instancia recusada")
 
@@ -361,7 +361,7 @@ class TestStartupCheck(_Base):
     def _pasta(self, tid, **estados):
         pasta = executor.preparar_diretorio(self.work, tid)
         for nome, dados in estados.items():
-            plataforma.gravar_estado(os.path.join(pasta, "." + nome), dados)
+            os_platform.gravar_estado(os.path.join(pasta, "." + nome), dados)
         return pasta
 
     def _grupo(self, comando="sleep 300 & sleep 300"):
@@ -378,7 +378,7 @@ class TestStartupCheck(_Base):
     def test_grupo_vivo_e_encerrado_e_ticket_orfao(self):
         p = self._grupo()
         pasta = self._pasta(5, sss_proc={"ticket_id": 5, "pid": p.pid, "pgid": p.pid, "usuario_execucao": None,
-                                         "process_start": plataforma.identidade_processo(p.pid)})
+                                         "process_start": os_platform.identidade_processo(p.pid)})
         self.repo.running = [{"id": 5, "process_id": p.pid, "process_start": None, "cancel_requested": "N"}]
         ag, _logs = self._subir()
         self.assertIn(("finalizar", 5, "FAILED", "ORPHAN_PROCESS", -2), self.repo.chamadas)
@@ -395,7 +395,7 @@ class TestStartupCheck(_Base):
         # NODE_OFFLINE no banco com o filho vivo: o disco manda; o grupo e encerrado e nada e finalizado.
         p = self._grupo()
         self._pasta(6, sss_proc={"ticket_id": 6, "pid": p.pid, "pgid": p.pid, "usuario_execucao": None,
-                                 "process_start": plataforma.identidade_processo(p.pid)})
+                                 "process_start": os_platform.identidade_processo(p.pid)})
         ag, _logs = self._subir()
         self.assertEqual(self.repo.chamadas, [])
         self.assertIn(6, ag.encerrando)
@@ -404,7 +404,7 @@ class TestStartupCheck(_Base):
     def test_pid_reciclado_nao_recebe_sinal(self):
         p = self._grupo("sleep 300")
         pasta = self._pasta(7, sss_proc={"ticket_id": 7, "pid": p.pid, "pgid": p.pid, "usuario_execucao": None,
-                                         "process_start": plataforma.identidade_processo(p.pid) + 1})
+                                         "process_start": os_platform.identidade_processo(p.pid) + 1})
         self.repo.running = [{"id": 7, "process_id": p.pid, "process_start": None, "cancel_requested": "N"}]
         ag, _logs = self._subir()
         self.assertTrue(_vivo(p.pid), "PID reciclado: o processo de agora nao e o do ticket")
@@ -426,7 +426,7 @@ class TestStartupCheck(_Base):
         pasta = self._pasta(9, sss_proc={"ticket_id": 9, "pid": p.pid, "pgid": p.pid, "usuario_execucao": None,
                                          "process_start": None})
         self.repo.running = [{"id": 9, "process_id": p.pid, "process_start": None, "cancel_requested": "N"}]
-        plat = _Plat(reabrir_grupo=lambda estado: plataforma.Processo(p.pid, None, sem_identidade=True))
+        plat = _Plat(reabrir_grupo=lambda estado: os_platform.Processo(p.pid, None, sem_identidade=True))
         ag, logs = self._subir(plat=plat)
         self.assertIn("ORFAO_SEM_IDENTIDADE", logs)
         self.assertTrue(_vivo(p.pid), "sem identidade nunca recebe sinal")
@@ -510,7 +510,7 @@ class TestSubidaOracle(_Base):
 
     def test_subida_real_e_parada(self):
         import db_conn
-        from repo_oracle.scheduler_fila import RepoSchedulerFila
+        from repo_oracle.scheduler_queue import RepoSchedulerFila
         cfg = self.cfg_real
         seg = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel="agent")
         conn = db_conn.conectar(cfg, seg, "agent")

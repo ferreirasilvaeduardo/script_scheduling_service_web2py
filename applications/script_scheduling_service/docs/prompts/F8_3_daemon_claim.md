@@ -2,13 +2,13 @@
 
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §3.2, §4.9–4.11, §5.6, §6
-- `docs/arquitetura/CR-007-robustez-do-scheduler.md` (inteiro: é a especificação de robustez deste passo)
-- `docs/arquitetura/CR-008-auditoria-final.md` (R-01, R-02, R-07, R-08, R-09, R-11, R-17, R-20, R-25, R-26 e E4: correções da auditoria final que tocam este passo)
-- `docs/arquitetura/CR-002-oracle-unico-e-driver-adaptativo.md`, `docs/arquitetura/CR-005-posix-caminho-livre-e-logs.md` (D1 a D8, R-a a R-e) e `docs/arquitetura/CR-006-colunas-de-registro.md` (R-b a R-e: ator `SYSTEM:<agent_id>`, alteração de negócio × rotina técnica)
+- `docs/architecture/CR-007-scheduler-robustness.md` (inteiro: é a especificação de robustez deste passo)
+- `docs/architecture/CR-008-final-audit.md` (R-01, R-02, R-07, R-08, R-09, R-11, R-17, R-20, R-25, R-26 e E4: correções da auditoria final que tocam este passo)
+- `docs/architecture/CR-002-single-oracle-and-adaptive-driver.md`, `docs/architecture/CR-005-posix-free-path-and-logs.md` (D1 a D8, R-a a R-e) e `docs/architecture/CR-006-record-columns.md` (R-b a R-e: ator `SYSTEM:<agent_id>`, alteração de negócio × rotina técnica)
 - `README.md` §2.3 (seleção do driver), §3.1 (inclusive a regra de thread única do processo inteiro, C10), §4.4 (tabela de entidade por ação), §5.1, §5.2, §5.6 (parte do agente), §6.4, §6.5 (snapshot **versão 4**), §8.0–8.4 (em especial o passo 1 do §8.4), §8.5 (caminho livre e checagens), §8.9 ("Mesmos tempos em todos os nós"), §8.7, §8.10, §8.11 (apenas a parte de sinais e do arquivo `.stop`; o resto é F8.4), §8.12 (inteiro), §10 (tabelas 6, 13 e 15, e "Colunas de registro"), §12.1 ("Falha de configuração"), §13 (formato e níveis)
 - Arquivos: `modules/plataforma/`, `modules/pastas_log.py`, `modules/executor.py`, `modules/env_builder.py`, `modules/log_pump.py`, `modules/params_compiler.py` (`validar_snapshot`, `montar_argv_agente`), `modules/path_guard.py` (`resolver`), `modules/sss_config.py`, `modules/db_conn.py`, `modules/sql_ident.py`
 
-> **CR-011 (2026-10-20), vale para o que ainda falta deste passo (F8.3d):** o caminho do script pode ter link simbólico (o agente executa o arquivo real); o SSS não calcula nem confere hash (`sha256_homologado`, `arquivo_sha256`, `ARQUIVO_ALTERADO`, `SEM_HASH` e `ambientes_exigem_hash` saíram) nem o dono dos arquivos (`script_owner_uids` saiu). Os itens abaixo que citam hash ou dono ficam sem efeito (`docs/arquitetura/CR-011-link-simbolico-e-sem-hash.md`).
+> **CR-011 (2026-10-20), vale para o que ainda falta deste passo (F8.3d):** o caminho do script pode ter link simbólico (o agente executa o arquivo real); o SSS não calcula nem confere hash (`sha256_homologado`, `arquivo_sha256`, `ARQUIVO_ALTERADO`, `SEM_HASH` e `ambientes_exigem_hash` saíram) nem o dono dos arquivos (`script_owner_uids` saiu). Os itens abaixo que citam hash ou dono ficam sem efeito (`docs/architecture/CR-011-symlink-and-no-hash.md`).
 
 > **CR-012 (2026-10-20):** a pasta de saída do script (README §8.13) é implementada pelo próprio CR-012, antes do F8.3d. O F8.3d inclui no teste com 2 agentes um script que grava em `SSS_SAIDA_DIR`, com `saida_dir` diferente em cada agente.
 

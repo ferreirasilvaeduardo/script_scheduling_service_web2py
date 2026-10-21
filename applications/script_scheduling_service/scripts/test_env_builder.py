@@ -222,7 +222,7 @@ class TestEnvBuilder(unittest.TestCase):
         with open(env_builder.__file__, encoding="utf-8") as f:
             fonte = f.read()
         self.assertNotIn("os.environ", fonte)
-        self.assertNotIn("import plataforma", fonte)
+        self.assertNotIn("import os_platform", fonte)
 
 
 if __name__ == "__main__":

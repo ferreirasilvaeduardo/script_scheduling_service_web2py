@@ -11,11 +11,11 @@
 
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §3.1, §4 (inteiro)
-- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (inteiro, menos a D16, revogada: D6, D9, D11, D12, C3, C4, C9 e a rastreabilidade) e `docs/arquitetura/CR-004-telas-de-consulta-e-linguagem-clara.md` ("Contrato": as duas leituras novas de `RepoTickets`)
-- `docs/arquitetura/CR-007-robustez-do-scheduler.md` (R-19 a R-30 no que toca os repositórios da UI)
-- `docs/arquitetura/CR-008-auditoria-final.md` (E2: `sessao_epoch`; R-02: `PENDING` com cancelamento pedido; R-15: fila sem atendente pelo cadastro e sem CLOB; R-13: `pid_daemon NUMBER(10)`)
-- `docs/arquitetura/CR-006-colunas-de-registro.md` (inteiro: R-a a R-h; colunas de registro, ator obrigatório e vínculos por diferença)
-- `docs/arquitetura/CR-005-posix-caminho-livre-e-logs.md` (D2: `path_file` absoluto, sem `pasta_base` em `tbsss_scripts` nem `pastas_base` em `tbsss_agentes`; R-g e R-h: CKs)
+- `docs/architecture/CR-003-post-analysis-fixes.md` (inteiro, menos a D16, revogada: D6, D9, D11, D12, C3, C4, C9 e a rastreabilidade) e `docs/architecture/CR-004-query-screens-and-plain-language.md` ("Contrato": as duas leituras novas de `RepoTickets`)
+- `docs/architecture/CR-007-scheduler-robustness.md` (R-19 a R-30 no que toca os repositórios da UI)
+- `docs/architecture/CR-008-final-audit.md` (E2: `sessao_epoch`; R-02: `PENDING` com cancelamento pedido; R-15: fila sem atendente pelo cadastro e sem CLOB; R-13: `pid_daemon NUMBER(10)`)
+- `docs/architecture/CR-006-record-columns.md` (inteiro: R-a a R-h; colunas de registro, ator obrigatório e vínculos por diferença)
+- `docs/architecture/CR-005-posix-free-path-and-logs.md` (D2: `path_file` absoluto, sem `pasta_base` em `tbsss_scripts` nem `pastas_base` em `tbsss_agentes`; R-g e R-h: CKs)
 - `README.md` §2.5 (paridade: FKs, NOT NULL, limites, maiúsculas e cascatas), §2.7, §4.2 ("Proteções do login" e "Relógio do banco"), §4.3.A (`perm_versao`), §4.3.B, §4.4 (inteiro: tabela de entidade por ação, limites e "Quantidade registrada"), §5 (inteiro, em especial §5.6 e §5.8), §7.5 ("Bind de datas"), §7.6, §8.2, §8.3 (ordem de locks), §8.5 ("CKs de banco"), §8.10 ("UI `VER_LOGS`"), §10 (tabelas do agregado), §10 (política de exclusão, texto nos cadastros e "Colunas de registro")
 - Arquivos: o contrato `modules/repo_<x>.py` do agregado, a implementação `modules/repo_fake/<x>.py` (e `repo_fake/store.py`, que emula FKs e limites), `modules/db_conn.py` (`definir_tipos_entrada`, `agora_banco`, `proximo_id`), `modules/sql_ident.py` e `scripts/test_repo_contract.py` (inclusive `test_06b_fks_e_limites_de_auditoria`)
 

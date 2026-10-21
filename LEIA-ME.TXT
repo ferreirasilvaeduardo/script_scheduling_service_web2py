@@ -6,7 +6,7 @@ SSS_TZ=America/Sao_Paulo
 eduardof@kyros5425-NOTE:~$ ssh -N -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -L 18000:127.0.0.1:18000 mastersafgf@10.238.10.109
 
 
-Hoje a aplicação sobe só em modo de demonstração: interface completa sobre o backend FAKE (`sss_env = DEV`), com os dados na memória. O roteiro abaixo serve para qualquer máquina Linux, sem `sudo`, rodando com o seu próprio usuário. Ele foi montado a partir do `docs/IMPLANTACAO.md`, que tem a versão completa para servidor (usuário `sss`, systemd, túnel).
+Hoje a aplicação sobe só em modo de demonstração: interface completa sobre o backend FAKE (`sss_env = DEV`), com os dados na memória. O roteiro abaixo serve para qualquer máquina Linux, sem `sudo`, rodando com o seu próprio usuário. Ele foi montado a partir do `docs/DEPLOYMENT.md`, que tem a versão completa para servidor (usuário `sss`, systemd, túnel).
 
 ## 1. Requisitos
 - Linux com **Python 3.6.0 ou superior** e um executável chamado `python3` ou `python3.X`. O launcher recusa outro nome, como `python`.
@@ -127,11 +127,11 @@ ssh -N -L 8000:127.0.0.1:8000 <usuario>@<maquina>
 Depois abra `http://localhost:8000/script_scheduling_service` no seu navegador. Nunca suba com `-i 0.0.0.0`.
 
 ## O que esperar
-- **Scripts do seed:** apontam para `/opt/automacoes/scripts/...`, que não existe numa máquina nova. O disparo cria o ticket normalmente, e a Gestão de Scripts mostra o aviso "Arquivo não encontrado neste servidor…". É o comportamento previsto. Para a validação completa dos caminhos é preciso instalar essa árvore com `sudo` (`docs/AMBIENTE_DEV.md` §6.1).
+- **Scripts do seed:** apontam para `/opt/automacoes/scripts/...`, que não existe numa máquina nova. O disparo cria o ticket normalmente, e a Gestão de Scripts mostra o aviso "Arquivo não encontrado neste servidor…". É o comportamento previsto. Para a validação completa dos caminhos é preciso instalar essa árvore com `sudo` (`docs/DEV_ENVIRONMENT.md` §6.1).
 - **Um processo só:** o FAKE guarda os dados na memória do processo. Não use gunicorn nem uWSGI com vários workers.
-- **Para homologar:** siga o `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx` (v2.2).
+- **Para homologar:** siga o `docs/homologation/SSS_Homologation_Manual_UI_Freeze.docx` (v2.2).
 
-Para manter no ar como serviço (usuário `sss`, systemd, `/opt/sss`), siga o `docs/IMPLANTACAO.md` a partir do §4.
+Para manter no ar como serviço (usuário `sss`, systemd, `/opt/sss`), siga o `docs/DEPLOYMENT.md` a partir do §4.
 
 
 
@@ -292,7 +292,7 @@ Os passos 3 a 8 do roteiro que te passei antes valem sem mudança, porque nenhum
 5. **Subida** pelo `bin/sss-web.sh`.
 6. **Validação** com `curl` e acesso pelo túnel SSH.
 
-Se o servidor tiver usuário de serviço, `sudo` ou `systemd`, o `docs/IMPLANTACAO.md` §4 em diante mostra a instalação definitiva em `/opt/sss`. Se não tiver nada disso, o §21 descreve exatamente esse caso, que é o modelo usado no clone 7 e no 3067.
+Se o servidor tiver usuário de serviço, `sudo` ou `systemd`, o `docs/DEPLOYMENT.md` §4 em diante mostra a instalação definitiva em `/opt/sss`. Se não tiver nada disso, o §21 descreve exatamente esse caso, que é o modelo usado no clone 7 e no 3067.
 
 
 
@@ -393,15 +393,15 @@ Consegue fazer as alteração abaixo ? :
 - O log do script sempre ficam na pasta com padrão : <nome_script>(minusculo)/<YYYY>(ano)/<MM>(mes)/DD(dia)/HH(hora)/MI(minuto)/<nome_log>_<PID>.log 
 - Qq outro log fica na pasta app/YYYY(ano)/MM(mes)/DD(dia)/HH(hora)/MI(minuto)/<nome_log>_<PID>.log
 
-* atualizar AGENTS.md , README.md, IMPLANTACAO.md , AMBIENTE_DEV.md , PADRAO_CRUD_ADMIN.md de forma RIGOROSA.
+* atualizar AGENTS.md , README.md, DEPLOYMENT.md , DEV_ENVIRONMENT.md , ADMIN_CRUD_PATTERN.md de forma RIGOROSA.
 * atualizar prompt de forma RIGOROSA. /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/prompts
 *  atualizar documentacao de forma RIGOROSA.
-/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/homologacao
+/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/homologation
 
 
-* LEIA :> AGENTS.md , README.md, IMPLANTACAO.md , AMBIENTE_DEV.md , PADRAO_CRUD_ADMIN.md de forma RIGOROSA e valide se estão atualizados com as ultimas alterações aplicadas.
+* LEIA :> AGENTS.md , README.md, DEPLOYMENT.md , DEV_ENVIRONMENT.md , ADMIN_CRUD_PATTERN.md de forma RIGOROSA e valide se estão atualizados com as ultimas alterações aplicadas.
 A mesma coisa para:
-/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/homologacao
+/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/homologation
 /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/docs/prompts
 
 
@@ -452,7 +452,7 @@ O navegador continua em `http://localhost:18000/script_scheduling_service`. Agor
 
 **Cuidado:** o clone 7 é compartilhado, e qualquer usuário logado nele também consegue chegar à tela de login do SSS por esse túnel. Ainda é preciso a senha do SSS para entrar, então o risco é baixo para um ambiente de demonstração.
 
-Se preferir que eu instale, autorize a ação quando eu tentar de novo. Também posso atualizar o `IMPLANTACAO.md` §22 com esse túnel fixo.
+Se preferir que eu instale, autorize a ação quando eu tentar de novo. Também posso atualizar o `DEPLOYMENT.md` §22 com esse túnel fixo.
 
 
 ======================
@@ -616,7 +616,7 @@ SENHA CONSULTA: KDPe3tBar4RCmqMroFxMwm5o
 
 O `parar_sss.sh` liberava o terminal antes de o servidor terminar de encerrar; ajustei para esperar a porta ser liberada e testei de novo.
 
-**Documentação:** o `IMPLANTACAO.md` ganhou o §21, com o registro desta implantação como modelo para servidores sem `sudo`/`systemd` (commit `aca60b0`). Também corrigi o teste de Python do §6, que exigia o módulo `ssl` e teria falhado neste servidor sem necessidade.
+**Documentação:** o `DEPLOYMENT.md` ganhou o §21, com o registro desta implantação como modelo para servidores sem `sudo`/`systemd` (commit `aca60b0`). Também corrigi o teste de Python do §6, que exigia o módulo `ssl` e teria falhado neste servidor sem necessidade.
 
 Cada pessoa da homologação precisa de uma conta com SSH no servidor para abrir o túnel. Se forem usar a conta `mastersafgf`, ela é compartilhada com o outro sistema, então vale combinar isso com o responsável pelo servidor.
 

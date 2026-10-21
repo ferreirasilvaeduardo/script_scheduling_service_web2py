@@ -1,6 +1,6 @@
 {{extend 'layout.html'}}
 {{
-# Lista de perfis (padrão de CRUD administrativo, docs/PADRAO_CRUD_ADMIN.md).
+# Lista de perfis (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
 _opc_admin = [('', 'Todos'), ('Y', 'Administrativos'), ('N', 'Operacionais')]
 filtros = {'id': 'filtro-perfis', 'url_base': ('admin_perfis', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': [

@@ -13,7 +13,7 @@ import os
 import sys
 import threading
 
-import pastas_log
+import log_paths
 
 
 FMT_SSS = "%(asctime)s %(levelname)s [pid=%(process)d] [agente=%(agente)s] [ticket=%(ticket)s] [acao=%(acao)s] %(message)s"
@@ -96,7 +96,7 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
         self._avisos = []
 
         agora = datetime.datetime.now()
-        caminho_inicial = pastas_log.proximo_caminho_log_app(
+        caminho_inicial = log_paths.proximo_caminho_log_app(
             self.log_dir, self.nome_processo, self.pid, agora
         )
         _garantir_diretorio(os.path.dirname(caminho_inicial), self._avisos)
@@ -116,7 +116,7 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
 
     def executar_retencao(self, ref_dt=None):
         falhas = []
-        pastas_log.limpar_retencao_app(self.log_dir, self.retention_days, ref_dt=ref_dt, falhas=falhas)
+        log_paths.limpar_retencao_app(self.log_dir, self.retention_days, ref_dt=ref_dt, falhas=falhas)
         for falha in falhas:
             self.registrar_aviso("RETENCAO", "retencao do log da aplicacao nao removeu %s" % falha)
 
@@ -156,7 +156,7 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
             self.stream.close()
             self.stream = None
         agora = datetime.datetime.now()
-        novo_caminho = pastas_log.proximo_caminho_log_app(
+        novo_caminho = log_paths.proximo_caminho_log_app(
             self.log_dir, self.nome_processo, self.pid, agora
         )
         self.baseFilename = os.path.abspath(novo_caminho)
@@ -174,7 +174,7 @@ def _chmod(caminho, modo, avisos):
 
 def _garantir_diretorio(diretorio, avisos):
     # Nivel a nivel com 0o750 (README §13): regra unica em pastas_log (F8.1).
-    pastas_log.garantir_diretorio(diretorio, avisos)
+    log_paths.garantir_diretorio(diretorio, avisos)
 
 
 def configurar(nome_log, cfg):
@@ -244,7 +244,7 @@ def registrar_critico_inicial(nome_log, mensagem, log_dir=None, stream=None):
     if log_dir and os.path.isdir(log_dir) and os.access(log_dir, os.W_OK):
         nome = nome_log[:-4] if nome_log.endswith(".log") else nome_log
         # Sem sufixo _<n>: falhas repetidas no mesmo minuto e processo vao para o mesmo arquivo.
-        caminho = pastas_log.caminho_log_app(log_dir, nome, os.getpid(), datetime.datetime.now())
+        caminho = log_paths.caminho_log_app(log_dir, nome, os.getpid(), datetime.datetime.now())
         try:
             _garantir_diretorio(os.path.dirname(caminho), avisos)
             arquivo_novo = not os.path.exists(caminho)

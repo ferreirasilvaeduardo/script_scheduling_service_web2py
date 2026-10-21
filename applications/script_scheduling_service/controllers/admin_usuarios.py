@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Cadastro de usuarios (README §4.2, §4.3.B, MANAGE_USERS). Padrao em docs/PADRAO_CRUD_ADMIN.md.
+"""Cadastro de usuarios (README §4.2, §4.3.B, MANAGE_USERS). Padrao em docs/ADMIN_CRUD_PATTERN.md.
 
-Regras ficam em modules/admin_usuarios_service.py; CSRF e Origin de todo POST sao validados em
+Regras ficam em modules/admin_users_service.py; CSRF e Origin de todo POST sao validados em
 models/10_security.py. Senhas sao retiradas de request.vars assim que lidas: o ticket de erro do
 web2py grava as variaveis da requisicao.
 """
 import admin_crud
-import admin_usuarios_service as servico
+import admin_users_service as servico
 import security
 import ui_helpers
 from admin_crud import AcessoNegado, OperacaoNegada

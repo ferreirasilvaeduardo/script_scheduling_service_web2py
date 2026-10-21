@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Cadastro de scripts, homologacao e vinculo de parametros (README §4.3.A, §6.3, §8.5, MANAGE_SCRIPTS).
 
-Padrao em docs/PADRAO_CRUD_ADMIN.md. Regras ficam em modules/admin_scripts_service.py; CSRF e Origin
+Padrao em docs/ADMIN_CRUD_PATTERN.md. Regras ficam em modules/admin_scripts_service.py; CSRF e Origin
 de todo POST sao validados em models/10_security.py. Listas enviadas pelo cliente sao revalidadas inteiras.
 """
 import admin_crud

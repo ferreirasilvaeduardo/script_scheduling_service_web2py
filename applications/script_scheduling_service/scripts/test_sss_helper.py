@@ -376,11 +376,11 @@ class TestSssHelper(unittest.TestCase):
 
     def test_relativo_de_pastas_log_passa_no_helper(self):
         import datetime
-        import pastas_log
+        import log_paths
         helper = _carregar_helper()
         dt = datetime.datetime(2026, 1, 2, 3, 4)
         for nome in (u"Carga Diária", u"-x-", u"a.b_c", u"!!!", u"x" * 60, u"Relatório 2026 (v2)"):
-            _base, rel = pastas_log.pasta_saida("/s", "PRODUCAO", nome, dt, 99, script_id=5)
+            _base, rel = log_paths.pasta_saida("/s", "PRODUCAO", nome, dt, 99, script_id=5)
             self.assertEqual(len(helper._partes_relativo(rel)), 7, rel)
 
     def test_empacotar_so_arquivos_regulares_sem_seguir_links(self):
@@ -468,7 +468,7 @@ class TestSssHelper(unittest.TestCase):
             fonte = f.read()
         compile(fonte, HELPER, "exec")
         self.assertTrue(fonte.startswith("#!/usr/bin/env python3\n"))
-        for proibido in ("import gluon", "import sss_", "import plataforma", "config.ini\""):
+        for proibido in ("import gluon", "import sss_", "import os_platform", "config.ini\""):
             self.assertNotIn(proibido, fonte)
         self.assertTrue(os.stat(HELPER).st_mode & 0o111, "helper executavel")
 

@@ -46,10 +46,10 @@ bin/sss-web-*_v*.sh
 /welcome.w2p
 
 # Pacotes de implantacao gerados (binarios)
-/applications/script_scheduling_service/docs/sss_pacotes/*.tar.gz
-/applications/script_scheduling_service/docs/sss_pacotes/*.sha256
-/applications/script_scheduling_service/docs/sss_dev_scripts_exemplos/
-# Capturas do manual de homologacao: ja ficam dentro do .docx (dev/homologacao/LEIA-ME.md)
-applications/script_scheduling_service/dev/homologacao/telas/
+/applications/script_scheduling_service/docs/sss_packages/*.tar.gz
+/applications/script_scheduling_service/docs/sss_packages/*.sha256
+/applications/script_scheduling_service/docs/sss_dev_script_examples/
+# Capturas do manual de homologacao: ja ficam dentro do .docx (dev/homologation/README.md)
+applications/script_scheduling_service/dev/homologation/screens/
 applications/script_scheduling_service/output/
 applications/script_scheduling_service/input/

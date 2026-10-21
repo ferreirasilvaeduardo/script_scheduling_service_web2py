@@ -24,13 +24,13 @@ from unittest import mock
 import executor
 import log_pump
 import path_guard
-import plataforma
+import os_platform
 import rbac
 import scheduler_loop as sl
 import sql_ident
-from repo_oracle.scheduler_fila import RegistroPerdido
+from repo_oracle.scheduler_queue import RegistroPerdido
 from sss_config import AmbienteSegredo, Segredos
-from _saida_memoria import RepoSaidaMemoria
+from _output_memory import RepoSaidaMemoria
 
 AGENTE_FALSO = 2 ** 31 - 3
 AMB = "DEV"
@@ -493,7 +493,7 @@ class TestExecucao(_Base):
         p = subprocess.Popen(["true"], start_new_session=True)
         p.wait()
         item.execucao = executor.Execucao(1, self.work, None, None, None)
-        item.execucao.processo = plataforma.Processo(p.pid, None, popen=p)
+        item.execucao.processo = os_platform.Processo(p.pid, None, popen=p)
         item.execucao.pid = p.pid
         self.ag._encerrar(item, "CANCEL")
         self.assertIsNone(item.motivo)
@@ -659,13 +659,13 @@ class TestPendencias(_Base):
 
     def test_falha_no_proc_depois_do_spawn_e_spawn_error(self):
         tid = self.banco.ticket(self.banco.script("sleep 300\n"))
-        original = plataforma.gravar_estado
+        original = os_platform.gravar_estado
         def _grava(caminho, dados):
             if caminho.endswith(executor.PROC):
                 raise OSError(28, "No space left on device")
             return original(caminho, dados)
         self.subir()
-        with mock.patch.object(plataforma, "gravar_estado", side_effect=_grava), \
+        with mock.patch.object(os_platform, "gravar_estado", side_effect=_grava), \
                 self.assertLogs("sss_scheduler", "ERROR"):
             self.rodar(self.terminado(tid))
         self.assertEqual(self.final(tid), ("FAILED", "SPAWN_ERROR", -4))
@@ -750,7 +750,7 @@ class _PlatDisco(object):
     def __getattr__(self, nome):
         if nome == "espaco_livre_mb":
             return lambda caminho: 10
-        return getattr(plataforma, nome)
+        return getattr(os_platform, nome)
 
 
 def _vivo(pid):

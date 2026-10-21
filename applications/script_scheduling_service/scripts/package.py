@@ -39,7 +39,7 @@ EXCLUIR_APP = (
     "controllers/dev.py", "views/dev", "dev", "modules/repo_fake", "instance/config.ini", "instance/web.env",
     "log", "logs", "work", "exec", "dist", "applications", "deposit", "site-packages",
     "scripts/applications", "scripts/deposit", "scripts/logs", "scripts/site-packages",
-    "scripts/_testenv.py", "scripts/_oracle_test_support.py", "scripts/_saida_memoria.py",
+    "scripts/_testenv.py", "scripts/_oracle_test_support.py", "scripts/_output_memory.py",
 ) + RUNTIME_VAZIAS
 _RE_TESTE = re.compile(r"^scripts/test_[^/]*\.py$")
 # Do gluon/ (upstream) saem os testes e o ambiente virtual de teste versionado do pydal, em qualquer nivel.

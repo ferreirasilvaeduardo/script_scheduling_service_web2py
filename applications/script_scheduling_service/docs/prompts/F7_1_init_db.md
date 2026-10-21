@@ -2,10 +2,10 @@
 
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §4 (inteiro)
-- `docs/arquitetura/CR-007-robustez-do-scheduler.md` (D1b: contas e GRANTs por papel; D4: versão do esquema e migrações; R-27: índice único da ocorrência; R-29: LOBs e estatísticas; R-32: `--recreate`)
-- `docs/arquitetura/CR-008-auditoria-final.md` (E2: `tbsss_usuarios.sessao_epoch`; E3: papel `monitor`; R-13: `pid_daemon NUMBER(10)`; R-14: normalização da conferência de esquema; R-28: `table_prefix` só minúsculo; o esquema continua na versão 1 até o primeiro banco real)
-- `docs/arquitetura/CR-006-colunas-de-registro.md` (R-a: colunas de registro e CKs `_upd`; R-b: atores `SYSTEM:init_db`)
-- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D5 e C4: colunas e CKs novas, `table_prefix`, CRITICAL em configuração inválida; a D16, várias pastas base, foi revogada pelo CR-005)
+- `docs/architecture/CR-007-scheduler-robustness.md` (D1b: contas e GRANTs por papel; D4: versão do esquema e migrações; R-27: índice único da ocorrência; R-29: LOBs e estatísticas; R-32: `--recreate`)
+- `docs/architecture/CR-008-final-audit.md` (E2: `tbsss_usuarios.sessao_epoch`; E3: papel `monitor`; R-13: `pid_daemon NUMBER(10)`; R-14: normalização da conferência de esquema; R-28: `table_prefix` só minúsculo; o esquema continua na versão 1 até o primeiro banco real)
+- `docs/architecture/CR-006-record-columns.md` (R-a: colunas de registro e CKs `_upd`; R-b: atores `SYSTEM:init_db`)
+- `docs/architecture/CR-003-post-analysis-fixes.md` (D5 e C4: colunas e CKs novas, `table_prefix`, CRITICAL em configuração inválida; a D16, várias pastas base, foi revogada pelo CR-005)
 - `README.md` §9, §10 (inteiro; em especial as tabelas 6 `tbsss_scripts`, 9 `tbsss_usuarios`, 15 `tbsss_agentes` e 16 `tbsss_auditoria`), §11.1, §11.2, §4.3.D (seed de funcionalidades), §8.5 ("CKs de banco"), §12.1 (tabela de faixas e "Falha de configuração"), §13
 - Arquivos: `modules/sql_ident.py` (fonte única do modelo; já contém as colunas e CKs do CR-003), `modules/sss_config.py` (`obter_config`/`carregar`, regex de `owner` e `table_prefix`)
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Base comum dos cadastros administrativos (docs/PADRAO_CRUD_ADMIN.md, README §4.4, §10).
+"""Base comum dos cadastros administrativos (docs/ADMIN_CRUD_PATTERN.md, README §4.4, §10).
 
 Modulo puro: nao importa gluon (testavel sem o framework).
 """

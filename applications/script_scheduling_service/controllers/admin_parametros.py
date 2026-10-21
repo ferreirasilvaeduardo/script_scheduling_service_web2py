@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Dicionario de parametros (README §6, MANAGE_PARAMETERS). Padrao em docs/PADRAO_CRUD_ADMIN.md.
+"""Dicionario de parametros (README §6, MANAGE_PARAMETERS). Padrao em docs/ADMIN_CRUD_PATTERN.md.
 
-Regras ficam em modules/admin_parametros_service.py; CSRF e Origin de todo POST sao validados em
+Regras ficam em modules/admin_parameters_service.py; CSRF e Origin de todo POST sao validados em
 models/10_security.py. O editor de opcoes do cliente e conveniencia: o servidor revalida tudo.
 """
 import admin_crud
-import admin_parametros_service as servico
+import admin_parameters_service as servico
 import ui_helpers
 from admin_crud import AcessoNegado, OperacaoNegada
 from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado

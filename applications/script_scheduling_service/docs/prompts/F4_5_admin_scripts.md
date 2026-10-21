@@ -3,7 +3,7 @@
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §3.2
 - `README.md` §4.3.A (homologação), §6.3 (`NENHUM` sem vínculos, `NOMEADO` exige flag), §8.5, §10 (tabelas 6, 8 e 11, política de exclusão)
-- `docs/PADRAO_CRUD_ADMIN.md`, `modules/path_guard.py`, `modules/params_compiler.py`
+- `docs/ADMIN_CRUD_PATTERN.md`, `modules/path_guard.py`, `modules/params_compiler.py`
 
 ## Objetivo
 Cadastrar rotinas no catálogo com validação de segurança do executável, a homologação por ambiente e o vínculo ordenado de parâmetros.

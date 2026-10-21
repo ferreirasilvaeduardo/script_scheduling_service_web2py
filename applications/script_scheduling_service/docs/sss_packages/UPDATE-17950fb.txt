@@ -1,0 +1,66 @@
+# Roteiro de atualizacao do SSS no 10.129.164.55 para 17950fb (copia do DEPLOYMENT.md §22.7).
+# Passo 0 roda na estacao e no clone 7; os demais no servidor. Pacote: sss-17950fb.tar.gz (SHA-256 em sss-17950fb.tar.gz.sha256).
+
+VER=17950fb
+# na estação, a partir da pasta onde estão os arquivos
+scp -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+    sss-$VER.tar.gz sss-$VER.tar.gz.sha256 mastersafgf@10.238.10.109:/tmp/
+# no clone 7 (defina VER=17950fb de novo)
+scp /tmp/sss-$VER.tar.gz /tmp/sss-$VER.tar.gz.sha256 mastersafgf@10.129.164.55:/portaloptrib/TESHUVA/SSS/pacotes/
+rm -f /tmp/sss-$VER.tar.gz /tmp/sss-$VER.tar.gz.sha256
+VER=17950fb
+SSS=/portaloptrib/TESHUVA/SSS
+PY=/portaloptrib/TESHUVA/sparta/python3.8/bin/python3
+APP=applications/script_scheduling_service
+NOVO=$SSS/web2py-$VER
+
+# 1. Conferir e extrair AO LADO da versão atual (o SSS continua no ar)
+cd $SSS/pacotes && sha256sum -c sss-$VER.tar.gz.sha256              # sss-17950fb.tar.gz: OK
+mkdir -m 750 $NOVO && tar -xzf $SSS/pacotes/sss-$VER.tar.gz -C $NOVO
+ls $NOVO/applications                                                # somente script_scheduling_service
+
+# 2. config.ini: copiar o atual e converter (chave removida, retenção do log e chaves opcionais novas)
+cp $SSS/web2py/$APP/instance/config.ini $NOVO/$APP/instance/config.ini
+chmod 640 $NOVO/$APP/instance/config.ini
+sed -i -e '/^base_script_dirs\{0,1\} *=/d' \
+       -e 's|^app_log_backups *=.*$|app_log_retention_days = 30|' \
+       -e '/^work_dir *=/a exec_users =\nexec_work_dir =' \
+       -e '/^cron_horizon_days *=/a queue_aging_min = 60\nambientes_exigem_hash =\nlog_dir_min_livre_mb = 1024' \
+       -e '/^session_idle_timeout_s *=/a session_max_hours = 12' \
+       -e '/^purge_batch_size *=/a purge_user =' $NOVO/$APP/instance/config.ini
+grep -nE '^(base_script|app_log_|cron_horizon_days)' $NOVO/$APP/instance/config.ini
+# esperado: app_log_max_bytes, app_log_retention_days = 30 e cron_horizon_days = 1461 (mínimo novo: 1461)
+diff <(grep -oE "^[a-z_]+ =" $NOVO/$APP/instance/config.ini.example | sort) \
+     <(grep -oE "^[a-z_]+ =" $NOVO/$APP/instance/config.ini | sort) && echo "chaves OK"
+
+# 3. Verificar o código novo (não usa a porta; o SSS atual segue no ar)
+cd $NOVO/$APP
+$PY scripts/check_env.py; echo "codigo: $?"                         # 0
+$PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran 819 tests ... OK (skipped=23)
+
+# 4. Teste de carga da configuração (§10) na pasta nova
+cd $NOVO && umask 077
+echo 'print("SSS: configuracao OK (sss_env=%s, backend=%s, agent_id=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.app.data_backend, current.sss_cfg.agent.agent_id))' > /tmp/sss_diag.py
+$PY web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E "^SSS:|ConfigErro"
+rm -f /tmp/sss_diag.py
+# esperado: SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)
+
+# 5. Conferir que os scripts de operação usam o caminho $SSS/web2py e exportam um locale UTF-8
+grep -n "web2py\|sss_web.log\|LANG\|LC_ALL\|sss-web.sh" $SSS/iniciar_sss.sh $SSS/parar_sss.sh
+# Se o iniciar_sss.sh não passar pelo bin/sss-web.sh nem exportar LANG/LC_ALL UTF-8, a subida é recusada
+# (CR-007, R-17): acrescente "export LANG=C.UTF-8 LC_ALL=C.UTF-8" antes do comando do web2py.
+
+# 6. Trocar a versão (parada de ~1 minuto)
+$SSS/parar_sss.sh
+mv $SSS/web2py $SSS/web2py-fdf6f35 && mv $NOVO $SSS/web2py
+$SSS/iniciar_sss.sh
+
+# 7. Validar
+curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:18000/script_scheduling_service/default/login     # 200
+curl -sI http://127.0.0.1:18000/script_scheduling_service/default/login | grep -icE "content-security-policy|x-frame-options|x-content-type-options|referrer-policy"   # 4
+curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://outro-host" http://127.0.0.1:18000/script_scheduling_service/default/login   # 403
+find $SSS/logs/app -name 'sss_web_*.log' -type f | xargs grep -c CRITICAL   # 0 em cada arquivo
+tail -n 5 $SSS/logs/servidor.out
+$SSS/parar_sss.sh
+mv $SSS/web2py $SSS/web2py-$VER && mv $SSS/web2py-fdf6f35 $SSS/web2py
+$SSS/iniciar_sss.sh

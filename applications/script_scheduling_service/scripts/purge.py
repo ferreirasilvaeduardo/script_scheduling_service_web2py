@@ -30,11 +30,11 @@ import sys
 _BASE = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 sys.path.insert(0, os.path.join(_BASE, "modules"))
 
-import auditoria_service  # noqa: E402
+import audit_service  # noqa: E402
 import db_conn  # noqa: E402
 import masking  # noqa: E402
-import pastas_log  # noqa: E402
-import plataforma  # noqa: E402
+import log_paths  # noqa: E402
+import os_platform  # noqa: E402
 import sss_config  # noqa: E402
 import sss_logging  # noqa: E402
 from repo_oracle.purge import RepoPurge  # noqa: E402
@@ -67,12 +67,12 @@ class ExportacaoAuditoria(object):
         self._arquivo = io.open(fd, "w", encoding="utf-8", newline="")
         self._escritor = csv.writer(self._arquivo, delimiter=";", lineterminator="\r\n")
         self._arquivo.write(u"﻿")
-        self._escritor.writerow(auditoria_service.CABECALHO_CSV)
+        self._escritor.writerow(audit_service.CABECALHO_CSV)
         self.linhas = 0
 
     def gravar(self, registros):
         for reg in registros:
-            self._escritor.writerow(auditoria_service.linha_csv(reg))
+            self._escritor.writerow(audit_service.linha_csv(reg))
         self._arquivo.flush()
         os.fsync(self._arquivo.fileno())
         self.linhas += len(registros)
@@ -84,7 +84,7 @@ class ExportacaoAuditoria(object):
 class Purge(object):
     """Uma execucao do purge sobre uma conexao ja aberta. Devolve o codigo de saida e preenche self.resumo."""
 
-    def __init__(self, cfg, conn, repo=None, plat=plataforma, logger=None):
+    def __init__(self, cfg, conn, repo=None, plat=os_platform, logger=None):
         self.cfg = cfg
         self.conn = conn
         self.repo = repo or RepoPurge.da_config(cfg)
@@ -200,10 +200,10 @@ class Purge(object):
 
     def _logs_locais(self, agora, dry_run):
         log_dir = self.cfg.logging.log_dir
-        manter = [pastas_log.diretorio_log_execucao(log_dir, amb, nome, inicio, script_id=sid)
+        manter = [log_paths.diretorio_log_execucao(log_dir, amb, nome, inicio, script_id=sid)
                   for amb, nome, sid, inicio in self.repo.running_para_logs(self.conn) if nome]
         falhas = []
-        pastas = pastas_log.limpar_retencao_execucao(log_dir, self.cfg.logging.local_log_retention_days, agora,
+        pastas = log_paths.limpar_retencao_execucao(log_dir, self.cfg.logging.local_log_retention_days, agora,
                                                      manter=manter, dry_run=dry_run, falhas=falhas,
                                                      caminho_final=self.plat.caminho_final)
         for falha in falhas:
@@ -222,7 +222,7 @@ class Purge(object):
         usuarios = dict(agente.exec_users or ())
         total, ok = 0, True
         for amb in agente.environments:
-            base = os.path.join(agente.output_dir, pastas_log.pasta_ambiente(amb))
+            base = os.path.join(agente.output_dir, log_paths.pasta_ambiente(amb))
             if not os.path.isdir(base):
                 continue
             try:
@@ -248,7 +248,7 @@ def _argumentos(argv):
     return args
 
 
-def main(argv=None, conectar=None, plat=plataforma, saida=None):
+def main(argv=None, conectar=None, plat=os_platform, saida=None):
     """conectar(cfg, segredos) e plat sao pontos de injecao dos testes; saida recebe o resumo (stdout)."""
     saida = saida or sys.stdout
     args = _argumentos(argv)
@@ -280,7 +280,7 @@ def main(argv=None, conectar=None, plat=plataforma, saida=None):
     if not args.dry_run:
         try:
             trava = plat.travar_instancia(os.path.join(cfg.agent.work_dir, NOME_TRAVA))
-        except plataforma.InstanciaJaEmExecucao:
+        except os_platform.InstanciaJaEmExecucao:
             logger.info("outro purge ja esta em execucao neste servidor (%s)", NOME_TRAVA, extra=_EXTRA)
             return SAIDA_OK
     try:

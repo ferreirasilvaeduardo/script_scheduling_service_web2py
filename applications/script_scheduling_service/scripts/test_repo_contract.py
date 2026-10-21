@@ -33,14 +33,14 @@ from gluon import current
 
 import repo_factory
 import sql_ident
-from repo_agendamentos import RepoAgendamentos
-from repo_agentes import RepoAgentes
-from repo_auditoria import RepoAuditoria
-from repo_catalogo import RepoCatalogo
+from repo_schedules import RepoAgendamentos
+from repo_agents import RepoAgentes
+from repo_audit import RepoAuditoria
+from repo_catalog import RepoCatalogo
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 from repo_rbac import RepoRbac
 from repo_tickets import RepoTickets
-from repo_usuarios import RepoUsuarios
+from repo_users import RepoUsuarios
 
 
 class _Massa(object):

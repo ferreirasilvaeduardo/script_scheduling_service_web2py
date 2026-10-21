@@ -1,6 +1,6 @@
 # SSS — Explain Plan: repositório do daemon (F8.3a)
 
-Consultas do `RepoSchedulerFila` (`modules/repo_oracle/scheduler_fila.py`) no Oracle 11gR2+.
+Consultas do `RepoSchedulerFila` (`modules/repo_oracle/scheduler_queue.py`) no Oracle 11gR2+.
 
 > **Identificadores dinâmicos (README §9.1, §12.1):** `{owner}` vem de `[oracle] owner` e `{prefixo}` de `[oracle] table_prefix`, validados por `sql_ident` e qualificados uma vez, na criação do repositório. As listas `IN` (`:amb0..`, `:int0..`) são geradas por contagem e todo valor entra por bind.
 >

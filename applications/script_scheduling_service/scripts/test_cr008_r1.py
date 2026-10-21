@@ -10,15 +10,15 @@ import time
 import unittest
 from unittest import mock
 
-import admin_perfis_service as perfis_mod
-import admin_usuarios_service as usr_mod
+import admin_profiles_service as perfis_mod
+import admin_users_service as usr_mod
 import auth_service
 import params_compiler
 import repo_factory
 import security
 from admin_crud import CAMPO_GERAL, OperacaoNegada
-from admin_perfis_service import ServicoAdminPerfis
-from admin_usuarios_service import ServicoAdminUsuarios
+from admin_profiles_service import ServicoAdminPerfis
+from admin_users_service import ServicoAdminUsuarios
 from params_compiler import ParamErro
 
 IP = "10.8.8.8"

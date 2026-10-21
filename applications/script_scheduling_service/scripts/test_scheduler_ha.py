@@ -15,11 +15,11 @@ import unittest
 from unittest import mock
 
 import db_conn
-import desdobro
+import schedule_expansion
 import rbac
 import sql_ident
-from repo_oracle.scheduler_agenda import OcorrenciaDuplicada
-from test_scheduler_fila import _Erro
+from repo_oracle.scheduler_schedules import OcorrenciaDuplicada
+from test_scheduler_queue import _Erro
 
 AGENTE = "srv-ha"
 AGORA = datetime.datetime(2026, 10, 20, 10, 0, 0)
@@ -225,7 +225,7 @@ class _Base(unittest.TestCase):
         self.horizonte = None
 
     def des(self):
-        return desdobro.Desdobro(self.agenda, self.fila, AGENTE, self.cfg, lambda: self.monotonico[0],
+        return schedule_expansion.Desdobro(self.agenda, self.fila, AGENTE, self.cfg, lambda: self.monotonico[0],
                                  horizonte_dias=self.horizonte)
 
     def regra(self, rid=1, **kw):
@@ -417,7 +417,7 @@ class TestDesdobro(_Base):
         self.regra(recurrence_type="CRON", cron_expression="0 10 29 2 *", run_time=None,
                    next_run_at=datetime.datetime(2026, 10, 20, 9, 55))
         self.agenda.regras[1]["cron_expression"] = "55 9 * * *"
-        with mock.patch("recurrence.proxima_execucao", side_effect=desdobro.recurrence.CronErro("sem ocorrencia")):
+        with mock.patch("recurrence.proxima_execucao", side_effect=schedule_expansion.recurrence.CronErro("sem ocorrencia")):
             with self.assertLogs("sss_scheduler", "WARNING"):
                 self.assertEqual(self.processar(), "CRON_INVALIDO_COM_TICKET")
         r = self.agenda.regras[1]
@@ -426,7 +426,7 @@ class TestDesdobro(_Base):
         self.setUp()
         self.regra(recurrence_type="CRON", cron_expression="55 9 * * *", run_time=None, last_ticket_id=50)
         self.agenda.tickets[50] = {"status": "RUNNING", "created_at": AGORA}
-        with mock.patch("recurrence.proxima_execucao", side_effect=desdobro.recurrence.CronErro("sem ocorrencia")):
+        with mock.patch("recurrence.proxima_execucao", side_effect=schedule_expansion.recurrence.CronErro("sem ocorrencia")):
             with self.assertLogs("sss_scheduler", "WARNING"):
                 self.assertEqual(self.processar(), "INVALID_CRON")
         self.assertEqual(len(self.agenda.tickets), 1, "sobreposicao: sem ticket novo")
@@ -544,8 +544,8 @@ class TestDesdobroOracle(unittest.TestCase):
         return self.contrato._limpar_massa(self)
 
     def setUp(self):
-        from repo_oracle.scheduler_agenda import RepoSchedulerAgenda
-        from repo_oracle.scheduler_fila import RepoSchedulerFila
+        from repo_oracle.scheduler_schedules import RepoSchedulerAgenda
+        from repo_oracle.scheduler_queue import RepoSchedulerFila
         self.contrato.setUp(self)
         self._massa = self.trc._Massa(self.obter_repo)
         self.c = self._massa.cenario()
@@ -555,7 +555,7 @@ class TestDesdobroOracle(unittest.TestCase):
         self.rbac.matriz_salvar(self.c["perfil"]["id"], funcs, [self.c["amb1"]["id"]], [self.c["scr"]["id"]],
                                 ator=self._massa.ator)
         self.agente = "tst-ha-%s" % self._massa.suf
-        self.des = desdobro.Desdobro(RepoSchedulerAgenda(cat._owner, cat._prefixo),
+        self.des = schedule_expansion.Desdobro(RepoSchedulerAgenda(cat._owner, cat._prefixo),
                                      RepoSchedulerFila(cat._owner, cat._prefixo), self.agente, _Cfg(),
                                      lambda: 0.0)
         self.conn = cat._obter_conexao()
@@ -734,7 +734,7 @@ class TestNodeOffline(tsc._Base):
 import signal as _signal  # noqa: E402
 import threading as _threading  # noqa: E402
 
-import plataforma as _plataforma  # noqa: E402
+import os_platform as _plataforma  # noqa: E402
 
 
 class TestParada(tsc._Base):

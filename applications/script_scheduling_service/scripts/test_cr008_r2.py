@@ -13,7 +13,7 @@ import repo_factory
 import security
 import sql_ident
 import ui_helpers
-from agendamentos_service import ServicoAgendamentos
+from schedules_service import ServicoAgendamentos
 from ticket_service import ServicoTicket
 
 SESSAO_ADMIN = {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao": 1, "sessao_epoch": 0}

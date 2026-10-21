@@ -4,10 +4,10 @@ import time
 
 from gluon import current
 
-import agendamentos_service
-import agentes_service
+import schedules_service
+import agents_service
 import auth_service
-import permissoes_service
+import permissions_service
 import rbac
 import security
 import ticket_service
@@ -43,9 +43,9 @@ def index():
         cartoes["tickets"] = _cartao(ctx, "tickets", lambda: ticket_service.resumo_inicial(ctx))
     if rbac.tem_func(ctx, "MANAGE_SCHEDULES"):
         cartoes["agendamentos"] = _cartao(
-            ctx, "agendamentos", lambda: agendamentos_service.listar(ctx, {"active": "Y"}, 1, 5)["itens"])
+            ctx, "agendamentos", lambda: schedules_service.listar(ctx, {"active": "Y"}, 1, 5)["itens"])
     if rbac.tem_func(ctx, "VIEW_AUDIT"):
-        cartoes["agentes"] = _cartao(ctx, "agentes", lambda: agentes_service.painel(ctx))
+        cartoes["agentes"] = _cartao(ctx, "agentes", lambda: agents_service.painel(ctx))
     return dict(ctx=ctx, menu=response.sss_menu, pode_disparar=rbac.tem_func(ctx, "EXEC_SCRIPT"),
                 cartoes=cartoes)
 
@@ -100,7 +100,7 @@ def permissoes():
     ctx = _exigir_login()
     response.title = u"O que eu posso fazer — SSS"
     try:
-        dados = permissoes_service.montar(ctx)
+        dados = permissions_service.montar(ctx)
         erro = None
     except RepoErro:
         _log.exception("falha ao montar permissoes (login=%s)", ctx["login"], extra={"acao": "PERMISSOES"})

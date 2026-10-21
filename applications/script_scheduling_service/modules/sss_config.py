@@ -809,9 +809,9 @@ def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None, papel=
     if not os.path.exists(caminho):
         raise ConfigErro(motivo="Arquivo de segredos nao encontrado: %s" % caminho)
 
-    import plataforma
+    import os_platform
     try:
-        codigo, st = plataforma.validar_arquivo_restrito(caminho)
+        codigo, st = os_platform.validar_arquivo_restrito(caminho)
     except OSError as e:
         raise ConfigErro(motivo="Erro ao obter informacoes do arquivo de segredos %s: %s" % (caminho, e))
 

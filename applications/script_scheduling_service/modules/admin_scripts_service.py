@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Cadastro de scripts, homologacao por ambiente e vinculo de parametros (README §4.3.A, §6.3, §8.5, §10).
 
-Segue docs/PADRAO_CRUD_ADMIN.md. O cadastro confere so o formato do path_file e as pastas do sistema (CR-011,
+Segue docs/ADMIN_CRUD_PATTERN.md. O cadastro confere so o formato do path_file e as pastas do sistema (CR-011,
 S1): o arquivo e conferido pelo agente, no servidor onde o script roda. Regras de tipo_param x vinculos sao
 reverificadas pelo repositorio na mesma operacao. Nao importa gluon fora de _servico.
 """
@@ -13,7 +13,7 @@ import threading
 
 import admin_crud
 import params_compiler
-import pastas_log
+import log_paths
 import path_guard
 import ui_helpers
 from admin_crud import CAMPO_GERAL, OperacaoNegada
@@ -233,7 +233,7 @@ class ServicoAdminScripts(object):
             erros["interpreter"] = MENSAGENS_PATH[exc.codigo]
         reg["interpreter"] = cmd
         # D7 (README §8.5): a pasta de log do script nao pode ser a dos logs da aplicacao.
-        if reg["name"] and "name" not in erros and pastas_log.nome_reservado(reg["name"]):
+        if reg["name"] and "name" not in erros and log_paths.nome_reservado(reg["name"]):
             erros["name"] = MSG_NOME_RESERVADO
         tipo = admin_crud.texto(dados.get("param_type"), 15)
         if tipo not in TIPOS_PARAM:

@@ -80,19 +80,19 @@ def _senha_dev_seed():
 def _classe_oracle(nome_norm):
     """Classe Oracle do agregado (import tardio: o driver so e carregado quando usado)."""
     if nome_norm == "catalogo":
-        from repo_oracle.catalogo import RepoCatalogoOracle
+        from repo_oracle.catalog import RepoCatalogoOracle
         return RepoCatalogoOracle
     if nome_norm == "tickets":
         from repo_oracle.tickets import RepoTicketsOracle
         return RepoTicketsOracle
     if nome_norm == "agendamentos":
-        from repo_oracle.agendamentos import RepoAgendamentosOracle
+        from repo_oracle.schedules import RepoAgendamentosOracle
         return RepoAgendamentosOracle
     if nome_norm == "auditoria":
-        from repo_oracle.auditoria import RepoAuditoriaOracle
+        from repo_oracle.audit import RepoAuditoriaOracle
         return RepoAuditoriaOracle
     if nome_norm == "agentes":
-        from repo_oracle.agentes import RepoAgentesOracle
+        from repo_oracle.agents import RepoAgentesOracle
         return RepoAgentesOracle
     return None
 
@@ -117,7 +117,7 @@ def obter(nome, config=None):
         with _lock_fabrica:
             if nome_norm in ("usuarios", "rbac") and nome_norm not in _singletons_oracle:
                 # RBAC_USUARIOS: os dois repositorios compartilham o agregado.
-                from repo_oracle.usuarios import RepoUsuariosOracle
+                from repo_oracle.users import RepoUsuariosOracle
                 from repo_oracle.rbac import RepoRbacOracle
                 _singletons_oracle["usuarios"] = RepoUsuariosOracle()
                 _singletons_oracle["rbac"] = RepoRbacOracle()
@@ -133,15 +133,15 @@ def obter(nome, config=None):
 
     with _lock_fabrica:
         if _fake_store is None:
-            from repo_fake.agendamentos import RepoAgendamentosFake
-            from repo_fake.agentes import RepoAgentesFake
-            from repo_fake.auditoria import RepoAuditoriaFake
-            from repo_fake.catalogo import RepoCatalogoFake
+            from repo_fake.schedules import RepoAgendamentosFake
+            from repo_fake.agents import RepoAgentesFake
+            from repo_fake.audit import RepoAuditoriaFake
+            from repo_fake.catalog import RepoCatalogoFake
             from repo_fake.rbac import RepoRbacFake
             from repo_fake.seed import carregar_seed
             from repo_fake.store import FakeDataStore
             from repo_fake.tickets import RepoTicketsFake
-            from repo_fake.usuarios import RepoUsuariosFake
+            from repo_fake.users import RepoUsuariosFake
             _fake_store = FakeDataStore()
             carregar_seed(_fake_store, senha_dev=_senha_dev_seed())
 

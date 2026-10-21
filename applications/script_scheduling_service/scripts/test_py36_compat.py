@@ -118,7 +118,7 @@ def encontrar_arquivos_python(app_dir, web2py_root):
 
 def verificar_primitivas_so(caminho, app_dir, web2py_root):
     """Rejeita primitivas POSIX fora da plataforma e da allowlist estrita do helper."""
-    plataforma_dir = os.path.normpath(os.path.join(app_dir, "modules", "plataforma"))
+    plataforma_dir = os.path.normpath(os.path.join(app_dir, "modules", "os_platform"))
     helper = os.path.normpath(os.path.join(web2py_root, "bin", "sss-helper"))
     caminho = os.path.normpath(caminho)
     if os.path.commonpath([caminho, plataforma_dir]) == plataforma_dir:
@@ -407,7 +407,7 @@ class TestPy36Compat(unittest.TestCase):
             web2py_root = os.path.join(raiz, "web2py")
             caminho_ruim = os.path.join(app_dir, "modules", "outro", "bad_source.py")
             helper = os.path.join(web2py_root, "bin", "sss-helper")
-            plataforma = os.path.join(app_dir, "modules", "plataforma", "posix.py")
+            plataforma = os.path.join(app_dir, "modules", "os_platform", "posix.py")
             for caminho, conteudo in (
                 (caminho_ruim, "os.killpg(1, 15)\nos.setsid()\nimport resource\nimport fcntl\nproc = '/proc/1/cwd'\nsubprocess.Popen(['pwdx', '1'])\nvalor = sys.platform\n"),
                 (helper, "import os\nimport resource\nimport subprocess\ndef _run():\n    resource.setrlimit(1, (2, 3))\ndef _term():\n    os.killpg(1, 15)\ndef _kill():\n    os.killpg(1, 9)\ndef _encerrar_ticket():\n    proc = '/proc/1/cwd'\n    subprocess.Popen(['/usr/bin/pwdx', '1'])\n"),

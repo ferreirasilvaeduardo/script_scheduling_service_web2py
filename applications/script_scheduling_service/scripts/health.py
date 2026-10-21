@@ -18,15 +18,15 @@ import sys
 _BASE = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 sys.path.insert(0, os.path.join(_BASE, "modules"))
 
-import agentes_service  # noqa: E402
+import agents_service  # noqa: E402
 import db_conn  # noqa: E402
 import sql_ident  # noqa: E402
 import sss_config  # noqa: E402
-from repo_oracle import saude as saude_sql  # noqa: E402
+from repo_oracle import health as saude_sql  # noqa: E402
 
 OK, WARNING, CRITICAL, UNKNOWN = 0, 1, 2, 3
 ESTADOS = ("OK", "WARNING", "CRITICAL", "UNKNOWN")
-_SAUDAVEIS = (agentes_service.OK, agentes_service.ATRASADO)
+_SAUDAVEIS = (agents_service.OK, agents_service.ATRASADO)
 
 
 class Verificacao(object):
@@ -38,7 +38,7 @@ class Verificacao(object):
         self.args = args
         self.repo = repo or saude_sql.RepoSaude.da_config(cfg)
         agente = cfg.agent
-        self.limiares = agentes_service.Limiares(agente.heartbeat_interval_s, agente.fence_timeout_s,
+        self.limiares = agents_service.Limiares(agente.heartbeat_interval_s, agente.fence_timeout_s,
                                                  agente.node_offline_timeout_s)
         self.problemas = []  # (nivel, texto)
         self.desempenho = []
@@ -69,10 +69,10 @@ class Verificacao(object):
         for ag in agentes:
             if ag["status"] != "ACTIVE":
                 continue
-            saude = agentes_service.saude(ag, agora, self.limiares)
+            saude = agents_service.saude(ag, agora, self.limiares)
             if saude in _SAUDAVEIS:
                 saudaveis += 1
-            elif saude == agentes_service.EM_RISCO:
+            elif saude == agents_service.EM_RISCO:
                 self._problema(WARNING, "agente %s em risco: heartbeat ha %s (fence %d s)" % (
                     ag["code"], self._idade(ag, agora), self.limiares.fence_timeout_s))
             else:
@@ -88,7 +88,7 @@ class Verificacao(object):
     def _ambientes(self, agentes, agora):
         atendidos = set()
         for ag in agentes:
-            if ag["status"] == "ACTIVE" and agentes_service.saude(ag, agora, self.limiares) in _SAUDAVEIS:
+            if ag["status"] == "ACTIVE" and agents_service.saude(ag, agora, self.limiares) in _SAUDAVEIS:
                 atendidos.update(a.strip() for a in (ag.get("environments") or "").split(",") if a.strip())
         for nome in self.repo.ambientes_ativos(self.conn):
             if nome not in atendidos:

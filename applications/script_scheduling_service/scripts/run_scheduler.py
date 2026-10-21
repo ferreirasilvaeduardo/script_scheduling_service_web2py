@@ -18,7 +18,7 @@ _BASE = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 sys.path.insert(0, os.path.join(_BASE, "modules"))
 
 import masking  # noqa: E402
-import plataforma  # noqa: E402
+import os_platform  # noqa: E402
 import scheduler_loop  # noqa: E402
 import sss_config  # noqa: E402
 import sss_logging  # noqa: E402
@@ -50,7 +50,7 @@ def main(argv=None):
             outro.addHandler(handler)
     masking.instalar_filtro_em_handlers()
     parada = threading.Event()
-    plataforma.instalar_parada(parada)
+    os_platform.instalar_parada(parada)
     agente = scheduler_loop.Agente(cfg=cfg)
     try:
         agente.inicializar()

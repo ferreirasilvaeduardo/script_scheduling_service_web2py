@@ -19,7 +19,7 @@ for _p in (_app_dir, _modules_dir):
         sys.path.insert(0, _p)
 
 import sss_config  # noqa: E402
-import plataforma  # noqa: E402
+import os_platform  # noqa: E402
 
 
 _RE_CODIGO_ERRO = re.compile(r"\b([A-Z]{3,4}-\d{4,5})\b")
@@ -87,7 +87,7 @@ def sondar(candidato, cfg, senha, usuario=None):
         elif candidato == "thick":
             import oracledb
             driver = oracledb
-            lib_dir = plataforma.obter_lib_dir_oracle(cfg)
+            lib_dir = os_platform.obter_lib_dir_oracle(cfg)
             try:
                 if lib_dir:
                     oracledb.init_oracle_client(lib_dir=lib_dir)
@@ -104,7 +104,7 @@ def sondar(candidato, cfg, senha, usuario=None):
         elif candidato == "cx_oracle":
             import cx_Oracle
             driver = cx_Oracle
-            lib_dir = plataforma.obter_lib_dir_oracle(cfg)
+            lib_dir = os_platform.obter_lib_dir_oracle(cfg)
             try:
                 if lib_dir:
                     cx_Oracle.init_oracle_client(lib_dir=lib_dir)

@@ -94,14 +94,14 @@ class TestEnvSkeleton(unittest.TestCase):
             self.assertIn(p, content, "Padrao ausente no .gitignore: %s" % p)
 
     def test_ambiente_dev_has_no_cdn(self):
-        """Verifica se docs/AMBIENTE_DEV.md existe e nao contem URLs externas/CDN."""
-        doc_path = os.path.join(self.app_dir, "docs", "AMBIENTE_DEV.md")
-        self.assertTrue(os.path.isfile(doc_path), "docs/AMBIENTE_DEV.md ausente")
+        """Verifica se docs/DEV_ENVIRONMENT.md existe e nao contem URLs externas/CDN."""
+        doc_path = os.path.join(self.app_dir, "docs", "DEV_ENVIRONMENT.md")
+        self.assertTrue(os.path.isfile(doc_path), "docs/DEV_ENVIRONMENT.md ausente")
         with open(doc_path, "r", encoding="utf-8") as f:
             content = f.read()
         import re
         urls = re.findall(r"https?://[^\s)]+", content)
-        self.assertEqual(urls, [], "URLs externas encontradas em AMBIENTE_DEV.md: %s" % urls)
+        self.assertEqual(urls, [], "URLs externas encontradas em DEV_ENVIRONMENT.md: %s" % urls)
 
     def test_check_env_success(self):
         """Executa check_env.py e verifica retorno 0 e presenca de OK."""

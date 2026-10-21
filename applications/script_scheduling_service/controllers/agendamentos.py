@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """Regras de agendamento (README §4.3.C MANAGE_SCHEDULES, §7). Regras de negocio ficam em
-modules/agendamentos_service.py; padrao de telas em docs/PADRAO_CRUD_ADMIN.md.
+modules/schedules_service.py; padrao de telas em docs/ADMIN_CRUD_PATTERN.md.
 
 CSRF e Origin de todo POST sao validados em models/10_security.py.
 """
 import admin_crud
-import agendamentos_service as servico
+import schedules_service as servico
 import ui_helpers
 from admin_crud import AcessoNegado, OperacaoNegada
 from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado

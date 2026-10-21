@@ -1,13 +1,13 @@
 # SSS — Prompt F9.1: Purge, hardening de implantação e runbook
 
 ## Leitura obrigatória antes de planejar
-- `docs/arquitetura/CR-007-robustez-do-scheduler.md` (R-18, R-21, R-22, D1, D1b, R-29, R-32)
-- `docs/arquitetura/CR-008-auditoria-final.md` (E3: conta e papel `monitor` do `saude.py`; R-16: `PURGE` auditado com 0 linhas; R-18: procedimento depois de restaurar o banco; R-25: partição do `log_dir`; R-27: liberação da concessão)
-- `docs/arquitetura/CR-002-oracle-unico-e-driver-adaptativo.md` e `docs/arquitetura/CR-005-posix-caminho-livre-e-logs.md` (revoga Windows do CR-001, caminho livre e logs por minuto)
-- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D7, D12 e o passo P10: pastas de runtime e launcher restrito)
+- `docs/architecture/CR-007-scheduler-robustness.md` (R-18, R-21, R-22, D1, D1b, R-29, R-32)
+- `docs/architecture/CR-008-final-audit.md` (E3: conta e papel `monitor` do `saude.py`; R-16: `PURGE` auditado com 0 linhas; R-18: procedimento depois de restaurar o banco; R-25: partição do `log_dir`; R-27: liberação da concessão)
+- `docs/architecture/CR-002-single-oracle-and-adaptive-driver.md` e `docs/architecture/CR-005-posix-free-path-and-logs.md` (revoga Windows do CR-001, caminho livre e logs por minuto)
+- `docs/architecture/CR-003-post-analysis-fixes.md` (D7, D12 e o passo P10: pastas de runtime e launcher restrito)
 - `AGENTS.md` §2.2, §3.2, §4.9, §6
 - `README.md` §2.3 (seleção do driver), §2.6, §4.1, §4.4 (tabela de entidade por ação: `PURGE`), §8.0, §8.4 (logs de execução), §8.5 (validação de caminho e UIDs), §8.9 ("Mesmos tempos em todos os nós"), §8.11, §8.12, §11.3, §12.1, §12.2 (inteiro: launchers restritos, pacote, **pastas de runtime do web2py** e **hardening do web2py**), §13, §14
-- Arquivos: `bin/*.sh` (o `sss-web.sh` já tem a restrição de comando do P10 do CR-003), `docs/IMPLANTACAO.md`, `instance/config.ini.example`, `scripts/init_db.py`, `scripts/sondar_driver.py`, `modules/plataforma/`, `modules/pastas_log.py`
+- Arquivos: `bin/*.sh` (o `sss-web.sh` já tem a restrição de comando do P10 do CR-003), `docs/DEPLOYMENT.md`, `instance/config.ini.example`, `scripts/init_db.py`, `scripts/sondar_driver.py`, `modules/plataforma/`, `modules/pastas_log.py`
 
 ## Objetivo
 Fechamento do produto para implantação manual em servidores air-gapped **POSIX (Linux e Unix — CR-005)**: retenção de dados, launchers POSIX, hardening do pacote e documentação operacional suficiente para operar e investigar falhas **apenas lendo logs**.
@@ -34,10 +34,10 @@ Fechamento do produto para implantação manual em servidores air-gapped **POSIX
   - gera `dist/sss-<versao>.tar.gz` e o `dist/SHA256SUMS` (README §12.2; o `.zip` saiu com o Windows, CR-005);
   - **inclui:** `web2py` (sem `applications/admin`, `welcome` e `examples`), `APP` (sem `controllers/dev.py`, `views/dev/`, `dev/`, `modules/repo_fake/`, `instance/config.ini`, `log/`, `sessions/`, `errors/` e `cache/`), `routes.py` com a aplicação padrão única, `bin/*.sh`, `bin/sss-helper` e `docs/`;
   - **não** inclui as pastas de runtime do web2py criadas dentro da aplicação (`applications/script_scheduling_service/applications/`, `deposit/`, `logs/`, `site-packages/`; README §12.2);
-  - inclui um **único `config.ini` de referência** (`instance/config.ini.example`) para os tempos `fence_timeout_s` e `node_offline_timeout_s`, idênticos para todos os agentes (README §8.9, D7). `docs/IMPLANTACAO.md` orienta copiar esses dois valores sem alteração em cada nó;
+  - inclui um **único `config.ini` de referência** (`instance/config.ini.example`) para os tempos `fence_timeout_s` e `node_offline_timeout_s`, idênticos para todos os agentes (README §8.9, D7). `docs/DEPLOYMENT.md` orienta copiar esses dois valores sem alteração em cada nó;
   - gera um `SHA256SUMS` do conteúdo;
   - **falha** se encontrar no pacote: `secrets.cfg` (o arquivo real, não `secrets.cfg.example`), `*.pyc`, `__pycache__`, `controllers/dev.py`, `repo_fake` ou uma senha não-placeholder. A varredura de credenciais inclui `.ini`, `.cfg` e `.cfg.example`, sem depender de `Path.suffix` para reconhecer exemplos. A única exceção é a string exata `CHANGE_ME` em `instance/secrets.cfg.example`; qualquer outro valor não vazio após `password =` falha, inclusive em arquivo `.cfg.example`. `test_empacotar.py` verifica que o exemplo com `CHANGE_ME` é aceito e que substituir qualquer senha por um valor de teste não-placeholder faz o empacotamento falhar; não imprime o valor detectado.
-- **`docs/IMPLANTACAO.md`** (artefato operacional canônico já referenciado pelo README; ampliar, sem criar um `RUNBOOK.md` duplicado. Deve incluir, do CR-007: helper e `sudoers`, usuários de execução com cota e `nproc`, contas Oracle por papel e GRANTs, DSN de RAC/Data Guard, `SQLNET.EXPIRE_TIME`, fuso e NTP, dimensionamento dos LOBs, job de estatísticas, monitoração com `saude.py` (conta `sss_monitor`, CR-008 E3), partição própria do `log_dir` (CR-008, R-25), hash homologado informado para web e agentes separados (CR-008, E4), orçamento da abertura da conexão (CR-008, R-17), backup e o procedimento depois de restaurar o banco, com os seis passos do CR-008 R-18; manter a seção de implantação existente):
+- **`docs/DEPLOYMENT.md`** (artefato operacional canônico já referenciado pelo README; ampliar, sem criar um `RUNBOOK.md` duplicado. Deve incluir, do CR-007: helper e `sudoers`, usuários de execução com cota e `nproc`, contas Oracle por papel e GRANTs, DSN de RAC/Data Guard, `SQLNET.EXPIRE_TIME`, fuso e NTP, dimensionamento dos LOBs, job de estatísticas, monitoração com `saude.py` (conta `sss_monitor`, CR-008 E3), partição própria do `log_dir` (CR-008, R-25), hash homologado informado para web e agentes separados (CR-008, E4), orçamento da abertura da conexão (CR-008, R-17), backup e o procedimento depois de restaurar o banco, com os seis passos do CR-008 R-18; manter a seção de implantação existente):
   - **instalação Linux/Unix (POSIX):** usuário de SO dedicado sem shell, diretórios, donos e permissões conforme o README §8.5 (UIDs), `secrets.cfg` com `0600`, Instant Client 19 + `ldconfig` (obrigatório se algum banco for 11g; recomendado sempre como contingência da cadeia de driver), unit `systemd` de exemplo para o web e o scheduler (`KillMode=mixed`, `TimeoutStopSec` maior que `shutdown_grace_s + kill_grace_s`, `User=`, `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ReadWritePaths=` para `log_dir` e `work_dir`), apresentada **como exemplo a validar** com a infraestrutura;
   - **driver Oracle (CR-002):** `modo_driver`, como ler a linha INFO da combinação escolhida, `check_env.py`, quando forçar `thick`/`cx_oracle`;
   - `init_db.py --dry-run` revisado pelo DBA, depois a execução real;
@@ -63,10 +63,10 @@ Fechamento do produto para implantação manual em servidores air-gapped **POSIX
 
 ## Critérios de aceite
 - [x] `scripts/empacotar.py` gera `dist/sss-<versao>.tar.gz` e `dist/SHA256SUMS`, cujos hashes correspondem, e falha quando um `secrets.cfg` de teste é colocado na árvore.
-- [x] `docs/IMPLANTACAO.md` permite a instalação em Linux/Unix por alguém que não participou do desenvolvimento (revisão sua).
+- [x] `docs/DEPLOYMENT.md` permite a instalação em Linux/Unix por alguém que não participou do desenvolvimento (revisão sua).
 - [x] Os testes passam.
 
-Concluído em 2026-10-21: F9.1a (purge, `7c9be76`), F9.1b (`saude.py`, `f86f8a7`), F9.1c (launchers e pacote, `5ee058f`) e F9.1d (`IMPLANTACAO.md` e ensaio a partir do pacote). O ensaio do F9.1d achou e corrigiu dois defeitos: o `repo_factory` importava o `repo_fake` no topo (o pacote não subia) e a sondagem de driver usava a conta do `[oracle]` em vez da do papel (o `saude.py` não conectava).
+Concluído em 2026-10-21: F9.1a (purge, `7c9be76`), F9.1b (`saude.py`, `f86f8a7`), F9.1c (launchers e pacote, `5ee058f`) e F9.1d (`DEPLOYMENT.md` e ensaio a partir do pacote). O ensaio do F9.1d achou e corrigiu dois defeitos: o `repo_factory` importava o `repo_fake` no topo (o pacote não subia) e a sondagem de driver usava a conta do `[oracle]` em vez da do papel (o `saude.py` não conectava).
 
 ## Verificação
 - `python scripts/empacotar.py` e confira o conteúdo do `tar.gz` e o `SHA256SUMS`. A verificação de entradas proibidas (`dev.py`, `repo_fake`, `secrets.cfg`, `/admin/`) deve passar quando não houver correspondências; trate o código 1 de `grep` como “nenhuma correspondência” e distinga-o de falha de leitura/extração do `tar`.

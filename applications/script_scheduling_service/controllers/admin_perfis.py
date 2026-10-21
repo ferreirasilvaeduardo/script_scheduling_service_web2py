@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Cadastro de perfis e matriz de permissoes (README §4.3, MANAGE_PROFILES). Padrao em docs/PADRAO_CRUD_ADMIN.md.
+"""Cadastro de perfis e matriz de permissoes (README §4.3, MANAGE_PROFILES). Padrao em docs/ADMIN_CRUD_PATTERN.md.
 
-Regras ficam em modules/admin_perfis_service.py; CSRF e Origin de todo POST sao validados
+Regras ficam em modules/admin_profiles_service.py; CSRF e Origin de todo POST sao validados
 em models/10_security.py. Nenhuma permissao e decidida no cliente: o POST da matriz e revalidado inteiro.
 """
 import admin_crud
-import admin_perfis_service as servico
+import admin_profiles_service as servico
 import ui_helpers
 from admin_crud import AcessoNegado, OperacaoNegada
 from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado

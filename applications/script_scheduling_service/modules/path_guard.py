@@ -9,7 +9,7 @@ Modulo puro: nao importa gluon (AGENTS §7.1).
 import errno
 import os
 
-import plataforma
+import os_platform
 
 # Interpretadores logicos (CR-001, D1/D2; CR-005: somente POSIX): o catalogo guarda a chave; cada agente
 # a mapeia para o executavel local ([agent] interpreters).
@@ -21,7 +21,7 @@ ARGS_FIXOS = {
     'SH': (),
 }
 # Pastas do sistema onde nenhum script pode ficar (README §8.5, CR-005 D3).
-PASTAS_DO_SISTEMA = plataforma.PASTAS_DO_SISTEMA
+PASTAS_DO_SISTEMA = os_platform.PASTAS_DO_SISTEMA
 # Tamanho maximo de path_file (coluna VARCHAR2(500 CHAR)).
 TAMANHO_MAXIMO = 500
 
@@ -79,8 +79,8 @@ def _dentro(caminho, pasta):
 
 def checar_pastas_proibidas(path_file, dirs_sss=()):
     """Recusa pastas do sistema e log_dir/work_dir, no caminho digitado e no resolvido (symlink)."""
-    sss = [plataforma.caminho_final(d) for d in dirs_sss if d]
-    for alvo in (path_file, plataforma.caminho_final(path_file)):
+    sss = [os_platform.caminho_final(d) for d in dirs_sss if d]
+    for alvo in (path_file, os_platform.caminho_final(path_file)):
         if any(_dentro(alvo, d) for d in PASTAS_DO_SISTEMA):
             raise PathGuardErro(Codigo.PASTA_DO_SISTEMA)
         if any(_dentro(alvo, d) for d in sss):
@@ -106,10 +106,10 @@ def resolver(path_file, dirs_sss=()):
     """
     validar_cadastro(path_file)
     checar_pastas_proibidas(path_file, dirs_sss)
-    codigo = plataforma.validar_caminho_script(path_file)
+    codigo = os_platform.validar_caminho_script(path_file)
     if codigo:
         raise PathGuardErro(codigo)
-    return plataforma.caminho_final(path_file)
+    return os_platform.caminho_final(path_file)
 
 
 def validar_executavel(caminho, dirs_sss=()):
@@ -119,14 +119,14 @@ def validar_executavel(caminho, dirs_sss=()):
     NAO_ENCONTRADO ou INTERPRETADOR_INSEGURO."""
     if not isinstance(caminho, str) or caminho[:1] != '/' or os.path.normpath(caminho) != caminho:
         raise PathGuardErro(Codigo.INTERPRETADOR_INSEGURO)
-    real = plataforma.caminho_final(caminho)
+    real = os_platform.caminho_final(caminho)
     try:
         _stat(real)
     except PathGuardErro as e:
         if e.codigo == Codigo.NAO_ENCONTRADO:
             raise
         raise PathGuardErro(Codigo.INTERPRETADOR_INSEGURO)
-    sss = [plataforma.caminho_final(d) for d in dirs_sss if d]
+    sss = [os_platform.caminho_final(d) for d in dirs_sss if d]
     if any(_dentro(alvo, d) for alvo in (caminho, real) for d in sss):
         raise PathGuardErro(Codigo.INTERPRETADOR_INSEGURO)
     if not os.path.isfile(real) or not os.access(real, os.X_OK):

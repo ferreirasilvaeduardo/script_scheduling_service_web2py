@@ -1,10 +1,10 @@
 # SSS — Prompt F8.1: Ambiente do processo filho e executor
 
 ## Leitura obrigatória antes de planejar
-- `docs/arquitetura/CR-007-robustez-do-scheduler.md` (D1, R-01 a R-04, R-17, R-32)
-- `docs/arquitetura/CR-008-auditoria-final.md` (R-01: `.sss_spawn` antes do `Popen` e grupo encerrado em exceção depois dele; R-36: `cwd` do script e `limpar` com `pasta_base`)
+- `docs/architecture/CR-007-scheduler-robustness.md` (D1, R-01 a R-04, R-17, R-32)
+- `docs/architecture/CR-008-final-audit.md` (R-01: `.sss_spawn` antes do `Popen` e grupo encerrado em exceção depois dele; R-36: `cwd` do script e `limpar` com `pasta_base`)
 - `AGENTS.md` §3.2 (inteiro), §6, §7.4 (`test_env_builder`, `test_executor`)
-- `docs/arquitetura/CR-005-posix-caminho-livre-e-logs.md` (D1: somente POSIX; D2: caminho livre; D5, R-a, R-b: pastas de log; snapshot v4)
+- `docs/architecture/CR-005-posix-free-path-and-logs.md` (D1: somente POSIX; D2: caminho livre; D5, R-a, R-b: pastas de log; snapshot v4)
 - `README.md` §5.2 (motivos e return codes), §6.4 (montagem do `argv`), §6.5 (snapshot versão 4), §8.0, §8.4 (passos 1–5), §8.5 (caminho livre e checagens), §8.6 (ambiente do processo filho POSIX), §8.7 (timeout e finalização), §14
 - Arquivos: `modules/plataforma/` (F8.0), `modules/pastas_log.py`, `modules/params_compiler.py` (`validar_snapshot`, `montar_argv_agente`), `modules/path_guard.py` (`resolver`)
 

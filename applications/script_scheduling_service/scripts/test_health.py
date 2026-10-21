@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Testes do scripts/health.py e do repo_oracle/saude.py (README §13; F9.1b; CR-007 R-18; CR-008 E3, R-15, R-16).
+"""Testes do scripts/health.py e do repo_oracle/health.py (README §13; F9.1b; CR-007 R-18; CR-008 E3, R-15, R-16).
 
 Com repositorio simulado: cada verificacao no limiar e fora dele e o codigo Nagios agregado (o pior vence);
 segredos pelo papel monitor; UNKNOWN em configuracao, conexao e erro de banco; o SQL do RepoSaude (indices da
@@ -18,10 +18,10 @@ import types
 import unittest
 from unittest import mock
 
-import health as saude_cli  # scripts/health.py (o repositorio e repo_oracle.saude)
+import health as saude_cli  # scripts/health.py (o repositorio e repo_oracle.health)
 import sql_ident
 import sss_config
-from repo_oracle import saude as saude_sql
+from repo_oracle import health as saude_sql
 
 AGORA = datetime.datetime(2026, 10, 21, 10, 0, 0)
 NS = types.SimpleNamespace
@@ -282,12 +282,12 @@ class TestSqlRepoSaude(unittest.TestCase):
             self.assertNotIn("*", sql.replace("COUNT(*)", ""), nome)
 
     def test_tela_de_agentes_usa_o_mesmo_sql(self):
-        import repo_oracle.agentes as agentes_oracle
+        import repo_oracle.agents as agentes_oracle
         self.assertIs(agentes_oracle._SQL_FILA, saude_sql.SQL_FILA)
         self.assertIs(agentes_oracle._SQL_RODANDO_SEM_PID, saude_sql.SQL_RODANDO_SEM_PID)
 
     def test_pares_atendidos_ignoram_em_risco_e_parados(self):
-        lim = saude_cli.agentes_service.Limiares(10, 90, 180)
+        lim = saude_cli.agents_service.Limiares(10, 90, 180)
         agentes = [_agente("a", 5, interpreters="SH"), _agente("b", 91, interpreters="BASH"),
                    _agente("c", 5, status="STOPPED", interpreters="PYTHON3")]
         self.assertEqual(saude_sql.pares_atendidos(agentes, AGORA, lim), {("PRODUCAO", "SH")})

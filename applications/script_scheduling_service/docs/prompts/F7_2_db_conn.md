@@ -1,11 +1,11 @@
 # SSS — Prompt F7.2: Conexão Oracle (`db_conn`: API sobre o driver escolhido)
 
 ## Leitura obrigatória antes de planejar
-- `docs/arquitetura/CR-007-robustez-do-scheduler.md` (R-04, R-12, D1b e D4)
-- `docs/arquitetura/CR-008-auditoria-final.md` (E3: papel `monitor`; R-17: orçamento da abertura da conexão; R-29: `user` diferente do `owner`)
-- `docs/arquitetura/CR-002-oracle-unico-e-driver-adaptativo.md`
+- `docs/architecture/CR-007-scheduler-robustness.md` (R-04, R-12, D1b e D4)
+- `docs/architecture/CR-008-final-audit.md` (E3: papel `monitor`; R-17: orçamento da abertura da conexão; R-29: `user` diferente do `owner`)
+- `docs/architecture/CR-002-single-oracle-and-adaptive-driver.md`
 - `AGENTS.md` §2.2, §4.9–4.11, §6 (reconexão)
-- `docs/arquitetura/CR-003-correcoes-pos-analise.md` (D5, D6, D12 e o achado "Bind DATE com microssegundos")
+- `docs/architecture/CR-003-post-analysis-fixes.md` (D5, D6, D12 e o achado "Bind DATE com microssegundos")
 - `README.md` §2.3 (inteiro), §2.7 (`seq.NEXTVAL` antes do `INSERT`), §4.1 (segredos), §4.2 ("Relógio do banco"), §4.4 ("Quantidade registrada" da exportação), §7.1, §7.5 ("Bind de datas"), §12.1 (`[oracle]` e "Falha de configuração"), §13 (formato do log)
 - `AGENTS.md` §3.1 (binds de data)
 - Arquivos: `modules/sss_config.py`, `modules/masking.py`, `modules/db_conn.py` (seleção do F7.0), `scripts/init_db.py`
@@ -32,7 +32,7 @@ Ter um ponto único, seguro e resiliente de acesso ao Oracle (11gR2 a 23ai), com
     - `agora_banco(conn)` (abaixo) é a base de `RepoUsuarios.agora()` e `RepoTickets.agora()` no Oracle. O relógio do nó nunca é usado para regra de negócio (README §4.2 "Relógio do banco", §7.1);
     - `proximo_id(conn, sequence_qualificada)`: `SELECT {owner}.sq_<...>.NEXTVAL FROM DUAL`, com o nome vindo de `sql_ident`. É a base de `RepoAuditoria.reservar_id()` (a exportação usa `id_max = id reservado − 1`, README §4.4 "Quantidade registrada") e de toda inclusão, porque a aplicação sempre informa o `id` (README §2.7).
   - **Contas por papel (CR-007, D1b):** `web` e `agente` usam `[oracle] user`; `purge` usa `[retencao] purge_user` com `[purge] password`; `monitor` usa `[monitor] user/password` (CR-008, E3). Cada processo carrega somente o papel permitido por `sss_config`; a conta dona do esquema nunca é usada aqui (só pelo `init_db.py`; `[oracle] user` igual ao `owner` já é recusado pelo `sss_config` fora de DEV, CR-008 R-29).
-  - **Conexão com prazo (R-04):** a abertura da conexão respeita `call_timeout_ms` (Thin: `tcp_connect_timeout`; Thick e cx_Oracle: `CONNECT_TIMEOUT` no descritor ou `SQLNET.OUTBOUND_CONNECT_TIMEOUT`, documentado em `docs/IMPLANTACAO.md`).
+  - **Conexão com prazo (R-04):** a abertura da conexão respeita `call_timeout_ms` (Thin: `tcp_connect_timeout`; Thick e cx_Oracle: `CONNECT_TIMEOUT` no descritor ou `SQLNET.OUTBOUND_CONNECT_TIMEOUT`, documentado em `docs/DEPLOYMENT.md`).
   - **Orçamento da abertura (CR-008, R-17):** `orcamento_conexao_s(dsn, call_timeout_s) -> int` lê o DSN descritor (sem resolver alias TNS; Easy Connect conta 1 endereço) e devolve `CONNECT_TIMEOUT × (RETRY_COUNT + 1) × endereços` (`CONNECT_TIMEOUT` ausente = `call_timeout_s`; `RETRY_COUNT` ausente = 0). Se passar de `call_timeout_s`, a conexão registra WARN `CONEXAO_ACIMA_DO_PRAZO` uma vez por processo, com o valor; o `check_env.py` mostra o mesmo aviso.
   - **Pool do web:** `ping_interval` de 60 s (oracledb e cx_Oracle 8.3), para descartar sessões mortas depois de um failover (R-12).
   - **Versão do esquema (CR-007, D4):** `conferir_versao_esquema(conn)`: `SELECT versao_esquema FROM {owner}.tbsss_controle WHERE id = 1` igual a `sql_ident.VERSAO_ESQUEMA`, senão `ErroVersaoEsquema` (CRITICAL na subida do web e do agente, com as duas versões).

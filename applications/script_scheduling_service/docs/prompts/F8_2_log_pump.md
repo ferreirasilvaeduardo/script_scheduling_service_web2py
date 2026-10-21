@@ -2,7 +2,7 @@
 
 ## Leitura obrigatória antes de planejar
 - `AGENTS.md` §4.13, §6
-- `docs/arquitetura/CR-008-auditoria-final.md` (R-11: orçamento de tempo do pump e rodízio entre tickets)
+- `docs/architecture/CR-008-final-audit.md` (R-11: orçamento de tempo do pump e rodízio entre tickets)
 - `README.md` §4.1 (segredos com menos de 4 caracteres não são registrados no mascarador), §5.2 (`LOG_LIMIT`), §8.10 (inteiro, revisado no CR-003: medida do teto, marcador e leitura da UI), §12.1 (`[logging]`), §14 (risco aceito dos segredos curtos)
 - Arquivos: `modules/masking.py` (`MascaradorFluxo`), `modules/db_conn.py` (F7.0/F7.2, CR-002), `modules/executor.py`, `modules/plataforma/` (F8.0)
 
