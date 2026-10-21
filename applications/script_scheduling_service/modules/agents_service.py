@@ -14,18 +14,18 @@ from admin_crud import AcessoNegado  # noqa: F401  (reexportado para o controlle
 FUNCIONALIDADE = "VIEW_AUDIT"
 
 OK = "OK"
-ATRASADO = "ATRASADO"
-EM_RISCO = "EM_RISCO"
+DELAYED = "DELAYED"
+AT_RISK = "AT_RISK"
 OFFLINE = "OFFLINE"
-ORDEM_SAUDE = (OK, ATRASADO, EM_RISCO, OFFLINE)
+ORDEM_SAUDE = (OK, DELAYED, AT_RISK, OFFLINE)
 
 # codigo -> (rotulo, classe do badge, icone, explicacao da legenda); cor + icone + texto.
 _SAUDE = {
     OK: (u"OK", "sss-status-success", "status-success",
          u"Heartbeat recente: menos de 2 intervalos de heartbeat."),
-    ATRASADO: (u"Atrasado", "sss-status-pending", "status-pending",
+    DELAYED: (u"Atrasado", "sss-status-pending", "status-pending",
                u"Heartbeat atrasado, ainda dentro do tempo de autoproteção (fence) do agente."),
-    EM_RISCO: (u"Em risco", "sss-status-failed", "icon-alert",
+    AT_RISK: (u"Em risco", "sss-status-failed", "icon-alert",
                u"O agente já deve ter se isolado (fence); se o atraso passar do limite de nó offline, "
                u"outro agente encerrará os tickets dele."),
     OFFLINE: (u"Offline", "sss-status-cancelled", "status-cancelled",
@@ -36,9 +36,9 @@ Limiares = collections.namedtuple("Limiares", "heartbeat_interval_s fence_timeou
 
 
 def saude(agente, agora, limiares):
-    """Codigo de saude do agente: OK, ATRASADO, EM_RISCO ou OFFLINE.
+    """Codigo de saude do agente: OK, DELAYED, AT_RISK ou OFFLINE.
 
-    OK: idade < 2 x heartbeat_interval_s; ATRASADO: ate fence_timeout_s; EM_RISCO: ate
+    OK: idade < 2 x heartbeat_interval_s; DELAYED: ate fence_timeout_s; AT_RISK: ate
     node_offline_timeout_s; OFFLINE: alem disso, sem heartbeat ou com status PARADO.
     """
     if agente.get("status") == "STOPPED":
@@ -50,9 +50,9 @@ def saude(agente, agora, limiares):
     if idade < 2 * limiares.heartbeat_interval_s:
         return OK
     if idade <= limiares.fence_timeout_s:
-        return ATRASADO
+        return DELAYED
     if idade <= limiares.node_offline_timeout_s:
-        return EM_RISCO
+        return AT_RISK
     return OFFLINE
 
 

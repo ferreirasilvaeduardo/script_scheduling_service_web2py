@@ -791,8 +791,8 @@ def _monitor_secrets(cp, env):
         valores[chave] = cp["monitor"][chave].strip()
         if not valores[chave]:
             raise ConfigError(section="monitor", key=chave, reason="%s nao pode ser vazio em [monitor]" % chave)
-    from masking import registrar_segredo
-    registrar_segredo(valores["password"])
+    from masking import register_secret
+    register_secret(valores["password"])
     return Secrets(oracle_password=None, cookie_key=None, environments={}, purge_password=None,
                     monitor=EnvironmentSecret(user=valores["user"], password=valores["password"]))
 
@@ -933,16 +933,16 @@ def load_secrets(caminho, cfg=None, sss_env=None, data_backend=None, papel="web"
 
     # Import tardio para nao acoplar carregar() ao masking. Sem masking.py a carga de
     # segredos falha (ImportError): segredo sem mascaramento nunca chega aos logs (AGENTS §3.3).
-    from masking import registrar_segredo
+    from masking import register_secret
 
     if oracle_password:
-        registrar_segredo(oracle_password)
+        register_secret(oracle_password)
     if cookie_key:
-        registrar_segredo(cookie_key)
+        register_secret(cookie_key)
     if purge_password:
-        registrar_segredo(purge_password)
+        register_secret(purge_password)
     for amb in ambientes.values():
-        registrar_segredo(amb.password)
+        register_secret(amb.password)
 
     return segredos
 

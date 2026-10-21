@@ -38,7 +38,7 @@ TICKET = {"id": 41, "environment": "PRODUCAO"}
 class TestEnvBuilder(unittest.TestCase):
 
     def construir(self, cfg=None, segredos=None, ambiente=AMB, environ=DAEMON):
-        return env_builder.construir(cfg or _cfg(), segredos or _segredos(), TICKET, ambiente, SCRIPT, WORK,
+        return env_builder.build(cfg or _cfg(), segredos or _segredos(), TICKET, ambiente, SCRIPT, WORK,
                                      dict(environ), "LINUX")
 
     def test_variaveis_exatas_dev(self):
@@ -91,11 +91,11 @@ class TestEnvBuilder(unittest.TestCase):
 
     def test_conexao_com_dsn_e_credencial_e_mascarador(self):
         cred = EnvironmentSecret("fat_app", "S3nh@Forte")
-        with mock.patch.object(masking, "MASCARADOR", masking.Mascarador()) as masc:
+        with mock.patch.object(masking, "MASKER", masking.Masker()) as masc:
             env = self.construir(segredos=_segredos({"PRODUCAO": cred}))
             self.assertEqual(env["PADRAO_VALOR_RUN_CONEXAO_BD"], "fat_app/S3nh@Forte@dbprod:1521/FAT")
-            self.assertEqual(masc.mascarar("conexao fat_app/S3nh@Forte@dbprod:1521/FAT ok"), "conexao **** ok")
-            self.assertNotIn("S3nh@Forte", masc.mascarar("senha S3nh@Forte"))
+            self.assertEqual(masc.mask("conexao fat_app/S3nh@Forte@dbprod:1521/FAT ok"), "conexao **** ok")
+            self.assertNotIn("S3nh@Forte", masc.mask("senha S3nh@Forte"))
 
     def test_conexao_omitida_sem_secao_ou_sem_dsn(self):
         cred = EnvironmentSecret("fat_app", "S3nh@Forte")
@@ -116,8 +116,8 @@ class TestEnvBuilder(unittest.TestCase):
         snap = {"script_id": 12, "script_nome": "Carga Faturas", "interpreter": "PYTHON3"}
         amb = dict(AMB, description="Produção faturamento")
         log = "/srv/sss/logs/producao/carga_faturas/2026/10/20/03/00/ticket_41.log.parcial"
-        with mock.patch.object(masking, "MASCARADOR", masking.Mascarador()):
-            env = env_builder.construir(_cfg(), _segredos({"PRODUCAO": cred}), ticket, amb, SCRIPT, WORK,
+        with mock.patch.object(masking, "MASKER", masking.Masker()):
+            env = env_builder.build(_cfg(), _segredos({"PRODUCAO": cred}), ticket, amb, SCRIPT, WORK,
                                         dict(DAEMON), "LINUX", snapshot=snap,
                                         agendamento={"name": "Carga noturna", "recurrence_type": "MONTHLY"},
                                         caminho_log=log, timeout_seg=3600, hostname="srv-linux-01", versao="1.0")
@@ -145,7 +145,7 @@ class TestEnvBuilder(unittest.TestCase):
         ticket = {"id": 41, "environment": "PRODUCAO", "parent_ticket_id": None, "schedule_id": None,
                   "priority": None}
         with self.assertLogs("sss_scheduler", "WARNING"):
-            env = env_builder.construir(_cfg(), _segredos(), ticket, dict(AMB, description="  ", connection=None),
+            env = env_builder.build(_cfg(), _segredos(), ticket, dict(AMB, description="  ", connection=None),
                                         SCRIPT, WORK, {}, "UNIX", snapshot={"script_nome": ""},
                                         agendamento={"name": "ignorado", "recurrence_type": "DAILY"},
                                         hostname="", versao=None)
@@ -159,34 +159,34 @@ class TestEnvBuilder(unittest.TestCase):
 
     def test_cr010_conexao_mascarada_nos_logs(self):
         cred = EnvironmentSecret("fat_app", "S3nh@Forte")
-        with mock.patch.object(masking, "MASCARADOR", masking.Mascarador()) as masc:
+        with mock.patch.object(masking, "MASKER", masking.Masker()) as masc:
             env = self.construir(segredos=_segredos({"PRODUCAO": cred}))
-            self.assertEqual(masc.mascarar("SSS_ENVIRONMENT_CONNECTION=%s" % env["SSS_ENVIRONMENT_CONNECTION"]),
+            self.assertEqual(masc.mask("SSS_ENVIRONMENT_CONNECTION=%s" % env["SSS_ENVIRONMENT_CONNECTION"]),
                              "SSS_ENVIRONMENT_CONNECTION=****")
         self.assertEqual(env["SSS_ENVIRONMENT_USER"], "fat_app")
 
     def test_cr011_link_no_caminho_cadastrado(self):
         with self.assertLogs("sss_scheduler", "WARNING"):
-            env = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
+            env = env_builder.build(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
                                         snapshot={"path_file": "/opt/automacoes/atual/carga.py"})
-            sem_link = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
+            sem_link = env_builder.build(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
                                              snapshot={"path_file": SCRIPT})
         self.assertEqual((env["SSS_SCRIPT_FILE"], env["SSS_SCRIPT_LINK"]), (SCRIPT, "/opt/automacoes/atual/carga.py"))
         self.assertNotIn("SSS_SCRIPT_LINK", sem_link)
 
     def test_cr012_pasta_de_saida_so_quando_informada(self):
         with self.assertLogs("sss_scheduler", "WARNING"):
-            env = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
+            env = env_builder.build(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
                                         pasta_saida="/srv/sss/output/producao/carga/2026/10/20/03/00/ticket_41")
-            sem = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
+            sem = env_builder.build(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
         self.assertEqual(env["SSS_OUTPUT_DIR"], "/srv/sss/output/producao/carga/2026/10/20/03/00/ticket_41")
         self.assertNotIn("SSS_OUTPUT_DIR", sem)
 
     def test_cr014_pasta_de_entrada_so_quando_informada(self):
         with self.assertLogs("sss_scheduler", "WARNING"):
-            env = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
+            env = env_builder.build(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
                                         pasta_entrada="/srv/sss/input/producao/carga")
-            sem = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
+            sem = env_builder.build(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
         self.assertEqual(env["SSS_INPUT_DIR"], "/srv/sss/input/producao/carga")
         self.assertNotIn("SSS_INPUT_DIR", sem)
 
@@ -201,8 +201,8 @@ class TestEnvBuilder(unittest.TestCase):
         ticket = {"id": 41, "environment": "PRODUCAO", "parent_ticket_id": 7, "schedule_id": 3, "priority": 2,
                   "started_at": datetime.datetime(2026, 10, 20, 3, 0, 5),
                   "scheduled_at": datetime.datetime(2026, 10, 20, 3, 0)}
-        with mock.patch.object(masking, "MASCARADOR", masking.Mascarador()):
-            env = env_builder.construir(_cfg(), _segredos({"PRODUCAO": EnvironmentSecret("fat_app", "S3nh@Forte")}),
+        with mock.patch.object(masking, "MASKER", masking.Masker()):
+            env = env_builder.build(_cfg(), _segredos({"PRODUCAO": EnvironmentSecret("fat_app", "S3nh@Forte")}),
                                         ticket, dict(AMB, description="x"), SCRIPT, WORK, dict(DAEMON), "LINUX",
                                         snapshot={"script_id": 12, "script_nome": "C", "interpreter": "SH",
                                                   "path_file": "/opt/automacoes/atual/carga.sh"},
@@ -214,9 +214,9 @@ class TestEnvBuilder(unittest.TestCase):
 
     def test_entradas_invalidas(self):
         with self.assertRaises(ValueError):
-            env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "WINDOWS")
+            env_builder.build(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "WINDOWS")
         with self.assertRaises(ValueError):
-            env_builder.construir(_cfg(), _segredos(), TICKET, AMB, "relativo/x.py", WORK, {}, "LINUX")
+            env_builder.build(_cfg(), _segredos(), TICKET, AMB, "relativo/x.py", WORK, {}, "LINUX")
 
     def test_modulo_nao_le_os_environ(self):
         with open(env_builder.__file__, encoding="utf-8") as f:

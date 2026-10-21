@@ -965,7 +965,7 @@ class TestOracleAgendamentos(unittest.TestCase):
                         chamada(ator)
 
     def test_pausar_sem_linha_afetada_e_conflito(self):
-        """Regra existente, mas nao ativa (ou com outra proxima_execucao): RepoConflict e ROLLBACK."""
+        """Regra existente, mas nao ativa (ou com outra next_run): RepoConflict e ROLLBACK."""
         conn = _ConexaoRoteirizada([("WHERE id = :id AND active = 'Y'", 0, []), ("SELECT id FROM", 1, [(7,)])])
         with mock.patch.object(self.agd, "_obter_conexao", return_value=conn):
             with self.assertRaises(repo_errors.RepoConflict):

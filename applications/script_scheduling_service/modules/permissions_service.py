@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tela "O que eu posso fazer" (README §4.3.E, CR-004 T1): o que o perfil libera, em linguagem simples.
 
-So leitura: nao grava nem audita. A regra de execucao e a do disparo (rbac.pode_executar via
+So leitura: nao grava nem audita. A regra de execucao e a do disparo (rbac.can_execute via
 ticket_service), para que a tela nunca diga algo diferente do que o disparo faz.
 Nao importa gluon fora de _servico.
 """
@@ -87,7 +87,7 @@ class ServicoPermissoes(object):
     def montar(self, ctx):
         """Dados da tela. Scripts fora do perfil nunca sao listados (nao revela o catalogo)."""
         admin = ctx.get("is_admin") is True
-        pode_exec = rbac.tem_func(ctx, "EXEC_SCRIPT")
+        pode_exec = rbac.has_feature(ctx, "EXEC_SCRIPT")
         scripts = self._scripts(ctx) if pode_exec else []
         disponiveis = set(s["id"] for s in scripts)
         ausentes = []

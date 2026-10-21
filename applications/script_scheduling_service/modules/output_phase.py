@@ -181,7 +181,7 @@ def gravar(saida, conn, repo, agente_id):
                 saida.offset += len(parte)
         if saida.offset < saida.tamanho:
             return CONTINUA
-        if repo.concluir(conn, saida.ticket_id, agente_id, saida.qtd_arquivos, saida.tamanho):
+        if repo.complete(conn, saida.ticket_id, agente_id, saida.qtd_arquivos, saida.tamanho):
             conn.commit()
             return CONCLUIDA
         conn.rollback()

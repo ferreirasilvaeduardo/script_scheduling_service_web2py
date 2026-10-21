@@ -14,7 +14,7 @@ class RepoAgents(object):
         raise NotImplementedError
 
     def unattended_queue(self, agora, limiares):
-        """PENDING com scheduled_at <= agora sem agente OK/ATRASADO para o par ambiente/interpretador.
+        """PENDING com scheduled_at <= agora sem agente OK/DELAYED para o par ambiente/interpretador.
 
         Retorna grupos ordenados por ambiente e interpretador: ambiente, interpretador,
         quantidade e mais_antigo (menor inicio da espera, GREATEST(scheduled_at, created_at); CR-013). O interpretador e o do cadastro

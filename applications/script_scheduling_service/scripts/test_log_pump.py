@@ -146,7 +146,7 @@ class _Base(unittest.TestCase):
             f.write(dados)
 
     def bomba(self, caminho, mascarador=None, teto=GRANDE, local=GRANDE, ticket_id=1):
-        return Bomba(caminho, ticket_id, mascarador or masking.Mascarador(), teto, local)
+        return Bomba(caminho, ticket_id, mascarador or masking.Masker(), teto, local)
 
     def drenar(self, bomba, conn=None, repo=None):
         """Flush final num CLOB falso e devolve o texto do CLOB."""
@@ -182,7 +182,7 @@ class TestLeituraEMascara(_Base):
         self.assertEqual(self.drenar(b).texto, "ok �� fim\n")
 
     def test_segredo_cortado_entre_leituras(self):
-        m = masking.Mascarador()
+        m = masking.Masker()
         m.register("SenhaSuperSecreta")
         caminho = self.arquivo(b"conectando com Senha")
         b = self.bomba(caminho, m)
@@ -202,7 +202,7 @@ class TestLeituraEMascara(_Base):
         t2 = self.drenar(self.bomba(self.arquivo(linha), m2, ticket_id=2)).texto
         self.assertEqual(t1, "**** tok-ticket-dois **** **** 2026-10-13\n")
         self.assertEqual(t2, "tok-ticket-um **** **** app/****@db:1521/X 2026-10-13\n")
-        self.assertIsNone(masking.MASCARADOR.regex and masking.MASCARADOR.regex.search("tok-ticket-um"),
+        self.assertIsNone(masking.MASKER.regex and masking.MASKER.regex.search("tok-ticket-um"),
                           "o mascarador global nao recebe o sensivel do ticket")
 
     def test_segredo_curto_nao_e_mascarado(self):
@@ -300,7 +300,7 @@ class TestLimites(_Base):
         self.assertEqual(log_pump.unidades_clob("a\U0001F600é", 1), 3)
 
     def test_bomba_com_unidade_de_charset_de_um_byte(self):
-        b = Bomba(self.arquivo("x\U0001F600y\n".encode("utf-8")), 1, masking.Mascarador(), GRANDE, GRANDE,
+        b = Bomba(self.arquivo("x\U0001F600y\n".encode("utf-8")), 1, masking.Masker(), GRANDE, GRANDE,
                   unidade_suplementar=1)
         conn = _ConnFalsa({1: _ClobFalso()})
         log_pump.flush_final(b, conn, _RepoFalso(), "srv-01")
@@ -365,7 +365,7 @@ class TestProtocolo(_Base):
             for t in (1, 2, 3):
                 # Tickets verbosos: 3 blocos novos por rodada (cada envio custa 1 s no relogio simulado).
                 self.anexar_bytes(caminhos[t], ("%d" % t * 8000 * 3).encode("ascii"))
-            res = rodada.executar(conn, _RepoFalso(), "srv-01")
+            res = rodada.run(conn, _RepoFalso(), "srv-01")
             self.assertTrue(res.esgotou_orcamento)
             atendidos.append(set(res.atendidos))
             relogio.avancar(100)
@@ -389,8 +389,8 @@ class TestProtocolo(_Base):
                   2: self.bomba(self.arquivo(b"ok\n"), ticket_id=2)}
         rodada = Rodada(bombas, _Relogio(), orcamento_s=100)
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            rodada.executar(conn, _RepoFalso(), "srv-01")
-            rodada.executar(conn, _RepoFalso(), "srv-01")
+            rodada.run(conn, _RepoFalso(), "srv-01")
+            rodada.run(conn, _RepoFalso(), "srv-01")
         self.assertEqual(len([x for x in logs.output if "ilegivel" in x]), 1, "WARN uma vez")
         self.assertTrue(bombas[1].erro_leitura)
         self.assertEqual(log_pump.flush_final(bombas[2], conn, _RepoFalso(), "srv-01"), log_pump.OK)
@@ -423,9 +423,9 @@ class TestProtocolo(_Base):
         bombas = {1: self.bomba(caminho)}
         rodada = Rodada(bombas, relogio, orcamento_s=100)
         with self.assertLogs("sss_scheduler", "WARNING"):
-            res = rodada.executar(conn, _RepoFalso(), "srv-01")
+            res = rodada.run(conn, _RepoFalso(), "srv-01")
         self.assertTrue(res.conexao_incerta)
-        res = rodada.executar(conn, _RepoFalso(), "srv-01")
+        res = rodada.run(conn, _RepoFalso(), "srv-01")
         self.assertFalse(res.conexao_incerta)
         self.assertEqual(log_pump.flush_final(bombas[1], conn, _RepoFalso(), "srv-01"), log_pump.OK)
         self.assertEqual(clobs[1].texto, "a" * 20000)

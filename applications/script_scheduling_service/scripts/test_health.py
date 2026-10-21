@@ -113,7 +113,7 @@ class TestVerificacoes(unittest.TestCase):
         repo = _Repo(**kw)
         conn = _ConnAgora()
         v = saude_cli.Verificacao(_cfg(), conn, _args(argv), repo=repo)
-        codigo = v.executar()
+        codigo = v.run()
         self.assertEqual(conn.agoras, 1, "um unico agora_banco()")
         return codigo, v.saida(codigo), repo
 
@@ -126,7 +126,7 @@ class TestVerificacoes(unittest.TestCase):
         self.assertIn(("purge", 2), repo.chamadas)
 
     def test_heartbeat_por_faixa(self):
-        self.assertEqual(self._rodar(agents=[_agente("srv-a", 90)])[0], saude_cli.OK, "ATRASADO ainda atende")
+        self.assertEqual(self._rodar(agents=[_agente("srv-a", 90)])[0], saude_cli.OK, "DELAYED ainda atende")
         codigo, texto, _r = self._rodar(agents=[_agente("srv-a", 91), _agente("srv-b")])
         self.assertEqual(codigo, saude_cli.WARNING)
         self.assertIn("WARNING: agente srv-a em risco: heartbeat ha 91 s", texto)
@@ -254,7 +254,7 @@ class TestMain(unittest.TestCase):
                     "[monitor]\nuser = sss_monitor\npassword = senha-mon-1\n")
         os.chmod(caminho, 0o600)
         registrados = []
-        with mock.patch("masking.registrar_segredo", side_effect=registrados.append):
+        with mock.patch("masking.register_secret", side_effect=registrados.append):
             seg = sss_config.load_secrets(caminho, sss_env="PROD", papel="monitor")
         self.assertEqual((seg.monitor_user, seg.oracle_password, seg.purge_password, seg.environments),
                          ("sss_monitor", None, None, {}))
@@ -322,7 +322,7 @@ class TestSaudeOracle(unittest.TestCase):
         self.repo.running_without_pid(self.conn, agora, 2)
         self.repo.last_purge(self.conn, agora, 2)
         v = saude_cli.Verificacao(self.cfg, self.conn, _args(), repo=self.repo)
-        codigo = v.executar()
+        codigo = v.run()
         self.assertIn(codigo, (0, 1, 2))
         print("\n[F9.1b] saude no GFPR: %s" % v.saida(codigo).splitlines()[0])
 

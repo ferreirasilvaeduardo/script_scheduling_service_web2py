@@ -57,7 +57,7 @@ def mascarador_do_ticket(segredos, conexao=None, snapshot=None):
     """Mascarador proprio do ticket (CR-007, R-25): segredos carregados, PADRAO_VALOR_RUN_CONEXAO_BD do
     ambiente e os valores de respostas cujos codigos estao em sensiveis no snapshot. Valores com menos
     de 4 caracteres nao sao registrados (regra do masking, README §4.1; risco aceito no §14)."""
-    m = masking.Mascarador()
+    m = masking.Masker()
     for valor in segredos or ():
         m.register(valor)
     if conexao:
@@ -85,7 +85,7 @@ class Bomba(object):
         # Leitura do arquivo.
         self.offset_bytes = 0
         self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-        self._fluxo = masking.MascaradorFluxo(mascarador)
+        self._fluxo = masking.StreamMasker(mascarador)
         # Teto do CLOB: bytes ja aceitos (confirmados + fila) e o sufixo retido ate a decisao.
         self._bytes_aceitos = 0
         self._retido = ""
@@ -118,7 +118,7 @@ class Bomba(object):
         if self.finalizada or self.parada or self.truncado:
             return ""
         texto = self._decoder.decode(self._ler(max_bytes_leitura))
-        enviar, _truncou = self.aplicar_teto_banco(self._fluxo.alimentar(texto))
+        enviar, _truncou = self.aplicar_teto_banco(self._fluxo.feed(texto))
         self._fila += enviar
         return enviar
 
@@ -137,10 +137,10 @@ class Bomba(object):
                 break
             if not dados:
                 break
-            enviar, _truncou = self.aplicar_teto_banco(self._fluxo.alimentar(self._decoder.decode(dados)))
+            enviar, _truncou = self.aplicar_teto_banco(self._fluxo.feed(self._decoder.decode(dados)))
             enfileirado.append(enviar)
         resto = self._decoder.decode(b"", final=True)
-        enviar, _truncou = self.aplicar_teto_banco(self._fluxo.alimentar(resto) + self._fluxo.finalize())
+        enviar, _truncou = self.aplicar_teto_banco(self._fluxo.feed(resto) + self._fluxo.finalize())
         if not self.truncado:
             enviar += self._retido
             self._bytes_aceitos += _bytes(self._retido)
@@ -289,7 +289,7 @@ class Rodada(object):
         depois = [t for t in ids if t > self._ultimo]
         return depois + [t for t in ids if t <= self._ultimo]
 
-    def executar(self, conn, repo, agente_id):
+    def run(self, conn, repo, agente_id):
         res = ResultadoRodada()
         inicio = self.relogio()
         ativos = []

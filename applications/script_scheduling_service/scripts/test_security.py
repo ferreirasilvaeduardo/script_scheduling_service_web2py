@@ -25,28 +25,28 @@ class TestHashSenha(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.senha = u"correta-horse-çã-12"
-        cls.armazenado = security.hash_senha(cls.senha)
+        cls.armazenado = security.hash_password(cls.senha)
 
     def test_formato(self):
         self.assertTrue(_RE_FORMATO.fullmatch(self.armazenado))
 
     def test_salt_aleatorio(self):
-        self.assertNotEqual(self.armazenado, security.hash_senha(self.senha))
+        self.assertNotEqual(self.armazenado, security.hash_password(self.senha))
 
     def test_verificacao_certa_e_errada(self):
-        self.assertTrue(security.verificar_senha(self.senha, self.armazenado))
-        self.assertFalse(security.verificar_senha(self.senha + "x", self.armazenado))
-        self.assertFalse(security.verificar_senha("", self.armazenado))
+        self.assertTrue(security.verify_password(self.senha, self.armazenado))
+        self.assertFalse(security.verify_password(self.senha + "x", self.armazenado))
+        self.assertFalse(security.verify_password("", self.armazenado))
 
     def test_senha_nao_str(self):
-        self.assertFalse(security.verificar_senha(None, self.armazenado))
-        self.assertFalse(security.verificar_senha(self.senha.encode("utf-8"), self.armazenado))
+        self.assertFalse(security.verify_password(None, self.armazenado))
+        self.assertFalse(security.verify_password(self.senha.encode("utf-8"), self.armazenado))
         with self.assertRaises(TypeError):
-            security.hash_senha(None)
+            security.hash_password(None)
 
     def test_bloqueado_exclamacao(self):
-        self.assertFalse(security.verificar_senha(self.senha, "!"))
-        self.assertFalse(security.verificar_senha("!", "!"))
+        self.assertFalse(security.verify_password(self.senha, "!"))
+        self.assertFalse(security.verify_password("!", "!"))
 
     def test_formatos_invalidos(self):
         partes = self.armazenado.split("$")
@@ -60,33 +60,33 @@ class TestHashSenha(unittest.TestCase):
             "$".join([partes[0], partes[1], partes[2], partes[3][:-1] + "g"]),
         ]
         for inv in invalidos:
-            self.assertFalse(security.verificar_senha(self.senha, inv), inv)
-            self.assertFalse(security.precisa_rehash(inv), inv)
+            self.assertFalse(security.verify_password(self.senha, inv), inv)
+            self.assertFalse(security.needs_rehash(inv), inv)
 
     def test_iteracoes_antigas_verificam_e_pedem_rehash(self):
         antigo = _hash_com_iteracoes("senha-antiga-123", 1000)
-        self.assertTrue(security.verificar_senha("senha-antiga-123", antigo))
-        self.assertTrue(security.precisa_rehash(antigo))
-        self.assertFalse(security.precisa_rehash(self.armazenado))
-        self.assertFalse(security.precisa_rehash("!"))
+        self.assertTrue(security.verify_password("senha-antiga-123", antigo))
+        self.assertTrue(security.needs_rehash(antigo))
+        self.assertFalse(security.needs_rehash(self.armazenado))
+        self.assertFalse(security.needs_rehash("!"))
 
     def test_hash_ficticio(self):
-        h = security.hash_ficticio()
+        h = security.dummy_hash()
         self.assertTrue(_RE_FORMATO.fullmatch(h))
-        self.assertEqual(h, security.hash_ficticio())
-        self.assertFalse(security.verificar_senha("qualquer-coisa-123", h))
+        self.assertEqual(h, security.dummy_hash())
+        self.assertFalse(security.verify_password("qualquer-coisa-123", h))
 
 
 class TestPoliticaSenha(unittest.TestCase):
 
     def test_minimo_12(self):
-        self.assertEqual(len(security.validar_politica_senha("a" * 11)), 1)
-        self.assertEqual(security.validar_politica_senha("a" * 12), [])
-        self.assertEqual(security.validar_politica_senha(u"ç" * 12), [])
+        self.assertEqual(len(security.validate_password_policy("a" * 11)), 1)
+        self.assertEqual(security.validate_password_policy("a" * 12), [])
+        self.assertEqual(security.validate_password_policy(u"ç" * 12), [])
 
     def test_nao_str_ou_vazia(self):
-        self.assertTrue(security.validar_politica_senha(None))
-        self.assertTrue(security.validar_politica_senha(""))
+        self.assertTrue(security.validate_password_policy(None))
+        self.assertTrue(security.validate_password_policy(""))
 
 
 class TestRetirarSenhas(unittest.TestCase):
@@ -94,7 +94,7 @@ class TestRetirarSenhas(unittest.TestCase):
     def test_remove_de_todas_as_origens(self):
         post_vars = {"login": "admin", "senha": "Segredo-123456", "outra": "x"}
         todas = dict(post_vars, pagina="1")
-        senhas = security.retirar_senhas((post_vars, todas), ("senha", "confirmacao"))
+        senhas = security.strip_passwords((post_vars, todas), ("senha", "confirmacao"))
         self.assertEqual(senhas, {"senha": "Segredo-123456", "confirmacao": None})
         self.assertNotIn("senha", post_vars)
         self.assertNotIn("senha", todas)
@@ -102,9 +102,9 @@ class TestRetirarSenhas(unittest.TestCase):
         self.assertNotIn("Segredo", repr(post_vars) + repr(todas))
 
     def test_lista_vale_o_ultimo_e_nao_str_vira_none(self):
-        self.assertEqual(security.retirar_senhas(({"s": ["a", "b"]},), ("s",)), {"s": "b"})
-        self.assertEqual(security.retirar_senhas(({"s": []},), ("s",)), {"s": None})
-        self.assertEqual(security.retirar_senhas(({"s": 123},), ("s",)), {"s": None})
+        self.assertEqual(security.strip_passwords(({"s": ["a", "b"]},), ("s",)), {"s": "b"})
+        self.assertEqual(security.strip_passwords(({"s": []},), ("s",)), {"s": None})
+        self.assertEqual(security.strip_passwords(({"s": 123},), ("s",)), {"s": None})
 
     def test_controllers_nao_leem_senha_direto_de_request(self):
         # Regressao: login lia request.post_vars.get("senha") e a senha ia parar no ticket de erro.
@@ -119,21 +119,21 @@ class TestRetirarSenhas(unittest.TestCase):
 class TestCsrf(unittest.TestCase):
 
     def test_token(self):
-        t = security.gerar_token_csrf()
+        t = security.generate_csrf_token()
         self.assertGreaterEqual(len(t), 43)
         self.assertTrue(re.fullmatch(r"[A-Za-z0-9_\-]+", t))
-        self.assertNotEqual(t, security.gerar_token_csrf())
+        self.assertNotEqual(t, security.generate_csrf_token())
 
     def test_validacao(self):
-        t = security.gerar_token_csrf()
-        self.assertTrue(security.validar_token_csrf(t, t))
-        self.assertFalse(security.validar_token_csrf(t, t[:-1] + ("A" if t[-1] != "A" else "B")))
-        self.assertFalse(security.validar_token_csrf(t, ""))
-        self.assertFalse(security.validar_token_csrf(t, None))
-        self.assertFalse(security.validar_token_csrf(None, None))
-        self.assertFalse(security.validar_token_csrf("", ""))
-        self.assertFalse(security.validar_token_csrf(t, [t]))
-        self.assertFalse(security.validar_token_csrf(t, u"çãé"))
+        t = security.generate_csrf_token()
+        self.assertTrue(security.validate_csrf_token(t, t))
+        self.assertFalse(security.validate_csrf_token(t, t[:-1] + ("A" if t[-1] != "A" else "B")))
+        self.assertFalse(security.validate_csrf_token(t, ""))
+        self.assertFalse(security.validate_csrf_token(t, None))
+        self.assertFalse(security.validate_csrf_token(None, None))
+        self.assertFalse(security.validate_csrf_token("", ""))
+        self.assertFalse(security.validate_csrf_token(t, [t]))
+        self.assertFalse(security.validate_csrf_token(t, u"çãé"))
 
 
 class TestOrigemPermitida(unittest.TestCase):
@@ -141,7 +141,7 @@ class TestOrigemPermitida(unittest.TestCase):
     PERMITIDAS = ["https://sss.empresa.local", "http://127.0.0.1:8000"]
 
     def _ok(self, origin, referer=None):
-        return security.origem_permitida(origin, referer, self.PERMITIDAS)
+        return security.is_allowed_origin(origin, referer, self.PERMITIDAS)
 
     def test_origem_igual(self):
         self.assertTrue(self._ok("https://sss.empresa.local"))
@@ -186,25 +186,25 @@ class TestOrigemPermitida(unittest.TestCase):
         self.assertFalse(self._ok("http://127.0.0.1:abc"))
 
     def test_lista_vazia(self):
-        self.assertFalse(security.origem_permitida("https://sss.empresa.local", None, []))
+        self.assertFalse(security.is_allowed_origin("https://sss.empresa.local", None, []))
 
 
 class TestSessaoExpirada(unittest.TestCase):
 
     def test_limites(self):
-        self.assertFalse(security.sessao_expirada(1000.0, 1000.0 + 1800, 1800))
-        self.assertTrue(security.sessao_expirada(1000.0, 1000.0 + 1801, 1800))
+        self.assertFalse(security.is_session_expired(1000.0, 1000.0 + 1800, 1800))
+        self.assertTrue(security.is_session_expired(1000.0, 1000.0 + 1801, 1800))
 
     def test_sem_marca(self):
-        self.assertTrue(security.sessao_expirada(None, 1000.0, 1800))
-        self.assertTrue(security.sessao_expirada("1000", 1000.0, 1800))
-        self.assertTrue(security.sessao_expirada(True, 1000.0, 1800))
+        self.assertTrue(security.is_session_expired(None, 1000.0, 1800))
+        self.assertTrue(security.is_session_expired("1000", 1000.0, 1800))
+        self.assertTrue(security.is_session_expired(True, 1000.0, 1800))
 
 
 class TestCookiesSeguros(unittest.TestCase):
 
     def test_httponly_e_secure(self):
-        c = security.CookiesSeguros(secure=True)
+        c = security.SecureCookies(secure=True)
         c["session_data_x"] = "valor"
         c["session_data_x"]["path"] = "/"
         saida = c["session_data_x"].OutputString()
@@ -212,21 +212,21 @@ class TestCookiesSeguros(unittest.TestCase):
         self.assertIn("Secure", saida)
 
     def test_sem_secure(self):
-        c = security.CookiesSeguros(secure=False)
+        c = security.SecureCookies(secure=False)
         c["a"] = "1"
         saida = c["a"].OutputString()
         self.assertIn("HttpOnly", saida)
         self.assertNotIn("Secure", saida)
 
     def test_reatribuicao_mantem_atributos(self):
-        c = security.CookiesSeguros(secure=True)
+        c = security.SecureCookies(secure=True)
         c["a"] = "1"
         c.pop("a")
         c["a"] = "2"
         self.assertIn("HttpOnly", c["a"].OutputString())
 
     def test_valor_bytes_decodificado(self):
-        c = security.CookiesSeguros(secure=False)
+        c = security.SecureCookies(secure=False)
         c["s"] = b"hmac256:abc:ZGF0YQ=="
         self.assertEqual(c["s"].value, "hmac256:abc:ZGF0YQ==")
         self.assertNotIn("b'", c["s"].OutputString())
@@ -235,16 +235,16 @@ class TestCookiesSeguros(unittest.TestCase):
         import http.cookies
         r = http.cookies.SimpleCookie()
         r.load('s="hmac256:abc:ZGF0YQ=="; outro=1')
-        security.adaptar_cookie_sessao(r, "s")
+        security.adapt_session_cookie(r, "s")
         self.assertEqual(r["s"].value, b"hmac256:abc:ZGF0YQ==")
-        security.adaptar_cookie_sessao(r, "ausente")
+        security.adapt_session_cookie(r, "ausente")
         self.assertEqual(r["outro"].value, "1")
 
     def test_adaptar_cookie_sessao_nao_ascii_descartado(self):
         import http.cookies
         r = http.cookies.SimpleCookie()
         r["s"] = u"ção"
-        security.adaptar_cookie_sessao(r, "s")
+        security.adapt_session_cookie(r, "s")
         self.assertNotIn("s", r)
 
     def test_roundtrip_secure_dumps(self):
@@ -252,19 +252,19 @@ class TestCookiesSeguros(unittest.TestCase):
         import http.cookies
         from gluon.utils import secure_dumps, secure_loads
         chave = "k" * 32
-        c = security.CookiesSeguros(secure=True)
+        c = security.SecureCookies(secure=True)
         c["session_data_x"] = secure_dumps({"csrf_token": "t"}, chave)
         r = http.cookies.SimpleCookie()
         r.load(c["session_data_x"].OutputString().split(";")[0])
-        security.adaptar_cookie_sessao(r, "session_data_x")
+        security.adapt_session_cookie(r, "session_data_x")
         self.assertEqual(secure_loads(r["session_data_x"].value, chave, safe_unpickle=False), {"csrf_token": "t"})
 
     def test_adotar(self):
         import http.cookies
         origem = http.cookies.SimpleCookie()
         origem["b"] = "2"
-        c = security.CookiesSeguros(secure=True)
-        c.adotar(origem)
+        c = security.SecureCookies(secure=True)
+        c.adopt(origem)
         saida = c["b"].OutputString()
         self.assertIn("HttpOnly", saida)
         self.assertIn("Secure", saida)
@@ -293,7 +293,7 @@ class TestValidarNext(unittest.TestCase):
     def test_validos(self):
         for v in ("/script_scheduling_service/default/index",
                   "/script_scheduling_service/dev/componentes?pagina=2&status=FAILED"):
-            self.assertEqual(security.validar_next(v), v)
+            self.assertEqual(security.validate_next(v), v)
 
     def test_rejeitados(self):
         for v in (None, "", 123, "//evil.com", "//evil.com/script_scheduling_service/",
@@ -303,28 +303,28 @@ class TestValidarNext(unittest.TestCase):
                   "/script_scheduling_service/%2e%2e/admin", "/script_scheduling_service/%2F%2Fevil",
                   "/script_scheduling_service/a b", "/script_scheduling_service/\n",
                   "script_scheduling_service/default", "/script_scheduling_service/" + "a" * 600):
-            self.assertIsNone(security.validar_next(v), repr(v))
+            self.assertIsNone(security.validate_next(v), repr(v))
 
 
 class TestIpOrigem(unittest.TestCase):
 
     def test_sem_proxy(self):
-        self.assertEqual(security.ip_origem("10.0.0.5", "1.2.3.4", ()), "10.0.0.5")
+        self.assertEqual(security.client_ip("10.0.0.5", "1.2.3.4", ()), "10.0.0.5")
 
     def test_xff_ignorado_de_nao_confiavel(self):
-        self.assertEqual(security.ip_origem("10.0.0.5", "1.2.3.4", ("10.0.0.9",)), "10.0.0.5")
+        self.assertEqual(security.client_ip("10.0.0.5", "1.2.3.4", ("10.0.0.9",)), "10.0.0.5")
 
     def test_xff_de_proxy_confiavel(self):
-        self.assertEqual(security.ip_origem("10.0.0.9", "6.6.6.6, 1.2.3.4", ("10.0.0.9",)), "1.2.3.4")
-        self.assertEqual(security.ip_origem("10.0.0.9", "1.2.3.4, 10.0.0.8", ("10.0.0.9", "10.0.0.8")),
+        self.assertEqual(security.client_ip("10.0.0.9", "6.6.6.6, 1.2.3.4", ("10.0.0.9",)), "1.2.3.4")
+        self.assertEqual(security.client_ip("10.0.0.9", "1.2.3.4, 10.0.0.8", ("10.0.0.9", "10.0.0.8")),
                          "1.2.3.4")
 
     def test_xff_invalido(self):
-        self.assertEqual(security.ip_origem("10.0.0.9", "lixo", ("10.0.0.9",)), "10.0.0.9")
-        self.assertIsNone(security.ip_origem("nao-ip", None, ()))
+        self.assertEqual(security.client_ip("10.0.0.9", "lixo", ("10.0.0.9",)), "10.0.0.9")
+        self.assertIsNone(security.client_ip("nao-ip", None, ()))
 
     def test_ipv6(self):
-        self.assertEqual(security.ip_origem("::1", None, ()), "::1")
+        self.assertEqual(security.client_ip("::1", None, ()), "::1")
 
 
 class TestCabecalhoReferrer(unittest.TestCase):
@@ -338,7 +338,7 @@ class TestCabecalhoReferrer(unittest.TestCase):
         self.assertNotRegex(codigo, r'"Referrer-Policy":\s*"no-referrer"')
 
     def test_origin_null_continua_rejeitado(self):
-        self.assertFalse(security.origem_permitida("null", None, ["http://127.0.0.1:8000"]))
+        self.assertFalse(security.is_allowed_origin("null", None, ["http://127.0.0.1:8000"]))
 
 if __name__ == "__main__":
     unittest.main()

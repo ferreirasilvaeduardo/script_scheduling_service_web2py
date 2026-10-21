@@ -35,7 +35,7 @@ class TestAtorVisivel(unittest.TestCase):
 class TestResponsavelMascarado(unittest.TestCase):
 
     def setUp(self):
-        patcher = mock.patch.object(security, "ITERACOES", 1000)
+        patcher = mock.patch.object(security, "ITERATIONS", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
         env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: "senha-dev-de-teste-123"})
@@ -70,12 +70,12 @@ class TestMotivoPausa(unittest.TestCase):
 
     def test_traducao_unica(self):
         # CR-008, R-33: a mesma funcao pura na web e no daemon (README §7.5).
-        M = rbac.Motivo
+        M = rbac.Reason
         for motivo in (M.USER_INACTIVE, M.SCRIPT_INACTIVE, M.ENVIRONMENT_INACTIVE):
-            self.assertEqual(rbac.motivo_pausa(motivo), motivo)
-        for motivo in (M.PERFIL_INATIVO, M.SEM_HOMOLOGACAO, M.SEM_FUNC, M.SEM_AMBIENTE, M.SEM_SCRIPT,
-                       M.DADO_INVALIDO):
-            self.assertEqual(rbac.motivo_pausa(motivo), "NO_PERMISSION")
+            self.assertEqual(rbac.pause_reason_for(motivo), motivo)
+        for motivo in (M.PROFILE_INACTIVE, M.NOT_HOMOLOGATED, M.NO_FEATURE, M.NO_ENVIRONMENT, M.NO_SCRIPT,
+                       M.INVALID_DATA):
+            self.assertEqual(rbac.pause_reason_for(motivo), "NO_PERMISSION")
 
 
 class TestRegistroEsquema(unittest.TestCase):

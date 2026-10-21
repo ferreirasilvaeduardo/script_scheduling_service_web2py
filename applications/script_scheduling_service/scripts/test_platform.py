@@ -471,11 +471,11 @@ class TestEstadoEDiretorios(unittest.TestCase):
         self.assertIsNone(os_platform.validar_dir_restrito(self.raiz))
         os.chmod(self.raiz, 0o750)
         self.assertIsNone(os_platform.validar_dir_restrito(self.raiz), "0750 aceito (log_dir)")
-        self.assertEqual(os_platform.validar_dir_restrito("relativo/x"), "CAMINHO_RELATIVO")
-        self.assertEqual(os_platform.validar_dir_restrito("/usr/local/sss"), "PASTA_DO_SISTEMA")
+        self.assertEqual(os_platform.validar_dir_restrito("relativo/x"), "RELATIVE_PATH")
+        self.assertEqual(os_platform.validar_dir_restrito("/usr/local/sss"), "SYSTEM_DIR")
         os.symlink("/etc", os.path.join(self.raiz, "etc_link"))
-        self.assertEqual(os_platform.validar_dir_restrito(os.path.join(self.raiz, "etc_link")), "PASTA_DO_SISTEMA")
-        self.assertEqual(os_platform.validar_dir_restrito(os.path.join(self.raiz, "nao")), "NAO_ENCONTRADO")
+        self.assertEqual(os_platform.validar_dir_restrito(os.path.join(self.raiz, "etc_link")), "SYSTEM_DIR")
+        self.assertEqual(os_platform.validar_dir_restrito(os.path.join(self.raiz, "nao")), "NOT_FOUND")
         arq = os.path.join(self.raiz, "arq")
         open(arq, "w").close()
         self.assertEqual(os_platform.validar_dir_restrito(arq), "NAO_E_DIRETORIO")
@@ -522,37 +522,37 @@ class TestValidacoesDeCaminho(unittest.TestCase):
         # CR-011: o link e aceito e as checagens valem para o destino.
         self.assertIsNone(self.validar(os.path.join(self.base, "link.py")))
         os.chmod(self.script, 0o666)
-        self.assertEqual(self.validar(os.path.join(self.base, "link.py")), "GRAVAVEL_GRUPO_OUTROS",
+        self.assertEqual(self.validar(os.path.join(self.base, "link.py")), "GROUP_OTHER_WRITABLE",
                          "modo conferido no arquivo real")
 
     def test_sem_acesso(self):
         os.chmod(os.path.join(self.base, "sub"), 0o000)
-        self.assertEqual(self.validar(self.script), "SEM_ACESSO")
+        self.assertEqual(self.validar(self.script), "NO_ACCESS")
 
     def test_so_o_arquivo_e_conferido(self):
         # CR-011 (S2): pasta gravavel nao e conferida; o arquivo gravavel por grupo ou outros e recusado.
         os.chmod(os.path.join(self.base, "sub"), 0o777)
         self.assertIsNone(self.validar(self.script))
         os.chmod(self.script, 0o464)
-        self.assertEqual(self.validar(self.script), "GRAVAVEL_GRUPO_OUTROS")
+        self.assertEqual(self.validar(self.script), "GROUP_OTHER_WRITABLE")
 
     def test_ciclo_de_links(self):
         os.chmod(self.base, 0o755)
         os.symlink("ciclo_b", os.path.join(self.base, "ciclo_a"))
         os.symlink("ciclo_a", os.path.join(self.base, "ciclo_b"))
-        self.assertEqual(self.validar(os.path.join(self.base, "ciclo_a")), "NAO_ENCONTRADO")
+        self.assertEqual(self.validar(os.path.join(self.base, "ciclo_a")), "NOT_FOUND")
 
     def test_inexistente_e_nao_arquivo(self):
-        self.assertEqual(self.validar(os.path.join(self.base, "nao.py")), "NAO_ENCONTRADO")
-        self.assertEqual(self.validar(os.path.join(self.base, "sub")), "NAO_E_ARQUIVO")
+        self.assertEqual(self.validar(os.path.join(self.base, "nao.py")), "NOT_FOUND")
+        self.assertEqual(self.validar(os.path.join(self.base, "sub")), "NOT_A_FILE")
 
     def test_interpretador_pelo_validar_executavel(self):
         real = os_platform.validar_interpretador_executavel("/bin/sh")
         self.assertEqual(real, os.path.realpath("/bin/sh"))
-        with mock.patch.object(path_guard, "validar_executavel", return_value="/x") as ve:
+        with mock.patch.object(path_guard, "validate_executable", return_value="/x") as ve:
             os_platform.validar_interpretador_executavel("/usr/bin/python3", dirs_sss=("/srv",))
         ve.assert_called_once_with("/usr/bin/python3", dirs_sss=("/srv",))
-        with self.assertRaises(path_guard.PathGuardErro):
+        with self.assertRaises(path_guard.PathGuardError):
             os_platform.validar_interpretador_executavel("bin/sh")
 
 

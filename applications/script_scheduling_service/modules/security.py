@@ -11,27 +11,27 @@ import re
 import secrets
 import urllib.parse
 
-ALGORITMO = "pbkdf2_sha256"
-ITERACOES = 200000
+ALGORITHM = "pbkdf2_sha256"
+ITERATIONS = 200000
 SALT_BYTES = 16
-SENHA_MIN = 12
+PASSWORD_MIN = 12
 CSRF_BYTES = 32
 
 _RE_HASH = re.compile(r"pbkdf2_sha256\$([0-9]{1,7})\$([0-9a-f]{32})\$([0-9a-f]{64})")
 # Host (nome DNS/IPv4 ou IPv6 entre colchetes) e porta opcional; userinfo ('@') e rejeitado.
 _RE_NETLOC = re.compile(r"([a-z0-9.\-]+|\[[0-9a-f:.]+\])(?::([0-9]{1,5}))?")
-_PORTA_PADRAO = {"http": 80, "https": 443}
+_DEFAULT_PORTS = {"http": 80, "https": 443}
 _RE_COOKIE_ASCII = re.compile(r"[\x21-\x7e]*")
 _RE_NEXT = re.compile(r"[\x21-\x7e]{1,512}")
-PREFIXO_APP = "/script_scheduling_service/"
+APP_PREFIX = "/script_scheduling_service/"
 IP_MAX = 45
 
 
-def _derivar(senha, salt, iteracoes):
+def _derive(senha, salt, iteracoes):
     return hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, iteracoes)
 
 
-def _decompor(armazenado):
+def _split_hash(armazenado):
     if not isinstance(armazenado, str):
         return None
     m = _RE_HASH.fullmatch(armazenado)
@@ -43,53 +43,53 @@ def _decompor(armazenado):
     return iteracoes, bytes.fromhex(m.group(2)), bytes.fromhex(m.group(3))
 
 
-def hash_senha(senha):
+def hash_password(senha):
     """Gera o hash 'pbkdf2_sha256$<iter>$<salt_hex>$<hash_hex>' da senha."""
     if not isinstance(senha, str):
         raise TypeError("senha deve ser str")
     salt = secrets.token_bytes(SALT_BYTES)
-    dk = _derivar(senha, salt, ITERACOES)
-    return "%s$%d$%s$%s" % (ALGORITMO, ITERACOES, salt.hex(), dk.hex())
+    dk = _derive(senha, salt, ITERATIONS)
+    return "%s$%d$%s$%s" % (ALGORITHM, ITERATIONS, salt.hex(), dk.hex())
 
 
-def verificar_senha(senha, armazenado):
+def verify_password(senha, armazenado):
     """True se a senha confere com o hash armazenado; formato invalido ou '!' resulta em False."""
     if not isinstance(senha, str):
         return False
-    partes = _decompor(armazenado)
+    partes = _split_hash(armazenado)
     if partes is None:
         return False
     iteracoes, salt, esperado = partes
-    return hmac.compare_digest(_derivar(senha, salt, iteracoes), esperado)
+    return hmac.compare_digest(_derive(senha, salt, iteracoes), esperado)
 
 
-def hash_reconhecido(armazenado):
+def is_known_hash(armazenado):
     """True se o valor armazenado tem o formato de hash vigente (senha utilizavel)."""
-    return _decompor(armazenado) is not None
+    return _split_hash(armazenado) is not None
 
 
-def precisa_rehash(armazenado):
+def needs_rehash(armazenado):
     """True se o hash e valido mas usa menos iteracoes que o vigente."""
-    partes = _decompor(armazenado)
-    return partes is not None and partes[0] < ITERACOES
+    partes = _split_hash(armazenado)
+    return partes is not None and partes[0] < ITERATIONS
 
 
-_HASH_FICTICIO = hash_senha(secrets.token_hex(16))
+_DUMMY_HASH = hash_password(secrets.token_hex(16))
 
 
-def hash_ficticio():
+def dummy_hash():
     """Hash pre-computado para equalizar o tempo de resposta de login inexistente."""
-    return _HASH_FICTICIO
+    return _DUMMY_HASH
 
 
-def validar_politica_senha(senha):
+def validate_password_policy(senha):
     """Lista de mensagens de violacao da politica de senha (vazia se valida)."""
-    if not isinstance(senha, str) or len(senha) < SENHA_MIN:
-        return [u"A senha deve ter no mínimo %d caracteres." % SENHA_MIN]
+    if not isinstance(senha, str) or len(senha) < PASSWORD_MIN:
+        return [u"A senha deve ter no mínimo %d caracteres." % PASSWORD_MIN]
     return []
 
 
-def retirar_senhas(origens, campos):
+def strip_passwords(origens, campos):
     """Remove os campos de senha de todos os dicts de variaveis da requisicao e devolve seus valores.
 
     O ticket de erro do web2py grava request.vars/post_vars: as senhas saem deles assim que lidas.
@@ -108,12 +108,12 @@ def retirar_senhas(origens, campos):
     return senhas
 
 
-def gerar_token_csrf():
+def generate_csrf_token():
     """Token sincronizador CSRF (32 bytes aleatorios, urlsafe)."""
     return secrets.token_urlsafe(CSRF_BYTES)
 
 
-def validar_token_csrf(esperado, recebido):
+def validate_csrf_token(esperado, recebido):
     """Compara os tokens em tempo constante; ausentes ou vazios resultam em False."""
     if not isinstance(esperado, str) or not isinstance(recebido, str):
         return False
@@ -122,46 +122,46 @@ def validar_token_csrf(esperado, recebido):
     return hmac.compare_digest(esperado.encode("utf-8"), recebido.encode("utf-8"))
 
 
-def normalizar_origem(url):
+def normalize_origin(url):
     """Retorna (esquema, host, porta) de uma URL http(s) ou None se invalida."""
     if not isinstance(url, str) or not url:
         return None
     partes = urllib.parse.urlsplit(url.strip())
     esquema = partes.scheme.lower()
-    if esquema not in _PORTA_PADRAO:
+    if esquema not in _DEFAULT_PORTS:
         return None
     m = _RE_NETLOC.fullmatch(partes.netloc.lower())
     if not m:
         return None
-    porta = int(m.group(2)) if m.group(2) else _PORTA_PADRAO[esquema]
+    porta = int(m.group(2)) if m.group(2) else _DEFAULT_PORTS[esquema]
     if not 1 <= porta <= 65535:
         return None
     return esquema, m.group(1), porta
 
 
-def origem_permitida(origin, referer, allowed_origins):
+def is_allowed_origin(origin, referer, allowed_origins):
     """Valida Origin (ou, na sua ausencia, a origem do Referer) contra a lista permitida.
 
     Compara esquema, host e porta exatos. Sem nenhum dos dois cabecalhos, rejeita.
     """
     fonte = origin if origin else referer
-    alvo = normalizar_origem(fonte)
+    alvo = normalize_origin(fonte)
     if alvo is None:
         return False
     for permitida in allowed_origins or ():
-        if normalizar_origem(permitida) == alvo:
+        if normalize_origin(permitida) == alvo:
             return True
     return False
 
 
-def sessao_expirada(ultimo_acesso, agora, timeout_s):
+def is_session_expired(ultimo_acesso, agora, timeout_s):
     """True se a sessao esta ociosa ha mais de timeout_s segundos (ou sem marca valida)."""
     if not isinstance(ultimo_acesso, (int, float)) or isinstance(ultimo_acesso, bool):
         return True
     return (agora - ultimo_acesso) > timeout_s
 
 
-class CookiesSeguros(http.cookies.SimpleCookie):
+class SecureCookies(http.cookies.SimpleCookie):
     """SimpleCookie que marca HttpOnly (e Secure, se pedido) em todo cookie atribuido.
 
     SameSite nao e tratado aqui: no Python 3.6 o Morsel rejeita o atributo (README §4.2).
@@ -169,9 +169,9 @@ class CookiesSeguros(http.cookies.SimpleCookie):
 
     def __init__(self, secure=True, input=None):
         self.secure = secure
-        super(CookiesSeguros, self).__init__(input)
+        super(SecureCookies, self).__init__(input)
 
-    def _proteger(self, morsel):
+    def _protect(self, morsel):
         morsel["httponly"] = True
         if self.secure:
             morsel["secure"] = True
@@ -180,17 +180,17 @@ class CookiesSeguros(http.cookies.SimpleCookie):
         # secure_dumps do web2py devolve bytes; sem decodificar, o cookie sairia como "b'...'".
         if isinstance(value, bytes):
             value = value.decode("ascii")
-        super(CookiesSeguros, self).__setitem__(key, value)
-        self._proteger(dict.__getitem__(self, key))
+        super(SecureCookies, self).__setitem__(key, value)
+        self._protect(dict.__getitem__(self, key))
 
-    def adotar(self, cookies):
+    def adopt(self, cookies):
         """Copia os morsels de outro SimpleCookie aplicando as protecoes."""
         for chave, morsel in cookies.items():
             dict.__setitem__(self, chave, morsel)
-            self._proteger(morsel)
+            self._protect(morsel)
 
 
-def adaptar_cookie_sessao(cookies, nome):
+def adapt_session_cookie(cookies, nome):
     """Converte para bytes o valor do cookie de sessao recebido, formato que o secure_loads exige.
 
     Valor fora de ASCII imprimivel e descartado (sessao vazia) em vez de gerar erro.
@@ -204,7 +204,7 @@ def adaptar_cookie_sessao(cookies, nome):
         del cookies[nome]
 
 
-def validar_next(valor, prefixo=PREFIXO_APP):
+def validate_next(valor, prefixo=APP_PREFIX):
     """Retorna o destino pos-login se for caminho local da aplicacao; senao None (open redirect)."""
     if not isinstance(valor, str) or not _RE_NEXT.fullmatch(valor):
         return None
@@ -219,7 +219,7 @@ def validar_next(valor, prefixo=PREFIXO_APP):
     return valor
 
 
-def _ip_normalizado(texto):
+def _normalized_ip(texto):
     if not isinstance(texto, str):
         return None
     try:
@@ -228,19 +228,19 @@ def _ip_normalizado(texto):
         return None
 
 
-def ip_origem(remote_addr, x_forwarded_for, trusted_proxies):
+def client_ip(remote_addr, x_forwarded_for, trusted_proxies):
     """IP do cliente: remote_addr, ou o X-Forwarded-For quando remote_addr e proxy confiavel.
 
     No XFF, percorre da direita para a esquerda e devolve o primeiro IP nao confiavel.
     """
-    confiaveis = frozenset(ip for ip in (_ip_normalizado(t) for t in (trusted_proxies or ())) if ip)
-    remoto = _ip_normalizado(remote_addr)
+    confiaveis = frozenset(ip for ip in (_normalized_ip(t) for t in (trusted_proxies or ())) if ip)
+    remoto = _normalized_ip(remote_addr)
     if remoto is None:
         return None
     if remoto not in confiaveis or not isinstance(x_forwarded_for, str):
         return remoto[:IP_MAX]
     for item in reversed(x_forwarded_for.split(",")):
-        ip = _ip_normalizado(item)
+        ip = _normalized_ip(item)
         if ip is None:
             return remoto[:IP_MAX]
         if ip not in confiaveis:

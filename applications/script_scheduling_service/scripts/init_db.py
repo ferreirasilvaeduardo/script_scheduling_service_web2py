@@ -149,7 +149,7 @@ def _executar_ddl_fases(conn, owner, prefixo, lob_storage="SECUREFILE", log_fn=p
     cursor = conn.cursor()
     try:
         mapa = _consultar_existencia(cursor, owner)
-        instrucoes = ddl_builder.gerar_instrucoes_ddl(owner, prefixo, lob_storage=lob_storage)
+        instrucoes = ddl_builder.build_ddl_statements(owner, prefixo, lob_storage=lob_storage)
 
         total = len(instrucoes)
         sucesso_count = 0
@@ -203,7 +203,7 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
           VALUES ({sq_fnc}.NEXTVAL, :code, :name, :module, :description, 'Y', SYSDATE, 'SYSTEM:init_db')
         """.format(tb_fnc=tb_fnc, sq_fnc=sq_fnc)
 
-        for mod, cod, nom, desc in ddl_builder.CATALOGO_FUNCIONALIDADES:
+        for mod, cod, nom, desc in ddl_builder.FEATURE_CATALOG:
             cursor.execute(sql_merge_fnc, {
                 "code": cod,
                 "name": nom,
@@ -211,7 +211,7 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
                 "description": desc,
             })
 
-        # 2. Perfis padrao e matrizes de permissao (CATALOGO_PERFIS_PADRAO)
+        # 2. Perfis padrao e matrizes de permissao (DEFAULT_PROFILES)
         tb_per = "{}.{}".format(owner, esquema["profiles"]["tabela"])
         sq_per = "{}.{}".format(owner, esquema["profiles"]["sequence"])
         tb_pfnc = "{}.{}".format(owner, esquema["profile_feature"]["tabela"])
@@ -263,7 +263,7 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
           VALUES ({sq_pamb}.NEXTVAL, src.profile_id, src.environment_id, SYSDATE, 'SYSTEM:init_db')
         """.format(tb_pamb=tb_pamb, sq_pamb=sq_pamb, tb_per=tb_per, tb_amb=tb_amb)
 
-        for per_nome, per_desc, is_adm, per_funcs, per_ambs in ddl_builder.CATALOGO_PERFIS_PADRAO:
+        for per_nome, per_desc, is_adm, per_funcs, per_ambs in ddl_builder.DEFAULT_PROFILES:
             cursor.execute(sql_merge_per, {
                 "name": per_nome,
                 "description": per_desc,
@@ -295,7 +295,7 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
           VALUES ({sq_amb}.NEXTVAL, :name, :description, :connection, 'Y', SYSDATE, 'SYSTEM:init_db')
         """.format(tb_amb=tb_amb, sq_amb=sq_amb)
 
-        for amb_nome, amb_desc, amb_conn in ddl_builder.CATALOGO_AMBIENTES_PADRAO:
+        for amb_nome, amb_desc, amb_conn in ddl_builder.DEFAULT_ENVIRONMENTS:
             cursor.execute(sql_merge_amb, {
                 "name": amb_nome,
                 "description": amb_desc,
@@ -332,7 +332,7 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
           VALUES ({sq_prm}.NEXTVAL, :code, :param_flag, :label, :description, :component_type, :options_json, :default_value, NULL, 'N', 'Y', SYSDATE, 'SYSTEM:init_db')
         """.format(tb_prm=tb_prm, sq_prm=sq_prm)
 
-        for cod, p_nom, lbl, desc, tcomp, opc, vpad in ddl_builder.CATALOGO_PARAMETROS_PADRAO:
+        for cod, p_nom, lbl, desc, tcomp, opc, vpad in ddl_builder.DEFAULT_PARAMETERS:
             cursor.execute(sql_merge_prm, {
                 "code": cod,
                 "param_flag": p_nom,
@@ -433,7 +433,7 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
           VALUES ({sq_sprm}.NEXTVAL, src.script_id, src.parameter_id, :sort_order, :required, :vsub, SYSDATE, 'SYSTEM:init_db')
         """.format(tb_sprm=tb_sprm, sq_sprm=sq_sprm, tb_scr=tb_scr, tb_prm=tb_prm)
 
-        for s_nome, s_desc, s_grp, s_cat, s_etp, s_int, s_path, s_tpar, s_paral, s_tmout, s_params in ddl_builder.CATALOGO_SCRIPTS_PADRAO:
+        for s_nome, s_desc, s_grp, s_cat, s_etp, s_int, s_path, s_tpar, s_paral, s_tmout, s_params in ddl_builder.DEFAULT_SCRIPTS:
             cursor.execute(sql_merge_scr, {
                 "name": s_nome,
                 "description": s_desc,
@@ -447,10 +447,10 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
                 "timeout_s": s_tmout,
             })
 
-            for amb_nome, _, _ in ddl_builder.CATALOGO_AMBIENTES_PADRAO:
+            for amb_nome, _, _ in ddl_builder.DEFAULT_ENVIRONMENTS:
                 cursor.execute(sql_merge_samb, {"s_nome": s_nome, "amb_nome": amb_nome})
 
-            for per_nome, _, _, _, _ in ddl_builder.CATALOGO_PERFIS_PADRAO:
+            for per_nome, _, _, _, _ in ddl_builder.DEFAULT_PROFILES:
                 cursor.execute(sql_merge_pscr, {"per_nome": per_nome, "s_nome": s_nome})
 
             for p_cod, p_ord, p_obrig, p_vsub in s_params:
@@ -474,7 +474,7 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
         """.format(tb_ctl=tb_ctl)
         cursor.execute(sql_merge_ctl, {"schema_version": sql_ident.SCHEMA_VERSION})
 
-        # 8. Usuarios padrao da aplicacao e homologacao (CATALOGO_USUARIOS_PADRAO)
+        # 8. Usuarios padrao da aplicacao e homologacao (DEFAULT_USERS)
         tb_usr = "{}.{}".format(owner, esquema["users"]["tabela"])
         sq_usr = "{}.{}".format(owner, esquema["users"]["sequence"])
 
@@ -500,12 +500,12 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
           VALUES ({sq_usr}.NEXTVAL, :login, :name, :password_hash, src.profile_id, 'Y', 0, 0, SYSDATE, 'SYSTEM:init_db')
         """.format(tb_usr=tb_usr, sq_usr=sq_usr, tb_per=tb_per)
 
-        for u_login, u_nome, u_perfil in ddl_builder.CATALOGO_USUARIOS_PADRAO:
+        for u_login, u_nome, u_perfil in ddl_builder.DEFAULT_USERS:
             nome_final = admin_nome if (u_login == "admin" and admin_nome) else u_nome
             if u_login == "admin" and admin_senha:
-                hash_final = security.hash_senha(admin_senha)
+                hash_final = security.hash_password(admin_senha)
             else:
-                hash_final = ddl_builder.HASH_SENHA_PADRAO_HOMOLOGACAO
+                hash_final = ddl_builder.HOMOLOGATION_DEFAULT_PASSWORD_HASH
 
             cursor.execute(sql_merge_usr, {
                 "login": u_login,
@@ -820,13 +820,13 @@ def main(argv=None):
 
     # Modo DRY-RUN: imprime DDL e/ou GRANTs e sai com 0
     if args.dry_run:
-        script_ddl = ddl_builder.gerar_script_ddl(owner, prefixo, lob_storage=lob_storage)
+        script_ddl = ddl_builder.build_ddl_script(owner, prefixo, lob_storage=lob_storage)
         print(script_ddl)
         if papeis_grants:
             print("\n-- ==============================================================================")
             print("-- GRANTS POR PAPEL (README §11.1)")
             print("-- ==============================================================================")
-            grants = ddl_builder.gerar_grants_por_papel(owner, prefixo, papeis_grants)
+            grants = ddl_builder.build_grants_by_role(owner, prefixo, papeis_grants)
             for g in grants:
                 print(g)
         return 0
@@ -857,7 +857,7 @@ def main(argv=None):
                 print("\nOperacao cancelada.", file=sys.stderr)
                 return 2
 
-        valida, msg_pol = security.validar_politica_senha(admin_senha)
+        valida, msg_pol = security.validate_password_policy(admin_senha)
         if not valida:
             print("Senha do administrador viola politica de complexidade: %s" % msg_pol, file=sys.stderr)
             return 2
@@ -944,7 +944,7 @@ def main(argv=None):
         # Exibe GRANTs se solicitado
         if papeis_grants:
             print("\nGRANTs para os papeis solicitados:")
-            grants = ddl_builder.gerar_grants_por_papel(owner, prefixo, papeis_grants)
+            grants = ddl_builder.build_grants_by_role(owner, prefixo, papeis_grants)
             for g in grants:
                 print("  " + g)
 

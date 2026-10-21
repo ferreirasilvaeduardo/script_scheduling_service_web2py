@@ -70,7 +70,7 @@ class _Banco(object):
         self.scripts = {}
         self.ambiente = {"id": 1, "name": AMB, "description": "Desenvolvimento", "connection": "db:1521/dev", "active": "Y"}
         self.homologados = set()
-        self.ctx = rbac.contexto_usuario({
+        self.ctx = rbac.user_context({
             "user_id": 9, "login": "ana", "profile_id": 2, "usuario_ativo": "Y", "perfil_ativo": "Y",
             "is_admin": "N", "perm_version": 1, "features": ["EXEC_SCRIPT"], "environments": [AMB],
             "scripts": []})
@@ -380,7 +380,7 @@ class _Base(unittest.TestCase):
 
     def rodar(self, ate, limite=15):
         with mock.patch.object(time, "sleep", side_effect=AssertionError("time.sleep dentro do laco")):
-            codigo = self.ag.executar(self.parada, ate=ate, limite_s=limite)
+            codigo = self.ag.run(self.parada, ate=ate, limite_s=limite)
         return codigo
 
     def terminado(self, tid):
@@ -560,7 +560,7 @@ class TestPrevalidacao(_Base):
             os.rename(self.banco.scripts[sid]["path_file"], caminho)
             self.banco.scripts[sid]["path_file"] = caminho
             tid = self.banco.ticket(sid)
-            self._recusa(tid, "PASTA_DO_SSS", **{chave: pasta})
+            self._recusa(tid, "SSS_DIR", **{chave: pasta})
             self.ag.liberar_recursos()
 
     def test_snapshots_antigos(self):
@@ -583,7 +583,7 @@ class TestPrevalidacao(_Base):
     def test_caminho_inexistente(self):
         sid = self.banco.script("echo x\n")
         t1 = self.banco.ticket(sid, path_file=os.path.join(self.banco.base, "nao.sh"))
-        self._recusa(t1, "NAO_ENCONTRADO")
+        self._recusa(t1, "NOT_FOUND")
 
     def test_cadastro_mudou(self):
         sid = self.banco.script("echo x\n")

@@ -48,8 +48,8 @@ class RepoSaidaMemoria(object):
             return scheduler_output.ALREADY_WRITTEN
         raise scheduler_output.OutputOffsetMismatch(tid, offset, len(parte))
 
-    def concluir(self, conn, tid, agente_id, qtd, tamanho):
-        self._falhar("concluir")
+    def complete(self, conn, tid, agente_id, qtd, tamanho):
+        self._falhar("complete")
         linha = self.linhas.get(tid)
         if linha is None or linha["state"] != "WRITING" or linha["agent_id"] != agente_id \
                 or len(linha["content"]) != tamanho:

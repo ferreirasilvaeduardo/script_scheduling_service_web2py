@@ -64,14 +64,14 @@ class ServicoAuth(object):
 
         usuario = self._usuarios.get_by_login(login_norm) if login_valido else None
         if usuario is None:
-            security.verificar_senha(senha_txt, security.hash_ficticio())
+            security.verify_password(senha_txt, security.dummy_hash())
             return self._falha_inexistente(login_norm if login_valido else "?", ip, agora)
 
         armazenado = usuario.get("password_hash")
-        if security.hash_reconhecido(armazenado):
-            senha_confere = senha_ok_tipo and security.verificar_senha(senha_txt, armazenado)
+        if security.is_known_hash(armazenado):
+            senha_confere = senha_ok_tipo and security.verify_password(senha_txt, armazenado)
         else:
-            security.verificar_senha(senha_txt, security.hash_ficticio())
+            security.verify_password(senha_txt, security.dummy_hash())
             senha_confere = False
 
         if self._bloqueado(usuario, agora):
@@ -87,7 +87,7 @@ class ServicoAuth(object):
             self._registrar_falha(usuario, ip, "usuario ou perfil inativo")
             return None, MSG_GENERICA
 
-        novo_hash = security.hash_senha(senha_txt) if security.precisa_rehash(armazenado) else None
+        novo_hash = security.hash_password(senha_txt) if security.needs_rehash(armazenado) else None
         # Sucesso, rehash e auditoria numa unica operacao do repositorio (README §4.2, §4.4).
         self._usuarios.register_login_success(
             usuario["login"], novo_hash=novo_hash,
@@ -204,7 +204,7 @@ class ServicoAuth(object):
         funcs, ambs, scrs = self._matriz(estado["profile_id"], estado["perm_version"])
         dados = dict(estado)
         dados.update(features=funcs, environments=ambs, scripts=scrs)
-        return rbac.contexto_usuario(dados)
+        return rbac.user_context(dados)
 
     def _matriz(self, perfil_id, perm_versao):
         # perm_versao muda em toda alteracao de matriz/perfil (README §4.3.A): a chave invalida o cache.
@@ -250,14 +250,14 @@ class ServicoAuth(object):
         usuario = self._reiniciar_se_expirado(usuario)
         armazenado = usuario.get("password_hash")
         atual_ok = (isinstance(atual, str) and 0 < len(atual) <= SENHA_MAX
-                    and security.hash_reconhecido(armazenado) and security.verificar_senha(atual, armazenado))
+                    and security.is_known_hash(armazenado) and security.verify_password(atual, armazenado))
         if not atual_ok:
             _ctx, mensagem = self._falha_senha(usuario, ip)
             if mensagem == self.msg_bloqueio:
                 return "BLOQUEADO", {"senha_atual": self.msg_bloqueio}
             return "ERRO", {"senha_atual": MSG_SENHA_ATUAL}
         erros = {}
-        problemas = security.validar_politica_senha(nova) if isinstance(nova, str) and len(nova) <= SENHA_MAX \
+        problemas = security.validate_password_policy(nova) if isinstance(nova, str) and len(nova) <= SENHA_MAX \
             else [u"Informe a nova senha."]
         if problemas:
             erros["nova"] = problemas[0]
@@ -265,7 +265,7 @@ class ServicoAuth(object):
             erros["confirmacao"] = MSG_CONFIRMACAO
         if erros:
             return "ERRO", erros
-        self._usuarios.set_password(usuario["id"], security.hash_senha(nova), agora,
+        self._usuarios.set_password(usuario["id"], security.hash_password(nova), agora,
                                      auditoria={"actor": usuario["login"], "ip": ip, "action": "UPDATE",
                                                 "detail": u"senha alterada pelo próprio usuário"})
         self._log.info("senha alterada pelo proprio usuario (login=%s ip=%s)", usuario["login"], ip,

@@ -24,11 +24,11 @@ MARKER_TRUNCATED = "[SSS] log truncado no banco; arquivo integral no agente\n"
 _STEP_LOG_S = {11: 24, 12: 30, 13: 8, 14: 36, 15: 30, 16: 36}
 _LINES_LOG_LARGE = 27000
 # Idade inicial do heartbeat congelado do agt-host02: com os limiares padrao (10/90/180 s) ele
-# comeca ATRASADO, fica EM_RISCO ~1 min depois e OFFLINE ~2,5 min depois (README §13).
+# comeca DELAYED, fica AT_RISK ~1 min depois e OFFLINE ~2,5 min depois (README §13).
 _HB_FROZEN_S = 30
 _TICKET_LOG_LARGE = 17
 # Quadros de atencao da tela de agentes (CR-007, R-18): o ticket 4 (SH em HOMOLOGACAO) ja venceu e
-# so o agt-host02 atende o par, entao aparece em "Fila sem atendente" quando ele sai de ATRASADO;
+# so o agt-host02 atende o par, entao aparece em "Fila sem atendente" quando ele sai de DELAYED;
 # o RUNNING 16 foi reservado sem PID ("Rodando sem PID", sem log simulado).
 _TICKET_QUEUE_NO_SERVER = 4
 _TICKET_NO_PID = 16
@@ -58,7 +58,7 @@ def _compiler_links(store, script_id):
 def _compile_seed(store, script_id, agora):
     """Snapshot e respostas resolvidas reais do script (README §2.5: seed coerente com as regras)."""
     vinculos = _compiler_links(store, script_id)
-    snapshot, resolvidos, erros = params_compiler.compilar_snapshot(store.scripts[script_id], vinculos, {}, agora)
+    snapshot, resolvidos, erros = params_compiler.compile_snapshot(store.scripts[script_id], vinculos, {}, agora)
     if erros:
         raise ValueError("seed incoerente: script %s nao compila (%s)" % (script_id, sorted(erros)))
     return snapshot, resolvidos, vinculos
@@ -249,7 +249,7 @@ def load_seed(store, forcar=False, senha_dev=None):
                                     u["created_at"] = base_dt - datetime.timedelta(days=60)
                                     u["session_epoch"] = 0
                                     if senha_dev is not None and u["login"] not in _NO_PASSWORD_DEV:
-                                        u["password_hash"] = security.hash_senha(senha_dev)
+                                        u["password_hash"] = security.hash_password(senha_dev)
                                     store.users[u["id"]] = u
                                 store.seqs["tbsss_users"] = 6
 
@@ -400,13 +400,13 @@ def load_seed(store, forcar=False, senha_dev=None):
                                     {"id": 4, "name": "Fechamento Mensal Dia 1", "script_id": 2, "environment": "HOMOLOGACAO", "user_id": 3, "priority": 3, "recurrence_type": "MONTHLY", "cron_expression": None, "run_time": "01:00", "week_days": None, "month_day": 1, "params_json": '{"formato_saida":"JSON"}', "start_date": base_dt - datetime.timedelta(days=30), "end_date": None, "next_run_at": base_dt + datetime.timedelta(days=15), "last_run_at": base_dt - datetime.timedelta(days=15), "last_ticket_id": 34, "pause_reason": None, "active": "Y"},
                                     {"id": 5, "name": "Limpeza Cron Periódica (Pausado)", "script_id": 3, "environment": "PRODUCAO", "user_id": 1, "priority": 2, "recurrence_type": "CRON", "cron_expression": "0 */4 * * *", "run_time": None, "week_days": None, "month_day": None, "params_json": "{}", "start_date": base_dt - datetime.timedelta(days=2), "end_date": None, "next_run_at": base_dt + datetime.timedelta(hours=4), "last_run_at": base_dt, "last_ticket_id": 35, "pause_reason": "MANUAL", "active": "N"},
                                 ]
-                                agora_agd = recurrence.truncar_segundos(base_dt)
+                                agora_agd = recurrence.truncate_seconds(base_dt)
                                 for a in agds:
                                     a["created_at"] = base_dt - datetime.timedelta(days=20)
                                     # Coerente com as regras (README §2.5, §7.2, §7.6): minuto exato, proxima pelo
                                     # recurrence e parametros_json com as respostas resolvidas completas.
-                                    a["start_date"] = recurrence.truncar_segundos(a["start_date"])
-                                    a["next_run_at"] = recurrence.proxima_execucao(a, agora_agd, 1461)
+                                    a["start_date"] = recurrence.truncate_seconds(a["start_date"])
+                                    a["next_run_at"] = recurrence.next_run(a, agora_agd, 1461)
                                     _snap, resolvidos, _v = _compile_seed(store, a["script_id"], agora_agd)
                                     respostas = dict(json.loads(a["params_json"]))
                                     for codigo, valor in resolvidos.items():

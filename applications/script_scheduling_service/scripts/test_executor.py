@@ -480,7 +480,7 @@ class TestSnapshotV4(_Base):
                               "path_file": self.script, "param_type": "NAMED", "args": ["--data", "2026-10-13"],
                               "respostas": {}, "sensiveis": [], "compilado_em": "2026-10-13 10:47:00"},
                              ensure_ascii=False, sort_keys=True)
-        snap, argv, script_real = pc.validar_snapshot(snap_js, _CfgSnap({"PYTHON3": sys.executable}))
+        snap, argv, script_real = pc.validate_snapshot(snap_js, _CfgSnap({"PYTHON3": sys.executable}))
         self.assertEqual(argv, [sys.executable, "-I", script_real, "--data", "2026-10-13"])
         wd = executor.preparar_diretorio(self.work, 21)
         cfg = _Cfg(_Agente("srv-01", "C.UTF-8", (), (), None))
@@ -488,7 +488,7 @@ class TestSnapshotV4(_Base):
         ticket = {"id": 21, "environment": "DEV", "schedule_id": 5, "parent_ticket_id": None, "priority": 3,
                   "started_at": STARTED_AT, "scheduled_at": STARTED_AT}
         with self.assertLogs("sss_scheduler", "WARNING"):
-            env = env_builder.construir(cfg, Secrets("x" * 8, None, {}), ticket,
+            env = env_builder.build(cfg, Secrets("x" * 8, None, {}), ticket,
                                         {"name": "DEV", "connection": None, "description": "Desenvolvimento"},
                                         script_real, wd, {}, os_platform.NOME, snapshot=snap,
                                         agendamento={"name": "Diario DEV", "recurrence_type": "DAILY"},

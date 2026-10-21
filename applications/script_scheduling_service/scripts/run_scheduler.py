@@ -48,13 +48,13 @@ def main(argv=None):
         outro.setLevel(logger.level)
         for handler in logger.handlers:
             outro.addHandler(handler)
-    masking.instalar_filtro_em_handlers()
+    masking.install_filter_on_handlers()
     parada = threading.Event()
     os_platform.instalar_parada(parada)
     agente = scheduler_loop.Agente(cfg=cfg)
     try:
         agente.inicializar()
-        return agente.executar(parada, esperar=_esperar(parada))
+        return agente.run(parada, esperar=_esperar(parada))
     except scheduler_loop.FalhaInicializacao as falha:
         return falha.codigo
     finally:

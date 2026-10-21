@@ -91,7 +91,7 @@ class _Log(logging.LoggerAdapter):
 
 
 def _dirs_sss(cfg):
-    """Pastas do SSS onde nenhum script nem interpretador pode ficar (PASTA_DO_SSS, README §8.5). CR-014: inclui
+    """Pastas do SSS onde nenhum script nem interpretador pode ficar (SSS_DIR, README §8.5). CR-014: inclui
     output_dir e input_dir, que o usuario de execucao grava (um script ali poderia ser trocado por outro)."""
     agente = cfg.agent
     return tuple(d for d in (cfg.logging.log_dir, agente.work_dir, agente.exec_work_dir,
@@ -232,7 +232,7 @@ class Agente(object):
         for logico, caminho in agente.interpreters:
             try:
                 self.plat.validar_interpretador_executavel(caminho, dirs_sss=dirs_sss)
-            except Exception as exc:  # noqa: BLE001 - PathGuardErro e afins: CRITICAL com o codigo
+            except Exception as exc:  # noqa: BLE001 - PathGuardError e afins: CRITICAL com o codigo
                 self._falhar(SAIDA_DIRETORIOS, "interpretador %s (%s) recusado: %s", logico, caminho,
                              getattr(exc, "codigo", exc.__class__.__name__))
         if self.cfg.app.sss_env != "DEV":
@@ -530,7 +530,7 @@ class Agente(object):
             valores.append(getattr(cred, "password", None))
         return valores
 
-    def executar(self, parada, esperar=None, ate=None, limite_s=None):
+    def run(self, parada, esperar=None, ate=None, limite_s=None):
         """Laco principal ate a parada (flag com is_set() ou arquivo .stop). Devolve o codigo de saida.
 
         ate/limite_s: so para os testes (condicao de termino e prazo maximo do harness).
@@ -932,7 +932,7 @@ class Agente(object):
             elif item is not None:
                 item.motivo = "OWNERSHIP_LOST"
             self.devolucoes_pendentes.discard(tid)
-        res = self.rodada.executar(conn, self.repo_log, self.agente_id)
+        res = self.rodada.run(conn, self.repo_log, self.agente_id)
         for tid in res.posse_perdida:
             item = self.execucoes.get(tid)
             if item is None:
@@ -982,9 +982,9 @@ class Agente(object):
         if self._parando or self.cercado:
             return
         if self.desdobro is None:
-            self.desdobro = schedule_expansion.Desdobro(self.repo_agenda, self.repo, self.agente_id, self.cfg.agent,
+            self.desdobro = schedule_expansion.Expansion(self.repo_agenda, self.repo, self.agente_id, self.cfg.agent,
                                               self.relogio)
-        stats = self.desdobro.executar(self._conn(), continuar=self._pode_seguir)
+        stats = self.desdobro.run(self._conn(), continuar=self._pode_seguir)
         if stats["regras"]:
             self.log.info("desdobro: %(regras)d regra(s), %(tickets)d ticket(s), %(pausas)d pausa(s), "
                           "%(puladas)d com outro agente", stats, extra={"action": "DESDOBRO"})
@@ -1067,9 +1067,9 @@ class Agente(object):
         contexto = self.repo.execution_context(conn, ticket)
         script, ambiente = contexto["script"], contexto["environment"]
         try:
-            snap, argv, script_real = params_compiler.validar_snapshot(ticket["submitted_params"],
+            snap, argv, script_real = params_compiler.validate_snapshot(ticket["submitted_params"],
                                                                        self._cfg_snapshot())
-        except params_compiler.SnapshotErro as exc:
+        except params_compiler.SnapshotError as exc:
             codigo = exc.motivo[len("PATH_GUARD_"):] if exc.motivo.startswith("PATH_GUARD_") else exc.motivo
             return self._recusar(item, codigo)
         if script is None or snap["path_file"] != script["path_file"] or snap["interpreter"] != script["interpreter"]:
@@ -1080,7 +1080,7 @@ class Agente(object):
             return self._recusar(item, "NAO_HOMOLOGADO")
         if ambiente is None or ambiente.get("active") != "Y":
             return self._recusar(item, "ENVIRONMENT_INACTIVE")
-        ok, _motivo = rbac.pode_executar(contexto["ctx"], script, ambiente, contexto["homologacoes"])
+        ok, _motivo = rbac.can_execute(contexto["ctx"], script, ambiente, contexto["homologacoes"])
         if not ok:
             return self._recusar(item, "NO_PERMISSION")
         return snap, argv, script_real, contexto
@@ -1148,7 +1148,7 @@ class Agente(object):
     def _spawn(self, item, snap, argv, script_real, contexto):
         agente = self.cfg.agent
         ticket = item.ticket
-        usuario = env_builder.usuario_execucao(self.cfg, ticket["environment"])
+        usuario = env_builder.exec_user(self.cfg, ticket["environment"])
         rotulo = "SSS-%s-%s" % (self.agente_id, item.tid)
         try:
             work_dir_ticket = executor.preparar_diretorio(agente.work_dir, item.tid, startup_concluido=True)
@@ -1173,13 +1173,13 @@ class Agente(object):
                                                         item.started_at, item.tid, snap.get("script_id"))
                 saida = output_phase.Saida(item.tid, base, relativo, usuario, work_dir_ticket)
             ticket_env = dict(ticket, started_at=item.started_at)
-            env = env_builder.construir(self.cfg, self.segredos, ticket_env, contexto["environment"], script_real,
+            env = env_builder.build(self.cfg, self.segredos, ticket_env, contexto["environment"], script_real,
                                         work_dir_ticket, dict(os.environ), self.plat.NOME, snapshot=snap,
                                         agendamento=contexto["agendamento"], caminho_log=caminho,
                                         timeout_seg=timeout, hostname=self.hostname, versao=sss_config.SSS_VERSION,
                                         pasta_saida=saida.pasta if saida else None,
                                         pasta_entrada=os.path.join(*entrada) if entrada else None)
-            conexao = env.get(env_builder.VAR_CONEXAO)
+            conexao = env.get(env_builder.CONNECTION_VAR)
         except Exception as exc:  # noqa: BLE001 - CR-007 R-17: SPAWN_ERROR
             ex = executor.falha_antes_do_spawn(fd, item.tid, exc, rotulo, work_dir_ticket)
             return self._apos_iniciar(item, ex, snap, conexao)

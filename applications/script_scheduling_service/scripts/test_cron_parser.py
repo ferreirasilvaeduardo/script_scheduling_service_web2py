@@ -10,22 +10,22 @@ import timeit
 import unittest
 
 import cron_parser
-from cron_parser import CronErro
+from cron_parser import CronError
 
 D = datetime.datetime
 # Quinta-feira, com segundos e microssegundos de proposito.
 AGORA = D(2026, 10, 15, 10, 7, 30, 123456)
 
 
-def prox(expr, apos=AGORA, horizonte=cron_parser.HORIZONTE_PADRAO):
-    return cron_parser.parse(expr).proxima(apos, horizonte)
+def prox(expr, apos=AGORA, horizonte=cron_parser.DEFAULT_HORIZON):
+    return cron_parser.parse(expr).next(apos, horizonte)
 
 
 def sequencia(expr, apos, n):
     cron = cron_parser.parse(expr)
     lista = []
     for _ in range(n):
-        apos = cron.proxima(apos)
+        apos = cron.next(apos)
         lista.append(apos)
     return lista
 
@@ -69,12 +69,12 @@ class TestSintaxe(unittest.TestCase):
         }
         for expr, trecho in casos.items():
             with self.subTest(expr=expr):
-                with self.assertRaises(CronErro) as ctx:
+                with self.assertRaises(CronError) as ctx:
                     cron_parser.parse(expr)
                 self.assertIn(trecho, ctx.exception.mensagem)
-        with self.assertRaises(CronErro):
+        with self.assertRaises(CronError):
             cron_parser.parse('0,' * 30 + '0 * * * *')
-        with self.assertRaises(CronErro):
+        with self.assertRaises(CronError):
             cron_parser.parse(None)
 
     def test_texto_com_espacos_dentro_do_limite(self):
@@ -158,7 +158,7 @@ class TestProxima(unittest.TestCase):
                     esperado = t
                     break
                 t += datetime.timedelta(minutes=1)
-            obtido = cron.proxima(inicio)
+            obtido = cron.next(inicio)
             with self.subTest(expr=expr):
                 if esperado is not None:
                     self.assertEqual(obtido, esperado)
@@ -170,7 +170,7 @@ class TestProxima(unittest.TestCase):
                  '0-59/7 0-23/5 1-31/3 1-12/5 0-6/3')
         for expr in exprs:
             cron = cron_parser.parse(expr)
-            segundos = min(timeit.repeat(lambda: cron.proxima(AGORA), number=5, repeat=3)) / 5
+            segundos = min(timeit.repeat(lambda: cron.next(AGORA), number=5, repeat=3)) / 5
             with self.subTest(expr=expr):
                 self.assertLess(segundos, 0.050, '%s levou %.1f ms' % (expr, segundos * 1000))
 
@@ -199,12 +199,12 @@ class TestDescrever(unittest.TestCase):
         )
         for expr, texto in casos:
             with self.subTest(expr=expr):
-                self.assertEqual(cron_parser.parse(expr).descrever(), texto)
+                self.assertEqual(cron_parser.parse(expr).describe(), texto)
 
     def test_qualquer_expressao_valida_tem_descricao(self):
         for expr in ('0-59/7 0-23/5 1-31/3 1-12/5 0-6/3', '1,2 3,4 5-9 6-8 *', '0 0 */2 * 1'):
             with self.subTest(expr=expr):
-                self.assertTrue(cron_parser.parse(expr).descrever())
+                self.assertTrue(cron_parser.parse(expr).describe())
 
 
 class TestPureza(unittest.TestCase):

@@ -9,13 +9,13 @@ import collections
 import sql_ident
 
 # Estrutura representativa de uma instrucao DDL
-ItemDDL = collections.namedtuple("ItemDDL", [
+DDLItem = collections.namedtuple("ItemDDL", [
     "fase", "tipo", "nome", "sql", "entidade"
 ])
 
 # Catalogo canonico de funcionalidades (README §4.3.D)
 # Tuplas: (modulo, codigo, nome_exibicao, finalidade)
-CATALOGO_FUNCIONALIDADES = (
+FEATURE_CATALOG = (
     ("OPERATION", "EXEC_SCRIPT", "Disparar Scripts", "Preencher questionários e abrir tickets"),
     ("OPERATION", "VIEW_LOGS", "Consultar Logs", "Visualizar logs e histórico em tempo quase real"),
     ("OPERATION", "CANCEL_TICKET", "Cancelar Tickets", "Cancelar tickets de terceiros em ambientes autorizados"),
@@ -29,7 +29,7 @@ CATALOGO_FUNCIONALIDADES = (
 )
 
 # Catalogo padrao de ambientes atendidos (nome, descricao, conexao)
-CATALOGO_AMBIENTES_PADRAO = (
+DEFAULT_ENVIRONMENTS = (
     ("CLONE2", "BRTLVLTS1199PL (10.238.10.209)", "10.238.55.146/gfprod"),
     ("CLONE1", "BRTLVLTS1198PL (10.238.10.208)", "10.238.55.145/gfprod"),
     ("CLONE6", "BRTLVLTS3089SL (10.238.10.210)", "10.238.45.230/svc_gfprodc6"),
@@ -38,7 +38,7 @@ CATALOGO_AMBIENTES_PADRAO = (
 )
 
 # Catalogo padrao de perfis operacionais e administrativos (nome, descricao, is_admin, funcionalidades, ambientes)
-CATALOGO_PERFIS_PADRAO = (
+DEFAULT_PROFILES = (
     ("ADMINISTRATOR", "Acesso irrestrito a todas as funcionalidades e ambientes", "Y", (
         "EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET", "MANAGE_USERS", "MANAGE_PROFILES",
         "MANAGE_ENVIRONMENTS", "MANAGE_SCRIPTS", "MANAGE_PARAMETERS", "MANAGE_SCHEDULES", "VIEW_AUDIT"
@@ -55,7 +55,7 @@ CATALOGO_PERFIS_PADRAO = (
 )
 
 # Catalogo padrao de usuarios de homologacao e demonstracao (login, nome, perfil_nome)
-CATALOGO_USUARIOS_PADRAO = (
+DEFAULT_USERS = (
     ("admin", "Super Administrador", "ADMINISTRATOR"),
     ("op.prod", "Operador Producao", "OPERATOR_PROD"),
     ("op.hml", "Operador Homologacao", "OPERATOR_HML"),
@@ -63,10 +63,10 @@ CATALOGO_USUARIOS_PADRAO = (
 )
 
 # Hash PBKDF2 da senha padrao de homologacao/demonstracao (senha: Sss@Homolog2026!)
-HASH_SENHA_PADRAO_HOMOLOGACAO = "pbkdf2_sha256$200000$8007db1bd770663178d0f1b1a129140c$9d9604af27e21326e982e5e7c64bfdd868c0995a97181b5a9695149755852d63"
+HOMOLOGATION_DEFAULT_PASSWORD_HASH = "pbkdf2_sha256$200000$8007db1bd770663178d0f1b1a129140c$9d9604af27e21326e982e5e7c64bfdd868c0995a97181b5a9695149755852d63"
 
 # Catalogo padrao de parametros reutilizaveis de utilitarios (codigo, param_nomeado, label, descricao, tipo, opcoes, vpadrao)
-CATALOGO_PARAMETROS_PADRAO = (
+DEFAULT_PARAMETERS = (
     ("arq_origem", "--origem", "Arquivo ou Pasta de Origem", "Caminho do arquivo ou pasta a ser processado", "TEXT", None, None),
     ("arq_destino", "--destino", "Arquivo ou Pasta de Destino", "Caminho do arquivo de saida ou diretorio destino", "TEXT", None, None),
     ("arq_zip", "--arquivo-zip", "Arquivo ZIP", "Caminho do pacote compactado .zip", "TEXT", None, None),
@@ -89,7 +89,7 @@ CATALOGO_PARAMETROS_PADRAO = (
 )
 
 # Catalogo padrao de scripts utilitarios de demonstracao (nome, descricao, grupo, categoria, etapa, interpretador, path_file, tipo_param, max_paral, timeout_seg, params)
-CATALOGO_SCRIPTS_PADRAO = (
+DEFAULT_SCRIPTS = (
     ("zipar_arquivos", "Compacta arquivo ou pasta em formato ZIP", "UTILITARIOS", "ARQUIVOS", "COMPACTACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/zipar_arquivos.py", "NAMED", 2, 1800, (
         ("arq_origem", 1, "Y", None),
         ("arq_destino", 2, "Y", None),
@@ -161,14 +161,14 @@ CATALOGO_SCRIPTS_PADRAO = (
 # -----------------------------------------------------------------------------
 # Dicionario de Governanca de Dados (Metadados para COMMENT ON TABLE/COLUMN)
 # -----------------------------------------------------------------------------
-COLUNAS_REGISTRO_DESCRICOES = {
+RECORD_COLUMN_DESCRIPTIONS = {
     "created_at": "Data e hora da criacao do registro no banco de dados (imutavel)",
     "created_by": "Identificador do usuario ou servico responsavel pela criacao (imutavel)",
     "updated_at": "Data e hora da ultima alteracao de negocio (nulo ate a primeira alteracao)",
     "updated_by": "Identificador do usuario ou servico responsavel pela ultima alteracao",
 }
 
-DICIONARIO_TABELAS = {
+TABLE_COMMENTS = {
     "environments": "Cadastro de ambientes operacionais para execucao de rotinas (PRODUCAO, HOMOLOGACAO, CLONES)",
     "profiles": "Perfis de acesso para autorizacao baseada em papeis (RBAC)",
     "features": "Catalogo canonico de permissoes e operacoes controladas pelo sistema",
@@ -188,7 +188,7 @@ DICIONARIO_TABELAS = {
     "control": "Parametros de controle global, versao de esquema e concessao de limpeza",
 }
 
-DICIONARIO_COLUNAS = {
+COLUMN_COMMENTS = {
     "environments": {
         "id": "Identificador unico sequencial do ambiente (chave primaria)",
         "name": "Nome mnemonico unico do ambiente em maiusculas (chave natural imutavel)",
@@ -373,7 +373,7 @@ DICIONARIO_COLUNAS = {
 }
 
 
-def _formatar_coluna(col_nome, col_info):
+def _format_column(col_nome, col_info):
     """Formata a declaracao de uma coluna em CREATE TABLE."""
     partes = [col_nome, col_info["tipo"]]
     if col_info.get("default") is not None:
@@ -383,7 +383,7 @@ def _formatar_coluna(col_nome, col_info):
     return "    {}".format(" ".join(partes))
 
 
-def gerar_instrucoes_ddl(owner, prefixo, lob_storage="SECUREFILE"):
+def build_ddl_statements(owner, prefixo, lob_storage="SECUREFILE"):
     """Gera todas as instrucoes DDL em ordem estrita de fases (README §11.1).
 
     Fases:
@@ -409,14 +409,14 @@ def gerar_instrucoes_ddl(owner, prefixo, lob_storage="SECUREFILE"):
         sql = "CREATE SEQUENCE {}.{} START WITH 1 INCREMENT BY 1 CACHE 20 NOCYCLE".format(
             owner, seq_nome
         )
-        instrucoes.append(ItemDDL(1, "SEQUENCE", seq_nome, sql, entidade))
+        instrucoes.append(DDLItem(1, "SEQUENCE", seq_nome, sql, entidade))
 
     # -------------------------------------------------------------------------
     # FASE 2: Tabelas
     # -------------------------------------------------------------------------
     for entidade, t in esquema.items():
         tabela_nome = t["tabela"]
-        linhas_cols = [_formatar_coluna(c_nome, c_info) for c_nome, c_info in t["colunas"].items()]
+        linhas_cols = [_format_column(c_nome, c_info) for c_nome, c_info in t["colunas"].items()]
         corpo = ",\n".join(linhas_cols)
 
         # Clausula LOB
@@ -430,7 +430,7 @@ def gerar_instrucoes_ddl(owner, prefixo, lob_storage="SECUREFILE"):
                 clausula_lob = "\nLOB ({}) STORE AS SECUREFILE (CACHE)".format(lobs_str)
 
         sql = "CREATE TABLE {}.{} (\n{}\n){}".format(owner, tabela_nome, corpo, clausula_lob)
-        instrucoes.append(ItemDDL(2, "TABLE", tabela_nome, sql, entidade))
+        instrucoes.append(DDLItem(2, "TABLE", tabela_nome, sql, entidade))
 
     # -------------------------------------------------------------------------
     # FASE 3: Constraints (PK, UK, CK)
@@ -444,7 +444,7 @@ def gerar_instrucoes_ddl(owner, prefixo, lob_storage="SECUREFILE"):
         sql_pk = "ALTER TABLE {}.{} ADD CONSTRAINT {} PRIMARY KEY ({})".format(
             owner, tabela_nome, pk_nome, colunas_pk
         )
-        instrucoes.append(ItemDDL(3, "CONSTRAINT", pk_nome, sql_pk, entidade))
+        instrucoes.append(DDLItem(3, "CONSTRAINT", pk_nome, sql_pk, entidade))
 
         # UKs
         for uk_nome, uk_def in t["uks"].items():
@@ -452,7 +452,7 @@ def gerar_instrucoes_ddl(owner, prefixo, lob_storage="SECUREFILE"):
             sql_uk = "ALTER TABLE {}.{} ADD CONSTRAINT {} UNIQUE ({})".format(
                 owner, tabela_nome, uk_nome, colunas_uk
             )
-            instrucoes.append(ItemDDL(3, "CONSTRAINT", uk_nome, sql_uk, entidade))
+            instrucoes.append(DDLItem(3, "CONSTRAINT", uk_nome, sql_uk, entidade))
 
         # CKs
         for ck_nome, ck_def in t["cks"].items():
@@ -460,7 +460,7 @@ def gerar_instrucoes_ddl(owner, prefixo, lob_storage="SECUREFILE"):
             sql_ck = "ALTER TABLE {}.{} ADD CONSTRAINT {} CHECK ({})".format(
                 owner, tabela_nome, ck_nome, expr_ck
             )
-            instrucoes.append(ItemDDL(3, "CONSTRAINT", ck_nome, sql_ck, entidade))
+            instrucoes.append(DDLItem(3, "CONSTRAINT", ck_nome, sql_ck, entidade))
 
     # -------------------------------------------------------------------------
     # FASE 4: Constraints (FK)
@@ -475,7 +475,7 @@ def gerar_instrucoes_ddl(owner, prefixo, lob_storage="SECUREFILE"):
             sql_fk = "ALTER TABLE {}.{} ADD CONSTRAINT {} FOREIGN KEY ({}) REFERENCES {}.{} ({}){}".format(
                 owner, tabela_nome, fk_nome, cols_fk, owner, ref_tabela, ref_cols, on_del
             )
-            instrucoes.append(ItemDDL(4, "CONSTRAINT", fk_nome, sql_fk, entidade))
+            instrucoes.append(DDLItem(4, "CONSTRAINT", fk_nome, sql_fk, entidade))
 
     # -------------------------------------------------------------------------
     # FASE 5: Indices
@@ -502,7 +502,7 @@ def gerar_instrucoes_ddl(owner, prefixo, lob_storage="SECUREFILE"):
                     owner, ix_nome, owner, tabela_nome, cols_ix
                 )
 
-            instrucoes.append(ItemDDL(5, "INDEX", ix_nome, sql_ix, entidade))
+            instrucoes.append(DDLItem(5, "INDEX", ix_nome, sql_ix, entidade))
 
     # -------------------------------------------------------------------------
     # FASE 6: Triggers (_bi e _bu)
@@ -536,7 +536,7 @@ def gerar_instrucoes_ddl(owner, prefixo, lob_storage="SECUREFILE"):
             table_name=tabela_nome,
             sequence_name=seq_nome,
         )
-        instrucoes.append(ItemDDL(6, "TRIGGER", tr_bi_nome, sql_tr_bi, entidade))
+        instrucoes.append(DDLItem(6, "TRIGGER", tr_bi_nome, sql_tr_bi, entidade))
 
         # Trigger BEFORE UPDATE imutavel (quando configurada) com cabecalho de governanca
         if t.get("trigger_bu") and t.get("trigger_extra"):
@@ -565,12 +565,12 @@ def gerar_instrucoes_ddl(owner, prefixo, lob_storage="SECUREFILE"):
                 table_name=tabela_nome,
                 coluna=col_imutavel,
             )
-            instrucoes.append(ItemDDL(6, "TRIGGER", tr_bu_nome, sql_tr_bu, entidade))
+            instrucoes.append(DDLItem(6, "TRIGGER", tr_bu_nome, sql_tr_bu, entidade))
 
     return instrucoes
 
 
-def gerar_instrucoes_comentarios(owner, prefixo):
+def build_comment_statements(owner, prefixo):
     """Gera declaracoes COMMENT ON TABLE e COMMENT ON COLUMN para todas as tabelas e colunas."""
     sql_ident.validate_owner(owner)
     sql_ident.validate_prefix(prefixo)
@@ -579,17 +579,17 @@ def gerar_instrucoes_comentarios(owner, prefixo):
 
     for entidade, t in esquema.items():
         tabela_nome = t["tabela"]
-        desc_tab = DICIONARIO_TABELAS.get(entidade, "Tabela {}".format(tabela_nome))
+        desc_tab = TABLE_COMMENTS.get(entidade, "Tabela {}".format(tabela_nome))
         comandos.append("COMMENT ON TABLE {}.{} IS '{}';".format(
             owner, tabela_nome, _escape_sql(desc_tab)
         ))
 
-        cols_entidade = DICIONARIO_COLUNAS.get(entidade, {})
+        cols_entidade = COLUMN_COMMENTS.get(entidade, {})
         for c_nome in t["colunas"]:
             if c_nome in cols_entidade:
                 desc_col = cols_entidade[c_nome]
-            elif c_nome in COLUNAS_REGISTRO_DESCRICOES:
-                desc_col = COLUNAS_REGISTRO_DESCRICOES[c_nome]
+            elif c_nome in RECORD_COLUMN_DESCRIPTIONS:
+                desc_col = RECORD_COLUMN_DESCRIPTIONS[c_nome]
             else:
                 desc_col = "Coluna {} da tabela {}".format(c_nome, tabela_nome)
             comandos.append("COMMENT ON COLUMN {}.{}.{} IS '{}';".format(
@@ -599,9 +599,9 @@ def gerar_instrucoes_comentarios(owner, prefixo):
     return comandos
 
 
-def gerar_script_ddl(owner, prefixo, lob_storage="SECUREFILE", incluir_comentarios=True):
+def build_ddl_script(owner, prefixo, lob_storage="SECUREFILE", incluir_comentarios=True):
     """Gera script SQL completo pronto para visualizacao ou execucao via cliente."""
-    instrucoes = gerar_instrucoes_ddl(owner, prefixo, lob_storage=lob_storage)
+    instrucoes = build_ddl_statements(owner, prefixo, lob_storage=lob_storage)
     fases_titulos = {
         1: "FASE 1: SEQUENCES",
         2: "FASE 2: TABELAS",
@@ -642,7 +642,7 @@ def gerar_script_ddl(owner, prefixo, lob_storage="SECUREFILE", incluir_comentari
             linhas.append("")
 
     if incluir_comentarios:
-        comentarios = gerar_instrucoes_comentarios(owner, prefixo)
+        comentarios = build_comment_statements(owner, prefixo)
         if comentarios:
             linhas.extend([
                 "-- ------------------------------------------------------------------------------",
@@ -657,10 +657,10 @@ def gerar_script_ddl(owner, prefixo, lob_storage="SECUREFILE", incluir_comentari
     return "\n".join(linhas)
 
 
-PAPEIS_GRANT = ("web", "agent", "purge", "monitor")
+GRANT_ROLES = ("web", "agent", "purge", "monitor")
 
 
-def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
+def build_grants_by_role(owner, prefixo, papeis_usuarios):
     """Gera comandos GRANT para os usuarios informados por papel (README §11.1).
 
     papeis_usuarios: dict com mapeamento papel -> usuario_oracle, ex:
@@ -675,11 +675,11 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
     esquema = sql_ident.names(prefixo)
     comandos = []
 
-    desconhecidos = sorted(set(papeis_usuarios or {}) - set(PAPEIS_GRANT))
+    desconhecidos = sorted(set(papeis_usuarios or {}) - set(GRANT_ROLES))
     if desconhecidos:
         raise ValueError("Papel de GRANT desconhecido: {}".format(", ".join(desconhecidos)))
     papeis_usuarios = dict(papeis_usuarios or {})
-    for papel in PAPEIS_GRANT:
+    for papel in GRANT_ROLES:
         usr = papeis_usuarios.get(papel)
         if not usr:
             comandos.append("-- papel {}: conta nao informada; nenhum GRANT gerado".format(papel))
@@ -825,7 +825,7 @@ def _escape_sql(texto):
     return str(texto).replace("'", "''")
 
 
-def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, admin_senha_hash=None):
+def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, admin_senha_hash=None):
     """Gera declaracoes SQL de seed inicial (Fase 7) via MERGE idempotente e estatisticas (Fase 8)."""
     sql_ident.validate_owner(owner)
     sql_ident.validate_prefix(prefixo)
@@ -835,7 +835,7 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
     # 1. Funcionalidades canonicas
     tb_fnc = "{}.{}".format(owner, esquema["features"]["tabela"])
     sq_fnc = "{}.{}".format(owner, esquema["features"]["sequence"])
-    for mod, cod, nome_exib, finalidade in CATALOGO_FUNCIONALIDADES:
+    for mod, cod, nome_exib, finalidade in FEATURE_CATALOG:
         sql = (
             "MERGE INTO {tb} dst\n"
             "USING (SELECT '{cod}' AS code FROM DUAL) src\n"
@@ -867,7 +867,7 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
     # 2. Ambientes padrao (inseridos antes dos perfis para permitir vinculo de perfil_amb)
     tb_amb = "{}.{}".format(owner, esquema["environments"]["tabela"])
     sq_amb = "{}.{}".format(owner, esquema["environments"]["sequence"])
-    for amb_nome, amb_desc, amb_conn in CATALOGO_AMBIENTES_PADRAO:
+    for amb_nome, amb_desc, amb_conn in DEFAULT_ENVIRONMENTS:
         sql_amb = (
             "MERGE INTO {tb} dst\n"
             "USING (SELECT '{name}' AS name FROM DUAL) src\n"
@@ -893,7 +893,7 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
         )
         comandos.append(sql_amb)
 
-    # 3. Perfis padrao e matrizes de permissao (CATALOGO_PERFIS_PADRAO)
+    # 3. Perfis padrao e matrizes de permissao (DEFAULT_PROFILES)
     tb_per = "{}.{}".format(owner, esquema["profiles"]["tabela"])
     sq_per = "{}.{}".format(owner, esquema["profiles"]["sequence"])
     tb_pfnc = "{}.{}".format(owner, esquema["profile_feature"]["tabela"])
@@ -901,7 +901,7 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
     tb_pamb = "{}.{}".format(owner, esquema["profile_env"]["tabela"])
     sq_pamb = "{}.{}".format(owner, esquema["profile_env"]["sequence"])
 
-    for per_nome, per_desc, is_adm, per_funcs, per_ambs in CATALOGO_PERFIS_PADRAO:
+    for per_nome, per_desc, is_adm, per_funcs, per_ambs in DEFAULT_PROFILES:
         sql_per = (
             "MERGE INTO {tb} dst\n"
             "USING (SELECT '{name}' AS name FROM DUAL) src\n"
@@ -965,7 +965,7 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
     # 4. Parametros padrao reutilizaveis
     tb_prm = "{}.{}".format(owner, esquema["parameters"]["tabela"])
     sq_prm = "{}.{}".format(owner, esquema["parameters"]["sequence"])
-    for cod, p_nom, lbl, desc, tcomp, opc, vpad in CATALOGO_PARAMETROS_PADRAO:
+    for cod, p_nom, lbl, desc, tcomp, opc, vpad in DEFAULT_PARAMETERS:
         pnom_sql = "'{}'".format(_escape_sql(p_nom)) if p_nom else "NULL"
         opc_sql = "'{}'".format(_escape_sql(opc)) if opc else "NULL"
         vpad_sql = "'{}'".format(_escape_sql(vpad)) if vpad else "NULL"
@@ -1011,7 +1011,7 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
     tb_sprm = "{}.{}".format(owner, esquema["script_param"]["tabela"])
     sq_sprm = "{}.{}".format(owner, esquema["script_param"]["sequence"])
 
-    for s_nome, s_desc, s_grp, s_cat, s_etp, s_int, s_path, s_tpar, s_paral, s_tmout, s_params in CATALOGO_SCRIPTS_PADRAO:
+    for s_nome, s_desc, s_grp, s_cat, s_etp, s_int, s_path, s_tpar, s_paral, s_tmout, s_params in DEFAULT_SCRIPTS:
         sql_scr = (
             "MERGE INTO {tb} dst\n"
             "USING (SELECT '{name}' AS name FROM DUAL) src\n"
@@ -1051,7 +1051,7 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
         comandos.append(sql_scr)
 
         # 5a. Homologacao do script nos 5 ambientes padrao
-        for amb_nome, _, _ in CATALOGO_AMBIENTES_PADRAO:
+        for amb_nome, _, _ in DEFAULT_ENVIRONMENTS:
             sql_samb = (
                 "MERGE INTO {tb_samb} dst\n"
                 "USING (\n"
@@ -1070,7 +1070,7 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
             comandos.append(sql_samb)
 
         # 5b. Permissao do script para os perfis operacionais e administradores
-        for per_nome, _, _, _, _ in CATALOGO_PERFIS_PADRAO:
+        for per_nome, _, _, _, _ in DEFAULT_PROFILES:
             sql_pscr = (
                 "MERGE INTO {tb_pscr} dst\n"
                 "USING (\n"
@@ -1130,13 +1130,13 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
     ).format(tb=tb_ctl, version=sql_ident.SCHEMA_VERSION)
     comandos.append(sql_ctl)
 
-    # 7. Usuarios padrao da aplicacao e homologacao (CATALOGO_USUARIOS_PADRAO)
+    # 7. Usuarios padrao da aplicacao e homologacao (DEFAULT_USERS)
     tb_usr = "{}.{}".format(owner, esquema["users"]["tabela"])
     sq_usr = "{}.{}".format(owner, esquema["users"]["sequence"])
 
-    for u_login, u_nome, u_perfil in CATALOGO_USUARIOS_PADRAO:
+    for u_login, u_nome, u_perfil in DEFAULT_USERS:
         nome_final = admin_nome if (u_login == "admin" and admin_nome) else u_nome
-        hash_final = admin_senha_hash if (u_login == "admin" and admin_senha_hash) else HASH_SENHA_PADRAO_HOMOLOGACAO
+        hash_final = admin_senha_hash if (u_login == "admin" and admin_senha_hash) else HOMOLOGATION_DEFAULT_PASSWORD_HASH
         sql_usr = (
             "MERGE INTO {tb_usr} dst\n"
             "USING (\n"
@@ -1171,9 +1171,9 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
     return comandos
 
 
-def gerar_script_seed(owner, prefixo, admin_login=None, admin_nome=None, admin_senha_hash=None):
+def build_seed_script(owner, prefixo, admin_login=None, admin_nome=None, admin_senha_hash=None):
     """Gera script SQL puro com DML de seed, estatisticas e COMMIT pronto para SQL*Plus."""
-    comandos = gerar_instrucoes_seed(
+    comandos = build_seed_statements(
         owner, prefixo,
         admin_login=admin_login,
         admin_nome=admin_nome,
@@ -1232,7 +1232,7 @@ def gerar_script_seed(owner, prefixo, admin_login=None, admin_nome=None, admin_s
     return "\n".join(linhas)
 
 
-ORDEM_ROLLBACK_ENTIDADES = (
+ROLLBACK_ENTITY_ORDER = (
     "ticket_output",
     "ticket_answer",
     "tickets",
@@ -1254,7 +1254,7 @@ ORDEM_ROLLBACK_ENTIDADES = (
 )
 
 
-def gerar_instrucoes_rollback(owner, prefixo):
+def build_rollback_statements(owner, prefixo):
     """Gera lista de instrucoes DROP (Triggers, Tabelas com CASCADE PURGE e Sequences)."""
     sql_ident.validate_owner(owner)
     sql_ident.validate_prefix(prefixo)
@@ -1262,7 +1262,7 @@ def gerar_instrucoes_rollback(owner, prefixo):
     instrucoes = []
 
     # 1. Triggers
-    for entidade in ORDEM_ROLLBACK_ENTIDADES:
+    for entidade in ROLLBACK_ENTITY_ORDER:
         t = esquema[entidade]
         if t.get("trigger_bu"):
             instrucoes.append(("TRIGGER", t["trigger_bu"], "DROP TRIGGER {}.{};".format(owner, t["trigger_bu"])))
@@ -1270,13 +1270,13 @@ def gerar_instrucoes_rollback(owner, prefixo):
             instrucoes.append(("TRIGGER", t["trigger_bi"], "DROP TRIGGER {}.{};".format(owner, t["trigger_bi"])))
 
     # 2. Tabelas (Ordem reversa de dependencia com CASCADE CONSTRAINTS PURGE)
-    for entidade in ORDEM_ROLLBACK_ENTIDADES:
+    for entidade in ROLLBACK_ENTITY_ORDER:
         t = esquema[entidade]
         tabela = t["tabela"]
         instrucoes.append(("TABLE", tabela, "DROP TABLE {}.{} CASCADE CONSTRAINTS PURGE;".format(owner, tabela)))
 
     # 3. Sequences
-    for entidade in ORDEM_ROLLBACK_ENTIDADES:
+    for entidade in ROLLBACK_ENTITY_ORDER:
         t = esquema[entidade]
         seq = t["sequence"]
         instrucoes.append(("SEQUENCE", seq, "DROP SEQUENCE {}.{};".format(owner, seq)))
@@ -1284,9 +1284,9 @@ def gerar_instrucoes_rollback(owner, prefixo):
     return instrucoes
 
 
-def gerar_script_rollback(owner, prefixo):
+def build_rollback_script(owner, prefixo):
     """Gera script SQL puro para rollback total da implantacao no Oracle."""
-    instrucoes = gerar_instrucoes_rollback(owner, prefixo)
+    instrucoes = build_rollback_statements(owner, prefixo)
 
     linhas = [
         "-- ==============================================================================",
@@ -1338,7 +1338,7 @@ def gerar_script_rollback(owner, prefixo):
     return "\n".join(linhas)
 
 
-def _lista_literais(nomes):
+def _literal_list(nomes):
     """Lista IN de literais com nomes do registro sql_ident (ja validados), em maiusculas.
 
     Quebra a cada 6 nomes: o SQL*Plus recusa linhas com mais de 2.499 caracteres (SP2-0027).
@@ -1348,13 +1348,13 @@ def _lista_literais(nomes):
     return ",\n      ".join(grupos)
 
 
-def _linhas_seed_por_tabela(owner, prefixo):
+def _seed_rows_by_table(owner, prefixo):
     """Quantidade de MERGE do seed por tabela (minimo esperado logo apos a implantacao)."""
     esquema = sql_ident.names(prefixo)
     por_tabela = dict((t["tabela"].upper(), ent) for ent, t in esquema.items())
     contagem = collections.OrderedDict((ent, 0) for ent in esquema)
     marca = "MERGE INTO {}.".format(owner).upper()
-    for cmd in gerar_instrucoes_seed(owner, prefixo):
+    for cmd in build_seed_statements(owner, prefixo):
         texto = cmd.lstrip()
         if texto.upper().startswith(marca):
             ent = por_tabela.get(texto[len(marca):].split(None, 1)[0].upper())
@@ -1363,7 +1363,7 @@ def _linhas_seed_por_tabela(owner, prefixo):
     return contagem
 
 
-def gerar_script_validacao(owner, prefixo):
+def build_validation_script(owner, prefixo):
     """Gera o 99_validate_deploy.sql a partir do registro sql_ident (SQL*Plus, somente leitura).
 
     Compara esperado x encontrado: objetos (tabelas, sequences, triggers, constraints e indices pelos
@@ -1396,25 +1396,25 @@ def gerar_script_validacao(owner, prefixo):
     dicionario = [
         chk(1, "TABELAS", "=", len(tabelas),
             "SELECT COUNT(*) FROM all_tables WHERE owner = '{}' AND table_name IN ({})".format(
-                own, _lista_literais(tabelas))),
+                own, _literal_list(tabelas))),
         chk(2, "SEQUENCES", "=", len(sequences),
             "SELECT COUNT(*) FROM all_sequences WHERE sequence_owner = '{}' AND sequence_name IN ({})".format(
-                own, _lista_literais(sequences))),
+                own, _literal_list(sequences))),
         chk(3, "TRIGGERS HABILITADAS", "=", len(triggers),
             "SELECT COUNT(*) FROM all_triggers WHERE owner = '{}' AND status = 'ENABLED' "
-            "AND trigger_name IN ({})".format(own, _lista_literais(triggers))),
+            "AND trigger_name IN ({})".format(own, _literal_list(triggers))),
         chk(4, "CONSTRAINTS HABILITADAS", "=", len(constraints),
             "SELECT COUNT(*) FROM all_constraints WHERE owner = '{}' AND status = 'ENABLED' "
-            "AND constraint_name IN ({})".format(own, _lista_literais(constraints))),
+            "AND constraint_name IN ({})".format(own, _literal_list(constraints))),
         chk(5, "INDICES VALIDOS", "=", len(indices),
             "SELECT COUNT(*) FROM all_indexes WHERE owner = '{}' AND status = 'VALID' "
-            "AND index_name IN ({})".format(own, _lista_literais(indices))),
+            "AND index_name IN ({})".format(own, _literal_list(indices))),
         chk(6, "OBJETOS INVALIDOS", "=", 0,
             "SELECT COUNT(*) FROM all_objects WHERE owner = '{}' AND status = 'INVALID' "
-            "AND object_name IN ({})".format(own, _lista_literais(objetos))),
+            "AND object_name IN ({})".format(own, _literal_list(objetos))),
         chk(7, "GRANTS A PUBLIC", "=", 0,
             "SELECT COUNT(*) FROM all_tab_privs WHERE table_schema = '{}' AND grantee = 'PUBLIC' "
-            "AND table_name IN ({})".format(own, _lista_literais(tabelas + sequences))),
+            "AND table_name IN ({})".format(own, _literal_list(tabelas + sequences))),
     ]
 
     tab = dict((ent, "{}.{}".format(owner, t["tabela"])) for ent, t in esquema.items())
@@ -1422,7 +1422,7 @@ def gerar_script_validacao(owner, prefixo):
         chk(10, "VERSAO DO ESQUEMA", "=", sql_ident.SCHEMA_VERSION,
             "SELECT MAX(schema_version) FROM {}".format(tab["control"])),
     ]
-    for n, (ent, minimo) in enumerate(_linhas_seed_por_tabela(owner, prefixo).items()):
+    for n, (ent, minimo) in enumerate(_seed_rows_by_table(owner, prefixo).items()):
         dados.append(chk(11 + n, "LINHAS " + esquema[ent]["tabela"].upper(), ">=", minimo,
                          "SELECT COUNT(*) FROM {}".format(tab[ent])))
 
@@ -1522,7 +1522,7 @@ def gerar_script_validacao(owner, prefixo):
         "COLUMN privilege FORMAT A12",
         "SELECT grantee, privilege, COUNT(*) AS objetos",
         "  FROM all_tab_privs",
-        " WHERE table_schema = '{}' AND table_name IN ({})".format(own, _lista_literais(tabelas + sequences)),
+        " WHERE table_schema = '{}' AND table_name IN ({})".format(own, _literal_list(tabelas + sequences)),
         " GROUP BY grantee, privilege",
         " ORDER BY grantee, privilege;",
         "SET FEEDBACK OFF",
@@ -1534,7 +1534,7 @@ def gerar_script_validacao(owner, prefixo):
     return "\n".join(linhas)
 
 
-def gerar_script_implantacao_completo(owner, prefixo, lob_storage="SECUREFILE",
+def build_full_deploy_script(owner, prefixo, lob_storage="SECUREFILE",
                                       admin_login=None, admin_nome=None, admin_senha_hash=None,
                                       papeis_usuarios=None):
     """Gera script SQL autocontido com DDL, DML Seed, Estatisticas e Grants para execucao direta.
@@ -1544,8 +1544,8 @@ def gerar_script_implantacao_completo(owner, prefixo, lob_storage="SECUREFILE",
     02 -> 01 -> 99). Os GRANTs seguem so os papeis do README §11.1; nada e concedido a PUBLIC
     (tbsss_users guarda senha_hash).
     """
-    sql_ddl = gerar_script_ddl(owner, prefixo, lob_storage=lob_storage)
-    sql_seed = gerar_script_seed(
+    sql_ddl = build_ddl_script(owner, prefixo, lob_storage=lob_storage)
+    sql_seed = build_seed_script(
         owner, prefixo,
         admin_login=admin_login,
         admin_nome=admin_nome,
@@ -1571,7 +1571,7 @@ def gerar_script_implantacao_completo(owner, prefixo, lob_storage="SECUREFILE",
         "-- ==============================================================================",
         "",
     ])
-    partes.extend(gerar_grants_por_papel(owner, prefixo, papeis_usuarios or {}))
+    partes.extend(build_grants_by_role(owner, prefixo, papeis_usuarios or {}))
     partes.append("")
 
     partes.extend([

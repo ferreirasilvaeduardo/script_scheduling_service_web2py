@@ -492,7 +492,7 @@ password = ...
      * Script inativo pode ter a homologação editada: a regra vale para o caso de ele ser reativado.
      * A alteração é auditada (`UPDATE`, `homologação: +A, -B`).
      * O modal mostra os agendamentos ativos afetados nos ambientes removidos.
-* **Decisão composta para executar** (`rbac.pode_executar(usuario, script, environment)`), verdadeira somente se todas as condições forem atendidas:
+* **Decisão composta para executar** (`rbac.can_execute(usuario, script, environment)`), verdadeira somente se todas as condições forem atendidas:
   * usuário ativo **e** perfil ativo;
   * script ativo **e** ambiente ativo **e** par (script, ambiente) presente em `tbsss_script_env`;
   * perfil admin, **ou** (funcionalidade `EXEC_SCRIPT` **e** ambiente em `perfil_amb` **e** script em `perfil_scr`).
@@ -501,7 +501,7 @@ password = ...
 * **`RepoCatalog.executable_scripts` no Oracle (F7.3, CATALOGO):** uma única consulta.
   * O não administrador precisa de `EXEC_SCRIPT` no contexto. A matriz é lida do banco pelo `profile_id` do contexto, com `EXISTS` sobre `tbsss_profile_script` e `tbsss_profile_env`, e não pelos conjuntos `ambientes`/`scripts` do contexto.
   * O administrador dispensa as dimensões 1 a 3, mas não a homologação em ambiente ativo.
-  * O resultado é o mesmo do FAKE quando o contexto está atualizado (`perm_version`). Ele continua sendo só a lista de candidatos: a decisão por ambiente segue em `rbac.pode_executar`.
+  * O resultado é o mesmo do FAKE quando o contexto está atualizado (`perm_version`). Ele continua sendo só a lista de candidatos: a decisão por ambiente segue em `rbac.can_execute`.
 * **`perm_version`:** qualquer alteração em perfil, na matriz do perfil, em `is_admin` ou em `active` incrementa `tbsss_profiles.perm_version` **na mesma transação**.
   * Desativar um usuário ou trocar o perfil dele também incrementa o `perm_version` dos perfis de origem e de destino. Por isso, uma edição de matriz aberta ao mesmo tempo nesses perfis recebe a mensagem de conflito e precisa ser recarregada.
 * **Administrador só por administrador (CR-008, E1/R-05):** quem tem `MANAGE_USERS` ou `MANAGE_PROFILES` sem ser administrador **não** pode:
@@ -557,7 +557,7 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
   * o motivo de cada perfil estar na lista: "administrador" ou "tem Disparar Scripts, o ambiente e o script".
 * **Por ambiente:** escolhe-se um ambiente e a tela lista os perfis ativos que o acessam e, para cada um, os scripts homologados ali que eles podem rodar.
 * Perfis **inativos** aparecem num bloco separado, "Não valem agora (perfil inativo)". Script ou ambiente **inativo** gera um aviso no topo: "Este script está inativo: ninguém consegue rodá-lo agora."
-* A regra usada é a mesma de `rbac.pode_executar` (§4.3.A), aplicada perfil a perfil. O cálculo é feito no service com as leituras que já existem no contrato (`profiles_list`, `matrix_get`, catálogo e homologações), sem método novo.
+* A regra usada é a mesma de `rbac.can_execute` (§4.3.A), aplicada perfil a perfil. O cálculo é feito no service com as leituras que já existem no contrato (`profiles_list`, `matrix_get`, catálogo e homologações), sem método novo.
 * Cada perfil tem um link para a matriz dele (§4.3.B.1).
 * A tela de perfis ganha o botão "Quem pode o quê".
 
@@ -565,9 +565,9 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 
 | Funcionalidade | Escopo |
 |---|---|
-| `EXEC_SCRIPT` | Criar tickets e reexecutar tickets próprios, sujeito a `pode_executar`. **Perfil admin** reexecuta qualquer ticket que consegue ver. O novo ticket registra o admin como solicitante, então não há uso de privilégio alheio |
+| `EXEC_SCRIPT` | Criar tickets e reexecutar tickets próprios, sujeito a `can_execute`. **Perfil admin** reexecuta qualquer ticket que consegue ver. O novo ticket registra o admin como solicitante, então não há uso de privilégio alheio |
 | `VIEW_LOGS` | Tickets de ambientes autorizados ao perfil (admin: todos). Respostas de parâmetros `sensitive = 'Y'` aparecem mascaradas. **Sem** `VIEW_LOGS`, quem tem `EXEC_SCRIPT` vê, lista e lê o log apenas dos **próprios** tickets |
-| `CANCEL_TICKET` | Cancelar qualquer ticket de ambiente autorizado, **sem** exigir `VIEW_LOGS`: a decisão é só de `rbac.pode_cancelar`. **Sem** esta funcionalidade, o solicitante com `EXEC_SCRIPT` pode cancelar apenas os próprios tickets, mesmo que tenha perdido o acesso ao ambiente |
+| `CANCEL_TICKET` | Cancelar qualquer ticket de ambiente autorizado, **sem** exigir `VIEW_LOGS`: a decisão é só de `rbac.can_cancel`. **Sem** esta funcionalidade, o solicitante com `EXEC_SCRIPT` pode cancelar apenas os próprios tickets, mesmo que tenha perdido o acesso ao ambiente |
 | `MANAGE_SCHEDULES` | Criar e editar regras. O `user_id` da regra é o criador, e cada desdobro roda sob os privilégios vigentes desse usuário |
 
 #### D. Catálogo canônico de funcionalidades (seed)
@@ -614,8 +614,8 @@ Qualquer usuário logado pode abrir. Ela responde, em linguagem simples (§2.4.2
 * **Meu perfil:** nome do perfil e, se for administrador, a frase "Seu perfil é de administrador: você pode usar todas as telas e rodar qualquer script ativo, nos ambientes ativos onde ele foi liberado."
 * **Telas que posso usar:** as funcionalidades do perfil, com o nome e a finalidade do §4.3.D e um link para cada tela.
 * **Onde posso rodar scripts:** os ambientes ativos do perfil, com a descrição de cada um.
-* **Scripts que posso rodar:** para cada script, os ambientes onde `rbac.pode_executar` é verdadeiro, com o botão "Rodar aqui" (abre o disparo já preenchido).
-* **Por que um script não aparece:** só para os scripts **associados ao perfil** (`perfil_scr`) que não podem rodar em nenhum ambiente. O motivo vem de `pode_executar` em frase simples:
+* **Scripts que posso rodar:** para cada script, os ambientes onde `rbac.can_execute` é verdadeiro, com o botão "Rodar aqui" (abre o disparo já preenchido).
+* **Por que um script não aparece:** só para os scripts **associados ao perfil** (`perfil_scr`) que não podem rodar em nenhum ambiente. O motivo vem de `can_execute` em frase simples:
   * "o script está desativado";
   * "o script não foi liberado em nenhum dos seus ambientes";
   * "o ambiente está desativado";
@@ -783,7 +783,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
 
 ### 5.4 Criação manual de ticket (transação única)
 
-1. Validar o CSRF e `rbac.pode_executar(usuario, script_id, environment)`.
+1. Validar o CSRF e `rbac.can_execute(usuario, script_id, environment)`.
 2. Carregar o vínculo `tbsss_script_param` + `tbsss_parameters` (ativos) do script.
 3. Validar as respostas e compilar o snapshot (§6). Em caso de erro, retornar o erro por campo, sem gravar nada.
 4. Gravar o `scheduled_at` informado (opcional, padrão `SYSDATE`).
@@ -840,7 +840,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
 
 * Cria um novo ticket com `parent_ticket_id = <original>` e `created_by` = login de quem reexecutou, que também é o `requested_by` (§10, CR-006).
 * As respostas resolvidas do original (`tbsss_ticket_answer`) são **recompiladas contra o catálogo vigente**, gerando um novo snapshot.
-* A reexecução exige `pode_executar` vigente.
+* A reexecução exige `can_execute` vigente.
 * O snapshot original permanece intocado.
 * **Regras complementares:**
   * só ticket **terminal** pode ser reexecutado;
@@ -923,7 +923,7 @@ O topo do detalhe (`tickets/detalhe/<id>`) responde "o que está acontecendo?" a
 
 **Rotinas disponíveis** (`tickets/catalogo`, exige `EXEC_SCRIPT`): responde "o que eu posso rodar?".
 
-* Um cartão por script em que o usuário tem `pode_executar` em **pelo menos um** ambiente (admin: todo script ativo homologado em ambiente ativo). Cada cartão traz:
+* Um cartão por script em que o usuário tem `can_execute` em **pelo menos um** ambiente (admin: todo script ativo homologado em ambiente ativo). Cada cartão traz:
   * nome, descrição, grupo e categoria;
   * as **perguntas** que o script faz (rótulos, com "(obrigatório)" quando for o caso);
   * os **ambientes** onde o usuário pode rodar, cada um com o botão "Rodar em {ambiente}", que abre o disparo já na etapa 3;
@@ -997,7 +997,7 @@ Para todos os tipos, **nesta ordem**:
 **Governança de `validation_regex`:**
 
 * O padrão é compilado no cadastro, que o rejeita se não compilar.
-* **Subconjunto seguro (CR-007, D5).** O Python 3.6 não tem timeout de regex, e a regex roda também no desdobro do agente (§7.5), que faz uma coisa por vez. Por isso, `params_compiler.validar_regex_cadastro` recusa, com a regra violada na mensagem:
+* **Subconjunto seguro (CR-007, D5).** O Python 3.6 não tem timeout de regex, e a regex roda também no desdobro do agente (§7.5), que faz uma coisa por vez. Por isso, `params_compiler.validate_registry_regex` recusa, com a regra violada na mensagem:
   * grupo seguido de quantificador, exceto `?` (por exemplo, `(ab)+`, `(a|b)*`, `(\d{2}){3}`);
   * quantificador logo depois de outro quantificador (`a{2}{3}`, `a**`); o modificador preguiçoso `?` (`a+?`) é permitido;
   * referência a grupo (`\1`, `(?P=name)`), lookahead e lookbehind (`(?=`, `(?!`, `(?<=`, `(?<!`) e grupo condicional (`(?(`);
@@ -1025,7 +1025,7 @@ Para todos os tipos, **nesta ordem**:
     * não troca o tipo de parâmetro que tem regex;
     * não usa "Testar valor" com regex.
   * A regex nunca é executada no navegador.
-* **`default_value`** é validado por `validar_valor` contra a configuração em edição e gravado normalizado (`CHECKBOX` → `true`/`false`, `DATE` → `AAAA-MM-DD`), com até 100 caracteres.
+* **`default_value`** é validado por `validate_value` contra a configuração em edição e gravado normalizado (`CHECKBOX` → `true`/`false`, `DATE` → `AAAA-MM-DD`), com até 100 caracteres.
 * **`default_value` de parâmetro sensível é só de escrita:**
   * campo `password` nunca reapresentado; deixar em branco mantém o valor gravado, e "remover" apaga;
   * na auditoria aparece como `****`;
@@ -1101,11 +1101,11 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 * **Conteúdo do arquivo (CR-011):** o SSS não guarda nem confere hash do arquivo; o ambiente controla o conteúdo e a versão do script (§8.5).
 * **Vínculo de parâmetros pela UI** (`admin_scripts/parametros`, F4.5):
   * a lista inteira vai num único POST, e a ordem é renumerada pelo servidor (1..n, pela posição);
-  * a lista é revalidada inteira: ID inexistente ou duplicado, `default_value_override` por `validar_valor` (com até 100 caracteres), `NONE` sem vínculos e `NAMED` com flag em todos os parâmetros;
+  * a lista é revalidada inteira: ID inexistente ou duplicado, `default_value_override` por `validate_value` (com até 100 caracteres), `NONE` sem vínculos e `NAMED` com flag em todos os parâmetros;
   * as regras de `NONE`/`NAMED` também são garantidas pelo repositório na mesma operação (`sss_scr_nenhum_vinculado` e `sss_scr_nomeado_sem_flag`), inclusive ao trocar `param_type`;
   * só parâmetros ativos podem ser adicionados; vínculos existentes a parâmetros inativos aparecem com o selo "inativo" e podem ser removidos, mas nunca readicionados enquanto o parâmetro estiver inativo (D9);
   * o `default_value_override` de parâmetro sensível é só de escrita (em branco mantém o gravado) e aparece como `****` na auditoria e na prévia. Há uma opção explícita "remover valor" por vínculo, que apaga o valor gravado sem remover o vínculo;
-  * o valor sensível **mantido** também é revalidado por `validar_valor` contra a configuração atual do parâmetro. Se tiver ficado inválido, a gravação é recusada com a orientação de informar um novo valor ou removê-lo;
+  * o valor sensível **mantido** também é revalidado por `validate_value` contra a configuração atual do parâmetro. Se tiver ficado inválido, a gravação é recusada com a orientação de informar um novo valor ou removê-lo;
   * o hash de versão dos vínculos troca o valor sensível por um marcador fixo (§6.2), para que o segredo não saia no HTML nem de forma derivada;
   * a **prévia do argv** usa a configuração em edição, com os valores padrão (§6.1), e não grava nada;
   * concorrência pelo estado lido (hash dos vínculos), com a mensagem de conflito;
@@ -1168,7 +1168,7 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
   * O horizonte é contado a partir do instante de referência da busca: `start_date` no cadastro e na prévia, e o "agora" do banco no desdobro.
   * **Exceção:** se `end_date` cair dentro do horizonte, a falta de ocorrência significa que a regra terminou (`COMPLETED`), não que a expressão é inválida. No cadastro, a mensagem é a de "sem próxima execução", e não a de expressão sem ocorrência (CR-007, R-32).
 * O passo exige `*` ou intervalo (`*/5`, `0-30/5`). A forma `a/n` é rejeitada, e a expressão tem no máximo 60 caracteres.
-* `CronExpr.descrever()` gera a descrição em português exibida na UI. Exemplos:
+* `CronExpr.describe()` gera a descrição em português exibida na UI. Exemplos:
   * `30 2 * * 1-5` → "às 02:30, de segunda a sexta";
   * `*/15 * * * *` → "a cada 15 minutos";
   * `0 0 1 * 1` → "às 00:00, no dia 1 de cada mês ou às segundas";
@@ -1190,23 +1190,23 @@ Nos dois casos, `next_run_at` recebe a **primeira ocorrência futura** maior que
 * em **WARN** quando a vencida **mais antiga** (`next_run_at`) passa de `misfire_tolerance_s` (houve misfire de verdade, mesmo que a mais recente esteja na tolerância);
 * em **INFO** quando há ocorrências coalescidas **dentro** da tolerância (por exemplo, CRON a cada minuto com o daemon 4 minutos atrasado gera 1 ticket e 4 perdidas em INFO).
 
-**Contrato de `recurrence.avaliar_disparo(regra, agora, misfire_policy, misfire_tolerance_s)`** (decisões do F5.1). A função devolve `Decisao(gerar_ticket, nova_data, perdidas, concluir, ocorrencia, cron_erro)`; `cron_erro` tem padrão `False` (CR-008, R-19):
+**Contrato de `recurrence.evaluate_trigger(regra, agora, misfire_policy, misfire_tolerance_s)`** (decisões do F5.1). A função devolve `Decision(create_ticket, next_date, missed, complete, occurrence, cron_error)`; `cron_error` tem padrão `False` (CR-008, R-19):
 
-* **Vencidas** são as ocorrências em `[proxima_execucao, agora]`, contando a própria `next_run_at`.
+* **Vencidas** são as ocorrências em `[next_run_at, agora]`, contando a própria `next_run_at`.
 * **Atraso dentro da tolerância** (`agora − última vencida ≤ misfire_tolerance_s`, CR-008 R-21): gera **um** ticket para a vencida mais recente, mesmo que várias tenham vencido e mesmo com `SKIP`. Exemplo: CRON a cada minuto com o daemon 4 minutos atrasado.
-* **`perdidas`:**
+* **`missed`:**
   * `vencidas − 1` quando há ticket (o ticket cobre a ocorrência mais recente);
   * todas as vencidas com `SKIP` fora da tolerância;
   * limitada a 10.000.
   * Exemplo: `DAILY` com 3 dias de downtime e `RUN_ONCE` gera 1 ticket e 3 perdidas.
-* **`nova_data`:** sempre a primeira ocorrência maior que `agora`, respeitando piso e teto. É `None` quando a regra terminou.
-* **`concluir`:**
+* **`next_date`:** sempre a primeira ocorrência maior que `agora`, respeitando piso e teto. É `None` quando a regra terminou.
+* **`complete`:**
   * `ONCE` depois da decisão. No passado, `RUN_ONCE` dispara uma vez e conclui; `SKIP` fora da tolerância conclui sem ticket.
   * Ou quando não há próxima ocorrência até `end_date`. Nesse caso, o ticket da ocorrência atual ainda é gerado.
-* **`ocorrencia` (CR-007, R-27):** quando `gerar_ticket`, a ocorrência coberta pelo ticket (a vencida mais recente, nunca no futuro); senão `None`. O desdobro a grava como `scheduled_at` do ticket (§7.5).
-* **Conclusão sem ticket:** sempre que `gerar_ticket = False` e `concluir = True`. Exemplos: `ONCE` com `SKIP` fora da tolerância, ou `end_date` vencida durante uma parada com `SKIP` (CR-007, R-32).
-* **Sem próxima ocorrência no horizonte (CR-008, R-19):** a expressão é válida, mas a próxima ocorrência depois de `agora` não existe em `cron_horizon_days` (e `end_date` não explica). A função **não** lança exceção: devolve a decisão normal (`gerar_ticket`, `perdidas` e `ocorrencia` calculados pelas vencidas, como em qualquer regra) com `nova_data = None`, `concluir = False` e `cron_erro = True`. O daemon aplica os passos 4 e 5 do §7.5 normalmente e grava a pausa `INVALID_CRON` (§7.5, passo 6, variante `cron_erro`).
-* **Expressão CRON sintaticamente inválida** (gravada por fora da validação): lança `CronErro`, sem decisão. O daemon pausa com `INVALID_CRON` **sem** ticket (passo 7), porque não há como calcular as vencidas.
+* **`occurrence` (CR-007, R-27):** quando `create_ticket`, a ocorrência coberta pelo ticket (a vencida mais recente, nunca no futuro); senão `None`. O desdobro a grava como `scheduled_at` do ticket (§7.5).
+* **Conclusão sem ticket:** sempre que `create_ticket = False` e `complete = True`. Exemplos: `ONCE` com `SKIP` fora da tolerância, ou `end_date` vencida durante uma parada com `SKIP` (CR-007, R-32).
+* **Sem próxima ocorrência no horizonte (CR-008, R-19):** a expressão é válida, mas a próxima ocorrência depois de `agora` não existe em `cron_horizon_days` (e `end_date` não explica). A função **não** lança exceção: devolve a decisão normal (`create_ticket`, `missed` e `occurrence` calculados pelas vencidas, como em qualquer regra) com `next_date = None`, `complete = False` e `cron_error = True`. O daemon aplica os passos 4 e 5 do §7.5 normalmente e grava a pausa `INVALID_CRON` (§7.5, passo 6, variante `cron_error`).
+* **Expressão CRON sintaticamente inválida** (gravada por fora da validação): lança `CronError`, sem decisão. O daemon pausa com `INVALID_CRON` **sem** ticket (passo 7), porque não há como calcular as vencidas.
 * Os módulos `cron_parser.py` e `recurrence.py` são puros: não importam `gluon`, nunca chamam `datetime.now()` e recebem o "agora" por parâmetro.
 
 ### 7.5 Algoritmo de desdobro (ciclo 1 do daemon)
@@ -1239,17 +1239,17 @@ SELECT id, next_run_at FROM (
 Para cada regra travada, na **mesma transação** (que já detém o lock da linha):
 
 1. Ler a regra completa, guardando `antiga_data = next_run_at` **exatamente como retornada pelo banco**.
-2. **Revalidar privilégios** do `user_id` com `rbac.pode_executar(usuario, script, environment)`. Se falhar, pausar (passo 7) com o motivo dado por `rbac.motivo_pausa(motivo_rbac)` (CR-008, R-33), função pura usada também pela web (aviso "Será pausada", §7.6), para que o daemon nunca grave um valor fora de `ck_tbsss_sch_pause`:
+2. **Revalidar privilégios** do `user_id` com `rbac.can_execute(usuario, script, environment)`. Se falhar, pausar (passo 7) com o motivo dado por `rbac.pause_reason_for(motivo_rbac)` (CR-008, R-33), função pura usada também pela web (aviso "Será pausada", §7.6), para que o daemon nunca grave um valor fora de `ck_tbsss_sch_pause`:
 
-   | `rbac.Motivo` | `pause_reason` |
+   | `rbac.Reason` | `pause_reason` |
    |---|---|
    | `USER_INACTIVE` | `USER_INACTIVE` |
    | `SCRIPT_INACTIVE` | `SCRIPT_INACTIVE` |
    | `ENVIRONMENT_INACTIVE` | `ENVIRONMENT_INACTIVE` |
-   | `PERFIL_INATIVO`, `SEM_HOMOLOGACAO`, `SEM_FUNC`, `SEM_AMBIENTE`, `SEM_SCRIPT`, `DADO_INVALIDO` e qualquer outro | `NO_PERMISSION` |
+   | `PROFILE_INACTIVE`, `NOT_HOMOLOGATED`, `NO_FEATURE`, `NO_ENVIRONMENT`, `NO_SCRIPT`, `INVALID_DATA` e qualquer outro | `NO_PERMISSION` |
 
    Se a regra tem prioridade 1 e o responsável deixou de ser admin, o ticket sai com prioridade 2 e o log registra WARN `PRIORIDADE_REBAIXADA`; a regra não muda.
-3. Calcular a decisão com `recurrence.avaliar_disparo` (§7.4): `gerar_ticket`, `nova_data`, `perdidas`, `concluir` e `ocorrencia`. Se não houver próxima ocorrência, a conclusão vem depois do ticket deste ciclo. Decisão com `cron_erro = True` (CR-008, R-19): seguir os passos 4 e 5 como em qualquer regra (sobreposição, `SKIP` e snapshot) e, no passo 6, usar a variante `cron_erro`. `CronErro` (expressão inválida): pausar com `INVALID_CRON`, sem ticket (passo 7).
+3. Calcular a decisão com `recurrence.evaluate_trigger` (§7.4): `gerar_ticket`, `nova_data`, `perdidas`, `concluir` e `ocorrencia`. Se não houver próxima ocorrência, a conclusão vem depois do ticket deste ciclo. Decisão com `cron_erro = True` (CR-008, R-19): seguir os passos 4 e 5 como em qualquer regra (sobreposição, `SKIP` e snapshot) e, no passo 6, usar a variante `cron_erro`. `CronError` (expressão inválida): pausar com `INVALID_CRON`, sem ticket (passo 7).
 4. **Prevenir sobreposição:** se `last_ticket_id` estiver em `PENDING` ou `RUNNING`, não gerar ticket: aplicar o **avanço sem ticket** (abaixo), registrar INFO `SKIP_OVERLAP` e encerrar a regra.
    * `last_ticket_id` nulo, inexistente (purgado, §11.3) ou terminal significa **livre**.
    * Se o ticket que bloqueia foi criado há mais que o tempo máximo do script (`timeout_s` ou `script_timeout_s`) mais `node_offline_timeout_s`, o registro é **WARN** `SKIP_OVERLAP_PRESO`, com o id do ticket: ele provavelmente está preso e precisa de atenção (CR-007, R-26). A lista e a agenda também avisam (§7.6, §7.7).
@@ -1355,9 +1355,9 @@ Todas recebem a conexão da transação do ciclo e nunca fazem `COMMIT` sozinhas
 Implementação: `controllers/agendamentos.py`, `modules/schedules_service.py` e `views/agendamentos/`. O questionário de parâmetros é o mesmo do disparo (`views/components/questionario.html`).
 
 * **Validação estrita (sem truncamento):** todo campo recebido é validado no tamanho e no formato exatos. Um valor mais longo ou fora do formato é **recusado** com mensagem no campo, nunca cortado. Exemplos: dia do mês `100` ou `311`, hora `03:000`, data com segundos ou frações (`…T10:00:00.999`).
-* **Escolha de script e ambiente:** na inclusão, a escolha é feita em etapas e usa os mesmos filtros do disparo (§4.3.A): só aparecem scripts e ambientes em que o editor tem `pode_executar`. Por isso, quem não é admin precisa também de `EXEC_SCRIPT`.
+* **Escolha de script e ambiente:** na inclusão, a escolha é feita em etapas e usa os mesmos filtros do disparo (§4.3.A): só aparecem scripts e ambientes em que o editor tem `can_execute`. Por isso, quem não é admin precisa também de `EXEC_SCRIPT`.
 * **Edição (D2):** script e ambiente ficam **fixos**. Para usar outro script ou ambiente, cria-se uma nova regra.
-* **`user_id`:** a inclusão e a edição gravam o editor, que precisa ter `pode_executar` vigente (§10). Sem essa permissão, a operação é negada e a regra fica intacta. A tela de edição sempre avisa: "Ao salvar, esta regra passará a executar com as suas permissões." O criador original fica em `created_by`, que nunca muda (§10, CR-006).
+* **`user_id`:** a inclusão e a edição gravam o editor, que precisa ter `can_execute` vigente (§10). Sem essa permissão, a operação é negada e a regra fica intacta. A tela de edição sempre avisa: "Ao salvar, esta regra passará a executar com as suas permissões." O criador original fica em `created_by`, que nunca muda (§10, CR-006).
 * **Datas:**
   * O servidor valida as datas e as converte para `datetime` sem microssegundos.
   * `start_date` é obrigatória em `ONCE`. Nos demais tipos, vazio significa "agora" (relógio do banco, truncado ao minuto) (D3).
@@ -1380,8 +1380,8 @@ Implementação: `controllers/agendamentos.py`, `modules/schedules_service.py` e
   * A edição grava `UPDATE` e **sempre** começa por `user_id: <anterior> (login) → <novo> (login)`, mesmo quando o editor não muda. Sem nenhuma mudança e com o mesmo editor, nada é gravado.
 * **Pausa manual:** grava `active = 'N'` e `pause_reason = 'MANUAL'`, de forma otimista sobre `next_run_at` e só sobre regra ativa (§7.5 passo 7), e audita `SCHEDULE_PAUSE` com o login e o IP de quem pausou. Se a regra foi pausada ou concluída entre a leitura e o clique, a operação vira conflito, sem gravar nem auditar (CR-007, R-19).
 * **Retomada:**
-  * Revalida `pode_executar` de **quem retoma**, recalcula `next_run_at` a partir de agora, limpa `pause_reason` e grava `active = 'Y'`. Audita `UPDATE`.
-  * **Reavaliação da causa (CR-007, R-26):** antes de retomar, o servidor confere o que o desdobro conferiria: responsável ativo e com `pode_executar` para o script e o ambiente, script e ambiente ativos, snapshot compilável a partir de `params_json` e, em `CRON`, ocorrência no horizonte. Se algo falhar, a retomada é recusada com a causa em linguagem simples e a orientação "Edite a regra para corrigir (ao salvar, ela passa a rodar com as suas permissões) e depois retome."
+  * Revalida `can_execute` de **quem retoma**, recalcula `next_run_at` a partir de agora, limpa `pause_reason` e grava `active = 'Y'`. Audita `UPDATE`.
+  * **Reavaliação da causa (CR-007, R-26):** antes de retomar, o servidor confere o que o desdobro conferiria: responsável ativo e com `can_execute` para o script e o ambiente, script e ambiente ativos, snapshot compilável a partir de `params_json` e, em `CRON`, ocorrência no horizonte. Se algo falhar, a retomada é recusada com a causa em linguagem simples e a orientação "Edite a regra para corrigir (ao salvar, ela passa a rodar com as suas permissões) e depois retome."
   * O responsável (`user_id`) não muda: os privilégios dele continuam sendo revalidados a cada desdobro (§7.5 passo 2).
   * Uma regra `COMPLETED` só é retomada se ainda houver próxima execução (D5). Pausar uma regra já pausada, ou retomar uma ativa, gera aviso sem gravar nem auditar.
 * **Colunas de registro (CR-006):** a inclusão grava `created_*`; edição, pausa manual e retomada gravam `updated_*` com o login de quem agiu. O formulário de edição mostra o quadro Registro (§10).
@@ -1408,7 +1408,7 @@ Responde "o que vai rodar hoje e nos próximos dias?". Exige `MANAGE_SCHEDULES` 
   * o nome da regra;
   * o script;
   * o ambiente;
-  * a frase da recorrência (`descrever()` ou o tipo em português);
+  * a frase da recorrência (`describe()` ou o tipo em português);
   * o link para a regra.
 * `next_run_at` no passado (daemon atrasado) aparece em "Atrasado", no topo, com a frase "deveria ter rodado às {hora}; vai rodar assim que o servidor puder". Com `misfire_policy = SKIP` e atraso acima de `misfire_tolerance_s`, a frase é "passou do horário e será pulada (política de atraso: pular)" (CR-007, R-26).
 * **Previsão fiel ao daemon (CR-007, R-26):** cada regra recebe as checagens do desdobro (§7.5, passos 2, 4 e 5). A regra que será pausada aparece com "Será pausada: {motivo}", e a regra cuja execução anterior ainda está na fila ou rodando, com "Pode ser pulada: a execução #{id} ainda está {situação}". Regras `CRON` sem ocorrência no horizonte aparecem num bloco "Regras com problema", e não somem.
@@ -1563,7 +1563,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
    * `path_file` (absoluto) passa na §8.5 neste agente, que fornece o `script_real` (códigos do `path_guard`);
    * o `argv` é montado pelo agente (§6.4) a partir de `interpreter`, `script_real` e `args`;
    * o script segue `active = 'Y'` (`SCRIPT_INACTIVE`) e homologado para o ambiente (`NAO_HOMOLOGADO`);
-   * o ambiente do ticket segue ativo (`ENVIRONMENT_INACTIVE`) e o **solicitante** ainda tem `rbac.pode_executar` para o script e o ambiente, com o mesmo contexto de RBAC do desdobro (`NO_PERMISSION`, CR-007 D2).
+   * o ambiente do ticket segue ativo (`ENVIRONMENT_INACTIVE`) e o **solicitante** ainda tem `rbac.can_execute` para o script e o ambiente, com o mesmo contexto de RBAC do desdobro (`NO_PERMISSION`, CR-007 D2).
 
    Uma exceção inesperada nesta fase também finaliza o ticket com `PRECHECK_FAILED` (R-03). **Erro de banco antes do spawn (CR-008, R-07):** só erro de rede ou de prazo (`db_conn.is_network_error` ou `is_timeout`, §2.3) é "banco indisponível": o ticket é **devolvido à fila** (§5.1), ou finalizado `CANCELLED` se `cancel_requested = 'Y'` (R-02). Qualquer outro erro de banco (ex.: ORA-01031 por GRANT faltando, ORA-00942, ORA-30006 de lock persistente) finaliza `PRECHECK_FAILED` com a linha `[SSS] ERRO_BANCO: ORA-nnnnn` no log, sem a mensagem do Oracle. Se a própria devolução ou finalização falhar, o ticket fica como "devolução pendente" no mapa local (§8.7, R-08).
 2. **Diretórios de trabalho:**
@@ -1636,23 +1636,23 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
 
 **Interpretadores lógicos (somente POSIX):** `PYTHON3`, `BASH` e `SH`.
 
-* O executável de cada interpretador vem de `[agent] interpreters`. Na inicialização, o agente confere, por `path_guard.validar_executavel`: caminho absoluto e normalizado, existe, é arquivo executável e fica fora de `log_dir`, `work_dir` e `exec_work_dir`. Pode ser link simbólico (como `/usr/bin/python3`) e pode ficar nas pastas do sistema. Falha: `INTERPRETADOR_INSEGURO` (ou `NAO_ENCONTRADO`), CRITICAL.
+* O executável de cada interpretador vem de `[agent] interpreters`. Na inicialização, o agente confere, por `path_guard.validate_executable`: caminho absoluto e normalizado, existe, é arquivo executável e fica fora de `log_dir`, `work_dir` e `exec_work_dir`. Pode ser link simbólico (como `/usr/bin/python3`) e pode ficar nas pastas do sistema. Falha: `INTERPRETADOR_INSEGURO` (ou `NOT_FOUND`), CRITICAL.
 
 **Caminho livre (CR-005, D2): o script pode ficar em qualquer lugar do servidor, fora das pastas do sistema e do SSS**
 
 * O cadastro grava em `path_file` o **caminho absoluto** do arquivo (ex.: `/opt/automacoes/scripts/faturamento/carga_faturas.py`). O mesmo caminho vale para todos os agentes que atendem o script.
 * **Link simbólico (CR-011):** o `path_file` pode ser link, ou ter link em qualquer pasta do caminho. O agente resolve o caminho real (`os.path.realpath`) e **executa o arquivo real**; o script recebe os dois (`SSS_SCRIPT_FILE` e `SSS_SCRIPT_LINK`, §8.6). A pasta onde o link está não é conferida: quem puder gravar nela pode trocar o destino, risco aceito no §14.
-* **Formato** (`validar_cadastro`; parte dele também nas CKs, abaixo):
+* **Formato** (`validate_registration`; parte dele também nas CKs, abaixo):
   * absoluto (começa com `/`) e normalizado (`os.path.normpath(p) == p`): sem `//`, sem `/./` e sem barra no fim;
   * sem `..` em nenhum ponto, sem `\` e sem caractere de controle;
   * até 500 caracteres.
-* **Pastas proibidas**, no caminho cadastrado e no real: dentro de `/bin`, `/sbin`, `/usr`, `/lib`, `/lib32`, `/lib64`, `/libx32`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev` ou `/root` é `PASTA_DO_SISTEMA`; dentro de `log_dir`, `work_dir`, `exec_work_dir`, `output_dir` ou `input_dir` é `PASTA_DO_SSS` (CR-014: o usuário de execução grava nas duas últimas, e um script guardado ali poderia ser trocado por outro script).
+* **Pastas proibidas**, no caminho cadastrado e no real: dentro de `/bin`, `/sbin`, `/usr`, `/lib`, `/lib32`, `/lib64`, `/libx32`, `/etc`, `/boot`, `/proc`, `/sys`, `/dev` ou `/root` é `SYSTEM_DIR`; dentro de `log_dir`, `work_dir`, `exec_work_dir`, `output_dir` ou `input_dir` é `SSS_DIR` (CR-014: o usuário de execução grava nas duas últimas, e um script guardado ali poderia ser trocado por outro script).
 * **O arquivo real** (`platform.validar_caminho_script`):
-  * existe (`NAO_ENCONTRADO`; um ciclo de links também dá `NAO_ENCONTRADO`);
-  * as pastas do caminho deixam o agente passar (`EACCES` é `SEM_ACESSO`, diferente de `NAO_ENCONTRADO`);
-  * é arquivo regular (`NAO_E_ARQUIVO`);
-  * não é gravável por grupo nem por outros (`st_mode & 0o022 == 0`; senão `GRAVAVEL_GRUPO_OUTROS`). As pastas do caminho não são conferidas.
-* **Códigos de recusa:** `CAMINHO_RELATIVO`, `CAMINHO_NAO_NORMALIZADO`, `CONTEM_PONTOS`, `SEPARADOR_INVALIDO`, `CARACTERE_INVALIDO`, `PASTA_DO_SISTEMA`, `PASTA_DO_SSS`, `NAO_ENCONTRADO`, `SEM_ACESSO`, `NAO_E_ARQUIVO`, `GRAVAVEL_GRUPO_OUTROS`, `INTERPRETADOR_NAO_PERMITIDO` e `INTERPRETADOR_INSEGURO`. A mensagem de erro nunca inclui o caminho.
+  * existe (`NOT_FOUND`; um ciclo de links também dá `NOT_FOUND`);
+  * as pastas do caminho deixam o agente passar (`EACCES` é `NO_ACCESS`, diferente de `NOT_FOUND`);
+  * é arquivo regular (`NOT_A_FILE`);
+  * não é gravável por grupo nem por outros (`st_mode & 0o022 == 0`; senão `GROUP_OTHER_WRITABLE`). As pastas do caminho não são conferidas.
+* **Códigos de recusa:** `RELATIVE_PATH`, `PATH_NOT_NORMALIZED`, `HAS_DOTS`, `INVALID_SEPARATOR`, `INVALID_CHARACTER`, `SYSTEM_DIR`, `SSS_DIR`, `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE`, `GROUP_OTHER_WRITABLE`, `INTERPRETADOR_NAO_PERMITIDO` e `INTERPRETADOR_INSEGURO`. A mensagem de erro nunca inclui o caminho.
 * **Onde cada coisa é conferida (CR-011, S1):**
   * **no nó web** (cadastro, prévia e disparo): só o formato, o interpretador da allowlist e as pastas do sistema. O web pode nem ter o arquivo, e não emite aviso de arquivo ausente;
   * **no agente**, a cada execução (§8.4, passo 1): tudo acima, inclusive o arquivo real. Falha: `PRECHECK_FAILED` com o código na linha `[SSS]` do log.
@@ -1813,7 +1813,7 @@ O relógio de referência é sempre o `SYSDATE` do banco, nunca o relógio do n�
   * **orçamento (CR-008, R-11):** a rodada para ao gastar `heartbeat_interval_s / 2` (§8.1), com rodízio entre tickets; o flush final de um ticket não tem orçamento, mas só um flush final roda por iteração do laço;
   * o agente lê os bytes novos do arquivo a partir do offset local;
   * decodifica com `utf-8`, `errors='replace'`, sem cortar caracteres multibyte (o resto incompleto fica para o próximo ciclo);
-  * aplica o **mascarador do ticket** (CR-007, R-25): uma instância de `masking.Mascarador` por ticket, com os segredos carregados, o `PADRAO_VALOR_RUN_CONEXAO_BD` (= `SSS_ENVIRONMENT_CONNECTION`) do ambiente e os valores das `answers` cujos códigos estão em `sensiveis` no snapshot. O mesmo mascarador filtra as linhas do log da aplicação que tratam do ticket;
+  * aplica o **mascarador do ticket** (CR-007, R-25): uma instância de `masking.Masker` por ticket, com os segredos carregados, o `PADRAO_VALOR_RUN_CONEXAO_BD` (= `SSS_ENVIRONMENT_CONNECTION`) do ambiente e os valores das `answers` cujos códigos estão em `sensiveis` no snapshot. O mesmo mascarador filtra as linhas do log da aplicação que tratam do ticket;
   * anexa ao CLOB em blocos de até 8.000 caracteres:
 
 ```sql
@@ -1899,7 +1899,7 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
 3. **Segredos:** validar o `secrets.cfg` (§4.1).
 4. **Diretórios e interpretadores:**
    * `log_dir` e `work_dir` existem, são graváveis pelo agente e não ficam dentro das pastas do sistema (§8.5);
-   * cada entrada de `[agent] interpreters` é uma chave da allowlist com caminho absoluto e executável, que passa por `path_guard.validar_executavel` (§8.5);
+   * cada entrada de `[agent] interpreters` é uma chave da allowlist com caminho absoluto e executável, que passa por `path_guard.validate_executable` (§8.5);
    * fora de DEV, `platform.validar_execucao()` (§8.0): helper, regra de sudoers, usuários de execução e `exec_work_dir`;
    * com `output_dir` (CR-012): fora de DEV, `output_dir/<ambiente>/` de cada ambiente atendido existe, é diretório, pertence ao usuário de execução do ambiente e não tem escrita de grupo nem de outros; em DEV, `output_dir` existe e é gravável pelo agente.
    * com `input_dir` (CR-014): a mesma conferência, para `input_dir/<ambiente>/` (CRITICAL `pasta de entrada: <falha>`).
@@ -1963,7 +1963,7 @@ Pasta permanente onde o script encontra os arquivos de que precisa (lotes, plani
 * **Dono:** fora de DEV, `input_dir/<ambiente>/` é criada na implantação pelo root, com dono o usuário de execução do ambiente e `0700` (`DEPLOYMENT.md`), e o agente confere na subida (§8.12, passo 4). Cada ambiente tem a sua pasta: o mesmo script em `PRODUCAO` e `HOMOLOGACAO` não vê os arquivos do outro.
 * **Permanente:** o SSS não limpa, não compacta, não purga e não lê nada nessa pasta. O conteúdo é responsabilidade do script e da operação (quem deposita os arquivos).
 * **Concorrência:** dois tickets do mesmo script no mesmo ambiente (com `max_parallel_env` maior que 1) usam a mesma pasta ao mesmo tempo. A coordenação (por exemplo, mover o arquivo para uma subpasta antes de processar) é do script.
-* **Scripts e interpretadores** não podem ficar dentro de `input_dir` (`PASTA_DO_SSS`, §8.5).
+* **Scripts e interpretadores** não podem ficar dentro de `input_dir` (`SSS_DIR`, §8.5).
 * Web e agentes podem estar em servidores diferentes: a pasta existe só no servidor de cada agente. Com mais de um agente atendendo o mesmo ambiente, cada um tem a sua `input_dir` (ou um compartilhamento de rede comum, montado pela infraestrutura).
 
 ---
@@ -2087,7 +2087,7 @@ END;
   * A linha de auditoria é gravada na mesma operação (transação) do `INSERT` ou `UPDATE`.
 * **Listagens com `total` limitado (CR-007, R-29):** o `COUNT` das listagens paginadas para em 10.001 (`ROWNUM <= 10001` no Oracle, o mesmo limite no FAKE). Acima de 10.000, a tela mostra "mais de 10.000 registros" e a paginação não oferece "Última". O repositório devolve `total_limitado = True` nesse caso.
 * **LOBs (CR-007, R-29; CR-012):** todo LOB (os CLOBs `tbsss_tickets.submitted_params`, `tbsss_tickets.log_output` e `tbsss_schedules.params_json`, e o BLOB `tbsss_ticket_output.content`) tem cláusula de armazenamento explícita (`SECUREFILE (CACHE)` ou `BASICFILE`, §11.1). Num banco AL32UTF8, o CLOB guarda AL16UTF16, cerca de 2 bytes por caractere: a fórmula de dimensionamento está no `DEPLOYMENT.md`.
-* **Edição de agendamento:** ao salvar uma alteração, `user_id` passa a ser o **editor**, que precisa ter `pode_executar` vigente para o script e o ambiente da regra. A regra sempre roda sob os privilégios de quem a definiu por último, o que impede um usuário de reaproveitar privilégios de outro editando a regra dele. A alteração é auditada com o `user_id` anterior e o novo. Script e ambiente da regra não mudam na edição (§7.6).
+* **Edição de agendamento:** ao salvar uma alteração, `user_id` passa a ser o **editor**, que precisa ter `can_execute` vigente para o script e o ambiente da regra. A regra sempre roda sob os privilégios de quem a definiu por último, o que impede um usuário de reaproveitar privilégios de outro editando a regra dele. A alteração é auditada com o `user_id` anterior e o novo. Script e ambiente da regra não mudam na edição (§7.6).
 
 ### 1. `tbsss_environments`
 * PK `pk_tbsss_environments` · UK `uk_tbsss_env_name (name)`
@@ -2664,7 +2664,7 @@ Toda chave é validada por tipo e faixa na inicialização (`sss_config.py`). Ch
 | `[oracle]` | `pool_min`, `pool_max` | inteiro | 1 a 1.000, com `pool_min <= pool_max` |
 | `[secrets]` | `secrets_file` | caminho | obrigatório |
 | `[agent]` | `agent_id` | texto | `^[A-Za-z0-9._-]{1,30}$`, diferente de `init_db`, `seed` e `purge` |
-| `[agent]` | `environments` | lista CSV | obrigatória; o texto inteiro com até 1.000 caracteres (coluna `tbsss_agents.ambientes`) |
+| `[agent]` | `environments` | lista CSV | obrigatória; o texto inteiro com até 1.000 caracteres (coluna `tbsss_agents.environments`) |
 | `[agent]` | `exec_users` (CR-007) | lista `AMBIENTE=usuario` | obrigatória fora de DEV, cobrindo todos os `environments`; usuário `^[a-z_][a-z0-9_-]{0,31}$`, diferente de `root`. Vazia em DEV = execução com o próprio usuário, com WARN |
 | `[agent]` | `exec_work_dir` (CR-007) | caminho | obrigatório fora de DEV; fora das pastas do sistema e diferente de `work_dir` e `log_dir` |
 | `[agent]` | `queue_aging_min` (CR-007) | inteiro | 0 a 1.440 (0 desliga) |
@@ -2777,19 +2777,19 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
     | Saúde | Condição | Exibição |
     |---|---|---|
     | `OK` | idade < `2 × heartbeat_interval_s` | verde, ícone de confirmação |
-    | `ATRASADO` | idade ≤ `fence_timeout_s` (limite inclusivo) | âmbar, ampulheta |
-    | `EM_RISCO` | idade ≤ `node_offline_timeout_s` (limite inclusivo) | vermelho, alerta |
+    | `DELAYED` | idade ≤ `fence_timeout_s` (limite inclusivo) | âmbar, ampulheta |
+    | `AT_RISK` | idade ≤ `node_offline_timeout_s` (limite inclusivo) | vermelho, alerta |
     | `OFFLINE` | além disso, sem heartbeat ou com status `STOPPED` | cinza, círculo cortado |
 
   * Cartões por agente com "há N s", lista expansível dos tickets `RUNNING` (com link para o detalhe), legenda dos estados e atualização automática a cada 15 s (fragmento `.load`, que preserva as listas abertas).
   * Cada cartão mostra também a plataforma e os interpretadores do agente.
-  * Backend FAKE (DEV): o `agt-host01` renova o heartbeat a cada leitura. O `agt-host02` nasce com o heartbeat congelado 30 s antes da carga do seed, então envelhece com o relógio: começa `ATRASADO`, passa a `EM_RISCO` cerca de 1 min depois e a `OFFLINE` cerca de 2,5 min depois.
+  * Backend FAKE (DEV): o `agt-host01` renova o heartbeat a cada leitura. O `agt-host02` nasce com o heartbeat congelado 30 s antes da carga do seed, então envelhece com o relógio: começa `DELAYED`, passa a `AT_RISK` cerca de 1 min depois e a `OFFLINE` cerca de 2,5 min depois.
 * **Quadros de atenção na tela de agentes (CR-007, R-18):**
-  * **Fila sem atendente:** tickets `PENDING` vencidos cujo par (ambiente, interpretador) não é atendido por nenhum agente com saúde `OK` ou `ATRASADO` (cruzando `tbsss_agents.ambientes` e `interpreters`). Mostra o ambiente, o interpretador, a quantidade e o mais antigo (o menor início da espera, `GREATEST(scheduled_at, created_at)`; CR-013). A consulta lê só `ix_tbsss_tck_queue` e agrupa por script antes do join com o catálogo. **Critério do claim (CR-008, R-15):** o interpretador é o do cadastro (`tbsss_scripts.interpreter`, por join), o mesmo que a seleção de candidatos usa (§8.2); `submitted_params` (CLOB) nunca é lido. A consulta usa as expressões de `ix_tbsss_tck_queue` (`PENDING` vencidos) e agrupa por `t.environment, s.interpreter`; o par é comparado em Python com os agentes saudáveis.
+  * **Fila sem atendente:** tickets `PENDING` vencidos cujo par (ambiente, interpretador) não é atendido por nenhum agente com saúde `OK` ou `DELAYED` (cruzando `tbsss_agents.environments` e `interpreters`). Mostra o ambiente, o interpretador, a quantidade e o mais antigo (o menor início da espera, `GREATEST(scheduled_at, created_at)`; CR-013). A consulta lê só `ix_tbsss_tck_queue` e agrupa por script antes do join com o catálogo. **Critério do claim (CR-008, R-15):** o interpretador é o do cadastro (`tbsss_scripts.interpreter`, por join), o mesmo que a seleção de candidatos usa (§8.2); `submitted_params` (CLOB) nunca é lido. A consulta usa as expressões de `ix_tbsss_tck_queue` (`PENDING` vencidos) e agrupa por `t.environment, s.interpreter`; o par é comparado em Python com os agentes saudáveis.
   * **Rodando sem PID:** tickets `RUNNING` com `process_id` nulo há mais de 2 minutos (o agente reservou e não iniciou). A consulta usa a expressão de `ix_tbsss_tck_run` e devolve só `id`, `script_id`, `environment`, `agent_id` e `started_at`, sem LOB (CR-008, R-15).
   * **Configuração divergente:** agentes ativos com `critical_config` diferente entre si ou dos valores do nó web (§8.12).
   * Os quadros só aparecem quando há algo a mostrar e ficam no topo da tela.
-  * Backend FAKE (DEV): o seed mostra os três quadros. O `agt-host02` tem `kill=10` (configuração divergente); o ticket 16 está `RUNNING` sem PID desde a carga; o ticket 4 (SH em `HOMOLOGACAO`, vencido 3 min antes da carga) só é atendido pelo `agt-host02` (o `agt-host01` mapeia `PYTHON3,BASH`) e entra na fila sem atendente quando ele passa a `EM_RISCO`, cerca de 1 min depois da carga.
+  * Backend FAKE (DEV): o seed mostra os três quadros. O `agt-host02` tem `kill=10` (configuração divergente); o ticket 16 está `RUNNING` sem PID desde a carga; o ticket 4 (SH em `HOMOLOGACAO`, vencido 3 min antes da carga) só é atendido pelo `agt-host02` (o `agt-host01` mapeia `PYTHON3,BASH`) e entra na fila sem atendente quando ele passa a `AT_RISK`, cerca de 1 min depois da carga.
   * `critical_config` do nó web: `sss_config.critical_config(cfg)`, com `call` em segundos (`call_timeout_s`, arredondado para cima), igual ao texto do agente (§8.12).
 * **Monitoração externa (CR-007, R-18):** `scripts/health.py` (F9.1) roda, com a conta só de leitura do papel **monitor** (`[monitor]` no `secrets.cfg`, §4.1 e §11.1, CR-008 E3; a conta do agente não lê `tbsss_audit`), as consultas de saúde e devolve o código no padrão Nagios (0 OK, 1 WARN, 2 CRITICAL, 3 desconhecido), com uma linha por problema. Verifica: agente `ACTIVE` sem heartbeat além de `node_offline_timeout_s`; ambiente ativo sem nenhum agente saudável; os três quadros acima; fila `PENDING` vencida acima de um limite; ausência de `PURGE` auditado em 2 dias; versão do esquema (§11.1). Os limites são argumentos com padrão, e o `DEPLOYMENT.md` traz o exemplo de agendamento no monitoramento corporativo.
   * **Uso (F9.1):** `python scripts/health.py [--config <config.ini>] [--no-pid-min 2] [--queue-warn 500] [--queue-crit 5000] [--wait-warn-min 30] [--wait-crit-min 120] [--purge-days 2]`. Todas as verificações usam um único `db_now()`. As consultas ficam em `repo_oracle/health.py` (sem gluon), que também fornece à tela de agentes o SQL da fila sem atendente e do rodando sem PID: a tela e o monitoramento não divergem. Nenhum LOB é lido, e o plano não varre `tbsss_tickets` nem `tbsss_audit` (`ix_tbsss_tck_queue`, `ix_tbsss_tck_run`, `ix_tbsss_aud_actor`).
@@ -2799,7 +2799,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
     | Versão do esquema diferente da do código (§11.1) | CRITICAL |
     | Agente `ACTIVE` sem heartbeat além de `node_offline_timeout_s` (ou sem heartbeat) | CRITICAL |
     | Agente `ACTIVE` em risco (heartbeat além de `fence_timeout_s`) | WARNING |
-    | Ambiente ativo sem nenhum agente `OK` ou `ATRASADO` que o atenda | CRITICAL |
+    | Ambiente ativo sem nenhum agente `OK` ou `DELAYED` que o atenda | CRITICAL |
     | Fila sem atendente, por ambiente e interpretador do cadastro (o quadro da tela de agentes) | CRITICAL |
     | `PENDING` vencidos ≥ `--queue-warn`/`--queue-crit`, ou espera máxima ≥ `--wait-warn-min`/`--wait-crit-min` | WARNING / CRITICAL |
     | Ticket `RUNNING` sem PID há mais de `--no-pid-min` minutos | WARNING |

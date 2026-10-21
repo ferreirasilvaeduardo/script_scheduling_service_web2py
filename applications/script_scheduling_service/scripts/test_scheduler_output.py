@@ -67,11 +67,11 @@ class TestSemBanco(unittest.TestCase):
 
     def test_concluir_confere_o_tamanho_no_banco(self):
         conn = _Conn([("SET state = 'AVAILABLE'", (1, []))])
-        self.assertTrue(self.repo.concluir(conn, 7, AGENTE, 3, 2048))
+        self.assertTrue(self.repo.complete(conn, 7, AGENTE, 3, 2048))
         sql, binds = conn.executados[0]
         self.assertIn("DBMS_LOB.GETLENGTH(content) = :size_bytes", sql)
         self.assertIn("updated_by = :actor", sql)
-        self.assertFalse(self.repo.concluir(_Conn([]), 7, AGENTE, 3, 2048))
+        self.assertFalse(self.repo.complete(_Conn([]), 7, AGENTE, 3, 2048))
 
     def test_registrar_sem_conteudo(self):
         conn = _Conn([("SET state = :state", (1, []))])
@@ -127,7 +127,7 @@ conn.commit()
 r.append(repo.append_chunk(conn, tid, agente, 0, parte))
 conn.commit()
 r.append(repo.append_chunk(conn, tid, agente, 0, parte))
-r.append(repo.concluir(conn, tid, agente, 1, len(parte)))
+r.append(repo.complete(conn, tid, agente, 1, len(parte)))
 conn.commit()
 print(json.dumps({"candidato": db_conn.get_selection().candidato, "r": r}))
 conn.close()
@@ -199,8 +199,8 @@ class TestSchedulerSaidaOracle(unittest.TestCase):
         self.assertEqual(self.tickets.output_get(tid)["state"], "WRITING")
         with self.assertRaises(self.trc.RepoNotFound):
             self.tickets.output_read(tid, 0, 10)
-        self.assertFalse(self.repo.concluir(self.conn, tid, self.agente, 2, len(zip_) + 1), "tamanho conferido")
-        self.assertTrue(self.repo.concluir(self.conn, tid, self.agente, 2, len(zip_)))
+        self.assertFalse(self.repo.complete(self.conn, tid, self.agente, 2, len(zip_) + 1), "tamanho conferido")
+        self.assertTrue(self.repo.complete(self.conn, tid, self.agente, 2, len(zip_)))
         self.conn.commit()
         meta = self.tickets.output_get(tid)
         self.assertEqual((meta["state"], meta["file_count"], meta["size_bytes"], meta["agent_id"]),

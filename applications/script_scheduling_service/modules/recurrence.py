@@ -15,7 +15,7 @@ Regras (decisoes do F5.1, README §7.2):
 * `data_fim` e o teto inclusivo: uma ocorrencia exatamente em data_fim ainda vale.
 * UNICA ocorre em data_inicio (truncada); so e devolvida se for > `apos`.
 * MENSAL com dia inexistente no mes cai no ultimo dia do mes.
-* CRON sem ocorrencia no horizonte lanca CronErro (o daemon pausa com INVALID_CRON), exceto
+* CRON sem ocorrencia no horizonte lanca CronError (o daemon pausa com INVALID_CRON), exceto
   quando data_fim cai dentro do horizonte: ai a regra apenas terminou (None).
 """
 import calendar
@@ -24,47 +24,47 @@ import datetime
 import re
 
 import cron_parser
-from cron_parser import CronErro
+from cron_parser import CronError
 
-TIPOS = ('ONCE', 'DAILY', 'WEEKLY', 'MONTHLY', 'CRON')
-POLITICAS_MISFIRE = ('RUN_ONCE', 'SKIP')
-LIMITE_PERDIDAS = 10000
-HORIZONTE_PADRAO = cron_parser.HORIZONTE_PADRAO
+TYPES = ('ONCE', 'DAILY', 'WEEKLY', 'MONTHLY', 'CRON')
+MISFIRE_POLICIES = ('RUN_ONCE', 'SKIP')
+MISSED_LIMIT = 10000
+DEFAULT_HORIZON = cron_parser.DEFAULT_HORIZON
 
 _RE_TIME = re.compile(r'^([01][0-9]|2[0-3]):[0-5][0-9]$')
 _RE_WDAY = re.compile(r'^[1-7](,[1-7]){0,6}$')
-_UM_MINUTO = datetime.timedelta(minutes=1)
-_UM_DIA = datetime.timedelta(days=1)
+_ONE_MINUTE = datetime.timedelta(minutes=1)
+_ONE_DAY = datetime.timedelta(days=1)
 _CACHE_CRON = {}
-_CACHE_MAXIMO = 256
+_CACHE_MAX = 256
 
-# ocorrencia (CR-007, R-27): a vencida mais recente coberta pelo ticket; None quando nao ha ticket.
-# cron_erro (CR-008, R-19): a proxima ocorrencia nao existe no horizonte; nova_data fica None e o daemon
+# occurrence (CR-007, R-27): a vencida mais recente coberta pelo ticket; None quando nao ha ticket.
+# cron_error (CR-008, R-19): a proxima ocorrencia nao existe no horizonte; next_date fica None e o daemon
 # aplica sobreposicao e SKIP normalmente antes de pausar a regra com INVALID_CRON.
-Decisao = collections.namedtuple('Decisao', ['gerar_ticket', 'nova_data', 'perdidas', 'concluir', 'ocorrencia',
-                                             'cron_erro'])
-Decisao.__new__.__defaults__ = (None, False)
+Decision = collections.namedtuple('Decision', ['create_ticket', 'next_date', 'missed', 'complete', 'occurrence',
+                                               'cron_error'])
+Decision.__new__.__defaults__ = (None, False)
 
 
-def truncar_segundos(dt):
+def truncate_seconds(dt):
     """Zera segundos e microssegundos (None passa direto)."""
     if dt is None:
         return None
     return dt.replace(second=0, microsecond=0)
 
 
-def sem_microssegundos(dt):
+def without_microseconds(dt):
     """Zera microssegundos: nenhum datetime com microssegundos e comparado a coluna DATE (README §7.5)."""
     if dt is None:
         return None
     return dt.replace(microsecond=0)
 
 
-def _vazio(valor):
+def _empty(valor):
     return valor is None or (isinstance(valor, str) and not valor.strip())
 
 
-def validar_regra(regra, horizonte_dias=HORIZONTE_PADRAO):
+def validate_rule(regra, horizonte_dias=DEFAULT_HORIZON):
     """Espelha as CKs de tbsss_schedules (_trec, _campos, _hora, _dsem, _dia, _fim) e valida o CRON.
 
     Devolve {campo: mensagem}; vazio quando a regra e valida.
@@ -78,7 +78,7 @@ def validar_regra(regra, horizonte_dias=HORIZONTE_PADRAO):
     inicio = regra.get('start_date')
     fim = regra.get('end_date')
 
-    if tipo not in TIPOS:
+    if tipo not in TYPES:
         erros['recurrence_type'] = 'Tipo de recorrência inválido.'
     if not isinstance(inicio, datetime.datetime):
         erros['start_date'] = 'Informe a data e hora de início.'
@@ -87,11 +87,11 @@ def validar_regra(regra, horizonte_dias=HORIZONTE_PADRAO):
             erros['end_date'] = 'Data de fim inválida.'
         elif isinstance(inicio, datetime.datetime) and fim < inicio:
             erros['end_date'] = 'A data de fim não pode ser anterior à de início.'
-    if not _vazio(hora) and not (isinstance(hora, str) and _RE_TIME.match(hora)):
+    if not _empty(hora) and not (isinstance(hora, str) and _RE_TIME.match(hora)):
         erros['run_time'] = 'Horário inválido; use HH:MM (00:00 a 23:59).'
-    if not _vazio(dsem) and not (isinstance(dsem, str) and _RE_WDAY.match(dsem)):
+    if not _empty(dsem) and not (isinstance(dsem, str) and _RE_WDAY.match(dsem)):
         erros['week_days'] = 'Dias da semana inválidos; use números de 1 (segunda) a 7 (domingo), ex.: 1,3,5.'
-    if not _vazio(dia):
+    if not _empty(dia):
         try:
             valido = 1 <= int(dia) <= 31 and str(dia).strip().isdigit()
         except (TypeError, ValueError):
@@ -102,50 +102,50 @@ def validar_regra(regra, horizonte_dias=HORIZONTE_PADRAO):
     obrigatorios = {'DAILY': ('run_time',), 'WEEKLY': ('run_time', 'week_days'),
                     'MONTHLY': ('run_time', 'month_day'), 'CRON': ('cron_expression',)}
     for campo in obrigatorios.get(tipo, ()):
-        if _vazio(regra.get(campo)) and campo not in erros:
+        if _empty(regra.get(campo)) and campo not in erros:
             erros[campo] = 'Campo obrigatório para recorrência %s.' % tipo
 
-    if tipo == 'CRON' and not _vazio(cron) and 'cron_expression' not in erros:
+    if tipo == 'CRON' and not _empty(cron) and 'cron_expression' not in erros:
         try:
             expr = cron_parser.parse(cron)
             if isinstance(inicio, datetime.datetime):
-                piso = truncar_segundos(inicio) - _UM_MINUTO
+                piso = truncate_seconds(inicio) - _ONE_MINUTE
                 # Com data_fim dentro do horizonte, a falta de ocorrencia e "sem proxima execucao" (o servico
                 # da a mensagem), e nao expressao invalida (README §7.3, CR-007 R-32).
                 fim_no_horizonte = (isinstance(fim, datetime.datetime)
                                     and fim <= piso + datetime.timedelta(days=horizonte_dias))
-                if expr.proxima(piso, horizonte_dias) is None and not fim_no_horizonte:
+                if expr.next(piso, horizonte_dias) is None and not fim_no_horizonte:
                     erros['cron_expression'] = ('A expressão não ocorre nos próximos %d dias a partir do início.'
                                                % horizonte_dias)
-        except CronErro as erro:
+        except CronError as erro:
             erros['cron_expression'] = erro.mensagem
     return erros
 
 
-def _expressao(texto):
-    """parse() com cache pequeno: o calculo de vencidas chama proxima_execucao em laco."""
+def _expression(texto):
+    """parse() com cache pequeno: o calculo de vencidas chama next_run em laco."""
     expr = _CACHE_CRON.get(texto)
     if expr is None:
         expr = cron_parser.parse(texto)
-        if len(_CACHE_CRON) >= _CACHE_MAXIMO:
+        if len(_CACHE_CRON) >= _CACHE_MAX:
             _CACHE_CRON.clear()
         _CACHE_CRON[texto] = expr
     return expr
 
 
-def _hora_minuto(hora):
+def _hour_minute(hora):
     hh, mm = hora.split(':')
     return int(hh), int(mm)
 
 
-def _diaria(ref, hora):
-    hh, mm = _hora_minuto(hora)
+def _daily(ref, hora):
+    hh, mm = _hour_minute(hora)
     candidato = datetime.datetime(ref.year, ref.month, ref.day, hh, mm)
-    return candidato if candidato > ref else candidato + _UM_DIA
+    return candidato if candidato > ref else candidato + _ONE_DAY
 
 
-def _semanal(ref, hora, dias_semana):
-    hh, mm = _hora_minuto(hora)
+def _weekly(ref, hora, dias_semana):
+    hh, mm = _hour_minute(hora)
     dias = set(int(d) for d in dias_semana.split(','))
     base = datetime.datetime(ref.year, ref.month, ref.day, hh, mm)
     for desloc in range(8):
@@ -155,8 +155,8 @@ def _semanal(ref, hora, dias_semana):
     return None
 
 
-def _mensal(ref, hora, dia_mes):
-    hh, mm = _hora_minuto(hora)
+def _monthly(ref, hora, dia_mes):
+    hh, mm = _hour_minute(hora)
     dia = int(dia_mes)
     ano, mes = ref.year, ref.month
     for _ in range(2):
@@ -168,76 +168,76 @@ def _mensal(ref, hora, dia_mes):
     return None
 
 
-def proxima_execucao(regra, apos, horizonte_dias=HORIZONTE_PADRAO):
+def next_run(regra, apos, horizonte_dias=DEFAULT_HORIZON):
     """Primeira ocorrencia > `apos`, respeitando o piso data_inicio e o teto data_fim; None se nao houver.
 
-    Lanca CronErro para expressao CRON invalida ou sem ocorrencia no horizonte (README §7.3).
+    Lanca CronError para expressao CRON invalida ou sem ocorrencia no horizonte (README §7.3).
     """
     tipo = regra['recurrence_type']
-    piso = truncar_segundos(regra['start_date'])
+    piso = truncate_seconds(regra['start_date'])
     fim = regra.get('end_date')
     if tipo == 'ONCE':
         resultado = piso if piso > apos else None
     else:
         # Ocorrencias tem precisao de minuto: ">= piso" equivale a "> piso - 1 minuto".
-        ref = max(apos, piso - _UM_MINUTO)
+        ref = max(apos, piso - _ONE_MINUTE)
         if tipo == 'DAILY':
-            resultado = _diaria(ref, regra['run_time'])
+            resultado = _daily(ref, regra['run_time'])
         elif tipo == 'WEEKLY':
-            resultado = _semanal(ref, regra['run_time'], regra['week_days'])
+            resultado = _weekly(ref, regra['run_time'], regra['week_days'])
         elif tipo == 'MONTHLY':
-            resultado = _mensal(ref, regra['run_time'], regra['month_day'])
+            resultado = _monthly(ref, regra['run_time'], regra['month_day'])
         elif tipo == 'CRON':
-            resultado = _expressao(regra['cron_expression']).proxima(ref, horizonte_dias)
+            resultado = _expression(regra['cron_expression']).next(ref, horizonte_dias)
             if resultado is None:
                 if fim is not None and fim <= ref + datetime.timedelta(days=horizonte_dias):
                     return None
-                raise CronErro('A expressão não ocorre nos próximos %d dias.' % horizonte_dias)
+                raise CronError('A expressão não ocorre nos próximos %d dias.' % horizonte_dias)
         else:
             raise ValueError('tipo_recorrencia inválido: %r' % (tipo,))
     if resultado is not None and fim is not None and resultado > fim:
         return None
-    return truncar_segundos(resultado)
+    return truncate_seconds(resultado)
 
 
-def proximas(regra, apos, n, horizonte_dias=HORIZONTE_PADRAO):
+def next_runs(regra, apos, n, horizonte_dias=DEFAULT_HORIZON):
     """Ate `n` proximas ocorrencias depois de `apos` (previa da UI)."""
     lista = []
     atual = apos
     while len(lista) < n:
-        atual = proxima_execucao(regra, atual, horizonte_dias)
+        atual = next_run(regra, atual, horizonte_dias)
         if atual is None:
             break
         lista.append(atual)
     return lista
 
 
-def _vencidas(regra, inicio, agora, horizonte_dias):
-    """(quantidade, ultima) das ocorrencias em [inicio, agora], contando `inicio`; para em LIMITE_PERDIDAS + 1."""
+def _due(regra, inicio, agora, horizonte_dias):
+    """(quantidade, ultima) das ocorrencias em [inicio, agora], contando `inicio`; para em MISSED_LIMIT + 1."""
     total = 1
     ultima = inicio
     if regra['recurrence_type'] == 'ONCE':
         return total, ultima
     atual = inicio
-    while total <= LIMITE_PERDIDAS:
+    while total <= MISSED_LIMIT:
         try:
-            atual = proxima_execucao(regra, atual, horizonte_dias)
-        except CronErro:
+            atual = next_run(regra, atual, horizonte_dias)
+        except CronError:
             break  # sem ocorrencia no horizonte depois de 'atual': nao ha mais vencidas (CR-008, R-19)
         if atual is None or atual > agora:
             break
         total += 1
         ultima = atual
-    if total > LIMITE_PERDIDAS:
+    if total > MISSED_LIMIT:
         # O limite da contagem nao pode limitar a ocorrencia coberta pelo ticket.
-        teto = truncar_segundos(min(agora, regra.get('end_date') or agora))
+        teto = truncate_seconds(min(agora, regra.get('end_date') or agora))
         esquerda, direita = ultima, teto
         while esquerda < direita:
             minutos = int((direita - esquerda).total_seconds() // 60)
             meio = esquerda + datetime.timedelta(minutes=minutos // 2)
             try:
-                seguinte = proxima_execucao(regra, meio, horizonte_dias)
-            except CronErro:
+                seguinte = next_run(regra, meio, horizonte_dias)
+            except CronError:
                 seguinte = None
             if seguinte is not None and seguinte <= teto:
                 ultima = seguinte
@@ -247,29 +247,29 @@ def _vencidas(regra, inicio, agora, horizonte_dias):
     return total, ultima
 
 
-def avaliar_disparo(regra, agora, misfire_policy, misfire_tolerance_s, horizonte_dias=HORIZONTE_PADRAO):
+def evaluate_trigger(regra, agora, misfire_policy, misfire_tolerance_s, horizonte_dias=DEFAULT_HORIZON):
     """Decide o disparo de uma regra vencida (README §7.4 e passos 3-4 do §7.5).
 
-    * nova_data: sempre a primeira ocorrencia > agora (None quando a regra terminou);
-    * gerar_ticket: um ticket coalescendo as vencidas, exceto SKIP com a vencida mais recente atrasada
+    * next_date: sempre a primeira ocorrencia > agora (None quando a regra terminou);
+    * create_ticket: um ticket coalescendo as vencidas, exceto SKIP com a vencida mais recente atrasada
       acima da tolerancia (CR-008, R-21: o atraso e medido pela mais recente);
-    * perdidas: vencidas que nao viraram ticket, limitada a LIMITE_PERDIDAS;
-    * concluir: UNICA apos a decisao, ou sem proxima ocorrencia ate data_fim (sem ticket quando
-      gerar_ticket e falso);
-    * ocorrencia: a vencida mais recente, coberta pelo ticket (scheduled_at do ticket, CR-007 R-27);
-    * cron_erro: CRON sem proxima ocorrencia no horizonte (CR-008, R-19); nova_data None, concluir falso.
-    Lanca CronErro so se a expressao CRON for invalida.
+    * missed: vencidas que nao viraram ticket, limitada a MISSED_LIMIT;
+    * complete: UNICA apos a decisao, ou sem proxima ocorrencia ate data_fim (sem ticket quando
+      create_ticket e falso);
+    * occurrence: a vencida mais recente, coberta pelo ticket (scheduled_at do ticket, CR-007 R-27);
+    * cron_error: CRON sem proxima ocorrencia no horizonte (CR-008, R-19); next_date None, complete falso.
+    Lanca CronError so se a expressao CRON for invalida.
     """
-    if misfire_policy not in POLITICAS_MISFIRE:
+    if misfire_policy not in MISFIRE_POLICIES:
         raise ValueError('misfire_policy inválida: %r' % (misfire_policy,))
-    agora = sem_microssegundos(agora)
+    agora = without_microseconds(agora)
     prevista = regra.get('next_run_at')
     if prevista is None or prevista > agora:
-        return Decisao(False, sem_microssegundos(prevista), 0, False, None)
+        return Decision(False, without_microseconds(prevista), 0, False, None)
 
     if regra['recurrence_type'] == 'CRON':
-        _expressao(regra['cron_expression'])  # expressao invalida: CronErro (pausa INVALID_CRON)
-    vencidas, ultima = _vencidas(regra, prevista, agora, horizonte_dias)
+        _expression(regra['cron_expression'])  # expressao invalida: CronError (pausa INVALID_CRON)
+    vencidas, ultima = _due(regra, prevista, agora, horizonte_dias)
     atraso = (agora - ultima).total_seconds()
     if atraso > misfire_tolerance_s and misfire_policy == 'SKIP':
         gerar, perdidas = False, vencidas
@@ -281,8 +281,8 @@ def avaliar_disparo(regra, agora, misfire_policy, misfire_tolerance_s, horizonte
         nova_data = None
     else:
         try:
-            nova_data = proxima_execucao(regra, agora, horizonte_dias)
-        except CronErro:
+            nova_data = next_run(regra, agora, horizonte_dias)
+        except CronError:
             nova_data, cron_erro = None, True
-    return Decisao(gerar, nova_data, min(perdidas, LIMITE_PERDIDAS), nova_data is None and not cron_erro,
-                   sem_microssegundos(ultima) if gerar else None, cron_erro)
+    return Decision(gerar, nova_data, min(perdidas, MISSED_LIMIT), nova_data is None and not cron_erro,
+                   without_microseconds(ultima) if gerar else None, cron_erro)

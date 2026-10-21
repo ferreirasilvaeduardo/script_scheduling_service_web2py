@@ -16,10 +16,10 @@ _STAGE_HTML = 5
 
 def _mask_like_log_pump(texto, sensiveis):
     # README §8.10: segredos carregados e valores de parametros sensiveis antes de anexar ao CLOB.
-    local = masking.Mascarador()
+    local = masking.Masker()
     for _codigo, valor in sensiveis:
         local.register(valor)
-    return masking.MASCARADOR.mascarar(local.mascarar(texto))
+    return masking.MASKER.mask(local.mask(texto))
 
 
 def _stage_lines(n, quando, sensiveis):

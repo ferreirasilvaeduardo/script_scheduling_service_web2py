@@ -34,7 +34,7 @@ AGORA = datetime.datetime(2026, 10, 15, 9, 0, 0)
 class _Base(unittest.TestCase):
 
     def setUp(self):
-        patcher = mock.patch.object(security, "ITERACOES", 1000)
+        patcher = mock.patch.object(security, "ITERATIONS", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
         env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: SENHA_DEV})
@@ -102,7 +102,7 @@ class TestInclusao(_Base):
         self.assertEqual(erros, {})
         u = self.users.get_by_id(uid)
         self.assertEqual((u["login"], u["name"], u["profile_id"], u["active"]), ("maria.silva", "Maria Silva", P_CONSULTA, "Y"))
-        self.assertTrue(security.verificar_senha(SENHA_NOVA, u["password_hash"]))
+        self.assertTrue(security.verify_password(SENHA_NOVA, u["password_hash"]))
         self.assertEqual(u["password_changed_at"], AGORA)
         aud = self._auditorias("CREATE")
         self.assertEqual(len(aud), 1)
@@ -119,7 +119,7 @@ class TestInclusao(_Base):
 
     def test_senha_fraca_e_confirmacao_divergente(self):
         _uid, erros = self._incluir(senha="curta", confirmacao="curta")
-        self.assertEqual(erros, {"senha": security.validar_politica_senha("curta")[0]})
+        self.assertEqual(erros, {"senha": security.validate_password_policy("curta")[0]})
         _uid, erros = self._incluir(confirmacao=SENHA_NOVA + "x")
         self.assertEqual(erros, {"confirmacao": usr_mod.MSG_CONFIRMACAO})
         _uid, erros = self._incluir(senha="", confirmacao="")
@@ -229,14 +229,14 @@ class TestSenhaEBloqueio(_Base):
         self.assertEqual(erros, {})
         u = self.users.get_by_id(U_BLOQUEADO)
         self.assertEqual((u["failed_attempts"], u["locked_until"], u["password_changed_at"]), (0, None, AGORA))
-        self.assertTrue(security.verificar_senha(SENHA_NOVA, u["password_hash"]))
+        self.assertTrue(security.verify_password(SENHA_NOVA, u["password_hash"]))
         aud = self._auditorias("UPDATE")
         self.assertEqual([a["detail"] for a in aud], ["senha redefinida"])
         self._sem_segredo(repr(self.audit.list(pagina=1, tamanho=1000)), SENHA_NOVA, u["password_hash"])
 
     def test_redefinicao_valida_politica_e_confirmacao(self):
         self.assertEqual(self.svc.redefinir_senha(self.ctx["admin"], IP, str(U_OPPROD), "fraca", "fraca"),
-                         {"senha": security.validar_politica_senha("fraca")[0]})
+                         {"senha": security.validate_password_policy("fraca")[0]})
         self.assertEqual(self.svc.redefinir_senha(self.ctx["admin"], IP, str(U_OPPROD), SENHA_NOVA, "x"),
                          {"confirmacao": usr_mod.MSG_CONFIRMACAO})
 
@@ -255,7 +255,7 @@ class TestSenhaEBloqueio(_Base):
         self.assertEqual((res, erros), ("ERRO", {"senha_atual": auth_service.MSG_SENHA_ATUAL}))
         u = self.users.get_by_id(U_OPPROD)
         self.assertEqual(u["failed_attempts"], 1)
-        self.assertTrue(security.verificar_senha(SENHA_DEV, u["password_hash"]))
+        self.assertTrue(security.verify_password(SENHA_DEV, u["password_hash"]))
         falhas = [a for a in self.audit.list(filtros={"action": "LOGIN_FAILED"}, pagina=1, tamanho=50)["itens"]
                   if a["id"] > self.aud_base]
         self.assertEqual(len(falhas), 1)
@@ -280,7 +280,7 @@ class TestSenhaEBloqueio(_Base):
         res, erros = self.auth.trocar_senha(self.ctx["op.prod"], IP, SENHA_DEV, SENHA_NOVA, SENHA_NOVA)
         self.assertEqual((res, erros), ("OK", {}))
         u = self.users.get_by_id(U_OPPROD)
-        self.assertTrue(security.verificar_senha(SENHA_NOVA, u["password_hash"]))
+        self.assertTrue(security.verify_password(SENHA_NOVA, u["password_hash"]))
         aud = self._auditorias("UPDATE")
         self.assertEqual((aud[0]["actor"], aud[0]["detail"]), ("op.prod", u"senha alterada pelo próprio usuário"))
 

@@ -19,7 +19,7 @@ import security
 from admin_crud import CAMPO_GERAL, OperacaoNegada
 from admin_profiles_service import ServicoAdminPerfis
 from admin_users_service import ServicoAdminUsuarios
-from params_compiler import ParamErro
+from params_compiler import ParamError
 
 IP = "10.8.8.8"
 SENHA_DEV = "senha-dev-de-teste-123"
@@ -36,7 +36,7 @@ def _sessao(uid, login, perfil_id):
 class _Base(unittest.TestCase):
 
     def setUp(self):
-        patcher = mock.patch.object(security, "ITERACOES", 1000)
+        patcher = mock.patch.object(security, "ITERATIONS", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
         env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: SENHA_DEV})
@@ -155,7 +155,7 @@ class TestSessaoRevogavel(_Base):
         self.assertIsNone(u.get("updated_by"), "logout e rotina tecnica, sem updated_*")
 
     def test_troca_da_propria_senha_mantem_a_sessao_nova(self):
-        self.users.set_password(U_OPPROD, security.hash_senha(SENHA_DEV), AGORA, ator="teste")
+        self.users.set_password(U_OPPROD, security.hash_password(SENHA_DEV), AGORA, ator="teste")
         epoch = self._epoch(U_OPPROD)
         resultado, erros = self.auth.trocar_senha(self.ctx["op.prod"], IP, SENHA_DEV, SENHA_NOVA, SENHA_NOVA)
         self.assertEqual((resultado, erros), ("OK", {}))
@@ -170,35 +170,35 @@ class TestSessaoRevogavel(_Base):
 
     def test_vida_maxima(self):
         agora = time.time()
-        self.assertFalse(security.sessao_expirada(agora - 11 * 3600, agora, 12 * 3600))
-        self.assertTrue(security.sessao_expirada(agora - 13 * 3600, agora, 12 * 3600))
-        self.assertTrue(security.sessao_expirada(None, agora, 12 * 3600))
+        self.assertFalse(security.is_session_expired(agora - 11 * 3600, agora, 12 * 3600))
+        self.assertTrue(security.is_session_expired(agora - 13 * 3600, agora, 12 * 3600))
+        self.assertTrue(security.is_session_expired(None, agora, 12 * 3600))
 
 
 class TestRegexQuantificadorLargo(unittest.TestCase):
 
     def _recusada(self, padrao):
-        with self.assertRaises(ParamErro):
-            params_compiler.validar_regex_cadastro(padrao)
+        with self.assertRaises(ParamError):
+            params_compiler.validate_registry_regex(padrao)
 
     def test_largo_conta_como_ilimitado(self):
         self._recusada(r"\w{0,100}\w{0,100}\w{0,100}x")
         self._recusada(r"\w*\w{0,11}\w+x")
-        params_compiler.validar_regex_cadastro(r"\w{0,100}\w{0,100}x")
-        params_compiler.validar_regex_cadastro(r"^\d{1,11}$")
-        params_compiler.validar_regex_cadastro(r"^[A-Z]{2}\d{0,10}$")
+        params_compiler.validate_registry_regex(r"\w{0,100}\w{0,100}x")
+        params_compiler.validate_registry_regex(r"^\d{1,11}$")
+        params_compiler.validate_registry_regex(r"^[A-Z]{2}\d{0,10}$")
 
     def test_teto_de_escolhas_com_ilimitado(self):
         self._recusada(r"\w*" + r"\d{0,10}" * 4 + "x")
         self._recusada(r"\d?\d?\d?\d?\w*")
-        params_compiler.validar_regex_cadastro(r"\w*" + r"\d{0,10}" * 3 + "x")
-        params_compiler.validar_regex_cadastro(r"\w{0,10}" * 6 + "x")
+        params_compiler.validate_registry_regex(r"\w*" + r"\d{0,10}" * 3 + "x")
+        params_compiler.validate_registry_regex(r"\w{0,10}" * 6 + "x")
 
     def test_pior_caso_aceito_e_rapido(self):
         for padrao in (r"\w*\w*" + r"\w{0,10}" * 2 + "@", r"\w{0,10}" * 6 + "x", r"\w{0,500}\w{0,500}x"):
-            params_compiler.validar_regex_cadastro(padrao)
+            params_compiler.validate_registry_regex(padrao)
             inicio = time.time()
-            for valor in ("1" * params_compiler.TAMANHO_MAXIMO, "a" * (params_compiler.TAMANHO_MAXIMO - 1) + "!"):
+            for valor in ("1" * params_compiler.MAX_LENGTH, "a" * (params_compiler.MAX_LENGTH - 1) + "!"):
                 re.fullmatch(padrao, valor)
             self.assertLess(time.time() - inicio, 1.0, padrao)
 

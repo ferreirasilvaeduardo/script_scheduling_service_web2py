@@ -19,12 +19,12 @@ from repo_oracle.scheduler_schedules import DuplicateOccurrence
 
 _log = logging.getLogger("sss_scheduler")
 
-FALHAS_ATE_PAUSAR = 3
-_OCUPADO = ("PENDING", "RUNNING")
+FAILURES_BEFORE_PAUSE = 3
+_BUSY = ("PENDING", "RUNNING")
 _DETAIL_MAX = 900
 
 
-def _texto_resposta(valor):
+def _answer_text(valor):
     """Mesma forma do ticket manual (ticket_service): CHECKBOX vira 'true'/'false'."""
     if valor is True:
         return "true"
@@ -33,18 +33,18 @@ def _texto_resposta(valor):
     return valor
 
 
-def _curto(texto):
+def _short(texto):
     texto = " ".join(str(texto).split())
     return texto if len(texto) <= _DETAIL_MAX else texto[:_DETAIL_MAX - 3] + "..."
 
 
-def eh_erro_banco(exc):
+def is_db_error(exc):
     """Erro do contrato do banco (ORA/DPY/DPI, rede ou prazo): nova tentativa no ciclo seguinte (R-22)."""
     pfx, _num = db_conn.classify_error(exc)
     return pfx is not None or db_conn.is_network_error(exc) or db_conn.is_timeout(exc)
 
 
-class Desdobro(object):
+class Expansion(object):
     """Ciclo de desdobro de um agente. As falhas seguidas por regra ficam em memoria (zeradas no sucesso)."""
 
     def __init__(self, agenda, fila, agente_id, cfg_agente, relogio, log=None, horizonte_dias=None):
@@ -59,7 +59,7 @@ class Desdobro(object):
 
     # ------------------------------------------------------------------ ciclo
 
-    def executar(self, conn, continuar=None):
+    def run(self, conn, continuar=None):
         """Paginas de regras vencidas ate vir uma incompleta ou gastar heartbeat_interval_s / 2 (R-08).
 
         continuar(): False interrompe entre regras (fencing ou parada). Devolve contadores do ciclo.
@@ -80,7 +80,7 @@ class Desdobro(object):
                 if regra_id in ignoradas:
                     continue
                 stats["regras"] += 1
-                desfecho = self.processar(conn, regra_id)
+                desfecho = self.process(conn, regra_id)
                 if desfecho == "IGNORAR":
                     ignoradas.add(regra_id)
                 elif desfecho in ("TICKET", "CONCLUIDA_COM_TICKET", "CRON_INVALIDO_COM_TICKET"):
@@ -94,22 +94,22 @@ class Desdobro(object):
 
     # ------------------------------------------------------------------ uma regra
 
-    def processar(self, conn, regra_id):
+    def process(self, conn, regra_id):
         """Passos 1 a 8 do README §7.5 numa transacao. Devolve o desfecho (texto, para o log e os testes)."""
-        log = _LogRegra(self.log, self.agente_id, regra_id)
+        log = _RuleLog(self.log, self.agente_id, regra_id)
         self._regra_atual = None
         try:
-            desfecho = self._processar(conn, regra_id, log)
+            desfecho = self._process(conn, regra_id, log)
         except DuplicateOccurrence:
             conn.rollback()
-            return self._ocorrencia_duplicada(conn, regra_id, log)
+            return self._duplicate_occurrence(conn, regra_id, log)
         except Exception as exc:  # noqa: BLE001 - nenhuma regra derruba o ciclo (R-08, R-22)
             conn.rollback()
-            return self._falha(conn, regra_id, exc, log)
+            return self._failure(conn, regra_id, exc, log)
         self.falhas.pop(regra_id, None)
         return desfecho
 
-    def _processar(self, conn, regra_id, log):
+    def _process(self, conn, regra_id, log):
         if not self.agenda.lock_rule(conn, regra_id):
             conn.rollback()
             return "OUTRO_AGENTE"
@@ -125,10 +125,10 @@ class Desdobro(object):
         login = self.agenda.user_login(conn, regra["user_id"])
         ctx_exec = self.fila.execution_context(conn, {"script_id": regra["script_id"], "environment": regra["environment"],
                                                       "requested_by": login})
-        ok, motivo = rbac.pode_executar(ctx_exec["ctx"], ctx_exec["script"], ctx_exec["environment"],
+        ok, motivo = rbac.can_execute(ctx_exec["ctx"], ctx_exec["script"], ctx_exec["environment"],
                                         ctx_exec["homologacoes"])
         if not ok:
-            return self._pausar(conn, regra, antiga, rbac.motivo_pausa(motivo), "rbac: %s" % motivo, log)
+            return self._pause(conn, regra, antiga, rbac.pause_reason_for(motivo), "rbac: %s" % motivo, log)
         prioridade = int(regra["priority"])
         if prioridade == 1 and not (ctx_exec["ctx"] or {}).get("is_admin"):
             prioridade = 2
@@ -136,84 +136,84 @@ class Desdobro(object):
 
         # Passo 3: decisao (misfire pela vencida mais recente, CR-008 R-21).
         try:
-            dec = recurrence.avaliar_disparo(regra, agora, self.cfg.misfire_policy, self.cfg.misfire_tolerance_s,
+            dec = recurrence.evaluate_trigger(regra, agora, self.cfg.misfire_policy, self.cfg.misfire_tolerance_s,
                                              self.horizonte)
-        except recurrence.CronErro as exc:
-            return self._pausar(conn, regra, antiga, "INVALID_CRON", _curto(exc), log)
-        self._registrar_perdidas(dec, antiga, agora, log)
+        except recurrence.CronError as exc:
+            return self._pause(conn, regra, antiga, "INVALID_CRON", _short(exc), log)
+        self._log_missed(dec, antiga, agora, log)
 
         # Passo 4: sobreposicao (ultimo ticket PENDING/RUNNING).
-        if self._ocupado(conn, regra, ctx_exec["script"], agora, log):
-            if dec.cron_erro:
-                return self._cron_erro(conn, regra, antiga, None, None, [], log)
-            if dec.concluir:
+        if self._busy(conn, regra, ctx_exec["script"], agora, log):
+            if dec.cron_error:
+                return self._cron_error(conn, regra, antiga, None, None, [], log)
+            if dec.complete:
                 if not self.agenda.complete_without_ticket(conn, regra["id"], antiga, self.agente_id):
                     conn.rollback()
                     return "CORRIDA"
                 conn.commit()
-                log.info("SKIP_OVERLAP: regra concluida sem ticket; ocorrencias perdidas: %d", dec.perdidas + 1)
+                log.info("SKIP_OVERLAP: regra concluida sem ticket; ocorrencias perdidas: %d", dec.missed + 1)
                 return "CONCLUIDA_SEM_TICKET"
-            return self._avancar(conn, regra, antiga, dec.nova_data, log, "SKIP_OVERLAP")
+            return self._advance(conn, regra, antiga, dec.next_date, log, "SKIP_OVERLAP")
 
-        if not dec.gerar_ticket:
-            if dec.cron_erro:
-                return self._cron_erro(conn, regra, antiga, None, None, [], log)
-            if dec.concluir:
+        if not dec.create_ticket:
+            if dec.cron_error:
+                return self._cron_error(conn, regra, antiga, None, None, [], log)
+            if dec.complete:
                 if not self.agenda.complete_without_ticket(conn, regra["id"], antiga, self.agente_id):
                     conn.rollback()
                     return "CORRIDA"
                 conn.commit()
                 log.info("regra concluida sem ticket (misfire SKIP fora da tolerancia)")
                 return "CONCLUIDA_SEM_TICKET"
-            return self._avancar(conn, regra, antiga, dec.nova_data, log, "MISFIRE_SKIP")
+            return self._advance(conn, regra, antiga, dec.next_date, log, "MISFIRE_SKIP")
 
         # Passo 5: snapshot v4 (path_file absoluto, CR-005) a partir de parametros_json.
         script, vinculos = self.agenda.script_and_links(conn, regra["script_id"])
-        ticket, linhas, erro = self._montar_ticket(regra, script, vinculos, login, prioridade, dec.ocorrencia, agora)
+        ticket, linhas, erro = self._build_ticket(regra, script, vinculos, login, prioridade, dec.occurrence, agora)
         if erro is not None:
-            return self._pausar(conn, regra, antiga, "INVALID_PARAM", erro, log)
+            return self._pause(conn, regra, antiga, "INVALID_PARAM", erro, log)
 
         # Passo 6: reserva + ticket (ou conclusao / variante cron_erro).
         ticket_id = self.agenda.next_ticket_id(conn)
-        if dec.cron_erro:
-            return self._cron_erro(conn, regra, antiga, ticket_id, ticket, linhas, log)
-        if dec.concluir:
+        if dec.cron_error:
+            return self._cron_error(conn, regra, antiga, ticket_id, ticket, linhas, log)
+        if dec.complete:
             if not self.agenda.complete_with_ticket(conn, regra, antiga, ticket_id, ticket, linhas, self.agente_id):
                 conn.rollback()
                 return "CORRIDA"
             conn.commit()
-            log.info("ticket %d gerado (ocorrencia %s, prioridade %d); regra concluida", ticket_id, dec.ocorrencia,
+            log.info("ticket %d gerado (ocorrencia %s, prioridade %d); regra concluida", ticket_id, dec.occurrence,
                      prioridade)
             return "CONCLUIDA_COM_TICKET"
-        if not self.agenda.reserve_and_create_ticket(conn, regra, antiga, dec.nova_data, ticket_id, ticket, linhas,
+        if not self.agenda.reserve_and_create_ticket(conn, regra, antiga, dec.next_date, ticket_id, ticket, linhas,
                                                    self.agente_id):
             conn.rollback()
             return "CORRIDA"
         conn.commit()
-        log.info("ticket %d gerado (ocorrencia %s, prioridade %d); proxima execucao %s", ticket_id, dec.ocorrencia,
-                 prioridade, dec.nova_data)
+        log.info("ticket %d gerado (ocorrencia %s, prioridade %d); proxima execucao %s", ticket_id, dec.occurrence,
+                 prioridade, dec.next_date)
         return "TICKET"
 
     # ------------------------------------------------------------------ passos auxiliares
 
-    def _registrar_perdidas(self, dec, antiga, agora, log):
-        """README §7.4 (D3): WARN quando a vencida mais antiga (a proxima_execucao lida) passa da tolerancia
+    def _log_missed(self, dec, antiga, agora, log):
+        """README §7.4 (D3): WARN quando a vencida mais antiga (a next_run lida) passa da tolerancia
         (misfire de verdade, mesmo com a mais recente dentro dela); INFO quando coalescidas dentro da tolerancia."""
-        if not dec.perdidas and dec.gerar_ticket:
+        if not dec.missed and dec.create_ticket:
             return
         if (agora - antiga).total_seconds() > self.cfg.misfire_tolerance_s:
-            log.warning("MISFIRE: %d ocorrencia(s) perdida(s) (politica %s, tolerancia %d s)", dec.perdidas,
+            log.warning("MISFIRE: %d ocorrencia(s) perdida(s) (politica %s, tolerancia %d s)", dec.missed,
                         self.cfg.misfire_policy, self.cfg.misfire_tolerance_s)
         else:
-            log.info("%d ocorrencia(s) coalescida(s) dentro da tolerancia", dec.perdidas)
+            log.info("%d ocorrencia(s) coalescida(s) dentro da tolerancia", dec.missed)
 
-    def _ocupado(self, conn, regra, script, agora, log):
+    def _busy(self, conn, regra, script, agora, log):
         """ultimo_ticket_id PENDING/RUNNING bloqueia; nulo, inexistente (purgado) ou terminal e livre."""
         ultimo = regra.get("last_ticket_id")
         if ultimo is None:
             return False
         estado = self.agenda.get_ticket_status(conn, ultimo)
-        if estado is None or estado[0] not in _OCUPADO:
+        if estado is None or estado[0] not in _BUSY:
             return False
         limite = (((script or {}).get("timeout_s") or self.cfg.script_timeout_s) + self.cfg.node_offline_timeout_s)
         criado = estado[1]
@@ -224,7 +224,7 @@ class Desdobro(object):
             log.info("SKIP_OVERLAP: o ticket %d ainda esta %s", ultimo, estado[0])
         return True
 
-    def _montar_ticket(self, regra, script, vinculos, login, prioridade, ocorrencia, agora):
+    def _build_ticket(self, regra, script, vinculos, login, prioridade, ocorrencia, agora):
         """(ticket, linhas_ticket_resp, None) ou (None, None, detalhe do INVALID_PARAM sem valores; R-26)."""
         if script is None:
             return None, None, "script inexistente"
@@ -235,16 +235,16 @@ class Desdobro(object):
         if not isinstance(respostas, dict):
             return None, None, "parametros_json invalido"
         ativos = sorted((v for v in vinculos if v.get("active") == "Y"), key=lambda v: (v["sort_order"], v["parameter_id"]))
-        snapshot, resolvidos, erros = params_compiler.compilar_snapshot(script, ativos, respostas, agora)
+        snapshot, resolvidos, erros = params_compiler.compile_snapshot(script, ativos, respostas, agora)
         if erros:
-            return None, None, _curto("; ".join("%s: %s" % (c, m) for c, m in sorted(erros.items())))
-        linhas = [{"parameter_id": v["parameter_id"], "answer_value": _texto_resposta(resolvidos.get(v["code"]))}
+            return None, None, _short("; ".join("%s: %s" % (c, m) for c, m in sorted(erros.items())))
+        linhas = [{"parameter_id": v["parameter_id"], "answer_value": _answer_text(resolvidos.get(v["code"]))}
                   for v in ativos if resolvidos.get(v["code"]) is not None]
         ticket = {"requested_by": login, "priority": prioridade, "submitted_params": snapshot,
                   "scheduled_at": ocorrencia}
         return ticket, linhas, None
 
-    def _avancar(self, conn, regra, antiga, nova, log, motivo):
+    def _advance(self, conn, regra, antiga, nova, log, motivo):
         if not self.agenda.advance_without_ticket(conn, regra["id"], antiga, nova):
             conn.rollback()
             return "CORRIDA"
@@ -252,7 +252,7 @@ class Desdobro(object):
         log.info("%s: sem ticket; proxima execucao %s", motivo, nova)
         return "AVANCADA"
 
-    def _pausar(self, conn, regra, antiga, motivo, detalhe, log):
+    def _pause(self, conn, regra, antiga, motivo, detalhe, log):
         if not self.agenda.pause(conn, regra["id"], antiga, motivo, detalhe, self.agente_id):
             conn.rollback()
             return "CORRIDA"
@@ -260,7 +260,7 @@ class Desdobro(object):
         log.warning("regra pausada: %s (%s)", motivo, detalhe)
         return "PAUSADA"
 
-    def _cron_erro(self, conn, regra, antiga, ticket_id, ticket, linhas, log):
+    def _cron_error(self, conn, regra, antiga, ticket_id, ticket, linhas, log):
         if not self.agenda.pause_cron_error(conn, regra, antiga, ticket_id, ticket, linhas,
                                             "sem proxima ocorrencia no horizonte", self.agente_id):
             conn.rollback()
@@ -272,16 +272,16 @@ class Desdobro(object):
         log.warning("ticket %d gerado e regra pausada: INVALID_CRON (sem proxima ocorrencia no horizonte)", ticket_id)
         return "CRON_INVALIDO_COM_TICKET"
 
-    def _ocorrencia_duplicada(self, conn, regra_id, log):
+    def _duplicate_occurrence(self, conn, regra_id, log):
         """R-31: ROLLBACK, WARN e, numa nova transacao, o avanco sem ticket com a mesma antiga e a nova da decisao."""
         log.warning("OCORRENCIA_DUPLICADA: outro caminho ja gerou o ticket desta ocorrencia")
         regra = getattr(self, "_regra_atual", None)
         try:
             if regra is not None and regra["id"] == regra_id:
-                dec = recurrence.avaliar_disparo(regra, db_conn.db_now(conn), self.cfg.misfire_policy,
+                dec = recurrence.evaluate_trigger(regra, db_conn.db_now(conn), self.cfg.misfire_policy,
                                                  self.cfg.misfire_tolerance_s, self.horizonte)
-                if dec.nova_data is not None:
-                    self.agenda.advance_without_ticket(conn, regra_id, regra["next_run_at"], dec.nova_data)
+                if dec.next_date is not None:
+                    self.agenda.advance_without_ticket(conn, regra_id, regra["next_run_at"], dec.next_date)
             conn.commit()
         except Exception as exc:  # noqa: BLE001 - a regra volta no ciclo seguinte
             conn.rollback()
@@ -289,16 +289,16 @@ class Desdobro(object):
         self.falhas.pop(regra_id, None)
         return "OCORRENCIA_DUPLICADA"
 
-    def _falha(self, conn, regra_id, exc, log):
-        if eh_erro_banco(exc):
+    def _failure(self, conn, regra_id, exc, log):
+        if is_db_error(exc):
             pfx, num = db_conn.classify_error(exc)
             n = self.falhas.get(regra_id, 0) + 1
             self.falhas[regra_id] = n
             log.warning("DESDOBRO_ERRO_BANCO: %s (falha %d de %d seguidas)",
-                        "%s-%05d" % (pfx, num) if pfx else exc.__class__.__name__, n, FALHAS_ATE_PAUSAR)
+                        "%s-%05d" % (pfx, num) if pfx else exc.__class__.__name__, n, FAILURES_BEFORE_PAUSE)
             if db_conn.is_network_error(exc):
                 raise exc  # conexao perdida: o ciclo para e o agente reconecta (o laco trata)
-            if n < FALHAS_ATE_PAUSAR:
+            if n < FAILURES_BEFORE_PAUSE:
                 return "ERRO_BANCO"
             detalhe = "%d falhas seguidas de banco (%s)" % (n, "%s-%05d" % (pfx, num) if pfx else exc.__class__.__name__)
         else:
@@ -317,7 +317,7 @@ class Desdobro(object):
         return "INTERNAL_ERROR"
 
 
-class _LogRegra(object):
+class _RuleLog(object):
     """Linhas do desdobro com agente, regra e acao DESDOBRO (README §13)."""
 
     def __init__(self, log, agente_id, regra_id):

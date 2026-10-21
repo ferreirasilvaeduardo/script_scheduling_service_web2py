@@ -85,7 +85,7 @@ class RepoAgentsOracle(BaseRepoOracle, RepoAgents):
         return [self.tuple_to_dict(_COLS_TCK, r) for r in linhas]
 
     def unattended_queue(self, agora, limiares, conn=None):
-        """Grupos de PENDING vencidos sem agente OK/ATRASADO para o par ambiente/interpretador."""
+        """Grupos de PENDING vencidos sem agente OK/DELAYED para o par ambiente/interpretador."""
         atendidos = saude_sql.served_pairs(self.list(conn=conn), agora, limiares)
         linhas = self._ler(self._sql["QUEUE"], {"agora": agora}, {"agora": db_conn.TIPO_DATE}, conn=conn)
         return saude_sql.unattended_queue(linhas, atendidos)

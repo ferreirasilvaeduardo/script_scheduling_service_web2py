@@ -18,7 +18,7 @@ import masking
 import repo_factory
 import security
 from admin_crud import AcessoNegado
-from agents_service import ATRASADO, EM_RISCO, OFFLINE, OK, Limiares, ServicoAgentes
+from agents_service import DELAYED, AT_RISK, OFFLINE, OK, Limiares, ServicoAgentes
 from audit_service import FiltrosInvalidos, ServicoAuditoria
 from ticket_service import ServicoTicket
 
@@ -40,7 +40,7 @@ def _ler_csv(blocos):
 class _Base(unittest.TestCase):
 
     def setUp(self):
-        patcher = mock.patch.object(security, "ITERACOES", 1000)
+        patcher = mock.patch.object(security, "ITERATIONS", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
         env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: SENHA_DEV})
@@ -206,7 +206,7 @@ class TestListar(_Base):
                     self.svc.list(self.ctx[login], {}, 1, 20)
 
     def test_detalhe_truncado_e_mascarado(self):
-        masking.registrar_segredo(SEGREDO)
+        masking.register_secret(SEGREDO)
         longo = u"campo: " + u"á" * 120
         aid_longo = self._inserir(self.base, detail=longo)
         aid_seg = self._inserir(self.base, detail=u"valor vazado %s" % SEGREDO)
@@ -315,7 +315,7 @@ class TestSaudeAgente(unittest.TestCase):
         return agents_service.saude({"status": status, "heartbeat_at": hb}, self.AGORA, LIMIARES)
 
     def test_quatro_limiares(self):
-        casos = ((0, OK), (19, OK), (20, ATRASADO), (90, ATRASADO), (91, EM_RISCO), (180, EM_RISCO),
+        casos = ((0, OK), (19, OK), (20, DELAYED), (90, DELAYED), (91, AT_RISK), (180, AT_RISK),
                  (181, OFFLINE), (-5, OK))
         for idade, esperado in casos:
             with self.subTest(idade=idade):
@@ -326,7 +326,7 @@ class TestSaudeAgente(unittest.TestCase):
         self.assertEqual(self._saude(None), OFFLINE)
 
     def test_info_e_legenda(self):
-        self.assertEqual([i["code"] for i in agents_service.legenda()], [OK, ATRASADO, EM_RISCO, OFFLINE])
+        self.assertEqual([i["code"] for i in agents_service.legenda()], [OK, DELAYED, AT_RISK, OFFLINE])
         for info in agents_service.legenda():
             self.assertTrue(info["rotulo"] and info["classe"] and info["icone"] and info["description"])
 
@@ -346,9 +346,9 @@ class TestPainelAgentes(_Base):
         return dict((a["code"], a["saude"]["code"]) for a in painel["agents"])
 
     def test_seed_em_estados_diferentes_mudando_com_o_relogio(self):
-        self.assertEqual(self._saudes(), {"agt-host01": OK, "agt-host02": ATRASADO})
+        self.assertEqual(self._saudes(), {"agt-host01": OK, "agt-host02": DELAYED})
         self.now = self.base + datetime.timedelta(seconds=70)
-        self.assertEqual(self._saudes(), {"agt-host01": OK, "agt-host02": EM_RISCO})
+        self.assertEqual(self._saudes(), {"agt-host01": OK, "agt-host02": AT_RISK})
         self.now = self.base + datetime.timedelta(seconds=160)
         self.assertEqual(self._saudes(), {"agt-host01": OK, "agt-host02": OFFLINE})
 
@@ -421,8 +421,8 @@ class TestPainelAgentes(_Base):
         self.assertEqual([a["code"] for a in painel["config_divergente"]], ["agt-host02"])
         self.assertIn("kill=10", painel["config_divergente"][0]["critical_config"])
         self.assertEqual([t["id"] for t in painel["rodando_sem_pid"]], [16])
-        self.assertEqual(painel["fila_sem_atendente"], [])  # agt-host02 ainda ATRASADO
-        self.now = self.base + datetime.timedelta(seconds=61)  # agt-host02 EM_RISCO
+        self.assertEqual(painel["fila_sem_atendente"], [])  # agt-host02 ainda DELAYED
+        self.now = self.base + datetime.timedelta(seconds=61)  # agt-host02 AT_RISK
         fila = self.svc_agentes.painel(self.ctx["admin"])["fila_sem_atendente"]
         self.assertEqual([(g["environment"], g["interpreter"], g["quantidade"]) for g in fila],
                          [("HOMOLOGACAO", "SH", 1)])

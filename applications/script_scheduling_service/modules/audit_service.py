@@ -193,7 +193,7 @@ def neutralizar_csv(valor):
 
 
 def _mascarar(texto):
-    return masking.MASCARADOR.mascarar(texto) if texto else texto
+    return masking.MASKER.mask(texto) if texto else texto
 
 
 def linha_csv(reg):
@@ -220,7 +220,7 @@ def link_entidade(ctx, entidade, entidade_id, pode_ver_tickets):
     if tela is None:
         return None
     controller, funcao, func = tela
-    permitido = pode_ver_tickets if func is None else rbac.tem_func(ctx, func)
+    permitido = pode_ver_tickets if func is None else rbac.has_feature(ctx, func)
     if not permitido:
         return None
     return controller, funcao, [entidade_id]

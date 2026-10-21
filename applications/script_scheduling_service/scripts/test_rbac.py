@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Testes de rbac.py (F2.2): pode_executar, pode_cancelar, pode_ver_ticket, prioridade e tem_func."""
+"""Testes de rbac.py (F2.2): can_execute, can_cancel, can_view_ticket, prioridade e has_feature."""
 import _testenv  # noqa: F401
 
 import logging
@@ -16,13 +16,13 @@ import repo_factory
 import security
 from admin_crud import CAMPO_GERAL, AcessoNegado, OperacaoNegada
 from admin_profiles_service import ServicoAdminPerfis
-from rbac import Motivo
+from rbac import Reason
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 
 def _ctx(is_admin=False, usuario_ativo="Y", perfil_ativo="Y", funcs=("EXEC_SCRIPT",),
          ambs=("PRODUCAO",), scrs=(1,), login="op.prod"):
-    return rbac.contexto_usuario({
+    return rbac.user_context({
         "user_id": 2, "login": login, "name": "Operador", "usuario_ativo": usuario_ativo,
         "profile_id": 2, "perfil_nome": "OPERADOR", "perfil_ativo": perfil_ativo,
         "is_admin": "Y" if is_admin else "N", "perm_version": 1,
@@ -60,48 +60,48 @@ class TestPodeExecutar(unittest.TestCase):
         self.assertEqual(resultado, (False, motivo))
 
     def test_caso_ok(self):
-        self.assertEqual(rbac.pode_executar(_ctx(), SCRIPT, AMBIENTE, HOMOLOGACOES), (True, Motivo.OK))
+        self.assertEqual(rbac.can_execute(_ctx(), SCRIPT, AMBIENTE, HOMOLOGACOES), (True, Reason.OK))
 
     def test_admin_dispensa_dimensoes(self):
         ctx = _ctx(is_admin=True, funcs=(), ambs=(), scrs=())
-        self.assertEqual(rbac.pode_executar(ctx, SCRIPT, AMBIENTE, HOMOLOGACOES), (True, Motivo.OK))
+        self.assertEqual(rbac.can_execute(ctx, SCRIPT, AMBIENTE, HOMOLOGACOES), (True, Reason.OK))
 
     def test_admin_com_perfil_inativo(self):
         ctx = _ctx(is_admin=True, perfil_ativo="N")
-        self.assertNegado(rbac.pode_executar(ctx, SCRIPT, AMBIENTE, HOMOLOGACOES), Motivo.PERFIL_INATIVO)
+        self.assertNegado(rbac.can_execute(ctx, SCRIPT, AMBIENTE, HOMOLOGACOES), Reason.PROFILE_INACTIVE)
 
     def test_usuario_inativo(self):
-        self.assertNegado(rbac.pode_executar(_ctx(usuario_ativo="N"), SCRIPT, AMBIENTE, HOMOLOGACOES),
-                          Motivo.USER_INACTIVE)
+        self.assertNegado(rbac.can_execute(_ctx(usuario_ativo="N"), SCRIPT, AMBIENTE, HOMOLOGACOES),
+                          Reason.USER_INACTIVE)
 
     def test_script_inativo(self):
         script = dict(SCRIPT, active="N")
-        self.assertNegado(rbac.pode_executar(_ctx(), script, AMBIENTE, HOMOLOGACOES), Motivo.SCRIPT_INACTIVE)
-        self.assertNegado(rbac.pode_executar(_ctx(is_admin=True), script, AMBIENTE, HOMOLOGACOES),
-                          Motivo.SCRIPT_INACTIVE)
+        self.assertNegado(rbac.can_execute(_ctx(), script, AMBIENTE, HOMOLOGACOES), Reason.SCRIPT_INACTIVE)
+        self.assertNegado(rbac.can_execute(_ctx(is_admin=True), script, AMBIENTE, HOMOLOGACOES),
+                          Reason.SCRIPT_INACTIVE)
 
     def test_ambiente_inativo(self):
         ambiente = dict(AMBIENTE, active="N")
-        self.assertNegado(rbac.pode_executar(_ctx(), SCRIPT, ambiente, HOMOLOGACOES), Motivo.ENVIRONMENT_INACTIVE)
-        self.assertNegado(rbac.pode_executar(_ctx(is_admin=True), SCRIPT, ambiente, HOMOLOGACOES),
-                          Motivo.ENVIRONMENT_INACTIVE)
+        self.assertNegado(rbac.can_execute(_ctx(), SCRIPT, ambiente, HOMOLOGACOES), Reason.ENVIRONMENT_INACTIVE)
+        self.assertNegado(rbac.can_execute(_ctx(is_admin=True), SCRIPT, ambiente, HOMOLOGACOES),
+                          Reason.ENVIRONMENT_INACTIVE)
 
     def test_sem_homologacao(self):
-        self.assertNegado(rbac.pode_executar(_ctx(), SCRIPT, AMBIENTE, [2]), Motivo.SEM_HOMOLOGACAO)
-        self.assertNegado(rbac.pode_executar(_ctx(is_admin=True), SCRIPT, AMBIENTE, []), Motivo.SEM_HOMOLOGACAO)
-        self.assertNegado(rbac.pode_executar(_ctx(), SCRIPT, AMBIENTE, None), Motivo.SEM_HOMOLOGACAO)
+        self.assertNegado(rbac.can_execute(_ctx(), SCRIPT, AMBIENTE, [2]), Reason.NOT_HOMOLOGATED)
+        self.assertNegado(rbac.can_execute(_ctx(is_admin=True), SCRIPT, AMBIENTE, []), Reason.NOT_HOMOLOGATED)
+        self.assertNegado(rbac.can_execute(_ctx(), SCRIPT, AMBIENTE, None), Reason.NOT_HOMOLOGATED)
 
     def test_sem_exec_script(self):
-        self.assertNegado(rbac.pode_executar(_ctx(funcs=("VIEW_LOGS",)), SCRIPT, AMBIENTE, HOMOLOGACOES),
-                          Motivo.SEM_FUNC)
+        self.assertNegado(rbac.can_execute(_ctx(funcs=("VIEW_LOGS",)), SCRIPT, AMBIENTE, HOMOLOGACOES),
+                          Reason.NO_FEATURE)
 
     def test_sem_ambiente(self):
-        self.assertNegado(rbac.pode_executar(_ctx(ambs=("HOMOLOGACAO",)), SCRIPT, AMBIENTE, HOMOLOGACOES),
-                          Motivo.SEM_AMBIENTE)
+        self.assertNegado(rbac.can_execute(_ctx(ambs=("HOMOLOGACAO",)), SCRIPT, AMBIENTE, HOMOLOGACOES),
+                          Reason.NO_ENVIRONMENT)
 
     def test_sem_script(self):
-        self.assertNegado(rbac.pode_executar(_ctx(scrs=(2,)), SCRIPT, AMBIENTE, HOMOLOGACOES),
-                          Motivo.SEM_SCRIPT)
+        self.assertNegado(rbac.can_execute(_ctx(scrs=(2,)), SCRIPT, AMBIENTE, HOMOLOGACOES),
+                          Reason.NO_SCRIPT)
 
     def test_dados_invalidos(self):
         for script, ambiente in (
@@ -112,27 +112,27 @@ class TestPodeExecutar(unittest.TestCase):
             (SCRIPT, dict(AMBIENTE, id=0)),
             (SCRIPT, dict(AMBIENTE, name="")),
         ):
-            self.assertNegado(rbac.pode_executar(_ctx(), script, ambiente, HOMOLOGACOES), Motivo.DADO_INVALIDO)
-        self.assertNegado(rbac.pode_executar(None, SCRIPT, AMBIENTE, HOMOLOGACOES), Motivo.DADO_INVALIDO)
+            self.assertNegado(rbac.can_execute(_ctx(), script, ambiente, HOMOLOGACOES), Reason.INVALID_DATA)
+        self.assertNegado(rbac.can_execute(None, SCRIPT, AMBIENTE, HOMOLOGACOES), Reason.INVALID_DATA)
 
     def test_flag_ativo_somente_s(self):
         for flag in ("", "n", None, "s", "SIM"):
-            self.assertNegado(rbac.pode_executar(_ctx(), dict(SCRIPT, active=flag), AMBIENTE, HOMOLOGACOES),
-                              Motivo.SCRIPT_INACTIVE)
+            self.assertNegado(rbac.can_execute(_ctx(), dict(SCRIPT, active=flag), AMBIENTE, HOMOLOGACOES),
+                              Reason.SCRIPT_INACTIVE)
 
 
 class TestTemFunc(unittest.TestCase):
 
     def test_admin_ativo(self):
-        self.assertTrue(rbac.tem_func(_ctx(is_admin=True, funcs=()), "MANAGE_USERS"))
+        self.assertTrue(rbac.has_feature(_ctx(is_admin=True, funcs=()), "MANAGE_USERS"))
 
     def test_admin_perfil_inativo(self):
-        self.assertFalse(rbac.tem_func(_ctx(is_admin=True, perfil_ativo="N"), "MANAGE_USERS"))
+        self.assertFalse(rbac.has_feature(_ctx(is_admin=True, perfil_ativo="N"), "MANAGE_USERS"))
 
     def test_nao_admin(self):
-        self.assertTrue(rbac.tem_func(_ctx(funcs=("VIEW_LOGS",)), "VIEW_LOGS"))
-        self.assertFalse(rbac.tem_func(_ctx(funcs=("VIEW_LOGS",)), "MANAGE_USERS"))
-        self.assertFalse(rbac.tem_func(None, "VIEW_LOGS"))
+        self.assertTrue(rbac.has_feature(_ctx(funcs=("VIEW_LOGS",)), "VIEW_LOGS"))
+        self.assertFalse(rbac.has_feature(_ctx(funcs=("VIEW_LOGS",)), "MANAGE_USERS"))
+        self.assertFalse(rbac.has_feature(None, "VIEW_LOGS"))
 
 
 class TestTickets(unittest.TestCase):
@@ -143,59 +143,59 @@ class TestTickets(unittest.TestCase):
 
     def test_cancelar_proprio_sem_canc_ticket(self):
         ctx = _ctx(funcs=("EXEC_SCRIPT",))
-        self.assertTrue(rbac.pode_cancelar(ctx, self.TICKET_PROPRIO))
-        self.assertFalse(rbac.pode_cancelar(ctx, self.TICKET_TERCEIRO))
+        self.assertTrue(rbac.can_cancel(ctx, self.TICKET_PROPRIO))
+        self.assertFalse(rbac.can_cancel(ctx, self.TICKET_TERCEIRO))
 
     def test_cancelar_proprio_sem_exec_script(self):
-        self.assertFalse(rbac.pode_cancelar(_ctx(funcs=("VIEW_LOGS",)), self.TICKET_PROPRIO))
+        self.assertFalse(rbac.can_cancel(_ctx(funcs=("VIEW_LOGS",)), self.TICKET_PROPRIO))
 
     def test_cancelar_terceiro_com_canc_ticket(self):
         ctx = _ctx(funcs=("CANCEL_TICKET",))
-        self.assertTrue(rbac.pode_cancelar(ctx, self.TICKET_TERCEIRO))
-        self.assertFalse(rbac.pode_cancelar(ctx, self.TICKET_OUTRO_AMB))
+        self.assertTrue(rbac.can_cancel(ctx, self.TICKET_TERCEIRO))
+        self.assertFalse(rbac.can_cancel(ctx, self.TICKET_OUTRO_AMB))
 
     def test_cancelar_admin(self):
-        self.assertTrue(rbac.pode_cancelar(_ctx(is_admin=True, funcs=(), ambs=()), self.TICKET_OUTRO_AMB))
+        self.assertTrue(rbac.can_cancel(_ctx(is_admin=True, funcs=(), ambs=()), self.TICKET_OUTRO_AMB))
 
     def test_cancelar_perfil_inativo(self):
         ctx = _ctx(funcs=("CANCEL_TICKET", "EXEC_SCRIPT"), perfil_ativo="N")
-        self.assertFalse(rbac.pode_cancelar(ctx, self.TICKET_PROPRIO))
+        self.assertFalse(rbac.can_cancel(ctx, self.TICKET_PROPRIO))
 
     def test_cancelar_ticket_invalido(self):
-        self.assertFalse(rbac.pode_cancelar(_ctx(), None))
-        self.assertFalse(rbac.pode_cancelar(_ctx(), {"environment": "PRODUCAO", "requested_by": None}))
+        self.assertFalse(rbac.can_cancel(_ctx(), None))
+        self.assertFalse(rbac.can_cancel(_ctx(), {"environment": "PRODUCAO", "requested_by": None}))
 
     def test_ver_ticket(self):
         ctx = _ctx(funcs=("VIEW_LOGS",))
-        self.assertTrue(rbac.pode_ver_ticket(ctx, self.TICKET_TERCEIRO))
-        self.assertFalse(rbac.pode_ver_ticket(ctx, self.TICKET_OUTRO_AMB))
-        self.assertFalse(rbac.pode_ver_ticket(_ctx(funcs=("EXEC_SCRIPT",)), self.TICKET_PROPRIO))
-        self.assertTrue(rbac.pode_ver_ticket(_ctx(is_admin=True, ambs=()), self.TICKET_OUTRO_AMB))
+        self.assertTrue(rbac.can_view_ticket(ctx, self.TICKET_TERCEIRO))
+        self.assertFalse(rbac.can_view_ticket(ctx, self.TICKET_OUTRO_AMB))
+        self.assertFalse(rbac.can_view_ticket(_ctx(funcs=("EXEC_SCRIPT",)), self.TICKET_PROPRIO))
+        self.assertTrue(rbac.can_view_ticket(_ctx(is_admin=True, ambs=()), self.TICKET_OUTRO_AMB))
 
     def test_ver_ambiente(self):
-        self.assertTrue(rbac.pode_ver_ambiente(_ctx(), {"name": "PRODUCAO"}))
-        self.assertTrue(rbac.pode_ver_ambiente(_ctx(), "PRODUCAO"))
-        self.assertFalse(rbac.pode_ver_ambiente(_ctx(), "HOMOLOGACAO"))
-        self.assertFalse(rbac.pode_ver_ambiente(_ctx(), None))
+        self.assertTrue(rbac.can_view_environment(_ctx(), {"name": "PRODUCAO"}))
+        self.assertTrue(rbac.can_view_environment(_ctx(), "PRODUCAO"))
+        self.assertFalse(rbac.can_view_environment(_ctx(), "HOMOLOGACAO"))
+        self.assertFalse(rbac.can_view_environment(_ctx(), None))
 
 
 class TestPrioridade(unittest.TestCase):
 
     def test_admin(self):
         for p in (1, 2, 3, 4):
-            self.assertTrue(rbac.prioridade_permitida(_ctx(is_admin=True), p))
+            self.assertTrue(rbac.allowed_priority(_ctx(is_admin=True), p))
 
     def test_nao_admin(self):
-        self.assertFalse(rbac.prioridade_permitida(_ctx(), 1))
+        self.assertFalse(rbac.allowed_priority(_ctx(), 1))
         for p in (2, 3, 4):
-            self.assertTrue(rbac.prioridade_permitida(_ctx(), p))
+            self.assertTrue(rbac.allowed_priority(_ctx(), p))
 
     def test_invalidas(self):
         for p in (0, 5, -1, True, "2", None, 2.0):
-            self.assertFalse(rbac.prioridade_permitida(_ctx(is_admin=True), p))
+            self.assertFalse(rbac.allowed_priority(_ctx(is_admin=True), p))
 
     def test_perfil_inativo(self):
-        self.assertFalse(rbac.prioridade_permitida(_ctx(perfil_ativo="N"), 2))
+        self.assertFalse(rbac.allowed_priority(_ctx(perfil_ativo="N"), 2))
 
 
 # ---------------------------------------------------------------- F4.2: perfis e matriz (FAKE)
@@ -216,7 +216,7 @@ AMB_PRODUCAO, AMB_HOMOLOGACAO, AMB_DESENV = 1, 2, 3
 class _BasePerfis(unittest.TestCase):
 
     def setUp(self):
-        patcher = mock.patch.object(security, "ITERACOES", 1000)
+        patcher = mock.patch.object(security, "ITERATIONS", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
         env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: "senha-dev-de-teste-123"})

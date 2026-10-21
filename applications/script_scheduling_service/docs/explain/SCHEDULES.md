@@ -12,7 +12,7 @@ Consultas SQL estáticas do `RepoSchedulesOracle` (`modules/repo_oracle/schedule
 
 | Método | Consulta | Acesso esperado |
 |---|---|---|
-| `list` | `COUNT(*)` com `ROWNUM <= 10001` e página `ROWNUM`, ordem `proxima_execucao, id`; filtros `active`, `script_id`, `environment`, `user_id`, `name` (trecho, `ESCAPE`) e escopo por `IN` | `ix_{prefixo}sch_next (active, next_run_at, id)` com `active = 'Y'` (Agenda); `ix_{prefixo}sch_scr`/`amb`/`usr` nos filtros |
+| `list` | `COUNT(*)` com `ROWNUM <= 10001` e página `ROWNUM`, ordem `next_run, id`; filtros `active`, `script_id`, `environment`, `user_id`, `name` (trecho, `ESCAPE`) e escopo por `IN` | `ix_{prefixo}sch_next (active, next_run_at, id)` com `active = 'Y'` (Agenda); `ix_{prefixo}sch_scr`/`amb`/`usr` nos filtros |
 | `get`, `update`, `resume` | Leitura pela PK; lock `FOR UPDATE WAIT 5`; `UPDATE` pela PK | `pk_{prefixo}schedules` |
 | `pause` | `UPDATE … WHERE id = :id AND active = 'Y' [AND next_run_at = :antiga_data]` (CR-007, R-19), com `rowcount` conferido | `pk_{prefixo}schedules` |
 | `ticket_status` | `SELECT status FROM {prefixo}tickets WHERE id = :id` | `pk_{prefixo}tickets` |
@@ -28,7 +28,7 @@ Consultas SQL estáticas do `RepoSchedulesOracle` (`modules/repo_oracle/schedule
   * O estado antes e depois foi conferido e é idêntico. Nenhuma linha foi gravada.
 * **`tbsss_tickets`/`tbsss_audit`:** só `ticket_status` lê tickets, pela PK; a auditoria só recebe `INSERT`. Conforme.
 * **Agenda, filtros e transições:** todos por índice; a Agenda (`active = 'Y'`) lê `ix_{prefixo}sch_next` na ordem do índice.
-* **Lista do administrador sem filtro:** `TABLE ACCESS FULL` em `tbsss_schedules` + `SORT ORDER BY STOPKEY`, porque a ordem `proxima_execucao, id` não começa por `active`.
+* **Lista do administrador sem filtro:** `TABLE ACCESS FULL` em `tbsss_schedules` + `SORT ORDER BY STOPKEY`, porque a ordem `next_run, id` não começa por `active`.
   * Fica registrado, sem mudança de esquema: a tabela é de escala de cadastro (centenas de regras) e não está no critério do F7.3 (tickets e auditoria).
   * Se o volume real crescer, a correção é um índice `(next_run_at, id)`.
 

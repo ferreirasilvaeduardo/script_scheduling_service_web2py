@@ -11,8 +11,8 @@ import masking
 
 
 def _fluxo(mascarador, blocos):
-    f = masking.MascaradorFluxo(mascarador)
-    saida = [f.alimentar(b) for b in blocos]
+    f = masking.StreamMasker(mascarador)
+    saida = [f.feed(b) for b in blocos]
     saida.append(f.finalize())
     return saida
 
@@ -20,57 +20,57 @@ def _fluxo(mascarador, blocos):
 class TestMascarador(unittest.TestCase):
 
     def setUp(self):
-        self.m = masking.Mascarador()
+        self.m = masking.Masker()
 
     def test_segredo_inteiro(self):
         self.m.register("S3gr3d0Forte")
-        self.assertEqual(self.m.mascarar("senha=S3gr3d0Forte fim S3gr3d0Forte"), "senha=**** fim ****")
+        self.assertEqual(self.m.mask("senha=S3gr3d0Forte fim S3gr3d0Forte"), "senha=**** fim ****")
 
     def test_curto_e_nao_str_ignorados(self):
         self.m.register("abc")
         self.m.register(None)
         self.m.register(12345)
-        self.assertEqual(self.m.mascarar("abc 12345"), "abc 12345")
+        self.assertEqual(self.m.mask("abc 12345"), "abc 12345")
         self.assertEqual(self.m.max_len, 0)
 
     def test_prefixo_comum_mais_longo_vence(self):
         for s in ("abcd", "abcdefgh", "abcdef"):
             self.m.register(s)
-        self.assertEqual(self.m.mascarar("x abcdefgh y abcdef z abcd"), "x **** y **** z ****")
-        self.assertEqual(self.m.mascarar("abcdefghij"), "****ij")
+        self.assertEqual(self.m.mask("x abcdefgh y abcdef z abcd"), "x **** y **** z ****")
+        self.assertEqual(self.m.mask("abcdefghij"), "****ij")
 
     def test_caracteres_especiais(self):
         self.m.register("a.b*c+(d)")
-        self.assertEqual(self.m.mascarar("[a.b*c+(d)] axbbc"), "[****] axbbc")
+        self.assertEqual(self.m.mask("[a.b*c+(d)] axbbc"), "[****] axbbc")
 
     def test_connect_string(self):
-        self.assertEqual(self.m.mascarar("conectando app_prod/Xyz#9@localhost:2424/svc"),
+        self.assertEqual(self.m.mask("conectando app_prod/Xyz#9@localhost:2424/svc"),
                          "conectando app_prod/****@localhost:2424/svc")
-        self.assertEqual(self.m.mascarar("sqlplus -s scott/tiger@ORCL"), "sqlplus -s scott/****@ORCL")
-        self.assertEqual(self.m.mascarar("/opt/sss/scripts/carga.py"), "/opt/sss/scripts/carga.py")
+        self.assertEqual(self.m.mask("sqlplus -s scott/tiger@ORCL"), "sqlplus -s scott/****@ORCL")
+        self.assertEqual(self.m.mask("/opt/sss/scripts/carga.py"), "/opt/sss/scripts/carga.py")
 
     def test_nao_str(self):
-        self.assertIsNone(self.m.mascarar(None))
-        self.assertEqual(self.m.mascarar(""), "")
+        self.assertIsNone(self.m.mask(None))
+        self.assertEqual(self.m.mask(""), "")
 
 
 class TestDesempenho(unittest.TestCase):
 
     def test_linha_longa_sem_barra_em_tempo_linear(self):
         # Regressao F8.2: _RE_CONNECT tentava a partir de cada posicao de uma sequencia longa (quadratico).
-        m = masking.Mascarador()
+        m = masking.Masker()
         for texto in ("x" * 1048576, "a/" + "b" * 1048576, "ab/" * 300000):
             inicio = time.monotonic()
-            m.mascarar(texto)
+            m.mask(texto)
             self.assertLess(time.monotonic() - inicio, 1.0)
-        self.assertEqual(m.mascarar("u=app/Pw12@db:1521/X fat.app/s3nh@//h:1/s x/y"),
+        self.assertEqual(m.mask("u=app/Pw12@db:1521/X fat.app/s3nh@//h:1/s x/y"),
                          "u=app/****@db:1521/X fat.app/****@//h:1/s x/y")
 
 
 class TestMascaradorFluxo(unittest.TestCase):
 
     def setUp(self):
-        self.m = masking.Mascarador()
+        self.m = masking.Masker()
         self.m.register("SEGREDO-123")
 
     def test_segredo_inteiro_em_um_bloco(self):
@@ -94,31 +94,31 @@ class TestMascaradorFluxo(unittest.TestCase):
         self.assertEqual("".join(saida), "a **** b ****")
 
     def test_varios_segredos_prefixo_comum(self):
-        m = masking.Mascarador()
+        m = masking.Masker()
         for s in ("token", "token-longo-999"):
             m.register(s)
         saida = _fluxo(m, ["inicio token-lo", "ngo-999 meio tok", "en fim"])
         self.assertEqual("".join(saida), "inicio **** meio **** fim")
 
     def test_cauda_retida_e_finalizar(self):
-        f = masking.MascaradorFluxo(self.m)
+        f = masking.StreamMasker(self.m)
         # max_len 11: retem 10 caracteres; o corte cai no espaco, fim de token.
-        self.assertEqual(f.alimentar("aa bb 0123456789"), "aa bb ")
+        self.assertEqual(f.feed("aa bb 0123456789"), "aa bb ")
         self.assertEqual(f.finalize(), "0123456789")
         self.assertEqual(f.finalize(), "")
 
     def test_token_longo_retido_ate_o_limite(self):
-        f = masking.MascaradorFluxo(self.m)
-        bloco = "x" * (masking.MAX_TOKEN_RETIDO * 3)
-        emitido = f.alimentar(bloco)
-        self.assertLessEqual(len(bloco) - len(emitido), masking.MAX_TOKEN_RETIDO + self.m.max_len)
+        f = masking.StreamMasker(self.m)
+        bloco = "x" * (masking.MAX_HELD_TOKEN * 3)
+        emitido = f.feed(bloco)
+        self.assertLessEqual(len(bloco) - len(emitido), masking.MAX_HELD_TOKEN + self.m.max_len)
         self.assertEqual(emitido + f.finalize(), bloco)
 
     def test_sem_segredos_emite_ate_o_ultimo_token(self):
-        m = masking.Mascarador()
-        f = masking.MascaradorFluxo(m)
-        self.assertEqual(f.alimentar("user/pwd@db fim\n"), "user/****@db fim\n")
-        self.assertEqual(f.alimentar("parcial"), "")
+        m = masking.Masker()
+        f = masking.StreamMasker(m)
+        self.assertEqual(f.feed("user/pwd@db fim\n"), "user/****@db fim\n")
+        self.assertEqual(f.feed("parcial"), "")
         self.assertEqual(f.finalize(), "parcial")
 
     def test_connect_string_no_fluxo(self):
@@ -128,7 +128,7 @@ class TestMascaradorFluxo(unittest.TestCase):
     def test_connect_string_cortada_entre_blocos(self):
         for blocos in (["conn app", "/Senha1@HML ok\n"], ["conn app/Sen", "ha1@HML ok\n"],
                        ["conn app/Senha1@", "HML ok\n"], ["conn app/", "Senha1", "@HML ok\n"]):
-            for m in (self.m, masking.Mascarador()):
+            for m in (self.m, masking.Masker()):
                 saida = _fluxo(m, blocos)
                 self.assertEqual("".join(saida), "conn app/****@HML ok\n", blocos)
                 for parte in saida:
@@ -138,12 +138,12 @@ class TestMascaradorFluxo(unittest.TestCase):
 class TestFiltroLogging(unittest.TestCase):
 
     def setUp(self):
-        self.m = masking.Mascarador()
+        self.m = masking.Masker()
         self.m.register("chave-secreta-1")
         self.buf = io.StringIO()
         self.handler = logging.StreamHandler(self.buf)
         self.handler.setFormatter(logging.Formatter("%(message)s"))
-        self.handler.addFilter(masking.filtro_logging(self.m))
+        self.handler.addFilter(masking.logging_filter(self.m))
         self.log = logging.getLogger("test_masking_filtro")
         self.log.propagate = False
         self.log.setLevel(logging.DEBUG)
@@ -182,15 +182,15 @@ class TestFiltroLogging(unittest.TestCase):
         h = logging.StreamHandler(io.StringIO())
         lg.addHandler(h)
         try:
-            masking.instalar_filtro_em_handlers(self.m)
-            masking.instalar_filtro_em_handlers(self.m)
+            masking.install_filter_on_handlers(self.m)
+            masking.install_filter_on_handlers(self.m)
             self.assertEqual(len(h.filters), 1)
         finally:
             lg.removeHandler(h)
 
     def test_registro_global(self):
-        masking.registrar_segredo("global-segredo-77")
-        self.assertEqual(masking.MASCARADOR.mascarar("x global-segredo-77"), "x ****")
+        masking.register_secret("global-segredo-77")
+        self.assertEqual(masking.MASKER.mask("x global-segredo-77"), "x ****")
 
 
 if __name__ == "__main__":

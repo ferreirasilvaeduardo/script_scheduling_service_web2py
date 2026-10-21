@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento**, em blocos. Blocos 1 (base) e 2 (repositórios) concluídos em 2026-10-21 |
+| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios) e 3a (regras) concluídos em 2026-10-21 |
 | Origem | Regra do README §2.8 (CR-016): funções, classes, métodos, constantes e variáveis em inglês |
 | Restrições | Sem dependência nova. Python 3.6. Sem mudança de esquema |
-| Blocos | 1 base (`sql_ident`, `sss_config`, `db_conn`, `sss_logging` e formato do log); 2 repositórios e chaves lógicas das entidades; 3 services e regras; 4 daemon; 5 scripts e testes; passada final de parâmetros e variáveis locais |
+| Blocos | 1 base (`sql_ident`, `sss_config`, `db_conn`, `sss_logging` e formato do log); 2 repositórios e chaves lógicas das entidades; 3 regras (3a) e services (3b); 4 daemon; 5 scripts e testes; passada final de parâmetros e variáveis locais |
 
 ---
 
@@ -697,3 +697,336 @@ Cada título é o arquivo em `repo_oracle/` e `repo_fake/` (os que começam com 
   * código Python dentro de string, rodado em subprocesso pelos testes de driver (`test_log_pump`, `test_scheduler_output`), ainda chamava `da_config`, `iniciar` e `anexar`.
 * Os testes progressivos (`test_repo_oracle_progressive`) só rodam com `SSS_TEST_REPO_AGREGADO=<agregado>` e ficam de fora da bateria comum. Rodados os cinco agregados, apareceram falhas antigas do próprio teste, corrigidas: nomes de CK de agendamentos anteriores ao CR-016a, chaves `_sql` antigas, `import sql_ident` ausente e a fila sem atendente comparada com o `scheduled_at` no passado, quando desde o CR-013 a espera conta de `GREATEST(scheduled_at, created_at)`.
 * Conferência automática nos arquivos alterados: chaves `_sql` consultadas x definidas, chaves de bind x `:placeholders` do SQL e nomes antigos em strings de código.
+
+## 6. Bloco 3a (regras)
+
+Módulos `rbac`, `params_compiler`, `recurrence`, `schedule_expansion`, `cron_parser`, `security`, `masking`, `path_guard`, `env_builder` e `ddl_builder`.
+
+Decisões aprovadas (2026-10-21):
+
+| # | Decisão | Resumo |
+|---|---|---|
+| D5 | Valor muda com o nome | Códigos internos com valor em português passam a valor em inglês: `rbac.Reason` (só log), `path_guard.Code` (log e mensagem do cadastro; os mesmos códigos devolvidos por `os_platform/posix.py`) e os códigos de saúde dos agentes (`ATRASADO` → `DELAYED`, `EM_RISCO` → `AT_RISK`). Nada disso é gravado no banco; a tela mostra o rótulo em português. Muda o que sai no log e na saída do `health.py` |
+| D6 | `Decision` e `complete` | Campos de `recurrence.Decision` em inglês; o método `concluir` do repositório de saída (adiado do bloco 2) vira `complete` |
+| D7 | `list_page` | No bloco 3b, a função de módulo `listar` vira `list_page` (não `list`, para não esconder o builtin); o método `list` dos services fica |
+| D8 | Fora deste bloco | Funções de controller (URLs), variáveis de tela, atributos de sessão e chaves de `TELAS_ENTIDADE` no CR-016d; parâmetros, locais e binds de SQL na passada final |
+
+Métodos com nome genérico mudaram em todas as classes que os definem, depois de conferir que nenhuma já tinha o nome novo nem herdava de `threading.Thread`: `executar` → `run` (`Desdobro`, `Agente`, `Rodada`, `Verificacao` do `health.py`, `Purge`), `processar` → `process`, `mascarar` → `mask`, `alimentar` → `feed`.
+
+### `rbac`
+
+| Antes | Depois |
+|---|---|
+| `Motivo` | `Reason` |
+| `PRIORIDADE_ADMIN` | `ADMIN_PRIORITY` |
+| `_ativo` | `_active` |
+| `_id_valido` | `_valid_id` |
+| `_nome_ambiente` | `_environment_name` |
+| `contexto_usuario` | `user_context` |
+| `motivo_pausa` | `pause_reason_for` |
+| `pode_cancelar` | `can_cancel` |
+| `pode_executar` | `can_execute` |
+| `pode_ver_ambiente` | `can_view_environment` |
+| `pode_ver_ticket` | `can_view_ticket` |
+| `prioridade_permitida` | `allowed_priority` |
+| `tem_func` | `has_feature` |
+
+### `params_compiler`
+
+| Antes | Depois |
+|---|---|
+| `AMPLITUDE_LARGA` | `WIDE_RANGE` |
+| `CHAVE_GERAL` | `GENERAL_KEY` |
+| `MASCARA` | `MASK` |
+| `MAX_ESCOLHAS` | `MAX_CHOICES` |
+| `MAX_ESCOLHAS_COM_ILIMITADO` | `MAX_CHOICES_WITH_UNBOUNDED` |
+| `MAX_ILIMITADOS` | `MAX_UNBOUNDED` |
+| `ParamErro` | `ParamError` |
+| `SENSIVEL_MINIMO` | `SENSITIVE_MIN_LENGTH` |
+| `SnapshotErro` | `SnapshotError` |
+| `TAMANHO_CHAVE_OPCAO` | `OPTION_KEY_MAX_LENGTH` |
+| `TAMANHO_MAXIMO` | `MAX_LENGTH` |
+| `TAMANHO_OPCOES` | `OPTIONS_MAX_LENGTH` |
+| `TAMANHO_REGEX` | `REGEX_MAX_LENGTH` |
+| `TAMANHO_ROTULO_OPCAO` | `OPTION_LABEL_MAX_LENGTH` |
+| `TIPOS_COMPONENTE` | `COMPONENT_TYPES` |
+| `TIPOS_PARAM` | `PARAM_TYPES` |
+| `VERSAO_SNAPSHOT` | `SNAPSHOT_VERSION` |
+| `_CHAVES_SNAPSHOT` | `_SNAPSHOT_KEYS` |
+| `_RE_CONTROLE` | `_RE_CONTROL` |
+| `_RE_QUANT_CHAVE` | `_RE_BRACE_QUANT` |
+| `_arg_sequencial` | `_sequential_arg` |
+| `_args_nomeado` | `_named_args` |
+| `_fim_da_classe` | `_class_end` |
+| `_mascarar_args` | `_mask_args` |
+| `_montar` | `_build` |
+| `_opcoes_select` | `_select_options` |
+| `_ordenados` | `_sorted_links` |
+| `_pares_sem_duplicata` | `_unique_pairs` |
+| `_recusar_regex` | `_reject_regex` |
+| `_resolver` | `_resolve` |
+| `_rotulo` | `_label` |
+| `_segredos` | `_secrets` |
+| `_sensivel` | `_sensitive` |
+| `_vazio` | `_empty` |
+| `argv_para_exibicao` | `display_argv` |
+| `compilar_snapshot` | `compile_snapshot` |
+| `montar_args` | `build_args` |
+| `montar_argv_agente` | `build_agent_argv` |
+| `resolver_respostas` | `resolve_answers` |
+| `validar_flag` | `validate_flag` |
+| `validar_opcoes_cadastro` | `validate_registry_options` |
+| `validar_regex_cadastro` | `validate_registry_regex` |
+| `validar_snapshot` | `validate_snapshot` |
+| `validar_valor` | `validate_value` |
+
+### `recurrence`
+
+| Antes | Depois |
+|---|---|
+| `Decisao` | `Decision` |
+| `HORIZONTE_PADRAO` | `DEFAULT_HORIZON` |
+| `LIMITE_PERDIDAS` | `MISSED_LIMIT` |
+| `POLITICAS_MISFIRE` | `MISFIRE_POLICIES` |
+| `TIPOS` | `TYPES` |
+| `_CACHE_MAXIMO` | `_CACHE_MAX` |
+| `_UM_DIA` | `_ONE_DAY` |
+| `_UM_MINUTO` | `_ONE_MINUTE` |
+| `_diaria` | `_daily` |
+| `_expressao` | `_expression` |
+| `_hora_minuto` | `_hour_minute` |
+| `_mensal` | `_monthly` |
+| `_semanal` | `_weekly` |
+| `_vazio` | `_empty` |
+| `_vencidas` | `_due` |
+| `avaliar_disparo` | `evaluate_trigger` |
+| `proxima_execucao` | `next_run` |
+| `proximas` | `next_runs` |
+| `sem_microssegundos` | `without_microseconds` |
+| `truncar_segundos` | `truncate_seconds` |
+| `validar_regra` | `validate_rule` |
+
+### `schedule_expansion`
+
+| Antes | Depois |
+|---|---|
+| `Desdobro` | `Expansion` |
+| `FALHAS_ATE_PAUSAR` | `FAILURES_BEFORE_PAUSE` |
+| `_LogRegra` | `_RuleLog` |
+| `_OCUPADO` | `_BUSY` |
+| `_avancar` | `_advance` |
+| `_cron_erro` | `_cron_error` |
+| `_curto` | `_short` |
+| `_falha` | `_failure` |
+| `_montar_ticket` | `_build_ticket` |
+| `_ocorrencia_duplicada` | `_duplicate_occurrence` |
+| `_ocupado` | `_busy` |
+| `_pausar` | `_pause` |
+| `_processar` | `_process` |
+| `_registrar_perdidas` | `_log_missed` |
+| `_texto_resposta` | `_answer_text` |
+| `eh_erro_banco` | `is_db_error` |
+| `executar` | `run` |
+| `processar` | `process` |
+
+### `cron_parser`
+
+| Antes | Depois |
+|---|---|
+| `CronErro` | `CronError` |
+| `HORIZONTE_PADRAO` | `DEFAULT_HORIZON` |
+| `TAMANHO_MAXIMO` | `MAX_LENGTH` |
+| `_DIAS_SEMANA` | `_WEEKDAYS` |
+| `_DIAS_SEMANA_PLURAL` | `_WEEKDAYS_PLURAL` |
+| `_ESPECIAIS` | `_SPECIAL` |
+| `_FAIXAS` | `_RANGES` |
+| `_MESES` | `_MONTHS` |
+| `_PERMITIDOS` | `_ALLOWED` |
+| `_UM_MINUTO` | `_ONE_MINUTE` |
+| `_campo` | `_field` |
+| `_descrever_datas` | `_describe_dates` |
+| `_descrever_dsem` | `_describe_weekday` |
+| `_descrever_horario` | `_describe_time` |
+| `_dia_casa` | `_day_matches` |
+| `_dsem_quando` | `_weekday_when` |
+| `_estrela` | `_star` |
+| `_inteiro` | `_integer` |
+| `_juntar` | `_join` |
+| `_proximo_mes` | `_next_month` |
+| `_seguinte` | `_next_value` |
+| `_simples` | `_simple` |
+| `_texto_itens` | `_items_text` |
+| `_ultimo_dia` | `_last_day` |
+| `descrever` | `describe` |
+| `proxima` | `next` |
+
+### `security`
+
+| Antes | Depois |
+|---|---|
+| `ALGORITMO` | `ALGORITHM` |
+| `CookiesSeguros` | `SecureCookies` |
+| `ITERACOES` | `ITERATIONS` |
+| `PREFIXO_APP` | `APP_PREFIX` |
+| `SENHA_MIN` | `PASSWORD_MIN` |
+| `_HASH_FICTICIO` | `_DUMMY_HASH` |
+| `_PORTA_PADRAO` | `_DEFAULT_PORTS` |
+| `_decompor` | `_split_hash` |
+| `_derivar` | `_derive` |
+| `_ip_normalizado` | `_normalized_ip` |
+| `_proteger` | `_protect` |
+| `adaptar_cookie_sessao` | `adapt_session_cookie` |
+| `adotar` | `adopt` |
+| `gerar_token_csrf` | `generate_csrf_token` |
+| `hash_ficticio` | `dummy_hash` |
+| `hash_reconhecido` | `is_known_hash` |
+| `hash_senha` | `hash_password` |
+| `ip_origem` | `client_ip` |
+| `normalizar_origem` | `normalize_origin` |
+| `origem_permitida` | `is_allowed_origin` |
+| `precisa_rehash` | `needs_rehash` |
+| `retirar_senhas` | `strip_passwords` |
+| `sessao_expirada` | `is_session_expired` |
+| `validar_next` | `validate_next` |
+| `validar_politica_senha` | `validate_password_policy` |
+| `validar_token_csrf` | `validate_csrf_token` |
+| `verificar_senha` | `verify_password` |
+
+### `masking`
+
+| Antes | Depois |
+|---|---|
+| `MASCARA` | `MASK` |
+| `MASCARADOR` | `MASKER` |
+| `MAX_TOKEN_RETIDO` | `MAX_HELD_TOKEN` |
+| `Mascarador` | `Masker` |
+| `MascaradorFluxo` | `StreamMasker` |
+| `TAMANHO_MINIMO` | `MIN_LENGTH` |
+| `_FiltroMascara` | `_MaskFilter` |
+| `_MARCA_FILTRO` | `_FILTER_MARK` |
+| `_mascarar_arg` | `_mask_arg` |
+| `_recuar_connect_string` | `_trim_connect_string` |
+| `alimentar` | `feed` |
+| `filtro_logging` | `logging_filter` |
+| `instalar_filtro_em_handlers` | `install_filter_on_handlers` |
+| `mascarar` | `mask` |
+| `registrar_segredo` | `register_secret` |
+
+### `path_guard`
+
+| Antes | Depois |
+|---|---|
+| `ARGS_FIXOS` | `FIXED_ARGS` |
+| `Codigo` | `Code` |
+| `PASTAS_DO_SISTEMA` | `SYSTEM_DIRS` |
+| `PathGuardErro` | `PathGuardError` |
+| `TAMANHO_MAXIMO` | `MAX_LENGTH` |
+| `_dentro` | `_inside` |
+| `checar_pastas_proibidas` | `check_forbidden_dirs` |
+| `resolver` | `resolve` |
+| `validar_cadastro` | `validate_registration` |
+| `validar_executavel` | `validate_executable` |
+| `validar_interpretador` | `validate_interpreter` |
+
+### `env_builder`
+
+| Antes | Depois |
+|---|---|
+| `PATH_FILHO` | `CHILD_PATH` |
+| `PLATAFORMAS` | `PLATFORMS` |
+| `VAR_CONEXAO` | `CONNECTION_VAR` |
+| `VAR_CONEXAO_SSS` | `SSS_CONNECTION_VAR` |
+| `_FMT_DATA` | `_DATE_FMT` |
+| `_conexao` | `_connection` |
+| `_data` | `_date` |
+| `_definir` | `_set` |
+| `construir` | `build` |
+| `dir_trabalho_script` | `script_work_dir` |
+| `usuario_execucao` | `exec_user` |
+
+### `ddl_builder`
+
+| Antes | Depois |
+|---|---|
+| `CATALOGO_AMBIENTES_PADRAO` | `DEFAULT_ENVIRONMENTS` |
+| `CATALOGO_FUNCIONALIDADES` | `FEATURE_CATALOG` |
+| `CATALOGO_PARAMETROS_PADRAO` | `DEFAULT_PARAMETERS` |
+| `CATALOGO_PERFIS_PADRAO` | `DEFAULT_PROFILES` |
+| `CATALOGO_SCRIPTS_PADRAO` | `DEFAULT_SCRIPTS` |
+| `CATALOGO_USUARIOS_PADRAO` | `DEFAULT_USERS` |
+| `COLUNAS_REGISTRO_DESCRICOES` | `RECORD_COLUMN_DESCRIPTIONS` |
+| `DICIONARIO_COLUNAS` | `COLUMN_COMMENTS` |
+| `DICIONARIO_TABELAS` | `TABLE_COMMENTS` |
+| `HASH_SENHA_PADRAO_HOMOLOGACAO` | `HOMOLOGATION_DEFAULT_PASSWORD_HASH` |
+| `ItemDDL` | `DDLItem` |
+| `ORDEM_ROLLBACK_ENTIDADES` | `ROLLBACK_ENTITY_ORDER` |
+| `PAPEIS_GRANT` | `GRANT_ROLES` |
+| `_formatar_coluna` | `_format_column` |
+| `_linhas_seed_por_tabela` | `_seed_rows_by_table` |
+| `_lista_literais` | `_literal_list` |
+| `gerar_grants_por_papel` | `build_grants_by_role` |
+| `gerar_instrucoes_comentarios` | `build_comment_statements` |
+| `gerar_instrucoes_ddl` | `build_ddl_statements` |
+| `gerar_instrucoes_rollback` | `build_rollback_statements` |
+| `gerar_instrucoes_seed` | `build_seed_statements` |
+| `gerar_script_ddl` | `build_ddl_script` |
+| `gerar_script_implantacao_completo` | `build_full_deploy_script` |
+| `gerar_script_rollback` | `build_rollback_script` |
+| `gerar_script_seed` | `build_seed_script` |
+| `gerar_script_validacao` | `build_validation_script` |
+
+### `rbac.Reason` (atributo e valor)
+
+| Antes | Depois |
+|---|---|
+| `DADO_INVALIDO` | `INVALID_DATA` |
+| `PERFIL_INATIVO` | `PROFILE_INACTIVE` |
+| `SEM_AMBIENTE` | `NO_ENVIRONMENT` |
+| `SEM_FUNC` | `NO_FEATURE` |
+| `SEM_HOMOLOGACAO` | `NOT_HOMOLOGATED` |
+| `SEM_SCRIPT` | `NO_SCRIPT` |
+
+### `path_guard.Code` (atributo e valor)
+
+| Antes | Depois |
+|---|---|
+| `CAMINHO_NAO_NORMALIZADO` | `PATH_NOT_NORMALIZED` |
+| `CAMINHO_RELATIVO` | `RELATIVE_PATH` |
+| `CARACTERE_INVALIDO` | `INVALID_CHARACTER` |
+| `CONTEM_PONTOS` | `HAS_DOTS` |
+| `GRAVAVEL_GRUPO_OUTROS` | `GROUP_OTHER_WRITABLE` |
+| `NAO_ENCONTRADO` | `NOT_FOUND` |
+| `NAO_E_ARQUIVO` | `NOT_A_FILE` |
+| `PASTA_DO_SISTEMA` | `SYSTEM_DIR` |
+| `PASTA_DO_SSS` | `SSS_DIR` |
+| `SEM_ACESSO` | `NO_ACCESS` |
+| `SEPARADOR_INVALIDO` | `INVALID_SEPARATOR` |
+
+### Códigos de saúde (`agents_service`; atributo e valor)
+
+| Antes | Depois |
+|---|---|
+| `ATRASADO` | `DELAYED` |
+| `EM_RISCO` | `AT_RISK` |
+
+### `recurrence.Decision` (campos)
+
+| Antes | Depois |
+|---|---|
+| `concluir` | `complete` |
+| `cron_erro` | `cron_error` |
+| `gerar_ticket` | `create_ticket` |
+| `nova_data` | `next_date` |
+| `ocorrencia` | `occurrence` |
+| `perdidas` | `missed` |
+
+### Repositório de saída
+
+| Antes | Depois |
+|---|---|
+| `RepoSchedulerOutput.concluir` | `complete` |
+
+## 7. Validação do bloco 3a
+
+* Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, percurso real das telas e conferência de resíduos.
+* Achados na conferência e corrigidos: nome reexportado (`recurrence.CronErro`, em `schedule_expansion`) que a ferramenta por escopo não alcança; módulo falso de teste (`masking_stub`) com o nome antigo; códigos compostos (`PATH_GUARD_<código>`) que a troca por palavra inteira não pega.

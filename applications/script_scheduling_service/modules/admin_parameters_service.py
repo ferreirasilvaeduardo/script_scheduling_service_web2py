@@ -15,7 +15,7 @@ import params_compiler
 import ui_helpers
 import rbac
 from admin_crud import CAMPO_GERAL, OperacaoNegada
-from params_compiler import ParamErro, TIPOS_COMPONENTE
+from params_compiler import ParamError, COMPONENT_TYPES
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FUNCIONALIDADE = "MANAGE_PARAMETERS"
@@ -29,7 +29,7 @@ TAMANHO_PADRAO = 100
 TAMANHO_REGEX = 150
 ROTULOS_TIPO = (("TEXT", u"Texto"), ("NUMBER", u"Número"), ("DATE", u"Data"), ("SELECT", u"Lista de opções"),
                 ("CHECKBOX", u"Sim/Não"))
-MASCARA = params_compiler.MASCARA
+MASCARA = params_compiler.MASK
 
 _RE_ID = re.compile(r"[0-9]{1,10}")
 _RE_CODIGO = re.compile(r"[a-z0-9_]{1,30}")
@@ -97,7 +97,7 @@ def normalizar_filtros(entrada):
         if valor and _RE_FILTRO.fullmatch(valor):
             filtros[chave] = valor
     tipo = admin_crud.texto(entrada.get("component_type"), 20)
-    if tipo in TIPOS_COMPONENTE:
+    if tipo in COMPONENT_TYPES:
         filtros["component_type"] = tipo
     ativo = admin_crud.texto(entrada.get("active"), 1)
     if ativo in ("Y", "N"):
@@ -171,7 +171,7 @@ class ServicoAdminParametros(object):
     def formulario(self, ctx, parametro_id=None):
         """Dados do formulario. Padrao de parametro sensivel nunca e devolvido (apenas 'tem_padrao')."""
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        pode_regex = rbac.tem_func(ctx, FUNCIONALIDADE) and ctx.get("is_admin") is True
+        pode_regex = rbac.has_feature(ctx, FUNCIONALIDADE) and ctx.get("is_admin") is True
         if parametro_id in (None, ""):
             return {"id": None, "code": "", "param_flag": "", "label": "", "description": "",
                     "component_type": "TEXT", "options_json": "", "default_value": "", "tem_padrao": False,
@@ -198,15 +198,15 @@ class ServicoAdminParametros(object):
         """Tipo, opcoes e regex validados (a configuracao que valida valores); atual e None na inclusao."""
         admin = ctx.get("is_admin") is True
         tipo = admin_crud.texto(dados.get("component_type"), 20)
-        if tipo not in TIPOS_COMPONENTE:
+        if tipo not in COMPONENT_TYPES:
             erros["component_type"] = MSG_TIPO_INVALIDO
             tipo = None
 
         opcoes = admin_crud.texto(dados.get("options_json"))
         if tipo == "SELECT":
             try:
-                opcoes = params_compiler.validar_opcoes_cadastro(opcoes)
-            except ParamErro as exc:
+                opcoes = params_compiler.validate_registry_options(opcoes)
+            except ParamError as exc:
                 erros["options_json"] = exc.mensagem
                 opcoes = None
         elif opcoes is not None:
@@ -232,8 +232,8 @@ class ServicoAdminParametros(object):
                 erros["validation_regex"] = MSG_REGEX_TAMANHO
             else:
                 try:
-                    params_compiler.validar_regex_cadastro(regex)
-                except ParamErro as exc:
+                    params_compiler.validate_registry_regex(regex)
+                except ParamError as exc:
                     erros["validation_regex"] = exc.mensagem
         return tipo, opcoes, regex
 
@@ -255,8 +255,8 @@ class ServicoAdminParametros(object):
         flag = admin_crud.texto(dados.get("param_flag"))
         if flag is not None:
             try:
-                params_compiler.validar_flag(flag)
-            except ParamErro as exc:
+                params_compiler.validate_flag(flag)
+            except ParamError as exc:
                 erros["param_flag"] = exc.mensagem
         label = admin_crud.texto_livre(dados.get("label"), erros, "label")
         if label is None:
@@ -286,8 +286,8 @@ class ServicoAdminParametros(object):
             erros["sensitive"] = MSG_SENSIVEL_MONOTONICO
         if bruto is not None and not any(k in erros for k in ("component_type", "options_json", "validation_regex")):
             try:
-                padrao = _padrao_texto(params_compiler.validar_valor(dict(reg, code=reg["code"]), bruto))
-            except ParamErro as exc:
+                padrao = _padrao_texto(params_compiler.validate_value(dict(reg, code=reg["code"]), bruto))
+            except ParamError as exc:
                 erros["default_value"] = exc.mensagem
                 padrao = None
             if padrao is not None and len(padrao) > TAMANHO_PADRAO:
@@ -434,8 +434,8 @@ class ServicoAdminParametros(object):
         if not isinstance(valor, str):
             return {"ok": False, "erro": u"Informe um valor para testar."}
         try:
-            normalizado = _padrao_texto(params_compiler.validar_valor(config, valor))
-        except ParamErro as exc:
+            normalizado = _padrao_texto(params_compiler.validate_value(config, valor))
+        except ParamError as exc:
             return {"ok": False, "erro": exc.mensagem}
         if admin_crud.texto(dados.get("sensitive"), 1) == "Y":
             normalizado = MASCARA

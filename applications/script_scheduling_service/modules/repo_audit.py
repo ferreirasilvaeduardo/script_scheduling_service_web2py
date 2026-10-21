@@ -20,7 +20,7 @@ class RepoAudit(object):
         """Lista registros de auditoria ordenados por created_at DESC, id DESC.
 
         Chaves de filtros: ator (trecho, sem distinguir caixa), acao, entidade, entidade_id,
-        ip_origem (trecho), data_inicio e data_fim (inclusivos) e id_max (inclusivo).
+        client_ip (trecho), data_inicio e data_fim (inclusivos) e id_max (inclusivo).
         """
         raise NotImplementedError
 

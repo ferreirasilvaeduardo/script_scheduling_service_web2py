@@ -129,7 +129,7 @@ class _Agenda(object):
         return True
 
     def complete_with_ticket(self, conn, regra, antiga, tid, ticket, linhas, agente_id):
-        self._escrever("concluir")
+        self._escrever("complete")
         if not self._regra_ok(regra["id"], antiga):
             return False
         self.regras[regra["id"]].update(active="N", pause_reason="COMPLETED", last_run_at=AGORA,
@@ -139,7 +139,7 @@ class _Agenda(object):
         return True
 
     def complete_without_ticket(self, conn, rid, antiga, agente_id):
-        self._escrever("concluir")
+        self._escrever("complete")
         if not self._regra_ok(rid, antiga):
             return False
         self.regras[rid].update(active="N", pause_reason="COMPLETED", updated_by="SYSTEM:%s" % agente_id)
@@ -197,7 +197,7 @@ class _Fila(object):
 
     def execution_context(self, conn, ticket):
         return {"script": dict(self.script), "environment": dict(self.ambiente), "homologacoes": self.homologacoes,
-                "ctx": rbac.contexto_usuario(dict(self.usuario)) if self.usuario else None, "agendamento": None}
+                "ctx": rbac.user_context(dict(self.usuario)) if self.usuario else None, "agendamento": None}
 
 
 def _vinculo():
@@ -225,7 +225,7 @@ class _Base(unittest.TestCase):
         self.horizonte = None
 
     def des(self):
-        return schedule_expansion.Desdobro(self.agenda, self.fila, AGENTE, self.cfg, lambda: self.monotonico[0],
+        return schedule_expansion.Expansion(self.agenda, self.fila, AGENTE, self.cfg, lambda: self.monotonico[0],
                                  horizonte_dias=self.horizonte)
 
     def regra(self, rid=1, **kw):
@@ -239,8 +239,8 @@ class _Base(unittest.TestCase):
         self.agenda.regras[rid] = base
         return base
 
-    def processar(self, rid=1):
-        return self.des().processar(self.conn, rid)
+    def process(self, rid=1):
+        return self.des().process(self.conn, rid)
 
 
 class TestDesdobro(_Base):
@@ -248,7 +248,7 @@ class TestDesdobro(_Base):
     def test_ticket_com_ocorrencia_snapshot_v4_e_um_commit(self):
         self.regra()
         with self.assertLogs("sss_scheduler", "INFO") as logs:
-            self.assertEqual(self.processar(), "TICKET")
+            self.assertEqual(self.process(), "TICKET")
         self.assertEqual(self.conn.commits, 1, "COMMIT unico por regra")
         r = self.agenda.regras[1]
         t = self.agenda.tickets[r["last_ticket_id"]]
@@ -265,10 +265,10 @@ class TestDesdobro(_Base):
     def test_corrida_e_outro_agente(self):
         self.regra()
         self.agenda.reserve_and_create_ticket = lambda *a: False
-        self.assertEqual(self.processar(), "CORRIDA")
+        self.assertEqual(self.process(), "CORRIDA")
         self.assertEqual((self.agenda.tickets, self.conn.commits), ({}, 0))
         self.agenda.travadas_por_outro.add(1)
-        self.assertEqual(self.processar(), "OUTRO_AGENTE")
+        self.assertEqual(self.process(), "OUTRO_AGENTE")
 
     def test_pausas_pelo_rbac_com_a_traducao_unica(self):
         casos = (("usuario_ativo", "N", "USER_INACTIVE"), ("perfil_ativo", "N", "NO_PERMISSION"),
@@ -279,7 +279,7 @@ class TestDesdobro(_Base):
             self.regra(i)
             self.fila.usuario[campo] = valor
             with self.assertLogs("sss_scheduler", "WARNING"):
-                self.assertEqual(self.processar(i), "PAUSADA", campo)
+                self.assertEqual(self.process(i), "PAUSADA", campo)
             self.assertEqual(self.agenda.regras[i]["pause_reason"], motivo, campo)
             self.assertEqual(self.agenda.regras[i]["updated_by"], "SYSTEM:" + AGENTE)
         for chave, motivo in ((("script", "active"), "SCRIPT_INACTIVE"), (("ambiente", "active"), "ENVIRONMENT_INACTIVE")):
@@ -287,34 +287,34 @@ class TestDesdobro(_Base):
             self.regra()
             getattr(self.fila, chave[0])[chave[1]] = "N"
             with self.assertLogs("sss_scheduler", "WARNING"):
-                self.processar()
+                self.process()
             self.assertEqual(self.agenda.regras[1]["pause_reason"], motivo)
 
     def test_r33_todo_motivo_do_rbac_cabe_na_ck(self):
         aceitos = sql_ident.TABLES["schedules"]["cks"]["pause"]["expr"]
-        for nome in dir(rbac.Motivo):
+        for nome in dir(rbac.Reason):
             if nome.startswith("_") or nome == "OK":
                 continue
-            self.assertIn("'%s'" % rbac.motivo_pausa(getattr(rbac.Motivo, nome)), aceitos, nome)
+            self.assertIn("'%s'" % rbac.pause_reason_for(getattr(rbac.Reason, nome)), aceitos, nome)
 
     def test_prioridade_rebaixada(self):
         self.regra(priority=1)
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.processar()
+            self.process()
         t = self.agenda.tickets[self.agenda.regras[1]["last_ticket_id"]]
         self.assertEqual((t["priority"], self.agenda.regras[1]["priority"]), (2, 1), "a regra nao muda")
         self.assertTrue(any("PRIORIDADE_REBAIXADA" in l for l in logs.output))
         self.setUp()
         self.regra(priority=1)
         self.fila.usuario["is_admin"] = "Y"
-        self.processar()
+        self.process()
         self.assertEqual(self.agenda.tickets[self.agenda.regras[1]["last_ticket_id"]]["priority"], 1)
 
     def test_sobreposicao_avanca_sem_ticket_e_preso(self):
         self.regra(last_ticket_id=50)
         self.agenda.tickets[50] = {"status": "RUNNING", "created_at": AGORA - datetime.timedelta(minutes=5)}
         with self.assertLogs("sss_scheduler", "INFO") as logs:
-            self.assertEqual(self.processar(), "AVANCADA")
+            self.assertEqual(self.process(), "AVANCADA")
         r = self.agenda.regras[1]
         self.assertEqual((r["last_ticket_id"], r["next_run_at"], r["last_run_at"]),
                          (50, datetime.datetime(2026, 10, 21, 9, 55), None), "R-05: sem mexer no ultimo ticket")
@@ -323,20 +323,20 @@ class TestDesdobro(_Base):
         self.regra(last_ticket_id=50)
         self.agenda.tickets[50] = {"status": "PENDING", "created_at": AGORA - datetime.timedelta(hours=2)}
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.processar()
+            self.process()
         self.assertTrue(any("SKIP_OVERLAP_PRESO: o ticket 50" in l for l in logs.output), "600 + 180 s < 2 h")
         for livre in (None, "SUCCESS"):
             self.setUp()
             self.regra(last_ticket_id=50)
             if livre:
                 self.agenda.tickets[50] = {"status": livre, "created_at": AGORA}
-            self.assertEqual(self.processar(), "TICKET", "inexistente (purgado) ou terminal e livre")
+            self.assertEqual(self.process(), "TICKET", "inexistente (purgado) ou terminal e livre")
 
     def test_misfire_run_once_e_skip(self):
         tres_dias = datetime.datetime(2026, 10, 17, 9, 55)
         self.regra(next_run_at=tres_dias)
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.assertEqual(self.processar(), "TICKET")
+            self.assertEqual(self.process(), "TICKET")
         self.assertEqual(len(self.agenda.tickets), 1, "RUN_ONCE: um ticket apos o downtime")
         self.assertEqual(list(self.agenda.tickets.values())[0]["scheduled_at"], datetime.datetime(2026, 10, 20, 9, 55))
         self.assertTrue(any("MISFIRE: 3 ocorrencia(s) perdida(s)" in l for l in logs.output))
@@ -344,7 +344,7 @@ class TestDesdobro(_Base):
         self.cfg = _Cfg(misfire_policy="SKIP")
         self.regra(next_run_at=tres_dias, run_time="09:00")
         with self.assertLogs("sss_scheduler", "WARNING"):
-            self.assertEqual(self.processar(), "AVANCADA")
+            self.assertEqual(self.process(), "AVANCADA")
         self.assertEqual((self.agenda.tickets, self.agenda.regras[1]["next_run_at"]),
                          ({}, datetime.datetime(2026, 10, 21, 9, 0)))
         # R-21: SKIP com a vencida mais recente dentro da tolerancia gera o ticket dela.
@@ -352,20 +352,20 @@ class TestDesdobro(_Base):
         self.cfg = _Cfg(misfire_policy="SKIP")
         self.regra(next_run_at=tres_dias)
         with self.assertLogs("sss_scheduler", "INFO"):
-            self.assertEqual(self.processar(), "TICKET")
+            self.assertEqual(self.process(), "TICKET")
 
     def test_perdidas_dentro_da_tolerancia_em_info(self):
         self.regra(recurrence_type="CRON", cron_expression="* * * * *", run_time=None,
                    next_run_at=AGORA - datetime.timedelta(minutes=3))
         with self.assertLogs("sss_scheduler", "INFO") as logs:
-            self.processar()
+            self.process()
         self.assertTrue(any("ocorrencia(s) coalescida(s) dentro da tolerancia" in l for l in logs.output))
         self.assertFalse(any("WARNING" in l for l in logs.output))
 
     def test_unica_conclui_com_e_sem_ticket(self):
         self.regra(recurrence_type="ONCE", run_time=None)
         with self.assertLogs("sss_scheduler", "INFO") as logs:
-            self.assertEqual(self.processar(), "CONCLUIDA_COM_TICKET")
+            self.assertEqual(self.process(), "CONCLUIDA_COM_TICKET")
         r = self.agenda.regras[1]
         self.assertEqual((r["active"], r["pause_reason"], r["next_run_at"]),
                          ("N", "COMPLETED", datetime.datetime(2026, 10, 20, 9, 55)), "proxima_execucao mantida (D1)")
@@ -376,19 +376,19 @@ class TestDesdobro(_Base):
         self.cfg = _Cfg(misfire_policy="SKIP")
         self.regra(recurrence_type="ONCE", run_time=None, next_run_at=datetime.datetime(2026, 10, 19, 9, 0))
         with self.assertLogs("sss_scheduler", "INFO"):
-            self.assertEqual(self.processar(), "CONCLUIDA_SEM_TICKET")
+            self.assertEqual(self.process(), "CONCLUIDA_SEM_TICKET")
         self.assertEqual((self.agenda.tickets, self.agenda.regras[1]["last_ticket_id"]), ({}, None))
 
     def test_data_fim_conclui_com_o_ticket_da_ocorrencia(self):
         self.regra(end_date=datetime.datetime(2026, 10, 20, 23, 59))
-        self.assertEqual(self.processar(), "CONCLUIDA_COM_TICKET")
+        self.assertEqual(self.process(), "CONCLUIDA_COM_TICKET")
         self.assertEqual(self.agenda.regras[1]["pause_reason"], "COMPLETED")
 
     def test_sobreposicao_numa_regra_que_conclui(self):
         self.regra(recurrence_type="ONCE", run_time=None, last_ticket_id=50)
         self.agenda.tickets[50] = {"status": "RUNNING", "created_at": AGORA}
         with self.assertLogs("sss_scheduler", "INFO") as logs:
-            self.assertEqual(self.processar(), "CONCLUIDA_SEM_TICKET")
+            self.assertEqual(self.process(), "CONCLUIDA_SEM_TICKET")
         self.assertTrue(any("SKIP_OVERLAP: regra concluida sem ticket; ocorrencias perdidas: 1" in l
                             for l in logs.output))
         self.assertEqual(len(self.agenda.tickets), 1)
@@ -396,19 +396,19 @@ class TestDesdobro(_Base):
     def test_param_invalido_e_cron_invalido(self):
         self.regra(params_json=json.dumps({}))
         with self.assertLogs("sss_scheduler", "WARNING"):
-            self.assertEqual(self.processar(), "PAUSADA")
+            self.assertEqual(self.process(), "PAUSADA")
         self.assertEqual(self.agenda.regras[1]["pause_reason"], "INVALID_PARAM")
         detalhe = self.agenda.audit[0][1]
         self.assertTrue(detalhe.startswith("pause_reason: INVALID_PARAM; data_ref: "), detalhe)
         self.setUp()
         self.regra(params_json="{nao json")
         with self.assertLogs("sss_scheduler", "WARNING"):
-            self.processar()
+            self.process()
         self.assertEqual(self.agenda.regras[1]["pause_reason"], "INVALID_PARAM")
         self.setUp()
         self.regra(recurrence_type="CRON", cron_expression="99 * * * *", run_time=None)
         with self.assertLogs("sss_scheduler", "WARNING"):
-            self.assertEqual(self.processar(), "PAUSADA")
+            self.assertEqual(self.process(), "PAUSADA")
         self.assertEqual((self.agenda.regras[1]["pause_reason"], self.agenda.tickets), ("INVALID_CRON", {}))
 
     def test_r19_cron_sem_proxima_no_horizonte(self):
@@ -417,25 +417,25 @@ class TestDesdobro(_Base):
         self.regra(recurrence_type="CRON", cron_expression="0 10 29 2 *", run_time=None,
                    next_run_at=datetime.datetime(2026, 10, 20, 9, 55))
         self.agenda.regras[1]["cron_expression"] = "55 9 * * *"
-        with mock.patch("recurrence.proxima_execucao", side_effect=schedule_expansion.recurrence.CronErro("sem ocorrencia")):
+        with mock.patch("recurrence.next_run", side_effect=schedule_expansion.recurrence.CronError("sem ocorrencia")):
             with self.assertLogs("sss_scheduler", "WARNING"):
-                self.assertEqual(self.processar(), "CRON_INVALIDO_COM_TICKET")
+                self.assertEqual(self.process(), "CRON_INVALIDO_COM_TICKET")
         r = self.agenda.regras[1]
         self.assertEqual((r["pause_reason"], r["next_run_at"]), ("INVALID_CRON", datetime.datetime(2026, 10, 20, 9, 55)))
         self.assertEqual(len(self.agenda.tickets), 1, "o ticket da vencida e gerado antes de pausar")
         self.setUp()
         self.regra(recurrence_type="CRON", cron_expression="55 9 * * *", run_time=None, last_ticket_id=50)
         self.agenda.tickets[50] = {"status": "RUNNING", "created_at": AGORA}
-        with mock.patch("recurrence.proxima_execucao", side_effect=schedule_expansion.recurrence.CronErro("sem ocorrencia")):
+        with mock.patch("recurrence.next_run", side_effect=schedule_expansion.recurrence.CronError("sem ocorrencia")):
             with self.assertLogs("sss_scheduler", "WARNING"):
-                self.assertEqual(self.processar(), "INVALID_CRON")
+                self.assertEqual(self.process(), "INVALID_CRON")
         self.assertEqual(len(self.agenda.tickets), 1, "sobreposicao: sem ticket novo")
 
     def test_r31_ocorrencia_duplicada_avanca_numa_nova_transacao(self):
         self.regra()
         self.agenda.duplicar.add((1, datetime.datetime(2026, 10, 20, 9, 55)))
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.assertEqual(self.processar(), "OCORRENCIA_DUPLICADA")
+            self.assertEqual(self.process(), "OCORRENCIA_DUPLICADA")
         r = self.agenda.regras[1]
         self.assertEqual((r["next_run_at"], r["last_ticket_id"]), (datetime.datetime(2026, 10, 21, 9, 55), None))
         self.assertEqual((self.conn.rollbacks, self.conn.commits), (1, 1))
@@ -449,12 +449,12 @@ class TestDesdobro(_Base):
         for n in (1, 2):
             self.agenda.falhas = [("inserir_ticket", espaco)]
             with self.assertLogs("sss_scheduler", "WARNING") as logs:
-                self.assertEqual(d.processar(self.conn, 1), "ERRO_BANCO")
+                self.assertEqual(d.process(self.conn, 1), "ERRO_BANCO")
             self.assertTrue(any("DESDOBRO_ERRO_BANCO: ORA-01653 (falha %d de 3 seguidas)" % n in l for l in logs.output))
             self.assertEqual((self.agenda.regras[1]["active"], self.agenda.tickets), ("Y", {}), "sem pausar")
         self.agenda.falhas = [("inserir_ticket", espaco)]
         with self.assertLogs("sss_scheduler", "WARNING"):
-            self.assertEqual(d.processar(self.conn, 1), "INTERNAL_ERROR")
+            self.assertEqual(d.process(self.conn, 1), "INTERNAL_ERROR")
         self.assertEqual(self.agenda.regras[1]["pause_reason"], "INTERNAL_ERROR")
         self.assertIn("3 falhas seguidas de banco (ORA-01653)", self.agenda.audit[-1][1])
         # Sucesso zera o contador.
@@ -463,15 +463,15 @@ class TestDesdobro(_Base):
         d = self.des()
         self.agenda.falhas = [("inserir_ticket", espaco)]
         with self.assertLogs("sss_scheduler", "WARNING"):
-            d.processar(self.conn, 1)
-        self.assertEqual(d.processar(self.conn, 1), "TICKET")
+            d.process(self.conn, 1)
+        self.assertEqual(d.process(self.conn, 1), "TICKET")
         self.assertEqual(d.falhas, {})
         # Excecao que nao e de banco pausa na primeira, em transacao separada (R-08).
         self.setUp()
         self.regra()
         self.agenda.falhas = [("load_rule", ValueError("dado incoerente"))]
         with self.assertLogs("sss_scheduler", "ERROR"):
-            self.assertEqual(self.processar(), "INTERNAL_ERROR")
+            self.assertEqual(self.process(), "INTERNAL_ERROR")
         self.assertEqual(self.agenda.regras[1]["pause_reason"], "INTERNAL_ERROR")
         self.assertEqual(self.agenda.audit[-1][1], "pause_reason: INTERNAL_ERROR; ValueError")
 
@@ -480,7 +480,7 @@ class TestDesdobro(_Base):
         self.regra(2, next_run_at=datetime.datetime(2026, 10, 20, 9, 56))
         self.agenda.falhas = [("load_rule", ValueError("x")), ("pause_internal_error", ValueError("y"))]
         with self.assertLogs("sss_scheduler", "ERROR"):
-            stats = self.des().executar(self.conn)
+            stats = self.des().run(self.conn)
         self.assertEqual(stats["tickets"], 1, "a regra 2 segue")
         self.assertEqual(self.agenda.regras[1]["active"], "Y")
 
@@ -491,7 +491,7 @@ class TestDesdobro(_Base):
         paginas = []
         original = self.agenda.due_rules
         self.agenda.due_rules = lambda *a: paginas.append(a[2:]) or original(*a)
-        self.assertEqual(self.des().executar(self.conn)["tickets"], 5)
+        self.assertEqual(self.des().run(self.conn)["tickets"], 5)
         self.assertEqual(len(paginas), 3, "2 + 2 + 1")
         self.assertEqual(paginas[0], (None, 0))
         self.assertEqual(paginas[1], (datetime.datetime(2026, 10, 20, 9, 52), 2))
@@ -500,19 +500,19 @@ class TestDesdobro(_Base):
         for i in range(1, 6):
             self.regra(i, next_run_at=datetime.datetime(2026, 10, 20, 9, 50 + i))
         d = self.des()
-        original_proc = d.processar
+        original_proc = d.process
 
         def lento(conn, rid):
             self.monotonico[0] += 2.0
             return original_proc(conn, rid)
-        d.processar = lento
-        self.assertEqual(d.executar(self.conn)["tickets"], 3)
+        d.process = lento
+        self.assertEqual(d.run(self.conn)["tickets"], 3)
         self.assertEqual(sum(1 for r in self.agenda.regras.values() if r["last_ticket_id"]), 3)
 
     def test_continuar_falso_interrompe_entre_regras(self):
         self.regra(1)
         self.regra(2)
-        self.assertEqual(self.des().executar(self.conn, continuar=lambda: False)["regras"], 0)
+        self.assertEqual(self.des().run(self.conn, continuar=lambda: False)["regras"], 0)
 
 
 if __name__ == "__main__":
@@ -555,7 +555,7 @@ class TestDesdobroOracle(unittest.TestCase):
         self.rbac.matrix_save(self.c["perfil"]["id"], funcs, [self.c["amb1"]["id"]], [self.c["scr"]["id"]],
                                 ator=self._massa.ator)
         self.agente = "tst-ha-%s" % self._massa.suf
-        self.des = schedule_expansion.Desdobro(RepoSchedulerSchedules(cat._owner, cat._prefixo),
+        self.des = schedule_expansion.Expansion(RepoSchedulerSchedules(cat._owner, cat._prefixo),
                                      RepoSchedulerQueue(cat._owner, cat._prefixo), self.agente, _Cfg(),
                                      lambda: 0.0)
         self.conn = cat._obter_conexao()
@@ -586,8 +586,8 @@ class TestDesdobroOracle(unittest.TestCase):
         ok = self._regra({prm_a: "valor-a"})
         ruim = self._regra({})
         with self.assertLogs("sss_scheduler", "INFO"):
-            self.assertEqual(self.des.processar(self.conn, ok["id"]), "TICKET")
-            self.assertEqual(self.des.processar(self.conn, ruim["id"]), "PAUSADA")
+            self.assertEqual(self.des.process(self.conn, ok["id"]), "TICKET")
+            self.assertEqual(self.des.process(self.conn, ruim["id"]), "PAUSADA")
         agd = self.obter_repo("schedules")
         r_ok, r_ruim = agd.get(ok["id"]), agd.get(ruim["id"])
         self.assertGreater(r_ok["next_run_at"], ok["next_run_at"])

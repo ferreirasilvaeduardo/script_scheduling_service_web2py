@@ -41,12 +41,12 @@ def index():
     # Cada cartao so existe para quem tem a funcionalidade (F6.1); o escopo e o das telas de origem.
     if ticket_service.pode_consultar(ctx):
         cartoes["tickets"] = _cartao(ctx, "tickets", lambda: ticket_service.resumo_inicial(ctx))
-    if rbac.tem_func(ctx, "MANAGE_SCHEDULES"):
+    if rbac.has_feature(ctx, "MANAGE_SCHEDULES"):
         cartoes["schedules"] = _cartao(
             ctx, "schedules", lambda: schedules_service.listar(ctx, {"active": "Y"}, 1, 5)["itens"])
-    if rbac.tem_func(ctx, "VIEW_AUDIT"):
+    if rbac.has_feature(ctx, "VIEW_AUDIT"):
         cartoes["agents"] = _cartao(ctx, "agents", lambda: agents_service.painel(ctx))
-    return dict(ctx=ctx, menu=response.sss_menu, pode_disparar=rbac.tem_func(ctx, "EXEC_SCRIPT"),
+    return dict(ctx=ctx, menu=response.sss_menu, pode_disparar=rbac.has_feature(ctx, "EXEC_SCRIPT"),
                 cartoes=cartoes)
 
 
@@ -55,7 +55,7 @@ def login():
     if metodo not in ("GET", "HEAD", "POST"):
         raise HTTP(405)
     response.title = u"Entrar — SSS"
-    destino = security.validar_next(request.vars.get("next"))
+    destino = security.validate_next(request.vars.get("next"))
     if current.sss_ctx:
         redirect(destino or URL(c="default", f="index"))
 
@@ -63,12 +63,12 @@ def login():
     login_digitado = ""
     if metodo == "POST":
         login_digitado = _texto_post("login", 30).strip()
-        senha = security.retirar_senhas((request.post_vars, request.vars), ("senha",))["senha"]
+        senha = security.strip_passwords((request.post_vars, request.vars), ("senha",))["senha"]
         ctx, mensagem = auth_service.autenticar(login_digitado, senha, _ip_origem())
         if ctx is not None:
             # Em sessao por cookie, renew() apenas limpa: o cookie e regravado com conteudo novo.
             session.renew(clear_session=True)
-            session.csrf_token = security.gerar_token_csrf()
+            session.csrf_token = security.generate_csrf_token()
             session.usuario_id = ctx["user_id"]
             session.login = ctx["login"]
             session.perfil_id = ctx["profile_id"]
@@ -85,7 +85,7 @@ def logout():
     if current.sss_ctx:
         auth_service.logout(current.sss_ctx, _ip_origem())
     session.clear()
-    session.csrf_token = security.gerar_token_csrf()
+    session.csrf_token = security.generate_csrf_token()
     session.flash = {"tipo": "sucesso", "mensagem": u"Você saiu do sistema."}
     redirect(URL(c="default", f="login"))
 
@@ -116,18 +116,18 @@ def minha_senha():
     response.title = u"Minha senha — SSS"
     erros = {}
     if metodo == "POST":
-        senhas = security.retirar_senhas((request.post_vars, request.vars), _CAMPOS_MINHA_SENHA)
+        senhas = security.strip_passwords((request.post_vars, request.vars), _CAMPOS_MINHA_SENHA)
         resultado, erros = auth_service.trocar_senha(ctx, _ip_origem(), senhas["senha_atual"], senhas["nova"],
                                                      senhas["confirmacao"])
         if resultado == "BLOQUEADO":
             session.clear()
-            session.csrf_token = security.gerar_token_csrf()
+            session.csrf_token = security.generate_csrf_token()
             session.flash = {"tipo": "aviso", "mensagem": auth_service.MSG_BLOQUEIO}
             redirect(URL(c="default", f="login"))
         if resultado == "OK":
             # Nova senha, nova sessao: o cookie e regravado com conteudo novo e outro token CSRF.
             session.renew(clear_session=True)
-            session.csrf_token = security.gerar_token_csrf()
+            session.csrf_token = security.generate_csrf_token()
             session.usuario_id = ctx["user_id"]
             session.login = ctx["login"]
             session.perfil_id = ctx["profile_id"]
@@ -140,4 +140,4 @@ def minha_senha():
         response.flash = {"tipo": "erro", "mensagem": u"A senha não foi alterada. Veja os campos destacados."}
     campos = [{"name": n, "erro": erros.get(n)} for n in _CAMPOS_MINHA_SENHA]
     return dict(erros=erros, foco_campo=ui_helpers.primeiro_campo_invalido(campos),
-                ajuda_senha=u"Mínimo de %d caracteres. A senha nunca é exibida nem registrada." % security.SENHA_MIN)
+                ajuda_senha=u"Mínimo de %d caracteres. A senha nunca é exibida nem registrada." % security.PASSWORD_MIN)

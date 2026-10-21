@@ -14,7 +14,7 @@ from unittest import mock
 
 import params_compiler as pc
 import path_guard
-from params_compiler import ParamErro, SnapshotErro
+from params_compiler import ParamError, SnapshotError
 
 # UID fictício do agente: o dono dos arquivos de teste é o usuário do teste (CR-007, R-15).
 AGENTE_FALSO = 2 ** 31 - 3
@@ -45,13 +45,13 @@ REAL = "/opt/automacoes/scripts/faturamento/carga_faturas.py"
 class TestValidarValor(unittest.TestCase):
 
     def _erro(self, p, valor):
-        with self.assertRaises(ParamErro) as ctx:
-            pc.validar_valor(p, valor)
+        with self.assertRaises(ParamError) as ctx:
+            pc.validate_value(p, valor)
         self.assertEqual(ctx.exception.codigo_param, p["code"])
         return ctx.exception
 
     def test_strip(self):
-        self.assertEqual(pc.validar_valor(prm("t"), "  abc  "), "abc")
+        self.assertEqual(pc.validate_value(prm("t"), "  abc  "), "abc")
 
     def test_nul_e_controle(self):
         for valor in ("a\x00b", "a\x1bb", "a\x7fb", "a\nb", "a\tb", "\x01"):
@@ -60,12 +60,12 @@ class TestValidarValor(unittest.TestCase):
 
     def test_strip_antes_de_controle_e_tamanho(self):
         # CR-003 P5 (README §6.2): strip primeiro; controle so nas pontas nao rejeita.
-        self.assertEqual(pc.validar_valor(prm("t"), "\tabc\n"), "abc")
-        self.assertEqual(len(pc.validar_valor(prm("t"), "x" * 500 + "  ")), 500)
+        self.assertEqual(pc.validate_value(prm("t"), "\tabc\n"), "abc")
+        self.assertEqual(len(pc.validate_value(prm("t"), "x" * 500 + "  ")), 500)
         self._erro(prm("t"), "\ta\tb\n")
 
     def test_tamanho(self):
-        self.assertEqual(len(pc.validar_valor(prm("t"), "x" * 500)), 500)
+        self.assertEqual(len(pc.validate_value(prm("t"), "x" * 500)), 500)
         self._erro(prm("t"), "x" * 501)
 
     def test_tipo_nao_str(self):
@@ -74,7 +74,7 @@ class TestValidarValor(unittest.TestCase):
 
     def test_text_regex_fullmatch(self):
         p = prm("f", regex=r"[0-9]{4}")
-        self.assertEqual(pc.validar_valor(p, "0001"), "0001")
+        self.assertEqual(pc.validate_value(p, "0001"), "0001")
         # search casaria; fullmatch nao.
         self._erro(p, "00012")
         self._erro(p, "x0001")
@@ -85,22 +85,22 @@ class TestValidarValor(unittest.TestCase):
     def test_number(self):
         p = prm("n", "NUMBER")
         for ok in ("0", "-5", "123456789012345678", "1.123456", "-0.5"):
-            self.assertEqual(pc.validar_valor(p, ok), ok)
+            self.assertEqual(pc.validate_value(p, ok), ok)
         for ruim in ("1e3", "1.1234567", "1234567890123456789", "+1", "1.", ".5", "abc", "1,5"):
             with self.subTest(valor=ruim):
                 self._erro(p, ruim)
 
     def test_date(self):
         p = prm("d", "DATE")
-        self.assertEqual(pc.validar_valor(p, "2026-10-13"), "2026-10-13")
-        self.assertEqual(pc.validar_valor(p, "2026-1-5"), "2026-01-05")
+        self.assertEqual(pc.validate_value(p, "2026-10-13"), "2026-10-13")
+        self.assertEqual(pc.validate_value(p, "2026-1-5"), "2026-01-05")
         for ruim in ("2026-02-30", "13/10/2026", "2026-10-13 10:00", "x"):
             with self.subTest(valor=ruim):
                 self._erro(p, ruim)
 
     def test_select(self):
         p = prm("s", "SELECT", opcoes='{"CSV": "Arquivo CSV", "JSON": "Arquivo JSON"}')
-        self.assertEqual(pc.validar_valor(p, "CSV"), "CSV")
+        self.assertEqual(pc.validate_value(p, "CSV"), "CSV")
         self._erro(p, "XML")
         self._erro(p, "Arquivo CSV")
         self._erro(p, "csv")
@@ -115,7 +115,7 @@ class TestValidarValor(unittest.TestCase):
         p = prm("c", "CHECKBOX")
         for valor, esperado in (("true", True), ("TRUE", True), ("1", True), ("False", False),
                                 ("0", False), (True, True), (False, False)):
-            self.assertIs(pc.validar_valor(p, valor), esperado)
+            self.assertIs(pc.validate_value(p, valor), esperado)
         for ruim in ("sim", "yes", "2", 1):
             with self.subTest(valor=ruim):
                 self._erro(p, ruim)
@@ -136,19 +136,19 @@ class TestRegexCadastro(unittest.TestCase):
 
     def test_validas(self):
         for padrao in (r"^[0-9]{4}$", r"[A-Z]{2}-\d+", r"(abc)?x+"):
-            pc.validar_regex_cadastro(padrao)
+            pc.validate_registry_regex(padrao)
 
     def test_nao_compila(self):
         for padrao in (r"([0-9]", r"*a", None):
             with self.subTest(padrao=padrao):
-                with self.assertRaises(ParamErro):
-                    pc.validar_regex_cadastro(padrao)
+                with self.assertRaises(ParamError):
+                    pc.validate_registry_regex(padrao)
 
     def test_redos_rejeitada(self):
         for padrao in (r"(a+)+", r"(a*)*", r"(\w+){2}", r"^(x+y*)+$", r"(.*a)+"):
             with self.subTest(padrao=padrao):
-                with self.assertRaises(ParamErro) as ctx:
-                    pc.validar_regex_cadastro(padrao)
+                with self.assertRaises(ParamError) as ctx:
+                    pc.validate_registry_regex(padrao)
                 self.assertIn("README §6.2", ctx.exception.mensagem)
 
     def test_subconjunto_seguro_cr007(self):
@@ -161,102 +161,102 @@ class TestRegexCadastro(unittest.TestCase):
                      "a?" * 7 + "a" * 7, r"(?(1)a|b)", "x" * 151)
         for padrao in aceitas:
             with self.subTest(aceita=padrao):
-                pc.validar_regex_cadastro(padrao)
+                pc.validate_registry_regex(padrao)
                 for valor in ("a" * 500, "a" * 499 + "!"):
                     inicio = time.time()
                     re.fullmatch(padrao, valor)
                     self.assertLess(time.time() - inicio, 0.5)
         for padrao in recusadas:
             with self.subTest(recusada=padrao):
-                with self.assertRaises(ParamErro):
-                    pc.validar_regex_cadastro(padrao)
+                with self.assertRaises(ParamError):
+                    pc.validate_registry_regex(padrao)
 
     def test_valor_sensivel_minimo_de_4(self):
         prm_s = {"code": "doc", "label": "Doc", "component_type": "TEXT", "sensitive": "Y"}
-        with self.assertRaises(ParamErro) as ctx:
-            pc.validar_valor(prm_s, "abc")
+        with self.assertRaises(ParamError) as ctx:
+            pc.validate_value(prm_s, "abc")
         self.assertIn("pelo menos 4", ctx.exception.mensagem)
-        self.assertEqual(pc.validar_valor(prm_s, "abcd"), "abcd")
-        self.assertEqual(pc.validar_valor(prm_s, "  "), "")
-        self.assertEqual(pc.validar_valor(dict(prm_s, sensitive="N"), "abc"), "abc")
+        self.assertEqual(pc.validate_value(prm_s, "abcd"), "abcd")
+        self.assertEqual(pc.validate_value(prm_s, "  "), "")
+        self.assertEqual(pc.validate_value(dict(prm_s, sensitive="N"), "abc"), "abc")
 
 
 class TestCadastroOpcoesEFlag(unittest.TestCase):
 
     def test_opcoes_validas_preservam_ordem_e_normalizam(self):
-        self.assertEqual(pc.validar_opcoes_cadastro(' { "Z": " Último ", "A": "Primeiro" } '),
+        self.assertEqual(pc.validate_registry_options(' { "Z": " Último ", "A": "Primeiro" } '),
                          u'{"Z":"Último","A":"Primeiro"}')
 
     def test_opcoes_invalidas(self):
         for texto in (None, "", "   ", "{", "[]", '"x"', "{}", '{"a": 1}', '{"": "x"}', '{"a": " "}',
                       '{"a": "x", "a": "y"}', '{"a": "x", " a": "y"}', '{"a\\u0001": "x"}',
                       '{"%s": "x"}' % ("k" * 101)):
-            with self.assertRaises(pc.ParamErro, msg=repr(texto)) as cm:
-                pc.validar_opcoes_cadastro(texto)
+            with self.assertRaises(pc.ParamError, msg=repr(texto)) as cm:
+                pc.validate_registry_options(texto)
             self.assertEqual(cm.exception.codigo_param, "options_json")
 
     def test_opcoes_acima_de_500_caracteres(self):
         grande = "{" + ",".join('"k%02d": "%s"' % (i, "r" * 20) for i in range(25)) + "}"
-        with self.assertRaises(pc.ParamErro):
-            pc.validar_opcoes_cadastro(grande)
+        with self.assertRaises(pc.ParamError):
+            pc.validate_registry_options(grande)
 
     def test_flag(self):
         for ok in ("--data-ref", "-n", "--a_b", "-X1"):
-            pc.validar_flag(ok)
+            pc.validate_flag(ok)
         for ruim in ("data", "---x", "--", "-", "--x y", "--" + "a" * 29, "-_x", None):
-            with self.assertRaises(pc.ParamErro, msg=repr(ruim)):
-                pc.validar_flag(ruim)
+            with self.assertRaises(pc.ParamError, msg=repr(ruim)):
+                pc.validate_flag(ruim)
 
 
 class TestPrecedencia(unittest.TestCase):
 
     def test_ordem_de_precedencia(self):
         v = [prm("a", ordem=1, padrao_sub="sub", padrao="glob")]
-        self.assertEqual(pc.resolver_respostas(v, {"a": "resp"})["a"], "resp")
-        self.assertEqual(pc.resolver_respostas(v, {})["a"], "sub")
-        self.assertEqual(pc.resolver_respostas(v, {"a": "   "})["a"], "sub")
+        self.assertEqual(pc.resolve_answers(v, {"a": "resp"})["a"], "resp")
+        self.assertEqual(pc.resolve_answers(v, {})["a"], "sub")
+        self.assertEqual(pc.resolve_answers(v, {"a": "   "})["a"], "sub")
         v = [prm("a", ordem=1, padrao="glob")]
-        self.assertEqual(pc.resolver_respostas(v, None)["a"], "glob")
+        self.assertEqual(pc.resolve_answers(v, None)["a"], "glob")
         v = [prm("a", ordem=1)]
-        self.assertIsNone(pc.resolver_respostas(v, {})["a"])
+        self.assertIsNone(pc.resolve_answers(v, {})["a"])
 
     def test_padrao_tambem_validado(self):
         v = [prm("n", "NUMBER", ordem=1, padrao_sub="abc", padrao="10")]
-        with self.assertRaises(ParamErro) as ctx:
-            pc.resolver_respostas(v, {})
+        with self.assertRaises(ParamError) as ctx:
+            pc.resolve_answers(v, {})
         self.assertEqual(ctx.exception.codigo_param, "n")
         v = [prm("n", "NUMBER", ordem=1, padrao="abc")]
-        with self.assertRaises(ParamErro):
-            pc.resolver_respostas(v, {})
+        with self.assertRaises(ParamError):
+            pc.resolve_answers(v, {})
 
     def test_resposta_invalida_nao_cai_no_padrao(self):
         v = [prm("n", "NUMBER", ordem=1, padrao_sub="10")]
-        with self.assertRaises(ParamErro):
-            pc.resolver_respostas(v, {"n": "abc"})
+        with self.assertRaises(ParamError):
+            pc.resolve_answers(v, {"n": "abc"})
 
     def test_obrigatorio_ausente(self):
         v = [prm("a", ordem=1, obrigatorio="Y")]
-        with self.assertRaises(ParamErro) as ctx:
-            pc.resolver_respostas(v, {"a": ""})
+        with self.assertRaises(ParamError) as ctx:
+            pc.resolve_answers(v, {"a": ""})
         self.assertEqual(ctx.exception.codigo_param, "a")
         self.assertIn("obrigatório", ctx.exception.mensagem)
 
     def test_checkbox_falso_obrigatorio_e_valor(self):
         v = [prm("c", "CHECKBOX", ordem=1, obrigatorio="Y")]
-        self.assertIs(pc.resolver_respostas(v, {"c": "false"})["c"], False)
+        self.assertIs(pc.resolve_answers(v, {"c": "false"})["c"], False)
 
     def test_ordem_do_resultado(self):
         v = [prm("z", ordem=3), prm("a", ordem=1), prm("m", ordem=2)]
-        self.assertEqual(list(pc.resolver_respostas(v, {}).keys()), ["a", "m", "z"])
+        self.assertEqual(list(pc.resolve_answers(v, {}).keys()), ["a", "m", "z"])
 
 
 class TestMontarArgs(unittest.TestCase):
 
     def _args(self, tipo_param, vinculos, respostas):
-        return pc.montar_args(tipo_param, vinculos, pc.resolver_respostas(vinculos, respostas))
+        return pc.build_args(tipo_param, vinculos, pc.resolve_answers(vinculos, respostas))
 
     def _erro(self, tipo_param, vinculos, respostas):
-        with self.assertRaises(ParamErro) as ctx:
+        with self.assertRaises(ParamError) as ctx:
             self._args(tipo_param, vinculos, respostas)
         return ctx.exception
 
@@ -309,7 +309,7 @@ class TestMontarArgs(unittest.TestCase):
         self.assertEqual(self._args("POSITIONAL", [prm("n", "NUMBER", ordem=1)], {"n": "-1.5"}), ["-1.5"])
 
     def test_nenhum(self):
-        self.assertEqual(pc.montar_args("NONE", [], collections.OrderedDict()), [])
+        self.assertEqual(pc.build_args("NONE", [], collections.OrderedDict()), [])
         e = self._erro("NONE", [prm("a", ordem=1)], {"a": "x"})
         self.assertIsNone(e.codigo_param)
 
@@ -321,15 +321,15 @@ class TestMontarArgs(unittest.TestCase):
 class TestMontarArgvAgente(unittest.TestCase):
 
     def test_interpretadores(self):
-        self.assertEqual(pc.montar_argv_agente("PYTHON3", EXE_PY, "/b/s.py", ["a"]), [EXE_PY, "-I", "/b/s.py", "a"])
-        self.assertEqual(pc.montar_argv_agente("BASH", "/bin/bash", "/b/s.sh", ["a"]), ["/bin/bash", "/b/s.sh", "a"])
-        self.assertEqual(pc.montar_argv_agente("SH", "/bin/sh", "/b/s.sh", []), ["/bin/sh", "/b/s.sh"])
+        self.assertEqual(pc.build_agent_argv("PYTHON3", EXE_PY, "/b/s.py", ["a"]), [EXE_PY, "-I", "/b/s.py", "a"])
+        self.assertEqual(pc.build_agent_argv("BASH", "/bin/bash", "/b/s.sh", ["a"]), ["/bin/bash", "/b/s.sh", "a"])
+        self.assertEqual(pc.build_agent_argv("SH", "/bin/sh", "/b/s.sh", []), ["/bin/sh", "/b/s.sh"])
 
     def test_fora_da_allowlist(self):
         import path_guard
         for interp in ("/usr/bin/python3", "PERL", "CMD", "cmd.exe", ""):
-            with self.assertRaises(path_guard.PathGuardErro, msg=interp):
-                pc.montar_argv_agente(interp, "/x", "/b/s", [])
+            with self.assertRaises(path_guard.PathGuardError, msg=interp):
+                pc.build_agent_argv(interp, "/x", "/b/s", [])
 
 
 class TestCompilarSnapshot(unittest.TestCase):
@@ -340,7 +340,7 @@ class TestCompilarSnapshot(unittest.TestCase):
                 prm("modo", "SELECT", ordem=3, flag="--modo", opcoes='{"A":"Ação","B":"Bê"}', padrao="A")]
 
     def test_formato_6_5(self):
-        js, resolvidos, erros = pc.compilar_snapshot(script(), self._vinculos()[:1], {"data_ref": "2026-10-13"}, AGORA)
+        js, resolvidos, erros = pc.compile_snapshot(script(), self._vinculos()[:1], {"data_ref": "2026-10-13"}, AGORA)
         self.assertEqual(erros, {})
         esperado = {
             "version": 4, "script_id": 12, "script_nome": "carga_faturas", "interpreter": "PYTHON3",
@@ -356,8 +356,8 @@ class TestCompilarSnapshot(unittest.TestCase):
         v = self._vinculos()
         r1 = collections.OrderedDict([("data_ref", "2026-10-13"), ("token", "abc123"), ("modo", "B")])
         r2 = collections.OrderedDict([("modo", "B"), ("token", "abc123"), ("data_ref", "2026-10-13")])
-        js1 = pc.compilar_snapshot(script(), v, r1, AGORA)[0]
-        js2 = pc.compilar_snapshot(script(), list(reversed(v)), r2, AGORA)[0]
+        js1 = pc.compile_snapshot(script(), v, r1, AGORA)[0]
+        js2 = pc.compile_snapshot(script(), list(reversed(v)), r2, AGORA)[0]
         self.assertIsNotNone(js1)
         self.assertEqual(js1, js2)
         snap = json.loads(js1)
@@ -365,41 +365,41 @@ class TestCompilarSnapshot(unittest.TestCase):
         self.assertEqual(snap["sensiveis"], ["token"])
 
     def test_utf8_sem_escape(self):
-        js = pc.compilar_snapshot(script(), [prm("t", ordem=1, flag="--t")], {"t": "ação"}, AGORA)[0]
+        js = pc.compile_snapshot(script(), [prm("t", ordem=1, flag="--t")], {"t": "ação"}, AGORA)[0]
         self.assertIn("ação", js)
 
     def test_respostas_tipadas(self):
         v = [prm("c", "CHECKBOX", ordem=1, flag="--c"), prm("o", ordem=2, flag="--o")]
-        snap = json.loads(pc.compilar_snapshot(script(), v, {"c": "1"}, AGORA)[0])
+        snap = json.loads(pc.compile_snapshot(script(), v, {"c": "1"}, AGORA)[0])
         self.assertEqual(snap["respostas"], {"c": True, "o": None})
 
     def test_erros_acumulados(self):
         v = self._vinculos() + [prm("n", "NUMBER", ordem=4, flag="-n")]
-        js, resolvidos, erros = pc.compilar_snapshot(script(), v, {"token": "a\x00b", "modo": "Z", "n": "-3"}, AGORA)
+        js, resolvidos, erros = pc.compile_snapshot(script(), v, {"token": "a\x00b", "modo": "Z", "n": "-3"}, AGORA)
         self.assertIsNone(js)
         self.assertEqual(list(erros.keys()), ["data_ref", "token", "modo", "n"])
         for msg in erros.values():
             self.assertNotIn("a\x00b", msg)
 
     def test_erros_estruturais(self):
-        js, _, erros = pc.compilar_snapshot(script("NONE"), [prm("a", ordem=1)], {"a": "x"}, AGORA)
+        js, _, erros = pc.compile_snapshot(script("NONE"), [prm("a", ordem=1)], {"a": "x"}, AGORA)
         self.assertIsNone(js)
-        self.assertIn(pc.CHAVE_GERAL, erros)
+        self.assertIn(pc.GENERAL_KEY, erros)
         for interp in ("/usr/bin/python3", "PERL", "CMD"):
-            js, _, erros = pc.compilar_snapshot(script(interpreter=interp), [], {}, AGORA)
+            js, _, erros = pc.compile_snapshot(script(interpreter=interp), [], {}, AGORA)
             self.assertIsNone(js, interp)
-            self.assertIn(pc.CHAVE_GERAL, erros)
+            self.assertIn(pc.GENERAL_KEY, erros)
 
     def test_nenhum_sem_vinculos(self):
-        js = pc.compilar_snapshot(script("NONE", "BASH"), [], {}, AGORA)[0]
+        js = pc.compile_snapshot(script("NONE", "BASH"), [], {}, AGORA)[0]
         snap = json.loads(js)
         self.assertEqual((snap["interpreter"], snap["args"]), ("BASH", []))
 
     def test_argv_para_exibicao(self):
         v = self._vinculos() + [prm("seq", ordem=4, flag="-s", sensivel="Y")]
-        snap = json.loads(pc.compilar_snapshot(
+        snap = json.loads(pc.compile_snapshot(
             script(), v, {"data_ref": "2026-10-13", "token": "-segredo", "seq": "outro_segredo"}, AGORA)[0])
-        exib = pc.argv_para_exibicao(snap)
+        exib = pc.display_argv(snap)
         # CR-005 D8: caminho completo para todos.
         self.assertEqual(exib, ["PYTHON3", "-I", REAL, "--data", "2026-10-13",
                                 "--token=****", "--modo", "A", "-s", "****"])
@@ -407,8 +407,8 @@ class TestCompilarSnapshot(unittest.TestCase):
         self.assertIn("-segredo", snap["args"][2])
 
     def test_argv_para_exibicao_sem_sensiveis(self):
-        snap = json.loads(pc.compilar_snapshot(script("POSITIONAL", "SH"), [prm("a", ordem=1)], {"a": "x"}, AGORA)[0])
-        self.assertEqual(pc.argv_para_exibicao(snap), ["SH", REAL, "x"])
+        snap = json.loads(pc.compile_snapshot(script("POSITIONAL", "SH"), [prm("a", ordem=1)], {"a": "x"}, AGORA)[0])
+        self.assertEqual(pc.display_argv(snap), ["SH", REAL, "x"])
 
 
 @unittest.skipIf(os.geteuid() == 0, "root sempre passa em os.access(W_OK)")
@@ -428,7 +428,7 @@ class TestValidarSnapshot(unittest.TestCase):
         self.real = os.path.realpath(self.arq)
         v = [prm("data_ref", "DATE", ordem=1, obrigatorio="Y", flag="--data")]
         scr = dict(script(), path_file=self.arq)
-        self.js = pc.compilar_snapshot(scr, v, {"data_ref": "2026-10-13"}, AGORA)[0]
+        self.js = pc.compile_snapshot(scr, v, {"data_ref": "2026-10-13"}, AGORA)[0]
 
     def tearDown(self):
         for raiz, _, _ in os.walk(self.raiz):
@@ -447,12 +447,12 @@ class TestValidarSnapshot(unittest.TestCase):
                 self.assertEqual(self._motivo(self._alterado(args=["--data", ruim])), "ARGS_INVALIDOS")
 
     def _motivo(self, js, cfg=None):
-        with self.assertRaises(SnapshotErro) as ctx:
-            pc.validar_snapshot(js, cfg or self.cfg)
+        with self.assertRaises(SnapshotError) as ctx:
+            pc.validate_snapshot(js, cfg or self.cfg)
         return ctx.exception.motivo
 
     def test_ok_monta_argv_com_executavel_e_base_do_agente(self):
-        snap, argv, script_real = pc.validar_snapshot(self.js, self.cfg)
+        snap, argv, script_real = pc.validate_snapshot(self.js, self.cfg)
         self.assertEqual(argv, [EXE_PY, "-I", self.real, "--data", "2026-10-13"])
         self.assertEqual(script_real, self.real)
         self.assertEqual(snap["interpreter"], "PYTHON3")
@@ -479,18 +479,18 @@ class TestValidarSnapshot(unittest.TestCase):
         self.assertEqual(self._motivo(self._alterado(args=["--n", 1])), "ARGS_INVALIDOS")
 
     def test_path_guard_revalidado_no_agente(self):
-        self.assertEqual(self._motivo(self._alterado(path_file="x.py")), "PATH_GUARD_CAMINHO_RELATIVO")
-        self.assertEqual(self._motivo(self._alterado(path_file="/opt/../x.py")), "PATH_GUARD_CONTEM_PONTOS")
-        self.assertEqual(self._motivo(self._alterado(path_file="/etc/passwd")), "PATH_GUARD_PASTA_DO_SISTEMA")
+        self.assertEqual(self._motivo(self._alterado(path_file="x.py")), "PATH_GUARD_RELATIVE_PATH")
+        self.assertEqual(self._motivo(self._alterado(path_file="/opt/../x.py")), "PATH_GUARD_HAS_DOTS")
+        self.assertEqual(self._motivo(self._alterado(path_file="/etc/passwd")), "PATH_GUARD_SYSTEM_DIR")
         self.assertEqual(self._motivo(self._alterado(path_file=os.path.join(self.base, "nao_existe.py"))),
-                         "PATH_GUARD_NAO_ENCONTRADO")
+                         "PATH_GUARD_NOT_FOUND")
         self.assertEqual(self._motivo(self._alterado(path_file=os.path.join(self.base, "faturamento"))),
-                         "PATH_GUARD_NAO_E_ARQUIVO")
+                         "PATH_GUARD_NOT_A_FILE")
 
     def test_log_dir_e_work_dir_do_agente(self):
         cfg = collections.namedtuple("CfgDirs", ["interpreters", "dirs_sss"])(
             self.cfg.interpreters, (os.path.join(self.base, "faturamento"),))
-        self.assertEqual(self._motivo(self.js, cfg), "PATH_GUARD_PASTA_DO_SSS")
+        self.assertEqual(self._motivo(self.js, cfg), "PATH_GUARD_SSS_DIR")
 
 
 class TestSeedFake(unittest.TestCase):
@@ -510,7 +510,7 @@ class TestSeedFake(unittest.TestCase):
     def test_carga_diaria(self):
         scr = self.catalog.scripts_get(1)
         vinculos = self.catalog.script_params_get(1)
-        js, resolvidos, erros = pc.compilar_snapshot(scr, vinculos, {}, AGORA)
+        js, resolvidos, erros = pc.compile_snapshot(scr, vinculos, {}, AGORA)
         self.assertEqual(erros, {})
         snap = json.loads(js)
         self.assertEqual(set(snap.keys()), CHAVES_6_5)
@@ -519,14 +519,14 @@ class TestSeedFake(unittest.TestCase):
                                         "--documento", "00011122233"])
         self.assertEqual(snap["sensiveis"], ["documento_cliente"])
         self.assertEqual(snap["respostas"]["verbose"], True)
-        self.assertNotIn("00011122233", pc.argv_para_exibicao(snap))
+        self.assertNotIn("00011122233", pc.display_argv(snap))
 
     def test_todos_os_scripts_do_seed_compilam(self):
         for sid in (1, 2, 3, 4, 6):
             with self.subTest(script_id=sid):
                 scr = self.catalog.scripts_get(sid)
                 vinculos = self.catalog.script_params_get(sid)
-                js, _, erros = pc.compilar_snapshot(scr, vinculos, {}, AGORA)
+                js, _, erros = pc.compile_snapshot(scr, vinculos, {}, AGORA)
                 self.assertEqual(erros, {})
                 self.assertEqual(set(json.loads(js).keys()), CHAVES_6_5)
 

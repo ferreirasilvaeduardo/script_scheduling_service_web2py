@@ -19,7 +19,7 @@ from repo_errors import RepoUnavailable
 _cfg = current.sss_cfg
 _segredos = sss_config.get_secrets("sss_web")
 _log = sss_logging.get_logger("sss_web", _cfg)
-masking.instalar_filtro_em_handlers()
+masking.install_filter_on_handlers()
 
 response.headers.update({
     "Content-Security-Policy": (
@@ -36,12 +36,12 @@ response.headers.update({
 # O web2py recria o cookie de dados da sessao sem HttpOnly/Secure apos o controller;
 # o container de cookies aplica os atributos em toda atribuicao.
 _cookie_secure = not (_cfg.app.sss_env == "DEV" and not request.is_https)
-_cookies = security.CookiesSeguros(secure=_cookie_secure)
-_cookies.adotar(response.cookies)
+_cookies = security.SecureCookies(secure=_cookie_secure)
+_cookies.adopt(response.cookies)
 response.cookies = _cookies
 
 # O secure_loads deste web2py exige bytes, mas o cookie chega como str (defeito no Python 3).
-security.adaptar_cookie_sessao(request.cookies, "session_data_%s" % request.application.lower())
+security.adapt_session_cookie(request.cookies, "session_data_%s" % request.application.lower())
 session.connect(request, response, cookie_key=_segredos.cookie_key)
 
 _URL_LOGIN = ("default", "login")
@@ -49,7 +49,7 @@ _URL_LOGIN = ("default", "login")
 
 def _encerrar_sessao(mensagem):
     session.clear()
-    session.csrf_token = security.gerar_token_csrf()
+    session.csrf_token = security.generate_csrf_token()
     session.flash = {"tipo": "aviso", "mensagem": mensagem}
     redirect(URL(c=_URL_LOGIN[0], f=_URL_LOGIN[1]))
 
@@ -57,16 +57,16 @@ def _encerrar_sessao(mensagem):
 current.sss_ctx = None
 if session.usuario_id:
     _agora = time.time()
-    if security.sessao_expirada(session.ultimo_acesso, _agora, _cfg.web.session_idle_timeout_s):
+    if security.is_session_expired(session.ultimo_acesso, _agora, _cfg.web.session_idle_timeout_s):
         # Expiracao por inatividade: so log, sem auditoria (README §4.2).
         _log.info("sessao expirada por inatividade (login=%s)", session.login, extra={"action": "SESSAO"})
         _encerrar_sessao(ui_helpers.mensagem("sessao_expirada"))
-    if security.sessao_expirada(session.login_em, _agora, _cfg.web.session_max_hours * 3600):
+    if security.is_session_expired(session.login_em, _agora, _cfg.web.session_max_hours * 3600):
         # Vida maxima desde o login (CR-008, E2), mesmo com uso continuo: so log.
         _log.info("sessao encerrada pela vida maxima (login=%s)", session.login, extra={"action": "SESSAO"})
         _encerrar_sessao(ui_helpers.mensagem("sessao_max"))
     try:
-        _ctx = auth_service.revalidar(session, security.ip_origem(
+        _ctx = auth_service.revalidar(session, security.client_ip(
             request.env.remote_addr, request.env.http_x_forwarded_for, _cfg.web.trusted_proxies))
     except RepoUnavailable:
         _log.exception("revalidacao de sessao indisponivel (usuario_id=%s caminho=%s)",
@@ -83,7 +83,7 @@ if session.usuario_id:
         _ctx["features"], _ctx["is_admin"], (request.controller, request.function))
 
 if not session.csrf_token:
-    session.csrf_token = security.gerar_token_csrf()
+    session.csrf_token = security.generate_csrf_token()
 
 
 def csrf_campo():
@@ -117,18 +117,18 @@ if _reprocessando_erro:
 
 if (request.env.request_method or "GET").upper() not in ("GET", "HEAD", "OPTIONS") \
         and not _reprocessando_erro:
-    if not security.origem_permitida(request.env.http_origin, request.env.http_referer, _origens_permitidas()):
+    if not security.is_allowed_origin(request.env.http_origin, request.env.http_referer, _origens_permitidas()):
         _rejeitar("origem")
     _token = request.post_vars.get("_csrf")
     if not isinstance(_token, str) or not _token:
         _token = request.env.http_x_csrf_token
-    if not security.validar_token_csrf(session.csrf_token, _token):
+    if not security.validate_csrf_token(session.csrf_token, _token):
         _rejeitar("csrf")
 
 
 def _ip_origem():
     """IP do cliente (README §4.2): X-Forwarded-For so quando remote_addr e proxy confiavel."""
-    return security.ip_origem(request.env.remote_addr, request.env.http_x_forwarded_for,
+    return security.client_ip(request.env.remote_addr, request.env.http_x_forwarded_for,
                               _cfg.web.trusted_proxies)
 
 
@@ -136,7 +136,7 @@ def _destino_atual():
     caminho = request.env.path_info or ""
     if request.env.query_string:
         caminho = "%s?%s" % (caminho, request.env.query_string)
-    return security.validar_next(caminho)
+    return security.validate_next(caminho)
 
 
 def _exigir_login():
@@ -153,7 +153,7 @@ def _exigir_login():
 def _exigir_func(codigo):
     """Guarda de autorizacao: exige login e a funcionalidade; sem ela, 403 com log WARN."""
     ctx = _exigir_login()
-    if not rbac.tem_func(ctx, codigo):
+    if not rbac.has_feature(ctx, codigo):
         _log.warning(
             "acesso negado (login=%s funcionalidade=%s caminho=%s ip=%s)",
             ctx["login"], codigo, request.env.path_info, _ip_origem(), extra={"action": "RBAC"},

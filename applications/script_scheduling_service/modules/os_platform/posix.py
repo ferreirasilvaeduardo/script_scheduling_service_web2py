@@ -104,7 +104,7 @@ def _limites_do_filho(limites):
 def iniciar_processo(especificacao, log_fd, usuario_execucao=None):
     """Inicia o script num grupo proprio (start_new_session) com stdout/stderr no arquivo de log.
 
-    Com usuario_execucao: sudo -n -u <usuario> -- /opt/sss/bin/sss-helper run, com a especificacao JSON
+    Com exec_user: sudo -n -u <usuario> -- /opt/sss/bin/sss-helper run, com a especificacao JSON
     (ticket_id, argv, env, rlimits, pasta_base) pela entrada padrao. Sem ele (so DEV): Popen direto com
     argv, cwd, env e os limites. Nunca usa shell nem PIPE de saida (AGENTS §3.2).
     """
@@ -189,7 +189,7 @@ def grupo_vivo(processo):
 def reabrir_grupo(estado):
     """Grupo de um ticket que nao e filho do daemon (startup check, README §8.12 passo 9), sem wait().
 
-    estado: o .sss_proc (pid, process_start, usuario_execucao). PID vivo com outra identidade: PID
+    estado: o .sss_proc (pid, process_start, exec_user). PID vivo com outra identidade: PID
     reciclado, o grupo antigo acabou (None). PID vivo sem identidade legivel: Processo sem_identidade,
     que nao recebe sinal. Lider morto com o grupo ainda vivo (netos): Processo para o executor encerrar.
     """
@@ -379,12 +379,12 @@ def validar_dir_restrito(caminho):
     """log_dir/work_dir (README §8.12 passo 4): existe, e diretorio, e gravavel e fica fora das pastas do
     sistema. Nao exige 0700 (log_dir e as pastas de log sao 0750). Devolve o codigo da falha ou None."""
     if not isinstance(caminho, str) or not caminho.startswith("/"):
-        return "CAMINHO_RELATIVO"
+        return "RELATIVE_PATH"
     real = os.path.realpath(caminho)
     if any(_dentro(alvo, d) for alvo in (caminho, real) for d in PASTAS_DO_SISTEMA):
-        return "PASTA_DO_SISTEMA"
+        return "SYSTEM_DIR"
     if not os.path.exists(real):
-        return "NAO_ENCONTRADO"
+        return "NOT_FOUND"
     if not os.path.isdir(real):
         return "NAO_E_DIRETORIO"
     if not os.access(real, os.W_OK | os.X_OK):
@@ -397,31 +397,31 @@ def _stat_codigo(caminho):
         return os.stat(caminho), None
     except OSError as e:
         if e.errno in (errno.EACCES, errno.EPERM):
-            return None, "SEM_ACESSO"
-        return None, "NAO_ENCONTRADO"
+            return None, "NO_ACCESS"
+        return None, "NOT_FOUND"
 
 
 def validar_caminho_script(caminho):
     """Script no servidor do agente (README §8.0, §8.5; CR-011): vale o arquivo real (o caminho pode ter link
     simbolico), que precisa existir, ser regular e nao ser gravavel por grupo nem por outros. Ciclo de links:
-    NAO_ENCONTRADO; EACCES: SEM_ACESSO. Devolve o codigo ou None."""
+    NOT_FOUND; EACCES: NO_ACCESS. Devolve o codigo ou None."""
     real = caminho_final(caminho)
     if os.path.islink(real):
-        return "NAO_ENCONTRADO"  # realpath parou num link: ciclo ou destino inexistente
+        return "NOT_FOUND"  # realpath parou num link: ciclo ou destino inexistente
     st, codigo = _stat_codigo(real)
     if codigo:
         return codigo
     if not stat.S_ISREG(st.st_mode):
-        return "NAO_E_ARQUIVO"
+        return "NOT_A_FILE"
     if st.st_mode & 0o022:
-        return "GRAVAVEL_GRUPO_OUTROS"
+        return "GROUP_OTHER_WRITABLE"
     return None
 
 
 def validar_interpretador_executavel(caminho, dirs_sss=()):
-    """Executavel do interpretador: envolve path_guard.validar_executavel (README §8.5, CR-011)."""
+    """Executavel do interpretador: envolve path_guard.validate_executable (README §8.5, CR-011)."""
     import path_guard
-    return path_guard.validar_executavel(caminho, dirs_sss=dirs_sss)
+    return path_guard.validate_executable(caminho, dirs_sss=dirs_sss)
 
 
 # -----------------------------------------------------------------------------

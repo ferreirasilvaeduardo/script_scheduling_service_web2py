@@ -32,7 +32,7 @@ PERFIL_ADMIN, PERFIL_CONSULTA = 1, 4
 class _Base(unittest.TestCase):
 
     def setUp(self):
-        patcher = mock.patch.object(security, "ITERACOES", 1000)
+        patcher = mock.patch.object(security, "ITERATIONS", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
         env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: "senha-dev-de-teste-123"})
@@ -188,14 +188,14 @@ class TestQuemPode(_Base):
         q = self.svc.quem_pode(self.ctx["admin"], script_id="1")
         perfis = self._nomes(q["profiles"])
         self.assertEqual(perfis["ADMINISTRATOR"]["reason"], u"administrador")
-        # Cada perfil listado tem um usuario cujo contexto pode_executar no ambiente indicado.
+        # Cada perfil listado tem um usuario cujo contexto can_execute no ambiente indicado.
         catalogo = self.svc._catalogo
         script = catalogo.scripts_get(1)
         ambs = dict((a["name"], a) for a in catalogo.environments_list(pagina=1, tamanho=50)["itens"])
         hom = catalogo.homologation_get(1)
         for login in ("op.prod", "consulta"):
             ctx = self.ctx[login]
-            podem = set(n for n, a in ambs.items() if rbac.pode_executar(ctx, script, a, hom)[0])
+            podem = set(n for n, a in ambs.items() if rbac.can_execute(ctx, script, a, hom)[0])
             nome = self.rbac_repo.profiles_get(ctx["profile_id"])["name"]
             self.assertEqual(set(perfis[nome]["detalhes"]) if nome in perfis else set(), podem, login)
 

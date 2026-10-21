@@ -15,35 +15,35 @@ import os_platform
 # a mapeia para o executavel local ([agent] interpreters).
 ALLOWLIST = ('PYTHON3', 'BASH', 'SH')
 # Argumentos fixos entre o executavel e o script (README §6.4); Python sempre com -I.
-ARGS_FIXOS = {
+FIXED_ARGS = {
     'PYTHON3': ('-I',),
     'BASH': (),
     'SH': (),
 }
 # Pastas do sistema onde nenhum script pode ficar (README §8.5, CR-005 D3).
-PASTAS_DO_SISTEMA = os_platform.PASTAS_DO_SISTEMA
+SYSTEM_DIRS = os_platform.PASTAS_DO_SISTEMA
 # Tamanho maximo de path_file (coluna VARCHAR2(500 CHAR)).
-TAMANHO_MAXIMO = 500
+MAX_LENGTH = 500
 
 
-class Codigo(object):
+class Code(object):
     """Codigos de rejeicao do path_guard (README §8.5)."""
-    CAMINHO_RELATIVO = 'CAMINHO_RELATIVO'
-    CAMINHO_NAO_NORMALIZADO = 'CAMINHO_NAO_NORMALIZADO'
-    CONTEM_PONTOS = 'CONTEM_PONTOS'
-    SEPARADOR_INVALIDO = 'SEPARADOR_INVALIDO'
-    CARACTERE_INVALIDO = 'CARACTERE_INVALIDO'
-    PASTA_DO_SISTEMA = 'PASTA_DO_SISTEMA'
-    PASTA_DO_SSS = 'PASTA_DO_SSS'
-    NAO_ENCONTRADO = 'NAO_ENCONTRADO'
-    SEM_ACESSO = 'SEM_ACESSO'
-    NAO_E_ARQUIVO = 'NAO_E_ARQUIVO'
-    GRAVAVEL_GRUPO_OUTROS = 'GRAVAVEL_GRUPO_OUTROS'
+    RELATIVE_PATH = 'RELATIVE_PATH'
+    PATH_NOT_NORMALIZED = 'PATH_NOT_NORMALIZED'
+    HAS_DOTS = 'HAS_DOTS'
+    INVALID_SEPARATOR = 'INVALID_SEPARATOR'
+    INVALID_CHARACTER = 'INVALID_CHARACTER'
+    SYSTEM_DIR = 'SYSTEM_DIR'
+    SSS_DIR = 'SSS_DIR'
+    NOT_FOUND = 'NOT_FOUND'
+    NO_ACCESS = 'NO_ACCESS'
+    NOT_A_FILE = 'NOT_A_FILE'
+    GROUP_OTHER_WRITABLE = 'GROUP_OTHER_WRITABLE'
     INTERPRETADOR_NAO_PERMITIDO = 'INTERPRETADOR_NAO_PERMITIDO'
     INTERPRETADOR_INSEGURO = 'INTERPRETADOR_INSEGURO'
 
 
-class PathGuardErro(Exception):
+class PathGuardError(Exception):
     """Rejeicao de caminho ou interpretador; a mensagem nunca inclui o caminho."""
 
     def __init__(self, codigo):
@@ -51,84 +51,84 @@ class PathGuardErro(Exception):
         self.codigo = codigo
 
 
-def validar_interpretador(interpretador):
+def validate_interpreter(interpretador):
     """Exige que o interpretador logico seja exatamente um item da ALLOWLIST."""
     if interpretador not in ALLOWLIST:
-        raise PathGuardErro(Codigo.INTERPRETADOR_NAO_PERMITIDO)
+        raise PathGuardError(Code.INTERPRETADOR_NAO_PERMITIDO)
 
 
-def validar_cadastro(path_file):
+def validate_registration(path_file):
     """Formato de path_file (README §8.5, ck_tbsss_scr_path): absoluto, normalizado, sem '..', '\\' e controle."""
     if not isinstance(path_file, str) or path_file[:1] != '/':
-        raise PathGuardErro(Codigo.CAMINHO_RELATIVO)
+        raise PathGuardError(Code.RELATIVE_PATH)
     if any(ord(c) < 32 or ord(c) == 127 for c in path_file):
-        raise PathGuardErro(Codigo.CARACTERE_INVALIDO)
+        raise PathGuardError(Code.INVALID_CHARACTER)
     if '\\' in path_file:
-        raise PathGuardErro(Codigo.SEPARADOR_INVALIDO)
+        raise PathGuardError(Code.INVALID_SEPARATOR)
     if '..' in path_file:
-        raise PathGuardErro(Codigo.CONTEM_PONTOS)
+        raise PathGuardError(Code.HAS_DOTS)
     # normpath mantem '//' inicial (POSIX); a CK recusa '//' em qualquer ponto.
     if path_file == '/' or '//' in path_file or os.path.normpath(path_file) != path_file:
-        raise PathGuardErro(Codigo.CAMINHO_NAO_NORMALIZADO)
+        raise PathGuardError(Code.PATH_NOT_NORMALIZED)
 
 
-def _dentro(caminho, pasta):
+def _inside(caminho, pasta):
     """True se caminho e a propria pasta ou fica abaixo dela (por componente, nunca prefixo de texto)."""
     return os.path.commonpath([caminho, pasta]) == pasta
 
 
-def checar_pastas_proibidas(path_file, dirs_sss=()):
+def check_forbidden_dirs(path_file, dirs_sss=()):
     """Recusa pastas do sistema e log_dir/work_dir, no caminho digitado e no resolvido (symlink)."""
     sss = [os_platform.caminho_final(d) for d in dirs_sss if d]
     for alvo in (path_file, os_platform.caminho_final(path_file)):
-        if any(_dentro(alvo, d) for d in PASTAS_DO_SISTEMA):
-            raise PathGuardErro(Codigo.PASTA_DO_SISTEMA)
-        if any(_dentro(alvo, d) for d in sss):
-            raise PathGuardErro(Codigo.PASTA_DO_SSS)
+        if any(_inside(alvo, d) for d in SYSTEM_DIRS):
+            raise PathGuardError(Code.SYSTEM_DIR)
+        if any(_inside(alvo, d) for d in sss):
+            raise PathGuardError(Code.SSS_DIR)
 
 
 def _stat(caminho):
-    """os.stat com EACCES -> SEM_ACESSO e ausente -> NAO_ENCONTRADO (README §8.5)."""
+    """os.stat com EACCES -> NO_ACCESS e ausente -> NOT_FOUND (README §8.5)."""
     try:
         return os.stat(caminho)
     except OSError as e:
         if e.errno in (errno.EACCES, errno.EPERM):
-            raise PathGuardErro(Codigo.SEM_ACESSO)
-        raise PathGuardErro(Codigo.NAO_ENCONTRADO)
+            raise PathGuardError(Code.NO_ACCESS)
+        raise PathGuardError(Code.NOT_FOUND)
 
 
-def resolver(path_file, dirs_sss=()):
+def resolve(path_file, dirs_sss=()):
     """Confere o script no servidor do agente e devolve o caminho real, que e o executado (README §8.5, CR-011).
 
     Formato do caminho cadastrado; pastas do sistema e do SSS no cadastrado e no real; o arquivo real existe
-    (NAO_ENCONTRADO; ciclo de links tambem), as pastas deixam passar (SEM_ACESSO), e arquivo regular
-    (NAO_E_ARQUIVO) e nao e gravavel por grupo nem por outros (GRAVAVEL_GRUPO_OUTROS).
+    (NOT_FOUND; ciclo de links tambem), as pastas deixam passar (NO_ACCESS), e arquivo regular
+    (NOT_A_FILE) e nao e gravavel por grupo nem por outros (GROUP_OTHER_WRITABLE).
     """
-    validar_cadastro(path_file)
-    checar_pastas_proibidas(path_file, dirs_sss)
+    validate_registration(path_file)
+    check_forbidden_dirs(path_file, dirs_sss)
     codigo = os_platform.validar_caminho_script(path_file)
     if codigo:
-        raise PathGuardErro(codigo)
+        raise PathGuardError(codigo)
     return os_platform.caminho_final(path_file)
 
 
-def validar_executavel(caminho, dirs_sss=()):
+def validate_executable(caminho, dirs_sss=()):
     """Executavel de um interpretador de [agent] interpreters (README §8.5, CR-011): caminho absoluto e
     normalizado, existe, e arquivo executavel e fica fora de log_dir/work_dir/exec_work_dir. Pode ser link
     simbolico (ex.: /usr/bin/python3) e ficar nas pastas do sistema. Devolve o caminho real; falha:
-    NAO_ENCONTRADO ou INTERPRETADOR_INSEGURO."""
+    NOT_FOUND ou INTERPRETADOR_INSEGURO."""
     if not isinstance(caminho, str) or caminho[:1] != '/' or os.path.normpath(caminho) != caminho:
-        raise PathGuardErro(Codigo.INTERPRETADOR_INSEGURO)
+        raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
     real = os_platform.caminho_final(caminho)
     try:
         _stat(real)
-    except PathGuardErro as e:
-        if e.codigo == Codigo.NAO_ENCONTRADO:
+    except PathGuardError as e:
+        if e.codigo == Code.NOT_FOUND:
             raise
-        raise PathGuardErro(Codigo.INTERPRETADOR_INSEGURO)
+        raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
     sss = [os_platform.caminho_final(d) for d in dirs_sss if d]
-    if any(_dentro(alvo, d) for alvo in (caminho, real) for d in sss):
-        raise PathGuardErro(Codigo.INTERPRETADOR_INSEGURO)
+    if any(_inside(alvo, d) for alvo in (caminho, real) for d in sss):
+        raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
     if not os.path.isfile(real) or not os.access(real, os.X_OK):
-        raise PathGuardErro(Codigo.INTERPRETADOR_INSEGURO)
+        raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
     return real

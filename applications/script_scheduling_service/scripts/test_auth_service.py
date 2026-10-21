@@ -44,7 +44,7 @@ class TestAuthService(unittest.TestCase):
 
     def setUp(self):
         # Iteracoes reduzidas apenas para o tempo de execucao; o fluxo e o mesmo do vigente.
-        patcher = mock.patch.object(security, "ITERACOES", ITER_TESTE)
+        patcher = mock.patch.object(security, "ITERATIONS", ITER_TESTE)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.senha = secrets.token_urlsafe(16)
@@ -70,7 +70,7 @@ class TestAuthService(unittest.TestCase):
             usuarios=self.users, rbac_repo=self.rbac, catalogo=repo_factory.get("catalog"),
             auditoria=self.audit, max_tentativas=MAX, bloqueio_s=BLOQUEIO_S, log=log,
         )
-        self.users.update(5, {"password_hash": security.hash_senha(self.senha)}, ator="teste")
+        self.users.update(5, {"password_hash": security.hash_password(self.senha)}, ator="teste")
         self.aud_base = max(a["id"] for a in self.audit.list(tamanho=1000)["itens"])
 
     def _acoes(self, ator):
@@ -199,7 +199,7 @@ class TestAuthService(unittest.TestCase):
         self.assertIn("LOGIN_LOCKED", self._acoes("fantasma"))
 
     def test_seed_bloqueado(self):
-        self.users.update(6, {"password_hash": security.hash_senha(self.senha),
+        self.users.update(6, {"password_hash": security.hash_password(self.senha),
                                   "locked_until": INICIO + datetime.timedelta(minutes=5)}, ator="teste")
         self.assertEqual(self.servico.autenticar("bloqueado", self.senha, "10.0.0.1"), (None, self.servico.msg_bloqueio))
 
@@ -223,8 +223,8 @@ class TestAuthService(unittest.TestCase):
         self.assertIsNone(msg)
         u = self.users.get_by_id(1)
         self.assertTrue(u["password_hash"].startswith("pbkdf2_sha256$%d$" % ITER_TESTE))
-        self.assertFalse(security.precisa_rehash(u["password_hash"]))
-        self.assertTrue(security.verificar_senha(self.senha, u["password_hash"]))
+        self.assertFalse(security.needs_rehash(u["password_hash"]))
+        self.assertTrue(security.verify_password(self.senha, u["password_hash"]))
         self.assertEqual(u["password_changed_at"], antes)
 
     def test_login_e_auditoria_numa_operacao_do_repositorio(self):
@@ -243,7 +243,7 @@ class TestAuthService(unittest.TestCase):
         with mock.patch.object(self.users, "update", side_effect=AssertionError("rehash separado")):
             _ctx, msg = self.servico.autenticar("admin", self.senha, "10.0.0.1")
         self.assertIsNone(msg)
-        self.assertFalse(security.precisa_rehash(self.users.get_by_id(1)["password_hash"]))
+        self.assertFalse(security.needs_rehash(self.users.get_by_id(1)["password_hash"]))
 
     def test_minha_senha_reinicia_ciclo_apos_bloqueio_expirado(self):
         # CR-003 P3: bloqueio expirado zera as tentativas tambem em "Minha senha" (README §4.2).
@@ -330,7 +330,7 @@ class TestSeedDev(unittest.TestCase):
         repo_factory.reset_singletons()
         self.addCleanup(repo_factory.reset_singletons)
         self.addCleanup(repo_factory.configure, None)
-        patcher = mock.patch.object(security, "ITERACOES", ITER_TESTE)
+        patcher = mock.patch.object(security, "ITERATIONS", ITER_TESTE)
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -350,7 +350,7 @@ class TestSeedDev(unittest.TestCase):
         with mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: senha}):
             hashes = self._hashes()
         for login in ("admin", "op.prod", "op.hml", "consulta"):
-            self.assertTrue(security.verificar_senha(senha, hashes[login]), login)
+            self.assertTrue(security.verify_password(senha, hashes[login]), login)
         self.assertEqual(hashes["inativo"], "!")
         self.assertEqual(hashes["bloqueado"], "!")
         self.assertNotEqual(hashes["admin"], hashes["consulta"])

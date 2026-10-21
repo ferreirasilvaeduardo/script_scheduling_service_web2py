@@ -566,7 +566,7 @@ grep -h "Subida abortada" $(find /var/log/sss/interno/app -name '*.log')
 
 ### 14.3 Linhas `[SSS]` no log do ticket
 
-Toda finalização sem execução (pré-validação, falha ao iniciar, cancelamento antes do início) grava no log do ticket uma linha `[SSS] <evento>: <código> (agente <id>)`, visível na tela do ticket. Exemplo: `[SSS] pre-validacao recusada: GRAVAVEL_GRUPO_OUTROS (agente srv-linux-prod-01)`.
+Toda finalização sem execução (pré-validação, falha ao iniciar, cancelamento antes do início) grava no log do ticket uma linha `[SSS] <evento>: <código> (agente <id>)`, visível na tela do ticket. Exemplo: `[SSS] pre-validacao recusada: GROUP_OTHER_WRITABLE (agente srv-linux-prod-01)`.
 
 ### 14.4 `httpserver.log`
 
@@ -641,9 +641,9 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | `PENDING` que nunca sai | Nenhuma linha. No `health.py` e na tela de agentes: `fila sem atendente: N tickets de AMB/INTERP` | Nenhum agente saudável do ambiente mapeia o interpretador do script (o do cadastro, CR-008 R-15) | Mapeie o interpretador em `[agent] interpreters` ou suba um agente para o ambiente |
 | `PENDING` que demora | `DISCO_LOG: N MB livres em log_dir (minimo M): sem claim` ou `DISCO_SAIDA: ...` | Disco quase cheio | Libere espaço (purge, §12) ou aumente a partição |
 | `FAILED` / `PRECHECK_FAILED` | `pre-validacao recusada: <código>` e `[SSS] pre-validacao recusada: <código> (agente X)` | Ver os códigos abaixo | Ver abaixo |
-| ↳ `NAO_ENCONTRADO`, `SEM_ACESSO`, `NAO_E_ARQUIVO` | | O arquivo real não existe, não é legível ou não é arquivo, no servidor do agente | Corrija o arquivo no agente (§9) |
-| ↳ `GRAVAVEL_GRUPO_OUTROS` | | Arquivo real com escrita de grupo ou outros | `chmod go-w <arquivo>` |
-| ↳ `PASTA_DO_SISTEMA`, `PASTA_DO_SSS` | | Script nas pastas do sistema ou nas do SSS (inclusive `output_dir` e `input_dir`, CR-014) | Mova o script e corrija o cadastro |
+| ↳ `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE` | | O arquivo real não existe, não é legível ou não é arquivo, no servidor do agente | Corrija o arquivo no agente (§9) |
+| ↳ `GROUP_OTHER_WRITABLE` | | Arquivo real com escrita de grupo ou outros | `chmod go-w <arquivo>` |
+| ↳ `SYSTEM_DIR`, `SSS_DIR` | | Script nas pastas do sistema ou nas do SSS (inclusive `output_dir` e `input_dir`, CR-014) | Mova o script e corrija o cadastro |
 | ↳ `INTERPRETADOR_NAO_DISPONIVEL` | | O interpretador do script não está mapeado **neste** agente | `[agent] interpreters` |
 | ↳ `VERSAO_NAO_SUPORTADA` | | Ticket criado por uma versão anterior (snapshot antes da versão 4) | Dispare de novo pela tela |
 | ↳ `CADASTRO_MUDOU`, `SCRIPT_INACTIVE`, `NAO_HOMOLOGADO`, `ENVIRONMENT_INACTIVE`, `NO_PERMISSION` | | O cadastro mudou entre o disparo e a execução | Confira o cadastro e dispare de novo |

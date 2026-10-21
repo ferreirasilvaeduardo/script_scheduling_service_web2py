@@ -219,7 +219,7 @@ class RepoSchedulesFake(RepoSchedules):
             return copy.deepcopy(a)
 
     def resume(self, id, nova_data, esperado=None, auditoria=None, ator=None):
-        """Retoma agendamento pausado, limpando pausa_motivo e definindo proxima_execucao."""
+        """Retoma agendamento pausado, limpando pausa_motivo e definindo next_run."""
         with self._store.lock_agendamentos:
             ator = self._store.record_actor(auditoria, ator)
             if id not in self._store.schedules:

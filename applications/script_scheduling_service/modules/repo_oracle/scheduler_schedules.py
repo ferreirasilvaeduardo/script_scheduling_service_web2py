@@ -94,7 +94,7 @@ class RepoSchedulerSchedules(object):
     # ------------------------------------------------------------------ leitura
 
     def due_rules(self, conn, lote, ult_prox=None, ult_id=0):
-        """Pagina de (id, proxima_execucao) vencidas, depois de (ult_prox, ult_id) (README §7.5, R-08)."""
+        """Pagina de (id, next_run) vencidas, depois de (ult_prox, ult_id) (README §7.5, R-08)."""
         cur = conn.cursor()
         try:
             db_conn.set_input_types(cur, ult_prox=db_conn.TIPO_DATE)
@@ -121,7 +121,7 @@ class RepoSchedulerSchedules(object):
             cur.close()
 
     def load_rule(self, conn, regra_id):
-        """Regra completa (passo 1); proxima_execucao exatamente como o banco a devolveu (a antiga_data)."""
+        """Regra completa (passo 1); next_run exatamente como o banco a devolveu (a antiga_data)."""
         cur = conn.cursor()
         try:
             cur.execute("SELECT " + ", ".join(_COLS_RULE) + " FROM " + self._agd + " WHERE id = :id",
@@ -257,7 +257,7 @@ class RepoSchedulerSchedules(object):
         return True
 
     def advance_without_ticket(self, conn, regra_id, antiga, nova):
-        """Avanco sem ticket (CR-007, R-05): so proxima_execucao, sem ultima_execucao, ultimo_ticket_id nem
+        """Avanco sem ticket (CR-007, R-05): so next_run, sem ultima_execucao, ultimo_ticket_id nem
         updated_* (rotina tecnica)."""
         return self._executar(conn, "UPDATE " + self._agd + " SET next_run_at = :nova_data WHERE id = :id"
                               " AND active = 'Y' AND next_run_at = :antiga_data",

@@ -30,7 +30,7 @@ SETA = u" → "
 class _Base(unittest.TestCase):
 
     def setUp(self):
-        patcher = mock.patch.object(security, "ITERACOES", 1000)
+        patcher = mock.patch.object(security, "ITERATIONS", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
         env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: "senha-dev-de-teste-123"})
@@ -267,12 +267,12 @@ class TestAcessoEAuditoria(_Base):
 
     def test_detalhe_mascara_credencial_e_limita_tamanho(self):
         segredo = "segredo-registrado-xyz"
-        with mock.patch.object(masking, "MASCARADOR", masking.Mascarador()):
-            masking.MASCARADOR.register(segredo)
+        with mock.patch.object(masking, "MASKER", masking.Masker()):
+            masking.MASKER.register(segredo)
             detalhe = admin_crud.detalhe_alteracoes({"description": "a"}, {"description": "usa " + segredo},
                                                     ("description",))
             self.assertNotIn(segredo, detalhe)
-            self.assertIn(masking.MASCARA, detalhe)
+            self.assertIn(masking.MASK, detalhe)
             detalhe = admin_crud.detalhe_alteracoes({"connection": None}, {"connection": "app/senha@db"}, ("connection",))
             self.assertNotIn("senha", detalhe)
         longo = admin_crud.detalhe_alteracoes({"description": "a"}, {"description": "b" * 2000}, ("description",))

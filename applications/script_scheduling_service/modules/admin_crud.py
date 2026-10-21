@@ -33,7 +33,7 @@ class OperacaoNegada(Exception):
 
 def exigir_func(ctx, codigo):
     """Defesa em profundidade: o controller ja exige a funcionalidade, o service reconfirma."""
-    if not rbac.tem_func(ctx, codigo):
+    if not rbac.has_feature(ctx, codigo):
         raise AcessoNegado(codigo)
 
 
@@ -129,7 +129,7 @@ def esperado(registro, campos):
 
 def _exibir(valor):
     valor = normalizar(valor)
-    return _VAZIO if valor is None else masking.MASCARADOR.mascarar(str(valor))
+    return _VAZIO if valor is None else masking.MASKER.mask(str(valor))
 
 
 def limitar(detalhe):
@@ -141,7 +141,7 @@ def limitar(detalhe):
 
 def detalhe_livre(texto):
     """Detalhe de auditoria montado pelo service, sempre mascarado e limitado (README §4.4)."""
-    return limitar(masking.MASCARADOR.mascarar(texto))
+    return limitar(masking.MASKER.mask(texto))
 
 
 def detalhe_alteracoes(antes, depois, campos):

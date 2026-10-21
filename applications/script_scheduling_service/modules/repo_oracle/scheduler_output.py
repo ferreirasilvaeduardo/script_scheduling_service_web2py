@@ -98,7 +98,7 @@ class RepoSchedulerOutput(object):
         self._sql_reiniciar = _SQL_RESTART.format(sai=sai)
         self._sql_incluir_gravando = _SQL_INSERT.format(sai=sai, tck=tck, content="EMPTY_BLOB()")
         self._sql_incluir_sem_conteudo = _SQL_INSERT.format(sai=sai, tck=tck, content="NULL")
-        self._sql_concluir = _SQL_COMPLETE.format(sai=sai)
+        self._sql_complete = _SQL_COMPLETE.format(sai=sai)
         self._sql_encerrar = _SQL_CLOSE_WRITING.format(sai=sai)
         self._sql_falhar = _SQL_FAIL_OF_AGENT.format(sai=sai)
         self._sql_situacao = _SQL_STATE.format(sai=sai)
@@ -155,11 +155,11 @@ class RepoSchedulerOutput(object):
             raise RuntimeError("resultado inesperado do anexar da saida: %r" % (valor,))
         return valor
 
-    def concluir(self, conn, ticket_id, agente_id, qtd_arquivos, tamanho_bytes):
+    def complete(self, conn, ticket_id, agente_id, qtd_arquivos, tamanho_bytes):
         """GRAVANDO -> DISPONIVEL, so se o zip no banco tiver tamanho_bytes. False: posse perdida. Sem COMMIT."""
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_concluir, ticket_id=int(ticket_id), agent_id=agente_id,
+            cur.execute(self._sql_complete, ticket_id=int(ticket_id), agent_id=agente_id,
                         file_count=int(qtd_arquivos), size_bytes=int(tamanho_bytes), actor=_actor(agente_id))
             return cur.rowcount == 1
         finally:

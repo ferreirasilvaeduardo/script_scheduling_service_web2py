@@ -336,8 +336,8 @@ class TestSemBanco(unittest.TestCase):
         self.assertEqual(ctx["homologacoes"], frozenset({5}))
         self.assertEqual(ctx["agendamento"], {"name": "Noturna", "recurrence_type": "DAILY"})
         import rbac
-        self.assertEqual(rbac.pode_executar(ctx["ctx"], ctx["script"], ctx["environment"], ctx["homologacoes"]),
-                         (True, rbac.Motivo.OK))
+        self.assertEqual(rbac.can_execute(ctx["ctx"], ctx["script"], ctx["environment"], ctx["homologacoes"]),
+                         (True, rbac.Reason.OK))
 
     def test_sql_sem_prefixo_fixo(self):
         with open(scheduler_queue.__file__, encoding="utf-8") as f:

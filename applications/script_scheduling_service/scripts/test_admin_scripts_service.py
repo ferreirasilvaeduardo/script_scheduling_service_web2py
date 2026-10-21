@@ -20,7 +20,7 @@ import repo_factory
 import security
 from admin_crud import CAMPO_GERAL, AcessoNegado, OperacaoNegada
 from admin_scripts_service import ServicoAdminScripts
-from path_guard import Codigo
+from path_guard import Code
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 # UID fictício do agente: o dono dos arquivos de teste é o usuário do teste (CR-007, R-15).
@@ -75,7 +75,7 @@ class _Base(unittest.TestCase):
     ENV = "DEV"
 
     def setUp(self):
-        patcher = mock.patch.object(security, "ITERACOES", 1000)
+        patcher = mock.patch.object(security, "ITERATIONS", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
         env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: "senha-dev-de-teste-123"})
@@ -145,14 +145,14 @@ class TestCadastro(_Base):
     def test_interpretador_fora_da_allowlist(self):
         for cmd in ("/bin/ls", "/usr/bin/python3", "PYTHON3 -c", "python3", "CMD", "POWERSHELL", "", None):
             _sid, erros, _ = self._incluir(interpreter=cmd)
-            self.assertEqual(erros.get("interpreter"), scr_mod.MENSAGENS_PATH[Codigo.INTERPRETADOR_NAO_PERMITIDO], cmd)
+            self.assertEqual(erros.get("interpreter"), scr_mod.MENSAGENS_PATH[Code.INTERPRETADOR_NAO_PERMITIDO], cmd)
 
     def test_path_file_invalidos(self):
         # CR-005 (README §8.5): caminho absoluto, normalizado e fora das pastas do sistema; vale em qualquer sss_env.
-        casos = (("novo.py", Codigo.CAMINHO_RELATIVO), ("/etc/passwd", Codigo.PASTA_DO_SISTEMA),
-                 ("/usr/local/bin/x.py", Codigo.PASTA_DO_SISTEMA), ("/etc/nao_existe.py", Codigo.PASTA_DO_SISTEMA),
-                 (self.base + "/../x.py", Codigo.CONTEM_PONTOS), (self.base + "//novo.py", Codigo.CAMINHO_NAO_NORMALIZADO),
-                 ("/opt\\x.py", Codigo.SEPARADOR_INVALIDO))
+        casos = (("novo.py", Code.RELATIVE_PATH), ("/etc/passwd", Code.SYSTEM_DIR),
+                 ("/usr/local/bin/x.py", Code.SYSTEM_DIR), ("/etc/nao_existe.py", Code.SYSTEM_DIR),
+                 (self.base + "/../x.py", Code.HAS_DOTS), (self.base + "//novo.py", Code.PATH_NOT_NORMALIZED),
+                 ("/opt\\x.py", Code.INVALID_SEPARATOR))
         for env in ("DEV", "HML"):
             svc = self._servico(env)
             for path, codigo in casos:
@@ -166,7 +166,7 @@ class TestCadastro(_Base):
         os.symlink("/etc/hostname", self._p("fuga.py"))
         os.chmod(self.base, 0o555)
         _sid, erros, _ = self._incluir(path_file=self._p("fuga.py"))
-        self.assertEqual(erros, {"path_file": scr_mod.MENSAGENS_PATH[Codigo.PASTA_DO_SISTEMA]})
+        self.assertEqual(erros, {"path_file": scr_mod.MENSAGENS_PATH[Code.SYSTEM_DIR]})
 
     def test_arquivo_nao_e_conferido_no_cadastro(self):
         # CR-011 (S1): ausente, gravavel ou pasta neste servidor nao importam aqui; o agente confere ao executar.
@@ -318,7 +318,7 @@ class TestVinculos(_Base):
 
     def test_detalhe_dos_vinculos_passa_pelo_masking(self):
         import masking
-        masking.MASCARADOR.register("SEGREDO-DE-INFRA-9")
+        masking.MASKER.register("SEGREDO-DE-INFRA-9")
         tela, itens = self._vinculos_json(S_CARGA)
         for item in itens:
             if item["parameter_id"] == 1:
@@ -462,7 +462,7 @@ class TestSemHashELink(_Base):
         os.symlink("/etc/hostname", link)
         os.chmod(self.base, 0o555)
         _sid, erros, _a = self._incluir(path_file=link)
-        self.assertEqual(erros, {"path_file": scr_mod.MENSAGENS_PATH[path_guard.Codigo.PASTA_DO_SISTEMA]})
+        self.assertEqual(erros, {"path_file": scr_mod.MENSAGENS_PATH[path_guard.Code.SYSTEM_DIR]})
 
 
 if __name__ == "__main__":

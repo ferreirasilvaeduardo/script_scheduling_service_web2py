@@ -93,7 +93,7 @@ class Purge(object):
         self.dono = cfg.agent.agent_id
         self.resumo = []
 
-    def executar(self, alvos, dry_run=False, exportar=None):
+    def run(self, alvos, dry_run=False, exportar=None):
         agora = db_conn.db_now(self.conn)  # uma vez: todos os limites partem deste instante
         self.log.info("purge iniciado (alvos=%s dry_run=%s agora_banco=%s)", ",".join(alvos), dry_run,
                       agora.strftime("%Y-%m-%d %H:%M:%S"), extra=_EXTRA)
@@ -263,7 +263,7 @@ def main(argv=None, conectar=None, plat=os_platform, saida=None):
         outro.setLevel(logger.level)
         for handler in logger.handlers:
             outro.addHandler(handler)
-    masking.instalar_filtro_em_handlers()
+    masking.install_filter_on_handlers()
     if not cfg.retention.purge_user:
         logger.critical("purge desligado: [retention] purge_user vazio (README §12.1)", extra=_EXTRA)
         return SAIDA_CONFIG
@@ -291,7 +291,7 @@ def main(argv=None, conectar=None, plat=os_platform, saida=None):
             return SAIDA_BANCO
         try:
             purge = Purge(cfg, conn, plat=plat, logger=logger)
-            codigo = purge.executar(alvos, dry_run=args.dry_run, exportar=args.exportar_auditoria)
+            codigo = purge.run(alvos, dry_run=args.dry_run, exportar=args.exportar_auditoria)
         finally:
             conn.close()
         if args.dry_run:

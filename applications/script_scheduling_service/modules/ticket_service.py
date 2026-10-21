@@ -2,7 +2,7 @@
 """Disparo manual de script e consulta de tickets (README §4.3.C, §5, §6).
 
 O servidor e a autoridade: script, ambiente e homologacao sao sempre recarregados do
-repositorio e reautorizados com rbac.pode_executar. Valores de parametros nunca vao para
+repositorio e reautorizados com rbac.can_execute. Valores de parametros nunca vao para
 o log; so codigos de campo.
 """
 import collections
@@ -18,7 +18,7 @@ import rbac
 import ui_helpers
 from repo_errors import RepoError, RepoNotFound
 
-CAMPO_GERAL = params_compiler.CHAVE_GERAL
+CAMPO_GERAL = params_compiler.GENERAL_KEY
 CAMPO_PRIORIDADE = "priority"
 CAMPO_AGENDAMENTO = "scheduled_at"
 PRIORIDADE_PADRAO = 2
@@ -71,7 +71,7 @@ MARCADOR_DOWNLOAD_INTERROMPIDO = u"\n[SSS] download interrompido por falha na le
 
 
 class AcessoNegado(Exception):
-    """Execucao nao autorizada; o motivo (rbac.Motivo) e destinado apenas ao log."""
+    """Execucao nao autorizada; o motivo (rbac.Reason) e destinado apenas ao log."""
 
     def __init__(self, motivo):
         Exception.__init__(self, motivo)
@@ -226,10 +226,10 @@ def _snapshot(ticket):
 
 def _argv_exibicao(snap):
     # Snapshot ilegivel ou de versao anterior ao CR-005 (v1 a v3) nao tem argv exibivel.
-    if snap is None or snap.get("version") != params_compiler.VERSAO_SNAPSHOT:
+    if snap is None or snap.get("version") != params_compiler.SNAPSHOT_VERSION:
         return None
     try:
-        return params_compiler.argv_para_exibicao(snap)
+        return params_compiler.display_argv(snap)
     except (KeyError, TypeError, ValueError, AttributeError):
         return None
 
@@ -253,11 +253,11 @@ class ServicoTicket(object):
     def _script(self, ctx, script_id):
         sid = _id(script_id)
         if sid is None:
-            self._negar(ctx, rbac.Motivo.DADO_INVALIDO, script_id, None)
+            self._negar(ctx, rbac.Reason.INVALID_DATA, script_id, None)
         try:
             return self._catalogo.scripts_get(sid)
         except RepoNotFound:
-            self._negar(ctx, rbac.Motivo.DADO_INVALIDO, script_id, None)
+            self._negar(ctx, rbac.Reason.INVALID_DATA, script_id, None)
 
     def _ambiente_por_nome(self, nome):
         if not isinstance(nome, str) or not _RE_AMBIENTE.fullmatch(nome):
@@ -269,19 +269,19 @@ class ServicoTicket(object):
         return None
 
     def _autorizar(self, ctx, script_id, ambiente):
-        """Recarrega script, ambiente e homologacao do repositorio e aplica pode_executar."""
+        """Recarrega script, ambiente e homologacao do repositorio e aplica can_execute."""
         script = self._script(ctx, script_id)
         amb = self._ambiente_por_nome(ambiente)
         if amb is None:
-            self._negar(ctx, rbac.Motivo.DADO_INVALIDO, script_id, ambiente)
+            self._negar(ctx, rbac.Reason.INVALID_DATA, script_id, ambiente)
         homologacoes = self._catalogo.homologation_get(script["id"])
-        ok, motivo = rbac.pode_executar(ctx, script, amb, homologacoes)
+        ok, motivo = rbac.can_execute(ctx, script, amb, homologacoes)
         if not ok:
             self._negar(ctx, motivo, script["id"], amb["name"])
         return script, amb
 
     def autorizar(self, ctx, script_id, ambiente):
-        """(script, ambiente) recarregados do repositorio e autorizados por pode_executar; lanca AcessoNegado."""
+        """(script, ambiente) recarregados do repositorio e autorizados por can_execute; lanca AcessoNegado."""
         return self._autorizar(ctx, script_id, ambiente)
 
     def _ambientes_executaveis(self, ctx, script):
@@ -291,7 +291,7 @@ class ServicoTicket(object):
                 amb = self._catalogo.environments_get(aid)
             except RepoNotFound:
                 continue
-            ok, _motivo = rbac.pode_executar(ctx, script, amb, (aid,))
+            ok, _motivo = rbac.can_execute(ctx, script, amb, (aid,))
             if ok:
                 ambientes.append(amb)
         ambientes.sort(key=lambda a: a["name"])
@@ -304,7 +304,7 @@ class ServicoTicket(object):
 
         Retorna lista ordenada de {grupo, categoria, scripts: [{id, nome, descricao, etapa}]}.
         """
-        if not rbac.tem_func(ctx, "EXEC_SCRIPT"):
+        if not rbac.has_feature(ctx, "EXEC_SCRIPT"):
             return []
         grupos = collections.OrderedDict()
         candidatos = sorted(self._catalogo.executable_scripts(ctx),
@@ -326,7 +326,7 @@ class ServicoTicket(object):
         script = self._script(ctx, script_id)
         ambientes = self._ambientes_executaveis(ctx, script)
         if not ambientes:
-            self._negar(ctx, rbac.Motivo.SEM_AMBIENTE, script["id"], None)
+            self._negar(ctx, rbac.Reason.NO_ENVIRONMENT, script["id"], None)
         return script, [{"id": a["id"], "name": a["name"], "description": a.get("description") or ""}
                         for a in ambientes]
 
@@ -338,8 +338,8 @@ class ServicoTicket(object):
             if fonte is None or (isinstance(fonte, str) and fonte.strip() == ""):
                 continue
             try:
-                return params_compiler.validar_valor(vinculo, fonte)
-            except params_compiler.ParamErro:
+                return params_compiler.validate_value(vinculo, fonte)
+            except params_compiler.ParamError:
                 return None
         return None
 
@@ -359,7 +359,7 @@ class ServicoTicket(object):
         return None
 
     def preparar_formulario(self, ctx, script_id, ambiente, valores=None, erros=None, avisos=None):
-        """Vinculos ordenados com padroes resolvidos para exibicao; valida pode_executar.
+        """Vinculos ordenados com padroes resolvidos para exibicao; valida can_execute.
 
         valores/erros (opcionais) reapresentam um POST com erro; avisos (opcional) sao notas por campo
         (ex.: resposta da ultima execucao que mudou). Valores e padroes sensiveis nunca sao devolvidos.
@@ -406,7 +406,7 @@ class ServicoTicket(object):
                 "exemplo": self._exemplo(v),
                 "aviso": avisos.get(codigo),
             })
-        prioridades = [(p, ROTULOS_PRIORIDADE[p]) for p in rbac.PRIORITIES if rbac.prioridade_permitida(ctx, p)]
+        prioridades = [(p, ROTULOS_PRIORIDADE[p]) for p in rbac.PRIORITIES if rbac.allowed_priority(ctx, p)]
         return {
             "script": {"id": script["id"], "name": script["name"], "description": script.get("description") or "",
                        "param_type": script["param_type"]},
@@ -424,9 +424,9 @@ class ServicoTicket(object):
             prioridade = PRIORIDADE_PADRAO
         else:
             prioridade = _id(valor.strip() if isinstance(valor, str) else valor)
-        if prioridade is not None and rbac.prioridade_permitida(ctx, prioridade):
+        if prioridade is not None and rbac.allowed_priority(ctx, prioridade):
             return prioridade
-        if prioridade == rbac.PRIORIDADE_ADMIN:
+        if prioridade == rbac.ADMIN_PRIORITY:
             erros[CAMPO_PRIORIDADE] = u"A prioridade 1 é exclusiva de administradores."
         else:
             erros[CAMPO_PRIORIDADE] = u"Selecione uma prioridade entre 1 e 4."
@@ -469,14 +469,14 @@ class ServicoTicket(object):
         # CR-011 (README §5.4, §8.5): o web confere so o formato do caminho e as pastas do sistema; o arquivo
         # e conferido pelo agente, no servidor onde ele roda (README §8.4).
         try:
-            path_guard.validar_cadastro(script["path_file"])
-            path_guard.checar_pastas_proibidas(script["path_file"])
-        except path_guard.PathGuardErro as e:
+            path_guard.validate_registration(script["path_file"])
+            path_guard.check_forbidden_dirs(script["path_file"])
+        except path_guard.PathGuardError as e:
             self._log.warning("caminho do script recusado (login=%s script_id=%s code=%s)",
                               ctx["login"], script["id"], e.codigo, extra={"action": "TICKET_CREATE"})
             erros[CAMPO_GERAL] = MSG_SCRIPT_INDISPONIVEL
 
-        snapshot, resolvidos, erros_param = params_compiler.compilar_snapshot(
+        snapshot, resolvidos, erros_param = params_compiler.compile_snapshot(
             script, vinculos, respostas, agora)
         for codigo, mensagem in erros_param.items():
             erros.setdefault(codigo, mensagem)
@@ -497,7 +497,7 @@ class ServicoTicket(object):
                                                           self._tickets.now(), erros)
         if snapshot is None:
             return None, dict(erros)
-        return params_compiler.argv_para_exibicao(json.loads(snapshot)), {}
+        return params_compiler.display_argv(json.loads(snapshot)), {}
 
     def resumo_disparo(self, ctx, script_id, ambiente, respostas, prioridade=None, scheduled_at=None):
         """Resumo em frase do modal de confirmacao (README §5.4), montado pelo servidor; nao grava nada.
@@ -517,7 +517,7 @@ class ServicoTicket(object):
         for v in _ordenados(vinculos):
             valor = resolvidos.get(v["code"])
             if v.get("sensitive") == "Y" and valor not in (None, ""):
-                texto = params_compiler.MASCARA
+                texto = params_compiler.MASK
             elif valor is None or valor == "":
                 texto = u"(sem resposta)"
             elif isinstance(valor, bool):
@@ -529,7 +529,7 @@ class ServicoTicket(object):
         frase = u"Vamos rodar %s no ambiente %s %s, com prioridade %d." % (script["name"], amb["name"], quando, prio)
         if linhas:
             frase += u" Respostas: " + u"; ".join(u"%s = %s" % (l["rotulo"], l["valor"]) for l in linhas) + u"."
-        return {"argv": params_compiler.argv_para_exibicao(json.loads(snapshot)),
+        return {"argv": params_compiler.display_argv(json.loads(snapshot)),
                 "erros": {},
                 "resumo": {"script": script["name"], "environment": amb["name"], "quando": quando, "priority": prio,
                            "respostas": linhas, "frase": frase}}
@@ -566,8 +566,8 @@ class ServicoTicket(object):
                 continue
             bruto = por_id[v["parameter_id"]]
             try:
-                params_compiler.validar_valor(v, bruto)
-            except params_compiler.ParamErro:
+                params_compiler.validate_value(v, bruto)
+            except params_compiler.ParamError:
                 avisos[v["code"]] = MSG_ULTIMA_MUDOU
                 continue
             valores[v["code"]] = bruto
@@ -579,7 +579,7 @@ class ServicoTicket(object):
 
         reexecucao_de (opcional) vincula o novo ticket ao original (README §5.5), exigindo
         as mesmas regras de reexecutar e o mesmo script/environment. Lanca AcessoNegado quando
-        pode_executar nega. A auditoria e gravada pelo repositorio na mesma transacao do INSERT.
+        can_execute nega. A auditoria e gravada pelo repositorio na mesma transacao do INSERT.
         """
         parent_id = None
         if reexecucao_de not in (None, ""):
@@ -630,13 +630,13 @@ class ServicoTicket(object):
 
     def pode_consultar(self, ctx):
         """Acesso a lista de tickets: VIEW_LOGS (escopo de ambientes) ou EXEC_SCRIPT (proprios)."""
-        return rbac.tem_func(ctx, "VIEW_LOGS") or rbac.tem_func(ctx, "EXEC_SCRIPT")
+        return rbac.has_feature(ctx, "VIEW_LOGS") or rbac.has_feature(ctx, "EXEC_SCRIPT")
 
     def _proprio(self, ctx, ticket):
-        return rbac.tem_func(ctx, "EXEC_SCRIPT") and ticket.get("requested_by") == ctx.get("login")
+        return rbac.has_feature(ctx, "EXEC_SCRIPT") and ticket.get("requested_by") == ctx.get("login")
 
     def _pode_ver(self, ctx, ticket):
-        return self._proprio(ctx, ticket) or rbac.pode_ver_ticket(ctx, ticket)
+        return self._proprio(ctx, ticket) or rbac.can_view_ticket(ctx, ticket)
 
     def visivel(self, ctx, ticket_id):
         """True se o ticket existe e pode ser visto (destino do redirecionamento apos cancelar)."""
@@ -664,7 +664,7 @@ class ServicoTicket(object):
 
     def opcoes_filtro(self, ctx):
         """Opcoes dos selects de filtro: ambientes visiveis ao perfil e scripts do catalogo."""
-        if rbac.tem_func(ctx, "VIEW_LOGS") and ctx.get("is_admin") is True:
+        if rbac.has_feature(ctx, "VIEW_LOGS") and ctx.get("is_admin") is True:
             pagina = self._catalogo.environments_list(pagina=1, tamanho=_AMBIENTES_MAX)
             ambientes = sorted(a["name"] for a in pagina["itens"])
         else:
@@ -679,7 +679,7 @@ class ServicoTicket(object):
         Com VIEW_LOGS: ambientes autorizados (admin: todos, escopo None). Sem VIEW_LOGS: apenas
         os tickets do proprio solicitante. visivel False: nada a consultar.
         """
-        if rbac.tem_func(ctx, "VIEW_LOGS"):
+        if rbac.has_feature(ctx, "VIEW_LOGS"):
             if ctx.get("is_admin") is True:
                 return True, None
             escopo = sorted(ctx.get("environments") or ())
@@ -691,7 +691,7 @@ class ServicoTicket(object):
 
     def _escopo_execucoes(self, ctx):
         """(escopo_ambientes, solicitante) da ultima execucao/historico: o mesmo da lista (README §5.8)."""
-        if rbac.tem_func(ctx, "VIEW_LOGS"):
+        if rbac.has_feature(ctx, "VIEW_LOGS"):
             return (None if ctx.get("is_admin") is True else sorted(ctx.get("environments") or ())), None
         return None, ctx["login"]
 
@@ -810,7 +810,7 @@ class ServicoTicket(object):
         tickets do proprio solicitante. filtros passa por normalizar_filtros.
         """
         if not self.pode_consultar(ctx):
-            self._negar(ctx, rbac.Motivo.SEM_FUNC, None, None)
+            self._negar(ctx, rbac.Reason.NO_FEATURE, None, None)
         repo_filtros = _filtros_repo(normalizar_filtros(filtros))
         vazio = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         visivel, escopo = self._escopo_consulta(ctx, repo_filtros)
@@ -858,12 +858,12 @@ class ServicoTicket(object):
                 sensivel = True
             valor = r.get("answer_value")
             linhas.append({"code": codigo, "rotulo": rotulo, "sensitive": sensivel,
-                           "valor": params_compiler.MASCARA if sensivel and valor not in (None, "") else valor})
+                           "valor": params_compiler.MASK if sensivel and valor not in (None, "") else valor})
         return linhas
 
     def _pode_reexecutar_regra(self, ctx, ticket):
         # README §4.3.C: EXEC_SCRIPT reexecuta tickets proprios; admin, qualquer ticket visivel.
-        return (ctx.get("is_admin") is True and rbac.tem_func(ctx, "EXEC_SCRIPT")) or self._proprio(ctx, ticket)
+        return (ctx.get("is_admin") is True and rbac.has_feature(ctx, "EXEC_SCRIPT")) or self._proprio(ctx, ticket)
 
     def _pode_executar_vigente(self, ctx, ticket):
         try:
@@ -873,7 +873,7 @@ class ServicoTicket(object):
         amb = self._ambiente_por_nome(ticket["environment"])
         if amb is None:
             return False
-        ok, _motivo = rbac.pode_executar(ctx, script, amb, self._catalogo.homologation_get(script["id"]))
+        ok, _motivo = rbac.can_execute(ctx, script, amb, self._catalogo.homologation_get(script["id"]))
         return ok
 
     def detalhe(self, ctx, ticket_id):
@@ -905,7 +905,7 @@ class ServicoTicket(object):
         status = ticket["status"]
         cancel_requested = ticket.get("cancel_requested") == "Y"
         pode_cancelar = (status in STATUS_CANCELAVEIS and not cancel_requested
-                         and rbac.pode_cancelar(ctx, ticket))
+                         and rbac.can_cancel(ctx, ticket))
         pode_reexecutar = (status in STATUS_TERMINAIS and self._pode_reexecutar_regra(ctx, ticket)
                            and self._pode_executar_vigente(ctx, ticket))
         argv = _argv_exibicao(snap)
@@ -1047,11 +1047,11 @@ class ServicoTicket(object):
         if tid is None:
             raise RepoNotFound("ticket invalido")
         ticket = self._tickets.get(tid)
-        if not (self._pode_ver(ctx, ticket) or rbac.pode_cancelar(ctx, ticket)):
+        if not (self._pode_ver(ctx, ticket) or rbac.can_cancel(ctx, ticket)):
             self._log.warning("ticket fora do escopo (login=%s ticket=%s environment=%s)",
                               ctx.get("login"), tid, ticket.get("environment"), extra={"action": "TICKET_CANCEL"})
             raise RepoNotFound("ticket fora do escopo")
-        if not rbac.pode_cancelar(ctx, ticket):
+        if not rbac.can_cancel(ctx, ticket):
             self._negar(ctx, "SEM_CANCELAMENTO", ticket["script_id"], ticket["environment"])
         try:
             resultado = self._tickets.request_cancel(ticket["id"], ctx["login"], ip)
@@ -1068,7 +1068,7 @@ class ServicoTicket(object):
         if ticket["status"] not in STATUS_TERMINAIS:
             self._negar(ctx, "TICKET_NAO_TERMINAL", ticket["script_id"], ticket["environment"])
         if not self._pode_reexecutar_regra(ctx, ticket):
-            self._negar(ctx, rbac.Motivo.SEM_FUNC, ticket["script_id"], ticket["environment"])
+            self._negar(ctx, rbac.Reason.NO_FEATURE, ticket["script_id"], ticket["environment"])
         return ticket
 
     def _respostas_originais(self, ticket, vinculos):
@@ -1094,7 +1094,7 @@ class ServicoTicket(object):
         """Novo ticket com parent_ticket_id, recompilado contra o catalogo vigente (README §5.5).
 
         Retorna o novo ID. Lanca RepoNotFound (fora do escopo), AcessoNegado (regra de
-        reexecucao ou pode_executar vigente) e ErroReexecucao (recompilacao ou gravacao).
+        reexecucao ou can_execute vigente) e ErroReexecucao (recompilacao ou gravacao).
         """
         original = self._ticket_reexecutavel(ctx, ticket_id)
         script, amb, prio, _resp, snapshot, resolvidos, vinculos, erros = self._recompilar(ctx, original)

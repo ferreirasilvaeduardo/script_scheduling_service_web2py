@@ -5,7 +5,7 @@ tbsss_schedules com a mesma semantica do repo_fake/schedules.py (README §2.5):
 - SQL estatico com binds; os modelos ficam nas constantes abaixo e recebem, uma vez por instancia,
   somente identificadores qualificados por sql_ident (owner e prefixo validados);
 - CKs e FKs conferidas antes do DML, na ordem do FAKE e com os mesmos nomes (sem gravacao parcial);
-- pausar condicional a ativo = 'S' e, quando informada, a proxima_execucao lida (CR-007, R-19):
+- pausar condicional a ativo = 'S' e, quando informada, a next_run lida (CR-007, R-19):
   rowcount = 0 vira RepoConflict; binds de DATE como TIPO_DATE (README §7.5), sem microssegundos;
 - colunas de registro (CR-006, R-g): created_* e o criador original; alterar, pausar e retomar
   gravam updated_* com o ator;
@@ -77,7 +77,7 @@ _SQL_UPDATE = (
     "last_ticket_id = :last_ticket_id, pause_reason = :pause_reason, active = :active, "
     "updated_at = SYSDATE, updated_by = :actor WHERE id = :id"
 )
-# CR-007, R-19: so pausa regra ativa e, com antiga_data, so se a proxima_execucao lida nao mudou.
+# CR-007, R-19: so pausa regra ativa e, com antiga_data, so se a next_run lida nao mudou.
 _SQL_PAUSE = (
     "UPDATE {agd} SET active = 'N', pause_reason = :reason, updated_at = SYSDATE, updated_by = :actor "
     "WHERE id = :id AND active = 'Y'"
@@ -237,7 +237,7 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
     # -------------------------------------------------------------------------
 
     def list(self, filtros=None, pagina=1, tamanho=20, escopo_ambientes=None, conn=None):
-        """Lista por proxima_execucao, id, com total limitado a 10.001 (traz parametros_json, sem log)."""
+        """Lista por next_run, id, com total limitado a 10.001 (traz parametros_json, sem log)."""
         filtros = filtros or {}
         clausulas, binds = [], {}
         if escopo_ambientes is not None:
@@ -395,7 +395,7 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             return self.get(id, conn=c)
 
     def pause(self, id, motivo, antiga_data=None, auditoria=None, ator=None, conn=None):
-        """Pausa so regra ativa e, com antiga_data, so se a proxima_execucao nao mudou (CR-007, R-19)."""
+        """Pausa so regra ativa e, com antiga_data, so se a next_run nao mudou (CR-007, R-19)."""
         ator_limpo = validate_record_actor(auditoria, ator)
         with self.write_transaction(conn=conn) as c:
             if not self._existe(c, self._sql["EXISTS"], {"id": int(id)}):
@@ -422,7 +422,7 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             return self.get(id, conn=c)
 
     def resume(self, id, nova_data, esperado=None, auditoria=None, ator=None, conn=None):
-        """Retoma: ativo = 'S', pausa_motivo nulo e proxima_execucao = nova_data, condicional a 'esperado'."""
+        """Retoma: ativo = 'S', pausa_motivo nulo e next_run = nova_data, condicional a 'esperado'."""
         ator_limpo = validate_record_actor(auditoria, ator)
         with self.write_transaction(conn=conn) as c:
             atual = self._uma(c, self._sql["GET_LOCK"], {"id": int(id)})

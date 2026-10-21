@@ -62,7 +62,7 @@ class _BaseTicket(unittest.TestCase):
 
     def setUp(self):
         # Iteracoes reduzidas so para o hash das senhas do seed; nao afeta o fluxo testado.
-        patcher = mock.patch.object(security, "ITERACOES", 1000)
+        patcher = mock.patch.object(security, "ITERATIONS", 1000)
         patcher.start()
         self.addCleanup(patcher.stop)
         env = mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: "senha-dev-de-teste-123"})
@@ -121,7 +121,7 @@ class TestTicketService(_BaseTicket):
         bruto = ticket["submitted_params"]
         snap = json.loads(bruto)
         self.assertEqual(bruto, json.dumps(snap, ensure_ascii=False, sort_keys=True))
-        self.assertEqual(sorted(snap), sorted(params_compiler._CHAVES_SNAPSHOT))
+        self.assertEqual(sorted(snap), sorted(params_compiler._SNAPSHOT_KEYS))
         self.assertEqual(snap["version"], 4)
         self.assertEqual(snap["script_nome"], "carga_diaria")
         caminho_esperado = os.path.join(self.base, "carga_diaria.py")
@@ -180,7 +180,7 @@ class TestTicketService(_BaseTicket):
         antes = self._total_tickets()
         with self.assertRaises(AcessoNegado) as cm:
             self._criar(login="consulta", script_id="1", ambiente="PRODUCAO")
-        self.assertEqual(cm.exception.motivo, "SEM_FUNC")
+        self.assertEqual(cm.exception.motivo, "NO_FEATURE")
         self.assertEqual(self.svc.scripts_disponiveis(self.ctx["consulta"]), [])
         self.assertEqual(self._total_tickets(), antes)
 
@@ -188,7 +188,7 @@ class TestTicketService(_BaseTicket):
         # sync_tabelas (4) so e homologado em HOMOLOGACAO; admin nao dispensa a homologacao.
         with self.assertRaises(AcessoNegado) as cm:
             self._criar(login="admin", script_id="4", ambiente="PRODUCAO")
-        self.assertEqual(cm.exception.motivo, "SEM_HOMOLOGACAO")
+        self.assertEqual(cm.exception.motivo, "NOT_HOMOLOGATED")
         with self.assertRaises(AcessoNegado):
             self.svc.previa(self.ctx["admin"], "4", "PRODUCAO", {})
 
@@ -279,7 +279,7 @@ class TestTicketService(_BaseTicket):
         argv, erros = self.svc.previa(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"documento_cliente": SEGREDO})
         self.assertEqual(erros, {})
         self.assertNotIn(SEGREDO, " ".join(argv))
-        self.assertEqual(argv[argv.index("--documento") + 1], params_compiler.MASCARA)
+        self.assertEqual(argv[argv.index("--documento") + 1], params_compiler.MASK)
         argv, erros = self.svc.previa(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"modo_exec": "X"})
         self.assertIsNone(argv)
         self.assertIn("modo_exec", erros)
@@ -314,7 +314,7 @@ class TestClarezaDisparo(_BaseTicket):
                                                    u"com prioridade 3."))
         valores = dict((x["rotulo"], x["valor"]) for x in resumo["respostas"])
         self.assertNotIn("12345678900", resumo["frase"])
-        self.assertIn(params_compiler.MASCARA, valores.values())
+        self.assertIn(params_compiler.MASK, valores.values())
         self.assertTrue(r["argv"])
 
     def test_resumo_com_horario_e_erros(self):
@@ -574,10 +574,10 @@ class TestTicketConsulta(_BaseTicket):
             else:
                 det = self.svc.detalhe(self.ctx[login], str(tid))
                 respostas = dict((r["code"], r) for r in det["respostas"])
-                self.assertEqual(respostas["documento_cliente"]["valor"], params_compiler.MASCARA)
+                self.assertEqual(respostas["documento_cliente"]["valor"], params_compiler.MASK)
                 self.assertTrue(respostas["documento_cliente"]["sensitive"])
                 self.assertEqual(respostas["data_ref"]["valor"], "2026-10-14")
-                self.assertIn(params_compiler.MASCARA, det["argv_para_exibicao"])
+                self.assertIn(params_compiler.MASK, det["argv_para_exibicao"])
             serial = json.dumps(det, default=str)
             self.assertNotIn(SEGREDO, serial)
             self.assertNotIn("00011122233", serial)

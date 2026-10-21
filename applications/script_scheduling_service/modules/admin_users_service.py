@@ -42,7 +42,7 @@ MSG_AUTO_PERFIL = u"Operação negada: você não pode remover o próprio perfil
 MSG_AUTO_SENHA = u"Para trocar a sua própria senha, use \"Minha senha\" (exige a senha atual)."
 MSG_SO_ADMIN = (u"Só um administrador pode alterar um usuário administrador ou dar o perfil de administrador. "
                 u"Peça a um administrador.")
-AJUDA_POLITICA = u"Mínimo de %d caracteres. A senha nunca é exibida nem registrada." % security.SENHA_MIN
+AJUDA_POLITICA = u"Mínimo de %d caracteres. A senha nunca é exibida nem registrada." % security.PASSWORD_MIN
 AVISO_DESATIVACAO = u"O usuário perde o acesso e tem a sessão encerrada no próximo clique."
 
 _CAMPO_POR_CONSTRAINT = {
@@ -176,7 +176,7 @@ class ServicoAdminUsuarios(object):
         if len(senha) > auth_service.SENHA_MAX:
             erros[campo] = MSG_SENHA_LONGA
             return None
-        problemas = security.validar_politica_senha(senha)
+        problemas = security.validate_password_policy(senha)
         if problemas:
             erros[campo] = problemas[0]
             return None
@@ -220,7 +220,7 @@ class ServicoAdminUsuarios(object):
                 return None, {"profile_id": exc.mensagem}
             agora = self._relogio()
             novo = {"login": login, "name": nome, "profile_id": perfil_id, "active": "Y",
-                    "password_hash": security.hash_senha(senha), "password_changed_at": agora}
+                    "password_hash": security.hash_password(senha), "password_changed_at": agora}
             auditoria = admin_crud.auditoria(ctx, ip, "CREATE",
                                              admin_crud.detalhe_insercao(dict(novo, perfil=perfil["name"]),
                                                                          CAMPOS_INSERCAO))
@@ -312,7 +312,7 @@ class ServicoAdminUsuarios(object):
         senha = self._senha(senha, confirmacao, erros)
         if erros:
             return erros
-        self._usuarios.set_password(atual["id"], security.hash_senha(senha), self._relogio(),
+        self._usuarios.set_password(atual["id"], security.hash_password(senha), self._relogio(),
                                      auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", u"senha redefinida"))
         self._log.info("senha redefinida (login=%s usuario=%s)", ctx.get("login"), atual["login"],
                        extra={"action": "UPDATE"})

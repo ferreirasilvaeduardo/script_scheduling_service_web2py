@@ -38,7 +38,7 @@ def _texto(valor, limite):
 
 
 def _retirar_senhas():
-    return security.retirar_senhas((request.post_vars, request.vars), _CAMPOS_SENHA)
+    return security.strip_passwords((request.post_vars, request.vars), _CAMPOS_SENHA)
 
 
 def _inteiro(valor):

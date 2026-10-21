@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 import path_guard
-from path_guard import Codigo, PathGuardErro
+from path_guard import Code, PathGuardError
 
 
 
@@ -57,10 +57,10 @@ class TestResolver(unittest.TestCase):
         return os.path.join(self.base, rel)
 
     def _resolver(self, rel, dirs_sss=()):
-        return path_guard.resolver(self._p(rel), dirs_sss)
+        return path_guard.resolve(self._p(rel), dirs_sss)
 
     def _codigo(self, rel, **kw):
-        with self.assertRaises(PathGuardErro) as ctx:
+        with self.assertRaises(PathGuardError) as ctx:
             self._resolver(rel, **kw)
         return ctx.exception.codigo
 
@@ -78,37 +78,37 @@ class TestResolver(unittest.TestCase):
         # CR-011 (S2): vale o arquivo real; gravavel por grupo ou outros e recusado, mesmo via link.
         self.assertTrue(self._resolver("link_fora.py"), "destino fora da arvore, mas nao gravavel: aceito")
         os.chmod(self.fora, 0o666)
-        self.assertEqual(self._codigo("link_fora.py"), Codigo.GRAVAVEL_GRUPO_OUTROS)
+        self.assertEqual(self._codigo("link_fora.py"), Code.GROUP_OTHER_WRITABLE)
 
     def test_ciclo_de_links(self):
-        self.assertEqual(self._codigo("ciclo_a"), Codigo.NAO_ENCONTRADO)
+        self.assertEqual(self._codigo("ciclo_a"), Code.NOT_FOUND)
 
     def test_pastas_do_sistema_digitadas_e_via_symlink(self):
         for caminho in ("/etc/passwd", "/usr/bin/python3", "/bin/sh", "/root/x.py", "/proc/self/status"):
             with self.subTest(caminho=caminho):
-                with self.assertRaises(PathGuardErro) as ctx:
-                    path_guard.resolver(caminho)
-                self.assertEqual(ctx.exception.codigo, Codigo.PASTA_DO_SISTEMA)
-        self.assertEqual(self._codigo("link_etc.py"), Codigo.PASTA_DO_SISTEMA)
-        self.assertEqual(self._codigo("link_usr/bin/env"), Codigo.PASTA_DO_SISTEMA)
+                with self.assertRaises(PathGuardError) as ctx:
+                    path_guard.resolve(caminho)
+                self.assertEqual(ctx.exception.codigo, Code.SYSTEM_DIR)
+        self.assertEqual(self._codigo("link_etc.py"), Code.SYSTEM_DIR)
+        self.assertEqual(self._codigo("link_usr/bin/env"), Code.SYSTEM_DIR)
 
     def test_prefixo_irmao_nao_e_pasta_do_sistema(self):
         # /usrx e /etcetera nao estao dentro de /usr e /etc (componente, nao prefixo de texto).
         for caminho in ("/usrx/a.py", "/etcetera/a.py", "/binarios/a.sh"):
             with self.subTest(caminho=caminho):
-                with self.assertRaises(PathGuardErro) as ctx:
-                    path_guard.resolver(caminho)
-                self.assertEqual(ctx.exception.codigo, Codigo.NAO_ENCONTRADO)
+                with self.assertRaises(PathGuardError) as ctx:
+                    path_guard.resolve(caminho)
+                self.assertEqual(ctx.exception.codigo, Code.NOT_FOUND)
 
     def test_dentro_de_log_dir_ou_work_dir(self):
-        self.assertEqual(self._codigo("sub/ok.py", dirs_sss=(self._p("sub"),)), Codigo.PASTA_DO_SSS)
+        self.assertEqual(self._codigo("sub/ok.py", dirs_sss=(self._p("sub"),)), Code.SSS_DIR)
         self.assertEqual(self._codigo("sub/fundo/ok.sh", dirs_sss=("/var/x", self._p("sub/fundo"))),
-                         Codigo.PASTA_DO_SSS)
+                         Code.SSS_DIR)
         self.assertTrue(self._resolver("sub/ok.py", dirs_sss=(self._p("sub/fundo"),)))
 
     def test_inexistente_e_diretorio(self):
-        self.assertEqual(self._codigo("inexistente.py"), Codigo.NAO_ENCONTRADO)
-        self.assertEqual(self._codigo("sub"), Codigo.NAO_E_ARQUIVO)
+        self.assertEqual(self._codigo("inexistente.py"), Code.NOT_FOUND)
+        self.assertEqual(self._codigo("sub"), Code.NOT_A_FILE)
 
     def test_gravavel_por_grupo_ou_outros_so_no_arquivo(self):
         # CR-011 (S2): o ambiente controla o conteudo; o SSS confere so o proprio arquivo, nao as pastas.
@@ -116,7 +116,7 @@ class TestResolver(unittest.TestCase):
         for bit in (0o020, 0o002):
             os.chmod(arq, MODO_ARQ | bit)
             try:
-                self.assertEqual(self._codigo("sub/fundo/ok.sh"), Codigo.GRAVAVEL_GRUPO_OUTROS, oct(bit))
+                self.assertEqual(self._codigo("sub/fundo/ok.sh"), Code.GROUP_OTHER_WRITABLE, oct(bit))
             finally:
                 os.chmod(arq, MODO_ARQ)
         os.chmod(self._p("sub/fundo"), 0o777)
@@ -132,7 +132,7 @@ class TestResolver(unittest.TestCase):
 
 @unittest.skipIf(os.geteuid() == 0, "root sempre passa nas checagens de acesso")
 class TestAcessoEExecutavel(unittest.TestCase):
-    """SEM_ACESSO e o executavel do interpretador (CR-011, S3)."""
+    """NO_ACCESS e o executavel do interpretador (CR-011, S3)."""
 
     setUp = TestResolver.setUp
     tearDown = TestResolver.tearDown
@@ -145,80 +145,80 @@ class TestAcessoEExecutavel(unittest.TestCase):
         fundo = self._p("sub/fundo")
         os.chmod(fundo, 0o000)
         try:
-            self.assertEqual(self._codigo("sub/fundo/ok.sh"), Codigo.SEM_ACESSO)
+            self.assertEqual(self._codigo("sub/fundo/ok.sh"), Code.NO_ACCESS)
         finally:
             os.chmod(fundo, MODO_DIR)
 
     def test_executavel_do_interpretador(self):
         sh = os.path.realpath("/bin/sh")
-        self.assertEqual(path_guard.validar_executavel("/bin/sh"), sh)
-        with self.assertRaises(PathGuardErro) as ctx:
-            path_guard.validar_executavel("/nao/existe/python3")
-        self.assertEqual(ctx.exception.codigo, Codigo.NAO_ENCONTRADO)
+        self.assertEqual(path_guard.validate_executable("/bin/sh"), sh)
+        with self.assertRaises(PathGuardError) as ctx:
+            path_guard.validate_executable("/nao/existe/python3")
+        self.assertEqual(ctx.exception.codigo, Code.NOT_FOUND)
         for caminho, kw in (("bin/sh", {}), ("/bin/sh", {"dirs_sss": (os.path.dirname(sh),)}),
                             (self._p("sub/ok.py"), {}), (self._p("sub"), {})):
             with self.subTest(caminho=caminho, kw=kw):
-                with self.assertRaises(PathGuardErro) as ctx:
-                    path_guard.validar_executavel(caminho, **kw)
-                self.assertEqual(ctx.exception.codigo, Codigo.INTERPRETADOR_INSEGURO)
+                with self.assertRaises(PathGuardError) as ctx:
+                    path_guard.validate_executable(caminho, **kw)
+                self.assertEqual(ctx.exception.codigo, Code.INTERPRETADOR_INSEGURO)
 
 
 class TestValidacoesTextuais(unittest.TestCase):
 
     def test_validar_cadastro(self):
-        path_guard.validar_cadastro("/opt/automacoes/scripts/faturamento/carga_faturas.py")
-        path_guard.validar_cadastro("/opt/a b/script com espaço.py")
-        casos = (("faturamento/carga.py", Codigo.CAMINHO_RELATIVO),
-                 ("", Codigo.CAMINHO_RELATIVO),
-                 (None, Codigo.CAMINHO_RELATIVO),
-                 ("./a.py", Codigo.CAMINHO_RELATIVO),
-                 ("/opt/../etc/passwd", Codigo.CONTEM_PONTOS),
-                 ("/opt/a..b.py", Codigo.CONTEM_PONTOS),
-                 ("/opt\\a.py", Codigo.SEPARADOR_INVALIDO),
-                 ("/opt/a\x00.py", Codigo.CARACTERE_INVALIDO),
-                 ("/opt/a\n.py", Codigo.CARACTERE_INVALIDO),
-                 ("/opt//a.py", Codigo.CAMINHO_NAO_NORMALIZADO),
-                 ("//opt/a.py", Codigo.CAMINHO_NAO_NORMALIZADO),
-                 ("/opt/./a.py", Codigo.CAMINHO_NAO_NORMALIZADO),
-                 ("/opt/scripts/", Codigo.CAMINHO_NAO_NORMALIZADO),
-                 ("/", Codigo.CAMINHO_NAO_NORMALIZADO))
+        path_guard.validate_registration("/opt/automacoes/scripts/faturamento/carga_faturas.py")
+        path_guard.validate_registration("/opt/a b/script com espaço.py")
+        casos = (("faturamento/carga.py", Code.RELATIVE_PATH),
+                 ("", Code.RELATIVE_PATH),
+                 (None, Code.RELATIVE_PATH),
+                 ("./a.py", Code.RELATIVE_PATH),
+                 ("/opt/../etc/passwd", Code.HAS_DOTS),
+                 ("/opt/a..b.py", Code.HAS_DOTS),
+                 ("/opt\\a.py", Code.INVALID_SEPARATOR),
+                 ("/opt/a\x00.py", Code.INVALID_CHARACTER),
+                 ("/opt/a\n.py", Code.INVALID_CHARACTER),
+                 ("/opt//a.py", Code.PATH_NOT_NORMALIZED),
+                 ("//opt/a.py", Code.PATH_NOT_NORMALIZED),
+                 ("/opt/./a.py", Code.PATH_NOT_NORMALIZED),
+                 ("/opt/scripts/", Code.PATH_NOT_NORMALIZED),
+                 ("/", Code.PATH_NOT_NORMALIZED))
         for valor, codigo in casos:
             with self.subTest(valor=valor):
-                with self.assertRaises(PathGuardErro) as ctx:
-                    path_guard.validar_cadastro(valor)
+                with self.assertRaises(PathGuardError) as ctx:
+                    path_guard.validate_registration(valor)
                 self.assertEqual(ctx.exception.codigo, codigo)
 
     def test_checar_pastas_proibidas_sem_o_arquivo(self):
         # Vale mesmo se o arquivo nao existe neste servidor (README §8.5, D4).
         for caminho in ("/etc/nao_existe.py", "/lib64/x.sh", "/sys/x", "/dev/null", "/boot/a.py"):
             with self.subTest(caminho=caminho):
-                with self.assertRaises(PathGuardErro) as ctx:
-                    path_guard.checar_pastas_proibidas(caminho)
-                self.assertEqual(ctx.exception.codigo, Codigo.PASTA_DO_SISTEMA)
-        path_guard.checar_pastas_proibidas("/opt/automacoes/nao_existe.py")
-        with self.assertRaises(PathGuardErro) as ctx:
-            path_guard.checar_pastas_proibidas("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/x.py", ("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work"))
-        self.assertEqual(ctx.exception.codigo, Codigo.PASTA_DO_SSS)
+                with self.assertRaises(PathGuardError) as ctx:
+                    path_guard.check_forbidden_dirs(caminho)
+                self.assertEqual(ctx.exception.codigo, Code.SYSTEM_DIR)
+        path_guard.check_forbidden_dirs("/opt/automacoes/nao_existe.py")
+        with self.assertRaises(PathGuardError) as ctx:
+            path_guard.check_forbidden_dirs("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/x.py", ("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work"))
+        self.assertEqual(ctx.exception.codigo, Code.SSS_DIR)
 
     def test_interpretador_na_allowlist(self):
         for cmd in ("PYTHON3", "BASH", "SH"):
-            path_guard.validar_interpretador(cmd)
+            path_guard.validate_interpreter(cmd)
         # CR-005: somente POSIX; POWERSHELL e cmd ficam fora da allowlist.
         for cmd in ("POWERSHELL", "CMD", "python3"):
-            with self.assertRaises(PathGuardErro) as ctx:
-                path_guard.validar_interpretador(cmd)
-            self.assertEqual(ctx.exception.codigo, Codigo.INTERPRETADOR_NAO_PERMITIDO)
-        self.assertNotIn("POWERSHELL", path_guard.ARGS_FIXOS)
-        self.assertEqual(path_guard.ARGS_FIXOS["PYTHON3"], ("-I",))
+            with self.assertRaises(PathGuardError) as ctx:
+                path_guard.validate_interpreter(cmd)
+            self.assertEqual(ctx.exception.codigo, Code.INTERPRETADOR_NAO_PERMITIDO)
+        self.assertNotIn("POWERSHELL", path_guard.FIXED_ARGS)
+        self.assertEqual(path_guard.FIXED_ARGS["PYTHON3"], ("-I",))
 
     def test_interpretador_fora_da_allowlist(self):
         # Caminhos absolutos (modelo anterior ao CR-001) e cmd/.bat (D2) tambem sao rejeitados.
         for cmd in ("/usr/bin/python3", "/bin/bash", "/bin/zsh", "", None, "PYTHON3 ", "python3", "CMD", "cmd.exe",
                     "BAT", "SH -c"):
             with self.subTest(cmd=cmd):
-                with self.assertRaises(PathGuardErro) as ctx:
-                    path_guard.validar_interpretador(cmd)
-                self.assertEqual(ctx.exception.codigo, Codigo.INTERPRETADOR_NAO_PERMITIDO)
+                with self.assertRaises(PathGuardError) as ctx:
+                    path_guard.validate_interpreter(cmd)
+                self.assertEqual(ctx.exception.codigo, Code.INTERPRETADOR_NAO_PERMITIDO)
 
     def test_sem_startswith(self):
         with open(path_guard.__file__, "r", encoding="utf-8") as f:

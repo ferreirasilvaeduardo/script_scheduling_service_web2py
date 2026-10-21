@@ -45,7 +45,7 @@ _SQL_VERSION = "SELECT schema_version FROM {ctl} WHERE id = 1"
 
 
 def served_pairs(agentes, agora, limiares):
-    """(ambiente, interpretador) servidos por agente ATIVO com saude OK ou ATRASADO (README §13), com o mesmo
+    """(ambiente, interpretador) servidos por agente ATIVO com saude OK ou DELAYED (README §13), com o mesmo
     arredondamento de agents_service.saude."""
     atendidos = set()
     for ag in agentes:

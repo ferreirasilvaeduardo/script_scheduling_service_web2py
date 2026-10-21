@@ -110,13 +110,13 @@ def main(argv=None):
             "purge": getattr(getattr(cfg, "retention", None), "purge_user", None),
         }
     try:
-        ddl_builder.gerar_grants_por_papel(owner, prefixo, papeis_grants)
+        ddl_builder.build_grants_by_role(owner, prefixo, papeis_grants)
     except ValueError as exc:
         print("Erro nos GRANTs por papel: %s" % exc, file=sys.stderr)
         return 2
 
     # 2. Geracao dos scripts
-    script_implantar = ddl_builder.gerar_script_implantacao_completo(
+    script_implantar = ddl_builder.build_full_deploy_script(
         owner=owner,
         prefixo=prefixo,
         lob_storage=lob_storage,
@@ -126,16 +126,16 @@ def main(argv=None):
         papeis_usuarios=papeis_grants,
     )
 
-    script_rollback = ddl_builder.gerar_script_rollback(
+    script_rollback = ddl_builder.build_rollback_script(
         owner=owner,
         prefixo=prefixo,
     )
 
-    script_validar = ddl_builder.gerar_script_validacao(owner=owner, prefixo=prefixo)
+    script_validar = ddl_builder.build_validation_script(owner=owner, prefixo=prefixo)
 
     script_grants = ""
     if args.grants_para:
-        grants = ddl_builder.gerar_grants_por_papel(owner, prefixo, papeis_grants)
+        grants = ddl_builder.build_grants_by_role(owner, prefixo, papeis_grants)
         script_grants = "\n".join([
             "-- ==============================================================================",
             "-- Script Scheduling Service (SSS) - Grants por Papel Oracle 11gR2+",

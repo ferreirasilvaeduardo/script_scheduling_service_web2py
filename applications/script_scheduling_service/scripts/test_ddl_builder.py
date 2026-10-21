@@ -26,7 +26,7 @@ class TestDdlBuilder(unittest.TestCase):
     def setUp(self):
         self.owner = "openrisow"
         self.prefixo = "tbsss_"
-        self.instrucoes = ddl_builder.gerar_instrucoes_ddl(self.owner, self.prefixo)
+        self.instrucoes = ddl_builder.build_ddl_statements(self.owner, self.prefixo)
 
     def test_ddl_contem_todos_os_nomes_do_registro(self):
         """O DDL gerado contem todos os nomes de objetos registrados em sql_ident."""
@@ -183,7 +183,7 @@ class TestDdlBuilder(unittest.TestCase):
         self.assertIn("LOB (submitted_params, log_output) STORE AS SECUREFILE (CACHE)", tabelas["tbsss_tickets"])
 
         # Fallback Basicfile
-        ddl_basic = ddl_builder.gerar_instrucoes_ddl(self.owner, self.prefixo, lob_storage="BASICFILE")
+        ddl_basic = ddl_builder.build_ddl_statements(self.owner, self.prefixo, lob_storage="BASICFILE")
         tabelas_basic = {item.nome: item.sql for item in ddl_basic if item.tipo == "TABLE"}
         self.assertIn("LOB (params_json) STORE AS BASICFILE", tabelas_basic["tbsss_schedules"])
         self.assertIn("LOB (submitted_params, log_output) STORE AS BASICFILE", tabelas_basic["tbsss_tickets"])
@@ -217,7 +217,7 @@ class TestGrantsPorPapel(unittest.TestCase):
             "purge": "sss_purge",
             "monitor": "sss_monitor",
         }
-        self.grants = ddl_builder.gerar_grants_por_papel("openrisow", "tbsss_", self.papeis)
+        self.grants = ddl_builder.build_grants_by_role("openrisow", "tbsss_", self.papeis)
         self.grants_texto = "\n".join(self.grants)
 
     def test_auditoria_protegida_contra_update_e_delete(self):
@@ -251,7 +251,7 @@ class TestGrantsPorPapel(unittest.TestCase):
 
     def test_grants_da_saida_do_ticket(self):
         """CR-012: web so le o zip; agente le, inclui e altera (com a sequence); purge e monitor nada."""
-        grants = ddl_builder.gerar_grants_por_papel("openrisow", "tbsss_", dict(self.papeis))
+        grants = ddl_builder.build_grants_by_role("openrisow", "tbsss_", dict(self.papeis))
         da_saida = [g for g in grants if "ticket_output" in g]
         self.assertEqual(sorted(da_saida), sorted([
             "GRANT SELECT ON openrisow.tbsss_ticket_output TO %s;" % self.papeis["web"],
@@ -261,14 +261,14 @@ class TestGrantsPorPapel(unittest.TestCase):
 
     def test_nunca_concede_a_public(self):
         """O script de implantacao nao concede nada a PUBLIC (tbsss_users guarda senha_hash)."""
-        script = ddl_builder.gerar_script_implantacao_completo("openrisow", "tbsss_", papeis_usuarios=self.papeis)
+        script = ddl_builder.build_full_deploy_script("openrisow", "tbsss_", papeis_usuarios=self.papeis)
         self.assertNotIn("PUBLIC", script.upper().replace("NENHUM GRANT A PUBLIC", ""))
         self.assertIn("GRANT SELECT ON openrisow.tbsss_agents TO sss_monitor;", script)
         self.assertFalse(hasattr(ddl_builder, "gerar_grants_public"))
 
     def test_conta_igual_ao_owner_nao_recebe_grant(self):
         """Papel que usa a conta dona do esquema vira comentario (GRANT a si mesmo e ORA-01749)."""
-        grants = ddl_builder.gerar_grants_por_papel(
+        grants = ddl_builder.build_grants_by_role(
             "openrisow", "tbsss_", {"web": "OPENRISOW", "agent": "openrisow", "purge": "sss_purge"})
         comandos = [g for g in grants if not g.startswith("--")]
         self.assertTrue(comandos)
@@ -277,7 +277,7 @@ class TestGrantsPorPapel(unittest.TestCase):
         self.assertIn("-- papel monitor: conta nao informada; nenhum GRANT gerado", grants)
 
     def test_sem_contas_nenhum_grant(self):
-        grants = ddl_builder.gerar_grants_por_papel("openrisow", "tbsss_", {})
+        grants = ddl_builder.build_grants_by_role("openrisow", "tbsss_", {})
         self.assertEqual(len(grants), 4)
         self.assertTrue(all(g.startswith("-- papel ") for g in grants))
 
@@ -285,9 +285,9 @@ class TestGrantsPorPapel(unittest.TestCase):
         """A conta entra no texto do GRANT: so identificador Oracle valido; papel fora da lista e recusado."""
         for usr in ("sss_web; DROP TABLE x", "1abc", "a" * 31, "PUBLIC x", "PUBLIC", "public"):
             with self.assertRaises(ValueError):
-                ddl_builder.gerar_grants_por_papel("openrisow", "tbsss_", {"web": usr})
+                ddl_builder.build_grants_by_role("openrisow", "tbsss_", {"web": usr})
         with self.assertRaises(ValueError):
-            ddl_builder.gerar_grants_por_papel("openrisow", "tbsss_", {"dba": "sss_dba"})
+            ddl_builder.build_grants_by_role("openrisow", "tbsss_", {"dba": "sss_dba"})
 
     def test_papel_purge_concessao_controle(self):
         """Papel purge recebe SELECT e UPDATE em controle somente nas colunas de concessao."""
@@ -428,7 +428,7 @@ class TestDdlSeedERollback(unittest.TestCase):
 
     def test_gerar_script_seed(self):
         """Script de seed contem MERGEs idempotentes, 5 ambientes, estatisticas e COMMIT."""
-        sql_seed = ddl_builder.gerar_script_seed(self.owner, self.prefixo)
+        sql_seed = ddl_builder.build_seed_script(self.owner, self.prefixo)
 
         self.assertIn("MERGE INTO openrisow.tbsss_features", sql_seed)
         self.assertIn("MERGE INTO openrisow.tbsss_profiles", sql_seed)
@@ -446,7 +446,7 @@ class TestDdlSeedERollback(unittest.TestCase):
 
     def test_gerar_script_rollback(self):
         """Script de rollback contem drop de 20 triggers, 18 tabelas CASCADE PURGE e 18 sequences."""
-        sql_rb = ddl_builder.gerar_script_rollback(self.owner, self.prefixo)
+        sql_rb = ddl_builder.build_rollback_script(self.owner, self.prefixo)
 
         # 20 triggers
         self.assertEqual(sql_rb.count("DROP TRIGGER openrisow.tr_"), 20)
@@ -465,13 +465,13 @@ class TestDdlSeedERollback(unittest.TestCase):
     def test_hash_do_seed_confere_com_a_senha_documentada(self):
         """Regressao (F7.3): o hash do seed nao conferia com a senha do README §11.1 e nenhum usuario entrava."""
         import security
-        self.assertTrue(security.verificar_senha("Sss@Homolog2026!", ddl_builder.HASH_SENHA_PADRAO_HOMOLOGACAO))
-        seed = "\n".join(ddl_builder.gerar_instrucoes_seed(self.owner, self.prefixo))
-        self.assertIn(ddl_builder.HASH_SENHA_PADRAO_HOMOLOGACAO, seed)
+        self.assertTrue(security.verify_password("Sss@Homolog2026!", ddl_builder.HOMOLOGATION_DEFAULT_PASSWORD_HASH))
+        seed = "\n".join(ddl_builder.build_seed_statements(self.owner, self.prefixo))
+        self.assertIn(ddl_builder.HOMOLOGATION_DEFAULT_PASSWORD_HASH, seed)
 
     def test_validacao_sem_hash_e_com_owner_prefixo_parametrizados(self):
         """99_validar: nao mostra senha_hash, nao fixa owner/prefixo e respeita o limite de linha do SQL*Plus."""
-        sql = ddl_builder.gerar_script_validacao("SSS_APP", "abc_")
+        sql = ddl_builder.build_validation_script("SSS_APP", "abc_")
         self.assertNotIn("tbsss", sql.lower())
         self.assertNotIn("openrisow", sql.lower())
         self.assertNotIn("user_tables", sql.lower())
@@ -486,13 +486,13 @@ class TestDdlSeedERollback(unittest.TestCase):
 
     def test_validacao_espera_o_registro_e_o_seed(self):
         """Os esperados vem do registro (objetos) e do proprio seed (minimo de linhas)."""
-        sql = ddl_builder.gerar_script_validacao(self.owner, self.prefixo)
+        sql = ddl_builder.build_validation_script(self.owner, self.prefixo)
         esquema = sql_ident.names(self.prefixo)
         self.assertIn("'TABELAS' AS verificacao, '=' AS regra, {} AS esperado".format(len(esquema)), sql)
         self.assertIn("'VERSAO DO ESQUEMA' AS verificacao, '=' AS regra, {} AS esperado".format(
             sql_ident.SCHEMA_VERSION), sql)
-        seed = ddl_builder.gerar_instrucoes_seed(self.owner, self.prefixo)
-        contagem = ddl_builder._linhas_seed_por_tabela(self.owner, self.prefixo)
+        seed = ddl_builder.build_seed_statements(self.owner, self.prefixo)
+        contagem = ddl_builder._seed_rows_by_table(self.owner, self.prefixo)
         self.assertEqual(sum(contagem.values()), sum(1 for c in seed if c.lstrip().upper().startswith("MERGE INTO")))
         self.assertEqual(contagem["users"], 4)
         self.assertIn("'LINHAS TBSSS_SCRIPT_ENV' AS verificacao, '>=' AS regra, {} AS esperado".format(

@@ -6,7 +6,7 @@ padrao do processo web e criado sob demanda (_servico). O relogio e injetado: na
 SYSDATE do repositorio de tickets; nos testes, um relogio fixo.
 
 A regra roda sob os privilegios de quem a definiu por ultimo (README §10): toda inclusao ou
-edicao grava usuario_id = editor, que precisa de pode_executar vigente para o script e o
+edicao grava usuario_id = editor, que precisa de can_execute vigente para o script e o
 ambiente. Valores de parametros sensiveis nunca vao para o log, a auditoria ou o HTML.
 """
 import collections
@@ -22,7 +22,7 @@ import rbac
 import recurrence
 import ui_helpers
 from admin_crud import CAMPO_GERAL, OperacaoNegada
-from cron_parser import CronErro
+from cron_parser import CronError
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 from ticket_service import AcessoNegado as DisparoNegado
 
@@ -186,8 +186,8 @@ def descrever_regra(regra):
         return u"Às %s, no dia %s de cada mês" % (hora, regra.get("month_day"))
     if tipo == "CRON":
         try:
-            texto = cron_parser.parse(regra.get("cron_expression")).descrever()
-        except CronErro:
+            texto = cron_parser.parse(regra.get("cron_expression")).describe()
+        except CronError:
             return MOTIVOS_PAUSA["INVALID_CRON"]
         return texto[:1].upper() + texto[1:]
     return u"-"
@@ -350,10 +350,10 @@ class ServicoAgendamentos(object):
                 continue
         dados_ctx = dict(estado, features=funcs, environments=frozenset(ambs_nomes),
                          scripts=frozenset(matriz.get("scrs", ())))
-        ctx_usuario = rbac.contexto_usuario(dados_ctx)
-        ok, motivo_rbac = rbac.pode_executar(ctx_usuario, script, amb, homologacoes)
+        ctx_usuario = rbac.user_context(dados_ctx)
+        ok, motivo_rbac = rbac.can_execute(ctx_usuario, script, amb, homologacoes)
         if not ok:
-            codigo = rbac.motivo_pausa(motivo_rbac)
+            codigo = rbac.pause_reason_for(motivo_rbac)
             return codigo, MOTIVOS_PAUSA[codigo]
 
         try:
@@ -364,20 +364,20 @@ class ServicoAgendamentos(object):
             return "INVALID_PARAM", MOTIVOS_PAUSA["INVALID_PARAM"]
 
         vinculos = self._vinculos(script["id"])
-        _snap, _resolv, erros_param = params_compiler.compilar_snapshot(script, vinculos, respostas, agora)
+        _snap, _resolv, erros_param = params_compiler.compile_snapshot(script, vinculos, respostas, agora)
         if erros_param:
             return "INVALID_PARAM", MOTIVOS_PAUSA["INVALID_PARAM"]
 
         if reg.get("recurrence_type") == "CRON":
             try:
-                recurrence.proxima_execucao(reg, agora, self._horizonte)
-            except CronErro:
+                recurrence.next_run(reg, agora, self._horizonte)
+            except CronError:
                 return "INVALID_CRON", MOTIVOS_PAUSA["INVALID_CRON"]
 
         return None
 
     def _agora(self):
-        return recurrence.sem_microssegundos(self._relogio())
+        return recurrence.without_microseconds(self._relogio())
 
     def _obter_visivel(self, ctx, agendamento_id):
         """Regra existente e de ambiente autorizado; fora do escopo e tratada como inexistente (404)."""
@@ -385,7 +385,7 @@ class ServicoAgendamentos(object):
         if aid is None:
             raise RepoNotFound("agendamento invalido")
         registro = self._agendamentos.get(aid)
-        if not rbac.pode_ver_ambiente(ctx, registro.get("environment")):
+        if not rbac.can_view_environment(ctx, registro.get("environment")):
             self._log.warning("agendamento fora do escopo (login=%s agendamento=%s environment=%s)",
                               ctx.get("login"), aid, registro.get("environment"), extra={"action": FUNCIONALIDADE})
             raise RepoNotFound("agendamento fora do escopo")
@@ -442,7 +442,7 @@ class ServicoAgendamentos(object):
                 erros["start_date"] = MSG_INICIO_UNICA
             else:
                 # Decisao D3 do F5.2: sem inicio informado, a regra vale a partir de agora.
-                inicio = recurrence.truncar_segundos(agora)
+                inicio = recurrence.truncate_seconds(agora)
         fim, invalido = _data(dados.get("end_date"))
         if tipo == "ONCE":
             # data_fim nao se aplica a UNICA (README §7.2): ignorada e gravada nula.
@@ -453,7 +453,7 @@ class ServicoAgendamentos(object):
         regra["end_date"] = fim
 
         if tipo in ROTULOS_TIPO:
-            for campo, mensagem in recurrence.validar_regra(regra, self._horizonte).items():
+            for campo, mensagem in recurrence.validate_rule(regra, self._horizonte).items():
                 erros.setdefault(campo, mensagem)
         if regra["month_day"] is not None and "month_day" not in erros:
             regra["month_day"] = int(regra["month_day"])
@@ -461,8 +461,8 @@ class ServicoAgendamentos(object):
 
     def _proxima(self, regra, agora, erros):
         try:
-            proxima = recurrence.proxima_execucao(regra, agora, self._horizonte)
-        except CronErro as exc:
+            proxima = recurrence.next_run(regra, agora, self._horizonte)
+        except CronError as exc:
             erros["cron_expression"] = exc.mensagem
             return None
         if proxima is None:
@@ -475,9 +475,9 @@ class ServicoAgendamentos(object):
             prioridade = PRIORIDADE_PADRAO
         else:
             prioridade = int(texto) if texto.isdigit() else None
-        if prioridade is not None and rbac.prioridade_permitida(ctx, prioridade):
+        if prioridade is not None and rbac.allowed_priority(ctx, prioridade):
             return prioridade
-        erros["priority"] = MSG_PRIORIDADE_ADMIN if prioridade == rbac.PRIORIDADE_ADMIN else MSG_PRIORIDADE
+        erros["priority"] = MSG_PRIORIDADE_ADMIN if prioridade == rbac.ADMIN_PRIORITY else MSG_PRIORIDADE
         return None
 
     def _respostas(self, vinculos, respostas, anteriores):
@@ -523,7 +523,7 @@ class ServicoAgendamentos(object):
         AGENDA_POR_REGRA ocorrencias, 'mais' (quantas a mais no periodo). So leitura.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
-        agora = recurrence.truncar_segundos(self._agora())
+        agora = recurrence.truncate_seconds(self._agora())
         fim = datetime.datetime.combine(agora.date() + datetime.timedelta(days=8), datetime.time())
         escopo = None if ctx.get("is_admin") is True else sorted(ctx.get("environments") or ())
         regras, pagina = [], 1
@@ -565,7 +565,7 @@ class ServicoAgendamentos(object):
             atual = prox if prox >= agora else None
             extra = 0
             try:
-                proxima_calculada = recurrence.proxima_execucao(reg, agora, self._horizonte)
+                proxima_calculada = recurrence.next_run(reg, agora, self._horizonte)
                 if atual is None:
                     atual = proxima_calculada
                 while atual is not None and atual < fim:
@@ -575,8 +575,8 @@ class ServicoAgendamentos(object):
                         extra += 1
                     else:
                         break
-                    atual = recurrence.proxima_execucao(reg, atual, self._horizonte)
-            except CronErro as exc:
+                    atual = recurrence.next_run(reg, atual, self._horizonte)
+            except CronError as exc:
                 if reg.get("recurrence_type") == "CRON":
                     problemas.append(dict(base, problema=exc.mensagem))
                 continue
@@ -651,7 +651,7 @@ class ServicoAgendamentos(object):
 
         enviados/valores/erros (opcionais) reapresentam um POST com erro: campos da regra,
         respostas do questionario e mensagens por campo. Lanca RepoNotFound, AcessoNegado
-        e OperacaoNegada (editor sem pode_executar).
+        e OperacaoNegada (editor sem can_execute).
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         erros = erros or {}
@@ -739,8 +739,8 @@ class ServicoAgendamentos(object):
         if erros:
             return {"datas": [], "description": None, "erros": dict(erros)}
         try:
-            datas = recurrence.proximas(regra, agora, QTD_PREVIA, self._horizonte)
-        except CronErro as exc:
+            datas = recurrence.next_runs(regra, agora, QTD_PREVIA, self._horizonte)
+        except CronError as exc:
             return {"datas": [], "description": None, "erros": {"cron_expression": exc.mensagem}}
         if not datas:
             return {"datas": [], "description": descrever_regra(regra), "erros": {CAMPO_GERAL: MSG_SEM_PROXIMA}}
@@ -754,7 +754,7 @@ class ServicoAgendamentos(object):
         dados: id, versao, nome, script_id e ambiente (so na inclusao), tipo_recorrencia,
         expressao_cron, hora_execucao, dias_semana, dia_mes, data_inicio, data_fim, prioridade e
         respostas ({codigo: valor}). Lanca RepoNotFound, AcessoNegado e OperacaoNegada
-        (editor sem pode_executar).
+        (editor sem can_execute).
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         atual = None
@@ -779,7 +779,7 @@ class ServicoAgendamentos(object):
         anteriores = _parametros(atual) if atual else {}
         respostas = self._respostas(vinculos, dados.get("respostas"), anteriores)
         # Compila o snapshot completo so para validar: o daemon recompila a cada desdobro (README §7.5 passo 5).
-        _snapshot, resolvidos, erros_param = params_compiler.compilar_snapshot(script, vinculos, respostas, agora)
+        _snapshot, resolvidos, erros_param = params_compiler.compile_snapshot(script, vinculos, respostas, agora)
         for codigo, mensagem in erros_param.items():
             erros.setdefault(codigo, mensagem)
 
@@ -845,7 +845,7 @@ class ServicoAgendamentos(object):
         return atual["id"], {}
 
     def pause(self, ctx, ip, agendamento_id):
-        """Pausa manual (pause_reason = 'MANUAL'), otimista sobre proxima_execucao (README §7.5 passo 7).
+        """Pausa manual (pause_reason = 'MANUAL'), otimista sobre next_run (README §7.5 passo 7).
 
         Audita SCHEDULE_PAUSE. Lanca OperacaoNegada (ja pausada), RepoConflict, RepoNotFound e AcessoNegado.
         """
@@ -862,7 +862,7 @@ class ServicoAgendamentos(object):
         return alterado
 
     def resume(self, ctx, ip, agendamento_id):
-        """Retoma a regra: revalida pode_executar de quem retoma, recalcula proxima_execucao a partir
+        """Retoma a regra: revalida can_execute de quem retoma, recalcula next_run a partir
         de agora, limpa pausa_motivo e reativa. O responsavel (usuario_id) nao muda.
 
         Audita UPDATE. Lanca OperacaoNegada (ja ativa, sem permissao ou sem proxima execucao),
@@ -879,8 +879,8 @@ class ServicoAgendamentos(object):
             raise OperacaoNegada(u"%s. %s" % (causa, MSG_ORIENTACAO_RETOMAR))
         self._autorizar(ctx, atual["script_id"], atual["environment"])
         try:
-            proxima = recurrence.proxima_execucao(atual, agora, self._horizonte)
-        except CronErro as exc:
+            proxima = recurrence.next_run(atual, agora, self._horizonte)
+        except CronError as exc:
             raise OperacaoNegada(u"%s: %s" % (MOTIVOS_PAUSA["INVALID_CRON"], exc.mensagem))
         if proxima is None:
             raise OperacaoNegada(MSG_RETOMAR_SEM_PROXIMA)

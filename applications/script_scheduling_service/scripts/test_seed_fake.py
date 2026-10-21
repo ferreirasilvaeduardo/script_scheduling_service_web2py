@@ -56,7 +56,7 @@ class TestSeedFake(unittest.TestCase):
     def test_snapshot_e_respostas_compativeis_com_o_script(self):
         for t in self.store.tickets.values():
             snap = json.loads(t["submitted_params"])
-            self.assertEqual(snap["version"], params_compiler.VERSAO_SNAPSHOT, t["id"])
+            self.assertEqual(snap["version"], params_compiler.SNAPSHOT_VERSION, t["id"])
             vinculos = [v for v in self.store.script_param.values() if v["script_id"] == t["script_id"]]
             codigos = set(self.store.parameters[v["parameter_id"]]["code"] for v in vinculos)
             self.assertEqual(set(snap["respostas"]), codigos, t["id"])
@@ -66,7 +66,7 @@ class TestSeedFake(unittest.TestCase):
     def test_agendamentos_alinhados_ao_minuto_e_a_regra(self):
         for a in self.store.schedules.values():
             self.assertEqual((a["next_run_at"].second, a["next_run_at"].microsecond), (0, 0), a["id"])
-            esperado = recurrence.proxima_execucao(a, recurrence.truncar_segundos(self.now), 1461)
+            esperado = recurrence.next_run(a, recurrence.truncate_seconds(self.now), 1461)
             self.assertEqual(a["next_run_at"], esperado, a["id"])
             respostas = json.loads(a["params_json"])
             obrigatorios = [self.store.parameters[v["parameter_id"]]["code"] for v in self.store.script_param.values()

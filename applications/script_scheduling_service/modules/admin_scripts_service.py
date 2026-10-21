@@ -17,8 +17,8 @@ import log_paths
 import path_guard
 import ui_helpers
 from admin_crud import CAMPO_GERAL, OperacaoNegada
-from params_compiler import ParamErro, TIPOS_PARAM
-from path_guard import Codigo, PathGuardErro
+from params_compiler import ParamError, PARAM_TYPES
+from path_guard import Code, PathGuardError
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FUNCIONALIDADE = "MANAGE_SCRIPTS"
@@ -35,11 +35,11 @@ ROTULOS_INTERPRETADOR = (("PYTHON3", u"PYTHON3 — Python 3"),
 ROTULOS_TIPO_PARAM = (("NAMED", u"Por flag (NOMEADO)"), ("POSITIONAL", u"Posicional (SEQUENCIAL)"),
                       ("NONE", u"Sem argumentos (NENHUM)"))
 TAMANHOS = {"name": 60, "description": 200, "script_group": 30, "category": 30, "stage": 30,
-            "path_file": path_guard.TAMANHO_MAXIMO}
+            "path_file": path_guard.MAX_LENGTH}
 TIMEOUT_MAXIMO = 9999999
 VINCULOS_MAXIMO = 200
 TAMANHO_PADRAO_SUB = 100
-MASCARA = params_compiler.MASCARA
+MASCARA = params_compiler.MASK
 _CATALOGO_MAX = 1000
 _TAMANHO_CONTAGEM = 1  # so o total interessa
 
@@ -49,16 +49,16 @@ _RE_CONTROLE = re.compile(r"[\x00-\x1f\x7f]")
 _RE_FILTRO = re.compile(r"[^\x00-\x1f\x7f<>]{1,60}")
 
 MENSAGENS_PATH = {
-    Codigo.CAMINHO_RELATIVO: u"Informe o caminho completo do arquivo, começando por / (ex.: /opt/automacoes/scripts/carga.py).",
-    Codigo.CAMINHO_NAO_NORMALIZADO: u"Escreva o caminho sem // repetida, sem /./ e sem / no fim.",
-    Codigo.CONTEM_PONTOS: u"O caminho não pode conter '..'.",
-    Codigo.SEPARADOR_INVALIDO: u"Use só / para separar pastas; não use \\.",
-    Codigo.CARACTERE_INVALIDO: u"O caminho contém caracteres de controle não permitidos.",
-    Codigo.PASTA_DO_SISTEMA: u"Scripts não podem ficar em pastas do sistema (/bin, /sbin, /usr, /lib, /etc, /boot, "
+    Code.RELATIVE_PATH: u"Informe o caminho completo do arquivo, começando por / (ex.: /opt/automacoes/scripts/carga.py).",
+    Code.PATH_NOT_NORMALIZED: u"Escreva o caminho sem // repetida, sem /./ e sem / no fim.",
+    Code.HAS_DOTS: u"O caminho não pode conter '..'.",
+    Code.INVALID_SEPARATOR: u"Use só / para separar pastas; não use \\.",
+    Code.INVALID_CHARACTER: u"O caminho contém caracteres de controle não permitidos.",
+    Code.SYSTEM_DIR: u"Scripts não podem ficar em pastas do sistema (/bin, /sbin, /usr, /lib, /etc, /boot, "
                              u"/proc, /sys, /dev, /root). Use outra pasta.",
-    Codigo.PASTA_DO_SSS: u"Scripts não podem ficar nas pastas de log ou de trabalho do SSS. Use outra pasta.",
-    Codigo.INTERPRETADOR_INSEGURO: u"O executável do interpretador não passou na checagem de segurança.",
-    Codigo.INTERPRETADOR_NAO_PERMITIDO: u"Interpretador não permitido.",
+    Code.SSS_DIR: u"Scripts não podem ficar nas pastas de log ou de trabalho do SSS. Use outra pasta.",
+    Code.INTERPRETADOR_INSEGURO: u"O executável do interpretador não passou na checagem de segurança.",
+    Code.INTERPRETADOR_NAO_PERMITIDO: u"Interpretador não permitido.",
 }
 OBS_VALIDACAO = (u"O arquivo é conferido pelo agente, no servidor onde o script roda, no momento da execução "
                  u"(pode ser link simbólico).")
@@ -83,8 +83,8 @@ AVISO_DESATIVACAO = u"Agendamentos que usam este script serão pausados no próx
 
 _CAMPO_POR_CONSTRAINT = {
     "uk_tbsss_scr_name": ("name", MSG_NOME_DUPLICADO),
-    "ck_tbsss_scr_int": ("interpreter", MENSAGENS_PATH[Codigo.INTERPRETADOR_NAO_PERMITIDO]),
-    "ck_tbsss_scr_path": ("path_file", MENSAGENS_PATH[Codigo.CAMINHO_NAO_NORMALIZADO]),
+    "ck_tbsss_scr_int": ("interpreter", MENSAGENS_PATH[Code.INTERPRETADOR_NAO_PERMITIDO]),
+    "ck_tbsss_scr_path": ("path_file", MENSAGENS_PATH[Code.PATH_NOT_NORMALIZED]),
     "ck_tbsss_scr_paral": ("max_parallel_env", MSG_PARALELO),
     "ck_tbsss_scr_tmout": ("timeout_s", MSG_TIMEOUT),
     "ck_tbsss_scr_ptype": ("param_type", MSG_TIPO_PARAM),
@@ -228,15 +228,15 @@ class ServicoAdminScripts(object):
         # Valor exato da allowlist: um HTML adulterado nunca grava outro interpretador.
         cmd = dados.get("interpreter")
         try:
-            path_guard.validar_interpretador(cmd)
-        except PathGuardErro as exc:
+            path_guard.validate_interpreter(cmd)
+        except PathGuardError as exc:
             erros["interpreter"] = MENSAGENS_PATH[exc.codigo]
         reg["interpreter"] = cmd
         # D7 (README §8.5): a pasta de log do script nao pode ser a dos logs da aplicacao.
         if reg["name"] and "name" not in erros and log_paths.nome_reservado(reg["name"]):
             erros["name"] = MSG_NOME_RESERVADO
         tipo = admin_crud.texto(dados.get("param_type"), 15)
-        if tipo not in TIPOS_PARAM:
+        if tipo not in PARAM_TYPES:
             erros["param_type"] = MSG_TIPO_PARAM
         reg["param_type"] = tipo
         return reg
@@ -247,9 +247,9 @@ class ServicoAdminScripts(object):
         if path_file is None or "path_file" in erros:
             return
         try:
-            path_guard.validar_cadastro(path_file)
-            path_guard.checar_pastas_proibidas(path_file)
-        except PathGuardErro as exc:
+            path_guard.validate_registration(path_file)
+            path_guard.check_forbidden_dirs(path_file)
+        except PathGuardError as exc:
             erros["path_file"] = MENSAGENS_PATH[exc.codigo]
 
     def _pre_tipo_param(self, script_id, tipo, erros):
@@ -468,14 +468,14 @@ class ServicoAdminScripts(object):
                 # O valor mantido tambem e revalidado contra a configuracao atual (README §6.5).
                 if sub:
                     try:
-                        params_compiler.validar_valor(p, sub)
-                    except ParamErro:
+                        params_compiler.validate_value(p, sub)
+                    except ParamError:
                         erros["vinculo_%d" % pid] = MSG_SIGILOSO_INVALIDO
             elif sub:
                 try:
-                    sub = params_compiler.validar_valor(p, sub)
+                    sub = params_compiler.validate_value(p, sub)
                     sub = "true" if sub is True else ("false" if sub is False else sub)
-                except ParamErro as exc:
+                except ParamError as exc:
                     erros["vinculo_%d" % pid] = exc.mensagem
                     sub = None
                 if sub is not None and len(sub) > TAMANHO_PADRAO_SUB:
@@ -556,10 +556,10 @@ class ServicoAdminScripts(object):
             if erros:
                 return {"argv": None, "erros": erros, "aviso": None}
         aviso = None
-        snap, _resolvidos, erros = params_compiler.compilar_snapshot(script, vinculos, {}, self._relogio())
+        snap, _resolvidos, erros = params_compiler.compile_snapshot(script, vinculos, {}, self._relogio())
         if snap is None:
             return {"argv": None, "erros": erros, "aviso": aviso}
-        return {"argv": params_compiler.argv_para_exibicao(json.loads(snap)),
+        return {"argv": params_compiler.display_argv(json.loads(snap)),
                 "erros": {}, "aviso": aviso}
 
 

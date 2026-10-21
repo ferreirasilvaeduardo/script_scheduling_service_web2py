@@ -35,7 +35,7 @@ class TestConfig(unittest.TestCase):
         # masking.py ainda nao existe; o substituto registra o que carregar_segredos entrega.
         self.mascarados = []
         masking_stub = types.ModuleType("masking")
-        masking_stub.registrar_segredo = self.mascarados.append
+        masking_stub.register_secret = self.mascarados.append
         patcher = mock.patch.dict(sys.modules, {"masking": masking_stub})
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -548,7 +548,7 @@ class TestConfig(unittest.TestCase):
             sss_config.load_secrets(caminho_sec, sss_env="PROD", data_backend="ORACLE")
 
     def test_segredos_carregados_sao_registrados_no_masking(self):
-        """Regressao: todo segredo carregado e entregue a masking.registrar_segredo (AGENTS §3.3)."""
+        """Regressao: todo segredo carregado e entregue a masking.register_secret (AGENTS §3.3)."""
         caminho_sec, tokens = self._criar_secrets_temporario(modo=0o600)
         sss_config.load_secrets(caminho_sec)
         self.assertEqual(sorted(self.mascarados), sorted(tokens.values()))

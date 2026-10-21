@@ -517,7 +517,7 @@ class TestSubidaOracle(_Base):
         try:
             import ddl_builder
             ativos, _ = RepoSchedulerQueue.from_config(cfg).active_environments(
-                conn, [a[0] for a in ddl_builder.CATALOGO_AMBIENTES_PADRAO])
+                conn, [a[0] for a in ddl_builder.DEFAULT_ENVIRONMENTS])
         finally:
             conn.close()
         self.assertTrue(ativos, "o seed precisa de um ambiente ativo")

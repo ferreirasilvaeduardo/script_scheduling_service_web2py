@@ -26,7 +26,7 @@ from repo_oracle import health as saude_sql  # noqa: E402
 
 OK, WARNING, CRITICAL, UNKNOWN = 0, 1, 2, 3
 ESTADOS = ("OK", "WARNING", "CRITICAL", "UNKNOWN")
-_SAUDAVEIS = (agents_service.OK, agents_service.ATRASADO)
+_SAUDAVEIS = (agents_service.OK, agents_service.DELAYED)
 
 
 class Verificacao(object):
@@ -46,7 +46,7 @@ class Verificacao(object):
     def _problema(self, nivel, texto):
         self.problemas.append((nivel, texto))
 
-    def executar(self):
+    def run(self):
         agora = db_conn.db_now(self.conn)
         self._versao()
         agentes = self.repo.agents(self.conn)
@@ -72,7 +72,7 @@ class Verificacao(object):
             saude = agents_service.saude(ag, agora, self.limiares)
             if saude in _SAUDAVEIS:
                 saudaveis += 1
-            elif saude == agents_service.EM_RISCO:
+            elif saude == agents_service.AT_RISK:
                 self._problema(WARNING, "agente %s em risco: heartbeat ha %s (fence %d s)" % (
                     ag["code"], self._idade(ag, agora), self.limiares.fence_timeout_s))
             else:
@@ -170,7 +170,7 @@ def main(argv=None, conectar=None, saida=None):
         return _desconhecido(saida, "falha ao conectar no Oracle: %s" % db_conn.translate_error(exc))
     try:
         verificacao = Verificacao(cfg, conn, args)
-        codigo = verificacao.executar()
+        codigo = verificacao.run()
     except Exception as exc:
         return _desconhecido(saida, "falha de banco: %s" % db_conn.translate_error(exc))
     finally:

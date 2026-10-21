@@ -69,8 +69,8 @@ def _dev_seed_password():
         log.warning("%s ausente: usuarios do seed FAKE sem senha utilizavel (logins DEV impossiveis)",
                     ENV_DEV_PASSWORD, extra={"action": "SEED"})
         return None
-    masking.registrar_segredo(senha)
-    if security.validar_politica_senha(senha):
+    masking.register_secret(senha)
+    if security.validate_password_policy(senha):
         log.warning("%s fora da politica de senha: usuarios do seed FAKE sem senha utilizavel",
                     ENV_DEV_PASSWORD, extra={"action": "SEED"})
         return None

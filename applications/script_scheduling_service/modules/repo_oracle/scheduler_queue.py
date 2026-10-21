@@ -282,7 +282,7 @@ class RepoSchedulerQueue(object):
                 "agendamento": agendamento}
 
     def _ctx_solicitante(self, cur, login):
-        """Contexto RBAC do solicitante (o mesmo da web: rbac.contexto_usuario), ou None se ele nao existe."""
+        """Contexto RBAC do solicitante (o mesmo da web: rbac.user_context), ou None se ele nao existe."""
         if not login:
             return None
         cur.execute("SELECT u.id, u.login, u.name, u.profile_id, u.active, u.session_epoch, p.name, p.is_admin, "
@@ -302,7 +302,7 @@ class RepoSchedulerQueue(object):
         estado["environments"] = [x[0] for x in cur.fetchall()]
         cur.execute("SELECT script_id FROM " + self._pscr + " WHERE profile_id = :p", p=estado["profile_id"])
         estado["scripts"] = [x[0] for x in cur.fetchall()]
-        return rbac.contexto_usuario(estado)
+        return rbac.user_context(estado)
 
     def active_homologated_script(self, conn, script_id, ambiente):
         """Script ativo e homologado para o ambiente (README §8.4 passo 1)."""
