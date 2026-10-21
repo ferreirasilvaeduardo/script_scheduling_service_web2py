@@ -491,7 +491,7 @@ class TestRepoSchedulerLog(unittest.TestCase):
             self.assertIn(trecho, sql)
         self.assertNotIn("updated_", sql)
         self.assertEqual(set(binds), {"chunk", "ticket_id", "agent_id", "offset_esperado", "resultado"})
-        self.assertEqual(tipos, {"chunk": db_conn.obter_tipo_driver(db_conn.TIPO_CLOB)})
+        self.assertEqual(tipos, {"chunk": db_conn.get_driver_type(db_conn.TIPO_CLOB)})
 
     def test_resultados_e_posse_perdida(self):
         for r in (GRAVADO, JA_GRAVADO, POSSE_PERDIDA):
@@ -519,8 +519,8 @@ class TestRepoSchedulerLog(unittest.TestCase):
                                                   ("cx_oracle", cx, "CX_STRING", "CX_CLOB")):
             selecao = mock.Mock(candidato=candidato)
             conn = _ConnAnexar(resultado=JA_GRAVADO)
-            with mock.patch.object(db_conn, "_DRIVER_INICIALIZADO", driver), \
-                    mock.patch.object(db_conn, "_SELECAO_DRIVER", selecao):
+            with mock.patch.object(db_conn, "_DRIVER_INITIALIZED", driver), \
+                    mock.patch.object(db_conn, "_DRIVER_SELECTION", selecao):
                 self.assertEqual(self.repo.anexar(conn, 7, "srv-01", 3, "abc"), JA_GRAVADO, candidato)
             self.assertEqual(conn.vars, [(esperado, 20)], candidato)
             self.assertEqual(conn.execucoes[0][2], {"chunk": clob}, candidato)
@@ -553,11 +553,11 @@ warnings.simplefilter("ignore")
 sys.path.insert(0, sys.argv[1])
 import sss_config, db_conn
 from repo_oracle.scheduler_log import RepoSchedulerLog
-cfg = sss_config.obter_config()
+cfg = sss_config.get_config()
 cfg = cfg._replace(oracle=cfg.oracle._replace(driver_mode=sys.argv[2]))
-seg = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel="web")
+seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel="web")
 try:
-    conn = db_conn.conectar(cfg, seg, "web")
+    conn = db_conn.connect(cfg, seg, "web")
 except Exception as e:
     print(json.dumps({"indisponivel": "%s: %s" % (e.__class__.__name__, str(e)[:120])}))
     sys.exit(0)
@@ -567,7 +567,7 @@ r1 = repo.anexar(conn, ticket_id, agente, offset, bloco)
 conn.commit()
 r2 = repo.anexar(conn, ticket_id, agente, offset, bloco)
 conn.commit()
-print(json.dumps({"candidato": db_conn.obter_selecao().candidato, "r": [r1, r2]}))
+print(json.dumps({"candidato": db_conn.get_selection().candidato, "r": [r1, r2]}))
 conn.close()
 '''
 
@@ -631,7 +631,7 @@ class TestSchedulerLogOracle(unittest.TestCase):
         conn = self.catalogo._obter_conexao()
         try:
             cur = conn.cursor()
-            db_conn.definir_tipos_entrada(cur, x=db_conn.TIPO_CLOB)
+            db_conn.set_input_types(cur, x=db_conn.TIPO_CLOB)
             cur.execute("SELECT TO_CLOB(:x) FROM DUAL", x=texto)
             return cur.fetchone()[0].read()
         finally:

@@ -24,7 +24,7 @@ class RepoPurge(object):
     """Owner e prefixo vem da configuracao (nunca fixos); os nomes passam por sql_ident."""
 
     def __init__(self, owner, prefixo):
-        t = lambda nome: sql_ident.tabela(owner, prefixo, nome)  # noqa: E731
+        t = lambda nome: sql_ident.table(owner, prefixo, nome)  # noqa: E731
         self._tck, self._aud, self._ctl, self._scr = t("tickets"), t("auditoria"), t("controle"), t("scripts")
         self._seq_aud = sql_ident.sequence(owner, prefixo, "auditoria")
         self._prefixo = prefixo
@@ -37,7 +37,7 @@ class RepoPurge(object):
         cur = conn.cursor()
         try:
             if datas:
-                db_conn.definir_tipos_entrada(cur, **dict((d, db_conn.TIPO_DATE) for d in datas))
+                db_conn.set_input_types(cur, **dict((d, db_conn.TIPO_DATE) for d in datas))
             cur.execute(sql, binds)
             return cur.rowcount
         finally:
@@ -46,7 +46,7 @@ class RepoPurge(object):
     def _contar(self, conn, sql, binds):
         cur = conn.cursor()
         try:
-            db_conn.definir_tipos_entrada(cur, limite=db_conn.TIPO_DATE)
+            db_conn.set_input_types(cur, limite=db_conn.TIPO_DATE)
             cur.execute(sql, binds)
             return int(cur.fetchone()[0])
         finally:
@@ -93,7 +93,7 @@ class RepoPurge(object):
         CSV ter exatamente o que saiu. Devolve a lista de dicts (vazia no fim). Sem COMMIT."""
         cur = conn.cursor()
         try:
-            db_conn.definir_tipos_entrada(cur, limite=db_conn.TIPO_DATE)
+            db_conn.set_input_types(cur, limite=db_conn.TIPO_DATE)
             cur.execute("SELECT " + ", ".join(_COLS_AUD) + " FROM " + self._aud + " WHERE created_at < :limite"
                         " AND ROWNUM <= :lote FOR UPDATE WAIT 5", {"limite": limite, "lote": int(lote)})
             linhas = [dict(zip(_COLS_AUD, r)) for r in cur.fetchall()]
@@ -108,12 +108,12 @@ class RepoPurge(object):
         tambem com 0 linhas). Sem COMMIT."""
         self._executar(conn, "INSERT INTO " + self._aud + " (id, actor, source_ip, action, entity, entity_id, detail,"
                        " created_at) VALUES (:id, :actor, NULL, 'PURGE', :entity, NULL, :detail, SYSDATE)",
-                       {"id": db_conn.proximo_id(conn, self._seq_aud), "actor": ATOR,
+                       {"id": db_conn.next_id(conn, self._seq_aud), "actor": ATOR,
                         "entity": self._prefixo_padrao(tabela), "detail": "%d linhas" % int(apagadas)})
 
     def _prefixo_padrao(self, tabela):
         # A entidade da auditoria usa o nome tbsss_<tabela fisica> (README §4.4), como as demais acoes.
-        return "tbsss_%s" % sql_ident.fisico(tabela)
+        return "tbsss_%s" % sql_ident.physical(tabela)
 
     # ------------------------------------------------------------------ logs de tickets RUNNING
 

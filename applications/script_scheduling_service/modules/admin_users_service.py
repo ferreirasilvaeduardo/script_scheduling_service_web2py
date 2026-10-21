@@ -158,7 +158,7 @@ class ServicoAdminUsuarios(object):
         campo, mensagem = _CAMPO_POR_CONSTRAINT.get(exc.constraint, (CAMPO_GERAL, admin_crud.MSG_FALHA))
         erros[campo] = mensagem
         self._log.warning("cadastro de usuario rejeitado pelo repositorio (login=%s constraint=%s)",
-                          ctx.get("login"), exc.constraint, extra={"acao": FUNCIONALIDADE})
+                          ctx.get("login"), exc.constraint, extra={"action": FUNCIONALIDADE})
 
     def _perfil_ativo(self, valor, erros, atual=None):
         """Perfil escolhido: precisa estar ativo, exceto quando a edicao mantem o perfil atual."""
@@ -230,7 +230,7 @@ class ServicoAdminUsuarios(object):
                 self._violacao(ctx, exc, erros)
                 return None, erros
             self._log.info("usuario incluido (login=%s usuario=%s)", ctx.get("login"), login,
-                           extra={"acao": "CREATE"})
+                           extra={"action": "CREATE"})
             return criado["id"], {}
 
         atual = self._obter(usuario_id)
@@ -264,7 +264,7 @@ class ServicoAdminUsuarios(object):
             self._violacao(ctx, exc, erros)
             return atual["id"], erros
         self._log.info("usuario alterado (login=%s usuario=%s)", ctx.get("login"), atual["login"],
-                       extra={"acao": "UPDATE"})
+                       extra={"action": "UPDATE"})
         return atual["id"], {}
 
     def alternar_ativo(self, ctx, ip, usuario_id, versao):
@@ -290,11 +290,11 @@ class ServicoAdminUsuarios(object):
         except RepoViolacao as exc:
             if exc.constraint == "sss_ultimo_admin":
                 self._log.warning("desativacao do ultimo admin negada (login=%s usuario=%s)", ctx.get("login"),
-                                  atual["login"], extra={"acao": acao})
+                                  atual["login"], extra={"action": acao})
                 raise OperacaoNegada(MSG_ULTIMO_ADMIN)
             raise
         self._log.info("usuario %s (login=%s usuario=%s)", "desativado" if novo_ativo == "N" else "reativado",
-                       ctx.get("login"), atual["login"], extra={"acao": acao})
+                       ctx.get("login"), atual["login"], extra={"action": acao})
         return publico(alterado)
 
     def redefinir_senha(self, ctx, ip, usuario_id, senha, confirmacao):
@@ -315,7 +315,7 @@ class ServicoAdminUsuarios(object):
         self._usuarios.definir_senha(atual["id"], security.hash_senha(senha), self._relogio(),
                                      auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", u"senha redefinida"))
         self._log.info("senha redefinida (login=%s usuario=%s)", ctx.get("login"), atual["login"],
-                       extra={"acao": "UPDATE"})
+                       extra={"action": "UPDATE"})
         return {}
 
     def desbloquear(self, ctx, ip, usuario_id):
@@ -328,7 +328,7 @@ class ServicoAdminUsuarios(object):
         alterado = self._usuarios.desbloquear(atual["id"],
                                               auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
         self._log.info("usuario desbloqueado (login=%s usuario=%s)", ctx.get("login"), atual["login"],
-                       extra={"acao": "UPDATE"})
+                       extra={"action": "UPDATE"})
         return publico(alterado)
 
 
@@ -346,7 +346,7 @@ def _servico():
             _padrao = ServicoAdminUsuarios(
                 usuarios=fabrica.obter("usuarios"),
                 rbac_repo=fabrica.obter("rbac"),
-                log=sss_logging.obter_logger("sss_web", current.sss_cfg),
+                log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _padrao
 

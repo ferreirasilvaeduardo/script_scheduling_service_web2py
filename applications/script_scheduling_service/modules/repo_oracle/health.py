@@ -10,8 +10,8 @@ import datetime
 import db_conn
 import sql_ident
 
-_RUN = "(" + sql_ident.FBI_TCK_RUN_AGENTE_CASE + ")"
-_INICIO = sql_ident.FBI_TCK_FILA_INICIO
+_RUN = "(" + sql_ident.FBI_TCK_RUN_AGENT_CASE + ")"
+_INICIO = sql_ident.FBI_TCK_QUEUE_START
 
 COLS_AGENTE = ("code", "status", "heartbeat_at", "environments", "interpreters", "critical_config")
 COLS_SEM_PID = ("id", "script_id", "environment", "agent_id", "started_at")
@@ -75,7 +75,7 @@ class RepoSaude(object):
     def __init__(self, owner, prefixo):
         nomes = {"agt": "agentes", "tck": "tickets", "scr": "scripts", "amb": "ambientes", "aud": "auditoria",
                  "ctl": "controle"}
-        idents = dict((k, sql_ident.tabela(owner, prefixo, v)) for k, v in nomes.items())
+        idents = dict((k, sql_ident.table(owner, prefixo, v)) for k, v in nomes.items())
         self._sql = dict((nome, modelo.format(**idents)) for nome, modelo in (
             ("agentes", _SQL_AGENTES), ("ambientes", _SQL_AMBIENTES), ("fila", SQL_FILA),
             ("fila_vencida", _SQL_FILA_VENCIDA), ("sem_pid", SQL_RODANDO_SEM_PID),
@@ -92,7 +92,7 @@ class RepoSaude(object):
         cur = conn.cursor()
         try:
             if datas:
-                db_conn.definir_tipos_entrada(cur, **dict((k, db_conn.TIPO_DATE) for k in datas))
+                db_conn.set_input_types(cur, **dict((k, db_conn.TIPO_DATE) for k in datas))
                 cur.execute(self._sql[nome], datas)
             else:
                 cur.execute(self._sql[nome])

@@ -4,7 +4,7 @@
 Uso: python scripts/package.py [--source <raiz do web2py>] [--out-dir <pasta>]
 
 Gera <saida>/sss-<versao>.tar.gz (tudo sob sss-<versao>/, com um SHA256SUMS de cada arquivo) e <saida>/SHA256SUMS
-com o hash do tar.gz. A versao e sss_config.VERSAO_SSS. O tar e deterministico (ordem, dono, data e modos fixos).
+com o hash do tar.gz. A versao e sss_config.SSS_VERSION. O tar e deterministico (ordem, dono, data e modos fixos).
 
 Entram: web2py.py, anyserver.py, gluon/ (sem os testes do upstream), um routes.py gerado com a aplicacao padrao unica, os launchers de
 producao e o helper do bin/, e a aplicacao sem codigo de DEV, sem testes e sem pastas de runtime (que vao vazias).
@@ -178,7 +178,7 @@ def _info(nome, tamanho, modo, tipo=tarfile.REGTYPE):
 
 def empacotar(origem, saida, versao=None):
     """Gera o pacote e o SHA256SUMS; devolve (tar_gz, sha256sums). ErroPacote sem gravar nada."""
-    versao = versao or sss_config.VERSAO_SSS
+    versao = versao or sss_config.SSS_VERSION
     origem = os.path.abspath(origem)
     arquivos, problemas = coletar(origem)
 

@@ -38,7 +38,7 @@ def dir_trabalho_script(ticket_id, usuario, exec_work_dir, work_dir_ticket):
 def _passthrough(nomes, environ_daemon):
     env = {}
     for nome in nomes or ():
-        if sss_config.variavel_bloqueada(nome):
+        if sss_config.is_blocked_variable(nome):
             # O config ja recusa na subida; aqui e defesa em profundidade (README §8.6).
             raise ValueError("Variavel bloqueada no env_passthrough: %s" % nome)
         if nome in environ_daemon:
@@ -50,12 +50,12 @@ def _conexao(segredos, ambiente, ticket_id):
     """(usuario, connect string) do ambiente, ou (usuario ou None, None) sem DSN ou sem credencial."""
     nome = ambiente["name"]
     dsn = (ambiente.get("connection") or "").strip()
-    cred = (getattr(segredos, "ambientes", None) or {}).get(nome)
+    cred = (getattr(segredos, "environments", None) or {}).get(nome)
     usuario = cred.user if cred is not None else None
     if not dsn or cred is None:
         _log.warning("%s omitida: ambiente %s sem %s", VAR_CONEXAO, nome,
                      "DSN" if not dsn else "credencial [environment:%s] no secrets.cfg" % nome,
-                     extra={"ticket": ticket_id, "acao": "SPAWN"})
+                     extra={"ticket": ticket_id, "action": "SPAWN"})
         return usuario, None
     valor = "%s/%s@%s" % (cred.user, cred.password, dsn)
     masking.registrar_segredo(cred.password)

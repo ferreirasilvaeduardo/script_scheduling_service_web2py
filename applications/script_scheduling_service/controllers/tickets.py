@@ -46,7 +46,7 @@ def _exigir_consulta():
     ctx = _exigir_login()
     if not ticket_service.pode_consultar(ctx):
         _log.warning("acesso negado (login=%s funcionalidade=VIEW_LOGS|EXEC_SCRIPT caminho=%s ip=%s)",
-                     ctx["login"], request.env.path_info, _ip_origem(), extra={"acao": "RBAC"})
+                     ctx["login"], request.env.path_info, _ip_origem(), extra={"action": "RBAC"})
         _negado()
     return ctx
 
@@ -120,7 +120,7 @@ def catalogo():
     try:
         return dict(grupos=ticket_service.catalogo_rotinas(ctx), erro=None)
     except RepoErro:
-        _log.exception("falha ao montar o catalogo de rotinas (login=%s)", ctx["login"], extra={"acao": "CATALOGO"})
+        _log.exception("falha ao montar o catalogo de rotinas (login=%s)", ctx["login"], extra={"action": "CATALOGO"})
         return dict(grupos=[], erro=ui_helpers.mensagem("falha_interna"))
 
 
@@ -194,7 +194,7 @@ def lista():
     except AcessoNegado:
         _negado()
     except RepoErro:
-        _log.exception("falha ao listar tickets (login=%s)", ctx["login"], extra={"acao": "TICKET_LISTAR"})
+        _log.exception("falha ao listar tickets (login=%s)", ctx["login"], extra={"action": "TICKET_LISTAR"})
         resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
     query_params = dict(filtros, tamanho=tamanho)
@@ -239,7 +239,7 @@ def saida():
         _nao_encontrado()
     except RepoErro:
         _log.exception("falha ao iniciar o download da saida (login=%s ticket=%r)", ctx["login"], request.args(0),
-                       extra={"acao": "SAIDA_BAIXAR"})
+                       extra={"action": "SAIDA_BAIXAR"})
         raise HTTP(503, _MSG_FALHA_SAIDA, **response.headers)
     response.headers["Content-Type"] = "application/zip"
     response.headers["Content-Disposition"] = 'attachment; filename="ticket_%d_saida.zip"' % ticket_id

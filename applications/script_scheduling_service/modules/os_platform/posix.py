@@ -136,7 +136,7 @@ def _colher_pedidos_helper():
         if rc is None:
             restantes.append((argv, p))
         elif rc not in (0,):
-            _log.warning("helper %s terminou com codigo %s", argv[-3], rc, extra={"acao": "SINAL"})
+            _log.warning("helper %s terminou com codigo %s", argv[-3], rc, extra={"action": "SINAL"})
     _pedidos_helper[:] = restantes
 
 
@@ -200,7 +200,7 @@ def reabrir_grupo(estado):
         atual = identidade_processo(pid)
         if atual is None:
             _log.warning("ORFAO_SEM_IDENTIDADE pid=%s: identidade ilegivel nesta plataforma", pid,
-                         extra={"acao": "STARTUP"})
+                         extra={"action": "STARTUP"})
             return Processo(pid, None, usuario_execucao=usuario, sem_identidade=True)
         if esperada is not None and int(esperada) != atual:
             return None

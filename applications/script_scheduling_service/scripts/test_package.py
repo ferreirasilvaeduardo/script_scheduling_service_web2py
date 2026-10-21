@@ -65,7 +65,7 @@ class TestEmpacotar(unittest.TestCase):
         return codigo, texto.getvalue()
 
     def _pacote(self):
-        return os.path.join(self.saida, "sss-%s.tar.gz" % empacotar.sss_config.VERSAO_SSS)
+        return os.path.join(self.saida, "sss-%s.tar.gz" % empacotar.sss_config.SSS_VERSION)
 
     def _recusado(self, trecho):
         codigo, texto = self._main()
@@ -83,7 +83,7 @@ class TestEmpacotar(unittest.TestCase):
             dados = f.read()
         with open(os.path.join(self.saida, "SHA256SUMS")) as f:
             self.assertEqual(f.read(), "%s  %s\n" % (hashlib.sha256(dados).hexdigest(), os.path.basename(pacote)))
-        topo = "sss-%s/" % empacotar.sss_config.VERSAO_SSS
+        topo = "sss-%s/" % empacotar.sss_config.SSS_VERSION
         with tarfile.open(pacote) as tar:
             membros = dict((m.name[len(topo):], m) for m in tar.getmembers() if m.name.startswith(topo))
             somas = tar.extractfile(topo + "SHA256SUMS").read().decode("utf-8")

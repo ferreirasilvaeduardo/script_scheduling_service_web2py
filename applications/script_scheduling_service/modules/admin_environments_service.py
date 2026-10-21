@@ -148,7 +148,7 @@ class ServicoAdminAmbientes(object):
         campo, mensagem = _CAMPO_POR_CONSTRAINT.get(exc.constraint, (CAMPO_GERAL, admin_crud.MSG_FALHA))
         erros[campo] = mensagem
         self._log.warning("cadastro de ambiente rejeitado pelo repositorio (login=%s constraint=%s)",
-                          ctx.get("login"), exc.constraint, extra={"acao": "MANAGE_ENVIRONMENTS"})
+                          ctx.get("login"), exc.constraint, extra={"action": "MANAGE_ENVIRONMENTS"})
 
     def salvar(self, ctx, ip, ambiente_id, dados):
         """Inclui (ambiente_id vazio) ou altera um ambiente.
@@ -182,7 +182,7 @@ class ServicoAdminAmbientes(object):
                 self._violacao(ctx, exc, erros)
                 return None, erros
             self._log.info("ambiente incluido (login=%s environment=%s)", ctx.get("login"), criado["name"],
-                           extra={"acao": "CREATE"})
+                           extra={"action": "CREATE"})
             return criado["id"], {}
 
         atual = self._obter(ambiente_id)
@@ -208,7 +208,7 @@ class ServicoAdminAmbientes(object):
             self._violacao(ctx, exc, erros)
             return atual["id"], erros
         self._log.info("ambiente alterado (login=%s environment=%s)", ctx.get("login"), atual["name"],
-                       extra={"acao": "UPDATE"})
+                       extra={"action": "UPDATE"})
         return atual["id"], {}
 
     def alternar_ativo(self, ctx, ip, ambiente_id, versao):
@@ -232,7 +232,7 @@ class ServicoAdminAmbientes(object):
             atual["id"], {"active": novo_ativo}, esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
             auditoria=admin_crud.auditoria(ctx, ip, acao, detalhe))
         self._log.info("ambiente %s (login=%s environment=%s)", "desativado" if novo_ativo == "N" else "reativado",
-                       ctx.get("login"), atual["name"], extra={"acao": acao})
+                       ctx.get("login"), atual["name"], extra={"action": acao})
         return alterado
 
 
@@ -250,7 +250,7 @@ def _servico():
             _padrao = ServicoAdminAmbientes(
                 catalogo=fabrica.obter("catalogo"),
                 agendamentos=fabrica.obter("agendamentos"),
-                log=sss_logging.obter_logger("sss_web", current.sss_cfg),
+                log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _padrao
 

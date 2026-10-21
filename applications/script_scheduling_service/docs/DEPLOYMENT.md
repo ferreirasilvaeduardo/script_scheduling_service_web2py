@@ -242,7 +242,7 @@ Ajuste em cada servidor: `[app] sss_env`, `[oracle]` (`user` do papel do servido
 
 **Tempos que precisam ser idênticos em todos os agentes (README §8.9, D7):** copie `fence_timeout_s` e `node_offline_timeout_s` do arquivo de referência **sem alterar**, assim como os outros valores do `critical_config` (`heartbeat_interval_s`, `call_timeout_ms`, `kill_grace_s`, `misfire_policy`, `misfire_tolerance_s`, `cron_horizon_days`, `queue_aging_min`). Cada agente registra na subida:
 
-`INFO ... [acao=INICIO] tempos do fencing: fence_timeout_s=90 node_offline_timeout_s=180`
+`INFO ... [action=INICIO] tempos do fencing: fence_timeout_s=90 node_offline_timeout_s=180`
 
 Confira que a linha é igual em todos. Se um agente subir com valores diferentes dos que já estão ativos, ele é recusado (código 16, §15).
 
@@ -343,9 +343,9 @@ bin/sss-scheduler.sh                       # ou: bin/sss-scheduler.sh --config /
 * O launcher aceita só essas duas formas; qualquer outro argumento sai com código 2.
 * Subida bem-sucedida, no log da aplicação (`log_dir/interno/app/AAAA/MM/DD/HH/MI/sss_scheduler_<PID>.log`):
   ```text
-  INFO ... [acao=INICIO] tempos do fencing: fence_timeout_s=90 node_offline_timeout_s=180
-  INFO ... [acao=INICIO] driver=oracledb modo=thin servidor=19.24.0.0.0 cliente=-
-  INFO ... [acao=INICIO] agente inicializado (versao 1.0.0-dev, 0 grupo(s) em encerramento, 0 pasta(s) preservada(s))
+  INFO ... [action=INICIO] tempos do fencing: fence_timeout_s=90 node_offline_timeout_s=180
+  INFO ... [action=INICIO] driver=oracledb modo=thin servidor=19.24.0.0.0 cliente=-
+  INFO ... [action=INICIO] agente inicializado (versao 1.0.0-dev, 0 grupo(s) em encerramento, 0 pasta(s) preservada(s))
   ```
 * Falha na subida: uma linha `CRITICAL ... [action=INICIO] Subida abortada: <reason>` e um código de saída de 10 a 19 (§15.1).
 * A primeira conexão registra `INFO ... [action=CONEXAO] Conectando ao Oracle (papel=agente)...` e `Conexao estabelecida (papel=agente)`. `WARNING ... [action=RECONEXAO] Tentando reconexao` só aparece depois de uma queda (§15.3).
@@ -459,8 +459,8 @@ Depois:
 2. Em **Agentes**, confira que cada agente aparece como OK, com a plataforma e os interpretadores esperados.
 3. Dispare um script simples num ambiente de teste. O ticket deve terminar em `SUCCESS`, e o log do agente mostra:
    ```text
-   INFO ... [ticket=1000929] [acao=SPAWN] script iniciado (pid 151505)
-   INFO ... [ticket=1000929] [acao=FINALIZAR] ticket finalizado: SUCCESS/EXIT_OK rc=0
+   INFO ... [ticket=1000929] [action=SPAWN] script iniciado (pid 151505)
+   INFO ... [ticket=1000929] [action=FINALIZAR] ticket finalizado: SUCCESS/EXIT_OK rc=0
    ```
 4. Rode o `health.py` (§13). O esperado é o código 0 depois da primeira execução do purge.
 
@@ -549,7 +549,7 @@ WARNING: nenhum PURGE auditado nos ultimos 2 dias (README §11.3)
 
 * O arquivo nasce na pasta do minuto em que o processo sobe e troca por tamanho (`app_log_max_bytes`) para a pasta do minuto atual. Com o mesmo nome no mesmo minuto, ganha o sufixo `_<n>`.
 * **Retenção:** o próprio processo apaga as pastas de dia do log da aplicação com mais de `app_log_retention_days` dias. O `purge.py` apaga as pastas de minuto dos logs de execução com mais de `local_log_retention_days` dias, menos as de tickets ainda `RUNNING`.
-* Formato: `data-hora-ISO NÍVEL [pid=…] [agente=…] [ticket=…] [action=…] mensagem`. Os segredos saem como `****`.
+* Formato: `data-hora-ISO NÍVEL [pid=…] [agent=…] [ticket=…] [action=…] mensagem`. Os segredos saem como `****`.
 
 ### 14.2 Achar o log certo
 
@@ -611,7 +611,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | 19 | `o processo tem N threads antes do primeiro spawn (...)` | Algo criou uma thread antes do primeiro script | Suba só pelo `bin/sss-scheduler.sh` (Python puro); não use `web2py.py -S ... -R` |
 | 20 | `REGISTRO_PERDIDO: <motivo>; encerramento TERMINATE` (com o agente já no ar) | A linha do agente em `tbsss_agents` sumiu ou mudou de dono | Veja se alguém apagou a linha ou subiu outro agente com o mesmo `agent_id`; reinicie |
 
-### 15.2 Cadeia de driver Oracle (`[acao=SELECAO_DRIVER]`)
+### 15.2 Cadeia de driver Oracle (`[action=SELECAO_DRIVER]`)
 
 | Linha | Causa provável | Ação |
 |---|---|---|
@@ -627,12 +627,12 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 
 | Linha | Causa provável | Ação |
 |---|---|---|
-| `ciclo <nome> falhou: ... ORA-03113 ...` / `DPY-4011` / `ORA-12541`, seguido de `WARNING ... [acao=RECONEXAO] Tentando reconexao com o Oracle (papel=agente)...` e, se falhar, `Falha na tentativa de reconexao: ...` | Queda de rede ou do banco | O agente reconecta sozinho (`Reconexao bem-sucedida`). Se demorar mais que `fence_timeout_s`, ele se isola (`FENCED`) |
+| `ciclo <nome> falhou: ... ORA-03113 ...` / `DPY-4011` / `ORA-12541`, seguido de `WARNING ... [action=RECONEXAO] Tentando reconexao com o Oracle (papel=agente)...` e, se falhar, `Falha na tentativa de reconexao: ...` | Queda de rede ou do banco | O agente reconecta sozinho (`Reconexao bem-sucedida`). Se demorar mais que `fence_timeout_s`, ele se isola (`FENCED`) |
 | `CRITICAL ... FENCED: sem heartbeat confirmado ha N s (fence_timeout_s 90); M execucao(oes) encerrada(s), claims e desdobro suspensos ate o banco voltar` | O agente ficou sem confirmar o heartbeat por mais que `fence_timeout_s` | Restabeleça a conexão. Na volta: `FENCED encerrado: heartbeat confirmado; ...`. Os tickets que ele tinha terminam `FAILED`/`FENCED` |
 | `SALTO_RELOGIO: o SYSDATE andou N s diferente do relogio monotonico; NODE_OFFLINE ...` | Ajuste brusco de relógio no banco ou no servidor | Use NTP em *slew*; a detecção de nó offline fica suspensa por um ciclo |
 | `relogio local diverge do SYSDATE em N s (README §7.1)` | Servidor sem NTP | Ative o NTP |
 | `CONEXAO_ACIMA_DO_PRAZO: orcamento da conexao Ns excede call_timeout_s Ms (CR-008, R-17)` | `CONNECT_TIMEOUT × tentativas × endereços` maior que o `call_timeout` | Ajuste o descritor (§5.4) |
-| `WARNING ... [acao=CLAIM] claim do ticket N pulado: linha do script S travada por outra sessao (ORA-30006, FOR UPDATE WAIT 5)` | Outra sessão segura a linha do script em `tbsss_scripts` por mais de 5 s (edição presa ou sessão morta) | Ocasional é normal: o ticket volta no próximo ciclo. Persistente: o DBA procura a sessão em `v$lock`/`v$session` e a encerra; `SQLNET.EXPIRE_TIME` (§5.1) evita sessões mortas |
+| `WARNING ... [action=CLAIM] claim do ticket N pulado: linha do script S travada por outra sessao (ORA-30006, FOR UPDATE WAIT 5)` | Outra sessão segura a linha do script em `tbsss_scripts` por mais de 5 s (edição presa ou sessão morta) | Ocasional é normal: o ticket volta no próximo ciclo. Persistente: o DBA procura a sessão em `v$lock`/`v$session` e a encerra; `SQLNET.EXPIRE_TIME` (§5.1) evita sessões mortas |
 
 ### 15.4 Tickets (status e motivo na tela e no log)
 
@@ -721,9 +721,10 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 1. Gere e confira o pacote novo (§3) e extraia **ao lado** do atual: `/opt/sss/web2py-<versao>`.
 2. Copie o `instance/config.ini` atual para a pasta nova e compare com o `config.ini.example` novo (`diff`). Chave nova obrigatória ou removida aparece na subida como `configuracao invalida` (§15.1).
    * **Chaves renomeadas (CR-015a):** `[agent] saida_dir` → `output_dir`, `saida_max_bytes` → `output_max_bytes`, `saida_max_arquivos` → `output_max_files`, `entrada_dir` → `input_dir` e `[logging] saida_retention_days` → `output_retention_days`. Com o nome antigo, a subida para com `Chave renomeada: <antiga> passou a se chamar <nova>`.
+   * **Formato do log (CR-016c2):** as linhas passam a `[pid=…] [agent=…] [ticket=…] [action=…]` (antes `[agente=…]` e `[acao=…]`). Ajuste filtros de `grep`, coletores de log e alertas que procuravam `[acao=`.
    * **Configuração e operação em inglês (CR-016b):** no `config.ini`, `[oracle] modo_driver` → `driver_mode`; `[agent] ambientes_atendidos` → `environments`, `usuarios_execucao` → `exec_users`, `interpretadores` → `interpreters`, `fila_envelhecimento_min` → `queue_aging_min`, `log_dir_min_livre_mb` → `log_dir_min_free_mb`; `[web] sessao_max_horas` → `session_max_hours`, `login_max_tentativas` → `login_max_attempts`, `login_bloqueio_s` → `login_lockout_s`; a seção `[retencao]` → `[retention]`. No `secrets.cfg`, `[ambiente:<NOME>]` → `[environment:<NOME>]`. Com o nome antigo, a subida para com `Chave renomeada` ou `Secao renomeada`, citando o nome novo. Os scripts de operação mudaram de nome (`saude.py` → `health.py`, `empacotar.py` → `package.py`, `gerar_scripts_sql.py` → `generate_sql.py`, `sondar_driver.py` → `probe_driver.py`), assim como as opções de linha de comando (`--alvo` → `--target`, `--exportar-auditoria` → `--export-audit`, `--fila-warn` → `--queue-warn`…; de-para em `docs/architecture/CR-016b-config-and-operations.md`): ajuste o `cron`, os `timer`/`service` do systemd e o Nagios. Os subcomandos do helper mudaram (`clean`, `stop-ticket`, `pack`, `clean-output`, `purge-output`): troque o `sss-helper` junto com a aplicação (passo 4).
    * **Variáveis do script renomeadas (CR-015a):** os scripts recebem só os nomes em inglês (de-para em `docs/architecture/CR-015a-english-names.md`). Antes de atualizar, procure os nomes antigos nos scripts cadastrados, por exemplo: `grep -rnE 'SSS_(AMBIENTE|AGENTE|PLATAFORMA|VERSAO|SCRIPT_NOME|SCRIPT_ARQUIVO|INTERPRETADOR|TIPO_EXECUCAO|PRIORIDADE|DATA_|TIMEOUT_SEG|AGENDAMENTO|RECORRENCIA|LOG_ARQUIVO|SAIDA_DIR|ENTRADA_DIR|TICKET_PAI_ID)' <pastas dos scripts>`. Script que ainda lê um nome antigo recebe vazio.
-3. Se o esquema mudou (`VERSAO_ESQUEMA`), o DBA aplica a migração antes (§5.2). Web e agentes recusam subir com versão diferente (código 15).
+3. Se o esquema mudou (`SCHEMA_VERSION`), o DBA aplica a migração antes (§5.2). Web e agentes recusam subir com versão diferente (código 15).
    * **Nomes em inglês no banco (CR-016a), sem migração:** a atualização de um banco com o esquema anterior (tabelas `tbsss_ambientes`, `tbsss_controle`…) **apaga os dados do SSS**. Faça o backup (§17), aplique o `02_rollback_sss.sql` **gerado pela versão anterior** e depois o `01_deploy_sss.sql` e o `99_validate_deploy.sql` da versão nova (§5.2). O `init_db` recusa criar o esquema novo com a `tbsss_controle` antiga presente.
 4. Copie o `sss-helper` novo para `/opt/sss/bin` (§8).
 5. Pare os agentes (`sss-stop.sh` ou `SIGTERM`) e o web, troque as pastas (`mv /opt/sss/web2py /opt/sss/web2py-<anterior> && mv /opt/sss/web2py-<versao> /opt/sss/web2py`) e suba de novo.
@@ -972,10 +973,10 @@ O pacote `e8759e3` (CR-003 e CR-004), ensaiado antes do CR-005, foi descartado: 
 | Parada | Cerca de 1 minuto (passo 6). Os dados de demonstração voltam ao seed, como em todo reinício |
 
 **Ensaio (2026-10-16, na máquina de desenvolvimento, com o Python 3.8.5, a mesma versão do servidor, numa estrutura `$SSS` igual à do servidor):**
-* `config.ini` do servidor reproduzido a partir do exemplo do `fdf6f35` (com `base_script_dir` e `app_log_backups`): sem conversão, a carga é recusada com `ConfigErro` "Chave desconhecida na secao [agent]: base_script_dir";
+* `config.ini` do servidor reproduzido a partir do exemplo do `fdf6f35` (com `base_script_dir` e `app_log_backups`): sem conversão, a carga é recusada com `ConfigError` "Chave desconhecida na secao [agent]: base_script_dir";
 * passos 1 a 4 como abaixo: SHA-256 OK; só `script_scheduling_service` em `applications`; passo 2 deixa `app_log_max_bytes` e `app_log_retention_days = 30` e responde "chaves OK"; `check_env.py` com código 0; suíte `Ran 718 tests ... OK (skipped=18)`; teste de carga `SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)`;
 * subida pelo `bin/sss-web.sh` com `-a '<recycle>' -i 127.0.0.1`: login HTTP 200, os 4 cabeçalhos de segurança, origem estranha recusada com 403, painel do web2py desabilitado (`password=None`);
-* log em `$SSS/logs/interno/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (o teste de carga do passo 4 deixa um arquivo próprio, do minuto em que rodou), com `[agente=srv3067-sss-hml]`, nenhum `CRITICAL`, pastas `0750` e arquivos `0640`;
+* log em `$SSS/logs/interno/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (o teste de carga do passo 4 deixa um arquivo próprio, do minuto em que rodou), com `[agent=srv3067-sss-hml]`, nenhum `CRITICAL`, pastas `0750` e arquivos `0640`;
 * teste de fumaça no navegador: login, O que eu posso fazer, Rotinas disponíveis (5 scripts), disparo do carga_diaria com o resumo e o comando `PYTHON3 -I /opt/automacoes/scripts/carga_diaria.py ...`, "Ticket #41 criado com sucesso." (o log registra `arquivo do script nao existe no no web; o agente confere`), agentes `agt-host01` e `agt-host02`, saída com "Você saiu do sistema."; nenhum erro no console;
 * parada por SIGINT, com a porta liberada.
 
@@ -1023,7 +1024,7 @@ $PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran ... 
 # 4. Teste de carga da configuração (§10) na pasta nova
 cd $NOVO && umask 077
 echo 'print("SSS: configuracao OK (sss_env=%s, owner=%s, prefixo=%s, agent_id=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.oracle.owner, current.sss_cfg.oracle.table_prefix, current.sss_cfg.agent.agent_id))' > /tmp/sss_diag.py
-$PY web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E "^SSS:|ConfigErro"
+$PY web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E "^SSS:|ConfigError"
 rm -f /tmp/sss_diag.py
 # esperado: SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)
 
@@ -1044,7 +1045,7 @@ find $SSS/logs/interno/app -name 'sss_web_*.log' -type f | xargs grep -c CRITICA
 tail -n 5 $SSS/logs/servidor.out
 ```
 
-Se no passo 4 aparecer `ConfigErro` com "Chave desconhecida", a linha citada ficou no `config.ini`: apague-a ou corrija-a e repita o passo 4.
+Se no passo 4 aparecer `ConfigError` com "Chave desconhecida", a linha citada ficou no `config.ini`: apague-a ou corrija-a e repita o passo 4.
 
 Depois, pelo túnel (§22.4), faça o teste de fumaça do §12: login, **O que eu posso fazer**, **Rotinas disponíveis**, disparo com o resumo (o comando mostra `/opt/automacoes/scripts/carga_diaria.py`), agentes e saída.
 
@@ -1131,7 +1132,7 @@ $PY -m unittest discover -s scripts -p "test_*.py" 2>&1 | tail -3     # Ran 819 
 # 4. Teste de carga da configuração (§10) na pasta nova
 cd $NOVO && umask 077
 echo 'print("SSS: configuracao OK (sss_env=%s, owner=%s, prefixo=%s, agent_id=%s)" % (current.sss_cfg.app.sss_env, current.sss_cfg.oracle.owner, current.sss_cfg.oracle.table_prefix, current.sss_cfg.agent.agent_id))' > /tmp/sss_diag.py
-$PY web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E "^SSS:|ConfigErro"
+$PY web2py.py -S script_scheduling_service -M -R /tmp/sss_diag.py 2>&1 | grep -E "^SSS:|ConfigError"
 rm -f /tmp/sss_diag.py
 # esperado: SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)
 

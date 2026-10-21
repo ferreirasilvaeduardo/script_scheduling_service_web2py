@@ -86,7 +86,7 @@ def _linha_sss(log_fd, texto):
     try:
         os.write(log_fd, ("[SSS] %s\n" % texto).encode("utf-8", "replace"))
     except OSError as e:
-        _log.warning("falha ao gravar a linha [SSS] no log (%s)", e.__class__.__name__, extra={"acao": "SPAWN"})
+        _log.warning("falha ao gravar a linha [SSS] no log (%s)", e.__class__.__name__, extra={"action": "SPAWN"})
 
 
 # -----------------------------------------------------------------------------
@@ -117,7 +117,7 @@ def preparar_diretorio(work_dir, ticket_id, startup_concluido=False):
         real = os_platform.caminho_final(caminho)
         if real == base or os.path.commonpath([real, base]) != base:
             raise DiretorioPreservado("ticket %s: pasta fora do work_dir" % ticket_id)
-        _log.warning("pasta de trabalho sem estado removida", extra={"ticket": ticket_id, "acao": "SPAWN"})
+        _log.warning("pasta de trabalho sem estado removida", extra={"ticket": ticket_id, "action": "SPAWN"})
         shutil.rmtree(real)
     os_platform.criar_dir_trabalho(caminho)
     os_platform.criar_dir_trabalho(os.path.join(caminho, "tmp"))
@@ -169,7 +169,7 @@ def _falha_spawn(execucao, log_fd, erro, agente):
     try:
         os.close(log_fd)
     except OSError:
-        _log.warning("log_fd ja fechado", extra={"ticket": execucao.ticket_id, "acao": "SPAWN"})
+        _log.warning("log_fd ja fechado", extra={"ticket": execucao.ticket_id, "action": "SPAWN"})
     if execucao.caminho_log:
         final = os.path.join(os.path.dirname(execucao.caminho_log),
                              log_paths.nome_log_execucao(execucao.ticket_id, 0))
@@ -178,8 +178,8 @@ def _falha_spawn(execucao, log_fd, erro, agente):
             execucao.caminho_log = final
         except OSError as e:
             _log.error("rename do log de SPAWN_ERROR falhou (%s)", e.__class__.__name__,
-                       extra={"ticket": execucao.ticket_id, "acao": "SPAWN"})
-    _log.error("SPAWN_ERROR: %s", execucao.erro_spawn, extra={"ticket": execucao.ticket_id, "acao": "SPAWN"})
+                       extra={"ticket": execucao.ticket_id, "action": "SPAWN"})
+    _log.error("SPAWN_ERROR: %s", execucao.erro_spawn, extra={"ticket": execucao.ticket_id, "action": "SPAWN"})
     return execucao
 
 
@@ -260,9 +260,9 @@ def _apos_spawn_falhou(execucao, processo, log_fd, erro, agente):
     try:
         os.close(log_fd)
     except OSError:
-        _log.warning("log_fd ja fechado", extra={"ticket": execucao.ticket_id, "acao": "SPAWN"})
+        _log.warning("log_fd ja fechado", extra={"ticket": execucao.ticket_id, "action": "SPAWN"})
     _log.error("falha depois do spawn (%s): encerrando o grupo", execucao.erro_spawn,
-               extra={"ticket": execucao.ticket_id, "acao": "SPAWN"})
+               extra={"ticket": execucao.ticket_id, "action": "SPAWN"})
     pedir_encerramento(execucao, time.monotonic())
     return execucao
 
@@ -295,12 +295,12 @@ def pedir_encerramento(execucao, agora_monotonico, grace_s=GRACE_PADRAO_S):
         # Sem identidade nao ha sinal seguro (PID pode ter sido reciclado): o chamador finaliza ORPHAN_PROCESS
         # e o limpar preserva a pasta enquanto o grupo existir (CR-008, R-26).
         _log.warning("ORFAO_SEM_IDENTIDADE: grupo vivo sem identidade, nenhum sinal enviado",
-                     extra={"ticket": execucao.ticket_id, "acao": "ENCERRAR"})
+                     extra={"ticket": execucao.ticket_id, "action": "ENCERRAR"})
         execucao.fase = FASE_SEM_IDENTIDADE
         return
     if verificar(execucao) is not None:
         _log.warning("NETOS_ENCERRADOS: o grupo tinha processos depois da saida do principal",
-                     extra={"ticket": execucao.ticket_id, "acao": "ENCERRAR"})
+                     extra={"ticket": execucao.ticket_id, "action": "ENCERRAR"})
     os_platform.sinalizar_grupo(processo, signal.SIGTERM)
     execucao.fase = FASE_TERM
     execucao.grace_s = grace_s
@@ -326,7 +326,7 @@ def avancar_encerramento(execucao, agora_monotonico):
             and agora_monotonico >= execucao.prazo_kill + (execucao.grace_s or 0):
         execucao.travado = True
         _log.error("GRUPO_NAO_ENCERRA: grupo vivo depois do SIGKILL", extra={"ticket": execucao.ticket_id,
-                                                                         "acao": "ENCERRAR"})
+                                                                         "action": "ENCERRAR"})
         os_platform.sinalizar_grupo(execucao.processo, signal.SIGKILL)
     return False
 

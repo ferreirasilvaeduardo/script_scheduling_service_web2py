@@ -180,9 +180,9 @@ def main():
         senha = senha[:-1]
 
     if args.config:
-        cfg = sss_config.carregar(args.config)
+        cfg = sss_config.load(args.config)
     else:
-        cfg = sss_config.obter_config()
+        cfg = sss_config.get_config()
 
     resultado = sondar(args.candidato, cfg, senha, usuario=args.usuario)
     sys.stdout.write(json.dumps(resultado) + "\n")

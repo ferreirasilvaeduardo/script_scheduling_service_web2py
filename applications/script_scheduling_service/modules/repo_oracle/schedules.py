@@ -217,7 +217,7 @@ class RepoAgendamentosOracle(BaseRepoOracle, RepoAgendamentos):
     def _tipos(cur):
         tipos = dict((c, db_conn.TIPO_DATE) for c in _DATAS)
         tipos["params_json"] = db_conn.TIPO_CLOB
-        db_conn.definir_tipos_entrada(cur, **tipos)
+        db_conn.set_input_types(cur, **tipos)
 
     def _auditar(self, conn, auditoria, id, acao_padrao=None, detalhe_padrao=None, ator=None):
         if auditoria:
@@ -331,7 +331,7 @@ class RepoAgendamentosOracle(BaseRepoOracle, RepoAgendamentos):
         """Insere com as CKs e FKs conferidas antes do INSERT e a auditoria na mesma transacao."""
         ator_limpo = validar_ator_registro(auditoria, ator)
         with self.transacao_escrita(conn=conn) as c:
-            agora = db_conn.agora_banco(c)
+            agora = db_conn.db_now(c)
             novo = {
                 "name": dados.get("name"),
                 "script_id": int(dados["script_id"]),
@@ -354,7 +354,7 @@ class RepoAgendamentosOracle(BaseRepoOracle, RepoAgendamentos):
             }
             self._checar_cks(novo)
             self._checar_fks(c, novo)
-            aid = db_conn.proximo_id(c, self._seq_agd)
+            aid = db_conn.next_id(c, self._seq_agd)
             binds = self._binds_registro(novo, ator_limpo)
             binds["id"] = aid
             cur = c.cursor()
@@ -408,7 +408,7 @@ class RepoAgendamentosOracle(BaseRepoOracle, RepoAgendamentos):
                 if antiga_data is not None:
                     binds["antiga_data"] = antiga_data
                     # TIPO_DATE descarta a fracao: o valor lido mais microssegundos ainda casa (README §7.5).
-                    db_conn.definir_tipos_entrada(cur, antiga_data=db_conn.TIPO_DATE)
+                    db_conn.set_input_types(cur, antiga_data=db_conn.TIPO_DATE)
                     cur.execute(self._sql["PAUSAR_OTIMISTA"], binds)
                 else:
                     cur.execute(self._sql["PAUSAR"], binds)
@@ -433,7 +433,7 @@ class RepoAgendamentosOracle(BaseRepoOracle, RepoAgendamentos):
                 raise repo_errors.RepoViolacao("proxima_execucao e obrigatoria")
             cur = c.cursor()
             try:
-                db_conn.definir_tipos_entrada(cur, nova_data=db_conn.TIPO_DATE)
+                db_conn.set_input_types(cur, nova_data=db_conn.TIPO_DATE)
                 cur.execute(self._sql["RETOMAR"], {"id": int(id), "nova_data": nova_data, "actor": ator_limpo})
                 if cur.rowcount != 1:
                     raise repo_errors.RepoConflito("Agendamento ID %s alterado por outra operacao" % id)

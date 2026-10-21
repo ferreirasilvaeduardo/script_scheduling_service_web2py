@@ -21,16 +21,16 @@ import _testenv  # noqa: F401 - ajusta sys.path sem importar gluon
 
 import sql_ident
 from sql_ident import (
-    TABELAS,
-    FBI_TCK_FILA_EXPR,
+    TABLES,
+    FBI_TCK_QUEUE_EXPR,
     FBI_TCK_RUN_EXPR,
-    nomes,
-    qualificar,
-    todos_identificadores,
-    validar_nome,
-    validar_owner,
-    validar_prefixo,
-    validar_registro,
+    names,
+    qualify,
+    all_identifiers,
+    validate_name,
+    validate_owner,
+    validate_prefix,
+    validate_registry,
 )
 
 
@@ -73,8 +73,8 @@ class TestDbSchema(unittest.TestCase):
             "controle",
             "ticket_saida",
         ]
-        self.assertEqual(len(TABELAS), 18, "Devem existir exatamente 18 tabelas")
-        self.assertEqual(list(TABELAS.keys()), entidades_esperadas)
+        self.assertEqual(len(TABLES), 18, "Devem existir exatamente 18 tabelas")
+        self.assertEqual(list(TABLES.keys()), entidades_esperadas)
 
     def test_reproducao_exata_readme_9_2(self):
         """Verifica que nomes('tbsss_') reproduz exatamente a tabela do README §9.2."""
@@ -100,7 +100,7 @@ class TestDbSchema(unittest.TestCase):
             ("ticket_saida", "tout", "sq_tbsss_ticket_output", "tr_tbsss_tout_bi", "pk_tbsss_ticket_output"),
         ]
 
-        esquema = nomes("tbsss_")
+        esquema = names("tbsss_")
         for ent, abrev, seq, trg, pk in esperado_readme:
             self.assertIn(ent, esquema, "Entidade '{}' ausente no resultado de nomes()".format(ent))
             t = esquema[ent]
@@ -109,7 +109,7 @@ class TestDbSchema(unittest.TestCase):
             self.assertEqual(t["trigger"], trg, "Trigger divergente em {}".format(ent))
             self.assertEqual(t["trigger_bi"], trg, "Trigger_bi divergente em {}".format(ent))
             self.assertEqual(t["pk"], pk, "PK divergente em {}".format(ent))
-            self.assertEqual(t["tabela"], "tbsss_" + sql_ident.fisico(ent), "Nome de tabela divergente em {}".format(ent))
+            self.assertEqual(t["tabela"], "tbsss_" + sql_ident.physical(ent), "Nome de tabela divergente em {}".format(ent))
 
     def test_limite_30_caracteres_config_example_e_pior_caso(self):
         """Valida len <= 30 para prefixo do config.ini.example e pior caso (8 chars)."""
@@ -118,10 +118,10 @@ class TestDbSchema(unittest.TestCase):
 
         for pref in prefixos_para_testar:
             self.assertTrue(
-                validar_registro(pref),
+                validate_registry(pref),
                 "Registro deve ser valido com prefixo '{}'".format(pref),
             )
-            todos = todos_identificadores(pref)
+            todos = all_identifiers(pref)
             for ident in todos:
                 self.assertLessEqual(
                     len(ident),
@@ -133,7 +133,7 @@ class TestDbSchema(unittest.TestCase):
 
     def test_todos_identificadores_ascii_lowercase(self):
         """Verifica se todos os identificadores casam com ^[a-z][a-z0-9_]*$."""
-        todos = todos_identificadores("tbsss_")
+        todos = all_identifiers("tbsss_")
         re_padrao = re.compile(r"^[a-z][a-z0-9_]*$")
         for ident in todos:
             self.assertIsNotNone(
@@ -145,28 +145,28 @@ class TestDbSchema(unittest.TestCase):
 
     def test_estrutura_padrao_id_sequence_trigger_bi(self):
         """Garante que toda tabela tem sequence, trigger _bi e coluna 'id NUMBER(10) NOT NULL'."""
-        esquema = nomes("tbsss_")
+        esquema = names("tbsss_")
         for entidade, t in esquema.items():
             cols = t["colunas"]
             self.assertIn("id", cols, "Tabela '{}' deve possuir coluna 'id'".format(entidade))
             id_col = cols["id"]
             self.assertEqual(id_col["tipo"], "NUMBER(10)", "id em '{}' deve ser NUMBER(10)".format(entidade))
             self.assertTrue(id_col["not_null"], "id em '{}' deve ser NOT NULL".format(entidade))
-            self.assertEqual(t["pk"], "pk_tbsss_" + sql_ident.fisico(entidade))
-            self.assertEqual(t["sequence"], "sq_tbsss_" + sql_ident.fisico(entidade))
+            self.assertEqual(t["pk"], "pk_tbsss_" + sql_ident.physical(entidade))
+            self.assertEqual(t["sequence"], "sq_tbsss_" + sql_ident.physical(entidade))
             self.assertTrue(t["trigger_bi"].startswith("tr_tbsss_"))
             self.assertTrue(t["trigger_bi"].endswith("_bi"))
 
     def test_fks_possuem_indice_ou_uk_com_coluna_lider(self):
         """Garante que toda FK filha tem indice (ou UK/PK) cuja coluna lider e a FK (AGENTS §4.7)."""
-        esquema = nomes("tbsss_")
+        esquema = names("tbsss_")
         for entidade, t in esquema.items():
             for fk_nome, fk_info in t["fks"].items():
                 fk_col_lider = fk_info["colunas"][0]
                 coberta = False
 
                 # Verifica se a PK cobre
-                if TABELAS[entidade]["pk"]["colunas"][0] == fk_col_lider:
+                if TABLES[entidade]["pk"]["colunas"][0] == fk_col_lider:
                     coberta = True
 
                 # Verifica se alguma UK cobre
@@ -193,7 +193,7 @@ class TestDbSchema(unittest.TestCase):
     def test_varchar2_com_char_explicito(self):
         """Garante que toda coluna VARCHAR2 declara 'CHAR' explicitamente (AGENTS §4.6)."""
         re_varchar = re.compile(r"^VARCHAR2\(\d+ CHAR\)$")
-        for entidade, defn in TABELAS.items():
+        for entidade, defn in TABLES.items():
             for col_nome, col_info in defn["colunas"].items():
                 tipo = col_info["tipo"]
                 if tipo.startswith("VARCHAR2"):
@@ -206,7 +206,7 @@ class TestDbSchema(unittest.TestCase):
 
     def test_flags_char1_com_ck_sn(self):
         """Garante que toda coluna CHAR(1) possui CK IN ('Y','N') correspondente."""
-        for entidade, defn in TABELAS.items():
+        for entidade, defn in TABLES.items():
             cks_da_tabela = [ck["expr"] for ck in defn["cks"].values()]
             for col_nome, col_info in defn["colunas"].items():
                 if col_info["tipo"] == "CHAR(1)":
@@ -224,13 +224,13 @@ class TestDbSchema(unittest.TestCase):
 
     def test_triggers_extras_imutabilidade(self):
         """Verifica configuracao de triggers _bu para chaves naturais imutaveis."""
-        self.assertIsNotNone(TABELAS["ambientes"]["trigger_bu"])
-        self.assertEqual(TABELAS["ambientes"]["trigger_bu"]["coluna_imutavel"], "name")
-        self.assertIsNotNone(TABELAS["usuarios"]["trigger_bu"])
-        self.assertEqual(TABELAS["usuarios"]["trigger_bu"]["coluna_imutavel"], "login")
+        self.assertIsNotNone(TABLES["ambientes"]["trigger_bu"])
+        self.assertEqual(TABLES["ambientes"]["trigger_bu"]["coluna_imutavel"], "name")
+        self.assertIsNotNone(TABLES["usuarios"]["trigger_bu"])
+        self.assertEqual(TABLES["usuarios"]["trigger_bu"]["coluna_imutavel"], "login")
 
         # Nenhuma outra tabela deve ter trigger_bu
-        for ent, defn in TABELAS.items():
+        for ent, defn in TABLES.items():
             if ent not in ("ambientes", "usuarios"):
                 self.assertIsNone(
                     defn["trigger_bu"],
@@ -245,10 +245,10 @@ class TestDbSchema(unittest.TestCase):
             ("updated_at", "DATE", False, None),
             ("updated_by", "VARCHAR2(40 CHAR)", False, None),
         ]
-        esquema = nomes("tbsss_")
-        for entidade, defn in TABELAS.items():
+        esquema = names("tbsss_")
+        for entidade, defn in TABLES.items():
             cols = list(defn["colunas"].items())
-            if entidade in sql_ident.TABELAS_SEM_REGISTRO:
+            if entidade in sql_ident.TABLES_WITHOUT_RECORD:
                 nomes_cols = [c for c, _ in cols]
                 for c in ("created_by", "updated_at", "updated_by"):
                     self.assertNotIn(c, nomes_cols, "{} nao recebe {}".format(entidade, c))
@@ -256,38 +256,38 @@ class TestDbSchema(unittest.TestCase):
                 continue
             obtido = [(n, c["tipo"], c["not_null"], c["default"]) for n, c in cols[-4:]]
             self.assertEqual(obtido, esperado, "Colunas de registro em {}".format(entidade))
-            self.assertEqual(defn["cks"]["upd"]["expr"], sql_ident.CK_REGISTRO_EXPR)
+            self.assertEqual(defn["cks"]["upd"]["expr"], sql_ident.CK_RECORD_EXPR)
             abrev = defn["abrev"]
             self.assertIn("ck_tbsss_{}_upd".format(abrev), esquema[entidade]["cks"])
-        self.assertEqual(sql_ident.TABELAS_SEM_REGISTRO, ("auditoria", "controle"))
+        self.assertEqual(sql_ident.TABLES_WITHOUT_RECORD, ("auditoria", "controle"))
         self.assertEqual(
-            sum(1 for e in TABELAS if "upd" in TABELAS[e]["cks"]), 16)
+            sum(1 for e in TABLES if "upd" in TABLES[e]["cks"]), 16)
 
     def test_registro_cr007(self):
         """CR-007: versao do esquema, controle de linha unica, indice unico da ocorrencia, colunas e tamanhos."""
-        self.assertIsInstance(sql_ident.VERSAO_ESQUEMA, int)
-        self.assertGreaterEqual(sql_ident.VERSAO_ESQUEMA, 1)
-        ctl = TABELAS["controle"]
+        self.assertIsInstance(sql_ident.SCHEMA_VERSION, int)
+        self.assertGreaterEqual(sql_ident.SCHEMA_VERSION, 1)
+        ctl = TABLES["controle"]
         self.assertEqual(ctl["cks"]["id"]["expr"], "id = 1")
         self.assertEqual(list(ctl["colunas"]), ["id", "schema_version", "version_applied_at", "version_applied_by",
                                                  "purge_owner", "purge_lease_until"])
-        esquema = nomes("tbsss_")
+        esquema = names("tbsss_")
         ocor = esquema["tickets"]["indices"]["ix_tbsss_tck_occur"]
         self.assertTrue(ocor["unico"] and ocor["fbi"])
-        self.assertEqual(ocor["expr"], sql_ident.FBI_TCK_OCOR_EXPR)
+        self.assertEqual(ocor["expr"], sql_ident.FBI_TCK_OCCUR_EXPR)
         self.assertFalse(esquema["tickets"]["indices"]["ix_tbsss_tck_queue"]["unico"])
         self.assertEqual(esquema["tickets"]["indices"]["ix_tbsss_tck_hist"]["colunas"], ("script_id", "created_at"))
         self.assertEqual(esquema["agendamentos"]["indices"]["ix_tbsss_sch_next"]["colunas"],
                          ("active", "next_run_at", "id"))
-        self.assertIn("'INTERNAL_ERROR'", TABELAS["agendamentos"]["cks"]["pause"]["expr"])
-        self.assertEqual(TABELAS["tickets"]["colunas"]["process_id"]["tipo"], "NUMBER(10)")
-        self.assertEqual(TABELAS["agentes"]["colunas"]["hostname"]["tipo"], "VARCHAR2(255 CHAR)")
-        self.assertEqual(TABELAS["agentes"]["colunas"]["environments"]["tipo"], "VARCHAR2(1000 CHAR)")
-        self.assertIn("critical_config", TABELAS["agentes"]["colunas"])
+        self.assertIn("'INTERNAL_ERROR'", TABLES["agendamentos"]["cks"]["pause"]["expr"])
+        self.assertEqual(TABLES["tickets"]["colunas"]["process_id"]["tipo"], "NUMBER(10)")
+        self.assertEqual(TABLES["agentes"]["colunas"]["hostname"]["tipo"], "VARCHAR2(255 CHAR)")
+        self.assertEqual(TABLES["agentes"]["colunas"]["environments"]["tipo"], "VARCHAR2(1000 CHAR)")
+        self.assertIn("critical_config", TABLES["agentes"]["colunas"])
         # CR-011: sem hash do script.
         for ent, col in (("scripts", "sha256_homologado"), ("tickets", "arquivo_sha256")):
-            self.assertNotIn(col, TABELAS[ent]["colunas"])
-            self.assertNotIn("sha", TABELAS[ent]["cks"])
+            self.assertNotIn(col, TABLES[ent]["colunas"])
+            self.assertNotIn("sha", TABLES[ent]["cks"])
 
     def test_readme_10_colunas_iguais_ao_registro(self):
         """README §10 lista exatamente as colunas do registro, na mesma ordem (fonte unica)."""
@@ -306,21 +306,21 @@ class TestDbSchema(unittest.TestCase):
             else:
                 cols = re.findall(r"^  \* `(\w+)", m.group(2), re.M)
             lidas[blocos[i]] = cols
-        self.assertEqual(list(lidas.keys()), [defn["fisico"] for defn in TABELAS.values()])
-        for entidade, defn in TABELAS.items():
+        self.assertEqual(list(lidas.keys()), [defn["fisico"] for defn in TABLES.values()])
+        for entidade, defn in TABLES.items():
             self.assertEqual(lidas[defn["fisico"]], list(defn["colunas"].keys()),
                              "README §10 diverge do registro em {}".format(entidade))
 
     def test_colunas_lob_declaradas(self):
         """Verifica catalogacao de colunas LOB (CLOB e, na saida do ticket, BLOB; CR-012)."""
-        self.assertEqual(TABELAS["agendamentos"]["colunas_lob"], ("params_json",))
+        self.assertEqual(TABLES["agendamentos"]["colunas_lob"], ("params_json",))
         self.assertEqual(
-            TABELAS["tickets"]["colunas_lob"],
+            TABLES["tickets"]["colunas_lob"],
             ("submitted_params", "log_output"),
         )
-        self.assertEqual(TABELAS["ticket_saida"]["colunas_lob"], ("content",))
-        self.assertEqual(TABELAS["ticket_saida"]["colunas"]["content"]["tipo"], "BLOB")
-        for ent, defn in TABELAS.items():
+        self.assertEqual(TABLES["ticket_saida"]["colunas_lob"], ("content",))
+        self.assertEqual(TABLES["ticket_saida"]["colunas"]["content"]["tipo"], "BLOB")
+        for ent, defn in TABLES.items():
             if ent not in ("agendamentos", "tickets", "ticket_saida"):
                 self.assertEqual(
                     defn["colunas_lob"],
@@ -331,14 +331,14 @@ class TestDbSchema(unittest.TestCase):
     def test_expressoes_fbi_literais(self):
         """Verifica que as constantes de FBI sao strings unicas identicas ao README."""
         # CR-013: colunas simples na frente e o inicio da espera (sem CASE: o Oracle elimina o sort).
-        self.assertEqual(FBI_TCK_FILA_EXPR,
+        self.assertEqual(FBI_TCK_QUEUE_EXPR,
                          "(status, environment, priority, GREATEST(scheduled_at, created_at), id, script_id)")
         self.assertIn("CASE WHEN status = 'RUNNING' THEN agent_id END", FBI_TCK_RUN_EXPR)
 
-        esquema = nomes("tbsss_")
+        esquema = names("tbsss_")
         tck_indices = esquema["tickets"]["indices"]
         self.assertIn("ix_tbsss_tck_queue", tck_indices)
-        self.assertEqual(tck_indices["ix_tbsss_tck_queue"]["expr"], FBI_TCK_FILA_EXPR)
+        self.assertEqual(tck_indices["ix_tbsss_tck_queue"]["expr"], FBI_TCK_QUEUE_EXPR)
         self.assertTrue(tck_indices["ix_tbsss_tck_queue"]["fbi"])
 
         self.assertIn("ix_tbsss_tck_run", tck_indices)
@@ -348,42 +348,42 @@ class TestDbSchema(unittest.TestCase):
     def test_validadores_owner_prefixo_e_qualificar(self):
         """Testa validacoes de owner, prefixo e qualificacao com casos validos e invalidos."""
         # Casos validos
-        self.assertEqual(validar_owner("openrisow"), "openrisow")
-        self.assertEqual(validar_owner("OWNER_123"), "OWNER_123")
-        self.assertEqual(validar_prefixo("tbsss_"), "tbsss_")
-        self.assertEqual(validar_prefixo("a1_"), "a1_")
-        self.assertEqual(qualificar("openrisow", "tbsss_tickets"), "openrisow.tbsss_tickets")
+        self.assertEqual(validate_owner("openrisow"), "openrisow")
+        self.assertEqual(validate_owner("OWNER_123"), "OWNER_123")
+        self.assertEqual(validate_prefix("tbsss_"), "tbsss_")
+        self.assertEqual(validate_prefix("a1_"), "a1_")
+        self.assertEqual(qualify("openrisow", "tbsss_tickets"), "openrisow.tbsss_tickets")
         self.assertEqual(
-            qualificar("openrisow", "tbsss_tickets", prefixo="tbsss_"),
+            qualify("openrisow", "tbsss_tickets", prefixo="tbsss_"),
             "openrisow.tbsss_tickets",
         )
 
         # Casos invalidos em owner
         with self.assertRaises(ValueError):
-            validar_owner("1owner")  # comeca com digito
+            validate_owner("1owner")  # comeca com digito
         with self.assertRaises(ValueError):
-            validar_owner("owner-invalido!")  # hifen/caractere especial
+            validate_owner("owner-invalido!")  # hifen/caractere especial
         with self.assertRaises(ValueError):
-            validar_owner("a" * 31)  # excede 30 chars
+            validate_owner("a" * 31)  # excede 30 chars
 
         # Casos invalidos em prefixo
         with self.assertRaises(ValueError):
-            validar_prefixo("123456789")  # 9 caracteres excede 8
+            validate_prefix("123456789")  # 9 caracteres excede 8
         with self.assertRaises(ValueError):
-            validar_prefixo("")  # vazio
+            validate_prefix("")  # vazio
         with self.assertRaises(ValueError):
-            validar_prefixo("tb-sss_")  # caractere especial
+            validate_prefix("tb-sss_")  # caractere especial
 
         # Casos invalidos em qualificar
         with self.assertRaises(ValueError):
-            qualificar("owner; DROP TABLE", "tbsss_tickets")
+            qualify("owner; DROP TABLE", "tbsss_tickets")
         with self.assertRaises(ValueError):
-            qualificar("openrisow", "tabela; DROP TABLE")
+            qualify("openrisow", "tabela; DROP TABLE")
 
         # Nao ecoa se valor > 64 caracteres
         valor_longo = "x" * 70
         try:
-            validar_owner(valor_longo)
+            validate_owner(valor_longo)
             self.fail("Deveria lancar ValueError")
         except ValueError as e:
             self.assertNotIn(valor_longo, str(e), "Erro nao deve conter valor bruto longo")
@@ -391,7 +391,7 @@ class TestDbSchema(unittest.TestCase):
     def test_negativo_identificador_31_caracteres_falha(self):
         """Prova deteccao: registro temporario com 31 caracteres faz validacao falhar."""
         # 1. Coluna com 31 caracteres
-        reg_col_invalida = copy.deepcopy(TABELAS)
+        reg_col_invalida = copy.deepcopy(TABLES)
         col_31 = "coluna_com_trinta_e_um_chars_xy"  # len = 31
         self.assertEqual(len(col_31), 31)
         reg_col_invalida["ambientes"]["colunas"][col_31] = {
@@ -401,11 +401,11 @@ class TestDbSchema(unittest.TestCase):
             "default": None,
         }
         with self.assertRaises(ValueError) as ctx:
-            validar_registro("tbsss_", tabelas=reg_col_invalida)
+            validate_registry("tbsss_", tabelas=reg_col_invalida)
         self.assertIn("excede 30 caracteres", str(ctx.exception))
 
         # 2. Constraint UK que gera nome com 31 caracteres
-        reg_uk_invalida = copy.deepcopy(TABELAS)
+        reg_uk_invalida = copy.deepcopy(TABLES)
         # uk_ + tbsss_ (6) + amb (3) + _ (1) = 13. Se sufixo tiver 18 chars -> total 31 chars
         sufixo_18 = "sufixo_com_18_char"  # len = 18
         self.assertEqual(len("uk_tbsss_amb_" + sufixo_18), 31)
@@ -414,7 +414,7 @@ class TestDbSchema(unittest.TestCase):
             "colunas": ("name",),
         }
         with self.assertRaises(ValueError) as ctx:
-            validar_registro("tbsss_", tabelas=reg_uk_invalida)
+            validate_registry("tbsss_", tabelas=reg_uk_invalida)
         self.assertIn("excede 30 caracteres", str(ctx.exception))
 
 

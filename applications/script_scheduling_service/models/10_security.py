@@ -17,8 +17,8 @@ import ui_menu
 from repo_errors import RepoIndisponivel
 
 _cfg = current.sss_cfg
-_segredos = sss_config.obter_segredos("sss_web")
-_log = sss_logging.obter_logger("sss_web", _cfg)
+_segredos = sss_config.get_secrets("sss_web")
+_log = sss_logging.get_logger("sss_web", _cfg)
 masking.instalar_filtro_em_handlers()
 
 response.headers.update({
@@ -59,18 +59,18 @@ if session.usuario_id:
     _agora = time.time()
     if security.sessao_expirada(session.ultimo_acesso, _agora, _cfg.web.session_idle_timeout_s):
         # Expiracao por inatividade: so log, sem auditoria (README §4.2).
-        _log.info("sessao expirada por inatividade (login=%s)", session.login, extra={"acao": "SESSAO"})
+        _log.info("sessao expirada por inatividade (login=%s)", session.login, extra={"action": "SESSAO"})
         _encerrar_sessao(ui_helpers.mensagem("sessao_expirada"))
     if security.sessao_expirada(session.login_em, _agora, _cfg.web.session_max_hours * 3600):
         # Vida maxima desde o login (CR-008, E2), mesmo com uso continuo: so log.
-        _log.info("sessao encerrada pela vida maxima (login=%s)", session.login, extra={"acao": "SESSAO"})
+        _log.info("sessao encerrada pela vida maxima (login=%s)", session.login, extra={"action": "SESSAO"})
         _encerrar_sessao(ui_helpers.mensagem("sessao_max"))
     try:
         _ctx = auth_service.revalidar(session, security.ip_origem(
             request.env.remote_addr, request.env.http_x_forwarded_for, _cfg.web.trusted_proxies))
     except RepoIndisponivel:
         _log.exception("revalidacao de sessao indisponivel (usuario_id=%s caminho=%s)",
-                       session.usuario_id, request.env.path_info, extra={"acao": "SESSAO"})
+                       session.usuario_id, request.env.path_info, extra={"action": "SESSAO"})
         raise HTTP(503)
     if _ctx is None:
         _encerrar_sessao(u"Seu acesso mudou e a sessão foi encerrada. Entre de novo para continuar.")
@@ -103,7 +103,7 @@ def _rejeitar(motivo):
     _log.warning(
         "requisicao rejeitada (motivo=%s metodo=%s caminho=%s origem=%r ip=%s)",
         motivo, request.env.request_method, request.env.path_info, origem[:200],
-        request.env.remote_addr, extra={"acao": "CSRF"},
+        request.env.remote_addr, extra={"action": "CSRF"},
     )
     raise HTTP(403, u"Requisição recusada.", **response.headers)
 
@@ -156,7 +156,7 @@ def _exigir_func(codigo):
     if not rbac.tem_func(ctx, codigo):
         _log.warning(
             "acesso negado (login=%s funcionalidade=%s caminho=%s ip=%s)",
-            ctx["login"], codigo, request.env.path_info, _ip_origem(), extra={"acao": "RBAC"},
+            ctx["login"], codigo, request.env.path_info, _ip_origem(), extra={"action": "RBAC"},
         )
         raise HTTP(403, u"Acesso negado.", **response.headers)
     return ctx

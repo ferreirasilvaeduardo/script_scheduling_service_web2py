@@ -6,6 +6,6 @@ Contrato de cada modulo scripts/migrations/m<NNNN>_<descricao>.py:
 - Funcao de execucao: aplicar(conn, nomes, log)
 Onde:
   conn: conexao ativa aberta com o dono do esquema
-  nomes: dicionario de identificadores expandidos sql_ident.nomes(prefixo)
+  nomes: dicionario de identificadores expandidos sql_ident.names(prefixo)
   log: callable para registro de mensagens
 """

@@ -60,7 +60,7 @@ class _Cursor(object):
 
 class _Conn(object):
     def __init__(self):
-        self.versao = sql_ident.VERSAO_ESQUEMA
+        self.versao = sql_ident.SCHEMA_VERSION
         self.commits = 0
         self.rollbacks = 0
 
@@ -79,10 +79,10 @@ class _Conexao(object):
         self.ok = ok
         self.conn = _Conn()
 
-    def garantir(self):
+    def ensure(self):
         return self.ok
 
-    def obter_conexao(self):
+    def get_connection(self):
         return self.conn
 
 
@@ -227,7 +227,7 @@ class TestPassos(_Base):
         self.assertNotIn("SEM_EXIGENCIA_HASH", texto, "CR-011: sem hash")
         r = self.repo.registro
         self.assertEqual((r["code"], r["hostname"], r["version"], r["platform"], r["interpreters"]),
-                         ("srv-t", "host-t", sss_config.VERSAO_SSS, os_platform.NOME, "SH"))
+                         ("srv-t", "host-t", sss_config.SSS_VERSION, os_platform.NOME, "SH"))
         self.assertEqual(r["critical_config"], "hb=10;fence=40;offline=120;call=30;kill=1;misfire=RUN_ONCE;tol=300;"
                                                "horizonte=366;envelhecimento=30")
         self.assertTrue(os.path.exists(os.path.join(self.work, "sss-srv-t.lock")))
@@ -312,8 +312,8 @@ class TestPassos(_Base):
     def test_banco(self):
         self.falha(sl.SAIDA_BANCO, self.agente(connection=_Conexao(ok=False)))
         conexao = _Conexao()
-        conexao.conn.versao = sql_ident.VERSAO_ESQUEMA + 1
-        with mock.patch.object(sl.db_conn, "_registrar_critico"):
+        conexao.conn.versao = sql_ident.SCHEMA_VERSION + 1
+        with mock.patch.object(sl.db_conn, "_log_critical"):
             self.falha(sl.SAIDA_BANCO, self.agente(connection=conexao))
 
     def test_registro(self):
@@ -493,12 +493,12 @@ class TestSubidaOracle(_Base):
     def _limpar_registro(self):
         import db_conn
         import sql_ident
-        seg = sss_config.carregar_segredos(self.cfg_real.secrets.secrets_file, cfg=self.cfg_real, papel="agent")
-        conn = db_conn.conectar(self.cfg_real, seg, "agent")
+        seg = sss_config.load_secrets(self.cfg_real.secrets.secrets_file, cfg=self.cfg_real, papel="agent")
+        conn = db_conn.connect(self.cfg_real, seg, "agent")
         try:
             o, p = self.cfg_real.oracle.owner.strip(), self.cfg_real.oracle.table_prefix.strip()
-            agt = sql_ident.tabela(o, p, "agentes")
-            aud = sql_ident.tabela(o, p, "auditoria")
+            agt = sql_ident.table(o, p, "agentes")
+            aud = sql_ident.table(o, p, "auditoria")
             cur = conn.cursor()
             cur.execute("SELECT id FROM " + agt + " WHERE code = :c", c=self.codigo)
             for (aid,) in cur.fetchall():
@@ -512,8 +512,8 @@ class TestSubidaOracle(_Base):
         import db_conn
         from repo_oracle.scheduler_queue import RepoSchedulerFila
         cfg = self.cfg_real
-        seg = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel="agent")
-        conn = db_conn.conectar(cfg, seg, "agent")
+        seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel="agent")
+        conn = db_conn.connect(cfg, seg, "agent")
         try:
             import ddl_builder
             ativos, _ = RepoSchedulerFila.da_config(cfg).ambientes_ativos(
@@ -537,7 +537,7 @@ class TestSubidaOracle(_Base):
         self.agentes.append(outro)
         os.makedirs(os.path.join(self.raiz, "logs2"), exist_ok=True)
         self.falha(sl.SAIDA_REGISTRO, outro)
-        self.assertTrue(ag.repo.encerrar_agente(ag.conexao.obter_conexao(), self.codigo, "host-tst", os.getpid(),
+        self.assertTrue(ag.repo.encerrar_agente(ag.conexao.get_connection(), self.codigo, "host-tst", os.getpid(),
                                                 "TERMINATE"))
 
 

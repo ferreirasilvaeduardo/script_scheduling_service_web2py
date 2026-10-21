@@ -11,52 +11,52 @@ import re
 from collections import OrderedDict
 
 # Regex oficiais de validacao (AGENTS.md §3.1)
-PADRAO_OWNER = r"^[A-Za-z][A-Za-z0-9_]{0,29}$"
-PADRAO_PREFIXO = r"^[a-z][a-z0-9_]{0,7}$"
-PADRAO_IDENTIFICADOR = r"^[a-zA-Z][a-zA-Z0-9_]{0,29}$"
-PADRAO_IDENT_ASCII_LOWER = r"^[a-z][a-z0-9_]*$"
+OWNER_PATTERN = r"^[A-Za-z][A-Za-z0-9_]{0,29}$"
+PREFIX_PATTERN = r"^[a-z][a-z0-9_]{0,7}$"
+IDENTIFIER_PATTERN = r"^[a-zA-Z][a-zA-Z0-9_]{0,29}$"
+IDENT_ASCII_LOWER_PATTERN = r"^[a-z][a-z0-9_]*$"
 
-_RE_OWNER = re.compile(PADRAO_OWNER)
-_RE_PREFIXO = re.compile(PADRAO_PREFIXO)
-_RE_IDENT = re.compile(PADRAO_IDENTIFICADOR)
-_RE_IDENT_ASCII_LOWER = re.compile(PADRAO_IDENT_ASCII_LOWER)
+_RE_OWNER = re.compile(OWNER_PATTERN)
+_RE_PREFIXO = re.compile(PREFIX_PATTERN)
+_RE_IDENT = re.compile(IDENTIFIER_PATTERN)
+_RE_IDENT_ASCII_LOWER = re.compile(IDENT_ASCII_LOWER_PATTERN)
 
 # Expressoes literais de indices baseados em funcao (FBI) - README §10.13 e AGENTS §4.8
 # Fila (CR-013): colunas simples na frente e o inicio da espera, para a janela por ambiente e prioridade
 # ler o indice ja na ordem da fila e parar no lote (INDEX RANGE SCAN sem sort, sem acesso a tabela).
 # Com CASE em todas as colunas (indice so dos PENDING) o Oracle nunca elimina o sort (medido no GFPR 19c).
-FBI_TCK_FILA_INICIO = "GREATEST(scheduled_at, created_at)"
-FBI_TCK_FILA_EXPR = "(status, environment, priority, " + FBI_TCK_FILA_INICIO + ", id, script_id)"
+FBI_TCK_QUEUE_START = "GREATEST(scheduled_at, created_at)"
+FBI_TCK_QUEUE_EXPR = "(status, environment, priority, " + FBI_TCK_QUEUE_START + ", id, script_id)"
 FBI_TCK_RUN_EXPR = "((CASE WHEN status = 'RUNNING' THEN agent_id END))"
 
 # Cláusulas CASE individuais para composicao identica em queries (README §10.13, AGENTS §4.8)
-FBI_TCK_RUN_AGENTE_CASE = "CASE WHEN status = 'RUNNING' THEN agent_id END"
+FBI_TCK_RUN_AGENT_CASE = "CASE WHEN status = 'RUNNING' THEN agent_id END"
 
 # Saidas ainda em gravacao, por agente (CR-012): o startup check acha so as linhas GRAVANDO dele.
-FBI_TSAI_GRAV_EXPR = "((CASE WHEN state = 'WRITING' THEN agent_id END))"
-FBI_TSAI_GRAV_CASE = "CASE WHEN state = 'WRITING' THEN agent_id END"
+FBI_TOUT_WRITE_EXPR = "((CASE WHEN state = 'WRITING' THEN agent_id END))"
+FBI_TOUT_WRITE_CASE = "CASE WHEN state = 'WRITING' THEN agent_id END"
 
 # Indice unico da ocorrencia de agendamento (CR-007, R-27): so tickets de agendamento entram no indice.
-FBI_TCK_OCOR_EXPR = (
+FBI_TCK_OCCUR_EXPR = (
     "((CASE WHEN schedule_id IS NOT NULL THEN schedule_id END), "
     "(CASE WHEN schedule_id IS NOT NULL THEN scheduled_at END))"
 )
 
 # Versao do esquema que o codigo espera em tbsss_control (CR-007, D4). Toda mudanca de esquema a
 # incrementa e traz a migracao scripts/migrations/m<NNNN>_*.py no mesmo pacote (AGENTS §4.16).
-VERSAO_ESQUEMA = 1  # aberta ate a primeira producao (AGENTS §4.16): o CR-016a entra direto nela
+SCHEMA_VERSION = 1  # aberta ate a primeira producao (AGENTS §4.16): o CR-016a entra direto nela
 
 # Colunas de registro (CR-006, README §10): todas as tabelas, exceto as listadas em TABELAS_SEM_REGISTRO.
-COLUNAS_REGISTRO = ("created_at", "created_by", "updated_at", "updated_by")
-TABELAS_SEM_REGISTRO = ("auditoria", "controle")
-ATOR_MAX = 40
-CK_REGISTRO_EXPR = (
+RECORD_COLUMNS = ("created_at", "created_by", "updated_at", "updated_by")
+TABLES_WITHOUT_RECORD = ("auditoria", "controle")
+ACTOR_MAX = 40
+CK_RECORD_EXPR = (
     "(updated_at IS NULL AND updated_by IS NULL) OR "
     "(updated_at IS NOT NULL AND updated_by IS NOT NULL)"
 )
 
 
-def _eco_seguro(valor):
+def _safe_echo(valor):
     """Retorna representacao segura do valor sem expor dados que excedam 64 caracteres."""
     if valor is None:
         return "None"
@@ -67,77 +67,77 @@ def _eco_seguro(valor):
     return "'{}'".format(valor)
 
 
-def validar_owner(owner):
+def validate_owner(owner):
     """Valida o nome do owner/schema Oracle conforme AGENTS §3.1.
 
     Aceita ^[A-Za-z][A-Za-z0-9_]{0,29}$ com comprimento maximo de 30 caracteres.
     Lanca ValueError se invalido, sem ecoar o valor se tiver mais de 64 caracteres.
     """
     if not isinstance(owner, str) or not _RE_OWNER.fullmatch(owner):
-        raise ValueError("Owner invalido: {}".format(_eco_seguro(owner)))
+        raise ValueError("Owner invalido: {}".format(_safe_echo(owner)))
     return owner
 
 
-def validar_prefixo(prefixo):
+def validate_prefix(prefixo):
     """Valida o prefixo de tabela conforme AGENTS §3.1.
 
     Aceita ^[A-Za-z][A-Za-z0-9_]{0,7}$: comeca com letra (nome Oracle valido), ate 8 caracteres.
     Lanca ValueError se invalido, sem ecoar o valor se tiver mais de 64 caracteres.
     """
     if not isinstance(prefixo, str) or not _RE_PREFIXO.fullmatch(prefixo):
-        raise ValueError("Prefixo invalido: {}".format(_eco_seguro(prefixo)))
+        raise ValueError("Prefixo invalido: {}".format(_safe_echo(prefixo)))
     return prefixo
 
 
-def validar_nome(nome, prefixo=None):
+def validate_name(nome, prefixo=None):
     """Valida sintaxe e tamanho de um identificador Oracle (<= 30 caracteres).
 
     Se prefixo for informado, verifica tambem presenca no catalogo de identificadores.
     Lanca ValueError se invalido, sem ecoar o valor se tiver mais de 64 caracteres.
     """
     if not isinstance(nome, str) or len(nome) > 30 or not _RE_IDENT.fullmatch(nome):
-        raise ValueError("Nome de objeto invalido: {}".format(_eco_seguro(nome)))
+        raise ValueError("Nome de objeto invalido: {}".format(_safe_echo(nome)))
     if prefixo is not None:
-        validar_prefixo(prefixo)
-        catalogo = todos_identificadores(prefixo)
+        validate_prefix(prefixo)
+        catalogo = all_identifiers(prefixo)
         if nome.lower() not in catalogo:
             raise ValueError(
-                "Nome de objeto nao registrado no catalogo: {}".format(_eco_seguro(nome))
+                "Nome de objeto nao registrado no catalogo: {}".format(_safe_echo(nome))
             )
     return nome
 
 
 # Tabela de controle do esquema anterior ao CR-016a (nomes em portugues): o init_db recusa criar o novo com ela.
-CONTROLE_ESQUEMA_1 = "controle"
+LEGACY_CONTROL_TABLE = "controle"
 
 
-def fisico(entidade):
+def physical(entidade):
     """Nome fisico da tabela, sem o prefixo, da entidade logica (CR-016a; a chave logica muda no CR-016c)."""
-    return TABELAS[entidade]['fisico']
+    return TABLES[entidade]['fisico']
 
 
-def qualificar(owner, nome, prefixo=None):
+def qualify(owner, nome, prefixo=None):
     """Valida e retorna OWNER.NOME qualificado para uso em SQL (AGENTS §3.1)."""
-    v_owner = validar_owner(owner)
-    v_nome = validar_nome(nome, prefixo=prefixo)
+    v_owner = validate_owner(owner)
+    v_nome = validate_name(nome, prefixo=prefixo)
     return "{}.{}".format(v_owner, v_nome)
 
 
-def tabela(owner, prefixo, entidade):
+def table(owner, prefixo, entidade):
     """OWNER.<prefixo><nome fisico> da entidade logica, validado (CR-016a)."""
-    return qualificar(owner, prefixo + fisico(entidade), prefixo=prefixo)
+    return qualify(owner, prefixo + physical(entidade), prefixo=prefixo)
 
 
 def sequence(owner, prefixo, entidade):
     """OWNER.sq_<prefixo><nome fisico> da entidade logica, validado (CR-016a)."""
-    return qualificar(owner, "sq_" + prefixo + fisico(entidade), prefixo=prefixo)
+    return qualify(owner, "sq_" + prefixo + physical(entidade), prefixo=prefixo)
 
 
 # ---------------------------------------------------------------------------
 # Registro Declarativo das 17 Tabelas (README §10)
 # ---------------------------------------------------------------------------
 
-def _criar_registro_tabelas():
+def _build_table_registry():
     """Constroi o registro declarativo ordenado das 17 tabelas do SSS."""
     r = OrderedDict()
 
@@ -597,9 +597,9 @@ def _criar_registro_tabelas():
             # da tabela inteira (F7.3, EXPLAIN com volume).
             ('crt', {'sufixo': 'crt', 'colunas': ('created_at', 'id'), 'expr': None, 'fbi': False}),
             ('hist', {'sufixo': 'hist', 'colunas': ('script_id', 'created_at'), 'expr': None, 'fbi': False}),
-            ('queue', {'sufixo': 'queue', 'colunas': (), 'expr': FBI_TCK_FILA_EXPR, 'fbi': True}),
+            ('queue', {'sufixo': 'queue', 'colunas': (), 'expr': FBI_TCK_QUEUE_EXPR, 'fbi': True}),
             ('run', {'sufixo': 'run', 'colunas': (), 'expr': FBI_TCK_RUN_EXPR, 'fbi': True}),
-            ('occur', {'sufixo': 'occur', 'colunas': (), 'expr': FBI_TCK_OCOR_EXPR, 'fbi': True, 'unico': True}),
+            ('occur', {'sufixo': 'occur', 'colunas': (), 'expr': FBI_TCK_OCCUR_EXPR, 'fbi': True, 'unico': True}),
         ])),
         ('trigger_bu', None),
         ('colunas_lob', ('submitted_params', 'log_output')),
@@ -708,8 +708,8 @@ def _criar_registro_tabelas():
             ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
             ('schema_version', {'name': 'schema_version', 'tipo': 'NUMBER(6)', 'not_null': True, 'default': None}),
             ('version_applied_at', {'name': 'version_applied_at', 'tipo': 'DATE', 'not_null': True, 'default': None}),
-            ('version_applied_by', {'name': 'version_applied_by', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': True, 'default': None}),
-            ('purge_owner', {'name': 'purge_owner', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': False, 'default': None}),
+            ('version_applied_by', {'name': 'version_applied_by', 'tipo': 'VARCHAR2(%d CHAR)' % ACTOR_MAX, 'not_null': True, 'default': None}),
+            ('purge_owner', {'name': 'purge_owner', 'tipo': 'VARCHAR2(%d CHAR)' % ACTOR_MAX, 'not_null': False, 'default': None}),
             ('purge_lease_until', {'name': 'purge_lease_until', 'tipo': 'DATE', 'not_null': False, 'default': None}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
@@ -754,20 +754,20 @@ def _criar_registro_tabelas():
             ('size', {'sufixo': 'size', 'expr': "(file_count IS NULL OR file_count >= 0) AND (size_bytes IS NULL OR size_bytes >= 0)"}),
         ])),
         ('indices', OrderedDict([
-            ('write', {'sufixo': 'write', 'colunas': (), 'expr': FBI_TSAI_GRAV_EXPR, 'fbi': True}),
+            ('write', {'sufixo': 'write', 'colunas': (), 'expr': FBI_TOUT_WRITE_EXPR, 'fbi': True}),
         ])),
         ('trigger_bu', None),
         ('colunas_lob', ('content',)),
     ])
 
     for entidade, defn in r.items():
-        if entidade not in TABELAS_SEM_REGISTRO:
-            _aplicar_colunas_registro(defn)
+        if entidade not in TABLES_WITHOUT_RECORD:
+            _apply_record_columns(defn)
 
     return r
 
 
-def _aplicar_colunas_registro(defn):
+def _apply_record_columns(defn):
     """Acrescenta as colunas de registro que faltam e a CK _upd (CR-006, README §10).
 
     created_at ja existe no fim de algumas tabelas; as demais colunas entram depois dela.
@@ -775,28 +775,28 @@ def _aplicar_colunas_registro(defn):
     colunas = defn['colunas']
     novas = OrderedDict([
         ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
-        ('created_by', {'name': 'created_by', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': True, 'default': None}),
+        ('created_by', {'name': 'created_by', 'tipo': 'VARCHAR2(%d CHAR)' % ACTOR_MAX, 'not_null': True, 'default': None}),
         ('updated_at', {'name': 'updated_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
-        ('updated_by', {'name': 'updated_by', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': False, 'default': None}),
+        ('updated_by', {'name': 'updated_by', 'tipo': 'VARCHAR2(%d CHAR)' % ACTOR_MAX, 'not_null': False, 'default': None}),
     ])
     for nome, coluna in novas.items():
         if nome not in colunas:
             colunas[nome] = coluna
-    defn['cks']['upd'] = {'sufixo': 'upd', 'expr': CK_REGISTRO_EXPR}
+    defn['cks']['upd'] = {'sufixo': 'upd', 'expr': CK_RECORD_EXPR}
 
 
 # Instancia imutavel de referencia do catalogo
-TABELAS = _criar_registro_tabelas()
+TABLES = _build_table_registry()
 
 
-class NomesEsquema(OrderedDict):
+class SchemaNames(OrderedDict):
     """Container ordenado dos identificadores expandidos para um prefixo.
 
     Permite indexacao por entidade (ex: n['tickets']) e oferece metodo para
     extracao plana de todos os identificadores gerados no esquema.
     """
 
-    def todos_identificadores(self, incluir_colunas=True):
+    def all_identifiers(self, incluir_colunas=True):
         """Retorna o conjunto (set) de todos os identificadores expandidos."""
         ids = set()
         for entidade, t in self.items():
@@ -820,12 +820,12 @@ class NomesEsquema(OrderedDict):
                     ids.add(col_nome)
         return ids
 
-    def lista_identificadores(self, incluir_colunas=True):
+    def list_identifiers(self, incluir_colunas=True):
         """Retorna lista ordenada de todos os identificadores expandidos."""
-        return sorted(self.todos_identificadores(incluir_colunas=incluir_colunas))
+        return sorted(self.all_identifiers(incluir_colunas=incluir_colunas))
 
 
-def nomes(prefixo, tabelas=None):
+def names(prefixo, tabelas=None):
     """Gera e retorna todos os identificadores expandidos a partir de table_prefix.
 
     Segue as regras do template README §9.1:
@@ -836,10 +836,10 @@ def nomes(prefixo, tabelas=None):
       PK          = pk_{prefixo}{fisico}
       UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}
     """
-    validar_prefixo(prefixo)
-    registro = TABELAS if tabelas is None else tabelas
+    validate_prefix(prefixo)
+    registro = TABLES if tabelas is None else tabelas
 
-    resultado = NomesEsquema()
+    resultado = SchemaNames()
     for entidade, defn in registro.items():
         abrev = defn['abrev']
         tabela_nome = "{}{}".format(prefixo, defn['fisico'])
@@ -919,13 +919,13 @@ def nomes(prefixo, tabelas=None):
     return resultado
 
 
-def todos_identificadores(prefixo, tabelas=None, incluir_colunas=True):
+def all_identifiers(prefixo, tabelas=None, incluir_colunas=True):
     """Retorna conjunto de todos os identificadores expandidos para o prefixo informado."""
-    esquema = nomes(prefixo, tabelas=tabelas)
-    return esquema.todos_identificadores(incluir_colunas=incluir_colunas)
+    esquema = names(prefixo, tabelas=tabelas)
+    return esquema.all_identifiers(incluir_colunas=incluir_colunas)
 
 
-def validar_registro(prefixo, tabelas=None):
+def validate_registry(prefixo, tabelas=None):
     """Valida se todos os identificadores respeitam as restricoes do Oracle 11gR2.
 
     Garante:
@@ -934,9 +934,9 @@ def validar_registro(prefixo, tabelas=None):
 
     Lanca ValueError detalhando o identificador e tipo em caso de violacao.
     """
-    validar_prefixo(prefixo)
-    registro = TABELAS if tabelas is None else tabelas
-    esquema = nomes(prefixo, tabelas=registro)
+    validate_prefix(prefixo)
+    registro = TABLES if tabelas is None else tabelas
+    esquema = names(prefixo, tabelas=registro)
 
     for entidade, t in esquema.items():
         # Tabelas, sequences, triggers, PK
@@ -950,37 +950,37 @@ def validar_registro(prefixo, tabelas=None):
             itens_principais.append(("trigger_bu", t['trigger_bu']))
 
         for rotulo, ident in itens_principais:
-            _checar_identificador(ident, rotulo, entidade)
+            _check_identifier(ident, rotulo, entidade)
 
         # UKs
         for uk_nome in t['uks']:
-            _checar_identificador(uk_nome, "UK", entidade)
+            _check_identifier(uk_nome, "UK", entidade)
 
         # FKs
         for fk_nome in t['fks']:
-            _checar_identificador(fk_nome, "FK", entidade)
+            _check_identifier(fk_nome, "FK", entidade)
 
         # CKs
         for ck_nome in t['cks']:
-            _checar_identificador(ck_nome, "CK", entidade)
+            _check_identifier(ck_nome, "CK", entidade)
 
         # Indices
         for ix_nome in t['indices']:
-            _checar_identificador(ix_nome, "Indice", entidade)
+            _check_identifier(ix_nome, "Indice", entidade)
 
         # Colunas
         for col_nome in t['colunas']:
-            _checar_identificador(col_nome, "Coluna", entidade)
+            _check_identifier(col_nome, "Coluna", entidade)
 
     return True
 
 
-def _checar_identificador(ident, tipo, entidade):
+def _check_identifier(ident, tipo, entidade):
     """Verifica comprimento (<= 30) e formato ASCII minúsculo de um identificador."""
     if not isinstance(ident, str):
         raise ValueError(
             "Identificador do tipo {} na entidade '{}' nao e string: {}".format(
-                tipo, entidade, _eco_seguro(ident)
+                tipo, entidade, _safe_echo(ident)
             )
         )
     if len(ident) > 30:
@@ -1002,7 +1002,7 @@ def _checar_identificador(ident, tipo, entidade):
         )
 
 
-def normalizar_expressao(texto):
+def normalize_expression(texto):
     """Normaliza expressoes SQL (CK, FBI, DATA_DEFAULT) para comparacao (CR-008, R-14).
 
     Regras:
@@ -1106,7 +1106,7 @@ def normalizar_expressao(texto):
     return res
 
 
-def eh_ck_not_null_sistema(nome_ck, condicao):
+def is_system_not_null_ck(nome_ck, condicao):
     """Indica se a CK eh uma constraint de sistema SYS_C% que apenas reforca NOT NULL."""
     if not nome_ck or not nome_ck.upper().startswith("SYS_C"):
         return False

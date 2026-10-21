@@ -56,7 +56,7 @@ def lista():
     except AcessoNegado:
         _negado()
     except RepoErro:
-        _log.exception("falha ao listar ambientes (login=%s)", ctx["login"], extra={"acao": _FUNC})
+        _log.exception("falha ao listar ambientes (login=%s)", ctx["login"], extra={"action": _FUNC})
         resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
     response.title = u"Ambientes — SSS"
@@ -88,7 +88,7 @@ def salvar():
     except AcessoNegado:
         _negado()
     except RepoErro:
-        _log.exception("falha ao salvar ambiente (login=%s id=%r)", ctx["login"], ambiente_id, extra={"acao": _FUNC})
+        _log.exception("falha ao salvar ambiente (login=%s id=%r)", ctx["login"], ambiente_id, extra={"action": _FUNC})
         salvo_id, erros = None, {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}
     if not erros:
         session.flash = {"tipo": "sucesso", "mensagem": u"Ambiente salvo com sucesso."}
@@ -129,6 +129,6 @@ def alternar_ativo():
     except RepoConflito:
         session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
     except RepoErro:
-        _log.exception("falha ao alternar ambiente (login=%s id=%r)", ctx["login"], ambiente_id, extra={"acao": _FUNC})
+        _log.exception("falha ao alternar ambiente (login=%s id=%r)", ctx["login"], ambiente_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ALTERNAR}
     redirect(URL(c="admin_ambientes", f="form", args=[ambiente_id]))

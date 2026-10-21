@@ -19,7 +19,7 @@ def _exigir_consulta():
     ctx = _exigir_login()
     if not ticket_service.pode_consultar(ctx):
         _log.warning("acesso negado (login=%s funcionalidade=VIEW_LOGS|EXEC_SCRIPT caminho=%s ip=%s)",
-                     ctx["login"], request.env.path_info, _ip_origem(), extra={"acao": "RBAC"})
+                     ctx["login"], request.env.path_info, _ip_origem(), extra={"action": "RBAC"})
         raise HTTP(403, u"Acesso negado.", **response.headers)
     return ctx
 
@@ -42,7 +42,7 @@ def chunk():
         raise HTTP(404, u"Ticket não encontrado.", **response.headers)
     except RepoErro:
         _log.exception("falha na leitura incremental do log (login=%s ticket=%r)", ctx["login"], _ticket_id(),
-                       extra={"acao": "LOG_LER"})
+                       extra={"action": "LOG_LER"})
         raise HTTP(503, _MSG_FALHA_LOG, **response.headers)
     return response.json(dados)
 
@@ -56,7 +56,7 @@ def baixar():
         raise HTTP(404, u"Ticket não encontrado.", **response.headers)
     except RepoErro:
         _log.exception("falha ao iniciar o download do log (login=%s ticket=%r)", ctx["login"], _ticket_id(),
-                       extra={"acao": "LOG_BAIXAR"})
+                       extra={"action": "LOG_BAIXAR"})
         raise HTTP(503, _MSG_FALHA_LOG, **response.headers)
     response.headers["Content-Type"] = "text/plain; charset=utf-8"
     response.headers["Content-Disposition"] = 'attachment; filename="ticket_%d.log"' % ticket_id

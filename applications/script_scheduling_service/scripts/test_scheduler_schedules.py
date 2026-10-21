@@ -43,7 +43,7 @@ class TestAgendaSemBanco(unittest.TestCase):
     def setUp(self):
         self.repo = RepoSchedulerAgenda("OWN_X", "pfx_")
         self.tipos = _Tipos()
-        p = mock.patch.object(db_conn, "definir_tipos_entrada", self.tipos)
+        p = mock.patch.object(db_conn, "set_input_types", self.tipos)
         p.start()
         self.addCleanup(p.stop)
 

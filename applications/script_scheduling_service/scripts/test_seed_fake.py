@@ -79,7 +79,7 @@ class TestSeedFake(unittest.TestCase):
         self.assertIn(1, self.store.controle)
         ctl = self.store.controle[1]
         self.assertEqual(ctl["id"], 1)
-        self.assertEqual(ctl["schema_version"], sql_ident.VERSAO_ESQUEMA)
+        self.assertEqual(ctl["schema_version"], sql_ident.SCHEMA_VERSION)
 
 
 class TestSeedColunasRegistro(unittest.TestCase):
@@ -89,14 +89,14 @@ class TestSeedColunasRegistro(unittest.TestCase):
 
     def test_toda_linha_com_registro_coerente(self):
         import sql_ident
-        for entidade in sql_ident.TABELAS:
+        for entidade in sql_ident.TABLES:
             linhas = list(getattr(self.store, entidade).values())
             self.assertTrue(linhas, entidade)
             for r in linhas:
-                if entidade in sql_ident.TABELAS_SEM_REGISTRO:
+                if entidade in sql_ident.TABLES_WITHOUT_RECORD:
                     self.assertNotIn("created_by", r)
                     continue
-                self.assertTrue(r["created_by"] and len(r["created_by"]) <= sql_ident.ATOR_MAX, (entidade, r["id"]))
+                self.assertTrue(r["created_by"] and len(r["created_by"]) <= sql_ident.ACTOR_MAX, (entidade, r["id"]))
                 self.assertLessEqual(r["created_at"], self.agora, (entidade, r["id"]))
                 self.assertEqual(r["updated_at"] is None, r["updated_by"] is None, (entidade, r["id"]))
                 if r["updated_at"] is not None:

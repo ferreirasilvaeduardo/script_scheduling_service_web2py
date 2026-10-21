@@ -95,7 +95,7 @@ SELECT s.id, ... FROM {owner}.{prefixo}scripts s
 
 ## 3. Transições e gravações
 
-Toda gravação roda numa só transação (`db_conn.transacao`), com o `id` obtido por `seq.NEXTVAL` (`db_conn.proximo_id`) antes do `INSERT`.
+Toda gravação roda numa só transação (`db_conn.transaction`), com o `id` obtido por `seq.NEXTVAL` (`db_conn.next_id`) antes do `INSERT`.
 
 | Operação | Lock | DML | Acesso esperado |
 |---|---|---|---|

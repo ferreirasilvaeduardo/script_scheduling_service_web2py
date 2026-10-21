@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Testes unitarios para ddl_builder.py, sql_ident.normalizar_expressao e scripts/init_db.py (F7.1).
+"""Testes unitarios para ddl_builder.py, sql_ident.normalize_expression e scripts/init_db.py (F7.1).
 
 Cobre a geracao de DDL Oracle 11gR2 fase a fase, triggers, restricoes de seguranca,
 normalizacao de expressoes SQL contra textos reais do 11gR2, GRANTs por papel e CLI.
@@ -30,7 +30,7 @@ class TestDdlBuilder(unittest.TestCase):
 
     def test_ddl_contem_todos_os_nomes_do_registro(self):
         """O DDL gerado contem todos os nomes de objetos registrados em sql_ident."""
-        nomes_esperados = sql_ident.todos_identificadores(self.prefixo, incluir_colunas=False)
+        nomes_esperados = sql_ident.all_identifiers(self.prefixo, incluir_colunas=False)
         nomes_gerados = set(item.nome for item in self.instrucoes)
 
         for nome in nomes_esperados:
@@ -75,7 +75,7 @@ class TestDdlBuilder(unittest.TestCase):
             "END;"
         )
 
-        esquema = sql_ident.nomes(self.prefixo)
+        esquema = sql_ident.names(self.prefixo)
         for t in bi_triggers:
             entidade = t.entidade
             seq = esquema[entidade]["sequence"]
@@ -136,7 +136,7 @@ class TestDdlBuilder(unittest.TestCase):
         tabelas = {item.nome: item.sql for item in self.instrucoes if item.tipo == "TABLE"}
         constraints = {item.nome: item.sql for item in self.instrucoes if item.tipo == "CONSTRAINT"}
 
-        esquema = sql_ident.nomes(self.prefixo)
+        esquema = sql_ident.names(self.prefixo)
         for ent, t in esquema.items():
             t_nome = t["tabela"]
             abrev = t["abrev"]
@@ -301,26 +301,26 @@ class TestNormalizacaoExpressaoOracle11g(unittest.TestCase):
     def test_fbi_texto_real_11g(self):
         """FBI com CASE e aspas duplas no 11gR2 bate normalizado contra o registro."""
         texto_oracle = 'CASE WHEN "STATUS"=\'PENDING\' THEN "PRIORITY" END'
-        normalizado = sql_ident.normalizar_expressao(texto_oracle)
+        normalizado = sql_ident.normalize_expression(texto_oracle)
         self.assertEqual(normalizado, "CASE WHEN STATUS='PENDING' THEN PRIORITY END")
 
         # Texto do registro
         texto_reg = "CASE WHEN status = 'PENDING' THEN priority END"
-        norm_reg = sql_ident.normalizar_expressao(texto_reg)
+        norm_reg = sql_ident.normalize_expression(texto_reg)
         self.assertEqual(normalizado, norm_reg)
 
     def test_data_default_espacos_e_quebras(self):
         """DATA_DEFAULT com espacos e quebras no fim bate com o valor normalizado."""
-        self.assertEqual(sql_ident.normalizar_expressao("'N' \n"), "'N'")
-        self.assertEqual(sql_ident.normalizar_expressao("SYSDATE \n\t"), "SYSDATE")
-        self.assertEqual(sql_ident.normalizar_expressao("0\n"), "0")
+        self.assertEqual(sql_ident.normalize_expression("'N' \n"), "'N'")
+        self.assertEqual(sql_ident.normalize_expression("SYSDATE \n\t"), "SYSDATE")
+        self.assertEqual(sql_ident.normalize_expression("0\n"), "0")
 
     def test_ck_not_null_sistema_ignorada(self):
         """CK de sistema SYS_C% que apenas checa IS NOT NULL eh identificada."""
-        self.assertTrue(sql_ident.eh_ck_not_null_sistema("SYS_C0012345", '"STATUS" IS NOT NULL'))
-        self.assertTrue(sql_ident.eh_ck_not_null_sistema("SYS_C99999", "NOME IS NOT NULL"))
-        self.assertFalse(sql_ident.eh_ck_not_null_sistema("ck_tbsss_tck_stat", "status IN ('PENDING')"))
-        self.assertFalse(sql_ident.eh_ck_not_null_sistema("SYS_C0012345", "status IN ('Y','N')"))
+        self.assertTrue(sql_ident.is_system_not_null_ck("SYS_C0012345", '"STATUS" IS NOT NULL'))
+        self.assertTrue(sql_ident.is_system_not_null_ck("SYS_C99999", "NOME IS NOT NULL"))
+        self.assertFalse(sql_ident.is_system_not_null_ck("ck_tbsss_tck_stat", "status IN ('PENDING')"))
+        self.assertFalse(sql_ident.is_system_not_null_ck("SYS_C0012345", "status IN ('Y','N')"))
 
 
 class TestInitDbCli(unittest.TestCase):
@@ -487,10 +487,10 @@ class TestDdlSeedERollback(unittest.TestCase):
     def test_validacao_espera_o_registro_e_o_seed(self):
         """Os esperados vem do registro (objetos) e do proprio seed (minimo de linhas)."""
         sql = ddl_builder.gerar_script_validacao(self.owner, self.prefixo)
-        esquema = sql_ident.nomes(self.prefixo)
+        esquema = sql_ident.names(self.prefixo)
         self.assertIn("'TABELAS' AS verificacao, '=' AS regra, {} AS esperado".format(len(esquema)), sql)
         self.assertIn("'VERSAO DO ESQUEMA' AS verificacao, '=' AS regra, {} AS esperado".format(
-            sql_ident.VERSAO_ESQUEMA), sql)
+            sql_ident.SCHEMA_VERSION), sql)
         seed = ddl_builder.gerar_instrucoes_seed(self.owner, self.prefixo)
         contagem = ddl_builder._linhas_seed_por_tabela(self.owner, self.prefixo)
         self.assertEqual(sum(contagem.values()), sum(1 for c in seed if c.lstrip().upper().startswith("MERGE INTO")))

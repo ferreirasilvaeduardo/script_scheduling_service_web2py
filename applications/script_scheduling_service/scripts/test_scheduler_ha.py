@@ -217,7 +217,7 @@ class _Base(unittest.TestCase):
         self.agenda.vinculos[3] = [_vinculo()]
         self.conn = _Conn(self.agenda)
         self.agora = AGORA
-        p = mock.patch.object(db_conn, "agora_banco", lambda conn: self.agora)
+        p = mock.patch.object(db_conn, "db_now", lambda conn: self.agora)
         p.start()
         self.addCleanup(p.stop)
         self.monotonico = [0.0]
@@ -291,7 +291,7 @@ class TestDesdobro(_Base):
             self.assertEqual(self.agenda.regras[1]["pause_reason"], motivo)
 
     def test_r33_todo_motivo_do_rbac_cabe_na_ck(self):
-        aceitos = sql_ident.TABELAS["agendamentos"]["cks"]["pause"]["expr"]
+        aceitos = sql_ident.TABLES["agendamentos"]["cks"]["pause"]["expr"]
         for nome in dir(rbac.Motivo):
             if nome.startswith("_") or nome == "OK":
                 continue

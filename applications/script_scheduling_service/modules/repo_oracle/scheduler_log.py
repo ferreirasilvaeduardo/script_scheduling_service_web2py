@@ -79,7 +79,7 @@ class RepoSchedulerLog(object):
     """Owner e prefixo vem da configuracao (nunca fixos); os nomes passam por sql_ident."""
 
     def __init__(self, owner, prefixo):
-        self._tck = sql_ident.tabela(owner, prefixo, "tickets")
+        self._tck = sql_ident.table(owner, prefixo, "tickets")
         self._plsql = _PLSQL_ANEXAR.format(tck=self._tck, atrib=":" + "=")
         self._sql_truncado = _SQL_TRUNCADO.format(tck=self._tck)
 
@@ -96,16 +96,16 @@ class RepoSchedulerLog(object):
             raise ValueError("bloco vazio")
         cur = conn.cursor()
         try:
-            db_conn.definir_tipos_entrada(cur, chunk=db_conn.TIPO_CLOB)
-            resultado = db_conn.variavel_saida(cur, db_conn.TIPO_VARCHAR, tamanho=20)
+            db_conn.set_input_types(cur, chunk=db_conn.TIPO_CLOB)
+            resultado = db_conn.output_variable(cur, db_conn.TIPO_VARCHAR, tamanho=20)
             try:
                 cur.execute(self._plsql, chunk=bloco, ticket_id=int(ticket_id), agent_id=agente_id,
                             offset_esperado=int(offset_esperado), resultado=resultado)
             except Exception as exc:
-                if db_conn.classificar_erro(exc) == ("ORA", _ORA_DIVERGENTE):
+                if db_conn.classify_error(exc) == ("ORA", _ORA_DIVERGENTE):
                     raise LogOffsetInconsistente(ticket_id, offset_esperado, len(bloco))
                 raise
-            valor = db_conn.valor_saida(resultado)
+            valor = db_conn.output_value(resultado)
         finally:
             cur.close()
         if valor not in _RESULTADOS:

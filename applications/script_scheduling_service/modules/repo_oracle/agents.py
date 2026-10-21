@@ -30,7 +30,7 @@ _COLS_TCK = ("id", "script_id", "environment", "requested_by", "source_ip", "age
              "created_at", "created_by", "updated_at", "updated_by")
 _COLS_SEM_PID = saude_sql.COLS_SEM_PID
 
-_RUN = "(" + sql_ident.FBI_TCK_RUN_AGENTE_CASE + ")"
+_RUN = "(" + sql_ident.FBI_TCK_RUN_AGENT_CASE + ")"
 
 
 def _lista(cols, alias=""):
@@ -66,7 +66,7 @@ class RepoAgentesOracle(BaseRepoOracle, RepoAgentes):
             cur = c.cursor()
             try:
                 if tipos:
-                    db_conn.definir_tipos_entrada(cur, **tipos)
+                    db_conn.set_input_types(cur, **tipos)
                 if binds is None:
                     cur.execute(sql)
                 else:

@@ -86,7 +86,7 @@ def traduzir_erro_oracle(exc, constraint_padrao=None, prefixo=None):
     if isinstance(exc, repo_errors.RepoErro):
         return exc
 
-    pfx, num = db_conn.classificar_erro(exc)
+    pfx, num = db_conn.classify_error(exc)
     msg = str(exc)
 
     m = _RE_CONSTRAINT.search(msg)
@@ -103,10 +103,10 @@ def traduzir_erro_oracle(exc, constraint_padrao=None, prefixo=None):
         if num in (54, 30006, 60, 3156):
             return repo_errors.RepoConflito(msg)
     elif pfx in ("DPY", "DPI"):
-        if db_conn.eh_tempo_esgotado(exc):
+        if db_conn.is_timeout(exc):
             return repo_errors.RepoConflito(msg)
 
-    if db_conn.eh_erro_rede(exc):
+    if db_conn.is_network_error(exc):
         return repo_errors.RepoIndisponivel(msg)
 
     return repo_errors.RepoErro(msg)
@@ -131,7 +131,7 @@ def gravar_auditoria(conn, sql_tbl_aud, sql_seq_aud, auditoria, entidade, entida
         for item in itens:
             if not isinstance(item, dict):
                 continue
-            aid = db_conn.proximo_id(conn, sql_seq_aud)
+            aid = db_conn.next_id(conn, sql_seq_aud)
             cur.execute(
                 "INSERT INTO " + sql_tbl_aud + " "
                 "(id, actor, source_ip, action, entity, entity_id, detail, created_at) "
@@ -165,7 +165,7 @@ class BaseRepoOracle(object):
             self._cfg = getattr(current, "sss_cfg", None)
         if self._cfg is None:
             try:
-                self._cfg = sss_config.obter_config()
+                self._cfg = sss_config.get_config()
             except Exception:
                 pass
 
@@ -180,14 +180,14 @@ class BaseRepoOracle(object):
         self._resolver_config()
         if self._segredos is None and self._cfg is not None:
             try:
-                self._segredos = sss_config.carregar_segredos(
+                self._segredos = sss_config.load_secrets(
                     self._cfg.secrets.secrets_file, cfg=self._cfg, papel="web"
                 )
             except Exception:
                 pass
         # Conexao do pool do processo; conn.close() a devolve ao pool.
         conn = _pool_web(self._cfg, self._segredos).acquire()
-        return db_conn.configurar_sessao(conn, self._cfg, "web")
+        return db_conn.configure_session(conn, self._cfg, "web")
 
     @contextlib.contextmanager
     def transacao_escrita(self, conn=None):
@@ -197,7 +197,7 @@ class BaseRepoOracle(object):
             conn = self._obter_conexao()
             fechar = True
         try:
-            with db_conn.transacao(conn):
+            with db_conn.transaction(conn):
                 yield conn
         except Exception as exc:
             raise traduzir_erro_oracle(exc, prefixo=self._prefixo)
@@ -227,19 +227,19 @@ class BaseRepoOracle(object):
                     pass
 
     def qualificar_tabela(self, entidade):
-        return sql_ident.tabela(self._owner, self._prefixo, entidade)
+        return sql_ident.table(self._owner, self._prefixo, entidade)
 
     def qualificar_sequence(self, entidade):
         return sql_ident.sequence(self._owner, self._prefixo, entidade)
 
     def nome_constraint(self, tipo, entidade, sufixo):
         """Retorna o nome da constraint/indice para o prefixo configurado (README §9.1)."""
-        abrev = sql_ident.TABELAS.get(entidade, {}).get("abrev", entidade[:3])
+        abrev = sql_ident.TABLES.get(entidade, {}).get("abrev", entidade[:3])
         return "{}_{}{}_{}".format(tipo, self._prefixo, abrev, sufixo)
 
     def nome_trigger(self, entidade, sufixo="bu"):
         """Retorna o nome da trigger para o prefixo configurado (README §9.1)."""
-        abrev = sql_ident.TABELAS.get(entidade, {}).get("abrev", entidade[:3])
+        abrev = sql_ident.TABLES.get(entidade, {}).get("abrev", entidade[:3])
         return "tr_{}{}_{}".format(self._prefixo, abrev, sufixo)
 
     def tupla_para_dict(self, colunas, valores):

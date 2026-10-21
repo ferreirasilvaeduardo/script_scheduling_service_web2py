@@ -11,7 +11,7 @@ from unittest import mock
 
 import env_builder
 import masking
-from sss_config import AmbienteSegredo, Segredos
+from sss_config import EnvironmentSecret, Secrets
 
 _Agente = collections.namedtuple("_Agente", "agent_id child_locale env_passthrough exec_users exec_work_dir")
 _Cfg = collections.namedtuple("_Cfg", "agent")
@@ -28,7 +28,7 @@ def _cfg(passthrough=("ORACLE_HOME", "NLS_LANG", "TNS_ADMIN"), usuarios=(), exec
 
 
 def _segredos(ambientes=None):
-    return Segredos(oracle_password="x" * 8, cookie_key=None, ambientes=ambientes or {})
+    return Secrets(oracle_password="x" * 8, cookie_key=None, environments=ambientes or {})
 
 
 AMB = {"name": "PRODUCAO", "connection": "dbprod:1521/FAT"}
@@ -90,7 +90,7 @@ class TestEnvBuilder(unittest.TestCase):
         self.assertEqual(env["LD_LIBRARY_PATH"], "/opt/oracle/lib")
 
     def test_conexao_com_dsn_e_credencial_e_mascarador(self):
-        cred = AmbienteSegredo("fat_app", "S3nh@Forte")
+        cred = EnvironmentSecret("fat_app", "S3nh@Forte")
         with mock.patch.object(masking, "MASCARADOR", masking.Mascarador()) as masc:
             env = self.construir(segredos=_segredos({"PRODUCAO": cred}))
             self.assertEqual(env["PADRAO_VALOR_RUN_CONEXAO_BD"], "fat_app/S3nh@Forte@dbprod:1521/FAT")
@@ -98,7 +98,7 @@ class TestEnvBuilder(unittest.TestCase):
             self.assertNotIn("S3nh@Forte", masc.mascarar("senha S3nh@Forte"))
 
     def test_conexao_omitida_sem_secao_ou_sem_dsn(self):
-        cred = AmbienteSegredo("fat_app", "S3nh@Forte")
+        cred = EnvironmentSecret("fat_app", "S3nh@Forte")
         casos = ((_segredos(), AMB, "credencial"), (_segredos({"PRODUCAO": cred}), dict(AMB, connection=None), "DSN"),
                  (_segredos({"PRODUCAO": cred}), dict(AMB, connection="  "), "DSN"))
         for segredos, ambiente, motivo in casos:
@@ -109,7 +109,7 @@ class TestEnvBuilder(unittest.TestCase):
             self.assertNotIn("S3nh@Forte", logs.output[0], "WARN sem valores")
 
     def test_cr010_execucao_agendada_completa(self):
-        cred = AmbienteSegredo("fat_app", "S3nh@Forte")
+        cred = EnvironmentSecret("fat_app", "S3nh@Forte")
         ticket = {"id": 41, "environment": "PRODUCAO", "parent_ticket_id": 7, "schedule_id": 3, "priority": 2,
                   "started_at": datetime.datetime(2026, 10, 20, 3, 0, 5),
                   "scheduled_at": datetime.datetime(2026, 10, 20, 3, 0)}
@@ -158,7 +158,7 @@ class TestEnvBuilder(unittest.TestCase):
         self.assertEqual(env["SSS_PLATFORM"], "UNIX")
 
     def test_cr010_conexao_mascarada_nos_logs(self):
-        cred = AmbienteSegredo("fat_app", "S3nh@Forte")
+        cred = EnvironmentSecret("fat_app", "S3nh@Forte")
         with mock.patch.object(masking, "MASCARADOR", masking.Mascarador()) as masc:
             env = self.construir(segredos=_segredos({"PRODUCAO": cred}))
             self.assertEqual(masc.mascarar("SSS_ENVIRONMENT_CONNECTION=%s" % env["SSS_ENVIRONMENT_CONNECTION"]),
@@ -202,7 +202,7 @@ class TestEnvBuilder(unittest.TestCase):
                   "started_at": datetime.datetime(2026, 10, 20, 3, 0, 5),
                   "scheduled_at": datetime.datetime(2026, 10, 20, 3, 0)}
         with mock.patch.object(masking, "MASCARADOR", masking.Mascarador()):
-            env = env_builder.construir(_cfg(), _segredos({"PRODUCAO": AmbienteSegredo("fat_app", "S3nh@Forte")}),
+            env = env_builder.construir(_cfg(), _segredos({"PRODUCAO": EnvironmentSecret("fat_app", "S3nh@Forte")}),
                                         ticket, dict(AMB, description="x"), SCRIPT, WORK, dict(DAEMON), "LINUX",
                                         snapshot={"script_id": 12, "script_nome": "C", "interpreter": "SH",
                                                   "path_file": "/opt/automacoes/atual/carga.sh"},

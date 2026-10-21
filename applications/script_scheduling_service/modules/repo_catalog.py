@@ -21,7 +21,7 @@ class RepoCatalogo(object):
     def ambientes_inserir(self, dados, auditoria=None, ator=None):
         """Insere novo ambiente e retorna dict com o registro criado.
 
-        auditoria: opcional, {'ator', 'ip', 'acao', 'detalhe'}; gravada na mesma transacao
+        auditoria: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
         (entidade tbsss_environments, entidade_id = novo id).
         """
         raise NotImplementedError
@@ -87,7 +87,7 @@ class RepoCatalogo(object):
     def parametros_inserir(self, dados, auditoria=None, ator=None):
         """Insere novo parametro e retorna dict com o registro criado.
 
-        auditoria: opcional, {'ator', 'ip', 'acao', 'detalhe'}; gravada na mesma transacao
+        auditoria: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
         (entidade tbsss_parameters, entidade_id = novo id).
         """
         raise NotImplementedError

@@ -125,7 +125,7 @@ class TestSemBanco(unittest.TestCase):
         self.assertEqual(b_scr, {"int0": "PYTHON3", "int1": "SH"})
         self.assertIn("environment IN (:amb0, :amb1) GROUP BY script_id, environment", sql_run)
         self.assertEqual(b_run, {"amb0": "PRD", "amb1": "HML"})
-        inicio = sql_ident.FBI_TCK_FILA_INICIO
+        inicio = sql_ident.FBI_TCK_QUEUE_START
         self.assertEqual(sql.count("SELECT id, script_id, environment, prio, inicio FROM (SELECT id, script_id"), 8,
                          "2 environments x 4 prioridades")
         self.assertNotIn("SELECT *", sql, "AGENTS §4.12")
@@ -246,7 +246,7 @@ class TestSemBanco(unittest.TestCase):
     def test_varredura_e_running_usam_a_expressao_do_indice(self):
         conn = _Conn([("SELECT id, cancel_requested", (2, [(7, "N"), (8, "Y")]))])
         self.assertEqual(self.repo.varredura_propria(conn, AGENTE), {7: "N", 8: "Y"})
-        self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENTE_CASE + ") = :agent_id", conn.executados[0][0])
+        self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENT_CASE + ") = :agent_id", conn.executados[0][0])
         conn = _Conn([("SELECT id, process_id", (1, [(7, None, None, "N")]))])
         self.assertEqual(self.repo.tickets_running_do_agente(conn, AGENTE),
                          [{"id": 7, "process_id": None, "process_start": None, "cancel_requested": "N"}])

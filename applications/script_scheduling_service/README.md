@@ -178,7 +178,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
   * **chaves estrangeiras e NOT NULL:** inclusões de ticket, `ticket_resp` e agendamento com script, ambiente (nome), solicitante (login), usuário ou parâmetro inexistente geram `RepoViolacao` com o nome da FK do §10. A UK de `ticket_resp` também é verificada;
   * **limites de coluna** que o código grava, por exemplo `actor` (40) e `detail` (1.000) da auditoria;
   * **unicidade da ocorrência** de agendamento nos tickets (`ix_tbsss_tck_occur`, CR-007, R-27) e o **`total` limitado** das listagens (10.001, §10, R-29);
-  * a **linha de controle** (`tbsss_control`, tabela 17) com a versão do esquema do código (`sql_ident.VERSAO_ESQUEMA`, CR-007, D4);
+  * a **linha de controle** (`tbsss_control`, tabela 17) com a versão do esquema do código (`sql_ident.SCHEMA_VERSION`, CR-007, D4);
   * **colunas de registro (CR-006):** `created_*` na inclusão e `updated_*` só nas alterações de negócio (§10), com `store.agora()` no lugar do `SYSDATE`. Gravação sem ator é recusada com `RepoViolacao`, como no Oracle;
   * **comparação de texto** idêntica à do Oracle: UKs diferenciam maiúsculas de minúsculas;
   * **cascatas** (`ON DELETE CASCADE` e `SET NULL` do §10): o contrato não expõe exclusão de registros mestres (só o `purge.py`, que é batch e não tem FAKE, apaga linhas). Por isso, não há cascata a emular no FAKE; o `test_repo_contract.py` as cobre **contra o Oracle** (F7.3), com `DELETE` direto no teste.
@@ -207,7 +207,7 @@ As telas novas do CR-004 são **somente de consulta**: não gravam nada, não au
   * **Modo deduzido do owner:**
     * **Descartável** (owner `SSS_TEST_*`): owner dedicado e conta de teste diferente do owner.
     * **Compartilhado** (qualquer outro owner): para um owner existente, onde não há permissão para criar outro (ex.: `openrisow` no `GFPR`).
-      * A conta pode ser o próprio owner, mas o esquema SSS tem de estar implantado na versão do código (`tbsss_control.schema_version = sql_ident.VERSAO_ESQUEMA`).
+      * A conta pode ser o próprio owner, mas o esquema SSS tem de estar implantado na versão do código (`tbsss_control.schema_version = sql_ident.SCHEMA_VERSION`).
       * Os testes gravam só registros próprios (nomes `TST_`/`tst_`, IDs das sequences) e nunca alteram os que já existem.
       * A limpeza remove só os IDs criados pelo teste, sem `DROP` nem `TRUNCATE`; limpeza incompleta falha o teste e lista os IDs que sobraram.
       * Os únicos efeitos permanentes são o avanço das sequences e as linhas de auditoria de testes que passam `auditoria=` (a auditoria só recebe inclusões e só o purge remove linhas).
@@ -259,7 +259,7 @@ Continuam em **português**:
 * os **comentários** e docstrings, inclusive os `COMMENT ON` das tabelas e colunas;
 * os **dados**: o que o usuário cadastra (nomes de ambiente, scripts, parâmetros e respostas) e os scripts de demonstração do seed.
 
-**Transição:** o CR-016 é aplicado em fases (016a banco, 016b configuração e operação, 016c código, 016d web). Até a fase correspondente terminar, convivem nomes legados em português. Código novo já nasce com nomes em inglês. Um nome legado só muda na sua fase, com recusa explícita do nome antigo quando ele é configurável (`CHAVES_RENOMEADAS`, `SECOES_RENOMEADAS`).
+**Transição:** o CR-016 é aplicado em fases (016a banco, 016b configuração e operação, 016c código, 016d web). Até a fase correspondente terminar, convivem nomes legados em português. Código novo já nasce com nomes em inglês. Um nome legado só muda na sua fase, com recusa explícita do nome antigo quando ele é configurável (`RENAMED_KEYS`, `RENAMED_SECTIONS`).
 
 ---
 
@@ -388,7 +388,7 @@ user = app_hml
 password = ...
 ```
 
-* **Seções por papel** (validadas por `sss_config.carregar_segredos(caminho, papel)`):
+* **Seções por papel** (validadas por `sss_config.load_secrets(caminho, papel)`):
 
   | Papel | Obrigatórias | Proibidas |
   |---|---|---|
@@ -1525,7 +1525,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
     WHERE id = :script_id
       FOR UPDATE WAIT 5
    ```
-   ORA-30006 ou ORA-00054 leva a `ROLLBACK` e ao próximo candidato, com uma linha `WARNING [acao=CLAIM] claim do ticket <id> pulado: linha do script <id> travada por outra sessao (<código>, FOR UPDATE WAIT 5)`, sem stack trace (§13; F9.1d).
+   ORA-30006 ou ORA-00054 leva a `ROLLBACK` e ao próximo candidato, com uma linha `WARNING [action=CLAIM] claim do ticket <id> pulado: linha do script <id> travada por outra sessao (<código>, FOR UPDATE WAIT 5)`, sem stack trace (§13; F9.1d).
 2. **Checagem de teto** (usa `ix_tbsss_tck_scr`):
    ```sql
    SELECT COUNT(*) FROM {owner}.tbsss_tickets
@@ -1565,7 +1565,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
    * o script segue `active = 'Y'` (`SCRIPT_INACTIVE`) e homologado para o ambiente (`NAO_HOMOLOGADO`);
    * o ambiente do ticket segue ativo (`ENVIRONMENT_INACTIVE`) e o **solicitante** ainda tem `rbac.pode_executar` para o script e o ambiente, com o mesmo contexto de RBAC do desdobro (`NO_PERMISSION`, CR-007 D2).
 
-   Uma exceção inesperada nesta fase também finaliza o ticket com `PRECHECK_FAILED` (R-03). **Erro de banco antes do spawn (CR-008, R-07):** só erro de rede ou de prazo (`db_conn.eh_erro_rede` ou `eh_tempo_esgotado`, §2.3) é "banco indisponível": o ticket é **devolvido à fila** (§5.1), ou finalizado `CANCELLED` se `cancel_requested = 'Y'` (R-02). Qualquer outro erro de banco (ex.: ORA-01031 por GRANT faltando, ORA-00942, ORA-30006 de lock persistente) finaliza `PRECHECK_FAILED` com a linha `[SSS] ERRO_BANCO: ORA-nnnnn` no log, sem a mensagem do Oracle. Se a própria devolução ou finalização falhar, o ticket fica como "devolução pendente" no mapa local (§8.7, R-08).
+   Uma exceção inesperada nesta fase também finaliza o ticket com `PRECHECK_FAILED` (R-03). **Erro de banco antes do spawn (CR-008, R-07):** só erro de rede ou de prazo (`db_conn.is_network_error` ou `is_timeout`, §2.3) é "banco indisponível": o ticket é **devolvido à fila** (§5.1), ou finalizado `CANCELLED` se `cancel_requested = 'Y'` (R-02). Qualquer outro erro de banco (ex.: ORA-01031 por GRANT faltando, ORA-00942, ORA-30006 de lock persistente) finaliza `PRECHECK_FAILED` com a linha `[SSS] ERRO_BANCO: ORA-nnnnn` no log, sem a mensagem do Oracle. Se a própria devolução ou finalização falhar, o ticket fica como "devolução pendente" no mapa local (§8.7, R-08).
 2. **Diretórios de trabalho:**
    * `work_dir/ticket_<id>/`, do agente, com `0700`, guarda o estado local (`.sss_spawn`, `.sss_proc` e `.sss_result`, §8.7);
    * o diretório de trabalho do **script** (`cwd`, `HOME` e, com `tmp/`, `TMPDIR`) é `exec_work_dir/<usuário de execução>/ticket_<id>/`, criado pelo helper com o usuário de execução e `0700` (§8.0). Em DEV sem usuário de execução, é `work_dir/ticket_<id>/exec/`, com `tmp/`;
@@ -1904,7 +1904,7 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
    * com `output_dir` (CR-012): fora de DEV, `output_dir/<ambiente>/` de cada ambiente atendido existe, é diretório, pertence ao usuário de execução do ambiente e não tem escrita de grupo nem de outros; em DEV, `output_dir` existe e é gravável pelo agente.
    * com `input_dir` (CR-014): a mesma conferência, para `input_dir/<ambiente>/` (CRITICAL `pasta de entrada: <falha>`).
 5. **Instância única por host:** `platform.travar_instancia` em `work_dir/sss-<agent_id>.lock`. Um arquivo `.stop` antigo é removido com WARN, para o daemon não parar logo depois de subir (CR-007, R-32).
-6. **Banco:** selecionar o driver (§2.3; a sondagem roda aqui), conectar e confirmar o relógio do banco (`SELECT SYSDATE FROM DUAL`). WARN se o `SYSDATE` divergir do relógio local em mais de 60 s (§7.1). **Versão do esquema (CR-007, D4):** `SELECT schema_version FROM {owner}.tbsss_control WHERE id = 1` precisa ser igual a `sql_ident.VERSAO_ESQUEMA`; diferente ou ausente, CRITICAL com as duas versões.
+6. **Banco:** selecionar o driver (§2.3; a sondagem roda aqui), conectar e confirmar o relógio do banco (`SELECT SYSDATE FROM DUAL`). WARN se o `SYSDATE` divergir do relógio local em mais de 60 s (§7.1). **Versão do esquema (CR-007, D4):** `SELECT schema_version FROM {owner}.tbsss_control WHERE id = 1` precisa ser igual a `sql_ident.SCHEMA_VERSION`; diferente ou ausente, CRITICAL com as duas versões.
 7. **Registro em `tbsss_agents`**, numa transação (CR-007, R-11):
    * travar a linha do mesmo `code` com `SELECT ... FOR UPDATE WAIT 5`. Sem linha, a inclusão pode disputar com outro processo: a violação de `uk_tbsss_agt_code` leva a `ROLLBACK` e a uma nova tentativa, que encontra a linha;
    * recusar a subida (`agent_id` duplicado) se a linha estiver `ACTIVE` com `heartbeat_at` recente (menor que `node_offline_timeout_s`) e: `hostname` diferente, **ou** o mesmo `hostname` com um `daemon_pid` diferente do próprio que ainda existe (`platform.processo_existe`). Mesmo host com o PID antigo morto é a religação depois de uma queda, e segue;
@@ -1981,7 +1981,7 @@ PK          = pk_{prefixo}{fisico}              pk_tbsss_tickets
 UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}   ix_tbsss_tck_queue
 ```
 
-* **Nomes em inglês (CR-016a):** tabela (`{fisico}`), coluna, abreviação, sufixo e valor gravado (`'Y'`/`'N'`, `DAILY`, `NAMED`, `VIEW_LOGS`…) são em inglês. A chave lógica da entidade no código (`ambientes`, `agendamentos`…) muda no CR-016c; até lá, `sql_ident.fisico(entidade)` dá o nome físico, e `sql_ident.tabela`/`sql_ident.sequence` dão o nome qualificado. Texto de tela e comentários de tabela e coluna continuam em português.
+* **Nomes em inglês (CR-016a):** tabela (`{fisico}`), coluna, abreviação, sufixo e valor gravado (`'Y'`/`'N'`, `DAILY`, `NAMED`, `VIEW_LOGS`…) são em inglês. A chave lógica da entidade no código (`ambientes`, `agendamentos`…) muda no CR-016c; até lá, `sql_ident.physical(entidade)` dá o nome físico, e `sql_ident.table`/`sql_ident.sequence` dão o nome qualificado. Texto de tela e comentários de tabela e coluna continuam em português.
 * `{prefixo}` vem de `table_prefix`, inclui o `_` final e obedece à regex `^[a-z][a-z0-9_]{0,7}$` (começa com letra minúscula, para gerar nome Oracle válido e casar com o registro, que só aceita identificadores em minúsculas; até 8 caracteres; CR-007, R-31).
 * O DDL é gerado por `init_db.py` a partir de um **registro único de identificadores** em `modules/sql_ident.py`, consumido também por `test_db_schema.py`.
 * O `owner` vem de `[oracle] owner` no `config.ini` (ex.: `openrisow`) e obedece à regex `^[A-Za-z][A-Za-z0-9_]{0,29}$`. Todo objeto no banco é qualificado como `{owner}.{prefixo}{fisico}`.
@@ -2436,7 +2436,7 @@ END;
   * `ck_tbsss_ctl_version (schema_version >= 1)`
 * **Colunas:**
   * `id`
-  * `schema_version NUMBER(6) NOT NULL` (versão do esquema aplicada; o código espera `sql_ident.VERSAO_ESQUEMA`)
+  * `schema_version NUMBER(6) NOT NULL` (versão do esquema aplicada; o código espera `sql_ident.SCHEMA_VERSION`)
   * `version_applied_at DATE NOT NULL`
   * `version_applied_by VARCHAR2(40 CHAR) NOT NULL` (`SYSTEM:init_db`)
   * `purge_owner VARCHAR2(40 CHAR)` (agente que detém a concessão do purge, §11.3)
@@ -2485,13 +2485,13 @@ END;
 * Cada objeto é verificado em `ALL_OBJECTS`/`ALL_CONSTRAINTS`/`ALL_INDEXES` (filtro por `owner` via bind) antes da criação. Objetos existentes são registrados como `SKIP`.
 * **Conexão do `init_db`:** com a conta **dona do esquema** (`--owner-user`, padrão o `owner`), senha lida por `getpass` ou de `SSS_INIT_DB_PASSWORD`, nunca de arquivo nem de argumento. É a única conta com privilégio de DDL (CR-007, D1b).
 * **Versão do esquema e migração (CR-007, D4):**
-  * base vazia: cria tudo e grava `tbsss_control` com `schema_version = sql_ident.VERSAO_ESQUEMA`;
+  * base vazia: cria tudo e grava `tbsss_control` com `schema_version = sql_ident.SCHEMA_VERSION`;
   * base com versão menor: aplica, em ordem, as migrações `scripts/migrations/m<NNNN>_<descricao>.py` (cada uma com `VERSAO`, idempotente, e auditada como `SCHEMA_MIGRATE`, com a versão no `detail`), atualizando `tbsss_control` ao fim de cada uma;
   * base com versão maior que a do código: aborta (aplicação mais antiga que o banco);
   * **Versão 1 aberta até a primeira produção (AGENTS §4.16, ajustado no F7.3):** antes da primeira implantação em produção, mudanças de esquema entram direto na versão 1, sem migração. Os bancos de DEV (ex.: `GFPR`) são refeitos pelo ciclo `02_rollback` → `01_deploy` → `99_validate`. A primeira produção congela a versão 1;
   * **Nomes em inglês (CR-016a):** entraram direto na versão 1, pela regra acima. O esquema anterior (nomes em português) não convive com o novo: com `tbsss_controle` no owner, o `init_db` aborta (código 3) e pede o `02_rollback_sss.sql` **da versão anterior** antes. Web e agente do código novo não acham `tbsss_control` num banco antigo e recusam subir (código 15);
   * depois das fases, **conferência do esquema real contra o registro**: colunas (`ALL_TAB_COLUMNS`: tipo, tamanho, `NULLABLE`, `DATA_DEFAULT`), CKs (`SEARCH_CONDITION`), índices (colunas e expressões) e objetos inválidos (`ALL_OBJECTS.STATUS = 'INVALID'` e `ALL_ERRORS`, inclusive triggers compiladas com erro, que o modo Thin só reporta como aviso). Divergência aborta com a lista; o `init_db` nunca corrige sozinho um objeto existente.
-  * **Normalização antes de comparar (CR-008, R-14):** o Oracle devolve os textos reescritos, então a comparação literal acusaria divergência sempre. Os dois lados (o do dicionário e o do registro `sql_ident`) passam pela mesma função `sql_ident.normalizar_expressao`: remove aspas duplas, converte para maiúsculas fora de literais entre aspas simples, colapsa espaços, tabulações e quebras de linha num espaço, remove espaços junto de `(`, `)` e `,`, e tira espaços nas pontas (o `DATA_DEFAULT` costuma vir com espaço ou quebra final). CKs de sistema `SYS_C%` cuja condição é só `"<COLUNA>" IS NOT NULL` são ignoradas (repetem o `NULLABLE`). Expressões de índice baseado em função são lidas de `ALL_IND_EXPRESSIONS.COLUMN_EXPRESSION` (`LONG`, lido como texto) e comparadas normalizadas, coluna a coluna, na ordem de `COLUMN_POSITION`. O F7.1 testa a normalização com textos reais do 11gR2 e, com `SSS_TEST_DSN`, cria o esquema e confere que a conferência dá zero divergências.
+  * **Normalização antes de comparar (CR-008, R-14):** o Oracle devolve os textos reescritos, então a comparação literal acusaria divergência sempre. Os dois lados (o do dicionário e o do registro `sql_ident`) passam pela mesma função `sql_ident.normalize_expression`: remove aspas duplas, converte para maiúsculas fora de literais entre aspas simples, colapsa espaços, tabulações e quebras de linha num espaço, remove espaços junto de `(`, `)` e `,`, e tira espaços nas pontas (o `DATA_DEFAULT` costuma vir com espaço ou quebra final). CKs de sistema `SYS_C%` cuja condição é só `"<COLUNA>" IS NOT NULL` são ignoradas (repetem o `NULLABLE`). Expressões de índice baseado em função são lidas de `ALL_IND_EXPRESSIONS.COLUMN_EXPRESSION` (`LONG`, lido como texto) e comparadas normalizadas, coluna a coluna, na ordem de `COLUMN_POSITION`. O F7.1 testa a normalização com textos reais do 11gR2 e, com `SSS_TEST_DSN`, cria o esquema e confere que a conferência dá zero divergências.
 * **Recriação do esquema:** não há opção `--recreate` nesta versão. O CR-007 R-32 define pré-condições, mas não especifica quais objetos ou dados seriam removidos; a opção só poderá ser implementada após essa semântica ser definida nesta seção.
 * **Estatísticas (CR-007, R-29):** não são coletadas em tabela vazia (gerariam planos com 0 linhas). O `--stats` só coleta tabelas com linhas; o `DEPLOYMENT.md` exige o job automático de estatísticas do banco ativo, ou um job próprio, para o esquema.
 * **Códigos de saída:** 0 sucesso (inclusive tudo `SKIP`), 1 falha de fase, 2 configuração inválida, 3 divergência de esquema ou versão.
@@ -2519,7 +2519,7 @@ END;
   * Uma instalação antiga que já tenha GRANTs a PUBLIC os perde no rollback (o `DROP TABLE` remove as concessões). Sem rollback, o DBA precisa revogá-los à mão.
 * **Validação da implantação (`docs/sql/99_validate_deploy.sql`):** gerada com os outros dois scripts, a partir do mesmo registro, com o owner e o prefixo do `config.ini` ou de `--owner`/`--prefix`. Só faz leituras.
   * **Dicionário:** confere, pelos nomes do registro, as tabelas, sequences, triggers habilitadas, constraints habilitadas e índices válidos; e exige zero objetos inválidos e zero GRANTs a PUBLIC.
-  * **Dados:** confere a versão do esquema contra `sql_ident.VERSAO_ESQUEMA` e o mínimo de linhas que o seed grava em cada tabela.
+  * **Dados:** confere a versão do esquema contra `sql_ident.SCHEMA_VERSION` e o mínimo de linhas que o seed grava em cada tabela.
   * Cada verificação sai como "esperado × encontrado" com OK ou FALHA, e cada seção termina com um resumo.
   * As listagens de usuários, scripts, acesso por perfil e GRANTs **nunca** mostram `password_hash`: só se a senha está definida (AGENTS §3.3).
 
@@ -2549,7 +2549,7 @@ END;
      AND (purge_lease_until IS NULL OR purge_lease_until < SYSDATE OR purge_owner = :dono)
   ```
   Com `rowcount = 0`, outro nó está purgando: o purge pula tickets e auditoria, registra INFO e sai com 0. A concessão é renovada a cada lote e liberada no fim com `SET purge_owner = NULL, purge_lease_until = NULL WHERE id = 1 AND purge_owner = :dono` (CR-008, R-27: zerar só o dono deixava outro nó esperando até 1 h). `:dono` é o `agent_id` do servidor.
-* **`--dry-run` (F9.1):** não toma concessão nem lock local, não executa DML, não remove arquivos e não grava auditoria `PURGE`. Calcula os limites de retenção uma vez com `agora_banco()` e consulta as quantidades elegíveis de tickets, auditoria e pastas de logs locais; as consultas para identificar pastas de tickets `RUNNING` são somente leitura. O resumo identifica cada alvo e suas contagens como estimativas sujeitas a corrida.
+* **`--dry-run` (F9.1):** não toma concessão nem lock local, não executa DML, não remove arquivos e não grava auditoria `PURGE`. Calcula os limites de retenção uma vez com `db_now()` e consulta as quantidades elegíveis de tickets, auditoria e pastas de logs locais; as consultas para identificar pastas de tickets `RUNNING` são somente leitura. O resumo identifica cada alvo e suas contagens como estimativas sujeitas a corrida.
 * Remove tickets terminais com `created_at < SYSDATE - :ticket_retention_days`, em lotes:
   ```sql
   DELETE FROM {owner}.tbsss_tickets
@@ -2559,7 +2559,7 @@ END;
   ```
   Com `COMMIT` por lote, até `rowcount = 0`. A renovação da concessão vai na mesma transação do lote: se ela não achar mais este nó como dono (outro nó a tomou depois de vencida), o lote é desfeito, o purge registra ERROR e sai com 1.
 * `tbsss_ticket_answer` é removida em cascata, e `parent_ticket_id` dos filhos vira `NULL`. `tbsss_schedules.last_ticket_id` pode apontar para um ticket removido: o desdobro o trata como livre (§7.5).
-* `tbsss_audit` usa `audit_retention_days` e o mesmo padrão de lote. Com `--export-audit <pasta>`, as linhas de cada lote são gravadas antes em CSV (mesmo formato da exportação do §4.4, arquivo `0600`), para arquivamento (CR-007, R-22). Nesse caso, cada lote é lido com `FOR UPDATE`, gravado e sincronizado no disco (`auditoria_purge_AAAAMMDD_HHMMSS.csv`, pelo `agora_banco()`), e só então apagado pelo `id` das linhas gravadas e confirmado. A pasta precisa existir (senão, código 2).
+* `tbsss_audit` usa `audit_retention_days` e o mesmo padrão de lote. Com `--export-audit <pasta>`, as linhas de cada lote são gravadas antes em CSV (mesmo formato da exportação do §4.4, arquivo `0600`), para arquivamento (CR-007, R-22). Nesse caso, cada lote é lido com `FOR UPDATE`, gravado e sincronizado no disco (`auditoria_purge_AAAAMMDD_HHMMSS.csv`, pelo `db_now()`), e só então apagado pelo `id` das linhas gravadas e confirmado. A pasta precisa existir (senão, código 2).
 * **Logs de execução** (§8.4, passo 3): remove as pastas de minuto `log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/` cuja data é anterior a `local_log_retention_days` dias, e depois as pastas de hora, dia, mês, ano, script e ambiente que ficarem vazias. A data vem do próprio caminho, não do `mtime`. A pasta `log_dir/interno/` (logs da aplicação) nunca é tocada pelo purge (§13, CR-009). Só entram pastas cujo caminho tem o formato exato `<ambiente>/<pasta>/AAAA/MM/DD/HH/MI`; qualquer outra coisa em `log_dir` é ignorada. **Uma pasta que contém o log de um ticket ainda `RUNNING` é mantida** (CR-007, R-32). Esta etapa roda em todo agente, sem concessão.
 * **Pastas de saída** (CR-012, §8.13): com `output_dir`, remove as pastas de minuto de `output_dir/<ambiente>/...` mais antigas que `output_retention_days`, pela mesma regra de data no caminho. Fora de DEV, pelo helper `purge-output`, com o usuário de execução de cada ambiente atendido; ambiente sem pasta é pulado. Sem concessão. O limite usa a data do servidor do agente (o helper não recebe o instante do banco). No `--dry-run`, o helper só conta (`purge-output <base> <dias> contar`).
 * A execução é agendada pelo cron no servidor do agente e auditada como `PURGE`: **sempre** que obtém a concessão, uma linha por tabela (`tbsss_tickets` e `tbsss_audit`), com a contagem no `detail`, inclusive `0 linhas` (CR-008, R-16). Sem a concessão, não audita (outro nó audita a sua execução).
@@ -2731,7 +2731,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
 `bin/sss-helper` (CR-007, D1) é o helper de execução do §8.0. O pacote o leva, mas ele só vale depois de copiado pelo root para `/opt/sss/bin/sss-helper` (dono root, `0755`), com a regra de sudoers do `DEPLOYMENT.md`.
 
 **Pacote de implantação (F9.1):** `python scripts/package.py [--source <raiz do web2py>] [--out-dir <pasta>]`, só com a biblioteca padrão.
-* Gera `<saida>/sss-<version>.tar.gz` (padrão `<origem>/dist/`; versão `sss_config.VERSAO_SSS`), com tudo sob `sss-<versao>/` e um `SHA256SUMS` de cada arquivo dentro do pacote, e `<saida>/SHA256SUMS` com o hash do `tar.gz` (`sha256sum -c SHA256SUMS`). O tar é reprodutível: ordem, dono (0), data e modos fixos (`0755` no `bin/`, `0644` nos demais arquivos).
+* Gera `<saida>/sss-<version>.tar.gz` (padrão `<origem>/dist/`; versão `sss_config.SSS_VERSION`), com tudo sob `sss-<versao>/` e um `SHA256SUMS` de cada arquivo dentro do pacote, e `<saida>/SHA256SUMS` com o hash do `tar.gz` (`sha256sum -c SHA256SUMS`). O tar é reprodutível: ordem, dono (0), data e modos fixos (`0755` no `bin/`, `0644` nos demais arquivos).
 * **Entram:** `web2py.py`, `anyserver.py`, `gluon/` (sem `tests/`, `test-venv/`, `.pytest_cache/` e `ci/` do upstream), um `routes.py` **gerado** com `default_application = "script_scheduling_service"` e o `routes_onerror` da aplicação (o `routes.py` do repositório não muda, para não alterar as URLs do DEV), `bin/sss-web.sh`, `bin/sss-scheduler.sh`, `bin/sss-stop.sh`, `bin/sss-helper` e a aplicação com `docs/` e os `instance/*.example`. As pastas `sessions`, `errors`, `cache`, `databases`, `uploads`, `private` e `cron` entram vazias.
 * **Não entram:** `controllers/dev.py`, `views/dev/`, `dev/`, `modules/repo_fake/`, `instance/config.ini`, `instance/web.env`, `log/`, `logs/`, `work/`, `exec/`, os testes (`scripts/test_*.py` e os auxiliares `_testenv.py`, `_oracle_test_support.py`, `_output_memory.py`), as pastas de runtime do web2py dentro da aplicação (abaixo), os launchers de DEV e os arquivos da raiz que não são do web2py.
 * **Recusa** (código 1, sem gravar nada) se o pacote tiver um `secrets.cfg` real, `*.pyc`, `__pycache__`, `controllers/dev.py`, `repo_fake`, outra aplicação (`/admin/`, `welcome`, `examples`), pasta de runtime do web2py, link simbólico, ou `password`/`cookie_key` com valor em `.ini`, `.cfg`, `.ini.example` ou `.cfg.example` (pelo nome do arquivo). A única exceção é o valor exato `CHANGE_ME` em `instance/secrets.cfg.example`. A mensagem cita arquivo e linha, nunca o valor.
@@ -2754,11 +2754,11 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
   * O arquivo nasce na pasta do minuto em que o processo sobe, pelo relógio local do processo (com o `TZ` do launcher). Cada processo (cada worker do WSGI) tem o próprio arquivo.
   * **Troca por tamanho:** ao atingir `app_log_max_bytes`, o processo fecha o arquivo e abre um novo na pasta do minuto **atual**. Se já existir um arquivo com o mesmo nome (mesmo minuto e mesmo PID), o novo ganha o sufixo `_<n>`: `sss_web_4321_2.log`.
   * **Retenção:** o próprio processo apaga as pastas `log_dir/interno/app/AAAA/MM/DD` com data anterior a `app_log_retention_days` dias, na subida e a cada troca de arquivo, e depois as pastas de mês e de ano que ficarem vazias. Só entram pastas com o formato exato de data; o resto é ignorado. O `purge.py` nunca toca em `log_dir/interno/`.
-  * **Falhas do próprio log** (remoção na retenção, `chmod` ou fechamento do arquivo anterior) não interrompem o processo: viram uma linha WARN no próprio arquivo, com `[acao=RETENCAO]` ou `[acao=LOG]`, antes do registro seguinte.
+  * **Falhas do próprio log** (remoção na retenção, `chmod` ou fechamento do arquivo anterior) não interrompem o processo: viram uma linha WARN no próprio arquivo, com `[action=RETENCAO]` ou `[action=LOG]`, antes do registro seguinte.
   * O `log_dir` é criado com `0750` se não existir. Pastas criadas com `0750` (todas as que o processo cria: `interno/`, `app/`, ano, mês, dia, hora e minuto) e arquivos com `0640`, com `chmod` explícito, porque o launcher aplica `umask 077`.
   * O log de acesso do próprio web2py (`httpserver.log`, na raiz do web2py) não segue este padrão; ele é do servidor embutido e fica fora do `log_dir`.
   * **Logs de execução dos scripts** ficam em `log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log` (§8.4, passo 3). Nenhum script pode ter a pasta de log `app` (§8.5), regra mantida do CR-005, e nenhum ambiente pode gerar a pasta `interno` (CR-009).
-  * Formato: `%(asctime)s %(levelname)s [pid=%(process)d] [agente=<id>] [ticket=<id|->] [action=<CLAIM|SPAWN|HB|...>] %(message)s`, com data ISO local e offset.
+  * Formato: `%(asctime)s %(levelname)s [pid=%(process)d] [agent=<id>] [ticket=<id|->] [action=<CLAIM|SPAWN|HB|...>] %(message)s`, com data ISO local e offset.
 * **Níveis:**
 
   | Nível | Uso |
@@ -2792,7 +2792,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
   * Backend FAKE (DEV): o seed mostra os três quadros. O `agt-host02` tem `kill=10` (configuração divergente); o ticket 16 está `RUNNING` sem PID desde a carga; o ticket 4 (SH em `HOMOLOGACAO`, vencido 3 min antes da carga) só é atendido pelo `agt-host02` (o `agt-host01` mapeia `PYTHON3,BASH`) e entra na fila sem atendente quando ele passa a `EM_RISCO`, cerca de 1 min depois da carga.
   * `critical_config` do nó web: `sss_config.critical_config(cfg)`, com `call` em segundos (`call_timeout_s`, arredondado para cima), igual ao texto do agente (§8.12).
 * **Monitoração externa (CR-007, R-18):** `scripts/health.py` (F9.1) roda, com a conta só de leitura do papel **monitor** (`[monitor]` no `secrets.cfg`, §4.1 e §11.1, CR-008 E3; a conta do agente não lê `tbsss_audit`), as consultas de saúde e devolve o código no padrão Nagios (0 OK, 1 WARN, 2 CRITICAL, 3 desconhecido), com uma linha por problema. Verifica: agente `ACTIVE` sem heartbeat além de `node_offline_timeout_s`; ambiente ativo sem nenhum agente saudável; os três quadros acima; fila `PENDING` vencida acima de um limite; ausência de `PURGE` auditado em 2 dias; versão do esquema (§11.1). Os limites são argumentos com padrão, e o `DEPLOYMENT.md` traz o exemplo de agendamento no monitoramento corporativo.
-  * **Uso (F9.1):** `python scripts/health.py [--config <config.ini>] [--no-pid-min 2] [--queue-warn 500] [--queue-crit 5000] [--wait-warn-min 30] [--wait-crit-min 120] [--purge-days 2]`. Todas as verificações usam um único `agora_banco()`. As consultas ficam em `repo_oracle/health.py` (sem gluon), que também fornece à tela de agentes o SQL da fila sem atendente e do rodando sem PID: a tela e o monitoramento não divergem. Nenhum LOB é lido, e o plano não varre `tbsss_tickets` nem `tbsss_audit` (`ix_tbsss_tck_queue`, `ix_tbsss_tck_run`, `ix_tbsss_aud_actor`).
+  * **Uso (F9.1):** `python scripts/health.py [--config <config.ini>] [--no-pid-min 2] [--queue-warn 500] [--queue-crit 5000] [--wait-warn-min 30] [--wait-crit-min 120] [--purge-days 2]`. Todas as verificações usam um único `db_now()`. As consultas ficam em `repo_oracle/health.py` (sem gluon), que também fornece à tela de agentes o SQL da fila sem atendente e do rodando sem PID: a tela e o monitoramento não divergem. Nenhum LOB é lido, e o plano não varre `tbsss_tickets` nem `tbsss_audit` (`ix_tbsss_tck_queue`, `ix_tbsss_tck_run`, `ix_tbsss_aud_actor`).
 
     | Verificação | Nível |
     |---|---|

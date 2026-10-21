@@ -73,7 +73,7 @@ def lista():
     except AcessoNegado:
         _negado()
     except RepoErro:
-        _log.exception("falha ao listar scripts (login=%s)", ctx["login"], extra={"acao": _FUNC})
+        _log.exception("falha ao listar scripts (login=%s)", ctx["login"], extra={"action": _FUNC})
         resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
     response.title = u"Scripts — SSS"
@@ -109,7 +109,7 @@ def salvar():
     except OperacaoNegada as exc:
         salvo_id, erros = None, {admin_crud.CAMPO_GERAL: str(exc)}
     except RepoErro:
-        _log.exception("falha ao salvar script (login=%s id=%r)", ctx["login"], script_id, extra={"acao": _FUNC})
+        _log.exception("falha ao salvar script (login=%s id=%r)", ctx["login"], script_id, extra={"action": _FUNC})
         salvo_id, erros = None, {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}
     if not erros:
         mensagem = u"Script salvo com sucesso." + (u" " + aviso if aviso else u"")
@@ -146,7 +146,7 @@ def alternar_ativo():
     except RepoConflito:
         session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
     except RepoErro:
-        _log.exception("falha ao alternar script (login=%s id=%r)", ctx["login"], script_id, extra={"acao": _FUNC})
+        _log.exception("falha ao alternar script (login=%s id=%r)", ctx["login"], script_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
     redirect(URL(c="admin_scripts", f="form", args=[script_id]))
 
@@ -179,7 +179,7 @@ def salvar_homologacao():
     except AcessoNegado:
         _negado()
     except RepoErro:
-        _log.exception("falha ao salvar homologacao (login=%s id=%r)", ctx["login"], script_id, extra={"acao": _FUNC})
+        _log.exception("falha ao salvar homologacao (login=%s id=%r)", ctx["login"], script_id, extra={"action": _FUNC})
         diff, erros = None, {admin_crud.CAMPO_GERAL: _MSG_FALHA_ACAO}
     if erros:
         session.flash = {"tipo": "erro", "mensagem": erros[admin_crud.CAMPO_GERAL]}
@@ -217,7 +217,7 @@ def salvar_parametros():
     except AcessoNegado:
         _negado()
     except RepoErro:
-        _log.exception("falha ao salvar vinculos (login=%s id=%r)", ctx["login"], script_id, extra={"acao": _FUNC})
+        _log.exception("falha ao salvar vinculos (login=%s id=%r)", ctx["login"], script_id, extra={"action": _FUNC})
         descricao, erros = None, {admin_crud.CAMPO_GERAL: _MSG_FALHA_ACAO}
     if erros:
         mensagem = erros.get(admin_crud.CAMPO_GERAL) or u" ".join(sorted(erros.values()))

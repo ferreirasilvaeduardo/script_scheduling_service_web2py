@@ -387,7 +387,7 @@ class ServicoAgendamentos(object):
         registro = self._agendamentos.obter(aid)
         if not rbac.pode_ver_ambiente(ctx, registro.get("environment")):
             self._log.warning("agendamento fora do escopo (login=%s agendamento=%s environment=%s)",
-                              ctx.get("login"), aid, registro.get("environment"), extra={"acao": FUNCIONALIDADE})
+                              ctx.get("login"), aid, registro.get("environment"), extra={"action": FUNCIONALIDADE})
             raise RepoNaoEncontrado("agendamento fora do escopo")
         return registro
 
@@ -396,7 +396,7 @@ class ServicoAgendamentos(object):
             return self._disparo.autorizar(ctx, script_id, ambiente)
         except DisparoNegado as exc:
             self._log.warning("agendamento negado ao editor (login=%s script_id=%r environment=%r reason=%s)",
-                              ctx.get("login"), script_id, ambiente, exc.motivo, extra={"acao": FUNCIONALIDADE})
+                              ctx.get("login"), script_id, ambiente, exc.motivo, extra={"action": FUNCIONALIDADE})
             raise OperacaoNegada(MSG_SEM_PERMISSAO)
 
     def _login(self, usuario_id, cache=None):
@@ -679,7 +679,7 @@ class ServicoAgendamentos(object):
         except DisparoNegado as exc:
             if dados["edicao"]:
                 self._log.warning("edicao de agendamento negada (login=%s agendamento=%s reason=%s)",
-                                  ctx.get("login"), atual["id"], exc.motivo, extra={"acao": FUNCIONALIDADE})
+                                  ctx.get("login"), atual["id"], exc.motivo, extra={"action": FUNCIONALIDADE})
                 raise OperacaoNegada(MSG_SEM_PERMISSAO)
             raise
         for campo in form["campos"]:
@@ -789,7 +789,7 @@ class ServicoAgendamentos(object):
         if erros:
             self._log.info("validacao do agendamento com erros (login=%s agendamento=%s campos=%s)",
                            ctx.get("login"), atual["id"] if atual else None, ",".join(sorted(erros)),
-                           extra={"acao": FUNCIONALIDADE})
+                           extra={"action": FUNCIONALIDADE})
             return (atual["id"] if atual else None), dict(erros)
 
         registro = dict(regra, name=nome, script_id=script["id"], environment=amb["name"],
@@ -809,11 +809,11 @@ class ServicoAgendamentos(object):
             criado = self._agendamentos.inserir(novo, auditoria=admin_crud.auditoria(ctx, ip, "CREATE", detalhe))
         except RepoViolacao as exc:
             self._log.error("agendamento rejeitado pelo repositorio (login=%s constraint=%s)",
-                            ctx.get("login"), exc.constraint, extra={"acao": "CREATE"})
+                            ctx.get("login"), exc.constraint, extra={"action": "CREATE"})
             return None, {CAMPO_GERAL: admin_crud.MSG_FALHA}
         self._log.info("agendamento incluido (login=%s agendamento=%s script_id=%s environment=%s tipo=%s)",
                        ctx.get("login"), criado["id"], criado["script_id"], criado["environment"],
-                       criado["recurrence_type"], extra={"acao": "CREATE"})
+                       criado["recurrence_type"], extra={"action": "CREATE"})
         return criado["id"], {}
 
     def _alterar(self, ctx, ip, atual, registro, sensiveis):
@@ -837,11 +837,11 @@ class ServicoAgendamentos(object):
         except RepoViolacao as exc:
             self._log.error("alteracao de agendamento rejeitada pelo repositorio (login=%s agendamento=%s "
                             "constraint=%s)", ctx.get("login"), atual["id"], exc.constraint,
-                            extra={"acao": "UPDATE"})
+                            extra={"action": "UPDATE"})
             return atual["id"], {CAMPO_GERAL: admin_crud.MSG_FALHA}
         self._log.info("agendamento alterado (login=%s agendamento=%s user_id=%s->%s)",
                        ctx.get("login"), atual["id"], atual["user_id"], registro["user_id"],
-                       extra={"acao": "UPDATE"})
+                       extra={"action": "UPDATE"})
         return atual["id"], {}
 
     def pausar(self, ctx, ip, agendamento_id):
@@ -858,7 +858,7 @@ class ServicoAgendamentos(object):
         alterado = self._agendamentos.pausar(atual["id"], "MANUAL", antiga_data=atual["next_run_at"],
                                              auditoria=admin_crud.auditoria(ctx, ip, "SCHEDULE_PAUSE", detalhe))
         self._log.info("agendamento pausado (login=%s agendamento=%s reason=MANUAL)", ctx.get("login"),
-                       atual["id"], extra={"acao": "SCHEDULE_PAUSE"})
+                       atual["id"], extra={"action": "SCHEDULE_PAUSE"})
         return alterado
 
     def retomar(self, ctx, ip, agendamento_id):
@@ -892,7 +892,7 @@ class ServicoAgendamentos(object):
             atual["id"], proxima, esperado=admin_crud.esperado(atual, ("active", "pause_reason", "next_run_at")),
             auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
         self._log.info("agendamento retomado (login=%s agendamento=%s proxima=%s)", ctx.get("login"),
-                       atual["id"], formatar_data(proxima), extra={"acao": "UPDATE"})
+                       atual["id"], formatar_data(proxima), extra={"action": "UPDATE"})
         return alterado
 
 
@@ -917,7 +917,7 @@ def _servico():
                 disparo=ticket_service._servico(),
                 relogio=tickets.agora,
                 horizonte_dias=cfg.agent.cron_horizon_days,
-                log=sss_logging.obter_logger("sss_web", cfg),
+                log=sss_logging.get_logger("sss_web", cfg),
                 tickets=tickets,
                 rbac_repo=fabrica.obter("rbac"),
                 misfire_policy=cfg.agent.misfire_policy,

@@ -35,7 +35,7 @@ def _cfg():
               secrets=NS(secrets_file="/x/secrets.cfg"))
 
 
-CRITICOS = sss_config.config_criticos(_cfg())
+CRITICOS = sss_config.critical_config(_cfg())
 
 
 def _agente(codigo, idade_s=5, status="ACTIVE", ambientes="PRODUCAO", interpreters="SH,PYTHON3", cfg=CRITICOS):
@@ -48,7 +48,7 @@ class _Repo(object):
     """RepoSaude simulado: tudo saudavel por padrao."""
 
     def __init__(self, **kw):
-        self.d = dict(version=sql_ident.VERSAO_ESQUEMA, agentes=[_agente("srv-a")], ambientes=["PRODUCAO"],
+        self.d = dict(version=sql_ident.SCHEMA_VERSION, agentes=[_agente("srv-a")], ambientes=["PRODUCAO"],
                       fila=[], vencida=(0, None), sem_pid=[], purge=AGORA - datetime.timedelta(hours=20))
         self.d.update(kw)
         self.chamadas = []
@@ -187,9 +187,9 @@ class TestVerificacoes(unittest.TestCase):
         self.assertIn(("purge", 3), repo.chamadas)
 
     def test_versao_do_esquema(self):
-        codigo, texto, _r = self._rodar(version=sql_ident.VERSAO_ESQUEMA - 1)
+        codigo, texto, _r = self._rodar(version=sql_ident.SCHEMA_VERSION - 1)
         self.assertEqual(codigo, saude_cli.CRITICAL)
-        self.assertIn("versao do esquema %d" % (sql_ident.VERSAO_ESQUEMA - 1), texto)
+        self.assertIn("versao do esquema %d" % (sql_ident.SCHEMA_VERSION - 1), texto)
 
     def test_pior_nivel_vence_e_criticos_primeiro(self):
         codigo, texto, _r = self._rodar(purge=None, version=None)
@@ -204,12 +204,12 @@ class TestMain(unittest.TestCase):
 
     def _main(self, argv=(), conectar=None, cfg_erro=False, seg_erro=False):
         saida = io.StringIO()
-        obter = mock.Mock(side_effect=sss_config.ConfigErro(motivo="faltou dsn") if cfg_erro else None,
+        obter = mock.Mock(side_effect=sss_config.ConfigError(reason="faltou dsn") if cfg_erro else None,
                           return_value=_cfg())
-        carregar = mock.Mock(side_effect=sss_config.ConfigErro(motivo="sem [monitor]") if seg_erro else None,
+        carregar = mock.Mock(side_effect=sss_config.ConfigError(reason="sem [monitor]") if seg_erro else None,
                              return_value=object())
-        with mock.patch.object(saude_cli.sss_config, "obter_config", obter), \
-                mock.patch.object(saude_cli.sss_config, "carregar_segredos", carregar), \
+        with mock.patch.object(saude_cli.sss_config, "get_config", obter), \
+                mock.patch.object(saude_cli.sss_config, "load_secrets", carregar), \
                 mock.patch.object(saude_cli.saude_sql.RepoSaude, "da_config", return_value=_Repo()):
             codigo = saude_cli.main(list(argv), conectar=conectar, saida=saida)
         self.carregar = carregar
@@ -255,8 +255,8 @@ class TestMain(unittest.TestCase):
         os.chmod(caminho, 0o600)
         registrados = []
         with mock.patch("masking.registrar_segredo", side_effect=registrados.append):
-            seg = sss_config.carregar_segredos(caminho, sss_env="PROD", papel="monitor")
-        self.assertEqual((seg.monitor_user, seg.oracle_password, seg.purge_password, seg.ambientes),
+            seg = sss_config.load_secrets(caminho, sss_env="PROD", papel="monitor")
+        self.assertEqual((seg.monitor_user, seg.oracle_password, seg.purge_password, seg.environments),
                          ("sss_monitor", None, None, {}))
         self.assertEqual(registrados, ["senha-mon-1"])
 
@@ -302,8 +302,8 @@ class TestSaudeOracle(unittest.TestCase):
         from _oracle_test_support import preparar_schema_descartavel
         import db_conn
         cls.cfg = preparar_schema_descartavel("agent")
-        segredos = sss_config.carregar_segredos(cls.cfg.secrets.secrets_file, cfg=cls.cfg, papel="agent")
-        cls.conn = db_conn.conectar(cls.cfg, segredos, papel="agent")
+        segredos = sss_config.load_secrets(cls.cfg.secrets.secrets_file, cfg=cls.cfg, papel="agent")
+        cls.conn = db_conn.connect(cls.cfg, segredos, papel="agent")
         cls.repo = saude_sql.RepoSaude.da_config(cls.cfg)
 
     @classmethod
@@ -313,8 +313,8 @@ class TestSaudeOracle(unittest.TestCase):
 
     def test_consultas_e_verificacao_completa(self):
         import db_conn
-        agora = db_conn.agora_banco(self.conn)
-        self.assertEqual(self.repo.versao_esquema(self.conn), sql_ident.VERSAO_ESQUEMA)
+        agora = db_conn.db_now(self.conn)
+        self.assertEqual(self.repo.versao_esquema(self.conn), sql_ident.SCHEMA_VERSION)
         self.assertIsInstance(self.repo.agentes(self.conn), list)
         self.assertIsInstance(self.repo.ambientes_ativos(self.conn), list)
         qtd, _antigo = self.repo.fila_vencida(self.conn, agora)
@@ -328,14 +328,14 @@ class TestSaudeOracle(unittest.TestCase):
 
     def test_explain_sem_varredura_de_tickets_e_auditoria(self):
         import db_conn
-        agora = db_conn.agora_banco(self.conn)
+        agora = db_conn.db_now(self.conn)
         binds = {"fila": {"agora": agora}, "fila_vencida": {"agora": agora}, "sem_pid": {"limite": agora},
                  "purge": {"limite": agora}}
         for nome, valores in binds.items():
             cur = self.conn.cursor()
             stmt = "SSS_F91B_%s" % nome.upper()
             cur.execute("DELETE FROM plan_table WHERE statement_id = :s", {"s": stmt})
-            db_conn.definir_tipos_entrada(cur, **dict((k, db_conn.TIPO_DATE) for k in valores))
+            db_conn.set_input_types(cur, **dict((k, db_conn.TIPO_DATE) for k in valores))
             cur.execute("EXPLAIN PLAN SET STATEMENT_ID = '%s' FOR %s" % (stmt, self.repo.sql(nome)), valores)
             cur.execute("SELECT operation, options, object_name FROM plan_table WHERE statement_id = :s",
                         {"s": stmt})

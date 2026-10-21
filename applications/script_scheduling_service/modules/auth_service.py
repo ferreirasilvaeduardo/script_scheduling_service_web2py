@@ -94,8 +94,8 @@ class ServicoAuth(object):
             auditoria=_aud(usuario["login"], ip, "LOGIN_OK", "Login bem-sucedido"))
         if novo_hash is not None:
             self._log.info("hash de senha atualizado para as iteracoes vigentes (login=%s)",
-                           usuario["login"], extra={"acao": "LOGIN"})
-        self._log.info("login ok (login=%s ip=%s)", usuario["login"], ip, extra={"acao": "LOGIN"})
+                           usuario["login"], extra={"action": "LOGIN"})
+        self._log.info("login ok (login=%s ip=%s)", usuario["login"], ip, extra={"action": "LOGIN"})
         return self._montar_ctx(estado), None
 
     @staticmethod
@@ -113,7 +113,7 @@ class ServicoAuth(object):
         self._auditoria.registrar(usuario["login"], ip, "LOGIN_FAILED", ENTIDADE, usuario["id"],
                                   "Falha de login: %s" % motivo)
         self._log.warning("login falhou (login=%s ip=%s reason=%s)", usuario["login"], ip, motivo,
-                          extra={"acao": "LOGIN"})
+                          extra={"action": "LOGIN"})
 
     def _falha_senha(self, usuario, ip):
         # O repositorio conta e decide o bloqueio sob a trava da linha: a contagem lida aqui pode estar
@@ -127,10 +127,10 @@ class ServicoAuth(object):
         bloquear = bool(reg.get("bloqueou"))
         motivo = "senha incorreta (tentativa %d de %d)" % (tentativas, self._max)
         self._log.warning("login falhou (login=%s ip=%s reason=%s)", usuario["login"], ip, motivo,
-                          extra={"acao": "LOGIN"})
+                          extra={"action": "LOGIN"})
         if not bloquear:
             return None, MSG_GENERICA
-        self._log.warning("conta bloqueada (login=%s ip=%s)", usuario["login"], ip, extra={"acao": "LOGIN"})
+        self._log.warning("conta bloqueada (login=%s ip=%s)", usuario["login"], ip, extra={"action": "LOGIN"})
         return None, self.msg_bloqueio
 
     def _falha_inexistente(self, login, ip, agora):
@@ -152,7 +152,7 @@ class ServicoAuth(object):
         self._auditoria.registrar(login, ip, "LOGIN_FAILED", ENTIDADE, None,
                                   "Falha de login: usuario inexistente")
         self._log.warning("login falhou (login=%s ip=%s reason=usuario inexistente)", login, ip,
-                          extra={"acao": "LOGIN"})
+                          extra={"action": "LOGIN"})
         if resultado == "falha":
             return None, MSG_GENERICA
         if resultado == "bloqueou":
@@ -174,30 +174,30 @@ class ServicoAuth(object):
             estado = self._usuarios.obter_estado_sessao(usuario_id)
         except RepoNaoEncontrado:
             self._log.warning("sessao encerrada: usuario inexistente (user_id=%s)", usuario_id,
-                              extra={"acao": "SESSAO"})
+                              extra={"action": "SESSAO"})
             return None
         if estado.get("login") != sessao.get("login"):
             self._log.warning("sessao encerrada: login divergente (user_id=%s)", usuario_id,
-                              extra={"acao": "SESSAO"})
+                              extra={"action": "SESSAO"})
             return None
         if estado.get("usuario_ativo") != "Y" or estado.get("perfil_ativo") != "Y":
             motivo = u"usuário inativo" if estado.get("usuario_ativo") != "Y" else u"perfil inativo"
             self._auditoria.registrar(estado.get("login"), ip, "LOGOUT", ENTIDADE, usuario_id,
                                       u"sessão encerrada pela revalidação: %s" % motivo)
             self._log.info("sessao encerrada: usuario ou perfil inativo (login=%s)", estado.get("login"),
-                           extra={"acao": "SESSAO"})
+                           extra={"action": "SESSAO"})
             return None
         if estado.get("session_epoch", 0) != sessao.get("sessao_epoch"):
             # Sessao revogada (CR-008, E2): logout em outro lugar, senha trocada ou redefinida, perfil
             # ou situacao do usuario alterados. Ja auditado na origem; aqui so o log.
             self._log.info("sessao encerrada: sessao revogada (login=%s)", estado.get("login"),
-                           extra={"acao": "SESSAO"})
+                           extra={"action": "SESSAO"})
             return None
         if estado.get("perm_version") != sessao.get("perm_versao") \
                 or estado.get("profile_id") != sessao.get("perfil_id"):
             self._log.info("permissoes recarregadas (login=%s profile_id=%s perm_version=%s)",
                            estado.get("login"), estado.get("profile_id"), estado.get("perm_version"),
-                           extra={"acao": "SESSAO"})
+                           extra={"action": "SESSAO"})
         return self._montar_ctx(estado)
 
     def _montar_ctx(self, estado):
@@ -225,7 +225,7 @@ class ServicoAuth(object):
                 nomes.append(self._catalogo.ambientes_obter(aid)["name"])
             except RepoNaoEncontrado:
                 self._log.warning("ambiente da matriz inexistente (profile_id=%s environment_id=%s)",
-                                  perfil_id, aid, extra={"acao": "SESSAO"})
+                                  perfil_id, aid, extra={"action": "SESSAO"})
         valor = (funcs, frozenset(nomes), frozenset(matriz.get("scrs", ())))
 
         with self._lock:
@@ -269,7 +269,7 @@ class ServicoAuth(object):
                                      auditoria={"actor": usuario["login"], "ip": ip, "action": "UPDATE",
                                                 "detail": u"senha alterada pelo próprio usuário"})
         self._log.info("senha alterada pelo proprio usuario (login=%s ip=%s)", usuario["login"], ip,
-                       extra={"acao": "UPDATE"})
+                       extra={"action": "UPDATE"})
         return "OK", {}
 
     # ----------------------------------------------------------------- logout
@@ -283,7 +283,7 @@ class ServicoAuth(object):
         if not ctx:
             return
         self._usuarios.encerrar_sessoes(ctx["user_id"], auditoria=_aud(ctx["login"], ip, "LOGOUT", "Logout"))
-        self._log.info("logout (login=%s ip=%s)", ctx["login"], ip, extra={"acao": "LOGIN"})
+        self._log.info("logout (login=%s ip=%s)", ctx["login"], ip, extra={"action": "LOGIN"})
 
 
 _padrao = None
@@ -305,7 +305,7 @@ def _servico():
                 auditoria=fabrica.obter("auditoria"),
                 max_tentativas=cfg.web.login_max_attempts,
                 bloqueio_s=cfg.web.login_lockout_s,
-                log=sss_logging.obter_logger("sss_web", cfg),
+                log=sss_logging.get_logger("sss_web", cfg),
             )
         return _padrao
 

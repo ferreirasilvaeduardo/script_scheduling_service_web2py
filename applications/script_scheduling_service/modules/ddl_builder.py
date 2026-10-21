@@ -396,9 +396,9 @@ def gerar_instrucoes_ddl(owner, prefixo, lob_storage="SECUREFILE"):
 
     Retorna lista de ItemDDL(fase, tipo, nome, sql, entidade).
     """
-    sql_ident.validar_owner(owner)
-    sql_ident.validar_prefixo(prefixo)
-    esquema = sql_ident.nomes(prefixo)
+    sql_ident.validate_owner(owner)
+    sql_ident.validate_prefix(prefixo)
+    esquema = sql_ident.names(prefixo)
     instrucoes = []
 
     # -------------------------------------------------------------------------
@@ -440,7 +440,7 @@ def gerar_instrucoes_ddl(owner, prefixo, lob_storage="SECUREFILE"):
 
         # PK
         pk_nome = t["pk"]
-        colunas_pk = ", ".join(sql_ident.TABELAS[entidade]["pk"]["colunas"])
+        colunas_pk = ", ".join(sql_ident.TABLES[entidade]["pk"]["colunas"])
         sql_pk = "ALTER TABLE {}.{} ADD CONSTRAINT {} PRIMARY KEY ({})".format(
             owner, tabela_nome, pk_nome, colunas_pk
         )
@@ -572,9 +572,9 @@ def gerar_instrucoes_ddl(owner, prefixo, lob_storage="SECUREFILE"):
 
 def gerar_instrucoes_comentarios(owner, prefixo):
     """Gera declaracoes COMMENT ON TABLE e COMMENT ON COLUMN para todas as tabelas e colunas."""
-    sql_ident.validar_owner(owner)
-    sql_ident.validar_prefixo(prefixo)
-    esquema = sql_ident.nomes(prefixo)
+    sql_ident.validate_owner(owner)
+    sql_ident.validate_prefix(prefixo)
+    esquema = sql_ident.names(prefixo)
     comandos = []
 
     for entidade, t in esquema.items():
@@ -670,9 +670,9 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
     texto do GRANT). Papel sem conta ou cuja conta e a dona do esquema nao recebe GRANT: o owner ja
     tem todos os privilegios e GRANT para si mesmo falha (ORA-01749); fica um comentario no lugar.
     """
-    sql_ident.validar_owner(owner)
-    sql_ident.validar_prefixo(prefixo)
-    esquema = sql_ident.nomes(prefixo)
+    sql_ident.validate_owner(owner)
+    sql_ident.validate_prefix(prefixo)
+    esquema = sql_ident.names(prefixo)
     comandos = []
 
     desconhecidos = sorted(set(papeis_usuarios or {}) - set(PAPEIS_GRANT))
@@ -685,7 +685,7 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
             comandos.append("-- papel {}: conta nao informada; nenhum GRANT gerado".format(papel))
             continue
         try:
-            sql_ident.validar_owner(usr)
+            sql_ident.validate_owner(usr)
         except ValueError:
             raise ValueError("Conta Oracle invalida para o papel {}".format(papel))
         if usr.upper() == "PUBLIC":
@@ -827,9 +827,9 @@ def _escape_sql(texto):
 
 def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, admin_senha_hash=None):
     """Gera declaracoes SQL de seed inicial (Fase 7) via MERGE idempotente e estatisticas (Fase 8)."""
-    sql_ident.validar_owner(owner)
-    sql_ident.validar_prefixo(prefixo)
-    esquema = sql_ident.nomes(prefixo)
+    sql_ident.validate_owner(owner)
+    sql_ident.validate_prefix(prefixo)
+    esquema = sql_ident.names(prefixo)
     comandos = []
 
     # 1. Funcionalidades canonicas
@@ -1127,7 +1127,7 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
         "WHEN NOT MATCHED THEN\n"
         "  INSERT (id, schema_version, version_applied_at, version_applied_by)\n"
         "  VALUES (1, {version}, SYSDATE, 'SYSTEM:init_db');"
-    ).format(tb=tb_ctl, version=sql_ident.VERSAO_ESQUEMA)
+    ).format(tb=tb_ctl, version=sql_ident.SCHEMA_VERSION)
     comandos.append(sql_ctl)
 
     # 7. Usuarios padrao da aplicacao e homologacao (CATALOGO_USUARIOS_PADRAO)
@@ -1179,7 +1179,7 @@ def gerar_script_seed(owner, prefixo, admin_login=None, admin_nome=None, admin_s
         admin_nome=admin_nome,
         admin_senha_hash=admin_senha_hash
     )
-    esquema = sql_ident.nomes(prefixo)
+    esquema = sql_ident.names(prefixo)
     owner_u = owner.upper()
 
     tabelas_stats = [
@@ -1256,9 +1256,9 @@ ORDEM_ROLLBACK_ENTIDADES = (
 
 def gerar_instrucoes_rollback(owner, prefixo):
     """Gera lista de instrucoes DROP (Triggers, Tabelas com CASCADE PURGE e Sequences)."""
-    sql_ident.validar_owner(owner)
-    sql_ident.validar_prefixo(prefixo)
-    esquema = sql_ident.nomes(prefixo)
+    sql_ident.validate_owner(owner)
+    sql_ident.validate_prefix(prefixo)
+    esquema = sql_ident.names(prefixo)
     instrucoes = []
 
     # 1. Triggers
@@ -1350,7 +1350,7 @@ def _lista_literais(nomes):
 
 def _linhas_seed_por_tabela(owner, prefixo):
     """Quantidade de MERGE do seed por tabela (minimo esperado logo apos a implantacao)."""
-    esquema = sql_ident.nomes(prefixo)
+    esquema = sql_ident.names(prefixo)
     por_tabela = dict((t["tabela"].upper(), ent) for ent, t in esquema.items())
     contagem = collections.OrderedDict((ent, 0) for ent in esquema)
     marca = "MERGE INTO {}.".format(owner).upper()
@@ -1371,9 +1371,9 @@ def gerar_script_validacao(owner, prefixo):
     linhas do seed. Cada verificacao sai com OK ou FALHA e um resumo final. Owner e prefixo vem dos
     parametros; nenhum hash de senha e exibido (AGENTS §3.3), so se a senha esta definida.
     """
-    sql_ident.validar_owner(owner)
-    sql_ident.validar_prefixo(prefixo)
-    esquema = sql_ident.nomes(prefixo)
+    sql_ident.validate_owner(owner)
+    sql_ident.validate_prefix(prefixo)
+    esquema = sql_ident.names(prefixo)
     own = owner.upper()
 
     tabelas = [t["tabela"] for t in esquema.values()]
@@ -1419,7 +1419,7 @@ def gerar_script_validacao(owner, prefixo):
 
     tab = dict((ent, "{}.{}".format(owner, t["tabela"])) for ent, t in esquema.items())
     dados = [
-        chk(10, "VERSAO DO ESQUEMA", "=", sql_ident.VERSAO_ESQUEMA,
+        chk(10, "VERSAO DO ESQUEMA", "=", sql_ident.SCHEMA_VERSION,
             "SELECT MAX(schema_version) FROM {}".format(tab["controle"])),
     ]
     for n, (ent, minimo) in enumerate(_linhas_seed_por_tabela(owner, prefixo).items()):

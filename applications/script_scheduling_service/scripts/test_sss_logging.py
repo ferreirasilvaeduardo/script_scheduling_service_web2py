@@ -42,7 +42,7 @@ class TestSSSLogging(unittest.TestCase):
         log_dir = os.path.join(self.tmp_dir, "logs")
         cfg = self._criar_cfg(log_dir)
 
-        logger = sss_logging.configurar("sss_web", cfg)
+        logger = sss_logging.configure("sss_web", cfg)
         self.addCleanup(lambda: [h.close() for h in list(logger.handlers)])
 
         logger.info("Teste de subida do log")
@@ -201,7 +201,7 @@ class TestSSSLogging(unittest.TestCase):
         os.makedirs(log_dir)
         umask_antiga = os.umask(0o077)
         try:
-            logger = sss_logging.configurar("sss_web", self._criar_cfg(log_dir))
+            logger = sss_logging.configure("sss_web", self._criar_cfg(log_dir))
         finally:
             os.umask(umask_antiga)
         self.addCleanup(lambda: [h.close() for h in list(logger.handlers)])
@@ -215,25 +215,25 @@ class TestSSSLogging(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(os.stat(nivel).st_mode), 0o750, nivel)
 
     def test_agent_id_aparece_nas_linhas(self):
-        """Regressao do R4: o agent_id do config.ini entra em [agente=...] (README §13)."""
+        """Regressao do R4: o agent_id do config.ini entra em [agent=...] (README §13)."""
         log_dir = os.path.join(self.tmp_dir, "logs")
-        logger = sss_logging.configurar("sss_web", self._criar_cfg(log_dir))
+        logger = sss_logging.configure("sss_web", self._criar_cfg(log_dir))
         self.addCleanup(lambda: [h.close() for h in list(logger.handlers)])
         logger.info("linha sem contexto")
-        sss_logging.get_adapter(logger, agente="agt-explicito", ticket=7, acao="CLAIM").info("com contexto")
+        sss_logging.get_adapter(logger, agent="agt-explicito", ticket=7, action="CLAIM").info("com contexto")
         logger.handlers[0].flush()
         with open(logger.handlers[0].baseFilename, encoding="utf-8") as f:
             linhas = f.read().splitlines()
-        self.assertIn("[agente=srv-test-01] [ticket=-] [acao=-] linha sem contexto", linhas[0])
-        self.assertIn("[agente=agt-explicito] [ticket=7] [acao=CLAIM] com contexto", linhas[1])
+        self.assertIn("[agent=srv-test-01] [ticket=-] [action=-] linha sem contexto", linhas[0])
+        self.assertIn("[agent=agt-explicito] [ticket=7] [action=CLAIM] com contexto", linhas[1])
 
     def test_falha_na_retencao_vira_warn_no_log(self):
-        """Regressao (AGENTS §6): falha da retencao nao e engolida; vira WARN [acao=RETENCAO]."""
+        """Regressao (AGENTS §6): falha da retencao nao e engolida; vira WARN [action=RETENCAO]."""
         log_dir = os.path.join(self.tmp_dir, "logs")
         antiga = os.path.join(log_dir, "interno", "app", "2000", "01", "01", "00", "00")
         os.makedirs(antiga)
         with mock.patch("log_paths.shutil.rmtree", side_effect=PermissionError(13, "Permission denied")):
-            logger = sss_logging.configurar("sss_web", self._criar_cfg(log_dir))
+            logger = sss_logging.configure("sss_web", self._criar_cfg(log_dir))
         self.addCleanup(lambda: [h.close() for h in list(logger.handlers)])
         logger.info("primeira linha")
         logger.handlers[0].flush()
@@ -241,7 +241,7 @@ class TestSSSLogging(unittest.TestCase):
             linhas = f.read().splitlines()
         self.assertEqual(len(linhas), 2)
         self.assertIn(" WARNING ", linhas[0])
-        self.assertIn("[agente=srv-test-01] [ticket=-] [acao=RETENCAO]", linhas[0])
+        self.assertIn("[agent=srv-test-01] [ticket=-] [action=RETENCAO]", linhas[0])
         self.assertIn(os.path.join(log_dir, "interno", "app", "2000", "01", "01"), linhas[0])
         self.assertIn("primeira linha", linhas[1])
         self.assertTrue(os.path.isdir(antiga))
@@ -251,15 +251,15 @@ class TestSSSLogging(unittest.TestCase):
         log_dir = os.path.join(self.tmp_dir, "logs")
         cfg = self._criar_cfg(log_dir)
 
-        logger1 = sss_logging.configurar("sss_web", cfg)
+        logger1 = sss_logging.configure("sss_web", cfg)
         self.assertEqual(len(logger1.handlers), 1)
 
-        logger2 = sss_logging.configurar("sss_web", cfg)
+        logger2 = sss_logging.configure("sss_web", cfg)
         self.assertIs(logger1, logger2)
         self.assertEqual(len(logger2.handlers), 1)
 
         # obter_logger tambem devolve o mesmo singleton
-        logger3 = sss_logging.obter_logger("sss_web", cfg)
+        logger3 = sss_logging.get_logger("sss_web", cfg)
         self.assertIs(logger1, logger3)
 
 

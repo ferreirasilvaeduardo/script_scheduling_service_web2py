@@ -134,16 +134,16 @@ def _conferir_esquema_sss(cur, owner, prefixo):
         import sql_ident
     except ImportError:
         from modules import sql_ident
-    tabela = sql_ident.tabela(owner, prefixo or "tbsss_", "controle")
+    tabela = sql_ident.table(owner, prefixo or "tbsss_", "controle")
     try:
         cur.execute("SELECT schema_version FROM " + tabela)
         row = cur.fetchone()
     except Exception as exc:
         raise PrecondicaoSchemaErro("Esquema SSS ausente no owner '%s' (%s)" % (owner, type(exc).__name__))
-    if not row or int(row[0]) != sql_ident.VERSAO_ESQUEMA:
+    if not row or int(row[0]) != sql_ident.SCHEMA_VERSION:
         raise PrecondicaoSchemaErro(
             "Versao do esquema SSS em '%s' (%s) difere da do codigo (%s)"
-            % (owner, row[0] if row else None, sql_ident.VERSAO_ESQUEMA)
+            % (owner, row[0] if row else None, sql_ident.SCHEMA_VERSION)
         )
 
 
@@ -159,7 +159,7 @@ def preparar_schema_descartavel(papel="web", cfg=None, segredos=None):
     if not ok:
         raise PrecondicaoSchemaErro(motivo)
     if cfg is None:
-        cfg = sss_config.obter_config()
+        cfg = sss_config.get_config()
     ok, motivo = verificar_precondicoes_ambiente(cfg=cfg)
     if not ok:
         raise PrecondicaoSchemaErro(motivo)
@@ -176,7 +176,7 @@ def preparar_schema_descartavel(papel="web", cfg=None, segredos=None):
         raise PrecondicaoSchemaErro("Usuario de teste '%s' nao pode ser o owner do esquema" % usuario_esperado)
 
     if segredos is None:
-        segredos = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel=papel)
+        segredos = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel=papel)
 
     import sys
     try:
@@ -185,7 +185,7 @@ def preparar_schema_descartavel(papel="web", cfg=None, segredos=None):
         from modules import db_conn
     conn_mod = sys.modules.get("db_conn", db_conn)
 
-    conn = conn_mod.conectar(cfg, segredos, papel)
+    conn = conn_mod.connect(cfg, segredos, papel)
     try:
         prefixo = _cfg_oracle(cfg, "table_prefix") or "tbsss_"
         validar_schema_descartavel(conn, cfg_owner, usuario_esperado, prefixo=prefixo)

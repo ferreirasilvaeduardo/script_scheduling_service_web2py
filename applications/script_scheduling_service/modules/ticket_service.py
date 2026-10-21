@@ -247,7 +247,7 @@ class ServicoTicket(object):
     def _negar(self, ctx, motivo, script_id, ambiente):
         self._log.warning("disparo negado (login=%s script_id=%r environment=%r reason=%s)",
                           (ctx or {}).get("login"), script_id, ambiente, motivo,
-                          extra={"acao": "RBAC"})
+                          extra={"action": "RBAC"})
         raise AcessoNegado(motivo)
 
     def _script(self, ctx, script_id):
@@ -473,7 +473,7 @@ class ServicoTicket(object):
             path_guard.checar_pastas_proibidas(script["path_file"])
         except path_guard.PathGuardErro as e:
             self._log.warning("caminho do script recusado (login=%s script_id=%s code=%s)",
-                              ctx["login"], script["id"], e.codigo, extra={"acao": "TICKET_CREATE"})
+                              ctx["login"], script["id"], e.codigo, extra={"action": "TICKET_CREATE"})
             erros[CAMPO_GERAL] = MSG_SCRIPT_INDISPONIVEL
 
         snapshot, resolvidos, erros_param = params_compiler.compilar_snapshot(
@@ -483,7 +483,7 @@ class ServicoTicket(object):
         if erros:
             self._log.info("validacao do disparo com erros (login=%s script_id=%s ambiente=%s campos=%s)",
                            ctx["login"], script["id"], amb["name"], ",".join(sorted(erros)),
-                           extra={"acao": "TICKET_CREATE"})
+                           extra={"action": "TICKET_CREATE"})
             return None, None, vinculos
         return snapshot, resolvidos, vinculos
 
@@ -619,11 +619,11 @@ class ServicoTicket(object):
             ticket_id = self._tickets.criar(ticket, linhas)
         except RepoErro:
             self._log.exception("falha ao gravar ticket (login=%s script_id=%s environment=%s pai=%s)",
-                                ctx["login"], script["id"], amb["name"], parent_id, extra={"acao": acao})
+                                ctx["login"], script["id"], amb["name"], parent_id, extra={"action": acao})
             return None, {CAMPO_GERAL: MSG_FALHA_CRIAR}
         self._log.info("ticket criado (ticket=%s login=%s script_id=%s environment=%s priority=%s pai=%s ip=%s)",
                        ticket_id, ctx["login"], script["id"], amb["name"], prio, parent_id, ip,
-                       extra={"acao": acao})
+                       extra={"action": acao})
         return ticket_id, {}
 
     # ------------------------------------------------------------ consulta
@@ -654,7 +654,7 @@ class ServicoTicket(object):
         ticket = self._tickets.obter(tid)
         if not self._pode_ver(ctx, ticket):
             self._log.warning("ticket fora do escopo (login=%s ticket=%s environment=%s)",
-                              ctx.get("login"), tid, ticket.get("environment"), extra={"acao": acao})
+                              ctx.get("login"), tid, ticket.get("environment"), extra={"action": acao})
             raise RepoNaoEncontrado("ticket fora do escopo")
         return ticket
 
@@ -989,7 +989,7 @@ class ServicoTicket(object):
             raise RepoNaoEncontrado("saida do ticket indisponivel")
         tamanho = int(saida["size_bytes"])
         self._log.info("download da saida (login=%s ticket=%s bytes=%s)", ctx.get("login"), tid, tamanho,
-                       extra={"acao": "SAIDA_BAIXAR"})
+                       extra={"action": "SAIDA_BAIXAR"})
 
         def gerar():
             off = 0
@@ -998,7 +998,7 @@ class ServicoTicket(object):
                     parte = self._tickets.saida_ler(tid, off, SAIDA_FATIA_BYTES)
                 except RepoErro:
                     self._log.exception("falha na leitura da saida para download (ticket=%s offset=%s)", tid, off,
-                                        extra={"acao": "SAIDA_BAIXAR"})
+                                        extra={"action": "SAIDA_BAIXAR"})
                     return
                 if not parte:
                     return
@@ -1016,7 +1016,7 @@ class ServicoTicket(object):
         ticket = self._ticket_visivel(ctx, ticket_id, "LOG_BAIXAR")
         tid = ticket["id"]
         self._log.info("download de log (login=%s ticket=%s)", ctx.get("login"), tid,
-                       extra={"acao": "LOG_BAIXAR"})
+                       extra={"action": "LOG_BAIXAR"})
 
         def gerar():
             off = 0
@@ -1025,7 +1025,7 @@ class ServicoTicket(object):
                     texto, off, _terminal, _truncado = self._tickets.log_ler(tid, off, LOG_MAX_CHARS)
                 except RepoErro:
                     self._log.exception("falha na leitura do log para download (ticket=%s offset=%s)", tid, off,
-                                        extra={"acao": "LOG_BAIXAR"})
+                                        extra={"action": "LOG_BAIXAR"})
                     yield MARCADOR_DOWNLOAD_INTERROMPIDO
                     return
                 if not texto:
@@ -1049,7 +1049,7 @@ class ServicoTicket(object):
         ticket = self._tickets.obter(tid)
         if not (self._pode_ver(ctx, ticket) or rbac.pode_cancelar(ctx, ticket)):
             self._log.warning("ticket fora do escopo (login=%s ticket=%s environment=%s)",
-                              ctx.get("login"), tid, ticket.get("environment"), extra={"acao": "TICKET_CANCEL"})
+                              ctx.get("login"), tid, ticket.get("environment"), extra={"action": "TICKET_CANCEL"})
             raise RepoNaoEncontrado("ticket fora do escopo")
         if not rbac.pode_cancelar(ctx, ticket):
             self._negar(ctx, "SEM_CANCELAMENTO", ticket["script_id"], ticket["environment"])
@@ -1057,10 +1057,10 @@ class ServicoTicket(object):
             resultado = self._tickets.solicitar_cancelamento(ticket["id"], ctx["login"], ip)
         except RepoErro:
             self._log.exception("falha ao cancelar ticket (ticket=%s login=%s)", ticket["id"], ctx["login"],
-                                extra={"acao": "TICKET_CANCEL"})
+                                extra={"action": "TICKET_CANCEL"})
             raise
         self._log.info("cancelamento de ticket (ticket=%s login=%s resultado=%s ip=%s)",
-                       ticket["id"], ctx["login"], resultado, ip, extra={"acao": "TICKET_CANCEL"})
+                       ticket["id"], ctx["login"], resultado, ip, extra={"action": "TICKET_CANCEL"})
         return resultado
 
     def _ticket_reexecutavel(self, ctx, ticket_id):
@@ -1139,7 +1139,7 @@ def _servico():
             _padrao = ServicoTicket(
                 catalogo=fabrica.obter("catalogo"),
                 tickets=fabrica.obter("tickets"),
-                log=sss_logging.obter_logger("sss_web", cfg),
+                log=sss_logging.get_logger("sss_web", cfg),
             )
         return _padrao
 

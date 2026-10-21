@@ -156,7 +156,7 @@ class Bomba(object):
         if not self.erro_leitura:
             self.erro_leitura = True
             _log.warning("log local ilegivel (%s); coleta do ticket suspensa", erro.__class__.__name__,
-                         extra={"ticket": self.ticket_id, "acao": "LOG"})
+                         extra={"ticket": self.ticket_id, "action": "LOG"})
 
     # -- limites -------------------------------------------------------------
 
@@ -189,7 +189,7 @@ class Bomba(object):
         self._bytes_aceitos += _bytes(enviar)
         self.truncado = True
         _log.warning("log truncado no banco (max_log_size_bytes)", extra={"ticket": self.ticket_id,
-                                                                          "acao": "LOG"})
+                                                                          "action": "LOG"})
         return enviar, True
 
     # -- envio ---------------------------------------------------------------
@@ -218,7 +218,7 @@ def _rollback(conn):
     try:
         conn.rollback()
     except Exception as e:  # noqa: BLE001 - a conexao sera tratada como incerta pelo chamador
-        _log.warning("rollback falhou (%s)", e.__class__.__name__, extra={"acao": "LOG"})
+        _log.warning("rollback falhou (%s)", e.__class__.__name__, extra={"action": "LOG"})
 
 
 def _enviar_um(bomba, conn, repo, agente_id):
@@ -233,12 +233,12 @@ def _enviar_um(bomba, conn, repo, agente_id):
     except LogOffsetInconsistente as e:
         _rollback(conn)
         bomba.parada = True
-        _log.error("pump interrompido: %s", e, extra={"ticket": bomba.ticket_id, "acao": "LOG"})
+        _log.error("pump interrompido: %s", e, extra={"ticket": bomba.ticket_id, "action": "LOG"})
         return INCONSISTENTE
     except Exception as e:  # noqa: BLE001 - erro de banco: mesmo bloco reapresentado numa conexao nova
         _rollback(conn)
         _log.warning("envio do log falhou (%s); bloco mantido", e.__class__.__name__,
-                     extra={"ticket": bomba.ticket_id, "acao": "LOG"})
+                     extra={"ticket": bomba.ticket_id, "action": "LOG"})
         return CONEXAO_INCERTA
     if resultado == POSSE_PERDIDA:
         _rollback(conn)
@@ -248,7 +248,7 @@ def _enviar_um(bomba, conn, repo, agente_id):
         conn.commit()
     except Exception as e:  # noqa: BLE001 - desfecho desconhecido: a repeticao reconcilia (JA_GRAVADO)
         _log.warning("COMMIT do log incerto (%s); bloco mantido", e.__class__.__name__,
-                     extra={"ticket": bomba.ticket_id, "acao": "LOG"})
+                     extra={"ticket": bomba.ticket_id, "action": "LOG"})
         return CONEXAO_INCERTA
     if item is not None:
         bomba.confirmar()

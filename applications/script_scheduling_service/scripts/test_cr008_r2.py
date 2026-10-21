@@ -81,14 +81,14 @@ class TestMotivoPausa(unittest.TestCase):
 class TestRegistroEsquema(unittest.TestCase):
 
     def test_colunas_novas_e_ampliadas(self):
-        usr = sql_ident.TABELAS["usuarios"]["colunas"]["session_epoch"]
+        usr = sql_ident.TABLES["usuarios"]["colunas"]["session_epoch"]
         self.assertEqual((usr["tipo"], usr["not_null"], usr["default"]), ("NUMBER(10)", True, "0"))
-        self.assertEqual(sql_ident.TABELAS["agentes"]["colunas"]["daemon_pid"]["tipo"], "NUMBER(10)")
-        self.assertEqual(sql_ident.VERSAO_ESQUEMA, 1)
+        self.assertEqual(sql_ident.TABLES["agentes"]["colunas"]["daemon_pid"]["tipo"], "NUMBER(10)")
+        self.assertEqual(sql_ident.SCHEMA_VERSION, 1)
 
     def test_prefixo_so_minusculo(self):
-        self.assertRegex("tbsss_", sql_ident.PADRAO_PREFIXO)
-        self.assertNotRegex("TBSSS_", sql_ident.PADRAO_PREFIXO)
+        self.assertRegex("tbsss_", sql_ident.PREFIX_PATTERN)
+        self.assertNotRegex("TBSSS_", sql_ident.PREFIX_PATTERN)
 
 
 if __name__ == "__main__":

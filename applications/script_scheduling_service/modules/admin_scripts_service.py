@@ -269,7 +269,7 @@ class ServicoAdminScripts(object):
             campo, mensagem = _CAMPO_POR_CONSTRAINT.get(exc.constraint, (CAMPO_GERAL, admin_crud.MSG_FALHA))
             erros[campo] = mensagem
         self._log.warning("cadastro de script rejeitado pelo repositorio (login=%s constraint=%s)",
-                          ctx.get("login"), exc.constraint, extra={"acao": FUNCIONALIDADE})
+                          ctx.get("login"), exc.constraint, extra={"action": FUNCIONALIDADE})
 
     # ----------------------------------------------------------------- escrita
 
@@ -292,7 +292,7 @@ class ServicoAdminScripts(object):
                 self._violacao(ctx, exc, erros)
                 return None, erros, None
             self._log.info("script incluido (login=%s script=%s)", ctx.get("login"), criado["name"],
-                           extra={"acao": "CREATE"})
+                           extra={"action": "CREATE"})
             return criado["id"], {}, aviso
 
         atual = self._obter(script_id)
@@ -316,7 +316,7 @@ class ServicoAdminScripts(object):
             self._violacao(ctx, exc, erros, atual["id"])
             return atual["id"], erros, None
         self._log.info("script alterado (login=%s script=%s)", ctx.get("login"), reg["name"],
-                       extra={"acao": "UPDATE"})
+                       extra={"action": "UPDATE"})
         return atual["id"], {}, aviso
 
     def alternar_ativo(self, ctx, ip, script_id, versao):
@@ -341,7 +341,7 @@ class ServicoAdminScripts(object):
                                                   esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
                                                   auditoria=admin_crud.auditoria(ctx, ip, acao, detalhe))
         self._log.info("script %s (login=%s script=%s)", "desativado" if novo_ativo == "N" else "reativado",
-                       ctx.get("login"), atual["name"], extra={"acao": acao})
+                       ctx.get("login"), atual["name"], extra={"action": acao})
         return alterado
 
     # ------------------------------------------------------------ homologacao
@@ -403,7 +403,7 @@ class ServicoAdminScripts(object):
         except RepoConflito:
             return None, {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
         self._log.info("homologacao alterada (login=%s script=%s)", ctx.get("login"), script["name"],
-                       extra={"acao": "UPDATE"})
+                       extra={"action": "UPDATE"})
         return diff, {}
 
     # -------------------------------------------------------------- vinculos
@@ -530,14 +530,14 @@ class ServicoAdminScripts(object):
             return None, {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
         except RepoViolacao as exc:
             self._log.warning("vinculos rejeitados pelo repositorio (login=%s script=%s constraint=%s)",
-                              ctx.get("login"), script["name"], exc.constraint, extra={"acao": FUNCIONALIDADE})
+                              ctx.get("login"), script["name"], exc.constraint, extra={"action": FUNCIONALIDADE})
             if exc.constraint == "sss_scr_nomeado_sem_flag":
                 return None, {CAMPO_GERAL: msg_nomeado_sem_flag([v["code"] for v in final if not v.get("param_flag")])}
             if exc.constraint == "sss_scr_nenhum_vinculado":
                 return None, {CAMPO_GERAL: MSG_VINCULO_NENHUM}
             return None, {CAMPO_GERAL: admin_crud.MSG_FALHA}
         self._log.info("vinculos alterados (login=%s script=%s)", ctx.get("login"), script["name"],
-                       extra={"acao": "UPDATE"})
+                       extra={"action": "UPDATE"})
         return depois, {}
 
     def previa(self, ctx, script_id, vinculos_json=None):
@@ -580,7 +580,7 @@ def _servico():
                 catalogo=fabrica.obter("catalogo"),
                 agendamentos=fabrica.obter("agendamentos"),
                 sss_env=cfg.app.sss_env,
-                log=sss_logging.obter_logger("sss_web", cfg),
+                log=sss_logging.get_logger("sss_web", cfg),
                 relogio=tickets.agora,
             )
         return _padrao

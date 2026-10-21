@@ -21,24 +21,24 @@ BLOCKED_ENV_VARS = frozenset([
     "PS4", "PROMPT_COMMAND", "CDPATH", "GLOBIGNORE",
 ])
 # Prefixos bloqueados: LD_* (exceto LD_LIBRARY_PATH), BASH_FUNC_* e MALLOC_*.
-_PREFIXOS_BLOQUEADOS = ("LD_", "BASH_FUNC_", "MALLOC_")
-_LD_PERMITIDA = "LD_LIBRARY_PATH"
+_BLOCKED_PREFIXES = ("LD_", "BASH_FUNC_", "MALLOC_")
+_ALLOWED_LD = "LD_LIBRARY_PATH"
 # Chaves que o agente define e que o env_passthrough nao pode sobrescrever (README §8.6).
-_CHAVES_FIXAS = frozenset(["PATH", "HOME", "TMPDIR", "LANG", "TZ", "PADRAO_VALOR_RUN_CONEXAO_BD"])
-_PREFIXOS_FIXOS = ("LC_", "SSS_", "PYTHON")
+_FIXED_KEYS = frozenset(["PATH", "HOME", "TMPDIR", "LANG", "TZ", "PADRAO_VALOR_RUN_CONEXAO_BD"])
+_FIXED_PREFIXES = ("LC_", "SSS_", "PYTHON")
 
 # Versao do SSS: unico lugar (tbsss_agentes.versao e SSS_VERSION do script, CR-010). Trocada a cada release.
-VERSAO_SSS = "1.0.0-dev"
+SSS_VERSION = "1.0.0-dev"
 
 # Chaves que existiram e foram retiradas: recusadas com orientacao, para nao serem ignoradas em silencio.
-CHAVES_REMOVIDAS = {
+REMOVED_KEYS = {
     ("app", "data_backend"): "a aplicacao usa sempre o Oracle do [oracle] (owner e table_prefix) (F7.3)",
     ("agent", "script_owner_uids"): "o SSS nao confere mais o dono dos scripts; o ambiente controla o conteudo (CR-011)",
     ("agent", "ambientes_exigem_hash"): "o SSS nao confere mais o hash dos scripts (CR-011)",
 }
 
 # Chaves com nome novo (CR-015a): o config.ini antigo e recusado com o nome a usar, sem aceitar o antigo.
-CHAVES_RENOMEADAS = {
+RENAMED_KEYS = {
     ("agent", "saida_dir"): "output_dir",
     ("agent", "saida_max_bytes"): "output_max_bytes",
     ("agent", "saida_max_arquivos"): "output_max_files",
@@ -57,63 +57,63 @@ CHAVES_RENOMEADAS = {
 }
 
 # Secoes com nome novo (CR-016b), no config.ini e no secrets.cfg ([ambiente:X] -> [environment:X]).
-SECOES_RENOMEADAS = {"retencao": "retention", "ambiente:": "environment:"}
+RENAMED_SECTIONS = {"retencao": "retention", "ambiente:": "environment:"}
 
 # Atores do sistema que nao podem ser agent_id (README §4.4 e §8.12).
-AGENT_IDS_RESERVADOS = ("init_db", "seed", "purge")
-_RE_USUARIO_EXECUCAO = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
-_AMBIENTES_MAX = 1000
-PAPEIS = ("web", "agent", "monitor")
+RESERVED_AGENT_IDS = ("init_db", "seed", "purge")
+_RE_EXEC_USER = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
+_ENVIRONMENTS_MAX = 1000
+ROLES = ("web", "agent", "monitor")
 
 _log = logging.getLogger("sss_config")
 
 
-def variavel_bloqueada(nome):
+def is_blocked_variable(nome):
     """Verdadeiro se a variavel nao pode ir para o ambiente do script (lista de bloqueio ou chave fixa)."""
     alto = nome.upper()
     if alto in BLOCKED_ENV_VARS:
         return True
-    if alto.startswith(_PREFIXOS_BLOQUEADOS) and alto != _LD_PERMITIDA:
+    if alto.startswith(_BLOCKED_PREFIXES) and alto != _ALLOWED_LD:
         return True
-    return alto in _CHAVES_FIXAS or alto.startswith(_PREFIXOS_FIXOS)
+    return alto in _FIXED_KEYS or alto.startswith(_FIXED_PREFIXES)
 
 
-class ConfigErro(Exception):
+class ConfigError(Exception):
     """Excecao para falhas de configuracao e validacao tipada."""
 
-    def __init__(self, secao=None, chave=None, motivo=None):
-        if chave is None and motivo is None and secao is not None:
-            self.motivo = str(secao)
-            self.secao = None
-            self.chave = None
+    def __init__(self, section=None, key=None, reason=None):
+        if key is None and reason is None and section is not None:
+            self.reason = str(section)
+            self.section = None
+            self.key = None
         else:
-            self.secao = secao
-            self.chave = chave
-            self.motivo = motivo
+            self.section = section
+            self.key = key
+            self.reason = reason
 
         partes = []
-        if self.secao:
-            partes.append("[%s]" % self.secao)
-        if self.chave:
-            partes.append(self.chave)
-        if self.motivo:
-            partes.append(str(self.motivo))
+        if self.section:
+            partes.append("[%s]" % self.section)
+        if self.key:
+            partes.append(self.key)
+        if self.reason:
+            partes.append(str(self.reason))
         msg = ": ".join(partes) if partes else "Erro de configuracao"
-        super(ConfigErro, self).__init__(msg)
+        super(ConfigError, self).__init__(msg)
 
 
-class CampoDef(object):
+class FieldDef(object):
     """Definicao declarativa de um campo de configuracao."""
 
     __slots__ = (
-        "tipo", "obrigatorio", "min_val", "max_val",
+        "kind", "required", "min_val", "max_val",
         "allowed_values", "regex", "default"
     )
 
-    def __init__(self, tipo, obrigatorio=True, min_val=None, max_val=None,
+    def __init__(self, kind, required=True, min_val=None, max_val=None,
                  allowed_values=None, regex=None, default=None):
-        self.tipo = tipo  # 'str', 'int', 'bool', 'enum', 'list_csv', 'path'
-        self.obrigatorio = obrigatorio
+        self.kind = kind  # 'str', 'int', 'bool', 'enum', 'list_csv', 'path'
+        self.required = required
         self.min_val = min_val
         self.max_val = max_val
         self.allowed_values = tuple(allowed_values) if allowed_values else None
@@ -124,87 +124,87 @@ class CampoDef(object):
 # Esquema declarativo completo de todas as secoes e chaves (README §12.1)
 SCHEMA = collections.OrderedDict([
     ("app", collections.OrderedDict([
-        ("sss_env", CampoDef("enum", obrigatorio=True, allowed_values=("DEV", "HML", "PROD"))),
+        ("sss_env", FieldDef("enum", required=True, allowed_values=("DEV", "HML", "PROD"))),
     ])),
     ("oracle", collections.OrderedDict([
-        ("user", CampoDef("str", obrigatorio=True)),
-        ("dsn", CampoDef("str", obrigatorio=True)),
-        ("owner", CampoDef("str", obrigatorio=True, regex=r"^[A-Za-z][A-Za-z0-9_]{0,29}$")),
+        ("user", FieldDef("str", required=True)),
+        ("dsn", FieldDef("str", required=True)),
+        ("owner", FieldDef("str", required=True, regex=r"^[A-Za-z][A-Za-z0-9_]{0,29}$")),
         # So minusculas: o registro de identificadores so aceita nomes em minusculas (CR-007, R-31).
-        ("table_prefix", CampoDef("str", obrigatorio=True, regex=r"^[a-z][a-z0-9_]{0,7}$")),
-        ("driver_mode", CampoDef("enum", obrigatorio=False, allowed_values=("auto", "thin", "thick", "cx_oracle"), default="auto")),
-        ("oracle_client_lib_dir", CampoDef("path", obrigatorio=False, default=None)),
-        ("call_timeout_ms", CampoDef("int", obrigatorio=True, min_val=1, max_val=3600000)),
-        ("pool_min", CampoDef("int", obrigatorio=True, min_val=1, max_val=1000)),
-        ("pool_max", CampoDef("int", obrigatorio=True, min_val=1, max_val=1000)),
+        ("table_prefix", FieldDef("str", required=True, regex=r"^[a-z][a-z0-9_]{0,7}$")),
+        ("driver_mode", FieldDef("enum", required=False, allowed_values=("auto", "thin", "thick", "cx_oracle"), default="auto")),
+        ("oracle_client_lib_dir", FieldDef("path", required=False, default=None)),
+        ("call_timeout_ms", FieldDef("int", required=True, min_val=1, max_val=3600000)),
+        ("pool_min", FieldDef("int", required=True, min_val=1, max_val=1000)),
+        ("pool_max", FieldDef("int", required=True, min_val=1, max_val=1000)),
     ])),
     ("secrets", collections.OrderedDict([
-        ("secrets_file", CampoDef("path", obrigatorio=True)),
+        ("secrets_file", FieldDef("path", required=True)),
     ])),
     ("agent", collections.OrderedDict([
         # init_db, seed e purge sao atores reservados do sistema (README §4.4 e §8.12).
-        ("agent_id", CampoDef("str", obrigatorio=True, regex=r"^(?!(?:init_db|seed|purge)$)[A-Za-z0-9._-]{1,30}$")),
-        ("environments", CampoDef("list_csv", obrigatorio=True)),
-        ("work_dir", CampoDef("path", obrigatorio=True)),
+        ("agent_id", FieldDef("str", required=True, regex=r"^(?!(?:init_db|seed|purge)$)[A-Za-z0-9._-]{1,30}$")),
+        ("environments", FieldDef("list_csv", required=True)),
+        ("work_dir", FieldDef("path", required=True)),
         # Usuario do SO por ambiente e pasta base dos diretorios de trabalho dos scripts (CR-007, D1):
         # obrigatorios fora de DEV (validacao cruzada em carregar()).
-        ("exec_users", CampoDef("map_csv", obrigatorio=False, default=())),
-        ("interpreters", CampoDef("map_csv", obrigatorio=False, default=())),
-        ("exec_work_dir", CampoDef("path", obrigatorio=False, default=None)),
-        ("max_parallel_jobs", CampoDef("int", obrigatorio=True, min_val=1, max_val=999)),
-        ("max_parallel_hard_limit", CampoDef("int", obrigatorio=True, min_val=1, max_val=999)),
-        ("claim_batch_size", CampoDef("int", obrigatorio=True, min_val=1, max_val=1000)),
-        ("schedule_batch_size", CampoDef("int", obrigatorio=True, min_val=1, max_val=1000)),
-        ("orchestrator_interval_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=3600)),
-        ("cancel_poll_interval_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=3600)),
-        ("heartbeat_interval_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=3600)),
-        ("fence_timeout_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=86400)),
-        ("node_offline_timeout_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=86400)),
-        ("kill_grace_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=300)),
-        ("script_timeout_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=86400)),
-        ("shutdown_mode", CampoDef("enum", obrigatorio=True, allowed_values=("TERMINATE", "DRAIN"))),
-        ("shutdown_grace_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=3600)),
-        ("misfire_policy", CampoDef("enum", obrigatorio=True, allowed_values=("RUN_ONCE", "SKIP"))),
-        ("misfire_tolerance_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=86400)),
+        ("exec_users", FieldDef("map_csv", required=False, default=())),
+        ("interpreters", FieldDef("map_csv", required=False, default=())),
+        ("exec_work_dir", FieldDef("path", required=False, default=None)),
+        ("max_parallel_jobs", FieldDef("int", required=True, min_val=1, max_val=999)),
+        ("max_parallel_hard_limit", FieldDef("int", required=True, min_val=1, max_val=999)),
+        ("claim_batch_size", FieldDef("int", required=True, min_val=1, max_val=1000)),
+        ("schedule_batch_size", FieldDef("int", required=True, min_val=1, max_val=1000)),
+        ("orchestrator_interval_s", FieldDef("int", required=True, min_val=1, max_val=3600)),
+        ("cancel_poll_interval_s", FieldDef("int", required=True, min_val=1, max_val=3600)),
+        ("heartbeat_interval_s", FieldDef("int", required=True, min_val=1, max_val=3600)),
+        ("fence_timeout_s", FieldDef("int", required=True, min_val=1, max_val=86400)),
+        ("node_offline_timeout_s", FieldDef("int", required=True, min_val=1, max_val=86400)),
+        ("kill_grace_s", FieldDef("int", required=True, min_val=1, max_val=300)),
+        ("script_timeout_s", FieldDef("int", required=True, min_val=1, max_val=86400)),
+        ("shutdown_mode", FieldDef("enum", required=True, allowed_values=("TERMINATE", "DRAIN"))),
+        ("shutdown_grace_s", FieldDef("int", required=True, min_val=1, max_val=3600)),
+        ("misfire_policy", FieldDef("enum", required=True, allowed_values=("RUN_ONCE", "SKIP"))),
+        ("misfire_tolerance_s", FieldDef("int", required=True, min_val=1, max_val=86400)),
         # Minimo 1461 (4 anos): cobre o 29/02 de regras CRON anuais (CR-008, R-32).
-        ("cron_horizon_days", CampoDef("int", obrigatorio=True, min_val=1461, max_val=36500)),
-        ("queue_aging_min", CampoDef("int", obrigatorio=False, min_val=0, max_val=1440, default=60)),
+        ("cron_horizon_days", FieldDef("int", required=True, min_val=1461, max_val=36500)),
+        ("queue_aging_min", FieldDef("int", required=False, min_val=0, max_val=1440, default=60)),
         # CR-008, R-25: espaco minimo do log_dir.
-        ("log_dir_min_free_mb", CampoDef("int", obrigatorio=False, min_val=0, max_val=1048576, default=1024)),
+        ("log_dir_min_free_mb", FieldDef("int", required=False, min_val=0, max_val=1048576, default=1024)),
         # CR-012: pasta de saida dos scripts (vazio desliga) e limites do zip (README §8.13).
-        ("output_dir", CampoDef("path", obrigatorio=False, default=None)),
-        ("output_max_bytes", CampoDef("int", obrigatorio=False, min_val=1048576, max_val=209715200, default=20971520)),
-        ("output_max_files", CampoDef("int", obrigatorio=False, min_val=1, max_val=10000, default=1000)),
+        ("output_dir", FieldDef("path", required=False, default=None)),
+        ("output_max_bytes", FieldDef("int", required=False, min_val=1048576, max_val=209715200, default=20971520)),
+        ("output_max_files", FieldDef("int", required=False, min_val=1, max_val=10000, default=1000)),
         # CR-014: pasta de entrada dos scripts, permanente, uma por ambiente e script (vazio desliga; README §8.14).
-        ("input_dir", CampoDef("path", obrigatorio=False, default=None)),
-        ("child_locale", CampoDef("str", obrigatorio=True)),
-        ("env_passthrough", CampoDef("list_csv", obrigatorio=False, default=())),
+        ("input_dir", FieldDef("path", required=False, default=None)),
+        ("child_locale", FieldDef("str", required=True)),
+        ("env_passthrough", FieldDef("list_csv", required=False, default=())),
     ])),
     ("logging", collections.OrderedDict([
-        ("log_dir", CampoDef("path", obrigatorio=True)),
-        ("level", CampoDef("enum", obrigatorio=True, allowed_values=("DEBUG", "INFO", "WARN", "ERROR"))),
-        ("app_log_max_bytes", CampoDef("int", obrigatorio=True, min_val=1024, max_val=1073741824)),
-        ("app_log_retention_days", CampoDef("int", obrigatorio=True, min_val=1, max_val=3650)),
-        ("max_log_size_bytes", CampoDef("int", obrigatorio=True, min_val=1024, max_val=67108864)),
-        ("max_local_log_size_bytes", CampoDef("int", obrigatorio=True, min_val=1024, max_val=10737418240)),
-        ("local_log_retention_days", CampoDef("int", obrigatorio=True, min_val=1, max_val=3650)),
+        ("log_dir", FieldDef("path", required=True)),
+        ("level", FieldDef("enum", required=True, allowed_values=("DEBUG", "INFO", "WARN", "ERROR"))),
+        ("app_log_max_bytes", FieldDef("int", required=True, min_val=1024, max_val=1073741824)),
+        ("app_log_retention_days", FieldDef("int", required=True, min_val=1, max_val=3650)),
+        ("max_log_size_bytes", FieldDef("int", required=True, min_val=1024, max_val=67108864)),
+        ("max_local_log_size_bytes", FieldDef("int", required=True, min_val=1024, max_val=10737418240)),
+        ("local_log_retention_days", FieldDef("int", required=True, min_val=1, max_val=3650)),
         # CR-012: pastas de saida que ficaram no disco (excesso ou falha).
-        ("output_retention_days", CampoDef("int", obrigatorio=False, min_val=1, max_val=365, default=7)),
+        ("output_retention_days", FieldDef("int", required=False, min_val=1, max_val=365, default=7)),
     ])),
     ("web", collections.OrderedDict([
-        ("session_idle_timeout_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=86400)),
-        ("session_max_hours", CampoDef("int", obrigatorio=False, min_val=1, max_val=168, default=12)),
-        ("login_max_attempts", CampoDef("int", obrigatorio=True, min_val=1, max_val=99)),
-        ("login_lockout_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=86400)),
-        ("log_poll_interval_s", CampoDef("int", obrigatorio=True, min_val=1, max_val=3600)),
-        ("trusted_proxies", CampoDef("list_csv", obrigatorio=False, default=())),
-        ("allowed_origins", CampoDef("list_csv", obrigatorio=True)),
+        ("session_idle_timeout_s", FieldDef("int", required=True, min_val=1, max_val=86400)),
+        ("session_max_hours", FieldDef("int", required=False, min_val=1, max_val=168, default=12)),
+        ("login_max_attempts", FieldDef("int", required=True, min_val=1, max_val=99)),
+        ("login_lockout_s", FieldDef("int", required=True, min_val=1, max_val=86400)),
+        ("log_poll_interval_s", FieldDef("int", required=True, min_val=1, max_val=3600)),
+        ("trusted_proxies", FieldDef("list_csv", required=False, default=())),
+        ("allowed_origins", FieldDef("list_csv", required=True)),
     ])),
     ("retention", collections.OrderedDict([
-        ("ticket_retention_days", CampoDef("int", obrigatorio=True, min_val=1, max_val=3650)),
-        ("audit_retention_days", CampoDef("int", obrigatorio=True, min_val=365, max_val=3650)),
-        ("purge_batch_size", CampoDef("int", obrigatorio=True, min_val=1, max_val=100000)),
-        ("purge_user", CampoDef("str", obrigatorio=False, default=None, regex=r"^[A-Za-z][A-Za-z0-9_$#]{0,29}$")),
+        ("ticket_retention_days", FieldDef("int", required=True, min_val=1, max_val=3650)),
+        ("audit_retention_days", FieldDef("int", required=True, min_val=365, max_val=3650)),
+        ("purge_batch_size", FieldDef("int", required=True, min_val=1, max_val=100000)),
+        ("purge_user", FieldDef("str", required=False, default=None, regex=r"^[A-Za-z][A-Za-z0-9_$#]{0,29}$")),
     ])),
 ])
 
@@ -265,7 +265,7 @@ class WebConfig(_ItemAccessMixin, collections.namedtuple("WebConfig", [
     __slots__ = ()
 
 
-class RetencaoConfig(_ItemAccessMixin, collections.namedtuple("RetencaoConfig", [
+class RetentionConfig(_ItemAccessMixin, collections.namedtuple("RetencaoConfig", [
     "ticket_retention_days", "audit_retention_days", "purge_batch_size", "purge_user"
 ])):
     __slots__ = ()
@@ -277,75 +277,75 @@ class Config(_ItemAccessMixin, collections.namedtuple("Config", [
     __slots__ = ()
 
 
-def _converter_valor(secao, chave, cdef, raw_val):
+def _convert_value(secao, chave, cdef, raw_val):
     """Converte e valida um valor individual com base em CampoDef."""
     if raw_val is None:
-        if cdef.obrigatorio:
-            raise ConfigErro(secao, chave, "Chave obrigatoria ausente")
+        if cdef.required:
+            raise ConfigError(secao, chave, "Chave obrigatoria ausente")
         return cdef.default
 
     val_str = str(raw_val).strip()
 
-    if cdef.tipo == "str":
+    if cdef.kind == "str":
         if not val_str:
-            if cdef.obrigatorio:
-                raise ConfigErro(secao, chave, "Valor obrigatorio nao pode ser vazio")
+            if cdef.required:
+                raise ConfigError(secao, chave, "Valor obrigatorio nao pode ser vazio")
             return cdef.default
         if cdef.regex and not re.fullmatch(cdef.regex, val_str):
-            raise ConfigErro(
+            raise ConfigError(
                 secao, chave,
                 "Valor '%s' nao atende ao padrao exigido '%s'" % (val_str, cdef.regex)
             )
         return val_str
 
-    elif cdef.tipo == "path":
+    elif cdef.kind == "path":
         if not val_str:
-            if cdef.obrigatorio:
-                raise ConfigErro(secao, chave, "Caminho obrigatorio nao pode ser vazio")
+            if cdef.required:
+                raise ConfigError(secao, chave, "Caminho obrigatorio nao pode ser vazio")
             return cdef.default
         return os.path.normpath(val_str)
 
-    elif cdef.tipo == "int":
+    elif cdef.kind == "int":
         if not val_str:
-            if cdef.obrigatorio:
-                raise ConfigErro(secao, chave, "Valor inteiro obrigatorio ausente")
+            if cdef.required:
+                raise ConfigError(secao, chave, "Valor inteiro obrigatorio ausente")
             return cdef.default
         try:
             val_int = int(val_str)
         except ValueError:
-            raise ConfigErro(secao, chave, "Valor inteiro invalido: '%s'" % val_str)
+            raise ConfigError(secao, chave, "Valor inteiro invalido: '%s'" % val_str)
 
         if cdef.min_val is not None and val_int < cdef.min_val:
-            raise ConfigErro(
+            raise ConfigError(
                 secao, chave,
                 "Valor %d abaixo do minimo permitido (%d)" % (val_int, cdef.min_val)
             )
         if cdef.max_val is not None and val_int > cdef.max_val:
-            raise ConfigErro(
+            raise ConfigError(
                 secao, chave,
                 "Valor %d acima do maximo permitido (%d)" % (val_int, cdef.max_val)
             )
         return val_int
 
-    elif cdef.tipo == "bool":
+    elif cdef.kind == "bool":
         if not val_str:
-            if cdef.obrigatorio:
-                raise ConfigErro(secao, chave, "Valor booleano obrigatorio ausente")
+            if cdef.required:
+                raise ConfigError(secao, chave, "Valor booleano obrigatorio ausente")
             return cdef.default
         low = val_str.lower()
         if low in ("true", "1", "yes", "on"):
             return True
         elif low in ("false", "0", "no", "off"):
             return False
-        raise ConfigErro(secao, chave, "Valor booleano invalido: '%s'" % val_str)
+        raise ConfigError(secao, chave, "Valor booleano invalido: '%s'" % val_str)
 
-    elif cdef.tipo == "enum":
+    elif cdef.kind == "enum":
         if not val_str:
-            if cdef.obrigatorio:
-                raise ConfigErro(secao, chave, "Valor obrigatorio ausente")
+            if cdef.required:
+                raise ConfigError(secao, chave, "Valor obrigatorio ausente")
             return cdef.default
         if cdef.allowed_values and val_str not in cdef.allowed_values:
-            raise ConfigErro(
+            raise ConfigError(
                 secao, chave,
                 "Valor '%s' invalido. Permitidos: %s" % (
                     val_str, ", ".join(cdef.allowed_values)
@@ -353,144 +353,144 @@ def _converter_valor(secao, chave, cdef, raw_val):
             )
         return val_str
 
-    elif cdef.tipo == "list_csv":
+    elif cdef.kind == "list_csv":
         if not val_str:
-            if cdef.obrigatorio:
-                raise ConfigErro(secao, chave, "Lista obrigatoria nao pode ser vazia")
+            if cdef.required:
+                raise ConfigError(secao, chave, "Lista obrigatoria nao pode ser vazia")
             return cdef.default
 
         partes = [p.strip() for p in val_str.split(",") if p.strip()]
-        if cdef.obrigatorio and not partes:
-            raise ConfigErro(secao, chave, "Lista obrigatoria nao pode ser vazia")
+        if cdef.required and not partes:
+            raise ConfigError(secao, chave, "Lista obrigatoria nao pode ser vazia")
 
         return tuple(partes)
 
-    elif cdef.tipo == "map_csv":
+    elif cdef.kind == "map_csv":
         # "CHAVE=valor,CHAVE=valor" -> tupla de pares, na ordem, sem chave repetida.
         if not val_str:
-            if cdef.obrigatorio:
-                raise ConfigErro(secao, chave, "Lista obrigatoria nao pode ser vazia")
+            if cdef.required:
+                raise ConfigError(secao, chave, "Lista obrigatoria nao pode ser vazia")
             return cdef.default
         pares = []
         vistas = set()
         for item in [p.strip() for p in val_str.split(",") if p.strip()]:
             if item.count("=") != 1:
-                raise ConfigErro(secao, chave, "Item invalido (esperado CHAVE=valor): '%s'" % item)
+                raise ConfigError(secao, chave, "Item invalido (esperado CHAVE=valor): '%s'" % item)
             k, v = [x.strip() for x in item.split("=")]
             if not k or not v:
-                raise ConfigErro(secao, chave, "Item invalido (esperado CHAVE=valor): '%s'" % item)
+                raise ConfigError(secao, chave, "Item invalido (esperado CHAVE=valor): '%s'" % item)
             if k in vistas:
-                raise ConfigErro(secao, chave, "Chave repetida: '%s'" % k)
+                raise ConfigError(secao, chave, "Chave repetida: '%s'" % k)
             vistas.add(k)
             pares.append((k, v))
         return tuple(pares)
 
-    raise ConfigErro(secao, chave, "Tipo de campo desconhecido no schema: '%s'" % cdef.tipo)
+    raise ConfigError(secao, chave, "Tipo de campo desconhecido no schema: '%s'" % cdef.kind)
 
 
-def carregar(caminho_ini):
+def load(caminho_ini):
     """Carrega e valida o config.ini de forma declarativa e fail-fast.
 
     Retorna uma instancia imutavel de Config.
     """
     if not os.path.exists(caminho_ini):
-        raise ConfigErro(motivo="Arquivo de configuracao nao encontrado: %s" % caminho_ini)
+        raise ConfigError(reason="Arquivo de configuracao nao encontrado: %s" % caminho_ini)
 
     cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
     try:
         with open(caminho_ini, "r", encoding="utf-8") as f:
             cp.read_file(f)
     except Exception as e:
-        raise ConfigErro(motivo="Erro ao ler arquivo de configuracao %s: %s" % (caminho_ini, e))
+        raise ConfigError(reason="Erro ao ler arquivo de configuracao %s: %s" % (caminho_ini, e))
 
     # 1. Validar secoes desconhecidas
     for sec in cp.sections():
-        if sec in SECOES_RENOMEADAS:
-            raise ConfigErro(secao=sec, chave=None, motivo="Secao renomeada: [%s] passou a se chamar [%s] (CR-016b)"
-                             % (sec, SECOES_RENOMEADAS[sec]))
+        if sec in RENAMED_SECTIONS:
+            raise ConfigError(section=sec, key=None, reason="Secao renomeada: [%s] passou a se chamar [%s] (CR-016b)"
+                             % (sec, RENAMED_SECTIONS[sec]))
         if sec not in SCHEMA:
-            raise ConfigErro(secao=sec, chave=None, motivo="Secao desconhecida no config.ini: [%s]" % sec)
+            raise ConfigError(section=sec, key=None, reason="Secao desconhecida no config.ini: [%s]" % sec)
 
     # 2. Validar presenca e chaves de cada secao
     dados_secoes = {}
     for sec_nome, sec_campos in SCHEMA.items():
         if sec_nome not in cp.sections():
-            raise ConfigErro(secao=sec_nome, chave=None, motivo="Secao obrigatoria ausente: [%s]" % sec_nome)
+            raise ConfigError(section=sec_nome, key=None, reason="Secao obrigatoria ausente: [%s]" % sec_nome)
 
         cp_sec = cp[sec_nome]
 
         # Chaves desconhecidas na secao
         for k in cp_sec:
-            if (sec_nome, k) in CHAVES_REMOVIDAS:
-                raise ConfigErro(secao=sec_nome, chave=k, motivo="Chave removida: %s; apague a linha %s" % (
-                    CHAVES_REMOVIDAS[(sec_nome, k)], k))
-            if (sec_nome, k) in CHAVES_RENOMEADAS:
-                raise ConfigErro(secao=sec_nome, chave=k, motivo="Chave renomeada: %s passou a se chamar %s (CR-015a)"
-                                 % (k, CHAVES_RENOMEADAS[(sec_nome, k)]))
+            if (sec_nome, k) in REMOVED_KEYS:
+                raise ConfigError(section=sec_nome, key=k, reason="Chave removida: %s; apague a linha %s" % (
+                    REMOVED_KEYS[(sec_nome, k)], k))
+            if (sec_nome, k) in RENAMED_KEYS:
+                raise ConfigError(section=sec_nome, key=k, reason="Chave renomeada: %s passou a se chamar %s (CR-015a)"
+                                 % (k, RENAMED_KEYS[(sec_nome, k)]))
             if k not in sec_campos:
-                raise ConfigErro(secao=sec_nome, chave=k, motivo="Chave desconhecida na secao [%s]: %s" % (sec_nome, k))
+                raise ConfigError(section=sec_nome, key=k, reason="Chave desconhecida na secao [%s]: %s" % (sec_nome, k))
 
         # Validar e converter cada chave esperada
         dados_sec = {}
         for k, cdef in sec_campos.items():
             if k not in cp_sec:
-                if cdef.obrigatorio:
-                    raise ConfigErro(
-                        secao=sec_nome, chave=k,
-                        motivo="Chave obrigatoria ausente na secao [%s]: %s" % (sec_nome, k)
+                if cdef.required:
+                    raise ConfigError(
+                        section=sec_nome, key=k,
+                        reason="Chave obrigatoria ausente na secao [%s]: %s" % (sec_nome, k)
                     )
                 dados_sec[k] = cdef.default
             else:
                 raw = cp_sec[k]
-                dados_sec[k] = _converter_valor(sec_nome, k, cdef, raw)
+                dados_sec[k] = _convert_value(sec_nome, k, cdef, raw)
 
         dados_secoes[sec_nome] = dados_sec
 
     # 3. Validacao de env_passthrough contra a lista de bloqueio e as chaves fixas (README §8.6)
     agent_dict = dados_secoes["agent"]
     for env_var in agent_dict["env_passthrough"]:
-        if variavel_bloqueada(env_var):
-            raise ConfigErro(
-                secao="agent", chave="env_passthrough",
-                motivo="Variavel bloqueada nao permitida em env_passthrough: '%s'" % env_var
+        if is_blocked_variable(env_var):
+            raise ConfigError(
+                section="agent", key="env_passthrough",
+                reason="Variavel bloqueada nao permitida em env_passthrough: '%s'" % env_var
             )
 
     # 4. Invariantes
     app_dict = dados_secoes["app"]
     oracle_dict = dados_secoes["oracle"]
     if oracle_dict["pool_min"] > oracle_dict["pool_max"]:
-        raise ConfigErro(
-            secao="oracle", chave="pool_min",
-            motivo="pool_min (%d) nao pode ser maior que pool_max (%d)" % (
+        raise ConfigError(
+            section="oracle", key="pool_min",
+            reason="pool_min (%d) nao pode ser maior que pool_max (%d)" % (
                 oracle_dict["pool_min"], oracle_dict["pool_max"]
             )
         )
 
     if agent_dict["max_parallel_jobs"] > agent_dict["max_parallel_hard_limit"]:
-        raise ConfigErro(
-            secao="agent", chave="max_parallel_jobs",
-            motivo="max_parallel_jobs (%d) nao pode ser maior que max_parallel_hard_limit (%d)" % (
+        raise ConfigError(
+            section="agent", key="max_parallel_jobs",
+            reason="max_parallel_jobs (%d) nao pode ser maior que max_parallel_hard_limit (%d)" % (
                 agent_dict["max_parallel_jobs"], agent_dict["max_parallel_hard_limit"]
             )
         )
 
     if agent_dict["fence_timeout_s"] * 2 > agent_dict["node_offline_timeout_s"]:
-        raise ConfigErro(
-            secao="agent", chave="fence_timeout_s",
-            motivo="Invariante violada: fence_timeout_s * 2 (%d) deve ser <= node_offline_timeout_s (%d)" % (
+        raise ConfigError(
+            section="agent", key="fence_timeout_s",
+            reason="Invariante violada: fence_timeout_s * 2 (%d) deve ser <= node_offline_timeout_s (%d)" % (
                 agent_dict["fence_timeout_s"] * 2, agent_dict["node_offline_timeout_s"]
             )
         )
 
     if agent_dict["heartbeat_interval_s"] * 3 > agent_dict["fence_timeout_s"]:
-        raise ConfigErro(
-            secao="agent", chave="heartbeat_interval_s",
-            motivo="Invariante violada: heartbeat_interval_s * 3 (%d) deve ser <= fence_timeout_s (%d)" % (
+        raise ConfigError(
+            section="agent", key="heartbeat_interval_s",
+            reason="Invariante violada: heartbeat_interval_s * 3 (%d) deve ser <= fence_timeout_s (%d)" % (
                 agent_dict["heartbeat_interval_s"] * 3, agent_dict["fence_timeout_s"]
             )
         )
 
-    _validar_cr007(app_dict, oracle_dict, agent_dict, dados_secoes["logging"], dados_secoes["retention"])
+    _validate_cr007(app_dict, oracle_dict, agent_dict, dados_secoes["logging"], dados_secoes["retention"])
 
     # 5. Instanciar arvore de configuracao imutavel
     app_cfg = AppConfig(**app_dict)
@@ -499,7 +499,7 @@ def carregar(caminho_ini):
     agent_cfg = AgentConfig(**agent_dict)
     logging_cfg = LoggingConfig(**dados_secoes["logging"])
     web_cfg = WebConfig(**dados_secoes["web"])
-    retencao_cfg = RetencaoConfig(**dados_secoes["retention"])
+    retencao_cfg = RetentionConfig(**dados_secoes["retention"])
 
     return Config(
         app=app_cfg,
@@ -517,111 +517,111 @@ def call_timeout_s(call_timeout_ms):
     return (int(call_timeout_ms) + 999) // 1000
 
 
-def _dentro(caminho, pasta):
+def _inside(caminho, pasta):
     caminho, pasta = os.path.normpath(caminho), os.path.normpath(pasta)
     return os.path.commonpath([caminho, pasta]) == pasta
 
 
-def _validar_cr007(app, oracle, agent, logging_dict, retencao):
+def _validate_cr007(app, oracle, agent, logging_dict, retencao):
     """Validacoes cruzadas do CR-007: invariantes I3/I4, execucao, retencao e purge."""
     call_s = call_timeout_s(oracle["call_timeout_ms"])
     i3 = agent["heartbeat_interval_s"] + 2 * call_s
     if i3 > agent["fence_timeout_s"]:
-        raise ConfigErro(
-            secao="agent", chave="fence_timeout_s",
-            motivo="Invariante I3 violada: heartbeat_interval_s + 2 * call_timeout_s (%d) deve ser <= "
+        raise ConfigError(
+            section="agent", key="fence_timeout_s",
+            reason="Invariante I3 violada: heartbeat_interval_s + 2 * call_timeout_s (%d) deve ser <= "
                    "fence_timeout_s (%d) (README §8.9)" % (i3, agent["fence_timeout_s"]))
     i4 = agent["fence_timeout_s"] + call_s + agent["kill_grace_s"] + 2
     if i4 > agent["node_offline_timeout_s"]:
-        raise ConfigErro(
-            secao="agent", chave="node_offline_timeout_s",
-            motivo="Invariante I4 violada: fence_timeout_s + call_timeout_s + kill_grace_s + 2 (%d) deve ser <= "
+        raise ConfigError(
+            section="agent", key="node_offline_timeout_s",
+            reason="Invariante I4 violada: fence_timeout_s + call_timeout_s + kill_grace_s + 2 (%d) deve ser <= "
                    "node_offline_timeout_s (%d) (README §8.9)" % (i4, agent["node_offline_timeout_s"]))
 
-    if len(",".join(agent["environments"])) > _AMBIENTES_MAX:
-        raise ConfigErro(secao="agent", chave="environments",
-                         motivo="Lista com mais de %d caracteres (coluna tbsss_agentes.ambientes)" % _AMBIENTES_MAX)
+    if len(",".join(agent["environments"])) > _ENVIRONMENTS_MAX:
+        raise ConfigError(section="agent", key="environments",
+                         reason="Lista com mais de %d caracteres (coluna tbsss_agentes.ambientes)" % _ENVIRONMENTS_MAX)
 
     for logico, executavel in agent["interpreters"]:
         # Allowlist do path_guard (README §6.4); o executavel e conferido pelo agente na subida (§8.5).
         if logico not in ("PYTHON3", "BASH", "SH"):
-            raise ConfigErro(secao="agent", chave="interpreters",
-                             motivo="Interpretador fora da allowlist (PYTHON3, BASH, SH): '%s'" % logico)
+            raise ConfigError(section="agent", key="interpreters",
+                             reason="Interpretador fora da allowlist (PYTHON3, BASH, SH): '%s'" % logico)
         if not executavel.startswith("/") or os.path.normpath(executavel) != executavel:
-            raise ConfigErro(secao="agent", chave="interpreters",
-                             motivo="Executavel de %s deve ser caminho absoluto e normalizado" % logico)
+            raise ConfigError(section="agent", key="interpreters",
+                             reason="Executavel de %s deve ser caminho absoluto e normalizado" % logico)
 
     dev = app["sss_env"] == "DEV"
     usuarios = dict(agent["exec_users"])
     for amb, usr in agent["exec_users"]:
         if amb not in agent["environments"]:
-            raise ConfigErro(secao="agent", chave="exec_users",
-                             motivo="Ambiente '%s' nao esta em environments" % amb)
-        if not _RE_USUARIO_EXECUCAO.match(usr) or usr == "root":
-            raise ConfigErro(secao="agent", chave="exec_users",
-                             motivo="Usuario de execucao invalido para '%s'" % amb)
+            raise ConfigError(section="agent", key="exec_users",
+                             reason="Ambiente '%s' nao esta em environments" % amb)
+        if not _RE_EXEC_USER.match(usr) or usr == "root":
+            raise ConfigError(section="agent", key="exec_users",
+                             reason="Usuario de execucao invalido para '%s'" % amb)
     if not dev:
         faltando = [a for a in agent["environments"] if a not in usuarios]
         if faltando:
-            raise ConfigErro(secao="agent", chave="exec_users",
-                             motivo="Fora de DEV, todo ambiente atendido precisa de usuario de execucao: %s"
+            raise ConfigError(section="agent", key="exec_users",
+                             reason="Fora de DEV, todo ambiente atendido precisa de usuario de execucao: %s"
                                     % ", ".join(faltando))
         if not agent["exec_work_dir"]:
-            raise ConfigErro(secao="agent", chave="exec_work_dir", motivo="Obrigatorio fora de DEV (CR-007, D1)")
+            raise ConfigError(section="agent", key="exec_work_dir", reason="Obrigatorio fora de DEV (CR-007, D1)")
     if agent["exec_work_dir"]:
         for nome, outro in (("work_dir", agent["work_dir"]), ("log_dir", logging_dict["log_dir"])):
-            if _dentro(agent["exec_work_dir"], outro) or _dentro(outro, agent["exec_work_dir"]):
-                raise ConfigErro(secao="agent", chave="exec_work_dir",
-                                 motivo="Nao pode ficar dentro de %s nem conte-lo" % nome)
+            if _inside(agent["exec_work_dir"], outro) or _inside(outro, agent["exec_work_dir"]):
+                raise ConfigError(section="agent", key="exec_work_dir",
+                                 reason="Nao pode ficar dentro de %s nem conte-lo" % nome)
     if agent["output_dir"]:
         # CR-012: a pasta de saida nao se sobrepoe as pastas do SSS (README §8.13).
         if not os.path.isabs(agent["output_dir"]):
-            raise ConfigErro(secao="agent", chave="output_dir", motivo="Deve ser um caminho absoluto")
+            raise ConfigError(section="agent", key="output_dir", reason="Deve ser um caminho absoluto")
         for nome, outro in (("work_dir", agent["work_dir"]), ("log_dir", logging_dict["log_dir"]),
                             ("exec_work_dir", agent["exec_work_dir"])):
-            if outro and (_dentro(agent["output_dir"], outro) or _dentro(outro, agent["output_dir"])):
-                raise ConfigErro(secao="agent", chave="output_dir",
-                                 motivo="Nao pode ficar dentro de %s nem conte-lo" % nome)
+            if outro and (_inside(agent["output_dir"], outro) or _inside(outro, agent["output_dir"])):
+                raise ConfigError(section="agent", key="output_dir",
+                                 reason="Nao pode ficar dentro de %s nem conte-lo" % nome)
     if agent["input_dir"]:
         # CR-014: a pasta de entrada nao se sobrepoe as pastas do SSS nem a de saida (README §8.14).
         if not os.path.isabs(agent["input_dir"]):
-            raise ConfigErro(secao="agent", chave="input_dir", motivo="Deve ser um caminho absoluto")
+            raise ConfigError(section="agent", key="input_dir", reason="Deve ser um caminho absoluto")
         for nome, outro in (("work_dir", agent["work_dir"]), ("log_dir", logging_dict["log_dir"]),
                             ("exec_work_dir", agent["exec_work_dir"]), ("output_dir", agent["output_dir"])):
-            if outro and (_dentro(agent["input_dir"], outro) or _dentro(outro, agent["input_dir"])):
-                raise ConfigErro(secao="agent", chave="input_dir",
-                                 motivo="Nao pode ficar dentro de %s nem conte-lo" % nome)
+            if outro and (_inside(agent["input_dir"], outro) or _inside(outro, agent["input_dir"])):
+                raise ConfigError(section="agent", key="input_dir",
+                                 reason="Nao pode ficar dentro de %s nem conte-lo" % nome)
 
     if retencao["audit_retention_days"] < retencao["ticket_retention_days"]:
-        raise ConfigErro(secao="retention", chave="audit_retention_days",
-                         motivo="audit_retention_days (%d) deve ser >= ticket_retention_days (%d)" % (
+        raise ConfigError(section="retention", key="audit_retention_days",
+                         reason="audit_retention_days (%d) deve ser >= ticket_retention_days (%d)" % (
                              retencao["audit_retention_days"], retencao["ticket_retention_days"]))
     if app["sss_env"] != "DEV" and oracle["user"].upper() == oracle["owner"].upper():
         # CR-008, R-29: a conta da aplicacao nunca e a dona do esquema fora de DEV (D1b do CR-007).
-        raise ConfigErro(secao="oracle", chave="user",
-                         motivo="Fora de DEV, a conta da aplicacao deve ser diferente do owner do esquema")
+        raise ConfigError(section="oracle", key="user",
+                         reason="Fora de DEV, a conta da aplicacao deve ser diferente do owner do esquema")
     purge = retencao["purge_user"]
     if not purge:
         # Em DEV, purge_user vazio significa purge desligado (scripts/purge.py recusa rodar; README §12.1).
         if app["sss_env"] != "DEV":
-            raise ConfigErro(secao="retention", chave="purge_user", motivo="Obrigatorio fora de DEV")
+            raise ConfigError(section="retention", key="purge_user", reason="Obrigatorio fora de DEV")
     elif purge.upper() in (oracle["user"].upper(), oracle["owner"].upper()):
-            raise ConfigErro(secao="retention", chave="purge_user",
-                             motivo="A conta de purge deve ser diferente da conta do processo e do owner")
+            raise ConfigError(section="retention", key="purge_user",
+                             reason="A conta de purge deve ser diferente da conta do processo e do owner")
 
 
-def verificar_codificacao(nome_log=None, log_dir=None):
+def check_encoding(nome_log=None, log_dir=None):
     """Aborta (ConfigErro) se a codificacao do sistema de arquivos nao for UTF-8 (CR-007, R-17)."""
     cod = (sys.getfilesystemencoding() or "").lower().replace("-", "")
     if cod != "utf8":
-        exc = ConfigErro(motivo="Codificacao do sistema de arquivos '%s' nao e UTF-8: exporte LANG/LC_ALL "
+        exc = ConfigError(reason="Codificacao do sistema de arquivos '%s' nao e UTF-8: exporte LANG/LC_ALL "
                                 "(por exemplo C.UTF-8) antes de iniciar (README §12.2)" % sys.getfilesystemencoding())
         if nome_log:
-            _abortar(nome_log, exc, log_dir)
+            _abort(nome_log, exc, log_dir)
         raise exc
 
 
-class OracleSegredo(object):
+class OracleSecret(object):
     """Representacao de credenciais Oracle, sem exibir senha no repr."""
 
     __slots__ = ("_password",)
@@ -640,7 +640,7 @@ class OracleSegredo(object):
         return "<OracleSegredo: ***redacted***>"
 
 
-class WebSegredo(object):
+class WebSecret(object):
     """Representacao da chave de sessao web, sem exibir no repr."""
 
     __slots__ = ("_cookie_key",)
@@ -659,7 +659,7 @@ class WebSegredo(object):
         return "<WebSegredo: ***redacted***>"
 
 
-class AmbienteSegredo(object):
+class EnvironmentSecret(object):
     """Credenciais de acesso para um ambiente catalogado."""
 
     __slots__ = ("_user", "_password")
@@ -683,17 +683,17 @@ class AmbienteSegredo(object):
         return "<AmbienteSegredo: user=%r, password=***>" % (self._user,)
 
 
-class Segredos(object):
+class Secrets(object):
     """Container seguro de segredos carregados do secrets.cfg."""
 
-    __slots__ = ("_oracle", "_web", "_ambientes", "_purge", "_monitor")
+    __slots__ = ("_oracle", "_web", "_environments", "_purge", "_monitor")
 
-    def __init__(self, oracle_password, cookie_key, ambientes, purge_password=None, monitor=None):
-        self._oracle = OracleSegredo(oracle_password) if oracle_password is not None else None
-        self._web = WebSegredo(cookie_key) if cookie_key is not None else None
-        self._ambientes = dict(ambientes)
-        self._purge = OracleSegredo(purge_password) if purge_password is not None else None
-        self._monitor = monitor  # AmbienteSegredo com user e password (CR-008, E3)
+    def __init__(self, oracle_password, cookie_key, environments, purge_password=None, monitor=None):
+        self._oracle = OracleSecret(oracle_password) if oracle_password is not None else None
+        self._web = WebSecret(cookie_key) if cookie_key is not None else None
+        self._environments = dict(environments)
+        self._purge = OracleSecret(purge_password) if purge_password is not None else None
+        self._monitor = monitor  # EnvironmentSecret com user e password (CR-008, E3)
 
     @property
     def purge_password(self):
@@ -728,11 +728,11 @@ class Segredos(object):
         return self._monitor.user if self._monitor else None
 
     @property
-    def ambientes(self):
-        return self._ambientes
+    def environments(self):
+        return self._environments
 
-    def get_ambiente(self, nome):
-        return self._ambientes.get(nome)
+    def get_environment(self, nome):
+        return self._environments.get(nome)
 
     def __getitem__(self, item):
         if item == "oracle":
@@ -749,85 +749,85 @@ class Segredos(object):
             return {"user": self.monitor_user, "password": self.monitor_password}
         elif item.startswith("environment:"):
             nome = item.split(":", 1)[1]
-            amb = self.get_ambiente(nome)
+            amb = self.get_environment(nome)
             if amb is None:
                 raise KeyError(item)
             return {"user": amb.user, "password": amb.password}
-        elif item in self._ambientes:
-            amb = self._ambientes[item]
+        elif item in self._environments:
+            amb = self._environments[item]
             return {"user": amb.user, "password": amb.password}
         raise KeyError(item)
 
     def __repr__(self):
-        return "<Segredos: oracle=%s, web=%s, monitor=%s, ambientes=%r>" % (
+        return "<Segredos: oracle=%s, web=%s, monitor=%s, environments=%r>" % (
             "***" if self._oracle else "None", "***" if self._web else "None",
             "***" if self._monitor else "None",
-            sorted(list(self._ambientes.keys()))
+            sorted(list(self._environments.keys()))
         )
 
     def __str__(self):
         return "<Segredos: ***redacted***>"
 
 
-def _secao_de_outro_papel(papel, secao, env):
+def _other_role_section(papel, secao, env):
     """Secao que pertence a outro papel (README §4.1, CR-007 D1b): erro em HML/PROD, WARN nos demais casos."""
     motivo = "Secao [%s] nao pertence ao papel '%s' (README §4.1)" % (secao, papel)
     if env in ("HML", "PROD"):
-        raise ConfigErro(secao=secao, chave=None, motivo=motivo)
+        raise ConfigError(section=secao, key=None, reason=motivo)
     _log.warning("secrets.cfg: %s; ignorada fora de HML/PROD", motivo)
 
 
-def _segredos_monitor(cp, env):
+def _monitor_secrets(cp, env):
     """Papel monitor (README §4.1; CR-008, E3; F9.1b): so [monitor]; [web] proibida; as demais secoes do arquivo
     do servidor sao ignoradas, sem validar nem registrar no masking os segredos de outros papeis."""
     if "web" in cp.sections():
-        _secao_de_outro_papel("monitor", "web", env)
+        _other_role_section("monitor", "web", env)
     if "monitor" not in cp.sections():
-        raise ConfigErro(secao="monitor", chave=None, motivo="Secao [monitor] obrigatoria ausente em secrets.cfg")
+        raise ConfigError(section="monitor", key=None, reason="Secao [monitor] obrigatoria ausente em secrets.cfg")
     valores = {}
     for chave in ("user", "password"):
         if chave not in cp["monitor"]:
-            raise ConfigErro(secao="monitor", chave=chave, motivo="Chave %s obrigatoria ausente em [monitor]" % chave)
+            raise ConfigError(section="monitor", key=chave, reason="Chave %s obrigatoria ausente em [monitor]" % chave)
         valores[chave] = cp["monitor"][chave].strip()
         if not valores[chave]:
-            raise ConfigErro(secao="monitor", chave=chave, motivo="%s nao pode ser vazio em [monitor]" % chave)
+            raise ConfigError(section="monitor", key=chave, reason="%s nao pode ser vazio em [monitor]" % chave)
     from masking import registrar_segredo
     registrar_segredo(valores["password"])
-    return Segredos(oracle_password=None, cookie_key=None, ambientes={}, purge_password=None,
-                    monitor=AmbienteSegredo(user=valores["user"], password=valores["password"]))
+    return Secrets(oracle_password=None, cookie_key=None, environments={}, purge_password=None,
+                    monitor=EnvironmentSecret(user=valores["user"], password=valores["password"]))
 
 
-def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None, papel="web"):
+def load_secrets(caminho, cfg=None, sss_env=None, data_backend=None, papel="web"):
     """Valida e carrega segredos de arquivo com modo 0600 e ownership restrito.
 
     papel ('web' ou 'agent', CR-007 D1b) define as secoes obrigatorias e as proibidas (README §4.1).
     A aplicacao usa sempre o Oracle, entao [oracle] password e obrigatoria para web e agente.
     data_backend='FAKE' so pode vir como parametro explicito de teste (DEV), nunca do config.ini.
     """
-    if papel not in PAPEIS:
-        raise ConfigErro(motivo="Papel de segredos invalido: %r" % (papel,))
+    if papel not in ROLES:
+        raise ConfigError(reason="Papel de segredos invalido: %r" % (papel,))
     if not os.path.exists(caminho):
-        raise ConfigErro(motivo="Arquivo de segredos nao encontrado: %s" % caminho)
+        raise ConfigError(reason="Arquivo de segredos nao encontrado: %s" % caminho)
 
     import os_platform
     try:
         codigo, st = os_platform.validar_arquivo_restrito(caminho)
     except OSError as e:
-        raise ConfigErro(motivo="Erro ao obter informacoes do arquivo de segredos %s: %s" % (caminho, e))
+        raise ConfigError(reason="Erro ao obter informacoes do arquivo de segredos %s: %s" % (caminho, e))
 
     if codigo == "NAO_REGULAR":
-        raise ConfigErro(motivo="Arquivo de segredos deve ser um arquivo regular: %s" % caminho)
+        raise ConfigError(reason="Arquivo de segredos deve ser um arquivo regular: %s" % caminho)
 
     if codigo == "DONO_INVALIDO":
-        raise ConfigErro(
-            motivo="Arquivo de segredos deve pertencer ao usuario corrente (UID %d, atual %d)" % (
+        raise ConfigError(
+            reason="Arquivo de segredos deve pertencer ao usuario corrente (UID %d, atual %d)" % (
                 os.geteuid(), st.st_uid
             )
         )
 
     if codigo == "PERMISSAO_INSEGURA":
-        raise ConfigErro(
-            motivo="Arquivo de segredos possui permissoes inseguras (mode %o, esperado sem acesso grupo/outros)" % (
+        raise ConfigError(
+            reason="Arquivo de segredos possui permissoes inseguras (mode %o, esperado sem acesso grupo/outros)" % (
                 st.st_mode & 0o777
             )
         )
@@ -844,23 +844,23 @@ def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None, papel=
         with open(caminho, "r", encoding="utf-8") as f:
             cp.read_file(f)
     except Exception as e:
-        raise ConfigErro(motivo="Erro ao ler arquivo de segredos %s: %s" % (caminho, e))
+        raise ConfigError(reason="Erro ao ler arquivo de segredos %s: %s" % (caminho, e))
 
     if papel == "monitor":
-        return _segredos_monitor(cp, env)
+        return _monitor_secrets(cp, env)
 
     # [web] cookie_key: obrigatorio no papel web e proibido no agente (README §4.1)
     cookie_key = None
     if papel == "web":
         if "web" not in cp.sections():
-            raise ConfigErro(secao="web", chave=None, motivo="Secao [web] obrigatoria ausente em secrets.cfg")
+            raise ConfigError(section="web", key=None, reason="Secao [web] obrigatoria ausente em secrets.cfg")
         if "cookie_key" not in cp["web"]:
-            raise ConfigErro(secao="web", chave="cookie_key", motivo="Chave cookie_key obrigatoria ausente em [web]")
+            raise ConfigError(section="web", key="cookie_key", reason="Chave cookie_key obrigatoria ausente em [web]")
         cookie_key = cp["web"]["cookie_key"].strip()
         if not cookie_key:
-            raise ConfigErro(secao="web", chave="cookie_key", motivo="cookie_key nao pode ser vazio")
+            raise ConfigError(section="web", key="cookie_key", reason="cookie_key nao pode ser vazio")
     elif "web" in cp.sections():
-        _secao_de_outro_papel(papel, "web", env)
+        _other_role_section(papel, "web", env)
 
     # [oracle] password: em DEV e FAKE e opcional; obrigatorio para web e agente
     oracle_password = None
@@ -868,29 +868,29 @@ def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None, papel=
     if "oracle" in cp.sections():
         if "password" not in cp["oracle"]:
             if not is_dev_fake:
-                raise ConfigErro(secao="oracle", chave="password", motivo="Chave password obrigatoria ausente em [oracle]")
+                raise ConfigError(section="oracle", key="password", reason="Chave password obrigatoria ausente em [oracle]")
         else:
             pwd = cp["oracle"]["password"].strip()
             if not pwd and not is_dev_fake:
-                raise ConfigErro(secao="oracle", chave="password", motivo="password do oracle nao pode ser vazio")
+                raise ConfigError(section="oracle", key="password", reason="password do oracle nao pode ser vazio")
             oracle_password = pwd if pwd else None
     else:
         if not is_dev_fake:
-            raise ConfigErro(secao="oracle", chave=None, motivo="Secao [oracle] obrigatoria ausente em secrets.cfg")
+            raise ConfigError(section="oracle", key=None, reason="Secao [oracle] obrigatoria ausente em secrets.cfg")
 
     # [purge] password: so no papel agente (o purge.py roda no servidor do agente)
     purge_password = None
     if "purge" in cp.sections():
         if papel != "agent":
-            _secao_de_outro_papel(papel, "purge", env)
+            _other_role_section(papel, "purge", env)
         else:
             purge_password = (cp["purge"].get("password") or "").strip() or None
             if purge_password is None:
-                raise ConfigErro(secao="purge", chave="password", motivo="password do purge nao pode ser vazio")
+                raise ConfigError(section="purge", key="password", reason="password do purge nao pode ser vazio")
 
     # [monitor]: so no papel monitor (CR-008, E3), tratado em _segredos_monitor
     if "monitor" in cp.sections():
-        _secao_de_outro_papel(papel, "monitor", env)
+        _other_role_section(papel, "monitor", env)
 
     # [environment:<NOME>]: so no papel agente
     ambientes = {}
@@ -899,36 +899,36 @@ def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None, papel=
             continue
         if sec.startswith("environment:"):
             if papel != "agent":
-                _secao_de_outro_papel(papel, sec, env)
+                _other_role_section(papel, sec, env)
                 if env in ("HML", "PROD"):
                     continue
             nome = sec.split(":", 1)[1].strip()
             if not nome:
-                raise ConfigErro(secao=sec, chave=None, motivo="Nome de ambiente invalido na secao [%s]" % sec)
+                raise ConfigError(section=sec, key=None, reason="Nome de ambiente invalido na secao [%s]" % sec)
             if "user" not in cp[sec]:
-                raise ConfigErro(secao=sec, chave="user", motivo="Chave user obrigatoria ausente em [%s]" % sec)
+                raise ConfigError(section=sec, key="user", reason="Chave user obrigatoria ausente em [%s]" % sec)
             if "password" not in cp[sec]:
-                raise ConfigErro(secao=sec, chave="password", motivo="Chave password obrigatoria ausente em [%s]" % sec)
+                raise ConfigError(section=sec, key="password", reason="Chave password obrigatoria ausente em [%s]" % sec)
             u = cp[sec]["user"].strip()
             p = cp[sec]["password"].strip()
             if not u:
-                raise ConfigErro(secao=sec, chave="user", motivo="user nao pode ser vazio em [%s]" % sec)
+                raise ConfigError(section=sec, key="user", reason="user nao pode ser vazio em [%s]" % sec)
             if not p:
-                raise ConfigErro(secao=sec, chave="password", motivo="password nao pode ser vazio em [%s]" % sec)
-            ambientes[nome] = AmbienteSegredo(user=u, password=p)
+                raise ConfigError(section=sec, key="password", reason="password nao pode ser vazio em [%s]" % sec)
+            ambientes[nome] = EnvironmentSecret(user=u, password=p)
         elif sec.startswith("ambiente:"):
-            raise ConfigErro(secao=sec, chave=None, motivo="Secao renomeada: [%s] passou a se chamar [environment:%s] "
+            raise ConfigError(section=sec, key=None, reason="Secao renomeada: [%s] passou a se chamar [environment:%s] "
                              "(CR-016b)" % (sec, sec.split(":", 1)[1]))
         else:
-            raise ConfigErro(secao=sec, chave=None, motivo="Secao desconhecida em secrets.cfg: [%s]" % sec)
+            raise ConfigError(section=sec, key=None, reason="Secao desconhecida em secrets.cfg: [%s]" % sec)
 
     if papel == "agent" and cfg is not None and env != "DEV":
         faltando = [a for a in cfg.agent.environments if a not in ambientes]
         if faltando:
-            raise ConfigErro(secao="ambiente", chave=None,
-                             motivo="Ambientes atendidos sem credencial em secrets.cfg: %s" % ", ".join(faltando))
+            raise ConfigError(section="ambiente", key=None,
+                             reason="Ambientes atendidos sem credencial em secrets.cfg: %s" % ", ".join(faltando))
 
-    segredos = Segredos(oracle_password=oracle_password, cookie_key=cookie_key, ambientes=ambientes,
+    segredos = Secrets(oracle_password=oracle_password, cookie_key=cookie_key, environments=ambientes,
                         purge_password=purge_password, monitor=None)
 
     # Import tardio para nao acoplar carregar() ao masking. Sem masking.py a carga de
@@ -950,13 +950,13 @@ def carregar_segredos(caminho, cfg=None, sss_env=None, data_backend=None, papel=
 _CONFIG_CACHE = None
 
 
-def caminho_config_padrao():
+def default_config_path():
     """Caminho canonico do config.ini da aplicacao (instance/config.ini)."""
     app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(app_dir, "instance", "config.ini")
 
 
-def _log_dir_bruto(caminho_ini):
+def _raw_log_dir(caminho_ini):
     """[logging] log_dir lido sem validacao, so para registrar o CRITICAL de uma configuracao invalida."""
     try:
         cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
@@ -968,12 +968,12 @@ def _log_dir_bruto(caminho_ini):
         return None
 
 
-def _abortar(nome_log, exc, log_dir):
+def _abort(nome_log, exc, log_dir):
     import sss_logging
-    sss_logging.registrar_critico_inicial(nome_log, "Subida abortada: configuracao invalida: %s" % exc, log_dir)
+    sss_logging.log_initial_critical(nome_log, "Subida abortada: configuracao invalida: %s" % exc, log_dir)
 
 
-def obter_config(nome_log=None, caminho=None):
+def get_config(nome_log=None, caminho=None):
     """Retorna a configuracao validada, carregada uma unica vez por processo.
 
     Com nome_log ('sss_web' ou 'sss_scheduler'), uma falha e registrada em CRITICAL antes de
@@ -982,13 +982,13 @@ def obter_config(nome_log=None, caminho=None):
     """
     global _CONFIG_CACHE
     if _CONFIG_CACHE is None:
-        caminho = caminho or caminho_config_padrao()
+        caminho = caminho or default_config_path()
         try:
             # Corrida entre threads do servidor web apenas recarrega o mesmo arquivo imutavel.
-            _CONFIG_CACHE = carregar(caminho)
-        except ConfigErro as exc:
+            _CONFIG_CACHE = load(caminho)
+        except ConfigError as exc:
             if nome_log:
-                _abortar(nome_log, exc, _log_dir_bruto(caminho))
+                _abort(nome_log, exc, _raw_log_dir(caminho))
             raise
     return _CONFIG_CACHE
 
@@ -999,34 +999,34 @@ def reset_config_cache():
     _CONFIG_CACHE = None
 
 
-_SEGREDOS_CACHE = None
+_SECRETS_CACHE = None
 
 
-def obter_segredos(nome_log=None, papel="web"):
+def get_secrets(nome_log=None, papel="web"):
     """Retorna os segredos validados de [secrets] secrets_file, carregados uma unica vez por processo.
 
-    papel: 'web' (nó web) ou 'agente' (daemon e purge), README §4.1.
+    papel: 'web' (nó web) ou 'agent' (daemon e purge), README §4.1.
     Com nome_log, uma falha e registrada em CRITICAL (sem valores de segredo) antes de ser relancada.
     """
-    global _SEGREDOS_CACHE
-    if _SEGREDOS_CACHE is None:
-        cfg = obter_config(nome_log)
+    global _SECRETS_CACHE
+    if _SECRETS_CACHE is None:
+        cfg = get_config(nome_log)
         try:
-            _SEGREDOS_CACHE = carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel=papel)
-        except ConfigErro as exc:
+            _SECRETS_CACHE = load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel=papel)
+        except ConfigError as exc:
             if nome_log:
-                _abortar(nome_log, exc, cfg.logging.log_dir)
+                _abort(nome_log, exc, cfg.logging.log_dir)
             raise
-    return _SEGREDOS_CACHE
+    return _SECRETS_CACHE
 
 
-def reset_segredos_cache():
+def reset_secrets_cache():
     """Descarta os segredos em cache (uso em testes)."""
-    global _SEGREDOS_CACHE
-    _SEGREDOS_CACHE = None
+    global _SECRETS_CACHE
+    _SECRETS_CACHE = None
 
 
-def config_criticos(cfg):
+def critical_config(cfg):
     """Texto canonico dos parametros que precisam coincidir nos nos (README §8.12)."""
     campos = (("hb", "heartbeat_interval_s"), ("fence", "fence_timeout_s"),
               ("offline", "node_offline_timeout_s"), ("call", None),

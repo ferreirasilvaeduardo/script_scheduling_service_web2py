@@ -56,7 +56,7 @@ def lista():
     except AcessoNegado:
         _negado()
     except RepoErro:
-        _log.exception("falha ao listar a auditoria (login=%s)", ctx["login"], extra={"acao": _FUNC})
+        _log.exception("falha ao listar a auditoria (login=%s)", ctx["login"], extra={"action": _FUNC})
         filtros, erros = audit_service.filtros_padrao(entrada)
         resultado = {"filtros": filtros, "erros": erros, "itens": [], "total": 0, "pagina": 1,
                      "tamanho": tamanho}
@@ -88,7 +88,7 @@ def exportar():
         session.flash = {"tipo": "erro", "mensagem": _MSG_FILTROS_EXPORTAR}
         redirect(voltar)
     except RepoErro:
-        _log.exception("falha ao exportar a auditoria (login=%s)", ctx["login"], extra={"acao": "AUDIT_EXPORT"})
+        _log.exception("falha ao exportar a auditoria (login=%s)", ctx["login"], extra={"action": "AUDIT_EXPORT"})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_EXPORTAR}
         redirect(voltar)
     response.headers["Content-Type"] = "text/csv; charset=utf-8"
@@ -109,7 +109,7 @@ def agentes():
     except AcessoNegado:
         _negado()
     except RepoErro:
-        _log.exception("falha ao montar o painel de agentes (login=%s)", ctx["login"], extra={"acao": _FUNC})
+        _log.exception("falha ao montar o painel de agentes (login=%s)", ctx["login"], extra={"action": _FUNC})
         painel = {"agentes": [], "resumo": {}, "agora": None}
         erro = _MSG_FALHA_AGENTES
     dados = dict(painel=painel, erro=erro, url_fragmento=URL(c="auditoria", f="agentes", extension="load"),

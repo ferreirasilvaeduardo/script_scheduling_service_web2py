@@ -30,7 +30,7 @@ def _cartao(ctx, nome, funcao):
         return funcao(), None
     except RepoErro:
         _log.exception("falha ao montar o cartao %s do painel inicial (login=%s)", nome, ctx["login"],
-                       extra={"acao": "PAINEL"})
+                       extra={"action": "PAINEL"})
         return None, _MSG_FALHA_CARTAO
 
 
@@ -103,7 +103,7 @@ def permissoes():
         dados = permissions_service.montar(ctx)
         erro = None
     except RepoErro:
-        _log.exception("falha ao montar permissoes (login=%s)", ctx["login"], extra={"acao": "PERMISSOES"})
+        _log.exception("falha ao montar permissoes (login=%s)", ctx["login"], extra={"action": "PERMISSOES"})
         dados, erro = None, ui_helpers.mensagem("falha_interna")
     return dict(dados=dados, erro=erro)
 

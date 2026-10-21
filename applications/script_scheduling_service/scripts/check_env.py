@@ -255,7 +255,7 @@ def main():
         if modules_dir not in sys.path:
             sys.path.insert(0, modules_dir)
         import sss_config
-        cfg = sss_config.obter_config()
+        cfg = sss_config.get_config()
         modo = getattr(cfg.oracle, "driver_mode", "auto")
         cadeia_desc = "auto (Thin -> Thick -> cx_Oracle)" if modo == "auto" else modo
 
@@ -264,8 +264,8 @@ def main():
         if os.environ.get("SSS_TEST_ORACLE") == "1":
             try:
                 import db_conn
-                segredos = sss_config.obter_segredos()
-                sel = db_conn.selecionar_driver(cfg, segredos)
+                segredos = sss_config.get_secrets()
+                sel = db_conn.select_driver(cfg, segredos)
                 sel_desc = "modo=%s (servidor=%s driver=%s cliente=%s)" % (
                     sel.candidato, sel.versao_servidor or "-", sel.versao_driver or "-", sel.versao_cliente or "-"
                 )

@@ -129,7 +129,7 @@ def _servico():
                 rbac_repo=fabrica.obter("rbac"),
                 catalogo=fabrica.obter("catalogo"),
                 disparo=ticket_service._servico(),
-                log=sss_logging.obter_logger("sss_web", current.sss_cfg),
+                log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _padrao
 

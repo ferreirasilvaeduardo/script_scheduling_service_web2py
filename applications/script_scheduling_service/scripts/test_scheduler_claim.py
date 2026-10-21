@@ -29,7 +29,7 @@ import rbac
 import scheduler_loop as sl
 import sql_ident
 from repo_oracle.scheduler_queue import RegistroPerdido
-from sss_config import AmbienteSegredo, Segredos
+from sss_config import EnvironmentSecret, Secrets
 from _output_memory import RepoSaidaMemoria
 
 AGENTE_FALSO = 2 ** 31 - 3
@@ -290,7 +290,7 @@ class _Conn(object):
 
 class _Cursor(object):
     def execute(self, sql, *a, **k):
-        self._linha = (datetime.datetime.now().replace(microsecond=0),) if "SYSDATE" in sql else (sql_ident.VERSAO_ESQUEMA,)
+        self._linha = (datetime.datetime.now().replace(microsecond=0),) if "SYSDATE" in sql else (sql_ident.SCHEMA_VERSION,)
 
     def fetchone(self):
         return self._linha
@@ -305,16 +305,16 @@ class _Conexao(object):
         self.fora = False
         self.fechamentos = 0
 
-    def garantir(self):
+    def ensure(self):
         return not self.fora
 
-    def obter_conexao(self):
+    def get_connection(self):
         return None if self.fora else self.conn
 
-    def fechar(self):
+    def close(self):
         self.fechamentos += 1
 
-    def notificar_erro(self, exc):
+    def notify_error(self, exc):
         pass
 
 
@@ -366,7 +366,7 @@ class _Base(unittest.TestCase):
                     _Oracle("db:1521/x", 30000, "OWN_X", "pfx_"), None)
 
     def subir(self, **mudancas):
-        segredos = Segredos("SenhaOracle#1", None, {AMB: AmbienteSegredo("app_dev", SENHA_AMB)})
+        segredos = Secrets("SenhaOracle#1", None, {AMB: EnvironmentSecret("app_dev", SENHA_AMB)})
         plat = mudancas.pop("plat", None)
         with mock.patch.object(sl.os, "geteuid", return_value=AGENTE_FALSO):
             if getattr(self, "repo_saida", None) is None:

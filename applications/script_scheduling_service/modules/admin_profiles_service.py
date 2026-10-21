@@ -173,7 +173,7 @@ class ServicoAdminPerfis(object):
             campo, mensagem = _CAMPO_POR_CONSTRAINT.get(exc.constraint, (CAMPO_GERAL, admin_crud.MSG_FALHA))
             erros[campo] = mensagem
         self._log.warning("cadastro de perfil rejeitado pelo repositorio (login=%s constraint=%s)",
-                          ctx.get("login"), exc.constraint, extra={"acao": FUNCIONALIDADE})
+                          ctx.get("login"), exc.constraint, extra={"action": FUNCIONALIDADE})
 
     def _exigir_admin(self, ctx, condicao, operacao):
         admin_crud.exigir_admin(ctx, condicao, MSG_SO_ADMIN, self._log, operacao)
@@ -207,7 +207,7 @@ class ServicoAdminPerfis(object):
                 self._violacao(ctx, exc, erros)
                 return None, erros
             self._log.info("perfil incluido (login=%s perfil=%s)", ctx.get("login"), criado["name"],
-                           extra={"acao": "CREATE"})
+                           extra={"action": "CREATE"})
             return criado["id"], {}
 
         atual = self._obter(perfil_id)
@@ -225,7 +225,7 @@ class ServicoAdminPerfis(object):
         if ctx.get("profile_id") == atual["id"] and atual["is_admin"] == "Y" and is_admin == "N":
             # Autoprotecao (README §4.3.B): vale mesmo havendo outros administradores.
             self._log.warning("remocao de is_admin do proprio perfil negada (login=%s perfil=%s)",
-                              ctx.get("login"), atual["name"], extra={"acao": "UPDATE"})
+                              ctx.get("login"), atual["name"], extra={"action": "UPDATE"})
             erros[CAMPO_GERAL] = MSG_AUTO_ADMIN
             return atual["id"], erros
         depois = dict(atual, name=nome, description=descricao, is_admin=is_admin)
@@ -243,7 +243,7 @@ class ServicoAdminPerfis(object):
         except RepoViolacao as exc:
             self._violacao(ctx, exc, erros)
             return atual["id"], erros
-        self._log.info("perfil alterado (login=%s perfil=%s)", ctx.get("login"), nome, extra={"acao": "UPDATE"})
+        self._log.info("perfil alterado (login=%s perfil=%s)", ctx.get("login"), nome, extra={"action": "UPDATE"})
         return atual["id"], {}
 
     def alternar_ativo(self, ctx, ip, perfil_id, versao):
@@ -259,7 +259,7 @@ class ServicoAdminPerfis(object):
         self._exigir_admin(ctx, atual["is_admin"] == "Y" and ctx.get("profile_id") != atual["id"], "DEACTIVATE")
         if novo_ativo == "N" and ctx.get("profile_id") == atual["id"]:
             self._log.warning("desativacao do proprio perfil negada (login=%s perfil=%s)",
-                              ctx.get("login"), atual["name"], extra={"acao": "DEACTIVATE"})
+                              ctx.get("login"), atual["name"], extra={"action": "DEACTIVATE"})
             raise OperacaoNegada(MSG_AUTO_DESATIVAR)
         detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, active=novo_ativo), ("active",))
         acao = "DEACTIVATE" if novo_ativo == "N" else "UPDATE"
@@ -272,11 +272,11 @@ class ServicoAdminPerfis(object):
         except RepoViolacao as exc:
             if exc.constraint == "sss_ultimo_admin":
                 self._log.warning("desativacao do ultimo perfil admin negada (login=%s perfil=%s)",
-                                  ctx.get("login"), atual["name"], extra={"acao": acao})
+                                  ctx.get("login"), atual["name"], extra={"action": acao})
                 raise OperacaoNegada(MSG_ULTIMO_ADMIN)
             raise
         self._log.info("perfil %s (login=%s perfil=%s)", "desativado" if novo_ativo == "N" else "reativado",
-                       ctx.get("login"), atual["name"], extra={"acao": acao})
+                       ctx.get("login"), atual["name"], extra={"action": acao})
         return alterado
 
     # ------------------------------------------------------------ quem pode
@@ -430,7 +430,7 @@ class ServicoAdminPerfis(object):
             if desconhecidos:
                 self._log.warning("matriz rejeitada: IDs inexistentes (login=%s perfil=%s dimensao=%s ids=%s)",
                                   ctx.get("login"), perfil["name"], dim, sorted(desconhecidos),
-                                  extra={"acao": "PERM_UPDATE"})
+                                  extra={"action": "PERM_UPDATE"})
                 return None, {CAMPO_GERAL: MSG_MATRIZ_ID_INVALIDO}
             inativos = set(i for i, r in cat[dim].items() if r.get("active") != "Y")
             if (enviados[dim] - atual[dim]) & inativos:
@@ -449,10 +449,10 @@ class ServicoAdminPerfis(object):
             return None, {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
         except RepoViolacao:
             self._log.warning("matriz rejeitada pelo repositorio (login=%s perfil=%s)", ctx.get("login"),
-                              perfil["name"], extra={"acao": "PERM_UPDATE"})
+                              perfil["name"], extra={"action": "PERM_UPDATE"})
             return None, {CAMPO_GERAL: MSG_MATRIZ_ID_INVALIDO}
         self._log.info("matriz de permissoes alterada (login=%s perfil=%s)", ctx.get("login"), perfil["name"],
-                       extra={"acao": "PERM_UPDATE"})
+                       extra={"action": "PERM_UPDATE"})
         return diff, {}
 
 
@@ -471,7 +471,7 @@ def _servico():
                 rbac_repo=fabrica.obter("rbac"),
                 catalogo=fabrica.obter("catalogo"),
                 usuarios=fabrica.obter("usuarios"),
-                log=sss_logging.obter_logger("sss_web", current.sss_cfg),
+                log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _padrao
 

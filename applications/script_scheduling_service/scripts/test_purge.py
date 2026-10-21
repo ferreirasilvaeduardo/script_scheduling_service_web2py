@@ -414,11 +414,11 @@ class TestMain(_Base):
             self.conexoes.append(1)
             return _Conn(banco)
         saida = io.StringIO()
-        carregar = mock.Mock(side_effect=purge_cli.sss_config.ConfigErro(motivo="x") if segredos_erro else None,
+        carregar = mock.Mock(side_effect=purge_cli.sss_config.ConfigError(reason="x") if segredos_erro else None,
                              return_value=object())
-        with mock.patch.object(purge_cli.sss_config, "obter_config", return_value=cfg), \
-                mock.patch.object(purge_cli.sss_config, "carregar_segredos", carregar), \
-                mock.patch.object(purge_cli.sss_logging, "configurar", return_value=self.log), \
+        with mock.patch.object(purge_cli.sss_config, "get_config", return_value=cfg), \
+                mock.patch.object(purge_cli.sss_config, "load_secrets", carregar), \
+                mock.patch.object(purge_cli.sss_logging, "configure", return_value=self.log), \
                 mock.patch.object(purge_cli.masking, "instalar_filtro_em_handlers"):
             codigo = purge_cli.main(argv, conectar=conectar, plat=plat or _Plat(), saida=saida)
         self.carregar = carregar
@@ -449,8 +449,8 @@ class TestMain(_Base):
         self.assertEqual((codigo, texto, self.conexoes), (0, "", []))
 
     def test_configuracao_invalida(self):
-        with mock.patch.object(purge_cli.sss_config, "obter_config",
-                               side_effect=purge_cli.sss_config.ConfigErro(motivo="x")):
+        with mock.patch.object(purge_cli.sss_config, "get_config",
+                               side_effect=purge_cli.sss_config.ConfigError(reason="x")):
             self.assertEqual(purge_cli.main([], conectar=None), purge_cli.SAIDA_CONFIG)
         self.assertEqual(self._main([], cfg=_cfg(self.raiz, purge_user=None))[0], purge_cli.SAIDA_CONFIG)
         self.assertEqual(self._main(["--export-audit", os.path.join(self.raiz, "nao_existe")])[0],
@@ -459,9 +459,9 @@ class TestMain(_Base):
         self.assertEqual(self.conexoes, [])
 
     def test_falha_ao_conectar(self):
-        with mock.patch.object(purge_cli.sss_config, "obter_config", return_value=self.cfg), \
-                mock.patch.object(purge_cli.sss_config, "carregar_segredos", return_value=object()), \
-                mock.patch.object(purge_cli.sss_logging, "configurar", return_value=self.log), \
+        with mock.patch.object(purge_cli.sss_config, "get_config", return_value=self.cfg), \
+                mock.patch.object(purge_cli.sss_config, "load_secrets", return_value=object()), \
+                mock.patch.object(purge_cli.sss_logging, "configure", return_value=self.log), \
                 mock.patch.object(purge_cli.masking, "instalar_filtro_em_handlers"):
             codigo = purge_cli.main([], conectar=mock.Mock(side_effect=RuntimeError("ORA-12541: no listener")),
                                     plat=_Plat(), saida=io.StringIO())

@@ -3,7 +3,7 @@
 
 Segue estritamente as especificacoes do README §13 e AGENTS.md §6.
 Gera formato:
-%(asctime)s %(levelname)s [pid=%(process)d] [agente=%(agente)s] [ticket=%(ticket)s] [acao=%(acao)s] %(message)s
+%(asctime)s %(levelname)s [pid=%(process)d] [agent=%(agent)s] [ticket=%(ticket)s] [action=%(action)s] %(message)s
 com data ISO local e offset.
 """
 import datetime
@@ -16,7 +16,7 @@ import threading
 import log_paths
 
 
-FMT_SSS = "%(asctime)s %(levelname)s [pid=%(process)d] [agente=%(agente)s] [ticket=%(ticket)s] [acao=%(acao)s] %(message)s"
+FMT_SSS = "%(asctime)s %(levelname)s [pid=%(process)d] [agent=%(agent)s] [ticket=%(ticket)s] [action=%(action)s] %(message)s"
 
 
 class SSSFormatter(logging.Formatter):
@@ -30,32 +30,32 @@ class SSSFormatter(logging.Formatter):
 
 
 class SSSContextFilter(logging.Filter):
-    """Filtro que injeta defaults ('-') para agente, ticket e acao."""
+    """Filtro que injeta defaults ('-') para agent, ticket e action."""
 
-    def __init__(self, default_agente="-", default_ticket="-", default_acao="-"):
+    def __init__(self, default_agent="-", default_ticket="-", default_action="-"):
         super(SSSContextFilter, self).__init__()
-        self.default_agente = default_agente or "-"
+        self.default_agent = default_agent or "-"
         self.default_ticket = default_ticket or "-"
-        self.default_acao = default_acao or "-"
+        self.default_action = default_action or "-"
 
     def filter(self, record):
-        if not hasattr(record, "agente") or record.agente is None:
-            record.agente = self.default_agente
+        if not hasattr(record, "agent") or record.agent is None:
+            record.agent = self.default_agent
         if not hasattr(record, "ticket") or record.ticket is None:
             record.ticket = self.default_ticket
-        if not hasattr(record, "acao") or record.acao is None:
-            record.acao = self.default_acao
+        if not hasattr(record, "action") or record.action is None:
+            record.action = self.default_action
         return True
 
 
 class SSSLoggerAdapter(logging.LoggerAdapter):
-    """LoggerAdapter contextualizado com agente, ticket e acao."""
+    """LoggerAdapter contextualizado com agent, ticket e action."""
 
-    def __init__(self, logger, agente="-", ticket="-", acao="-"):
+    def __init__(self, logger, agent="-", ticket="-", action="-"):
         super(SSSLoggerAdapter, self).__init__(logger, {
-            "agente": agente or "-",
+            "agent": agent or "-",
             "ticket": ticket or "-",
-            "acao": acao or "-"
+            "action": action or "-"
         })
 
     def process(self, msg, kwargs):
@@ -66,9 +66,9 @@ class SSSLoggerAdapter(logging.LoggerAdapter):
         return msg, kwargs
 
 
-def get_adapter(logger, agente="-", ticket="-", acao="-"):
+def get_adapter(logger, agent="-", ticket="-", action="-"):
     """Retorna um SSSLoggerAdapter com os atributos de contexto fornecidos."""
-    return SSSLoggerAdapter(logger, agente=agente, ticket=ticket, acao=acao)
+    return SSSLoggerAdapter(logger, agent=agent, ticket=ticket, action=action)
 
 
 class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
@@ -84,7 +84,7 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
     """
 
     def __init__(self, log_dir, nome_processo, max_bytes, retention_days,
-                 encoding="utf-8", pid=None, delay=False, default_agente="-"):
+                 encoding="utf-8", pid=None, delay=False, default_agent="-"):
         self.log_dir = log_dir
         self.nome_processo = nome_processo[:-4] if nome_processo.endswith(".log") else nome_processo
         self.max_bytes = max_bytes
@@ -99,7 +99,7 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
         caminho_inicial = log_paths.proximo_caminho_log_app(
             self.log_dir, self.nome_processo, self.pid, agora
         )
-        _garantir_diretorio(os.path.dirname(caminho_inicial), self._avisos)
+        _ensure_directory(os.path.dirname(caminho_inicial), self._avisos)
 
         # Retencao na subida (CR-005, R-d)
         self.executar_retencao(agora)
@@ -108,7 +108,7 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
             caminho_inicial, mode="a", encoding=encoding, delay=delay
         )
         # Filtro unico: um segundo SSSContextFilter depois deste nunca veria o agente vazio.
-        self.addFilter(SSSContextFilter(default_agente=default_agente))
+        self.addFilter(SSSContextFilter(default_agent=default_agent))
 
     def registrar_aviso(self, acao, mensagem):
         """Guarda um WARN para gravar neste arquivo antes do proximo registro."""
@@ -121,7 +121,7 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
             self.registrar_aviso("RETENCAO", "retencao do log da aplicacao nao removeu %s" % falha)
 
     def _open(self):
-        _garantir_diretorio(os.path.dirname(self.baseFilename), self._avisos)
+        _ensure_directory(os.path.dirname(self.baseFilename), self._avisos)
         arquivo_novo = not os.path.exists(self.baseFilename)
         stream = open(self.baseFilename, self.mode, encoding=self.encoding)
         if arquivo_novo:
@@ -134,7 +134,7 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
             for acao, mensagem in pendentes:
                 aviso = logging.LogRecord(self.nome_processo, logging.WARNING, __file__, 0,
                                           mensagem, None, None)
-                aviso.acao = acao
+                aviso.action = acao
                 if aviso.levelno >= self.level and self.filter(aviso):
                     super(AppLogRotatingHandler, self).emit(aviso)
         super(AppLogRotatingHandler, self).emit(record)
@@ -172,12 +172,12 @@ def _chmod(caminho, modo, avisos):
         avisos.append(("LOG", "chmod %o falhou em %s: %s" % (modo, caminho, exc)))
 
 
-def _garantir_diretorio(diretorio, avisos):
+def _ensure_directory(diretorio, avisos):
     # Nivel a nivel com 0o750 (README §13): regra unica em pastas_log (F8.1).
     log_paths.garantir_diretorio(diretorio, avisos)
 
 
-def configurar(nome_log, cfg):
+def configure(nome_log, cfg):
     """Cria um AppLogRotatingHandler em log_dir/app/... com o formato do README §13.
 
     Aplica o nivel configurado e cria log_dir com permissao 0o750 se necessario.
@@ -189,9 +189,9 @@ def configurar(nome_log, cfg):
         # makedirs aplica a umask ao mode; o chmod garante 0o750. Falha aqui aborta a subida.
         os.chmod(log_dir, 0o750)
 
-    default_agente = "-"
+    default_agent = "-"
     if hasattr(cfg, "agent") and hasattr(cfg.agent, "agent_id") and cfg.agent.agent_id:
-        default_agente = cfg.agent.agent_id
+        default_agent = cfg.agent.agent_id
 
     handler = AppLogRotatingHandler(
         log_dir=log_dir,
@@ -199,7 +199,7 @@ def configurar(nome_log, cfg):
         max_bytes=cfg.logging.app_log_max_bytes,
         retention_days=cfg.logging.app_log_retention_days,
         encoding="utf-8",
-        default_agente=default_agente,
+        default_agent=default_agent,
     )
 
     handler.setFormatter(SSSFormatter(FMT_SSS))
@@ -227,10 +227,10 @@ def configurar(nome_log, cfg):
 
 
 _LOGGERS = {}
-_LOCK_LOGGERS = threading.Lock()
+_LOGGERS_LOCK = threading.Lock()
 
 
-def registrar_critico_inicial(nome_log, mensagem, log_dir=None, stream=None):
+def log_initial_critical(nome_log, mensagem, log_dir=None, stream=None):
     """CRITICAL de falha na subida, antes de haver configuracao valida (README §12.1).
 
     Grava no log da aplicacao do minuto atual (log_dir/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log,
@@ -246,7 +246,7 @@ def registrar_critico_inicial(nome_log, mensagem, log_dir=None, stream=None):
         # Sem sufixo _<n>: falhas repetidas no mesmo minuto e processo vao para o mesmo arquivo.
         caminho = log_paths.caminho_log_app(log_dir, nome, os.getpid(), datetime.datetime.now())
         try:
-            _garantir_diretorio(os.path.dirname(caminho), avisos)
+            _ensure_directory(os.path.dirname(caminho), avisos)
             arquivo_novo = not os.path.exists(caminho)
             handler = logging.FileHandler(caminho, encoding="utf-8")
             if arquivo_novo:
@@ -258,7 +258,7 @@ def registrar_critico_inicial(nome_log, mensagem, log_dir=None, stream=None):
     if handler is None:
         handler = logging.StreamHandler(stream or sys.stderr)
     handler.setFormatter(SSSFormatter(FMT_SSS))
-    handler.addFilter(SSSContextFilter(default_acao="INICIO"))
+    handler.addFilter(SSSContextFilter(default_action="INICIO"))
     logger = logging.getLogger("%s.inicio" % nome_log)
     logger.propagate = False
     logger.addHandler(handler)
@@ -274,11 +274,11 @@ def registrar_critico_inicial(nome_log, mensagem, log_dir=None, stream=None):
     return destino
 
 
-def obter_logger(nome_log, cfg):
+def get_logger(nome_log, cfg):
     """Retorna o logger configurado por configurar(), criando-o uma unica vez por processo."""
-    with _LOCK_LOGGERS:
+    with _LOGGERS_LOCK:
         logger = _LOGGERS.get(nome_log)
         if logger is None:
-            logger = configurar(nome_log, cfg)
+            logger = configure(nome_log, cfg)
             _LOGGERS[nome_log] = logger
         return logger

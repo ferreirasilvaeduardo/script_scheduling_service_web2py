@@ -28,7 +28,7 @@ class TestSemBanco(unittest.TestCase):
     def setUp(self):
         self.repo = RepoSchedulerSaida("openrisow", "tbsss_")
         # O cursor roteirizado devolve a variavel de saida em lista (formato do RETURNING).
-        valor = mock.patch.object(db_conn, "valor_saida", lambda var: var.getvalue()[0])
+        valor = mock.patch.object(db_conn, "output_value", lambda var: var.getvalue()[0])
         valor.start()
         self.addCleanup(valor.stop)
 
@@ -111,11 +111,11 @@ warnings.simplefilter("ignore")
 sys.path.insert(0, sys.argv[1])
 import sss_config, db_conn
 from repo_oracle.scheduler_output import RepoSchedulerSaida
-cfg = sss_config.obter_config()
+cfg = sss_config.get_config()
 cfg = cfg._replace(oracle=cfg.oracle._replace(driver_mode=sys.argv[2]))
-seg = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel="web")
+seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel="web")
 try:
-    conn = db_conn.conectar(cfg, seg, "web")
+    conn = db_conn.connect(cfg, seg, "web")
 except Exception as e:
     print(json.dumps({"indisponivel": "%s: %s" % (e.__class__.__name__, str(e)[:120])}))
     sys.exit(0)
@@ -129,7 +129,7 @@ conn.commit()
 r.append(repo.anexar(conn, tid, agente, 0, parte))
 r.append(repo.concluir(conn, tid, agente, 1, len(parte)))
 conn.commit()
-print(json.dumps({"candidato": db_conn.obter_selecao().candidato, "r": r}))
+print(json.dumps({"candidato": db_conn.get_selection().candidato, "r": r}))
 conn.close()
 '''
 

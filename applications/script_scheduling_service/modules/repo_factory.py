@@ -67,12 +67,12 @@ def _senha_dev_seed():
     senha = os.environ.get(ENV_SENHA_DEV)
     if not senha:
         log.warning("%s ausente: usuarios do seed FAKE sem senha utilizavel (logins DEV impossiveis)",
-                    ENV_SENHA_DEV, extra={"acao": "SEED"})
+                    ENV_SENHA_DEV, extra={"action": "SEED"})
         return None
     masking.registrar_segredo(senha)
     if security.validar_politica_senha(senha):
         log.warning("%s fora da politica de senha: usuarios do seed FAKE sem senha utilizavel",
-                    ENV_SENHA_DEV, extra={"acao": "SEED"})
+                    ENV_SENHA_DEV, extra={"action": "SEED"})
         return None
     return senha
 

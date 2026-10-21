@@ -177,8 +177,8 @@ def _servico():
                 relogio=fabrica.obter("tickets").agora,
                 limiares=Limiares(cfg.agent.heartbeat_interval_s, cfg.agent.fence_timeout_s,
                                   cfg.agent.node_offline_timeout_s),
-                log=sss_logging.obter_logger("sss_web", cfg),
-                config_criticos=sss_config.config_criticos(cfg),
+                log=sss_logging.get_logger("sss_web", cfg),
+                config_criticos=sss_config.critical_config(cfg),
             )
         return _padrao
 

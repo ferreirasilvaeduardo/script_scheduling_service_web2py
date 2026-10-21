@@ -149,7 +149,7 @@ class BaseRepoContractTest(object):
     def cn(self, tipo, entidade, sufixo):
         """Nome da constraint/indice/trigger com o prefixo do repositorio em uso (FAKE: tbsss_)."""
         prefixo = getattr(self.obter_repo("catalogo"), "_prefixo", None) or "tbsss_"
-        return "%s_%s%s_%s" % (tipo, prefixo, sql_ident.TABELAS[entidade]["abrev"], sufixo)
+        return "%s_%s%s_%s" % (tipo, prefixo, sql_ident.TABLES[entidade]["abrev"], sufixo)
 
     def aud_total(self, acao, entidade, entidade_id):
         return self.obter_repo("auditoria").listar(
@@ -897,7 +897,7 @@ class _OracleContrato(object):
                         cur.execute("DELETE FROM " + tabela + " WHERE id = :id", {"id": rid})
                         if compartilhado:
                             cur.execute("DELETE FROM " + tab_aud + " WHERE entity = :ent AND entity_id = :id",
-                                        {"ent": "tbsss_" + sql_ident.fisico(entidade), "id": rid})
+                                        {"ent": "tbsss_" + sql_ident.physical(entidade), "id": rid})
                 conn.commit()
                 for entidade, ids in massa.criados.items():
                     tabela = repo.qualificar_tabela(entidade)
@@ -977,10 +977,10 @@ class TestRepoFactoryEIntegridade(unittest.TestCase):
         conexao = mock.Mock()
         conexao.cursor.return_value.fetchone.return_value = ("SSS_APP",)
         db_conn_mock = mock.Mock()
-        db_conn_mock.conectar.return_value = conexao
+        db_conn_mock.connect.return_value = conexao
         sss_config_mock = mock.Mock()
-        sss_config_mock.obter_config.return_value = cfg
-        sss_config_mock.carregar_segredos.return_value = segredos
+        sss_config_mock.get_config.return_value = cfg
+        sss_config_mock.load_secrets.return_value = segredos
 
         def preparar(env):
             with mock.patch.dict(os.environ, env, clear=True):
@@ -989,19 +989,19 @@ class TestRepoFactoryEIntegridade(unittest.TestCase):
 
         # Ligado e autorizado: usa o config da aplicacao, confere a sessao e fecha a conexao.
         self.assertIs(preparar({"SSS_TEST_ORACLE": "1"}), cfg)
-        db_conn_mock.conectar.assert_called_once_with(cfg, segredos, "web")
+        db_conn_mock.connect.assert_called_once_with(cfg, segredos, "web")
         self.assertEqual(conexao.cursor.return_value.execute.call_args[0][0], "SELECT USER FROM DUAL")
         conexao.close.assert_called_once_with()
 
         # Desligado, variavel antiga ou fora de DEV: recusa antes de conectar.
-        db_conn_mock.conectar.reset_mock()
+        db_conn_mock.connect.reset_mock()
         for env in ({}, {"SSS_TEST_ORACLE": "1", "SSS_TEST_DSN": "dbtest.local/sss"}):
             with self.assertRaises(PrecondicaoSchemaErro):
                 preparar(env)
         cfg.app.sss_env = "HML"
         with self.assertRaises(PrecondicaoSchemaErro):
             preparar({"SSS_TEST_ORACLE": "1"})
-        db_conn_mock.conectar.assert_not_called()
+        db_conn_mock.connect.assert_not_called()
 
     def test_oracle_agregado_seguinte_ainda_nao_implementado(self):
         repo_factory.configurar({"app": {"data_backend": "ORACLE", "sss_env": "DEV"}})

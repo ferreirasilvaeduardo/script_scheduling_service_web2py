@@ -44,7 +44,7 @@ def exigir_admin(ctx, condicao, mensagem, log, operacao):
     """
     if condicao and ctx.get("is_admin") is not True:
         log.warning("operacao reservada a administrador negada (login=%s operacao=%s)", ctx.get("login"),
-                    operacao, extra={"acao": "ACESSO_NEGADO"})
+                    operacao, extra={"action": "ACESSO_NEGADO"})
         raise OperacaoNegada(mensagem)
 
 

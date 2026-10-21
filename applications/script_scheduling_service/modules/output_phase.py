@@ -79,7 +79,7 @@ def iniciar_empacotar(saida, plat, max_bytes, max_arquivos, agora):
             os.close(fd)
     except Exception as exc:  # noqa: BLE001 - qualquer falha local: FALHOU (o ticket segue)
         _log.warning("empacotamento da saida nao iniciado (%s)", exc.__class__.__name__,
-                     extra={"ticket": saida.ticket_id, "acao": "SAIDA"})
+                     extra={"ticket": saida.ticket_id, "action": "SAIDA"})
         saida.resultado, saida.motivo = FALHOU, "ERROR"
         return
     saida.prazo = agora + PRAZO_EMPACOTAR_S
@@ -95,7 +95,7 @@ def avancar_empacotar(saida, plat, agora):
             saida.morto = True
             plat.sinalizar_grupo(saida.processo, signal.SIGKILL)
             _log.warning("empacotamento da saida passou de %d s: encerrado", PRAZO_EMPACOTAR_S,
-                         extra={"ticket": saida.ticket_id, "acao": "SAIDA"})
+                         extra={"ticket": saida.ticket_id, "action": "SAIDA"})
         return False
     if saida.morto:
         saida.resultado, saida.motivo = FALHOU, "DEADLINE"
@@ -109,7 +109,7 @@ def avancar_empacotar(saida, plat, agora):
         saida.resultado, saida.motivo = EXCEDEU, "BYTES"
     else:
         _log.warning("empacotamento da saida terminou com codigo %s", rc,
-                     extra={"ticket": saida.ticket_id, "acao": "SAIDA"})
+                     extra={"ticket": saida.ticket_id, "action": "SAIDA"})
         saida.resultado, saida.motivo = FALHOU, "ERROR"
     return True
 
@@ -122,7 +122,7 @@ def _conferir_zip(saida):
         saida.tamanho = os.path.getsize(saida.caminho_zip)
     except (OSError, zipfile.BadZipFile) as exc:
         _log.warning("zip da saida ilegivel (%s)", exc.__class__.__name__,
-                     extra={"ticket": saida.ticket_id, "acao": "SAIDA"})
+                     extra={"ticket": saida.ticket_id, "action": "SAIDA"})
         saida.resultado, saida.motivo = FALHOU, "ERROR"
         return
     if saida.qtd_arquivos == 0 or saida.tamanho == 0:

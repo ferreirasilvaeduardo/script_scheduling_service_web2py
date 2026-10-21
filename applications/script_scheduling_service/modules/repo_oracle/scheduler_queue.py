@@ -12,8 +12,8 @@ import db_conn
 import rbac
 import sql_ident
 
-_INICIO = sql_ident.FBI_TCK_FILA_INICIO
-_RUN = sql_ident.FBI_TCK_RUN_AGENTE_CASE
+_INICIO = sql_ident.FBI_TCK_QUEUE_START
+_RUN = sql_ident.FBI_TCK_RUN_AGENT_CASE
 PRIORIDADES = (1, 2, 3, 4)
 # Limite de itens de uma lista IN do Oracle (ORA-01795 acima de 1.000): listas maiores viram OR de listas.
 _IN_MAX = 900
@@ -42,7 +42,7 @@ def _placeholders(prefixo, valores):
 
 
 class _Transacao(object):
-    """COMMIT no sucesso e ROLLBACK em excecao, como db_conn.transacao, mas sem registrar como erro de banco os
+    """COMMIT no sucesso e ROLLBACK em excecao, como db_conn.transaction, mas sem registrar como erro de banco os
     desfechos de regra (AgenteDuplicado, RegistroPerdido): quem chama decide o nivel do log."""
 
     def __init__(self, conn):
@@ -58,7 +58,7 @@ class _Transacao(object):
         if issubclass(tipo, (AgenteDuplicado, RegistroPerdido)):
             self.conn.rollback()
             return False
-        with db_conn.transacao(self.conn):
+        with db_conn.transaction(self.conn):
             raise valor
 
 
@@ -69,7 +69,7 @@ def _ler_lob(valor):
 class RepoSchedulerFila(object):
 
     def __init__(self, owner, prefixo):
-        t = lambda nome: sql_ident.tabela(owner, prefixo, nome)  # noqa: E731
+        t = lambda nome: sql_ident.table(owner, prefixo, nome)  # noqa: E731
         self._p = prefixo
         self._tck, self._scr, self._amb = t("tickets"), t("scripts"), t("ambientes")
         self._agt, self._aud, self._usr, self._per = t("agentes"), t("auditoria"), t("usuarios"), t("perfis")
@@ -91,7 +91,7 @@ class RepoSchedulerFila(object):
             raise ValueError("ator ou detalhe de auditoria fora do limite")
         cur.execute("INSERT INTO " + self._aud + " (id, actor, source_ip, action, entity, entity_id, detail, "
                     "created_at) VALUES (:id, :actor, NULL, :action, :entity, :entity_id, :detail, SYSDATE)",
-                    id=db_conn.proximo_id(conn, self._seq_aud), actor=ator, action=acao,
+                    id=db_conn.next_id(conn, self._seq_aud), actor=ator, action=acao,
                     entity="tbsss_agents", entity_id=entidade_id, detail=detalhe)
 
     # -------------------------------------------------------------------------
@@ -185,8 +185,8 @@ class RepoSchedulerFila(object):
                 linha = cur.fetchone()
             except Exception as exc:
                 conn.rollback()
-                if db_conn.eh_lock(exc):
-                    pfx, num = db_conn.classificar_erro(exc)
+                if db_conn.is_lock(exc):
+                    pfx, num = db_conn.classify_error(exc)
                     return False, "LOCK", ("%s-%05d" % (pfx, num)) if pfx else exc.__class__.__name__
                 raise
             if linha is None:
@@ -197,7 +197,7 @@ class RepoSchedulerFila(object):
             if cur.fetchone()[0] >= int(linha[1]):
                 conn.rollback()
                 return False, "TETO", None
-            started = db_conn.variavel_saida(cur, db_conn.TIPO_DATE)
+            started = db_conn.output_variable(cur, db_conn.TIPO_DATE)
             cur.execute("UPDATE " + self._tck + " SET status = 'RUNNING', agent_id = :agent_id, "
                         "started_at = SYSDATE, heartbeat_at = SYSDATE, log_output = EMPTY_CLOB(), "
                         "log_offset_chars = 0, updated_at = SYSDATE, updated_by = :actor "
@@ -208,7 +208,7 @@ class RepoSchedulerFila(object):
             if cur.rowcount != 1:
                 conn.rollback()
                 return False, "PERDIDO", None
-            valor = db_conn.valor_saida(started)
+            valor = db_conn.output_value(started)
             conn.commit()
             return True, None, valor[0] if isinstance(valor, list) else valor
         except Exception:
@@ -333,7 +333,7 @@ class RepoSchedulerFila(object):
     def registrar_pid(self, conn, ticket_id, agente_id, pid, process_start):
         """PID e identidade do processo (README §8.4 passo 5). Rotina tecnica, sem updated_*.
         False = posse perdida (OWNERSHIP_LOST)."""
-        with db_conn.transacao(conn):
+        with db_conn.transaction(conn):
             cur = conn.cursor()
             try:
                 cur.execute("UPDATE " + self._tck + " SET process_id = :pid, process_start = :process_start "
@@ -347,7 +347,7 @@ class RepoSchedulerFila(object):
         """RUNNING -> PENDING para script nunca iniciado (CR-007 R-03); com cancelamento pedido, CANCELLED/
         CANCEL_USER/-1 na mesma transacao (CR-008 R-02). 'DEVOLVIDO' | 'CANCELADO' | 'PERDIDO'."""
         ator = ator_sistema(agente_id)
-        with db_conn.transacao(conn):
+        with db_conn.transaction(conn):
             cur = conn.cursor()
             try:
                 cur.execute("UPDATE " + self._tck + " SET status = 'PENDING', agent_id = NULL, started_at = NULL, "
@@ -370,7 +370,7 @@ class RepoSchedulerFila(object):
         """Finalizacao pelo agente dono (README §8.7 passo 4). False = posse perdida (rowcount 0)."""
         if status not in TERMINAIS:
             raise ValueError("status terminal invalido: %r" % (status,))
-        with db_conn.transacao(conn):
+        with db_conn.transaction(conn):
             cur = conn.cursor()
             try:
                 cur.execute("UPDATE " + self._tck + " SET status = :status, status_reason = :reason, "
@@ -391,7 +391,7 @@ class RepoSchedulerFila(object):
         executemany com updated_* do agente que detectou (CR-006). Devolve os ids marcados.
         """
         ator = ator_sistema(agente_id)
-        with db_conn.transacao(conn):
+        with db_conn.transaction(conn):
             cur = conn.cursor()
             try:
                 cur.execute("SELECT SYSDATE FROM DUAL")
@@ -495,7 +495,7 @@ class RepoSchedulerFila(object):
             try:
                 return self._registrar_agente(conn, dados, processo_existe)
             except Exception as exc:
-                if tentativa + 1 < tentativas and db_conn.classificar_erro(exc) == ("ORA", 1):
+                if tentativa + 1 < tentativas and db_conn.classify_error(exc) == ("ORA", 1):
                     continue  # ORA-00001 em uk_<prefixo>agt_codigo: outro processo incluiu antes; relê
                 raise
 
@@ -542,7 +542,7 @@ class RepoSchedulerFila(object):
         """status = 'PARADO' com updated_* e AGENT_STOP, com o filtro de hostname/pid do heartbeat (README
         §8.11). False se o registro ja nao era deste processo."""
         ator = ator_sistema(agente_id)
-        with db_conn.transacao(conn):
+        with db_conn.transaction(conn):
             cur = conn.cursor()
             try:
                 cur.execute("UPDATE " + self._agt + " SET status = 'STOPPED', updated_at = SYSDATE, updated_by = :actor "

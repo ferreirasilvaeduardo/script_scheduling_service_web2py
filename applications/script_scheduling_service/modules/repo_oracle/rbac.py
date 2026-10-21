@@ -211,7 +211,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                 if cur.fetchone():
                     raise repo_errors.RepoViolacao("Perfil com nome '%s' ja existe" % nome, constraint=self.nome_constraint("uk", "perfis", "name"))
 
-                pid = db_conn.proximo_id(c, self._seq_perfis())
+                pid = db_conn.next_id(c, self._seq_perfis())
                 perm_versao = int(dados.get("perm_version", 1))
 
                 sql_ins = (
@@ -425,7 +425,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                 for rid in f_del:
                     cur.execute("DELETE FROM " + self._tabela_perfil_func() + " WHERE id = :rid", {"rid": rid})
                 for fid in f_ins:
-                    nid = db_conn.proximo_id(c, self._seq_perfil_func())
+                    nid = db_conn.next_id(c, self._seq_perfil_func())
                     cur.execute(
                         "INSERT INTO " + self._tabela_perfil_func() + " "
                         "(id, profile_id, feature_id, created_at, created_by, updated_at, updated_by) "
@@ -446,7 +446,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                 for rid in a_del:
                     cur.execute("DELETE FROM " + self._tabela_perfil_amb() + " WHERE id = :rid", {"rid": rid})
                 for aid in a_ins:
-                    nid = db_conn.proximo_id(c, self._seq_perfil_amb())
+                    nid = db_conn.next_id(c, self._seq_perfil_amb())
                     cur.execute(
                         "INSERT INTO " + self._tabela_perfil_amb() + " "
                         "(id, profile_id, environment_id, created_at, created_by, updated_at, updated_by) "
@@ -467,7 +467,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                 for rid in s_del:
                     cur.execute("DELETE FROM " + self._tabela_perfil_scr() + " WHERE id = :rid", {"rid": rid})
                 for sid in s_ins:
-                    nid = db_conn.proximo_id(c, self._seq_perfil_scr())
+                    nid = db_conn.next_id(c, self._seq_perfil_scr())
                     cur.execute(
                         "INSERT INTO " + self._tabela_perfil_scr() + " "
                         "(id, profile_id, script_id, created_at, created_by, updated_at, updated_by) "

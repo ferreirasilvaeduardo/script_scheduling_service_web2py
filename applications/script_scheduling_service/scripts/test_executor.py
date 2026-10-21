@@ -25,7 +25,7 @@ import executor
 import params_compiler as pc
 import path_guard
 import os_platform
-from sss_config import Segredos
+from sss_config import Secrets
 
 AGENTE_FALSO = 2 ** 31 - 3
 STARTED_AT = datetime.datetime(2026, 10, 16, 14, 5, 33)
@@ -488,7 +488,7 @@ class TestSnapshotV4(_Base):
         ticket = {"id": 21, "environment": "DEV", "schedule_id": 5, "parent_ticket_id": None, "priority": 3,
                   "started_at": STARTED_AT, "scheduled_at": STARTED_AT}
         with self.assertLogs("sss_scheduler", "WARNING"):
-            env = env_builder.construir(cfg, Segredos("x" * 8, None, {}), ticket,
+            env = env_builder.construir(cfg, Secrets("x" * 8, None, {}), ticket,
                                         {"name": "DEV", "connection": None, "description": "Desenvolvimento"},
                                         script_real, wd, {}, os_platform.NOME, snapshot=snap,
                                         agendamento={"name": "Diario DEV", "recurrence_type": "DAILY"},

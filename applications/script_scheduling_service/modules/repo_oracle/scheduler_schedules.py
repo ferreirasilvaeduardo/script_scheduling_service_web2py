@@ -56,7 +56,7 @@ class RepoSchedulerAgenda(object):
     """Owner e prefixo vem da configuracao (nunca fixos); os nomes passam por sql_ident."""
 
     def __init__(self, owner, prefixo):
-        t = lambda nome: sql_ident.tabela(owner, prefixo, nome)  # noqa: E731
+        t = lambda nome: sql_ident.table(owner, prefixo, nome)  # noqa: E731
         s = lambda nome: sql_ident.sequence(owner, prefixo, nome)  # noqa: E731
         self._agd, self._tck, self._resp, self._aud = t("agendamentos"), t("tickets"), t("ticket_resp"), t("auditoria")
         self._scr, self._amb, self._usr, self._samb = t("scripts"), t("ambientes"), t("usuarios"), t("script_amb")
@@ -75,7 +75,7 @@ class RepoSchedulerAgenda(object):
         cur = conn.cursor()
         try:
             if datas:
-                db_conn.definir_tipos_entrada(cur, **dict((d, db_conn.TIPO_DATE) for d in datas))
+                db_conn.set_input_types(cur, **dict((d, db_conn.TIPO_DATE) for d in datas))
             cur.execute(sql, binds)
             return cur.rowcount
         finally:
@@ -88,7 +88,7 @@ class RepoSchedulerAgenda(object):
         self._executar(conn, "INSERT INTO " + self._aud + " (id, actor, source_ip, action, entity, entity_id, "
                        "detail, created_at) VALUES (:id, :actor, NULL, 'SCHEDULE_PAUSE', 'tbsss_schedules', :rid, "
                        ":detail, SYSDATE)",
-                       {"id": db_conn.proximo_id(conn, self._seq_aud), "actor": ator, "rid": int(regra_id),
+                       {"id": db_conn.next_id(conn, self._seq_aud), "actor": ator, "rid": int(regra_id),
                         "detail": detalhe})
 
     # ------------------------------------------------------------------ leitura
@@ -97,7 +97,7 @@ class RepoSchedulerAgenda(object):
         """Pagina de (id, proxima_execucao) vencidas, depois de (ult_prox, ult_id) (README §7.5, R-08)."""
         cur = conn.cursor()
         try:
-            db_conn.definir_tipos_entrada(cur, ult_prox=db_conn.TIPO_DATE)
+            db_conn.set_input_types(cur, ult_prox=db_conn.TIPO_DATE)
             cur.execute("SELECT id, next_run_at FROM ("
                         " SELECT id, next_run_at FROM " + self._agd +
                         " WHERE active = 'Y' AND next_run_at <= SYSDATE"
@@ -182,7 +182,7 @@ class RepoSchedulerAgenda(object):
             cur.close()
 
     def proximo_ticket_id(self, conn):
-        return db_conn.proximo_id(conn, self._seq_tck)
+        return db_conn.next_id(conn, self._seq_tck)
 
     # ------------------------------------------------------------------ escrita do ticket
 
@@ -191,7 +191,7 @@ class RepoSchedulerAgenda(object):
         scheduled_at = ocorrencia (CR-007 R-27, CR-008 R-03). ORA-00001 em ix_tck_ocor: OcorrenciaDuplicada."""
         cur = conn.cursor()
         try:
-            db_conn.definir_tipos_entrada(cur, scheduled_at=db_conn.TIPO_DATE, parametros=db_conn.TIPO_CLOB)
+            db_conn.set_input_types(cur, scheduled_at=db_conn.TIPO_DATE, parametros=db_conn.TIPO_CLOB)
             try:
                 cur.execute("INSERT INTO " + self._tck + " (id, script_id, environment, requested_by, source_ip, status,"
                             " priority, cancel_requested, schedule_id, submitted_params, log_offset_chars,"
@@ -203,7 +203,7 @@ class RepoSchedulerAgenda(object):
                              "schedule_id": int(regra["id"]), "parametros": ticket["submitted_params"],
                              "scheduled_at": sem_microssegundos(ticket["scheduled_at"]), "actor": ator})
             except Exception as exc:
-                if db_conn.classificar_erro(exc) == ("ORA", _ORA_DUPLICADO) and self._ocor.upper() in str(exc).upper():
+                if db_conn.classify_error(exc) == ("ORA", _ORA_DUPLICADO) and self._ocor.upper() in str(exc).upper():
                     raise OcorrenciaDuplicada(str(exc))
                 raise
         finally:
@@ -212,7 +212,7 @@ class RepoSchedulerAgenda(object):
             self._executar(conn, "INSERT INTO " + self._resp + " (id, ticket_id, parameter_id, answer_value,"
                            " created_at, created_by, updated_at, updated_by) VALUES (:id, :ticket_id, :parameter_id,"
                            " :valor, SYSDATE, :actor, NULL, NULL)",
-                           {"id": db_conn.proximo_id(conn, self._seq_resp), "ticket_id": int(ticket_id),
+                           {"id": db_conn.next_id(conn, self._seq_resp), "ticket_id": int(ticket_id),
                             "parameter_id": int(linha["parameter_id"]), "valor": linha["answer_value"],
                             "actor": ator})
 

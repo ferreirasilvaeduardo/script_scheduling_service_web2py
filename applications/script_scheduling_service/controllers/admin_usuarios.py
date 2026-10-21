@@ -73,7 +73,7 @@ def lista():
     except AcessoNegado:
         _negado()
     except RepoErro:
-        _log.exception("falha ao listar usuarios (login=%s)", ctx["login"], extra={"acao": _FUNC})
+        _log.exception("falha ao listar usuarios (login=%s)", ctx["login"], extra={"action": _FUNC})
         resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
     response.title = u"Usuários — SSS"
@@ -107,7 +107,7 @@ def salvar():
     except AcessoNegado:
         _negado()
     except RepoErro:
-        _log.exception("falha ao salvar usuario (login=%s id=%r)", ctx["login"], usuario_id, extra={"acao": _FUNC})
+        _log.exception("falha ao salvar usuario (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
         erros = {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}
     if not erros:
         session.flash = {"tipo": "sucesso", "mensagem": u"Usuário salvo com sucesso."}
@@ -146,7 +146,7 @@ def alternar_ativo():
     except RepoConflito:
         session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
     except RepoErro:
-        _log.exception("falha ao alternar usuario (login=%s id=%r)", ctx["login"], usuario_id, extra={"acao": _FUNC})
+        _log.exception("falha ao alternar usuario (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
     redirect(URL(c="admin_usuarios", f="form", args=[usuario_id]))
 
@@ -166,7 +166,7 @@ def redefinir_senha():
         session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
         redirect(URL(c="admin_usuarios", f="form", args=[usuario_id]))
     except RepoErro:
-        _log.exception("falha ao redefinir senha (login=%s id=%r)", ctx["login"], usuario_id, extra={"acao": _FUNC})
+        _log.exception("falha ao redefinir senha (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
         redirect(URL(c="admin_usuarios", f="form", args=[usuario_id]))
     if not erros:
@@ -190,6 +190,6 @@ def desbloquear():
     except OperacaoNegada as exc:
         session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
     except RepoErro:
-        _log.exception("falha ao desbloquear (login=%s id=%r)", ctx["login"], usuario_id, extra={"acao": _FUNC})
+        _log.exception("falha ao desbloquear (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
     redirect(URL(c="admin_usuarios", f="form", args=[usuario_id]))

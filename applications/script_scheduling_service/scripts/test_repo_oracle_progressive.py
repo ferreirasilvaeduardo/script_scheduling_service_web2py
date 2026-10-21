@@ -1184,10 +1184,10 @@ class TestOracleAuditoriaAgentes(unittest.TestCase):
     def test_painel_usa_as_expressoes_dos_indices_e_nenhum_clob(self):
         """AGENTS §4.8: CASE textualmente identico ao de ix_tck_run/ix_tck_fila; sem CLOB (CR-008, R-15)."""
         import sql_ident
-        self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENTE_CASE + ") = :code", self.agt._sql["TICKETS_RUNNING"])
-        self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENTE_CASE + ") >= CHR(1)", self.agt._sql["RODANDO_SEM_PID"])
+        self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENT_CASE + ") = :code", self.agt._sql["TICKETS_RUNNING"])
+        self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENT_CASE + ") >= CHR(1)", self.agt._sql["RODANDO_SEM_PID"])
         # CR-013: so ix_tck_fila (status lider e o inicio da espera), agrupado por script antes do JOIN.
-        self.assertIn("WHERE status = 'PENDING' AND " + sql_ident.FBI_TCK_FILA_INICIO + " <= :agora", self.agt._sql["FILA"])
+        self.assertIn("WHERE status = 'PENDING' AND " + sql_ident.FBI_TCK_QUEUE_START + " <= :agora", self.agt._sql["FILA"])
         self.assertIn("JOIN " + self.agt._idents["scr"] + " s ON s.id = g.script_id", self.agt._sql["FILA"])
         for nome in ("TICKETS_RUNNING", "FILA", "RODANDO_SEM_PID"):
             self.assertNotIn("log_output", self.agt._sql[nome])
@@ -1261,7 +1261,7 @@ class TestOracleAuditoriaAgentes(unittest.TestCase):
             self.assertEqual(reg["created_at"].microsecond, 0)
             with self.assertRaises(repo_errors.RepoViolacao) as ctx:
                 self.aud.registrar("teste_" + marca, None, "UPDATE", "tbsss_control", 1, None, id=aid)
-            self.assertEqual(ctx.exception.constraint, "pk_" + self.aud._prefixo + sql_ident.fisico("auditoria"))
+            self.assertEqual(ctx.exception.constraint, "pk_" + self.aud._prefixo + sql_ident.physical("auditoria"))
             for _ in range(2):
                 aud_ids.append(self.aud.registrar("teste_" + marca, None, "UPDATE", "tbsss_control", 1)["id"])
             filtros = {"actor": "TESTE_" + marca.upper(), "start_date": agora - datetime.timedelta(minutes=5),
@@ -1279,7 +1279,7 @@ class TestOracleAuditoriaAgentes(unittest.TestCase):
             login = repo_factory.obter("usuarios").listar(tamanho=1)["itens"][0]["login"]
             c = self.aud._obter_conexao()
             try:
-                agt_id = db_conn.proximo_id(c, self.agt.qualificar_sequence("agentes"))
+                agt_id = db_conn.next_id(c, self.agt.qualificar_sequence("agentes"))
             finally:
                 c.close()
             self._executar([(

@@ -40,18 +40,18 @@ def _registrar_critico_config(msg, cfg=None):
 
     # Garante envio para o logger e/ou stderr se ainda nao configurado
     if logger.handlers or logging.getLogger().handlers:
-        logger.critical(msg, extra={"agente": "-", "ticket": "-", "acao": "CONFIG"})
+        logger.critical(msg, extra={"agent": "-", "ticket": "-", "action": "CONFIG"})
     else:
-        sss_logging.registrar_critico_inicial("sss_init_db", msg, log_dir)
+        sss_logging.log_initial_critical("sss_init_db", msg, log_dir)
 
 
 def _conectar(cfg, usuario, senha):
-    """Estabelece conexao Oracle com a conta informada usando db_conn.conectar (F7.2)."""
+    """Estabelece conexao Oracle com a conta informada usando db_conn.connect (F7.2)."""
     import db_conn
     segredos_dummy = collections.namedtuple("SegredosDummy", ["oracle"])(
         oracle=collections.namedtuple("OracleDummy", ["password"])(password=senha)
     )
-    return db_conn.conectar(cfg, segredos_dummy, papel="dono", user=usuario, password=senha)
+    return db_conn.connect(cfg, segredos_dummy, papel="dono", user=usuario, password=senha)
 
 
 def _validar_schema_descartavel_dev(cfg, usuario_dono, conn):
@@ -167,7 +167,7 @@ def _executar_ddl_fases(conn, owner, prefixo, lob_storage="SECUREFILE", log_fn=p
                 sucesso_count += 1
             except Exception as exc:
                 msg = "Fase {} - Falha ao criar {} {}: {}".format(item.fase, item.tipo, item.nome, exc)
-                logger.error(msg, extra={"agente": "-", "ticket": "-", "acao": "INIT_DB"})
+                logger.error(msg, extra={"agent": "-", "ticket": "-", "action": "INIT_DB"})
                 raise RuntimeError(msg)
 
         log_fn("DDL concluido: {} criados, {} ignorados (ja existiam)".format(sucesso_count, skip_count))
@@ -177,7 +177,7 @@ def _executar_ddl_fases(conn, owner, prefixo, lob_storage="SECUREFILE", log_fn=p
 
 def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_senha=None, log_fn=print):
     """Executa o seed idempotente via MERGE (Fase 7, README §4.3.D e §11.1)."""
-    esquema = sql_ident.nomes(prefixo)
+    esquema = sql_ident.names(prefixo)
     cursor = conn.cursor()
     try:
         # 1. Catálogo de Funcionalidades
@@ -472,7 +472,7 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
           INSERT (id, schema_version, version_applied_at, version_applied_by)
           VALUES (1, :schema_version, SYSDATE, 'SYSTEM:init_db')
         """.format(tb_ctl=tb_ctl)
-        cursor.execute(sql_merge_ctl, {"schema_version": sql_ident.VERSAO_ESQUEMA})
+        cursor.execute(sql_merge_ctl, {"schema_version": sql_ident.SCHEMA_VERSION})
 
         # 8. Usuarios padrao da aplicacao e homologacao (CATALOGO_USUARIOS_PADRAO)
         tb_usr = "{}.{}".format(owner, esquema["usuarios"]["tabela"])
@@ -520,7 +520,7 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
     except Exception as exc:
         conn.rollback()
         msg = "Falha no seed: %s" % exc
-        logger.error(msg, extra={"agente": "-", "ticket": "-", "acao": "INIT_DB"})
+        logger.error(msg, extra={"agent": "-", "ticket": "-", "action": "INIT_DB"})
         raise RuntimeError(msg)
     finally:
         cursor.close()
@@ -529,7 +529,7 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
 def _coletar_estatisticas(conn, owner, prefixo, log_fn=print):
     """Coleta estatisticas apenas em tabelas com linhas (Fase 8, CR-007, R-29)."""
     cursor = conn.cursor()
-    esquema = sql_ident.nomes(prefixo)
+    esquema = sql_ident.names(prefixo)
     try:
         for entidade, t in esquema.items():
             tabela_nome = t["tabela"]
@@ -557,13 +557,13 @@ def _coletar_estatisticas(conn, owner, prefixo, log_fn=print):
 
 def _conferir_esquema(conn, owner, prefixo, log_fn=print):
     """Confere esquema real do banco contra o registro sql_ident (README §11.1, CR-008, R-14)."""
-    esquema = sql_ident.nomes(prefixo)
+    esquema = sql_ident.names(prefixo)
     cursor = conn.cursor()
     divergencias = []
 
     try:
         # 1. Checagem de Objetos Invalidos (apenas objetos pertencentes ao SSS)
-        idents_sss = {i.upper() for i in esquema.todos_identificadores(incluir_colunas=False)}
+        idents_sss = {i.upper() for i in esquema.all_identifiers(incluir_colunas=False)}
         cursor.execute(
             "SELECT OBJECT_TYPE, OBJECT_NAME FROM ALL_OBJECTS WHERE OWNER = :o AND STATUS = 'INVALID'",
             {"o": owner.upper()}
@@ -618,8 +618,8 @@ def _conferir_esquema(conn, owner, prefixo, log_fn=print):
 
                 # Valida Default (normalizado)
                 if col_info.get("default") is not None:
-                    def_esperado = sql_ident.normalizar_expressao(col_info["default"])
-                    def_real = sql_ident.normalizar_expressao(b_col["data_default"])
+                    def_esperado = sql_ident.normalize_expression(col_info["default"])
+                    def_real = sql_ident.normalize_expression(b_col["data_default"])
                     if def_esperado != def_real:
                         divergencias.append(
                             "Coluna {}.{} divergencia de DEFAULT (esperado: '{}', real: '{}')".format(
@@ -643,7 +643,7 @@ def _conferir_esquema(conn, owner, prefixo, log_fn=print):
             cks_banco = {}
             for c_nome, s_cond in cursor.fetchall():
                 # Ignora SYS_C% que apenas validam IS NOT NULL
-                if sql_ident.eh_ck_not_null_sistema(c_nome, s_cond):
+                if sql_ident.is_system_not_null_ck(c_nome, s_cond):
                     continue
                 cks_banco[c_nome.lower()] = s_cond
 
@@ -652,8 +652,8 @@ def _conferir_esquema(conn, owner, prefixo, log_fn=print):
                     divergencias.append("Constraint CK ausente: {}.{}".format(t["tabela"], ck_esperada))
                     continue
 
-                cond_real = sql_ident.normalizar_expressao(cks_banco[ck_esperada])
-                cond_esp = sql_ident.normalizar_expressao(ck_info["expr"])
+                cond_real = sql_ident.normalize_expression(cks_banco[ck_esperada])
+                cond_esp = sql_ident.normalize_expression(ck_info["expr"])
                 if cond_real != cond_esp:
                     divergencias.append(
                         "Constraint CK {}.{} condicao divergente (esperado: '{}', real: '{}')".format(
@@ -721,7 +721,7 @@ def _existe_esquema_1(conn, owner, prefixo):
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT COUNT(*) FROM all_tables WHERE owner = :o AND table_name = :t",
-                       o=owner.upper(), t=(prefixo + sql_ident.CONTROLE_ESQUEMA_1).upper())
+                       o=owner.upper(), t=(prefixo + sql_ident.LEGACY_CONTROL_TABLE).upper())
         return int(cursor.fetchone()[0]) > 0
     finally:
         cursor.close()
@@ -760,14 +760,14 @@ def main(argv=None):
 
     # Carrega configuracao
     cfg = None
-    caminho_cfg = args.config or sss_config.caminho_config_padrao()
+    caminho_cfg = args.config or sss_config.default_config_path()
     if not os.path.isfile(caminho_cfg):
         exemplo = os.path.join(os.path.dirname(caminho_cfg), "config.ini.example")
         if os.path.isfile(exemplo):
             caminho_cfg = exemplo
 
     try:
-        cfg = sss_config.carregar(caminho_cfg)
+        cfg = sss_config.load(caminho_cfg)
     except Exception as exc:
         msg = "Falha ao carregar configuracao: %s" % exc
         _registrar_critico_config(msg)
@@ -780,9 +780,9 @@ def main(argv=None):
 
     # Valida owner e prefixo antes de qualquer acao
     try:
-        sql_ident.validar_owner(owner)
-        sql_ident.validar_prefixo(prefixo)
-        sql_ident.validar_registro(prefixo)
+        sql_ident.validate_owner(owner)
+        sql_ident.validate_prefix(prefixo)
+        sql_ident.validate_registry(prefixo)
     except Exception as exc:
         msg = "Falha de configuracao em identificadores Oracle: %s" % exc
         _registrar_critico_config(msg, cfg)
@@ -866,7 +866,7 @@ def main(argv=None):
         conn = _conectar(cfg, usuario_dono, senha_dono)
     except Exception as exc:
         msg = "Falha de conexao com o banco Oracle: %s" % exc
-        logger.critical(msg, extra={"agente": "-", "ticket": "-", "acao": "INIT_DB"})
+        logger.critical(msg, extra={"agent": "-", "ticket": "-", "action": "INIT_DB"})
         print(msg, file=sys.stderr)
         return 1
 
@@ -889,7 +889,7 @@ def main(argv=None):
                 cursor.close()
 
         # Checagem de versao do esquema atual
-        esquema = sql_ident.nomes(prefixo)
+        esquema = sql_ident.names(prefixo)
         cursor = conn.cursor()
         tb_ctl = "{}.{}".format(owner, esquema["controle"]["tabela"])
         versao_banco = 0
@@ -909,9 +909,9 @@ def main(argv=None):
                   "da versao anterior antes de criar o novo" % owner, file=sys.stderr)
             return 3
 
-        if versao_banco > sql_ident.VERSAO_ESQUEMA:
+        if versao_banco > sql_ident.SCHEMA_VERSION:
             msg = "Versao do banco (%d) e maior que a versao suportada pelo codigo (%d)" % (
-                versao_banco, sql_ident.VERSAO_ESQUEMA
+                versao_banco, sql_ident.SCHEMA_VERSION
             )
             print(msg, file=sys.stderr)
             return 3

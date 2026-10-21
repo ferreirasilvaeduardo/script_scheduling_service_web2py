@@ -40,8 +40,8 @@ def _curto(texto):
 
 def eh_erro_banco(exc):
     """Erro do contrato do banco (ORA/DPY/DPI, rede ou prazo): nova tentativa no ciclo seguinte (R-22)."""
-    pfx, _num = db_conn.classificar_erro(exc)
-    return pfx is not None or db_conn.eh_erro_rede(exc) or db_conn.eh_tempo_esgotado(exc)
+    pfx, _num = db_conn.classify_error(exc)
+    return pfx is not None or db_conn.is_network_error(exc) or db_conn.is_timeout(exc)
 
 
 class Desdobro(object):
@@ -118,7 +118,7 @@ class Desdobro(object):
             conn.rollback()
             return "OUTRO_AGENTE"
         antiga = regra["next_run_at"]  # passo 1: exatamente como o banco devolveu
-        agora = db_conn.agora_banco(conn)
+        agora = db_conn.db_now(conn)
         self._regra_atual = regra
 
         # Passo 2: o responsavel ainda pode executar (motivo pela traducao unica, CR-008 R-33).
@@ -278,7 +278,7 @@ class Desdobro(object):
         regra = getattr(self, "_regra_atual", None)
         try:
             if regra is not None and regra["id"] == regra_id:
-                dec = recurrence.avaliar_disparo(regra, db_conn.agora_banco(conn), self.cfg.misfire_policy,
+                dec = recurrence.avaliar_disparo(regra, db_conn.db_now(conn), self.cfg.misfire_policy,
                                                  self.cfg.misfire_tolerance_s, self.horizonte)
                 if dec.nova_data is not None:
                     self.agenda.avancar_sem_ticket(conn, regra_id, regra["next_run_at"], dec.nova_data)
@@ -291,12 +291,12 @@ class Desdobro(object):
 
     def _falha(self, conn, regra_id, exc, log):
         if eh_erro_banco(exc):
-            pfx, num = db_conn.classificar_erro(exc)
+            pfx, num = db_conn.classify_error(exc)
             n = self.falhas.get(regra_id, 0) + 1
             self.falhas[regra_id] = n
             log.warning("DESDOBRO_ERRO_BANCO: %s (falha %d de %d seguidas)",
                         "%s-%05d" % (pfx, num) if pfx else exc.__class__.__name__, n, FALHAS_ATE_PAUSAR)
-            if db_conn.eh_erro_rede(exc):
+            if db_conn.is_network_error(exc):
                 raise exc  # conexao perdida: o ciclo para e o agente reconecta (o laco trata)
             if n < FALHAS_ATE_PAUSAR:
                 return "ERRO_BANCO"
@@ -322,7 +322,7 @@ class _LogRegra(object):
 
     def __init__(self, log, agente_id, regra_id):
         self._log = log
-        self._extra = {"agente": agente_id, "ticket": "-", "acao": "DESDOBRO"}
+        self._extra = {"agent": agente_id, "ticket": "-", "action": "DESDOBRO"}
         self._pfx = "agendamento %d: " % int(regra_id)
 
     def info(self, msg, *args):

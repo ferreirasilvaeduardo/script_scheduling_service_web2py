@@ -371,7 +371,7 @@ class RepoCatalogoOracle(BaseRepoOracle, RepoCatalogo):
             if ativo not in ("Y", "N"):
                 raise repo_errors.RepoViolacao("Flag ativo deve ser 'Y' ou 'N'",
                                                constraint=self._ck("ambientes", "active"))
-            aid = db_conn.proximo_id(c, self._seq["ambientes"])
+            aid = db_conn.next_id(c, self._seq["ambientes"])
             cur = c.cursor()
             try:
                 cur.execute(self._sql["AMB_INSERIR"], {
@@ -553,7 +553,7 @@ class RepoCatalogoOracle(BaseRepoOracle, RepoCatalogo):
         self._validar_script(base)
         with self.transacao_escrita(conn=conn) as c:
             self._nome_script_livre(c, base["name"], 0)
-            sid = db_conn.proximo_id(c, self._seq["scripts"])
+            sid = db_conn.next_id(c, self._seq["scripts"])
             binds = self._binds_script(base, ator_limpo)
             binds["id"] = sid
             cur = c.cursor()
@@ -641,7 +641,7 @@ class RepoCatalogoOracle(BaseRepoOracle, RepoCatalogo):
             incluir = []
             for aid in ids:
                 if aid not in atuais:
-                    incluir.append({"id": db_conn.proximo_id(c, self._seq["script_amb"]),
+                    incluir.append({"id": db_conn.next_id(c, self._seq["script_amb"]),
                                     "script_id": sid, "environment_id": aid, "actor": ator_limpo})
             cur = c.cursor()
             try:
@@ -720,7 +720,7 @@ class RepoCatalogoOracle(BaseRepoOracle, RepoCatalogo):
             self._validar_flag_nomeado(flag)
             self._validar_flags_parametro("sensitive", sens)
             self._validar_flags_parametro("active", ativo)
-            pid = db_conn.proximo_id(c, self._seq["parametros"])
+            pid = db_conn.next_id(c, self._seq["parametros"])
             cur = c.cursor()
             try:
                 cur.execute(self._sql["PRM_INSERIR"], {
@@ -878,7 +878,7 @@ class RepoCatalogoOracle(BaseRepoOracle, RepoCatalogo):
             mudou = set(anteriores) != set(nv["parameter_id"] for nv in novos)
             lote_novo, lote_mantido, lote_alterado = [], [], []
             for nv in novos:
-                binds = {"id": db_conn.proximo_id(c, self._seq["script_param"]), "script_id": sid,
+                binds = {"id": db_conn.next_id(c, self._seq["script_param"]), "script_id": sid,
                          "parameter_id": nv["parameter_id"], "sort_order": nv["sort_order"],
                          "required": nv["required"], "default_value_override": nv["default_value_override"]}
                 velho = anteriores.get(nv["parameter_id"])
@@ -917,7 +917,7 @@ class RepoCatalogoOracle(BaseRepoOracle, RepoCatalogo):
                     continue
                 cur = c.cursor()
                 try:
-                    db_conn.definir_tipos_entrada(cur, **tipos)
+                    db_conn.set_input_types(cur, **tipos)
                     cur.executemany(sql, lote)
                 finally:
                     cur.close()

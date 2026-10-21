@@ -67,7 +67,7 @@ def main(argv=None):
 
         if caminho_cfg and os.path.isfile(caminho_cfg):
             try:
-                cfg = sss_config.carregar(caminho_cfg)
+                cfg = sss_config.load(caminho_cfg)
                 if hasattr(cfg, "oracle"):
                     if not owner:
                         owner = getattr(cfg.oracle, "owner", "OPENRISOW")
@@ -82,9 +82,9 @@ def main(argv=None):
     prefixo = prefixo or "tbsss_"
 
     try:
-        sql_ident.validar_owner(owner)
-        sql_ident.validar_prefixo(prefixo)
-        sql_ident.validar_registro(prefixo)
+        sql_ident.validate_owner(owner)
+        sql_ident.validate_prefix(prefixo)
+        sql_ident.validate_registry(prefixo)
     except Exception as exc:
         print("Erro de validacao em identificadores Oracle: %s" % exc, file=sys.stderr)
         return 2

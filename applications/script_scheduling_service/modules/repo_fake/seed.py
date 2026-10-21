@@ -637,7 +637,7 @@ def carregar_seed(store, forcar=False, senha_dev=None):
                                 _carimbar_registro(store, base_dt)
 
                                 # Controle (tabela 17, CR-007 D4): o FAKE nasce na versao do esquema do codigo.
-                                store.controle[1] = {"id": 1, "schema_version": sql_ident.VERSAO_ESQUEMA,
+                                store.controle[1] = {"id": 1, "schema_version": sql_ident.SCHEMA_VERSION,
                                                      "version_applied_at": base_dt - datetime.timedelta(days=90),
                                                      "version_applied_by": "SYSTEM:seed", "purge_owner": None,
                                                      "purge_lease_until": None}

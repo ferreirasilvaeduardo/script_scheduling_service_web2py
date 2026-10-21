@@ -304,7 +304,7 @@ class ServicoAuditoria(object):
             _descrever_filtros(filtros), linhas, LIMITE_EXPORTACAO))
         self._auditoria.registrar(ctx.get("login"), ip, ACAO_EXPORTAR, ENTIDADE_AUDITORIA, None, detalhe, id=aid)
         self._log.info("auditoria exportada (login=%s linhas=%d total=%d)", ctx.get("login"), linhas, total,
-                       extra={"acao": ACAO_EXPORTAR})
+                       extra={"action": ACAO_EXPORTAR})
         nome = "auditoria_%s.csv" % self._relogio().strftime("%Y%m%d_%H%M%S")
         return nome, linhas, self._blocos(repo_filtros, ctx.get("login"))
 
@@ -328,7 +328,7 @@ class ServicoAuditoria(object):
         except Exception:
             # A resposta ja comecou: so resta registrar e encerrar o arquivo incompleto.
             self._log.exception("falha durante a exportacao da auditoria (login=%s)", login,
-                                extra={"acao": ACAO_EXPORTAR})
+                                extra={"action": ACAO_EXPORTAR})
             raise
         if pendentes:
             yield buffer.getvalue().encode("utf-8")
@@ -348,7 +348,7 @@ def _servico():
             _padrao = ServicoAuditoria(
                 auditoria=fabrica.obter("auditoria"),
                 relogio=fabrica.obter("tickets").agora,
-                log=sss_logging.obter_logger("sss_web", current.sss_cfg),
+                log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _padrao
 

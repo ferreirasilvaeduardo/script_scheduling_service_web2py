@@ -101,7 +101,7 @@ def lista():
     except AcessoNegado:
         _negado()
     except RepoErro:
-        _log.exception("falha ao listar agendamentos (login=%s)", ctx["login"], extra={"acao": _FUNC})
+        _log.exception("falha ao listar agendamentos (login=%s)", ctx["login"], extra={"action": _FUNC})
         resultado = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
     response.title = u"Regras de agendamento — SSS"
@@ -120,7 +120,7 @@ def agenda():
     except AcessoNegado:
         _negado()
     except RepoErro:
-        _log.exception("falha ao montar a agenda (login=%s)", ctx["login"], extra={"acao": _FUNC})
+        _log.exception("falha ao montar a agenda (login=%s)", ctx["login"], extra={"action": _FUNC})
         return dict(dados=None, erro=ui_helpers.mensagem("falha_interna"))
 
 
@@ -159,7 +159,7 @@ def salvar():
         _redirecionar_lista("erro", exc.mensagem)
     except RepoErro:
         _log.exception("falha ao salvar agendamento (login=%s id=%r)", ctx["login"], agendamento_id,
-                       extra={"acao": _FUNC})
+                       extra={"action": _FUNC})
         salvo_id, erros = None, {admin_crud.CAMPO_GERAL: admin_crud.MSG_FALHA}
     if not erros:
         _redirecionar_lista("sucesso", u"Regra de agendamento salva com sucesso.")
@@ -198,7 +198,7 @@ def _acao_estado(funcao, sucesso):
         session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLITO}
     except RepoErro:
         _log.exception("falha ao alterar a situacao do agendamento (login=%s id=%r)", ctx["login"],
-                       agendamento_id, extra={"acao": _FUNC})
+                       agendamento_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
     redirect(URL(c="agendamentos", f="lista"))
 

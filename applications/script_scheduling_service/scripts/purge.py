@@ -50,7 +50,7 @@ ALVOS_CLI = collections.OrderedDict([("tickets", "tickets"), ("audit", "auditori
                                      ("output", "saida"), ("all", "todos")])
 NOME_TRAVA = "sss-purge.lock"
 _LOGGERS_DO_PURGE = ("sss_db_conn", "sss_config")
-_EXTRA = {"agente": "-", "ticket": "-", "acao": "PURGE"}
+_EXTRA = {"agent": "-", "ticket": "-", "action": "PURGE"}
 
 
 class ConcessaoPerdida(Exception):
@@ -94,7 +94,7 @@ class Purge(object):
         self.resumo = []
 
     def executar(self, alvos, dry_run=False, exportar=None):
-        agora = db_conn.agora_banco(self.conn)  # uma vez: todos os limites partem deste instante
+        agora = db_conn.db_now(self.conn)  # uma vez: todos os limites partem deste instante
         self.log.info("purge iniciado (alvos=%s dry_run=%s agora_banco=%s)", ",".join(alvos), dry_run,
                       agora.strftime("%Y-%m-%d %H:%M:%S"), extra=_EXTRA)
         tabelas = [a for a in ("tickets", "auditoria") if a in alvos]
@@ -111,7 +111,7 @@ class Purge(object):
             self.log.error("concessao do purge perdida durante a execucao; parado", extra=_EXTRA)
             return SAIDA_BANCO
         except Exception as exc:  # erro do driver: ja houve rollback do lote em andamento
-            self.log.error("falha de banco no purge: %s", db_conn.traduzir_erro(exc), extra=_EXTRA)
+            self.log.error("falha de banco no purge: %s", db_conn.translate_error(exc), extra=_EXTRA)
             return SAIDA_BANCO
         finally:
             if dry_run:
@@ -254,10 +254,10 @@ def main(argv=None, conectar=None, plat=os_platform, saida=None):
     args = _argumentos(argv)
     alvos = ALVOS if args.alvo == "todos" else (args.alvo,)
     try:
-        cfg = sss_config.obter_config(nome_log="purge", caminho=args.config)
-    except sss_config.ConfigErro:  # o CRITICAL ja foi registrado (README §12.1)
+        cfg = sss_config.get_config(nome_log="purge", caminho=args.config)
+    except sss_config.ConfigError:  # o CRITICAL ja foi registrado (README §12.1)
         return SAIDA_CONFIG
-    logger = sss_logging.configurar("purge", cfg)
+    logger = sss_logging.configure("purge", cfg)
     for nome in _LOGGERS_DO_PURGE:
         outro = logging.getLogger(nome)
         outro.setLevel(logger.level)
@@ -271,8 +271,8 @@ def main(argv=None, conectar=None, plat=os_platform, saida=None):
         logger.critical("--export-audit: pasta inexistente: %s", args.exportar_auditoria, extra=_EXTRA)
         return SAIDA_CONFIG
     try:
-        segredos = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel="agent")
-    except sss_config.ConfigErro as exc:
+        segredos = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel="agent")
+    except sss_config.ConfigError as exc:
         logger.critical("segredos invalidos: %s", exc, extra=_EXTRA)
         return SAIDA_CONFIG
 
@@ -287,7 +287,7 @@ def main(argv=None, conectar=None, plat=os_platform, saida=None):
         try:
             conn = (conectar or _conectar)(cfg, segredos)
         except Exception as exc:
-            logger.error("falha ao conectar no Oracle: %s", db_conn.traduzir_erro(exc), extra=_EXTRA)
+            logger.error("falha ao conectar no Oracle: %s", db_conn.translate_error(exc), extra=_EXTRA)
             return SAIDA_BANCO
         try:
             purge = Purge(cfg, conn, plat=plat, logger=logger)
@@ -306,7 +306,7 @@ def main(argv=None, conectar=None, plat=os_platform, saida=None):
 
 
 def _conectar(cfg, segredos):
-    return db_conn.conectar(cfg, segredos, papel="purge")
+    return db_conn.connect(cfg, segredos, papel="purge")
 
 
 if __name__ == "__main__":

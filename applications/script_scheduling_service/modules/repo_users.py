@@ -33,7 +33,7 @@ class RepoUsuarios(object):
     def inserir(self, dados, auditoria=None, ator=None):
         """Insere novo usuario e retorna dict com o registro criado.
 
-        auditoria: opcional, {'ator', 'ip', 'acao', 'detalhe'}; gravada na mesma transacao
+        auditoria: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
         (entidade tbsss_users, entidade_id = novo id).
         """
         raise NotImplementedError
@@ -62,7 +62,7 @@ class RepoUsuarios(object):
         limite, bloqueado_ate = SYSDATE + bloqueio_s/86400 (relogio do banco) e auditoria_bloqueio
         (LOGIN_LOCKED) e gravada; o detalhe de auditoria (LOGIN_FAILED) ganha " (tentativa N de M)".
         Sem max_tentativas: bloqueia se bloqueio_s for informado (testes e rotinas tecnicas).
-        auditoria: dict ou lista de dicts {'ator', 'ip', 'acao', 'detalhe'} na mesma transacao.
+        auditoria: dict ou lista de dicts {'actor', 'ip', 'action', 'detail'} na mesma transacao.
         Retorna o registro atualizado, com a chave 'bloqueou' (bool).
         """
         raise NotImplementedError

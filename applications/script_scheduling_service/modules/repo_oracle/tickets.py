@@ -191,7 +191,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
     def agora(self):
         """Instante corrente do banco (SYSDATE), sem microssegundos."""
         with self.contexto_leitura() as conn:
-            return db_conn.agora_banco(conn)
+            return db_conn.db_now(conn)
 
     def obter(self, id, conn=None):
         """Ticket pela PK, com parametros_enviados e sem log_output (que sai por log_ler)."""
@@ -263,7 +263,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             cur = c.cursor()
             try:
                 if datas:
-                    db_conn.definir_tipos_entrada(cur, **datas)
+                    db_conn.set_input_types(cur, **datas)
                 cur.execute(sql_conta, binds)
                 bruto = cur.fetchone()[0]
             finally:
@@ -274,7 +274,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             cur = c.cursor()
             try:
                 if datas:
-                    db_conn.definir_tipos_entrada(cur, **datas)
+                    db_conn.set_input_types(cur, **datas)
                 cur.execute(sql_pag, binds_pag)
                 itens = [self.tupla_para_dict(_COLS_TCK, r[:len(_COLS_TCK)]) for r in cur.fetchall()]
             finally:
@@ -323,7 +323,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
         with self.contexto_leitura(conn=conn) as c:
             cur = c.cursor()
             try:
-                db_conn.definir_tipos_entrada(cur, desde=db_conn.TIPO_DATE)
+                db_conn.set_input_types(cur, desde=db_conn.TIPO_DATE)
                 cur.execute(sql, binds)
                 linhas = [self.tupla_para_dict(_COLS_HIST, r) for r in cur.fetchall()]
             finally:
@@ -443,7 +443,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
                         constraint=self.nome_constraint("uk", "ticket_resp", "tck_prm"))
                 vistos.add(pid)
 
-            tid = db_conn.proximo_id(c, self._seq_tck)
+            tid = db_conn.next_id(c, self._seq_tck)
             binds = {
                 "id": tid, "script_id": script_id, "environment": ambiente, "requested_by": solicitante,
                 "source_ip": ticket.get("source_ip"), "agent_id": ticket.get("agent_id"),
@@ -463,7 +463,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             tipos.update(submitted_params=db_conn.TIPO_CLOB, log_output=db_conn.TIPO_CLOB)
             cur = c.cursor()
             try:
-                db_conn.definir_tipos_entrada(cur, **tipos)
+                db_conn.set_input_types(cur, **tipos)
                 # Ocorrencia repetida do agendamento: ORA-00001 em ix_<prefixo>tck_ocor (RepoViolacao).
                 cur.execute(self._sql["INSERIR"], binds)
             finally:
@@ -471,7 +471,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
 
             lote = []
             for resp in (respostas or []):
-                lote.append({"id": db_conn.proximo_id(c, self._seq_resp), "ticket_id": tid,
+                lote.append({"id": db_conn.next_id(c, self._seq_resp), "ticket_id": tid,
                              "parameter_id": int(resp["parameter_id"]),
                              "answer_value": resp.get("answer_value"), "actor": ator_limpo})
             if lote:

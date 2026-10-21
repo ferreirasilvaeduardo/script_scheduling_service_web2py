@@ -82,13 +82,13 @@ class RepoAuditoriaOracle(BaseRepoOracle, RepoAuditoria):
     def reservar_id(self, conn=None):
         """Proximo id da trilha (seq.NEXTVAL), usado antes de gravar a linha (README §4.4)."""
         with self.contexto_leitura(conn=conn) as c:
-            return db_conn.proximo_id(c, self._seq_aud)
+            return db_conn.next_id(c, self._seq_aud)
 
     def registrar(self, ator, ip, acao, entidade, entidade_id=None, detalhe=None, id=None, conn=None):
         """Grava a linha (com o id reservado, se informado) e devolve o registro criado."""
         validar_campos_auditoria(ator, detalhe)
         with self.transacao_escrita(conn=conn) as c:
-            aid = int(id) if id is not None else db_conn.proximo_id(c, self._seq_aud)
+            aid = int(id) if id is not None else db_conn.next_id(c, self._seq_aud)
             cur = c.cursor()
             try:
                 # id repetido: ORA-00001 em pk_<prefixo>auditoria (RepoViolacao com o nome da PK).
@@ -122,7 +122,7 @@ class RepoAuditoriaOracle(BaseRepoOracle, RepoAuditoria):
             cur = c.cursor()
             try:
                 if datas:
-                    db_conn.definir_tipos_entrada(cur, **datas)
+                    db_conn.set_input_types(cur, **datas)
                 cur.execute(sql_conta, binds)
                 bruto = cur.fetchone()[0]
             finally:
@@ -133,7 +133,7 @@ class RepoAuditoriaOracle(BaseRepoOracle, RepoAuditoria):
             cur = c.cursor()
             try:
                 if datas:
-                    db_conn.definir_tipos_entrada(cur, **datas)
+                    db_conn.set_input_types(cur, **datas)
                 cur.execute(sql_pag, binds_pag)
                 itens = [self.tupla_para_dict(_COLS, r[:len(_COLS)]) for r in cur.fetchall()]
             finally:
@@ -160,7 +160,7 @@ class RepoAuditoriaOracle(BaseRepoOracle, RepoAuditoria):
             try:
                 cur.arraysize = _ARRAYSIZE
                 if datas:
-                    db_conn.definir_tipos_entrada(cur, **datas)
+                    db_conn.set_input_types(cur, **datas)
                 cur.execute(sql, binds)
                 while True:
                     linhas = cur.fetchmany(_ARRAYSIZE)

@@ -21,7 +21,7 @@ class RepoRbac(object):
     def perfis_inserir(self, dados, auditoria=None, ator=None):
         """Insere novo perfil e retorna dict com o registro criado.
 
-        auditoria: opcional, {'ator', 'ip', 'acao', 'detalhe'}; gravada na mesma transacao
+        auditoria: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
         (entidade tbsss_profiles, entidade_id = novo id).
         """
         raise NotImplementedError

@@ -9,7 +9,7 @@ import datetime
 import threading
 
 from repo_errors import RepoViolacao
-from sql_ident import ATOR_MAX
+from sql_ident import ACTOR_MAX
 
 # Limites de tbsss_audit (README §4.4, §10 tabela 16).
 _ATOR_MAX = 40
@@ -105,7 +105,7 @@ class FakeDataStore(object):
         valor = (auditoria or {}).get("actor") or ator
         if not valor:
             raise RepoViolacao("ator das colunas de registro e obrigatorio")
-        if len(valor) > ATOR_MAX:
+        if len(valor) > ACTOR_MAX:
             raise RepoViolacao("ator excede o tamanho da coluna (ORA-12899)")
         return valor
 

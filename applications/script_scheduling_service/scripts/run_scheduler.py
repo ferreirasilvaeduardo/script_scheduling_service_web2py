@@ -39,10 +39,10 @@ def main(argv=None):
     parser.add_argument("--config", dest="config", default=None, help="config.ini do agente (padrao: instance/)")
     args = parser.parse_args(argv)
     try:
-        cfg = sss_config.obter_config(nome_log="sss_scheduler", caminho=args.config)
-    except sss_config.ConfigErro:  # o CRITICAL ja foi registrado (README §12.1)
+        cfg = sss_config.get_config(nome_log="sss_scheduler", caminho=args.config)
+    except sss_config.ConfigError:  # o CRITICAL ja foi registrado (README §12.1)
         return scheduler_loop.SAIDA_CONFIG
-    logger = sss_logging.configurar("sss_scheduler", cfg)
+    logger = sss_logging.configure("sss_scheduler", cfg)
     for nome in _LOGGERS_DO_DAEMON:
         outro = logging.getLogger(nome)
         outro.setLevel(logger.level)

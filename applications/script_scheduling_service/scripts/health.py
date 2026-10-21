@@ -47,7 +47,7 @@ class Verificacao(object):
         self.problemas.append((nivel, texto))
 
     def executar(self):
-        agora = db_conn.agora_banco(self.conn)
+        agora = db_conn.db_now(self.conn)
         self._versao()
         agentes = self.repo.agentes(self.conn)
         self._agentes(agentes, agora)
@@ -60,9 +60,9 @@ class Verificacao(object):
 
     def _versao(self):
         versao = self.repo.versao_esquema(self.conn)
-        if versao != sql_ident.VERSAO_ESQUEMA:
+        if versao != sql_ident.SCHEMA_VERSION:
             self._problema(CRITICAL, "versao do esquema %s, esperada %d (README §11.1)"
-                           % (versao, sql_ident.VERSAO_ESQUEMA))
+                           % (versao, sql_ident.SCHEMA_VERSION))
 
     def _agentes(self, agentes, agora):
         saudaveis = 0
@@ -119,7 +119,7 @@ class Verificacao(object):
                 t["id"], t["agent_id"], t["started_at"].strftime("%Y-%m-%d %H:%M:%S")))
 
     def _config(self, agentes):
-        local = sss_config.config_criticos(self.cfg)
+        local = sss_config.critical_config(self.cfg)
         for ag in agentes:
             if ag["status"] == "ACTIVE" and ag.get("critical_config") and ag["critical_config"] != local:
                 self._problema(WARNING, "agente %s com configuracao divergente: %s (local: %s)" % (
@@ -160,19 +160,19 @@ def main(argv=None, conectar=None, saida=None):
     saida = saida or sys.stdout
     args = _argumentos(argv)
     try:
-        cfg = sss_config.obter_config(nome_log="health", caminho=args.config)
-        segredos = sss_config.carregar_segredos(cfg.secrets.secrets_file, cfg=cfg, papel="monitor")
-    except sss_config.ConfigErro as exc:
+        cfg = sss_config.get_config(nome_log="health", caminho=args.config)
+        segredos = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel="monitor")
+    except sss_config.ConfigError as exc:
         return _desconhecido(saida, "configuracao invalida: %s" % exc)
     try:
         conn = (conectar or _conectar)(cfg, segredos)
     except Exception as exc:
-        return _desconhecido(saida, "falha ao conectar no Oracle: %s" % db_conn.traduzir_erro(exc))
+        return _desconhecido(saida, "falha ao conectar no Oracle: %s" % db_conn.translate_error(exc))
     try:
         verificacao = Verificacao(cfg, conn, args)
         codigo = verificacao.executar()
     except Exception as exc:
-        return _desconhecido(saida, "falha de banco: %s" % db_conn.traduzir_erro(exc))
+        return _desconhecido(saida, "falha de banco: %s" % db_conn.translate_error(exc))
     finally:
         conn.close()
     saida.write(verificacao.saida(codigo))
@@ -180,7 +180,7 @@ def main(argv=None, conectar=None, saida=None):
 
 
 def _conectar(cfg, segredos):
-    return db_conn.conectar(cfg, segredos, papel="monitor")
+    return db_conn.connect(cfg, segredos, papel="monitor")
 
 
 if __name__ == "__main__":

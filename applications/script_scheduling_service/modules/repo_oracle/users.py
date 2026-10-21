@@ -75,7 +75,7 @@ class RepoUsuariosOracle(BaseRepoOracle, RepoUsuarios):
     def agora(self):
         """Instante atual do banco (SYSDATE), sem microssegundos (README §4.2)."""
         with self.contexto_leitura() as conn:
-            return db_conn.agora_banco(conn)
+            return db_conn.db_now(conn)
 
     def obter_por_login(self, login, conn=None):
         """Retorna dict com dados do usuario ou None se nao encontrado."""
@@ -214,7 +214,7 @@ class RepoUsuariosOracle(BaseRepoOracle, RepoUsuarios):
             cur = c.cursor()
             try:
                 if binds_data:
-                    db_conn.definir_tipos_entrada(cur, **binds_data)
+                    db_conn.set_input_types(cur, **binds_data)
                 cur.execute(sql_count, binds)
                 row_c = cur.fetchone()
                 raw_count = row_c[0] if row_c else 0
@@ -270,7 +270,7 @@ class RepoUsuariosOracle(BaseRepoOracle, RepoUsuarios):
                 if not cur.fetchone():
                     raise repo_errors.RepoViolacao("Perfil ID %s nao existe" % perfil_id, constraint=self.nome_constraint("fk", "usuarios", "prf"))
 
-                uid = db_conn.proximo_id(c, self._seq_usuarios())
+                uid = db_conn.next_id(c, self._seq_usuarios())
                 sql_ins = (
                     "INSERT INTO " + self._tabela() + " "
                     "(id, login, name, password_hash, profile_id, failed_attempts, "
@@ -280,7 +280,7 @@ class RepoUsuariosOracle(BaseRepoOracle, RepoUsuarios):
                     ":locked_until, :last_login_at, :password_changed_at, 0, :active, "
                     "NVL(:created_at, SYSDATE), :actor, NULL, NULL)"
                 )
-                db_conn.definir_tipos_entrada(
+                db_conn.set_input_types(
                     cur,
                     locked_until=db_conn.TIPO_DATE,
                     last_login_at=db_conn.TIPO_DATE,
@@ -444,7 +444,7 @@ class RepoUsuariosOracle(BaseRepoOracle, RepoUsuarios):
                 tipos = dict((c, db_conn.TIPO_DATE) for c in ("locked_until", "last_login_at", "password_changed_at")
                              if c in params)
                 if tipos:
-                    db_conn.definir_tipos_entrada(cur, **tipos)
+                    db_conn.set_input_types(cur, **tipos)
                 cur.execute(sql_upd, params)
 
                 # Incrementa perm_versao do perfil de origem e destino se aplicavel
@@ -616,7 +616,7 @@ class RepoUsuariosOracle(BaseRepoOracle, RepoUsuarios):
                     "updated_at = SYSDATE, updated_by = :actor "
                     "WHERE id = :id"
                 )
-                db_conn.definir_tipos_entrada(cur, agora=db_conn.TIPO_DATE)
+                db_conn.set_input_types(cur, agora=db_conn.TIPO_DATE)
                 cur.execute(sql, {"id": int(id), "password_hash": senha_hash, "agora": agora, "actor": ator_limpo})
                 gravar_auditoria(c, self._tabela_auditoria(), self._seq_auditoria(), auditoria, "tbsss_users", int(id))
             finally:

@@ -71,7 +71,7 @@ _SQL_ENCERRAR_GRAVANDO = (
 _SQL_FALHAR_DO_AGENTE = (
     "UPDATE {sai} SET state = 'FAILED', reason = 'ERROR', file_count = NULL, size_bytes = NULL, "
     "content = NULL, updated_at = SYSDATE, updated_by = :actor "
-    "WHERE (" + sql_ident.FBI_TSAI_GRAV_CASE + ") = :agent_id"
+    "WHERE (" + sql_ident.FBI_TOUT_WRITE_CASE + ") = :agent_id"
 )
 _SQL_SITUACAO = "SELECT state, agent_id FROM {sai} WHERE ticket_id = :ticket_id"
 
@@ -92,7 +92,7 @@ class RepoSchedulerSaida(object):
     """Owner e prefixo vem da configuracao (nunca fixos); os nomes passam por sql_ident."""
 
     def __init__(self, owner, prefixo):
-        sai, tck = sql_ident.tabela(owner, prefixo, "ticket_saida"), sql_ident.tabela(owner, prefixo, "tickets")
+        sai, tck = sql_ident.table(owner, prefixo, "ticket_saida"), sql_ident.table(owner, prefixo, "tickets")
         self._seq = sql_ident.sequence(owner, prefixo, "ticket_saida")
         self._plsql = _PLSQL_ANEXAR.format(sai=sai, atrib=":" + "=")
         self._sql_reiniciar = _SQL_REINICIAR.format(sai=sai)
@@ -139,16 +139,16 @@ class RepoSchedulerSaida(object):
             raise ValueError("parte da saida vazia ou acima de 1 MiB")
         cur = conn.cursor()
         try:
-            db_conn.definir_tipos_entrada(cur, parte=db_conn.TIPO_BLOB)
-            resultado = db_conn.variavel_saida(cur, db_conn.TIPO_VARCHAR, tamanho=20)
+            db_conn.set_input_types(cur, parte=db_conn.TIPO_BLOB)
+            resultado = db_conn.output_variable(cur, db_conn.TIPO_VARCHAR, tamanho=20)
             try:
                 cur.execute(self._plsql, parte=bytes(parte), ticket_id=int(ticket_id), agent_id=agente_id,
                             offset_esperado=int(offset_esperado), resultado=resultado)
             except Exception as exc:
-                if db_conn.classificar_erro(exc) == ("ORA", _ORA_DIVERGENTE):
+                if db_conn.classify_error(exc) == ("ORA", _ORA_DIVERGENTE):
                     raise SaidaOffsetInconsistente(ticket_id, int(offset_esperado), len(parte))
                 raise
-            valor = db_conn.valor_saida(resultado)
+            valor = db_conn.output_value(resultado)
         finally:
             cur.close()
         if valor not in _RESULTADOS:

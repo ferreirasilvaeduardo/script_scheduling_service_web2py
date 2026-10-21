@@ -334,7 +334,7 @@ class ServicoAdminParametros(object):
             campo, mensagem = _CAMPO_POR_CONSTRAINT.get(exc.constraint, (CAMPO_GERAL, admin_crud.MSG_FALHA))
             erros[campo] = mensagem
         self._log.warning("cadastro de parametro rejeitado pelo repositorio (login=%s constraint=%s)",
-                          ctx.get("login"), exc.constraint, extra={"acao": FUNCIONALIDADE})
+                          ctx.get("login"), exc.constraint, extra={"action": FUNCIONALIDADE})
 
     def salvar(self, ctx, ip, parametro_id, dados):
         """Inclui ou altera um parametro. Retorna (id, erros). codigo e imutavel depois de criado.
@@ -356,7 +356,7 @@ class ServicoAdminParametros(object):
                 self._violacao(ctx, exc, erros)
                 return None, erros
             self._log.info("parametro incluido (login=%s code=%s)", ctx.get("login"), criado["code"],
-                           extra={"acao": "CREATE"})
+                           extra={"action": "CREATE"})
             return criado["id"], {}
 
         atual = self._obter(parametro_id)
@@ -382,7 +382,7 @@ class ServicoAdminParametros(object):
             self._violacao(ctx, exc, erros, atual["id"])
             return atual["id"], erros
         self._log.info("parametro alterado (login=%s code=%s)", ctx.get("login"), atual["code"],
-                       extra={"acao": "UPDATE"})
+                       extra={"action": "UPDATE"})
         return atual["id"], {}
 
     def alternar_ativo(self, ctx, ip, parametro_id, versao):
@@ -410,7 +410,7 @@ class ServicoAdminParametros(object):
                 raise OperacaoNegada(msg_vinculo_ativo([s for s in self.vinculos(atual["id"]) if s["active"] == "Y"]))
             raise
         self._log.info("parametro %s (login=%s code=%s)", "desativado" if novo_ativo == "N" else "reativado",
-                       ctx.get("login"), atual["code"], extra={"acao": acao})
+                       ctx.get("login"), atual["code"], extra={"action": acao})
         return alterado
 
     def testar(self, ctx, parametro_id, dados, valor):
@@ -454,7 +454,7 @@ def _servico():
             import sss_logging
             _padrao = ServicoAdminParametros(
                 catalogo=current.repo_factory.obter("catalogo"),
-                log=sss_logging.obter_logger("sss_web", current.sss_cfg),
+                log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _padrao
 
