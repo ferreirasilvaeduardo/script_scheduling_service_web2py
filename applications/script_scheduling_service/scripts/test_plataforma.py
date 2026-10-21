@@ -336,6 +336,22 @@ class TestPastaDeSaida(unittest.TestCase):
         self.assertFalse(os.path.exists(pasta))
         self.assertEqual(plataforma.purgar_saida(self.base, 7), 0)
 
+    def test_cr014_dev_cria_a_entrada_e_preserva_a_existente(self):
+        base = os.path.join(self.raiz, "entrada", "producao")
+        pasta = plataforma.criar_pasta_entrada(base, "carga")
+        self.assertEqual((pasta, os.stat(pasta).st_mode & 0o777), (os.path.join(base, "carga"), 0o700))
+        with open(os.path.join(pasta, "lote.csv"), "w") as f:
+            f.write("1;2\n")
+        os.chmod(pasta, 0o750)
+        self.assertEqual(plataforma.criar_pasta_entrada(base, "carga"), pasta, "idempotente")
+        self.assertEqual(os.stat(pasta).st_mode & 0o777, 0o750, "a existente fica como esta")
+        self.assertEqual(os.listdir(pasta), ["lote.csv"], "conteudo permanente")
+        fora = os.path.join(self.raiz, "fora_entrada")
+        os.mkdir(fora)
+        os.symlink(fora, os.path.join(base, "ligada"))
+        with self.assertRaises(RuntimeError):
+            plataforma.criar_pasta_entrada(base, "ligada")
+
     def test_dev_recusa_link_no_caminho(self):
         os.makedirs(self.base)
         fora = os.path.join(self.raiz, "fora")

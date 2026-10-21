@@ -24,6 +24,7 @@ from plataforma.posix import (  # noqa: E402,F401
     Processo,
     caminho_final,
     criar_dir_trabalho,
+    criar_pasta_entrada,
     criar_pasta_saida,
     encerrar_ticket,
     espaco_livre_mb,

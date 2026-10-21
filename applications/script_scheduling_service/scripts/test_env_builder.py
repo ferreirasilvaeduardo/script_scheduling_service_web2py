@@ -181,6 +181,14 @@ class TestEnvBuilder(unittest.TestCase):
         self.assertEqual(env["SSS_SAIDA_DIR"], "/srv/sss/saida/producao/carga/2026/10/20/03/00/ticket_41")
         self.assertNotIn("SSS_SAIDA_DIR", sem)
 
+    def test_cr014_pasta_de_entrada_so_quando_informada(self):
+        with self.assertLogs("sss_scheduler", "WARNING"):
+            env = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
+                                        pasta_entrada="/srv/sss/entrada/producao/carga")
+            sem = env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
+        self.assertEqual(env["SSS_ENTRADA_DIR"], "/srv/sss/entrada/producao/carga")
+        self.assertNotIn("SSS_ENTRADA_DIR", sem)
+
     def test_entradas_invalidas(self):
         with self.assertRaises(ValueError):
             env_builder.construir(_cfg(), _segredos(), TICKET, AMB, SCRIPT, WORK, {}, "WINDOWS")

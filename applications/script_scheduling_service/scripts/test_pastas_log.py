@@ -66,6 +66,14 @@ class TestPastasLog(unittest.TestCase):
         self.assertEqual(pastas_log.pasta_saida("/s", "HML", u"!!!", dt, 7, script_id=3)[1],
                          "script_3/2026/04/05/08/09/ticket_7")
 
+    def test_pasta_entrada_so_ambiente_e_script(self):
+        # CR-014 (README §8.14): permanente, sem data nem ticket; nome do script minusculo, sem acento nem espaco.
+        self.assertEqual(pastas_log.pasta_entrada("/srv/sss/entrada", "PRODUCAO", u"Carga Diária"),
+                         ("/srv/sss/entrada/producao", "carga_diaria"))
+        self.assertEqual(pastas_log.pasta_entrada("/e", "HML", u"Extrator de Relatórios v2"),
+                         ("/e/hml", "extrator_de_relatorios_v2"))
+        self.assertEqual(pastas_log.pasta_entrada("/e", "HML", u"!!!", script_id=3), ("/e/hml", "script_3"))
+
     def test_ambiente_no_topo_obrigatorio_e_normalizado(self):
         # CR-009: pasta do ambiente antes de qualquer outra; minusculo, sem espaco nem especial.
         dt = datetime.datetime(2026, 4, 5, 8, 9, 30)

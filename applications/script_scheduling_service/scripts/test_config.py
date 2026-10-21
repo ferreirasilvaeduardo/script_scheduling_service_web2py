@@ -697,6 +697,16 @@ class TestConfigCR007(unittest.TestCase):
         self._recusa("saida_dir", agent={"saida_dir": os.path.dirname(cfg.logging.log_dir)})
         self._recusa("saida_dir", agent={"saida_dir": os.path.join(base, "s"),
                                          "exec_work_dir": os.path.join(base, "s", "exec")})
+        # CR-014 (README §8.14): entrada_dir opcional, sem sobrepor as pastas do SSS nem a de saida.
+        self.assertIsNone(cfg.agent.entrada_dir)
+        ok = self._carregar(agent={"entrada_dir": os.path.join(base, "entrada_teste")})
+        self.assertEqual(ok.agent.entrada_dir, os.path.join(base, "entrada_teste"))
+        self._recusa("entrada_dir", agent={"entrada_dir": "relativa/entrada"})
+        self._recusa("entrada_dir", agent={"entrada_dir": os.path.join(cfg.agent.work_dir, "entrada")})
+        self._recusa("entrada_dir", agent={"entrada_dir": os.path.join(cfg.logging.log_dir, "entrada")})
+        self._recusa("entrada_dir", agent={"entrada_dir": os.path.dirname(cfg.logging.log_dir)})
+        self._recusa("entrada_dir", agent={"entrada_dir": os.path.join(base, "s", "entrada"),
+                                           "saida_dir": os.path.join(base, "s")})
         for chave, ruins, bons in (("saida_max_bytes", ("1048575", "209715201"), ("1048576", "209715200")),
                                    ("saida_max_arquivos", ("0", "10001"), ("1", "10000"))):
             for v in ruins:

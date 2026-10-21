@@ -100,6 +100,15 @@ def pasta_saida(saida_dir, ambiente, nome_script, started_at, ticket_id, script_
     return base, relativo
 
 
+def pasta_entrada(entrada_dir, ambiente, nome_script, script_id=None):
+    """Pasta de entrada do script (CR-014, README §8.14): permanente, uma por ambiente e script, sem data nem ticket.
+
+    Devolve (base, relativo): base = entrada_dir/<ambiente> (do usuario de execucao fora de DEV) e relativo =
+    <pasta do script>, com a mesma regra da pasta do log (minusculo, sem acento e sem espaco).
+    """
+    return os.path.join(entrada_dir, pasta_ambiente(ambiente)), pasta_script(nome_script, script_id)
+
+
 def garantir_diretorio(diretorio, avisos=None):
     """Cria diretorio nivel a nivel com 0o750 em cada pasta nova (README §8.4 passo 3 e §13).
 

@@ -41,9 +41,9 @@ _Agent = collections.namedtuple("_Agent", (
     "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "fila_envelhecimento_min", "child_locale",
     "cancel_poll_interval_s", "orchestrator_interval_s", "max_parallel_jobs",
     "log_dir_min_livre_mb", "script_timeout_s", "env_passthrough", "saida_dir", "saida_max_bytes",
-    "saida_max_arquivos", "schedule_batch_size", "shutdown_mode", "shutdown_grace_s"))
-# CR-012: sem saida_dir por padrao; F8.4b: lote do desdobro; F8.4d: parada TERMINATE por padrao.
-_Agent.__new__.__defaults__ = (None, 20971520, 1000, 50, "TERMINATE", 30)
+    "saida_max_arquivos", "schedule_batch_size", "shutdown_mode", "shutdown_grace_s", "entrada_dir"))
+# CR-012: sem saida_dir por padrao; F8.4b: lote do desdobro; F8.4d: parada TERMINATE; CR-014: sem entrada_dir.
+_Agent.__new__.__defaults__ = (None, 20971520, 1000, 50, "TERMINATE", 30, None)
 _Log = collections.namedtuple("_Log", "log_dir max_log_size_bytes max_local_log_size_bytes")
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
 _App = collections.namedtuple("_App", "sss_env")
@@ -423,6 +423,32 @@ class TestExecucao(_Base):
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
         self.assertIn("%s|%s\n" % (real, link), self.banco.tickets[tid]["log"])
 
+    def test_cr014_pasta_de_entrada_permanente_por_ambiente_e_script(self):
+        # CR-014 (README §8.14): SSS_ENTRADA_DIR = entrada_dir/<ambiente>/<script>, criada sob demanda e mantida.
+        entrada = os.path.join(self.raiz, "entrada")
+        os.mkdir(entrada, 0o700)
+        sid = self.banco.script('n=$(ls "$SSS_ENTRADA_DIR" | wc -l)\n'
+                                'echo "dir=$SSS_ENTRADA_DIR n=$n"\n'
+                                'echo ok > "$SSS_ENTRADA_DIR/lote_$SSS_TICKET_ID.txt"\n')
+        primeiro = self.banco.ticket(sid)
+        self.subir(entrada_dir=entrada)
+        self.rodar(self.terminado(primeiro))
+        segundo = self.banco.ticket(sid)
+        self.rodar(self.terminado(segundo))
+        pasta = os.path.join(entrada, "dev", "script_%d" % sid)
+        for tid, n in ((primeiro, 0), (segundo, 1)):
+            self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
+            self.assertIn("dir=%s n=%d" % (pasta, n), self.banco.tickets[tid]["log"])
+        self.assertEqual(sorted(os.listdir(pasta)), ["lote_%d.txt" % primeiro, "lote_%d.txt" % segundo],
+                         "o SSS nao limpa a pasta de entrada")
+        self.assertEqual(os.stat(pasta).st_mode & 0o777, 0o700)
+
+    def test_cr014_sem_entrada_dir_sem_variavel(self):
+        tid = self.banco.ticket(self.banco.script('echo "entrada=[${SSS_ENTRADA_DIR:-}]"\n'))
+        self.subir()
+        self.rodar(self.terminado(tid))
+        self.assertIn("entrada=[]", self.banco.tickets[tid]["log"])
+
     def test_exit_error(self):
         tid = self.banco.ticket(self.banco.script("echo falhou\nexit 3\n"))
         self.subir()
@@ -522,6 +548,19 @@ class TestPrevalidacao(_Base):
         self.assertEqual(self.final(tid), ("FAILED", "PRECHECK_FAILED", -4))
         self.assertIn("[SSS] pre-validacao recusada: %s (agente srv-t)" % codigo, self.banco.tickets[tid]["log"])
         self.assertIsNone(self.banco.tickets[tid]["process_id"])
+
+    def test_cr014_script_dentro_da_entrada_ou_da_saida_e_pasta_do_sss(self):
+        # CR-014: o usuario de execucao grava em entrada_dir e saida_dir; um script ali poderia ser trocado.
+        for chave in ("entrada_dir", "saida_dir"):
+            pasta = os.path.join(self.raiz, chave)
+            os.mkdir(pasta, 0o700)
+            sid = self.banco.script("echo nao deveria rodar\n")
+            caminho = os.path.join(pasta, "s%d.sh" % sid)
+            os.rename(self.banco.scripts[sid]["path_file"], caminho)
+            self.banco.scripts[sid]["path_file"] = caminho
+            tid = self.banco.ticket(sid)
+            self._recusa(tid, "PASTA_DO_SSS", **{chave: pasta})
+            self.ag.liberar_recursos()
 
     def test_snapshots_antigos(self):
         sid = self.banco.script("echo x\n")

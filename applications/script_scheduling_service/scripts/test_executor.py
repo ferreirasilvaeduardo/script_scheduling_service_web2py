@@ -443,6 +443,21 @@ class TestFalhasDeSpawn(_Base):
         self.assertEqual((ex.pasta_base, ex.erro_spawn), ("/srv/exec/sssprd", "RuntimeError"))
 
 
+    def test_cr014_entrada_na_especificacao_e_criada_em_dev(self):
+        self.assertEqual(executor.especificacao(15, ["/bin/true"], {}, {}, "/srv/exec/sssprd",
+                                                entrada=("/srv/sss/entrada/producao", "carga"))["entrada"],
+                         {"base": "/srv/sss/entrada/producao", "relativo": "carga"})
+        self.assertNotIn("entrada", executor.especificacao(15, ["/bin/true"], {}, {}, "/srv/exec/sssprd"))
+        base = os.path.join(self.raiz, "entrada", "dev")
+        wd = executor.preparar_diretorio(self.work, 16)
+        fd, _ = executor.abrir_log(self.logs, "DEV", "Teste Script", STARTED_AT, 16)
+        with mock.patch.object(plataforma, "iniciar_processo", side_effect=RuntimeError("parar")), \
+                self.assertLogs("sss_scheduler", "ERROR"):
+            executor.iniciar(16, ["/bin/true"], fd, {}, wd, None, None, plataforma.RLIMITS_PADRAO, "SSS-srv-01-16",
+                             entrada=(base, "teste_script"))
+        self.assertEqual(os.stat(os.path.join(base, "teste_script")).st_mode & 0o777, 0o700)
+
+
 class TestSnapshotV4(_Base):
 
     def setUp(self):

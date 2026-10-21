@@ -523,6 +523,23 @@ def criar_pasta_saida(base, relativo):
     return atual
 
 
+def criar_pasta_entrada(base, relativo):
+    """So em DEV sem usuario de execucao (CR-014, README §8.14): base e a pasta do script com 0700 se nao existirem,
+    recusando link ou item que nao seja diretorio do proprio usuario. A pasta e permanente: a existente fica como
+    esta (fora de DEV, quem cria e o helper run)."""
+    os.makedirs(base, 0o700, exist_ok=True)
+    pasta = os.path.join(base, relativo)
+    try:
+        os.mkdir(pasta, 0o700)
+    except FileExistsError:  # fluxo previsto: a pasta do script ja existe (tickets anteriores)
+        pass
+    for item in (base, pasta):
+        st = os.lstat(item)
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid():
+            raise RuntimeError("pasta de entrada com item que nao e diretorio do agente")
+    return pasta
+
+
 def iniciar_empacotar(base, relativo, max_bytes, max_arquivos, destino_fd, usuario_execucao=None):
     """Inicia o helper empacotar num grupo proprio, com o zip no descritor destino_fd; nao espera.
 

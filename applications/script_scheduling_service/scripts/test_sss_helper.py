@@ -329,6 +329,41 @@ class TestSssHelper(unittest.TestCase):
         self.assertEqual(_helper("run", entrada=json.dumps(spec).encode("utf-8"))[0], 2)
         self.assertEqual(os.listdir(fora), [])
 
+    def test_run_cria_a_pasta_de_entrada_e_preserva_o_conteudo(self):
+        # CR-014 (README §8.14): permanente; o script le, grava e apaga; a existente fica como esta.
+        base = os.path.join(self.raiz, "entrada", "producao")
+        os.makedirs(base, 0o700)
+        script = os.path.join(self.raiz, "consome.py")
+        with open(script, "w") as f:
+            f.write("import os\nd = os.environ['SSS_ENTRADA_DIR']\n"
+                    "n = len(os.listdir(d))\nopen(os.path.join(d, 'lido_%d.txt' % n), 'w').write('ok')\n")
+        alvo = os.path.join(base, "carga_diaria")
+        for ticket in (21, 22):
+            spec = {"ticket_id": ticket, "argv": [sys.executable, script], "env": {"SSS_ENTRADA_DIR": alvo},
+                    "pasta_base": self.base, "entrada": {"base": base, "relativo": "carga_diaria"}}
+            codigo, erro = _helper("run", entrada=json.dumps(spec).encode("utf-8"))
+            self.assertEqual(codigo, 0, erro)
+            if ticket == 21:
+                self.assertEqual(os.stat(alvo).st_mode & 0o777, 0o700)
+                os.chmod(alvo, 0o750)
+        self.assertEqual(sorted(os.listdir(alvo)), ["lido_0.txt", "lido_1.txt"], "persiste entre tickets")
+        self.assertEqual(os.stat(alvo).st_mode & 0o777, 0o750, "a existente fica como esta")
+
+    def test_run_recusa_entrada_invalida(self):
+        base = os.path.join(self.raiz, "entrada", "producao")
+        os.makedirs(base, 0o700)
+        valida = {"ticket_id": 12, "argv": ["/bin/true"], "env": {}, "pasta_base": self.base}
+        for entrada in ({"base": base}, {"base": base, "relativo": "a/b"}, {"base": base, "relativo": ".."},
+                        {"base": base, "relativo": ".x"}, {"base": base, "relativo": "Maiuscula"},
+                        {"base": "relativa", "relativo": "x"}, {"base": base + "/../producao", "relativo": "x"}):
+            self.assertEqual(_helper("run", entrada=json.dumps(dict(valida, entrada=entrada)).encode("utf-8"))[0],
+                             2, entrada)
+        fora = os.path.join(self.raiz, "fora_entrada")
+        os.mkdir(fora)
+        os.symlink(fora, os.path.join(base, "x"))
+        spec = dict(valida, entrada={"base": base, "relativo": "x"})
+        self.assertEqual(_helper("run", entrada=json.dumps(spec).encode("utf-8"))[0], 2, "link recusado")
+
     def _preencher(self, base, rel, arquivos):
         pasta = os.path.join(base, rel)
         os.makedirs(pasta, 0o700)

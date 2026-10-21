@@ -90,6 +90,14 @@ class _Log(logging.LoggerAdapter):
         return msg, kwargs
 
 
+def _dirs_sss(cfg):
+    """Pastas do SSS onde nenhum script nem interpretador pode ficar (PASTA_DO_SSS, README §8.5). CR-014: inclui
+    saida_dir e entrada_dir, que o usuario de execucao grava (um script ali poderia ser trocado por outro)."""
+    agente = cfg.agent
+    return tuple(d for d in (cfg.logging.log_dir, agente.work_dir, agente.exec_work_dir,
+                             getattr(agente, "saida_dir", None), getattr(agente, "entrada_dir", None)) if d)
+
+
 def _ler_estado(pasta, nome, plat):
     try:
         return plat.ler_estado(os.path.join(pasta, nome))
@@ -218,7 +226,7 @@ class Agente(object):
             codigo = self.plat.validar_dir_restrito(caminho)
             if codigo:
                 self._falhar(SAIDA_DIRETORIOS, "%s %s recusado: %s", nome, caminho, codigo)
-        dirs_sss = tuple(d for d in (self.cfg.logging.log_dir, agente.work_dir, agente.exec_work_dir) if d)
+        dirs_sss = _dirs_sss(self.cfg)
         if not agente.interpretadores:
             self._falhar(SAIDA_DIRETORIOS, "[agent] interpretadores vazio: o agente nao executaria nada")
         for logico, caminho in agente.interpretadores:
@@ -234,6 +242,26 @@ class Agente(object):
             if falhas:
                 self._falhar(SAIDA_DIRETORIOS, "%d falha(s) na conferencia do helper e do sudoers", len(falhas))
         self._conferir_saida_dir()
+        self._conferir_entrada_dir()
+
+    def _conferir_entrada_dir(self):
+        """CR-014 (README §8.12 passo 4): entrada_dir fora das pastas do sistema; fora de DEV, a pasta de cada
+        ambiente atendido do usuario de execucao dele, sem escrita de grupo nem de outros (como a de saida)."""
+        agente = self.cfg.agent
+        if not agente.entrada_dir:
+            return
+        codigo = self.plat.validar_dir_restrito(agente.entrada_dir)
+        if codigo:
+            self._falhar(SAIDA_DIRETORIOS, "entrada_dir %s recusado: %s", agente.entrada_dir, codigo)
+        if self.cfg.app.sss_env == "DEV" and not agente.usuarios_execucao:
+            return
+        pares = [(os.path.join(agente.entrada_dir, pastas_log.pasta_ambiente(amb)), self._usuario_execucao(amb))
+                 for amb in agente.ambientes_atendidos if self._usuario_execucao(amb)]
+        falhas = self.plat.validar_pastas_saida(pares)
+        for falha in falhas:
+            self.log.critical("pasta de entrada: %s", falha)
+        if falhas:
+            self._falhar(SAIDA_DIRETORIOS, "%d falha(s) nas pastas de entrada (CR-014)", len(falhas))
 
     def _conferir_saida_dir(self):
         """CR-012 (README §8.12 passo 4): saida_dir fora das pastas do sistema; fora de DEV, a pasta de cada
@@ -1062,7 +1090,7 @@ class Agente(object):
 
         class _Cfg(object):
             interpretadores = dict(agente.interpretadores)
-            dirs_sss = tuple(d for d in (self.cfg.logging.log_dir, agente.work_dir, agente.exec_work_dir) if d)
+            dirs_sss = _dirs_sss(self.cfg)
         return _Cfg()
 
     def _recusar(self, item, codigo):
@@ -1133,7 +1161,12 @@ class Agente(object):
         timeout = contexto["script"].get("timeout_seg") or agente.script_timeout_s
         conexao = None
         saida = None
+        entrada = None
         try:
+            if agente.entrada_dir:
+                # CR-014 (README §8.14): pasta permanente do script no ambiente, com o nome do snapshot.
+                entrada = pastas_log.pasta_entrada(agente.entrada_dir, ticket["ambiente"], snap["script_nome"],
+                                                   snap.get("script_id"))
             if agente.saida_dir:
                 # CR-012 (README §8.13): pasta de saida com as partes do log e o mesmo minuto.
                 base, relativo = pastas_log.pasta_saida(agente.saida_dir, ticket["ambiente"], snap["script_nome"],
@@ -1144,14 +1177,15 @@ class Agente(object):
                                         work_dir_ticket, dict(os.environ), self.plat.NOME, snapshot=snap,
                                         agendamento=contexto["agendamento"], caminho_log=caminho,
                                         timeout_seg=timeout, hostname=self.hostname, versao=sss_config.VERSAO_SSS,
-                                        pasta_saida=saida.pasta if saida else None)
+                                        pasta_saida=saida.pasta if saida else None,
+                                        pasta_entrada=os.path.join(*entrada) if entrada else None)
             conexao = env.get(env_builder.VAR_CONEXAO)
         except Exception as exc:  # noqa: BLE001 - CR-007 R-17: SPAWN_ERROR
             ex = executor.falha_antes_do_spawn(fd, item.tid, exc, rotulo, work_dir_ticket)
             return self._apos_iniciar(item, ex, snap, conexao)
         ex = executor.iniciar(item.tid, argv, fd, env, work_dir_ticket, usuario, agente.exec_work_dir,
                               dict(self.plat.RLIMITS_PADRAO), rotulo,
-                              saida=(saida.base, saida.relativo) if saida else None)
+                              saida=(saida.base, saida.relativo) if saida else None, entrada=entrada)
         if not ex.spawn_error:
             item.saida = saida
         item.timeout_s = timeout

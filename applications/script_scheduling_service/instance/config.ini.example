@@ -43,6 +43,7 @@ log_dir_min_livre_mb = 1024       ; abaixo disso em log_dir o agente não reserv
 saida_dir =                       ; CR-012: pasta de saida dos scripts (README §8.13); vazio desliga
 saida_max_bytes = 20971520        ; limite do zip da saida (1 MiB a 200 MiB)
 saida_max_arquivos = 1000         ; limite de arquivos da saida (1 a 10.000)
+entrada_dir =                     ; CR-014: pasta de entrada dos scripts (README §8.14); vazio desliga
 child_locale = C.UTF-8
 env_passthrough = ORACLE_HOME,TNS_ADMIN,NLS_LANG,LD_LIBRARY_PATH
 

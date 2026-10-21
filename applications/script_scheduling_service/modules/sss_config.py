@@ -153,6 +153,8 @@ SCHEMA = collections.OrderedDict([
         ("saida_dir", CampoDef("path", obrigatorio=False, default=None)),
         ("saida_max_bytes", CampoDef("int", obrigatorio=False, min_val=1048576, max_val=209715200, default=20971520)),
         ("saida_max_arquivos", CampoDef("int", obrigatorio=False, min_val=1, max_val=10000, default=1000)),
+        # CR-014: pasta de entrada dos scripts, permanente, uma por ambiente e script (vazio desliga; README §8.14).
+        ("entrada_dir", CampoDef("path", obrigatorio=False, default=None)),
         ("child_locale", CampoDef("str", obrigatorio=True)),
         ("env_passthrough", CampoDef("list_csv", obrigatorio=False, default=())),
     ])),
@@ -222,7 +224,7 @@ class AgentConfig(_ItemAccessMixin, collections.namedtuple("AgentConfig", [
     "shutdown_mode", "shutdown_grace_s", "misfire_policy",
     "misfire_tolerance_s", "cron_horizon_days", "child_locale",
     "env_passthrough", "usuarios_execucao", "interpretadores", "exec_work_dir", "fila_envelhecimento_min",
-    "log_dir_min_livre_mb", "saida_dir", "saida_max_bytes", "saida_max_arquivos"
+    "log_dir_min_livre_mb", "saida_dir", "saida_max_bytes", "saida_max_arquivos", "entrada_dir"
 ])):
     __slots__ = ()
 
@@ -551,6 +553,15 @@ def _validar_cr007(app, oracle, agent, logging_dict, retencao):
                             ("exec_work_dir", agent["exec_work_dir"])):
             if outro and (_dentro(agent["saida_dir"], outro) or _dentro(outro, agent["saida_dir"])):
                 raise ConfigErro(secao="agent", chave="saida_dir",
+                                 motivo="Nao pode ficar dentro de %s nem conte-lo" % nome)
+    if agent["entrada_dir"]:
+        # CR-014: a pasta de entrada nao se sobrepoe as pastas do SSS nem a de saida (README §8.14).
+        if not os.path.isabs(agent["entrada_dir"]):
+            raise ConfigErro(secao="agent", chave="entrada_dir", motivo="Deve ser um caminho absoluto")
+        for nome, outro in (("work_dir", agent["work_dir"]), ("log_dir", logging_dict["log_dir"]),
+                            ("exec_work_dir", agent["exec_work_dir"]), ("saida_dir", agent["saida_dir"])):
+            if outro and (_dentro(agent["entrada_dir"], outro) or _dentro(outro, agent["entrada_dir"])):
+                raise ConfigErro(secao="agent", chave="entrada_dir",
                                  motivo="Nao pode ficar dentro de %s nem conte-lo" % nome)
 
     if retencao["audit_retention_days"] < retencao["ticket_retention_days"]:

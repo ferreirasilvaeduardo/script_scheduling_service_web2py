@@ -141,6 +141,22 @@ def _pasta_saida(base, relativo, criar=False):
     return atual
 
 
+def _pasta_entrada(base, relativo):
+    """Pasta de entrada do script (CR-014, README §8.14): base = entrada_dir/<ambiente> e relativo = a pasta do
+    script, um nivel so. Permanente: criada com 0700 se nao existir, sem seguir link; a existente fica como esta."""
+    if not isinstance(relativo, str) or not _RE_PASTA_SCRIPT.match(relativo):
+        _erro(USO_INVALIDO, "entrada fora do formato <script>")
+    atual = os.path.join(_pasta_base(base, "base"), relativo)
+    if not _diretorio_proprio(atual):
+        try:
+            os.mkdir(atual, 0o700)
+        except FileExistsError:  # criada por outro ticket entre o lstat e o mkdir: conferida abaixo
+            pass
+        if not _diretorio_proprio(atual):
+            _erro(ERRO_SISTEMA, "pasta de entrada nao foi criada")
+    return atual
+
+
 def _pasta_ticket(pasta_base, ticket_id):
     return os.path.join(pasta_base, "ticket_%d" % ticket_id)
 
@@ -186,12 +202,20 @@ def _ler_especificacao(entrada):
         _pasta_base(saida["base"], "base")
         if _partes_relativo(saida["relativo"])[6] != "ticket_%d" % ticket_id:
             _erro(USO_INVALIDO, "saida de outro ticket")
-    return ticket_id, argv, env, limites, _pasta_base(spec.get("pasta_base")), saida
+    entrada = spec.get("entrada")
+    if entrada is not None:
+        if not isinstance(entrada, dict) or set(entrada) != {"base", "relativo"}:
+            _erro(USO_INVALIDO, "entrada invalida")
+        _pasta_base(entrada["base"], "base")
+        if not isinstance(entrada["relativo"], str) or not _RE_PASTA_SCRIPT.match(entrada["relativo"]):
+            _erro(USO_INVALIDO, "entrada fora do formato <script>")
+    return ticket_id, argv, env, limites, _pasta_base(spec.get("pasta_base")), saida, entrada
 
 
 def _run(entrada=None, executar=os.execve):
     """Cria <pasta_base>/ticket_<id>/ e tmp/ (0700), entra nela, aplica umask e limites e faz execve."""
-    ticket_id, argv, env, limites, pasta_base, saida = _ler_especificacao(entrada or sys.stdin.buffer)
+    ticket_id, argv, env, limites, pasta_base, saida, pasta_entrada = _ler_especificacao(
+        entrada or sys.stdin.buffer)
     pasta = _pasta_ticket(pasta_base, ticket_id)
     try:
         # O script nunca le a entrada padrao do helper (a especificacao ja foi consumida).
@@ -204,6 +228,9 @@ def _run(entrada=None, executar=os.execve):
         if saida is not None:
             # CR-012: a pasta de saida do ticket, do usuario de execucao, antes do script (README §8.13).
             _pasta_saida(saida["base"], saida["relativo"], criar=True)
+        if pasta_entrada is not None:
+            # CR-014: a pasta de entrada do script, permanente, do usuario de execucao (README §8.14).
+            _pasta_entrada(pasta_entrada["base"], pasta_entrada["relativo"])
         os.chdir(pasta)
         os.umask(0o077)
         for nome, par in sorted(limites.items()):

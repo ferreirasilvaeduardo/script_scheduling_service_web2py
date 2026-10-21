@@ -138,10 +138,11 @@ def abrir_log(log_dir, ambiente, nome_script, started_at, ticket_id, script_id=N
     return fd, caminho
 
 
-def especificacao(ticket_id, argv, env, rlimits, pasta_base, saida=None):
+def especificacao(ticket_id, argv, env, rlimits, pasta_base, saida=None, entrada=None):
     """Especificacao do helper run (README §8.0), serializada em JSON pela plataforma.
 
     saida: (base, relativo) da pasta de saida do ticket (CR-012), que o helper cria antes do script.
+    entrada: (base, relativo) da pasta de entrada do script (CR-014), que o helper cria se nao existir.
     """
     spec = {
         "ticket_id": int(ticket_id),
@@ -152,6 +153,8 @@ def especificacao(ticket_id, argv, env, rlimits, pasta_base, saida=None):
     }
     if saida is not None:
         spec["saida"] = {"base": saida[0], "relativo": saida[1]}
+    if entrada is not None:
+        spec["entrada"] = {"base": entrada[0], "relativo": entrada[1]}
     return spec
 
 
@@ -188,7 +191,7 @@ def falha_antes_do_spawn(log_fd, ticket_id, erro, rotulo, work_dir_ticket=None):
 
 
 def iniciar(ticket_id, argv, log_fd, env, work_dir_ticket, usuario_execucao, exec_work_dir, rlimits, rotulo,
-            saida=None):
+            saida=None, entrada=None):
     """Inicia o script e devolve a Execucao (README §8.4 passos 3 a 5; CR-008 R-01).
 
     Ordem: .sss_spawn -> plataforma.iniciar_processo -> rename do log para ticket_<id>_<PID>.log ->
@@ -197,6 +200,7 @@ def iniciar(ticket_id, argv, log_fd, env, work_dir_ticket, usuario_execucao, exe
     chamador acompanha a execucao ate o grupo acabar e so entao finaliza SPAWN_ERROR.
 
     saida: (base, relativo) da pasta de saida (CR-012): o helper run a cria; em DEV, a plataforma.
+    entrada: (base, relativo) da pasta de entrada (CR-014), permanente: idem, so se nao existir.
     """
     agente = _agente_do_rotulo(rotulo)
     pasta_base = os.path.join(exec_work_dir, usuario_execucao) if usuario_execucao else None
@@ -205,7 +209,7 @@ def iniciar(ticket_id, argv, log_fd, env, work_dir_ticket, usuario_execucao, exe
         if execucao.caminho_log is None:
             raise ValueError("log_fd nao foi aberto por abrir_log")
         if usuario_execucao:
-            spec = especificacao(ticket_id, argv, env, rlimits, pasta_base, saida)
+            spec = especificacao(ticket_id, argv, env, rlimits, pasta_base, saida, entrada)
         else:
             # DEV sem usuario de execucao: o cwd e a pasta exec de work_dir/ticket_<id> (CR-008, R-36).
             cwd = plataforma.criar_dir_trabalho(os.path.join(work_dir_ticket, "exec"))
@@ -213,6 +217,8 @@ def iniciar(ticket_id, argv, log_fd, env, work_dir_ticket, usuario_execucao, exe
             spec = {"argv": list(argv), "cwd": cwd, "env": dict(env), "rlimits": dict(rlimits or {})}
             if saida is not None:
                 plataforma.criar_pasta_saida(saida[0], saida[1])
+            if entrada is not None:
+                plataforma.criar_pasta_entrada(entrada[0], entrada[1])
         plataforma.gravar_estado(os.path.join(work_dir_ticket, SPAWN), {
             "ticket_id": int(ticket_id), "usuario_execucao": usuario_execucao,
             "monotonico": time.monotonic(), "parede": time.time()})
