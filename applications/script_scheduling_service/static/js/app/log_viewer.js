@@ -46,7 +46,7 @@
           this.maxChars = max > 0 ? max : 65536;
           this.status = raiz.getAttribute('data-status') || '';
           this.statusInicial = this.status;
-          this.truncado = raiz.getAttribute('data-truncado') === 'S';
+          this.truncado = raiz.getAttribute('data-truncado') === 'Y';
           try {
             this.statusInfo = JSON.parse(raiz.getAttribute('data-status-info') || '{}');
           } catch (erro) {

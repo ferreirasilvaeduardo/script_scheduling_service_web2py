@@ -57,7 +57,7 @@ class _Base(unittest.TestCase):
         self.ctx = {"admin": self.auth.revalidar(_sessao(U_ADMIN, "admin", P_ADMIN)),
                     "op.prod": self.auth.revalidar(_sessao(U_OPPROD, "op.prod", P_OPPROD))}
         # Gestor sem perfil de administrador, com as funcionalidades de cadastro (CR-008, F-05).
-        self.ctx["gestor"] = dict(self.ctx["op.prod"], funcionalidades=frozenset(["CAD_USUARIOS", "CAD_PERFIS"]))
+        self.ctx["gestor"] = dict(self.ctx["op.prod"], funcionalidades=frozenset(["MANAGE_USERS", "MANAGE_PROFILES"]))
         self.svc_usr = ServicoAdminUsuarios(self.usuarios, self.rbac_repo, self.log, relogio=lambda: AGORA)
         self.svc_per = ServicoAdminPerfis(self.rbac_repo, repo_factory.obter("catalogo"), self.usuarios, self.log)
 
@@ -65,65 +65,65 @@ class _Base(unittest.TestCase):
 class TestAdminSoPorAdmin(_Base):
 
     def test_gestor_nao_cria_usuario_admin(self):
-        dados = {"login": "novo.admin", "nome": "Novo", "perfil_id": str(P_ADMIN),
+        dados = {"login": "novo.admin", "name": "Novo", "profile_id": str(P_ADMIN),
                  "senha": SENHA_NOVA, "confirmacao": SENHA_NOVA}
         uid, erros = self.svc_usr.salvar(self.ctx["gestor"], IP, None, dados)
-        self.assertEqual((uid, erros), (None, {"perfil_id": usr_mod.MSG_SO_ADMIN}))
+        self.assertEqual((uid, erros), (None, {"profile_id": usr_mod.MSG_SO_ADMIN}))
         self.assertIsNone(self.usuarios.obter_por_login("novo.admin"))
-        uid, erros = self.svc_usr.salvar(self.ctx["gestor"], IP, None, dict(dados, perfil_id=str(P_CONSULTA)))
+        uid, erros = self.svc_usr.salvar(self.ctx["gestor"], IP, None, dict(dados, profile_id=str(P_CONSULTA)))
         self.assertEqual(erros, {})
 
     def test_gestor_nao_se_promove_nem_altera_admin(self):
         form = self.svc_usr.formulario(self.ctx["gestor"], str(U_OPPROD))
         _id, erros = self.svc_usr.salvar(self.ctx["gestor"], IP, str(U_OPPROD),
-                                         {"nome": form["nome"], "perfil_id": str(P_ADMIN), "versao": form["versao"]})
+                                         {"name": form["name"], "profile_id": str(P_ADMIN), "version": form["version"]})
         self.assertEqual(erros, {CAMPO_GERAL: usr_mod.MSG_SO_ADMIN})
-        self.assertEqual(self.usuarios.obter_por_id(U_OPPROD)["perfil_id"], P_OPPROD)
+        self.assertEqual(self.usuarios.obter_por_id(U_OPPROD)["profile_id"], P_OPPROD)
         form = self.svc_usr.formulario(self.ctx["gestor"], str(U_ADMIN))
         _id, erros = self.svc_usr.salvar(self.ctx["gestor"], IP, str(U_ADMIN),
-                                         {"nome": "Outro", "perfil_id": str(P_ADMIN), "versao": form["versao"]})
+                                         {"name": "Outro", "profile_id": str(P_ADMIN), "version": form["version"]})
         self.assertEqual(erros, {CAMPO_GERAL: usr_mod.MSG_SO_ADMIN})
         for acao in (lambda: self.svc_usr.redefinir_senha(self.ctx["gestor"], IP, str(U_ADMIN), SENHA_NOVA, SENHA_NOVA),
                      lambda: self.svc_usr.desbloquear(self.ctx["gestor"], IP, str(U_ADMIN)),
-                     lambda: self.svc_usr.alternar_ativo(self.ctx["gestor"], IP, str(U_ADMIN), form["versao"])):
+                     lambda: self.svc_usr.alternar_ativo(self.ctx["gestor"], IP, str(U_ADMIN), form["version"])):
             with self.assertRaises(OperacaoNegada) as cm:
                 acao()
             self.assertEqual(cm.exception.mensagem, usr_mod.MSG_SO_ADMIN)
         admin = self.usuarios.obter_por_id(U_ADMIN)
-        self.assertEqual((admin["ativo"], admin["sessao_epoch"]), ("S", 0))
+        self.assertEqual((admin["active"], admin["session_epoch"]), ("Y", 0))
 
     def test_gestor_altera_usuario_comum_e_admin_altera_admin(self):
         self.assertEqual(self.svc_usr.redefinir_senha(self.ctx["gestor"], IP, str(U_OPHML), SENHA_NOVA, SENHA_NOVA), {})
         form = self.svc_usr.formulario(self.ctx["admin"], str(U_OPHML))
         _id, erros = self.svc_usr.salvar(self.ctx["admin"], IP, str(U_OPHML),
-                                         {"nome": form["nome"], "perfil_id": str(P_ADMIN), "versao": form["versao"]})
+                                         {"name": form["name"], "profile_id": str(P_ADMIN), "version": form["version"]})
         self.assertEqual(erros, {})
 
     def test_gestor_nao_marca_admin_nem_mexe_no_proprio_perfil(self):
-        _id, erros = self.svc_per.salvar(self.ctx["gestor"], IP, None, {"nome": "SUPORTE", "is_admin": "S"})
+        _id, erros = self.svc_per.salvar(self.ctx["gestor"], IP, None, {"name": "SUPORTE", "is_admin": "Y"})
         self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_SO_ADMIN})
         form = self.svc_per.formulario(self.ctx["gestor"], str(P_OPPROD))
         _id, erros = self.svc_per.salvar(self.ctx["gestor"], IP, str(P_OPPROD),
-                                         {"nome": form["nome"], "descricao": "nova", "versao": form["versao"]})
+                                         {"name": form["name"], "description": "nova", "version": form["version"]})
         self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_SO_ADMIN})
         matriz = self.rbac_repo.matriz_obter(P_OPPROD)
         todas = [f["id"] for f in self.rbac_repo.funcionalidades_listar()]
         diff, erros = self.svc_per.salvar_matriz(self.ctx["gestor"], IP, str(P_OPPROD), [str(i) for i in todas],
                                                  [str(i) for i in matriz["ambs"]], [str(i) for i in matriz["scrs"]],
-                                                 str(self.rbac_repo.perfis_obter(P_OPPROD)["perm_versao"]))
+                                                 str(self.rbac_repo.perfis_obter(P_OPPROD)["perm_version"]))
         self.assertEqual((diff, erros), (None, {CAMPO_GERAL: perfis_mod.MSG_SO_ADMIN}))
         self.assertEqual(self.rbac_repo.matriz_obter(P_OPPROD), matriz)
         # Perfil comum de outra pessoa continua editavel pelo gestor.
         form = self.svc_per.formulario(self.ctx["gestor"], str(P_CONSULTA))
         _id, erros = self.svc_per.salvar(self.ctx["gestor"], IP, str(P_CONSULTA),
-                                         {"nome": form["nome"], "descricao": "leitura", "versao": form["versao"]})
+                                         {"name": form["name"], "description": "leitura", "version": form["version"]})
         self.assertEqual(erros, {})
 
 
 class TestSessaoRevogavel(_Base):
 
     def _epoch(self, uid):
-        return self.usuarios.obter_por_id(uid)["sessao_epoch"]
+        return self.usuarios.obter_por_id(uid)["session_epoch"]
 
     def test_eventos_que_revogam(self):
         sessao = _sessao(U_OPHML, "op.hml", 3)
@@ -135,11 +135,11 @@ class TestSessaoRevogavel(_Base):
         self.assertIsNotNone(self.auth.revalidar(sessao))
         form = self.svc_usr.formulario(self.ctx["admin"], str(U_OPHML))
         self.svc_usr.salvar(self.ctx["admin"], IP, str(U_OPHML),
-                            {"nome": "Outro nome", "perfil_id": str(3), "versao": form["versao"]})
+                            {"name": "Outro nome", "profile_id": str(3), "version": form["version"]})
         self.assertEqual(self._epoch(U_OPHML), 1, "so o nome mudou")
         self.svc_usr.salvar(self.ctx["admin"], IP, str(U_OPHML),
-                            {"nome": "Outro nome", "perfil_id": str(P_CONSULTA),
-                             "versao": self.svc_usr.formulario(self.ctx["admin"], str(U_OPHML))["versao"]})
+                            {"name": "Outro nome", "profile_id": str(P_CONSULTA),
+                             "version": self.svc_usr.formulario(self.ctx["admin"], str(U_OPHML))["version"]})
         self.assertEqual(self._epoch(U_OPHML), 2)
 
     def test_logout_derruba_todas_as_sessoes_e_audita(self):
@@ -147,10 +147,10 @@ class TestSessaoRevogavel(_Base):
         self.auth.logout(self.ctx["op.prod"], IP)
         self.assertEqual(self._epoch(U_OPPROD), 1)
         self.assertIsNone(self.auth.revalidar(outra))
-        logout = [a for a in self.auditoria.listar(filtros={"acao": "LOGOUT"}, pagina=1, tamanho=10)["itens"]
-                  if a["ator"] == "op.prod"]
-        self.assertEqual((logout[0]["entidade"], logout[0]["entidade_id"], logout[0]["ip_origem"]),
-                         ("tbsss_usuarios", U_OPPROD, IP))
+        logout = [a for a in self.auditoria.listar(filtros={"action": "LOGOUT"}, pagina=1, tamanho=10)["itens"]
+                  if a["actor"] == "op.prod"]
+        self.assertEqual((logout[0]["entity"], logout[0]["entity_id"], logout[0]["source_ip"]),
+                         ("tbsss_users", U_OPPROD, IP))
         u = self.usuarios.obter_por_id(U_OPPROD)
         self.assertIsNone(u.get("updated_by"), "logout e rotina tecnica, sem updated_*")
 

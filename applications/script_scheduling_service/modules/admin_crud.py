@@ -162,4 +162,4 @@ def detalhe_insercao(registro, campos):
 
 def auditoria(ctx, ip, acao, detalhe):
     """Dicionario de auditoria repassado ao repositorio (gravado na mesma operacao)."""
-    return {"ator": ctx.get("login"), "ip": ip, "acao": acao, "detalhe": detalhe}
+    return {"actor": ctx.get("login"), "ip": ip, "action": acao, "detail": detalhe}

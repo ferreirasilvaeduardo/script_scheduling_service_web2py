@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Cadastro de ambientes (README §4.1, §4.3.D CAD_AMBIENTES, §10 tabela 1).
+"""Cadastro de ambientes (README §4.1, §4.3.D MANAGE_ENVIRONMENTS, §10 tabela 1).
 
 Segue docs/PADRAO_CRUD_ADMIN.md. Recebe ctx e ip como parametros; o servico padrao do
 processo web importa gluon apenas sob demanda (_servico).
@@ -13,9 +13,9 @@ import ui_helpers
 from admin_crud import CAMPO_GERAL
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 
-FUNCIONALIDADE = "CAD_AMBIENTES"
-CAMPOS_EDITAVEIS = ("descricao", "conexao", "ativo")
-CAMPOS_INSERCAO = ("nome", "descricao", "conexao")
+FUNCIONALIDADE = "MANAGE_ENVIRONMENTS"
+CAMPOS_EDITAVEIS = ("description", "connection", "active")
+CAMPOS_INSERCAO = ("name", "description", "connection")
 TAMANHO_DESCRICAO = 100
 TAMANHO_CONEXAO = 250
 _SCRIPTS_PAGINA = 500
@@ -39,9 +39,9 @@ MSG_DESCRICAO_TAMANHO = u"A descrição deve ter no máximo %d caracteres." % TA
 AVISO_DESATIVACAO = u"Agendamentos que usam este ambiente serão pausados no próximo ciclo."
 
 _CAMPO_POR_CONSTRAINT = {
-    "uk_tbsss_amb_nome": ("nome", MSG_NOME_DUPLICADO),
-    "ck_tbsss_amb_nome": ("nome", MSG_NOME_INVALIDO),
-    "ck_tbsss_amb_conexao": ("conexao", MSG_CONEXAO_CREDENCIAL),
+    "uk_tbsss_env_name": ("name", MSG_NOME_DUPLICADO),
+    "ck_tbsss_env_name": ("name", MSG_NOME_INVALIDO),
+    "ck_tbsss_env_connection": ("connection", MSG_CONEXAO_CREDENCIAL),
 }
 
 
@@ -69,12 +69,12 @@ def normalizar_filtros(entrada):
     """Filtros da lista vindos de request.vars: nome (trecho) e ativo ('S' | 'N')."""
     entrada = entrada or {}
     filtros = {}
-    nome = admin_crud.texto(entrada.get("nome"), 30)
+    nome = admin_crud.texto(entrada.get("name"), 30)
     if nome and _RE_FILTRO_NOME.fullmatch(nome):
-        filtros["nome"] = nome
-    ativo = admin_crud.texto(entrada.get("ativo"), 1)
-    if ativo in ("S", "N"):
-        filtros["ativo"] = ativo
+        filtros["name"] = nome
+    ativo = admin_crud.texto(entrada.get("active"), 1)
+    if ativo in ("Y", "N"):
+        filtros["active"] = ativo
     return filtros
 
 
@@ -94,7 +94,7 @@ class ServicoAdminAmbientes(object):
 
     def agendamentos_ativos(self, nome):
         """Quantidade de agendamentos ativos do ambiente (pausados no proximo desdobro se desativado)."""
-        return self._agendamentos.listar(filtros={"ambiente": nome, "ativo": "S"}, pagina=1,
+        return self._agendamentos.listar(filtros={"environment": nome, "active": "Y"}, pagina=1,
                                          tamanho=_TAMANHO_CONTAGEM)["total"]
 
     def scripts_homologados(self, nome):
@@ -119,36 +119,36 @@ class ServicoAdminAmbientes(object):
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         if ambiente_id in (None, ""):
-            return {"id": None, "nome": "", "descricao": "", "conexao": "", "ativo": "S", "versao": "",
+            return {"id": None, "name": "", "description": "", "connection": "", "active": "Y", "version": "",
                     "agendamentos_ativos": 0, "scripts_homologados": 0, "registro": None}
         amb = self._obter(ambiente_id)
         return {
             "id": amb["id"],
-            "nome": amb["nome"],
-            "descricao": admin_crud.normalizar(amb.get("descricao")) or "",
-            "conexao": admin_crud.normalizar(amb.get("conexao")) or "",
-            "ativo": amb["ativo"],
-            "versao": admin_crud.versao(amb, CAMPOS_EDITAVEIS),
-            "agendamentos_ativos": self.agendamentos_ativos(amb["nome"]),
-            "scripts_homologados": self.scripts_homologados(amb["nome"]),
+            "name": amb["name"],
+            "description": admin_crud.normalizar(amb.get("description")) or "",
+            "connection": admin_crud.normalizar(amb.get("connection")) or "",
+            "active": amb["active"],
+            "version": admin_crud.versao(amb, CAMPOS_EDITAVEIS),
+            "agendamentos_ativos": self.agendamentos_ativos(amb["name"]),
+            "scripts_homologados": self.scripts_homologados(amb["name"]),
             "registro": ui_helpers.registro(amb, ctx),
         }
 
     def _validar(self, dados, erros):
-        descricao = admin_crud.texto_livre(dados.get("descricao"), erros, "descricao")
+        descricao = admin_crud.texto_livre(dados.get("description"), erros, "description")
         if descricao is not None and len(descricao) > TAMANHO_DESCRICAO:
-            erros["descricao"] = MSG_DESCRICAO_TAMANHO
-        conexao = admin_crud.texto(dados.get("conexao"))
+            erros["description"] = MSG_DESCRICAO_TAMANHO
+        conexao = admin_crud.texto(dados.get("connection"))
         erro_conexao = validar_conexao(conexao)
         if erro_conexao:
-            erros["conexao"] = erro_conexao
+            erros["connection"] = erro_conexao
         return descricao, conexao
 
     def _violacao(self, ctx, exc, erros):
         campo, mensagem = _CAMPO_POR_CONSTRAINT.get(exc.constraint, (CAMPO_GERAL, admin_crud.MSG_FALHA))
         erros[campo] = mensagem
         self._log.warning("cadastro de ambiente rejeitado pelo repositorio (login=%s constraint=%s)",
-                          ctx.get("login"), exc.constraint, extra={"acao": "CAD_AMBIENTES"})
+                          ctx.get("login"), exc.constraint, extra={"acao": "MANAGE_ENVIRONMENTS"})
 
     def salvar(self, ctx, ip, ambiente_id, dados):
         """Inclui (ambiente_id vazio) ou altera um ambiente.
@@ -160,79 +160,79 @@ class ServicoAdminAmbientes(object):
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         erros = {}
         if ambiente_id in (None, ""):
-            nome = admin_crud.identificador(dados.get("nome"), erros, "nome")
+            nome = admin_crud.identificador(dados.get("name"), erros, "name")
             if nome is None:
-                erros["nome"] = MSG_NOME_OBRIGATORIO
-            elif "nome" in erros:
+                erros["name"] = MSG_NOME_OBRIGATORIO
+            elif "name" in erros:
                 pass
             elif not _RE_NOME.fullmatch(nome):
-                erros["nome"] = MSG_NOME_INVALIDO
+                erros["name"] = MSG_NOME_INVALIDO
             elif pastas_log.ambiente_reservado(nome):
                 # CR-009: a pasta de log 'interno' e dos logs sem ambiente (aplicacao).
-                erros["nome"] = MSG_NOME_RESERVADO
+                erros["name"] = MSG_NOME_RESERVADO
             descricao, conexao = self._validar(dados, erros)
             if erros:
                 return None, erros
-            novo = {"nome": nome, "descricao": descricao, "conexao": conexao, "ativo": "S"}
-            auditoria = admin_crud.auditoria(ctx, ip, "CAD_INSERIR",
+            novo = {"name": nome, "description": descricao, "connection": conexao, "active": "Y"}
+            auditoria = admin_crud.auditoria(ctx, ip, "CREATE",
                                              admin_crud.detalhe_insercao(novo, CAMPOS_INSERCAO))
             try:
                 criado = self._catalogo.ambientes_inserir(novo, auditoria=auditoria)
             except RepoViolacao as exc:
                 self._violacao(ctx, exc, erros)
                 return None, erros
-            self._log.info("ambiente incluido (login=%s ambiente=%s)", ctx.get("login"), criado["nome"],
-                           extra={"acao": "CAD_INSERIR"})
+            self._log.info("ambiente incluido (login=%s environment=%s)", ctx.get("login"), criado["name"],
+                           extra={"acao": "CREATE"})
             return criado["id"], {}
 
         atual = self._obter(ambiente_id)
         descricao, conexao = self._validar(dados, erros)
         if erros:
             return atual["id"], erros
-        if admin_crud.texto(dados.get("versao"), 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
+        if admin_crud.texto(dados.get("version"), 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
             erros[CAMPO_GERAL] = admin_crud.MSG_CONFLITO
             return atual["id"], erros
-        depois = dict(atual, descricao=descricao, conexao=conexao)
+        depois = dict(atual, description=descricao, connection=conexao)
         detalhe = admin_crud.detalhe_alteracoes(atual, depois, CAMPOS_EDITAVEIS)
         if detalhe is None:
             return atual["id"], {}
         try:
             self._catalogo.ambientes_alterar(
-                atual["id"], {"descricao": descricao, "conexao": conexao},
+                atual["id"], {"description": descricao, "connection": conexao},
                 esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
-                auditoria=admin_crud.auditoria(ctx, ip, "CAD_ALTERAR", detalhe))
+                auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
         except RepoConflito:
             erros[CAMPO_GERAL] = admin_crud.MSG_CONFLITO
             return atual["id"], erros
         except RepoViolacao as exc:
             self._violacao(ctx, exc, erros)
             return atual["id"], erros
-        self._log.info("ambiente alterado (login=%s ambiente=%s)", ctx.get("login"), atual["nome"],
-                       extra={"acao": "CAD_ALTERAR"})
+        self._log.info("ambiente alterado (login=%s environment=%s)", ctx.get("login"), atual["name"],
+                       extra={"acao": "UPDATE"})
         return atual["id"], {}
 
     def alternar_ativo(self, ctx, ip, ambiente_id, versao):
         """Desativa ou reativa o ambiente; retorna o registro alterado.
 
-        Desativar audita CAD_DESATIVAR com a quantidade de agendamentos ativos afetados;
-        reativar audita CAD_ALTERAR. Lanca RepoConflito (versao divergente),
+        Desativar audita DEACTIVATE com a quantidade de agendamentos ativos afetados;
+        reativar audita UPDATE. Lanca RepoConflito (versao divergente),
         RepoNaoEncontrado e AcessoNegado.
         """
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         atual = self._obter(ambiente_id)
         if admin_crud.texto(versao, 64) != admin_crud.versao(atual, CAMPOS_EDITAVEIS):
             raise RepoConflito("versao divergente")
-        novo_ativo = "N" if atual["ativo"] == "S" else "S"
-        detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, ativo=novo_ativo), ("ativo",))
-        acao = "CAD_DESATIVAR" if novo_ativo == "N" else "CAD_ALTERAR"
+        novo_ativo = "N" if atual["active"] == "Y" else "Y"
+        detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, active=novo_ativo), ("active",))
+        acao = "DEACTIVATE" if novo_ativo == "N" else "UPDATE"
         if novo_ativo == "N":
             detalhe = u"%s; agendamentos ativos afetados: %d; scripts homologados afetados: %d" % (
-                detalhe, self.agendamentos_ativos(atual["nome"]), self.scripts_homologados(atual["nome"]))
+                detalhe, self.agendamentos_ativos(atual["name"]), self.scripts_homologados(atual["name"]))
         alterado = self._catalogo.ambientes_alterar(
-            atual["id"], {"ativo": novo_ativo}, esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
+            atual["id"], {"active": novo_ativo}, esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
             auditoria=admin_crud.auditoria(ctx, ip, acao, detalhe))
-        self._log.info("ambiente %s (login=%s ambiente=%s)", "desativado" if novo_ativo == "N" else "reativado",
-                       ctx.get("login"), atual["nome"], extra={"acao": acao})
+        self._log.info("ambiente %s (login=%s environment=%s)", "desativado" if novo_ativo == "N" else "reativado",
+                       ctx.get("login"), atual["name"], extra={"acao": acao})
         return alterado
 
 

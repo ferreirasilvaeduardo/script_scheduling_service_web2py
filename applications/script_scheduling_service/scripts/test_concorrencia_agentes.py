@@ -77,13 +77,13 @@ class _DoisAgentesBase(unittest.TestCase):
                               "echo \"ticket $SSS_TICKET_ID\" > \"$SSS_OUTPUT_DIR/resultado.txt\"\n"
                               "sleep 2\necho fim\n" % self.execucoes)
         longo = self._arquivo(scripts_dir, "longo.sh", "echo inicio\nsleep %d\n" % MARCA_LONGO)
-        self.scr = m.script("curto", path_file=curto, max_qtd_parallel_env=TETO)
-        self.scr_longo = m.script("longo", path_file=longo, max_qtd_parallel_env=1)
+        self.scr = m.script("curto", path_file=curto, max_parallel_env=TETO)
+        self.scr_longo = m.script("longo", path_file=longo, max_parallel_env=1)
         cat, rbac = self.obter_repo("catalogo"), self.obter_repo("rbac")
         for s in (self.scr, self.scr_longo):
             cat.homologacao_salvar(s["id"], [self.amb["id"]], ator=m.ator)
         self.perfil = perfil = m.perfil("P")
-        funcs = [f["id"] for f in rbac.funcionalidades_listar() if f["codigo"] in ("EXEC_SCRIPT", "VER_LOGS", "CANC_TICKET")]
+        funcs = [f["id"] for f in rbac.funcionalidades_listar() if f["code"] in ("EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET")]
         rbac.matriz_salvar(perfil["id"], funcs, [self.amb["id"]], [self.scr["id"], self.scr_longo["id"]], ator=m.ator)
         self.login = m.usuario(perfil["id"], "u")["login"]
         self.usuario_id = [u for u in m.criados["usuarios"]][-1]
@@ -103,7 +103,7 @@ class _DoisAgentesBase(unittest.TestCase):
             cat.homologacao_salvar(sid, [], ator=m.ator)
         # Tickets gerados pelo desdobro das regras da fixture (F8.4e) entram na limpeza antes do usuario.
         for rid in m.criados["agendamentos"]:
-            for (tid,) in self._consulta("SELECT id FROM {tck} WHERE agendamento_id = :r", r=rid):
+            for (tid,) in self._consulta("SELECT id FROM {tck} WHERE schedule_id = :r", r=rid):
                 if tid not in m.criados["tickets"]:
                     m.anotar("tickets", tid)
         self._limpar_massa()
@@ -116,14 +116,14 @@ class _DoisAgentesBase(unittest.TestCase):
         return caminho
 
     def _snapshot(self, scr):
-        return json.dumps({"versao": 4, "script_id": scr["id"], "script_nome": scr["nome"], "interpretador": "SH",
-                           "path_file": scr["path_file"], "tipo_param": "NOMEADO", "args": [], "respostas": {},
+        return json.dumps({"version": 4, "script_id": scr["id"], "script_nome": scr["name"], "interpreter": "SH",
+                           "path_file": scr["path_file"], "param_type": "NAMED", "args": [], "respostas": {},
                            "sensiveis": [], "compilado_em": "2026-10-20 10:00:00"})
 
     def _ticket(self, scr):
         tid = self.obter_repo("tickets").criar({
-            "script_id": scr["id"], "ambiente": self.amb["nome"], "solicitante": self.login, "status": "PENDING",
-            "prioridade": 2, "parametros_enviados": self._snapshot(scr)}, [], ator=self.login)
+            "script_id": scr["id"], "environment": self.amb["name"], "requested_by": self.login, "status": "PENDING",
+            "priority": 2, "submitted_params": self._snapshot(scr)}, [], ator=self.login)
         return self._massa.anotar("tickets", tid)
 
     def _config(self, agente):
@@ -133,7 +133,7 @@ class _DoisAgentesBase(unittest.TestCase):
             os.makedirs(p, 0o750, exist_ok=True)
         cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
         cp.read(os.path.join(APP, "instance", "config.ini"), encoding="utf-8")
-        cp["agent"].update({"agent_id": agente, "ambientes_atendidos": self.amb["nome"], "work_dir": pastas["work"],
+        cp["agent"].update({"agent_id": agente, "ambientes_atendidos": self.amb["name"], "work_dir": pastas["work"],
                             "usuarios_execucao": "", "exec_work_dir": "", "interpretadores": "SH=/bin/sh",
                             "max_parallel_jobs": "4", "orchestrator_interval_s": "1", "cancel_poll_interval_s": "1",
                             "output_dir": pastas["saida"], "log_dir_min_livre_mb": "0"})
@@ -166,16 +166,16 @@ class _DoisAgentesBase(unittest.TestCase):
                 p.wait(10)
 
     def _limpar_agentes(self):
-        """Linhas de tbsss_agentes dos agentes de teste e a auditoria deles (AGENTE_INICIO/AGENTE_FIM)."""
+        """Linhas de tbsss_agents dos agentes de teste e a auditoria deles (AGENT_START/AGENT_STOP)."""
         cat = self.obter_repo("catalogo")
         conn = cat._obter_conexao()
         try:
             cur = conn.cursor()
             agt, aud = cat.qualificar_tabela("agentes"), cat.qualificar_tabela("auditoria")
             for codigo in self.agentes:
-                cur.execute("SELECT id FROM " + agt + " WHERE codigo = :c", c=codigo)
+                cur.execute("SELECT id FROM " + agt + " WHERE code = :c", c=codigo)
                 for (aid,) in cur.fetchall():
-                    cur.execute("DELETE FROM " + aud + " WHERE entidade = 'tbsss_agentes' AND entidade_id = :id", id=aid)
+                    cur.execute("DELETE FROM " + aud + " WHERE entity = 'tbsss_agents' AND entity_id = :id", id=aid)
                     cur.execute("DELETE FROM " + agt + " WHERE id = :id", id=aid)
             conn.commit()
         finally:
@@ -195,7 +195,7 @@ class _DoisAgentesBase(unittest.TestCase):
             conn.close()
 
     def _tickets(self, ids):
-        linhas = self._consulta("SELECT id, status, status_motivo, return_code, agente_id, process_id FROM {tck}"
+        linhas = self._consulta("SELECT id, status, status_reason, return_code, agent_id, process_id FROM {tck}"
                                 " WHERE script_id IN (:a, :b)", a=self.scr["id"], b=self.scr_longo["id"])
         return dict((r[0], r[1:]) for r in linhas if r[0] in ids)
 
@@ -251,13 +251,13 @@ class TestConcorrenciaDoisAgentes(_DoisAgentesBase):
 
         # 3. Saida (CR-012): DISPONIVEL para cada ticket, com o zip do proprio ticket e a pasta removida.
         self.assertTrue(self._esperar(lambda: len(self._consulta(
-            "SELECT ticket_id FROM {sai} WHERE ticket_id IN (%s) AND situacao = 'DISPONIVEL'"
+            "SELECT ticket_id FROM {sai} WHERE ticket_id IN (%s) AND state = 'AVAILABLE'"
             % ", ".join(str(t) for t in curtos))) == N_TICKETS, 60), "saidas DISPONIVEL")
         tickets = self.obter_repo("tickets")
         for tid in curtos:
             meta = tickets.saida_obter(tid)
-            self.assertEqual((meta["agente_id"], meta["qtd_arquivos"]), (donos[tid], 1))
-            dados = tickets.saida_ler(tid, 0, meta["tamanho_bytes"])
+            self.assertEqual((meta["agent_id"], meta["file_count"]), (donos[tid], 1))
+            dados = tickets.saida_ler(tid, 0, meta["size_bytes"])
             self.assertEqual(zipfile.ZipFile(io.BytesIO(dados)).read("resultado.txt"), b"ticket %d\n" % tid)
         self.assertEqual(self._pastas_de_saida(set(curtos)), [], "pastas de saida dos curtos removidas")
 
@@ -273,9 +273,9 @@ class TestConcorrenciaDoisAgentes(_DoisAgentesBase):
         self.assertIsNone(tickets.saida_obter(longo))
 
         # 5. Heartbeat e configuracao critica iguais nos dois agentes ativos.
-        agentes = self._consulta("SELECT codigo, status, heartbeat_at, config_criticos FROM {agt}"
-                                 " WHERE codigo IN (:a, :b)", a=self.agentes[0], b=self.agentes[1])
-        self.assertEqual(sorted((r[0], r[1]) for r in agentes), [(a, "ATIVO") for a in sorted(self.agentes)])
+        agentes = self._consulta("SELECT code, status, heartbeat_at, critical_config FROM {agt}"
+                                 " WHERE code IN (:a, :b)", a=self.agentes[0], b=self.agentes[1])
+        self.assertEqual(sorted((r[0], r[1]) for r in agentes), [(a, "ACTIVE") for a in sorted(self.agentes)])
         agora = self._consulta("SELECT SYSDATE FROM DUAL")[0][0]
         for codigo, _st, hb, _cc in agentes:
             self.assertLess((agora - hb).total_seconds(), 60, "heartbeat recente de %s" % codigo)
@@ -286,9 +286,9 @@ class TestConcorrenciaDoisAgentes(_DoisAgentesBase):
             open(os.path.join(pastas["work"], "sss-%s.stop" % agente), "w").close()
         for agente, p, _pastas in self.processos:
             self.assertEqual(p.wait(60), 0, "saida de %s" % agente)
-        parados = self._consulta("SELECT codigo, status FROM {agt} WHERE codigo IN (:a, :b)",
+        parados = self._consulta("SELECT code, status FROM {agt} WHERE code IN (:a, :b)",
                                  a=self.agentes[0], b=self.agentes[1])
-        self.assertEqual(sorted(parados), [(a, "PARADO") for a in sorted(self.agentes)])
+        self.assertEqual(sorted(parados), [(a, "STOPPED") for a in sorted(self.agentes)])
 
         # 7. Nenhum processo orfao dos scripts do teste.
         ps = subprocess.run(["ps", "-eo", "args"], stdout=subprocess.PIPE).stdout.decode("utf-8", "replace")

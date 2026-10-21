@@ -4,7 +4,7 @@ import ui_helpers
 icones = URL('static', 'img/icons.svg')
 }}
 <div class="sss-page-header">
-  <h1 class="sss-page-titulo">Olá, {{=ctx['nome']}}</h1>
+  <h1 class="sss-page-titulo">Olá, {{=ctx['name']}}</h1>
   <p class="sss-page-sub">Perfil {{=ctx['perfil_nome']}}. Escolha uma das funcionalidades disponíveis.</p>
 </div>
 
@@ -51,7 +51,7 @@ icones = URL('static', 'img/icons.svg')
         <li>
           <a class="sss-mono" href="{{=URL(c='tickets', f='detalhe', args=[_t['id']])}}">#{{=_t['id']}}</a>
           <span class="sss-mono">{{=_t['script_nome']}}</span>
-          <span>{{=_t['ambiente']}}</span>
+          <span>{{=_t['environment']}}</span>
           {{status = _t['status']
           status_motivo = None}}{{include 'components/badge_status.html'}}
           <span class="sss-texto-suave">{{=ui_helpers.formatar_data(_t['created_at'])}}</span>
@@ -71,9 +71,9 @@ icones = URL('static', 'img/icons.svg')
       <ul class="sss-lista-simples">
         {{for _a in _c_dados:}}
         <li>
-          <span class="sss-mono">{{=_a['proxima_execucao']}}</span>
-          <a href="{{=URL(c='agendamentos', f='form', args=[_a['id']])}}">{{=_a['nome']}}</a>
-          <span class="sss-texto-suave">{{=_a['script']}} · {{=_a['ambiente']}}</span>
+          <span class="sss-mono">{{=_a['next_run_at']}}</span>
+          <a href="{{=URL(c='agendamentos', f='form', args=[_a['id']])}}">{{=_a['name']}}</a>
+          <span class="sss-texto-suave">{{=_a['script']}} · {{=_a['environment']}}</span>
         </li>
         {{pass}}
       </ul>
@@ -91,7 +91,7 @@ icones = URL('static', 'img/icons.svg')
       <ul class="sss-lista-simples">
         {{for _ag in _c_dados['agentes']:}}
         <li>
-          <span class="sss-mono">{{=_ag['codigo']}}</span>
+          <span class="sss-mono">{{=_ag['code']}}</span>
           <span class="sss-status {{=_ag['saude']['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_ag['saude']['icone']}}"></use></svg><span>{{=_ag['saude']['rotulo']}}</span></span>
           <span class="sss-texto-suave">heartbeat {{=_ag['ha']}} · {{=_ag['running']}} em execução</span>
         </li>

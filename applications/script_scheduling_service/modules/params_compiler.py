@@ -16,7 +16,7 @@ TAMANHO_MAXIMO = 500
 MASCARA = '****'
 CHAVE_GERAL = '_geral'
 
-TIPOS_PARAM = ('NOMEADO', 'SEQUENCIAL', 'NENHUM')
+TIPOS_PARAM = ('NAMED', 'POSITIONAL', 'NONE')
 TIPOS_COMPONENTE = ('TEXT', 'NUMBER', 'DATE', 'SELECT', 'CHECKBOX')
 
 _RE_CONTROLE = re.compile(r'[\x00-\x1f\x7f]')
@@ -37,7 +37,7 @@ TAMANHO_CHAVE_OPCAO = 100
 TAMANHO_ROTULO_OPCAO = 100
 
 # Snapshot v4 (README §6.5, CR-005): path_file absoluto; sem pasta base nem executavel do no que compilou.
-_CHAVES_SNAPSHOT = ('versao', 'script_id', 'script_nome', 'interpretador', 'path_file', 'tipo_param',
+_CHAVES_SNAPSHOT = ('version', 'script_id', 'script_nome', 'interpreter', 'path_file', 'param_type',
                     'args', 'respostas', 'sensiveis', 'compilado_em')
 
 
@@ -59,20 +59,20 @@ class SnapshotErro(Exception):
 
 
 def _sensivel(parametro):
-    return parametro.get('sensivel') == 'S'
+    return parametro.get('sensitive') == 'Y'
 
 
 def _rotulo(parametro):
-    return parametro.get('label') or parametro.get('codigo') or 'Parâmetro'
+    return parametro.get('label') or parametro.get('code') or 'Parâmetro'
 
 
 def _opcoes_select(parametro):
     try:
-        opcoes = json.loads(parametro.get('opcoes_json') or '')
+        opcoes = json.loads(parametro.get('options_json') or '')
     except ValueError:
         opcoes = None
     if not isinstance(opcoes, dict) or not opcoes:
-        raise ParamErro(parametro.get('codigo'),
+        raise ParamErro(parametro.get('code'),
                         'O parâmetro "%s" está com as opções mal configuradas. Contate o administrador.'
                         % _rotulo(parametro))
     return opcoes
@@ -83,9 +83,9 @@ def validar_valor(parametro, valor_bruto):
 
     CHECKBOX devolve bool; os demais tipos devolvem str normalizada.
     """
-    codigo = parametro.get('codigo')
+    codigo = parametro.get('code')
     rotulo = _rotulo(parametro)
-    tipo = parametro.get('tipo_componente')
+    tipo = parametro.get('component_type')
 
     if tipo == 'CHECKBOX' and isinstance(valor_bruto, bool):
         return valor_bruto
@@ -102,7 +102,7 @@ def validar_valor(parametro, valor_bruto):
         raise ParamErro(codigo, 'O valor sigiloso precisa ter pelo menos %d caracteres.' % SENSIVEL_MINIMO)
 
     if tipo == 'TEXT':
-        padrao = parametro.get('regex_validacao')
+        padrao = parametro.get('validation_regex')
         if padrao:
             try:
                 casou = re.fullmatch(padrao, valor) is not None
@@ -135,7 +135,7 @@ def validar_valor(parametro, valor_bruto):
 
 
 def _recusar_regex(motivo):
-    raise ParamErro('regex_validacao', 'A expressão regular foi recusada: %s (README §6.2).' % motivo)
+    raise ParamErro('validation_regex', 'A expressão regular foi recusada: %s (README §6.2).' % motivo)
 
 
 def _fim_da_classe(padrao, i):
@@ -167,7 +167,7 @@ def validar_regex_cadastro(padrao):
     try:
         re.compile(padrao)
     except Exception:  # noqa: B902 - re.error, TypeError e erros internos do sre (ex.: grupo condicional invalido)
-        raise ParamErro('regex_validacao', 'A expressão regular é inválida.')
+        raise ParamErro('validation_regex', 'A expressão regular é inválida.')
     if len(padrao) > TAMANHO_REGEX:
         _recusar_regex('tem mais de %d caracteres' % TAMANHO_REGEX)
     ilimitados = 0
@@ -199,7 +199,7 @@ def validar_regex_cadastro(padrao):
             atomo, apos_quant, i = None, False, i + 1
             continue
         if c == ')':
-            atomo, apos_quant, i = 'grupo', False, i + 1
+            atomo, apos_quant, i = 'script_group', False, i + 1
             continue
         if c == '|':
             atomo, apos_quant, i = None, False, i + 1
@@ -221,7 +221,7 @@ def validar_regex_cadastro(padrao):
                 preguicoso, i = True, fim
                 continue
             _recusar_regex('quantificador aplicado a outro quantificador')
-        if atomo == 'grupo' and quant not in ('?', '{0,1}'):
+        if atomo == 'script_group' and quant not in ('?', '{0,1}'):
             _recusar_regex('grupo entre parênteses repetido por quantificador (use só ? depois de parênteses)')
         limites = quant[1:-1].split(',') if quant.startswith('{') else None
         largo = (limites is not None and len(limites) == 2 and limites[1] != ''
@@ -244,7 +244,7 @@ def validar_regex_cadastro(padrao):
 def validar_flag(flag):
     """Valida param_nomeado pela CK ck_tbsss_prm_flag (README §10 tabela 10); lanca ParamErro."""
     if not isinstance(flag, str) or not _RE_FLAG.fullmatch(flag):
-        raise ParamErro('param_nomeado', 'Use uma flag como --data-ref ou -n (até 30 caracteres, '
+        raise ParamErro('param_flag', 'Use uma flag como --data-ref ou -n (até 30 caracteres, '
                                          'letras, dígitos, _ e -).')
 
 
@@ -258,43 +258,43 @@ def _pares_sem_duplicata(pares):
 
 
 def validar_opcoes_cadastro(texto):
-    """Valida opcoes_json de SELECT e devolve o JSON canonico (ordem do usuario preservada).
+    """Valida options_json de SELECT e devolve o JSON canonico (sort_order do usuario preservada).
 
     Exige objeto {"valor": "Rotulo"} nao vazio, sem chave duplicada, com chaves e rotulos str nao vazios
     (apos strip), sem caracteres de controle, e serializacao com ate TAMANHO_OPCOES caracteres.
     """
     if not isinstance(texto, str) or not texto.strip():
-        raise ParamErro('opcoes_json', 'Informe as opções da lista (pelo menos uma).')
+        raise ParamErro('options_json', 'Informe as opções da lista (pelo menos uma).')
     try:
         opcoes = json.loads(texto, object_pairs_hook=_pares_sem_duplicata)
     except ValueError:
-        raise ParamErro('opcoes_json', 'As opções não formam um JSON válido sem chaves repetidas.')
+        raise ParamErro('options_json', 'As opções não formam um JSON válido sem chaves repetidas.')
     if not isinstance(opcoes, dict) or not opcoes:
-        raise ParamErro('opcoes_json', 'As opções devem ser um objeto {"valor": "Rótulo"} com pelo menos um item.')
+        raise ParamErro('options_json', 'As opções devem ser um objeto {"valor": "Rótulo"} com pelo menos um item.')
     limpas = collections.OrderedDict()
     for chave, rotulo in opcoes.items():
         if not isinstance(rotulo, str):
-            raise ParamErro('opcoes_json', 'Todo rótulo de opção deve ser texto.')
+            raise ParamErro('options_json', 'Todo rótulo de opção deve ser texto.')
         chave, rotulo = chave.strip(), rotulo.strip()
         if not chave or not rotulo:
-            raise ParamErro('opcoes_json', 'Valores e rótulos das opções não podem ser vazios.')
+            raise ParamErro('options_json', 'Valores e rótulos das opções não podem ser vazios.')
         if _RE_CONTROLE.search(chave) or _RE_CONTROLE.search(rotulo):
-            raise ParamErro('opcoes_json', 'As opções contêm caracteres de controle não permitidos.')
+            raise ParamErro('options_json', 'As opções contêm caracteres de controle não permitidos.')
         if len(chave) > TAMANHO_CHAVE_OPCAO or len(rotulo) > TAMANHO_ROTULO_OPCAO:
-            raise ParamErro('opcoes_json', 'Cada valor e rótulo de opção aceita até %d caracteres.'
+            raise ParamErro('options_json', 'Cada valor e rótulo de opção aceita até %d caracteres.'
                                            % TAMANHO_CHAVE_OPCAO)
         if chave in limpas:
-            raise ParamErro('opcoes_json', 'O valor "%s" aparece mais de uma vez.' % chave)
+            raise ParamErro('options_json', 'O valor "%s" aparece mais de uma vez.' % chave)
         limpas[chave] = rotulo
     canonico = json.dumps(limpas, ensure_ascii=False, separators=(',', ':'))
     if len(canonico) > TAMANHO_OPCOES:
-        raise ParamErro('opcoes_json', 'As opções excedem %d caracteres; reduza a lista ou os rótulos.'
+        raise ParamErro('options_json', 'As opções excedem %d caracteres; reduza a lista ou os rótulos.'
                                        % TAMANHO_OPCOES)
     return canonico
 
 
 def _ordenados(vinculos):
-    return sorted(vinculos, key=lambda v: int(v['ordem']))
+    return sorted(vinculos, key=lambda v: int(v['sort_order']))
 
 
 def _vazio(valor):
@@ -307,14 +307,14 @@ def _resolver(vinculos, respostas):
     resolvidos = collections.OrderedDict()
     erros = collections.OrderedDict()
     for v in _ordenados(vinculos):
-        codigo = v['codigo']
+        codigo = v['code']
         valor = None
         try:
-            for fonte in (respostas.get(codigo), v.get('valor_padrao_sub'), v.get('valor_padrao')):
+            for fonte in (respostas.get(codigo), v.get('default_value_override'), v.get('default_value')):
                 if not _vazio(fonte):
                     valor = validar_valor(v, fonte)
                     break
-            if valor is None and v.get('obrigatorio') == 'S':
+            if valor is None and v.get('required') == 'Y':
                 raise ParamErro(codigo, 'O campo "%s" é obrigatório.' % _rotulo(v))
         except ParamErro as e:
             erros[codigo] = e.mensagem
@@ -332,11 +332,11 @@ def resolver_respostas(vinculos, respostas):
 
 
 def _args_nomeado(v, valor):
-    codigo = v['codigo']
-    flag = v.get('param_nomeado')
+    codigo = v['code']
+    flag = v.get('param_flag')
     if not flag:
         raise ParamErro(codigo, 'O parâmetro "%s" não tem flag configurada para script NOMEADO.' % _rotulo(v))
-    if v.get('tipo_componente') == 'CHECKBOX':
+    if v.get('component_type') == 'CHECKBOX':
         return [flag] if valor is True else []
     if valor is None:
         return []
@@ -352,30 +352,30 @@ def _args_nomeado(v, valor):
 def _arg_sequencial(v, valor):
     if valor is None:
         return ''
-    if v.get('tipo_componente') == 'CHECKBOX':
+    if v.get('component_type') == 'CHECKBOX':
         return '1' if valor else '0'
-    if valor[:1] == '-' and v.get('tipo_componente') != 'NUMBER':
-        raise ParamErro(v['codigo'], 'O campo "%s" não pode começar com "-".' % _rotulo(v))
+    if valor[:1] == '-' and v.get('component_type') != 'NUMBER':
+        raise ParamErro(v['code'], 'O campo "%s" não pode começar com "-".' % _rotulo(v))
     return valor
 
 
 def _montar(tipo_param, vinculos, resolvidos, erros):
     """Monta args acumulando erros; erros estruturais vao em CHAVE_GERAL."""
     args = []
-    if tipo_param == 'NENHUM':
+    if tipo_param == 'NONE':
         if vinculos:
             erros[CHAVE_GERAL] = 'Scripts sem parâmetros (NENHUM) não podem ter parâmetros vinculados.'
         return args
-    if tipo_param not in ('NOMEADO', 'SEQUENCIAL'):
+    if tipo_param not in ('NAMED', 'POSITIONAL'):
         erros[CHAVE_GERAL] = 'Estratégia de parâmetros do script é desconhecida.'
         return args
     for v in _ordenados(vinculos):
-        codigo = v['codigo']
+        codigo = v['code']
         if codigo in erros:
             continue
         valor = resolvidos.get(codigo)
         try:
-            if tipo_param == 'NOMEADO':
+            if tipo_param == 'NAMED':
                 args.extend(_args_nomeado(v, valor))
             else:
                 args.append(_arg_sequencial(v, valor))
@@ -409,24 +409,24 @@ def compilar_snapshot(script, vinculos, respostas, agora):
     pelo agente com o proprio executavel. Erros sao acumulados.
     """
     resolvidos, erros = _resolver(vinculos, respostas)
-    args = _montar(script['tipo_param'], vinculos, resolvidos, erros)
+    args = _montar(script['param_type'], vinculos, resolvidos, erros)
     try:
-        path_guard.validar_interpretador(script['interpretador'])
+        path_guard.validar_interpretador(script['interpreter'])
     except path_guard.PathGuardErro:
         erros[CHAVE_GERAL] = 'O interpretador do script não é permitido.'
     if erros:
         return None, resolvidos, erros
 
     obj = {
-        'versao': VERSAO_SNAPSHOT,
+        'version': VERSAO_SNAPSHOT,
         'script_id': script['id'],
-        'script_nome': script['nome'],
-        'interpretador': script['interpretador'],
+        'script_nome': script['name'],
+        'interpreter': script['interpreter'],
         'path_file': script['path_file'],
-        'tipo_param': script['tipo_param'],
+        'param_type': script['param_type'],
         'args': args,
         'respostas': dict(resolvidos),
-        'sensiveis': sorted(v['codigo'] for v in vinculos if _sensivel(v)),
+        'sensiveis': sorted(v['code'] for v in vinculos if _sensivel(v)),
         'compilado_em': agora.strftime('%Y-%m-%d %H:%M:%S'),
     }
     return json.dumps(obj, ensure_ascii=False, sort_keys=True), resolvidos, erros
@@ -446,9 +446,9 @@ def validar_snapshot(json_str, cfg):
         raise SnapshotErro('JSON_INVALIDO')
     if not isinstance(snap, dict) or any(k not in snap for k in _CHAVES_SNAPSHOT):
         raise SnapshotErro('ESTRUTURA_INVALIDA')
-    if snap['versao'] != VERSAO_SNAPSHOT:
+    if snap['version'] != VERSAO_SNAPSHOT:
         raise SnapshotErro('VERSAO_NAO_SUPORTADA')
-    interpretador = snap['interpretador']
+    interpretador = snap['interpreter']
     if interpretador not in path_guard.ALLOWLIST:
         raise SnapshotErro('INTERPRETADOR_NAO_PERMITIDO')
     executavel = (cfg.interpretadores or {}).get(interpretador)
@@ -497,6 +497,6 @@ def argv_para_exibicao(snapshot):
     O caminho do script vai completo para todos (README §6.4, CR-005 D8).
     Conservador: qualquer argumento igual a um valor sensivel e mascarado.
     """
-    interpretador = snapshot['interpretador']
+    interpretador = snapshot['interpreter']
     return ([interpretador] + list(path_guard.ARGS_FIXOS.get(interpretador, ())) + [snapshot['path_file']]
             + _mascarar_args(list(snapshot['args']), _segredos(snapshot)))

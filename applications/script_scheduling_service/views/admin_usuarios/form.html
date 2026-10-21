@@ -5,32 +5,32 @@
 import ui_helpers
 _u = usuario
 _novo = not _u.get('id')
-_situacao = ui_helpers.ativo_info(_u.get('ativo'))
-_opc_perfil = [('', u'Selecione…')] + [(str(_pf['id']), _pf['nome'] + (' (inativo)' if _pf['ativo'] != 'S' else '')) for _pf in perfis]
+_situacao = ui_helpers.ativo_info(_u.get('active'))
+_opc_perfil = [('', u'Selecione…')] + [(str(_pf['id']), _pf['name'] + (' (inativo)' if _pf['active'] != 'Y' else '')) for _pf in perfis]
 _campos = [
-    {'nome': 'login', 'rotulo': 'Login', 'valor': _u.get('login'), 'erro': erros.get('login'), 'obrigatorio': _novo, 'maxlength': 30, 'somente_leitura': not _novo, 'autocomplete': 'off',
+    {'name': 'login', 'rotulo': 'Login', 'valor': _u.get('login'), 'erro': erros.get('login'), 'required': _novo, 'maxlength': 30, 'somente_leitura': not _novo, 'autocomplete': 'off',
      'ajuda': u'3 a 30 caracteres: letras minúsculas, dígitos, ponto, _ ou -. Não pode ser alterado depois de criado.'},
-    {'nome': 'nome', 'rotulo': 'Nome', 'valor': _u.get('nome'), 'erro': erros.get('nome'), 'obrigatorio': True, 'maxlength': 60},
-    {'nome': 'perfil_id', 'rotulo': 'Perfil', 'tipo': 'select', 'valor': str(_u.get('perfil_id') or ''), 'erro': erros.get('perfil_id'), 'obrigatorio': True, 'opcoes': _opc_perfil},
+    {'name': 'name', 'rotulo': 'Nome', 'valor': _u.get('name'), 'erro': erros.get('name'), 'required': True, 'maxlength': 60},
+    {'name': 'profile_id', 'rotulo': 'Perfil', 'tipo': 'select', 'valor': str(_u.get('profile_id') or ''), 'erro': erros.get('profile_id'), 'required': True, 'opcoes': _opc_perfil},
 ]
 if _novo:
-    _campos.append({'nome': 'senha', 'rotulo': 'Senha inicial', 'tipo': 'password', 'erro': erros.get('senha'), 'obrigatorio': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'ajuda': ajuda_senha})
-    _campos.append({'nome': 'confirmacao', 'rotulo': u'Confirmação da senha', 'tipo': 'password', 'erro': erros.get('confirmacao'), 'obrigatorio': True, 'autocomplete': 'new-password', 'maxlength': 1024})
+    _campos.append({'name': 'senha', 'rotulo': 'Senha inicial', 'tipo': 'password', 'erro': erros.get('senha'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'ajuda': ajuda_senha})
+    _campos.append({'name': 'confirmacao', 'rotulo': u'Confirmação da senha', 'tipo': 'password', 'erro': erros.get('confirmacao'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024})
 else:
-    _desativar = _u.get('ativo') == 'S'
+    _desativar = _u.get('active') == 'Y'
     _modal_ativo = {'id': 'modal-ativo', 'titulo': (u'Desativar usuário %s' if _desativar else u'Reativar usuário %s') % _u['login'],
                     'texto': aviso_desativacao if _desativar else u'O usuário voltará a ter acesso conforme o perfil.',
                     'rotulo_gatilho': 'Desativar' if _desativar else 'Reativar',
                     'rotulo_confirmar': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
                     'variante': 'perigo' if _desativar else 'normal', 'acao': URL(c='admin_usuarios', f='alternar_ativo'),
-                    'campos_ocultos': dict(id=_u['id'], versao=_u['versao'])}
+                    'campos_ocultos': dict(id=_u['id'], versao=_u['version'])}
     _modal_desbloq = {'id': 'modal-desbloq', 'titulo': u'Desbloquear usuário %s' % _u['login'],
                       'texto': u'As tentativas de login com falha e o bloqueio serão zerados.', 'rotulo_gatilho': 'Desbloquear',
                       'rotulo_confirmar': 'Confirmar desbloqueio', 'variante': 'normal', 'acao': URL(c='admin_usuarios', f='desbloquear'),
                       'campos_ocultos': dict(id=_u['id'])}
     _campos_senha = [
-        {'nome': 'senha', 'rotulo': 'Nova senha', 'tipo': 'password', 'erro': erros_senha.get('senha'), 'obrigatorio': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'ajuda': ajuda_senha},
-        {'nome': 'confirmacao', 'rotulo': u'Confirmação da nova senha', 'tipo': 'password', 'erro': erros_senha.get('confirmacao'), 'obrigatorio': True, 'autocomplete': 'new-password', 'maxlength': 1024},
+        {'name': 'senha', 'rotulo': 'Nova senha', 'tipo': 'password', 'erro': erros_senha.get('senha'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'ajuda': ajuda_senha},
+        {'name': 'confirmacao', 'rotulo': u'Confirmação da nova senha', 'tipo': 'password', 'erro': erros_senha.get('confirmacao'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024},
     ]
 pass
 }}
@@ -43,7 +43,7 @@ pass
   </div>
   <div class="sss-acoes">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_usuarios', f='lista')}}">Voltar à lista</a>
-    {{if not _novo and not (_u.get('proprio') and _u.get('ativo') == 'S'):}}
+    {{if not _novo and not (_u.get('proprio') and _u.get('active') == 'Y'):}}
     {{modal = _modal_ativo}}
     {{include 'components/modal_confirmacao.html'}}
     {{pass}}
@@ -56,7 +56,7 @@ pass
     {{=csrf_campo()}}
     {{if not _novo:}}
     <input type="hidden" name="id" value="{{=_u['id']}}">
-    <input type="hidden" name="versao" value="{{=_u['versao']}}">
+    <input type="hidden" name="version" value="{{=_u['version']}}">
     {{pass}}
     {{if erro_geral:}}
     <div class="alert alert-danger sss-alerta" role="alert">
@@ -85,15 +85,15 @@ pass
   <div class="sss-card-corpo">
     <dl class="sss-resumo">
       <dt>Situação do login</dt>
-      <dd>{{if _u.get('bloqueado'):}}Bloqueado até {{=ui_helpers.formatar_data(_u.get('bloqueado_ate'))}}{{else:}}Liberado{{pass}}</dd>
+      <dd>{{if _u.get('bloqueado'):}}Bloqueado até {{=ui_helpers.formatar_data(_u.get('locked_until'))}}{{else:}}Liberado{{pass}}</dd>
       <dt>Tentativas com falha</dt>
-      <dd>{{=_u.get('tentativas_falha') or 0}}</dd>
+      <dd>{{=_u.get('failed_attempts') or 0}}</dd>
       <dt>Último login</dt>
-      <dd>{{=ui_helpers.formatar_data(_u.get('ultimo_login'))}}</dd>
+      <dd>{{=ui_helpers.formatar_data(_u.get('last_login_at'))}}</dd>
       <dt>Senha alterada em</dt>
-      <dd>{{=ui_helpers.formatar_data(_u.get('senha_alterada_em'))}}</dd>
+      <dd>{{=ui_helpers.formatar_data(_u.get('password_changed_at'))}}</dd>
     </dl>
-    {{if _u.get('bloqueado') or (_u.get('tentativas_falha') or 0) > 0:}}
+    {{if _u.get('bloqueado') or (_u.get('failed_attempts') or 0) > 0:}}
     <div class="mt-3">
       {{modal = _modal_desbloq}}
       {{include 'components/modal_confirmacao.html'}}

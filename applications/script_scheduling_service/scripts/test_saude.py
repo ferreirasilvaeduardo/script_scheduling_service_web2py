@@ -38,23 +38,23 @@ def _cfg():
 CRITICOS = sss_config.config_criticos(_cfg())
 
 
-def _agente(codigo, idade_s=5, status="ATIVO", ambientes="PRODUCAO", interpretadores="SH,PYTHON3", cfg=CRITICOS):
+def _agente(codigo, idade_s=5, status="ACTIVE", ambientes="PRODUCAO", interpretadores="SH,PYTHON3", cfg=CRITICOS):
     hb = None if idade_s is None else AGORA - datetime.timedelta(seconds=idade_s)
-    return {"codigo": codigo, "status": status, "heartbeat_at": hb, "ambientes": ambientes,
-            "interpretadores": interpretadores, "config_criticos": cfg}
+    return {"code": codigo, "status": status, "heartbeat_at": hb, "environments": ambientes,
+            "interpreters": interpretadores, "critical_config": cfg}
 
 
 class _Repo(object):
     """RepoSaude simulado: tudo saudavel por padrao."""
 
     def __init__(self, **kw):
-        self.d = dict(versao=sql_ident.VERSAO_ESQUEMA, agentes=[_agente("srv-a")], ambientes=["PRODUCAO"],
+        self.d = dict(version=sql_ident.VERSAO_ESQUEMA, agentes=[_agente("srv-a")], ambientes=["PRODUCAO"],
                       fila=[], vencida=(0, None), sem_pid=[], purge=AGORA - datetime.timedelta(hours=20))
         self.d.update(kw)
         self.chamadas = []
 
     def versao_esquema(self, conn):
-        return self.d["versao"]
+        return self.d["version"]
 
     def agentes(self, conn):
         return self.d["agentes"]
@@ -135,7 +135,7 @@ class TestVerificacoes(unittest.TestCase):
         self.assertIn("CRITICAL: agente srv-a ATIVO sem heartbeat ha 181 s", texto)
         codigo, texto, _r = self._rodar(agentes=[_agente("srv-a", None), _agente("srv-b")])
         self.assertIn("agente srv-a ATIVO sem heartbeat ha -", texto)
-        self.assertEqual(self._rodar(agentes=[_agente("srv-a", None, status="PARADO"), _agente("srv-b")])[0],
+        self.assertEqual(self._rodar(agentes=[_agente("srv-a", None, status="STOPPED"), _agente("srv-b")])[0],
                          saude_cli.OK, "agente PARADO nao e problema")
 
     def test_ambiente_sem_agente_saudavel(self):
@@ -165,7 +165,7 @@ class TestVerificacoes(unittest.TestCase):
         self.assertEqual(self._rodar(["--fila-warn", "10"], vencida=(10, um_min))[0], saude_cli.WARNING)
 
     def test_rodando_sem_pid(self):
-        sem_pid = [{"id": 77, "script_id": 3, "ambiente": "PRODUCAO", "agente_id": "srv-a",
+        sem_pid = [{"id": 77, "script_id": 3, "environment": "PRODUCAO", "agent_id": "srv-a",
                     "started_at": datetime.datetime(2026, 10, 21, 9, 55)}]
         codigo, texto, repo = self._rodar(["--sem-pid-min", "5"], sem_pid=sem_pid)
         self.assertEqual(codigo, saude_cli.WARNING)
@@ -175,7 +175,7 @@ class TestVerificacoes(unittest.TestCase):
     def test_configuracao_divergente(self):
         outro = CRITICOS.replace("kill=5", "kill=10")
         codigo, texto, _r = self._rodar(agentes=[_agente("srv-a"), _agente("srv-b", cfg=outro),
-                                                 _agente("srv-c", status="PARADO", cfg=outro)])
+                                                 _agente("srv-c", status="STOPPED", cfg=outro)])
         self.assertEqual(codigo, saude_cli.WARNING)
         self.assertIn("agente srv-b com configuracao divergente", texto)
         self.assertNotIn("srv-c", texto, "so agentes ativos")
@@ -187,12 +187,12 @@ class TestVerificacoes(unittest.TestCase):
         self.assertIn(("purge", 3), repo.chamadas)
 
     def test_versao_do_esquema(self):
-        codigo, texto, _r = self._rodar(versao=sql_ident.VERSAO_ESQUEMA - 1)
+        codigo, texto, _r = self._rodar(version=sql_ident.VERSAO_ESQUEMA - 1)
         self.assertEqual(codigo, saude_cli.CRITICAL)
         self.assertIn("versao do esquema %d" % (sql_ident.VERSAO_ESQUEMA - 1), texto)
 
     def test_pior_nivel_vence_e_criticos_primeiro(self):
-        codigo, texto, _r = self._rodar(purge=None, versao=None)
+        codigo, texto, _r = self._rodar(purge=None, version=None)
         self.assertEqual(codigo, saude_cli.CRITICAL)
         linhas = texto.splitlines()
         self.assertTrue(linhas[0].startswith("SSS CRITICAL - 2 problemas | "))
@@ -272,12 +272,12 @@ class TestSqlRepoSaude(unittest.TestCase):
         self.assertIn("status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :agora", fila)
         self.assertIn("status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :agora",
                       self.repo.sql("fila_vencida"))
-        self.assertIn("(CASE WHEN status = 'RUNNING' THEN agente_id END) >= CHR(1)", self.repo.sql("sem_pid"))
-        self.assertIn("ator = 'SYSTEM:purge' AND acao = 'PURGE'", self.repo.sql("purge"))
-        for nome in ("agentes", "ambientes", "fila", "fila_vencida", "sem_pid", "purge", "versao"):
+        self.assertIn("(CASE WHEN status = 'RUNNING' THEN agent_id END) >= CHR(1)", self.repo.sql("sem_pid"))
+        self.assertIn("actor = 'SYSTEM:purge' AND action = 'PURGE'", self.repo.sql("purge"))
+        for nome in ("agentes", "ambientes", "fila", "fila_vencida", "sem_pid", "purge", "version"):
             sql = self.repo.sql(nome)
             self.assertTrue(sql.startswith("SELECT "), nome)
-            self.assertNotIn("parametros_enviados", sql)
+            self.assertNotIn("submitted_params", sql)
             self.assertNotIn("log_output", sql)
             self.assertNotIn("*", sql.replace("COUNT(*)", ""), nome)
 
@@ -289,7 +289,7 @@ class TestSqlRepoSaude(unittest.TestCase):
     def test_pares_atendidos_ignoram_em_risco_e_parados(self):
         lim = saude_cli.agentes_service.Limiares(10, 90, 180)
         agentes = [_agente("a", 5, interpretadores="SH"), _agente("b", 91, interpretadores="BASH"),
-                   _agente("c", 5, status="PARADO", interpretadores="PYTHON3")]
+                   _agente("c", 5, status="STOPPED", interpretadores="PYTHON3")]
         self.assertEqual(saude_sql.pares_atendidos(agentes, AGORA, lim), {("PRODUCAO", "SH")})
 
 
@@ -343,7 +343,7 @@ class TestSaudeOracle(unittest.TestCase):
             cur.execute("DELETE FROM plan_table WHERE statement_id = :s", {"s": stmt})
             self.conn.commit()
             varreduras = [o for op, opt, o in plano if op == "TABLE ACCESS" and opt == "FULL"
-                          and (o or "").upper() in ("TBSSS_TICKETS", "TBSSS_AUDITORIA")]
+                          and (o or "").upper() in ("TBSSS_TICKETS", "TBSSS_AUDIT")]
             self.assertEqual(varreduras, [], "%s: %s" % (nome, plano))
             print("\n[F9.1b] EXPLAIN %s: %s" % (nome, ", ".join("%s %s %s" % (op, opt or "", o or "")
                                                                for op, opt, o in plano)))

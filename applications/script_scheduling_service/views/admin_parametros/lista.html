@@ -3,35 +3,35 @@
 # Lista do dicionário de parâmetros (padrão de CRUD administrativo).
 _rotulo_tipo = dict(tipos)
 _opc_tipo = [('', 'Todos')] + list(tipos)
-_opc_ativo = [('', 'Todos'), ('S', 'Ativos'), ('N', 'Inativos')]
+_opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
 filtros = {'id': 'filtro-parametros', 'url_base': ('admin_parametros', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': [
-    {'nome': 'codigo', 'rotulo': u'Código', 'tipo': 'texto', 'valor': filtros_ativos.get('codigo')},
-    {'nome': 'label', 'rotulo': u'Rótulo', 'tipo': 'texto', 'valor': filtros_ativos.get('label')},
-    {'nome': 'tipo_componente', 'rotulo': 'Tipo', 'tipo': 'select', 'valor': filtros_ativos.get('tipo_componente'), 'opcoes': _opc_tipo},
-    {'nome': 'ativo', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('ativo'), 'opcoes': _opc_ativo},
+    {'name': 'code', 'rotulo': u'Código', 'tipo': 'texto', 'valor': filtros_ativos.get('code')},
+    {'name': 'label', 'rotulo': u'Rótulo', 'tipo': 'texto', 'valor': filtros_ativos.get('label')},
+    {'name': 'component_type', 'rotulo': 'Tipo', 'tipo': 'select', 'valor': filtros_ativos.get('component_type'), 'opcoes': _opc_tipo},
+    {'name': 'active', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('active'), 'opcoes': _opc_ativo},
 ]}
 _linhas = []
 for _p in resultado['itens']:
     _qtd = _p.get('qtd_scripts') or 0
     _linhas.append({
-        'codigo': _p['codigo'],
-        'label': _p['label'] + (u' (sigiloso)' if _p.get('sensivel') == 'S' else ''),
-        'tipo': _rotulo_tipo.get(_p['tipo_componente'], _p['tipo_componente']),
-        'flag': _p.get('param_nomeado') or '-',
-        'padrao': _p.get('valor_padrao') or '-',
+        'code': _p['code'],
+        'label': _p['label'] + (u' (sigiloso)' if _p.get('sensitive') == 'Y' else ''),
+        'tipo': _rotulo_tipo.get(_p['component_type'], _p['component_type']),
+        'flag': _p.get('param_flag') or '-',
+        'padrao': _p.get('default_value') or '-',
         'uso': (u'Usado por %d script%s' % (_qtd, '' if _qtd == 1 else 's')) if _qtd else u'Não usado',
-        'ativo': _p['ativo'],
-        'acao': {'href': URL(c='admin_parametros', f='form', args=[_p['id']]), 'rotulo': 'Editar', 'descricao': u'Editar parâmetro %s' % _p['codigo']},
+        'active': _p['active'],
+        'acao': {'href': URL(c='admin_parametros', f='form', args=[_p['id']]), 'rotulo': 'Editar', 'description': u'Editar parâmetro %s' % _p['code']},
     })
 pass
 tabela = {'legenda': u'Parâmetros cadastrados', 'erro': erro, 'linhas': _linhas, 'msg_vazio': u'Nenhum parâmetro encontrado.', 'colunas': [
-    {'chave': 'codigo', 'rotulo': u'Código', 'tipo': 'mono'},
+    {'chave': 'code', 'rotulo': u'Código', 'tipo': 'mono'},
     {'chave': 'label', 'rotulo': u'Rótulo'},
     {'chave': 'tipo', 'rotulo': 'Tipo'},
     {'chave': 'flag', 'rotulo': 'Flag', 'tipo': 'mono'},
     {'chave': 'padrao', 'rotulo': u'Valor padrão', 'tipo': 'mono'},
     {'chave': 'uso', 'rotulo': 'Uso'},
-    {'chave': 'ativo', 'rotulo': u'Situação', 'tipo': 'ativo'},
+    {'chave': 'active', 'rotulo': u'Situação', 'tipo': 'active'},
     {'chave': 'acao', 'rotulo': u'Ações', 'tipo': 'acao'},
 ]}
 pagina = resultado['pagina']

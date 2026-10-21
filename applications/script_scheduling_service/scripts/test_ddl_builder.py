@@ -86,9 +86,9 @@ class TestDdlBuilder(unittest.TestCase):
         bu_triggers = {t.nome: t for t in triggers if t.nome.endswith("_bu")}
         self.assertEqual(len(bu_triggers), 2)
 
-        tr_amb_bu = bu_triggers["tr_tbsss_amb_bu"]
-        self.assertIn(":NEW.nome <> :OLD.nome", tr_amb_bu.sql)
-        self.assertIn("RAISE_APPLICATION_ERROR(-20001, 'nome é imutável')", tr_amb_bu.sql)
+        tr_amb_bu = bu_triggers["tr_tbsss_env_bu"]
+        self.assertIn(":NEW.name <> :OLD.name", tr_amb_bu.sql)
+        self.assertIn("RAISE_APPLICATION_ERROR(-20001, 'name é imutável')", tr_amb_bu.sql)
 
         tr_usr_bu = bu_triggers["tr_tbsss_usr_bu"]
         self.assertIn(":NEW.login <> :OLD.login", tr_usr_bu.sql)
@@ -119,7 +119,7 @@ class TestDdlBuilder(unittest.TestCase):
         tabelas = {item.nome: item.sql for item in self.instrucoes if item.tipo == "TABLE"}
         self.assertIn("path_file VARCHAR2(500 CHAR) NOT NULL", tabelas["tbsss_scripts"])
         self.assertNotIn("pasta_base", tabelas["tbsss_scripts"])
-        self.assertNotIn("pastas_base", tabelas["tbsss_agentes"])
+        self.assertNotIn("pastas_base", tabelas["tbsss_agents"])
 
         constraints = {item.nome: item.sql for item in self.instrucoes if item.tipo == "CONSTRAINT"}
         ck_path = constraints["ck_tbsss_scr_path"]
@@ -129,7 +129,7 @@ class TestDdlBuilder(unittest.TestCase):
         self.assertIn("INSTR(path_file, '\\') = 0", ck_path)
 
         ck_plat = constraints["ck_tbsss_agt_plat"]
-        self.assertIn("plataforma IS NULL OR plataforma IN ('LINUX','UNIX')", ck_plat)
+        self.assertIn("platform IS NULL OR platform IN ('LINUX','UNIX')", ck_plat)
 
     def test_cr006_colunas_registro_e_ck_upd(self):
         """Valida que as 15 tabelas (menos auditoria e controle) tem colunas de registro e ck_upd."""
@@ -164,42 +164,42 @@ class TestDdlBuilder(unittest.TestCase):
         indices = {item.nome: item.sql for item in self.instrucoes if item.tipo == "INDEX"}
         tabelas = {item.nome: item.sql for item in self.instrucoes if item.tipo == "TABLE"}
 
-        # tbsss_controle
+        # tbsss_control
         self.assertIn("ck_tbsss_ctl_id", constraints)
         self.assertIn("id = 1", constraints["ck_tbsss_ctl_id"])
-        self.assertIn("versao_esquema >= 1", constraints["ck_tbsss_ctl_versao"])
+        self.assertIn("schema_version >= 1", constraints["ck_tbsss_ctl_version"])
 
-        # FBI unico ix_tbsss_tck_ocor
-        self.assertIn("ix_tbsss_tck_ocor", indices)
-        self.assertTrue(indices["ix_tbsss_tck_ocor"].startswith("CREATE UNIQUE INDEX"))
-        self.assertIn("agendamento_id IS NOT NULL", indices["ix_tbsss_tck_ocor"])
+        # FBI unico ix_tbsss_tck_occur
+        self.assertIn("ix_tbsss_tck_occur", indices)
+        self.assertTrue(indices["ix_tbsss_tck_occur"].startswith("CREATE UNIQUE INDEX"))
+        self.assertIn("schedule_id IS NOT NULL", indices["ix_tbsss_tck_occur"])
 
         # CR-011: sem CKs de hash
         self.assertNotIn("ck_tbsss_scr_sha", constraints)
         self.assertNotIn("ck_tbsss_tck_sha", constraints)
 
         # LOB Securefile (padrao)
-        self.assertIn("LOB (parametros_json) STORE AS SECUREFILE (CACHE)", tabelas["tbsss_agendamentos"])
-        self.assertIn("LOB (parametros_enviados, log_output) STORE AS SECUREFILE (CACHE)", tabelas["tbsss_tickets"])
+        self.assertIn("LOB (params_json) STORE AS SECUREFILE (CACHE)", tabelas["tbsss_schedules"])
+        self.assertIn("LOB (submitted_params, log_output) STORE AS SECUREFILE (CACHE)", tabelas["tbsss_tickets"])
 
         # Fallback Basicfile
         ddl_basic = ddl_builder.gerar_instrucoes_ddl(self.owner, self.prefixo, lob_storage="BASICFILE")
         tabelas_basic = {item.nome: item.sql for item in ddl_basic if item.tipo == "TABLE"}
-        self.assertIn("LOB (parametros_json) STORE AS BASICFILE", tabelas_basic["tbsss_agendamentos"])
-        self.assertIn("LOB (parametros_enviados, log_output) STORE AS BASICFILE", tabelas_basic["tbsss_tickets"])
+        self.assertIn("LOB (params_json) STORE AS BASICFILE", tabelas_basic["tbsss_schedules"])
+        self.assertIn("LOB (submitted_params, log_output) STORE AS BASICFILE", tabelas_basic["tbsss_tickets"])
 
     def test_cr008_sessao_epoch_pid_daemon_log_offset(self):
         """Valida campos adicionados e ajustados pelo CR-008."""
         tabelas = {item.nome: item.sql for item in self.instrucoes if item.tipo == "TABLE"}
         constraints = {item.nome: item.sql for item in self.instrucoes if item.tipo == "CONSTRAINT"}
 
-        # tbsss_usuarios.sessao_epoch e ck
-        self.assertIn("sessao_epoch NUMBER(10) DEFAULT 0 NOT NULL", tabelas["tbsss_usuarios"])
+        # tbsss_users.sessao_epoch e ck
+        self.assertIn("session_epoch NUMBER(10) DEFAULT 0 NOT NULL", tabelas["tbsss_users"])
         self.assertIn("ck_tbsss_usr_epoch", constraints)
-        self.assertIn("sessao_epoch >= 0", constraints["ck_tbsss_usr_epoch"])
+        self.assertIn("session_epoch >= 0", constraints["ck_tbsss_usr_epoch"])
 
-        # tbsss_agentes.pid_daemon
-        self.assertIn("pid_daemon NUMBER(10)", tabelas["tbsss_agentes"])
+        # tbsss_agents.pid_daemon
+        self.assertIn("daemon_pid NUMBER(10)", tabelas["tbsss_agents"])
 
         # tbsss_tickets.log_offset_chars e ck
         self.assertIn("log_offset_chars NUMBER(20) DEFAULT 0 NOT NULL", tabelas["tbsss_tickets"])
@@ -221,9 +221,9 @@ class TestGrantsPorPapel(unittest.TestCase):
         self.grants_texto = "\n".join(self.grants)
 
     def test_auditoria_protegida_contra_update_e_delete(self):
-        """Web e agente nunca tem UPDATE ou DELETE em tbsss_auditoria (CR-007, D1b)."""
+        """Web e agente nunca tem UPDATE ou DELETE em tbsss_audit (CR-007, D1b)."""
         for g in self.grants:
-            if "ON openrisow.tbsss_auditoria TO" in g:
+            if "ON openrisow.tbsss_audit TO" in g:
                 if "sss_web" in g or "sss_agente" in g:
                     self.assertNotIn("UPDATE", g)
                     self.assertNotIn("DELETE", g)
@@ -243,8 +243,8 @@ class TestGrantsPorPapel(unittest.TestCase):
             self.assertNotIn("sq_", g, "Monitor nao deve ter GRANT em sequences")
 
         tabelas_monitor = [
-            "tbsss_agentes", "tbsss_tickets", "tbsss_agendamentos", "tbsss_scripts",
-            "tbsss_ambientes", "tbsss_controle", "tbsss_auditoria"
+            "tbsss_agents", "tbsss_tickets", "tbsss_schedules", "tbsss_scripts",
+            "tbsss_environments", "tbsss_control", "tbsss_audit"
         ]
         for t in tabelas_monitor:
             self.assertTrue(any(t in g for g in grants_monitor), "Faltou GRANT para %s" % t)
@@ -252,18 +252,18 @@ class TestGrantsPorPapel(unittest.TestCase):
     def test_grants_da_saida_do_ticket(self):
         """CR-012: web so le o zip; agente le, inclui e altera (com a sequence); purge e monitor nada."""
         grants = ddl_builder.gerar_grants_por_papel("openrisow", "tbsss_", dict(self.papeis))
-        da_saida = [g for g in grants if "ticket_saida" in g]
+        da_saida = [g for g in grants if "ticket_output" in g]
         self.assertEqual(sorted(da_saida), sorted([
-            "GRANT SELECT ON openrisow.tbsss_ticket_saida TO %s;" % self.papeis["web"],
-            "GRANT SELECT, INSERT, UPDATE ON openrisow.tbsss_ticket_saida TO %s;" % self.papeis["agente"],
-            "GRANT SELECT ON openrisow.sq_tbsss_ticket_saida TO %s;" % self.papeis["agente"],
+            "GRANT SELECT ON openrisow.tbsss_ticket_output TO %s;" % self.papeis["web"],
+            "GRANT SELECT, INSERT, UPDATE ON openrisow.tbsss_ticket_output TO %s;" % self.papeis["agente"],
+            "GRANT SELECT ON openrisow.sq_tbsss_ticket_output TO %s;" % self.papeis["agente"],
         ]))
 
     def test_nunca_concede_a_public(self):
-        """O script de implantacao nao concede nada a PUBLIC (tbsss_usuarios guarda senha_hash)."""
+        """O script de implantacao nao concede nada a PUBLIC (tbsss_users guarda senha_hash)."""
         script = ddl_builder.gerar_script_implantacao_completo("openrisow", "tbsss_", papeis_usuarios=self.papeis)
         self.assertNotIn("PUBLIC", script.upper().replace("NENHUM GRANT A PUBLIC", ""))
-        self.assertIn("GRANT SELECT ON openrisow.tbsss_agentes TO sss_monitor;", script)
+        self.assertIn("GRANT SELECT ON openrisow.tbsss_agents TO sss_monitor;", script)
         self.assertFalse(hasattr(ddl_builder, "gerar_grants_public"))
 
     def test_conta_igual_ao_owner_nao_recebe_grant(self):
@@ -292,7 +292,7 @@ class TestGrantsPorPapel(unittest.TestCase):
     def test_papel_purge_concessao_controle(self):
         """Papel purge recebe SELECT e UPDATE em controle somente nas colunas de concessao."""
         grants_purge = [g for g in self.grants if "TO sss_purge" in g]
-        self.assertTrue(any("UPDATE (purge_dono, purge_concessao_ate) ON openrisow.tbsss_controle" in g for g in grants_purge))
+        self.assertTrue(any("UPDATE (purge_owner, purge_lease_until) ON openrisow.tbsss_control" in g for g in grants_purge))
 
 
 class TestNormalizacaoExpressaoOracle11g(unittest.TestCase):
@@ -300,12 +300,12 @@ class TestNormalizacaoExpressaoOracle11g(unittest.TestCase):
 
     def test_fbi_texto_real_11g(self):
         """FBI com CASE e aspas duplas no 11gR2 bate normalizado contra o registro."""
-        texto_oracle = 'CASE WHEN "STATUS"=\'PENDING\' THEN "PRIORIDADE" END'
+        texto_oracle = 'CASE WHEN "STATUS"=\'PENDING\' THEN "PRIORITY" END'
         normalizado = sql_ident.normalizar_expressao(texto_oracle)
-        self.assertEqual(normalizado, "CASE WHEN STATUS='PENDING' THEN PRIORIDADE END")
+        self.assertEqual(normalizado, "CASE WHEN STATUS='PENDING' THEN PRIORITY END")
 
         # Texto do registro
-        texto_reg = "CASE WHEN status = 'PENDING' THEN prioridade END"
+        texto_reg = "CASE WHEN status = 'PENDING' THEN priority END"
         norm_reg = sql_ident.normalizar_expressao(texto_reg)
         self.assertEqual(normalizado, norm_reg)
 
@@ -320,7 +320,7 @@ class TestNormalizacaoExpressaoOracle11g(unittest.TestCase):
         self.assertTrue(sql_ident.eh_ck_not_null_sistema("SYS_C0012345", '"STATUS" IS NOT NULL'))
         self.assertTrue(sql_ident.eh_ck_not_null_sistema("SYS_C99999", "NOME IS NOT NULL"))
         self.assertFalse(sql_ident.eh_ck_not_null_sistema("ck_tbsss_tck_stat", "status IN ('PENDING')"))
-        self.assertFalse(sql_ident.eh_ck_not_null_sistema("SYS_C0012345", "status IN ('S','N')"))
+        self.assertFalse(sql_ident.eh_ck_not_null_sistema("SYS_C0012345", "status IN ('Y','N')"))
 
 
 class TestInitDbCli(unittest.TestCase):
@@ -359,6 +359,17 @@ class TestInitDbCli(unittest.TestCase):
 
             self.assertEqual(code, 2)
             self.assertTrue(any("CRITICAL" in msg for msg in cm.output))
+
+    def test_cr016a_esquema_1_detectado_pela_tabela_de_controle_antiga(self):
+        """CR-016a: tbsss_controle (esquema anterior, em portugues) no owner impede criar o novo ao lado dele."""
+        for contagem, esperado in ((1, True), (0, False)):
+            conn = mock.MagicMock()
+            cur = conn.cursor.return_value
+            cur.fetchone.return_value = (contagem,)
+            self.assertIs(init_db._existe_esquema_1(conn, "openrisow", "tbsss_"), esperado)
+            _sql, binds = cur.execute.call_args[0][0], cur.execute.call_args[1]
+            self.assertEqual(binds, {"o": "OPENRISOW", "t": "TBSSS_CONTROLE"})
+            cur.close.assert_called_once_with()
 
 
 class TestInitDbConferenciaMock(unittest.TestCase):
@@ -419,11 +430,11 @@ class TestDdlSeedERollback(unittest.TestCase):
         """Script de seed contem MERGEs idempotentes, 5 ambientes, estatisticas e COMMIT."""
         sql_seed = ddl_builder.gerar_script_seed(self.owner, self.prefixo)
 
-        self.assertIn("MERGE INTO openrisow.tbsss_funcionalidades", sql_seed)
-        self.assertIn("MERGE INTO openrisow.tbsss_perfis", sql_seed)
-        self.assertIn("MERGE INTO openrisow.tbsss_perfil_func", sql_seed)
-        self.assertIn("MERGE INTO openrisow.tbsss_ambientes", sql_seed)
-        self.assertIn("MERGE INTO openrisow.tbsss_controle", sql_seed)
+        self.assertIn("MERGE INTO openrisow.tbsss_features", sql_seed)
+        self.assertIn("MERGE INTO openrisow.tbsss_profiles", sql_seed)
+        self.assertIn("MERGE INTO openrisow.tbsss_profile_feature", sql_seed)
+        self.assertIn("MERGE INTO openrisow.tbsss_environments", sql_seed)
+        self.assertIn("MERGE INTO openrisow.tbsss_control", sql_seed)
 
         # 5 ambientes padrao
         for amb in ("CLONE2", "CLONE1", "CLONE6", "CLONE7", "GFPREPROD"):
@@ -448,7 +459,7 @@ class TestDdlSeedERollback(unittest.TestCase):
 
         # Ordem de remocao: ticket_resp e tickets antes de ambientes e perfis
         pos_tck = sql_rb.index("DROP TABLE openrisow.tbsss_tickets")
-        pos_amb = sql_rb.index("DROP TABLE openrisow.tbsss_ambientes")
+        pos_amb = sql_rb.index("DROP TABLE openrisow.tbsss_environments")
         self.assertLess(pos_tck, pos_amb)
 
     def test_hash_do_seed_confere_com_a_senha_documentada(self):
@@ -464,11 +475,11 @@ class TestDdlSeedERollback(unittest.TestCase):
         self.assertNotIn("tbsss", sql.lower())
         self.assertNotIn("openrisow", sql.lower())
         self.assertNotIn("user_tables", sql.lower())
-        self.assertIn("SSS_APP.abc_usuarios", sql)
+        self.assertIn("SSS_APP.abc_users", sql)
         self.assertIn("owner = 'SSS_APP'", sql)
         # senha_hash so aparece dentro do CASE que diz se a senha esta definida (AGENTS §3.3).
-        usos = [l for l in sql.splitlines() if "senha_hash" in l]
-        self.assertEqual(usos, ["       CASE WHEN u.senha_hash IS NULL THEN 'N' ELSE 'S' END AS senha_definida"])
+        usos = [l for l in sql.splitlines() if "password_hash" in l]
+        self.assertEqual(usos, ["       CASE WHEN u.password_hash IS NULL THEN 'N' ELSE 'Y' END AS senha_definida"])
         self.assertLessEqual(max(len(l) for l in sql.splitlines()), 2499)
         self.assertIn("GRANTS A PUBLIC", sql)
         self.assertNotIn("SELECT *", sql)
@@ -484,7 +495,7 @@ class TestDdlSeedERollback(unittest.TestCase):
         contagem = ddl_builder._linhas_seed_por_tabela(self.owner, self.prefixo)
         self.assertEqual(sum(contagem.values()), sum(1 for c in seed if c.lstrip().upper().startswith("MERGE INTO")))
         self.assertEqual(contagem["usuarios"], 4)
-        self.assertIn("'LINHAS TBSSS_SCRIPT_AMB' AS verificacao, '>=' AS regra, {} AS esperado".format(
+        self.assertIn("'LINHAS TBSSS_SCRIPT_ENV' AS verificacao, '>=' AS regra, {} AS esperado".format(
             contagem["script_amb"]), sql)
         # Resumo final com OK/FALHA em cada secao de verificacao.
         self.assertEqual(sql.count("'OK: nenhuma falha'"), 2)
@@ -500,9 +511,9 @@ class TestDdlSeedERollback(unittest.TestCase):
                 "--out-dir", tmp_dir,
             ])
             self.assertEqual(ret, 0)
-            self.assertTrue(os.path.isfile(os.path.join(tmp_dir, "01_implantar_sss.sql")))
+            self.assertTrue(os.path.isfile(os.path.join(tmp_dir, "01_deploy_sss.sql")))
             self.assertTrue(os.path.isfile(os.path.join(tmp_dir, "02_rollback_sss.sql")))
-            self.assertTrue(os.path.isfile(os.path.join(tmp_dir, "99_validar_implantacao.sql")))
+            self.assertTrue(os.path.isfile(os.path.join(tmp_dir, "99_validate_deploy.sql")))
 
         with tempfile.TemporaryDirectory() as tmp_dir2:
             ret = init_db.main([
@@ -510,7 +521,7 @@ class TestDdlSeedERollback(unittest.TestCase):
                 "--gerar-sql", tmp_dir2,
             ])
             self.assertEqual(ret, 0)
-            self.assertTrue(os.path.isfile(os.path.join(tmp_dir2, "01_implantar_sss.sql")))
+            self.assertTrue(os.path.isfile(os.path.join(tmp_dir2, "01_deploy_sss.sql")))
             self.assertTrue(os.path.isfile(os.path.join(tmp_dir2, "02_rollback_sss.sql")))
 
 

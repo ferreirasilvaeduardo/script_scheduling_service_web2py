@@ -48,8 +48,8 @@ def _passthrough(nomes, environ_daemon):
 
 def _conexao(segredos, ambiente, ticket_id):
     """(usuario, connect string) do ambiente, ou (usuario ou None, None) sem DSN ou sem credencial."""
-    nome = ambiente["nome"]
-    dsn = (ambiente.get("conexao") or "").strip()
+    nome = ambiente["name"]
+    dsn = (ambiente.get("connection") or "").strip()
     cred = (getattr(segredos, "ambientes", None) or {}).get(nome)
     usuario = cred.user if cred is not None else None
     if not dsn or cred is None:
@@ -85,7 +85,7 @@ def construir(cfg, segredos, ticket, ambiente, script_real, work_dir_ticket, env
 
     ticket: dict com id, ambiente e, quando houver, parent_ticket_id, agendamento_id, prioridade, started_at
     (relogio do banco, devolvido pelo claim) e scheduled_at; ambiente: dict com nome, descricao e conexao
-    (tbsss_ambientes); script_real: o caminho resolvido pelo path_guard; environ_daemon: o ambiente do daemon
+    (tbsss_environments); script_real: o caminho resolvido pelo path_guard; environ_daemon: o ambiente do daemon
     (so para TZ e env_passthrough); snapshot: o snapshot v4 (script_id, script_nome, interpretador);
     agendamento: dict com nome e tipo_recorrencia da regra que gerou o ticket; caminho_log: o
     .log.parcial aberto por executor.abrir_log; timeout_seg: o prazo efetivo; hostname e versao: do agente;
@@ -98,7 +98,7 @@ def construir(cfg, segredos, ticket, ambiente, script_real, work_dir_ticket, env
         raise ValueError("script_real deve ser absoluto")
     ticket_id = int(ticket["id"])
     agente = cfg.agent
-    usuario = usuario_execucao(cfg, ambiente["nome"])
+    usuario = usuario_execucao(cfg, ambiente["name"])
     home = dir_trabalho_script(ticket_id, usuario, agente.exec_work_dir, work_dir_ticket)
     snap = snapshot or {}
 
@@ -113,7 +113,7 @@ def construir(cfg, segredos, ticket, ambiente, script_real, work_dir_ticket, env
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONIOENCODING": "utf-8",
         "SSS_TICKET_ID": str(ticket_id),
-        "SSS_ENVIRONMENT": ambiente["nome"],
+        "SSS_ENVIRONMENT": ambiente["name"],
         "SSS_AGENT_ID": agente.agent_id,
         "SSS_SCRIPT_DIR": os.path.dirname(script_real),
         "SSS_SCRIPT_FILE": script_real,
@@ -123,24 +123,24 @@ def construir(cfg, segredos, ticket, ambiente, script_real, work_dir_ticket, env
         env["TZ"] = environ_daemon["TZ"]
 
     # Execucao (CR-010).
-    agendada = ticket.get("agendamento_id") is not None
+    agendada = ticket.get("schedule_id") is not None
     env["SSS_EXECUTION_TYPE"] = "AGENDADA" if agendada else "MANUAL"
     _definir(env, "SSS_PARENT_TICKET_ID", ticket.get("parent_ticket_id"))
-    _definir(env, "SSS_PRIORITY", ticket.get("prioridade"))
+    _definir(env, "SSS_PRIORITY", ticket.get("priority"))
     _definir(env, "SSS_STARTED_AT", _data(ticket.get("started_at")))
     _definir(env, "SSS_SCHEDULED_AT", _data(ticket.get("scheduled_at")))
     _definir(env, "SSS_TIMEOUT_SECONDS", timeout_seg)
     if agendada:
-        _definir(env, "SSS_SCHEDULE_ID", ticket.get("agendamento_id"))
-        _definir(env, "SSS_SCHEDULE_NAME", (agendamento or {}).get("nome"))
-        _definir(env, "SSS_RECURRENCE", (agendamento or {}).get("tipo_recorrencia"))
+        _definir(env, "SSS_SCHEDULE_ID", ticket.get("schedule_id"))
+        _definir(env, "SSS_SCHEDULE_NAME", (agendamento or {}).get("name"))
+        _definir(env, "SSS_RECURRENCE", (agendamento or {}).get("recurrence_type"))
     # Script, log e agente.
     # CR-011: com link simbolico no caminho, o cadastrado vai em SSS_SCRIPT_LINK; o real nos demais.
     if snap.get("path_file") and snap["path_file"] != script_real:
         _definir(env, "SSS_SCRIPT_LINK", snap["path_file"])
     _definir(env, "SSS_SCRIPT_ID", snap.get("script_id"))
     _definir(env, "SSS_SCRIPT_NAME", snap.get("script_nome"))
-    _definir(env, "SSS_INTERPRETER", snap.get("interpretador"))
+    _definir(env, "SSS_INTERPRETER", snap.get("interpreter"))
     if caminho_log:
         _definir(env, "SSS_LOG_DIR", os.path.dirname(caminho_log))
         _definir(env, "SSS_LOG_FILE", os.path.basename(caminho_log))
@@ -149,8 +149,8 @@ def construir(cfg, segredos, ticket, ambiente, script_real, work_dir_ticket, env
     _definir(env, "SSS_AGENT_HOST", hostname)
     _definir(env, "SSS_VERSION", versao)
     # Ambiente: descricao, DSN (sem credencial), usuario e a connect string (mascarada em todo log).
-    _definir(env, "SSS_ENVIRONMENT_DESCRIPTION", ambiente.get("descricao"))
-    _definir(env, "SSS_ENVIRONMENT_DSN", (ambiente.get("conexao") or "").strip() or None)
+    _definir(env, "SSS_ENVIRONMENT_DESCRIPTION", ambiente.get("description"))
+    _definir(env, "SSS_ENVIRONMENT_DSN", (ambiente.get("connection") or "").strip() or None)
     usuario_bd, conexao = _conexao(segredos, ambiente, ticket_id)
     _definir(env, "SSS_ENVIRONMENT_USER", usuario_bd)
     if conexao is not None:

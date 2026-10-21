@@ -18,9 +18,9 @@ _ag_icones = URL('static', 'img/icons.svg')
   <p class="sss-texto-suave">Referência: {{=ui_helpers.formatar_data(painel['agora'])}} (relógio do banco).</p>
   <div class="sss-agentes">
     {{for _ag in painel['agentes']:}}
-    <article class="sss-agente" aria-labelledby="agente-{{=_ag['codigo']}}">
+    <article class="sss-agente" aria-labelledby="agente-{{=_ag['code']}}">
       <header class="sss-agente-cabecalho">
-        <h3 class="sss-agente-titulo sss-mono" id="agente-{{=_ag['codigo']}}">{{=_ag['codigo']}}</h3>
+        <h3 class="sss-agente-titulo sss-mono" id="agente-{{=_ag['code']}}">{{=_ag['code']}}</h3>
         <span class="sss-status {{=_ag['saude']['classe']}}">
           <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_ag_icones}}#{{=_ag['saude']['icone']}}"></use></svg>
           <span>{{=_ag['saude']['rotulo']}}</span>
@@ -30,19 +30,19 @@ _ag_icones = URL('static', 'img/icons.svg')
         <dt>Heartbeat</dt><dd>{{=_ag['ha']}}{{if _ag['heartbeat_at']:}} <span class="sss-texto-suave">({{=ui_helpers.formatar_data(_ag['heartbeat_at'])}})</span>{{pass}}</dd>
         <dt>Host</dt><dd class="sss-mono">{{=_ag['hostname']}}</dd>
         <dt>Status</dt><dd>{{=_ag['status']}}</dd>
-        <dt>Versão</dt><dd>{{=_ag['versao'] or '-'}}{{if _ag['plataforma']:}} · {{=_ag['plataforma']}}{{pass}}</dd>
-        <dt>Ambientes</dt><dd>{{=', '.join(_ag['ambientes']) or '-'}}</dd>
-        <dt>Interpretadores</dt><dd>{{=', '.join(_ag['interpretadores']) or '-'}}</dd>
-        <dt>Iniciado em</dt><dd>{{=ui_helpers.formatar_data(_ag['iniciado_em'])}}</dd>
+        <dt>Versão</dt><dd>{{=_ag['version'] or '-'}}{{if _ag['platform']:}} · {{=_ag['platform']}}{{pass}}</dd>
+        <dt>Ambientes</dt><dd>{{=', '.join(_ag['environments']) or '-'}}</dd>
+        <dt>Interpretadores</dt><dd>{{=', '.join(_ag['interpreters']) or '-'}}</dd>
+        <dt>Iniciado em</dt><dd>{{=ui_helpers.formatar_data(_ag['started_at'])}}</dd>
       </dl>
-      <details class="sss-agente-tickets" data-agente="{{=_ag['codigo']}}">
+      <details class="sss-agente-tickets" data-agente="{{=_ag['code']}}">
         <summary>Tickets em execução: <strong>{{=_ag['running']}}</strong></summary>
         {{if _ag['tickets']:}}
         <ul class="sss-agente-lista">
           {{for _t in _ag['tickets']:}}
           <li>
             <a href="{{=URL(c='tickets', f='detalhe', args=[_t['id']], extension=False)}}">#{{=_t['id']}}</a>
-            <span class="sss-mono">{{=_t['script_nome']}}</span> · {{=_t['ambiente']}} · {{=_t['solicitante']}}
+            <span class="sss-mono">{{=_t['script_nome']}}</span> · {{=_t['environment']}} · {{=_t['requested_by']}}
             <span class="sss-texto-suave">· em execução há {{=_t['duracao']}} · heartbeat {{=_t['heartbeat']}}</span>
           </li>
           {{pass}}

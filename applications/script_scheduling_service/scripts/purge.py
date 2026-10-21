@@ -7,12 +7,12 @@ Roda no servidor do agente, agendado pelo cron, com a conta Oracle de purge ([re
     python scripts/purge.py [--config <config.ini>] [--dry-run] [--alvo tickets|auditoria|logs_locais|saida|todos]
                             [--exportar-auditoria <pasta>]
 
-* tickets e auditoria: so com a concessao em tbsss_controle (um no por vez), DELETE em lotes com COMMIT por lote
+* tickets e auditoria: so com a concessao em tbsss_control (um no por vez), DELETE em lotes com COMMIT por lote
   (a excecao do AGENTS §4.9), concessao renovada a cada lote e liberada no fim; uma linha PURGE por tabela,
   inclusive com 0 linhas. Sem a concessao: INFO e saida 0.
-* logs_locais: pastas de minuto de log_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI vencidas, menos as de tickets
+* logs_locais: pastas de minuto de log_dir/<environment>/<script>/AAAA/MM/DD/HH/MI vencidas, menos as de tickets
   RUNNING; nunca log_dir/interno/. Em todo agente, sem concessao.
-* saida: pastas de minuto de output_dir/<ambiente>/... vencidas, pelo helper purgar-saida. Sem concessao.
+* saida: pastas de minuto de output_dir/<environment>/... vencidas, pelo helper purgar-saida. Sem concessao.
 * --dry-run: so SELECT e listagem; um unico agora_banco() para todos os limites; nada e travado nem gravado.
 
 Saida: 0 sucesso (inclusive "outro no esta purgando"), 1 falha de banco, 2 configuracao invalida, 3 falha na
@@ -138,7 +138,7 @@ class Purge(object):
     def _purgar_tabelas(self, tabelas, agora, exportar):
         if not self.repo.tomar_concessao(self.conn, self.dono):
             self._desfazer()
-            self.log.info("outro no esta purgando (concessao em tbsss_controle); tickets e auditoria pulados",
+            self.log.info("outro no esta purgando (concessao em tbsss_control); tickets e auditoria pulados",
                           extra=_EXTRA)
             for tabela in tabelas:
                 self.resumo.append("%s: pulado (outro no esta purgando)" % tabela)

@@ -127,7 +127,7 @@ def _executar_sondagem_subprocesso(candidato, cfg, senha, usuario=None):
                 "candidato": candidato,
                 "ok": False,
                 "codigo_erro": "EXIT_%d" % proc.returncode,
-                "categoria": "OUTRO",
+                "category": "OUTRO",
             }
 
         linha = stdout_bytes.decode("utf-8", "replace").strip()
@@ -136,7 +136,7 @@ def _executar_sondagem_subprocesso(candidato, cfg, senha, usuario=None):
                 "candidato": candidato,
                 "ok": False,
                 "codigo_erro": "SEM_SAIDA",
-                "categoria": "OUTRO",
+                "category": "OUTRO",
             }
         return json.loads(linha)
 
@@ -150,14 +150,14 @@ def _executar_sondagem_subprocesso(candidato, cfg, senha, usuario=None):
             "candidato": candidato,
             "ok": False,
             "codigo_erro": "TIMEOUT",
-            "categoria": "REDE",
+            "category": "REDE",
         }
     except Exception as exc:
         return {
             "candidato": candidato,
             "ok": False,
             "codigo_erro": "SUBPROCESS_ERROR: %s" % exc,
-            "categoria": "OUTRO",
+            "category": "OUTRO",
         }
 
 
@@ -206,7 +206,7 @@ def selecionar_driver(cfg, segredos, executor_sondagem=None, usuario=None, senha
                 return selecao
 
             codigo = res.get("codigo_erro") or "DESCONHECIDO"
-            categoria = res.get("categoria") or "OUTRO"
+            categoria = res.get("category") or "OUTRO"
             tentativas.append((cand, codigo, categoria))
 
             logger.warning(
@@ -728,15 +728,15 @@ def proximo_id(conn, sequence_qualificada):
 
 
 def conferir_versao_esquema(conn, owner=None, prefixo="tbsss_"):
-    """Confere se versao_esquema em tbsss_controle e igual a VERSAO_ESQUEMA (CR-007, D4)."""
+    """Confere se versao_esquema em tbsss_control e igual a VERSAO_ESQUEMA (CR-007, D4)."""
     if owner:
-        tabela = sql_ident.qualificar(owner, prefixo + "controle")
+        tabela = sql_ident.qualificar(owner, prefixo + sql_ident.fisico("controle"))
     else:
-        tabela = prefixo + "controle"
+        tabela = prefixo + sql_ident.fisico("controle")
 
     cur = conn.cursor()
     try:
-        cur.execute("SELECT versao_esquema FROM %s WHERE id = 1" % tabela)
+        cur.execute("SELECT schema_version FROM %s WHERE id = 1" % tabela)
         row = cur.fetchone()
         if not row:
             msg = "Versao do esquema ausente na tabela de controle (id=1)"

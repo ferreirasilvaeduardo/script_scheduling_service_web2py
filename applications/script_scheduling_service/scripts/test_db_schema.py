@@ -80,24 +80,24 @@ class TestDbSchema(unittest.TestCase):
         """Verifica que nomes('tbsss_') reproduz exatamente a tabela do README §9.2."""
         esperado_readme = [
             # (entidade, abrev, sequence, trigger, pk)
-            ("ambientes", "amb", "sq_tbsss_ambientes", "tr_tbsss_amb_bi", "pk_tbsss_ambientes"),
-            ("perfis", "per", "sq_tbsss_perfis", "tr_tbsss_per_bi", "pk_tbsss_perfis"),
-            ("funcionalidades", "fnc", "sq_tbsss_funcionalidades", "tr_tbsss_fnc_bi", "pk_tbsss_funcionalidades"),
-            ("perfil_func", "pfnc", "sq_tbsss_perfil_func", "tr_tbsss_pfnc_bi", "pk_tbsss_perfil_func"),
-            ("perfil_amb", "pamb", "sq_tbsss_perfil_amb", "tr_tbsss_pamb_bi", "pk_tbsss_perfil_amb"),
+            ("ambientes", "env", "sq_tbsss_environments", "tr_tbsss_env_bi", "pk_tbsss_environments"),
+            ("perfis", "prf", "sq_tbsss_profiles", "tr_tbsss_prf_bi", "pk_tbsss_profiles"),
+            ("funcionalidades", "fea", "sq_tbsss_features", "tr_tbsss_fea_bi", "pk_tbsss_features"),
+            ("perfil_func", "pfea", "sq_tbsss_profile_feature", "tr_tbsss_pfea_bi", "pk_tbsss_profile_feature"),
+            ("perfil_amb", "penv", "sq_tbsss_profile_env", "tr_tbsss_penv_bi", "pk_tbsss_profile_env"),
             ("scripts", "scr", "sq_tbsss_scripts", "tr_tbsss_scr_bi", "pk_tbsss_scripts"),
-            ("perfil_scr", "pscr", "sq_tbsss_perfil_scr", "tr_tbsss_pscr_bi", "pk_tbsss_perfil_scr"),
-            ("script_amb", "samb", "sq_tbsss_script_amb", "tr_tbsss_samb_bi", "pk_tbsss_script_amb"),
-            ("usuarios", "usr", "sq_tbsss_usuarios", "tr_tbsss_usr_bi", "pk_tbsss_usuarios"),
-            ("parametros", "prm", "sq_tbsss_parametros", "tr_tbsss_prm_bi", "pk_tbsss_parametros"),
+            ("perfil_scr", "pscr", "sq_tbsss_profile_script", "tr_tbsss_pscr_bi", "pk_tbsss_profile_script"),
+            ("script_amb", "senv", "sq_tbsss_script_env", "tr_tbsss_senv_bi", "pk_tbsss_script_env"),
+            ("usuarios", "usr", "sq_tbsss_users", "tr_tbsss_usr_bi", "pk_tbsss_users"),
+            ("parametros", "prm", "sq_tbsss_parameters", "tr_tbsss_prm_bi", "pk_tbsss_parameters"),
             ("script_param", "sprm", "sq_tbsss_script_param", "tr_tbsss_sprm_bi", "pk_tbsss_script_param"),
-            ("agendamentos", "agd", "sq_tbsss_agendamentos", "tr_tbsss_agd_bi", "pk_tbsss_agendamentos"),
+            ("agendamentos", "sch", "sq_tbsss_schedules", "tr_tbsss_sch_bi", "pk_tbsss_schedules"),
             ("tickets", "tck", "sq_tbsss_tickets", "tr_tbsss_tck_bi", "pk_tbsss_tickets"),
-            ("ticket_resp", "trsp", "sq_tbsss_ticket_resp", "tr_tbsss_trsp_bi", "pk_tbsss_ticket_resp"),
-            ("agentes", "agt", "sq_tbsss_agentes", "tr_tbsss_agt_bi", "pk_tbsss_agentes"),
-            ("auditoria", "aud", "sq_tbsss_auditoria", "tr_tbsss_aud_bi", "pk_tbsss_auditoria"),
-            ("controle", "ctl", "sq_tbsss_controle", "tr_tbsss_ctl_bi", "pk_tbsss_controle"),
-            ("ticket_saida", "tsai", "sq_tbsss_ticket_saida", "tr_tbsss_tsai_bi", "pk_tbsss_ticket_saida"),
+            ("ticket_resp", "tans", "sq_tbsss_ticket_answer", "tr_tbsss_tans_bi", "pk_tbsss_ticket_answer"),
+            ("agentes", "agt", "sq_tbsss_agents", "tr_tbsss_agt_bi", "pk_tbsss_agents"),
+            ("auditoria", "aud", "sq_tbsss_audit", "tr_tbsss_aud_bi", "pk_tbsss_audit"),
+            ("controle", "ctl", "sq_tbsss_control", "tr_tbsss_ctl_bi", "pk_tbsss_control"),
+            ("ticket_saida", "tout", "sq_tbsss_ticket_output", "tr_tbsss_tout_bi", "pk_tbsss_ticket_output"),
         ]
 
         esquema = nomes("tbsss_")
@@ -109,7 +109,7 @@ class TestDbSchema(unittest.TestCase):
             self.assertEqual(t["trigger"], trg, "Trigger divergente em {}".format(ent))
             self.assertEqual(t["trigger_bi"], trg, "Trigger_bi divergente em {}".format(ent))
             self.assertEqual(t["pk"], pk, "PK divergente em {}".format(ent))
-            self.assertEqual(t["tabela"], "tbsss_" + ent, "Nome de tabela divergente em {}".format(ent))
+            self.assertEqual(t["tabela"], "tbsss_" + sql_ident.fisico(ent), "Nome de tabela divergente em {}".format(ent))
 
     def test_limite_30_caracteres_config_example_e_pior_caso(self):
         """Valida len <= 30 para prefixo do config.ini.example e pior caso (8 chars)."""
@@ -152,8 +152,8 @@ class TestDbSchema(unittest.TestCase):
             id_col = cols["id"]
             self.assertEqual(id_col["tipo"], "NUMBER(10)", "id em '{}' deve ser NUMBER(10)".format(entidade))
             self.assertTrue(id_col["not_null"], "id em '{}' deve ser NOT NULL".format(entidade))
-            self.assertEqual(t["pk"], "pk_tbsss_" + entidade)
-            self.assertEqual(t["sequence"], "sq_tbsss_" + entidade)
+            self.assertEqual(t["pk"], "pk_tbsss_" + sql_ident.fisico(entidade))
+            self.assertEqual(t["sequence"], "sq_tbsss_" + sql_ident.fisico(entidade))
             self.assertTrue(t["trigger_bi"].startswith("tr_tbsss_"))
             self.assertTrue(t["trigger_bi"].endswith("_bi"))
 
@@ -205,19 +205,19 @@ class TestDbSchema(unittest.TestCase):
                     )
 
     def test_flags_char1_com_ck_sn(self):
-        """Garante que toda coluna CHAR(1) possui CK IN ('S','N') correspondente."""
+        """Garante que toda coluna CHAR(1) possui CK IN ('Y','N') correspondente."""
         for entidade, defn in TABELAS.items():
             cks_da_tabela = [ck["expr"] for ck in defn["cks"].values()]
             for col_nome, col_info in defn["colunas"].items():
                 if col_info["tipo"] == "CHAR(1)":
                     tem_ck = False
                     for expr in cks_da_tabela:
-                        if col_nome in expr and ("'S'" in expr and "'N'" in expr):
+                        if col_nome in expr and ("'Y'" in expr and "'N'" in expr):
                             tem_ck = True
                             break
                     self.assertTrue(
                         tem_ck,
-                        "Coluna flag '{}.{}' CHAR(1) deve possuir CK IN ('S','N')".format(
+                        "Coluna flag '{}.{}' CHAR(1) deve possuir CK IN ('Y','N')".format(
                             entidade, col_nome
                         ),
                     )
@@ -225,7 +225,7 @@ class TestDbSchema(unittest.TestCase):
     def test_triggers_extras_imutabilidade(self):
         """Verifica configuracao de triggers _bu para chaves naturais imutaveis."""
         self.assertIsNotNone(TABELAS["ambientes"]["trigger_bu"])
-        self.assertEqual(TABELAS["ambientes"]["trigger_bu"]["coluna_imutavel"], "nome")
+        self.assertEqual(TABELAS["ambientes"]["trigger_bu"]["coluna_imutavel"], "name")
         self.assertIsNotNone(TABELAS["usuarios"]["trigger_bu"])
         self.assertEqual(TABELAS["usuarios"]["trigger_bu"]["coluna_imutavel"], "login")
 
@@ -269,21 +269,21 @@ class TestDbSchema(unittest.TestCase):
         self.assertGreaterEqual(sql_ident.VERSAO_ESQUEMA, 1)
         ctl = TABELAS["controle"]
         self.assertEqual(ctl["cks"]["id"]["expr"], "id = 1")
-        self.assertEqual(list(ctl["colunas"]), ["id", "versao_esquema", "versao_aplicada_em", "versao_aplicada_por",
-                                                 "purge_dono", "purge_concessao_ate"])
+        self.assertEqual(list(ctl["colunas"]), ["id", "schema_version", "version_applied_at", "version_applied_by",
+                                                 "purge_owner", "purge_lease_until"])
         esquema = nomes("tbsss_")
-        ocor = esquema["tickets"]["indices"]["ix_tbsss_tck_ocor"]
+        ocor = esquema["tickets"]["indices"]["ix_tbsss_tck_occur"]
         self.assertTrue(ocor["unico"] and ocor["fbi"])
         self.assertEqual(ocor["expr"], sql_ident.FBI_TCK_OCOR_EXPR)
-        self.assertFalse(esquema["tickets"]["indices"]["ix_tbsss_tck_fila"]["unico"])
+        self.assertFalse(esquema["tickets"]["indices"]["ix_tbsss_tck_queue"]["unico"])
         self.assertEqual(esquema["tickets"]["indices"]["ix_tbsss_tck_hist"]["colunas"], ("script_id", "created_at"))
-        self.assertEqual(esquema["agendamentos"]["indices"]["ix_tbsss_agd_prox"]["colunas"],
-                         ("ativo", "proxima_execucao", "id"))
-        self.assertIn("'ERRO_INTERNO'", TABELAS["agendamentos"]["cks"]["pausa"]["expr"])
+        self.assertEqual(esquema["agendamentos"]["indices"]["ix_tbsss_sch_next"]["colunas"],
+                         ("active", "next_run_at", "id"))
+        self.assertIn("'INTERNAL_ERROR'", TABELAS["agendamentos"]["cks"]["pause"]["expr"])
         self.assertEqual(TABELAS["tickets"]["colunas"]["process_id"]["tipo"], "NUMBER(10)")
         self.assertEqual(TABELAS["agentes"]["colunas"]["hostname"]["tipo"], "VARCHAR2(255 CHAR)")
-        self.assertEqual(TABELAS["agentes"]["colunas"]["ambientes"]["tipo"], "VARCHAR2(1000 CHAR)")
-        self.assertIn("config_criticos", TABELAS["agentes"]["colunas"])
+        self.assertEqual(TABELAS["agentes"]["colunas"]["environments"]["tipo"], "VARCHAR2(1000 CHAR)")
+        self.assertIn("critical_config", TABELAS["agentes"]["colunas"])
         # CR-011: sem hash do script.
         for ent, col in (("scripts", "sha256_homologado"), ("tickets", "arquivo_sha256")):
             self.assertNotIn(col, TABELAS[ent]["colunas"])
@@ -306,20 +306,20 @@ class TestDbSchema(unittest.TestCase):
             else:
                 cols = re.findall(r"^  \* `(\w+)", m.group(2), re.M)
             lidas[blocos[i]] = cols
-        self.assertEqual(list(lidas.keys()), list(TABELAS.keys()))
+        self.assertEqual(list(lidas.keys()), [defn["fisico"] for defn in TABELAS.values()])
         for entidade, defn in TABELAS.items():
-            self.assertEqual(lidas[entidade], list(defn["colunas"].keys()),
+            self.assertEqual(lidas[defn["fisico"]], list(defn["colunas"].keys()),
                              "README §10 diverge do registro em {}".format(entidade))
 
     def test_colunas_lob_declaradas(self):
         """Verifica catalogacao de colunas LOB (CLOB e, na saida do ticket, BLOB; CR-012)."""
-        self.assertEqual(TABELAS["agendamentos"]["colunas_lob"], ("parametros_json",))
+        self.assertEqual(TABELAS["agendamentos"]["colunas_lob"], ("params_json",))
         self.assertEqual(
             TABELAS["tickets"]["colunas_lob"],
-            ("parametros_enviados", "log_output"),
+            ("submitted_params", "log_output"),
         )
-        self.assertEqual(TABELAS["ticket_saida"]["colunas_lob"], ("conteudo",))
-        self.assertEqual(TABELAS["ticket_saida"]["colunas"]["conteudo"]["tipo"], "BLOB")
+        self.assertEqual(TABELAS["ticket_saida"]["colunas_lob"], ("content",))
+        self.assertEqual(TABELAS["ticket_saida"]["colunas"]["content"]["tipo"], "BLOB")
         for ent, defn in TABELAS.items():
             if ent not in ("agendamentos", "tickets", "ticket_saida"):
                 self.assertEqual(
@@ -332,14 +332,14 @@ class TestDbSchema(unittest.TestCase):
         """Verifica que as constantes de FBI sao strings unicas identicas ao README."""
         # CR-013: colunas simples na frente e o inicio da espera (sem CASE: o Oracle elimina o sort).
         self.assertEqual(FBI_TCK_FILA_EXPR,
-                         "(status, ambiente, prioridade, GREATEST(scheduled_at, created_at), id, script_id)")
-        self.assertIn("CASE WHEN status = 'RUNNING' THEN agente_id END", FBI_TCK_RUN_EXPR)
+                         "(status, environment, priority, GREATEST(scheduled_at, created_at), id, script_id)")
+        self.assertIn("CASE WHEN status = 'RUNNING' THEN agent_id END", FBI_TCK_RUN_EXPR)
 
         esquema = nomes("tbsss_")
         tck_indices = esquema["tickets"]["indices"]
-        self.assertIn("ix_tbsss_tck_fila", tck_indices)
-        self.assertEqual(tck_indices["ix_tbsss_tck_fila"]["expr"], FBI_TCK_FILA_EXPR)
-        self.assertTrue(tck_indices["ix_tbsss_tck_fila"]["fbi"])
+        self.assertIn("ix_tbsss_tck_queue", tck_indices)
+        self.assertEqual(tck_indices["ix_tbsss_tck_queue"]["expr"], FBI_TCK_FILA_EXPR)
+        self.assertTrue(tck_indices["ix_tbsss_tck_queue"]["fbi"])
 
         self.assertIn("ix_tbsss_tck_run", tck_indices)
         self.assertEqual(tck_indices["ix_tbsss_tck_run"]["expr"], FBI_TCK_RUN_EXPR)
@@ -395,7 +395,7 @@ class TestDbSchema(unittest.TestCase):
         col_31 = "coluna_com_trinta_e_um_chars_xy"  # len = 31
         self.assertEqual(len(col_31), 31)
         reg_col_invalida["ambientes"]["colunas"][col_31] = {
-            "nome": col_31,
+            "name": col_31,
             "tipo": "VARCHAR2(10 CHAR)",
             "not_null": False,
             "default": None,
@@ -411,7 +411,7 @@ class TestDbSchema(unittest.TestCase):
         self.assertEqual(len("uk_tbsss_amb_" + sufixo_18), 31)
         reg_uk_invalida["ambientes"]["uks"]["invalido"] = {
             "sufixo": sufixo_18,
-            "colunas": ("nome",),
+            "colunas": ("name",),
         }
         with self.assertRaises(ValueError) as ctx:
             validar_registro("tbsss_", tabelas=reg_uk_invalida)

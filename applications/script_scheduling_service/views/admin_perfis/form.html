@@ -3,14 +3,14 @@
 # Inclusão e edição de perfil (padrão de CRUD administrativo, docs/PADRAO_CRUD_ADMIN.md).
 import ui_helpers
 _novo = not perfil.get('id')
-_situacao = ui_helpers.ativo_info(perfil.get('ativo'))
+_situacao = ui_helpers.ativo_info(perfil.get('active'))
 _campos = [
-    {'nome': 'nome', 'rotulo': 'Nome', 'valor': perfil.get('nome'), 'erro': erros.get('nome'), 'obrigatorio': True, 'maxlength': 30,
-     'ajuda': u'Letras maiúsculas, dígitos e _ (ex.: OPERADOR_PROD).'},
-    {'nome': 'descricao', 'rotulo': u'Descrição', 'valor': perfil.get('descricao'), 'erro': erros.get('descricao'), 'maxlength': 100},
+    {'name': 'name', 'rotulo': 'Nome', 'valor': perfil.get('name'), 'erro': erros.get('name'), 'required': True, 'maxlength': 30,
+     'ajuda': u'Letras maiúsculas, dígitos e _ (ex.: OPERATOR_PROD).'},
+    {'name': 'description', 'rotulo': u'Descrição', 'valor': perfil.get('description'), 'erro': erros.get('description'), 'maxlength': 100},
 ]
 if not _novo:
-    _desativar = perfil.get('ativo') == 'S'
+    _desativar = perfil.get('active') == 'Y'
     if _desativar:
         _total = perfil.get('usuarios_ativos') or 0
         _logins = perfil.get('usuarios_afetados') or []
@@ -25,16 +25,16 @@ if not _novo:
     else:
         _texto_modal = u'Os usuários do perfil voltarão a ter acesso conforme a matriz de permissões.'
     pass
-    _modal_ativo = {'id': 'modal-ativo', 'titulo': (u'Desativar perfil %s' if _desativar else u'Reativar perfil %s') % perfil['nome'],
+    _modal_ativo = {'id': 'modal-ativo', 'titulo': (u'Desativar perfil %s' if _desativar else u'Reativar perfil %s') % perfil['name'],
                     'texto': _texto_modal, 'rotulo_gatilho': 'Desativar' if _desativar else 'Reativar',
                     'rotulo_confirmar': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
                     'variante': 'perigo' if _desativar else 'normal', 'acao': URL(c='admin_perfis', f='alternar_ativo'),
-                    'campos_ocultos': dict(id=perfil['id'], versao=perfil['versao'])}
+                    'campos_ocultos': dict(id=perfil['id'], versao=perfil['version'])}
 pass
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
-    <h1 class="sss-page-titulo">{{if _novo:}}Novo perfil{{else:}}Perfil <span class="sss-mono">{{=perfil['nome']}}</span>
+    <h1 class="sss-page-titulo">{{if _novo:}}Novo perfil{{else:}}Perfil <span class="sss-mono">{{=perfil['name']}}</span>
       <span class="sss-status {{=_situacao['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icone']}}"></use></svg><span>{{=_situacao['rotulo']}}</span></span>{{pass}}
     </h1>
   </div>
@@ -54,7 +54,7 @@ pass
     {{=csrf_campo()}}
     {{if not _novo:}}
     <input type="hidden" name="id" value="{{=perfil['id']}}">
-    <input type="hidden" name="versao" value="{{=perfil['versao']}}">
+    <input type="hidden" name="version" value="{{=perfil['version']}}">
     {{pass}}
     {{if erro_geral:}}
     <div class="alert alert-danger sss-alerta" role="alert">
@@ -66,7 +66,7 @@ pass
     {{include 'components/form_campo.html'}}
     {{pass}}
     <div class="form-check mb-3">
-      <input class="form-check-input" type="checkbox" id="campo-is_admin" name="is_admin" value="S" aria-describedby="campo-is_admin-ajuda"{{if perfil.get('is_admin') == 'S':}} checked{{pass}}>
+      <input class="form-check-input" type="checkbox" id="campo-is_admin" name="is_admin" value="Y" aria-describedby="campo-is_admin-ajuda"{{if perfil.get('is_admin') == 'Y':}} checked{{pass}}>
       <label class="form-check-label" for="campo-is_admin">Perfil administrativo</label>
       <div class="form-text" id="campo-is_admin-ajuda">Dispensa funcionalidades, ambientes e scripts; não dispensa a homologação nem as flags de ativo. O sistema nunca fica sem administrador ativo.</div>
     </div>

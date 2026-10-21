@@ -25,7 +25,7 @@ BEGIN
   SELECT log_output, log_offset_chars
     INTO v_lob, v_offset
     FROM {tck}
-   WHERE id = :ticket_id AND agente_id = :agente_id AND status = 'RUNNING'
+   WHERE id = :ticket_id AND agent_id = :agent_id AND status = 'RUNNING'
      FOR UPDATE WAIT 5;
   IF DBMS_LOB.GETLENGTH(v_lob) <> v_offset THEN
     RAISE_APPLICATION_ERROR(-20002, 'LOG_OFFSET_DIVERGENTE');
@@ -33,7 +33,7 @@ BEGIN
     DBMS_LOB.WRITEAPPEND(v_lob, v_tamanho, :chunk);
     UPDATE {tck}
        SET log_offset_chars = v_offset + v_tamanho
-     WHERE id = :ticket_id AND agente_id = :agente_id
+     WHERE id = :ticket_id AND agent_id = :agent_id
        AND status = 'RUNNING' AND log_offset_chars = v_offset;
     IF SQL%ROWCOUNT <> 1 THEN
       RAISE_APPLICATION_ERROR(-20002, 'LOG_OFFSET_DIVERGENTE');
@@ -56,8 +56,8 @@ END;"""
 _SQL_UNIDADE_SUPLEMENTAR = "SELECT LENGTH(TO_CLOB(UNISTR('\\D83D\\DE00'))) FROM DUAL"
 
 _SQL_TRUNCADO = (
-    "UPDATE {tck} SET log_truncado = 'S' "
-    "WHERE id = :ticket_id AND agente_id = :agente_id AND status = 'RUNNING'"
+    "UPDATE {tck} SET log_truncated = 'Y' "
+    "WHERE id = :ticket_id AND agent_id = :agent_id AND status = 'RUNNING'"
 )
 
 
@@ -79,7 +79,7 @@ class RepoSchedulerLog(object):
     """Owner e prefixo vem da configuracao (nunca fixos); os nomes passam por sql_ident."""
 
     def __init__(self, owner, prefixo):
-        self._tck = sql_ident.qualificar(owner, prefixo + "tickets", prefixo=prefixo)
+        self._tck = sql_ident.tabela(owner, prefixo, "tickets")
         self._plsql = _PLSQL_ANEXAR.format(tck=self._tck, atrib=":" + "=")
         self._sql_truncado = _SQL_TRUNCADO.format(tck=self._tck)
 
@@ -99,7 +99,7 @@ class RepoSchedulerLog(object):
             db_conn.definir_tipos_entrada(cur, chunk=db_conn.TIPO_CLOB)
             resultado = db_conn.variavel_saida(cur, db_conn.TIPO_VARCHAR, tamanho=20)
             try:
-                cur.execute(self._plsql, chunk=bloco, ticket_id=int(ticket_id), agente_id=agente_id,
+                cur.execute(self._plsql, chunk=bloco, ticket_id=int(ticket_id), agent_id=agente_id,
                             offset_esperado=int(offset_esperado), resultado=resultado)
             except Exception as exc:
                 if db_conn.classificar_erro(exc) == ("ORA", _ORA_DIVERGENTE):
@@ -128,7 +128,7 @@ class RepoSchedulerLog(object):
         """log_truncado = 'S' no ticket RUNNING deste agente. False se a posse foi perdida. Sem COMMIT."""
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_truncado, ticket_id=int(ticket_id), agente_id=agente_id)
+            cur.execute(self._sql_truncado, ticket_id=int(ticket_id), agent_id=agente_id)
             return cur.rowcount == 1
         finally:
             cur.close()

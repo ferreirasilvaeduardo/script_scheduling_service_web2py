@@ -13,10 +13,10 @@ class Motivo(object):
     """Motivos internos de negacao; destinados ao log, nunca ao usuario."""
     OK = "OK"
     DADO_INVALIDO = "DADO_INVALIDO"
-    USUARIO_INATIVO = "USUARIO_INATIVO"
+    USER_INACTIVE = "USER_INACTIVE"
     PERFIL_INATIVO = "PERFIL_INATIVO"
-    SCRIPT_INATIVO = "SCRIPT_INATIVO"
-    AMBIENTE_INATIVO = "AMBIENTE_INATIVO"
+    SCRIPT_INACTIVE = "SCRIPT_INACTIVE"
+    ENVIRONMENT_INACTIVE = "ENVIRONMENT_INACTIVE"
     SEM_HOMOLOGACAO = "SEM_HOMOLOGACAO"
     SEM_FUNC = "SEM_FUNC"
     SEM_AMBIENTE = "SEM_AMBIENTE"
@@ -25,7 +25,7 @@ class Motivo(object):
 
 def _flag(valor):
     # Somente 'S' ou True sao verdadeiros: 'N', '', None e afins negam.
-    return valor is True or valor == "S"
+    return valor is True or valor == "Y"
 
 
 def _id_valido(valor):
@@ -39,10 +39,10 @@ def contexto_usuario(estado):
     (codigos), 'ambientes' (nomes) e 'scripts' (ids).
     """
     return {
-        "usuario_id": estado["usuario_id"],
+        "user_id": estado["user_id"],
         "login": estado["login"],
-        "nome": estado.get("nome") or estado["login"],
-        "perfil_id": estado["perfil_id"],
+        "name": estado.get("name") or estado["login"],
+        "profile_id": estado["profile_id"],
         "perfil_nome": estado.get("perfil_nome") or "",
         "is_admin": _flag(estado.get("is_admin")),
         "usuario_ativo": _flag(estado.get("usuario_ativo")),
@@ -50,8 +50,8 @@ def contexto_usuario(estado):
         "funcionalidades": frozenset(estado.get("funcionalidades") or ()),
         "ambientes": frozenset(estado.get("ambientes") or ()),
         "scripts": frozenset(estado.get("scripts") or ()),
-        "perm_versao": estado["perm_versao"],
-        "sessao_epoch": estado.get("sessao_epoch", 0),
+        "perm_version": estado["perm_version"],
+        "session_epoch": estado.get("session_epoch", 0),
     }
 
 
@@ -70,7 +70,7 @@ def tem_func(ctx, codigo):
 
 def _nome_ambiente(ambiente):
     if isinstance(ambiente, dict):
-        ambiente = ambiente.get("nome")
+        ambiente = ambiente.get("name")
     return ambiente if isinstance(ambiente, str) and ambiente else None
 
 
@@ -90,7 +90,7 @@ def pode_executar(ctx, script, ambiente, homologacoes):
     """Decisao composta de execucao (README §4.3.A). Retorna (bool, Motivo.*).
 
     script e ambiente sao dicts do repositorio (id, ativo, nome); homologacoes e o
-    iteravel de ambiente_id homologados para o script (tbsss_script_amb).
+    iteravel de ambiente_id homologados para o script (tbsss_script_env).
     """
     if not ctx or not isinstance(script, dict) or not isinstance(ambiente, dict):
         return False, Motivo.DADO_INVALIDO
@@ -98,20 +98,20 @@ def pode_executar(ctx, script, ambiente, homologacoes):
             or _nome_ambiente(ambiente) is None:
         return False, Motivo.DADO_INVALIDO
     if ctx.get("usuario_ativo") is not True:
-        return False, Motivo.USUARIO_INATIVO
+        return False, Motivo.USER_INACTIVE
     if ctx.get("perfil_ativo") is not True:
         return False, Motivo.PERFIL_INATIVO
-    if not _flag(script.get("ativo")):
-        return False, Motivo.SCRIPT_INATIVO
-    if not _flag(ambiente.get("ativo")):
-        return False, Motivo.AMBIENTE_INATIVO
+    if not _flag(script.get("active")):
+        return False, Motivo.SCRIPT_INACTIVE
+    if not _flag(ambiente.get("active")):
+        return False, Motivo.ENVIRONMENT_INACTIVE
     if ambiente["id"] not in frozenset(homologacoes or ()):
         return False, Motivo.SEM_HOMOLOGACAO
     if ctx.get("is_admin") is True:
         return True, Motivo.OK
     if "EXEC_SCRIPT" not in ctx.get("funcionalidades", ()):
         return False, Motivo.SEM_FUNC
-    if ambiente["nome"] not in ctx.get("ambientes", ()):
+    if ambiente["name"] not in ctx.get("ambientes", ()):
         return False, Motivo.SEM_AMBIENTE
     if script["id"] not in ctx.get("scripts", ()):
         return False, Motivo.SEM_SCRIPT
@@ -119,32 +119,32 @@ def pode_executar(ctx, script, ambiente, homologacoes):
 
 
 def motivo_pausa(motivo_rbac):
-    """Motivo de pausa da regra (tbsss_agendamentos.pausa_motivo) para um motivo de pode_executar.
+    """Motivo de pausa da regra (tbsss_schedules.pausa_motivo) para um motivo de pode_executar.
 
-    Traducao unica para a web e o daemon (CR-008, R-33; README §7.5): USUARIO_INATIVO,
-    SCRIPT_INATIVO e AMBIENTE_INATIVO passam direto; os demais viram SEM_PERMISSAO.
+    Traducao unica para a web e o daemon (CR-008, R-33; README §7.5): USER_INACTIVE,
+    SCRIPT_INACTIVE e ENVIRONMENT_INACTIVE passam direto; os demais viram NO_PERMISSION.
     """
-    if motivo_rbac in (Motivo.USUARIO_INATIVO, Motivo.SCRIPT_INATIVO, Motivo.AMBIENTE_INATIVO):
+    if motivo_rbac in (Motivo.USER_INACTIVE, Motivo.SCRIPT_INACTIVE, Motivo.ENVIRONMENT_INACTIVE):
         return motivo_rbac
-    return "SEM_PERMISSAO"
+    return "NO_PERMISSION"
 
 
 def pode_ver_ticket(ctx, ticket):
-    """VER_LOGS sobre ticket de ambiente autorizado (admin: todos) (README §4.3.C)."""
+    """VIEW_LOGS sobre ticket de ambiente autorizado (admin: todos) (README §4.3.C)."""
     if not isinstance(ticket, dict):
         return False
-    return tem_func(ctx, "VER_LOGS") and pode_ver_ambiente(ctx, ticket.get("ambiente"))
+    return tem_func(ctx, "VIEW_LOGS") and pode_ver_ambiente(ctx, ticket.get("environment"))
 
 
 def pode_cancelar(ctx, ticket):
-    """CANC_TICKET em ambiente autorizado, ou EXEC_SCRIPT sobre ticket proprio (README §4.3.C)."""
+    """CANCEL_TICKET em ambiente autorizado, ou EXEC_SCRIPT sobre ticket proprio (README §4.3.C)."""
     if not isinstance(ticket, dict) or not _ativo(ctx):
         return False
     if ctx.get("is_admin") is True:
         return True
-    if tem_func(ctx, "CANC_TICKET") and pode_ver_ambiente(ctx, ticket.get("ambiente")):
+    if tem_func(ctx, "CANCEL_TICKET") and pode_ver_ambiente(ctx, ticket.get("environment")):
         return True
-    solicitante = ticket.get("solicitante")
+    solicitante = ticket.get("requested_by")
     return tem_func(ctx, "EXEC_SCRIPT") and isinstance(solicitante, str) \
         and solicitante == ctx.get("login")
 

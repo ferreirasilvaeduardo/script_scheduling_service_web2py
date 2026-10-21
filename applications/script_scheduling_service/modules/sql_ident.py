@@ -26,25 +26,25 @@ _RE_IDENT_ASCII_LOWER = re.compile(PADRAO_IDENT_ASCII_LOWER)
 # ler o indice ja na ordem da fila e parar no lote (INDEX RANGE SCAN sem sort, sem acesso a tabela).
 # Com CASE em todas as colunas (indice so dos PENDING) o Oracle nunca elimina o sort (medido no GFPR 19c).
 FBI_TCK_FILA_INICIO = "GREATEST(scheduled_at, created_at)"
-FBI_TCK_FILA_EXPR = "(status, ambiente, prioridade, " + FBI_TCK_FILA_INICIO + ", id, script_id)"
-FBI_TCK_RUN_EXPR = "((CASE WHEN status = 'RUNNING' THEN agente_id END))"
+FBI_TCK_FILA_EXPR = "(status, environment, priority, " + FBI_TCK_FILA_INICIO + ", id, script_id)"
+FBI_TCK_RUN_EXPR = "((CASE WHEN status = 'RUNNING' THEN agent_id END))"
 
 # Cláusulas CASE individuais para composicao identica em queries (README §10.13, AGENTS §4.8)
-FBI_TCK_RUN_AGENTE_CASE = "CASE WHEN status = 'RUNNING' THEN agente_id END"
+FBI_TCK_RUN_AGENTE_CASE = "CASE WHEN status = 'RUNNING' THEN agent_id END"
 
 # Saidas ainda em gravacao, por agente (CR-012): o startup check acha so as linhas GRAVANDO dele.
-FBI_TSAI_GRAV_EXPR = "((CASE WHEN situacao = 'GRAVANDO' THEN agente_id END))"
-FBI_TSAI_GRAV_CASE = "CASE WHEN situacao = 'GRAVANDO' THEN agente_id END"
+FBI_TSAI_GRAV_EXPR = "((CASE WHEN state = 'WRITING' THEN agent_id END))"
+FBI_TSAI_GRAV_CASE = "CASE WHEN state = 'WRITING' THEN agent_id END"
 
 # Indice unico da ocorrencia de agendamento (CR-007, R-27): so tickets de agendamento entram no indice.
 FBI_TCK_OCOR_EXPR = (
-    "((CASE WHEN agendamento_id IS NOT NULL THEN agendamento_id END), "
-    "(CASE WHEN agendamento_id IS NOT NULL THEN scheduled_at END))"
+    "((CASE WHEN schedule_id IS NOT NULL THEN schedule_id END), "
+    "(CASE WHEN schedule_id IS NOT NULL THEN scheduled_at END))"
 )
 
-# Versao do esquema que o codigo espera em tbsss_controle (CR-007, D4). Toda mudanca de esquema a
+# Versao do esquema que o codigo espera em tbsss_control (CR-007, D4). Toda mudanca de esquema a
 # incrementa e traz a migracao scripts/migracoes/m<NNNN>_*.py no mesmo pacote (AGENTS §4.16).
-VERSAO_ESQUEMA = 1
+VERSAO_ESQUEMA = 1  # aberta ate a primeira producao (AGENTS §4.16): o CR-016a entra direto nela
 
 # Colunas de registro (CR-006, README §10): todas as tabelas, exceto as listadas em TABELAS_SEM_REGISTRO.
 COLUNAS_REGISTRO = ("created_at", "created_by", "updated_at", "updated_by")
@@ -107,11 +107,30 @@ def validar_nome(nome, prefixo=None):
     return nome
 
 
+# Tabela de controle do esquema anterior ao CR-016a (nomes em portugues): o init_db recusa criar o novo com ela.
+CONTROLE_ESQUEMA_1 = "controle"
+
+
+def fisico(entidade):
+    """Nome fisico da tabela, sem o prefixo, da entidade logica (CR-016a; a chave logica muda no CR-016c)."""
+    return TABELAS[entidade]['fisico']
+
+
 def qualificar(owner, nome, prefixo=None):
     """Valida e retorna OWNER.NOME qualificado para uso em SQL (AGENTS §3.1)."""
     v_owner = validar_owner(owner)
     v_nome = validar_nome(nome, prefixo=prefixo)
     return "{}.{}".format(v_owner, v_nome)
+
+
+def tabela(owner, prefixo, entidade):
+    """OWNER.<prefixo><nome fisico> da entidade logica, validado (CR-016a)."""
+    return qualificar(owner, prefixo + fisico(entidade), prefixo=prefixo)
+
+
+def sequence(owner, prefixo, entidade):
+    """OWNER.sq_<prefixo><nome fisico> da entidade logica, validado (CR-016a)."""
+    return qualificar(owner, "sq_" + prefixo + fisico(entidade), prefixo=prefixo)
 
 
 # ---------------------------------------------------------------------------
@@ -124,54 +143,56 @@ def _criar_registro_tabelas():
 
     # 1. Ambientes
     r['ambientes'] = OrderedDict([
-        ('entidade', 'ambientes'),
-        ('abrev', 'amb'),
+        ('entity', 'ambientes'),
+        ('fisico', 'environments'),
+        ('abrev', 'env'),
         ('rotulo', 'Ambientes'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('nome', {'nome': 'nome', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
-            ('descricao', {'nome': 'descricao', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': False, 'default': None}),
-            ('conexao', {'nome': 'conexao', 'tipo': 'VARCHAR2(250 CHAR)', 'not_null': False, 'default': None}),
-            ('ativo', {'nome': 'ativo', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'S'"}),
-            ('created_at', {'nome': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('name', {'name': 'name', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('description', {'name': 'description', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': False, 'default': None}),
+            ('connection', {'name': 'connection', 'tipo': 'VARCHAR2(250 CHAR)', 'not_null': False, 'default': None}),
+            ('active', {'name': 'active', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'Y'"}),
+            ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
-            ('nome', {'sufixo': 'nome', 'colunas': ('nome',)}),
+            ('name', {'sufixo': 'name', 'colunas': ('name',)}),
         ])),
         ('fks', OrderedDict()),
         ('cks', OrderedDict([
-            ('ativo', {'sufixo': 'ativo', 'expr': "ativo IN ('S', 'N')"}),
-            ('nome', {'sufixo': 'nome', 'expr': "REGEXP_LIKE(nome, '^[A-Z0-9_]{1,30}$')"}),
-            ('conexao', {'sufixo': 'conexao', 'expr': "conexao IS NULL OR INSTR(conexao, '@') = 0"}),
+            ('active', {'sufixo': 'active', 'expr': "active IN ('Y', 'N')"}),
+            ('name', {'sufixo': 'name', 'expr': "REGEXP_LIKE(name, '^[A-Z0-9_]{1,30}$')"}),
+            ('connection', {'sufixo': 'connection', 'expr': "connection IS NULL OR INSTR(connection, '@') = 0"}),
         ])),
         ('indices', OrderedDict()),
-        ('trigger_bu', {'sufixo': 'bu', 'coluna_imutavel': 'nome'}),
+        ('trigger_bu', {'sufixo': 'bu', 'coluna_imutavel': 'name'}),
         ('colunas_lob', ()),
     ])
 
     # 2. Perfis
     r['perfis'] = OrderedDict([
-        ('entidade', 'perfis'),
-        ('abrev', 'per'),
+        ('entity', 'perfis'),
+        ('fisico', 'profiles'),
+        ('abrev', 'prf'),
         ('rotulo', 'Perfis'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('nome', {'nome': 'nome', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
-            ('descricao', {'nome': 'descricao', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': False, 'default': None}),
-            ('is_admin', {'nome': 'is_admin', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
-            ('perm_versao', {'nome': 'perm_versao', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': '1'}),
-            ('ativo', {'nome': 'ativo', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'S'"}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('name', {'name': 'name', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('description', {'name': 'description', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': False, 'default': None}),
+            ('is_admin', {'name': 'is_admin', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
+            ('perm_version', {'name': 'perm_version', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': '1'}),
+            ('active', {'name': 'active', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'Y'"}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
-            ('nome', {'sufixo': 'nome', 'colunas': ('nome',)}),
+            ('name', {'sufixo': 'name', 'colunas': ('name',)}),
         ])),
         ('fks', OrderedDict()),
         ('cks', OrderedDict([
-            ('adm', {'sufixo': 'adm', 'expr': "is_admin IN ('S', 'N')"}),
-            ('ativo', {'sufixo': 'ativo', 'expr': "ativo IN ('S', 'N')"}),
-            ('versao', {'sufixo': 'versao', 'expr': "perm_versao >= 1"}),
+            ('adm', {'sufixo': 'adm', 'expr': "is_admin IN ('Y', 'N')"}),
+            ('active', {'sufixo': 'active', 'expr': "active IN ('Y', 'N')"}),
+            ('version', {'sufixo': 'version', 'expr': "perm_version >= 1"}),
         ])),
         ('indices', OrderedDict()),
         ('trigger_bu', None),
@@ -180,24 +201,25 @@ def _criar_registro_tabelas():
 
     # 3. Funcionalidades
     r['funcionalidades'] = OrderedDict([
-        ('entidade', 'funcionalidades'),
-        ('abrev', 'fnc'),
+        ('entity', 'funcionalidades'),
+        ('fisico', 'features'),
+        ('abrev', 'fea'),
         ('rotulo', 'Funcionalidades'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('codigo', {'nome': 'codigo', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
-            ('nome', {'nome': 'nome', 'tipo': 'VARCHAR2(60 CHAR)', 'not_null': True, 'default': None}),
-            ('modulo', {'nome': 'modulo', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
-            ('descricao', {'nome': 'descricao', 'tipo': 'VARCHAR2(150 CHAR)', 'not_null': False, 'default': None}),
-            ('ativo', {'nome': 'ativo', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'S'"}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('code', {'name': 'code', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('name', {'name': 'name', 'tipo': 'VARCHAR2(60 CHAR)', 'not_null': True, 'default': None}),
+            ('module', {'name': 'module', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('description', {'name': 'description', 'tipo': 'VARCHAR2(150 CHAR)', 'not_null': False, 'default': None}),
+            ('active', {'name': 'active', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'Y'"}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
-            ('codigo', {'sufixo': 'codigo', 'colunas': ('codigo',)}),
+            ('code', {'sufixo': 'code', 'colunas': ('code',)}),
         ])),
         ('fks', OrderedDict()),
         ('cks', OrderedDict([
-            ('ativo', {'sufixo': 'ativo', 'expr': "ativo IN ('S', 'N')"}),
+            ('active', {'sufixo': 'active', 'expr': "active IN ('Y', 'N')"}),
         ])),
         ('indices', OrderedDict()),
         ('trigger_bu', None),
@@ -206,25 +228,26 @@ def _criar_registro_tabelas():
 
     # 4. Perfil x Funcionalidade
     r['perfil_func'] = OrderedDict([
-        ('entidade', 'perfil_func'),
-        ('abrev', 'pfnc'),
+        ('entity', 'perfil_func'),
+        ('fisico', 'profile_feature'),
+        ('abrev', 'pfea'),
         ('rotulo', 'Perfil x Funcionalidade'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('perfil_id', {'nome': 'perfil_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('funcionalidade_id', {'nome': 'funcionalidade_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('profile_id', {'name': 'profile_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('feature_id', {'name': 'feature_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
-            ('per_fnc', {'sufixo': 'per_fnc', 'colunas': ('perfil_id', 'funcionalidade_id')}),
+            ('prf_fea', {'sufixo': 'prf_fea', 'colunas': ('profile_id', 'feature_id')}),
         ])),
         ('fks', OrderedDict([
-            ('per', {'sufixo': 'per', 'colunas': ('perfil_id',), 'ref_tabela': 'perfis', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
-            ('fnc', {'sufixo': 'fnc', 'colunas': ('funcionalidade_id',), 'ref_tabela': 'funcionalidades', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
+            ('prf', {'sufixo': 'prf', 'colunas': ('profile_id',), 'ref_tabela': 'perfis', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
+            ('fea', {'sufixo': 'fea', 'colunas': ('feature_id',), 'ref_tabela': 'funcionalidades', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
         ])),
         ('cks', OrderedDict()),
         ('indices', OrderedDict([
-            ('fnc', {'sufixo': 'fnc', 'colunas': ('funcionalidade_id',), 'expr': None, 'fbi': False}),
+            ('fea', {'sufixo': 'fea', 'colunas': ('feature_id',), 'expr': None, 'fbi': False}),
         ])),
         ('trigger_bu', None),
         ('colunas_lob', ()),
@@ -232,25 +255,26 @@ def _criar_registro_tabelas():
 
     # 5. Perfil x Ambiente
     r['perfil_amb'] = OrderedDict([
-        ('entidade', 'perfil_amb'),
-        ('abrev', 'pamb'),
+        ('entity', 'perfil_amb'),
+        ('fisico', 'profile_env'),
+        ('abrev', 'penv'),
         ('rotulo', 'Perfil x Ambiente'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('perfil_id', {'nome': 'perfil_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('ambiente_id', {'nome': 'ambiente_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('profile_id', {'name': 'profile_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('environment_id', {'name': 'environment_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
-            ('per_amb', {'sufixo': 'per_amb', 'colunas': ('perfil_id', 'ambiente_id')}),
+            ('prf_env', {'sufixo': 'prf_env', 'colunas': ('profile_id', 'environment_id')}),
         ])),
         ('fks', OrderedDict([
-            ('per', {'sufixo': 'per', 'colunas': ('perfil_id',), 'ref_tabela': 'perfis', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
-            ('amb', {'sufixo': 'amb', 'colunas': ('ambiente_id',), 'ref_tabela': 'ambientes', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
+            ('prf', {'sufixo': 'prf', 'colunas': ('profile_id',), 'ref_tabela': 'perfis', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
+            ('env', {'sufixo': 'env', 'colunas': ('environment_id',), 'ref_tabela': 'ambientes', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
         ])),
         ('cks', OrderedDict()),
         ('indices', OrderedDict([
-            ('amb', {'sufixo': 'amb', 'colunas': ('ambiente_id',), 'expr': None, 'fbi': False}),
+            ('env', {'sufixo': 'env', 'colunas': ('environment_id',), 'expr': None, 'fbi': False}),
         ])),
         ('trigger_bu', None),
         ('colunas_lob', ()),
@@ -258,35 +282,36 @@ def _criar_registro_tabelas():
 
     # 6. Scripts
     r['scripts'] = OrderedDict([
-        ('entidade', 'scripts'),
+        ('entity', 'scripts'),
+        ('fisico', 'scripts'),
         ('abrev', 'scr'),
         ('rotulo', 'Scripts'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('nome', {'nome': 'nome', 'tipo': 'VARCHAR2(60 CHAR)', 'not_null': True, 'default': None}),
-            ('descricao', {'nome': 'descricao', 'tipo': 'VARCHAR2(200 CHAR)', 'not_null': False, 'default': None}),
-            ('grupo', {'nome': 'grupo', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
-            ('categoria', {'nome': 'categoria', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
-            ('etapa', {'nome': 'etapa', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
-            ('interpretador', {'nome': 'interpretador', 'tipo': 'VARCHAR2(15 CHAR)', 'not_null': True, 'default': None}),
-            ('path_file', {'nome': 'path_file', 'tipo': 'VARCHAR2(500 CHAR)', 'not_null': True, 'default': None}),
-            ('tipo_param', {'nome': 'tipo_param', 'tipo': 'VARCHAR2(15 CHAR)', 'not_null': True, 'default': "'NOMEADO'"}),
-            ('max_qtd_parallel_env', {'nome': 'max_qtd_parallel_env', 'tipo': 'NUMBER(3)', 'not_null': True, 'default': '1'}),
-            ('timeout_seg', {'nome': 'timeout_seg', 'tipo': 'NUMBER(7)', 'not_null': False, 'default': None}),
-            ('ativo', {'nome': 'ativo', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'S'"}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('name', {'name': 'name', 'tipo': 'VARCHAR2(60 CHAR)', 'not_null': True, 'default': None}),
+            ('description', {'name': 'description', 'tipo': 'VARCHAR2(200 CHAR)', 'not_null': False, 'default': None}),
+            ('script_group', {'name': 'script_group', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
+            ('category', {'name': 'category', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
+            ('stage', {'name': 'stage', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
+            ('interpreter', {'name': 'interpreter', 'tipo': 'VARCHAR2(15 CHAR)', 'not_null': True, 'default': None}),
+            ('path_file', {'name': 'path_file', 'tipo': 'VARCHAR2(500 CHAR)', 'not_null': True, 'default': None}),
+            ('param_type', {'name': 'param_type', 'tipo': 'VARCHAR2(15 CHAR)', 'not_null': True, 'default': "'NAMED'"}),
+            ('max_parallel_env', {'name': 'max_parallel_env', 'tipo': 'NUMBER(3)', 'not_null': True, 'default': '1'}),
+            ('timeout_s', {'name': 'timeout_s', 'tipo': 'NUMBER(7)', 'not_null': False, 'default': None}),
+            ('active', {'name': 'active', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'Y'"}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
-            ('nome', {'sufixo': 'nome', 'colunas': ('nome',)}),
+            ('name', {'sufixo': 'name', 'colunas': ('name',)}),
         ])),
         ('fks', OrderedDict()),
         ('cks', OrderedDict([
-            ('tparam', {'sufixo': 'tparam', 'expr': "tipo_param IN ('NOMEADO','SEQUENCIAL','NENHUM')"}),
-            ('ativo', {'sufixo': 'ativo', 'expr': "ativo IN ('S', 'N')"}),
-            ('paral', {'sufixo': 'paral', 'expr': "max_qtd_parallel_env BETWEEN 1 AND 999"}),
-            ('int', {'sufixo': 'int', 'expr': "interpretador IN ('PYTHON3','BASH','SH')"}),
+            ('ptype', {'sufixo': 'ptype', 'expr': "param_type IN ('NAMED','POSITIONAL','NONE')"}),
+            ('active', {'sufixo': 'active', 'expr': "active IN ('Y', 'N')"}),
+            ('paral', {'sufixo': 'paral', 'expr': "max_parallel_env BETWEEN 1 AND 999"}),
+            ('int', {'sufixo': 'int', 'expr': "interpreter IN ('PYTHON3','BASH','SH')"}),
             ('path', {'sufixo': 'path', 'expr': "SUBSTR(path_file, 1, 1) = '/' AND INSTR(path_file, '..') = 0 AND INSTR(path_file, '//') = 0 AND INSTR(path_file, '\\') = 0"}),
-            ('tmout', {'sufixo': 'tmout', 'expr': "timeout_seg IS NULL OR timeout_seg > 0"}),
+            ('tmout', {'sufixo': 'tmout', 'expr': "timeout_s IS NULL OR timeout_s > 0"}),
         ])),
         ('indices', OrderedDict()),
         ('trigger_bu', None),
@@ -295,20 +320,21 @@ def _criar_registro_tabelas():
 
     # 7. Perfil x Script
     r['perfil_scr'] = OrderedDict([
-        ('entidade', 'perfil_scr'),
+        ('entity', 'perfil_scr'),
+        ('fisico', 'profile_script'),
         ('abrev', 'pscr'),
         ('rotulo', 'Perfil x Script'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('perfil_id', {'nome': 'perfil_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('script_id', {'nome': 'script_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('profile_id', {'name': 'profile_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('script_id', {'name': 'script_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
-            ('per_scr', {'sufixo': 'per_scr', 'colunas': ('perfil_id', 'script_id')}),
+            ('prf_scr', {'sufixo': 'prf_scr', 'colunas': ('profile_id', 'script_id')}),
         ])),
         ('fks', OrderedDict([
-            ('per', {'sufixo': 'per', 'colunas': ('perfil_id',), 'ref_tabela': 'perfis', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
+            ('prf', {'sufixo': 'prf', 'colunas': ('profile_id',), 'ref_tabela': 'perfis', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
             ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'ref_tabela': 'scripts', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
         ])),
         ('cks', OrderedDict()),
@@ -321,25 +347,26 @@ def _criar_registro_tabelas():
 
     # 8. Script x Ambiente
     r['script_amb'] = OrderedDict([
-        ('entidade', 'script_amb'),
-        ('abrev', 'samb'),
+        ('entity', 'script_amb'),
+        ('fisico', 'script_env'),
+        ('abrev', 'senv'),
         ('rotulo', 'Script x Ambiente'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('script_id', {'nome': 'script_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('ambiente_id', {'nome': 'ambiente_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('script_id', {'name': 'script_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('environment_id', {'name': 'environment_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
-            ('scr_amb', {'sufixo': 'scr_amb', 'colunas': ('script_id', 'ambiente_id')}),
+            ('scr_env', {'sufixo': 'scr_env', 'colunas': ('script_id', 'environment_id')}),
         ])),
         ('fks', OrderedDict([
             ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'ref_tabela': 'scripts', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
-            ('amb', {'sufixo': 'amb', 'colunas': ('ambiente_id',), 'ref_tabela': 'ambientes', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
+            ('env', {'sufixo': 'env', 'colunas': ('environment_id',), 'ref_tabela': 'ambientes', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
         ])),
         ('cks', OrderedDict()),
         ('indices', OrderedDict([
-            ('amb', {'sufixo': 'amb', 'colunas': ('ambiente_id',), 'expr': None, 'fbi': False}),
+            ('env', {'sufixo': 'env', 'colunas': ('environment_id',), 'expr': None, 'fbi': False}),
         ])),
         ('trigger_bu', None),
         ('colunas_lob', ()),
@@ -347,38 +374,39 @@ def _criar_registro_tabelas():
 
     # 9. Usuarios
     r['usuarios'] = OrderedDict([
-        ('entidade', 'usuarios'),
+        ('entity', 'usuarios'),
+        ('fisico', 'users'),
         ('abrev', 'usr'),
         ('rotulo', 'Usuários'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('login', {'nome': 'login', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
-            ('nome', {'nome': 'nome', 'tipo': 'VARCHAR2(60 CHAR)', 'not_null': True, 'default': None}),
-            ('senha_hash', {'nome': 'senha_hash', 'tipo': 'VARCHAR2(256 CHAR)', 'not_null': True, 'default': None}),
-            ('perfil_id', {'nome': 'perfil_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('tentativas_falha', {'nome': 'tentativas_falha', 'tipo': 'NUMBER(2)', 'not_null': True, 'default': '0'}),
-            ('bloqueado_ate', {'nome': 'bloqueado_ate', 'tipo': 'DATE', 'not_null': False, 'default': None}),
-            ('ultimo_login', {'nome': 'ultimo_login', 'tipo': 'DATE', 'not_null': False, 'default': None}),
-            ('senha_alterada_em', {'nome': 'senha_alterada_em', 'tipo': 'DATE', 'not_null': False, 'default': None}),
-            ('sessao_epoch', {'nome': 'sessao_epoch', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': '0'}),
-            ('ativo', {'nome': 'ativo', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'S'"}),
-            ('created_at', {'nome': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('login', {'name': 'login', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('name', {'name': 'name', 'tipo': 'VARCHAR2(60 CHAR)', 'not_null': True, 'default': None}),
+            ('password_hash', {'name': 'password_hash', 'tipo': 'VARCHAR2(256 CHAR)', 'not_null': True, 'default': None}),
+            ('profile_id', {'name': 'profile_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('failed_attempts', {'name': 'failed_attempts', 'tipo': 'NUMBER(2)', 'not_null': True, 'default': '0'}),
+            ('locked_until', {'name': 'locked_until', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('last_login_at', {'name': 'last_login_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('password_changed_at', {'name': 'password_changed_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('session_epoch', {'name': 'session_epoch', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': '0'}),
+            ('active', {'name': 'active', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'Y'"}),
+            ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
             ('login', {'sufixo': 'login', 'colunas': ('login',)}),
         ])),
         ('fks', OrderedDict([
-            ('per', {'sufixo': 'per', 'colunas': ('perfil_id',), 'ref_tabela': 'perfis', 'ref_colunas': ('id',), 'on_delete': None}),
+            ('prf', {'sufixo': 'prf', 'colunas': ('profile_id',), 'ref_tabela': 'perfis', 'ref_colunas': ('id',), 'on_delete': None}),
         ])),
         ('cks', OrderedDict([
-            ('ativo', {'sufixo': 'ativo', 'expr': "ativo IN ('S', 'N')"}),
+            ('active', {'sufixo': 'active', 'expr': "active IN ('Y', 'N')"}),
             ('login', {'sufixo': 'login', 'expr': "REGEXP_LIKE(login, '^[a-z0-9._-]{3,30}$')"}),
-            ('tent', {'sufixo': 'tent', 'expr': "tentativas_falha >= 0"}),
-            ('epoch', {'sufixo': 'epoch', 'expr': "sessao_epoch >= 0"}),
+            ('att', {'sufixo': 'att', 'expr': "failed_attempts >= 0"}),
+            ('epoch', {'sufixo': 'epoch', 'expr': "session_epoch >= 0"}),
         ])),
         ('indices', OrderedDict([
-            ('per', {'sufixo': 'per', 'colunas': ('perfil_id',), 'expr': None, 'fbi': False}),
+            ('prf', {'sufixo': 'prf', 'colunas': ('profile_id',), 'expr': None, 'fbi': False}),
         ])),
         ('trigger_bu', {'sufixo': 'bu', 'coluna_imutavel': 'login'}),
         ('colunas_lob', ()),
@@ -386,33 +414,34 @@ def _criar_registro_tabelas():
 
     # 10. Parametros
     r['parametros'] = OrderedDict([
-        ('entidade', 'parametros'),
+        ('entity', 'parametros'),
+        ('fisico', 'parameters'),
         ('abrev', 'prm'),
         ('rotulo', 'Parâmetros'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('codigo', {'nome': 'codigo', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
-            ('param_nomeado', {'nome': 'param_nomeado', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
-            ('label', {'nome': 'label', 'tipo': 'VARCHAR2(60 CHAR)', 'not_null': True, 'default': None}),
-            ('descricao', {'nome': 'descricao', 'tipo': 'VARCHAR2(150 CHAR)', 'not_null': False, 'default': None}),
-            ('tipo_componente', {'nome': 'tipo_componente', 'tipo': 'VARCHAR2(20 CHAR)', 'not_null': True, 'default': None}),
-            ('opcoes_json', {'nome': 'opcoes_json', 'tipo': 'VARCHAR2(500 CHAR)', 'not_null': False, 'default': None}),
-            ('valor_padrao', {'nome': 'valor_padrao', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': False, 'default': None}),
-            ('regex_validacao', {'nome': 'regex_validacao', 'tipo': 'VARCHAR2(150 CHAR)', 'not_null': False, 'default': None}),
-            ('sensivel', {'nome': 'sensivel', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
-            ('ativo', {'nome': 'ativo', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'S'"}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('code', {'name': 'code', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('param_flag', {'name': 'param_flag', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
+            ('label', {'name': 'label', 'tipo': 'VARCHAR2(60 CHAR)', 'not_null': True, 'default': None}),
+            ('description', {'name': 'description', 'tipo': 'VARCHAR2(150 CHAR)', 'not_null': False, 'default': None}),
+            ('component_type', {'name': 'component_type', 'tipo': 'VARCHAR2(20 CHAR)', 'not_null': True, 'default': None}),
+            ('options_json', {'name': 'options_json', 'tipo': 'VARCHAR2(500 CHAR)', 'not_null': False, 'default': None}),
+            ('default_value', {'name': 'default_value', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': False, 'default': None}),
+            ('validation_regex', {'name': 'validation_regex', 'tipo': 'VARCHAR2(150 CHAR)', 'not_null': False, 'default': None}),
+            ('sensitive', {'name': 'sensitive', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
+            ('active', {'name': 'active', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'Y'"}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
-            ('codigo', {'sufixo': 'codigo', 'colunas': ('codigo',)}),
+            ('code', {'sufixo': 'code', 'colunas': ('code',)}),
         ])),
         ('fks', OrderedDict()),
         ('cks', OrderedDict([
-            ('tcomp', {'sufixo': 'tcomp', 'expr': "tipo_componente IN ('TEXT','NUMBER','DATE','SELECT','CHECKBOX')"}),
-            ('ativo', {'sufixo': 'ativo', 'expr': "ativo IN ('S', 'N')"}),
-            ('sens', {'sufixo': 'sens', 'expr': "sensivel IN ('S','N')"}),
-            ('codigo', {'sufixo': 'codigo', 'expr': "REGEXP_LIKE(codigo, '^[a-z0-9_]{1,30}$')"}),
-            ('flag', {'sufixo': 'flag', 'expr': "param_nomeado IS NULL OR REGEXP_LIKE(param_nomeado, '^-{1,2}[A-Za-z0-9][A-Za-z0-9_-]{0,27}$')"}),
+            ('ctype', {'sufixo': 'ctype', 'expr': "component_type IN ('TEXT','NUMBER','DATE','SELECT','CHECKBOX')"}),
+            ('active', {'sufixo': 'active', 'expr': "active IN ('Y', 'N')"}),
+            ('sens', {'sufixo': 'sens', 'expr': "sensitive IN ('Y','N')"}),
+            ('code', {'sufixo': 'code', 'expr': "REGEXP_LIKE(code, '^[a-z0-9_]{1,30}$')"}),
+            ('flag', {'sufixo': 'flag', 'expr': "param_flag IS NULL OR REGEXP_LIKE(param_flag, '^-{1,2}[A-Za-z0-9][A-Za-z0-9_-]{0,27}$')"}),
         ])),
         ('indices', OrderedDict()),
         ('trigger_bu', None),
@@ -421,32 +450,33 @@ def _criar_registro_tabelas():
 
     # 11. Script x Parametro
     r['script_param'] = OrderedDict([
-        ('entidade', 'script_param'),
+        ('entity', 'script_param'),
+        ('fisico', 'script_param'),
         ('abrev', 'sprm'),
         ('rotulo', 'Script x Parâmetro'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('script_id', {'nome': 'script_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('parametro_id', {'nome': 'parametro_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('ordem', {'nome': 'ordem', 'tipo': 'NUMBER(3)', 'not_null': True, 'default': None}),
-            ('obrigatorio', {'nome': 'obrigatorio', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'S'"}),
-            ('valor_padrao_sub', {'nome': 'valor_padrao_sub', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': False, 'default': None}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('script_id', {'name': 'script_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('parameter_id', {'name': 'parameter_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('sort_order', {'name': 'sort_order', 'tipo': 'NUMBER(3)', 'not_null': True, 'default': None}),
+            ('required', {'name': 'required', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'Y'"}),
+            ('default_value_override', {'name': 'default_value_override', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': False, 'default': None}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
-            ('scr_prm', {'sufixo': 'scr_prm', 'colunas': ('script_id', 'parametro_id')}),
-            ('scr_ord', {'sufixo': 'scr_ord', 'colunas': ('script_id', 'ordem')}),
+            ('scr_prm', {'sufixo': 'scr_prm', 'colunas': ('script_id', 'parameter_id')}),
+            ('scr_ord', {'sufixo': 'scr_ord', 'colunas': ('script_id', 'sort_order')}),
         ])),
         ('fks', OrderedDict([
             ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'ref_tabela': 'scripts', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
-            ('prm', {'sufixo': 'prm', 'colunas': ('parametro_id',), 'ref_tabela': 'parametros', 'ref_colunas': ('id',), 'on_delete': None}),
+            ('prm', {'sufixo': 'prm', 'colunas': ('parameter_id',), 'ref_tabela': 'parametros', 'ref_colunas': ('id',), 'on_delete': None}),
         ])),
         ('cks', OrderedDict([
-            ('obrig', {'sufixo': 'obrig', 'expr': "obrigatorio IN ('S', 'N')"}),
-            ('ordem', {'sufixo': 'ordem', 'expr': "ordem >= 1"}),
+            ('req', {'sufixo': 'req', 'expr': "required IN ('Y', 'N')"}),
+            ('sort_order', {'sufixo': 'sort_order', 'expr': "sort_order >= 1"}),
         ])),
         ('indices', OrderedDict([
-            ('prm', {'sufixo': 'prm', 'colunas': ('parametro_id',), 'expr': None, 'fbi': False}),
+            ('prm', {'sufixo': 'prm', 'colunas': ('parameter_id',), 'expr': None, 'fbi': False}),
         ])),
         ('trigger_bu', None),
         ('colunas_lob', ()),
@@ -454,148 +484,151 @@ def _criar_registro_tabelas():
 
     # 12. Agendamentos
     r['agendamentos'] = OrderedDict([
-        ('entidade', 'agendamentos'),
-        ('abrev', 'agd'),
+        ('entity', 'agendamentos'),
+        ('fisico', 'schedules'),
+        ('abrev', 'sch'),
         ('rotulo', 'Agendamentos'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('nome', {'nome': 'nome', 'tipo': 'VARCHAR2(60 CHAR)', 'not_null': True, 'default': None}),
-            ('script_id', {'nome': 'script_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('ambiente', {'nome': 'ambiente', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
-            ('usuario_id', {'nome': 'usuario_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('prioridade', {'nome': 'prioridade', 'tipo': 'NUMBER(1)', 'not_null': True, 'default': '2'}),
-            ('tipo_recorrencia', {'nome': 'tipo_recorrencia', 'tipo': 'VARCHAR2(15 CHAR)', 'not_null': True, 'default': None}),
-            ('expressao_cron', {'nome': 'expressao_cron', 'tipo': 'VARCHAR2(60 CHAR)', 'not_null': False, 'default': None}),
-            ('hora_execucao', {'nome': 'hora_execucao', 'tipo': 'VARCHAR2(5 CHAR)', 'not_null': False, 'default': None}),
-            ('dias_semana', {'nome': 'dias_semana', 'tipo': 'VARCHAR2(20 CHAR)', 'not_null': False, 'default': None}),
-            ('dia_mes', {'nome': 'dia_mes', 'tipo': 'NUMBER(2)', 'not_null': False, 'default': None}),
-            ('parametros_json', {'nome': 'parametros_json', 'tipo': 'CLOB', 'not_null': False, 'default': None}),
-            ('data_inicio', {'nome': 'data_inicio', 'tipo': 'DATE', 'not_null': True, 'default': None}),
-            ('data_fim', {'nome': 'data_fim', 'tipo': 'DATE', 'not_null': False, 'default': None}),
-            ('proxima_execucao', {'nome': 'proxima_execucao', 'tipo': 'DATE', 'not_null': True, 'default': None}),
-            ('ultima_execucao', {'nome': 'ultima_execucao', 'tipo': 'DATE', 'not_null': False, 'default': None}),
-            ('ultimo_ticket_id', {'nome': 'ultimo_ticket_id', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
-            ('pausa_motivo', {'nome': 'pausa_motivo', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
-            ('ativo', {'nome': 'ativo', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'S'"}),
-            ('created_at', {'nome': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('name', {'name': 'name', 'tipo': 'VARCHAR2(60 CHAR)', 'not_null': True, 'default': None}),
+            ('script_id', {'name': 'script_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('environment', {'name': 'environment', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('user_id', {'name': 'user_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('priority', {'name': 'priority', 'tipo': 'NUMBER(1)', 'not_null': True, 'default': '2'}),
+            ('recurrence_type', {'name': 'recurrence_type', 'tipo': 'VARCHAR2(15 CHAR)', 'not_null': True, 'default': None}),
+            ('cron_expression', {'name': 'cron_expression', 'tipo': 'VARCHAR2(60 CHAR)', 'not_null': False, 'default': None}),
+            ('run_time', {'name': 'run_time', 'tipo': 'VARCHAR2(5 CHAR)', 'not_null': False, 'default': None}),
+            ('week_days', {'name': 'week_days', 'tipo': 'VARCHAR2(20 CHAR)', 'not_null': False, 'default': None}),
+            ('month_day', {'name': 'month_day', 'tipo': 'NUMBER(2)', 'not_null': False, 'default': None}),
+            ('params_json', {'name': 'params_json', 'tipo': 'CLOB', 'not_null': False, 'default': None}),
+            ('start_date', {'name': 'start_date', 'tipo': 'DATE', 'not_null': True, 'default': None}),
+            ('end_date', {'name': 'end_date', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('next_run_at', {'name': 'next_run_at', 'tipo': 'DATE', 'not_null': True, 'default': None}),
+            ('last_run_at', {'name': 'last_run_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('last_ticket_id', {'name': 'last_ticket_id', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
+            ('pause_reason', {'name': 'pause_reason', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
+            ('active', {'name': 'active', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'Y'"}),
+            ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict()),
         ('fks', OrderedDict([
             ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'ref_tabela': 'scripts', 'ref_colunas': ('id',), 'on_delete': None}),
-            ('usr', {'sufixo': 'usr', 'colunas': ('usuario_id',), 'ref_tabela': 'usuarios', 'ref_colunas': ('id',), 'on_delete': None}),
-            ('amb', {'sufixo': 'amb', 'colunas': ('ambiente',), 'ref_tabela': 'ambientes', 'ref_colunas': ('nome',), 'on_delete': None}),
+            ('usr', {'sufixo': 'usr', 'colunas': ('user_id',), 'ref_tabela': 'usuarios', 'ref_colunas': ('id',), 'on_delete': None}),
+            ('env', {'sufixo': 'env', 'colunas': ('environment',), 'ref_tabela': 'ambientes', 'ref_colunas': ('name',), 'on_delete': None}),
         ])),
         ('cks', OrderedDict([
-            ('trec', {'sufixo': 'trec', 'expr': "tipo_recorrencia IN ('UNICA','DIARIA','SEMANAL','MENSAL','CRON')"}),
-            ('prio', {'sufixo': 'prio', 'expr': "prioridade BETWEEN 1 AND 4"}),
-            ('ativo', {'sufixo': 'ativo', 'expr': "ativo IN ('S', 'N')"}),
-            ('dia', {'sufixo': 'dia', 'expr': "dia_mes IS NULL OR dia_mes BETWEEN 1 AND 31"}),
-            ('hora', {'sufixo': 'hora', 'expr': "hora_execucao IS NULL OR REGEXP_LIKE(hora_execucao, '^([01][0-9]|2[0-3]):[0-5][0-9]$')"}),
-            ('dsem', {'sufixo': 'dsem', 'expr': "dias_semana IS NULL OR REGEXP_LIKE(dias_semana, '^[1-7](,[1-7]){0,6}$')"}),
-            ('fim', {'sufixo': 'fim', 'expr': "data_fim IS NULL OR data_fim >= data_inicio"}),
-            ('pausa', {'sufixo': 'pausa', 'expr': "pausa_motivo IS NULL OR pausa_motivo IN ('USUARIO_INATIVO','SEM_PERMISSAO','SCRIPT_INATIVO','AMBIENTE_INATIVO','PARAM_INVALIDO','CRON_INVALIDO','CONCLUIDO','MANUAL','ERRO_INTERNO')"}),
-            ('campos', {'sufixo': 'campos', 'expr': "(tipo_recorrencia = 'UNICA') OR (tipo_recorrencia = 'DIARIA' AND hora_execucao IS NOT NULL) OR (tipo_recorrencia = 'SEMANAL' AND hora_execucao IS NOT NULL AND dias_semana IS NOT NULL) OR (tipo_recorrencia = 'MENSAL' AND hora_execucao IS NOT NULL AND dia_mes IS NOT NULL) OR (tipo_recorrencia = 'CRON' AND expressao_cron IS NOT NULL)"}),
+            ('rtype', {'sufixo': 'rtype', 'expr': "recurrence_type IN ('ONCE','DAILY','WEEKLY','MONTHLY','CRON')"}),
+            ('prio', {'sufixo': 'prio', 'expr': "priority BETWEEN 1 AND 4"}),
+            ('active', {'sufixo': 'active', 'expr': "active IN ('Y', 'N')"}),
+            ('day', {'sufixo': 'day', 'expr': "month_day IS NULL OR month_day BETWEEN 1 AND 31"}),
+            ('time', {'sufixo': 'time', 'expr': "run_time IS NULL OR REGEXP_LIKE(run_time, '^([01][0-9]|2[0-3]):[0-5][0-9]$')"}),
+            ('wday', {'sufixo': 'wday', 'expr': "week_days IS NULL OR REGEXP_LIKE(week_days, '^[1-7](,[1-7]){0,6}$')"}),
+            ('end', {'sufixo': 'end', 'expr': "end_date IS NULL OR end_date >= start_date"}),
+            ('pause', {'sufixo': 'pause', 'expr': "pause_reason IS NULL OR pause_reason IN ('USER_INACTIVE','NO_PERMISSION','SCRIPT_INACTIVE','ENVIRONMENT_INACTIVE','INVALID_PARAM','INVALID_CRON','COMPLETED','MANUAL','INTERNAL_ERROR')"}),
+            ('fields', {'sufixo': 'fields', 'expr': "(recurrence_type = 'ONCE') OR (recurrence_type = 'DAILY' AND run_time IS NOT NULL) OR (recurrence_type = 'WEEKLY' AND run_time IS NOT NULL AND week_days IS NOT NULL) OR (recurrence_type = 'MONTHLY' AND run_time IS NOT NULL AND month_day IS NOT NULL) OR (recurrence_type = 'CRON' AND cron_expression IS NOT NULL)"}),
         ])),
         ('indices', OrderedDict([
             ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'expr': None, 'fbi': False}),
-            ('usr', {'sufixo': 'usr', 'colunas': ('usuario_id',), 'expr': None, 'fbi': False}),
-            ('amb', {'sufixo': 'amb', 'colunas': ('ambiente',), 'expr': None, 'fbi': False}),
-            ('prox', {'sufixo': 'prox', 'colunas': ('ativo', 'proxima_execucao', 'id'), 'expr': None, 'fbi': False}),
+            ('usr', {'sufixo': 'usr', 'colunas': ('user_id',), 'expr': None, 'fbi': False}),
+            ('env', {'sufixo': 'env', 'colunas': ('environment',), 'expr': None, 'fbi': False}),
+            ('next', {'sufixo': 'next', 'colunas': ('active', 'next_run_at', 'id'), 'expr': None, 'fbi': False}),
         ])),
         ('trigger_bu', None),
-        ('colunas_lob', ('parametros_json',)),
+        ('colunas_lob', ('params_json',)),
     ])
 
     # 13. Tickets
     r['tickets'] = OrderedDict([
-        ('entidade', 'tickets'),
+        ('entity', 'tickets'),
+        ('fisico', 'tickets'),
         ('abrev', 'tck'),
         ('rotulo', 'Tickets'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('script_id', {'nome': 'script_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('ambiente', {'nome': 'ambiente', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
-            ('solicitante', {'nome': 'solicitante', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
-            ('ip_origem', {'nome': 'ip_origem', 'tipo': 'VARCHAR2(45 CHAR)', 'not_null': False, 'default': None}),
-            ('agente_id', {'nome': 'agente_id', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
-            ('process_id', {'nome': 'process_id', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
-            ('process_start', {'nome': 'process_start', 'tipo': 'NUMBER(20)', 'not_null': False, 'default': None}),
-            ('status', {'nome': 'status', 'tipo': 'VARCHAR2(15 CHAR)', 'not_null': True, 'default': "'PENDING'"}),
-            ('prioridade', {'nome': 'prioridade', 'tipo': 'NUMBER(1)', 'not_null': True, 'default': '2'}),
-            ('cancel_requested', {'nome': 'cancel_requested', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
-            ('status_motivo', {'nome': 'status_motivo', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
-            ('parent_ticket_id', {'nome': 'parent_ticket_id', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
-            ('agendamento_id', {'nome': 'agendamento_id', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
-            ('parametros_enviados', {'nome': 'parametros_enviados', 'tipo': 'CLOB', 'not_null': True, 'default': None}),
-            ('log_output', {'nome': 'log_output', 'tipo': 'CLOB', 'not_null': False, 'default': None}),
-            ('log_offset_chars', {'nome': 'log_offset_chars', 'tipo': 'NUMBER(20)', 'not_null': True, 'default': '0'}),
-            ('log_truncado', {'nome': 'log_truncado', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
-            ('return_code', {'nome': 'return_code', 'tipo': 'NUMBER(6)', 'not_null': False, 'default': None}),
-            ('scheduled_at', {'nome': 'scheduled_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
-            ('started_at', {'nome': 'started_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
-            ('heartbeat_at', {'nome': 'heartbeat_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
-            ('finished_at', {'nome': 'finished_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
-            ('created_at', {'nome': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('script_id', {'name': 'script_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('environment', {'name': 'environment', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('requested_by', {'name': 'requested_by', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('source_ip', {'name': 'source_ip', 'tipo': 'VARCHAR2(45 CHAR)', 'not_null': False, 'default': None}),
+            ('agent_id', {'name': 'agent_id', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
+            ('process_id', {'name': 'process_id', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
+            ('process_start', {'name': 'process_start', 'tipo': 'NUMBER(20)', 'not_null': False, 'default': None}),
+            ('status', {'name': 'status', 'tipo': 'VARCHAR2(15 CHAR)', 'not_null': True, 'default': "'PENDING'"}),
+            ('priority', {'name': 'priority', 'tipo': 'NUMBER(1)', 'not_null': True, 'default': '2'}),
+            ('cancel_requested', {'name': 'cancel_requested', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
+            ('status_reason', {'name': 'status_reason', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': False, 'default': None}),
+            ('parent_ticket_id', {'name': 'parent_ticket_id', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
+            ('schedule_id', {'name': 'schedule_id', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
+            ('submitted_params', {'name': 'submitted_params', 'tipo': 'CLOB', 'not_null': True, 'default': None}),
+            ('log_output', {'name': 'log_output', 'tipo': 'CLOB', 'not_null': False, 'default': None}),
+            ('log_offset_chars', {'name': 'log_offset_chars', 'tipo': 'NUMBER(20)', 'not_null': True, 'default': '0'}),
+            ('log_truncated', {'name': 'log_truncated', 'tipo': 'CHAR(1)', 'not_null': True, 'default': "'N'"}),
+            ('return_code', {'name': 'return_code', 'tipo': 'NUMBER(6)', 'not_null': False, 'default': None}),
+            ('scheduled_at', {'name': 'scheduled_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+            ('started_at', {'name': 'started_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('heartbeat_at', {'name': 'heartbeat_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('finished_at', {'name': 'finished_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict()),
         ('fks', OrderedDict([
             ('scr', {'sufixo': 'scr', 'colunas': ('script_id',), 'ref_tabela': 'scripts', 'ref_colunas': ('id',), 'on_delete': None}),
-            ('amb', {'sufixo': 'amb', 'colunas': ('ambiente',), 'ref_tabela': 'ambientes', 'ref_colunas': ('nome',), 'on_delete': None}),
-            ('usr', {'sufixo': 'usr', 'colunas': ('solicitante',), 'ref_tabela': 'usuarios', 'ref_colunas': ('login',), 'on_delete': None}),
+            ('env', {'sufixo': 'env', 'colunas': ('environment',), 'ref_tabela': 'ambientes', 'ref_colunas': ('name',), 'on_delete': None}),
+            ('usr', {'sufixo': 'usr', 'colunas': ('requested_by',), 'ref_tabela': 'usuarios', 'ref_colunas': ('login',), 'on_delete': None}),
             ('parent', {'sufixo': 'parent', 'colunas': ('parent_ticket_id',), 'ref_tabela': 'tickets', 'ref_colunas': ('id',), 'on_delete': 'SET NULL'}),
-            ('agd', {'sufixo': 'agd', 'colunas': ('agendamento_id',), 'ref_tabela': 'agendamentos', 'ref_colunas': ('id',), 'on_delete': 'SET NULL'}),
+            ('sch', {'sufixo': 'sch', 'colunas': ('schedule_id',), 'ref_tabela': 'agendamentos', 'ref_colunas': ('id',), 'on_delete': 'SET NULL'}),
         ])),
         ('cks', OrderedDict([
             ('stat', {'sufixo': 'stat', 'expr': "status IN ('PENDING','RUNNING','SUCCESS','FAILED','CANCELLED')"}),
-            ('prio', {'sufixo': 'prio', 'expr': "prioridade BETWEEN 1 AND 4"}),
-            ('cancreq', {'sufixo': 'cancreq', 'expr': "cancel_requested IN ('S','N')"}),
-            ('logtr', {'sufixo': 'logtr', 'expr': "log_truncado IN ('S','N')"}),
+            ('prio', {'sufixo': 'prio', 'expr': "priority BETWEEN 1 AND 4"}),
+            ('cancreq', {'sufixo': 'cancreq', 'expr': "cancel_requested IN ('Y','N')"}),
+            ('logtr', {'sufixo': 'logtr', 'expr': "log_truncated IN ('Y','N')"}),
             ('logoff', {'sufixo': 'logoff', 'expr': 'log_offset_chars >= 0'}),
-            ('motivo', {'sufixo': 'motivo', 'expr': "status_motivo IS NULL OR status_motivo IN ('EXIT_OK','EXIT_ERROR','KILLED_SIGNAL','TIMEOUT','NODE_OFFLINE','ORPHAN_PROCESS','FENCED','PRECHECK_FAILED','SPAWN_ERROR','LOG_LIMIT','SHUTDOWN','CANCEL_USER')"}),
+            ('reason', {'sufixo': 'reason', 'expr': "status_reason IS NULL OR status_reason IN ('EXIT_OK','EXIT_ERROR','KILLED_SIGNAL','TIMEOUT','NODE_OFFLINE','ORPHAN_PROCESS','FENCED','PRECHECK_FAILED','SPAWN_ERROR','LOG_LIMIT','SHUTDOWN','CANCEL_USER')"}),
         ])),
         ('indices', OrderedDict([
-            ('scr', {'sufixo': 'scr', 'colunas': ('script_id', 'ambiente', 'status'), 'expr': None, 'fbi': False}),
-            ('amb', {'sufixo': 'amb', 'colunas': ('ambiente',), 'expr': None, 'fbi': False}),
-            ('usr', {'sufixo': 'usr', 'colunas': ('solicitante',), 'expr': None, 'fbi': False}),
+            ('scr', {'sufixo': 'scr', 'colunas': ('script_id', 'environment', 'status'), 'expr': None, 'fbi': False}),
+            ('env', {'sufixo': 'env', 'colunas': ('environment',), 'expr': None, 'fbi': False}),
+            ('usr', {'sufixo': 'usr', 'colunas': ('requested_by',), 'expr': None, 'fbi': False}),
             ('par', {'sufixo': 'par', 'colunas': ('parent_ticket_id',), 'expr': None, 'fbi': False}),
-            ('agd', {'sufixo': 'agd', 'colunas': ('agendamento_id',), 'expr': None, 'fbi': False}),
+            ('sch', {'sufixo': 'sch', 'colunas': ('schedule_id',), 'expr': None, 'fbi': False}),
             # (created_at, id): retencao e a ordem da lista de tickets (created_at DESC, id DESC) sem SORT
             # da tabela inteira (F7.3, EXPLAIN com volume).
             ('crt', {'sufixo': 'crt', 'colunas': ('created_at', 'id'), 'expr': None, 'fbi': False}),
             ('hist', {'sufixo': 'hist', 'colunas': ('script_id', 'created_at'), 'expr': None, 'fbi': False}),
-            ('fila', {'sufixo': 'fila', 'colunas': (), 'expr': FBI_TCK_FILA_EXPR, 'fbi': True}),
+            ('queue', {'sufixo': 'queue', 'colunas': (), 'expr': FBI_TCK_FILA_EXPR, 'fbi': True}),
             ('run', {'sufixo': 'run', 'colunas': (), 'expr': FBI_TCK_RUN_EXPR, 'fbi': True}),
-            ('ocor', {'sufixo': 'ocor', 'colunas': (), 'expr': FBI_TCK_OCOR_EXPR, 'fbi': True, 'unico': True}),
+            ('occur', {'sufixo': 'occur', 'colunas': (), 'expr': FBI_TCK_OCOR_EXPR, 'fbi': True, 'unico': True}),
         ])),
         ('trigger_bu', None),
-        ('colunas_lob', ('parametros_enviados', 'log_output')),
+        ('colunas_lob', ('submitted_params', 'log_output')),
     ])
 
     # 14. Ticket x Resposta
     r['ticket_resp'] = OrderedDict([
-        ('entidade', 'ticket_resp'),
-        ('abrev', 'trsp'),
+        ('entity', 'ticket_resp'),
+        ('fisico', 'ticket_answer'),
+        ('abrev', 'tans'),
         ('rotulo', 'Ticket x Resposta'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('ticket_id', {'nome': 'ticket_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('parametro_id', {'nome': 'parametro_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('valor_resposta', {'nome': 'valor_resposta', 'tipo': 'VARCHAR2(500 CHAR)', 'not_null': False, 'default': None}),
-            ('created_at', {'nome': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('ticket_id', {'name': 'ticket_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('parameter_id', {'name': 'parameter_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('answer_value', {'name': 'answer_value', 'tipo': 'VARCHAR2(500 CHAR)', 'not_null': False, 'default': None}),
+            ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
-            ('tck_prm', {'sufixo': 'tck_prm', 'colunas': ('ticket_id', 'parametro_id')}),
+            ('tck_prm', {'sufixo': 'tck_prm', 'colunas': ('ticket_id', 'parameter_id')}),
         ])),
         ('fks', OrderedDict([
             ('tck', {'sufixo': 'tck', 'colunas': ('ticket_id',), 'ref_tabela': 'tickets', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
-            ('prm', {'sufixo': 'prm', 'colunas': ('parametro_id',), 'ref_tabela': 'parametros', 'ref_colunas': ('id',), 'on_delete': None}),
+            ('prm', {'sufixo': 'prm', 'colunas': ('parameter_id',), 'ref_tabela': 'parametros', 'ref_colunas': ('id',), 'on_delete': None}),
         ])),
         ('cks', OrderedDict()),
         ('indices', OrderedDict([
-            ('prm', {'sufixo': 'prm', 'colunas': ('parametro_id',), 'expr': None, 'fbi': False}),
+            ('prm', {'sufixo': 'prm', 'colunas': ('parameter_id',), 'expr': None, 'fbi': False}),
         ])),
         ('trigger_bu', None),
         ('colunas_lob', ()),
@@ -603,32 +636,33 @@ def _criar_registro_tabelas():
 
     # 15. Agentes
     r['agentes'] = OrderedDict([
-        ('entidade', 'agentes'),
+        ('entity', 'agentes'),
+        ('fisico', 'agents'),
         ('abrev', 'agt'),
         ('rotulo', 'Agentes'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('codigo', {'nome': 'codigo', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
-            ('hostname', {'nome': 'hostname', 'tipo': 'VARCHAR2(255 CHAR)', 'not_null': True, 'default': None}),
-            ('pid_daemon', {'nome': 'pid_daemon', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
-            ('versao', {'nome': 'versao', 'tipo': 'VARCHAR2(20 CHAR)', 'not_null': False, 'default': None}),
-            ('ambientes', {'nome': 'ambientes', 'tipo': 'VARCHAR2(1000 CHAR)', 'not_null': False, 'default': None}),
-            ('plataforma', {'nome': 'plataforma', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': False, 'default': None}),
-            ('interpretadores', {'nome': 'interpretadores', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': False, 'default': None}),
-            ('status', {'nome': 'status', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': True, 'default': "'ATIVO'"}),
-            ('iniciado_em', {'nome': 'iniciado_em', 'tipo': 'DATE', 'not_null': False, 'default': None}),
-            ('heartbeat_at', {'nome': 'heartbeat_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
-            ('config_criticos', {'nome': 'config_criticos', 'tipo': 'VARCHAR2(400 CHAR)', 'not_null': False, 'default': None}),
-            ('created_at', {'nome': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('code', {'name': 'code', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('hostname', {'name': 'hostname', 'tipo': 'VARCHAR2(255 CHAR)', 'not_null': True, 'default': None}),
+            ('daemon_pid', {'name': 'daemon_pid', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
+            ('version', {'name': 'version', 'tipo': 'VARCHAR2(20 CHAR)', 'not_null': False, 'default': None}),
+            ('environments', {'name': 'environments', 'tipo': 'VARCHAR2(1000 CHAR)', 'not_null': False, 'default': None}),
+            ('platform', {'name': 'platform', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': False, 'default': None}),
+            ('interpreters', {'name': 'interpreters', 'tipo': 'VARCHAR2(100 CHAR)', 'not_null': False, 'default': None}),
+            ('status', {'name': 'status', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': True, 'default': "'ACTIVE'"}),
+            ('started_at', {'name': 'started_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('heartbeat_at', {'name': 'heartbeat_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('critical_config', {'name': 'critical_config', 'tipo': 'VARCHAR2(400 CHAR)', 'not_null': False, 'default': None}),
+            ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
-            ('codigo', {'sufixo': 'codigo', 'colunas': ('codigo',)}),
+            ('code', {'sufixo': 'code', 'colunas': ('code',)}),
         ])),
         ('fks', OrderedDict()),
         ('cks', OrderedDict([
-            ('stat', {'sufixo': 'stat', 'expr': "status IN ('ATIVO','PARADO')"}),
-            ('plat', {'sufixo': 'plat', 'expr': "plataforma IS NULL OR plataforma IN ('LINUX','UNIX')"}),
+            ('stat', {'sufixo': 'stat', 'expr': "status IN ('ACTIVE','STOPPED')"}),
+            ('plat', {'sufixo': 'plat', 'expr': "platform IS NULL OR platform IN ('LINUX','UNIX')"}),
         ])),
         ('indices', OrderedDict()),
         ('trigger_bu', None),
@@ -637,18 +671,19 @@ def _criar_registro_tabelas():
 
     # 16. Auditoria
     r['auditoria'] = OrderedDict([
-        ('entidade', 'auditoria'),
+        ('entity', 'auditoria'),
+        ('fisico', 'audit'),
         ('abrev', 'aud'),
         ('rotulo', 'Auditoria'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('ator', {'nome': 'ator', 'tipo': 'VARCHAR2(40 CHAR)', 'not_null': True, 'default': None}),
-            ('ip_origem', {'nome': 'ip_origem', 'tipo': 'VARCHAR2(45 CHAR)', 'not_null': False, 'default': None}),
-            ('acao', {'nome': 'acao', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
-            ('entidade', {'nome': 'entidade', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
-            ('entidade_id', {'nome': 'entidade_id', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
-            ('detalhe', {'nome': 'detalhe', 'tipo': 'VARCHAR2(1000 CHAR)', 'not_null': False, 'default': None}),
-            ('created_at', {'nome': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('actor', {'name': 'actor', 'tipo': 'VARCHAR2(40 CHAR)', 'not_null': True, 'default': None}),
+            ('source_ip', {'name': 'source_ip', 'tipo': 'VARCHAR2(45 CHAR)', 'not_null': False, 'default': None}),
+            ('action', {'name': 'action', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('entity', {'name': 'entity', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('entity_id', {'name': 'entity_id', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
+            ('detail', {'name': 'detail', 'tipo': 'VARCHAR2(1000 CHAR)', 'not_null': False, 'default': None}),
+            ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict()),
@@ -656,8 +691,8 @@ def _criar_registro_tabelas():
         ('cks', OrderedDict()),
         ('indices', OrderedDict([
             ('crt', {'sufixo': 'crt', 'colunas': ('created_at',), 'expr': None, 'fbi': False}),
-            ('ent', {'sufixo': 'ent', 'colunas': ('entidade', 'entidade_id'), 'expr': None, 'fbi': False}),
-            ('ator', {'sufixo': 'ator', 'colunas': ('ator',), 'expr': None, 'fbi': False}),
+            ('ent', {'sufixo': 'ent', 'colunas': ('entity', 'entity_id'), 'expr': None, 'fbi': False}),
+            ('actor', {'sufixo': 'actor', 'colunas': ('actor',), 'expr': None, 'fbi': False}),
         ])),
         ('trigger_bu', None),
         ('colunas_lob', ()),
@@ -665,23 +700,24 @@ def _criar_registro_tabelas():
 
     # 17. Controle (CR-007, D4): linha unica com a versao do esquema e a concessao do purge.
     r['controle'] = OrderedDict([
-        ('entidade', 'controle'),
+        ('entity', 'controle'),
+        ('fisico', 'control'),
         ('abrev', 'ctl'),
         ('rotulo', 'Controle'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('versao_esquema', {'nome': 'versao_esquema', 'tipo': 'NUMBER(6)', 'not_null': True, 'default': None}),
-            ('versao_aplicada_em', {'nome': 'versao_aplicada_em', 'tipo': 'DATE', 'not_null': True, 'default': None}),
-            ('versao_aplicada_por', {'nome': 'versao_aplicada_por', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': True, 'default': None}),
-            ('purge_dono', {'nome': 'purge_dono', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': False, 'default': None}),
-            ('purge_concessao_ate', {'nome': 'purge_concessao_ate', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('schema_version', {'name': 'schema_version', 'tipo': 'NUMBER(6)', 'not_null': True, 'default': None}),
+            ('version_applied_at', {'name': 'version_applied_at', 'tipo': 'DATE', 'not_null': True, 'default': None}),
+            ('version_applied_by', {'name': 'version_applied_by', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': True, 'default': None}),
+            ('purge_owner', {'name': 'purge_owner', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': False, 'default': None}),
+            ('purge_lease_until', {'name': 'purge_lease_until', 'tipo': 'DATE', 'not_null': False, 'default': None}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict()),
         ('fks', OrderedDict()),
         ('cks', OrderedDict([
             ('id', {'sufixo': 'id', 'expr': "id = 1"}),
-            ('versao', {'sufixo': 'versao', 'expr': "versao_esquema >= 1"}),
+            ('version', {'sufixo': 'version', 'expr': "schema_version >= 1"}),
         ])),
         ('indices', OrderedDict()),
         ('trigger_bu', None),
@@ -690,19 +726,20 @@ def _criar_registro_tabelas():
 
     # 18. Saida do ticket (CR-012): zip da pasta de saida do script, uma linha por ticket.
     r['ticket_saida'] = OrderedDict([
-        ('entidade', 'ticket_saida'),
-        ('abrev', 'tsai'),
+        ('entity', 'ticket_saida'),
+        ('fisico', 'ticket_output'),
+        ('abrev', 'tout'),
         ('rotulo', 'Saida do ticket'),
         ('colunas', OrderedDict([
-            ('id', {'nome': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('ticket_id', {'nome': 'ticket_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
-            ('situacao', {'nome': 'situacao', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': True, 'default': None}),
-            ('motivo', {'nome': 'motivo', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': False, 'default': None}),
-            ('agente_id', {'nome': 'agente_id', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
-            ('qtd_arquivos', {'nome': 'qtd_arquivos', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
-            ('tamanho_bytes', {'nome': 'tamanho_bytes', 'tipo': 'NUMBER(12)', 'not_null': False, 'default': None}),
-            ('conteudo', {'nome': 'conteudo', 'tipo': 'BLOB', 'not_null': False, 'default': None}),
-            ('created_at', {'nome': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+            ('id', {'name': 'id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('ticket_id', {'name': 'ticket_id', 'tipo': 'NUMBER(10)', 'not_null': True, 'default': None}),
+            ('state', {'name': 'state', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': True, 'default': None}),
+            ('reason', {'name': 'reason', 'tipo': 'VARCHAR2(10 CHAR)', 'not_null': False, 'default': None}),
+            ('agent_id', {'name': 'agent_id', 'tipo': 'VARCHAR2(30 CHAR)', 'not_null': True, 'default': None}),
+            ('file_count', {'name': 'file_count', 'tipo': 'NUMBER(10)', 'not_null': False, 'default': None}),
+            ('size_bytes', {'name': 'size_bytes', 'tipo': 'NUMBER(12)', 'not_null': False, 'default': None}),
+            ('content', {'name': 'content', 'tipo': 'BLOB', 'not_null': False, 'default': None}),
+            ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
         ])),
         ('pk', {'colunas': ('id',), 'sufixo': None}),
         ('uks', OrderedDict([
@@ -712,15 +749,15 @@ def _criar_registro_tabelas():
             ('tck', {'sufixo': 'tck', 'colunas': ('ticket_id',), 'ref_tabela': 'tickets', 'ref_colunas': ('id',), 'on_delete': 'CASCADE'}),
         ])),
         ('cks', OrderedDict([
-            ('sit', {'sufixo': 'sit', 'expr': "situacao IN ('GRAVANDO','DISPONIVEL','EXCEDEU','FALHOU')"}),
-            ('mot', {'sufixo': 'mot', 'expr': "motivo IS NULL OR motivo IN ('ARQUIVOS','BYTES','PRAZO','ERRO')"}),
-            ('tam', {'sufixo': 'tam', 'expr': "(qtd_arquivos IS NULL OR qtd_arquivos >= 0) AND (tamanho_bytes IS NULL OR tamanho_bytes >= 0)"}),
+            ('state', {'sufixo': 'state', 'expr': "state IN ('WRITING','AVAILABLE','EXCEEDED','FAILED')"}),
+            ('rsn', {'sufixo': 'rsn', 'expr': "reason IS NULL OR reason IN ('FILES','BYTES','DEADLINE','ERROR')"}),
+            ('size', {'sufixo': 'size', 'expr': "(file_count IS NULL OR file_count >= 0) AND (size_bytes IS NULL OR size_bytes >= 0)"}),
         ])),
         ('indices', OrderedDict([
-            ('grav', {'sufixo': 'grav', 'colunas': (), 'expr': FBI_TSAI_GRAV_EXPR, 'fbi': True}),
+            ('write', {'sufixo': 'write', 'colunas': (), 'expr': FBI_TSAI_GRAV_EXPR, 'fbi': True}),
         ])),
         ('trigger_bu', None),
-        ('colunas_lob', ('conteudo',)),
+        ('colunas_lob', ('content',)),
     ])
 
     for entidade, defn in r.items():
@@ -737,10 +774,10 @@ def _aplicar_colunas_registro(defn):
     """
     colunas = defn['colunas']
     novas = OrderedDict([
-        ('created_at', {'nome': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
-        ('created_by', {'nome': 'created_by', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': True, 'default': None}),
-        ('updated_at', {'nome': 'updated_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
-        ('updated_by', {'nome': 'updated_by', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': False, 'default': None}),
+        ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
+        ('created_by', {'name': 'created_by', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': True, 'default': None}),
+        ('updated_at', {'name': 'updated_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
+        ('updated_by', {'name': 'updated_by', 'tipo': 'VARCHAR2(%d CHAR)' % ATOR_MAX, 'not_null': False, 'default': None}),
     ])
     for nome, coluna in novas.items():
         if nome not in colunas:
@@ -792,11 +829,11 @@ def nomes(prefixo, tabelas=None):
     """Gera e retorna todos os identificadores expandidos a partir de table_prefix.
 
     Segue as regras do template README §9.1:
-      tabela      = {prefixo}{entidade}
-      sequence    = sq_{prefixo}{entidade}
+      tabela      = {prefixo}{fisico}
+      sequence    = sq_{prefixo}{fisico}
       trigger PK  = tr_{prefixo}{abrev}_bi
       trigger UPD = tr_{prefixo}{abrev}_bu
-      PK          = pk_{prefixo}{entidade}
+      PK          = pk_{prefixo}{fisico}
       UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}
     """
     validar_prefixo(prefixo)
@@ -805,18 +842,18 @@ def nomes(prefixo, tabelas=None):
     resultado = NomesEsquema()
     for entidade, defn in registro.items():
         abrev = defn['abrev']
-        tabela_nome = "{}{}".format(prefixo, entidade)
-        seq_nome = "sq_{}{}".format(prefixo, entidade)
+        tabela_nome = "{}{}".format(prefixo, defn['fisico'])
+        seq_nome = "sq_{}{}".format(prefixo, defn['fisico'])
         tr_bi_nome = "tr_{}{}_bi".format(prefixo, abrev)
         tr_bu_nome = "tr_{}{}_bu".format(prefixo, abrev) if defn.get('trigger_bu') else None
-        pk_nome = "pk_{}{}".format(prefixo, entidade)
+        pk_nome = "pk_{}{}".format(prefixo, defn['fisico'])
 
         uks = OrderedDict()
         for sufixo_key, uk_def in defn.get('uks', {}).items():
             suf = uk_def['sufixo']
             uk_nome = "uk_{}{}_{}".format(prefixo, abrev, suf)
             uks[uk_nome] = OrderedDict([
-                ('nome', uk_nome),
+                ('name', uk_nome),
                 ('sufixo', suf),
                 ('colunas', uk_def['colunas']),
             ])
@@ -825,9 +862,9 @@ def nomes(prefixo, tabelas=None):
         for sufixo_key, fk_def in defn.get('fks', {}).items():
             suf = fk_def['sufixo']
             fk_nome = "fk_{}{}_{}".format(prefixo, abrev, suf)
-            ref_tabela_nome = "{}{}".format(prefixo, fk_def['ref_tabela'])
+            ref_tabela_nome = "{}{}".format(prefixo, registro[fk_def['ref_tabela']]['fisico'])
             fks[fk_nome] = OrderedDict([
-                ('nome', fk_nome),
+                ('name', fk_nome),
                 ('sufixo', suf),
                 ('colunas', fk_def['colunas']),
                 ('ref_entidade', fk_def['ref_tabela']),
@@ -841,7 +878,7 @@ def nomes(prefixo, tabelas=None):
             suf = ck_def['sufixo']
             ck_nome = "ck_{}{}_{}".format(prefixo, abrev, suf)
             cks[ck_nome] = OrderedDict([
-                ('nome', ck_nome),
+                ('name', ck_nome),
                 ('sufixo', suf),
                 ('expr', ck_def['expr']),
             ])
@@ -851,7 +888,7 @@ def nomes(prefixo, tabelas=None):
             suf = ix_def['sufixo']
             ix_nome = "ix_{}{}_{}".format(prefixo, abrev, suf)
             indices[ix_nome] = OrderedDict([
-                ('nome', ix_nome),
+                ('name', ix_nome),
                 ('sufixo', suf),
                 ('colunas', ix_def['colunas']),
                 ('expr', ix_def.get('expr')),
@@ -860,7 +897,7 @@ def nomes(prefixo, tabelas=None):
             ])
 
         info = OrderedDict([
-            ('entidade', entidade),
+            ('entity', entidade),
             ('abrev', abrev),
             ('rotulo', defn.get('rotulo', entidade)),
             ('tabela', tabela_nome),
@@ -969,7 +1006,7 @@ def normalizar_expressao(texto):
     """Normaliza expressoes SQL (CK, FBI, DATA_DEFAULT) para comparacao (CR-008, R-14).
 
     Regras:
-      1. Remove aspas duplas (o Oracle devolve "STATUS", "PRIORIDADE").
+      1. Remove aspas duplas (o Oracle devolve "STATUS", "PRIORITY").
       2. Converte para maiusculas fora de literais entre aspas simples.
       3. Colapsa sequencias de espacos, tabs e quebras de linha em um unico espaco.
       4. Remove espacos adjacentes a '(', ')' e ',' e operadores fora de literais.

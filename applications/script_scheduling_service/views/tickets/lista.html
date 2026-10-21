@@ -7,13 +7,13 @@ _opc_ambientes = [('', 'Todos')] + [(_a, _a) for _a in opcoes['ambientes']]
 _opc_scripts = [('', 'Todos')] + list(opcoes['scripts'])
 _opc_origens = [('', 'Todas')] + list(opcoes['origens'])
 _campos = []
-_campos.append({'nome': 'status', 'rotulo': 'Status', 'tipo': 'multipla', 'valor': filtros_ativos.get('status', []), 'opcoes': _opc_status})
-_campos.append({'nome': 'ambiente', 'rotulo': 'Ambiente', 'tipo': 'select', 'valor': filtros_ativos.get('ambiente'), 'opcoes': _opc_ambientes})
-_campos.append({'nome': 'script', 'rotulo': 'Script', 'tipo': 'select', 'valor': filtros_ativos.get('script'), 'opcoes': _opc_scripts})
-_campos.append({'nome': 'solicitante', 'rotulo': 'Solicitante (login)', 'tipo': 'texto', 'valor': filtros_ativos.get('solicitante')})
-_campos.append({'nome': 'criado_de', 'rotulo': 'Criado de', 'tipo': 'data', 'valor': filtros_ativos.get('criado_de')})
-_campos.append({'nome': 'criado_ate', 'rotulo': 'Criado até', 'tipo': 'data', 'valor': filtros_ativos.get('criado_ate')})
-_campos.append({'nome': 'origem', 'rotulo': 'Origem', 'tipo': 'select', 'valor': filtros_ativos.get('origem'), 'opcoes': _opc_origens})
+_campos.append({'name': 'status', 'rotulo': 'Status', 'tipo': 'multipla', 'valor': filtros_ativos.get('status', []), 'opcoes': _opc_status})
+_campos.append({'name': 'environment', 'rotulo': 'Ambiente', 'tipo': 'select', 'valor': filtros_ativos.get('environment'), 'opcoes': _opc_ambientes})
+_campos.append({'name': 'script', 'rotulo': 'Script', 'tipo': 'select', 'valor': filtros_ativos.get('script'), 'opcoes': _opc_scripts})
+_campos.append({'name': 'requested_by', 'rotulo': 'Solicitante (login)', 'tipo': 'texto', 'valor': filtros_ativos.get('requested_by')})
+_campos.append({'name': 'criado_de', 'rotulo': 'Criado de', 'tipo': 'data', 'valor': filtros_ativos.get('criado_de')})
+_campos.append({'name': 'criado_ate', 'rotulo': 'Criado até', 'tipo': 'data', 'valor': filtros_ativos.get('criado_ate')})
+_campos.append({'name': 'origem', 'rotulo': 'Origem', 'tipo': 'select', 'valor': filtros_ativos.get('origem'), 'opcoes': _opc_origens})
 filtros = {'id': 'filtro-tickets', 'url_base': ('tickets', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': _campos}
 }}
 <div class="sss-page-header">
@@ -29,10 +29,10 @@ filtros = {'id': 'filtro-tickets', 'url_base': ('tickets', 'lista'), 'preservar'
   <div class="sss-card-titulo sss-titulo-linha">
     <h2 class="sss-card-titulo-texto" id="titulo-tickets">Fila de tickets</h2>
     <div class="form-check form-switch mb-0">
-      <input class="form-check-input" type="checkbox" role="switch" id="auto-atualizar" :checked="ativo" @change="alternar">
+      <input class="form-check-input" type="checkbox" role="switch" id="auto-atualizar" :checked="active" @change="alternar">
       <label class="form-check-label" for="auto-atualizar">Atualizar automaticamente</label>
     </div>
-    <span class="sss-texto-suave sss-auto-situacao" aria-live="polite" x-text="situacao"></span>
+    <span class="sss-texto-suave sss-auto-situacao" aria-live="polite" x-text="state"></span>
   </div>
   {{include 'tickets/lista.load'}}
 </section>

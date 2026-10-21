@@ -46,15 +46,15 @@ url_base = ('tickets', 'lista')
         <tr{{if _lt['status'] == 'RUNNING':}} class="sss-linha-running"{{pass}}>
           <td class="sss-col-num sss-mono"><a href="{{=URL(c='tickets', f='detalhe', args=[_lt['id']], extension=False)}}">{{=_lt['id']}}</a></td>
           <td class="sss-mono">{{=_lt['script_nome']}}{{if _lt['origem'] == 'agendamento':}} <span class="badge text-bg-secondary" title="Criado por regra de agendamento">agend.</span>{{pass}}</td>
-          <td>{{=_lt['ambiente']}}</td>
+          <td>{{=_lt['environment']}}</td>
           <td>
             {{status = _lt['status']
             status_motivo = None}}{{include 'components/badge_status.html'}}
-            {{if _lt['status_motivo']:}}<span class="sss-motivo" title="{{=_lt['descricao_motivo']}}">{{=_lt['status_motivo']}}</span>{{pass}}
+            {{if _lt['status_reason']:}}<span class="sss-motivo" title="{{=_lt['descricao_motivo']}}">{{=_lt['status_reason']}}</span>{{pass}}
             {{if _lt['cancel_requested'] and _lt['status'] == 'RUNNING':}}<span class="sss-motivo">Cancelamento solicitado</span>{{pass}}
           </td>
-          <td class="sss-col-num">{{=_lt['prioridade']}}</td>
-          <td>{{=_lt['solicitante']}}</td>
+          <td class="sss-col-num">{{=_lt['priority']}}</td>
+          <td>{{=_lt['requested_by']}}</td>
           <td class="sss-col-data">{{=ui_helpers.formatar_data(_lt['created_at'])}}</td>
           <td class="sss-col-data">{{=ui_helpers.formatar_data(_lt['started_at'])}}</td>
           <td class="sss-col-num">{{=_lt['duracao']}}</td>

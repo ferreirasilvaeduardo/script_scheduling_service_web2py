@@ -33,17 +33,17 @@ class TestSemBanco(unittest.TestCase):
         self.addCleanup(valor.stop)
 
     def test_iniciar_reinicia_a_propria_ou_inclui_com_posse_do_ticket(self):
-        conn = _Conn([("SET conteudo = EMPTY_BLOB()", (1, []))])
+        conn = _Conn([("SET content = EMPTY_BLOB()", (1, []))])
         self.assertTrue(self.repo.iniciar(conn, 7, AGENTE))
         self.assertEqual(conn.sql("INSERT"), [])
-        conn = _Conn([("SET conteudo = EMPTY_BLOB()", (0, [])), ("INSERT INTO", (1, []))])
+        conn = _Conn([("SET content = EMPTY_BLOB()", (0, [])), ("INSERT INTO", (1, []))])
         self.assertTrue(self.repo.iniciar(conn, 7, AGENTE))
         sql, binds = [e for e in conn.executados if "INSERT INTO" in e[0]][0]
-        self.assertIn("FROM openrisow.tbsss_tickets t WHERE t.id = :ticket_id AND t.agente_id = :agente_id", sql)
+        self.assertIn("FROM openrisow.tbsss_tickets t WHERE t.id = :ticket_id AND t.agent_id = :agent_id", sql)
         self.assertIn("NOT EXISTS", sql)
         self.assertIn("EMPTY_BLOB()", sql)
-        self.assertEqual((binds["situacao"], binds["ator"], binds["id"]), ("GRAVANDO", "SYSTEM:srv-01", 501))
-        conn = _Conn([("SET conteudo = EMPTY_BLOB()", (0, [])), ("INSERT INTO", (0, []))])
+        self.assertEqual((binds["state"], binds["actor"], binds["id"]), ("WRITING", "SYSTEM:srv-01", 501))
+        conn = _Conn([("SET content = EMPTY_BLOB()", (0, [])), ("INSERT INTO", (0, []))])
         self.assertFalse(self.repo.iniciar(conn, 7, AGENTE))
         self.assertEqual((conn.commits, conn.rollbacks), (0, 0), "sem COMMIT: a fase decide")
 
@@ -56,7 +56,7 @@ class TestSemBanco(unittest.TestCase):
         sql, binds = conn.executados[0]
         self.assertIn("FOR UPDATE WAIT 5", sql)
         self.assertIn("DBMS_LOB.APPEND(v_lob, :parte)", sql)
-        self.assertIn("situacao = 'GRAVANDO'", sql)
+        self.assertIn("state = 'WRITING'", sql)
         self.assertEqual((binds["offset_esperado"], binds["parte"]), (1048576, b"x"))
         conn = _Conn([("DECLARE", _Erro("ORA-20003: SAIDA_OFFSET_DIVERGENTE"))])
         with self.assertRaises(SaidaOffsetInconsistente):
@@ -66,41 +66,41 @@ class TestSemBanco(unittest.TestCase):
                 self.repo.anexar(_Conn([]), 7, AGENTE, 0, ruim)
 
     def test_concluir_confere_o_tamanho_no_banco(self):
-        conn = _Conn([("SET situacao = 'DISPONIVEL'", (1, []))])
+        conn = _Conn([("SET state = 'AVAILABLE'", (1, []))])
         self.assertTrue(self.repo.concluir(conn, 7, AGENTE, 3, 2048))
         sql, binds = conn.executados[0]
-        self.assertIn("DBMS_LOB.GETLENGTH(conteudo) = :tamanho_bytes", sql)
-        self.assertIn("updated_by = :ator", sql)
+        self.assertIn("DBMS_LOB.GETLENGTH(content) = :size_bytes", sql)
+        self.assertIn("updated_by = :actor", sql)
         self.assertFalse(self.repo.concluir(_Conn([]), 7, AGENTE, 3, 2048))
 
     def test_registrar_sem_conteudo(self):
-        conn = _Conn([("SET situacao = :situacao", (1, []))])
-        self.assertTrue(self.repo.registrar_sem_conteudo(conn, 7, AGENTE, "EXCEDEU", "ARQUIVOS", 1001))
+        conn = _Conn([("SET state = :state", (1, []))])
+        self.assertTrue(self.repo.registrar_sem_conteudo(conn, 7, AGENTE, "EXCEEDED", "FILES", 1001))
         self.assertEqual(conn.sql("INSERT"), [])
-        conn = _Conn([("SET situacao = :situacao", (0, [])), ("INSERT INTO", (1, []))])
-        self.assertTrue(self.repo.registrar_sem_conteudo(conn, 7, AGENTE, "FALHOU", "PRAZO"))
+        conn = _Conn([("SET state = :state", (0, [])), ("INSERT INTO", (1, []))])
+        self.assertTrue(self.repo.registrar_sem_conteudo(conn, 7, AGENTE, "FAILED", "DEADLINE"))
         sql, binds = [e for e in conn.executados if "INSERT INTO" in e[0]][0]
-        self.assertIn(", NULL, SYSDATE", sql, "sem conteudo")
-        self.assertEqual((binds["situacao"], binds["motivo"]), ("FALHOU", "PRAZO"))
-        for situacao, motivo in (("DISPONIVEL", "ERRO"), ("FALHOU", "OUTRO")):
+        self.assertIn(", NULL, SYSDATE", sql, "sem content")
+        self.assertEqual((binds["state"], binds["reason"]), ("FAILED", "DEADLINE"))
+        for situacao, motivo in (("AVAILABLE", "ERROR"), ("FAILED", "OUTRO")):
             with self.assertRaises(ValueError):
                 self.repo.registrar_sem_conteudo(_Conn([]), 7, AGENTE, situacao, motivo)
 
     def test_falhar_gravando_usa_o_indice_de_funcao(self):
-        conn = _Conn([("SET situacao = 'FALHOU'", (2, []))])
+        conn = _Conn([("SET state = 'FAILED'", (2, []))])
         self.assertEqual(self.repo.falhar_gravando_do_agente(conn, AGENTE), 2)
-        self.assertIn("(CASE WHEN situacao = 'GRAVANDO' THEN agente_id END) = :agente_id", conn.executados[0][0])
+        self.assertIn("(CASE WHEN state = 'WRITING' THEN agent_id END) = :agent_id", conn.executados[0][0])
 
     def test_situacao(self):
-        self.assertEqual(self.repo.situacao(_Conn([("SELECT situacao", (1, [("DISPONIVEL", AGENTE)]))]), 7),
-                         ("DISPONIVEL", AGENTE))
+        self.assertEqual(self.repo.situacao(_Conn([("SELECT state", (1, [("AVAILABLE", AGENTE)]))]), 7),
+                         ("AVAILABLE", AGENTE))
         self.assertIsNone(self.repo.situacao(_Conn([]), 7))
 
     def test_prefixo_e_owner_parametrizados(self):
         repo = RepoSchedulerSaida("outro", "abcdefg_")
-        conn = _Conn([("SET conteudo = EMPTY_BLOB()", (1, []))])
+        conn = _Conn([("SET content = EMPTY_BLOB()", (1, []))])
         repo.iniciar(conn, 1, AGENTE)
-        self.assertIn("outro.abcdefg_ticket_saida", conn.executados[0][0])
+        self.assertIn("outro.abcdefg_ticket_output", conn.executados[0][0])
         self.assertNotIn("tbsss_", conn.executados[0][0])
 
 
@@ -164,7 +164,7 @@ class TestSchedulerSaidaOracle(unittest.TestCase):
         self.fila = RepoSchedulerFila(cat._owner, cat._prefixo)
         self.repo = RepoSchedulerSaida(cat._owner, cat._prefixo)
         self.agente = "tst-sai-%s" % self._massa.suf
-        self.amb = self.c["amb1"]["nome"]
+        self.amb = self.c["amb1"]["name"]
         self.conn = cat._obter_conexao()
         self.addCleanup(self.conn.close)
         self.tickets = self.obter_repo("tickets")
@@ -173,8 +173,8 @@ class TestSchedulerSaidaOracle(unittest.TestCase):
         self.contrato.tearDown(self)
 
     def _ticket_do_agente(self):
-        tid = self._massa.ticket(ator="teste", script_id=self.c["scr"]["id"], ambiente=self.amb,
-                                 solicitante=self.c["login"])
+        tid = self._massa.ticket(actor="teste", script_id=self.c["scr"]["id"], environment=self.amb,
+                                 requested_by=self.c["login"])
         self.assertTrue(self.fila.claim(self.conn, tid, self.c["scr"]["id"], self.amb, self.agente)[0])
         self.assertTrue(self.fila.finalizar(self.conn, tid, self.agente, "SUCCESS", "EXIT_OK", 0))
         return tid
@@ -196,17 +196,17 @@ class TestSchedulerSaidaOracle(unittest.TestCase):
             self.repo.anexar(self.conn, tid, self.agente, 10, p2)
         self.conn.rollback()
         self.assertEqual(self.repo.anexar(self.conn, tid, self.agente, len(p1), p2), "GRAVADO")
-        self.assertEqual(self.tickets.saida_obter(tid)["situacao"], "GRAVANDO")
+        self.assertEqual(self.tickets.saida_obter(tid)["state"], "WRITING")
         with self.assertRaises(self.trc.RepoNaoEncontrado):
             self.tickets.saida_ler(tid, 0, 10)
         self.assertFalse(self.repo.concluir(self.conn, tid, self.agente, 2, len(zip_) + 1), "tamanho conferido")
         self.assertTrue(self.repo.concluir(self.conn, tid, self.agente, 2, len(zip_)))
         self.conn.commit()
         meta = self.tickets.saida_obter(tid)
-        self.assertEqual((meta["situacao"], meta["qtd_arquivos"], meta["tamanho_bytes"], meta["agente_id"]),
-                         ("DISPONIVEL", 2, len(zip_), self.agente))
+        self.assertEqual((meta["state"], meta["file_count"], meta["size_bytes"], meta["agent_id"]),
+                         ("AVAILABLE", 2, len(zip_), self.agente))
         self.assertEqual(meta["updated_by"], "SYSTEM:%s" % self.agente)
-        self.assertNotIn("conteudo", meta)
+        self.assertNotIn("content", meta)
         lido, off = b"", 0
         while True:
             parte = self.tickets.saida_ler(tid, off, 300000)
@@ -243,21 +243,21 @@ class TestSchedulerSaidaOracle(unittest.TestCase):
 
     def test_excedeu_falhou_e_startup_check(self):
         t1, t2, t3 = self._ticket_do_agente(), self._ticket_do_agente(), self._ticket_do_agente()
-        self.assertTrue(self.repo.registrar_sem_conteudo(self.conn, t1, self.agente, "EXCEDEU", "ARQUIVOS", 1001))
+        self.assertTrue(self.repo.registrar_sem_conteudo(self.conn, t1, self.agente, "EXCEEDED", "FILES", 1001))
         self.assertTrue(self.repo.iniciar(self.conn, t2, self.agente))
-        self.assertTrue(self.repo.registrar_sem_conteudo(self.conn, t2, self.agente, "FALHOU", "PRAZO"))
+        self.assertTrue(self.repo.registrar_sem_conteudo(self.conn, t2, self.agente, "FAILED", "DEADLINE"))
         self.assertTrue(self.repo.iniciar(self.conn, t3, self.agente))
         self.conn.commit()
         self.assertEqual(self.repo.falhar_gravando_do_agente(self.conn, self.agente), 1)
         self.conn.commit()
-        for tid, esperado in ((t1, ("EXCEDEU", "ARQUIVOS", 1001)), (t2, ("FALHOU", "PRAZO", None)),
-                              (t3, ("FALHOU", "ERRO", None))):
+        for tid, esperado in ((t1, ("EXCEEDED", "FILES", 1001)), (t2, ("FAILED", "DEADLINE", None)),
+                              (t3, ("FAILED", "ERROR", None))):
             meta = self.tickets.saida_obter(tid)
-            self.assertEqual((meta["situacao"], meta["motivo"], meta["qtd_arquivos"]), esperado)
+            self.assertEqual((meta["state"], meta["reason"], meta["file_count"]), esperado)
             with self.assertRaises(self.trc.RepoNaoEncontrado):
                 self.tickets.saida_ler(tid, 0, 10)
-        self.assertEqual(self.repo.situacao(self.conn, t1), ("EXCEDEU", self.agente))
-        self.assertFalse(self.repo.registrar_sem_conteudo(self.conn, t1, self.agente, "FALHOU", "ERRO"))
+        self.assertEqual(self.repo.situacao(self.conn, t1), ("EXCEEDED", self.agente))
+        self.assertFalse(self.repo.registrar_sem_conteudo(self.conn, t1, self.agente, "FAILED", "ERROR"))
         self.conn.rollback()
 
 

@@ -137,11 +137,11 @@
           var corpo = new URLSearchParams();
           var dados = new FormData(form);
           dados.forEach(function (valor, chave) {
-            if (chave !== 'valor_padrao') {
+            if (chave !== 'default_value') {
               corpo.append(chave, valor);
             }
           });
-          corpo.set('opcoes_json', this.opcoesJson);
+          corpo.set('options_json', this.opcoesJson);
           corpo.set('valor_teste', this.$refs.valorTeste.value);
           this.testando = true;
           this.limparTeste();

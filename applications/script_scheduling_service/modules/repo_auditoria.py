@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Contrato de persistencia para trilha de auditoria (tbsss_auditoria)."""
+"""Contrato de persistencia para trilha de auditoria (tbsss_audit)."""
 
 
 class RepoAuditoria(object):

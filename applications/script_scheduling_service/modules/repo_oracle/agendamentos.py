@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Implementacao Oracle 11gR2 do repositorio de agendamentos (F7.3, agregado AGENDAMENTOS; AGENTS §4).
 
-tbsss_agendamentos com a mesma semantica do repo_fake/agendamentos.py (README §2.5):
+tbsss_schedules com a mesma semantica do repo_fake/agendamentos.py (README §2.5):
 - SQL estatico com binds; os modelos ficam nas constantes abaixo e recebem, uma vez por instancia,
   somente identificadores qualificados por sql_ident (owner e prefixo validados);
 - CKs e FKs conferidas antes do DML, na ordem do FAKE e com os mesmos nomes (sem gravacao parcial);
@@ -21,23 +21,23 @@ from repo_agendamentos import RepoAgendamentos
 from repo_oracle.base import BaseRepoOracle, gravar_auditoria, validar_ator_registro
 
 _LIMITE_TOTAL = 10001
-_TIPOS = ("UNICA", "DIARIA", "SEMANAL", "MENSAL", "CRON")
-_MOTIVOS_PAUSA = ("USUARIO_INATIVO", "SEM_PERMISSAO", "SCRIPT_INATIVO", "AMBIENTE_INATIVO",
-                  "PARAM_INVALIDO", "CRON_INVALIDO", "CONCLUIDO", "MANUAL", "ERRO_INTERNO")
+_TIPOS = ("ONCE", "DAILY", "WEEKLY", "MONTHLY", "CRON")
+_MOTIVOS_PAUSA = ("USER_INACTIVE", "NO_PERMISSION", "SCRIPT_INACTIVE", "ENVIRONMENT_INACTIVE",
+                  "INVALID_PARAM", "INVALID_CRON", "COMPLETED", "MANUAL", "INTERNAL_ERROR")
 _RE_HORA = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
 _RE_DSEM = re.compile(r"^[1-7](,[1-7]){0,6}$")
 _TAMANHO_NOME = 60
 
-_COLS = ("id", "nome", "script_id", "ambiente", "usuario_id", "prioridade", "tipo_recorrencia",
-         "expressao_cron", "hora_execucao", "dias_semana", "dia_mes", "parametros_json", "data_inicio",
-         "data_fim", "proxima_execucao", "ultima_execucao", "ultimo_ticket_id", "pausa_motivo", "ativo",
+_COLS = ("id", "name", "script_id", "environment", "user_id", "priority", "recurrence_type",
+         "cron_expression", "run_time", "week_days", "month_day", "params_json", "start_date",
+         "end_date", "next_run_at", "last_run_at", "last_ticket_id", "pause_reason", "active",
          "created_at", "created_by", "updated_at", "updated_by")
-_COLUNAS_ALTERAVEIS = ("nome", "script_id", "ambiente", "usuario_id", "prioridade",
-                       "tipo_recorrencia", "expressao_cron", "hora_execucao", "dias_semana",
-                       "dia_mes", "parametros_json", "data_inicio", "data_fim",
-                       "proxima_execucao", "ultima_execucao", "ultimo_ticket_id",
-                       "pausa_motivo", "ativo")
-_DATAS = ("data_inicio", "data_fim", "proxima_execucao", "ultima_execucao")
+_COLUNAS_ALTERAVEIS = ("name", "script_id", "environment", "user_id", "priority",
+                       "recurrence_type", "cron_expression", "run_time", "week_days",
+                       "month_day", "params_json", "start_date", "end_date",
+                       "next_run_at", "last_run_at", "last_ticket_id",
+                       "pause_reason", "active")
+_DATAS = ("start_date", "end_date", "next_run_at", "last_run_at")
 
 
 def _lista(cols, alias=""):
@@ -52,40 +52,40 @@ def _lista(cols, alias=""):
 _SQL_OBTER = "SELECT " + _lista(_COLS) + " FROM {agd} WHERE id = :id"
 _SQL_OBTER_LOCK = _SQL_OBTER + " FOR UPDATE WAIT 5"
 _SQL_EXISTE = "SELECT id FROM {agd} WHERE id = :id"
-_SQL_LISTAR = "SELECT " + _lista(_COLS) + " FROM {agd}{where} ORDER BY proxima_execucao, id"
+_SQL_LISTAR = "SELECT " + _lista(_COLS) + " FROM {agd}{where} ORDER BY next_run_at, id"
 _SQL_CONTAR = "SELECT COUNT(*) FROM (SELECT id FROM {agd} WHERE {where_count})"
 _SQL_SCR_EXISTE = "SELECT id FROM {scr} WHERE id = :id"
 _SQL_USR_EXISTE = "SELECT id FROM {usr} WHERE id = :id"
-_SQL_AMB_EXISTE = "SELECT id FROM {amb} WHERE nome = :nome"
+_SQL_AMB_EXISTE = "SELECT id FROM {amb} WHERE name = :name"
 _SQL_TICKET_STATUS = "SELECT status FROM {tck} WHERE id = :id"
 _SQL_INSERIR = (
-    "INSERT INTO {agd} (id, nome, script_id, ambiente, usuario_id, prioridade, tipo_recorrencia, "
-    "expressao_cron, hora_execucao, dias_semana, dia_mes, parametros_json, data_inicio, data_fim, "
-    "proxima_execucao, ultima_execucao, ultimo_ticket_id, pausa_motivo, ativo, "
+    "INSERT INTO {agd} (id, name, script_id, environment, user_id, priority, recurrence_type, "
+    "cron_expression, run_time, week_days, month_day, params_json, start_date, end_date, "
+    "next_run_at, last_run_at, last_ticket_id, pause_reason, active, "
     "created_at, created_by, updated_at, updated_by) "
-    "VALUES (:id, :nome, :script_id, :ambiente, :usuario_id, :prioridade, :tipo_recorrencia, "
-    ":expressao_cron, :hora_execucao, :dias_semana, :dia_mes, :parametros_json, :data_inicio, :data_fim, "
-    ":proxima_execucao, :ultima_execucao, :ultimo_ticket_id, :pausa_motivo, :ativo, "
-    "SYSDATE, :ator, NULL, NULL)"
+    "VALUES (:id, :name, :script_id, :environment, :user_id, :priority, :recurrence_type, "
+    ":cron_expression, :run_time, :week_days, :month_day, :params_json, :start_date, :end_date, "
+    ":next_run_at, :last_run_at, :last_ticket_id, :pause_reason, :active, "
+    "SYSDATE, :actor, NULL, NULL)"
 )
 _SQL_ALTERAR = (
-    "UPDATE {agd} SET nome = :nome, script_id = :script_id, ambiente = :ambiente, usuario_id = :usuario_id, "
-    "prioridade = :prioridade, tipo_recorrencia = :tipo_recorrencia, expressao_cron = :expressao_cron, "
-    "hora_execucao = :hora_execucao, dias_semana = :dias_semana, dia_mes = :dia_mes, "
-    "parametros_json = :parametros_json, data_inicio = :data_inicio, data_fim = :data_fim, "
-    "proxima_execucao = :proxima_execucao, ultima_execucao = :ultima_execucao, "
-    "ultimo_ticket_id = :ultimo_ticket_id, pausa_motivo = :pausa_motivo, ativo = :ativo, "
-    "updated_at = SYSDATE, updated_by = :ator WHERE id = :id"
+    "UPDATE {agd} SET name = :name, script_id = :script_id, environment = :environment, user_id = :user_id, "
+    "priority = :priority, recurrence_type = :recurrence_type, cron_expression = :cron_expression, "
+    "run_time = :run_time, week_days = :week_days, month_day = :month_day, "
+    "params_json = :params_json, start_date = :start_date, end_date = :end_date, "
+    "next_run_at = :next_run_at, last_run_at = :last_run_at, "
+    "last_ticket_id = :last_ticket_id, pause_reason = :pause_reason, active = :active, "
+    "updated_at = SYSDATE, updated_by = :actor WHERE id = :id"
 )
 # CR-007, R-19: so pausa regra ativa e, com antiga_data, so se a proxima_execucao lida nao mudou.
 _SQL_PAUSAR = (
-    "UPDATE {agd} SET ativo = 'N', pausa_motivo = :motivo, updated_at = SYSDATE, updated_by = :ator "
-    "WHERE id = :id AND ativo = 'S'"
+    "UPDATE {agd} SET active = 'N', pause_reason = :reason, updated_at = SYSDATE, updated_by = :actor "
+    "WHERE id = :id AND active = 'Y'"
 )
-_SQL_PAUSAR_OTIMISTA = _SQL_PAUSAR + " AND proxima_execucao = :antiga_data"
+_SQL_PAUSAR_OTIMISTA = _SQL_PAUSAR + " AND next_run_at = :antiga_data"
 _SQL_RETOMAR = (
-    "UPDATE {agd} SET ativo = 'S', pausa_motivo = NULL, proxima_execucao = :nova_data, "
-    "updated_at = SYSDATE, updated_by = :ator WHERE id = :id"
+    "UPDATE {agd} SET active = 'Y', pause_reason = NULL, next_run_at = :nova_data, "
+    "updated_at = SYSDATE, updated_by = :actor WHERE id = :id"
 )
 
 
@@ -139,40 +139,40 @@ class RepoAgendamentosOracle(BaseRepoOracle, RepoAgendamentos):
         return self.nome_constraint("ck", "agendamentos", sufixo)
 
     def _checar_cks(self, r):
-        """Espelha NOT NULL e as CKs de tbsss_agendamentos (README §10, tabela 12), na ordem do FAKE."""
-        nome = r.get("nome")
+        """Espelha NOT NULL e as CKs de tbsss_schedules (README §10, tabela 12), na ordem do FAKE."""
+        nome = r.get("name")
         if _nulo(nome) or len(nome) > _TAMANHO_NOME:
             # NOT NULL e tamanho da coluna nao sao constraints nomeadas (ORA-01400 / ORA-12899).
             raise repo_errors.RepoViolacao("nome obrigatorio com ate %d caracteres" % _TAMANHO_NOME)
-        trec = r.get("tipo_recorrencia")
+        trec = r.get("recurrence_type")
         if trec not in _TIPOS:
-            raise repo_errors.RepoViolacao("tipo_recorrencia invalido", constraint=self._ck("trec"))
-        prio = r.get("prioridade")
+            raise repo_errors.RepoViolacao("tipo_recorrencia invalido", constraint=self._ck("rtype"))
+        prio = r.get("priority")
         if isinstance(prio, bool) or not isinstance(prio, int) or not (1 <= prio <= 4):
             raise repo_errors.RepoViolacao("prioridade deve estar entre 1 e 4", constraint=self._ck("prio"))
-        if r.get("ativo") not in ("S", "N"):
-            raise repo_errors.RepoViolacao("ativo deve ser 'S' ou 'N'", constraint=self._ck("ativo"))
-        dia = r.get("dia_mes")
+        if r.get("active") not in ("Y", "N"):
+            raise repo_errors.RepoViolacao("ativo deve ser 'Y' ou 'N'", constraint=self._ck("active"))
+        dia = r.get("month_day")
         if not _nulo(dia) and (isinstance(dia, bool) or not isinstance(dia, int) or not (1 <= dia <= 31)):
-            raise repo_errors.RepoViolacao("dia_mes deve estar entre 1 e 31", constraint=self._ck("dia"))
-        hora = r.get("hora_execucao")
+            raise repo_errors.RepoViolacao("dia_mes deve estar entre 1 e 31", constraint=self._ck("day"))
+        hora = r.get("run_time")
         if not _nulo(hora) and not _RE_HORA.match(hora):
-            raise repo_errors.RepoViolacao("hora_execucao fora do formato HH:MM", constraint=self._ck("hora"))
-        dsem = r.get("dias_semana")
+            raise repo_errors.RepoViolacao("hora_execucao fora do formato HH:MM", constraint=self._ck("time"))
+        dsem = r.get("week_days")
         if not _nulo(dsem) and not _RE_DSEM.match(dsem):
-            raise repo_errors.RepoViolacao("dias_semana fora do formato ISO 1-7", constraint=self._ck("dsem"))
-        if r.get("data_inicio") is None or r.get("proxima_execucao") is None:
+            raise repo_errors.RepoViolacao("dias_semana fora do formato ISO 1-7", constraint=self._ck("wday"))
+        if r.get("start_date") is None or r.get("next_run_at") is None:
             raise repo_errors.RepoViolacao("data_inicio e proxima_execucao sao obrigatorias")
-        if r.get("data_fim") is not None and r["data_fim"] < r["data_inicio"]:
-            raise repo_errors.RepoViolacao("data_fim anterior a data_inicio", constraint=self._ck("fim"))
-        if not _nulo(r.get("pausa_motivo")) and r["pausa_motivo"] not in _MOTIVOS_PAUSA:
-            raise repo_errors.RepoViolacao("pausa_motivo invalido", constraint=self._ck("pausa"))
-        exigidos = {"DIARIA": ("hora_execucao",), "SEMANAL": ("hora_execucao", "dias_semana"),
-                    "MENSAL": ("hora_execucao", "dia_mes"), "CRON": ("expressao_cron",)}
+        if r.get("end_date") is not None and r["end_date"] < r["start_date"]:
+            raise repo_errors.RepoViolacao("data_fim anterior a data_inicio", constraint=self._ck("end"))
+        if not _nulo(r.get("pause_reason")) and r["pause_reason"] not in _MOTIVOS_PAUSA:
+            raise repo_errors.RepoViolacao("pausa_motivo invalido", constraint=self._ck("pause"))
+        exigidos = {"DAILY": ("run_time",), "WEEKLY": ("run_time", "week_days"),
+                    "MONTHLY": ("run_time", "month_day"), "CRON": ("cron_expression",)}
         for coluna in exigidos.get(trec, ()):
             if _nulo(r.get(coluna)):
                 raise repo_errors.RepoViolacao("%s obrigatorio para %s" % (coluna, trec),
-                                               constraint=self._ck("campos"))
+                                               constraint=self._ck("fields"))
 
     def _existe(self, conn, sql, binds):
         cur = conn.cursor()
@@ -185,8 +185,8 @@ class RepoAgendamentosOracle(BaseRepoOracle, RepoAgendamentos):
     def _checar_fks(self, conn, reg):
         for existe, sufixo in (
             (self._existe(conn, self._sql["SCR_EXISTE"], {"id": int(reg["script_id"])}), "scr"),
-            (self._existe(conn, self._sql["USR_EXISTE"], {"id": int(reg["usuario_id"])}), "usr"),
-            (self._existe(conn, self._sql["AMB_EXISTE"], {"nome": reg["ambiente"]}), "amb"),
+            (self._existe(conn, self._sql["USR_EXISTE"], {"id": int(reg["user_id"])}), "usr"),
+            (self._existe(conn, self._sql["AMB_EXISTE"], {"name": reg["environment"]}), "env"),
         ):
             if not existe:
                 constraint = self.nome_constraint("fk", "agendamentos", sufixo)
@@ -194,7 +194,7 @@ class RepoAgendamentosOracle(BaseRepoOracle, RepoAgendamentos):
 
     def _linha(self, row):
         reg = self.tupla_para_dict(_COLS, row[:len(_COLS)])
-        reg["parametros_json"] = _ler_lob(reg["parametros_json"])
+        reg["params_json"] = _ler_lob(reg["params_json"])
         return reg
 
     def _uma(self, conn, sql, binds):
@@ -209,23 +209,23 @@ class RepoAgendamentosOracle(BaseRepoOracle, RepoAgendamentos):
     def _binds_registro(self, reg, ator):
         binds = dict((c, reg.get(c)) for c in _COLUNAS_ALTERAVEIS)
         binds["script_id"] = int(reg["script_id"])
-        binds["usuario_id"] = int(reg["usuario_id"])
-        binds["ator"] = ator
+        binds["user_id"] = int(reg["user_id"])
+        binds["actor"] = ator
         return binds
 
     @staticmethod
     def _tipos(cur):
         tipos = dict((c, db_conn.TIPO_DATE) for c in _DATAS)
-        tipos["parametros_json"] = db_conn.TIPO_CLOB
+        tipos["params_json"] = db_conn.TIPO_CLOB
         db_conn.definir_tipos_entrada(cur, **tipos)
 
     def _auditar(self, conn, auditoria, id, acao_padrao=None, detalhe_padrao=None, ator=None):
         if auditoria:
-            gravar_auditoria(conn, self._tbl_aud, self._seq_aud, auditoria, "tbsss_agendamentos", id)
+            gravar_auditoria(conn, self._tbl_aud, self._seq_aud, auditoria, "tbsss_schedules", id)
         elif acao_padrao:
             gravar_auditoria(conn, self._tbl_aud, self._seq_aud,
-                             {"ator": ator, "ip": None, "acao": acao_padrao, "detalhe": detalhe_padrao},
-                             "tbsss_agendamentos", id)
+                             {"actor": ator, "ip": None, "action": acao_padrao, "detail": detalhe_padrao},
+                             "tbsss_schedules", id)
 
     def _conferir_esperado(self, id, atual, esperado):
         for campo, valor in (esperado or {}).items():
@@ -249,23 +249,23 @@ class RepoAgendamentosOracle(BaseRepoOracle, RepoAgendamentos):
                 for n, amb in enumerate(ambs):
                     binds["e%d" % n] = amb
                     marcas.append(":e%d" % n)
-                clausulas.append("ambiente IN (" + ", ".join(marcas) + ")")
-        if filtros.get("ativo"):
-            clausulas.append("ativo = :ativo_f")
-            binds["ativo_f"] = filtros["ativo"]
+                clausulas.append("environment IN (" + ", ".join(marcas) + ")")
+        if filtros.get("active"):
+            clausulas.append("active = :ativo_f")
+            binds["ativo_f"] = filtros["active"]
         if filtros.get("script_id") is not None:
             clausulas.append("script_id = :script_id_f")
             binds["script_id_f"] = int(filtros["script_id"])
-        if filtros.get("ambiente"):
-            clausulas.append("ambiente = :ambiente_f")
-            binds["ambiente_f"] = filtros["ambiente"]
-        if filtros.get("usuario_id") is not None:
-            clausulas.append("usuario_id = :usuario_id_f")
-            binds["usuario_id_f"] = int(filtros["usuario_id"])
-        if filtros.get("nome"):
+        if filtros.get("environment"):
+            clausulas.append("environment = :ambiente_f")
+            binds["ambiente_f"] = filtros["environment"]
+        if filtros.get("user_id") is not None:
+            clausulas.append("user_id = :usuario_id_f")
+            binds["usuario_id_f"] = int(filtros["user_id"])
+        if filtros.get("name"):
             # '%' e '_' digitados contam como literais, como o 'in' do FAKE.
-            trecho = filtros["nome"].lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            clausulas.append("LOWER(nome) LIKE :nome_f ESCAPE '\\'")
+            trecho = filtros["name"].lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            clausulas.append("LOWER(name) LIKE :nome_f ESCAPE '\\'")
             binds["nome_f"] = "%" + trecho + "%"
 
         p = 1 if pagina is None else int(pagina)
@@ -333,24 +333,24 @@ class RepoAgendamentosOracle(BaseRepoOracle, RepoAgendamentos):
         with self.transacao_escrita(conn=conn) as c:
             agora = db_conn.agora_banco(c)
             novo = {
-                "nome": dados.get("nome"),
+                "name": dados.get("name"),
                 "script_id": int(dados["script_id"]),
-                "ambiente": dados["ambiente"],
-                "usuario_id": int(dados["usuario_id"]),
-                "prioridade": dados.get("prioridade", 2),
-                "tipo_recorrencia": dados.get("tipo_recorrencia"),
-                "expressao_cron": dados.get("expressao_cron"),
-                "hora_execucao": dados.get("hora_execucao"),
-                "dias_semana": dados.get("dias_semana"),
-                "dia_mes": dados.get("dia_mes"),
-                "parametros_json": dados.get("parametros_json", "{}"),
-                "data_inicio": dados.get("data_inicio") or agora,
-                "data_fim": dados.get("data_fim"),
-                "proxima_execucao": dados.get("proxima_execucao") or agora,
-                "ultima_execucao": dados.get("ultima_execucao"),
-                "ultimo_ticket_id": dados.get("ultimo_ticket_id"),
-                "pausa_motivo": dados.get("pausa_motivo"),
-                "ativo": dados.get("ativo", "S"),
+                "environment": dados["environment"],
+                "user_id": int(dados["user_id"]),
+                "priority": dados.get("priority", 2),
+                "recurrence_type": dados.get("recurrence_type"),
+                "cron_expression": dados.get("cron_expression"),
+                "run_time": dados.get("run_time"),
+                "week_days": dados.get("week_days"),
+                "month_day": dados.get("month_day"),
+                "params_json": dados.get("params_json", "{}"),
+                "start_date": dados.get("start_date") or agora,
+                "end_date": dados.get("end_date"),
+                "next_run_at": dados.get("next_run_at") or agora,
+                "last_run_at": dados.get("last_run_at"),
+                "last_ticket_id": dados.get("last_ticket_id"),
+                "pause_reason": dados.get("pause_reason"),
+                "active": dados.get("active", "Y"),
             }
             self._checar_cks(novo)
             self._checar_fks(c, novo)
@@ -401,8 +401,8 @@ class RepoAgendamentosOracle(BaseRepoOracle, RepoAgendamentos):
             if not self._existe(c, self._sql["EXISTE"], {"id": int(id)}):
                 raise repo_errors.RepoNaoEncontrado("Agendamento ID %s nao encontrado" % id)
             if motivo not in _MOTIVOS_PAUSA:
-                raise repo_errors.RepoViolacao("pausa_motivo invalido", constraint=self._ck("pausa"))
-            binds = {"id": int(id), "motivo": motivo, "ator": ator_limpo}
+                raise repo_errors.RepoViolacao("pausa_motivo invalido", constraint=self._ck("pause"))
+            binds = {"id": int(id), "reason": motivo, "actor": ator_limpo}
             cur = c.cursor()
             try:
                 if antiga_data is not None:
@@ -417,7 +417,7 @@ class RepoAgendamentosOracle(BaseRepoOracle, RepoAgendamentos):
                         "Agendamento %s nao esta ativo ou a proxima_execucao mudou (outra operacao)" % id)
             finally:
                 cur.close()
-            self._auditar(c, auditoria, int(id), "AGD_PAUSAR", "Agendamento pausado: motivo=%s" % motivo,
+            self._auditar(c, auditoria, int(id), "SCHEDULE_PAUSE", "Agendamento pausado: reason=%s" % motivo,
                           ator_limpo)
             return self.obter(id, conn=c)
 
@@ -434,11 +434,11 @@ class RepoAgendamentosOracle(BaseRepoOracle, RepoAgendamentos):
             cur = c.cursor()
             try:
                 db_conn.definir_tipos_entrada(cur, nova_data=db_conn.TIPO_DATE)
-                cur.execute(self._sql["RETOMAR"], {"id": int(id), "nova_data": nova_data, "ator": ator_limpo})
+                cur.execute(self._sql["RETOMAR"], {"id": int(id), "nova_data": nova_data, "actor": ator_limpo})
                 if cur.rowcount != 1:
                     raise repo_errors.RepoConflito("Agendamento ID %s alterado por outra operacao" % id)
             finally:
                 cur.close()
-            self._auditar(c, auditoria, int(id), "CAD_ALTERAR",
-                          "Agendamento retomado com proxima_execucao=%s" % nova_data, ator_limpo)
+            self._auditar(c, auditoria, int(id), "UPDATE",
+                          "Agendamento retomado com next_run_at=%s" % nova_data, ator_limpo)
             return self.obter(id, conn=c)

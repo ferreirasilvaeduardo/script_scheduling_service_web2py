@@ -5,14 +5,14 @@
 # O servidor revalida tudo; a prévia e os campos condicionais (Alpine) só ajudam o preenchimento.
 icones = URL('static', 'img/icons.svg')
 _regra = regra or {}
-_tipo = _regra.get('tipo_recorrencia')
+_tipo = _regra.get('recurrence_type')
 _ajuda_fim = u'Opcional. A última execução acontece até esta data e hora (inclusive).'
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
-    <h1 class="sss-page-titulo">{{if edicao:}}Regra {{=_regra['nome']}}{{else:}}Nova regra de agendamento{{pass}}</h1>
+    <h1 class="sss-page-titulo">{{if edicao:}}Regra {{=_regra['name']}}{{else:}}Nova regra de agendamento{{pass}}</h1>
     {{if edicao:}}
-    <p class="sss-page-sub">Responsável atual: <span class="sss-mono">{{=_regra['responsavel']}}</span> · Situação: {{=_regra['situacao'][0]}}{{if _regra['situacao'][1]:}} ({{=_regra['situacao'][1]}}){{pass}}</p>
+    <p class="sss-page-sub">Responsável atual: <span class="sss-mono">{{=_regra['responsavel']}}</span> · Situação: {{=_regra['state'][0]}}{{if _regra['state'][1]:}} ({{=_regra['state'][1]}}){{pass}}</p>
     {{else:}}
     <p class="sss-page-sub">Escolha o script e o ambiente, defina a recorrência e preencha o questionário.</p>
     {{pass}}
@@ -35,8 +35,8 @@ _ajuda_fim = u'Opcional. A última execução acontece até esta data e hora (in
         <select class="form-select" id="campo-script_id" name="script_id" required>
           <option value="">Selecione…</option>
           {{for _g in grupos:}}
-          <optgroup label="{{=_g['grupo']}} / {{=_g['categoria']}}">
-            {{for _s in _g['scripts']:}}<option value="{{=_s['id']}}">{{=_s['nome']}}{{if _s['descricao']:}} — {{=_s['descricao']}}{{pass}}</option>{{pass}}
+          <optgroup label="{{=_g['script_group']}} / {{=_g['category']}}">
+            {{for _s in _g['scripts']:}}<option value="{{=_s['id']}}">{{=_s['name']}}{{if _s['description']:}} — {{=_s['description']}}{{pass}}</option>{{pass}}
           </optgroup>
           {{pass}}
         </select>
@@ -51,7 +51,7 @@ _ajuda_fim = u'Opcional. A última execução acontece até esta data e hora (in
   <h2 class="sss-card-titulo" id="titulo-alvo">{{='Script e ambiente' if edicao else '1. Script'}}</h2>
   <div class="sss-card-corpo sss-escolhido">
     {{_scr = form['script'] if form else script}}
-    <span><span class="sss-mono">{{=_scr['nome']}}</span> — {{=_scr.get('descricao') or ''}}{{if form:}} · <strong>{{=form['ambiente']['nome']}}</strong>{{if form['ambiente']['producao']:}} <span class="badge text-bg-danger">Produção</span>{{pass}}{{pass}}</span>
+    <span><span class="sss-mono">{{=_scr['name']}}</span> — {{=_scr.get('description') or ''}}{{if form:}} · <strong>{{=form['environment']['name']}}</strong>{{if form['environment']['producao']:}} <span class="badge text-bg-danger">Produção</span>{{pass}}{{pass}}</span>
     {{if not edicao:}}
     <span class="sss-acoes">
       <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='agendamentos', f='form')}}">Trocar script</a>
@@ -71,9 +71,9 @@ _ajuda_fim = u'Opcional. A última execução acontece até esta data e hora (in
     <input type="hidden" name="script_id" value="{{=script['id']}}">
     <div class="sss-form-campo mb-3">
       <label class="form-label" for="campo-ambiente">Ambiente <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span></label>
-      <select class="form-select" id="campo-ambiente" name="ambiente" required>
+      <select class="form-select" id="campo-ambiente" name="environment" required>
         <option value="">Selecione…</option>
-        {{for _a in ambientes:}}<option value="{{=_a['nome']}}">{{=_a['nome']}}{{if _a['descricao']:}} — {{=_a['descricao']}}{{pass}}</option>{{pass}}
+        {{for _a in ambientes:}}<option value="{{=_a['name']}}">{{=_a['name']}}{{if _a['description']:}} — {{=_a['description']}}{{pass}}</option>{{pass}}
       </select>
     </div>
     <div class="sss-form-acoes"><button type="submit" class="btn btn-primary">Continuar</button></div>
@@ -86,7 +86,7 @@ _ajuda_fim = u'Opcional. A última execução acontece até esta data e hora (in
   {{=csrf_campo()}}
   {{if edicao:}}
   <input type="hidden" name="id" value="{{=_regra['id']}}">
-  <input type="hidden" name="versao" value="{{=_regra['versao']}}">
+  <input type="hidden" name="version" value="{{=_regra['version']}}">
   {{if _regra.get('pausa_aviso'):}}
   <div class="alert alert-warning sss-alerta mb-3" role="alert">
     <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
@@ -99,7 +99,7 @@ _ajuda_fim = u'Opcional. A última execução acontece até esta data e hora (in
   </div>
   {{else:}}
   <input type="hidden" name="script_id" value="{{=form['script']['id']}}">
-  <input type="hidden" name="ambiente" value="{{=form['ambiente']['nome']}}">
+  <input type="hidden" name="environment" value="{{=form['environment']['name']}}">
   {{pass}}
 
   {{if erros:}}
@@ -107,7 +107,7 @@ _ajuda_fim = u'Opcional. A última execução acontece até esta data e hora (in
     <p class="mb-1"><strong>Não foi possível salvar a regra:</strong></p>
     <ul class="mb-0">
       {{if erro_geral:}}<li>{{=erro_geral}}</li>{{pass}}
-      {{for _k in ('nome', 'tipo_recorrencia', 'data_inicio', 'data_fim', 'hora_execucao', 'dias_semana', 'dia_mes', 'expressao_cron', 'prioridade'):}}{{if erros.get(_k):}}<li>{{=erros[_k]}}</li>{{pass}}{{pass}}
+      {{for _k in ('name', 'recurrence_type', 'start_date', 'end_date', 'run_time', 'week_days', 'month_day', 'cron_expression', 'priority'):}}{{if erros.get(_k):}}<li>{{=erros[_k]}}</li>{{pass}}{{pass}}
       {{for _c in form['campos']:}}{{if _c['erro']:}}<li>{{=_c['erro']}}</li>{{pass}}{{pass}}
     </ul>
   </div>
@@ -116,73 +116,73 @@ _ajuda_fim = u'Opcional. A última execução acontece até esta data e hora (in
   <section class="sss-card" aria-labelledby="titulo-recorrencia">
     <h2 class="sss-card-titulo" id="titulo-recorrencia">{{='Recorrência' if edicao else '3. Recorrência'}}</h2>
     <div class="sss-card-corpo" @input="agendarPrevia" @change="agendarPrevia">
-      {{campo = {'nome': 'nome', 'rotulo': 'Nome da regra', 'valor': _regra.get('nome'), 'erro': erros.get('nome'), 'obrigatorio': True, 'maxlength': 60} }}
+      {{campo = {'name': 'name', 'rotulo': 'Nome da regra', 'valor': _regra.get('name'), 'erro': erros.get('name'), 'required': True, 'maxlength': 60} }}
       {{include 'components/form_campo.html'}}
 
       <div class="sss-form-linha">
         <div class="sss-form-campo mb-3">
           <label class="form-label" for="campo-tipo_recorrencia">Tipo de recorrência <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span></label>
-          <select class="form-select{{=' is-invalid' if erros.get('tipo_recorrencia') else ''}}" id="campo-tipo_recorrencia" name="tipo_recorrencia" required x-ref="tipo" @change="alterarTipo"{{if erros.get('tipo_recorrencia'):}} aria-invalid="true" aria-describedby="campo-tipo_recorrencia-erro"{{pass}}{{if foco_campo == 'tipo_recorrencia':}} autofocus{{pass}}>
+          <select class="form-select{{=' is-invalid' if erros.get('recurrence_type') else ''}}" id="campo-tipo_recorrencia" name="recurrence_type" required x-ref="tipo" @change="alterarTipo"{{if erros.get('recurrence_type'):}} aria-invalid="true" aria-describedby="campo-tipo_recorrencia-erro"{{pass}}{{if foco_campo == 'recurrence_type':}} autofocus{{pass}}>
             {{for _tv, _tr in rotulos_tipo.items():}}<option value="{{=_tv}}"{{if _tv == _tipo:}} selected{{pass}}>{{=_tr}}</option>{{pass}}
           </select>
-          {{if erros.get('tipo_recorrencia'):}}<div class="invalid-feedback" id="campo-tipo_recorrencia-erro">{{=erros['tipo_recorrencia']}}</div>{{pass}}
+          {{if erros.get('recurrence_type'):}}<div class="invalid-feedback" id="campo-tipo_recorrencia-erro">{{=erros['recurrence_type']}}</div>{{pass}}
         </div>
         <div class="sss-form-campo mb-3">
           <label class="form-label" for="campo-prioridade">Prioridade</label>
-          <select class="form-select{{=' is-invalid' if erros.get('prioridade') else ''}}" id="campo-prioridade" name="prioridade" aria-describedby="campo-prioridade-ajuda{{=' campo-prioridade-erro' if erros.get('prioridade') else ''}}"{{if erros.get('prioridade'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'prioridade':}} autofocus{{pass}}>
-            {{for _pv, _pr in form['prioridades']:}}<option value="{{=_pv}}"{{if str(_pv) == str(_regra.get('prioridade') or 2):}} selected{{pass}}>{{=_pr}}</option>{{pass}}
+          <select class="form-select{{=' is-invalid' if erros.get('priority') else ''}}" id="campo-prioridade" name="priority" aria-describedby="campo-prioridade-ajuda{{=' campo-prioridade-erro' if erros.get('priority') else ''}}"{{if erros.get('priority'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'priority':}} autofocus{{pass}}>
+            {{for _pv, _pr in form['prioridades']:}}<option value="{{=_pv}}"{{if str(_pv) == str(_regra.get('priority') or 2):}} selected{{pass}}>{{=_pr}}</option>{{pass}}
           </select>
           <div class="form-text" id="campo-prioridade-ajuda">Prioridade dos tickets gerados; 1 é a mais alta.</div>
-          {{if erros.get('prioridade'):}}<div class="invalid-feedback" id="campo-prioridade-erro">{{=erros['prioridade']}}</div>{{pass}}
+          {{if erros.get('priority'):}}<div class="invalid-feedback" id="campo-prioridade-erro">{{=erros['priority']}}</div>{{pass}}
         </div>
       </div>
 
       <div class="sss-form-linha">
         <div class="sss-form-campo mb-3">
           <label class="form-label" for="campo-data_inicio"><span x-show="ehUnica">Data e hora da execução</span><span x-show="naoUnica">Início</span></label>
-          <input class="form-control{{=' is-invalid' if erros.get('data_inicio') else ''}}" type="datetime-local" id="campo-data_inicio" name="data_inicio" value="{{=_regra.get('data_inicio') or ''}}" aria-describedby="campo-data_inicio-ajuda{{=' campo-data_inicio-erro' if erros.get('data_inicio') else ''}}"{{if erros.get('data_inicio'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'data_inicio':}} autofocus{{pass}}>
+          <input class="form-control{{=' is-invalid' if erros.get('start_date') else ''}}" type="datetime-local" id="campo-data_inicio" name="start_date" value="{{=_regra.get('start_date') or ''}}" aria-describedby="campo-data_inicio-ajuda{{=' campo-data_inicio-erro' if erros.get('start_date') else ''}}"{{if erros.get('start_date'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'start_date':}} autofocus{{pass}}>
           <div class="form-text" id="campo-data_inicio-ajuda"><span x-show="ehUnica">Obrigatória: a regra executa uma única vez neste momento.</span><span x-show="naoUnica">Opcional: em branco, a regra vale a partir de agora.</span></div>
-          {{if erros.get('data_inicio'):}}<div class="invalid-feedback" id="campo-data_inicio-erro">{{=erros['data_inicio']}}</div>{{pass}}
+          {{if erros.get('start_date'):}}<div class="invalid-feedback" id="campo-data_inicio-erro">{{=erros['start_date']}}</div>{{pass}}
         </div>
         <div class="sss-form-campo mb-3" x-show="naoUnica">
           <label class="form-label" for="campo-data_fim">Fim</label>
-          <input class="form-control{{=' is-invalid' if erros.get('data_fim') else ''}}" type="datetime-local" id="campo-data_fim" name="data_fim" value="{{=_regra.get('data_fim') or ''}}" aria-describedby="campo-data_fim-ajuda{{=' campo-data_fim-erro' if erros.get('data_fim') else ''}}"{{if erros.get('data_fim'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'data_fim':}} autofocus{{pass}}>
+          <input class="form-control{{=' is-invalid' if erros.get('end_date') else ''}}" type="datetime-local" id="campo-data_fim" name="end_date" value="{{=_regra.get('end_date') or ''}}" aria-describedby="campo-data_fim-ajuda{{=' campo-data_fim-erro' if erros.get('end_date') else ''}}"{{if erros.get('end_date'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'end_date':}} autofocus{{pass}}>
           <div class="form-text" id="campo-data_fim-ajuda">{{=_ajuda_fim}}</div>
-          {{if erros.get('data_fim'):}}<div class="invalid-feedback" id="campo-data_fim-erro">{{=erros['data_fim']}}</div>{{pass}}
+          {{if erros.get('end_date'):}}<div class="invalid-feedback" id="campo-data_fim-erro">{{=erros['end_date']}}</div>{{pass}}
         </div>
       </div>
 
       <div class="sss-form-linha">
         <div class="sss-form-campo mb-3" x-show="temHora">
           <label class="form-label" for="campo-hora_execucao">Horário <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span></label>
-          <input class="form-control{{=' is-invalid' if erros.get('hora_execucao') else ''}}" type="time" id="campo-hora_execucao" name="hora_execucao" value="{{=_regra.get('hora_execucao') or ''}}" aria-describedby="campo-hora_execucao-ajuda{{=' campo-hora_execucao-erro' if erros.get('hora_execucao') else ''}}"{{if erros.get('hora_execucao'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'hora_execucao':}} autofocus{{pass}}>
+          <input class="form-control{{=' is-invalid' if erros.get('run_time') else ''}}" type="time" id="campo-hora_execucao" name="run_time" value="{{=_regra.get('run_time') or ''}}" aria-describedby="campo-hora_execucao-ajuda{{=' campo-hora_execucao-erro' if erros.get('run_time') else ''}}"{{if erros.get('run_time'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'run_time':}} autofocus{{pass}}>
           <div class="form-text" id="campo-hora_execucao-ajuda">Horário do servidor de banco (HH:MM).</div>
-          {{if erros.get('hora_execucao'):}}<div class="invalid-feedback" id="campo-hora_execucao-erro">{{=erros['hora_execucao']}}</div>{{pass}}
+          {{if erros.get('run_time'):}}<div class="invalid-feedback" id="campo-hora_execucao-erro">{{=erros['run_time']}}</div>{{pass}}
         </div>
         <div class="sss-form-campo mb-3" x-show="ehMensal">
           <label class="form-label" for="campo-dia_mes">Dia do mês <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span></label>
-          <input class="form-control{{=' is-invalid' if erros.get('dia_mes') else ''}}" type="number" min="1" max="31" step="1" inputmode="numeric" id="campo-dia_mes" name="dia_mes" value="{{=_regra.get('dia_mes') or ''}}" aria-describedby="campo-dia_mes-ajuda{{=' campo-dia_mes-erro' if erros.get('dia_mes') else ''}}"{{if erros.get('dia_mes'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'dia_mes':}} autofocus{{pass}}>
+          <input class="form-control{{=' is-invalid' if erros.get('month_day') else ''}}" type="number" min="1" max="31" step="1" inputmode="numeric" id="campo-dia_mes" name="month_day" value="{{=_regra.get('month_day') or ''}}" aria-describedby="campo-dia_mes-ajuda{{=' campo-dia_mes-erro' if erros.get('month_day') else ''}}"{{if erros.get('month_day'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'month_day':}} autofocus{{pass}}>
           <div class="form-text" id="campo-dia_mes-ajuda">Se o mês não tiver o dia, executa no último dia do mês.</div>
-          {{if erros.get('dia_mes'):}}<div class="invalid-feedback" id="campo-dia_mes-erro">{{=erros['dia_mes']}}</div>{{pass}}
+          {{if erros.get('month_day'):}}<div class="invalid-feedback" id="campo-dia_mes-erro">{{=erros['month_day']}}</div>{{pass}}
         </div>
       </div>
 
-      <fieldset class="sss-form-campo mb-3" x-show="ehSemanal"{{if erros.get('dias_semana'):}} aria-describedby="campo-dias_semana-erro"{{pass}}>
+      <fieldset class="sss-form-campo mb-3" x-show="ehSemanal"{{if erros.get('week_days'):}} aria-describedby="campo-dias_semana-erro"{{pass}}>
         <legend class="form-label fs-6">Dias da semana <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span></legend>
         {{for _dn, _dabrev, _dnome in dias_semana:}}
         <div class="form-check form-check-inline">
-          <input class="form-check-input{{=' is-invalid' if erros.get('dias_semana') else ''}}" type="checkbox" id="campo-dias_semana-{{=_dn}}" name="dias_semana" value="{{=_dn}}"{{if _dn in (_regra.get('dias_semana') or ()):}} checked{{pass}}{{if foco_campo == 'dias_semana' and _dn == 1:}} autofocus{{pass}}>
+          <input class="form-check-input{{=' is-invalid' if erros.get('week_days') else ''}}" type="checkbox" id="campo-dias_semana-{{=_dn}}" name="week_days" value="{{=_dn}}"{{if _dn in (_regra.get('week_days') or ()):}} checked{{pass}}{{if foco_campo == 'week_days' and _dn == 1:}} autofocus{{pass}}>
           <label class="form-check-label" for="campo-dias_semana-{{=_dn}}"><span aria-hidden="true">{{=_dabrev}}</span><span class="visually-hidden">{{=_dnome}}</span></label>
         </div>
         {{pass}}
-        {{if erros.get('dias_semana'):}}<div class="invalid-feedback d-block" id="campo-dias_semana-erro">{{=erros['dias_semana']}}</div>{{pass}}
+        {{if erros.get('week_days'):}}<div class="invalid-feedback d-block" id="campo-dias_semana-erro">{{=erros['week_days']}}</div>{{pass}}
       </fieldset>
 
       <div class="sss-form-campo mb-3" x-show="ehCron">
         <label class="form-label" for="campo-expressao_cron">Expressão CRON <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span></label>
-        <input class="form-control sss-mono{{=' is-invalid' if erros.get('expressao_cron') else ''}}" type="text" id="campo-expressao_cron" name="expressao_cron" maxlength="60" spellcheck="false" placeholder="*/15 8-18 * * 1-5" value="{{=_regra.get('expressao_cron') or ''}}" aria-describedby="campo-expressao_cron-ajuda{{=' campo-expressao_cron-erro' if erros.get('expressao_cron') else ''}}"{{if erros.get('expressao_cron'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'expressao_cron':}} autofocus{{pass}}>
+        <input class="form-control sss-mono{{=' is-invalid' if erros.get('cron_expression') else ''}}" type="text" id="campo-expressao_cron" name="cron_expression" maxlength="60" spellcheck="false" placeholder="*/15 8-18 * * 1-5" value="{{=_regra.get('cron_expression') or ''}}" aria-describedby="campo-expressao_cron-ajuda{{=' campo-expressao_cron-erro' if erros.get('cron_expression') else ''}}"{{if erros.get('cron_expression'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'cron_expression':}} autofocus{{pass}}>
         <div class="form-text" id="campo-expressao_cron-ajuda">Cinco campos: minuto, hora, dia do mês, mês e dia da semana.</div>
-        {{if erros.get('expressao_cron'):}}<div class="invalid-feedback" id="campo-expressao_cron-erro">{{=erros['expressao_cron']}}</div>{{pass}}
+        {{if erros.get('cron_expression'):}}<div class="invalid-feedback" id="campo-expressao_cron-erro">{{=erros['cron_expression']}}</div>{{pass}}
         <details class="sss-ajuda-cron mt-2">
           <summary>Sintaxe suportada</summary>
           <ul class="mb-0">
@@ -201,7 +201,7 @@ _ajuda_fim = u'Opcional. A última execução acontece até esta data e hora (in
     <h2 class="sss-card-titulo" id="titulo-previa-agd">Próximas execuções</h2>
     <div class="sss-card-corpo sss-previa-agd" aria-live="polite">
       <p class="sss-texto-suave mb-2" x-show="carregando" x-cloak>Calculando…</p>
-      <p class="mb-2" x-show="temDescricao" x-cloak><strong x-text="descricao"></strong></p>
+      <p class="mb-2" x-show="temDescricao" x-cloak><strong x-text="description"></strong></p>
       <ol class="sss-previa-datas mb-0" x-show="temDatas" x-cloak>
         <template x-for="d in datas" :key="d.id">
           <li x-text="d.texto"></li>

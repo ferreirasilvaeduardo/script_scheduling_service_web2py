@@ -16,14 +16,14 @@ O padrão é o mesmo nas três listagens: um `COUNT` que para em 10.001 e a pág
 
 ### 1.1 `ambientes_listar`
 ```sql
-SELECT COUNT(*) FROM (SELECT id FROM {owner}.{prefixo}ambientes
-                       WHERE UPPER(nome) LIKE :nome_f ESCAPE '\' AND ativo = :ativo_f AND ROWNUM <= 10001);
+SELECT COUNT(*) FROM (SELECT id FROM {owner}.{prefixo}environments
+                       WHERE UPPER(name) LIKE :nome_f ESCAPE '\' AND active = :ativo_f AND ROWNUM <= 10001);
 
 SELECT * FROM (SELECT a.*, ROWNUM rn FROM (
-  SELECT id, nome, descricao, conexao, ativo, created_at, created_by, updated_at, updated_by
-    FROM {owner}.{prefixo}ambientes
-   WHERE UPPER(nome) LIKE :nome_f ESCAPE '\' AND ativo = :ativo_f
-   ORDER BY NLSSORT(nome, 'NLS_SORT=BINARY'), id
+  SELECT id, name, description, connection, active, created_at, created_by, updated_at, updated_by
+    FROM {owner}.{prefixo}environments
+   WHERE UPPER(name) LIKE :nome_f ESCAPE '\' AND active = :ativo_f
+   ORDER BY NLSSORT(name, 'NLS_SORT=BINARY'), id
 ) a WHERE ROWNUM <= :fim) WHERE rn > :inicio
 ```
 * **Esperado:** `COUNT STOPKEY` + `TABLE ACCESS FULL` em `{prefixo}ambientes` (tabela de cadastro); `SORT ORDER BY STOPKEY`.
@@ -31,18 +31,18 @@ SELECT * FROM (SELECT a.*, ROWNUM rn FROM (
 ### 1.2 `scripts_listar`
 ```sql
 SELECT * FROM (SELECT a.*, ROWNUM rn FROM (
-  SELECT s.id, s.nome, s.descricao, s.grupo, s.categoria, s.etapa, s.interpretador, s.path_file,
-         s.tipo_param, s.max_qtd_parallel_env, s.timeout_seg, s.ativo,
+  SELECT s.id, s.name, s.description, s.script_group, s.category, s.stage, s.interpreter, s.path_file,
+         s.param_type, s.max_parallel_env, s.timeout_s, s.active,
          s.created_at, s.created_by, s.updated_at, s.updated_by,
          (SELECT COUNT(*) FROM {owner}.{prefixo}script_param sp WHERE sp.script_id = s.id) qtd_parametros
     FROM {owner}.{prefixo}scripts s
-   WHERE LOWER(s.nome) LIKE :nome_f ESCAPE '\' AND s.grupo = :grupo_f   -- só os filtros informados
-   ORDER BY NLSSORT(s.nome, 'NLS_SORT=BINARY'), s.id
+   WHERE LOWER(s.name) LIKE :nome_f ESCAPE '\' AND s.script_group = :grupo_f   -- só os filtros informados
+   ORDER BY NLSSORT(s.name, 'NLS_SORT=BINARY'), s.id
 ) a WHERE ROWNUM <= :fim) WHERE rn > :inicio;
 
 -- Ambientes homologados só da página (IN por contagem controlada, em lotes de até 500):
-SELECT sa.script_id, a.nome
-  FROM {owner}.{prefixo}script_amb sa JOIN {owner}.{prefixo}ambientes a ON a.id = sa.ambiente_id
+SELECT sa.script_id, a.name
+  FROM {owner}.{prefixo}script_amb sa JOIN {owner}.{prefixo}environments a ON a.id = sa.environment_id
  WHERE sa.script_id IN (:s0, :s1, ...)
 ```
 * **Esperado:**
@@ -52,43 +52,43 @@ SELECT sa.script_id, a.nome
 
 ### 1.3 `parametros_listar`
 ```sql
-SELECT p.id, p.codigo, ..., p.updated_by,
-       (SELECT COUNT(*) FROM {owner}.{prefixo}script_param sp WHERE sp.parametro_id = p.id) qtd_scripts
+SELECT p.id, p.code, ..., p.updated_by,
+       (SELECT COUNT(*) FROM {owner}.{prefixo}script_param sp WHERE sp.parameter_id = p.id) qtd_scripts
   FROM {owner}.{prefixo}parametros p
- WHERE LOWER(p.codigo) LIKE :codigo_f ESCAPE '\'                        -- só os filtros informados
- ORDER BY NLSSORT(p.codigo, 'NLS_SORT=BINARY'), p.id                    -- dentro do padrão ROWNUM
+ WHERE LOWER(p.code) LIKE :codigo_f ESCAPE '\'                        -- só os filtros informados
+ ORDER BY NLSSORT(p.code, 'NLS_SORT=BINARY'), p.id                    -- dentro do padrão ROWNUM
 ```
-* **Esperado:** `qtd_scripts` faz `INDEX RANGE SCAN` em `ix_{prefixo}sprm_prm` (`parametro_id`).
+* **Esperado:** `qtd_scripts` faz `INDEX RANGE SCAN` em `ix_{prefixo}sprm_prm` (`parameter_id`).
 
 ---
 
 ## 2. `scripts_executaveis` (README §4.3.A)
 
-Uma única consulta. A matriz é lida pelo `perfil_id` do contexto, com `EXISTS` (decisão registrada no README §4.3.A).
+Uma única consulta. A matriz é lida pelo `profile_id` do contexto, com `EXISTS` (decisão registrada no README §4.3.A).
 
 ```sql
 -- Não administrador (o EXEC_SCRIPT é conferido antes, no contexto):
-SELECT s.id, s.nome, ..., s.updated_by
+SELECT s.id, s.name, ..., s.updated_by
   FROM {owner}.{prefixo}scripts s
- WHERE s.ativo = 'S'
+ WHERE s.active = 'Y'
    AND EXISTS (SELECT 1 FROM {owner}.{prefixo}perfil_scr ps
-                WHERE ps.perfil_id = :perfil_id AND ps.script_id = s.id)
+                WHERE ps.profile_id = :profile_id AND ps.script_id = s.id)
    AND EXISTS (SELECT 1 FROM {owner}.{prefixo}script_amb sa
-                 JOIN {owner}.{prefixo}ambientes a ON a.id = sa.ambiente_id
-                 JOIN {owner}.{prefixo}perfil_amb pa ON pa.ambiente_id = sa.ambiente_id AND pa.perfil_id = :perfil_id
-                WHERE sa.script_id = s.id AND a.ativo = 'S')
- ORDER BY NLSSORT(s.nome, 'NLS_SORT=BINARY'), s.id
+                 JOIN {owner}.{prefixo}environments a ON a.id = sa.environment_id
+                 JOIN {owner}.{prefixo}perfil_amb pa ON pa.environment_id = sa.environment_id AND pa.profile_id = :profile_id
+                WHERE sa.script_id = s.id AND a.active = 'Y')
+ ORDER BY NLSSORT(s.name, 'NLS_SORT=BINARY'), s.id
 
--- Administrador: dispensa perfil_scr/perfil_amb; não dispensa a homologação em ambiente ativo.
+-- Administrador: dispensa perfil_scr/perfil_amb; não dispensa a homologação em environment active.
 SELECT s.id, ... FROM {owner}.{prefixo}scripts s
- WHERE s.ativo = 'S'
-   AND EXISTS (SELECT 1 FROM {owner}.{prefixo}script_amb sa JOIN {owner}.{prefixo}ambientes a ON a.id = sa.ambiente_id
-                WHERE sa.script_id = s.id AND a.ativo = 'S')
- ORDER BY NLSSORT(s.nome, 'NLS_SORT=BINARY'), s.id
+ WHERE s.active = 'Y'
+   AND EXISTS (SELECT 1 FROM {owner}.{prefixo}script_amb sa JOIN {owner}.{prefixo}environments a ON a.id = sa.environment_id
+                WHERE sa.script_id = s.id AND a.active = 'Y')
+ ORDER BY NLSSORT(s.name, 'NLS_SORT=BINARY'), s.id
 ```
 * **Esperado:**
   * o `EXISTS` vira semi-join (`NESTED LOOPS SEMI` ou `HASH JOIN SEMI`);
-  * `perfil_scr` e `perfil_amb` por `INDEX RANGE SCAN` nas UKs de líder `perfil_id`;
+  * `perfil_scr` e `perfil_amb` por `INDEX RANGE SCAN` nas UKs de líder `profile_id`;
   * `script_amb` por `uk_{prefixo}samb_scr_amb` (líder `script_id`).
 
 ---
@@ -99,10 +99,10 @@ Toda gravação roda numa só transação (`db_conn.transacao`), com o `id` obti
 
 | Operação | Lock | DML | Acesso esperado |
 |---|---|---|---|
-| `ambientes_alterar` | `SELECT … FROM {prefixo}ambientes WHERE id = :id FOR UPDATE WAIT 5` | `UPDATE … SET descricao, conexao, ativo, updated_at = SYSDATE, updated_by = :ator WHERE id = :id` (`rowcount = 1` conferido) | `INDEX UNIQUE SCAN` na PK |
-| `scripts_alterar` | `SELECT … FROM {prefixo}scripts WHERE id = :id FOR UPDATE WAIT 5`; ao trocar `tipo_param`, trava os parâmetros vinculados (`scripts → parametros`) | `UPDATE` de todas as colunas de negócio + `updated_*` pela PK | PK; UK do nome por `INDEX UNIQUE SCAN` (`nome = :nome AND id <> :id`, sem `UPPER`) |
+| `ambientes_alterar` | `SELECT … FROM {prefixo}ambientes WHERE id = :id FOR UPDATE WAIT 5` | `UPDATE … SET description, connection, active, updated_at = SYSDATE, updated_by = :actor WHERE id = :id` (`rowcount = 1` conferido) | `INDEX UNIQUE SCAN` na PK |
+| `scripts_alterar` | `SELECT … FROM {prefixo}scripts WHERE id = :id FOR UPDATE WAIT 5`; ao trocar `param_type`, trava os parâmetros vinculados (`scripts → parametros`) | `UPDATE` de todas as colunas de negócio + `updated_*` pela PK | PK; UK do nome por `INDEX UNIQUE SCAN` (`name = :name AND id <> :id`, sem `UPPER`) |
 | `homologacao_salvar` | `SELECT id FROM {prefixo}scripts WHERE id = :id FOR UPDATE WAIT 5` | `executemany DELETE … WHERE id = :id` (removidos), `executemany INSERT` (novos, `created_*`), `UPDATE {prefixo}scripts SET updated_*` se houve mudança | `uk_{prefixo}samb_scr_amb` (líder `script_id`) |
-| `parametros_alterar` | `SELECT … FROM {prefixo}parametros WHERE id = :id FOR UPDATE WAIT 5` | `UPDATE` pela PK; dependências por `SELECT s.tipo_param, s.ativo FROM {prefixo}script_param sp JOIN {prefixo}scripts s …` | `ix_{prefixo}sprm_prm` + PK de scripts |
+| `parametros_alterar` | `SELECT … FROM {prefixo}parametros WHERE id = :id FOR UPDATE WAIT 5` | `UPDATE` pela PK; dependências por `SELECT s.param_type, s.active FROM {prefixo}script_param sp JOIN {prefixo}scripts s …` | `ix_{prefixo}sprm_prm` + PK de scripts |
 | `script_params_salvar` | script `FOR UPDATE WAIT 5`, depois cada parâmetro `FOR UPDATE WAIT 5` em ordem de `id` | `DELETE … WHERE script_id = :script_id` e `executemany INSERT`: novos com `SYSDATE`/ator; mantidos com o `created_*`/`updated_*` lidos (bind `TIPO_DATE`); alterados com o `created_*` lido e `updated_* = SYSDATE`/ator | `uk_{prefixo}sprm_scr_prm` (líder `script_id`) |
 
 A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é invertida e não cruza com as ordens do README §8.3 (claim e desdobro): o catálogo não trava tickets nem agendamentos.
@@ -113,9 +113,9 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é inv
 
 **Plano: TESTADO em 2026-10-19**, Oracle 19.24 (banco `GFPR`), owner `openrisow` em modo compartilhado (`SSS_TEST_SCHEMA_COMPARTILHADO=1`, README §2.5), driver Thin (python-oracledb 1.4.2). Os planos saíram de `EXPLAIN PLAN SET STATEMENT_ID … FOR <query>` + `DBMS_XPLAN.DISPLAY`, sem executar os comandos. O texto `{owner}` substitui `OPENRISOW`.
 
-* **Sem `TABLE ACCESS FULL` em `tbsss_tickets` nem em `tbsss_auditoria`:** conforme: o agregado não lê essas tabelas.
-* **`TABLE ACCESS FULL` aceitável:** aparece só no `COUNT` e na página das listagens de cadastro (`tbsss_ambientes`, `tbsss_scripts`, `tbsss_parametros`), com `COUNT STOPKEY`/`SORT ORDER BY STOPKEY`, e no ramo alternativo dos planos adaptativos (`STATISTICS COLLECTOR` + `HASH JOIN`), que o otimizador só usa se a cardinalidade real for maior.
-* **Leituras por chave e transições:** lock e `UPDATE` pela PK (`INDEX UNIQUE SCAN`); UK do nome do script por `INDEX UNIQUE SCAN`; vínculos por `UK_…_SPRM_SCR_ORD`/`UK_…_SAMB_SCR_AMB` (líder `script_id`); `scripts_executaveis` com semi-join e `INDEX UNIQUE SCAN` em `UK_…_PSCR_PER_SCR` e `UK_…_PAMB_PER_AMB`. Nas consultas por `parametro_id`, o otimizador escolheu `INDEX SKIP SCAN` em `UK_…_SPRM_SCR_PRM`, por causa do volume pequeno de hoje; `IX_…_SPRM_PRM` continua disponível e é usado em `qtd_scripts`.
+* **Sem `TABLE ACCESS FULL` em `tbsss_tickets` nem em `tbsss_audit`:** conforme: o agregado não lê essas tabelas.
+* **`TABLE ACCESS FULL` aceitável:** aparece só no `COUNT` e na página das listagens de cadastro (`tbsss_environments`, `tbsss_scripts`, `tbsss_parameters`), com `COUNT STOPKEY`/`SORT ORDER BY STOPKEY`, e no ramo alternativo dos planos adaptativos (`STATISTICS COLLECTOR` + `HASH JOIN`), que o otimizador só usa se a cardinalidade real for maior.
+* **Leituras por chave e transições:** lock e `UPDATE` pela PK (`INDEX UNIQUE SCAN`); UK do nome do script por `INDEX UNIQUE SCAN`; vínculos por `UK_…_SPRM_SCR_ORD`/`UK_…_SAMB_SCR_AMB` (líder `script_id`); `scripts_executaveis` com semi-join e `INDEX UNIQUE SCAN` em `UK_…_PSCR_PER_SCR` e `UK_…_PAMB_PER_AMB`. Nas consultas por `parameter_id`, o otimizador escolheu `INDEX SKIP SCAN` em `UK_…_SPRM_SCR_PRM`, por causa do volume pequeno de hoje; `IX_…_SPRM_PRM` continua disponível e é usado em `qtd_scripts`.
 
 ### Planos registrados
 
@@ -129,7 +129,7 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é inv
 |   1 |  SORT AGGREGATE      |                 |     1 |
 |   2 |   VIEW               |                 |     1 |
 |   3 |    COUNT STOPKEY     |                 |       |
-|   4 |     TABLE ACCESS FULL| TBSSS_AMBIENTES |     1 |
+|   4 |     TABLE ACCESS FULL| TBSSS_ENVIRONMENTS |     1 |
 --------------------------------------------------------
 ```
 
@@ -144,7 +144,7 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é inv
 |   2 |   COUNT STOPKEY          |                 |       |
 |   3 |    VIEW                  |                 |     1 |
 |   4 |     SORT ORDER BY STOPKEY|                 |     1 |
-|   5 |      TABLE ACCESS FULL   | TBSSS_AMBIENTES |     1 |
+|   5 |      TABLE ACCESS FULL   | TBSSS_ENVIRONMENTS |     1 |
 ------------------------------------------------------------
 ```
 
@@ -189,7 +189,7 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é inv
 |   1 |  SORT AGGREGATE    |                     |     1 |
 |   2 |   VIEW             |                     |     1 |
 |   3 |    COUNT STOPKEY   |                     |       |
-|   4 |     INDEX FULL SCAN| UK_TBSSS_PRM_CODIGO |     1 |
+|   4 |     INDEX FULL SCAN| UK_TBSSS_PRM_CODE |     1 |
 ----------------------------------------------------------
 ```
 
@@ -206,7 +206,7 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é inv
 |   4 |   COUNT STOPKEY          |                   |       |
 |   5 |    VIEW                  |                   |     1 |
 |   6 |     SORT ORDER BY STOPKEY|                   |     1 |
-|   7 |      TABLE ACCESS FULL   | TBSSS_PARAMETROS  |     1 |
+|   7 |      TABLE ACCESS FULL   | TBSSS_PARAMETERS  |     1 |
 --------------------------------------------------------------
 ```
 
@@ -226,12 +226,12 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é inv
 |   7 |      VIEW                          | VW_SQ_1               |    57 |
 |   8 |       NESTED LOOPS SEMI            |                       |    57 |
 |   9 |        MERGE JOIN                  |                       |    63 |
-|  10 |         TABLE ACCESS BY INDEX ROWID| TBSSS_AMBIENTES       |     5 |
-|  11 |          INDEX FULL SCAN           | PK_TBSSS_AMBIENTES    |     5 |
+|  10 |         TABLE ACCESS BY INDEX ROWID| TBSSS_ENVIRONMENTS       |     5 |
+|  11 |          INDEX FULL SCAN           | PK_TBSSS_ENVIRONMENTS    |     5 |
 |  12 |         SORT JOIN                  |                       |    70 |
-|  13 |          INDEX FULL SCAN           | UK_TBSSS_SAMB_SCR_AMB |    70 |
-|  14 |        INDEX UNIQUE SCAN           | UK_TBSSS_PAMB_PER_AMB |     5 |
-|  15 |    INDEX UNIQUE SCAN               | UK_TBSSS_PSCR_PER_SCR |    10 |
+|  13 |          INDEX FULL SCAN           | UK_TBSSS_SENV_SCR_ENV |    70 |
+|  14 |        INDEX UNIQUE SCAN           | UK_TBSSS_PENV_PRF_ENV |     5 |
+|  15 |    INDEX UNIQUE SCAN               | UK_TBSSS_PSCR_PRF_SCR |    10 |
 ----------------------------------------------------------------------------
 ```
 
@@ -249,10 +249,10 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é inv
 |   5 |    SORT UNIQUE                   |                       |    63 |
 |   6 |     VIEW                         | VW_SQ_1               |    63 |
 |   7 |      MERGE JOIN                  |                       |    63 |
-|   8 |       TABLE ACCESS BY INDEX ROWID| TBSSS_AMBIENTES       |     5 |
-|   9 |        INDEX FULL SCAN           | PK_TBSSS_AMBIENTES    |     5 |
+|   8 |       TABLE ACCESS BY INDEX ROWID| TBSSS_ENVIRONMENTS       |     5 |
+|   9 |        INDEX FULL SCAN           | PK_TBSSS_ENVIRONMENTS    |     5 |
 |  10 |       SORT JOIN                  |                       |    70 |
-|  11 |        INDEX FULL SCAN           | UK_TBSSS_SAMB_SCR_AMB |    70 |
+|  11 |        INDEX FULL SCAN           | UK_TBSSS_SENV_SCR_ENV |    70 |
 --------------------------------------------------------------------------
 ```
 
@@ -268,12 +268,12 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é inv
 |   3 |    STATISTICS COLLECTOR   |                       |       |
 |   4 |     VIEW                  | index$_join$_002      |     5 |
 |   5 |      HASH JOIN            |                       |       |
-|   6 |       INDEX FAST FULL SCAN| PK_TBSSS_AMBIENTES    |     5 |
-|   7 |       INDEX FAST FULL SCAN| UK_TBSSS_AMB_NOME     |     5 |
+|   6 |       INDEX FAST FULL SCAN| PK_TBSSS_ENVIRONMENTS    |     5 |
+|   7 |       INDEX FAST FULL SCAN| UK_TBSSS_ENV_NAME     |     5 |
 |   8 |    INLIST ITERATOR        |                       |       |
-|   9 |     INDEX UNIQUE SCAN     | UK_TBSSS_SAMB_SCR_AMB |     2 |
+|   9 |     INDEX UNIQUE SCAN     | UK_TBSSS_SENV_SCR_ENV |     2 |
 |  10 |   INLIST ITERATOR         |                       |       |
-|  11 |    INDEX RANGE SCAN       | UK_TBSSS_SAMB_SCR_AMB |    10 |
+|  11 |    INDEX RANGE SCAN       | UK_TBSSS_SENV_SCR_ENV |    10 |
 -------------------------------------------------------------------
 ```
 
@@ -311,9 +311,9 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é inv
 |   5 |      STATISTICS COLLECTOR                |                       |       |
 |   6 |       TABLE ACCESS BY INDEX ROWID BATCHED| TBSSS_SCRIPT_PARAM    |     3 |
 |   7 |        INDEX RANGE SCAN                  | UK_TBSSS_SPRM_SCR_ORD |     3 |
-|   8 |      INDEX UNIQUE SCAN                   | PK_TBSSS_PARAMETROS   |     1 |
-|   9 |     TABLE ACCESS BY INDEX ROWID          | TBSSS_PARAMETROS      |     1 |
-|  10 |    TABLE ACCESS FULL                     | TBSSS_PARAMETROS      |     1 |
+|   8 |      INDEX UNIQUE SCAN                   | PK_TBSSS_PARAMETERS   |     1 |
+|   9 |     TABLE ACCESS BY INDEX ROWID          | TBSSS_PARAMETERS      |     1 |
+|  10 |    TABLE ACCESS FULL                     | TBSSS_PARAMETERS      |     1 |
 ----------------------------------------------------------------------------------
 ```
 
@@ -337,8 +337,8 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é inv
 | Id  | Operation                           | Name                  | Rows  |
 -----------------------------------------------------------------------------
 |   0 | SELECT STATEMENT                    |                       |     5 |
-|   1 |  TABLE ACCESS BY INDEX ROWID BATCHED| TBSSS_SCRIPT_AMB      |     5 |
-|   2 |   INDEX RANGE SCAN                  | UK_TBSSS_SAMB_SCR_AMB |     5 |
+|   1 |  TABLE ACCESS BY INDEX ROWID BATCHED| TBSSS_SCRIPT_ENV      |     5 |
+|   2 |   INDEX RANGE SCAN                  | UK_TBSSS_SENV_SCR_ENV |     5 |
 -----------------------------------------------------------------------------
 ```
 
@@ -368,7 +368,7 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é inv
 -----------------------------------------------------------------
 |   0 | SELECT STATEMENT            |                   |     1 |
 |   1 |  TABLE ACCESS BY INDEX ROWID| TBSSS_SCRIPTS     |     1 |
-|   2 |   INDEX UNIQUE SCAN         | UK_TBSSS_SCR_NOME |     1 |
+|   2 |   INDEX UNIQUE SCAN         | UK_TBSSS_SCR_NAME |     1 |
 -----------------------------------------------------------------
 ```
 
@@ -393,8 +393,8 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é inv
 -------------------------------------------------------------------
 |   0 | SELECT STATEMENT             |                    |     1 |
 |   1 |  FOR UPDATE                  |                    |       |
-|   2 |   TABLE ACCESS BY INDEX ROWID| TBSSS_AMBIENTES    |     1 |
-|   3 |    INDEX UNIQUE SCAN         | PK_TBSSS_AMBIENTES |     1 |
+|   2 |   TABLE ACCESS BY INDEX ROWID| TBSSS_ENVIRONMENTS    |     1 |
+|   3 |    INDEX UNIQUE SCAN         | PK_TBSSS_ENVIRONMENTS |     1 |
 -------------------------------------------------------------------
 ```
 
@@ -406,8 +406,8 @@ A ordem de locks é `{prefixo}scripts → {prefixo}parametros`. Ela nunca é inv
 --------------------------------------------------------------------
 |   0 | SELECT STATEMENT             |                     |     1 |
 |   1 |  FOR UPDATE                  |                     |       |
-|   2 |   TABLE ACCESS BY INDEX ROWID| TBSSS_PARAMETROS    |     1 |
-|   3 |    INDEX UNIQUE SCAN         | PK_TBSSS_PARAMETROS |     1 |
+|   2 |   TABLE ACCESS BY INDEX ROWID| TBSSS_PARAMETERS    |     1 |
+|   3 |    INDEX UNIQUE SCAN         | PK_TBSSS_PARAMETERS |     1 |
 --------------------------------------------------------------------
 ```
 

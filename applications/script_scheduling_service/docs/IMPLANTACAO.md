@@ -98,7 +98,7 @@ python3 /tmp/sss-limpo/applications/script_scheduling_service/scripts/empacotar.
 
 Com código 1, a saída diz o que foi recusado ("Pacote recusado:" e uma linha por problema, com arquivo e linha, nunca o valor). O caso comum é um `password` ou `cookie_key` que não é `CHANGE_ME` no `instance/secrets.cfg.example`.
 
-Leve os dois arquivos (`sss-<versao>.tar.gz` e `SHA256SUMS`) ao servidor e confira:
+Leve os dois arquivos (`sss-<version>.tar.gz` e `SHA256SUMS`) ao servidor e confira:
 
 ```bash
 # como sss, na pasta onde estão os dois arquivos
@@ -172,18 +172,18 @@ Os três scripts saem do mesmo registro de identificadores, com o owner e o pref
 # na máquina de desenvolvimento ou num servidor com o pacote
 cd /opt/sss/web2py/applications/script_scheduling_service
 python3 scripts/gerar_scripts_sql.py --grants-para web=sss_web,agente=sss_agente,purge=sss_purge,monitor=sss_monitor
-# gera docs/sql/01_implantar_sss.sql, 02_rollback_sss.sql, 99_validar_implantacao.sql e 03_grants_sss.sql
+# gera docs/sql/01_deploy_sss.sql, 02_rollback_sss.sql, 99_validate_deploy.sql e 03_grants_sss.sql
 ```
 
 O DBA revisa o `01` (ou a saída de `python3 scripts/init_db.py --dry-run`, que imprime o DDL sem conectar) **antes** de executar. Depois:
 
 ```sql
 -- como a conta dona do esquema, gravando a saída
-SPOOL /tmp/sss_01_implantar.log
-@docs/sql/01_implantar_sss.sql
+SPOOL /tmp/sss_01_deploy.log
+@docs/sql/01_deploy_sss.sql
 SPOOL OFF
-SPOOL /tmp/sss_99_validar.log
-@docs/sql/99_validar_implantacao.sql
+SPOOL /tmp/sss_99_validate.log
+@docs/sql/99_validate_deploy.sql
 SPOOL OFF
 ```
 
@@ -207,7 +207,7 @@ O seed cria os usuários de homologação `admin`, `op.prod`, `op.hml` e `consul
 ### 5.5 Dimensionamento dos LOBs (CR-007, R-29; CR-012)
 
 * **Log no banco:** num banco AL32UTF8, o CLOB guarda cerca de **2 bytes por caractere**. Estimativa do segmento LOB de `tbsss_tickets`: `tickets por dia × caracteres médios do log × 2 × ticket_retention_days × 1,3`. Exemplo: 2.000 × 50.000 × 2 × 180 × 1,3 ≈ 47 GB. O teto por ticket é `max_log_size_bytes` (até 64 MiB).
-* **Saída dos scripts:** o zip fica no BLOB de `tbsss_ticket_saida` até o ticket sair pela retenção: `tickets com saída por dia × zip médio × ticket_retention_days × 1,3`. O teto por ticket é `output_max_bytes` (até 200 MiB).
+* **Saída dos scripts:** o zip fica no BLOB de `tbsss_ticket_output` até o ticket sair pela retenção: `tickets com saída por dia × zip médio × ticket_retention_days × 1,3`. O teto por ticket é `output_max_bytes` (até 200 MiB).
 * Depois do purge, o espaço volta ao segmento, não ao tablespace. Para devolvê-lo, o DBA usa `ALTER TABLE ... MOVE LOB` ou redefinição online numa janela.
 
 ---
@@ -216,7 +216,7 @@ O seed cria os usuários de homologação `admin`, `op.prod`, `op.hml` e `consul
 
 * `[oracle] modo_driver = auto` (padrão) tenta, na ordem, **Thin → Thick → cx_Oracle**, cada um numa sondagem isolada, e usa o primeiro que conectar. A sondagem usa a conta do papel que está conectando: `[oracle] user` no web e no agente, `[monitor] user` no `saude.py`.
 * **Linha da combinação escolhida**, no log da aplicação de cada processo (ensaio, banco 19c):
-  `INFO ... [acao=INICIO] driver=oracledb modo=thin servidor=19.24.0.0.0 cliente=-`
+  `INFO ... [action=INICIO] driver=oracledb modo=thin servidor=19.24.0.0.0 cliente=-`
   Com Thick ou cx_Oracle, `cliente=` mostra a versão do Instant Client (precisa ser 19). Registre essa linha no checklist (§19).
 * **Conferência antes de subir:** `python3 applications/script_scheduling_service/scripts/check_env.py`, a partir de `W`. Ela confere os pré-requisitos (código 0 = tudo OK, 1 = falta arquivo, 2 = Python menor que 3.6.0).
 * **Quando forçar:**
@@ -240,7 +240,7 @@ cp config.ini.example config.ini && chmod 0640 config.ini
 
 Ajuste em cada servidor: `[app] sss_env`, `[oracle]` (`user` do papel do servidor, `dsn`, `owner`, `table_prefix`, `modo_driver`), `[secrets] secrets_file = /etc/sss/secrets.cfg`, `[logging] log_dir`, `[web] allowed_origins` e `trusted_proxies` (nó web) e `[agent]` (agentes: `agent_id` único, `ambientes_atendidos`, `usuarios_execucao`, `exec_work_dir`, `work_dir`, `interpretadores`). A descrição de cada chave está no README §12.1.
 
-**Tempos que precisam ser idênticos em todos os agentes (README §8.9, D7):** copie `fence_timeout_s` e `node_offline_timeout_s` do arquivo de referência **sem alterar**, assim como os outros valores do `config_criticos` (`heartbeat_interval_s`, `call_timeout_ms`, `kill_grace_s`, `misfire_policy`, `misfire_tolerance_s`, `cron_horizon_days`, `fila_envelhecimento_min`). Cada agente registra na subida:
+**Tempos que precisam ser idênticos em todos os agentes (README §8.9, D7):** copie `fence_timeout_s` e `node_offline_timeout_s` do arquivo de referência **sem alterar**, assim como os outros valores do `critical_config` (`heartbeat_interval_s`, `call_timeout_ms`, `kill_grace_s`, `misfire_policy`, `misfire_tolerance_s`, `cron_horizon_days`, `fila_envelhecimento_min`). Cada agente registra na subida:
 
 `INFO ... [acao=INICIO] tempos do fencing: fence_timeout_s=90 node_offline_timeout_s=180`
 
@@ -347,8 +347,8 @@ bin/sss-scheduler.sh                       # ou: bin/sss-scheduler.sh --config /
   INFO ... [acao=INICIO] driver=oracledb modo=thin servidor=19.24.0.0.0 cliente=-
   INFO ... [acao=INICIO] agente inicializado (versao 1.0.0-dev, 0 grupo(s) em encerramento, 0 pasta(s) preservada(s))
   ```
-* Falha na subida: uma linha `CRITICAL ... [acao=INICIO] Subida abortada: <motivo>` e um código de saída de 10 a 19 (§15.1).
-* A primeira conexão registra `INFO ... [acao=CONEXAO] Conectando ao Oracle (papel=agente)...` e `Conexao estabelecida (papel=agente)`. `WARNING ... [acao=RECONEXAO] Tentando reconexao` só aparece depois de uma queda (§15.3).
+* Falha na subida: uma linha `CRITICAL ... [action=INICIO] Subida abortada: <reason>` e um código de saída de 10 a 19 (§15.1).
+* A primeira conexão registra `INFO ... [action=CONEXAO] Conectando ao Oracle (papel=agente)...` e `Conexao estabelecida (papel=agente)`. `WARNING ... [action=RECONEXAO] Tentando reconexao` só aparece depois de uma queda (§15.3).
 
 ### 10.3 Parada controlada [ensaiado]
 
@@ -359,7 +359,7 @@ bin/sss-scheduler.sh                       # ou: bin/sss-scheduler.sh --config /
   ```text
   parada solicitada: /var/lib/sss/work/sss-srv-linux-prod-01.stop
   ```
-  O agente para na próxima iteração (no ensaio, em menos de 2 s; `WARNING ... [acao=PARADA] encerramento TERMINATE: 0 execucao(oes) local(is)`) e remove o arquivo. O `sss-stop.sh` sai com código 2 se o `config.ini` for inválido.
+  O agente para na próxima iteração (no ensaio, em menos de 2 s; `WARNING ... [action=PARADA] encerramento TERMINATE: 0 execucao(oes) local(is)`) e remove o arquivo. O `sss-stop.sh` sai com código 2 se o `config.ini` for inválido.
 
 ### 10.4 Acesso dos usuários
 
@@ -469,7 +469,7 @@ Depois:
 ## 12. Purge (retenção; README §11.3)
 
 * **Conta:** `[retencao] purge_user = sss_purge` no `config.ini` e `[purge] password` no `secrets.cfg` do agente que roda o purge. Com `purge_user` vazio (aceito só em DEV), o purge recusa rodar [ensaiado]:
-  `CRITICAL ... [acao=PURGE] purge desligado: [retencao] purge_user vazio (README §12.1)` e código 2.
+  `CRITICAL ... [action=PURGE] purge desligado: [retencao] purge_user vazio (README §12.1)` e código 2.
 * **Primeiro, `--dry-run`:** só conta (estimativas), sem gravar nem apagar nada:
   ```bash
   # como sss
@@ -549,7 +549,7 @@ WARNING: nenhum PURGE auditado nos ultimos 2 dias (README §11.3)
 
 * O arquivo nasce na pasta do minuto em que o processo sobe e troca por tamanho (`app_log_max_bytes`) para a pasta do minuto atual. Com o mesmo nome no mesmo minuto, ganha o sufixo `_<n>`.
 * **Retenção:** o próprio processo apaga as pastas de dia do log da aplicação com mais de `app_log_retention_days` dias. O `purge.py` apaga as pastas de minuto dos logs de execução com mais de `local_log_retention_days` dias, menos as de tickets ainda `RUNNING`.
-* Formato: `data-hora-ISO NÍVEL [pid=…] [agente=…] [ticket=…] [acao=…] mensagem`. Os segredos saem como `****`.
+* Formato: `data-hora-ISO NÍVEL [pid=…] [agente=…] [ticket=…] [action=…] mensagem`. Os segredos saem como `****`.
 
 ### 14.2 Achar o log certo
 
@@ -590,15 +590,15 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 
 ### 15.1 Subida do agente (códigos de saída; README §8.12)
 
-| Código | Linha no log (`CRITICAL ... [acao=INICIO] Subida abortada: …`) | Causa provável | Ação |
+| Código | Linha no log (`CRITICAL ... [action=INICIO] Subida abortada: …`) | Causa provável | Ação |
 |---|---|---|---|
 | 1 (launcher) | `Erro: execucao como root nao e permitida.` (stderr) | Executado como root | Suba como `sss` (`sudo -u sss -H bash`) |
 | 10 | `o agente nao pode rodar como root (README §8.12 passo 1)` | Idem, sem o launcher | Idem |
 | 11 | `configuracao invalida: Arquivo de configuracao nao encontrado: <caminho>` | `config.ini` ausente ou `--config` errado | §7.1 |
 | 11 | `configuracao invalida: [secao] chave: <motivo>` | Chave ausente, desconhecida ou fora da faixa | Compare com o `config.ini.example`; uma chave removida pede "apague a linha" |
 | 11 | `child_locale <x> nao consta em locale -a (CR-007, R-17)` | Locale do filho não instalado | Instale o locale ou ajuste `[agent] child_locale` |
-| 12 | `secrets.cfg invalido: <motivo>` (ex.: `Arquivo de segredos possui permissoes inseguras (mode 644, ...)`, `... deve pertencer ao usuario corrente`, `Secao [web] nao pertence ao papel 'agente'`) | Modo, dono ou seções do `secrets.cfg` | `chmod 0600`, `chown sss`, e só as seções do papel (§7.2) |
-| 13 | `interpretador SH (/bin/sh) recusado: <código>` | Interpretador mapeado inexistente ou inseguro | Ajuste `[agent] interpretadores` (caminho absoluto, executável, fora das pastas do SSS) |
+| 12 | `secrets.cfg invalido: <reason>` (ex.: `Arquivo de segredos possui permissoes inseguras (mode 644, ...)`, `... deve pertencer ao usuario corrente`, `Secao [web] nao pertence ao papel 'agente'`) | Modo, dono ou seções do `secrets.cfg` | `chmod 0600`, `chown sss`, e só as seções do papel (§7.2) |
+| 13 | `interpreter SH (/bin/sh) recusado: <código>` | Interpretador mapeado inexistente ou inseguro | Ajuste `[agent] interpretadores` (caminho absoluto, executável, fora das pastas do SSS) |
 | 13 | `[agent] interpretadores vazio: o agente nao executaria nada` | Chave vazia | Preencha |
 | 13 | Linhas `execucao fora de DEV: <falha>` e depois `N falha(s) na conferencia do helper e do sudoers` | Helper ou `sudoers` incompletos: `helper ... nao pertence ao root`, `... deve ter modo 0755`, `sudo -n -l sem a regra do helper para <usuário>`, `<pasta> deve pertencer a <usuário> com modo 0700`, `usuario de execucao <x> nao existe` | §8 e §4.2 |
 | 13 | `<nome> <caminho> recusado: <código>` (`log_dir`, `work_dir`...), `output_dir ... recusado` / `pasta de saida: <falha>` e `input_dir ... recusado` / `pasta de entrada: <falha>` | Pasta ausente, sem escrita ou nas pastas do sistema | §4 e §8 |
@@ -609,7 +609,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | 17 | `ambientes atendidos inexistentes: X` | Nome em `ambientes_atendidos` não cadastrado | Corrija o nome ou cadastre o ambiente. Ambiente inativo só gera `WARNING ambiente atendido X inativo: ignorado ate ser reativado` |
 | 18 | `startup check: <erro>` | Falha ao conferir o que ficou da execução anterior | Veja as linhas `TALVEZ_INICIADO`, `ORPHAN_PROCESS` e `pasta do ticket nao removida` logo antes |
 | 19 | `o processo tem N threads antes do primeiro spawn (...)` | Algo criou uma thread antes do primeiro script | Suba só pelo `bin/sss-scheduler.sh` (Python puro); não use `web2py.py -S ... -R` |
-| 20 | `REGISTRO_PERDIDO: <motivo>; encerramento TERMINATE` (com o agente já no ar) | A linha do agente em `tbsss_agentes` sumiu ou mudou de dono | Veja se alguém apagou a linha ou subiu outro agente com o mesmo `agent_id`; reinicie |
+| 20 | `REGISTRO_PERDIDO: <motivo>; encerramento TERMINATE` (com o agente já no ar) | A linha do agente em `tbsss_agents` sumiu ou mudou de dono | Veja se alguém apagou a linha ou subiu outro agente com o mesmo `agent_id`; reinicie |
 
 ### 15.2 Cadeia de driver Oracle (`[acao=SELECAO_DRIVER]`)
 
@@ -646,11 +646,11 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | ↳ `PASTA_DO_SISTEMA`, `PASTA_DO_SSS` | | Script nas pastas do sistema ou nas do SSS (inclusive `output_dir` e `input_dir`, CR-014) | Mova o script e corrija o cadastro |
 | ↳ `INTERPRETADOR_NAO_DISPONIVEL` | | O interpretador do script não está mapeado **neste** agente | `[agent] interpretadores` |
 | ↳ `VERSAO_NAO_SUPORTADA` | | Ticket criado por uma versão anterior (snapshot antes da versão 4) | Dispare de novo pela tela |
-| ↳ `CADASTRO_MUDOU`, `SCRIPT_INATIVO`, `NAO_HOMOLOGADO`, `AMBIENTE_INATIVO`, `SEM_PERMISSAO` | | O cadastro mudou entre o disparo e a execução | Confira o cadastro e dispare de novo |
+| ↳ `CADASTRO_MUDOU`, `SCRIPT_INACTIVE`, `NAO_HOMOLOGADO`, `ENVIRONMENT_INACTIVE`, `NO_PERMISSION` | | O cadastro mudou entre o disparo e a execução | Confira o cadastro e dispare de novo |
 | ↳ `ERRO_BANCO: ORA-nnnnn` | `falha antes do spawn: ERRO_BANCO: ...` | Erro de banco na pré-validação | Veja o código ORA |
 | `FAILED` / `SPAWN_ERROR` | `falha antes do spawn: <erro>` e `[SSS] falha ao iniciar: <erro> (agente X)` | Não foi possível criar o log ou o processo (disco, permissão, `sudo`) | Veja o erro; confira o §8 |
 | `FAILED` / `LOG_LIMIT` | `encerramento pedido: LOG_LIMIT` | O log local passou de `max_local_log_size_bytes` | Reduza a saída do script ou aumente o limite |
-| `FAILED` / `TIMEOUT` | `encerramento pedido: TIMEOUT` | Passou do `timeout_seg` do script (ou `script_timeout_s`) | Ajuste o cadastro |
+| `FAILED` / `TIMEOUT` | `encerramento pedido: TIMEOUT` | Passou do `timeout_s` do script (ou `script_timeout_s`) | Ajuste o cadastro |
 | `FAILED` / `FENCED` | `FENCED: ...` (§15.3) | O agente perdeu o banco durante a execução | §15.3 |
 | `FAILED` / `NODE_OFFLINE` | No **outro** agente: `NODE_OFFLINE: ticket(s) N marcado(s) (heartbeat de outro agente vencido ha mais de 180 s)` | O agente dono caiu (ex.: `kill -9`, servidor desligado) | Religue o agente; o filho que ficou vivo é encerrado na religação |
 | `FAILED` / `ORPHAN_PROCESS` | Na subida: `ticket finalizado na subida: FAILED/ORPHAN_PROCESS (processo sem acompanhamento)` ou `(PID sem pasta local)` | O agente reiniciou e não pôde acompanhar o processo | Confira no servidor se o script terminou; dispare de novo se precisar |
@@ -659,13 +659,13 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 
 ### 15.5 Agendamentos
 
-| Linha (`WARNING ... regra pausada: <MOTIVO> (<detalhe>)`) | Causa | Ação |
+| Linha (`WARNING ... regra pausada: <MOTIVO> (<detail>)`) | Causa | Ação |
 |---|---|---|
-| `USUARIO_INATIVO`, `SCRIPT_INATIVO`, `AMBIENTE_INATIVO` | O responsável, o script ou o ambiente foram desativados | Reative e retome a regra pela tela |
-| `SEM_PERMISSAO` | O responsável perdeu a permissão de executar | Ajuste o perfil e retome |
-| `PARAM_INVALIDO` | Os parâmetros gravados não valem mais | Edite a regra |
-| `CRON_INVALIDO` (também `regra pausada: CRON_INVALIDO (sem proxima ocorrencia no horizonte)`) | Expressão sem próxima ocorrência em `cron_horizon_days` | Corrija a expressão |
-| `ERRO_INTERNO` | Três falhas seguidas de banco na mesma regra, ou outro erro inesperado | Veja as linhas anteriores da regra no log do agente |
+| `USER_INACTIVE`, `SCRIPT_INACTIVE`, `ENVIRONMENT_INACTIVE` | O responsável, o script ou o ambiente foram desativados | Reative e retome a regra pela tela |
+| `NO_PERMISSION` | O responsável perdeu a permissão de executar | Ajuste o perfil e retome |
+| `INVALID_PARAM` | Os parâmetros gravados não valem mais | Edite a regra |
+| `INVALID_CRON` (também `regra pausada: INVALID_CRON (sem proxima ocorrencia no horizonte)`) | Expressão sem próxima ocorrência em `cron_horizon_days` | Corrija a expressão |
+| `INTERNAL_ERROR` | Três falhas seguidas de banco na mesma regra, ou outro erro inesperado | Veja as linhas anteriores da regra no log do agente |
 | `MISFIRE: N ocorrencia(s) perdida(s) (politica X, tolerancia N s)` | Agentes parados além da tolerância | Esperado depois de parada longa |
 | `SKIP_OVERLAP_PRESO: o ticket N esta X ha mais de N s; precisa de atencao` | O ticket anterior da regra não termina | Veja o ticket |
 
@@ -674,8 +674,8 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | Sintoma | Linha / onde ver | Causa | Ação |
 |---|---|---|---|
 | HTTP 500 em todas as telas | `CRITICAL ... Subida abortada: configuracao invalida: ...` no `sss_web_<PID>.log` (ou no stderr, se o `log_dir` não aceita escrita) | Configuração, segredos ou banco | Corrija pelo motivo da linha; tickets do web2py em `APP/errors/` |
-| "Requisição recusada." (HTTP 403) nos formulários | `requisicao rejeitada (motivo=origem ...)` | URL de acesso fora de `allowed_origins` | §10.4 |
-| Idem | `motivo=csrf` | Página aberta há muito tempo | Recarregue e repita |
+| "Requisição recusada." (HTTP 403) nos formulários | `requisicao rejeitada (reason=origem ...)` | URL de acesso fora de `allowed_origins` | §10.4 |
+| Idem | `reason=csrf` | Página aberta há muito tempo | Recarregue e repita |
 | Ninguém entra com HTTPS ausente | — | `sss_env = HML/PROD` exige cookie `Secure` | Acesse por HTTPS (§10.4) |
 | Um usuário não entra: "Houve muitas tentativas com a senha errada..." | — | Bloqueio após `login_max_tentativas` | Aguarde `login_bloqueio_s` ou desbloqueie em Gestão de Usuários |
 | `Socket 127.0.0.1:8000 in use by other process` | Terminal | Porta ocupada | `ss -ltnp \| grep :8000` |
@@ -685,7 +685,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | Linha | Causa | Ação |
 |---|---|---|
 | `purge desligado: [retencao] purge_user vazio (README §12.1)` (código 2) | Sem conta de purge | §12 |
-| `outro no esta purgando (concessao em tbsss_controle); tickets e auditoria pulados` | Outro agente purgando | Normal; código 0 |
+| `outro no esta purgando (concessao em tbsss_control); tickets e auditoria pulados` | Outro agente purgando | Normal; código 0 |
 | `outro purge ja esta em execucao neste servidor (sss-purge.lock)` | Duas execuções no mesmo servidor | Normal; código 0 |
 | `concessao do purge perdida durante a execucao; parado` (código 1) | Uma execução passou de 1 hora e outro nó tomou a concessão | Reduza `purge_batch_size` ou rode com mais frequência |
 | `retencao dos logs locais: <pasta>: <erro>` (código 3) | Sem permissão para apagar | Dono das pastas de log deve ser o `sss` |
@@ -709,9 +709,9 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 * **Depois de restaurar o banco** (restore ou *flashback*): o banco volta a um instante anterior, mas os scripts executados depois dele já produziram efeito. Antes de religar qualquer agente:
   1. pare todos os agentes e anote o **instante de restauração** (o do backup ou do *flashback*);
   2. finalize como `FAILED`/`ORPHAN_PROCESS` os tickets `RUNNING` restaurados que têm PID (eles se referem a processos que não existem mais);
-  3. **revise** os tickets `PENDING` e os `RUNNING` sem PID criados antes do instante de restauração. Compare com os logs locais dos agentes (`log_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log`), que sobrevivem à restauração. Os que já rodaram depois do backup são cancelados pela tela (auditado como `TICKET_CANCELAR` com o login do operador), nunca apagados;
-  4. para não repetir ocorrências de agendamento já cumpridas, configure temporariamente `misfire_policy = SKIP` em **todos** os agentes (o `config_criticos` precisa ser igual em todos) para a primeira subida; volte a `RUN_ONCE` depois que o primeiro desdobro avançar as regras;
-  5. avance as sequences de `tbsss_tickets` e `tbsss_auditoria` acima do maior id visto nos logs locais e no log da aplicação. O DBA recria a sequence com `START WITH` maior; o 11g não tem `ALTER SEQUENCE ... RESTART`. Assim nenhum id se repete entre o banco e os arquivos locais;
+  3. **revise** os tickets `PENDING` e os `RUNNING` sem PID criados antes do instante de restauração. Compare com os logs locais dos agentes (`log_dir/<ambiente>/<script>/AAAA/MM/DD/HH/MI/ticket_<id>_<PID>.log`), que sobrevivem à restauração. Os que já rodaram depois do backup são cancelados pela tela (auditado como `TICKET_CANCEL` com o login do operador), nunca apagados;
+  4. para não repetir ocorrências de agendamento já cumpridas, configure temporariamente `misfire_policy = SKIP` em **todos** os agentes (o `critical_config` precisa ser igual em todos) para a primeira subida; volte a `RUN_ONCE` depois que o primeiro desdobro avançar as regras;
+  5. avance as sequences de `tbsss_tickets` e `tbsss_audit` acima do maior id visto nos logs locais e no log da aplicação. O DBA recria a sequence com `START WITH` maior; o 11g não tem `ALTER SEQUENCE ... RESTART`. Assim nenhum id se repete entre o banco e os arquivos locais;
   6. religue os agentes. O startup check limpa as pastas locais.
 
 ---
@@ -723,6 +723,7 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
    * **Chaves renomeadas (CR-015a):** `[agent] saida_dir` → `output_dir`, `saida_max_bytes` → `output_max_bytes`, `saida_max_arquivos` → `output_max_files`, `entrada_dir` → `input_dir` e `[logging] saida_retention_days` → `output_retention_days`. Com o nome antigo, a subida para com `Chave renomeada: <antiga> passou a se chamar <nova>`.
    * **Variáveis do script renomeadas (CR-015a):** os scripts recebem só os nomes em inglês (de-para em `docs/arquitetura/CR-015a-nomes-em-ingles.md`). Antes de atualizar, procure os nomes antigos nos scripts cadastrados, por exemplo: `grep -rnE 'SSS_(AMBIENTE|AGENTE|PLATAFORMA|VERSAO|SCRIPT_NOME|SCRIPT_ARQUIVO|INTERPRETADOR|TIPO_EXECUCAO|PRIORIDADE|DATA_|TIMEOUT_SEG|AGENDAMENTO|RECORRENCIA|LOG_ARQUIVO|SAIDA_DIR|ENTRADA_DIR|TICKET_PAI_ID)' <pastas dos scripts>`. Script que ainda lê um nome antigo recebe vazio.
 3. Se o esquema mudou (`VERSAO_ESQUEMA`), o DBA aplica a migração antes (§5.2). Web e agentes recusam subir com versão diferente (código 15).
+   * **Nomes em inglês no banco (CR-016a), sem migração:** a atualização de um banco com o esquema anterior (tabelas `tbsss_ambientes`, `tbsss_controle`…) **apaga os dados do SSS**. Faça o backup (§17), aplique o `02_rollback_sss.sql` **gerado pela versão anterior** e depois o `01_deploy_sss.sql` e o `99_validate_deploy.sql` da versão nova (§5.2). O `init_db` recusa criar o esquema novo com a `tbsss_controle` antiga presente.
 4. Copie o `sss-helper` novo para `/opt/sss/bin` (§8).
 5. Pare os agentes (`sss-stop.sh` ou `SIGTERM`) e o web, troque as pastas (`mv /opt/sss/web2py /opt/sss/web2py-<anterior> && mv /opt/sss/web2py-<versao> /opt/sss/web2py`) e suba de novo.
 6. Valide (§11). **Retorno:** pare, troque as pastas de volta e suba. Com migração de esquema, o retorno precisa do backup do banco (§17).
@@ -1068,7 +1069,7 @@ Substitui o §22.6: o pacote `fe5884c` não chegou a ser aplicado e fica descart
 | Mudança de configuração | No `config.ini`: apagar `base_script_dir`, trocar `app_log_backups` por `app_log_retention_days = 30` e acrescentar as chaves opcionais novas com o valor padrão (CR-007 e CR-008; passo 2). `secrets.cfg` e `web.env` não mudam: as seções `[ambiente:*]` do `secrets.cfg` antigo só geram WARN em DEV ("não pertence ao papel 'web'") |
 | Árvore de scripts | Como no §22.6: os scripts do seed apontam para `/opt/automacoes/scripts/...`, que não existe neste servidor; a Gestão de Scripts avisa "Arquivo não encontrado neste servidor…" e o disparo funciona |
 | Logs | `$SSS/logs/interno/app/AAAA/MM/DD/HH/MI/sss_web_<PID>.log` (§15.2); o `$SSS/logs/sss_web.log` antigo para de crescer |
-| Usuários | Todos precisam entrar de novo depois da troca (CR-008, E2: a sessão antiga não tem `sessao_epoch`). Os dados de demonstração voltam ao seed, como em todo reinício |
+| Usuários | Todos precisam entrar de novo depois da troca (CR-008, E2: a sessão antiga não tem `session_epoch`). Os dados de demonstração voltam ao seed, como em todo reinício |
 | Parada | Cerca de 1 minuto (passo 6) |
 
 **Ensaio (2026-10-17, na máquina de desenvolvimento, com o Python 3.8.5, a mesma versão do servidor, numa estrutura `$SSS` igual à do servidor, partindo do `fdf6f35` com o `config.ini` e o `secrets.cfg` daquela versão):**

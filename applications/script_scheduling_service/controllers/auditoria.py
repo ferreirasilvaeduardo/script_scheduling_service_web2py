@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Trilha de auditoria e painel de agentes (README §4.3.D VER_AUDITORIA, §4.4, §13). Somente leitura:
+"""Trilha de auditoria e painel de agentes (README §4.3.D VIEW_AUDIT, §4.4, §13). Somente leitura:
 nenhuma action altera agentes. Regras em modules/auditoria_service.py e modules/agentes_service.py.
 
 CSRF e Origin de todo POST sao validados em models/10_security.py.
@@ -14,7 +14,7 @@ from admin_crud import AcessoNegado
 from auditoria_service import FiltrosInvalidos
 from repo_errors import RepoErro
 
-_FUNC = "VER_AUDITORIA"
+_FUNC = "VIEW_AUDIT"
 _JS_AGENTES = "js/app/agentes.js"
 _TAMANHOS = (20, 50, 100)
 _EXTENSOES_AGENTES = ("html", "load")
@@ -65,7 +65,7 @@ def lista():
         response.flash = {"tipo": "erro", "mensagem": u"Corrija os filtros destacados."}
     pode_ver_tickets = ticket_service.pode_consultar(ctx)
     for item in resultado["itens"]:
-        item["link"] = auditoria_service.link_entidade(ctx, item["entidade"], item["entidade_id"],
+        item["link"] = auditoria_service.link_entidade(ctx, item["entity"], item["entity_id"],
                                                        pode_ver_tickets)
     response.title = u"Auditoria — SSS"
     return dict(resultado=resultado, erro=erro, tamanho=tamanho, filtros_ativos=resultado["filtros"],
@@ -88,7 +88,7 @@ def exportar():
         session.flash = {"tipo": "erro", "mensagem": _MSG_FILTROS_EXPORTAR}
         redirect(voltar)
     except RepoErro:
-        _log.exception("falha ao exportar a auditoria (login=%s)", ctx["login"], extra={"acao": "AUD_EXPORTAR"})
+        _log.exception("falha ao exportar a auditoria (login=%s)", ctx["login"], extra={"acao": "AUDIT_EXPORT"})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_EXPORTAR}
         redirect(voltar)
     response.headers["Content-Type"] = "text/csv; charset=utf-8"
@@ -122,7 +122,7 @@ def agentes():
     for secao in response.sss_menu or []:
         for item in secao["itens"]:
             if item["rota"] == ("auditoria", "lista"):
-                item["ativo"] = True
+                item["active"] = True
     dados["legenda"] = agentes_service.legenda()
     dados["limiares"] = current.sss_cfg.agent
     return dados

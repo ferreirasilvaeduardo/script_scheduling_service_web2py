@@ -18,7 +18,7 @@ def _exigir_get():
 def _exigir_consulta():
     ctx = _exigir_login()
     if not ticket_service.pode_consultar(ctx):
-        _log.warning("acesso negado (login=%s funcionalidade=VER_LOGS|EXEC_SCRIPT caminho=%s ip=%s)",
+        _log.warning("acesso negado (login=%s funcionalidade=VIEW_LOGS|EXEC_SCRIPT caminho=%s ip=%s)",
                      ctx["login"], request.env.path_info, _ip_origem(), extra={"acao": "RBAC"})
         raise HTTP(403, u"Acesso negado.", **response.headers)
     return ctx

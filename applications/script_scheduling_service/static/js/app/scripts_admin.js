@@ -65,7 +65,7 @@
           var menos = [];
           var afetados = 0;
           caixas(this.$root, 'input[type="checkbox"][name="ambientes"]').forEach(function (cx) {
-            var inicial = cx.getAttribute('data-inicial') === 'S';
+            var inicial = cx.getAttribute('data-inicial') === 'Y';
             if (cx.disabled || cx.checked === inicial) {
               return;
             }

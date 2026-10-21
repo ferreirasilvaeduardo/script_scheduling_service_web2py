@@ -16,16 +16,16 @@ ItemDDL = collections.namedtuple("ItemDDL", [
 # Catalogo canonico de funcionalidades (README §4.3.D)
 # Tuplas: (modulo, codigo, nome_exibicao, finalidade)
 CATALOGO_FUNCIONALIDADES = (
-    ("OPERACAO", "EXEC_SCRIPT", "Disparar Scripts", "Preencher questionários e abrir tickets"),
-    ("OPERACAO", "VER_LOGS", "Consultar Logs", "Visualizar logs e histórico em tempo quase real"),
-    ("OPERACAO", "CANC_TICKET", "Cancelar Tickets", "Cancelar tickets de terceiros em ambientes autorizados"),
-    ("ADMIN", "CAD_USUARIOS", "Gestão de Usuários", "Gerenciar operadores e credenciais"),
-    ("ADMIN", "CAD_PERFIS", "Gestão de Perfis", "Gerenciar perfis e matrizes de permissão"),
-    ("ADMIN", "CAD_AMBIENTES", "Gestão de Ambientes", "Gerenciar ambientes e DSNs"),
-    ("ADMIN", "CAD_SCRIPTS", "Gestão de Scripts", "Cadastrar rotinas e homologação por ambiente"),
-    ("ADMIN", "CAD_PARAMETROS", "Dicionário de Parâmetros", "Gerenciar perguntas e flags reutilizáveis"),
-    ("ADMIN", "CAD_AGENDAMENTOS", "Regras de Agendamento", "Criar e gerenciar recorrências"),
-    ("ADMIN", "VER_AUDITORIA", "Auditoria", "Consultar a trilha de auditoria e os agentes"),
+    ("OPERATION", "EXEC_SCRIPT", "Disparar Scripts", "Preencher questionários e abrir tickets"),
+    ("OPERATION", "VIEW_LOGS", "Consultar Logs", "Visualizar logs e histórico em tempo quase real"),
+    ("OPERATION", "CANCEL_TICKET", "Cancelar Tickets", "Cancelar tickets de terceiros em ambientes autorizados"),
+    ("ADMIN", "MANAGE_USERS", "Gestão de Usuários", "Gerenciar operadores e credenciais"),
+    ("ADMIN", "MANAGE_PROFILES", "Gestão de Perfis", "Gerenciar perfis e matrizes de permissão"),
+    ("ADMIN", "MANAGE_ENVIRONMENTS", "Gestão de Ambientes", "Gerenciar ambientes e DSNs"),
+    ("ADMIN", "MANAGE_SCRIPTS", "Gestão de Scripts", "Cadastrar rotinas e homologação por ambiente"),
+    ("ADMIN", "MANAGE_PARAMETERS", "Dicionário de Parâmetros", "Gerenciar perguntas e flags reutilizáveis"),
+    ("ADMIN", "MANAGE_SCHEDULES", "Regras de Agendamento", "Criar e gerenciar recorrências"),
+    ("ADMIN", "VIEW_AUDIT", "Auditoria", "Consultar a trilha de auditoria e os agentes"),
 )
 
 # Catalogo padrao de ambientes atendidos (nome, descricao, conexao)
@@ -39,27 +39,27 @@ CATALOGO_AMBIENTES_PADRAO = (
 
 # Catalogo padrao de perfis operacionais e administrativos (nome, descricao, is_admin, funcionalidades, ambientes)
 CATALOGO_PERFIS_PADRAO = (
-    ("ADMINISTRADOR", "Acesso irrestrito a todas as funcionalidades e ambientes", "S", (
-        "EXEC_SCRIPT", "VER_LOGS", "CANC_TICKET", "CAD_USUARIOS", "CAD_PERFIS",
-        "CAD_AMBIENTES", "CAD_SCRIPTS", "CAD_PARAMETROS", "CAD_AGENDAMENTOS", "VER_AUDITORIA"
+    ("ADMINISTRATOR", "Acesso irrestrito a todas as funcionalidades e ambientes", "Y", (
+        "EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET", "MANAGE_USERS", "MANAGE_PROFILES",
+        "MANAGE_ENVIRONMENTS", "MANAGE_SCRIPTS", "MANAGE_PARAMETERS", "MANAGE_SCHEDULES", "VIEW_AUDIT"
     ), ("CLONE2", "CLONE1", "CLONE6", "CLONE7", "GFPREPROD")),
-    ("OPERADOR_PROD", "Operador de Ambientes de Producao", "N", (
-        "EXEC_SCRIPT", "VER_LOGS", "CANC_TICKET"
+    ("OPERATOR_PROD", "Operador de Ambientes de Producao", "N", (
+        "EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET"
     ), ("CLONE2", "CLONE1", "CLONE6", "CLONE7", "GFPREPROD")),
-    ("OPERADOR_HML", "Operador de Ambientes de Homologacao", "N", (
-        "EXEC_SCRIPT", "VER_LOGS", "CANC_TICKET"
+    ("OPERATOR_HML", "Operador de Ambientes de Homologacao", "N", (
+        "EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET"
     ), ("CLONE6", "CLONE7", "GFPREPROD")),
-    ("CONSULTA", "Perfil de Apenas Leitura e Consulta", "N", (
-        "VER_LOGS",
+    ("READ_ONLY", "Perfil de Apenas Leitura e Consulta", "N", (
+        "VIEW_LOGS",
     ), ("CLONE2", "CLONE1", "CLONE6", "CLONE7", "GFPREPROD")),
 )
 
 # Catalogo padrao de usuarios de homologacao e demonstracao (login, nome, perfil_nome)
 CATALOGO_USUARIOS_PADRAO = (
-    ("admin", "Super Administrador", "ADMINISTRADOR"),
-    ("op.prod", "Operador Producao", "OPERADOR_PROD"),
-    ("op.hml", "Operador Homologacao", "OPERADOR_HML"),
-    ("consulta", "Auditor e Consulta", "CONSULTA"),
+    ("admin", "Super Administrador", "ADMINISTRATOR"),
+    ("op.prod", "Operador Producao", "OPERATOR_PROD"),
+    ("op.hml", "Operador Homologacao", "OPERATOR_HML"),
+    ("consulta", "Auditor e Consulta", "READ_ONLY"),
 )
 
 # Hash PBKDF2 da senha padrao de homologacao/demonstracao (senha: Sss@Homolog2026!)
@@ -90,71 +90,71 @@ CATALOGO_PARAMETROS_PADRAO = (
 
 # Catalogo padrao de scripts utilitarios de demonstracao (nome, descricao, grupo, categoria, etapa, interpretador, path_file, tipo_param, max_paral, timeout_seg, params)
 CATALOGO_SCRIPTS_PADRAO = (
-    ("zipar_arquivos", "Compacta arquivo ou pasta em formato ZIP", "UTILITARIOS", "ARQUIVOS", "COMPACTACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/zipar_arquivos.py", "NOMEADO", 2, 1800, (
-        ("arq_origem", 1, "S", None),
-        ("arq_destino", 2, "S", None),
+    ("zipar_arquivos", "Compacta arquivo ou pasta em formato ZIP", "UTILITARIOS", "ARQUIVOS", "COMPACTACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/zipar_arquivos.py", "NAMED", 2, 1800, (
+        ("arq_origem", 1, "Y", None),
+        ("arq_destino", 2, "Y", None),
         ("nivel_compressao", 3, "N", "6"),
     )),
-    ("descompactar_zip", "Extrai arquivos de pacote ZIP para pasta destino com protecao segura", "UTILITARIOS", "ARQUIVOS", "DESCOMPACTACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/descompactar_zip.py", "NOMEADO", 2, 1800, (
-        ("arq_zip", 1, "S", None),
-        ("arq_destino", 2, "S", None),
+    ("descompactar_zip", "Extrai arquivos de pacote ZIP para pasta destino com protecao segura", "UTILITARIOS", "ARQUIVOS", "DESCOMPACTACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/descompactar_zip.py", "NAMED", 2, 1800, (
+        ("arq_zip", 1, "Y", None),
+        ("arq_destino", 2, "Y", None),
     )),
-    ("quebrar_arquivo", "Divide arquivo texto em partes menores por quantidade de linhas", "UTILITARIOS", "ARQUIVOS", "DIVISAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/quebrar_arquivo.py", "NOMEADO", 2, 1800, (
-        ("arq_origem", 1, "S", None),
+    ("quebrar_arquivo", "Divide arquivo texto em partes menores por quantidade de linhas", "UTILITARIOS", "ARQUIVOS", "DIVISAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/quebrar_arquivo.py", "NAMED", 2, 1800, (
+        ("arq_origem", 1, "Y", None),
         ("linhas_por_parte", 2, "N", "1000"),
         ("prefixo_saida", 3, "N", "/tmp/parte_"),
     )),
-    ("juntar_arquivos", "Concatena blocos de arquivos ordenados em arquivo consolidado final", "UTILITARIOS", "ARQUIVOS", "CONCATENACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/juntar_arquivos.py", "NOMEADO", 2, 1800, (
-        ("padrao_origem", 1, "S", "/tmp/parte_*"),
-        ("arq_destino", 2, "S", None),
+    ("juntar_arquivos", "Concatena blocos de arquivos ordenados em arquivo consolidado final", "UTILITARIOS", "ARQUIVOS", "CONCATENACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/juntar_arquivos.py", "NAMED", 2, 1800, (
+        ("padrao_origem", 1, "Y", "/tmp/parte_*"),
+        ("arq_destino", 2, "Y", None),
     )),
-    ("converter_encoding", "Converte codificacao de caracteres de arquivo texto (ex: ISO-8859-1 para UTF-8)", "UTILITARIOS", "ARQUIVOS", "CONVERSAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/converter_encoding.py", "NOMEADO", 2, 1800, (
-        ("arq_origem", 1, "S", None),
-        ("arq_destino", 2, "S", None),
+    ("converter_encoding", "Converte codificacao de caracteres de arquivo texto (ex: ISO-8859-1 para UTF-8)", "UTILITARIOS", "ARQUIVOS", "CONVERSAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/converter_encoding.py", "NAMED", 2, 1800, (
+        ("arq_origem", 1, "Y", None),
+        ("arq_destino", 2, "Y", None),
         ("enc_origem", 3, "N", "ISO-8859-1"),
         ("enc_destino", 4, "N", "UTF-8"),
     )),
-    ("substituir_texto", "Localiza e substitui texto em arquivo gerando copia atualizada", "UTILITARIOS", "ARQUIVOS", "TRANSFORMACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/substituir_texto.py", "NOMEADO", 2, 1800, (
-        ("arq_origem", 1, "S", None),
-        ("arq_destino", 2, "S", None),
-        ("termo_busca", 3, "S", None),
-        ("termo_substituicao", 4, "S", None),
+    ("substituir_texto", "Localiza e substitui texto em arquivo gerando copia atualizada", "UTILITARIOS", "ARQUIVOS", "TRANSFORMACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/substituir_texto.py", "NAMED", 2, 1800, (
+        ("arq_origem", 1, "Y", None),
+        ("arq_destino", 2, "Y", None),
+        ("termo_busca", 3, "Y", None),
+        ("termo_substituicao", 4, "Y", None),
     )),
-    ("remover_duplicadas", "Remove linhas duplicadas de arquivo texto preservando ordem ou ordenando", "UTILITARIOS", "ARQUIVOS", "HIGIENIZACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/remover_duplicadas.py", "NOMEADO", 2, 1800, (
-        ("arq_origem", 1, "S", None),
-        ("arq_destino", 2, "S", None),
+    ("remover_duplicadas", "Remove linhas duplicadas de arquivo texto preservando ordem ou ordenando", "UTILITARIOS", "ARQUIVOS", "HIGIENIZACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/remover_duplicadas.py", "NAMED", 2, 1800, (
+        ("arq_origem", 1, "Y", None),
+        ("arq_destino", 2, "Y", None),
         ("flag_ordenar", 3, "N", "S"),
     )),
-    ("gerar_hash_arquivo", "Calcula hash criptografico (SHA256, MD5, SHA1) para conferencia de integridade", "UTILITARIOS", "ARQUIVOS", "AUDITORIA", "PYTHON3", "/opt/automacoes/scripts/utilitarios/gerar_hash_arquivo.py", "NOMEADO", 2, 1800, (
-        ("arq_origem", 1, "S", None),
+    ("gerar_hash_arquivo", "Calcula hash criptografico (SHA256, MD5, SHA1) para conferencia de integridade", "UTILITARIOS", "ARQUIVOS", "AUDITORIA", "PYTHON3", "/opt/automacoes/scripts/utilitarios/gerar_hash_arquivo.py", "NAMED", 2, 1800, (
+        ("arq_origem", 1, "Y", None),
         ("tipo_hash", 2, "N", "sha256"),
     )),
-    ("compactar_targz", "Cria pacote compactado .tar.gz a partir de arquivo ou pasta", "UTILITARIOS", "ARQUIVOS", "COMPACTACAO", "BASH", "/opt/automacoes/scripts/utilitarios/compactar_targz.sh", "NOMEADO", 2, 1800, (
-        ("arq_origem", 1, "S", None),
-        ("arq_destino", 2, "S", None),
+    ("compactar_targz", "Cria pacote compactado .tar.gz a partir de arquivo ou pasta", "UTILITARIOS", "ARQUIVOS", "COMPACTACAO", "BASH", "/opt/automacoes/scripts/utilitarios/compactar_targz.sh", "NAMED", 2, 1800, (
+        ("arq_origem", 1, "Y", None),
+        ("arq_destino", 2, "Y", None),
     )),
-    ("descompactar_targz", "Extrai pacote compactado .tar.gz para pasta destino com verificacao", "UTILITARIOS", "ARQUIVOS", "DESCOMPACTACAO", "BASH", "/opt/automacoes/scripts/utilitarios/descompactar_targz.sh", "NOMEADO", 2, 1800, (
-        ("arq_tar", 1, "S", None),
-        ("arq_destino", 2, "S", None),
+    ("descompactar_targz", "Extrai pacote compactado .tar.gz para pasta destino com verificacao", "UTILITARIOS", "ARQUIVOS", "DESCOMPACTACAO", "BASH", "/opt/automacoes/scripts/utilitarios/descompactar_targz.sh", "NAMED", 2, 1800, (
+        ("arq_tar", 1, "Y", None),
+        ("arq_destino", 2, "Y", None),
     )),
-    ("contar_linhas_arquivo", "Conta linhas, palavras e bytes de arquivo texto (modo posicional/sequencial)", "UTILITARIOS", "ARQUIVOS", "ANALISE", "SH", "/opt/automacoes/scripts/utilitarios/contar_linhas_arquivo.sh", "SEQUENCIAL", 2, 600, (
-        ("caminho_arquivo", 1, "S", None),
+    ("contar_linhas_arquivo", "Conta linhas, palavras e bytes de arquivo texto (modo posicional/sequencial)", "UTILITARIOS", "ARQUIVOS", "ANALISE", "SH", "/opt/automacoes/scripts/utilitarios/contar_linhas_arquivo.sh", "POSITIONAL", 2, 600, (
+        ("caminho_arquivo", 1, "Y", None),
     )),
-    ("filtrar_linhas", "Filtra linhas de arquivo baseado em padrao de texto com opcao de inverter", "UTILITARIOS", "ARQUIVOS", "FILTRAGEM", "BASH", "/opt/automacoes/scripts/utilitarios/filtrar_linhas.sh", "NOMEADO", 2, 1800, (
-        ("arq_origem", 1, "S", None),
-        ("arq_destino", 2, "S", None),
-        ("termo_filtro", 3, "S", None),
+    ("filtrar_linhas", "Filtra linhas de arquivo baseado em padrao de texto com opcao de inverter", "UTILITARIOS", "ARQUIVOS", "FILTRAGEM", "BASH", "/opt/automacoes/scripts/utilitarios/filtrar_linhas.sh", "NAMED", 2, 1800, (
+        ("arq_origem", 1, "Y", None),
+        ("arq_destino", 2, "Y", None),
+        ("termo_filtro", 3, "Y", None),
         ("flag_inverter", 4, "N", "N"),
     )),
-    ("ordenar_arquivo", "Ordena linhas de arquivo texto com opcoes numerica e reversa", "UTILITARIOS", "ARQUIVOS", "ORGANIZACAO", "SH", "/opt/automacoes/scripts/utilitarios/ordenar_arquivo.sh", "NOMEADO", 2, 1800, (
-        ("arq_origem", 1, "S", None),
-        ("arq_destino", 2, "S", None),
+    ("ordenar_arquivo", "Ordena linhas de arquivo texto com opcoes numerica e reversa", "UTILITARIOS", "ARQUIVOS", "ORGANIZACAO", "SH", "/opt/automacoes/scripts/utilitarios/ordenar_arquivo.sh", "NAMED", 2, 1800, (
+        ("arq_origem", 1, "Y", None),
+        ("arq_destino", 2, "Y", None),
         ("flag_numerico", 3, "N", "N"),
         ("flag_reverso", 4, "N", "N"),
     )),
-    ("limpar_linhas_vazias", "Remove espacos em branco excedentes e linhas vazias de arquivo texto", "UTILITARIOS", "ARQUIVOS", "HIGIENIZACAO", "BASH", "/opt/automacoes/scripts/utilitarios/limpar_linhas_vazias.sh", "NOMEADO", 2, 1800, (
-        ("arq_origem", 1, "S", None),
-        ("arq_destino", 2, "S", None),
+    ("limpar_linhas_vazias", "Remove espacos em branco excedentes e linhas vazias de arquivo texto", "UTILITARIOS", "ARQUIVOS", "HIGIENIZACAO", "BASH", "/opt/automacoes/scripts/utilitarios/limpar_linhas_vazias.sh", "NAMED", 2, 1800, (
+        ("arq_origem", 1, "Y", None),
+        ("arq_destino", 2, "Y", None),
     )),
 )
 
@@ -191,124 +191,124 @@ DICIONARIO_TABELAS = {
 DICIONARIO_COLUNAS = {
     "ambientes": {
         "id": "Identificador unico sequencial do ambiente (chave primaria)",
-        "nome": "Nome mnemonico unico do ambiente em maiusculas (chave natural imutavel)",
-        "descricao": "Descricao detalhada do ambiente, servidor host e finalidade",
-        "conexao": "String de conexao ou alias DSN/TNS sugerido para o banco de dados do ambiente",
-        "ativo": "Indicador de vigencia do ambiente (S=Ativo, N=Inativo)",
+        "name": "Nome mnemonico unico do ambiente em maiusculas (chave natural imutavel)",
+        "description": "Descricao detalhada do ambiente, servidor host e finalidade",
+        "connection": "String de conexao ou alias DSN/TNS sugerido para o banco de dados do ambiente",
+        "active": "Indicador de vigencia do ambiente (Y=Ativo, N=Inativo)",
     },
     "perfis": {
         "id": "Identificador unico sequencial do perfil (chave primaria)",
-        "nome": "Nome unico de identificacao do perfil (ex: ADMINISTRADOR, OPERADOR)",
-        "descricao": "Finalidade e escopo de atuacao dos usuarios vinculados ao perfil",
-        "is_admin": "Indicador de perfil com poderes administrativos plenos (S/N)",
-        "perm_versao": "Versao incremental das permissoes para invalidacao de sessoes ativas",
-        "ativo": "Indicador de vigencia do perfil no sistema (S=Ativo, N=Inativo)",
+        "name": "Nome unico de identificacao do perfil (ex: ADMINISTRATOR, OPERADOR)",
+        "description": "Finalidade e escopo de atuacao dos usuarios vinculados ao perfil",
+        "is_admin": "Indicador de perfil com poderes administrativos plenos (Y/N)",
+        "perm_version": "Versao incremental das permissoes para invalidacao de sessoes ativas",
+        "active": "Indicador de vigencia do perfil no sistema (Y=Ativo, N=Inativo)",
     },
     "funcionalidades": {
         "id": "Identificador unico sequencial da funcionalidade (chave primaria)",
-        "codigo": "Codigo mnemonico unico da operacao (ex: EXEC_SCRIPT, VER_LOGS, CANC_TICKET)",
-        "modulo": "Modulo funcional do sistema ao qual a operacao pertence (OPERACAO, ADMIN)",
-        "nome": "Nome amigavel de exibicao da funcionalidade na interface",
-        "descricao": "Descricao clara das acoes permitidas por esta funcionalidade",
-        "ativo": "Indicador de vigencia da funcionalidade no sistema (S/N)",
+        "code": "Codigo mnemonico unico da operacao (ex: EXEC_SCRIPT, VIEW_LOGS, CANCEL_TICKET)",
+        "module": "Modulo funcional do sistema ao qual a operacao pertence (OPERATION, ADMIN)",
+        "name": "Nome amigavel de exibicao da funcionalidade na interface",
+        "description": "Descricao clara das acoes permitidas por esta funcionalidade",
+        "active": "Indicador de vigencia da funcionalidade no sistema (Y/N)",
     },
     "perfil_func": {
         "id": "Identificador unico sequencial do vinculo (chave primaria)",
-        "perfil_id": "Identificador do perfil associado (FK para tbsss_perfis)",
-        "funcionalidade_id": "Identificador da funcionalidade autorizada (FK para tbsss_funcionalidades)",
+        "profile_id": "Identificador do perfil associado (FK para tbsss_profiles)",
+        "feature_id": "Identificador da funcionalidade autorizada (FK para tbsss_features)",
     },
     "perfil_amb": {
         "id": "Identificador unico sequencial do vinculo (chave primaria)",
-        "perfil_id": "Identificador do perfil autorizado (FK para tbsss_perfis)",
-        "ambiente_id": "Identificador do ambiente autorizado (FK para tbsss_ambientes)",
+        "profile_id": "Identificador do perfil autorizado (FK para tbsss_profiles)",
+        "environment_id": "Identificador do ambiente autorizado (FK para tbsss_environments)",
     },
     "scripts": {
         "id": "Identificador unico sequencial do script (chave primaria)",
-        "nome": "Nome unico da rotina (ex: carga_diaria, relatorio_mensal)",
-        "descricao": "Detalhamento da finalidade, regras e impacto da execucao do script",
-        "interpretador": "Interpretador utilizado para execucao (PYTHON3, BASH, SH)",
+        "name": "Nome unico da rotina (ex: carga_diaria, relatorio_mensal)",
+        "description": "Detalhamento da finalidade, regras e impacto da execucao do script",
+        "interpreter": "Interpretador utilizado para execucao (PYTHON3, BASH, SH)",
         "path_file": "Caminho absoluto normalizado do script no sistema de arquivos do servidor",
         "timeout_segundos": "Tempo limite em segundos para execucao antes de encerramento forcado",
-        "permite_concorrente": "Indicador se permite execucoes simultaneas no mesmo ambiente (S/N)",
-        "categoria": "Categoria de negocio ou agrupador funcional da rotina",
-        "ativo": "Indicador de disponibilidade da rotina para novas execucoes (S/N)",
+        "permite_concorrente": "Indicador se permite execucoes simultaneas no mesmo ambiente (Y/N)",
+        "category": "Categoria de negocio ou agrupador funcional da rotina",
+        "active": "Indicador de disponibilidade da rotina para novas execucoes (Y/N)",
     },
     "perfil_scr": {
         "id": "Identificador unico sequencial do vinculo (chave primaria)",
-        "perfil_id": "Identificador do perfil autorizado (FK para tbsss_perfis)",
+        "profile_id": "Identificador do perfil autorizado (FK para tbsss_profiles)",
         "script_id": "Identificador da rotina homologada (FK para tbsss_scripts)",
     },
     "script_amb": {
         "id": "Identificador unico sequencial da homologacao (chave primaria)",
         "script_id": "Identificador do script homologado (FK para tbsss_scripts)",
-        "ambiente_id": "Identificador do ambiente onde a rotina e permitida (FK para tbsss_ambientes)",
+        "environment_id": "Identificador do ambiente onde a rotina e permitida (FK para tbsss_environments)",
     },
     "usuarios": {
         "id": "Identificador unico sequencial do usuario (chave primaria)",
         "login": "Identificador de login do usuario (chave natural imutavel)",
-        "nome": "Nome completo do operador para identificacao",
+        "name": "Nome completo do operador para identificacao",
         "email": "Endereco de correio eletronico corporativo do operador",
-        "senha_hash": "Hash criptografico da senha gerado via PBKDF2-SHA256 (200k iteracoes)",
-        "perfil_id": "Identificador do perfil de acesso atribuido (FK para tbsss_perfis)",
-        "ativo": "Indicador se o usuario esta ativo (S=Ativo, N=Bloqueado/Inativo)",
-        "sessao_epoch": "Contador de revogacao de sessoes ativas para seguranca",
-        "tentativas_falha": "Numero de tentativas consecutivas de autenticacao incorretas",
-        "bloqueado_ate": "Data e hora limite de bloqueio temporario por excesso de falhas",
+        "password_hash": "Hash criptografico da senha gerado via PBKDF2-SHA256 (200k iteracoes)",
+        "profile_id": "Identificador do perfil de acesso atribuido (FK para tbsss_profiles)",
+        "active": "Indicador se o usuario esta ativo (Y=Ativo, N=Bloqueado/Inativo)",
+        "session_epoch": "Contador de revogacao de sessoes ativas para seguranca",
+        "failed_attempts": "Numero de tentativas consecutivas de autenticacao incorretas",
+        "locked_until": "Data e hora limite de bloqueio temporario por excesso de falhas",
     },
     "parametros": {
         "id": "Identificador unico sequencial do parametro (chave primaria)",
-        "codigo": "Codigo mnemonico unico do parametro (ex: DATA_REF, FORMATO)",
+        "code": "Codigo mnemonico unico do parametro (ex: DATA_REF, FORMATO)",
         "label": "Rotulo de exibicao amigavel apresentado no formulario ao usuario",
-        "tipo_componente": "Tipo de componente visual (TEXTO, NUMERO, DATA, SELECT, RADIO, CHECKBOX)",
-        "descricao": "Texto explicativo de orientacao ao operador",
-        "regex_validacao": "Expressao regular segura para validacao do valor inserido",
-        "opcoes_json": "Opcoes selecionaveis em formato JSON para componentes do tipo lista",
-        "valor_padrao": "Valor pre-definido padrao sugerido no formulario",
+        "component_type": "Tipo de componente visual (TEXTO, NUMERO, DATA, SELECT, RADIO, CHECKBOX)",
+        "description": "Texto explicativo de orientacao ao operador",
+        "validation_regex": "Expressao regular segura para validacao do valor inserido",
+        "options_json": "Opcoes selecionaveis em formato JSON para componentes do tipo lista",
+        "default_value": "Valor pre-definido padrao sugerido no formulario",
         "flag_comando": "Flag de linha de comando associada (ex: --data, -f)",
-        "sensivel": "Indicador se o dado e confidencial e deve ser mascarado em logs (S/N)",
-        "ativo": "Indicador de vigencia do parametro no sistema (S/N)",
+        "sensitive": "Indicador se o dado e confidencial e deve ser mascarado em logs (Y/N)",
+        "active": "Indicador de vigencia do parametro no sistema (Y/N)",
     },
     "script_param": {
         "id": "Identificador unico sequencial da associacao (chave primaria)",
         "script_id": "Identificador do script (FK para tbsss_scripts)",
-        "parametro_id": "Identificador do parametro associado (FK para tbsss_parametros)",
-        "ordem": "Posicao de apresentacao do campo no questionario de execucao",
-        "obrigatorio": "Indicador se o preenchimento e mandatorio para esta rotina (S/N)",
-        "valor_padrao_sub": "Valor padrao especifico que sobrescreve o valor do parametro para este script",
-        "grupo": "Agrupador ou secao visual no formulario",
-        "etapa": "Etapa de preenchimento em formularios com multiplos passos",
+        "parameter_id": "Identificador do parametro associado (FK para tbsss_parameters)",
+        "sort_order": "Posicao de apresentacao do campo no questionario de execucao",
+        "required": "Indicador se o preenchimento e mandatorio para esta rotina (Y/N)",
+        "default_value_override": "Valor padrao especifico que sobrescreve o valor do parametro para este script",
+        "script_group": "Agrupador ou secao visual no formulario",
+        "stage": "Etapa de preenchimento em formularios com multiplos passos",
     },
     "agendamentos": {
         "id": "Identificador unico sequencial do agendamento (chave primaria)",
-        "nome": "Titulo descritivo da regra de agendamento",
+        "name": "Titulo descritivo da regra de agendamento",
         "script_id": "Identificador da rotina a ser executada (FK para tbsss_scripts)",
-        "ambiente": "Nome do ambiente onde a rotina deve ser disparada (FK para tbsss_ambientes)",
-        "usuario_id": "Operador responsavel pelo agendamento (FK para tbsss_usuarios)",
-        "prioridade": "Nivel de prioridade da execucao (1=Critico a 4=Baixa)",
-        "tipo_recorrencia": "Tipo de periodicidade (UNICA, DIARIA, SEMANAL, MENSAL, CRON)",
-        "expressao_cron": "Expressao cron no formato padrao de 5 campos (minuto hora dia mes dsem)",
-        "hora_execucao": "Horario de disparo no formato HH:MM para recorrencias diarias/semanais/mensais",
-        "dias_semana": "Dias da semana selecionados (1=Dom a 7=Sab) para agendamento semanal",
-        "dia_mes": "Dia do mes (1 a 31) para agendamento mensal",
-        "parametros_json": "Parametros congelados configurados para o agendamento em JSON (CLOB)",
-        "data_inicio": "Data inicial de vigencia do agendamento",
-        "data_fim": "Data final limite para expiracao do agendamento",
-        "proxima_execucao": "Data e hora exatas calculadas para o proximo disparo",
-        "ultima_execucao": "Data e hora em que ocorreu o ultimo disparo",
-        "ultimo_ticket_id": "Identificador do ticket mais recente gerado por esta regra",
-        "pausa_motivo": "Motivo formal em caso de suspensao da regra (ex: USUARIO_INATIVO, MANUAL)",
-        "ativo": "Indicador de vigencia da regra (S=Ativo, N=Pausado/Concluido)",
+        "environment": "Nome do ambiente onde a rotina deve ser disparada (FK para tbsss_environments)",
+        "user_id": "Operador responsavel pelo agendamento (FK para tbsss_users)",
+        "priority": "Nivel de prioridade da execucao (1=Critico a 4=Baixa)",
+        "recurrence_type": "Tipo de periodicidade (ONCE, DAILY, WEEKLY, MONTHLY, CRON)",
+        "cron_expression": "Expressao cron no formato padrao de 5 campos (minuto hora dia mes dsem)",
+        "run_time": "Horario de disparo no formato HH:MM para recorrencias diarias/semanais/mensais",
+        "week_days": "Dias da semana selecionados (1=Dom a 7=Sab) para agendamento semanal",
+        "month_day": "Dia do mes (1 a 31) para agendamento mensal",
+        "params_json": "Parametros congelados configurados para o agendamento em JSON (CLOB)",
+        "start_date": "Data inicial de vigencia do agendamento",
+        "end_date": "Data final limite para expiracao do agendamento",
+        "next_run_at": "Data e hora exatas calculadas para o proximo disparo",
+        "last_run_at": "Data e hora em que ocorreu o ultimo disparo",
+        "last_ticket_id": "Identificador do ticket mais recente gerado por esta regra",
+        "pause_reason": "Motivo formal em caso de suspensao da regra (ex: USER_INACTIVE, MANUAL)",
+        "active": "Indicador de vigencia da regra (Y=Ativo, N=Pausado/Concluido)",
     },
     "tickets": {
         "id": "Identificador unico sequencial do ticket de execucao (chave primaria)",
         "script_id": "Identificador da rotina solicitada (FK para tbsss_scripts)",
-        "ambiente": "Nome do ambiente alvo da execucao (FK para tbsss_ambientes)",
-        "solicitante": "Login do operador que solicitou a execucao (FK para tbsss_usuarios)",
-        "ip_origem": "Endereco IP do cliente que originou o pedido",
-        "agente_id": "Identificador do daemon do agente que executou o ticket",
+        "environment": "Nome do ambiente alvo da execucao (FK para tbsss_environments)",
+        "requested_by": "Login do operador que solicitou a execucao (FK para tbsss_users)",
+        "source_ip": "Endereco IP do cliente que originou o pedido",
+        "agent_id": "Identificador do daemon do agente que executou o ticket",
         "status": "Situacao da execucao (PENDING, RUNNING, SUCCESS, FAILED, CANCELLED)",
-        "prioridade": "Prioridade de atendimento na fila (1=Critico, 2=Alta, 3=Normal, 4=Baixa)",
-        "cancel_requested": "Indicador se o cancelamento foi requisitado pelo operador (S/N)",
+        "priority": "Prioridade de atendimento na fila (1=Critico, 2=Alta, 3=Normal, 4=Baixa)",
+        "cancel_requested": "Indicador se o cancelamento foi requisitado pelo operador (Y/N)",
         "process_id": "Identificador do processo (PID) no sistema operacional do servidor",
         "exit_code": "Codigo numerico de retorno do processo (0=Sucesso, >0=Erro)",
         "scheduled_at": "Data e hora agendadas para o processamento",
@@ -316,59 +316,59 @@ DICIONARIO_COLUNAS = {
         "finished_at": "Data e hora de conclusao ou encerramento da execucao",
         "heartbeat_at": "Data e hora da ultima confirmacao de atividade do processo",
         "log_output": "Saida completa de execucao capturada de stdout/stderr (CLOB)",
-        "log_truncado": "Indicador se o log excedeu o limite maximo de tamanho (S/N)",
+        "log_truncated": "Indicador se o log excedeu o limite maximo de tamanho (Y/N)",
         "log_offset_chars": "Controle tecnico de caracteres confirmados gravados no log",
         "parent_ticket_id": "Identificador do ticket pai em caso de reexecucao",
-        "agendamento_id": "Identificador da regra de agendamento de origem (se houver)",
-        "status_motivo": "Codigo tecnico do motivo de falha ou cancelamento",
-        "parametros_enviados": "Copia fiel dos parametros de entrada fornecidos na solicitacao (CLOB)",
+        "schedule_id": "Identificador da regra de agendamento de origem (se houver)",
+        "status_reason": "Codigo tecnico do motivo de falha ou cancelamento",
+        "submitted_params": "Copia fiel dos parametros de entrada fornecidos na solicitacao (CLOB)",
     },
     "ticket_resp": {
         "id": "Identificador unico sequencial da resposta (chave primaria)",
         "ticket_id": "Identificador do ticket correspondente (FK para tbsss_tickets)",
-        "parametro_id": "Identificador do parametro respondido (FK para tbsss_parametros)",
+        "parameter_id": "Identificador do parametro respondido (FK para tbsss_parameters)",
         "valor": "Valor fornecido pelo operador para este parametro",
     },
     "agentes": {
         "id": "Identificador unico sequencial do agente (chave primaria)",
-        "codigo": "Codigo identificador unico do agente (ex: agt-node01)",
+        "code": "Codigo identificador unico do agente (ex: agt-node01)",
         "hostname": "Nome de rede (hostname) da maquina servidora do agente",
-        "pid_daemon": "Identificador de processo (PID) do daemon no servidor",
-        "versao": "Versao do software do servico em execucao no agente",
-        "ambientes": "Lista separada por virgulas dos ambientes atendidos por este no",
-        "plataforma": "Sistema operacional da maquina servidora (POSIX)",
-        "interpretadores": "Interpretadores homologados disponiveis no servidor (PYTHON3, BASH, SH)",
-        "status": "Estado de operacao do no (ATIVO, INATIVO, DRAIN)",
-        "iniciado_em": "Data e hora de inicializacao do daemon",
+        "daemon_pid": "Identificador de processo (PID) do daemon no servidor",
+        "version": "Versao do software do servico em execucao no agente",
+        "environments": "Lista separada por virgulas dos ambientes atendidos por este no",
+        "platform": "Sistema operacional da maquina servidora (POSIX)",
+        "interpreters": "Interpretadores homologados disponiveis no servidor (PYTHON3, BASH, SH)",
+        "status": "Estado de operacao do no (ACTIVE, STOPPED)",
+        "started_at": "Data e hora de inicializacao do daemon",
         "heartbeat_at": "Data e hora do sinal periodico de disponibilidade mais recente",
     },
     "auditoria": {
         "id": "Identificador unico sequencial do evento de auditoria (chave primaria)",
         "created_at": "Data e hora exatas da realizacao do evento auditado",
-        "ator": "Identificador do operador ou servico que executou a acao",
-        "ip_origem": "Endereco IP do cliente que solicitou a operacao",
-        "acao": "Codigo mnemonico da acao executada (ex: CAD_INSERIR, TICKET_CRIAR)",
-        "entidade": "Nome da tabela ou entidade alvo afetada",
-        "entidade_id": "Identificador numerico do registro alvo afetado",
-        "detalhe": "Texto descritivo ou dados em formato estruturado sobre o evento",
+        "actor": "Identificador do operador ou servico que executou a acao",
+        "source_ip": "Endereco IP do cliente que solicitou a operacao",
+        "action": "Codigo mnemonico da acao executada (ex: CREATE, TICKET_CREATE)",
+        "entity": "Nome da tabela ou entidade alvo afetada",
+        "entity_id": "Identificador numerico do registro alvo afetado",
+        "detail": "Texto descritivo ou dados em formato estruturado sobre o evento",
     },
     "controle": {
         "id": "Identificador unico da linha de controle global (sempre 1)",
-        "versao_esquema": "Numero da versao estrutural do banco de dados atualmente instalada",
-        "versao_aplicada_em": "Data e hora de aplicacao da versao de esquema atual",
-        "versao_aplicada_por": "Identificador de quem realizou a aplicacao do esquema",
-        "purge_dono": "Identificador do no que detem a concessao de purga de dados",
-        "purge_concessao_ate": "Data e hora limite de expiracao da concessao de purga",
+        "schema_version": "Numero da versao estrutural do banco de dados atualmente instalada",
+        "version_applied_at": "Data e hora de aplicacao da versao de esquema atual",
+        "version_applied_by": "Identificador de quem realizou a aplicacao do esquema",
+        "purge_owner": "Identificador do no que detem a concessao de purga de dados",
+        "purge_lease_until": "Data e hora limite de expiracao da concessao de purga",
     },
     "ticket_saida": {
         "id": "Identificador unico sequencial da saida (chave primaria)",
         "ticket_id": "Ticket dono da saida (FK para tbsss_tickets, removida em cascata)",
-        "situacao": "Situacao do zip (GRAVANDO, DISPONIVEL, EXCEDEU, FALHOU)",
-        "motivo": "Motivo de EXCEDEU ou FALHOU (ARQUIVOS, BYTES, PRAZO, ERRO)",
-        "agente_id": "Agente que executou o ticket e em cujo servidor a pasta de saida ficou",
-        "qtd_arquivos": "Quantidade de arquivos no zip",
-        "tamanho_bytes": "Tamanho do zip em bytes",
-        "conteudo": "Zip da pasta de saida do script (BLOB)",
+        "state": "Situacao do zip (WRITING, AVAILABLE, EXCEEDED, FAILED)",
+        "reason": "Motivo de EXCEEDED ou FAILED (FILES, BYTES, DEADLINE, ERROR)",
+        "agent_id": "Agente que executou o ticket e em cujo servidor a pasta de saida ficou",
+        "file_count": "Quantidade de arquivos no zip",
+        "size_bytes": "Tamanho do zip em bytes",
+        "content": "Zip da pasta de saida do script (BLOB)",
     },
 }
 
@@ -791,7 +791,7 @@ def gerar_grants_por_papel(owner, prefixo, papeis_usuarios):
         comandos.append("GRANT SELECT, INSERT, DELETE ON {}.{} TO {};".format(
             owner, esquema["auditoria"]["tabela"], usr_purge
         ))
-        comandos.append("GRANT SELECT, UPDATE (purge_dono, purge_concessao_ate) ON {}.{} TO {};".format(
+        comandos.append("GRANT SELECT, UPDATE (purge_owner, purge_lease_until) ON {}.{} TO {};".format(
             owner, esquema["controle"]["tabela"], usr_purge
         ))
         comandos.append("GRANT SELECT ON {}.{} TO {};".format(
@@ -838,28 +838,28 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
     for mod, cod, nome_exib, finalidade in CATALOGO_FUNCIONALIDADES:
         sql = (
             "MERGE INTO {tb} dst\n"
-            "USING (SELECT '{cod}' AS codigo FROM DUAL) src\n"
-            "ON (dst.codigo = src.codigo)\n"
+            "USING (SELECT '{cod}' AS code FROM DUAL) src\n"
+            "ON (dst.code = src.code)\n"
             "WHEN MATCHED THEN\n"
-            "  UPDATE SET dst.nome = '{nome}',\n"
-            "             dst.modulo = '{mod}',\n"
-            "             dst.descricao = '{desc}',\n"
-            "             dst.ativo = 'S',\n"
+            "  UPDATE SET dst.name = '{name}',\n"
+            "             dst.module = '{mod}',\n"
+            "             dst.description = '{desc}',\n"
+            "             dst.active = 'Y',\n"
             "             dst.updated_at = SYSDATE,\n"
             "             dst.updated_by = 'SYSTEM:init_db'\n"
-            "  WHERE dst.ativo <> 'S'\n"
-            "     OR dst.nome <> '{nome}'\n"
-            "     OR dst.modulo <> '{mod}'\n"
-            "     OR dst.descricao <> '{desc}'\n"
+            "  WHERE dst.active <> 'Y'\n"
+            "     OR dst.name <> '{name}'\n"
+            "     OR dst.module <> '{mod}'\n"
+            "     OR dst.description <> '{desc}'\n"
             "WHEN NOT MATCHED THEN\n"
-            "  INSERT (id, codigo, modulo, nome, descricao, ativo, created_at, created_by)\n"
-            "  VALUES ({sq}.NEXTVAL, '{cod}', '{mod}', '{nome}', '{desc}', 'S', SYSDATE, 'SYSTEM:init_db');"
+            "  INSERT (id, code, module, name, description, active, created_at, created_by)\n"
+            "  VALUES ({sq}.NEXTVAL, '{cod}', '{mod}', '{name}', '{desc}', 'Y', SYSDATE, 'SYSTEM:init_db');"
         ).format(
             tb=tb_fnc,
             sq=sq_fnc,
             cod=_escape_sql(cod),
             mod=_escape_sql(mod),
-            nome=_escape_sql(nome_exib),
+            name=_escape_sql(nome_exib),
             desc=_escape_sql(finalidade),
         )
         comandos.append(sql)
@@ -870,24 +870,24 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
     for amb_nome, amb_desc, amb_conn in CATALOGO_AMBIENTES_PADRAO:
         sql_amb = (
             "MERGE INTO {tb} dst\n"
-            "USING (SELECT '{nome}' AS nome FROM DUAL) src\n"
-            "ON (dst.nome = src.nome)\n"
+            "USING (SELECT '{name}' AS name FROM DUAL) src\n"
+            "ON (dst.name = src.name)\n"
             "WHEN MATCHED THEN\n"
-            "  UPDATE SET dst.descricao = '{desc}',\n"
-            "             dst.conexao = '{conn}',\n"
-            "             dst.ativo = 'S',\n"
+            "  UPDATE SET dst.description = '{desc}',\n"
+            "             dst.connection = '{conn}',\n"
+            "             dst.active = 'Y',\n"
             "             dst.updated_at = SYSDATE,\n"
             "             dst.updated_by = 'SYSTEM:init_db'\n"
-            "  WHERE dst.ativo <> 'S'\n"
-            "     OR NVL(dst.descricao, '~') <> '{desc}'\n"
-            "     OR NVL(dst.conexao, '~') <> '{conn}'\n"
+            "  WHERE dst.active <> 'Y'\n"
+            "     OR NVL(dst.description, '~') <> '{desc}'\n"
+            "     OR NVL(dst.connection, '~') <> '{conn}'\n"
             "WHEN NOT MATCHED THEN\n"
-            "  INSERT (id, nome, descricao, conexao, ativo, created_at, created_by)\n"
-            "  VALUES ({sq}.NEXTVAL, '{nome}', '{desc}', '{conn}', 'S', SYSDATE, 'SYSTEM:init_db');"
+            "  INSERT (id, name, description, connection, active, created_at, created_by)\n"
+            "  VALUES ({sq}.NEXTVAL, '{name}', '{desc}', '{conn}', 'Y', SYSDATE, 'SYSTEM:init_db');"
         ).format(
             tb=tb_amb,
             sq=sq_amb,
-            nome=_escape_sql(amb_nome),
+            name=_escape_sql(amb_nome),
             desc=_escape_sql(amb_desc),
             conn=_escape_sql(amb_conn),
         )
@@ -904,22 +904,22 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
     for per_nome, per_desc, is_adm, per_funcs, per_ambs in CATALOGO_PERFIS_PADRAO:
         sql_per = (
             "MERGE INTO {tb} dst\n"
-            "USING (SELECT '{nome}' AS nome FROM DUAL) src\n"
-            "ON (dst.nome = src.nome)\n"
+            "USING (SELECT '{name}' AS name FROM DUAL) src\n"
+            "ON (dst.name = src.name)\n"
             "WHEN MATCHED THEN\n"
-            "  UPDATE SET dst.descricao = '{desc}',\n"
+            "  UPDATE SET dst.description = '{desc}',\n"
             "             dst.is_admin = '{is_adm}',\n"
-            "             dst.ativo = 'S',\n"
+            "             dst.active = 'Y',\n"
             "             dst.updated_at = SYSDATE,\n"
             "             dst.updated_by = 'SYSTEM:init_db'\n"
             "  WHERE dst.is_admin <> '{is_adm}'\n"
-            "     OR dst.ativo <> 'S'\n"
-            "     OR NVL(dst.descricao, '~') <> '{desc}'\n"
+            "     OR dst.active <> 'Y'\n"
+            "     OR NVL(dst.description, '~') <> '{desc}'\n"
             "WHEN NOT MATCHED THEN\n"
-            "  INSERT (id, nome, descricao, is_admin, perm_versao, ativo, created_at, created_by)\n"
-            "  VALUES ({sq}.NEXTVAL, '{nome}', '{desc}', '{is_adm}', 1, 'S', SYSDATE, 'SYSTEM:init_db');"
+            "  INSERT (id, name, description, is_admin, perm_version, active, created_at, created_by)\n"
+            "  VALUES ({sq}.NEXTVAL, '{name}', '{desc}', '{is_adm}', 1, 'Y', SYSDATE, 'SYSTEM:init_db');"
         ).format(
-            tb=tb_per, sq=sq_per, nome=_escape_sql(per_nome),
+            tb=tb_per, sq=sq_per, name=_escape_sql(per_nome),
             desc=_escape_sql(per_desc), is_adm=_escape_sql(is_adm)
         )
         comandos.append(sql_per)
@@ -929,14 +929,14 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
             sql_pfnc = (
                 "MERGE INTO {tb_pfnc} dst\n"
                 "USING (\n"
-                "  SELECT p.id AS perfil_id, f.id AS funcionalidade_id\n"
+                "  SELECT p.id AS profile_id, f.id AS feature_id\n"
                 "    FROM {tb_per} p, {tb_fnc} f\n"
-                "   WHERE p.nome = '{per_nome}' AND f.codigo = '{f_cod}'\n"
+                "   WHERE p.name = '{per_nome}' AND f.code = '{f_cod}'\n"
                 ") src\n"
-                "ON (dst.perfil_id = src.perfil_id AND dst.funcionalidade_id = src.funcionalidade_id)\n"
+                "ON (dst.profile_id = src.profile_id AND dst.feature_id = src.feature_id)\n"
                 "WHEN NOT MATCHED THEN\n"
-                "  INSERT (id, perfil_id, funcionalidade_id, created_at, created_by)\n"
-                "  VALUES ({sq_pfnc}.NEXTVAL, src.perfil_id, src.funcionalidade_id, SYSDATE, 'SYSTEM:init_db');"
+                "  INSERT (id, profile_id, feature_id, created_at, created_by)\n"
+                "  VALUES ({sq_pfnc}.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');"
             ).format(
                 tb_pfnc=tb_pfnc, sq_pfnc=sq_pfnc, tb_per=tb_per, tb_fnc=tb_fnc,
                 per_nome=_escape_sql(per_nome), f_cod=_escape_sql(f_cod)
@@ -948,14 +948,14 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
             sql_pamb = (
                 "MERGE INTO {tb_pamb} dst\n"
                 "USING (\n"
-                "  SELECT p.id AS perfil_id, a.id AS ambiente_id\n"
+                "  SELECT p.id AS profile_id, a.id AS environment_id\n"
                 "    FROM {tb_per} p, {tb_amb} a\n"
-                "   WHERE p.nome = '{per_nome}' AND a.nome = '{a_nome}'\n"
+                "   WHERE p.name = '{per_nome}' AND a.name = '{a_nome}'\n"
                 ") src\n"
-                "ON (dst.perfil_id = src.perfil_id AND dst.ambiente_id = src.ambiente_id)\n"
+                "ON (dst.profile_id = src.profile_id AND dst.environment_id = src.environment_id)\n"
                 "WHEN NOT MATCHED THEN\n"
-                "  INSERT (id, perfil_id, ambiente_id, created_at, created_by)\n"
-                "  VALUES ({sq_pamb}.NEXTVAL, src.perfil_id, src.ambiente_id, SYSDATE, 'SYSTEM:init_db');"
+                "  INSERT (id, profile_id, environment_id, created_at, created_by)\n"
+                "  VALUES ({sq_pamb}.NEXTVAL, src.profile_id, src.environment_id, SYSDATE, 'SYSTEM:init_db');"
             ).format(
                 tb_pamb=tb_pamb, sq_pamb=sq_pamb, tb_per=tb_per, tb_amb=tb_amb,
                 per_nome=_escape_sql(per_nome), a_nome=_escape_sql(a_nome)
@@ -971,29 +971,29 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
         vpad_sql = "'{}'".format(_escape_sql(vpad)) if vpad else "NULL"
         sql_prm = (
             "MERGE INTO {tb} dst\n"
-            "USING (SELECT '{cod}' AS codigo FROM DUAL) src\n"
-            "ON (dst.codigo = src.codigo)\n"
+            "USING (SELECT '{cod}' AS code FROM DUAL) src\n"
+            "ON (dst.code = src.code)\n"
             "WHEN MATCHED THEN\n"
-            "  UPDATE SET dst.param_nomeado = {pnom},\n"
+            "  UPDATE SET dst.param_flag = {pnom},\n"
             "             dst.label = '{lbl}',\n"
-            "             dst.descricao = '{desc}',\n"
-            "             dst.tipo_componente = '{tcomp}',\n"
-            "             dst.opcoes_json = {opc},\n"
-            "             dst.valor_padrao = {vpad},\n"
-            "             dst.sensivel = 'N',\n"
-            "             dst.ativo = 'S',\n"
+            "             dst.description = '{desc}',\n"
+            "             dst.component_type = '{tcomp}',\n"
+            "             dst.options_json = {opc},\n"
+            "             dst.default_value = {vpad},\n"
+            "             dst.sensitive = 'N',\n"
+            "             dst.active = 'Y',\n"
             "             dst.updated_at = SYSDATE,\n"
             "             dst.updated_by = 'SYSTEM:init_db'\n"
-            "  WHERE dst.ativo <> 'S'\n"
-            "     OR NVL(dst.param_nomeado, '~') <> NVL({pnom}, '~')\n"
+            "  WHERE dst.active <> 'Y'\n"
+            "     OR NVL(dst.param_flag, '~') <> NVL({pnom}, '~')\n"
             "     OR dst.label <> '{lbl}'\n"
-            "     OR NVL(dst.descricao, '~') <> '{desc}'\n"
-            "     OR dst.tipo_componente <> '{tcomp}'\n"
-            "     OR NVL(dst.opcoes_json, '~') <> NVL({opc}, '~')\n"
-            "     OR NVL(dst.valor_padrao, '~') <> NVL({vpad}, '~')\n"
+            "     OR NVL(dst.description, '~') <> '{desc}'\n"
+            "     OR dst.component_type <> '{tcomp}'\n"
+            "     OR NVL(dst.options_json, '~') <> NVL({opc}, '~')\n"
+            "     OR NVL(dst.default_value, '~') <> NVL({vpad}, '~')\n"
             "WHEN NOT MATCHED THEN\n"
-            "  INSERT (id, codigo, param_nomeado, label, descricao, tipo_componente, opcoes_json, valor_padrao, regex_validacao, sensivel, ativo, created_at, created_by)\n"
-            "  VALUES ({sq}.NEXTVAL, '{cod}', {pnom}, '{lbl}', '{desc}', '{tcomp}', {opc}, {vpad}, NULL, 'N', 'S', SYSDATE, 'SYSTEM:init_db');"
+            "  INSERT (id, code, param_flag, label, description, component_type, options_json, default_value, validation_regex, sensitive, active, created_at, created_by)\n"
+            "  VALUES ({sq}.NEXTVAL, '{cod}', {pnom}, '{lbl}', '{desc}', '{tcomp}', {opc}, {vpad}, NULL, 'N', 'Y', SYSDATE, 'SYSTEM:init_db');"
         ).format(
             tb=tb_prm, sq=sq_prm, cod=_escape_sql(cod), pnom=pnom_sql,
             lbl=_escape_sql(lbl), desc=_escape_sql(desc), tcomp=_escape_sql(tcomp),
@@ -1014,36 +1014,36 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
     for s_nome, s_desc, s_grp, s_cat, s_etp, s_int, s_path, s_tpar, s_paral, s_tmout, s_params in CATALOGO_SCRIPTS_PADRAO:
         sql_scr = (
             "MERGE INTO {tb} dst\n"
-            "USING (SELECT '{nome}' AS nome FROM DUAL) src\n"
-            "ON (dst.nome = src.nome)\n"
+            "USING (SELECT '{name}' AS name FROM DUAL) src\n"
+            "ON (dst.name = src.name)\n"
             "WHEN MATCHED THEN\n"
-            "  UPDATE SET dst.descricao = '{desc}',\n"
-            "             dst.grupo = '{grp}',\n"
-            "             dst.categoria = '{cat}',\n"
-            "             dst.etapa = '{etp}',\n"
-            "             dst.interpretador = '{interp}',\n"
+            "  UPDATE SET dst.description = '{desc}',\n"
+            "             dst.script_group = '{grp}',\n"
+            "             dst.category = '{cat}',\n"
+            "             dst.stage = '{etp}',\n"
+            "             dst.interpreter = '{interp}',\n"
             "             dst.path_file = '{pfile}',\n"
-            "             dst.tipo_param = '{tpar}',\n"
-            "             dst.max_qtd_parallel_env = {paral},\n"
-            "             dst.timeout_seg = {tmout},\n"
-            "             dst.ativo = 'S',\n"
+            "             dst.param_type = '{tpar}',\n"
+            "             dst.max_parallel_env = {paral},\n"
+            "             dst.timeout_s = {tmout},\n"
+            "             dst.active = 'Y',\n"
             "             dst.updated_at = SYSDATE,\n"
             "             dst.updated_by = 'SYSTEM:init_db'\n"
-            "  WHERE dst.ativo <> 'S'\n"
-            "     OR NVL(dst.descricao, '~') <> '{desc}'\n"
-            "     OR NVL(dst.grupo, '~') <> '{grp}'\n"
-            "     OR NVL(dst.categoria, '~') <> '{cat}'\n"
-            "     OR NVL(dst.etapa, '~') <> '{etp}'\n"
-            "     OR dst.interpretador <> '{interp}'\n"
+            "  WHERE dst.active <> 'Y'\n"
+            "     OR NVL(dst.description, '~') <> '{desc}'\n"
+            "     OR NVL(dst.script_group, '~') <> '{grp}'\n"
+            "     OR NVL(dst.category, '~') <> '{cat}'\n"
+            "     OR NVL(dst.stage, '~') <> '{etp}'\n"
+            "     OR dst.interpreter <> '{interp}'\n"
             "     OR dst.path_file <> '{pfile}'\n"
-            "     OR dst.tipo_param <> '{tpar}'\n"
-            "     OR dst.max_qtd_parallel_env <> {paral}\n"
-            "     OR NVL(dst.timeout_seg, 0) <> {tmout}\n"
+            "     OR dst.param_type <> '{tpar}'\n"
+            "     OR dst.max_parallel_env <> {paral}\n"
+            "     OR NVL(dst.timeout_s, 0) <> {tmout}\n"
             "WHEN NOT MATCHED THEN\n"
-            "  INSERT (id, nome, descricao, grupo, categoria, etapa, interpretador, path_file, tipo_param, max_qtd_parallel_env, timeout_seg, ativo, created_at, created_by)\n"
-            "  VALUES ({sq}.NEXTVAL, '{nome}', '{desc}', '{grp}', '{cat}', '{etp}', '{interp}', '{pfile}', '{tpar}', {paral}, {tmout}, 'S', SYSDATE, 'SYSTEM:init_db');"
+            "  INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)\n"
+            "  VALUES ({sq}.NEXTVAL, '{name}', '{desc}', '{grp}', '{cat}', '{etp}', '{interp}', '{pfile}', '{tpar}', {paral}, {tmout}, 'Y', SYSDATE, 'SYSTEM:init_db');"
         ).format(
-            tb=tb_scr, sq=sq_scr, nome=_escape_sql(s_nome), desc=_escape_sql(s_desc),
+            tb=tb_scr, sq=sq_scr, name=_escape_sql(s_nome), desc=_escape_sql(s_desc),
             grp=_escape_sql(s_grp), cat=_escape_sql(s_cat), etp=_escape_sql(s_etp),
             interp=_escape_sql(s_int), pfile=_escape_sql(s_path), tpar=_escape_sql(s_tpar),
             paral=s_paral, tmout=s_tmout
@@ -1055,14 +1055,14 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
             sql_samb = (
                 "MERGE INTO {tb_samb} dst\n"
                 "USING (\n"
-                "  SELECT s.id AS script_id, a.id AS ambiente_id\n"
+                "  SELECT s.id AS script_id, a.id AS environment_id\n"
                 "    FROM {tb_scr} s, {tb_amb} a\n"
-                "   WHERE s.nome = '{s_nome}' AND a.nome = '{amb_nome}'\n"
+                "   WHERE s.name = '{s_nome}' AND a.name = '{amb_nome}'\n"
                 ") src\n"
-                "ON (dst.script_id = src.script_id AND dst.ambiente_id = src.ambiente_id)\n"
+                "ON (dst.script_id = src.script_id AND dst.environment_id = src.environment_id)\n"
                 "WHEN NOT MATCHED THEN\n"
-                "  INSERT (id, script_id, ambiente_id, created_at, created_by)\n"
-                "  VALUES ({sq_samb}.NEXTVAL, src.script_id, src.ambiente_id, SYSDATE, 'SYSTEM:init_db');"
+                "  INSERT (id, script_id, environment_id, created_at, created_by)\n"
+                "  VALUES ({sq_samb}.NEXTVAL, src.script_id, src.environment_id, SYSDATE, 'SYSTEM:init_db');"
             ).format(
                 tb_samb=tb_samb, sq_samb=sq_samb, tb_scr=tb_scr, tb_amb=tb_amb,
                 s_nome=_escape_sql(s_nome), amb_nome=_escape_sql(amb_nome)
@@ -1074,14 +1074,14 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
             sql_pscr = (
                 "MERGE INTO {tb_pscr} dst\n"
                 "USING (\n"
-                "  SELECT p.id AS perfil_id, s.id AS script_id\n"
+                "  SELECT p.id AS profile_id, s.id AS script_id\n"
                 "    FROM {tb_per} p, {tb_scr} s\n"
-                "   WHERE p.nome = '{per_nome}' AND s.nome = '{s_nome}'\n"
+                "   WHERE p.name = '{per_nome}' AND s.name = '{s_nome}'\n"
                 ") src\n"
-                "ON (dst.perfil_id = src.perfil_id AND dst.script_id = src.script_id)\n"
+                "ON (dst.profile_id = src.profile_id AND dst.script_id = src.script_id)\n"
                 "WHEN NOT MATCHED THEN\n"
-                "  INSERT (id, perfil_id, script_id, created_at, created_by)\n"
-                "  VALUES ({sq_pscr}.NEXTVAL, src.perfil_id, src.script_id, SYSDATE, 'SYSTEM:init_db');"
+                "  INSERT (id, profile_id, script_id, created_at, created_by)\n"
+                "  VALUES ({sq_pscr}.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');"
             ).format(
                 tb_pscr=tb_pscr, sq_pscr=sq_pscr, tb_per=tb_per, tb_scr=tb_scr,
                 per_nome=_escape_sql(per_nome), s_nome=_escape_sql(s_nome)
@@ -1094,27 +1094,27 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
             sql_sprm = (
                 "MERGE INTO {tb_sprm} dst\n"
                 "USING (\n"
-                "  SELECT s.id AS script_id, p.id AS parametro_id\n"
+                "  SELECT s.id AS script_id, p.id AS parameter_id\n"
                 "    FROM {tb_scr} s, {tb_prm} p\n"
-                "   WHERE s.nome = '{s_nome}' AND p.codigo = '{p_cod}'\n"
+                "   WHERE s.name = '{s_nome}' AND p.code = '{p_cod}'\n"
                 ") src\n"
-                "ON (dst.script_id = src.script_id AND dst.parametro_id = src.parametro_id)\n"
+                "ON (dst.script_id = src.script_id AND dst.parameter_id = src.parameter_id)\n"
                 "WHEN MATCHED THEN\n"
-                "  UPDATE SET dst.ordem = {ordem},\n"
-                "             dst.obrigatorio = '{obrig}',\n"
-                "             dst.valor_padrao_sub = {vsub},\n"
+                "  UPDATE SET dst.sort_order = {sort_order},\n"
+                "             dst.required = '{obrig}',\n"
+                "             dst.default_value_override = {vsub},\n"
                 "             dst.updated_at = SYSDATE,\n"
                 "             dst.updated_by = 'SYSTEM:init_db'\n"
-                "  WHERE dst.ordem <> {ordem}\n"
-                "     OR dst.obrigatorio <> '{obrig}'\n"
-                "     OR NVL(dst.valor_padrao_sub, '~') <> NVL({vsub}, '~')\n"
+                "  WHERE dst.sort_order <> {sort_order}\n"
+                "     OR dst.required <> '{obrig}'\n"
+                "     OR NVL(dst.default_value_override, '~') <> NVL({vsub}, '~')\n"
                 "WHEN NOT MATCHED THEN\n"
-                "  INSERT (id, script_id, parametro_id, ordem, obrigatorio, valor_padrao_sub, created_at, created_by)\n"
-                "  VALUES ({sq_sprm}.NEXTVAL, src.script_id, src.parametro_id, {ordem}, '{obrig}', {vsub}, SYSDATE, 'SYSTEM:init_db');"
+                "  INSERT (id, script_id, parameter_id, sort_order, required, default_value_override, created_at, created_by)\n"
+                "  VALUES ({sq_sprm}.NEXTVAL, src.script_id, src.parameter_id, {sort_order}, '{obrig}', {vsub}, SYSDATE, 'SYSTEM:init_db');"
             ).format(
                 tb_sprm=tb_sprm, sq_sprm=sq_sprm, tb_scr=tb_scr, tb_prm=tb_prm,
                 s_nome=_escape_sql(s_nome), p_cod=_escape_sql(p_cod),
-                ordem=p_ord, obrig=_escape_sql(p_obrig), vsub=vsub_sql
+                sort_order=p_ord, obrig=_escape_sql(p_obrig), vsub=vsub_sql
             )
             comandos.append(sql_sprm)
 
@@ -1125,9 +1125,9 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
         "USING (SELECT 1 AS id FROM DUAL) src\n"
         "ON (dst.id = src.id)\n"
         "WHEN NOT MATCHED THEN\n"
-        "  INSERT (id, versao_esquema, versao_aplicada_em, versao_aplicada_por)\n"
-        "  VALUES (1, {versao}, SYSDATE, 'SYSTEM:init_db');"
-    ).format(tb=tb_ctl, versao=sql_ident.VERSAO_ESQUEMA)
+        "  INSERT (id, schema_version, version_applied_at, version_applied_by)\n"
+        "  VALUES (1, {version}, SYSDATE, 'SYSTEM:init_db');"
+    ).format(tb=tb_ctl, version=sql_ident.VERSAO_ESQUEMA)
     comandos.append(sql_ctl)
 
     # 7. Usuarios padrao da aplicacao e homologacao (CATALOGO_USUARIOS_PADRAO)
@@ -1140,29 +1140,29 @@ def gerar_instrucoes_seed(owner, prefixo, admin_login=None, admin_nome=None, adm
         sql_usr = (
             "MERGE INTO {tb_usr} dst\n"
             "USING (\n"
-            "  SELECT '{login}' AS login, p.id AS perfil_id\n"
+            "  SELECT '{login}' AS login, p.id AS profile_id\n"
             "    FROM {tb_per} p\n"
-            "   WHERE p.nome = '{perfil}'\n"
+            "   WHERE p.name = '{perfil}'\n"
             ") src\n"
             "ON (dst.login = src.login)\n"
             "WHEN MATCHED THEN\n"
-            "  UPDATE SET dst.nome = '{nome}',\n"
-            "             dst.perfil_id = src.perfil_id,\n"
-            "             dst.ativo = 'S',\n"
+            "  UPDATE SET dst.name = '{name}',\n"
+            "             dst.profile_id = src.profile_id,\n"
+            "             dst.active = 'Y',\n"
             "             dst.updated_at = SYSDATE,\n"
             "             dst.updated_by = 'SYSTEM:init_db'\n"
-            "  WHERE dst.nome <> '{nome}'\n"
-            "     OR dst.perfil_id <> src.perfil_id\n"
-            "     OR dst.ativo <> 'S'\n"
+            "  WHERE dst.name <> '{name}'\n"
+            "     OR dst.profile_id <> src.profile_id\n"
+            "     OR dst.active <> 'Y'\n"
             "WHEN NOT MATCHED THEN\n"
-            "  INSERT (id, login, nome, senha_hash, perfil_id, ativo, sessao_epoch, tentativas_falha, created_at, created_by)\n"
-            "  VALUES ({sq_usr}.NEXTVAL, '{login}', '{nome}', '{hash_s}', src.perfil_id, 'S', 0, 0, SYSDATE, 'SYSTEM:init_db');"
+            "  INSERT (id, login, name, password_hash, profile_id, active, session_epoch, failed_attempts, created_at, created_by)\n"
+            "  VALUES ({sq_usr}.NEXTVAL, '{login}', '{name}', '{hash_s}', src.profile_id, 'Y', 0, 0, SYSDATE, 'SYSTEM:init_db');"
         ).format(
             tb_usr=tb_usr,
             tb_per=tb_per,
             sq_usr=sq_usr,
             login=_escape_sql(u_login),
-            nome=_escape_sql(nome_final),
+            name=_escape_sql(nome_final),
             perfil=_escape_sql(u_perfil),
             hash_s=_escape_sql(hash_final),
         )
@@ -1364,7 +1364,7 @@ def _linhas_seed_por_tabela(owner, prefixo):
 
 
 def gerar_script_validacao(owner, prefixo):
-    """Gera o 99_validar_implantacao.sql a partir do registro sql_ident (SQL*Plus, somente leitura).
+    """Gera o 99_validate_deploy.sql a partir do registro sql_ident (SQL*Plus, somente leitura).
 
     Compara esperado x encontrado: objetos (tabelas, sequences, triggers, constraints e indices pelos
     nomes do registro), objetos invalidos, GRANTs a PUBLIC (proibidos), versao do esquema e o minimo de
@@ -1390,7 +1390,7 @@ def gerar_script_validacao(owner, prefixo):
     objetos = tabelas + sequences + triggers + indices
 
     def chk(ordem, rotulo, regra, valor, sql_contagem):
-        return ("SELECT {o} AS ordem, '{r}' AS verificacao, '{g}' AS regra, {v} AS esperado, "
+        return ("SELECT {o} AS sort_order, '{r}' AS verificacao, '{g}' AS regra, {v} AS esperado, "
                 "({s}) AS encontrado FROM DUAL").format(o=ordem, r=rotulo, g=regra, v=valor, s=sql_contagem)
 
     dicionario = [
@@ -1420,7 +1420,7 @@ def gerar_script_validacao(owner, prefixo):
     tab = dict((ent, "{}.{}".format(owner, t["tabela"])) for ent, t in esquema.items())
     dados = [
         chk(10, "VERSAO DO ESQUEMA", "=", sql_ident.VERSAO_ESQUEMA,
-            "SELECT MAX(versao_esquema) FROM {}".format(tab["controle"])),
+            "SELECT MAX(schema_version) FROM {}".format(tab["controle"])),
     ]
     for n, (ent, minimo) in enumerate(_linhas_seed_por_tabela(owner, prefixo).items()):
         dados.append(chk(11 + n, "LINHAS " + esquema[ent]["tabela"].upper(), ">=", minimo,
@@ -1433,7 +1433,7 @@ def gerar_script_validacao(owner, prefixo):
             "SELECT verificacao, regra || ' ' || esperado AS esperado, encontrado,\n"
             "       CASE WHEN (regra = '=' AND encontrado = esperado) OR (regra = '>=' AND encontrado >= esperado)\n"
             "            THEN 'OK' ELSE 'FALHA' END AS resultado\n"
-            "  FROM chk ORDER BY ordem;"
+            "  FROM chk ORDER BY sort_order;"
         )
         resumo = (
             "WITH chk AS (\n  " + uniao + "\n)\n"
@@ -1481,25 +1481,25 @@ def gerar_script_validacao(owner, prefixo):
         "PROMPT 3. USUARIOS E PERFIS (sem hash de senha)",
         "PROMPT ==============================================================================",
         "COLUMN login FORMAT A20",
-        "COLUMN nome FORMAT A30",
+        "COLUMN name FORMAT A30",
         "COLUMN perfil FORMAT A20",
         "COLUMN admin FORMAT A5",
-        "COLUMN ativo FORMAT A5",
+        "COLUMN active FORMAT A5",
         "COLUMN senha_definida FORMAT A14",
-        "SELECT u.id, u.login, u.nome, p.nome AS perfil, p.is_admin AS admin, u.ativo,",
-        "       CASE WHEN u.senha_hash IS NULL THEN 'N' ELSE 'S' END AS senha_definida",
-        "  FROM {} u JOIN {} p ON p.id = u.perfil_id".format(tab["usuarios"], tab["perfis"]),
+        "SELECT u.id, u.login, u.name, p.name AS perfil, p.is_admin AS admin, u.active,",
+        "       CASE WHEN u.password_hash IS NULL THEN 'N' ELSE 'Y' END AS senha_definida",
+        "  FROM {} u JOIN {} p ON p.id = u.profile_id".format(tab["usuarios"], tab["perfis"]),
         " ORDER BY u.id;",
         "",
         "PROMPT ==============================================================================",
         "PROMPT 4. SCRIPTS CADASTRADOS",
         "PROMPT ==============================================================================",
-        "COLUMN nome FORMAT A25",
-        "COLUMN interpretador FORMAT A8",
-        "COLUMN tipo_param FORMAT A10",
+        "COLUMN name FORMAT A25",
+        "COLUMN interpreter FORMAT A8",
+        "COLUMN param_type FORMAT A10",
         "COLUMN path_file FORMAT A70",
-        "SELECT id, nome, interpretador, tipo_param, max_qtd_parallel_env AS paral, timeout_seg AS tmout,",
-        "       ativo, path_file",
+        "SELECT id, name, interpreter, param_type, max_parallel_env AS paral, timeout_s AS tmout,",
+        "       active, path_file",
         "  FROM {}".format(tab["scripts"]),
         " ORDER BY id;",
         "",
@@ -1507,12 +1507,12 @@ def gerar_script_validacao(owner, prefixo):
         "PROMPT 5. ACESSO POR PERFIL (funcionalidades, ambientes e scripts liberados)",
         "PROMPT ==============================================================================",
         "COLUMN perfil FORMAT A20",
-        "SELECT p.nome AS perfil, p.is_admin AS admin, p.ativo,",
-        "       (SELECT COUNT(*) FROM {} x WHERE x.perfil_id = p.id) AS funcionalidades,".format(tab["perfil_func"]),
-        "       (SELECT COUNT(*) FROM {} x WHERE x.perfil_id = p.id) AS ambientes,".format(tab["perfil_amb"]),
-        "       (SELECT COUNT(*) FROM {} x WHERE x.perfil_id = p.id) AS scripts".format(tab["perfil_scr"]),
+        "SELECT p.name AS perfil, p.is_admin AS admin, p.active,",
+        "       (SELECT COUNT(*) FROM {} x WHERE x.profile_id = p.id) AS funcionalidades,".format(tab["perfil_func"]),
+        "       (SELECT COUNT(*) FROM {} x WHERE x.profile_id = p.id) AS environments,".format(tab["perfil_amb"]),
+        "       (SELECT COUNT(*) FROM {} x WHERE x.profile_id = p.id) AS scripts".format(tab["perfil_scr"]),
         "  FROM {} p".format(tab["perfis"]),
-        " ORDER BY p.nome;",
+        " ORDER BY p.name;",
         "",
         "PROMPT ==============================================================================",
         "PROMPT 6. GRANTS NOS OBJETOS DO SSS (README 11.1: so contas dos papeis; nunca PUBLIC)",
@@ -1542,7 +1542,7 @@ def gerar_script_implantacao_completo(owner, prefixo, lob_storage="SECUREFILE",
     Para no primeiro erro (WHENEVER SQLERROR EXIT FAILURE ROLLBACK, revisao de 2026-10-20): um
     esquema parcial nunca e anunciado como sucesso. Reaplicar exige o 02_rollback antes (ciclo
     02 -> 01 -> 99). Os GRANTs seguem so os papeis do README §11.1; nada e concedido a PUBLIC
-    (tbsss_usuarios guarda senha_hash).
+    (tbsss_users guarda senha_hash).
     """
     sql_ddl = gerar_script_ddl(owner, prefixo, lob_storage=lob_storage)
     sql_seed = gerar_script_seed(

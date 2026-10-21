@@ -19,13 +19,13 @@ from repo_agentes import RepoAgentes
 from repo_oracle import saude as saude_sql
 from repo_oracle.base import BaseRepoOracle
 
-_COLS_AGT = ("id", "codigo", "hostname", "pid_daemon", "versao", "ambientes", "plataforma", "interpretadores",
-             "status", "iniciado_em", "heartbeat_at", "config_criticos",
+_COLS_AGT = ("id", "code", "hostname", "daemon_pid", "version", "environments", "platform", "interpreters",
+             "status", "started_at", "heartbeat_at", "critical_config",
              "created_at", "created_by", "updated_at", "updated_by")
 # Mesmas colunas sem CLOB do listar de tickets (contrato RepoTickets.listar).
-_COLS_TCK = ("id", "script_id", "ambiente", "solicitante", "ip_origem", "agente_id", "process_id",
-             "process_start", "status", "prioridade", "cancel_requested", "status_motivo",
-             "parent_ticket_id", "agendamento_id", "log_offset_chars", "log_truncado", "return_code",
+_COLS_TCK = ("id", "script_id", "environment", "requested_by", "source_ip", "agent_id", "process_id",
+             "process_start", "status", "priority", "cancel_requested", "status_reason",
+             "parent_ticket_id", "schedule_id", "log_offset_chars", "log_truncated", "return_code",
              "scheduled_at", "started_at", "heartbeat_at", "finished_at",
              "created_at", "created_by", "updated_at", "updated_by")
 _COLS_SEM_PID = saude_sql.COLS_SEM_PID
@@ -38,9 +38,9 @@ def _lista(cols, alias=""):
 
 
 # {agt}, {tck} e {scr} recebem apenas nomes qualificados por sql_ident (validados).
-_SQL_LISTAR = "SELECT " + _lista(_COLS_AGT) + " FROM {agt} ORDER BY codigo, id"
+_SQL_LISTAR = "SELECT " + _lista(_COLS_AGT) + " FROM {agt} ORDER BY code, id"
 _SQL_TICKETS_RUNNING = (
-    "SELECT " + _lista(_COLS_TCK) + " FROM {tck} WHERE " + _RUN + " = :codigo ORDER BY id"
+    "SELECT " + _lista(_COLS_TCK) + " FROM {tck} WHERE " + _RUN + " = :code ORDER BY id"
 )
 _SQL_FILA = saude_sql.SQL_FILA
 _SQL_RODANDO_SEM_PID = saude_sql.SQL_RODANDO_SEM_PID
@@ -81,7 +81,7 @@ class RepoAgentesOracle(BaseRepoOracle, RepoAgentes):
 
     def tickets_running(self, codigo, conn=None):
         """Tickets RUNNING do agente pela expressao de ix_tck_run, por id, sem CLOB."""
-        linhas = self._ler(self._sql["TICKETS_RUNNING"], {"codigo": codigo}, conn=conn)
+        linhas = self._ler(self._sql["TICKETS_RUNNING"], {"code": codigo}, conn=conn)
         return [self.tupla_para_dict(_COLS_TCK, r) for r in linhas]
 
     def fila_sem_atendente(self, agora, limiares, conn=None):

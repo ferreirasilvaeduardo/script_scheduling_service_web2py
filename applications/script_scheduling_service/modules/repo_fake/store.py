@@ -11,7 +11,7 @@ import threading
 from repo_errors import RepoViolacao
 from sql_ident import ATOR_MAX
 
-# Limites de tbsss_auditoria (README §4.4, §10 tabela 16).
+# Limites de tbsss_audit (README §4.4, §10 tabela 16).
 _ATOR_MAX = 40
 _DETALHE_MAX = 1000
 
@@ -81,17 +81,17 @@ class FakeDataStore(object):
         if len(ator) > _ATOR_MAX or (detalhe is not None and len(detalhe) > _DETALHE_MAX):
             raise RepoViolacao("auditoria excede o tamanho da coluna (ORA-12899)")
         with self.lock_auditoria:
-            aid = id if id is not None else self.proximo_id("tbsss_auditoria")
+            aid = id if id is not None else self.proximo_id("tbsss_audit")
             if aid in self.auditoria:
-                raise RepoViolacao("id de auditoria ja usado", constraint="pk_tbsss_auditoria")
+                raise RepoViolacao("id de auditoria ja usado", constraint="pk_tbsss_audit")
             reg = {
                 "id": aid,
-                "ator": ator,
-                "ip_origem": ip,
-                "acao": acao,
-                "entidade": entidade,
-                "entidade_id": entidade_id,
-                "detalhe": detalhe,
+                "actor": ator,
+                "source_ip": ip,
+                "action": acao,
+                "entity": entidade,
+                "entity_id": entidade_id,
+                "detail": detalhe,
                 "created_at": self.agora(),
             }
             self.auditoria[aid] = copy.deepcopy(reg)
@@ -102,7 +102,7 @@ class FakeDataStore(object):
 
         Chamado antes de qualquer gravacao: sem ator, nada e gravado (paridade com created_by NOT NULL).
         """
-        valor = (auditoria or {}).get("ator") or ator
+        valor = (auditoria or {}).get("actor") or ator
         if not valor:
             raise RepoViolacao("ator das colunas de registro e obrigatorio")
         if len(valor) > ATOR_MAX:
@@ -130,7 +130,7 @@ class FakeDataStore(object):
             raise RepoViolacao("Referencia inexistente (%s)" % constraint, constraint=constraint)
 
     def ambiente_existe(self, nome):
-        return any(a["nome"] == nome for a in self.ambientes.values())
+        return any(a["name"] == nome for a in self.ambientes.values())
 
     def login_existe(self, login):
         return any(u["login"] == login for u in self.usuarios.values())

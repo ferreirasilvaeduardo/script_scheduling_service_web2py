@@ -22,12 +22,12 @@ SESSAO_ADMIN = {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao"
 class TestAtorVisivel(unittest.TestCase):
 
     def test_regras(self):
-        sem = {"login": "op.prod", "funcionalidades": frozenset(["VER_LOGS"])}
+        sem = {"login": "op.prod", "funcionalidades": frozenset(["VIEW_LOGS"])}
         self.assertEqual(ui_helpers.ator_visivel("op.prod", sem), u"você")
         self.assertEqual(ui_helpers.ator_visivel("admin", sem), u"outra pessoa")
         self.assertEqual(ui_helpers.ator_visivel("SYSTEM:agt-host01", sem), "SYSTEM:agt-host01")
         self.assertIsNone(ui_helpers.ator_visivel(None, sem))
-        self.assertEqual(ui_helpers.ator_visivel("admin", dict(sem, funcionalidades=frozenset(["VER_AUDITORIA"]))),
+        self.assertEqual(ui_helpers.ator_visivel("admin", dict(sem, funcionalidades=frozenset(["VIEW_AUDIT"]))),
                          "admin")
         self.assertEqual(ui_helpers.ator_visivel("admin", {"is_admin": True}), "admin")
 
@@ -54,9 +54,9 @@ class TestResponsavelMascarado(unittest.TestCase):
         tickets = r("tickets")
         ticket = ServicoTicket(catalogo=r("catalogo"), tickets=tickets, log=log)
         self.svc = ServicoAgendamentos(r("agendamentos"), r("catalogo"), r("usuarios"), ticket, tickets.agora, 1461, log)
-        # op.prod com o necessario para ver as regras, mas sem VER_AUDITORIA.
-        self.operador = dict(self.admin, usuario_id=2, login="op.prod", is_admin=False,
-                             funcionalidades=frozenset(f for f in self.admin["funcionalidades"] if f != "VER_AUDITORIA"))
+        # op.prod com o necessario para ver as regras, mas sem VIEW_AUDIT.
+        self.operador = dict(self.admin, user_id=2, login="op.prod", is_admin=False,
+                             funcionalidades=frozenset(f for f in self.admin["funcionalidades"] if f != "VIEW_AUDIT"))
 
     def test_lista_e_formulario(self):
         responsaveis = set(i["responsavel"] for i in self.svc.listar(self.operador, {}, 1, 100)["itens"])
@@ -71,19 +71,19 @@ class TestMotivoPausa(unittest.TestCase):
     def test_traducao_unica(self):
         # CR-008, R-33: a mesma funcao pura na web e no daemon (README §7.5).
         M = rbac.Motivo
-        for motivo in (M.USUARIO_INATIVO, M.SCRIPT_INATIVO, M.AMBIENTE_INATIVO):
+        for motivo in (M.USER_INACTIVE, M.SCRIPT_INACTIVE, M.ENVIRONMENT_INACTIVE):
             self.assertEqual(rbac.motivo_pausa(motivo), motivo)
         for motivo in (M.PERFIL_INATIVO, M.SEM_HOMOLOGACAO, M.SEM_FUNC, M.SEM_AMBIENTE, M.SEM_SCRIPT,
                        M.DADO_INVALIDO):
-            self.assertEqual(rbac.motivo_pausa(motivo), "SEM_PERMISSAO")
+            self.assertEqual(rbac.motivo_pausa(motivo), "NO_PERMISSION")
 
 
 class TestRegistroEsquema(unittest.TestCase):
 
     def test_colunas_novas_e_ampliadas(self):
-        usr = sql_ident.TABELAS["usuarios"]["colunas"]["sessao_epoch"]
+        usr = sql_ident.TABELAS["usuarios"]["colunas"]["session_epoch"]
         self.assertEqual((usr["tipo"], usr["not_null"], usr["default"]), ("NUMBER(10)", True, "0"))
-        self.assertEqual(sql_ident.TABELAS["agentes"]["colunas"]["pid_daemon"]["tipo"], "NUMBER(10)")
+        self.assertEqual(sql_ident.TABELAS["agentes"]["colunas"]["daemon_pid"]["tipo"], "NUMBER(10)")
         self.assertEqual(sql_ident.VERSAO_ESQUEMA, 1)
 
     def test_prefixo_so_minusculo(self):

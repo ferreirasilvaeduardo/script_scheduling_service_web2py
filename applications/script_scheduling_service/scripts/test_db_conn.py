@@ -22,6 +22,7 @@ import _oracle_test_support
 import db_conn
 import plataforma
 import sondar_driver
+import sql_ident
 
 
 class _FakeOracleConfig(object):
@@ -126,9 +127,9 @@ class TestDbConnSelecaoMocks(unittest.TestCase):
         def executor_sondagem(candidato, cfg, senha):
             chamadas.append(candidato)
             if candidato == "thin":
-                return {"candidato": "thin", "ok": False, "codigo_erro": "DPY-3010", "categoria": "INCOMPATIVEL"}
+                return {"candidato": "thin", "ok": False, "codigo_erro": "DPY-3010", "category": "INCOMPATIVEL"}
             elif candidato == "thick":
-                return {"candidato": "thick", "ok": False, "codigo_erro": "DPI-1047", "categoria": "BIBLIOTECA"}
+                return {"candidato": "thick", "ok": False, "codigo_erro": "DPI-1047", "category": "BIBLIOTECA"}
             elif candidato == "cx_oracle":
                 return {
                     "candidato": "cx_oracle",
@@ -151,7 +152,7 @@ class TestDbConnSelecaoMocks(unittest.TestCase):
         def executor_sondagem(candidato, cfg, senha):
             chamadas.append(candidato)
             if candidato in ("thin", "thick"):
-                return {"candidato": candidato, "ok": False, "codigo_erro": "NO_ORACLEDB", "categoria": "BIBLIOTECA"}
+                return {"candidato": candidato, "ok": False, "codigo_erro": "NO_ORACLEDB", "category": "BIBLIOTECA"}
             elif candidato == "cx_oracle":
                 return {
                     "candidato": "cx_oracle",
@@ -174,7 +175,7 @@ class TestDbConnSelecaoMocks(unittest.TestCase):
 
             def executor_sondagem(candidato, cfg, senha):
                 chamadas.append(candidato)
-                return {"candidato": candidato, "ok": False, "codigo_erro": cod_erro, "categoria": "AUTENTICACAO"}
+                return {"candidato": candidato, "ok": False, "codigo_erro": cod_erro, "category": "AUTENTICACAO"}
 
             with self.assertLogs("sss_db_conn", level="CRITICAL") as cm:
                 with self.assertRaises(RuntimeError) as ctx:
@@ -194,7 +195,7 @@ class TestDbConnSelecaoMocks(unittest.TestCase):
                 "cx_oracle": ("ORA-12541", "REDE"),
             }
             cod, cat = erros[candidato]
-            return {"candidato": candidato, "ok": False, "codigo_erro": cod, "categoria": cat}
+            return {"candidato": candidato, "ok": False, "codigo_erro": cod, "category": cat}
 
         with self.assertLogs("sss_db_conn", level="CRITICAL") as cm:
             with self.assertRaises(RuntimeError) as ctx:
@@ -215,7 +216,7 @@ class TestDbConnSelecaoMocks(unittest.TestCase):
 
             def executor_sondagem(candidato, cfg, senha):
                 chamadas.append(candidato)
-                return {"candidato": candidato, "ok": False, "codigo_erro": "FORCED_FAIL", "categoria": "INCOMPATIVEL"}
+                return {"candidato": candidato, "ok": False, "codigo_erro": "FORCED_FAIL", "category": "INCOMPATIVEL"}
 
             with self.assertLogs("sss_db_conn", level="CRITICAL") as cm:
                 with self.assertRaises(RuntimeError) as ctx:
@@ -426,7 +427,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
             "ORA-02291: integrity constraint (OPENRISOW.FK_TBSSS_TCK_SCR) violated - parent key not found",
             "ORA-02292: integrity constraint (OPENRISOW.FK_TBSSS_TCK_RESP) violated - child record found",
             "ORA-01400: cannot insert NULL into (OPENRISOW.TBSSS_SCRIPTS.PATH_FILE)",
-            "ORA-12899: value too large for column OPENRISOW.TBSSS_AUDITORIA.ATOR",
+            "ORA-12899: value too large for column OPENRISOW.TBSSS_AUDIT.ACTOR",
             "ORA-01438: value larger than specified precision allowed for this column",
         ):
             exc = Exception(msg)
@@ -502,13 +503,13 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
         mock_cur = mock.MagicMock()
         mock_conn.cursor.return_value = mock_cur
 
-        # 1. Versao igual (VERSAO_ESQUEMA = 1)
-        mock_cur.fetchone.return_value = (1,)
+        # 1. Versao igual
+        mock_cur.fetchone.return_value = (sql_ident.VERSAO_ESQUEMA,)
         v = db_conn.conferir_versao_esquema(mock_conn, owner="openrisow")
-        self.assertEqual(v, 1)
+        self.assertEqual(v, sql_ident.VERSAO_ESQUEMA)
 
-        # 2. Versao incompativel (ex.: 2)
-        mock_cur.fetchone.return_value = (2,)
+        # 2. Versao incompativel
+        mock_cur.fetchone.return_value = (sql_ident.VERSAO_ESQUEMA + 1,)
         with self.assertLogs("sss_db_conn", level="CRITICAL"):
             with self.assertRaises(db_conn.ErroVersaoEsquema) as ctx:
                 db_conn.conferir_versao_esquema(mock_conn, owner="openrisow")
@@ -754,7 +755,7 @@ class TestOracleTestSupportMocks(unittest.TestCase):
         res = _oracle_test_support.validar_schema_descartavel(mock_conn, "openrisow", "openrisow", prefixo="tbsss_")
         self.assertEqual(res, "OPENRISOW")
         self.assertEqual(mock_cur.execute.call_args_list[1][0][0],
-                         "SELECT versao_esquema FROM OPENRISOW.tbsss_controle")
+                         "SELECT schema_version FROM OPENRISOW.tbsss_control")
 
     def test_compartilhado_versao_divergente_recusada(self):
         import sql_ident

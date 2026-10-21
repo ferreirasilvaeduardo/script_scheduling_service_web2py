@@ -124,7 +124,7 @@ def sondar(candidato, cfg, senha, usuario=None):
                 "versao_driver": None,
                 "versao_cliente": None,
                 "codigo_erro": "CANDIDATO_INVALIDO",
-                "categoria": "OUTRO",
+                "category": "OUTRO",
             }
 
         cur = conn.cursor()
@@ -149,7 +149,7 @@ def sondar(candidato, cfg, senha, usuario=None):
             "versao_driver": versao_driver,
             "versao_cliente": versao_cliente,
             "codigo_erro": None,
-            "categoria": None,
+            "category": None,
         }
 
     except Exception as exc:
@@ -161,7 +161,7 @@ def sondar(candidato, cfg, senha, usuario=None):
             "versao_driver": getattr(driver, "__version__", None) if driver else None,
             "versao_cliente": None,
             "codigo_erro": codigo,
-            "categoria": categoria,
+            "category": categoria,
         }
 
 

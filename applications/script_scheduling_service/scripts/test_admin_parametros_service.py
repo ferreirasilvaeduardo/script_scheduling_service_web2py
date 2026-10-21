@@ -48,182 +48,182 @@ class _Base(unittest.TestCase):
         auth = auth_service.ServicoAuth(repo_factory.obter("usuarios"), repo_factory.obter("rbac"), self.catalogo,
                                         self.auditoria, 5, 900, self.log)
         self.ctx = dict((login, auth.revalidar(sessao)) for login, sessao in SESSOES.items())
-        # Gestor: perfil nao admin com CAD_PARAMETROS (como se a matriz o concedesse).
-        self.ctx["gestor"] = dict(self.ctx["op.prod"], funcionalidades=frozenset(["CAD_PARAMETROS"]))
+        # Gestor: perfil nao admin com MANAGE_PARAMETERS (como se a matriz o concedesse).
+        self.ctx["gestor"] = dict(self.ctx["op.prod"], funcionalidades=frozenset(["MANAGE_PARAMETERS"]))
         self.svc = ServicoAdminParametros(self.catalogo, self.log)
         self.aud_base = max([a["id"] for a in self.auditoria.listar(pagina=1, tamanho=1000)["itens"]] or [0])
 
     def _auditorias(self, acao):
-        return [a for a in self.auditoria.listar(filtros={"acao": acao}, pagina=1, tamanho=100)["itens"]
-                if a["entidade"] == "tbsss_parametros" and a["id"] > self.aud_base]
+        return [a for a in self.auditoria.listar(filtros={"action": acao}, pagina=1, tamanho=100)["itens"]
+                if a["entity"] == "tbsss_parameters" and a["id"] > self.aud_base]
 
-    def _incluir(self, ator="admin", **mudancas):
-        dados = {"codigo": "novo_param", "label": "Novo parametro", "tipo_componente": "TEXT"}
+    def _incluir(self, actor="admin", **mudancas):
+        dados = {"code": "novo_param", "label": "Novo parametro", "component_type": "TEXT"}
         dados.update(mudancas)
-        return self.svc.salvar(self.ctx[ator], IP, None, dados)
+        return self.svc.salvar(self.ctx[actor], IP, None, dados)
 
-    def _editar(self, pid, ator="admin", **mudancas):
-        f = self.svc.formulario(self.ctx[ator], str(pid))
-        dados = dict((k, f[k]) for k in ("param_nomeado", "label", "descricao", "tipo_componente", "opcoes_json",
-                                          "valor_padrao", "regex_validacao", "versao"))
-        dados["sensivel"] = f["sensivel"]
+    def _editar(self, pid, actor="admin", **mudancas):
+        f = self.svc.formulario(self.ctx[actor], str(pid))
+        dados = dict((k, f[k]) for k in ("param_flag", "label", "description", "component_type", "options_json",
+                                          "default_value", "validation_regex", "version"))
+        dados["sensitive"] = f["sensitive"]
         dados.update(mudancas)
-        return self.svc.salvar(self.ctx[ator], IP, str(pid), dados)
+        return self.svc.salvar(self.ctx[actor], IP, str(pid), dados)
 
 
 class TestCadastro(_Base):
 
     def test_sensivel_nunca_volta_a_nao_sensivel(self):
         # CR-007, R-20 (README §6.2): respostas ja gravadas passariam a aparecer em claro.
-        self._editar(P_CHAVE_API, valor_padrao="tok-guardado-1234")
-        _pid, erros = self._editar(P_CHAVE_API, sensivel="N")
-        self.assertEqual(erros["sensivel"], prm_mod.MSG_SENSIVEL_MONOTONICO)
-        self._editar(P_CHAVE_API, remover_padrao="S")
-        _pid, erros = self._editar(P_CHAVE_API, sensivel="N")
-        self.assertEqual(erros["sensivel"], prm_mod.MSG_SENSIVEL_MONOTONICO)
-        self.assertEqual(self.catalogo.parametros_obter(P_CHAVE_API)["sensivel"], "S")
+        self._editar(P_CHAVE_API, default_value="tok-guardado-1234")
+        _pid, erros = self._editar(P_CHAVE_API, sensitive="N")
+        self.assertEqual(erros["sensitive"], prm_mod.MSG_SENSIVEL_MONOTONICO)
+        self._editar(P_CHAVE_API, remover_padrao="Y")
+        _pid, erros = self._editar(P_CHAVE_API, sensitive="N")
+        self.assertEqual(erros["sensitive"], prm_mod.MSG_SENSIVEL_MONOTONICO)
+        self.assertEqual(self.catalogo.parametros_obter(P_CHAVE_API)["sensitive"], "Y")
 
     def test_inclusao_audita_descricao_e_rotulo_sem_controle(self):
         _pid, erros = self._incluir(label="Rotulo\tcom tab")
         self.assertEqual(erros, {"label": admin_crud.MSG_CONTROLE})
-        pid, erros = self._incluir(descricao="Descricao do parametro")
+        pid, erros = self._incluir(description="Descricao do parametro")
         self.assertEqual(erros, {})
-        self.assertIn("descricao: Descricao do parametro", self._auditorias("CAD_INSERIR")[0]["detalhe"])
+        self.assertIn("description: Descricao do parametro", self._auditorias("CREATE")[0]["detail"])
 
     def test_versao_nao_deriva_do_valor_sensivel(self):
         # CR-003 P1: a versao vai ao HTML; um sha256 sem sal do segredo permitiria adivinha-lo.
-        self._editar(P_CHAVE_API, valor_padrao="segredo-numero-um-111")
-        v1 = self.svc.formulario(self.ctx["admin"], str(P_CHAVE_API))["versao"]
-        self._editar(P_CHAVE_API, valor_padrao="segredo-numero-dois-222")
+        self._editar(P_CHAVE_API, default_value="segredo-numero-um-111")
+        v1 = self.svc.formulario(self.ctx["admin"], str(P_CHAVE_API))["version"]
+        self._editar(P_CHAVE_API, default_value="segredo-numero-dois-222")
         f = self.svc.formulario(self.ctx["admin"], str(P_CHAVE_API))
-        self.assertEqual(f["versao"], v1)
+        self.assertEqual(f["version"], v1)
         self.assertNotIn("segredo-numero-dois-222", repr(f))
         p = self.catalogo.parametros_obter(P_CHAVE_API)
         com_valor = admin_crud.versao(p, prm_mod.CAMPOS_EDITAVEIS)
-        self.assertNotEqual(f["versao"], com_valor)
+        self.assertNotEqual(f["version"], com_valor)
 
     def test_versao_muda_com_valor_nao_sensivel(self):
-        v1 = self.svc.formulario(self.ctx["admin"], str(P_DESCRICAO_LOTE))["versao"]
-        self._editar(P_DESCRICAO_LOTE, valor_padrao="lote-a")
-        self.assertNotEqual(self.svc.formulario(self.ctx["admin"], str(P_DESCRICAO_LOTE))["versao"], v1)
+        v1 = self.svc.formulario(self.ctx["admin"], str(P_DESCRICAO_LOTE))["version"]
+        self._editar(P_DESCRICAO_LOTE, default_value="lote-a")
+        self.assertNotEqual(self.svc.formulario(self.ctx["admin"], str(P_DESCRICAO_LOTE))["version"], v1)
 
     def test_sensivel_de_vazio_para_preenchido_gera_conflito(self):
         f = self.svc.formulario(self.ctx["admin"], str(P_CHAVE_API))
         self.assertFalse(f["tem_padrao"])
-        self.catalogo.parametros_alterar(P_CHAVE_API, {"valor_padrao": "colocado-por-outro-333"}, ator="teste")
-        dados = dict((k, f[k]) for k in ("param_nomeado", "label", "descricao", "tipo_componente", "opcoes_json",
-                                          "valor_padrao", "regex_validacao", "versao", "sensivel"))
+        self.catalogo.parametros_alterar(P_CHAVE_API, {"default_value": "colocado-por-outro-333"}, ator="teste")
+        dados = dict((k, f[k]) for k in ("param_flag", "label", "description", "component_type", "options_json",
+                                          "default_value", "validation_regex", "version", "sensitive"))
         _pid, erros = self.svc.salvar(self.ctx["admin"], IP, str(P_CHAVE_API), dict(dados, label="Outro"))
         self.assertEqual(erros, {CAMPO_GERAL: admin_crud.MSG_CONFLITO})
 
     def test_inclusao_de_cada_tipo(self):
         casos = (
-            {"codigo": "p_text", "tipo_componente": "TEXT", "regex_validacao": "[A-Z]{2}", "valor_padrao": "SP"},
-            {"codigo": "p_number", "tipo_componente": "NUMBER", "valor_padrao": " -12.5 "},
-            {"codigo": "p_date", "tipo_componente": "DATE", "valor_padrao": "2026-02-28"},
-            {"codigo": "p_select", "tipo_componente": "SELECT", "opcoes_json": '{"A": "Alfa", "B": "Beta"}',
-             "valor_padrao": "B"},
-            {"codigo": "p_check", "tipo_componente": "CHECKBOX", "valor_padrao": "1", "param_nomeado": "--ativo"},
+            {"code": "p_text", "component_type": "TEXT", "validation_regex": "[A-Z]{2}", "default_value": "SP"},
+            {"code": "p_number", "component_type": "NUMBER", "default_value": " -12.5 "},
+            {"code": "p_date", "component_type": "DATE", "default_value": "2026-02-28"},
+            {"code": "p_select", "component_type": "SELECT", "options_json": '{"A": "Alfa", "B": "Beta"}',
+             "default_value": "B"},
+            {"code": "p_check", "component_type": "CHECKBOX", "default_value": "1", "param_flag": "--active"},
         )
         esperados = ("SP", "-12.5", "2026-02-28", "B", "true")
         for dados, padrao in zip(casos, esperados):
             pid, erros = self._incluir(**dados)
-            self.assertEqual(erros, {}, dados["codigo"])
-            self.assertEqual(self.catalogo.parametros_obter(pid)["valor_padrao"], padrao)
-        self.assertEqual(self.catalogo.parametros_obter(pid)["param_nomeado"], "--ativo")
-        self.assertEqual(len(self._auditorias("CAD_INSERIR")), 5)
+            self.assertEqual(erros, {}, dados["code"])
+            self.assertEqual(self.catalogo.parametros_obter(pid)["default_value"], padrao)
+        self.assertEqual(self.catalogo.parametros_obter(pid)["param_flag"], "--active")
+        self.assertEqual(len(self._auditorias("CREATE")), 5)
 
     def test_codigo_invalido_ou_duplicado(self):
         for codigo in ("Data", "a-b", "x" * 31, ""):
-            _pid, erros = self._incluir(codigo=codigo)
-            self.assertIn("codigo", erros, codigo)
-        _pid, erros = self._incluir(codigo="data_ref")
-        self.assertEqual(erros, {"codigo": prm_mod.MSG_CODIGO_DUPLICADO})
+            _pid, erros = self._incluir(code=codigo)
+            self.assertIn("code", erros, codigo)
+        _pid, erros = self._incluir(code="data_ref")
+        self.assertEqual(erros, {"code": prm_mod.MSG_CODIGO_DUPLICADO})
 
     def test_flag_invalida(self):
-        _pid, erros = self._incluir(param_nomeado="data")
-        self.assertIn("param_nomeado", erros)
+        _pid, erros = self._incluir(param_flag="data")
+        self.assertIn("param_flag", erros)
 
     def test_select_sem_opcoes_opcoes_em_outro_tipo_e_json_invalido(self):
-        _pid, erros = self._incluir(tipo_componente="SELECT")
-        self.assertIn("opcoes_json", erros)
-        _pid, erros = self._incluir(tipo_componente="TEXT", opcoes_json='{"a": "b"}')
-        self.assertEqual(erros, {"opcoes_json": prm_mod.MSG_OPCOES_PROIBIDAS})
-        _pid, erros = self._incluir(tipo_componente="SELECT", opcoes_json='{"a": ')
-        self.assertIn("JSON", erros["opcoes_json"])
+        _pid, erros = self._incluir(component_type="SELECT")
+        self.assertIn("options_json", erros)
+        _pid, erros = self._incluir(component_type="TEXT", options_json='{"a": "b"}')
+        self.assertEqual(erros, {"options_json": prm_mod.MSG_OPCOES_PROIBIDAS})
+        _pid, erros = self._incluir(component_type="SELECT", options_json='{"a": ')
+        self.assertIn("JSON", erros["options_json"])
 
     def test_padrao_invalido_para_o_tipo(self):
         for tipo, padrao, extra in (("NUMBER", "abc", {}), ("DATE", "31/12/2026", {}), ("CHECKBOX", "talvez", {}),
-                                    ("SELECT", "Z", {"opcoes_json": '{"A": "Alfa"}'}),
-                                    ("TEXT", "abc", {"regex_validacao": "[0-9]+"})):
-            dados = dict(extra, tipo_componente=tipo, valor_padrao=padrao)
+                                    ("SELECT", "Z", {"options_json": '{"A": "Alfa"}'}),
+                                    ("TEXT", "abc", {"validation_regex": "[0-9]+"})):
+            dados = dict(extra, component_type=tipo, default_value=padrao)
             _pid, erros = self._incluir(**dados)
-            self.assertIn("valor_padrao", erros, tipo)
-        _pid, erros = self._incluir(valor_padrao="x" * 101)
-        self.assertEqual(erros, {"valor_padrao": prm_mod.MSG_PADRAO_TAMANHO})
+            self.assertIn("default_value", erros, tipo)
+        _pid, erros = self._incluir(default_value="x" * 101)
+        self.assertEqual(erros, {"default_value": prm_mod.MSG_PADRAO_TAMANHO})
 
     def test_regex_redos_e_regex_em_outro_tipo(self):
-        _pid, erros = self._incluir(regex_validacao="(a+)+$")
-        self.assertIn("recusada", erros["regex_validacao"])
-        _pid, erros = self._incluir(regex_validacao="(a|a)*b")
-        self.assertIn("grupo entre parênteses repetido", erros["regex_validacao"])
-        _pid, erros = self._incluir(regex_validacao="[")
-        self.assertIn("inválida", erros["regex_validacao"])
-        _pid, erros = self._incluir(tipo_componente="NUMBER", regex_validacao="[0-9]+")
-        self.assertEqual(erros, {"regex_validacao": prm_mod.MSG_REGEX_SO_TEXTO})
+        _pid, erros = self._incluir(validation_regex="(a+)+$")
+        self.assertIn("recusada", erros["validation_regex"])
+        _pid, erros = self._incluir(validation_regex="(a|a)*b")
+        self.assertIn("grupo entre parênteses repetido", erros["validation_regex"])
+        _pid, erros = self._incluir(validation_regex="[")
+        self.assertIn("inválida", erros["validation_regex"])
+        _pid, erros = self._incluir(component_type="NUMBER", validation_regex="[0-9]+")
+        self.assertEqual(erros, {"validation_regex": prm_mod.MSG_REGEX_SO_TEXTO})
 
     def test_regex_por_nao_admin(self):
-        _pid, erros = self._incluir(ator="gestor", regex_validacao="[0-9]+")
-        self.assertEqual(erros, {"regex_validacao": prm_mod.MSG_REGEX_SO_ADMIN})
+        _pid, erros = self._incluir(actor="gestor", validation_regex="[0-9]+")
+        self.assertEqual(erros, {"validation_regex": prm_mod.MSG_REGEX_SO_ADMIN})
         # Editar outros campos preserva a regex gravada; tentar trocar a regex ou o tipo e negado.
-        _pid, erros = self._editar(P_FILIAL, ator="gestor", label="Filial (4 digitos)")
+        _pid, erros = self._editar(P_FILIAL, actor="gestor", label="Filial (4 digitos)")
         self.assertEqual(erros, {})
-        self.assertEqual(self.catalogo.parametros_obter(P_FILIAL)["regex_validacao"], "^[0-9]{4}$")
-        _pid, erros = self._editar(P_FILIAL, ator="gestor", regex_validacao="[0-9]+")
-        self.assertEqual(erros, {"regex_validacao": prm_mod.MSG_REGEX_SO_ADMIN})
-        _pid, erros = self._editar(P_DESCRICAO_LOTE, ator="admin", regex_validacao="[A-Za-z ]+")
+        self.assertEqual(self.catalogo.parametros_obter(P_FILIAL)["validation_regex"], "^[0-9]{4}$")
+        _pid, erros = self._editar(P_FILIAL, actor="gestor", validation_regex="[0-9]+")
+        self.assertEqual(erros, {"validation_regex": prm_mod.MSG_REGEX_SO_ADMIN})
+        _pid, erros = self._editar(P_DESCRICAO_LOTE, actor="admin", validation_regex="[A-Za-z ]+")
         self.assertEqual(erros, {})
 
     def test_codigo_imutavel_na_edicao(self):
-        _pid, erros = self._editar(P_DESCRICAO_LOTE, codigo="outro_codigo", label="Lote")
+        _pid, erros = self._editar(P_DESCRICAO_LOTE, code="outro_codigo", label="Lote")
         self.assertEqual(erros, {})
-        self.assertEqual(self.catalogo.parametros_obter(P_DESCRICAO_LOTE)["codigo"], "descricao_lote")
+        self.assertEqual(self.catalogo.parametros_obter(P_DESCRICAO_LOTE)["code"], "descricao_lote")
 
 
 class TestDependencias(_Base):
 
     def test_troca_de_tipo_com_vinculo_bloqueada_com_scripts(self):
-        _pid, erros = self._editar(P_DATA_REF, tipo_componente="TEXT")
-        self.assertIn("carga_diaria", erros["tipo_componente"])
-        self.assertIn("relatorio_mensal", erros["tipo_componente"])
-        self.assertEqual(self.catalogo.parametros_obter(P_DATA_REF)["tipo_componente"], "DATE")
+        _pid, erros = self._editar(P_DATA_REF, component_type="TEXT")
+        self.assertIn("carga_diaria", erros["component_type"])
+        self.assertIn("relatorio_mensal", erros["component_type"])
+        self.assertEqual(self.catalogo.parametros_obter(P_DATA_REF)["component_type"], "DATE")
 
     def test_troca_de_flag_com_script_nomeado_bloqueada(self):
-        _pid, erros = self._editar(P_DATA_REF, param_nomeado="--data")
-        self.assertIn("carga_diaria", erros["param_nomeado"])
-        self.assertNotIn("relatorio_mensal", erros["param_nomeado"])
+        _pid, erros = self._editar(P_DATA_REF, param_flag="--data")
+        self.assertIn("carga_diaria", erros["param_flag"])
+        self.assertNotIn("relatorio_mensal", erros["param_flag"])
 
     def test_desativacao_com_vinculo_ativo_negada_listando_scripts(self):
         f = self.svc.formulario(self.ctx["admin"], str(P_DATA_REF))
         with self.assertRaises(OperacaoNegada) as cm:
-            self.svc.alternar_ativo(self.ctx["admin"], IP, str(P_DATA_REF), f["versao"])
+            self.svc.alternar_ativo(self.ctx["admin"], IP, str(P_DATA_REF), f["version"])
         self.assertIn("carga_diaria", cm.exception.mensagem)
-        self.assertEqual(self.catalogo.parametros_obter(P_DATA_REF)["ativo"], "S")
-        self.assertEqual(self._auditorias("CAD_DESATIVAR"), [])
+        self.assertEqual(self.catalogo.parametros_obter(P_DATA_REF)["active"], "Y")
+        self.assertEqual(self._auditorias("DEACTIVATE"), [])
 
     def test_desativacao_sem_vinculo_e_reativacao(self):
         pid, _ = self._incluir()
         f = self.svc.formulario(self.ctx["admin"], str(pid))
-        self.assertEqual(self.svc.alternar_ativo(self.ctx["admin"], IP, str(pid), f["versao"])["ativo"], "N")
+        self.assertEqual(self.svc.alternar_ativo(self.ctx["admin"], IP, str(pid), f["version"])["active"], "N")
         f = self.svc.formulario(self.ctx["admin"], str(pid))
-        self.assertEqual(self.svc.alternar_ativo(self.ctx["admin"], IP, str(pid), f["versao"])["ativo"], "S")
+        self.assertEqual(self.svc.alternar_ativo(self.ctx["admin"], IP, str(pid), f["version"])["active"], "Y")
         with self.assertRaises(RepoConflito):
-            self.svc.alternar_ativo(self.ctx["admin"], IP, str(pid), f["versao"])
+            self.svc.alternar_ativo(self.ctx["admin"], IP, str(pid), f["version"])
 
     def test_regras_atomicas_no_repositorio(self):
-        for dados, constraint in (({"tipo_componente": "TEXT"}, "sss_prm_tipo_vinculado"),
-                                  ({"param_nomeado": "--outra"}, "sss_prm_flag_nomeado"),
-                                  ({"ativo": "N"}, "sss_prm_vinculo_ativo")):
+        for dados, constraint in (({"component_type": "TEXT"}, "sss_prm_tipo_vinculado"),
+                                  ({"param_flag": "--outra"}, "sss_prm_flag_nomeado"),
+                                  ({"active": "N"}, "sss_prm_vinculo_ativo")):
             with self.assertRaises(RepoViolacao) as cm:
                 self.catalogo.parametros_alterar(P_DATA_REF, dados, ator="teste")
             self.assertEqual(cm.exception.constraint, constraint)
@@ -231,8 +231,8 @@ class TestDependencias(_Base):
     def test_conflito_de_edicao(self):
         f = self.svc.formulario(self.ctx["admin"], str(P_DESCRICAO_LOTE))
         self._editar(P_DESCRICAO_LOTE, label="Primeira")
-        dados = dict((k, f[k]) for k in ("param_nomeado", "descricao", "tipo_componente", "opcoes_json",
-                                          "valor_padrao", "regex_validacao", "versao", "sensivel"))
+        dados = dict((k, f[k]) for k in ("param_flag", "description", "component_type", "options_json",
+                                          "default_value", "validation_regex", "version", "sensitive"))
         _pid, erros = self.svc.salvar(self.ctx["admin"], IP, str(P_DESCRICAO_LOTE), dict(dados, label="Segunda"))
         self.assertEqual(erros, {CAMPO_GERAL: admin_crud.MSG_CONFLITO})
 
@@ -240,40 +240,40 @@ class TestDependencias(_Base):
 class TestSensivelETeste(_Base):
 
     def test_padrao_sensivel_e_so_de_escrita_e_mascarado_na_auditoria(self):
-        _pid, erros = self._editar(P_CHAVE_API, valor_padrao="tok-padrao-secreto-1")
+        _pid, erros = self._editar(P_CHAVE_API, default_value="tok-padrao-secreto-1")
         self.assertEqual(erros, {})
-        self.assertEqual(self.catalogo.parametros_obter(P_CHAVE_API)["valor_padrao"], "tok-padrao-secreto-1")
+        self.assertEqual(self.catalogo.parametros_obter(P_CHAVE_API)["default_value"], "tok-padrao-secreto-1")
         f = self.svc.formulario(self.ctx["admin"], str(P_CHAVE_API))
-        self.assertEqual((f["valor_padrao"], f["tem_padrao"]), ("", True))
+        self.assertEqual((f["default_value"], f["tem_padrao"]), ("", True))
         # Em branco mantem; marcar remover apaga.
         _pid, erros = self._editar(P_CHAVE_API, label="Token da API")
-        self.assertEqual(self.catalogo.parametros_obter(P_CHAVE_API)["valor_padrao"], "tok-padrao-secreto-1")
-        _pid, erros = self._editar(P_CHAVE_API, remover_padrao="S")
-        self.assertIsNone(self.catalogo.parametros_obter(P_CHAVE_API)["valor_padrao"])
-        detalhes = " | ".join(a["detalhe"] for a in self._auditorias("CAD_ALTERAR"))
+        self.assertEqual(self.catalogo.parametros_obter(P_CHAVE_API)["default_value"], "tok-padrao-secreto-1")
+        _pid, erros = self._editar(P_CHAVE_API, remover_padrao="Y")
+        self.assertIsNone(self.catalogo.parametros_obter(P_CHAVE_API)["default_value"])
+        detalhes = " | ".join(a["detail"] for a in self._auditorias("UPDATE"))
         self.assertNotIn("tok-padrao-secreto-1", detalhes)
         self.assertIn("****", detalhes)
-        pagina = self.svc.listar(self.ctx["admin"], {"codigo": "documento_cliente"}, 1, 20)
+        pagina = self.svc.listar(self.ctx["admin"], {"code": "documento_cliente"}, 1, 20)
         self.assertNotIn("tok-padrao", repr(pagina))
 
     def test_testar_reflete_configuracao_em_edicao(self):
-        cfg = {"tipo_componente": "SELECT", "opcoes_json": '{"X": "Xis"}'}
+        cfg = {"component_type": "SELECT", "options_json": '{"X": "Xis"}'}
         self.assertEqual(self.svc.testar(self.ctx["admin"], None, cfg, "X"), {"ok": True, "valor": "X"})
         self.assertFalse(self.svc.testar(self.ctx["admin"], None, cfg, "Y")["ok"])
-        self.assertEqual(self.svc.testar(self.ctx["admin"], None, {"tipo_componente": "CHECKBOX"}, "1"),
+        self.assertEqual(self.svc.testar(self.ctx["admin"], None, {"component_type": "CHECKBOX"}, "1"),
                          {"ok": True, "valor": "true"})
-        self.assertEqual(self.svc.testar(self.ctx["admin"], None, {"tipo_componente": "DATE"}, "2026-02-30")["ok"], False)
-        r = self.svc.testar(self.ctx["admin"], None, {"tipo_componente": "TEXT", "regex_validacao": "(a+)+$"}, "a")
+        self.assertEqual(self.svc.testar(self.ctx["admin"], None, {"component_type": "DATE"}, "2026-02-30")["ok"], False)
+        r = self.svc.testar(self.ctx["admin"], None, {"component_type": "TEXT", "validation_regex": "(a+)+$"}, "a")
         self.assertIn("recusada", r["erro"])
-        self.assertEqual(self.svc.testar(self.ctx["admin"], None, {"tipo_componente": "TEXT", "sensivel": "S"}, "abcd"),
+        self.assertEqual(self.svc.testar(self.ctx["admin"], None, {"component_type": "TEXT", "sensitive": "Y"}, "abcd"),
                          {"ok": True, "valor": "****"})
-        self.assertFalse(self.svc.testar(self.ctx["admin"], None, {"tipo_componente": "TEXT", "sensivel": "S"}, "abc")["ok"])
+        self.assertFalse(self.svc.testar(self.ctx["admin"], None, {"component_type": "TEXT", "sensitive": "Y"}, "abc")["ok"])
 
     def test_testar_com_regex_exige_admin(self):
-        r = self.svc.testar(self.ctx["gestor"], str(P_FILIAL), {"tipo_componente": "TEXT"}, "1234")
+        r = self.svc.testar(self.ctx["gestor"], str(P_FILIAL), {"component_type": "TEXT"}, "1234")
         self.assertEqual(r, {"ok": False, "erro": prm_mod.MSG_TESTE_REGEX_ADMIN})
         self.assertEqual(self.svc.testar(self.ctx["admin"], str(P_FILIAL),
-                                         {"tipo_componente": "TEXT", "regex_validacao": "^[0-9]{4}$"}, "1234"),
+                                         {"component_type": "TEXT", "validation_regex": "^[0-9]{4}$"}, "1234"),
                          {"ok": True, "valor": "1234"})
 
     def test_opcoes_em_pares_preserva_ordem_numerica(self):
@@ -284,12 +284,12 @@ class TestSensivelETeste(_Base):
         self.assertIsNone(prm_mod.opcoes_em_pares("[1, 2]"))
 
     def test_lista_filtros_e_acesso(self):
-        pagina = self.svc.listar(self.ctx["admin"], {"tipo_componente": "DATE"}, 1, 20)
-        data_ref = [p for p in pagina["itens"] if p["codigo"] == "data_ref"][0]
+        pagina = self.svc.listar(self.ctx["admin"], {"component_type": "DATE"}, 1, 20)
+        data_ref = [p for p in pagina["itens"] if p["code"] == "data_ref"][0]
         self.assertEqual(data_ref["qtd_scripts"], 2)
-        self.assertEqual(prm_mod.normalizar_filtros({"codigo": "data", "tipo_componente": "DATE", "ativo": "S"}),
-                         {"codigo": "data", "tipo_componente": "DATE", "ativo": "S"})
-        self.assertEqual(prm_mod.normalizar_filtros({"codigo": "<x>", "tipo_componente": "XML"}), {})
+        self.assertEqual(prm_mod.normalizar_filtros({"code": "data", "component_type": "DATE", "active": "Y"}),
+                         {"code": "data", "component_type": "DATE", "active": "Y"})
+        self.assertEqual(prm_mod.normalizar_filtros({"code": "<x>", "component_type": "XML"}), {})
         for chamada in (lambda c: self.svc.listar(c, {}, 1, 20), lambda c: self.svc.formulario(c),
                         lambda c: self.svc.testar(c, None, {}, "x"), lambda c: self.svc.alternar_ativo(c, IP, "1", "x")):
             with self.assertRaises(AcessoNegado):

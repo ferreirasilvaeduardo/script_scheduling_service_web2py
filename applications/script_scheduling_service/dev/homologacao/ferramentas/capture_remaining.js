@@ -235,7 +235,7 @@ async function sleep(ms) {
         await page.goto(`${BASE_URL}/admin_ambientes/form/1`, { waitUntil: 'networkidle0' });
         // Alterar e salvar para ter alteracao
         await page.evaluate(() => {
-            const desc = document.querySelector('#campo-descricao');
+            const desc = document.querySelector('#campo-description');
             if (desc) desc.value = desc.value + ' (atualizado)';
         });
         const btnSalvarAmb = await page.$('form[action*="/admin_ambientes/salvar"] button[type="submit"]');

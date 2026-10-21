@@ -9,7 +9,7 @@
         <thead><tr><th scope="col">Ambiente</th><th scope="col">Interpretador</th><th scope="col">Quantidade</th><th scope="col">Horário mais antigo</th></tr></thead>
         <tbody>
           {{for _fila in painel['fila_sem_atendente']:}}
-          <tr><td>{{=_fila['ambiente']}}</td><td>{{=_fila['interpretador']}}</td><td>{{=_fila['quantidade']}}</td><td>{{=ui_helpers.formatar_data(_fila['mais_antigo'])}}</td></tr>
+          <tr><td>{{=_fila['environment']}}</td><td>{{=_fila['interpreter']}}</td><td>{{=_fila['quantidade']}}</td><td>{{=ui_helpers.formatar_data(_fila['mais_antigo'])}}</td></tr>
           {{pass}}
         </tbody>
       </table>
@@ -24,7 +24,7 @@
     <p>{{=ui_helpers.mensagem('rodando_sem_pid')}}</p>
     <ul>
       {{for _sem_pid in painel['rodando_sem_pid']:}}
-      <li><a href="{{=URL(c='tickets', f='detalhe', args=[_sem_pid['id']], extension=False)}}">Pedido #{{=_sem_pid['id']}}</a> · {{=_sem_pid['ambiente']}} · servidor {{=_sem_pid['agente_id'] or '-'}} · reservado em {{=ui_helpers.formatar_data(_sem_pid['started_at'])}}</li>
+      <li><a href="{{=URL(c='tickets', f='detalhe', args=[_sem_pid['id']], extension=False)}}">Pedido #{{=_sem_pid['id']}}</a> · {{=_sem_pid['environment']}} · servidor {{=_sem_pid['agent_id'] or '-'}} · reservado em {{=ui_helpers.formatar_data(_sem_pid['started_at'])}}</li>
       {{pass}}
     </ul>
   </div>
@@ -38,7 +38,7 @@
     <p>Nó web: <code class="text-break">{{=painel['config_web']}}</code></p>
     <ul>
       {{for _divergente in painel['config_divergente']:}}
-      <li>{{=_divergente['codigo']}}: <code class="text-break">{{=_divergente['config_criticos'] or 'Configuração não registrada'}}</code></li>
+      <li>{{=_divergente['code']}}: <code class="text-break">{{=_divergente['critical_config'] or 'Configuração não registrada'}}</code></li>
       {{pass}}
     </ul>
   </div>

@@ -14,7 +14,7 @@ aba_ativa = 'agentes'
 <section class="sss-card" aria-labelledby="titulo-agentes" x-data="atualizacaoAgentes" data-url="{{=url_fragmento}}" data-intervalo="{{=intervalo_s}}">
   <div class="sss-card-titulo sss-titulo-linha">
     <h2 class="sss-card-titulo-texto" id="titulo-agentes">Agentes</h2>
-    <span class="sss-texto-suave sss-auto-situacao" aria-live="polite" x-text="situacao">Atualização automática a cada {{=intervalo_s}} segundos.</span>
+    <span class="sss-texto-suave sss-auto-situacao" aria-live="polite" x-text="state">Atualização automática a cada {{=intervalo_s}} segundos.</span>
   </div>
   <div class="sss-card-corpo">
     {{include 'auditoria/agentes.load'}}
@@ -27,7 +27,7 @@ aba_ativa = 'agentes'
     <dl class="sss-legenda-saude">
       {{for _lg in legenda:}}
       <dt><span class="sss-status {{=_lg['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_lg['icone']}}"></use></svg><span>{{=_lg['rotulo']}}</span></span></dt>
-      <dd>{{=_lg['descricao']}}</dd>
+      <dd>{{=_lg['description']}}</dd>
       {{pass}}
     </dl>
     <p class="sss-texto-suave mb-0">Limiares atuais: heartbeat a cada {{=limiares.heartbeat_interval_s}} s (OK abaixo de {{=2 * limiares.heartbeat_interval_s}} s), fence em {{=limiares.fence_timeout_s}} s e nó offline em {{=limiares.node_offline_timeout_s}} s.</p>

@@ -25,7 +25,7 @@ _d = dados
   <ul class="sss-card-corpo sss-lista-permissoes">
     {{for _t in _d['telas']:}}
     <li>
-      {{if _t['rota']:}}<a href="{{=URL(c=_t['rota'][0], f=_t['rota'][1])}}">{{=_t['nome']}}</a>{{else:}}<strong>{{=_t['nome']}}</strong>{{pass}}
+      {{if _t['rota']:}}<a href="{{=URL(c=_t['rota'][0], f=_t['rota'][1])}}">{{=_t['name']}}</a>{{else:}}<strong>{{=_t['name']}}</strong>{{pass}}
       <span class="sss-texto-suave"> — {{=_t['finalidade']}}</span>
     </li>
     {{pass}}
@@ -40,7 +40,7 @@ _d = dados
   {{if _d['ambientes']:}}
   <ul class="sss-card-corpo sss-lista-permissoes">
     {{for _a in _d['ambientes']:}}
-    <li><strong class="sss-mono">{{=_a['nome']}}</strong>{{if _a['descricao']:}}<span class="sss-texto-suave"> — {{=_a['descricao']}}</span>{{pass}}</li>
+    <li><strong class="sss-mono">{{=_a['name']}}</strong>{{if _a['description']:}}<span class="sss-texto-suave"> — {{=_a['description']}}</span>{{pass}}</li>
     {{pass}}
   </ul>
   {{else:}}
@@ -59,10 +59,10 @@ _d = dados
     <ul class="sss-lista-permissoes">
       {{for _s in _d['scripts']:}}
       <li>
-        <strong class="sss-mono">{{=_s['nome']}}</strong>{{if _s['descricao']:}}<span class="sss-texto-suave"> — {{=_s['descricao']}}</span>{{pass}}
+        <strong class="sss-mono">{{=_s['name']}}</strong>{{if _s['description']:}}<span class="sss-texto-suave"> — {{=_s['description']}}</span>{{pass}}
         <div class="sss-acoes-inline">
           {{for _amb in _s['ambientes']:}}
-          <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='tickets', f='novo', vars=dict(script_id=_s['id'], ambiente=_amb))}}">Rodar em {{=_amb}}</a>
+          <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='tickets', f='novo', vars=dict(script_id=_s['id'], environment=_amb))}}">Rodar em {{=_amb}}</a>
           {{pass}}
         </div>
       </li>
@@ -77,7 +77,7 @@ _d = dados
   <h2 class="sss-card-titulo" id="titulo-ausentes">Por que um script não aparece</h2>
   <ul class="sss-card-corpo sss-lista-permissoes">
     {{for _x in _d['ausentes']:}}
-    <li><strong class="sss-mono">{{=_x['nome']}}</strong>: {{=_x['motivo']}}.</li>
+    <li><strong class="sss-mono">{{=_x['name']}}</strong>: {{=_x['reason']}}.</li>
     {{pass}}
   </ul>
 </section>

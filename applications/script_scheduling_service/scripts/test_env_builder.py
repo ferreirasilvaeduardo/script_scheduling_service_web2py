@@ -31,8 +31,8 @@ def _segredos(ambientes=None):
     return Segredos(oracle_password="x" * 8, cookie_key=None, ambientes=ambientes or {})
 
 
-AMB = {"nome": "PRODUCAO", "conexao": "dbprod:1521/FAT"}
-TICKET = {"id": 41, "ambiente": "PRODUCAO"}
+AMB = {"name": "PRODUCAO", "connection": "dbprod:1521/FAT"}
+TICKET = {"id": 41, "environment": "PRODUCAO"}
 
 
 class TestEnvBuilder(unittest.TestCase):
@@ -99,8 +99,8 @@ class TestEnvBuilder(unittest.TestCase):
 
     def test_conexao_omitida_sem_secao_ou_sem_dsn(self):
         cred = AmbienteSegredo("fat_app", "S3nh@Forte")
-        casos = ((_segredos(), AMB, "credencial"), (_segredos({"PRODUCAO": cred}), dict(AMB, conexao=None), "DSN"),
-                 (_segredos({"PRODUCAO": cred}), dict(AMB, conexao="  "), "DSN"))
+        casos = ((_segredos(), AMB, "credencial"), (_segredos({"PRODUCAO": cred}), dict(AMB, connection=None), "DSN"),
+                 (_segredos({"PRODUCAO": cred}), dict(AMB, connection="  "), "DSN"))
         for segredos, ambiente, motivo in casos:
             with self.assertLogs("sss_scheduler", "WARNING") as logs:
                 env = self.construir(segredos=segredos, ambiente=ambiente)
@@ -110,21 +110,21 @@ class TestEnvBuilder(unittest.TestCase):
 
     def test_cr010_execucao_agendada_completa(self):
         cred = AmbienteSegredo("fat_app", "S3nh@Forte")
-        ticket = {"id": 41, "ambiente": "PRODUCAO", "parent_ticket_id": 7, "agendamento_id": 3, "prioridade": 2,
+        ticket = {"id": 41, "environment": "PRODUCAO", "parent_ticket_id": 7, "schedule_id": 3, "priority": 2,
                   "started_at": datetime.datetime(2026, 10, 20, 3, 0, 5),
                   "scheduled_at": datetime.datetime(2026, 10, 20, 3, 0)}
-        snap = {"script_id": 12, "script_nome": "Carga Faturas", "interpretador": "PYTHON3"}
-        amb = dict(AMB, descricao="Produção faturamento")
+        snap = {"script_id": 12, "script_nome": "Carga Faturas", "interpreter": "PYTHON3"}
+        amb = dict(AMB, description="Produção faturamento")
         log = "/srv/sss/logs/producao/carga_faturas/2026/10/20/03/00/ticket_41.log.parcial"
         with mock.patch.object(masking, "MASCARADOR", masking.Mascarador()):
             env = env_builder.construir(_cfg(), _segredos({"PRODUCAO": cred}), ticket, amb, SCRIPT, WORK,
                                         dict(DAEMON), "LINUX", snapshot=snap,
-                                        agendamento={"nome": "Carga noturna", "tipo_recorrencia": "MENSAL"},
+                                        agendamento={"name": "Carga noturna", "recurrence_type": "MONTHLY"},
                                         caminho_log=log, timeout_seg=3600, hostname="srv-linux-01", versao="1.0")
         sss = dict((k, v) for k, v in env.items() if k.startswith("SSS_"))
         self.assertEqual(sss, {
             "SSS_TICKET_ID": "41", "SSS_PARENT_TICKET_ID": "7", "SSS_EXECUTION_TYPE": "AGENDADA",
-            "SSS_RECURRENCE": "MENSAL", "SSS_SCHEDULE_ID": "3", "SSS_SCHEDULE_NAME": "Carga noturna",
+            "SSS_RECURRENCE": "MONTHLY", "SSS_SCHEDULE_ID": "3", "SSS_SCHEDULE_NAME": "Carga noturna",
             "SSS_STARTED_AT": "2026-10-20 03:00:05", "SSS_SCHEDULED_AT": "2026-10-20 03:00:00",
             "SSS_PRIORITY": "2", "SSS_TIMEOUT_SECONDS": "3600",
             "SSS_ENVIRONMENT": "PRODUCAO", "SSS_ENVIRONMENT_DESCRIPTION": "Produção faturamento",
@@ -142,12 +142,12 @@ class TestEnvBuilder(unittest.TestCase):
         self.assertFalse([k for k in env if k.startswith("SSS_PARAM")])
 
     def test_cr010_manual_sem_dados_de_agendamento_e_valores_vazios_ausentes(self):
-        ticket = {"id": 41, "ambiente": "PRODUCAO", "parent_ticket_id": None, "agendamento_id": None,
-                  "prioridade": None}
+        ticket = {"id": 41, "environment": "PRODUCAO", "parent_ticket_id": None, "schedule_id": None,
+                  "priority": None}
         with self.assertLogs("sss_scheduler", "WARNING"):
-            env = env_builder.construir(_cfg(), _segredos(), ticket, dict(AMB, descricao="  ", conexao=None),
+            env = env_builder.construir(_cfg(), _segredos(), ticket, dict(AMB, description="  ", connection=None),
                                         SCRIPT, WORK, {}, "UNIX", snapshot={"script_nome": ""},
-                                        agendamento={"nome": "ignorado", "tipo_recorrencia": "DIARIA"},
+                                        agendamento={"name": "ignorado", "recurrence_type": "DAILY"},
                                         hostname="", versao=None)
         self.assertEqual(env["SSS_EXECUTION_TYPE"], "MANUAL")
         for ausente in ("SSS_RECURRENCE", "SSS_SCHEDULE_ID", "SSS_SCHEDULE_NAME", "SSS_PARENT_TICKET_ID",
@@ -198,15 +198,15 @@ class TestEnvBuilder(unittest.TestCase):
                    "SSS_TIPO_EXECUCAO", "SSS_PRIORIDADE", "SSS_DATA_EXECUCAO", "SSS_DATA_AGENDADA", "SSS_TIMEOUT_SEG",
                    "SSS_AGENDAMENTO_ID", "SSS_AGENDAMENTO_NOME", "SSS_RECORRENCIA", "SSS_LOG_ARQUIVO",
                    "SSS_SAIDA_DIR", "SSS_ENTRADA_DIR")
-        ticket = {"id": 41, "ambiente": "PRODUCAO", "parent_ticket_id": 7, "agendamento_id": 3, "prioridade": 2,
+        ticket = {"id": 41, "environment": "PRODUCAO", "parent_ticket_id": 7, "schedule_id": 3, "priority": 2,
                   "started_at": datetime.datetime(2026, 10, 20, 3, 0, 5),
                   "scheduled_at": datetime.datetime(2026, 10, 20, 3, 0)}
         with mock.patch.object(masking, "MASCARADOR", masking.Mascarador()):
             env = env_builder.construir(_cfg(), _segredos({"PRODUCAO": AmbienteSegredo("fat_app", "S3nh@Forte")}),
-                                        ticket, dict(AMB, descricao="x"), SCRIPT, WORK, dict(DAEMON), "LINUX",
-                                        snapshot={"script_id": 12, "script_nome": "C", "interpretador": "SH",
+                                        ticket, dict(AMB, description="x"), SCRIPT, WORK, dict(DAEMON), "LINUX",
+                                        snapshot={"script_id": 12, "script_nome": "C", "interpreter": "SH",
                                                   "path_file": "/opt/automacoes/atual/carga.sh"},
-                                        agendamento={"nome": "N", "tipo_recorrencia": "CRON"},
+                                        agendamento={"name": "N", "recurrence_type": "CRON"},
                                         caminho_log="/srv/sss/logs/x/ticket_41.log.parcial", timeout_seg=60,
                                         hostname="h", versao="1.0", pasta_saida="/srv/s", pasta_entrada="/srv/e")
         self.assertEqual([k for k in antigos if k in env], [])

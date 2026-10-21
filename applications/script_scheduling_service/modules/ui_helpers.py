@@ -23,7 +23,7 @@ def status_info(status):
 
 
 _ATIVO = {
-    "S": (u"Ativo", "sss-status-success", "status-success"),
+    "Y": (u"Ativo", "sss-status-success", "status-success"),
     "N": (u"Inativo", "sss-status-cancelled", "status-cancelled"),
 }
 
@@ -99,29 +99,29 @@ def explicacao_ticket(ticket, agora, timeout_s=None):
     if status == "PENDING":
         agendado = ticket.get("scheduled_at")
         if agendado is not None and agora is not None and agendado > agora:
-            return {"situacao": situacao,
+            return {"state": situacao,
                     "aconteceu": u"Está agendado para começar em %s às %s." % (
                         agendado.strftime("%d/%m/%Y"), agendado.strftime("%H:%M")),
                     "fazer": u"Não precisa fazer nada. Se não quiser mais, cancele."}
-        return {"situacao": situacao, "aconteceu": u"Está na fila, esperando um servidor livre.",
+        return {"state": situacao, "aconteceu": u"Está na fila, esperando um servidor livre.",
                 "fazer": u"Não precisa fazer nada. Esta página se atualiza sozinha."}
     if status == "RUNNING":
-        if ticket.get("cancel_requested") == "S":
-            return {"situacao": situacao,
+        if ticket.get("cancel_requested") == "Y":
+            return {"state": situacao,
                     "aconteceu": u"O cancelamento foi pedido. O servidor está parando o script.",
                     "fazer": u"Espere alguns segundos."}
         inicio = ticket.get("started_at")
         decorrido = (agora - inicio).total_seconds() if inicio is not None and agora is not None else 0
-        return {"situacao": situacao, "aconteceu": u"Está rodando agora. Começou há %s." % tempo_simples(decorrido),
+        return {"state": situacao, "aconteceu": u"Está rodando agora. Começou há %s." % tempo_simples(decorrido),
                 "fazer": u"Acompanhe o log abaixo."}
-    motivo = ticket.get("status_motivo")
+    motivo = ticket.get("status_reason")
     if motivo not in _EXPLICACOES:
-        return {"situacao": situacao,
+        return {"state": situacao,
                 "aconteceu": u"Terminou com um motivo que o sistema não conhece (%s)." % (motivo or "-"),
                 "fazer": u"Avise o suporte com o número deste ticket."}
     aconteceu, fazer = _EXPLICACOES[motivo]
     tempo = tempo_simples(timeout_s) if timeout_s else u"definido para o script"
-    return {"situacao": situacao,
+    return {"state": situacao,
             "aconteceu": aconteceu.format(codigo=ticket.get("return_code"), tempo=tempo),
             "fazer": fazer}
 
@@ -240,19 +240,19 @@ MENSAGENS = {
 # Quadro Saida do detalhe do ticket (CR-012, README §8.13): o que aconteceu + o que fazer agora.
 SAIDA_GRAVANDO_LIMITE_S = 3600
 _SAIDA_MENSAGENS = {
-    "GRAVANDO": (u"A saída está em preparação.", u"Atualize a página em alguns instantes."),
+    "WRITING": (u"A saída está em preparação.", u"Atualize a página em alguns instantes."),
     "PARADA": (u"A saída não foi concluída.",
                u"Os arquivos ficaram temporariamente no servidor do agente {agente}. Peça a quem administra o servidor."),
-    "DISPONIVEL": (u"O script deixou {qtd} na pasta de saída ({tamanho}).", u"Use o botão Baixar para salvar o zip."),
-    "ARQUIVOS": (u"A saída passou do limite de quantidade de arquivos e não foi empacotada.",
+    "AVAILABLE": (u"O script deixou {qtd} na pasta de saída ({tamanho}).", u"Use o botão Baixar para salvar o zip."),
+    "FILES": (u"A saída passou do limite de quantidade de arquivos e não foi empacotada.",
                  u"Os arquivos ficaram temporariamente no servidor do agente {agente}. Peça a quem administra o servidor."),
     "BYTES": (u"A saída passou do limite de tamanho e não foi empacotada.",
               u"Os arquivos ficaram temporariamente no servidor do agente {agente}. Peça a quem administra o servidor."),
-    "FALHOU": (u"A saída não foi gravada.",
+    "FAILED": (u"A saída não foi gravada.",
                u"Os arquivos ficaram temporariamente no servidor do agente {agente}. Peça a quem administra o servidor."),
 }
-_SAIDA_CLASSE = {"GRAVANDO": "info", "PARADA": "warning", "DISPONIVEL": "success", "ARQUIVOS": "warning",
-                 "BYTES": "warning", "FALHOU": "warning"}
+_SAIDA_CLASSE = {"WRITING": "info", "PARADA": "warning", "AVAILABLE": "success", "FILES": "warning",
+                 "BYTES": "warning", "FAILED": "warning"}
 
 
 def tamanho_legivel(nbytes):
@@ -271,22 +271,22 @@ def quadro_saida(saida, agora):
     """Quadro Saida (CR-012) a partir de saida_obter, ou None sem saida. Nunca leva o conteudo nem o caminho."""
     if not saida:
         return None
-    situacao = saida.get("situacao")
+    situacao = saida.get("state")
     chave = situacao
-    if situacao == "GRAVANDO":
+    if situacao == "WRITING":
         desde = saida.get("updated_at") or saida.get("created_at")
         if desde is not None and agora is not None and (agora - desde).total_seconds() > SAIDA_GRAVANDO_LIMITE_S:
             chave = "PARADA"
-    elif situacao == "EXCEDEU":
-        chave = "BYTES" if saida.get("motivo") == "BYTES" else "ARQUIVOS"
+    elif situacao == "EXCEEDED":
+        chave = "BYTES" if saida.get("reason") == "BYTES" else "FILES"
     elif situacao not in _SAIDA_MENSAGENS:
-        chave = "FALHOU"
-    qtd = saida.get("qtd_arquivos")
-    valores = {"agente": saida.get("agente_id") or u"-", "tamanho": tamanho_legivel(saida.get("tamanho_bytes")),
+        chave = "FAILED"
+    qtd = saida.get("file_count")
+    valores = {"agente": saida.get("agent_id") or u"-", "tamanho": tamanho_legivel(saida.get("size_bytes")),
                "qtd": (u"1 arquivo" if qtd == 1 else u"%s arquivos" % qtd)}
     aconteceu, fazer = _SAIDA_MENSAGENS[chave]
-    return {"situacao": situacao, "classe": _SAIDA_CLASSE[chave], "aconteceu": aconteceu.format(**valores),
-            "fazer": fazer.format(**valores), "pode_baixar": situacao == "DISPONIVEL"}
+    return {"state": situacao, "classe": _SAIDA_CLASSE[chave], "aconteceu": aconteceu.format(**valores),
+            "fazer": fazer.format(**valores), "pode_baixar": situacao == "AVAILABLE"}
 
 
 def mensagem(chave, **valores):
@@ -323,12 +323,12 @@ _ATORES_SISTEMA = {"init_db": u"Sistema (instalação)", "seed": u"Sistema (dado
 
 
 def ator_visivel(ator, ctx):
-    """Login de pessoa como o contexto pode ver (CR-007 D6, CR-008 E5): sem VER_AUDITORIA nem admin,
+    """Login de pessoa como o contexto pode ver (CR-007 D6, CR-008 E5): sem VIEW_AUDIT nem admin,
     vira "você" ou "outra pessoa"; atores do sistema e vazio passam direto."""
     ctx = ctx or {}
     if not ator or ator == "SYSTEM" or ator.startswith(_PREFIXO_SISTEMA):
         return ator
-    if ctx.get("is_admin") is True or "VER_AUDITORIA" in (ctx.get("funcionalidades") or ()):
+    if ctx.get("is_admin") is True or "VIEW_AUDIT" in (ctx.get("funcionalidades") or ()):
         return ator
     return u"você" if ator == ctx.get("login") else u"outra pessoa"
 
@@ -450,7 +450,7 @@ def primeiro_campo_invalido(campos):
     """Nome do primeiro campo (na ordem dada) com 'erro' preenchido; None se nenhum."""
     for campo in campos or ():
         if campo.get("erro"):
-            return campo.get("nome")
+            return campo.get("name")
     return None
 
 

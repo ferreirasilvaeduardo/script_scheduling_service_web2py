@@ -6,7 +6,7 @@ Este documento registra as consultas SQL estáticas executadas pelos repositóri
 > * `{owner}`: configurado em `[oracle] owner` no `instance/config.ini` (ex.: `openrisow`). Validado por `^[A-Za-z][A-Za-z0-9_]{0,29}$`.
 > * `{prefixo}`: configurado em `[oracle] table_prefix` no `instance/config.ini` (padrão: `tbsss_`). Validado por `^[a-z][a-z0-9_]{0,7}$` (CR-007 R-31, CR-008 R-28).
 >
-> Nenhum SQL dos repositórios possui nomes de tabela, sequence ou constraint fixos no código; todos são qualificados dinamicamente via `BaseRepoOracle.qualificar_tabela(entidade)`, `qualificar_sequence(entidade)` e `nome_constraint(tipo, entidade, sufixo)` com base em `modules/sql_ident.py`.
+> Nenhum SQL dos repositórios possui nomes de tabela, sequence ou constraint fixos no código; todos são qualificados dinamicamente via `BaseRepoOracle.qualificar_tabela(entity)`, `qualificar_sequence(entity)` e `nome_constraint(tipo, entity, sufixo)` com base em `modules/sql_ident.py`.
 
 ---
 
@@ -14,8 +14,8 @@ Este documento registra as consultas SQL estáticas executadas pelos repositóri
 
 ### 1.1 Leitura por Login (`obter_por_login`)
 ```sql
-SELECT id, login, nome, senha_hash, perfil_id, tentativas_falha, bloqueado_ate,
-       ultimo_login, senha_alterada_em, sessao_epoch, ativo,
+SELECT id, login, name, password_hash, profile_id, failed_attempts, locked_until,
+       last_login_at, password_changed_at, session_epoch, active,
        created_at, created_by, updated_at, updated_by
   FROM {owner}.{prefixo}usuarios
  WHERE login = :login
@@ -26,8 +26,8 @@ SELECT id, login, nome, senha_hash, perfil_id, tentativas_falha, bloqueado_ate,
 
 ### 1.2 Leitura por ID (`obter_por_id`)
 ```sql
-SELECT id, login, nome, senha_hash, perfil_id, tentativas_falha, bloqueado_ate,
-       ultimo_login, senha_alterada_em, sessao_epoch, ativo,
+SELECT id, login, name, password_hash, profile_id, failed_attempts, locked_until,
+       last_login_at, password_changed_at, session_epoch, active,
        created_at, created_by, updated_at, updated_by
   FROM {owner}.{prefixo}usuarios
  WHERE id = :id
@@ -38,11 +38,11 @@ SELECT id, login, nome, senha_hash, perfil_id, tentativas_falha, bloqueado_ate,
 
 ### 1.3 Estado de Sessão (`obter_estado_sessao`)
 ```sql
-SELECT u.id, u.login, u.nome, u.ativo,
-       p.id, p.nome, p.ativo, p.is_admin, p.perm_versao, u.sessao_epoch
+SELECT u.id, u.login, u.name, u.active,
+       p.id, p.name, p.active, p.is_admin, p.perm_version, u.session_epoch
   FROM {owner}.{prefixo}usuarios u
-  JOIN {owner}.{prefixo}perfis p ON p.id = u.perfil_id
- WHERE u.id = :usuario_id
+  JOIN {owner}.{prefixo}perfis p ON p.id = u.profile_id
+ WHERE u.id = :user_id
 ```
 * **Acesso esperado:** `INDEX UNIQUE SCAN` em `pk_{prefixo}usuarios` seguido de `INDEX UNIQUE SCAN` em `pk_{prefixo}perfis` por `NESTED LOOPS`.
 
@@ -52,16 +52,16 @@ SELECT u.id, u.login, u.nome, u.ativo,
 ```sql
 SELECT * FROM (
   SELECT a.*, ROWNUM rn FROM (
-    SELECT id, login, nome, senha_hash, perfil_id, tentativas_falha, bloqueado_ate,
-           ultimo_login, senha_alterada_em, sessao_epoch, ativo,
+    SELECT id, login, name, password_hash, profile_id, failed_attempts, locked_until,
+           last_login_at, password_changed_at, session_epoch, active,
            created_at, created_by, updated_at, updated_by
       FROM {owner}.{prefixo}usuarios
      WHERE 1=1
        AND LOWER(login) LIKE :login_f
-       AND LOWER(nome) LIKE :nome_f
-       AND perfil_id = :perfil_f
-       AND ativo = :ativo_f
-       AND bloqueado_ate IS NOT NULL AND bloqueado_ate > :bloq_f
+       AND LOWER(name) LIKE :nome_f
+       AND profile_id = :perfil_f
+       AND active = :ativo_f
+       AND locked_until IS NOT NULL AND locked_until > :bloq_f
      ORDER BY login ASC, id ASC
   ) a WHERE ROWNUM <= :fim
 ) WHERE rn > :inicio
@@ -81,9 +81,9 @@ SELECT COUNT(*) FROM (
 ```sql
 SELECT u.id
   FROM {owner}.{prefixo}usuarios u
-  JOIN {owner}.{prefixo}perfis p ON p.id = u.perfil_id
- WHERE u.ativo = 'S' AND p.ativo = 'S' AND p.is_admin = 'S'
-   FOR UPDATE OF u.ativo WAIT 5
+  JOIN {owner}.{prefixo}perfis p ON p.id = u.profile_id
+ WHERE u.active = 'Y' AND p.active = 'Y' AND p.is_admin = 'Y'
+   FOR UPDATE OF u.active WAIT 5
 ```
 * **Acesso esperado:** `TABLE ACCESS BY INDEX ROWID` em `{prefixo}perfis` e `{prefixo}usuarios` com `FOR UPDATE`.
 
@@ -93,7 +93,7 @@ SELECT u.id
 
 ### 2.1 Leitura de Perfil por ID (`perfis_obter`)
 ```sql
-SELECT id, nome, descricao, is_admin, perm_versao, ativo,
+SELECT id, name, description, is_admin, perm_version, active,
        created_at, created_by, updated_at, updated_by
   FROM {owner}.{prefixo}perfis
  WHERE id = :id
@@ -106,14 +106,14 @@ SELECT id, nome, descricao, is_admin, perm_versao, ativo,
 ```sql
 SELECT * FROM (
   SELECT a.*, ROWNUM rn FROM (
-    SELECT id, nome, descricao, is_admin, perm_versao, ativo,
+    SELECT id, name, description, is_admin, perm_version, active,
            created_at, created_by, updated_at, updated_by
       FROM {owner}.{prefixo}perfis
      WHERE 1=1
-       AND LOWER(nome) LIKE :nome_f
-       AND ativo = :ativo_f
+       AND LOWER(name) LIKE :nome_f
+       AND active = :ativo_f
        AND is_admin = :is_admin_f
-     ORDER BY nome ASC, id ASC
+     ORDER BY name ASC, id ASC
   ) a WHERE ROWNUM <= :fim
 ) WHERE rn > :inicio
 ```
@@ -123,20 +123,20 @@ SELECT * FROM (
 
 ### 2.3 Matriz de Permissões (`matriz_obter`)
 ```sql
-SELECT funcionalidade_id FROM {owner}.{prefixo}perfil_func WHERE perfil_id = :id ORDER BY funcionalidade_id ASC;
-SELECT ambiente_id FROM {owner}.{prefixo}perfil_amb WHERE perfil_id = :id ORDER BY ambiente_id ASC;
-SELECT script_id FROM {owner}.{prefixo}perfil_scr WHERE perfil_id = :id ORDER BY script_id ASC;
+SELECT feature_id FROM {owner}.{prefixo}perfil_func WHERE profile_id = :id ORDER BY feature_id ASC;
+SELECT environment_id FROM {owner}.{prefixo}perfil_amb WHERE profile_id = :id ORDER BY environment_id ASC;
+SELECT script_id FROM {owner}.{prefixo}perfil_scr WHERE profile_id = :id ORDER BY script_id ASC;
 ```
-* **Acesso esperado:** `INDEX RANGE SCAN` nas UKs / FKs que cobrem a coluna líder `perfil_id` (`uk_{prefixo}pfnc_per_fnc`, `uk_{prefixo}pamb_per_amb`, `uk_{prefixo}pscr_per_scr`).
+* **Acesso esperado:** `INDEX RANGE SCAN` nas UKs / FKs que cobrem a coluna líder `profile_id` (`uk_{prefixo}pfnc_per_fnc`, `uk_{prefixo}pamb_per_amb`, `uk_{prefixo}pscr_per_scr`).
 
 ---
 
 ### 2.4 Catálogo de Funcionalidades (`funcionalidades_listar`)
 ```sql
-SELECT id, codigo, nome, modulo, descricao, ativo,
+SELECT id, code, name, module, description, active,
        created_at, created_by, updated_at, updated_by
   FROM {owner}.{prefixo}funcionalidades
- ORDER BY modulo ASC, codigo ASC, id ASC
+ ORDER BY module ASC, code ASC, id ASC
 ```
 * **Acesso esperado:** `TABLE ACCESS FULL` sobre tabela estática de catálogo de 14 linhas (aceitável e recomendada pelo CBO para tabelas minúsculas com menos de 1 bloco).
 
@@ -146,9 +146,9 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 
 **Plano: TESTADO em 2026-10-19**, Oracle 19.24 (banco `GFPR`), owner `openrisow` em modo compartilhado (`SSS_TEST_SCHEMA_COMPARTILHADO=1`, README §2.5), driver Thin (python-oracledb 1.4.2). Os planos saíram de `EXPLAIN PLAN SET STATEMENT_ID … FOR <query>` + `DBMS_XPLAN.DISPLAY`, sem executar os comandos. O texto `{owner}` substitui `OPENRISOW`.
 
-* **Sem `TABLE ACCESS FULL` em `tbsss_tickets` nem em `tbsss_auditoria`:** conforme: o agregado não lê `tbsss_tickets`. A auditoria só recebe `INSERT`, sem leitura.
-* **`TABLE ACCESS FULL` aceitável:** só nas listagens de cadastro (`tbsss_usuarios`, `tbsss_perfis`), com `COUNT STOPKEY`/`SORT ORDER BY STOPKEY`, no catálogo canônico `tbsss_funcionalidades` (10 linhas) e no lado `tbsss_perfis` do `admins_ativos_bloquear`.
-* **Leituras por chave e transições:** `obter_por_login` pela `UK_…_USR_LOGIN`; `obter_estado_sessao` e a matriz pelas PKs e pelas UKs de líder `perfil_id`.
+* **Sem `TABLE ACCESS FULL` em `tbsss_tickets` nem em `tbsss_audit`:** conforme: o agregado não lê `tbsss_tickets`. A auditoria só recebe `INSERT`, sem leitura.
+* **`TABLE ACCESS FULL` aceitável:** só nas listagens de cadastro (`tbsss_users`, `tbsss_profiles`), com `COUNT STOPKEY`/`SORT ORDER BY STOPKEY`, no catálogo canônico `tbsss_features` (10 linhas) e no lado `tbsss_profiles` do `admins_ativos_bloquear`.
+* **Leituras por chave e transições:** `obter_por_login` pela `UK_…_USR_LOGIN`; `obter_estado_sessao` e a matriz pelas PKs e pelas UKs de líder `profile_id`.
 
 ### Planos registrados
 
@@ -159,7 +159,7 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 | Id  | Operation                   | Name               | Rows  |
 ------------------------------------------------------------------
 |   0 | SELECT STATEMENT            |                    |     1 |
-|   1 |  TABLE ACCESS BY INDEX ROWID| TBSSS_USUARIOS     |     1 |
+|   1 |  TABLE ACCESS BY INDEX ROWID| TBSSS_USERS     |     1 |
 |   2 |   INDEX UNIQUE SCAN         | UK_TBSSS_USR_LOGIN |     1 |
 ------------------------------------------------------------------
 ```
@@ -172,10 +172,10 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 ------------------------------------------------------------------
 |   0 | SELECT STATEMENT             |                   |     1 |
 |   1 |  NESTED LOOPS                |                   |     1 |
-|   2 |   TABLE ACCESS BY INDEX ROWID| TBSSS_USUARIOS    |     1 |
-|   3 |    INDEX UNIQUE SCAN         | PK_TBSSS_USUARIOS |     1 |
-|   4 |   TABLE ACCESS BY INDEX ROWID| TBSSS_PERFIS      |     1 |
-|   5 |    INDEX UNIQUE SCAN         | PK_TBSSS_PERFIS   |     1 |
+|   2 |   TABLE ACCESS BY INDEX ROWID| TBSSS_USERS    |     1 |
+|   3 |    INDEX UNIQUE SCAN         | PK_TBSSS_USERS |     1 |
+|   4 |   TABLE ACCESS BY INDEX ROWID| TBSSS_PROFILES      |     1 |
+|   5 |    INDEX UNIQUE SCAN         | PK_TBSSS_PROFILES   |     1 |
 ------------------------------------------------------------------
 ```
 
@@ -189,7 +189,7 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 |   1 |  SORT AGGREGATE      |                |     1 |
 |   2 |   VIEW               |                |     1 |
 |   3 |    COUNT STOPKEY     |                |       |
-|   4 |     TABLE ACCESS FULL| TBSSS_USUARIOS |     1 |
+|   4 |     TABLE ACCESS FULL| TBSSS_USERS |     1 |
 -------------------------------------------------------
 ```
 
@@ -204,7 +204,7 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 |   2 |   COUNT STOPKEY          |                |       |
 |   3 |    VIEW                  |                |     1 |
 |   4 |     SORT ORDER BY STOPKEY|                |     1 |
-|   5 |      TABLE ACCESS FULL   | TBSSS_USUARIOS |     1 |
+|   5 |      TABLE ACCESS FULL   | TBSSS_USERS |     1 |
 -----------------------------------------------------------
 ```
 
@@ -218,7 +218,7 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 |   1 |  SORT AGGREGATE      |                |     1 |
 |   2 |   VIEW               |                |     1 |
 |   3 |    COUNT STOPKEY     |                |       |
-|   4 |     TABLE ACCESS FULL| TBSSS_USUARIOS |     1 |
+|   4 |     TABLE ACCESS FULL| TBSSS_USERS |     1 |
 -------------------------------------------------------
 ```
 
@@ -233,7 +233,7 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 |   2 |   COUNT STOPKEY          |                |       |
 |   3 |    VIEW                  |                |     1 |
 |   4 |     SORT ORDER BY STOPKEY|                |     1 |
-|   5 |      TABLE ACCESS FULL   | TBSSS_USUARIOS |     1 |
+|   5 |      TABLE ACCESS FULL   | TBSSS_USERS |     1 |
 -----------------------------------------------------------
 ```
 
@@ -247,7 +247,7 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 |   1 |  SORT AGGREGATE    |                   |     1 |
 |   2 |   VIEW             |                   |     1 |
 |   3 |    COUNT STOPKEY   |                   |       |
-|   4 |     INDEX FULL SCAN| UK_TBSSS_PER_NOME |     1 |
+|   4 |     INDEX FULL SCAN| UK_TBSSS_PRF_NAME |     1 |
 --------------------------------------------------------
 ```
 
@@ -262,7 +262,7 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 |   2 |   COUNT STOPKEY          |              |       |
 |   3 |    VIEW                  |              |     1 |
 |   4 |     SORT ORDER BY STOPKEY|              |     1 |
-|   5 |      TABLE ACCESS FULL   | TBSSS_PERFIS |     1 |
+|   5 |      TABLE ACCESS FULL   | TBSSS_PROFILES |     1 |
 ---------------------------------------------------------
 ```
 
@@ -273,7 +273,7 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 | Id  | Operation         | Name            | Rows  |
 -----------------------------------------------------
 |   0 | SELECT STATEMENT  |                 |     1 |
-|   1 |  INDEX UNIQUE SCAN| PK_TBSSS_PERFIS |     1 |
+|   1 |  INDEX UNIQUE SCAN| PK_TBSSS_PROFILES |     1 |
 -----------------------------------------------------
 ```
 
@@ -284,7 +284,7 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 | Id  | Operation        | Name                  | Rows  |
 ----------------------------------------------------------
 |   0 | SELECT STATEMENT |                       |     4 |
-|   1 |  INDEX RANGE SCAN| UK_TBSSS_PFNC_PER_FNC |     4 |
+|   1 |  INDEX RANGE SCAN| UK_TBSSS_PFEA_PRF_FEA |     4 |
 ----------------------------------------------------------
 ```
 
@@ -295,7 +295,7 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 | Id  | Operation        | Name                  | Rows  |
 ----------------------------------------------------------
 |   0 | SELECT STATEMENT |                       |     5 |
-|   1 |  INDEX RANGE SCAN| UK_TBSSS_PAMB_PER_AMB |     5 |
+|   1 |  INDEX RANGE SCAN| UK_TBSSS_PENV_PRF_ENV |     5 |
 ----------------------------------------------------------
 ```
 
@@ -306,7 +306,7 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 | Id  | Operation        | Name                  | Rows  |
 ----------------------------------------------------------
 |   0 | SELECT STATEMENT |                       |    14 |
-|   1 |  INDEX RANGE SCAN| UK_TBSSS_PSCR_PER_SCR |    14 |
+|   1 |  INDEX RANGE SCAN| UK_TBSSS_PSCR_PRF_SCR |    14 |
 ----------------------------------------------------------
 ```
 
@@ -321,9 +321,9 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 |   2 |   BUFFER SORT                  |                  |       |
 |   3 |    NESTED LOOPS                |                  |     1 |
 |   4 |     NESTED LOOPS               |                  |     1 |
-|   5 |      TABLE ACCESS FULL         | TBSSS_PERFIS     |     1 |
-|   6 |      INDEX RANGE SCAN          | IX_TBSSS_USR_PER |     1 |
-|   7 |     TABLE ACCESS BY INDEX ROWID| TBSSS_USUARIOS   |     1 |
+|   5 |      TABLE ACCESS FULL         | TBSSS_PROFILES     |     1 |
+|   6 |      INDEX RANGE SCAN          | IX_TBSSS_USR_PRF |     1 |
+|   7 |     TABLE ACCESS BY INDEX ROWID| TBSSS_USERS   |     1 |
 -------------------------------------------------------------------
 ```
 
@@ -335,6 +335,6 @@ SELECT id, codigo, nome, modulo, descricao, ativo,
 ------------------------------------------------------------
 |   0 | SELECT STATEMENT   |                       |    10 |
 |   1 |  SORT ORDER BY     |                       |    10 |
-|   2 |   TABLE ACCESS FULL| TBSSS_FUNCIONALIDADES |    10 |
+|   2 |   TABLE ACCESS FULL| TBSSS_FEATURES |    10 |
 ------------------------------------------------------------
 ```

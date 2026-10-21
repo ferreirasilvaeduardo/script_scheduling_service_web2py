@@ -60,7 +60,7 @@ def validar_ator_registro(auditoria=None, ator=None):
     """
     at = None
     if isinstance(auditoria, dict):
-        at = auditoria.get("ator")
+        at = auditoria.get("actor")
     if not at and ator:
         at = ator
 
@@ -113,10 +113,10 @@ def traduzir_erro_oracle(exc, constraint_padrao=None, prefixo=None):
 
 
 def gravar_auditoria(conn, sql_tbl_aud, sql_seq_aud, auditoria, entidade, entidade_id):
-    """Grava linha(s) em tbsss_auditoria na mesma transacao (README §4.4, §10).
+    """Grava linha(s) em tbsss_audit na mesma transacao (README §4.4, §10).
 
-    Nunca corta nem completa valores (paridade com o FAKE e o test_06b): ator obrigatorio com ate 40
-    caracteres e detalhe com ate 1.000; fora disso, RepoViolacao antes do INSERT, e a transacao toda
+    Nunca corta nem completa valores (paridade com o FAKE e o test_06b): actor required com ate 40
+    caracteres e detail com ate 1.000; fora disso, RepoViolacao antes do INSERT, e a transacao toda
     e desfeita.
     """
     if not auditoria:
@@ -125,7 +125,7 @@ def gravar_auditoria(conn, sql_tbl_aud, sql_seq_aud, auditoria, entidade, entida
     for item in itens:
         if not isinstance(item, dict):
             continue
-        validar_campos_auditoria(item.get("ator"), item.get("detalhe"))
+        validar_campos_auditoria(item.get("actor"), item.get("detail"))
     cur = conn.cursor()
     try:
         for item in itens:
@@ -134,16 +134,16 @@ def gravar_auditoria(conn, sql_tbl_aud, sql_seq_aud, auditoria, entidade, entida
             aid = db_conn.proximo_id(conn, sql_seq_aud)
             cur.execute(
                 "INSERT INTO " + sql_tbl_aud + " "
-                "(id, ator, ip_origem, acao, entidade, entidade_id, detalhe, created_at) "
-                "VALUES (:id, :ator, :ip_origem, :acao, :entidade, :entidade_id, :detalhe, SYSDATE)",
+                "(id, actor, source_ip, action, entity, entity_id, detail, created_at) "
+                "VALUES (:id, :actor, :source_ip, :action, :entity, :entity_id, :detail, SYSDATE)",
                 {
                     "id": aid,
-                    "ator": item.get("ator"),
-                    "ip_origem": item.get("ip") or item.get("ip_origem"),
-                    "acao": item["acao"],
-                    "entidade": entidade,
-                    "entidade_id": entidade_id,
-                    "detalhe": item.get("detalhe"),
+                    "actor": item.get("actor"),
+                    "source_ip": item.get("ip") or item.get("source_ip"),
+                    "action": item["action"],
+                    "entity": entidade,
+                    "entity_id": entidade_id,
+                    "detail": item.get("detail"),
                 }
             )
     finally:
@@ -227,10 +227,10 @@ class BaseRepoOracle(object):
                     pass
 
     def qualificar_tabela(self, entidade):
-        return sql_ident.qualificar(self._owner, self._prefixo + entidade, prefixo=self._prefixo)
+        return sql_ident.tabela(self._owner, self._prefixo, entidade)
 
     def qualificar_sequence(self, entidade):
-        return sql_ident.qualificar(self._owner, "sq_" + self._prefixo + entidade, prefixo=self._prefixo)
+        return sql_ident.sequence(self._owner, self._prefixo, entidade)
 
     def nome_constraint(self, tipo, entidade, sufixo):
         """Retorna o nome da constraint/indice para o prefixo configurado (README §9.1)."""

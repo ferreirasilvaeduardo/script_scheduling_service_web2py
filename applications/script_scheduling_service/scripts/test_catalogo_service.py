@@ -54,7 +54,7 @@ class TestUltimasExecucoes(_Base):
         todos = self.tickets.listar(pagina=1, tamanho=100)["itens"]
         esperado = {}
         for t in todos:
-            if t["ambiente"] == "HOMOLOGACAO":
+            if t["environment"] == "HOMOLOGACAO":
                 atual = esperado.get(t["script_id"])
                 if atual is None or (t["created_at"], t["id"]) > (atual["created_at"], atual["id"]):
                     esperado[t["script_id"]] = t
@@ -63,7 +63,7 @@ class TestUltimasExecucoes(_Base):
         self.assertNotIn("log_output", list(r.values())[0])
         so_meus = self.tickets.ultimas_execucoes([1, 2, 3, 4], None, "op.hml")
         for sid, u in so_meus.items():
-            self.assertEqual(self.tickets.obter(u["id"])["solicitante"], "op.hml")
+            self.assertEqual(self.tickets.obter(u["id"])["requested_by"], "op.hml")
         self.assertEqual(self.tickets.ultimas_execucoes([], None), {})
 
 
@@ -79,20 +79,20 @@ class TestCatalogoRotinas(_Base):
                 self.assertTrue(c["ambientes"])
                 if c["ultima"]:
                     t = self.tickets.obter(c["ultima"]["id"])
-                    self.assertIn(t["ambiente"], ctx["ambientes"])
+                    self.assertIn(t["environment"], ctx["ambientes"])
                     self.assertTrue(c["ultima"]["quando"].startswith(u"há "))
 
     def test_sem_ver_logs_so_os_proprios(self):
-        ctx = self._sem("op.hml", "VER_LOGS")
+        ctx = self._sem("op.hml", "VIEW_LOGS")
         for g in self.svc.catalogo_rotinas(ctx):
             for c in g["cartoes"]:
                 if c["ultima"]:
-                    self.assertEqual(self.tickets.obter(c["ultima"]["id"])["solicitante"], "op.hml")
+                    self.assertEqual(self.tickets.obter(c["ultima"]["id"])["requested_by"], "op.hml")
 
     def test_perguntas_com_obrigatorio(self):
-        cartoes = dict((c["nome"], c) for g in self.svc.catalogo_rotinas(self.ctx["admin"]) for c in g["cartoes"])
+        cartoes = dict((c["name"], c) for g in self.svc.catalogo_rotinas(self.ctx["admin"]) for c in g["cartoes"])
         perguntas = cartoes["carga_diaria"]["perguntas"]
-        self.assertIn({"rotulo": u"Data de Referencia", "obrigatorio": True}, perguntas)
+        self.assertIn({"rotulo": u"Data de Referencia", "required": True}, perguntas)
 
     def test_sem_exec_script_vazio(self):
         self.assertEqual(self.svc.catalogo_rotinas(self._sem("op.hml", "EXEC_SCRIPT")), [])
@@ -106,10 +106,10 @@ class TestHistoricoScript(_Base):
         desde = self.tickets.agora() - datetime.timedelta(days=30)
         itens = self.tickets.historico_script(1, desde)
         self.assertTrue(itens)
-        self.assertEqual(set(itens[0]), {"id", "status", "status_motivo", "created_at", "started_at", "finished_at"})
+        self.assertEqual(set(itens[0]), {"id", "status", "status_reason", "created_at", "started_at", "finished_at"})
         self.assertEqual(itens, sorted(itens, key=lambda t: (t["created_at"], t["id"])))
         self.assertEqual(len(self.tickets.historico_script(1, desde, limite=2)), 2)
-        self.assertTrue(all(self.tickets.obter(t["id"])["ambiente"] == "HOMOLOGACAO"
+        self.assertTrue(all(self.tickets.obter(t["id"])["environment"] == "HOMOLOGACAO"
                             for t in self.tickets.historico_script(1, desde, ["HOMOLOGACAO"])))
 
     def test_numeros_batem_com_o_grafico_e_a_taxa(self):
@@ -133,7 +133,7 @@ class TestHistoricoScript(_Base):
             self.svc.historico_script(self._sem("op.hml", "EXEC_SCRIPT"), "1")
 
     def test_escopo_sem_ver_logs_so_os_proprios(self):
-        h = self.svc.historico_script(self._sem("op.hml", "VER_LOGS"), "1")
+        h = self.svc.historico_script(self._sem("op.hml", "VIEW_LOGS"), "1")
         desde = self.tickets.agora() - datetime.timedelta(days=30)
         self.assertEqual(h["total"], len(self.tickets.historico_script(1, desde, None, "op.hml")))
 

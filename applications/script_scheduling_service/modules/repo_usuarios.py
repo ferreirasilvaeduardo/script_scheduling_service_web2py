@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Contrato de persistencia para o agregado de usuarios (tbsss_usuarios)."""
+"""Contrato de persistencia para o agregado de usuarios (tbsss_users)."""
 
 
 class RepoUsuarios(object):
     """Contrato abstrato para gestao de usuarios e credenciais.
 
-    Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o ator, por
-    auditoria['ator'] ou pelo parametro ator=; o INSERT grava created_*, a alteracao grava updated_*.
-    Sem ator, RepoViolacao sem gravar nada.
+    Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o actor, por
+    auditoria['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
+    Sem actor, RepoViolacao sem gravar nada.
     """
 
     def obter_por_login(self, login):
@@ -34,7 +34,7 @@ class RepoUsuarios(object):
         """Insere novo usuario e retorna dict com o registro criado.
 
         auditoria: opcional, {'ator', 'ip', 'acao', 'detalhe'}; gravada na mesma transacao
-        (entidade tbsss_usuarios, entidade_id = novo id).
+        (entidade tbsss_users, entidade_id = novo id).
         """
         raise NotImplementedError
 
@@ -60,7 +60,7 @@ class RepoUsuarios(object):
         Com max_tentativas (uso do login), a decisao de bloquear e tomada aqui, sobre a contagem lida sob a
         trava da linha: tentativas paralelas nunca escapam do limite (revisao de 2026-10-20). Ao atingir o
         limite, bloqueado_ate = SYSDATE + bloqueio_s/86400 (relogio do banco) e auditoria_bloqueio
-        (LOGIN_BLOQUEIO) e gravada; o detalhe de auditoria (LOGIN_FALHA) ganha " (tentativa N de M)".
+        (LOGIN_LOCKED) e gravada; o detalhe de auditoria (LOGIN_FAILED) ganha " (tentativa N de M)".
         Sem max_tentativas: bloqueia se bloqueio_s for informado (testes e rotinas tecnicas).
         auditoria: dict ou lista de dicts {'ator', 'ip', 'acao', 'detalhe'} na mesma transacao.
         Retorna o registro atualizado, com a chave 'bloqueou' (bool).
@@ -92,15 +92,15 @@ class RepoUsuarios(object):
         raise NotImplementedError
 
     def definir_senha(self, id, senha_hash, agora=None, auditoria=None, ator=None):
-        """Atualiza senha_hash e senha_alterada_em, zera tentativas_falha e bloqueado_ate e incrementa
-        sessao_epoch (CR-008, E2), tudo no mesmo UPDATE.
+        """Atualiza password_hash e password_changed_at, zera failed_attempts e locked_until e incrementa
+        session_epoch (CR-008, E2), tudo no mesmo UPDATE.
 
-        auditoria: opcional, na mesma transacao; o detalhe nunca contem senha nem hash.
+        auditoria: opcional, na mesma transacao; o detail nunca contem senha nem hash.
         """
         raise NotImplementedError
 
     def encerrar_sessoes(self, id, auditoria=None):
-        """Logout (CR-008, E2): sessao_epoch = sessao_epoch + 1 num UPDATE, sem updated_* (rotina tecnica).
+        """Logout (CR-008, E2): session_epoch = session_epoch + 1 num UPDATE, sem updated_* (rotina tecnica).
 
         auditoria: opcional (LOGOUT), na mesma transacao. Retorna o registro atualizado.
         """

@@ -292,7 +292,7 @@ class TestEstadoLocal(_Base):
         self.assertFalse(os.path.exists(os.path.join(ex.work_dir_ticket, executor.RESULT)))
         executor.registrar_resultado(ex, "FAILED", "TIMEOUT", -3)
         self.assertEqual(plataforma.ler_estado(os.path.join(ex.work_dir_ticket, executor.RESULT)),
-                         {"ticket_id": 3, "status": "FAILED", "status_motivo": "TIMEOUT", "return_code": -3})
+                         {"ticket_id": 3, "status": "FAILED", "status_reason": "TIMEOUT", "return_code": -3})
         executor.limpar(ex)
         self.assertFalse(os.path.exists(ex.work_dir_ticket))
 
@@ -476,8 +476,8 @@ class TestSnapshotV4(_Base):
         os.chmod(self.base, 0o555)
 
     def test_argv_do_snapshot_e_sss_script_dir(self):
-        snap_js = json.dumps({"versao": 4, "script_id": 12, "script_nome": "Carga Faturas", "interpretador": "PYTHON3",
-                              "path_file": self.script, "tipo_param": "NOMEADO", "args": ["--data", "2026-10-13"],
+        snap_js = json.dumps({"version": 4, "script_id": 12, "script_nome": "Carga Faturas", "interpreter": "PYTHON3",
+                              "path_file": self.script, "param_type": "NAMED", "args": ["--data", "2026-10-13"],
                               "respostas": {}, "sensiveis": [], "compilado_em": "2026-10-13 10:47:00"},
                              ensure_ascii=False, sort_keys=True)
         snap, argv, script_real = pc.validar_snapshot(snap_js, _CfgSnap({"PYTHON3": sys.executable}))
@@ -485,13 +485,13 @@ class TestSnapshotV4(_Base):
         wd = executor.preparar_diretorio(self.work, 21)
         cfg = _Cfg(_Agente("srv-01", "C.UTF-8", (), (), None))
         fd, parcial = executor.abrir_log(self.logs, "DEV", snap["script_nome"], STARTED_AT, 21, snap["script_id"])
-        ticket = {"id": 21, "ambiente": "DEV", "agendamento_id": 5, "parent_ticket_id": None, "prioridade": 3,
+        ticket = {"id": 21, "environment": "DEV", "schedule_id": 5, "parent_ticket_id": None, "priority": 3,
                   "started_at": STARTED_AT, "scheduled_at": STARTED_AT}
         with self.assertLogs("sss_scheduler", "WARNING"):
             env = env_builder.construir(cfg, Segredos("x" * 8, None, {}), ticket,
-                                        {"nome": "DEV", "conexao": None, "descricao": "Desenvolvimento"},
+                                        {"name": "DEV", "connection": None, "description": "Desenvolvimento"},
                                         script_real, wd, {}, plataforma.NOME, snapshot=snap,
-                                        agendamento={"nome": "Diario DEV", "tipo_recorrencia": "DIARIA"},
+                                        agendamento={"name": "Diario DEV", "recurrence_type": "DAILY"},
                                         caminho_log=parcial, timeout_seg=60, hostname="host-dev", versao="t")
         ex = executor.iniciar(21, argv, fd, env, wd, None, None, plataforma.RLIMITS_PADRAO, "SSS-srv-01-21")
         self.execs.append(ex)
@@ -503,7 +503,7 @@ class TestSnapshotV4(_Base):
         # CR-010: o filho le os dados da execucao em SSS_*.
         sss = saida[5]
         self.assertEqual((sss["SSS_TICKET_ID"], sss["SSS_EXECUTION_TYPE"], sss["SSS_RECURRENCE"]),
-                         ("21", "AGENDADA", "DIARIA"))
+                         ("21", "AGENDADA", "DAILY"))
         self.assertEqual((sss["SSS_ENVIRONMENT"], sss["SSS_ENVIRONMENT_DESCRIPTION"]), ("DEV", "Desenvolvimento"))
         self.assertEqual(sss["SSS_STARTED_AT"], "2026-10-16 14:05:33")
         self.assertEqual(sss["SSS_SCRIPT_FILE"], script_real)

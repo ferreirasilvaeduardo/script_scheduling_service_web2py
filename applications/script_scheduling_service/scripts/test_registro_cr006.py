@@ -67,8 +67,8 @@ class TestRegistroNosServicos(unittest.TestCase):
             self.assertEqual(svc.formulario(self.ctx, str(rid))["registro"]["created_by"], "SYSTEM:seed", nome)
 
     def test_registro_sem_auditoria_nos_servicos_e_aviso_de_pausa(self):
-        ctx = dict(self.ctx, is_admin=False, login="op.prod", usuario_id=2,
-                   funcionalidades=frozenset(f for f in self.ctx["funcionalidades"] if f != "VER_AUDITORIA"),
+        ctx = dict(self.ctx, is_admin=False, login="op.prod", user_id=2,
+                   funcionalidades=frozenset(f for f in self.ctx["funcionalidades"] if f != "VIEW_AUDIT"),
                    ambientes=frozenset(("PRODUCAO", "HOMOLOGACAO")), scripts=frozenset((1, 2, 3, 4, 5, 6)))
         store = repo_factory._fake_store
         for tabela, rid in (("ambientes", 1), ("perfis", 2), ("usuarios", 2), ("parametros", 1),
@@ -91,12 +91,12 @@ class TestRegistroNosServicos(unittest.TestCase):
     def test_edicao_pela_tela_grava_o_editor(self):
         svc, rid, ler = self.servicos["ambientes"]
         form = svc.formulario(self.ctx, str(rid))
-        _id, erros = svc.salvar(self.ctx, IP, str(rid), {"descricao": "Editada", "conexao": form["conexao"],
-                                                         "versao": form["versao"]})
+        _id, erros = svc.salvar(self.ctx, IP, str(rid), {"description": "Editada", "connection": form["connection"],
+                                                         "version": form["version"]})
         self.assertEqual(erros, {})
         reg = svc.formulario(self.ctx, str(rid))["registro"]
         self.assertEqual((reg["created_by"], reg["updated_by"]), ("SYSTEM:seed", "admin"))
-        self.assertEqual(svc.formulario(self.ctx, str(rid))["versao"] != form["versao"], True)
+        self.assertEqual(svc.formulario(self.ctx, str(rid))["version"] != form["version"], True)
 
     def test_agendamento_e_ticket(self):
         regra = self.agendamentos.formulario(self.ctx, "5")["regra"]

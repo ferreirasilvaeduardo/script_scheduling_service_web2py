@@ -7,15 +7,15 @@ _opc_acoes = [('', 'Todas')] + [(_a, _a) for _a in acoes]
 _opc_entidades = [('', 'Todas')] + [(_e, _e) for _e in entidades]
 _erros = resultado['erros']
 filtros = {'id': 'filtro-auditoria', 'url_base': ('auditoria', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': [
-    {'nome': 'de', 'rotulo': 'De', 'tipo': 'data', 'valor': filtros_ativos.get('de')},
-    {'nome': 'ate', 'rotulo': u'Até', 'tipo': 'data', 'valor': filtros_ativos.get('ate')},
-    {'nome': 'ator', 'rotulo': 'Ator (login)', 'tipo': 'texto', 'valor': filtros_ativos.get('ator')},
-    {'nome': 'acao', 'rotulo': u'Ação', 'tipo': 'select', 'valor': filtros_ativos.get('acao'), 'opcoes': _opc_acoes},
-    {'nome': 'entidade', 'rotulo': 'Entidade', 'tipo': 'select', 'valor': filtros_ativos.get('entidade'), 'opcoes': _opc_entidades},
-    {'nome': 'entidade_id', 'rotulo': 'ID da entidade', 'tipo': 'texto', 'valor': filtros_ativos.get('entidade_id')},
-    {'nome': 'ip', 'rotulo': 'IP de origem', 'tipo': 'texto', 'valor': filtros_ativos.get('ip')},
+    {'name': 'de', 'rotulo': 'De', 'tipo': 'data', 'valor': filtros_ativos.get('de')},
+    {'name': 'ate', 'rotulo': u'Até', 'tipo': 'data', 'valor': filtros_ativos.get('ate')},
+    {'name': 'actor', 'rotulo': 'Ator (login)', 'tipo': 'texto', 'valor': filtros_ativos.get('actor')},
+    {'name': 'action', 'rotulo': u'Ação', 'tipo': 'select', 'valor': filtros_ativos.get('action'), 'opcoes': _opc_acoes},
+    {'name': 'entity', 'rotulo': 'Entidade', 'tipo': 'select', 'valor': filtros_ativos.get('entity'), 'opcoes': _opc_entidades},
+    {'name': 'entity_id', 'rotulo': 'ID da entidade', 'tipo': 'texto', 'valor': filtros_ativos.get('entity_id')},
+    {'name': 'ip', 'rotulo': 'IP de origem', 'tipo': 'texto', 'valor': filtros_ativos.get('ip')},
 ]}
-_rotulos_campo = dict((_c['nome'], _c['rotulo']) for _c in filtros['campos'])
+_rotulos_campo = dict((_c['name'], _c['rotulo']) for _c in filtros['campos'])
 _colunas = ('Data/hora', 'Ator', u'Ação', 'Entidade', 'ID', 'IP de origem', 'Detalhe')
 pagina = resultado['pagina']
 total = resultado['total']
@@ -37,7 +37,7 @@ aba_ativa = 'lista'
     <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
     <span>Filtros inválidos:</span>
     <ul class="mb-0 sss-alerta-lista">
-      {{for _campo in [c for c in ('de', 'ate', 'ator', 'acao', 'entidade', 'entidade_id', 'ip') if c in _erros]:}}
+      {{for _campo in [c for c in ('de', 'ate', 'actor', 'action', 'entity', 'entity_id', 'ip') if c in _erros]:}}
       <li><strong>{{=_rotulos_campo[_campo]}}:</strong> {{=_erros[_campo]}}</li>
       {{pass}}
     </ul>
@@ -91,20 +91,20 @@ aba_ativa = 'lista'
         {{for _r in resultado['itens']:}}
         <tr>
           <td class="sss-col-data">{{=ui_helpers.formatar_data(_r['created_at'])}}</td>
-          <td class="sss-mono">{{=_r['ator']}}</td>
-          <td class="sss-mono">{{=_r['acao']}}</td>
-          <td class="sss-mono">{{=_r['entidade']}}</td>
+          <td class="sss-mono">{{=_r['actor']}}</td>
+          <td class="sss-mono">{{=_r['action']}}</td>
+          <td class="sss-mono">{{=_r['entity']}}</td>
           <td class="sss-col-num sss-mono">
-            {{if _r['link']:}}<a href="{{=URL(c=_r['link'][0], f=_r['link'][1], args=_r['link'][2], extension=False)}}" aria-label="Abrir {{=_r['entidade']}} {{=_r['entidade_id']}}">{{=_r['entidade_id']}}</a>{{elif _r['entidade_id'] is not None:}}{{=_r['entidade_id']}}{{else:}}-{{pass}}
+            {{if _r['link']:}}<a href="{{=URL(c=_r['link'][0], f=_r['link'][1], args=_r['link'][2], extension=False)}}" aria-label="Abrir {{=_r['entity']}} {{=_r['entity_id']}}">{{=_r['entity_id']}}</a>{{elif _r['entity_id'] is not None:}}{{=_r['entity_id']}}{{else:}}-{{pass}}
           </td>
-          <td class="sss-mono">{{=_r['ip_origem'] or '-'}}</td>
+          <td class="sss-mono">{{=_r['source_ip'] or '-'}}</td>
           <td class="sss-aud-detalhe">
             {{if _r['truncado']:}}
             <details>
               <summary><span>{{=_r['detalhe_curto']}}</span> <span class="sss-ver-mais">ver mais</span></summary>
-              <div class="sss-aud-detalhe-completo">{{=_r['detalhe']}}</div>
+              <div class="sss-aud-detalhe-completo">{{=_r['detail']}}</div>
             </details>
-            {{else:}}{{=_r['detalhe'] or '-'}}{{pass}}
+            {{else:}}{{=_r['detail'] or '-'}}{{pass}}
           </td>
         </tr>
         {{pass}}

@@ -32,7 +32,7 @@ def _linhas_etapa(n, quando, sensiveis):
     return linhas
 
 
-_COLUNAS_CLOB = ("parametros_enviados", "log_output")
+_COLUNAS_CLOB = ("submitted_params", "log_output")
 
 
 def _sem(registro, colunas):
@@ -51,14 +51,14 @@ class RepoTicketsFake(RepoTickets):
         return self._store.agora()
 
     def criar(self, ticket, respostas, ator=None):
-        """Cria ticket e respostas vinculadas atomicamente, com auditoria TICKET_CRIAR ou TICKET_REEXECUTAR.
+        """Cria ticket e respostas vinculadas atomicamente, com auditoria TICKET_CREATE ou TICKET_RERUN.
 
         created_by do ticket e das respostas: ator= ou, sem ele, o solicitante (CR-006, README §10).
         """
         with self._store.lock_tickets:
             script_id = int(ticket.get("script_id", 0))
-            ambiente = ticket.get("ambiente")
-            solicitante = ticket.get("solicitante")
+            ambiente = ticket.get("environment")
+            solicitante = ticket.get("requested_by")
             ator = self._store.ator_registro(ator=ator or solicitante)
 
             if not script_id:
@@ -68,7 +68,7 @@ class RepoTicketsFake(RepoTickets):
             if not solicitante:
                 raise RepoViolacao("solicitante e obrigatorio")
 
-            prio = int(ticket.get("prioridade", 2))
+            prio = int(ticket.get("priority", 2))
             if not (1 <= prio <= 4):
                 raise RepoViolacao("prioridade deve estar entre 1 e 4", constraint="ck_tbsss_tck_prio")
 
@@ -81,44 +81,44 @@ class RepoTicketsFake(RepoTickets):
                 raise RepoViolacao("ticket pai inexistente", constraint="fk_tbsss_tck_parent")
             # FKs e UK checadas antes de gravar qualquer linha: a operacao e atomica como no Oracle.
             self._store.checar_fk(script_id in self._store.scripts, "fk_tbsss_tck_scr")
-            self._store.checar_fk(self._store.ambiente_existe(ambiente), "fk_tbsss_tck_amb")
+            self._store.checar_fk(self._store.ambiente_existe(ambiente), "fk_tbsss_tck_env")
             self._store.checar_fk(self._store.login_existe(solicitante), "fk_tbsss_tck_usr")
             vistos = set()
             for resp in (respostas or []):
-                pid = int(resp["parametro_id"])
-                self._store.checar_fk(pid in self._store.parametros, "fk_tbsss_trsp_prm")
+                pid = int(resp["parameter_id"])
+                self._store.checar_fk(pid in self._store.parametros, "fk_tbsss_tans_prm")
                 if pid in vistos:
-                    raise RepoViolacao("resposta repetida para o parametro %s" % pid, constraint="uk_tbsss_trsp_tck_prm")
+                    raise RepoViolacao("resposta repetida para o parametro %s" % pid, constraint="uk_tbsss_tans_tck_prm")
                 vistos.add(pid)
 
             tid = self._store.proximo_id("tbsss_tickets")
             agora = self._store.agora()
             sched = ticket.get("scheduled_at") or agora
 
-            if ticket.get("agendamento_id") is not None:
-                agd_id = int(ticket["agendamento_id"])
+            if ticket.get("schedule_id") is not None:
+                agd_id = int(ticket["schedule_id"])
                 for t in self._store.tickets.values():
-                    if t.get("agendamento_id") == agd_id and t.get("scheduled_at") == sched:
-                        raise RepoViolacao("ocorrencia duplicada para este agendamento", constraint="ix_tbsss_tck_ocor")
+                    if t.get("schedule_id") == agd_id and t.get("scheduled_at") == sched:
+                        raise RepoViolacao("ocorrencia duplicada para este agendamento", constraint="ix_tbsss_tck_occur")
 
             novo_ticket = {
                 "id": tid,
                 "script_id": script_id,
-                "ambiente": ambiente,
-                "solicitante": solicitante,
-                "ip_origem": ticket.get("ip_origem"),
-                "agente_id": ticket.get("agente_id"),
+                "environment": ambiente,
+                "requested_by": solicitante,
+                "source_ip": ticket.get("source_ip"),
+                "agent_id": ticket.get("agent_id"),
                 "process_id": ticket.get("process_id"),
                 "process_start": ticket.get("process_start"),
                 "status": status,
-                "prioridade": prio,
+                "priority": prio,
                 "cancel_requested": ticket.get("cancel_requested", "N"),
-                "status_motivo": ticket.get("status_motivo"),
+                "status_reason": ticket.get("status_reason"),
                 "parent_ticket_id": parent_id,
-                "agendamento_id": ticket.get("agendamento_id"),
-                "parametros_enviados": ticket.get("parametros_enviados", "{}"),
+                "schedule_id": ticket.get("schedule_id"),
+                "submitted_params": ticket.get("submitted_params", "{}"),
                 "log_output": ticket.get("log_output", ""),
-                "log_truncado": ticket.get("log_truncado", "N"),
+                "log_truncated": ticket.get("log_truncated", "N"),
                 "return_code": ticket.get("return_code"),
                 "scheduled_at": sched,
                 "started_at": ticket.get("started_at"),
@@ -131,12 +131,12 @@ class RepoTicketsFake(RepoTickets):
 
             # Insercao das respostas
             for resp in (respostas or []):
-                rid = self._store.proximo_id("tbsss_ticket_resp")
+                rid = self._store.proximo_id("tbsss_ticket_answer")
                 nresp = {
                     "id": rid,
                     "ticket_id": tid,
-                    "parametro_id": int(resp["parametro_id"]),
-                    "valor_resposta": resp.get("valor_resposta"),
+                    "parameter_id": int(resp["parameter_id"]),
+                    "answer_value": resp.get("answer_value"),
                     "created_at": agora,
                 }
                 self._store.carimbar_inclusao(nresp, ator)
@@ -144,14 +144,14 @@ class RepoTicketsFake(RepoTickets):
 
             # Auditoria na mesma transacao (lock)
             if parent_id is None:
-                acao = "TICKET_CRIAR"
+                acao = "TICKET_CREATE"
                 detalhe = "Ticket criado para script %s em %s" % (script_id, ambiente)
             else:
-                acao = "TICKET_REEXECUTAR"
+                acao = "TICKET_RERUN"
                 detalhe = "Reexecucao do ticket %s para script %s em %s" % (parent_id, script_id, ambiente)
             self._store.registrar_auditoria_interno(
                 ator=solicitante,
-                ip=ticket.get("ip_origem"),
+                ip=ticket.get("source_ip"),
                 acao=acao,
                 entidade="tbsss_tickets",
                 entidade_id=tid,
@@ -177,7 +177,7 @@ class RepoTicketsFake(RepoTickets):
             # Escopo de ambientes autorizados ao perfil
             if escopo_ambientes is not None:
                 ambs_permitidos = set(escopo_ambientes)
-                lista = [t for t in lista if t.get("ambiente") in ambs_permitidos]
+                lista = [t for t in lista if t.get("environment") in ambs_permitidos]
 
             stat_f = filtros.get("status")
             if stat_f:
@@ -187,17 +187,17 @@ class RepoTicketsFake(RepoTickets):
                 else:
                     lista = [t for t in lista if t.get("status") == stat_f]
 
-            amb_f = filtros.get("ambiente")
+            amb_f = filtros.get("environment")
             if amb_f:
-                lista = [t for t in lista if t.get("ambiente") == amb_f]
+                lista = [t for t in lista if t.get("environment") == amb_f]
 
             sid_f = filtros.get("script_id")
             if sid_f is not None:
                 lista = [t for t in lista if t.get("script_id") == int(sid_f)]
 
-            usr_f = filtros.get("solicitante")
+            usr_f = filtros.get("requested_by")
             if usr_f:
-                lista = [t for t in lista if t.get("solicitante") == usr_f]
+                lista = [t for t in lista if t.get("requested_by") == usr_f]
 
             par_f = filtros.get("parent_ticket_id")
             if par_f is not None:
@@ -205,9 +205,9 @@ class RepoTicketsFake(RepoTickets):
 
             origem_f = filtros.get("origem")
             if origem_f == "manual":
-                lista = [t for t in lista if t.get("agendamento_id") is None]
+                lista = [t for t in lista if t.get("schedule_id") is None]
             elif origem_f == "agendamento":
-                lista = [t for t in lista if t.get("agendamento_id") is not None]
+                lista = [t for t in lista if t.get("schedule_id") is not None]
 
             dt_ini = filtros.get("criado_inicio")
             if dt_ini:
@@ -229,15 +229,15 @@ class RepoTicketsFake(RepoTickets):
         with self._store.lock_tickets:
             melhores = {}
             for t in self._store.tickets.values():
-                if t["script_id"] not in ids or (ambs is not None and t["ambiente"] not in ambs):
+                if t["script_id"] not in ids or (ambs is not None and t["environment"] not in ambs):
                     continue
-                if solicitante is not None and t["solicitante"] != solicitante:
+                if solicitante is not None and t["requested_by"] != solicitante:
                     continue
                 chave = (t["created_at"], t["id"])
                 atual = melhores.get(t["script_id"])
                 if atual is None or chave > (atual["created_at"], atual["id"]):
                     melhores[t["script_id"]] = t
-            return dict((sid, {"id": t["id"], "status": t["status"], "status_motivo": t.get("status_motivo"),
+            return dict((sid, {"id": t["id"], "status": t["status"], "status_reason": t.get("status_reason"),
                                "created_at": t["created_at"], "finished_at": t.get("finished_at")})
                         for sid, t in melhores.items())
 
@@ -247,11 +247,11 @@ class RepoTicketsFake(RepoTickets):
         with self._store.lock_tickets:
             lista = [t for t in self._store.tickets.values()
                      if t["script_id"] == int(script_id) and t["created_at"] >= desde
-                     and (ambs is None or t["ambiente"] in ambs)
-                     and (solicitante is None or t["solicitante"] == solicitante)]
+                     and (ambs is None or t["environment"] in ambs)
+                     and (solicitante is None or t["requested_by"] == solicitante)]
             lista.sort(key=lambda t: (t["created_at"], t["id"]))
             lista = lista[-int(limite):] if limite else lista
-            return [dict((k, t.get(k)) for k in ("id", "status", "status_motivo", "created_at", "started_at",
+            return [dict((k, t.get(k)) for k in ("id", "status", "status_reason", "created_at", "started_at",
                                                  "finished_at")) for t in lista]
 
     def respostas(self, ticket_id):
@@ -279,20 +279,20 @@ class RepoTicketsFake(RepoTickets):
 
             def auditar(resultado):
                 self._store.registrar_auditoria_interno(
-                    ator=ator, ip=ip, acao="TICKET_CANCELAR", entidade="tbsss_tickets", entidade_id=id,
+                    ator=ator, ip=ip, acao="TICKET_CANCEL", entidade="tbsss_tickets", entidade_id=id,
                     detalhe=u"resultado: %s" % resultado)
 
             if st not in ("PENDING", "RUNNING"):
                 auditar(u"sem efeito: ticket encerrado")
                 return "TERMINAL"
-            if st == "RUNNING" and t.get("cancel_requested") == "S":
+            if st == "RUNNING" and t.get("cancel_requested") == "Y":
                 auditar(u"já sinalizado")
                 return "JA_SINALIZADO"
 
             if st == "PENDING":
-                t["cancel_requested"] = "S"
+                t["cancel_requested"] = "Y"
                 t["status"] = "CANCELLED"
-                t["status_motivo"] = "CANCEL_USER"
+                t["status_reason"] = "CANCEL_USER"
                 t["return_code"] = -1
                 t["finished_at"] = self._store.agora()
                 self._store.carimbar_alteracao(t, ator)
@@ -301,7 +301,7 @@ class RepoTicketsFake(RepoTickets):
                 return "CANCELADO"
 
             if st == "RUNNING":
-                t["cancel_requested"] = "S"
+                t["cancel_requested"] = "Y"
                 self._store.carimbar_alteracao(t, ator)
 
                 auditar(u"sinalizado")
@@ -331,7 +331,7 @@ class RepoTicketsFake(RepoTickets):
             texto = log_output[off:off + mc]
             novo_offset = off + len(texto)
             terminal = t.get("status") in ("SUCCESS", "FAILED", "CANCELLED")
-            truncado = t.get("log_truncado") == "S"
+            truncado = t.get("log_truncated") == "Y"
 
             return (texto, novo_offset, terminal, truncado)
 
@@ -340,7 +340,7 @@ class RepoTicketsFake(RepoTickets):
         with self._store.lock_tickets:
             for s in self._store.ticket_saida.values():
                 if s["ticket_id"] == int(ticket_id):
-                    return dict((k, v) for k, v in s.items() if k not in ("id", "ticket_id", "conteudo"))
+                    return dict((k, v) for k, v in s.items() if k not in ("id", "ticket_id", "content"))
         return None
 
     def saida_ler(self, ticket_id, offset, tamanho):
@@ -351,8 +351,8 @@ class RepoTicketsFake(RepoTickets):
             raise RepoViolacao("Fatia da saida invalida")
         with self._store.lock_tickets:
             for s in self._store.ticket_saida.values():
-                if s["ticket_id"] == int(ticket_id) and s["situacao"] == "DISPONIVEL" and s["conteudo"] is not None:
-                    return bytes(s["conteudo"][off:off + tam])
+                if s["ticket_id"] == int(ticket_id) and s["state"] == "AVAILABLE" and s["content"] is not None:
+                    return bytes(s["content"][off:off + tam])
         raise RepoNaoEncontrado("Saida do ticket %s indisponivel" % ticket_id)
 
     def _simular_log(self, t, sim):
@@ -360,7 +360,7 @@ class RepoTicketsFake(RepoTickets):
         agora = self._store.agora()
         decorrido = int((agora - t["started_at"]).total_seconds())
         alvo = min(_ETAPAS_SIMULADAS, max(0, decorrido // sim["passo_s"]))
-        cancelar = t.get("cancel_requested") == "S"
+        cancelar = t.get("cancel_requested") == "Y"
         if alvo <= sim["emitidos"] and not cancelar:
             return
         linhas = []
@@ -370,14 +370,14 @@ class RepoTicketsFake(RepoTickets):
         sim["emitidos"] = alvo
         if cancelar:
             linhas.append("[%s] processo encerrado por cancelamento (SIGTERM)\n" % agora)
-            t.update(status="CANCELLED", status_motivo="CANCEL_USER", return_code=-1)
+            t.update(status="CANCELLED", status_reason="CANCEL_USER", return_code=-1)
         elif alvo >= _ETAPAS_SIMULADAS:
             linhas.append("[%s] Script concluido com retorno 0.\n" % agora)
-            t.update(status="SUCCESS", status_motivo="EXIT_OK", return_code=0)
+            t.update(status="SUCCESS", status_reason="EXIT_OK", return_code=0)
         if t["status"] != "RUNNING":
             t["finished_at"] = agora
             # A finalizacao e do agente dono (README §8.7); o heartbeat e o log nao gravam updated_*.
-            self._store.carimbar_alteracao(t, "SYSTEM:%s" % t.get("agente_id"))
+            self._store.carimbar_alteracao(t, "SYSTEM:%s" % t.get("agent_id"))
             self._store.log_sim.pop(t["id"], None)
         t["heartbeat_at"] = agora
         t["log_output"] = (t.get("log_output") or "") + _mascarar_como_log_pump("".join(linhas), sim["sensiveis"])

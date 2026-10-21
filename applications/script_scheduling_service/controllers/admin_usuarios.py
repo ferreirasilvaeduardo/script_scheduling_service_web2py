@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Cadastro de usuarios (README §4.2, §4.3.B, CAD_USUARIOS). Padrao em docs/PADRAO_CRUD_ADMIN.md.
+"""Cadastro de usuarios (README §4.2, §4.3.B, MANAGE_USERS). Padrao em docs/PADRAO_CRUD_ADMIN.md.
 
 Regras ficam em modules/admin_usuarios_service.py; CSRF e Origin de todo POST sao validados em
 models/10_security.py. Senhas sao retiradas de request.vars assim que lidas: o ticket de erro do
@@ -12,7 +12,7 @@ import ui_helpers
 from admin_crud import AcessoNegado, OperacaoNegada
 from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
 
-_FUNC = "CAD_USUARIOS"
+_FUNC = "MANAGE_USERS"
 _TAMANHOS = (20, 50, 100)
 _CAMPOS_SENHA = ("senha", "confirmacao")
 _MSG_FALHA_LISTA = u"Não foi possível carregar os usuários. Tente novamente em instantes."
@@ -49,10 +49,10 @@ def _pagina_form(ctx, dados, erros=None, erros_senha=None):
     response.title = (u"Usuário %s — SSS" % dados["login"]) if dados.get("id") else u"Novo usuário — SSS"
     response.view = "admin_usuarios/form.html"
     erros = erros or {}
-    campos = [{"nome": n, "erro": erros.get(n)} for n in ("login", "nome", "perfil_id", "senha", "confirmacao")]
+    campos = [{"name": n, "erro": erros.get(n)} for n in ("login", "name", "profile_id", "senha", "confirmacao")]
     # Perfil de administrador so e oferecido a administrador (CR-008, E1), salvo o perfil atual.
     perfis = [p for p in servico.perfis()
-              if p["id"] == dados.get("perfil_id") or (p["ativo"] == "S" and (ctx["is_admin"] or p["is_admin"] != "S"))]
+              if p["id"] == dados.get("profile_id") or (p["active"] == "Y" and (ctx["is_admin"] or p["is_admin"] != "Y"))]
     return dict(usuario=dados, erros=erros, erro_geral=erros.get(admin_crud.CAMPO_GERAL),
                 erros_senha=erros_senha or {}, perfis=perfis,
                 foco_campo=ui_helpers.primeiro_campo_invalido(campos), ajuda_senha=servico.AJUDA_POLITICA,
@@ -98,7 +98,7 @@ def salvar():
     ctx = _exigir_func(_FUNC)
     senhas = _retirar_senhas()
     usuario_id = _texto(request.post_vars.get("id"), 11)
-    enviados = dict((c, _texto(request.post_vars.get(c), 300)) for c in ("login", "nome", "perfil_id", "versao"))
+    enviados = dict((c, _texto(request.post_vars.get(c), 300)) for c in ("login", "name", "profile_id", "version"))
     enviados.update(senhas)
     try:
         _salvo, erros = servico.salvar(ctx, _ip_origem(), usuario_id, enviados)
@@ -115,14 +115,14 @@ def salvar():
     try:
         dados = servico.formulario(ctx, usuario_id) if usuario_id else servico.formulario(ctx)
     except RepoErro:
-        dados = {"id": None, "login": "", "nome": "", "perfil_id": None, "ativo": "S", "versao": "",
-                 "bloqueado": False, "bloqueado_ate": None, "tentativas_falha": 0, "proprio": False}
+        dados = {"id": None, "login": "", "name": "", "profile_id": None, "active": "Y", "version": "",
+                 "bloqueado": False, "locked_until": None, "failed_attempts": 0, "proprio": False}
     if admin_crud.CAMPO_GERAL not in erros:
-        dados = dict(dados, nome=enviados["nome"] or "", perfil_id=_inteiro(enviados["perfil_id"]))
+        dados = dict(dados, name=enviados["name"] or "", profile_id=_inteiro(enviados["profile_id"]))
         if not usuario_id:
             dados["login"] = enviados["login"] or ""
         else:
-            dados["versao"] = enviados["versao"] or ""
+            dados["version"] = enviados["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
     response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.CAMPO_GERAL)
                       or ui_helpers.mensagem("formulario")}
@@ -134,8 +134,8 @@ def alternar_ativo():
     ctx = _exigir_func(_FUNC)
     usuario_id = _texto(request.post_vars.get("id"), 11)
     try:
-        alterado = servico.alternar_ativo(ctx, _ip_origem(), usuario_id, _texto(request.post_vars.get("versao"), 64))
-        acao = u"desativado" if alterado["ativo"] == "N" else u"reativado"
+        alterado = servico.alternar_ativo(ctx, _ip_origem(), usuario_id, _texto(request.post_vars.get("version"), 64))
+        acao = u"desativado" if alterado["active"] == "N" else u"reativado"
         session.flash = {"tipo": "sucesso", "mensagem": u"Usuário %s %s." % (alterado["login"], acao)}
     except RepoNaoEncontrado:
         _nao_encontrado()

@@ -23,24 +23,24 @@ Para atender aos cenários operacionais frequentes de manipulação de arquivos 
 
 | # | Nome da Rotina | Interpretador | Tipo Param | Grupo / Categoria / Etapa | Timeout (s) | Max Paralelo | Arquivo Físico |
 |:---:|:---|:---:|:---:|:---|:---:|:---:|:---|
-| 1 | `zipar_arquivos` | `PYTHON3` | `NOMEADO` | `UTILITARIOS` / `ARQUIVOS` / `COMPACTACAO` | 1800 | 2 | `zipar_arquivos.py` |
-| 2 | `descompactar_zip` | `PYTHON3` | `NOMEADO` | `UTILITARIOS` / `ARQUIVOS` / `DESCOMPACTACAO` | 1800 | 2 | `descompactar_zip.py` |
-| 3 | `quebrar_arquivo` | `PYTHON3` | `NOMEADO` | `UTILITARIOS` / `ARQUIVOS` / `DIVISAO` | 1800 | 2 | `quebrar_arquivo.py` |
-| 4 | `juntar_arquivos` | `PYTHON3` | `NOMEADO` | `UTILITARIOS` / `ARQUIVOS` / `CONCATENACAO` | 1800 | 2 | `juntar_arquivos.py` |
-| 5 | `converter_encoding` | `PYTHON3` | `NOMEADO` | `UTILITARIOS` / `ARQUIVOS` / `CONVERSAO` | 1800 | 2 | `converter_encoding.py` |
-| 6 | `substituir_texto` | `PYTHON3` | `NOMEADO` | `UTILITARIOS` / `ARQUIVOS` / `TRANSFORMACAO` | 1800 | 2 | `substituir_texto.py` |
-| 7 | `remover_duplicadas` | `PYTHON3` | `NOMEADO` | `UTILITARIOS` / `ARQUIVOS` / `HIGIENIZACAO` | 1800 | 2 | `remover_duplicadas.py` |
-| 8 | `gerar_hash_arquivo` | `PYTHON3` | `NOMEADO` | `UTILITARIOS` / `ARQUIVOS` / `AUDITORIA` | 1800 | 2 | `gerar_hash_arquivo.py` |
-| 9 | `compactar_targz` | `BASH` | `NOMEADO` | `UTILITARIOS` / `ARQUIVOS` / `COMPACTACAO` | 1800 | 2 | `compactar_targz.sh` |
-| 10 | `descompactar_targz` | `BASH` | `NOMEADO` | `UTILITARIOS` / `ARQUIVOS` / `DESCOMPACTACAO` | 1800 | 2 | `descompactar_targz.sh` |
-| 11 | `contar_linhas_arquivo` | `SH` | `SEQUENCIAL` | `UTILITARIOS` / `ARQUIVOS` / `ANALISE` | 600 | 2 | `contar_linhas_arquivo.sh` |
-| 12 | `filtrar_linhas` | `BASH` | `NOMEADO` | `UTILITARIOS` / `ARQUIVOS` / `FILTRAGEM` | 1800 | 2 | `filtrar_linhas.sh` |
-| 13 | `ordenar_arquivo` | `SH` | `NOMEADO` | `UTILITARIOS` / `ARQUIVOS` / `ORGANIZACAO` | 1800 | 2 | `ordenar_arquivo.sh` |
-| 14 | `limpar_linhas_vazias` | `BASH` | `NOMEADO` | `UTILITARIOS` / `ARQUIVOS` / `HIGIENIZACAO` | 1800 | 2 | `limpar_linhas_vazias.sh` |
+| 1 | `zipar_arquivos` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `COMPACTACAO` | 1800 | 2 | `zipar_arquivos.py` |
+| 2 | `descompactar_zip` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `DESCOMPACTACAO` | 1800 | 2 | `descompactar_zip.py` |
+| 3 | `quebrar_arquivo` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `DIVISAO` | 1800 | 2 | `quebrar_arquivo.py` |
+| 4 | `juntar_arquivos` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `CONCATENACAO` | 1800 | 2 | `juntar_arquivos.py` |
+| 5 | `converter_encoding` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `CONVERSAO` | 1800 | 2 | `converter_encoding.py` |
+| 6 | `substituir_texto` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `TRANSFORMACAO` | 1800 | 2 | `substituir_texto.py` |
+| 7 | `remover_duplicadas` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `HIGIENIZACAO` | 1800 | 2 | `remover_duplicadas.py` |
+| 8 | `gerar_hash_arquivo` | `PYTHON3` | `NAMED` | `UTILITARIOS` / `FILES` / `AUDITORIA` | 1800 | 2 | `gerar_hash_arquivo.py` |
+| 9 | `compactar_targz` | `BASH` | `NAMED` | `UTILITARIOS` / `FILES` / `COMPACTACAO` | 1800 | 2 | `compactar_targz.sh` |
+| 10 | `descompactar_targz` | `BASH` | `NAMED` | `UTILITARIOS` / `FILES` / `DESCOMPACTACAO` | 1800 | 2 | `descompactar_targz.sh` |
+| 11 | `contar_linhas_arquivo` | `SH` | `POSITIONAL` | `UTILITARIOS` / `FILES` / `ANALISE` | 600 | 2 | `contar_linhas_arquivo.sh` |
+| 12 | `filtrar_linhas` | `BASH` | `NAMED` | `UTILITARIOS` / `FILES` / `FILTRAGEM` | 1800 | 2 | `filtrar_linhas.sh` |
+| 13 | `ordenar_arquivo` | `SH` | `NAMED` | `UTILITARIOS` / `FILES` / `ORGANIZACAO` | 1800 | 2 | `ordenar_arquivo.sh` |
+| 14 | `limpar_linhas_vazias` | `BASH` | `NAMED` | `UTILITARIOS` / `FILES` / `HIGIENIZACAO` | 1800 | 2 | `limpar_linhas_vazias.sh` |
 
 ---
 
-## 3. Dicionário de Parâmetros Homologados (`tbsss_parametros`)
+## 3. Dicionário de Parâmetros Homologados (`tbsss_parameters`)
 
 Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de dados e vinculados a cada rotina conforme as necessidades de entrada:
 
@@ -58,12 +58,12 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
 | `enc_destino` | `--enc-destino` | Codificação de Destino | `SELECT` | `UTF-8`, `ISO-8859-1`, `CP1252` | `UTF-8` |
 | `termo_busca` | `--busca` | Texto a Localizar | `TEXT` | String de busca | — |
 | `termo_substituicao` | `--substituicao` | Texto Substituto | `TEXT` | Nova string | — |
-| `flag_ordenar` | `--ordenar` | Ordenar Resultado | `SELECT` | `S` (Sim), `N` (Não) | `S` |
+| `flag_ordenar` | `--ordenar` | Ordenar Resultado | `SELECT` | `Y` (Sim), `N` (Não) | `Y` |
 | `tipo_hash` | `--algoritmo` | Algoritmo de Hash | `SELECT` | `sha256`, `md5`, `sha1` | `sha256` |
 | `termo_filtro` | `--padrao` | Padrão de Filtragem | `TEXT` | Termo para filtragem | — |
-| `flag_inverter` | `--inverter` | Inverter Seleção | `SELECT` | `N` (Manter), `S` (Excluir) | `N` |
-| `flag_numerico` | `--numerico` | Ordenação Numérica | `SELECT` | `N` (Alfanumérica), `S` (Numérica) | `N` |
-| `flag_reverso` | `--reverso` | Ordem Reversa (Decrescente) | `SELECT` | `N` (Crescente), `S` (Decrescente) | `N` |
+| `flag_inverter` | `--inverter` | Inverter Seleção | `SELECT` | `N` (Manter), `Y` (Excluir) | `N` |
+| `flag_numerico` | `--numerico` | Ordenação Numérica | `SELECT` | `N` (Alfanumérica), `Y` (Numérica) | `N` |
+| `flag_reverso` | `--reverso` | Ordem Reversa (Decrescente) | `SELECT` | `N` (Crescente), `Y` (Decrescente) | `N` |
 | `caminho_arquivo` | *(posicional)* | Caminho do Arquivo | `TEXT` | Argumento posicional 1 | — |
 
 ---
@@ -141,7 +141,7 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
 - **Parâmetros:**
   1. `arq_origem` (`--origem`, obrigatório)
   2. `arq_destino` (`--destino`, obrigatório)
-  3. `flag_ordenar` (`--ordenar`, opcional, padrão `S`)
+  3. `flag_ordenar` (`--ordenar`, opcional, padrão `Y`)
 - **Exemplo de Execução CLI:**
   ```bash
   python3 /opt/automacoes/scripts/utilitarios/remover_duplicadas.py --origem /dados/lista_emails.txt --destino /dados/lista_emails_unicos.txt --ordenar S
@@ -224,9 +224,9 @@ Os parâmetros abaixo são componentes reutilizáveis cadastrados no banco de da
 
 ## 5. Homologação, Perfis e Usuários Cadastrados no Oracle
 
-Na implantação do banco de dados (via `scripts/init_db.py` ou script SQL `docs/sql/01_implantar_sss.sql`):
+Na implantação do banco de dados (via `scripts/init_db.py` ou script SQL `docs/sql/01_deploy_sss.sql`):
 
-### 5.1 Homologação Técnica nos Ambientes (`tbsss_script_amb`)
+### 5.1 Homologação Técnica nos Ambientes (`tbsss_script_env`)
 Todos os 14 scripts são automaticamente homologados para execução nos **5 ambientes padrão**:
 - `CLONE2` (`10.238.55.146/gfprod`)
 - `CLONE1` (`10.238.55.145/gfprod`)
@@ -235,28 +235,28 @@ Todos os 14 scripts são automaticamente homologados para execução nos **5 amb
 - `GFPREPROD` (`10.129.177.188/GFPR`)
 *Totalizando 70 registros de homologação técnica (14 scripts × 5 ambientes).*
 
-### 5.2 Perfis de Acesso e Matriz de Autorização (`tbsss_perfis`, `tbsss_perfil_func`, `tbsss_perfil_amb`)
+### 5.2 Perfis de Acesso e Matriz de Autorização (`tbsss_profiles`, `tbsss_profile_feature`, `tbsss_profile_env`)
 Foram configurados **4 perfis de acesso** com escopos operacionais e administrativos bem delineados:
 
-| Perfil | Tipo | Funcionalidades Autorizadas (`tbsss_perfil_func`) | Ambientes Autorizados (`tbsss_perfil_amb`) |
+| Perfil | Tipo | Funcionalidades Autorizadas (`tbsss_profile_feature`) | Ambientes Autorizados (`tbsss_profile_env`) |
 |:---|:---:|:---|:---|
-| `ADMINISTRADOR` | Super Administrador (`is_admin = 'S'`) | Todas as 10 funcionalidades (`EXEC_SCRIPT`, `VER_LOGS`, `CANC_TICKET`, `CAD_USUARIOS`, `CAD_PERFIS`, `CAD_AMBIENTES`, `CAD_SCRIPTS`, `CAD_PARAMETROS`, `CAD_AGENDAMENTOS`, `VER_AUDITORIA`) | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
-| `OPERADOR_PROD` | Operacional Produção (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VER_LOGS`, `CANC_TICKET` | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
-| `OPERADOR_HML` | Operacional Homologação (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VER_LOGS`, `CANC_TICKET` | Ambientes não produtivos (`CLONE6`, `CLONE7`, `GFPREPROD`) |
-| `CONSULTA` | Auditoria / Leitura (`is_admin = 'N'`) | Apenas leitura de logs e tickets (`VER_LOGS`) | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
+| `ADMINISTRATOR` | Super Administrador (`is_admin = 'Y'`) | Todas as 10 funcionalidades (`EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET`, `MANAGE_USERS`, `MANAGE_PROFILES`, `MANAGE_ENVIRONMENTS`, `MANAGE_SCRIPTS`, `MANAGE_PARAMETERS`, `MANAGE_SCHEDULES`, `VIEW_AUDIT`) | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
+| `OPERATOR_PROD` | Operacional Produção (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET` | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
+| `OPERATOR_HML` | Operacional Homologação (`is_admin = 'N'`) | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET` | Ambientes não produtivos (`CLONE6`, `CLONE7`, `GFPREPROD`) |
+| `READ_ONLY` | Auditoria / Leitura (`is_admin = 'N'`) | Apenas leitura de logs e tickets (`VIEW_LOGS`) | Todos os 5 ambientes (`CLONE2`, `CLONE1`, `CLONE6`, `CLONE7`, `GFPREPROD`) |
 
-### 5.3 Liberação de Scripts por Perfil (`tbsss_perfil_scr`)
+### 5.3 Liberação de Scripts por Perfil (`tbsss_profile_script`)
 Todos os 14 scripts utilitários foram liberados para os 4 perfis operacionais cadastrados, totalizando **56 registros de permissão** (4 perfis × 14 scripts).
 
-### 5.4 Usuários Padrão Cadastrados para Homologação e Demonstração (`tbsss_usuarios`)
+### 5.4 Usuários Padrão Cadastrados para Homologação e Demonstração (`tbsss_users`)
 Para viabilizar a demonstração operacional e os testes de interface (conforme matriz utilizada na homologação das telas / UI Freeze), foram cadastrados **4 usuários padrão**:
 
 | Login | Nome Completo | Perfil Atribuído | Privilégio Administrativo | Finalidade de Teste / Demonstração |
 |:---|:---|:---|:---:|:---|
-| `admin` | Super Administrador | `ADMINISTRADOR` | Sim (`is_admin = 'S'`) | Acesso total a painéis administrativos, cadastros, agendamentos, trilha de auditoria e disparo de rotinas |
-| `op.prod` | Operador Producao | `OPERADOR_PROD` | Não (`is_admin = 'N'`) | Disparo e acompanhamento de rotinas em ambientes de produção e clones |
-| `op.hml` | Operador Homologacao | `OPERADOR_HML` | Não (`is_admin = 'N'`) | Validação de restrição de escopo de ambientes (apenas Clones 6/7 e Preprod) |
-| `consulta` | Auditor e Consulta | `CONSULTA` | Não (`is_admin = 'N'`) | Validação de acesso somente leitura, sem permissão para disparar scripts ou alterar cadastros |
+| `admin` | Super Administrador | `ADMINISTRATOR` | Sim (`is_admin = 'Y'`) | Acesso total a painéis administrativos, cadastros, agendamentos, trilha de auditoria e disparo de rotinas |
+| `op.prod` | Operador Producao | `OPERATOR_PROD` | Não (`is_admin = 'N'`) | Disparo e acompanhamento de rotinas em ambientes de produção e clones |
+| `op.hml` | Operador Homologacao | `OPERATOR_HML` | Não (`is_admin = 'N'`) | Validação de restrição de escopo de ambientes (apenas Clones 6/7 e Preprod) |
+| `consulta` | Auditor e Consulta | `READ_ONLY` | Não (`is_admin = 'N'`) | Validação de acesso somente leitura, sem permissão para disparar scripts ou alterar cadastros |
 
 > [!IMPORTANT]
 > **Credenciais Padrão de Homologação / Demonstração:**
@@ -292,7 +292,7 @@ sudo chmod 0755 /opt/automacoes/scripts/utilitarios/*.py
 Para criar ou atualizar o catálogo no banco de dados Oracle:
 
 ```bash
-sqlplus usuario_owner/senha@//host:porta/servico @docs/sql/01_implantar_sss.sql
+sqlplus usuario_owner/senha@//host:porta/servico @docs/sql/01_deploy_sss.sql
 ```
 
 O script possui idempotência completa via `MERGE INTO`, atualizando descrições e parâmetros existentes e inserindo os novos registros sem duplicidade nem erros de chave única.

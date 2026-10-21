@@ -52,17 +52,17 @@ class TestPermissoes(unittest.TestCase):
         self.assertEqual(d["frase_admin"], svc_mod.FRASE_ADMIN)
         self.assertEqual(len(d["telas"]), 10)
         self.assertEqual(d["ausentes"], [])
-        rotas = dict((t["codigo"], t["rota"]) for t in d["telas"])
-        self.assertEqual(rotas["CAD_PERFIS"], ("admin_perfis", "lista"))
-        self.assertIsNone(rotas["CANC_TICKET"])  # acao, nao tela
+        rotas = dict((t["code"], t["rota"]) for t in d["telas"])
+        self.assertEqual(rotas["MANAGE_PROFILES"], ("admin_perfis", "lista"))
+        self.assertIsNone(rotas["CANCEL_TICKET"])  # acao, nao tela
 
     def test_sem_exec_script_mostra_frase_e_motivo(self):
         d = self.svc.montar(self.ctx["consulta"])
         self.assertFalse(d["pode_executar"])
         self.assertEqual(d["frase_sem_exec"], svc_mod.FRASE_SEM_EXEC)
         self.assertEqual(d["scripts"], [])
-        self.assertTrue(all(a["motivo"] == svc_mod.MOTIVO_SEM_FUNC for a in d["ausentes"]))
-        self.assertEqual([t["codigo"] for t in d["telas"]], ["VER_LOGS"])
+        self.assertTrue(all(a["reason"] == svc_mod.MOTIVO_SEM_FUNC for a in d["ausentes"]))
+        self.assertEqual([t["code"] for t in d["telas"]], ["VIEW_LOGS"])
 
     def test_scripts_e_ambientes_iguais_aos_do_disparo(self):
         ctx = self.ctx["op.hml"]
@@ -77,23 +77,23 @@ class TestPermissoes(unittest.TestCase):
         ctx = dict(self.ctx["op.hml"])
         # Script do perfil desativado e script do perfil sem homologacao nos ambientes dele.
         sid_inativo = sorted(ctx["scripts"])[0]
-        self.catalogo.scripts_alterar(sid_inativo, {"ativo": "N"}, ator="teste")
-        novo = self.catalogo.scripts_inserir({"nome": "So em PRODUCAO", "interpretador": "PYTHON3",
+        self.catalogo.scripts_alterar(sid_inativo, {"active": "N"}, ator="teste")
+        novo = self.catalogo.scripts_inserir({"name": "So em PRODUCAO", "interpreter": "PYTHON3",
                                               "path_file": "/opt/scripts/x.py",
-                                              "tipo_param": "NENHUM"}, ator="teste")["id"]
-        prod = [a for a in self.catalogo.ambientes_listar(pagina=1, tamanho=50)["itens"] if a["nome"] == "PRODUCAO"][0]
+                                              "param_type": "NONE"}, ator="teste")["id"]
+        prod = [a for a in self.catalogo.ambientes_listar(pagina=1, tamanho=50)["itens"] if a["name"] == "PRODUCAO"][0]
         self.catalogo.homologacao_salvar(novo, [prod["id"]], ator="teste")
         ctx["scripts"] = frozenset(ctx["scripts"]) | frozenset([novo])
         ctx["ambientes"] = frozenset(a for a in ctx["ambientes"] if a != "PRODUCAO")
         d = self.svc.montar(ctx)
-        motivos = dict((a["nome"], a["motivo"]) for a in d["ausentes"])
-        nome_inativo = self.catalogo.scripts_obter(sid_inativo)["nome"]
+        motivos = dict((a["name"], a["reason"]) for a in d["ausentes"])
+        nome_inativo = self.catalogo.scripts_obter(sid_inativo)["name"]
         self.assertEqual(motivos[nome_inativo], svc_mod.MOTIVO_SCRIPT_INATIVO)
         self.assertEqual(motivos["So em PRODUCAO"], svc_mod.MOTIVO_SEM_HOMOLOGACAO)
-        fora = set(s["nome"] for s in self.catalogo.scripts_listar(pagina=1, tamanho=100)["itens"]
+        fora = set(s["name"] for s in self.catalogo.scripts_listar(pagina=1, tamanho=100)["itens"]
                    if s["id"] not in ctx["scripts"])
         self.assertFalse(fora & set(motivos))
-        self.assertFalse(fora & set(s["nome"] for s in d["scripts"]))
+        self.assertFalse(fora & set(s["name"] for s in d["scripts"]))
 
     def test_nao_grava_nem_audita(self):
         self.svc.montar(self.ctx["op.hml"])

@@ -4,32 +4,32 @@
 # Na edição o nome é somente leitura e o servidor ignora qualquer valor enviado para ele.
 import ui_helpers
 _novo = not amb.get('id')
-_situacao = ui_helpers.ativo_info(amb.get('ativo'))
+_situacao = ui_helpers.ativo_info(amb.get('active'))
 _campos = [
-    {'nome': 'nome', 'rotulo': 'Nome', 'valor': amb.get('nome'), 'erro': erros.get('nome'), 'obrigatorio': _novo, 'maxlength': 30, 'somente_leitura': not _novo,
+    {'name': 'name', 'rotulo': 'Nome', 'valor': amb.get('name'), 'erro': erros.get('name'), 'required': _novo, 'maxlength': 30, 'somente_leitura': not _novo,
      'ajuda': u'Letras maiúsculas, dígitos e _ (ex.: PRODUCAO). Não pode ser alterado depois de criado.'},
-    {'nome': 'descricao', 'rotulo': u'Descrição', 'valor': amb.get('descricao'), 'erro': erros.get('descricao'), 'maxlength': 100},
-    {'nome': 'conexao', 'rotulo': 'DSN', 'valor': amb.get('conexao'), 'erro': erros.get('conexao'), 'maxlength': 250,
+    {'name': 'description', 'rotulo': u'Descrição', 'valor': amb.get('description'), 'erro': erros.get('description'), 'maxlength': 100},
+    {'name': 'connection', 'rotulo': 'DSN', 'valor': amb.get('connection'), 'erro': erros.get('connection'), 'maxlength': 250,
      'ajuda': u'host:porta/serviço (ex.: db01.local:1521/svc) ou alias TNS. Sem usuário nem senha: credenciais ficam no secrets.cfg.'},
 ]
 if not _novo:
-    _desativar = amb.get('ativo') == 'S'
+    _desativar = amb.get('active') == 'Y'
     _qtd = amb.get('agendamentos_ativos') or 0
     if _desativar:
         _texto_modal = u'%s Agendamentos ativos afetados: %d. Scripts homologados neste ambiente, que deixam de poder rodar nele: %d.' % (aviso_desativacao, _qtd, amb.get('scripts_homologados') or 0)
     else:
         _texto_modal = u'O ambiente voltará a aceitar tickets e agendamentos.'
     pass
-    _modal_ativo = {'id': 'modal-ativo', 'titulo': (u'Desativar ambiente %s' if _desativar else u'Reativar ambiente %s') % amb['nome'],
+    _modal_ativo = {'id': 'modal-ativo', 'titulo': (u'Desativar ambiente %s' if _desativar else u'Reativar ambiente %s') % amb['name'],
                     'texto': _texto_modal, 'rotulo_gatilho': 'Desativar' if _desativar else 'Reativar',
                     'rotulo_confirmar': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
                     'variante': 'perigo' if _desativar else 'normal', 'acao': URL(c='admin_ambientes', f='alternar_ativo'),
-                    'campos_ocultos': dict(id=amb['id'], versao=amb['versao'])}
+                    'campos_ocultos': dict(id=amb['id'], versao=amb['version'])}
 pass
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
-    <h1 class="sss-page-titulo">{{if _novo:}}Novo ambiente{{else:}}Ambiente <span class="sss-mono">{{=amb['nome']}}</span>
+    <h1 class="sss-page-titulo">{{if _novo:}}Novo ambiente{{else:}}Ambiente <span class="sss-mono">{{=amb['name']}}</span>
       <span class="sss-status {{=_situacao['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icone']}}"></use></svg><span>{{=_situacao['rotulo']}}</span></span>{{pass}}
     </h1>
   </div>
@@ -42,7 +42,7 @@ pass
   </div>
 </div>
 
-{{if not _novo and amb.get('ativo') == 'S' and amb.get('agendamentos_ativos'):}}
+{{if not _novo and amb.get('active') == 'Y' and amb.get('agendamentos_ativos'):}}
 <div class="alert alert-info sss-alerta" role="note">
   <span>Este ambiente tem {{=amb['agendamentos_ativos']}} agendamento(s) ativo(s). {{=aviso_desativacao}}</span>
 </div>
@@ -54,7 +54,7 @@ pass
     {{=csrf_campo()}}
     {{if not _novo:}}
     <input type="hidden" name="id" value="{{=amb['id']}}">
-    <input type="hidden" name="versao" value="{{=amb['versao']}}">
+    <input type="hidden" name="version" value="{{=amb['version']}}">
     {{pass}}
     {{if erro_geral:}}
     <div class="alert alert-danger sss-alerta" role="alert">

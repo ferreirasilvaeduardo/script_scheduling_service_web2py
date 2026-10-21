@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Dicionario de parametros (README §6, CAD_PARAMETROS). Padrao em docs/PADRAO_CRUD_ADMIN.md.
+"""Dicionario de parametros (README §6, MANAGE_PARAMETERS). Padrao em docs/PADRAO_CRUD_ADMIN.md.
 
 Regras ficam em modules/admin_parametros_service.py; CSRF e Origin de todo POST sao validados em
 models/10_security.py. O editor de opcoes do cliente e conveniencia: o servidor revalida tudo.
@@ -10,10 +10,10 @@ import ui_helpers
 from admin_crud import AcessoNegado, OperacaoNegada
 from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
 
-_FUNC = "CAD_PARAMETROS"
+_FUNC = "MANAGE_PARAMETERS"
 _TAMANHOS = (20, 50, 100)
-_CAMPOS = ("codigo", "param_nomeado", "label", "descricao", "tipo_componente", "opcoes_json", "valor_padrao",
-           "remover_padrao", "regex_validacao", "sensivel", "versao")
+_CAMPOS = ("code", "param_flag", "label", "description", "component_type", "options_json", "default_value",
+           "remover_padrao", "validation_regex", "sensitive", "version")
 _JS = "js/app/parametros.js"
 _MSG_FALHA_LISTA = u"Não foi possível carregar os parâmetros. Tente novamente em instantes."
 _MSG_FALHA_ACAO = u"Não foi possível concluir a operação. Tente novamente em instantes."
@@ -42,13 +42,13 @@ def _enviados():
 
 
 def _pagina_form(ctx, dados, erros=None):
-    response.title = (u"Parâmetro %s — SSS" % dados["codigo"]) if dados.get("id") else u"Novo parâmetro — SSS"
+    response.title = (u"Parâmetro %s — SSS" % dados["code"]) if dados.get("id") else u"Novo parâmetro — SSS"
     response.view = "admin_parametros/form.html"
     response.sss_scripts = [_JS]
     erros = erros or {}
-    campos = [{"nome": n, "erro": erros.get(n)} for n in ("codigo", "param_nomeado", "label", "descricao",
-                                                          "tipo_componente", "opcoes_json", "regex_validacao",
-                                                          "valor_padrao")]
+    campos = [{"name": n, "erro": erros.get(n)} for n in ("code", "param_flag", "label", "description",
+                                                          "component_type", "options_json", "validation_regex",
+                                                          "default_value")]
     return dict(prm=dados, erros=erros, erro_geral=erros.get(admin_crud.CAMPO_GERAL),
                 foco_campo=ui_helpers.primeiro_campo_invalido(campos), tipos=servico.ROTULOS_TIPO,
                 aviso_sensivel=servico.AVISO_SENSIVEL)
@@ -106,23 +106,23 @@ def salvar():
     try:
         dados = servico.formulario(ctx, parametro_id) if parametro_id else servico.formulario(ctx)
     except RepoErro:
-        dados = {"id": None, "codigo": "", "param_nomeado": "", "label": "", "descricao": "",
-                 "tipo_componente": "TEXT", "opcoes_json": "", "valor_padrao": "", "tem_padrao": False,
-                 "regex_validacao": "", "sensivel": "N", "ativo": "S", "versao": "", "vinculos": [],
+        dados = {"id": None, "code": "", "param_flag": "", "label": "", "description": "",
+                 "component_type": "TEXT", "options_json": "", "default_value": "", "tem_padrao": False,
+                 "validation_regex": "", "sensitive": "N", "active": "Y", "version": "", "vinculos": [],
                  "pode_regex": ctx.get("is_admin") is True}
     if admin_crud.CAMPO_GERAL not in erros:
-        reapresentar = dict((c, enviados[c] or "") for c in ("param_nomeado", "label", "descricao", "tipo_componente",
-                                                             "opcoes_json", "regex_validacao"))
-        reapresentar["sensivel"] = "S" if enviados["sensivel"] == "S" else "N"
+        reapresentar = dict((c, enviados[c] or "") for c in ("param_flag", "label", "description", "component_type",
+                                                             "options_json", "validation_regex"))
+        reapresentar["sensitive"] = "Y" if enviados["sensitive"] == "Y" else "N"
         # Padrao de parametro sensivel nunca volta ao HTML.
-        reapresentar["valor_padrao"] = "" if reapresentar["sensivel"] == "S" else (enviados["valor_padrao"] or "")
+        reapresentar["default_value"] = "" if reapresentar["sensitive"] == "Y" else (enviados["default_value"] or "")
         if not dados.get("pode_regex"):
-            reapresentar.pop("regex_validacao")
+            reapresentar.pop("validation_regex")
         dados = dict(dados, **reapresentar)
         if not parametro_id:
-            dados["codigo"] = enviados["codigo"] or ""
+            dados["code"] = enviados["code"] or ""
         else:
-            dados["versao"] = enviados["versao"] or ""
+            dados["version"] = enviados["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
     response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.CAMPO_GERAL)
                       or ui_helpers.mensagem("formulario")}
@@ -134,9 +134,9 @@ def alternar_ativo():
     ctx = _exigir_func(_FUNC)
     parametro_id = _texto(request.post_vars.get("id"), 11)
     try:
-        alterado = servico.alternar_ativo(ctx, _ip_origem(), parametro_id, _texto(request.post_vars.get("versao"), 64))
-        acao = u"desativado" if alterado["ativo"] == "N" else u"reativado"
-        session.flash = {"tipo": "sucesso", "mensagem": u"Parâmetro %s %s." % (alterado["codigo"], acao)}
+        alterado = servico.alternar_ativo(ctx, _ip_origem(), parametro_id, _texto(request.post_vars.get("version"), 64))
+        acao = u"desativado" if alterado["active"] == "N" else u"reativado"
+        session.flash = {"tipo": "sucesso", "mensagem": u"Parâmetro %s %s." % (alterado["code"], acao)}
     except RepoNaoEncontrado:
         _nao_encontrado()
     except AcessoNegado:

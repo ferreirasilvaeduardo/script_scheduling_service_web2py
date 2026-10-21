@@ -84,7 +84,7 @@ class _RepoFalso(object):
         if clob.dono != (agente_id, "RUNNING"):
             return False
         clob.iniciar_tx()
-        clob.truncado = "S"
+        clob.truncado = "Y"
         return True
 
 
@@ -266,7 +266,7 @@ class TestLimites(_Base):
             corpo = clob.texto[:-len(MARCADOR)]
             self.assertTrue(conteudo.decode("utf-8").startswith(corpo), "corte em fronteira de caractere")
             self.assertGreater(len(corpo.encode("utf-8")), teto - len(MARCADOR.encode("utf-8")) - 4)
-            self.assertEqual(clob.truncado, "S")
+            self.assertEqual(clob.truncado, "Y")
 
     def test_aplicar_teto_banco_direto(self):
         teto = 1100
@@ -490,7 +490,7 @@ class TestRepoSchedulerLog(unittest.TestCase):
                        "DBMS_LOB.COMPARE", "WHEN NO_DATA_FOUND", "RAISE_APPLICATION_ERROR(-20002"):
             self.assertIn(trecho, sql)
         self.assertNotIn("updated_", sql)
-        self.assertEqual(set(binds), {"chunk", "ticket_id", "agente_id", "offset_esperado", "resultado"})
+        self.assertEqual(set(binds), {"chunk", "ticket_id", "agent_id", "offset_esperado", "resultado"})
         self.assertEqual(tipos, {"chunk": db_conn.obter_tipo_driver(db_conn.TIPO_CLOB)})
 
     def test_resultados_e_posse_perdida(self):
@@ -529,7 +529,7 @@ class TestRepoSchedulerLog(unittest.TestCase):
         conn = _ConnAnexar(rowcount=1)
         self.assertTrue(self.repo.marcar_truncado(conn, 7, "srv-01"))
         sql = conn.execucoes[0][0]
-        self.assertIn("log_truncado = 'S'", sql)
+        self.assertIn("log_truncated = 'Y'", sql)
         self.assertIn("OWN_X.pfx_tickets", sql)
         self.assertNotIn("updated_", sql)
         self.assertFalse(self.repo.marcar_truncado(_ConnAnexar(rowcount=0), 7, "srv-01"))
@@ -593,8 +593,8 @@ class TestSchedulerLogOracle(unittest.TestCase):
         self.contrato.setUp(self)
         self._massa = self.trc._Massa(self.obter_repo)
         c = self._massa.cenario()
-        self.ticket_id = self._massa.ticket(ator="teste", script_id=c["scr"]["id"], ambiente=c["amb1"]["nome"],
-                                            solicitante=c["login"])
+        self.ticket_id = self._massa.ticket(actor="teste", script_id=c["scr"]["id"], environment=c["amb1"]["name"],
+                                            requested_by=c["login"])
         self.catalogo = self.obter_repo("catalogo")
         self.repo = RepoSchedulerLog(self.catalogo._owner, self.catalogo._prefixo)
         self.tck = self.catalogo.qualificar_tabela("tickets")
@@ -604,7 +604,7 @@ class TestSchedulerLogOracle(unittest.TestCase):
         finally:
             conn.close()
         # Estado que o claim (F8.3) deixa: RUNNING deste agente, CLOB vazio e offset 0.
-        self._sql("UPDATE " + self.tck + " SET status = 'RUNNING', agente_id = :a, started_at = SYSDATE, "
+        self._sql("UPDATE " + self.tck + " SET status = 'RUNNING', agent_id = :a, started_at = SYSDATE, "
                   "heartbeat_at = SYSDATE, log_output = EMPTY_CLOB(), log_offset_chars = 0 WHERE id = :id",
                   a=self.AGENTE, id=self.ticket_id)
 
@@ -641,7 +641,7 @@ class TestSchedulerLogOracle(unittest.TestCase):
         conn = self.catalogo._obter_conexao()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT log_output, log_offset_chars, log_truncado FROM " + self.tck + " WHERE id = :id",
+            cur.execute("SELECT log_output, log_offset_chars, log_truncated FROM " + self.tck + " WHERE id = :id",
                         id=self.ticket_id)
             lob, off, trunc = cur.fetchone()
             return (lob.read() if lob is not None and lob.size() else ""), int(off), trunc
@@ -674,7 +674,7 @@ class TestSchedulerLogOracle(unittest.TestCase):
             conn.rollback()
             self.assertTrue(self.repo.marcar_truncado(conn, self.ticket_id, self.AGENTE))
             conn.commit()
-            self.assertEqual(self._estado()[2], "S")
+            self.assertEqual(self._estado()[2], "Y")
         finally:
             conn.close()
 

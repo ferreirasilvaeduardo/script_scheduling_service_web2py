@@ -76,7 +76,7 @@ class TestSqlOracle11g(unittest.TestCase):
         self.assertEqual(violacoes, [], "Violacoes de sintaxe 12c+ encontradas:\n" + "\n".join(violacoes))
 
     def test_ausencia_select_star(self):
-        """Proibe SELECT * direto da tabela em codigo de aplicacao (exceto subquery de paginacao)."""
+        """Proibe SELECT * direto da tabela em code de aplicacao (exceto subquery de paginacao)."""
         arquivos = self._obter_arquivos_sql()
         violacoes = []
         for caminho in arquivos:

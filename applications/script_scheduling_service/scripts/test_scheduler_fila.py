@@ -115,21 +115,21 @@ class TestSemBanco(unittest.TestCase):
 
     def test_candidatos_sql_literal_e_binds_gerados(self):
         # CR-013: catalogo do agente, RUNNING por par e a janela por ambiente x prioridade em ix_tck_fila.
-        conn = _Conn([("FROM OWN_X.pfx_scripts WHERE interpretador IN", (3, [(3, 2), (4, 1), (5, 1)])),
-                      ("WHERE status = 'RUNNING' AND ambiente IN", (1, [(4, "PRD", 1)])),
+        conn = _Conn([("FROM OWN_X.pfx_scripts WHERE interpreter IN", (3, [(3, 2), (4, 1), (5, 1)])),
+                      ("WHERE status = 'RUNNING' AND environment IN", (1, [(4, "PRD", 1)])),
                       ("UNION ALL", (2, [(7, 3, "PRD"), (8, 4, "HML")]))])
         itens = self.repo.candidatos(conn, ["PRD", "HML"], ["PYTHON3", "SH"], 10, 30)
-        self.assertEqual(itens, [{"id": 7, "script_id": 3, "ambiente": "PRD"}, {"id": 8, "script_id": 4, "ambiente": "HML"}])
+        self.assertEqual(itens, [{"id": 7, "script_id": 3, "environment": "PRD"}, {"id": 8, "script_id": 4, "environment": "HML"}])
         (sql_scr, b_scr), (sql_run, b_run), (sql, binds) = conn.executados
-        self.assertIn("interpretador IN (:int0, :int1)", sql_scr)
+        self.assertIn("interpreter IN (:int0, :int1)", sql_scr)
         self.assertEqual(b_scr, {"int0": "PYTHON3", "int1": "SH"})
-        self.assertIn("ambiente IN (:amb0, :amb1) GROUP BY script_id, ambiente", sql_run)
+        self.assertIn("environment IN (:amb0, :amb1) GROUP BY script_id, environment", sql_run)
         self.assertEqual(b_run, {"amb0": "PRD", "amb1": "HML"})
         inicio = sql_ident.FBI_TCK_FILA_INICIO
-        self.assertEqual(sql.count("SELECT id, script_id, ambiente, prio, inicio FROM (SELECT id, script_id"), 8,
-                         "2 ambientes x 4 prioridades")
+        self.assertEqual(sql.count("SELECT id, script_id, environment, prio, inicio FROM (SELECT id, script_id"), 8,
+                         "2 environments x 4 prioridades")
         self.assertNotIn("SELECT *", sql, "AGENTS §4.12")
-        for trecho in ("WHERE status = 'PENDING' AND ambiente = :amb0 AND prioridade = 1 AND %s <= SYSDATE" % inicio,
+        for trecho in ("WHERE status = 'PENDING' AND environment = :amb0 AND priority = 1 AND %s <= SYSDATE" % inicio,
                        "ORDER BY %s, id) WHERE ROWNUM <= :lote" % inicio,
                        "c.status = 'PENDING' AND c.cancel_requested = 'N'",
                        "j.inicio, j.id", "OWN_X.pfx_tickets"):
@@ -144,16 +144,16 @@ class TestSemBanco(unittest.TestCase):
         self.assertEqual(self.repo.candidatos(conn, ["PRD"], [], 10, 0), [])
 
     def test_candidatos_sem_script_elegivel_nao_le_a_fila(self):
-        conn = _Conn([("FROM OWN_X.pfx_scripts WHERE interpretador IN", (1, [(4, 1)])),
-                      ("WHERE status = 'RUNNING' AND ambiente IN", (1, [(4, "PRD", 1)]))])
+        conn = _Conn([("FROM OWN_X.pfx_scripts WHERE interpreter IN", (1, [(4, 1)])),
+                      ("WHERE status = 'RUNNING' AND environment IN", (1, [(4, "PRD", 1)]))])
         self.assertEqual(self.repo.candidatos(conn, ["PRD"], ["SH"], 10, 30), [])
         self.assertEqual(len(conn.executados), 2, "todos no teto: sem a janela")
         conn = _Conn([])
         self.assertEqual(self.repo.candidatos(conn, ["PRD"], ["PERL"], 10, 30), [])
-        self.assertEqual(len(conn.executados), 1, "nenhum script do interpretador: so o catalogo")
+        self.assertEqual(len(conn.executados), 1, "nenhum script do interpreter: so o catalogo")
 
     def test_candidatos_lista_longa_vira_or_de_listas(self):
-        conn = _Conn([("FROM OWN_X.pfx_scripts WHERE interpretador IN", (1, [(i, 1) for i in range(1, 1902)])),
+        conn = _Conn([("FROM OWN_X.pfx_scripts WHERE interpreter IN", (1, [(i, 1) for i in range(1, 1902)])),
                       ("UNION ALL", (0, []))])
         self.repo.candidatos(conn, ["PRD"], ["SH"], 10, 30)
         sql = conn.executados[-1][0]
@@ -168,9 +168,9 @@ class TestSemBanco(unittest.TestCase):
         self.assertEqual((conn.commits, conn.rollbacks), (1, 0))
         upd, binds = [x for x in conn.executados if "RETURNING" in x[0]][0]
         for trecho in ("status = 'RUNNING'", "log_output = EMPTY_CLOB()", "log_offset_chars = 0",
-                       "updated_at = SYSDATE, updated_by = :ator", "status = 'PENDING' AND cancel_requested = 'N'"):
+                       "updated_at = SYSDATE, updated_by = :actor", "status = 'PENDING' AND cancel_requested = 'N'"):
             self.assertIn(trecho, upd)
-        self.assertEqual(binds["ator"], ATOR)
+        self.assertEqual(binds["actor"], ATOR)
         # Ordem de locks (README §8.3): scripts antes de tickets.
         self.assertIn("OWN_X.pfx_scripts", conn.executados[0][0])
 
@@ -200,20 +200,20 @@ class TestSemBanco(unittest.TestCase):
         self.assertNotIn("updated_", conn.executados[0][0])
         self.assertFalse(self.repo.registrar_pid(_Conn([("SET process_id", (0, []))]), 7, AGENTE, 1, 1))
         agora = datetime.datetime(2026, 10, 20, 15, 0, 0)
-        conn = _Conn([("UPDATE OWN_X.pfx_agentes", (1, [])), ("SELECT SYSDATE", (1, [(agora,)]))], contagens={8: 0})
+        conn = _Conn([("UPDATE OWN_X.pfx_agents", (1, [])), ("SELECT SYSDATE", (1, [(agora,)]))], contagens={8: 0})
         self.assertEqual(self.repo.heartbeat(conn, AGENTE, "host", 77, [7, 8]), ([8], agora))
         self.assertEqual(conn.commits, 1)
         for sql, _b in conn.executados:
             self.assertNotIn("updated_", sql)
-        self.assertIn("hostname = :hostname AND pid_daemon = :pid AND status = 'ATIVO'",
-                      conn.sql("pfx_agentes")[0])
+        self.assertIn("hostname = :hostname AND daemon_pid = :pid AND status = 'ACTIVE'",
+                      conn.sql("pfx_agents")[0])
 
     def test_heartbeat_sem_tickets_e_registro_perdido(self):
         agora = datetime.datetime(2026, 10, 20, 15, 0, 0)
-        conn = _Conn([("UPDATE OWN_X.pfx_agentes", (1, [])), ("SELECT SYSDATE", (1, [(agora,)]))])
+        conn = _Conn([("UPDATE OWN_X.pfx_agents", (1, [])), ("SELECT SYSDATE", (1, [(agora,)]))])
         self.assertEqual(self.repo.heartbeat(conn, AGENTE, "host", 77, []), ([], agora))
         self.assertEqual(conn.sql("pfx_tickets"), [], "executemany vazio pulado; o do agente nao (R-28)")
-        conn = _Conn([("UPDATE OWN_X.pfx_agentes", (0, []))])
+        conn = _Conn([("UPDATE OWN_X.pfx_agents", (0, []))])
         with self.assertRaises(RegistroPerdido):
             self.repo.heartbeat(conn, AGENTE, "host", 77, [7])
         self.assertEqual((conn.commits, conn.rollbacks), (0, 1))
@@ -228,32 +228,32 @@ class TestSemBanco(unittest.TestCase):
             self.assertEqual(conn.commits, 1)
         sqls = [s for s, _b in conn.executados]
         self.assertIn("process_id IS NULL AND cancel_requested = 'N'", sqls[0])
-        self.assertIn("process_id IS NULL AND cancel_requested = 'S'", sqls[1])
-        self.assertIn("status_motivo = 'CANCEL_USER', return_code = -1", sqls[1])
+        self.assertIn("process_id IS NULL AND cancel_requested = 'Y'", sqls[1])
+        self.assertIn("status_reason = 'CANCEL_USER', return_code = -1", sqls[1])
         for s in sqls:
-            self.assertIn("updated_at = SYSDATE, updated_by = :ator", s)
+            self.assertIn("updated_at = SYSDATE, updated_by = :actor", s)
 
     def test_finalizar(self):
         conn = _Conn([("finished_at = SYSDATE", (1, []))])
         self.assertTrue(self.repo.finalizar(conn, 7, AGENTE, "FAILED", "TIMEOUT", -3))
         sql, binds = conn.executados[0]
-        self.assertIn("WHERE id = :ticket_id AND agente_id = :agente_id AND status = 'RUNNING'", sql)
-        self.assertEqual((binds["status"], binds["motivo"], binds["rc"], binds["ator"]), ("FAILED", "TIMEOUT", -3, ATOR))
+        self.assertIn("WHERE id = :ticket_id AND agent_id = :agent_id AND status = 'RUNNING'", sql)
+        self.assertEqual((binds["status"], binds["reason"], binds["rc"], binds["actor"]), ("FAILED", "TIMEOUT", -3, ATOR))
         self.assertFalse(self.repo.finalizar(_Conn([("finished_at", (0, []))]), 7, AGENTE, "SUCCESS", "EXIT_OK", 0))
         with self.assertRaises(ValueError):
             self.repo.finalizar(conn, 7, AGENTE, "RUNNING", None, None)
 
     def test_varredura_e_running_usam_a_expressao_do_indice(self):
-        conn = _Conn([("SELECT id, cancel_requested", (2, [(7, "N"), (8, "S")]))])
-        self.assertEqual(self.repo.varredura_propria(conn, AGENTE), {7: "N", 8: "S"})
-        self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENTE_CASE + ") = :agente_id", conn.executados[0][0])
+        conn = _Conn([("SELECT id, cancel_requested", (2, [(7, "N"), (8, "Y")]))])
+        self.assertEqual(self.repo.varredura_propria(conn, AGENTE), {7: "N", 8: "Y"})
+        self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENTE_CASE + ") = :agent_id", conn.executados[0][0])
         conn = _Conn([("SELECT id, process_id", (1, [(7, None, None, "N")]))])
         self.assertEqual(self.repo.tickets_running_do_agente(conn, AGENTE),
                          [{"id": 7, "process_id": None, "process_start": None, "cancel_requested": "N"}])
 
     def _dados_agente(self, **mudancas):
-        d = {"codigo": AGENTE, "hostname": "host-a", "pid": 100, "versao": "1.0", "ambientes": "PRD",
-             "plataforma": "LINUX", "interpretadores": "PYTHON3,SH", "config_criticos": "hb=10",
+        d = {"code": AGENTE, "hostname": "host-a", "pid": 100, "version": "1.0", "environments": "PRD",
+             "platform": "LINUX", "interpreters": "PYTHON3,SH", "critical_config": "hb=10",
              "node_offline_timeout_s": 120}
         d.update(mudancas)
         return d
@@ -262,17 +262,17 @@ class TestSemBanco(unittest.TestCase):
         conn = _Conn([("FOR UPDATE WAIT 5", (0, [])), ("MERGE INTO", (1, [])), ("SELECT id FROM", (1, [(42,)]))])
         self.assertEqual(self.repo.registrar_agente(conn, self._dados_agente(), lambda pid: False), 42)
         merge, binds = [x for x in conn.executados if "MERGE INTO" in x[0]][0]
-        self.assertIn("a.updated_at = SYSDATE, a.updated_by = :ator", merge)
+        self.assertIn("a.updated_at = SYSDATE, a.updated_by = :actor", merge)
         self.assertIn("created_at, created_by", merge)
-        self.assertIn("sq_pfx_agentes.NEXTVAL", merge)
-        self.assertEqual(binds["ator"], ATOR)
-        aud = [x for x in conn.executados if "INSERT INTO OWN_X.pfx_auditoria" in x[0]][0]
-        self.assertEqual((aud[1]["acao"], aud[1]["entidade"], aud[1]["entidade_id"], aud[1]["ator"]),
-                         ("AGENTE_INICIO", "tbsss_agentes", 42, ATOR))
+        self.assertIn("sq_pfx_agents.NEXTVAL", merge)
+        self.assertEqual(binds["actor"], ATOR)
+        aud = [x for x in conn.executados if "INSERT INTO OWN_X.pfx_audit" in x[0]][0]
+        self.assertEqual((aud[1]["action"], aud[1]["entity"], aud[1]["entity_id"], aud[1]["actor"]),
+                         ("AGENT_START", "tbsss_agents", 42, ATOR))
         self.assertEqual(conn.commits, 1)
 
     def test_registrar_agente_duplicidade(self):
-        def roteiro(host, pid, status="ATIVO", recente="S"):
+        def roteiro(host, pid, status="ACTIVE", recente="Y"):
             return [("FOR UPDATE WAIT 5", (1, [(42, host, pid, status, recente)])), ("MERGE INTO", (1, [])),
                     ("SELECT id FROM", (1, [(42,)]))]
         with self.assertRaises(AgenteDuplicado):
@@ -280,7 +280,7 @@ class TestSemBanco(unittest.TestCase):
         with self.assertRaises(AgenteDuplicado):
             self.repo.registrar_agente(_Conn(roteiro("host-a", 99)), self._dados_agente(), lambda pid: True)
         # Mesmo host com PID antigo morto, heartbeat antigo ou PARADO: religacao segue.
-        for r in (roteiro("host-a", 99), roteiro("host-b", 99, recente="N"), roteiro("host-b", 99, "PARADO")):
+        for r in (roteiro("host-a", 99), roteiro("host-b", 99, recente="N"), roteiro("host-b", 99, "STOPPED")):
             self.assertEqual(self.repo.registrar_agente(_Conn(r), self._dados_agente(), lambda pid: False), 42)
 
     def test_registrar_agente_corrida_na_inclusao(self):
@@ -294,7 +294,7 @@ class TestSemBanco(unittest.TestCase):
                 def execute(sql, binds=None, **kw):
                     if "MERGE INTO" in sql and estado["n"] == 0:
                         estado["n"] += 1
-                        raise _Erro("ORA-00001: unique constraint (OWN_X.UK_PFX_AGT_CODIGO) violated")
+                        raise _Erro("ORA-00001: unique constraint (OWN_X.UK_PFX_AGT_CODE) violated")
                     return original(sql, binds, **kw)
                 cur.execute = execute
                 return cur
@@ -305,38 +305,38 @@ class TestSemBanco(unittest.TestCase):
         self.assertEqual((conn.rollbacks, conn.commits), (1, 1))
 
     def test_encerrar_agente(self):
-        conn = _Conn([("SET status = 'PARADO'", (1, [])), ("SELECT id FROM", (1, [(42,)]))])
+        conn = _Conn([("SET status = 'STOPPED'", (1, [])), ("SELECT id FROM", (1, [(42,)]))])
         self.assertTrue(self.repo.encerrar_agente(conn, AGENTE, "host-a", 100, "TERMINATE"))
-        self.assertIn("updated_at = SYSDATE, updated_by = :ator", conn.executados[0][0])
-        self.assertIn("AGENTE_FIM", [b.get("acao") for _s, b in conn.executados if isinstance(b, dict)])
+        self.assertIn("updated_at = SYSDATE, updated_by = :actor", conn.executados[0][0])
+        self.assertIn("AGENT_STOP", [b.get("action") for _s, b in conn.executados if isinstance(b, dict)])
         self.assertFalse(self.repo.encerrar_agente(_Conn([("SET status", (0, []))]), AGENTE, "h", 1, "TERMINATE"))
 
     def test_conferir_config_e_ambientes_ativos(self):
-        conn = _Conn([("config_criticos <> :config", (1, [("srv-02", "hb=20")]))])
+        conn = _Conn([("critical_config <> :config", (1, [("srv-02", "hb=20")]))])
         self.assertEqual(self.repo.conferir_config(conn, AGENTE, "hb=10", 120), [("srv-02", "hb=20")])
-        conn = _Conn([("SELECT nome, ativo", (2, [("PRD", "S"), ("HML", "N")]))])
+        conn = _Conn([("SELECT name, active", (2, [("PRD", "Y"), ("HML", "N")]))])
         self.assertEqual(self.repo.ambientes_ativos(conn, ["PRD", "HML", "DEV"]), (["PRD"], ["DEV"]))
         self.assertEqual(conn.executados[0][1], {"amb0": "DEV", "amb1": "HML", "amb2": "PRD"})
 
     def test_contexto_execucao_monta_o_ctx_rbac(self):
         conn = _Conn([
-            ("FROM OWN_X.pfx_scripts WHERE id", (1, [(3, "carga", "SH", "/opt/x.sh", "S", 60)])),
-            ("FROM OWN_X.pfx_ambientes WHERE nome", (1, [(5, "PRD", "Producao", "db:1/x", "S")])),
-            ("SELECT ambiente_id FROM", (1, [(5,)])),
-            ("JOIN OWN_X.pfx_perfis p", (1, [(9, "ana", "Ana", 2, "S", 0, "Op", "N", "S", 4)])),
-            ("SELECT f.codigo", (1, [("EXEC_SCRIPT",)])),
-            ("SELECT a.nome FROM", (1, [("PRD",)])),
+            ("FROM OWN_X.pfx_scripts WHERE id", (1, [(3, "carga", "SH", "/opt/x.sh", "Y", 60)])),
+            ("FROM OWN_X.pfx_environments WHERE name", (1, [(5, "PRD", "Producao", "db:1/x", "Y")])),
+            ("SELECT environment_id FROM", (1, [(5,)])),
+            ("JOIN OWN_X.pfx_profiles p", (1, [(9, "ana", "Ana", 2, "Y", 0, "Op", "N", "Y", 4)])),
+            ("SELECT f.code", (1, [("EXEC_SCRIPT",)])),
+            ("SELECT a.name FROM", (1, [("PRD",)])),
             ("SELECT script_id FROM", (1, [(3,)])),
-            ("SELECT nome, tipo_recorrencia", (1, [("Noturna", "DIARIA")])),
+            ("SELECT name, recurrence_type", (1, [("Noturna", "DAILY")])),
         ])
-        ctx = self.repo.contexto_execucao(conn, {"script_id": 3, "ambiente": "PRD", "solicitante": "ana",
-                                                 "agendamento_id": 12})
+        ctx = self.repo.contexto_execucao(conn, {"script_id": 3, "environment": "PRD", "requested_by": "ana",
+                                                 "schedule_id": 12})
         self.assertEqual(ctx["script"]["path_file"], "/opt/x.sh")
-        self.assertEqual(ctx["ambiente"]["descricao"], "Producao")
+        self.assertEqual(ctx["environment"]["description"], "Producao")
         self.assertEqual(ctx["homologacoes"], frozenset({5}))
-        self.assertEqual(ctx["agendamento"], {"nome": "Noturna", "tipo_recorrencia": "DIARIA"})
+        self.assertEqual(ctx["agendamento"], {"name": "Noturna", "recurrence_type": "DAILY"})
         import rbac
-        self.assertEqual(rbac.pode_executar(ctx["ctx"], ctx["script"], ctx["ambiente"], ctx["homologacoes"]),
+        self.assertEqual(rbac.pode_executar(ctx["ctx"], ctx["script"], ctx["environment"], ctx["homologacoes"]),
                          (True, rbac.Motivo.OK))
 
     def test_sql_sem_prefixo_fixo(self):
@@ -376,7 +376,7 @@ class TestSchedulerFilaOracle(unittest.TestCase):
         self.catalogo = self.obter_repo("catalogo")
         self.repo = RepoSchedulerFila(self.catalogo._owner, self.catalogo._prefixo)
         self.agente = "tst-f83-%s" % self._massa.suf
-        self.amb = self.c["amb1"]["nome"]
+        self.amb = self.c["amb1"]["name"]
         self.conn = self.catalogo._obter_conexao()
         self.addCleanup(self.conn.close)
 
@@ -388,22 +388,22 @@ class TestSchedulerFilaOracle(unittest.TestCase):
         try:
             cur = conn.cursor()
             agt, aud = self.catalogo.qualificar_tabela("agentes"), self.catalogo.qualificar_tabela("auditoria")
-            cur.execute("SELECT id FROM " + agt + " WHERE codigo LIKE 'tst-f83-%'")
+            cur.execute("SELECT id FROM " + agt + " WHERE code LIKE 'tst-f83-%'")
             for (aid,) in cur.fetchall():
-                cur.execute("DELETE FROM " + aud + " WHERE entidade = 'tbsss_agentes' AND entidade_id = :id", id=aid)
+                cur.execute("DELETE FROM " + aud + " WHERE entity = 'tbsss_agents' AND entity_id = :id", id=aid)
                 cur.execute("DELETE FROM " + agt + " WHERE id = :id", id=aid)
             conn.commit()
         finally:
             conn.close()
 
     def _ticket(self):
-        return self._massa.ticket(ator="teste", script_id=self.c["scr"]["id"], ambiente=self.amb,
-                                  solicitante=self.c["login"])
+        return self._massa.ticket(actor="teste", script_id=self.c["scr"]["id"], environment=self.amb,
+                                  requested_by=self.c["login"])
 
     def _registrar(self, pid=None):
         return self.repo.registrar_agente(self.conn, {
-            "codigo": self.agente, "hostname": "host-teste", "pid": pid or os.getpid(), "versao": "teste",
-            "ambientes": self.amb, "plataforma": "LINUX", "interpretadores": "SH", "config_criticos": "hb=10",
+            "code": self.agente, "hostname": "host-teste", "pid": pid or os.getpid(), "version": "teste",
+            "environments": self.amb, "platform": "LINUX", "interpreters": "SH", "critical_config": "hb=10",
             "node_offline_timeout_s": 120}, lambda p: False)
 
     def test_ordem_da_fila_igual_a_ordenacao_completa(self):
@@ -411,8 +411,8 @@ class TestSchedulerFilaOracle(unittest.TestCase):
         no teto nem os de outro interpretador; inicio = GREATEST(scheduled_at, created_at) (misfire)."""
         cat = self.catalogo
         scr_sh = self.c["scr"]
-        scr_teto = self._massa.script("teto", max_qtd_parallel_env=1)
-        scr_py = self._massa.script("py", interpretador="PYTHON3", path_file="/opt/tst/%s_py.py" % self._massa.suf)
+        scr_teto = self._massa.script("teto", max_parallel_env=1)
+        scr_py = self._massa.script("py", interpreter="PYTHON3", path_file="/opt/tst/%s_py.py" % self._massa.suf)
         cur = self.conn.cursor()
         tck = cat.qualificar_tabela("tickets")
         casos = []
@@ -423,15 +423,15 @@ class TestSchedulerFilaOracle(unittest.TestCase):
                 (scr_sh["id"], 2, 30, 31), (scr_sh["id"], 4, 30, 31), (scr_sh["id"], 1, 240, 241),
                 (scr_sh["id"], 3, 61, 62), (scr_sh["id"], 2, 120, 121), (scr_teto["id"], 1, 900, 901),
                 (scr_py["id"], 1, 900, 901), (scr_sh["id"], 3, -60, 1))):    # o ultimo e do futuro
-            tid = self._massa.ticket(ator="teste", script_id=sid, ambiente=self.amb, solicitante=self.c["login"],
-                                     prioridade=prio)
+            tid = self._massa.ticket(actor="teste", script_id=sid, environment=self.amb, requested_by=self.c["login"],
+                                     priority=prio)
             cur.execute("UPDATE " + tck + " SET scheduled_at = SYSDATE - :s / 1440, created_at = SYSDATE - :c / 1440"
                         " WHERE id = :id", s=sched, c=crt, id=tid)
             casos.append((tid, sid, prio, sched, crt))
         # O script do teto ja tem um RUNNING no ambiente.
-        rodando = self._massa.ticket(ator="teste", script_id=scr_teto["id"], ambiente=self.amb,
-                                     solicitante=self.c["login"])
-        cur.execute("UPDATE " + tck + " SET status = 'RUNNING', agente_id = 'tst-outro' WHERE id = :id", id=rodando)
+        rodando = self._massa.ticket(actor="teste", script_id=scr_teto["id"], environment=self.amb,
+                                     requested_by=self.c["login"])
+        cur.execute("UPDATE " + tck + " SET status = 'RUNNING', agent_id = 'tst-outro' WHERE id = :id", id=rodando)
         self.conn.commit()
         env = 60
 
@@ -499,8 +499,8 @@ class TestSchedulerFilaOracle(unittest.TestCase):
         self._registrar()
         with self.assertRaises(AgenteDuplicado):
             self.repo.registrar_agente(self.conn, {
-                "codigo": self.agente, "hostname": "outro-host", "pid": 1, "versao": "t", "ambientes": self.amb,
-                "plataforma": "LINUX", "interpretadores": "SH", "config_criticos": "hb=10",
+                "code": self.agente, "hostname": "outro-host", "pid": 1, "version": "t", "environments": self.amb,
+                "platform": "LINUX", "interpreters": "SH", "critical_config": "hb=10",
                 "node_offline_timeout_s": 120}, lambda p: False)
         tid = self._ticket()
         perdidos, _agora = self.repo.heartbeat(self.conn, self.agente, "host-teste", os.getpid(), [tid])

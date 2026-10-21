@@ -23,6 +23,7 @@ from unittest import mock
 import executor
 import plataforma
 import scheduler_loop as sl
+import sql_ident
 import sss_config
 from repo_oracle.scheduler_fila import AgenteDuplicado
 from _saida_memoria import RepoSaidaMemoria
@@ -47,7 +48,7 @@ class _Cursor(object):
     def execute(self, sql, *a, **k):
         if "SYSDATE" in sql:
             self._linha = (datetime.datetime.now().replace(microsecond=0),)
-        elif "versao_esquema" in sql:
+        elif "schema_version" in sql:
             self._linha = (self.conn.versao,)
 
     def fetchone(self):
@@ -59,7 +60,7 @@ class _Cursor(object):
 
 class _Conn(object):
     def __init__(self):
-        self.versao = 1
+        self.versao = sql_ident.VERSAO_ESQUEMA
         self.commits = 0
         self.rollbacks = 0
 
@@ -188,7 +189,7 @@ class _Base(unittest.TestCase):
 
     def agente(self, cfg=None, plat=None, **kw):
         kw.setdefault("repo_saida", self.repo_saida)
-        ag = sl.Agente(cfg=cfg or self.cfg(), segredos=object(), plat=plat, conexao=kw.pop("conexao", self.conexao),
+        ag = sl.Agente(cfg=cfg or self.cfg(), segredos=object(), plat=plat, conexao=kw.pop("connection", self.conexao),
                        repo=self.repo, repo_log=self.repo_log, hostname="host-t", pid=os.getpid(), **kw)
         self.agentes.append(ag)
         return ag
@@ -225,9 +226,9 @@ class TestPassos(_Base):
         self.assertIn("fence_timeout_s=40 node_offline_timeout_s=120", texto)
         self.assertNotIn("SEM_EXIGENCIA_HASH", texto, "CR-011: sem hash")
         r = self.repo.registro
-        self.assertEqual((r["codigo"], r["hostname"], r["versao"], r["plataforma"], r["interpretadores"]),
+        self.assertEqual((r["code"], r["hostname"], r["version"], r["platform"], r["interpreters"]),
                          ("srv-t", "host-t", sss_config.VERSAO_SSS, plataforma.NOME, "SH"))
-        self.assertEqual(r["config_criticos"], "hb=10;fence=40;offline=120;call=30;kill=1;misfire=RUN_ONCE;tol=300;"
+        self.assertEqual(r["critical_config"], "hb=10;fence=40;offline=120;call=30;kill=1;misfire=RUN_ONCE;tol=300;"
                                                "horizonte=366;envelhecimento=30")
         self.assertTrue(os.path.exists(os.path.join(self.work, "sss-srv-t.lock")))
 
@@ -309,11 +310,11 @@ class TestPassos(_Base):
         self.falha(sl.SAIDA_INSTANCIA)
 
     def test_banco(self):
-        self.falha(sl.SAIDA_BANCO, self.agente(conexao=_Conexao(ok=False)))
+        self.falha(sl.SAIDA_BANCO, self.agente(connection=_Conexao(ok=False)))
         conexao = _Conexao()
-        conexao.conn.versao = 2
+        conexao.conn.versao = sql_ident.VERSAO_ESQUEMA + 1
         with mock.patch.object(sl.db_conn, "_registrar_critico"):
-            self.falha(sl.SAIDA_BANCO, self.agente(conexao=conexao))
+            self.falha(sl.SAIDA_BANCO, self.agente(connection=conexao))
 
     def test_registro(self):
         self.repo.duplicado = True
@@ -348,12 +349,12 @@ class TestStartupCheck(_Base):
 
     def test_saida_em_gravacao_vira_falhou(self):
         # CR-012 (README §8.13): queda durante a gravacao do zip; a pasta fica no disco.
-        self.repo_saida.linhas = {5: {"situacao": "GRAVANDO", "agente_id": "srv-t", "conteudo": b"PK"},
-                                  6: {"situacao": "GRAVANDO", "agente_id": "outro", "conteudo": b"PK"}}
+        self.repo_saida.linhas = {5: {"state": "WRITING", "agent_id": "srv-t", "content": b"PK"},
+                                  6: {"state": "WRITING", "agent_id": "outro", "content": b"PK"}}
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             self.agente().inicializar()
-        self.assertEqual(self.repo_saida.linhas[5]["situacao"], "FALHOU")
-        self.assertEqual(self.repo_saida.linhas[6]["situacao"], "GRAVANDO", "so as deste agente")
+        self.assertEqual(self.repo_saida.linhas[5]["state"], "FAILED")
+        self.assertEqual(self.repo_saida.linhas[6]["state"], "WRITING", "so as deste agente")
         self.assertTrue(any("1 saida(s) em gravacao" in x for x in logs.output))
 
 
@@ -413,7 +414,7 @@ class TestStartupCheck(_Base):
     def test_resultado_local_prevalece(self):
         pasta = self._pasta(8, sss_proc={"ticket_id": 8, "pid": 2 ** 31 - 2, "pgid": 2 ** 31 - 2,
                                          "usuario_execucao": None, "process_start": 1},
-                            sss_result={"ticket_id": 8, "status": "SUCCESS", "status_motivo": "EXIT_OK",
+                            sss_result={"ticket_id": 8, "status": "SUCCESS", "status_reason": "EXIT_OK",
                                         "return_code": 0})
         self.repo.running = [{"id": 8, "process_id": 1, "process_start": 1, "cancel_requested": "N"}]
         self._subir()
@@ -496,12 +497,12 @@ class TestSubidaOracle(_Base):
         conn = db_conn.conectar(self.cfg_real, seg, "agente")
         try:
             o, p = self.cfg_real.oracle.owner.strip(), self.cfg_real.oracle.table_prefix.strip()
-            agt = sql_ident.qualificar(o, p + "agentes", prefixo=p)
-            aud = sql_ident.qualificar(o, p + "auditoria", prefixo=p)
+            agt = sql_ident.tabela(o, p, "agentes")
+            aud = sql_ident.tabela(o, p, "auditoria")
             cur = conn.cursor()
-            cur.execute("SELECT id FROM " + agt + " WHERE codigo = :c", c=self.codigo)
+            cur.execute("SELECT id FROM " + agt + " WHERE code = :c", c=self.codigo)
             for (aid,) in cur.fetchall():
-                cur.execute("DELETE FROM " + aud + " WHERE entidade = 'tbsss_agentes' AND entidade_id = :id", id=aid)
+                cur.execute("DELETE FROM " + aud + " WHERE entity = 'tbsss_agents' AND entity_id = :id", id=aid)
                 cur.execute("DELETE FROM " + agt + " WHERE id = :id", id=aid)
             conn.commit()
         finally:

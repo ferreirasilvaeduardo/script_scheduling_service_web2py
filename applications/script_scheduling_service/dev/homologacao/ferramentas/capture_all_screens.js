@@ -286,8 +286,8 @@ async function sleep(ms) {
         await snap(29, false);
 
         await page.goto(`${BASE_URL}/admin_ambientes/form`, { waitUntil: 'networkidle0' });
-        await page.type('#campo-nome', '  QA_01  ');
-        await page.type('#campo-descricao', 'Ambiente de teste');
+        await page.type('#campo-name', '  QA_01  ');
+        await page.type('#campo-description', 'Ambiente de teste');
         await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.click('button[type="submit"]')]);
         await snap(30, false);
 
@@ -481,7 +481,7 @@ async function sleep(ms) {
 
         await page.goto(`${BASE_URL}/admin_ambientes/form/1`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
-            const desc = document.querySelector('#campo-descricao');
+            const desc = document.querySelector('#campo-description');
             if (desc) desc.value = desc.value + ' (atualizado)';
         });
         const formSalvarAmb = await page.$('form[action*="/admin_ambientes/salvar"]');

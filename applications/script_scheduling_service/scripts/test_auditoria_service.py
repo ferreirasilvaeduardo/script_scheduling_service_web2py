@@ -70,20 +70,20 @@ class _Base(unittest.TestCase):
         self.ctx = {}
         for uid, login, perfil_id in ((1, "admin", 1), (2, "op.prod", 2), (4, "consulta", 4)):
             sessao = {"usuario_id": uid, "login": login, "perfil_id": perfil_id,
-                      "perm_versao": self.rbac.perfis_obter(perfil_id)["perm_versao"], "sessao_epoch": 0}
+                      "perm_versao": self.rbac.perfis_obter(perfil_id)["perm_version"], "sessao_epoch": 0}
             self.ctx[login] = auth.revalidar(sessao)
         self.svc = ServicoAuditoria(self.auditoria, lambda: self.agora, self.log)
         self.svc_agentes = ServicoAgentes(self.agentes, self.catalogo, lambda: self.agora, LIMIARES, self.log, CONFIG_CRITICOS)
 
-    def _inserir(self, created_at, ator="admin", acao="CAD_ALTERAR", entidade="tbsss_scripts",
-                 entidade_id=1, detalhe="x", ip="127.0.0.1"):
-        aid = self.store.proximo_id("tbsss_auditoria")
-        self.store.auditoria[aid] = {"id": aid, "ator": ator, "ip_origem": ip, "acao": acao, "entidade": entidade,
-                                     "entidade_id": entidade_id, "detalhe": detalhe, "created_at": created_at}
+    def _inserir(self, created_at, actor="admin", acao="UPDATE", entidade="tbsss_scripts",
+                 entidade_id=1, detail="x", ip="127.0.0.1"):
+        aid = self.store.proximo_id("tbsss_audit")
+        self.store.auditoria[aid] = {"id": aid, "actor": actor, "source_ip": ip, "action": acao, "entity": entidade,
+                                     "entity_id": entidade_id, "detail": detail, "created_at": created_at}
         return aid
 
     def _exportacoes(self):
-        return self.auditoria.listar(filtros={"acao": "AUD_EXPORTAR"}, pagina=1, tamanho=100)["itens"]
+        return self.auditoria.listar(filtros={"action": "AUDIT_EXPORT"}, pagina=1, tamanho=100)["itens"]
 
 
 class TestFiltros(unittest.TestCase):
@@ -103,13 +103,13 @@ class TestFiltros(unittest.TestCase):
 
     def test_periodo_longo_exige_filtro_seletivo(self):
         longo = {"de": "2025-10-15", "ate": "2026-10-15"}  # 366 dias
-        for extra in ({"ator": "admin"}, {"entidade": "tbsss_usuarios", "entidade_id": "6"}):
+        for extra in ({"actor": "admin"}, {"entity": "tbsss_users", "entity_id": "6"}):
             with self.subTest(extra=extra):
                 _, erros = auditoria_service.normalizar_filtros(dict(longo, **extra), HOJE)
                 self.assertEqual(erros, {})
-        _, erros = auditoria_service.normalizar_filtros(dict(longo, entidade="tbsss_usuarios"), HOJE)
+        _, erros = auditoria_service.normalizar_filtros(dict(longo, entity="tbsss_users"), HOJE)
         self.assertEqual(erros, {"de": auditoria_service.MSG_PERIODO})
-        _, erros = auditoria_service.normalizar_filtros({"de": "2025-10-14", "ate": "2026-10-15", "ator": "admin"},
+        _, erros = auditoria_service.normalizar_filtros({"de": "2025-10-14", "ate": "2026-10-15", "actor": "admin"},
                                                         HOJE)
         self.assertEqual(erros, {"de": auditoria_service.MSG_PERIODO_SELETIVO})
 
@@ -121,25 +121,25 @@ class TestFiltros(unittest.TestCase):
         self.assertEqual(filtros["ate"], "2026-10-01")
 
     def test_allowlist_dos_demais_filtros(self):
-        entrada = {"ator": "SYSTEM:agt-host01", "acao": "LOGIN_OK", "entidade": "tbsss_agentes",
-                   "entidade_id": "12", "ip": "10.0.", "outro": "x"}
+        entrada = {"actor": "SYSTEM:agt-host01", "action": "LOGIN_OK", "entity": "tbsss_agents",
+                   "entity_id": "12", "ip": "10.0.", "outro": "x"}
         filtros, erros = auditoria_service.normalizar_filtros(entrada, HOJE)
         self.assertEqual(erros, {})
-        self.assertEqual(list(filtros), ["de", "ate", "ator", "acao", "entidade", "entidade_id", "ip"])
-        self.assertEqual(filtros["entidade_id"], 12)
-        invalidos = {"ator": "a b", "acao": "DROP", "entidade": "dual", "entidade_id": "-1", "ip": "1.1;x"}
+        self.assertEqual(list(filtros), ["de", "ate", "actor", "action", "entity", "entity_id", "ip"])
+        self.assertEqual(filtros["entity_id"], 12)
+        invalidos = {"actor": "a b", "action": "DROP", "entity": "dual", "entity_id": "-1", "ip": "1.1;x"}
         _, erros = auditoria_service.normalizar_filtros(invalidos, HOJE)
-        self.assertEqual(sorted(erros), ["acao", "ator", "entidade", "entidade_id", "ip"])
+        self.assertEqual(sorted(erros), ["action", "actor", "entity", "entity_id", "ip"])
 
     def test_filtros_repo_periodo_inclusivo(self):
         filtros, _ = auditoria_service.normalizar_filtros({"de": "2026-10-01", "ate": "2026-10-02", "ip": "127"}, HOJE)
         repo = auditoria_service.filtros_repo(filtros)
-        self.assertEqual(repo["data_inicio"], datetime.datetime(2026, 10, 1))
-        self.assertEqual(repo["data_fim"], datetime.datetime(2026, 10, 2, 23, 59, 59))
-        self.assertEqual(repo["ip_origem"], "127")
+        self.assertEqual(repo["start_date"], datetime.datetime(2026, 10, 1))
+        self.assertEqual(repo["end_date"], datetime.datetime(2026, 10, 2, 23, 59, 59))
+        self.assertEqual(repo["source_ip"], "127")
 
     def test_catalogo_de_acoes(self):
-        for acao in ("LOGIN_OK", "PERM_ALTERAR", "AGENTE_FIM", "PURGE", "AUD_EXPORTAR"):
+        for acao in ("LOGIN_OK", "PERM_UPDATE", "AGENT_STOP", "PURGE", "AUDIT_EXPORT"):
             self.assertIn(acao, auditoria_service.ACOES)
         self.assertTrue(all(len(a) <= 30 for a in auditoria_service.ACOES))
 
@@ -176,10 +176,10 @@ class TestListar(_Base):
 
     def test_filtros(self):
         casos = (
-            ({"acao": "LOGIN_OK"}, 4),
-            ({"ator": "op.prod"}, 3),
-            ({"ator": "system:agt"}, 2),
-            ({"entidade": "tbsss_usuarios", "entidade_id": "6"}, 3),
+            ({"action": "LOGIN_OK"}, 4),
+            ({"actor": "op.prod"}, 3),
+            ({"actor": "system:agt"}, 2),
+            ({"entity": "tbsss_users", "entity_id": "6"}, 3),
             ({"ip": "127.0"}, 30),
             ({"ip": "10.9"}, 0),
         )
@@ -195,9 +195,9 @@ class TestListar(_Base):
 
     def test_filtro_invalido_nao_consulta(self):
         with mock.patch.object(self.auditoria, "listar") as listar:
-            res = self.svc.listar(self.ctx["admin"], {"acao": "XPTO"}, 1, 20)
+            res = self.svc.listar(self.ctx["admin"], {"action": "XPTO"}, 1, 20)
         listar.assert_not_called()
-        self.assertEqual((res["total"], sorted(res["erros"])), (0, ["acao"]))
+        self.assertEqual((res["total"], sorted(res["erros"])), (0, ["action"]))
 
     def test_rbac(self):
         for login in ("consulta", "op.prod"):
@@ -208,13 +208,13 @@ class TestListar(_Base):
     def test_detalhe_truncado_e_mascarado(self):
         masking.registrar_segredo(SEGREDO)
         longo = u"campo: " + u"á" * 120
-        aid_longo = self._inserir(self.base, detalhe=longo)
-        aid_seg = self._inserir(self.base, detalhe=u"valor vazado %s" % SEGREDO)
+        aid_longo = self._inserir(self.base, detail=longo)
+        aid_seg = self._inserir(self.base, detail=u"valor vazado %s" % SEGREDO)
         itens = dict((i["id"], i) for i in self.svc.listar(self.ctx["admin"], {}, 1, 100)["itens"])
         self.assertTrue(itens[aid_longo]["truncado"])
         self.assertEqual(len(itens[aid_longo]["detalhe_curto"]), auditoria_service.DETALHE_CURTO)
-        self.assertEqual(itens[aid_longo]["detalhe"], longo)
-        self.assertNotIn(SEGREDO, itens[aid_seg]["detalhe"])
+        self.assertEqual(itens[aid_longo]["detail"], longo)
+        self.assertNotIn(SEGREDO, itens[aid_seg]["detail"])
 
     def test_seed_sem_segredos(self):
         res = self.svc.listar(self.ctx["admin"], {}, 1, 100)
@@ -228,18 +228,18 @@ class TestListar(_Base):
         admin, prod = self.ctx["admin"], self.ctx["op.prod"]
         link = auditoria_service.link_entidade
         self.assertEqual(link(admin, "tbsss_tickets", 11, True), ("tickets", "detalhe", [11]))
-        self.assertEqual(link(admin, "tbsss_usuarios", 6, True), ("admin_usuarios", "form", [6]))
-        self.assertIsNone(link(prod, "tbsss_usuarios", 6, True))
+        self.assertEqual(link(admin, "tbsss_users", 6, True), ("admin_usuarios", "form", [6]))
+        self.assertIsNone(link(prod, "tbsss_users", 6, True))
         self.assertIsNone(link(prod, "tbsss_tickets", 11, False))
-        self.assertIsNone(link(admin, "tbsss_agentes", 1, True))
+        self.assertIsNone(link(admin, "tbsss_agents", 1, True))
         self.assertIsNone(link(admin, "tbsss_tickets", None, True))
 
 
 class TestExportar(_Base):
 
     def test_csv_injection_neutralizado(self):
-        aid = self._inserir(self.base, detalhe="=CMD()", ator="admin")
-        self._inserir(self.base, detalhe="-1+2", ip="@evil")
+        aid = self._inserir(self.base, detail="=CMD()", actor="admin")
+        self._inserir(self.base, detail="-1+2", ip="@evil")
         _, linhas, blocos = self.svc.exportar_csv(self.ctx["admin"], IP, {})
         corpo, tabela = _ler_csv(blocos)
         self.assertTrue(corpo.startswith(b"\xef\xbb\xbf"))
@@ -252,20 +252,20 @@ class TestExportar(_Base):
         self.assertEqual(len(tabela) - 1, linhas)
 
     def test_respeita_filtros(self):
-        _, linhas, blocos = self.svc.exportar_csv(self.ctx["admin"], IP, {"acao": "LOGIN_OK"})
+        _, linhas, blocos = self.svc.exportar_csv(self.ctx["admin"], IP, {"action": "LOGIN_OK"})
         _, tabela = _ler_csv(blocos)
         self.assertEqual(linhas, 4)
         self.assertEqual(set(r[4] for r in tabela[1:]), {"LOGIN_OK"})
 
     def test_exportacao_auditada_e_fora_do_proprio_arquivo(self):
-        nome, linhas, blocos = self.svc.exportar_csv(self.ctx["admin"], IP, {"ator": "admin"})
+        nome, linhas, blocos = self.svc.exportar_csv(self.ctx["admin"], IP, {"actor": "admin"})
         regs = self._exportacoes()
         self.assertEqual(len(regs), 1)
         reg = regs[0]
-        self.assertEqual((reg["ator"], reg["ip_origem"], reg["entidade"], reg["entidade_id"]),
-                         ("admin", IP, "tbsss_auditoria", None))
-        self.assertIn("ator=admin", reg["detalhe"])
-        self.assertIn("linhas: %d" % linhas, reg["detalhe"])
+        self.assertEqual((reg["actor"], reg["source_ip"], reg["entity"], reg["entity_id"]),
+                         ("admin", IP, "tbsss_audit", None))
+        self.assertIn("actor=admin", reg["detail"])
+        self.assertIn("linhas: %d" % linhas, reg["detail"])
         self.assertTrue(nome.startswith("auditoria_") and nome.endswith(".csv"))
         _, tabela = _ler_csv(blocos)
         self.assertNotIn(str(reg["id"]), [r[0] for r in tabela[1:]])
@@ -273,11 +273,11 @@ class TestExportar(_Base):
 
     def test_quantidade_registrada_e_a_do_recorte_exportado(self):
         # CR-003 P9 (README §4.4): linhas gravadas depois da reserva do id nao entram nem na contagem nem no arquivo.
-        _nome, linhas, blocos = self.svc.exportar_csv(self.ctx["admin"], IP, {"ator": "admin"})
-        self.auditoria.registrar("admin", IP, "CAD_ALTERAR", "tbsss_ambientes", 1, "depois da exportacao")
+        _nome, linhas, blocos = self.svc.exportar_csv(self.ctx["admin"], IP, {"actor": "admin"})
+        self.auditoria.registrar("admin", IP, "UPDATE", "tbsss_environments", 1, "depois da exportacao")
         _, tabela = _ler_csv(blocos)
         self.assertEqual(len(tabela) - 1, linhas)
-        self.assertIn("linhas: %d" % linhas, self._exportacoes()[0]["detalhe"])
+        self.assertIn("linhas: %d" % linhas, self._exportacoes()[0]["detail"])
 
     def test_limite_de_linhas(self):
         for _ in range(auditoria_service.LIMITE_EXPORTACAO + 20):
@@ -289,7 +289,7 @@ class TestExportar(_Base):
         _, tabela = _ler_csv(blocos)
         self.assertEqual(linhas, auditoria_service.LIMITE_EXPORTACAO)
         self.assertEqual(len(tabela) - 1, auditoria_service.LIMITE_EXPORTACAO)
-        self.assertIn("limite %d" % auditoria_service.LIMITE_EXPORTACAO, self._exportacoes()[0]["detalhe"])
+        self.assertIn("limite %d" % auditoria_service.LIMITE_EXPORTACAO, self._exportacoes()[0]["detail"])
 
     def test_streaming_em_blocos(self):
         for _ in range(1200):
@@ -310,7 +310,7 @@ class TestSaudeAgente(unittest.TestCase):
 
     AGORA = datetime.datetime(2026, 10, 15, 12, 0, 0)
 
-    def _saude(self, idade_s, status="ATIVO"):
+    def _saude(self, idade_s, status="ACTIVE"):
         hb = None if idade_s is None else self.AGORA - datetime.timedelta(seconds=idade_s)
         return agentes_service.saude({"status": status, "heartbeat_at": hb}, self.AGORA, LIMIARES)
 
@@ -322,13 +322,13 @@ class TestSaudeAgente(unittest.TestCase):
                 self.assertEqual(self._saude(idade), esperado)
 
     def test_parado_ou_sem_heartbeat_offline(self):
-        self.assertEqual(self._saude(0, "PARADO"), OFFLINE)
+        self.assertEqual(self._saude(0, "STOPPED"), OFFLINE)
         self.assertEqual(self._saude(None), OFFLINE)
 
     def test_info_e_legenda(self):
-        self.assertEqual([i["codigo"] for i in agentes_service.legenda()], [OK, ATRASADO, EM_RISCO, OFFLINE])
+        self.assertEqual([i["code"] for i in agentes_service.legenda()], [OK, ATRASADO, EM_RISCO, OFFLINE])
         for info in agentes_service.legenda():
-            self.assertTrue(info["rotulo"] and info["classe"] and info["icone"] and info["descricao"])
+            self.assertTrue(info["rotulo"] and info["classe"] and info["icone"] and info["description"])
 
     def test_formatar_idade(self):
         self.assertEqual(agentes_service.formatar_idade(None), u"sem heartbeat")
@@ -343,7 +343,7 @@ class TestPainelAgentes(_Base):
 
     def _saudes(self, agora=None):
         painel = self.svc_agentes.painel(self.ctx["admin"], agora)
-        return dict((a["codigo"], a["saude"]["codigo"]) for a in painel["agentes"])
+        return dict((a["code"], a["saude"]["code"]) for a in painel["agentes"])
 
     def test_seed_em_estados_diferentes_mudando_com_o_relogio(self):
         self.assertEqual(self._saudes(), {"agt-host01": OK, "agt-host02": ATRASADO})
@@ -356,15 +356,15 @@ class TestPainelAgentes(_Base):
         painel = self.svc_agentes.painel(self.ctx["admin"])
         self.assertEqual(painel["agora"], self.base)
         ag = painel["agentes"][0]
-        for campo in ("codigo", "hostname", "status", "versao", "ambientes", "iniciado_em", "heartbeat_at",
+        for campo in ("code", "hostname", "status", "version", "environments", "started_at", "heartbeat_at",
                       "saude", "running", "ha"):
             self.assertIn(campo, ag)
         for ag in painel["agentes"]:
-            esperado = [t["id"] for t in self.agentes.tickets_running(ag["codigo"])]
+            esperado = [t["id"] for t in self.agentes.tickets_running(ag["code"])]
             self.assertEqual([t["id"] for t in ag["tickets"]], esperado)
             self.assertEqual(ag["running"], len(esperado))
         self.assertEqual(sum(painel["resumo"].values()), 2)
-        segundo = [a for a in painel["agentes"] if a["codigo"] == "agt-host02"][0]
+        segundo = [a for a in painel["agentes"] if a["code"] == "agt-host02"][0]
         self.assertEqual((segundo["idade_s"], segundo["ha"]), (30, u"há 30 s"))
 
     def _fila_diagnostico(self):
@@ -373,30 +373,30 @@ class TestPainelAgentes(_Base):
         for tid, segundos, status in ((1, -300, "PENDING"), (2, 0, "PENDING"),
                                       (3, 1, "PENDING"), (4, -600, "SUCCESS")):
             # Script 3 (cleanup_tmp) e BASH no cadastro; o snapshot diz outra coisa e e ignorado (CR-008, R-15).
-            self.store.tickets[tid] = {"id": tid, "status": status, "ambiente": "PRODUCAO", "script_id": 3,
+            self.store.tickets[tid] = {"id": tid, "status": status, "environment": "PRODUCAO", "script_id": 3,
                                       "scheduled_at": self.agora + datetime.timedelta(seconds=segundos),
-                                      "parametros_enviados": json.dumps({"interpretador": "SH"}),
+                                      "submitted_params": json.dumps({"interpreter": "SH"}),
                                       "log_output": object()}
 
     def test_fila_exige_um_agente_para_o_par_e_ignora_futuro(self):
         self._fila_diagnostico()
-        self.store.agentes[1].update(ambientes="PRODUCAO", interpretadores="PYTHON3")
-        self.store.agentes[2].update(ambientes="HOMOLOGACAO", interpretadores="BASH")
+        self.store.agentes[1].update(environments="PRODUCAO", interpreters="PYTHON3")
+        self.store.agentes[2].update(environments="HOMOLOGACAO", interpreters="BASH")
         resultado = self.agentes.fila_sem_atendente(self.agora, LIMIARES)
-        self.assertEqual(resultado, [{"ambiente": "PRODUCAO", "interpretador": "BASH", "quantidade": 2,
+        self.assertEqual(resultado, [{"environment": "PRODUCAO", "interpreter": "BASH", "quantidade": 2,
                                      "mais_antigo": self.agora - datetime.timedelta(seconds=300)}])
-        self.store.agentes[2]["ambientes"] = "PRODUCAO"
+        self.store.agentes[2]["environments"] = "PRODUCAO"
         self.assertEqual(self.agentes.fila_sem_atendente(self.agora, LIMIARES), [])
 
     def test_fila_limiares_e_agente_parado(self):
         self._fila_diagnostico()
-        self.store.agentes[2]["status"] = "PARADO"
-        for idade, status, quantidade in ((19, "ATIVO", 0), (20, "ATIVO", 0), (90, "ATIVO", 0),
-                                          (91, "ATIVO", 1), (181, "ATIVO", 1), (0, "PARADO", 1)):
+        self.store.agentes[2]["status"] = "STOPPED"
+        for idade, status, quantidade in ((19, "ACTIVE", 0), (20, "ACTIVE", 0), (90, "ACTIVE", 0),
+                                          (91, "ACTIVE", 1), (181, "ACTIVE", 1), (0, "STOPPED", 1)):
             self.store.agentes[1].update(status=status,
                                         heartbeat_at=self.agora - datetime.timedelta(seconds=idade))
             self.assertEqual(len(self.agentes.fila_sem_atendente(self.agora, LIMIARES)), quantidade)
-        self.store.agentes[1].update(status="ATIVO", heartbeat_at=None)
+        self.store.agentes[1].update(status="ACTIVE", heartbeat_at=None)
         self.assertEqual(len(self.agentes.fila_sem_atendente(self.agora, LIMIARES)), 1)
 
     def test_sem_pid_usa_reserva_e_limite_estrito_sem_lob(self):
@@ -404,40 +404,40 @@ class TestPainelAgentes(_Base):
         for tid, segundos, pid, status in ((1, 121, None, "RUNNING"), (2, 120, None, "RUNNING"),
                                           (3, 119, None, "RUNNING"), (4, 600, 42, "RUNNING"),
                                           (5, 600, None, "PENDING"), (6, 180, None, "RUNNING")):
-            self.store.tickets[tid] = {"id": tid, "script_id": 1, "ambiente": "PRODUCAO", "status": status,
-                                      "process_id": pid, "agente_id": "agt-host01",
+            self.store.tickets[tid] = {"id": tid, "script_id": 1, "environment": "PRODUCAO", "status": status,
+                                      "process_id": pid, "agent_id": "agt-host01",
                                       "started_at": self.agora - datetime.timedelta(seconds=segundos),
                                       "created_at": self.agora - datetime.timedelta(days=5),
-                                      "log_output": object(), "parametros_enviados": object()}
+                                      "log_output": object(), "submitted_params": object()}
         antes = dict(self.store.auditoria)
         itens = self.agentes.rodando_sem_pid(self.agora, 2)
         self.assertEqual([t["id"] for t in itens], [6, 1])
-        self.assertEqual(set(itens[0]), {"id", "script_id", "ambiente", "agente_id", "started_at"})
+        self.assertEqual(set(itens[0]), {"id", "script_id", "environment", "agent_id", "started_at"})
         self.assertEqual(self.store.auditoria, antes)
 
     def test_diagnosticos_do_seed(self):
         """Dados de demonstracao: os tres quadros aparecem (UI_FREEZE, CR-007 R-18)."""
         painel = self.svc_agentes.painel(self.ctx["admin"])
-        self.assertEqual([a["codigo"] for a in painel["config_divergente"]], ["agt-host02"])
-        self.assertIn("kill=10", painel["config_divergente"][0]["config_criticos"])
+        self.assertEqual([a["code"] for a in painel["config_divergente"]], ["agt-host02"])
+        self.assertIn("kill=10", painel["config_divergente"][0]["critical_config"])
         self.assertEqual([t["id"] for t in painel["rodando_sem_pid"]], [16])
         self.assertEqual(painel["fila_sem_atendente"], [])  # agt-host02 ainda ATRASADO
         self.agora = self.base + datetime.timedelta(seconds=61)  # agt-host02 EM_RISCO
         fila = self.svc_agentes.painel(self.ctx["admin"])["fila_sem_atendente"]
-        self.assertEqual([(g["ambiente"], g["interpretador"], g["quantidade"]) for g in fila],
+        self.assertEqual([(g["environment"], g["interpreter"], g["quantidade"]) for g in fila],
                          [("HOMOLOGACAO", "SH", 1)])
         self.assertEqual(fila[0]["mais_antigo"], self.store.tickets[4]["scheduled_at"])
 
     def test_diagnosticos_config_divergente_e_parado(self):
-        self.store.agentes[2]["config_criticos"] = CONFIG_CRITICOS
+        self.store.agentes[2]["critical_config"] = CONFIG_CRITICOS
         self.assertEqual(self.svc_agentes.painel(self.ctx["admin"])["config_divergente"], [])
-        self.store.agentes[2]["config_criticos"] = CONFIG_CRITICOS.replace("hb=10", "hb=11")
+        self.store.agentes[2]["critical_config"] = CONFIG_CRITICOS.replace("hb=10", "hb=11")
         painel = self.svc_agentes.painel(self.ctx["admin"])
-        self.assertEqual([a["codigo"] for a in painel["config_divergente"]], ["agt-host02"])
+        self.assertEqual([a["code"] for a in painel["config_divergente"]], ["agt-host02"])
         self.assertEqual(painel["config_web"], CONFIG_CRITICOS)
-        self.store.agentes[1]["config_criticos"] = self.store.agentes[2]["config_criticos"]
+        self.store.agentes[1]["critical_config"] = self.store.agentes[2]["critical_config"]
         self.assertEqual(len(self.svc_agentes.painel(self.ctx["admin"])["config_divergente"]), 2)
-        self.store.agentes[2]["status"] = "PARADO"
+        self.store.agentes[2]["status"] = "STOPPED"
         self.assertEqual(len(self.svc_agentes.painel(self.ctx["admin"])["config_divergente"]), 1)
 
     def test_tickets_do_agente(self):
@@ -447,9 +447,9 @@ class TestPainelAgentes(_Base):
         self.assertEqual(self.svc_agentes.tickets_do_agente(self.ctx["admin"], "inexistente"), [])
 
     def test_somente_leitura_e_rbac(self):
-        antes = [dict(a) for a in self.store.agentes.values() if a["codigo"] == "agt-host02"]
+        antes = [dict(a) for a in self.store.agentes.values() if a["code"] == "agt-host02"]
         self.svc_agentes.painel(self.ctx["admin"])
-        depois = [dict(a) for a in self.store.agentes.values() if a["codigo"] == "agt-host02"]
+        depois = [dict(a) for a in self.store.agentes.values() if a["code"] == "agt-host02"]
         self.assertEqual(antes, depois)
         for login in ("consulta", "op.prod"):
             with self.subTest(login=login):
@@ -475,8 +475,8 @@ class TestResumoInicial(_Base):
         self.assertGreater(total_admin, 0)
         self.assertLessEqual(sum(q for _, q in prod["contagem"]), total_admin)
         self.assertLessEqual(len(admin["meus"]), 5)
-        self.assertTrue(all(t["solicitante"] == "admin" for t in admin["meus"]))
-        self.assertTrue(all(t["solicitante"] == u"você" for t in prod["meus"]))
+        self.assertTrue(all(t["requested_by"] == "admin" for t in admin["meus"]))
+        self.assertTrue(all(t["requested_by"] == u"você" for t in prod["meus"]))
         self.assertEqual(consulta["meus"], [])
 
     def test_contagem_igual_a_lista(self):

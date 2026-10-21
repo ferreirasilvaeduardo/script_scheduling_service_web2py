@@ -150,7 +150,7 @@ class TestProcessos(_ComProcessos):
         self.assertIsNone(plataforma.reabrir_grupo({"pid": PID_INEXISTENTE, "process_start": 1}))
 
     def test_starttime_com_parenteses_no_nome_do_comando(self):
-        campos = ["S"] + [str(i) for i in range(4, 60)]
+        campos = ["Y"] + [str(i) for i in range(4, 60)]
         conteudo = "4242 (meu ) script) (x)) " + " ".join(campos)
         self.assertEqual(posix._starttime_linux(conteudo), 22)
 

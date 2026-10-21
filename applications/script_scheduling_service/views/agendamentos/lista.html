@@ -4,11 +4,11 @@
 # Pausar e retomar abrem components/modal_confirmacao.html com POST real.
 import ui_helpers
 icones = URL('static', 'img/icons.svg')
-_opc_ativo = [('', 'Todas'), ('S', 'Ativas'), ('N', 'Pausadas')]
+_opc_ativo = [('', 'Todas'), ('Y', 'Ativas'), ('N', 'Pausadas')]
 filtros = {'id': 'filtro-agendamentos', 'url_base': ('agendamentos', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': [
-    {'nome': 'nome', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('nome')},
-    {'nome': 'ambiente', 'rotulo': 'Ambiente', 'tipo': 'texto', 'valor': filtros_ativos.get('ambiente')},
-    {'nome': 'ativo', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('ativo'), 'opcoes': _opc_ativo},
+    {'name': 'name', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('name')},
+    {'name': 'environment', 'rotulo': 'Ambiente', 'tipo': 'texto', 'valor': filtros_ativos.get('environment')},
+    {'name': 'active', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('active'), 'opcoes': _opc_ativo},
 ]}
 _colunas = ('Nome', 'Script', 'Ambiente', u'Recorrência', u'Próxima execução', u'Última execução', u'Responsável', u'Situação', u'Ações')
 pagina = resultado['pagina']
@@ -55,30 +55,30 @@ url_base = ('agendamentos', 'lista')
         <tr><td colspan="{{=len(_colunas)}}" class="sss-tabela-estado sss-tabela-vazia">Nenhuma regra de agendamento encontrada.</td></tr>
         {{else:}}
         {{for _r in resultado['itens']:}}
-        {{_sit = ui_helpers.ativo_info(_r['ativo'])}}
+        {{_sit = ui_helpers.ativo_info(_r['active'])}}
         <tr>
-          <td>{{=_r['nome']}}</td>
+          <td>{{=_r['name']}}</td>
           <td class="sss-mono">{{=_r['script']}}</td>
-          <td>{{=_r['ambiente']}}</td>
-          <td>{{=_r['recorrencia']}}{{if _r['expressao_cron']:}}<br><code class="sss-mono">{{=_r['expressao_cron']}}</code>{{pass}}</td>
-          <td>{{=_r['proxima_execucao']}}</td>
-          <td>{{=_r['ultima_execucao']}}{{if _r['ultimo_ticket_id']:}}<br><a href="{{=URL(c='tickets', f='detalhe', args=[_r['ultimo_ticket_id']])}}" aria-label="Ticket #{{=_r['ultimo_ticket_id']}} da última execução">ticket #{{=_r['ultimo_ticket_id']}}</a>{{pass}}</td>
+          <td>{{=_r['environment']}}</td>
+          <td>{{=_r['recorrencia']}}{{if _r['cron_expression']:}}<br><code class="sss-mono">{{=_r['cron_expression']}}</code>{{pass}}</td>
+          <td>{{=_r['next_run_at']}}</td>
+          <td>{{=_r['last_run_at']}}{{if _r['last_ticket_id']:}}<br><a href="{{=URL(c='tickets', f='detalhe', args=[_r['last_ticket_id']])}}" aria-label="Ticket #{{=_r['last_ticket_id']}} da última execução">ticket #{{=_r['last_ticket_id']}}</a>{{pass}}</td>
           <td class="sss-mono">{{=_r['responsavel']}}</td>
           <td>
-            <span class="sss-status {{=_sit['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_sit['icone']}}"></use></svg><span>{{=_r['situacao']}}</span></span>
-            {{if _r['motivo']:}}<div class="sss-texto-suave">{{=_r['motivo']}}</div>{{pass}}
+            <span class="sss-status {{=_sit['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_sit['icone']}}"></use></svg><span>{{=_r['state']}}</span></span>
+            {{if _r['reason']:}}<div class="sss-texto-suave">{{=_r['reason']}}</div>{{pass}}
             {{if _r.get('aviso'):}}<div class="sss-texto-suave text-warning"><small>{{=_r['aviso']}}</small></div>{{pass}}
           </td>
           <td class="sss-tabela-acoes">
             <div class="sss-acoes">
-              <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='agendamentos', f='form', args=[_r['id']])}}" aria-label="Editar regra {{=_r['nome']}}">Editar</a>
-              {{if _r['ativo'] == 'S':}}
-              {{modal = {'id': 'modal-pausar-%s' % _r['id'], 'titulo': u'Pausar regra %s' % _r['nome'],
+              <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='agendamentos', f='form', args=[_r['id']])}}" aria-label="Editar regra {{=_r['name']}}">Editar</a>
+              {{if _r['active'] == 'Y':}}
+              {{modal = {'id': 'modal-pausar-%s' % _r['id'], 'titulo': u'Pausar regra %s' % _r['name'],
                          'texto': u'A regra deixa de gerar tickets até ser retomada. Tickets já criados não são afetados.',
                          'rotulo_gatilho': 'Pausar', 'rotulo_confirmar': u'Confirmar pausa', 'variante': 'perigo',
                          'acao': URL(c='agendamentos', f='pausar'), 'campos_ocultos': dict(id=_r['id'])} }}
               {{else:}}
-              {{modal = {'id': 'modal-retomar-%s' % _r['id'], 'titulo': u'Retomar regra %s' % _r['nome'],
+              {{modal = {'id': 'modal-retomar-%s' % _r['id'], 'titulo': u'Retomar regra %s' % _r['name'],
                          'texto': u'A próxima execução será recalculada a partir de agora. Suas permissões para o script e o ambiente serão conferidas; o responsável pela regra não muda.',
                          'rotulo_gatilho': 'Retomar', 'rotulo_confirmar': u'Confirmar retomada', 'variante': 'normal',
                          'acao': URL(c='agendamentos', f='retomar'), 'campos_ocultos': dict(id=_r['id'])} }}

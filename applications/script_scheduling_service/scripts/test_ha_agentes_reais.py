@@ -51,15 +51,15 @@ class TestHaDoisAgentes(_DoisAgentesBase):
     def test_cron_por_minuto_gera_um_ticket_por_minuto(self):
         agora = self._consulta("SELECT SYSDATE FROM DUAL")[0][0]
         primeira = agora.replace(second=0) + datetime.timedelta(minutes=1)
-        regra = self._massa.agendamento(self.scr["id"], self.amb["nome"], self.usuario_id, tipo_recorrencia="CRON",
-                                        expressao_cron="* * * * *", hora_execucao=None, parametros_json="{}",
-                                        data_inicio=agora - datetime.timedelta(minutes=1), proxima_execucao=primeira)
+        regra = self._massa.agendamento(self.scr["id"], self.amb["name"], self.usuario_id, recurrence_type="CRON",
+                                        cron_expression="* * * * *", run_time=None, params_json="{}",
+                                        start_date=agora - datetime.timedelta(minutes=1), next_run_at=primeira)
         for agente in self.agentes:
             self._subir(agente)
         fim = primeira + datetime.timedelta(minutes=MINUTOS - 1)
 
         def ocorrencias():
-            return self._consulta("SELECT scheduled_at, COUNT(*) FROM {tck} WHERE agendamento_id = :r"
+            return self._consulta("SELECT scheduled_at, COUNT(*) FROM {tck} WHERE schedule_id = :r"
                                   " GROUP BY scheduled_at ORDER BY scheduled_at", r=regra["id"])
         self.assertTrue(self._esperar(lambda: any(s >= fim for s, _n in ocorrencias()), MINUTOS * 60 + 60, passo=2),
                         "tickets das %d ocorrencias" % MINUTOS)
@@ -69,7 +69,7 @@ class TestHaDoisAgentes(_DoisAgentesBase):
         self.assertEqual([s for s, _n in linhas], [primeira + datetime.timedelta(minutes=i) for i in range(MINUTOS)],
                          "uma ocorrencia por minuto, sem buracos")
         self.assertEqual(set(n for _s, n in linhas), {1}, "sem duplicata entre os dois agentes")
-        criadores = self._consulta("SELECT DISTINCT created_by FROM {tck} WHERE agendamento_id = :r", r=regra["id"])
+        criadores = self._consulta("SELECT DISTINCT created_by FROM {tck} WHERE schedule_id = :r", r=regra["id"])
         self.assertTrue(set(c for (c,) in criadores) <= set("SYSTEM:%s" % a for a in self.agentes))
         print("\n[F8.4e] CRON: %d ocorrencias, criadores %s" % (len(linhas), sorted(c for (c,) in criadores)))
 
@@ -100,9 +100,9 @@ class TestHaDoisAgentes(_DoisAgentesBase):
         self.processos = [x for x in self.processos if x[0] != dono]
         self._subir(dono)
         self.assertTrue(self._esperar(lambda: not _vivo(orfaos[0]), 60), "filho encerrado na religacao")
-        ativos = self._consulta("SELECT codigo, status FROM {agt} WHERE codigo IN (:a, :b)",
+        ativos = self._consulta("SELECT code, status FROM {agt} WHERE code IN (:a, :b)",
                                 a=self.agentes[0], b=self.agentes[1])
-        self.assertEqual(sorted(ativos), [(a, "ATIVO") for a in sorted(self.agentes)], "religacao aceita (PID antigo morto)")
+        self.assertEqual(sorted(ativos), [(a, "ACTIVE") for a in sorted(self.agentes)], "religacao aceita (PID antigo morto)")
         print("\n[F8.4e] kill -9 em %s: NODE_OFFLINE por %s em %.0f s; filho %d encerrado na religacao"
               % (dono, outro, decorrido, orfaos[0]))
         self.assertEqual(_pids_do_longo(), [])

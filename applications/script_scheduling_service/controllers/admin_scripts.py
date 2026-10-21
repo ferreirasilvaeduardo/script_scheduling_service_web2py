@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Cadastro de scripts, homologacao e vinculo de parametros (README §4.3.A, §6.3, §8.5, CAD_SCRIPTS).
+"""Cadastro de scripts, homologacao e vinculo de parametros (README §4.3.A, §6.3, §8.5, MANAGE_SCRIPTS).
 
 Padrao em docs/PADRAO_CRUD_ADMIN.md. Regras ficam em modules/admin_scripts_service.py; CSRF e Origin
 de todo POST sao validados em models/10_security.py. Listas enviadas pelo cliente sao revalidadas inteiras.
@@ -11,10 +11,10 @@ import ui_helpers
 from admin_crud import AcessoNegado, OperacaoNegada
 from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
 
-_FUNC = "CAD_SCRIPTS"
+_FUNC = "MANAGE_SCRIPTS"
 _TAMANHOS = (20, 50, 100)
-_CAMPOS = ("nome", "descricao", "grupo", "categoria", "etapa", "interpretador", "path_file", "tipo_param",
-           "max_qtd_parallel_env", "timeout_seg", "versao")
+_CAMPOS = ("name", "description", "script_group", "category", "stage", "interpreter", "path_file", "param_type",
+           "max_parallel_env", "timeout_s", "version")
 _JS = "js/app/scripts_admin.js"
 _MAX_JSON = 50000
 _MAX_IDS = 1000
@@ -42,20 +42,20 @@ def _texto(valor, limite):
 
 def _vazio_form(ctx):
     # Fallback quando nem o formulario pode ser lido (falha de repositorio): so os campos que a view usa.
-    return {"id": None, "nome": "", "descricao": "", "grupo": "", "categoria": "", "etapa": "",
-            "interpretador": path_guard.ALLOWLIST[0], "path_file": "",
-            "tipo_param": "NOMEADO",
-            "max_qtd_parallel_env": 1, "timeout_seg": "", "ativo": "S", "versao": "", "agendamentos_ativos": 0,
+    return {"id": None, "name": "", "description": "", "script_group": "", "category": "", "stage": "",
+            "interpreter": path_guard.ALLOWLIST[0], "path_file": "",
+            "param_type": "NAMED",
+            "max_parallel_env": 1, "timeout_s": "", "active": "Y", "version": "", "agendamentos_ativos": 0,
             "obs_validacao": servico.OBS_VALIDACAO}
 
 
 def _pagina_form(ctx, dados, erros=None):
-    response.title = (u"Script %s — SSS" % dados["nome"]) if dados.get("id") else u"Novo script — SSS"
+    response.title = (u"Script %s — SSS" % dados["name"]) if dados.get("id") else u"Novo script — SSS"
     response.view = "admin_scripts/form.html"
     erros = erros or {}
-    campos = [{"nome": n, "erro": erros.get(n)} for n in ("nome", "descricao", "grupo", "categoria", "etapa",
-                                                          "interpretador", "path_file", "tipo_param",
-                                                          "max_qtd_parallel_env", "timeout_seg")]
+    campos = [{"name": n, "erro": erros.get(n)} for n in ("name", "description", "script_group", "category", "stage",
+                                                          "interpreter", "path_file", "param_type",
+                                                          "max_parallel_env", "timeout_s")]
     return dict(scr=dados, erros=erros, erro_geral=erros.get(admin_crud.CAMPO_GERAL), interpretadores=servico.ROTULOS_INTERPRETADOR,
                 tipos_param=servico.ROTULOS_TIPO_PARAM, foco_campo=ui_helpers.primeiro_campo_invalido(campos),
                 aviso_desativacao=servico.AVISO_DESATIVACAO)
@@ -120,9 +120,9 @@ def salvar():
     except RepoErro:
         dados = _vazio_form(ctx)
     if admin_crud.CAMPO_GERAL not in erros:
-        dados = dict(dados, **dict((c, enviados[c] or "") for c in _CAMPOS if c != "versao"))
+        dados = dict(dados, **dict((c, enviados[c] or "") for c in _CAMPOS if c != "version"))
         if script_id:
-            dados["versao"] = enviados["versao"] or ""
+            dados["version"] = enviados["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
     response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.CAMPO_GERAL)
                       or ui_helpers.mensagem("formulario")}
@@ -134,9 +134,9 @@ def alternar_ativo():
     ctx = _exigir_func(_FUNC)
     script_id = _texto(request.post_vars.get("id"), 11)
     try:
-        alterado = servico.alternar_ativo(ctx, _ip_origem(), script_id, _texto(request.post_vars.get("versao"), 64))
-        acao = u"desativado" if alterado["ativo"] == "N" else u"reativado"
-        session.flash = {"tipo": "sucesso", "mensagem": u"Script %s %s." % (alterado["nome"], acao)}
+        alterado = servico.alternar_ativo(ctx, _ip_origem(), script_id, _texto(request.post_vars.get("version"), 64))
+        acao = u"desativado" if alterado["active"] == "N" else u"reativado"
+        session.flash = {"tipo": "sucesso", "mensagem": u"Script %s %s." % (alterado["name"], acao)}
     except RepoNaoEncontrado:
         _nao_encontrado()
     except AcessoNegado:
@@ -160,7 +160,7 @@ def homologacao():
         _nao_encontrado()
     except AcessoNegado:
         _negado()
-    response.title = u"Homologação de %s — SSS" % dados["script"]["nome"]
+    response.title = u"Homologação de %s — SSS" % dados["script"]["name"]
     response.sss_scripts = [_JS]
     return dict(homolog=dados)
 
@@ -173,7 +173,7 @@ def salvar_homologacao():
     ids = (ids if isinstance(ids, list) else ([] if ids is None else [ids]))[:_MAX_IDS]
     try:
         diff, erros = servico.salvar_homologacao(ctx, _ip_origem(), script_id, ids,
-                                                 _texto(request.post_vars.get("versao"), 64))
+                                                 _texto(request.post_vars.get("version"), 64))
     except RepoNaoEncontrado:
         _nao_encontrado()
     except AcessoNegado:
@@ -199,7 +199,7 @@ def parametros():
         _nao_encontrado()
     except AcessoNegado:
         _negado()
-    response.title = u"Parâmetros de %s — SSS" % dados["script"]["nome"]
+    response.title = u"Parâmetros de %s — SSS" % dados["script"]["name"]
     response.sss_scripts = [_JS]
     return dict(vinc=dados)
 
@@ -211,7 +211,7 @@ def salvar_parametros():
     try:
         descricao, erros = servico.salvar_parametros(ctx, _ip_origem(), script_id,
                                                      _texto(request.post_vars.get("vinculos_json"), _MAX_JSON),
-                                                     _texto(request.post_vars.get("versao"), 64))
+                                                     _texto(request.post_vars.get("version"), 64))
     except RepoNaoEncontrado:
         _nao_encontrado()
     except AcessoNegado:

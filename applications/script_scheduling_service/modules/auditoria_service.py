@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Consulta e exportacao da trilha de auditoria (README §4.3.D VER_AUDITORIA, §4.4, §10 tabela 16).
+"""Consulta e exportacao da trilha de auditoria (README §4.3.D VIEW_AUDIT, §4.4, §10 tabela 16).
 
 O detalhe ja e gravado sem segredos (README §4.4); na leitura ele passa de novo pelo
 mascarador do processo, como defesa em profundidade. A exportacao CSV usa os mesmos
@@ -18,34 +18,34 @@ import rbac
 import ui_helpers
 from admin_crud import AcessoNegado  # noqa: F401  (reexportado para o controller)
 
-FUNCIONALIDADE = "VER_AUDITORIA"
+FUNCIONALIDADE = "VIEW_AUDIT"
 
 # Catalogo de acoes (README §10, tabela 16), mantido em codigo e sem CK para permitir extensao.
 ACOES = (
-    "LOGIN_OK", "LOGIN_FALHA", "LOGIN_BLOQUEIO", "LOGOUT",
-    "TICKET_CRIAR", "TICKET_CANCELAR", "TICKET_REEXECUTAR",
-    "CAD_INSERIR", "CAD_ALTERAR", "CAD_DESATIVAR", "PERM_ALTERAR",
-    "AGD_PAUSAR", "AGENTE_INICIO", "AGENTE_FIM", "PURGE",
-    "AUD_EXPORTAR", "ESQUEMA_MIGRAR",
+    "LOGIN_OK", "LOGIN_FAILED", "LOGIN_LOCKED", "LOGOUT",
+    "TICKET_CREATE", "TICKET_CANCEL", "TICKET_RERUN",
+    "CREATE", "UPDATE", "DEACTIVATE", "PERM_UPDATE",
+    "SCHEDULE_PAUSE", "AGENT_START", "AGENT_STOP", "PURGE",
+    "AUDIT_EXPORT", "SCHEMA_MIGRATE",
 )
-ACAO_EXPORTAR = "AUD_EXPORTAR"
-ENTIDADE_AUDITORIA = "tbsss_auditoria"
+ACAO_EXPORTAR = "AUDIT_EXPORT"
+ENTIDADE_AUDITORIA = "tbsss_audit"
 
 ENTIDADES = (
-    "tbsss_agendamentos", "tbsss_agentes", "tbsss_ambientes", "tbsss_auditoria", "tbsss_controle",
-    "tbsss_parametros", "tbsss_perfis", "tbsss_scripts", "tbsss_tickets", "tbsss_usuarios",
+    "tbsss_schedules", "tbsss_agents", "tbsss_environments", "tbsss_audit", "tbsss_control",
+    "tbsss_parameters", "tbsss_profiles", "tbsss_scripts", "tbsss_tickets", "tbsss_users",
 )
 
 # Rota da tela de cada entidade e funcionalidade exigida para exibir o link (decisao D6 do F6.1).
-# None na funcionalidade: tela de tickets, cuja consulta exige VER_LOGS ou EXEC_SCRIPT.
+# None na funcionalidade: tela de tickets, cuja consulta exige VIEW_LOGS ou EXEC_SCRIPT.
 TELAS_ENTIDADE = {
     "tbsss_tickets": ("tickets", "detalhe", None),
-    "tbsss_agendamentos": ("agendamentos", "form", "CAD_AGENDAMENTOS"),
-    "tbsss_usuarios": ("admin_usuarios", "form", "CAD_USUARIOS"),
-    "tbsss_perfis": ("admin_perfis", "form", "CAD_PERFIS"),
-    "tbsss_ambientes": ("admin_ambientes", "form", "CAD_AMBIENTES"),
-    "tbsss_scripts": ("admin_scripts", "form", "CAD_SCRIPTS"),
-    "tbsss_parametros": ("admin_parametros", "form", "CAD_PARAMETROS"),
+    "tbsss_schedules": ("agendamentos", "form", "MANAGE_SCHEDULES"),
+    "tbsss_users": ("admin_usuarios", "form", "MANAGE_USERS"),
+    "tbsss_profiles": ("admin_perfis", "form", "MANAGE_PROFILES"),
+    "tbsss_environments": ("admin_ambientes", "form", "MANAGE_ENVIRONMENTS"),
+    "tbsss_scripts": ("admin_scripts", "form", "MANAGE_SCRIPTS"),
+    "tbsss_parameters": ("admin_parametros", "form", "MANAGE_PARAMETERS"),
 }
 
 TAMANHO_MAX = 100
@@ -57,7 +57,7 @@ LIMITE_EXPORTACAO = 50000
 DETALHE_CURTO = 80
 _LINHAS_POR_BLOCO = 500
 
-CAMPOS_FILTRO = ("de", "ate", "ator", "acao", "entidade", "entidade_id", "ip")
+CAMPOS_FILTRO = ("de", "ate", "actor", "action", "entity", "entity_id", "ip")
 CABECALHO_CSV = (u"ID", u"Data/hora", u"Ator", u"IP de origem", u"Ação", u"Entidade", u"ID da entidade",
                  u"Detalhe")
 # Prefixos que planilhas interpretam como formula (CSV injection).
@@ -125,30 +125,30 @@ def normalizar_filtros(entrada, hoje):
     if de is None:
         de = ate - datetime.timedelta(days=PERIODO_PADRAO_DIAS - 1)
 
-    ator = _texto(entrada.get("ator"), 41)
+    ator = _texto(entrada.get("actor"), 41)
     if ator:
         if _RE_ATOR.fullmatch(ator):
-            filtros["ator"] = ator
+            filtros["actor"] = ator
         else:
-            erros["ator"] = MSG_ATOR
-    acao = _texto(entrada.get("acao"), 30)
+            erros["actor"] = MSG_ATOR
+    acao = _texto(entrada.get("action"), 30)
     if acao:
         if acao in ACOES:
-            filtros["acao"] = acao
+            filtros["action"] = acao
         else:
-            erros["acao"] = MSG_ACAO
-    entidade = _texto(entrada.get("entidade"), 30)
+            erros["action"] = MSG_ACAO
+    entidade = _texto(entrada.get("entity"), 30)
     if entidade:
         if entidade in ENTIDADES:
-            filtros["entidade"] = entidade
+            filtros["entity"] = entidade
         else:
-            erros["entidade"] = MSG_ENTIDADE
-    entidade_id = _texto(entrada.get("entidade_id"), 11)
+            erros["entity"] = MSG_ENTIDADE
+    entidade_id = _texto(entrada.get("entity_id"), 11)
     if entidade_id:
         if _RE_ID.fullmatch(entidade_id) and int(entidade_id) > 0:
-            filtros["entidade_id"] = int(entidade_id)
+            filtros["entity_id"] = int(entidade_id)
         else:
-            erros["entidade_id"] = MSG_ENTIDADE_ID
+            erros["entity_id"] = MSG_ENTIDADE_ID
     ip = _texto(entrada.get("ip"), 46)
     if ip:
         if _RE_IP.fullmatch(ip):
@@ -158,7 +158,7 @@ def normalizar_filtros(entrada, hoje):
 
     if "de" not in erros and "ate" not in erros:
         dias = (ate - de).days + 1
-        seletivo = "ator" in filtros or ("entidade" in filtros and "entidade_id" in filtros)
+        seletivo = "actor" in filtros or ("entity" in filtros and "entity_id" in filtros)
         if dias < 1:
             erros["ate"] = MSG_INTERVALO
         elif dias > PERIODO_MAX_SELETIVO_DIAS:
@@ -177,9 +177,9 @@ def filtros_repo(filtros):
     """Traduz filtros validos para o contrato: periodo vira [de 00:00:00, ate 23:59:59]."""
     de = datetime.datetime.strptime(filtros["de"], _FORMATO_DIA)
     ate = datetime.datetime.strptime(filtros["ate"], _FORMATO_DIA)
-    repo = {"data_inicio": de, "data_fim": ate + datetime.timedelta(days=1, seconds=-1)}
-    for chave, destino in (("ator", "ator"), ("acao", "acao"), ("entidade", "entidade"),
-                           ("entidade_id", "entidade_id"), ("ip", "ip_origem")):
+    repo = {"start_date": de, "end_date": ate + datetime.timedelta(days=1, seconds=-1)}
+    for chave, destino in (("actor", "actor"), ("action", "action"), ("entity", "entity"),
+                           ("entity_id", "entity_id"), ("ip", "source_ip")):
         if chave in filtros:
             repo[destino] = filtros[chave]
     return repo
@@ -202,12 +202,12 @@ def linha_csv(reg):
     valores = (
         reg["id"],
         criado.strftime(_FORMATO_CSV) if criado else u"",
-        reg.get("ator") or u"",
-        reg.get("ip_origem") or u"",
-        reg.get("acao") or u"",
-        reg.get("entidade") or u"",
-        u"" if reg.get("entidade_id") is None else reg["entidade_id"],
-        _mascarar(reg.get("detalhe")) or u"",
+        reg.get("actor") or u"",
+        reg.get("source_ip") or u"",
+        reg.get("action") or u"",
+        reg.get("entity") or u"",
+        u"" if reg.get("entity_id") is None else reg["entity_id"],
+        _mascarar(reg.get("detail")) or u"",
     )
     return [neutralizar_csv(v) for v in valores]
 
@@ -265,16 +265,16 @@ class ServicoAuditoria(object):
             resultado = self._auditoria.listar(filtros=repo_filtros, pagina=info["pagina"], tamanho=tamanho)
         itens = []
         for reg in resultado["itens"]:
-            detalhe = _mascarar(reg.get("detalhe")) or u""
+            detalhe = _mascarar(reg.get("detail")) or u""
             itens.append({
                 "id": reg["id"],
                 "created_at": reg.get("created_at"),
-                "ator": reg.get("ator"),
-                "ip_origem": reg.get("ip_origem"),
-                "acao": reg.get("acao"),
-                "entidade": reg.get("entidade"),
-                "entidade_id": reg.get("entidade_id"),
-                "detalhe": detalhe,
+                "actor": reg.get("actor"),
+                "source_ip": reg.get("source_ip"),
+                "action": reg.get("action"),
+                "entity": reg.get("entity"),
+                "entity_id": reg.get("entity_id"),
+                "detail": detalhe,
                 "detalhe_curto": detalhe if len(detalhe) <= DETALHE_CURTO else detalhe[:DETALHE_CURTO - 1] + u"…",
                 "truncado": len(detalhe) > DETALHE_CURTO,
             })
@@ -285,7 +285,7 @@ class ServicoAuditoria(object):
         """Exportacao com os filtros e o RBAC da tela: retorna (nome_arquivo, linhas, blocos).
 
         blocos e um gerador de bytes UTF-8 (com BOM, separador ';') de no maximo
-        LIMITE_EXPORTACAO linhas. A exportacao e auditada (AUD_EXPORTAR) antes do streaming,
+        LIMITE_EXPORTACAO linhas. A exportacao e auditada (AUDIT_EXPORT) antes do streaming,
         e o conjunto exportado para no ID anterior ao da propria linha de auditoria.
         Filtros invalidos levantam FiltrosInvalidos.
         """

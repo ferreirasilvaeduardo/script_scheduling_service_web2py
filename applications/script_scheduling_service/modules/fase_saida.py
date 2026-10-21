@@ -27,8 +27,8 @@ NOME_ZIP = "saida.zip"
 # Resultados do empacotamento.
 ZIP = "ZIP"
 VAZIA = "VAZIA"
-EXCEDEU = "EXCEDEU"
-FALHOU = "FALHOU"
+EXCEDEU = "EXCEEDED"
+FALHOU = "FAILED"
 ABANDONADA = "ABANDONADA"
 
 # Desfechos da gravacao.
@@ -80,7 +80,7 @@ def iniciar_empacotar(saida, plat, max_bytes, max_arquivos, agora):
     except Exception as exc:  # noqa: BLE001 - qualquer falha local: FALHOU (o ticket segue)
         _log.warning("empacotamento da saida nao iniciado (%s)", exc.__class__.__name__,
                      extra={"ticket": saida.ticket_id, "acao": "SAIDA"})
-        saida.resultado, saida.motivo = FALHOU, "ERRO"
+        saida.resultado, saida.motivo = FALHOU, "ERROR"
         return
     saida.prazo = agora + PRAZO_EMPACOTAR_S
 
@@ -98,19 +98,19 @@ def avancar_empacotar(saida, plat, agora):
                          extra={"ticket": saida.ticket_id, "acao": "SAIDA"})
         return False
     if saida.morto:
-        saida.resultado, saida.motivo = FALHOU, "PRAZO"
+        saida.resultado, saida.motivo = FALHOU, "DEADLINE"
     elif rc == 0:
         _conferir_zip(saida)
     elif rc == plat.SAIDA_VAZIA:
         saida.resultado = VAZIA
     elif rc == plat.SAIDA_EXCEDE_ARQUIVOS:
-        saida.resultado, saida.motivo = EXCEDEU, "ARQUIVOS"
+        saida.resultado, saida.motivo = EXCEDEU, "FILES"
     elif rc == plat.SAIDA_EXCEDE_BYTES:
         saida.resultado, saida.motivo = EXCEDEU, "BYTES"
     else:
         _log.warning("empacotamento da saida terminou com codigo %s", rc,
                      extra={"ticket": saida.ticket_id, "acao": "SAIDA"})
-        saida.resultado, saida.motivo = FALHOU, "ERRO"
+        saida.resultado, saida.motivo = FALHOU, "ERROR"
     return True
 
 
@@ -123,10 +123,10 @@ def _conferir_zip(saida):
     except (OSError, zipfile.BadZipFile) as exc:
         _log.warning("zip da saida ilegivel (%s)", exc.__class__.__name__,
                      extra={"ticket": saida.ticket_id, "acao": "SAIDA"})
-        saida.resultado, saida.motivo = FALHOU, "ERRO"
+        saida.resultado, saida.motivo = FALHOU, "ERROR"
         return
     if saida.qtd_arquivos == 0 or saida.tamanho == 0:
-        saida.resultado, saida.motivo = FALHOU, "ERRO"
+        saida.resultado, saida.motivo = FALHOU, "ERROR"
         return
     saida.resultado = ZIP
 
@@ -141,12 +141,12 @@ def abandonar(saida, plat):
 def linha_log(saida, agente_id, max_arquivos, max_bytes):
     """Texto da linha [SSS] para o log do ticket (sem caminho nem conteudo), ou None."""
     if saida.resultado == EXCEDEU:
-        limite = ("%d arquivos" % max_arquivos) if saida.motivo == "ARQUIVOS" else \
+        limite = ("%d arquivos" % max_arquivos) if saida.motivo == "FILES" else \
             ("%d MiB" % (max_bytes // (1024 * 1024)))
         return "saida nao empacotada: excede o limite de %s (agente %s)" % (limite, agente_id)
     if saida.resultado == FALHOU:
         return "saida nao empacotada: %s (agente %s)" % (
-            "prazo de %d s esgotado" % PRAZO_EMPACOTAR_S if saida.motivo == "PRAZO" else "falha", agente_id)
+            "prazo de %d s esgotado" % PRAZO_EMPACOTAR_S if saida.motivo == "DEADLINE" else "falha", agente_id)
     return None
 
 
@@ -164,7 +164,7 @@ def gravar(saida, conn, repo, agente_id):
         if not saida.iniciada:
             if not repo.iniciar(conn, saida.ticket_id, agente_id):
                 conn.rollback()
-                return CONCLUIDA if _ja_esta(conn, repo, saida, agente_id, "DISPONIVEL") else POSSE_PERDIDA
+                return CONCLUIDA if _ja_esta(conn, repo, saida, agente_id, "AVAILABLE") else POSSE_PERDIDA
             conn.commit()
             saida.iniciada, saida.offset = True, 0
         with open(saida.caminho_zip, "rb") as f:
@@ -176,7 +176,7 @@ def gravar(saida, conn, repo, agente_id):
                 desfecho = repo.anexar(conn, saida.ticket_id, agente_id, saida.offset, parte)
                 if desfecho == scheduler_saida.POSSE_PERDIDA:
                     conn.rollback()
-                    return CONCLUIDA if _ja_esta(conn, repo, saida, agente_id, "DISPONIVEL") else POSSE_PERDIDA
+                    return CONCLUIDA if _ja_esta(conn, repo, saida, agente_id, "AVAILABLE") else POSSE_PERDIDA
                 conn.commit()
                 saida.offset += len(parte)
         if saida.offset < saida.tamanho:
@@ -185,7 +185,7 @@ def gravar(saida, conn, repo, agente_id):
             conn.commit()
             return CONCLUIDA
         conn.rollback()
-        return CONCLUIDA if _ja_esta(conn, repo, saida, agente_id, "DISPONIVEL") else POSSE_PERDIDA
+        return CONCLUIDA if _ja_esta(conn, repo, saida, agente_id, "AVAILABLE") else POSSE_PERDIDA
     except scheduler_saida.SaidaOffsetInconsistente:
         conn.rollback()
         saida.iniciada = False  # o proximo iniciar zera a gravacao deste agente e recomeca do inicio

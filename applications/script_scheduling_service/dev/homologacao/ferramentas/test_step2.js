@@ -24,8 +24,8 @@ if (!process.env.SSS_HOMOLOG_SENHA) { console.error('Defina SSS_HOMOLOG_SENHA.')
     console.log('2. In form, url:', page.url());
 
     // Digitar espacos
-    await page.type('#campo-nome', '  QA_01  ');
-    await page.type('#campo-descricao', 'Ambiente de teste');
+    await page.type('#campo-name', '  QA_01  ');
+    await page.type('#campo-description', 'Ambiente de teste');
     // Submeter usando o botao do form!
     await Promise.all([
         page.waitForNavigation({ waitUntil: 'networkidle0' }),

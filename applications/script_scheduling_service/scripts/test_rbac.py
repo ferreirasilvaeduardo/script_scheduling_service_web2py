@@ -20,18 +20,18 @@ from rbac import Motivo
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 
 
-def _ctx(is_admin=False, usuario_ativo="S", perfil_ativo="S", funcs=("EXEC_SCRIPT",),
+def _ctx(is_admin=False, usuario_ativo="Y", perfil_ativo="Y", funcs=("EXEC_SCRIPT",),
          ambs=("PRODUCAO",), scrs=(1,), login="op.prod"):
     return rbac.contexto_usuario({
-        "usuario_id": 2, "login": login, "nome": "Operador", "usuario_ativo": usuario_ativo,
-        "perfil_id": 2, "perfil_nome": "OPERADOR", "perfil_ativo": perfil_ativo,
-        "is_admin": "S" if is_admin else "N", "perm_versao": 1,
+        "user_id": 2, "login": login, "name": "Operador", "usuario_ativo": usuario_ativo,
+        "profile_id": 2, "perfil_nome": "OPERADOR", "perfil_ativo": perfil_ativo,
+        "is_admin": "Y" if is_admin else "N", "perm_version": 1,
         "funcionalidades": funcs, "ambientes": ambs, "scripts": scrs,
     })
 
 
-SCRIPT = {"id": 1, "nome": "carga_diaria", "ativo": "S"}
-AMBIENTE = {"id": 1, "nome": "PRODUCAO", "ativo": "S"}
+SCRIPT = {"id": 1, "name": "carga_diaria", "active": "Y"}
+AMBIENTE = {"id": 1, "name": "PRODUCAO", "active": "Y"}
 HOMOLOGACOES = [1, 2]
 
 
@@ -39,8 +39,8 @@ class TestContexto(unittest.TestCase):
 
     def test_formato(self):
         ctx = _ctx()
-        for chave in ("usuario_id", "login", "perfil_id", "is_admin", "funcionalidades",
-                      "ambientes", "scripts", "perm_versao"):
+        for chave in ("user_id", "login", "profile_id", "is_admin", "funcionalidades",
+                      "ambientes", "scripts", "perm_version"):
             self.assertIn(chave, ctx)
         self.assertIsInstance(ctx["funcionalidades"], frozenset)
         self.assertIs(ctx["is_admin"], False)
@@ -72,19 +72,19 @@ class TestPodeExecutar(unittest.TestCase):
 
     def test_usuario_inativo(self):
         self.assertNegado(rbac.pode_executar(_ctx(usuario_ativo="N"), SCRIPT, AMBIENTE, HOMOLOGACOES),
-                          Motivo.USUARIO_INATIVO)
+                          Motivo.USER_INACTIVE)
 
     def test_script_inativo(self):
-        script = dict(SCRIPT, ativo="N")
-        self.assertNegado(rbac.pode_executar(_ctx(), script, AMBIENTE, HOMOLOGACOES), Motivo.SCRIPT_INATIVO)
+        script = dict(SCRIPT, active="N")
+        self.assertNegado(rbac.pode_executar(_ctx(), script, AMBIENTE, HOMOLOGACOES), Motivo.SCRIPT_INACTIVE)
         self.assertNegado(rbac.pode_executar(_ctx(is_admin=True), script, AMBIENTE, HOMOLOGACOES),
-                          Motivo.SCRIPT_INATIVO)
+                          Motivo.SCRIPT_INACTIVE)
 
     def test_ambiente_inativo(self):
-        ambiente = dict(AMBIENTE, ativo="N")
-        self.assertNegado(rbac.pode_executar(_ctx(), SCRIPT, ambiente, HOMOLOGACOES), Motivo.AMBIENTE_INATIVO)
+        ambiente = dict(AMBIENTE, active="N")
+        self.assertNegado(rbac.pode_executar(_ctx(), SCRIPT, ambiente, HOMOLOGACOES), Motivo.ENVIRONMENT_INACTIVE)
         self.assertNegado(rbac.pode_executar(_ctx(is_admin=True), SCRIPT, ambiente, HOMOLOGACOES),
-                          Motivo.AMBIENTE_INATIVO)
+                          Motivo.ENVIRONMENT_INACTIVE)
 
     def test_sem_homologacao(self):
         self.assertNegado(rbac.pode_executar(_ctx(), SCRIPT, AMBIENTE, [2]), Motivo.SEM_HOMOLOGACAO)
@@ -92,7 +92,7 @@ class TestPodeExecutar(unittest.TestCase):
         self.assertNegado(rbac.pode_executar(_ctx(), SCRIPT, AMBIENTE, None), Motivo.SEM_HOMOLOGACAO)
 
     def test_sem_exec_script(self):
-        self.assertNegado(rbac.pode_executar(_ctx(funcs=("VER_LOGS",)), SCRIPT, AMBIENTE, HOMOLOGACOES),
+        self.assertNegado(rbac.pode_executar(_ctx(funcs=("VIEW_LOGS",)), SCRIPT, AMBIENTE, HOMOLOGACOES),
                           Motivo.SEM_FUNC)
 
     def test_sem_ambiente(self):
@@ -110,36 +110,36 @@ class TestPodeExecutar(unittest.TestCase):
             (dict(SCRIPT, id="1"), AMBIENTE),
             (dict(SCRIPT, id=True), AMBIENTE),
             (SCRIPT, dict(AMBIENTE, id=0)),
-            (SCRIPT, dict(AMBIENTE, nome="")),
+            (SCRIPT, dict(AMBIENTE, name="")),
         ):
             self.assertNegado(rbac.pode_executar(_ctx(), script, ambiente, HOMOLOGACOES), Motivo.DADO_INVALIDO)
         self.assertNegado(rbac.pode_executar(None, SCRIPT, AMBIENTE, HOMOLOGACOES), Motivo.DADO_INVALIDO)
 
     def test_flag_ativo_somente_s(self):
         for flag in ("", "n", None, "s", "SIM"):
-            self.assertNegado(rbac.pode_executar(_ctx(), dict(SCRIPT, ativo=flag), AMBIENTE, HOMOLOGACOES),
-                              Motivo.SCRIPT_INATIVO)
+            self.assertNegado(rbac.pode_executar(_ctx(), dict(SCRIPT, active=flag), AMBIENTE, HOMOLOGACOES),
+                              Motivo.SCRIPT_INACTIVE)
 
 
 class TestTemFunc(unittest.TestCase):
 
     def test_admin_ativo(self):
-        self.assertTrue(rbac.tem_func(_ctx(is_admin=True, funcs=()), "CAD_USUARIOS"))
+        self.assertTrue(rbac.tem_func(_ctx(is_admin=True, funcs=()), "MANAGE_USERS"))
 
     def test_admin_perfil_inativo(self):
-        self.assertFalse(rbac.tem_func(_ctx(is_admin=True, perfil_ativo="N"), "CAD_USUARIOS"))
+        self.assertFalse(rbac.tem_func(_ctx(is_admin=True, perfil_ativo="N"), "MANAGE_USERS"))
 
     def test_nao_admin(self):
-        self.assertTrue(rbac.tem_func(_ctx(funcs=("VER_LOGS",)), "VER_LOGS"))
-        self.assertFalse(rbac.tem_func(_ctx(funcs=("VER_LOGS",)), "CAD_USUARIOS"))
-        self.assertFalse(rbac.tem_func(None, "VER_LOGS"))
+        self.assertTrue(rbac.tem_func(_ctx(funcs=("VIEW_LOGS",)), "VIEW_LOGS"))
+        self.assertFalse(rbac.tem_func(_ctx(funcs=("VIEW_LOGS",)), "MANAGE_USERS"))
+        self.assertFalse(rbac.tem_func(None, "VIEW_LOGS"))
 
 
 class TestTickets(unittest.TestCase):
 
-    TICKET_PROPRIO = {"id": 10, "ambiente": "PRODUCAO", "solicitante": "op.prod"}
-    TICKET_TERCEIRO = {"id": 11, "ambiente": "PRODUCAO", "solicitante": "outro"}
-    TICKET_OUTRO_AMB = {"id": 12, "ambiente": "HOMOLOGACAO", "solicitante": "outro"}
+    TICKET_PROPRIO = {"id": 10, "environment": "PRODUCAO", "requested_by": "op.prod"}
+    TICKET_TERCEIRO = {"id": 11, "environment": "PRODUCAO", "requested_by": "outro"}
+    TICKET_OUTRO_AMB = {"id": 12, "environment": "HOMOLOGACAO", "requested_by": "outro"}
 
     def test_cancelar_proprio_sem_canc_ticket(self):
         ctx = _ctx(funcs=("EXEC_SCRIPT",))
@@ -147,10 +147,10 @@ class TestTickets(unittest.TestCase):
         self.assertFalse(rbac.pode_cancelar(ctx, self.TICKET_TERCEIRO))
 
     def test_cancelar_proprio_sem_exec_script(self):
-        self.assertFalse(rbac.pode_cancelar(_ctx(funcs=("VER_LOGS",)), self.TICKET_PROPRIO))
+        self.assertFalse(rbac.pode_cancelar(_ctx(funcs=("VIEW_LOGS",)), self.TICKET_PROPRIO))
 
     def test_cancelar_terceiro_com_canc_ticket(self):
-        ctx = _ctx(funcs=("CANC_TICKET",))
+        ctx = _ctx(funcs=("CANCEL_TICKET",))
         self.assertTrue(rbac.pode_cancelar(ctx, self.TICKET_TERCEIRO))
         self.assertFalse(rbac.pode_cancelar(ctx, self.TICKET_OUTRO_AMB))
 
@@ -158,22 +158,22 @@ class TestTickets(unittest.TestCase):
         self.assertTrue(rbac.pode_cancelar(_ctx(is_admin=True, funcs=(), ambs=()), self.TICKET_OUTRO_AMB))
 
     def test_cancelar_perfil_inativo(self):
-        ctx = _ctx(funcs=("CANC_TICKET", "EXEC_SCRIPT"), perfil_ativo="N")
+        ctx = _ctx(funcs=("CANCEL_TICKET", "EXEC_SCRIPT"), perfil_ativo="N")
         self.assertFalse(rbac.pode_cancelar(ctx, self.TICKET_PROPRIO))
 
     def test_cancelar_ticket_invalido(self):
         self.assertFalse(rbac.pode_cancelar(_ctx(), None))
-        self.assertFalse(rbac.pode_cancelar(_ctx(), {"ambiente": "PRODUCAO", "solicitante": None}))
+        self.assertFalse(rbac.pode_cancelar(_ctx(), {"environment": "PRODUCAO", "requested_by": None}))
 
     def test_ver_ticket(self):
-        ctx = _ctx(funcs=("VER_LOGS",))
+        ctx = _ctx(funcs=("VIEW_LOGS",))
         self.assertTrue(rbac.pode_ver_ticket(ctx, self.TICKET_TERCEIRO))
         self.assertFalse(rbac.pode_ver_ticket(ctx, self.TICKET_OUTRO_AMB))
         self.assertFalse(rbac.pode_ver_ticket(_ctx(funcs=("EXEC_SCRIPT",)), self.TICKET_PROPRIO))
         self.assertTrue(rbac.pode_ver_ticket(_ctx(is_admin=True, ambs=()), self.TICKET_OUTRO_AMB))
 
     def test_ver_ambiente(self):
-        self.assertTrue(rbac.pode_ver_ambiente(_ctx(), {"nome": "PRODUCAO"}))
+        self.assertTrue(rbac.pode_ver_ambiente(_ctx(), {"name": "PRODUCAO"}))
         self.assertTrue(rbac.pode_ver_ambiente(_ctx(), "PRODUCAO"))
         self.assertFalse(rbac.pode_ver_ambiente(_ctx(), "HOMOLOGACAO"))
         self.assertFalse(rbac.pode_ver_ambiente(_ctx(), None))
@@ -206,8 +206,8 @@ SESSOES = {
     "op.prod": {"usuario_id": 2, "login": "op.prod", "perfil_id": 2, "perm_versao": 1, "sessao_epoch": 0},
     "consulta": {"usuario_id": 4, "login": "consulta", "perfil_id": 4, "perm_versao": 1, "sessao_epoch": 0},
 }
-# Seed FAKE: perfil 1 ADMINISTRADOR (unico admin), 3 OPERADOR_HML (ambiente DESENV inativo associado),
-# 4 CONSULTA (VER_LOGS; PRODUCAO e HOMOLOGACAO). Funcionalidades 1 EXEC_SCRIPT, 2 VER_LOGS, 3 CANC_TICKET.
+# Seed FAKE: perfil 1 ADMINISTRADOR (unico admin), 3 OPERATOR_HML (ambiente DESENV inativo associado),
+# 4 CONSULTA (VIEW_LOGS; PRODUCAO e HOMOLOGACAO). Funcionalidades 1 EXEC_SCRIPT, 2 VIEW_LOGS, 3 CANCEL_TICKET.
 PERFIL_ADMIN, PERFIL_HML, PERFIL_CONSULTA = 1, 3, 4
 F_EXEC, F_VER_LOGS = 1, 2
 AMB_PRODUCAO, AMB_HOMOLOGACAO, AMB_DESENV = 1, 2, 3
@@ -237,20 +237,20 @@ class _BasePerfis(unittest.TestCase):
         self.auth = auth_service.ServicoAuth(self.usuarios, self.rbac_repo, self.catalogo, self.auditoria,
                                              5, 900, self.log)
         self.ctx = dict((login, self.auth.revalidar(sessao)) for login, sessao in SESSOES.items())
-        # Gestor: perfil nao admin com CAD_PERFIS; exercita o ultimo admin sem cair na autoprotecao.
-        self.ctx["gestor"] = dict(self.ctx["op.prod"], funcionalidades=frozenset(["CAD_PERFIS"]))
+        # Gestor: perfil nao admin com MANAGE_PROFILES; exercita o ultimo admin sem cair na autoprotecao.
+        self.ctx["gestor"] = dict(self.ctx["op.prod"], funcionalidades=frozenset(["MANAGE_PROFILES"]))
         # Administrador fora do perfil ADMINISTRADOR: exercita a protecao do ultimo admin pelo servico,
         # ja que quem nao e admin nao altera perfil de admin (CR-008, E1).
-        self.ctx["admin_externo"] = dict(self.ctx["admin"], perfil_id=999)
+        self.ctx["admin_externo"] = dict(self.ctx["admin"], profile_id=999)
         self.svc = ServicoAdminPerfis(self.rbac_repo, self.catalogo, self.usuarios, self.log)
         self.aud_base = max([a["id"] for a in self.auditoria.listar(pagina=1, tamanho=1000)["itens"]] or [0])
 
     def _auditorias(self, acao):
-        return [a for a in self.auditoria.listar(filtros={"acao": acao}, pagina=1, tamanho=100)["itens"]
-                if a["entidade"] == "tbsss_perfis" and a["id"] > self.aud_base]
+        return [a for a in self.auditoria.listar(filtros={"action": acao}, pagina=1, tamanho=100)["itens"]
+                if a["entity"] == "tbsss_profiles" and a["id"] > self.aud_base]
 
     def _versao(self, perfil_id):
-        return self.rbac_repo.perfis_obter(perfil_id)["perm_versao"]
+        return self.rbac_repo.perfis_obter(perfil_id)["perm_version"]
 
     def _salvar_matriz(self, perfil_id, funcs, ambs, scrs, versao=None):
         versao = self._versao(perfil_id) if versao is None else versao
@@ -264,10 +264,10 @@ class _BasePerfis(unittest.TestCase):
 class TestMatriz(_BasePerfis):
 
     def test_diff_formato(self):
-        rotulos = {"funcs": {1: "EXEC_SCRIPT", 2: "VER_LOGS"}, "ambs": {1: "PRODUCAO"}, "scrs": {7: "carga"}}
+        rotulos = {"funcs": {1: "EXEC_SCRIPT", 2: "VIEW_LOGS"}, "ambs": {1: "PRODUCAO"}, "scrs": {7: "carga"}}
         diff = perfis_mod.diff_matriz({"funcs": {2}, "ambs": set(), "scrs": {7}},
                                       {"funcs": {1}, "ambs": {1}, "scrs": set()}, rotulos)
-        self.assertEqual(diff, "+EXEC_SCRIPT, -VER_LOGS, +amb:PRODUCAO, -scr:carga")
+        self.assertEqual(diff, "+EXEC_SCRIPT, -VIEW_LOGS, +amb:PRODUCAO, -scr:carga")
         self.assertIsNone(perfis_mod.diff_matriz({"funcs": {1}}, {"funcs": {1}}, rotulos))
 
     def test_salvar_matriz_incrementa_versao_e_audita_diff(self):
@@ -276,12 +276,12 @@ class TestMatriz(_BasePerfis):
         scrs = [x for x in antes["scrs"] if x != 3]
         diff, erros = self._salvar_matriz(PERFIL_CONSULTA, [F_EXEC], antes["ambs"], scrs)
         self.assertEqual(erros, {})
-        self.assertEqual(diff, "+EXEC_SCRIPT, -VER_LOGS, -scr:cleanup_tmp")
+        self.assertEqual(diff, "+EXEC_SCRIPT, -VIEW_LOGS, -scr:cleanup_tmp")
         self.assertEqual(self._versao(PERFIL_CONSULTA), versao + 1)
         self.assertEqual(sorted(self._matriz(PERFIL_CONSULTA)["funcs"]), [F_EXEC])
-        aud = self._auditorias("PERM_ALTERAR")
+        aud = self._auditorias("PERM_UPDATE")
         self.assertEqual(len(aud), 1)
-        self.assertEqual((aud[0]["detalhe"], aud[0]["entidade_id"], aud[0]["ator"]), (diff, PERFIL_CONSULTA, "admin"))
+        self.assertEqual((aud[0]["detail"], aud[0]["entity_id"], aud[0]["actor"]), (diff, PERFIL_CONSULTA, "admin"))
 
     def test_sem_mudanca_nao_incrementa_nem_audita(self):
         m = self._matriz(PERFIL_CONSULTA)
@@ -289,16 +289,16 @@ class TestMatriz(_BasePerfis):
         diff, erros = self._salvar_matriz(PERFIL_CONSULTA, m["funcs"], m["ambs"], m["scrs"])
         self.assertEqual((diff, erros), (None, {}))
         self.assertEqual(self._versao(PERFIL_CONSULTA), versao)
-        self.assertEqual(self._auditorias("PERM_ALTERAR"), [])
+        self.assertEqual(self._auditorias("PERM_UPDATE"), [])
 
     def test_efeito_imediato_na_revalidacao(self):
-        self.assertIn("VER_LOGS", self.ctx["consulta"]["funcionalidades"])
+        self.assertIn("VIEW_LOGS", self.ctx["consulta"]["funcionalidades"])
         m = self._matriz(PERFIL_CONSULTA)
         self._salvar_matriz(PERFIL_CONSULTA, [], m["ambs"], m["scrs"])
         sessao = dict(SESSOES["consulta"])
         ctx = self.auth.revalidar(sessao)
-        self.assertNotIn("VER_LOGS", ctx["funcionalidades"])
-        self.assertEqual(ctx["perm_versao"], self._versao(PERFIL_CONSULTA))
+        self.assertNotIn("VIEW_LOGS", ctx["funcionalidades"])
+        self.assertEqual(ctx["perm_version"], self._versao(PERFIL_CONSULTA))
 
     def test_id_inexistente_ou_invalido_rejeita_tudo(self):
         m = self._matriz(PERFIL_CONSULTA)
@@ -344,7 +344,7 @@ class TestMatriz(_BasePerfis):
         ambs = [i for g in tela["ambs"] for i in g["itens"]]
         desenv = [i for i in ambs if i["rotulo"] == "DESENV"][0]
         self.assertTrue(desenv["marcado"] and desenv["inativo"])
-        self.assertEqual([g["grupo"] for g in tela["funcs"]], ["ADMIN", "OPERACAO"])
+        self.assertEqual([g["script_group"] for g in tela["funcs"]], ["ADMIN", "OPERATION"])
         self.assertIsNone(tela["aviso_admin"])
         self.assertEqual(self.svc.matriz(self.ctx["admin"], str(PERFIL_ADMIN))["aviso_admin"], perfis_mod.AVISO_ADMIN)
         tela_consulta = self.svc.matriz(self.ctx["admin"], str(PERFIL_CONSULTA))
@@ -359,54 +359,54 @@ class TestUltimoAdmin(_BasePerfis):
     def test_desativar_unico_perfil_admin_e_negado(self):
         form = self._form(PERFIL_ADMIN)
         with self.assertRaises(OperacaoNegada) as cm:
-            self.svc.alternar_ativo(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["versao"])
+            self.svc.alternar_ativo(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
         self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_ULTIMO_ADMIN)
         perfil = self.rbac_repo.perfis_obter(PERFIL_ADMIN)
-        self.assertEqual((perfil["ativo"], perfil["perm_versao"]), ("S", 1))
-        self.assertEqual(self._auditorias("CAD_DESATIVAR"), [])
+        self.assertEqual((perfil["active"], perfil["perm_version"]), ("Y", 1))
+        self.assertEqual(self._auditorias("DEACTIVATE"), [])
 
     def test_remover_is_admin_do_unico_perfil_admin_e_negado(self):
         form = self._form(PERFIL_ADMIN)
         _id, erros = self.svc.salvar(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN),
-                                     {"nome": form["nome"], "descricao": form["descricao"], "is_admin": None,
-                                      "versao": form["versao"]})
+                                     {"name": form["name"], "description": form["description"], "is_admin": None,
+                                      "version": form["version"]})
         self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_ULTIMO_ADMIN})
-        self.assertEqual(self.rbac_repo.perfis_obter(PERFIL_ADMIN)["is_admin"], "S")
+        self.assertEqual(self.rbac_repo.perfis_obter(PERFIL_ADMIN)["is_admin"], "Y")
 
     def test_com_outro_admin_ativo_a_operacao_passa(self):
-        novo_id, erros = self.svc.salvar(self.ctx["admin"], IP, None, {"nome": "ADMIN_RESERVA", "is_admin": "S"})
+        novo_id, erros = self.svc.salvar(self.ctx["admin"], IP, None, {"name": "ADMIN_RESERVA", "is_admin": "Y"})
         self.assertEqual(erros, {})
         u = self.usuarios.obter_por_login("op.hml")
-        self.usuarios.alterar(u["id"], {"perfil_id": novo_id}, ator="teste")
+        self.usuarios.alterar(u["id"], {"profile_id": novo_id}, ator="teste")
         form = self._form(PERFIL_ADMIN)
-        alterado = self.svc.alternar_ativo(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["versao"])
-        self.assertEqual(alterado["ativo"], "N")
-        aud = self._auditorias("CAD_DESATIVAR")
+        alterado = self.svc.alternar_ativo(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
+        self.assertEqual(alterado["active"], "N")
+        aud = self._auditorias("DEACTIVATE")
         self.assertEqual(len(aud), 1)
-        self.assertIn(u"usuários ativos afetados: 1", aud[0]["detalhe"])
+        self.assertIn(u"usuários ativos afetados: 1", aud[0]["detail"])
 
     def test_perfil_admin_sem_usuarios_nao_conta_como_admin_ativo(self):
         # Um segundo perfil admin sem usuarios nao livra o ultimo admin real.
-        self.svc.salvar(self.ctx["admin"], IP, None, {"nome": "ADMIN_VAZIO", "is_admin": "S"})
+        self.svc.salvar(self.ctx["admin"], IP, None, {"name": "ADMIN_VAZIO", "is_admin": "Y"})
         form = self._form(PERFIL_ADMIN)
         with self.assertRaises(OperacaoNegada) as cm:
-            self.svc.alternar_ativo(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["versao"])
+            self.svc.alternar_ativo(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
         self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_ULTIMO_ADMIN)
 
     def test_quem_nao_e_admin_nao_altera_perfil_admin(self):
         form = self._form(PERFIL_ADMIN)
         with self.assertRaises(OperacaoNegada) as cm:
-            self.svc.alternar_ativo(self.ctx["gestor"], IP, str(PERFIL_ADMIN), form["versao"])
+            self.svc.alternar_ativo(self.ctx["gestor"], IP, str(PERFIL_ADMIN), form["version"])
         self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_SO_ADMIN)
         _id, erros = self.svc.salvar(self.ctx["gestor"], IP, str(PERFIL_ADMIN),
-                                     {"nome": form["nome"], "descricao": form["descricao"], "is_admin": None,
-                                      "versao": form["versao"]})
+                                     {"name": form["name"], "description": form["description"], "is_admin": None,
+                                      "version": form["version"]})
         self.assertEqual(erros, {CAMPO_GERAL: perfis_mod.MSG_SO_ADMIN})
-        self.assertEqual(self.rbac_repo.perfis_obter(PERFIL_ADMIN)["is_admin"], "S")
+        self.assertEqual(self.rbac_repo.perfis_obter(PERFIL_ADMIN)["is_admin"], "Y")
 
     def test_protecao_e_atomica_no_repositorio(self):
         with self.assertRaises(RepoViolacao) as cm:
-            self.rbac_repo.perfis_alterar(PERFIL_ADMIN, {"ativo": "N"}, ator="teste")
+            self.rbac_repo.perfis_alterar(PERFIL_ADMIN, {"active": "N"}, ator="teste")
         self.assertEqual(cm.exception.constraint, "sss_ultimo_admin")
         self.assertEqual(self.rbac_repo.admins_ativos_bloquear(), [1])
 
@@ -415,37 +415,37 @@ class TestCadastroPerfil(_BasePerfis):
 
     def test_inclusao_validacoes_e_auditoria(self):
         for nome, msg in (("", perfis_mod.MSG_NOME_OBRIGATORIO), ("auditor", perfis_mod.MSG_NOME_INVALIDO),
-                          ("CONSULTA", perfis_mod.MSG_NOME_DUPLICADO)):
-            _id, erros = self.svc.salvar(self.ctx["admin"], IP, None, {"nome": nome})
-            self.assertEqual(erros, {"nome": msg}, nome)
-        pid, erros = self.svc.salvar(self.ctx["admin"], IP, None, {"nome": "AUDITOR", "descricao": "Leitura"})
+                          ("READ_ONLY", perfis_mod.MSG_NOME_DUPLICADO)):
+            _id, erros = self.svc.salvar(self.ctx["admin"], IP, None, {"name": nome})
+            self.assertEqual(erros, {"name": msg}, nome)
+        pid, erros = self.svc.salvar(self.ctx["admin"], IP, None, {"name": "AUDITOR", "description": "Leitura"})
         self.assertEqual(erros, {})
         perfil = self.rbac_repo.perfis_obter(pid)
-        self.assertEqual((perfil["is_admin"], perfil["ativo"], perfil["perm_versao"]), ("N", "S", 1))
-        self.assertIn("nome: AUDITOR", self._auditorias("CAD_INSERIR")[0]["detalhe"])
+        self.assertEqual((perfil["is_admin"], perfil["active"], perfil["perm_version"]), ("N", "Y", 1))
+        self.assertIn("name: AUDITOR", self._auditorias("CREATE")[0]["detail"])
 
     def test_alteracao_concorrente_e_auditoria(self):
         aba1 = self.svc.formulario(self.ctx["admin"], str(PERFIL_CONSULTA))
         aba2 = self.svc.formulario(self.ctx["admin"], str(PERFIL_CONSULTA))
         self.assertEqual(aba1["usuarios_ativos"], 1)
         _id, erros = self.svc.salvar(self.ctx["admin"], IP, str(PERFIL_CONSULTA),
-                                     {"nome": "CONSULTA_GERAL", "descricao": aba2["descricao"], "versao": aba2["versao"]})
+                                     {"name": "CONSULTA_GERAL", "description": aba2["description"], "version": aba2["version"]})
         self.assertEqual(erros, {})
         _id, erros = self.svc.salvar(self.ctx["admin"], IP, str(PERFIL_CONSULTA),
-                                     {"nome": "CONSULTA", "descricao": "x", "versao": aba1["versao"]})
+                                     {"name": "READ_ONLY", "description": "x", "version": aba1["version"]})
         self.assertEqual(erros, {CAMPO_GERAL: admin_crud.MSG_CONFLITO})
-        aud = self._auditorias("CAD_ALTERAR")
+        aud = self._auditorias("UPDATE")
         self.assertEqual(len(aud), 1)
-        self.assertIn(u"nome: CONSULTA \u2192 CONSULTA_GERAL", aud[0]["detalhe"])
+        self.assertIn(u"name: READ_ONLY \u2192 CONSULTA_GERAL", aud[0]["detail"])
         self.assertEqual(self._versao(PERFIL_CONSULTA), 2)
 
     def test_reativar(self):
         form = self.svc.formulario(self.ctx["admin"], str(PERFIL_CONSULTA))
-        self.svc.alternar_ativo(self.ctx["admin"], IP, str(PERFIL_CONSULTA), form["versao"])
+        self.svc.alternar_ativo(self.ctx["admin"], IP, str(PERFIL_CONSULTA), form["version"])
         form = self.svc.formulario(self.ctx["admin"], str(PERFIL_CONSULTA))
         with self.assertRaises(RepoConflito):
             self.svc.alternar_ativo(self.ctx["admin"], IP, str(PERFIL_CONSULTA), "x")
-        self.assertEqual(self.svc.alternar_ativo(self.ctx["admin"], IP, str(PERFIL_CONSULTA), form["versao"])["ativo"], "S")
+        self.assertEqual(self.svc.alternar_ativo(self.ctx["admin"], IP, str(PERFIL_CONSULTA), form["version"])["active"], "Y")
 
     def test_acesso_negado_e_nao_encontrado(self):
         for chamada in (lambda c: self.svc.listar(c, {}, 1, 20), lambda c: self.svc.matriz(c, "1"),
@@ -458,9 +458,9 @@ class TestCadastroPerfil(_BasePerfis):
                 self.svc.matriz(self.ctx["admin"], pid)
 
     def test_filtros(self):
-        self.assertEqual(perfis_mod.normalizar_filtros({"nome": "OPER", "ativo": "S", "is_admin": "N"}),
-                         {"nome": "OPER", "ativo": "S", "is_admin": "N"})
-        self.assertEqual(perfis_mod.normalizar_filtros({"nome": "<x>", "ativo": "?"}), {})
+        self.assertEqual(perfis_mod.normalizar_filtros({"name": "OPER", "active": "Y", "is_admin": "N"}),
+                         {"name": "OPER", "active": "Y", "is_admin": "N"})
+        self.assertEqual(perfis_mod.normalizar_filtros({"name": "<x>", "active": "?"}), {})
 
 
 if __name__ == "__main__":

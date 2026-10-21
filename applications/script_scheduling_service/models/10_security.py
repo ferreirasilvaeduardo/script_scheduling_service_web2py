@@ -75,8 +75,8 @@ if session.usuario_id:
     if _ctx is None:
         _encerrar_sessao(u"Seu acesso mudou e a sessão foi encerrada. Entre de novo para continuar.")
     current.sss_ctx = _ctx
-    session.perfil_id = _ctx["perfil_id"]
-    session.perm_versao = _ctx["perm_versao"]
+    session.perfil_id = _ctx["profile_id"]
+    session.perm_versao = _ctx["perm_version"]
     session.ultimo_acesso = _agora
     response.headers["Cache-Control"] = "no-store"
     response.sss_menu = ui_menu.montar_menu(

@@ -329,10 +329,10 @@ class Agente(object):
         inicio = self.relogio()
         try:
             self.agente_db_id = self.repo.registrar_agente(self._conn(), {
-                "codigo": agente.agent_id, "hostname": self.hostname, "pid": self.pid,
-                "versao": sss_config.VERSAO_SSS, "ambientes": ",".join(agente.ambientes_atendidos),
-                "plataforma": self.plat.NOME, "interpretadores": ",".join(k for k, _v in agente.interpretadores),
-                "config_criticos": criticos, "node_offline_timeout_s": agente.node_offline_timeout_s,
+                "code": agente.agent_id, "hostname": self.hostname, "pid": self.pid,
+                "version": sss_config.VERSAO_SSS, "environments": ",".join(agente.ambientes_atendidos),
+                "platform": self.plat.NOME, "interpreters": ",".join(k for k, _v in agente.interpretadores),
+                "critical_config": criticos, "node_offline_timeout_s": agente.node_offline_timeout_s,
             }, self.plat.processo_existe)
             divergentes = self.repo.conferir_config(self._conn(), agente.agent_id, criticos,
                                                     agente.node_offline_timeout_s)
@@ -414,7 +414,7 @@ class Agente(object):
             if tid in pastas:
                 res = resultados.get(tid)
                 if res is not None:
-                    self._finalizar(tid, res["status"], res["status_motivo"], res["return_code"], log,
+                    self._finalizar(tid, res["status"], res["status_reason"], res["return_code"], log,
                                     "resultado local gravado antes da queda")
                 else:
                     self._finalizar(tid, "FAILED", "ORPHAN_PROCESS", -2, log, "processo sem acompanhamento")
@@ -841,7 +841,7 @@ class Agente(object):
                         and not item.finalizacao_pendente:
                     item.motivo = "OWNERSHIP_LOST"
                 continue
-            if proprios[tid] == "S" and item.fase == _Item.RODANDO:
+            if proprios[tid] == "Y" and item.fase == _Item.RODANDO:
                 self._encerrar(item, "CANCEL")
         for tid in sorted(set(proprios) - set(self.execucoes) - set(self.encerrando) - self.devolucoes_pendentes):
             self._reconciliar(tid)
@@ -877,7 +877,7 @@ class Agente(object):
                     log.warning("TALVEZ_INICIADO sem meio de encerrar nesta plataforma")
                 log.error("TALVEZ_INICIADO: .sss_spawn sem .sss_proc")
             if res is not None:
-                self._finalizar(tid, res["status"], res["status_motivo"], res["return_code"], log,
+                self._finalizar(tid, res["status"], res["status_reason"], res["return_code"], log,
                                 "resultado local")
             else:
                 self._finalizar(tid, "FAILED", "ORPHAN_PROCESS", -2, log, "processo sem acompanhamento")
@@ -1025,7 +1025,7 @@ class Agente(object):
             if len(self.execucoes) >= agente.max_parallel_jobs or self.relogio() - inicio > orcamento \
                     or not self._pode_seguir():
                 break
-            ok, motivo, started_at = self.repo.claim(conn, cand["id"], cand["script_id"], cand["ambiente"],
+            ok, motivo, started_at = self.repo.claim(conn, cand["id"], cand["script_id"], cand["environment"],
                                                      self.agente_id)
             if not ok:
                 if motivo == "LOCK":  # esperado e tratado: WARN com o codigo, sem stack trace (README §13, R-32)
@@ -1065,24 +1065,24 @@ class Agente(object):
         ticket = self.repo.obter_ticket(conn, item.tid)
         item.ticket = ticket
         contexto = self.repo.contexto_execucao(conn, ticket)
-        script, ambiente = contexto["script"], contexto["ambiente"]
+        script, ambiente = contexto["script"], contexto["environment"]
         try:
-            snap, argv, script_real = params_compiler.validar_snapshot(ticket["parametros_enviados"],
+            snap, argv, script_real = params_compiler.validar_snapshot(ticket["submitted_params"],
                                                                        self._cfg_snapshot())
         except params_compiler.SnapshotErro as exc:
             codigo = exc.motivo[len("PATH_GUARD_"):] if exc.motivo.startswith("PATH_GUARD_") else exc.motivo
             return self._recusar(item, codigo)
-        if script is None or snap["path_file"] != script["path_file"] or snap["interpretador"] != script["interpretador"]:
+        if script is None or snap["path_file"] != script["path_file"] or snap["interpreter"] != script["interpreter"]:
             return self._recusar(item, "CADASTRO_MUDOU")
-        if script.get("ativo") != "S":
-            return self._recusar(item, "SCRIPT_INATIVO")
-        if not self.repo.script_ativo_homologado(conn, script["id"], ticket["ambiente"]):
+        if script.get("active") != "Y":
+            return self._recusar(item, "SCRIPT_INACTIVE")
+        if not self.repo.script_ativo_homologado(conn, script["id"], ticket["environment"]):
             return self._recusar(item, "NAO_HOMOLOGADO")
-        if ambiente is None or ambiente.get("ativo") != "S":
-            return self._recusar(item, "AMBIENTE_INATIVO")
+        if ambiente is None or ambiente.get("active") != "Y":
+            return self._recusar(item, "ENVIRONMENT_INACTIVE")
         ok, _motivo = rbac.pode_executar(contexto["ctx"], script, ambiente, contexto["homologacoes"])
         if not ok:
-            return self._recusar(item, "SEM_PERMISSAO")
+            return self._recusar(item, "NO_PERMISSION")
         return snap, argv, script_real, contexto
 
     def _cfg_snapshot(self):
@@ -1148,32 +1148,32 @@ class Agente(object):
     def _spawn(self, item, snap, argv, script_real, contexto):
         agente = self.cfg.agent
         ticket = item.ticket
-        usuario = env_builder.usuario_execucao(self.cfg, ticket["ambiente"])
+        usuario = env_builder.usuario_execucao(self.cfg, ticket["environment"])
         rotulo = "SSS-%s-%s" % (self.agente_id, item.tid)
         try:
             work_dir_ticket = executor.preparar_diretorio(agente.work_dir, item.tid, startup_concluido=True)
-            fd, caminho = executor.abrir_log(self.cfg.logging.log_dir, ticket["ambiente"], snap["script_nome"],
+            fd, caminho = executor.abrir_log(self.cfg.logging.log_dir, ticket["environment"], snap["script_nome"],
                                              item.started_at, item.tid, snap.get("script_id"))
         except Exception as exc:  # noqa: BLE001 - CR-007 R-17: sem arquivo de log, a causa vai para o CLOB
             item.log.error("falha antes do spawn: %s", exc, extra={"acao": "SPAWN"})
             return self._finalizar_sem_spawn(item, _FINAL["SPAWN_ERROR"], "falha ao iniciar: %s (agente %s)" % (
                 exc.__class__.__name__, self.agente_id))
-        timeout = contexto["script"].get("timeout_seg") or agente.script_timeout_s
+        timeout = contexto["script"].get("timeout_s") or agente.script_timeout_s
         conexao = None
         saida = None
         entrada = None
         try:
             if agente.input_dir:
                 # CR-014 (README §8.14): pasta permanente do script no ambiente, com o nome do snapshot.
-                entrada = pastas_log.pasta_entrada(agente.input_dir, ticket["ambiente"], snap["script_nome"],
+                entrada = pastas_log.pasta_entrada(agente.input_dir, ticket["environment"], snap["script_nome"],
                                                    snap.get("script_id"))
             if agente.output_dir:
                 # CR-012 (README §8.13): pasta de saida com as partes do log e o mesmo minuto.
-                base, relativo = pastas_log.pasta_saida(agente.output_dir, ticket["ambiente"], snap["script_nome"],
+                base, relativo = pastas_log.pasta_saida(agente.output_dir, ticket["environment"], snap["script_nome"],
                                                         item.started_at, item.tid, snap.get("script_id"))
                 saida = fase_saida.Saida(item.tid, base, relativo, usuario, work_dir_ticket)
             ticket_env = dict(ticket, started_at=item.started_at)
-            env = env_builder.construir(self.cfg, self.segredos, ticket_env, contexto["ambiente"], script_real,
+            env = env_builder.construir(self.cfg, self.segredos, ticket_env, contexto["environment"], script_real,
                                         work_dir_ticket, dict(os.environ), self.plat.NOME, snapshot=snap,
                                         agendamento=contexto["agendamento"], caminho_log=caminho,
                                         timeout_seg=timeout, hostname=self.hostname, versao=sss_config.VERSAO_SSS,
@@ -1233,7 +1233,7 @@ class Agente(object):
 
     def encerrar_tudo(self, modo, registro_perdido=False):
         """Fim da parada (README §8.11): TERMINATE nos grupos que restarem (todos, no TERMINATE; os que passaram
-        de shutdown_grace_s, no DRAIN), finalizados SHUTDOWN; flush dos logs, PARADO com AGENTE_FIM, remocao
+        de shutdown_grace_s, no DRAIN), finalizados SHUTDOWN; flush dos logs, PARADO com AGENT_STOP, remocao
         do .stop, recursos liberados e saida 0."""
         self.log.warning("encerramento %s: %d execucao(oes) local(is)", modo, len(self.execucoes),
                          extra={"acao": "PARADA"})

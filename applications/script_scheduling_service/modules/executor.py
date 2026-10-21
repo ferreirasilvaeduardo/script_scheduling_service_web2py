@@ -346,7 +346,7 @@ def traduzir_retorno(returncode, plataforma_nome):
 def registrar_resultado(execucao, status, motivo, rc):
     """Grava .sss_result antes do UPDATE de finalizacao (CR-007, R-01)."""
     plataforma.gravar_estado(os.path.join(execucao.work_dir_ticket, RESULT), {
-        "ticket_id": execucao.ticket_id, "status": status, "status_motivo": motivo, "return_code": rc})
+        "ticket_id": execucao.ticket_id, "status": status, "status_reason": motivo, "return_code": rc})
 
 
 def anexar_linha_local(execucao, texto):

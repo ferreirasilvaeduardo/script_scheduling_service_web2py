@@ -32,7 +32,7 @@ def shell():
     tickets = [{
         "id": tid,
         "script": script,
-        "ambiente": amb,
+        "environment": amb,
         "status": ui_helpers.status_info(st),
         "inicio": ui_helpers.formatar_data(ini),
         "duracao": ui_helpers.formatar_duracao(ini, fim),
@@ -72,9 +72,9 @@ def _tickets_demo():
         tickets.append({
             "id": 1100 - i,
             "script": _SCRIPTS_DEMO[i % len(_SCRIPTS_DEMO)],
-            "ambiente": _AMBIENTES_DEMO[i % len(_AMBIENTES_DEMO)],
+            "environment": _AMBIENTES_DEMO[i % len(_AMBIENTES_DEMO)],
             "status": status,
-            "status_motivo": motivo,
+            "status_reason": motivo,
             "data": inicio.strftime("%Y-%m-%d"),
             "inicio": ui_helpers.formatar_data(None if status == "PENDING" else inicio),
             "duracao": ui_helpers.formatar_duracao(None if status == "PENDING" else inicio, fim),
@@ -88,13 +88,13 @@ def _formulario_demo():
     timeout = _texto_var("ex_timeout", 9)
     prioridade = _texto_var("ex_prioridade", 1)
     campos = [
-        {"nome": "ex_nome", "rotulo": u"Nome do agendamento", "tipo": "text", "valor": nome,
-         "ajuda": u"Identificador exibido nas listagens.", "obrigatorio": True},
-        {"nome": "ex_timeout", "rotulo": u"Tempo limite (segundos)", "tipo": "number", "valor": timeout,
-         "ajuda": u"Entre 1 e 86400.", "obrigatorio": True},
-        {"nome": "ex_prioridade", "rotulo": u"Prioridade", "tipo": "select", "valor": prioridade or "2",
+        {"name": "ex_nome", "rotulo": u"Nome do agendamento", "tipo": "text", "valor": nome,
+         "ajuda": u"Identificador exibido nas listagens.", "required": True},
+        {"name": "ex_timeout", "rotulo": u"Tempo limite (segundos)", "tipo": "number", "valor": timeout,
+         "ajuda": u"Entre 1 e 86400.", "required": True},
+        {"name": "ex_prioridade", "rotulo": u"Prioridade", "tipo": "select", "valor": prioridade or "2",
          "opcoes": [("2", u"2 — Normal"), ("3", u"3 — Baixa"), ("4", u"4 — Mínima")]},
-        {"nome": "ex_obs", "rotulo": u"Observação", "tipo": "textarea", "valor": _texto_var("ex_obs", 500)},
+        {"name": "ex_obs", "rotulo": u"Observação", "tipo": "textarea", "valor": _texto_var("ex_obs", 500)},
     ]
     # Validacao apenas ilustrativa do erro por campo; nao e regra de negocio.
     if enviado:
@@ -148,7 +148,7 @@ def componentes():
     colunas = [
         {"chave": "id", "rotulo": u"Ticket", "tipo": "mono", "classe": "sss-col-id"},
         {"chave": "script", "rotulo": u"Script", "tipo": "mono"},
-        {"chave": "ambiente", "rotulo": u"Ambiente"},
+        {"chave": "environment", "rotulo": u"Ambiente"},
         {"chave": "status", "rotulo": u"Status", "tipo": "status"},
         {"chave": "inicio", "rotulo": u"Início", "tipo": "mono", "classe": "sss-col-data"},
         {"chave": "duracao", "rotulo": u"Duração", "tipo": "mono", "classe": "sss-col-num"},
@@ -176,12 +176,12 @@ def componentes():
             "url_base": (request.controller, request.function),
             "preservar": {"tamanho": pag["tamanho"]},
             "campos": [
-                {"nome": "q", "rotulo": u"Script", "tipo": "texto", "valor": q},
-                {"nome": "status", "rotulo": u"Status", "tipo": "select", "valor": status,
+                {"name": "q", "rotulo": u"Script", "tipo": "texto", "valor": q},
+                {"name": "status", "rotulo": u"Status", "tipo": "select", "valor": status,
                  "opcoes": [("", u"Todos")] + [(c, ui_helpers.status_info(c)["rotulo"]) for c in
                                                ("PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED")]},
-                {"nome": "de", "rotulo": u"Data início", "tipo": "data", "valor": de},
-                {"nome": "ate", "rotulo": u"Data fim", "tipo": "data", "valor": ate},
+                {"name": "de", "rotulo": u"Data início", "tipo": "data", "valor": de},
+                {"name": "ate", "rotulo": u"Data fim", "tipo": "data", "valor": ate},
             ],
         },
         tamanhos=(20, 50, 100),
@@ -210,6 +210,6 @@ def componentes():
 def admin_teste():
     _exigir_login()
     _exigir_dev()
-    ctx = _exigir_func("CAD_USUARIOS")
+    ctx = _exigir_func("MANAGE_USERS")
     response.title = u"Rota administrativa de teste — SSS"
     return dict(ctx=ctx)

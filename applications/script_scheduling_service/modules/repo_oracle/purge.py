@@ -13,7 +13,7 @@ import sql_ident
 
 ATOR = "SYSTEM:purge"
 TERMINAIS = ("SUCCESS", "FAILED", "CANCELLED")
-_COLS_AUD = ("id", "created_at", "ator", "ip_origem", "acao", "entidade", "entidade_id", "detalhe")
+_COLS_AUD = ("id", "created_at", "actor", "source_ip", "action", "entity", "entity_id", "detail")
 
 
 def _ler_lob(valor):
@@ -24,9 +24,9 @@ class RepoPurge(object):
     """Owner e prefixo vem da configuracao (nunca fixos); os nomes passam por sql_ident."""
 
     def __init__(self, owner, prefixo):
-        t = lambda nome: sql_ident.qualificar(owner, prefixo + nome, prefixo=prefixo)  # noqa: E731
+        t = lambda nome: sql_ident.tabela(owner, prefixo, nome)  # noqa: E731
         self._tck, self._aud, self._ctl, self._scr = t("tickets"), t("auditoria"), t("controle"), t("scripts")
-        self._seq_aud = sql_ident.qualificar(owner, "sq_%sauditoria" % prefixo, prefixo=prefixo)
+        self._seq_aud = sql_ident.sequence(owner, prefixo, "auditoria")
         self._prefixo = prefixo
 
     @classmethod
@@ -52,18 +52,18 @@ class RepoPurge(object):
         finally:
             cur.close()
 
-    # ------------------------------------------------------------------ concessao (tbsss_controle)
+    # ------------------------------------------------------------------ concessao (tbsss_control)
 
     def tomar_concessao(self, conn, dono):
         """Toma ou renova a concessao por 1 hora (README §11.3). False: outro no esta purgando. Sem COMMIT."""
-        return self._executar(conn, "UPDATE " + self._ctl + " SET purge_dono = :dono, purge_concessao_ate = SYSDATE + 1/24"
-                              " WHERE id = 1 AND (purge_concessao_ate IS NULL OR purge_concessao_ate < SYSDATE"
-                              " OR purge_dono = :dono)", {"dono": dono}) == 1
+        return self._executar(conn, "UPDATE " + self._ctl + " SET purge_owner = :dono, purge_lease_until = SYSDATE + 1/24"
+                              " WHERE id = 1 AND (purge_lease_until IS NULL OR purge_lease_until < SYSDATE"
+                              " OR purge_owner = :dono)", {"dono": dono}) == 1
 
     def liberar_concessao(self, conn, dono):
         """Libera dono e prazo (CR-008, R-27), so se a concessao ainda for deste no. Sem COMMIT."""
-        return self._executar(conn, "UPDATE " + self._ctl + " SET purge_dono = NULL, purge_concessao_ate = NULL"
-                              " WHERE id = 1 AND purge_dono = :dono", {"dono": dono}) == 1
+        return self._executar(conn, "UPDATE " + self._ctl + " SET purge_owner = NULL, purge_lease_until = NULL"
+                              " WHERE id = 1 AND purge_owner = :dono", {"dono": dono}) == 1
 
     # ------------------------------------------------------------------ tickets
 
@@ -106,14 +106,14 @@ class RepoPurge(object):
     def auditar(self, conn, tabela, apagadas):
         """PURGE com uma linha por tabela purgada, entidade = a tabela, entidade_id nulo (README §4.4; CR-008 R-16:
         tambem com 0 linhas). Sem COMMIT."""
-        self._executar(conn, "INSERT INTO " + self._aud + " (id, ator, ip_origem, acao, entidade, entidade_id, detalhe,"
-                       " created_at) VALUES (:id, :ator, NULL, 'PURGE', :entidade, NULL, :detalhe, SYSDATE)",
-                       {"id": db_conn.proximo_id(conn, self._seq_aud), "ator": ATOR,
-                        "entidade": self._prefixo_padrao(tabela), "detalhe": "%d linhas" % int(apagadas)})
+        self._executar(conn, "INSERT INTO " + self._aud + " (id, actor, source_ip, action, entity, entity_id, detail,"
+                       " created_at) VALUES (:id, :actor, NULL, 'PURGE', :entity, NULL, :detail, SYSDATE)",
+                       {"id": db_conn.proximo_id(conn, self._seq_aud), "actor": ATOR,
+                        "entity": self._prefixo_padrao(tabela), "detail": "%d linhas" % int(apagadas)})
 
     def _prefixo_padrao(self, tabela):
-        # A entidade da auditoria usa o nome logico tbsss_<tabela> (README §4.4), como as demais acoes.
-        return "tbsss_%s" % tabela
+        # A entidade da auditoria usa o nome tbsss_<tabela fisica> (README §4.4), como as demais acoes.
+        return "tbsss_%s" % sql_ident.fisico(tabela)
 
     # ------------------------------------------------------------------ logs de tickets RUNNING
 
@@ -122,7 +122,7 @@ class RepoPurge(object):
         (CR-007, R-32). O nome vem do snapshot (o da epoca do disparo), como no caminho do log (README §8.4)."""
         cur = conn.cursor()
         try:
-            cur.execute("SELECT t.ambiente, t.script_id, t.started_at, t.parametros_enviados FROM " + self._tck + " t"
+            cur.execute("SELECT t.environment, t.script_id, t.started_at, t.submitted_params FROM " + self._tck + " t"
                         " WHERE t.status = 'RUNNING' AND t.started_at IS NOT NULL")
             saida = []
             for amb, sid, inicio, snap in cur.fetchall():

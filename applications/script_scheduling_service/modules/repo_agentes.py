@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Contrato de persistencia para monitoramento de agentes (tbsss_agentes)."""
+"""Contrato de persistencia para monitoramento de agentes (tbsss_agents)."""
 
 
 class RepoAgentes(object):

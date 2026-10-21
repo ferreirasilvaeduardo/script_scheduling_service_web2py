@@ -6,12 +6,12 @@
 import json
 _v = vinc
 _sc = _v['script']
-_rotulo_tipo = {'NOMEADO': u'por flag (NOMEADO)', 'SEQUENCIAL': u'posicional (SEQUENCIAL)', 'NENHUM': u'sem argumentos (NENHUM)'}
+_rotulo_tipo = {'NAMED': u'por flag (NOMEADO)', 'POSITIONAL': u'posicional (SEQUENCIAL)', 'NONE': u'sem argumentos (NENHUM)'}
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
-    <h1 class="sss-page-titulo">Parâmetros de <span class="sss-mono">{{=_sc['nome']}}</span></h1>
-    <p class="sss-page-sub">Montagem {{=_rotulo_tipo.get(_sc['tipo_param'], _sc['tipo_param'])}}. A ordem da lista é a ordem dos argumentos.</p>
+    <h1 class="sss-page-titulo">Parâmetros de <span class="sss-mono">{{=_sc['name']}}</span></h1>
+    <p class="sss-page-sub">Montagem {{=_rotulo_tipo.get(_sc['param_type'], _sc['param_type'])}}. A ordem da lista é a ordem dos argumentos.</p>
   </div>
   <div class="sss-acoes">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_scripts', f='form', args=[_sc['id']])}}">Dados do script</a>
@@ -24,10 +24,10 @@ _rotulo_tipo = {'NOMEADO': u'por flag (NOMEADO)', 'SEQUENCIAL': u'posicional (SE
       data-vinculos="{{=json.dumps(_v['vinculos'])}}" data-disponiveis="{{=json.dumps(_v['disponiveis'])}}">
   {{=csrf_campo()}}
   <input type="hidden" name="id" value="{{=_sc['id']}}">
-  <input type="hidden" name="versao" value="{{=_v['versao']}}">
+  <input type="hidden" name="version" value="{{=_v['version']}}">
   <input type="hidden" name="vinculos_json" :value="vinculosJson">
   <div class="sss-card-corpo">
-    {{if _sc['tipo_param'] == 'NENHUM':}}
+    {{if _sc['param_type'] == 'NONE':}}
     <div class="alert alert-info sss-alerta" role="note"><span>Este script não recebe argumentos: não é possível vincular parâmetros.</span></div>
     {{pass}}
     <p class="sss-texto-suave" x-show="semVinculos">Nenhum parâmetro vinculado.</p>
@@ -57,7 +57,7 @@ _rotulo_tipo = {'NOMEADO': u'por flag (NOMEADO)', 'SEQUENCIAL': u'posicional (SE
       </template>
     </ol>
 
-    {{if _sc['tipo_param'] != 'NENHUM':}}
+    {{if _sc['param_type'] != 'NONE':}}
     <fieldset class="sss-teste mb-3">
       <legend class="form-label fs-6">Adicionar parâmetro do dicionário</legend>
       <input type="search" class="form-control form-control-sm mb-2" id="busca-parametro" maxlength="60" placeholder="Código ou rótulo" aria-label="Buscar parâmetro" @input="buscar">

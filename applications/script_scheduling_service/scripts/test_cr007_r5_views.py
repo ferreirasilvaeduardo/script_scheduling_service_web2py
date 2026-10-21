@@ -27,13 +27,13 @@ class TestViewsCR007(unittest.TestCase):
     def test_paginacao_limitada_preserva_filtro_sem_ultima(self):
         html = _render("components/paginacao.html", pagina=502, tamanho=20, total=10001,
                        total_limitado=True, quantidade_pagina=20, url_base=("tickets", "lista"),
-                       query_params={"ambiente": "HOMOLOGACAO", "pagina": 1})
+                       query_params={"environment": "HOMOLOGACAO", "pagina": 1})
         self.assertIn("mais de 10.000 registros", html)
         self.assertNotIn("Última", html)
         self.assertNotIn("502 de", html)
         self.assertIn("Página 502", html)
         self.assertIn("pagina=503", html)
-        self.assertIn("ambiente=HOMOLOGACAO", html)
+        self.assertIn("environment=HOMOLOGACAO", html)
         exato = _render("components/paginacao.html", pagina=1, tamanho=20, total=10000,
                         total_limitado=False, quantidade_pagina=20, url_base=("tickets", "lista"),
                         query_params={})
@@ -54,11 +54,11 @@ class TestViewsCR007(unittest.TestCase):
     def test_diagnosticos_aparecem_sem_agentes_e_escapam_conteudo(self):
         agora = datetime.datetime(2026, 10, 17)
         painel = {"agentes": [], "resumo": {}, "agora": agora, "config_web": "hb=10",
-                  "fila_sem_atendente": [{"ambiente": "HOMOLOGACAO", "interpretador": "BASH",
+                  "fila_sem_atendente": [{"environment": "HOMOLOGACAO", "interpreter": "BASH",
                                           "quantidade": 2, "mais_antigo": agora}],
-                  "rodando_sem_pid": [{"id": 1, "ambiente": "HOMOLOGACAO", "agente_id": "agt01",
+                  "rodando_sem_pid": [{"id": 1, "environment": "HOMOLOGACAO", "agent_id": "agt01",
                                        "started_at": agora}],
-                  "config_divergente": [{"codigo": "agt01", "config_criticos": "<script>intruso</script>"}]}
+                  "config_divergente": [{"code": "agt01", "critical_config": "<script>intruso</script>"}]}
         html = _render("auditoria/agentes.load", painel=painel, erro=None)
         for titulo in ("Fila sem atendente", "Rodando sem PID", "Configuração divergente"):
             self.assertIn(titulo, html)

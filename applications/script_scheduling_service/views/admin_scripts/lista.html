@@ -2,39 +2,39 @@
 {{
 # Lista de scripts (padrão de CRUD administrativo). O caminho completo do arquivo é exibido (README §8.5, CR-005 D8).
 _opc_cmd = [('', 'Todos')] + [(_c, _c) for _c, _r in interpretadores]
-_opc_ativo = [('', 'Todos'), ('S', 'Ativos'), ('N', 'Inativos')]
+_opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
 filtros = {'id': 'filtro-scripts', 'url_base': ('admin_scripts', 'lista'), 'preservar': {'tamanho': tamanho}, 'campos': [
-    {'nome': 'nome', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('nome')},
-    {'nome': 'grupo', 'rotulo': 'Grupo', 'tipo': 'texto', 'valor': filtros_ativos.get('grupo')},
-    {'nome': 'categoria', 'rotulo': 'Categoria', 'tipo': 'texto', 'valor': filtros_ativos.get('categoria')},
-    {'nome': 'interpretador', 'rotulo': 'Interpretador', 'tipo': 'select', 'valor': filtros_ativos.get('interpretador'), 'opcoes': _opc_cmd},
-    {'nome': 'ativo', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('ativo'), 'opcoes': _opc_ativo},
+    {'name': 'name', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('name')},
+    {'name': 'script_group', 'rotulo': 'Grupo', 'tipo': 'texto', 'valor': filtros_ativos.get('script_group')},
+    {'name': 'category', 'rotulo': 'Categoria', 'tipo': 'texto', 'valor': filtros_ativos.get('category')},
+    {'name': 'interpreter', 'rotulo': 'Interpretador', 'tipo': 'select', 'valor': filtros_ativos.get('interpreter'), 'opcoes': _opc_cmd},
+    {'name': 'active', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('active'), 'opcoes': _opc_ativo},
 ]}
 _linhas = []
 for _s in resultado['itens']:
     _linhas.append({
-        'nome': _s['nome'],
-        'grupo': ' / '.join([_x for _x in (_s.get('grupo'), _s.get('categoria')) if _x]) or '-',
-        'cmd': _s['interpretador'],
+        'name': _s['name'],
+        'script_group': ' / '.join([_x for _x in (_s.get('script_group'), _s.get('category')) if _x]) or '-',
+        'cmd': _s['interpreter'],
         'path': _s['path_file'],
         'ambientes': ', '.join(_s.get('ambientes_homologados') or []) or u'Nenhum',
         'parametros': str(_s.get('qtd_parametros') or 0),
-        'ativo': _s['ativo'],
+        'active': _s['active'],
         'acao': [
-            {'href': URL(c='admin_scripts', f='form', args=[_s['id']]), 'rotulo': 'Editar', 'descricao': u'Editar script %s' % _s['nome']},
-            {'href': URL(c='admin_scripts', f='homologacao', args=[_s['id']]), 'rotulo': u'Homologação', 'descricao': u'Homologação do script %s' % _s['nome']},
-            {'href': URL(c='admin_scripts', f='parametros', args=[_s['id']]), 'rotulo': u'Parâmetros', 'descricao': u'Parâmetros do script %s' % _s['nome']},
+            {'href': URL(c='admin_scripts', f='form', args=[_s['id']]), 'rotulo': 'Editar', 'description': u'Editar script %s' % _s['name']},
+            {'href': URL(c='admin_scripts', f='homologacao', args=[_s['id']]), 'rotulo': u'Homologação', 'description': u'Homologação do script %s' % _s['name']},
+            {'href': URL(c='admin_scripts', f='parametros', args=[_s['id']]), 'rotulo': u'Parâmetros', 'description': u'Parâmetros do script %s' % _s['name']},
         ],
     })
 pass
 tabela = {'legenda': 'Scripts cadastrados', 'erro': erro, 'linhas': _linhas, 'msg_vazio': 'Nenhum script encontrado.', 'colunas': [
-    {'chave': 'nome', 'rotulo': 'Nome', 'tipo': 'mono'},
-    {'chave': 'grupo', 'rotulo': 'Grupo / categoria'},
+    {'chave': 'name', 'rotulo': 'Nome', 'tipo': 'mono'},
+    {'chave': 'script_group', 'rotulo': 'Grupo / categoria'},
     {'chave': 'cmd', 'rotulo': 'Interpretador', 'tipo': 'mono'},
     {'chave': 'path', 'rotulo': 'Caminho do arquivo', 'tipo': 'mono'},
     {'chave': 'ambientes', 'rotulo': 'Ambientes homologados'},
     {'chave': 'parametros', 'rotulo': u'Parâmetros'},
-    {'chave': 'ativo', 'rotulo': u'Situação', 'tipo': 'ativo'},
+    {'chave': 'active', 'rotulo': u'Situação', 'tipo': 'active'},
     {'chave': 'acao', 'rotulo': u'Ações', 'tipo': 'acao'},
 ]}
 pagina = resultado['pagina']

@@ -17,7 +17,7 @@ from repo_errors import RepoNaoEncontrado
 # Mensagens-padrao em duas partes (README §2.4.2); o bloqueio informa os minutos configurados.
 MSG_GENERICA = ui_helpers.mensagem("login_incorreto")
 
-ENTIDADE = "tbsss_usuarios"
+ENTIDADE = "tbsss_users"
 MSG_SENHA_ATUAL = u"A senha atual está incorreta."
 MSG_CONFIRMACAO = u"A confirmação não confere com a nova senha."
 SENHA_MAX = 1024
@@ -28,7 +28,7 @@ _RE_LOGIN = re.compile(r"[a-z0-9._-]{3,30}")
 
 
 def _aud(login, ip, acao, detalhe):
-    return {"ator": login, "ip": ip, "acao": acao, "detalhe": detalhe}
+    return {"actor": login, "ip": ip, "action": acao, "detail": detalhe}
 
 
 class ServicoAuth(object):
@@ -67,7 +67,7 @@ class ServicoAuth(object):
             security.verificar_senha(senha_txt, security.hash_ficticio())
             return self._falha_inexistente(login_norm if login_valido else "?", ip, agora)
 
-        armazenado = usuario.get("senha_hash")
+        armazenado = usuario.get("password_hash")
         if security.hash_reconhecido(armazenado):
             senha_confere = senha_ok_tipo and security.verificar_senha(senha_txt, armazenado)
         else:
@@ -83,7 +83,7 @@ class ServicoAuth(object):
             return self._falha_senha(usuario, ip)
 
         estado = self._usuarios.obter_estado_sessao(usuario["id"])
-        if estado.get("usuario_ativo") != "S" or estado.get("perfil_ativo") != "S":
+        if estado.get("usuario_ativo") != "Y" or estado.get("perfil_ativo") != "Y":
             self._registrar_falha(usuario, ip, "usuario ou perfil inativo")
             return None, MSG_GENERICA
 
@@ -100,19 +100,19 @@ class ServicoAuth(object):
 
     @staticmethod
     def _bloqueado(usuario, agora):
-        bloqueado_ate = usuario.get("bloqueado_ate")
+        bloqueado_ate = usuario.get("locked_until")
         return bloqueado_ate is not None and bloqueado_ate > agora
 
     def _reiniciar_se_expirado(self, usuario):
         # Bloqueio expirado (ou contador no limite): novo ciclo de tentativas, no login e na troca de senha.
-        if usuario.get("bloqueado_ate") is not None or int(usuario.get("tentativas_falha") or 0) >= self._max:
+        if usuario.get("locked_until") is not None or int(usuario.get("failed_attempts") or 0) >= self._max:
             return self._usuarios.reiniciar_tentativas(usuario["id"])
         return usuario
 
     def _registrar_falha(self, usuario, ip, motivo):
-        self._auditoria.registrar(usuario["login"], ip, "LOGIN_FALHA", ENTIDADE, usuario["id"],
+        self._auditoria.registrar(usuario["login"], ip, "LOGIN_FAILED", ENTIDADE, usuario["id"],
                                   "Falha de login: %s" % motivo)
-        self._log.warning("login falhou (login=%s ip=%s motivo=%s)", usuario["login"], ip, motivo,
+        self._log.warning("login falhou (login=%s ip=%s reason=%s)", usuario["login"], ip, motivo,
                           extra={"acao": "LOGIN"})
 
     def _falha_senha(self, usuario, ip):
@@ -120,13 +120,13 @@ class ServicoAuth(object):
         # desatualizada quando ha tentativas em paralelo (revisao de 2026-10-20).
         reg = self._usuarios.registrar_falha_login(
             usuario["login"], self._bloqueio_s, max_tentativas=self._max,
-            auditoria=_aud(usuario["login"], ip, "LOGIN_FALHA", "Falha de login: senha incorreta"),
-            auditoria_bloqueio=_aud(usuario["login"], ip, "LOGIN_BLOQUEIO",
+            auditoria=_aud(usuario["login"], ip, "LOGIN_FAILED", "Falha de login: senha incorreta"),
+            auditoria_bloqueio=_aud(usuario["login"], ip, "LOGIN_LOCKED",
                                     "Conta bloqueada por %d falhas consecutivas" % self._max))
-        tentativas = int(reg.get("tentativas_falha") or 0)
+        tentativas = int(reg.get("failed_attempts") or 0)
         bloquear = bool(reg.get("bloqueou"))
         motivo = "senha incorreta (tentativa %d de %d)" % (tentativas, self._max)
-        self._log.warning("login falhou (login=%s ip=%s motivo=%s)", usuario["login"], ip, motivo,
+        self._log.warning("login falhou (login=%s ip=%s reason=%s)", usuario["login"], ip, motivo,
                           extra={"acao": "LOGIN"})
         if not bloquear:
             return None, MSG_GENERICA
@@ -149,14 +149,14 @@ class ServicoAuth(object):
             while len(self._simulados) > SIMULADOS_MAX:
                 self._simulados.popitem(last=False)
 
-        self._auditoria.registrar(login, ip, "LOGIN_FALHA", ENTIDADE, None,
+        self._auditoria.registrar(login, ip, "LOGIN_FAILED", ENTIDADE, None,
                                   "Falha de login: usuario inexistente")
-        self._log.warning("login falhou (login=%s ip=%s motivo=usuario inexistente)", login, ip,
+        self._log.warning("login falhou (login=%s ip=%s reason=usuario inexistente)", login, ip,
                           extra={"acao": "LOGIN"})
         if resultado == "falha":
             return None, MSG_GENERICA
         if resultado == "bloqueou":
-            self._auditoria.registrar(login, ip, "LOGIN_BLOQUEIO", ENTIDADE, None,
+            self._auditoria.registrar(login, ip, "LOGIN_LOCKED", ENTIDADE, None,
                                       "Bloqueio simulado de login inexistente")
         return None, self.msg_bloqueio
 
@@ -173,35 +173,35 @@ class ServicoAuth(object):
         try:
             estado = self._usuarios.obter_estado_sessao(usuario_id)
         except RepoNaoEncontrado:
-            self._log.warning("sessao encerrada: usuario inexistente (usuario_id=%s)", usuario_id,
+            self._log.warning("sessao encerrada: usuario inexistente (user_id=%s)", usuario_id,
                               extra={"acao": "SESSAO"})
             return None
         if estado.get("login") != sessao.get("login"):
-            self._log.warning("sessao encerrada: login divergente (usuario_id=%s)", usuario_id,
+            self._log.warning("sessao encerrada: login divergente (user_id=%s)", usuario_id,
                               extra={"acao": "SESSAO"})
             return None
-        if estado.get("usuario_ativo") != "S" or estado.get("perfil_ativo") != "S":
-            motivo = u"usuário inativo" if estado.get("usuario_ativo") != "S" else u"perfil inativo"
+        if estado.get("usuario_ativo") != "Y" or estado.get("perfil_ativo") != "Y":
+            motivo = u"usuário inativo" if estado.get("usuario_ativo") != "Y" else u"perfil inativo"
             self._auditoria.registrar(estado.get("login"), ip, "LOGOUT", ENTIDADE, usuario_id,
                                       u"sessão encerrada pela revalidação: %s" % motivo)
             self._log.info("sessao encerrada: usuario ou perfil inativo (login=%s)", estado.get("login"),
                            extra={"acao": "SESSAO"})
             return None
-        if estado.get("sessao_epoch", 0) != sessao.get("sessao_epoch"):
+        if estado.get("session_epoch", 0) != sessao.get("sessao_epoch"):
             # Sessao revogada (CR-008, E2): logout em outro lugar, senha trocada ou redefinida, perfil
             # ou situacao do usuario alterados. Ja auditado na origem; aqui so o log.
             self._log.info("sessao encerrada: sessao revogada (login=%s)", estado.get("login"),
                            extra={"acao": "SESSAO"})
             return None
-        if estado.get("perm_versao") != sessao.get("perm_versao") \
-                or estado.get("perfil_id") != sessao.get("perfil_id"):
-            self._log.info("permissoes recarregadas (login=%s perfil_id=%s perm_versao=%s)",
-                           estado.get("login"), estado.get("perfil_id"), estado.get("perm_versao"),
+        if estado.get("perm_version") != sessao.get("perm_versao") \
+                or estado.get("profile_id") != sessao.get("perfil_id"):
+            self._log.info("permissoes recarregadas (login=%s profile_id=%s perm_version=%s)",
+                           estado.get("login"), estado.get("profile_id"), estado.get("perm_version"),
                            extra={"acao": "SESSAO"})
         return self._montar_ctx(estado)
 
     def _montar_ctx(self, estado):
-        funcs, ambs, scrs = self._matriz(estado["perfil_id"], estado["perm_versao"])
+        funcs, ambs, scrs = self._matriz(estado["profile_id"], estado["perm_version"])
         dados = dict(estado)
         dados.update(funcionalidades=funcs, ambientes=ambs, scripts=scrs)
         return rbac.contexto_usuario(dados)
@@ -216,15 +216,15 @@ class ServicoAuth(object):
 
         matriz = self._rbac.matriz_obter(perfil_id)
         codigos = dict(
-            (f["id"], f["codigo"]) for f in self._rbac.funcionalidades_listar() if f.get("ativo") == "S"
+            (f["id"], f["code"]) for f in self._rbac.funcionalidades_listar() if f.get("active") == "Y"
         )
         funcs = frozenset(codigos[fid] for fid in matriz.get("funcs", ()) if fid in codigos)
         nomes = []
         for aid in matriz.get("ambs", ()):
             try:
-                nomes.append(self._catalogo.ambientes_obter(aid)["nome"])
+                nomes.append(self._catalogo.ambientes_obter(aid)["name"])
             except RepoNaoEncontrado:
-                self._log.warning("ambiente da matriz inexistente (perfil_id=%s ambiente_id=%s)",
+                self._log.warning("ambiente da matriz inexistente (profile_id=%s environment_id=%s)",
                                   perfil_id, aid, extra={"acao": "SESSAO"})
         valor = (funcs, frozenset(nomes), frozenset(matriz.get("scrs", ())))
 
@@ -243,12 +243,12 @@ class ServicoAuth(object):
         (mesmo limite e bloqueio do §4.2); ao bloquear, o chamador encerra a sessao.
         """
         agora = self._relogio()
-        usuario = self._usuarios.obter_por_id(ctx["usuario_id"])
+        usuario = self._usuarios.obter_por_id(ctx["user_id"])
         if self._bloqueado(usuario, agora):
             self._registrar_falha(usuario, ip, "troca de senha com conta bloqueada")
             return "BLOQUEADO", {"senha_atual": self.msg_bloqueio}
         usuario = self._reiniciar_se_expirado(usuario)
-        armazenado = usuario.get("senha_hash")
+        armazenado = usuario.get("password_hash")
         atual_ok = (isinstance(atual, str) and 0 < len(atual) <= SENHA_MAX
                     and security.hash_reconhecido(armazenado) and security.verificar_senha(atual, armazenado))
         if not atual_ok:
@@ -266,23 +266,23 @@ class ServicoAuth(object):
         if erros:
             return "ERRO", erros
         self._usuarios.definir_senha(usuario["id"], security.hash_senha(nova), agora,
-                                     auditoria={"ator": usuario["login"], "ip": ip, "acao": "CAD_ALTERAR",
-                                                "detalhe": u"senha alterada pelo próprio usuário"})
+                                     auditoria={"actor": usuario["login"], "ip": ip, "action": "UPDATE",
+                                                "detail": u"senha alterada pelo próprio usuário"})
         self._log.info("senha alterada pelo proprio usuario (login=%s ip=%s)", usuario["login"], ip,
-                       extra={"acao": "CAD_ALTERAR"})
+                       extra={"acao": "UPDATE"})
         return "OK", {}
 
     # ----------------------------------------------------------------- logout
 
     def sessao_epoch(self, usuario_id):
         """sessao_epoch vigente do usuario, para a sessao nova depois da troca de senha (CR-008, E2)."""
-        return self._usuarios.obter_estado_sessao(usuario_id).get("sessao_epoch", 0)
+        return self._usuarios.obter_estado_sessao(usuario_id).get("session_epoch", 0)
 
     def logout(self, ctx, ip):
         """Encerra todas as sessoes do usuario (sessao_epoch + 1) e audita LOGOUT na mesma operacao."""
         if not ctx:
             return
-        self._usuarios.encerrar_sessoes(ctx["usuario_id"], auditoria=_aud(ctx["login"], ip, "LOGOUT", "Logout"))
+        self._usuarios.encerrar_sessoes(ctx["user_id"], auditoria=_aud(ctx["login"], ip, "LOGOUT", "Logout"))
         self._log.info("logout (login=%s ip=%s)", ctx["login"], ip, extra={"acao": "LOGIN"})
 
 

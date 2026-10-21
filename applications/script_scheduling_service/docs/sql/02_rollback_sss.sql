@@ -11,23 +11,23 @@ WHENEVER SQLERROR CONTINUE;
 -- ------------------------------------------------------------------------------
 -- 1. DROP TRIGGERS
 -- ------------------------------------------------------------------------------
-DROP TRIGGER openrisow.tr_tbsss_tsai_bi;
-DROP TRIGGER openrisow.tr_tbsss_trsp_bi;
+DROP TRIGGER openrisow.tr_tbsss_tout_bi;
+DROP TRIGGER openrisow.tr_tbsss_tans_bi;
 DROP TRIGGER openrisow.tr_tbsss_tck_bi;
-DROP TRIGGER openrisow.tr_tbsss_agd_bi;
+DROP TRIGGER openrisow.tr_tbsss_sch_bi;
 DROP TRIGGER openrisow.tr_tbsss_sprm_bi;
 DROP TRIGGER openrisow.tr_tbsss_prm_bi;
-DROP TRIGGER openrisow.tr_tbsss_samb_bi;
+DROP TRIGGER openrisow.tr_tbsss_senv_bi;
 DROP TRIGGER openrisow.tr_tbsss_pscr_bi;
-DROP TRIGGER openrisow.tr_tbsss_pamb_bi;
-DROP TRIGGER openrisow.tr_tbsss_pfnc_bi;
+DROP TRIGGER openrisow.tr_tbsss_penv_bi;
+DROP TRIGGER openrisow.tr_tbsss_pfea_bi;
 DROP TRIGGER openrisow.tr_tbsss_scr_bi;
 DROP TRIGGER openrisow.tr_tbsss_usr_bu;
 DROP TRIGGER openrisow.tr_tbsss_usr_bi;
-DROP TRIGGER openrisow.tr_tbsss_fnc_bi;
-DROP TRIGGER openrisow.tr_tbsss_per_bi;
-DROP TRIGGER openrisow.tr_tbsss_amb_bu;
-DROP TRIGGER openrisow.tr_tbsss_amb_bi;
+DROP TRIGGER openrisow.tr_tbsss_fea_bi;
+DROP TRIGGER openrisow.tr_tbsss_prf_bi;
+DROP TRIGGER openrisow.tr_tbsss_env_bu;
+DROP TRIGGER openrisow.tr_tbsss_env_bi;
 DROP TRIGGER openrisow.tr_tbsss_agt_bi;
 DROP TRIGGER openrisow.tr_tbsss_aud_bi;
 DROP TRIGGER openrisow.tr_tbsss_ctl_bi;
@@ -35,46 +35,46 @@ DROP TRIGGER openrisow.tr_tbsss_ctl_bi;
 -- ------------------------------------------------------------------------------
 -- 2. DROP TABELAS (CASCADE CONSTRAINTS PURGE)
 -- ------------------------------------------------------------------------------
-DROP TABLE openrisow.tbsss_ticket_saida CASCADE CONSTRAINTS PURGE;
-DROP TABLE openrisow.tbsss_ticket_resp CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_ticket_output CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_ticket_answer CASCADE CONSTRAINTS PURGE;
 DROP TABLE openrisow.tbsss_tickets CASCADE CONSTRAINTS PURGE;
-DROP TABLE openrisow.tbsss_agendamentos CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_schedules CASCADE CONSTRAINTS PURGE;
 DROP TABLE openrisow.tbsss_script_param CASCADE CONSTRAINTS PURGE;
-DROP TABLE openrisow.tbsss_parametros CASCADE CONSTRAINTS PURGE;
-DROP TABLE openrisow.tbsss_script_amb CASCADE CONSTRAINTS PURGE;
-DROP TABLE openrisow.tbsss_perfil_scr CASCADE CONSTRAINTS PURGE;
-DROP TABLE openrisow.tbsss_perfil_amb CASCADE CONSTRAINTS PURGE;
-DROP TABLE openrisow.tbsss_perfil_func CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_parameters CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_script_env CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_profile_script CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_profile_env CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_profile_feature CASCADE CONSTRAINTS PURGE;
 DROP TABLE openrisow.tbsss_scripts CASCADE CONSTRAINTS PURGE;
-DROP TABLE openrisow.tbsss_usuarios CASCADE CONSTRAINTS PURGE;
-DROP TABLE openrisow.tbsss_funcionalidades CASCADE CONSTRAINTS PURGE;
-DROP TABLE openrisow.tbsss_perfis CASCADE CONSTRAINTS PURGE;
-DROP TABLE openrisow.tbsss_ambientes CASCADE CONSTRAINTS PURGE;
-DROP TABLE openrisow.tbsss_agentes CASCADE CONSTRAINTS PURGE;
-DROP TABLE openrisow.tbsss_auditoria CASCADE CONSTRAINTS PURGE;
-DROP TABLE openrisow.tbsss_controle CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_users CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_features CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_profiles CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_environments CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_agents CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_audit CASCADE CONSTRAINTS PURGE;
+DROP TABLE openrisow.tbsss_control CASCADE CONSTRAINTS PURGE;
 
 -- ------------------------------------------------------------------------------
 -- 3. DROP SEQUENCES
 -- ------------------------------------------------------------------------------
-DROP SEQUENCE openrisow.sq_tbsss_ticket_saida;
-DROP SEQUENCE openrisow.sq_tbsss_ticket_resp;
+DROP SEQUENCE openrisow.sq_tbsss_ticket_output;
+DROP SEQUENCE openrisow.sq_tbsss_ticket_answer;
 DROP SEQUENCE openrisow.sq_tbsss_tickets;
-DROP SEQUENCE openrisow.sq_tbsss_agendamentos;
+DROP SEQUENCE openrisow.sq_tbsss_schedules;
 DROP SEQUENCE openrisow.sq_tbsss_script_param;
-DROP SEQUENCE openrisow.sq_tbsss_parametros;
-DROP SEQUENCE openrisow.sq_tbsss_script_amb;
-DROP SEQUENCE openrisow.sq_tbsss_perfil_scr;
-DROP SEQUENCE openrisow.sq_tbsss_perfil_amb;
-DROP SEQUENCE openrisow.sq_tbsss_perfil_func;
+DROP SEQUENCE openrisow.sq_tbsss_parameters;
+DROP SEQUENCE openrisow.sq_tbsss_script_env;
+DROP SEQUENCE openrisow.sq_tbsss_profile_script;
+DROP SEQUENCE openrisow.sq_tbsss_profile_env;
+DROP SEQUENCE openrisow.sq_tbsss_profile_feature;
 DROP SEQUENCE openrisow.sq_tbsss_scripts;
-DROP SEQUENCE openrisow.sq_tbsss_usuarios;
-DROP SEQUENCE openrisow.sq_tbsss_funcionalidades;
-DROP SEQUENCE openrisow.sq_tbsss_perfis;
-DROP SEQUENCE openrisow.sq_tbsss_ambientes;
-DROP SEQUENCE openrisow.sq_tbsss_agentes;
-DROP SEQUENCE openrisow.sq_tbsss_auditoria;
-DROP SEQUENCE openrisow.sq_tbsss_controle;
+DROP SEQUENCE openrisow.sq_tbsss_users;
+DROP SEQUENCE openrisow.sq_tbsss_features;
+DROP SEQUENCE openrisow.sq_tbsss_profiles;
+DROP SEQUENCE openrisow.sq_tbsss_environments;
+DROP SEQUENCE openrisow.sq_tbsss_agents;
+DROP SEQUENCE openrisow.sq_tbsss_audit;
+DROP SEQUENCE openrisow.sq_tbsss_control;
 
 PROMPT Rollback do SSS concluido com sucesso.
 EXIT;

@@ -174,7 +174,7 @@ class TestSssHelper(unittest.TestCase):
 
     def test_identidade_com_parenteses_no_nome(self):
         helper = _carregar_helper()
-        campos = " ".join(["S"] + [str(i) for i in range(4, 60)])
+        campos = " ".join(["Y"] + [str(i) for i in range(4, 60)])
         with mock.patch("builtins.open", mock.mock_open(read_data="77 (a) b)) %s" % campos)):
             self.assertEqual(helper._identidade(77), 22)
         self.assertIsNone(helper._identidade(2 ** 31 - 2))

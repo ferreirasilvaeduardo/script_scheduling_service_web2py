@@ -1,7 +1,7 @@
 {{extend 'layout.html'}}
 {{
 # Quem pode o quê (README §4.3.B.2, CR-004 T5): só leitura; a regra é a de rbac.pode_executar, perfil a perfil.
-_alvo = q['script'] or q['ambiente']
+_alvo = q['script'] or q['environment']
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
@@ -20,7 +20,7 @@ _alvo = q['script'] or q['ambiente']
       <div class="sss-acoes-inline">
         <select class="form-select form-select-sm" id="campo-script" name="script">
           {{for _s in q['scripts']:}}
-          <option value="{{=_s['id']}}"{{if q['script'] and q['script']['id'] == _s['id']:}} selected{{pass}}>{{=_s['nome']}}{{if _s.get('ativo') != 'S':}} (inativo){{pass}}</option>
+          <option value="{{=_s['id']}}"{{if q['script'] and q['script']['id'] == _s['id']:}} selected{{pass}}>{{=_s['name']}}{{if _s.get('active') != 'Y':}} (inativo){{pass}}</option>
           {{pass}}
         </select>
         <button type="submit" class="btn btn-sm btn-primary">Ver</button>
@@ -29,9 +29,9 @@ _alvo = q['script'] or q['ambiente']
     <form method="get" action="{{=URL(c='admin_perfis', f='quem_pode')}}" class="sss-form-campo mb-0">
       <label class="form-label" for="campo-ambiente">Por ambiente</label>
       <div class="sss-acoes-inline">
-        <select class="form-select form-select-sm" id="campo-ambiente" name="ambiente">
+        <select class="form-select form-select-sm" id="campo-ambiente" name="environment">
           {{for _a in q['ambientes']:}}
-          <option value="{{=_a['id']}}"{{if q['ambiente'] and q['ambiente']['id'] == _a['id']:}} selected{{pass}}>{{=_a['nome']}}{{if _a.get('ativo') != 'S':}} (inativo){{pass}}</option>
+          <option value="{{=_a['id']}}"{{if q['environment'] and q['environment']['id'] == _a['id']:}} selected{{pass}}>{{=_a['name']}}{{if _a.get('active') != 'Y':}} (inativo){{pass}}</option>
           {{pass}}
         </select>
         <button type="submit" class="btn btn-sm btn-primary">Ver</button>
@@ -55,8 +55,8 @@ _alvo = q['script'] or q['ambiente']
       <tbody>
         {{for _p in _lista:}}
         <tr>
-          <td><a class="sss-mono" href="{{=URL(c='admin_perfis', f='matriz', args=[_p['id']])}}">{{=_p['nome']}}</a></td>
-          <td>{{=_p['motivo']}}</td>
+          <td><a class="sss-mono" href="{{=URL(c='admin_perfis', f='matriz', args=[_p['id']])}}">{{=_p['name']}}</a></td>
+          <td>{{=_p['reason']}}</td>
           <td class="sss-mono">{{=', '.join(_p['detalhes']) or '-'}}</td>
           <td>{{=_p['usuarios_ativos']}}</td>
         </tr>

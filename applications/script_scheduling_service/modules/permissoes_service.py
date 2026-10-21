@@ -37,29 +37,29 @@ class ServicoPermissoes(object):
         for secao in ui_menu.montar_menu(ctx.get("funcionalidades"), admin):
             for item in secao["itens"]:
                 # Ultimo item vence: EXEC_SCRIPT ("Disparar Scripts") leva ao disparo, nao ao catalogo.
-                rotas[item["codigo"]] = item["rota"]
+                rotas[item["code"]] = item["rota"]
         telas = []
         for f in self._rbac.funcionalidades_listar():
-            if f.get("ativo") != "S" or not (admin or f["codigo"] in (ctx.get("funcionalidades") or ())):
+            if f.get("active") != "Y" or not (admin or f["code"] in (ctx.get("funcionalidades") or ())):
                 continue
-            telas.append({"codigo": f["codigo"], "nome": f["nome"], "finalidade": f.get("descricao") or "",
-                          "rota": rotas.get(f["codigo"])})
+            telas.append({"code": f["code"], "name": f["name"], "finalidade": f.get("description") or "",
+                          "rota": rotas.get(f["code"])})
         return telas
 
     def _ambientes(self, ctx):
         admin = ctx.get("is_admin") is True
         meus = ctx.get("ambientes") or ()
-        return [{"nome": a["nome"], "descricao": a.get("descricao") or ""}
+        return [{"name": a["name"], "description": a.get("description") or ""}
                 for a in self._catalogo.ambientes_listar(pagina=1, tamanho=_CATALOGO_MAX)["itens"]
-                if a["ativo"] == "S" and (admin or a["nome"] in meus)]
+                if a["active"] == "Y" and (admin or a["name"] in meus)]
 
     def _scripts(self, ctx):
         scripts = []
         for grupo in self._disparo.scripts_disponiveis(ctx):
             for s in grupo["scripts"]:
                 _script, ambientes = self._disparo.ambientes_disponiveis(ctx, s["id"])
-                scripts.append({"id": s["id"], "nome": s["nome"], "descricao": s["descricao"],
-                                "ambientes": [a["nome"] for a in ambientes]})
+                scripts.append({"id": s["id"], "name": s["name"], "description": s["description"],
+                                "ambientes": [a["name"] for a in ambientes]})
         return scripts
 
     def _motivo(self, ctx, script_id):
@@ -68,7 +68,7 @@ class ServicoPermissoes(object):
             script = self._catalogo.scripts_obter(script_id)
         except RepoNaoEncontrado:
             return None, None
-        if script.get("ativo") != "S":
+        if script.get("active") != "Y":
             return script, MOTIVO_SCRIPT_INATIVO
         meus = set(ctx.get("ambientes") or ())
         homologados = []
@@ -77,12 +77,12 @@ class ServicoPermissoes(object):
                 homologados.append(self._catalogo.ambientes_obter(aid))
             except RepoNaoEncontrado:
                 continue
-        nos_meus = [a for a in homologados if a["nome"] in meus]
+        nos_meus = [a for a in homologados if a["name"] in meus]
         if not nos_meus:
             return script, MOTIVO_SEM_HOMOLOGACAO
-        if all(a.get("ativo") != "S" for a in nos_meus):
+        if all(a.get("active") != "Y" for a in nos_meus):
             return script, MOTIVO_AMBIENTE_INATIVO
-        return script, MOTIVO_SCRIPT_INATIVO if script.get("ativo") != "S" else None
+        return script, MOTIVO_SCRIPT_INATIVO if script.get("active") != "Y" else None
 
     def montar(self, ctx):
         """Dados da tela. Scripts fora do perfil nunca sao listados (nao revela o catalogo)."""
@@ -98,8 +98,8 @@ class ServicoPermissoes(object):
                 script, motivo = self._motivo(ctx, sid)
                 if script is None:
                     continue
-                ausentes.append({"nome": script["nome"],
-                                 "motivo": MOTIVO_SEM_FUNC if not pode_exec else (motivo or MOTIVO_SEM_HOMOLOGACAO)})
+                ausentes.append({"name": script["name"],
+                                 "reason": MOTIVO_SEM_FUNC if not pode_exec else (motivo or MOTIVO_SEM_HOMOLOGACAO)})
         return {
             "perfil": ctx.get("perfil_nome"),
             "frase_admin": FRASE_ADMIN if admin else None,

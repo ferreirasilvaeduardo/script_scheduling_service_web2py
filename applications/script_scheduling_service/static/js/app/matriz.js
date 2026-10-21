@@ -1,6 +1,6 @@
 /* SSS - matriz de permissoes do perfil (README §4.3).
  * Carregado com defer ANTES do alpine.min.js. Abas, contadores, "marcar todos", busca de scripts e o
- * resumo do modal. O resumo segue o formato do diff auditado (PERM_ALTERAR); o servidor revalida tudo.
+ * resumo do modal. O resumo segue o formato do diff auditado (PERM_UPDATE); o servidor revalida tudo.
  */
 (function () {
   'use strict';
@@ -59,7 +59,7 @@
             var mudancas = [];
             var marcados = 0;
             caixas(raiz, 'input[type="checkbox"][data-dim="' + dim + '"]').forEach(function (cx) {
-              var inicial = cx.getAttribute('data-inicial') === 'S';
+              var inicial = cx.getAttribute('data-inicial') === 'Y';
               var rotulo = cx.getAttribute('data-diff');
               if (cx.checked) {
                 marcados++;

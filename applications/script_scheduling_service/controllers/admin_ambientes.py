@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Cadastro de ambientes (README §4.3.D CAD_AMBIENTES). Padrao em docs/PADRAO_CRUD_ADMIN.md.
+"""Cadastro de ambientes (README §4.3.D MANAGE_ENVIRONMENTS). Padrao em docs/PADRAO_CRUD_ADMIN.md.
 
 Regras ficam em modules/admin_ambientes_service.py; CSRF e Origin de todo POST sao validados
 em models/10_security.py.
@@ -10,7 +10,7 @@ import ui_helpers
 from admin_crud import AcessoNegado
 from repo_errors import RepoConflito, RepoErro, RepoNaoEncontrado
 
-_FUNC = "CAD_AMBIENTES"
+_FUNC = "MANAGE_ENVIRONMENTS"
 _TAMANHOS = (20, 50, 100)
 _MSG_FALHA_LISTA = u"Não foi possível carregar os ambientes. Tente novamente em instantes."
 _MSG_FALHA_ALTERNAR = u"Não foi possível alterar a situação do ambiente. Tente novamente em instantes."
@@ -35,10 +35,10 @@ def _texto(valor, limite):
 
 
 def _pagina_form(ctx, dados, erros=None):
-    response.title = (u"Ambiente %s — SSS" % dados["nome"]) if dados.get("id") else u"Novo ambiente — SSS"
+    response.title = (u"Ambiente %s — SSS" % dados["name"]) if dados.get("id") else u"Novo ambiente — SSS"
     response.view = "admin_ambientes/form.html"
     erros = erros or {}
-    campos = [{"nome": n, "erro": erros.get(n)} for n in ("nome", "descricao", "conexao")]
+    campos = [{"name": n, "erro": erros.get(n)} for n in ("name", "description", "connection")]
     return dict(amb=dados, erros=erros, erro_geral=erros.get(admin_crud.CAMPO_GERAL),
                 foco_campo=ui_helpers.primeiro_campo_invalido(campos),
                 aviso_desativacao=servico.AVISO_DESATIVACAO)
@@ -80,7 +80,7 @@ def salvar():
     _exigir_metodo("POST")
     ctx = _exigir_func(_FUNC)
     ambiente_id = _texto(request.post_vars.get("id"), 11)
-    enviados = dict((c, _texto(request.post_vars.get(c), 300)) for c in ("nome", "descricao", "conexao", "versao"))
+    enviados = dict((c, _texto(request.post_vars.get(c), 300)) for c in ("name", "description", "connection", "version"))
     try:
         salvo_id, erros = servico.salvar(ctx, _ip_origem(), ambiente_id, enviados)
     except RepoNaoEncontrado:
@@ -97,15 +97,15 @@ def salvar():
     try:
         dados = servico.formulario(ctx, ambiente_id) if ambiente_id else servico.formulario(ctx)
     except RepoErro:
-        dados = {"id": None, "nome": "", "ativo": "S", "versao": "", "agendamentos_ativos": 0, "scripts_homologados": 0}
+        dados = {"id": None, "name": "", "active": "Y", "version": "", "agendamentos_ativos": 0, "scripts_homologados": 0}
     if admin_crud.CAMPO_GERAL not in erros:
-        conexao = enviados["conexao"] or ""
+        conexao = enviados["connection"] or ""
         # Nunca devolve ao HTML um DSN com credencial digitado por engano.
-        dados = dict(dados, descricao=enviados["descricao"] or "", conexao="" if "@" in conexao else conexao)
+        dados = dict(dados, description=enviados["description"] or "", connection="" if "@" in conexao else conexao)
         if not ambiente_id:
-            dados["nome"] = enviados["nome"] or ""
+            dados["name"] = enviados["name"] or ""
         else:
-            dados["versao"] = enviados["versao"] or ""
+            dados["version"] = enviados["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
     response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.CAMPO_GERAL)
                       or ui_helpers.mensagem("formulario")}
@@ -117,11 +117,11 @@ def alternar_ativo():
     ctx = _exigir_func(_FUNC)
     ambiente_id = _texto(request.post_vars.get("id"), 11)
     try:
-        alterado = servico.alternar_ativo(ctx, _ip_origem(), ambiente_id, _texto(request.post_vars.get("versao"), 64))
-        if alterado["ativo"] == "N":
-            session.flash = {"tipo": "sucesso", "mensagem": u"Ambiente %s desativado." % alterado["nome"]}
+        alterado = servico.alternar_ativo(ctx, _ip_origem(), ambiente_id, _texto(request.post_vars.get("version"), 64))
+        if alterado["active"] == "N":
+            session.flash = {"tipo": "sucesso", "mensagem": u"Ambiente %s desativado." % alterado["name"]}
         else:
-            session.flash = {"tipo": "sucesso", "mensagem": u"Ambiente %s reativado." % alterado["nome"]}
+            session.flash = {"tipo": "sucesso", "mensagem": u"Ambiente %s reativado." % alterado["name"]}
     except RepoNaoEncontrado:
         _nao_encontrado()
     except AcessoNegado:

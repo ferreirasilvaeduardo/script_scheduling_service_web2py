@@ -6,7 +6,7 @@
 #   status_motivo -- opcional; código de status_motivo (README §5.2) exibido como tooltip textual.
 import ui_helpers
 _badge = ui_helpers.status_info(status)
-_badge_motivo = globals().get('status_motivo')
+_badge_motivo = globals().get('status_reason')
 }}<span class="sss-status {{=_badge['classe']}}"{{if _badge_motivo:}} title="Motivo: {{=_badge_motivo}}"{{pass}}>
   <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_badge['icone']}}"></use></svg>
   <span>{{=_badge['rotulo']}}</span>{{if _badge_motivo:}}<span class="visually-hidden"> (motivo: {{=_badge_motivo}})</span>{{pass}}

@@ -7,7 +7,7 @@ de DEV ou sobre um esquema nao autorizado. O modo e deduzido do owner:
 - DESCARTAVEL (owner SSS_TEST_*): owner dedicado e conta de teste distinta do owner;
 - COMPARTILHADO (qualquer outro owner, ex.: openrisow no GFPR): owner existente onde nao e possivel
   criar outro. Aceita a conta igual ao owner, mas exige o esquema SSS na versao do codigo
-  (tbsss_controle); os testes so gravam registros proprios e limpam apenas os proprios IDs.
+  (tbsss_control); os testes so gravam registros proprios e limpam apenas os proprios IDs.
 O data_backend do config nao importa aqui: ele e escolha da aplicacao; os testes usam a secao [oracle].
 O helper nao importa drivers diretamente: toda conexao passa por db_conn.
 """
@@ -134,9 +134,9 @@ def _conferir_esquema_sss(cur, owner, prefixo):
         import sql_ident
     except ImportError:
         from modules import sql_ident
-    tabela = sql_ident.qualificar(owner, (prefixo or "tbsss_") + "controle", prefixo=prefixo or "tbsss_")
+    tabela = sql_ident.tabela(owner, prefixo or "tbsss_", "controle")
     try:
-        cur.execute("SELECT versao_esquema FROM " + tabela)
+        cur.execute("SELECT schema_version FROM " + tabela)
         row = cur.fetchone()
     except Exception as exc:
         raise PrecondicaoSchemaErro("Esquema SSS ausente no owner '%s' (%s)" % (owner, type(exc).__name__))

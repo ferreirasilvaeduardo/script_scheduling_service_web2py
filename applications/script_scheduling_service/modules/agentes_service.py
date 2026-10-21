@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Painel somente leitura dos agentes executores (README §4.3.D VER_AUDITORIA, §8.7-8.9, §13).
+"""Painel somente leitura dos agentes executores (README §4.3.D VIEW_AUDIT, §8.7-8.9, §13).
 
 A saude e derivada da idade do heartbeat medida pelo relogio do banco (SYSDATE), nunca
 pelo relogio do no web, com os mesmos limiares do daemon (README §8.8 e §8.9).
@@ -11,7 +11,7 @@ import admin_crud
 import ui_helpers
 from admin_crud import AcessoNegado  # noqa: F401  (reexportado para o controller)
 
-FUNCIONALIDADE = "VER_AUDITORIA"
+FUNCIONALIDADE = "VIEW_AUDIT"
 
 OK = "OK"
 ATRASADO = "ATRASADO"
@@ -41,7 +41,7 @@ def saude(agente, agora, limiares):
     OK: idade < 2 x heartbeat_interval_s; ATRASADO: ate fence_timeout_s; EM_RISCO: ate
     node_offline_timeout_s; OFFLINE: alem disso, sem heartbeat ou com status PARADO.
     """
-    if agente.get("status") == "PARADO":
+    if agente.get("status") == "STOPPED":
         return OFFLINE
     hb = agente.get("heartbeat_at")
     if hb is None:
@@ -59,7 +59,7 @@ def saude(agente, agora, limiares):
 def saude_info(codigo):
     """{codigo, rotulo, classe, icone, descricao} da saude, para badge e legenda."""
     rotulo, classe, icone, descricao = _SAUDE[codigo]
-    return {"codigo": codigo, "rotulo": rotulo, "classe": classe, "icone": icone, "descricao": descricao}
+    return {"code": codigo, "rotulo": rotulo, "classe": classe, "icone": icone, "description": descricao}
 
 
 def legenda():
@@ -93,7 +93,7 @@ class ServicoAgentes(object):
 
     def _nomes_scripts(self):
         pagina = self._catalogo.scripts_listar(pagina=1, tamanho=1000)
-        return dict((s["id"], s["nome"]) for s in pagina["itens"])
+        return dict((s["id"], s["name"]) for s in pagina["itens"])
 
     def _tickets(self, codigo, agora, nomes):
         itens = []
@@ -102,8 +102,8 @@ class ServicoAgentes(object):
             itens.append({
                 "id": t["id"],
                 "script_nome": nomes.get(t.get("script_id"), u"#%s" % t.get("script_id")),
-                "ambiente": t.get("ambiente"),
-                "solicitante": t.get("solicitante"),
+                "environment": t.get("environment"),
+                "requested_by": t.get("requested_by"),
                 "started_at": t.get("started_at"),
                 "duracao": ui_helpers.formatar_duracao(t.get("started_at"), agora),
                 "heartbeat": formatar_idade(None if hb is None else max(0, int((agora - hb).total_seconds()))),
@@ -128,23 +128,23 @@ class ServicoAgentes(object):
         agentes = []
         divergentes = []
         for ag in self._agentes.listar():
-            if ag.get("status") == "ATIVO" and ag.get("config_criticos") != self._config_criticos:
-                divergentes.append({"codigo": ag["codigo"], "config_criticos": ag.get("config_criticos")})
+            if ag.get("status") == "ACTIVE" and ag.get("critical_config") != self._config_criticos:
+                divergentes.append({"code": ag["code"], "critical_config": ag.get("critical_config")})
             hb = ag.get("heartbeat_at")
             idade = None if hb is None else max(0, int((agora - hb).total_seconds()))
             codigo_saude = saude(ag, agora, self._limiares)
             resumo[codigo_saude] += 1
-            tickets = self._tickets(ag["codigo"], agora, nomes)
+            tickets = self._tickets(ag["code"], agora, nomes)
             agentes.append({
-                "codigo": ag["codigo"],
+                "code": ag["code"],
                 "hostname": ag.get("hostname"),
                 "status": ag.get("status"),
-                "versao": ag.get("versao"),
-                "plataforma": ag.get("plataforma"),
-                "ambientes": [a for a in (ag.get("ambientes") or "").split(",") if a],
-                "interpretadores": [i for i in (ag.get("interpretadores") or "").split(",") if i],
+                "version": ag.get("version"),
+                "platform": ag.get("platform"),
+                "environments": [a for a in (ag.get("environments") or "").split(",") if a],
+                "interpreters": [i for i in (ag.get("interpreters") or "").split(",") if i],
                 # So os nomes logicos: os caminhos locais nunca vao para a tela (README §13).
-                "iniciado_em": ag.get("iniciado_em"),
+                "started_at": ag.get("started_at"),
                 "heartbeat_at": hb,
                 "idade_s": idade,
                 "ha": formatar_idade(idade),

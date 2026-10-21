@@ -1,0 +1,258 @@
+-- ==============================================================================
+-- Script Scheduling Service (SSS) - Validacao da Implantacao Oracle 11gR2+
+-- Gerado automaticamente a partir do registro sql_ident.py (somente leitura)
+-- Owner: openrisow
+-- Prefixo: tbsss_
+-- Cada verificacao mostra OK ou FALHA; procure tambem ORA-/SP2- no SPOOL.
+-- ==============================================================================
+SET DEFINE OFF;
+SET LINESIZE 200 PAGESIZE 200 FEEDBACK OFF VERIFY OFF ECHO OFF TRIMSPOOL ON;
+WHENEVER SQLERROR CONTINUE;
+COLUMN verificacao FORMAT A40
+COLUMN esperado FORMAT A12
+COLUMN encontrado FORMAT 999999999
+COLUMN resultado FORMAT A9
+COLUMN resumo FORMAT A60
+
+PROMPT ==============================================================================
+PROMPT 1. OBJETOS NO DICIONARIO (esperado pelo registro x encontrado)
+PROMPT ==============================================================================
+WITH chk AS (
+  SELECT 1 AS sort_order, 'TABELAS' AS verificacao, '=' AS regra, 18 AS esperado, (SELECT COUNT(*) FROM all_tables WHERE owner = 'OPENRISOW' AND table_name IN ('TBSSS_ENVIRONMENTS', 'TBSSS_PROFILES', 'TBSSS_FEATURES', 'TBSSS_PROFILE_FEATURE', 'TBSSS_PROFILE_ENV', 'TBSSS_SCRIPTS',
+      'TBSSS_PROFILE_SCRIPT', 'TBSSS_SCRIPT_ENV', 'TBSSS_USERS', 'TBSSS_PARAMETERS', 'TBSSS_SCRIPT_PARAM', 'TBSSS_SCHEDULES',
+      'TBSSS_TICKETS', 'TBSSS_TICKET_ANSWER', 'TBSSS_AGENTS', 'TBSSS_AUDIT', 'TBSSS_CONTROL', 'TBSSS_TICKET_OUTPUT')) AS encontrado FROM DUAL
+  UNION ALL SELECT 2 AS sort_order, 'SEQUENCES' AS verificacao, '=' AS regra, 18 AS esperado, (SELECT COUNT(*) FROM all_sequences WHERE sequence_owner = 'OPENRISOW' AND sequence_name IN ('SQ_TBSSS_ENVIRONMENTS', 'SQ_TBSSS_PROFILES', 'SQ_TBSSS_FEATURES', 'SQ_TBSSS_PROFILE_FEATURE', 'SQ_TBSSS_PROFILE_ENV', 'SQ_TBSSS_SCRIPTS',
+      'SQ_TBSSS_PROFILE_SCRIPT', 'SQ_TBSSS_SCRIPT_ENV', 'SQ_TBSSS_USERS', 'SQ_TBSSS_PARAMETERS', 'SQ_TBSSS_SCRIPT_PARAM', 'SQ_TBSSS_SCHEDULES',
+      'SQ_TBSSS_TICKETS', 'SQ_TBSSS_TICKET_ANSWER', 'SQ_TBSSS_AGENTS', 'SQ_TBSSS_AUDIT', 'SQ_TBSSS_CONTROL', 'SQ_TBSSS_TICKET_OUTPUT')) AS encontrado FROM DUAL
+  UNION ALL SELECT 3 AS sort_order, 'TRIGGERS HABILITADAS' AS verificacao, '=' AS regra, 20 AS esperado, (SELECT COUNT(*) FROM all_triggers WHERE owner = 'OPENRISOW' AND status = 'ENABLED' AND trigger_name IN ('TR_TBSSS_ENV_BI', 'TR_TBSSS_ENV_BU', 'TR_TBSSS_PRF_BI', 'TR_TBSSS_FEA_BI', 'TR_TBSSS_PFEA_BI', 'TR_TBSSS_PENV_BI',
+      'TR_TBSSS_SCR_BI', 'TR_TBSSS_PSCR_BI', 'TR_TBSSS_SENV_BI', 'TR_TBSSS_USR_BI', 'TR_TBSSS_USR_BU', 'TR_TBSSS_PRM_BI',
+      'TR_TBSSS_SPRM_BI', 'TR_TBSSS_SCH_BI', 'TR_TBSSS_TCK_BI', 'TR_TBSSS_TANS_BI', 'TR_TBSSS_AGT_BI', 'TR_TBSSS_AUD_BI',
+      'TR_TBSSS_CTL_BI', 'TR_TBSSS_TOUT_BI')) AS encontrado FROM DUAL
+  UNION ALL SELECT 4 AS sort_order, 'CONSTRAINTS HABILITADAS' AS verificacao, '=' AS regra, 117 AS esperado, (SELECT COUNT(*) FROM all_constraints WHERE owner = 'OPENRISOW' AND status = 'ENABLED' AND constraint_name IN ('PK_TBSSS_ENVIRONMENTS', 'UK_TBSSS_ENV_NAME', 'CK_TBSSS_ENV_ACTIVE', 'CK_TBSSS_ENV_NAME', 'CK_TBSSS_ENV_CONNECTION', 'CK_TBSSS_ENV_UPD',
+      'PK_TBSSS_PROFILES', 'UK_TBSSS_PRF_NAME', 'CK_TBSSS_PRF_ADM', 'CK_TBSSS_PRF_ACTIVE', 'CK_TBSSS_PRF_VERSION', 'CK_TBSSS_PRF_UPD',
+      'PK_TBSSS_FEATURES', 'UK_TBSSS_FEA_CODE', 'CK_TBSSS_FEA_ACTIVE', 'CK_TBSSS_FEA_UPD', 'PK_TBSSS_PROFILE_FEATURE', 'UK_TBSSS_PFEA_PRF_FEA',
+      'FK_TBSSS_PFEA_PRF', 'FK_TBSSS_PFEA_FEA', 'CK_TBSSS_PFEA_UPD', 'PK_TBSSS_PROFILE_ENV', 'UK_TBSSS_PENV_PRF_ENV', 'FK_TBSSS_PENV_PRF',
+      'FK_TBSSS_PENV_ENV', 'CK_TBSSS_PENV_UPD', 'PK_TBSSS_SCRIPTS', 'UK_TBSSS_SCR_NAME', 'CK_TBSSS_SCR_PTYPE', 'CK_TBSSS_SCR_ACTIVE',
+      'CK_TBSSS_SCR_PARAL', 'CK_TBSSS_SCR_INT', 'CK_TBSSS_SCR_PATH', 'CK_TBSSS_SCR_TMOUT', 'CK_TBSSS_SCR_UPD', 'PK_TBSSS_PROFILE_SCRIPT',
+      'UK_TBSSS_PSCR_PRF_SCR', 'FK_TBSSS_PSCR_PRF', 'FK_TBSSS_PSCR_SCR', 'CK_TBSSS_PSCR_UPD', 'PK_TBSSS_SCRIPT_ENV', 'UK_TBSSS_SENV_SCR_ENV',
+      'FK_TBSSS_SENV_SCR', 'FK_TBSSS_SENV_ENV', 'CK_TBSSS_SENV_UPD', 'PK_TBSSS_USERS', 'UK_TBSSS_USR_LOGIN', 'FK_TBSSS_USR_PRF',
+      'CK_TBSSS_USR_ACTIVE', 'CK_TBSSS_USR_LOGIN', 'CK_TBSSS_USR_ATT', 'CK_TBSSS_USR_EPOCH', 'CK_TBSSS_USR_UPD', 'PK_TBSSS_PARAMETERS',
+      'UK_TBSSS_PRM_CODE', 'CK_TBSSS_PRM_CTYPE', 'CK_TBSSS_PRM_ACTIVE', 'CK_TBSSS_PRM_SENS', 'CK_TBSSS_PRM_CODE', 'CK_TBSSS_PRM_FLAG',
+      'CK_TBSSS_PRM_UPD', 'PK_TBSSS_SCRIPT_PARAM', 'UK_TBSSS_SPRM_SCR_PRM', 'UK_TBSSS_SPRM_SCR_ORD', 'FK_TBSSS_SPRM_SCR', 'FK_TBSSS_SPRM_PRM',
+      'CK_TBSSS_SPRM_REQ', 'CK_TBSSS_SPRM_SORT_ORDER', 'CK_TBSSS_SPRM_UPD', 'PK_TBSSS_SCHEDULES', 'FK_TBSSS_SCH_SCR', 'FK_TBSSS_SCH_USR',
+      'FK_TBSSS_SCH_ENV', 'CK_TBSSS_SCH_RTYPE', 'CK_TBSSS_SCH_PRIO', 'CK_TBSSS_SCH_ACTIVE', 'CK_TBSSS_SCH_DAY', 'CK_TBSSS_SCH_TIME',
+      'CK_TBSSS_SCH_WDAY', 'CK_TBSSS_SCH_END', 'CK_TBSSS_SCH_PAUSE', 'CK_TBSSS_SCH_FIELDS', 'CK_TBSSS_SCH_UPD', 'PK_TBSSS_TICKETS',
+      'FK_TBSSS_TCK_SCR', 'FK_TBSSS_TCK_ENV', 'FK_TBSSS_TCK_USR', 'FK_TBSSS_TCK_PARENT', 'FK_TBSSS_TCK_SCH', 'CK_TBSSS_TCK_STAT',
+      'CK_TBSSS_TCK_PRIO', 'CK_TBSSS_TCK_CANCREQ', 'CK_TBSSS_TCK_LOGTR', 'CK_TBSSS_TCK_LOGOFF', 'CK_TBSSS_TCK_REASON', 'CK_TBSSS_TCK_UPD',
+      'PK_TBSSS_TICKET_ANSWER', 'UK_TBSSS_TANS_TCK_PRM', 'FK_TBSSS_TANS_TCK', 'FK_TBSSS_TANS_PRM', 'CK_TBSSS_TANS_UPD', 'PK_TBSSS_AGENTS',
+      'UK_TBSSS_AGT_CODE', 'CK_TBSSS_AGT_STAT', 'CK_TBSSS_AGT_PLAT', 'CK_TBSSS_AGT_UPD', 'PK_TBSSS_AUDIT', 'PK_TBSSS_CONTROL',
+      'CK_TBSSS_CTL_ID', 'CK_TBSSS_CTL_VERSION', 'PK_TBSSS_TICKET_OUTPUT', 'UK_TBSSS_TOUT_TCK', 'FK_TBSSS_TOUT_TCK', 'CK_TBSSS_TOUT_STATE',
+      'CK_TBSSS_TOUT_RSN', 'CK_TBSSS_TOUT_SIZE', 'CK_TBSSS_TOUT_UPD')) AS encontrado FROM DUAL
+  UNION ALL SELECT 5 AS sort_order, 'INDICES VALIDOS' AS verificacao, '=' AS regra, 25 AS esperado, (SELECT COUNT(*) FROM all_indexes WHERE owner = 'OPENRISOW' AND status = 'VALID' AND index_name IN ('IX_TBSSS_PFEA_FEA', 'IX_TBSSS_PENV_ENV', 'IX_TBSSS_PSCR_SCR', 'IX_TBSSS_SENV_ENV', 'IX_TBSSS_USR_PRF', 'IX_TBSSS_SPRM_PRM',
+      'IX_TBSSS_SCH_SCR', 'IX_TBSSS_SCH_USR', 'IX_TBSSS_SCH_ENV', 'IX_TBSSS_SCH_NEXT', 'IX_TBSSS_TCK_SCR', 'IX_TBSSS_TCK_ENV',
+      'IX_TBSSS_TCK_USR', 'IX_TBSSS_TCK_PAR', 'IX_TBSSS_TCK_SCH', 'IX_TBSSS_TCK_CRT', 'IX_TBSSS_TCK_HIST', 'IX_TBSSS_TCK_QUEUE',
+      'IX_TBSSS_TCK_RUN', 'IX_TBSSS_TCK_OCCUR', 'IX_TBSSS_TANS_PRM', 'IX_TBSSS_AUD_CRT', 'IX_TBSSS_AUD_ENT', 'IX_TBSSS_AUD_ACTOR',
+      'IX_TBSSS_TOUT_WRITE')) AS encontrado FROM DUAL
+  UNION ALL SELECT 6 AS sort_order, 'OBJETOS INVALIDOS' AS verificacao, '=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM all_objects WHERE owner = 'OPENRISOW' AND status = 'INVALID' AND object_name IN ('TBSSS_ENVIRONMENTS', 'TBSSS_PROFILES', 'TBSSS_FEATURES', 'TBSSS_PROFILE_FEATURE', 'TBSSS_PROFILE_ENV', 'TBSSS_SCRIPTS',
+      'TBSSS_PROFILE_SCRIPT', 'TBSSS_SCRIPT_ENV', 'TBSSS_USERS', 'TBSSS_PARAMETERS', 'TBSSS_SCRIPT_PARAM', 'TBSSS_SCHEDULES',
+      'TBSSS_TICKETS', 'TBSSS_TICKET_ANSWER', 'TBSSS_AGENTS', 'TBSSS_AUDIT', 'TBSSS_CONTROL', 'TBSSS_TICKET_OUTPUT',
+      'SQ_TBSSS_ENVIRONMENTS', 'SQ_TBSSS_PROFILES', 'SQ_TBSSS_FEATURES', 'SQ_TBSSS_PROFILE_FEATURE', 'SQ_TBSSS_PROFILE_ENV', 'SQ_TBSSS_SCRIPTS',
+      'SQ_TBSSS_PROFILE_SCRIPT', 'SQ_TBSSS_SCRIPT_ENV', 'SQ_TBSSS_USERS', 'SQ_TBSSS_PARAMETERS', 'SQ_TBSSS_SCRIPT_PARAM', 'SQ_TBSSS_SCHEDULES',
+      'SQ_TBSSS_TICKETS', 'SQ_TBSSS_TICKET_ANSWER', 'SQ_TBSSS_AGENTS', 'SQ_TBSSS_AUDIT', 'SQ_TBSSS_CONTROL', 'SQ_TBSSS_TICKET_OUTPUT',
+      'TR_TBSSS_ENV_BI', 'TR_TBSSS_ENV_BU', 'TR_TBSSS_PRF_BI', 'TR_TBSSS_FEA_BI', 'TR_TBSSS_PFEA_BI', 'TR_TBSSS_PENV_BI',
+      'TR_TBSSS_SCR_BI', 'TR_TBSSS_PSCR_BI', 'TR_TBSSS_SENV_BI', 'TR_TBSSS_USR_BI', 'TR_TBSSS_USR_BU', 'TR_TBSSS_PRM_BI',
+      'TR_TBSSS_SPRM_BI', 'TR_TBSSS_SCH_BI', 'TR_TBSSS_TCK_BI', 'TR_TBSSS_TANS_BI', 'TR_TBSSS_AGT_BI', 'TR_TBSSS_AUD_BI',
+      'TR_TBSSS_CTL_BI', 'TR_TBSSS_TOUT_BI', 'IX_TBSSS_PFEA_FEA', 'IX_TBSSS_PENV_ENV', 'IX_TBSSS_PSCR_SCR', 'IX_TBSSS_SENV_ENV',
+      'IX_TBSSS_USR_PRF', 'IX_TBSSS_SPRM_PRM', 'IX_TBSSS_SCH_SCR', 'IX_TBSSS_SCH_USR', 'IX_TBSSS_SCH_ENV', 'IX_TBSSS_SCH_NEXT',
+      'IX_TBSSS_TCK_SCR', 'IX_TBSSS_TCK_ENV', 'IX_TBSSS_TCK_USR', 'IX_TBSSS_TCK_PAR', 'IX_TBSSS_TCK_SCH', 'IX_TBSSS_TCK_CRT',
+      'IX_TBSSS_TCK_HIST', 'IX_TBSSS_TCK_QUEUE', 'IX_TBSSS_TCK_RUN', 'IX_TBSSS_TCK_OCCUR', 'IX_TBSSS_TANS_PRM', 'IX_TBSSS_AUD_CRT',
+      'IX_TBSSS_AUD_ENT', 'IX_TBSSS_AUD_ACTOR', 'IX_TBSSS_TOUT_WRITE')) AS encontrado FROM DUAL
+  UNION ALL SELECT 7 AS sort_order, 'GRANTS A PUBLIC' AS verificacao, '=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM all_tab_privs WHERE table_schema = 'OPENRISOW' AND grantee = 'PUBLIC' AND table_name IN ('TBSSS_ENVIRONMENTS', 'TBSSS_PROFILES', 'TBSSS_FEATURES', 'TBSSS_PROFILE_FEATURE', 'TBSSS_PROFILE_ENV', 'TBSSS_SCRIPTS',
+      'TBSSS_PROFILE_SCRIPT', 'TBSSS_SCRIPT_ENV', 'TBSSS_USERS', 'TBSSS_PARAMETERS', 'TBSSS_SCRIPT_PARAM', 'TBSSS_SCHEDULES',
+      'TBSSS_TICKETS', 'TBSSS_TICKET_ANSWER', 'TBSSS_AGENTS', 'TBSSS_AUDIT', 'TBSSS_CONTROL', 'TBSSS_TICKET_OUTPUT',
+      'SQ_TBSSS_ENVIRONMENTS', 'SQ_TBSSS_PROFILES', 'SQ_TBSSS_FEATURES', 'SQ_TBSSS_PROFILE_FEATURE', 'SQ_TBSSS_PROFILE_ENV', 'SQ_TBSSS_SCRIPTS',
+      'SQ_TBSSS_PROFILE_SCRIPT', 'SQ_TBSSS_SCRIPT_ENV', 'SQ_TBSSS_USERS', 'SQ_TBSSS_PARAMETERS', 'SQ_TBSSS_SCRIPT_PARAM', 'SQ_TBSSS_SCHEDULES',
+      'SQ_TBSSS_TICKETS', 'SQ_TBSSS_TICKET_ANSWER', 'SQ_TBSSS_AGENTS', 'SQ_TBSSS_AUDIT', 'SQ_TBSSS_CONTROL', 'SQ_TBSSS_TICKET_OUTPUT')) AS encontrado FROM DUAL
+)
+SELECT verificacao, regra || ' ' || esperado AS esperado, encontrado,
+       CASE WHEN (regra = '=' AND encontrado = esperado) OR (regra = '>=' AND encontrado >= esperado)
+            THEN 'OK' ELSE 'FALHA' END AS resultado
+  FROM chk ORDER BY sort_order;
+
+WITH chk AS (
+  SELECT 1 AS sort_order, 'TABELAS' AS verificacao, '=' AS regra, 18 AS esperado, (SELECT COUNT(*) FROM all_tables WHERE owner = 'OPENRISOW' AND table_name IN ('TBSSS_ENVIRONMENTS', 'TBSSS_PROFILES', 'TBSSS_FEATURES', 'TBSSS_PROFILE_FEATURE', 'TBSSS_PROFILE_ENV', 'TBSSS_SCRIPTS',
+      'TBSSS_PROFILE_SCRIPT', 'TBSSS_SCRIPT_ENV', 'TBSSS_USERS', 'TBSSS_PARAMETERS', 'TBSSS_SCRIPT_PARAM', 'TBSSS_SCHEDULES',
+      'TBSSS_TICKETS', 'TBSSS_TICKET_ANSWER', 'TBSSS_AGENTS', 'TBSSS_AUDIT', 'TBSSS_CONTROL', 'TBSSS_TICKET_OUTPUT')) AS encontrado FROM DUAL
+  UNION ALL SELECT 2 AS sort_order, 'SEQUENCES' AS verificacao, '=' AS regra, 18 AS esperado, (SELECT COUNT(*) FROM all_sequences WHERE sequence_owner = 'OPENRISOW' AND sequence_name IN ('SQ_TBSSS_ENVIRONMENTS', 'SQ_TBSSS_PROFILES', 'SQ_TBSSS_FEATURES', 'SQ_TBSSS_PROFILE_FEATURE', 'SQ_TBSSS_PROFILE_ENV', 'SQ_TBSSS_SCRIPTS',
+      'SQ_TBSSS_PROFILE_SCRIPT', 'SQ_TBSSS_SCRIPT_ENV', 'SQ_TBSSS_USERS', 'SQ_TBSSS_PARAMETERS', 'SQ_TBSSS_SCRIPT_PARAM', 'SQ_TBSSS_SCHEDULES',
+      'SQ_TBSSS_TICKETS', 'SQ_TBSSS_TICKET_ANSWER', 'SQ_TBSSS_AGENTS', 'SQ_TBSSS_AUDIT', 'SQ_TBSSS_CONTROL', 'SQ_TBSSS_TICKET_OUTPUT')) AS encontrado FROM DUAL
+  UNION ALL SELECT 3 AS sort_order, 'TRIGGERS HABILITADAS' AS verificacao, '=' AS regra, 20 AS esperado, (SELECT COUNT(*) FROM all_triggers WHERE owner = 'OPENRISOW' AND status = 'ENABLED' AND trigger_name IN ('TR_TBSSS_ENV_BI', 'TR_TBSSS_ENV_BU', 'TR_TBSSS_PRF_BI', 'TR_TBSSS_FEA_BI', 'TR_TBSSS_PFEA_BI', 'TR_TBSSS_PENV_BI',
+      'TR_TBSSS_SCR_BI', 'TR_TBSSS_PSCR_BI', 'TR_TBSSS_SENV_BI', 'TR_TBSSS_USR_BI', 'TR_TBSSS_USR_BU', 'TR_TBSSS_PRM_BI',
+      'TR_TBSSS_SPRM_BI', 'TR_TBSSS_SCH_BI', 'TR_TBSSS_TCK_BI', 'TR_TBSSS_TANS_BI', 'TR_TBSSS_AGT_BI', 'TR_TBSSS_AUD_BI',
+      'TR_TBSSS_CTL_BI', 'TR_TBSSS_TOUT_BI')) AS encontrado FROM DUAL
+  UNION ALL SELECT 4 AS sort_order, 'CONSTRAINTS HABILITADAS' AS verificacao, '=' AS regra, 117 AS esperado, (SELECT COUNT(*) FROM all_constraints WHERE owner = 'OPENRISOW' AND status = 'ENABLED' AND constraint_name IN ('PK_TBSSS_ENVIRONMENTS', 'UK_TBSSS_ENV_NAME', 'CK_TBSSS_ENV_ACTIVE', 'CK_TBSSS_ENV_NAME', 'CK_TBSSS_ENV_CONNECTION', 'CK_TBSSS_ENV_UPD',
+      'PK_TBSSS_PROFILES', 'UK_TBSSS_PRF_NAME', 'CK_TBSSS_PRF_ADM', 'CK_TBSSS_PRF_ACTIVE', 'CK_TBSSS_PRF_VERSION', 'CK_TBSSS_PRF_UPD',
+      'PK_TBSSS_FEATURES', 'UK_TBSSS_FEA_CODE', 'CK_TBSSS_FEA_ACTIVE', 'CK_TBSSS_FEA_UPD', 'PK_TBSSS_PROFILE_FEATURE', 'UK_TBSSS_PFEA_PRF_FEA',
+      'FK_TBSSS_PFEA_PRF', 'FK_TBSSS_PFEA_FEA', 'CK_TBSSS_PFEA_UPD', 'PK_TBSSS_PROFILE_ENV', 'UK_TBSSS_PENV_PRF_ENV', 'FK_TBSSS_PENV_PRF',
+      'FK_TBSSS_PENV_ENV', 'CK_TBSSS_PENV_UPD', 'PK_TBSSS_SCRIPTS', 'UK_TBSSS_SCR_NAME', 'CK_TBSSS_SCR_PTYPE', 'CK_TBSSS_SCR_ACTIVE',
+      'CK_TBSSS_SCR_PARAL', 'CK_TBSSS_SCR_INT', 'CK_TBSSS_SCR_PATH', 'CK_TBSSS_SCR_TMOUT', 'CK_TBSSS_SCR_UPD', 'PK_TBSSS_PROFILE_SCRIPT',
+      'UK_TBSSS_PSCR_PRF_SCR', 'FK_TBSSS_PSCR_PRF', 'FK_TBSSS_PSCR_SCR', 'CK_TBSSS_PSCR_UPD', 'PK_TBSSS_SCRIPT_ENV', 'UK_TBSSS_SENV_SCR_ENV',
+      'FK_TBSSS_SENV_SCR', 'FK_TBSSS_SENV_ENV', 'CK_TBSSS_SENV_UPD', 'PK_TBSSS_USERS', 'UK_TBSSS_USR_LOGIN', 'FK_TBSSS_USR_PRF',
+      'CK_TBSSS_USR_ACTIVE', 'CK_TBSSS_USR_LOGIN', 'CK_TBSSS_USR_ATT', 'CK_TBSSS_USR_EPOCH', 'CK_TBSSS_USR_UPD', 'PK_TBSSS_PARAMETERS',
+      'UK_TBSSS_PRM_CODE', 'CK_TBSSS_PRM_CTYPE', 'CK_TBSSS_PRM_ACTIVE', 'CK_TBSSS_PRM_SENS', 'CK_TBSSS_PRM_CODE', 'CK_TBSSS_PRM_FLAG',
+      'CK_TBSSS_PRM_UPD', 'PK_TBSSS_SCRIPT_PARAM', 'UK_TBSSS_SPRM_SCR_PRM', 'UK_TBSSS_SPRM_SCR_ORD', 'FK_TBSSS_SPRM_SCR', 'FK_TBSSS_SPRM_PRM',
+      'CK_TBSSS_SPRM_REQ', 'CK_TBSSS_SPRM_SORT_ORDER', 'CK_TBSSS_SPRM_UPD', 'PK_TBSSS_SCHEDULES', 'FK_TBSSS_SCH_SCR', 'FK_TBSSS_SCH_USR',
+      'FK_TBSSS_SCH_ENV', 'CK_TBSSS_SCH_RTYPE', 'CK_TBSSS_SCH_PRIO', 'CK_TBSSS_SCH_ACTIVE', 'CK_TBSSS_SCH_DAY', 'CK_TBSSS_SCH_TIME',
+      'CK_TBSSS_SCH_WDAY', 'CK_TBSSS_SCH_END', 'CK_TBSSS_SCH_PAUSE', 'CK_TBSSS_SCH_FIELDS', 'CK_TBSSS_SCH_UPD', 'PK_TBSSS_TICKETS',
+      'FK_TBSSS_TCK_SCR', 'FK_TBSSS_TCK_ENV', 'FK_TBSSS_TCK_USR', 'FK_TBSSS_TCK_PARENT', 'FK_TBSSS_TCK_SCH', 'CK_TBSSS_TCK_STAT',
+      'CK_TBSSS_TCK_PRIO', 'CK_TBSSS_TCK_CANCREQ', 'CK_TBSSS_TCK_LOGTR', 'CK_TBSSS_TCK_LOGOFF', 'CK_TBSSS_TCK_REASON', 'CK_TBSSS_TCK_UPD',
+      'PK_TBSSS_TICKET_ANSWER', 'UK_TBSSS_TANS_TCK_PRM', 'FK_TBSSS_TANS_TCK', 'FK_TBSSS_TANS_PRM', 'CK_TBSSS_TANS_UPD', 'PK_TBSSS_AGENTS',
+      'UK_TBSSS_AGT_CODE', 'CK_TBSSS_AGT_STAT', 'CK_TBSSS_AGT_PLAT', 'CK_TBSSS_AGT_UPD', 'PK_TBSSS_AUDIT', 'PK_TBSSS_CONTROL',
+      'CK_TBSSS_CTL_ID', 'CK_TBSSS_CTL_VERSION', 'PK_TBSSS_TICKET_OUTPUT', 'UK_TBSSS_TOUT_TCK', 'FK_TBSSS_TOUT_TCK', 'CK_TBSSS_TOUT_STATE',
+      'CK_TBSSS_TOUT_RSN', 'CK_TBSSS_TOUT_SIZE', 'CK_TBSSS_TOUT_UPD')) AS encontrado FROM DUAL
+  UNION ALL SELECT 5 AS sort_order, 'INDICES VALIDOS' AS verificacao, '=' AS regra, 25 AS esperado, (SELECT COUNT(*) FROM all_indexes WHERE owner = 'OPENRISOW' AND status = 'VALID' AND index_name IN ('IX_TBSSS_PFEA_FEA', 'IX_TBSSS_PENV_ENV', 'IX_TBSSS_PSCR_SCR', 'IX_TBSSS_SENV_ENV', 'IX_TBSSS_USR_PRF', 'IX_TBSSS_SPRM_PRM',
+      'IX_TBSSS_SCH_SCR', 'IX_TBSSS_SCH_USR', 'IX_TBSSS_SCH_ENV', 'IX_TBSSS_SCH_NEXT', 'IX_TBSSS_TCK_SCR', 'IX_TBSSS_TCK_ENV',
+      'IX_TBSSS_TCK_USR', 'IX_TBSSS_TCK_PAR', 'IX_TBSSS_TCK_SCH', 'IX_TBSSS_TCK_CRT', 'IX_TBSSS_TCK_HIST', 'IX_TBSSS_TCK_QUEUE',
+      'IX_TBSSS_TCK_RUN', 'IX_TBSSS_TCK_OCCUR', 'IX_TBSSS_TANS_PRM', 'IX_TBSSS_AUD_CRT', 'IX_TBSSS_AUD_ENT', 'IX_TBSSS_AUD_ACTOR',
+      'IX_TBSSS_TOUT_WRITE')) AS encontrado FROM DUAL
+  UNION ALL SELECT 6 AS sort_order, 'OBJETOS INVALIDOS' AS verificacao, '=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM all_objects WHERE owner = 'OPENRISOW' AND status = 'INVALID' AND object_name IN ('TBSSS_ENVIRONMENTS', 'TBSSS_PROFILES', 'TBSSS_FEATURES', 'TBSSS_PROFILE_FEATURE', 'TBSSS_PROFILE_ENV', 'TBSSS_SCRIPTS',
+      'TBSSS_PROFILE_SCRIPT', 'TBSSS_SCRIPT_ENV', 'TBSSS_USERS', 'TBSSS_PARAMETERS', 'TBSSS_SCRIPT_PARAM', 'TBSSS_SCHEDULES',
+      'TBSSS_TICKETS', 'TBSSS_TICKET_ANSWER', 'TBSSS_AGENTS', 'TBSSS_AUDIT', 'TBSSS_CONTROL', 'TBSSS_TICKET_OUTPUT',
+      'SQ_TBSSS_ENVIRONMENTS', 'SQ_TBSSS_PROFILES', 'SQ_TBSSS_FEATURES', 'SQ_TBSSS_PROFILE_FEATURE', 'SQ_TBSSS_PROFILE_ENV', 'SQ_TBSSS_SCRIPTS',
+      'SQ_TBSSS_PROFILE_SCRIPT', 'SQ_TBSSS_SCRIPT_ENV', 'SQ_TBSSS_USERS', 'SQ_TBSSS_PARAMETERS', 'SQ_TBSSS_SCRIPT_PARAM', 'SQ_TBSSS_SCHEDULES',
+      'SQ_TBSSS_TICKETS', 'SQ_TBSSS_TICKET_ANSWER', 'SQ_TBSSS_AGENTS', 'SQ_TBSSS_AUDIT', 'SQ_TBSSS_CONTROL', 'SQ_TBSSS_TICKET_OUTPUT',
+      'TR_TBSSS_ENV_BI', 'TR_TBSSS_ENV_BU', 'TR_TBSSS_PRF_BI', 'TR_TBSSS_FEA_BI', 'TR_TBSSS_PFEA_BI', 'TR_TBSSS_PENV_BI',
+      'TR_TBSSS_SCR_BI', 'TR_TBSSS_PSCR_BI', 'TR_TBSSS_SENV_BI', 'TR_TBSSS_USR_BI', 'TR_TBSSS_USR_BU', 'TR_TBSSS_PRM_BI',
+      'TR_TBSSS_SPRM_BI', 'TR_TBSSS_SCH_BI', 'TR_TBSSS_TCK_BI', 'TR_TBSSS_TANS_BI', 'TR_TBSSS_AGT_BI', 'TR_TBSSS_AUD_BI',
+      'TR_TBSSS_CTL_BI', 'TR_TBSSS_TOUT_BI', 'IX_TBSSS_PFEA_FEA', 'IX_TBSSS_PENV_ENV', 'IX_TBSSS_PSCR_SCR', 'IX_TBSSS_SENV_ENV',
+      'IX_TBSSS_USR_PRF', 'IX_TBSSS_SPRM_PRM', 'IX_TBSSS_SCH_SCR', 'IX_TBSSS_SCH_USR', 'IX_TBSSS_SCH_ENV', 'IX_TBSSS_SCH_NEXT',
+      'IX_TBSSS_TCK_SCR', 'IX_TBSSS_TCK_ENV', 'IX_TBSSS_TCK_USR', 'IX_TBSSS_TCK_PAR', 'IX_TBSSS_TCK_SCH', 'IX_TBSSS_TCK_CRT',
+      'IX_TBSSS_TCK_HIST', 'IX_TBSSS_TCK_QUEUE', 'IX_TBSSS_TCK_RUN', 'IX_TBSSS_TCK_OCCUR', 'IX_TBSSS_TANS_PRM', 'IX_TBSSS_AUD_CRT',
+      'IX_TBSSS_AUD_ENT', 'IX_TBSSS_AUD_ACTOR', 'IX_TBSSS_TOUT_WRITE')) AS encontrado FROM DUAL
+  UNION ALL SELECT 7 AS sort_order, 'GRANTS A PUBLIC' AS verificacao, '=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM all_tab_privs WHERE table_schema = 'OPENRISOW' AND grantee = 'PUBLIC' AND table_name IN ('TBSSS_ENVIRONMENTS', 'TBSSS_PROFILES', 'TBSSS_FEATURES', 'TBSSS_PROFILE_FEATURE', 'TBSSS_PROFILE_ENV', 'TBSSS_SCRIPTS',
+      'TBSSS_PROFILE_SCRIPT', 'TBSSS_SCRIPT_ENV', 'TBSSS_USERS', 'TBSSS_PARAMETERS', 'TBSSS_SCRIPT_PARAM', 'TBSSS_SCHEDULES',
+      'TBSSS_TICKETS', 'TBSSS_TICKET_ANSWER', 'TBSSS_AGENTS', 'TBSSS_AUDIT', 'TBSSS_CONTROL', 'TBSSS_TICKET_OUTPUT',
+      'SQ_TBSSS_ENVIRONMENTS', 'SQ_TBSSS_PROFILES', 'SQ_TBSSS_FEATURES', 'SQ_TBSSS_PROFILE_FEATURE', 'SQ_TBSSS_PROFILE_ENV', 'SQ_TBSSS_SCRIPTS',
+      'SQ_TBSSS_PROFILE_SCRIPT', 'SQ_TBSSS_SCRIPT_ENV', 'SQ_TBSSS_USERS', 'SQ_TBSSS_PARAMETERS', 'SQ_TBSSS_SCRIPT_PARAM', 'SQ_TBSSS_SCHEDULES',
+      'SQ_TBSSS_TICKETS', 'SQ_TBSSS_TICKET_ANSWER', 'SQ_TBSSS_AGENTS', 'SQ_TBSSS_AUDIT', 'SQ_TBSSS_CONTROL', 'SQ_TBSSS_TICKET_OUTPUT')) AS encontrado FROM DUAL
+)
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK: nenhuma falha'
+            ELSE 'FALHA: ' || COUNT(*) || ' verificacao(oes) divergente(s)' END AS resumo
+  FROM chk
+ WHERE NOT ((regra = '=' AND encontrado = esperado) OR (regra = '>=' AND encontrado >= esperado))
+    OR encontrado IS NULL;
+
+PROMPT ==============================================================================
+PROMPT 2. VERSAO DO ESQUEMA E MINIMO DE LINHAS DO SEED
+PROMPT (se as tabelas nao existirem, esta secao falha com ORA-00942: veja a secao 1)
+PROMPT ==============================================================================
+WITH chk AS (
+  SELECT 10 AS sort_order, 'VERSAO DO ESQUEMA' AS verificacao, '=' AS regra, 1 AS esperado, (SELECT MAX(schema_version) FROM openrisow.tbsss_control) AS encontrado FROM DUAL
+  UNION ALL SELECT 11 AS sort_order, 'LINHAS TBSSS_ENVIRONMENTS' AS verificacao, '>=' AS regra, 5 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_environments) AS encontrado FROM DUAL
+  UNION ALL SELECT 12 AS sort_order, 'LINHAS TBSSS_PROFILES' AS verificacao, '>=' AS regra, 4 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profiles) AS encontrado FROM DUAL
+  UNION ALL SELECT 13 AS sort_order, 'LINHAS TBSSS_FEATURES' AS verificacao, '>=' AS regra, 10 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_features) AS encontrado FROM DUAL
+  UNION ALL SELECT 14 AS sort_order, 'LINHAS TBSSS_PROFILE_FEATURE' AS verificacao, '>=' AS regra, 17 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profile_feature) AS encontrado FROM DUAL
+  UNION ALL SELECT 15 AS sort_order, 'LINHAS TBSSS_PROFILE_ENV' AS verificacao, '>=' AS regra, 18 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profile_env) AS encontrado FROM DUAL
+  UNION ALL SELECT 16 AS sort_order, 'LINHAS TBSSS_SCRIPTS' AS verificacao, '>=' AS regra, 14 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_scripts) AS encontrado FROM DUAL
+  UNION ALL SELECT 17 AS sort_order, 'LINHAS TBSSS_PROFILE_SCRIPT' AS verificacao, '>=' AS regra, 56 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profile_script) AS encontrado FROM DUAL
+  UNION ALL SELECT 18 AS sort_order, 'LINHAS TBSSS_SCRIPT_ENV' AS verificacao, '>=' AS regra, 70 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_script_env) AS encontrado FROM DUAL
+  UNION ALL SELECT 19 AS sort_order, 'LINHAS TBSSS_USERS' AS verificacao, '>=' AS regra, 4 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_users) AS encontrado FROM DUAL
+  UNION ALL SELECT 20 AS sort_order, 'LINHAS TBSSS_PARAMETERS' AS verificacao, '>=' AS regra, 19 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_parameters) AS encontrado FROM DUAL
+  UNION ALL SELECT 21 AS sort_order, 'LINHAS TBSSS_SCRIPT_PARAM' AS verificacao, '>=' AS regra, 38 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_script_param) AS encontrado FROM DUAL
+  UNION ALL SELECT 22 AS sort_order, 'LINHAS TBSSS_SCHEDULES' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_schedules) AS encontrado FROM DUAL
+  UNION ALL SELECT 23 AS sort_order, 'LINHAS TBSSS_TICKETS' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_tickets) AS encontrado FROM DUAL
+  UNION ALL SELECT 24 AS sort_order, 'LINHAS TBSSS_TICKET_ANSWER' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_ticket_answer) AS encontrado FROM DUAL
+  UNION ALL SELECT 25 AS sort_order, 'LINHAS TBSSS_AGENTS' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_agents) AS encontrado FROM DUAL
+  UNION ALL SELECT 26 AS sort_order, 'LINHAS TBSSS_AUDIT' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_audit) AS encontrado FROM DUAL
+  UNION ALL SELECT 27 AS sort_order, 'LINHAS TBSSS_CONTROL' AS verificacao, '>=' AS regra, 1 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_control) AS encontrado FROM DUAL
+  UNION ALL SELECT 28 AS sort_order, 'LINHAS TBSSS_TICKET_OUTPUT' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_ticket_output) AS encontrado FROM DUAL
+)
+SELECT verificacao, regra || ' ' || esperado AS esperado, encontrado,
+       CASE WHEN (regra = '=' AND encontrado = esperado) OR (regra = '>=' AND encontrado >= esperado)
+            THEN 'OK' ELSE 'FALHA' END AS resultado
+  FROM chk ORDER BY sort_order;
+
+WITH chk AS (
+  SELECT 10 AS sort_order, 'VERSAO DO ESQUEMA' AS verificacao, '=' AS regra, 1 AS esperado, (SELECT MAX(schema_version) FROM openrisow.tbsss_control) AS encontrado FROM DUAL
+  UNION ALL SELECT 11 AS sort_order, 'LINHAS TBSSS_ENVIRONMENTS' AS verificacao, '>=' AS regra, 5 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_environments) AS encontrado FROM DUAL
+  UNION ALL SELECT 12 AS sort_order, 'LINHAS TBSSS_PROFILES' AS verificacao, '>=' AS regra, 4 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profiles) AS encontrado FROM DUAL
+  UNION ALL SELECT 13 AS sort_order, 'LINHAS TBSSS_FEATURES' AS verificacao, '>=' AS regra, 10 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_features) AS encontrado FROM DUAL
+  UNION ALL SELECT 14 AS sort_order, 'LINHAS TBSSS_PROFILE_FEATURE' AS verificacao, '>=' AS regra, 17 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profile_feature) AS encontrado FROM DUAL
+  UNION ALL SELECT 15 AS sort_order, 'LINHAS TBSSS_PROFILE_ENV' AS verificacao, '>=' AS regra, 18 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profile_env) AS encontrado FROM DUAL
+  UNION ALL SELECT 16 AS sort_order, 'LINHAS TBSSS_SCRIPTS' AS verificacao, '>=' AS regra, 14 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_scripts) AS encontrado FROM DUAL
+  UNION ALL SELECT 17 AS sort_order, 'LINHAS TBSSS_PROFILE_SCRIPT' AS verificacao, '>=' AS regra, 56 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_profile_script) AS encontrado FROM DUAL
+  UNION ALL SELECT 18 AS sort_order, 'LINHAS TBSSS_SCRIPT_ENV' AS verificacao, '>=' AS regra, 70 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_script_env) AS encontrado FROM DUAL
+  UNION ALL SELECT 19 AS sort_order, 'LINHAS TBSSS_USERS' AS verificacao, '>=' AS regra, 4 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_users) AS encontrado FROM DUAL
+  UNION ALL SELECT 20 AS sort_order, 'LINHAS TBSSS_PARAMETERS' AS verificacao, '>=' AS regra, 19 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_parameters) AS encontrado FROM DUAL
+  UNION ALL SELECT 21 AS sort_order, 'LINHAS TBSSS_SCRIPT_PARAM' AS verificacao, '>=' AS regra, 38 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_script_param) AS encontrado FROM DUAL
+  UNION ALL SELECT 22 AS sort_order, 'LINHAS TBSSS_SCHEDULES' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_schedules) AS encontrado FROM DUAL
+  UNION ALL SELECT 23 AS sort_order, 'LINHAS TBSSS_TICKETS' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_tickets) AS encontrado FROM DUAL
+  UNION ALL SELECT 24 AS sort_order, 'LINHAS TBSSS_TICKET_ANSWER' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_ticket_answer) AS encontrado FROM DUAL
+  UNION ALL SELECT 25 AS sort_order, 'LINHAS TBSSS_AGENTS' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_agents) AS encontrado FROM DUAL
+  UNION ALL SELECT 26 AS sort_order, 'LINHAS TBSSS_AUDIT' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_audit) AS encontrado FROM DUAL
+  UNION ALL SELECT 27 AS sort_order, 'LINHAS TBSSS_CONTROL' AS verificacao, '>=' AS regra, 1 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_control) AS encontrado FROM DUAL
+  UNION ALL SELECT 28 AS sort_order, 'LINHAS TBSSS_TICKET_OUTPUT' AS verificacao, '>=' AS regra, 0 AS esperado, (SELECT COUNT(*) FROM openrisow.tbsss_ticket_output) AS encontrado FROM DUAL
+)
+SELECT CASE WHEN COUNT(*) = 0 THEN 'OK: nenhuma falha'
+            ELSE 'FALHA: ' || COUNT(*) || ' verificacao(oes) divergente(s)' END AS resumo
+  FROM chk
+ WHERE NOT ((regra = '=' AND encontrado = esperado) OR (regra = '>=' AND encontrado >= esperado))
+    OR encontrado IS NULL;
+
+PROMPT ==============================================================================
+PROMPT 3. USUARIOS E PERFIS (sem hash de senha)
+PROMPT ==============================================================================
+COLUMN login FORMAT A20
+COLUMN name FORMAT A30
+COLUMN perfil FORMAT A20
+COLUMN admin FORMAT A5
+COLUMN active FORMAT A5
+COLUMN senha_definida FORMAT A14
+SELECT u.id, u.login, u.name, p.name AS perfil, p.is_admin AS admin, u.active,
+       CASE WHEN u.password_hash IS NULL THEN 'N' ELSE 'Y' END AS senha_definida
+  FROM openrisow.tbsss_users u JOIN openrisow.tbsss_profiles p ON p.id = u.profile_id
+ ORDER BY u.id;
+
+PROMPT ==============================================================================
+PROMPT 4. SCRIPTS CADASTRADOS
+PROMPT ==============================================================================
+COLUMN name FORMAT A25
+COLUMN interpreter FORMAT A8
+COLUMN param_type FORMAT A10
+COLUMN path_file FORMAT A70
+SELECT id, name, interpreter, param_type, max_parallel_env AS paral, timeout_s AS tmout,
+       active, path_file
+  FROM openrisow.tbsss_scripts
+ ORDER BY id;
+
+PROMPT ==============================================================================
+PROMPT 5. ACESSO POR PERFIL (funcionalidades, ambientes e scripts liberados)
+PROMPT ==============================================================================
+COLUMN perfil FORMAT A20
+SELECT p.name AS perfil, p.is_admin AS admin, p.active,
+       (SELECT COUNT(*) FROM openrisow.tbsss_profile_feature x WHERE x.profile_id = p.id) AS funcionalidades,
+       (SELECT COUNT(*) FROM openrisow.tbsss_profile_env x WHERE x.profile_id = p.id) AS environments,
+       (SELECT COUNT(*) FROM openrisow.tbsss_profile_script x WHERE x.profile_id = p.id) AS scripts
+  FROM openrisow.tbsss_profiles p
+ ORDER BY p.name;
+
+PROMPT ==============================================================================
+PROMPT 6. GRANTS NOS OBJETOS DO SSS (README 11.1: so contas dos papeis; nunca PUBLIC)
+PROMPT ==============================================================================
+SET FEEDBACK ON
+COLUMN grantee FORMAT A30
+COLUMN privilege FORMAT A12
+SELECT grantee, privilege, COUNT(*) AS objetos
+  FROM all_tab_privs
+ WHERE table_schema = 'OPENRISOW' AND table_name IN ('TBSSS_ENVIRONMENTS', 'TBSSS_PROFILES', 'TBSSS_FEATURES', 'TBSSS_PROFILE_FEATURE', 'TBSSS_PROFILE_ENV', 'TBSSS_SCRIPTS',
+      'TBSSS_PROFILE_SCRIPT', 'TBSSS_SCRIPT_ENV', 'TBSSS_USERS', 'TBSSS_PARAMETERS', 'TBSSS_SCRIPT_PARAM', 'TBSSS_SCHEDULES',
+      'TBSSS_TICKETS', 'TBSSS_TICKET_ANSWER', 'TBSSS_AGENTS', 'TBSSS_AUDIT', 'TBSSS_CONTROL', 'TBSSS_TICKET_OUTPUT',
+      'SQ_TBSSS_ENVIRONMENTS', 'SQ_TBSSS_PROFILES', 'SQ_TBSSS_FEATURES', 'SQ_TBSSS_PROFILE_FEATURE', 'SQ_TBSSS_PROFILE_ENV', 'SQ_TBSSS_SCRIPTS',
+      'SQ_TBSSS_PROFILE_SCRIPT', 'SQ_TBSSS_SCRIPT_ENV', 'SQ_TBSSS_USERS', 'SQ_TBSSS_PARAMETERS', 'SQ_TBSSS_SCRIPT_PARAM', 'SQ_TBSSS_SCHEDULES',
+      'SQ_TBSSS_TICKETS', 'SQ_TBSSS_TICKET_ANSWER', 'SQ_TBSSS_AGENTS', 'SQ_TBSSS_AUDIT', 'SQ_TBSSS_CONTROL', 'SQ_TBSSS_TICKET_OUTPUT')
+ GROUP BY grantee, privilege
+ ORDER BY grantee, privilege;
+SET FEEDBACK OFF
+
+PROMPT Fim da validacao do SSS.
+EXIT;

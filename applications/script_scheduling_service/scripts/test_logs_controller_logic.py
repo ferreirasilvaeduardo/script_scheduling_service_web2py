@@ -176,7 +176,7 @@ class TestLerLogConteudo(_BaseLog):
         self.assertIn("etapa %d/%d processada" % (ETAPAS, ETAPAS), r3["texto"])
         self.assertIn("Script concluido com retorno 0.", r3["texto"])
         ticket = self.tickets.obter(TCK_RUNNING)
-        self.assertEqual((ticket["status_motivo"], ticket["return_code"]), ("EXIT_OK", 0))
+        self.assertEqual((ticket["status_reason"], ticket["return_code"]), ("EXIT_OK", 0))
         self.assertEqual(ticket["finished_at"], self.relogio())
 
         # Terminal e imutavel: o log nao cresce mais.
@@ -190,7 +190,7 @@ class TestLerLogConteudo(_BaseLog):
         self.assertTrue(ultima["terminal"])
         self.assertEqual(ultima["status"], "CANCELLED")
         self.assertIn("cancelamento", texto)
-        self.assertEqual(self.tickets.obter(TCK_RUNNING)["status_motivo"], "CANCEL_USER")
+        self.assertEqual(self.tickets.obter(TCK_RUNNING)["status_reason"], "CANCEL_USER")
 
     def test_segredo_mascarado(self):
         texto, _ = self._ler_tudo("admin", TCK_RUNNING)

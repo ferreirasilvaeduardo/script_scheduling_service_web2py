@@ -5,7 +5,7 @@ R-26, R-27; CR-008 R-03, R-19, R-21, R-22, R-31, R-33).
 Uma transacao por regra, sem espera: trava (SKIP LOCKED), le, revalida o responsavel, decide (recurrence), confere
 a sobreposicao, compila o snapshot v4 e reserva/conclui/pausa pelo repo_oracle/scheduler_agenda, com o COMMIT unico
 aqui (passo 8). Uma regra com defeito nunca trava as demais: erro de banco conta falhas seguidas (3a pausa
-ERRO_INTERNO), outra excecao pausa ERRO_INTERNO numa transacao separada. Paginacao com orcamento de tempo.
+INTERNAL_ERROR), outra excecao pausa INTERNAL_ERROR numa transacao separada. Paginacao com orcamento de tempo.
 Python puro, sem gluon; o log permite reconstruir cada decisao sem o banco.
 """
 import json
@@ -85,7 +85,7 @@ class Desdobro(object):
                     ignoradas.add(regra_id)
                 elif desfecho in ("TICKET", "CONCLUIDA_COM_TICKET", "CRON_INVALIDO_COM_TICKET"):
                     stats["tickets"] += 1
-                if desfecho in ("PAUSADA", "CRON_INVALIDO", "CRON_INVALIDO_COM_TICKET", "ERRO_INTERNO"):
+                if desfecho in ("PAUSADA", "INVALID_CRON", "CRON_INVALIDO_COM_TICKET", "INTERNAL_ERROR"):
                     stats["pausas"] += 1
                 if desfecho == "OUTRO_AGENTE":
                     stats["puladas"] += 1
@@ -117,19 +117,19 @@ class Desdobro(object):
         if regra is None:
             conn.rollback()
             return "OUTRO_AGENTE"
-        antiga = regra["proxima_execucao"]  # passo 1: exatamente como o banco devolveu
+        antiga = regra["next_run_at"]  # passo 1: exatamente como o banco devolveu
         agora = db_conn.agora_banco(conn)
         self._regra_atual = regra
 
         # Passo 2: o responsavel ainda pode executar (motivo pela traducao unica, CR-008 R-33).
-        login = self.agenda.login_do_usuario(conn, regra["usuario_id"])
-        ctx_exec = self.fila.contexto_execucao(conn, {"script_id": regra["script_id"], "ambiente": regra["ambiente"],
-                                                      "solicitante": login})
-        ok, motivo = rbac.pode_executar(ctx_exec["ctx"], ctx_exec["script"], ctx_exec["ambiente"],
+        login = self.agenda.login_do_usuario(conn, regra["user_id"])
+        ctx_exec = self.fila.contexto_execucao(conn, {"script_id": regra["script_id"], "environment": regra["environment"],
+                                                      "requested_by": login})
+        ok, motivo = rbac.pode_executar(ctx_exec["ctx"], ctx_exec["script"], ctx_exec["environment"],
                                         ctx_exec["homologacoes"])
         if not ok:
             return self._pausar(conn, regra, antiga, rbac.motivo_pausa(motivo), "rbac: %s" % motivo, log)
-        prioridade = int(regra["prioridade"])
+        prioridade = int(regra["priority"])
         if prioridade == 1 and not (ctx_exec["ctx"] or {}).get("is_admin"):
             prioridade = 2
             log.warning("PRIORIDADE_REBAIXADA: o responsavel %s deixou de ser admin; ticket com prioridade 2", login)
@@ -139,7 +139,7 @@ class Desdobro(object):
             dec = recurrence.avaliar_disparo(regra, agora, self.cfg.misfire_policy, self.cfg.misfire_tolerance_s,
                                              self.horizonte)
         except recurrence.CronErro as exc:
-            return self._pausar(conn, regra, antiga, "CRON_INVALIDO", _curto(exc), log)
+            return self._pausar(conn, regra, antiga, "INVALID_CRON", _curto(exc), log)
         self._registrar_perdidas(dec, antiga, agora, log)
 
         # Passo 4: sobreposicao (ultimo ticket PENDING/RUNNING).
@@ -171,7 +171,7 @@ class Desdobro(object):
         script, vinculos = self.agenda.script_e_vinculos(conn, regra["script_id"])
         ticket, linhas, erro = self._montar_ticket(regra, script, vinculos, login, prioridade, dec.ocorrencia, agora)
         if erro is not None:
-            return self._pausar(conn, regra, antiga, "PARAM_INVALIDO", erro, log)
+            return self._pausar(conn, regra, antiga, "INVALID_PARAM", erro, log)
 
         # Passo 6: reserva + ticket (ou conclusao / variante cron_erro).
         ticket_id = self.agenda.proximo_ticket_id(conn)
@@ -209,13 +209,13 @@ class Desdobro(object):
 
     def _ocupado(self, conn, regra, script, agora, log):
         """ultimo_ticket_id PENDING/RUNNING bloqueia; nulo, inexistente (purgado) ou terminal e livre."""
-        ultimo = regra.get("ultimo_ticket_id")
+        ultimo = regra.get("last_ticket_id")
         if ultimo is None:
             return False
         estado = self.agenda.status_ticket(conn, ultimo)
         if estado is None or estado[0] not in _OCUPADO:
             return False
-        limite = (((script or {}).get("timeout_seg") or self.cfg.script_timeout_s) + self.cfg.node_offline_timeout_s)
+        limite = (((script or {}).get("timeout_s") or self.cfg.script_timeout_s) + self.cfg.node_offline_timeout_s)
         criado = estado[1]
         if criado is not None and (agora - criado).total_seconds() > limite:
             log.warning("SKIP_OVERLAP_PRESO: o ticket %d esta %s ha mais de %d s; precisa de atencao", ultimo,
@@ -225,22 +225,22 @@ class Desdobro(object):
         return True
 
     def _montar_ticket(self, regra, script, vinculos, login, prioridade, ocorrencia, agora):
-        """(ticket, linhas_ticket_resp, None) ou (None, None, detalhe do PARAM_INVALIDO sem valores; R-26)."""
+        """(ticket, linhas_ticket_resp, None) ou (None, None, detalhe do INVALID_PARAM sem valores; R-26)."""
         if script is None:
             return None, None, "script inexistente"
         try:
-            respostas = json.loads(regra.get("parametros_json") or "{}")
+            respostas = json.loads(regra.get("params_json") or "{}")
         except ValueError:
             return None, None, "parametros_json invalido"
         if not isinstance(respostas, dict):
             return None, None, "parametros_json invalido"
-        ativos = sorted((v for v in vinculos if v.get("ativo") == "S"), key=lambda v: (v["ordem"], v["parametro_id"]))
+        ativos = sorted((v for v in vinculos if v.get("active") == "Y"), key=lambda v: (v["sort_order"], v["parameter_id"]))
         snapshot, resolvidos, erros = params_compiler.compilar_snapshot(script, ativos, respostas, agora)
         if erros:
             return None, None, _curto("; ".join("%s: %s" % (c, m) for c, m in sorted(erros.items())))
-        linhas = [{"parametro_id": v["parametro_id"], "valor_resposta": _texto_resposta(resolvidos.get(v["codigo"]))}
-                  for v in ativos if resolvidos.get(v["codigo"]) is not None]
-        ticket = {"solicitante": login, "prioridade": prioridade, "parametros_enviados": snapshot,
+        linhas = [{"parameter_id": v["parameter_id"], "answer_value": _texto_resposta(resolvidos.get(v["code"]))}
+                  for v in ativos if resolvidos.get(v["code"]) is not None]
+        ticket = {"requested_by": login, "priority": prioridade, "submitted_params": snapshot,
                   "scheduled_at": ocorrencia}
         return ticket, linhas, None
 
@@ -267,9 +267,9 @@ class Desdobro(object):
             return "CORRIDA"
         conn.commit()
         if ticket_id is None:
-            log.warning("regra pausada: CRON_INVALIDO (sem proxima ocorrencia no horizonte), sem ticket")
-            return "CRON_INVALIDO"
-        log.warning("ticket %d gerado e regra pausada: CRON_INVALIDO (sem proxima ocorrencia no horizonte)", ticket_id)
+            log.warning("regra pausada: INVALID_CRON (sem proxima ocorrencia no horizonte), sem ticket")
+            return "INVALID_CRON"
+        log.warning("ticket %d gerado e regra pausada: INVALID_CRON (sem proxima ocorrencia no horizonte)", ticket_id)
         return "CRON_INVALIDO_COM_TICKET"
 
     def _ocorrencia_duplicada(self, conn, regra_id, log):
@@ -281,7 +281,7 @@ class Desdobro(object):
                 dec = recurrence.avaliar_disparo(regra, db_conn.agora_banco(conn), self.cfg.misfire_policy,
                                                  self.cfg.misfire_tolerance_s, self.horizonte)
                 if dec.nova_data is not None:
-                    self.agenda.avancar_sem_ticket(conn, regra_id, regra["proxima_execucao"], dec.nova_data)
+                    self.agenda.avancar_sem_ticket(conn, regra_id, regra["next_run_at"], dec.nova_data)
             conn.commit()
         except Exception as exc:  # noqa: BLE001 - a regra volta no ciclo seguinte
             conn.rollback()
@@ -310,11 +310,11 @@ class Desdobro(object):
             conn.commit()
         except Exception as exc2:  # noqa: BLE001 - a regra fica ignorada ate o fim do ciclo (R-08)
             conn.rollback()
-            log.error("pausa ERRO_INTERNO falhou (%s): regra ignorada neste ciclo", exc2.__class__.__name__)
+            log.error("pausa INTERNAL_ERROR falhou (%s): regra ignorada neste ciclo", exc2.__class__.__name__)
             return "IGNORAR"
         if pausou:
-            log.warning("regra pausada: ERRO_INTERNO (%s)", detalhe)
-        return "ERRO_INTERNO"
+            log.warning("regra pausada: INTERNAL_ERROR (%s)", detalhe)
+        return "INTERNAL_ERROR"
 
 
 class _LogRegra(object):

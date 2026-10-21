@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Implementacao Oracle 11gR2 do repositorio de auditoria (F7.3, agregado AUDITORIA_AGENTES; AGENTS §4).
 
-tbsss_auditoria com a mesma semantica do repo_fake/auditoria.py (README §2.5, §4.4):
+tbsss_audit com a mesma semantica do repo_fake/auditoria.py (README §2.5, §4.4):
 - reservar_id: NEXTVAL da sequence (README §2.7); registrar usa o id recebido ou um proprio;
 - ator obrigatorio ate 40 e detalhe ate 1.000, sem corte nem valor padrao (test_06b);
 - sem colunas de registro (CR-006, D1): so ator e created_at;
@@ -14,7 +14,7 @@ from repo_oracle.base import BaseRepoOracle, validar_campos_auditoria
 
 _LIMITE_TOTAL = 10001
 _ARRAYSIZE = 1000
-_COLS = ("id", "ator", "ip_origem", "acao", "entidade", "entidade_id", "detalhe", "created_at")
+_COLS = ("id", "actor", "source_ip", "action", "entity", "entity_id", "detail", "created_at")
 
 
 def _lista(cols):
@@ -23,8 +23,8 @@ def _lista(cols):
 
 # {aud} recebe apenas o nome qualificado por sql_ident (validado); todo valor entra por bind.
 _SQL_INSERIR = (
-    "INSERT INTO {aud} (id, ator, ip_origem, acao, entidade, entidade_id, detalhe, created_at) "
-    "VALUES (:id, :ator, :ip_origem, :acao, :entidade, :entidade_id, :detalhe, SYSDATE)"
+    "INSERT INTO {aud} (id, actor, source_ip, action, entity, entity_id, detail, created_at) "
+    "VALUES (:id, :actor, :source_ip, :action, :entity, :entity_id, :detail, SYSDATE)"
 )
 _SQL_OBTER = "SELECT " + _lista(_COLS) + " FROM {aud} WHERE id = :id"
 _SQL_LISTAR = "SELECT " + _lista(_COLS) + " FROM {aud}{where} ORDER BY created_at DESC, id DESC"
@@ -48,32 +48,32 @@ class RepoAuditoriaOracle(BaseRepoOracle, RepoAuditoria):
         """Clausulas fixas (allowlist) e binds; datas declaradas como TIPO_DATE (README §7.5)."""
         filtros = filtros or {}
         clausulas, binds, datas = [], {}, {}
-        if filtros.get("ator"):
-            trecho = filtros["ator"].lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            clausulas.append("LOWER(ator) LIKE :ator_f ESCAPE '\\'")
+        if filtros.get("actor"):
+            trecho = filtros["actor"].lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            clausulas.append("LOWER(actor) LIKE :ator_f ESCAPE '\\'")
             binds["ator_f"] = "%" + trecho + "%"
-        if filtros.get("acao"):
-            clausulas.append("acao = :acao_f")
-            binds["acao_f"] = filtros["acao"]
-        if filtros.get("entidade"):
-            clausulas.append("entidade = :entidade_f")
-            binds["entidade_f"] = filtros["entidade"]
-        if filtros.get("entidade_id") is not None:
-            clausulas.append("entidade_id = :entidade_id_f")
-            binds["entidade_id_f"] = int(filtros["entidade_id"])
-        if filtros.get("ip_origem"):
-            trecho = filtros["ip_origem"].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            clausulas.append("ip_origem LIKE :ip_f ESCAPE '\\'")
+        if filtros.get("action"):
+            clausulas.append("action = :acao_f")
+            binds["acao_f"] = filtros["action"]
+        if filtros.get("entity"):
+            clausulas.append("entity = :entidade_f")
+            binds["entidade_f"] = filtros["entity"]
+        if filtros.get("entity_id") is not None:
+            clausulas.append("entity_id = :entidade_id_f")
+            binds["entidade_id_f"] = int(filtros["entity_id"])
+        if filtros.get("source_ip"):
+            trecho = filtros["source_ip"].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            clausulas.append("source_ip LIKE :ip_f ESCAPE '\\'")
             binds["ip_f"] = "%" + trecho + "%"
         # Periodo sempre por intervalo, sem TRUNC na coluna indexada (AGENTS §4.12).
-        if filtros.get("data_inicio"):
-            clausulas.append("created_at >= :data_inicio")
-            binds["data_inicio"] = filtros["data_inicio"]
-            datas["data_inicio"] = db_conn.TIPO_DATE
-        if filtros.get("data_fim"):
-            clausulas.append("created_at <= :data_fim")
-            binds["data_fim"] = filtros["data_fim"]
-            datas["data_fim"] = db_conn.TIPO_DATE
+        if filtros.get("start_date"):
+            clausulas.append("created_at >= :start_date")
+            binds["start_date"] = filtros["start_date"]
+            datas["start_date"] = db_conn.TIPO_DATE
+        if filtros.get("end_date"):
+            clausulas.append("created_at <= :end_date")
+            binds["end_date"] = filtros["end_date"]
+            datas["end_date"] = db_conn.TIPO_DATE
         if filtros.get("id_max") is not None:
             clausulas.append("id <= :id_max")
             binds["id_max"] = int(filtros["id_max"])
@@ -93,8 +93,8 @@ class RepoAuditoriaOracle(BaseRepoOracle, RepoAuditoria):
             try:
                 # id repetido: ORA-00001 em pk_<prefixo>auditoria (RepoViolacao com o nome da PK).
                 cur.execute(self._sql["INSERIR"], {
-                    "id": aid, "ator": ator, "ip_origem": ip, "acao": acao, "entidade": entidade,
-                    "entidade_id": entidade_id, "detalhe": detalhe,
+                    "id": aid, "actor": ator, "source_ip": ip, "action": acao, "entity": entidade,
+                    "entity_id": entidade_id, "detail": detalhe,
                 })
                 cur.execute(self._sql["OBTER"], {"id": aid})
                 return self.tupla_para_dict(_COLS, cur.fetchone())

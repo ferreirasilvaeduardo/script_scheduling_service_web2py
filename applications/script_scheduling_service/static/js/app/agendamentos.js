@@ -6,7 +6,7 @@
   'use strict';
 
   var DEBOUNCE_MS = 500;
-  var CAMPOS = ['tipo_recorrencia', 'data_inicio', 'data_fim', 'hora_execucao', 'dia_mes', 'expressao_cron'];
+  var CAMPOS = ['recurrence_type', 'start_date', 'end_date', 'run_time', 'month_day', 'cron_expression'];
 
   function valor(form, nome) {
     var campo = form.elements[nome];
@@ -15,7 +15,7 @@
 
   // Checkboxes seg-dom -> '1,3,5' (ISO 1-7, README §7.2).
   function diasSemana(form) {
-    var marcados = form.querySelectorAll('input[name="dias_semana"]:checked');
+    var marcados = form.querySelectorAll('input[name="week_days"]:checked');
     var dias = [];
     var i;
     for (i = 0; i < marcados.length; i++) {
@@ -58,18 +58,18 @@
           this.tipo = this.$refs.tipo.value;
           this.carregar();
         },
-        get ehUnica() { return this.tipo === 'UNICA'; },
-        get naoUnica() { return this.tipo !== 'UNICA'; },
-        get temHora() { return this.tipo === 'DIARIA' || this.tipo === 'SEMANAL' || this.tipo === 'MENSAL'; },
-        get ehSemanal() { return this.tipo === 'SEMANAL'; },
-        get ehMensal() { return this.tipo === 'MENSAL'; },
+        get ehUnica() { return this.tipo === 'ONCE'; },
+        get naoUnica() { return this.tipo !== 'ONCE'; },
+        get temHora() { return this.tipo === 'DAILY' || this.tipo === 'WEEKLY' || this.tipo === 'MONTHLY'; },
+        get ehSemanal() { return this.tipo === 'WEEKLY'; },
+        get ehMensal() { return this.tipo === 'MONTHLY'; },
         get ehCron() { return this.tipo === 'CRON'; },
         get temDescricao() { return this.descricao !== ''; },
         get temDatas() { return this.datas.length > 0; },
         get temErros() { return this.erros.length > 0; },
         alterarTipo: function () {
           this.tipo = this.$refs.tipo.value;
-          if (this.tipo === 'UNICA') {
+          if (this.tipo === 'ONCE') {
             // data_fim nao se aplica a UNICA (README §7.2): o campo escondido e limpo.
             var fim = this.$root.querySelector('#campo-data_fim');
             if (fim) {

@@ -8,7 +8,7 @@ _g = h['grafico']
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
-    <h1 class="sss-page-titulo">Histórico de <span class="sss-mono">{{=h['script']['nome']}}</span></h1>
+    <h1 class="sss-page-titulo">Histórico de <span class="sss-mono">{{=h['script']['name']}}</span></h1>
     <p class="sss-page-sub">Como este script se saiu nos últimos 30 dias, nos pedidos que você pode ver.</p>
   </div>
   <div class="sss-acoes">
@@ -84,7 +84,7 @@ _g = h['grafico']
   <h2 class="sss-card-titulo" id="titulo-motivos">Principais motivos de erro</h2>
   <ul class="sss-card-corpo sss-agenda-lista">
     {{for _m in h['motivos']:}}
-    <li><strong>{{=_m['quantidade']}}</strong> — {{=_m['nome']}} <span class="sss-texto-suave sss-mono">({{=_m['motivo']}})</span></li>
+    <li><strong>{{=_m['quantidade']}}</strong> — {{=_m['name']}} <span class="sss-texto-suave sss-mono">({{=_m['reason']}})</span></li>
     {{pass}}
   </ul>
 </section>

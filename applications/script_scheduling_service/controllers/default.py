@@ -41,10 +41,10 @@ def index():
     # Cada cartao so existe para quem tem a funcionalidade (F6.1); o escopo e o das telas de origem.
     if ticket_service.pode_consultar(ctx):
         cartoes["tickets"] = _cartao(ctx, "tickets", lambda: ticket_service.resumo_inicial(ctx))
-    if rbac.tem_func(ctx, "CAD_AGENDAMENTOS"):
+    if rbac.tem_func(ctx, "MANAGE_SCHEDULES"):
         cartoes["agendamentos"] = _cartao(
-            ctx, "agendamentos", lambda: agendamentos_service.listar(ctx, {"ativo": "S"}, 1, 5)["itens"])
-    if rbac.tem_func(ctx, "VER_AUDITORIA"):
+            ctx, "agendamentos", lambda: agendamentos_service.listar(ctx, {"active": "Y"}, 1, 5)["itens"])
+    if rbac.tem_func(ctx, "VIEW_AUDIT"):
         cartoes["agentes"] = _cartao(ctx, "agentes", lambda: agentes_service.painel(ctx))
     return dict(ctx=ctx, menu=response.sss_menu, pode_disparar=rbac.tem_func(ctx, "EXEC_SCRIPT"),
                 cartoes=cartoes)
@@ -69,11 +69,11 @@ def login():
             # Em sessao por cookie, renew() apenas limpa: o cookie e regravado com conteudo novo.
             session.renew(clear_session=True)
             session.csrf_token = security.gerar_token_csrf()
-            session.usuario_id = ctx["usuario_id"]
+            session.usuario_id = ctx["user_id"]
             session.login = ctx["login"]
-            session.perfil_id = ctx["perfil_id"]
-            session.perm_versao = ctx["perm_versao"]
-            session.sessao_epoch = ctx["sessao_epoch"]
+            session.perfil_id = ctx["profile_id"]
+            session.perm_versao = ctx["perm_version"]
+            session.sessao_epoch = ctx["session_epoch"]
             session.ultimo_acesso = session.login_em = time.time()
             redirect(destino or URL(c="default", f="index"))
     return dict(mensagem=mensagem, login_digitado=login_digitado, destino=destino or "")
@@ -128,16 +128,16 @@ def minha_senha():
             # Nova senha, nova sessao: o cookie e regravado com conteudo novo e outro token CSRF.
             session.renew(clear_session=True)
             session.csrf_token = security.gerar_token_csrf()
-            session.usuario_id = ctx["usuario_id"]
+            session.usuario_id = ctx["user_id"]
             session.login = ctx["login"]
-            session.perfil_id = ctx["perfil_id"]
-            session.perm_versao = ctx["perm_versao"]
+            session.perfil_id = ctx["profile_id"]
+            session.perm_versao = ctx["perm_version"]
             # A troca incrementou sessao_epoch (CR-008, E2): as outras sessoes caem, esta continua.
-            session.sessao_epoch = auth_service.sessao_epoch(ctx["usuario_id"])
+            session.sessao_epoch = auth_service.sessao_epoch(ctx["user_id"])
             session.ultimo_acesso = session.login_em = time.time()
             session.flash = {"tipo": "sucesso", "mensagem": u"Senha alterada com sucesso."}
             redirect(URL(c="default", f="index"))
         response.flash = {"tipo": "erro", "mensagem": u"A senha não foi alterada. Veja os campos destacados."}
-    campos = [{"nome": n, "erro": erros.get(n)} for n in _CAMPOS_MINHA_SENHA]
+    campos = [{"name": n, "erro": erros.get(n)} for n in _CAMPOS_MINHA_SENHA]
     return dict(erros=erros, foco_campo=ui_helpers.primeiro_campo_invalido(campos),
                 ajuda_senha=u"Mínimo de %d caracteres. A senha nunca é exibida nem registrada." % security.SENHA_MIN)

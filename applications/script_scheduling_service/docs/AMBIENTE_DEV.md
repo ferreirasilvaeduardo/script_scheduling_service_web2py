@@ -143,7 +143,7 @@ Para subir como nos servidores via launcher oficial:
 
 ### Usuários de homologação
 
-* **No Oracle:** os usuários `admin`, `op.prod`, `op.hml` e `consulta` vêm do seed do `01_implantar_sss.sql`, com a senha padrão de homologação do README §11.1. Troque-as depois da implantação.
+* **No Oracle:** os usuários `admin`, `op.prod`, `op.hml` e `consulta` vêm do seed do `01_deploy_sss.sql`, com a senha padrão de homologação do README §11.1. Troque-as depois da implantação.
 * **`SSS_DEV_SEED_PASSWORD`:** só vale para o FAKE dos testes automáticos. A aplicação não usa mais essa variável.
 * **Perfis, permissões e dados de apoio de cada usuário:** `docs/homologacao/SSS_Manual_Homologacao_UI_Freeze.docx`, capítulo 3.
 
@@ -247,7 +247,7 @@ O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-00
 * **Credencial:** só no `secrets.cfg` (`0600`, dono = usuário do processo), nunca no `config.ini`.
 * **Inicialização e DDL/DML:**
   * Via Python: `python3 scripts/init_db.py`
-  * Via SQL*Plus (autônomo): `sqlplus usuario/senha@//host:porta/servico @docs/sql/01_implantar_sss.sql`
+  * Via SQL*Plus (autônomo): `sqlplus usuario/senha@//host:porta/servico @docs/sql/01_deploy_sss.sql`
   * Rollback total: `sqlplus usuario/senha@//host:porta/servico @docs/sql/02_rollback_sss.sql`
 * **Testes contra banco real:** só `SSS_TEST_ORACLE=1` (README §2.5). Owner, prefixo, DSN e conta vêm do `instance/config.ini`. O modo sai do owner: `SSS_TEST_*` é descartável e qualquer outro é compartilhado. Sem a chave, as partes de banco ficam `NÃO TESTADO` no relatório.
   * **No `GFPR`** (owner `openrisow`, modo compartilhado), o driver Oracle só está instalado no Python 3.6.15 desta máquina. Exemplo para um agregado do F7.3:
@@ -256,7 +256,7 @@ O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-00
       ~/.pyenv/versions/3.6.15/bin/python -m unittest discover -s scripts -p "test_repo_oracle_progressive.py" -v
     ```
   * **Outro driver:** os testes usam o `[oracle] modo_driver` do config (`auto`, `thin`, `thick` ou `cx_oracle`).
-  * **Produção:** só os scripts SQL de `docs/sql/` (`01_implantar_sss.sql`, `02_rollback_sss.sql`, `99_validar_implantacao.sql`), sem Python. Os testes acima são só para DEV.
+  * **Produção:** só os scripts SQL de `docs/sql/` (`01_deploy_sss.sql`, `02_rollback_sss.sql`, `99_validate_deploy.sql`), sem Python. Os testes acima são só para DEV.
 * `python scripts/check_env.py` mostra a combinação de driver escolhida.
 
 ---
@@ -267,10 +267,10 @@ Para testes interativos na interface web (tanto no backend FAKE quanto no backen
 
 | Login | Perfil | Permissões Principais | Escopo de Ambientes |
 |---|---|---|---|
-| `admin` | `ADMINISTRADOR` | Acesso irrestrito a todas as 10 funcionalidades | Todos os 5 ambientes |
-| `op.prod` | `OPERADOR_PROD` | `EXEC_SCRIPT`, `VER_LOGS`, `CANC_TICKET` | Todos os 5 ambientes |
-| `op.hml` | `OPERADOR_HML` | `EXEC_SCRIPT`, `VER_LOGS`, `CANC_TICKET` | `CLONE6`, `CLONE7`, `GFPREPROD` |
-| `consulta` | `CONSULTA` | Apenas consulta (`VER_LOGS`) | Todos os 5 ambientes |
+| `admin` | `ADMINISTRATOR` | Acesso irrestrito a todas as 10 funcionalidades | Todos os 5 ambientes |
+| `op.prod` | `OPERATOR_PROD` | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET` | Todos os 5 ambientes |
+| `op.hml` | `OPERATOR_HML` | `EXEC_SCRIPT`, `VIEW_LOGS`, `CANCEL_TICKET` | `CLONE6`, `CLONE7`, `GFPREPROD` |
+| `consulta` | `READ_ONLY` | Apenas consulta (`VIEW_LOGS`) | Todos os 5 ambientes |
 
 * **Senha Inicial Padrão:** `Sss@Homolog2026!` (hash PBKDF2-SHA256 com 200.000 iterações).
 * **Troca de Senha:** Disponível na interface em "Minha senha" no cabeçalho.

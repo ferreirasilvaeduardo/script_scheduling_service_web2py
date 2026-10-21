@@ -2,7 +2,7 @@
 {{
 # Matriz de permissões do perfil (README §4.3): três abas, um único POST com as três listas.
 # Itens inativos já associados aparecem marcados, com selo, e podem ser removidos; nunca readicionados.
-# O resumo do modal usa o mesmo formato do diff auditado (PERM_ALTERAR), e o servidor revalida tudo.
+# O resumo do modal usa o mesmo formato do diff auditado (PERM_UPDATE), e o servidor revalida tudo.
 _m = matriz
 _p = _m['perfil']
 _abas = (
@@ -13,7 +13,7 @@ _abas = (
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
-    <h1 class="sss-page-titulo">Permissões do perfil <span class="sss-mono">{{=_p['nome']}}</span></h1>
+    <h1 class="sss-page-titulo">Permissões do perfil <span class="sss-mono">{{=_p['name']}}</span></h1>
     <p class="sss-page-sub">Marque o que o perfil pode acessar. A mudança vale no próximo clique dos usuários do perfil. Itens marcados como inativo podem ser removidos, mas não adicionados de novo.</p>
   </div>
   <div class="sss-acoes">
@@ -25,14 +25,14 @@ _abas = (
 {{if _m['aviso_admin']:}}
 <div class="alert alert-info sss-alerta" role="note"><span>{{=_m['aviso_admin']}}</span></div>
 {{pass}}
-{{if _p['ativo'] != 'S':}}
+{{if _p['active'] != 'Y':}}
 <div class="alert alert-warning sss-alerta" role="note"><span>Perfil inativo: os usuários dele não têm acesso enquanto o perfil não for reativado.</span></div>
 {{pass}}
 
 <form class="sss-card" method="post" action="{{=URL(c='admin_perfis', f='salvar_matriz')}}" x-data="matrizPermissoes" aria-label="Matriz de permissões">
   {{=csrf_campo()}}
   <input type="hidden" name="id" value="{{=_p['id']}}">
-  <input type="hidden" name="perm_versao" value="{{=_m['perm_versao']}}">
+  <input type="hidden" name="perm_version" value="{{=_m['perm_version']}}">
 
   <ul class="nav nav-tabs sss-matriz-abas" role="tablist">
     {{for _dim, _titulo, _grupos in _abas:}}
@@ -58,17 +58,17 @@ _abas = (
     {{_gid = '%s-%d' % (_dim, _gi)}}
     <fieldset class="sss-matriz-grupo" data-grupo="{{=_gid}}">
       <legend class="sss-matriz-legenda">
-        <span>{{=_g['grupo']}}</span>
+        <span>{{=_g['script_group']}}</span>
         <button type="button" class="btn btn-sm btn-link" data-grupo="{{=_gid}}" @click="marcarGrupo">Marcar/desmarcar todos</button>
       </legend>
       <div class="sss-matriz-itens">
         {{for _i in _g['itens']:}}
         {{_iid = '%s-%s' % (_dim, _i['id'])}}
-        <div class="form-check sss-matriz-item" data-busca="{{=(_i['rotulo'] + ' ' + _i['detalhe'] + ' ' + _g['grupo']).lower()}}">
-          <input class="form-check-input" type="checkbox" name="{{=_dim}}" value="{{=_i['id']}}" id="{{=_iid}}" data-dim="{{=_dim}}" data-inicial="{{='S' if _i['marcado'] else 'N'}}" data-diff="{{=_i['rotulo_diff']}}"{{if _i['marcado']:}} checked{{pass}} @change="atualizar">
+        <div class="form-check sss-matriz-item" data-busca="{{=(_i['rotulo'] + ' ' + _i['detail'] + ' ' + _g['script_group']).lower()}}">
+          <input class="form-check-input" type="checkbox" name="{{=_dim}}" value="{{=_i['id']}}" id="{{=_iid}}" data-dim="{{=_dim}}" data-inicial="{{='Y' if _i['marcado'] else 'N'}}" data-diff="{{=_i['rotulo_diff']}}"{{if _i['marcado']:}} checked{{pass}} @change="atualizar">
           <label class="form-check-label" for="{{=_iid}}">
             <span class="sss-mono">{{=_i['rotulo']}}</span>{{if _i['inativo']:}} <span class="badge text-bg-secondary">inativo</span>{{pass}}
-            {{if _i['detalhe']:}}<span class="sss-matriz-detalhe">{{=_i['detalhe']}}</span>{{pass}}
+            {{if _i['detail']:}}<span class="sss-matriz-detalhe">{{=_i['detail']}}</span>{{pass}}
           </label>
         </div>
         {{pass}}
@@ -81,12 +81,12 @@ _abas = (
   <div class="sss-card-corpo sss-matriz-rodape">
     <div class="sss-confirmacao sss-form-acoes" x-data="confirmacao" @keydown.escape.window="fechar">
       <button type="button" class="btn btn-primary" x-ref="gatilho" @click="abrir">Revisar e salvar</button>
-      <span class="sss-texto-suave" aria-live="polite" x-text="situacao"></span>
+      <span class="sss-texto-suave" aria-live="polite" x-text="state"></span>
       <div class="modal sss-modal" :class="classeModal" role="dialog" aria-modal="true" aria-labelledby="modal-matriz-titulo" tabindex="-1" @click.self="fechar">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
           <div class="modal-content">
             <div class="modal-header">
-              <h2 class="modal-title fs-5" id="modal-matriz-titulo">Confirmar permissões de {{=_p['nome']}}</h2>
+              <h2 class="modal-title fs-5" id="modal-matriz-titulo">Confirmar permissões de {{=_p['name']}}</h2>
               <button type="button" class="btn-close" aria-label="Fechar" @click="fechar"></button>
             </div>
             <div class="modal-body">

@@ -18,11 +18,11 @@ from admin_crud import CAMPO_GERAL, OperacaoNegada
 from params_compiler import ParamErro, TIPOS_COMPONENTE
 from repo_errors import RepoConflito, RepoNaoEncontrado, RepoViolacao
 
-FUNCIONALIDADE = "CAD_PARAMETROS"
-CAMPOS_EDITAVEIS = ("param_nomeado", "label", "descricao", "tipo_componente", "opcoes_json", "valor_padrao",
-                    "regex_validacao", "sensivel", "ativo")
-CAMPOS_INSERCAO = ("codigo", "param_nomeado", "label", "descricao", "tipo_componente", "opcoes_json", "valor_padrao",
-                   "regex_validacao", "sensivel")
+FUNCIONALIDADE = "MANAGE_PARAMETERS"
+CAMPOS_EDITAVEIS = ("param_flag", "label", "description", "component_type", "options_json", "default_value",
+                    "validation_regex", "sensitive", "active")
+CAMPOS_INSERCAO = ("code", "param_flag", "label", "description", "component_type", "options_json", "default_value",
+                   "validation_regex", "sensitive")
 TAMANHO_LABEL = 60
 TAMANHO_DESCRICAO = 150
 TAMANHO_PADRAO = 100
@@ -55,8 +55,8 @@ MSG_TESTE_REGEX_ADMIN = u"Somente administradores podem testar valores contra ex
 AVISO_SENSIVEL = u"Não use parâmetros para senhas ou credenciais. Elas ficam visíveis no processo do servidor."
 
 _CAMPO_POR_CONSTRAINT = {
-    "uk_tbsss_prm_codigo": ("codigo", MSG_CODIGO_DUPLICADO),
-    "ck_tbsss_prm_codigo": ("codigo", MSG_CODIGO_INVALIDO),
+    "uk_tbsss_prm_code": ("code", MSG_CODIGO_DUPLICADO),
+    "ck_tbsss_prm_code": ("code", MSG_CODIGO_INVALIDO),
 }
 
 
@@ -68,7 +68,7 @@ def _id(valor):
 
 
 def _lista_scripts(scripts):
-    return u", ".join(s["nome"] for s in scripts)
+    return u", ".join(s["name"] for s in scripts)
 
 
 def msg_tipo_vinculado(scripts):
@@ -92,16 +92,16 @@ def normalizar_filtros(entrada):
     """Filtros da lista: codigo e label (trechos), tipo_componente e ativo ('S' | 'N')."""
     entrada = entrada or {}
     filtros = {}
-    for chave in ("codigo", "label"):
+    for chave in ("code", "label"):
         valor = admin_crud.texto(entrada.get(chave), 60)
         if valor and _RE_FILTRO.fullmatch(valor):
             filtros[chave] = valor
-    tipo = admin_crud.texto(entrada.get("tipo_componente"), 20)
+    tipo = admin_crud.texto(entrada.get("component_type"), 20)
     if tipo in TIPOS_COMPONENTE:
-        filtros["tipo_componente"] = tipo
-    ativo = admin_crud.texto(entrada.get("ativo"), 1)
-    if ativo in ("S", "N"):
-        filtros["ativo"] = ativo
+        filtros["component_type"] = tipo
+    ativo = admin_crud.texto(entrada.get("active"), 1)
+    if ativo in ("Y", "N"):
+        filtros["active"] = ativo
     return filtros
 
 
@@ -132,7 +132,7 @@ def _padrao_texto(valor):
 
 def _versao(parametro):
     """Versao do formulario; o valor_padrao sensivel entra pelo marcador (README §6.2, §10)."""
-    sensiveis = ("valor_padrao",) if parametro.get("sensivel") == "S" else ()
+    sensiveis = ("default_value",) if parametro.get("sensitive") == "Y" else ()
     return admin_crud.versao(parametro, CAMPOS_EDITAVEIS, sensiveis=sensiveis)
 
 
@@ -151,7 +151,7 @@ class ServicoAdminParametros(object):
 
     def vinculos(self, parametro_id):
         """Scripts vinculados ao parametro: [{id, nome, tipo_param, ativo}] por nome."""
-        return [{"id": s["id"], "nome": s["nome"], "tipo_param": s.get("tipo_param"), "ativo": s.get("ativo")}
+        return [{"id": s["id"], "name": s["name"], "param_type": s.get("param_type"), "active": s.get("active")}
                 for s in self._catalogo.parametro_vinculos(parametro_id)]
 
     # ----------------------------------------------------------------- leitura
@@ -163,8 +163,8 @@ class ServicoAdminParametros(object):
         itens = []
         for p in resultado["itens"]:
             item = dict(p)
-            if p.get("sensivel") == "S" and p.get("valor_padrao"):
-                item["valor_padrao"] = MASCARA
+            if p.get("sensitive") == "Y" and p.get("default_value"):
+                item["default_value"] = MASCARA
             itens.append(item)
         return dict(resultado, itens=itens)
 
@@ -173,21 +173,21 @@ class ServicoAdminParametros(object):
         admin_crud.exigir_func(ctx, FUNCIONALIDADE)
         pode_regex = rbac.tem_func(ctx, FUNCIONALIDADE) and ctx.get("is_admin") is True
         if parametro_id in (None, ""):
-            return {"id": None, "codigo": "", "param_nomeado": "", "label": "", "descricao": "",
-                    "tipo_componente": "TEXT", "opcoes_json": "", "valor_padrao": "", "tem_padrao": False,
-                    "regex_validacao": "", "sensivel": "N", "ativo": "S", "versao": "", "vinculos": [],
+            return {"id": None, "code": "", "param_flag": "", "label": "", "description": "",
+                    "component_type": "TEXT", "options_json": "", "default_value": "", "tem_padrao": False,
+                    "validation_regex": "", "sensitive": "N", "active": "Y", "version": "", "vinculos": [],
                     "pode_regex": pode_regex, "registro": None}
         p = self._obter(parametro_id)
-        sensivel = p.get("sensivel") == "S"
+        sensivel = p.get("sensitive") == "Y"
         return {
-            "id": p["id"], "codigo": p["codigo"],
-            "param_nomeado": admin_crud.normalizar(p.get("param_nomeado")) or "",
-            "label": p.get("label") or "", "descricao": admin_crud.normalizar(p.get("descricao")) or "",
-            "tipo_componente": p["tipo_componente"], "opcoes_json": p.get("opcoes_json") or "",
-            "valor_padrao": "" if sensivel else (p.get("valor_padrao") or ""),
-            "tem_padrao": bool(p.get("valor_padrao")),
-            "regex_validacao": p.get("regex_validacao") or "", "sensivel": p.get("sensivel") or "N",
-            "ativo": p["ativo"], "versao": _versao(p),
+            "id": p["id"], "code": p["code"],
+            "param_flag": admin_crud.normalizar(p.get("param_flag")) or "",
+            "label": p.get("label") or "", "description": admin_crud.normalizar(p.get("description")) or "",
+            "component_type": p["component_type"], "options_json": p.get("options_json") or "",
+            "default_value": "" if sensivel else (p.get("default_value") or ""),
+            "tem_padrao": bool(p.get("default_value")),
+            "validation_regex": p.get("validation_regex") or "", "sensitive": p.get("sensitive") or "N",
+            "active": p["active"], "version": _versao(p),
             "vinculos": self.vinculos(p["id"]), "pode_regex": pode_regex,
             "registro": ui_helpers.registro(p, ctx),
         }
@@ -197,102 +197,102 @@ class ServicoAdminParametros(object):
     def _config(self, ctx, dados, atual, erros):
         """Tipo, opcoes e regex validados (a configuracao que valida valores); atual e None na inclusao."""
         admin = ctx.get("is_admin") is True
-        tipo = admin_crud.texto(dados.get("tipo_componente"), 20)
+        tipo = admin_crud.texto(dados.get("component_type"), 20)
         if tipo not in TIPOS_COMPONENTE:
-            erros["tipo_componente"] = MSG_TIPO_INVALIDO
+            erros["component_type"] = MSG_TIPO_INVALIDO
             tipo = None
 
-        opcoes = admin_crud.texto(dados.get("opcoes_json"))
+        opcoes = admin_crud.texto(dados.get("options_json"))
         if tipo == "SELECT":
             try:
                 opcoes = params_compiler.validar_opcoes_cadastro(opcoes)
             except ParamErro as exc:
-                erros["opcoes_json"] = exc.mensagem
+                erros["options_json"] = exc.mensagem
                 opcoes = None
         elif opcoes is not None:
-            erros["opcoes_json"] = MSG_OPCOES_PROIBIDAS
+            erros["options_json"] = MSG_OPCOES_PROIBIDAS
             opcoes = None
 
-        regex_atual = (atual or {}).get("regex_validacao") or None
+        regex_atual = (atual or {}).get("validation_regex") or None
         if admin:
-            regex = admin_crud.texto(dados.get("regex_validacao"))
+            regex = admin_crud.texto(dados.get("validation_regex"))
         else:
             # Nao admin nunca altera a regex: o valor enviado e ignorado e a gravada e preservada.
             regex = regex_atual
-            if regex_atual and tipo is not None and tipo != (atual or {}).get("tipo_componente"):
-                erros["tipo_componente"] = MSG_TIPO_COM_REGEX
-            elif admin_crud.texto(dados.get("regex_validacao")) not in (None, regex_atual):
-                erros["regex_validacao"] = MSG_REGEX_SO_ADMIN
+            if regex_atual and tipo is not None and tipo != (atual or {}).get("component_type"):
+                erros["component_type"] = MSG_TIPO_COM_REGEX
+            elif admin_crud.texto(dados.get("validation_regex")) not in (None, regex_atual):
+                erros["validation_regex"] = MSG_REGEX_SO_ADMIN
         if regex is not None and tipo not in (None, "TEXT"):
             if admin:
-                erros["regex_validacao"] = MSG_REGEX_SO_TEXTO
+                erros["validation_regex"] = MSG_REGEX_SO_TEXTO
             regex = None
         elif regex is not None and admin:
             if len(regex) > TAMANHO_REGEX:
-                erros["regex_validacao"] = MSG_REGEX_TAMANHO
+                erros["validation_regex"] = MSG_REGEX_TAMANHO
             else:
                 try:
                     params_compiler.validar_regex_cadastro(regex)
                 except ParamErro as exc:
-                    erros["regex_validacao"] = exc.mensagem
+                    erros["validation_regex"] = exc.mensagem
         return tipo, opcoes, regex
 
     def _validar(self, ctx, dados, atual, erros):
         """Registro candidato (campos editaveis + codigo na inclusao) e erros por campo."""
         reg = {}
         if atual is None:
-            codigo = admin_crud.identificador(dados.get("codigo"), erros, "codigo")
+            codigo = admin_crud.identificador(dados.get("code"), erros, "code")
             if codigo is None:
-                erros["codigo"] = MSG_CODIGO_OBRIGATORIO
-            elif "codigo" in erros:
+                erros["code"] = MSG_CODIGO_OBRIGATORIO
+            elif "code" in erros:
                 pass
             elif not _RE_CODIGO.fullmatch(codigo):
-                erros["codigo"] = MSG_CODIGO_INVALIDO
-            reg["codigo"] = codigo
+                erros["code"] = MSG_CODIGO_INVALIDO
+            reg["code"] = codigo
         else:
-            reg["codigo"] = atual["codigo"]
+            reg["code"] = atual["code"]
 
-        flag = admin_crud.texto(dados.get("param_nomeado"))
+        flag = admin_crud.texto(dados.get("param_flag"))
         if flag is not None:
             try:
                 params_compiler.validar_flag(flag)
             except ParamErro as exc:
-                erros["param_nomeado"] = exc.mensagem
+                erros["param_flag"] = exc.mensagem
         label = admin_crud.texto_livre(dados.get("label"), erros, "label")
         if label is None:
             erros["label"] = MSG_LABEL_OBRIGATORIO
         elif "label" not in erros and len(label) > TAMANHO_LABEL:
             erros["label"] = MSG_LABEL_TAMANHO
-        descricao = admin_crud.texto_livre(dados.get("descricao"), erros, "descricao")
+        descricao = admin_crud.texto_livre(dados.get("description"), erros, "description")
         if descricao is not None and len(descricao) > TAMANHO_DESCRICAO:
-            erros["descricao"] = MSG_DESCRICAO_TAMANHO
+            erros["description"] = MSG_DESCRICAO_TAMANHO
         tipo, opcoes, regex = self._config(ctx, dados, atual, erros)
-        sensivel = "S" if admin_crud.texto(dados.get("sensivel"), 1) == "S" else "N"
-        reg.update(param_nomeado=flag, label=label, descricao=descricao, tipo_componente=tipo, opcoes_json=opcoes,
-                   regex_validacao=regex, sensivel=sensivel)
+        sensivel = "Y" if admin_crud.texto(dados.get("sensitive"), 1) == "Y" else "N"
+        reg.update(param_flag=flag, label=label, description=descricao, component_type=tipo, options_json=opcoes,
+                   validation_regex=regex, sensitive=sensivel)
 
-        bruto = dados.get("valor_padrao")
+        bruto = dados.get("default_value")
         bruto = bruto if isinstance(bruto, str) and bruto.strip() else None
-        if admin_crud.texto(dados.get("remover_padrao"), 1) == "S":
+        if admin_crud.texto(dados.get("remover_padrao"), 1) == "Y":
             padrao = None
-        elif bruto is None and atual is not None and (atual.get("sensivel") == "S" or sensivel == "S"):
+        elif bruto is None and atual is not None and (atual.get("sensitive") == "Y" or sensivel == "Y"):
             # Padrao de sensivel e so de escrita: em branco mantem o gravado.
-            padrao = atual.get("valor_padrao")
+            padrao = atual.get("default_value")
             bruto = padrao
         else:
             padrao = None
-        if atual is not None and atual.get("sensivel") == "S" and sensivel == "N":
+        if atual is not None and atual.get("sensitive") == "Y" and sensivel == "N":
             # CR-007, R-20: S nunca volta para N (README §6.2).
-            erros["sensivel"] = MSG_SENSIVEL_MONOTONICO
-        if bruto is not None and not any(k in erros for k in ("tipo_componente", "opcoes_json", "regex_validacao")):
+            erros["sensitive"] = MSG_SENSIVEL_MONOTONICO
+        if bruto is not None and not any(k in erros for k in ("component_type", "options_json", "validation_regex")):
             try:
-                padrao = _padrao_texto(params_compiler.validar_valor(dict(reg, codigo=reg["codigo"]), bruto))
+                padrao = _padrao_texto(params_compiler.validar_valor(dict(reg, code=reg["code"]), bruto))
             except ParamErro as exc:
-                erros["valor_padrao"] = exc.mensagem
+                erros["default_value"] = exc.mensagem
                 padrao = None
             if padrao is not None and len(padrao) > TAMANHO_PADRAO:
-                erros["valor_padrao"] = MSG_PADRAO_TAMANHO
-        reg["valor_padrao"] = padrao
+                erros["default_value"] = MSG_PADRAO_TAMANHO
+        reg["default_value"] = padrao
         return reg
 
     # ----------------------------------------------------------------- escrita
@@ -300,16 +300,16 @@ class ServicoAdminParametros(object):
     @staticmethod
     def _para_auditoria(reg):
         # README §4.4: o detalhe nunca contem valor de parametro sensivel.
-        if reg.get("sensivel") == "S" and reg.get("valor_padrao"):
-            return dict(reg, valor_padrao=MASCARA)
+        if reg.get("sensitive") == "Y" and reg.get("default_value"):
+            return dict(reg, default_value=MASCARA)
         return reg
 
     def _detalhe_alteracao(self, atual, depois):
         detalhe = admin_crud.detalhe_alteracoes(self._para_auditoria(atual), self._para_auditoria(depois),
                                                 CAMPOS_EDITAVEIS)
-        padrao_mudou = admin_crud.normalizar(atual.get("valor_padrao")) != admin_crud.normalizar(depois.get("valor_padrao"))
-        if padrao_mudou and (atual.get("sensivel") == "S" or depois.get("sensivel") == "S") \
-                and (detalhe is None or "valor_padrao" not in detalhe):
+        padrao_mudou = admin_crud.normalizar(atual.get("default_value")) != admin_crud.normalizar(depois.get("default_value"))
+        if padrao_mudou and (atual.get("sensitive") == "Y" or depois.get("sensitive") == "Y") \
+                and (detalhe is None or "default_value" not in detalhe):
             extra = u"valor_padrao: alterado (sigiloso)"
             detalhe = admin_crud.detalhe_livre(extra if detalhe is None else u"%s; %s" % (detalhe, extra))
         return detalhe
@@ -318,18 +318,18 @@ class ServicoAdminParametros(object):
         scripts = self.vinculos(atual["id"])
         if not scripts:
             return
-        if reg["tipo_componente"] is not None and reg["tipo_componente"] != atual["tipo_componente"]:
-            erros["tipo_componente"] = msg_tipo_vinculado(scripts)
-        nomeados = [s for s in scripts if s["tipo_param"] == "NOMEADO"]
-        if nomeados and admin_crud.normalizar(reg["param_nomeado"]) != admin_crud.normalizar(atual.get("param_nomeado")):
-            erros["param_nomeado"] = msg_flag_nomeado(nomeados)
+        if reg["component_type"] is not None and reg["component_type"] != atual["component_type"]:
+            erros["component_type"] = msg_tipo_vinculado(scripts)
+        nomeados = [s for s in scripts if s["param_type"] == "NAMED"]
+        if nomeados and admin_crud.normalizar(reg["param_flag"]) != admin_crud.normalizar(atual.get("param_flag")):
+            erros["param_flag"] = msg_flag_nomeado(nomeados)
 
     def _violacao(self, ctx, exc, erros, parametro_id=None):
         scripts = self.vinculos(parametro_id) if parametro_id else []
         if exc.constraint == "sss_prm_tipo_vinculado":
-            erros["tipo_componente"] = msg_tipo_vinculado(scripts)
+            erros["component_type"] = msg_tipo_vinculado(scripts)
         elif exc.constraint == "sss_prm_flag_nomeado":
-            erros["param_nomeado"] = msg_flag_nomeado([s for s in scripts if s["tipo_param"] == "NOMEADO"])
+            erros["param_flag"] = msg_flag_nomeado([s for s in scripts if s["param_type"] == "NAMED"])
         else:
             campo, mensagem = _CAMPO_POR_CONSTRAINT.get(exc.constraint, (CAMPO_GERAL, admin_crud.MSG_FALHA))
             erros[campo] = mensagem
@@ -347,16 +347,16 @@ class ServicoAdminParametros(object):
             reg = self._validar(ctx, dados, None, erros)
             if erros:
                 return None, erros
-            novo = dict(reg, ativo="S")
-            auditoria = admin_crud.auditoria(ctx, ip, "CAD_INSERIR",
+            novo = dict(reg, active="Y")
+            auditoria = admin_crud.auditoria(ctx, ip, "CREATE",
                                              admin_crud.detalhe_insercao(self._para_auditoria(novo), CAMPOS_INSERCAO))
             try:
                 criado = self._catalogo.parametros_inserir(novo, auditoria=auditoria)
             except RepoViolacao as exc:
                 self._violacao(ctx, exc, erros)
                 return None, erros
-            self._log.info("parametro incluido (login=%s codigo=%s)", ctx.get("login"), criado["codigo"],
-                           extra={"acao": "CAD_INSERIR"})
+            self._log.info("parametro incluido (login=%s code=%s)", ctx.get("login"), criado["code"],
+                           extra={"acao": "CREATE"})
             return criado["id"], {}
 
         atual = self._obter(parametro_id)
@@ -365,9 +365,9 @@ class ServicoAdminParametros(object):
             self._dependencias(atual, reg, erros)
         if erros:
             return atual["id"], erros
-        if admin_crud.texto(dados.get("versao"), 64) != _versao(atual):
+        if admin_crud.texto(dados.get("version"), 64) != _versao(atual):
             return atual["id"], {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
-        alteracoes = dict((c, reg[c]) for c in CAMPOS_EDITAVEIS if c != "ativo")
+        alteracoes = dict((c, reg[c]) for c in CAMPOS_EDITAVEIS if c != "active")
         depois = dict(atual, **alteracoes)
         detalhe = self._detalhe_alteracao(atual, depois)
         if detalhe is None:
@@ -375,14 +375,14 @@ class ServicoAdminParametros(object):
         try:
             self._catalogo.parametros_alterar(atual["id"], alteracoes,
                                               esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
-                                              auditoria=admin_crud.auditoria(ctx, ip, "CAD_ALTERAR", detalhe))
+                                              auditoria=admin_crud.auditoria(ctx, ip, "UPDATE", detalhe))
         except RepoConflito:
             return atual["id"], {CAMPO_GERAL: admin_crud.MSG_CONFLITO}
         except RepoViolacao as exc:
             self._violacao(ctx, exc, erros, atual["id"])
             return atual["id"], erros
-        self._log.info("parametro alterado (login=%s codigo=%s)", ctx.get("login"), atual["codigo"],
-                       extra={"acao": "CAD_ALTERAR"})
+        self._log.info("parametro alterado (login=%s code=%s)", ctx.get("login"), atual["code"],
+                       extra={"acao": "UPDATE"})
         return atual["id"], {}
 
     def alternar_ativo(self, ctx, ip, parametro_id, versao):
@@ -394,23 +394,23 @@ class ServicoAdminParametros(object):
         atual = self._obter(parametro_id)
         if admin_crud.texto(versao, 64) != _versao(atual):
             raise RepoConflito("versao divergente")
-        novo_ativo = "N" if atual["ativo"] == "S" else "S"
+        novo_ativo = "N" if atual["active"] == "Y" else "Y"
         if novo_ativo == "N":
-            ativos = [s for s in self.vinculos(atual["id"]) if s["ativo"] == "S"]
+            ativos = [s for s in self.vinculos(atual["id"]) if s["active"] == "Y"]
             if ativos:
                 raise OperacaoNegada(msg_vinculo_ativo(ativos))
-        detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, ativo=novo_ativo), ("ativo",))
-        acao = "CAD_DESATIVAR" if novo_ativo == "N" else "CAD_ALTERAR"
+        detalhe = admin_crud.detalhe_alteracoes(atual, dict(atual, active=novo_ativo), ("active",))
+        acao = "DEACTIVATE" if novo_ativo == "N" else "UPDATE"
         try:
             alterado = self._catalogo.parametros_alterar(
-                atual["id"], {"ativo": novo_ativo}, esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
+                atual["id"], {"active": novo_ativo}, esperado=admin_crud.esperado(atual, CAMPOS_EDITAVEIS),
                 auditoria=admin_crud.auditoria(ctx, ip, acao, detalhe))
         except RepoViolacao as exc:
             if exc.constraint == "sss_prm_vinculo_ativo":
-                raise OperacaoNegada(msg_vinculo_ativo([s for s in self.vinculos(atual["id"]) if s["ativo"] == "S"]))
+                raise OperacaoNegada(msg_vinculo_ativo([s for s in self.vinculos(atual["id"]) if s["active"] == "Y"]))
             raise
-        self._log.info("parametro %s (login=%s codigo=%s)", "desativado" if novo_ativo == "N" else "reativado",
-                       ctx.get("login"), atual["codigo"], extra={"acao": acao})
+        self._log.info("parametro %s (login=%s code=%s)", "desativado" if novo_ativo == "N" else "reativado",
+                       ctx.get("login"), atual["code"], extra={"acao": acao})
         return alterado
 
     def testar(self, ctx, parametro_id, dados, valor):
@@ -427,17 +427,17 @@ class ServicoAdminParametros(object):
             return {"ok": False, "erro": MSG_TESTE_REGEX_ADMIN}
         if erros:
             return {"ok": False, "erro": u"Corrija a configuração antes de testar: %s" % sorted(erros.values())[0]}
-        config = {"codigo": (atual or {}).get("codigo") or "teste",
+        config = {"code": (atual or {}).get("code") or "teste",
                   "label": admin_crud.texto(dados.get("label")) or u"Valor de teste",
-                  "tipo_componente": tipo, "opcoes_json": opcoes, "regex_validacao": regex,
-                  "sensivel": "S" if admin_crud.texto(dados.get("sensivel"), 1) == "S" else "N"}
+                  "component_type": tipo, "options_json": opcoes, "validation_regex": regex,
+                  "sensitive": "Y" if admin_crud.texto(dados.get("sensitive"), 1) == "Y" else "N"}
         if not isinstance(valor, str):
             return {"ok": False, "erro": u"Informe um valor para testar."}
         try:
             normalizado = _padrao_texto(params_compiler.validar_valor(config, valor))
         except ParamErro as exc:
             return {"ok": False, "erro": exc.mensagem}
-        if admin_crud.texto(dados.get("sensivel"), 1) == "S":
+        if admin_crud.texto(dados.get("sensitive"), 1) == "Y":
             normalizado = MASCARA
         return {"ok": True, "valor": normalizado}
 

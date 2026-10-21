@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Contrato de persistencia para tickets e execucoes (tbsss_tickets, tbsss_ticket_resp, tbsss_ticket_saida)."""
+"""Contrato de persistencia para tickets e execucoes (tbsss_tickets, tbsss_ticket_answer, tbsss_ticket_output)."""
 
 
 class RepoTickets(object):
     """Contrato abstrato para gestao do ciclo de vida e logs dos tickets.
 
-    Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o ator, por
-    auditoria['ator'] ou pelo parametro ator=; o INSERT grava created_*, a alteracao grava updated_*.
-    Sem ator, RepoViolacao sem gravar nada.
+    Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o actor, por
+    auditoria['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
+    Sem actor, RepoViolacao sem gravar nada.
     """
 
     def agora(self):
@@ -17,7 +17,7 @@ class RepoTickets(object):
     def criar(self, ticket, respostas, ator=None):
         """Cria ticket e respostas vinculadas em transacao unica e retorna o ID criado.
 
-        Audita TICKET_CRIAR, ou TICKET_REEXECUTAR quando ticket['parent_ticket_id'] e informado.
+        Audita TICKET_CREATE, ou TICKET_RERUN quando ticket['parent_ticket_id'] e informado.
         created_by do ticket e das respostas: ator= ou, sem ele, o solicitante (CR-006).
         """
         raise NotImplementedError
@@ -65,10 +65,10 @@ class RepoTickets(object):
         raise NotImplementedError
 
     def solicitar_cancelamento(self, id, ator, ip):
-        """Cancelamento do no web (README §5.6) e auditoria TICKET_CANCELAR na mesma transacao.
+        """Cancelamento do no web (README §5.6) e auditoria TICKET_CANCEL na mesma transacao.
 
         Retorna 'TERMINAL' | 'CANCELADO' | 'SINALIZADO' | 'JA_SINALIZADO'. Toda solicitacao grava
-        TICKET_CANCELAR, inclusive as sem efeito, com detalhe 'resultado: <cancelado | sinalizado |
+        TICKET_CANCEL, inclusive as sem efeito, com detalhe 'resultado: <cancelado | sinalizado |
         ja sinalizado | sem efeito: ticket encerrado>'. Lanca RepoNaoEncontrado se nao existir.
         """
         raise NotImplementedError

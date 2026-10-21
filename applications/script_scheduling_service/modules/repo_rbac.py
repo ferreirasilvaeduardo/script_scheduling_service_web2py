@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Contrato de persistencia para RBAC e perfis (tbsss_perfis, tbsss_funcionalidades, matrizes)."""
+"""Contrato de persistencia para RBAC e perfis (tbsss_profiles, tbsss_features, matrizes)."""
 
 
 class RepoRbac(object):
     """Contrato abstrato para gestao de perfis, matrizes de permissao e RBAC.
 
-    Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o ator, por
-    auditoria['ator'] ou pelo parametro ator=; o INSERT grava created_*, a alteracao grava updated_*.
-    Sem ator, RepoViolacao sem gravar nada.
+    Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o actor, por
+    auditoria['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
+    Sem actor, RepoViolacao sem gravar nada.
     """
 
     def perfis_listar(self, filtros=None, pagina=1, tamanho=20):
@@ -22,7 +22,7 @@ class RepoRbac(object):
         """Insere novo perfil e retorna dict com o registro criado.
 
         auditoria: opcional, {'ator', 'ip', 'acao', 'detalhe'}; gravada na mesma transacao
-        (entidade tbsss_perfis, entidade_id = novo id).
+        (entidade tbsss_profiles, entidade_id = novo id).
         """
         raise NotImplementedError
 

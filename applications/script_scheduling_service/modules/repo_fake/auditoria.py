@@ -15,7 +15,7 @@ class RepoAuditoriaFake(RepoAuditoria):
     def reservar_id(self):
         """Simula seq.NEXTVAL da trilha."""
         with self._store.lock_auditoria:
-            return self._store.proximo_id("tbsss_auditoria")
+            return self._store.proximo_id("tbsss_audit")
 
     def registrar(self, ator, ip, acao, entidade, entidade_id=None, detalhe=None, id=None):
         """Registra um evento na trilha de auditoria (com o id reservado, se informado)."""
@@ -34,31 +34,31 @@ class RepoAuditoriaFake(RepoAuditoria):
         filtros = filtros or {}
         lista = list(self._store.auditoria.values())
 
-        ator_f = filtros.get("ator")
+        ator_f = filtros.get("actor")
         if ator_f:
-            lista = [a for a in lista if ator_f.lower() in a.get("ator", "").lower()]
+            lista = [a for a in lista if ator_f.lower() in a.get("actor", "").lower()]
 
-        acao_f = filtros.get("acao")
+        acao_f = filtros.get("action")
         if acao_f:
-            lista = [a for a in lista if a.get("acao") == acao_f]
+            lista = [a for a in lista if a.get("action") == acao_f]
 
-        ent_f = filtros.get("entidade")
+        ent_f = filtros.get("entity")
         if ent_f:
-            lista = [a for a in lista if a.get("entidade") == ent_f]
+            lista = [a for a in lista if a.get("entity") == ent_f]
 
-        ent_id_f = filtros.get("entidade_id")
+        ent_id_f = filtros.get("entity_id")
         if ent_id_f is not None:
-            lista = [a for a in lista if a.get("entidade_id") == int(ent_id_f)]
+            lista = [a for a in lista if a.get("entity_id") == int(ent_id_f)]
 
-        ip_f = filtros.get("ip_origem")
+        ip_f = filtros.get("source_ip")
         if ip_f:
-            lista = [a for a in lista if ip_f in (a.get("ip_origem") or "")]
+            lista = [a for a in lista if ip_f in (a.get("source_ip") or "")]
 
-        dt_ini = filtros.get("data_inicio")
+        dt_ini = filtros.get("start_date")
         if dt_ini:
             lista = [a for a in lista if a.get("created_at") and a["created_at"] >= dt_ini]
 
-        dt_fim = filtros.get("data_fim")
+        dt_fim = filtros.get("end_date")
         if dt_fim:
             lista = [a for a in lista if a.get("created_at") and a["created_at"] <= dt_fim]
 

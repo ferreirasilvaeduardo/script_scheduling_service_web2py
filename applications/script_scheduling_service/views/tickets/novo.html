@@ -32,13 +32,13 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
     <p class="sss-busca-vazia" x-show="semResultado" x-cloak role="status">Nenhum script corresponde à busca.</p>
     {{for _g in grupos:}}
     <section class="sss-grupo-scripts" data-grupo>
-      <h3 class="sss-grupo-titulo">{{=_g['grupo']}} <span class="sss-grupo-categoria">/ {{=_g['categoria']}}</span></h3>
+      <h3 class="sss-grupo-titulo">{{=_g['script_group']}} <span class="sss-grupo-categoria">/ {{=_g['category']}}</span></h3>
       <ul class="sss-lista-escolha">
         {{for _s in _g['scripts']:}}
-        <li data-busca="{{=(' '.join((_s['nome'], _s['descricao'], _g['grupo'], _g['categoria'], _s['etapa']))).lower()}}">
+        <li data-busca="{{=(' '.join((_s['name'], _s['description'], _g['script_group'], _g['category'], _s['stage']))).lower()}}">
           <a class="sss-escolha" href="{{=URL(c='tickets', f='novo', vars={'script_id': _s['id']})}}">
-            <span class="sss-escolha-nome sss-mono">{{=_s['nome']}}</span>
-            <span class="sss-escolha-desc">{{=_s['descricao']}}</span>
+            <span class="sss-escolha-nome sss-mono">{{=_s['name']}}</span>
+            <span class="sss-escolha-desc">{{=_s['description']}}</span>
           </a>
         </li>
         {{pass}}
@@ -52,7 +52,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 <section class="sss-card" aria-labelledby="titulo-script-escolhido">
   <h2 class="sss-card-titulo" id="titulo-script-escolhido">1. Script</h2>
   <div class="sss-card-corpo sss-escolhido">
-    <span><span class="sss-mono">{{=script['nome']}}</span> — {{=script.get('descricao') or ''}}</span>
+    <span><span class="sss-mono">{{=script['name']}}</span> — {{=script.get('description') or ''}}</span>
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='novo')}}">Trocar script</a>
   </div>
 </section>
@@ -65,9 +65,9 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
     <ul class="sss-lista-escolha">
       {{for _a in ambientes:}}
       <li>
-        <a class="sss-escolha" href="{{=URL(c='tickets', f='novo', vars={'script_id': script['id'], 'ambiente': _a['nome']})}}">
-          <span class="sss-escolha-nome">{{=_a['nome']}}{{if _a['nome'] == 'PRODUCAO':}} <span class="badge text-bg-danger">Produção</span>{{pass}}</span>
-          <span class="sss-escolha-desc">{{=_a['descricao']}}</span>
+        <a class="sss-escolha" href="{{=URL(c='tickets', f='novo', vars={'script_id': script['id'], 'environment': _a['name']})}}">
+          <span class="sss-escolha-nome">{{=_a['name']}}{{if _a['name'] == 'PRODUCAO':}} <span class="badge text-bg-danger">Produção</span>{{pass}}</span>
+          <span class="sss-escolha-desc">{{=_a['description']}}</span>
         </a>
       </li>
       {{pass}}
@@ -78,7 +78,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 <section class="sss-card" aria-labelledby="titulo-ambiente-escolhido">
   <h2 class="sss-card-titulo" id="titulo-ambiente-escolhido">2. Ambiente</h2>
   <div class="sss-card-corpo sss-escolhido">
-    <span><strong>{{=form['ambiente']['nome']}}</strong>{{if form['ambiente']['producao']:}} <span class="badge text-bg-danger">Produção</span>{{pass}} — {{=form['ambiente']['descricao']}}</span>
+    <span><strong>{{=form['environment']['name']}}</strong>{{if form['environment']['producao']:}} <span class="badge text-bg-danger">Produção</span>{{pass}} — {{=form['environment']['description']}}</span>
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='novo', vars={'script_id': form['script']['id']})}}">Trocar ambiente</a>
   </div>
 </section>
@@ -88,7 +88,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
   <form class="sss-card-corpo" id="form-ticket" method="post" action="{{=URL(c='tickets', f='criar')}}" autocomplete="off">
     {{=csrf_campo()}}
     <input type="hidden" name="script_id" value="{{=form['script']['id']}}">
-    <input type="hidden" name="ambiente" value="{{=form['ambiente']['nome']}}">
+    <input type="hidden" name="environment" value="{{=form['environment']['name']}}">
     {{if reexecucao_de:}}
     <input type="hidden" name="reexecucao_de" value="{{=reexecucao_de}}">
     <div class="alert alert-info sss-alerta" role="note">
@@ -98,7 +98,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
     {{pass}}
 
     {{if tem_ultima and not usou_ultima:}}
-    <p class="mb-3"><a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='novo', vars=dict(script_id=form['script']['id'], ambiente=form['ambiente']['nome'], ultima='1'))}}">Usar as respostas da minha última execução</a></p>
+    <p class="mb-3"><a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='novo', vars=dict(script_id=form['script']['id'], environment=form['environment']['name'], ultima='1'))}}">Usar as respostas da minha última execução</a></p>
     {{elif usou_ultima:}}
     <div class="alert alert-info sss-alerta" role="note"><span>Carregamos as respostas da sua última execução. Confira antes de criar; valores sigilosos precisam ser digitados de novo.</span></div>
     {{pass}}
@@ -109,7 +109,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
       <ul class="mb-0">
         {{if erro_geral:}}<li>{{=erro_geral}}</li>{{pass}}
         {{for _c in form['campos']:}}{{if _c['erro']:}}<li>{{=_c['erro']}}</li>{{pass}}{{pass}}
-        {{if erros.get('prioridade'):}}<li>{{=erros['prioridade']}}</li>{{pass}}
+        {{if erros.get('priority'):}}<li>{{=erros['priority']}}</li>{{pass}}
         {{if erros.get('scheduled_at'):}}<li>{{=erros['scheduled_at']}}</li>{{pass}}
       </ul>
     </div>
@@ -120,13 +120,13 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
     <div class="sss-form-linha">
       <div class="sss-form-campo mb-3">
         <label class="form-label" for="campo-prioridade">Prioridade</label>
-        <select class="form-select{{=' is-invalid' if erros.get('prioridade') else ''}}" id="campo-prioridade" name="prioridade" aria-describedby="campo-prioridade-ajuda{{=' campo-prioridade-erro' if erros.get('prioridade') else ''}}"{{if erros.get('prioridade'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'prioridade':}} autofocus{{pass}}>
+        <select class="form-select{{=' is-invalid' if erros.get('priority') else ''}}" id="campo-prioridade" name="priority" aria-describedby="campo-prioridade-ajuda{{=' campo-prioridade-erro' if erros.get('priority') else ''}}"{{if erros.get('priority'):}} aria-invalid="true"{{pass}}{{if foco_campo == 'priority':}} autofocus{{pass}}>
           {{for _pv, _pr in form['prioridades']:}}
           <option value="{{=_pv}}"{{if str(_pv) == str(prioridade or 2):}} selected{{pass}}>{{=_pr}}</option>
           {{pass}}
         </select>
         <div class="form-text" id="campo-prioridade-ajuda">1 é a mais alta; a fila ordena por prioridade e depois pelo horário agendado.</div>
-        {{if erros.get('prioridade'):}}<div class="invalid-feedback" id="campo-prioridade-erro">{{=erros['prioridade']}}</div>{{pass}}
+        {{if erros.get('priority'):}}<div class="invalid-feedback" id="campo-prioridade-erro">{{=erros['priority']}}</div>{{pass}}
       </div>
       <div class="sss-form-campo mb-3">
         <label class="form-label" for="campo-scheduled_at">Agendar para (opcional)</label>
@@ -169,7 +169,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
               <button type="button" class="btn-close" aria-label="Fechar" @click="fechar"></button>
             </div>
             <div class="modal-body" id="confirmar-ticket-texto">
-              {{if form['ambiente']['producao']:}}
+              {{if form['environment']['producao']:}}
               <div class="alert alert-danger sss-alerta sss-aviso-producao" role="alert">
                 <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
                 <strong>Ambiente de produção</strong>
@@ -178,7 +178,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
               <div x-data="resumoDisparo" data-url="{{=URL(c='tickets', f='previa')}}">
                 <p class="mb-2" x-show="carregando">Montando o resumo…</p>
                 <div x-show="temResumo" x-cloak>
-                  <p class="mb-2">Vamos rodar <strong class="sss-mono" x-text="script"></strong> no ambiente <strong x-text="ambiente"></strong> <span x-text="quando"></span>, com prioridade <span x-text="prioridade"></span>.</p>
+                  <p class="mb-2">Vamos rodar <strong class="sss-mono" x-text="script"></strong> no ambiente <strong x-text="environment"></strong> <span x-text="quando"></span>, com prioridade <span x-text="priority"></span>.</p>
                   <ul class="mb-2 sss-resumo-respostas" x-show="temRespostas">
                     <template x-for="r in respostas" :key="r.id">
                       <li><span x-text="r.rotulo"></span> = <span class="sss-mono" x-text="r.valor"></span></li>
@@ -196,7 +196,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancelar" @click="fechar">Cancelar</button>
-              <button type="submit" class="btn btn-sm {{='btn-danger' if form['ambiente']['producao'] else 'btn-primary'}}">Criar ticket</button>
+              <button type="submit" class="btn btn-sm {{='btn-danger' if form['environment']['producao'] else 'btn-primary'}}">Criar ticket</button>
             </div>
           </div>
         </div>

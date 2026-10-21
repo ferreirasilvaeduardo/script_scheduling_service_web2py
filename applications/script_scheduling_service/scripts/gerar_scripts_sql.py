@@ -6,7 +6,7 @@ SQL Developer em ambientes de homologacao e producao, sem depender de execucao P
 no servidor de banco de dados.
 
 Produz:
-  - 01_implantar_sss.sql : DDL (189 objetos), DML Seed (5 ambientes + controle + perfil admin), Estatisticas
+  - 01_deploy_sss.sql : DDL (189 objetos), DML Seed (5 ambientes + controle + perfil admin), Estatisticas
   - 02_rollback_sss.sql  : Desinstalacao total e limpa (Drop triggers, tabelas CASCADE PURGE, sequences)
   - 03_grants_sss.sql    : Privilegios minimos por papel (web, agente, purge, monitor) [opcional]
 """
@@ -164,9 +164,9 @@ def main(argv=None):
     out_dir = os.path.abspath(args.out_dir)
     os.makedirs(out_dir, exist_ok=True)
 
-    arq_implantar = os.path.join(out_dir, "01_implantar_sss.sql")
+    arq_implantar = os.path.join(out_dir, "01_deploy_sss.sql")
     arq_rollback = os.path.join(out_dir, "02_rollback_sss.sql")
-    arq_validar = os.path.join(out_dir, "99_validar_implantacao.sql")
+    arq_validar = os.path.join(out_dir, "99_validate_deploy.sql")
 
     with open(arq_implantar, "w", encoding="utf-8") as f:
         f.write(script_implantar)

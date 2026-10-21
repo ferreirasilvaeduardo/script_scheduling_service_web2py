@@ -19,11 +19,11 @@ from repo_rbac import RepoRbac
 
 _COLS_PERFIL = (
     "id",
-    "nome",
-    "descricao",
+    "name",
+    "description",
     "is_admin",
-    "perm_versao",
-    "ativo",
+    "perm_version",
+    "active",
     "created_at",
     "created_by",
     "updated_at",
@@ -32,11 +32,11 @@ _COLS_PERFIL = (
 
 _COLS_FUNC = (
     "id",
-    "codigo",
-    "nome",
-    "modulo",
-    "descricao",
-    "ativo",
+    "code",
+    "name",
+    "module",
+    "description",
+    "active",
     "created_at",
     "created_by",
     "updated_at",
@@ -98,14 +98,14 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
         clausulas = []
         binds = {}
 
-        nome_f = filtros.get("nome")
+        nome_f = filtros.get("name")
         if nome_f:
-            clausulas.append("LOWER(nome) LIKE :nome_f")
+            clausulas.append("LOWER(name) LIKE :nome_f")
             binds["nome_f"] = "%" + nome_f.lower() + "%"
 
-        ativo_f = filtros.get("ativo")
+        ativo_f = filtros.get("active")
         if ativo_f:
-            clausulas.append("ativo = :ativo_f")
+            clausulas.append("active = :ativo_f")
             binds["ativo_f"] = str(ativo_f).strip().upper()
 
         is_admin_f = filtros.get("is_admin")
@@ -135,10 +135,10 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
         sql_paginada = (
             "SELECT * FROM ("
             "SELECT a.*, ROWNUM rn FROM ("
-            "SELECT id, nome, descricao, is_admin, perm_versao, ativo, "
+            "SELECT id, name, description, is_admin, perm_version, active, "
             "created_at, created_by, updated_at, updated_by "
             "FROM " + self._tabela_perfis() + where_sql + " "
-            "ORDER BY nome ASC, id ASC"
+            "ORDER BY name ASC, id ASC"
             ") a WHERE ROWNUM <= :fim"
             ") WHERE rn > :inicio"
         )
@@ -171,7 +171,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
     def perfis_obter(self, id, conn=None):
         """Retorna dict com dados do perfil pelo ID ou lanca RepoNaoEncontrado."""
         sql = (
-            "SELECT id, nome, descricao, is_admin, perm_versao, ativo, "
+            "SELECT id, name, description, is_admin, perm_version, active, "
             "created_at, created_by, updated_at, updated_by "
             "FROM " + self._tabela_perfis() + " WHERE id = :id"
         )
@@ -189,51 +189,51 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
     def perfis_inserir(self, dados, auditoria=None, ator=None, conn=None):
         """Insere novo perfil com validacoes de UK e CKs e auditoria na mesma transacao."""
         ator_limpo = validar_ator_registro(auditoria, ator)
-        nome = dados.get("nome")
+        nome = dados.get("name")
         if not nome or not str(nome).strip():
             raise repo_errors.RepoViolacao("Nome de perfil e obrigatorio")
 
         is_admin = str(dados.get("is_admin", "N")).strip().upper()
-        if is_admin not in ("S", "N"):
-            raise repo_errors.RepoViolacao("Flag is_admin deve ser 'S' ou 'N'", constraint=self.nome_constraint("ck", "perfis", "adm"))
+        if is_admin not in ("Y", "N"):
+            raise repo_errors.RepoViolacao("Flag is_admin deve ser 'Y' ou 'N'", constraint=self.nome_constraint("ck", "perfis", "adm"))
 
-        ativo = str(dados.get("ativo", "S")).strip().upper()
-        if ativo not in ("S", "N"):
-            raise repo_errors.RepoViolacao("Flag ativo deve ser 'S' ou 'N'", constraint=self.nome_constraint("ck", "perfis", "ativo"))
+        ativo = str(dados.get("active", "Y")).strip().upper()
+        if ativo not in ("Y", "N"):
+            raise repo_errors.RepoViolacao("Flag ativo deve ser 'Y' ou 'N'", constraint=self.nome_constraint("ck", "perfis", "active"))
 
         with self.transacao_escrita(conn=conn) as c:
             cur = c.cursor()
             try:
                 cur.execute(
-                    "SELECT id FROM " + self._tabela_perfis() + " WHERE UPPER(nome) = :nome_u",
+                    "SELECT id FROM " + self._tabela_perfis() + " WHERE UPPER(name) = :nome_u",
                     {"nome_u": nome.strip().upper()},
                 )
                 if cur.fetchone():
-                    raise repo_errors.RepoViolacao("Perfil com nome '%s' ja existe" % nome, constraint=self.nome_constraint("uk", "perfis", "nome"))
+                    raise repo_errors.RepoViolacao("Perfil com nome '%s' ja existe" % nome, constraint=self.nome_constraint("uk", "perfis", "name"))
 
                 pid = db_conn.proximo_id(c, self._seq_perfis())
-                perm_versao = int(dados.get("perm_versao", 1))
+                perm_versao = int(dados.get("perm_version", 1))
 
                 sql_ins = (
                     "INSERT INTO " + self._tabela_perfis() + " "
-                    "(id, nome, descricao, is_admin, perm_versao, ativo, "
+                    "(id, name, description, is_admin, perm_version, active, "
                     "created_at, created_by, updated_at, updated_by) "
-                    "VALUES (:id, :nome, :descricao, :is_admin, :perm_versao, :ativo, "
-                    "SYSDATE, :ator, NULL, NULL)"
+                    "VALUES (:id, :name, :description, :is_admin, :perm_version, :active, "
+                    "SYSDATE, :actor, NULL, NULL)"
                 )
                 cur.execute(
                     sql_ins,
                     {
                         "id": pid,
-                        "nome": nome.strip(),
-                        "descricao": dados.get("descricao", ""),
+                        "name": nome.strip(),
+                        "description": dados.get("description", ""),
                         "is_admin": is_admin,
-                        "perm_versao": perm_versao,
-                        "ativo": ativo,
-                        "ator": ator_limpo,
+                        "perm_version": perm_versao,
+                        "active": ativo,
+                        "actor": ator_limpo,
                     },
                 )
-                gravar_auditoria(c, self._tabela_auditoria(), self._seq_auditoria(), auditoria, "tbsss_perfis", pid)
+                gravar_auditoria(c, self._tabela_auditoria(), self._seq_auditoria(), auditoria, "tbsss_profiles", pid)
             finally:
                 cur.close()
 
@@ -246,7 +246,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
             cur = c.cursor()
             try:
                 cur.execute(
-                    "SELECT id, nome, descricao, is_admin, perm_versao, ativo, "
+                    "SELECT id, name, description, is_admin, perm_version, active, "
                     "created_at, created_by, updated_at, updated_by "
                     "FROM " + self._tabela_perfis() + " WHERE id = :id FOR UPDATE WAIT 5",
                     {"id": int(id)},
@@ -265,43 +265,43 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                     elif val_atual != val_esp:
                         raise repo_errors.RepoConflito("Perfil ID %s alterado por outra operacao (%s)" % (id, campo))
 
-                novo_nome = dados.get("nome")
-                if novo_nome and novo_nome.strip().upper() != atual["nome"].upper():
+                novo_nome = dados.get("name")
+                if novo_nome and novo_nome.strip().upper() != atual["name"].upper():
                     cur.execute(
-                        "SELECT id FROM " + self._tabela_perfis() + " WHERE UPPER(nome) = :n AND id != :id",
+                        "SELECT id FROM " + self._tabela_perfis() + " WHERE UPPER(name) = :n AND id != :id",
                         {"n": novo_nome.strip().upper(), "id": int(id)},
                     )
                     if cur.fetchone():
-                        raise repo_errors.RepoViolacao("Perfil com nome '%s' ja existe" % novo_nome, constraint=self.nome_constraint("uk", "perfis", "nome"))
+                        raise repo_errors.RepoViolacao("Perfil com nome '%s' ja existe" % novo_nome, constraint=self.nome_constraint("uk", "perfis", "name"))
 
                 novo_is_admin = dados.get("is_admin")
                 if novo_is_admin is not None:
                     novo_is_admin = str(novo_is_admin).strip().upper()
-                    if novo_is_admin not in ("S", "N"):
-                        raise repo_errors.RepoViolacao("Flag is_admin deve ser 'S' ou 'N'", constraint=self.nome_constraint("ck", "perfis", "adm"))
+                    if novo_is_admin not in ("Y", "N"):
+                        raise repo_errors.RepoViolacao("Flag is_admin deve ser 'Y' ou 'N'", constraint=self.nome_constraint("ck", "perfis", "adm"))
 
-                novo_ativo = dados.get("ativo")
+                novo_ativo = dados.get("active")
                 if novo_ativo is not None:
                     novo_ativo = str(novo_ativo).strip().upper()
-                    if novo_ativo not in ("S", "N"):
-                        raise repo_errors.RepoViolacao("Flag ativo deve ser 'S' ou 'N'", constraint=self.nome_constraint("ck", "perfis", "ativo"))
+                    if novo_ativo not in ("Y", "N"):
+                        raise repo_errors.RepoViolacao("Flag ativo deve ser 'Y' ou 'N'", constraint=self.nome_constraint("ck", "perfis", "active"))
 
                 # Protecao do ultimo administrador (README §4.3.B)
                 is_admin_efetivo = novo_is_admin if novo_is_admin is not None else atual["is_admin"]
-                ativo_efetivo = novo_ativo if novo_ativo is not None else atual["ativo"]
-                reduz_admin = (atual["is_admin"] == "S" and atual["ativo"] == "S") and (
+                ativo_efetivo = novo_ativo if novo_ativo is not None else atual["active"]
+                reduz_admin = (atual["is_admin"] == "Y" and atual["active"] == "Y") and (
                     is_admin_efetivo == "N" or ativo_efetivo == "N"
                 )
 
                 if reduz_admin:
                     cur.execute(
-                        "SELECT u.id, u.perfil_id "
+                        "SELECT u.id, u.profile_id "
                         "FROM " + self._tabela_usuarios() + " u "
-                        "JOIN " + self._tabela_perfis() + " p ON p.id = u.perfil_id "
-                        "WHERE u.ativo = 'S' AND p.ativo = 'S' AND p.is_admin = 'S' "
+                        "JOIN " + self._tabela_perfis() + " p ON p.id = u.profile_id "
+                        "WHERE u.active = 'Y' AND p.active = 'Y' AND p.is_admin = 'Y' "
                         # Trava tambem os perfis: quem espera releia o is_admin alterado por outra
                         # transacao, e duas operacoes simultaneas nao deixam o sistema sem admin.
-                        "FOR UPDATE OF u.ativo, p.is_admin WAIT 5"
+                        "FOR UPDATE OF u.active, p.is_admin WAIT 5"
                     )
                     admins_outros = [r[0] for r in cur.fetchall() if r[1] != int(id)]
                     if not admins_outros:
@@ -311,25 +311,25 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                         )
 
                 sets = [
-                    "nome = :nome",
-                    "descricao = :descricao",
+                    "name = :name",
+                    "description = :description",
                     "is_admin = :is_admin",
-                    "ativo = :ativo",
-                    "perm_versao = perm_versao + 1",
+                    "active = :active",
+                    "perm_version = perm_version + 1",
                     "updated_at = SYSDATE",
-                    "updated_by = :ator",
+                    "updated_by = :actor",
                 ]
                 params = {
                     "id": int(id),
-                    "nome": novo_nome.strip() if novo_nome else atual["nome"],
-                    "descricao": dados.get("descricao", atual["descricao"]),
+                    "name": novo_nome.strip() if novo_nome else atual["name"],
+                    "description": dados.get("description", atual["description"]),
                     "is_admin": is_admin_efetivo,
-                    "ativo": ativo_efetivo,
-                    "ator": ator_limpo,
+                    "active": ativo_efetivo,
+                    "actor": ator_limpo,
                 }
                 sql_upd = "UPDATE " + self._tabela_perfis() + " SET " + ", ".join(sets) + " WHERE id = :id"
                 cur.execute(sql_upd, params)
-                gravar_auditoria(c, self._tabela_auditoria(), self._seq_auditoria(), auditoria, "tbsss_perfis", int(id))
+                gravar_auditoria(c, self._tabela_auditoria(), self._seq_auditoria(), auditoria, "tbsss_profiles", int(id))
             finally:
                 cur.close()
 
@@ -345,22 +345,22 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                     raise repo_errors.RepoNaoEncontrado("Perfil ID %s nao encontrado" % perfil_id)
 
                 cur.execute(
-                    "SELECT funcionalidade_id FROM " + self._tabela_perfil_func() + " "
-                    "WHERE perfil_id = :id ORDER BY funcionalidade_id ASC",
+                    "SELECT feature_id FROM " + self._tabela_perfil_func() + " "
+                    "WHERE profile_id = :id ORDER BY feature_id ASC",
                     {"id": int(perfil_id)},
                 )
                 funcs = [r[0] for r in cur.fetchall()]
 
                 cur.execute(
-                    "SELECT ambiente_id FROM " + self._tabela_perfil_amb() + " "
-                    "WHERE perfil_id = :id ORDER BY ambiente_id ASC",
+                    "SELECT environment_id FROM " + self._tabela_perfil_amb() + " "
+                    "WHERE profile_id = :id ORDER BY environment_id ASC",
                     {"id": int(perfil_id)},
                 )
                 ambs = [r[0] for r in cur.fetchall()]
 
                 cur.execute(
                     "SELECT script_id FROM " + self._tabela_perfil_scr() + " "
-                    "WHERE perfil_id = :id ORDER BY script_id ASC",
+                    "WHERE profile_id = :id ORDER BY script_id ASC",
                     {"id": int(perfil_id)},
                 )
                 scrs = [r[0] for r in cur.fetchall()]
@@ -385,7 +385,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
             cur = c.cursor()
             try:
                 cur.execute(
-                    "SELECT perm_versao FROM " + self._tabela_perfis() + " WHERE id = :id FOR UPDATE WAIT 5",
+                    "SELECT perm_version FROM " + self._tabela_perfis() + " WHERE id = :id FOR UPDATE WAIT 5",
                     {"id": pid},
                 )
                 row = cur.fetchone()
@@ -400,12 +400,12 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                 for fid in funcs_ids:
                     cur.execute("SELECT id FROM " + self._tabela_funcionalidades() + " WHERE id = :x", {"x": fid})
                     if not cur.fetchone():
-                        raise repo_errors.RepoViolacao("ID %s inexistente" % fid, constraint=self.nome_constraint("fk", "perfil_func", "fnc"))
+                        raise repo_errors.RepoViolacao("ID %s inexistente" % fid, constraint=self.nome_constraint("fk", "perfil_func", "fea"))
 
                 for aid in ambs_ids:
                     cur.execute("SELECT id FROM " + self._tabela_ambientes() + " WHERE id = :x", {"x": aid})
                     if not cur.fetchone():
-                        raise repo_errors.RepoViolacao("ID %s inexistente" % aid, constraint=self.nome_constraint("fk", "perfil_amb", "amb"))
+                        raise repo_errors.RepoViolacao("ID %s inexistente" % aid, constraint=self.nome_constraint("fk", "perfil_amb", "env"))
 
                 for sid in scrs_ids:
                     cur.execute("SELECT id FROM " + self._tabela_scripts() + " WHERE id = :x", {"x": sid})
@@ -416,7 +416,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
 
                 # 1. Funcionalidades
                 cur.execute(
-                    "SELECT id, funcionalidade_id FROM " + self._tabela_perfil_func() + " WHERE perfil_id = :id",
+                    "SELECT id, feature_id FROM " + self._tabela_perfil_func() + " WHERE profile_id = :id",
                     {"id": pid},
                 )
                 f_atuais = dict((r[1], r[0]) for r in cur.fetchall())
@@ -428,16 +428,16 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                     nid = db_conn.proximo_id(c, self._seq_perfil_func())
                     cur.execute(
                         "INSERT INTO " + self._tabela_perfil_func() + " "
-                        "(id, perfil_id, funcionalidade_id, created_at, created_by, updated_at, updated_by) "
-                        "VALUES (:id, :pid, :fid, SYSDATE, :ator, NULL, NULL)",
-                        {"id": nid, "pid": pid, "fid": fid, "ator": ator_limpo},
+                        "(id, profile_id, feature_id, created_at, created_by, updated_at, updated_by) "
+                        "VALUES (:id, :pid, :fid, SYSDATE, :actor, NULL, NULL)",
+                        {"id": nid, "pid": pid, "fid": fid, "actor": ator_limpo},
                     )
                 if f_del or f_ins:
                     mudou = True
 
                 # 2. Ambientes
                 cur.execute(
-                    "SELECT id, ambiente_id FROM " + self._tabela_perfil_amb() + " WHERE perfil_id = :id",
+                    "SELECT id, environment_id FROM " + self._tabela_perfil_amb() + " WHERE profile_id = :id",
                     {"id": pid},
                 )
                 a_atuais = dict((r[1], r[0]) for r in cur.fetchall())
@@ -449,16 +449,16 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                     nid = db_conn.proximo_id(c, self._seq_perfil_amb())
                     cur.execute(
                         "INSERT INTO " + self._tabela_perfil_amb() + " "
-                        "(id, perfil_id, ambiente_id, created_at, created_by, updated_at, updated_by) "
-                        "VALUES (:id, :pid, :aid, SYSDATE, :ator, NULL, NULL)",
-                        {"id": nid, "pid": pid, "aid": aid, "ator": ator_limpo},
+                        "(id, profile_id, environment_id, created_at, created_by, updated_at, updated_by) "
+                        "VALUES (:id, :pid, :aid, SYSDATE, :actor, NULL, NULL)",
+                        {"id": nid, "pid": pid, "aid": aid, "actor": ator_limpo},
                     )
                 if a_del or a_ins:
                     mudou = True
 
                 # 3. Scripts
                 cur.execute(
-                    "SELECT id, script_id FROM " + self._tabela_perfil_scr() + " WHERE perfil_id = :id",
+                    "SELECT id, script_id FROM " + self._tabela_perfil_scr() + " WHERE profile_id = :id",
                     {"id": pid},
                 )
                 s_atuais = dict((r[1], r[0]) for r in cur.fetchall())
@@ -470,9 +470,9 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                     nid = db_conn.proximo_id(c, self._seq_perfil_scr())
                     cur.execute(
                         "INSERT INTO " + self._tabela_perfil_scr() + " "
-                        "(id, perfil_id, script_id, created_at, created_by, updated_at, updated_by) "
-                        "VALUES (:id, :pid, :sid, SYSDATE, :ator, NULL, NULL)",
-                        {"id": nid, "pid": pid, "sid": sid, "ator": ator_limpo},
+                        "(id, profile_id, script_id, created_at, created_by, updated_at, updated_by) "
+                        "VALUES (:id, :pid, :sid, SYSDATE, :actor, NULL, NULL)",
+                        {"id": nid, "pid": pid, "sid": sid, "actor": ator_limpo},
                     )
                 if s_del or s_ins:
                     mudou = True
@@ -481,19 +481,19 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                 if mudou:
                     cur.execute(
                         "UPDATE " + self._tabela_perfis() + " "
-                        "SET perm_versao = perm_versao + 1, updated_at = SYSDATE, updated_by = :ator "
+                        "SET perm_version = perm_version + 1, updated_at = SYSDATE, updated_by = :actor "
                         "WHERE id = :id",
-                        {"id": pid, "ator": ator_limpo},
+                        {"id": pid, "actor": ator_limpo},
                     )
                 else:
                     cur.execute(
                         "UPDATE " + self._tabela_perfis() + " "
-                        "SET perm_versao = perm_versao + 1 "
+                        "SET perm_version = perm_version + 1 "
                         "WHERE id = :id",
                         {"id": pid},
                     )
 
-                gravar_auditoria(c, self._tabela_auditoria(), self._seq_auditoria(), auditoria, "tbsss_perfis", pid)
+                gravar_auditoria(c, self._tabela_auditoria(), self._seq_auditoria(), auditoria, "tbsss_profiles", pid)
             finally:
                 cur.close()
 
@@ -504,9 +504,9 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
         sql = (
             "SELECT u.id "
             "FROM " + self._tabela_usuarios() + " u "
-            "JOIN " + self._tabela_perfis() + " p ON p.id = u.perfil_id "
-            "WHERE u.ativo = 'S' AND p.ativo = 'S' AND p.is_admin = 'S' "
-            "FOR UPDATE OF u.ativo, p.is_admin WAIT 5"
+            "JOIN " + self._tabela_perfis() + " p ON p.id = u.profile_id "
+            "WHERE u.active = 'Y' AND p.active = 'Y' AND p.is_admin = 'Y' "
+            "FOR UPDATE OF u.active, p.is_admin WAIT 5"
         )
         with self.contexto_leitura(conn=conn) as c:
             cur = c.cursor()
@@ -519,10 +519,10 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
     def funcionalidades_listar(self, conn=None):
         """Retorna lista do catalogo canonico de funcionalidades ativas."""
         sql = (
-            "SELECT id, codigo, nome, modulo, descricao, ativo, "
+            "SELECT id, code, name, module, description, active, "
             "created_at, created_by, updated_at, updated_by "
             "FROM " + self._tabela_funcionalidades() + " "
-            "ORDER BY modulo ASC, codigo ASC, id ASC"
+            "ORDER BY module ASC, code ASC, id ASC"
         )
         with self.contexto_leitura(conn=conn) as c:
             cur = c.cursor()

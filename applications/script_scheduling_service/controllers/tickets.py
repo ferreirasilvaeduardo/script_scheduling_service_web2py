@@ -45,7 +45,7 @@ def _nao_encontrado():
 def _exigir_consulta():
     ctx = _exigir_login()
     if not ticket_service.pode_consultar(ctx):
-        _log.warning("acesso negado (login=%s funcionalidade=VER_LOGS|EXEC_SCRIPT caminho=%s ip=%s)",
+        _log.warning("acesso negado (login=%s funcionalidade=VIEW_LOGS|EXEC_SCRIPT caminho=%s ip=%s)",
                      ctx["login"], request.env.path_info, _ip_origem(), extra={"acao": "RBAC"})
         _negado()
     return ctx
@@ -82,9 +82,9 @@ def _pagina_novo(ctx, script_id, ambiente, valores=None, erros=None, prioridade=
         return dados
     form = ticket_service.preparar_formulario(ctx, script_id, ambiente, valores, erros, avisos)
     dados["tem_ultima"] = not reexecucao_de and ticket_service.tem_ultima_execucao(ctx, script_id, ambiente)
-    campos = [{"nome": c["nome"], "erro": c["erro"]} for c in form["campos"]]
-    campos.append({"nome": "prioridade", "erro": erros.get(ticket_service.CAMPO_PRIORIDADE)})
-    campos.append({"nome": "scheduled_at", "erro": erros.get(ticket_service.CAMPO_AGENDAMENTO)})
+    campos = [{"name": c["name"], "erro": c["erro"]} for c in form["campos"]]
+    campos.append({"name": "priority", "erro": erros.get(ticket_service.CAMPO_PRIORIDADE)})
+    campos.append({"name": "scheduled_at", "erro": erros.get(ticket_service.CAMPO_AGENDAMENTO)})
     dados.update(etapa=3, form=form, foco_campo=ui_helpers.primeiro_campo_invalido(campos))
     return dados
 
@@ -96,10 +96,10 @@ def novo():
     try:
         if reexecucao:
             dados = ticket_service.preparar_reexecucao(ctx, reexecucao)
-            return _pagina_novo(ctx, dados["script_id"], dados["ambiente"], dados["valores"], dados["erros"],
-                                dados["prioridade"], reexecucao_de=dados["ticket_id"])
+            return _pagina_novo(ctx, dados["script_id"], dados["environment"], dados["valores"], dados["erros"],
+                                dados["priority"], reexecucao_de=dados["ticket_id"])
         script_id = _texto(request.get_vars.get("script_id"), 10)
-        ambiente = _texto(request.get_vars.get("ambiente"), 30)
+        ambiente = _texto(request.get_vars.get("environment"), 30)
         if script_id and ambiente and request.get_vars.get("ultima") == "1":
             # README §5.4: respostas da ultima execucao propria, sem sensiveis; nada e gravado.
             valores, avisos = ticket_service.ultimas_respostas(ctx, script_id, ambiente)
@@ -132,7 +132,7 @@ def historico():
         dados = ticket_service.historico_script(ctx, _texto(request.args(0), 10))
     except RepoNaoEncontrado:
         _nao_encontrado()
-    response.title = u"Histórico de %s — SSS" % dados["script"]["nome"]
+    response.title = u"Histórico de %s — SSS" % dados["script"]["name"]
     return dict(h=dados)
 
 
@@ -140,8 +140,8 @@ def criar():
     _exigir_metodo("POST")
     ctx = _exigir_func("EXEC_SCRIPT")
     script_id = _texto(request.post_vars.get("script_id"), 10)
-    ambiente = _texto(request.post_vars.get("ambiente"), 30)
-    prioridade = _texto(request.post_vars.get("prioridade"), 10)
+    ambiente = _texto(request.post_vars.get("environment"), 30)
+    prioridade = _texto(request.post_vars.get("priority"), 10)
     scheduled_at = _texto(request.post_vars.get("scheduled_at"), 40)
     reexecucao_de = _texto(request.post_vars.get("reexecucao_de"), 10)
     respostas = _respostas_post()
@@ -170,9 +170,9 @@ def previa():
     try:
         # Mesmo endpoint da previa do comando e do resumo em frase do modal (README §5.4).
         dados = ticket_service.resumo_disparo(ctx, _texto(request.post_vars.get("script_id"), 10),
-                                              _texto(request.post_vars.get("ambiente"), 30),
+                                              _texto(request.post_vars.get("environment"), 30),
                                               respostas if isinstance(respostas, dict) else {},
-                                              _texto(request.post_vars.get("prioridade"), 10),
+                                              _texto(request.post_vars.get("priority"), 10),
                                               _texto(request.post_vars.get("scheduled_at"), 40))
     except AcessoNegado:
         response.status = 403
@@ -263,7 +263,7 @@ def cancelar():
         _negado()
     except RepoErro:
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_CANCELAR}
-    # CANC_TICKET sem VER_LOGS cancela sem poder ver o ticket (README §4.3.C): volta ao painel.
+    # CANCEL_TICKET sem VIEW_LOGS cancela sem poder ver o ticket (README §4.3.C): volta ao painel.
     if ticket_service.visivel(ctx, ticket_id):
         redirect(URL(c="tickets", f="detalhe", args=[ticket_id]))
     redirect(URL(c="default", f="index"))

@@ -24,7 +24,7 @@ def _ids_sprite():
 class TestAtivoInfo(unittest.TestCase):
 
     def test_flags(self):
-        self.assertEqual(ui_helpers.ativo_info("S"),
+        self.assertEqual(ui_helpers.ativo_info("Y"),
                          {"rotulo": u"Ativo", "classe": "sss-status-success", "icone": "status-success"})
         self.assertEqual(ui_helpers.ativo_info("N"),
                          {"rotulo": u"Inativo", "classe": "sss-status-cancelled", "icone": "status-cancelled"})
@@ -99,7 +99,7 @@ class TestQuadroRegistro(unittest.TestCase):
                  "updated_at": criado, "updated_by": "op.prod"}
         for ctx, esperado in (({"login": "op.prod"}, (u"outra pessoa", u"você")),
                               ({"is_admin": True}, ("editor.privado", "op.prod")),
-                              ({"funcionalidades": {"VER_AUDITORIA"}}, ("editor.privado", "op.prod")),
+                              ({"funcionalidades": {"VIEW_AUDIT"}}, ("editor.privado", "op.prod")),
                               (None, (u"outra pessoa", u"outra pessoa"))):
             reg = ui_helpers.registro(bruto, ctx)
             self.assertEqual((reg["created_by"], reg["updated_by"]), esperado)
@@ -109,7 +109,7 @@ class TestQuadroRegistro(unittest.TestCase):
 
     def test_registro_e_exibicao(self):
         criado = datetime.datetime(2026, 10, 17, 9, 5, 0)
-        reg = ui_helpers.registro({"id": 1, "created_at": criado, "created_by": "SYSTEM:seed", "nome": "x"}, {})
+        reg = ui_helpers.registro({"id": 1, "created_at": criado, "created_by": "SYSTEM:seed", "name": "x"}, {})
         self.assertEqual(reg, {"created_at": criado, "created_by": "SYSTEM:seed", "updated_at": None,
                                "updated_by": None})
         self.assertEqual(ui_helpers.registro_exibicao(reg), {
@@ -270,11 +270,11 @@ class TestPaginacaoInfo(unittest.TestCase):
 class TestPrimeiroCampoInvalido(unittest.TestCase):
 
     def test_ordem(self):
-        campos = [{"nome": "a"}, {"nome": "b", "erro": u"Obrigatório."}, {"nome": "c", "erro": u"Inválido."}]
+        campos = [{"name": "a"}, {"name": "b", "erro": u"Obrigatório."}, {"name": "c", "erro": u"Inválido."}]
         self.assertEqual(ui_helpers.primeiro_campo_invalido(campos), "b")
 
     def test_sem_erro(self):
-        self.assertIsNone(ui_helpers.primeiro_campo_invalido([{"nome": "a", "erro": ""}, {"nome": "b"}]))
+        self.assertIsNone(ui_helpers.primeiro_campo_invalido([{"name": "a", "erro": ""}, {"name": "b"}]))
         self.assertIsNone(ui_helpers.primeiro_campo_invalido([]))
         self.assertIsNone(ui_helpers.primeiro_campo_invalido(None))
 
@@ -317,16 +317,16 @@ class TestAlertaInfo(unittest.TestCase):
 class TestMontarMenu(unittest.TestCase):
 
     def _codigos(self, menu):
-        return [(s["secao"], [i["codigo"] for i in s["itens"]]) for s in menu]
+        return [(s["secao"], [i["code"] for i in s["itens"]]) for s in menu]
 
     def test_admin_ve_catalogo_completo_na_ordem(self):
         menu = ui_menu.montar_menu([], True)
         self.assertEqual(self._codigos(menu), [
-            ("OPERACAO", ["EXEC_SCRIPT", "EXEC_SCRIPT", "VER_LOGS"]),
-            ("ADMIN", ["CAD_USUARIOS", "CAD_PERFIS", "CAD_AMBIENTES", "CAD_SCRIPTS",
-                       "CAD_PARAMETROS", "CAD_AGENDAMENTOS", "VER_AUDITORIA"]),
+            ("OPERATION", ["EXEC_SCRIPT", "EXEC_SCRIPT", "VIEW_LOGS"]),
+            ("ADMIN", ["MANAGE_USERS", "MANAGE_PROFILES", "MANAGE_ENVIRONMENTS", "MANAGE_SCRIPTS",
+                       "MANAGE_PARAMETERS", "MANAGE_SCHEDULES", "VIEW_AUDIT"]),
         ])
-        self.assertEqual(self._codigos(ui_menu.montar_menu(None, "S")), self._codigos(menu))
+        self.assertEqual(self._codigos(ui_menu.montar_menu(None, "Y")), self._codigos(menu))
 
     def test_admin_somente_true_ou_s(self):
         for flag in (False, "N", "s", "", None, 1, "True"):
@@ -334,37 +334,37 @@ class TestMontarMenu(unittest.TestCase):
                 self.assertEqual(ui_menu.montar_menu([], flag), [])
 
     def test_filtra_por_funcionalidade_e_omite_secao_vazia(self):
-        menu = ui_menu.montar_menu(["VER_LOGS", "CAD_AGENDAMENTOS"], False)
+        menu = ui_menu.montar_menu(["VIEW_LOGS", "MANAGE_SCHEDULES"], False)
         self.assertEqual(self._codigos(menu), [
-            ("OPERACAO", ["VER_LOGS"]),
-            ("ADMIN", ["CAD_AGENDAMENTOS"]),
+            ("OPERATION", ["VIEW_LOGS"]),
+            ("ADMIN", ["MANAGE_SCHEDULES"]),
         ])
         self.assertEqual(self._codigos(ui_menu.montar_menu(["EXEC_SCRIPT"], False)),
-                         [("OPERACAO", ["EXEC_SCRIPT", "EXEC_SCRIPT"])])
+                         [("OPERATION", ["EXEC_SCRIPT", "EXEC_SCRIPT"])])
 
     def test_codigo_desconhecido_ou_caixa_diferente_ignorado(self):
-        self.assertEqual(ui_menu.montar_menu(["exec_script", "CANC_TICKET", "XYZ"], False), [])
+        self.assertEqual(ui_menu.montar_menu(["exec_script", "CANCEL_TICKET", "XYZ"], False), [])
 
     def test_item_completo_e_rota_ativa(self):
-        menu = ui_menu.montar_menu(["EXEC_SCRIPT", "VER_LOGS"], False, ("tickets", "lista"))
+        menu = ui_menu.montar_menu(["EXEC_SCRIPT", "VIEW_LOGS"], False, ("tickets", "lista"))
         itens = menu[0]["itens"]
         self.assertEqual(menu[0]["titulo"], u"Operação")
         # CR-004 U5 (README §5.8): "Rotinas disponíveis" vem antes de "Disparar Scripts".
         self.assertEqual(itens[0]["rota"], ("tickets", "catalogo"))
         self.assertEqual(itens[1], {
-            "codigo": "EXEC_SCRIPT",
+            "code": "EXEC_SCRIPT",
             "rotulo": u"Disparar Scripts",
             "rota": ("tickets", "novo"),
             "icone": "icon-play",
-            "ativo": False,
+            "active": False,
         })
-        self.assertTrue(itens[2]["ativo"])
-        self.assertEqual(ui_menu.montar_menu(["EXEC_SCRIPT"], False)[0]["itens"][0]["ativo"], False)
+        self.assertTrue(itens[2]["active"])
+        self.assertEqual(ui_menu.montar_menu(["EXEC_SCRIPT"], False)[0]["itens"][0]["active"], False)
 
     def test_rotulos_do_catalogo_canonico(self):
-        rotulos = {i["codigo"]: i["rotulo"] for s in ui_menu.montar_menu([], True) for i in s["itens"]}
-        self.assertEqual(rotulos["CAD_PARAMETROS"], u"Dicionário de Parâmetros")
-        self.assertEqual(rotulos["CAD_USUARIOS"], u"Gestão de Usuários")
+        rotulos = {i["code"]: i["rotulo"] for s in ui_menu.montar_menu([], True) for i in s["itens"]}
+        self.assertEqual(rotulos["MANAGE_PARAMETERS"], u"Dicionário de Parâmetros")
+        self.assertEqual(rotulos["MANAGE_USERS"], u"Gestão de Usuários")
         self.assertEqual(ui_menu.montar_menu([], True)[1]["titulo"], u"Administração")
 
     def test_rotas_e_icones_ascii_e_icones_no_sprite(self):
@@ -412,13 +412,13 @@ class TestLinguagemClara(unittest.TestCase):
                          u"Está na fila, esperando um servidor livre.")
         rodando = {"status": "RUNNING", "started_at": self.AGORA - datetime.timedelta(minutes=4)}
         self.assertEqual(e(rodando, self.AGORA)["aconteceu"], u"Está rodando agora. Começou há 4 minutos.")
-        self.assertIn(u"cancelamento foi pedido", e(dict(rodando, cancel_requested="S"), self.AGORA)["aconteceu"])
-        erro = e({"status": "FAILED", "status_motivo": "EXIT_ERROR", "return_code": 3}, self.AGORA)
-        self.assertEqual((erro["situacao"], erro["aconteceu"]),
+        self.assertIn(u"cancelamento foi pedido", e(dict(rodando, cancel_requested="Y"), self.AGORA)["aconteceu"])
+        erro = e({"status": "FAILED", "status_reason": "EXIT_ERROR", "return_code": 3}, self.AGORA)
+        self.assertEqual((erro["state"], erro["aconteceu"]),
                          (u"Deu erro", u"O script rodou, mas terminou avisando que algo deu errado (código 3)."))
-        self.assertIn(u"6 horas", e({"status": "FAILED", "status_motivo": "TIMEOUT"}, self.AGORA, 21600)["aconteceu"])
-        self.assertIsNone(e({"status": "SUCCESS", "status_motivo": "EXIT_OK"}, self.AGORA)["fazer"])
-        self.assertIn("XYZ", e({"status": "FAILED", "status_motivo": "XYZ"}, self.AGORA)["aconteceu"])
+        self.assertIn(u"6 horas", e({"status": "FAILED", "status_reason": "TIMEOUT"}, self.AGORA, 21600)["aconteceu"])
+        self.assertIsNone(e({"status": "SUCCESS", "status_reason": "EXIT_OK"}, self.AGORA)["fazer"])
+        self.assertIn("XYZ", e({"status": "FAILED", "status_reason": "XYZ"}, self.AGORA)["aconteceu"])
 
     def test_etapas_do_ticket(self):
         # CR-004 U2 (README §5.7).

@@ -17,8 +17,8 @@ _RESULTADOS = (GRAVADO, JA_GRAVADO, POSSE_PERDIDA)
 _ORA_DIVERGENTE = 20003
 
 PARTE_MAX = 1024 * 1024
-SITUACOES_SEM_CONTEUDO = ("EXCEDEU", "FALHOU")
-MOTIVOS = ("ARQUIVOS", "BYTES", "PRAZO", "ERRO")
+SITUACOES_SEM_CONTEUDO = ("EXCEEDED", "FAILED")
+MOTIVOS = ("FILES", "BYTES", "DEADLINE", "ERROR")
 
 # Mesmo protocolo do log (README §8.10): FOR UPDATE WAIT 5, tamanho atual contra o offset esperado e
 # DBMS_LOB.COMPARE para reconhecer uma parte ja gravada (COMMIT de desfecho desconhecido). {atrib} e o
@@ -28,9 +28,9 @@ _PLSQL_ANEXAR = """DECLARE
   v_atual NUMBER(12);
   v_parte NUMBER(12) {atrib} DBMS_LOB.GETLENGTH(:parte);
 BEGIN
-  SELECT conteudo INTO v_lob
+  SELECT content INTO v_lob
     FROM {sai}
-   WHERE ticket_id = :ticket_id AND agente_id = :agente_id AND situacao = 'GRAVANDO'
+   WHERE ticket_id = :ticket_id AND agent_id = :agent_id AND state = 'WRITING'
      FOR UPDATE WAIT 5;
   v_atual {atrib} DBMS_LOB.GETLENGTH(v_lob);
   IF v_atual = :offset_esperado THEN
@@ -48,32 +48,32 @@ EXCEPTION
 END;"""
 
 _SQL_REINICIAR = (
-    "UPDATE {sai} SET conteudo = EMPTY_BLOB(), qtd_arquivos = NULL, tamanho_bytes = NULL "
-    "WHERE ticket_id = :ticket_id AND agente_id = :agente_id AND situacao = 'GRAVANDO'"
+    "UPDATE {sai} SET content = EMPTY_BLOB(), file_count = NULL, size_bytes = NULL "
+    "WHERE ticket_id = :ticket_id AND agent_id = :agent_id AND state = 'WRITING'"
 )
 _SQL_INCLUIR = (
-    "INSERT INTO {sai} (id, ticket_id, situacao, motivo, agente_id, qtd_arquivos, conteudo, created_at, created_by) "
-    "SELECT :id, t.id, :situacao, :motivo, :agente_id, :qtd_arquivos, {conteudo}, SYSDATE, :ator "
-    "FROM {tck} t WHERE t.id = :ticket_id AND t.agente_id = :agente_id "
+    "INSERT INTO {sai} (id, ticket_id, state, reason, agent_id, file_count, content, created_at, created_by) "
+    "SELECT :id, t.id, :state, :reason, :agent_id, :file_count, {content}, SYSDATE, :actor "
+    "FROM {tck} t WHERE t.id = :ticket_id AND t.agent_id = :agent_id "
     "AND NOT EXISTS (SELECT 1 FROM {sai} s WHERE s.ticket_id = :ticket_id)"
 )
 _SQL_CONCLUIR = (
-    "UPDATE {sai} SET situacao = 'DISPONIVEL', qtd_arquivos = :qtd_arquivos, tamanho_bytes = :tamanho_bytes, "
-    "updated_at = SYSDATE, updated_by = :ator "
-    "WHERE ticket_id = :ticket_id AND agente_id = :agente_id AND situacao = 'GRAVANDO' "
-    "AND DBMS_LOB.GETLENGTH(conteudo) = :tamanho_bytes"
+    "UPDATE {sai} SET state = 'AVAILABLE', file_count = :file_count, size_bytes = :size_bytes, "
+    "updated_at = SYSDATE, updated_by = :actor "
+    "WHERE ticket_id = :ticket_id AND agent_id = :agent_id AND state = 'WRITING' "
+    "AND DBMS_LOB.GETLENGTH(content) = :size_bytes"
 )
 _SQL_ENCERRAR_GRAVANDO = (
-    "UPDATE {sai} SET situacao = :situacao, motivo = :motivo, qtd_arquivos = :qtd_arquivos, "
-    "tamanho_bytes = NULL, conteudo = NULL, updated_at = SYSDATE, updated_by = :ator "
-    "WHERE ticket_id = :ticket_id AND agente_id = :agente_id AND situacao = 'GRAVANDO'"
+    "UPDATE {sai} SET state = :state, reason = :reason, file_count = :file_count, "
+    "size_bytes = NULL, content = NULL, updated_at = SYSDATE, updated_by = :actor "
+    "WHERE ticket_id = :ticket_id AND agent_id = :agent_id AND state = 'WRITING'"
 )
 _SQL_FALHAR_DO_AGENTE = (
-    "UPDATE {sai} SET situacao = 'FALHOU', motivo = 'ERRO', qtd_arquivos = NULL, tamanho_bytes = NULL, "
-    "conteudo = NULL, updated_at = SYSDATE, updated_by = :ator "
-    "WHERE (" + sql_ident.FBI_TSAI_GRAV_CASE + ") = :agente_id"
+    "UPDATE {sai} SET state = 'FAILED', reason = 'ERROR', file_count = NULL, size_bytes = NULL, "
+    "content = NULL, updated_at = SYSDATE, updated_by = :actor "
+    "WHERE (" + sql_ident.FBI_TSAI_GRAV_CASE + ") = :agent_id"
 )
-_SQL_SITUACAO = "SELECT situacao, agente_id FROM {sai} WHERE ticket_id = :ticket_id"
+_SQL_SITUACAO = "SELECT state, agent_id FROM {sai} WHERE ticket_id = :ticket_id"
 
 
 class SaidaOffsetInconsistente(RuntimeError):
@@ -92,13 +92,12 @@ class RepoSchedulerSaida(object):
     """Owner e prefixo vem da configuracao (nunca fixos); os nomes passam por sql_ident."""
 
     def __init__(self, owner, prefixo):
-        q = lambda nome: sql_ident.qualificar(owner, nome, prefixo=prefixo)  # noqa: E731
-        sai, tck = q(prefixo + "ticket_saida"), q(prefixo + "tickets")
-        self._seq = q("sq_%sticket_saida" % prefixo)
+        sai, tck = sql_ident.tabela(owner, prefixo, "ticket_saida"), sql_ident.tabela(owner, prefixo, "tickets")
+        self._seq = sql_ident.sequence(owner, prefixo, "ticket_saida")
         self._plsql = _PLSQL_ANEXAR.format(sai=sai, atrib=":" + "=")
         self._sql_reiniciar = _SQL_REINICIAR.format(sai=sai)
-        self._sql_incluir_gravando = _SQL_INCLUIR.format(sai=sai, tck=tck, conteudo="EMPTY_BLOB()")
-        self._sql_incluir_sem_conteudo = _SQL_INCLUIR.format(sai=sai, tck=tck, conteudo="NULL")
+        self._sql_incluir_gravando = _SQL_INCLUIR.format(sai=sai, tck=tck, content="EMPTY_BLOB()")
+        self._sql_incluir_sem_conteudo = _SQL_INCLUIR.format(sai=sai, tck=tck, content="NULL")
         self._sql_concluir = _SQL_CONCLUIR.format(sai=sai)
         self._sql_encerrar = _SQL_ENCERRAR_GRAVANDO.format(sai=sai)
         self._sql_falhar = _SQL_FALHAR_DO_AGENTE.format(sai=sai)
@@ -112,9 +111,9 @@ class RepoSchedulerSaida(object):
         cur.execute("SELECT %s.NEXTVAL FROM DUAL" % self._seq)
         return int(cur.fetchone()[0])
 
-    def _incluir(self, cur, sql, ticket_id, agente_id, situacao, motivo=None, qtd_arquivos=None):
-        cur.execute(sql, id=self._proximo_id(cur), ticket_id=int(ticket_id), agente_id=agente_id,
-                    situacao=situacao, motivo=motivo, qtd_arquivos=qtd_arquivos, ator=_ator(agente_id))
+    def _incluir(self, cur, sql, ticket_id, agente_id, situacao, reason=None, file_count=None):
+        cur.execute(sql, id=self._proximo_id(cur), ticket_id=int(ticket_id), agent_id=agente_id,
+                    state=situacao, reason=reason, file_count=file_count, actor=_ator(agente_id))
         return cur.rowcount == 1
 
     def iniciar(self, conn, ticket_id, agente_id):
@@ -124,10 +123,10 @@ class RepoSchedulerSaida(object):
         """
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_reiniciar, ticket_id=int(ticket_id), agente_id=agente_id)
+            cur.execute(self._sql_reiniciar, ticket_id=int(ticket_id), agent_id=agente_id)
             if cur.rowcount == 1:
                 return True
-            return self._incluir(cur, self._sql_incluir_gravando, ticket_id, agente_id, "GRAVANDO")
+            return self._incluir(cur, self._sql_incluir_gravando, ticket_id, agente_id, "WRITING")
         finally:
             cur.close()
 
@@ -143,7 +142,7 @@ class RepoSchedulerSaida(object):
             db_conn.definir_tipos_entrada(cur, parte=db_conn.TIPO_BLOB)
             resultado = db_conn.variavel_saida(cur, db_conn.TIPO_VARCHAR, tamanho=20)
             try:
-                cur.execute(self._plsql, parte=bytes(parte), ticket_id=int(ticket_id), agente_id=agente_id,
+                cur.execute(self._plsql, parte=bytes(parte), ticket_id=int(ticket_id), agent_id=agente_id,
                             offset_esperado=int(offset_esperado), resultado=resultado)
             except Exception as exc:
                 if db_conn.classificar_erro(exc) == ("ORA", _ORA_DIVERGENTE):
@@ -160,8 +159,8 @@ class RepoSchedulerSaida(object):
         """GRAVANDO -> DISPONIVEL, so se o zip no banco tiver tamanho_bytes. False: posse perdida. Sem COMMIT."""
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_concluir, ticket_id=int(ticket_id), agente_id=agente_id,
-                        qtd_arquivos=int(qtd_arquivos), tamanho_bytes=int(tamanho_bytes), ator=_ator(agente_id))
+            cur.execute(self._sql_concluir, ticket_id=int(ticket_id), agent_id=agente_id,
+                        file_count=int(qtd_arquivos), size_bytes=int(tamanho_bytes), actor=_ator(agente_id))
             return cur.rowcount == 1
         finally:
             cur.close()
@@ -175,12 +174,12 @@ class RepoSchedulerSaida(object):
             raise ValueError("situacao ou motivo da saida invalido")
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_encerrar, ticket_id=int(ticket_id), agente_id=agente_id, situacao=situacao,
-                        motivo=motivo, qtd_arquivos=qtd_arquivos, ator=_ator(agente_id))
+            cur.execute(self._sql_encerrar, ticket_id=int(ticket_id), agent_id=agente_id, state=situacao,
+                        reason=motivo, file_count=qtd_arquivos, actor=_ator(agente_id))
             if cur.rowcount == 1:
                 return True
             return self._incluir(cur, self._sql_incluir_sem_conteudo, ticket_id, agente_id, situacao,
-                                 motivo=motivo, qtd_arquivos=qtd_arquivos)
+                                 reason=motivo, file_count=qtd_arquivos)
         finally:
             cur.close()
 
@@ -188,7 +187,7 @@ class RepoSchedulerSaida(object):
         """Startup check (README §8.13): toda linha GRAVANDO deste agente vira FALHOU. Devolve a contagem."""
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_falhar, agente_id=agente_id, ator=_ator(agente_id))
+            cur.execute(self._sql_falhar, agent_id=agente_id, actor=_ator(agente_id))
             return cur.rowcount
         finally:
             cur.close()

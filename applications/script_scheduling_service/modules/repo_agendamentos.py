@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Contrato de persistencia para regras de agendamento (tbsss_agendamentos)."""
+"""Contrato de persistencia para regras de agendamento (tbsss_schedules)."""
 
 
 class RepoAgendamentos(object):
     """Contrato abstrato para gestao de agendamentos e regras de recorrencia.
 
-    Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o ator, por
-    auditoria['ator'] ou pelo parametro ator=; o INSERT grava created_*, a alteracao grava updated_*.
-    Sem ator, RepoViolacao sem gravar nada.
+    Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o actor, por
+    auditoria['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
+    Sem actor, RepoViolacao sem gravar nada.
     """
 
     def listar(self, filtros=None, pagina=1, tamanho=20, escopo_ambientes=None):
@@ -31,7 +31,7 @@ class RepoAgendamentos(object):
         raise NotImplementedError
 
     def alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
-        """Atualiza agendamento (com usuario_id do editor) e retorna dict atualizado.
+        """Atualiza agendamento (com user_id do editor) e retorna dict atualizado.
 
         UPDATE condicional aos valores lidos em `esperado` (RepoConflito se divergirem), CKs
         aplicadas ao registro resultante e `auditoria` gravada na mesma operacao.
@@ -41,12 +41,12 @@ class RepoAgendamentos(object):
     def pausar(self, id, motivo, antiga_data=None, auditoria=None, ator=None):
         """Pausa o agendamento de forma otimista, checando antiga_data se informada (README §7.5 passo 7).
 
-        Audita AGD_PAUSAR na mesma operacao: com `auditoria` (ator e ip da UI) ou, sem ela, como SYSTEM.
+        Audita SCHEDULE_PAUSE na mesma operacao: com `auditoria` (ator e ip da UI) ou, sem ela, como SYSTEM.
         """
         raise NotImplementedError
 
     def retomar(self, id, nova_data, esperado=None, auditoria=None, ator=None):
-        """Retoma agendamento pausado: ativo = 'S', pausa_motivo nulo e proxima_execucao = nova_data.
+        """Retoma agendamento pausado: active = 'Y', pause_reason nulo e next_run_at = nova_data.
 
         UPDATE condicional aos valores lidos em `esperado` (RepoConflito se divergirem) e `auditoria`
         gravada na mesma operacao.

@@ -21,22 +21,22 @@ AGENTE_FALSO = 2 ** 31 - 3
 
 AGORA = datetime.datetime(2026, 10, 13, 10, 47, 0, 123456)
 CfgAgente = collections.namedtuple("CfgAgente", ["interpretadores"])
-CHAVES_6_5 = {"versao", "script_id", "script_nome", "interpretador", "path_file", "tipo_param", "args",
+CHAVES_6_5 = {"version", "script_id", "script_nome", "interpreter", "path_file", "param_type", "args",
               "respostas", "sensiveis", "compilado_em"}
 EXE_PY = "/usr/bin/python3"
 
 
 def prm(codigo, tipo="TEXT", ordem=1, obrigatorio="N", flag=None, opcoes=None, padrao=None,
         padrao_sub=None, regex=None, sensivel="N"):
-    return {"codigo": codigo, "label": codigo.upper(), "tipo_componente": tipo, "ordem": ordem,
-            "obrigatorio": obrigatorio, "param_nomeado": flag, "opcoes_json": opcoes,
-            "valor_padrao": padrao, "valor_padrao_sub": padrao_sub, "regex_validacao": regex,
-            "sensivel": sensivel}
+    return {"code": codigo, "label": codigo.upper(), "component_type": tipo, "sort_order": ordem,
+            "required": obrigatorio, "param_flag": flag, "options_json": opcoes,
+            "default_value": padrao, "default_value_override": padrao_sub, "validation_regex": regex,
+            "sensitive": sensivel}
 
 
-def script(tipo_param="NOMEADO", interpretador="PYTHON3"):
-    return {"id": 12, "nome": "carga_faturas", "interpretador": interpretador,
-            "path_file": REAL, "tipo_param": tipo_param}
+def script(tipo_param="NAMED", interpreter="PYTHON3"):
+    return {"id": 12, "name": "carga_faturas", "interpreter": interpreter,
+            "path_file": REAL, "param_type": tipo_param}
 
 
 REAL = "/opt/automacoes/scripts/faturamento/carga_faturas.py"
@@ -47,7 +47,7 @@ class TestValidarValor(unittest.TestCase):
     def _erro(self, p, valor):
         with self.assertRaises(ParamErro) as ctx:
             pc.validar_valor(p, valor)
-        self.assertEqual(ctx.exception.codigo_param, p["codigo"])
+        self.assertEqual(ctx.exception.codigo_param, p["code"])
         return ctx.exception
 
     def test_strip(self):
@@ -125,8 +125,8 @@ class TestValidarValor(unittest.TestCase):
 
     def test_sensivel_nao_ecoa_valor(self):
         segredo = "Segr3d0-Muito-Secreto"
-        for p in (prm("k", regex=r"[a-z]+", sensivel="S"), prm("k", "NUMBER", sensivel="S"),
-                  prm("k", "SELECT", opcoes='{"A":"a"}', sensivel="S")):
+        for p in (prm("k", regex=r"[a-z]+", sensivel="Y"), prm("k", "NUMBER", sensivel="Y"),
+                  prm("k", "SELECT", opcoes='{"A":"a"}', sensivel="Y")):
             e = self._erro(p, segredo)
             self.assertNotIn(segredo, e.mensagem)
             self.assertNotIn(segredo, str(e))
@@ -172,13 +172,13 @@ class TestRegexCadastro(unittest.TestCase):
                     pc.validar_regex_cadastro(padrao)
 
     def test_valor_sensivel_minimo_de_4(self):
-        prm_s = {"codigo": "doc", "label": "Doc", "tipo_componente": "TEXT", "sensivel": "S"}
+        prm_s = {"code": "doc", "label": "Doc", "component_type": "TEXT", "sensitive": "Y"}
         with self.assertRaises(ParamErro) as ctx:
             pc.validar_valor(prm_s, "abc")
         self.assertIn("pelo menos 4", ctx.exception.mensagem)
         self.assertEqual(pc.validar_valor(prm_s, "abcd"), "abcd")
         self.assertEqual(pc.validar_valor(prm_s, "  "), "")
-        self.assertEqual(pc.validar_valor(dict(prm_s, sensivel="N"), "abc"), "abc")
+        self.assertEqual(pc.validar_valor(dict(prm_s, sensitive="N"), "abc"), "abc")
 
 
 class TestCadastroOpcoesEFlag(unittest.TestCase):
@@ -193,7 +193,7 @@ class TestCadastroOpcoesEFlag(unittest.TestCase):
                       '{"%s": "x"}' % ("k" * 101)):
             with self.assertRaises(pc.ParamErro, msg=repr(texto)) as cm:
                 pc.validar_opcoes_cadastro(texto)
-            self.assertEqual(cm.exception.codigo_param, "opcoes_json")
+            self.assertEqual(cm.exception.codigo_param, "options_json")
 
     def test_opcoes_acima_de_500_caracteres(self):
         grande = "{" + ",".join('"k%02d": "%s"' % (i, "r" * 20) for i in range(25)) + "}"
@@ -235,14 +235,14 @@ class TestPrecedencia(unittest.TestCase):
             pc.resolver_respostas(v, {"n": "abc"})
 
     def test_obrigatorio_ausente(self):
-        v = [prm("a", ordem=1, obrigatorio="S")]
+        v = [prm("a", ordem=1, obrigatorio="Y")]
         with self.assertRaises(ParamErro) as ctx:
             pc.resolver_respostas(v, {"a": ""})
         self.assertEqual(ctx.exception.codigo_param, "a")
         self.assertIn("obrigatório", ctx.exception.mensagem)
 
     def test_checkbox_falso_obrigatorio_e_valor(self):
-        v = [prm("c", "CHECKBOX", ordem=1, obrigatorio="S")]
+        v = [prm("c", "CHECKBOX", ordem=1, obrigatorio="Y")]
         self.assertIs(pc.resolver_respostas(v, {"c": "false"})["c"], False)
 
     def test_ordem_do_resultado(self):
@@ -262,55 +262,55 @@ class TestMontarArgs(unittest.TestCase):
 
     def test_nomeado_flags(self):
         v = [prm("d", "DATE", ordem=2, flag="--data"), prm("n", "NUMBER", ordem=1, flag="-n")]
-        self.assertEqual(self._args("NOMEADO", v, {"d": "2026-10-13", "n": "5"}),
+        self.assertEqual(self._args("NAMED", v, {"d": "2026-10-13", "n": "5"}),
                          ["-n", "5", "--data", "2026-10-13"])
 
     def test_nomeado_longa_valor_com_hifen(self):
         v = [prm("t", ordem=1, flag="--taxa"), prm("x", ordem=2, flag="--texto")]
-        self.assertEqual(self._args("NOMEADO", v, {"t": "-1.5", "x": "--rm"}), ["--taxa=-1.5", "--texto=--rm"])
+        self.assertEqual(self._args("NAMED", v, {"t": "-1.5", "x": "--rm"}), ["--taxa=-1.5", "--texto=--rm"])
 
     def test_nomeado_curta_valor_com_hifen_rejeitado(self):
         for tipo, valor in (("NUMBER", "-5"), ("TEXT", "-rf")):
             with self.subTest(tipo=tipo):
-                e = self._erro("NOMEADO", [prm("n", tipo, ordem=1, flag="-n")], {"n": valor})
+                e = self._erro("NAMED", [prm("n", tipo, ordem=1, flag="-n")], {"n": valor})
                 self.assertEqual(e.codigo_param, "n")
                 self.assertNotIn(valor, e.mensagem)
 
     def test_nomeado_checkbox(self):
         v = [prm("v", "CHECKBOX", ordem=1, flag="--verbose"), prm("m", "CHECKBOX", ordem=2, flag="-m")]
-        self.assertEqual(self._args("NOMEADO", v, {"v": "true", "m": "false"}), ["--verbose"])
-        self.assertEqual(self._args("NOMEADO", v, {"v": "0", "m": "1"}), ["-m"])
-        self.assertEqual(self._args("NOMEADO", v, {}), [])
+        self.assertEqual(self._args("NAMED", v, {"v": "true", "m": "false"}), ["--verbose"])
+        self.assertEqual(self._args("NAMED", v, {"v": "0", "m": "1"}), ["-m"])
+        self.assertEqual(self._args("NAMED", v, {}), [])
 
     def test_nomeado_opcional_vazio_omitido(self):
         v = [prm("a", ordem=1, flag="--a"), prm("b", ordem=2, flag="--b")]
-        self.assertEqual(self._args("NOMEADO", v, {"b": "x"}), ["--b", "x"])
+        self.assertEqual(self._args("NAMED", v, {"b": "x"}), ["--b", "x"])
 
     def test_nomeado_sem_flag(self):
-        e = self._erro("NOMEADO", [prm("a", ordem=1)], {"a": "x"})
+        e = self._erro("NAMED", [prm("a", ordem=1)], {"a": "x"})
         self.assertEqual(e.codigo_param, "a")
 
     def test_sequencial(self):
         v = [prm("c", "CHECKBOX", ordem=4), prm("a", ordem=1, flag="--ignorada"),
              prm("b", ordem=2), prm("n", "NUMBER", ordem=3), prm("d", "CHECKBOX", ordem=5)]
-        self.assertEqual(self._args("SEQUENCIAL", v, {"a": "x", "n": "-7", "c": "true", "d": "false"}),
+        self.assertEqual(self._args("POSITIONAL", v, {"a": "x", "n": "-7", "c": "true", "d": "false"}),
                          ["x", "", "-7", "1", "0"])
 
     def test_sequencial_opcional_vazio_intermediario(self):
         v = [prm("a", ordem=1), prm("b", ordem=2), prm("c", "CHECKBOX", ordem=3), prm("d", ordem=4)]
-        self.assertEqual(self._args("SEQUENCIAL", v, {"a": "x", "d": "y"}), ["x", "", "", "y"])
+        self.assertEqual(self._args("POSITIONAL", v, {"a": "x", "d": "y"}), ["x", "", "", "y"])
 
     def test_sequencial_hifen_rejeitado_exceto_number(self):
         for tipo, valor in (("TEXT", "-x"), ("SELECT", "-A")):
             with self.subTest(tipo=tipo):
                 p = prm("t", tipo, ordem=1, opcoes='{"-A": "a"}')
-                e = self._erro("SEQUENCIAL", [p], {"t": valor})
+                e = self._erro("POSITIONAL", [p], {"t": valor})
                 self.assertEqual(e.codigo_param, "t")
-        self.assertEqual(self._args("SEQUENCIAL", [prm("n", "NUMBER", ordem=1)], {"n": "-1.5"}), ["-1.5"])
+        self.assertEqual(self._args("POSITIONAL", [prm("n", "NUMBER", ordem=1)], {"n": "-1.5"}), ["-1.5"])
 
     def test_nenhum(self):
-        self.assertEqual(pc.montar_args("NENHUM", [], collections.OrderedDict()), [])
-        e = self._erro("NENHUM", [prm("a", ordem=1)], {"a": "x"})
+        self.assertEqual(pc.montar_args("NONE", [], collections.OrderedDict()), [])
+        e = self._erro("NONE", [prm("a", ordem=1)], {"a": "x"})
         self.assertIsNone(e.codigo_param)
 
     def test_tipo_param_desconhecido(self):
@@ -335,16 +335,16 @@ class TestMontarArgvAgente(unittest.TestCase):
 class TestCompilarSnapshot(unittest.TestCase):
 
     def _vinculos(self):
-        return [prm("data_ref", "DATE", ordem=1, obrigatorio="S", flag="--data"),
-                prm("token", ordem=2, flag="--token", sensivel="S"),
+        return [prm("data_ref", "DATE", ordem=1, obrigatorio="Y", flag="--data"),
+                prm("token", ordem=2, flag="--token", sensivel="Y"),
                 prm("modo", "SELECT", ordem=3, flag="--modo", opcoes='{"A":"Ação","B":"Bê"}', padrao="A")]
 
     def test_formato_6_5(self):
         js, resolvidos, erros = pc.compilar_snapshot(script(), self._vinculos()[:1], {"data_ref": "2026-10-13"}, AGORA)
         self.assertEqual(erros, {})
         esperado = {
-            "versao": 4, "script_id": 12, "script_nome": "carga_faturas", "interpretador": "PYTHON3",
-            "path_file": REAL, "tipo_param": "NOMEADO",
+            "version": 4, "script_id": 12, "script_nome": "carga_faturas", "interpreter": "PYTHON3",
+            "path_file": REAL, "param_type": "NAMED",
             "args": ["--data", "2026-10-13"],
             "respostas": {"data_ref": "2026-10-13"}, "sensiveis": [], "compilado_em": "2026-10-13 10:47:00",
         }
@@ -382,21 +382,21 @@ class TestCompilarSnapshot(unittest.TestCase):
             self.assertNotIn("a\x00b", msg)
 
     def test_erros_estruturais(self):
-        js, _, erros = pc.compilar_snapshot(script("NENHUM"), [prm("a", ordem=1)], {"a": "x"}, AGORA)
+        js, _, erros = pc.compilar_snapshot(script("NONE"), [prm("a", ordem=1)], {"a": "x"}, AGORA)
         self.assertIsNone(js)
         self.assertIn(pc.CHAVE_GERAL, erros)
         for interp in ("/usr/bin/python3", "PERL", "CMD"):
-            js, _, erros = pc.compilar_snapshot(script(interpretador=interp), [], {}, AGORA)
+            js, _, erros = pc.compilar_snapshot(script(interpreter=interp), [], {}, AGORA)
             self.assertIsNone(js, interp)
             self.assertIn(pc.CHAVE_GERAL, erros)
 
     def test_nenhum_sem_vinculos(self):
-        js = pc.compilar_snapshot(script("NENHUM", "BASH"), [], {}, AGORA)[0]
+        js = pc.compilar_snapshot(script("NONE", "BASH"), [], {}, AGORA)[0]
         snap = json.loads(js)
-        self.assertEqual((snap["interpretador"], snap["args"]), ("BASH", []))
+        self.assertEqual((snap["interpreter"], snap["args"]), ("BASH", []))
 
     def test_argv_para_exibicao(self):
-        v = self._vinculos() + [prm("seq", ordem=4, flag="-s", sensivel="S")]
+        v = self._vinculos() + [prm("seq", ordem=4, flag="-s", sensivel="Y")]
         snap = json.loads(pc.compilar_snapshot(
             script(), v, {"data_ref": "2026-10-13", "token": "-segredo", "seq": "outro_segredo"}, AGORA)[0])
         exib = pc.argv_para_exibicao(snap)
@@ -407,7 +407,7 @@ class TestCompilarSnapshot(unittest.TestCase):
         self.assertIn("-segredo", snap["args"][2])
 
     def test_argv_para_exibicao_sem_sensiveis(self):
-        snap = json.loads(pc.compilar_snapshot(script("SEQUENCIAL", "SH"), [prm("a", ordem=1)], {"a": "x"}, AGORA)[0])
+        snap = json.loads(pc.compilar_snapshot(script("POSITIONAL", "SH"), [prm("a", ordem=1)], {"a": "x"}, AGORA)[0])
         self.assertEqual(pc.argv_para_exibicao(snap), ["SH", REAL, "x"])
 
 
@@ -426,7 +426,7 @@ class TestValidarSnapshot(unittest.TestCase):
         os.chmod(self.base, 0o555)
         self.cfg = CfgAgente({"PYTHON3": EXE_PY, "SH": "/bin/sh"})
         self.real = os.path.realpath(self.arq)
-        v = [prm("data_ref", "DATE", ordem=1, obrigatorio="S", flag="--data")]
+        v = [prm("data_ref", "DATE", ordem=1, obrigatorio="Y", flag="--data")]
         scr = dict(script(), path_file=self.arq)
         self.js = pc.compilar_snapshot(scr, v, {"data_ref": "2026-10-13"}, AGORA)[0]
 
@@ -455,7 +455,7 @@ class TestValidarSnapshot(unittest.TestCase):
         snap, argv, script_real = pc.validar_snapshot(self.js, self.cfg)
         self.assertEqual(argv, [EXE_PY, "-I", self.real, "--data", "2026-10-13"])
         self.assertEqual(script_real, self.real)
-        self.assertEqual(snap["interpretador"], "PYTHON3")
+        self.assertEqual(snap["interpreter"], "PYTHON3")
 
     def test_json_e_estrutura(self):
         self.assertEqual(self._motivo("{x"), "JSON_INVALIDO")
@@ -466,13 +466,13 @@ class TestValidarSnapshot(unittest.TestCase):
     def test_versoes_1_a_3_rejeitadas(self):
         # CR-005: o snapshot v4 traz path_file absoluto; v1 a v3 so existiram em DEV/FAKE.
         for versao in (1, 2, 3):
-            self.assertEqual(self._motivo(self._alterado(versao=versao)), "VERSAO_NAO_SUPORTADA")
+            self.assertEqual(self._motivo(self._alterado(version=versao)), "VERSAO_NAO_SUPORTADA")
 
     def test_interpretador_fora_da_allowlist_ou_indisponivel_no_agente(self):
-        self.assertEqual(self._motivo(self._alterado(interpretador="/usr/bin/perl")), "INTERPRETADOR_NAO_PERMITIDO")
-        self.assertEqual(self._motivo(self._alterado(interpretador="BASH")), "INTERPRETADOR_NAO_DISPONIVEL")
+        self.assertEqual(self._motivo(self._alterado(interpreter="/usr/bin/perl")), "INTERPRETADOR_NAO_PERMITIDO")
+        self.assertEqual(self._motivo(self._alterado(interpreter="BASH")), "INTERPRETADOR_NAO_DISPONIVEL")
         # CR-005: POWERSHELL saiu da allowlist (somente POSIX).
-        self.assertEqual(self._motivo(self._alterado(interpretador="POWERSHELL")), "INTERPRETADOR_NAO_PERMITIDO")
+        self.assertEqual(self._motivo(self._alterado(interpreter="POWERSHELL")), "INTERPRETADOR_NAO_PERMITIDO")
 
     def test_args_invalidos(self):
         self.assertEqual(self._motivo(self._alterado(args="--data x")), "ARGS_INVALIDOS")
@@ -533,8 +533,8 @@ class TestSeedFake(unittest.TestCase):
     def test_snapshots_do_seed_sao_v4(self):
         tickets = self.repo_factory.obter("tickets")
         for tid in (1, 11, 17, 37):
-            snap = json.loads(tickets.obter(tid)["parametros_enviados"])
-            self.assertEqual((snap["versao"], set(snap.keys())), (4, CHAVES_6_5), tid)
+            snap = json.loads(tickets.obter(tid)["submitted_params"])
+            self.assertEqual((snap["version"], set(snap.keys())), (4, CHAVES_6_5), tid)
             self.assertTrue(snap["path_file"].startswith("/opt/automacoes/scripts/"), tid)
 
 

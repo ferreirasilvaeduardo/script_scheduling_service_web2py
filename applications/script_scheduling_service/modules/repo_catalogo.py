@@ -3,11 +3,11 @@
 
 
 class RepoCatalogo(object):
-    """Contrato abstrato para gestao de ambientes, scripts e parametros.
+    """Contrato abstrato para gestao de environments, scripts e parametros.
 
-    Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o ator, por
-    auditoria['ator'] ou pelo parametro ator=; o INSERT grava created_*, a alteracao grava updated_*.
-    Sem ator, RepoViolacao sem gravar nada.
+    Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o actor, por
+    auditoria['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
+    Sem actor, RepoViolacao sem gravar nada.
     """
 
     def ambientes_listar(self, filtros=None, pagina=1, tamanho=20):
@@ -22,12 +22,12 @@ class RepoCatalogo(object):
         """Insere novo ambiente e retorna dict com o registro criado.
 
         auditoria: opcional, {'ator', 'ip', 'acao', 'detalhe'}; gravada na mesma transacao
-        (entidade tbsss_ambientes, entidade_id = novo id).
+        (entidade tbsss_environments, entidade_id = novo id).
         """
         raise NotImplementedError
 
     def ambientes_alterar(self, id, dados, esperado=None, auditoria=None, ator=None):
-        """Atualiza dados do ambiente e retorna o registro alterado. Nome e imutavel.
+        """Atualiza dados do environment e retorna o registro alterado. Nome e imutavel.
 
         esperado: opcional, dict campo -> valor lido pelo chamador; o UPDATE e condicional a esses
         valores (concorrencia otimista) e, se algum divergir, lanca RepoConflito sem alterar nada.
@@ -88,7 +88,7 @@ class RepoCatalogo(object):
         """Insere novo parametro e retorna dict com o registro criado.
 
         auditoria: opcional, {'ator', 'ip', 'acao', 'detalhe'}; gravada na mesma transacao
-        (entidade tbsss_parametros, entidade_id = novo id).
+        (entidade tbsss_parameters, entidade_id = novo id).
         """
         raise NotImplementedError
 
