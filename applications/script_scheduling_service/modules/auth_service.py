@@ -333,3 +333,8 @@ def logout(ctx, ip):
 def change_password(ctx, ip, atual, nova, confirmacao):
     """Troca da propria senha pelo servico padrao do processo web."""
     return _service().change_password(ctx, ip, atual, nova, confirmacao)
+
+
+def lock_message():
+    """Mensagem de conta bloqueada (com os minutos configurados) do servico padrao do processo web."""
+    return _service().msg_bloqueio

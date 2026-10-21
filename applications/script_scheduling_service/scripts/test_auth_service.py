@@ -4,8 +4,10 @@ import _testenv  # noqa: F401
 
 import datetime
 import hashlib
+import io
 import logging
 import os
+import re
 import secrets
 import threading
 import unittest
@@ -321,6 +323,19 @@ class TestAuthService(unittest.TestCase):
         self.assertIsNone(self.servico.revalidate(dict(sessao, usuario_id=999)))
         self.assertIsNone(self.servico.revalidate(dict(sessao, usuario_id="4")))
         self.assertIsNone(self.servico.revalidate({}))
+
+    def test_mensagem_de_bloqueio_pela_funcao_do_modulo(self):
+        # "Minha senha" bloqueada (controllers/default.py) usa a mesma mensagem do login.
+        with mock.patch.object(auth_service, "_service", return_value=self.servico):
+            self.assertEqual(auth_service.lock_message(), self.servico.msg_bloqueio)
+
+    def test_controllers_so_usam_nomes_existentes_do_auth_service(self):
+        raiz = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "controllers")
+        for nome in sorted(os.listdir(raiz)):
+            if nome.endswith(".py"):
+                with io.open(os.path.join(raiz, nome), encoding="utf-8") as f:
+                    for atributo in re.findall(r"\bauth_service\.([A-Za-z_]\w*)", f.read()):
+                        self.assertTrue(hasattr(auth_service, atributo), "%s: auth_service.%s" % (nome, atributo))
 
 
 class TestSeedDev(unittest.TestCase):

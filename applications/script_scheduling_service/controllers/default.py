@@ -122,7 +122,7 @@ def minha_senha():
         if resultado == "BLOQUEADO":
             session.clear()
             session.csrf_token = security.generate_csrf_token()
-            session.flash = {"tipo": "aviso", "mensagem": auth_service.MSG_BLOQUEIO}
+            session.flash = {"tipo": "aviso", "mensagem": auth_service.lock_message()}
             redirect(URL(c="default", f="login"))
         if resultado == "OK":
             # Nova senha, nova sessao: o cookie e regravado com conteudo novo e outro token CSRF.
