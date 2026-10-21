@@ -768,6 +768,7 @@ class ConexaoResiliente(object):
         self.backoff_s = 1.0
         self.proxima_tentativa_monotonic = 0.0
         self.em_falha = False
+        self._ja_conectou = False  # a primeira conexao nao e reconexao (F9.1d)
 
     def obter_conexao(self):
         """Retorna a conexao ativa ou None."""
@@ -799,23 +800,29 @@ class ConexaoResiliente(object):
         if agora < self.proxima_tentativa_monotonic:
             return False
 
-        logger.warning(
-            "Tentando reconexao com o Oracle (papel=%s)...", self.papel,
-            extra={"agente": "-", "ticket": "-", "acao": "RECONEXAO"},
-        )
+        primeira = not self._ja_conectou
+        if primeira:
+            logger.info("Conectando ao Oracle (papel=%s)...", self.papel,
+                        extra={"agente": "-", "ticket": "-", "acao": "CONEXAO"})
+        else:
+            logger.warning(
+                "Tentando reconexao com o Oracle (papel=%s)...", self.papel,
+                extra={"agente": "-", "ticket": "-", "acao": "RECONEXAO"},
+            )
         try:
             self.conn = conectar(self.cfg, self.segredos, papel=self.papel)
             self.backoff_s = 1.0
             self.em_falha = False
+            self._ja_conectou = True
             logger.info(
-                "Reconexao bem-sucedida (papel=%s)", self.papel,
-                extra={"agente": "-", "ticket": "-", "acao": "RECONEXAO"},
+                "Conexao estabelecida (papel=%s)" if primeira else "Reconexao bem-sucedida (papel=%s)", self.papel,
+                extra={"agente": "-", "ticket": "-", "acao": "CONEXAO" if primeira else "RECONEXAO"},
             )
             return True
         except Exception as exc:
             logger.warning(
-                "Falha na tentativa de reconexao: %s", exc,
-                extra={"agente": "-", "ticket": "-", "acao": "RECONEXAO"},
+                "Falha na tentativa de %s: %s", "conexao" if primeira else "reconexao", exc,
+                extra={"agente": "-", "ticket": "-", "acao": "CONEXAO" if primeira else "RECONEXAO"},
             )
             self.proxima_tentativa_monotonic = time.monotonic() + self.backoff_s
             self.backoff_s = min(60.0, self.backoff_s * 2.0)

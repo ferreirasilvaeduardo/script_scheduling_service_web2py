@@ -176,16 +176,18 @@ class TestSemBanco(unittest.TestCase):
 
     def test_claim_lock_teto_e_perdido(self):
         casos = (
-            ([("FOR UPDATE WAIT 5", _Erro("ORA-30006: resource busy; acquire with WAIT timeout expired"))], "LOCK"),
-            ([("FOR UPDATE WAIT 5", _Erro("ORA-00054: resource busy"))], "LOCK"),
+            ([("FOR UPDATE WAIT 5", _Erro("ORA-30006: resource busy; acquire with WAIT timeout expired"))],
+             ("LOCK", "ORA-30006")),
+            ([("FOR UPDATE WAIT 5", _Erro("ORA-00054: resource busy"))], ("LOCK", "ORA-00054")),
             ([("FOR UPDATE WAIT 5", (1, [(3, 2)])), ("SELECT COUNT(*)", (1, [(2,)]))], "TETO"),
             ([("FOR UPDATE WAIT 5", (1, [(3, 2)])), ("SELECT COUNT(*)", (1, [(0,)])),
               ("RETURNING started_at", (0, [], None))], "PERDIDO"),
             ([("FOR UPDATE WAIT 5", (0, []))], "PERDIDO"),
         )
         for roteiro, motivo in casos:
+            motivo, extra = motivo if isinstance(motivo, tuple) else (motivo, None)
             conn = _Conn(roteiro)
-            self.assertEqual(self.repo.claim(conn, 7, 3, "PRD", AGENTE), (False, motivo, None), motivo)
+            self.assertEqual(self.repo.claim(conn, 7, 3, "PRD", AGENTE), (False, motivo, extra), motivo)
             self.assertEqual(conn.commits, 0)
             self.assertGreaterEqual(conn.rollbacks, 1)
         with self.assertRaises(_Erro):

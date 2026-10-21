@@ -501,9 +501,15 @@ class TestExecucao(_Base):
 
     def test_lock_no_claim_tenta_de_novo(self):
         tid = self.banco.ticket(self.banco.script("echo ok\n"))
-        self.banco.claim_respostas = [(False, "LOCK", None), (False, "TETO", None)]
+        self.banco.claim_respostas = [(False, "LOCK", "ORA-30006"), (False, "TETO", None)]
         self.subir()
-        self.rodar(self.terminado(tid))
+        with self.assertLogs("sss_scheduler", "WARNING") as logs:
+            self.rodar(self.terminado(tid))
+        avisos = [r.getMessage() for r in logs.records if "pulado" in r.getMessage()]
+        self.assertEqual(len(avisos), 1, "WARN so no LOCK, nao no TETO (README §13, CR-007 R-32)")
+        self.assertIn("claim do ticket %d pulado: linha do script" % tid, avisos[0])
+        self.assertIn("(ORA-30006, FOR UPDATE WAIT 5)", avisos[0])
+        self.assertFalse([r for r in logs.records if "pulado" in r.getMessage() and r.exc_info], "sem stack trace")
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
         self.assertGreaterEqual(self.banco.chamadas["claim"], 3)
 

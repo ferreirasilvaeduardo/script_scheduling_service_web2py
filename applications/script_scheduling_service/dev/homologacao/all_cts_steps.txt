@@ -1,0 +1,696 @@
+=== CT-01 ===
+  CT-01 — Login, sessão e troca de senha
+  Objetivo
+  Validar a entrada no sistema, a mensagem de falha sem revelar detalhes, a troca da própria senha e a saída.
+  Usuário(s)
+  op.hml (falha proposital), admin
+  Login com senha incorreta
+  Acesse http://127.0.0.1:8000/script_scheduling_service. O sistema redireciona para Entrar.
+  Informe o login op.hml e uma senha errada. Clique em Entrar.
+  Repita informando o login com espaços em volta ( op.hml ) e a senha correta.
+  Resultado esperado:
+  Mensagem genérica "Usuário ou senha incorretos. Confira o que digitou e tente de novo.", que não informa se o erro foi no login ou na senha.
+  Espaços em volta do login são ignorados (o login é limpo antes da validação) e a entrada funciona.
+  A faixa amarela "AMBIENTE DEV" aparece no topo.
+  Após 5 falhas seguidas a conta fica bloqueada por 15 minutos (não repita mais de 4 vezes, para não travar o usuário durante a homologação).
+  Figura 1 — Tela de login
+  Figura 2 — Mensagem após senha incorreta
+  Login, troca de senha e saída
+  Entre com admin e a senha de demonstração. O sistema abre o Painel inicial.
+  No topo, clique em Minha senha. Informe a senha atual, a nova e a confirmação.
+  Teste primeiro uma confirmação diferente da nova senha e depois a troca válida.
+  Clique em Sair.
+  Resultado esperado:
+  Confirmação divergente: o campo é destacado com mensagem em português e nada é alterado.
+  Troca válida: mensagem de sucesso e a sessão continua ativa.
+  Sair volta para o login com "Você saiu do sistema.". Abrir a URL /default/logout diretamente no navegador (GET) não faz logout (erro 405).
+  Observação: se trocar a senha do admin, use a nova senha nos casos seguintes ou reinicie o servidor.
+  Figura 3 — Tela Minha senha
+  Registro
+  Resultado
+  X ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-02 ===
+  CT-02 — Painel inicial por perfil
+  Objetivo
+  Confirmar que os cartões do painel inicial e o menu respeitam as permissões de cada perfil.
+  Usuário(s)
+  admin, op.prod, op.hml, consulta
+  Entre com cada um dos quatro usuários (use Sair entre eles).
+  Observe o menu superior, o botão O que eu posso fazer no topo e os cartões do painel.
+  Resultado esperado:
+  admin: cartão Disparar script; Tickets nas últimas 24 horas (contagem por situação); Meus últimos tickets; Próximos agendamentos; Saúde dos agentes; atalhos de Operação e Administração; menu Operação com Rotinas disponíveis, Disparar Scripts e Consultar Logs.
+  op.prod e op.hml: Disparar script, Tickets nas últimas 24 horas e Meus últimos tickets. Sem agendamentos, sem agentes, sem menu de Administração. As contagens diferem porque o escopo de ambientes é diferente.
+  consulta: apenas Tickets nas últimas 24 horas e Meus últimos tickets (vazio). Sem Disparar script e sem Rotinas disponíveis.
+  As situações aparecem com os nomes simples (Esperando, Rodando, Deu certo, Deu erro, Cancelado), sempre com ícone e texto.
+  Cada número da contagem corresponde à lista de tickets filtrada pela mesma situação (o link Ver tickets leva à lista).
+  Figura 4 — Painel inicial do admin
+  Figura 5 — Painel inicial do op.prod
+  Figura 6 — Painel inicial do op.hml
+  Figura 7 — Painel inicial do consulta
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-03 ===
+  CT-03 — O que eu posso fazer (novo)
+  Objetivo
+  Verificar que cada usuário vê, em linguagem simples, o que o próprio perfil libera, sem revelar o catálogo.
+  Usuário(s)
+  op.hml, op.prod, consulta, admin
+  Entre com op.hml e clique em O que eu posso fazer, no topo.
+  Clique em um botão Rodar em HOMOLOGACAO.
+  Repita com op.prod, consulta e admin.
+  Resultado esperado:
+  Quadros Meu perfil, Telas que posso usar (com a finalidade de cada uma), Onde posso rodar scripts e Scripts que posso rodar, e a frase "Precisa de mais acesso? Fale com o administrador do sistema.".
+  op.hml: só HOMOLOGACAO (DESENV está inativo e não aparece) e os scripts carga_diaria, sync_tabelas, cleanup_tmp e relatorio_mensal.
+  op.prod: validacao_fiscal aparece só com Rodar em PRODUCAO, porque só está liberado nesse ambiente.
+  O botão Rodar em… abre o disparo já na etapa 3, com script e ambiente escolhidos.
+  consulta: "Você ainda não pode rodar scripts. Peça ao administrador, se precisar.". Os scripts do perfil aparecem com o motivo "seu perfil não tem Disparar Scripts".
+  admin: frase de administrador (todas as telas e qualquer script ativo nos ambientes ativos onde foi liberado).
+  Nenhum script fora do perfil é listado. A tela é só leitura e não gera auditoria.
+  Figura 8 — O que eu posso fazer (op.hml)
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-04 ===
+  CT-04 — Rotinas disponíveis e histórico do script (novo)
+  Objetivo
+  Validar o catálogo de rotinas que o usuário pode rodar, a busca, a última execução e o histórico de 30 dias.
+  Usuário(s)
+  op.hml, admin, consulta
+  Rotinas disponíveis
+  Entre com op.hml e abra Rotinas disponíveis no menu Operação.
+  Digite sync em Buscar rotina; depois digite um texto que não existe; depois apague a busca.
+  Clique em Rodar em HOMOLOGACAO em um cartão.
+  Resultado esperado:
+  Um cartão por script que o usuário pode rodar, agrupado por grupo / categoria, com descrição, Perguntas que faz (com "(obrigatório)"), Última execução e os botões Rodar em {ambiente} e Ver histórico.
+  Última execução mostra a situação com nome simples e "há {tempo}", com link para o ticket; sem nenhuma: "Ainda não rodou". O escopo é o da lista de tickets (op.hml só vê HOMOLOGACAO).
+  A busca filtra na hora; sem resultado: "Nenhuma rotina corresponde à busca.".
+  Rodar em… abre o disparo na etapa 3.
+  Figura 9 — Rotinas disponíveis (op.hml)
+  Histórico do script
+  Entre com admin, abra Rotinas disponíveis e clique em Ver histórico do carga_diaria.
+  Abra Ver os números em tabela.
+  Clique em Ver estes pedidos.
+  Com consulta, acesse /script_scheduling_service/tickets/catalogo.
+  Resultado esperado:
+  Quadro Resumo com a frase "De cada 10 vezes, N deram certo.", a taxa de acerto e os números: Pedidos, Deram certo, Deram erro, Cancelados, Esperando ou rodando, Duração típica e Mais demorada.
+  Gráfico Pedidos por dia (30 dias) com legenda; a tabela traz os mesmos números do gráfico.
+  Principais motivos de erro com o nome simples e o código técnico entre parênteses.
+  Ver estes pedidos abre a lista de tickets já filtrada pelo script.
+  consulta (sem Disparar Scripts): a página de acesso negado ("Você não tem permissão para abrir esta página.", com o código do erro 403).
+  Figura 10 — Histórico do carga_diaria
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-05 ===
+  CT-05 — Disparo de script (criação de ticket)
+  Objetivo
+  Criar um ticket pelo assistente de três etapas, verificando o filtro de scripts e ambientes autorizados, o questionário, o resumo antes de criar e o aproveitamento da última execução.
+  Usuário(s)
+  op.prod
+  Etapa 1 — Script
+  Entre com op.prod e clique em Disparar script.
+  Use o campo Buscar script para filtrar por nome, descrição, grupo ou categoria.
+  Clique em carga_diaria.
+  Resultado esperado:
+  Aparecem somente os scripts ativos autorizados ao perfil e homologados em algum ambiente dele: carga_diaria, validacao_fiscal, cleanup_tmp e relatorio_mensal (agrupados por grupo/categoria).
+  sync_tabelas (não autorizado ao perfil) e backup_extra (inativo) não aparecem.
+  Figura 11 — Etapa 1: escolha do script
+  Etapa 2 — Ambiente
+  Escolha PRODUCAO.
+  Resultado esperado:
+  Aparecem somente os ambientes ativos, autorizados ao perfil e em que o script está homologado. PRODUCAO tem o selo vermelho "Produção".
+  Figura 12 — Etapa 2: escolha do ambiente
+  Etapa 3 — Questionário, resumo e confirmação
+  Confira os campos: obrigatórios marcados com "(obrigatório)"; abaixo de cada campo, a descrição, um exemplo do formato e o padrão, em frases separadas por ponto.
+  Confira o campo sigiloso Documento do cliente (CPF) vazio, com "Valor sigiloso: deixe em branco para usar o padrão configurado.".
+  Clique em Pré-visualizar comando e confira o comando montado.
+  Mantenha a prioridade 2 — Normal (padrão) e deixe Agendar para em branco.
+  Clique em Criar ticket. Na janela Confirmar disparo, leia o resumo e clique em Criar ticket.
+  Resultado esperado:
+  A lista de prioridades do op.prod começa em 2: a prioridade 1 é exclusiva de administradores.
+  A confirmação mostra o destaque "AMBIENTE DE PRODUÇÃO", a frase "Vamos rodar carga_diaria no ambiente PRODUCAO agora, com prioridade 2.", a lista de respostas (o sigiloso como ****) e o Comando que será executado, com o caminho completo do script (/opt/automacoes/scripts/carga_diaria.py), visível também para quem não é administrador (CR-005). O botão de confirmação é vermelho.
+  Após confirmar: "Ticket #N criado com sucesso." e o detalhe com a situação Esperando, as frases "O que aconteceu" e "O que fazer agora", as etapas 1–4, o comando, o Arquivo do script com o caminho completo e as respostas (o sigiloso como ****, com o selo "sigiloso").
+  Anote o número do ticket criado para o CT-08.
+  Figura 13 — Etapa 3: questionário
+  Figura 14 — Confirmação de disparo em produção, com o resumo
+  Figura 15 — Ticket criado (detalhe)
+  Usar as respostas da última execução
+  Volte a Disparar script, escolha carga_diaria e PRODUCAO.
+  Clique em Usar as respostas da minha última execução.
+  Resultado esperado:
+  Aviso "Carregamos as respostas da sua última execução. Confira antes de criar; valores sigilosos precisam ser digitados de novo.".
+  Os campos vêm preenchidos com as respostas do ticket anterior; o campo sigiloso fica vazio, com "Por segurança, digite de novo.".
+  Nada é criado até o usuário clicar em Criar ticket e confirmar.
+  Figura 16 — Questionário preenchido com a última execução
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-06 ===
+  CT-06 — Lista de tickets, filtros e escopo
+  Objetivo
+  Verificar a lista de tickets, os filtros, a paginação, a atualização automática e o escopo por ambiente.
+  Usuário(s)
+  admin, op.hml
+  Com admin, abra Consultar Logs.
+  Marque a situação Rodando e clique em Filtrar. Depois clique em Limpar.
+  Ligue Atualizar automaticamente e aguarde 10 segundos.
+  Navegue pelas páginas e troque o tamanho da página.
+  Saia e repita a consulta com op.hml.
+  Resultado esperado:
+  admin vê tickets de todos os ambientes. op.hml vê somente HOMOLOGACAO (nenhum ticket de PRODUCAO).
+  Situações com os nomes simples, ícone e texto.
+  Os filtros são preservados na paginação; Limpar volta à página 1 sem filtros.
+  Com a atualização automática ligada, aparece "Atualizada às HH:MM:SS" e a tabela é renovada sem recarregar a página.
+  Tickets criados por regra de agendamento exibem o selo "agend.".
+  Figura 17 — Lista de tickets (admin)
+  Figura 18 — Filtro pela situação Rodando
+  Figura 19 — Lista de tickets do op.hml: somente HOMOLOGACAO
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-07 ===
+  CT-07 — Detalhe do ticket e visualizador de log
+  Objetivo
+  Conferir a frase-resumo, as etapas, o detalhe técnico, o acompanhamento do log, o download e a exibição segura do conteúdo.
+  Usuário(s)
+  admin
+  Abra o ticket #11 (Rodando).
+  Leia o quadro do topo e a barra de etapas.
+  Observe o log por alguns segundos com Seguir o final marcado; depois use Pausar e Baixar log.
+  Procure a linha "saida bruta do script" no log.
+  Abra o ticket #30 (Deu erro) e leia o quadro do topo e o resumo.
+  Resultado esperado:
+  Quadro do topo com a situação, "O que aconteceu" e "O que fazer agora"; para um ticket rodando: "Está rodando agora. Começou há N minutos." e "Acompanhe o log abaixo.".
+  Etapas 1. Pedido criado, 2. Na fila, 3. Rodando ("há {tempo}") e 4. Terminou, com a etapa atual destacada.
+  O log recebe novas linhas periodicamente; Pausar interrompe a atualização; Baixar log baixa o arquivo ticket_11.log.
+  O trecho <script>alert(1)</script> <b>negrito</b> aparece como texto, sem executar script nem aplicar negrito.
+  Ticket #30: "O script demorou mais do que o tempo máximo (30 minutos) e foi parado." e a orientação do que fazer; Detalhe técnico FAILED / TIMEOUT com a descrição técnica; Código de retorno -3.
+  O bloco do comando mostra Interpretador, Arquivo do script (o caminho completo, para todos os perfis), Montagem e Compilado em.
+  Valores sigilosos nunca aparecem: no comando e nas respostas, aparecem como ****.
+  Quando a situação muda, a página se atualiza sozinha e o quadro e as etapas acompanham.
+  Figura 20 — Detalhe do ticket rodando, com log
+  Figura 21 — Detalhe de ticket que deu erro
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-08 ===
+  CT-08 — Cancelamento de ticket
+  Objetivo
+  Cancelar um ticket rodando e um esperando, com confirmação que explica a consequência, e conferir a auditoria de cada pedido.
+  Usuário(s)
+  admin (e op.prod para o ticket do CT-05)
+  Com admin, abra o ticket #14 (Rodando) em duas abas do navegador. Na primeira, clique em Cancelar este pedido.
+  Leia a janela de confirmação e clique em Sim, cancelar.
+  Aguarde alguns segundos na página.
+  Na segunda aba (aberta antes do pedido), clique também em Cancelar este pedido e confirme.
+  Com op.prod, abra o ticket criado no CT-05 (Esperando) e cancele-o.
+  Resultado esperado:
+  A janela "Cancelar o pedido #14" explica o efeito: "O script está rodando: o servidor vai receber o pedido e parar a execução em alguns segundos.".
+  Rodando: "Cancelamento solicitado ao agente; ele vai encerrar a execução." e a frase "O cancelamento foi pedido. O servidor está parando o script.". O log termina com "processo encerrado por cancelamento (SIGTERM)", o selo do log passa a Cancelado e a página se atualiza sozinha ("A situação mudou; atualizando a página…").
+  Esperando: o ticket fica Cancelado imediatamente.
+  O botão Cancelar este pedido some dos tickets terminados.
+  Na segunda aba: "O ticket já estava encerrado." (no FAKE o cancelamento termina em segundos) ou, se o pedido for muito rápido, "O cancelamento já havia sido solicitado.".
+  Cada pedido de cancelamento gera TICKET_CANCELAR na auditoria, inclusive o repetido: os resultados "sinalizado" e "sem efeito: ticket encerrado" (ou "já sinalizado") aparecem no CT-19.
+  Figura 22 — Confirmação de cancelamento
+  Figura 23 — Ticket após o pedido de cancelamento
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-09 ===
+  CT-09 — Reexecução de ticket
+  Objetivo
+  Rodar de novo um ticket terminado, verificar a volta ao formulário quando o cadastro do script mudou e a ausência do botão em ticket de outro usuário.
+  Usuário(s)
+  op.prod, admin
+  Reexecução bem-sucedida
+  Com op.prod, abra o ticket #19 (Deu certo, cleanup_tmp, solicitado por op.prod).
+  Clique em Rodar de novo com as mesmas respostas e confirme em Sim, rodar de novo.
+  Resultado esperado:
+  A janela explica que um novo pedido será criado com as mesmas respostas, conferidas de novo contra o cadastro atual do script, e que o pedido original não muda.
+  "Ticket #N criado como reexecução do ticket #19."; o campo Ticket original aponta para o #19 e o #19 passa a listar a reexecução.
+  O ticket original não é alterado.
+  Figura 24 — Confirmação de reexecução
+  Figura 25 — Ticket criado por reexecução
+  Reexecução que volta ao formulário (cadastro mudou)
+  Com admin, abra Gestão de Scripts → carga_diaria → Parâmetros e vincule Descricao do Lote como obrigatório, sem valor padrão. Salve.
+  Com op.prod, abra o ticket #17 (Deu certo, carga_diaria) e clique em Rodar de novo com as mesmas respostas → Sim, rodar de novo.
+  Ao final, desfaça o vínculo com admin.
+  Resultado esperado:
+  Aviso amarelo: "Não foi possível reexecutar automaticamente: o cadastro do script pode ter mudado desde a execução original. Revise os campos destacados e crie o ticket novamente.".
+  O questionário abre preenchido com as respostas não sigilosas, com Descricao do Lote destacado. Um campo sigiloso deixado em branco recebe o padrão vigente, não o valor original.
+  Nenhum ticket é criado até o usuário corrigir e enviar novamente.
+  Ticket de outro usuário
+  Com op.prod, abra o ticket #21 (Deu certo, PRODUCAO, solicitado por admin).
+  Resultado esperado:
+  O botão Rodar de novo com as mesmas respostas não aparece: fora do administrador, cada um só roda de novo os próprios pedidos.
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-10 ===
+  CT-10 — Perfil somente leitura (consulta)
+  Objetivo
+  Confirmar que o perfil de consulta vê tickets do seu escopo, sem ações de alteração.
+  Usuário(s)
+  consulta
+  Entre com consulta e abra Consultar Logs.
+  Abra o ticket #12.
+  Digite na barra de endereço /script_scheduling_service/tickets/novo.
+  Resultado esperado:
+  A lista mostra tickets de PRODUCAO e HOMOLOGACAO.
+  O detalhe mostra o quadro do topo e as etapas, mas não exibe Cancelar este pedido nem Rodar de novo; o log é visível.
+  O disparo direto pela URL abre a página de acesso negado ("Você não tem permissão para abrir esta página.", com o código do erro 403), com a explicação do que fazer.
+  Figura 26 — Lista de tickets do consulta
+  Figura 27 — Detalhe sem ações para o consulta
+  Figura 28 — Página de acesso negado (403) no disparo
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-11 ===
+  CT-11 — Gestão de Ambientes
+  Objetivo
+  Validar lista, inclusão, edição, validação de identificadores e desativação de ambientes.
+  Usuário(s)
+  admin
+  Abra Gestão de Ambientes. Use os filtros e a paginação.
+  Clique em Novo ambiente e tente incluir o nome  QA_01  (com espaços em volta).
+  Inclua um ambiente HOMOLOG2 válido.
+  Edite o ambiente criado alterando a descrição e salve; salve de novo sem alterar nada.
+  Abra HOMOLOGACAO, clique em Desativar, leia a confirmação e cancele.
+  Resultado esperado:
+  Identificador com espaços em volta é recusado: "Não use espaços no início nem no fim." (identificadores não são limpos automaticamente). O topo mostra "Alguns campos precisam de correção…".
+  Campos obrigatórios são sinalizados; erros do servidor aparecem por campo e em português.
+  Inclusão e alteração exibem mensagem de sucesso. Salvar sem mudança não gera auditoria.
+  A desativação mostra o impacto (por exemplo, agendamentos ativos e scripts afetados) antes de confirmar.
+  Auditoria gerada: CAD_INSERIR e CAD_ALTERAR (campo: antigo → novo).
+  Figura 29 — Lista de ambientes
+  Figura 30 — Identificador com espaços recusado
+  Figura 31 — Confirmação de desativação de ambiente
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-12 ===
+  CT-12 — Gestão de Perfis e matriz de permissões
+  Objetivo
+  Validar o cadastro de perfis, a matriz de funcionalidades, ambientes e scripts, o aviso de usuários afetados e as proteções do próprio perfil e do último administrador.
+  Usuário(s)
+  admin
+  Abra Gestão de Perfis, abra CONSULTA e clique em Desativar; leia a confirmação e cancele.
+  Abra OPERADOR_HML → Permissões. Navegue pelas abas Funcionalidades, Ambientes e Scripts.
+  Na aba Ambientes, desmarque DESENV (inativo); na aba Funcionalidades, marque VER_AUDITORIA. Clique em Revisar e salvar, confira o resumo e cancele.
+  Tente desativar o perfil ADMINISTRADOR (o seu) ou remover o indicador Perfil administrativo dele.
+  Resultado esperado:
+  A confirmação de desativação diz o efeito e quem é afetado: "Os usuários deste perfil perdem o acesso e têm a sessão encerrada no próximo clique. Usuários ativos afetados: 1 (consulta).".
+  As abas mostram contadores; a página explica que itens inativos podem ser removidos, mas não adicionados de novo.
+  O resumo da revisão usa o formato +VER_AUDITORIA, -amb:DESENV, e mostra "2 alterações pendentes.".
+  Salvar gera PERM_ALTERAR; os usuários do perfil passam a ver as novas permissões no próximo clique.
+  Operação sobre o próprio perfil ou sobre o último administrador ativo é negada com a explicação do motivo.
+  Figura 32 — Lista de perfis
+  Figura 33 — Desativação de perfil com usuários afetados
+  Figura 34 — Matriz de permissões (aba Ambientes)
+  Figura 35 — Revisão das alterações da matriz
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-13 ===
+  CT-13 — Quem pode o quê (novo)
+  Objetivo
+  Verificar a consulta reversa de permissões: quais perfis podem rodar um script e onde, ou quem roda o quê em um ambiente.
+  Usuário(s)
+  admin, op.prod
+  Em Gestão de Perfis, abra Quem pode o quê.
+  Em Por script, escolha carga_diaria e clique em Ver.
+  Em Por ambiente, escolha DESENV (inativo) e clique em Ver; depois HOMOLOGACAO.
+  Clique no nome de um perfil.
+  Com op.prod, acesse /script_scheduling_service/admin_perfis/quem_pode.
+  Resultado esperado:
+  Por script: tabela Perfis ativos com Perfil, Por quê ("administrador" ou "tem Disparar Scripts, o ambiente e o script"), Onde pode rodar e Usuários ativos (OPERADOR_PROD conta 2: op.prod e bloqueado, que está ativo, mas bloqueado).
+  Perfis inativos aparecem à parte, em "Não valem agora (perfil inativo)".
+  Ambiente inativo: aviso de que nada roda nele enquanto estiver desativado.
+  O nome do perfil leva à matriz de permissões. A tela é só leitura.
+  op.prod: a página de acesso negado ("Você não tem permissão para abrir esta página.", com o código do erro 403).
+  Figura 36 — Quem pode o quê: perfis que podem rodar o carga_diaria
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-14 ===
+  CT-14 — Gestão de Usuários
+  Objetivo
+  Validar cadastro, desativação, redefinição de senha e desbloqueio de usuários.
+  Usuário(s)
+  admin
+  Abra Gestão de Usuários e use o filtro de situação (Ativos, Inativos, Bloqueados).
+  Edite op.prod; clique em Desativar e leia a confirmação (cancele).
+  Clique em Redefinir senha, informe uma senha fora da política e depois uma válida.
+  Filtre Bloqueados, abra bloqueado e use Desbloquear.
+  Tente salvar o nome com um caractere de controle (por exemplo, colado de outro programa) ou com espaços em volta.
+  Resultado esperado:
+  A política de senha é explicada e validada; a senha nunca aparece em tela nem na auditoria ("senha redefinida").
+  Desbloquear zera as tentativas; a auditoria registra CAD_ALTERAR.
+  Texto livre com caractere de controle é recusado com explicação; espaços em volta do texto livre são removidos antes da validação. Nada é cortado sem aviso.
+  Desativar o próprio usuário ou o último administrador é negado.
+  Figura 37 — Lista de usuários
+  Figura 38 — Edição de usuário
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-15 ===
+  CT-15 — Dicionário de Parâmetros
+  Objetivo
+  Validar o cadastro de parâmetros reutilizáveis, o teste de validação e o tratamento do valor sigiloso.
+  Usuário(s)
+  admin
+  Abra Dicionário de Parâmetros e edite data_ref.
+  Use Testar ("Testar valor com a configuração acima") com um valor válido e um inválido.
+  Abra documento_cliente (sigiloso).
+  Resultado esperado:
+  Tipos de componente, opções e regex são validados com mensagens em português; quantificador aninhado na regex é recusado.
+  O cabeçalho mostra onde o parâmetro é usado ("Usado por: carga_diaria (NOMEADO), relatorio_mensal (SEQUENCIAL)"); tipo e flag ficam bloqueados enquanto houver vínculos.
+  Parâmetro sigiloso: no dicionário ele não tem valor padrão (o padrão sigiloso fica no vínculo com o carga_diaria, conferido no CT-16, aba Parâmetros, sem exibir o valor) e há o aviso "Não use parâmetros para senhas ou credenciais. Elas ficam visíveis no processo do servidor.".
+  A auditoria nunca contém o valor sigiloso; a versão usada para detectar conflito de edição também não.
+  Figura 39 — Lista de parâmetros
+  Figura 40 — Parâmetro sigiloso
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-16 ===
+  CT-16 — Gestão de Scripts, homologação e vínculo de parâmetros
+  Objetivo
+  Validar o cadastro do script pelo caminho completo, a homologação por ambiente e o vínculo de parâmetros com prévia.
+  Usuário(s)
+  admin
+  Abra Gestão de Scripts e edite carga_diaria. Confira o campo Arquivo do script com o caminho completo e a ajuda com o exemplo.
+  Em Arquivo do script, salve cada valor abaixo, um de cada vez: carga_diaria.py, /opt/automacoes/../scripts/carga_diaria.py, /etc/passwd e /opt/automacoes/scripts/.
+  Em Nome, tente salvar App; depois volte ao nome original.
+  Em Arquivo do script, salve /opt/automacoes/scripts/carga_diaria_nova.py (arquivo que não existe neste servidor); depois volte ao valor original /opt/automacoes/scripts/carga_diaria.py e salve.
+  Abra Homologação: marque/desmarque ambientes e revise a confirmação (agendamentos afetados).
+  Abra Parâmetros: confira a ordem, os valores padrão e a prévia do comando.
+  Resultado esperado:
+  Cada valor do passo 2 é recusado com a explicação embaixo do campo: "Informe o caminho completo do arquivo, começando por /…"; "O caminho não pode conter '..'."; "Scripts não podem ficar em pastas do sistema (/bin, /sbin, /usr, /lib, /etc, /boot, /proc, /sys, /dev, /root). Use outra pasta."; "Escreva o caminho sem // repetida, sem /./ e sem / no fim.". Nada é gravado.
+  App é recusado com "Este nome é reservado pelo sistema. Escolha outro." (a pasta app dos logs é da aplicação).
+  O arquivo inexistente é salvo com "Script salvo com sucesso. Arquivo não encontrado neste servidor: a validação ocorrerá no agente. Se o arquivo não existir lá, a execução será recusada.". Sem a árvore /opt/automacoes/scripts nesta máquina, o mesmo aviso aparece ao voltar ao valor original. Quando o arquivo existe, dono e permissões são conferidos na hora (arquivo e cada pasta até a raiz). A conferência só ocorre quando o caminho ou o interpretador mudam, ou quando o script é reativado.
+  Somente ambientes ativos podem ser homologados; homologações a ambientes inativos são preservadas. A alteração é auditada como homologação: +A, -B.
+  A prévia do comando reflete a montagem (NOMEADO, SEQUENCIAL ou NENHUM) com sigilosos mascarados e o caminho completo do script.
+  Figura 41 — Lista de scripts
+  Figura 42 — Edição de script com o caminho completo
+  Figura 43 — Script salvo com o aviso de arquivo não encontrado neste servidor
+  Figura 44 — Homologação por ambiente
+  Figura 45 — Vínculo de parâmetros
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-17 ===
+  CT-17 — Regras de Agendamento
+  Objetivo
+  Validar a lista, a criação e a edição de regras de recorrência, a prévia das próximas execuções e a pausa.
+  Usuário(s)
+  admin
+  Abra Regras de Agendamento e use os filtros (nome, ambiente, situação).
+  Edite Carga Diaria Madrugada e confira a prévia das próximas execuções.
+  Clique em Nova regra, escolha script e ambiente, teste os tipos (Única, Diária, Semanal, Mensal, CRON), uma expressão CRON inválida e uma data inexistente (por exemplo, 31/02).
+  Na lista, clique em Pausar em uma regra ativa e confirme; depois use Retomar.
+  Resultado esperado:
+  A prévia mostra as próximas datas coerentes com a regra; CRON inválido e data inexistente são recusados com explicação.
+  Regras pausadas exibem "Pausado" e o motivo; Retomar recalcula a próxima execução.
+  Toda alteração gera auditoria (CAD_INSERIR, CAD_ALTERAR, AGD_PAUSAR).
+  Figura 46 — Lista de regras de agendamento
+  Figura 47 — Edição de regra com prévia
+  Figura 48 — Confirmação de pausa
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-18 ===
+  CT-18 — Agenda dos próximos 7 dias (novo)
+  Objetivo
+  Verificar a previsão do que vai rodar hoje e nos próximos 7 dias pelas regras ativas.
+  Usuário(s)
+  admin, op.prod
+  Em Regras de Agendamento, clique em Ver agenda.
+  Compare com a lista de regras: a regra pausada "Limpeza Cron Periódica" não deve aparecer.
+  Clique no nome de uma regra.
+  Com op.prod, acesse /script_scheduling_service/agendamentos/agenda.
+  Resultado esperado:
+  As ocorrências aparecem agrupadas por dia ("Hoje", "Amanhã" e depois o dia da semana com a data), em ordem de horário, com regra, script, ambiente e a recorrência em palavras (por exemplo, "Todos os dias às 03:00", "Às 04:00, seg, qua, sex").
+  A tela avisa que é uma previsão e que "Regras pausadas não aparecem aqui.".
+  O nome da regra leva ao formulário dela. A tela é só leitura.
+  op.prod: a página de acesso negado ("Você não tem permissão para abrir esta página.", com o código do erro 403).
+  Figura 49 — Agenda dos próximos 7 dias
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-19 ===
+  CT-19 — Auditoria: trilha, filtros e exportação CSV
+  Objetivo
+  Validar a consulta da trilha, os limites de período, a exportação com neutralização de CSV injection e o registro da própria exportação.
+  Usuário(s)
+  admin
+  Abra Auditoria (aba Trilha de auditoria). Confira o período padrão (últimos 7 dias).
+  Filtre por Ação = TICKET_CANCELAR; clique no ID de uma linha que tenha link.
+  Informe De = uma data com mais de 90 dias atrás, sem outros filtros, e clique em Filtrar.
+  Repita o período longo informando também Ator (login) = admin.
+  Volte ao período padrão e clique em Exportar CSV; abra o arquivo no Excel ou LibreOffice.
+  Filtre Ação = AUD_EXPORTAR.
+  Resultado esperado:
+  Ordem do mais recente para o mais antigo; conteúdo sempre exibido como texto.
+  Os cancelamentos do CT-08 aparecem como TICKET_CANCELAR, um por pedido.
+  O ID só vira link quando a entidade tem tela e o usuário tem permissão para ela.
+  Período acima de 90 dias sem filtro seletivo: "Corrija os filtros destacados." e "O período máximo é de 90 dias. Para consultar até 366 dias, filtre também pelo ator ou pela entidade e ID."; a exportação fica oculta. Com ator (ou entidade + ID), é aceito.
+  CSV: nome auditoria_AAAAMMDD_HHMMSS.csv, separador ;, acentos corretos, cabeçalho em português, até 50.000 linhas. Valores que começam com =, +, - ou @ aparecem precedidos de apóstrofo.
+  A exportação aparece na trilha como AUD_EXPORTAR, com os filtros e a quantidade de linhas no detalhe.
+  Figura 50 — Trilha de auditoria
+  Figura 51 — Filtro por ação TICKET_CANCELAR
+  Figura 52 — Período acima do limite
+  Figura 53 — Exportação registrada na trilha
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-20 ===
+  CT-20 — Painel de agentes
+  Objetivo
+  Validar a saúde derivada dos agentes, a atualização automática e a lista de tickets rodando.
+  Usuário(s)
+  admin
+  Pré-condição
+  Servidor recém-iniciado (o relógio da simulação conta a partir do início do servidor).
+  Abra Auditoria → aba Agentes logo após iniciar o servidor.
+  Expanda Tickets em execução do agt-host01 e clique em um ticket.
+  Volte e permaneça na tela por cerca de 3 minutos, sem recarregar.
+  Leia a Legenda de saúde e os limiares exibidos.
+  Resultado esperado:
+  agt-host01 permanece OK (heartbeat "há 0 s").
+  agt-host02 começa Atrasado, passa a Em risco cerca de 1 minuto depois e a Offline cerca de 2,5 minutos depois.
+  No topo, os quadros de atenção do CR-007: Configuração divergente e Rodando sem PID desde a carga; Fila sem atendente quando o agt-host02 passa a Em risco (detalhes no CT-24).
+  A tela se atualiza sozinha a cada 15 s ("Atualizado às …"), mantendo abertas as listas expandidas.
+  Cada estado combina cor, ícone e texto. O painel é só leitura.
+  Figura 54 — Painel de agentes
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-21 ===
+  CT-21 — Controle de acesso direto pela URL
+  Objetivo
+  Garantir que telas não autorizadas não sejam acessíveis digitando o endereço.
+  Usuário(s)
+  op.prod, op.hml, consulta
+  Com op.prod, acesse /script_scheduling_service/admin_usuarios/lista, /auditoria/lista, /agendamentos/agenda e /admin_perfis/quem_pode.
+  Com op.hml, acesse /script_scheduling_service/tickets/detalhe/1 (ticket de PRODUCAO) e /tickets/historico/6 (validacao_fiscal, fora do perfil).
+  Com consulta, acesse /script_scheduling_service/tickets/catalogo.
+  Resultado esperado:
+  Cadastros, auditoria, agenda, quem pode o quê e rotinas sem permissão: a página de acesso negado ("Você não tem permissão para abrir esta página.", com o código do erro 403), com a explicação do que fazer e o link para O que eu posso fazer (a mesma página da figura do CT-10).
+  Ticket ou script fora do escopo: Erro 404 (o sistema não revela que o item existe).
+  Figura 55 — Erro 404 em ticket fora do escopo
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-21. ===
+  CT-21.
+  404 em tickets e históricos fora do escopo, 403 em telas não autorizadas.
+  ☐
+  Telas de consulta não vazam o catálogo
+  Com op.hml, abra O que eu posso fazer e Rotinas disponíveis; procure no código-fonte (Ctrl+U) por validacao_fiscal.
+  Nenhum script fora do perfil aparece, nem no HTML.
+  ☐
+  Redirecionamento externo no login
+  Saia e acesse /script_scheduling_service/default/login?next=https://exemplo.invalido; faça login.
+  Após o login, abre o Painel inicial; nunca o site externo.
+  ☐
+
+=== CT-22 ===
+  CT-22 — Tema escuro e uso em celular
+  Objetivo
+  Verificar a legibilidade no tema escuro, inclusive do gráfico do histórico, e a adaptação a telas pequenas.
+  Usuário(s)
+  admin, op.prod
+  Ative o tema escuro do sistema operacional (ou em DevTools: Rendering → prefers-color-scheme: dark) e navegue pelas telas, incluindo um detalhe de ticket e o Histórico de um script.
+  Em DevTools, ative o modo dispositivo com largura de 360 px e navegue pelo painel, rotinas, tickets e auditoria.
+  Resultado esperado:
+  No tema escuro, textos, selos de situação, etapas e o gráfico continuam legíveis (contraste AA); o gráfico mantém a legenda e a tabela com os números.
+  Em 360 px não há rolagem horizontal da página; o menu se reorganiza, os cartões de rotina ocupam a largura e tabelas largas rolam dentro do próprio quadro.
+  Figura 56 — Tema escuro (detalhe do ticket)
+  Figura 57 — Tema escuro (histórico com gráfico)
+  Figura 58 — Painel inicial em 360 px
+  Figura 59 — Rotinas disponíveis em 360 px
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-23 ===
+  CT-23 — Quadro Registro: quem criou e quem alterou (novo)
+  Objetivo
+  Verificar o quadro Registro (data e autor da criação e da última alteração) nos formulários de edição e no detalhe do ticket, e que as listas e as inclusões não o mostram (README §10, CR-006).
+  Usuário(s)
+  admin
+  Entre como admin. Em Gestão de Perfis, clique em Editar no perfil OPERADOR_PROD e role até o quadro Registro.
+  Em Gestão de Ambientes, abra o ambiente DESENV (inativo).
+  Abra o ambiente PRODUCAO, mude a Descrição e clique em Salvar alterações. Abra o PRODUCAO de novo.
+  Ainda no PRODUCAO, clique em Salvar alterações sem mudar nada e abra o ambiente de novo.
+  Em Consultar Logs, abra o ticket #17 (Deu certo).
+  Em Regras de Agendamento, clique em Editar na regra Limpeza Cron Periódica (Pausado).
+  Clique em Novo ambiente e depois volte à lista de ambientes; em Gestão de Scripts, confira a lista.
+  Resultado esperado:
+  OPERADOR_PROD: "Criado em … por Sistema (dados de demonstração)" e "Última alteração: Nunca alterado" (figura 60).
+  DESENV: a última alteração aparece preenchida, por Sistema (dados de demonstração), porque o seed já o criou inativo.
+  PRODUCAO depois de salvar: "Última alteração" com a data e a hora atuais e "por admin"; "Criado em" não muda (figura 61).
+  Salvar sem mudança não grava nada: o quadro continua igual ao do passo anterior.
+  Ticket #17: criado por op.prod; última alteração por Sistema (agente agt-host01), que é quem finalizou a execução (figura 62).
+  Regra pausada manualmente: criada por Sistema (dados de demonstração); última alteração por admin, que pausou a regra.
+  Novo ambiente não mostra o quadro Registro; nenhuma lista ganha colunas novas; a lista de scripts mostra a coluna "Caminho do arquivo" com o caminho completo.
+  Figura 60 — Perfil nunca alterado
+  Figura 61 — Ambiente alterado pela tela
+  Figura 62 — Quadro Registro no detalhe do ticket
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-24 ===
+  CT-24 — Robustez do scheduler na interface (novo)
+  Objetivo
+  Verificar as proteções do CR-007 visíveis na interface: regex em subconjunto seguro, parâmetro sigiloso, limite de 366 dias no agendamento, conflito de pausa, responsável inativo, caminho com link simbólico, ator mascarado no quadro Registro e quadros de atenção da tela de agentes (README §6.2, §8.12, §10 e §13; CR-007).
+  Usuário(s)
+  admin, consulta e op.prod
+  Entre como admin. Em Dicionário de Parâmetros, clique em Novo parâmetro, preencha Código ct24_a, Rótulo e Tipo Texto, informe a regex (a|a)*b e salve. Repita com ^(\w|\d)+$ (código ct24_b) e com ^\d+(\.\d{1,2})?$ (código ct24_valor).
+  Abra o parâmetro documento_cliente (sigiloso), desmarque Valor sigiloso e clique em Salvar alterações.
+  Em Disparar Scripts, escolha carga_diaria em PRODUCAO, preencha as respostas, informe abc no Documento do cliente e envie.
+  Corrija o documento (12345678901), informe em Agendar para uma data mais de 366 dias à frente e envie.
+  Abra Regras de Agendamento em duas abas. Na primeira, pause a regra Execucao Avulsa Carga; na segunda, sem recarregar, pause a mesma regra.
+  Em Gestão de Usuários, desative o op.hml. Volte a Regras de Agendamento, veja a regra Fechamento Mensal Dia 1, pause-a e clique em Retomar.
+  Clique em Editar na regra Limpeza Cron Periódica (Pausado).
+  No servidor, crie um arquivo .sh e um link simbólico para ele (por exemplo ~/sss_ct24/link.sh → real.sh). Em Gestão de Scripts, cadastre um script SH com o caminho do link.
+  Saia, entre como consulta e abra o ticket #17 até o quadro Registro. Repita com op.prod.
+  Entre como admin, abra Auditoria → Agentes e aguarde cerca de 1 minuto. Ao terminar, reinicie o servidor para restaurar o seed.
+  Resultado esperado:
+  (a|a)*b e ^(\w|\d)+$ são recusadas no campo: "A expressão regular foi recusada: grupo entre parênteses repetido por quantificador (use só ? depois de parênteses) (README §6.2)." (figura 63). ^\d+(\.\d{1,2})?$ é aceita: "Parâmetro salvo com sucesso."
+  Sigiloso não volta atrás: "Um parâmetro sigiloso não pode deixar de ser sigiloso: respostas já gravadas passariam a aparecer em claro. Se o dado não for mais sigiloso, crie outro parâmetro."
+  Valor sigiloso curto: "O valor sigiloso precisa ter pelo menos 4 caracteres." no campo; nenhum ticket é criado.
+  Data além do limite: "Escolha uma data até <hoje + 366 dias>." no campo Agendar para; nenhum ticket é criado.
+  Primeira aba: "Regra Execucao Avulsa Carga pausada.". Segunda aba: "A regra já está pausada."
+  Com o op.hml inativo, a lista avisa na regra "Será pausada: Responsável inativo.". Retomar é recusado: "Responsável inativo. Edite a regra para corrigir (ao salvar, ela passa a rodar com as suas permissões) e depois retome."
+  O formulário da regra pausada mostra "Pausada em <data> por admin: Pausado manualmente." com a orientação.
+  Caminho com link: "O caminho passa por um link simbólico. Informe o caminho real do arquivo, sem links." (CAMINHO_COM_LINK).
+  Com consulta, o quadro mostra "Criado em … por outra pessoa" e "Última alteração … por Sistema (agente agt-host01)" (figura 64); com op.prod, "por você". O login de terceiros não aparece; com admin, aparece.
+  Configuração divergente (agt-host02 com kill=10, ao lado do texto do nó web) e Rodando sem PID (Pedido #16) desde a carga; Fila sem atendente (HOMOLOGACAO, SH, 1) quando o agt-host02 passa a Em risco (figura 65).
+  "mais de 10.000 registros" na paginação, sem o botão Última, não se reproduz com os 40 tickets do seed: é coberto pelos testes automatizados (test_cr007_r5_views e test_ui_helpers).
+  Figura 63 — Regex recusada no Dicionário de Parâmetros
+  Figura 64 — Quadro Registro visto pelo perfil consulta
+  Figura 65 — Quadros de atenção da tela de agentes
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+
+=== CT-25 ===
+  CT-25 — Correções da auditoria final (novo)
+  Objetivo
+  Verificar as correções do CR-008 visíveis na interface: administrador só por administrador (E1), regex com quantificador largo (R-06), sessão encerrada pelo Sair em todos os navegadores (E2), SHA-256 informado (E4) e solicitante mascarado (E5) (README §4.2, §4.3.A, §6.2, §8.5 e §10; CR-008).
+  Usuário(s)
+  admin, op.prod e consulta
+  Entre como admin. Em Gestão de Perfis, abra Permissões do OPERADOR_PROD, marque Gestão de Usuários e salve.
+  Em outro navegador, entre como op.prod. Em Gestão de Usuários, abra o op.prod e veja as opções de Perfil. Depois abra o admin, informe uma senha nova nos dois campos e clique em Redefinir senha.
+  Como admin, em Dicionário de Parâmetros, tente cadastrar um parâmetro Texto com a regex \w{0,100}\w{0,100}\w{0,100}x.
+  Como admin, edite o script carga_diaria: informe xyz no campo SHA-256 do arquivo no servidor do agente e salve; depois informe 64 caracteres hexadecimais (por exemplo, ab repetido 32 vezes) e salve.
+  Saia, entre como consulta e abra o ticket #17.
+  Entre como op.prod em dois navegadores (ou copie o cookie para uma segunda janela). Clique em Sair no primeiro e depois clique em qualquer menu no segundo. Ao terminar, reinicie o servidor para restaurar o seed.
+  Resultado esperado:
+  "Permissões salvas: +CAD_USUARIOS".
+  O op.prod não vê ADMINISTRADOR entre os perfis. Redefinir a senha do admin é recusado: "Só um administrador pode alterar um usuário administrador ou dar o perfil de administrador. Peça a um administrador." (figura 66). O mesmo vale para desativar ou desbloquear um administrador.
+  Regex recusada: "mais de 2 quantificadores ilimitados (*, +, {n,} ou {m,n} com mais de 10 de diferença)".
+  xyz é recusado no campo: "Informe os 64 caracteres hexadecimais do SHA-256 (a saída de sha256sum no servidor do agente).". Com os 64 caracteres, o script é salvo e o formulário mostra "Conteúdo homologado (SHA-256)" com o valor informado (figura 67).
+  Cabeçalho do ticket: "solicitado por outra pessoa"; nenhum login de terceiros aparece na lista nem no detalhe (figura 68). Com admin, o login aparece.
+  O primeiro navegador mostra "Você saiu do sistema."; o segundo volta ao login com "Seu acesso mudou e a sessão foi encerrada. Entre de novo para continuar.".
+  Figura 66 — Redefinição de senha de administrador recusada
+  Figura 67 — SHA-256 informado no cadastro do script
+  Figura 68 — Solicitante mascarado para o perfil consulta
+  Registro
+  Resultado
+  ☐ OK   ☐ Não OK   ☐ OK com ressalva
+  Observações
+  Executado por / data
+

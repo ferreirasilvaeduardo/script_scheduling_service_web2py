@@ -1,0 +1,68 @@
+[CT-01] media/image1.png -> Figura 1 — Tela de login
+[CT-01] media/image2.png -> Figura 2 — Mensagem após senha incorreta
+[CT-01] media/image3.png -> Figura 3 — Tela Minha senha
+[CT-02] media/image4.png -> Figura 4 — Painel inicial do admin
+[CT-02] media/image5.png -> Figura 5 — Painel inicial do op.prod
+[CT-02] media/image6.png -> Figura 6 — Painel inicial do op.hml
+[CT-02] media/image7.png -> Figura 7 — Painel inicial do consulta
+[CT-03] media/image8.png -> Figura 8 — O que eu posso fazer (op.hml)
+[CT-04] media/image9.png -> Figura 9 — Rotinas disponíveis (op.hml)
+[CT-04] media/image10.png -> Figura 10 — Histórico do carga_diaria
+[CT-05] media/image11.png -> Figura 11 — Etapa 1: escolha do script
+[CT-05] media/image12.png -> Figura 12 — Etapa 2: escolha do ambiente
+[CT-05] media/image13.png -> Figura 13 — Etapa 3: questionário
+[CT-05] media/image14.png -> Figura 14 — Confirmação de disparo em produção, com o resumo
+[CT-05] media/image15.png -> Figura 15 — Ticket criado (detalhe)
+[CT-05] media/image16.png -> Figura 16 — Questionário preenchido com a última execução
+[CT-06] media/image17.png -> Figura 17 — Lista de tickets (admin)
+[CT-06] media/image18.png -> Figura 18 — Filtro pela situação Rodando
+[CT-06] media/image19.png -> Figura 19 — Lista de tickets do op.hml: somente HOMOLOGACAO
+[CT-07] media/image20.png -> Figura 20 — Detalhe do ticket rodando, com log
+[CT-07] media/image21.png -> Figura 21 — Detalhe de ticket que deu erro
+[CT-08] media/image22.png -> Figura 22 — Confirmação de cancelamento
+[CT-08] media/image23.png -> Figura 23 — Ticket após o pedido de cancelamento
+[CT-09] media/image24.png -> Figura 24 — Confirmação de reexecução
+[CT-09] media/image25.png -> Figura 25 — Ticket criado por reexecução
+[CT-10] media/image26.png -> Figura 26 — Lista de tickets do consulta
+[CT-10] media/image27.png -> Figura 27 — Detalhe sem ações para o consulta
+[CT-10] media/image28.png -> Figura 28 — Página de acesso negado (403) no disparo
+[CT-11] media/image29.png -> Figura 29 — Lista de ambientes
+[CT-11] media/image30.png -> Figura 30 — Identificador com espaços recusado
+[CT-11] media/image31.png -> Figura 31 — Confirmação de desativação de ambiente
+[CT-12] media/image32.png -> Figura 32 — Lista de perfis
+[CT-12] media/image33.png -> Figura 33 — Desativação de perfil com usuários afetados
+[CT-12] media/image34.png -> Figura 34 — Matriz de permissões (aba Ambientes)
+[CT-12] media/image35.png -> Figura 35 — Revisão das alterações da matriz
+[CT-13] media/image36.png -> Figura 36 — Quem pode o quê: perfis que podem rodar o carga_diaria
+[CT-14] media/image37.png -> Figura 37 — Lista de usuários
+[CT-14] media/image38.png -> Figura 38 — Edição de usuário
+[CT-15] media/image39.png -> Figura 39 — Lista de parâmetros
+[CT-15] media/image40.png -> Figura 40 — Parâmetro sigiloso
+[CT-16] media/image41.png -> Figura 41 — Lista de scripts
+[CT-16] media/image42.png -> Figura 42 — Edição de script com o caminho completo
+[CT-16] media/image43.png -> Figura 43 — Script salvo com o aviso de arquivo não encontrado neste servidor
+[CT-16] media/image44.png -> Figura 44 — Homologação por ambiente
+[CT-16] media/image45.png -> Figura 45 — Vínculo de parâmetros
+[CT-17] media/image46.png -> Figura 46 — Lista de regras de agendamento
+[CT-17] media/image47.png -> Figura 47 — Edição de regra com prévia
+[CT-17] media/image48.png -> Figura 48 — Confirmação de pausa
+[CT-18] media/image49.png -> Figura 49 — Agenda dos próximos 7 dias
+[CT-19] media/image50.png -> Figura 50 — Trilha de auditoria
+[CT-19] media/image51.png -> Figura 51 — Filtro por ação TICKET_CANCELAR
+[CT-19] media/image52.png -> Figura 52 — Período acima do limite
+[CT-19] media/image53.png -> Figura 53 — Exportação registrada na trilha
+[CT-20] media/image54.png -> Figura 54 — Painel de agentes
+[CT-21] media/image55.png -> Figura 55 — Erro 404 em ticket fora do escopo
+[CT-22] media/image56.png -> Figura 56 — Tema escuro (detalhe do ticket)
+[CT-22] media/image57.png -> Figura 57 — Tema escuro (histórico com gráfico)
+[CT-22] media/image58.png -> Figura 58 — Painel inicial em 360 px
+[CT-22] media/image59.png -> Figura 59 — Rotinas disponíveis em 360 px
+[CT-23] media/image60.png -> Figura 60 — Perfil nunca alterado
+[CT-23] media/image61.png -> Figura 61 — Ambiente alterado pela tela
+[CT-23] media/image62.png -> Figura 62 — Quadro Registro no detalhe do ticket
+[CT-24] media/image63.png -> Figura 63 — Regex recusada no Dicionário de Parâmetros
+[CT-24] media/image64.png -> Figura 64 — Quadro Registro visto pelo perfil consulta
+[CT-24] media/image65.png -> Figura 65 — Quadros de atenção da tela de agentes
+[CT-25] media/image66.png -> Figura 66 — Redefinição de senha de administrador recusada
+[CT-25] media/image67.png -> Figura 67 — SHA-256 informado no cadastro do script
+[CT-25] media/image68.png -> Figura 68 — Solicitante mascarado para o perfil consulta

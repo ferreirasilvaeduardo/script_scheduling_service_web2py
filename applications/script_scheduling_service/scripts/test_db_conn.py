@@ -810,6 +810,34 @@ class TestOracleTestSupportMocks(unittest.TestCase):
         conectar.assert_not_called()
 
 
+class TestPrimeiraConexaoNaoEReconexao(unittest.TestCase):
+    """F9.1d: a primeira conexao do ConexaoResiliente e INFO 'Conectando'/'Conexao estabelecida'; o WARN
+    'Tentando reconexao' fica so para as reconexoes de verdade."""
+
+    def test_primeira_conexao_e_depois_reconexao(self):
+        resiliente = db_conn.ConexaoResiliente(_FakeConfig(), _FakeSegredos(password="x"))
+        with mock.patch.object(db_conn, "conectar", return_value=mock.Mock()):
+            with self.assertLogs("sss_db_conn", "INFO") as primeira:
+                self.assertTrue(resiliente.garantir())
+            resiliente.fechar()
+            resiliente.proxima_tentativa_monotonic = 0.0
+            with self.assertLogs("sss_db_conn", "INFO") as segunda:
+                self.assertTrue(resiliente.garantir())
+        self.assertEqual([(r.levelname, r.getMessage()) for r in primeira.records],
+                         [("INFO", "Conectando ao Oracle (papel=agente)..."),
+                          ("INFO", "Conexao estabelecida (papel=agente)")])
+        self.assertEqual([(r.levelname, r.getMessage()) for r in segunda.records],
+                         [("WARNING", "Tentando reconexao com o Oracle (papel=agente)..."),
+                          ("INFO", "Reconexao bem-sucedida (papel=agente)")])
+
+    def test_falha_na_primeira_conexao(self):
+        resiliente = db_conn.ConexaoResiliente(_FakeConfig(), _FakeSegredos(password="x"))
+        with mock.patch.object(db_conn, "conectar", side_effect=RuntimeError("ORA-12541: TNS:no listener")):
+            with self.assertLogs("sss_db_conn", "INFO") as logs:
+                self.assertFalse(resiliente.garantir())
+        self.assertIn("Falha na tentativa de conexao: ORA-12541", logs.records[-1].getMessage())
+
+
 class TestSondagemComAContaDoPapel(unittest.TestCase):
     """F9.1d (ensaio a partir do pacote): a sondagem usa a conta do papel que conecta (monitor, purge), nao a do
     [oracle]; o usuario vai no argv e a senha so pela entrada padrao."""

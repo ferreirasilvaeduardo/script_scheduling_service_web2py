@@ -343,7 +343,7 @@ bin/sss-scheduler.sh                       # ou: bin/sss-scheduler.sh --config /
   INFO ... [acao=INICIO] agente inicializado (versao 1.0.0-dev, 0 grupo(s) em encerramento, 0 pasta(s) preservada(s))
   ```
 * Falha na subida: uma linha `CRITICAL ... [acao=INICIO] Subida abortada: <motivo>` e um código de saída de 10 a 19 (§15.1).
-* A **primeira** conexão também registra `WARNING ... [acao=RECONEXAO] Tentando reconexao com o Oracle (papel=agente)...`, seguida de `Reconexao bem-sucedida`. Na subida, é normal.
+* A primeira conexão registra `INFO ... [acao=CONEXAO] Conectando ao Oracle (papel=agente)...` e `Conexao estabelecida (papel=agente)`. `WARNING ... [acao=RECONEXAO] Tentando reconexao` só aparece depois de uma queda (§15.3).
 
 ### 10.3 Parada controlada [ensaiado]
 
@@ -622,12 +622,12 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 
 | Linha | Causa provável | Ação |
 |---|---|---|
-| `ciclo <nome> falhou: ... ORA-03113 ...` / `DPY-4011` / `ORA-12541`, seguido de `Tentando reconexao com o Oracle (papel=agente)...` | Queda de rede ou do banco | O agente reconecta sozinho (`Reconexao bem-sucedida`). Se demorar mais que `fence_timeout_s`, ele se isola (`FENCED`) |
+| `ciclo <nome> falhou: ... ORA-03113 ...` / `DPY-4011` / `ORA-12541`, seguido de `WARNING ... [acao=RECONEXAO] Tentando reconexao com o Oracle (papel=agente)...` e, se falhar, `Falha na tentativa de reconexao: ...` | Queda de rede ou do banco | O agente reconecta sozinho (`Reconexao bem-sucedida`). Se demorar mais que `fence_timeout_s`, ele se isola (`FENCED`) |
 | `CRITICAL ... FENCED: sem heartbeat confirmado ha N s (fence_timeout_s 90); M execucao(oes) encerrada(s), claims e desdobro suspensos ate o banco voltar` | O agente ficou sem confirmar o heartbeat por mais que `fence_timeout_s` | Restabeleça a conexão. Na volta: `FENCED encerrado: heartbeat confirmado; ...`. Os tickets que ele tinha terminam `FAILED`/`FENCED` |
 | `SALTO_RELOGIO: o SYSDATE andou N s diferente do relogio monotonico; NODE_OFFLINE ...` | Ajuste brusco de relógio no banco ou no servidor | Use NTP em *slew*; a detecção de nó offline fica suspensa por um ciclo |
 | `relogio local diverge do SYSDATE em N s (README §7.1)` | Servidor sem NTP | Ative o NTP |
 | `CONEXAO_ACIMA_DO_PRAZO: orcamento da conexao Ns excede call_timeout_s Ms (CR-008, R-17)` | `CONNECT_TIMEOUT × tentativas × endereços` maior que o `call_timeout` | Ajuste o descritor (§5.4) |
-| Fila parada sem nenhuma linha no log, com outro processo segurando a linha do script | **Lock timeout no claim** (`ORA-30006`, `FOR UPDATE WAIT 5`): o agente pula o candidato **sem registrar linha**. Ver o §6 do relatório do F9.1d | O DBA procura a sessão que segura o lock em `tbsss_scripts` (`v$lock`/`v$session`) e a encerra; `SQLNET.EXPIRE_TIME` (§5.1) evita sessões mortas |
+| `WARNING ... [acao=CLAIM] claim do ticket N pulado: linha do script S travada por outra sessao (ORA-30006, FOR UPDATE WAIT 5)` | Outra sessão segura a linha do script em `tbsss_scripts` por mais de 5 s (edição presa ou sessão morta) | Ocasional é normal: o ticket volta no próximo ciclo. Persistente: o DBA procura a sessão em `v$lock`/`v$session` e a encerra; `SQLNET.EXPIRE_TIME` (§5.1) evita sessões mortas |
 
 ### 15.4 Tickets (status e motivo na tela e no log)
 

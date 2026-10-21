@@ -174,8 +174,9 @@ class RepoSchedulerFila(object):
             cur.close()
 
     def claim(self, conn, ticket_id, script_id, ambiente, agente_id):
-        """Claim em tres passos numa transacao (README §8.3). (True, None, started_at) ou (False, motivo, None)
-        com motivo 'LOCK' (ORA-30006/54), 'TETO' ou 'PERDIDO'. Ordem de locks: scripts -> tickets."""
+        """Claim em tres passos numa transacao (README §8.3). (True, None, started_at) ou (False, motivo, extra)
+        com motivo 'LOCK' (extra = o codigo, ORA-30006 ou ORA-00054, para o WARN do laco; README §13, CR-007
+        R-32), 'TETO' ou 'PERDIDO' (extra None). Ordem de locks: scripts -> tickets."""
         cur = conn.cursor()
         try:
             try:
@@ -185,7 +186,8 @@ class RepoSchedulerFila(object):
             except Exception as exc:
                 conn.rollback()
                 if db_conn.eh_lock(exc):
-                    return False, "LOCK", None
+                    pfx, num = db_conn.classificar_erro(exc)
+                    return False, "LOCK", ("%s-%05d" % (pfx, num)) if pfx else exc.__class__.__name__
                 raise
             if linha is None:
                 conn.rollback()

@@ -1000,6 +1000,10 @@ class Agente(object):
             ok, motivo, started_at = self.repo.claim(conn, cand["id"], cand["script_id"], cand["ambiente"],
                                                      self.agente_id)
             if not ok:
+                if motivo == "LOCK":  # esperado e tratado: WARN com o codigo, sem stack trace (README §13, R-32)
+                    self.log.warning("claim do ticket %s pulado: linha do script %s travada por outra sessao (%s, "
+                                     "FOR UPDATE WAIT 5)", cand["id"], cand["script_id"], started_at,
+                                     extra={"acao": "CLAIM"})
                 continue
             # CR-007, R-03: no mapa local logo depois do COMMIT do claim, antes de qualquer outra operacao.
             item = _Item(cand["id"], started_at, _Log(_log, {"agente": self.agente_id, "ticket": cand["id"],

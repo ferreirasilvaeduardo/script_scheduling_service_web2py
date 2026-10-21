@@ -49,3 +49,5 @@ bin/sss-web-*_v*.sh
 /applications/script_scheduling_service/docs/sss_pacotes/*.tar.gz
 /applications/script_scheduling_service/docs/sss_pacotes/*.sha256
 /applications/script_scheduling_service/docs/sss_dev_scripts_exemplos/
+# Capturas do manual de homologacao: ja ficam dentro do .docx (dev/homologacao/LEIA-ME.md)
+applications/script_scheduling_service/dev/homologacao/telas/

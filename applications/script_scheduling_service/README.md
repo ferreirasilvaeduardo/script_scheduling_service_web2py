@@ -322,6 +322,7 @@ applications/script_scheduling_service/
   views/                      # layout.html, components/*.html, <controller>/*.html
   instance/config.ini         # configuração sem segredos (§12)
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
+  dev/homologacao/            # ferramentas das figuras do manual de homologação (Puppeteer e .docx; nunca implantadas)
 docs/
   prompts/                    # prompts de execução faseada (UI-first)
 /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance          # segredos fora do repositório, modo 0600, um arquivo por papel (§4.1)
@@ -1506,7 +1507,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
     WHERE id = :script_id
       FOR UPDATE WAIT 5
    ```
-   ORA-30006 ou ORA-00054 leva a `ROLLBACK` e ao próximo candidato.
+   ORA-30006 ou ORA-00054 leva a `ROLLBACK` e ao próximo candidato, com uma linha `WARNING [acao=CLAIM] claim do ticket <id> pulado: linha do script <id> travada por outra sessao (<código>, FOR UPDATE WAIT 5)`, sem stack trace (§13; F9.1d).
 2. **Checagem de teto** (usa `ix_tbsss_tck_scr`):
    ```sql
    SELECT COUNT(*) FROM {owner}.tbsss_tickets
