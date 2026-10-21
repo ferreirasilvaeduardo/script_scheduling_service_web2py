@@ -20,6 +20,7 @@ import threading
 import time
 
 import db_conn
+import desdobro
 import env_builder
 import executor
 import fase_saida
@@ -29,6 +30,7 @@ import pastas_log
 import plataforma
 import rbac
 import sss_config
+from repo_oracle.scheduler_agenda import RepoSchedulerAgenda
 from repo_oracle.scheduler_fila import AgenteDuplicado, RegistroPerdido, RepoSchedulerFila
 from repo_oracle.scheduler_log import RepoSchedulerLog
 from repo_oracle.scheduler_saida import RepoSchedulerSaida
@@ -95,7 +97,7 @@ class Agente(object):
 
     def __init__(self, cfg=None, segredos=None, plat=None, conexao=None, repo=None, repo_log=None,
                  relogio=None, relogio_parede=None, hostname=None, pid=None, carregar_config=None,
-                 carregar_segredos=None, repo_saida=None):
+                 carregar_segredos=None, repo_saida=None, repo_agenda=None):
         self.cfg = cfg
         self.segredos = segredos
         self.plat = plat or plataforma
@@ -103,6 +105,8 @@ class Agente(object):
         self.repo = repo
         self.repo_log = repo_log
         self.repo_saida = repo_saida
+        self.repo_agenda = repo_agenda
+        self.desdobro = None
         self.relogio = relogio or time.monotonic
         self.relogio_parede = relogio_parede or time.time
         self.hostname = hostname or socket.gethostname()
@@ -271,6 +275,8 @@ class Agente(object):
                 self.repo_log = RepoSchedulerLog.da_config(self.cfg)
             if self.repo_saida is None:
                 self.repo_saida = RepoSchedulerSaida.da_config(self.cfg)
+            if self.repo_agenda is None:
+                self.repo_agenda = RepoSchedulerAgenda.da_config(self.cfg)
             agora_banco = db_conn.agora_banco(conn)
             local = self.relogio_parede()
             divergencia = abs((datetime.datetime.fromtimestamp(local) - agora_banco).total_seconds())
@@ -845,7 +851,17 @@ class Agente(object):
         """Deteccao de no offline (README §8.8): implementado no F8.4."""
 
     def _desdobro(self):
-        """Desdobro dos agendamentos (README §7.5): implementado no F8.4."""
+        """Desdobro dos agendamentos (README §7.5; F8.4b): uma transacao por regra, com orcamento de tempo.
+        Suspenso na parada (e, no F8.4c, em modo cercado)."""
+        if self._parando:
+            return
+        if self.desdobro is None:
+            self.desdobro = desdobro.Desdobro(self.repo_agenda, self.repo, self.agente_id, self.cfg.agent,
+                                              self.relogio)
+        stats = self.desdobro.executar(self._conn(), continuar=lambda: not self._parando)
+        if stats["regras"]:
+            self.log.info("desdobro: %(regras)d regra(s), %(tickets)d ticket(s), %(pausas)d pausa(s), "
+                          "%(puladas)d com outro agente", stats, extra={"acao": "DESDOBRO"})
 
     def _claims(self):
         agente = self.cfg.agent

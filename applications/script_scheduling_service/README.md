@@ -1191,6 +1191,8 @@ Nos dois casos, `proxima_execucao` recebe a **primeira ocorrência futura** maio
 
 ### 7.5 Algoritmo de desdobro (ciclo 1 do daemon)
 
+Implementado em `modules/desdobro.py` (F8.4b), chamado pelo ciclo do orquestrador do agente e suspenso na parada; o SQL fica em `repo_oracle/scheduler_agenda.py`. O log de cada regra (`agendamento <id>: ...`, ação `DESDOBRO`) permite reconstruir a decisão sem o banco: ticket gerado (com a ocorrência e a prioridade), avanço, conclusão, pausa (com o motivo e o detalhe), `SKIP_OVERLAP`, `MISFIRE` e `DESDOBRO_ERRO_BANCO`; o ciclo fecha com o resumo (regras, tickets, pausas e as que estavam com outro agente).
+
 **Leitura paginada (CR-007, R-08).** A cada ciclo do orquestrador, o agente lê páginas de regras vencidas (usa `ix_tbsss_agd_prox (ativo, proxima_execucao, id)`), começando do início e continuando depois da última regra lida:
 
 ```sql

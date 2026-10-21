@@ -41,8 +41,8 @@ _Agent = collections.namedtuple("_Agent", (
     "misfire_policy", "misfire_tolerance_s", "cron_horizon_days", "fila_envelhecimento_min", "child_locale",
     "cancel_poll_interval_s", "orchestrator_interval_s", "max_parallel_jobs",
     "log_dir_min_livre_mb", "script_timeout_s", "env_passthrough", "saida_dir", "saida_max_bytes",
-    "saida_max_arquivos"))
-_Agent.__new__.__defaults__ = (None, 20971520, 1000)  # CR-012: sem saida_dir por padrao
+    "saida_max_arquivos", "schedule_batch_size"))
+_Agent.__new__.__defaults__ = (None, 20971520, 1000, 50)  # CR-012: sem saida_dir por padrao; F8.4b: lote do desdobro
 _Log = collections.namedtuple("_Log", "log_dir max_log_size_bytes max_local_log_size_bytes")
 _Cfg = collections.namedtuple("_Cfg", "agent logging app oracle secrets")
 _App = collections.namedtuple("_App", "sss_env")
@@ -247,6 +247,13 @@ class _Banco(object):
         return True
 
 
+class _AgendaVazia(object):
+    """Sem regras vencidas: o desdobro (F8.4b) e testado no test_scheduler_ha."""
+
+    def regras_vencidas(self, conn, lote, ult_prox=None, ult_id=0):
+        return []
+
+
 class _Conn(object):
     def cursor(self):
         return _Cursor()
@@ -343,7 +350,7 @@ class _Base(unittest.TestCase):
                 self.repo_saida = RepoSaidaMemoria(self.banco.tickets)
             self.ag = sl.Agente(cfg=self.cfg(**mudancas), segredos=segredos, plat=plat, conexao=self.conexao,
                                 repo=self.banco, repo_log=self.banco, hostname="host-t", pid=os.getpid(),
-                                repo_saida=self.repo_saida)
+                                repo_saida=self.repo_saida, repo_agenda=_AgendaVazia())
             self.ag.inicializar()
         self.ag.preparar_laco(lambda s: self._espera.wait(min(s, 0.02)))
         return self.ag
