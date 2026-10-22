@@ -56,8 +56,8 @@
       <span>{{=_sss_ctx['login']}}</span>
       <span class="sss-usuario-perfil">{{=_sss_ctx['perfil_nome']}}</span>
     </span>
-    <a class="btn btn-sm btn-outline-light" href="{{=URL(c='default', f='permissoes')}}">O que eu posso fazer</a>
-    <a class="btn btn-sm btn-outline-light" href="{{=URL(c='default', f='minha_senha')}}">Minha senha</a>
+    <a class="btn btn-sm btn-outline-light" href="{{=URL(c='default', f='permissions')}}">O que eu posso fazer</a>
+    <a class="btn btn-sm btn-outline-light" href="{{=URL(c='default', f='my_password')}}">Minha senha</a>
     <form method="post" action="{{=URL(c='default', f='logout')}}" class="sss-usuario-sair">
       {{=csrf_campo()}}
       <button type="submit" class="btn btn-sm btn-outline-light">Sair</button>
@@ -69,7 +69,7 @@
 <main id="content" class="sss-main" tabindex="-1">
   {{import ui_helpers
   alerta = ui_helpers.alerta_info(response.flash)}}
-  {{include 'components/alerta.html'}}
+  {{include 'components/alert.html'}}
   {{include}}
 </main>
 
@@ -90,7 +90,7 @@
 </footer>
 
 <script defer src="{{=URL('static', 'js/app/sss.js')}}"></script>
-<script defer src="{{=URL('static', 'js/app/componentes.js')}}"></script>
+<script defer src="{{=URL('static', 'js/app/components.js')}}"></script>
 {{for _sss_js in response.sss_scripts or []:}}
 <script defer src="{{=URL('static', _sss_js)}}"></script>
 {{pass}}

@@ -53,7 +53,7 @@ class TestPermissions(unittest.TestCase):
         self.assertEqual(len(d["telas"]), 10)
         self.assertEqual(d["ausentes"], [])
         routes = dict((t["code"], t["rota"]) for t in d["telas"])
-        self.assertEqual(routes["MANAGE_PROFILES"], ("admin_perfis", "lista"))
+        self.assertEqual(routes["MANAGE_PROFILES"], ("admin_profiles", "index"))
         self.assertIsNone(routes["CANCEL_TICKET"])  # acao, nao tela
 
     def test_sem_exec_script_mostra_frase_e_motivo(self):

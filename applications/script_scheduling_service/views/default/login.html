@@ -4,7 +4,7 @@
     <h1 class="sss-card-titulo" id="login-titulo">Entrar</h1>
     <div class="sss-card-corpo">
       {{if mensagem:}}
-      {{# components/alerta.html ja e incluido pelo layout; o parser do web2py nao o inclui duas vezes.
+      {{# components/alert.html ja e incluido pelo layout; o parser do web2py nao o inclui duas vezes.
       _erro = ui_helpers.alerta_info({'tipo': 'erro', 'mensagem': mensagem})}}
       <div class="alert {{=_erro['classe']}} sss-alerta" role="{{=_erro['role']}}">
         <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_erro['icone']}}"></use></svg>

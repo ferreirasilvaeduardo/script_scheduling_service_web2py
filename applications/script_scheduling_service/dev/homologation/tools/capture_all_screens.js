@@ -104,7 +104,7 @@ async function sleep(ms) {
         await snap(2, false);
 
         await login('admin');
-        await page.goto(`${BASE_URL}/default/minha_senha`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/default/my_password`, { waitUntil: 'networkidle0' });
         await snap(3, false);
 
         // ==========================================
@@ -132,7 +132,7 @@ async function sleep(ms) {
         // ==========================================
         console.log('\n--- CT-03 ---');
         await login('op.hml');
-        await page.goto(`${BASE_URL}/default/permissoes`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/default/permissions`, { waitUntil: 'networkidle0' });
         await snap(8, true);
 
         // ==========================================
@@ -140,11 +140,11 @@ async function sleep(ms) {
         // ==========================================
         console.log('\n--- CT-04 ---');
         await login('op.hml');
-        await page.goto(`${BASE_URL}/tickets/catalogo`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/catalog`, { waitUntil: 'networkidle0' });
         await snap(9, true);
 
         await login('admin');
-        await page.goto(`${BASE_URL}/tickets/historico/1`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/history/1`, { waitUntil: 'networkidle0' });
         await snap(10, true);
 
         // ==========================================
@@ -152,13 +152,13 @@ async function sleep(ms) {
         // ==========================================
         console.log('\n--- CT-05 ---');
         await login('op.prod');
-        await page.goto(`${BASE_URL}/tickets/novo`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/new`, { waitUntil: 'networkidle0' });
         await snap(11, false);
 
-        await page.goto(`${BASE_URL}/tickets/novo?script_id=1`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/new?script_id=1`, { waitUntil: 'networkidle0' });
         await snap(12, false);
 
-        await page.goto(`${BASE_URL}/tickets/novo?script_id=1&ambiente_id=1`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/new?script_id=1&ambiente_id=1`, { waitUntil: 'networkidle0' });
         await snap(13, true);
 
         // Abrir modal de confirmacao de disparo
@@ -179,12 +179,12 @@ async function sleep(ms) {
             await sleep(500);
         }
         if (!page.url().includes('/detalhe/')) {
-            await page.goto(`${BASE_URL}/tickets/detalhe/17`, { waitUntil: 'networkidle0' });
+            await page.goto(`${BASE_URL}/tickets/detail/17`, { waitUntil: 'networkidle0' });
         }
         await snap(15, true);
 
         // Questionário preenchido com última execução
-        await page.goto(`${BASE_URL}/tickets/novo?script_id=1&ambiente_id=1`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/new?script_id=1&ambiente_id=1`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
             const btn = Array.from(document.querySelectorAll('a, button')).find(b => b.textContent.includes('última execução'));
             if (btn) btn.click();
@@ -197,14 +197,14 @@ async function sleep(ms) {
         // ==========================================
         console.log('\n--- CT-06 ---');
         await login('admin');
-        await page.goto(`${BASE_URL}/tickets/lista`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/index`, { waitUntil: 'networkidle0' });
         await snap(17, true);
 
-        await page.goto(`${BASE_URL}/tickets/lista?status=RUNNING`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/index?status=RUNNING`, { waitUntil: 'networkidle0' });
         await snap(18, false);
 
         await login('op.hml');
-        await page.goto(`${BASE_URL}/tickets/lista`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/index`, { waitUntil: 'networkidle0' });
         await snap(19, true);
 
         // ==========================================
@@ -212,17 +212,17 @@ async function sleep(ms) {
         // ==========================================
         console.log('\n--- CT-07 ---');
         await login('admin');
-        await page.goto(`${BASE_URL}/tickets/detalhe/11`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/detail/11`, { waitUntil: 'networkidle0' });
         await snap(20, true);
 
-        await page.goto(`${BASE_URL}/tickets/detalhe/30`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/detail/30`, { waitUntil: 'networkidle0' });
         await snap(21, true);
 
         // ==========================================
         // CT-08 — Cancelamento de ticket
         // ==========================================
         console.log('\n--- CT-08 ---');
-        await page.goto(`${BASE_URL}/tickets/detalhe/14`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/detail/14`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
             const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Cancelar'));
             if (btn) btn.click();
@@ -245,7 +245,7 @@ async function sleep(ms) {
         // ==========================================
         console.log('\n--- CT-09 ---');
         await login('op.prod');
-        await page.goto(`${BASE_URL}/tickets/detalhe/19`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/detail/19`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
             const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Rodar de novo'));
             if (btn) btn.click();
@@ -268,13 +268,13 @@ async function sleep(ms) {
         // ==========================================
         console.log('\n--- CT-10 ---');
         await login('consulta');
-        await page.goto(`${BASE_URL}/tickets/lista`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/index`, { waitUntil: 'networkidle0' });
         await snap(26, true);
 
-        await page.goto(`${BASE_URL}/tickets/detalhe/12`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/detail/12`, { waitUntil: 'networkidle0' });
         await snap(27, true);
 
-        await page.goto(`${BASE_URL}/tickets/novo`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/new`, { waitUntil: 'networkidle0' });
         await snap(28, false);
 
         // ==========================================
@@ -282,16 +282,16 @@ async function sleep(ms) {
         // ==========================================
         console.log('\n--- CT-11 ---');
         await login('admin');
-        await page.goto(`${BASE_URL}/admin_ambientes/lista`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_environments/index`, { waitUntil: 'networkidle0' });
         await snap(29, false);
 
-        await page.goto(`${BASE_URL}/admin_ambientes/form`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_environments/form`, { waitUntil: 'networkidle0' });
         await page.type('#campo-name', '  QA_01  ');
         await page.type('#campo-description', 'Ambiente de teste');
         await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.click('button[type="submit"]')]);
         await snap(30, false);
 
-        await page.goto(`${BASE_URL}/admin_ambientes/form/2`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_environments/form/2`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
             const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Desativar'));
             if (btn) btn.click();
@@ -303,10 +303,10 @@ async function sleep(ms) {
         // CT-12 — Gestão de Perfis e matriz de permissões
         // ==========================================
         console.log('\n--- CT-12 ---');
-        await page.goto(`${BASE_URL}/admin_perfis/lista`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_profiles/index`, { waitUntil: 'networkidle0' });
         await snap(32, false);
 
-        await page.goto(`${BASE_URL}/admin_perfis/form/4`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_profiles/form/4`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
             const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Desativar'));
             if (btn) btn.click();
@@ -314,7 +314,7 @@ async function sleep(ms) {
         await sleep(500);
         await snap(33, false);
 
-        await page.goto(`${BASE_URL}/admin_perfis/matriz/3?aba=ambientes`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_profiles/matrix/3?aba=ambientes`, { waitUntil: 'networkidle0' });
         await snap(34, false);
 
         await page.evaluate(() => {
@@ -328,34 +328,34 @@ async function sleep(ms) {
         // CT-13 — Quem pode o quê (novo)
         // ==========================================
         console.log('\n--- CT-13 ---');
-        await page.goto(`${BASE_URL}/admin_perfis/quem_pode?modo=script&script_id=1`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_profiles/who_can?modo=script&script_id=1`, { waitUntil: 'networkidle0' });
         await snap(36, false);
 
         // ==========================================
         // CT-14 — Gestão de Usuários
         // ==========================================
         console.log('\n--- CT-14 ---');
-        await page.goto(`${BASE_URL}/admin_usuarios/lista`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_users/index`, { waitUntil: 'networkidle0' });
         await snap(37, false);
 
-        await page.goto(`${BASE_URL}/admin_usuarios/form/2`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_users/form/2`, { waitUntil: 'networkidle0' });
         await snap(38, true);
 
         // ==========================================
         // CT-15 — Dicionário de Parâmetros
         // ==========================================
         console.log('\n--- CT-15 ---');
-        await page.goto(`${BASE_URL}/admin_parametros/lista`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_parameters/index`, { waitUntil: 'networkidle0' });
         await snap(39, true);
 
-        await page.goto(`${BASE_URL}/admin_parametros/form/4`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_parameters/form/4`, { waitUntil: 'networkidle0' });
         await snap(40, true);
 
         // ==========================================
         // CT-16 — Gestão de Scripts
         // ==========================================
         console.log('\n--- CT-16 ---');
-        await page.goto(`${BASE_URL}/admin_scripts/lista`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_scripts/index`, { waitUntil: 'networkidle0' });
         await snap(41, false);
 
         await page.goto(`${BASE_URL}/admin_scripts/form/1`, { waitUntil: 'networkidle0' });
@@ -365,7 +365,7 @@ async function sleep(ms) {
             const el = document.querySelector('#campo-path_file');
             if (el) el.value = '/opt/automacoes/scripts/carga_diaria_nova.py';
         });
-        const formSalvarScr1 = await page.$('form[action*="/admin_scripts/salvar"]');
+        const formSalvarScr1 = await page.$('form[action*="/admin_scripts/save"]');
         if (formSalvarScr1) {
             await Promise.all([
                 page.waitForNavigation({ waitUntil: 'networkidle0' }),
@@ -379,7 +379,7 @@ async function sleep(ms) {
             const el = document.querySelector('#campo-path_file');
             if (el) el.value = '/opt/automacoes/scripts/carga_diaria.py';
         });
-        const formSalvarScr2 = await page.$('form[action*="/admin_scripts/salvar"]');
+        const formSalvarScr2 = await page.$('form[action*="/admin_scripts/save"]');
         if (formSalvarScr2) {
             await Promise.all([
                 page.waitForNavigation({ waitUntil: 'networkidle0' }),
@@ -387,23 +387,23 @@ async function sleep(ms) {
             ]);
         }
 
-        await page.goto(`${BASE_URL}/admin_scripts/homologacao/1`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_scripts/homologation/1`, { waitUntil: 'networkidle0' });
         await snap(44, false);
 
-        await page.goto(`${BASE_URL}/admin_scripts/parametros/1`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_scripts/parameters/1`, { waitUntil: 'networkidle0' });
         await snap(45, true);
 
         // ==========================================
         // CT-17 — Regras de Agendamento
         // ==========================================
         console.log('\n--- CT-17 ---');
-        await page.goto(`${BASE_URL}/agendamentos/lista`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/schedules/index`, { waitUntil: 'networkidle0' });
         await snap(46, true);
 
-        await page.goto(`${BASE_URL}/agendamentos/form/1`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/schedules/form/1`, { waitUntil: 'networkidle0' });
         await snap(47, true);
 
-        await page.goto(`${BASE_URL}/agendamentos/lista`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/schedules/index`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
             const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Pausar'));
             if (btn) btn.click();
@@ -415,30 +415,30 @@ async function sleep(ms) {
         // CT-18 — Agenda dos próximos 7 dias
         // ==========================================
         console.log('\n--- CT-18 ---');
-        await page.goto(`${BASE_URL}/agendamentos/agenda`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/schedules/agenda`, { waitUntil: 'networkidle0' });
         await snap(49, true);
 
         // ==========================================
         // CT-19 — Auditoria: trilha, filtros e exportação CSV
         // ==========================================
         console.log('\n--- CT-19 ---');
-        await page.goto(`${BASE_URL}/auditoria/lista`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/audit/index`, { waitUntil: 'networkidle0' });
         await snap(50, true);
 
-        await page.goto(`${BASE_URL}/auditoria/lista?acao=TICKET_CANCELAR`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/audit/index?acao=TICKET_CANCELAR`, { waitUntil: 'networkidle0' });
         await snap(51, false);
 
-        await page.goto(`${BASE_URL}/auditoria/lista?de=2026-01-01&ate=2026-10-18`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/audit/index?de=2026-01-01&ate=2026-10-18`, { waitUntil: 'networkidle0' });
         await snap(52, false);
 
-        await page.goto(`${BASE_URL}/auditoria/lista?acao=AUD_EXPORTAR`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/audit/index?acao=AUD_EXPORTAR`, { waitUntil: 'networkidle0' });
         await snap(53, false);
 
         // ==========================================
         // CT-20 — Painel de agentes
         // ==========================================
         console.log('\n--- CT-20 ---');
-        await page.goto(`${BASE_URL}/auditoria/agentes`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/audit/agents`, { waitUntil: 'networkidle0' });
         await snap(54, false);
 
         // ==========================================
@@ -446,7 +446,7 @@ async function sleep(ms) {
         // ==========================================
         console.log('\n--- CT-21 ---');
         await login('op.hml');
-        await page.goto(`${BASE_URL}/tickets/detalhe/1`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/detail/1`, { waitUntil: 'networkidle0' });
         await snap(55, false);
 
         // ==========================================
@@ -455,10 +455,10 @@ async function sleep(ms) {
         console.log('\n--- CT-22 ---');
         await setDark();
         await login('admin');
-        await page.goto(`${BASE_URL}/tickets/detalhe/11`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/detail/11`, { waitUntil: 'networkidle0' });
         await snap(56, true);
 
-        await page.goto(`${BASE_URL}/tickets/historico/1`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/history/1`, { waitUntil: 'networkidle0' });
         await snap(57, true);
 
         await setMobile();
@@ -466,7 +466,7 @@ async function sleep(ms) {
         await snap(58, true);
 
         await login('op.hml');
-        await page.goto(`${BASE_URL}/tickets/catalogo`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/catalog`, { waitUntil: 'networkidle0' });
         await snap(59, true);
 
         await setDesktop();
@@ -476,28 +476,28 @@ async function sleep(ms) {
         // ==========================================
         console.log('\n--- CT-23 ---');
         await login('admin');
-        await page.goto(`${BASE_URL}/admin_perfis/form/2`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_profiles/form/2`, { waitUntil: 'networkidle0' });
         await snap(60, false, '.sss-quadro-registro, section[aria-label*="Registro"]');
 
-        await page.goto(`${BASE_URL}/admin_ambientes/form/1`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_environments/form/1`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
             const desc = document.querySelector('#campo-description');
             if (desc) desc.value = desc.value + ' (atualizado)';
         });
-        const formSalvarAmb = await page.$('form[action*="/admin_ambientes/salvar"]');
+        const formSalvarAmb = await page.$('form[action*="/admin_environments/save"]');
         if (formSalvarAmb) {
             await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), formSalvarAmb.evaluate(f => f.submit())]);
         }
         await snap(61, false, '.sss-quadro-registro, section[aria-label*="Registro"]');
 
-        await page.goto(`${BASE_URL}/tickets/detalhe/17`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/detail/17`, { waitUntil: 'networkidle0' });
         await snap(62, false, '.sss-quadro-registro, section[aria-label*="Registro"]');
 
         // ==========================================
         // CT-24 — Robustez do scheduler na interface
         // ==========================================
         console.log('\n--- CT-24 ---');
-        await page.goto(`${BASE_URL}/admin_parametros/form`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_parameters/form`, { waitUntil: 'networkidle0' });
         await page.type('#campo-codigo', 'ct24_a');
         await page.type('#campo-label', 'Teste Regex');
         await page.type('#campo-regex_validacao', '(a|a)*b');
@@ -505,36 +505,36 @@ async function sleep(ms) {
         await snap(63, false);
 
         await login('consulta');
-        await page.goto(`${BASE_URL}/tickets/detalhe/17`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/detail/17`, { waitUntil: 'networkidle0' });
         await snap(64, false, '.sss-quadro-registro, section[aria-label*="Registro"]');
 
         await login('admin');
-        await page.goto(`${BASE_URL}/auditoria/agentes`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/audit/agents`, { waitUntil: 'networkidle0' });
         await snap(65, false);
 
         // ==========================================
         // CT-25 — Correções da auditoria final
         // ==========================================
         console.log('\n--- CT-25 ---');
-        await page.goto(`${BASE_URL}/admin_perfis/matriz/2?aba=funcionalidades`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_profiles/matrix/2?aba=funcionalidades`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
             const cb = document.querySelector('input[value="CAD_USUARIOS"]') || Array.from(document.querySelectorAll('input[type="checkbox"]')).find(i => i.name && i.name.includes('CAD_USUARIOS'));
             if (cb && !cb.checked) cb.click();
         });
-        const formSalvarMat = await page.$('form[action*="/admin_perfis/matriz_salvar"]');
+        const formSalvarMat = await page.$('form[action*="/admin_profiles/matriz_salvar"]');
         if (formSalvarMat) {
             await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), formSalvarMat.evaluate(f => f.submit())]);
         }
 
         await login('op.prod');
-        await page.goto(`${BASE_URL}/admin_usuarios/form/1`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_users/form/1`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
             const s = document.querySelector('input[name="senha"]');
             const c = document.querySelector('input[name="confirmacao"]');
             if (s) s.value = 'NovaSenha123!';
             if (c) c.value = 'NovaSenha123!';
         });
-        const formRedef = await page.$('form[action*="/admin_usuarios/redefinir_senha"]');
+        const formRedef = await page.$('form[action*="/admin_users/reset_password"]');
         if (formRedef) {
             await Promise.all([
                 page.waitForNavigation({ waitUntil: 'networkidle0' }),
@@ -550,7 +550,7 @@ async function sleep(ms) {
             const el = document.querySelector('#campo-sha256_informado');
             if (el) el.value = val;
         }, dummySha);
-        const formSalvarScrSha = await page.$('form[action*="/admin_scripts/salvar"]');
+        const formSalvarScrSha = await page.$('form[action*="/admin_scripts/save"]');
         if (formSalvarScrSha) {
             await Promise.all([
                 page.waitForNavigation({ waitUntil: 'networkidle0' }),
@@ -560,7 +560,7 @@ async function sleep(ms) {
         await snap(67, false);
 
         await login('consulta');
-        await page.goto(`${BASE_URL}/tickets/detalhe/17`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/detail/17`, { waitUntil: 'networkidle0' });
         await snap(68, false);
 
         console.log('\n=============================================');

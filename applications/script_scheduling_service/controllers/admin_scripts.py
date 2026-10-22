@@ -61,7 +61,7 @@ def _pagina_form(ctx, dados, erros=None):
                 aviso_desativacao=servico.DEACTIVATION_WARNING)
 
 
-def lista():
+def index():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
     filtros = servico.normalize_filters(request.get_vars)
@@ -93,7 +93,7 @@ def form():
     return _pagina_form(ctx, dados)
 
 
-def salvar():
+def save():
     _exigir_metodo("POST")
     ctx = _exigir_func(_FUNC)
     script_id = _texto(request.post_vars.get("id"), 11)
@@ -129,7 +129,7 @@ def salvar():
     return _pagina_form(ctx, dados, erros)
 
 
-def alternar_ativo():
+def toggle_active():
     _exigir_metodo("POST")
     ctx = _exigir_func(_FUNC)
     script_id = _texto(request.post_vars.get("id"), 11)
@@ -151,7 +151,7 @@ def alternar_ativo():
     redirect(URL(c="admin_scripts", f="form", args=[script_id]))
 
 
-def homologacao():
+def homologation():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
     try:
@@ -165,7 +165,7 @@ def homologacao():
     return dict(homolog=dados)
 
 
-def salvar_homologacao():
+def save_homologation():
     _exigir_metodo("POST")
     ctx = _exigir_func(_FUNC)
     script_id = _texto(request.post_vars.get("id"), 11)
@@ -187,10 +187,10 @@ def salvar_homologacao():
         session.flash = {"tipo": "sucesso", "mensagem": u"Homologação salva: %s" % diff}
     else:
         session.flash = {"tipo": "aviso", "mensagem": u"Nenhuma alteração para salvar."}
-    redirect(URL(c="admin_scripts", f="homologacao", args=[script_id]))
+    redirect(URL(c="admin_scripts", f="homologation", args=[script_id]))
 
 
-def parametros():
+def parameters():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func(_FUNC)
     try:
@@ -204,7 +204,7 @@ def parametros():
     return dict(vinc=dados)
 
 
-def salvar_parametros():
+def save_parameters():
     _exigir_metodo("POST")
     ctx = _exigir_func(_FUNC)
     script_id = _texto(request.post_vars.get("id"), 11)
@@ -226,10 +226,10 @@ def salvar_parametros():
         session.flash = {"tipo": "sucesso", "mensagem": u"Parâmetros salvos: %s" % descricao}
     else:
         session.flash = {"tipo": "aviso", "mensagem": u"Nenhuma alteração para salvar."}
-    redirect(URL(c="admin_scripts", f="parametros", args=[script_id]))
+    redirect(URL(c="admin_scripts", f="parameters", args=[script_id]))
 
 
-def previa():
+def preview():
     # POST: a configuracao em edicao (e eventuais valores sigilosos) nunca vai para a URL.
     _exigir_metodo("POST")
     ctx = _exigir_func(_FUNC)

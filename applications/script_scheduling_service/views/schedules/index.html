@@ -1,0 +1,96 @@
+{{extend 'layout.html'}}
+{{
+# Lista de regras de agendamento (README §7; padrão de lista em docs/ADMIN_CRUD_PATTERN.md).
+# Pausar e retomar abrem components/confirm_modal.html com POST real.
+import ui_helpers
+icones = URL('static', 'img/icons.svg')
+_opc_ativo = [('', 'Todas'), ('Y', 'Ativas'), ('N', 'Pausadas')]
+filtros = {'id': 'filtro-agendamentos', 'url_base': ('schedules', 'index'), 'preservar': {'tamanho': tamanho}, 'campos': [
+    {'name': 'name', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('name')},
+    {'name': 'environment', 'rotulo': 'Ambiente', 'tipo': 'texto', 'valor': filtros_ativos.get('environment')},
+    {'name': 'active', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('active'), 'opcoes': _opc_ativo},
+]}
+_colunas = ('Nome', 'Script', 'Ambiente', u'Recorrência', u'Próxima execução', u'Última execução', u'Responsável', u'Situação', u'Ações')
+pagina = resultado['pagina']
+total = resultado['total']
+total_limitado = resultado.get('total_limitado', False)
+quantidade_pagina = len(resultado['itens'])
+url_base = ('schedules', 'index')
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">Regras de agendamento</h1>
+    <p class="sss-page-sub">Agendamento é uma regra que pede para rodar um script sozinho, de tempos em tempos. Cada regra roda com as permissões de quem a salvou por último.</p>
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='schedules', f='agenda')}}">Ver agenda</a>
+    <a class="btn btn-sm btn-primary" href="{{=URL(c='schedules', f='form')}}">Nova regra</a>
+  </div>
+</div>
+
+<section class="sss-card" aria-label="Filtros">
+  {{include 'components/filters.html'}}
+</section>
+
+<section class="sss-card" aria-label="Regras de agendamento">
+  <div class="table-responsive">
+    <table class="table table-sm sss-tabela mb-0">
+      <caption class="visually-hidden">Regras de agendamento cadastradas</caption>
+      <thead>
+        <tr>
+          {{for _col in _colunas:}}<th scope="col">{{=_col}}</th>{{pass}}
+        </tr>
+      </thead>
+      <tbody>
+        {{if erro:}}
+        <tr>
+          <td colspan="{{=len(_colunas)}}" class="sss-tabela-estado">
+            <div class="alert alert-danger mb-0" role="alert">
+              <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
+              <span>{{=erro}}</span>
+            </div>
+          </td>
+        </tr>
+        {{elif not resultado['itens']:}}
+        <tr><td colspan="{{=len(_colunas)}}" class="sss-tabela-estado sss-tabela-vazia">Nenhuma regra de agendamento encontrada.</td></tr>
+        {{else:}}
+        {{for _r in resultado['itens']:}}
+        {{_sit = ui_helpers.ativo_info(_r['active'])}}
+        <tr>
+          <td>{{=_r['name']}}</td>
+          <td class="sss-mono">{{=_r['script']}}</td>
+          <td>{{=_r['environment']}}</td>
+          <td>{{=_r['recorrencia']}}{{if _r['cron_expression']:}}<br><code class="sss-mono">{{=_r['cron_expression']}}</code>{{pass}}</td>
+          <td>{{=_r['next_run_at']}}</td>
+          <td>{{=_r['last_run_at']}}{{if _r['last_ticket_id']:}}<br><a href="{{=URL(c='tickets', f='detail', args=[_r['last_ticket_id']])}}" aria-label="Ticket #{{=_r['last_ticket_id']}} da última execução">ticket #{{=_r['last_ticket_id']}}</a>{{pass}}</td>
+          <td class="sss-mono">{{=_r['responsavel']}}</td>
+          <td>
+            <span class="sss-status {{=_sit['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_sit['icone']}}"></use></svg><span>{{=_r['state']}}</span></span>
+            {{if _r['reason']:}}<div class="sss-texto-suave">{{=_r['reason']}}</div>{{pass}}
+            {{if _r.get('aviso'):}}<div class="sss-texto-suave text-warning"><small>{{=_r['aviso']}}</small></div>{{pass}}
+          </td>
+          <td class="sss-tabela-acoes">
+            <div class="sss-acoes">
+              <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='schedules', f='form', args=[_r['id']])}}" aria-label="Editar regra {{=_r['name']}}">Editar</a>
+              {{if _r['active'] == 'Y':}}
+              {{modal = {'id': 'modal-pausar-%s' % _r['id'], 'titulo': u'Pausar regra %s' % _r['name'],
+                         'texto': u'A regra deixa de gerar tickets até ser retomada. Tickets já criados não são afetados.',
+                         'rotulo_gatilho': 'Pausar', 'rotulo_confirmar': u'Confirmar pausa', 'variante': 'perigo',
+                         'acao': URL(c='schedules', f='pause'), 'campos_ocultos': dict(id=_r['id'])} }}
+              {{else:}}
+              {{modal = {'id': 'modal-retomar-%s' % _r['id'], 'titulo': u'Retomar regra %s' % _r['name'],
+                         'texto': u'A próxima execução será recalculada a partir de agora. Suas permissões para o script e o ambiente serão conferidas; o responsável pela regra não muda.',
+                         'rotulo_gatilho': 'Retomar', 'rotulo_confirmar': u'Confirmar retomada', 'variante': 'normal',
+                         'acao': URL(c='schedules', f='resume'), 'campos_ocultos': dict(id=_r['id'])} }}
+              {{pass}}
+              {{include 'components/confirm_modal.html'}}
+            </div>
+          </td>
+        </tr>
+        {{pass}}
+        {{pass}}
+      </tbody>
+    </table>
+  </div>
+  {{include 'components/pagination.html'}}
+</section>

@@ -227,8 +227,8 @@ class TestList(_Base):
     def test_link_entidade_respeita_permissao(self):
         admin, prod = self.ctx["admin"], self.ctx["op.prod"]
         link = audit_service.entity_link
-        self.assertEqual(link(admin, "tbsss_tickets", 11, True), ("tickets", "detalhe", [11]))
-        self.assertEqual(link(admin, "tbsss_users", 6, True), ("admin_usuarios", "form", [6]))
+        self.assertEqual(link(admin, "tbsss_tickets", 11, True), ("tickets", "detail", [11]))
+        self.assertEqual(link(admin, "tbsss_users", 6, True), ("admin_users", "form", [6]))
         self.assertIsNone(link(prod, "tbsss_users", 6, True))
         self.assertIsNone(link(prod, "tbsss_tickets", 11, False))
         self.assertIsNone(link(admin, "tbsss_agents", 1, True))

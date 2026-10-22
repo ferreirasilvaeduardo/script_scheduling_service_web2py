@@ -39,13 +39,13 @@ ENTITIES = (
 # Rota da tela de cada entidade e funcionalidade exigida para exibir o link (decisao D6 do F6.1).
 # None na funcionalidade: tela de tickets, cuja consulta exige VIEW_LOGS ou EXEC_SCRIPT.
 ENTITY_SCREENS = {
-    "tbsss_tickets": ("tickets", "detalhe", None),
-    "tbsss_schedules": ("agendamentos", "form", "MANAGE_SCHEDULES"),
-    "tbsss_users": ("admin_usuarios", "form", "MANAGE_USERS"),
-    "tbsss_profiles": ("admin_perfis", "form", "MANAGE_PROFILES"),
-    "tbsss_environments": ("admin_ambientes", "form", "MANAGE_ENVIRONMENTS"),
+    "tbsss_tickets": ("tickets", "detail", None),
+    "tbsss_schedules": ("schedules", "form", "MANAGE_SCHEDULES"),
+    "tbsss_users": ("admin_users", "form", "MANAGE_USERS"),
+    "tbsss_profiles": ("admin_profiles", "form", "MANAGE_PROFILES"),
+    "tbsss_environments": ("admin_environments", "form", "MANAGE_ENVIRONMENTS"),
     "tbsss_scripts": ("admin_scripts", "form", "MANAGE_SCRIPTS"),
-    "tbsss_parameters": ("admin_parametros", "form", "MANAGE_PARAMETERS"),
+    "tbsss_parameters": ("admin_parameters", "form", "MANAGE_PARAMETERS"),
 }
 
 MAX_LENGTH = 100

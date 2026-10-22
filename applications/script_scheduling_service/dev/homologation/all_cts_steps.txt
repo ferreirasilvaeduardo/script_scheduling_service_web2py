@@ -100,7 +100,7 @@
   Entre com admin, abra Rotinas disponíveis e clique em Ver histórico do carga_diaria.
   Abra Ver os números em tabela.
   Clique em Ver estes pedidos.
-  Com consulta, acesse /script_scheduling_service/tickets/catalogo.
+  Com consulta, acesse /script_scheduling_service/tickets/catalog.
   Resultado esperado:
   Quadro Resumo com a frase "De cada 10 vezes, N deram certo.", a taxa de acerto e os números: Pedidos, Deram certo, Deram erro, Cancelados, Esperando ou rodando, Duração típica e Mais demorada.
   Gráfico Pedidos por dia (30 dias) com legenda; a tabela traz os mesmos números do gráfico.
@@ -282,7 +282,7 @@
   consulta
   Entre com consulta e abra Consultar Logs.
   Abra o ticket #12.
-  Digite na barra de endereço /script_scheduling_service/tickets/novo.
+  Digite na barra de endereço /script_scheduling_service/tickets/new.
   Resultado esperado:
   A lista mostra tickets de PRODUCAO e HOMOLOGACAO.
   O detalhe mostra o quadro do topo e as etapas, mas não exibe Cancelar este pedido nem Rodar de novo; o log é visível.
@@ -358,7 +358,7 @@
   Em Por script, escolha carga_diaria e clique em Ver.
   Em Por ambiente, escolha DESENV (inativo) e clique em Ver; depois HOMOLOGACAO.
   Clique no nome de um perfil.
-  Com op.prod, acesse /script_scheduling_service/admin_perfis/quem_pode.
+  Com op.prod, acesse /script_scheduling_service/admin_profiles/who_can.
   Resultado esperado:
   Por script: tabela Perfis ativos com Perfil, Por quê ("administrador" ou "tem Disparar Scripts, o ambiente e o script"), Onde pode rodar e Usuários ativos (OPERADOR_PROD conta 2: op.prod e bloqueado, que está ativo, mas bloqueado).
   Perfis inativos aparecem à parte, em "Não valem agora (perfil inativo)".
@@ -479,7 +479,7 @@
   Em Regras de Agendamento, clique em Ver agenda.
   Compare com a lista de regras: a regra pausada "Limpeza Cron Periódica" não deve aparecer.
   Clique no nome de uma regra.
-  Com op.prod, acesse /script_scheduling_service/agendamentos/agenda.
+  Com op.prod, acesse /script_scheduling_service/schedules/agenda.
   Resultado esperado:
   As ocorrências aparecem agrupadas por dia ("Hoje", "Amanhã" e depois o dia da semana com a data), em ordem de horário, com regra, script, ambiente e a recorrência em palavras (por exemplo, "Todos os dias às 03:00", "Às 04:00, seg, qua, sex").
   A tela avisa que é uma previsão e que "Regras pausadas não aparecem aqui.".
@@ -552,9 +552,9 @@
   Garantir que telas não autorizadas não sejam acessíveis digitando o endereço.
   Usuário(s)
   op.prod, op.hml, consulta
-  Com op.prod, acesse /script_scheduling_service/admin_usuarios/lista, /auditoria/lista, /agendamentos/agenda e /admin_perfis/quem_pode.
-  Com op.hml, acesse /script_scheduling_service/tickets/detalhe/1 (ticket de PRODUCAO) e /tickets/historico/6 (validacao_fiscal, fora do perfil).
-  Com consulta, acesse /script_scheduling_service/tickets/catalogo.
+  Com op.prod, acesse /script_scheduling_service/admin_users/index, /audit/index, /schedules/agenda e /admin_profiles/who_can.
+  Com op.hml, acesse /script_scheduling_service/tickets/detail/1 (ticket de PRODUCAO) e /tickets/history/6 (validacao_fiscal, fora do perfil).
+  Com consulta, acesse /script_scheduling_service/tickets/catalog.
   Resultado esperado:
   Cadastros, auditoria, agenda, quem pode o quê e rotinas sem permissão: a página de acesso negado ("Você não tem permissão para abrir esta página.", com o código do erro 403), com a explicação do que fazer e o link para O que eu posso fazer (a mesma página da figura do CT-10).
   Ticket ou script fora do escopo: Erro 404 (o sistema não revela que o item existe).

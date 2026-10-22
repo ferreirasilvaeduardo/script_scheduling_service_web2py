@@ -1,5 +1,5 @@
 /* SSS - lista de tickets: atualizacao automatica opcional da tabela.
- * Carregado com defer ANTES do alpine.min.js. O fragmento (tickets/lista.load) e renderizado
+ * Carregado com defer ANTES do alpine.min.js. O fragmento (tickets/index.load) e renderizado
  * e escapado pelo servidor, que reaplica os mesmos guardas da pagina; aqui so se troca o no.
  */
 (function () {

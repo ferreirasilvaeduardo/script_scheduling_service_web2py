@@ -25,8 +25,8 @@ def _render(view, **context):
 class TestViewsCR007(unittest.TestCase):
 
     def test_paginacao_limitada_preserva_filtro_sem_ultima(self):
-        html = _render("components/paginacao.html", pagina=502, tamanho=20, total=10001,
-                       total_limitado=True, quantidade_pagina=20, url_base=("tickets", "lista"),
+        html = _render("components/pagination.html", pagina=502, tamanho=20, total=10001,
+                       total_limitado=True, quantidade_pagina=20, url_base=("tickets", "index"),
                        query_params={"environment": "HOMOLOGACAO", "pagina": 1})
         self.assertIn("mais de 10.000 registros", html)
         self.assertNotIn("Última", html)
@@ -34,8 +34,8 @@ class TestViewsCR007(unittest.TestCase):
         self.assertIn("Página 502", html)
         self.assertIn("pagina=503", html)
         self.assertIn("environment=HOMOLOGACAO", html)
-        exact = _render("components/paginacao.html", pagina=1, tamanho=20, total=10000,
-                        total_limitado=False, quantidade_pagina=20, url_base=("tickets", "lista"),
+        exact = _render("components/pagination.html", pagina=1, tamanho=20, total=10000,
+                        total_limitado=False, quantidade_pagina=20, url_base=("tickets", "index"),
                         query_params={})
         self.assertIn("Última", exact)
         self.assertNotIn("mais de", exact)
@@ -43,12 +43,12 @@ class TestViewsCR007(unittest.TestCase):
     def test_registro_nao_inclui_ator_oculto_no_html(self):
         reg = {"created_at": datetime.datetime(2026, 10, 17), "created_by": "editor.privado",
                "updated_at": datetime.datetime(2026, 10, 17), "updated_by": "operador"}
-        html = _render("components/registro.html", registro=ui_helpers.registro(reg, {"login": "operador"}))
+        html = _render("components/record.html", registro=ui_helpers.registro(reg, {"login": "operador"}))
         self.assertNotIn("editor.privado", html)
         self.assertNotIn("operador", html)
         self.assertIn("outra pessoa", html)
         self.assertIn("você", html)
-        html = _render("components/registro.html", registro=ui_helpers.registro(reg, {"is_admin": True}))
+        html = _render("components/record.html", registro=ui_helpers.registro(reg, {"is_admin": True}))
         self.assertIn("editor.privado", html)
 
     def test_diagnosticos_aparecem_sem_agentes_e_escapam_conteudo(self):
@@ -59,14 +59,14 @@ class TestViewsCR007(unittest.TestCase):
                   "rodando_sem_pid": [{"id": 1, "environment": "HOMOLOGACAO", "agent_id": "agt01",
                                        "started_at": now}],
                   "config_divergente": [{"code": "agt01", "critical_config": "<script>intruso</script>"}]}
-        html = _render("auditoria/agentes.load", painel=dashboard, erro=None)
+        html = _render("audit/agents.load", painel=dashboard, erro=None)
         for title in ("Fila sem atendente", "Rodando sem PID", "Configuração divergente"):
             self.assertIn(title, html)
         self.assertNotIn("<script>intruso</script>", html)
         self.assertIn("&lt;script&gt;", html)
         self.assertIn("Nenhum agente registrado", html)
         dashboard.update(fila_sem_atendente=[], rodando_sem_pid=[], config_divergente=[])
-        html = _render("auditoria/agentes.load", painel=dashboard, erro=None)
+        html = _render("audit/agents.load", painel=dashboard, erro=None)
         self.assertNotIn("Fila sem atendente", html)
         self.assertNotIn("Rodando sem PID", html)
         self.assertNotIn("Configuração divergente", html)

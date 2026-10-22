@@ -346,15 +346,15 @@ class TestBuildMenu(unittest.TestCase):
         self.assertEqual(ui_menu.montar_menu(["exec_script", "CANCEL_TICKET", "XYZ"], False), [])
 
     def test_item_completo_e_rota_ativa(self):
-        menu = ui_menu.montar_menu(["EXEC_SCRIPT", "VIEW_LOGS"], False, ("tickets", "lista"))
+        menu = ui_menu.montar_menu(["EXEC_SCRIPT", "VIEW_LOGS"], False, ("tickets", "index"))
         items = menu[0]["itens"]
         self.assertEqual(menu[0]["titulo"], u"Operação")
         # CR-004 U5 (README §5.8): "Rotinas disponíveis" vem antes de "Disparar Scripts".
-        self.assertEqual(items[0]["rota"], ("tickets", "catalogo"))
+        self.assertEqual(items[0]["rota"], ("tickets", "catalog"))
         self.assertEqual(items[1], {
             "code": "EXEC_SCRIPT",
             "rotulo": u"Disparar Scripts",
-            "rota": ("tickets", "novo"),
+            "rota": ("tickets", "new"),
             "icone": "icon-play",
             "active": False,
         })

@@ -66,19 +66,19 @@ async function sleep(ms) {
         console.log('\n--- CT-25 (Fig 66 a 68) ---');
         // 1. Como admin, dar CAD_USUARIOS ao OPERADOR_PROD
         await login('admin');
-        await page.goto(`${BASE_URL}/admin_perfis/matriz/2?aba=funcionalidades`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_profiles/matrix/2?aba=funcionalidades`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
             const cb = document.querySelector('input[value="CAD_USUARIOS"]') || Array.from(document.querySelectorAll('input[type="checkbox"]')).find(i => i.name && i.name.includes('CAD_USUARIOS'));
             if (cb && !cb.checked) cb.click();
         });
-        const btnSalvarMat = await page.$('form[action*="/admin_perfis/matriz_salvar"] button[type="submit"]');
+        const btnSalvarMat = await page.$('form[action*="/admin_profiles/matriz_salvar"] button[type="submit"]');
         if (btnSalvarMat) {
             await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), btnSalvarMat.click()]);
         }
 
         // 2. Login como op.prod e tentar redefinir senha do admin (id 1)
         await login('op.prod');
-        await page.goto(`${BASE_URL}/admin_usuarios/form/1`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/admin_users/form/1`, { waitUntil: 'networkidle0' });
         
         // Preencher senha e confirmacao
         await page.evaluate(() => {
@@ -89,7 +89,7 @@ async function sleep(ms) {
         });
 
         // Submeter redefinicao
-        const formRedef = await page.$('form[action*="/admin_usuarios/redefinir_senha"]');
+        const formRedef = await page.$('form[action*="/admin_users/reset_password"]');
         if (formRedef) {
             await Promise.all([
                 page.waitForNavigation({ waitUntil: 'networkidle0' }),
@@ -106,7 +106,7 @@ async function sleep(ms) {
             const el = document.querySelector('#campo-sha256_informado');
             if (el) el.value = val;
         }, dummySha);
-        const formSalvarScr = await page.$('form[action*="/admin_scripts/salvar"]');
+        const formSalvarScr = await page.$('form[action*="/admin_scripts/save"]');
         if (formSalvarScr) {
             await Promise.all([
                 page.waitForNavigation({ waitUntil: 'networkidle0' }),
@@ -117,7 +117,7 @@ async function sleep(ms) {
 
         // 4. Fig 68: Solicitante mascarado para o perfil consulta
         await login('consulta');
-        await page.goto(`${BASE_URL}/tickets/detalhe/17`, { waitUntil: 'networkidle0' });
+        await page.goto(`${BASE_URL}/tickets/detail/17`, { waitUntil: 'networkidle0' });
         await snap(68, false);
 
         console.log('\n=============================================');

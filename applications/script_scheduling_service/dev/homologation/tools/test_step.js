@@ -19,8 +19,8 @@ if (!process.env.SSS_HOMOLOG_PASSWORD) { console.error('Defina SSS_HOMOLOG_PASSW
     ]);
     console.log('1. Logged in, url:', page.url());
 
-    // Ir para admin_ambientes/form
-    await page.goto('http://127.0.0.1:8000/script_scheduling_service/admin_ambientes/form', { waitUntil: 'networkidle0' });
+    // Ir para admin_environments/form
+    await page.goto('http://127.0.0.1:8000/script_scheduling_service/admin_environments/form', { waitUntil: 'networkidle0' });
     console.log('2. In form, url:', page.url());
 
     // Digitar espacos
@@ -37,12 +37,12 @@ if (!process.env.SSS_HOMOLOG_PASSWORD) { console.error('Defina SSS_HOMOLOG_PASSW
     });
     console.log('3. Error shown:', errText);
 
-    // Ir para admin_ambientes/form/2
-    await page.goto('http://127.0.0.1:8000/script_scheduling_service/admin_ambientes/form/2', { waitUntil: 'networkidle0' });
+    // Ir para admin_environments/form/2
+    await page.goto('http://127.0.0.1:8000/script_scheduling_service/admin_environments/form/2', { waitUntil: 'networkidle0' });
     console.log('4. Next form/2 url:', page.url());
 
-    // Ir para admin_perfis/lista
-    await page.goto('http://127.0.0.1:8000/script_scheduling_service/admin_perfis/lista', { waitUntil: 'networkidle0' });
+    // Ir para admin_profiles/index
+    await page.goto('http://127.0.0.1:8000/script_scheduling_service/admin_profiles/index', { waitUntil: 'networkidle0' });
     console.log('5. Perfis lista url:', page.url());
 
     await browser.close();

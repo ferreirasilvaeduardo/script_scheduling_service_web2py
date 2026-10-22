@@ -164,7 +164,7 @@ class TestAllowedOrigin(unittest.TestCase):
         self.assertFalse(self._ok("https://evil.com"))
 
     def test_so_referer(self):
-        self.assertTrue(self._ok(None, "https://sss.empresa.local/script_scheduling_service/dev/componentes?x=1"))
+        self.assertTrue(self._ok(None, "https://sss.empresa.local/script_scheduling_service/dev/components?x=1"))
         self.assertTrue(self._ok("", "http://127.0.0.1:8000/a/b"))
         self.assertFalse(self._ok(None, "https://evil.com/https://sss.empresa.local"))
 
@@ -292,7 +292,7 @@ class TestValidateNext(unittest.TestCase):
 
     def test_validos(self):
         for v in ("/script_scheduling_service/default/index",
-                  "/script_scheduling_service/dev/componentes?pagina=2&status=FAILED"):
+                  "/script_scheduling_service/dev/components?pagina=2&status=FAILED"):
             self.assertEqual(security.validate_next(v), v)
 
     def test_rejeitados(self):

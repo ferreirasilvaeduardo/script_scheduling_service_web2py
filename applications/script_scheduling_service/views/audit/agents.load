@@ -1,0 +1,59 @@
+{{
+# Fragmento dos cartões de agentes: resposta de audit/agents.load (atualização automática) e
+# incluído por audit/agents.html. O controller aplica os mesmos guardas nas duas extensões.
+# Variáveis: painel ({agentes, resumo, agora}), erro.
+import ui_helpers
+_ag_icones = URL('static', 'img/icons.svg')
+}}<div data-sss-fragmento="agentes">
+  {{if erro:}}
+  <div class="alert alert-danger mb-0" role="alert">
+    <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_ag_icones}}#icon-alert"></use></svg>
+    <span>{{=erro}}</span>
+  </div>
+  {{else:}}
+  {{include 'audit/_agent_diagnostics.html'}}
+  {{if not painel['agents']:}}
+  <p class="sss-tabela-vazia mb-0">Nenhum agente registrado.</p>
+  {{else:}}
+  <p class="sss-texto-suave">Referência: {{=ui_helpers.formatar_data(painel['agora'])}} (relógio do banco).</p>
+  <div class="sss-agentes">
+    {{for _ag in painel['agents']:}}
+    <article class="sss-agente" aria-labelledby="agente-{{=_ag['code']}}">
+      <header class="sss-agente-cabecalho">
+        <h3 class="sss-agente-titulo sss-mono" id="agente-{{=_ag['code']}}">{{=_ag['code']}}</h3>
+        <span class="sss-status {{=_ag['saude']['classe']}}">
+          <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_ag_icones}}#{{=_ag['saude']['icone']}}"></use></svg>
+          <span>{{=_ag['saude']['rotulo']}}</span>
+        </span>
+      </header>
+      <dl class="sss-resumo">
+        <dt>Heartbeat</dt><dd>{{=_ag['ha']}}{{if _ag['heartbeat_at']:}} <span class="sss-texto-suave">({{=ui_helpers.formatar_data(_ag['heartbeat_at'])}})</span>{{pass}}</dd>
+        <dt>Host</dt><dd class="sss-mono">{{=_ag['hostname']}}</dd>
+        <dt>Status</dt><dd>{{=_ag['status']}}</dd>
+        <dt>Versão</dt><dd>{{=_ag['version'] or '-'}}{{if _ag['platform']:}} · {{=_ag['platform']}}{{pass}}</dd>
+        <dt>Ambientes</dt><dd>{{=', '.join(_ag['environments']) or '-'}}</dd>
+        <dt>Interpretadores</dt><dd>{{=', '.join(_ag['interpreters']) or '-'}}</dd>
+        <dt>Iniciado em</dt><dd>{{=ui_helpers.formatar_data(_ag['started_at'])}}</dd>
+      </dl>
+      <details class="sss-agente-tickets" data-agente="{{=_ag['code']}}">
+        <summary>Tickets em execução: <strong>{{=_ag['running']}}</strong></summary>
+        {{if _ag['tickets']:}}
+        <ul class="sss-agente-lista">
+          {{for _t in _ag['tickets']:}}
+          <li>
+            <a href="{{=URL(c='tickets', f='detail', args=[_t['id']], extension=False)}}">#{{=_t['id']}}</a>
+            <span class="sss-mono">{{=_t['script_nome']}}</span> · {{=_t['environment']}} · {{=_t['requested_by']}}
+            <span class="sss-texto-suave">· em execução há {{=_t['duracao']}} · heartbeat {{=_t['heartbeat']}}</span>
+          </li>
+          {{pass}}
+        </ul>
+        {{else:}}
+        <p class="sss-texto-suave mb-0">Nenhum ticket em execução neste agente.</p>
+        {{pass}}
+      </details>
+    </article>
+    {{pass}}
+  </div>
+  {{pass}}
+  {{pass}}
+</div>

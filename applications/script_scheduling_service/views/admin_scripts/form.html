@@ -38,7 +38,7 @@ if not _novo:
     _modal_ativo = {'id': 'modal-ativo', 'titulo': (u'Desativar script %s' if _desativar else u'Reativar script %s') % _s['name'],
                     'texto': _texto_modal, 'rotulo_gatilho': 'Desativar' if _desativar else 'Reativar',
                     'rotulo_confirmar': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
-                    'variante': 'perigo' if _desativar else 'normal', 'acao': URL(c='admin_scripts', f='alternar_ativo'),
+                    'variante': 'perigo' if _desativar else 'normal', 'acao': URL(c='admin_scripts', f='toggle_active'),
                     'campos_ocultos': dict(id=_s['id'], versao=_s['version'])}
 pass
 }}
@@ -49,19 +49,19 @@ pass
     </h1>
   </div>
   <div class="sss-acoes">
-    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_scripts', f='lista')}}">Voltar à lista</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_scripts', f='index')}}">Voltar à lista</a>
     {{if not _novo:}}
-    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='homologacao', args=[_s['id']])}}">Homologação</a>
-    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='parametros', args=[_s['id']])}}">Parâmetros</a>
+    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='homologation', args=[_s['id']])}}">Homologação</a>
+    <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='parameters', args=[_s['id']])}}">Parâmetros</a>
     {{modal = _modal_ativo}}
-    {{include 'components/modal_confirmacao.html'}}
+    {{include 'components/confirm_modal.html'}}
     {{pass}}
   </div>
 </div>
 
 <section class="sss-card" aria-labelledby="titulo-form">
   <h2 class="sss-card-titulo" id="titulo-form">Dados do script</h2>
-  <form class="sss-card-corpo" method="post" action="{{=URL(c='admin_scripts', f='salvar')}}" autocomplete="off">
+  <form class="sss-card-corpo" method="post" action="{{=URL(c='admin_scripts', f='save')}}" autocomplete="off">
     {{=csrf_campo()}}
     {{if not _novo:}}
     <input type="hidden" name="id" value="{{=_s['id']}}">
@@ -74,29 +74,29 @@ pass
     </div>
     {{pass}}
     {{for campo in _campos_a:}}
-    {{include 'components/form_campo.html'}}
+    {{include 'components/form_field.html'}}
     {{pass}}
     <div class="sss-form-linha">
       {{for campo in _campos_b:}}
-      {{include 'components/form_campo.html'}}
+      {{include 'components/form_field.html'}}
       {{pass}}
     </div>
     {{for campo in _campos_c:}}
-    {{include 'components/form_campo.html'}}
+    {{include 'components/form_field.html'}}
     {{pass}}
     <div class="sss-form-linha">
       {{for campo in _campos_d:}}
-      {{include 'components/form_campo.html'}}
+      {{include 'components/form_field.html'}}
       {{pass}}
     </div>
     <div class="sss-form-acoes">
       <button type="submit" class="btn btn-primary">{{=u'Incluir script' if _novo else u'Salvar alterações'}}</button>
-      <a class="btn btn-outline-secondary" href="{{=URL(c='admin_scripts', f='lista')}}">Cancelar</a>
+      <a class="btn btn-outline-secondary" href="{{=URL(c='admin_scripts', f='index')}}">Cancelar</a>
     </div>
   </form>
 </section>
 
 {{if not _novo and _s.get('registro'):}}
 {{registro = _s['registro']}}
-{{include 'components/registro.html'}}
+{{include 'components/record.html'}}
 {{pass}}

@@ -2,10 +2,10 @@
 
 Este padrão foi definido no F4.1 (ambientes) e vale para todos os cadastros do F4.2 ao F4.5. A referência de implementação está em:
 
-* `controllers/admin_ambientes.py`
+* `controllers/admin_environments.py`
 * `modules/admin_environments_service.py`
 * `modules/admin_crud.py`
-* `views/admin_ambientes/`
+* `views/admin_environments/`
 
 As regras de negócio estão no README §4.4 e §10 (padrões globais e tabela 1).
 
@@ -22,10 +22,10 @@ As regras de negócio estão no README §4.4 e §10 (padrões globais e tabela 1
 
 | Ação | Método | Comportamento |
 |---|---|---|
-| `lista` | GET | Filtros com `components/filtros.html`, tabela com `components/tabela.html` (colunas `active` e `action`) e paginação com `components/paginacao.html`. Ordenação definida pelo repositório. O `total` vem limitado a 10.001: acima de 10.000, a paginação mostra "mais de 10.000 registros" e não oferece "Última" (CR-007, R-29). |
-| `form[/id]` | GET | Uma única view para inclusão (sem id) e edição. Campos com `components/form_campo.html`. Na edição, a chave natural fica `somente_leitura` e o servidor ignora o valor enviado. Também na edição, o quadro **Registro** (`components/registro.html`, CR-006) mostra quem criou o registro e quando, e a última alteração ("Nunca alterado" enquanto `updated_at` for nulo). O service entrega `created_at`, `created_by`, `updated_at` e `updated_by` no dicionário do `formulario()`, por `ui_helpers.registro(reg, ctx)`: o login do ator só vai para quem tem `VIEW_AUDIT` ou é administrador; os demais veem "você", "Sistema (…)" ou "outra pessoa" (CR-007, D6). |
+| `lista` | GET | Filtros com `components/filters.html`, tabela com `components/table.html` (colunas `active` e `action`) e paginação com `components/pagination.html`. Ordenação definida pelo repositório. O `total` vem limitado a 10.001: acima de 10.000, a paginação mostra "mais de 10.000 registros" e não oferece "Última" (CR-007, R-29). |
+| `form[/id]` | GET | Uma única view para inclusão (sem id) e edição. Campos com `components/form_field.html`. Na edição, a chave natural fica `somente_leitura` e o servidor ignora o valor enviado. Também na edição, o quadro **Registro** (`components/record.html`, CR-006) mostra quem criou o registro e quando, e a última alteração ("Nunca alterado" enquanto `updated_at` for nulo). O service entrega `created_at`, `created_by`, `updated_at` e `updated_by` no dicionário do `formulario()`, por `ui_helpers.registro(reg, ctx)`: o login do ator só vai para quem tem `VIEW_AUDIT` ou é administrador; os demais veem "você", "Sistema (…)" ou "outra pessoa" (CR-007, D6). |
 | `salvar` | POST + CSRF | Em caso de sucesso, grava o flash e redireciona para a `lista`. A exceção é o cadastro de scripts, que volta ao `form` para mostrar avisos e atalhos (README §8.5). Em caso de erro, responde **200**, reapresenta o que foi digitado e destaca os campos. O primeiro campo inválido recebe `autofocus`. Valor acima do limite ou fora do formato é recusado, nunca truncado (README §10, "Texto nos cadastros"). |
-| `alternar_ativo` | POST + CSRF | O botão fica no **formulário de edição**, e não na lista, e abre `components/modal_confirmacao.html`. O modal diz a consequência e o impacto da ação: no ambiente, os agendamentos ativos afetados e a quantidade de scripts homologados nele; no perfil, a quantidade e os logins dos usuários ativos afetados (README §4.3.B.1); no parâmetro vinculado a script ativo, a desativação é bloqueada e os scripts são listados. Depois redireciona de volta para o `form`. |
+| `alternar_ativo` | POST + CSRF | O botão fica no **formulário de edição**, e não na lista, e abre `components/confirm_modal.html`. O modal diz a consequência e o impacto da ação: no ambiente, os agendamentos ativos afetados e a quantidade de scripts homologados nele; no perfil, a quantidade e os logins dos usuários ativos afetados (README §4.3.B.1); no parâmetro vinculado a script ativo, a desativação é bloqueada e os scripts são listados. Depois redireciona de volta para o `form`. |
 
 As entidades mestras nunca são excluídas, apenas desativadas (README §10).
 

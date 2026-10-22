@@ -1,0 +1,39 @@
+{{
+# Componente: botão + modal de confirmação com submit POST real.
+# Variáveis de entrada:
+#   modal -- dict:
+#     id                -- prefixo ASCII único na página (ids do título e do texto);
+#     titulo, texto     -- conteúdo do modal;
+#     rotulo_gatilho    -- texto do botão que abre o modal;
+#     rotulo_confirmar  -- texto do botão de confirmação;
+#     variante          -- 'perigo' (btn-danger) | 'normal' (btn-primary);
+#     acao              -- URL do POST;
+#     campos_ocultos    -- opcional; dict de campos hidden enviados no POST.
+# O token CSRF da sessão é enviado no campo oculto '_csrf' (csrf_campo(), README §4.2).
+# Abrir/fechar exige JavaScript (Alpine 'confirmacao' em static/js/app/components.js).
+_mod_perigo = modal.get('variante') == 'perigo'
+}}<div class="sss-confirmacao" x-data="confirmacao" @keydown.escape.window="fechar">
+  <button type="button" class="btn btn-sm {{='btn-outline-danger' if _mod_perigo else 'btn-outline-primary'}}" x-ref="gatilho" @click="abrir">{{=modal['rotulo_gatilho']}}</button>
+  <div class="modal sss-modal" :class="classeModal" role="dialog" aria-modal="true" aria-labelledby="{{=modal['id']}}-titulo" aria-describedby="{{=modal['id']}}-texto" tabindex="-1" @click.self="fechar">
+    <div class="modal-dialog modal-dialog-centered">
+      <form class="modal-content" method="post" action="{{=modal['acao']}}">
+        {{=csrf_campo()}}
+        {{for _mod_k, _mod_v in sorted((modal.get('campos_ocultos') or {}).items()):}}
+        <input type="hidden" name="{{=_mod_k}}" value="{{=_mod_v}}">
+        {{pass}}
+        <div class="modal-header">
+          <h2 class="modal-title fs-5" id="{{=modal['id']}}-titulo">{{=modal['titulo']}}</h2>
+          <button type="button" class="btn-close" aria-label="Fechar" @click="fechar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-0" id="{{=modal['id']}}-texto">{{=modal['texto']}}</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancelar" @click="fechar">Cancelar</button>
+          <button type="submit" class="btn btn-sm {{='btn-danger' if _mod_perigo else 'btn-primary'}}">{{=modal['rotulo_confirmar']}}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="sss-modal-fundo" :class="classeFundo"></div>
+</div>

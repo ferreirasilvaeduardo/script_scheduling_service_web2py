@@ -56,7 +56,7 @@ default_controller = "default"
 default_function = "index"
 
 routes_onerror = [
-    ("script_scheduling_service/*", "/script_scheduling_service/erro/index"),
+    ("script_scheduling_service/*", "/script_scheduling_service/error/index"),
 ]
 '''
 

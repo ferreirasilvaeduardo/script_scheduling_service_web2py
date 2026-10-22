@@ -47,7 +47,7 @@ def chunk():
     return response.json(dados)
 
 
-def baixar():
+def download():
     _exigir_get()
     ctx = _exigir_consulta()
     try:

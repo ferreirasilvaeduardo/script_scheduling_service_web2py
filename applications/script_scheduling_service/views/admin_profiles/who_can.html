@@ -1,0 +1,71 @@
+{{extend 'layout.html'}}
+{{
+# Quem pode o quê (README §4.3.B.2, CR-004 T5): só leitura; a regra é a de rbac.can_execute, perfil a perfil.
+_alvo = q['script'] or q['environment']
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">Quem pode o quê</h1>
+    <p class="sss-page-sub">Escolha um script para ver quais perfis podem rodá-lo e onde, ou um ambiente para ver quem roda o quê nele.</p>
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_profiles', f='index')}}">Voltar aos perfis</a>
+  </div>
+</div>
+
+<section class="sss-card" aria-label="Escolha">
+  <div class="sss-card-corpo sss-form-linha">
+    <form method="get" action="{{=URL(c='admin_profiles', f='who_can')}}" class="sss-form-campo mb-0">
+      <label class="form-label" for="campo-script">Por script</label>
+      <div class="sss-acoes-inline">
+        <select class="form-select form-select-sm" id="campo-script" name="script">
+          {{for _s in q['scripts']:}}
+          <option value="{{=_s['id']}}"{{if q['script'] and q['script']['id'] == _s['id']:}} selected{{pass}}>{{=_s['name']}}{{if _s.get('active') != 'Y':}} (inativo){{pass}}</option>
+          {{pass}}
+        </select>
+        <button type="submit" class="btn btn-sm btn-primary">Ver</button>
+      </div>
+    </form>
+    <form method="get" action="{{=URL(c='admin_profiles', f='who_can')}}" class="sss-form-campo mb-0">
+      <label class="form-label" for="campo-ambiente">Por ambiente</label>
+      <div class="sss-acoes-inline">
+        <select class="form-select form-select-sm" id="campo-ambiente" name="environment">
+          {{for _a in q['environments']:}}
+          <option value="{{=_a['id']}}"{{if q['environment'] and q['environment']['id'] == _a['id']:}} selected{{pass}}>{{=_a['name']}}{{if _a.get('active') != 'Y':}} (inativo){{pass}}</option>
+          {{pass}}
+        </select>
+        <button type="submit" class="btn btn-sm btn-primary">Ver</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+{{if _alvo:}}
+{{if q['aviso']:}}<div class="alert alert-warning sss-alerta" role="status"><span>{{=q['aviso']}}</span></div>{{pass}}
+{{for _titulo, _lista in ((u'Perfis ativos', q['profiles']), (u'Não valem agora (perfil inativo)', q['inativos'])):}}
+{{if _lista or _titulo == u'Perfis ativos':}}
+<section class="sss-card">
+  <h2 class="sss-card-titulo">{{=_titulo}}</h2>
+  {{if not _lista:}}
+  <p class="sss-card-corpo sss-texto-suave mb-0">{{if q['script']:}}Nenhum perfil pode rodar este script.{{else:}}Nenhum perfil roda scripts neste ambiente.{{pass}}</p>
+  {{else:}}
+  <div class="table-responsive">
+    <table class="table table-sm sss-tabela mb-0">
+      <thead><tr><th scope="col">Perfil</th><th scope="col">Por quê</th><th scope="col">{{='Onde pode rodar' if q['script'] else 'Scripts que pode rodar'}}</th><th scope="col">Usuários ativos</th></tr></thead>
+      <tbody>
+        {{for _p in _lista:}}
+        <tr>
+          <td><a class="sss-mono" href="{{=URL(c='admin_profiles', f='matrix', args=[_p['id']])}}">{{=_p['name']}}</a></td>
+          <td>{{=_p['reason']}}</td>
+          <td class="sss-mono">{{=', '.join(_p['detalhes']) or '-'}}</td>
+          <td>{{=_p['usuarios_ativos']}}</td>
+        </tr>
+        {{pass}}
+      </tbody>
+    </table>
+  </div>
+  {{pass}}
+</section>
+{{pass}}
+{{pass}}
+{{pass}}

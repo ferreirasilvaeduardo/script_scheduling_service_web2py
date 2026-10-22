@@ -16,7 +16,7 @@ Regras **obrigatórias e inegociáveis** para qualquer agente de IA ou desenvolv
 * **Estilo:**
   * Sem código didático e sem comentários redundantes. Comente apenas o "porquê" não óbvio (invariantes, ordem de locks, armadilhas do 11g).
   * Docstrings curtas em funções públicas de `modules/`.
-  * **Nomes em inglês (CR-016, README §2.8):** objetos do banco, valores gravados, arquivos, pastas, módulos, funções, classes, variáveis, chaves, configuração, variáveis de ambiente, opções de linha de comando e rotas têm nome em inglês. Ficam em português o conteúdo (texto de tela, mensagens, logs legíveis e documentação), os comentários e docstrings e os dados cadastrados. Código novo nasce em inglês; nome legado só muda na sua fase do CR-016.
+  * **Nomes em inglês (CR-016, README §2.8):** objetos do banco, valores gravados, arquivos, pastas, módulos, funções, classes, variáveis, chaves, configuração, variáveis de ambiente, opções de linha de comando e rotas têm nome em inglês. Ficam em português o conteúdo (texto de tela, mensagens, logs legíveis e documentação), os comentários e docstrings e os dados cadastrados. Código novo nasce em inglês; nome legado só muda na sua fase do CR-016. Rota renomeada não ganha redirecionamento do nome antigo (CR-016d, D22).
 * **Proibições gerais:**
   * Não gere código "temporário" nem `TODO` em fluxos de segurança, concorrência ou transação.
   * Não desabilite validações para "fazer passar" um teste.

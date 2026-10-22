@@ -4681,3 +4681,88 @@ Pedido do usuário (2026-10-22): o projeto não pode usar a biblioteca `cryptogr
 * Com `auto` num nó sem `cryptography`, a sondagem do Thin falha com `DPY-3016` (WARN) e a cadeia segue para o Thick.
 * Validado no DEV com o Python 3.6.0 sem `cryptography` (removida pelo usuário): sondagem Thick conecta, Thin falha com `DPY-3016`, conexão da aplicação em `thick` e em `auto` escolhe o Thick e a biblioteca nunca é carregada; agregado Oracle CATALOGO OK. No 3.6.15: bateria Oracle completa e cinco agregados em `thick`, ciclo real do agente (`driver=oracledb modo=thick`) e percurso das telas.
 * Achado no modo Thick: o Oracle recusa valores de bind num `EXPLAIN PLAN` (`ORA-01036`), o que o Thin tolerava; o teste `test_health.test_explain_…` passou a explicar o SQL com `SYSDATE` no lugar dos binds de data (o produto não roda `EXPLAIN`).
+
+## 30. Rotas da web (CR-016d, parte d1)
+
+Plano aprovado pelo usuário (2026-10-22) com as decisões D22 a D25:
+
+* **D22:** troca direta, sem redirecionamento do endereço antigo (dá 404); a página inicial não muda. Nota de atualização no DEPLOYMENT §18.
+* **D23:** as classes CSS também passam a inglês (parte d3).
+* **D24:** o nome do arquivo baixado `ticket_<id>_saida.zip` fica em português (é conteúdo que o usuário vê).
+* **D25:** o manual de homologação e as evidências do UI Freeze ficam como registro histórico, com os endereços da época; as ferramentas de `dev/homologation` (roteiro e capturas) usam as rotas novas.
+
+Os arquivos de controller, as pastas e arquivos de view, os componentes e os scripts de `static/js/app` foram movidos com `git mv`; o nome da função de cada ação acompanha a rota. `routes.py` (raiz) aponta o erro para `error/index`.
+
+| Controller antes | Depois |
+|---|---|
+| `admin_ambientes` | `admin_environments` |
+| `admin_parametros` | `admin_parameters` |
+| `admin_perfis` | `admin_profiles` |
+| `admin_usuarios` | `admin_users` |
+| `agendamentos` | `schedules` |
+| `auditoria` | `audit` |
+| `erro` | `error` |
+
+| Ação antes | Depois |
+|---|---|
+| `admin_teste` | `admin_test` |
+| `agentes` | `agents` |
+| `alternar_ativo` | `toggle_active` |
+| `baixar` | `download` |
+| `cancelar` | `cancel` |
+| `catalogo` | `catalog` |
+| `componentes` | `components` |
+| `criar` | `create` |
+| `desbloquear` | `unlock` |
+| `detalhe` | `detail` |
+| `exportar` | `export` |
+| `historico` | `history` |
+| `homologacao` | `homologation` |
+| `lista` | `index` |
+| `matriz` | `matrix` |
+| `minha_senha` | `my_password` |
+| `novo` | `new` |
+| `parametros` | `parameters` |
+| `pausar` | `pause` |
+| `permissoes` | `permissions` |
+| `previa` | `preview` |
+| `quem_pode` | `who_can` |
+| `redefinir_senha` | `reset_password` |
+| `reexecutar` | `rerun` |
+| `retomar` | `resume` |
+| `saida` | `output` |
+| `salvar` | `save` |
+| `salvar_homologacao` | `save_homologation` |
+| `salvar_matriz` | `save_matrix` |
+| `salvar_parametros` | `save_parameters` |
+| `testar` | `test_regex` |
+
+| View parcial ou componente antes | Depois |
+|---|---|
+| `_abas.html` | `_tabs.html` |
+| `_diagnosticos_agentes.html` | `_agent_diagnostics.html` |
+| `alerta.html` | `alert.html` |
+| `filtros.html` | `filters.html` |
+| `form_campo.html` | `form_field.html` |
+| `modal_confirmacao.html` | `confirm_modal.html` |
+| `paginacao.html` | `pagination.html` |
+| `questionario.html` | `questionnaire.html` |
+| `registro.html` | `record.html` |
+| `tabela.html` | `table.html` |
+
+| JavaScript antes (`static/js/app/`) | Depois |
+|---|---|
+| `agendamentos.js` | `schedules.js` |
+| `agentes.js` | `agents.js` |
+| `componentes.js` | `components.js` |
+| `disparo.js` | `trigger.js` |
+| `matriz.js` | `matrix.js` |
+| `parametros.js` | `parameters.js` |
+
+Ficam: os controllers `default`, `tickets`, `logs`, `admin_scripts` e `dev`, e as ações `index`, `form`, `login`, `logout`, `agenda` e `shell`.
+
+Achado durante a aplicação e corrigido antes do commit: a regra que troca o par `("controller", "ação")` casou `"erro", "mensagem"` no dicionário do flash (`{"tipo": "erro", ...}`) e `"FAILED": "erro", "CANCELLED"` no `ticket_service`, porque `erro` também era nome de controller; os valores voltaram a `erro` (as chaves de flash são da parte d2).
+
+Achado pela varredura das URLs geradas nas telas (todo endereço do app citado em `href`, `action` e `data-*`, pedido por GET): a aba "Trilha de auditoria" (`views/audit/_tabs.html`) montava `audit/lista`, porque o nome da ação estava numa tupla que as regras de troca não alcançam; corrigido para `index`. Os demais 404 da varredura são legítimos: links da trilha de auditoria para registros já apagados pelas baterias e `logs/download` sem argumento. Endereços antigos (`tickets/novo`, `admin_usuarios/lista`, `auditoria/agentes`) respondem 404 (D22).
+
+Validação: suítes em 3.6.0, 3.6.8 e 3.13.2 (1275 testes), bateria Oracle (1273), testes progressivos nos cinco agregados, ciclo real do agente, percurso real das telas com a varredura das URLs (baseline de 2 falhas conhecidas do fixture), conferência de resíduos.

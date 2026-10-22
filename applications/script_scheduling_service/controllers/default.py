@@ -93,7 +93,7 @@ def logout():
 _CAMPOS_MINHA_SENHA = ("senha_atual", "nova", "confirmacao")
 
 
-def permissoes():
+def permissions():
     """O que eu posso fazer (README §4.3.E): so leitura, para qualquer usuario logado."""
     if (request.env.request_method or "GET").upper() not in ("GET", "HEAD"):
         raise HTTP(405, **response.headers)
@@ -108,7 +108,7 @@ def permissoes():
     return dict(dados=dados, erro=erro)
 
 
-def minha_senha():
+def my_password():
     metodo = (request.env.request_method or "GET").upper()
     if metodo not in ("GET", "HEAD", "POST"):
         raise HTTP(405, **response.headers)

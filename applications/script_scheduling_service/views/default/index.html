@@ -13,7 +13,7 @@ icones = URL('static', 'img/icons.svg')
   <h2 class="sss-card-titulo" id="painel-disparo">Disparar script</h2>
   <div class="sss-card-corpo sss-escolhido">
     <span>Escolha um script e um ambiente autorizados, preencha o questionário e crie o ticket de execução.</span>
-    <a class="btn btn-sm btn-primary" href="{{=URL(c='tickets', f='novo')}}">
+    <a class="btn btn-sm btn-primary" href="{{=URL(c='tickets', f='new')}}">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-play"></use></svg>
       <span>Disparar script</span>
     </a>
@@ -38,7 +38,7 @@ icones = URL('static', 'img/icons.svg')
         </li>
         {{pass}}
       </ul>
-      <p class="sss-texto-suave mt-2 mb-0">Criados desde {{=ui_helpers.formatar_data(_c_dados['desde'])}}, no escopo do seu perfil. <a href="{{=URL(c='tickets', f='lista')}}">Ver tickets</a></p>
+      <p class="sss-texto-suave mt-2 mb-0">Criados desde {{=ui_helpers.formatar_data(_c_dados['desde'])}}, no escopo do seu perfil. <a href="{{=URL(c='tickets', f='index')}}">Ver tickets</a></p>
       {{pass}}
     </div>
   </section>
@@ -49,7 +49,7 @@ icones = URL('static', 'img/icons.svg')
       <ul class="sss-lista-simples">
         {{for _t in _c_dados['meus']:}}
         <li>
-          <a class="sss-mono" href="{{=URL(c='tickets', f='detalhe', args=[_t['id']])}}">#{{=_t['id']}}</a>
+          <a class="sss-mono" href="{{=URL(c='tickets', f='detail', args=[_t['id']])}}">#{{=_t['id']}}</a>
           <span class="sss-mono">{{=_t['script_nome']}}</span>
           <span>{{=_t['environment']}}</span>
           {{status = _t['status']
@@ -72,13 +72,13 @@ icones = URL('static', 'img/icons.svg')
         {{for _a in _c_dados:}}
         <li>
           <span class="sss-mono">{{=_a['next_run_at']}}</span>
-          <a href="{{=URL(c='agendamentos', f='form', args=[_a['id']])}}">{{=_a['name']}}</a>
+          <a href="{{=URL(c='schedules', f='form', args=[_a['id']])}}">{{=_a['name']}}</a>
           <span class="sss-texto-suave">{{=_a['script']}} · {{=_a['environment']}}</span>
         </li>
         {{pass}}
       </ul>
       {{pass}}
-      <p class="mt-2 mb-0"><a href="{{=URL(c='agendamentos', f='lista')}}">Ver regras de agendamento</a></p>
+      <p class="mt-2 mb-0"><a href="{{=URL(c='schedules', f='index')}}">Ver regras de agendamento</a></p>
     </div>
   </section>
   {{pass}}
@@ -98,7 +98,7 @@ icones = URL('static', 'img/icons.svg')
         {{pass}}
       </ul>
       {{pass}}
-      <p class="mt-2 mb-0"><a href="{{=URL(c='auditoria', f='agentes')}}">Abrir painel de agentes</a></p>
+      <p class="mt-2 mb-0"><a href="{{=URL(c='audit', f='agents')}}">Abrir painel de agentes</a></p>
     </div>
   </section>
   {{pass}}

@@ -11,7 +11,7 @@ from repo_errors import RepoError, RepoNotFound
 from ticket_service import AccessDenied, RerunError
 
 _PREFIXO_PARAM = "p_"
-_JS_DISPARO = "js/app/disparo.js"
+_JS_DISPARO = "js/app/trigger.js"
 _JS_TICKETS = "js/app/tickets.js"
 _JS_LOG = "js/app/log_viewer.js"
 _TAMANHOS = (20, 50, 100)
@@ -89,7 +89,7 @@ def _pagina_novo(ctx, script_id, ambiente, valores=None, erros=None, prioridade=
     return dados
 
 
-def novo():
+def new():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func("EXEC_SCRIPT")
     reexecucao = _texto(request.get_vars.get("reexecucao"), 10)
@@ -111,7 +111,7 @@ def novo():
         _negado()
 
 
-def catalogo():
+def catalog():
     """Rotinas disponiveis (README §5.8): so leitura, para quem tem EXEC_SCRIPT."""
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func("EXEC_SCRIPT")
@@ -124,7 +124,7 @@ def catalogo():
         return dict(grupos=[], erro=ui_helpers.mensagem("falha_interna"))
 
 
-def historico():
+def history():
     """Historico do script (README §5.8): so leitura, para quem tem EXEC_SCRIPT."""
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_func("EXEC_SCRIPT")
@@ -136,7 +136,7 @@ def historico():
     return dict(h=dados)
 
 
-def criar():
+def create():
     _exigir_metodo("POST")
     ctx = _exigir_func("EXEC_SCRIPT")
     script_id = _texto(request.post_vars.get("script_id"), 10)
@@ -150,10 +150,10 @@ def criar():
                                                        prioridade, scheduled_at, reexecucao_de)
         if ticket_id is not None:
             session.flash = {"tipo": "sucesso", "mensagem": u"Ticket #%s criado com sucesso." % ticket_id}
-            redirect(URL(c="tickets", f="detalhe", args=[ticket_id]))
+            redirect(URL(c="tickets", f="detail", args=[ticket_id]))
         # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
         response.flash = {"tipo": "erro", "mensagem": ui_helpers.mensagem("formulario")}
-        response.view = "tickets/novo.html"
+        response.view = "tickets/new.html"
         return _pagina_novo(ctx, script_id, ambiente, respostas, erros, prioridade, scheduled_at,
                             reexecucao_de or None)
     except RepoNotFound:
@@ -162,7 +162,7 @@ def criar():
         _negado()
 
 
-def previa():
+def preview():
     # POST porque o corpo pode conter valores sensiveis: nunca na URL nem no log de acesso.
     _exigir_metodo("POST")
     ctx = _exigir_func("EXEC_SCRIPT")
@@ -180,7 +180,7 @@ def previa():
     return response.json(dados)
 
 
-def lista():
+def index():
     _exigir_metodo("GET", "HEAD")
     if request.extension not in _EXTENSOES_LISTA:
         raise HTTP(404, **response.headers)
@@ -200,7 +200,7 @@ def lista():
     query_params = dict(filtros, tamanho=tamanho)
     dados = dict(resultado=resultado, erro=erro, pagina=resultado["pagina"], tamanho=tamanho,
                  query_params=query_params,
-                 url_fragmento=URL(c="tickets", f="lista", extension="load",
+                 url_fragmento=URL(c="tickets", f="index", extension="load",
                                    vars=dict(query_params, pagina=resultado["pagina"])))
     if request.extension == "load":
         return dados
@@ -211,7 +211,7 @@ def lista():
     return dados
 
 
-def detalhe():
+def detail():
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_consulta()
     try:
@@ -222,14 +222,14 @@ def detalhe():
     response.sss_scripts = [_JS_TICKETS, _JS_LOG]
     visor_log = {
         "url_chunk": URL(c="logs", f="chunk", vars={"ticket_id": ticket["id"]}),
-        "url_baixar": URL(c="logs", f="baixar", vars={"ticket_id": ticket["id"]}),
+        "url_baixar": URL(c="logs", f="download", vars={"ticket_id": ticket["id"]}),
         "intervalo_s": current.sss_cfg.web.log_poll_interval_s,
         "max_chars": ticket_service.LOG_MAX_CHARS,
     }
     return dict(ticket=ticket, visor_log=visor_log)
 
 
-def saida():
+def output():
     """Download do zip da pasta de saida (CR-012, README §8.13): GET, regra de leitura do log, so DISPONIVEL."""
     _exigir_metodo("GET", "HEAD")
     ctx = _exigir_consulta()
@@ -249,7 +249,7 @@ def saida():
     return partes
 
 
-def cancelar():
+def cancel():
     _exigir_metodo("POST")
     ctx = _exigir_login()
     ticket_id = _texto(request.post_vars.get("ticket_id"), 10)
@@ -265,11 +265,11 @@ def cancelar():
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_CANCELAR}
     # CANCEL_TICKET sem VIEW_LOGS cancela sem poder ver o ticket (README §4.3.C): volta ao painel.
     if ticket_service.is_visible(ctx, ticket_id):
-        redirect(URL(c="tickets", f="detalhe", args=[ticket_id]))
+        redirect(URL(c="tickets", f="detail", args=[ticket_id]))
     redirect(URL(c="default", f="index"))
 
 
-def reexecutar():
+def rerun():
     _exigir_metodo("POST")
     ctx = _exigir_func("EXEC_SCRIPT")
     ticket_id = _texto(request.post_vars.get("ticket_id"), 10)
@@ -281,7 +281,7 @@ def reexecutar():
         _negado()
     except RerunError as e:
         session.flash = {"tipo": "aviso", "mensagem": _MSG_REEXECUCAO_REVISAR}
-        redirect(URL(c="tickets", f="novo", vars={"reexecucao": e.ticket_id}))
+        redirect(URL(c="tickets", f="new", vars={"reexecucao": e.ticket_id}))
     session.flash = {"tipo": "sucesso",
                      "mensagem": u"Ticket #%s criado como reexecução do ticket #%s." % (novo_id, ticket_id)}
-    redirect(URL(c="tickets", f="detalhe", args=[novo_id]))
+    redirect(URL(c="tickets", f="detail", args=[novo_id]))

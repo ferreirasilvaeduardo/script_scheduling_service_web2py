@@ -105,7 +105,7 @@ def _formulario_demo():
     return campos, enviado
 
 
-def componentes():
+def components():
     _exigir_login()
     _exigir_dev()
     # POST chega aqui ja validado (CSRF + Origin) por models/10_security.py.
@@ -192,11 +192,11 @@ def componentes():
             {"id": "modal-cancelar", "titulo": u"Cancelar ticket 1024?",
              "texto": u"O processo em execução será interrompido. Esta ação não pode ser desfeita.",
              "rotulo_gatilho": u"Cancelar ticket", "rotulo_confirmar": u"Sim, cancelar",
-             "variante": "perigo", "acao": URL("dev", "componentes"), "campos_ocultos": {"ticket_id": 1024}},
+             "variante": "perigo", "acao": URL("dev", "components"), "campos_ocultos": {"ticket_id": 1024}},
             {"id": "modal-reexecutar", "titulo": u"Reexecutar ticket 1023?",
              "texto": u"Um novo ticket será criado com os mesmos parâmetros.",
              "rotulo_gatilho": u"Reexecutar", "rotulo_confirmar": u"Reexecutar",
-             "variante": "normal", "acao": URL("dev", "componentes"), "campos_ocultos": {"ticket_id": 1023}},
+             "variante": "normal", "acao": URL("dev", "components"), "campos_ocultos": {"ticket_id": 1023}},
         ],
         alertas=[ui_helpers.alerta_info({"tipo": t, "mensagem": m}) for t, m in (
             ("sucesso", u"Usuário salvo com sucesso."),
@@ -207,7 +207,7 @@ def componentes():
     )
 
 
-def admin_teste():
+def admin_test():
     _exigir_login()
     _exigir_dev()
     ctx = _exigir_func("MANAGE_USERS")

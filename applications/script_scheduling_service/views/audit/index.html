@@ -1,0 +1,116 @@
+{{extend 'layout.html'}}
+{{
+# Trilha de auditoria (README §4.4, §10 tabela 16). Somente leitura; o detalhe é sempre escapado.
+import ui_helpers
+icones = URL('static', 'img/icons.svg')
+_opc_acoes = [('', 'Todas')] + [(_a, _a) for _a in acoes]
+_opc_entidades = [('', 'Todas')] + [(_e, _e) for _e in entidades]
+_erros = resultado['erros']
+filtros = {'id': 'filtro-auditoria', 'url_base': ('audit', 'index'), 'preservar': {'tamanho': tamanho}, 'campos': [
+    {'name': 'de', 'rotulo': 'De', 'tipo': 'data', 'valor': filtros_ativos.get('de')},
+    {'name': 'ate', 'rotulo': u'Até', 'tipo': 'data', 'valor': filtros_ativos.get('ate')},
+    {'name': 'actor', 'rotulo': 'Ator (login)', 'tipo': 'texto', 'valor': filtros_ativos.get('actor')},
+    {'name': 'action', 'rotulo': u'Ação', 'tipo': 'select', 'valor': filtros_ativos.get('action'), 'opcoes': _opc_acoes},
+    {'name': 'entity', 'rotulo': 'Entidade', 'tipo': 'select', 'valor': filtros_ativos.get('entity'), 'opcoes': _opc_entidades},
+    {'name': 'entity_id', 'rotulo': 'ID da entidade', 'tipo': 'texto', 'valor': filtros_ativos.get('entity_id')},
+    {'name': 'ip', 'rotulo': 'IP de origem', 'tipo': 'texto', 'valor': filtros_ativos.get('ip')},
+]}
+_rotulos_campo = dict((_c['name'], _c['rotulo']) for _c in filtros['campos'])
+_colunas = ('Data/hora', 'Ator', u'Ação', 'Entidade', 'ID', 'IP de origem', 'Detalhe')
+pagina = resultado['pagina']
+total = resultado['total']
+total_limitado = resultado.get('total_limitado', False)
+quantidade_pagina = len(resultado['itens'])
+url_base = ('audit', 'index')
+aba_ativa = 'index'
+}}
+<div class="sss-page-header">
+  <h1 class="sss-page-titulo">Auditoria</h1>
+  <p class="sss-page-sub">Trilha das ações sensíveis do sistema, da mais recente para a mais antiga. Sem filtro de data, mostra os últimos 7 dias.</p>
+</div>
+{{include 'audit/_tabs.html'}}
+
+<section class="sss-card" aria-label="Filtros">
+  {{include 'components/filters.html'}}
+  {{if _erros:}}
+  <div class="alert alert-danger mx-3 mb-3" role="alert">
+    <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
+    <span>Filtros inválidos:</span>
+    <ul class="mb-0 sss-alerta-lista">
+      {{for _campo in [c for c in ('de', 'ate', 'actor', 'action', 'entity', 'entity_id', 'ip') if c in _erros]:}}
+      <li><strong>{{=_rotulos_campo[_campo]}}:</strong> {{=_erros[_campo]}}</li>
+      {{pass}}
+    </ul>
+  </div>
+  {{pass}}
+</section>
+
+<section class="sss-card" aria-labelledby="titulo-trilha">
+  <div class="sss-card-titulo sss-titulo-linha">
+    <h2 class="sss-card-titulo-texto" id="titulo-trilha">Registros</h2>
+    {{if not _erros:}}
+    <form method="post" action="{{=URL(c='audit', f='export')}}" class="sss-exportar">
+      {{=csrf_campo()}}
+      {{for _fk, _fv in filtros_ativos.items():}}
+      <input type="hidden" name="{{=_fk}}" value="{{=_fv}}">
+      {{pass}}
+      <button type="submit" class="btn btn-sm btn-outline-secondary">Exportar CSV</button>
+    </form>
+    <span class="sss-texto-suave">Mesmos filtros da tela; no máximo {{='{:,}'.format(limite_exportacao).replace(',', '.')}} linhas, as mais recentes. A exportação é registrada na auditoria.</span>
+    {{pass}}
+  </div>
+  {{if total > limite_exportacao:}}
+  <div class="alert alert-warning mx-3 mt-3 mb-0" role="status">
+    <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
+    <span>O resultado tem {{=total}} registros; a exportação levará apenas os {{='{:,}'.format(limite_exportacao).replace(',', '.')}} mais recentes. Refine os filtros para exportar tudo.</span>
+  </div>
+  {{pass}}
+  <div class="table-responsive">
+    <table class="table table-sm sss-tabela mb-0">
+      <caption class="visually-hidden">Trilha de auditoria{{if erro:}} (erro ao carregar){{pass}}</caption>
+      <thead>
+        <tr>
+          {{for _col in _colunas:}}<th scope="col"{{if _col == 'Data/hora':}} class="sss-col-data"{{elif _col == 'ID':}} class="sss-col-num"{{pass}}>{{=_col}}</th>{{pass}}
+        </tr>
+      </thead>
+      <tbody>
+        {{if erro:}}
+        <tr>
+          <td colspan="{{=len(_colunas)}}" class="sss-tabela-estado">
+            <div class="alert alert-danger mb-0" role="alert">
+              <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
+              <span>{{=erro}}</span>
+            </div>
+          </td>
+        </tr>
+        {{elif not resultado['itens']:}}
+        <tr>
+          <td colspan="{{=len(_colunas)}}" class="sss-tabela-estado sss-tabela-vazia">{{if _erros:}}Corrija os filtros para consultar a trilha.{{else:}}Nenhum registro encontrado para os filtros informados.{{pass}}</td>
+        </tr>
+        {{else:}}
+        {{for _r in resultado['itens']:}}
+        <tr>
+          <td class="sss-col-data">{{=ui_helpers.formatar_data(_r['created_at'])}}</td>
+          <td class="sss-mono">{{=_r['actor']}}</td>
+          <td class="sss-mono">{{=_r['action']}}</td>
+          <td class="sss-mono">{{=_r['entity']}}</td>
+          <td class="sss-col-num sss-mono">
+            {{if _r['link']:}}<a href="{{=URL(c=_r['link'][0], f=_r['link'][1], args=_r['link'][2], extension=False)}}" aria-label="Abrir {{=_r['entity']}} {{=_r['entity_id']}}">{{=_r['entity_id']}}</a>{{elif _r['entity_id'] is not None:}}{{=_r['entity_id']}}{{else:}}-{{pass}}
+          </td>
+          <td class="sss-mono">{{=_r['source_ip'] or '-'}}</td>
+          <td class="sss-aud-detalhe">
+            {{if _r['truncado']:}}
+            <details>
+              <summary><span>{{=_r['detalhe_curto']}}</span> <span class="sss-ver-mais">ver mais</span></summary>
+              <div class="sss-aud-detalhe-completo">{{=_r['detail']}}</div>
+            </details>
+            {{else:}}{{=_r['detail'] or '-'}}{{pass}}
+          </td>
+        </tr>
+        {{pass}}
+        {{pass}}
+      </tbody>
+    </table>
+  </div>
+  {{include 'components/pagination.html'}}
+</section>

@@ -1,0 +1,49 @@
+{{extend 'layout.html'}}
+{{
+# Lista de ambientes (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
+_opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
+filtros = {'id': 'filtro-ambientes', 'url_base': ('admin_environments', 'index'), 'preservar': {'tamanho': tamanho}, 'campos': [
+    {'name': 'name', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('name')},
+    {'name': 'active', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('active'), 'opcoes': _opc_ativo},
+]}
+_linhas = []
+for _a in resultado['itens']:
+    _linhas.append({
+        'name': _a['name'],
+        'description': _a.get('description') or '-',
+        'connection': _a.get('connection') or '-',
+        'active': _a['active'],
+        'acao': {'href': URL(c='admin_environments', f='form', args=[_a['id']]), 'rotulo': 'Editar', 'description': u'Editar ambiente %s' % _a['name']},
+    })
+pass
+tabela = {'legenda': 'Ambientes cadastrados', 'erro': erro, 'linhas': _linhas, 'msg_vazio': 'Nenhum ambiente encontrado.', 'colunas': [
+    {'chave': 'name', 'rotulo': 'Nome', 'tipo': 'mono'},
+    {'chave': 'description', 'rotulo': u'Descrição'},
+    {'chave': 'connection', 'rotulo': 'DSN', 'tipo': 'mono'},
+    {'chave': 'active', 'rotulo': u'Situação', 'tipo': 'active'},
+    {'chave': 'acao', 'rotulo': u'Ações', 'tipo': 'acao'},
+]}
+pagina = resultado['pagina']
+total = resultado['total']
+total_limitado = resultado.get('total_limitado', False)
+quantidade_pagina = len(resultado['itens'])
+url_base = ('admin_environments', 'index')
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">Ambientes</h1>
+    <p class="sss-page-sub">Ambiente é onde o script vai rodar (por exemplo, produção ou homologação). Cada um aponta para o seu banco (DSN). As credenciais ficam no secrets.cfg, nunca aqui.</p>
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-primary" href="{{=URL(c='admin_environments', f='form')}}">Novo ambiente</a>
+  </div>
+</div>
+
+<section class="sss-card" aria-label="Filtros">
+  {{include 'components/filters.html'}}
+</section>
+
+<section class="sss-card" aria-label="Ambientes">
+  {{include 'components/table.html'}}
+  {{include 'components/pagination.html'}}
+</section>

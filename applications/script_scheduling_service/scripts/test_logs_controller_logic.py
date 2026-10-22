@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Testes da logica por tras de logs/chunk e logs/baixar (F3.4): ticket_service.read_log e log_chunks."""
+"""Testes da logica por tras de logs/chunk e logs/download (F3.4): ticket_service.read_log e log_chunks."""
 import _testenv  # noqa: F401
 
 import datetime

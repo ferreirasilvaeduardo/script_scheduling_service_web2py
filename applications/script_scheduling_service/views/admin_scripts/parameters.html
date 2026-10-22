@@ -1,0 +1,88 @@
+{{extend 'layout.html'}}
+{{
+# Vínculo ordenado de parâmetros do script (README §6.3). A lista vai num único POST (JSON montado no
+# cliente por conveniência); o servidor revalida tudo e renumera a ordem. Valor específico sigiloso
+# nunca volta ao HTML: em branco mantém o gravado.
+import json
+_v = vinc
+_sc = _v['script']
+_rotulo_tipo = {'NAMED': u'por flag (NOMEADO)', 'POSITIONAL': u'posicional (SEQUENCIAL)', 'NONE': u'sem argumentos (NENHUM)'}
+}}
+<div class="sss-page-header sss-detalhe-cabecalho">
+  <div>
+    <h1 class="sss-page-titulo">Parâmetros de <span class="sss-mono">{{=_sc['name']}}</span></h1>
+    <p class="sss-page-sub">Montagem {{=_rotulo_tipo.get(_sc['param_type'], _sc['param_type'])}}. A ordem da lista é a ordem dos argumentos.</p>
+  </div>
+  <div class="sss-acoes">
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_scripts', f='form', args=[_sc['id']])}}">Dados do script</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_scripts', f='homologation', args=[_sc['id']])}}">Homologação</a>
+  </div>
+</div>
+
+<form class="sss-card" method="post" action="{{=URL(c='admin_scripts', f='save_parameters')}}" autocomplete="off"
+      x-data="vinculosScript" data-url-previa="{{=URL(c='admin_scripts', f='preview')}}"
+      data-vinculos="{{=json.dumps(_v['vinculos'])}}" data-disponiveis="{{=json.dumps(_v['disponiveis'])}}">
+  {{=csrf_campo()}}
+  <input type="hidden" name="id" value="{{=_sc['id']}}">
+  <input type="hidden" name="version" value="{{=_v['version']}}">
+  <input type="hidden" name="vinculos_json" :value="vinculosJson">
+  <div class="sss-card-corpo">
+    {{if _sc['param_type'] == 'NONE':}}
+    <div class="alert alert-info sss-alerta" role="note"><span>Este script não recebe argumentos: não é possível vincular parâmetros.</span></div>
+    {{pass}}
+    <p class="sss-texto-suave" x-show="semVinculos">Nenhum parâmetro vinculado.</p>
+    <ol class="sss-vinculos">
+      <template x-for="(linha, i) in linhas" :key="linha.id">
+        <li class="sss-vinculo">
+          <div class="sss-vinculo-titulo">
+            <span class="sss-mono" x-text="linha.codigo"></span>
+            <span class="sss-texto-suave" x-text="linha.label"></span>
+            <span class="badge text-bg-secondary sss-mono" x-show="linha.flag" x-text="linha.flag"></span>
+            <span class="badge text-bg-warning" x-show="linha.sensivel">sigiloso</span>
+          </div>
+          <div class="sss-vinculo-campos">
+            <div class="form-check mb-0">
+              <input class="form-check-input" type="checkbox" :id="linha.idObrig" :data-i="i" :checked="linha.obrigatorio" @change="alternarObrigatorio">
+              <label class="form-check-label" :for="linha.idObrig">Obrigatório</label>
+            </div>
+            <input class="form-control form-control-sm" maxlength="100" aria-label="Valor padrão específico" :data-i="i" :type="linha.tipoSub" :value="linha.sub" :placeholder="linha.dicaSub" @input="editarSub">
+            <button type="button" class="btn btn-sm btn-outline-secondary" x-show="linha.podeLimpar" :data-i="i" @click="limparSigiloso">Remover valor</button>
+          </div>
+          <div class="sss-vinculo-acoes">
+            <button type="button" class="btn btn-sm btn-outline-secondary" :data-i="i" data-delta="-1" @click="mover" :aria-label="linha.rotuloSubir">Subir</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" :data-i="i" data-delta="1" @click="mover" :aria-label="linha.rotuloDescer">Descer</button>
+            <button type="button" class="btn btn-sm btn-outline-danger" :data-i="i" @click="remover" :aria-label="linha.rotuloRemover">Remover</button>
+          </div>
+        </li>
+      </template>
+    </ol>
+
+    {{if _sc['param_type'] != 'NONE':}}
+    <fieldset class="sss-teste mb-3">
+      <legend class="form-label fs-6">Adicionar parâmetro do dicionário</legend>
+      <input type="search" class="form-control form-control-sm mb-2" id="busca-parametro" maxlength="60" placeholder="Código ou rótulo" aria-label="Buscar parâmetro" @input="buscar">
+      <p class="sss-texto-suave mb-0" x-show="semResultados">Nenhum parâmetro ativo disponível para a busca.</p>
+      <ul class="sss-busca-parametros">
+        <template x-for="p in resultados" :key="p.id">
+          <li>
+            <button type="button" class="btn btn-sm btn-link" :data-id="p.id" @click="adicionar"><span class="sss-mono" x-text="p.codigo"></span> — <span x-text="p.label"></span></button>
+          </li>
+        </template>
+      </ul>
+    </fieldset>
+    {{pass}}
+
+    <fieldset class="sss-teste mb-3">
+      <legend class="form-label fs-6">Prévia do comando (valores padrão, sem salvar)</legend>
+      <button type="button" class="btn btn-sm btn-outline-primary" @click="previa" :disabled="carregando">Gerar prévia</button>
+      <pre class="sss-argv mt-2" x-show="temPrevia" x-text="previaTexto"></pre>
+      <ul class="sss-teste-erro mt-2 mb-0" x-show="temErrosPrevia"><template x-for="e in previaErros" :key="e"><li x-text="e"></li></template></ul>
+      <p class="sss-texto-suave mt-2 mb-0" x-show="temAvisoPrevia" x-text="previaAviso"></p>
+    </fieldset>
+
+    <div class="sss-form-acoes">
+      <button type="submit" class="btn btn-primary">Salvar parâmetros</button>
+      <a class="btn btn-outline-secondary" href="{{=URL(c='admin_scripts', f='index')}}">Cancelar</a>
+    </div>
+  </div>
+</form>

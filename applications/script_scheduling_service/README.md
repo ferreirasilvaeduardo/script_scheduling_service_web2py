@@ -145,24 +145,24 @@ Todas as telas, quem pode abrir cada uma e para que servem. Telas marcadas com *
 |---|---|---|---|
 | Entrar | `default/login` | Todos | Entrar no sistema |
 | Painel inicial | `default/index` | Logado | Resumo do que importa para o seu perfil (§13) |
-| Minha senha | `default/minha_senha` | Logado | Trocar a própria senha (§4.2) |
-| **O que eu posso fazer** (CR-004) | `default/permissoes` | Logado | Ver o que o seu perfil libera e por que algo não aparece (§4.3.E) |
-| **Rotinas disponíveis** (CR-004) | `tickets/catalogo` | `EXEC_SCRIPT` | Conhecer os scripts que você pode rodar, onde e como foram as últimas execuções (§5.8) |
-| **Histórico do script** (CR-004) | `tickets/historico/<script_id>` | `EXEC_SCRIPT` | Ver como o script se saiu nos últimos 30 dias (§5.8) |
-| Disparar script | `tickets/novo` | `EXEC_SCRIPT` | Pedir para rodar um script agora ou num horário (§5.4, **CR-004**: resumo em frase e exemplos) |
-| Tickets | `tickets/lista` | `EXEC_SCRIPT` ou `VIEW_LOGS` | Acompanhar os pedidos e o que está rodando (§4.3.C) |
-| Detalhe do ticket | `tickets/detalhe/<id>` | Quem pode ver o ticket | Saber o que aconteceu, ver o log, cancelar ou repetir (§5.7, **CR-004**: frase-resumo e etapas) |
-| **Saída do ticket** (CR-012) | `tickets/saida/<id>` | Quem pode ler o log do ticket | Baixar o zip com os arquivos que o script deixou na pasta de saída (§8.13) |
-| Agendamentos | `agendamentos/lista`, `form` | `MANAGE_SCHEDULES` | Criar e cuidar das regras que rodam sozinhas (§7.6) |
-| **Agenda** (CR-004) | `agendamentos/agenda` | `MANAGE_SCHEDULES` | Ver o que vai rodar hoje e nos próximos 7 dias (§7.7) |
-| Ambientes | `admin_ambientes/*` | `MANAGE_ENVIRONMENTS` | Cadastrar onde os scripts rodam |
-| Perfis e permissões | `admin_perfis/*` | `MANAGE_PROFILES` | Definir o que cada perfil pode fazer (§4.3.B.1) |
-| **Quem pode o quê** (CR-004) | `admin_perfis/quem_pode` | `MANAGE_PROFILES` | Descobrir quem pode rodar um script ou usar um ambiente (§4.3.B.2) |
-| Usuários | `admin_usuarios/*` | `MANAGE_USERS` | Cadastrar pessoas, senhas e bloqueios |
-| Parâmetros | `admin_parametros/*` | `MANAGE_PARAMETERS` | Cadastrar as perguntas que os scripts fazem (§6.2) |
+| Minha senha | `default/my_password` | Logado | Trocar a própria senha (§4.2) |
+| **O que eu posso fazer** (CR-004) | `default/permissions` | Logado | Ver o que o seu perfil libera e por que algo não aparece (§4.3.E) |
+| **Rotinas disponíveis** (CR-004) | `tickets/catalog` | `EXEC_SCRIPT` | Conhecer os scripts que você pode rodar, onde e como foram as últimas execuções (§5.8) |
+| **Histórico do script** (CR-004) | `tickets/history/<script_id>` | `EXEC_SCRIPT` | Ver como o script se saiu nos últimos 30 dias (§5.8) |
+| Disparar script | `tickets/new` | `EXEC_SCRIPT` | Pedir para rodar um script agora ou num horário (§5.4, **CR-004**: resumo em frase e exemplos) |
+| Tickets | `tickets/index` | `EXEC_SCRIPT` ou `VIEW_LOGS` | Acompanhar os pedidos e o que está rodando (§4.3.C) |
+| Detalhe do ticket | `tickets/detail/<id>` | Quem pode ver o ticket | Saber o que aconteceu, ver o log, cancelar ou repetir (§5.7, **CR-004**: frase-resumo e etapas) |
+| **Saída do ticket** (CR-012) | `tickets/output/<id>` | Quem pode ler o log do ticket | Baixar o zip com os arquivos que o script deixou na pasta de saída (§8.13) |
+| Agendamentos | `schedules/index`, `form` | `MANAGE_SCHEDULES` | Criar e cuidar das regras que rodam sozinhas (§7.6) |
+| **Agenda** (CR-004) | `schedules/agenda` | `MANAGE_SCHEDULES` | Ver o que vai rodar hoje e nos próximos 7 dias (§7.7) |
+| Ambientes | `admin_environments/*` | `MANAGE_ENVIRONMENTS` | Cadastrar onde os scripts rodam |
+| Perfis e permissões | `admin_profiles/*` | `MANAGE_PROFILES` | Definir o que cada perfil pode fazer (§4.3.B.1) |
+| **Quem pode o quê** (CR-004) | `admin_profiles/who_can` | `MANAGE_PROFILES` | Descobrir quem pode rodar um script ou usar um ambiente (§4.3.B.2) |
+| Usuários | `admin_users/*` | `MANAGE_USERS` | Cadastrar pessoas, senhas e bloqueios |
+| Parâmetros | `admin_parameters/*` | `MANAGE_PARAMETERS` | Cadastrar as perguntas que os scripts fazem (§6.2) |
 | Scripts | `admin_scripts/*` | `MANAGE_SCRIPTS` | Cadastrar scripts, onde podem rodar e que perguntas fazem (§8.5) |
-| Auditoria | `auditoria/lista` | `VIEW_AUDIT` | Ver quem fez o quê e quando (§4.4) |
-| Agentes | `auditoria/agentes` | `VIEW_AUDIT` | Ver se os servidores que rodam os scripts estão bem (§13) |
+| Auditoria | `audit/index` | `VIEW_AUDIT` | Ver quem fez o quê e quando (§4.4) |
+| Agentes | `audit/agents` | `VIEW_AUDIT` | Ver se os servidores que rodam os scripts estão bem (§13) |
 
 As telas novas do CR-004 são **somente de consulta**: não gravam nada, não auditam e usam `GET`. Elas seguem os mesmos guardas, o mesmo escopo de ambiente e o §2.4.1.
 
@@ -262,7 +262,7 @@ Continuam em **português**:
 * os **comentários** e docstrings, inclusive os `COMMENT ON` das tabelas e colunas;
 * os **dados**: o que o usuário cadastra (nomes de ambiente, scripts, parâmetros e respostas) e os scripts de demonstração do seed.
 
-**Transição:** o CR-016 é aplicado em fases (016a banco, 016b configuração e operação, 016c código, 016d web). Até a fase correspondente terminar, convivem nomes legados em português. Código novo já nasce com nomes em inglês. Um nome legado só muda na sua fase, com recusa explícita do nome antigo quando ele é configurável (`RENAMED_KEYS`, `RENAMED_SECTIONS`).
+**Transição:** o CR-016 é aplicado em fases (016a banco, 016b configuração e operação, 016c código, 016d web). Até a fase correspondente terminar, convivem nomes legados em português. Código novo já nasce com nomes em inglês. Um nome legado só muda na sua fase, com recusa explícita do nome antigo quando ele é configurável (`RENAMED_KEYS`, `RENAMED_SECTIONS`). As rotas trocaram de nome sem redirecionamento (CR-016d, D22): um endereço antigo dá 404.
 
 ---
 
@@ -464,7 +464,7 @@ password = ...
   * **Redefinir senha** (administrador, `MANAGE_USERS`): aplica a política com confirmação, zera `failed_attempts` e `locked_until` e incrementa `session_epoch` (as sessões abertas do alvo caem, CR-008 E2). A auditoria é `UPDATE` com detalhe `senha redefinida`, sem o valor. Não existe "trocar no próximo login". A senha de um **administrador** só é redefinida por outro administrador (CR-008, E1).
   * **Desbloquear:** zera tentativas e bloqueio, com auditoria `UPDATE`. A ação é auditada mesmo quando a conta não estava bloqueada.
   * **Nova senha igual à atual:** é aceita em todas as telas. Não há histórico de senhas.
-  * **Minha senha** (`default/minha_senha`, qualquer usuário logado):
+  * **Minha senha** (`default/my_password`, qualquer usuário logado):
     * exige a senha atual. Uma senha atual errada **conta como falha de login**, com o mesmo limite e bloqueio do item "Proteções do login" e auditoria `LOGIN_FAILED`;
     * se a conta for bloqueada, a sessão é encerrada;
     * no sucesso, `session_epoch` é incrementado (as outras sessões do usuário caem, CR-008 E2), a sessão atual é renovada (`session.renew()`, com novo token CSRF e o novo `session_epoch`) e a troca é auditada (`UPDATE`, "senha alterada pelo próprio usuário").
@@ -537,7 +537,7 @@ As operações cobertas são: desativar usuário, trocar o perfil de usuário, d
   * Não há proteção contra um perfil **não** administrativo retirar da própria matriz `MANAGE_PROFILES` ou `MANAGE_USERS`. Quem fizer isso perde o acesso à tela no próximo clique, e um administrador pode restaurar a permissão.
 * **Filtro de situação na lista de usuários:** Ativos, Inativos e **Bloqueados**, que são os usuários com `locked_until` ainda vigente (filtro `bloqueado_em` do contrato).
 
-#### B.1 Matriz de permissões na UI (`admin_perfis`)
+#### B.1 Matriz de permissões na UI (`admin_profiles`)
 
 * **Um único POST** com as três listas (funcionalidades, ambientes e scripts), revalidado inteiro no servidor.
 * **Concorrência:** a tela envia o `perm_version` lido. `matrix_save` só grava se ele não tiver mudado; senão, `RepoConflict`.
@@ -550,7 +550,7 @@ As operações cobertas são: desativar usuário, trocar o perfil de usuário, d
 * **Perfil administrativo:** a matriz continua editável e registrada, com um aviso de que o perfil dispensa as dimensões 1 a 3 (mas não a homologação). Ela passa a valer se `is_admin` for removido.
 * **Desativar perfil:** o modal mostra a quantidade **e os logins** dos usuários ativos afetados (no máximo 20, seguidos de "e outros N"), que têm a sessão encerrada no próximo request pela revalidação (§4.2).
 
-#### B.2 Consulta "Quem pode o quê" (`admin_perfis/quem_pode`, CR-004)
+#### B.2 Consulta "Quem pode o quê" (`admin_profiles/who_can`, CR-004)
 
 Responde às duas perguntas mais comuns do administrador, sem abrir perfil por perfil. A tela é só de consulta e exige `MANAGE_PROFILES`.
 
@@ -610,7 +610,7 @@ O processo de inicialização do banco (`init_db.py` e script SQL de implantaç�
    * **Credencial Inicial de Homologação:** senha `Sss@Homolog2026!` (hash PBKDF2-SHA256, 200k iterações: `pbkdf2_sha256$200000$f9fb31dc39b754d083af236a880dfa6e$2229f3f8a694a9c45be82d9c3bd38110f8b474d2a0aa0ee7f691d405738a4cd8`).
    * **Idempotência:** o `MERGE` do seed atualiza nome e perfil de acesso, mas preserva a senha existente caso tenha sido redefinida pelo operador.
 
-#### E. Tela "O que eu posso fazer" (`default/permissoes`, CR-004)
+#### E. Tela "O que eu posso fazer" (`default/permissions`, CR-004)
 
 Qualquer usuário logado pode abrir. Ela responde, em linguagem simples (§2.4.2), "o que eu posso fazer aqui?". O acesso fica no cabeçalho, ao lado de "Minha senha", e a mensagem de 403 aponta para ela.
 
@@ -675,13 +675,13 @@ O campo `detail` nunca contém segredos nem valores de parâmetros sensíveis.
 
 Todo `detail` passa pelo `masking.py`, inclusive os de vínculos de parâmetros, homologação e matriz, e é limitado a 1.000 caracteres. Valores de parâmetros sensíveis aparecem sempre como `****`.
 
-**Consulta e exportação** (tela `auditoria/lista`, `VIEW_AUDIT`, decisões do F6.1):
+**Consulta e exportação** (tela `audit/index`, `VIEW_AUDIT`, decisões do F6.1):
 
 * Filtros: período (`de`/`até`, por dia, inclusivos), ator (trecho), ação (catálogo da tabela 16), entidade, `entity_id` e IP (trecho). Ordenação `created_at DESC, id DESC` e página de no máximo 100 linhas.
 * Período padrão: últimos 7 dias. Período máximo: 90 dias. Acima disso, até 366 dias, só com filtro seletivo: ator, ou entidade + ID.
 * O `detail` é sempre exibido escapado (truncado com "ver mais"), e passa de novo pelo `masking.py` na leitura.
 * O ID vira link só quando a entidade tem tela (tickets, agendamentos, usuários, perfis, ambientes, scripts e parâmetros) **e** o usuário tem a funcionalidade dessa tela. Nos outros casos, o ID aparece como texto.
-* **Exportação CSV** (`auditoria/exportar`):
+* **Exportação CSV** (`audit/export`):
   * por `POST` com CSRF, porque grava auditoria e `GET` nunca altera estado;
   * mesmos filtros e mesmo RBAC da tela;
   * streaming de no máximo 50.000 linhas (as mais recentes);
@@ -903,7 +903,7 @@ Se o processo terminou sozinho **antes** de o agente sinalizá-lo, prevalece o r
 
 ### 5.7 Detalhe do ticket: resumo e etapas (CR-004)
 
-O topo do detalhe (`tickets/detalhe/<id>`) responde "o que está acontecendo?" antes de qualquer dado técnico:
+O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" antes de qualquer dado técnico:
 
 1. **Frase-resumo:** um quadro com o nome simples da situação (§5.2.1), a frase "o que aconteceu" e a frase "o que fazer agora", com ícone e cor da situação.
 2. **Barra de etapas**, uma lista ordenada acessível, com `aria-current` na etapa atual:
@@ -924,7 +924,7 @@ O topo do detalhe (`tickets/detalhe/<id>`) responde "o que está acontecendo?" a
 
 ### 5.8 Rotinas disponíveis e histórico do script (CR-004)
 
-**Rotinas disponíveis** (`tickets/catalogo`, exige `EXEC_SCRIPT`): responde "o que eu posso rodar?".
+**Rotinas disponíveis** (`tickets/catalog`, exige `EXEC_SCRIPT`): responde "o que eu posso rodar?".
 
 * Um cartão por script em que o usuário tem `can_execute` em **pelo menos um** ambiente (admin: todo script ativo homologado em ambiente ativo). Cada cartão traz:
   * nome, descrição, grupo e categoria;
@@ -937,7 +937,7 @@ O topo do detalhe (`tickets/detalhe/<id>`) responde "o que está acontecendo?" a
 * **Contrato (leitura nova):** `RepoTickets.last_runs(script_ids, environment_scope=None, requested_by=None)` devolve `{script_id: {id, status, status_motivo, created_at, finished_at}}` com o ticket mais recente (`created_at DESC, id DESC`) de cada script no escopo. No Oracle, a consulta usa `ix_tbsss_tck_scr` e um `ROW_NUMBER()` por script, que é sintaxe 11gR2 e não carrega `log_output`.
 * O menu Operação ganha o item "Rotinas disponíveis" (`EXEC_SCRIPT`), antes de "Disparar Scripts".
 
-**Histórico do script** (`tickets/historico/<script_id>`, exige `EXEC_SCRIPT`): responde "esse script costuma dar certo?".
+**Histórico do script** (`tickets/history/<script_id>`, exige `EXEC_SCRIPT`): responde "esse script costuma dar certo?".
 
 * Abre só para um script que aparece nas Rotinas disponíveis do usuário. Fora disso, 404.
 * Período fixo: **últimos 30 dias** pelo relógio do banco (`created_at >= SYSDATE - 30`), no mesmo escopo da última execução.
@@ -1012,7 +1012,7 @@ Para todos os tipos, **nesta ordem**:
   Exemplos aceitos: `^[A-Z]{2}\d{6}$`, `^\d{3}\.\d{3}\.\d{3}-\d{2}$`, `^(PF|PJ)$`, `^\d+(\.\d{1,2})?$`, `^[\w.]+@[\w.]+$`, `^\w{0,10}$`. Recusados: `(a|a)*b`, `^(\w|\d)+$`, `(a+)+`, `\w{0,100}\w{0,100}\w{0,100}x` (3 ilimitados), `\w*\w{0,10}\w{0,10}\w{0,10}\w{0,10}\w?x` (6 escolhas com ilimitado). Com essas regras, o `fullmatch` no tamanho máximo do valor (500 caracteres) fica abaixo de 0,2 s no pior caso medido no Python 3.6.8; a promessa anterior, "no máximo quadrático", não valia para quantificadores limitados largos (auditoria final, F-06). Uma regex gravada antes do CR-007 que não atenda continua valendo até a próxima gravação do parâmetro, que exige a correção; o `init_db`/migração não a altera.
 * Somente admin cadastra padrões.
 
-**Cadastro no dicionário de parâmetros** (UI `admin_parametros`, F4.4):
+**Cadastro no dicionário de parâmetros** (UI `admin_parameters`, F4.4):
 
 * **`code` imutável depois de criado:** ele é a chave de `answers` no snapshot (§6.5) e de `tbsss_schedules.params_json` (§6.1). Renomeá-lo faria agendamentos perderem respostas sem aviso.
 * **`options_json`** (somente `SELECT`) é validado no servidor:
@@ -1103,7 +1103,7 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 * **Defesa em profundidade no claim:** o agente revalida o snapshot (§8.4, passo 1).
 * **Snapshot × cadastro (CR-007, R-24):** se `path_file` ou `interpreter` do snapshot diferirem do cadastro atual do script, o agente recusa (`REGISTRATION_CHANGED`): o ticket foi criado antes de uma mudança de cadastro e deve ser reexecutado, para ser compilado de novo.
 * **Conteúdo do arquivo (CR-011):** o SSS não guarda nem confere hash do arquivo; o ambiente controla o conteúdo e a versão do script (§8.5).
-* **Vínculo de parâmetros pela UI** (`admin_scripts/parametros`, F4.5):
+* **Vínculo de parâmetros pela UI** (`admin_scripts/parameters`, F4.5):
   * a lista inteira vai num único POST, e a ordem é renumerada pelo servidor (1..n, pela posição);
   * a lista é revalidada inteira: ID inexistente ou duplicado, `default_value_override` por `validate_value` (com até 100 caracteres), `NONE` sem vínculos e `NAMED` com flag em todos os parâmetros;
   * as regras de `NONE`/`NAMED` também são garantidas pelo repositório na mesma operação (`sss_scr_nenhum_vinculado` e `sss_scr_nomeado_sem_flag`), inclusive ao trocar `param_type`;
@@ -1356,7 +1356,7 @@ Todas recebem a conexão da transação do ciclo e nunca fazem `COMMIT` sozinhas
 
 ### 7.6 Cadastro de regras na UI (decisões do F5.2)
 
-Implementação: `controllers/agendamentos.py`, `modules/schedules_service.py` e `views/agendamentos/`. O questionário de parâmetros é o mesmo do disparo (`views/components/questionario.html`).
+Implementação: `controllers/schedules.py`, `modules/schedules_service.py` e `views/schedules/`. O questionário de parâmetros é o mesmo do disparo (`views/components/questionnaire.html`).
 
 * **Validação estrita (sem truncamento):** todo campo recebido é validado no tamanho e no formato exatos. Um valor mais longo ou fora do formato é **recusado** com mensagem no campo, nunca cortado. Exemplos: dia do mês `100` ou `311`, hora `03:000`, data com segundos ou frações (`…T10:00:00.999`).
 * **Escolha de script e ambiente:** na inclusão, a escolha é feita em etapas e usa os mesmos filtros do disparo (§4.3.A): só aparecem scripts e ambientes em que o editor tem `can_execute`. Por isso, quem não é admin precisa também de `EXEC_SCRIPT`.
@@ -1398,7 +1398,7 @@ Implementação: `controllers/agendamentos.py`, `modules/schedules_service.py` e
 
 ---
 
-### 7.7 Agenda: o que vai rodar (`agendamentos/agenda`, CR-004)
+### 7.7 Agenda: o que vai rodar (`schedules/agenda`, CR-004)
 
 Responde "o que vai rodar hoje e nos próximos dias?". Exige `MANAGE_SCHEDULES` e mostra só as regras dos ambientes autorizados ao perfil (admin: todas), como a lista do §7.6.
 
@@ -1945,7 +1945,7 @@ Canal opcional para o script devolver arquivos ao usuário. O zip vai para o ban
 * **Startup check (§8.12, passo 9):** linhas `WRITING` de tickets deste agente viram `FAILED`.
 * **Retenção no disco:** pastas que ficaram (`EXCEEDED`, `FAILED`, abandono) são removidas pelo `purge.py` depois de `output_retention_days` (§11.3).
 * **Sem mascaramento:** o conteúdo da saída não passa pelo mascarador (risco aceito no §14).
-* **Download:** `tickets/saida/<id>`, `GET`, com a mesma regra de leitura do log do ticket (§4.3.C). Só com situação `AVAILABLE`; resposta `application/zip`, `Content-Disposition: attachment; filename="ticket_<id>_saida.zip"`, `X-Content-Type-Options: nosniff`, `Cache-Control: no-store` e `Content-Length` (o tamanho gravado), lida do BLOB em fatias de 256 KiB (`ticket_service.output_chunks`). Uma falha de leitura no meio encerra a resposta antes do tamanho anunciado, e o navegador acusa o download incompleto. Sem auditoria (consulta); o download fica no log da aplicação (`SAIDA_BAIXAR`).
+* **Download:** `tickets/output/<id>`, `GET`, com a mesma regra de leitura do log do ticket (§4.3.C). Só com situação `AVAILABLE`; resposta `application/zip`, `Content-Disposition: attachment; filename="ticket_<id>_saida.zip"`, `X-Content-Type-Options: nosniff`, `Cache-Control: no-store` e `Content-Length` (o tamanho gravado), lida do BLOB em fatias de 256 KiB (`ticket_service.output_chunks`). Uma falha de leitura no meio encerra a resposta antes do tamanho anunciado, e o navegador acusa o download incompleto. Sem auditoria (consulta); o download fica no log da aplicação (`SAIDA_BAIXAR`).
 * **Quadro Saída no detalhe do ticket (§5.7; `ui_helpers.quadro_saida`, mensagem em duas partes):** o nó web não conhece os limites nem a retenção de cada agente, então as mensagens não citam números; o tamanho aparece em bytes, KB ou MB (`ui_helpers.tamanho_legivel`). O quadro nunca leva o conteúdo nem o caminho da pasta.
 
   | Situação | Mostra |
@@ -2775,7 +2775,7 @@ O `sss-scheduler.sh` aceita só a linha do daemon: sem argumentos ou `--config <
 
 * Todo `except` registra o código de erro do banco (ORA- no Oracle) e o stack trace em ERROR antes de qualquer `ROLLBACK`. **Exceção (CR-007, R-32):** situações esperadas e tratadas (timeout de lock, deadlock, *call timeout*, perda de corrida com `rowcount = 0` e `SKIP LOCKED`) registram WARN com o código do erro e sem stack trace, para não poluir o log (AGENTS §4.10).
 * É proibido registrar senhas, `PADRAO_VALOR_RUN_CONEXAO_BD`, `SSS_ENVIRONMENT_CONNECTION`, `cookie_key`, o conteúdo de `secrets.cfg` e valores de parâmetros sensíveis.
-* **Visão operacional:** a tela de agentes (`auditoria/agentes`, `VIEW_AUDIT`) lista `tbsss_agents` com o heartbeat e os tickets `RUNNING` de cada agente. É **somente leitura**.
+* **Visão operacional:** a tela de agentes (`audit/agents`, `VIEW_AUDIT`) lista `tbsss_agents` com o heartbeat e os tickets `RUNNING` de cada agente. É **somente leitura**.
   * **Saúde derivada** da idade do heartbeat, medida pelo relógio do banco (`SYSDATE`), com os limiares do daemon:
 
     | Saúde | Condição | Exibição |
