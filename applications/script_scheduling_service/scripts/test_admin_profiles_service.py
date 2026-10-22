@@ -158,7 +158,7 @@ class TestSelfProtection(_Base):
         form = self._form(PERFIL_ADMIN)
         with self.assertRaises(OperationDenied) as cm:
             self.svc.toggle_active(self.ctx["admin"], IP, str(PERFIL_ADMIN), form["version"])
-        self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_SELF_DEACTIVATE)
+        self.assertEqual(cm.exception.message, perfis_mod.MSG_SELF_DEACTIVATE)
         self.assertEqual(self.rbac_repo.profiles_get(PERFIL_ADMIN)["active"], "Y")
         self.assertEqual(self._audits("DEACTIVATE"), [])
 
@@ -189,7 +189,7 @@ class TestWhoCan(_Base):
         perfis = self._names(q["profiles"])
         self.assertEqual(perfis["ADMINISTRATOR"]["reason"], u"administrador")
         # Cada perfil listado tem um usuario cujo contexto can_execute no ambiente indicado.
-        catalogo = self.svc._catalogo
+        catalogo = self.svc._catalog
         script = catalogo.scripts_get(1)
         ambs = dict((a["name"], a) for a in catalogo.environments_list(pagina=1, tamanho=50)["itens"])
         hom = catalogo.homologation_get(1)
@@ -202,7 +202,7 @@ class TestWhoCan(_Base):
     def test_por_ambiente_e_inativos(self):
         self.rbac_repo.profiles_update(PERFIL_CONSULTA, {"is_admin": "Y"}, ator="teste")
         self.rbac_repo.profiles_update(PERFIL_CONSULTA, {"active": "N"}, ator="teste")
-        amb = [a for a in self.svc._catalogo.environments_list(pagina=1, tamanho=50)["itens"]
+        amb = [a for a in self.svc._catalog.environments_list(pagina=1, tamanho=50)["itens"]
                if a["name"] == "HOMOLOGACAO"][0]
         q = self.svc.who_can(self.ctx["admin"], ambiente_id=str(amb["id"]))
         self.assertIn("READ_ONLY", self._names(q["inativos"]))
@@ -210,7 +210,7 @@ class TestWhoCan(_Base):
         self.assertTrue(self._names(q["profiles"])["ADMINISTRATOR"]["detalhes"])
 
     def test_script_inativo_avisa_e_acesso(self):
-        self.svc._catalogo.scripts_update(5, {"active": "N"}, ator="teste")
+        self.svc._catalog.scripts_update(5, {"active": "N"}, ator="teste")
         self.assertIn(u"inativo", self.svc.who_can(self.ctx["admin"], script_id="5")["aviso"])
         with self.assertRaises(RepoNotFound):
             self.svc.who_can(self.ctx["admin"], script_id="999")

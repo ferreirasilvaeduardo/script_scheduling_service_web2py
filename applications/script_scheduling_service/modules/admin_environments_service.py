@@ -82,26 +82,26 @@ class AdminEnvironmentsService(object):
     """Regras do cadastro de ambientes com repositorios e log injetados."""
 
     def __init__(self, catalogo, agendamentos, log):
-        self._catalogo = catalogo
-        self._agendamentos = agendamentos
+        self._catalog = catalogo
+        self._schedules = agendamentos
         self._log = log
 
     def _get(self, ambiente_id):
         aid = _id(ambiente_id)
         if aid is None:
             raise RepoNotFound("ambiente invalido")
-        return self._catalogo.environments_get(aid)
+        return self._catalog.environments_get(aid)
 
     def active_schedules(self, nome):
         """Quantidade de agendamentos ativos do ambiente (pausados no proximo desdobro se desativado)."""
-        return self._agendamentos.list(filtros={"environment": nome, "active": "Y"}, pagina=1,
+        return self._schedules.list(filtros={"environment": nome, "active": "Y"}, pagina=1,
                                          tamanho=_COUNT_PAGE_SIZE)["total"]
 
     def homologated_scripts(self, nome):
         """Quantidade de scripts homologados no ambiente (deixam de poder rodar nele se for desativado)."""
         total, pagina = 0, 1
         while True:
-            itens = self._catalogo.scripts_list(pagina=pagina, tamanho=_SCRIPTS_PAGE)["itens"]
+            itens = self._catalog.scripts_list(pagina=pagina, tamanho=_SCRIPTS_PAGE)["itens"]
             total += sum(1 for s in itens if nome in (s.get("ambientes_homologados") or ()))
             if len(itens) < _SCRIPTS_PAGE:
                 return total
@@ -110,7 +110,7 @@ class AdminEnvironmentsService(object):
     def list(self, ctx, filtros, pagina, tamanho):
         """Pagina de ambientes (ordem nome ASC) com a versao de cada linha."""
         admin_crud.require_feature(ctx, FEATURE)
-        return self._catalogo.environments_list(filtros=filtros, pagina=pagina, tamanho=tamanho)
+        return self._catalog.environments_list(filtros=filtros, pagina=pagina, tamanho=tamanho)
 
     def form(self, ctx, ambiente_id=None):
         """Dados do formulario: vazio para inclusao; registro, versao e agendamentos ativos na edicao.
@@ -177,7 +177,7 @@ class AdminEnvironmentsService(object):
             auditoria = admin_crud.audit_entry(ctx, ip, "CREATE",
                                              admin_crud.insert_detail(novo, INSERT_FIELDS))
             try:
-                criado = self._catalogo.environments_insert(novo, auditoria=auditoria)
+                criado = self._catalog.environments_insert(novo, auditoria=auditoria)
             except RepoViolation as exc:
                 self._violation(ctx, exc, erros)
                 return None, erros
@@ -197,7 +197,7 @@ class AdminEnvironmentsService(object):
         if detalhe is None:
             return atual["id"], {}
         try:
-            self._catalogo.environments_update(
+            self._catalog.environments_update(
                 atual["id"], {"description": descricao, "connection": conexao},
                 esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
                 auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
@@ -228,7 +228,7 @@ class AdminEnvironmentsService(object):
         if novo_ativo == "N":
             detalhe = u"%s; agendamentos ativos afetados: %d; scripts homologados afetados: %d" % (
                 detalhe, self.active_schedules(atual["name"]), self.homologated_scripts(atual["name"]))
-        alterado = self._catalogo.environments_update(
+        alterado = self._catalog.environments_update(
             atual["id"], {"active": novo_ativo}, esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
             auditoria=admin_crud.audit_entry(ctx, ip, acao, detalhe))
         self._log.info("ambiente %s (login=%s environment=%s)", "desativado" if novo_ativo == "N" else "reativado",

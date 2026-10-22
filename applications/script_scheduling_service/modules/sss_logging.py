@@ -86,20 +86,20 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
     def __init__(self, log_dir, nome_processo, max_bytes, retention_days,
                  encoding="utf-8", pid=None, delay=False, default_agent="-"):
         self.log_dir = log_dir
-        self.nome_processo = nome_processo[:-4] if nome_processo.endswith(".log") else nome_processo
+        self.process_name = nome_processo[:-4] if nome_processo.endswith(".log") else nome_processo
         self.max_bytes = max_bytes
         self.maxBytes = max_bytes
         self.retention_days = retention_days
         self.pid = pid if pid is not None else os.getpid()
         self.encoding = encoding
         self._delay = delay
-        self._avisos = []
+        self._warnings = []
 
         agora = datetime.datetime.now()
         caminho_inicial = log_paths.next_app_log_path(
-            self.log_dir, self.nome_processo, self.pid, agora
+            self.log_dir, self.process_name, self.pid, agora
         )
-        _ensure_directory(os.path.dirname(caminho_inicial), self._avisos)
+        _ensure_directory(os.path.dirname(caminho_inicial), self._warnings)
 
         # Retencao na subida (CR-005, R-d)
         self.executar_retencao(agora)
@@ -112,7 +112,7 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
 
     def registrar_aviso(self, acao, mensagem):
         """Guarda um WARN para gravar neste arquivo antes do proximo registro."""
-        self._avisos.append((acao, mensagem))
+        self._warnings.append((acao, mensagem))
 
     def executar_retencao(self, ref_dt=None):
         falhas = []
@@ -121,18 +121,18 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
             self.registrar_aviso("RETENCAO", "retencao do log da aplicacao nao removeu %s" % falha)
 
     def _open(self):
-        _ensure_directory(os.path.dirname(self.baseFilename), self._avisos)
+        _ensure_directory(os.path.dirname(self.baseFilename), self._warnings)
         arquivo_novo = not os.path.exists(self.baseFilename)
         stream = open(self.baseFilename, self.mode, encoding=self.encoding)
         if arquivo_novo:
-            _chmod(self.baseFilename, 0o640, self._avisos)
+            _chmod(self.baseFilename, 0o640, self._warnings)
         return stream
 
     def emit(self, record):
-        if self._avisos:
-            pendentes, self._avisos = self._avisos, []
+        if self._warnings:
+            pendentes, self._warnings = self._warnings, []
             for acao, mensagem in pendentes:
-                aviso = logging.LogRecord(self.nome_processo, logging.WARNING, __file__, 0,
+                aviso = logging.LogRecord(self.process_name, logging.WARNING, __file__, 0,
                                           mensagem, None, None)
                 aviso.action = acao
                 if aviso.levelno >= self.level and self.filter(aviso):
@@ -157,7 +157,7 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
             self.stream = None
         agora = datetime.datetime.now()
         novo_caminho = log_paths.next_app_log_path(
-            self.log_dir, self.nome_processo, self.pid, agora
+            self.log_dir, self.process_name, self.pid, agora
         )
         self.baseFilename = os.path.abspath(novo_caminho)
         self.executar_retencao(agora)

@@ -88,7 +88,7 @@ class TestAdminOnlyByAdmin(_Base):
                      lambda: self.svc_usr.toggle_active(self.ctx["gestor"], IP, str(U_ADMIN), form["version"])):
             with self.assertRaises(OperationDenied) as cm:
                 acao()
-            self.assertEqual(cm.exception.mensagem, usr_mod.MSG_ADMIN_ONLY)
+            self.assertEqual(cm.exception.message, usr_mod.MSG_ADMIN_ONLY)
         admin = self.users.get_by_id(U_ADMIN)
         self.assertEqual((admin["active"], admin["session_epoch"]), ("Y", 0))
 

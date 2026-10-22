@@ -156,17 +156,17 @@ def _run_ddl_phases(conn, owner, prefixo, lob_storage="SECUREFILE", log_fn=print
         skip_count = 0
 
         for idx, item in enumerate(instrucoes, start=1):
-            if _object_exists(item.tipo, item.nome, mapa):
+            if _object_exists(item.kind, item.name, mapa):
                 skip_count += 1
-                log_fn("  [{}/{}] SKIP: {} {} ja existe".format(idx, total, item.tipo, item.nome))
+                log_fn("  [{}/{}] SKIP: {} {} ja existe".format(idx, total, item.kind, item.name))
                 continue
 
-            log_fn("  [{}/{}] CRIANDO: {} {}...".format(idx, total, item.tipo, item.nome))
+            log_fn("  [{}/{}] CRIANDO: {} {}...".format(idx, total, item.kind, item.name))
             try:
                 cursor.execute(item.sql)
                 sucesso_count += 1
             except Exception as exc:
-                msg = "Fase {} - Falha ao criar {} {}: {}".format(item.fase, item.tipo, item.nome, exc)
+                msg = "Fase {} - Falha ao criar {} {}: {}".format(item.phase, item.kind, item.name, exc)
                 logger.error(msg, extra={"agent": "-", "ticket": "-", "action": "INIT_DB"})
                 raise RuntimeError(msg)
 

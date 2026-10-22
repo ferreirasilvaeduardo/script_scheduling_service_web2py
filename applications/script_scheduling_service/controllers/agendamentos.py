@@ -136,7 +136,7 @@ def form():
     except (AccessDenied, DisparoNegado):
         _negado()
     except OperationDenied as exc:
-        _redirecionar_lista("erro", exc.mensagem)
+        _redirecionar_lista("erro", exc.message)
     return _pagina_form(dados)
 
 
@@ -156,7 +156,7 @@ def salvar():
     except AccessDenied:
         _negado()
     except OperationDenied as exc:
-        _redirecionar_lista("erro", exc.mensagem)
+        _redirecionar_lista("erro", exc.message)
     except RepoError:
         _log.exception("falha ao salvar agendamento (login=%s id=%r)", ctx["login"], agendamento_id,
                        extra={"action": _FUNC})
@@ -174,7 +174,7 @@ def salvar():
     except (AccessDenied, DisparoNegado):
         _negado()
     except OperationDenied as exc:
-        _redirecionar_lista("erro", exc.mensagem)
+        _redirecionar_lista("erro", exc.message)
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
     response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.GENERAL_FIELD)
                       or ui_helpers.mensagem("formulario")}
@@ -193,7 +193,7 @@ def _acao_estado(funcao, sucesso):
     except AccessDenied:
         _negado()
     except OperationDenied as exc:
-        session.flash = {"tipo": "aviso", "mensagem": exc.mensagem}
+        session.flash = {"tipo": "aviso", "mensagem": exc.message}
     except RepoConflict:
         session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLICT}
     except RepoError:

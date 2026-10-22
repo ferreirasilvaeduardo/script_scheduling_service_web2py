@@ -207,7 +207,7 @@ class TestDependencies(_Base):
         f = self.svc.form(self.ctx["admin"], str(P_DATA_REF))
         with self.assertRaises(OperationDenied) as cm:
             self.svc.toggle_active(self.ctx["admin"], IP, str(P_DATA_REF), f["version"])
-        self.assertIn("carga_diaria", cm.exception.mensagem)
+        self.assertIn("carga_diaria", cm.exception.message)
         self.assertEqual(self.catalog.parameters_get(P_DATA_REF)["active"], "Y")
         self.assertEqual(self._audits("DEACTIVATE"), [])
 

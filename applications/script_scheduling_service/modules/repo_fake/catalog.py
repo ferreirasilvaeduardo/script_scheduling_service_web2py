@@ -25,7 +25,7 @@ class RepoCatalogFake(RepoCatalog):
     def environments_list(self, filtros=None, pagina=1, tamanho=20):
         """Lista ambientes com paginacao deterministica por nome ASC, id ASC."""
         filtros = filtros or {}
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             lista = list(self._store.environments.values())
 
             nome_f = filtros.get("name")
@@ -41,7 +41,7 @@ class RepoCatalogFake(RepoCatalog):
 
     def environments_get(self, id):
         """Retorna dict do ambiente pelo ID ou lanca RepoNotFound."""
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             if id not in self._store.environments:
                 raise RepoNotFound("Ambiente ID %s nao encontrado" % id)
             return copy.deepcopy(self._store.environments[id])
@@ -59,7 +59,7 @@ class RepoCatalogFake(RepoCatalog):
 
     def environments_insert(self, dados, auditoria=None, ator=None):
         """Insere novo ambiente com validacao de CKs, UK e DSN, auditando na mesma operacao."""
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             ator = self._store.record_actor(auditoria, ator)
             nome = dados.get("name")
             if not nome or not _RE_ENV_NAME.fullmatch(nome):
@@ -93,7 +93,7 @@ class RepoCatalogFake(RepoCatalog):
 
     def environments_update(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Altera ambiente (nome imutavel, trigger tr_tbsss_env_bu), condicional a 'esperado'."""
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             ator = self._store.record_actor(auditoria, ator)
             if id not in self._store.environments:
                 raise RepoNotFound("Ambiente ID %s nao encontrado" % id)
@@ -163,7 +163,7 @@ class RepoCatalogFake(RepoCatalog):
     def scripts_list(self, filtros=None, pagina=1, tamanho=20):
         """Lista scripts com paginacao deterministica por nome ASC, id ASC, homologacoes e qtd de parametros."""
         filtros = filtros or {}
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             lista = list(self._store.scripts.values())
 
             nome_f = filtros.get("name")
@@ -185,7 +185,7 @@ class RepoCatalogFake(RepoCatalog):
 
     def scripts_get(self, id):
         """Retorna dict do script pelo ID ou lanca RepoNotFound."""
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             if id not in self._store.scripts:
                 raise RepoNotFound("Script ID %s nao encontrado" % id)
             return copy.deepcopy(self._store.scripts[id])
@@ -218,7 +218,7 @@ class RepoCatalogFake(RepoCatalog):
 
     def scripts_insert(self, dados, auditoria=None, ator=None):
         """Insere novo script com validacoes de seguranca e CKs, auditando na mesma operacao."""
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             ator = self._store.record_actor(auditoria, ator)
             self._validar_script(dados)
             sid = self._store.next_id("tbsss_scripts")
@@ -244,7 +244,7 @@ class RepoCatalogFake(RepoCatalog):
 
     def scripts_update(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Altera script (CKs, esperado e regras de tipo_param x vinculos) na mesma operacao."""
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             ator = self._store.record_actor(auditoria, ator)
             if id not in self._store.scripts:
                 raise RepoNotFound("Script ID %s nao encontrado" % id)
@@ -274,7 +274,7 @@ class RepoCatalogFake(RepoCatalog):
 
     def homologation_get(self, script_id):
         """Retorna lista de ambiente_id homologados para o script."""
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             if script_id not in self._store.scripts:
                 raise RepoNotFound("Script ID %s nao encontrado" % script_id)
             ambs = [
@@ -290,7 +290,7 @@ class RepoCatalogFake(RepoCatalog):
 
         Os vinculos que continuam mantem o created_*; havendo mudanca, o script recebe updated_* (CR-006).
         """
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             ator = self._store.record_actor(auditoria, ator)
             if script_id not in self._store.scripts:
                 raise RepoNotFound("Script ID %s nao encontrado" % script_id)
@@ -325,7 +325,7 @@ class RepoCatalogFake(RepoCatalog):
     def parameters_list(self, filtros=None, pagina=1, tamanho=20):
         """Lista parametros com paginacao deterministica por codigo ASC, id ASC."""
         filtros = filtros or {}
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             lista = list(self._store.parameters.values())
 
             cod_f = filtros.get("code")
@@ -353,7 +353,7 @@ class RepoCatalogFake(RepoCatalog):
 
     def parameters_get(self, id):
         """Retorna dict do parametro pelo ID ou lanca RepoNotFound."""
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             if id not in self._store.parameters:
                 raise RepoNotFound("Parametro ID %s nao encontrado" % id)
             return copy.deepcopy(self._store.parameters[id])
@@ -371,7 +371,7 @@ class RepoCatalogFake(RepoCatalog):
 
     def parameters_insert(self, dados, auditoria=None, ator=None):
         """Insere novo parametro validando CKs e UK, auditando na mesma operacao."""
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             ator = self._store.record_actor(auditoria, ator)
             codigo = dados.get("code")
             if not codigo or not _RE_PRM_CODE.fullmatch(codigo):
@@ -421,7 +421,7 @@ class RepoCatalogFake(RepoCatalog):
 
     def parameters_update(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Altera parametro (CKs, dependencias de vinculo e 'esperado') na mesma operacao."""
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             ator = self._store.record_actor(auditoria, ator)
             if id not in self._store.parameters:
                 raise RepoNotFound("Parametro ID %s nao encontrado" % id)
@@ -466,7 +466,7 @@ class RepoCatalogFake(RepoCatalog):
 
     def parameter_links(self, parametro_id):
         """Retorna lista de scripts vinculados ao parametro para verificacao de desativacao."""
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             script_ids = {
                 sp["script_id"]
                 for sp in self._store.script_param.values()
@@ -485,7 +485,7 @@ class RepoCatalogFake(RepoCatalog):
 
     def script_params_get(self, script_id):
         """Retorna lista de parametros vinculados ao script ordenados por ordem."""
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             if script_id not in self._store.scripts:
                 raise RepoNotFound("Script ID %s nao encontrado" % script_id)
 
@@ -514,7 +514,7 @@ class RepoCatalogFake(RepoCatalog):
         Apaga e reinsere (UK script_id + ordem), mas cada parametro que continua leva o created_*;
         o updated_* do vinculo so muda se ordem, obrigatorio ou valor_padrao_sub mudar (CR-006).
         """
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             ator = self._store.record_actor(auditoria, ator)
             if script_id not in self._store.scripts:
                 raise RepoNotFound("Script ID %s nao encontrado" % script_id)
@@ -586,7 +586,7 @@ class RepoCatalogFake(RepoCatalog):
 
     def executable_scripts(self, usuario_ctx):
         """Retorna lista filtrada de scripts que o usuario pode executar."""
-        with self._store.lock_catalogo:
+        with self._store.lock_catalog:
             usuario_ctx = usuario_ctx or {}
             is_admin = usuario_ctx.get("is_admin") in ("Y", True)
 

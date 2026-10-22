@@ -155,7 +155,7 @@ class BaseRepoOracle(object):
 
     def __init__(self, cfg=None, segredos=None):
         self._cfg = cfg
-        self._segredos = segredos
+        self._secrets = segredos
         self._owner = None
         self._prefixo = None
         self._resolver_config()
@@ -178,15 +178,15 @@ class BaseRepoOracle(object):
 
     def _obter_conexao(self):
         self._resolver_config()
-        if self._segredos is None and self._cfg is not None:
+        if self._secrets is None and self._cfg is not None:
             try:
-                self._segredos = sss_config.load_secrets(
+                self._secrets = sss_config.load_secrets(
                     self._cfg.secrets.secrets_file, cfg=self._cfg, papel="web"
                 )
             except Exception:
                 pass
         # Conexao do pool do processo; conn.close() a devolve ao pool.
-        conn = _pool_web(self._cfg, self._segredos).acquire()
+        conn = _pool_web(self._cfg, self._secrets).acquire()
         return db_conn.configure_session(conn, self._cfg, "web")
 
     @contextlib.contextmanager

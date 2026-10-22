@@ -270,12 +270,12 @@ class SchedulesService(object):
 
     def __init__(self, agendamentos, catalogo, usuarios, disparo, relogio, horizonte_dias, log,
                  tickets=None, rbac_repo=None, misfire_policy="RUN_ONCE", misfire_tolerance_s=300):
-        self._agendamentos = agendamentos
-        self._catalogo = catalogo
-        self._usuarios = usuarios
-        self._disparo = disparo
-        self._relogio = relogio
-        self._horizonte = horizonte_dias
+        self._schedules = agendamentos
+        self._catalog = catalogo
+        self._users = usuarios
+        self._trigger_service = disparo
+        self._clock = relogio
+        self._horizon = horizonte_dias
         self._log = log
         self._misfire_policy = (misfire_policy or "RUN_ONCE").upper()
         self._misfire_tolerance_s = int(misfire_tolerance_s if misfire_tolerance_s is not None else 300)
@@ -309,7 +309,7 @@ class SchedulesService(object):
         Retorna (codigo_motivo, texto_motivo) ou None se estiver apta.
         """
         try:
-            estado = self._usuarios.get_session_state(reg["user_id"])
+            estado = self._users.get_session_state(reg["user_id"])
         except RepoNotFound:
             return "USER_INACTIVE", PAUSE_REASONS["USER_INACTIVE"]
         if estado.get("usuario_ativo") != "Y":
@@ -318,21 +318,21 @@ class SchedulesService(object):
             return "NO_PERMISSION", PAUSE_REASONS["NO_PERMISSION"]
 
         try:
-            script = self._catalogo.scripts_get(reg["script_id"])
+            script = self._catalog.scripts_get(reg["script_id"])
         except RepoNotFound:
             return "SCRIPT_INACTIVE", PAUSE_REASONS["SCRIPT_INACTIVE"]
         if script.get("active") != "Y":
             return "SCRIPT_INACTIVE", PAUSE_REASONS["SCRIPT_INACTIVE"]
 
         amb = None
-        for a in self._catalogo.environments_list(tamanho=1000)["itens"]:
+        for a in self._catalog.environments_list(tamanho=1000)["itens"]:
             if a.get("name") == reg.get("environment"):
                 amb = a
                 break
         if amb is None or amb.get("active") != "Y":
             return "ENVIRONMENT_INACTIVE", PAUSE_REASONS["ENVIRONMENT_INACTIVE"]
 
-        homologacoes = self._catalogo.homologation_get(script["id"])
+        homologacoes = self._catalog.homologation_get(script["id"])
         if amb["id"] not in frozenset(homologacoes or ()):
             return "NO_PERMISSION", PAUSE_REASONS["NO_PERMISSION"]
 
@@ -345,7 +345,7 @@ class SchedulesService(object):
         ambs_nomes = []
         for aid in matriz.get("ambs", ()):
             try:
-                ambs_nomes.append(self._catalogo.environments_get(aid)["name"])
+                ambs_nomes.append(self._catalog.environments_get(aid)["name"])
             except RepoNotFound:
                 continue
         dados_ctx = dict(estado, features=funcs, environments=frozenset(ambs_nomes),
@@ -370,21 +370,21 @@ class SchedulesService(object):
 
         if reg.get("recurrence_type") == "CRON":
             try:
-                recurrence.next_run(reg, agora, self._horizonte)
+                recurrence.next_run(reg, agora, self._horizon)
             except CronError:
                 return "INVALID_CRON", PAUSE_REASONS["INVALID_CRON"]
 
         return None
 
     def _now(self):
-        return recurrence.without_microseconds(self._relogio())
+        return recurrence.without_microseconds(self._clock())
 
     def _get_visible(self, ctx, agendamento_id):
         """Regra existente e de ambiente autorizado; fora do escopo e tratada como inexistente (404)."""
         aid = _id(agendamento_id)
         if aid is None:
             raise RepoNotFound("agendamento invalido")
-        registro = self._agendamentos.get(aid)
+        registro = self._schedules.get(aid)
         if not rbac.can_view_environment(ctx, registro.get("environment")):
             self._log.warning("agendamento fora do escopo (login=%s agendamento=%s environment=%s)",
                               ctx.get("login"), aid, registro.get("environment"), extra={"action": FEATURE})
@@ -393,7 +393,7 @@ class SchedulesService(object):
 
     def _authorize(self, ctx, script_id, ambiente):
         try:
-            return self._disparo.authorize(ctx, script_id, ambiente)
+            return self._trigger_service.authorize(ctx, script_id, ambiente)
         except DisparoNegado as exc:
             self._log.warning("agendamento negado ao editor (login=%s script_id=%r environment=%r reason=%s)",
                               ctx.get("login"), script_id, ambiente, exc.reason, extra={"action": FEATURE})
@@ -403,7 +403,7 @@ class SchedulesService(object):
         if cache is not None and usuario_id in cache:
             return cache[usuario_id]
         try:
-            login = self._usuarios.get_by_id(usuario_id)["login"]
+            login = self._users.get_by_id(usuario_id)["login"]
         except RepoNotFound:
             login = u"#%s" % usuario_id
         if cache is not None:
@@ -411,11 +411,11 @@ class SchedulesService(object):
         return login
 
     def _links(self, script_id):
-        return [v for v in self._catalogo.script_params_get(script_id) if v.get("active") == "Y"]
+        return [v for v in self._catalog.script_params_get(script_id) if v.get("active") == "Y"]
 
     def _sensitive_codes(self, script_id):
         # Todos os vinculos, ativos ou nao: parametros_json pode guardar resposta de parametro ja desativado.
-        return frozenset(v["code"] for v in self._catalogo.script_params_get(script_id)
+        return frozenset(v["code"] for v in self._catalog.script_params_get(script_id)
                          if v.get("sensitive") == "Y")
 
     def _rule(self, dados, agora, erros):
@@ -453,7 +453,7 @@ class SchedulesService(object):
         regra["end_date"] = fim
 
         if tipo in TYPE_LABELS:
-            for campo, mensagem in recurrence.validate_rule(regra, self._horizonte).items():
+            for campo, mensagem in recurrence.validate_rule(regra, self._horizon).items():
                 erros.setdefault(campo, mensagem)
         if regra["month_day"] is not None and "month_day" not in erros:
             regra["month_day"] = int(regra["month_day"])
@@ -461,9 +461,9 @@ class SchedulesService(object):
 
     def _next_run(self, regra, agora, erros):
         try:
-            proxima = recurrence.next_run(regra, agora, self._horizonte)
+            proxima = recurrence.next_run(regra, agora, self._horizon)
         except CronError as exc:
-            erros["cron_expression"] = exc.mensagem
+            erros["cron_expression"] = exc.message
             return None
         if proxima is None:
             erros[GENERAL_FIELD] = MSG_NO_NEXT_RUN
@@ -528,7 +528,7 @@ class SchedulesService(object):
         escopo = None if ctx.get("is_admin") is True else sorted(ctx.get("environments") or ())
         regras, pagina = [], 1
         while escopo != []:
-            res = self._agendamentos.list(filtros={"active": "Y"}, pagina=pagina, tamanho=_AGENDA_PAGE,
+            res = self._schedules.list(filtros={"active": "Y"}, pagina=pagina, tamanho=_AGENDA_PAGE,
                                             escopo_ambientes=escopo)
             regras.extend(res["itens"])
             if len(res["itens"]) < _AGENDA_PAGE:
@@ -539,7 +539,7 @@ class SchedulesService(object):
         for reg in regras:
             if reg["script_id"] not in scripts:
                 try:
-                    scripts[reg["script_id"]] = self._catalogo.scripts_get(reg["script_id"])["name"]
+                    scripts[reg["script_id"]] = self._catalog.scripts_get(reg["script_id"])["name"]
                 except RepoNotFound:
                     scripts[reg["script_id"]] = u"#%s" % reg["script_id"]
             aviso_regra = self._overlap_warning(reg, prefixo=u"Pode ser pulada: a execução #")
@@ -565,7 +565,7 @@ class SchedulesService(object):
             atual = prox if prox >= agora else None
             extra = 0
             try:
-                proxima_calculada = recurrence.next_run(reg, agora, self._horizonte)
+                proxima_calculada = recurrence.next_run(reg, agora, self._horizon)
                 if atual is None:
                     atual = proxima_calculada
                 while atual is not None and atual < fim:
@@ -575,10 +575,10 @@ class SchedulesService(object):
                         extra += 1
                     else:
                         break
-                    atual = recurrence.next_run(reg, atual, self._horizonte)
+                    atual = recurrence.next_run(reg, atual, self._horizon)
             except CronError as exc:
                 if reg.get("recurrence_type") == "CRON":
-                    problemas.append(dict(base, problema=exc.mensagem))
+                    problemas.append(dict(base, problema=exc.message))
                 continue
             for i, quando in enumerate(datas):
                 item = dict(base, quando=quando, hora=quando.strftime("%H:%M"))
@@ -605,7 +605,7 @@ class SchedulesService(object):
             escopo = sorted(ctx.get("environments") or ())
             if not escopo:
                 return {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
-        resultado = self._agendamentos.list(filtros=filtros, pagina=pagina, tamanho=tamanho,
+        resultado = self._schedules.list(filtros=filtros, pagina=pagina, tamanho=tamanho,
                                               escopo_ambientes=escopo)
         scripts = {}
         logins = {}
@@ -614,7 +614,7 @@ class SchedulesService(object):
             sid = reg["script_id"]
             if sid not in scripts:
                 try:
-                    scripts[sid] = self._catalogo.scripts_get(sid)["name"]
+                    scripts[sid] = self._catalog.scripts_get(sid)["name"]
                 except RepoNotFound:
                     scripts[sid] = u"#%s" % sid
             rotulo, motivo = rule_state(reg)
@@ -664,18 +664,18 @@ class SchedulesService(object):
             script_id, ambiente = atual["script_id"], atual["environment"]
             dados["edicao"] = True
         elif not script_id:
-            dados["grupos"] = self._disparo.available_scripts(ctx)
+            dados["grupos"] = self._trigger_service.available_scripts(ctx)
             return dados
         try:
             if not dados["edicao"]:
-                script, ambientes = self._disparo.available_environments(ctx, script_id)
+                script, ambientes = self._trigger_service.available_environments(ctx, script_id)
                 dados.update(etapa=2, script=script, ambientes=ambientes)
                 if not ambiente:
                     return dados
             anteriores = _parameters(atual) if atual else {}
             if valores is None:
                 valores = anteriores
-            form = self._disparo.prepare_form(ctx, script_id, ambiente, valores, erros)
+            form = self._trigger_service.prepare_form(ctx, script_id, ambiente, valores, erros)
         except DisparoNegado as exc:
             if dados["edicao"]:
                 self._log.warning("edicao de agendamento negada (login=%s agendamento=%s reason=%s)",
@@ -739,9 +739,9 @@ class SchedulesService(object):
         if erros:
             return {"datas": [], "description": None, "erros": dict(erros)}
         try:
-            datas = recurrence.next_runs(regra, agora, PREVIEW_COUNT, self._horizonte)
+            datas = recurrence.next_runs(regra, agora, PREVIEW_COUNT, self._horizon)
         except CronError as exc:
-            return {"datas": [], "description": None, "erros": {"cron_expression": exc.mensagem}}
+            return {"datas": [], "description": None, "erros": {"cron_expression": exc.message}}
         if not datas:
             return {"datas": [], "description": describe_rule(regra), "erros": {GENERAL_FIELD: MSG_NO_NEXT_RUN}}
         return {"datas": [format_preview(d) for d in datas], "description": describe_rule(regra), "erros": {}}
@@ -752,7 +752,7 @@ class SchedulesService(object):
         """Inclui (sem 'id') ou altera uma regra. Retorna (id | None, erros_por_campo).
 
         dados: id, versao, nome, script_id e ambiente (so na inclusao), tipo_recorrencia,
-        expressao_cron, hora_execucao, dias_semana, dia_mes, data_inicio, data_fim, prioridade e
+        expressao_cron, hora_execucao, weekdays, dia_mes, data_inicio, data_fim, prioridade e
         respostas ({codigo: valor}). Lanca RepoNotFound, AccessDenied e OperationDenied
         (editor sem can_execute).
         """
@@ -806,7 +806,7 @@ class SchedulesService(object):
         novo = dict(registro, active="Y", pause_reason=None)
         detalhe = admin_crud.insert_detail(self._auditable(novo, sensiveis), _INSERT_FIELDS)
         try:
-            criado = self._agendamentos.insert(novo, auditoria=admin_crud.audit_entry(ctx, ip, "CREATE", detalhe))
+            criado = self._schedules.insert(novo, auditoria=admin_crud.audit_entry(ctx, ip, "CREATE", detalhe))
         except RepoViolation as exc:
             self._log.error("agendamento rejeitado pelo repositorio (login=%s constraint=%s)",
                             ctx.get("login"), exc.constraint, extra={"action": "CREATE"})
@@ -829,7 +829,7 @@ class SchedulesService(object):
             registro["user_id"], ctx.get("login"))
         detalhe = admin_crud.free_detail(responsavel if detalhe is None else u"%s; %s" % (responsavel, detalhe))
         try:
-            self._agendamentos.update(atual["id"], registro,
+            self._schedules.update(atual["id"], registro,
                                        esperado=admin_crud.expected(atual, _EXPECTED_FIELDS),
                                        auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         except RepoConflict:
@@ -855,7 +855,7 @@ class SchedulesService(object):
             raise OperationDenied(MSG_ALREADY_PAUSED)
         detalhe = admin_crud.changes_detail(atual, dict(atual, active="N", pause_reason="MANUAL"),
                                                 ("active", "pause_reason"))
-        alterado = self._agendamentos.pause(atual["id"], "MANUAL", antiga_data=atual["next_run_at"],
+        alterado = self._schedules.pause(atual["id"], "MANUAL", antiga_data=atual["next_run_at"],
                                              auditoria=admin_crud.audit_entry(ctx, ip, "SCHEDULE_PAUSE", detalhe))
         self._log.info("agendamento pausado (login=%s agendamento=%s reason=MANUAL)", ctx.get("login"),
                        atual["id"], extra={"action": "SCHEDULE_PAUSE"})
@@ -879,16 +879,16 @@ class SchedulesService(object):
             raise OperationDenied(u"%s. %s" % (causa, MSG_RESUME_GUIDANCE))
         self._authorize(ctx, atual["script_id"], atual["environment"])
         try:
-            proxima = recurrence.next_run(atual, agora, self._horizonte)
+            proxima = recurrence.next_run(atual, agora, self._horizon)
         except CronError as exc:
-            raise OperationDenied(u"%s: %s" % (PAUSE_REASONS["INVALID_CRON"], exc.mensagem))
+            raise OperationDenied(u"%s: %s" % (PAUSE_REASONS["INVALID_CRON"], exc.message))
         if proxima is None:
             raise OperationDenied(MSG_RESUME_NO_NEXT_RUN)
         antes = {"active": atual["active"], "pause_reason": atual.get("pause_reason"),
                  "next_run_at": format_date(atual.get("next_run_at"))}
         depois = {"active": "Y", "pause_reason": None, "next_run_at": format_date(proxima)}
         detalhe = admin_crud.changes_detail(antes, depois, ("active", "pause_reason", "next_run_at"))
-        alterado = self._agendamentos.resume(
+        alterado = self._schedules.resume(
             atual["id"], proxima, esperado=admin_crud.expected(atual, ("active", "pause_reason", "next_run_at")),
             auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         self._log.info("agendamento retomado (login=%s agendamento=%s proxima=%s)", ctx.get("login"),

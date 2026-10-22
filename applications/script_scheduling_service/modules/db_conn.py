@@ -45,8 +45,8 @@ TIPO_NUMBER = "TIPO_NUMBER"
 TIPO_VARCHAR = "TIPO_VARCHAR"
 TIPOS_NEUTROS = (TIPO_DATE, TIPO_CLOB, TIPO_BLOB, TIPO_NUMBER, TIPO_VARCHAR)
 
-SelecaoDriver = collections.namedtuple("SelecaoDriver", [
-    "candidato", "versao_servidor", "versao_driver", "versao_cliente"
+DriverSelection = collections.namedtuple("DriverSelection", [
+    "candidate", "server_version", "driver_version", "client_version"
 ])
 
 
@@ -124,19 +124,19 @@ def _run_probe_subprocess(candidato, cfg, senha, usuario=None):
         )
         if proc.returncode != 0:
             return {
-                "candidato": candidato,
+                "candidate": candidato,
                 "ok": False,
-                "codigo_erro": "EXIT_%d" % proc.returncode,
-                "category": "OUTRO",
+                "error_code": "EXIT_%d" % proc.returncode,
+                "category": "OTHER",
             }
 
         linha = stdout_bytes.decode("utf-8", "replace").strip()
         if not linha:
             return {
-                "candidato": candidato,
+                "candidate": candidato,
                 "ok": False,
-                "codigo_erro": "SEM_SAIDA",
-                "category": "OUTRO",
+                "error_code": "SEM_SAIDA",
+                "category": "OTHER",
             }
         return json.loads(linha)
 
@@ -147,17 +147,17 @@ def _run_probe_subprocess(candidato, cfg, senha, usuario=None):
         except Exception:
             pass
         return {
-            "candidato": candidato,
+            "candidate": candidato,
             "ok": False,
-            "codigo_erro": "TIMEOUT",
-            "category": "REDE",
+            "error_code": "TIMEOUT",
+            "category": "NETWORK",
         }
     except Exception as exc:
         return {
-            "candidato": candidato,
+            "candidate": candidato,
             "ok": False,
-            "codigo_erro": "SUBPROCESS_ERROR: %s" % exc,
-            "category": "OUTRO",
+            "error_code": "SUBPROCESS_ERROR: %s" % exc,
+            "category": "OTHER",
         }
 
 
@@ -196,17 +196,17 @@ def select_driver(cfg, segredos, executor_sondagem=None, usuario=None, senha=Non
         for cand in candidatos:
             res = sondador(cand, cfg, senha)
             if res.get("ok"):
-                selecao = SelecaoDriver(
-                    candidato=cand,
-                    versao_servidor=res.get("versao_servidor"),
-                    versao_driver=res.get("versao_driver"),
-                    versao_cliente=res.get("versao_cliente"),
+                selecao = DriverSelection(
+                    candidate=cand,
+                    server_version=res.get("server_version"),
+                    driver_version=res.get("driver_version"),
+                    client_version=res.get("client_version"),
                 )
                 _DRIVER_SELECTION = selecao
                 return selecao
 
-            codigo = res.get("codigo_erro") or "DESCONHECIDO"
-            categoria = res.get("category") or "OUTRO"
+            codigo = res.get("error_code") or "DESCONHECIDO"
+            categoria = res.get("category") or "OTHER"
             tentativas.append((cand, codigo, categoria))
 
             logger.warning(
@@ -216,7 +216,7 @@ def select_driver(cfg, segredos, executor_sondagem=None, usuario=None, senha=Non
             )
 
             # Falha de autenticacao interrompe imediatamente a cadeia (README §2.3)
-            if categoria == "AUTENTICACAO":
+            if categoria == "AUTHENTICATION":
                 msg = (
                     "Falha fatal de autenticacao Oracle com candidato '%s' (codigo=%s). "
                     "Cadeia interrompida para proteger a conta."
@@ -245,7 +245,7 @@ def initialize(selecao, cfg=None):
         if selecao is None:
             raise RuntimeError("selecao de driver nao fornecida para inicializar()")
 
-        candidato = selecao.candidato
+        candidato = selecao.candidate
         driver = None
 
         if candidato in ("thin", "thick"):
@@ -307,8 +307,8 @@ def initialize(selecao, cfg=None):
             "driver=%s modo=%s servidor=%s cliente=%s",
             nome_driver,
             candidato,
-            selecao.versao_servidor or "-",
-            selecao.versao_cliente or "-",
+            selecao.server_version or "-",
+            selecao.client_version or "-",
             extra={"agent": "-", "ticket": "-", "action": "INICIO"},
         )
 
@@ -338,7 +338,7 @@ def reset_selection():
 def get_driver_type(tipo_neutro, driver=None, candidato=None):
     """Mapeia uma constante de tipo neutro para o tipo nativo do driver ativo."""
     drv = driver or _DRIVER_INITIALIZED
-    cand = candidato or (_DRIVER_SELECTION.candidato if _DRIVER_SELECTION else None)
+    cand = candidato or (_DRIVER_SELECTION.candidate if _DRIVER_SELECTION else None)
 
     if drv is None:
         return tipo_neutro
@@ -374,7 +374,7 @@ def get_driver_type(tipo_neutro, driver=None, candidato=None):
 def set_input_types(cursor, **mapa):
     """Aplica setinputsizes no cursor convertendo constantes neutras para tipos do driver ativo."""
     drv = _DRIVER_INITIALIZED
-    cand = _DRIVER_SELECTION.candidato if _DRIVER_SELECTION else None
+    cand = _DRIVER_SELECTION.candidate if _DRIVER_SELECTION else None
 
     # Se o cursor possui conexao mock ou associada, tenta inferir driver se ainda nulo
     if drv is None and hasattr(cursor, "connection") and hasattr(cursor.connection, "_driver"):
@@ -391,7 +391,7 @@ def set_input_types(cursor, **mapa):
 def output_variable(cursor, tipo, tamanho=None):
     """Cria uma variavel de saida OUT bind PL/SQL sem expor cursor.var externamente."""
     drv = _DRIVER_INITIALIZED
-    cand = _DRIVER_SELECTION.candidato if _DRIVER_SELECTION else None
+    cand = _DRIVER_SELECTION.candidate if _DRIVER_SELECTION else None
 
     tipo_concreto = get_driver_type(tipo, driver=drv, candidato=cand)
     alvo = tipo_concreto if tipo_concreto is not None else tipo
@@ -589,7 +589,7 @@ def connect(cfg, segredos, papel="web", user=None, password=None):
         selecao = select_driver(cfg, segredos, usuario=u, senha=p)
     driver = initialize(selecao, cfg)
 
-    candidato = selecao.candidato
+    candidato = selecao.candidate
     if candidato == "thin":
         conn = driver.connect(user=u, password=p, dsn=dsn, tcp_connect_timeout=timeout_s)
     else:
@@ -638,7 +638,7 @@ def pool(cfg, segredos, papel="web"):
         selecao = select_driver(cfg, segredos)
     driver = initialize(selecao, cfg)
 
-    candidato = selecao.candidato
+    candidato = selecao.candidate
     if candidato in ("thin", "thick"):
         return driver.create_pool(
             user=u, password=p, dsn=dsn,
@@ -762,13 +762,13 @@ class ResilientConnection(object):
 
     def __init__(self, cfg, segredos, papel="agent"):
         self.cfg = cfg
-        self.segredos = segredos
-        self.papel = papel
+        self.secrets = segredos
+        self.role = papel
         self.conn = None
         self.backoff_s = 1.0
-        self.proxima_tentativa_monotonic = 0.0
-        self.em_falha = False
-        self._ja_conectou = False  # a primeira conexao nao e reconexao (F9.1d)
+        self.next_attempt_monotonic = 0.0
+        self.failing = False
+        self._connected_once = False  # a primeira conexao nao e reconexao (F9.1d)
 
     def get_connection(self):
         """Retorna a conexao ativa ou None."""
@@ -782,13 +782,13 @@ class ResilientConnection(object):
             except Exception:
                 pass
             self.conn = None
-        self.em_falha = True
+        self.failing = True
 
     def notify_error(self, exc):
         """Em erro de rede, descarta a conexao e calcula o proximo prazo do backoff."""
         if is_network_error(exc):
             self.close()
-            self.proxima_tentativa_monotonic = time.monotonic() + self.backoff_s
+            self.next_attempt_monotonic = time.monotonic() + self.backoff_s
             self.backoff_s = min(60.0, self.backoff_s * 2.0)
 
     def ensure(self):
@@ -797,25 +797,25 @@ class ResilientConnection(object):
             return True
 
         agora = time.monotonic()
-        if agora < self.proxima_tentativa_monotonic:
+        if agora < self.next_attempt_monotonic:
             return False
 
-        primeira = not self._ja_conectou
+        primeira = not self._connected_once
         if primeira:
-            logger.info("Conectando ao Oracle (papel=%s)...", self.papel,
+            logger.info("Conectando ao Oracle (papel=%s)...", self.role,
                         extra={"agent": "-", "ticket": "-", "action": "CONEXAO"})
         else:
             logger.warning(
-                "Tentando reconexao com o Oracle (papel=%s)...", self.papel,
+                "Tentando reconexao com o Oracle (papel=%s)...", self.role,
                 extra={"agent": "-", "ticket": "-", "action": "RECONEXAO"},
             )
         try:
-            self.conn = connect(self.cfg, self.segredos, papel=self.papel)
+            self.conn = connect(self.cfg, self.secrets, papel=self.role)
             self.backoff_s = 1.0
-            self.em_falha = False
-            self._ja_conectou = True
+            self.failing = False
+            self._connected_once = True
             logger.info(
-                "Conexao estabelecida (papel=%s)" if primeira else "Reconexao bem-sucedida (papel=%s)", self.papel,
+                "Conexao estabelecida (papel=%s)" if primeira else "Reconexao bem-sucedida (papel=%s)", self.role,
                 extra={"agent": "-", "ticket": "-", "action": "CONEXAO" if primeira else "RECONEXAO"},
             )
             return True
@@ -824,6 +824,6 @@ class ResilientConnection(object):
                 "Falha na tentativa de %s: %s", "conexao" if primeira else "reconexao", exc,
                 extra={"agent": "-", "ticket": "-", "action": "CONEXAO" if primeira else "RECONEXAO"},
             )
-            self.proxima_tentativa_monotonic = time.monotonic() + self.backoff_s
+            self.next_attempt_monotonic = time.monotonic() + self.backoff_s
             self.backoff_s = min(60.0, self.backoff_s * 2.0)
             return False

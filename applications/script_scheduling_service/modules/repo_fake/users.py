@@ -31,7 +31,7 @@ class RepoUsersFake(RepoUsers):
 
     def get_by_login(self, login):
         """Retorna dict com dados do usuario ou None se nao encontrado."""
-        with self._store.lock_usuarios:
+        with self._store.lock_users:
             for u in self._store.users.values():
                 if u["login"] == login:
                     return copy.deepcopy(u)
@@ -39,7 +39,7 @@ class RepoUsersFake(RepoUsers):
 
     def get_by_id(self, id):
         """Retorna dict com dados do usuario pelo ID ou lanca RepoNotFound."""
-        with self._store.lock_usuarios:
+        with self._store.lock_users:
             if id not in self._store.users:
                 raise RepoNotFound("Usuario ID %s nao encontrado" % id)
             return copy.deepcopy(self._store.users[id])
@@ -47,7 +47,7 @@ class RepoUsersFake(RepoUsers):
     def get_session_state(self, usuario_id):
         """Retorna estado composto de sessao (usuario + perfil + perm_versao)."""
         with self._store.lock_rbac:
-            with self._store.lock_usuarios:
+            with self._store.lock_users:
                 if usuario_id not in self._store.users:
                     raise RepoNotFound("Usuario ID %s nao encontrado" % usuario_id)
                 u = self._store.users[usuario_id]
@@ -72,7 +72,7 @@ class RepoUsersFake(RepoUsers):
     def list(self, filtros=None, pagina=1, tamanho=20):
         """Lista usuarios paginados com desempate por id."""
         filtros = filtros or {}
-        with self._store.lock_usuarios:
+        with self._store.lock_users:
             lista = list(self._store.users.values())
 
             login_f = filtros.get("login")
@@ -122,7 +122,7 @@ class RepoUsersFake(RepoUsers):
         """Insere novo usuario com validacoes de integridade, auditando na mesma operacao."""
         # Ordem de locks unica no FAKE: rbac e depois usuarios (como admins_ativos_bloquear).
         with self._store.lock_rbac:
-            with self._store.lock_usuarios:
+            with self._store.lock_users:
                 ator = self._store.record_actor(auditoria, ator)
                 login = dados.get("login")
                 if not login or not _RE_LOGIN.fullmatch(login):
@@ -167,7 +167,7 @@ class RepoUsersFake(RepoUsers):
     def update(self, id, dados, esperado=None, auditoria=None, ator=None):
         """Altera usuario (login imutavel), condicional a 'esperado' e com protecao do ultimo admin."""
         with self._store.lock_rbac:
-            with self._store.lock_usuarios:
+            with self._store.lock_users:
                 ator = self._store.record_actor(auditoria, ator)
                 if id not in self._store.users:
                     raise RepoNotFound("Usuario ID %s nao encontrado" % id)
@@ -231,7 +231,7 @@ class RepoUsersFake(RepoUsers):
     def register_login_failure(self, login, bloqueio_s=None, auditoria=None, max_tentativas=None,
                               auditoria_bloqueio=None):
         """Incrementa as falhas e decide o bloqueio sob o lock (contrato em RepoUsers); auditoria junto."""
-        with self._store.lock_usuarios:
+        with self._store.lock_users:
             u = self._por_login(login)
             tentativas = int(u.get("failed_attempts", 0)) + 1
             if tentativas > 99:
@@ -248,7 +248,7 @@ class RepoUsersFake(RepoUsers):
 
     def register_login_success(self, login, novo_hash=None, auditoria=None):
         """Zera falhas, grava ultimo_login (SYSDATE) e o rehash, com a auditoria, numa operacao."""
-        with self._store.lock_usuarios:
+        with self._store.lock_users:
             u = self._por_login(login)
             u["failed_attempts"] = 0
             u["locked_until"] = None
@@ -260,7 +260,7 @@ class RepoUsersFake(RepoUsers):
 
     def unlock(self, id, auditoria=None, ator=None):
         """Desbloqueia conta de usuario zerando tentativas (alteracao de negocio: grava updated_*)."""
-        with self._store.lock_usuarios:
+        with self._store.lock_users:
             ator = self._store.record_actor(auditoria, ator)
             if id not in self._store.users:
                 raise RepoNotFound("Usuario ID %s nao encontrado" % id)
@@ -273,7 +273,7 @@ class RepoUsersFake(RepoUsers):
 
     def reset_attempts(self, id):
         """Bloqueio vencido: novo ciclo de tentativas, sem updated_* nem auditoria (rotina tecnica)."""
-        with self._store.lock_usuarios:
+        with self._store.lock_users:
             if id not in self._store.users:
                 raise RepoNotFound("Usuario ID %s nao encontrado" % id)
             u = self._store.users[id]
@@ -283,7 +283,7 @@ class RepoUsersFake(RepoUsers):
 
     def set_password(self, id, senha_hash, agora=None, auditoria=None, ator=None):
         """Atualiza a senha do usuario e zera contadores de bloqueio (grava updated_*)."""
-        with self._store.lock_usuarios:
+        with self._store.lock_users:
             ator = self._store.record_actor(auditoria, ator)
             if id not in self._store.users:
                 raise RepoNotFound("Usuario ID %s nao encontrado" % id)
@@ -299,7 +299,7 @@ class RepoUsersFake(RepoUsers):
 
     def end_sessions(self, id, auditoria=None):
         """Logout: incrementa session_epoch (rotina tecnica, sem updated_*), com a auditoria na mesma operacao."""
-        with self._store.lock_usuarios:
+        with self._store.lock_users:
             if id not in self._store.users:
                 raise RepoNotFound("Usuario ID %s nao encontrado" % id)
             u = self._store.users[id]

@@ -95,13 +95,13 @@ class RepoSchedulerOutput(object):
         sai, tck = sql_ident.table(owner, prefixo, "ticket_output"), sql_ident.table(owner, prefixo, "tickets")
         self._seq = sql_ident.sequence(owner, prefixo, "ticket_output")
         self._plsql = _PLSQL_APPEND.format(sai=sai, atrib=":" + "=")
-        self._sql_reiniciar = _SQL_RESTART.format(sai=sai)
-        self._sql_incluir_gravando = _SQL_INSERT.format(sai=sai, tck=tck, content="EMPTY_BLOB()")
-        self._sql_incluir_sem_conteudo = _SQL_INSERT.format(sai=sai, tck=tck, content="NULL")
+        self._sql_restart = _SQL_RESTART.format(sai=sai)
+        self._sql_insert_writing = _SQL_INSERT.format(sai=sai, tck=tck, content="EMPTY_BLOB()")
+        self._sql_insert_without_content = _SQL_INSERT.format(sai=sai, tck=tck, content="NULL")
         self._sql_complete = _SQL_COMPLETE.format(sai=sai)
-        self._sql_encerrar = _SQL_CLOSE_WRITING.format(sai=sai)
-        self._sql_falhar = _SQL_FAIL_OF_AGENT.format(sai=sai)
-        self._sql_situacao = _SQL_STATE.format(sai=sai)
+        self._sql_finish = _SQL_CLOSE_WRITING.format(sai=sai)
+        self._sql_fail = _SQL_FAIL_OF_AGENT.format(sai=sai)
+        self._sql_state = _SQL_STATE.format(sai=sai)
 
     @classmethod
     def from_config(cls, cfg):
@@ -123,15 +123,15 @@ class RepoSchedulerOutput(object):
         """
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_reiniciar, ticket_id=int(ticket_id), agent_id=agente_id)
+            cur.execute(self._sql_restart, ticket_id=int(ticket_id), agent_id=agente_id)
             if cur.rowcount == 1:
                 return True
-            return self._insert(cur, self._sql_incluir_gravando, ticket_id, agente_id, "WRITING")
+            return self._insert(cur, self._sql_insert_writing, ticket_id, agente_id, "WRITING")
         finally:
             cur.close()
 
     def append_chunk(self, conn, ticket_id, agente_id, offset_esperado, parte):
-        """Anexa parte (bytes, ate 1 MiB) em offset_esperado: WRITTEN, ALREADY_WRITTEN ou OWNERSHIP_LOST.
+        """Anexa parte (bytes, ate 1 MiB) em expected_offset: WRITTEN, ALREADY_WRITTEN ou OWNERSHIP_LOST.
 
         Divergencia de tamanho ou de conteudo: OutputOffsetMismatch. Sem COMMIT.
         """
@@ -174,11 +174,11 @@ class RepoSchedulerOutput(object):
             raise ValueError("situacao ou motivo da saida invalido")
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_encerrar, ticket_id=int(ticket_id), agent_id=agente_id, state=situacao,
+            cur.execute(self._sql_finish, ticket_id=int(ticket_id), agent_id=agente_id, state=situacao,
                         reason=motivo, file_count=qtd_arquivos, actor=_actor(agente_id))
             if cur.rowcount == 1:
                 return True
-            return self._insert(cur, self._sql_incluir_sem_conteudo, ticket_id, agente_id, situacao,
+            return self._insert(cur, self._sql_insert_without_content, ticket_id, agente_id, situacao,
                                  reason=motivo, file_count=qtd_arquivos)
         finally:
             cur.close()
@@ -187,7 +187,7 @@ class RepoSchedulerOutput(object):
         """Startup check (README §8.13): toda linha GRAVANDO deste agente vira FALHOU. Devolve a contagem."""
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_falhar, agent_id=agente_id, actor=_actor(agente_id))
+            cur.execute(self._sql_fail, agent_id=agente_id, actor=_actor(agente_id))
             return cur.rowcount
         finally:
             cur.close()
@@ -196,7 +196,7 @@ class RepoSchedulerOutput(object):
         """(situacao, agent_id) da saida do ticket, ou None; desfaz a duvida de um COMMIT sem resposta."""
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_situacao, ticket_id=int(ticket_id))
+            cur.execute(self._sql_state, ticket_id=int(ticket_id))
             row = cur.fetchone()
         finally:
             cur.close()

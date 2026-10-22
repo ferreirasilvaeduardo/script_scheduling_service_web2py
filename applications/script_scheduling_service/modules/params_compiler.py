@@ -11,7 +11,7 @@ import re
 
 import path_guard
 
-SNAPSHOT_VERSION = 4
+SNAPSHOT_VERSION = 5
 MAX_LENGTH = 500
 MASK = '****'
 GENERAL_KEY = '_geral'
@@ -36,9 +36,9 @@ OPTIONS_MAX_LENGTH = 500
 OPTION_KEY_MAX_LENGTH = 100
 OPTION_LABEL_MAX_LENGTH = 100
 
-# Snapshot v4 (README §6.5, CR-005): path_file absoluto; sem pasta base nem executavel do no que compilou.
-_SNAPSHOT_KEYS = ('version', 'script_id', 'script_nome', 'interpreter', 'path_file', 'param_type',
-                    'args', 'respostas', 'sensiveis', 'compilado_em')
+# Snapshot v5 (README §6.5, CR-005; chaves em ingles no CR-016c2, D20): path_file absoluto; sem pasta base nem executavel do no que compilou.
+_SNAPSHOT_KEYS = ('version', 'script_id', 'script_name', 'interpreter', 'path_file', 'param_type',
+                    'args', 'answers', 'sensitive', 'compiled_at')
 
 
 class ParamError(Exception):
@@ -46,8 +46,8 @@ class ParamError(Exception):
 
     def __init__(self, codigo_param, mensagem):
         Exception.__init__(self, mensagem)
-        self.codigo_param = codigo_param
-        self.mensagem = mensagem
+        self.param_code = codigo_param
+        self.message = mensagem
 
 
 class SnapshotError(Exception):
@@ -317,7 +317,7 @@ def _resolve(vinculos, respostas):
             if valor is None and v.get('required') == 'Y':
                 raise ParamError(codigo, 'O campo "%s" é obrigatório.' % _label(v))
         except ParamError as e:
-            erros[codigo] = e.mensagem
+            erros[codigo] = e.message
             valor = None
         resolvidos[codigo] = valor
     return resolvidos, erros
@@ -380,7 +380,7 @@ def _build(tipo_param, vinculos, resolvidos, erros):
             else:
                 args.append(_sequential_arg(v, valor))
         except ParamError as e:
-            erros[codigo] = e.mensagem
+            erros[codigo] = e.message
     return args
 
 
@@ -403,7 +403,7 @@ def build_agent_argv(interpretador, executavel, script_real, args):
 
 
 def compile_snapshot(script, vinculos, respostas, agora):
-    """Compila o snapshot v4 (README §6.5) -> (json_str | None, resolvidos, erros_por_campo).
+    """Compila o snapshot v5 (README §6.5) -> (json_str | None, resolvidos, erros_por_campo).
 
     Guarda o interpretador logico, o path_file absoluto e apenas os argumentos: o argv real e montado
     pelo agente com o proprio executavel. Erros sao acumulados.
@@ -420,14 +420,14 @@ def compile_snapshot(script, vinculos, respostas, agora):
     obj = {
         'version': SNAPSHOT_VERSION,
         'script_id': script['id'],
-        'script_nome': script['name'],
+        'script_name': script['name'],
         'interpreter': script['interpreter'],
         'path_file': script['path_file'],
         'param_type': script['param_type'],
         'args': args,
-        'respostas': dict(resolvidos),
-        'sensiveis': sorted(v['code'] for v in vinculos if _sensitive(v)),
-        'compilado_em': agora.strftime('%Y-%m-%d %H:%M:%S'),
+        'answers': dict(resolvidos),
+        'sensitive': sorted(v['code'] for v in vinculos if _sensitive(v)),
+        'compiled_at': agora.strftime('%Y-%m-%d %H:%M:%S'),
     }
     return json.dumps(obj, ensure_ascii=False, sort_keys=True), resolvidos, erros
 
@@ -469,9 +469,9 @@ def validate_snapshot(json_str, cfg):
 
 
 def _secrets(snapshot):
-    respostas = snapshot.get('respostas') or {}
+    respostas = snapshot.get('answers') or {}
     segredos = set()
-    for codigo in snapshot.get('sensiveis') or []:
+    for codigo in snapshot.get('sensitive') or []:
         valor = respostas.get(codigo)
         if isinstance(valor, str) and valor != '':
             segredos.add(valor)

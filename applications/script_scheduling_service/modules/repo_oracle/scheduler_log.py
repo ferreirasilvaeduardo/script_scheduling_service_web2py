@@ -71,8 +71,8 @@ class LogOffsetMismatch(RuntimeError):
         RuntimeError.__init__(self, "LOG_OFFSET_DIVERGENTE ticket=%s offset_esperado=%s tamanho=%s"
                               % (ticket_id, offset_esperado, tamanho))
         self.ticket_id = ticket_id
-        self.offset_esperado = offset_esperado
-        self.tamanho = tamanho
+        self.expected_offset = offset_esperado
+        self.size = tamanho
 
 
 class RepoSchedulerLog(object):
@@ -81,14 +81,14 @@ class RepoSchedulerLog(object):
     def __init__(self, owner, prefixo):
         self._tck = sql_ident.table(owner, prefixo, "tickets")
         self._plsql = _PLSQL_APPEND.format(tck=self._tck, atrib=":" + "=")
-        self._sql_truncado = _SQL_TRUNCATED.format(tck=self._tck)
+        self._sql_truncated = _SQL_TRUNCATED.format(tck=self._tck)
 
     @classmethod
     def from_config(cls, cfg):
         return cls(cfg.oracle.owner.strip(), cfg.oracle.table_prefix.strip())
 
     def append_chunk(self, conn, ticket_id, agente_id, offset_esperado, bloco):
-        """Anexa bloco (ate 8.000 caracteres) em offset_esperado: WRITTEN, ALREADY_WRITTEN ou OWNERSHIP_LOST.
+        """Anexa bloco (ate 8.000 caracteres) em expected_offset: WRITTEN, ALREADY_WRITTEN ou OWNERSHIP_LOST.
 
         Divergencia de offset ou de conteudo: LogOffsetMismatch. Sem COMMIT.
         """
@@ -128,7 +128,7 @@ class RepoSchedulerLog(object):
         """log_truncado = 'S' no ticket RUNNING deste agente. False se a posse foi perdida. Sem COMMIT."""
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_truncado, ticket_id=int(ticket_id), agent_id=agente_id)
+            cur.execute(self._sql_truncated, ticket_id=int(ticket_id), agent_id=agente_id)
             return cur.rowcount == 1
         finally:
             cur.close()

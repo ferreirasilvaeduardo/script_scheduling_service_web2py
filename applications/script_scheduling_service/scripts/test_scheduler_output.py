@@ -129,7 +129,7 @@ conn.commit()
 r.append(repo.append_chunk(conn, tid, agente, 0, parte))
 r.append(repo.complete(conn, tid, agente, 1, len(parte)))
 conn.commit()
-print(json.dumps({"candidato": db_conn.get_selection().candidato, "r": r}))
+print(json.dumps({"candidate": db_conn.get_selection().candidate, "r": r}))
 conn.close()
 '''
 
@@ -161,7 +161,7 @@ class TestSchedulerOutputOracle(unittest.TestCase):
         self._fixtures = self.trc._Fixtures(self.obter_repo)
         self.c = self._fixtures.scenario()
         cat = self.obter_repo("catalog")
-        self.fila = RepoSchedulerQueue(cat._owner, cat._prefixo)
+        self.queue = RepoSchedulerQueue(cat._owner, cat._prefixo)
         self.repo = RepoSchedulerOutput(cat._owner, cat._prefixo)
         self.agent = "tst-sai-%s" % self._fixtures.suf
         self.amb = self.c["amb1"]["name"]
@@ -175,8 +175,8 @@ class TestSchedulerOutputOracle(unittest.TestCase):
     def _agent_ticket(self):
         tid = self._fixtures.ticket(actor="teste", script_id=self.c["scr"]["id"], environment=self.amb,
                                  requested_by=self.c["login"])
-        self.assertTrue(self.fila.claim(self.conn, tid, self.c["scr"]["id"], self.amb, self.agent)[0])
-        self.assertTrue(self.fila.finalize(self.conn, tid, self.agent, "SUCCESS", "EXIT_OK", 0))
+        self.assertTrue(self.queue.claim(self.conn, tid, self.c["scr"]["id"], self.amb, self.agent)[0])
+        self.assertTrue(self.queue.finalize(self.conn, tid, self.agent, "SUCCESS", "EXIT_OK", 0))
         return tid
 
     def test_ciclo_disponivel_e_leitura_pela_web(self):
@@ -236,7 +236,7 @@ class TestSchedulerOutputOracle(unittest.TestCase):
             resultados[modo] = saida
             if "indisponivel" in saida:
                 continue
-            self.assertEqual((saida["candidato"], saida["r"]), (modo, [True, "WRITTEN", "ALREADY_WRITTEN", True]), modo)
+            self.assertEqual((saida["candidate"], saida["r"]), (modo, [True, "WRITTEN", "ALREADY_WRITTEN", True]), modo)
             self.assertEqual(self.tickets.output_read(tid, 0, len(parte)), parte, modo)
         print("\n[saida] combinacoes de driver: %s" % json.dumps(resultados))
         self.assertNotIn("indisponivel", resultados["thin"], "Thin e o driver padrao do ambiente")

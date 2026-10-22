@@ -59,7 +59,7 @@ class TestSeedFake(unittest.TestCase):
             self.assertEqual(snap["version"], params_compiler.SNAPSHOT_VERSION, t["id"])
             vinculos = [v for v in self.store.script_param.values() if v["script_id"] == t["script_id"]]
             codigos = set(self.store.parameters[v["parameter_id"]]["code"] for v in vinculos)
-            self.assertEqual(set(snap["respostas"]), codigos, t["id"])
+            self.assertEqual(set(snap["answers"]), codigos, t["id"])
             resp = [r for r in self.store.ticket_answer.values() if r["ticket_id"] == t["id"]]
             self.assertTrue(set(r["parameter_id"] for r in resp) <= set(v["parameter_id"] for v in vinculos), t["id"])
 

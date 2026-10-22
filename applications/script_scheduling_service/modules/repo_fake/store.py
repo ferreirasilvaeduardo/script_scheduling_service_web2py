@@ -20,15 +20,15 @@ class FakeDataStore(object):
     """Armazenamento central em memoria simulando as tabelas Oracle."""
 
     def __init__(self, relogio=None):
-        self.lock_usuarios = threading.RLock()
+        self.lock_users = threading.RLock()
         self.lock_rbac = threading.RLock()
-        self.lock_catalogo = threading.RLock()
+        self.lock_catalog = threading.RLock()
         self.lock_tickets = threading.RLock()
-        self.lock_agendamentos = threading.RLock()
-        self.lock_auditoria = threading.RLock()
-        self.lock_agentes = threading.RLock()
+        self.lock_schedules = threading.RLock()
+        self.lock_audit = threading.RLock()
+        self.lock_agents = threading.RLock()
 
-        self._relogio_fn = relogio or (lambda: datetime.datetime.now().replace(microsecond=0))
+        self._clock_fn = relogio or (lambda: datetime.datetime.now().replace(microsecond=0))
 
         self.environments = collections.OrderedDict()
         self.profiles = collections.OrderedDict()
@@ -53,20 +53,20 @@ class FakeDataStore(object):
 
         self.seqs = collections.defaultdict(int)
         # Simulacao do log_pump por ticket RUNNING do seed: {ticket_id: {...}} (protegido por lock_tickets).
-        self.log_sim = {}
-        # Agentes "vivos" do seed: o heartbeat acompanha o relogio a cada leitura (protegido por lock_agentes).
-        self.agentes_hb_sim = set()
+        self.log_simulated = {}
+        # Agentes "vivos" do seed: o heartbeat acompanha o relogio a cada leitura (protegido por lock_agents).
+        self.agents_hb_simulated = set()
 
     def now(self):
         """Retorna o instante atual naive sem microssegundos conforme o relogio injetavel."""
-        dt = self._relogio_fn()
+        dt = self._clock_fn()
         if hasattr(dt, "replace"):
             return dt.replace(microsecond=0)
         return dt
 
     def set_clock(self, relogio):
         """Atualiza a funcao de relogio injetavel."""
-        self._relogio_fn = relogio
+        self._clock_fn = relogio
 
     def next_id(self, tabela):
         """Simula a obtencao de sequence.NEXTVAL do Oracle."""
@@ -80,7 +80,7 @@ class FakeDataStore(object):
             raise RepoViolation("ator da auditoria e obrigatorio")
         if len(ator) > _ACTOR_MAX or (detalhe is not None and len(detalhe) > _DETAIL_MAX):
             raise RepoViolation("auditoria excede o tamanho da coluna (ORA-12899)")
-        with self.lock_auditoria:
+        with self.lock_audit:
             aid = id if id is not None else self.next_id("tbsss_audit")
             if aid in self.audit:
                 raise RepoViolation("id de auditoria ja usado", constraint="pk_tbsss_audit")
@@ -137,13 +137,13 @@ class FakeDataStore(object):
 
     def reset(self):
         """Limpa todas as colecoes e sequencias em memoria."""
-        with self.lock_usuarios:
+        with self.lock_users:
             with self.lock_rbac:
-                with self.lock_catalogo:
+                with self.lock_catalog:
                     with self.lock_tickets:
-                        with self.lock_agendamentos:
-                            with self.lock_auditoria:
-                                with self.lock_agentes:
+                        with self.lock_schedules:
+                            with self.lock_audit:
+                                with self.lock_agents:
                                     self.environments.clear()
                                     self.profiles.clear()
                                     self.features.clear()
@@ -163,8 +163,8 @@ class FakeDataStore(object):
                                     self.audit.clear()
                                     self.control.clear()
                                     self.seqs.clear()
-                                    self.log_sim.clear()
-                                    self.agentes_hb_sim.clear()
+                                    self.log_simulated.clear()
+                                    self.agents_hb_simulated.clear()
 
 
 LIMIT_TOTAL_PAGINATION = 10001

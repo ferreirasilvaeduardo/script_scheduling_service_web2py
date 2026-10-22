@@ -28,7 +28,7 @@ class OperationDenied(Exception):
 
     def __init__(self, mensagem):
         Exception.__init__(self, mensagem)
-        self.mensagem = mensagem
+        self.message = mensagem
 
 
 def require_feature(ctx, codigo):

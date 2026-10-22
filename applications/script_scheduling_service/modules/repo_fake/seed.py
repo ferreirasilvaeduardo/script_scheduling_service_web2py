@@ -171,13 +171,13 @@ def load_seed(store, forcar=False, senha_dev=None):
     senha_dev: senha comum dos usuarios de demonstracao (exceto inativo e bloqueado),
     com hash e salt individuais. Sem ela, as senhas ficam inutilizaveis ('!').
     """
-    with store.lock_usuarios:
+    with store.lock_users:
         with store.lock_rbac:
-            with store.lock_catalogo:
+            with store.lock_catalog:
                 with store.lock_tickets:
-                    with store.lock_agendamentos:
-                        with store.lock_auditoria:
-                            with store.lock_agentes:
+                    with store.lock_schedules:
+                        with store.lock_audit:
+                            with store.lock_agents:
                                 if store.environments and not forcar:
                                     return
 
@@ -387,7 +387,7 @@ def load_seed(store, forcar=False, senha_dev=None):
                                                               % (10 if ag["id"] == 2 else 5))
                                     store.agents[ag["id"]] = ag
                                 # agt-host01 renova o heartbeat; agt-host02 envelhece com o relogio (F6.1).
-                                store.agentes_hb_sim.add("agt-host01")
+                                store.agents_hb_simulated.add("agt-host01")
                                 store.seqs["tbsss_agents"] = 2
 
                                 # ---------------------------------------------------------
@@ -470,7 +470,7 @@ def load_seed(store, forcar=False, senha_dev=None):
                                             log_out = "[%s] Script %s iniciado em %s.\nEtapa 1 concluida com sucesso.\n" % (
                                                 str(started), scr["name"], amb
                                             )
-                                            store.log_sim[tid] = {
+                                            store.log_simulated[tid] = {
                                                 "passo_s": _STEP_LOG_S[tid],
                                                 "emitidos": 0,
                                                 "sensiveis": list(sensiveis_por_script.get(script_id, [])),

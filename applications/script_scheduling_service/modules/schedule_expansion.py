@@ -49,13 +49,13 @@ class Expansion(object):
 
     def __init__(self, agenda, fila, agente_id, cfg_agente, relogio, log=None, horizonte_dias=None):
         self.agenda = agenda
-        self.fila = fila
-        self.agente_id = agente_id
+        self.queue = fila
+        self.agent_id = agente_id
         self.cfg = cfg_agente
-        self.relogio = relogio
+        self.clock = relogio
         self.log = log or _log
-        self.horizonte = horizonte_dias or cfg_agente.cron_horizon_days
-        self.falhas = {}
+        self.horizon = horizonte_dias or cfg_agente.cron_horizon_days
+        self.failures = {}
 
     # ------------------------------------------------------------------ ciclo
 
@@ -64,7 +64,7 @@ class Expansion(object):
 
         continuar(): False interrompe entre regras (fencing ou parada). Devolve contadores do ciclo.
         """
-        inicio = self.relogio()
+        inicio = self.clock()
         orcamento = self.cfg.heartbeat_interval_s / 2.0
         lote = self.cfg.schedule_batch_size
         ult_prox, ult_id = None, 0
@@ -74,7 +74,7 @@ class Expansion(object):
             pagina = self.agenda.due_rules(conn, lote, ult_prox, ult_id)
             conn.rollback()  # a leitura nao trava nada; cada regra abre a propria transacao
             for regra_id, prox in pagina:
-                if (continuar is not None and not continuar()) or self.relogio() - inicio > orcamento:
+                if (continuar is not None and not continuar()) or self.clock() - inicio > orcamento:
                     return stats
                 ult_prox, ult_id = prox, regra_id
                 if regra_id in ignoradas:
@@ -89,15 +89,15 @@ class Expansion(object):
                     stats["pausas"] += 1
                 if desfecho == "OUTRO_AGENTE":
                     stats["puladas"] += 1
-            if len(pagina) < lote or self.relogio() - inicio > orcamento:
+            if len(pagina) < lote or self.clock() - inicio > orcamento:
                 return stats
 
     # ------------------------------------------------------------------ uma regra
 
     def process(self, conn, regra_id):
         """Passos 1 a 8 do README §7.5 numa transacao. Devolve o desfecho (texto, para o log e os testes)."""
-        log = _RuleLog(self.log, self.agente_id, regra_id)
-        self._regra_atual = None
+        log = _RuleLog(self.log, self.agent_id, regra_id)
+        self._current_rule = None
         try:
             desfecho = self._process(conn, regra_id, log)
         except DuplicateOccurrence:
@@ -106,7 +106,7 @@ class Expansion(object):
         except Exception as exc:  # noqa: BLE001 - nenhuma regra derruba o ciclo (R-08, R-22)
             conn.rollback()
             return self._failure(conn, regra_id, exc, log)
-        self.falhas.pop(regra_id, None)
+        self.failures.pop(regra_id, None)
         return desfecho
 
     def _process(self, conn, regra_id, log):
@@ -119,11 +119,11 @@ class Expansion(object):
             return "OUTRO_AGENTE"
         antiga = regra["next_run_at"]  # passo 1: exatamente como o banco devolveu
         agora = db_conn.db_now(conn)
-        self._regra_atual = regra
+        self._current_rule = regra
 
         # Passo 2: o responsavel ainda pode executar (motivo pela traducao unica, CR-008 R-33).
         login = self.agenda.user_login(conn, regra["user_id"])
-        ctx_exec = self.fila.execution_context(conn, {"script_id": regra["script_id"], "environment": regra["environment"],
+        ctx_exec = self.queue.execution_context(conn, {"script_id": regra["script_id"], "environment": regra["environment"],
                                                       "requested_by": login})
         ok, motivo = rbac.can_execute(ctx_exec["ctx"], ctx_exec["script"], ctx_exec["environment"],
                                         ctx_exec["homologacoes"])
@@ -137,7 +137,7 @@ class Expansion(object):
         # Passo 3: decisao (misfire pela vencida mais recente, CR-008 R-21).
         try:
             dec = recurrence.evaluate_trigger(regra, agora, self.cfg.misfire_policy, self.cfg.misfire_tolerance_s,
-                                             self.horizonte)
+                                             self.horizon)
         except recurrence.CronError as exc:
             return self._pause(conn, regra, antiga, "INVALID_CRON", _short(exc), log)
         self._log_missed(dec, antiga, agora, log)
@@ -147,7 +147,7 @@ class Expansion(object):
             if dec.cron_error:
                 return self._cron_error(conn, regra, antiga, None, None, [], log)
             if dec.complete:
-                if not self.agenda.complete_without_ticket(conn, regra["id"], antiga, self.agente_id):
+                if not self.agenda.complete_without_ticket(conn, regra["id"], antiga, self.agent_id):
                     conn.rollback()
                     return "CORRIDA"
                 conn.commit()
@@ -159,7 +159,7 @@ class Expansion(object):
             if dec.cron_error:
                 return self._cron_error(conn, regra, antiga, None, None, [], log)
             if dec.complete:
-                if not self.agenda.complete_without_ticket(conn, regra["id"], antiga, self.agente_id):
+                if not self.agenda.complete_without_ticket(conn, regra["id"], antiga, self.agent_id):
                     conn.rollback()
                     return "CORRIDA"
                 conn.commit()
@@ -178,7 +178,7 @@ class Expansion(object):
         if dec.cron_error:
             return self._cron_error(conn, regra, antiga, ticket_id, ticket, linhas, log)
         if dec.complete:
-            if not self.agenda.complete_with_ticket(conn, regra, antiga, ticket_id, ticket, linhas, self.agente_id):
+            if not self.agenda.complete_with_ticket(conn, regra, antiga, ticket_id, ticket, linhas, self.agent_id):
                 conn.rollback()
                 return "CORRIDA"
             conn.commit()
@@ -186,7 +186,7 @@ class Expansion(object):
                      prioridade)
             return "CONCLUIDA_COM_TICKET"
         if not self.agenda.reserve_and_create_ticket(conn, regra, antiga, dec.next_date, ticket_id, ticket, linhas,
-                                                   self.agente_id):
+                                                   self.agent_id):
             conn.rollback()
             return "CORRIDA"
         conn.commit()
@@ -253,7 +253,7 @@ class Expansion(object):
         return "AVANCADA"
 
     def _pause(self, conn, regra, antiga, motivo, detalhe, log):
-        if not self.agenda.pause(conn, regra["id"], antiga, motivo, detalhe, self.agente_id):
+        if not self.agenda.pause(conn, regra["id"], antiga, motivo, detalhe, self.agent_id):
             conn.rollback()
             return "CORRIDA"
         conn.commit()
@@ -262,7 +262,7 @@ class Expansion(object):
 
     def _cron_error(self, conn, regra, antiga, ticket_id, ticket, linhas, log):
         if not self.agenda.pause_cron_error(conn, regra, antiga, ticket_id, ticket, linhas,
-                                            "sem proxima ocorrencia no horizonte", self.agente_id):
+                                            "sem proxima ocorrencia no horizonte", self.agent_id):
             conn.rollback()
             return "CORRIDA"
         conn.commit()
@@ -275,25 +275,25 @@ class Expansion(object):
     def _duplicate_occurrence(self, conn, regra_id, log):
         """R-31: ROLLBACK, WARN e, numa nova transacao, o avanco sem ticket com a mesma antiga e a nova da decisao."""
         log.warning("OCORRENCIA_DUPLICADA: outro caminho ja gerou o ticket desta ocorrencia")
-        regra = getattr(self, "_regra_atual", None)
+        regra = getattr(self, "_current_rule", None)
         try:
             if regra is not None and regra["id"] == regra_id:
                 dec = recurrence.evaluate_trigger(regra, db_conn.db_now(conn), self.cfg.misfire_policy,
-                                                 self.cfg.misfire_tolerance_s, self.horizonte)
+                                                 self.cfg.misfire_tolerance_s, self.horizon)
                 if dec.next_date is not None:
                     self.agenda.advance_without_ticket(conn, regra_id, regra["next_run_at"], dec.next_date)
             conn.commit()
         except Exception as exc:  # noqa: BLE001 - a regra volta no ciclo seguinte
             conn.rollback()
             log.warning("avanco apos OCORRENCIA_DUPLICADA falhou (%s)", exc.__class__.__name__)
-        self.falhas.pop(regra_id, None)
+        self.failures.pop(regra_id, None)
         return "OCORRENCIA_DUPLICADA"
 
     def _failure(self, conn, regra_id, exc, log):
         if is_db_error(exc):
             pfx, num = db_conn.classify_error(exc)
-            n = self.falhas.get(regra_id, 0) + 1
-            self.falhas[regra_id] = n
+            n = self.failures.get(regra_id, 0) + 1
+            self.failures[regra_id] = n
             log.warning("DESDOBRO_ERRO_BANCO: %s (falha %d de %d seguidas)",
                         "%s-%05d" % (pfx, num) if pfx else exc.__class__.__name__, n, FAILURES_BEFORE_PAUSE)
             if db_conn.is_network_error(exc):
@@ -304,9 +304,9 @@ class Expansion(object):
         else:
             log.error("erro interno no desdobro: %s", exc.__class__.__name__, exc_info=True)
             detalhe = exc.__class__.__name__
-        self.falhas.pop(regra_id, None)
+        self.failures.pop(regra_id, None)
         try:
-            pausou = self.agenda.pause_internal_error(conn, regra_id, detalhe, self.agente_id)
+            pausou = self.agenda.pause_internal_error(conn, regra_id, detalhe, self.agent_id)
             conn.commit()
         except Exception as exc2:  # noqa: BLE001 - a regra fica ignorada ate o fim do ciclo (R-08)
             conn.rollback()

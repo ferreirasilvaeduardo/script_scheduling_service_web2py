@@ -429,7 +429,7 @@ class RepoSchedulerQueue(object):
         finally:
             cur.close()
 
-    def tickets_running_do_agente(self, conn, agente_id):
+    def agent_running_tickets(self, conn, agente_id):
         """RUNNING deste agente para o startup check (README §8.12 passo 9)."""
         cur = conn.cursor()
         try:

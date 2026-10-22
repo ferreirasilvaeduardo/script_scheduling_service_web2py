@@ -59,8 +59,8 @@ class _BaseLog(unittest.TestCase):
         self.tickets = repo_factory.get("tickets")
         # Congela o relogio no instante da carga do seed (started_at do RUNNING + 5 min).
         inicio = self.tickets.get(TCK_RUNNING)["started_at"]
-        self.relogio = _Clock(inicio + datetime.timedelta(minutes=5))
-        repo_factory._fake_store.set_clock(self.relogio)
+        self.clock = _Clock(inicio + datetime.timedelta(minutes=5))
+        repo_factory._fake_store.set_clock(self.clock)
 
         self.log = logging.getLogger("sss_teste_logs")
         self.log.addHandler(logging.NullHandler())
@@ -164,12 +164,12 @@ class TestReadLogContent(_BaseLog):
         r = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r1["proximo_offset"]))
         self.assertEqual(r["texto"], "")
 
-        self.relogio.advance(STEP_13_S)
+        self.clock.advance(STEP_13_S)
         r2 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r1["proximo_offset"]))
         self.assertIn("etapa %d/%d processada" % (etapa_atual + 1, STAGES), r2["texto"])
         self.assertFalse(r2["terminal"])
 
-        self.relogio.advance(STAGES * STEP_13_S)
+        self.clock.advance(STAGES * STEP_13_S)
         r3 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r2["proximo_offset"]))
         self.assertTrue(r3["terminal"])
         self.assertEqual(r3["status"], "SUCCESS")
@@ -177,10 +177,10 @@ class TestReadLogContent(_BaseLog):
         self.assertIn("Script concluido com retorno 0.", r3["texto"])
         ticket = self.tickets.get(TCK_RUNNING)
         self.assertEqual((ticket["status_reason"], ticket["return_code"]), ("EXIT_OK", 0))
-        self.assertEqual(ticket["finished_at"], self.relogio())
+        self.assertEqual(ticket["finished_at"], self.clock())
 
         # Terminal e imutavel: o log nao cresce mais.
-        self.relogio.advance(3600)
+        self.clock.advance(3600)
         r4 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r3["proximo_offset"]))
         self.assertEqual((r4["texto"], r4["terminal"]), ("", True))
 

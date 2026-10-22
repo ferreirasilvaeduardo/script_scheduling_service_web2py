@@ -32,7 +32,7 @@ _HEALTH = {
               u"Sem heartbeat além do limite de nó offline, ou agente parado."),
 }
 
-Thresholds = collections.namedtuple("Limiares", "heartbeat_interval_s fence_timeout_s node_offline_timeout_s")
+Thresholds = collections.namedtuple("Thresholds", "heartbeat_interval_s fence_timeout_s node_offline_timeout_s")
 
 
 def health(agente, agora, limiares):
@@ -84,20 +84,20 @@ class AgentsService(object):
     """Painel de agentes com repositorios, relogio, limiares e log injetados."""
 
     def __init__(self, agentes, catalogo, relogio, limiares, log, config_criticos):
-        self._agentes = agentes
-        self._catalogo = catalogo
-        self._relogio = relogio
-        self._limiares = limiares
+        self._agents = agentes
+        self._catalog = catalogo
+        self._clock = relogio
+        self._thresholds = limiares
         self._log = log
-        self._config_criticos = config_criticos
+        self._critical_config = config_criticos
 
     def _script_names(self):
-        pagina = self._catalogo.scripts_list(pagina=1, tamanho=1000)
+        pagina = self._catalog.scripts_list(pagina=1, tamanho=1000)
         return dict((s["id"], s["name"]) for s in pagina["itens"])
 
     def _tickets(self, codigo, agora, nomes):
         itens = []
-        for t in self._agentes.tickets_running(codigo):
+        for t in self._agents.tickets_running(codigo):
             hb = t.get("heartbeat_at")
             itens.append({
                 "id": t["id"],
@@ -113,7 +113,7 @@ class AgentsService(object):
     def agent_tickets(self, ctx, codigo, agora=None):
         """Tickets RUNNING do agente, prontos para a lista com link para o detalhe."""
         admin_crud.require_feature(ctx, FEATURE)
-        agora = agora or self._relogio()
+        agora = agora or self._clock()
         return self._tickets(codigo, agora, self._script_names())
 
     def dashboard(self, ctx, agora=None):
@@ -122,17 +122,17 @@ class AgentsService(object):
         Retorna {"agents": [...], "resumo": {codigo_saude: quantidade}, "agora": datetime}.
         """
         admin_crud.require_feature(ctx, FEATURE)
-        agora = agora or self._relogio()
+        agora = agora or self._clock()
         nomes = self._script_names()
         resumo = collections.OrderedDict((c, 0) for c in HEALTH_ORDER)
         agentes = []
         divergentes = []
-        for ag in self._agentes.list():
-            if ag.get("status") == "ACTIVE" and ag.get("critical_config") != self._config_criticos:
+        for ag in self._agents.list():
+            if ag.get("status") == "ACTIVE" and ag.get("critical_config") != self._critical_config:
                 divergentes.append({"code": ag["code"], "critical_config": ag.get("critical_config")})
             hb = ag.get("heartbeat_at")
             idade = None if hb is None else max(0, int((agora - hb).total_seconds()))
-            codigo_saude = health(ag, agora, self._limiares)
+            codigo_saude = health(ag, agora, self._thresholds)
             resumo[codigo_saude] += 1
             tickets = self._tickets(ag["code"], agora, nomes)
             agentes.append({
@@ -153,9 +153,9 @@ class AgentsService(object):
                 "tickets": tickets,
             })
         return {"agents": agentes, "resumo": resumo, "agora": agora,
-                "fila_sem_atendente": self._agentes.unattended_queue(agora, self._limiares),
-                "rodando_sem_pid": self._agentes.running_without_pid(agora, 2),
-                "config_divergente": divergentes, "config_web": self._config_criticos}
+                "fila_sem_atendente": self._agents.unattended_queue(agora, self._thresholds),
+                "rodando_sem_pid": self._agents.running_without_pid(agora, 2),
+                "config_divergente": divergentes, "config_web": self._critical_config}
 
 
 _default = None

@@ -142,7 +142,7 @@ def alternar_ativo():
     except AccessDenied:
         _negado()
     except OperationDenied as exc:
-        session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
+        session.flash = {"tipo": "erro", "mensagem": exc.message}
     except RepoConflict:
         session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLICT}
     except RepoError:
@@ -163,7 +163,7 @@ def redefinir_senha():
     except AccessDenied:
         _negado()
     except OperationDenied as exc:
-        session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
+        session.flash = {"tipo": "erro", "mensagem": exc.message}
         redirect(URL(c="admin_usuarios", f="form", args=[usuario_id]))
     except RepoError:
         _log.exception("falha ao redefinir senha (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
@@ -188,7 +188,7 @@ def desbloquear():
     except AccessDenied:
         _negado()
     except OperationDenied as exc:
-        session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
+        session.flash = {"tipo": "erro", "mensagem": exc.message}
     except RepoError:
         _log.exception("falha ao desbloquear (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
         session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}

@@ -39,21 +39,21 @@ _NETWORK_ERRORS = {
 def _classify_error(exc):
     """Extrai codigo e categoria do erro sem expor dados sensiveis."""
     if isinstance(exc, ImportError):
-        return "IMPORT_ERROR", "BIBLIOTECA"
+        return "IMPORT_ERROR", "LIBRARY"
 
     msg = str(exc)
     match = _RE_ERROR_CODE.search(msg)
     codigo = match.group(1) if match else None
 
     if codigo in _AUTH_ERRORS or "logon denied" in msg.lower() or "account is locked" in msg.lower():
-        return codigo or "AUTH_ERROR", "AUTENTICACAO"
+        return codigo or "AUTH_ERROR", "AUTHENTICATION"
     if codigo == "DPY-3010" or "in thin mode" in msg.lower():
-        return codigo or "DPY-3010", "INCOMPATIVEL"
+        return codigo or "DPY-3010", "INCOMPATIBLE"
     if codigo == "DPI-1047" or "oracle client library" in msg.lower():
-        return codigo or "DPI-1047", "BIBLIOTECA"
+        return codigo or "DPI-1047", "LIBRARY"
     if codigo in _NETWORK_ERRORS or "timed out" in msg.lower() or "timeout" in msg.lower():
-        return codigo or "NET_ERROR", "REDE"
-    return codigo or "ERR_OUTRO", "OUTRO"
+        return codigo or "NET_ERROR", "NETWORK"
+    return codigo or "ERR_OTHER", "OTHER"
 
 
 def _format_client_version(val):
@@ -118,13 +118,13 @@ def probe(candidato, cfg, senha, usuario=None):
             )
         else:
             return {
-                "candidato": candidato,
+                "candidate": candidato,
                 "ok": False,
-                "versao_servidor": None,
-                "versao_driver": None,
-                "versao_cliente": None,
-                "codigo_erro": "CANDIDATO_INVALIDO",
-                "category": "OUTRO",
+                "server_version": None,
+                "driver_version": None,
+                "client_version": None,
+                "error_code": "INVALID_CANDIDATE",
+                "category": "OTHER",
             }
 
         cur = conn.cursor()
@@ -143,31 +143,31 @@ def probe(candidato, cfg, senha, usuario=None):
         conn.close()
 
         return {
-            "candidato": candidato,
+            "candidate": candidato,
             "ok": True,
-            "versao_servidor": versao_servidor,
-            "versao_driver": versao_driver,
-            "versao_cliente": versao_cliente,
-            "codigo_erro": None,
+            "server_version": versao_servidor,
+            "driver_version": versao_driver,
+            "client_version": versao_cliente,
+            "error_code": None,
             "category": None,
         }
 
     except Exception as exc:
         codigo, categoria = _classify_error(exc)
         return {
-            "candidato": candidato,
+            "candidate": candidato,
             "ok": False,
-            "versao_servidor": None,
-            "versao_driver": getattr(driver, "__version__", None) if driver else None,
-            "versao_cliente": None,
-            "codigo_erro": codigo,
+            "server_version": None,
+            "driver_version": getattr(driver, "__version__", None) if driver else None,
+            "client_version": None,
+            "error_code": codigo,
             "category": categoria,
         }
 
 
 def main():
     parser = argparse.ArgumentParser(description="Sondador isolado de driver Oracle")
-    parser.add_argument("candidato", choices=["thin", "thick", "cx_oracle"])
+    parser.add_argument("candidate", choices=["thin", "thick", "cx_oracle"])
     parser.add_argument("--config", dest="config", default=None)
     parser.add_argument("--user", dest="usuario", default=None, help="conta do papel (padrao: [oracle] user)")
     args = parser.parse_args()
@@ -184,7 +184,7 @@ def main():
     else:
         cfg = sss_config.get_config()
 
-    resultado = probe(args.candidato, cfg, senha, usuario=args.usuario)
+    resultado = probe(args.candidate, cfg, senha, usuario=args.usuario)
     sys.stdout.write(json.dumps(resultado) + "\n")
     sys.stdout.flush()
     sys.exit(0)

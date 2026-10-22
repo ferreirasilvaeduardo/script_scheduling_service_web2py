@@ -248,7 +248,7 @@ class TestWithoutDb(unittest.TestCase):
         self.assertEqual(self.repo.own_sweep(conn, AGENT), {7: "N", 8: "Y"})
         self.assertIn("(" + sql_ident.FBI_TCK_RUN_AGENT_CASE + ") = :agent_id", conn.executed[0][0])
         conn = _Conn([("SELECT id, process_id", (1, [(7, None, None, "N")]))])
-        self.assertEqual(self.repo.tickets_running_do_agente(conn, AGENT),
+        self.assertEqual(self.repo.agent_running_tickets(conn, AGENT),
                          [{"id": 7, "process_id": None, "process_start": None, "cancel_requested": "N"}])
 
     def _agent_data(self, **mudancas):
@@ -493,7 +493,7 @@ class TestSchedulerQueueOracle(unittest.TestCase):
         self.assertEqual(self.repo.return_to_queue(self.conn, t2, self.agent), "CANCELADO")
         t = self.repo.get_ticket(self.conn, t2)
         self.assertEqual(t["status"], "CANCELLED")
-        self.assertEqual(self.repo.tickets_running_do_agente(self.conn, self.agent), [])
+        self.assertEqual(self.repo.agent_running_tickets(self.conn, self.agent), [])
 
     def test_duplicidade_e_heartbeat_de_ticket_alheio(self):
         self._register()

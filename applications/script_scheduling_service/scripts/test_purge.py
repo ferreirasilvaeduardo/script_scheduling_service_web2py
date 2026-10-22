@@ -349,7 +349,7 @@ class TestLocalLogs(_Base):
         os.makedirs(fora)
         os.symlink(os.path.join(self.root, "fora"), os.path.join(self.cfg.logging.log_dir, "producao", "ligado"))
         banco = _Db(running=[("PRODUCAO", 9, datetime.datetime(2026, 9, 1, 23, 59, 30),
-                                 '{"versao": 4, "script_nome": "Extrator"}')])
+                                 '{"version": 5, "script_name": "Extrator"}')])
         p = self._purge(banco)
         self.assertEqual(p.run(("local_logs",)), 0)
         self.assertFalse(os.path.exists(velho), "pasta de minuto inteira, com o .log.parcial")

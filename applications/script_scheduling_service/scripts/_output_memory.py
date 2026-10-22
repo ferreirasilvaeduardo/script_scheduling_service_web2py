@@ -9,7 +9,7 @@ class RepoOutputMemory(object):
     def __init__(self, tickets=None):
         self.tickets = tickets if tickets is not None else {}
         self.rows = {}
-        self.falhas = []
+        self.failures = []
         self.calls = []
 
     def _owner(self, tid, agente_id):
@@ -18,8 +18,8 @@ class RepoOutputMemory(object):
 
     def _fail(self, nome):
         self.calls.append(nome)
-        if self.falhas and self.falhas[0][0] == nome:
-            raise self.falhas.pop(0)[1]
+        if self.failures and self.failures[0][0] == nome:
+            raise self.failures.pop(0)[1]
 
     def start(self, conn, tid, agente_id):
         self._fail("start")

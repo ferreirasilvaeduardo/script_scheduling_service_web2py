@@ -105,8 +105,8 @@ class AdminProfilesService(object):
 
     def __init__(self, rbac_repo, catalogo, usuarios, log):
         self._rbac = rbac_repo
-        self._catalogo = catalogo
-        self._usuarios = usuarios
+        self._catalog = catalogo
+        self._users = usuarios
         self._log = log
 
     def _get(self, perfil_id):
@@ -117,12 +117,12 @@ class AdminProfilesService(object):
 
     def active_users(self, perfil_id):
         """Quantidade de usuarios ativos do perfil (perdem o acesso se o perfil for desativado)."""
-        return self._usuarios.list(filtros={"profile_id": perfil_id, "active": "Y"}, pagina=1,
+        return self._users.list(filtros={"profile_id": perfil_id, "active": "Y"}, pagina=1,
                                      tamanho=_COUNT_PAGE_SIZE)["total"]
 
     def affected_users(self, perfil_id):
         """(total, logins) dos usuarios ativos do perfil; no maximo AFFECTED_MAX logins (README §4.3.B.1)."""
-        pagina = self._usuarios.list(filtros={"profile_id": perfil_id, "active": "Y"}, pagina=1,
+        pagina = self._users.list(filtros={"profile_id": perfil_id, "active": "Y"}, pagina=1,
                                        tamanho=AFFECTED_MAX)
         return pagina["total"], [u["login"] for u in pagina["itens"]]
 
@@ -197,7 +197,7 @@ class AdminProfilesService(object):
             try:
                 self._require_admin(ctx, is_admin == "Y", "CREATE")
             except OperationDenied as exc:
-                return None, {GENERAL_FIELD: exc.mensagem}
+                return None, {GENERAL_FIELD: exc.message}
             novo = {"name": nome, "description": descricao, "is_admin": is_admin, "active": "Y"}
             auditoria = admin_crud.audit_entry(ctx, ip, "CREATE",
                                              admin_crud.insert_detail(novo, INSERT_FIELDS))
@@ -220,7 +220,7 @@ class AdminProfilesService(object):
         try:
             self._require_admin(ctx, is_admin == "Y" or self._reserved(ctx, atual), "UPDATE")
         except OperationDenied as exc:
-            erros[GENERAL_FIELD] = exc.mensagem
+            erros[GENERAL_FIELD] = exc.message
             return atual["id"], erros
         if ctx.get("profile_id") == atual["id"] and atual["is_admin"] == "Y" and is_admin == "N":
             # Autoprotecao (README §4.3.B): vale mesmo havendo outros administradores.
@@ -289,8 +289,8 @@ class AdminProfilesService(object):
         scripts homologados ali que podem rodar. Perfis inativos vao para 'inativos'.
         """
         admin_crud.require_feature(ctx, FEATURE)
-        scripts = dict((s["id"], s) for s in self._catalogo.scripts_list(pagina=1, tamanho=_CATALOG_MAX)["itens"])
-        ambientes = dict((a["id"], a) for a in self._catalogo.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"])
+        scripts = dict((s["id"], s) for s in self._catalog.scripts_list(pagina=1, tamanho=_CATALOG_MAX)["itens"])
+        ambientes = dict((a["id"], a) for a in self._catalog.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"])
         resultado = {"scripts": sorted(scripts.values(), key=lambda s: s["name"]),
                      "environments": sorted(ambientes.values(), key=lambda a: a["name"]),
                      "script": None, "environment": None, "profiles": [], "inativos": [], "aviso": None}
@@ -303,7 +303,7 @@ class AdminProfilesService(object):
 
         def homologados(script):
             if script not in homolog:
-                homolog[script] = set(i for i in self._catalogo.homologation_get(script)
+                homolog[script] = set(i for i in self._catalog.homologation_get(script)
                                       if ambientes.get(i, {}).get("active") == "Y")
             return homolog[script]
 
@@ -352,8 +352,8 @@ class AdminProfilesService(object):
 
     def _matrix_catalog(self):
         funcs = self._rbac.features_list()
-        ambs = self._catalogo.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"]
-        scrs = self._catalogo.scripts_list(pagina=1, tamanho=_CATALOG_MAX)["itens"]
+        ambs = self._catalog.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"]
+        scrs = self._catalog.scripts_list(pagina=1, tamanho=_CATALOG_MAX)["itens"]
         return {"funcs": dict((f["id"], f) for f in funcs), "ambs": dict((a["id"], a) for a in ambs),
                 "scrs": dict((s["id"], s) for s in scrs)}
 
@@ -414,7 +414,7 @@ class AdminProfilesService(object):
         try:
             self._require_admin(ctx, self._reserved(ctx, perfil), "PERM_UPDATE")
         except OperationDenied as exc:
-            return None, {GENERAL_FIELD: exc.mensagem}
+            return None, {GENERAL_FIELD: exc.message}
         enviados = {"funcs": _ids(funcs), "ambs": _ids(ambs), "scrs": _ids(scrs)}
         if any(v is None for v in enviados.values()):
             return None, {GENERAL_FIELD: MSG_MATRIX_ID_INVALID}

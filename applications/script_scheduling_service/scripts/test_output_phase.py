@@ -173,7 +173,7 @@ class TestStateMachine(unittest.TestCase):
     def test_erro_de_banco_rollback_e_retomada(self):
         conteudo = _zip({"a.txt": os.urandom(3 * 1024 * 1024)})
         self._pack(_Plat(conteudo), 0)
-        self.repo.falhas = [("append_chunk", RuntimeError("ORA-03113"))]
+        self.repo.failures = [("append_chunk", RuntimeError("ORA-03113"))]
         with self.assertRaises(RuntimeError):
             output_phase.write(self.output, self.conn, self.repo, AGENT)
         self.assertEqual(self.conn.rollbacks, 1)
@@ -280,7 +280,7 @@ class TestLoopWithOutput(tsc._Base):
 
     def test_erro_de_banco_na_gravacao_e_refeito(self):
         tid = self.db.ticket(self.db.script("echo r > \"$SSS_OUTPUT_DIR/r.txt\"\n"))
-        self.repo_output.falhas = [("start", RuntimeError("ORA-03113"))]
+        self.repo_output.failures = [("start", RuntimeError("ORA-03113"))]
         self.start_agent()
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             self.run_loop(self.completed(tid))
@@ -289,7 +289,7 @@ class TestLoopWithOutput(tsc._Base):
 
     def test_parada_abandona_e_startup_marca_falhou(self):
         tid = self.db.ticket(self.db.script("echo r > \"$SSS_OUTPUT_DIR/r.txt\"\n"))
-        self.repo_output.falhas = [("append_chunk", RuntimeError("ORA-03113"))] * 50
+        self.repo_output.failures = [("append_chunk", RuntimeError("ORA-03113"))] * 50
         self.start_agent()
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.run_loop(lambda: self.finished(tid)() and tid in self.repo_output.rows)

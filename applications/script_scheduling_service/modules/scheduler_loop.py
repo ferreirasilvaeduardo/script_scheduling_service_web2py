@@ -389,7 +389,7 @@ class Agent(object):
     def _startup_check(self):
         agente = self.cfg.agent
         conn = self._conn()
-        running = dict((t["id"], t) for t in self.repo.tickets_running_do_agente(conn, self.agent_id))
+        running = dict((t["id"], t) for t in self.repo.agent_running_tickets(conn, self.agent_id))
         pastas = self._local_dirs()
         resultados = {}
         for tid, pasta in sorted(pastas.items()):
@@ -1152,7 +1152,7 @@ class Agent(object):
         rotulo = "SSS-%s-%s" % (self.agent_id, item.tid)
         try:
             work_dir_ticket = executor.prepare_directory(agente.work_dir, item.tid, startup_concluido=True)
-            fd, caminho = executor.open_log(self.cfg.logging.log_dir, ticket["environment"], snap["script_nome"],
+            fd, caminho = executor.open_log(self.cfg.logging.log_dir, ticket["environment"], snap["script_name"],
                                              item.started_at, item.tid, snap.get("script_id"))
         except Exception as exc:  # noqa: BLE001 - CR-007 R-17: sem arquivo de log, a causa vai para o CLOB
             item.log.error("falha antes do spawn: %s", exc, extra={"action": "SPAWN"})
@@ -1165,11 +1165,11 @@ class Agent(object):
         try:
             if agente.input_dir:
                 # CR-014 (README §8.14): pasta permanente do script no ambiente, com o nome do snapshot.
-                entrada = log_paths.input_dir(agente.input_dir, ticket["environment"], snap["script_nome"],
+                entrada = log_paths.input_dir(agente.input_dir, ticket["environment"], snap["script_name"],
                                                    snap.get("script_id"))
             if agente.output_dir:
                 # CR-012 (README §8.13): pasta de saida com as partes do log e o mesmo minuto.
-                base, relativo = log_paths.output_dir(agente.output_dir, ticket["environment"], snap["script_nome"],
+                base, relativo = log_paths.output_dir(agente.output_dir, ticket["environment"], snap["script_name"],
                                                         item.started_at, item.tid, snap.get("script_id"))
                 saida = output_phase.Output(item.tid, base, relativo, usuario, work_dir_ticket)
             ticket_env = dict(ticket, started_at=item.started_at)

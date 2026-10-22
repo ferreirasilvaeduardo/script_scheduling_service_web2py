@@ -300,7 +300,7 @@ class TestEdit(_Base):
         antes = self.agd.get(aid)
         with self.assertRaises(OperationDenied) as cm:
             self._edit(aid, login="op.prod", run_time="06:00", respostas={})
-        self.assertEqual(cm.exception.mensagem, svc_mod.MSG_NO_PERMISSION)
+        self.assertEqual(cm.exception.message, svc_mod.MSG_NO_PERMISSION)
         self.assertEqual(self.agd.get(aid), antes)
         self.assertEqual(self._audits("UPDATE"), [])
         with self.assertRaises(OperationDenied):
@@ -494,7 +494,7 @@ class TestPauseResume(_Base):
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         with self.assertRaises(OperationDenied) as cm:
             self.svc.resume(self.ctx["op.prod"], IP, str(aid))
-        self.assertEqual(cm.exception.mensagem, svc_mod.MSG_NO_PERMISSION)
+        self.assertEqual(cm.exception.message, svc_mod.MSG_NO_PERMISSION)
         self.assertEqual(self.agd.get(aid)["active"], "N")
 
     def test_retomar_sem_proxima_execucao(self):
@@ -503,7 +503,7 @@ class TestPauseResume(_Base):
         self.now = datetime.datetime(2026, 1, 17, 0, 0)
         with self.assertRaises(OperationDenied) as cm:
             self.svc.resume(self.ctx["admin"], IP, str(aid))
-        self.assertEqual(cm.exception.mensagem, svc_mod.MSG_RESUME_NO_NEXT_RUN)
+        self.assertEqual(cm.exception.message, svc_mod.MSG_RESUME_NO_NEXT_RUN)
         self.assertEqual(self.agd.get(aid)["active"], "N")
 
     def test_retomar_reavalia_usuario_responsavel_inativo(self):
@@ -514,8 +514,8 @@ class TestPauseResume(_Base):
         usuarios.update(3, {"active": "N"}, ator="teste")
         with self.assertRaises(OperationDenied) as cm:
             self.svc.resume(self.ctx["admin"], IP, str(aid))
-        self.assertIn(svc_mod.PAUSE_REASONS["USER_INACTIVE"], cm.exception.mensagem)
-        self.assertIn(svc_mod.MSG_RESUME_GUIDANCE, cm.exception.mensagem)
+        self.assertIn(svc_mod.PAUSE_REASONS["USER_INACTIVE"], cm.exception.message)
+        self.assertIn(svc_mod.MSG_RESUME_GUIDANCE, cm.exception.message)
 
     def test_retomar_reavalia_script_inativo(self):
         aid, _erros = self._save(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
@@ -523,7 +523,7 @@ class TestPauseResume(_Base):
         self.catalog.scripts_update(1, {"active": "N"}, ator="teste")
         with self.assertRaises(OperationDenied) as cm:
             self.svc.resume(self.ctx["admin"], IP, str(aid))
-        self.assertIn(svc_mod.PAUSE_REASONS["SCRIPT_INACTIVE"], cm.exception.mensagem)
+        self.assertIn(svc_mod.PAUSE_REASONS["SCRIPT_INACTIVE"], cm.exception.message)
 
     def test_retomar_reavalia_ambiente_inativo(self):
         aid, _erros = self._save(environment="HOMOLOGACAO", script_id="1",
@@ -532,7 +532,7 @@ class TestPauseResume(_Base):
         self.catalog.environments_update(2, {"active": "N"}, ator="teste")
         with self.assertRaises(OperationDenied) as cm:
             self.svc.resume(self.ctx["admin"], IP, str(aid))
-        self.assertIn(svc_mod.PAUSE_REASONS["ENVIRONMENT_INACTIVE"], cm.exception.mensagem)
+        self.assertIn(svc_mod.PAUSE_REASONS["ENVIRONMENT_INACTIVE"], cm.exception.message)
 
     def test_retomar_reavalia_parametros_invalidos(self):
         aid, _erros = self._save(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
@@ -540,7 +540,7 @@ class TestPauseResume(_Base):
         self.agd.update(aid, {"params_json": json.dumps({"data_ref": "data-invalida"})}, ator="teste")
         with self.assertRaises(OperationDenied) as cm:
             self.svc.resume(self.ctx["admin"], IP, str(aid))
-        self.assertIn(svc_mod.PAUSE_REASONS["INVALID_PARAM"], cm.exception.mensagem)
+        self.assertIn(svc_mod.PAUSE_REASONS["INVALID_PARAM"], cm.exception.message)
 
 
 class TestPreviewList(_Base):

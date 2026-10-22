@@ -24,7 +24,7 @@ class Masker(object):
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._segredos = []
+        self._secrets = []
         self._regex = None
         self.max_len = 0
 
@@ -33,11 +33,11 @@ class Masker(object):
         if not isinstance(valor, str) or len(valor) < MIN_LENGTH:
             return
         with self._lock:
-            if valor in self._segredos:
+            if valor in self._secrets:
                 return
-            segredos = sorted(self._segredos + [valor], key=len, reverse=True)
+            segredos = sorted(self._secrets + [valor], key=len, reverse=True)
             self._regex = re.compile("|".join(re.escape(s) for s in segredos))
-            self._segredos = segredos
+            self._secrets = segredos
             self.max_len = len(segredos[0])
 
     @property
@@ -67,20 +67,20 @@ class StreamMasker(object):
     """Mascara um fluxo em blocos retendo a cauda que pode conter um segredo cortado."""
 
     def __init__(self, mascarador):
-        self._mascarador = mascarador
-        self._pendente = ""
+        self._masker = mascarador
+        self._pending = ""
 
     def feed(self, bloco):
         """Recebe um bloco e devolve o texto ja seguro para emissao."""
-        texto = self._pendente + (bloco or "")
-        regex = self._mascarador.regex
+        texto = self._pending + (bloco or "")
+        regex = self._masker.regex
         corte = len(texto)
         if regex is not None:
-            corte = max(0, corte - (self._mascarador.max_len - 1))
+            corte = max(0, corte - (self._masker.max_len - 1))
         corte = _trim_connect_string(texto, corte)
         if regex is None:
-            self._pendente = texto[corte:]
-            return self._mascarador.mask(texto[:corte])
+            self._pending = texto[corte:]
+            return self._masker.mask(texto[:corte])
         # Um segredo que comece antes do corte cabe inteiro no texto (len <= max_len);
         # se ele atravessa o corte, o corte avanca para o fim do match.
         pedacos = []
@@ -94,13 +94,13 @@ class StreamMasker(object):
             if pos > corte:
                 corte = pos
         pedacos.append(texto[pos:corte])
-        self._pendente = texto[corte:]
-        return self._mascarador.mask("".join(pedacos))
+        self._pending = texto[corte:]
+        return self._masker.mask("".join(pedacos))
 
     def finalize(self):
         """Mascara e devolve o restante retido."""
-        resto, self._pendente = self._pendente, ""
-        return self._mascarador.mask(resto)
+        resto, self._pending = self._pending, ""
+        return self._masker.mask(resto)
 
 
 def _mask_arg(mascarador, valor):
@@ -115,10 +115,10 @@ class _MaskFilter(logging.Filter):
 
     def __init__(self, mascarador):
         super(_MaskFilter, self).__init__()
-        self.mascarador = mascarador
+        self.masker = mascarador
 
     def filter(self, record):
-        m = self.mascarador
+        m = self.masker
         if isinstance(record.msg, str):
             record.msg = m.mask(record.msg)
         else:

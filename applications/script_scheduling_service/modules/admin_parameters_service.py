@@ -140,26 +140,26 @@ class AdminParametersService(object):
     """Regras do dicionario de parametros com repositorio e log injetados."""
 
     def __init__(self, catalogo, log):
-        self._catalogo = catalogo
+        self._catalog = catalogo
         self._log = log
 
     def _get(self, parametro_id):
         pid = _id(parametro_id)
         if pid is None:
             raise RepoNotFound("parametro invalido")
-        return self._catalogo.parameters_get(pid)
+        return self._catalog.parameters_get(pid)
 
     def links(self, parametro_id):
         """Scripts vinculados ao parametro: [{id, nome, tipo_param, ativo}] por nome."""
         return [{"id": s["id"], "name": s["name"], "param_type": s.get("param_type"), "active": s.get("active")}
-                for s in self._catalogo.parameter_links(parametro_id)]
+                for s in self._catalog.parameter_links(parametro_id)]
 
     # ----------------------------------------------------------------- leitura
 
     def list(self, ctx, filtros, pagina, tamanho):
         """Pagina de parametros (codigo ASC) com qtd_scripts; padrao de sensivel mascarado."""
         admin_crud.require_feature(ctx, FEATURE)
-        resultado = self._catalogo.parameters_list(filtros=filtros, pagina=pagina, tamanho=tamanho)
+        resultado = self._catalog.parameters_list(filtros=filtros, pagina=pagina, tamanho=tamanho)
         itens = []
         for p in resultado["itens"]:
             item = dict(p)
@@ -207,7 +207,7 @@ class AdminParametersService(object):
             try:
                 opcoes = params_compiler.validate_registry_options(opcoes)
             except ParamError as exc:
-                erros["options_json"] = exc.mensagem
+                erros["options_json"] = exc.message
                 opcoes = None
         elif opcoes is not None:
             erros["options_json"] = MSG_OPTIONS_FORBIDDEN
@@ -234,7 +234,7 @@ class AdminParametersService(object):
                 try:
                     params_compiler.validate_registry_regex(regex)
                 except ParamError as exc:
-                    erros["validation_regex"] = exc.mensagem
+                    erros["validation_regex"] = exc.message
         return tipo, opcoes, regex
 
     def _validate(self, ctx, dados, atual, erros):
@@ -257,7 +257,7 @@ class AdminParametersService(object):
             try:
                 params_compiler.validate_flag(flag)
             except ParamError as exc:
-                erros["param_flag"] = exc.mensagem
+                erros["param_flag"] = exc.message
         label = admin_crud.free_text(dados.get("label"), erros, "label")
         if label is None:
             erros["label"] = MSG_LABEL_REQUIRED
@@ -288,7 +288,7 @@ class AdminParametersService(object):
             try:
                 padrao = _default_text(params_compiler.validate_value(dict(reg, code=reg["code"]), bruto))
             except ParamError as exc:
-                erros["default_value"] = exc.mensagem
+                erros["default_value"] = exc.message
                 padrao = None
             if padrao is not None and len(padrao) > DEFAULT_MAX_LENGTH:
                 erros["default_value"] = MSG_DEFAULT_LENGTH
@@ -351,7 +351,7 @@ class AdminParametersService(object):
             auditoria = admin_crud.audit_entry(ctx, ip, "CREATE",
                                              admin_crud.insert_detail(self._for_audit(novo), INSERT_FIELDS))
             try:
-                criado = self._catalogo.parameters_insert(novo, auditoria=auditoria)
+                criado = self._catalog.parameters_insert(novo, auditoria=auditoria)
             except RepoViolation as exc:
                 self._violation(ctx, exc, erros)
                 return None, erros
@@ -373,7 +373,7 @@ class AdminParametersService(object):
         if detalhe is None:
             return atual["id"], {}
         try:
-            self._catalogo.parameters_update(atual["id"], alteracoes,
+            self._catalog.parameters_update(atual["id"], alteracoes,
                                               esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
                                               auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         except RepoConflict:
@@ -402,7 +402,7 @@ class AdminParametersService(object):
         detalhe = admin_crud.changes_detail(atual, dict(atual, active=novo_ativo), ("active",))
         acao = "DEACTIVATE" if novo_ativo == "N" else "UPDATE"
         try:
-            alterado = self._catalogo.parameters_update(
+            alterado = self._catalog.parameters_update(
                 atual["id"], {"active": novo_ativo}, esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
                 auditoria=admin_crud.audit_entry(ctx, ip, acao, detalhe))
         except RepoViolation as exc:
@@ -436,7 +436,7 @@ class AdminParametersService(object):
         try:
             normalizado = _default_text(params_compiler.validate_value(config, valor))
         except ParamError as exc:
-            return {"ok": False, "erro": exc.mensagem}
+            return {"ok": False, "erro": exc.message}
         if admin_crud.text(dados.get("sensitive"), 1) == "Y":
             normalizado = MASK
         return {"ok": True, "valor": normalizado}

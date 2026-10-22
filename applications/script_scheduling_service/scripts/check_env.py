@@ -267,7 +267,7 @@ def main():
                 segredos = sss_config.get_secrets()
                 sel = db_conn.select_driver(cfg, segredos)
                 sel_desc = "modo=%s (servidor=%s driver=%s cliente=%s)" % (
-                    sel.candidato, sel.versao_servidor or "-", sel.versao_driver or "-", sel.versao_cliente or "-"
+                    sel.candidate, sel.server_version or "-", sel.driver_version or "-", sel.client_version or "-"
                 )
             except Exception as e_sonda:
                 sel_desc = "sondagem falhou: %s" % e_sonda

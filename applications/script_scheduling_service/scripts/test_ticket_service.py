@@ -122,24 +122,24 @@ class TestTicketService(_BaseTicket):
         snap = json.loads(bruto)
         self.assertEqual(bruto, json.dumps(snap, ensure_ascii=False, sort_keys=True))
         self.assertEqual(sorted(snap), sorted(params_compiler._SNAPSHOT_KEYS))
-        self.assertEqual(snap["version"], 4)
-        self.assertEqual(snap["script_nome"], "carga_diaria")
+        self.assertEqual(snap["version"], 5)
+        self.assertEqual(snap["script_name"], "carga_diaria")
         caminho_esperado = os.path.join(self.base, "carga_diaria.py")
         self.assertEqual((snap["interpreter"], snap["path_file"]),
                          ("PYTHON3", caminho_esperado))
         self.assertEqual(snap["param_type"], "NAMED")
-        # Snapshot v4 (CR-005 D2): path_file e absoluto; sem base_dir.
+        # Snapshot v5 (CR-005 D2; chaves em ingles no CR-016c2): path_file e absoluto; sem base_dir.
         self.assertNotIn("pasta_base", snap)
         self.assertIn(self.base, bruto)
         self.assertEqual(snap["args"], [
             "--data-ref", "2026-10-20", "-n", "5000", "--modo", "SIMULACAO",
             "--verbose", "--documento", SECRET,
         ])
-        self.assertEqual(snap["respostas"], {"data_ref": "2026-10-20", "limite_linhas": "5000",
+        self.assertEqual(snap["answers"], {"data_ref": "2026-10-20", "limite_linhas": "5000",
                                              "modo_exec": "SIMULACAO", "verbose": True,
                                              "documento_cliente": SECRET})
-        self.assertEqual(snap["sensiveis"], ["documento_cliente"])
-        datetime.datetime.strptime(snap["compilado_em"], "%Y-%m-%d %H:%M:%S")
+        self.assertEqual(snap["sensitive"], ["documento_cliente"])
+        datetime.datetime.strptime(snap["compiled_at"], "%Y-%m-%d %H:%M:%S")
 
     def test_ticket_resp_com_valores_resolvidos(self):
         tid, _ = self._create(respostas={"data_ref": "2026-10-20", "documento_cliente": SECRET})
@@ -520,7 +520,7 @@ class TestTicketQuery(_BaseTicket):
         self.assertEqual((t_novo["status"], t_novo["priority"], t_novo["requested_by"]), ("PENDING", 3, "op.hml"))
         snap_orig, snap_novo = json.loads(t_orig["submitted_params"]), json.loads(t_novo["submitted_params"])
         self.assertEqual(snap_novo["args"], snap_orig["args"])
-        self.assertEqual(snap_novo["respostas"], snap_orig["respostas"])
+        self.assertEqual(snap_novo["answers"], snap_orig["answers"])
         regs = self.audit.list(filtros={"action": "TICKET_RERUN", "entity_id": novo})["itens"]
         self.assertEqual(len(regs), 1)
         self.assertNotIn(SECRET, regs[0]["detail"] or "")
@@ -548,7 +548,7 @@ class TestTicketQuery(_BaseTicket):
         with self.assertRaises(RerunError) as cm:
             self.svc.rerun(ctx, IP, str(original))
         self.assertEqual(cm.exception.ticket_id, original)
-        self.assertEqual(list(cm.exception.erros), ["descricao_lote"])
+        self.assertEqual(list(cm.exception.errors), ["descricao_lote"])
         self.assertEqual(self._ticket_total(), antes)
 
         prep = self.svc.prepare_rerun(ctx, str(original))

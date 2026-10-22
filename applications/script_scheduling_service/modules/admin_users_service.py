@@ -86,17 +86,17 @@ class AdminUsersService(object):
     """Regras do cadastro de usuarios com repositorios, relogio e log injetados."""
 
     def __init__(self, usuarios, rbac_repo, log, relogio=None):
-        self._usuarios = usuarios
+        self._users = usuarios
         self._rbac = rbac_repo
         self._log = log
         # Relogio do banco (README §4.2): bloqueio vigente e filtro "Bloqueados" comparam com SYSDATE.
-        self._relogio = relogio or usuarios.now
+        self._clock = relogio or usuarios.now
 
     def _get(self, usuario_id):
         uid = _id(usuario_id)
         if uid is None:
             raise RepoNotFound("usuario invalido")
-        return self._usuarios.get_by_id(uid)
+        return self._users.get_by_id(uid)
 
     def profiles(self, apenas_ativos=False):
         """Perfis para selecao: lista de {id, nome, is_admin, ativo} ordenada por nome."""
@@ -116,7 +116,7 @@ class AdminUsersService(object):
     def is_locked(self, usuario):
         """True se o bloqueio por tentativas ainda vale agora."""
         ate = usuario.get("locked_until")
-        return ate is not None and ate > self._relogio()
+        return ate is not None and ate > self._clock()
 
     # ----------------------------------------------------------------- leitura
 
@@ -128,8 +128,8 @@ class AdminUsersService(object):
         if situacao in ("Y", "N"):
             repo_filtros["active"] = situacao
         elif situacao == "B":
-            repo_filtros["bloqueado_em"] = self._relogio()
-        resultado = self._usuarios.list(filtros=repo_filtros, pagina=pagina, tamanho=tamanho)
+            repo_filtros["bloqueado_em"] = self._clock()
+        resultado = self._users.list(filtros=repo_filtros, pagina=pagina, tamanho=tamanho)
         nomes = dict((p["id"], p["name"]) for p in self.profiles())
         itens = []
         for u in resultado["itens"]:
@@ -217,15 +217,15 @@ class AdminUsersService(object):
             try:
                 self._require_admin(ctx, perfil["is_admin"] == "Y", "CREATE")
             except OperationDenied as exc:
-                return None, {"profile_id": exc.mensagem}
-            agora = self._relogio()
+                return None, {"profile_id": exc.message}
+            agora = self._clock()
             novo = {"login": login, "name": nome, "profile_id": perfil_id, "active": "Y",
                     "password_hash": security.hash_password(senha), "password_changed_at": agora}
             auditoria = admin_crud.audit_entry(ctx, ip, "CREATE",
                                              admin_crud.insert_detail(dict(novo, perfil=perfil["name"]),
                                                                          INSERT_FIELDS))
             try:
-                criado = self._usuarios.insert(novo, auditoria=auditoria)
+                criado = self._users.insert(novo, auditoria=auditoria)
             except RepoViolation as exc:
                 self._violation(ctx, exc, erros)
                 return None, erros
@@ -247,7 +247,7 @@ class AdminUsersService(object):
             self._require_admin(ctx, perfil["is_admin"] == "Y" or self._admin_profile(atual["profile_id"])
                                or troca_propria, "UPDATE")
         except OperationDenied as exc:
-            return atual["id"], {GENERAL_FIELD: exc.mensagem}
+            return atual["id"], {GENERAL_FIELD: exc.message}
         if admin_crud.text(dados.get("version"), 64) != admin_crud.version(atual, EDITABLE_FIELDS):
             return atual["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
         depois = dict(atual, name=nome, profile_id=perfil_id)
@@ -255,7 +255,7 @@ class AdminUsersService(object):
         if detalhe is None:
             return atual["id"], {}
         try:
-            self._usuarios.update(atual["id"], {"name": nome, "profile_id": perfil_id},
+            self._users.update(atual["id"], {"name": nome, "profile_id": perfil_id},
                                    esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
                                    auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         except RepoConflict:
@@ -284,7 +284,7 @@ class AdminUsersService(object):
         detalhe = admin_crud.changes_detail(atual, dict(atual, active=novo_ativo), ("active",))
         acao = "DEACTIVATE" if novo_ativo == "N" else "UPDATE"
         try:
-            alterado = self._usuarios.update(atual["id"], {"active": novo_ativo},
+            alterado = self._users.update(atual["id"], {"active": novo_ativo},
                                               esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
                                               auditoria=admin_crud.audit_entry(ctx, ip, acao, detalhe))
         except RepoViolation as exc:
@@ -312,7 +312,7 @@ class AdminUsersService(object):
         senha = self._password(senha, confirmacao, erros)
         if erros:
             return erros
-        self._usuarios.set_password(atual["id"], security.hash_password(senha), self._relogio(),
+        self._users.set_password(atual["id"], security.hash_password(senha), self._clock(),
                                      auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", u"senha redefinida"))
         self._log.info("senha redefinida (login=%s usuario=%s)", ctx.get("login"), atual["login"],
                        extra={"action": "UPDATE"})
@@ -325,7 +325,7 @@ class AdminUsersService(object):
         self._require_admin(ctx, self._admin_profile(atual["profile_id"]), "UPDATE")
         detalhe = u"desbloqueado (failed_attempts: %s; locked_until: %s)" % (
             atual.get("failed_attempts") or 0, atual.get("locked_until") or u"(vazio)")
-        alterado = self._usuarios.unlock(atual["id"],
+        alterado = self._users.unlock(atual["id"],
                                               auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         self._log.info("usuario desbloqueado (login=%s usuario=%s)", ctx.get("login"), atual["login"],
                        extra={"action": "UPDATE"})

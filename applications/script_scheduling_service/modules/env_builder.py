@@ -139,7 +139,7 @@ def build(cfg, segredos, ticket, ambiente, script_real, work_dir_ticket, environ
     if snap.get("path_file") and snap["path_file"] != script_real:
         _set(env, "SSS_SCRIPT_LINK", snap["path_file"])
     _set(env, "SSS_SCRIPT_ID", snap.get("script_id"))
-    _set(env, "SSS_SCRIPT_NAME", snap.get("script_nome"))
+    _set(env, "SSS_SCRIPT_NAME", snap.get("script_name"))
     _set(env, "SSS_INTERPRETER", snap.get("interpreter"))
     if caminho_log:
         _set(env, "SSS_LOG_DIR", os.path.dirname(caminho_log))

@@ -45,7 +45,7 @@ class CronError(Exception):
 
     def __init__(self, mensagem):
         Exception.__init__(self, mensagem)
-        self.mensagem = mensagem
+        self.message = mensagem
 
 
 def _integer(texto, campo, minimo, maximo):
@@ -134,24 +134,24 @@ class CronExpr(object):
     """Expressao CRON ja validada; criada apenas por parse()."""
 
     def __init__(self, texto, analisados):
-        self.texto = texto
-        (self._it_min, self.minutos), (self._it_hora, self.horas), (self._it_dia, self.dias), \
-            (self._it_mes, self.meses), (self._it_dsem, dsem) = analisados
-        self.dias_semana = set(d % 7 for d in dsem)
+        self.text = texto
+        (self._it_min, self.minutes), (self._it_hour, self.hours), (self._it_day, self.days), \
+            (self._it_month, self.months), (self._it_wday, dsem) = analisados
+        self.weekdays = set(d % 7 for d in dsem)
         # Vixie: o campo so e "estrela" (nao restrito) quando o texto comeca com '*'.
         campos = texto.split()
-        self.dia_restrito = not campos[2].startswith('*')
-        self.dsem_restrito = not campos[4].startswith('*')
-        self._lista_min = sorted(self.minutos)
-        self._lista_hora = sorted(self.horas)
+        self.day_restricted = not campos[2].startswith('*')
+        self.wday_restricted = not campos[4].startswith('*')
+        self._minute_list = sorted(self.minutes)
+        self._hour_list = sorted(self.hours)
 
     def __repr__(self):
-        return 'CronExpr(%r)' % self.texto
+        return 'CronExpr(%r)' % self.text
 
     def _day_matches(self, data):
-        casa_dia = data.day in self.dias
-        casa_dsem = (data.weekday() + 1) % 7 in self.dias_semana
-        if self.dia_restrito and self.dsem_restrito:
+        casa_dia = data.day in self.days
+        casa_dsem = (data.weekday() + 1) % 7 in self.weekdays
+        if self.day_restricted and self.wday_restricted:
             return casa_dia or casa_dsem
         return casa_dia and casa_dsem
 
@@ -163,22 +163,22 @@ class CronExpr(object):
         limite = apos + datetime.timedelta(days=horizonte_dias)
         t = apos.replace(second=0, microsecond=0) + _ONE_MINUTE
         while t <= limite:
-            if t.month not in self.meses:
+            if t.month not in self.months:
                 ano, mes = _next_month(t.year, t.month)
                 t = datetime.datetime(ano, mes, 1)
                 continue
             if not self._day_matches(t.date()):
                 t = datetime.datetime(t.year, t.month, t.day) + datetime.timedelta(days=1)
                 continue
-            if t.hour not in self.horas:
-                hora = _next_value(self._lista_hora, t.hour)
+            if t.hour not in self.hours:
+                hora = _next_value(self._hour_list, t.hour)
                 if hora is None:
                     t = datetime.datetime(t.year, t.month, t.day) + datetime.timedelta(days=1)
                 else:
                     t = t.replace(hour=hora, minute=0)
                 continue
-            if t.minute not in self.minutos:
-                minuto = _next_value(self._lista_min, t.minute)
+            if t.minute not in self.minutes:
+                minuto = _next_value(self._minute_list, t.minute)
                 if minuto is None:
                     t = t.replace(minute=0) + datetime.timedelta(hours=1)
                 else:
@@ -189,7 +189,7 @@ class CronExpr(object):
 
     def describe(self):
         """Descricao curta em portugues para a UI (ex.: 'às 02:30, de segunda a sexta')."""
-        horario = _describe_time(self._it_min, self._it_hora)
+        horario = _describe_time(self._it_min, self._it_hour)
         datas = _describe_dates(self)
         if datas:
             return '%s, %s' % (horario, datas)
@@ -285,27 +285,27 @@ def _weekday_when(itens, texto_dsem):
 
 
 def _describe_dates(cron):
-    meses = _simple(cron._it_mes)
-    if _star(cron._it_mes) == 1:
+    meses = _simple(cron._it_month)
+    if _star(cron._it_month) == 1:
         texto_mes = None
     elif meses is not None:
         texto_mes = _join([_MONTHS[m - 1] for m in meses])
     else:
-        texto_mes = 'nos meses %s' % _items_text(cron._it_mes, lambda v: _MONTHS[v - 1])
+        texto_mes = 'nos meses %s' % _items_text(cron._it_month, lambda v: _MONTHS[v - 1])
 
     texto_dia = None
-    passo_dia = _star(cron._it_dia)
+    passo_dia = _star(cron._it_day)
     if passo_dia is not None and passo_dia > 1:
         # README §7.3: '*/n' no dia do mes e "a cada n dias a partir do dia 1" (sem "de cada mes").
         texto_dia = 'a cada %d dias a partir do dia 1' % passo_dia
-    elif cron.dia_restrito or passo_dia != 1:
-        dias = _simple(cron._it_dia)
+    elif cron.day_restricted or passo_dia != 1:
+        dias = _simple(cron._it_day)
         if dias is not None and len(dias) == 1:
             texto_dia = 'no dia %d' % dias[0]
         elif dias is not None:
             texto_dia = 'nos dias ' + _join([str(d) for d in dias])
         else:
-            texto_dia = 'nos dias do mês %s' % _items_text(cron._it_dia, str)
+            texto_dia = 'nos dias do mês %s' % _items_text(cron._it_day, str)
         if texto_mes is None:
             texto_dia += ' de cada mês'
         elif meses is not None:
@@ -313,15 +313,15 @@ def _describe_dates(cron):
             texto_mes = None
 
     texto_dsem = None
-    if cron.dsem_restrito or _star(cron._it_dsem) != 1:
-        texto_dsem = _describe_weekday(cron._it_dsem)
+    if cron.wday_restricted or _star(cron._it_wday) != 1:
+        texto_dsem = _describe_weekday(cron._it_wday)
 
     partes = []
     if texto_dia and texto_dsem and passo_dia is not None and passo_dia > 1:
         # Semantica E do Vixie (dia comeca com '*'): "quando cair numa segunda".
-        partes.append(texto_dia + ', quando cair ' + _weekday_when(cron._it_dsem, texto_dsem))
+        partes.append(texto_dia + ', quando cair ' + _weekday_when(cron._it_wday, texto_dsem))
     elif texto_dia and texto_dsem:
-        conector = ' ou ' if cron.dia_restrito and cron.dsem_restrito else ' e '
+        conector = ' ou ' if cron.day_restricted and cron.wday_restricted else ' e '
         partes.append(texto_dia + conector + texto_dsem)
     elif texto_dia or texto_dsem:
         partes.append(texto_dia or texto_dsem)

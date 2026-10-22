@@ -176,7 +176,7 @@ class TestEditAndLastAdmin(_Base):
         f = self.svc.form(ctx_gestor, str(U_ADMIN))
         with self.assertRaises(OperationDenied) as cm:
             self.svc.toggle_active(ctx_gestor, IP, str(U_ADMIN), f["version"])
-        self.assertEqual(cm.exception.mensagem, usr_mod.MSG_LAST_ADMIN)
+        self.assertEqual(cm.exception.message, usr_mod.MSG_LAST_ADMIN)
         self.assertEqual(self.users.get_by_id(U_ADMIN)["active"], "Y")
         self.assertEqual(self._audits("DEACTIVATE"), [])
 
@@ -192,7 +192,7 @@ class TestEditAndLastAdmin(_Base):
         novo, _ = self._insert(login="admin2", profile_id=str(P_ADMIN))
         with self.assertRaises(OperationDenied) as cm:
             self.svc.toggle_active(self.ctx["admin"], IP, str(U_ADMIN), self._form(U_ADMIN)["version"])
-        self.assertEqual(cm.exception.mensagem, usr_mod.MSG_SELF_DEACTIVATE)
+        self.assertEqual(cm.exception.message, usr_mod.MSG_SELF_DEACTIVATE)
         _uid, erros = self._edit(U_ADMIN, profile_id=str(P_CONSULTA))
         self.assertEqual(erros, {GENERAL_FIELD: usr_mod.MSG_SELF_PROFILE})
         _uid, erros = self._edit(U_ADMIN, name="Admin Renomeado")
@@ -243,7 +243,7 @@ class TestPasswordAndLock(_Base):
     def test_redefinir_a_propria_senha_pela_administracao_negado(self):
         with self.assertRaises(OperationDenied) as cm:
             self.svc.reset_password(self.ctx["admin"], IP, str(U_ADMIN), NEW_PASSWORD, NEW_PASSWORD)
-        self.assertEqual(cm.exception.mensagem, usr_mod.MSG_SELF_PASSWORD)
+        self.assertEqual(cm.exception.message, usr_mod.MSG_SELF_PASSWORD)
 
     def test_desbloquear(self):
         alterado = self.svc.unlock(self.ctx["admin"], IP, str(U_BLOQUEADO))

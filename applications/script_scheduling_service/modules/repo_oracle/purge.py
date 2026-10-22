@@ -127,7 +127,7 @@ class RepoPurge(object):
             saida = []
             for amb, sid, inicio, snap in cur.fetchall():
                 try:
-                    nome = json.loads(_read_lob(snap) or "{}").get("script_nome")
+                    nome = json.loads(_read_lob(snap) or "{}").get("script_name")
                 except ValueError:
                     nome = None
                 saida.append((amb, nome, sid, inicio))

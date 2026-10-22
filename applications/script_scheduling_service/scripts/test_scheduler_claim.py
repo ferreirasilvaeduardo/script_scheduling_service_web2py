@@ -74,7 +74,7 @@ class _Db(object):
             "user_id": 9, "login": "ana", "profile_id": 2, "usuario_ativo": "Y", "perfil_ativo": "Y",
             "is_admin": "N", "perm_version": 1, "features": ["EXEC_SCRIPT"], "environments": [AMB],
             "scripts": []})
-        self.falhas = collections.defaultdict(list)
+        self.failures = collections.defaultdict(list)
         self.calls = collections.defaultdict(int)
         self.claim_answers = []
         self.heartbeats = []
@@ -90,8 +90,8 @@ class _Db(object):
 
     def _fail(self, metodo):
         self.calls[metodo] += 1
-        if self.falhas[metodo]:
-            erro = self.falhas[metodo].pop(0)
+        if self.failures[metodo]:
+            erro = self.failures[metodo].pop(0)
             if erro is not None:
                 raise erro
 
@@ -112,13 +112,13 @@ class _Db(object):
         self.ctx = dict(self.ctx, scripts=frozenset(set(self.ctx["scripts"]) | {sid}))
         return sid
 
-    def ticket(self, sid, version=4, args=(), path_file=None, interpretador=None, agendamento_id=None):
+    def ticket(self, sid, version=5, args=(), path_file=None, interpretador=None, agendamento_id=None):
         self.seq += 1
         s = self.scripts[sid]
-        snap = {"version": version, "script_id": sid, "script_nome": s["name"],
+        snap = {"version": version, "script_id": sid, "script_name": s["name"],
                 "interpreter": interpretador or s["interpreter"], "path_file": path_file or s["path_file"],
-                "param_type": "NAMED", "args": list(args), "respostas": {}, "sensiveis": [],
-                "compilado_em": "2026-10-20 10:00:00"}
+                "param_type": "NAMED", "args": list(args), "answers": {}, "sensitive": [],
+                "compiled_at": "2026-10-20 10:00:00"}
         self.tickets[self.seq] = {
             "id": self.seq, "script_id": sid, "environment": AMB, "requested_by": "ana", "status": "PENDING",
             "priority": 2, "cancel_requested": "N", "agent_id": None, "process_id": None, "process_start": None,
@@ -213,7 +213,7 @@ class _Db(object):
         return dict((t["id"], t["cancel_requested"]) for t in self.tickets.values()
                     if t["status"] == "RUNNING" and t["agent_id"] == agente_id)
 
-    def tickets_running_do_agente(self, conn, agente_id):
+    def agent_running_tickets(self, conn, agente_id):
         return [{"id": t["id"], "process_id": t["process_id"], "process_start": t["process_start"],
                  "cancel_requested": t["cancel_requested"]} for t in self.tickets.values()
                 if t["status"] == "RUNNING" and t["agent_id"] == agente_id]
@@ -565,7 +565,7 @@ class TestPrevalidation(_Base):
 
     def test_snapshots_antigos(self):
         sid = self.db.script("echo x\n")
-        tids = [self.db.ticket(sid, version=versao) for versao in (1, 2, 3)]
+        tids = [self.db.ticket(sid, version=versao) for versao in (1, 2, 3, 4)]
         self.start_agent()
         self.run_loop(lambda: all(self.finished(t)() for t in tids))
         for tid in tids:
@@ -607,7 +607,7 @@ class TestPrevalidation(_Base):
 
     def test_erro_de_rede_antes_do_spawn_devolve(self):
         tid = self.db.ticket(self.db.script("echo x\n"))
-        self.db.falhas["execution_context"] = [_NetworkError()]
+        self.db.failures["execution_context"] = [_NetworkError()]
         self.start_agent()
         self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0), "devolvido e executado no ciclo seguinte")
@@ -615,7 +615,7 @@ class TestPrevalidation(_Base):
 
     def test_erro_de_banco_nao_transitorio_e_precheck(self):
         tid = self.db.ticket(self.db.script("echo x\n"))
-        self.db.falhas["execution_context"] = [_PrivilegeError()]
+        self.db.failures["execution_context"] = [_PrivilegeError()]
         self.start_agent()
         with self.assertLogs("sss_scheduler", "ERROR"):
             self.run_loop(self.finished(tid))
@@ -627,7 +627,7 @@ class TestPending(_Base):
 
     def test_finalizacao_pendente_ate_gravar(self):
         tid = self.db.ticket(self.db.script("echo ok\n"))
-        self.db.falhas["finalize"] = [_NetworkError(), _NetworkError()]
+        self.db.failures["finalize"] = [_NetworkError(), _NetworkError()]
         self.start_agent()
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             self.run_loop(self.finished(tid))
@@ -638,7 +638,7 @@ class TestPending(_Base):
     def test_pid_pendente_recebe_heartbeat(self):
         pronto = os.path.join(self.root, "pronto")
         tid = self.db.ticket(self.db.script("touch %s\nsleep 1\n" % pronto))
-        self.db.falhas["register_pid"] = [_NetworkError()]
+        self.db.failures["register_pid"] = [_NetworkError()]
         self.start_agent()
         self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid)[0], "SUCCESS")

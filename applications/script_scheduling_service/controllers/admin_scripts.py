@@ -142,7 +142,7 @@ def alternar_ativo():
     except AccessDenied:
         _negado()
     except OperationDenied as exc:
-        session.flash = {"tipo": "erro", "mensagem": exc.mensagem}
+        session.flash = {"tipo": "erro", "mensagem": exc.message}
     except RepoConflict:
         session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLICT}
     except RepoError:

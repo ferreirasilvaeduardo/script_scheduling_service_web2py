@@ -109,7 +109,7 @@ class _Repo(object):
     def active_environments(self, conn, atendidos):
         return self.environments or (list(atendidos), [])
 
-    def tickets_running_do_agente(self, conn, agente_id):
+    def agent_running_tickets(self, conn, agente_id):
         return list(self.running)
 
     def return_to_queue(self, conn, tid, agente_id):
@@ -475,7 +475,7 @@ class TestStartupCheck(_Base):
     def test_falha_de_banco_no_startup_check(self):
         def _erro(*a):
             raise RuntimeError("ORA-03113: end-of-file on communication channel")
-        self.repo.tickets_running_do_agente = _erro
+        self.repo.agent_running_tickets = _erro
         self.failure(sl.EXIT_STARTUP)
 
 

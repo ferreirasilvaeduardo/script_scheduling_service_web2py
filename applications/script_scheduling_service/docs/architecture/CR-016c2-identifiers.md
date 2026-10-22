@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras), 3b (services), 4a (camada de processo), 4b (laço do agente), 4c (helper), 5a (scripts de linha de comando) e 5b (testes) concluídos em 2026-10-21; falta a passada final |
+| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras), 3b (services), 4a (camada de processo), 4b (laço do agente), 4c (helper), 5a (scripts de linha de comando) e 5b (testes) concluídos em 2026-10-21; passada final: F1 concluída em 2026-10-22, F2 a F4 em andamento |
 | Origem | Regra do README §2.8 (CR-016): funções, classes, métodos, constantes e variáveis em inglês |
 | Restrições | Sem dependência nova. Python 3.6. Sem mudança de esquema |
 | Blocos | 1 base (`sql_ident`, `sss_config`, `db_conn`, `sss_logging` e formato do log); 2 repositórios e chaves lógicas das entidades; 3 regras (3a) e services (3b); 4 daemon (4a camada de processo, 4b laço do agente, 4c helper); 5 scripts de linha de comando e lançadores (5a) e testes (5b); passada final de parâmetros e variáveis locais |
@@ -2859,3 +2859,124 @@ Um método ou atributo de teste só mudou quando o mesmo nome não aparece como 
 * Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, percurso real das telas e conferência de resíduos.
 * Achados e corrigidos: atribuições no corpo da classe (`ORDEM = …`, `_copiar_e_modificar_ini = OutraClasse.metodo`), que a troca por atributo não alcança; um `getattr` com o nome do atributo vindo de uma tupla de strings em `test_scheduler_ha`. A bateria Oracle pegou ainda o módulo `test_repo_contract` guardado em atributo (`self.trc._Massa`, em sete arquivos), que a ferramenta por escopo não reconhece.
 * Para a passada final: o método de produção `tickets_running_do_agente`, ainda em português.
+
+## 20. Passada final, parte F1 (atributos e estruturas)
+
+Plano da passada final (aprovado em 2026-10-21): F1 atributos e estruturas; F2 binds de SQL e abreviações de tabela dos templates; F3 parâmetros (com os `nome=` das chamadas); F4 variáveis locais e variáveis dos lançadores `.sh`. Parâmetros e locais dos controllers e models ficam para o CR-016d.
+
+| # | Decisão | Resumo |
+|---|---|---|
+| D20 | Snapshot v5 | Chaves do snapshot em `tbsss_tickets.submitted_params` em inglês (`script_name`, `answers`, `sensitive`, `compiled_at`), `SNAPSHOT_VERSION` 5, troca direta: o agente recusa as versões 1 a 4 (`VERSAO_NAO_SUPORTADA`). O CR-016a já recria o banco, então não há ticket v4 num ambiente atualizado |
+
+As chaves de tela entregues às views (`script_nome`, `respostas`, `compilado_em` no detalhe do ticket) ficam para o CR-016d; o detalhe lê `compiled_at` do snapshot e entrega `compilado_em` à view.
+
+### Atributos de instância
+
+| Antes | Depois |
+|---|---|
+| `_agendamentos` | `_schedules` |
+| `_agentes` | `_agents` |
+| `_auditoria` | `_audit` |
+| `_avisos` | `_warnings` |
+| `_bloqueio` | `_lockout` |
+| `_bloqueio_s` | `_lockout_s` |
+| `_cache_matriz` | `_matrix_cache` |
+| `_catalogo` | `_catalog` |
+| `_config_criticos` | `_critical_config` |
+| `_disparo` | `_trigger_service` |
+| `_horizonte` | `_horizon` |
+| `_it_dia` | `_it_day` |
+| `_it_dsem` | `_it_wday` |
+| `_it_hora` | `_it_hour` |
+| `_it_mes` | `_it_month` |
+| `_ja_conectou` | `_connected_once` |
+| `_limiares` | `_thresholds` |
+| `_lista_hora` | `_hour_list` |
+| `_lista_min` | `_minute_list` |
+| `_mascarador` | `_masker` |
+| `_pendente` | `_pending` |
+| `_regra_atual` | `_current_rule` |
+| `_relogio` | `_clock` |
+| `_relogio_fn` | `_clock_fn` |
+| `_segredos` | `_secrets` |
+| `_simulados` | `_simulated` |
+| `_sql_encerrar` | `_sql_finish` |
+| `_sql_falhar` | `_sql_fail` |
+| `_sql_incluir_gravando` | `_sql_insert_writing` |
+| `_sql_incluir_sem_conteudo` | `_sql_insert_without_content` |
+| `_sql_reiniciar` | `_sql_restart` |
+| `_sql_situacao` | `_sql_state` |
+| `_sql_truncado` | `_sql_truncated` |
+| `_usuarios` | `_users` |
+| `agente_id` | `agent_id` |
+| `agentes_hb_sim` | `agents_hb_simulated` |
+| `codigo_param` | `param_code` |
+| `dia_restrito` | `day_restricted` |
+| `dias` | `days` |
+| `dias_semana` | `weekdays` |
+| `dsem_restrito` | `wday_restricted` |
+| `em_falha` | `failing` |
+| `erros` | `errors` |
+| `falhas` | `failures` |
+| `fila` | `queue` |
+| `horas` | `hours` |
+| `horizonte` | `horizon` |
+| `lock_agendamentos` | `lock_schedules` |
+| `lock_agentes` | `lock_agents` |
+| `lock_auditoria` | `lock_audit` |
+| `lock_catalogo` | `lock_catalog` |
+| `lock_usuarios` | `lock_users` |
+| `log_sim` | `log_simulated` |
+| `mascarador` | `masker` |
+| `mensagem` | `message` |
+| `meses` | `months` |
+| `minutos` | `minutes` |
+| `msg_bloqueio` | `lockout_message` |
+| `nome_processo` | `process_name` |
+| `offset_esperado` | `expected_offset` |
+| `papel` | `role` |
+| `proxima_tentativa_monotonic` | `next_attempt_monotonic` |
+| `relogio` | `clock` |
+| `segredos` | `secrets` |
+| `tamanho` | `size` |
+| `texto` | `text` |
+
+### Método
+
+| Antes | Depois |
+|---|---|
+| `tickets_running_do_agente` | `agent_running_tickets` |
+
+### namedtuples
+
+* `db_conn.SelecaoDriver` → `DriverSelection`: `candidato` → `candidate`, `versao_servidor` → `server_version`, `versao_driver` → `driver_version`, `versao_cliente` → `client_version`.
+* `ddl_builder.DDLItem` (tipo `ItemDDL` → `DDLItem`): `fase` → `phase`, `tipo` → `kind`, `nome` → `name`, `entidade` → `entity`.
+* Nomes de tipo `RetencaoConfig` → `RetentionConfig` e `Limiares` → `Thresholds`.
+
+### JSON do `probe_driver`
+
+| Antes | Depois |
+|---|---|
+| `candidato` | `candidate` |
+| `codigo_erro` | `error_code` |
+| `versao_cliente` | `client_version` |
+| `versao_driver` | `driver_version` |
+| `versao_servidor` | `server_version` |
+
+Categorias:
+
+| Antes | Depois |
+|---|---|
+| `AUTENTICACAO` | `AUTHENTICATION` |
+| `BIBLIOTECA` | `LIBRARY` |
+| `CANDIDATO_INVALIDO` | `INVALID_CANDIDATE` |
+| `ERR_OUTRO` | `ERR_OTHER` |
+| `INCOMPATIVEL` | `INCOMPATIBLE` |
+| `OUTRO` | `OTHER` |
+| `REDE` | `NETWORK` |
+
+## 21. Validação da F1
+
+* Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, `probe_driver` real (conecta; com senha errada, `AUTHENTICATION`), ciclo real do agente (snapshot v5 de ponta a ponta), percurso real das telas e conferência de resíduos.
+* Achados e corrigidos: kwargs do construtor da namedtuple e de `mock.Mock(...)`, que a troca por atributo não alcança; código em string de subprocesso (`get_selection().candidato`); argumento posicional do `argparse` (`args.candidato`); helpers de teste com `version=4` como padrão. A ferramenta de comentários passou a tratar só docstrings de verdade (um bloco PL/SQL entre três aspas parou na proteção por AST, sem alteração).
+* README §6.5: o exemplo do snapshot ainda mostrava chaves anteriores ao CR-016a (`versao`, `interpretador`, `tipo_param`); passou ao formato v5.

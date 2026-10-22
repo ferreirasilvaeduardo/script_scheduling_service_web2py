@@ -87,7 +87,7 @@ class RerunError(Exception):
     def __init__(self, ticket_id, erros):
         Exception.__init__(self, ",".join(sorted(erros)))
         self.ticket_id = ticket_id
-        self.erros = erros
+        self.errors = erros
 
 
 class InvalidOffset(ValueError):
@@ -238,7 +238,7 @@ class TicketService(object):
     """Servico de disparo com dependencias injetadas (repositorios, arvore de scripts e log)."""
 
     def __init__(self, catalogo, tickets, log):
-        self._catalogo = catalogo
+        self._catalog = catalogo
         self._tickets = tickets
         self._log = log
 
@@ -255,14 +255,14 @@ class TicketService(object):
         if sid is None:
             self._deny(ctx, rbac.Reason.INVALID_DATA, script_id, None)
         try:
-            return self._catalogo.scripts_get(sid)
+            return self._catalog.scripts_get(sid)
         except RepoNotFound:
             self._deny(ctx, rbac.Reason.INVALID_DATA, script_id, None)
 
     def _environment_by_name(self, nome):
         if not isinstance(nome, str) or not _RE_ENVIRONMENT.fullmatch(nome):
             return None
-        pagina = self._catalogo.environments_list(filtros={"name": nome}, pagina=1, tamanho=_ENVIRONMENTS_MAX)
+        pagina = self._catalog.environments_list(filtros={"name": nome}, pagina=1, tamanho=_ENVIRONMENTS_MAX)
         for amb in pagina["itens"]:
             if amb.get("name") == nome:
                 return amb
@@ -274,7 +274,7 @@ class TicketService(object):
         amb = self._environment_by_name(ambiente)
         if amb is None:
             self._deny(ctx, rbac.Reason.INVALID_DATA, script_id, ambiente)
-        homologacoes = self._catalogo.homologation_get(script["id"])
+        homologacoes = self._catalog.homologation_get(script["id"])
         ok, motivo = rbac.can_execute(ctx, script, amb, homologacoes)
         if not ok:
             self._deny(ctx, motivo, script["id"], amb["name"])
@@ -286,9 +286,9 @@ class TicketService(object):
 
     def _executable_environments(self, ctx, script):
         ambientes = []
-        for aid in self._catalogo.homologation_get(script["id"]):
+        for aid in self._catalog.homologation_get(script["id"]):
             try:
-                amb = self._catalogo.environments_get(aid)
+                amb = self._catalog.environments_get(aid)
             except RepoNotFound:
                 continue
             ok, _motivo = rbac.can_execute(ctx, script, amb, (aid,))
@@ -307,7 +307,7 @@ class TicketService(object):
         if not rbac.has_feature(ctx, "EXEC_SCRIPT"):
             return []
         grupos = collections.OrderedDict()
-        candidatos = sorted(self._catalogo.executable_scripts(ctx),
+        candidatos = sorted(self._catalog.executable_scripts(ctx),
                             key=lambda s: ((s.get("script_group") or ""), (s.get("category") or ""), s["name"]))
         for script in candidatos:
             if not self._executable_environments(ctx, script):
@@ -331,7 +331,7 @@ class TicketService(object):
                         for a in ambientes]
 
     def _links(self, script_id):
-        return [v for v in self._catalogo.script_params_get(script_id) if v.get("active") == "Y"]
+        return [v for v in self._catalog.script_params_get(script_id) if v.get("active") == "Y"]
 
     def _display_default(self, vinculo):
         for fonte in (vinculo.get("default_value_override"), vinculo.get("default_value")):
@@ -659,13 +659,13 @@ class TicketService(object):
         return ticket
 
     def _script_names(self):
-        pagina = self._catalogo.scripts_list(pagina=1, tamanho=_SCRIPTS_MAX)
+        pagina = self._catalog.scripts_list(pagina=1, tamanho=_SCRIPTS_MAX)
         return dict((s["id"], s["name"]) for s in pagina["itens"])
 
     def filter_options(self, ctx):
         """Opcoes dos selects de filtro: ambientes visiveis ao perfil e scripts do catalogo."""
         if rbac.has_feature(ctx, "VIEW_LOGS") and ctx.get("is_admin") is True:
-            pagina = self._catalogo.environments_list(pagina=1, tamanho=_ENVIRONMENTS_MAX)
+            pagina = self._catalog.environments_list(pagina=1, tamanho=_ENVIRONMENTS_MAX)
             ambientes = sorted(a["name"] for a in pagina["itens"])
         else:
             ambientes = sorted(ctx.get("environments") or ())
@@ -846,11 +846,11 @@ class TicketService(object):
                 "tamanho": resultado["tamanho"], "total_limitado": resultado.get("total_limitado", False)}
 
     def _display_answers(self, ticket_id, snap):
-        sensiveis = set((snap or {}).get("sensiveis") or ())
+        sensiveis = set((snap or {}).get("sensitive") or ())
         linhas = []
         for r in self._tickets.answers(ticket_id):
             try:
-                prm = self._catalogo.parameters_get(r["parameter_id"])
+                prm = self._catalog.parameters_get(r["parameter_id"])
                 codigo, rotulo = prm["code"], prm.get("label") or prm["code"]
                 sensivel = prm.get("sensitive") == "Y" or codigo in sensiveis
             except RepoNotFound:
@@ -867,13 +867,13 @@ class TicketService(object):
 
     def _can_execute_now(self, ctx, ticket):
         try:
-            script = self._catalogo.scripts_get(ticket["script_id"])
+            script = self._catalog.scripts_get(ticket["script_id"])
         except RepoNotFound:
             return False
         amb = self._environment_by_name(ticket["environment"])
         if amb is None:
             return False
-        ok, _motivo = rbac.can_execute(ctx, script, amb, self._catalogo.homologation_get(script["id"]))
+        ok, _motivo = rbac.can_execute(ctx, script, amb, self._catalog.homologation_get(script["id"]))
         return ok
 
     def detail(self, ctx, ticket_id):
@@ -884,9 +884,9 @@ class TicketService(object):
         ticket = self._visible_ticket(ctx, ticket_id, "TICKET_DETALHE")
         snap = _snapshot(ticket)
         try:
-            script_nome = self._catalogo.scripts_get(ticket["script_id"])["name"]
+            script_nome = self._catalog.scripts_get(ticket["script_id"])["name"]
         except RepoNotFound:
-            script_nome = (snap or {}).get("script_nome") or "#%s" % ticket["script_id"]
+            script_nome = (snap or {}).get("script_name") or "#%s" % ticket["script_id"]
 
         pai = None
         if ticket.get("parent_ticket_id") is not None:
@@ -911,14 +911,14 @@ class TicketService(object):
         argv = _display_argv(snap)
         agora = self._tickets.now()
         try:
-            timeout_s = self._catalogo.scripts_get(ticket["script_id"]).get("timeout_s")
+            timeout_s = self._catalog.scripts_get(ticket["script_id"]).get("timeout_s")
         except RepoNotFound:
             timeout_s = None
         snapshot = None
         if snap is not None:
             # Caminho completo para todos (README §8.5, CR-005 D8).
-            snapshot = dict((k, snap.get(k)) for k in ("version", "interpreter", "path_file", "param_type",
-                                                       "compilado_em"))
+            snapshot = dict((k, snap.get(k)) for k in ("version", "interpreter", "path_file", "param_type"))
+            snapshot["compilado_em"] = snap.get("compiled_at")  # chave de tela (CR-016d)
         return {
             "id": ticket["id"],
             "script_id": ticket["script_id"],

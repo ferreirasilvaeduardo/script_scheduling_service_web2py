@@ -476,15 +476,15 @@ class TestSnapshotV4(_Base):
         os.chmod(self.base, 0o555)
 
     def test_argv_do_snapshot_e_sss_script_dir(self):
-        snap_js = json.dumps({"version": 4, "script_id": 12, "script_nome": "Carga Faturas", "interpreter": "PYTHON3",
+        snap_js = json.dumps({"version": 5, "script_id": 12, "script_name": "Carga Faturas", "interpreter": "PYTHON3",
                               "path_file": self.script, "param_type": "NAMED", "args": ["--data", "2026-10-13"],
-                              "respostas": {}, "sensiveis": [], "compilado_em": "2026-10-13 10:47:00"},
+                              "answers": {}, "sensitive": [], "compiled_at": "2026-10-13 10:47:00"},
                              ensure_ascii=False, sort_keys=True)
         snap, argv, script_real = pc.validate_snapshot(snap_js, _CfgSnap({"PYTHON3": sys.executable}))
         self.assertEqual(argv, [sys.executable, "-I", script_real, "--data", "2026-10-13"])
         wd = executor.prepare_directory(self.work, 21)
         cfg = _Cfg(_AgentStub("srv-01", "C.UTF-8", (), (), None))
-        fd, parcial = executor.open_log(self.logs, "DEV", snap["script_nome"], STARTED_AT, 21, snap["script_id"])
+        fd, parcial = executor.open_log(self.logs, "DEV", snap["script_name"], STARTED_AT, 21, snap["script_id"])
         ticket = {"id": 21, "environment": "DEV", "schedule_id": 5, "parent_ticket_id": None, "priority": 3,
                   "started_at": STARTED_AT, "scheduled_at": STARTED_AT}
         with self.assertLogs("sss_scheduler", "WARNING"):

@@ -27,8 +27,8 @@ class PermissionsService(object):
 
     def __init__(self, rbac_repo, catalogo, disparo, log):
         self._rbac = rbac_repo
-        self._catalogo = catalogo
-        self._disparo = disparo
+        self._catalog = catalogo
+        self._trigger_service = disparo
         self._log = log
 
     def _screens(self, ctx):
@@ -50,14 +50,14 @@ class PermissionsService(object):
         admin = ctx.get("is_admin") is True
         meus = ctx.get("environments") or ()
         return [{"name": a["name"], "description": a.get("description") or ""}
-                for a in self._catalogo.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"]
+                for a in self._catalog.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"]
                 if a["active"] == "Y" and (admin or a["name"] in meus)]
 
     def _scripts(self, ctx):
         scripts = []
-        for grupo in self._disparo.available_scripts(ctx):
+        for grupo in self._trigger_service.available_scripts(ctx):
             for s in grupo["scripts"]:
-                _script, ambientes = self._disparo.available_environments(ctx, s["id"])
+                _script, ambientes = self._trigger_service.available_environments(ctx, s["id"])
                 scripts.append({"id": s["id"], "name": s["name"], "description": s["description"],
                                 "environments": [a["name"] for a in ambientes]})
         return scripts
@@ -65,16 +65,16 @@ class PermissionsService(object):
     def _reason(self, ctx, script_id):
         """Motivo simples de um script do perfil nao aparecer (README §4.3.E)."""
         try:
-            script = self._catalogo.scripts_get(script_id)
+            script = self._catalog.scripts_get(script_id)
         except RepoNotFound:
             return None, None
         if script.get("active") != "Y":
             return script, REASON_SCRIPT_INACTIVE
         meus = set(ctx.get("environments") or ())
         homologados = []
-        for aid in self._catalogo.homologation_get(script["id"]):
+        for aid in self._catalog.homologation_get(script["id"]):
             try:
-                homologados.append(self._catalogo.environments_get(aid))
+                homologados.append(self._catalog.environments_get(aid))
             except RepoNotFound:
                 continue
         nos_meus = [a for a in homologados if a["name"] in meus]

@@ -14,7 +14,7 @@ class RepoAuditFake(RepoAudit):
 
     def reserve_id(self):
         """Simula seq.NEXTVAL da trilha."""
-        with self._store.lock_auditoria:
+        with self._store.lock_audit:
             return self._store.next_id("tbsss_audit")
 
     def register(self, ator, ip, acao, entidade, entidade_id=None, detalhe=None, id=None):
@@ -71,11 +71,11 @@ class RepoAuditFake(RepoAudit):
 
     def list(self, filtros=None, pagina=1, tamanho=20):
         """Lista registros de auditoria ordenados por created_at DESC, id DESC."""
-        with self._store.lock_auditoria:
+        with self._store.lock_audit:
             return paginate(self._filtrar(filtros), pagina=pagina, tamanho=tamanho)
 
     def iterate(self, filtros=None, limite=50000):
         """Iterador de copias, no maximo `limite` registros (no Oracle: cursor com arraysize, sem offset)."""
-        with self._store.lock_auditoria:
+        with self._store.lock_audit:
             lista = copy.deepcopy(self._filtrar(filtros)[:max(0, int(limite))])
         return iter(lista)

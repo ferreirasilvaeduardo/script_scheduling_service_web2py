@@ -14,10 +14,10 @@ class RepoAgentsFake(RepoAgents):
 
     def list(self):
         """Retorna lista de todos os agentes ordenados por codigo ASC, id ASC."""
-        with self._store.lock_agentes:
+        with self._store.lock_agents:
             agora = self._store.now()
             for ag in self._store.agents.values():
-                if ag.get("code") in self._store.agentes_hb_sim and ag.get("status") == "ACTIVE":
+                if ag.get("code") in self._store.agents_hb_simulated and ag.get("status") == "ACTIVE":
                     ag["heartbeat_at"] = agora
             lista = list(self._store.agents.values())
             lista.sort(key=lambda x: (x.get("code", ""), x["id"]))

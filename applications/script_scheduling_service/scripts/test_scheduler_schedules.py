@@ -214,7 +214,7 @@ class TestAgendaOracle(unittest.TestCase):
         cat = self.obter_repo("catalog")
         self.cat = cat
         self.repo = RepoSchedulerSchedules(cat._owner, cat._prefixo)
-        self.fila = RepoSchedulerQueue(cat._owner, cat._prefixo)
+        self.queue = RepoSchedulerQueue(cat._owner, cat._prefixo)
         self.conn = cat._obter_conexao()
         self.addCleanup(self.conn.close)
         self.agent = "tst-agd-%s" % self._fixtures.suf
@@ -315,16 +315,16 @@ class TestAgendaOracle(unittest.TestCase):
             cur.execute("UPDATE " + tck + " SET status = 'RUNNING', agent_id = :a, heartbeat_at = SYSDATE - 1"
                         " WHERE id = :id", a=ag, id=tid)
         self.conn.commit()
-        self.assertIsNone(self.fila.mark_node_offline(self.conn, meu, 180, lambda agora: True), "salto: nada")
-        marcados = self.fila.mark_node_offline(self.conn, meu, 180, lambda agora: False)
+        self.assertIsNone(self.queue.mark_node_offline(self.conn, meu, 180, lambda agora: True), "salto: nada")
+        marcados = self.queue.mark_node_offline(self.conn, meu, 180, lambda agora: False)
         self.assertIn(t_outro, marcados)
         self.assertNotIn(t_meu, marcados, "nunca os proprios")
         t = self.obter_repo("tickets").get(t_outro)
         self.assertEqual((t["status"], t["status_reason"], t["return_code"], t["updated_by"]),
                          ("FAILED", "NODE_OFFLINE", -2, "SYSTEM:%s" % meu))
-        self.assertTrue(self.fila.finalize_fenced(self.conn, t_meu, meu))
+        self.assertTrue(self.queue.finalize_fenced(self.conn, t_meu, meu))
         self.assertEqual(self.obter_repo("tickets").get(t_meu)["status_reason"], "FENCED")
-        self.assertFalse(self.fila.finalize_fenced(self.conn, t_outro, outro), "ja NODE_OFFLINE")
+        self.assertFalse(self.queue.finalize_fenced(self.conn, t_outro, outro), "ja NODE_OFFLINE")
 
 
 if __name__ == "__main__":

@@ -265,7 +265,7 @@ class WebConfig(_ItemAccessMixin, collections.namedtuple("WebConfig", [
     __slots__ = ()
 
 
-class RetentionConfig(_ItemAccessMixin, collections.namedtuple("RetencaoConfig", [
+class RetentionConfig(_ItemAccessMixin, collections.namedtuple("RetentionConfig", [
     "ticket_retention_days", "audit_retention_days", "purge_batch_size", "purge_user"
 ])):
     __slots__ = ()

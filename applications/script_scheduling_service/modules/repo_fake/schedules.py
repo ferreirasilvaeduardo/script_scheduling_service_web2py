@@ -70,7 +70,7 @@ class RepoSchedulesFake(RepoSchedules):
     def list(self, filtros=None, pagina=1, tamanho=20, escopo_ambientes=None):
         """Lista agendamentos paginados com desempate por id."""
         filtros = filtros or {}
-        with self._store.lock_agendamentos:
+        with self._store.lock_schedules:
             lista = list(self._store.schedules.values())
 
             if escopo_ambientes is not None:
@@ -102,7 +102,7 @@ class RepoSchedulesFake(RepoSchedules):
 
     def get(self, id):
         """Retorna dict com dados do agendamento pelo ID ou lanca RepoNotFound."""
-        with self._store.lock_agendamentos:
+        with self._store.lock_schedules:
             if id not in self._store.schedules:
                 raise RepoNotFound("Agendamento ID %s nao encontrado" % id)
             return copy.deepcopy(self._store.schedules[id])
@@ -135,7 +135,7 @@ class RepoSchedulesFake(RepoSchedules):
 
     def insert(self, dados, auditoria=None, ator=None):
         """Insere novo agendamento com as CKs da tabela e auditoria na mesma operacao."""
-        with self._store.lock_agendamentos:
+        with self._store.lock_schedules:
             ator = self._store.record_actor(auditoria, ator)
             agora = self._store.now()
             novo = {
@@ -173,7 +173,7 @@ class RepoSchedulesFake(RepoSchedules):
 
         created_by guarda o criador original e nunca muda; updated_* recebe o editor (CR-006).
         """
-        with self._store.lock_agendamentos:
+        with self._store.lock_schedules:
             ator = self._store.record_actor(auditoria, ator)
             if id not in self._store.schedules:
                 raise RepoNotFound("Agendamento ID %s nao encontrado" % id)
@@ -194,7 +194,7 @@ class RepoSchedulesFake(RepoSchedules):
 
     def pause(self, id, motivo, antiga_data=None, auditoria=None, ator=None):
         """Pausa agendamento de forma otimista, validando antiga_data se informada."""
-        with self._store.lock_agendamentos:
+        with self._store.lock_schedules:
             ator = self._store.record_actor(auditoria, ator)
             if id not in self._store.schedules:
                 raise RepoNotFound("Agendamento ID %s nao encontrado" % id)
@@ -220,7 +220,7 @@ class RepoSchedulesFake(RepoSchedules):
 
     def resume(self, id, nova_data, esperado=None, auditoria=None, ator=None):
         """Retoma agendamento pausado, limpando pausa_motivo e definindo next_run."""
-        with self._store.lock_agendamentos:
+        with self._store.lock_schedules:
             ator = self._store.record_actor(auditoria, ator)
             if id not in self._store.schedules:
                 raise RepoNotFound("Agendamento ID %s nao encontrado" % id)

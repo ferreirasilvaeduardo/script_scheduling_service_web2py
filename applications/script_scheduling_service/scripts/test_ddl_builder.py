@@ -31,7 +31,7 @@ class TestDdlBuilder(unittest.TestCase):
     def test_ddl_contem_todos_os_nomes_do_registro(self):
         """O DDL gerado contem todos os nomes de objetos registrados em sql_ident."""
         nomes_esperados = sql_ident.all_identifiers(self.prefixo, incluir_colunas=False)
-        nomes_gerados = set(item.nome for item in self.statements)
+        nomes_gerados = set(item.name for item in self.statements)
 
         for nome in nomes_esperados:
             self.assertIn(
@@ -56,15 +56,15 @@ class TestDdlBuilder(unittest.TestCase):
                 self.assertIsNone(
                     padrao.search(sql),
                     "Padrao proibido '%s' encontrado no DDL de %s %s:\n%s"
-                    % (padrao.pattern, item.tipo, item.nome, sql)
+                    % (padrao.pattern, item.kind, item.name, sql)
                 )
 
     def test_triggers_bi_e_bu_literais(self):
         """Valida que toda trigger _bi segue o template do AGENTS §4.2 e _bu aplica imutabilidade."""
-        triggers = [item for item in self.statements if item.tipo == "TRIGGER"]
+        triggers = [item for item in self.statements if item.kind == "TRIGGER"]
         self.assertEqual(len(triggers), 20, "Devem existir 18 triggers _bi e 2 _bu")
 
-        bi_triggers = [t for t in triggers if t.nome.endswith("_bi")]
+        bi_triggers = [t for t in triggers if t.name.endswith("_bi")]
         self.assertEqual(len(bi_triggers), 18)
 
         template_esperado = (
@@ -77,13 +77,13 @@ class TestDdlBuilder(unittest.TestCase):
 
         esquema = sql_ident.names(self.prefixo)
         for t in bi_triggers:
-            entidade = t.entidade
+            entidade = t.entity
             seq = esquema[entidade]["sequence"]
             esperado = template_esperado.format(owner=self.owner, sequence_name=seq)
             self.assertIn(esperado, t.sql)
 
         # Triggers _bu (ambientes e usuarios)
-        bu_triggers = {t.nome: t for t in triggers if t.nome.endswith("_bu")}
+        bu_triggers = {t.name: t for t in triggers if t.name.endswith("_bu")}
         self.assertEqual(len(bu_triggers), 2)
 
         tr_amb_bu = bu_triggers["tr_tbsss_env_bu"]
@@ -96,7 +96,7 @@ class TestDdlBuilder(unittest.TestCase):
 
     def test_ordem_estrita_das_fases(self):
         """As fases 1 a 6 respeitam a ordem estrita do README §11.1."""
-        fases = [item.fase for item in self.statements]
+        fases = [item.phase for item in self.statements]
         # Garante que a lista de fases e nao-decrescente
         for i in range(len(fases) - 1):
             self.assertLessEqual(fases[i], fases[i + 1])
@@ -111,17 +111,17 @@ class TestDdlBuilder(unittest.TestCase):
             6: {"TRIGGER"},
         }
         for item in self.statements:
-            esperados = tipos_por_fase[item.fase]
-            self.assertIn(item.tipo, esperados)
+            esperados = tipos_por_fase[item.phase]
+            self.assertIn(item.kind, esperados)
 
     def test_cr005_path_file_e_cks(self):
         """Valida path_file VARCHAR2(500 CHAR) NOT NULL e CKs do CR-005."""
-        tabelas = {item.nome: item.sql for item in self.statements if item.tipo == "TABLE"}
+        tabelas = {item.name: item.sql for item in self.statements if item.kind == "TABLE"}
         self.assertIn("path_file VARCHAR2(500 CHAR) NOT NULL", tabelas["tbsss_scripts"])
         self.assertNotIn("pasta_base", tabelas["tbsss_scripts"])
         self.assertNotIn("pastas_base", tabelas["tbsss_agents"])
 
-        constraints = {item.nome: item.sql for item in self.statements if item.tipo == "CONSTRAINT"}
+        constraints = {item.name: item.sql for item in self.statements if item.kind == "CONSTRAINT"}
         ck_path = constraints["ck_tbsss_scr_path"]
         self.assertIn("SUBSTR(path_file, 1, 1) = '/'", ck_path)
         self.assertIn("INSTR(path_file, '..') = 0", ck_path)
@@ -133,8 +133,8 @@ class TestDdlBuilder(unittest.TestCase):
 
     def test_cr006_colunas_registro_e_ck_upd(self):
         """Valida que as 15 tabelas (menos auditoria e controle) tem colunas de registro e ck_upd."""
-        tabelas = {item.nome: item.sql for item in self.statements if item.tipo == "TABLE"}
-        constraints = {item.nome: item.sql for item in self.statements if item.tipo == "CONSTRAINT"}
+        tabelas = {item.name: item.sql for item in self.statements if item.kind == "TABLE"}
+        constraints = {item.name: item.sql for item in self.statements if item.kind == "CONSTRAINT"}
 
         esquema = sql_ident.names(self.prefixo)
         for ent, t in esquema.items():
@@ -160,9 +160,9 @@ class TestDdlBuilder(unittest.TestCase):
 
     def test_cr007_controle_fbi_unico_sha_e_lobs(self):
         """Valida objetos adicionados pelo CR-007 e suporte a SECUREFILE e BASICFILE."""
-        constraints = {item.nome: item.sql for item in self.statements if item.tipo == "CONSTRAINT"}
-        indices = {item.nome: item.sql for item in self.statements if item.tipo == "INDEX"}
-        tabelas = {item.nome: item.sql for item in self.statements if item.tipo == "TABLE"}
+        constraints = {item.name: item.sql for item in self.statements if item.kind == "CONSTRAINT"}
+        indices = {item.name: item.sql for item in self.statements if item.kind == "INDEX"}
+        tabelas = {item.name: item.sql for item in self.statements if item.kind == "TABLE"}
 
         # tbsss_control
         self.assertIn("ck_tbsss_ctl_id", constraints)
@@ -184,14 +184,14 @@ class TestDdlBuilder(unittest.TestCase):
 
         # Fallback Basicfile
         ddl_basic = ddl_builder.build_ddl_statements(self.owner, self.prefixo, lob_storage="BASICFILE")
-        tabelas_basic = {item.nome: item.sql for item in ddl_basic if item.tipo == "TABLE"}
+        tabelas_basic = {item.name: item.sql for item in ddl_basic if item.kind == "TABLE"}
         self.assertIn("LOB (params_json) STORE AS BASICFILE", tabelas_basic["tbsss_schedules"])
         self.assertIn("LOB (submitted_params, log_output) STORE AS BASICFILE", tabelas_basic["tbsss_tickets"])
 
     def test_cr008_sessao_epoch_pid_daemon_log_offset(self):
         """Valida campos adicionados e ajustados pelo CR-008."""
-        tabelas = {item.nome: item.sql for item in self.statements if item.tipo == "TABLE"}
-        constraints = {item.nome: item.sql for item in self.statements if item.tipo == "CONSTRAINT"}
+        tabelas = {item.name: item.sql for item in self.statements if item.kind == "TABLE"}
+        constraints = {item.name: item.sql for item in self.statements if item.kind == "CONSTRAINT"}
 
         # tbsss_users.sessao_epoch e ck
         self.assertIn("session_epoch NUMBER(10) DEFAULT 0 NOT NULL", tabelas["tbsss_users"])

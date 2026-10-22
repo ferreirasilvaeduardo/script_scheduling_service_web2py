@@ -95,7 +95,7 @@ class RepoRbacFake(RepoRbac):
         """Altera perfil e incrementa perm_versao; protege o ultimo admin na mesma operacao (§4.3.B)."""
         # Ordem de locks igual a admins_ativos_bloquear: rbac e depois usuarios.
         with self._store.lock_rbac:
-            with self._store.lock_usuarios:
+            with self._store.lock_users:
                 ator = self._store.record_actor(auditoria, ator)
                 if id not in self._store.profiles:
                     raise RepoNotFound("Perfil ID %s nao encontrado" % id)
@@ -173,7 +173,7 @@ class RepoRbacFake(RepoRbac):
         recebe updated_* (CR-006, README §10).
         """
         with self._store.lock_rbac:
-            with self._store.lock_catalogo:
+            with self._store.lock_catalog:
                 ator = self._store.record_actor(auditoria, ator)
                 if perfil_id not in self._store.profiles:
                     raise RepoNotFound("Perfil ID %s nao encontrado" % perfil_id)
@@ -218,7 +218,7 @@ class RepoRbacFake(RepoRbac):
     def lock_active_admins(self):
         """Retorna IDs dos administradores ativos conforme semantica do README §4.3.B."""
         with self._store.lock_rbac:
-            with self._store.lock_usuarios:
+            with self._store.lock_users:
                 return self._admins_ativos(self._store.profiles)
 
     def features_list(self):

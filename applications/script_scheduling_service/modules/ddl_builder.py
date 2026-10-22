@@ -9,8 +9,8 @@ import collections
 import sql_ident
 
 # Estrutura representativa de uma instrucao DDL
-DDLItem = collections.namedtuple("ItemDDL", [
-    "fase", "tipo", "nome", "sql", "entidade"
+DDLItem = collections.namedtuple("DDLItem", [
+    "phase", "kind", "name", "sql", "entity"
 ])
 
 # Catalogo canonico de funcionalidades (README §4.3.D)
@@ -624,8 +624,8 @@ def build_ddl_script(owner, prefixo, lob_storage="SECUREFILE", incluir_comentari
 
     fase_atual = None
     for item in instrucoes:
-        if item.fase != fase_atual:
-            fase_atual = item.fase
+        if item.phase != fase_atual:
+            fase_atual = item.phase
             linhas.extend([
                 "-- ------------------------------------------------------------------------------",
                 "-- {}".format(fases_titulos.get(fase_atual, "FASE %d" % fase_atual)),
@@ -633,7 +633,7 @@ def build_ddl_script(owner, prefixo, lob_storage="SECUREFILE", incluir_comentari
                 "",
             ])
 
-        if item.tipo == "TRIGGER":
+        if item.kind == "TRIGGER":
             linhas.append(item.sql)
             linhas.append("/")
             linhas.append("")

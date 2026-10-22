@@ -63,8 +63,8 @@ def ticket_masker(segredos, conexao=None, snapshot=None):
     if conexao:
         m.register(conexao)
     snap = snapshot or {}
-    respostas = snap.get("respostas") or {}
-    for codigo in snap.get("sensiveis") or ():
+    respostas = snap.get("answers") or {}
+    for codigo in snap.get("sensitive") or ():
         m.register(respostas.get(codigo))
     return m
 
@@ -199,7 +199,7 @@ class Pump(object):
         return bool(self._in_flight or self._queue) or (self.truncated and not self.truncated_written)
 
     def next_chunk(self):
-        """(bloco, offset_esperado) do bloco em voo, ou do proximo da fila; None se a fila esta vazia.
+        """(bloco, expected_offset) do bloco em voo, ou do proximo da fila; None se a fila esta vazia.
         Repetido ate confirmar: a mesma operacao e reapresentada depois de um COMMIT incerto."""
         if self._in_flight is None and self._queue:
             self._in_flight = (self._queue[:CHUNK_SIZE], self.confirmed_offset_chars)

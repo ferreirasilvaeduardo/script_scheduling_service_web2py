@@ -66,7 +66,7 @@ class _Agenda(object):
         self.tickets = {}
         self.audit = []
         self.locked_by_other = set()
-        self.falhas = []
+        self.failures = []
         self.duplicate = set()
         self.seq = 1000
         self._before = None
@@ -74,8 +74,8 @@ class _Agenda(object):
         self.links = {}
 
     def _write(self, nome):
-        if self.falhas and self.falhas[0][0] == nome:
-            raise self.falhas.pop(0)[1]
+        if self.failures and self.failures[0][0] == nome:
+            raise self.failures.pop(0)[1]
         if self._before is None:
             self._before = (copy.deepcopy(self.rules), copy.deepcopy(self.tickets), list(self.audit))
 
@@ -91,8 +91,8 @@ class _Agenda(object):
         return rid not in self.locked_by_other and r is not None and r["active"] == "Y"
 
     def load_rule(self, conn, rid):
-        if self.falhas and self.falhas[0][0] == "load_rule":
-            raise self.falhas.pop(0)[1]
+        if self.failures and self.failures[0][0] == "load_rule":
+            raise self.failures.pop(0)[1]
         return copy.deepcopy(self.rules.get(rid))
 
     def user_login(self, conn, usuario_id):
@@ -211,7 +211,7 @@ class _Base(unittest.TestCase):
 
     def setUp(self):
         self.agenda = _Agenda()
-        self.fila = _Queue()
+        self.queue = _Queue()
         self.agenda.scripts[3] = {"id": 3, "name": "carga", "interpreter": "SH", "path_file": "/opt/x/carga.sh",
                                   "param_type": "NAMED", "max_parallel_env": 2, "timeout_s": 600, "active": "Y"}
         self.agenda.links[3] = [_link()]
@@ -222,11 +222,11 @@ class _Base(unittest.TestCase):
         self.addCleanup(p.stop)
         self.monotonic = [0.0]
         self.cfg = _Cfg()
-        self.horizonte = None
+        self.horizon = None
 
     def des(self):
-        return schedule_expansion.Expansion(self.agenda, self.fila, AGENT, self.cfg, lambda: self.monotonic[0],
-                                 horizonte_dias=self.horizonte)
+        return schedule_expansion.Expansion(self.agenda, self.queue, AGENT, self.cfg, lambda: self.monotonic[0],
+                                 horizonte_dias=self.horizon)
 
     def rule(self, rid=1, **kw):
         base = {"id": rid, "name": "R%d" % rid, "script_id": 3, "environment": "PRD", "user_id": 7, "priority": 2,
@@ -245,7 +245,7 @@ class _Base(unittest.TestCase):
 
 class TestExpansion(_Base):
 
-    def test_ticket_com_ocorrencia_snapshot_v4_e_um_commit(self):
+    def test_ticket_com_ocorrencia_snapshot_v5_e_um_commit(self):
         self.rule()
         with self.assertLogs("sss_scheduler", "INFO") as logs:
             self.assertEqual(self.process(), "TICKET")
@@ -257,7 +257,7 @@ class TestExpansion(_Base):
                          (datetime.datetime(2026, 10, 20, 9, 55), LOGIN, 2, "SYSTEM:" + AGENT),
                          "scheduled_at = ocorrencia coberta (R-27, R-03)")
         snap = json.loads(t["submitted_params"])
-        self.assertEqual((snap["version"], snap["path_file"], snap["args"]), (4, "/opt/x/carga.sh", ["--data", "2026-10-20"]))
+        self.assertEqual((snap["version"], snap["path_file"], snap["args"]), (5, "/opt/x/carga.sh", ["--data", "2026-10-20"]))
         self.assertNotIn("pasta_base", snap)
         self.assertEqual(t["respostas"], [{"parameter_id": 11, "answer_value": "2026-10-20"}])
         self.assertTrue(any("agendamento 1: ticket %d gerado" % t["id"] in l for l in logs.output))
@@ -277,7 +277,7 @@ class TestExpansion(_Base):
         for i, (campo, valor, motivo) in enumerate(casos, 1):
             self.setUp()
             self.rule(i)
-            self.fila.usuario[campo] = valor
+            self.queue.usuario[campo] = valor
             with self.assertLogs("sss_scheduler", "WARNING"):
                 self.assertEqual(self.process(i), "PAUSADA", campo)
             self.assertEqual(self.agenda.rules[i]["pause_reason"], motivo, campo)
@@ -285,7 +285,7 @@ class TestExpansion(_Base):
         for chave, motivo in ((("script", "active"), "SCRIPT_INACTIVE"), (("environment", "active"), "ENVIRONMENT_INACTIVE")):
             self.setUp()
             self.rule()
-            getattr(self.fila, chave[0])[chave[1]] = "N"
+            getattr(self.queue, chave[0])[chave[1]] = "N"
             with self.assertLogs("sss_scheduler", "WARNING"):
                 self.process()
             self.assertEqual(self.agenda.rules[1]["pause_reason"], motivo)
@@ -306,7 +306,7 @@ class TestExpansion(_Base):
         self.assertTrue(any("PRIORIDADE_REBAIXADA" in l for l in logs.output))
         self.setUp()
         self.rule(priority=1)
-        self.fila.usuario["is_admin"] = "Y"
+        self.queue.usuario["is_admin"] = "Y"
         self.process()
         self.assertEqual(self.agenda.tickets[self.agenda.rules[1]["last_ticket_id"]]["priority"], 1)
 
@@ -413,7 +413,7 @@ class TestExpansion(_Base):
 
     def test_r19_cron_sem_proxima_no_horizonte(self):
         # 29/02 so em 2028; com horizonte de 30 dias (injetado), a proxima nao existe.
-        self.horizonte = 30
+        self.horizon = 30
         self.rule(recurrence_type="CRON", cron_expression="0 10 29 2 *", run_time=None,
                    next_run_at=datetime.datetime(2026, 10, 20, 9, 55))
         self.agenda.rules[1]["cron_expression"] = "55 9 * * *"
@@ -447,12 +447,12 @@ class TestExpansion(_Base):
         d = self.des()
         espaco = _Error("ORA-01653: unable to extend table")
         for n in (1, 2):
-            self.agenda.falhas = [("inserir_ticket", espaco)]
+            self.agenda.failures = [("inserir_ticket", espaco)]
             with self.assertLogs("sss_scheduler", "WARNING") as logs:
                 self.assertEqual(d.process(self.conn, 1), "ERRO_BANCO")
             self.assertTrue(any("DESDOBRO_ERRO_BANCO: ORA-01653 (falha %d de 3 seguidas)" % n in l for l in logs.output))
             self.assertEqual((self.agenda.rules[1]["active"], self.agenda.tickets), ("Y", {}), "sem pausar")
-        self.agenda.falhas = [("inserir_ticket", espaco)]
+        self.agenda.failures = [("inserir_ticket", espaco)]
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.assertEqual(d.process(self.conn, 1), "INTERNAL_ERROR")
         self.assertEqual(self.agenda.rules[1]["pause_reason"], "INTERNAL_ERROR")
@@ -461,15 +461,15 @@ class TestExpansion(_Base):
         self.setUp()
         self.rule()
         d = self.des()
-        self.agenda.falhas = [("inserir_ticket", espaco)]
+        self.agenda.failures = [("inserir_ticket", espaco)]
         with self.assertLogs("sss_scheduler", "WARNING"):
             d.process(self.conn, 1)
         self.assertEqual(d.process(self.conn, 1), "TICKET")
-        self.assertEqual(d.falhas, {})
+        self.assertEqual(d.failures, {})
         # Excecao que nao e de banco pausa na primeira, em transacao separada (R-08).
         self.setUp()
         self.rule()
-        self.agenda.falhas = [("load_rule", ValueError("dado incoerente"))]
+        self.agenda.failures = [("load_rule", ValueError("dado incoerente"))]
         with self.assertLogs("sss_scheduler", "ERROR"):
             self.assertEqual(self.process(), "INTERNAL_ERROR")
         self.assertEqual(self.agenda.rules[1]["pause_reason"], "INTERNAL_ERROR")
@@ -478,7 +478,7 @@ class TestExpansion(_Base):
     def test_pausa_que_falha_ignora_a_regra_no_ciclo(self):
         self.rule(1)
         self.rule(2, next_run_at=datetime.datetime(2026, 10, 20, 9, 56))
-        self.agenda.falhas = [("load_rule", ValueError("x")), ("pause_internal_error", ValueError("y"))]
+        self.agenda.failures = [("load_rule", ValueError("x")), ("pause_internal_error", ValueError("y"))]
         with self.assertLogs("sss_scheduler", "ERROR"):
             stats = self.des().run(self.conn)
         self.assertEqual(stats["tickets"], 1, "a regra 2 segue")
@@ -595,7 +595,7 @@ class TestExpansionOracle(unittest.TestCase):
         self.assertEqual((t["schedule_id"], t["requested_by"], t["created_by"], t["scheduled_at"], t["status"]),
                          (ok["id"], self.c["login"], "SYSTEM:%s" % self.agent, ok["next_run_at"], "PENDING"))
         snap = json.loads(t["submitted_params"])
-        self.assertEqual((snap["version"], snap["path_file"]), (4, self.c["scr"]["path_file"]))
+        self.assertEqual((snap["version"], snap["path_file"]), (5, self.c["scr"]["path_file"]))
         self.assertEqual([x["answer_value"] for x in self.obter_repo("tickets").answers(t["id"])], ["valor-a"])
         self.assertEqual((r_ruim["active"], r_ruim["pause_reason"], r_ruim["updated_by"]),
                          ("N", "INVALID_PARAM", "SYSTEM:%s" % self.agent))

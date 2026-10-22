@@ -148,28 +148,28 @@ class AdminScriptsService(object):
     """Regras do cadastro de scripts com repositorios, configuracao do agente, relogio e log injetados."""
 
     def __init__(self, catalogo, agendamentos, sss_env, log, relogio):
-        self._catalogo = catalogo
-        self._agendamentos = agendamentos
+        self._catalog = catalogo
+        self._schedules = agendamentos
         self._env = sss_env
         self._log = log
-        self._relogio = relogio
+        self._clock = relogio
 
     def _get(self, script_id):
         sid = _id(script_id)
         if sid is None:
             raise RepoNotFound("script invalido")
-        return self._catalogo.scripts_get(sid)
+        return self._catalog.scripts_get(sid)
 
     def _active_schedules(self, **filtros):
         filtros["active"] = "Y"
-        return self._agendamentos.list(filtros=filtros, pagina=1, tamanho=_COUNT_PAGE_SIZE)["total"]
+        return self._schedules.list(filtros=filtros, pagina=1, tamanho=_COUNT_PAGE_SIZE)["total"]
 
     # ----------------------------------------------------------------- leitura
 
     def list(self, ctx, filtros, pagina, tamanho):
         """Pagina de scripts (nome ASC) com ambientes homologados e quantidade de parametros."""
         admin_crud.require_feature(ctx, FEATURE)
-        return self._catalogo.scripts_list(filtros=filtros, pagina=pagina, tamanho=tamanho)
+        return self._catalog.scripts_list(filtros=filtros, pagina=pagina, tamanho=tamanho)
 
     def form(self, ctx, script_id=None):
         """Dados do formulario. Inclui agendamentos ativos na edicao."""
@@ -253,7 +253,7 @@ class AdminScriptsService(object):
             erros["path_file"] = PATH_MESSAGES[exc.code]
 
     def _param_type_precheck(self, script_id, tipo, erros):
-        vinculos = self._catalogo.script_params_get(script_id)
+        vinculos = self._catalog.script_params_get(script_id)
         if tipo == "NONE" and vinculos:
             erros["param_type"] = MSG_NONE_LINKED
         elif tipo == "NAMED":
@@ -264,7 +264,7 @@ class AdminScriptsService(object):
     def _violation(self, ctx, exc, erros, script_id=None):
         if exc.constraint == "sss_scr_nomeado_sem_flag" and script_id:
             erros["param_type"] = msg_named_without_flag(
-                [v["code"] for v in self._catalogo.script_params_get(script_id) if not v.get("param_flag")])
+                [v["code"] for v in self._catalog.script_params_get(script_id) if not v.get("param_flag")])
         else:
             campo, mensagem = _FIELD_BY_CONSTRAINT.get(exc.constraint, (GENERAL_FIELD, admin_crud.MSG_FAILURE))
             erros[campo] = mensagem
@@ -287,7 +287,7 @@ class AdminScriptsService(object):
             novo = dict(reg, active="Y")
             auditoria = admin_crud.audit_entry(ctx, ip, "CREATE", admin_crud.insert_detail(novo, INSERT_FIELDS))
             try:
-                criado = self._catalogo.scripts_insert(novo, auditoria=auditoria)
+                criado = self._catalog.scripts_insert(novo, auditoria=auditoria)
             except RepoViolation as exc:
                 self._violation(ctx, exc, erros)
                 return None, erros, None
@@ -308,7 +308,7 @@ class AdminScriptsService(object):
         if detalhe is None:
             return atual["id"], {}, aviso
         try:
-            self._catalogo.scripts_update(atual["id"], alteracoes, esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
+            self._catalog.scripts_update(atual["id"], alteracoes, esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
                                            auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         except RepoConflict:
             return atual["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}, None
@@ -337,7 +337,7 @@ class AdminScriptsService(object):
         acao = "DEACTIVATE" if novo_ativo == "N" else "UPDATE"
         if novo_ativo == "N":
             detalhe = u"%s; agendamentos ativos afetados: %d" % (detalhe, self._active_schedules(script_id=atual["id"]))
-        alterado = self._catalogo.scripts_update(atual["id"], mudancas,
+        alterado = self._catalog.scripts_update(atual["id"], mudancas,
                                                   esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
                                                   auditoria=admin_crud.audit_entry(ctx, ip, acao, detalhe))
         self._log.info("script %s (login=%s script=%s)", "desativado" if novo_ativo == "N" else "reativado",
@@ -350,9 +350,9 @@ class AdminScriptsService(object):
         """Tela de homologacao: ambientes ativos e inativos ja homologados, com agendamentos ativos por ambiente."""
         admin_crud.require_feature(ctx, FEATURE)
         script = self._get(script_id)
-        marcados = set(self._catalogo.homologation_get(script["id"]))
+        marcados = set(self._catalog.homologation_get(script["id"]))
         ambientes = []
-        for a in self._catalogo.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"]:
+        for a in self._catalog.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"]:
             if a["active"] != "Y" and a["id"] not in marcados:
                 continue
             ambientes.append({"id": a["id"], "name": a["name"], "description": a.get("description") or "",
@@ -377,10 +377,10 @@ class AdminScriptsService(object):
             if aid is None:
                 return None, {GENERAL_FIELD: MSG_HOMOLOG_INVALID}
             enviados.add(aid)
-        atuais = self._catalogo.homologation_get(script["id"])
+        atuais = self._catalog.homologation_get(script["id"])
         if admin_crud.text(versao, 64) != _hash(sorted(atuais)):
             return None, {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
-        ambientes = dict((a["id"], a) for a in self._catalogo.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"])
+        ambientes = dict((a["id"], a) for a in self._catalog.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"])
         if enviados - set(ambientes):
             return None, {GENERAL_FIELD: MSG_HOMOLOG_INVALID}
         inativos = set(i for i, a in ambientes.items() if a["active"] != "Y")
@@ -398,7 +398,7 @@ class AdminScriptsService(object):
         detalhe = admin_crud.free_detail(u"homologação: %s%s" % (
             diff, (u"; agendamentos ativos afetados: %d" % afetados) if removidos else u""))
         try:
-            self._catalogo.homologation_save(script["id"], sorted(final), esperado=atuais,
+            self._catalog.homologation_save(script["id"], sorted(final), esperado=atuais,
                                               auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         except RepoConflict:
             return None, {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
@@ -409,13 +409,13 @@ class AdminScriptsService(object):
     # -------------------------------------------------------------- vinculos
 
     def _dictionary(self):
-        return dict((p["id"], p) for p in self._catalogo.parameters_list(pagina=1, tamanho=_CATALOG_MAX)["itens"])
+        return dict((p["id"], p) for p in self._catalog.parameters_list(pagina=1, tamanho=_CATALOG_MAX)["itens"])
 
     def parameters(self, ctx, script_id):
         """Tela de vinculos: vinculos atuais (sub sigiloso nunca devolvido), dicionario para busca e versao."""
         admin_crud.require_feature(ctx, FEATURE)
         script = self._get(script_id)
-        atuais = self._catalogo.script_params_get(script["id"])
+        atuais = self._catalog.script_params_get(script["id"])
         dicionario = self._dictionary()
 
         def resumo(p):
@@ -476,7 +476,7 @@ class AdminScriptsService(object):
                     sub = params_compiler.validate_value(p, sub)
                     sub = "true" if sub is True else ("false" if sub is False else sub)
                 except ParamError as exc:
-                    erros["vinculo_%d" % pid] = exc.mensagem
+                    erros["vinculo_%d" % pid] = exc.message
                     sub = None
                 if sub is not None and len(sub) > SUB_DEFAULT_MAX_LENGTH:
                     erros["vinculo_%d" % pid] = u"O valor padrão específico aceita até %d caracteres." % SUB_DEFAULT_MAX_LENGTH
@@ -510,7 +510,7 @@ class AdminScriptsService(object):
         """
         admin_crud.require_feature(ctx, FEATURE)
         script = self._get(script_id)
-        atuais = self._catalogo.script_params_get(script["id"])
+        atuais = self._catalog.script_params_get(script["id"])
         if admin_crud.text(versao, 64) != _links_version(atuais, self._dictionary()):
             return None, {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
         erros = {}
@@ -522,7 +522,7 @@ class AdminScriptsService(object):
         antes, depois = self._describe(atuais), self._describe(final)
         detalhe = admin_crud.free_detail(u"vínculos: %s → %s" % (antes, depois))
         try:
-            self._catalogo.script_params_save(
+            self._catalog.script_params_save(
                 script["id"], [dict((k, v[k]) for k in ("parameter_id", "sort_order", "required", "default_value_override"))
                                for v in final],
                 esperado=_read_back(atuais), auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
@@ -547,7 +547,7 @@ class AdminScriptsService(object):
         """
         admin_crud.require_feature(ctx, FEATURE)
         script = self._get(script_id)
-        atuais = self._catalogo.script_params_get(script["id"])
+        atuais = self._catalog.script_params_get(script["id"])
         erros = {}
         if vinculos_json is None:
             vinculos = atuais
@@ -556,7 +556,7 @@ class AdminScriptsService(object):
             if erros:
                 return {"argv": None, "erros": erros, "aviso": None}
         aviso = None
-        snap, _resolvidos, erros = params_compiler.compile_snapshot(script, vinculos, {}, self._relogio())
+        snap, _resolvidos, erros = params_compiler.compile_snapshot(script, vinculos, {}, self._clock())
         if snap is None:
             return {"argv": None, "erros": erros, "aviso": aviso}
         return {"argv": params_compiler.display_argv(json.loads(snap)),

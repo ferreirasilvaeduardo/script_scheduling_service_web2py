@@ -360,7 +360,7 @@ class TestLastAdmin(_BaseProfiles):
         form = self._form(PERFIL_ADMIN)
         with self.assertRaises(OperationDenied) as cm:
             self.svc.toggle_active(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
-        self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_LAST_ADMIN)
+        self.assertEqual(cm.exception.message, perfis_mod.MSG_LAST_ADMIN)
         perfil = self.rbac_repo.profiles_get(PERFIL_ADMIN)
         self.assertEqual((perfil["active"], perfil["perm_version"]), ("Y", 1))
         self.assertEqual(self._audits("DEACTIVATE"), [])
@@ -391,13 +391,13 @@ class TestLastAdmin(_BaseProfiles):
         form = self._form(PERFIL_ADMIN)
         with self.assertRaises(OperationDenied) as cm:
             self.svc.toggle_active(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
-        self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_LAST_ADMIN)
+        self.assertEqual(cm.exception.message, perfis_mod.MSG_LAST_ADMIN)
 
     def test_quem_nao_e_admin_nao_altera_perfil_admin(self):
         form = self._form(PERFIL_ADMIN)
         with self.assertRaises(OperationDenied) as cm:
             self.svc.toggle_active(self.ctx["gestor"], IP, str(PERFIL_ADMIN), form["version"])
-        self.assertEqual(cm.exception.mensagem, perfis_mod.MSG_ADMIN_ONLY)
+        self.assertEqual(cm.exception.message, perfis_mod.MSG_ADMIN_ONLY)
         _id, erros = self.svc.save(self.ctx["gestor"], IP, str(PERFIL_ADMIN),
                                      {"name": form["name"], "description": form["description"], "is_admin": None,
                                       "version": form["version"]})

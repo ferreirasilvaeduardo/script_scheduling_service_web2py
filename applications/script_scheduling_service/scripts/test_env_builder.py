@@ -113,7 +113,7 @@ class TestEnvBuilder(unittest.TestCase):
         ticket = {"id": 41, "environment": "PRODUCAO", "parent_ticket_id": 7, "schedule_id": 3, "priority": 2,
                   "started_at": datetime.datetime(2026, 10, 20, 3, 0, 5),
                   "scheduled_at": datetime.datetime(2026, 10, 20, 3, 0)}
-        snap = {"script_id": 12, "script_nome": "Carga Faturas", "interpreter": "PYTHON3"}
+        snap = {"script_id": 12, "script_name": "Carga Faturas", "interpreter": "PYTHON3"}
         amb = dict(AMB, description="Produção faturamento")
         log = "/srv/sss/logs/producao/carga_faturas/2026/10/20/03/00/ticket_41.log.parcial"
         with mock.patch.object(masking, "MASKER", masking.Masker()):
@@ -146,7 +146,7 @@ class TestEnvBuilder(unittest.TestCase):
                   "priority": None}
         with self.assertLogs("sss_scheduler", "WARNING"):
             env = env_builder.build(_cfg(), _secrets(), ticket, dict(AMB, description="  ", connection=None),
-                                        SCRIPT, WORK, {}, "UNIX", snapshot={"script_nome": ""},
+                                        SCRIPT, WORK, {}, "UNIX", snapshot={"script_name": ""},
                                         agendamento={"name": "ignorado", "recurrence_type": "DAILY"},
                                         hostname="", versao=None)
         self.assertEqual(env["SSS_EXECUTION_TYPE"], "MANUAL")
@@ -204,7 +204,7 @@ class TestEnvBuilder(unittest.TestCase):
         with mock.patch.object(masking, "MASKER", masking.Masker()):
             env = env_builder.build(_cfg(), _secrets({"PRODUCAO": EnvironmentSecret("fat_app", "S3nh@Forte")}),
                                         ticket, dict(AMB, description="x"), SCRIPT, WORK, dict(DAEMON), "LINUX",
-                                        snapshot={"script_id": 12, "script_nome": "C", "interpreter": "SH",
+                                        snapshot={"script_id": 12, "script_name": "C", "interpreter": "SH",
                                                   "path_file": "/opt/automacoes/atual/carga.sh"},
                                         agendamento={"name": "N", "recurrence_type": "CRON"},
                                         caminho_log="/srv/sss/logs/x/ticket_41.log.parcial", timeout_seg=60,

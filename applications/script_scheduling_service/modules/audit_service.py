@@ -87,7 +87,7 @@ class InvalidFilters(ValueError):
 
     def __init__(self, erros):
         ValueError.__init__(self, ",".join(sorted(erros)))
-        self.erros = erros
+        self.errors = erros
 
 
 def _text(valor, limite):
@@ -234,12 +234,12 @@ class AuditService(object):
     """Consulta e exportacao da trilha, com repositorio, relogio e log injetados."""
 
     def __init__(self, auditoria, relogio, log):
-        self._auditoria = auditoria
-        self._relogio = relogio
+        self._audit = auditoria
+        self._clock = relogio
         self._log = log
 
     def _today(self):
-        return self._relogio().date()
+        return self._clock().date()
 
     def normalize_filters(self, entrada):
         """Filtros e erros com o periodo padrao calculado pelo relogio do banco."""
@@ -258,11 +258,11 @@ class AuditService(object):
         if erros:
             return vazio
         repo_filtros = repo_filters(filtros)
-        resultado = self._auditoria.list(filtros=repo_filtros, pagina=pagina, tamanho=tamanho)
+        resultado = self._audit.list(filtros=repo_filtros, pagina=pagina, tamanho=tamanho)
         info = ui_helpers.paginacao_info(pagina, tamanho, resultado["total"],
                                          resultado.get("total_limitado", False), len(resultado["itens"]))
         if not resultado["itens"] and info["pagina"] != resultado["pagina"]:
-            resultado = self._auditoria.list(filtros=repo_filtros, pagina=info["pagina"], tamanho=tamanho)
+            resultado = self._audit.list(filtros=repo_filtros, pagina=info["pagina"], tamanho=tamanho)
         itens = []
         for reg in resultado["itens"]:
             detalhe = _mask(reg.get("detail")) or u""
@@ -296,16 +296,16 @@ class AuditService(object):
         repo_filtros = repo_filters(filtros)
         # README §4.4 (D12): reserva o id, delimita id_max = id - 1, conta esse recorte e so entao grava a
         # linha; a quantidade registrada e o arquivo correspondem ao mesmo conjunto.
-        aid = self._auditoria.reserve_id()
+        aid = self._audit.reserve_id()
         repo_filtros["id_max"] = aid - 1
-        total = sum(1 for _ in self._auditoria.iterate(filtros=repo_filtros, limite=EXPORT_LIMIT))
+        total = sum(1 for _ in self._audit.iterate(filtros=repo_filtros, limite=EXPORT_LIMIT))
         linhas = min(total, EXPORT_LIMIT)
         detalhe = admin_crud.free_detail(u"filtros: %s; linhas: %d (limite %d)" % (
             _describe_filters(filtros), linhas, EXPORT_LIMIT))
-        self._auditoria.register(ctx.get("login"), ip, EXPORT_ACTION, AUDIT_ENTITY, None, detalhe, id=aid)
+        self._audit.register(ctx.get("login"), ip, EXPORT_ACTION, AUDIT_ENTITY, None, detalhe, id=aid)
         self._log.info("auditoria exportada (login=%s linhas=%d total=%d)", ctx.get("login"), linhas, total,
                        extra={"action": EXPORT_ACTION})
-        nome = "auditoria_%s.csv" % self._relogio().strftime("%Y%m%d_%H%M%S")
+        nome = "auditoria_%s.csv" % self._clock().strftime("%Y%m%d_%H%M%S")
         return nome, linhas, self._chunks(repo_filtros, ctx.get("login"))
 
     def _chunks(self, repo_filtros, login):
@@ -317,7 +317,7 @@ class AuditService(object):
         buffer.truncate(0)
         pendentes = 0
         try:
-            for reg in self._auditoria.iterate(filtros=repo_filtros, limite=EXPORT_LIMIT):
+            for reg in self._audit.iterate(filtros=repo_filtros, limite=EXPORT_LIMIT):
                 escritor.writerow(csv_row(reg))
                 pendentes += 1
                 if pendentes >= _LINES_PER_CHUNK:

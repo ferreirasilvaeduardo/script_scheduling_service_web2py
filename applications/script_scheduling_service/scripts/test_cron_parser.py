@@ -44,16 +44,16 @@ class TestSyntax(unittest.TestCase):
 
     def test_campos_basicos(self):
         cron = cron_parser.parse('  0,30   8-18/2 1-5,15 */3 1-5 ')
-        self.assertEqual(cron.minutos, {0, 30})
-        self.assertEqual(cron.horas, {8, 10, 12, 14, 16, 18})
-        self.assertEqual(cron.dias, {1, 2, 3, 4, 5, 15})
-        self.assertEqual(cron.meses, {1, 4, 7, 10})
-        self.assertEqual(cron.dias_semana, {1, 2, 3, 4, 5})
-        self.assertEqual(cron.texto, '0,30 8-18/2 1-5,15 */3 1-5')
+        self.assertEqual(cron.minutes, {0, 30})
+        self.assertEqual(cron.hours, {8, 10, 12, 14, 16, 18})
+        self.assertEqual(cron.days, {1, 2, 3, 4, 5, 15})
+        self.assertEqual(cron.months, {1, 4, 7, 10})
+        self.assertEqual(cron.weekdays, {1, 2, 3, 4, 5})
+        self.assertEqual(cron.text, '0,30 8-18/2 1-5,15 */3 1-5')
 
     def test_dia_semana_7_e_domingo(self):
-        self.assertEqual(cron_parser.parse('0 0 * * 7').dias_semana, {0})
-        self.assertEqual(cron_parser.parse('0 0 * * 5-7').dias_semana, {5, 6, 0})
+        self.assertEqual(cron_parser.parse('0 0 * * 7').weekdays, {0})
+        self.assertEqual(cron_parser.parse('0 0 * * 5-7').weekdays, {5, 6, 0})
 
     def test_rejeicoes(self):
         casos = {
@@ -71,14 +71,14 @@ class TestSyntax(unittest.TestCase):
             with self.subTest(expr=expr):
                 with self.assertRaises(CronError) as ctx:
                     cron_parser.parse(expr)
-                self.assertIn(trecho, ctx.exception.mensagem)
+                self.assertIn(trecho, ctx.exception.message)
         with self.assertRaises(CronError):
             cron_parser.parse('0,' * 30 + '0 * * * *')
         with self.assertRaises(CronError):
             cron_parser.parse(None)
 
     def test_texto_com_espacos_dentro_do_limite(self):
-        self.assertEqual(cron_parser.parse('0 0 1 1 1' + ' ' * 60).texto, '0 0 1 1 1')
+        self.assertEqual(cron_parser.parse('0 0 1 1 1' + ' ' * 60).text, '0 0 1 1 1')
 
 
 class TestNext(unittest.TestCase):
@@ -149,8 +149,8 @@ class TestNext(unittest.TestCase):
                 sorteio.choice(['*', '0', '1-5', '6,7', '*/2']),
             ))
             cron = cron_parser.parse(expr)
-            campos = (cron.minutos, cron.horas, cron.dias, cron.meses, cron.dias_semana,
-                      cron.dia_restrito, cron.dsem_restrito)
+            campos = (cron.minutes, cron.hours, cron.days, cron.months, cron.weekdays,
+                      cron.day_restricted, cron.wday_restricted)
             t = inicio.replace(second=0) + datetime.timedelta(minutes=1)
             esperado = None
             for _ in range(janela):

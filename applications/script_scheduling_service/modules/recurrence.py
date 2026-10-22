@@ -118,7 +118,7 @@ def validate_rule(regra, horizonte_dias=DEFAULT_HORIZON):
                     erros['cron_expression'] = ('A expressão não ocorre nos próximos %d dias a partir do início.'
                                                % horizonte_dias)
         except CronError as erro:
-            erros['cron_expression'] = erro.mensagem
+            erros['cron_expression'] = erro.message
     return erros
 
 

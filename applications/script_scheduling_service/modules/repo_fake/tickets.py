@@ -314,7 +314,7 @@ class RepoTicketsFake(RepoTickets):
                 raise RepoNotFound("Ticket ID %s nao encontrado" % id)
 
             t = self._store.tickets[id]
-            sim = self._store.log_sim.get(id)
+            sim = self._store.log_simulated.get(id)
             if sim is not None and t.get("status") == "RUNNING":
                 self._simular_log(t, sim)
             log_output = t.get("log_output") or ""
@@ -378,6 +378,6 @@ class RepoTicketsFake(RepoTickets):
             t["finished_at"] = agora
             # A finalizacao e do agente dono (README §8.7); o heartbeat e o log nao gravam updated_*.
             self._store.stamp_update(t, "SYSTEM:%s" % t.get("agent_id"))
-            self._store.log_sim.pop(t["id"], None)
+            self._store.log_simulated.pop(t["id"], None)
         t["heartbeat_at"] = agora
         t["log_output"] = (t.get("log_output") or "") + _mask_like_log_pump("".join(linhas), sim["sensiveis"])

@@ -116,9 +116,9 @@ class _TwoAgentsBase(unittest.TestCase):
         return caminho
 
     def _snapshot(self, scr):
-        return json.dumps({"version": 4, "script_id": scr["id"], "script_nome": scr["name"], "interpreter": "SH",
-                           "path_file": scr["path_file"], "param_type": "NAMED", "args": [], "respostas": {},
-                           "sensiveis": [], "compilado_em": "2026-10-20 10:00:00"})
+        return json.dumps({"version": 5, "script_id": scr["id"], "script_name": scr["name"], "interpreter": "SH",
+                           "path_file": scr["path_file"], "param_type": "NAMED", "args": [], "answers": {},
+                           "sensitive": [], "compiled_at": "2026-10-20 10:00:00"})
 
     def _ticket(self, scr):
         tid = self.obter_repo("tickets").create({

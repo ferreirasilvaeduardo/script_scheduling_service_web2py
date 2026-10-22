@@ -62,9 +62,9 @@ class TestAuthService(unittest.TestCase):
         self.users = repo_factory.get("users")
         self.rbac = repo_factory.get("rbac")
         self.audit = repo_factory.get("audit")
-        self.relogio = _Clock(START)
+        self.clock = _Clock(START)
         # O bloqueio usa o relogio do banco (README §4.2): o relogio de teste e o SYSDATE do FAKE.
-        repo_factory._fake_store.set_clock(self.relogio)
+        repo_factory._fake_store.set_clock(self.clock)
         log = logging.getLogger("test_auth_service")
         log.addHandler(logging.NullHandler())
         log.propagate = False
@@ -109,9 +109,9 @@ class TestAuthService(unittest.TestCase):
         self.assertIsNotNone(usuario["locked_until"], "a rajada nao pode escapar do bloqueio")
         self.assertEqual(usuario["failed_attempts"], 10)
         self.assertEqual(self._actions("admin").count("LOGIN_LOCKED"), 6, "uma por falha a partir do limite")
-        self.assertIn(self.service.msg_bloqueio, respostas)
+        self.assertIn(self.service.lockout_message, respostas)
         _ctx, msg = self.service.authenticate("admin", self.password, "10.0.0.1")
-        self.assertEqual(msg, self.service.msg_bloqueio, "senha certa nao entra durante o bloqueio")
+        self.assertEqual(msg, self.service.lockout_message, "senha certa nao entra durante o bloqueio")
 
     def test_detalhe_da_falha_com_a_contagem_do_repositorio(self):
         self._fail_login("admin", 2)
@@ -134,7 +134,7 @@ class TestAuthService(unittest.TestCase):
     def test_mensagens_em_duas_partes(self):
         # CR-004 U1 (README §2.4.2): o que aconteceu + o que fazer agora; o bloqueio informa os minutos.
         self.assertEqual(MSG_GENERIC, u"Usuário ou senha incorretos. Confira o que digitou e tente de novo.")
-        self.assertIn(u"Espere %d minutos" % max(1, -(-LOCKOUT_S // 60)), self.service.msg_bloqueio)
+        self.assertIn(u"Espere %d minutos" % max(1, -(-LOCKOUT_S // 60)), self.service.lockout_message)
 
     def test_login_normalizado(self):
         ctx, _ = self.service.authenticate("  ADMIN ", self.password, "10.0.0.1")
@@ -166,7 +166,7 @@ class TestAuthService(unittest.TestCase):
 
     def test_bloqueio_na_enesima_falha(self):
         self.assertEqual(self._fail_login("op.prod", MAX - 1), (None, MSG_GENERIC))
-        self.assertEqual(self._fail_login("op.prod", 1), (None, self.service.msg_bloqueio))
+        self.assertEqual(self._fail_login("op.prod", 1), (None, self.service.lockout_message))
         u = self.users.get_by_id(2)
         self.assertEqual(u["failed_attempts"], MAX)
         self.assertEqual(u["locked_until"], START + datetime.timedelta(seconds=LOCKOUT_S))
@@ -176,15 +176,15 @@ class TestAuthService(unittest.TestCase):
 
     def test_senha_correta_durante_bloqueio(self):
         self._fail_login("op.prod", MAX)
-        self.relogio.advance(LOCKOUT_S - 1)
-        self.assertEqual(self.service.authenticate("op.prod", self.password, "10.0.0.1"), (None, self.service.msg_bloqueio))
+        self.clock.advance(LOCKOUT_S - 1)
+        self.assertEqual(self.service.authenticate("op.prod", self.password, "10.0.0.1"), (None, self.service.lockout_message))
         # Tentativas durante o bloqueio nao o prolongam.
         u = self.users.get_by_id(2)
         self.assertEqual(u["locked_until"], START + datetime.timedelta(seconds=LOCKOUT_S))
 
     def test_desbloqueio_por_tempo(self):
         self._fail_login("op.prod", MAX)
-        self.relogio.advance(LOCKOUT_S)
+        self.clock.advance(LOCKOUT_S)
         self.assertEqual(self._fail_login("op.prod", 1), (None, MSG_GENERIC))
         self.assertEqual(self.users.get_by_id(2)["failed_attempts"], 1)
         ctx, msg = self.service.authenticate("op.prod", self.password, "10.0.0.1")
@@ -194,16 +194,16 @@ class TestAuthService(unittest.TestCase):
 
     def test_inexistente_bloqueio_simulado(self):
         self.assertEqual(self._fail_login("fantasma", MAX - 1), (None, MSG_GENERIC))
-        self.assertEqual(self._fail_login("fantasma", 1), (None, self.service.msg_bloqueio))
-        self.assertEqual(self._fail_login("fantasma", 1), (None, self.service.msg_bloqueio))
-        self.relogio.advance(LOCKOUT_S)
+        self.assertEqual(self._fail_login("fantasma", 1), (None, self.service.lockout_message))
+        self.assertEqual(self._fail_login("fantasma", 1), (None, self.service.lockout_message))
+        self.clock.advance(LOCKOUT_S)
         self.assertEqual(self._fail_login("fantasma", 1), (None, MSG_GENERIC))
         self.assertIn("LOGIN_LOCKED", self._actions("fantasma"))
 
     def test_seed_bloqueado(self):
         self.users.update(6, {"password_hash": security.hash_password(self.password),
                                   "locked_until": START + datetime.timedelta(minutes=5)}, ator="teste")
-        self.assertEqual(self.service.authenticate("bloqueado", self.password, "10.0.0.1"), (None, self.service.msg_bloqueio))
+        self.assertEqual(self.service.authenticate("bloqueado", self.password, "10.0.0.1"), (None, self.service.lockout_message))
 
     def test_usuario_inativo(self):
         self.assertEqual(self.service.authenticate("inativo", self.password, "10.0.0.1"), (None, MSG_GENERIC))
@@ -234,7 +234,7 @@ class TestAuthService(unittest.TestCase):
         with mock.patch.object(self.audit, "register", side_effect=AssertionError("auditoria separada")):
             ctx, msg = self.service.authenticate("admin", self.password, "10.0.0.1")
             self.assertIsNone(msg)
-            self.assertEqual(self._fail_login("op.prod", MAX), (None, self.service.msg_bloqueio))
+            self.assertEqual(self._fail_login("op.prod", MAX), (None, self.service.lockout_message))
         self.assertEqual(self._actions("admin"), ["LOGIN_OK"])
         acoes = self._actions("op.prod")
         self.assertEqual(acoes.count("LOGIN_FAILED"), MAX)
@@ -251,7 +251,7 @@ class TestAuthService(unittest.TestCase):
         # CR-003 P3: bloqueio expirado zera as tentativas tambem em "Minha senha" (README §4.2).
         ctx, _ = self.service.authenticate("op.prod", self.password, "10.0.0.1")
         self._fail_login("op.prod", MAX)
-        self.relogio.advance(LOCKOUT_S + 1)
+        self.clock.advance(LOCKOUT_S + 1)
         resultado, _erros = self.service.change_password(ctx, "10.0.0.1", "senha-errada-123", "x", "x")
         self.assertEqual(resultado, "ERRO")
         u = self.users.get_by_id(2)
@@ -327,7 +327,7 @@ class TestAuthService(unittest.TestCase):
     def test_mensagem_de_bloqueio_pela_funcao_do_modulo(self):
         # "Minha senha" bloqueada (controllers/default.py) usa a mesma mensagem do login.
         with mock.patch.object(auth_service, "_service", return_value=self.service):
-            self.assertEqual(auth_service.lock_message(), self.service.msg_bloqueio)
+            self.assertEqual(auth_service.lock_message(), self.service.lockout_message)
 
     def test_controllers_so_usam_nomes_existentes_do_auth_service(self):
         raiz = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "controllers")

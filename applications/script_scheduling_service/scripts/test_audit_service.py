@@ -302,7 +302,7 @@ class TestExport(_Base):
             self.svc.export_csv(self.ctx["consulta"], IP, {})
         with self.assertRaises(InvalidFilters) as cm:
             self.svc.export_csv(self.ctx["admin"], IP, {"de": "2020-01-01"})
-        self.assertIn("de", cm.exception.erros)
+        self.assertIn("de", cm.exception.errors)
         self.assertEqual(self._exports(), [])
 
 
@@ -369,7 +369,7 @@ class TestAgentsDashboard(_Base):
 
     def _queue_diagnostics(self):
         self.store.tickets.clear()
-        self.store.agentes_hb_sim.clear()
+        self.store.agents_hb_simulated.clear()
         for tid, segundos, status in ((1, -300, "PENDING"), (2, 0, "PENDING"),
                                       (3, 1, "PENDING"), (4, -600, "SUCCESS")):
             # Script 3 (cleanup_tmp) e BASH no cadastro; o snapshot diz outra coisa e e ignorado (CR-008, R-15).
