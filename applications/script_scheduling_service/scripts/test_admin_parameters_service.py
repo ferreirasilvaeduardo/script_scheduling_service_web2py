@@ -109,7 +109,7 @@ class TestRegistration(_Base):
 
     def test_sensivel_de_vazio_para_preenchido_gera_conflito(self):
         f = self.svc.form(self.ctx["admin"], str(P_CHAVE_API))
-        self.assertFalse(f["tem_padrao"])
+        self.assertFalse(f["has_default"])
         self.catalog.parameters_update(P_CHAVE_API, {"default_value": "colocado-por-outro-333"}, actor="teste")
         date = dict((k, f[k]) for k in ("param_flag", "label", "description", "component_type", "options_json",
                                           "default_value", "validation_regex", "version", "sensitive"))
@@ -244,7 +244,7 @@ class TestSensitiveAndTest(_Base):
         self.assertEqual(errors, {})
         self.assertEqual(self.catalog.parameters_get(P_CHAVE_API)["default_value"], "tok-padrao-secreto-1")
         f = self.svc.form(self.ctx["admin"], str(P_CHAVE_API))
-        self.assertEqual((f["default_value"], f["tem_padrao"]), ("", True))
+        self.assertEqual((f["default_value"], f["has_default"]), ("", True))
         # Em branco mantem; marcar remover apaga.
         _pid, errors = self._edit(P_CHAVE_API, label="Token da API")
         self.assertEqual(self.catalog.parameters_get(P_CHAVE_API)["default_value"], "tok-padrao-secreto-1")
@@ -258,23 +258,23 @@ class TestSensitiveAndTest(_Base):
 
     def test_testar_reflete_configuracao_em_edicao(self):
         cfg = {"component_type": "SELECT", "options_json": '{"X": "Xis"}'}
-        self.assertEqual(self.svc.test_regex(self.ctx["admin"], None, cfg, "X"), {"ok": True, "valor": "X"})
+        self.assertEqual(self.svc.test_regex(self.ctx["admin"], None, cfg, "X"), {"ok": True, "value": "X"})
         self.assertFalse(self.svc.test_regex(self.ctx["admin"], None, cfg, "Y")["ok"])
         self.assertEqual(self.svc.test_regex(self.ctx["admin"], None, {"component_type": "CHECKBOX"}, "1"),
-                         {"ok": True, "valor": "true"})
+                         {"ok": True, "value": "true"})
         self.assertEqual(self.svc.test_regex(self.ctx["admin"], None, {"component_type": "DATE"}, "2026-02-30")["ok"], False)
         r = self.svc.test_regex(self.ctx["admin"], None, {"component_type": "TEXT", "validation_regex": "(a+)+$"}, "a")
-        self.assertIn("recusada", r["erro"])
+        self.assertIn("recusada", r["error"])
         self.assertEqual(self.svc.test_regex(self.ctx["admin"], None, {"component_type": "TEXT", "sensitive": "Y"}, "abcd"),
-                         {"ok": True, "valor": "****"})
+                         {"ok": True, "value": "****"})
         self.assertFalse(self.svc.test_regex(self.ctx["admin"], None, {"component_type": "TEXT", "sensitive": "Y"}, "abc")["ok"])
 
     def test_testar_com_regex_exige_admin(self):
         r = self.svc.test_regex(self.ctx["gestor"], str(P_FILIAL), {"component_type": "TEXT"}, "1234")
-        self.assertEqual(r, {"ok": False, "erro": prm_mod.MSG_REGEX_TEST_ADMIN})
+        self.assertEqual(r, {"ok": False, "error": prm_mod.MSG_REGEX_TEST_ADMIN})
         self.assertEqual(self.svc.test_regex(self.ctx["admin"], str(P_FILIAL),
                                          {"component_type": "TEXT", "validation_regex": "^[0-9]{4}$"}, "1234"),
-                         {"ok": True, "valor": "1234"})
+                         {"ok": True, "value": "1234"})
 
     def test_opcoes_em_pares_preserva_ordem_numerica(self):
         self.assertEqual(prm_mod.options_as_pairs('{"2":"Dois","1":"Um","10":"Dez"}'),

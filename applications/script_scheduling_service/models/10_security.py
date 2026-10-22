@@ -50,7 +50,7 @@ _URL_LOGIN = ("default", "login")
 def _encerrar_sessao(message):
     session.clear()
     session.csrf_token = security.generate_csrf_token()
-    session.flash = {"tipo": "aviso", "mensagem": message}
+    session.flash = {"kind": "warning", "message": message}
     redirect(URL(c=_URL_LOGIN[0], f=_URL_LOGIN[1]))
 
 
@@ -60,11 +60,11 @@ if session.user_id:
     if security.is_session_expired(session.last_access, _agora, _cfg.web.session_idle_timeout_s):
         # Expiracao por inatividade: so log, sem auditoria (README §4.2).
         _log.info("sessao expirada por inatividade (login=%s)", session.login, extra={"action": "SESSAO"})
-        _encerrar_sessao(ui_helpers.mensagem("sessao_expirada"))
+        _encerrar_sessao(ui_helpers.mensagem("session_expired"))
     if security.is_session_expired(session.login_at, _agora, _cfg.web.session_max_hours * 3600):
         # Vida maxima desde o login (CR-008, E2), mesmo com uso continuo: so log.
         _log.info("sessao encerrada pela vida maxima (login=%s)", session.login, extra={"action": "SESSAO"})
-        _encerrar_sessao(ui_helpers.mensagem("sessao_max"))
+        _encerrar_sessao(ui_helpers.mensagem("session_max_age"))
     try:
         _ctx = auth_service.revalidate(session, security.client_ip(
             request.env.remote_addr, request.env.http_x_forwarded_for, _cfg.web.trusted_proxies))

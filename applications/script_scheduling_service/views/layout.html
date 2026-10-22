@@ -30,7 +30,7 @@
   <nav class="sss-nav" aria-label="Menu principal">
     {{for secao in response.sss_menu:}}
     <div class="sss-nav-secao">
-      <span class="sss-nav-titulo" id="menu-{{=secao['secao'].lower()}}">{{=secao['titulo']}}</span>
+      <span class="sss-nav-titulo" id="menu-{{=secao['secao'].lower()}}">{{=secao['title']}}</span>
       <ul class="sss-nav-lista" aria-labelledby="menu-{{=secao['secao'].lower()}}">
         {{for item in secao['itens']:}}
         <li>
@@ -39,8 +39,8 @@
           {{else:}}
           <a class="sss-nav-link" href="{{=URL(c=item['rota'][0], f=item['rota'][1])}}">
           {{pass}}
-            <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=item['icone']}}"></use></svg>
-            <span>{{=item['rotulo']}}</span>
+            <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=item['icon']}}"></use></svg>
+            <span>{{=item['label']}}</span>
           </a>
         </li>
         {{pass}}

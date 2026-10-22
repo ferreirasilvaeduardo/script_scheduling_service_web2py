@@ -29,12 +29,12 @@ icones = URL('static', 'img/icons.svg')
           <h3 class="sss-cartao-rotina-titulo sss-mono">{{=_c['name']}}</h3>
           {{if _c['description']:}}<p class="mb-2">{{=_c['description']}}</p>{{pass}}
           <p class="mb-1"><strong>Perguntas que faz:</strong>
-            {{if _c['perguntas']:}}{{=u', '.join(p['rotulo'] + (u' (obrigatório)' if p['required'] else u'') for p in _c['perguntas'])}}{{else:}}nenhuma{{pass}}
+            {{if _c['perguntas']:}}{{=u', '.join(p['label'] + (u' (obrigatório)' if p['required'] else u'') for p in _c['perguntas'])}}{{else:}}nenhuma{{pass}}
           </p>
           <p class="mb-2"><strong>Última execução:</strong>
             {{if _c['ultima']:}}
-            <a href="{{=URL(c='tickets', f='detail', args=[_c['ultima']['id']])}}"><span class="sss-status {{=_c['ultima']['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_c['ultima']['icone']}}"></use></svg><span>{{=_c['ultima']['state']}}</span></span></a>
-            <span class="sss-texto-suave">{{=_c['ultima']['quando']}}</span>
+            <a href="{{=URL(c='tickets', f='detail', args=[_c['ultima']['id']])}}"><span class="sss-status {{=_c['ultima']['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_c['ultima']['icon']}}"></use></svg><span>{{=_c['ultima']['state']}}</span></span></a>
+            <span class="sss-texto-suave">{{=_c['ultima']['when']}}</span>
             {{else:}}Ainda não rodou{{pass}}
           </p>
           <div class="sss-acoes-inline">

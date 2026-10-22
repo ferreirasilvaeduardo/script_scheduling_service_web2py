@@ -49,7 +49,7 @@ def _pagina_form(ctx, dados, erros=None, erros_senha=None):
     response.title = (u"Usuário %s — SSS" % dados["login"]) if dados.get("id") else u"Novo usuário — SSS"
     response.view = "admin_users/form.html"
     erros = erros or {}
-    campos = [{"name": n, "erro": erros.get(n)} for n in ("login", "name", "profile_id", "password", "confirmation")]
+    campos = [{"name": n, "error": erros.get(n)} for n in ("login", "name", "profile_id", "password", "confirmation")]
     # Perfil de administrador so e oferecido a administrador (CR-008, E1), salvo o perfil atual.
     perfis = [p for p in servico.profiles()
               if p["id"] == dados.get("profile_id") or (p["active"] == "Y" and (ctx["is_admin"] or p["is_admin"] != "Y"))]
@@ -110,7 +110,7 @@ def save():
         _log.exception("falha ao salvar usuario (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
         erros = {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
     if not erros:
-        session.flash = {"tipo": "sucesso", "mensagem": u"Usuário salvo com sucesso."}
+        session.flash = {"kind": "success", "message": u"Usuário salvo com sucesso."}
         redirect(URL(c="admin_users", f="index"))
     try:
         dados = servico.form(ctx, usuario_id) if usuario_id else servico.form(ctx)
@@ -124,8 +124,8 @@ def save():
         else:
             dados["version"] = enviados["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-    response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.GENERAL_FIELD)
-                      or ui_helpers.mensagem("formulario")}
+    response.flash = {"kind": "error", "message": erros.get(admin_crud.GENERAL_FIELD)
+                      or ui_helpers.mensagem("form_errors")}
     return _pagina_form(ctx, dados, erros)
 
 
@@ -136,18 +136,18 @@ def toggle_active():
     try:
         alterado = servico.toggle_active(ctx, _ip_origem(), usuario_id, _texto(request.post_vars.get("version"), 64))
         acao = u"desativado" if alterado["active"] == "N" else u"reativado"
-        session.flash = {"tipo": "sucesso", "mensagem": u"Usuário %s %s." % (alterado["login"], acao)}
+        session.flash = {"kind": "success", "message": u"Usuário %s %s." % (alterado["login"], acao)}
     except RepoNotFound:
         _nao_encontrado()
     except AccessDenied:
         _negado()
     except OperationDenied as exc:
-        session.flash = {"tipo": "erro", "mensagem": exc.message}
+        session.flash = {"kind": "error", "message": exc.message}
     except RepoConflict:
-        session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLICT}
+        session.flash = {"kind": "warning", "message": admin_crud.MSG_CONFLICT}
     except RepoError:
         _log.exception("falha ao alternar usuario (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
-        session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
+        session.flash = {"kind": "error", "message": _MSG_FALHA_ACAO}
     redirect(URL(c="admin_users", f="form", args=[usuario_id]))
 
 
@@ -163,16 +163,16 @@ def reset_password():
     except AccessDenied:
         _negado()
     except OperationDenied as exc:
-        session.flash = {"tipo": "erro", "mensagem": exc.message}
+        session.flash = {"kind": "error", "message": exc.message}
         redirect(URL(c="admin_users", f="form", args=[usuario_id]))
     except RepoError:
         _log.exception("falha ao redefinir senha (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
-        session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
+        session.flash = {"kind": "error", "message": _MSG_FALHA_ACAO}
         redirect(URL(c="admin_users", f="form", args=[usuario_id]))
     if not erros:
-        session.flash = {"tipo": "sucesso", "mensagem": u"Senha redefinida. Tentativas e bloqueio foram zerados."}
+        session.flash = {"kind": "success", "message": u"Senha redefinida. Tentativas e bloqueio foram zerados."}
         redirect(URL(c="admin_users", f="form", args=[usuario_id]))
-    response.flash = {"tipo": "erro", "mensagem": u"A nova senha não foi aceita. Veja o campo destacado."}
+    response.flash = {"kind": "error", "message": u"A nova senha não foi aceita. Veja o campo destacado."}
     return _pagina_form(ctx, servico.form(ctx, usuario_id), erros_senha=erros)
 
 
@@ -182,14 +182,14 @@ def unlock():
     usuario_id = _texto(request.post_vars.get("id"), 11)
     try:
         alterado = servico.unlock(ctx, _ip_origem(), usuario_id)
-        session.flash = {"tipo": "sucesso", "mensagem": u"Usuário %s desbloqueado." % alterado["login"]}
+        session.flash = {"kind": "success", "message": u"Usuário %s desbloqueado." % alterado["login"]}
     except RepoNotFound:
         _nao_encontrado()
     except AccessDenied:
         _negado()
     except OperationDenied as exc:
-        session.flash = {"tipo": "erro", "mensagem": exc.message}
+        session.flash = {"kind": "error", "message": exc.message}
     except RepoError:
         _log.exception("falha ao desbloquear (login=%s id=%r)", ctx["login"], usuario_id, extra={"action": _FUNC})
-        session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
+        session.flash = {"kind": "error", "message": _MSG_FALHA_ACAO}
     redirect(URL(c="admin_users", f="form", args=[usuario_id]))

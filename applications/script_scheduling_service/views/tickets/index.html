@@ -2,19 +2,19 @@
 {{
 # Lista de tickets com filtros (GET) e atualização automática opcional da tabela.
 import ui_helpers
-_opc_status = [(_st, ui_helpers.status_info(_st)['rotulo']) for _st in opcoes['status']]
+_opc_status = [(_st, ui_helpers.status_info(_st)['label']) for _st in opcoes['status']]
 _opc_ambientes = [('', 'Todos')] + [(_a, _a) for _a in opcoes['environments']]
 _opc_scripts = [('', 'Todos')] + list(opcoes['scripts'])
 _opc_origens = [('', 'Todas')] + list(opcoes['origens'])
 _campos = []
-_campos.append({'name': 'status', 'rotulo': 'Status', 'tipo': 'multipla', 'valor': filtros_ativos.get('status', []), 'opcoes': _opc_status})
-_campos.append({'name': 'environment', 'rotulo': 'Ambiente', 'tipo': 'select', 'valor': filtros_ativos.get('environment'), 'opcoes': _opc_ambientes})
-_campos.append({'name': 'script', 'rotulo': 'Script', 'tipo': 'select', 'valor': filtros_ativos.get('script'), 'opcoes': _opc_scripts})
-_campos.append({'name': 'requested_by', 'rotulo': 'Solicitante (login)', 'tipo': 'texto', 'valor': filtros_ativos.get('requested_by')})
-_campos.append({'name': 'criado_de', 'rotulo': 'Criado de', 'tipo': 'data', 'valor': filtros_ativos.get('criado_de')})
-_campos.append({'name': 'criado_ate', 'rotulo': 'Criado até', 'tipo': 'data', 'valor': filtros_ativos.get('criado_ate')})
-_campos.append({'name': 'origem', 'rotulo': 'Origem', 'tipo': 'select', 'valor': filtros_ativos.get('origem'), 'opcoes': _opc_origens})
-filtros = {'id': 'filtro-tickets', 'url_base': ('tickets', 'index'), 'preservar': {'size': tamanho}, 'campos': _campos}
+_campos.append({'name': 'status', 'label': 'Status', 'kind': 'multiple', 'value': filtros_ativos.get('status', []), 'options': _opc_status})
+_campos.append({'name': 'environment', 'label': 'Ambiente', 'kind': 'select', 'value': filtros_ativos.get('environment'), 'options': _opc_ambientes})
+_campos.append({'name': 'script', 'label': 'Script', 'kind': 'select', 'value': filtros_ativos.get('script'), 'options': _opc_scripts})
+_campos.append({'name': 'requested_by', 'label': 'Solicitante (login)', 'kind': 'text', 'value': filtros_ativos.get('requested_by')})
+_campos.append({'name': 'criado_de', 'label': 'Criado de', 'kind': 'date', 'value': filtros_ativos.get('criado_de')})
+_campos.append({'name': 'criado_ate', 'label': 'Criado até', 'kind': 'date', 'value': filtros_ativos.get('criado_ate')})
+_campos.append({'name': 'origem', 'label': 'Origem', 'kind': 'select', 'value': filtros_ativos.get('origem'), 'options': _opc_origens})
+filtros = {'id': 'filtro-tickets', 'url_base': ('tickets', 'index'), 'keep': {'size': tamanho}, 'fields': _campos}
 }}
 <div class="sss-page-header">
   <h1 class="sss-page-titulo">Tickets</h1>

@@ -5,17 +5,17 @@ import ui_helpers
 icones = URL('static', 'img/icons.svg')
 _opc_acoes = [('', 'Todas')] + [(_a, _a) for _a in acoes]
 _opc_entidades = [('', 'Todas')] + [(_e, _e) for _e in entidades]
-_erros = resultado['erros']
-filtros = {'id': 'filtro-auditoria', 'url_base': ('audit', 'index'), 'preservar': {'size': tamanho}, 'campos': [
-    {'name': 'de', 'rotulo': 'De', 'tipo': 'data', 'valor': filtros_ativos.get('de')},
-    {'name': 'ate', 'rotulo': u'Até', 'tipo': 'data', 'valor': filtros_ativos.get('ate')},
-    {'name': 'actor', 'rotulo': 'Ator (login)', 'tipo': 'texto', 'valor': filtros_ativos.get('actor')},
-    {'name': 'action', 'rotulo': u'Ação', 'tipo': 'select', 'valor': filtros_ativos.get('action'), 'opcoes': _opc_acoes},
-    {'name': 'entity', 'rotulo': 'Entidade', 'tipo': 'select', 'valor': filtros_ativos.get('entity'), 'opcoes': _opc_entidades},
-    {'name': 'entity_id', 'rotulo': 'ID da entidade', 'tipo': 'texto', 'valor': filtros_ativos.get('entity_id')},
-    {'name': 'ip', 'rotulo': 'IP de origem', 'tipo': 'texto', 'valor': filtros_ativos.get('ip')},
+_erros = resultado['errors']
+filtros = {'id': 'filtro-auditoria', 'url_base': ('audit', 'index'), 'keep': {'size': tamanho}, 'fields': [
+    {'name': 'de', 'label': 'De', 'kind': 'date', 'value': filtros_ativos.get('de')},
+    {'name': 'ate', 'label': u'Até', 'kind': 'date', 'value': filtros_ativos.get('ate')},
+    {'name': 'actor', 'label': 'Ator (login)', 'kind': 'text', 'value': filtros_ativos.get('actor')},
+    {'name': 'action', 'label': u'Ação', 'kind': 'select', 'value': filtros_ativos.get('action'), 'options': _opc_acoes},
+    {'name': 'entity', 'label': 'Entidade', 'kind': 'select', 'value': filtros_ativos.get('entity'), 'options': _opc_entidades},
+    {'name': 'entity_id', 'label': 'ID da entidade', 'kind': 'text', 'value': filtros_ativos.get('entity_id')},
+    {'name': 'ip', 'label': 'IP de origem', 'kind': 'text', 'value': filtros_ativos.get('ip')},
 ]}
-_rotulos_campo = dict((_c['name'], _c['rotulo']) for _c in filtros['campos'])
+_rotulos_campo = dict((_c['name'], _c['label']) for _c in filtros['fields'])
 _colunas = ('Data/hora', 'Ator', u'Ação', 'Entidade', 'ID', 'IP de origem', 'Detalhe')
 pagina = resultado['pagina']
 total = resultado['total']
@@ -99,7 +99,7 @@ aba_ativa = 'index'
           </td>
           <td class="sss-mono">{{=_r['source_ip'] or '-'}}</td>
           <td class="sss-aud-detalhe">
-            {{if _r['truncado']:}}
+            {{if _r['truncated']:}}
             <details>
               <summary><span>{{=_r['detalhe_curto']}}</span> <span class="sss-ver-mais">ver mais</span></summary>
               <div class="sss-aud-detalhe-completo">{{=_r['detail']}}</div>

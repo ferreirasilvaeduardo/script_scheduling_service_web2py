@@ -126,7 +126,7 @@ class _Base(unittest.TestCase):
     def _links_json(self, sid):
         screen = self.svc.parameters(self.ctx["admin"], str(sid))
         return screen, [{"parameter_id": v["id"], "required": v["required"],
-                       "default_value_override": v["default_value_override"], "manter_sigiloso": v["sensitive"]}
+                       "default_value_override": v["default_value_override"], "keep_secret": v["sensitive"]}
                       for v in screen["vinculos"]]
 
 
@@ -273,7 +273,7 @@ class TestHomologation(_Base):
         self.catalog.homologation_save(S_CARGA, [AMB_PROD, AMB_DESENV], actor="teste")
         screen = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
         dev = [a for a in screen["environments"] if a["name"] == "DESENV"][0]
-        self.assertTrue(dev["marcado"] and dev["inativo"])
+        self.assertTrue(dev["checked"] and dev["inativo"])
         diff, _ = self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA),
                                               [str(AMB_PROD), str(AMB_HML), str(AMB_DESENV)], screen["version"])
         self.assertEqual(diff, "+HOMOLOGACAO")
@@ -310,7 +310,7 @@ class TestLinks(_Base):
         self.assertEqual(errors, {"vinculo_6": scr_mod.MSG_SENSITIVE_INVALID})
         for item in items:
             if item["parameter_id"] == 6:
-                item["manter_sigiloso"] = False  # "Remover valor"
+                item["keep_secret"] = False  # "Remover valor"
         _d, errors = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(items), screen["version"])
         self.assertEqual(errors, {})
         sub = [v for v in self.catalog.script_params_get(S_CARGA) if v["parameter_id"] == 6][0]["default_value_override"]
@@ -403,7 +403,7 @@ class TestPreview(_Base):
     def test_previa_do_seed_gera_argv_esperado_e_mascara_sensivel(self):
         r = self.svc.preview(self.ctx["admin"], str(S_CARGA))
         real = "/opt/automacoes/scripts/carga_diaria.py"
-        self.assertEqual((r["erros"], r["aviso"]), ({}, None))
+        self.assertEqual((r["errors"], r["warning"]), ({}, None))
         self.assertEqual(r["argv"], ["PYTHON3", "-I", real, "--data-ref", "2026-10-14", "-n", "5000",
                                      "--modo", "REAL", "--verbose", "--documento", "****"])
 

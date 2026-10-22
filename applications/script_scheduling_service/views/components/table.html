@@ -2,64 +2,64 @@
 # Componente: tabela de listagem com estados vazio e de erro.
 # Variáveis de entrada:
 #   tabela -- dict:
-#     legenda   -- texto do <caption> (lido por leitores de tela; visualmente oculto);
-#     colunas   -- lista de {chave, rotulo, classe (opcional), tipo: 'texto' | 'mono' | 'status' | 'active' | 'acao'};
+#     caption   -- texto do <caption> (lido por leitores de tela; visualmente oculto);
+#     columns   -- lista de {key, label, css_class (opcional), kind: 'text' | 'mono' | 'status' | 'active' | 'action'};
 #                  tipo 'status' usa components/badge_status.html e lê '<chave>_motivo' da linha;
 #                  tipo 'active' mostra o selo Ativo/Inativo da flag 'Y'/'N' (ui_helpers.ativo_info);
 #                  tipo 'acao' espera na linha {href, rotulo, descricao (opcional, aria-label)}, ou uma lista
 #                  deles, e gera um link por item;
-#     linhas    -- lista de dicts indexados pela 'chave' de cada coluna;
-#     erro      -- opcional; mensagem segura ao usuário (sem ORA-, SQL ou stack trace, AGENTS §3.1);
-#     msg_vazio -- opcional; padrão "Nenhum registro encontrado".
+#     rows    -- lista de dicts indexados pela 'key' de cada coluna;
+#     error      -- opcional; mensagem segura ao usuário (sem ORA-, SQL ou stack trace, AGENTS §3.1);
+#     empty_message -- opcional; padrão "Nenhum registro encontrado".
 import ui_helpers
-_tab_colunas = tabela['colunas']
-_tab_linhas = tabela.get('linhas') or []
+_tab_colunas = tabela['columns']
+_tab_linhas = tabela.get('rows') or []
 }}<div class="table-responsive">
   <table class="table table-sm sss-tabela mb-0">
-    {{if tabela.get('legenda'):}}<caption class="visually-hidden">{{=tabela['legenda']}}</caption>{{pass}}
+    {{if tabela.get('caption'):}}<caption class="visually-hidden">{{=tabela['caption']}}</caption>{{pass}}
     <thead>
       <tr>
         {{for _tab_col in _tab_colunas:}}
-        <th scope="col" class="{{=_tab_col.get('classe', '')}}">{{=_tab_col['rotulo']}}</th>
+        <th scope="col" class="{{=_tab_col.get('css_class', '')}}">{{=_tab_col['label']}}</th>
         {{pass}}
       </tr>
     </thead>
     <tbody>
-      {{if tabela.get('erro'):}}
+      {{if tabela.get('error'):}}
       <tr>
         <td colspan="{{=len(_tab_colunas)}}" class="sss-tabela-estado">
           <div class="alert alert-danger mb-0" role="alert">
             <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
-            <span>{{=tabela['erro']}}</span>
+            <span>{{=tabela['error']}}</span>
           </div>
         </td>
       </tr>
       {{elif not _tab_linhas:}}
       <tr>
-        <td colspan="{{=len(_tab_colunas)}}" class="sss-tabela-estado sss-tabela-vazia">{{=tabela.get('msg_vazio') or 'Nenhum registro encontrado'}}</td>
+        <td colspan="{{=len(_tab_colunas)}}" class="sss-tabela-estado sss-tabela-vazia">{{=tabela.get('empty_message') or 'Nenhum registro encontrado'}}</td>
       </tr>
       {{else:}}
       {{for _tab_linha in _tab_linhas:}}
       <tr>
         {{for _tab_col in _tab_colunas:}}
-        {{_tab_tipo = _tab_col.get('tipo', 'texto')}}
+        {{_tab_tipo = _tab_col.get('kind', 'text')}}
         {{if _tab_tipo == 'status':}}
-        <td class="{{=_tab_col.get('classe', '')}}">
-          {{status = _tab_linha.get(_tab_col['chave'])
-          status_motivo = _tab_linha.get(_tab_col['chave'] + '_motivo')}}
+        <td class="{{=_tab_col.get('css_class', '')}}">
+          {{status = _tab_linha.get(_tab_col['key'])
+          status_motivo = _tab_linha.get(_tab_col['key'] + '_motivo')}}
           {{include 'components/badge_status.html'}}
         </td>
         {{elif _tab_tipo == 'active':}}
-        {{_tab_ativo = ui_helpers.ativo_info(_tab_linha.get(_tab_col['chave']))}}
-        <td class="{{=_tab_col.get('classe', '')}}"><span class="sss-status {{=_tab_ativo['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_tab_ativo['icone']}}"></use></svg><span>{{=_tab_ativo['rotulo']}}</span></span></td>
-        {{elif _tab_tipo == 'acao':}}
-        {{_tab_acoes = _tab_linha.get(_tab_col['chave']) or []
+        {{_tab_ativo = ui_helpers.ativo_info(_tab_linha.get(_tab_col['key']))}}
+        <td class="{{=_tab_col.get('css_class', '')}}"><span class="sss-status {{=_tab_ativo['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_tab_ativo['icon']}}"></use></svg><span>{{=_tab_ativo['label']}}</span></span></td>
+        {{elif _tab_tipo == 'action':}}
+        {{_tab_acoes = _tab_linha.get(_tab_col['key']) or []
         _tab_acoes = _tab_acoes if isinstance(_tab_acoes, (list, tuple)) else [_tab_acoes]}}
-        <td class="sss-tabela-acoes {{=_tab_col.get('classe', '')}}">{{for _tab_acao in _tab_acoes:}}{{if _tab_acao.get('href'):}}<a class="btn btn-sm btn-outline-secondary" href="{{=_tab_acao['href']}}"{{if _tab_acao.get('description'):}} aria-label="{{=_tab_acao['description']}}"{{pass}}>{{=_tab_acao['rotulo']}}</a> {{pass}}{{pass}}</td>
+        <td class="sss-tabela-acoes {{=_tab_col.get('css_class', '')}}">{{for _tab_acao in _tab_acoes:}}{{if _tab_acao.get('href'):}}<a class="btn btn-sm btn-outline-secondary" href="{{=_tab_acao['href']}}"{{if _tab_acao.get('description'):}} aria-label="{{=_tab_acao['description']}}"{{pass}}>{{=_tab_acao['label']}}</a> {{pass}}{{pass}}</td>
         {{elif _tab_tipo == 'mono':}}
-        <td class="sss-mono {{=_tab_col.get('classe', '')}}">{{=_tab_linha.get(_tab_col['chave'], '')}}</td>
+        <td class="sss-mono {{=_tab_col.get('css_class', '')}}">{{=_tab_linha.get(_tab_col['key'], '')}}</td>
         {{else:}}
-        <td class="{{=_tab_col.get('classe', '')}}">{{=_tab_linha.get(_tab_col['chave'], '')}}</td>
+        <td class="{{=_tab_col.get('css_class', '')}}">{{=_tab_linha.get(_tab_col['key'], '')}}</td>
         {{pass}}
         {{pass}}
       </tr>

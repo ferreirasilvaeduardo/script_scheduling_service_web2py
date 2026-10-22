@@ -299,7 +299,7 @@ class SchedulesService(object):
         except RepoNotFound:
             return None
         if tck and tck.get("status") in ("PENDING", "RUNNING"):
-            label = ui_helpers.status_info(tck["status"])["rotulo"].lower()
+            label = ui_helpers.status_info(tck["status"])["label"].lower()
             return u"%s%s ainda está %s." % (prefix, tid, label)
         return None
 
@@ -549,7 +549,7 @@ class SchedulesService(object):
                     warning_rule = u"Será pausada: %s." % prob[1]
             base = {"regra_id": reg["id"], "name": reg["name"], "script": scripts[reg["script_id"]],
                     "environment": reg["environment"], "recorrencia": describe_rule(reg),
-                    "aviso": warning_rule}
+                    "warning": warning_rule}
             next_value = reg.get("next_run_at")
             if next_value is None:
                 continue
@@ -560,7 +560,7 @@ class SchedulesService(object):
                 else:
                     phrase = (u"deveria ter rodado às %s; vai rodar assim que o servidor puder."
                              % next_value.strftime("%H:%M"))
-                late.append(dict(base, hora=next_value.strftime("%d/%m %H:%M"), frase=phrase))
+                late.append(dict(base, hora=next_value.strftime("%d/%m %H:%M"), phrase=phrase))
             dates = []
             current = next_value if next_value >= now else None
             extra = 0
@@ -581,20 +581,20 @@ class SchedulesService(object):
                     problems.append(dict(base, problema=exc.message))
                 continue
             for i, when in enumerate(dates):
-                item = dict(base, quando=when, hora=when.strftime("%H:%M"))
+                item = dict(base, when=when, hora=when.strftime("%H:%M"))
                 if extra and i == len(dates) - 1:
                     item["mais"] = extra
                 occurrences.append(item)
-        occurrences.sort(key=lambda o: (o["quando"], o["regra_id"]))
+        occurrences.sort(key=lambda o: (o["when"], o["regra_id"]))
         warning_total = None
         if len(occurrences) > AGENDA_TOTAL:
             warning_total = (u"Mostrando as primeiras %d execuções previstas; há mais no período." % AGENDA_TOTAL)
             occurrences = occurrences[:AGENDA_TOTAL]
         days = collections.OrderedDict()
         for o in occurrences:
-            days.setdefault(o["quando"].date(), []).append(o)
+            days.setdefault(o["when"].date(), []).append(o)
         return {"atrasados": late, "aviso_total": warning_total, "total": len(occurrences),
-                "dias": [{"rotulo": _day_label(d, now.date()), "itens": items} for d, items in days.items()],
+                "dias": [{"label": _day_label(d, now.date()), "itens": items} for d, items in days.items()],
                 "problemas": problems}
 
     def list(self, ctx, filters, page, size):
@@ -630,7 +630,7 @@ class SchedulesService(object):
                 "name": reg["name"],
                 "script": scripts[sid],
                 "environment": reg["environment"],
-                "tipo": TYPE_LABELS.get(reg["recurrence_type"], reg["recurrence_type"]),
+                "kind": TYPE_LABELS.get(reg["recurrence_type"], reg["recurrence_type"]),
                 "recorrencia": describe_rule(reg),
                 "cron_expression": reg.get("cron_expression") if reg["recurrence_type"] == "CRON" else None,
                 "next_run_at": format_date(reg.get("next_run_at")) if reg["active"] == "Y" else "-",
@@ -640,7 +640,7 @@ class SchedulesService(object):
                 "active": reg["active"],
                 "state": label,
                 "reason": reason,
-                "aviso": warning,
+                "warning": warning,
             })
         return dict(result, itens=items)
 
@@ -657,7 +657,7 @@ class SchedulesService(object):
         errors = errors or {}
         submitted = submitted or {}
         date = {"edicao": False, "etapa": 1, "grupos": [], "script": None, "ambientes": [], "form": None,
-                 "regra": None, "erros": errors}
+                 "regra": None, "errors": errors}
         current = None
         if schedule_id not in (None, ""):
             current = self._get_visible(ctx, schedule_id)
@@ -682,8 +682,8 @@ class SchedulesService(object):
                                   ctx.get("login"), current["id"], exc.reason, extra={"action": FEATURE})
                 raise OperationDenied(MSG_NO_PERMISSION)
             raise
-        for field in form["campos"]:
-            field["mantido"] = field["sensitive"] and field["code"] in previous
+        for field in form["fields"]:
+            field["kept"] = field["sensitive"] and field["code"] in previous
         date.update(etapa=3, form=form, regra=self._form_rule(ctx, current, submitted))
         return date
 
@@ -737,14 +737,14 @@ class SchedulesService(object):
         now = self._now()
         rule = self._rule(date or {}, now, errors)
         if errors:
-            return {"datas": [], "description": None, "erros": dict(errors)}
+            return {"dates": [], "description": None, "errors": dict(errors)}
         try:
             dates = recurrence.next_runs(rule, now, PREVIEW_COUNT, self._horizon)
         except CronError as exc:
-            return {"datas": [], "description": None, "erros": {"cron_expression": exc.message}}
+            return {"dates": [], "description": None, "errors": {"cron_expression": exc.message}}
         if not dates:
-            return {"datas": [], "description": describe_rule(rule), "erros": {GENERAL_FIELD: MSG_NO_NEXT_RUN}}
-        return {"datas": [format_preview(d) for d in dates], "description": describe_rule(rule), "erros": {}}
+            return {"dates": [], "description": describe_rule(rule), "errors": {GENERAL_FIELD: MSG_NO_NEXT_RUN}}
+        return {"dates": [format_preview(d) for d in dates], "description": describe_rule(rule), "errors": {}}
 
     # ----------------------------------------------------------- gravacao
 
@@ -777,7 +777,7 @@ class SchedulesService(object):
 
         links = self._links(script["id"])
         previous = _parameters(current) if current else {}
-        answers = self._answers(links, date.get("respostas"), previous)
+        answers = self._answers(links, date.get("answers"), previous)
         # Compila o snapshot completo so para validar: o daemon recompila a cada desdobro (README §7.5 passo 5).
         _snapshot, resolved, errors_param = params_compiler.compile_snapshot(script, links, answers, now)
         for code, message in errors_param.items():

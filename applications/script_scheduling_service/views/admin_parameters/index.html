@@ -4,11 +4,11 @@
 _rotulo_tipo = dict(tipos)
 _opc_tipo = [('', 'Todos')] + list(tipos)
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
-filtros = {'id': 'filtro-parametros', 'url_base': ('admin_parameters', 'index'), 'preservar': {'size': tamanho}, 'campos': [
-    {'name': 'code', 'rotulo': u'Código', 'tipo': 'texto', 'valor': filtros_ativos.get('code')},
-    {'name': 'label', 'rotulo': u'Rótulo', 'tipo': 'texto', 'valor': filtros_ativos.get('label')},
-    {'name': 'component_type', 'rotulo': 'Tipo', 'tipo': 'select', 'valor': filtros_ativos.get('component_type'), 'opcoes': _opc_tipo},
-    {'name': 'active', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('active'), 'opcoes': _opc_ativo},
+filtros = {'id': 'filtro-parametros', 'url_base': ('admin_parameters', 'index'), 'keep': {'size': tamanho}, 'fields': [
+    {'name': 'code', 'label': u'Código', 'kind': 'text', 'value': filtros_ativos.get('code')},
+    {'name': 'label', 'label': u'Rótulo', 'kind': 'text', 'value': filtros_ativos.get('label')},
+    {'name': 'component_type', 'label': 'Tipo', 'kind': 'select', 'value': filtros_ativos.get('component_type'), 'options': _opc_tipo},
+    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': filtros_ativos.get('active'), 'options': _opc_ativo},
 ]}
 _linhas = []
 for _p in resultado['itens']:
@@ -16,23 +16,23 @@ for _p in resultado['itens']:
     _linhas.append({
         'code': _p['code'],
         'label': _p['label'] + (u' (sigiloso)' if _p.get('sensitive') == 'Y' else ''),
-        'tipo': _rotulo_tipo.get(_p['component_type'], _p['component_type']),
+        'kind': _rotulo_tipo.get(_p['component_type'], _p['component_type']),
         'flag': _p.get('param_flag') or '-',
         'padrao': _p.get('default_value') or '-',
         'uso': (u'Usado por %d script%s' % (_qtd, '' if _qtd == 1 else 's')) if _qtd else u'Não usado',
         'active': _p['active'],
-        'acao': {'href': URL(c='admin_parameters', f='form', args=[_p['id']]), 'rotulo': 'Editar', 'description': u'Editar parâmetro %s' % _p['code']},
+        'action': {'href': URL(c='admin_parameters', f='form', args=[_p['id']]), 'label': 'Editar', 'description': u'Editar parâmetro %s' % _p['code']},
     })
 pass
-tabela = {'legenda': u'Parâmetros cadastrados', 'erro': erro, 'linhas': _linhas, 'msg_vazio': u'Nenhum parâmetro encontrado.', 'colunas': [
-    {'chave': 'code', 'rotulo': u'Código', 'tipo': 'mono'},
-    {'chave': 'label', 'rotulo': u'Rótulo'},
-    {'chave': 'tipo', 'rotulo': 'Tipo'},
-    {'chave': 'flag', 'rotulo': 'Flag', 'tipo': 'mono'},
-    {'chave': 'padrao', 'rotulo': u'Valor padrão', 'tipo': 'mono'},
-    {'chave': 'uso', 'rotulo': 'Uso'},
-    {'chave': 'active', 'rotulo': u'Situação', 'tipo': 'active'},
-    {'chave': 'acao', 'rotulo': u'Ações', 'tipo': 'acao'},
+tabela = {'caption': u'Parâmetros cadastrados', 'error': erro, 'rows': _linhas, 'empty_message': u'Nenhum parâmetro encontrado.', 'columns': [
+    {'key': 'code', 'label': u'Código', 'kind': 'mono'},
+    {'key': 'label', 'label': u'Rótulo'},
+    {'key': 'kind', 'label': 'Tipo'},
+    {'key': 'flag', 'label': 'Flag', 'kind': 'mono'},
+    {'key': 'padrao', 'label': u'Valor padrão', 'kind': 'mono'},
+    {'key': 'uso', 'label': 'Uso'},
+    {'key': 'active', 'label': u'Situação', 'kind': 'active'},
+    {'key': 'action', 'label': u'Ações', 'kind': 'action'},
 ]}
 pagina = resultado['pagina']
 total = resultado['total']

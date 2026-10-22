@@ -254,7 +254,7 @@ class AuditService(object):
         admin_crud.require_feature(ctx, FEATURE)
         size = max(1, min(int(size or 20), MAX_LENGTH))
         filters, errors = self.normalize_filters(input_value)
-        empty = {"filtros": filters, "erros": errors, "itens": [], "total": 0, "pagina": 1, "tamanho": size}
+        empty = {"filtros": filters, "errors": errors, "itens": [], "total": 0, "pagina": 1, "tamanho": size}
         if errors:
             return empty
         repo_filters_dict = repo_filters(filters)
@@ -276,7 +276,7 @@ class AuditService(object):
                 "entity_id": reg.get("entity_id"),
                 "detail": detail,
                 "detalhe_curto": detail if len(detail) <= SHORT_DETAIL else detail[:SHORT_DETAIL - 1] + u"…",
-                "truncado": len(detail) > SHORT_DETAIL,
+                "truncated": len(detail) > SHORT_DETAIL,
             })
         return dict(empty, itens=items, total=result["total"], pagina=result["pagina"],
                     tamanho=result["tamanho"], total_limitado=result.get("total_limitado", False))

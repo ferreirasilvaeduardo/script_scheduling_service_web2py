@@ -108,7 +108,7 @@ _ajuda_fim = u'Opcional. A última execução acontece até esta data e hora (in
     <ul class="mb-0">
       {{if erro_geral:}}<li>{{=erro_geral}}</li>{{pass}}
       {{for _k in ('name', 'recurrence_type', 'start_date', 'end_date', 'run_time', 'week_days', 'month_day', 'cron_expression', 'priority'):}}{{if erros.get(_k):}}<li>{{=erros[_k]}}</li>{{pass}}{{pass}}
-      {{for _c in form['campos']:}}{{if _c['erro']:}}<li>{{=_c['erro']}}</li>{{pass}}{{pass}}
+      {{for _c in form['fields']:}}{{if _c['error']:}}<li>{{=_c['error']}}</li>{{pass}}{{pass}}
     </ul>
   </div>
   {{pass}}
@@ -116,7 +116,7 @@ _ajuda_fim = u'Opcional. A última execução acontece até esta data e hora (in
   <section class="sss-card" aria-labelledby="titulo-recorrencia">
     <h2 class="sss-card-titulo" id="titulo-recorrencia">{{='Recorrência' if edicao else '3. Recorrência'}}</h2>
     <div class="sss-card-corpo" @input="agendarPrevia" @change="agendarPrevia">
-      {{campo = {'name': 'name', 'rotulo': 'Nome da regra', 'valor': _regra.get('name'), 'erro': erros.get('name'), 'required': True, 'maxlength': 60} }}
+      {{campo = {'name': 'name', 'label': 'Nome da regra', 'value': _regra.get('name'), 'error': erros.get('name'), 'required': True, 'maxlength': 60} }}
       {{include 'components/form_field.html'}}
 
       <div class="sss-form-linha">

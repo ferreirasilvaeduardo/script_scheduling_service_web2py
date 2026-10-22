@@ -86,7 +86,7 @@ def logout():
         auth_service.logout(current.sss_ctx, _ip_origem())
     session.clear()
     session.csrf_token = security.generate_csrf_token()
-    session.flash = {"tipo": "sucesso", "mensagem": u"Você saiu do sistema."}
+    session.flash = {"kind": "success", "message": u"Você saiu do sistema."}
     redirect(URL(c="default", f="login"))
 
 
@@ -104,7 +104,7 @@ def permissions():
         erro = None
     except RepoError:
         _log.exception("falha ao montar permissoes (login=%s)", ctx["login"], extra={"action": "PERMISSOES"})
-        dados, erro = None, ui_helpers.mensagem("falha_interna")
+        dados, erro = None, ui_helpers.mensagem("internal_error")
     return dict(dados=dados, erro=erro)
 
 
@@ -122,7 +122,7 @@ def my_password():
         if resultado == "LOCKED":
             session.clear()
             session.csrf_token = security.generate_csrf_token()
-            session.flash = {"tipo": "aviso", "mensagem": auth_service.lock_message()}
+            session.flash = {"kind": "warning", "message": auth_service.lock_message()}
             redirect(URL(c="default", f="login"))
         if resultado == "OK":
             # Nova senha, nova sessao: o cookie e regravado com conteudo novo e outro token CSRF.
@@ -135,9 +135,9 @@ def my_password():
             # A troca incrementou session_epoch (CR-008, E2): as outras sessoes caem, esta continua.
             session.session_epoch = auth_service.session_epoch(ctx["user_id"])
             session.last_access = session.login_at = time.time()
-            session.flash = {"tipo": "sucesso", "mensagem": u"Senha alterada com sucesso."}
+            session.flash = {"kind": "success", "message": u"Senha alterada com sucesso."}
             redirect(URL(c="default", f="index"))
-        response.flash = {"tipo": "erro", "mensagem": u"A senha não foi alterada. Veja os campos destacados."}
-    campos = [{"name": n, "erro": erros.get(n)} for n in _CAMPOS_MINHA_SENHA]
+        response.flash = {"kind": "error", "message": u"A senha não foi alterada. Veja os campos destacados."}
+    campos = [{"name": n, "error": erros.get(n)} for n in _CAMPOS_MINHA_SENHA]
     return dict(erros=erros, foco_campo=ui_helpers.primeiro_campo_invalido(campos),
                 ajuda_senha=u"Mínimo de %d caracteres. A senha nunca é exibida nem registrada." % security.PASSWORD_MIN)

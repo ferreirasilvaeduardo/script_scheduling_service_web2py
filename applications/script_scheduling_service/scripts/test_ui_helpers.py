@@ -25,13 +25,13 @@ class TestActiveInfo(unittest.TestCase):
 
     def test_flags(self):
         self.assertEqual(ui_helpers.ativo_info("Y"),
-                         {"rotulo": u"Ativo", "classe": "sss-status-success", "icone": "status-success"})
+                         {"label": u"Ativo", "css_class": "sss-status-success", "icon": "status-success"})
         self.assertEqual(ui_helpers.ativo_info("N"),
-                         {"rotulo": u"Inativo", "classe": "sss-status-cancelled", "icone": "status-cancelled"})
+                         {"label": u"Inativo", "css_class": "sss-status-cancelled", "icon": "status-cancelled"})
 
     def test_desconhecido(self):
         for flag in (None, "", "s", "X"):
-            self.assertEqual(ui_helpers.ativo_info(flag)["rotulo"], u"Desconhecido")
+            self.assertEqual(ui_helpers.ativo_info(flag)["label"], u"Desconhecido")
 
 
 class TestStatusInfo(unittest.TestCase):
@@ -47,23 +47,23 @@ class TestStatusInfo(unittest.TestCase):
         for status, (label, cls_name, icon) in expected.items():
             with self.subTest(status=status):
                 self.assertEqual(ui_helpers.status_info(status),
-                                 {"rotulo": label, "classe": cls_name, "icone": icon})
+                                 {"label": label, "css_class": cls_name, "icon": icon})
 
     def test_status_desconhecido(self):
-        expected = {"rotulo": u"Desconhecido", "classe": "sss-status-unknown", "icone": "status-unknown"}
+        expected = {"label": u"Desconhecido", "css_class": "sss-status-unknown", "icon": "status-unknown"}
         for status in ("EM_ANALISE", "pending", "", None, "<script>"):
             with self.subTest(status=status):
                 self.assertEqual(ui_helpers.status_info(status), expected)
 
     def test_retorno_nao_compartilha_estado(self):
         info = ui_helpers.status_info("FAILED")
-        info["rotulo"] = "alterado"
-        self.assertEqual(ui_helpers.status_info("FAILED")["rotulo"], u"Deu erro")
+        info["label"] = "alterado"
+        self.assertEqual(ui_helpers.status_info("FAILED")["label"], u"Deu erro")
 
     def test_icones_existem_no_sprite(self):
         ids = _ids_sprite()
         for status in ("PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED", None):
-            self.assertIn(ui_helpers.status_info(status)["icone"], ids)
+            self.assertIn(ui_helpers.status_info(status)["icon"], ids)
 
 
 class TestReasonDescription(unittest.TestCase):
@@ -113,9 +113,9 @@ class TestRecordPanel(unittest.TestCase):
         self.assertEqual(reg, {"created_at": created, "created_by": "SYSTEM:seed", "updated_at": None,
                                "updated_by": None})
         self.assertEqual(ui_helpers.registro_exibicao(reg), {
-            "criado": u"17/10/2026 09:05:00 por Sistema (dados de demonstração)", "alterado": u"Nunca alterado"})
+            "created": u"17/10/2026 09:05:00 por Sistema (dados de demonstração)", "updated": u"Nunca alterado"})
         reg.update(updated_at=created + datetime.timedelta(hours=1), updated_by="admin")
-        self.assertEqual(ui_helpers.registro_exibicao(reg)["alterado"], u"17/10/2026 10:05:00 por admin")
+        self.assertEqual(ui_helpers.registro_exibicao(reg)["updated"], u"17/10/2026 10:05:00 por admin")
         self.assertEqual(ui_helpers.registro(None, {}), dict.fromkeys(ui_helpers.COLUNAS_REGISTRO))
 
 
@@ -270,11 +270,11 @@ class TestPaginationInfo(unittest.TestCase):
 class TestFirstInvalidField(unittest.TestCase):
 
     def test_ordem(self):
-        fields = [{"name": "a"}, {"name": "b", "erro": u"Obrigatório."}, {"name": "c", "erro": u"Inválido."}]
+        fields = [{"name": "a"}, {"name": "b", "error": u"Obrigatório."}, {"name": "c", "error": u"Inválido."}]
         self.assertEqual(ui_helpers.primeiro_campo_invalido(fields), "b")
 
     def test_sem_erro(self):
-        self.assertIsNone(ui_helpers.primeiro_campo_invalido([{"name": "a", "erro": ""}, {"name": "b"}]))
+        self.assertIsNone(ui_helpers.primeiro_campo_invalido([{"name": "a", "error": ""}, {"name": "b"}]))
         self.assertIsNone(ui_helpers.primeiro_campo_invalido([]))
         self.assertIsNone(ui_helpers.primeiro_campo_invalido(None))
 
@@ -283,35 +283,35 @@ class TestAlertInfo(unittest.TestCase):
 
     def test_tipos(self):
         expected = {
-            "sucesso": ("alert-success", "status-success", "status"),
-            "aviso": ("alert-warning", "icon-alert", "status"),
-            "erro": ("alert-danger", "status-failed", "alert"),
+            "success": ("alert-success", "status-success", "status"),
+            "warning": ("alert-warning", "icon-alert", "status"),
+            "error": ("alert-danger", "status-failed", "alert"),
         }
         for kind, (cls_name, icon, role) in expected.items():
             with self.subTest(tipo=kind):
-                self.assertEqual(ui_helpers.alerta_info({"tipo": kind, "mensagem": u"Mensagem"}), {
-                    "tipo": kind, "mensagem": u"Mensagem", "classe": cls_name, "icone": icon, "role": role})
+                self.assertEqual(ui_helpers.alerta_info({"kind": kind, "message": u"Mensagem"}), {
+                    "kind": kind, "message": u"Mensagem", "css_class": cls_name, "icon": icon, "role": role})
 
     def test_formatos_de_entrada(self):
-        self.assertEqual(ui_helpers.alerta_info(("erro", u"Falhou."))["tipo"], "erro")
-        self.assertEqual(ui_helpers.alerta_info(["sucesso", u"Ok."])["tipo"], "sucesso")
+        self.assertEqual(ui_helpers.alerta_info(("error", u"Falhou."))["kind"], "error")
+        self.assertEqual(ui_helpers.alerta_info(["success", u"Ok."])["kind"], "success")
         info = ui_helpers.alerta_info(u"Texto simples")
-        self.assertEqual((info["tipo"], info["mensagem"]), ("aviso", u"Texto simples"))
+        self.assertEqual((info["kind"], info["message"]), ("warning", u"Texto simples"))
 
     def test_tipo_desconhecido_vira_aviso(self):
         for kind in ("info", "ERRO", None, "<script>"):
             with self.subTest(tipo=kind):
-                self.assertEqual(ui_helpers.alerta_info({"tipo": kind, "mensagem": "x"})["tipo"], "aviso")
+                self.assertEqual(ui_helpers.alerta_info({"kind": kind, "message": "x"})["kind"], "warning")
 
     def test_sem_mensagem(self):
-        for flash in (None, "", {}, {"tipo": "erro"}, {"tipo": "erro", "mensagem": ""}, ("erro", None)):
+        for flash in (None, "", {}, {"kind": "error"}, {"kind": "error", "message": ""}, ("error", None)):
             with self.subTest(flash=flash):
                 self.assertIsNone(ui_helpers.alerta_info(flash))
 
     def test_icones_existem_no_sprite(self):
         ids = _ids_sprite()
-        for kind in ("sucesso", "aviso", "erro"):
-            self.assertIn(ui_helpers.alerta_info((kind, "x"))["icone"], ids)
+        for kind in ("success", "warning", "error"):
+            self.assertIn(ui_helpers.alerta_info((kind, "x"))["icon"], ids)
 
 
 class TestBuildMenu(unittest.TestCase):
@@ -348,37 +348,37 @@ class TestBuildMenu(unittest.TestCase):
     def test_item_completo_e_rota_ativa(self):
         menu = ui_menu.montar_menu(["EXEC_SCRIPT", "VIEW_LOGS"], False, ("tickets", "index"))
         items = menu[0]["itens"]
-        self.assertEqual(menu[0]["titulo"], u"Operação")
+        self.assertEqual(menu[0]["title"], u"Operação")
         # CR-004 U5 (README §5.8): "Rotinas disponíveis" vem antes de "Disparar Scripts".
         self.assertEqual(items[0]["rota"], ("tickets", "catalog"))
         self.assertEqual(items[1], {
             "code": "EXEC_SCRIPT",
-            "rotulo": u"Disparar Scripts",
+            "label": u"Disparar Scripts",
             "rota": ("tickets", "new"),
-            "icone": "icon-play",
+            "icon": "icon-play",
             "active": False,
         })
         self.assertTrue(items[2]["active"])
         self.assertEqual(ui_menu.montar_menu(["EXEC_SCRIPT"], False)[0]["itens"][0]["active"], False)
 
     def test_rotulos_do_catalogo_canonico(self):
-        labels = {i["code"]: i["rotulo"] for s in ui_menu.montar_menu([], True) for i in s["itens"]}
+        labels = {i["code"]: i["label"] for s in ui_menu.montar_menu([], True) for i in s["itens"]}
         self.assertEqual(labels["MANAGE_PARAMETERS"], u"Dicionário de Parâmetros")
         self.assertEqual(labels["MANAGE_USERS"], u"Gestão de Usuários")
-        self.assertEqual(ui_menu.montar_menu([], True)[1]["titulo"], u"Administração")
+        self.assertEqual(ui_menu.montar_menu([], True)[1]["title"], u"Administração")
 
     def test_rotas_e_icones_ascii_e_icones_no_sprite(self):
         ids = _ids_sprite()
         for section in ui_menu.montar_menu([], True):
             for item in section["itens"]:
-                for part in item["rota"] + (item["icone"],):
+                for part in item["rota"] + (item["icon"],):
                     self.assertTrue(re.match(r"^[a-z][a-z0-9_-]*$", part), part)
-                self.assertIn(item["icone"], ids)
+                self.assertIn(item["icon"], ids)
 
     def test_resultado_independente_entre_chamadas(self):
         menu = ui_menu.montar_menu([], True)
-        menu[0]["itens"][0]["rotulo"] = "alterado"
-        self.assertEqual(ui_menu.montar_menu([], True)[0]["itens"][0]["rotulo"], u"Rotinas disponíveis")
+        menu[0]["itens"][0]["label"] = "alterado"
+        self.assertEqual(ui_menu.montar_menu([], True)[0]["itens"][0]["label"], u"Rotinas disponíveis")
 
 
 class TestPureModulesWithoutGluon(unittest.TestCase):
@@ -399,26 +399,26 @@ class TestPlainLanguage(unittest.TestCase):
         for key in ui_helpers.MENSAGENS:
             happened, todo = ui_helpers.mensagem_partes(key, minutos=15)
             self.assertTrue(happened and todo, key)
-        self.assertEqual(ui_helpers.mensagem("conflito"),
+        self.assertEqual(ui_helpers.mensagem("conflict"),
                          u"Outra pessoa mudou este registro enquanto você editava. "
                          u"Recarregue a página para ver a versão nova e faça a sua alteração de novo.")
 
     def test_explicacao_por_situacao(self):
         e = ui_helpers.explicacao_ticket
         future = self.NOW + datetime.timedelta(hours=2)
-        self.assertEqual(e({"status": "PENDING", "scheduled_at": future}, self.NOW)["aconteceu"],
+        self.assertEqual(e({"status": "PENDING", "scheduled_at": future}, self.NOW)["happened"],
                          u"Está agendado para começar em 16/10/2026 às 12:00.")
-        self.assertEqual(e({"status": "PENDING", "scheduled_at": self.NOW}, self.NOW)["aconteceu"],
+        self.assertEqual(e({"status": "PENDING", "scheduled_at": self.NOW}, self.NOW)["happened"],
                          u"Está na fila, esperando um servidor livre.")
         running = {"status": "RUNNING", "started_at": self.NOW - datetime.timedelta(minutes=4)}
-        self.assertEqual(e(running, self.NOW)["aconteceu"], u"Está rodando agora. Começou há 4 minutos.")
-        self.assertIn(u"cancelamento foi pedido", e(dict(running, cancel_requested="Y"), self.NOW)["aconteceu"])
+        self.assertEqual(e(running, self.NOW)["happened"], u"Está rodando agora. Começou há 4 minutos.")
+        self.assertIn(u"cancelamento foi pedido", e(dict(running, cancel_requested="Y"), self.NOW)["happened"])
         error = e({"status": "FAILED", "status_reason": "EXIT_ERROR", "return_code": 3}, self.NOW)
-        self.assertEqual((error["state"], error["aconteceu"]),
+        self.assertEqual((error["state"], error["happened"]),
                          (u"Deu erro", u"O script rodou, mas terminou avisando que algo deu errado (código 3)."))
-        self.assertIn(u"6 horas", e({"status": "FAILED", "status_reason": "TIMEOUT"}, self.NOW, 21600)["aconteceu"])
-        self.assertIsNone(e({"status": "SUCCESS", "status_reason": "EXIT_OK"}, self.NOW)["fazer"])
-        self.assertIn("XYZ", e({"status": "FAILED", "status_reason": "XYZ"}, self.NOW)["aconteceu"])
+        self.assertIn(u"6 horas", e({"status": "FAILED", "status_reason": "TIMEOUT"}, self.NOW, 21600)["happened"])
+        self.assertIsNone(e({"status": "SUCCESS", "status_reason": "EXIT_OK"}, self.NOW)["todo"])
+        self.assertIn("XYZ", e({"status": "FAILED", "status_reason": "XYZ"}, self.NOW)["happened"])
 
     def test_etapas_do_ticket(self):
         # CR-004 U2 (README §5.7).
@@ -426,16 +426,16 @@ class TestPlainLanguage(unittest.TestCase):
         pend = ui_helpers.etapas_ticket({"status": "PENDING", "created_at": created,
                                          "scheduled_at": self.NOW + datetime.timedelta(hours=1)}, self.NOW)
         self.assertEqual([e["estado"] for e in pend], ["feito", "atual", "pendente", "pendente"])
-        self.assertTrue(pend[1]["quando"].startswith(u"agendado para"))
+        self.assertTrue(pend[1]["when"].startswith(u"agendado para"))
         run = ui_helpers.etapas_ticket({"status": "RUNNING", "created_at": created, "scheduled_at": created,
                                         "started_at": self.NOW - datetime.timedelta(minutes=2)}, self.NOW)
         self.assertEqual([e["estado"] for e in run], ["feito", "feito", "atual", "pendente"])
-        self.assertEqual(run[2]["quando"], u"há 2 minutos")
+        self.assertEqual(run[2]["when"], u"há 2 minutos")
         cancel = ui_helpers.etapas_ticket({"status": "CANCELLED", "created_at": created, "scheduled_at": created,
                                          "finished_at": self.NOW}, self.NOW)
         self.assertEqual([e["estado"] for e in cancel], ["feito", "feito", "pulado", "atual"])
-        self.assertEqual(cancel[2]["quando"], u"não chegou a rodar")
-        self.assertTrue(cancel[3]["quando"].startswith(u"Cancelado"))
+        self.assertEqual(cancel[2]["when"], u"não chegou a rodar")
+        self.assertTrue(cancel[3]["when"].startswith(u"Cancelado"))
         ok = ui_helpers.etapas_ticket({"status": "SUCCESS", "created_at": created, "scheduled_at": created,
                                        "started_at": created, "finished_at": self.NOW}, self.NOW)
         self.assertEqual([e["estado"] for e in ok], ["feito", "feito", "feito", "atual"])

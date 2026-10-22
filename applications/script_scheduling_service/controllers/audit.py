@@ -58,11 +58,11 @@ def index():
     except RepoError:
         _log.exception("falha ao listar a auditoria (login=%s)", ctx["login"], extra={"action": _FUNC})
         filtros, erros = audit_service.default_filters(entrada)
-        resultado = {"filtros": filtros, "erros": erros, "itens": [], "total": 0, "pagina": 1,
+        resultado = {"filtros": filtros, "errors": erros, "itens": [], "total": 0, "pagina": 1,
                      "tamanho": tamanho}
         erro = _MSG_FALHA_LISTA
-    if resultado["erros"] and not erro:
-        response.flash = {"tipo": "erro", "mensagem": u"Corrija os filtros destacados."}
+    if resultado["errors"] and not erro:
+        response.flash = {"kind": "error", "message": u"Corrija os filtros destacados."}
     pode_ver_tickets = ticket_service.can_query(ctx)
     for item in resultado["itens"]:
         item["link"] = audit_service.entity_link(ctx, item["entity"], item["entity_id"],
@@ -85,11 +85,11 @@ def export():
     except AccessDenied:
         _negado()
     except InvalidFilters:
-        session.flash = {"tipo": "erro", "mensagem": _MSG_FILTROS_EXPORTAR}
+        session.flash = {"kind": "error", "message": _MSG_FILTROS_EXPORTAR}
         redirect(voltar)
     except RepoError:
         _log.exception("falha ao exportar a auditoria (login=%s)", ctx["login"], extra={"action": "AUDIT_EXPORT"})
-        session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_EXPORTAR}
+        session.flash = {"kind": "error", "message": _MSG_FALHA_EXPORTAR}
         redirect(voltar)
     response.headers["Content-Type"] = "text/csv; charset=utf-8"
     response.headers["Content-Disposition"] = 'attachment; filename="%s"' % nome
@@ -110,7 +110,7 @@ def agents():
         _negado()
     except RepoError:
         _log.exception("falha ao montar o painel de agentes (login=%s)", ctx["login"], extra={"action": _FUNC})
-        painel = {"agents": [], "resumo": {}, "agora": None}
+        painel = {"agents": [], "summary": {}, "agora": None}
         erro = _MSG_FALHA_AGENTES
     dados = dict(painel=painel, erro=erro, url_fragmento=URL(c="audit", f="agents", extension="load"),
                  intervalo_s=INTERVALO_AGENTES_S)

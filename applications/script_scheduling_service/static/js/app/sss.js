@@ -56,7 +56,7 @@
     opts.credentials = 'same-origin';
     return window.fetch(url, opts).then(function (resposta) {
       if (resposta.status === 403) {
-        SSS.toast('erro', 'Requisição recusada. Recarregue a página e tente novamente.');
+        SSS.toast('error', 'Requisição recusada. Recarregue a página e tente novamente.');
       }
       return resposta;
     });

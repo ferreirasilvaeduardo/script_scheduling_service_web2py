@@ -111,12 +111,12 @@
             if (!dados || numero !== self.sequencia) {
               return;
             }
-            self.descricao = dados.descricao || '';
-            self.datas = listar(dados.datas || []);
-            self.erros = listar(valoresDoMapa(dados.erros || {}));
+            self.descricao = dados.description || '';
+            self.datas = listar(dados.dates || []);
+            self.erros = listar(valoresDoMapa(dados.errors || {}));
           }).catch(function () {
             if (numero === self.sequencia) {
-              window.SSS.toast('erro', 'Não foi possível calcular a prévia. Tente novamente.');
+              window.SSS.toast('error', 'Não foi possível calcular a prévia. Tente novamente.');
             }
           }).then(function () {
             if (numero === self.sequencia) {

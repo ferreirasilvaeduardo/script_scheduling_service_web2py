@@ -5,10 +5,10 @@
 import ui_helpers
 icones = URL('static', 'img/icons.svg')
 _opc_ativo = [('', 'Todas'), ('Y', 'Ativas'), ('N', 'Pausadas')]
-filtros = {'id': 'filtro-agendamentos', 'url_base': ('schedules', 'index'), 'preservar': {'size': tamanho}, 'campos': [
-    {'name': 'name', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('name')},
-    {'name': 'environment', 'rotulo': 'Ambiente', 'tipo': 'texto', 'valor': filtros_ativos.get('environment')},
-    {'name': 'active', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('active'), 'opcoes': _opc_ativo},
+filtros = {'id': 'filtro-agendamentos', 'url_base': ('schedules', 'index'), 'keep': {'size': tamanho}, 'fields': [
+    {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': filtros_ativos.get('name')},
+    {'name': 'environment', 'label': 'Ambiente', 'kind': 'text', 'value': filtros_ativos.get('environment')},
+    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': filtros_ativos.get('active'), 'options': _opc_ativo},
 ]}
 _colunas = ('Nome', 'Script', 'Ambiente', u'Recorrência', u'Próxima execução', u'Última execução', u'Responsável', u'Situação', u'Ações')
 pagina = resultado['pagina']
@@ -65,23 +65,23 @@ url_base = ('schedules', 'index')
           <td>{{=_r['last_run_at']}}{{if _r['last_ticket_id']:}}<br><a href="{{=URL(c='tickets', f='detail', args=[_r['last_ticket_id']])}}" aria-label="Ticket #{{=_r['last_ticket_id']}} da última execução">ticket #{{=_r['last_ticket_id']}}</a>{{pass}}</td>
           <td class="sss-mono">{{=_r['responsavel']}}</td>
           <td>
-            <span class="sss-status {{=_sit['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_sit['icone']}}"></use></svg><span>{{=_r['state']}}</span></span>
+            <span class="sss-status {{=_sit['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_sit['icon']}}"></use></svg><span>{{=_r['state']}}</span></span>
             {{if _r['reason']:}}<div class="sss-texto-suave">{{=_r['reason']}}</div>{{pass}}
-            {{if _r.get('aviso'):}}<div class="sss-texto-suave text-warning"><small>{{=_r['aviso']}}</small></div>{{pass}}
+            {{if _r.get('warning'):}}<div class="sss-texto-suave text-warning"><small>{{=_r['warning']}}</small></div>{{pass}}
           </td>
           <td class="sss-tabela-acoes">
             <div class="sss-acoes">
               <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='schedules', f='form', args=[_r['id']])}}" aria-label="Editar regra {{=_r['name']}}">Editar</a>
               {{if _r['active'] == 'Y':}}
-              {{modal = {'id': 'modal-pausar-%s' % _r['id'], 'titulo': u'Pausar regra %s' % _r['name'],
-                         'texto': u'A regra deixa de gerar tickets até ser retomada. Tickets já criados não são afetados.',
-                         'rotulo_gatilho': 'Pausar', 'rotulo_confirmar': u'Confirmar pausa', 'variante': 'perigo',
-                         'acao': URL(c='schedules', f='pause'), 'campos_ocultos': dict(id=_r['id'])} }}
+              {{modal = {'id': 'modal-pausar-%s' % _r['id'], 'title': u'Pausar regra %s' % _r['name'],
+                         'text': u'A regra deixa de gerar tickets até ser retomada. Tickets já criados não são afetados.',
+                         'trigger_label': 'Pausar', 'confirm_label': u'Confirmar pausa', 'variant': 'danger',
+                         'action': URL(c='schedules', f='pause'), 'hidden_fields': dict(id=_r['id'])} }}
               {{else:}}
-              {{modal = {'id': 'modal-retomar-%s' % _r['id'], 'titulo': u'Retomar regra %s' % _r['name'],
-                         'texto': u'A próxima execução será recalculada a partir de agora. Suas permissões para o script e o ambiente serão conferidas; o responsável pela regra não muda.',
-                         'rotulo_gatilho': 'Retomar', 'rotulo_confirmar': u'Confirmar retomada', 'variante': 'normal',
-                         'acao': URL(c='schedules', f='resume'), 'campos_ocultos': dict(id=_r['id'])} }}
+              {{modal = {'id': 'modal-retomar-%s' % _r['id'], 'title': u'Retomar regra %s' % _r['name'],
+                         'text': u'A próxima execução será recalculada a partir de agora. Suas permissões para o script e o ambiente serão conferidas; o responsável pela regra não muda.',
+                         'trigger_label': 'Retomar', 'confirm_label': u'Confirmar retomada', 'variant': 'normal',
+                         'action': URL(c='schedules', f='resume'), 'hidden_fields': dict(id=_r['id'])} }}
               {{pass}}
               {{include 'components/confirm_modal.html'}}
             </div>

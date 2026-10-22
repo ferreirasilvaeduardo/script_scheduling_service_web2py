@@ -3,12 +3,12 @@
 # Lista de scripts (padrão de CRUD administrativo). O caminho completo do arquivo é exibido (README §8.5, CR-005 D8).
 _opc_cmd = [('', 'Todos')] + [(_c, _c) for _c, _r in interpretadores]
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
-filtros = {'id': 'filtro-scripts', 'url_base': ('admin_scripts', 'index'), 'preservar': {'size': tamanho}, 'campos': [
-    {'name': 'name', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('name')},
-    {'name': 'script_group', 'rotulo': 'Grupo', 'tipo': 'texto', 'valor': filtros_ativos.get('script_group')},
-    {'name': 'category', 'rotulo': 'Categoria', 'tipo': 'texto', 'valor': filtros_ativos.get('category')},
-    {'name': 'interpreter', 'rotulo': 'Interpretador', 'tipo': 'select', 'valor': filtros_ativos.get('interpreter'), 'opcoes': _opc_cmd},
-    {'name': 'active', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('active'), 'opcoes': _opc_ativo},
+filtros = {'id': 'filtro-scripts', 'url_base': ('admin_scripts', 'index'), 'keep': {'size': tamanho}, 'fields': [
+    {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': filtros_ativos.get('name')},
+    {'name': 'script_group', 'label': 'Grupo', 'kind': 'text', 'value': filtros_ativos.get('script_group')},
+    {'name': 'category', 'label': 'Categoria', 'kind': 'text', 'value': filtros_ativos.get('category')},
+    {'name': 'interpreter', 'label': 'Interpretador', 'kind': 'select', 'value': filtros_ativos.get('interpreter'), 'options': _opc_cmd},
+    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': filtros_ativos.get('active'), 'options': _opc_ativo},
 ]}
 _linhas = []
 for _s in resultado['itens']:
@@ -20,22 +20,22 @@ for _s in resultado['itens']:
         'environments': ', '.join(_s.get('ambientes_homologados') or []) or u'Nenhum',
         'parameters': str(_s.get('qtd_parametros') or 0),
         'active': _s['active'],
-        'acao': [
-            {'href': URL(c='admin_scripts', f='form', args=[_s['id']]), 'rotulo': 'Editar', 'description': u'Editar script %s' % _s['name']},
-            {'href': URL(c='admin_scripts', f='homologation', args=[_s['id']]), 'rotulo': u'Homologação', 'description': u'Homologação do script %s' % _s['name']},
-            {'href': URL(c='admin_scripts', f='parameters', args=[_s['id']]), 'rotulo': u'Parâmetros', 'description': u'Parâmetros do script %s' % _s['name']},
+        'action': [
+            {'href': URL(c='admin_scripts', f='form', args=[_s['id']]), 'label': 'Editar', 'description': u'Editar script %s' % _s['name']},
+            {'href': URL(c='admin_scripts', f='homologation', args=[_s['id']]), 'label': u'Homologação', 'description': u'Homologação do script %s' % _s['name']},
+            {'href': URL(c='admin_scripts', f='parameters', args=[_s['id']]), 'label': u'Parâmetros', 'description': u'Parâmetros do script %s' % _s['name']},
         ],
     })
 pass
-tabela = {'legenda': 'Scripts cadastrados', 'erro': erro, 'linhas': _linhas, 'msg_vazio': 'Nenhum script encontrado.', 'colunas': [
-    {'chave': 'name', 'rotulo': 'Nome', 'tipo': 'mono'},
-    {'chave': 'script_group', 'rotulo': 'Grupo / categoria'},
-    {'chave': 'cmd', 'rotulo': 'Interpretador', 'tipo': 'mono'},
-    {'chave': 'path', 'rotulo': 'Caminho do arquivo', 'tipo': 'mono'},
-    {'chave': 'environments', 'rotulo': 'Ambientes homologados'},
-    {'chave': 'parameters', 'rotulo': u'Parâmetros'},
-    {'chave': 'active', 'rotulo': u'Situação', 'tipo': 'active'},
-    {'chave': 'acao', 'rotulo': u'Ações', 'tipo': 'acao'},
+tabela = {'caption': 'Scripts cadastrados', 'error': erro, 'rows': _linhas, 'empty_message': 'Nenhum script encontrado.', 'columns': [
+    {'key': 'name', 'label': 'Nome', 'kind': 'mono'},
+    {'key': 'script_group', 'label': 'Grupo / categoria'},
+    {'key': 'cmd', 'label': 'Interpretador', 'kind': 'mono'},
+    {'key': 'path', 'label': 'Caminho do arquivo', 'kind': 'mono'},
+    {'key': 'environments', 'label': 'Ambientes homologados'},
+    {'key': 'parameters', 'label': u'Parâmetros'},
+    {'key': 'active', 'label': u'Situação', 'kind': 'active'},
+    {'key': 'action', 'label': u'Ações', 'kind': 'action'},
 ]}
 pagina = resultado['pagina']
 total = resultado['total']

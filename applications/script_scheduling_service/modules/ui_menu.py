@@ -44,11 +44,11 @@ def montar_menu(features, is_admin, current_route=None):
                 continue
             visible.append({
                 "code": code,
-                "rotulo": label,
+                "label": label,
                 "rota": (controller, function),
-                "icone": icon,
+                "icon": icon,
                 "active": current == (controller, function),
             })
         if visible:
-            menu.append({"secao": section, "titulo": title, "itens": visible})
+            menu.append({"secao": section, "title": title, "itens": visible})
     return menu

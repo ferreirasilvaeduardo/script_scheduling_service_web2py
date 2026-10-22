@@ -25,10 +25,10 @@ _g = h['grafico']
     <p class="mb-3"><strong>{{=h['frase_taxa']}}</strong>{{if h['taxa'] is not None:}} <span class="sss-texto-suave">(taxa de acerto: {{=h['taxa']}}%)</span>{{pass}}</p>
     <dl class="sss-numeros">
       <div class="sss-numero"><dt>Pedidos</dt><dd>{{=h['total']}}</dd></div>
-      <div class="sss-numero"><dt>Deram certo</dt><dd>{{=_c['certo']}}</dd></div>
-      <div class="sss-numero"><dt>Deram erro</dt><dd>{{=_c['erro']}}</dd></div>
-      <div class="sss-numero"><dt>Cancelados</dt><dd>{{=_c['cancelado']}}</dd></div>
-      <div class="sss-numero"><dt>Esperando ou rodando</dt><dd>{{=_c['andamento']}}</dd></div>
+      <div class="sss-numero"><dt>Deram certo</dt><dd>{{=_c['succeeded']}}</dd></div>
+      <div class="sss-numero"><dt>Deram erro</dt><dd>{{=_c['error']}}</dd></div>
+      <div class="sss-numero"><dt>Cancelados</dt><dd>{{=_c['cancelled']}}</dd></div>
+      <div class="sss-numero"><dt>Esperando ou rodando</dt><dd>{{=_c['in_progress']}}</dd></div>
       <div class="sss-numero"><dt>Duração típica</dt><dd>{{=h['duracao_tipica']}}</dd></div>
       <div class="sss-numero"><dt>Mais demorada</dt><dd>{{=h['duracao_maxima']}}</dd></div>
     </dl>
@@ -50,13 +50,13 @@ _g = h['grafico']
       <line class="sss-grafico-grade" x1="{{=_g['margem_esq']}}" x2="{{=_g['largura']}}" y1="{{=_g['base_y']}}" y2="{{=_g['base_y']}}"></line>
       {{for _l in _g['grade']:}}
       <line class="sss-grafico-grade" x1="{{=_g['margem_esq']}}" x2="{{=_g['largura']}}" y1="{{=_l['y']}}" y2="{{=_l['y']}}"></line>
-      <text class="sss-grafico-eixo" x="{{=_g['margem_esq'] - 4}}" y="{{=_l['y'] + 3}}" text-anchor="end">{{=_l['rotulo']}}</text>
+      <text class="sss-grafico-eixo" x="{{=_g['margem_esq'] - 4}}" y="{{=_l['y'] + 3}}" text-anchor="end">{{=_l['label']}}</text>
       {{pass}}
       {{for _b in _g['barras']:}}
-      <rect class="{{=_b['classe']}}" x="{{=_b['x']}}" y="{{=_b['y']}}" width="{{=_b['largura']}}" height="{{=_b['altura']}}" rx="2"><title>{{=_b['titulo']}}</title></rect>
+      <rect class="{{=_b['css_class']}}" x="{{=_b['x']}}" y="{{=_b['y']}}" width="{{=_b['largura']}}" height="{{=_b['altura']}}" rx="2"><title>{{=_b['title']}}</title></rect>
       {{pass}}
       {{for _e in _g['eixo_x']:}}
-      <text class="sss-grafico-eixo" x="{{=_e['x']}}" y="{{=_g['altura'] - 6}}" text-anchor="middle">{{=_e['rotulo']}}</text>
+      <text class="sss-grafico-eixo" x="{{=_e['x']}}" y="{{=_g['altura'] - 6}}" text-anchor="middle">{{=_e['label']}}</text>
       {{pass}}
     </svg>
     <details class="mt-2">
@@ -68,7 +68,7 @@ _g = h['grafico']
           <tbody>
             {{for _d in h['dias']:}}
             {{if sum(_d[_k] for _k, _r in ui_helpers.SERIES_HISTORICO):}}
-            <tr><th scope="row">{{=_d['rotulo']}}</th>{{for _k, _r in ui_helpers.SERIES_HISTORICO:}}<td>{{=_d[_k]}}</td>{{pass}}</tr>
+            <tr><th scope="row">{{=_d['label']}}</th>{{for _k, _r in ui_helpers.SERIES_HISTORICO:}}<td>{{=_d[_k]}}</td>{{pass}}</tr>
             {{pass}}
             {{pass}}
           </tbody>

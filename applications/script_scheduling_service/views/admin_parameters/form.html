@@ -21,11 +21,11 @@ if not _novo:
     else:
         _texto_modal = u'O parâmetro voltará a poder ser vinculado a scripts.'
     pass
-    _modal_ativo = {'id': 'modal-ativo', 'titulo': (u'Desativar parâmetro %s' if _desativar else u'Reativar parâmetro %s') % _p['code'],
-                    'texto': _texto_modal, 'rotulo_gatilho': 'Desativar' if _desativar else 'Reativar',
-                    'rotulo_confirmar': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
-                    'variante': 'perigo' if _desativar else 'normal', 'acao': URL(c='admin_parameters', f='toggle_active'),
-                    'campos_ocultos': dict(id=_p['id'], versao=_p['version'])}
+    _modal_ativo = {'id': 'modal-ativo', 'title': (u'Desativar parâmetro %s' if _desativar else u'Reativar parâmetro %s') % _p['code'],
+                    'text': _texto_modal, 'trigger_label': 'Desativar' if _desativar else 'Reativar',
+                    'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
+                    'variant': 'danger' if _desativar else 'normal', 'action': URL(c='admin_parameters', f='toggle_active'),
+                    'hidden_fields': dict(id=_p['id'], versao=_p['version'])}
 pass
 def _classe(campo):
     return 'form-control is-invalid' if erros.get(campo) else 'form-control'
@@ -44,7 +44,7 @@ pass
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
     <h1 class="sss-page-titulo">{{if _novo:}}Novo parâmetro{{else:}}Parâmetro <span class="sss-mono">{{=_p['code']}}</span>
-      <span class="sss-status {{=_situacao['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icones}}#{{=_situacao['icone']}}"></use></svg><span>{{=_situacao['rotulo']}}</span></span>{{pass}}
+      <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icones}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
     </h1>
     {{if not _novo:}}
     <p class="sss-page-sub">{{if _p['vinculos']:}}Usado por: {{for _i, _s in enumerate(_p['vinculos']):}}{{=', ' if _i else ''}}<span class="sss-mono">{{=_s['name']}}</span> ({{=_s['param_type']}}{{=', inativo' if _s['active'] != 'Y' else ''}}){{pass}}. Tipo e flag ficam bloqueados enquanto houver vínculos.{{else:}}Nenhum script usa este parâmetro.{{pass}}</p>
@@ -146,9 +146,9 @@ pass
     <div class="sss-form-campo mb-3">
       <label class="form-label" for="campo-valor_padrao">Valor padrão (opcional)</label>
       <input class="{{=_classe('default_value')}}" id="campo-valor_padrao" name="default_value" maxlength="100" :type="tipoPadrao" type="{{='password' if _sensivel else 'text'}}" value="{{='' if _sensivel else _p['default_value']}}" autocomplete="off" aria-describedby="{{=_desc('default_value')}}"{{if foco_campo == 'default_value':}} autofocus{{pass}}>
-      <div class="form-text" id="campo-valor_padrao-ajuda">Validado pelas mesmas regras do tipo.{{if _sensivel and _p.get('tem_padrao'):}} Há um padrão sigiloso gravado: deixe em branco para mantê-lo.{{pass}}</div>
+      <div class="form-text" id="campo-valor_padrao-ajuda">Validado pelas mesmas regras do tipo.{{if _sensivel and _p.get('has_default'):}} Há um padrão sigiloso gravado: deixe em branco para mantê-lo.{{pass}}</div>
       {{if erros.get('default_value'):}}<div class="invalid-feedback" id="campo-valor_padrao-erro">{{=erros['default_value']}}</div>{{pass}}
-      {{if _sensivel and _p.get('tem_padrao'):}}
+      {{if _sensivel and _p.get('has_default'):}}
       <div class="form-check mt-1">
         <input class="form-check-input" type="checkbox" id="campo-remove_default" name="remove_default" value="Y">
         <label class="form-check-label" for="campo-remove_default">Remover o padrão sigiloso gravado</label>

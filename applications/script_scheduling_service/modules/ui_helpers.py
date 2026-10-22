@@ -19,7 +19,7 @@ _STATUS_DESCONHECIDO = (u"Desconhecido", "sss-status-unknown", "status-unknown")
 def status_info(status):
     """Retorna {rotulo, classe, icone} do status do ticket (README §5.1)."""
     label, cls_name, icon = _STATUS.get(status, _STATUS_DESCONHECIDO)
-    return {"rotulo": label, "classe": cls_name, "icone": icon}
+    return {"label": label, "css_class": cls_name, "icon": icon}
 
 
 _ATIVO = {
@@ -31,7 +31,7 @@ _ATIVO = {
 def ativo_info(flag):
     """Retorna {rotulo, classe, icone} da flag ativo ('S'/'N') dos cadastros; outro valor e desconhecido."""
     label, cls_name, icon = _ATIVO.get(flag, _STATUS_DESCONHECIDO)
-    return {"rotulo": label, "classe": cls_name, "icone": icon}
+    return {"label": label, "css_class": cls_name, "icon": icon}
 
 
 _MOTIVOS = {
@@ -95,35 +95,35 @@ def explicacao_ticket(ticket, now, timeout_s=None):
     agora: relogio do banco; timeout_s: tempo maximo do script (para a frase de TIMEOUT).
     """
     status = ticket.get("status")
-    state = status_info(status)["rotulo"]
+    state = status_info(status)["label"]
     if status == "PENDING":
         scheduled = ticket.get("scheduled_at")
         if scheduled is not None and now is not None and scheduled > now:
             return {"state": state,
-                    "aconteceu": u"Está agendado para começar em %s às %s." % (
+                    "happened": u"Está agendado para começar em %s às %s." % (
                         scheduled.strftime("%d/%m/%Y"), scheduled.strftime("%H:%M")),
-                    "fazer": u"Não precisa fazer nada. Se não quiser mais, cancele."}
-        return {"state": state, "aconteceu": u"Está na fila, esperando um servidor livre.",
-                "fazer": u"Não precisa fazer nada. Esta página se atualiza sozinha."}
+                    "todo": u"Não precisa fazer nada. Se não quiser mais, cancele."}
+        return {"state": state, "happened": u"Está na fila, esperando um servidor livre.",
+                "todo": u"Não precisa fazer nada. Esta página se atualiza sozinha."}
     if status == "RUNNING":
         if ticket.get("cancel_requested") == "Y":
             return {"state": state,
-                    "aconteceu": u"O cancelamento foi pedido. O servidor está parando o script.",
-                    "fazer": u"Espere alguns segundos."}
+                    "happened": u"O cancelamento foi pedido. O servidor está parando o script.",
+                    "todo": u"Espere alguns segundos."}
         start = ticket.get("started_at")
         elapsed = (now - start).total_seconds() if start is not None and now is not None else 0
-        return {"state": state, "aconteceu": u"Está rodando agora. Começou há %s." % tempo_simples(elapsed),
-                "fazer": u"Acompanhe o log abaixo."}
+        return {"state": state, "happened": u"Está rodando agora. Começou há %s." % tempo_simples(elapsed),
+                "todo": u"Acompanhe o log abaixo."}
     reason = ticket.get("status_reason")
     if reason not in _EXPLICACOES:
         return {"state": state,
-                "aconteceu": u"Terminou com um motivo que o sistema não conhece (%s)." % (reason or "-"),
-                "fazer": u"Avise o suporte com o número deste ticket."}
+                "happened": u"Terminou com um motivo que o sistema não conhece (%s)." % (reason or "-"),
+                "todo": u"Avise o suporte com o número deste ticket."}
     happened, todo = _EXPLICACOES[reason]
     time_value = tempo_simples(timeout_s) if timeout_s else u"definido para o script"
     return {"state": state,
-            "aconteceu": happened.format(codigo=ticket.get("return_code"), tempo=time_value),
-            "fazer": todo}
+            "happened": happened.format(codigo=ticket.get("return_code"), tempo=time_value),
+            "todo": todo}
 
 
 def etapas_ticket(ticket, now):
@@ -148,7 +148,7 @@ def etapas_ticket(ticket, now):
         running_when = formatar_data(ticket.get("started_at"))
     end = formatar_data(ticket.get("finished_at"))
     if terminal:
-        end = u"%s — %s" % (status_info(status)["rotulo"], end)
+        end = u"%s — %s" % (status_info(status)["label"], end)
     states = {
         "PENDING": ("feito", "atual", "pendente", "pendente"),
         "RUNNING": ("feito", "feito", "atual", "pendente"),
@@ -156,7 +156,7 @@ def etapas_ticket(ticket, now):
     labels = (u"Pedido criado", u"Na fila", u"Rodando", u"Terminou")
     whens = (formatar_data(ticket.get("created_at")), queue_when, running_when,
                end if terminal else u"-")
-    return [{"rotulo": r, "quando": q, "estado": e} for r, q, e in zip(labels, whens, states)]
+    return [{"label": r, "when": q, "estado": e} for r, q, e in zip(labels, whens, states)]
 
 
 # Nomes curtos dos motivos de erro (historico do script, README §5.8).
@@ -169,14 +169,14 @@ NOMES_MOTIVO = {
 }
 
 # Series do grafico do historico na ordem fixa de empilhamento (de baixo para cima).
-SERIES_HISTORICO = (("certo", u"Deu certo"), ("erro", u"Deu erro"), ("cancelado", u"Cancelado"),
-                    ("andamento", u"Esperando ou rodando"))
+SERIES_HISTORICO = (("succeeded", u"Deu certo"), ("error", u"Deu erro"), ("cancelled", u"Cancelado"),
+                    ("in_progress", u"Esperando ou rodando"))
 
 
 def barras_empilhadas(days, width=1000, height=240, left_margin=28, bottom_margin=22, gap=2):
     """Geometria do grafico de barras empilhadas por dia (SVG gerado no servidor, README §5.8).
 
-    dias: [{'rotulo': 'dd/mm', 'certo': n, 'erro': n, 'cancelado': n, 'andamento': n}].
+    dias: [{'label': 'dd/mm', 'succeeded': n, 'error': n, 'cancelled': n, 'in_progress': n}].
     Retorna {largura, altura, base_y, maximo, grade: [{y, rotulo}], eixo_x: [{x, rotulo}],
     barras: [{x, y, largura, altura, classe, titulo}]}. Cores so por classe CSS (sem style inline);
     vao de 2px entre os segmentos; o titulo de cada segmento e a dica ao passar o mouse.
@@ -199,12 +199,12 @@ def barras_empilhadas(days, width=1000, height=240, left_margin=28, bottom_margi
             h = area_h * count / float(scale_max)
             y = top - h
             bars.append({"x": round(x, 1), "y": round(y, 1), "largura": round(width_bar, 1),
-                           "altura": round(max(h - gap, 1.0), 1), "classe": "sss-graf-" + key,
-                           "titulo": u"%s: %s — %d" % (d["rotulo"], label, count)})
+                           "altura": round(max(h - gap, 1.0), 1), "css_class": "sss-graf-" + key,
+                           "title": u"%s: %s — %d" % (d["label"], label, count)})
             top = y
         if i % 5 == 0 or i == n - 1:
-            axis_x.append({"x": round(x + width_bar / 2.0, 1), "rotulo": d["rotulo"]})
-    grid = [{"y": round(base_y - area_h * f, 1), "rotulo": str(int(round(scale_max * f)))}
+            axis_x.append({"x": round(x + width_bar / 2.0, 1), "label": d["label"]})
+    grid = [{"y": round(base_y - area_h * f, 1), "label": str(int(round(scale_max * f)))}
              for f in (0.5, 1.0) if max_value]
     return {"largura": width, "altura": height, "base_y": base_y, "maximo": max_value, "grade": grid,
             "eixo_x": axis_x, "barras": bars, "margem_esq": left_margin}
@@ -212,27 +212,27 @@ def barras_empilhadas(days, width=1000, height=240, left_margin=28, bottom_margi
 
 # Mensagens-padrao em duas partes: o que aconteceu + o que fazer agora (README §2.4.2, texto exato).
 MENSAGENS = {
-    "fila_sem_atendente": (u"Há pedidos vencidos sem servidor disponível para o ambiente e o interpretador.",
+    "unattended_queue": (u"Há pedidos vencidos sem servidor disponível para o ambiente e o interpretador.",
                            u"Confira os servidores e quais ambientes e interpretadores eles atendem."),
-    "rodando_sem_pid": (u"Há pedidos reservados há mais de dois minutos sem processo registrado.",
+    "running_without_pid": (u"Há pedidos reservados há mais de dois minutos sem processo registrado.",
                         u"Confira o servidor responsável e os logs antes de pedir outra execução."),
-    "config_divergente": (u"Há servidores ativos com configuração diferente da configuração deste nó web.",
+    "config_mismatch": (u"Há servidores ativos com configuração diferente da configuração deste nó web.",
                           u"Peça ao administrador para conferir e igualar as configurações críticas dos nós."),
-    "sem_permissao": (u"Você não tem permissão para abrir esta página.",
+    "no_permission": (u"Você não tem permissão para abrir esta página.",
                       u"Veja em O que eu posso fazer o que já está liberado para você, ou peça acesso ao administrador."),
-    "nao_encontrado": (u"Não encontramos o que você procurou.", u"Confira o número ou volte para a lista."),
-    "falha_interna": (u"Algo deu errado do nosso lado.",
+    "not_found": (u"Não encontramos o que você procurou.", u"Confira o número ou volte para a lista."),
+    "internal_error": (u"Algo deu errado do nosso lado.",
                       u"Tente de novo em alguns minutos. Se continuar, avise o suporte e informe o horário."),
-    "conflito": (u"Outra pessoa mudou este registro enquanto você editava.",
+    "conflict": (u"Outra pessoa mudou este registro enquanto você editava.",
                  u"Recarregue a página para ver a versão nova e faça a sua alteração de novo."),
-    "sessao_expirada": (u"Você ficou um tempo sem usar o sistema e saiu por segurança.", u"Entre de novo."),
-    "sessao_max": (u"A sua sessão chegou ao tempo máximo e foi encerrada por segurança.", u"Entre de novo."),
-    "login_incorreto": (u"Usuário ou senha incorretos.", u"Confira o que digitou e tente de novo."),
-    "conta_bloqueada": (u"Houve muitas tentativas com a senha errada.",
+    "session_expired": (u"Você ficou um tempo sem usar o sistema e saiu por segurança.", u"Entre de novo."),
+    "session_max_age": (u"A sua sessão chegou ao tempo máximo e foi encerrada por segurança.", u"Entre de novo."),
+    "login_failed": (u"Usuário ou senha incorretos.", u"Confira o que digitou e tente de novo."),
+    "account_locked": (u"Houve muitas tentativas com a senha errada.",
                         u"Espere {minutos} minutos ou peça ao administrador para desbloquear."),
-    "formulario": (u"Alguns campos precisam de correção.",
+    "form_errors": (u"Alguns campos precisam de correção.",
                    u"Os campos estão marcados em vermelho, com a explicação embaixo de cada um."),
-    "ultimo_admin": (u"Não pode ficar sem nenhum administrador ativo.",
+    "last_admin": (u"Não pode ficar sem nenhum administrador ativo.",
                      u"Antes, dê acesso de administrador a outra pessoa."),
 }
 
@@ -241,7 +241,7 @@ MENSAGENS = {
 SAIDA_GRAVANDO_LIMITE_S = 3600
 _SAIDA_MENSAGENS = {
     "WRITING": (u"A saída está em preparação.", u"Atualize a página em alguns instantes."),
-    "PARADA": (u"A saída não foi concluída.",
+    "STALLED": (u"A saída não foi concluída.",
                u"Os arquivos ficaram temporariamente no servidor do agente {agente}. Peça a quem administra o servidor."),
     "AVAILABLE": (u"O script deixou {qtd} na pasta de saída ({tamanho}).", u"Use o botão Baixar para salvar o zip."),
     "FILES": (u"A saída passou do limite de quantidade de arquivos e não foi empacotada.",
@@ -251,7 +251,7 @@ _SAIDA_MENSAGENS = {
     "FAILED": (u"A saída não foi gravada.",
                u"Os arquivos ficaram temporariamente no servidor do agente {agente}. Peça a quem administra o servidor."),
 }
-_SAIDA_CLASSE = {"WRITING": "info", "PARADA": "warning", "AVAILABLE": "success", "FILES": "warning",
+_SAIDA_CLASSE = {"WRITING": "info", "STALLED": "warning", "AVAILABLE": "success", "FILES": "warning",
                  "BYTES": "warning", "FAILED": "warning"}
 
 
@@ -276,7 +276,7 @@ def quadro_saida(output, now):
     if state == "WRITING":
         since = output.get("updated_at") or output.get("created_at")
         if since is not None and now is not None and (now - since).total_seconds() > SAIDA_GRAVANDO_LIMITE_S:
-            key = "PARADA"
+            key = "STALLED"
     elif state == "EXCEEDED":
         key = "BYTES" if output.get("reason") == "BYTES" else "FILES"
     elif state not in _SAIDA_MENSAGENS:
@@ -285,8 +285,8 @@ def quadro_saida(output, now):
     values = {"agente": output.get("agent_id") or u"-", "tamanho": tamanho_legivel(output.get("size_bytes")),
                "qtd": (u"1 arquivo" if count == 1 else u"%s arquivos" % count)}
     happened, todo = _SAIDA_MENSAGENS[key]
-    return {"state": state, "classe": _SAIDA_CLASSE[key], "aconteceu": happened.format(**values),
-            "fazer": todo.format(**values), "pode_baixar": state == "AVAILABLE"}
+    return {"state": state, "css_class": _SAIDA_CLASSE[key], "happened": happened.format(**values),
+            "todo": todo.format(**values), "pode_baixar": state == "AVAILABLE"}
 
 
 def mensagem(key_name, **values):
@@ -354,14 +354,14 @@ def nome_ator(actor):
 
 
 def registro_exibicao(reg):
-    """Textos do quadro Registro: {'criado': '<data> por <ator>', 'alterado': ... | 'Nunca alterado'}."""
+    """Textos do quadro Registro: {'created': '<data> por <ator>', 'updated': ... | 'Nunca alterado'}."""
     reg = reg or {}
     created = u"%s por %s" % (formatar_data(reg.get("created_at")), nome_ator(reg.get("created_by")))
     if reg.get("updated_at") is None:
         changed = u"Nunca alterado"
     else:
         changed = u"%s por %s" % (formatar_data(reg.get("updated_at")), nome_ator(reg.get("updated_by")))
-    return {"criado": created, "alterado": changed}
+    return {"created": created, "updated": changed}
 
 
 def formatar_duracao(start, end):
@@ -447,17 +447,17 @@ def paginacao_info(page, size, total, capped_total=False, quantity=None):
 
 
 def primeiro_campo_invalido(fields):
-    """Nome do primeiro campo (na ordem dada) com 'erro' preenchido; None se nenhum."""
+    """Nome do primeiro campo (na ordem dada) com 'error' preenchido; None se nenhum."""
     for field in fields or ():
-        if field.get("erro"):
+        if field.get("error"):
             return field.get("name")
     return None
 
 
 _ALERTAS = {
-    "sucesso": ("alert-success", "status-success", "status"),
-    "aviso": ("alert-warning", "icon-alert", "status"),
-    "erro": ("alert-danger", "status-failed", "alert"),
+    "success": ("alert-success", "status-success", "status"),
+    "warning": ("alert-warning", "icon-alert", "status"),
+    "error": ("alert-danger", "status-failed", "alert"),
 }
 
 
@@ -465,10 +465,10 @@ def alerta_info(flash):
     """Normaliza response.flash para {tipo, mensagem, classe, icone, role}.
 
     Aceita {'tipo', 'mensagem'}, (tipo, mensagem) ou texto simples. Tipo ausente
-    ou desconhecido vira 'aviso'. Retorna None quando nao ha mensagem.
+    ou desconhecido vira 'warning'. Retorna None quando nao ha mensagem.
     """
     if isinstance(flash, dict):
-        kind, message = flash.get("tipo"), flash.get("mensagem")
+        kind, message = flash.get("kind"), flash.get("message")
     elif isinstance(flash, (tuple, list)) and len(flash) == 2:
         kind, message = flash
     else:
@@ -476,6 +476,6 @@ def alerta_info(flash):
     if message is None or message == "":
         return None
     if kind not in _ALERTAS:
-        kind = "aviso"
+        kind = "warning"
     cls_name, icon, role = _ALERTAS[kind]
-    return {"tipo": kind, "mensagem": message, "classe": cls_name, "icone": icon, "role": role}
+    return {"kind": kind, "message": message, "css_class": cls_name, "icon": icon, "role": role}

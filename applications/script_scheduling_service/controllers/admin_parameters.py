@@ -46,7 +46,7 @@ def _pagina_form(ctx, dados, erros=None):
     response.view = "admin_parameters/form.html"
     response.sss_scripts = [_JS]
     erros = erros or {}
-    campos = [{"name": n, "erro": erros.get(n)} for n in ("code", "param_flag", "label", "description",
+    campos = [{"name": n, "error": erros.get(n)} for n in ("code", "param_flag", "label", "description",
                                                           "component_type", "options_json", "validation_regex",
                                                           "default_value")]
     return dict(prm=dados, erros=erros, erro_geral=erros.get(admin_crud.GENERAL_FIELD),
@@ -101,13 +101,13 @@ def save():
         _log.exception("falha ao salvar parametro (login=%s id=%r)", ctx["login"], parametro_id, extra={"action": _FUNC})
         erros = {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
     if not erros:
-        session.flash = {"tipo": "sucesso", "mensagem": u"Parâmetro salvo com sucesso."}
+        session.flash = {"kind": "success", "message": u"Parâmetro salvo com sucesso."}
         redirect(URL(c="admin_parameters", f="index"))
     try:
         dados = servico.form(ctx, parametro_id) if parametro_id else servico.form(ctx)
     except RepoError:
         dados = {"id": None, "code": "", "param_flag": "", "label": "", "description": "",
-                 "component_type": "TEXT", "options_json": "", "default_value": "", "tem_padrao": False,
+                 "component_type": "TEXT", "options_json": "", "default_value": "", "has_default": False,
                  "validation_regex": "", "sensitive": "N", "active": "Y", "version": "", "vinculos": [],
                  "pode_regex": ctx.get("is_admin") is True}
     if admin_crud.GENERAL_FIELD not in erros:
@@ -124,8 +124,8 @@ def save():
         else:
             dados["version"] = enviados["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-    response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.GENERAL_FIELD)
-                      or ui_helpers.mensagem("formulario")}
+    response.flash = {"kind": "error", "message": erros.get(admin_crud.GENERAL_FIELD)
+                      or ui_helpers.mensagem("form_errors")}
     return _pagina_form(ctx, dados, erros)
 
 
@@ -136,18 +136,18 @@ def toggle_active():
     try:
         alterado = servico.toggle_active(ctx, _ip_origem(), parametro_id, _texto(request.post_vars.get("version"), 64))
         acao = u"desativado" if alterado["active"] == "N" else u"reativado"
-        session.flash = {"tipo": "sucesso", "mensagem": u"Parâmetro %s %s." % (alterado["code"], acao)}
+        session.flash = {"kind": "success", "message": u"Parâmetro %s %s." % (alterado["code"], acao)}
     except RepoNotFound:
         _nao_encontrado()
     except AccessDenied:
         _negado()
     except OperationDenied as exc:
-        session.flash = {"tipo": "erro", "mensagem": exc.message}
+        session.flash = {"kind": "error", "message": exc.message}
     except RepoConflict:
-        session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLICT}
+        session.flash = {"kind": "warning", "message": admin_crud.MSG_CONFLICT}
     except RepoError:
         _log.exception("falha ao alternar parametro (login=%s id=%r)", ctx["login"], parametro_id, extra={"action": _FUNC})
-        session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
+        session.flash = {"kind": "error", "message": _MSG_FALHA_ACAO}
     redirect(URL(c="admin_parameters", f="form", args=[parametro_id]))
 
 
@@ -161,8 +161,8 @@ def test_regex():
                                    _texto(request.post_vars.get("test_value"), 1000))
     except RepoNotFound:
         response.status = 404
-        return response.json({"ok": False, "erro": u"Parâmetro não encontrado."})
+        return response.json({"ok": False, "error": u"Parâmetro não encontrado."})
     except AccessDenied:
         response.status = 403
-        return response.json({"ok": False, "erro": u"Acesso negado."})
+        return response.json({"ok": False, "error": u"Acesso negado."})
     return response.json(resultado)

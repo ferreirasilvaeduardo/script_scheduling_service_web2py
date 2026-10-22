@@ -71,21 +71,21 @@ def _pagina_form(dados):
         response.title = u"Nova regra de agendamento — SSS"
     response.view = "schedules/form.html"
     response.sss_scripts = [_JS]
-    erros = dados["erros"]
+    erros = dados["errors"]
     foco = None
     if dados.get("form"):
-        campos = [{"name": n, "erro": erros.get(n)} for n in ("name", "recurrence_type", "start_date", "end_date",
+        campos = [{"name": n, "error": erros.get(n)} for n in ("name", "recurrence_type", "start_date", "end_date",
                                                                "run_time", "week_days", "month_day",
                                                                "cron_expression")]
-        campos.extend({"name": c["name"], "erro": c["erro"]} for c in dados["form"]["campos"])
-        campos.append({"name": "priority", "erro": erros.get("priority")})
+        campos.extend({"name": c["name"], "error": c["error"]} for c in dados["form"]["fields"])
+        campos.append({"name": "priority", "error": erros.get("priority")})
         foco = ui_helpers.primeiro_campo_invalido(campos)
-    return dict(dados, erro_geral=erros.get(admin_crud.GENERAL_FIELD), foco_campo=foco,
+    return dict(dados, erros=erros, erro_geral=erros.get(admin_crud.GENERAL_FIELD), foco_campo=foco,
                 rotulos_tipo=servico.TYPE_LABELS, dias_semana=servico.WEEKDAYS)
 
 
 def _redirecionar_lista(tipo, mensagem):
-    session.flash = {"tipo": tipo, "mensagem": mensagem}
+    session.flash = {"kind": tipo, "message": mensagem}
     redirect(URL(c="schedules", f="index"))
 
 
@@ -121,7 +121,7 @@ def agenda():
         _negado()
     except RepoError:
         _log.exception("falha ao montar a agenda (login=%s)", ctx["login"], extra={"action": _FUNC})
-        return dict(dados=None, erro=ui_helpers.mensagem("falha_interna"))
+        return dict(dados=None, erro=ui_helpers.mensagem("internal_error"))
 
 
 def form():
@@ -136,7 +136,7 @@ def form():
     except (AccessDenied, DisparoNegado):
         _negado()
     except OperationDenied as exc:
-        _redirecionar_lista("erro", exc.message)
+        _redirecionar_lista("error", exc.message)
     return _pagina_form(dados)
 
 
@@ -150,19 +150,19 @@ def save():
     respostas = _respostas_post()
     try:
         salvo_id, erros = servico.save(ctx, _ip_origem(), dict(enviados, id=agendamento_id, script_id=script_id,
-                                                                  environment=ambiente, respostas=respostas))
+                                                                  environment=ambiente, answers=respostas))
     except RepoNotFound:
         _nao_encontrado()
     except AccessDenied:
         _negado()
     except OperationDenied as exc:
-        _redirecionar_lista("erro", exc.message)
+        _redirecionar_lista("error", exc.message)
     except RepoError:
         _log.exception("falha ao salvar agendamento (login=%s id=%r)", ctx["login"], agendamento_id,
                        extra={"action": _FUNC})
         salvo_id, erros = None, {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
     if not erros:
-        _redirecionar_lista("sucesso", u"Regra de agendamento salva com sucesso.")
+        _redirecionar_lista("success", u"Regra de agendamento salva com sucesso.")
     conflito = erros.get(admin_crud.GENERAL_FIELD) == admin_crud.MSG_CONFLICT
     try:
         # No conflito, o formulario volta com os dados atuais e uma nova versao (PADRAO_CRUD_ADMIN).
@@ -174,10 +174,10 @@ def save():
     except (AccessDenied, DisparoNegado):
         _negado()
     except OperationDenied as exc:
-        _redirecionar_lista("erro", exc.message)
+        _redirecionar_lista("error", exc.message)
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-    response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.GENERAL_FIELD)
-                      or ui_helpers.mensagem("formulario")}
+    response.flash = {"kind": "error", "message": erros.get(admin_crud.GENERAL_FIELD)
+                      or ui_helpers.mensagem("form_errors")}
     return _pagina_form(dados)
 
 
@@ -187,19 +187,19 @@ def _acao_estado(funcao, sucesso):
     agendamento_id = _texto(request.post_vars.get("id"), 11)
     try:
         alterado = funcao(ctx, _ip_origem(), agendamento_id)
-        session.flash = {"tipo": "sucesso", "mensagem": sucesso % alterado["name"]}
+        session.flash = {"kind": "success", "message": sucesso % alterado["name"]}
     except RepoNotFound:
         _nao_encontrado()
     except AccessDenied:
         _negado()
     except OperationDenied as exc:
-        session.flash = {"tipo": "aviso", "mensagem": exc.message}
+        session.flash = {"kind": "warning", "message": exc.message}
     except RepoConflict:
-        session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLICT}
+        session.flash = {"kind": "warning", "message": admin_crud.MSG_CONFLICT}
     except RepoError:
         _log.exception("falha ao alterar a situacao do agendamento (login=%s id=%r)", ctx["login"],
                        agendamento_id, extra={"action": _FUNC})
-        session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ACAO}
+        session.flash = {"kind": "error", "message": _MSG_FALHA_ACAO}
     redirect(URL(c="schedules", f="index"))
 
 
@@ -219,5 +219,5 @@ def preview():
         resultado = servico.preview(ctx, dados)
     except AccessDenied:
         response.status = 403
-        return response.json({"erro": u"Acesso negado."})
+        return response.json({"error": u"Acesso negado."})
     return response.json(resultado)

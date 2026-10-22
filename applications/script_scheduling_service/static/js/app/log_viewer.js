@@ -62,11 +62,11 @@
 
         get rotuloStatus() {
           var info = this.statusInfo[this.status];
-          return info ? info.rotulo : this.status;
+          return info ? info.label : this.status;
         },
         get classeStatus() {
           var info = this.statusInfo[this.status];
-          return info ? info.classe : '';
+          return info ? info.css_class : '';
         },
         get rotuloPausa() {
           return this.pausado ? 'Retomar' : 'Pausar';
@@ -165,11 +165,11 @@
               return;
             }
             self.carregando = false;
-            if (typeof dados.texto !== 'string' || typeof dados.proximo_offset !== 'number') {
+            if (typeof dados.text !== 'string' || typeof dados.next_offset !== 'number') {
               throw new ErroHttp(0);
             }
-            self.anexar(dados.texto);
-            self.offset = dados.proximo_offset;
+            self.anexar(dados.text);
+            self.offset = dados.next_offset;
             // README §5.7: a frase e a barra de etapas acompanham a mudanca de situacao.
             if (self.statusInicial && dados.status && dados.status !== self.statusInicial) {
               self.status = dados.status;
@@ -178,8 +178,8 @@
               return;
             }
             self.status = dados.status;
-            self.truncado = dados.truncado === true;
-            cheio = dados.texto.length >= self.maxChars;
+            self.truncado = dados.truncated === true;
+            cheio = dados.text.length >= self.maxChars;
             if ((dados.terminal === true || STATUS_TERMINAIS[dados.status]) && !cheio) {
               self.encerrar('Execução finalizada; log lido até o fim. Recarregue a página para atualizar o resumo.');
               return;

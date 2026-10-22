@@ -99,17 +99,17 @@
           var raiz = this.$root;
           this.disponiveis = lerJson(raiz, 'data-disponiveis', []);
           this.linhas = lerJson(raiz, 'data-vinculos', []).map(function (v) {
-            return linhaVinculo({ id: v.id, codigo: v.codigo, label: v.label, flag: v.param_nomeado,
-                                  sensivel: v.sensivel, ativo: v.ativo, obrigatorio: v.obrigatorio,
-                                  sub: v.valor_padrao_sub, temSub: v.tem_sub });
+            return linhaVinculo({ id: v.id, codigo: v.code, label: v.label, flag: v.param_flag,
+                                  sensivel: v.sensitive, ativo: v.active, obrigatorio: v.required,
+                                  sub: v.default_value_override, temSub: v.has_override });
           });
         },
 
         get vinculosJson() {
           return JSON.stringify(this.linhas.map(function (l) {
             return {
-              parametro_id: l.id, obrigatorio: l.obrigatorio, valor_padrao_sub: l.sub,
-              manter_sigiloso: l.sensivel && l.temSub && !l.sub
+              parameter_id: l.id, required: l.obrigatorio, default_value_override: l.sub,
+              keep_secret: l.sensivel && l.temSub && !l.sub
             };
           }));
         },
@@ -121,7 +121,7 @@
             if (usados[p.id]) {
               return false;
             }
-            return !termo || (p.codigo + ' ' + p.label).toLowerCase().indexOf(termo) !== -1;
+            return !termo || (p.code + ' ' + p.label).toLowerCase().indexOf(termo) !== -1;
           }).slice(0, 15);
         },
         get semVinculos() {
@@ -150,8 +150,8 @@
           var id = parseInt(evt.currentTarget.getAttribute('data-id'), 10);
           var p = this.disponiveis.filter(function (d) { return d.id === id; })[0];
           if (p) {
-            this.linhas.push(linhaVinculo({ id: p.id, codigo: p.codigo, label: p.label, flag: p.param_nomeado,
-                                            sensivel: p.sensivel, ativo: true, obrigatorio: false }));
+            this.linhas.push(linhaVinculo({ id: p.id, codigo: p.code, label: p.label, flag: p.param_flag,
+                                            sensivel: p.sensitive, ativo: true, obrigatorio: false }));
           }
         },
         mover: function (evt) {
@@ -202,12 +202,12 @@
             if (r.argv) {
               self.previaTexto = r.argv.join(' ');
             }
-            for (chave in (r.erros || {})) {
-              if (Object.prototype.hasOwnProperty.call(r.erros, chave)) {
-                self.previaErros.push(r.erros[chave]);
+            for (chave in (r.errors || {})) {
+              if (Object.prototype.hasOwnProperty.call(r.errors, chave)) {
+                self.previaErros.push(r.errors[chave]);
               }
             }
-            self.previaAviso = r.aviso || '';
+            self.previaAviso = r.warning || '';
           }).catch(function () {
             self.previaErros = ['Não foi possível gerar a prévia agora. Tente novamente.'];
           }).then(function () {

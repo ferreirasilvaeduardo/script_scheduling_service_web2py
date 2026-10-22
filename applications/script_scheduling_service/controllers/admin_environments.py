@@ -38,7 +38,7 @@ def _pagina_form(ctx, dados, erros=None):
     response.title = (u"Ambiente %s — SSS" % dados["name"]) if dados.get("id") else u"Novo ambiente — SSS"
     response.view = "admin_environments/form.html"
     erros = erros or {}
-    campos = [{"name": n, "erro": erros.get(n)} for n in ("name", "description", "connection")]
+    campos = [{"name": n, "error": erros.get(n)} for n in ("name", "description", "connection")]
     return dict(amb=dados, erros=erros, erro_geral=erros.get(admin_crud.GENERAL_FIELD),
                 foco_campo=ui_helpers.primeiro_campo_invalido(campos),
                 aviso_desativacao=servico.DEACTIVATION_WARNING)
@@ -91,7 +91,7 @@ def save():
         _log.exception("falha ao salvar ambiente (login=%s id=%r)", ctx["login"], ambiente_id, extra={"action": _FUNC})
         salvo_id, erros = None, {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
     if not erros:
-        session.flash = {"tipo": "sucesso", "mensagem": u"Ambiente salvo com sucesso."}
+        session.flash = {"kind": "success", "message": u"Ambiente salvo com sucesso."}
         redirect(URL(c="admin_environments", f="index"))
     # Reapresenta o que foi digitado; na edicao o nome e a versao continuam os do registro.
     try:
@@ -107,8 +107,8 @@ def save():
         else:
             dados["version"] = enviados["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-    response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.GENERAL_FIELD)
-                      or ui_helpers.mensagem("formulario")}
+    response.flash = {"kind": "error", "message": erros.get(admin_crud.GENERAL_FIELD)
+                      or ui_helpers.mensagem("form_errors")}
     return _pagina_form(ctx, dados, erros)
 
 
@@ -119,16 +119,16 @@ def toggle_active():
     try:
         alterado = servico.toggle_active(ctx, _ip_origem(), ambiente_id, _texto(request.post_vars.get("version"), 64))
         if alterado["active"] == "N":
-            session.flash = {"tipo": "sucesso", "mensagem": u"Ambiente %s desativado." % alterado["name"]}
+            session.flash = {"kind": "success", "message": u"Ambiente %s desativado." % alterado["name"]}
         else:
-            session.flash = {"tipo": "sucesso", "mensagem": u"Ambiente %s reativado." % alterado["name"]}
+            session.flash = {"kind": "success", "message": u"Ambiente %s reativado." % alterado["name"]}
     except RepoNotFound:
         _nao_encontrado()
     except AccessDenied:
         _negado()
     except RepoConflict:
-        session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLICT}
+        session.flash = {"kind": "warning", "message": admin_crud.MSG_CONFLICT}
     except RepoError:
         _log.exception("falha ao alternar ambiente (login=%s id=%r)", ctx["login"], ambiente_id, extra={"action": _FUNC})
-        session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ALTERNAR}
+        session.flash = {"kind": "error", "message": _MSG_FALHA_ALTERNAR}
     redirect(URL(c="admin_environments", f="form", args=[ambiente_id]))

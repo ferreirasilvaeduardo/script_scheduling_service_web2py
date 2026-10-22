@@ -174,7 +174,7 @@ class AdminParametersService(object):
         can_regex = rbac.has_feature(ctx, FEATURE) and ctx.get("is_admin") is True
         if parameter_id in (None, ""):
             return {"id": None, "code": "", "param_flag": "", "label": "", "description": "",
-                    "component_type": "TEXT", "options_json": "", "default_value": "", "tem_padrao": False,
+                    "component_type": "TEXT", "options_json": "", "default_value": "", "has_default": False,
                     "validation_regex": "", "sensitive": "N", "active": "Y", "version": "", "vinculos": [],
                     "pode_regex": can_regex, "registro": None}
         p = self._get(parameter_id)
@@ -185,7 +185,7 @@ class AdminParametersService(object):
             "label": p.get("label") or "", "description": admin_crud.normalize(p.get("description")) or "",
             "component_type": p["component_type"], "options_json": p.get("options_json") or "",
             "default_value": "" if sensitive else (p.get("default_value") or ""),
-            "tem_padrao": bool(p.get("default_value")),
+            "has_default": bool(p.get("default_value")),
             "validation_regex": p.get("validation_regex") or "", "sensitive": p.get("sensitive") or "N",
             "active": p["active"], "version": _version(p),
             "vinculos": self.links(p["id"]), "pode_regex": can_regex,
@@ -424,22 +424,22 @@ class AdminParametersService(object):
         errors = {}
         kind, options, regex = self._config(ctx, date, current, errors)
         if regex and ctx.get("is_admin") is not True:
-            return {"ok": False, "erro": MSG_REGEX_TEST_ADMIN}
+            return {"ok": False, "error": MSG_REGEX_TEST_ADMIN}
         if errors:
-            return {"ok": False, "erro": u"Corrija a configuração antes de testar: %s" % sorted(errors.values())[0]}
+            return {"ok": False, "error": u"Corrija a configuração antes de testar: %s" % sorted(errors.values())[0]}
         config = {"code": (current or {}).get("code") or "teste",
                   "label": admin_crud.text(date.get("label")) or u"Valor de teste",
                   "component_type": kind, "options_json": options, "validation_regex": regex,
                   "sensitive": "Y" if admin_crud.text(date.get("sensitive"), 1) == "Y" else "N"}
         if not isinstance(value, str):
-            return {"ok": False, "erro": u"Informe um valor para testar."}
+            return {"ok": False, "error": u"Informe um valor para testar."}
         try:
             normalized = _default_text(params_compiler.validate_value(config, value))
         except ParamError as exc:
-            return {"ok": False, "erro": exc.message}
+            return {"ok": False, "error": exc.message}
         if admin_crud.text(date.get("sensitive"), 1) == "Y":
             normalized = MASK
-        return {"ok": True, "valor": normalized}
+        return {"ok": True, "value": normalized}
 
 
 _default = None

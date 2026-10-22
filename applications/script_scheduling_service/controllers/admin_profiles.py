@@ -49,7 +49,7 @@ def _pagina_form(ctx, dados, erros=None):
     response.title = (u"Perfil %s — SSS" % dados["name"]) if dados.get("id") else u"Novo perfil — SSS"
     response.view = "admin_profiles/form.html"
     erros = erros or {}
-    campos = [{"name": n, "erro": erros.get(n)} for n in ("name", "description")]
+    campos = [{"name": n, "error": erros.get(n)} for n in ("name", "description")]
     return dict(perfil=dados, erros=erros, erro_geral=erros.get(admin_crud.GENERAL_FIELD),
                 foco_campo=ui_helpers.primeiro_campo_invalido(campos),
                 aviso_desativacao=servico.DEACTIVATION_WARNING)
@@ -102,7 +102,7 @@ def save():
         _log.exception("falha ao salvar perfil (login=%s id=%r)", ctx["login"], perfil_id, extra={"action": _FUNC})
         salvo_id, erros = None, {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
     if not erros:
-        session.flash = {"tipo": "sucesso", "mensagem": u"Perfil salvo com sucesso."}
+        session.flash = {"kind": "success", "message": u"Perfil salvo com sucesso."}
         redirect(URL(c="admin_profiles", f="index"))
     try:
         dados = servico.form(ctx, perfil_id) if perfil_id else servico.form(ctx)
@@ -115,8 +115,8 @@ def save():
         if perfil_id:
             dados["version"] = enviados["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-    response.flash = {"tipo": "erro", "mensagem": erros.get(admin_crud.GENERAL_FIELD)
-                      or ui_helpers.mensagem("formulario")}
+    response.flash = {"kind": "error", "message": erros.get(admin_crud.GENERAL_FIELD)
+                      or ui_helpers.mensagem("form_errors")}
     return _pagina_form(ctx, dados, erros)
 
 
@@ -127,18 +127,18 @@ def toggle_active():
     try:
         alterado = servico.toggle_active(ctx, _ip_origem(), perfil_id, _texto(request.post_vars.get("version"), 64))
         acao = u"desativado" if alterado["active"] == "N" else u"reativado"
-        session.flash = {"tipo": "sucesso", "mensagem": u"Perfil %s %s." % (alterado["name"], acao)}
+        session.flash = {"kind": "success", "message": u"Perfil %s %s." % (alterado["name"], acao)}
     except RepoNotFound:
         _nao_encontrado()
     except AccessDenied:
         _negado()
     except OperationDenied as exc:
-        session.flash = {"tipo": "erro", "mensagem": exc.message}
+        session.flash = {"kind": "error", "message": exc.message}
     except RepoConflict:
-        session.flash = {"tipo": "aviso", "mensagem": admin_crud.MSG_CONFLICT}
+        session.flash = {"kind": "warning", "message": admin_crud.MSG_CONFLICT}
     except RepoError:
         _log.exception("falha ao alternar perfil (login=%s id=%r)", ctx["login"], perfil_id, extra={"action": _FUNC})
-        session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_ALTERNAR}
+        session.flash = {"kind": "error", "message": _MSG_FALHA_ALTERNAR}
     redirect(URL(c="admin_profiles", f="form", args=[perfil_id]))
 
 
@@ -186,9 +186,9 @@ def save_matrix():
         _log.exception("falha ao salvar matriz (login=%s id=%r)", ctx["login"], perfil_id, extra={"action": "PERM_UPDATE"})
         diff, erros = None, {admin_crud.GENERAL_FIELD: _MSG_FALHA_MATRIZ}
     if erros:
-        session.flash = {"tipo": "erro", "mensagem": erros[admin_crud.GENERAL_FIELD]}
+        session.flash = {"kind": "error", "message": erros[admin_crud.GENERAL_FIELD]}
     elif diff:
-        session.flash = {"tipo": "sucesso", "mensagem": u"Permissões salvas: %s" % diff}
+        session.flash = {"kind": "success", "message": u"Permissões salvas: %s" % diff}
     else:
-        session.flash = {"tipo": "aviso", "mensagem": u"Nenhuma alteração para salvar."}
+        session.flash = {"kind": "warning", "message": u"Nenhuma alteração para salvar."}
     redirect(URL(c="admin_profiles", f="matrix", args=[perfil_id]))

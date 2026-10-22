@@ -356,7 +356,7 @@ class AdminScriptsService(object):
             if a["active"] != "Y" and a["id"] not in marked:
                 continue
             environments.append({"id": a["id"], "name": a["name"], "description": a.get("description") or "",
-                              "marcado": a["id"] in marked, "inativo": a["active"] != "Y",
+                              "checked": a["id"] in marked, "inativo": a["active"] != "Y",
                               "agendamentos_ativos": self._active_schedules(script_id=script["id"],
                                                                                environment=a["name"])})
         return {"script": {"id": script["id"], "name": script["name"], "active": script["active"]},
@@ -429,7 +429,7 @@ class AdminScriptsService(object):
             sensitive = item["sensitive"]
             item.update(required=v["required"] == "Y",
                         default_value_override="" if sensitive else (v.get("default_value_override") or ""),
-                        tem_sub=bool(v.get("default_value_override")))
+                        has_override=bool(v.get("default_value_override")))
             links.append(item)
         available = [resumo(p) for p in sorted(mapping.values(), key=lambda p: p["code"]) if p.get("active") == "Y"]
         return {"script": {"id": script["id"], "name": script["name"], "param_type": script["param_type"]},
@@ -463,7 +463,7 @@ class AdminScriptsService(object):
                 return None
             sub = item.get("default_value_override")
             sub = sub.strip() if isinstance(sub, str) else None
-            if p.get("sensitive") == "Y" and not sub and item.get("manter_sigiloso") is True and pid in current_by_id:
+            if p.get("sensitive") == "Y" and not sub and item.get("keep_secret") is True and pid in current_by_id:
                 sub = current_by_id[pid].get("default_value_override")
                 # O valor mantido tambem e revalidado contra a configuracao atual (README §6.5).
                 if sub:
@@ -554,13 +554,13 @@ class AdminScriptsService(object):
         else:
             links = self._build_links(script, links_json, current, errors)
             if errors:
-                return {"argv": None, "erros": errors, "aviso": None}
+                return {"argv": None, "errors": errors, "warning": None}
         warning = None
         snap, _resolved, errors = params_compiler.compile_snapshot(script, links, {}, self._clock())
         if snap is None:
-            return {"argv": None, "erros": errors, "aviso": warning}
+            return {"argv": None, "errors": errors, "warning": warning}
         return {"argv": params_compiler.display_argv(json.loads(snap)),
-                "erros": {}, "aviso": warning}
+                "errors": {}, "warning": warning}
 
 
 _default = None

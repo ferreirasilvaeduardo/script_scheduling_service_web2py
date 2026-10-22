@@ -21,8 +21,8 @@ _MSG_FALHA_CANCELAR = u"Não foi possível cancelar o ticket. Tente novamente em
 _MSG_FALHA_SAIDA = u"Não foi possível baixar a saída. Tente novamente em instantes."
 _MSG_REEXECUCAO_REVISAR = (u"Não foi possível reexecutar automaticamente: o cadastro do script pode ter mudado "
                            u"desde a execução original. Revise os campos destacados e crie o ticket novamente.")
-_TIPO_FLASH_CANCELAMENTO = {"TERMINAL": "aviso", "CANCELADO": "sucesso", "SINALIZADO": "sucesso",
-                            "JA_SINALIZADO": "aviso"}
+_TIPO_FLASH_CANCELAMENTO = {"TERMINAL": "warning", "CANCELADO": "success", "SINALIZADO": "success",
+                            "JA_SINALIZADO": "warning"}
 
 
 def _metodo():
@@ -82,9 +82,9 @@ def _pagina_novo(ctx, script_id, ambiente, valores=None, erros=None, prioridade=
         return dados
     form = ticket_service.prepare_form(ctx, script_id, ambiente, valores, erros, avisos)
     dados["tem_ultima"] = not reexecucao_de and ticket_service.has_last_run(ctx, script_id, ambiente)
-    campos = [{"name": c["name"], "erro": c["erro"]} for c in form["campos"]]
-    campos.append({"name": "priority", "erro": erros.get(ticket_service.PRIORITY_FIELD)})
-    campos.append({"name": "scheduled_at", "erro": erros.get(ticket_service.SCHEDULED_AT_FIELD)})
+    campos = [{"name": c["name"], "error": c["error"]} for c in form["fields"]]
+    campos.append({"name": "priority", "error": erros.get(ticket_service.PRIORITY_FIELD)})
+    campos.append({"name": "scheduled_at", "error": erros.get(ticket_service.SCHEDULED_AT_FIELD)})
     dados.update(etapa=3, form=form, foco_campo=ui_helpers.primeiro_campo_invalido(campos))
     return dados
 
@@ -96,7 +96,7 @@ def new():
     try:
         if reexecucao:
             dados = ticket_service.prepare_rerun(ctx, reexecucao)
-            return _pagina_novo(ctx, dados["script_id"], dados["environment"], dados["valores"], dados["erros"],
+            return _pagina_novo(ctx, dados["script_id"], dados["environment"], dados["valores"], dados["errors"],
                                 dados["priority"], reexecucao_de=dados["ticket_id"])
         script_id = _texto(request.get_vars.get("script_id"), 10)
         ambiente = _texto(request.get_vars.get("environment"), 30)
@@ -121,7 +121,7 @@ def catalog():
         return dict(grupos=ticket_service.routine_catalog(ctx), erro=None)
     except RepoError:
         _log.exception("falha ao montar o catalogo de rotinas (login=%s)", ctx["login"], extra={"action": "CATALOGO"})
-        return dict(grupos=[], erro=ui_helpers.mensagem("falha_interna"))
+        return dict(grupos=[], erro=ui_helpers.mensagem("internal_error"))
 
 
 def history():
@@ -149,10 +149,10 @@ def create():
         ticket_id, erros = ticket_service.create_ticket(ctx, _ip_origem(), script_id, ambiente, respostas,
                                                        prioridade, scheduled_at, reexecucao_de)
         if ticket_id is not None:
-            session.flash = {"tipo": "sucesso", "mensagem": u"Ticket #%s criado com sucesso." % ticket_id}
+            session.flash = {"kind": "success", "message": u"Ticket #%s criado com sucesso." % ticket_id}
             redirect(URL(c="tickets", f="detail", args=[ticket_id]))
         # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-        response.flash = {"tipo": "erro", "mensagem": ui_helpers.mensagem("formulario")}
+        response.flash = {"kind": "error", "message": ui_helpers.mensagem("form_errors")}
         response.view = "tickets/new.html"
         return _pagina_novo(ctx, script_id, ambiente, respostas, erros, prioridade, scheduled_at,
                             reexecucao_de or None)
@@ -176,7 +176,7 @@ def preview():
                                               _texto(request.post_vars.get("scheduled_at"), 40))
     except AccessDenied:
         response.status = 403
-        return response.json({"erro": ui_helpers.mensagem("sem_permissao")})
+        return response.json({"error": ui_helpers.mensagem("no_permission")})
     return response.json(dados)
 
 
@@ -255,14 +255,14 @@ def cancel():
     ticket_id = _texto(request.post_vars.get("ticket_id"), 10)
     try:
         resultado = ticket_service.cancel(ctx, _ip_origem(), ticket_id)
-        session.flash = {"tipo": _TIPO_FLASH_CANCELAMENTO[resultado],
-                         "mensagem": ticket_service.MSG_CANCEL[resultado]}
+        session.flash = {"kind": _TIPO_FLASH_CANCELAMENTO[resultado],
+                         "message": ticket_service.MSG_CANCEL[resultado]}
     except RepoNotFound:
         _nao_encontrado()
     except AccessDenied:
         _negado()
     except RepoError:
-        session.flash = {"tipo": "erro", "mensagem": _MSG_FALHA_CANCELAR}
+        session.flash = {"kind": "error", "message": _MSG_FALHA_CANCELAR}
     # CANCEL_TICKET sem VIEW_LOGS cancela sem poder ver o ticket (README §4.3.C): volta ao painel.
     if ticket_service.is_visible(ctx, ticket_id):
         redirect(URL(c="tickets", f="detail", args=[ticket_id]))
@@ -280,8 +280,8 @@ def rerun():
     except AccessDenied:
         _negado()
     except RerunError as e:
-        session.flash = {"tipo": "aviso", "mensagem": _MSG_REEXECUCAO_REVISAR}
+        session.flash = {"kind": "warning", "message": _MSG_REEXECUCAO_REVISAR}
         redirect(URL(c="tickets", f="new", vars={"rerun": e.ticket_id}))
-    session.flash = {"tipo": "sucesso",
-                     "mensagem": u"Ticket #%s criado como reexecução do ticket #%s." % (novo_id, ticket_id)}
+    session.flash = {"kind": "success",
+                     "message": u"Ticket #%s criado como reexecução do ticket #%s." % (novo_id, ticket_id)}
     redirect(URL(c="tickets", f="detail", args=[novo_id]))

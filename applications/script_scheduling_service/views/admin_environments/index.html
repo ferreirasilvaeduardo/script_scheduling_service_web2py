@@ -2,9 +2,9 @@
 {{
 # Lista de ambientes (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
-filtros = {'id': 'filtro-ambientes', 'url_base': ('admin_environments', 'index'), 'preservar': {'size': tamanho}, 'campos': [
-    {'name': 'name', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('name')},
-    {'name': 'active', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('active'), 'opcoes': _opc_ativo},
+filtros = {'id': 'filtro-ambientes', 'url_base': ('admin_environments', 'index'), 'keep': {'size': tamanho}, 'fields': [
+    {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': filtros_ativos.get('name')},
+    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': filtros_ativos.get('active'), 'options': _opc_ativo},
 ]}
 _linhas = []
 for _a in resultado['itens']:
@@ -13,15 +13,15 @@ for _a in resultado['itens']:
         'description': _a.get('description') or '-',
         'connection': _a.get('connection') or '-',
         'active': _a['active'],
-        'acao': {'href': URL(c='admin_environments', f='form', args=[_a['id']]), 'rotulo': 'Editar', 'description': u'Editar ambiente %s' % _a['name']},
+        'action': {'href': URL(c='admin_environments', f='form', args=[_a['id']]), 'label': 'Editar', 'description': u'Editar ambiente %s' % _a['name']},
     })
 pass
-tabela = {'legenda': 'Ambientes cadastrados', 'erro': erro, 'linhas': _linhas, 'msg_vazio': 'Nenhum ambiente encontrado.', 'colunas': [
-    {'chave': 'name', 'rotulo': 'Nome', 'tipo': 'mono'},
-    {'chave': 'description', 'rotulo': u'Descrição'},
-    {'chave': 'connection', 'rotulo': 'DSN', 'tipo': 'mono'},
-    {'chave': 'active', 'rotulo': u'Situação', 'tipo': 'active'},
-    {'chave': 'acao', 'rotulo': u'Ações', 'tipo': 'acao'},
+tabela = {'caption': 'Ambientes cadastrados', 'error': erro, 'rows': _linhas, 'empty_message': 'Nenhum ambiente encontrado.', 'columns': [
+    {'key': 'name', 'label': 'Nome', 'kind': 'mono'},
+    {'key': 'description', 'label': u'Descrição'},
+    {'key': 'connection', 'label': 'DSN', 'kind': 'mono'},
+    {'key': 'active', 'label': u'Situação', 'kind': 'active'},
+    {'key': 'action', 'label': u'Ações', 'kind': 'action'},
 ]}
 pagina = resultado['pagina']
 total = resultado['total']

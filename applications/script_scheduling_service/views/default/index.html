@@ -92,7 +92,7 @@ icones = URL('static', 'img/icons.svg')
         {{for _ag in _c_dados['agents']:}}
         <li>
           <span class="sss-mono">{{=_ag['code']}}</span>
-          <span class="sss-status {{=_ag['saude']['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_ag['saude']['icone']}}"></use></svg><span>{{=_ag['saude']['rotulo']}}</span></span>
+          <span class="sss-status {{=_ag['saude']['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_ag['saude']['icon']}}"></use></svg><span>{{=_ag['saude']['label']}}</span></span>
           <span class="sss-texto-suave">heartbeat {{=_ag['ha']}} · {{=_ag['running']}} em execução</span>
         </li>
         {{pass}}
@@ -112,12 +112,12 @@ icones = URL('static', 'img/icons.svg')
 {{pass}}
 {{for secao in menu:}}
 <section class="sss-card" aria-labelledby="painel-{{=secao['secao'].lower()}}">
-  <h2 class="sss-card-titulo" id="painel-{{=secao['secao'].lower()}}">{{=secao['titulo']}}</h2>
+  <h2 class="sss-card-titulo" id="painel-{{=secao['secao'].lower()}}">{{=secao['title']}}</h2>
   <div class="sss-card-corpo sss-acoes">
     {{for item in secao['itens']:}}
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c=item['rota'][0], f=item['rota'][1])}}">
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=item['icone']}}"></use></svg>
-      <span>{{=item['rotulo']}}</span>
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=item['icon']}}"></use></svg>
+      <span>{{=item['label']}}</span>
     </a>
     {{pass}}
   </div>

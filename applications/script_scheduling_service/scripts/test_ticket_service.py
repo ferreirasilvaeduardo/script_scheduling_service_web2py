@@ -287,16 +287,16 @@ class TestTicketService(_BaseTicket):
     def test_formulario_nao_expoe_sensivel(self):
         form = self.svc.prepare_form(self.ctx["op.hml"], "1", "HOMOLOGACAO",
                                             values={"documento_cliente": SECRET, "data_ref": "2026-01-01"})
-        fields = dict((c["code"], c) for c in form["campos"])
-        self.assertEqual([c["code"] for c in form["campos"]],
+        fields = dict((c["code"], c) for c in form["fields"])
+        self.assertEqual([c["code"] for c in form["fields"]],
                          ["data_ref", "limite_linhas", "modo_exec", "verbose", "documento_cliente"])
-        self.assertIsNone(fields["documento_cliente"]["valor"])
+        self.assertIsNone(fields["documento_cliente"]["value"])
         self.assertIsNone(fields["documento_cliente"]["padrao"])
-        self.assertTrue(fields["documento_cliente"]["tem_padrao"])
+        self.assertTrue(fields["documento_cliente"]["has_default"])
         self.assertNotIn("00011122233", json.dumps(form, default=str))
-        self.assertEqual(fields["data_ref"]["valor"], "2026-01-01")
-        self.assertEqual(fields["modo_exec"]["padrao_texto"], "Execucao Real")
-        self.assertTrue(fields["verbose"]["marcado"])
+        self.assertEqual(fields["data_ref"]["value"], "2026-01-01")
+        self.assertEqual(fields["modo_exec"]["default_text"], "Execucao Real")
+        self.assertTrue(fields["verbose"]["checked"])
 
 
 @_SKIP_ROOT
@@ -306,28 +306,28 @@ class TestTriggerClarity(_BaseTicket):
     def test_resumo_em_frase_com_sensivel_mascarado(self):
         r = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO",
                                     {"documento_cliente": "12345678900"}, "3", "")
-        self.assertEqual(r["erros"], {})
-        summary = r["resumo"]
-        self.assertEqual((summary["script"], summary["environment"], summary["quando"], summary["priority"]),
+        self.assertEqual(r["errors"], {})
+        summary = r["summary"]
+        self.assertEqual((summary["script"], summary["environment"], summary["when"], summary["priority"]),
                          ("carga_diaria", "HOMOLOGACAO", u"agora", 3))
-        self.assertTrue(summary["frase"].startswith(u"Vamos rodar carga_diaria no ambiente HOMOLOGACAO agora, "
+        self.assertTrue(summary["phrase"].startswith(u"Vamos rodar carga_diaria no ambiente HOMOLOGACAO agora, "
                                                    u"com prioridade 3."))
-        values = dict((x["rotulo"], x["valor"]) for x in summary["respostas"])
-        self.assertNotIn("12345678900", summary["frase"])
+        values = dict((x["label"], x["value"]) for x in summary["answers"])
+        self.assertNotIn("12345678900", summary["phrase"])
         self.assertIn(params_compiler.MASK, values.values())
         self.assertTrue(r["argv"])
 
     def test_resumo_com_horario_e_erros(self):
         future = (self.tickets.now() + datetime.timedelta(days=1)).replace(second=0)
         r = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO", {}, "2", future.strftime("%Y-%m-%dT%H:%M"))
-        self.assertEqual(r["resumo"]["quando"], u"em %s às %s" % (future.strftime("%d/%m/%Y"), future.strftime("%H:%M")))
+        self.assertEqual(r["summary"]["when"], u"em %s às %s" % (future.strftime("%d/%m/%Y"), future.strftime("%H:%M")))
         r = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"data_ref": "31/12/2026"}, "2", "")
-        self.assertIsNone(r["resumo"])
-        self.assertIn("data_ref", r["erros"])
+        self.assertIsNone(r["summary"])
+        self.assertIn("data_ref", r["errors"])
 
     def test_exemplo_por_tipo_no_formulario(self):
         form = self.svc.prepare_form(self.ctx["op.hml"], "1", "HOMOLOGACAO")
-        examples = dict((c["code"], c["exemplo"]) for c in form["campos"])
+        examples = dict((c["code"], c["example"]) for c in form["fields"])
         self.assertTrue(examples["data_ref"].startswith(u"Use o formato AAAA-MM-DD"))
         self.assertEqual(examples["modo_exec"], u"Escolha uma das opções da lista.")
         self.assertEqual(examples["verbose"], u"Marque para sim; deixe desmarcado para não.")
@@ -553,7 +553,7 @@ class TestTicketQuery(_BaseTicket):
 
         prep = self.svc.prepare_rerun(ctx, str(original))
         self.assertEqual((prep["ticket_id"], prep["script_id"], prep["environment"]), (original, 1, "HOMOLOGACAO"))
-        self.assertIn("descricao_lote", prep["erros"])
+        self.assertIn("descricao_lote", prep["errors"])
         self.assertNotIn("documento_cliente", prep["valores"])
         self.assertEqual(prep["valores"]["data_ref"], "2026-10-14")
 
@@ -573,10 +573,10 @@ class TestTicketQuery(_BaseTicket):
                 det = self.svc.detail(self.ctx[login], "1")
             else:
                 det = self.svc.detail(self.ctx[login], str(tid))
-                answers = dict((r["code"], r) for r in det["respostas"])
-                self.assertEqual(answers["documento_cliente"]["valor"], params_compiler.MASK)
+                answers = dict((r["code"], r) for r in det["answers"])
+                self.assertEqual(answers["documento_cliente"]["value"], params_compiler.MASK)
                 self.assertTrue(answers["documento_cliente"]["sensitive"])
-                self.assertEqual(answers["data_ref"]["valor"], "2026-10-14")
+                self.assertEqual(answers["data_ref"]["value"], "2026-10-14")
                 self.assertIn(params_compiler.MASK, det["argv_para_exibicao"])
             serial = json.dumps(det, default=str)
             self.assertNotIn(SECRET, serial)
@@ -614,16 +614,16 @@ class TestTicketOutput(_BaseTicket):
 
     def test_quadro_por_situacao(self):
         available = self.svc.detail(self.ctx["admin"], 17)["saida"]
-        self.assertEqual((available["state"], available["classe"], available["pode_baixar"]),
+        self.assertEqual((available["state"], available["css_class"], available["pode_baixar"]),
                          ("AVAILABLE", "success", True))
-        self.assertIn(u"2 arquivos", available["aconteceu"])
+        self.assertIn(u"2 arquivos", available["happened"])
         exceeded = self.svc.detail(self.ctx["admin"], 29)["saida"]
         self.assertFalse(exceeded["pode_baixar"])
-        self.assertIn(u"quantidade de arquivos", exceeded["aconteceu"])
-        self.assertIn(u"agente agt-host02", exceeded["fazer"])
+        self.assertIn(u"quantidade de arquivos", exceeded["happened"])
+        self.assertIn(u"agente agt-host02", exceeded["todo"])
         failed = self.svc.detail(self.ctx["admin"], 30)["saida"]
         self.assertEqual((failed["state"], failed["pode_baixar"]), ("FAILED", False))
-        self.assertIn(u"agente agt-host01", failed["fazer"])
+        self.assertIn(u"agente agt-host01", failed["todo"])
         self.assertIsNone(self.svc.detail(self.ctx["admin"], 18)["saida"], "sem saida, sem quadro")
         for field in ("content", "base", "relativo"):
             self.assertNotIn(field, available)
@@ -632,19 +632,19 @@ class TestTicketOutput(_BaseTicket):
         now = datetime.datetime(2026, 10, 20, 12, 0, 0)
         recent = ui_helpers.quadro_saida({"state": "WRITING", "agent_id": "a1",
                                            "created_at": now - datetime.timedelta(minutes=5)}, now)
-        self.assertEqual((recent["classe"], recent["pode_baixar"]), ("info", False))
-        self.assertIn(u"em preparação", recent["aconteceu"])
+        self.assertEqual((recent["css_class"], recent["pode_baixar"]), ("info", False))
+        self.assertIn(u"em preparação", recent["happened"])
         stop = ui_helpers.quadro_saida({"state": "WRITING", "agent_id": "a1",
                                           "created_at": now - datetime.timedelta(hours=2)}, now)
-        self.assertIn(u"não foi concluída", stop["aconteceu"])
-        self.assertIn(u"agente a1", stop["fazer"])
+        self.assertIn(u"não foi concluída", stop["happened"])
+        self.assertIn(u"agente a1", stop["todo"])
         bytes_ = ui_helpers.quadro_saida({"state": "EXCEEDED", "reason": "BYTES", "agent_id": "a1"}, now)
-        self.assertIn(u"limite de tamanho", bytes_["aconteceu"])
+        self.assertIn(u"limite de tamanho", bytes_["happened"])
         self.assertIsNone(ui_helpers.quadro_saida(None, now))
         self.assertEqual([ui_helpers.tamanho_legivel(n) for n in (None, 512, 12595, 4718592)],
                          [u"-", u"512 bytes", u"12,3 KB", u"4,5 MB"])
         one = ui_helpers.quadro_saida({"state": "AVAILABLE", "file_count": 1, "size_bytes": 10}, now)
-        self.assertIn(u"1 arquivo ", one["aconteceu"])
+        self.assertIn(u"1 arquivo ", one["happened"])
 
     def test_download_em_fatias_so_disponivel_e_no_escopo(self):
         import io

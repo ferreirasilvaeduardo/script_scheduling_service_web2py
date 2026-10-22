@@ -80,7 +80,7 @@ class TestRoutineCatalog(_Base):
                 if c["ultima"]:
                     t = self.tickets.get(c["ultima"]["id"])
                     self.assertIn(t["environment"], ctx["environments"])
-                    self.assertTrue(c["ultima"]["quando"].startswith(u"há "))
+                    self.assertTrue(c["ultima"]["when"].startswith(u"há "))
 
     def test_sem_ver_logs_so_os_proprios(self):
         ctx = self._without("op.hml", "VIEW_LOGS")
@@ -92,7 +92,7 @@ class TestRoutineCatalog(_Base):
     def test_perguntas_com_obrigatorio(self):
         cards = dict((c["name"], c) for g in self.svc.routine_catalog(self.ctx["admin"]) for c in g["cartoes"])
         questions = cards["carga_diaria"]["perguntas"]
-        self.assertIn({"rotulo": u"Data de Referencia", "required": True}, questions)
+        self.assertIn({"label": u"Data de Referencia", "required": True}, questions)
 
     def test_sem_exec_script_vazio(self):
         self.assertEqual(self.svc.routine_catalog(self._without("op.hml", "EXEC_SCRIPT")), [])
@@ -119,9 +119,9 @@ class TestScriptHistory(_Base):
         by_day = sum(sum(d[k] for k in c) for d in h["dias"])
         self.assertEqual(by_day, h["total"])
         self.assertEqual(len(h["dias"]), 30)
-        finished = c["certo"] + c["erro"] + c["cancelado"]
+        finished = c["succeeded"] + c["error"] + c["cancelled"]
         if finished:
-            self.assertEqual(h["taxa"], int(round(100.0 * c["certo"] / finished)))
+            self.assertEqual(h["taxa"], int(round(100.0 * c["succeeded"] / finished)))
             self.assertTrue(h["frase_taxa"].startswith(u"De cada 10 vezes,"))
         self.assertEqual(h["filtro_lista"]["script"], 1)
 
@@ -142,14 +142,14 @@ class TestStackedBars(unittest.TestCase):
 
     def test_geometria(self):
         import ui_helpers
-        days = [{"rotulo": "01/10", "certo": 2, "erro": 1, "cancelado": 0, "andamento": 0},
-                {"rotulo": "02/10", "certo": 0, "erro": 0, "cancelado": 0, "andamento": 0}]
+        days = [{"label": "01/10", "succeeded": 2, "error": 1, "cancelled": 0, "in_progress": 0},
+                {"label": "02/10", "succeeded": 0, "error": 0, "cancelled": 0, "in_progress": 0}]
         g = ui_helpers.barras_empilhadas(days, width=200, height=100)
         self.assertEqual(g["maximo"], 3)
-        self.assertEqual([b["classe"] for b in g["barras"]], ["sss-graf-certo", "sss-graf-erro"])
+        self.assertEqual([b["css_class"] for b in g["barras"]], ["sss-graf-succeeded", "sss-graf-error"])
         right, error = g["barras"]
         self.assertLess(error["y"], right["y"])  # empilhado de baixo para cima
-        self.assertIn(u"01/10: Deu erro — 1", error["titulo"])
+        self.assertIn(u"01/10: Deu erro — 1", error["title"])
         self.assertEqual(ui_helpers.barras_empilhadas([], 200, 100)["barras"], [])
 
 

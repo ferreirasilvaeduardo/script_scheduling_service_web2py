@@ -93,7 +93,7 @@
             self.ultima = horaAtual();
           }).catch(function () {
             self.parar();
-            window.SSS.toast('erro', 'Não foi possível atualizar o painel de agentes. Recarregue a página.');
+            window.SSS.toast('error', 'Não foi possível atualizar o painel de agentes. Recarregue a página.');
           }).then(function () {
             self.carregando = false;
           });

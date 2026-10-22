@@ -26,7 +26,7 @@ aba_ativa = 'agents'
   <div class="sss-card-corpo">
     <dl class="sss-legenda-saude">
       {{for _lg in legenda:}}
-      <dt><span class="sss-status {{=_lg['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_lg['icone']}}"></use></svg><span>{{=_lg['rotulo']}}</span></span></dt>
+      <dt><span class="sss-status {{=_lg['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_lg['icon']}}"></use></svg><span>{{=_lg['label']}}</span></span></dt>
       <dd>{{=_lg['description']}}</dd>
       {{pass}}
     </dl>

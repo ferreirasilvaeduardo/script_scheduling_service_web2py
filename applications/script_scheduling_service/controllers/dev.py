@@ -88,20 +88,20 @@ def _formulario_demo():
     timeout = _texto_var("demo_timeout", 9)
     prioridade = _texto_var("ex_prioridade", 1)
     campos = [
-        {"name": "ex_nome", "rotulo": u"Nome do agendamento", "tipo": "text", "valor": nome,
-         "ajuda": u"Identificador exibido nas listagens.", "required": True},
-        {"name": "demo_timeout", "rotulo": u"Tempo limite (segundos)", "tipo": "number", "valor": timeout,
-         "ajuda": u"Entre 1 e 86400.", "required": True},
-        {"name": "ex_prioridade", "rotulo": u"Prioridade", "tipo": "select", "valor": prioridade or "2",
-         "opcoes": [("2", u"2 — Normal"), ("3", u"3 — Baixa"), ("4", u"4 — Mínima")]},
-        {"name": "ex_obs", "rotulo": u"Observação", "tipo": "textarea", "valor": _texto_var("ex_obs", 500)},
+        {"name": "ex_nome", "label": u"Nome do agendamento", "kind": "text", "value": nome,
+         "help": u"Identificador exibido nas listagens.", "required": True},
+        {"name": "demo_timeout", "label": u"Tempo limite (segundos)", "kind": "number", "value": timeout,
+         "help": u"Entre 1 e 86400.", "required": True},
+        {"name": "ex_prioridade", "label": u"Prioridade", "kind": "select", "value": prioridade or "2",
+         "options": [("2", u"2 — Normal"), ("3", u"3 — Baixa"), ("4", u"4 — Mínima")]},
+        {"name": "ex_obs", "label": u"Observação", "kind": "textarea", "value": _texto_var("ex_obs", 500)},
     ]
     # Validacao apenas ilustrativa do erro por campo; nao e regra de negocio.
     if enviado:
         if not nome:
-            campos[0]["erro"] = u"Informe o nome do agendamento."
+            campos[0]["error"] = u"Informe o nome do agendamento."
         if not (re.fullmatch(r"[0-9]{1,5}", timeout) and 1 <= int(timeout) <= 86400):
-            campos[1]["erro"] = u"Informe um número inteiro entre 1 e 86400."
+            campos[1]["error"] = u"Informe um número inteiro entre 1 e 86400."
     return campos, enviado
 
 
@@ -115,14 +115,14 @@ def components():
 
     flash_demo = request.vars.get("flash")
     if request.env.request_method == "POST" and request.post_vars.get("ticket_id"):
-        response.flash = {"tipo": "sucesso", "mensagem": u"Confirmação recebida (demonstração; nenhuma ação executada)."}
-    if flash_demo in ("sucesso", "aviso", "erro"):
+        response.flash = {"kind": "success", "message": u"Confirmação recebida (demonstração; nenhuma ação executada)."}
+    if flash_demo in ("success", "warning", "error"):
         response.flash = {
-            "tipo": flash_demo,
-            "mensagem": {
-                "sucesso": u"Operação concluída com sucesso.",
-                "aviso": u"Agendamento pausado após falhas consecutivas.",
-                "erro": u"Não foi possível concluir a operação.",
+            "kind": flash_demo,
+            "message": {
+                "success": u"Operação concluída com sucesso.",
+                "warning": u"Agendamento pausado após falhas consecutivas.",
+                "error": u"Não foi possível concluir a operação.",
             }[flash_demo],
         }
 
@@ -146,12 +146,12 @@ def components():
     inicio = (pag["pagina"] - 1) * pag["tamanho"]
 
     colunas = [
-        {"chave": "id", "rotulo": u"Ticket", "tipo": "mono", "classe": "sss-col-id"},
-        {"chave": "script", "rotulo": u"Script", "tipo": "mono"},
-        {"chave": "environment", "rotulo": u"Ambiente"},
-        {"chave": "status", "rotulo": u"Status", "tipo": "status"},
-        {"chave": "inicio", "rotulo": u"Início", "tipo": "mono", "classe": "sss-col-data"},
-        {"chave": "duracao", "rotulo": u"Duração", "tipo": "mono", "classe": "sss-col-num"},
+        {"key": "id", "label": u"Ticket", "kind": "mono", "css_class": "sss-col-id"},
+        {"key": "script", "label": u"Script", "kind": "mono"},
+        {"key": "environment", "label": u"Ambiente"},
+        {"key": "status", "label": u"Status", "kind": "status"},
+        {"key": "inicio", "label": u"Início", "kind": "mono", "css_class": "sss-col-data"},
+        {"key": "duracao", "label": u"Duração", "kind": "mono", "css_class": "sss-col-num"},
     ]
     filtros_ativos = {"q": q, "status": status, "de": de, "ate": ate}
     campos_form, form_enviado = _formulario_demo()
@@ -159,13 +159,13 @@ def components():
     return dict(
         badges=[(s, m) for s, m in _STATUS_DEMO[:5]] + [("EM_ANALISE", None)],
         tabela={
-            "legenda": u"Tickets fictícios",
-            "colunas": colunas,
-            "linhas": tickets[inicio:inicio + pag["tamanho"]],
+            "caption": u"Tickets fictícios",
+            "columns": colunas,
+            "rows": tickets[inicio:inicio + pag["tamanho"]],
         },
-        tabela_vazia={"legenda": u"Tabela sem registros", "colunas": colunas[:4], "linhas": []},
-        tabela_erro={"legenda": u"Tabela com erro", "colunas": colunas[:4], "linhas": [],
-                     "erro": u"Não foi possível carregar os tickets. Tente novamente em instantes."},
+        tabela_vazia={"caption": u"Tabela sem registros", "columns": colunas[:4], "rows": []},
+        tabela_erro={"caption": u"Tabela com erro", "columns": colunas[:4], "rows": [],
+                     "error": u"Não foi possível carregar os tickets. Tente novamente em instantes."},
         pagina=pag["pagina"],
         tamanho=pag["tamanho"],
         total=pag["total"],
@@ -174,14 +174,14 @@ def components():
         filtros={
             "id": "filtro-tickets",
             "url_base": (request.controller, request.function),
-            "preservar": {"size": pag["tamanho"]},
-            "campos": [
-                {"name": "q", "rotulo": u"Script", "tipo": "texto", "valor": q},
-                {"name": "status", "rotulo": u"Status", "tipo": "select", "valor": status,
-                 "opcoes": [("", u"Todos")] + [(c, ui_helpers.status_info(c)["rotulo"]) for c in
+            "keep": {"size": pag["tamanho"]},
+            "fields": [
+                {"name": "q", "label": u"Script", "kind": "text", "value": q},
+                {"name": "status", "label": u"Status", "kind": "select", "value": status,
+                 "options": [("", u"Todos")] + [(c, ui_helpers.status_info(c)["label"]) for c in
                                                ("PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED")]},
-                {"name": "de", "rotulo": u"Data início", "tipo": "data", "valor": de},
-                {"name": "ate", "rotulo": u"Data fim", "tipo": "data", "valor": ate},
+                {"name": "de", "label": u"Data início", "kind": "date", "value": de},
+                {"name": "ate", "label": u"Data fim", "kind": "date", "value": ate},
             ],
         },
         tamanhos=(20, 50, 100),
@@ -189,19 +189,19 @@ def components():
         form_enviado=form_enviado,
         foco_campo=ui_helpers.primeiro_campo_invalido(campos_form),
         modais=[
-            {"id": "modal-cancelar", "titulo": u"Cancelar ticket 1024?",
-             "texto": u"O processo em execução será interrompido. Esta ação não pode ser desfeita.",
-             "rotulo_gatilho": u"Cancelar ticket", "rotulo_confirmar": u"Sim, cancelar",
-             "variante": "perigo", "acao": URL("dev", "components"), "campos_ocultos": {"ticket_id": 1024}},
-            {"id": "modal-reexecutar", "titulo": u"Reexecutar ticket 1023?",
-             "texto": u"Um novo ticket será criado com os mesmos parâmetros.",
-             "rotulo_gatilho": u"Reexecutar", "rotulo_confirmar": u"Reexecutar",
-             "variante": "normal", "acao": URL("dev", "components"), "campos_ocultos": {"ticket_id": 1023}},
+            {"id": "modal-cancelar", "title": u"Cancelar ticket 1024?",
+             "text": u"O processo em execução será interrompido. Esta ação não pode ser desfeita.",
+             "trigger_label": u"Cancelar ticket", "confirm_label": u"Sim, cancelar",
+             "variant": "danger", "action": URL("dev", "components"), "hidden_fields": {"ticket_id": 1024}},
+            {"id": "modal-reexecutar", "title": u"Reexecutar ticket 1023?",
+             "text": u"Um novo ticket será criado com os mesmos parâmetros.",
+             "trigger_label": u"Reexecutar", "confirm_label": u"Reexecutar",
+             "variant": "normal", "action": URL("dev", "components"), "hidden_fields": {"ticket_id": 1023}},
         ],
-        alertas=[ui_helpers.alerta_info({"tipo": t, "mensagem": m}) for t, m in (
-            ("sucesso", u"Usuário salvo com sucesso."),
-            ("aviso", u"O agente srv-linux-prod-02 está sem heartbeat há 2 minutos."),
-            ("erro", u"Não foi possível salvar: o login já está em uso."),
+        alertas=[ui_helpers.alerta_info({"kind": t, "message": m}) for t, m in (
+            ("success", u"Usuário salvo com sucesso."),
+            ("warning", u"O agente srv-linux-prod-02 está sem heartbeat há 2 minutos."),
+            ("error", u"Não foi possível salvar: o login já está em uso."),
         )],
         texto_copia=u"/opt/sss/scripts/carga_diaria.py --data 2026-10-14",
     )

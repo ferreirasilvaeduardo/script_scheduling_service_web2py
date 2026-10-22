@@ -59,7 +59,7 @@ def health(agent, now, thresholds):
 def health_info(code):
     """{codigo, rotulo, classe, icone, descricao} da saude, para badge e legenda."""
     label, cls_name, icon, description = _HEALTH[code]
-    return {"code": code, "rotulo": label, "classe": cls_name, "icone": icon, "description": description}
+    return {"code": code, "label": label, "css_class": cls_name, "icon": icon, "description": description}
 
 
 def legend():
@@ -119,7 +119,7 @@ class AgentsService(object):
     def dashboard(self, ctx, now=None):
         """Agentes com saude derivada, idade do heartbeat e tickets RUNNING (somente leitura).
 
-        Retorna {"agents": [...], "resumo": {codigo_saude: quantidade}, "agora": datetime}.
+        Retorna {"agents": [...], "summary": {codigo_saude: quantidade}, "agora": datetime}.
         """
         admin_crud.require_feature(ctx, FEATURE)
         now = now or self._clock()
@@ -152,10 +152,10 @@ class AgentsService(object):
                 "running": len(tickets),
                 "tickets": tickets,
             })
-        return {"agents": agents, "resumo": summary, "agora": now,
-                "fila_sem_atendente": self._agents.unattended_queue(now, self._thresholds),
-                "rodando_sem_pid": self._agents.running_without_pid(now, 2),
-                "config_divergente": divergent, "config_web": self._critical_config}
+        return {"agents": agents, "summary": summary, "agora": now,
+                "unattended_queue": self._agents.unattended_queue(now, self._thresholds),
+                "running_without_pid": self._agents.running_without_pid(now, 2),
+                "config_mismatch": divergent, "config_web": self._critical_config}
 
 
 _default = None

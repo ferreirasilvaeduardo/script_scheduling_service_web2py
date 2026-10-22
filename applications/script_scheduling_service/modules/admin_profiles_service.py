@@ -29,7 +29,7 @@ MSG_NAME_REQUIRED = u"Informe o nome do perfil."
 MSG_NAME_INVALID = u"Use de 1 a 30 caracteres: letras maiúsculas, dígitos e _ (ex.: OPERATOR_PROD)."
 MSG_NAME_DUPLICATE = u"Já existe um perfil com este nome."
 MSG_DESCRIPTION_LENGTH = u"A descrição deve ter no máximo %d caracteres." % DESCRIPTION_MAX_LENGTH
-MSG_LAST_ADMIN = ui_helpers.mensagem("ultimo_admin")
+MSG_LAST_ADMIN = ui_helpers.mensagem("last_admin")
 MSG_SELF_ADMIN = u"Você não pode remover o acesso administrativo do seu próprio perfil."
 MSG_SELF_DEACTIVATE = u"Você não pode desativar o seu próprio perfil."
 MSG_ADMIN_ONLY = (u"Só um administrador pode alterar um perfil de administrador, mudar o seu próprio perfil ou "
@@ -293,7 +293,7 @@ class AdminProfilesService(object):
         environments = dict((a["id"], a) for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["itens"])
         result = {"scripts": sorted(scripts.values(), key=lambda s: s["name"]),
                      "environments": sorted(environments.values(), key=lambda a: a["name"]),
-                     "script": None, "environment": None, "profiles": [], "inativos": [], "aviso": None}
+                     "script": None, "environment": None, "profiles": [], "inativos": [], "warning": None}
         sid, aid = _id(script_id), _id(environment_id)
         if sid is None and aid is None:
             return result
@@ -315,7 +315,7 @@ class AdminProfilesService(object):
             script = scripts[sid]
             result["script"] = script
             if script.get("active") != "Y":
-                result["aviso"] = u"Este script está inativo: ninguém consegue rodá-lo agora."
+                result["warning"] = u"Este script está inativo: ninguém consegue rodá-lo agora."
             for p in profiles:
                 m = self._rbac.matrix_get(p["id"])
                 if p["is_admin"] == "Y":
@@ -332,7 +332,7 @@ class AdminProfilesService(object):
             env = environments[aid]
             result["environment"] = env
             if env.get("active") != "Y":
-                result["aviso"] = u"Este ambiente está inativo: nenhum script roda nele agora."
+                result["warning"] = u"Este ambiente está inativo: nenhum script roda nele agora."
             active = [s for s in scripts.values() if s.get("active") == "Y" and aid in homologados(s["id"])]
             for p in profiles:
                 m = self._rbac.matrix_get(p["id"])
@@ -376,8 +376,8 @@ class AdminProfilesService(object):
         marked = dict((dim, set(current[dim])) for dim, _p in _PREFIXES)
 
         def item(dim, reg, label, detail, prefix):
-            return {"id": reg["id"], "rotulo": label, "detail": detail or "",
-                    "marcado": reg["id"] in marked[dim], "inativo": reg.get("active") != "Y",
+            return {"id": reg["id"], "label": label, "detail": detail or "",
+                    "checked": reg["id"] in marked[dim], "inativo": reg.get("active") != "Y",
                     "rotulo_diff": prefix + label}
 
         def agrupar(dim, group_key, build):

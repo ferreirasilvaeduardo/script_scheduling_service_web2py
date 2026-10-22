@@ -21,9 +21,9 @@ _ag_icones = URL('static', 'img/icons.svg')
     <article class="sss-agente" aria-labelledby="agente-{{=_ag['code']}}">
       <header class="sss-agente-cabecalho">
         <h3 class="sss-agente-titulo sss-mono" id="agente-{{=_ag['code']}}">{{=_ag['code']}}</h3>
-        <span class="sss-status {{=_ag['saude']['classe']}}">
-          <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_ag_icones}}#{{=_ag['saude']['icone']}}"></use></svg>
-          <span>{{=_ag['saude']['rotulo']}}</span>
+        <span class="sss-status {{=_ag['saude']['css_class']}}">
+          <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_ag_icones}}#{{=_ag['saude']['icon']}}"></use></svg>
+          <span>{{=_ag['saude']['label']}}</span>
         </span>
       </header>
       <dl class="sss-resumo">

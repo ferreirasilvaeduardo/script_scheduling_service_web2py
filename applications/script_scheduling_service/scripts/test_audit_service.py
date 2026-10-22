@@ -161,7 +161,7 @@ class TestList(_Base):
 
     def test_seed_nos_ultimos_7_dias_e_ordenacao(self):
         res = self.svc.list(self.ctx["admin"], {}, 1, 100)
-        self.assertEqual(res["erros"], {})
+        self.assertEqual(res["errors"], {})
         self.assertEqual(res["total"], 30)
         keys = [(i["created_at"], i["id"]) for i in res["itens"]]
         self.assertEqual(keys, sorted(keys, reverse=True))
@@ -197,7 +197,7 @@ class TestList(_Base):
         with mock.patch.object(self.audit, "list") as list_value:
             res = self.svc.list(self.ctx["admin"], {"action": "XPTO"}, 1, 20)
         list_value.assert_not_called()
-        self.assertEqual((res["total"], sorted(res["erros"])), (0, ["action"]))
+        self.assertEqual((res["total"], sorted(res["errors"])), (0, ["action"]))
 
     def test_rbac(self):
         for login in ("consulta", "op.prod"):
@@ -211,7 +211,7 @@ class TestList(_Base):
         aid_long = self._insert_row(self.base, detail=long)
         aid_seg = self._insert_row(self.base, detail=u"valor vazado %s" % SECRET)
         items = dict((i["id"], i) for i in self.svc.list(self.ctx["admin"], {}, 1, 100)["itens"])
-        self.assertTrue(items[aid_long]["truncado"])
+        self.assertTrue(items[aid_long]["truncated"])
         self.assertEqual(len(items[aid_long]["detalhe_curto"]), audit_service.SHORT_DETAIL)
         self.assertEqual(items[aid_long]["detail"], long)
         self.assertNotIn(SECRET, items[aid_seg]["detail"])
@@ -328,7 +328,7 @@ class TestAgentHealth(unittest.TestCase):
     def test_info_e_legenda(self):
         self.assertEqual([i["code"] for i in agents_service.legend()], [OK, DELAYED, AT_RISK, OFFLINE])
         for info in agents_service.legend():
-            self.assertTrue(info["rotulo"] and info["classe"] and info["icone"] and info["description"])
+            self.assertTrue(info["label"] and info["css_class"] and info["icon"] and info["description"])
 
     def test_formatar_idade(self):
         self.assertEqual(agents_service.format_age(None), u"sem heartbeat")
@@ -363,7 +363,7 @@ class TestAgentsDashboard(_Base):
             expected = [t["id"] for t in self.agents.tickets_running(ag["code"])]
             self.assertEqual([t["id"] for t in ag["tickets"]], expected)
             self.assertEqual(ag["running"], len(expected))
-        self.assertEqual(sum(dashboard["resumo"].values()), 2)
+        self.assertEqual(sum(dashboard["summary"].values()), 2)
         second = [a for a in dashboard["agents"] if a["code"] == "agt-host02"][0]
         self.assertEqual((second["idade_s"], second["ha"]), (30, u"há 30 s"))
 
@@ -418,27 +418,27 @@ class TestAgentsDashboard(_Base):
     def test_diagnosticos_do_seed(self):
         """Dados de demonstracao: os tres quadros aparecem (UI_FREEZE, CR-007 R-18)."""
         dashboard = self.svc_agentes.dashboard(self.ctx["admin"])
-        self.assertEqual([a["code"] for a in dashboard["config_divergente"]], ["agt-host02"])
-        self.assertIn("kill=10", dashboard["config_divergente"][0]["critical_config"])
-        self.assertEqual([t["id"] for t in dashboard["rodando_sem_pid"]], [16])
-        self.assertEqual(dashboard["fila_sem_atendente"], [])  # agt-host02 ainda DELAYED
+        self.assertEqual([a["code"] for a in dashboard["config_mismatch"]], ["agt-host02"])
+        self.assertIn("kill=10", dashboard["config_mismatch"][0]["critical_config"])
+        self.assertEqual([t["id"] for t in dashboard["running_without_pid"]], [16])
+        self.assertEqual(dashboard["unattended_queue"], [])  # agt-host02 ainda DELAYED
         self.now = self.base + datetime.timedelta(seconds=61)  # agt-host02 AT_RISK
-        queue_value = self.svc_agentes.dashboard(self.ctx["admin"])["fila_sem_atendente"]
+        queue_value = self.svc_agentes.dashboard(self.ctx["admin"])["unattended_queue"]
         self.assertEqual([(g["environment"], g["interpreter"], g["quantidade"]) for g in queue_value],
                          [("HOMOLOGACAO", "SH", 1)])
         self.assertEqual(queue_value[0]["mais_antigo"], self.store.tickets[4]["scheduled_at"])
 
     def test_diagnosticos_config_divergente_e_parado(self):
         self.store.agents[2]["critical_config"] = CRITICAL_CONFIG
-        self.assertEqual(self.svc_agentes.dashboard(self.ctx["admin"])["config_divergente"], [])
+        self.assertEqual(self.svc_agentes.dashboard(self.ctx["admin"])["config_mismatch"], [])
         self.store.agents[2]["critical_config"] = CRITICAL_CONFIG.replace("hb=10", "hb=11")
         dashboard = self.svc_agentes.dashboard(self.ctx["admin"])
-        self.assertEqual([a["code"] for a in dashboard["config_divergente"]], ["agt-host02"])
+        self.assertEqual([a["code"] for a in dashboard["config_mismatch"]], ["agt-host02"])
         self.assertEqual(dashboard["config_web"], CRITICAL_CONFIG)
         self.store.agents[1]["critical_config"] = self.store.agents[2]["critical_config"]
-        self.assertEqual(len(self.svc_agentes.dashboard(self.ctx["admin"])["config_divergente"]), 2)
+        self.assertEqual(len(self.svc_agentes.dashboard(self.ctx["admin"])["config_mismatch"]), 2)
         self.store.agents[2]["status"] = "STOPPED"
-        self.assertEqual(len(self.svc_agentes.dashboard(self.ctx["admin"])["config_divergente"]), 1)
+        self.assertEqual(len(self.svc_agentes.dashboard(self.ctx["admin"])["config_mismatch"]), 1)
 
     def test_tickets_do_agente(self):
         items = self.svc_agentes.agent_tickets(self.ctx["admin"], "agt-host01")

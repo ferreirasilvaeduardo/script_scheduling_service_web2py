@@ -342,13 +342,13 @@ class TestMatrix(_BaseProfiles):
     def test_tela_da_matriz(self):
         screen = self.svc.matrix(self.ctx["admin"], str(PERFIL_HML))
         envs = [i for g in screen["ambs"] for i in g["itens"]]
-        dev = [i for i in envs if i["rotulo"] == "DESENV"][0]
-        self.assertTrue(dev["marcado"] and dev["inativo"])
+        dev = [i for i in envs if i["label"] == "DESENV"][0]
+        self.assertTrue(dev["checked"] and dev["inativo"])
         self.assertEqual([g["script_group"] for g in screen["funcs"]], ["ADMIN", "OPERATION"])
         self.assertIsNone(screen["aviso_admin"])
         self.assertEqual(self.svc.matrix(self.ctx["admin"], str(PERFIL_ADMIN))["aviso_admin"], perfis_mod.ADMIN_WARNING)
         screen_query = self.svc.matrix(self.ctx["admin"], str(PERFIL_CONSULTA))
-        self.assertNotIn("DESENV", [i["rotulo"] for g in screen_query["ambs"] for i in g["itens"]])
+        self.assertNotIn("DESENV", [i["label"] for g in screen_query["ambs"] for i in g["itens"]])
 
 
 class TestLastAdmin(_BaseProfiles):

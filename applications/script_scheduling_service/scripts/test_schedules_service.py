@@ -82,7 +82,7 @@ class _Base(unittest.TestCase):
     def _data(self, **extra):
         date = {"name": "Regra de teste", "script_id": "1", "environment": "HOMOLOGACAO",
                  "recurrence_type": "DAILY", "run_time": "03:00", "priority": "2",
-                 "respostas": {"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"}}
+                 "answers": {"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"}}
         date.update(extra)
         return date
 
@@ -157,7 +157,7 @@ class TestSaveTypes(_Base):
         self.assertEqual(self.agd.get(aid)["start_date"], datetime.datetime(2026, 1, 15, 10, 0))
 
     def test_parametros_json_ordenado_com_resolvidos(self):
-        aid, _errors = self._save(respostas={"modo_exec": "SIMULACAO", "data_ref": "2026-01-20",
+        aid, _errors = self._save(answers={"modo_exec": "SIMULACAO", "data_ref": "2026-01-20",
                                               "verbose": ["false", "true"], "intruso": "x"})
         params = self.agd.get(aid)["params_json"]
         obj = json.loads(params)
@@ -218,7 +218,7 @@ class TestValidation(_Base):
         self.assertEqual(errors, {GENERAL_FIELD: svc_mod.MSG_NO_NEXT_RUN})
 
     def test_parametros_invalidos(self):
-        aid, errors = self._save(respostas={"data_ref": "20/01/2026", "modo_exec": "INEXISTENTE",
+        aid, errors = self._save(answers={"data_ref": "20/01/2026", "modo_exec": "INEXISTENTE",
                                              "limite_linhas": "abc"})
         self.assertIsNone(aid)
         self.assertEqual(set(errors), {"data_ref", "modo_exec", "limite_linhas"})
@@ -274,7 +274,7 @@ class TestEdit(_Base):
         date = {"id": "4", "version": self._version(reg), "name": reg["name"], "recurrence_type": "MONTHLY",
                  "run_time": "01:00", "month_day": "1", "priority": "3",
                  "start_date": reg["start_date"].strftime("%Y-%m-%dT%H:%M"),
-                 "respostas": {"formato_saida": "JSON"}}
+                 "answers": {"formato_saida": "JSON"}}
         _id, errors = self.svc.save(self.ctx["op.prod"], IP, date)
         self.assertEqual(errors, {})
         self.assertEqual(self.agd.get(4)["user_id"], 2)
@@ -296,10 +296,10 @@ class TestEdit(_Base):
         self.assertEqual(self.agd.get(aid)["next_run_at"], datetime.datetime(2026, 1, 16, 5, 0))
 
     def test_editor_sem_permissao_e_negado(self):
-        aid, _errors = self._save(script_id="4", respostas={})
+        aid, _errors = self._save(script_id="4", answers={})
         before = self.agd.get(aid)
         with self.assertRaises(OperationDenied) as cm:
-            self._edit(aid, login="op.prod", run_time="06:00", respostas={})
+            self._edit(aid, login="op.prod", run_time="06:00", answers={})
         self.assertEqual(cm.exception.message, svc_mod.MSG_NO_PERMISSION)
         self.assertEqual(self.agd.get(aid), before)
         self.assertEqual(self._audits("UPDATE"), [])
@@ -348,29 +348,29 @@ class TestEdit(_Base):
 
     def test_sensivel_nao_reexibido_e_vazio_mantem_valor(self):
         # CR-003 P1: a versao do formulario tambem nao deriva da resposta sensivel.
-        aid0, _e = self._save(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": "tok-um-111"})
+        aid0, _e = self._save(answers={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": "tok-um-111"})
         v1 = self.svc.form(self.ctx["admin"], str(aid0))["regra"]["version"]
         reg = self.agd.get(aid0)
         swapped = json.loads(reg["params_json"])
         swapped["documento_cliente"] = "tok-dois-222"
         self.assertEqual(svc_mod.version(dict(reg, params_json=json.dumps(swapped)), frozenset(["documento_cliente"])), v1)
         self.assertNotEqual(svc_mod.version(reg), v1)
-        aid, errors = self._save(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": SECRET})
+        aid, errors = self._save(answers={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": SECRET})
         self.assertEqual(errors, {})
         date = self.svc.form(self.ctx["admin"], str(aid))
-        field = [c for c in date["form"]["campos"] if c["code"] == "documento_cliente"][0]
-        self.assertTrue(field["mantido"])
-        self.assertIsNone(field["valor"])
+        field = [c for c in date["form"]["fields"] if c["code"] == "documento_cliente"][0]
+        self.assertTrue(field["kept"])
+        self.assertIsNone(field["value"])
         self.assertNotIn(SECRET, json.dumps(date, default=str))
-        not_sensitive = [c for c in date["form"]["campos"] if c["code"] == "modo_exec"][0]
-        self.assertEqual(not_sensitive["valor"], "REAL")
-        self.assertFalse(not_sensitive["mantido"])
+        not_sensitive = [c for c in date["form"]["fields"] if c["code"] == "modo_exec"][0]
+        self.assertEqual(not_sensitive["value"], "REAL")
+        self.assertFalse(not_sensitive["kept"])
 
         _id, errors = self._edit(aid, run_time="05:00",
                                   respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": ""})
         self.assertEqual(errors, {})
         self.assertEqual(json.loads(self.agd.get(aid)["params_json"])["documento_cliente"], SECRET)
-        _id, errors = self._edit(aid, respostas={"data_ref": "2026-01-20", "modo_exec": "REAL",
+        _id, errors = self._edit(aid, answers={"data_ref": "2026-01-20", "modo_exec": "REAL",
                                                   "documento_cliente": "outro-token-99"})
         self.assertEqual(json.loads(self.agd.get(aid)["params_json"])["documento_cliente"], "outro-token-99")
         for aud in self._audits():
@@ -406,7 +406,7 @@ class TestAgenda(_Base):
         date = self.svc.agenda(self.ctx["admin"])
         items = self._items(date, rid)
         self.assertEqual(len(items), 7)  # 16/01 a 22/01: ate o fim do 7o dia seguinte a 15/01
-        labels = [d["rotulo"] for d in date["dias"] if any(o["regra_id"] == rid for o in d["itens"])]
+        labels = [d["label"] for d in date["dias"] if any(o["regra_id"] == rid for o in d["itens"])]
         self.assertEqual(labels[0], u"Amanhã")
         self.assertTrue(labels[1].startswith(u"sábado, 17/01"))
 
@@ -490,7 +490,7 @@ class TestPauseResume(_Base):
         self.assertEqual(self._audits("SCHEDULE_PAUSE"), [])
 
     def test_retomar_revalida_permissao(self):
-        aid, _errors = self._save(script_id="4", respostas={})
+        aid, _errors = self._save(script_id="4", answers={})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         with self.assertRaises(OperationDenied) as cm:
             self.svc.resume(self.ctx["op.prod"], IP, str(aid))
@@ -518,7 +518,7 @@ class TestPauseResume(_Base):
         self.assertIn(svc_mod.MSG_RESUME_GUIDANCE, cm.exception.message)
 
     def test_retomar_reavalia_script_inativo(self):
-        aid, _errors = self._save(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
+        aid, _errors = self._save(script_id="1", answers={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         self.catalog.scripts_update(1, {"active": "N"}, actor="teste")
         with self.assertRaises(OperationDenied) as cm:
@@ -535,7 +535,7 @@ class TestPauseResume(_Base):
         self.assertIn(svc_mod.PAUSE_REASONS["ENVIRONMENT_INACTIVE"], cm.exception.message)
 
     def test_retomar_reavalia_parametros_invalidos(self):
-        aid, _errors = self._save(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
+        aid, _errors = self._save(script_id="1", answers={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         self.agd.update(aid, {"params_json": json.dumps({"data_ref": "data-invalida"})}, actor="teste")
         with self.assertRaises(OperationDenied) as cm:
@@ -572,37 +572,37 @@ class TestPreviewList(_Base):
     def test_previa_mensal_dia_31(self):
         res = self.svc.preview(self.ctx["admin"], {"recurrence_type": "MONTHLY", "run_time": "03:00",
                                                   "month_day": "31"})
-        self.assertEqual(res["erros"], {})
-        self.assertEqual(res["datas"], [u"sáb, 31/01/2026 03:00", u"sáb, 28/02/2026 03:00",
+        self.assertEqual(res["errors"], {})
+        self.assertEqual(res["dates"], [u"sáb, 31/01/2026 03:00", u"sáb, 28/02/2026 03:00",
                                         u"ter, 31/03/2026 03:00", u"qui, 30/04/2026 03:00",
                                         u"dom, 31/05/2026 03:00"])
         self.now = datetime.datetime(2028, 1, 15, 10, 0)
         res = self.svc.preview(self.ctx["admin"], {"recurrence_type": "MONTHLY", "run_time": "03:00",
                                                   "month_day": "31"})
-        self.assertIn(u"29/02/2028 03:00", res["datas"][1])
+        self.assertIn(u"29/02/2028 03:00", res["dates"][1])
 
     def test_previa_cron_descricao_e_datas(self):
         res = self.svc.preview(self.ctx["admin"], {"recurrence_type": "CRON",
                                                   "cron_expression": "*/15 8-18 * * 1-5"})
-        self.assertEqual(res["erros"], {})
+        self.assertEqual(res["errors"], {})
         self.assertEqual(res["description"], u"A cada 15 minutos, das 08:00 às 18:59, de segunda a sexta")
-        self.assertEqual(res["datas"], [u"qui, 15/01/2026 10:15", u"qui, 15/01/2026 10:30",
+        self.assertEqual(res["dates"], [u"qui, 15/01/2026 10:15", u"qui, 15/01/2026 10:30",
                                         u"qui, 15/01/2026 10:45", u"qui, 15/01/2026 11:00",
                                         u"qui, 15/01/2026 11:15"])
         # Sexta 18:50 -> pula o fim de semana.
         self.now = datetime.datetime(2026, 1, 16, 18, 50)
         res = self.svc.preview(self.ctx["admin"], {"recurrence_type": "CRON",
                                                   "cron_expression": "*/15 8-18 * * 1-5"})
-        self.assertEqual(res["datas"][:2], [u"seg, 19/01/2026 08:00", u"seg, 19/01/2026 08:15"])
+        self.assertEqual(res["dates"][:2], [u"seg, 19/01/2026 08:00", u"seg, 19/01/2026 08:15"])
 
     def test_previa_com_erros(self):
         res = self.svc.preview(self.ctx["admin"], {"recurrence_type": "CRON", "cron_expression": "0 0 L * *"})
-        self.assertEqual(res["datas"], [])
-        self.assertIn("cron_expression", res["erros"])
+        self.assertEqual(res["dates"], [])
+        self.assertIn("cron_expression", res["errors"])
         res = self.svc.preview(self.ctx["admin"], {"recurrence_type": "ONCE", "start_date": "2026-01-01T00:00"})
-        self.assertEqual(res["erros"], {GENERAL_FIELD: svc_mod.MSG_NO_NEXT_RUN})
+        self.assertEqual(res["errors"], {GENERAL_FIELD: svc_mod.MSG_NO_NEXT_RUN})
         res = self.svc.preview(self.ctx["admin"], {"recurrence_type": "ONCE", "start_date": "2026-03-01T09:00"})
-        self.assertEqual(res["datas"], [u"dom, 01/03/2026 09:00"])
+        self.assertEqual(res["dates"], [u"dom, 01/03/2026 09:00"])
         self.assertEqual(res["description"], u"Uma vez, em 01/03/2026 09:00")
 
     def test_lista_aviso_sobreposicao(self):
@@ -612,9 +612,9 @@ class TestPreviewList(_Base):
         self.agd.update(1, {"last_ticket_id": tid}, actor="teste")
         res = self.svc.list(self.ctx["admin"], {}, 1, 20)
         item1 = [i for i in res["itens"] if i["id"] == 1][0]
-        self.assertIsNotNone(item1.get("aviso"))
-        self.assertIn(u"pode ser pulada", item1["aviso"])
-        self.assertIn(str(tid), item1["aviso"])
+        self.assertIsNotNone(item1.get("warning"))
+        self.assertIn(u"pode ser pulada", item1["warning"])
+        self.assertIn(str(tid), item1["warning"])
 
     def test_agenda_aviso_e_problemas(self):
         aid_active, errors = self._save()
@@ -623,7 +623,7 @@ class TestPreviewList(_Base):
         date = self.svc.agenda(self.ctx["admin"])
         items_r1 = [i for day in date["dias"] for i in day["itens"] if i["regra_id"] == aid_active]
         self.assertTrue(items_r1)
-        self.assertIn(u"Será pausada", items_r1[0].get("aviso", ""))
+        self.assertIn(u"Será pausada", items_r1[0].get("warning", ""))
         aid = self.agd.insert({"name": "CRON Problematico", "user_id": 1, "script_id": 1,
                                 "environment": "HOMOLOGACAO", "recurrence_type": "CRON",
                                 "cron_expression": "0 0 31 2 *", "priority": 2, "active": "Y",
@@ -633,7 +633,7 @@ class TestPreviewList(_Base):
         self.assertIn(aid, [p["regra_id"] for p in problems])
 
     def test_formulario_regra_pausada_pausa_aviso(self):
-        aid, _errors = self._save(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
+        aid, _errors = self._save(script_id="1", answers={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         f = self.svc.form(self.ctx["admin"], str(aid))
         self.assertIsNotNone(f["regra"].get("pausa_aviso"))
@@ -643,7 +643,7 @@ class TestPreviewList(_Base):
 class TestAuditInsert(_Base):
 
     def test_inclusao_auditada_sem_valor_sensivel(self):
-        aid, _errors = self._save(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": SECRET})
+        aid, _errors = self._save(answers={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": SECRET})
         inserts = self._audits("CREATE")
         self.assertEqual(len(inserts), 1)
         aud = inserts[0]

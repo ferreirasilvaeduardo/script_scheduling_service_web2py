@@ -89,11 +89,11 @@
           var texto = evt.currentTarget.getAttribute('data-texto') || '';
           function sucesso() {
             self.copiado = true;
-            window.SSS.toast('sucesso', 'Texto copiado para a área de transferência.');
+            window.SSS.toast('success', 'Texto copiado para a área de transferência.');
             window.setTimeout(function () { self.copiado = false; }, FEEDBACK_COPIA_MS);
           }
           function falha() {
-            window.SSS.toast('erro', 'Não foi possível copiar. Selecione o texto e copie manualmente.');
+            window.SSS.toast('error', 'Não foi possível copiar. Selecione o texto e copie manualmente.');
           }
           // navigator.clipboard so existe em contexto seguro (HTTPS ou localhost).
           if (navigator.clipboard && window.isSecureContext) {

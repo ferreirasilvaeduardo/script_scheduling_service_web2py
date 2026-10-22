@@ -108,7 +108,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
       <p class="mb-1"><strong>Não foi possível criar o ticket:</strong></p>
       <ul class="mb-0">
         {{if erro_geral:}}<li>{{=erro_geral}}</li>{{pass}}
-        {{for _c in form['campos']:}}{{if _c['erro']:}}<li>{{=_c['erro']}}</li>{{pass}}{{pass}}
+        {{for _c in form['fields']:}}{{if _c['error']:}}<li>{{=_c['error']}}</li>{{pass}}{{pass}}
         {{if erros.get('priority'):}}<li>{{=erros['priority']}}</li>{{pass}}
         {{if erros.get('scheduled_at'):}}<li>{{=erros['scheduled_at']}}</li>{{pass}}
       </ul>

@@ -41,7 +41,7 @@ _alvo = q['script'] or q['environment']
 </section>
 
 {{if _alvo:}}
-{{if q['aviso']:}}<div class="alert alert-warning sss-alerta" role="status"><span>{{=q['aviso']}}</span></div>{{pass}}
+{{if q['warning']:}}<div class="alert alert-warning sss-alerta" role="status"><span>{{=q['warning']}}</span></div>{{pass}}
 {{for _titulo, _lista in ((u'Perfis ativos', q['profiles']), (u'Não valem agora (perfil inativo)', q['inativos'])):}}
 {{if _lista or _titulo == u'Perfis ativos':}}
 <section class="sss-card">

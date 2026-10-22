@@ -153,7 +153,7 @@
             return resposta.json();
           }).then(function (r) {
             self.testeOk = r.ok === true;
-            self.resultadoTeste = r.ok === true ? 'Válido. Valor normalizado: ' + r.valor : (r.erro || 'Valor inválido.');
+            self.resultadoTeste = r.ok === true ? 'Válido. Valor normalizado: ' + r.value : (r.error || 'Valor inválido.');
           }).catch(function () {
             self.testeOk = false;
             self.resultadoTeste = 'Não foi possível testar agora. Tente novamente.';

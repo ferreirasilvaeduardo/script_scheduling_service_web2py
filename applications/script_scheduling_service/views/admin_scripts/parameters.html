@@ -65,7 +65,7 @@ _rotulo_tipo = {'NAMED': u'por flag (NOMEADO)', 'POSITIONAL': u'posicional (SEQU
       <ul class="sss-busca-parametros">
         <template x-for="p in resultados" :key="p.id">
           <li>
-            <button type="button" class="btn btn-sm btn-link" :data-id="p.id" @click="adicionar"><span class="sss-mono" x-text="p.codigo"></span> — <span x-text="p.label"></span></button>
+            <button type="button" class="btn btn-sm btn-link" :data-id="p.id" @click="adicionar"><span class="sss-mono" x-text="p.code"></span> — <span x-text="p.label"></span></button>
           </li>
         </template>
       </ul>

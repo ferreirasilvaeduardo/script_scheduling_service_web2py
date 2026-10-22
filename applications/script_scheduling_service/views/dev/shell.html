@@ -10,14 +10,14 @@
   <h2 class="sss-card-titulo" id="sec-status">Estados do ticket</h2>
   <div class="sss-card-corpo sss-status-lista">
     {{for t in tickets:}}
-    <span class="sss-status {{=t['status']['classe']}}">
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=t['status']['icone']}}"></use></svg>
-      <span>{{=t['status']['rotulo']}}</span>
+    <span class="sss-status {{=t['status']['css_class']}}">
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=t['status']['icon']}}"></use></svg>
+      <span>{{=t['status']['label']}}</span>
     </span>
     {{pass}}
-    <span class="sss-status {{=status_desconhecido['classe']}}">
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=status_desconhecido['icone']}}"></use></svg>
-      <span>{{=status_desconhecido['rotulo']}}</span>
+    <span class="sss-status {{=status_desconhecido['css_class']}}">
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=status_desconhecido['icon']}}"></use></svg>
+      <span>{{=status_desconhecido['label']}}</span>
     </span>
   </div>
 </section>
@@ -43,9 +43,9 @@
           <td class="sss-mono">{{=t['script']}}</td>
           <td>{{=t['environment']}}</td>
           <td>
-            <span class="sss-status {{=t['status']['classe']}}">
-              <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=t['status']['icone']}}"></use></svg>
-              <span>{{=t['status']['rotulo']}}</span>
+            <span class="sss-status {{=t['status']['css_class']}}">
+              <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=t['status']['icon']}}"></use></svg>
+              <span>{{=t['status']['label']}}</span>
             </span>
           </td>
           <td class="sss-mono">{{=t['inicio']}}</td>
@@ -60,9 +60,9 @@
 <section class="sss-card" aria-labelledby="sec-toast">
   <h2 class="sss-card-titulo" id="sec-toast">Notificações</h2>
   <div class="sss-card-corpo sss-acoes" x-data="toastDemo">
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="sucesso" data-mensagem="Ticket 1023 concluído com sucesso." @click="disparar">Sucesso</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="erro" data-mensagem="Ticket 1022 falhou: tempo limite excedido." @click="disparar">Erro</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="alerta" data-mensagem="Agendamento pausado após falhas consecutivas." @click="disparar">Alerta</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="success" data-mensagem="Ticket 1023 concluído com sucesso." @click="disparar">Sucesso</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="error" data-mensagem="Ticket 1022 falhou: tempo limite excedido." @click="disparar">Erro</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="warning" data-mensagem="Agendamento pausado após falhas consecutivas." @click="disparar">Alerta</button>
     <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="info" data-mensagem="Agente srv-linux-prod-01 ativo." @click="disparar">Informação</button>
   </div>
 </section>

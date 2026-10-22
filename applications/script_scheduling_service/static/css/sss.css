@@ -161,10 +161,10 @@
   --sss-status-cancelled-fg: #374151;
   --sss-status-cancelled-bd: #9ca3af;
   /* Grafico do historico (CR-004 U7): cores de situacao validadas (CVD e contraste) para marcas. */
-  --sss-graf-certo: #4daf9a;
-  --sss-graf-erro: #ef4444;
-  --sss-graf-cancelado: #9ca3af;
-  --sss-graf-andamento: #831fb2;
+  --sss-graf-succeeded: #4daf9a;
+  --sss-graf-error: #ef4444;
+  --sss-graf-cancelled: #9ca3af;
+  --sss-graf-in_progress: #831fb2;
   --sss-status-unknown-bg: #ffffff;
   --sss-status-unknown-fg: #374151;
   --sss-status-unknown-bd: #6b7280;
@@ -215,10 +215,10 @@
     --sss-status-cancelled-bg: #23262d;
     --sss-status-cancelled-fg: #d1d5db;
     --sss-status-cancelled-bd: #6b7280;
-    --sss-graf-certo: #4daf9a;
-    --sss-graf-erro: #ef4444;
-    --sss-graf-cancelado: #8b939f;
-    --sss-graf-andamento: #b56ee0;
+    --sss-graf-succeeded: #4daf9a;
+    --sss-graf-error: #ef4444;
+    --sss-graf-cancelled: #8b939f;
+    --sss-graf-in_progress: #b56ee0;
     --sss-status-unknown-bg: #181b21;
     --sss-status-unknown-fg: #d1d5db;
     --sss-status-unknown-bd: #9ca3af;
@@ -573,9 +573,9 @@
   flex: 1 1 auto;
 }
 
-.sss-toast-sucesso { border-left-color: var(--sss-status-success-bd); }
-.sss-toast-erro { border-left-color: var(--sss-status-failed-bd); }
-.sss-toast-alerta { border-left-color: var(--sss-status-pending-bd); }
+.sss-toast-success { border-left-color: var(--sss-status-success-bd); }
+.sss-toast-error { border-left-color: var(--sss-status-failed-bd); }
+.sss-toast-warning { border-left-color: var(--sss-status-pending-bd); }
 .sss-toast-info { border-left-color: var(--sss-status-running-bd); }
 
 .sss-toast-fechar {
@@ -1589,10 +1589,10 @@
 
 .sss-grafico-grade { stroke: var(--sss-border); stroke-width: 1; }
 .sss-grafico-eixo { fill: var(--sss-text-muted); font-size: 10px; font-family: var(--sss-font-sans); }
-.sss-graf-certo { fill: var(--sss-graf-certo); }
-.sss-graf-erro { fill: var(--sss-graf-erro); }
-.sss-graf-cancelado { fill: var(--sss-graf-cancelado); }
-.sss-graf-andamento { fill: var(--sss-graf-andamento); }
+.sss-graf-succeeded { fill: var(--sss-graf-succeeded); }
+.sss-graf-error { fill: var(--sss-graf-error); }
+.sss-graf-cancelled { fill: var(--sss-graf-cancelled); }
+.sss-graf-in_progress { fill: var(--sss-graf-in_progress); }
 .sss-grafico rect:hover { opacity: 0.8; }
 
 .sss-legenda {
@@ -1614,7 +1614,7 @@
   vertical-align: -0.1rem;
 }
 
-.sss-legenda-cor.sss-graf-certo { background: var(--sss-graf-certo); }
-.sss-legenda-cor.sss-graf-erro { background: var(--sss-graf-erro); }
-.sss-legenda-cor.sss-graf-cancelado { background: var(--sss-graf-cancelado); }
-.sss-legenda-cor.sss-graf-andamento { background: var(--sss-graf-andamento); }
+.sss-legenda-cor.sss-graf-succeeded { background: var(--sss-graf-succeeded); }
+.sss-legenda-cor.sss-graf-error { background: var(--sss-graf-error); }
+.sss-legenda-cor.sss-graf-cancelled { background: var(--sss-graf-cancelled); }
+.sss-legenda-cor.sss-graf-in_progress { background: var(--sss-graf-in_progress); }

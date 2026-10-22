@@ -6,8 +6,8 @@ import ui_helpers
 # Mensagens em duas partes (README §2.4.2): o que aconteceu + o que fazer agora.
 _MENSAGENS = {
     400: (u"O pedido enviado não é válido.", u"Volte à página anterior e tente de novo."),
-    403: ui_helpers.mensagem_partes("sem_permissao"),
-    404: ui_helpers.mensagem_partes("nao_encontrado"),
+    403: ui_helpers.mensagem_partes("no_permission"),
+    404: ui_helpers.mensagem_partes("not_found"),
     405: (u"Esta página não aceita esse tipo de pedido.", u"Volte à página anterior e use os botões da tela."),
 }
 
@@ -22,7 +22,7 @@ def index():
     response.view = "error/index.html"
     return dict(
         codigo=codigo,
-        aconteceu=_MENSAGENS.get(codigo, ui_helpers.mensagem_partes("falha_interna"))[0],
-        fazer=_MENSAGENS.get(codigo, ui_helpers.mensagem_partes("falha_interna"))[1],
+        aconteceu=_MENSAGENS.get(codigo, ui_helpers.mensagem_partes("internal_error"))[0],
+        fazer=_MENSAGENS.get(codigo, ui_helpers.mensagem_partes("internal_error"))[1],
         permissoes=codigo == 403,
     )

@@ -25,7 +25,7 @@ _sc = _h['script']
     <div class="sss-matriz-itens">
       {{for _a in _h['environments']:}}
       <div class="form-check sss-matriz-item">
-        <input class="form-check-input" type="checkbox" name="environments" value="{{=_a['id']}}" id="amb-{{=_a['id']}}" data-nome="{{=_a['name']}}" data-inicial="{{='Y' if _a['marcado'] else 'N'}}" data-agendamentos="{{=_a['agendamentos_ativos']}}"{{if _a['marcado']:}} checked{{pass}} @change="atualizar">
+        <input class="form-check-input" type="checkbox" name="environments" value="{{=_a['id']}}" id="amb-{{=_a['id']}}" data-nome="{{=_a['name']}}" data-inicial="{{='Y' if _a['checked'] else 'N'}}" data-agendamentos="{{=_a['agendamentos_ativos']}}"{{if _a['checked']:}} checked{{pass}} @change="atualizar">
         <label class="form-check-label" for="amb-{{=_a['id']}}">
           <span class="sss-mono">{{=_a['name']}}</span>{{if _a['inativo']:}} <span class="badge text-bg-secondary">inativo</span>{{pass}}
           <span class="sss-matriz-detalhe">{{=_a['description']}}{{if _a['agendamentos_ativos']:}} · {{=_a['agendamentos_ativos']}} agendamento(s) ativo(s){{pass}}</span>

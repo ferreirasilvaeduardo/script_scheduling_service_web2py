@@ -951,10 +951,10 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 
       | Token | Série | Claro | Escuro |
       |---|---|---|---|
-      | `--sss-graf-certo` | Deu certo | `#4daf9a` | `#4daf9a` |
-      | `--sss-graf-erro` | Deu erro | `#ef4444` | `#ef4444` |
-      | `--sss-graf-cancelado` | Cancelado | `#9ca3af` | `#8b939f` |
-      | `--sss-graf-andamento` | Esperando ou rodando | `#831fb2` | `#b56ee0` |
+      | `--sss-graf-succeeded` | Deu certo | `#4daf9a` | `#4daf9a` |
+      | `--sss-graf-error` | Deu erro | `#ef4444` | `#ef4444` |
+      | `--sss-graf-cancelled` | Cancelado | `#9ca3af` | `#8b939f` |
+      | `--sss-graf-in_progress` | Esperando ou rodando | `#831fb2` | `#b56ee0` |
 
     * a cor nunca é a única pista: a **legenda** com o nome das séries fica sempre acima do gráfico; cada segmento tem um `<title>` com dia, série e quantidade, que aparece ao passar o mouse; e a mesma informação está na tabela "Ver os números em tabela" (`<details>`), logo abaixo, que também serve aos leitores de tela;
     * um vão de 2 px separa os segmentos; o eixo vertical tem linhas de grade discretas;

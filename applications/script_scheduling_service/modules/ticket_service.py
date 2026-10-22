@@ -393,18 +393,18 @@ class TicketService(object):
                 "name": "p_" + code,
                 "label": v.get("label") or code,
                 "description": v.get("description") or "",
-                "tipo": kind,
+                "kind": kind,
                 "required": v.get("required") == "Y",
                 "sensitive": sensitive,
-                "opcoes": options,
+                "options": options,
                 "padrao": default,
-                "tem_padrao": default_real is not None,
-                "padrao_texto": default_text,
-                "valor": value,
-                "marcado": marked,
-                "erro": errors.get(code),
-                "exemplo": self._example(v),
-                "aviso": warnings.get(code),
+                "has_default": default_real is not None,
+                "default_text": default_text,
+                "value": value,
+                "checked": marked,
+                "error": errors.get(code),
+                "example": self._example(v),
+                "warning": warnings.get(code),
             })
         priorities = [(p, PRIORITY_LABELS[p]) for p in rbac.PRIORITIES if rbac.allowed_priority(ctx, p)]
         return {
@@ -412,7 +412,7 @@ class TicketService(object):
                        "param_type": script["param_type"]},
             "environment": {"id": env["id"], "name": env["name"], "description": env.get("description") or "",
                          "producao": env["name"] == PRODUCTION_ENVIRONMENT},
-            "campos": fields,
+            "fields": fields,
             "prioridades": priorities,
         }
 
@@ -512,7 +512,7 @@ class TicketService(object):
         sched = self._scheduled_at(scheduled_at, now, errors)
         snapshot, resolved, links = self._compile(ctx, script, env, answers, now, errors)
         if snapshot is None or errors:
-            return {"argv": None, "erros": dict(errors), "resumo": None}
+            return {"argv": None, "errors": dict(errors), "summary": None}
         rows = []
         for v in _sorted_items(links):
             value = resolved.get(v["code"])
@@ -524,15 +524,15 @@ class TicketService(object):
                 text = u"sim" if value else u"não"
             else:
                 text = dict(_options(v)).get(value, value) if v.get("component_type") == "SELECT" else value
-            rows.append({"rotulo": v.get("label") or v["code"], "valor": text})
+            rows.append({"label": v.get("label") or v["code"], "value": text})
         when = u"agora" if sched is None else u"em %s às %s" % (sched.strftime("%d/%m/%Y"), sched.strftime("%H:%M"))
         phrase = u"Vamos rodar %s no ambiente %s %s, com prioridade %d." % (script["name"], env["name"], when, prio)
         if rows:
-            phrase += u" Respostas: " + u"; ".join(u"%s = %s" % (l["rotulo"], l["valor"]) for l in rows) + u"."
+            phrase += u" Respostas: " + u"; ".join(u"%s = %s" % (l["label"], l["value"]) for l in rows) + u"."
         return {"argv": params_compiler.display_argv(json.loads(snapshot)),
-                "erros": {},
-                "resumo": {"script": script["name"], "environment": env["name"], "quando": when, "priority": prio,
-                           "respostas": rows, "frase": phrase}}
+                "errors": {},
+                "summary": {"script": script["name"], "environment": env["name"], "when": when, "priority": prio,
+                           "answers": rows, "phrase": phrase}}
 
     def _last_ticket(self, ctx, script_id, environment):
         sid = _id(script_id)
@@ -711,15 +711,15 @@ class TicketService(object):
             cards = []
             for s in g["scripts"]:
                 _script, environments = self.available_environments(ctx, s["id"])
-                questions = [{"rotulo": v.get("label") or v["code"], "required": v.get("required") == "Y"}
+                questions = [{"label": v.get("label") or v["code"], "required": v.get("required") == "Y"}
                              for v in _sorted_items(self._links(s["id"]))]
                 last = None
                 if s["id"] in recent_runs:
                     u = recent_runs[s["id"]]
                     info = ui_helpers.status_info(u["status"])
-                    last = {"id": u["id"], "state": info["rotulo"], "classe": info["classe"],
-                              "icone": info["icone"],
-                              "quando": u"há %s" % ui_helpers.tempo_simples((now - u["created_at"]).total_seconds())}
+                    last = {"id": u["id"], "state": info["label"], "css_class": info["css_class"],
+                              "icon": info["icon"],
+                              "when": u"há %s" % ui_helpers.tempo_simples((now - u["created_at"]).total_seconds())}
                 cards.append(dict(s, script_group=g["script_group"], category=g["category"], perguntas=questions,
                                     environments=[a["name"] for a in environments], ultima=last))
             result.append({"script_group": g["script_group"], "category": g["category"], "cartoes": cards})
@@ -738,7 +738,7 @@ class TicketService(object):
         since = now - datetime.timedelta(days=HISTORY_DAYS)
         scope, requester = self._runs_scope(ctx)
         items = self._tickets.script_history(sid, since, scope, requester, HISTORY_LIMIT)
-        groups = {"SUCCESS": "certo", "FAILED": "erro", "CANCELLED": "cancelado"}
+        groups = {"SUCCESS": "succeeded", "FAILED": "error", "CANCELLED": "cancelled"}
         count = dict((c, 0) for c, _r in ui_helpers.SERIES_HISTORICO)
         days = collections.OrderedDict()
         for i in range(HISTORY_DAYS - 1, -1, -1):
@@ -746,22 +746,22 @@ class TicketService(object):
             days[day] = dict((c, 0) for c, _r in ui_helpers.SERIES_HISTORICO)
         durations, reasons = [], collections.Counter()
         for t in items:
-            key = groups.get(t["status"], "andamento")
+            key = groups.get(t["status"], "in_progress")
             count[key] += 1
             if t["created_at"].date() in days:
                 days[t["created_at"].date()][key] += 1
             if t["status"] == "FAILED":
                 reasons[t.get("status_reason") or "-"] += 1
-            if key != "andamento" and t.get("started_at") and t.get("finished_at"):
+            if key != "in_progress" and t.get("started_at") and t.get("finished_at"):
                 durations.append((t["finished_at"] - t["started_at"]).total_seconds())
-        finished = count["certo"] + count["erro"] + count["cancelado"]
-        rate = int(round(100.0 * count["certo"] / finished)) if finished else None
+        finished = count["succeeded"] + count["error"] + count["cancelled"]
+        rate = int(round(100.0 * count["succeeded"] / finished)) if finished else None
         durations.sort()
         median = None
         if durations:
             middle = len(durations) // 2
             median = durations[middle] if len(durations) % 2 else (durations[middle - 1] + durations[middle]) / 2.0
-        series = [dict(v, rotulo=d.strftime("%d/%m")) for d, v in days.items()]
+        series = [dict(v, label=d.strftime("%d/%m")) for d, v in days.items()]
         return {
             "script": {"id": sid, "name": available[sid]["name"]},
             "total": len(items),
@@ -857,8 +857,8 @@ class TicketService(object):
                 code = label = "#%s" % r["parameter_id"]
                 is_sensitive = True
             value = r.get("answer_value")
-            rows.append({"code": code, "rotulo": label, "sensitive": is_sensitive,
-                           "valor": params_compiler.MASK if is_sensitive and value not in (None, "") else value})
+            rows.append({"code": code, "label": label, "sensitive": is_sensitive,
+                           "value": params_compiler.MASK if is_sensitive and value not in (None, "") else value})
         return rows
 
     def _can_rerun_by_rule(self, ctx, ticket):
@@ -948,7 +948,7 @@ class TicketService(object):
             "snapshot": snapshot,
             "argv_para_exibicao": argv,
             "comando_exibicao": " ".join(shlex.quote(str(t)) for t in argv) if argv else None,
-            "respostas": self._display_answers(ticket["id"], snap),
+            "answers": self._display_answers(ticket["id"], snap),
             "pai": parent,
             "filhos": children,
             "registro": ui_helpers.registro(ticket, ctx),
@@ -973,8 +973,8 @@ class TicketService(object):
         if terminal and status not in TERMINAL_STATUSES:
             # O ticket terminou entre a checagem de escopo e a leitura.
             status = self._tickets.get(ticket["id"])["status"]
-        return {"texto": text, "proximo_offset": next_value, "terminal": bool(terminal),
-                "truncado": bool(truncated), "status": status}
+        return {"text": text, "next_offset": next_value, "terminal": bool(terminal),
+                "truncated": bool(truncated), "status": status}
 
     def output_chunks(self, ctx, ticket_id):
         """Valida o escopo (regra do log) e a situacao DISPONIVEL; retorna (id, tamanho, gerador de fatias).
@@ -1121,7 +1121,7 @@ class TicketService(object):
             "environment": env["name"],
             "priority": str(prio if prio is not None else DEFAULT_PRIORITY),
             "valores": dict((k, v) for k, v in answers.items() if k not in sensitive),
-            "erros": dict(errors),
+            "errors": dict(errors),
         }
 
 _default = None

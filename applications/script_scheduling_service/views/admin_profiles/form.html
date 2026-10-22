@@ -5,9 +5,9 @@ import ui_helpers
 _novo = not perfil.get('id')
 _situacao = ui_helpers.ativo_info(perfil.get('active'))
 _campos = [
-    {'name': 'name', 'rotulo': 'Nome', 'valor': perfil.get('name'), 'erro': erros.get('name'), 'required': True, 'maxlength': 30,
-     'ajuda': u'Letras maiúsculas, dígitos e _ (ex.: OPERATOR_PROD).'},
-    {'name': 'description', 'rotulo': u'Descrição', 'valor': perfil.get('description'), 'erro': erros.get('description'), 'maxlength': 100},
+    {'name': 'name', 'label': 'Nome', 'value': perfil.get('name'), 'error': erros.get('name'), 'required': True, 'maxlength': 30,
+     'help': u'Letras maiúsculas, dígitos e _ (ex.: OPERATOR_PROD).'},
+    {'name': 'description', 'label': u'Descrição', 'value': perfil.get('description'), 'error': erros.get('description'), 'maxlength': 100},
 ]
 if not _novo:
     _desativar = perfil.get('active') == 'Y'
@@ -25,17 +25,17 @@ if not _novo:
     else:
         _texto_modal = u'Os usuários do perfil voltarão a ter acesso conforme a matriz de permissões.'
     pass
-    _modal_ativo = {'id': 'modal-ativo', 'titulo': (u'Desativar perfil %s' if _desativar else u'Reativar perfil %s') % perfil['name'],
-                    'texto': _texto_modal, 'rotulo_gatilho': 'Desativar' if _desativar else 'Reativar',
-                    'rotulo_confirmar': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
-                    'variante': 'perigo' if _desativar else 'normal', 'acao': URL(c='admin_profiles', f='toggle_active'),
-                    'campos_ocultos': dict(id=perfil['id'], versao=perfil['version'])}
+    _modal_ativo = {'id': 'modal-ativo', 'title': (u'Desativar perfil %s' if _desativar else u'Reativar perfil %s') % perfil['name'],
+                    'text': _texto_modal, 'trigger_label': 'Desativar' if _desativar else 'Reativar',
+                    'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
+                    'variant': 'danger' if _desativar else 'normal', 'action': URL(c='admin_profiles', f='toggle_active'),
+                    'hidden_fields': dict(id=perfil['id'], versao=perfil['version'])}
 pass
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
     <h1 class="sss-page-titulo">{{if _novo:}}Novo perfil{{else:}}Perfil <span class="sss-mono">{{=perfil['name']}}</span>
-      <span class="sss-status {{=_situacao['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icone']}}"></use></svg><span>{{=_situacao['rotulo']}}</span></span>{{pass}}
+      <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
     </h1>
   </div>
   <div class="sss-acoes">

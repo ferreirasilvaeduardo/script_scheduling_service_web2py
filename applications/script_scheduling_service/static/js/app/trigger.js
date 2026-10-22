@@ -118,23 +118,23 @@
             return resposta.json();
           }).then(function (dados) {
             var chave;
-            if (dados && dados.resumo) {
-              self.script = dados.resumo.script;
-              self.ambiente = dados.resumo.ambiente;
-              self.quando = dados.resumo.quando;
-              self.prioridade = String(dados.resumo.prioridade);
-              self.respostas = dados.resumo.respostas.map(function (r, i) {
-                return { id: i, rotulo: r.rotulo, valor: String(r.valor) };
+            if (dados && dados.summary) {
+              self.script = dados.summary.script;
+              self.ambiente = dados.summary.environment;
+              self.quando = dados.summary.when;
+              self.prioridade = String(dados.summary.priority);
+              self.respostas = dados.summary.answers.map(function (r, i) {
+                return { id: i, rotulo: r.label, valor: String(r.value) };
               });
               self.comando = (dados.argv || []).map(tokenExibicao).join(' ');
             } else {
-              for (chave in (dados && dados.erros) || {}) {
-                if (Object.prototype.hasOwnProperty.call(dados.erros, chave)) {
-                  self.erros.push({ id: self.erros.length, texto: String(dados.erros[chave]) });
+              for (chave in (dados && dados.errors) || {}) {
+                if (Object.prototype.hasOwnProperty.call(dados.errors, chave)) {
+                  self.erros.push({ id: self.erros.length, texto: String(dados.errors[chave]) });
                 }
               }
               if (!self.erros.length) {
-                self.erros.push({ id: 0, texto: (dados && dados.erro) || 'Não foi possível montar o resumo.' });
+                self.erros.push({ id: 0, texto: (dados && dados.error) || 'Não foi possível montar o resumo.' });
               }
             }
           }).catch(function () {
@@ -194,10 +194,10 @@
             if (dados.argv) {
               self.comando = dados.argv.map(tokenExibicao).join(' ');
             } else {
-              self.mostrarErros(dados.erros || {});
+              self.mostrarErros(dados.errors || {});
             }
           }).catch(function () {
-            window.SSS.toast('erro', 'Não foi possível gerar a prévia. Tente novamente.');
+            window.SSS.toast('error', 'Não foi possível gerar a prévia. Tente novamente.');
           }).then(function () {
             self.carregando = false;
           });

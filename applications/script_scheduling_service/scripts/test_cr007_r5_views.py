@@ -53,19 +53,19 @@ class TestViewsCR007(unittest.TestCase):
 
     def test_diagnosticos_aparecem_sem_agentes_e_escapam_conteudo(self):
         now = datetime.datetime(2026, 10, 17)
-        dashboard = {"agents": [], "resumo": {}, "agora": now, "config_web": "hb=10",
-                  "fila_sem_atendente": [{"environment": "HOMOLOGACAO", "interpreter": "BASH",
+        dashboard = {"agents": [], "summary": {}, "agora": now, "config_web": "hb=10",
+                  "unattended_queue": [{"environment": "HOMOLOGACAO", "interpreter": "BASH",
                                           "quantidade": 2, "mais_antigo": now}],
-                  "rodando_sem_pid": [{"id": 1, "environment": "HOMOLOGACAO", "agent_id": "agt01",
+                  "running_without_pid": [{"id": 1, "environment": "HOMOLOGACAO", "agent_id": "agt01",
                                        "started_at": now}],
-                  "config_divergente": [{"code": "agt01", "critical_config": "<script>intruso</script>"}]}
+                  "config_mismatch": [{"code": "agt01", "critical_config": "<script>intruso</script>"}]}
         html = _render("audit/agents.load", painel=dashboard, erro=None)
         for title in ("Fila sem atendente", "Rodando sem PID", "Configuração divergente"):
             self.assertIn(title, html)
         self.assertNotIn("<script>intruso</script>", html)
         self.assertIn("&lt;script&gt;", html)
         self.assertIn("Nenhum agente registrado", html)
-        dashboard.update(fila_sem_atendente=[], rodando_sem_pid=[], config_divergente=[])
+        dashboard.update(unattended_queue=[], running_without_pid=[], config_mismatch=[])
         html = _render("audit/agents.load", painel=dashboard, erro=None)
         self.assertNotIn("Fila sem atendente", html)
         self.assertNotIn("Rodando sem PID", html)

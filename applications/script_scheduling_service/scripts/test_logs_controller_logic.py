@@ -85,12 +85,12 @@ class _BaseLog(unittest.TestCase):
         offset = 0
         while True:
             r = self.svc.read_log(self.ctx[login], str(ticket_id), str(offset))
-            self.assertLessEqual(len(r["texto"]), LOG_MAX_CHARS)
-            self.assertEqual(r["proximo_offset"], offset + len(r["texto"]))
-            if not r["texto"]:
+            self.assertLessEqual(len(r["text"]), LOG_MAX_CHARS)
+            self.assertEqual(r["next_offset"], offset + len(r["text"]))
+            if not r["text"]:
                 return "".join(parts), r
-            parts.append(r["texto"])
-            offset = r["proximo_offset"]
+            parts.append(r["text"])
+            offset = r["next_offset"]
 
 
 class TestReadLogValidation(_BaseLog):
@@ -102,7 +102,7 @@ class TestReadLogValidation(_BaseLog):
 
     def test_offset_valido_em_lista_vale_o_ultimo(self):
         r = self.svc.read_log(self.ctx["admin"], "17", ["0", "10"])
-        self.assertEqual(r["proximo_offset"], 10 + len(r["texto"]))
+        self.assertEqual(r["next_offset"], 10 + len(r["text"]))
 
     def test_ticket_inexistente_ou_id_invalido_e_404(self):
         for tid in ("999", "0", "abc", None, "-3"):
@@ -119,11 +119,11 @@ class TestReadLogValidation(_BaseLog):
     def test_dentro_do_escopo(self):
         r = self.svc.read_log(self.ctx["consulta"], str(TCK_RUNNING), "0")
         self.assertEqual(r["status"], "RUNNING")
-        self.assertTrue(r["texto"])
+        self.assertTrue(r["text"])
 
     def test_offset_alem_do_fim_retorna_vazio(self):
         r = self.svc.read_log(self.ctx["admin"], "35", "999999")
-        self.assertEqual((r["texto"], r["proximo_offset"]), ("", 999999))
+        self.assertEqual((r["text"], r["next_offset"]), ("", 999999))
         self.assertTrue(r["terminal"])
 
 
@@ -131,26 +131,26 @@ class TestReadLogContent(_BaseLog):
 
     def test_formato_da_resposta(self):
         r = self.svc.read_log(self.ctx["admin"], "17", "0")
-        self.assertEqual(sorted(r), ["proximo_offset", "status", "terminal", "texto", "truncado"])
+        self.assertEqual(sorted(r), ["next_offset", "status", "terminal", "text", "truncated"])
 
     def test_limite_de_64k_e_reconstrucao_do_log_de_2mb(self):
         full = self._full_log(TCK_GRANDE)
         self.assertGreaterEqual(len(full.encode("utf-8")), 2 * 1024 * 1024)
         r = self.svc.read_log(self.ctx["admin"], str(TCK_GRANDE), "0")
-        self.assertEqual(len(r["texto"]), LOG_MAX_CHARS)
+        self.assertEqual(len(r["text"]), LOG_MAX_CHARS)
         self.assertEqual(LOG_MAX_CHARS, 65536)
         self.assertTrue(r["terminal"])
         text, last = self._read_all("admin", TCK_GRANDE)
         self.assertEqual(text, full)
-        self.assertEqual(last["proximo_offset"], len(full))
+        self.assertEqual(last["next_offset"], len(full))
         self.assertEqual(last["status"], "SUCCESS")
 
     def test_truncado_com_marcador_final(self):
         text, last = self._read_all("admin", TCK_TRUNCADO)
-        self.assertTrue(last["truncado"])
+        self.assertTrue(last["truncated"])
         self.assertTrue(last["terminal"])
         self.assertTrue(text.endswith(MARKER_TRUNCATED))
-        self.assertFalse(self.svc.read_log(self.ctx["admin"], "17", "0")["truncado"])
+        self.assertFalse(self.svc.read_log(self.ctx["admin"], "17", "0")["truncated"])
 
     def test_running_cresce_com_o_relogio_e_termina(self):
         text1, r1 = self._read_all("admin", TCK_RUNNING)
@@ -161,28 +161,28 @@ class TestReadLogContent(_BaseLog):
         self.assertNotIn("etapa %d/%d" % (stage_current + 1, STAGES), text1)
 
         # Sem avanco do relogio, nada novo.
-        r = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r1["proximo_offset"]))
-        self.assertEqual(r["texto"], "")
+        r = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r1["next_offset"]))
+        self.assertEqual(r["text"], "")
 
         self.clock.advance(STEP_13_S)
-        r2 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r1["proximo_offset"]))
-        self.assertIn("etapa %d/%d processada" % (stage_current + 1, STAGES), r2["texto"])
+        r2 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r1["next_offset"]))
+        self.assertIn("etapa %d/%d processada" % (stage_current + 1, STAGES), r2["text"])
         self.assertFalse(r2["terminal"])
 
         self.clock.advance(STAGES * STEP_13_S)
-        r3 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r2["proximo_offset"]))
+        r3 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r2["next_offset"]))
         self.assertTrue(r3["terminal"])
         self.assertEqual(r3["status"], "SUCCESS")
-        self.assertIn("etapa %d/%d processada" % (STAGES, STAGES), r3["texto"])
-        self.assertIn("Script concluido com retorno 0.", r3["texto"])
+        self.assertIn("etapa %d/%d processada" % (STAGES, STAGES), r3["text"])
+        self.assertIn("Script concluido com retorno 0.", r3["text"])
         ticket = self.tickets.get(TCK_RUNNING)
         self.assertEqual((ticket["status_reason"], ticket["return_code"]), ("EXIT_OK", 0))
         self.assertEqual(ticket["finished_at"], self.clock())
 
         # Terminal e imutavel: o log nao cresce mais.
         self.clock.advance(3600)
-        r4 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r3["proximo_offset"]))
-        self.assertEqual((r4["texto"], r4["terminal"]), ("", True))
+        r4 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r3["next_offset"]))
+        self.assertEqual((r4["text"], r4["terminal"]), ("", True))
 
     def test_running_com_cancelamento_sinalizado_termina_cancelado(self):
         self.assertEqual(self.tickets.request_cancel(TCK_RUNNING, "admin", "10.0.0.1"), "SINALIZADO")

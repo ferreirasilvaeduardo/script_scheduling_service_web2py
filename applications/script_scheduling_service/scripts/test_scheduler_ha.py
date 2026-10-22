@@ -118,7 +118,7 @@ class _Agenda(object):
         if (rule["id"], ticket["scheduled_at"]) in self.duplicate:
             raise DuplicateOccurrence("ix_tck_ocor")
         self.tickets[tid] = dict(ticket, id=tid, status="PENDING", schedule_id=rule["id"], created_at=NOW,
-                                 created_by="SYSTEM:%s" % AGENT, respostas=list(rows))
+                                 created_by="SYSTEM:%s" % AGENT, answers=list(rows))
 
     def reserve_and_create_ticket(self, conn, rule, old, new, tid, ticket, rows, agent_id):
         self._write("reservar")
@@ -259,7 +259,7 @@ class TestExpansion(_Base):
         snap = json.loads(t["submitted_params"])
         self.assertEqual((snap["version"], snap["path_file"], snap["args"]), (5, "/opt/x/carga.sh", ["--data", "2026-10-20"]))
         self.assertNotIn("pasta_base", snap)
-        self.assertEqual(t["respostas"], [{"parameter_id": 11, "answer_value": "2026-10-20"}])
+        self.assertEqual(t["answers"], [{"parameter_id": 11, "answer_value": "2026-10-20"}])
         self.assertTrue(any("agendamento 1: ticket %d gerado" % t["id"] in l for l in logs.output))
 
     def test_corrida_e_outro_agente(self):

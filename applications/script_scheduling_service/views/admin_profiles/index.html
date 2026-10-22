@@ -3,30 +3,30 @@
 # Lista de perfis (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
 _opc_admin = [('', 'Todos'), ('Y', 'Administrativos'), ('N', 'Operacionais')]
-filtros = {'id': 'filtro-perfis', 'url_base': ('admin_profiles', 'index'), 'preservar': {'size': tamanho}, 'campos': [
-    {'name': 'name', 'rotulo': 'Nome', 'tipo': 'texto', 'valor': filtros_ativos.get('name')},
-    {'name': 'is_admin', 'rotulo': 'Tipo', 'tipo': 'select', 'valor': filtros_ativos.get('is_admin'), 'opcoes': _opc_admin},
-    {'name': 'active', 'rotulo': u'Situação', 'tipo': 'select', 'valor': filtros_ativos.get('active'), 'opcoes': _opc_ativo},
+filtros = {'id': 'filtro-perfis', 'url_base': ('admin_profiles', 'index'), 'keep': {'size': tamanho}, 'fields': [
+    {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': filtros_ativos.get('name')},
+    {'name': 'is_admin', 'label': 'Tipo', 'kind': 'select', 'value': filtros_ativos.get('is_admin'), 'options': _opc_admin},
+    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': filtros_ativos.get('active'), 'options': _opc_ativo},
 ]}
 _linhas = []
 for _p in resultado['itens']:
     _linhas.append({
         'name': _p['name'],
         'description': _p.get('description') or '-',
-        'tipo': 'Administrativo' if _p['is_admin'] == 'Y' else 'Operacional',
+        'kind': 'Administrativo' if _p['is_admin'] == 'Y' else 'Operacional',
         'active': _p['active'],
-        'acao': [
-            {'href': URL(c='admin_profiles', f='form', args=[_p['id']]), 'rotulo': 'Editar', 'description': u'Editar perfil %s' % _p['name']},
-            {'href': URL(c='admin_profiles', f='matrix', args=[_p['id']]), 'rotulo': u'Permissões', 'description': u'Permissões do perfil %s' % _p['name']},
+        'action': [
+            {'href': URL(c='admin_profiles', f='form', args=[_p['id']]), 'label': 'Editar', 'description': u'Editar perfil %s' % _p['name']},
+            {'href': URL(c='admin_profiles', f='matrix', args=[_p['id']]), 'label': u'Permissões', 'description': u'Permissões do perfil %s' % _p['name']},
         ],
     })
 pass
-tabela = {'legenda': 'Perfis cadastrados', 'erro': erro, 'linhas': _linhas, 'msg_vazio': 'Nenhum perfil encontrado.', 'colunas': [
-    {'chave': 'name', 'rotulo': 'Nome', 'tipo': 'mono'},
-    {'chave': 'description', 'rotulo': u'Descrição'},
-    {'chave': 'tipo', 'rotulo': 'Tipo'},
-    {'chave': 'active', 'rotulo': u'Situação', 'tipo': 'active'},
-    {'chave': 'acao', 'rotulo': u'Ações', 'tipo': 'acao'},
+tabela = {'caption': 'Perfis cadastrados', 'error': erro, 'rows': _linhas, 'empty_message': 'Nenhum perfil encontrado.', 'columns': [
+    {'key': 'name', 'label': 'Nome', 'kind': 'mono'},
+    {'key': 'description', 'label': u'Descrição'},
+    {'key': 'kind', 'label': 'Tipo'},
+    {'key': 'active', 'label': u'Situação', 'kind': 'active'},
+    {'key': 'action', 'label': u'Ações', 'kind': 'action'},
 ]}
 pagina = resultado['pagina']
 total = resultado['total']

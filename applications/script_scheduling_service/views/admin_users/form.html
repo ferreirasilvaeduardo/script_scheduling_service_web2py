@@ -8,36 +8,36 @@ _novo = not _u.get('id')
 _situacao = ui_helpers.ativo_info(_u.get('active'))
 _opc_perfil = [('', u'Selecione…')] + [(str(_pf['id']), _pf['name'] + (' (inativo)' if _pf['active'] != 'Y' else '')) for _pf in perfis]
 _campos = [
-    {'name': 'login', 'rotulo': 'Login', 'valor': _u.get('login'), 'erro': erros.get('login'), 'required': _novo, 'maxlength': 30, 'somente_leitura': not _novo, 'autocomplete': 'off',
-     'ajuda': u'3 a 30 caracteres: letras minúsculas, dígitos, ponto, _ ou -. Não pode ser alterado depois de criado.'},
-    {'name': 'name', 'rotulo': 'Nome', 'valor': _u.get('name'), 'erro': erros.get('name'), 'required': True, 'maxlength': 60},
-    {'name': 'profile_id', 'rotulo': 'Perfil', 'tipo': 'select', 'valor': str(_u.get('profile_id') or ''), 'erro': erros.get('profile_id'), 'required': True, 'opcoes': _opc_perfil},
+    {'name': 'login', 'label': 'Login', 'value': _u.get('login'), 'error': erros.get('login'), 'required': _novo, 'maxlength': 30, 'read_only': not _novo, 'autocomplete': 'off',
+     'help': u'3 a 30 caracteres: letras minúsculas, dígitos, ponto, _ ou -. Não pode ser alterado depois de criado.'},
+    {'name': 'name', 'label': 'Nome', 'value': _u.get('name'), 'error': erros.get('name'), 'required': True, 'maxlength': 60},
+    {'name': 'profile_id', 'label': 'Perfil', 'kind': 'select', 'value': str(_u.get('profile_id') or ''), 'error': erros.get('profile_id'), 'required': True, 'options': _opc_perfil},
 ]
 if _novo:
-    _campos.append({'name': 'password', 'rotulo': 'Senha inicial', 'tipo': 'password', 'erro': erros.get('password'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'ajuda': ajuda_senha})
-    _campos.append({'name': 'confirmation', 'rotulo': u'Confirmação da senha', 'tipo': 'password', 'erro': erros.get('confirmation'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024})
+    _campos.append({'name': 'password', 'label': 'Senha inicial', 'kind': 'password', 'error': erros.get('password'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'help': ajuda_senha})
+    _campos.append({'name': 'confirmation', 'label': u'Confirmação da senha', 'kind': 'password', 'error': erros.get('confirmation'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024})
 else:
     _desativar = _u.get('active') == 'Y'
-    _modal_ativo = {'id': 'modal-ativo', 'titulo': (u'Desativar usuário %s' if _desativar else u'Reativar usuário %s') % _u['login'],
-                    'texto': aviso_desativacao if _desativar else u'O usuário voltará a ter acesso conforme o perfil.',
-                    'rotulo_gatilho': 'Desativar' if _desativar else 'Reativar',
-                    'rotulo_confirmar': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
-                    'variante': 'perigo' if _desativar else 'normal', 'acao': URL(c='admin_users', f='toggle_active'),
-                    'campos_ocultos': dict(id=_u['id'], versao=_u['version'])}
-    _modal_desbloq = {'id': 'modal-desbloq', 'titulo': u'Desbloquear usuário %s' % _u['login'],
-                      'texto': u'As tentativas de login com falha e o bloqueio serão zerados.', 'rotulo_gatilho': 'Desbloquear',
-                      'rotulo_confirmar': 'Confirmar desbloqueio', 'variante': 'normal', 'acao': URL(c='admin_users', f='unlock'),
-                      'campos_ocultos': dict(id=_u['id'])}
+    _modal_ativo = {'id': 'modal-ativo', 'title': (u'Desativar usuário %s' if _desativar else u'Reativar usuário %s') % _u['login'],
+                    'text': aviso_desativacao if _desativar else u'O usuário voltará a ter acesso conforme o perfil.',
+                    'trigger_label': 'Desativar' if _desativar else 'Reativar',
+                    'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
+                    'variant': 'danger' if _desativar else 'normal', 'action': URL(c='admin_users', f='toggle_active'),
+                    'hidden_fields': dict(id=_u['id'], versao=_u['version'])}
+    _modal_desbloq = {'id': 'modal-desbloq', 'title': u'Desbloquear usuário %s' % _u['login'],
+                      'text': u'As tentativas de login com falha e o bloqueio serão zerados.', 'trigger_label': 'Desbloquear',
+                      'confirm_label': 'Confirmar desbloqueio', 'variant': 'normal', 'action': URL(c='admin_users', f='unlock'),
+                      'hidden_fields': dict(id=_u['id'])}
     _campos_senha = [
-        {'name': 'password', 'rotulo': 'Nova senha', 'tipo': 'password', 'erro': erros_senha.get('password'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'ajuda': ajuda_senha},
-        {'name': 'confirmation', 'rotulo': u'Confirmação da nova senha', 'tipo': 'password', 'erro': erros_senha.get('confirmation'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024},
+        {'name': 'password', 'label': 'Nova senha', 'kind': 'password', 'error': erros_senha.get('password'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024, 'help': ajuda_senha},
+        {'name': 'confirmation', 'label': u'Confirmação da nova senha', 'kind': 'password', 'error': erros_senha.get('confirmation'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024},
     ]
 pass
 }}
 <div class="sss-page-header sss-detalhe-cabecalho">
   <div>
     <h1 class="sss-page-titulo">{{if _novo:}}Novo usuário{{else:}}Usuário <span class="sss-mono">{{=_u['login']}}</span>
-      <span class="sss-status {{=_situacao['classe']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icone']}}"></use></svg><span>{{=_situacao['rotulo']}}</span></span>{{pass}}
+      <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
     </h1>
     {{if not _novo and _u.get('proprio'):}}<p class="sss-page-sub">Este é o seu usuário: desativação, troca para perfil não administrativo e redefinição de senha por aqui não são permitidas.</p>{{pass}}
   </div>

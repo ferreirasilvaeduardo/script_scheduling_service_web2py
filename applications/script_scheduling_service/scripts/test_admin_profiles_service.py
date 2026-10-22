@@ -211,7 +211,7 @@ class TestWhoCan(_Base):
 
     def test_script_inativo_avisa_e_acesso(self):
         self.svc._catalog.scripts_update(5, {"active": "N"}, actor="teste")
-        self.assertIn(u"inativo", self.svc.who_can(self.ctx["admin"], script_id="5")["aviso"])
+        self.assertIn(u"inativo", self.svc.who_can(self.ctx["admin"], script_id="5")["warning"])
         with self.assertRaises(RepoNotFound):
             self.svc.who_can(self.ctx["admin"], script_id="999")
         with self.assertRaises(AccessDenied):

@@ -81,7 +81,7 @@
           }).catch(function () {
             if (geracao === self.geracao) {
               self.parar();
-              window.SSS.toast('erro', 'Não foi possível atualizar a lista. A atualização automática foi desligada; recarregue a página.');
+              window.SSS.toast('error', 'Não foi possível atualizar a lista. A atualização automática foi desligada; recarregue a página.');
             }
           }).then(function () {
             self.carregando = false;
