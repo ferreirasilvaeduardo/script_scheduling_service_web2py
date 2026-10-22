@@ -54,12 +54,13 @@ O código deve compilar e rodar em **CPython 3.6.0 ou superior**. As versões va
 * **Proibidos:** Celery, Redis, APScheduler, croniter, Flask, FastAPI, Django, Bottle, SQLAlchemy, Peewee, requests, o **DAL do web2py** (inclusive para auth e sessão) e `gluon.scheduler`.
 * **Exceção homologada (pré-instalada na infraestrutura):** o driver Oracle, conforme a versão do Python (CR-002):
 
-  | Python | Driver principal (Thin ou Thick) | Contingência (Thick) |
+  | Python | Driver principal (Thick) | Contingência (Thick) |
   |---|---|---|
-  | 3.6 | `python-oracledb 1.x` (`< 2.0`) + `cryptography <= 40.x` | `cx_Oracle 8.3` |
-  | 3.7 a 3.13 | `python-oracledb 2.x` + `cryptography` | `cx_Oracle 8.3` (até 3.10) |
+  | 3.6 | `python-oracledb 1.x` (`< 2.0`) | `cx_Oracle 8.3` |
+  | 3.7 a 3.13 | `python-oracledb 2.x` | `cx_Oracle 8.3` (até 3.10) |
 
-  * Modos Thick e cx_Oracle usam o **Oracle Instant Client 19.x**.
+  * Modos Thick e cx_Oracle usam o **Oracle Instant Client 19.x**, obrigatório em todos os nós.
+  * **A biblioteca `cryptography` não é usada nem pode virar dependência.** Só o modo Thin precisa dela; o projeto usa `driver_mode = thick` (recomendado no `config.ini.example` e no DEV), e nenhum módulo importa `cryptography`.
   * A seleção é feita por `[oracle] driver_mode` (`auto` = Thin → Thick → cx_Oracle), sempre por **sondagem em subprocesso** antes da primeira conexão do processo (README §2.3). É proibido tentar um modo e "cair" para outro dentro do mesmo processo.
   * Erro de autenticação interrompe a cadeia (não pode consumir tentativas de login no banco).
   * É proibido chamar `init_oracle_client(lib_dir=...)` no Linux e no Unix (lá o IC vem do `ldconfig`/`LD_LIBRARY_PATH`). No macOS (só desenvolvimento), `lib_dir` vem de `oracle_client_lib_dir`.

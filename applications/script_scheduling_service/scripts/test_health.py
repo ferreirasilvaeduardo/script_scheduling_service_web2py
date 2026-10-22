@@ -12,6 +12,7 @@ import _testenv  # noqa: F401
 import datetime
 import io
 import os
+import re
 import shutil
 import tempfile
 import types
@@ -327,16 +328,14 @@ class TestHealthOracle(unittest.TestCase):
         print("\n[F9.1b] saude no GFPR: %s" % v.output(code).splitlines()[0])
 
     def test_explain_sem_varredura_de_tickets_e_auditoria(self):
-        import db_conn
-        now = db_conn.db_now(self.conn)
-        binds = {"queue": {"now": now}, "overdue_queue": {"now": now}, "running_no_pid": {"cutoff": now},
-                 "purge": {"cutoff": now}}
-        for name, values in binds.items():
+        # EXPLAIN PLAN nao aceita valores de bind no modo Thick (ORA-01036): os binds de data viram SYSDATE,
+        # a mesma comparacao de data que os indices usam.
+        for name in ("queue", "overdue_queue", "running_no_pid", "purge"):
             cur = self.conn.cursor()
             stmt = "SSS_F91B_%s" % name.upper()
             cur.execute("DELETE FROM plan_table WHERE statement_id = :s", {"s": stmt})
-            db_conn.set_input_types(cur, **dict((k, db_conn.TIPO_DATE) for k in values))
-            cur.execute("EXPLAIN PLAN SET STATEMENT_ID = '%s' FOR %s" % (stmt, self.repo.sql(name)), values)
+            sql = re.sub(r":(now|cutoff)\b", "SYSDATE", self.repo.sql(name))
+            cur.execute("EXPLAIN PLAN SET STATEMENT_ID = '%s' FOR %s" % (stmt, sql))
             cur.execute("SELECT operation, options, object_name FROM plan_table WHERE statement_id = :s",
                         {"s": stmt})
             plan = cur.fetchall()

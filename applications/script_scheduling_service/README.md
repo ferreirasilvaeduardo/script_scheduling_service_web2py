@@ -45,11 +45,14 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
 
 | Componente | Versão permitida | Observação |
 |---|---|---|
-| Driver (Python 3.6) | `python-oracledb 1.x` (`< 2.0`), com `cryptography <= 40.x`; contingência `cx_Oracle 8.3` | A série 2.x exige Python 3.7+ |
+| Driver (Python 3.6) | `python-oracledb 1.x` (`< 2.0`); contingência `cx_Oracle 8.3` | A série 2.x exige Python 3.7+ |
 | Driver (Python 3.7 a 3.13) | `python-oracledb 2.x`; contingência `cx_Oracle 8.3` (até 3.10) | — |
-| Cliente C (modos Thick e cx_Oracle) | **Oracle Instant Client 19.x** (Linux ou Unix, conforme o nó) | Conecta do 11.2.0.4 ao 23ai. O IC 21c/23ai não conecta ao 11gR2. Obrigatório nos nós que acessam banco 11g; recomendado em todos como contingência |
+| Cliente C (modos Thick e cx_Oracle) | **Oracle Instant Client 19.x** (Linux ou Unix, conforme o nó) | Conecta do 11.2.0.4 ao 23ai. O IC 21c/23ai não conecta ao 11gR2. **Obrigatório em todos os nós**, inclusive no DEV: o projeto conecta pelo Thick ou pelo cx_Oracle |
+| `cryptography` | **não usada** | O projeto não depende da biblioteca `cryptography`. Só o modo Thin do `python-oracledb` precisa dela, e ele fica fora de uso (`driver_mode = thick`) |
 
 **Seleção do driver (CR-002, `[oracle] driver_mode`):**
+
+* **Recomendado: `thick`** (o `config.ini.example` e o DEV já vêm assim). O projeto não usa a biblioteca `cryptography`, e o modo Thin depende dela; com `thick`, o Thin nunca é tentado. Com `auto` num nó sem `cryptography`, a sondagem do Thin falha com `DPY-3016` (WARN) e a cadeia segue para o Thick: funciona, mas registra o aviso a cada subida.
 
 * `auto` (padrão): ordem **Thin → Thick → cx_Oracle**.
   * O modo Thin dispensa o Instant Client, mas só conecta a banco **12.1 ou superior** (no 11gR2 falha com `DPY-3010`).
@@ -60,7 +63,7 @@ Os scripts do catálogo não pertencem a um único ambiente. Cada script declara
   * A combinação escolhida é registrada em INFO, exibida pelo `check_env.py` e mantida pelo processo; reconexões a reutilizam e só um reinício refaz a sondagem.
 * `thin`, `thick` ou `cx_oracle`: força um único candidato, sem sondagem; falha é fatal.
 * **Carregamento do Instant Client no Linux/Unix** (Thick e cx_Oracle): o IC deve estar no caminho de bibliotecas **antes** de o processo Python iniciar, via `ldconfig` (preferencial) ou `LD_LIBRARY_PATH` exportado pelos launchers `bin/sss-web.sh` e `bin/sss-scheduler.sh`. Nessas plataformas, `init_oracle_client(lib_dir=...)` não tem efeito e deve ser chamado sem `lib_dir`.
-* **Desenvolvimento em macOS:** `oracle_client_lib_dir` só é usado em macOS. O IC 19 para macOS existe apenas para Intel (x86_64). Em Apple Silicon, use o modo Thin (banco 12.1+), Python x86_64 sob Rosetta ou um container/VM Linux x86_64.
+* **Desenvolvimento em macOS:** `oracle_client_lib_dir` só é usado em macOS. O IC 19 para macOS existe apenas para Intel (x86_64). Em Apple Silicon, use Python x86_64 sob Rosetta ou um container/VM Linux x86_64 (o modo Thin exigiria a `cryptography`, que o projeto não usa).
 * `modules/db_conn.py` é a **única** porta de acesso ao banco. Ele contém a seleção do driver, o adaptador das diferenças de API entre `oracledb` (Thin/Thick) e `cx_Oracle` (exceções mapeadas por driver e modo para os erros do contrato, tipos de bind, conversão do estilo `:name` para o `paramstyle` do driver, pool e `init_oracle_client`).
 * **Toda conexão deve:**
   * usar `autocommit = False`;

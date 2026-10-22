@@ -129,7 +129,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg.oracle.dsn, "localhost:2424/servico_homolog")
         self.assertEqual(cfg.oracle.owner, "openrisow")
         self.assertEqual(cfg.oracle.table_prefix, "tbsss_")
-        self.assertEqual(cfg.oracle.driver_mode, "auto")
+        self.assertEqual(cfg.oracle.driver_mode, "thick")
         self.assertIsNone(cfg.oracle.oracle_client_lib_dir)
         self.assertEqual(cfg.oracle.call_timeout_ms, 30000)
         self.assertEqual(cfg.oracle.pool_min, 1)

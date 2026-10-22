@@ -240,7 +240,7 @@ Sem `sudo`, cadastre os scripts com o caminho real de `dev/scripts`.
 
 O backend FAKE não precisa de banco. Para o backend ORACLE (README §2.3, CR-002):
 
-* **Driver:** `python-oracledb` (`< 2.0` na 3.6; `2.x` na 3.7+) com `cryptography`, e `cx_Oracle 8.3` como contingência. São pré-instalados pela infraestrutura; não use `pip install` no projeto.
+* **Driver:** `python-oracledb` (`< 2.0` na 3.6; `2.x` na 3.7+) e `cx_Oracle 8.3` como contingência, com o Oracle Instant Client 19.x. São pré-instalados pela infraestrutura; não use `pip install` no projeto. O projeto não usa a biblioteca `cryptography`: o DEV vem com `driver_mode = thick`, e o modo Thin (que dependeria dela) fica fora de uso.
 * **Modo:** `[oracle] driver_mode = auto` tenta Thin → Thick → cx_Oracle por sondagem. Contra banco **11g**, só Thick e cx_Oracle conectam, então o **Instant Client 19** precisa estar instalado:
   * Linux/Unix: no `ldconfig` (preferencial) ou em `LD_LIBRARY_PATH` exportado **antes** de iniciar o Python;
   * macOS (só desenvolvimento): `oracle_client_lib_dir` no `config.ini`. Windows não é suportado (CR-005).

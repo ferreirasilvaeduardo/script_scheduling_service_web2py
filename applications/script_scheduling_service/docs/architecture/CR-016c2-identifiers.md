@@ -4672,3 +4672,12 @@ Decisão do usuário (2026-10-22, D21): os códigos de recusa da pré-validaçã
 | `PAUSADA` | `PAUSED` |
 
 Validação: suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos, ciclo real do agente, percurso real das telas e conferência de resíduos; README (§8.4) e DEPLOYMENT (tabela de diagnóstico) atualizados.
+
+## 29. Driver sem a biblioteca `cryptography` (opção B)
+
+Pedido do usuário (2026-10-22): o projeto não pode usar a biblioteca `cryptography`. O código nunca a importou; só o modo Thin do `python-oracledb` precisa dela. Decisão (opção B): tirar o `cryptography` dos requisitos (README §2.3, AGENTS §2.2, DEPLOYMENT, DEV_ENVIRONMENT) e recomendar `driver_mode = thick` (`config.ini.example` e DEV). Sem mudança de código: o modo Thin continua disponível e pode ser ligado num ambiente futuro instalando a `cryptography` e usando `driver_mode = auto` ou `thin`.
+
+* O Thick conecta do 11.2.0.4 ao 23ai com o Instant Client 19.x, agora obrigatório em todos os nós; o Thin só conecta a 12.1+ (em 11gR2, `DPY-3010`).
+* Com `auto` num nó sem `cryptography`, a sondagem do Thin falha com `DPY-3016` (WARN) e a cadeia segue para o Thick.
+* Validado no DEV com o Python 3.6.0 sem `cryptography` (removida pelo usuário): sondagem Thick conecta, Thin falha com `DPY-3016`, conexão da aplicação em `thick` e em `auto` escolhe o Thick e a biblioteca nunca é carregada; agregado Oracle CATALOGO OK. No 3.6.15: bateria Oracle completa e cinco agregados em `thick`, ciclo real do agente (`driver=oracledb modo=thick`) e percurso das telas.
+* Achado no modo Thick: o Oracle recusa valores de bind num `EXPLAIN PLAN` (`ORA-01036`), o que o Thin tolerava; o teste `test_health.test_explain_…` passou a explicar o SQL com `SYSDATE` no lugar dos binds de data (o produto não roda `EXPLAIN`).
