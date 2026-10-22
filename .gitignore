@@ -1,3 +1,5 @@
+.bkp/
+
 # Byte-compiled / cache files
 *.pyc
 __pycache__/

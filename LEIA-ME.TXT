@@ -748,3 +748,43 @@ Você verá as setas `->` indicando o caminho para `applications/script_scheduli
 cd /portaloptrib/TESHUVA/web2py
 read -s SSS_DEV_SEED_PASSWORD && export SSS_DEV_SEED_PASSWORD
 python3 web2py.py -a 'admin_web2py' -p 8000 -i 127.0.0.1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Aprovado. O que falta para terminar o CR-016:
+
+**1. Passada final do CR-016c2.** Você acabou de aprovar a F1, e eu começo por ela agora.
+- **F1:** atributos e estruturas (~90 trocas) mais o snapshot v5.
+- **F2:** binds de SQL (~30) e as abreviações de tabela dos templates SQL (`_agd`, `_amb`…).
+- **F3:** parâmetros (~270), com as chamadas por nome (`nome=`).
+- **F4:** variáveis locais (~650) e as variáveis dos lançadores `.sh`.
+
+**2. CR-016d: camada web.** É a última parte com nomes em português visíveis no sistema:
+- nomes das funções dos controllers, que viram URL (`admin_usuarios/lista`, `tickets/novo`…), e os nomes dos controllers e das pastas de views;
+- variáveis de tela (`ambientes`, `perfis`, `agora`…), atributos de sessão (`usuario_id`, `sessao_epoch`…), chaves do `TELAS_ENTIDADE`, do `ui_helpers` e do `ui_menu`;
+- o JavaScript local;
+- parâmetros e locais dos controllers;
+- o nome do arquivo no download (`ticket_<id>_saida.zip`).
+
+**3. CR-016e: pasta de trabalho.** Foi o pedido que originou o CR-016 e já está aprovado: `exec_work_dir` por ambiente, script e minuto, a variável `SSS_WORK_DIR` e a retenção `work_retention_days`, com o purge pelo helper.
+
+**4. Pendências fora do CR-016:**
+- o seed do `init_db.py`, que você preferiu tratar depois;
+- o `instance/secrets.cfg.example`, que você precisa voltar para CHANGE_ME;
+- no 3067, na próxima implantação, renomear `iniciar_sss.sh`/`parar_sss.sh`/`servidor.out`;
+- depois do CR-016, o roteiro volta ao F9.2.
+
+Cada parte segue o fluxo de sempre: plano, aprovação, validação, relatório, commit e push.
+
+Começo a F1 agora pela troca dos atributos de instância.
