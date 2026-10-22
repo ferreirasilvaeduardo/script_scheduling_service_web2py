@@ -35,7 +35,7 @@ def _bundle(*partes):
 class TestVerificarAlpineCsp(unittest.TestCase):
 
     def assertReprova(self, fonte, trecho):
-        ok, detalhe = check_env.verificar_alpine_csp(fonte)
+        ok, detalhe = check_env.check_alpine_csp(fonte)
         self.assertFalse(ok, detalhe)
         self.assertIn(trecho, detalhe)
 
@@ -43,12 +43,12 @@ class TestVerificarAlpineCsp(unittest.TestCase):
         self.assertReprova(_bundle(_PADRAO, _CSP, "B.setEvaluator(gt);"), "construtor dinâmico em 'kn'")
 
     def test_build_csp_com_avaliador_padrao_morto_aprovado(self):
-        ok, detalhe = check_env.verificar_alpine_csp(_bundle(_PADRAO, _CSP, "B.setEvaluator(Jr);"))
+        ok, detalhe = check_env.check_alpine_csp(_bundle(_PADRAO, _CSP, "B.setEvaluator(Jr);"))
         self.assertTrue(ok, detalhe)
         self.assertIn("código morto", detalhe)
 
     def test_build_csp_puro_aprovado(self):
-        ok, detalhe = check_env.verificar_alpine_csp(_bundle(_CSP, "B.setEvaluator(Jr);"))
+        ok, detalhe = check_env.check_alpine_csp(_bundle(_CSP, "B.setEvaluator(Jr);"))
         self.assertTrue(ok, detalhe)
 
     def test_construtor_alcancado_indiretamente_ou_por_variante(self):
@@ -91,12 +91,12 @@ class TestVerificarAlpineCsp(unittest.TestCase):
             _PADRAO,
             "B.setEvaluator(Jr);",
         )
-        ok, detalhe = check_env.verificar_alpine_csp(fonte)
+        ok, detalhe = check_env.check_alpine_csp(fonte)
         self.assertTrue(ok, detalhe)
 
     def test_asset_instalado_e_build_csp(self):
         with open(_ALPINE, "r", encoding="utf-8") as f:
-            ok, detalhe = check_env.verificar_alpine_csp(f.read())
+            ok, detalhe = check_env.check_alpine_csp(f.read())
         self.assertTrue(ok, detalhe)
 
 

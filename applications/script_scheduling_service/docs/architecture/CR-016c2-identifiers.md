@@ -2,10 +2,10 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras), 3b (services), 4a (camada de processo), 4b (laço do agente) e 4c (helper) concluídos em 2026-10-21 |
+| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras), 3b (services), 4a (camada de processo), 4b (laço do agente), 4c (helper) e 5a (scripts de linha de comando) concluídos em 2026-10-21 |
 | Origem | Regra do README §2.8 (CR-016): funções, classes, métodos, constantes e variáveis em inglês |
 | Restrições | Sem dependência nova. Python 3.6. Sem mudança de esquema |
-| Blocos | 1 base (`sql_ident`, `sss_config`, `db_conn`, `sss_logging` e formato do log); 2 repositórios e chaves lógicas das entidades; 3 regras (3a) e services (3b); 4 daemon (4a camada de processo, 4b laço do agente, 4c helper); 5 scripts e testes; passada final de parâmetros e variáveis locais |
+| Blocos | 1 base (`sql_ident`, `sss_config`, `db_conn`, `sss_logging` e formato do log); 2 repositórios e chaves lógicas das entidades; 3 regras (3a) e services (3b); 4 daemon (4a camada de processo, 4b laço do agente, 4c helper); 5 scripts de linha de comando e lançadores (5a) e testes (5b); passada final de parâmetros e variáveis locais |
 
 ---
 
@@ -2134,3 +2134,194 @@ As funções autorizadas a ler `/proc/<pid>/cwd` e `/proc/<pid>/stat` e a chamar
 * `test_sss_helper`, `test_py36_compat`, `test_platform`, `test_scheduler_init`, `test_package`, `test_launchers` e `test_deployment_doc` em 3.6.0 e 3.13.2; suítes completas em 3.6.0, 3.6.8 e 3.13.2; bateria Oracle.
 * Ensaio do pacote: o pacote gerado traz o helper idêntico ao da árvore, que responde com código 2 a subcomando ausente ou inválido, e o `secrets.cfg.example` com `CHANGE_ME`.
 * Ciclo real do agente no DEV repetido (em DEV a saída é empacotada pela cópia do helper no pacote): ticket `SUCCESS`, saída `AVAILABLE`.
+
+## 16. Bloco 5a (scripts de linha de comando, apoio dos testes e lançadores)
+
+Decisões aprovadas (2026-10-21):
+
+| # | Decisão | Resumo |
+|---|---|---|
+| D16 | Nomes dos testes | Os `test_*` (1.280, 919 com português) ficam em português: descrevem o cenário e são a legenda do teste na saída da suíte. Classes, helpers, fakes e constantes de teste mudam no 5b |
+| D17 | Lançadores de `bin/` | Eram três cópias idênticas de subida e três de parada: ficam `bin/start_local.sh` e `bin/stop_local.sh` (só DEV, fora do pacote); o log do lançador passa a `logs/server-<data>.log` e `logs/server.out`; o `AAA001-LEIA-ME-SUBIR-PARAR-SERVICO.TXT` vira `AAA001-README-START-STOP.TXT` (conteúdo em português) |
+| D18 | Scripts do servidor 3067 | Fora do repositório; a doc passa a `start_sss.sh`, `stop_sss.sh` e `logs/server.out` (DEPLOYMENT, com a nota de renomear no servidor na próxima implantação) |
+| D19 | `LEIA-ME.TXT` da raiz | Anotações do usuário, em português: fica como está |
+
+Os alvos internos do `purge.py` passam a ser os mesmos valores do `--target` (`tickets`, `audit`, `local_logs`, `output`, `all`), sem tradução no meio; o resumo usa os mesmos rótulos. A documentação do `--target` (docstring, README e DEPLOYMENT) ainda mostrava os valores anteriores ao CR-016b e foi corrigida.
+
+### `scripts/check_env.py`
+
+| Antes | Depois |
+|---|---|
+| `_ANTES_DE_REGEX` | `_BEFORE_REGEX` |
+| `_JsInvalido` | `_InvalidJs` |
+| `_PALAVRAS_ANTES_DE_REGEX` | `_WORDS_BEFORE_REGEX` |
+| `_PARES` | `_PAIRS` |
+| `_RE_CONSTRUTOR_DINAMICO` | `_RE_DYNAMIC_CONSTRUCTOR` |
+| `_RE_DECL_FUNCAO` | `_RE_FUNCTION_DECL` |
+| `_RE_EVAL_DIRETO` | `_RE_DIRECT_EVAL` |
+| `_casar` | `_match` |
+| `_corpos_de_funcoes` | `_function_bodies` |
+| `_inicia_regex` | `_starts_regex` |
+| `_pular_regex` | `_skip_regex` |
+| `verificar_alpine_csp` | `check_alpine_csp` |
+
+### `scripts/health.py`
+
+| Antes | Depois |
+|---|---|
+| `ESTADOS` | `STATES` |
+| `Verificacao` | `Check` |
+| `_SAUDAVEIS` | `_HEALTHY` |
+| `_agentes` | `_agents` |
+| `_argumentos` | `_arguments` |
+| `_conectar` | `_connect` |
+| `_desconhecido` | `_unknown` |
+| `_fila` | `_queue` |
+| `_idade` | `_age` |
+| `_problema` | `_problem` |
+| `_sem_pid` | `_no_pid` |
+| `_versao` | `_version` |
+| `saida` | `output` |
+
+### `scripts/init_db.py`
+
+| Antes | Depois |
+|---|---|
+| `_coletar_estatisticas` | `_gather_statistics` |
+| `_conectar` | `_connect` |
+| `_conferir_esquema` | `_check_schema` |
+| `_consultar_existencia` | `_query_existence` |
+| `_executar_ddl_fases` | `_run_ddl_phases` |
+| `_executar_seed` | `_run_seed` |
+| `_existe_esquema_1` | `_schema_1_exists` |
+| `_objeto_existe` | `_object_exists` |
+| `_registrar_critico_config` | `_log_critical_config` |
+| `_validar_schema_descartavel_dev` | `_validate_disposable_schema_dev` |
+
+### `scripts/package.py`
+
+| Antes | Depois |
+|---|---|
+| `ARQUIVOS_RAIZ` | `ROOT_FILES` |
+| `EXCLUIR_APP` | `EXCLUDE_APP` |
+| `EXCLUIR_GLUON` | `EXCLUDE_GLUON` |
+| `ErroPacote` | `PackageError` |
+| `PASTAS_RAIZ` | `ROOT_DIRS` |
+| `RAIZ_PADRAO` | `DEFAULT_ROOT` |
+| `RUNTIME_VAZIAS` | `EMPTY_RUNTIME_DIRS` |
+| `_EXEMPLO_SEGREDOS` | `_SECRETS_EXAMPLE` |
+| `_RE_CREDENCIAL` | `_RE_CREDENTIAL` |
+| `_RE_TESTE` | `_RE_TEST` |
+| `_caminhar` | `_walk` |
+| `_credenciais` | `_credentials` |
+| `_excluido_da_app` | `_excluded_from_app` |
+| `coletar` | `collect` |
+| `empacotar` | `build_package` |
+| `verificar` | `check` |
+
+### `scripts/probe_driver.py`
+
+| Antes | Depois |
+|---|---|
+| `_ERROS_AUTENTICACAO` | `_AUTH_ERRORS` |
+| `_ERROS_REDE` | `_NETWORK_ERRORS` |
+| `_RE_CODIGO_ERRO` | `_RE_ERROR_CODE` |
+| `_classificar_erro` | `_classify_error` |
+| `_formatar_versao_cliente` | `_format_client_version` |
+| `sondar` | `probe` |
+
+### `scripts/purge.py`
+
+| Antes | Depois |
+|---|---|
+| `ALVOS` | `TARGETS` |
+| `ALVOS_CLI` | `CLI_TARGETS` |
+| `ConcessaoPerdida` | `LeaseLost` |
+| `ExportacaoAuditoria` | `AuditExport` |
+| `NOME_TRAVA` | `LOCK_NAME` |
+| `SAIDA_BANCO` | `EXIT_DATABASE` |
+| `SAIDA_CONFIG` | `EXIT_CONFIG` |
+| `SAIDA_LOCAIS` | `EXIT_LOCAL` |
+| `SAIDA_OK` | `EXIT_OK` |
+| `_LOGGERS_DO_PURGE` | `_PURGE_LOGGERS` |
+| `_argumentos` | `_arguments` |
+| `_conectar` | `_connect` |
+| `_contar_tabelas` | `_count_tables` |
+| `_desfazer` | `_undo` |
+| `_liberar` | `_release` |
+| `_limite` | `_cutoff` |
+| `_logs_locais` | `_local_logs` |
+| `_purgar_tabela` | `_purge_table` |
+| `_purgar_tabelas` | `_purge_tables` |
+| `_saida` | `_output` |
+| `fechar` | `close` |
+| `gravar` | `write` |
+
+### `scripts/run_scheduler.py`
+
+| Antes | Depois |
+|---|---|
+| `_LOGGERS_DO_DAEMON` | `_DAEMON_LOGGERS` |
+| `_esperar` | `_wait` |
+
+### `scripts/_oracle_test_support.py`
+
+| Antes | Depois |
+|---|---|
+| `CHAVE` | `KEY` |
+| `MODO_COMPARTILHADO` | `SHARED_MODE` |
+| `MODO_DESCARTAVEL` | `DISPOSABLE_MODE` |
+| `PREFIXO_OWNER_RESERVADO` | `RESERVED_OWNER_PREFIX` |
+| `PrecondicaoSchemaErro` | `SchemaPreconditionError` |
+| `VARIAVEIS_ANTIGAS` | `OLD_VARIABLES` |
+| `_RE_OWNER_DESCARTAVEL` | `_RE_DISPOSABLE_OWNER` |
+| `_conferir_esquema_sss` | `_check_sss_schema` |
+| `_modo_atual` | `_current_mode` |
+| `banco_real_configurado` | `real_db_configured` |
+| `modo_do_owner` | `owner_mode` |
+| `modo_schema` | `schema_mode` |
+| `preparar_schema_descartavel` | `prepare_disposable_schema` |
+| `validar_schema_descartavel` | `validate_disposable_schema` |
+| `verificar_precondicoes_ambiente` | `check_environment_preconditions` |
+
+### `scripts/_output_memory.py`
+
+| Antes | Depois |
+|---|---|
+| `RepoSaidaMemoria` | `RepoOutputMemory` |
+| `_dono` | `_owner` |
+
+### Atributos de instância
+
+| Antes | Depois |
+|---|---|
+| `_arquivo` | `_file` |
+| `_escritor` | `_writer` |
+| `caminho` | `path` |
+| `desempenho` | `performance` |
+| `dono` | `owner` |
+| `limiares` | `thresholds` |
+| `linhas` | `rows` |
+| `problemas` | `problems` |
+| `resumo` | `summary` |
+
+### Lançadores de `bin/`
+
+| Antes | Depois |
+|---|---|
+| `bin/AAA001-LEIA-ME-SUBIR-PARAR-SERVICO.TXT` | `bin/AAA001-README-START-STOP.TXT` |
+| `bin/iniciar_local.sh` | `bin/start_local.sh` |
+| `bin/iniciar_sss.sh` | removido (cópia idêntica) |
+| `bin/parar_local.sh` | removido (cópia idêntica) |
+| `bin/parar_servico.sh` | `bin/stop_local.sh` |
+| `bin/parar_sss.sh` | removido (cópia idêntica) |
+| `bin/subir_local.sh` | removido (cópia idêntica) |
+
+## 17. Validação do bloco 5a
+
+* Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, percurso real das telas e conferência de resíduos.
+* Execução real no DEV: `purge.py --dry-run` (desligado no DEV, `purge_user` vazio: código 2 e o motivo no log em `internal/`), `health.py` (`UNKNOWN` sem `[monitor]` no DEV), `probe_driver.py thin` com a senha pela entrada padrão (conecta) e `generate_sql.py` (rollback e validação idênticos aos versionados).
+* `docs/sql/01_deploy_sss.sql` regenerado: o comentário do papel do agente ainda dizia "agente" (anterior ao CR-016b).
+* Ensaio do pacote: só os lançadores de produção (`sss-helper`, `sss-scheduler.sh`, `sss-stop.sh`, `sss-web.sh`), sem os de DEV e sem testes.
+* Achado e corrigido: `global _modo_atual` em `_oracle_test_support` (a ferramenta por escopo passou a renomear declarações `global`).
+* Para a passada final: as chaves do JSON do `probe_driver` (`candidato`, `versao_servidor`…) são o contrato com o `db_conn` e continuam em português.

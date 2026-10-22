@@ -5,7 +5,7 @@
 # Encerra graciosamente o processo web2py do SSS local.
 #
 # Uso:
-#   bin/parar_servico.sh
+#   bin/stop_local.sh
 # ==============================================================================
 set -euo pipefail
 
@@ -95,8 +95,8 @@ fi
 rm -f "${PID_FILE}" "${WEB2PY_ROOT}/httpserver.pid"
 
 if ! kill -0 "${PID}" 2>/dev/null; then
-    if [ -f "${APP_DIR}/logs/servidor.out" ]; then
-        echo "=== Servidor parado em $(date '+%Y-%m-%d %H:%M:%S') (PID: ${PID}) ===" >> "${APP_DIR}/logs/servidor.out" 2>/dev/null || true
+    if [ -f "${APP_DIR}/logs/server.out" ]; then
+        echo "=== Servidor parado em $(date '+%Y-%m-%d %H:%M:%S') (PID: ${PID}) ===" >> "${APP_DIR}/logs/server.out" 2>/dev/null || true
     fi
     echo "SSS parado com sucesso."
 else

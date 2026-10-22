@@ -482,7 +482,7 @@ Depois:
   15 2 * * * cd /opt/sss/web2py && umask 077 && LANG=C.UTF-8 LC_ALL=C.UTF-8 /usr/bin/python3 applications/script_scheduling_service/scripts/purge.py > /dev/null
   ```
   O resumo vai para o stdout; o registro completo vai para `log_dir/internal/app/.../purge_<PID>.log`.
-* **Alvos:** `--target tickets|auditoria|logs_locais|saida|todos` (padrão `todos`).
+* **Alvos:** `--target tickets|audit|local_logs|output|all` (padrão `all`).
 * **Arquivamento da auditoria:** `--export-audit <pasta>` grava antes de apagar um `auditoria_purge_AAAAMMDD_HHMMSS.csv` com `0600`. A pasta precisa existir.
 * **Códigos de saída:**
   * 0: sucesso, inclusive "outro nó está purgando" ou "outro purge neste servidor";
@@ -780,7 +780,7 @@ Para demonstração ou homologação interna, web e agente podem ficar no mesmo 
 * `purge_user` vazio desliga o purge (código 2, §12).
 * Siga o §3 (pacote), o §7 (configuração), o §10.1 e o §10.2 (subida), o §10.4 (túnel SSH) e o §11 (validação). **Esse é o cenário ensaiado em 2026-10-21.**
 
-Os scripts `bin/iniciar_local.sh` e `bin/parar_servico.sh` do repositório são só da máquina de desenvolvimento e não vêm no pacote.
+Os scripts `bin/start_local.sh` e `bin/stop_local.sh` do repositório são só da máquina de desenvolvimento e não vêm no pacote.
 
 ---
 
@@ -810,28 +810,30 @@ Implantação feita em 2026-10-15 no servidor **clone 7** (`brtlvlts1216pl`, 10.
 |---|---|---|
 | `/portaloptrib/TESHUVA/SSS/web2py` | Código (pacote `sss-fdf6f35.tar.gz`, SHA-256 conferido) | `0750` |
 | `/portaloptrib/TESHUVA/SSS/scripts` | Árvore de scripts de exemplo, do próprio usuário, somente leitura | arquivos `0444`, diretórios `0555` |
-| `/portaloptrib/TESHUVA/SSS/logs` | `sss_web.log` (aplicação) e `servidor.out` (saída do servidor) | `0750` |
+| `/portaloptrib/TESHUVA/SSS/logs` | `sss_web.log` (aplicação) e `server.out` (saída do servidor) | `0750` |
 | `/portaloptrib/TESHUVA/SSS/work` | Reservado ao agente (F8) | `0700` |
 | `/portaloptrib/TESHUVA/SSS/pacotes` | Pacotes recebidos e `.sha256` | `0750` |
-| `/portaloptrib/TESHUVA/SSS/iniciar_sss.sh`, `parar_sss.sh` | Operação | `0750` |
+| `/portaloptrib/TESHUVA/SSS/start_sss.sh`, `stop_sss.sh` | Operação | `0750` |
 | `~/.sss/secrets.cfg` | `cookie_key` | `0600` |
 | `~/.sss/web.env` | `SSS_DEV_SEED_PASSWORD` (gerada no servidor) e `SSS_TZ` | `0600` |
+
+> **Nomes em inglês (CR-016c2, bloco 5):** até esta versão os scripts do servidor se chamavam `iniciar_sss.sh` e `parar_sss.sh`, e a saída ia para `logs/servidor.out`. Na próxima implantação, renomeie os três no servidor (`mv iniciar_sss.sh start_sss.sh`, `mv parar_sss.sh stop_sss.sh` e, dentro deles, `servidor.out` → `server.out`).
 
 Diferenças do `config.ini` em relação ao exemplo: `secrets_file = /home/mastersafgf/.sss/secrets.cfg`, `agent_id = clone7-sss-hml`, `base_script_dir = /portaloptrib/TESHUVA/SSS/scripts`, `work_dir = /portaloptrib/TESHUVA/SSS/work`, `script_owner_uids = 4304` (UID do `mastersafgf`), `log_dir = /portaloptrib/TESHUVA/SSS/logs` e `allowed_origins = http://127.0.0.1:18000`.
 
 #### B.1.3 Operação
 
 ```bash
-/portaloptrib/TESHUVA/SSS/iniciar_sss.sh    # sobe no screen "sss" e confere o HTTP 200 do login
-/portaloptrib/TESHUVA/SSS/parar_sss.sh      # Ctrl+C no screen e espera a porta 18000 ser liberada
+/portaloptrib/TESHUVA/SSS/start_sss.sh    # sobe no screen "sss" e confere o HTTP 200 do login
+/portaloptrib/TESHUVA/SSS/stop_sss.sh      # Ctrl+C no screen e espera a porta 18000 ser liberada
 screen -r sss                               # acompanhar a saída; sair SEM parar: Ctrl+A e depois D
 cat ~/.sss/web.env                          # senha dos usuários de demonstração (admin, op.prod, op.hml, consulta)
 tail -f /portaloptrib/TESHUVA/SSS/logs/sss_web.log
 ```
 
-* O `iniciar_sss.sh` carrega `~/.sss/web.env` dentro do `screen` e chama `bin/sss-web.sh /usr/local/bin/python3.7 web2py.py -a '<recycle>' -i 127.0.0.1 -p 18000 --no_gui`. A senha não aparece na lista de processos.
-* **Sem início automático:** se o servidor reiniciar, rode o `iniciar_sss.sh` de novo. Reiniciar o SSS restaura os dados de demonstração.
-* Trocar a senha de demonstração: edite `~/.sss/web.env` e reinicie (`parar_sss.sh` + `iniciar_sss.sh`).
+* O `start_sss.sh` carrega `~/.sss/web.env` dentro do `screen` e chama `bin/sss-web.sh /usr/local/bin/python3.7 web2py.py -a '<recycle>' -i 127.0.0.1 -p 18000 --no_gui`. A senha não aparece na lista de processos.
+* **Sem início automático:** se o servidor reiniciar, rode o `start_sss.sh` de novo. Reiniciar o SSS restaura os dados de demonstração.
+* Trocar a senha de demonstração: edite `~/.sss/web.env` e reinicie (`stop_sss.sh` + `start_sss.sh`).
 
 #### B.1.4 Acesso dos usuários
 
@@ -873,9 +875,9 @@ Implantação feita em 2026-10-15 com o pacote do commit `aca60b0` (código do `
 #### B.2.2 Operação
 
 ```bash
-/portaloptrib/TESHUVA/SSS/iniciar_sss.sh    # sobe com nohup, grava o PID em SSS/work/sss_web.pid e confere o HTTP 200
-/portaloptrib/TESHUVA/SSS/parar_sss.sh      # SIGINT ao PID (só se o PID ainda for o do SSS), espera a porta ser liberada
-tail -f /portaloptrib/TESHUVA/SSS/logs/servidor.out     # saída do servidor (equivale ao "screen -r" do clone 7)
+/portaloptrib/TESHUVA/SSS/start_sss.sh    # sobe com nohup, grava o PID em SSS/work/sss_web.pid e confere o HTTP 200
+/portaloptrib/TESHUVA/SSS/stop_sss.sh      # SIGINT ao PID (só se o PID ainda for o do SSS), espera a porta ser liberada
+tail -f /portaloptrib/TESHUVA/SSS/logs/server.out     # saída do servidor (equivale ao "screen -r" do clone 7)
 tail -f /portaloptrib/TESHUVA/SSS/logs/sss_web.log      # log da aplicação (até a atualização do §22.6)
 # depois do §22.6: tail -f "$(find /portaloptrib/TESHUVA/SSS/logs/internal/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)"
 cat ~/.sss/web.env                                      # senha dos usuários de demonstração
@@ -889,7 +891,7 @@ cat ~/.sss/web.env                                      # senha dos usuários de
 O `crontab` do usuário está vazio e **não foi alterado**. Para ativar, o responsável roda uma vez no servidor:
 
 ```bash
-( crontab -l 2>/dev/null; echo "@reboot /portaloptrib/TESHUVA/SSS/iniciar_sss.sh >> /portaloptrib/TESHUVA/SSS/logs/servidor.out 2>&1" ) | crontab -
+( crontab -l 2>/dev/null; echo "@reboot /portaloptrib/TESHUVA/SSS/start_sss.sh >> /portaloptrib/TESHUVA/SSS/logs/server.out 2>&1" ) | crontab -
 crontab -l      # conferir
 ```
 
@@ -1030,12 +1032,12 @@ rm -f /tmp/sss_diag.py
 # esperado: SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)
 
 # 5. Conferir que os scripts de operação usam o caminho $SSS/web2py e não dependem do log antigo
-grep -n "web2py\|sss_web.log" $SSS/iniciar_sss.sh $SSS/parar_sss.sh
+grep -n "web2py\|sss_web.log" $SSS/start_sss.sh $SSS/stop_sss.sh
 
 # 6. Trocar a versão (parada de ~1 minuto)
-$SSS/parar_sss.sh
+$SSS/stop_sss.sh
 mv $SSS/web2py $SSS/web2py-fdf6f35 && mv $NOVO $SSS/web2py
-$SSS/iniciar_sss.sh
+$SSS/start_sss.sh
 
 # 7. Validar
 curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:18000/script_scheduling_service/default/login     # 200
@@ -1043,7 +1045,7 @@ curl -sI http://127.0.0.1:18000/script_scheduling_service/default/login | grep -
 curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://outro-host" http://127.0.0.1:18000/script_scheduling_service/default/login   # 403
 find $SSS/logs/internal/app -name 'sss_web_*.log' -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-   # log mais recente: o da subida
 find $SSS/logs/internal/app -name 'sss_web_*.log' -type f | xargs grep -c CRITICAL   # 0 em cada arquivo (o do passo 4 e o da subida)
-tail -n 5 $SSS/logs/servidor.out
+tail -n 5 $SSS/logs/server.out
 ```
 
 Se no passo 4 aparecer `ConfigError` com "Chave desconhecida", a linha citada ficou no `config.ini`: apague-a ou corrija-a e repita o passo 4.
@@ -1053,9 +1055,9 @@ Depois, pelo túnel (§22.4), faça o teste de fumaça do §12: login, **O que e
 **Retorno (rollback), se algo falhar no passo 7:**
 
 ```bash
-$SSS/parar_sss.sh
+$SSS/stop_sss.sh
 mv $SSS/web2py $SSS/web2py-$VER && mv $SSS/web2py-fdf6f35 $SSS/web2py
-$SSS/iniciar_sss.sh
+$SSS/start_sss.sh
 ```
 
 A versão anterior fica intacta em `$SSS/web2py-fdf6f35`, com o `config.ini` antigo. Apague essa pasta só depois do aceite da homologação. Depois da atualização, troque neste capítulo o commit do §22 para `fe5884c` e registre a validação no §22.5.
@@ -1138,21 +1140,21 @@ rm -f /tmp/sss_diag.py
 # esperado: SSS: configuracao OK (sss_env=DEV, backend=FAKE, agent_id=srv3067-sss-hml)
 
 # 5. Conferir que os scripts de operação usam o caminho $SSS/web2py e exportam um locale UTF-8
-grep -n "web2py\|sss_web.log\|LANG\|LC_ALL\|sss-web.sh" $SSS/iniciar_sss.sh $SSS/parar_sss.sh
-# Se o iniciar_sss.sh não passar pelo bin/sss-web.sh nem exportar LANG/LC_ALL UTF-8, a subida é recusada
+grep -n "web2py\|sss_web.log\|LANG\|LC_ALL\|sss-web.sh" $SSS/start_sss.sh $SSS/stop_sss.sh
+# Se o start_sss.sh não passar pelo bin/sss-web.sh nem exportar LANG/LC_ALL UTF-8, a subida é recusada
 # (CR-007, R-17): acrescente "export LANG=C.UTF-8 LC_ALL=C.UTF-8" antes do comando do web2py.
 
 # 6. Trocar a versão (parada de ~1 minuto)
-$SSS/parar_sss.sh
+$SSS/stop_sss.sh
 mv $SSS/web2py $SSS/web2py-fdf6f35 && mv $NOVO $SSS/web2py
-$SSS/iniciar_sss.sh
+$SSS/start_sss.sh
 
 # 7. Validar
 curl -s -o /dev/null -w "login: HTTP %{http_code}\n" http://127.0.0.1:18000/script_scheduling_service/default/login     # 200
 curl -sI http://127.0.0.1:18000/script_scheduling_service/default/login | grep -icE "content-security-policy|x-frame-options|x-content-type-options|referrer-policy"   # 4
 curl -s -o /dev/null -w "origem estranha: HTTP %{http_code}\n" -X POST -H "Origin: http://outro-host" http://127.0.0.1:18000/script_scheduling_service/default/login   # 403
 find $SSS/logs/internal/app -name 'sss_web_*.log' -type f | xargs grep -c CRITICAL   # 0 em cada arquivo
-tail -n 5 $SSS/logs/servidor.out
+tail -n 5 $SSS/logs/server.out
 ```
 
 Depois, pelo túnel (§22.4), faça o teste de fumaça do §12 e, se quiser, os casos CT-24 e CT-25 do manual v2.5 (reinicie o servidor no fim de cada um para restaurar o seed).
@@ -1160,9 +1162,9 @@ Depois, pelo túnel (§22.4), faça o teste de fumaça do §12 e, se quiser, os 
 **Retorno (rollback), se algo falhar no passo 7:**
 
 ```bash
-$SSS/parar_sss.sh
+$SSS/stop_sss.sh
 mv $SSS/web2py $SSS/web2py-$VER && mv $SSS/web2py-fdf6f35 $SSS/web2py
-$SSS/iniciar_sss.sh
+$SSS/start_sss.sh
 ```
 
 A versão anterior fica intacta em `$SSS/web2py-fdf6f35`, com o `config.ini` antigo. Apague essa pasta só depois do aceite da homologação. Depois da atualização, troque neste capítulo o commit do §22 para `17950fb` e registre a validação no §22.5.

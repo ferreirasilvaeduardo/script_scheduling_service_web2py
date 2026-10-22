@@ -6,10 +6,10 @@
 # (owner e table_prefix). O Python precisa ter o driver Oracle: PYTHON=<python> bin/...
 #
 # Uso:
-#   bin/iniciar_local.sh               # Inicia em segundo plano na porta 8000
-#   bin/iniciar_local.sh 18000         # Inicia na porta 18000
-#   bin/iniciar_local.sh -f            # Inicia em primeiro plano (Ctrl+C para sair)
-#   PORT=8000 bin/iniciar_local.sh     # Define porta por variavel de ambiente
+#   bin/start_local.sh               # Inicia em segundo plano na porta 8000
+#   bin/start_local.sh 18000         # Inicia na porta 18000
+#   bin/start_local.sh -f            # Inicia em primeiro plano (Ctrl+C para sair)
+#   PORT=8000 bin/start_local.sh     # Define porta por variavel de ambiente
 # ==============================================================================
 set -euo pipefail
 
@@ -31,9 +31,9 @@ WORK_DIR="${APP_DIR}/work"
 LOG_DIR="${APP_DIR}/logs"
 PID_FILE="${WORK_DIR}/sss_web.pid"
 DATA_HORA="$(date +%F_%H-%M-%S)"
-LOG_ARQUIVO_DATA="${LOG_DIR}/servidor-${DATA_HORA}.log"
+LOG_ARQUIVO_DATA="${LOG_DIR}/server-${DATA_HORA}.log"
 SERVER_OUT="${LOG_FILE:-${LOG_ARQUIVO_DATA}}"
-SERVER_LINK="${LOG_DIR}/servidor.out"
+SERVER_LINK="${LOG_DIR}/server.out"
 
 mkdir -p -m 700 "${WORK_DIR}"
 mkdir -p -m 750 "${LOG_DIR}"
@@ -194,7 +194,7 @@ else
         echo " URL:         http://127.0.0.1:${PORT}/script_scheduling_service"
         echo " Log c/ data: ${SERVER_OUT}"
         echo " Log atual:   ${SERVER_LINK}"
-        echo " Para parar:  ${WEB2PY_ROOT}/bin/parar_servico.sh"
+        echo " Para parar:  ${WEB2PY_ROOT}/bin/stop_local.sh"
         echo "================================================================="
     else
         echo "Aviso: O processo esta rodando (PID: ${SRV_PID}), mas a pagina de login nao respondeu 200 dentro de 20s."

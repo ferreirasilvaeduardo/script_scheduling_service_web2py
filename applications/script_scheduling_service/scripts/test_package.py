@@ -35,7 +35,7 @@ class TestEmpacotar(unittest.TestCase):
             "gluon/packages/pydal/test-venv/bin/pip": "#!/x/python\n",
             "bin/sss-web.sh": "#!/bin/bash\n", "bin/sss-scheduler.sh": "#!/bin/bash\n",
             "bin/sss-stop.sh": "#!/bin/bash\n", "bin/sss-helper": "#!/usr/bin/env python3\n",
-            "bin/iniciar_local.sh": "#!/bin/bash\n", "CLAUDE.md": "x", "parameters_8000.py": "x",
+            "bin/start_local.sh": "#!/bin/bash\n", "CLAUDE.md": "x", "parameters_8000.py": "x",
             APP + "/controllers/default.py": "# default\n", APP + "/controllers/dev.py": "# dev\n",
             APP + "/views/dev/index.html": "x", APP + "/dev/scripts/a.py": "x",
             APP + "/modules/repo_fake/__init__.py": "x", APP + "/modules/sss_config.py": "x",
@@ -100,7 +100,7 @@ class TestEmpacotar(unittest.TestCase):
                     APP + "/instance/config.ini.example", APP + "/instance/secrets.cfg.example",
                     APP + "/docs/DEPLOYMENT.md"):
             self.assertIn(rel, arquivos)
-        for pasta in empacotar.RUNTIME_VAZIAS:
+        for pasta in empacotar.EMPTY_RUNTIME_DIRS:
             self.assertTrue(membros[APP + "/" + pasta].isdir(), pasta)
         proibidos = [n for n in membros if any(n == APP + "/" + p or n.startswith(APP + "/" + p + "/") for p in (
             "applications", "deposit", "logs", "site-packages", "scripts/logs", "work", "dev", "views/dev",
@@ -108,7 +108,7 @@ class TestEmpacotar(unittest.TestCase):
             "scripts/_testenv.py", "sessions/abc", "errors/e"))]
         self.assertEqual(proibidos, [])
         self.assertFalse([n for n in membros if "/tests/" in n or "test-venv" in n], "testes do upstream fora")
-        self.assertFalse(set(("bin/iniciar_local.sh", "CLAUDE.md", "parameters_8000.py")) & arquivos)
+        self.assertFalse(set(("bin/start_local.sh", "CLAUDE.md", "parameters_8000.py")) & arquivos)
 
     def test_tar_reprodutivel(self):
         self.assertEqual(self._main()[0], 0)
@@ -146,7 +146,7 @@ class TestEmpacotar(unittest.TestCase):
         self.assertIn("gluon/fora: link simbolico", texto)
 
     def test_verificar_codigo_de_dev_e_admin(self):
-        problemas = empacotar.verificar([APP + "/controllers/dev.py", APP + "/modules/repo_fake/a.py",
+        problemas = empacotar.check([APP + "/controllers/dev.py", APP + "/modules/repo_fake/a.py",
                                         "applications/admin/x.py", APP + "/deposit/x"], lambda rel: b"")
         self.assertEqual(len(problemas), 4, problemas)
 
@@ -156,7 +156,7 @@ class TestEmpacotar(unittest.TestCase):
 
     def test_pacote_da_arvore_real_sem_segredo_nem_dev(self):
         # Coleta da propria arvore: as regras de inclusao nunca puxam DEV, testes nem runtime.
-        arquivos, _problemas = empacotar.coletar(empacotar.RAIZ_PADRAO)
+        arquivos, _problemas = empacotar.collect(empacotar.DEFAULT_ROOT)
         self.assertFalse([a for a in arquivos if "/repo_fake/" in a or a.endswith("controllers/dev.py")
                           or "/scripts/test_" in a or a.endswith("instance/config.ini")])
         self.assertIn(APP + "/modules/repo_oracle/purge.py", arquivos)
@@ -168,13 +168,13 @@ class TestPacoteSobeSemODev(unittest.TestCase):
 
     def test_sem_import_de_topo_do_que_fica_fora(self):
         import ast
-        arquivos, _p = empacotar.coletar(empacotar.RAIZ_PADRAO)
+        arquivos, _p = empacotar.collect(empacotar.DEFAULT_ROOT)
         excluidos = ("repo_fake", "dev", "_testenv", "_oracle_test_support", "_output_memory")
         violacoes = []
         for rel in arquivos:
             if not rel.startswith(APP + "/") or not rel.endswith(".py"):
                 continue
-            with open(os.path.join(empacotar.RAIZ_PADRAO, rel), encoding="utf-8") as f:
+            with open(os.path.join(empacotar.DEFAULT_ROOT, rel), encoding="utf-8") as f:
                 arvore = ast.parse(f.read(), rel)
             for no in arvore.body:  # so o nivel do modulo; import tardio dentro de funcao e permitido
                 nomes = []

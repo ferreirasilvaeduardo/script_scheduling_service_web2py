@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Fase de saida do agente (CR-012; README §8.7 e §8.13): maquina de estados com dubles e o laco real em DEV.
 
-Sem banco: RepoSaidaMemoria segue o contrato do repo_oracle.scheduler_output (posse, offset esperado, parte ja
+Sem banco: RepoOutputMemory segue o contrato do repo_oracle.scheduler_output (posse, offset esperado, parte ja
 gravada, situacao final). O laco real roda scripts /bin/sh com o helper do pacote (sem sudo).
 """
 import _testenv  # noqa: F401
@@ -14,7 +14,7 @@ import zipfile
 from unittest import mock
 
 import output_phase
-from _output_memory import RepoSaidaMemoria
+from _output_memory import RepoOutputMemory
 from repo_oracle import scheduler_output
 
 AGENTE = "srv-t"
@@ -87,7 +87,7 @@ class TestMaquina(unittest.TestCase):
         self.work = tempfile.mkdtemp(prefix="sss_fase_")
         self.addCleanup(shutil.rmtree, self.work, True)
         self.output = output_phase.Output(7, "/s/producao", "carga/2026/10/20/14/05/ticket_7", None, self.work)
-        self.repo = RepoSaidaMemoria({7: {"agent_id": AGENTE}})
+        self.repo = RepoOutputMemory({7: {"agent_id": AGENTE}})
         self.conn = _Conn()
 
     def _pack(self, plat, rc):
@@ -119,7 +119,7 @@ class TestMaquina(unittest.TestCase):
         for rc, esperado in ((6, (output_phase.EMPTY, None)), (7, (output_phase.EXCEEDED, "FILES")),
                              (8, (output_phase.EXCEEDED, "BYTES")), (4, (output_phase.FAILED, "ERROR"))):
             self.output = output_phase.Output(7, "/s/p", "c/2026/10/20/14/05/ticket_7", None, self.work)
-            self.repo = RepoSaidaMemoria({7: {"agent_id": AGENTE}})
+            self.repo = RepoOutputMemory({7: {"agent_id": AGENTE}})
             with self.assertLogs("sss_scheduler", "WARNING") if rc == 4 else _nada():
                 self._pack(_Plat(b""), rc)
             self.assertEqual((self.output.result, self.output.reason), esperado, rc)
@@ -216,7 +216,7 @@ class TestLacoComSaida(tsc._Base):
         tsc._Base.setUp(self)
         self.output_dir = os.path.join(self.raiz, "saida")
         os.mkdir(self.output_dir, 0o755)
-        self.repo_output = RepoSaidaMemoria(self.banco.tickets)
+        self.repo_output = RepoOutputMemory(self.banco.tickets)
 
     def subir(self, **mudancas):
         mudancas.setdefault("output_dir", self.output_dir)

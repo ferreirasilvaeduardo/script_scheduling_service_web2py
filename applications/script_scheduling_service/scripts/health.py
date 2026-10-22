@@ -25,11 +25,11 @@ import sss_config  # noqa: E402
 from repo_oracle import health as saude_sql  # noqa: E402
 
 OK, WARNING, CRITICAL, UNKNOWN = 0, 1, 2, 3
-ESTADOS = ("OK", "WARNING", "CRITICAL", "UNKNOWN")
-_SAUDAVEIS = (agents_service.OK, agents_service.DELAYED)
+STATES = ("OK", "WARNING", "CRITICAL", "UNKNOWN")
+_HEALTHY = (agents_service.OK, agents_service.DELAYED)
 
 
-class Verificacao(object):
+class Check(object):
     """As verificacoes do README §13 sobre uma conexao ja aberta; um unico agora_banco() para todas."""
 
     def __init__(self, cfg, conn, args, repo=None):
@@ -38,66 +38,66 @@ class Verificacao(object):
         self.args = args
         self.repo = repo or saude_sql.RepoHealth.from_config(cfg)
         agente = cfg.agent
-        self.limiares = agents_service.Thresholds(agente.heartbeat_interval_s, agente.fence_timeout_s,
+        self.thresholds = agents_service.Thresholds(agente.heartbeat_interval_s, agente.fence_timeout_s,
                                                  agente.node_offline_timeout_s)
-        self.problemas = []  # (nivel, texto)
-        self.desempenho = []
+        self.problems = []  # (nivel, texto)
+        self.performance = []
 
-    def _problema(self, nivel, texto):
-        self.problemas.append((nivel, texto))
+    def _problem(self, nivel, texto):
+        self.problems.append((nivel, texto))
 
     def run(self):
         agora = db_conn.db_now(self.conn)
-        self._versao()
+        self._version()
         agentes = self.repo.agents(self.conn)
-        self._agentes(agentes, agora)
+        self._agents(agentes, agora)
         self._environments(agentes, agora)
-        self._fila(agentes, agora)
-        self._sem_pid(agora)
+        self._queue(agentes, agora)
+        self._no_pid(agora)
         self._config(agentes)
         self._purge(agora)
-        return max([nivel for nivel, _t in self.problemas] or [OK])
+        return max([nivel for nivel, _t in self.problems] or [OK])
 
-    def _versao(self):
+    def _version(self):
         versao = self.repo.schema_version(self.conn)
         if versao != sql_ident.SCHEMA_VERSION:
-            self._problema(CRITICAL, "versao do esquema %s, esperada %d (README §11.1)"
+            self._problem(CRITICAL, "versao do esquema %s, esperada %d (README §11.1)"
                            % (versao, sql_ident.SCHEMA_VERSION))
 
-    def _agentes(self, agentes, agora):
+    def _agents(self, agentes, agora):
         saudaveis = 0
         for ag in agentes:
             if ag["status"] != "ACTIVE":
                 continue
-            saude = agents_service.health(ag, agora, self.limiares)
-            if saude in _SAUDAVEIS:
+            saude = agents_service.health(ag, agora, self.thresholds)
+            if saude in _HEALTHY:
                 saudaveis += 1
             elif saude == agents_service.AT_RISK:
-                self._problema(WARNING, "agente %s em risco: heartbeat ha %s (fence %d s)" % (
-                    ag["code"], self._idade(ag, agora), self.limiares.fence_timeout_s))
+                self._problem(WARNING, "agente %s em risco: heartbeat ha %s (fence %d s)" % (
+                    ag["code"], self._age(ag, agora), self.thresholds.fence_timeout_s))
             else:
-                self._problema(CRITICAL, "agente %s ATIVO sem heartbeat ha %s (node_offline %d s)" % (
-                    ag["code"], self._idade(ag, agora), self.limiares.node_offline_timeout_s))
-        self.desempenho.append("healthy_agents=%d" % saudaveis)
+                self._problem(CRITICAL, "agente %s ATIVO sem heartbeat ha %s (node_offline %d s)" % (
+                    ag["code"], self._age(ag, agora), self.thresholds.node_offline_timeout_s))
+        self.performance.append("healthy_agents=%d" % saudaveis)
 
     @staticmethod
-    def _idade(ag, agora):
+    def _age(ag, agora):
         hb = ag.get("heartbeat_at")
         return "-" if hb is None else "%d s" % max(0, int((agora - hb).total_seconds()))
 
     def _environments(self, agentes, agora):
         atendidos = set()
         for ag in agentes:
-            if ag["status"] == "ACTIVE" and agents_service.health(ag, agora, self.limiares) in _SAUDAVEIS:
+            if ag["status"] == "ACTIVE" and agents_service.health(ag, agora, self.thresholds) in _HEALTHY:
                 atendidos.update(a.strip() for a in (ag.get("environments") or "").split(",") if a.strip())
         for nome in self.repo.active_environments(self.conn):
             if nome not in atendidos:
-                self._problema(CRITICAL, "ambiente %s ativo sem nenhum agente saudavel" % nome)
+                self._problem(CRITICAL, "ambiente %s ativo sem nenhum agente saudavel" % nome)
 
-    def _fila(self, agentes, agora):
-        atendidos = saude_sql.served_pairs(agentes, agora, self.limiares)
+    def _queue(self, agentes, agora):
+        atendidos = saude_sql.served_pairs(agentes, agora, self.thresholds)
         for g in saude_sql.unattended_queue(self.repo.queue_by_pair(self.conn, agora), atendidos):
-            self._problema(CRITICAL, "fila sem atendente: %d tickets de %s/%s, o mais antigo desde %s" % (
+            self._problem(CRITICAL, "fila sem atendente: %d tickets de %s/%s, o mais antigo desde %s" % (
                 g["quantidade"], g["environment"], g["interpreter"], g["mais_antigo"].strftime("%Y-%m-%d %H:%M:%S")))
         qtd, antigo = self.repo.overdue_queue(self.conn, agora)
         espera_min = 0 if antigo is None else max(0, int((agora - antigo).total_seconds()) // 60)
@@ -109,36 +109,36 @@ class Verificacao(object):
         else:
             nivel = OK
         if nivel != OK:
-            self._problema(nivel, "fila vencida: %d tickets PENDING, espera maxima %d min" % (qtd, espera_min))
-        self.desempenho.append("overdue_queue=%d;%d;%d" % (qtd, a.fila_warn, a.fila_crit))
-        self.desempenho.append("max_wait_min=%d;%d;%d" % (espera_min, a.espera_warn_min, a.espera_crit_min))
+            self._problem(nivel, "fila vencida: %d tickets PENDING, espera maxima %d min" % (qtd, espera_min))
+        self.performance.append("overdue_queue=%d;%d;%d" % (qtd, a.fila_warn, a.fila_crit))
+        self.performance.append("max_wait_min=%d;%d;%d" % (espera_min, a.espera_warn_min, a.espera_crit_min))
 
-    def _sem_pid(self, agora):
+    def _no_pid(self, agora):
         for t in self.repo.running_without_pid(self.conn, agora, self.args.sem_pid_min):
-            self._problema(WARNING, "ticket %d RUNNING sem PID no agente %s desde %s" % (
+            self._problem(WARNING, "ticket %d RUNNING sem PID no agente %s desde %s" % (
                 t["id"], t["agent_id"], t["started_at"].strftime("%Y-%m-%d %H:%M:%S")))
 
     def _config(self, agentes):
         local = sss_config.critical_config(self.cfg)
         for ag in agentes:
             if ag["status"] == "ACTIVE" and ag.get("critical_config") and ag["critical_config"] != local:
-                self._problema(WARNING, "agente %s com configuracao divergente: %s (local: %s)" % (
+                self._problem(WARNING, "agente %s com configuracao divergente: %s (local: %s)" % (
                     ag["code"], ag["critical_config"], local))
 
     def _purge(self, agora):
         if self.repo.last_purge(self.conn, agora, self.args.purge_dias) is None:
-            self._problema(WARNING, "nenhum PURGE auditado nos ultimos %d dias (README §11.3)" % self.args.purge_dias)
+            self._problem(WARNING, "nenhum PURGE auditado nos ultimos %d dias (README §11.3)" % self.args.purge_dias)
 
-    def saida(self, codigo):
-        n = len(self.problemas)
-        linhas = ["SSS %s - %d problema%s | %s" % (ESTADOS[codigo], n, "" if n == 1 else "s",
-                                                  " ".join(self.desempenho))]
-        ordenados = sorted(self.problemas, key=lambda p: -p[0])
-        linhas.extend("%s: %s" % (ESTADOS[nivel], texto) for nivel, texto in ordenados)
+    def output(self, codigo):
+        n = len(self.problems)
+        linhas = ["SSS %s - %d problema%s | %s" % (STATES[codigo], n, "" if n == 1 else "s",
+                                                  " ".join(self.performance))]
+        ordenados = sorted(self.problems, key=lambda p: -p[0])
+        linhas.extend("%s: %s" % (STATES[nivel], texto) for nivel, texto in ordenados)
         return "\n".join(linhas) + "\n"
 
 
-def _argumentos(argv):
+def _arguments(argv):
     parser = argparse.ArgumentParser(description="Saude do SSS no padrao Nagios (README §13)")
     parser.add_argument("--config", default=None, help="config.ini (padrao: instance/)")
     parser.add_argument("--no-pid-min", dest="sem_pid_min", type=int, default=2, help="RUNNING sem PID ha mais de N minutos")
@@ -150,7 +150,7 @@ def _argumentos(argv):
     return parser.parse_args(argv)
 
 
-def _desconhecido(saida, motivo):
+def _unknown(saida, motivo):
     saida.write("SSS UNKNOWN - %s\n" % motivo)
     return UNKNOWN
 
@@ -158,28 +158,28 @@ def _desconhecido(saida, motivo):
 def main(argv=None, conectar=None, saida=None):
     """conectar(cfg, segredos) e o ponto de injecao dos testes; saida recebe o texto do plugin (stdout)."""
     saida = saida or sys.stdout
-    args = _argumentos(argv)
+    args = _arguments(argv)
     try:
         cfg = sss_config.get_config(nome_log="health", caminho=args.config)
         segredos = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel="monitor")
     except sss_config.ConfigError as exc:
-        return _desconhecido(saida, "configuracao invalida: %s" % exc)
+        return _unknown(saida, "configuracao invalida: %s" % exc)
     try:
-        conn = (conectar or _conectar)(cfg, segredos)
+        conn = (conectar or _connect)(cfg, segredos)
     except Exception as exc:
-        return _desconhecido(saida, "falha ao conectar no Oracle: %s" % db_conn.translate_error(exc))
+        return _unknown(saida, "falha ao conectar no Oracle: %s" % db_conn.translate_error(exc))
     try:
-        verificacao = Verificacao(cfg, conn, args)
+        verificacao = Check(cfg, conn, args)
         codigo = verificacao.run()
     except Exception as exc:
-        return _desconhecido(saida, "falha de banco: %s" % db_conn.translate_error(exc))
+        return _unknown(saida, "falha de banco: %s" % db_conn.translate_error(exc))
     finally:
         conn.close()
-    saida.write(verificacao.saida(codigo))
+    saida.write(verificacao.output(codigo))
     return codigo
 
 
-def _conectar(cfg, segredos):
+def _connect(cfg, segredos):
     return db_conn.connect(cfg, segredos, papel="monitor")
 
 

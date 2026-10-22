@@ -1,1 +1,0 @@
-parar_servico.sh

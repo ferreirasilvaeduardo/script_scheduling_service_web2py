@@ -39,11 +39,11 @@ def _preparar_banco_real(cls):
     Com banco real, o cfg validado vai para current.sss_cfg durante a classe (os repositorios Oracle
     leem owner, prefixo, DSN e segredos dele) e e restaurado no tearDownClass.
     """
-    cls.tem_banco_real = _oracle_test_support.banco_real_configurado()
+    cls.tem_banco_real = _oracle_test_support.real_db_configured()
     cls._tinha_sss_cfg = hasattr(current, "sss_cfg")
     cls._sss_cfg_anterior = getattr(current, "sss_cfg", None)
     if cls.tem_banco_real:
-        cls.cfg = _oracle_test_support.preparar_schema_descartavel("web")
+        cls.cfg = _oracle_test_support.prepare_disposable_schema("web")
         current.sss_cfg = cls.cfg
     repo_factory.configure({"app": {"data_backend": "ORACLE", "sss_env": "DEV"}})
 
@@ -193,7 +193,7 @@ class TestOracleRbacUsuarios(unittest.TestCase):
                 cur = conn.cursor()
                 try:
                     cur.execute("DELETE FROM " + self.usr._tabela() + " WHERE id = :id", {"id": uid})
-                    if _oracle_test_support.modo_schema() == _oracle_test_support.MODO_COMPARTILHADO:
+                    if _oracle_test_support.schema_mode() == _oracle_test_support.SHARED_MODE:
                         # encerrar_sessoes audita o LOGOUT do usuario do teste: so essa auditoria sai.
                         cur.execute("DELETE FROM " + self.rbac._tabela_auditoria() + " WHERE entity = "
                                     "'tbsss_users' AND entity_id = :id", {"id": uid})
@@ -764,7 +764,7 @@ class TestOracleTickets(unittest.TestCase):
             try:
                 for tid in ids:
                     cur.execute("DELETE FROM " + self.tck._idents["tck"] + " WHERE id = :id", {"id": tid})
-                    if _oracle_test_support.modo_schema() == _oracle_test_support.MODO_COMPARTILHADO:
+                    if _oracle_test_support.schema_mode() == _oracle_test_support.SHARED_MODE:
                         cur.execute("DELETE FROM " + self.tck._tbl_aud + " WHERE entity = 'tbsss_tickets' "
                                     "AND entity_id = :id AND action IN ('TICKET_CREATE', 'TICKET_RERUN', "
                                     "'TICKET_CANCEL')", {"id": tid})
@@ -1007,7 +1007,7 @@ class TestOracleAgendamentos(unittest.TestCase):
 
     def _limpar(self, agd_ids, tck_ids, marca):
         """Remove so os registros criados por este teste e, no modo compartilhado, a auditoria deles."""
-        compartilhado = _oracle_test_support.modo_schema() == _oracle_test_support.MODO_COMPARTILHADO
+        compartilhado = _oracle_test_support.schema_mode() == _oracle_test_support.SHARED_MODE
         tck = repo_factory.get("tickets")
         c = self.agd._obter_conexao()
         try:
@@ -1325,7 +1325,7 @@ class TestOracleAuditoriaAgentes(unittest.TestCase):
             limpeza = [("DELETE FROM " + self.aud._idents["aud"] + " WHERE id = :id", {"id": i}) for i in aud_ids]
             for tid in tck_ids:
                 limpeza.append(("DELETE FROM " + tck._idents["tck"] + " WHERE id = :id", {"id": tid}))
-                if _oracle_test_support.modo_schema() == _oracle_test_support.MODO_COMPARTILHADO:
+                if _oracle_test_support.schema_mode() == _oracle_test_support.SHARED_MODE:
                     limpeza.append(("DELETE FROM " + self.aud._idents["aud"] + " WHERE entity = 'tbsss_tickets' "
                                     "AND entity_id = :id", {"id": tid}))
             if agt_id is not None:

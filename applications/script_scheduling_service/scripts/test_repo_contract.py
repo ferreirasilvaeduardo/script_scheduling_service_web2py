@@ -847,10 +847,10 @@ class _OracleContrato(object):
 
     @classmethod
     def setUpClass(cls):
-        from _oracle_test_support import preparar_schema_descartavel
+        from _oracle_test_support import prepare_disposable_schema
         cls._tinha_sss_cfg = hasattr(current, "sss_cfg")
         cls._sss_cfg_anterior = getattr(current, "sss_cfg", None)
-        cls.oracle_cfg = preparar_schema_descartavel("web")
+        cls.oracle_cfg = prepare_disposable_schema("web")
         current.sss_cfg = cls.oracle_cfg
 
     @classmethod
@@ -884,7 +884,7 @@ class _OracleContrato(object):
         if massa is None or not any(massa.criados.values()):
             return
         repo = self.obter_repo("catalog")
-        compartilhado = _oracle_test_support.modo_schema() == _oracle_test_support.MODO_COMPARTILHADO
+        compartilhado = _oracle_test_support.schema_mode() == _oracle_test_support.SHARED_MODE
         tab_aud = repo.qualify_table("audit")
         conn = repo._obter_conexao()
         restantes = []
@@ -937,7 +937,7 @@ class TestUltimoAdminOracle(_OracleContrato, unittest.TestCase, BaseUltimoAdminT
     def setUpClass(cls):
         super(TestUltimoAdminOracle, cls).setUpClass()
         import _oracle_test_support
-        if _oracle_test_support.modo_schema() != _oracle_test_support.MODO_DESCARTAVEL:
+        if _oracle_test_support.schema_mode() != _oracle_test_support.DISPOSABLE_MODE:
             raise unittest.SkipTest("Owner compartilhado: ha administradores reais; a protecao do ultimo admin "
                                     "so e exercida no FAKE e com owner SSS_TEST_* (README §2.5)")
 
@@ -963,7 +963,7 @@ class TestRepoFactoryEIntegridade(unittest.TestCase):
 
     def test_oracle_integrado_exige_banco_autorizado(self):
         """A bateria Oracle so roda com SSS_TEST_ORACLE=1, DEV e o esquema validado (detalhes no test_db_conn)."""
-        from _oracle_test_support import PrecondicaoSchemaErro, preparar_schema_descartavel
+        from _oracle_test_support import SchemaPreconditionError, prepare_disposable_schema
 
         cfg = mock.Mock()
         cfg.app.data_backend = "FAKE"
@@ -985,7 +985,7 @@ class TestRepoFactoryEIntegridade(unittest.TestCase):
         def preparar(env):
             with mock.patch.dict(os.environ, env, clear=True):
                 with mock.patch.dict("sys.modules", {"db_conn": db_conn_mock, "sss_config": sss_config_mock}):
-                    return preparar_schema_descartavel("web")
+                    return prepare_disposable_schema("web")
 
         # Ligado e autorizado: usa o config da aplicacao, confere a sessao e fecha a conexao.
         self.assertIs(preparar({"SSS_TEST_ORACLE": "1"}), cfg)
@@ -996,10 +996,10 @@ class TestRepoFactoryEIntegridade(unittest.TestCase):
         # Desligado, variavel antiga ou fora de DEV: recusa antes de conectar.
         db_conn_mock.connect.reset_mock()
         for env in ({}, {"SSS_TEST_ORACLE": "1", "SSS_TEST_DSN": "dbtest.local/sss"}):
-            with self.assertRaises(PrecondicaoSchemaErro):
+            with self.assertRaises(SchemaPreconditionError):
                 preparar(env)
         cfg.app.sss_env = "HML"
-        with self.assertRaises(PrecondicaoSchemaErro):
+        with self.assertRaises(SchemaPreconditionError):
             preparar({"SSS_TEST_ORACLE": "1"})
         db_conn_mock.connect.assert_not_called()
 

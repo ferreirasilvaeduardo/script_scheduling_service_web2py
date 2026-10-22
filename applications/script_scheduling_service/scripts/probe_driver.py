@@ -22,41 +22,41 @@ import sss_config  # noqa: E402
 import os_platform  # noqa: E402
 
 
-_RE_CODIGO_ERRO = re.compile(r"\b([A-Z]{3,4}-\d{4,5})\b")
+_RE_ERROR_CODE = re.compile(r"\b([A-Z]{3,4}-\d{4,5})\b")
 
-_ERROS_AUTENTICACAO = {
+_AUTH_ERRORS = {
     "ORA-01017", "ORA-28000", "ORA-28001", "ORA-28002",
     "ORA-28003", "ORA-28007", "ORA-28014",
 }
 
-_ERROS_REDE = {
+_NETWORK_ERRORS = {
     "ORA-12154", "ORA-12170", "ORA-12514", "ORA-12541", "ORA-12543",
     "ORA-12545", "ORA-12560", "ORA-03113", "ORA-03114", "ORA-03156",
     "DPY-4011", "DPY-4024", "DPI-1067", "DPY-6005",
 }
 
 
-def _classificar_erro(exc):
+def _classify_error(exc):
     """Extrai codigo e categoria do erro sem expor dados sensiveis."""
     if isinstance(exc, ImportError):
         return "IMPORT_ERROR", "BIBLIOTECA"
 
     msg = str(exc)
-    match = _RE_CODIGO_ERRO.search(msg)
+    match = _RE_ERROR_CODE.search(msg)
     codigo = match.group(1) if match else None
 
-    if codigo in _ERROS_AUTENTICACAO or "logon denied" in msg.lower() or "account is locked" in msg.lower():
+    if codigo in _AUTH_ERRORS or "logon denied" in msg.lower() or "account is locked" in msg.lower():
         return codigo or "AUTH_ERROR", "AUTENTICACAO"
     if codigo == "DPY-3010" or "in thin mode" in msg.lower():
         return codigo or "DPY-3010", "INCOMPATIVEL"
     if codigo == "DPI-1047" or "oracle client library" in msg.lower():
         return codigo or "DPI-1047", "BIBLIOTECA"
-    if codigo in _ERROS_REDE or "timed out" in msg.lower() or "timeout" in msg.lower():
+    if codigo in _NETWORK_ERRORS or "timed out" in msg.lower() or "timeout" in msg.lower():
         return codigo or "NET_ERROR", "REDE"
     return codigo or "ERR_OUTRO", "OUTRO"
 
 
-def _formatar_versao_cliente(val):
+def _format_client_version(val):
     if val is None:
         return None
     if isinstance(val, (tuple, list)):
@@ -64,7 +64,7 @@ def _formatar_versao_cliente(val):
     return str(val)
 
 
-def sondar(candidato, cfg, senha, usuario=None):
+def probe(candidato, cfg, senha, usuario=None):
     """Executa a tentativa de conexao para o candidato especificado, com a conta do papel (usuario) ou, sem ela,
     [oracle] user."""
     usuario = usuario or cfg.oracle.user
@@ -135,7 +135,7 @@ def sondar(candidato, cfg, senha, usuario=None):
         versao_driver = str(getattr(driver, "__version__", None) or "")
         if candidato in ("thick", "cx_oracle") and hasattr(driver, "clientversion"):
             try:
-                versao_cliente = _formatar_versao_cliente(driver.clientversion())
+                versao_cliente = _format_client_version(driver.clientversion())
             except Exception:
                 versao_cliente = None
 
@@ -153,7 +153,7 @@ def sondar(candidato, cfg, senha, usuario=None):
         }
 
     except Exception as exc:
-        codigo, categoria = _classificar_erro(exc)
+        codigo, categoria = _classify_error(exc)
         return {
             "candidato": candidato,
             "ok": False,
@@ -184,7 +184,7 @@ def main():
     else:
         cfg = sss_config.get_config()
 
-    resultado = sondar(args.candidato, cfg, senha, usuario=args.usuario)
+    resultado = probe(args.candidato, cfg, senha, usuario=args.usuario)
     sys.stdout.write(json.dumps(resultado) + "\n")
     sys.stdout.flush()
     sys.exit(0)

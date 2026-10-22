@@ -23,10 +23,10 @@ import scheduler_loop  # noqa: E402
 import sss_config  # noqa: E402
 import sss_logging  # noqa: E402
 
-_LOGGERS_DO_DAEMON = ("sss_db_conn", "sss_config")
+_DAEMON_LOGGERS = ("sss_db_conn", "sss_config")
 
 
-def _esperar(parada):
+def _wait(parada):
     """A unica espera do daemon, entre iteracoes (no maximo 1 s, README §8.1); volta logo se a parada chegar."""
     def esperar(segundos):
         if segundos > 0 and not parada.is_set():
@@ -43,7 +43,7 @@ def main(argv=None):
     except sss_config.ConfigError:  # o CRITICAL ja foi registrado (README §12.1)
         return scheduler_loop.EXIT_CONFIG
     logger = sss_logging.configure("sss_scheduler", cfg)
-    for nome in _LOGGERS_DO_DAEMON:
+    for nome in _DAEMON_LOGGERS:
         outro = logging.getLogger(nome)
         outro.setLevel(logger.level)
         for handler in logger.handlers:
@@ -54,7 +54,7 @@ def main(argv=None):
     agente = scheduler_loop.Agent(cfg=cfg)
     try:
         agente.initialize()
-        return agente.run(parada, esperar=_esperar(parada))
+        return agente.run(parada, esperar=_wait(parada))
     except scheduler_loop.StartupFailure as falha:
         return falha.code
     finally:

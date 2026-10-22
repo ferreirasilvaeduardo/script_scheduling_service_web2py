@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """F8.3d: dois agentes reais (scripts/run_scheduler.py) contra o Oracle do instance/config.ini.
 
-Com SSS_TEST_ORACLE=1 (README §2.5): esquema validado por preparar_schema_descartavel('agent') antes de DML;
+Com SSS_TEST_ORACLE=1 (README §2.5): esquema validado por prepare_disposable_schema('agent') antes de DML;
 ambiente, perfil, usuario, scripts e tickets so da fixture; cada agente com o proprio config.ini temporario
 (agent_id, work_dir, log_dir e output_dir proprios). Confere: nunca mais de 2 RUNNING do script de teto 2
 (polling no banco), todos SUCCESS, cada ticket executado uma vez, saida DISPONIVEL gravada pelo agente dono,
@@ -39,8 +39,8 @@ class _DoisAgentesBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         import test_repo_contract as trc
-        from _oracle_test_support import preparar_schema_descartavel
-        preparar_schema_descartavel("agent")
+        from _oracle_test_support import prepare_disposable_schema
+        prepare_disposable_schema("agent")
         cls.trc = trc
         cls.contrato = trc._OracleContrato
         cls.contrato.setUpClass.__func__(cls)

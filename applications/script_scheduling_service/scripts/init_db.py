@@ -30,7 +30,7 @@ import sss_logging  # noqa: E402
 logger = logging.getLogger("sss_init_db")
 
 
-def _registrar_critico_config(msg, cfg=None):
+def _log_critical_config(msg, cfg=None):
     """Emite log de nivel CRITICAL conforme README §13 e AGENTS §3.1."""
     log_dir = None
     if cfg and hasattr(cfg, "logging") and hasattr(cfg.logging, "log_dir"):
@@ -45,7 +45,7 @@ def _registrar_critico_config(msg, cfg=None):
         sss_logging.log_initial_critical("sss_init_db", msg, log_dir)
 
 
-def _conectar(cfg, usuario, senha):
+def _connect(cfg, usuario, senha):
     """Estabelece conexao Oracle com a conta informada usando db_conn.connect (F7.2)."""
     import db_conn
     segredos_dummy = collections.namedtuple("SegredosDummy", ["oracle"])(
@@ -54,7 +54,7 @@ def _conectar(cfg, usuario, senha):
     return db_conn.connect(cfg, segredos_dummy, papel="dono", user=usuario, password=senha)
 
 
-def _validar_schema_descartavel_dev(cfg, usuario_dono, conn):
+def _validate_disposable_schema_dev(cfg, usuario_dono, conn):
     """Valida requisitos de seguranca para schema descartavel em DEV (F7.1)."""
     dsn_env = os.environ.get("SSS_TEST_DSN")
     owner_env = os.environ.get("SSS_TEST_OWNER")
@@ -93,7 +93,7 @@ def _validar_schema_descartavel_dev(cfg, usuario_dono, conn):
         cursor.close()
 
 
-def _consultar_existencia(cursor, owner):
+def _query_existence(cursor, owner):
     """Le todos os objetos, constraints e indices existentes do owner em conjuntos indexados."""
     v_owner = owner.upper()
 
@@ -132,7 +132,7 @@ def _consultar_existencia(cursor, owner):
     }
 
 
-def _objeto_existe(tipo, nome, mapa_existencia):
+def _object_exists(tipo, nome, mapa_existencia):
     """Verifica se um determinado objeto ja existe no dicionario de dados."""
     nome_low = nome.lower()
     if tipo in ("SEQUENCE", "TABLE", "TRIGGER"):
@@ -144,11 +144,11 @@ def _objeto_existe(tipo, nome, mapa_existencia):
     return False
 
 
-def _executar_ddl_fases(conn, owner, prefixo, lob_storage="SECUREFILE", log_fn=print):
+def _run_ddl_phases(conn, owner, prefixo, lob_storage="SECUREFILE", log_fn=print):
     """Aplica o DDL fase a fase de forma idempotente (1 a 6)."""
     cursor = conn.cursor()
     try:
-        mapa = _consultar_existencia(cursor, owner)
+        mapa = _query_existence(cursor, owner)
         instrucoes = ddl_builder.build_ddl_statements(owner, prefixo, lob_storage=lob_storage)
 
         total = len(instrucoes)
@@ -156,7 +156,7 @@ def _executar_ddl_fases(conn, owner, prefixo, lob_storage="SECUREFILE", log_fn=p
         skip_count = 0
 
         for idx, item in enumerate(instrucoes, start=1):
-            if _objeto_existe(item.tipo, item.nome, mapa):
+            if _object_exists(item.tipo, item.nome, mapa):
                 skip_count += 1
                 log_fn("  [{}/{}] SKIP: {} {} ja existe".format(idx, total, item.tipo, item.nome))
                 continue
@@ -175,7 +175,7 @@ def _executar_ddl_fases(conn, owner, prefixo, lob_storage="SECUREFILE", log_fn=p
         cursor.close()
 
 
-def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_senha=None, log_fn=print):
+def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_senha=None, log_fn=print):
     """Executa o seed idempotente via MERGE (Fase 7, README §4.3.D e §11.1)."""
     esquema = sql_ident.names(prefixo)
     cursor = conn.cursor()
@@ -526,7 +526,7 @@ def _executar_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admi
         cursor.close()
 
 
-def _coletar_estatisticas(conn, owner, prefixo, log_fn=print):
+def _gather_statistics(conn, owner, prefixo, log_fn=print):
     """Coleta estatisticas apenas em tabelas com linhas (Fase 8, CR-007, R-29)."""
     cursor = conn.cursor()
     esquema = sql_ident.names(prefixo)
@@ -555,7 +555,7 @@ def _coletar_estatisticas(conn, owner, prefixo, log_fn=print):
         cursor.close()
 
 
-def _conferir_esquema(conn, owner, prefixo, log_fn=print):
+def _check_schema(conn, owner, prefixo, log_fn=print):
     """Confere esquema real do banco contra o registro sql_ident (README §11.1, CR-008, R-14)."""
     esquema = sql_ident.names(prefixo)
     cursor = conn.cursor()
@@ -716,7 +716,7 @@ def _parse_grants_arg(arg_str):
     return papeis
 
 
-def _existe_esquema_1(conn, owner, prefixo):
+def _schema_1_exists(conn, owner, prefixo):
     """Tabela de controle do esquema anterior ao CR-016a presente: o esquema novo nao convive com ele."""
     cursor = conn.cursor()
     try:
@@ -752,7 +752,7 @@ def main(argv=None):
         args, desconhecidos = parser.parse_known_args(argv)
         if desconhecidos:
             msg = "Argumentos nao suportados: %s" % (" ".join(desconhecidos))
-            _registrar_critico_config(msg)
+            _log_critical_config(msg)
             print(msg, file=sys.stderr)
             return 2
     except SystemExit as e:
@@ -770,7 +770,7 @@ def main(argv=None):
         cfg = sss_config.load(caminho_cfg)
     except Exception as exc:
         msg = "Falha ao carregar configuracao: %s" % exc
-        _registrar_critico_config(msg)
+        _log_critical_config(msg)
         print(msg, file=sys.stderr)
         return 2
 
@@ -785,7 +785,7 @@ def main(argv=None):
         sql_ident.validate_registry(prefixo)
     except Exception as exc:
         msg = "Falha de configuracao em identificadores Oracle: %s" % exc
-        _registrar_critico_config(msg, cfg)
+        _log_critical_config(msg, cfg)
         print(msg, file=sys.stderr)
         return 2
 
@@ -796,7 +796,7 @@ def main(argv=None):
             papeis_grants = _parse_grants_arg(args.grants_para)
         except Exception as exc:
             msg = "Configuracao invalida de grants: %s" % exc
-            _registrar_critico_config(msg, cfg)
+            _log_critical_config(msg, cfg)
             print(msg, file=sys.stderr)
             return 2
 
@@ -863,7 +863,7 @@ def main(argv=None):
             return 2
 
     try:
-        conn = _conectar(cfg, usuario_dono, senha_dono)
+        conn = _connect(cfg, usuario_dono, senha_dono)
     except Exception as exc:
         msg = "Falha de conexao com o banco Oracle: %s" % exc
         logger.critical(msg, extra={"agent": "-", "ticket": "-", "action": "INIT_DB"})
@@ -873,7 +873,7 @@ def main(argv=None):
     try:
         # Validacao de protecao em DEV
         if getattr(cfg.app, "sss_env", "DEV") == "DEV" and not args.schema_real:
-            _validar_schema_descartavel_dev(cfg, usuario_dono, conn)
+            _validate_disposable_schema_dev(cfg, usuario_dono, conn)
         elif args.schema_real:
             cursor = conn.cursor()
             try:
@@ -904,7 +904,7 @@ def main(argv=None):
         finally:
             cursor.close()
 
-        if versao_banco == 0 and _existe_esquema_1(conn, owner, prefixo):
+        if versao_banco == 0 and _schema_1_exists(conn, owner, prefixo):
             print("Esquema anterior ao CR-016a (nomes em portugues) encontrado em %s: aplique o 02_rollback_sss.sql "
                   "da versao anterior antes de criar o novo" % owner, file=sys.stderr)
             return 3
@@ -918,11 +918,11 @@ def main(argv=None):
 
         # Executa Fases 1 a 6 (DDL)
         print("Iniciando aplicacao do DDL (Fases 1 a 6)...")
-        _executar_ddl_fases(conn, owner, prefixo, lob_storage=lob_storage, log_fn=print)
+        _run_ddl_phases(conn, owner, prefixo, lob_storage=lob_storage, log_fn=print)
 
         # Executa Fase 7 (Seed)
         print("Iniciando seed inicial (Fase 7)...")
-        _executar_seed(
+        _run_seed(
             conn, owner, prefixo,
             admin_login=args.admin_login,
             admin_nome=args.admin_nome,
@@ -933,11 +933,11 @@ def main(argv=None):
         # Executa Fase 8 (Estatisticas)
         if args.stats:
             print("Coletando estatisticas (Fase 8)...")
-            _coletar_estatisticas(conn, owner, prefixo, log_fn=print)
+            _gather_statistics(conn, owner, prefixo, log_fn=print)
 
         # Conferencia de esquema (Fase 9)
         print("Conferindo integridade do esquema...")
-        ok, divergencias = _conferir_esquema(conn, owner, prefixo, log_fn=print)
+        ok, divergencias = _check_schema(conn, owner, prefixo, log_fn=print)
         if not ok:
             return 3
 

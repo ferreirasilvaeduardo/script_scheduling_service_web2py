@@ -30,7 +30,7 @@ import scheduler_loop as sl
 import sql_ident
 from repo_oracle.scheduler_queue import RegistrationLost
 from sss_config import EnvironmentSecret, Secrets
-from _output_memory import RepoSaidaMemoria
+from _output_memory import RepoOutputMemory
 
 AGENTE_FALSO = 2 ** 31 - 3
 AMB = "DEV"
@@ -370,7 +370,7 @@ class _Base(unittest.TestCase):
         plat = mudancas.pop("plat", None)
         with mock.patch.object(sl.os, "geteuid", return_value=AGENTE_FALSO):
             if getattr(self, "repo_output", None) is None:
-                self.repo_output = RepoSaidaMemoria(self.banco.tickets)
+                self.repo_output = RepoOutputMemory(self.banco.tickets)
             self.ag = sl.Agent(cfg=self.cfg(**mudancas), segredos=segredos, plat=plat, conexao=self.connection,
                                 repo=self.banco, repo_log=self.banco, hostname="host-t", pid=os.getpid(),
                                 repo_saida=self.repo_output, repo_agenda=_AgendaVazia())

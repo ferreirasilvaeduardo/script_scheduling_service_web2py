@@ -1,1 +1,0 @@
-iniciar_local.sh

@@ -3,7 +3,7 @@
 from repo_oracle import scheduler_output
 
 
-class RepoSaidaMemoria(object):
+class RepoOutputMemory(object):
     """Contrato do RepoSchedulerOutput em memoria. tickets: {id: {'agente_id': ...}} para a posse."""
 
     def __init__(self, tickets=None):
@@ -12,7 +12,7 @@ class RepoSaidaMemoria(object):
         self.falhas = []
         self.chamadas = []
 
-    def _dono(self, tid, agente_id):
+    def _owner(self, tid, agente_id):
         t = self.tickets.get(tid)
         return t is not None and t.get("agent_id") == agente_id
 
@@ -29,7 +29,7 @@ class RepoSaidaMemoria(object):
                 linha.update(content=b"", file_count=None, size_bytes=None)
                 return True
             return False
-        if not self._dono(tid, agente_id):
+        if not self._owner(tid, agente_id):
             return False
         self.linhas[tid] = {"state": "WRITING", "reason": None, "agent_id": agente_id, "content": b"",
                             "file_count": None, "size_bytes": None}
@@ -63,7 +63,7 @@ class RepoSaidaMemoria(object):
         if linha is not None:
             if linha["state"] != "WRITING" or linha["agent_id"] != agente_id:
                 return False
-        elif not self._dono(tid, agente_id):
+        elif not self._owner(tid, agente_id):
             return False
         self.linhas[tid] = {"state": situacao, "reason": motivo, "agent_id": agente_id, "content": None,
                             "file_count": qtd, "size_bytes": None}

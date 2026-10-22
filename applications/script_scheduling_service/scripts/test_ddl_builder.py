@@ -366,7 +366,7 @@ class TestInitDbCli(unittest.TestCase):
             conn = mock.MagicMock()
             cur = conn.cursor.return_value
             cur.fetchone.return_value = (contagem,)
-            self.assertIs(init_db._existe_esquema_1(conn, "openrisow", "tbsss_"), esperado)
+            self.assertIs(init_db._schema_1_exists(conn, "openrisow", "tbsss_"), esperado)
             _sql, binds = cur.execute.call_args[0][0], cur.execute.call_args[1]
             self.assertEqual(binds, {"o": "OPENRISOW", "t": "TBSSS_CONTROLE"})
             cur.close.assert_called_once_with()
@@ -393,7 +393,7 @@ class TestInitDbConferenciaMock(unittest.TestCase):
         mock_cursor.fetchall.side_effect = fake_fetchall
         mock_cursor.fetchone.return_value = None
 
-        ok, divergencias = init_db._conferir_esquema(mock_conn, "openrisow", "tbsss_", log_fn=lambda x: None)
+        ok, divergencias = init_db._check_schema(mock_conn, "openrisow", "tbsss_", log_fn=lambda x: None)
         self.assertFalse(ok)
         self.assertTrue(any("Coluna ausente" in d for d in divergencias))
 
@@ -414,7 +414,7 @@ class TestInitDbConferenciaMock(unittest.TestCase):
         mock_cursor.fetchall.side_effect = fake_fetchall
         mock_cursor.fetchone.return_value = None
 
-        ok, divergencias = init_db._conferir_esquema(mock_conn, "openrisow", "tbsss_", log_fn=lambda x: None)
+        ok, divergencias = init_db._check_schema(mock_conn, "openrisow", "tbsss_", log_fn=lambda x: None)
         self.assertFalse(ok)
         self.assertTrue(any("Objeto invalido" in d for d in divergencias))
 

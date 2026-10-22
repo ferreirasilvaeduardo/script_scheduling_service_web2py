@@ -28,24 +28,24 @@ sys.path.insert(0, os.path.join(_APP_DIR, "modules"))
 import sss_config  # noqa: E402
 
 APP = "applications/script_scheduling_service"
-RAIZ_PADRAO = os.path.dirname(os.path.dirname(_APP_DIR))
-ARQUIVOS_RAIZ = ("web2py.py", "anyserver.py")
-PASTAS_RAIZ = ("gluon",)
+DEFAULT_ROOT = os.path.dirname(os.path.dirname(_APP_DIR))
+ROOT_FILES = ("web2py.py", "anyserver.py")
+ROOT_DIRS = ("gluon",)
 BIN = ("sss-web.sh", "sss-scheduler.sh", "sss-stop.sh", "sss-helper")
 # Pastas de runtime do web2py: entram vazias (o web2py as usa), nunca com conteudo.
-RUNTIME_VAZIAS = ("sessions", "errors", "cache", "databases", "uploads", "private", "cron")
+EMPTY_RUNTIME_DIRS = ("sessions", "errors", "cache", "databases", "uploads", "private", "cron")
 # Relativos a aplicacao: nunca entram (codigo de DEV, configuracao local, pastas que o web2py cria fora da raiz).
-EXCLUIR_APP = (
+EXCLUDE_APP = (
     "controllers/dev.py", "views/dev", "dev", "modules/repo_fake", "instance/config.ini", "instance/web.env",
     "log", "logs", "work", "exec", "dist", "applications", "deposit", "site-packages",
     "scripts/applications", "scripts/deposit", "scripts/logs", "scripts/site-packages",
     "scripts/_testenv.py", "scripts/_oracle_test_support.py", "scripts/_output_memory.py",
-) + RUNTIME_VAZIAS
-_RE_TESTE = re.compile(r"^scripts/test_[^/]*\.py$")
+) + EMPTY_RUNTIME_DIRS
+_RE_TEST = re.compile(r"^scripts/test_[^/]*\.py$")
 # Do gluon/ (upstream) saem os testes e o ambiente virtual de teste versionado do pydal, em qualquer nivel.
-EXCLUIR_GLUON = ("tests", "test-venv", ".pytest_cache", "ci")
-_RE_CREDENCIAL = re.compile(r"^\s*(password|cookie_key)\s*[=:]\s*(.*?)\s*$", re.IGNORECASE)
-_EXEMPLO_SEGREDOS = APP + "/instance/secrets.cfg.example"
+EXCLUDE_GLUON = ("tests", "test-venv", ".pytest_cache", "ci")
+_RE_CREDENTIAL = re.compile(r"^\s*(password|cookie_key)\s*[=:]\s*(.*?)\s*$", re.IGNORECASE)
+_SECRETS_EXAMPLE = APP + "/instance/secrets.cfg.example"
 _PLACEHOLDER = "CHANGE_ME"
 MTIME = 1767225600  # 2026-01-01 00:00:00 UTC: tar reprodutivel
 
@@ -61,21 +61,21 @@ routes_onerror = [
 '''
 
 
-class ErroPacote(Exception):
+class PackageError(Exception):
     """Pacote recusado; problemas e a lista de motivos (sem valores de credencial)."""
 
     def __init__(self, problemas):
         Exception.__init__(self, "pacote recusado: %d problema(s)" % len(problemas))
-        self.problemas = problemas
+        self.problems = problemas
 
 
-def _excluido_da_app(rel):
-    if _RE_TESTE.match(rel):
+def _excluded_from_app(rel):
+    if _RE_TEST.match(rel):
         return True
-    return any(rel == p or rel.startswith(p + "/") for p in EXCLUIR_APP)
+    return any(rel == p or rel.startswith(p + "/") for p in EXCLUDE_APP)
 
 
-def _caminhar(origem, base, problemas, filtro=None):
+def _walk(origem, base, problemas, filtro=None):
     """Arquivos de origem/base (relativos a origem), sem seguir links; links viram problema."""
     arquivos = []
     for pasta, subpastas, nomes in os.walk(os.path.join(origem, base)):
@@ -101,11 +101,11 @@ def _caminhar(origem, base, problemas, filtro=None):
     return arquivos
 
 
-def coletar(origem):
+def collect(origem):
     """(arquivos relativos a origem, problemas de link/ausencia). O routes.py e gerado, nao coletado."""
     problemas = []
     arquivos = []
-    for nome in ARQUIVOS_RAIZ:
+    for nome in ROOT_FILES:
         if os.path.isfile(os.path.join(origem, nome)):
             arquivos.append(nome)
         else:
@@ -116,35 +116,35 @@ def coletar(origem):
             arquivos.append(rel)
         else:
             problemas.append("%s: ausente" % rel)
-    for pasta in PASTAS_RAIZ:
-        arquivos.extend(_caminhar(origem, pasta, problemas,
-                                  filtro=lambda rel: any(p in EXCLUIR_GLUON for p in rel.split("/"))))
+    for pasta in ROOT_DIRS:
+        arquivos.extend(_walk(origem, pasta, problemas,
+                                  filtro=lambda rel: any(p in EXCLUDE_GLUON for p in rel.split("/"))))
     prefixo = APP + "/"
-    arquivos.extend(_caminhar(origem, APP, problemas,
-                              filtro=lambda rel: _excluido_da_app(rel[len(prefixo):])))
+    arquivos.extend(_walk(origem, APP, problemas,
+                              filtro=lambda rel: _excluded_from_app(rel[len(prefixo):])))
     return sorted(arquivos), problemas
 
 
-def _credenciais(rel, conteudo):
+def _credentials(rel, conteudo):
     nome = rel.rsplit("/", 1)[-1]
     if not (nome.endswith(".ini") or nome.endswith(".cfg") or nome.endswith(".cfg.example")
             or nome.endswith(".ini.example")):
         return []
     problemas = []
     for n, linha in enumerate(conteudo.decode("utf-8", "replace").splitlines(), 1):
-        m = _RE_CREDENCIAL.match(linha)
+        m = _RE_CREDENTIAL.match(linha)
         if not m:
             continue
         valor = re.split(r"\s+[;#]", m.group(2), 1)[0].strip()
         if not valor or valor in ("...",):
             continue
-        if rel == _EXEMPLO_SEGREDOS and valor == _PLACEHOLDER:
+        if rel == _SECRETS_EXAMPLE and valor == _PLACEHOLDER:
             continue
         problemas.append("%s:%d: %s com valor que nao e o placeholder %s" % (rel, n, m.group(1).lower(), _PLACEHOLDER))
     return problemas
 
 
-def verificar(arquivos, ler):
+def check(arquivos, ler):
     """Problemas do conteudo (sem valores). ler(rel) -> bytes."""
     problemas = []
     for rel in arquivos:
@@ -164,7 +164,7 @@ def verificar(arquivos, ler):
                     resto.split("/")[:2] in (["scripts", "applications"], ["scripts", "deposit"],
                                              ["scripts", "logs"], ["scripts", "site-packages"]):
                 problemas.append("%s: pasta de runtime do web2py" % rel)
-        problemas.extend(_credenciais(rel, ler(rel)))
+        problemas.extend(_credentials(rel, ler(rel)))
     return problemas
 
 
@@ -176,18 +176,18 @@ def _info(nome, tamanho, modo, tipo=tarfile.REGTYPE):
     return info
 
 
-def empacotar(origem, saida, versao=None):
-    """Gera o pacote e o SHA256SUMS; devolve (tar_gz, sha256sums). ErroPacote sem gravar nada."""
+def build_package(origem, saida, versao=None):
+    """Gera o pacote e o SHA256SUMS; devolve (tar_gz, sha256sums). PackageError sem gravar nada."""
     versao = versao or sss_config.SSS_VERSION
     origem = os.path.abspath(origem)
-    arquivos, problemas = coletar(origem)
+    arquivos, problemas = collect(origem)
 
     def ler(rel):
         with open(os.path.join(origem, rel), "rb") as f:
             return f.read()
-    problemas.extend(verificar(arquivos, ler))
+    problemas.extend(check(arquivos, ler))
     if problemas:
-        raise ErroPacote(problemas)
+        raise PackageError(problemas)
 
     topo = "sss-%s" % versao
     conteudo = [(rel, ler(rel)) for rel in arquivos] + [("routes.py", ROUTES.encode("utf-8"))]
@@ -197,7 +197,7 @@ def empacotar(origem, saida, versao=None):
     for rel, _d in conteudo:
         partes = rel.split("/")[:-1]
         pastas.update("/".join(partes[:i]) for i in range(1, len(partes) + 1))
-    pastas.update(APP + "/" + p for p in RUNTIME_VAZIAS)
+    pastas.update(APP + "/" + p for p in EMPTY_RUNTIME_DIRS)
 
     os.makedirs(saida, exist_ok=True)
     destino = os.path.join(saida, "%s.tar.gz" % topo)
@@ -231,14 +231,14 @@ def empacotar(origem, saida, versao=None):
 def main(argv=None, saida_texto=None):
     saida_texto = saida_texto or sys.stdout
     parser = argparse.ArgumentParser(description="Pacote de implantacao do SSS (README §12.2)")
-    parser.add_argument("--source", dest="origem", default=RAIZ_PADRAO, help="raiz do web2py a empacotar (padrao: esta arvore)")
+    parser.add_argument("--source", dest="origem", default=DEFAULT_ROOT, help="raiz do web2py a empacotar (padrao: esta arvore)")
     parser.add_argument("--out-dir", dest="saida", default=None, help="pasta de saida (padrao: <origem>/dist)")
     args = parser.parse_args(argv)
     try:
-        destino, somas = empacotar(args.origem, args.saida or os.path.join(args.origem, "dist"))
-    except ErroPacote as exc:
+        destino, somas = build_package(args.origem, args.saida or os.path.join(args.origem, "dist"))
+    except PackageError as exc:
         saida_texto.write("Pacote recusado:\n")
-        for problema in exc.problemas:
+        for problema in exc.problems:
             saida_texto.write("  - %s\n" % problema)
         return 1
     saida_texto.write("Pacote: %s\nSHA256SUMS: %s\n" % (destino, somas))

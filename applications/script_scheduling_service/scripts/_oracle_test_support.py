@@ -24,52 +24,52 @@ try:
 except ImportError:
     from modules import db_conn
 
-CHAVE = "SSS_TEST_ORACLE"
-PREFIXO_OWNER_RESERVADO = "SSS_TEST_"
-MODO_DESCARTAVEL = "DESCARTAVEL"
-MODO_COMPARTILHADO = "COMPARTILHADO"
+KEY = "SSS_TEST_ORACLE"
+RESERVED_OWNER_PREFIX = "SSS_TEST_"
+DISPOSABLE_MODE = "DESCARTAVEL"
+SHARED_MODE = "COMPARTILHADO"
 # Variaveis da versao anterior da guarda: recusadas para nao serem ignoradas em silencio.
-VARIAVEIS_ANTIGAS = ("SSS_TEST_DSN", "SSS_TEST_OWNER", "SSS_TEST_CONFIG",
+OLD_VARIABLES = ("SSS_TEST_DSN", "SSS_TEST_OWNER", "SSS_TEST_CONFIG",
                      "SSS_TEST_SCHEMA_DISPOSABLE", "SSS_TEST_SCHEMA_COMPARTILHADO")
 _RE_OWNER = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,29}$")
-_RE_OWNER_DESCARTAVEL = re.compile(r"^SSS_TEST_[A-Za-z0-9_]{1,21}$")
+_RE_DISPOSABLE_OWNER = re.compile(r"^SSS_TEST_[A-Za-z0-9_]{1,21}$")
 
-_modo_atual = None
+_current_mode = None
 
 
-class PrecondicaoSchemaErro(RuntimeError):
+class SchemaPreconditionError(RuntimeError):
     """Lancado quando o banco ou o esquema nao atendem as garantias dos testes reais."""
     pass
 
 
-def banco_real_configurado():
+def real_db_configured():
     """True quando os testes contra o Oracle real foram ligados (SSS_TEST_ORACLE=1)."""
-    return os.environ.get(CHAVE) == "1"
+    return os.environ.get(KEY) == "1"
 
 
-def modo_do_owner(owner):
+def owner_mode(owner):
     """DESCARTAVEL para owner SSS_TEST_*; COMPARTILHADO para os demais."""
-    return MODO_DESCARTAVEL if (owner or "").strip().upper().startswith(PREFIXO_OWNER_RESERVADO) \
-        else MODO_COMPARTILHADO
+    return DISPOSABLE_MODE if (owner or "").strip().upper().startswith(RESERVED_OWNER_PREFIX) \
+        else SHARED_MODE
 
 
-def modo_schema():
-    """Modo validado por preparar_schema_descartavel nesta execucao; None antes dela."""
-    return _modo_atual
+def schema_mode():
+    """Modo validado por prepare_disposable_schema nesta execucao; None antes dela."""
+    return _current_mode
 
 
 def _cfg_oracle(cfg, campo):
     return (getattr(getattr(cfg, "oracle", None), campo, None) or "").strip()
 
 
-def verificar_precondicoes_ambiente(cfg=None):
+def check_environment_preconditions(cfg=None):
     """Verifica a chave, o ambiente e o owner antes de qualquer conexao. Retorna (bool, motivo)."""
-    if not banco_real_configurado():
-        return False, "Testes Oracle reais desligados: defina %s=1" % CHAVE
-    antigas = [v for v in VARIAVEIS_ANTIGAS if os.environ.get(v)]
+    if not real_db_configured():
+        return False, "Testes Oracle reais desligados: defina %s=1" % KEY
+    antigas = [v for v in OLD_VARIABLES if os.environ.get(v)]
     if antigas:
         return False, ("Variaveis antigas definidas (%s): owner, prefixo e DSN vem so do instance/config.ini; "
-                       "use apenas %s=1" % (", ".join(antigas), CHAVE))
+                       "use apenas %s=1" % (", ".join(antigas), KEY))
     if cfg is None:
         return True, ""
 
@@ -80,27 +80,27 @@ def verificar_precondicoes_ambiente(cfg=None):
     owner = _cfg_oracle(cfg, "owner").upper()
     if not _RE_OWNER.match(owner):
         return False, "[oracle] owner invalido no config"
-    if modo_do_owner(owner) == MODO_DESCARTAVEL and not _RE_OWNER_DESCARTAVEL.match(owner):
+    if owner_mode(owner) == DISPOSABLE_MODE and not _RE_DISPOSABLE_OWNER.match(owner):
         return False, "Owner descartavel '%s' invalido: caracteres invalidos ou comprimento excessivo" % owner
     return True, ""
 
 
-def validar_schema_descartavel(conn, owner_configurado, usuario_sessao_esperado, prefixo="tbsss_"):
+def validate_disposable_schema(conn, owner_configurado, usuario_sessao_esperado, prefixo="tbsss_"):
     """Confere a sessao real (USER) e, no modo compartilhado, o esquema SSS na versao do codigo.
 
     No modo descartavel, a conta de sessao nunca pode ser a dona do esquema.
     """
     owner = (owner_configurado or "").strip().upper()
     if not _RE_OWNER.match(owner):
-        raise PrecondicaoSchemaErro("Owner configurado invalido")
-    modo = modo_do_owner(owner)
-    if modo == MODO_DESCARTAVEL and not _RE_OWNER_DESCARTAVEL.match(owner):
-        raise PrecondicaoSchemaErro("Owner descartavel '%s' invalido" % owner)
-    compartilhado = modo == MODO_COMPARTILHADO
+        raise SchemaPreconditionError("Owner configurado invalido")
+    modo = owner_mode(owner)
+    if modo == DISPOSABLE_MODE and not _RE_DISPOSABLE_OWNER.match(owner):
+        raise SchemaPreconditionError("Owner descartavel '%s' invalido" % owner)
+    compartilhado = modo == SHARED_MODE
     esperado = (usuario_sessao_esperado or "").strip().upper()
 
     if not compartilhado and esperado == owner:
-        raise PrecondicaoSchemaErro(
+        raise SchemaPreconditionError(
             "Conta de sessao '%s' nao pode ser a conta dona do esquema descartavel '%s'"
             % (usuario_sessao_esperado, owner_configurado)
         )
@@ -110,25 +110,25 @@ def validar_schema_descartavel(conn, owner_configurado, usuario_sessao_esperado,
         cur.execute("SELECT USER FROM DUAL")
         row = cur.fetchone()
         if not row:
-            raise PrecondicaoSchemaErro("Nenhum usuario retornado por SELECT USER FROM DUAL")
+            raise SchemaPreconditionError("Nenhum usuario retornado por SELECT USER FROM DUAL")
         user_sessao = str(row[0]).strip().upper()
         if user_sessao != esperado:
-            raise PrecondicaoSchemaErro(
+            raise SchemaPreconditionError(
                 "Usuario de sessao real '%s' difere do esperado '%s'" % (user_sessao, usuario_sessao_esperado)
             )
         if user_sessao == owner and not compartilhado:
-            raise PrecondicaoSchemaErro(
+            raise SchemaPreconditionError(
                 "Sessao Oracle real esta conectada como owner '%s'; exigida conta de teste distinta" % owner
             )
         if compartilhado:
-            _conferir_esquema_sss(cur, owner, prefixo)
+            _check_sss_schema(cur, owner, prefixo)
     finally:
         cur.close()
 
     return owner
 
 
-def _conferir_esquema_sss(cur, owner, prefixo):
+def _check_sss_schema(cur, owner, prefixo):
     """Owner existente: so aceita se o esquema SSS estiver implantado na versao do codigo."""
     try:
         import sql_ident
@@ -139,41 +139,41 @@ def _conferir_esquema_sss(cur, owner, prefixo):
         cur.execute("SELECT schema_version FROM " + tabela)
         row = cur.fetchone()
     except Exception as exc:
-        raise PrecondicaoSchemaErro("Esquema SSS ausente no owner '%s' (%s)" % (owner, type(exc).__name__))
+        raise SchemaPreconditionError("Esquema SSS ausente no owner '%s' (%s)" % (owner, type(exc).__name__))
     if not row or int(row[0]) != sql_ident.SCHEMA_VERSION:
-        raise PrecondicaoSchemaErro(
+        raise SchemaPreconditionError(
             "Versao do esquema SSS em '%s' (%s) difere da do codigo (%s)"
             % (owner, row[0] if row else None, sql_ident.SCHEMA_VERSION)
         )
 
 
-def preparar_schema_descartavel(papel="web", cfg=None, segredos=None):
+def prepare_disposable_schema(papel="web", cfg=None, segredos=None):
     """Valida o banco real para o papel e devolve o cfg do instance/config.ini (ou o informado)."""
-    global _modo_atual
+    global _current_mode
     try:
         import sss_config
     except ImportError:
         from modules import sss_config
 
-    ok, motivo = verificar_precondicoes_ambiente()
+    ok, motivo = check_environment_preconditions()
     if not ok:
-        raise PrecondicaoSchemaErro(motivo)
+        raise SchemaPreconditionError(motivo)
     if cfg is None:
         cfg = sss_config.get_config()
-    ok, motivo = verificar_precondicoes_ambiente(cfg=cfg)
+    ok, motivo = check_environment_preconditions(cfg=cfg)
     if not ok:
-        raise PrecondicaoSchemaErro(motivo)
+        raise SchemaPreconditionError(motivo)
 
     cfg_owner = _cfg_oracle(cfg, "owner").upper()
-    modo = modo_do_owner(cfg_owner)
+    modo = owner_mode(cfg_owner)
     usuario_esperado = getattr(getattr(cfg, "oracle", None), "user", None)
     if papel == "purge":
         usuario_esperado = getattr(getattr(cfg, "retention", None), "purge_user", None)
     elif papel == "monitor":
         usuario_esperado = getattr(getattr(cfg, "monitor", None), "user", None)
 
-    if modo == MODO_DESCARTAVEL and usuario_esperado and usuario_esperado.strip().upper() == cfg_owner:
-        raise PrecondicaoSchemaErro("Usuario de teste '%s' nao pode ser o owner do esquema" % usuario_esperado)
+    if modo == DISPOSABLE_MODE and usuario_esperado and usuario_esperado.strip().upper() == cfg_owner:
+        raise SchemaPreconditionError("Usuario de teste '%s' nao pode ser o owner do esquema" % usuario_esperado)
 
     if segredos is None:
         segredos = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel=papel)
@@ -188,9 +188,9 @@ def preparar_schema_descartavel(papel="web", cfg=None, segredos=None):
     conn = conn_mod.connect(cfg, segredos, papel)
     try:
         prefixo = _cfg_oracle(cfg, "table_prefix") or "tbsss_"
-        validar_schema_descartavel(conn, cfg_owner, usuario_esperado, prefixo=prefixo)
+        validate_disposable_schema(conn, cfg_owner, usuario_esperado, prefixo=prefixo)
     finally:
         conn.close()
 
-    _modo_atual = modo
+    _current_mode = modo
     return cfg

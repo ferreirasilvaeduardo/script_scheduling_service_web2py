@@ -104,7 +104,7 @@ class _ConnAgora(object):
 
 
 def _args(argv=()):
-    return saude_cli._argumentos(list(argv))
+    return saude_cli._arguments(list(argv))
 
 
 class TestVerificacoes(unittest.TestCase):
@@ -112,10 +112,10 @@ class TestVerificacoes(unittest.TestCase):
     def _rodar(self, argv=(), **kw):
         repo = _Repo(**kw)
         conn = _ConnAgora()
-        v = saude_cli.Verificacao(_cfg(), conn, _args(argv), repo=repo)
+        v = saude_cli.Check(_cfg(), conn, _args(argv), repo=repo)
         codigo = v.run()
         self.assertEqual(conn.agoras, 1, "um unico agora_banco()")
-        return codigo, v.saida(codigo), repo
+        return codigo, v.output(codigo), repo
 
     def test_tudo_saudavel(self):
         codigo, texto, repo = self._rodar()
@@ -299,9 +299,9 @@ class TestSaudeOracle(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        from _oracle_test_support import preparar_schema_descartavel
+        from _oracle_test_support import prepare_disposable_schema
         import db_conn
-        cls.cfg = preparar_schema_descartavel("agent")
+        cls.cfg = prepare_disposable_schema("agent")
         segredos = sss_config.load_secrets(cls.cfg.secrets.secrets_file, cfg=cls.cfg, papel="agent")
         cls.conn = db_conn.connect(cls.cfg, segredos, papel="agent")
         cls.repo = saude_sql.RepoHealth.from_config(cls.cfg)
@@ -321,10 +321,10 @@ class TestSaudeOracle(unittest.TestCase):
         self.assertEqual(qtd, sum(int(r[2]) for r in self.repo.queue_by_pair(self.conn, agora)))
         self.repo.running_without_pid(self.conn, agora, 2)
         self.repo.last_purge(self.conn, agora, 2)
-        v = saude_cli.Verificacao(self.cfg, self.conn, _args(), repo=self.repo)
+        v = saude_cli.Check(self.cfg, self.conn, _args(), repo=self.repo)
         codigo = v.run()
         self.assertIn(codigo, (0, 1, 2))
-        print("\n[F9.1b] saude no GFPR: %s" % v.saida(codigo).splitlines()[0])
+        print("\n[F9.1b] saude no GFPR: %s" % v.output(codigo).splitlines()[0])
 
     def test_explain_sem_varredura_de_tickets_e_auditoria(self):
         import db_conn

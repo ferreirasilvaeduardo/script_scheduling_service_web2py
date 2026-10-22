@@ -1,20 +1,20 @@
 Used tool: manage_task
-Viewed iniciar_local.sh:15-45
-Viewed iniciar_local.sh:150-207
-Viewed parar_servico.sh:70-103
-Edited iniciar_local.sh
-Viewed iniciar_local.sh:165-210
-Edited iniciar_local.sh
-Viewed parar_servico.sh:90-103
-Edited parar_servico.sh
-Ran command: `bin/iniciar_local.sh`
-Ran command: `head -n 5 applications/script_scheduling_service/logs/servidor-2026-10-18_06-40-21.log`
-Ran command: `ls -l applications/script_scheduling_service/logs/servidor*`
-Ran command: `bin/parar_servico.sh`
-Ran command: `cat applications/script_scheduling_service/logs/servidor.out`
+Viewed start_local.sh:15-45
+Viewed start_local.sh:150-207
+Viewed stop_local.sh:70-103
+Edited start_local.sh
+Viewed start_local.sh:165-210
+Edited start_local.sh
+Viewed stop_local.sh:90-103
+Edited stop_local.sh
+Ran command: `bin/start_local.sh`
+Ran command: `head -n 5 applications/script_scheduling_service/logs/server-2026-10-18_06-40-21.log`
+Ran command: `ls -l applications/script_scheduling_service/logs/server*`
+Ran command: `bin/stop_local.sh`
+Ran command: `cat applications/script_scheduling_service/logs/server.out`
 Ran command: `git status`
 
-Atualizado! O script [`bin/iniciar_local.sh`](file:///portaloptrib/TESHUVA/web2py/bin/iniciar_local.sh) agora gera automaticamente o **log com data e hora** tanto no **nome do arquivo** quanto no **cabeçalho interno**, além de manter um link simbólico `servidor.out` apontando para o log mais recente.
+Atualizado! O script [`bin/start_local.sh`](file:///portaloptrib/TESHUVA/web2py/bin/start_local.sh) agora gera automaticamente o **log com data e hora** tanto no **nome do arquivo** quanto no **cabeçalho interno**, além de manter um link simbólico `servidor.out` apontando para o log mais recente.
 
 ---
 
@@ -23,12 +23,12 @@ Atualizado! O script [`bin/iniciar_local.sh`](file:///portaloptrib/TESHUVA/web2p
 Você pode rodar diretamente:
 ```bash
 cd /portaloptrib/TESHUVA/web2py
-bin/iniciar_local.sh
+bin/start_local.sh
 ```
 
 O script executa o servidor com `nohup` em segundo plano e cria:
-- **Arquivo único com data/hora:** `applications/script_scheduling_service/logs/servidor-$(date +%F_%H-%M-%S).log` (ex: `servidor-2026-10-18_06-40-21.log`).
-- **Link sempre atual:** `applications/script_scheduling_service/logs/servidor.out` (apontando para o arquivo com a data).
+- **Arquivo único com data/hora:** `applications/script_scheduling_service/logs/server-$(date +%F_%H-%M-%S).log` (ex: `server-2026-10-18_06-40-21.log`).
+- **Link sempre atual:** `applications/script_scheduling_service/logs/server.out` (apontando para o arquivo com a data).
 - **Registro de data no início:** `=== Servidor iniciado em AAAA-MM-DD HH:MM:SS (Porta: 8000) ===`.
 
 ---
@@ -39,7 +39,7 @@ Caso queira disparar todo o processo com `nohup` e desanexar do terminal:
 
 ```bash
 cd /portaloptrib/TESHUVA/web2py
-nohup bin/iniciar_local.sh > applications/script_scheduling_service/logs/subida-$(date +%F_%H-%M-%S).log 2>&1 &
+nohup bin/start_local.sh > applications/script_scheduling_service/logs/subida-$(date +%F_%H-%M-%S).log 2>&1 &
 ```
 
 ---
@@ -48,7 +48,7 @@ nohup bin/iniciar_local.sh > applications/script_scheduling_service/logs/subida-
 
 Como o link `servidor.out` é atualizado a cada subida com a data do momento, basta executar:
 ```bash
-tail -f applications/script_scheduling_service/logs/servidor.out
+tail -f applications/script_scheduling_service/logs/server.out
 ```
 Ou listar todos os logs com data:
 ```bash
@@ -59,10 +59,10 @@ ls -lt applications/script_scheduling_service/logs/servidor-*.log
 
 ### 4. Parar o serviço
 
-Ao parar com o script [`bin/parar_servico.sh`](file:///portaloptrib/TESHUVA/web2py/bin/parar_servico.sh), a data e hora do encerramento também são carimbadas no log:
+Ao parar com o script [`bin/stop_local.sh`](file:///portaloptrib/TESHUVA/web2py/bin/stop_local.sh), a data e hora do encerramento também são carimbadas no log:
 ```bash
 cd /portaloptrib/TESHUVA/web2py
-bin/parar_servico.sh
+bin/stop_local.sh
 ```
 
 Exemplo do conteúdo gerado no arquivo de log:
@@ -124,7 +124,7 @@ Para deixar a raiz do **web2py** mais limpa sem afetar em nada a subida do servi
 
 * **[`gluon/`](file:///portaloptrib/TESHUVA/web2py/gluon)**: É o **core/framework** do web2py. Sem ele nada funciona.
 * **[`applications/script_scheduling_service/`](file:///portaloptrib/TESHUVA/web2py/applications/script_scheduling_service)**: É o código do seu sistema (telas, controllers, models, módulos, configurações e logs).
-* **[`bin/`](file:///portaloptrib/TESHUVA/web2py/bin)**: Contém o launcher seguro [`sss-web.sh`](file:///portaloptrib/TESHUVA/web2py/bin/sss-web.sh) e os scripts que criamos (`iniciar_local.sh`, `parar_servico.sh`).
+* **[`bin/`](file:///portaloptrib/TESHUVA/web2py/bin)**: Contém o launcher seguro [`sss-web.sh`](file:///portaloptrib/TESHUVA/web2py/bin/sss-web.sh) e os scripts que criamos (`start_local.sh`, `stop_local.sh`).
 * **Arquivos na raiz:**
   * `web2py.py` e `anyserver.py` (executáveis de subida).
   * `routes.py` (roteamento).
@@ -136,4 +136,4 @@ Para deixar a raiz do **web2py** mais limpa sem afetar em nada a subida do servi
 > **Aviso sobre Git:**
 > As pastas `extras/`, `examples/` e `scripts/` (da raiz) vieram rastreadas no repositório original do web2py. Se você apagá-las na sua máquina de desenvolvimento, o comando `git status` listará essas exclusões como alterações pendentes. Se estiver preparando um pacote limpo para homologação/produção, removê-las é uma excelente prática recomendada pelo guia de implantação.
 
-Viewed iniciar_local.sh:192-213
+Viewed start_local.sh:192-213

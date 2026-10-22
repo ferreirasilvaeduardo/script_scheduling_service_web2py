@@ -26,7 +26,7 @@ import scheduler_loop as sl
 import sql_ident
 import sss_config
 from repo_oracle.scheduler_queue import DuplicateAgent
-from _output_memory import RepoSaidaMemoria
+from _output_memory import RepoOutputMemory
 
 _Agent = collections.namedtuple("_Agent", (
     "agent_id", "environments", "work_dir", "interpreters", "exec_users",
@@ -156,7 +156,7 @@ class _Base(unittest.TestCase):
         os.mkdir(self.logs, 0o750)
         self.repo = _Repo()
         self.repo_log = _RepoLog()
-        self.repo_output = RepoSaidaMemoria()
+        self.repo_output = RepoOutputMemory()
         self.connection = _Conexao()
         self.popens = []
         self.agents = []
@@ -485,8 +485,8 @@ class TestSubidaOracle(_Base):
 
     def setUp(self):
         _Base.setUp(self)
-        from _oracle_test_support import preparar_schema_descartavel
-        self.cfg_real = preparar_schema_descartavel("agent")
+        from _oracle_test_support import prepare_disposable_schema
+        self.cfg_real = prepare_disposable_schema("agent")
         self.code = "tst-f83b-%d" % (int(time.time() * 1000) % 100000000)
         self.addCleanup(self._limpar_registro)
 

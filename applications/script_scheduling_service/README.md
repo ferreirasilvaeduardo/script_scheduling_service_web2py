@@ -290,7 +290,7 @@ bin/
   sss-web.sh                  # ambiente do Instant Client/TZ e subida do WSGI (§12.2)
   sss-scheduler.sh            # ambiente e subida do daemon: só run_scheduler.py [--config] (§12.2)
   sss-stop.sh                 # [F9.1] parada controlada do daemon pelo arquivo .stop (§8.11, §12.2)
-  iniciar_local.sh, parar_servico.sh  # somente DEV; fora do pacote
+  start_local.sh, stop_local.sh  # somente DEV; fora do pacote
   sss-helper                  # [F8.0] helper de execução com o usuário de execução (run/term/kill/clean/stop-ticket/pack/clean-output/purge-output), instalado pelo root em /opt/sss/bin (§8.0, CR-007)
 applications/script_scheduling_service/
   controllers/                # default.py (login), tickets.py, logs.py, agendamentos.py, admin_*.py, auditoria.py, dev.py (somente DEV)
@@ -2539,7 +2539,7 @@ END;
 ### 11.3 `scripts/purge.py` (retenção)
 
 * Roda no servidor do agente, com a conta Oracle de purge (`[retention] purge_user` e `[purge] password`, §4.1), e audita com o ator `SYSTEM:purge` (CR-007, R-21). Com `purge_user` vazio (só aceito em DEV), recusa rodar com o código 2.
-* **Uso (F9.1):** `python scripts/purge.py [--config <config.ini>] [--dry-run] [--target tickets|auditoria|logs_locais|saida|todos] [--export-audit <pasta>]`. O padrão é `todos`. O resumo vai para o stdout, uma linha por alvo, e o log para `log_dir/internal/app/.../purge_<PID>.log` (§13).
+* **Uso (F9.1):** `python scripts/purge.py [--config <config.ini>] [--dry-run] [--target tickets|audit|local_logs|output|all] [--export-audit <pasta>]`. O padrão é `all`. O resumo vai para o stdout, uma linha por alvo, e o log para `log_dir/internal/app/.../purge_<PID>.log` (§13).
 * **Trava local:** fora do `--dry-run`, `os_platform.lock_instance` em `work_dir/sss-purge.lock`. Com outro purge em execução no mesmo servidor, registra INFO e sai com 0, sem conectar.
 * **Concessão no banco:** só um nó purga tickets e auditoria por vez. Antes, o purge toma a concessão:
   ```sql

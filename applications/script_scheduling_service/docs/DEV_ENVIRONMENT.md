@@ -118,7 +118,7 @@ cd /portaloptrib/TESHUVA/web2py
 ~/.pyenv/versions/3.6.15/bin/python web2py.py -a '<recycle>' -i 127.0.0.1 -p 8000 --no_gui
 ```
 
-**A aplicação usa sempre o Oracle** do `[oracle]` do `instance/config.ini` (owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, só o 3.6.15 tem; no `bin/iniciar_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3`. O `-a '<recycle>'` desabilita o painel do web2py sem pôr senha na lista de processos (`docs/DEPLOYMENT.md` §10.1 e Apêndice A).
+**A aplicação usa sempre o Oracle** do `[oracle]` do `instance/config.ini` (owner e prefixo; F7.3). Por isso, o Python precisa ter o driver Oracle (`oracledb` ou `cx_Oracle`). Nesta máquina, só o 3.6.15 tem; no `bin/start_local.sh`, use `PYTHON=~/.pyenv/versions/3.6.15/bin/python3`. O `-a '<recycle>'` desabilita o painel do web2py sem pôr senha na lista de processos (`docs/DEPLOYMENT.md` §10.1 e Apêndice A).
 
 Antes da primeira subida, crie `instance/config.ini` a partir do `config.ini.example` (`sss_env = DEV`, o `[oracle]` com owner, prefixo e DSN, `secrets_file`, `log_dir` e `work_dir` apontando para pastas suas) e o `secrets.cfg` com o `cookie_key`, dono você e modo `0600`. O passo a passo está no `docs/DEPLOYMENT.md` §7.2 e §7.1.
 
@@ -128,10 +128,10 @@ Para subir de forma prática em segundo plano (com nohup, carimbo de data/hora n
 
 ```bash
 cd /portaloptrib/TESHUVA/web2py
-bin/iniciar_local.sh               # sobe em background na porta 8000
-# ou: bin/iniciar_local.sh 18000   # porta customizada
-# ou: bin/iniciar_local.sh -f      # em primeiro plano no terminal
-bin/parar_servico.sh               # encerra graciosamente o processo e libera a porta
+bin/start_local.sh               # sobe em background na porta 8000
+# ou: bin/start_local.sh 18000   # porta customizada
+# ou: bin/start_local.sh -f      # em primeiro plano no terminal
+bin/stop_local.sh               # encerra graciosamente o processo e libera a porta
 ```
 
 Para subir como nos servidores via launcher oficial:

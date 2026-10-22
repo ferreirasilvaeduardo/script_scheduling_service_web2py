@@ -19,30 +19,30 @@ if sys.version_info[:3] < (3, 6, 0):
 
 
 # Avaliacao de string como codigo: proibida em qualquer ponto do bundle.
-_RE_EVAL_DIRETO = (
+_RE_DIRECT_EVAL = (
     (re.compile(r"\bnew\s+Function\b"), "new Function"),
     (re.compile(r"(?<![\w$.])Function\s*\("), "Function()"),
     # Classe [e] evita que o proprio padrao seja acusado pelo varredor de test_py36_compat.
     (re.compile(r"(?<![\w$.])[e]val\s*\("), "eval"),
 )
 # Obtencao do construtor AsyncFunction/GeneratorFunction, equivalente a new Function.
-_RE_CONSTRUTOR_DINAMICO = re.compile(
+_RE_DYNAMIC_CONSTRUCTOR = re.compile(
     r"getPrototypeOf\s*\(\s*(?:async\b|function\s*\*)"
     r"|\(\s*(?:async\s*(?:function\b[^{]*\{\s*\}|\([^)]*\)\s*=>\s*\{\s*\})|function\s*\*[^{]*\{\s*\})\s*\)\s*\.\s*constructor"
 )
 _RE_SET_EVALUATOR = re.compile(r"\.setEvaluator\s*\(\s*([A-Za-z_$][\w$]*)\s*\)")
-_RE_DECL_FUNCAO = re.compile(r"(?<![\w$.])function\s+([A-Za-z_$][\w$]*)\s*\(")
+_RE_FUNCTION_DECL = re.compile(r"(?<![\w$.])function\s+([A-Za-z_$][\w$]*)\s*\(")
 _RE_IDENT = re.compile(r"(?<![\w$.])([A-Za-z_$][\w$]*)(?![\w$])")
-_ANTES_DE_REGEX = set("(,=:[!&|?{};+-*%<>~^")
-_PALAVRAS_ANTES_DE_REGEX = ("return", "typeof", "case", "in", "of", "void", "delete", "new", "throw")
-_PARES = {"(": ")", "[": "]", "{": "}"}
+_BEFORE_REGEX = set("(,=:[!&|?{};+-*%<>~^")
+_WORDS_BEFORE_REGEX = ("return", "typeof", "case", "in", "of", "void", "delete", "new", "throw")
+_PAIRS = {"(": ")", "[": "]", "{": "}"}
 
 
-class _JsInvalido(Exception):
+class _InvalidJs(Exception):
     pass
 
 
-def _pular_regex(src, i):
+def _skip_regex(src, i):
     """i aponta para a '/' de abertura; retorna o indice apos o literal (incluindo flags)."""
     i += 1
     em_classe = False
@@ -52,7 +52,7 @@ def _pular_regex(src, i):
             i += 2
             continue
         if c == "\n":
-            raise _JsInvalido("regex sem fechamento")
+            raise _InvalidJs("regex sem fechamento")
         if em_classe:
             em_classe = c != "]"
         elif c == "[":
@@ -63,28 +63,28 @@ def _pular_regex(src, i):
                 i += 1
             return i
         i += 1
-    raise _JsInvalido("regex sem fechamento")
+    raise _InvalidJs("regex sem fechamento")
 
 
-def _inicia_regex(src, i):
+def _starts_regex(src, i):
     j = i - 1
     while j >= 0 and src[j] in " \t\r\n":
         j -= 1
-    if j < 0 or src[j] in _ANTES_DE_REGEX:
+    if j < 0 or src[j] in _BEFORE_REGEX:
         return True
     k = j
     while k >= 0 and (src[k].isalnum() or src[k] in "_$"):
         k -= 1
-    return src[k + 1:j + 1] in _PALAVRAS_ANTES_DE_REGEX
+    return src[k + 1:j + 1] in _WORDS_BEFORE_REGEX
 
 
-def _casar(src, i):
+def _match(src, i):
     """Indice do delimitador que fecha src[i] ('(', '[' ou '{').
 
     Ignora strings, templates (com ${} aninhado), comentarios e literais regex.
-    Desbalanceamento levanta _JsInvalido (o chamador reprova: fail-closed).
+    Desbalanceamento levanta _InvalidJs (o chamador reprova: fail-closed).
     """
-    pilha = [_PARES[src[i]]]
+    pilha = [_PAIRS[src[i]]]
     # Cada nivel de template aberto guarda a profundidade da pilha no '${'.
     templates = []
     i += 1
@@ -97,10 +97,10 @@ def _casar(src, i):
                 if src[i] == "\\":
                     i += 1
                 elif src[i] == "\n":
-                    raise _JsInvalido("string sem fechamento")
+                    raise _InvalidJs("string sem fechamento")
                 i += 1
             if i >= n:
-                raise _JsInvalido("string sem fechamento")
+                raise _InvalidJs("string sem fechamento")
         elif c == "`" or (c == "}" and templates and len(pilha) == templates[-1]):
             if c == "}":
                 templates.pop()
@@ -115,42 +115,42 @@ def _casar(src, i):
                 i += 1
             else:
                 if i >= n:
-                    raise _JsInvalido("template sem fechamento")
+                    raise _InvalidJs("template sem fechamento")
         elif src.startswith("//", i):
             fim = src.find("\n", i)
             i = n if fim < 0 else fim
         elif src.startswith("/*", i):
             fim = src.find("*/", i + 2)
             if fim < 0:
-                raise _JsInvalido("comentario sem fechamento")
+                raise _InvalidJs("comentario sem fechamento")
             i = fim + 1
-        elif c == "/" and _inicia_regex(src, i):
-            i = _pular_regex(src, i)
+        elif c == "/" and _starts_regex(src, i):
+            i = _skip_regex(src, i)
             continue
-        elif c in _PARES:
-            pilha.append(_PARES[c])
+        elif c in _PAIRS:
+            pilha.append(_PAIRS[c])
         elif c in ")]}":
             if c != pilha.pop():
-                raise _JsInvalido("delimitadores desbalanceados")
+                raise _InvalidJs("delimitadores desbalanceados")
             if not pilha:
                 return i
         i += 1
-    raise _JsInvalido("delimitadores desbalanceados")
+    raise _InvalidJs("delimitadores desbalanceados")
 
 
-def _corpos_de_funcoes(src):
+def _function_bodies(src):
     """Mapeia nome -> lista de textos (parametros + corpo) das declaracoes 'function nome(...)'."""
     corpos = {}
-    for m in _RE_DECL_FUNCAO.finditer(src):
-        fim_params = _casar(src, m.end() - 1)
+    for m in _RE_FUNCTION_DECL.finditer(src):
+        fim_params = _match(src, m.end() - 1)
         abre = src.find("{", fim_params)
         if abre < 0 or src[fim_params + 1:abre].strip():
-            raise _JsInvalido("declaracao de funcao sem corpo: %s" % m.group(1))
-        corpos.setdefault(m.group(1), []).append(src[m.end() - 1:_casar(src, abre) + 1])
+            raise _InvalidJs("declaracao de funcao sem corpo: %s" % m.group(1))
+        corpos.setdefault(m.group(1), []).append(src[m.end() - 1:_match(src, abre) + 1])
     return corpos
 
 
-def verificar_alpine_csp(fonte):
+def check_alpine_csp(fonte):
     """Retorna (ok, detalhe) indicando se o bundle Alpine e seguro sob script-src 'self'.
 
     Reprova eval, new Function e Function() em qualquer ponto e reprova o avaliador
@@ -158,7 +158,7 @@ def verificar_alpine_csp(fonte):
     O build CSP oficial ainda embute o avaliador padrao como codigo morto; ele so e
     aceito se nao for alcancavel a partir do avaliador registrado.
     """
-    for regex, rotulo in _RE_EVAL_DIRETO:
+    for regex, rotulo in _RE_DIRECT_EVAL:
         if regex.search(fonte):
             return False, "Uso de %s encontrado" % rotulo
 
@@ -168,8 +168,8 @@ def verificar_alpine_csp(fonte):
     avaliador = registros[0]
 
     try:
-        corpos = _corpos_de_funcoes(fonte)
-    except _JsInvalido as e:
+        corpos = _function_bodies(fonte)
+    except _InvalidJs as e:
         return False, "Bundle não analisável: %s" % e
     if avaliador not in corpos:
         return False, "Avaliador registrado '%s' não declarado como função" % avaliador
@@ -184,12 +184,12 @@ def verificar_alpine_csp(fonte):
             continue
         alcancaveis.add(nome)
         for corpo in corpos[nome]:
-            if _RE_CONSTRUTOR_DINAMICO.search(corpo):
+            if _RE_DYNAMIC_CONSTRUCTOR.search(corpo):
                 return False, "Avaliador registrado '%s' alcança construtor dinâmico em '%s' (build não CSP)" % (
                     avaliador, nome)
             pendentes.extend(ident for ident in _RE_IDENT.findall(corpo) if ident in corpos)
 
-    if _RE_CONSTRUTOR_DINAMICO.search(fonte):
+    if _RE_DYNAMIC_CONSTRUCTOR.search(fonte):
         return True, "Build CSP confirmada: avaliador '%s' não avalia strings (avaliador padrão presente apenas como código morto)" % avaliador
     return True, "Build CSP confirmada: avaliador '%s' não avalia strings" % avaliador
 
@@ -244,7 +244,7 @@ def main():
     else:
         try:
             with open(alpine_js, "r", encoding="utf-8") as f:
-                ok, detalhe = verificar_alpine_csp(f.read())
+                ok, detalhe = check_alpine_csp(f.read())
             results.append(("Build CSP do Alpine.js", "OK" if ok else "FALHA", detalhe))
         except Exception as e:
             results.append(("Build CSP do Alpine.js", "FALHA", "Erro ao ler arquivo: %s" % str(e)))

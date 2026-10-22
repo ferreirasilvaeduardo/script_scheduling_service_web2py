@@ -703,56 +703,56 @@ class TestOracleTestSupportMocks(unittest.TestCase):
     def test_desligado_sem_a_chave(self):
         for env in ({}, {"SSS_TEST_ORACLE": "0"}, {"SSS_TEST_ORACLE": "sim"}):
             with mock.patch.dict(os.environ, env, clear=True):
-                self.assertFalse(_oracle_test_support.banco_real_configurado())
-                ok, motivo = _oracle_test_support.verificar_precondicoes_ambiente(cfg=self._cfg())
+                self.assertFalse(_oracle_test_support.real_db_configured())
+                ok, motivo = _oracle_test_support.check_environment_preconditions(cfg=self._cfg())
                 self.assertFalse(ok)
                 self.assertIn("SSS_TEST_ORACLE=1", motivo)
 
     def test_variaveis_antigas_recusadas(self):
         """As variaveis da guarda anterior nao sao ignoradas em silencio."""
-        for antiga in _oracle_test_support.VARIAVEIS_ANTIGAS:
+        for antiga in _oracle_test_support.OLD_VARIABLES:
             with mock.patch.dict(os.environ, dict(self._LIGADO, **{antiga: "x"}), clear=True):
-                ok, motivo = _oracle_test_support.verificar_precondicoes_ambiente(cfg=self._cfg())
+                ok, motivo = _oracle_test_support.check_environment_preconditions(cfg=self._cfg())
                 self.assertFalse(ok)
                 self.assertIn(antiga, motivo)
 
     def test_modo_deduzido_do_owner(self):
-        self.assertEqual(_oracle_test_support.modo_do_owner("SSS_TEST_DEV"), _oracle_test_support.MODO_DESCARTAVEL)
-        self.assertEqual(_oracle_test_support.modo_do_owner("sss_test_dev"), _oracle_test_support.MODO_DESCARTAVEL)
-        self.assertEqual(_oracle_test_support.modo_do_owner("openrisow"), _oracle_test_support.MODO_COMPARTILHADO)
+        self.assertEqual(_oracle_test_support.owner_mode("SSS_TEST_DEV"), _oracle_test_support.DISPOSABLE_MODE)
+        self.assertEqual(_oracle_test_support.owner_mode("sss_test_dev"), _oracle_test_support.DISPOSABLE_MODE)
+        self.assertEqual(_oracle_test_support.owner_mode("openrisow"), _oracle_test_support.SHARED_MODE)
 
     def test_precondicoes_do_config(self):
         """DEV obrigatorio, DSN preenchido e owner valido; o data_backend nao importa."""
         with mock.patch.dict(os.environ, self._LIGADO, clear=True):
-            self.assertEqual(_oracle_test_support.verificar_precondicoes_ambiente(cfg=self._cfg()), (True, ""))
+            self.assertEqual(_oracle_test_support.check_environment_preconditions(cfg=self._cfg()), (True, ""))
             for cfg, trecho in ((self._cfg(sss_env="HML"), "DEV"), (self._cfg(dsn=""), "dsn"),
                                 (self._cfg(owner="openrisow;DROP"), "owner"),
                                 (self._cfg(owner="SSS_TEST_"), "descartavel"), (self._cfg(owner="SSS_TEST_" + "X" * 25), "owner")):
-                ok, motivo = _oracle_test_support.verificar_precondicoes_ambiente(cfg=cfg)
+                ok, motivo = _oracle_test_support.check_environment_preconditions(cfg=cfg)
                 self.assertFalse(ok)
                 self.assertIn(trecho, motivo)
 
     def test_descartavel_conta_igual_owner_recusada(self):
         mock_conn, _cur = self._conn("SSS_TEST_DEV")
-        with self.assertRaises(_oracle_test_support.PrecondicaoSchemaErro):
-            _oracle_test_support.validar_schema_descartavel(mock_conn, "SSS_TEST_DEV", "SSS_TEST_DEV")
+        with self.assertRaises(_oracle_test_support.SchemaPreconditionError):
+            _oracle_test_support.validate_disposable_schema(mock_conn, "SSS_TEST_DEV", "SSS_TEST_DEV")
 
     def test_descartavel_sessao_divergente_recusada(self):
         mock_conn, _cur = self._conn("USUARIO_QUALQUER")
-        with self.assertRaises(_oracle_test_support.PrecondicaoSchemaErro) as ctx:
-            _oracle_test_support.validar_schema_descartavel(mock_conn, "SSS_TEST_DEV", "SSS_TEST_WEB")
+        with self.assertRaises(_oracle_test_support.SchemaPreconditionError) as ctx:
+            _oracle_test_support.validate_disposable_schema(mock_conn, "SSS_TEST_DEV", "SSS_TEST_WEB")
         self.assertIn("difere do esperado", str(ctx.exception))
 
     def test_descartavel_ok_sem_conferir_controle(self):
         mock_conn, mock_cur = self._conn("SSS_TEST_WEB")
-        res = _oracle_test_support.validar_schema_descartavel(mock_conn, "SSS_TEST_APP", "SSS_TEST_WEB")
+        res = _oracle_test_support.validate_disposable_schema(mock_conn, "SSS_TEST_APP", "SSS_TEST_WEB")
         self.assertEqual(res, "SSS_TEST_APP")
         self.assertEqual(mock_cur.execute.call_count, 1)
 
     def test_compartilhado_conta_igual_owner_com_esquema_na_versao(self):
         import sql_ident
         mock_conn, mock_cur = self._conn("OPENRISOW", sql_ident.SCHEMA_VERSION)
-        res = _oracle_test_support.validar_schema_descartavel(mock_conn, "openrisow", "openrisow", prefixo="tbsss_")
+        res = _oracle_test_support.validate_disposable_schema(mock_conn, "openrisow", "openrisow", prefixo="tbsss_")
         self.assertEqual(res, "OPENRISOW")
         self.assertEqual(mock_cur.execute.call_args_list[1][0][0],
                          "SELECT schema_version FROM OPENRISOW.tbsss_control")
@@ -760,8 +760,8 @@ class TestOracleTestSupportMocks(unittest.TestCase):
     def test_compartilhado_versao_divergente_recusada(self):
         import sql_ident
         mock_conn, _cur = self._conn("OPENRISOW", sql_ident.SCHEMA_VERSION + 1)
-        with self.assertRaises(_oracle_test_support.PrecondicaoSchemaErro) as ctx:
-            _oracle_test_support.validar_schema_descartavel(mock_conn, "OPENRISOW", "OPENRISOW")
+        with self.assertRaises(_oracle_test_support.SchemaPreconditionError) as ctx:
+            _oracle_test_support.validate_disposable_schema(mock_conn, "OPENRISOW", "OPENRISOW")
         self.assertIn("difere da do codigo", str(ctx.exception))
 
     def test_compartilhado_sem_esquema_sss_recusado(self):
@@ -770,15 +770,15 @@ class TestOracleTestSupportMocks(unittest.TestCase):
         mock_cur.fetchone.return_value = ("OPENRISOW",)
         mock_cur.execute.side_effect = [None, RuntimeError("ORA-00942")]
         mock_conn.cursor.return_value = mock_cur
-        with self.assertRaises(_oracle_test_support.PrecondicaoSchemaErro) as ctx:
-            _oracle_test_support.validar_schema_descartavel(mock_conn, "OPENRISOW", "OPENRISOW")
+        with self.assertRaises(_oracle_test_support.SchemaPreconditionError) as ctx:
+            _oracle_test_support.validate_disposable_schema(mock_conn, "OPENRISOW", "OPENRISOW")
         self.assertIn("Esquema SSS ausente", str(ctx.exception))
 
     def test_compartilhado_sessao_de_outra_conta_recusada(self):
         import sql_ident
         mock_conn, _cur = self._conn("OUTRA", sql_ident.SCHEMA_VERSION)
-        with self.assertRaises(_oracle_test_support.PrecondicaoSchemaErro):
-            _oracle_test_support.validar_schema_descartavel(mock_conn, "OPENRISOW", "OPENRISOW")
+        with self.assertRaises(_oracle_test_support.SchemaPreconditionError):
+            _oracle_test_support.validate_disposable_schema(mock_conn, "OPENRISOW", "OPENRISOW")
 
     def test_preparar_usa_o_config_da_aplicacao_e_registra_o_modo(self):
         """Sem cfg, usa sss_config.get_config() (instance/config.ini) e guarda o modo validado."""
@@ -789,24 +789,24 @@ class TestOracleTestSupportMocks(unittest.TestCase):
             with mock.patch("sss_config.get_config", return_value=cfg) as obter:
                 with mock.patch("sss_config.load_secrets", return_value=mock.MagicMock()):
                     with mock.patch("db_conn.connect", return_value=mock_conn):
-                        self.assertIs(_oracle_test_support.preparar_schema_descartavel("web"), cfg)
+                        self.assertIs(_oracle_test_support.prepare_disposable_schema("web"), cfg)
         obter.assert_called_once_with()
         mock_conn.close.assert_called_once()
-        self.assertEqual(_oracle_test_support.modo_schema(), _oracle_test_support.MODO_COMPARTILHADO)
+        self.assertEqual(_oracle_test_support.schema_mode(), _oracle_test_support.SHARED_MODE)
 
     def test_preparar_descartavel_recusa_conta_do_owner_sem_conectar(self):
         cfg = self._cfg(owner="SSS_TEST_APP", user="SSS_TEST_APP")
         with mock.patch.dict(os.environ, self._LIGADO, clear=True):
             with mock.patch("db_conn.connect") as conectar:
-                with self.assertRaises(_oracle_test_support.PrecondicaoSchemaErro):
-                    _oracle_test_support.preparar_schema_descartavel("web", cfg=cfg)
+                with self.assertRaises(_oracle_test_support.SchemaPreconditionError):
+                    _oracle_test_support.prepare_disposable_schema("web", cfg=cfg)
         conectar.assert_not_called()
 
     def test_preparar_desligado_nao_le_config_nem_conecta(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             with mock.patch("sss_config.get_config") as obter, mock.patch("db_conn.connect") as conectar:
-                with self.assertRaises(_oracle_test_support.PrecondicaoSchemaErro):
-                    _oracle_test_support.preparar_schema_descartavel("web")
+                with self.assertRaises(_oracle_test_support.SchemaPreconditionError):
+                    _oracle_test_support.prepare_disposable_schema("web")
         obter.assert_not_called()
         conectar.assert_not_called()
 
@@ -876,7 +876,7 @@ class TestSondagemComAContaDoPapel(unittest.TestCase):
         falso = mock.Mock()
         falso.connect.side_effect = RuntimeError("ORA-01017: invalid username/password")
         with mock.patch.dict(sys.modules, {"oracledb": falso}):
-            sondar_driver.sondar("thin", cfg, "s", usuario="sss_monitor")
+            sondar_driver.probe("thin", cfg, "s", usuario="sss_monitor")
         self.assertEqual(falso.connect.call_args[1]["user"], "sss_monitor")
 
 
@@ -898,7 +898,7 @@ class TestSondarDriverScript(unittest.TestCase):
         ]
         for item, cod_esperado, cat_esperada in casos:
             exc = item if isinstance(item, Exception) else Exception(item)
-            cod, cat = sondar_driver._classificar_erro(exc)
+            cod, cat = sondar_driver._classify_error(exc)
             self.assertEqual(cod, cod_esperado, "Codigo incorreto para: %s" % item)
             self.assertEqual(cat, cat_esperada, "Categoria incorreta para: %s" % item)
 
@@ -907,10 +907,10 @@ class TestDbConnReal(unittest.TestCase):
     """Testes com conexao real quando SSS_TEST_ORACLE=1 (F7.2): config e segredos da aplicacao."""
 
     def test_conexao_real_schema_descartavel(self):
-        if not _oracle_test_support.banco_real_configurado():
+        if not _oracle_test_support.real_db_configured():
             self.skipTest("Testes Oracle reais desligados (SSS_TEST_ORACLE=1); marcado como NAO TESTADO")
         import sss_config
-        cfg = _oracle_test_support.preparar_schema_descartavel(papel="web")
+        cfg = _oracle_test_support.prepare_disposable_schema(papel="web")
         segredos = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel="web")
 
         conn = db_conn.connect(cfg, segredos, papel="web")

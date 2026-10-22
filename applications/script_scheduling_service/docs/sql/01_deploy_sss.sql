@@ -5091,7 +5091,7 @@ COMMIT;
 -- ==============================================================================
 
 -- papel web: usa a conta dona do esquema (openrisow); nenhum GRANT necessario
--- papel agente: usa a conta dona do esquema (openrisow); nenhum GRANT necessario
+-- papel agent: usa a conta dona do esquema (openrisow); nenhum GRANT necessario
 -- papel purge: conta nao informada; nenhum GRANT gerado
 -- papel monitor: conta nao informada; nenhum GRANT gerado
 
