@@ -375,12 +375,12 @@ COLUMN_COMMENTS = {
 
 def _format_column(col_name, col_info):
     """Formata a declaracao de uma coluna em CREATE TABLE."""
-    partes = [col_name, col_info["tipo"]]
+    parts = [col_name, col_info["tipo"]]
     if col_info.get("default") is not None:
-        partes.append("DEFAULT {}".format(col_info["default"]))
+        parts.append("DEFAULT {}".format(col_info["default"]))
     if col_info.get("not_null"):
-        partes.append("NOT NULL")
-    return "    {}".format(" ".join(partes))
+        parts.append("NOT NULL")
+    return "    {}".format(" ".join(parts))
 
 
 def build_ddl_statements(owner, prefix, lob_storage="SECUREFILE"):
@@ -398,119 +398,119 @@ def build_ddl_statements(owner, prefix, lob_storage="SECUREFILE"):
     """
     sql_ident.validate_owner(owner)
     sql_ident.validate_prefix(prefix)
-    esquema = sql_ident.names(prefix)
-    instrucoes = []
+    schema = sql_ident.names(prefix)
+    statements = []
 
     # -------------------------------------------------------------------------
     # FASE 1: Sequences
     # -------------------------------------------------------------------------
-    for entidade, t in esquema.items():
-        seq_nome = t["sequence"]
+    for entity, t in schema.items():
+        seq_name = t["sequence"]
         sql = "CREATE SEQUENCE {}.{} START WITH 1 INCREMENT BY 1 CACHE 20 NOCYCLE".format(
-            owner, seq_nome
+            owner, seq_name
         )
-        instrucoes.append(DDLItem(1, "SEQUENCE", seq_nome, sql, entidade))
+        statements.append(DDLItem(1, "SEQUENCE", seq_name, sql, entity))
 
     # -------------------------------------------------------------------------
     # FASE 2: Tabelas
     # -------------------------------------------------------------------------
-    for entidade, t in esquema.items():
-        tabela_nome = t["tabela"]
-        linhas_cols = [_format_column(c_nome, c_info) for c_nome, c_info in t["colunas"].items()]
-        corpo = ",\n".join(linhas_cols)
+    for entity, t in schema.items():
+        table_name = t["tabela"]
+        rows_cols = [_format_column(c_name, c_info) for c_name, c_info in t["colunas"].items()]
+        body = ",\n".join(rows_cols)
 
         # Clausula LOB
-        colunas_lob = t.get("colunas_lob", ())
-        clausula_lob = ""
-        if colunas_lob:
-            lobs_str = ", ".join(colunas_lob)
+        columns_lob = t.get("colunas_lob", ())
+        clause_lob = ""
+        if columns_lob:
+            lobs_str = ", ".join(columns_lob)
             if lob_storage == "BASICFILE":
-                clausula_lob = "\nLOB ({}) STORE AS BASICFILE".format(lobs_str)
+                clause_lob = "\nLOB ({}) STORE AS BASICFILE".format(lobs_str)
             else:
-                clausula_lob = "\nLOB ({}) STORE AS SECUREFILE (CACHE)".format(lobs_str)
+                clause_lob = "\nLOB ({}) STORE AS SECUREFILE (CACHE)".format(lobs_str)
 
-        sql = "CREATE TABLE {}.{} (\n{}\n){}".format(owner, tabela_nome, corpo, clausula_lob)
-        instrucoes.append(DDLItem(2, "TABLE", tabela_nome, sql, entidade))
+        sql = "CREATE TABLE {}.{} (\n{}\n){}".format(owner, table_name, body, clause_lob)
+        statements.append(DDLItem(2, "TABLE", table_name, sql, entity))
 
     # -------------------------------------------------------------------------
     # FASE 3: Constraints (PK, UK, CK)
     # -------------------------------------------------------------------------
-    for entidade, t in esquema.items():
-        tabela_nome = t["tabela"]
+    for entity, t in schema.items():
+        table_name = t["tabela"]
 
         # PK
-        pk_nome = t["pk"]
-        colunas_pk = ", ".join(sql_ident.TABLES[entidade]["pk"]["colunas"])
+        pk_name = t["pk"]
+        columns_pk = ", ".join(sql_ident.TABLES[entity]["pk"]["colunas"])
         sql_pk = "ALTER TABLE {}.{} ADD CONSTRAINT {} PRIMARY KEY ({})".format(
-            owner, tabela_nome, pk_nome, colunas_pk
+            owner, table_name, pk_name, columns_pk
         )
-        instrucoes.append(DDLItem(3, "CONSTRAINT", pk_nome, sql_pk, entidade))
+        statements.append(DDLItem(3, "CONSTRAINT", pk_name, sql_pk, entity))
 
         # UKs
-        for uk_nome, uk_def in t["uks"].items():
-            colunas_uk = ", ".join(uk_def["colunas"])
+        for uk_name, uk_def in t["uks"].items():
+            columns_uk = ", ".join(uk_def["colunas"])
             sql_uk = "ALTER TABLE {}.{} ADD CONSTRAINT {} UNIQUE ({})".format(
-                owner, tabela_nome, uk_nome, colunas_uk
+                owner, table_name, uk_name, columns_uk
             )
-            instrucoes.append(DDLItem(3, "CONSTRAINT", uk_nome, sql_uk, entidade))
+            statements.append(DDLItem(3, "CONSTRAINT", uk_name, sql_uk, entity))
 
         # CKs
-        for ck_nome, ck_def in t["cks"].items():
+        for ck_name, ck_def in t["cks"].items():
             expr_ck = ck_def["expr"]
             sql_ck = "ALTER TABLE {}.{} ADD CONSTRAINT {} CHECK ({})".format(
-                owner, tabela_nome, ck_nome, expr_ck
+                owner, table_name, ck_name, expr_ck
             )
-            instrucoes.append(DDLItem(3, "CONSTRAINT", ck_nome, sql_ck, entidade))
+            statements.append(DDLItem(3, "CONSTRAINT", ck_name, sql_ck, entity))
 
     # -------------------------------------------------------------------------
     # FASE 4: Constraints (FK)
     # -------------------------------------------------------------------------
-    for entidade, t in esquema.items():
-        tabela_nome = t["tabela"]
-        for fk_nome, fk_def in t["fks"].items():
+    for entity, t in schema.items():
+        table_name = t["tabela"]
+        for fk_name, fk_def in t["fks"].items():
             cols_fk = ", ".join(fk_def["colunas"])
-            ref_tabela = fk_def["ref_tabela"]
+            ref_table = fk_def["ref_tabela"]
             ref_cols = ", ".join(fk_def["ref_colunas"])
             on_del = " ON DELETE {}".format(fk_def["on_delete"]) if fk_def.get("on_delete") else ""
             sql_fk = "ALTER TABLE {}.{} ADD CONSTRAINT {} FOREIGN KEY ({}) REFERENCES {}.{} ({}){}".format(
-                owner, tabela_nome, fk_nome, cols_fk, owner, ref_tabela, ref_cols, on_del
+                owner, table_name, fk_name, cols_fk, owner, ref_table, ref_cols, on_del
             )
-            instrucoes.append(DDLItem(4, "CONSTRAINT", fk_nome, sql_fk, entidade))
+            statements.append(DDLItem(4, "CONSTRAINT", fk_name, sql_fk, entity))
 
     # -------------------------------------------------------------------------
     # FASE 5: Indices
     # -------------------------------------------------------------------------
-    for entidade, t in esquema.items():
-        tabela_nome = t["tabela"]
-        for ix_nome, ix_def in t["indices"].items():
+    for entity, t in schema.items():
+        table_name = t["tabela"]
+        for ix_name, ix_def in t["indices"].items():
             is_fbi = ix_def.get("fbi", False)
-            is_unico = ix_def.get("unico", False)
+            is_single = ix_def.get("unico", False)
 
             if is_fbi:
                 expr = ix_def["expr"]
-                if is_unico:
+                if is_single:
                     sql_ix = "CREATE UNIQUE INDEX {}.{} ON {}.{} {}".format(
-                        owner, ix_nome, owner, tabela_nome, expr
+                        owner, ix_name, owner, table_name, expr
                     )
                 else:
                     sql_ix = "CREATE INDEX {}.{} ON {}.{} {}".format(
-                        owner, ix_nome, owner, tabela_nome, expr
+                        owner, ix_name, owner, table_name, expr
                     )
             else:
                 cols_ix = ", ".join(ix_def["colunas"])
                 sql_ix = "CREATE INDEX {}.{} ON {}.{} ({})".format(
-                    owner, ix_nome, owner, tabela_nome, cols_ix
+                    owner, ix_name, owner, table_name, cols_ix
                 )
 
-            instrucoes.append(DDLItem(5, "INDEX", ix_nome, sql_ix, entidade))
+            statements.append(DDLItem(5, "INDEX", ix_name, sql_ix, entity))
 
     # -------------------------------------------------------------------------
     # FASE 6: Triggers (_bi e _bu)
     # -------------------------------------------------------------------------
-    for entidade, t in esquema.items():
-        tabela_nome = t["tabela"]
-        seq_nome = t["sequence"]
-        tr_bi_nome = t["trigger_bi"]
+    for entity, t in schema.items():
+        table_name = t["tabela"]
+        seq_name = t["sequence"]
+        tr_bi_name = t["trigger_bi"]
 
         # Trigger BEFORE INSERT condicional (template literal AGENTS §4.2) com cabecalho de governanca
         sql_tr_bi = (
@@ -532,16 +532,16 @@ def build_ddl_statements(owner, prefix, lob_storage="SECUREFILE"):
             "END;"
         ).format(
             owner=owner,
-            trigger_name=tr_bi_nome,
-            table_name=tabela_nome,
-            sequence_name=seq_nome,
+            trigger_name=tr_bi_name,
+            table_name=table_name,
+            sequence_name=seq_name,
         )
-        instrucoes.append(DDLItem(6, "TRIGGER", tr_bi_nome, sql_tr_bi, entidade))
+        statements.append(DDLItem(6, "TRIGGER", tr_bi_name, sql_tr_bi, entity))
 
         # Trigger BEFORE UPDATE imutavel (quando configurada) com cabecalho de governanca
         if t.get("trigger_bu") and t.get("trigger_extra"):
-            tr_bu_nome = t["trigger_bu"]
-            col_imutavel = t["trigger_extra"]["coluna_imutavel"]
+            tr_bu_name = t["trigger_bu"]
+            col_immutable = t["trigger_extra"]["coluna_imutavel"]
             sql_tr_bu = (
                 "-- ==============================================================================\n"
                 "-- TRIGGER: {owner}.{trigger_name}\n"
@@ -561,48 +561,48 @@ def build_ddl_statements(owner, prefix, lob_storage="SECUREFILE"):
                 "END;"
             ).format(
                 owner=owner,
-                trigger_name=tr_bu_nome,
-                table_name=tabela_nome,
-                column=col_imutavel,
+                trigger_name=tr_bu_name,
+                table_name=table_name,
+                column=col_immutable,
             )
-            instrucoes.append(DDLItem(6, "TRIGGER", tr_bu_nome, sql_tr_bu, entidade))
+            statements.append(DDLItem(6, "TRIGGER", tr_bu_name, sql_tr_bu, entity))
 
-    return instrucoes
+    return statements
 
 
 def build_comment_statements(owner, prefix):
     """Gera declaracoes COMMENT ON TABLE e COMMENT ON COLUMN para todas as tabelas e colunas."""
     sql_ident.validate_owner(owner)
     sql_ident.validate_prefix(prefix)
-    esquema = sql_ident.names(prefix)
-    comandos = []
+    schema = sql_ident.names(prefix)
+    commands = []
 
-    for entidade, t in esquema.items():
-        tabela_nome = t["tabela"]
-        desc_tab = TABLE_COMMENTS.get(entidade, "Tabela {}".format(tabela_nome))
-        comandos.append("COMMENT ON TABLE {}.{} IS '{}';".format(
-            owner, tabela_nome, _escape_sql(desc_tab)
+    for entity, t in schema.items():
+        table_name = t["tabela"]
+        desc_tab = TABLE_COMMENTS.get(entity, "Tabela {}".format(table_name))
+        commands.append("COMMENT ON TABLE {}.{} IS '{}';".format(
+            owner, table_name, _escape_sql(desc_tab)
         ))
 
-        cols_entidade = COLUMN_COMMENTS.get(entidade, {})
-        for c_nome in t["colunas"]:
-            if c_nome in cols_entidade:
-                desc_col = cols_entidade[c_nome]
-            elif c_nome in RECORD_COLUMN_DESCRIPTIONS:
-                desc_col = RECORD_COLUMN_DESCRIPTIONS[c_nome]
+        cols_entity = COLUMN_COMMENTS.get(entity, {})
+        for c_name in t["colunas"]:
+            if c_name in cols_entity:
+                desc_col = cols_entity[c_name]
+            elif c_name in RECORD_COLUMN_DESCRIPTIONS:
+                desc_col = RECORD_COLUMN_DESCRIPTIONS[c_name]
             else:
-                desc_col = "Coluna {} da tabela {}".format(c_nome, tabela_nome)
-            comandos.append("COMMENT ON COLUMN {}.{}.{} IS '{}';".format(
-                owner, tabela_nome, c_nome, _escape_sql(desc_col)
+                desc_col = "Coluna {} da tabela {}".format(c_name, table_name)
+            commands.append("COMMENT ON COLUMN {}.{}.{} IS '{}';".format(
+                owner, table_name, c_name, _escape_sql(desc_col)
             ))
 
-    return comandos
+    return commands
 
 
 def build_ddl_script(owner, prefix, lob_storage="SECUREFILE", include_comments=True):
     """Gera script SQL completo pronto para visualizacao ou execucao via cliente."""
-    instrucoes = build_ddl_statements(owner, prefix, lob_storage=lob_storage)
-    fases_titulos = {
+    statements = build_ddl_statements(owner, prefix, lob_storage=lob_storage)
+    phases_titles = {
         1: "FASE 1: SEQUENCES",
         2: "FASE 2: TABELAS",
         3: "FASE 3: CONSTRAINTS (PK, UK, CK)",
@@ -611,7 +611,7 @@ def build_ddl_script(owner, prefix, lob_storage="SECUREFILE", include_comments=T
         6: "FASE 6: TRIGGERS",
     }
 
-    linhas = [
+    rows = [
         "-- ==============================================================================",
         "-- Script Scheduling Service (SSS) - DDL Oracle 11gR2",
         "-- Gerado automaticamente a partir do registro sql_ident.py (F7.1)",
@@ -622,39 +622,39 @@ def build_ddl_script(owner, prefix, lob_storage="SECUREFILE", include_comments=T
         "",
     ]
 
-    fase_atual = None
-    for item in instrucoes:
-        if item.phase != fase_atual:
-            fase_atual = item.phase
-            linhas.extend([
+    phase_current = None
+    for item in statements:
+        if item.phase != phase_current:
+            phase_current = item.phase
+            rows.extend([
                 "-- ------------------------------------------------------------------------------",
-                "-- {}".format(fases_titulos.get(fase_atual, "FASE %d" % fase_atual)),
+                "-- {}".format(phases_titles.get(phase_current, "FASE %d" % phase_current)),
                 "-- ------------------------------------------------------------------------------",
                 "",
             ])
 
         if item.kind == "TRIGGER":
-            linhas.append(item.sql)
-            linhas.append("/")
-            linhas.append("")
+            rows.append(item.sql)
+            rows.append("/")
+            rows.append("")
         else:
-            linhas.append(item.sql + ";")
-            linhas.append("")
+            rows.append(item.sql + ";")
+            rows.append("")
 
     if include_comments:
-        comentarios = build_comment_statements(owner, prefix)
-        if comentarios:
-            linhas.extend([
+        comments = build_comment_statements(owner, prefix)
+        if comments:
+            rows.extend([
                 "-- ------------------------------------------------------------------------------",
                 "-- FASE 7: DICIONARIO E GOVERNANCA DE DADOS (COMMENTS)",
                 "-- ------------------------------------------------------------------------------",
                 "",
             ])
-            for c in comentarios:
-                linhas.append(c)
-            linhas.append("")
+            for c in comments:
+                rows.append(c)
+            rows.append("")
 
-    return "\n".join(linhas)
+    return "\n".join(rows)
 
 
 GRANT_ROLES = ("web", "agent", "purge", "monitor")
@@ -672,146 +672,146 @@ def build_grants_by_role(owner, prefix, user_roles):
     """
     sql_ident.validate_owner(owner)
     sql_ident.validate_prefix(prefix)
-    esquema = sql_ident.names(prefix)
-    comandos = []
+    schema = sql_ident.names(prefix)
+    commands = []
 
-    desconhecidos = sorted(set(user_roles or {}) - set(GRANT_ROLES))
-    if desconhecidos:
-        raise ValueError("Papel de GRANT desconhecido: {}".format(", ".join(desconhecidos)))
+    unknown = sorted(set(user_roles or {}) - set(GRANT_ROLES))
+    if unknown:
+        raise ValueError("Papel de GRANT desconhecido: {}".format(", ".join(unknown)))
     user_roles = dict(user_roles or {})
-    for papel in GRANT_ROLES:
-        usr = user_roles.get(papel)
+    for role in GRANT_ROLES:
+        usr = user_roles.get(role)
         if not usr:
-            comandos.append("-- papel {}: conta nao informada; nenhum GRANT gerado".format(papel))
+            commands.append("-- papel {}: conta nao informada; nenhum GRANT gerado".format(role))
             continue
         try:
             sql_ident.validate_owner(usr)
         except ValueError:
-            raise ValueError("Conta Oracle invalida para o papel {}".format(papel))
+            raise ValueError("Conta Oracle invalida para o papel {}".format(role))
         if usr.upper() == "PUBLIC":
-            raise ValueError("PUBLIC nao pode receber GRANT (papel {})".format(papel))
+            raise ValueError("PUBLIC nao pode receber GRANT (papel {})".format(role))
         if usr.upper() == owner.upper():
-            comandos.append("-- papel {}: usa a conta dona do esquema ({}); nenhum GRANT necessario".format(
-                papel, owner))
-            user_roles[papel] = None
+            commands.append("-- papel {}: usa a conta dona do esquema ({}); nenhum GRANT necessario".format(
+                role, owner))
+            user_roles[role] = None
 
     # 1. PAPEL: web
     usr_web = user_roles.get("web")
     if usr_web:
-        cadastros_e_agendamentos = (
+        registries_and_schedules = (
             "environments", "profiles", "features", "scripts",
             "users", "parameters", "schedules"
         )
-        for ent in cadastros_e_agendamentos:
-            comandos.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
-                owner, esquema[ent]["tabela"], usr_web
+        for ent in registries_and_schedules:
+            commands.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
+                owner, schema[ent]["tabela"], usr_web
             ))
 
-        associacoes = (
+        associations = (
             "profile_feature", "profile_env", "profile_script", "script_env", "script_param"
         )
-        for ent in associacoes:
-            comandos.append("GRANT SELECT, INSERT, UPDATE, DELETE ON {}.{} TO {};".format(
-                owner, esquema[ent]["tabela"], usr_web
+        for ent in associations:
+            commands.append("GRANT SELECT, INSERT, UPDATE, DELETE ON {}.{} TO {};".format(
+                owner, schema[ent]["tabela"], usr_web
             ))
 
-        comandos.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
-            owner, esquema["tickets"]["tabela"], usr_web
+        commands.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
+            owner, schema["tickets"]["tabela"], usr_web
         ))
-        comandos.append("GRANT SELECT, INSERT ON {}.{} TO {};".format(
-            owner, esquema["ticket_answer"]["tabela"], usr_web
+        commands.append("GRANT SELECT, INSERT ON {}.{} TO {};".format(
+            owner, schema["ticket_answer"]["tabela"], usr_web
         ))
-        comandos.append("GRANT SELECT, INSERT ON {}.{} TO {};".format(
-            owner, esquema["audit"]["tabela"], usr_web
+        commands.append("GRANT SELECT, INSERT ON {}.{} TO {};".format(
+            owner, schema["audit"]["tabela"], usr_web
         ))
-        comandos.append("GRANT SELECT ON {}.{} TO {};".format(
-            owner, esquema["agents"]["tabela"], usr_web
+        commands.append("GRANT SELECT ON {}.{} TO {};".format(
+            owner, schema["agents"]["tabela"], usr_web
         ))
-        comandos.append("GRANT SELECT ON {}.{} TO {};".format(
-            owner, esquema["control"]["tabela"], usr_web
+        commands.append("GRANT SELECT ON {}.{} TO {};".format(
+            owner, schema["control"]["tabela"], usr_web
         ))
         # Saida do ticket (CR-012): a web so le o zip para o download
-        comandos.append("GRANT SELECT ON {}.{} TO {};".format(
-            owner, esquema["ticket_output"]["tabela"], usr_web
+        commands.append("GRANT SELECT ON {}.{} TO {};".format(
+            owner, schema["ticket_output"]["tabela"], usr_web
         ))
 
         # Sequences para web (todas exceto agentes, controle e ticket_saida, que a web nao insere)
-        for ent, t in esquema.items():
+        for ent, t in schema.items():
             if ent not in ("agents", "control", "ticket_output"):
-                comandos.append("GRANT SELECT ON {}.{} TO {};".format(
+                commands.append("GRANT SELECT ON {}.{} TO {};".format(
                     owner, t["sequence"], usr_web
                 ))
 
     # 2. PAPEL: agente
     usr_agt = user_roles.get("agent")
     if usr_agt:
-        cadastros_e_assoc = (
+        registries_and_assoc = (
             "environments", "profiles", "features", "profile_feature", "profile_env",
             "scripts", "profile_script", "script_env", "users", "parameters", "script_param"
         )
-        for ent in cadastros_e_assoc:
-            comandos.append("GRANT SELECT ON {}.{} TO {};".format(
-                owner, esquema[ent]["tabela"], usr_agt
+        for ent in registries_and_assoc:
+            commands.append("GRANT SELECT ON {}.{} TO {};".format(
+                owner, schema[ent]["tabela"], usr_agt
             ))
 
-        comandos.append("GRANT SELECT, UPDATE ON {}.{} TO {};".format(
-            owner, esquema["schedules"]["tabela"], usr_agt
+        commands.append("GRANT SELECT, UPDATE ON {}.{} TO {};".format(
+            owner, schema["schedules"]["tabela"], usr_agt
         ))
-        comandos.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
-            owner, esquema["tickets"]["tabela"], usr_agt
+        commands.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
+            owner, schema["tickets"]["tabela"], usr_agt
         ))
-        comandos.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
-            owner, esquema["agents"]["tabela"], usr_agt
+        commands.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
+            owner, schema["agents"]["tabela"], usr_agt
         ))
-        comandos.append("GRANT SELECT, INSERT ON {}.{} TO {};".format(
-            owner, esquema["ticket_answer"]["tabela"], usr_agt
+        commands.append("GRANT SELECT, INSERT ON {}.{} TO {};".format(
+            owner, schema["ticket_answer"]["tabela"], usr_agt
         ))
-        comandos.append("GRANT INSERT ON {}.{} TO {};".format(
-            owner, esquema["audit"]["tabela"], usr_agt
+        commands.append("GRANT INSERT ON {}.{} TO {};".format(
+            owner, schema["audit"]["tabela"], usr_agt
         ))
-        comandos.append("GRANT SELECT ON {}.{} TO {};".format(
-            owner, esquema["control"]["tabela"], usr_agt
+        commands.append("GRANT SELECT ON {}.{} TO {};".format(
+            owner, schema["control"]["tabela"], usr_agt
         ))
-        comandos.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
-            owner, esquema["ticket_output"]["tabela"], usr_agt
+        commands.append("GRANT SELECT, INSERT, UPDATE ON {}.{} TO {};".format(
+            owner, schema["ticket_output"]["tabela"], usr_agt
         ))
 
         # Sequences do agente: tickets, respostas, agentes, auditoria e saida (CR-012)
         for ent in ("tickets", "ticket_answer", "agents", "audit", "ticket_output"):
-            comandos.append("GRANT SELECT ON {}.{} TO {};".format(
-                owner, esquema[ent]["sequence"], usr_agt
+            commands.append("GRANT SELECT ON {}.{} TO {};".format(
+                owner, schema[ent]["sequence"], usr_agt
             ))
 
     # 3. PAPEL: purge
     usr_purge = user_roles.get("purge")
     if usr_purge:
-        comandos.append("GRANT SELECT, DELETE ON {}.{} TO {};".format(
-            owner, esquema["tickets"]["tabela"], usr_purge
+        commands.append("GRANT SELECT, DELETE ON {}.{} TO {};".format(
+            owner, schema["tickets"]["tabela"], usr_purge
         ))
-        comandos.append("GRANT SELECT, INSERT, DELETE ON {}.{} TO {};".format(
-            owner, esquema["audit"]["tabela"], usr_purge
+        commands.append("GRANT SELECT, INSERT, DELETE ON {}.{} TO {};".format(
+            owner, schema["audit"]["tabela"], usr_purge
         ))
-        comandos.append("GRANT SELECT, UPDATE (purge_owner, purge_lease_until) ON {}.{} TO {};".format(
-            owner, esquema["control"]["tabela"], usr_purge
+        commands.append("GRANT SELECT, UPDATE (purge_owner, purge_lease_until) ON {}.{} TO {};".format(
+            owner, schema["control"]["tabela"], usr_purge
         ))
-        comandos.append("GRANT SELECT ON {}.{} TO {};".format(
-            owner, esquema["audit"]["sequence"], usr_purge
+        commands.append("GRANT SELECT ON {}.{} TO {};".format(
+            owner, schema["audit"]["sequence"], usr_purge
         ))
 
     # 4. PAPEL: monitor (CR-008, E3/R-04)
     # Somente SELECT nas 7 tabelas que health.py consulta, zero sequences
     usr_mon = user_roles.get("monitor")
     if usr_mon:
-        tabelas_monitor = (
+        tables_monitor = (
             "agents", "tickets", "schedules", "scripts",
             "environments", "control", "audit"
         )
-        for ent in tabelas_monitor:
-            comandos.append("GRANT SELECT ON {}.{} TO {};".format(
-                owner, esquema[ent]["tabela"], usr_mon
+        for ent in tables_monitor:
+            commands.append("GRANT SELECT ON {}.{} TO {};".format(
+                owner, schema[ent]["tabela"], usr_mon
             ))
 
-    return comandos
+    return commands
 
 
 # -----------------------------------------------------------------------------
@@ -829,13 +829,13 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
     """Gera declaracoes SQL de seed inicial (Fase 7) via MERGE idempotente e estatisticas (Fase 8)."""
     sql_ident.validate_owner(owner)
     sql_ident.validate_prefix(prefix)
-    esquema = sql_ident.names(prefix)
-    comandos = []
+    schema = sql_ident.names(prefix)
+    commands = []
 
     # 1. Funcionalidades canonicas
-    tb_fea = "{}.{}".format(owner, esquema["features"]["tabela"])
-    sq_fea = "{}.{}".format(owner, esquema["features"]["sequence"])
-    for mod, cod, nome_exib, finalidade in FEATURE_CATALOG:
+    tb_fea = "{}.{}".format(owner, schema["features"]["tabela"])
+    sq_fea = "{}.{}".format(owner, schema["features"]["sequence"])
+    for mod, code, name_disp, purpose in FEATURE_CATALOG:
         sql = (
             "MERGE INTO {tb} dst\n"
             "USING (SELECT '{code}' AS code FROM DUAL) src\n"
@@ -857,18 +857,18 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
         ).format(
             tb=tb_fea,
             sq=sq_fea,
-            code=_escape_sql(cod),
+            code=_escape_sql(code),
             mod=_escape_sql(mod),
-            name=_escape_sql(nome_exib),
-            desc=_escape_sql(finalidade),
+            name=_escape_sql(name_disp),
+            desc=_escape_sql(purpose),
         )
-        comandos.append(sql)
+        commands.append(sql)
 
     # 2. Ambientes padrao (inseridos antes dos perfis para permitir vinculo de perfil_amb)
-    tb_env = "{}.{}".format(owner, esquema["environments"]["tabela"])
-    sq_env = "{}.{}".format(owner, esquema["environments"]["sequence"])
-    for amb_nome, amb_desc, amb_conn in DEFAULT_ENVIRONMENTS:
-        sql_amb = (
+    tb_env = "{}.{}".format(owner, schema["environments"]["tabela"])
+    sq_env = "{}.{}".format(owner, schema["environments"]["sequence"])
+    for env_name, env_desc, env_conn in DEFAULT_ENVIRONMENTS:
+        sql_env = (
             "MERGE INTO {tb} dst\n"
             "USING (SELECT '{name}' AS name FROM DUAL) src\n"
             "ON (dst.name = src.name)\n"
@@ -887,22 +887,22 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
         ).format(
             tb=tb_env,
             sq=sq_env,
-            name=_escape_sql(amb_nome),
-            desc=_escape_sql(amb_desc),
-            conn=_escape_sql(amb_conn),
+            name=_escape_sql(env_name),
+            desc=_escape_sql(env_desc),
+            conn=_escape_sql(env_conn),
         )
-        comandos.append(sql_amb)
+        commands.append(sql_env)
 
     # 3. Perfis padrao e matrizes de permissao (DEFAULT_PROFILES)
-    tb_prf = "{}.{}".format(owner, esquema["profiles"]["tabela"])
-    sq_prf = "{}.{}".format(owner, esquema["profiles"]["sequence"])
-    tb_pfea = "{}.{}".format(owner, esquema["profile_feature"]["tabela"])
-    sq_pfea = "{}.{}".format(owner, esquema["profile_feature"]["sequence"])
-    tb_penv = "{}.{}".format(owner, esquema["profile_env"]["tabela"])
-    sq_penv = "{}.{}".format(owner, esquema["profile_env"]["sequence"])
+    tb_prf = "{}.{}".format(owner, schema["profiles"]["tabela"])
+    sq_prf = "{}.{}".format(owner, schema["profiles"]["sequence"])
+    tb_pfea = "{}.{}".format(owner, schema["profile_feature"]["tabela"])
+    sq_pfea = "{}.{}".format(owner, schema["profile_feature"]["sequence"])
+    tb_penv = "{}.{}".format(owner, schema["profile_env"]["tabela"])
+    sq_penv = "{}.{}".format(owner, schema["profile_env"]["sequence"])
 
-    for per_nome, per_desc, is_adm, per_funcs, per_ambs in DEFAULT_PROFILES:
-        sql_per = (
+    for prf_name, prf_desc, is_adm, prf_features, prf_envs in DEFAULT_PROFILES:
+        sql_prf = (
             "MERGE INTO {tb} dst\n"
             "USING (SELECT '{name}' AS name FROM DUAL) src\n"
             "ON (dst.name = src.name)\n"
@@ -919,14 +919,14 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
             "  INSERT (id, name, description, is_admin, perm_version, active, created_at, created_by)\n"
             "  VALUES ({sq}.NEXTVAL, '{name}', '{desc}', '{is_adm}', 1, 'Y', SYSDATE, 'SYSTEM:init_db');"
         ).format(
-            tb=tb_prf, sq=sq_prf, name=_escape_sql(per_nome),
-            desc=_escape_sql(per_desc), is_adm=_escape_sql(is_adm)
+            tb=tb_prf, sq=sq_prf, name=_escape_sql(prf_name),
+            desc=_escape_sql(prf_desc), is_adm=_escape_sql(is_adm)
         )
-        comandos.append(sql_per)
+        commands.append(sql_prf)
 
         # 3a. Funcionalidades vinculadas ao perfil
-        for f_cod in per_funcs:
-            sql_pfnc = (
+        for f_code in prf_features:
+            sql_pfea = (
                 "MERGE INTO {tb_pfea} dst\n"
                 "USING (\n"
                 "  SELECT p.id AS profile_id, f.id AS feature_id\n"
@@ -939,13 +939,13 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
                 "  VALUES ({sq_pfea}.NEXTVAL, src.profile_id, src.feature_id, SYSDATE, 'SYSTEM:init_db');"
             ).format(
                 tb_pfea=tb_pfea, sq_pfea=sq_pfea, tb_prf=tb_prf, tb_fea=tb_fea,
-                prf_name=_escape_sql(per_nome), f_code=_escape_sql(f_cod)
+                prf_name=_escape_sql(prf_name), f_code=_escape_sql(f_code)
             )
-            comandos.append(sql_pfnc)
+            commands.append(sql_pfea)
 
         # 3b. Ambientes vinculados ao perfil
-        for a_nome in per_ambs:
-            sql_pamb = (
+        for a_name in prf_envs:
+            sql_penv = (
                 "MERGE INTO {tb_penv} dst\n"
                 "USING (\n"
                 "  SELECT p.id AS profile_id, a.id AS environment_id\n"
@@ -958,16 +958,16 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
                 "  VALUES ({sq_penv}.NEXTVAL, src.profile_id, src.environment_id, SYSDATE, 'SYSTEM:init_db');"
             ).format(
                 tb_penv=tb_penv, sq_penv=sq_penv, tb_prf=tb_prf, tb_env=tb_env,
-                prf_name=_escape_sql(per_nome), env_name=_escape_sql(a_nome)
+                prf_name=_escape_sql(prf_name), env_name=_escape_sql(a_name)
             )
-            comandos.append(sql_pamb)
+            commands.append(sql_penv)
 
     # 4. Parametros padrao reutilizaveis
-    tb_prm = "{}.{}".format(owner, esquema["parameters"]["tabela"])
-    sq_prm = "{}.{}".format(owner, esquema["parameters"]["sequence"])
-    for cod, p_nom, lbl, desc, tcomp, opc, vpad in DEFAULT_PARAMETERS:
+    tb_prm = "{}.{}".format(owner, schema["parameters"]["tabela"])
+    sq_prm = "{}.{}".format(owner, schema["parameters"]["sequence"])
+    for code, p_nom, lbl, desc, tcomp, opts, vpad in DEFAULT_PARAMETERS:
         pnom_sql = "'{}'".format(_escape_sql(p_nom)) if p_nom else "NULL"
-        opc_sql = "'{}'".format(_escape_sql(opc)) if opc else "NULL"
+        opts_sql = "'{}'".format(_escape_sql(opts)) if opts else "NULL"
         vpad_sql = "'{}'".format(_escape_sql(vpad)) if vpad else "NULL"
         sql_prm = (
             "MERGE INTO {tb} dst\n"
@@ -995,23 +995,23 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
             "  INSERT (id, code, param_flag, label, description, component_type, options_json, default_value, validation_regex, sensitive, active, created_at, created_by)\n"
             "  VALUES ({sq}.NEXTVAL, '{code}', {pname}, '{lbl}', '{desc}', '{ctype}', {opts}, {vdef}, NULL, 'N', 'Y', SYSDATE, 'SYSTEM:init_db');"
         ).format(
-            tb=tb_prm, sq=sq_prm, code=_escape_sql(cod), pname=pnom_sql,
+            tb=tb_prm, sq=sq_prm, code=_escape_sql(code), pname=pnom_sql,
             lbl=_escape_sql(lbl), desc=_escape_sql(desc), ctype=_escape_sql(tcomp),
-            opts=opc_sql, vdef=vpad_sql
+            opts=opts_sql, vdef=vpad_sql
         )
-        comandos.append(sql_prm)
+        commands.append(sql_prm)
 
     # 5. Scripts utilitarios padrao
-    tb_scr = "{}.{}".format(owner, esquema["scripts"]["tabela"])
-    sq_scr = "{}.{}".format(owner, esquema["scripts"]["sequence"])
-    tb_senv = "{}.{}".format(owner, esquema["script_env"]["tabela"])
-    sq_senv = "{}.{}".format(owner, esquema["script_env"]["sequence"])
-    tb_pscr = "{}.{}".format(owner, esquema["profile_script"]["tabela"])
-    sq_pscr = "{}.{}".format(owner, esquema["profile_script"]["sequence"])
-    tb_sprm = "{}.{}".format(owner, esquema["script_param"]["tabela"])
-    sq_sprm = "{}.{}".format(owner, esquema["script_param"]["sequence"])
+    tb_scr = "{}.{}".format(owner, schema["scripts"]["tabela"])
+    sq_scr = "{}.{}".format(owner, schema["scripts"]["sequence"])
+    tb_senv = "{}.{}".format(owner, schema["script_env"]["tabela"])
+    sq_senv = "{}.{}".format(owner, schema["script_env"]["sequence"])
+    tb_pscr = "{}.{}".format(owner, schema["profile_script"]["tabela"])
+    sq_pscr = "{}.{}".format(owner, schema["profile_script"]["sequence"])
+    tb_sprm = "{}.{}".format(owner, schema["script_param"]["tabela"])
+    sq_sprm = "{}.{}".format(owner, schema["script_param"]["sequence"])
 
-    for s_nome, s_desc, s_grp, s_cat, s_etp, s_int, s_path, s_tpar, s_paral, s_tmout, s_params in DEFAULT_SCRIPTS:
+    for s_name, s_desc, s_grp, s_cat, s_etp, s_int, s_path, s_tpar, s_paral, s_tmout, s_params in DEFAULT_SCRIPTS:
         sql_scr = (
             "MERGE INTO {tb} dst\n"
             "USING (SELECT '{name}' AS name FROM DUAL) src\n"
@@ -1043,16 +1043,16 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
             "  INSERT (id, name, description, script_group, category, stage, interpreter, path_file, param_type, max_parallel_env, timeout_s, active, created_at, created_by)\n"
             "  VALUES ({sq}.NEXTVAL, '{name}', '{desc}', '{grp}', '{cat}', '{stage}', '{interp}', '{pfile}', '{ptype}', {par}, {tmout}, 'Y', SYSDATE, 'SYSTEM:init_db');"
         ).format(
-            tb=tb_scr, sq=sq_scr, name=_escape_sql(s_nome), desc=_escape_sql(s_desc),
+            tb=tb_scr, sq=sq_scr, name=_escape_sql(s_name), desc=_escape_sql(s_desc),
             grp=_escape_sql(s_grp), cat=_escape_sql(s_cat), stage=_escape_sql(s_etp),
             interp=_escape_sql(s_int), pfile=_escape_sql(s_path), ptype=_escape_sql(s_tpar),
             par=s_paral, tmout=s_tmout
         )
-        comandos.append(sql_scr)
+        commands.append(sql_scr)
 
         # 5a. Homologacao do script nos 5 ambientes padrao
-        for amb_nome, _, _ in DEFAULT_ENVIRONMENTS:
-            sql_samb = (
+        for env_name, _, _ in DEFAULT_ENVIRONMENTS:
+            sql_senv = (
                 "MERGE INTO {tb_senv} dst\n"
                 "USING (\n"
                 "  SELECT s.id AS script_id, a.id AS environment_id\n"
@@ -1065,12 +1065,12 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
                 "  VALUES ({sq_senv}.NEXTVAL, src.script_id, src.environment_id, SYSDATE, 'SYSTEM:init_db');"
             ).format(
                 tb_senv=tb_senv, sq_senv=sq_senv, tb_scr=tb_scr, tb_env=tb_env,
-                scr_name=_escape_sql(s_nome), env_name=_escape_sql(amb_nome)
+                scr_name=_escape_sql(s_name), env_name=_escape_sql(env_name)
             )
-            comandos.append(sql_samb)
+            commands.append(sql_senv)
 
         # 5b. Permissao do script para os perfis operacionais e administradores
-        for per_nome, _, _, _, _ in DEFAULT_PROFILES:
+        for prf_name, _, _, _, _ in DEFAULT_PROFILES:
             sql_pscr = (
                 "MERGE INTO {tb_pscr} dst\n"
                 "USING (\n"
@@ -1084,12 +1084,12 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
                 "  VALUES ({sq_pscr}.NEXTVAL, src.profile_id, src.script_id, SYSDATE, 'SYSTEM:init_db');"
             ).format(
                 tb_pscr=tb_pscr, sq_pscr=sq_pscr, tb_prf=tb_prf, tb_scr=tb_scr,
-                prf_name=_escape_sql(per_nome), scr_name=_escape_sql(s_nome)
+                prf_name=_escape_sql(prf_name), scr_name=_escape_sql(s_name)
             )
-            comandos.append(sql_pscr)
+            commands.append(sql_pscr)
 
         # 5c. Vinculo dos parametros ao script
-        for p_cod, p_ord, p_obrig, p_vsub in s_params:
+        for p_code, p_ord, p_req, p_vsub in s_params:
             vsub_sql = "'{}'".format(_escape_sql(p_vsub)) if p_vsub else "NULL"
             sql_sprm = (
                 "MERGE INTO {tb_sprm} dst\n"
@@ -1113,13 +1113,13 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
                 "  VALUES ({sq_sprm}.NEXTVAL, src.script_id, src.parameter_id, {sort_order}, '{req}', {vovr}, SYSDATE, 'SYSTEM:init_db');"
             ).format(
                 tb_sprm=tb_sprm, sq_sprm=sq_sprm, tb_scr=tb_scr, tb_prm=tb_prm,
-                scr_name=_escape_sql(s_nome), p_code=_escape_sql(p_cod),
-                sort_order=p_ord, req=_escape_sql(p_obrig), vovr=vsub_sql
+                scr_name=_escape_sql(s_name), p_code=_escape_sql(p_code),
+                sort_order=p_ord, req=_escape_sql(p_req), vovr=vsub_sql
             )
-            comandos.append(sql_sprm)
+            commands.append(sql_sprm)
 
     # 6. Controle de versao
-    tb_ctl = "{}.{}".format(owner, esquema["control"]["tabela"])
+    tb_ctl = "{}.{}".format(owner, schema["control"]["tabela"])
     sql_ctl = (
         "MERGE INTO {tb} dst\n"
         "USING (SELECT 1 AS id FROM DUAL) src\n"
@@ -1128,14 +1128,14 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
         "  INSERT (id, schema_version, version_applied_at, version_applied_by)\n"
         "  VALUES (1, {version}, SYSDATE, 'SYSTEM:init_db');"
     ).format(tb=tb_ctl, version=sql_ident.SCHEMA_VERSION)
-    comandos.append(sql_ctl)
+    commands.append(sql_ctl)
 
     # 7. Usuarios padrao da aplicacao e homologacao (DEFAULT_USERS)
-    tb_usr = "{}.{}".format(owner, esquema["users"]["tabela"])
-    sq_usr = "{}.{}".format(owner, esquema["users"]["sequence"])
+    tb_usr = "{}.{}".format(owner, schema["users"]["tabela"])
+    sq_usr = "{}.{}".format(owner, schema["users"]["sequence"])
 
-    for u_login, u_nome, u_perfil in DEFAULT_USERS:
-        nome_final = admin_name if (u_login == "admin" and admin_name) else u_nome
+    for u_login, u_name, u_profile in DEFAULT_USERS:
+        name_final = admin_name if (u_login == "admin" and admin_name) else u_name
         hash_final = admin_password_hash if (u_login == "admin" and admin_password_hash) else HOMOLOGATION_DEFAULT_PASSWORD_HASH
         sql_usr = (
             "MERGE INTO {tb_usr} dst\n"
@@ -1162,66 +1162,66 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
             tb_prf=tb_prf,
             sq_usr=sq_usr,
             login=_escape_sql(u_login),
-            name=_escape_sql(nome_final),
-            profile=_escape_sql(u_perfil),
+            name=_escape_sql(name_final),
+            profile=_escape_sql(u_profile),
             hash_s=_escape_sql(hash_final),
         )
-        comandos.append(sql_usr)
+        commands.append(sql_usr)
 
-    return comandos
+    return commands
 
 
 def build_seed_script(owner, prefix, admin_login=None, admin_name=None, admin_password_hash=None):
     """Gera script SQL puro com DML de seed, estatisticas e COMMIT pronto para SQL*Plus."""
-    comandos = build_seed_statements(
+    commands = build_seed_statements(
         owner, prefix,
         admin_login=admin_login,
         admin_name=admin_name,
         admin_password_hash=admin_password_hash
     )
-    esquema = sql_ident.names(prefix)
+    schema = sql_ident.names(prefix)
     owner_u = owner.upper()
 
-    tabelas_stats = [
-        esquema["features"]["tabela"].upper(),
-        esquema["profiles"]["tabela"].upper(),
-        esquema["profile_feature"]["tabela"].upper(),
-        esquema["profile_env"]["tabela"].upper(),
-        esquema["environments"]["tabela"].upper(),
-        esquema["parameters"]["tabela"].upper(),
-        esquema["scripts"]["tabela"].upper(),
-        esquema["script_env"]["tabela"].upper(),
-        esquema["profile_script"]["tabela"].upper(),
-        esquema["script_param"]["tabela"].upper(),
-        esquema["control"]["tabela"].upper(),
-        esquema["users"]["tabela"].upper(),
+    tables_stats = [
+        schema["features"]["tabela"].upper(),
+        schema["profiles"]["tabela"].upper(),
+        schema["profile_feature"]["tabela"].upper(),
+        schema["profile_env"]["tabela"].upper(),
+        schema["environments"]["tabela"].upper(),
+        schema["parameters"]["tabela"].upper(),
+        schema["scripts"]["tabela"].upper(),
+        schema["script_env"]["tabela"].upper(),
+        schema["profile_script"]["tabela"].upper(),
+        schema["script_param"]["tabela"].upper(),
+        schema["control"]["tabela"].upper(),
+        schema["users"]["tabela"].upper(),
     ]
 
-    linhas_stats = [
+    rows_stats = [
         "    DBMS_STATS.GATHER_TABLE_STATS(ownname => '{own}', tabname => '{tab}', cascade => TRUE);".format(
             own=owner_u, tab=t
         )
-        for t in tabelas_stats
+        for t in tables_stats
     ]
 
-    linhas = [
+    rows = [
         "-- ------------------------------------------------------------------------------",
         "-- FASE 7: SEED INICIAL (MERGE IDEMPOTENTE)",
         "-- ------------------------------------------------------------------------------",
         "",
     ]
-    for cmd in comandos:
-        linhas.append(cmd)
-        linhas.append("")
+    for cmd in commands:
+        rows.append(cmd)
+        rows.append("")
 
-    linhas.extend([
+    rows.extend([
         "-- ------------------------------------------------------------------------------",
         "-- FASE 8: ESTATISTICAS INICIAIS DO OTIMIZADOR (CR-007, R-29)",
         "-- ------------------------------------------------------------------------------",
         "BEGIN",
     ])
-    linhas.extend(linhas_stats)
-    linhas.extend([
+    rows.extend(rows_stats)
+    rows.extend([
         "END;",
         "/",
         "",
@@ -1229,7 +1229,7 @@ def build_seed_script(owner, prefix, admin_login=None, admin_name=None, admin_pa
         "",
     ])
 
-    return "\n".join(linhas)
+    return "\n".join(rows)
 
 
 ROLLBACK_ENTITY_ORDER = (
@@ -1258,37 +1258,37 @@ def build_rollback_statements(owner, prefix):
     """Gera lista de instrucoes DROP (Triggers, Tabelas com CASCADE PURGE e Sequences)."""
     sql_ident.validate_owner(owner)
     sql_ident.validate_prefix(prefix)
-    esquema = sql_ident.names(prefix)
-    instrucoes = []
+    schema = sql_ident.names(prefix)
+    statements = []
 
     # 1. Triggers
-    for entidade in ROLLBACK_ENTITY_ORDER:
-        t = esquema[entidade]
+    for entity in ROLLBACK_ENTITY_ORDER:
+        t = schema[entity]
         if t.get("trigger_bu"):
-            instrucoes.append(("TRIGGER", t["trigger_bu"], "DROP TRIGGER {}.{};".format(owner, t["trigger_bu"])))
+            statements.append(("TRIGGER", t["trigger_bu"], "DROP TRIGGER {}.{};".format(owner, t["trigger_bu"])))
         if t.get("trigger_bi"):
-            instrucoes.append(("TRIGGER", t["trigger_bi"], "DROP TRIGGER {}.{};".format(owner, t["trigger_bi"])))
+            statements.append(("TRIGGER", t["trigger_bi"], "DROP TRIGGER {}.{};".format(owner, t["trigger_bi"])))
 
     # 2. Tabelas (Ordem reversa de dependencia com CASCADE CONSTRAINTS PURGE)
-    for entidade in ROLLBACK_ENTITY_ORDER:
-        t = esquema[entidade]
-        tabela = t["tabela"]
-        instrucoes.append(("TABLE", tabela, "DROP TABLE {}.{} CASCADE CONSTRAINTS PURGE;".format(owner, tabela)))
+    for entity in ROLLBACK_ENTITY_ORDER:
+        t = schema[entity]
+        table = t["tabela"]
+        statements.append(("TABLE", table, "DROP TABLE {}.{} CASCADE CONSTRAINTS PURGE;".format(owner, table)))
 
     # 3. Sequences
-    for entidade in ROLLBACK_ENTITY_ORDER:
-        t = esquema[entidade]
+    for entity in ROLLBACK_ENTITY_ORDER:
+        t = schema[entity]
         seq = t["sequence"]
-        instrucoes.append(("SEQUENCE", seq, "DROP SEQUENCE {}.{};".format(owner, seq)))
+        statements.append(("SEQUENCE", seq, "DROP SEQUENCE {}.{};".format(owner, seq)))
 
-    return instrucoes
+    return statements
 
 
 def build_rollback_script(owner, prefix):
     """Gera script SQL puro para rollback total da implantacao no Oracle."""
-    instrucoes = build_rollback_statements(owner, prefix)
+    statements = build_rollback_statements(owner, prefix)
 
-    linhas = [
+    rows = [
         "-- ==============================================================================",
         "-- Script Scheduling Service (SSS) - Rollback / Desinstalacao Oracle 11gR2+",
         "-- Gerado automaticamente a partir do registro sql_ident.py",
@@ -1304,38 +1304,38 @@ def build_rollback_script(owner, prefix):
         "-- ------------------------------------------------------------------------------",
     ]
 
-    for tipo, nome, sql in instrucoes:
-        if tipo == "TRIGGER":
-            linhas.append(sql)
+    for kind, name, sql in statements:
+        if kind == "TRIGGER":
+            rows.append(sql)
 
-    linhas.extend([
+    rows.extend([
         "",
         "-- ------------------------------------------------------------------------------",
         "-- 2. DROP TABELAS (CASCADE CONSTRAINTS PURGE)",
         "-- ------------------------------------------------------------------------------",
     ])
-    for tipo, nome, sql in instrucoes:
-        if tipo == "TABLE":
-            linhas.append(sql)
+    for kind, name, sql in statements:
+        if kind == "TABLE":
+            rows.append(sql)
 
-    linhas.extend([
+    rows.extend([
         "",
         "-- ------------------------------------------------------------------------------",
         "-- 3. DROP SEQUENCES",
         "-- ------------------------------------------------------------------------------",
     ])
-    for tipo, nome, sql in instrucoes:
-        if tipo == "SEQUENCE":
-            linhas.append(sql)
+    for kind, name, sql in statements:
+        if kind == "SEQUENCE":
+            rows.append(sql)
 
-    linhas.extend([
+    rows.extend([
         "",
         "PROMPT Rollback do SSS concluido com sucesso.",
         "EXIT;",
         "",
     ])
 
-    return "\n".join(linhas)
+    return "\n".join(rows)
 
 
 def _literal_list(names):
@@ -1343,24 +1343,24 @@ def _literal_list(names):
 
     Quebra a cada 6 nomes: o SQL*Plus recusa linhas com mais de 2.499 caracteres (SP2-0027).
     """
-    literais = ["'{}'".format(n.upper()) for n in names]
-    grupos = [", ".join(literais[i:i + 6]) for i in range(0, len(literais), 6)]
-    return ",\n      ".join(grupos)
+    literals = ["'{}'".format(n.upper()) for n in names]
+    groups = [", ".join(literals[i:i + 6]) for i in range(0, len(literals), 6)]
+    return ",\n      ".join(groups)
 
 
 def _seed_rows_by_table(owner, prefix):
     """Quantidade de MERGE do seed por tabela (minimo esperado logo apos a implantacao)."""
-    esquema = sql_ident.names(prefix)
-    por_tabela = dict((t["tabela"].upper(), ent) for ent, t in esquema.items())
-    contagem = collections.OrderedDict((ent, 0) for ent in esquema)
-    marca = "MERGE INTO {}.".format(owner).upper()
+    schema = sql_ident.names(prefix)
+    by_table = dict((t["tabela"].upper(), ent) for ent, t in schema.items())
+    count = collections.OrderedDict((ent, 0) for ent in schema)
+    mark = "MERGE INTO {}.".format(owner).upper()
     for cmd in build_seed_statements(owner, prefix):
-        texto = cmd.lstrip()
-        if texto.upper().startswith(marca):
-            ent = por_tabela.get(texto[len(marca):].split(None, 1)[0].upper())
+        text = cmd.lstrip()
+        if text.upper().startswith(mark):
+            ent = by_table.get(text[len(mark):].split(None, 1)[0].upper())
             if ent:
-                contagem[ent] += 1
-    return contagem
+                count[ent] += 1
+    return count
 
 
 def build_validation_script(owner, prefix):
@@ -1373,30 +1373,30 @@ def build_validation_script(owner, prefix):
     """
     sql_ident.validate_owner(owner)
     sql_ident.validate_prefix(prefix)
-    esquema = sql_ident.names(prefix)
+    schema = sql_ident.names(prefix)
     own = owner.upper()
 
-    tabelas = [t["tabela"] for t in esquema.values()]
-    sequences = [t["sequence"] for t in esquema.values()]
+    tables = [t["tabela"] for t in schema.values()]
+    sequences = [t["sequence"] for t in schema.values()]
     triggers = []
     constraints = []
-    indices = []
-    for t in esquema.values():
+    indexes = []
+    for t in schema.values():
         triggers.extend(n for n in (t.get("trigger_bi"), t.get("trigger_bu")) if n)
         constraints.append(t["pk"])
-        for grupo in ("uks", "fks", "cks"):
-            constraints.extend(t[grupo].keys())
-        indices.extend(t["indices"].keys())
-    objetos = tabelas + sequences + triggers + indices
+        for group in ("uks", "fks", "cks"):
+            constraints.extend(t[group].keys())
+        indexes.extend(t["indices"].keys())
+    objects = tables + sequences + triggers + indexes
 
     def chk(order, label, rule, value, sql_contagem):
         return ("SELECT {o} AS sort_order, '{r}' AS verificacao, '{g}' AS regra, {v} AS esperado, "
                 "({s}) AS encontrado FROM DUAL").format(o=order, r=label, g=rule, v=value, s=sql_contagem)
 
-    dicionario = [
-        chk(1, "TABELAS", "=", len(tabelas),
+    mapping = [
+        chk(1, "TABELAS", "=", len(tables),
             "SELECT COUNT(*) FROM all_tables WHERE owner = '{}' AND table_name IN ({})".format(
-                own, _literal_list(tabelas))),
+                own, _literal_list(tables))),
         chk(2, "SEQUENCES", "=", len(sequences),
             "SELECT COUNT(*) FROM all_sequences WHERE sequence_owner = '{}' AND sequence_name IN ({})".format(
                 own, _literal_list(sequences))),
@@ -1406,46 +1406,46 @@ def build_validation_script(owner, prefix):
         chk(4, "CONSTRAINTS HABILITADAS", "=", len(constraints),
             "SELECT COUNT(*) FROM all_constraints WHERE owner = '{}' AND status = 'ENABLED' "
             "AND constraint_name IN ({})".format(own, _literal_list(constraints))),
-        chk(5, "INDICES VALIDOS", "=", len(indices),
+        chk(5, "INDICES VALIDOS", "=", len(indexes),
             "SELECT COUNT(*) FROM all_indexes WHERE owner = '{}' AND status = 'VALID' "
-            "AND index_name IN ({})".format(own, _literal_list(indices))),
+            "AND index_name IN ({})".format(own, _literal_list(indexes))),
         chk(6, "OBJETOS INVALIDOS", "=", 0,
             "SELECT COUNT(*) FROM all_objects WHERE owner = '{}' AND status = 'INVALID' "
-            "AND object_name IN ({})".format(own, _literal_list(objetos))),
+            "AND object_name IN ({})".format(own, _literal_list(objects))),
         chk(7, "GRANTS A PUBLIC", "=", 0,
             "SELECT COUNT(*) FROM all_tab_privs WHERE table_schema = '{}' AND grantee = 'PUBLIC' "
-            "AND table_name IN ({})".format(own, _literal_list(tabelas + sequences))),
+            "AND table_name IN ({})".format(own, _literal_list(tables + sequences))),
     ]
 
-    tab = dict((ent, "{}.{}".format(owner, t["tabela"])) for ent, t in esquema.items())
-    dados = [
+    tab = dict((ent, "{}.{}".format(owner, t["tabela"])) for ent, t in schema.items())
+    date = [
         chk(10, "VERSAO DO ESQUEMA", "=", sql_ident.SCHEMA_VERSION,
             "SELECT MAX(schema_version) FROM {}".format(tab["control"])),
     ]
-    for n, (ent, minimo) in enumerate(_seed_rows_by_table(owner, prefix).items()):
-        dados.append(chk(11 + n, "LINHAS " + esquema[ent]["tabela"].upper(), ">=", minimo,
+    for n, (ent, min_value) in enumerate(_seed_rows_by_table(owner, prefix).items()):
+        date.append(chk(11 + n, "LINHAS " + schema[ent]["tabela"].upper(), ">=", min_value,
                          "SELECT COUNT(*) FROM {}".format(tab[ent])))
 
     def relatorio(parts):
-        uniao = "\n  UNION ALL ".join(parts)
-        detalhe = (
-            "WITH chk AS (\n  " + uniao + "\n)\n"
+        union = "\n  UNION ALL ".join(parts)
+        detail = (
+            "WITH chk AS (\n  " + union + "\n)\n"
             "SELECT verificacao, regra || ' ' || esperado AS esperado, encontrado,\n"
             "       CASE WHEN (regra = '=' AND encontrado = esperado) OR (regra = '>=' AND encontrado >= esperado)\n"
             "            THEN 'OK' ELSE 'FALHA' END AS resultado\n"
             "  FROM chk ORDER BY sort_order;"
         )
-        resumo = (
-            "WITH chk AS (\n  " + uniao + "\n)\n"
+        summary = (
+            "WITH chk AS (\n  " + union + "\n)\n"
             "SELECT CASE WHEN COUNT(*) = 0 THEN 'OK: nenhuma falha'\n"
             "            ELSE 'FALHA: ' || COUNT(*) || ' verificacao(oes) divergente(s)' END AS resumo\n"
             "  FROM chk\n"
             " WHERE NOT ((regra = '=' AND encontrado = esperado) OR (regra = '>=' AND encontrado >= esperado))\n"
             "    OR encontrado IS NULL;"
         )
-        return [detalhe, "", resumo]
+        return [detail, "", summary]
 
-    linhas = [
+    rows = [
         "-- ==============================================================================",
         "-- Script Scheduling Service (SSS) - Validacao da Implantacao Oracle 11gR2+",
         "-- Gerado automaticamente a partir do registro sql_ident.py (somente leitura)",
@@ -1466,16 +1466,16 @@ def build_validation_script(owner, prefix):
         "PROMPT 1. OBJETOS NO DICIONARIO (esperado pelo registro x encontrado)",
         "PROMPT ==============================================================================",
     ]
-    linhas.extend(relatorio(dicionario))
-    linhas.extend([
+    rows.extend(relatorio(mapping))
+    rows.extend([
         "",
         "PROMPT ==============================================================================",
         "PROMPT 2. VERSAO DO ESQUEMA E MINIMO DE LINHAS DO SEED",
         "PROMPT (se as tabelas nao existirem, esta secao falha com ORA-00942: veja a secao 1)",
         "PROMPT ==============================================================================",
     ])
-    linhas.extend(relatorio(dados))
-    linhas.extend([
+    rows.extend(relatorio(date))
+    rows.extend([
         "",
         "PROMPT ==============================================================================",
         "PROMPT 3. USUARIOS E PERFIS (sem hash de senha)",
@@ -1522,7 +1522,7 @@ def build_validation_script(owner, prefix):
         "COLUMN privilege FORMAT A12",
         "SELECT grantee, privilege, COUNT(*) AS objetos",
         "  FROM all_tab_privs",
-        " WHERE table_schema = '{}' AND table_name IN ({})".format(own, _literal_list(tabelas + sequences)),
+        " WHERE table_schema = '{}' AND table_name IN ({})".format(own, _literal_list(tables + sequences)),
         " GROUP BY grantee, privilege",
         " ORDER BY grantee, privilege;",
         "SET FEEDBACK OFF",
@@ -1531,7 +1531,7 @@ def build_validation_script(owner, prefix):
         "EXIT;",
         "",
     ])
-    return "\n".join(linhas)
+    return "\n".join(rows)
 
 
 def build_full_deploy_script(owner, prefix, lob_storage="SECUREFILE",
@@ -1552,7 +1552,7 @@ def build_full_deploy_script(owner, prefix, lob_storage="SECUREFILE",
         admin_password_hash=admin_password_hash
     )
 
-    partes = [
+    parts = [
         "SET DEFINE OFF;",
         "SET SERVEROUTPUT ON;",
         "-- Qualquer erro interrompe a implantacao com codigo de saida diferente de zero e sem a mensagem de",
@@ -1565,20 +1565,20 @@ def build_full_deploy_script(owner, prefix, lob_storage="SECUREFILE",
         sql_seed,
     ]
 
-    partes.extend([
+    parts.extend([
         "-- ==============================================================================",
         "-- GRANTS POR PAPEL (README §11.1); nenhum GRANT a PUBLIC",
         "-- ==============================================================================",
         "",
     ])
-    partes.extend(build_grants_by_role(owner, prefix, user_roles or {}))
-    partes.append("")
+    parts.extend(build_grants_by_role(owner, prefix, user_roles or {}))
+    parts.append("")
 
-    partes.extend([
+    parts.extend([
         "PROMPT Implantacao do SSS concluida com sucesso!",
         "EXIT;",
         "",
     ])
 
-    return "\n".join(partes)
+    return "\n".join(parts)
 

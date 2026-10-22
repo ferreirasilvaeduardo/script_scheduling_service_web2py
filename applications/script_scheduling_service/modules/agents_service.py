@@ -46,20 +46,20 @@ def health(agent, now, thresholds):
     hb = agent.get("heartbeat_at")
     if hb is None:
         return OFFLINE
-    idade = max(0, int((now - hb).total_seconds()))
-    if idade < 2 * thresholds.heartbeat_interval_s:
+    age = max(0, int((now - hb).total_seconds()))
+    if age < 2 * thresholds.heartbeat_interval_s:
         return OK
-    if idade <= thresholds.fence_timeout_s:
+    if age <= thresholds.fence_timeout_s:
         return DELAYED
-    if idade <= thresholds.node_offline_timeout_s:
+    if age <= thresholds.node_offline_timeout_s:
         return AT_RISK
     return OFFLINE
 
 
 def health_info(code):
     """{codigo, rotulo, classe, icone, descricao} da saude, para badge e legenda."""
-    rotulo, classe, icone, descricao = _HEALTH[code]
-    return {"code": code, "rotulo": rotulo, "classe": classe, "icone": icone, "description": descricao}
+    label, cls_name, icon, description = _HEALTH[code]
+    return {"code": code, "rotulo": label, "classe": cls_name, "icone": icon, "description": description}
 
 
 def legend():
@@ -92,14 +92,14 @@ class AgentsService(object):
         self._critical_config = config_criticos
 
     def _script_names(self):
-        pagina = self._catalog.scripts_list(page=1, size=1000)
-        return dict((s["id"], s["name"]) for s in pagina["itens"])
+        page = self._catalog.scripts_list(page=1, size=1000)
+        return dict((s["id"], s["name"]) for s in page["itens"])
 
     def _tickets(self, code, now, names):
-        itens = []
+        items = []
         for t in self._agents.tickets_running(code):
             hb = t.get("heartbeat_at")
-            itens.append({
+            items.append({
                 "id": t["id"],
                 "script_nome": names.get(t.get("script_id"), u"#%s" % t.get("script_id")),
                 "environment": t.get("environment"),
@@ -108,7 +108,7 @@ class AgentsService(object):
                 "duracao": ui_helpers.formatar_duracao(t.get("started_at"), now),
                 "heartbeat": format_age(None if hb is None else max(0, int((now - hb).total_seconds()))),
             })
-        return itens
+        return items
 
     def agent_tickets(self, ctx, code, now=None):
         """Tickets RUNNING do agente, prontos para a lista com link para o detalhe."""
@@ -123,19 +123,19 @@ class AgentsService(object):
         """
         admin_crud.require_feature(ctx, FEATURE)
         now = now or self._clock()
-        nomes = self._script_names()
-        resumo = collections.OrderedDict((c, 0) for c in HEALTH_ORDER)
-        agentes = []
-        divergentes = []
+        names = self._script_names()
+        summary = collections.OrderedDict((c, 0) for c in HEALTH_ORDER)
+        agents = []
+        divergent = []
         for ag in self._agents.list():
             if ag.get("status") == "ACTIVE" and ag.get("critical_config") != self._critical_config:
-                divergentes.append({"code": ag["code"], "critical_config": ag.get("critical_config")})
+                divergent.append({"code": ag["code"], "critical_config": ag.get("critical_config")})
             hb = ag.get("heartbeat_at")
-            idade = None if hb is None else max(0, int((now - hb).total_seconds()))
-            codigo_saude = health(ag, now, self._thresholds)
-            resumo[codigo_saude] += 1
-            tickets = self._tickets(ag["code"], now, nomes)
-            agentes.append({
+            age = None if hb is None else max(0, int((now - hb).total_seconds()))
+            code_health = health(ag, now, self._thresholds)
+            summary[code_health] += 1
+            tickets = self._tickets(ag["code"], now, names)
+            agents.append({
                 "code": ag["code"],
                 "hostname": ag.get("hostname"),
                 "status": ag.get("status"),
@@ -146,16 +146,16 @@ class AgentsService(object):
                 # So os nomes logicos: os caminhos locais nunca vao para a tela (README §13).
                 "started_at": ag.get("started_at"),
                 "heartbeat_at": hb,
-                "idade_s": idade,
-                "ha": format_age(idade),
-                "saude": health_info(codigo_saude),
+                "idade_s": age,
+                "ha": format_age(age),
+                "saude": health_info(code_health),
                 "running": len(tickets),
                 "tickets": tickets,
             })
-        return {"agents": agentes, "resumo": resumo, "agora": now,
+        return {"agents": agents, "resumo": summary, "agora": now,
                 "fila_sem_atendente": self._agents.unattended_queue(now, self._thresholds),
                 "rodando_sem_pid": self._agents.running_without_pid(now, 2),
-                "config_divergente": divergentes, "config_web": self._critical_config}
+                "config_divergente": divergent, "config_web": self._critical_config}
 
 
 _default = None
@@ -169,12 +169,12 @@ def _service():
             from gluon import current
             import sss_logging
             import sss_config
-            fabrica = current.repo_factory
+            factory = current.repo_factory
             cfg = current.sss_cfg
             _default = AgentsService(
-                agents=fabrica.get("agents"),
-                catalog=fabrica.get("catalog"),
-                clock=fabrica.get("tickets").now,
+                agents=factory.get("agents"),
+                catalog=factory.get("catalog"),
+                clock=factory.get("tickets").now,
                 thresholds=Thresholds(cfg.agent.heartbeat_interval_s, cfg.agent.fence_timeout_s,
                                   cfg.agent.node_offline_timeout_s),
                 log=sss_logging.get_logger("sss_web", cfg),

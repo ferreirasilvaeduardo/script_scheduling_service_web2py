@@ -58,14 +58,14 @@ def ticket_masker(secrets, connection=None, snapshot=None):
     ambiente e os valores de respostas cujos codigos estao em sensiveis no snapshot. Valores com menos
     de 4 caracteres nao sao registrados (regra do masking, README §4.1; risco aceito no §14)."""
     m = masking.Masker()
-    for valor in secrets or ():
-        m.register(valor)
+    for value in secrets or ():
+        m.register(value)
     if connection:
         m.register(connection)
     snap = snapshot or {}
-    respostas = snap.get("answers") or {}
-    for codigo in snap.get("sensitive") or ():
-        m.register(respostas.get(codigo))
+    answers = snap.get("answers") or {}
+    for code in snap.get("sensitive") or ():
+        m.register(answers.get(code))
     return m
 
 
@@ -108,19 +108,19 @@ class Pump(object):
         # open padrao do Python no POSIX nao bloqueia a escrita do filho (O_RDONLY, sem trava).
         with open(self.log_path, "rb") as f:
             f.seek(self.offset_bytes)
-            dados = f.read(maximum) if maximum is not None else f.read()
-        self.offset_bytes += len(dados)
-        return dados
+            date = f.read(maximum) if maximum is not None else f.read()
+        self.offset_bytes += len(date)
+        return date
 
     def collect(self, max_bytes_leitura=DEFAULT_READ):
         """Le ate max_bytes_leitura bytes novos, decodifica, mascara e enfileira. Devolve o texto seguro
         enfileirado (ja com o teto aplicado)."""
         if self.finished or self.stopped or self.truncated:
             return ""
-        texto = self._decoder.decode(self._read(max_bytes_leitura))
-        enviar, _truncou = self.apply_db_cap(self._stream.feed(texto))
-        self._queue += enviar
-        return enviar
+        text = self._decoder.decode(self._read(max_bytes_leitura))
+        send, _truncated = self.apply_db_cap(self._stream.feed(text))
+        self._queue += send
+        return send
 
     def finalize(self):
         """Depois do fim do processo: drena o arquivo em blocos de 1 MiB (parando de ler ao truncar), fecha
@@ -128,28 +128,28 @@ class Pump(object):
         Idempotente. Arquivo ilegivel: WARN e envia o que ja foi lido. Devolve o texto enfileirado."""
         if self.finished or self.stopped:
             return ""
-        enfileirado = []
+        queued = []
         while not self.truncated:
             try:
-                dados = self._read(DEFAULT_READ)
+                date = self._read(DEFAULT_READ)
             except OSError as e:
                 self._warn_read(e)
                 break
-            if not dados:
+            if not date:
                 break
-            enviar, _truncou = self.apply_db_cap(self._stream.feed(self._decoder.decode(dados)))
-            enfileirado.append(enviar)
-        resto = self._decoder.decode(b"", final=True)
-        enviar, _truncou = self.apply_db_cap(self._stream.feed(resto) + self._stream.finalize())
+            send, _truncated = self.apply_db_cap(self._stream.feed(self._decoder.decode(date)))
+            queued.append(send)
+        rest = self._decoder.decode(b"", final=True)
+        send, _truncated = self.apply_db_cap(self._stream.feed(rest) + self._stream.finalize())
         if not self.truncated:
-            enviar += self._held
+            send += self._held
             self._accepted_bytes += _bytes(self._held)
             self._held = ""
-        enfileirado.append(enviar)
-        texto = "".join(enfileirado)
-        self._queue += texto
+        queued.append(send)
+        text = "".join(queued)
+        self._queue += text
         self.finished = True
-        return texto
+        return text
 
     def _warn_read(self, error):
         """WARN uma vez por bomba quando o arquivo de log some ou fica ilegivel."""
@@ -177,20 +177,20 @@ class Pump(object):
         if self.truncated:
             return "", True
         buf = self._held + (text or "")
-        disponivel = self.max_log_size_bytes - self._accepted_bytes
-        antes_do_marcador = self.max_log_size_bytes - self._marker_bytes - self._accepted_bytes
-        prefixo = _prefix_in_bytes(buf, antes_do_marcador)
-        if _bytes(buf) <= disponivel:
-            self._held = buf[len(prefixo):]
-            self._accepted_bytes += _bytes(prefixo)
-            return prefixo, False
-        enviar = prefixo + MARKER
+        available = self.max_log_size_bytes - self._accepted_bytes
+        before_of_marker = self.max_log_size_bytes - self._marker_bytes - self._accepted_bytes
+        prefix = _prefix_in_bytes(buf, before_of_marker)
+        if _bytes(buf) <= available:
+            self._held = buf[len(prefix):]
+            self._accepted_bytes += _bytes(prefix)
+            return prefix, False
+        send = prefix + MARKER
         self._held = ""
-        self._accepted_bytes += _bytes(enviar)
+        self._accepted_bytes += _bytes(send)
         self.truncated = True
         _log.warning("log truncado no banco (max_log_size_bytes)", extra={"ticket": self.ticket_id,
                                                                           "action": "LOG"})
-        return enviar, True
+        return send, True
 
     # -- envio ---------------------------------------------------------------
 
@@ -207,10 +207,10 @@ class Pump(object):
 
     def confirm(self):
         """O bloco em voo foi confirmado (WRITTEN ou ALREADY_WRITTEN seguido de COMMIT)."""
-        bloco, _offset = self._in_flight
-        self._queue = self._queue[len(bloco):]
-        self.confirmed_offset_chars += clob_units(bloco, self.supplementary_unit)
-        self.confirmed_bytes += _bytes(bloco)
+        chunk, _offset = self._in_flight
+        self._queue = self._queue[len(chunk):]
+        self.confirmed_offset_chars += clob_units(chunk, self.supplementary_unit)
+        self.confirmed_bytes += _bytes(chunk)
         self._in_flight = None
 
 
@@ -226,10 +226,10 @@ def _send_one(pump, conn, repo, agent_id):
     item = pump.next_chunk()
     try:
         if item is not None:
-            bloco, offset = item
-            resultado = repo.append_chunk(conn, pump.ticket_id, agent_id, offset, bloco)
+            chunk, offset = item
+            result = repo.append_chunk(conn, pump.ticket_id, agent_id, offset, chunk)
         else:
-            resultado = WRITTEN if repo.mark_truncated(conn, pump.ticket_id, agent_id) else OWNERSHIP_LOST
+            result = WRITTEN if repo.mark_truncated(conn, pump.ticket_id, agent_id) else OWNERSHIP_LOST
     except LogOffsetMismatch as e:
         _rollback(conn)
         pump.stopped = True
@@ -240,7 +240,7 @@ def _send_one(pump, conn, repo, agent_id):
         _log.warning("envio do log falhou (%s); bloco mantido", e.__class__.__name__,
                      extra={"ticket": pump.ticket_id, "action": "LOG"})
         return UNCERTAIN_CONNECTION
-    if resultado == OWNERSHIP_LOST:
+    if result == OWNERSHIP_LOST:
         _rollback(conn)
         pump.ownership_lost = True
         return OWNERSHIP_LOST
@@ -286,41 +286,41 @@ class Round(object):
         ids = sorted(self.pumps)
         if self._last is None:
             return ids
-        depois = [t for t in ids if t > self._last]
-        return depois + [t for t in ids if t <= self._last]
+        after = [t for t in ids if t > self._last]
+        return after + [t for t in ids if t <= self._last]
 
     def run(self, conn, repo, agent_id):
         res = RoundResult()
-        inicio = self.clock()
-        ativos = []
+        start = self.clock()
+        active = []
         for ticket_id in self._order():
-            bomba = self.pumps[ticket_id]
-            if bomba.stopped or bomba.ownership_lost or bomba.finished:
+            pump = self.pumps[ticket_id]
+            if pump.stopped or pump.ownership_lost or pump.finished:
                 continue
             try:
-                bomba.collect()
+                pump.collect()
             except OSError as e:
                 # Um arquivo ilegivel nao para a coleta dos outros tickets; o envio do que ja foi lido segue.
-                bomba._warn_read(e)
-            ativos.append(ticket_id)
+                pump._warn_read(e)
+            active.append(ticket_id)
         while True:
-            com_pendencia = [t for t in ativos if self.pumps[t].pending()]
-            if not com_pendencia:
+            with_pending = [t for t in active if self.pumps[t].pending()]
+            if not with_pending:
                 return res
-            for ticket_id in com_pendencia:
-                if res.served and self.clock() - inicio > self.budget_s:
+            for ticket_id in with_pending:
+                if res.served and self.clock() - start > self.budget_s:
                     res.budget_exhausted = True
                     return res
-                desfecho = _send_one(self.pumps[ticket_id], conn, repo, agent_id)
+                outcome = _send_one(self.pumps[ticket_id], conn, repo, agent_id)
                 if ticket_id not in res.served:
                     res.served.append(ticket_id)
                 self._last = ticket_id
-                if desfecho == UNCERTAIN_CONNECTION:
+                if outcome == UNCERTAIN_CONNECTION:
                     res.uncertain_connection = True
                     return res
-                if desfecho in (OWNERSHIP_LOST, INCONSISTENT):
-                    (res.ownership_lost if desfecho == OWNERSHIP_LOST else res.inconsistent).append(ticket_id)
-                    ativos.remove(ticket_id)
+                if outcome in (OWNERSHIP_LOST, INCONSISTENT):
+                    (res.ownership_lost if outcome == OWNERSHIP_LOST else res.inconsistent).append(ticket_id)
+                    active.remove(ticket_id)
 
 
 def final_flush(pump, conn, repo, agent_id):
@@ -335,7 +335,7 @@ def final_flush(pump, conn, repo, agent_id):
         return OWNERSHIP_LOST
     pump.finalize()
     while pump.pending():
-        desfecho = _send_one(pump, conn, repo, agent_id)
-        if desfecho != OK:
-            return desfecho
+        outcome = _send_one(pump, conn, repo, agent_id)
+        if outcome != OK:
+            return outcome
     return OK

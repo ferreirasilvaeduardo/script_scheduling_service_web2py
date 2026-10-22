@@ -57,9 +57,9 @@ class RepoAgentsOracle(BaseRepoOracle, RepoAgents):
             "scr": self.qualify_table("scripts"),
         }
         self._sql = {}
-        for nome, modelo in globals().items():
-            if nome.startswith("_SQL_"):
-                self._sql[nome[5:]] = modelo.format(**self._idents)
+        for name, template in globals().items():
+            if name.startswith("_SQL_"):
+                self._sql[name[5:]] = template.format(**self._idents)
 
     def _ler(self, sql, binds=None, types=None, conn=None):
         with self.read_context(conn=conn) as c:
@@ -81,18 +81,18 @@ class RepoAgentsOracle(BaseRepoOracle, RepoAgents):
 
     def tickets_running(self, code, conn=None):
         """Tickets RUNNING do agente pela expressao de ix_tck_run, por id, sem CLOB."""
-        linhas = self._ler(self._sql["TICKETS_RUNNING"], {"code": code}, conn=conn)
-        return [self.tuple_to_dict(_COLS_TCK, r) for r in linhas]
+        rows = self._ler(self._sql["TICKETS_RUNNING"], {"code": code}, conn=conn)
+        return [self.tuple_to_dict(_COLS_TCK, r) for r in rows]
 
     def unattended_queue(self, now, thresholds, conn=None):
         """Grupos de PENDING vencidos sem agente OK/DELAYED para o par ambiente/interpretador."""
-        atendidos = saude_sql.served_pairs(self.list(conn=conn), now, thresholds)
-        linhas = self._ler(self._sql["QUEUE"], {"now": now}, {"now": db_conn.TIPO_DATE}, conn=conn)
-        return saude_sql.unattended_queue(linhas, atendidos)
+        served = saude_sql.served_pairs(self.list(conn=conn), now, thresholds)
+        rows = self._ler(self._sql["QUEUE"], {"now": now}, {"now": db_conn.TIPO_DATE}, conn=conn)
+        return saude_sql.unattended_queue(rows, served)
 
     def running_without_pid(self, now, minutes, conn=None):
         """RUNNING sem process_id ha mais de `minutos`, por started_at e id; so as colunas do contrato."""
-        limite = now - datetime.timedelta(minutes=minutes)
-        linhas = self._ler(self._sql["RUNNING_NO_PID"], {"cutoff": limite}, {"cutoff": db_conn.TIPO_DATE},
+        limit = now - datetime.timedelta(minutes=minutes)
+        rows = self._ler(self._sql["RUNNING_NO_PID"], {"cutoff": limit}, {"cutoff": db_conn.TIPO_DATE},
                            conn=conn)
-        return [self.tuple_to_dict(_COLS_NO_PID, r) for r in linhas]
+        return [self.tuple_to_dict(_COLS_NO_PID, r) for r in rows]

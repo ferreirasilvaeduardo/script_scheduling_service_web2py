@@ -54,10 +54,10 @@ class TestAgendaWithoutDb(unittest.TestCase):
         conn = _Conn([("ROWNUM <= :batch_size", (2, [(5, OLD), (7, OLD)])), ("SKIP LOCKED", (1, [(5,)]))])
         self.assertEqual(self.repo.due_rules(conn, 50), [(5, OLD), (7, OLD)])
         sql, binds = conn.executed[0]
-        for trecho in ("WHERE active = 'Y' AND next_run_at <= SYSDATE",
+        for snippet in ("WHERE active = 'Y' AND next_run_at <= SYSDATE",
                        "(next_run_at > :last_next OR (next_run_at = :last_next AND id > :last_id))",
                        "ORDER BY next_run_at, id", "OWN_X.pfx_schedules"):
-            self.assertIn(trecho, sql)
+            self.assertIn(snippet, sql)
         self.assertEqual(binds, {"last_next": scheduler_schedules.DATE_INITIAL, "last_id": 0, "batch_size": 50})
         self.repo.due_rules(conn, 50, last_next=NEW, last_id=5)
         self.assertEqual(conn.executed[1][1]["last_next"], NEW.replace(microsecond=0))
@@ -84,17 +84,17 @@ class TestAgendaWithoutDb(unittest.TestCase):
         resp = [e for e in conn.executed if e[0].startswith("INSERT INTO OWN_X.pfx_ticket_answer")][0]
         self.assertEqual((resp[1]["ticket_id"], resp[1]["actor"], resp[1]["value"]), (501, ACTOR, "x"))
         self._without_transaction(conn)
-        corrida = _Conn([])
-        self.assertFalse(self.repo.reserve_and_create_ticket(corrida, RULE, OLD, NEW, 502, TICKET, [], AGENT))
-        self.assertEqual(corrida.sql("INSERT"), [], "rowcount 0: nenhum ticket")
+        race = _Conn([])
+        self.assertFalse(self.repo.reserve_and_create_ticket(race, RULE, OLD, NEW, 502, TICKET, [], AGENT))
+        self.assertEqual(race.sql("INSERT"), [], "rowcount 0: nenhum ticket")
 
     def test_ocorrencia_duplicada(self):
-        erro = _Error("ORA-00001: unique constraint (OWN_X.IX_PFX_TCK_OCCUR) violated")
-        conn = _Conn([("SET next_run_at = :new_date", (1, [])), ("INSERT INTO OWN_X.pfx_tickets", erro)])
+        error = _Error("ORA-00001: unique constraint (OWN_X.IX_PFX_TCK_OCCUR) violated")
+        conn = _Conn([("SET next_run_at = :new_date", (1, [])), ("INSERT INTO OWN_X.pfx_tickets", error)])
         with self.assertRaises(DuplicateOccurrence):
             self.repo.reserve_and_create_ticket(conn, RULE, OLD, NEW, 503, TICKET, [], AGENT)
-        outro = _Error("ORA-00001: unique constraint (OWN_X.PK_PFX_TICKETS) violated")
-        conn = _Conn([("SET next_run_at = :new_date", (1, [])), ("INSERT INTO OWN_X.pfx_tickets", outro)])
+        other = _Error("ORA-00001: unique constraint (OWN_X.PK_PFX_TICKETS) violated")
+        conn = _Conn([("SET next_run_at = :new_date", (1, [])), ("INSERT INTO OWN_X.pfx_tickets", other)])
         with self.assertRaises(_Error):
             self.repo.reserve_and_create_ticket(conn, RULE, OLD, NEW, 503, TICKET, [], AGENT)
 
@@ -121,17 +121,17 @@ class TestAgendaWithoutDb(unittest.TestCase):
         conn = _Conn([("SET next_run_at = :new_date WHERE id", (1, []))])
         self.assertTrue(self.repo.advance_without_ticket(conn, 9, OLD, NEW))
         upd = conn.executed[0][0]
-        for ausente in ("last_run_at", "last_ticket_id", "updated_"):
-            self.assertNotIn(ausente, upd, "R-05")
+        for missing in ("last_run_at", "last_ticket_id", "updated_"):
+            self.assertNotIn(missing, upd, "R-05")
         conn = _Conn([("pause_reason = :reason", (1, []))])
         self.assertTrue(self.repo.pause(conn, 9, OLD, "NO_PERMISSION", "solicitante sem acesso", AGENT))
         self.assertIn("AND active = 'Y' AND next_run_at = :old_date", conn.executed[0][0], "R-19")
         aud = [e for e in conn.executed if "SCHEDULE_PAUSE" in e[0]][0][1]
         self.assertEqual((aud["detail"], aud["rid"], aud["actor"]),
                          ("pause_reason: NO_PERMISSION; solicitante sem acesso", 9, ACTOR))
-        ja = _Conn([])
-        self.assertFalse(self.repo.pause(ja, 9, OLD, "NO_PERMISSION", None, AGENT))
-        self.assertEqual(ja.sql("SCHEDULE_PAUSE"), [], "rowcount 0: sem auditoria")
+        already = _Conn([])
+        self.assertFalse(self.repo.pause(already, 9, OLD, "NO_PERMISSION", None, AGENT))
+        self.assertEqual(already.sql("SCHEDULE_PAUSE"), [], "rowcount 0: sem auditoria")
         for ticket_id in (None, 701):
             conn = _Conn([("pause_reason = 'INVALID_CRON'", (1, []))])
             self.assertTrue(self.repo.pause_cron_error(conn, RULE, OLD, ticket_id, TICKET, [], "horizonte", AGENT))
@@ -163,20 +163,20 @@ class TestQueueNodeOfflineWithoutDb(unittest.TestCase):
     def test_duas_etapas_sem_os_proprios_e_com_ator(self):
         conn = _Conn([("SELECT SYSDATE FROM DUAL", (1, [(OLD,)])), ("FOR UPDATE SKIP LOCKED", (2, [(4,), (5,)]))],
                      counts={4: 1, 5: 0})
-        vistos = []
-        ids = self.repo.mark_node_offline(conn, AGENT, 180, lambda agora: vistos.append(agora) or False)
-        self.assertEqual((ids, vistos), ([4], [OLD]), "a linha ja finalizada (rowcount 0) nao conta")
+        seen = []
+        ids = self.repo.mark_node_offline(conn, AGENT, 180, lambda now: seen.append(now) or False)
+        self.assertEqual((ids, seen), ([4], [OLD]), "a linha ja finalizada (rowcount 0) nao conta")
         sel = [s for s in conn.sql("SKIP LOCKED")][0]
         self.assertIn("<> :agent_id", sel)
         self.assertIn("heartbeat_at < SYSDATE - :node_offline_timeout_s * INTERVAL '1' SECOND", sel)
-        upd, linhas = [e for e in conn.executed if "NODE_OFFLINE" in e[0]][0]
+        upd, rows = [e for e in conn.executed if "NODE_OFFLINE" in e[0]][0]
         self.assertIn("updated_at = SYSDATE, updated_by = :actor", upd)
-        self.assertEqual(linhas[0], {"actor": ACTOR, "id": 4})
+        self.assertEqual(rows[0], {"actor": ACTOR, "id": 4})
         self.assertEqual(conn.commits, 1)
 
     def test_salto_de_relogio_aborta_sem_marcar(self):
         conn = _Conn([("SELECT SYSDATE FROM DUAL", (1, [(OLD,)]))])
-        self.assertIsNone(self.repo.mark_node_offline(conn, AGENT, 180, lambda agora: True))
+        self.assertIsNone(self.repo.mark_node_offline(conn, AGENT, 180, lambda now: True))
         self.assertEqual(conn.sql("SKIP LOCKED"), [], "R-10: nada lido nem marcado")
 
     def test_finalizar_fenced(self):
@@ -230,9 +230,9 @@ class TestAgendaOracle(unittest.TestCase):
         self.contrato.tearDown(self)
 
     def _rule(self, minutes_ago=10, **extra):
-        proxima = datetime.datetime.now().replace(second=0, microsecond=0) - datetime.timedelta(minutes=minutes_ago)
+        next_value = datetime.datetime.now().replace(second=0, microsecond=0) - datetime.timedelta(minutes=minutes_ago)
         return self._fixtures.schedule(self.c["scr"]["id"], self.c["amb1"]["name"], self.c["u1"]["id"],
-                                       next_run_at=proxima, **extra)
+                                       next_run_at=next_value, **extra)
 
     def _ticket(self, rule, scheduled):
         return {"requested_by": self.c["login"], "priority": 2, "submitted_params": "{\"versao\": 4}",
@@ -243,53 +243,53 @@ class TestAgendaOracle(unittest.TestCase):
 
     def test_microssegundos_nao_travam_a_reserva(self):
         """Teste obrigatorio (README §7.5): antiga/nova com microssegundos nao resultam em rowcount 0."""
-        regra = self._rule()
-        lida = self._linha(regra["id"])
-        antiga = lida["next_run_at"].replace(microsecond=654321)
-        nova = (lida["next_run_at"] + datetime.timedelta(days=1)).replace(microsecond=123456)
+        rule = self._rule()
+        read = self._linha(rule["id"])
+        old = read["next_run_at"].replace(microsecond=654321)
+        new = (read["next_run_at"] + datetime.timedelta(days=1)).replace(microsecond=123456)
         tid = self.repo.next_ticket_id(self.conn)
-        self.assertIn((regra["id"], lida["next_run_at"]), self.repo.due_rules(self.conn, 1000))
-        self.assertTrue(self.repo.lock_rule(self.conn, regra["id"]))
-        self.assertTrue(self.repo.reserve_and_create_ticket(self.conn, lida, antiga, nova, tid,
-                                                          self._ticket(lida, antiga), [], self.agent))
+        self.assertIn((rule["id"], read["next_run_at"]), self.repo.due_rules(self.conn, 1000))
+        self.assertTrue(self.repo.lock_rule(self.conn, rule["id"]))
+        self.assertTrue(self.repo.reserve_and_create_ticket(self.conn, read, old, new, tid,
+                                                          self._ticket(read, old), [], self.agent))
         self.conn.commit()
         self._fixtures.note("tickets", tid)
-        depois = self._linha(regra["id"])
-        self.assertEqual((depois["next_run_at"], depois["last_ticket_id"]), (nova.replace(microsecond=0), tid))
-        self.assertIsNone(depois["updated_at"], "reserva sem updated_* (CR-006)")
+        after = self._linha(rule["id"])
+        self.assertEqual((after["next_run_at"], after["last_ticket_id"]), (new.replace(microsecond=0), tid))
+        self.assertIsNone(after["updated_at"], "reserva sem updated_* (CR-006)")
         t = self.obter_repo("tickets").get(tid)
         self.assertEqual((t["schedule_id"], t["created_by"], t["scheduled_at"], t["source_ip"]),
-                         (regra["id"], self.actor, antiga.replace(microsecond=0), None))
+                         (rule["id"], self.actor, old.replace(microsecond=0), None))
         # A mesma ocorrencia de novo: ix_tck_ocor recusa (CR-008, R-31).
         tid2 = self.repo.next_ticket_id(self.conn)
         with self.assertRaises(DuplicateOccurrence):
-            self.repo._inserir_ticket(self.conn, lida, tid2, self._ticket(lida, antiga), [], self.actor)
+            self.repo._inserir_ticket(self.conn, read, tid2, self._ticket(read, old), [], self.actor)
         self.conn.rollback()
 
     def test_unica_concluida_mantem_a_data(self):
-        regra = self._rule(recurrence_type="ONCE", run_time=None)
-        lida = self._linha(regra["id"])
+        rule = self._rule(recurrence_type="ONCE", run_time=None)
+        read = self._linha(rule["id"])
         tid = self.repo.next_ticket_id(self.conn)
-        self.assertTrue(self.repo.lock_rule(self.conn, regra["id"]))
-        self.assertTrue(self.repo.complete_with_ticket(self.conn, lida, lida["next_run_at"], tid,
-                                                      self._ticket(lida, lida["next_run_at"]), [], self.agent))
+        self.assertTrue(self.repo.lock_rule(self.conn, rule["id"]))
+        self.assertTrue(self.repo.complete_with_ticket(self.conn, read, read["next_run_at"], tid,
+                                                      self._ticket(read, read["next_run_at"]), [], self.agent))
         self.conn.commit()
         self._fixtures.note("tickets", tid)
-        depois = self._linha(regra["id"])
-        self.assertEqual((depois["active"], depois["pause_reason"], depois["next_run_at"], depois["last_ticket_id"]),
-                         ("N", "COMPLETED", lida["next_run_at"], tid))
-        self.assertEqual(depois["updated_by"], self.actor)
-        self.assertFalse(self.repo.pause(self.conn, regra["id"], lida["next_run_at"], "NO_PERMISSION", None,
+        after = self._linha(rule["id"])
+        self.assertEqual((after["active"], after["pause_reason"], after["next_run_at"], after["last_ticket_id"]),
+                         ("N", "COMPLETED", read["next_run_at"], tid))
+        self.assertEqual(after["updated_by"], self.actor)
+        self.assertFalse(self.repo.pause(self.conn, rule["id"], read["next_run_at"], "NO_PERMISSION", None,
                                           self.agent), "pausa sobre regra concluida: rowcount 0")
         self.conn.rollback()
 
     def test_pausa_avanco_cron_erro_e_erro_interno(self):
         r1, r2, r3, r4 = self._rule(), self._rule(), self._rule(), self._rule()
         l1, l2, l3 = self._linha(r1["id"]), self._linha(r2["id"]), self._linha(r3["id"])
-        nova = l2["next_run_at"] + datetime.timedelta(days=1)
+        new = l2["next_run_at"] + datetime.timedelta(days=1)
         self.assertTrue(self.repo.pause(self.conn, r1["id"], l1["next_run_at"], "INVALID_PARAM",
                                          "data_ref: formato", self.agent))
-        self.assertTrue(self.repo.advance_without_ticket(self.conn, r2["id"], l2["next_run_at"], nova))
+        self.assertTrue(self.repo.advance_without_ticket(self.conn, r2["id"], l2["next_run_at"], new))
         self.assertTrue(self.repo.pause_cron_error(self.conn, l3, l3["next_run_at"], None, None, [], "horizonte",
                                                    self.agent))
         self.assertTrue(self.repo.pause_internal_error(self.conn, r4["id"], "ValueError", self.agent))
@@ -297,7 +297,7 @@ class TestAgendaOracle(unittest.TestCase):
         d1, d2, d3, d4 = (self._linha(r["id"]) for r in (r1, r2, r3, r4))
         self.assertEqual((d1["active"], d1["pause_reason"], d1["updated_by"]), ("N", "INVALID_PARAM", self.actor))
         self.assertEqual((d2["active"], d2["next_run_at"], d2["updated_at"], d2["last_ticket_id"]),
-                         ("Y", nova, None, l2["last_ticket_id"]))
+                         ("Y", new, None, l2["last_ticket_id"]))
         self.assertEqual((d3["pause_reason"], d3["next_run_at"]), ("INVALID_CRON", l3["next_run_at"]))
         self.assertEqual(d4["pause_reason"], "INTERNAL_ERROR")
         cur = self.conn.cursor()
@@ -306,25 +306,25 @@ class TestAgendaOracle(unittest.TestCase):
         self.assertEqual([x[0] for x in cur.fetchall()], ["pause_reason: INVALID_PARAM; data_ref: formato"])
 
     def test_node_offline_e_fenced(self):
-        outro, meu = "tst-agd-%s-o" % self._fixtures.suf, self.agent
-        t_outro, t_meu = (self._fixtures.ticket(actor="teste", script_id=self.c["scr"]["id"], environment=self.c["amb1"]["name"],
+        other, my = "tst-agd-%s-o" % self._fixtures.suf, self.agent
+        t_other, t_my = (self._fixtures.ticket(actor="teste", script_id=self.c["scr"]["id"], environment=self.c["amb1"]["name"],
                                              requested_by=self.c["login"]) for _i in range(2))
         cur = self.conn.cursor()
         tck = self.cat.qualify_table("tickets")
-        for tid, ag in ((t_outro, outro), (t_meu, meu)):
+        for tid, ag in ((t_other, other), (t_my, my)):
             cur.execute("UPDATE " + tck + " SET status = 'RUNNING', agent_id = :a, heartbeat_at = SYSDATE - 1"
                         " WHERE id = :id", a=ag, id=tid)
         self.conn.commit()
-        self.assertIsNone(self.queue.mark_node_offline(self.conn, meu, 180, lambda agora: True), "salto: nada")
-        marcados = self.queue.mark_node_offline(self.conn, meu, 180, lambda agora: False)
-        self.assertIn(t_outro, marcados)
-        self.assertNotIn(t_meu, marcados, "nunca os proprios")
-        t = self.obter_repo("tickets").get(t_outro)
+        self.assertIsNone(self.queue.mark_node_offline(self.conn, my, 180, lambda now: True), "salto: nada")
+        marked = self.queue.mark_node_offline(self.conn, my, 180, lambda now: False)
+        self.assertIn(t_other, marked)
+        self.assertNotIn(t_my, marked, "nunca os proprios")
+        t = self.obter_repo("tickets").get(t_other)
         self.assertEqual((t["status"], t["status_reason"], t["return_code"], t["updated_by"]),
-                         ("FAILED", "NODE_OFFLINE", -2, "SYSTEM:%s" % meu))
-        self.assertTrue(self.queue.finalize_fenced(self.conn, t_meu, meu))
-        self.assertEqual(self.obter_repo("tickets").get(t_meu)["status_reason"], "FENCED")
-        self.assertFalse(self.queue.finalize_fenced(self.conn, t_outro, outro), "ja NODE_OFFLINE")
+                         ("FAILED", "NODE_OFFLINE", -2, "SYSTEM:%s" % my))
+        self.assertTrue(self.queue.finalize_fenced(self.conn, t_my, my))
+        self.assertEqual(self.obter_repo("tickets").get(t_my)["status_reason"], "FENCED")
+        self.assertFalse(self.queue.finalize_fenced(self.conn, t_other, other), "ja NODE_OFFLINE")
 
 
 if __name__ == "__main__":

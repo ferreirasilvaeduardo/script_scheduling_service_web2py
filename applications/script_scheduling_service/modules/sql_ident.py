@@ -99,8 +99,8 @@ def validate_name(name, prefix=None):
         raise ValueError("Nome de objeto invalido: {}".format(_safe_echo(name)))
     if prefix is not None:
         validate_prefix(prefix)
-        catalogo = all_identifiers(prefix)
-        if name.lower() not in catalogo:
+        catalog = all_identifiers(prefix)
+        if name.lower() not in catalog:
             raise ValueError(
                 "Nome de objeto nao registrado no catalogo: {}".format(_safe_echo(name))
             )
@@ -119,8 +119,8 @@ def physical(entity):
 def qualify(owner, name, prefix=None):
     """Valida e retorna OWNER.NOME qualificado para uso em SQL (AGENTS §3.1)."""
     v_owner = validate_owner(owner)
-    v_nome = validate_name(name, prefix=prefix)
-    return "{}.{}".format(v_owner, v_nome)
+    v_name = validate_name(name, prefix=prefix)
+    return "{}.{}".format(v_owner, v_name)
 
 
 def table(owner, prefix, entity):
@@ -760,8 +760,8 @@ def _build_table_registry():
         ('colunas_lob', ('content',)),
     ])
 
-    for entidade, defn in r.items():
-        if entidade not in TABLES_WITHOUT_RECORD:
+    for entity, defn in r.items():
+        if entity not in TABLES_WITHOUT_RECORD:
             _apply_record_columns(defn)
 
     return r
@@ -772,16 +772,16 @@ def _apply_record_columns(defn):
 
     created_at ja existe no fim de algumas tabelas; as demais colunas entram depois dela.
     """
-    colunas = defn['colunas']
-    novas = OrderedDict([
+    columns = defn['colunas']
+    new = OrderedDict([
         ('created_at', {'name': 'created_at', 'tipo': 'DATE', 'not_null': True, 'default': 'SYSDATE'}),
         ('created_by', {'name': 'created_by', 'tipo': 'VARCHAR2(%d CHAR)' % ACTOR_MAX, 'not_null': True, 'default': None}),
         ('updated_at', {'name': 'updated_at', 'tipo': 'DATE', 'not_null': False, 'default': None}),
         ('updated_by', {'name': 'updated_by', 'tipo': 'VARCHAR2(%d CHAR)' % ACTOR_MAX, 'not_null': False, 'default': None}),
     ])
-    for nome, coluna in novas.items():
-        if nome not in colunas:
-            colunas[nome] = coluna
+    for name, column in new.items():
+        if name not in columns:
+            columns[name] = column
     defn['cks']['upd'] = {'sufixo': 'upd', 'expr': CK_RECORD_EXPR}
 
 
@@ -799,7 +799,7 @@ class SchemaNames(OrderedDict):
     def all_identifiers(self, include_columns=True):
         """Retorna o conjunto (set) de todos os identificadores expandidos."""
         ids = set()
-        for entidade, t in self.items():
+        for entity, t in self.items():
             ids.add(t['tabela'])
             ids.add(t['sequence'])
             ids.add(t['trigger_bi'])
@@ -807,17 +807,17 @@ class SchemaNames(OrderedDict):
             if t['trigger_bu']:
                 ids.add(t['trigger_bu'])
             ids.add(t['pk'])
-            for uk_nome in t['uks']:
-                ids.add(uk_nome)
-            for fk_nome in t['fks']:
-                ids.add(fk_nome)
-            for ck_nome in t['cks']:
-                ids.add(ck_nome)
-            for ix_nome in t['indices']:
-                ids.add(ix_nome)
+            for uk_name in t['uks']:
+                ids.add(uk_name)
+            for fk_name in t['fks']:
+                ids.add(fk_name)
+            for ck_name in t['cks']:
+                ids.add(ck_name)
+            for ix_name in t['indices']:
+                ids.add(ix_name)
             if include_columns:
-                for col_nome in t['colunas']:
-                    ids.add(col_nome)
+                for col_name in t['colunas']:
+                    ids.add(col_name)
         return ids
 
     def list_identifiers(self, include_columns=True):
@@ -837,58 +837,58 @@ def names(prefix, tables=None):
       UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}
     """
     validate_prefix(prefix)
-    registro = TABLES if tables is None else tables
+    record = TABLES if tables is None else tables
 
-    resultado = SchemaNames()
-    for entidade, defn in registro.items():
-        abrev = defn['abrev']
-        tabela_nome = "{}{}".format(prefix, defn['fisico'])
-        seq_nome = "sq_{}{}".format(prefix, defn['fisico'])
-        tr_bi_nome = "tr_{}{}_bi".format(prefix, abrev)
-        tr_bu_nome = "tr_{}{}_bu".format(prefix, abrev) if defn.get('trigger_bu') else None
-        pk_nome = "pk_{}{}".format(prefix, defn['fisico'])
+    result = SchemaNames()
+    for entity, defn in record.items():
+        abbr = defn['abrev']
+        table_name = "{}{}".format(prefix, defn['fisico'])
+        seq_name = "sq_{}{}".format(prefix, defn['fisico'])
+        tr_bi_name = "tr_{}{}_bi".format(prefix, abbr)
+        tr_bu_name = "tr_{}{}_bu".format(prefix, abbr) if defn.get('trigger_bu') else None
+        pk_name = "pk_{}{}".format(prefix, defn['fisico'])
 
         uks = OrderedDict()
-        for sufixo_key, uk_def in defn.get('uks', {}).items():
+        for suffix_key, uk_def in defn.get('uks', {}).items():
             suf = uk_def['sufixo']
-            uk_nome = "uk_{}{}_{}".format(prefix, abrev, suf)
-            uks[uk_nome] = OrderedDict([
-                ('name', uk_nome),
+            uk_name = "uk_{}{}_{}".format(prefix, abbr, suf)
+            uks[uk_name] = OrderedDict([
+                ('name', uk_name),
                 ('sufixo', suf),
                 ('colunas', uk_def['colunas']),
             ])
 
         fks = OrderedDict()
-        for sufixo_key, fk_def in defn.get('fks', {}).items():
+        for suffix_key, fk_def in defn.get('fks', {}).items():
             suf = fk_def['sufixo']
-            fk_nome = "fk_{}{}_{}".format(prefix, abrev, suf)
-            ref_tabela_nome = "{}{}".format(prefix, registro[fk_def['ref_tabela']]['fisico'])
-            fks[fk_nome] = OrderedDict([
-                ('name', fk_nome),
+            fk_name = "fk_{}{}_{}".format(prefix, abbr, suf)
+            ref_table_name = "{}{}".format(prefix, record[fk_def['ref_tabela']]['fisico'])
+            fks[fk_name] = OrderedDict([
+                ('name', fk_name),
                 ('sufixo', suf),
                 ('colunas', fk_def['colunas']),
                 ('ref_entidade', fk_def['ref_tabela']),
-                ('ref_tabela', ref_tabela_nome),
+                ('ref_tabela', ref_table_name),
                 ('ref_colunas', fk_def['ref_colunas']),
                 ('on_delete', fk_def.get('on_delete')),
             ])
 
         cks = OrderedDict()
-        for sufixo_key, ck_def in defn.get('cks', {}).items():
+        for suffix_key, ck_def in defn.get('cks', {}).items():
             suf = ck_def['sufixo']
-            ck_nome = "ck_{}{}_{}".format(prefix, abrev, suf)
-            cks[ck_nome] = OrderedDict([
-                ('name', ck_nome),
+            ck_name = "ck_{}{}_{}".format(prefix, abbr, suf)
+            cks[ck_name] = OrderedDict([
+                ('name', ck_name),
                 ('sufixo', suf),
                 ('expr', ck_def['expr']),
             ])
 
-        indices = OrderedDict()
-        for sufixo_key, ix_def in defn.get('indices', {}).items():
+        indexes = OrderedDict()
+        for suffix_key, ix_def in defn.get('indices', {}).items():
             suf = ix_def['sufixo']
-            ix_nome = "ix_{}{}_{}".format(prefix, abrev, suf)
-            indices[ix_nome] = OrderedDict([
-                ('name', ix_nome),
+            ix_name = "ix_{}{}_{}".format(prefix, abbr, suf)
+            indexes[ix_name] = OrderedDict([
+                ('name', ix_name),
                 ('sufixo', suf),
                 ('colunas', ix_def['colunas']),
                 ('expr', ix_def.get('expr')),
@@ -897,32 +897,32 @@ def names(prefix, tables=None):
             ])
 
         info = OrderedDict([
-            ('entity', entidade),
-            ('abrev', abrev),
-            ('rotulo', defn.get('rotulo', entidade)),
-            ('tabela', tabela_nome),
-            ('sequence', seq_nome),
-            ('trigger', tr_bi_nome),
-            ('trigger_bi', tr_bi_nome),
-            ('trigger_bu', tr_bu_nome),
-            ('pk', pk_nome),
+            ('entity', entity),
+            ('abrev', abbr),
+            ('rotulo', defn.get('rotulo', entity)),
+            ('tabela', table_name),
+            ('sequence', seq_name),
+            ('trigger', tr_bi_name),
+            ('trigger_bi', tr_bi_name),
+            ('trigger_bu', tr_bu_name),
+            ('pk', pk_name),
             ('uks', uks),
             ('fks', fks),
             ('cks', cks),
-            ('indices', indices),
+            ('indices', indexes),
             ('colunas', defn.get('colunas', OrderedDict())),
             ('colunas_lob', defn.get('colunas_lob', ())),
             ('trigger_extra', defn.get('trigger_bu')),
         ])
-        resultado[entidade] = info
+        result[entity] = info
 
-    return resultado
+    return result
 
 
 def all_identifiers(prefix, tables=None, include_columns=True):
     """Retorna conjunto de todos os identificadores expandidos para o prefixo informado."""
-    esquema = names(prefix, tables=tables)
-    return esquema.all_identifiers(include_columns=include_columns)
+    schema = names(prefix, tables=tables)
+    return schema.all_identifiers(include_columns=include_columns)
 
 
 def validate_registry(prefix, tables=None):
@@ -935,42 +935,42 @@ def validate_registry(prefix, tables=None):
     Lanca ValueError detalhando o identificador e tipo em caso de violacao.
     """
     validate_prefix(prefix)
-    registro = TABLES if tables is None else tables
-    esquema = names(prefix, tables=registro)
+    record = TABLES if tables is None else tables
+    schema = names(prefix, tables=record)
 
-    for entidade, t in esquema.items():
+    for entity, t in schema.items():
         # Tabelas, sequences, triggers, PK
-        itens_principais = [
+        items_main = [
             ("tabela", t['tabela']),
             ("sequence", t['sequence']),
             ("trigger_bi", t['trigger_bi']),
             ("pk", t['pk']),
         ]
         if t['trigger_bu']:
-            itens_principais.append(("trigger_bu", t['trigger_bu']))
+            items_main.append(("trigger_bu", t['trigger_bu']))
 
-        for rotulo, ident in itens_principais:
-            _check_identifier(ident, rotulo, entidade)
+        for label, ident in items_main:
+            _check_identifier(ident, label, entity)
 
         # UKs
-        for uk_nome in t['uks']:
-            _check_identifier(uk_nome, "UK", entidade)
+        for uk_name in t['uks']:
+            _check_identifier(uk_name, "UK", entity)
 
         # FKs
-        for fk_nome in t['fks']:
-            _check_identifier(fk_nome, "FK", entidade)
+        for fk_name in t['fks']:
+            _check_identifier(fk_name, "FK", entity)
 
         # CKs
-        for ck_nome in t['cks']:
-            _check_identifier(ck_nome, "CK", entidade)
+        for ck_name in t['cks']:
+            _check_identifier(ck_name, "CK", entity)
 
         # Indices
-        for ix_nome in t['indices']:
-            _check_identifier(ix_nome, "Indice", entidade)
+        for ix_name in t['indices']:
+            _check_identifier(ix_name, "Indice", entity)
 
         # Colunas
-        for col_nome in t['colunas']:
-            _check_identifier(col_nome, "Coluna", entidade)
+        for col_name in t['colunas']:
+            _check_identifier(col_name, "Coluna", entity)
 
     return True
 
@@ -1021,8 +1021,8 @@ def normalize_expression(text):
     text = text.replace('"', '')
 
     # 2. Converte para maiusculas fora de literais entre aspas simples
-    partes = []
-    em_literal = False
+    parts = []
+    in_literal = False
     buffer = []
     i = 0
     n = len(text)
@@ -1031,74 +1031,74 @@ def normalize_expression(text):
         if c == "'":
             buffer.append(c)
             # Escape de aspas simples em SQL eh ''
-            if em_literal and i + 1 < n and text[i + 1] == "'":
+            if in_literal and i + 1 < n and text[i + 1] == "'":
                 buffer.append(text[i + 1])
                 i += 2
                 continue
-            em_literal = not em_literal
+            in_literal = not in_literal
             i += 1
         else:
-            if em_literal:
+            if in_literal:
                 buffer.append(c)
             else:
                 buffer.append(c.upper())
             i += 1
 
-    texto_upper = "".join(buffer)
+    text_upper = "".join(buffer)
 
     # 3 e 4. Colapsa espacos e remove espacos ao redor de pontuacoes/operadores fora de literais
     tokens = []
     i = 0
-    n = len(texto_upper)
-    em_literal = False
+    n = len(text_upper)
+    in_literal = False
     buf = []
     while i < n:
-        c = texto_upper[i]
+        c = text_upper[i]
         if c == "'":
-            if not em_literal:
-                trecho = "".join(buf)
-                trecho = re.sub(r"\s+", " ", trecho)
-                trecho = re.sub(r"\s*([(),]|<=|>=|<>|=|<|>)\s*", r"\1", trecho)
-                tokens.append(trecho)
+            if not in_literal:
+                snippet = "".join(buf)
+                snippet = re.sub(r"\s+", " ", snippet)
+                snippet = re.sub(r"\s*([(),]|<=|>=|<>|=|<|>)\s*", r"\1", snippet)
+                tokens.append(snippet)
                 buf = [c]
-                em_literal = True
+                in_literal = True
                 i += 1
             else:
                 buf.append(c)
-                if i + 1 < n and texto_upper[i + 1] == "'":
-                    buf.append(texto_upper[i + 1])
+                if i + 1 < n and text_upper[i + 1] == "'":
+                    buf.append(text_upper[i + 1])
                     i += 2
                     continue
                 tokens.append("".join(buf))
                 buf = []
-                em_literal = False
+                in_literal = False
                 i += 1
         else:
             buf.append(c)
             i += 1
 
     if buf:
-        trecho = "".join(buf)
-        if not em_literal:
-            trecho = re.sub(r"\s+", " ", trecho)
-            trecho = re.sub(r"\s*([(),]|<=|>=|<>|=|<|>)\s*", r"\1", trecho)
-        tokens.append(trecho)
+        snippet = "".join(buf)
+        if not in_literal:
+            snippet = re.sub(r"\s+", " ", snippet)
+            snippet = re.sub(r"\s*([(),]|<=|>=|<>|=|<|>)\s*", r"\1", snippet)
+        tokens.append(snippet)
 
     res = "".join(tokens).strip()
 
     # Desempacota parenteses externos se envolverem a expressao toda
     while res.startswith("(") and res.endswith(")"):
-        nivel = 0
-        fechou_antes = False
+        level = 0
+        closed_before = False
         for idx, ch in enumerate(res):
             if ch == "(":
-                nivel += 1
+                level += 1
             elif ch == ")":
-                nivel -= 1
-                if nivel == 0 and idx < len(res) - 1:
-                    fechou_antes = True
+                level -= 1
+                if level == 0 and idx < len(res) - 1:
+                    closed_before = True
                     break
-        if not fechou_antes and nivel == 0:
+        if not closed_before and level == 0:
             res = res[1:-1].strip()
         else:
             break
@@ -1111,5 +1111,5 @@ def is_system_not_null_ck(ck_name, condition):
     if not ck_name or not ck_name.upper().startswith("SYS_C"):
         return False
     # Para checar se eh NOT NULL, normalizamos apenas tirando aspas e espacos externos
-    c_limpa = condition.replace('"', '').strip()
-    return bool(re.fullmatch(r"^[A-Za-z0-9_]+\s+IS\s+NOT\s+NULL$", c_limpa, re.IGNORECASE))
+    c_clean = condition.replace('"', '').strip()
+    return bool(re.fullmatch(r"^[A-Za-z0-9_]+\s+IS\s+NOT\s+NULL$", c_clean, re.IGNORECASE))

@@ -28,10 +28,10 @@ NS = types.SimpleNamespace
 
 
 def _cfg():
-    agente = NS(heartbeat_interval_s=10, fence_timeout_s=90, node_offline_timeout_s=180, kill_grace_s=5,
+    agent = NS(heartbeat_interval_s=10, fence_timeout_s=90, node_offline_timeout_s=180, kill_grace_s=5,
                 misfire_policy="RUN_ONCE", misfire_tolerance_s=300, cron_horizon_days=1461,
                 queue_aging_min=60)
-    return NS(oracle=NS(owner="openrisow", table_prefix="tbsss_", call_timeout_ms=30000), agent=agente,
+    return NS(oracle=NS(owner="openrisow", table_prefix="tbsss_", call_timeout_ms=30000), agent=agent,
               secrets=NS(secrets_file="/x/secrets.cfg"))
 
 
@@ -113,152 +113,152 @@ class TestChecks(unittest.TestCase):
         repo = _Repo(**kw)
         conn = _ConnNow()
         v = saude_cli.Check(_cfg(), conn, _args(argv), repo=repo)
-        codigo = v.run()
+        code = v.run()
         self.assertEqual(conn.nows, 1, "um unico agora_banco()")
-        return codigo, v.output(codigo), repo
+        return code, v.output(code), repo
 
     def test_tudo_saudavel(self):
-        codigo, texto, repo = self._run_loop()
-        self.assertEqual(codigo, saude_cli.OK)
-        self.assertEqual(texto, "SSS OK - 0 problemas | healthy_agents=1 overdue_queue=0;500;5000"
+        code, text, repo = self._run_loop()
+        self.assertEqual(code, saude_cli.OK)
+        self.assertEqual(text, "SSS OK - 0 problemas | healthy_agents=1 overdue_queue=0;500;5000"
                                 " max_wait_min=0;30;120\n")
         self.assertIn(("sem_pid", 2), repo.calls)
         self.assertIn(("purge", 2), repo.calls)
 
     def test_heartbeat_por_faixa(self):
         self.assertEqual(self._run_loop(agents=[_agent("srv-a", 90)])[0], saude_cli.OK, "DELAYED ainda atende")
-        codigo, texto, _r = self._run_loop(agents=[_agent("srv-a", 91), _agent("srv-b")])
-        self.assertEqual(codigo, saude_cli.WARNING)
-        self.assertIn("WARNING: agente srv-a em risco: heartbeat ha 91 s", texto)
-        codigo, texto, _r = self._run_loop(agents=[_agent("srv-a", 181), _agent("srv-b")])
-        self.assertEqual(codigo, saude_cli.CRITICAL)
-        self.assertIn("CRITICAL: agente srv-a ATIVO sem heartbeat ha 181 s", texto)
-        codigo, texto, _r = self._run_loop(agents=[_agent("srv-a", None), _agent("srv-b")])
-        self.assertIn("agente srv-a ATIVO sem heartbeat ha -", texto)
+        code, text, _r = self._run_loop(agents=[_agent("srv-a", 91), _agent("srv-b")])
+        self.assertEqual(code, saude_cli.WARNING)
+        self.assertIn("WARNING: agente srv-a em risco: heartbeat ha 91 s", text)
+        code, text, _r = self._run_loop(agents=[_agent("srv-a", 181), _agent("srv-b")])
+        self.assertEqual(code, saude_cli.CRITICAL)
+        self.assertIn("CRITICAL: agente srv-a ATIVO sem heartbeat ha 181 s", text)
+        code, text, _r = self._run_loop(agents=[_agent("srv-a", None), _agent("srv-b")])
+        self.assertIn("agente srv-a ATIVO sem heartbeat ha -", text)
         self.assertEqual(self._run_loop(agents=[_agent("srv-a", None, status="STOPPED"), _agent("srv-b")])[0],
                          saude_cli.OK, "agente PARADO nao e problema")
 
     def test_ambiente_sem_agente_saudavel(self):
-        codigo, texto, _r = self._run_loop(environments=["PRODUCAO", "HOMOLOGACAO"],
+        code, text, _r = self._run_loop(environments=["PRODUCAO", "HOMOLOGACAO"],
                                         agents=[_agent("srv-a"), _agent("srv-b", 120, environments="HOMOLOGACAO")])
-        self.assertEqual(codigo, saude_cli.CRITICAL)
-        self.assertIn("CRITICAL: ambiente HOMOLOGACAO ativo sem nenhum agente saudavel", texto)
+        self.assertEqual(code, saude_cli.CRITICAL)
+        self.assertIn("CRITICAL: ambiente HOMOLOGACAO ativo sem nenhum agente saudavel", text)
 
     def test_fila_sem_atendente_pelo_interpretador_do_cadastro(self):
-        antigo = datetime.datetime(2026, 10, 21, 9, 50, 0, 7)
-        fila = [("PRODUCAO", "SH", 3, antigo), ("PRODUCAO", "BASH", 2, antigo)]
-        codigo, texto, _r = self._run_loop(fila=fila)
-        self.assertEqual(codigo, saude_cli.CRITICAL)
+        old = datetime.datetime(2026, 10, 21, 9, 50, 0, 7)
+        queue_value = [("PRODUCAO", "SH", 3, old), ("PRODUCAO", "BASH", 2, old)]
+        code, text, _r = self._run_loop(fila=queue_value)
+        self.assertEqual(code, saude_cli.CRITICAL)
         self.assertIn("CRITICAL: fila sem atendente: 2 tickets de PRODUCAO/BASH, o mais antigo desde 2026-10-21 09:50:00",
-                      texto)
-        self.assertNotIn("PRODUCAO/SH", texto, "SH e atendido pelo srv-a")
+                      text)
+        self.assertNotIn("PRODUCAO/SH", text, "SH e atendido pelo srv-a")
 
     def test_fila_vencida_por_quantidade_e_espera(self):
-        um_min = NOW - datetime.timedelta(minutes=1)
-        self.assertEqual(self._run_loop(vencida=(499, um_min))[0], saude_cli.OK)
-        self.assertEqual(self._run_loop(vencida=(500, um_min))[0], saude_cli.WARNING)
-        codigo, texto, _r = self._run_loop(vencida=(5000, um_min))
-        self.assertEqual(codigo, saude_cli.CRITICAL)
-        self.assertIn("overdue_queue=5000;500;5000", texto)
+        one_min = NOW - datetime.timedelta(minutes=1)
+        self.assertEqual(self._run_loop(vencida=(499, one_min))[0], saude_cli.OK)
+        self.assertEqual(self._run_loop(vencida=(500, one_min))[0], saude_cli.WARNING)
+        code, text, _r = self._run_loop(vencida=(5000, one_min))
+        self.assertEqual(code, saude_cli.CRITICAL)
+        self.assertIn("overdue_queue=5000;500;5000", text)
         self.assertEqual(self._run_loop(vencida=(1, NOW - datetime.timedelta(minutes=30)))[0], saude_cli.WARNING)
         self.assertEqual(self._run_loop(vencida=(1, NOW - datetime.timedelta(minutes=120)))[0], saude_cli.CRITICAL)
-        self.assertEqual(self._run_loop(["--queue-warn", "10"], vencida=(10, um_min))[0], saude_cli.WARNING)
+        self.assertEqual(self._run_loop(["--queue-warn", "10"], vencida=(10, one_min))[0], saude_cli.WARNING)
 
     def test_rodando_sem_pid(self):
-        sem_pid = [{"id": 77, "script_id": 3, "environment": "PRODUCAO", "agent_id": "srv-a",
+        without_pid = [{"id": 77, "script_id": 3, "environment": "PRODUCAO", "agent_id": "srv-a",
                     "started_at": datetime.datetime(2026, 10, 21, 9, 55)}]
-        codigo, texto, repo = self._run_loop(["--no-pid-min", "5"], sem_pid=sem_pid)
-        self.assertEqual(codigo, saude_cli.WARNING)
-        self.assertIn("WARNING: ticket 77 RUNNING sem PID no agente srv-a desde 2026-10-21 09:55:00", texto)
+        code, text, repo = self._run_loop(["--no-pid-min", "5"], sem_pid=without_pid)
+        self.assertEqual(code, saude_cli.WARNING)
+        self.assertIn("WARNING: ticket 77 RUNNING sem PID no agente srv-a desde 2026-10-21 09:55:00", text)
         self.assertIn(("sem_pid", 5), repo.calls)
 
     def test_configuracao_divergente(self):
-        outro = CRITICAL.replace("kill=5", "kill=10")
-        codigo, texto, _r = self._run_loop(agents=[_agent("srv-a"), _agent("srv-b", cfg=outro),
-                                                 _agent("srv-c", status="STOPPED", cfg=outro)])
-        self.assertEqual(codigo, saude_cli.WARNING)
-        self.assertIn("agente srv-b com configuracao divergente", texto)
-        self.assertNotIn("srv-c", texto, "so agentes ativos")
+        other = CRITICAL.replace("kill=5", "kill=10")
+        code, text, _r = self._run_loop(agents=[_agent("srv-a"), _agent("srv-b", cfg=other),
+                                                 _agent("srv-c", status="STOPPED", cfg=other)])
+        self.assertEqual(code, saude_cli.WARNING)
+        self.assertIn("agente srv-b com configuracao divergente", text)
+        self.assertNotIn("srv-c", text, "so agentes ativos")
 
     def test_purge_ausente(self):
-        codigo, texto, repo = self._run_loop(["--purge-days", "3"], purge=None)
-        self.assertEqual(codigo, saude_cli.WARNING)
-        self.assertIn("nenhum PURGE auditado nos ultimos 3 dias", texto)
+        code, text, repo = self._run_loop(["--purge-days", "3"], purge=None)
+        self.assertEqual(code, saude_cli.WARNING)
+        self.assertIn("nenhum PURGE auditado nos ultimos 3 dias", text)
         self.assertIn(("purge", 3), repo.calls)
 
     def test_versao_do_esquema(self):
-        codigo, texto, _r = self._run_loop(version=sql_ident.SCHEMA_VERSION - 1)
-        self.assertEqual(codigo, saude_cli.CRITICAL)
-        self.assertIn("versao do esquema %d" % (sql_ident.SCHEMA_VERSION - 1), texto)
+        code, text, _r = self._run_loop(version=sql_ident.SCHEMA_VERSION - 1)
+        self.assertEqual(code, saude_cli.CRITICAL)
+        self.assertIn("versao do esquema %d" % (sql_ident.SCHEMA_VERSION - 1), text)
 
     def test_pior_nivel_vence_e_criticos_primeiro(self):
-        codigo, texto, _r = self._run_loop(purge=None, version=None)
-        self.assertEqual(codigo, saude_cli.CRITICAL)
-        linhas = texto.splitlines()
-        self.assertTrue(linhas[0].startswith("SSS CRITICAL - 2 problemas | "))
-        self.assertTrue(linhas[1].startswith("CRITICAL: versao do esquema None"))
-        self.assertTrue(linhas[2].startswith("WARNING: nenhum PURGE"))
+        code, text, _r = self._run_loop(purge=None, version=None)
+        self.assertEqual(code, saude_cli.CRITICAL)
+        rows = text.splitlines()
+        self.assertTrue(rows[0].startswith("SSS CRITICAL - 2 problemas | "))
+        self.assertTrue(rows[1].startswith("CRITICAL: versao do esquema None"))
+        self.assertTrue(rows[2].startswith("WARNING: nenhum PURGE"))
 
 
 class TestMain(unittest.TestCase):
 
     def _main(self, argv=(), connect=None, cfg_error=False, secrets_error=False):
-        saida = io.StringIO()
-        obter = mock.Mock(side_effect=sss_config.ConfigError(reason="faltou dsn") if cfg_error else None,
+        output = io.StringIO()
+        get = mock.Mock(side_effect=sss_config.ConfigError(reason="faltou dsn") if cfg_error else None,
                           return_value=_cfg())
-        carregar = mock.Mock(side_effect=sss_config.ConfigError(reason="sem [monitor]") if secrets_error else None,
+        load = mock.Mock(side_effect=sss_config.ConfigError(reason="sem [monitor]") if secrets_error else None,
                              return_value=object())
-        with mock.patch.object(saude_cli.sss_config, "get_config", obter), \
-                mock.patch.object(saude_cli.sss_config, "load_secrets", carregar), \
+        with mock.patch.object(saude_cli.sss_config, "get_config", get), \
+                mock.patch.object(saude_cli.sss_config, "load_secrets", load), \
                 mock.patch.object(saude_cli.saude_sql.RepoHealth, "from_config", return_value=_Repo()):
-            codigo = saude_cli.main(list(argv), connect=connect, output=saida)
-        self.load = carregar
-        return codigo, saida.getvalue()
+            code = saude_cli.main(list(argv), connect=connect, output=output)
+        self.load = load
+        return code, output.getvalue()
 
     def test_ok_com_papel_monitor(self):
         conn = _ConnNow()
-        papeis = []
+        roles = []
 
         def conectar(cfg, secrets):
-            papeis.append(secrets)
+            roles.append(secrets)
             return conn
-        codigo, texto = self._main(connect=conectar)
-        self.assertEqual(codigo, 0)
-        self.assertTrue(texto.startswith("SSS OK - 0 problemas"))
+        code, text = self._main(connect=conectar)
+        self.assertEqual(code, 0)
+        self.assertTrue(text.startswith("SSS OK - 0 problemas"))
         self.assertEqual(self.load.call_args[1]["role"], "monitor")
         self.assertTrue(conn.closed)
 
     def test_unknown(self):
         self.assertEqual(self._main(cfg_error=True), (3, "SSS UNKNOWN - configuracao invalida: faltou dsn\n"))
-        codigo, texto = self._main(secrets_error=True)
-        self.assertEqual(codigo, 3)
-        self.assertIn("sem [monitor]", texto)
-        codigo, texto = self._main(connect=mock.Mock(side_effect=RuntimeError("ORA-12541: TNS:no listener")))
-        self.assertEqual(codigo, 3)
-        self.assertIn("falha ao conectar no Oracle", texto)
+        code, text = self._main(secrets_error=True)
+        self.assertEqual(code, 3)
+        self.assertIn("sem [monitor]", text)
+        code, text = self._main(connect=mock.Mock(side_effect=RuntimeError("ORA-12541: TNS:no listener")))
+        self.assertEqual(code, 3)
+        self.assertIn("falha ao conectar no Oracle", text)
         conn = _ConnNow()
         with mock.patch.object(_Repo, "agents", side_effect=RuntimeError("ORA-03113: end-of-file")):
-            codigo, texto = self._main(connect=lambda c, s: conn)
-        self.assertEqual(codigo, 3)
-        self.assertIn("falha de banco", texto)
+            code, text = self._main(connect=lambda c, s: conn)
+        self.assertEqual(code, 3)
+        self.assertIn("falha de banco", text)
         self.assertTrue(conn.closed)
 
     def test_segredos_do_monitor_sem_os_outros_papeis(self):
         # Integracao com o sss_config real: o arquivo do servidor do agente, com [oracle], [purge] e [environment:*].
-        pasta = tempfile.mkdtemp(prefix="sss_test_saude_")
-        self.addCleanup(shutil.rmtree, pasta, True)
-        caminho = os.path.join(pasta, "secrets.cfg")
-        with open(caminho, "w") as f:
+        dir_value = tempfile.mkdtemp(prefix="sss_test_saude_")
+        self.addCleanup(shutil.rmtree, dir_value, True)
+        path = os.path.join(dir_value, "secrets.cfg")
+        with open(path, "w") as f:
             f.write("[oracle]\npassword = senha-agt-1\n[purge]\npassword = senha-prg-1\n"
                     "[environment:PRODUCAO]\nuser = app\npassword = senha-amb-1\n"
                     "[monitor]\nuser = sss_monitor\npassword = senha-mon-1\n")
-        os.chmod(caminho, 0o600)
-        registrados = []
-        with mock.patch("masking.register_secret", side_effect=registrados.append):
-            seg = sss_config.load_secrets(caminho, sss_env="PROD", role="monitor")
+        os.chmod(path, 0o600)
+        registered = []
+        with mock.patch("masking.register_secret", side_effect=registered.append):
+            seg = sss_config.load_secrets(path, sss_env="PROD", role="monitor")
         self.assertEqual((seg.monitor_user, seg.oracle_password, seg.purge_password, seg.environments),
                          ("sss_monitor", None, None, {}))
-        self.assertEqual(registrados, ["senha-mon-1"])
+        self.assertEqual(registered, ["senha-mon-1"])
 
 
 class TestSqlRepoHealth(unittest.TestCase):
@@ -267,19 +267,19 @@ class TestSqlRepoHealth(unittest.TestCase):
         self.repo = saude_sql.RepoHealth("openrisow", "tbsss_")
 
     def test_indices_sem_lob_e_interpretador_do_cadastro(self):
-        fila = self.repo.sql("queue")
-        self.assertIn("JOIN openrisow.tbsss_scripts s ON s.id = g.script_id", fila)
-        self.assertIn("status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :now", fila)
+        queue_value = self.repo.sql("queue")
+        self.assertIn("JOIN openrisow.tbsss_scripts s ON s.id = g.script_id", queue_value)
+        self.assertIn("status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :now", queue_value)
         self.assertIn("status = 'PENDING' AND GREATEST(scheduled_at, created_at) <= :now",
                       self.repo.sql("overdue_queue"))
         self.assertIn("(CASE WHEN status = 'RUNNING' THEN agent_id END) >= CHR(1)", self.repo.sql("running_no_pid"))
         self.assertIn("actor = 'SYSTEM:purge' AND action = 'PURGE'", self.repo.sql("purge"))
-        for nome in ("agents", "environments", "queue", "overdue_queue", "running_no_pid", "purge", "version"):
-            sql = self.repo.sql(nome)
-            self.assertTrue(sql.startswith("SELECT "), nome)
+        for name in ("agents", "environments", "queue", "overdue_queue", "running_no_pid", "purge", "version"):
+            sql = self.repo.sql(name)
+            self.assertTrue(sql.startswith("SELECT "), name)
             self.assertNotIn("submitted_params", sql)
             self.assertNotIn("log_output", sql)
-            self.assertNotIn("*", sql.replace("COUNT(*)", ""), nome)
+            self.assertNotIn("*", sql.replace("COUNT(*)", ""), name)
 
     def test_tela_de_agentes_usa_o_mesmo_sql(self):
         import repo_oracle.agents as agentes_oracle
@@ -288,9 +288,9 @@ class TestSqlRepoHealth(unittest.TestCase):
 
     def test_pares_atendidos_ignoram_em_risco_e_parados(self):
         lim = saude_cli.agents_service.Thresholds(10, 90, 180)
-        agentes = [_agent("a", 5, interpreters="SH"), _agent("b", 91, interpreters="BASH"),
+        agents = [_agent("a", 5, interpreters="SH"), _agent("b", 91, interpreters="BASH"),
                    _agent("c", 5, status="STOPPED", interpreters="PYTHON3")]
-        self.assertEqual(saude_sql.served_pairs(agentes, NOW, lim), {("PRODUCAO", "SH")})
+        self.assertEqual(saude_sql.served_pairs(agents, NOW, lim), {("PRODUCAO", "SH")})
 
 
 @unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")
@@ -302,8 +302,8 @@ class TestHealthOracle(unittest.TestCase):
         from _oracle_test_support import prepare_disposable_schema
         import db_conn
         cls.cfg = prepare_disposable_schema("agent")
-        segredos = sss_config.load_secrets(cls.cfg.secrets.secrets_file, cfg=cls.cfg, role="agent")
-        cls.conn = db_conn.connect(cls.cfg, segredos, role="agent")
+        secrets_value = sss_config.load_secrets(cls.cfg.secrets.secrets_file, cfg=cls.cfg, role="agent")
+        cls.conn = db_conn.connect(cls.cfg, secrets_value, role="agent")
         cls.repo = saude_sql.RepoHealth.from_config(cls.cfg)
 
     @classmethod
@@ -313,40 +313,40 @@ class TestHealthOracle(unittest.TestCase):
 
     def test_consultas_e_verificacao_completa(self):
         import db_conn
-        agora = db_conn.db_now(self.conn)
+        now = db_conn.db_now(self.conn)
         self.assertEqual(self.repo.schema_version(self.conn), sql_ident.SCHEMA_VERSION)
         self.assertIsInstance(self.repo.agents(self.conn), list)
         self.assertIsInstance(self.repo.active_environments(self.conn), list)
-        qtd, _antigo = self.repo.overdue_queue(self.conn, agora)
-        self.assertEqual(qtd, sum(int(r[2]) for r in self.repo.queue_by_pair(self.conn, agora)))
-        self.repo.running_without_pid(self.conn, agora, 2)
-        self.repo.last_purge(self.conn, agora, 2)
+        count, _old = self.repo.overdue_queue(self.conn, now)
+        self.assertEqual(count, sum(int(r[2]) for r in self.repo.queue_by_pair(self.conn, now)))
+        self.repo.running_without_pid(self.conn, now, 2)
+        self.repo.last_purge(self.conn, now, 2)
         v = saude_cli.Check(self.cfg, self.conn, _args(), repo=self.repo)
-        codigo = v.run()
-        self.assertIn(codigo, (0, 1, 2))
-        print("\n[F9.1b] saude no GFPR: %s" % v.output(codigo).splitlines()[0])
+        code = v.run()
+        self.assertIn(code, (0, 1, 2))
+        print("\n[F9.1b] saude no GFPR: %s" % v.output(code).splitlines()[0])
 
     def test_explain_sem_varredura_de_tickets_e_auditoria(self):
         import db_conn
-        agora = db_conn.db_now(self.conn)
-        binds = {"queue": {"now": agora}, "overdue_queue": {"now": agora}, "running_no_pid": {"cutoff": agora},
-                 "purge": {"cutoff": agora}}
-        for nome, valores in binds.items():
+        now = db_conn.db_now(self.conn)
+        binds = {"queue": {"now": now}, "overdue_queue": {"now": now}, "running_no_pid": {"cutoff": now},
+                 "purge": {"cutoff": now}}
+        for name, values in binds.items():
             cur = self.conn.cursor()
-            stmt = "SSS_F91B_%s" % nome.upper()
+            stmt = "SSS_F91B_%s" % name.upper()
             cur.execute("DELETE FROM plan_table WHERE statement_id = :s", {"s": stmt})
-            db_conn.set_input_types(cur, **dict((k, db_conn.TIPO_DATE) for k in valores))
-            cur.execute("EXPLAIN PLAN SET STATEMENT_ID = '%s' FOR %s" % (stmt, self.repo.sql(nome)), valores)
+            db_conn.set_input_types(cur, **dict((k, db_conn.TIPO_DATE) for k in values))
+            cur.execute("EXPLAIN PLAN SET STATEMENT_ID = '%s' FOR %s" % (stmt, self.repo.sql(name)), values)
             cur.execute("SELECT operation, options, object_name FROM plan_table WHERE statement_id = :s",
                         {"s": stmt})
-            plano = cur.fetchall()
+            plan = cur.fetchall()
             cur.execute("DELETE FROM plan_table WHERE statement_id = :s", {"s": stmt})
             self.conn.commit()
-            varreduras = [o for op, opt, o in plano if op == "TABLE ACCESS" and opt == "FULL"
+            scans = [o for op, opt, o in plan if op == "TABLE ACCESS" and opt == "FULL"
                           and (o or "").upper() in ("TBSSS_TICKETS", "TBSSS_AUDIT")]
-            self.assertEqual(varreduras, [], "%s: %s" % (nome, plano))
-            print("\n[F9.1b] EXPLAIN %s: %s" % (nome, ", ".join("%s %s %s" % (op, opt or "", o or "")
-                                                               for op, opt, o in plano)))
+            self.assertEqual(scans, [], "%s: %s" % (name, plan))
+            print("\n[F9.1b] EXPLAIN %s: %s" % (name, ", ".join("%s %s %s" % (op, opt or "", o or "")
+                                                               for op, opt, o in plan)))
 
 
 if __name__ == "__main__":

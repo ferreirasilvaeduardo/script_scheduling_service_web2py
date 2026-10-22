@@ -60,8 +60,8 @@ class TestEnvBuilder(unittest.TestCase):
             env = self.build()
         self.assertNotEqual(env["HOME"], DAEMON["HOME"])
         self.assertNotEqual(env["PATH"], DAEMON["PATH"])
-        for nome in ("SEGREDO_DAEMON", "LD_PRELOAD", "PYTHONPATH", "TNS_ADMIN"):
-            self.assertNotIn(nome, env)
+        for name in ("SEGREDO_DAEMON", "LD_PRELOAD", "PYTHONPATH", "TNS_ADMIN"):
+            self.assertNotIn(name, env)
 
     def test_nunca_le_os_environ(self):
         with mock.patch.dict(os.environ, {"ORACLE_HOME": "/do/os/environ", "TZ": "UTC"}, clear=False), \
@@ -79,11 +79,11 @@ class TestEnvBuilder(unittest.TestCase):
         self.assertNotEqual(env["HOME"], env["SSS_SCRIPT_DIR"], "cwd/HOME nao e a pasta do script")
 
     def test_variaveis_bloqueadas_e_chaves_fixas_geram_erro(self):
-        for nome in ("LD_PRELOAD", "LD_AUDIT", "BASH_FUNC_x%%", "MALLOC_ARENA_MAX", "PYTHONPATH", "BASH_ENV",
+        for name in ("LD_PRELOAD", "LD_AUDIT", "BASH_FUNC_x%%", "MALLOC_ARENA_MAX", "PYTHONPATH", "BASH_ENV",
                      "IFS", "PATH", "HOME", "TZ", "LC_CTYPE", "SSS_TICKET_ID", "PYTHONIOENCODING",
                      "PADRAO_VALOR_RUN_CONEXAO_BD", "GLIBC_TUNABLES"):
-            with self.assertRaises(ValueError, msg=nome):
-                self.build(cfg=_cfg(passthrough=(nome,)))
+            with self.assertRaises(ValueError, msg=name):
+                self.build(cfg=_cfg(passthrough=(name,)))
         with self.assertLogs("sss_scheduler", "WARNING"):
             env = self.build(cfg=_cfg(passthrough=("LD_LIBRARY_PATH",)),
                                  environ=dict(DAEMON, LD_LIBRARY_PATH="/opt/oracle/lib"))
@@ -91,21 +91,21 @@ class TestEnvBuilder(unittest.TestCase):
 
     def test_conexao_com_dsn_e_credencial_e_mascarador(self):
         cred = EnvironmentSecret("fat_app", "S3nh@Forte")
-        with mock.patch.object(masking, "MASKER", masking.Masker()) as masc:
+        with mock.patch.object(masking, "MASKER", masking.Masker()) as masker:
             env = self.build(secrets=_secrets({"PRODUCAO": cred}))
             self.assertEqual(env["PADRAO_VALOR_RUN_CONEXAO_BD"], "fat_app/S3nh@Forte@dbprod:1521/FAT")
-            self.assertEqual(masc.mask("conexao fat_app/S3nh@Forte@dbprod:1521/FAT ok"), "conexao **** ok")
-            self.assertNotIn("S3nh@Forte", masc.mask("senha S3nh@Forte"))
+            self.assertEqual(masker.mask("conexao fat_app/S3nh@Forte@dbprod:1521/FAT ok"), "conexao **** ok")
+            self.assertNotIn("S3nh@Forte", masker.mask("senha S3nh@Forte"))
 
     def test_conexao_omitida_sem_secao_ou_sem_dsn(self):
         cred = EnvironmentSecret("fat_app", "S3nh@Forte")
-        casos = ((_secrets(), AMB, "credencial"), (_secrets({"PRODUCAO": cred}), dict(AMB, connection=None), "DSN"),
+        cases = ((_secrets(), AMB, "credencial"), (_secrets({"PRODUCAO": cred}), dict(AMB, connection=None), "DSN"),
                  (_secrets({"PRODUCAO": cred}), dict(AMB, connection="  "), "DSN"))
-        for segredos, ambiente, motivo in casos:
+        for secrets_value, environment, reason in cases:
             with self.assertLogs("sss_scheduler", "WARNING") as logs:
-                env = self.build(secrets=segredos, environment=ambiente)
+                env = self.build(secrets=secrets_value, environment=environment)
             self.assertNotIn("PADRAO_VALOR_RUN_CONEXAO_BD", env)
-            self.assertIn(motivo, logs.output[0])
+            self.assertIn(reason, logs.output[0])
             self.assertNotIn("S3nh@Forte", logs.output[0], "WARN sem valores")
 
     def test_cr010_execucao_agendada_completa(self):
@@ -114,10 +114,10 @@ class TestEnvBuilder(unittest.TestCase):
                   "started_at": datetime.datetime(2026, 10, 20, 3, 0, 5),
                   "scheduled_at": datetime.datetime(2026, 10, 20, 3, 0)}
         snap = {"script_id": 12, "script_name": "Carga Faturas", "interpreter": "PYTHON3"}
-        amb = dict(AMB, description="Produção faturamento")
+        env_name = dict(AMB, description="Produção faturamento")
         log = "/srv/sss/logs/producao/carga_faturas/2026/10/20/03/00/ticket_41.log.parcial"
         with mock.patch.object(masking, "MASKER", masking.Masker()):
-            env = env_builder.build(_cfg(), _secrets({"PRODUCAO": cred}), ticket, amb, SCRIPT, WORK,
+            env = env_builder.build(_cfg(), _secrets({"PRODUCAO": cred}), ticket, env_name, SCRIPT, WORK,
                                         dict(DAEMON), "LINUX", snapshot=snap,
                                         schedule={"name": "Carga noturna", "recurrence_type": "MONTHLY"},
                                         log_path=log, timeout_sec=3600, hostname="srv-linux-01", version="1.0")
@@ -150,18 +150,18 @@ class TestEnvBuilder(unittest.TestCase):
                                         schedule={"name": "ignorado", "recurrence_type": "DAILY"},
                                         hostname="", version=None)
         self.assertEqual(env["SSS_EXECUTION_TYPE"], "MANUAL")
-        for ausente in ("SSS_RECURRENCE", "SSS_SCHEDULE_ID", "SSS_SCHEDULE_NAME", "SSS_PARENT_TICKET_ID",
+        for missing in ("SSS_RECURRENCE", "SSS_SCHEDULE_ID", "SSS_SCHEDULE_NAME", "SSS_PARENT_TICKET_ID",
                         "SSS_PRIORITY", "SSS_ENVIRONMENT_DESCRIPTION", "SSS_ENVIRONMENT_DSN", "SSS_ENVIRONMENT_USER",
                         "SSS_ENVIRONMENT_CONNECTION", "SSS_SCRIPT_NAME", "SSS_AGENT_HOST", "SSS_VERSION",
                         "SSS_LOG_DIR", "SSS_LOG_FILE", "SSS_STARTED_AT", "PADRAO_VALOR_RUN_CONEXAO_BD"):
-            self.assertNotIn(ausente, env, ausente)
+            self.assertNotIn(missing, env, missing)
         self.assertEqual(env["SSS_PLATFORM"], "UNIX")
 
     def test_cr010_conexao_mascarada_nos_logs(self):
         cred = EnvironmentSecret("fat_app", "S3nh@Forte")
-        with mock.patch.object(masking, "MASKER", masking.Masker()) as masc:
+        with mock.patch.object(masking, "MASKER", masking.Masker()) as masker:
             env = self.build(secrets=_secrets({"PRODUCAO": cred}))
-            self.assertEqual(masc.mask("SSS_ENVIRONMENT_CONNECTION=%s" % env["SSS_ENVIRONMENT_CONNECTION"]),
+            self.assertEqual(masker.mask("SSS_ENVIRONMENT_CONNECTION=%s" % env["SSS_ENVIRONMENT_CONNECTION"]),
                              "SSS_ENVIRONMENT_CONNECTION=****")
         self.assertEqual(env["SSS_ENVIRONMENT_USER"], "fat_app")
 
@@ -169,30 +169,30 @@ class TestEnvBuilder(unittest.TestCase):
         with self.assertLogs("sss_scheduler", "WARNING"):
             env = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
                                         snapshot={"path_file": "/opt/automacoes/atual/carga.py"})
-            sem_link = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
+            without_link = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
                                              snapshot={"path_file": SCRIPT})
         self.assertEqual((env["SSS_SCRIPT_FILE"], env["SSS_SCRIPT_LINK"]), (SCRIPT, "/opt/automacoes/atual/carga.py"))
-        self.assertNotIn("SSS_SCRIPT_LINK", sem_link)
+        self.assertNotIn("SSS_SCRIPT_LINK", without_link)
 
     def test_cr012_pasta_de_saida_so_quando_informada(self):
         with self.assertLogs("sss_scheduler", "WARNING"):
             env = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
                                         output_dir="/srv/sss/output/producao/carga/2026/10/20/03/00/ticket_41")
-            sem = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
+            without = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
         self.assertEqual(env["SSS_OUTPUT_DIR"], "/srv/sss/output/producao/carga/2026/10/20/03/00/ticket_41")
-        self.assertNotIn("SSS_OUTPUT_DIR", sem)
+        self.assertNotIn("SSS_OUTPUT_DIR", without)
 
     def test_cr014_pasta_de_entrada_so_quando_informada(self):
         with self.assertLogs("sss_scheduler", "WARNING"):
             env = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
                                         input_dir="/srv/sss/input/producao/carga")
-            sem = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
+            without = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
         self.assertEqual(env["SSS_INPUT_DIR"], "/srv/sss/input/producao/carga")
-        self.assertNotIn("SSS_INPUT_DIR", sem)
+        self.assertNotIn("SSS_INPUT_DIR", without)
 
     def test_cr015a_so_nomes_em_ingles(self):
         """Troca direta (CR-015a): nenhum nome antigo chega ao script, nem com todos os dados presentes."""
-        antigos = ("SSS_TICKET_PAI_ID", "SSS_AMBIENTE", "SSS_AMBIENTE_DESCRICAO", "SSS_AMBIENTE_DSN",
+        old = ("SSS_TICKET_PAI_ID", "SSS_AMBIENTE", "SSS_AMBIENTE_DESCRICAO", "SSS_AMBIENTE_DSN",
                    "SSS_AMBIENTE_USUARIO", "SSS_AMBIENTE_CONEXAO", "SSS_AGENTE_ID", "SSS_AGENTE_HOST",
                    "SSS_PLATAFORMA", "SSS_VERSAO", "SSS_SCRIPT_NOME", "SSS_SCRIPT_ARQUIVO", "SSS_INTERPRETADOR",
                    "SSS_TIPO_EXECUCAO", "SSS_PRIORIDADE", "SSS_DATA_EXECUCAO", "SSS_DATA_AGENDADA", "SSS_TIMEOUT_SEG",
@@ -209,7 +209,7 @@ class TestEnvBuilder(unittest.TestCase):
                                         schedule={"name": "N", "recurrence_type": "CRON"},
                                         log_path="/srv/sss/logs/x/ticket_41.log.parcial", timeout_sec=60,
                                         hostname="h", version="1.0", output_dir="/srv/s", input_dir="/srv/e")
-        self.assertEqual([k for k in antigos if k in env], [])
+        self.assertEqual([k for k in old if k in env], [])
         self.assertTrue(set(("SSS_ENVIRONMENT", "SSS_OUTPUT_DIR", "SSS_INPUT_DIR", "SSS_SCHEDULE_NAME")) <= set(env))
 
     def test_entradas_invalidas(self):
@@ -220,9 +220,9 @@ class TestEnvBuilder(unittest.TestCase):
 
     def test_modulo_nao_le_os_environ(self):
         with open(env_builder.__file__, encoding="utf-8") as f:
-            fonte = f.read()
-        self.assertNotIn("os.environ", fonte)
-        self.assertNotIn("import os_platform", fonte)
+            source = f.read()
+        self.assertNotIn("os.environ", source)
+        self.assertNotIn("import os_platform", source)
 
 
 if __name__ == "__main__":

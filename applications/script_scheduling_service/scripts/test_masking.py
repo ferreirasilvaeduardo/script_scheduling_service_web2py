@@ -12,9 +12,9 @@ import masking
 
 def _stream(masker, chunks):
     f = masking.StreamMasker(masker)
-    saida = [f.feed(b) for b in chunks]
-    saida.append(f.finalize())
-    return saida
+    output = [f.feed(b) for b in chunks]
+    output.append(f.finalize())
+    return output
 
 
 class TestMasker(unittest.TestCase):
@@ -59,10 +59,10 @@ class TestPerformance(unittest.TestCase):
     def test_linha_longa_sem_barra_em_tempo_linear(self):
         # Regressao F8.2: _RE_CONNECT tentava a partir de cada posicao de uma sequencia longa (quadratico).
         m = masking.Masker()
-        for texto in ("x" * 1048576, "a/" + "b" * 1048576, "ab/" * 300000):
-            inicio = time.monotonic()
-            m.mask(texto)
-            self.assertLess(time.monotonic() - inicio, 1.0)
+        for text in ("x" * 1048576, "a/" + "b" * 1048576, "ab/" * 300000):
+            start = time.monotonic()
+            m.mask(text)
+            self.assertLess(time.monotonic() - start, 1.0)
         self.assertEqual(m.mask("u=app/Pw12@db:1521/X fat.app/s3nh@//h:1/s x/y"),
                          "u=app/****@db:1521/X fat.app/****@//h:1/s x/y")
 
@@ -77,28 +77,28 @@ class TestStreamMasker(unittest.TestCase):
         self.assertEqual("".join(_stream(self.m, ["antes SEGREDO-123 depois"])), "antes **** depois")
 
     def test_cortado_entre_2_blocos(self):
-        saida = _stream(self.m, ["log: SEGRE", "DO-123 ok"])
-        self.assertEqual("".join(saida), "log: **** ok")
-        for parte in saida:
-            self.assertNotIn("SEGRE", parte)
+        output = _stream(self.m, ["log: SEGRE", "DO-123 ok"])
+        self.assertEqual("".join(output), "log: **** ok")
+        for part in output:
+            self.assertNotIn("SEGRE", part)
 
     def test_cortado_entre_3_blocos(self):
-        saida = _stream(self.m, ["x SEG", "REDO-", "123 y"])
-        self.assertEqual("".join(saida), "x **** y")
-        for parte in saida:
-            self.assertNotIn("SEG", parte)
+        output = _stream(self.m, ["x SEG", "REDO-", "123 y"])
+        self.assertEqual("".join(output), "x **** y")
+        for part in output:
+            self.assertNotIn("SEG", part)
 
     def test_um_caractere_por_bloco(self):
-        texto = "a SEGREDO-123 b SEGREDO-123"
-        saida = _stream(self.m, list(texto))
-        self.assertEqual("".join(saida), "a **** b ****")
+        text = "a SEGREDO-123 b SEGREDO-123"
+        output = _stream(self.m, list(text))
+        self.assertEqual("".join(output), "a **** b ****")
 
     def test_varios_segredos_prefixo_comum(self):
         m = masking.Masker()
         for s in ("token", "token-longo-999"):
             m.register(s)
-        saida = _stream(m, ["inicio token-lo", "ngo-999 meio tok", "en fim"])
-        self.assertEqual("".join(saida), "inicio **** meio **** fim")
+        output = _stream(m, ["inicio token-lo", "ngo-999 meio tok", "en fim"])
+        self.assertEqual("".join(output), "inicio **** meio **** fim")
 
     def test_cauda_retida_e_finalizar(self):
         f = masking.StreamMasker(self.m)
@@ -109,10 +109,10 @@ class TestStreamMasker(unittest.TestCase):
 
     def test_token_longo_retido_ate_o_limite(self):
         f = masking.StreamMasker(self.m)
-        bloco = "x" * (masking.MAX_HELD_TOKEN * 3)
-        emitido = f.feed(bloco)
-        self.assertLessEqual(len(bloco) - len(emitido), masking.MAX_HELD_TOKEN + self.m.max_len)
-        self.assertEqual(emitido + f.finalize(), bloco)
+        chunk = "x" * (masking.MAX_HELD_TOKEN * 3)
+        emitted = f.feed(chunk)
+        self.assertLessEqual(len(chunk) - len(emitted), masking.MAX_HELD_TOKEN + self.m.max_len)
+        self.assertEqual(emitted + f.finalize(), chunk)
 
     def test_sem_segredos_emite_ate_o_ultimo_token(self):
         m = masking.Masker()
@@ -122,17 +122,17 @@ class TestStreamMasker(unittest.TestCase):
         self.assertEqual(f.finalize(), "parcial")
 
     def test_connect_string_no_fluxo(self):
-        saida = _stream(self.m, ["conn app/Senha1@HML ok\n"])
-        self.assertEqual("".join(saida), "conn app/****@HML ok\n")
+        output = _stream(self.m, ["conn app/Senha1@HML ok\n"])
+        self.assertEqual("".join(output), "conn app/****@HML ok\n")
 
     def test_connect_string_cortada_entre_blocos(self):
-        for blocos in (["conn app", "/Senha1@HML ok\n"], ["conn app/Sen", "ha1@HML ok\n"],
+        for chunks in (["conn app", "/Senha1@HML ok\n"], ["conn app/Sen", "ha1@HML ok\n"],
                        ["conn app/Senha1@", "HML ok\n"], ["conn app/", "Senha1", "@HML ok\n"]):
             for m in (self.m, masking.Masker()):
-                saida = _stream(m, blocos)
-                self.assertEqual("".join(saida), "conn app/****@HML ok\n", blocos)
-                for parte in saida:
-                    self.assertNotIn("Sen", parte, blocos)
+                output = _stream(m, chunks)
+                self.assertEqual("".join(output), "conn app/****@HML ok\n", chunks)
+                for part in output:
+                    self.assertNotIn("Sen", part, chunks)
 
 
 class TestLoggingFilter(unittest.TestCase):
@@ -173,9 +173,9 @@ class TestLoggingFilter(unittest.TestCase):
             raise RuntimeError("chave-secreta-1")
         except RuntimeError:
             self.log.exception("falha")
-        saida = self.buf.getvalue()
-        self.assertIn("RuntimeError: ****", saida)
-        self.assertNotIn("chave-secreta-1", saida)
+        output = self.buf.getvalue()
+        self.assertIn("RuntimeError: ****", output)
+        self.assertNotIn("chave-secreta-1", output)
 
     def test_instalar_idempotente(self):
         lg = logging.getLogger("test_masking_instalar")

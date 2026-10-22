@@ -38,8 +38,8 @@ _CfgSnap = collections.namedtuple("_CfgSnap", "interpreters")
 
 def _wait(condition, deadline=10.0):
     """So do harness de teste."""
-    limite = time.monotonic() + deadline
-    while time.monotonic() < limite:
+    limit = time.monotonic() + deadline
+    while time.monotonic() < limit:
         if condition():
             return True
         time.sleep(0.02)
@@ -49,10 +49,10 @@ def _wait(condition, deadline=10.0):
 def _alive(pid):
     try:
         with open("/proc/%d/stat" % pid) as f:
-            conteudo = f.read()
+            content = f.read()
     except OSError:
         return False
-    return conteudo[conteudo.rindex(")") + 2:].split()[0] != "Z"
+    return content[content.rindex(")") + 2:].split()[0] != "Z"
 
 
 def _read(path):
@@ -90,14 +90,14 @@ class _Base(unittest.TestCase):
             except OSError:
                 pass
             p.wait()
-        for atual, dirs, _arqs in os.walk(self.root):
+        for current, dirs, _arqs in os.walk(self.root):
             for d in dirs:
-                os.chmod(os.path.join(atual, d), 0o700)
+                os.chmod(os.path.join(current, d), 0o700)
         shutil.rmtree(self.root, ignore_errors=True)
 
     def start(self, command, ticket_id=1, argv=None, env=None, label=None):
         wd = executor.prepare_directory(self.work, ticket_id)
-        fd, _parcial = executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, ticket_id)
+        fd, _partial = executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, ticket_id)
         ex = executor.start(ticket_id, argv or [SH, "-c", command], fd, env or {"PATH": "/usr/bin:/bin"}, wd,
                               None, None, os_platform.DEFAULT_RLIMITS, label or "SSS-srv-01-%d" % ticket_id)
         self.execs.append(ex)
@@ -112,48 +112,48 @@ class _Base(unittest.TestCase):
 
     def stop(self, ex, grace_s=1, deadline=10):
         """Ciclo do laco do daemon: cada chamada volta logo; o harness so repete ate o grupo acabar."""
-        inicio = time.monotonic()
+        start = time.monotonic()
         executor.request_stop(ex, time.monotonic(), grace_s=grace_s)
-        self.assertLess(time.monotonic() - inicio, 0.5)
+        self.assertLess(time.monotonic() - start, 0.5)
 
         def _passo():
             t = time.monotonic()
-            fim = executor.advance_stop(ex, time.monotonic())
+            end = executor.advance_stop(ex, time.monotonic())
             self.assertLess(time.monotonic() - t, 0.5, "avancar_encerramento nao pode bloquear")
-            return fim
+            return end
         self.assertTrue(_wait(_passo, deadline), "o grupo nao acabou")
-        return time.monotonic() - inicio
+        return time.monotonic() - start
 
 
 class TestLogAndOutput(_Base):
 
     def test_log_por_minuto_rename_e_permissoes(self):
-        antiga = os.umask(0o077)
+        old = os.umask(0o077)
         try:
             ex = self.start("echo ola")
         finally:
-            os.umask(antiga)
+            os.umask(old)
         self.assertEqual(self.until_exit(ex), 0)
         final = os.path.join(self.dir_log(), "ticket_1_%d.log" % ex.pid)
         self.assertEqual(ex.log_path, final)
         self.assertEqual(_read(final), "ola\n")
         self.assertFalse(os.path.exists(os.path.join(self.dir_log(), "ticket_1.log.parcial")), "rename atomico")
         self.assertEqual(os.stat(final).st_mode & 0o777, 0o600)
-        pasta = self.logs
-        for nivel in ("dev", "teste_script", "2026", "10", "16", "14", "05"):
-            pasta = os.path.join(pasta, nivel)
-            self.assertEqual(os.stat(pasta).st_mode & 0o777, 0o750, pasta)
+        dir_value = self.logs
+        for level in ("dev", "teste_script", "2026", "10", "16", "14", "05"):
+            dir_value = os.path.join(dir_value, level)
+            self.assertEqual(os.stat(dir_value).st_mode & 0o777, 0o750, dir_value)
         self.stop(ex)
 
     def test_log_com_o_excl(self):
-        fd, caminho = executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, 9)
+        fd, path = executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, 9)
         try:
             with self.assertRaises(FileExistsError):
                 executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, 9)
         finally:
             executor._open_logs.pop(fd, None)
             os.close(fd)
-        self.assertTrue(caminho.endswith("/ticket_9.log.parcial"))
+        self.assertTrue(path.endswith("/ticket_9.log.parcial"))
 
     def test_saida_de_2_mb_sem_travar(self):
         ex = self.start("head -c 2097152 /dev/zero | tr '\\000' a")
@@ -162,9 +162,9 @@ class TestLogAndOutput(_Base):
         self.stop(ex)
 
     def test_abrir_log_exige_ambiente(self):
-        for vazio in (None, "", "INTERNAL"):
+        for empty in (None, "", "INTERNAL"):
             with self.assertRaises(ValueError):
-                executor.open_log(self.logs, vazio, "Teste Script", STARTED_AT, 30)
+                executor.open_log(self.logs, empty, "Teste Script", STARTED_AT, 30)
         self.assertEqual(os.listdir(self.logs), [], "nada criado sem ambiente")
 
     def test_stdin_nulo(self):
@@ -177,41 +177,41 @@ class TestLogAndOutput(_Base):
 class TestStop(_Base):
 
     def test_neto_morre_com_o_principal_ja_terminado(self):
-        neto = os.path.join(self.root, "neto.pid")
-        ex = self.start("sleep 300 & echo $! > %s" % neto)
+        grandchild = os.path.join(self.root, "neto.pid")
+        ex = self.start("sleep 300 & echo $! > %s" % grandchild)
         self.assertEqual(self.until_exit(ex), 0)
-        pid_neto = int(_read(neto).strip())
-        self.assertTrue(_alive(pid_neto))
+        pid_grandchild = int(_read(grandchild).strip())
+        self.assertTrue(_alive(pid_grandchild))
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             self.stop(ex)
         self.assertIn("NETOS_ENCERRADOS", logs.output[0])
-        self.assertTrue(_wait(lambda: not _alive(pid_neto)))
+        self.assertTrue(_wait(lambda: not _alive(pid_grandchild)))
 
     def test_neto_morre_com_o_principal_vivo(self):
-        neto = os.path.join(self.root, "neto.pid")
-        ex = self.start("sleep 300 & echo $! > %s; sleep 300" % neto)
-        self.assertTrue(_wait(lambda: _read(neto).strip().isdigit()))
-        pid_neto = int(_read(neto).strip())
+        grandchild = os.path.join(self.root, "neto.pid")
+        ex = self.start("sleep 300 & echo $! > %s; sleep 300" % grandchild)
+        self.assertTrue(_wait(lambda: _read(grandchild).strip().isdigit()))
+        pid_grandchild = int(_read(grandchild).strip())
         self.stop(ex)
         self.assertFalse(_alive(ex.pid))
-        self.assertTrue(_wait(lambda: not _alive(pid_neto)))
+        self.assertTrue(_wait(lambda: not _alive(pid_grandchild)))
         self.assertEqual(executor.check(ex), -signal.SIGTERM)
 
     def test_grupo_que_ignora_sigterm_morre_dentro_de_grace_mais_1(self):
-        pronto = os.path.join(self.root, "pronto")
-        ex = self.start("trap '' TERM; touch %s; sleep 300 & sleep 300" % pronto)
-        self.assertTrue(_wait(lambda: os.path.exists(pronto)))
-        duracao = self.stop(ex, grace_s=1, deadline=5)
-        self.assertLess(duracao, 2.0)
+        ready = os.path.join(self.root, "pronto")
+        ex = self.start("trap '' TERM; touch %s; sleep 300 & sleep 300" % ready)
+        self.assertTrue(_wait(lambda: os.path.exists(ready)))
+        duration = self.stop(ex, grace_s=1, deadline=5)
+        self.assertLess(duration, 2.0)
         self.assertEqual(ex.phase, executor.PHASE_END)
         self.assertEqual(executor.check(ex), -signal.SIGKILL)
 
     def test_timeout_pelo_laco(self):
         ex = self.start("sleep 300")
-        limite = time.monotonic() + 0.3
+        limit = time.monotonic() + 0.3
         # Laco do daemon: verificar a cada volta; passou do tempo, pede o encerramento.
         while executor.check(ex) is None and ex.phase is None:
-            if time.monotonic() >= limite:
+            if time.monotonic() >= limit:
                 executor.request_stop(ex, time.monotonic(), grace_s=1)
             time.sleep(0.02)
         self.assertTrue(_wait(lambda: executor.advance_stop(ex, time.monotonic())))
@@ -269,21 +269,21 @@ class TestLocalState(_Base):
 
     def test_marcadores_spawn_proc_result(self):
         original = os_platform.start_process
-        vistos = {}
+        seen = {}
 
         def _confere(spec, log_fd, user):
             wd = os.path.join(self.work, "ticket_3")
-            vistos["spawn"] = os_platform.read_state(os.path.join(wd, executor.SPAWN))
-            vistos["proc"] = os.path.exists(os.path.join(wd, executor.PROC))
-            vistos["spec"] = spec
+            seen["spawn"] = os_platform.read_state(os.path.join(wd, executor.SPAWN))
+            seen["proc"] = os.path.exists(os.path.join(wd, executor.PROC))
+            seen["spec"] = spec
             return original(spec, log_fd, user)
 
         with mock.patch.object(os_platform, "start_process", side_effect=_confere):
             ex = self.start("sleep 300", ticket_id=3)
-        self.assertEqual((vistos["spawn"]["ticket_id"], vistos["spawn"]["exec_user"]), (3, None))
-        self.assertIn("monotonic", vistos["spawn"])
-        self.assertFalse(vistos["proc"], ".sss_proc so depois do Popen")
-        self.assertEqual(vistos["spec"]["cwd"], os.path.join(self.work, "ticket_3", "exec"))
+        self.assertEqual((seen["spawn"]["ticket_id"], seen["spawn"]["exec_user"]), (3, None))
+        self.assertIn("monotonic", seen["spawn"])
+        self.assertFalse(seen["proc"], ".sss_proc so depois do Popen")
+        self.assertEqual(seen["spec"]["cwd"], os.path.join(self.work, "ticket_3", "exec"))
         proc = os_platform.read_state(os.path.join(ex.work_dir_ticket, executor.PROC))
         self.assertEqual(proc, {"ticket_id": 3, "pid": ex.pid, "pgid": ex.pid, "process_start": ex.identity,
                                 "exec_user": None})
@@ -298,15 +298,15 @@ class TestLocalState(_Base):
 
     def test_diretorio_com_marcador_e_preservado(self):
         wd = os.path.join(self.work, "ticket_5")
-        for marcador in executor.MARKERS:
+        for marker in executor.MARKERS:
             os.makedirs(wd, exist_ok=True)
-            with open(os.path.join(wd, marcador), "w") as f:
+            with open(os.path.join(wd, marker), "w") as f:
                 f.write("{}")
             for startup in (False, True):
                 with self.assertRaises(executor.PreservedDirectory):
                     executor.prepare_directory(self.work, 5, startup_concluido=startup)
-            self.assertTrue(os.path.exists(os.path.join(wd, marcador)), "rastro nunca apagado")
-            os.unlink(os.path.join(wd, marcador))
+            self.assertTrue(os.path.exists(os.path.join(wd, marker)), "rastro nunca apagado")
+            os.unlink(os.path.join(wd, marker))
 
     def test_diretorio_sem_marcador_so_apos_startup(self):
         wd = os.path.join(self.work, "ticket_6")
@@ -323,12 +323,12 @@ class TestLocalState(_Base):
         self.assertEqual(os.stat(os.path.join(wd, "tmp")).st_mode & 0o777, 0o700)
 
     def test_diretorio_que_e_link_e_preservado(self):
-        fora = os.path.join(self.root, "fora")
-        os.mkdir(fora)
-        os.symlink(fora, os.path.join(self.work, "ticket_8"))
+        outside = os.path.join(self.root, "fora")
+        os.mkdir(outside)
+        os.symlink(outside, os.path.join(self.work, "ticket_8"))
         with self.assertRaises(executor.PreservedDirectory):
             executor.prepare_directory(self.work, 8, startup_concluido=True)
-        self.assertTrue(os.path.isdir(fora))
+        self.assertTrue(os.path.isdir(outside))
 
     def test_limpar_com_grupo_vivo_recusa(self):
         ex = self.start("sleep 300", ticket_id=4)
@@ -351,7 +351,7 @@ class TestLocalState(_Base):
 class TestSpawnFailures(_Base):
 
     def test_falha_no_proc_depois_do_popen_real(self):
-        neto = os.path.join(self.root, "neto.pid")
+        grandchild = os.path.join(self.root, "neto.pid")
         original = os_platform.write_state
 
         def _grava(path, date):
@@ -361,7 +361,7 @@ class TestSpawnFailures(_Base):
 
         with mock.patch.object(os_platform, "write_state", side_effect=_grava), \
                 self.assertLogs("sss_scheduler", "ERROR"):
-            ex = self.start("sleep 300 & echo $! > %s; sleep 300" % neto, ticket_id=7)
+            ex = self.start("sleep 300 & echo $! > %s; sleep 300" % grandchild, ticket_id=7)
         self.assertTrue(ex.failed_after_spawn)
         self.assertEqual(ex.spawn_error_info, "OSError")
         self.assertIn(ex.phase, (executor.PHASE_TERM, executor.PHASE_END), "encerramento ja iniciado")
@@ -369,26 +369,26 @@ class TestSpawnFailures(_Base):
         # Acompanhada no mapa local ate o grupo acabar (SIGKILL quando o prazo vence).
         self.assertTrue(_wait(lambda: executor.advance_stop(ex, time.monotonic() + 60)))
         self.assertFalse(_alive(ex.pid))
-        if _read(neto).strip().isdigit():
-            self.assertTrue(_wait(lambda: not _alive(int(_read(neto).strip()))))
+        if _read(grandchild).strip().isdigit():
+            self.assertTrue(_wait(lambda: not _alive(int(_read(grandchild).strip()))))
         self.assertIn("[SSS] falha ao iniciar: OSError (agente srv-01)", _read(ex.log_path))
 
     def test_falha_antes_do_spawn_fecha_e_renomeia_o_log(self):
         # Revisao F8.0-F8.2 (M2): falha entre open_log e iniciar (ex.: env_builder).
-        fd, parcial = executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, 42)
+        fd, partial = executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, 42)
         with self.assertLogs("sss_scheduler", "ERROR"):
             ex = executor.failure_before_spawn(fd, 42, ValueError("x"), "SSS-srv-01-42")
         self.assertEqual(ex.spawn_error_info, "ValueError")
         self.assertNotIn(fd, executor._open_logs)
         with self.assertRaises(OSError):
             os.fstat(fd)
-        self.assertFalse(os.path.exists(parcial))
+        self.assertFalse(os.path.exists(partial))
         self.assertEqual(_read(os.path.join(self.dir_log(), "ticket_42_0.log")),
                          "[SSS] falha ao iniciar: ValueError (agente srv-01)\n")
 
     def test_excecao_que_nao_e_oserror_vira_spawn_error(self):
-        erro = UnicodeEncodeError("utf-8", "x", 0, 1, "surrogates not allowed")
-        with mock.patch.object(os_platform, "start_process", side_effect=erro), \
+        error = UnicodeEncodeError("utf-8", "x", 0, 1, "surrogates not allowed")
+        with mock.patch.object(os_platform, "start_process", side_effect=error), \
                 self.assertLogs("sss_scheduler", "ERROR"):
             ex = self.start("echo nunca", ticket_id=12, label="SSS-srv-linux-prod-01-12")
         self.assertTrue(ex.spawn_error)
@@ -402,31 +402,31 @@ class TestSpawnFailures(_Base):
 
     def test_falha_no_marcador_de_spawn_nao_inicia(self):
         with mock.patch.object(os_platform, "write_state", side_effect=PermissionError(13, "negado")), \
-                mock.patch.object(os_platform, "start_process") as inicia, \
+                mock.patch.object(os_platform, "start_process") as starts, \
                 self.assertLogs("sss_scheduler", "ERROR"):
             ex = self.start("echo nunca", ticket_id=13)
-        inicia.assert_not_called()
+        starts.assert_not_called()
         self.assertEqual(ex.spawn_error_info, "PermissionError")
         self.assertTrue(ex.log_path.endswith("ticket_13_0.log"))
 
     def test_falha_apos_popen_do_helper(self):
-        lider = subprocess.Popen(["sleep", "300"], start_new_session=True)
-        self.extras.append(lider)
-        processo = os_platform.Process(lider.pid, os_platform.process_identity(lider.pid), popen=lider)
-        falha = os_platform.FailureAfterSpawn(processo, BrokenPipeError(32, "Broken pipe"))
-        with mock.patch.object(os_platform, "start_process", side_effect=falha), \
+        leader = subprocess.Popen(["sleep", "300"], start_new_session=True)
+        self.extras.append(leader)
+        process = os_platform.Process(leader.pid, os_platform.process_identity(leader.pid), popen=leader)
+        failure = os_platform.FailureAfterSpawn(process, BrokenPipeError(32, "Broken pipe"))
+        with mock.patch.object(os_platform, "start_process", side_effect=failure), \
                 self.assertLogs("sss_scheduler", "ERROR"):
             ex = self.start("ignorado", ticket_id=14)
         self.execs.remove(ex)
         self.assertTrue(ex.failed_after_spawn)
-        self.assertEqual((ex.pid, ex.spawn_error_info, ex.phase), (lider.pid, "BrokenPipeError", executor.PHASE_TERM))
-        self.assertEqual(lider.wait(5), -signal.SIGTERM)
+        self.assertEqual((ex.pid, ex.spawn_error_info, ex.phase), (leader.pid, "BrokenPipeError", executor.PHASE_TERM))
+        self.assertEqual(leader.wait(5), -signal.SIGTERM)
 
     def test_especificacao_do_helper_com_usuario_de_execucao(self):
-        capturado = {}
+        captured = {}
 
         def _captura(spec, log_fd, user):
-            capturado.update(spec=spec, usuario=user)
+            captured.update(spec=spec, usuario=user)
             raise RuntimeError("sem sudo no teste")
 
         wd = executor.prepare_directory(self.work, 15)
@@ -435,8 +435,8 @@ class TestSpawnFailures(_Base):
                 self.assertLogs("sss_scheduler", "ERROR"):
             ex = executor.start(15, ["/usr/bin/python3", "-I", "/opt/s.py"], fd, {"PATH": "/usr/bin:/bin"}, wd,
                                   "sssprd", "/srv/exec", os_platform.DEFAULT_RLIMITS, "SSS-srv-01-15")
-        self.assertEqual(capturado["usuario"], "sssprd")
-        self.assertEqual(capturado["spec"], {
+        self.assertEqual(captured["usuario"], "sssprd")
+        self.assertEqual(captured["spec"], {
             "ticket_id": 15, "argv": ["/usr/bin/python3", "-I", "/opt/s.py"], "env": {"PATH": "/usr/bin:/bin"},
             "rlimits": {"RLIMIT_CORE": [0, 0], "RLIMIT_NOFILE": [1024, 1024]}, "base_dir": "/srv/exec/sssprd"})
         self.assertFalse(os.path.exists(os.path.join(wd, "exec")), "fora de DEV o cwd e criado pelo helper")
@@ -484,7 +484,7 @@ class TestSnapshotV4(_Base):
         self.assertEqual(argv, [sys.executable, "-I", script_real, "--data", "2026-10-13"])
         wd = executor.prepare_directory(self.work, 21)
         cfg = _Cfg(_AgentStub("srv-01", "C.UTF-8", (), (), None))
-        fd, parcial = executor.open_log(self.logs, "DEV", snap["script_name"], STARTED_AT, 21, snap["script_id"])
+        fd, partial = executor.open_log(self.logs, "DEV", snap["script_name"], STARTED_AT, 21, snap["script_id"])
         ticket = {"id": 21, "environment": "DEV", "schedule_id": 5, "parent_ticket_id": None, "priority": 3,
                   "started_at": STARTED_AT, "scheduled_at": STARTED_AT}
         with self.assertLogs("sss_scheduler", "WARNING"):
@@ -492,22 +492,22 @@ class TestSnapshotV4(_Base):
                                         {"name": "DEV", "connection": None, "description": "Desenvolvimento"},
                                         script_real, wd, {}, os_platform.NAME, snapshot=snap,
                                         schedule={"name": "Diario DEV", "recurrence_type": "DAILY"},
-                                        log_path=parcial, timeout_sec=60, hostname="host-dev", version="t")
+                                        log_path=partial, timeout_sec=60, hostname="host-dev", version="t")
         ex = executor.start(21, argv, fd, env, wd, None, None, os_platform.DEFAULT_RLIMITS, "SSS-srv-01-21")
         self.execs.append(ex)
         self.assertEqual(self.until_exit(ex), 0, _read(ex.log_path))
         cwd = os.path.join(wd, "exec")
         with open(os.path.join(cwd, "saida.json")) as f:
-            saida = json.load(f)
-        self.assertEqual(saida[:5], [cwd, os.path.dirname(script_real), cwd, 1, ["--data", "2026-10-13"]])
+            output = json.load(f)
+        self.assertEqual(output[:5], [cwd, os.path.dirname(script_real), cwd, 1, ["--data", "2026-10-13"]])
         # CR-010: o filho le os dados da execucao em SSS_*.
-        sss = saida[5]
+        sss = output[5]
         self.assertEqual((sss["SSS_TICKET_ID"], sss["SSS_EXECUTION_TYPE"], sss["SSS_RECURRENCE"]),
                          ("21", "AGENDADA", "DAILY"))
         self.assertEqual((sss["SSS_ENVIRONMENT"], sss["SSS_ENVIRONMENT_DESCRIPTION"]), ("DEV", "Desenvolvimento"))
         self.assertEqual(sss["SSS_STARTED_AT"], "2026-10-16 14:05:33")
         self.assertEqual(sss["SSS_SCRIPT_FILE"], script_real)
-        self.assertEqual(os.path.join(sss["SSS_LOG_DIR"], sss["SSS_LOG_FILE"]), parcial)
+        self.assertEqual(os.path.join(sss["SSS_LOG_DIR"], sss["SSS_LOG_FILE"]), partial)
         self.assertEqual(os.path.dirname(ex.log_path), sss["SSS_LOG_DIR"])
         self.assertTrue(ex.log_path.startswith(os.path.join(self.logs, "dev", "carga_faturas", "2026")))
         self.stop(ex)
@@ -517,10 +517,10 @@ class TestSource(unittest.TestCase):
 
     def test_executor_sem_espera_pipe_shell_ou_environ(self):
         with open(executor.__file__, encoding="utf-8") as f:
-            fonte = f.read()
-        for proibido in ("time.sleep", ".wait(", "PIPE", "shell=" + "True", "os.environ", "os.killpg", "subprocess",
+            source = f.read()
+        for forbidden in ("time.sleep", ".wait(", "PIPE", "shell=" + "True", "os.environ", "os.killpg", "subprocess",
                          "def encerrar("):
-            self.assertFalse(proibido in fonte, proibido)
+            self.assertFalse(forbidden in source, forbidden)
 
 
 if __name__ == "__main__":

@@ -53,11 +53,11 @@ case "$1" in
         exec "${PYTHON}" anyserver.py "$@"
         ;;
 esac
-INTERPRETADOR="$1"
-case "$(basename "${INTERPRETADOR}")" in
+INTERPRETER="$1"
+case "$(basename "${INTERPRETER}")" in
     python3|python3.[0-9]|python3.[0-9][0-9]) ;;
     *)
-        echo "Erro: o primeiro argumento deve ser um interpretador python3 (recebido: $(basename "${INTERPRETADOR}"))." >&2
+        echo "Erro: o primeiro argumento deve ser um interpretador python3 (recebido: $(basename "${INTERPRETER}"))." >&2
         exit 2
         ;;
 esac

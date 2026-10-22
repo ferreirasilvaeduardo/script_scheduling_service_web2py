@@ -26,8 +26,8 @@ _Pw = collections.namedtuple("_Pw", "pw_name pw_uid")
 
 
 def _wait(condition, deadline=10.0):
-    limite = time.monotonic() + deadline
-    while time.monotonic() < limite:
+    limit = time.monotonic() + deadline
+    while time.monotonic() < limit:
         if condition():
             return True
         time.sleep(0.05)
@@ -51,10 +51,10 @@ def _alive(pid):
     """Vivo e nao zumbi (o zumbi ainda responde a kill(pid, 0))."""
     try:
         with open("/proc/%d/stat" % pid) as f:
-            conteudo = f.read()
+            content = f.read()
     except OSError:
         return False
-    return conteudo[conteudo.rindex(")") + 2:].split()[0] != "Z"
+    return content[content.rindex(")") + 2:].split()[0] != "Z"
 
 
 class _WithProcesses(unittest.TestCase):
@@ -77,9 +77,9 @@ class _WithProcesses(unittest.TestCase):
             except OSError:
                 pass
             p.wait()
-        for atual, dirs, _arqs in os.walk(self.root):
+        for current, dirs, _arqs in os.walk(self.root):
             for d in dirs:
-                os.chmod(os.path.join(atual, d), 0o700)
+                os.chmod(os.path.join(current, d), 0o700)
         shutil.rmtree(self.root, ignore_errors=True)
 
     def start(self, code, cwd=None):
@@ -99,49 +99,49 @@ class _WithProcesses(unittest.TestCase):
 class TestProcesses(_WithProcesses):
 
     def test_sinalizar_nao_bloqueia_com_processo_que_ignora_sigterm(self):
-        pronto = os.path.join(self.root, "pronto")
+        ready = os.path.join(self.root, "pronto")
         proc = self.start("import signal,time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
-                            "open(%r,'w').write('1')\ntime.sleep(300)\n" % pronto)
-        self.assertTrue(_wait(lambda: os.path.exists(pronto)))
-        inicio = time.monotonic()
+                            "open(%r,'w').write('1')\ntime.sleep(300)\n" % ready)
+        self.assertTrue(_wait(lambda: os.path.exists(ready)))
+        start = time.monotonic()
         self.assertTrue(os_platform.signal_group(proc, signal.SIGTERM))
-        self.assertLess(time.monotonic() - inicio, 0.5)
+        self.assertLess(time.monotonic() - start, 0.5)
         time.sleep(0.2)
         self.assertTrue(os_platform.group_alive(proc))
         self.assertTrue(os_platform.signal_group(proc, signal.SIGKILL))
         self.assertTrue(_wait(lambda: not os_platform.group_alive(proc)))
 
     def test_neto_vivo_depois_do_lider_e_ciclo_nao_bloqueante(self):
-        neto_pid = os.path.join(self.root, "neto.pid")
+        grandchild_pid = os.path.join(self.root, "neto.pid")
         proc = self.start("import subprocess\np = subprocess.Popen(['sleep', '300'])\n"
-                            "open(%r,'w').write(str(p.pid))\n" % neto_pid)
-        neto = _read_pid(neto_pid)
+                            "open(%r,'w').write(str(p.pid))\n" % grandchild_pid)
+        grandchild = _read_pid(grandchild_pid)
         proc.popen.wait(10)
         self.assertTrue(os_platform.group_alive(proc), "o neto continua no grupo depois da saida do lider")
         # Ciclo do executor (F8.1): SIGTERM, consultas sem esperar, SIGKILL se preciso.
-        estado, limite = "TERM", time.monotonic() + 10
-        while os_platform.group_alive(proc) and time.monotonic() < limite:
-            if estado == "TERM":
+        state, limit = "TERM", time.monotonic() + 10
+        while os_platform.group_alive(proc) and time.monotonic() < limit:
+            if state == "TERM":
                 self.assertFalse(proc.popen.poll() is None)
-                inicio = time.monotonic()
+                start = time.monotonic()
                 os_platform.signal_group(proc, signal.SIGTERM)
-                self.assertLess(time.monotonic() - inicio, 0.5)
-                estado, prazo = "AGUARDA", time.monotonic() + 2
-            elif estado == "AGUARDA" and time.monotonic() > prazo:
+                self.assertLess(time.monotonic() - start, 0.5)
+                state, deadline = "AGUARDA", time.monotonic() + 2
+            elif state == "AGUARDA" and time.monotonic() > deadline:
                 os_platform.signal_group(proc, signal.SIGKILL)
-                estado = "KILL"
+                state = "KILL"
             time.sleep(0.05)
         self.assertFalse(os_platform.group_alive(proc))
-        self.assertFalse(_alive(neto))
+        self.assertFalse(_alive(grandchild))
         self.assertFalse(os_platform.signal_group(proc, signal.SIGTERM), "ESRCH = grupo vazio")
 
     def test_identidade_estavel_e_diferente_para_outro_pid(self):
         proc = self.start("import time\ntime.sleep(300)\n")
-        minha = os_platform.process_identity(os.getpid())
-        self.assertIsNotNone(minha)
-        self.assertEqual(minha, os_platform.process_identity(os.getpid()))
+        my = os_platform.process_identity(os.getpid())
+        self.assertIsNotNone(my)
+        self.assertEqual(my, os_platform.process_identity(os.getpid()))
         self.assertEqual(proc.identity, os_platform.process_identity(proc.pid))
-        self.assertNotEqual((os.getpid(), minha), (proc.pid, proc.identity))
+        self.assertNotEqual((os.getpid(), my), (proc.pid, proc.identity))
         self.assertTrue(os_platform.process_exists(proc.pid))
 
     def test_pid_inexistente(self):
@@ -150,52 +150,52 @@ class TestProcesses(_WithProcesses):
         self.assertIsNone(os_platform.reopen_group({"pid": NONEXISTENT_PID, "process_start": 1}))
 
     def test_starttime_com_parenteses_no_nome_do_comando(self):
-        campos = ["Y"] + [str(i) for i in range(4, 60)]
-        conteudo = "4242 (meu ) script) (x)) " + " ".join(campos)
-        self.assertEqual(posix._linux_starttime(conteudo), 22)
+        fields = ["Y"] + [str(i) for i in range(4, 60)]
+        content = "4242 (meu ) script) (x)) " + " ".join(fields)
+        self.assertEqual(posix._linux_starttime(content), 22)
 
     def test_identidade_divergente_nao_sinaliza(self):
         proc = self.start("import time\ntime.sleep(300)\n")
-        falso = os_platform.Process(proc.pid, proc.identity + 1)
-        self.assertFalse(os_platform.signal_group(falso, signal.SIGTERM))
+        fake = os_platform.Process(proc.pid, proc.identity + 1)
+        self.assertFalse(os_platform.signal_group(fake, signal.SIGTERM))
         self.assertTrue(_alive(proc.pid))
 
     def test_reabrir_grupo(self):
         proc = self.start("import time\ntime.sleep(300)\n")
-        estado = {"pid": proc.pid, "process_start": proc.identity, "exec_user": None}
-        reaberto = os_platform.reopen_group(estado)
-        self.assertEqual((reaberto.pid, reaberto.identity, reaberto.popen), (proc.pid, proc.identity, None))
-        self.assertIsNone(os_platform.reopen_group(dict(estado, process_start=proc.identity + 1)))
+        state = {"pid": proc.pid, "process_start": proc.identity, "exec_user": None}
+        reopened = os_platform.reopen_group(state)
+        self.assertEqual((reopened.pid, reopened.identity, reopened.popen), (proc.pid, proc.identity, None))
+        self.assertIsNone(os_platform.reopen_group(dict(state, process_start=proc.identity + 1)))
         with mock.patch.object(posix, "process_identity", return_value=None), \
                 self.assertLogs("sss_scheduler", "WARNING") as logs:
-            sem = os_platform.reopen_group(estado)
+            without = os_platform.reopen_group(state)
         self.assertIn("ORFAO_SEM_IDENTIDADE", logs.output[0])
-        self.assertTrue(sem.no_identity)
-        self.assertFalse(os_platform.signal_group(sem, signal.SIGKILL), "sem identidade nunca recebe sinal")
+        self.assertTrue(without.no_identity)
+        self.assertFalse(os_platform.signal_group(without, signal.SIGKILL), "sem identidade nunca recebe sinal")
         self.assertTrue(_alive(proc.pid))
 
     def test_encerrar_ticket_dev_so_na_pasta_do_ticket(self):
-        pasta = os.path.join(self.root, "exec", "ticket_7")
-        os.makedirs(os.path.join(pasta, "tmp"))
-        neto_pid = os.path.join(self.root, "neto.pid")
-        dentro = self.start("import subprocess,time,os\nos.chdir('tmp')\n"
+        dir_value = os.path.join(self.root, "exec", "ticket_7")
+        os.makedirs(os.path.join(dir_value, "tmp"))
+        grandchild_pid = os.path.join(self.root, "neto.pid")
+        inside = self.start("import subprocess,time,os\nos.chdir('tmp')\n"
                               "p = subprocess.Popen(['sleep', '300'])\n"
-                              "open(%r,'w').write(str(p.pid))\ntime.sleep(300)\n" % neto_pid, cwd=pasta)
-        neto = _read_pid(neto_pid)
-        vizinha = os.path.join(self.root, "exec", "ticket_70")
-        os.makedirs(vizinha)
-        fora = self.start("import time\ntime.sleep(300)\n", cwd=vizinha)
+                              "open(%r,'w').write(str(p.pid))\ntime.sleep(300)\n" % grandchild_pid, cwd=dir_value)
+        grandchild = _read_pid(grandchild_pid)
+        neighbor = os.path.join(self.root, "exec", "ticket_70")
+        os.makedirs(neighbor)
+        outside = self.start("import time\ntime.sleep(300)\n", cwd=neighbor)
         self.assertEqual(os_platform.stop_ticket(os.path.join(self.root, "exec"), 7, None, 2), "OK")
-        self.assertTrue(_wait(lambda: not _alive(dentro.pid) and not _alive(neto)))
-        self.assertTrue(_alive(fora.pid), "processo do mesmo usuario fora da pasta do ticket")
+        self.assertTrue(_wait(lambda: not _alive(inside.pid) and not _alive(grandchild)))
+        self.assertTrue(_alive(outside.pid), "processo do mesmo usuario fora da pasta do ticket")
 
     def test_iniciar_processo_aplica_umask_limites_e_entrada_nula(self):
-        saida = os.path.join(self.root, "saida.txt")
+        output = os.path.join(self.root, "saida.txt")
         proc = self.start("import os,resource,sys\nm = os.umask(0)\n"
                             "open(%r,'w').write('%%o %%d %%d %%r' %% (m, resource.getrlimit(resource.RLIMIT_CORE)[0],"
-                            " resource.getrlimit(resource.RLIMIT_NOFILE)[0], sys.stdin.read()))\n" % saida)
+                            " resource.getrlimit(resource.RLIMIT_NOFILE)[0], sys.stdin.read()))\n" % output)
         proc.popen.wait(10)
-        with open(saida) as f:
+        with open(output) as f:
             self.assertEqual(f.read(), "77 0 1024 ''")
         self.assertFalse(os_platform.group_alive(proc))
 
@@ -207,8 +207,8 @@ class TestHelperDoubles(unittest.TestCase):
         posix._helper_requests[:] = []
 
     def test_iniciar_processo_com_usuario_manda_especificacao_pela_entrada(self):
-        falso = mock.MagicMock(pid=4321)
-        with mock.patch.object(posix.subprocess, "Popen", return_value=falso) as popen, \
+        fake = mock.MagicMock(pid=4321)
+        with mock.patch.object(posix.subprocess, "Popen", return_value=fake) as popen, \
                 mock.patch.object(posix, "process_identity", return_value=99):
             proc = os_platform.start_process({"ticket_id": 3, "argv": ["/bin/true"]}, 7, exec_user="exec1")
         argv = popen.call_args[0][0]
@@ -217,37 +217,37 @@ class TestHelperDoubles(unittest.TestCase):
         self.assertEqual((kw["shell"], kw["start_new_session"], kw["stdout"]), (False, True, 7))
         self.assertNotIn("preexec_fn", kw)
         self.assertEqual(kw["env"], posix._ENV_HELPER)
-        falso.stdin.write.assert_called_once_with(b'{"argv": ["/bin/true"], "ticket_id": 3}')
-        falso.stdin.close.assert_called_once_with()
+        fake.stdin.write.assert_called_once_with(b'{"argv": ["/bin/true"], "ticket_id": 3}')
+        fake.stdin.close.assert_called_once_with()
         self.assertEqual((proc.pid, proc.identity, proc.exec_user), (4321, 99, "exec1"))
 
     def test_sinalizar_pelo_helper_nao_espera(self):
-        lento = mock.MagicMock()
-        lento.poll.return_value = None
-        with mock.patch.object(posix.subprocess, "Popen", return_value=lento) as popen:
-            inicio = time.monotonic()
+        slow = mock.MagicMock()
+        slow.poll.return_value = None
+        with mock.patch.object(posix.subprocess, "Popen", return_value=slow) as popen:
+            start = time.monotonic()
             ok = os_platform.signal_group(os_platform.Process(500, 77, exec_user="exec1"), signal.SIGKILL)
-            self.assertLess(time.monotonic() - inicio, 0.5)
+            self.assertLess(time.monotonic() - start, 0.5)
         self.assertTrue(ok)
         self.assertEqual(popen.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "kill",
                                                  "500", "77"])
-        lento.wait.assert_not_called()
+        slow.wait.assert_not_called()
         self.assertEqual(len(posix._helper_requests), 1)
-        lento.poll.return_value = 3
+        slow.poll.return_value = 3
         with self.assertLogs("sss_scheduler", "WARNING"):
             posix._reap_helper_requests()
         self.assertEqual(posix._helper_requests, [])
 
     def test_falha_ao_entregar_a_especificacao_devolve_o_processo(self):
-        falso = mock.MagicMock(pid=4322)
-        falso.stdin.write.side_effect = BrokenPipeError(32, "Broken pipe")
-        with mock.patch.object(posix.subprocess, "Popen", return_value=falso), \
+        fake = mock.MagicMock(pid=4322)
+        fake.stdin.write.side_effect = BrokenPipeError(32, "Broken pipe")
+        with mock.patch.object(posix.subprocess, "Popen", return_value=fake), \
                 mock.patch.object(posix, "process_identity", return_value=7):
             with self.assertRaises(os_platform.FailureAfterSpawn) as ctx:
                 os_platform.start_process({"ticket_id": 3, "argv": ["/bin/true"]}, 7, exec_user="exec1")
         self.assertEqual((ctx.exception.process.pid, ctx.exception.process.identity), (4322, 7))
         self.assertIsInstance(ctx.exception.cause, BrokenPipeError)
-        falso.stdin.close.assert_called_once_with()
+        fake.stdin.close.assert_called_once_with()
 
     def test_limpar_dir_script_pelo_helper(self):
         with mock.patch.object(posix, "_run_short", return_value=(0, "")) as ex:
@@ -259,9 +259,9 @@ class TestHelperDoubles(unittest.TestCase):
                 os_platform.clean_script_dir("/srv/exec/exec1", 9, "exec1")
 
     def test_encerrar_ticket_pelo_helper(self):
-        for codigo, esperado in ((0, "OK"), (5, "NAO_SUPORTADO")):
-            with mock.patch.object(posix, "_run_short", return_value=(codigo, "")) as ex:
-                self.assertEqual(os_platform.stop_ticket("/srv/exec/exec1", 9, "exec1", 10), esperado)
+        for code, expected in ((0, "OK"), (5, "NAO_SUPORTADO")):
+            with mock.patch.object(posix, "_run_short", return_value=(code, "")) as ex:
+                self.assertEqual(os_platform.stop_ticket("/srv/exec/exec1", 9, "exec1", 10), expected)
             self.assertEqual(ex.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER,
                                                   "stop-ticket", "/srv/exec/exec1", "9", "10"])
         with mock.patch.object(posix, "_run_short", return_value=(4, "")):
@@ -286,8 +286,8 @@ class TestOutputDir(unittest.TestCase):
         self.assertTrue(os.path.isfile(posix.PACKAGE_HELPER), posix.PACKAGE_HELPER)
 
     def test_iniciar_empacotar_com_usuario_nao_espera(self):
-        falso = mock.MagicMock(pid=4400)
-        with mock.patch.object(posix.subprocess, "Popen", return_value=falso) as popen, \
+        fake = mock.MagicMock(pid=4400)
+        with mock.patch.object(posix.subprocess, "Popen", return_value=fake) as popen, \
                 mock.patch.object(posix, "process_identity", return_value=55):
             proc = os_platform.start_pack(self.base, self.rel, 1048576, 10, 9, exec_user="exec1")
         self.assertEqual(popen.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "pack",
@@ -295,7 +295,7 @@ class TestOutputDir(unittest.TestCase):
         kw = popen.call_args[1]
         self.assertEqual((kw["shell"], kw["start_new_session"], kw["stdout"], kw["env"]),
                          (False, True, 9, posix._ENV_HELPER))
-        falso.wait.assert_not_called()
+        fake.wait.assert_not_called()
         self.assertEqual((proc.pid, proc.identity, proc.exec_user), (4400, 55, "exec1"))
 
     def test_limpar_e_purgar_pelo_helper(self):
@@ -306,8 +306,8 @@ class TestOutputDir(unittest.TestCase):
         self.assertEqual(ex.call_args_list[0][0][0][-3:], ["clean-output", self.base, self.rel])
         self.assertEqual(ex.call_args_list[1][0][0][-3:], ["purge-output", self.base, "7"])
         self.assertEqual(ex.call_args_list[2][0][0][-4:], ["purge-output", self.base, "7", "count"])
-        for retorno in ((2, ""), (0, "sem contagem")):
-            with mock.patch.object(posix, "_run_short", return_value=retorno):
+        for return_value in ((2, ""), (0, "sem contagem")):
+            with mock.patch.object(posix, "_run_short", return_value=return_value):
                 with self.assertRaises(RuntimeError):
                     os_platform.purge_output(self.base, 7, "exec1")
         with mock.patch.object(posix, "_run_short", return_value=(4, "")):
@@ -317,62 +317,62 @@ class TestOutputDir(unittest.TestCase):
     def test_dev_cria_empacota_e_limpa_com_o_proprio_usuario(self):
         import io
         import zipfile
-        pasta = os_platform.create_output_dir(self.base, self.rel)
-        self.assertEqual(pasta, os.path.join(self.base, self.rel))
-        self.assertEqual(os.stat(pasta).st_mode & 0o777, 0o700)
-        self.assertEqual(os_platform.create_output_dir(self.base, self.rel), pasta, "idempotente")
-        with open(os.path.join(pasta, "r.txt"), "w") as f:
+        dir_value = os_platform.create_output_dir(self.base, self.rel)
+        self.assertEqual(dir_value, os.path.join(self.base, self.rel))
+        self.assertEqual(os.stat(dir_value).st_mode & 0o777, 0o700)
+        self.assertEqual(os_platform.create_output_dir(self.base, self.rel), dir_value, "idempotente")
+        with open(os.path.join(dir_value, "r.txt"), "w") as f:
             f.write("resultado")
-        destino = os.path.join(self.root, "output.zip")
-        fd = os.open(destino, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        destination = os.path.join(self.root, "output.zip")
+        fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         try:
             proc = os_platform.start_pack(self.base, self.rel, 1048576, 10, fd)
         finally:
             os.close(fd)
         self.assertEqual(proc.popen.wait(30), 0)
-        with open(destino, "rb") as f:
+        with open(destination, "rb") as f:
             self.assertEqual(zipfile.ZipFile(io.BytesIO(f.read())).read("r.txt"), b"resultado")
         os_platform.clean_output(self.base, self.rel)
-        self.assertFalse(os.path.exists(pasta))
+        self.assertFalse(os.path.exists(dir_value))
         self.assertEqual(os_platform.purge_output(self.base, 7), 0)
 
     def test_cr014_dev_cria_a_entrada_e_preserva_a_existente(self):
         base = os.path.join(self.root, "input", "producao")
-        pasta = os_platform.create_input_dir(base, "carga")
-        self.assertEqual((pasta, os.stat(pasta).st_mode & 0o777), (os.path.join(base, "carga"), 0o700))
-        with open(os.path.join(pasta, "lote.csv"), "w") as f:
+        dir_value = os_platform.create_input_dir(base, "carga")
+        self.assertEqual((dir_value, os.stat(dir_value).st_mode & 0o777), (os.path.join(base, "carga"), 0o700))
+        with open(os.path.join(dir_value, "lote.csv"), "w") as f:
             f.write("1;2\n")
-        os.chmod(pasta, 0o750)
-        self.assertEqual(os_platform.create_input_dir(base, "carga"), pasta, "idempotente")
-        self.assertEqual(os.stat(pasta).st_mode & 0o777, 0o750, "a existente fica como esta")
-        self.assertEqual(os.listdir(pasta), ["lote.csv"], "conteudo permanente")
-        fora = os.path.join(self.root, "fora_entrada")
-        os.mkdir(fora)
-        os.symlink(fora, os.path.join(base, "ligada"))
+        os.chmod(dir_value, 0o750)
+        self.assertEqual(os_platform.create_input_dir(base, "carga"), dir_value, "idempotente")
+        self.assertEqual(os.stat(dir_value).st_mode & 0o777, 0o750, "a existente fica como esta")
+        self.assertEqual(os.listdir(dir_value), ["lote.csv"], "conteudo permanente")
+        outside = os.path.join(self.root, "fora_entrada")
+        os.mkdir(outside)
+        os.symlink(outside, os.path.join(base, "ligada"))
         with self.assertRaises(RuntimeError):
             os_platform.create_input_dir(base, "ligada")
 
     def test_dev_recusa_link_no_caminho(self):
         os.makedirs(self.base)
-        fora = os.path.join(self.root, "fora")
-        os.mkdir(fora)
-        os.symlink(fora, os.path.join(self.base, "carga"))
+        outside = os.path.join(self.root, "fora")
+        os.mkdir(outside)
+        os.symlink(outside, os.path.join(self.base, "carga"))
         with self.assertRaises(RuntimeError):
             os_platform.create_output_dir(self.base, self.rel)
-        self.assertEqual(os.listdir(fora), [])
+        self.assertEqual(os.listdir(outside), [])
 
     def test_validar_pastas_saida(self):
         os.makedirs(self.base, 0o700)
-        eu = posix.pwd.getpwuid(os.geteuid()).pw_name
-        self.assertEqual(os_platform.validate_output_dirs([(self.base, eu)]), [])
+        me = posix.pwd.getpwuid(os.geteuid()).pw_name
+        self.assertEqual(os_platform.validate_output_dirs([(self.base, me)]), [])
         os.chmod(self.base, 0o770)
-        self.assertEqual(len(os_platform.validate_output_dirs([(self.base, eu)])), 1)
+        self.assertEqual(len(os_platform.validate_output_dirs([(self.base, me)])), 1)
         os.chmod(self.base, 0o700)
         link = os.path.join(self.root, "link")
         os.symlink(self.base, link)
-        falhas = os_platform.validate_output_dirs([(link, eu), (os.path.join(self.root, "nada"), eu),
+        failures = os_platform.validate_output_dirs([(link, me), (os.path.join(self.root, "nada"), me),
                                                   (self.base, "usuario_que_nao_existe_sss")])
-        self.assertEqual(len(falhas), 3, falhas)
+        self.assertEqual(len(failures), 3, failures)
         with mock.patch.object(posix.pwd, "getpwnam", return_value=_Pw("exec1", os.geteuid() + 1)):
             self.assertEqual(len(os_platform.validate_output_dirs([(self.base, "exec1")])), 1, "dono diferente")
 
@@ -386,19 +386,19 @@ class TestLockStopPrivilege(unittest.TestCase):
         shutil.rmtree(self.root, ignore_errors=True)
 
     def test_segunda_trava_falha(self):
-        caminho = os.path.join(self.root, "agente.lock")
-        trava = os_platform.lock_instance(caminho)
+        path = os.path.join(self.root, "agente.lock")
+        lock = os_platform.lock_instance(path)
         try:
             # Outro processo (flock e por descricao de arquivo aberto).
-            codigo = ("import sys\nsys.path.insert(0, %r)\nfrom os_platform import posix\n"
+            code = ("import sys\nsys.path.insert(0, %r)\nfrom os_platform import posix\n"
                       "try:\n    posix.lock_instance(%r)\nexcept posix.InstanceAlreadyRunning:\n    sys.exit(7)\n"
-                      % (os.path.dirname(os.path.dirname(posix.__file__)), caminho))
-            self.assertEqual(subprocess.call([sys.executable, "-c", codigo]), 7)
+                      % (os.path.dirname(os.path.dirname(posix.__file__)), path))
+            self.assertEqual(subprocess.call([sys.executable, "-c", code]), 7)
             with self.assertRaises(os_platform.InstanceAlreadyRunning):
-                os_platform.lock_instance(caminho)
+                os_platform.lock_instance(path)
         finally:
-            os_platform.release_instance(trava)
-        os_platform.release_instance(os_platform.lock_instance(caminho))
+            os_platform.release_instance(lock)
+        os_platform.release_instance(os_platform.lock_instance(path))
 
     def test_usuario_privilegiado(self):
         with mock.patch.object(posix.os, "geteuid", return_value=0):
@@ -407,16 +407,16 @@ class TestLockStopPrivilege(unittest.TestCase):
             self.assertFalse(os_platform.is_privileged_user())
 
     def test_parada_por_sinal_so_seta_a_flag(self):
-        antigos = (signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGINT))
+        old = (signal.getsignal(signal.SIGTERM), signal.getsignal(signal.SIGINT))
         try:
-            for sinal in (signal.SIGTERM, signal.SIGINT):
+            for signal_value in (signal.SIGTERM, signal.SIGINT):
                 flag = threading.Event()
                 os_platform.install_stop_handler(flag)
-                os.kill(os.getpid(), sinal)
+                os.kill(os.getpid(), signal_value)
                 self.assertTrue(_wait(flag.is_set, 2))
         finally:
-            signal.signal(signal.SIGTERM, antigos[0])
-            signal.signal(signal.SIGINT, antigos[1])
+            signal.signal(signal.SIGTERM, old[0])
+            signal.signal(signal.SIGINT, old[1])
 
 
 class TestStateAndDirectories(unittest.TestCase):
@@ -428,31 +428,31 @@ class TestStateAndDirectories(unittest.TestCase):
         shutil.rmtree(self.root, ignore_errors=True)
 
     def test_gravar_e_ler_estado_atomicos(self):
-        for nome in (".sss_spawn", ".sss_proc", ".sss_result"):
-            caminho = os.path.join(self.root, nome)
-            self.assertIsNone(os_platform.read_state(caminho))
-            os_platform.write_state(caminho, {"ticket_id": 5, "fase": nome})
-            os_platform.write_state(caminho, {"ticket_id": 5, "fase": nome, "v": 2})
-            self.assertEqual(os_platform.read_state(caminho), {"ticket_id": 5, "fase": nome, "v": 2})
-            self.assertEqual(os.stat(caminho).st_mode & 0o777, 0o600)
+        for name in (".sss_spawn", ".sss_proc", ".sss_result"):
+            path = os.path.join(self.root, name)
+            self.assertIsNone(os_platform.read_state(path))
+            os_platform.write_state(path, {"ticket_id": 5, "fase": name})
+            os_platform.write_state(path, {"ticket_id": 5, "fase": name, "v": 2})
+            self.assertEqual(os_platform.read_state(path), {"ticket_id": 5, "fase": name, "v": 2})
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
         self.assertEqual(sorted(os.listdir(self.root)), [".sss_proc", ".sss_result", ".sss_spawn"])
 
     def test_gravar_estado_com_falha_nao_deixa_temporario_nem_troca_o_anterior(self):
-        caminho = os.path.join(self.root, ".sss_proc")
-        os_platform.write_state(caminho, {"pid": 1})
+        path = os.path.join(self.root, ".sss_proc")
+        os_platform.write_state(path, {"pid": 1})
         with self.assertRaises(TypeError):
-            os_platform.write_state(caminho, {"pid": object()})
-        self.assertEqual(os_platform.read_state(caminho), {"pid": 1})
+            os_platform.write_state(path, {"pid": object()})
+        self.assertEqual(os_platform.read_state(path), {"pid": 1})
         self.assertEqual(os.listdir(self.root), [".sss_proc"])
 
     def test_criar_dir_trabalho_0700(self):
-        caminho = os.path.join(self.root, "work", "ticket_1")
+        path = os.path.join(self.root, "work", "ticket_1")
         old = os.umask(0)
         try:
-            os_platform.create_work_dir(caminho)
+            os_platform.create_work_dir(path)
         finally:
             os.umask(old)
-        self.assertEqual(os.stat(caminho).st_mode & 0o777, 0o700)
+        self.assertEqual(os.stat(path).st_mode & 0o777, 0o700)
 
     def test_espaco_livre_com_statvfs_simulado(self):
         st = mock.Mock(f_bavail=3 * 1024, f_frsize=4096)
@@ -461,10 +461,10 @@ class TestStateAndDirectories(unittest.TestCase):
         sv.assert_called_once_with("/srv/sss")
 
     def test_caminho_final(self):
-        alvo = os.path.join(self.root, "alvo")
-        os.mkdir(alvo)
-        os.symlink(alvo, os.path.join(self.root, "link"))
-        self.assertEqual(os_platform.final_path(os.path.join(self.root, "link")), os.path.realpath(alvo))
+        target = os.path.join(self.root, "alvo")
+        os.mkdir(target)
+        os.symlink(target, os.path.join(self.root, "link"))
+        self.assertEqual(os_platform.final_path(os.path.join(self.root, "link")), os.path.realpath(target))
 
     @unittest.skipIf(os.geteuid() == 0, "root sempre tem escrita")
     def test_validar_dir_restrito(self):
@@ -476,15 +476,15 @@ class TestStateAndDirectories(unittest.TestCase):
         os.symlink("/etc", os.path.join(self.root, "etc_link"))
         self.assertEqual(os_platform.validate_restricted_dir(os.path.join(self.root, "etc_link")), "SYSTEM_DIR")
         self.assertEqual(os_platform.validate_restricted_dir(os.path.join(self.root, "nao")), "NOT_FOUND")
-        arq = os.path.join(self.root, "arq")
-        open(arq, "w").close()
-        self.assertEqual(os_platform.validate_restricted_dir(arq), "NAO_E_DIRETORIO")
-        so_leitura = os.path.join(self.root, "ro")
-        os.mkdir(so_leitura, 0o500)
+        file = os.path.join(self.root, "arq")
+        open(file, "w").close()
+        self.assertEqual(os_platform.validate_restricted_dir(file), "NAO_E_DIRETORIO")
+        only_read = os.path.join(self.root, "ro")
+        os.mkdir(only_read, 0o500)
         try:
-            self.assertEqual(os_platform.validate_restricted_dir(so_leitura), "SEM_ESCRITA")
+            self.assertEqual(os_platform.validate_restricted_dir(only_read), "SEM_ESCRITA")
         finally:
-            os.chmod(so_leitura, 0o700)
+            os.chmod(only_read, 0o700)
 
 
 @unittest.skipIf(os.geteuid() == 0, "root sempre passa em os.access(W_OK)")
@@ -504,10 +504,10 @@ class TestPathValidations(unittest.TestCase):
         os.chmod(self.root, 0o555)
 
     def tearDown(self):
-        for atual, dirs, _arqs in os.walk(self.root):
-            os.chmod(atual, 0o700)
+        for current, dirs, _arqs in os.walk(self.root):
+            os.chmod(current, 0o700)
             for d in dirs:
-                os.chmod(os.path.join(atual, d), 0o700)
+                os.chmod(os.path.join(current, d), 0o700)
         os.chmod(self.root, 0o700)
         os.chmod(self.base, 0o700)
         shutil.rmtree(self.root, ignore_errors=True)
@@ -570,8 +570,8 @@ class TestRestrictedFile(unittest.TestCase):
         self.assertIsNone(os_platform.validate_restricted_file(self.path)[0])
         os.chmod(self.path, 0o400)
         self.assertIsNone(os_platform.validate_restricted_file(self.path)[0])
-        for modo in (0o640, 0o604, 0o660):
-            os.chmod(self.path, modo)
+        for mode in (0o640, 0o604, 0o660):
+            os.chmod(self.path, mode)
             self.assertEqual(os_platform.validate_restricted_file(self.path)[0], "PERMISSAO_INSEGURA")
         os.chmod(self.path, 0o600)
         with mock.patch.object(posix.os, "geteuid", return_value=os.geteuid() + 1):
@@ -648,14 +648,14 @@ class TestValidateExecution(unittest.TestCase):
 class TestInterface(unittest.TestCase):
 
     def test_exporta_a_interface_do_readme(self):
-        for nome in ("NAME", "Process", "start_process", "signal_group", "group_alive", "validate_execution",
+        for name in ("NAME", "Process", "start_process", "signal_group", "group_alive", "validate_execution",
                      "write_state", "read_state", "stop_ticket", "free_space_mb", "process_identity",
                      "process_exists", "reopen_group", "lock_instance", "release_instance",
                      "is_privileged_user", "validate_restricted_file", "validate_restricted_dir",
                      "validate_script_path", "final_path", "create_work_dir", "install_stop_handler",
                      "create_output_dir", "start_pack", "clean_output", "purge_output",
                      "validate_output_dirs"):
-            self.assertTrue(hasattr(os_platform, nome), nome)
+            self.assertTrue(hasattr(os_platform, name), name)
         self.assertIn(os_platform.NAME, ("LINUX", "UNIX"))
         self.assertFalse(hasattr(os_platform, "encerrar_grupo"), "encerramento escalonado e do executor (F8.1)")
 

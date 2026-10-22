@@ -22,12 +22,12 @@ ADMIN_SESSION = {"usuario_id": 1, "login": "admin", "perfil_id": 1, "perm_versao
 class TestVisibleActor(unittest.TestCase):
 
     def test_regras(self):
-        sem = {"login": "op.prod", "features": frozenset(["VIEW_LOGS"])}
-        self.assertEqual(ui_helpers.ator_visivel("op.prod", sem), u"você")
-        self.assertEqual(ui_helpers.ator_visivel("admin", sem), u"outra pessoa")
-        self.assertEqual(ui_helpers.ator_visivel("SYSTEM:agt-host01", sem), "SYSTEM:agt-host01")
-        self.assertIsNone(ui_helpers.ator_visivel(None, sem))
-        self.assertEqual(ui_helpers.ator_visivel("admin", dict(sem, features=frozenset(["VIEW_AUDIT"]))),
+        without = {"login": "op.prod", "features": frozenset(["VIEW_LOGS"])}
+        self.assertEqual(ui_helpers.ator_visivel("op.prod", without), u"você")
+        self.assertEqual(ui_helpers.ator_visivel("admin", without), u"outra pessoa")
+        self.assertEqual(ui_helpers.ator_visivel("SYSTEM:agt-host01", without), "SYSTEM:agt-host01")
+        self.assertIsNone(ui_helpers.ator_visivel(None, without))
+        self.assertEqual(ui_helpers.ator_visivel("admin", dict(without, features=frozenset(["VIEW_AUDIT"]))),
                          "admin")
         self.assertEqual(ui_helpers.ator_visivel("admin", {"is_admin": True}), "admin")
 
@@ -59,9 +59,9 @@ class TestMaskedOwner(unittest.TestCase):
                              features=frozenset(f for f in self.admin["features"] if f != "VIEW_AUDIT"))
 
     def test_lista_e_formulario(self):
-        responsaveis = set(i["responsavel"] for i in self.svc.list(self.operator, {}, 1, 100)["itens"])
-        self.assertTrue(responsaveis)
-        self.assertTrue(responsaveis <= {u"você", u"outra pessoa"}, responsaveis)
+        owners = set(i["responsavel"] for i in self.svc.list(self.operator, {}, 1, 100)["itens"])
+        self.assertTrue(owners)
+        self.assertTrue(owners <= {u"você", u"outra pessoa"}, owners)
         self.assertEqual(self.svc.form(self.operator, "2")["regra"]["responsavel"], u"você")
         self.assertEqual(self.svc.form(self.admin, "2")["regra"]["responsavel"], "op.prod")
 
@@ -71,11 +71,11 @@ class TestPauseReason(unittest.TestCase):
     def test_traducao_unica(self):
         # CR-008, R-33: a mesma funcao pura na web e no daemon (README §7.5).
         M = rbac.Reason
-        for motivo in (M.USER_INACTIVE, M.SCRIPT_INACTIVE, M.ENVIRONMENT_INACTIVE):
-            self.assertEqual(rbac.pause_reason_for(motivo), motivo)
-        for motivo in (M.PROFILE_INACTIVE, M.NOT_HOMOLOGATED, M.NO_FEATURE, M.NO_ENVIRONMENT, M.NO_SCRIPT,
+        for reason in (M.USER_INACTIVE, M.SCRIPT_INACTIVE, M.ENVIRONMENT_INACTIVE):
+            self.assertEqual(rbac.pause_reason_for(reason), reason)
+        for reason in (M.PROFILE_INACTIVE, M.NOT_HOMOLOGATED, M.NO_FEATURE, M.NO_ENVIRONMENT, M.NO_SCRIPT,
                        M.INVALID_DATA):
-            self.assertEqual(rbac.pause_reason_for(motivo), "NO_PERMISSION")
+            self.assertEqual(rbac.pause_reason_for(reason), "NO_PERMISSION")
 
 
 class TestSchemaRegistry(unittest.TestCase):

@@ -34,11 +34,11 @@ class TestViewsCR007(unittest.TestCase):
         self.assertIn("Página 502", html)
         self.assertIn("pagina=503", html)
         self.assertIn("environment=HOMOLOGACAO", html)
-        exato = _render("components/paginacao.html", pagina=1, tamanho=20, total=10000,
+        exact = _render("components/paginacao.html", pagina=1, tamanho=20, total=10000,
                         total_limitado=False, quantidade_pagina=20, url_base=("tickets", "lista"),
                         query_params={})
-        self.assertIn("Última", exato)
-        self.assertNotIn("mais de", exato)
+        self.assertIn("Última", exact)
+        self.assertNotIn("mais de", exact)
 
     def test_registro_nao_inclui_ator_oculto_no_html(self):
         reg = {"created_at": datetime.datetime(2026, 10, 17), "created_by": "editor.privado",
@@ -52,21 +52,21 @@ class TestViewsCR007(unittest.TestCase):
         self.assertIn("editor.privado", html)
 
     def test_diagnosticos_aparecem_sem_agentes_e_escapam_conteudo(self):
-        agora = datetime.datetime(2026, 10, 17)
-        painel = {"agents": [], "resumo": {}, "agora": agora, "config_web": "hb=10",
+        now = datetime.datetime(2026, 10, 17)
+        dashboard = {"agents": [], "resumo": {}, "agora": now, "config_web": "hb=10",
                   "fila_sem_atendente": [{"environment": "HOMOLOGACAO", "interpreter": "BASH",
-                                          "quantidade": 2, "mais_antigo": agora}],
+                                          "quantidade": 2, "mais_antigo": now}],
                   "rodando_sem_pid": [{"id": 1, "environment": "HOMOLOGACAO", "agent_id": "agt01",
-                                       "started_at": agora}],
+                                       "started_at": now}],
                   "config_divergente": [{"code": "agt01", "critical_config": "<script>intruso</script>"}]}
-        html = _render("auditoria/agentes.load", painel=painel, erro=None)
-        for titulo in ("Fila sem atendente", "Rodando sem PID", "Configuração divergente"):
-            self.assertIn(titulo, html)
+        html = _render("auditoria/agentes.load", painel=dashboard, erro=None)
+        for title in ("Fila sem atendente", "Rodando sem PID", "Configuração divergente"):
+            self.assertIn(title, html)
         self.assertNotIn("<script>intruso</script>", html)
         self.assertIn("&lt;script&gt;", html)
         self.assertIn("Nenhum agente registrado", html)
-        painel.update(fila_sem_atendente=[], rodando_sem_pid=[], config_divergente=[])
-        html = _render("auditoria/agentes.load", painel=painel, erro=None)
+        dashboard.update(fila_sem_atendente=[], rodando_sem_pid=[], config_divergente=[])
+        html = _render("auditoria/agentes.load", painel=dashboard, erro=None)
         self.assertNotIn("Fila sem atendente", html)
         self.assertNotIn("Rodando sem PID", html)
         self.assertNotIn("Configuração divergente", html)

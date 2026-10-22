@@ -77,95 +77,95 @@ def _excluded_from_app(rel):
 
 def _walk(source, base, problems, filter_value=None):
     """Arquivos de origem/base (relativos a origem), sem seguir links; links viram problema."""
-    arquivos = []
-    for pasta, subpastas, nomes in os.walk(os.path.join(source, base)):
-        rel_pasta = os.path.relpath(pasta, source).replace(os.sep, "/")
-        for nome in sorted(subpastas):
-            if os.path.islink(os.path.join(pasta, nome)):
-                problems.append("%s/%s: link simbolico" % (rel_pasta, nome))
-        manter = []
-        for nome in sorted(subpastas):
-            rel = rel_pasta + "/" + nome
-            if os.path.islink(os.path.join(pasta, nome)) or (filter_value and filter_value(rel)):
+    files = []
+    for dir_value, subdirs, names in os.walk(os.path.join(source, base)):
+        rel_dir = os.path.relpath(dir_value, source).replace(os.sep, "/")
+        for name in sorted(subdirs):
+            if os.path.islink(os.path.join(dir_value, name)):
+                problems.append("%s/%s: link simbolico" % (rel_dir, name))
+        keep = []
+        for name in sorted(subdirs):
+            rel = rel_dir + "/" + name
+            if os.path.islink(os.path.join(dir_value, name)) or (filter_value and filter_value(rel)):
                 continue
-            manter.append(nome)
-        subpastas[:] = manter
-        for nome in sorted(nomes):
-            rel = rel_pasta + "/" + nome
+            keep.append(name)
+        subdirs[:] = keep
+        for name in sorted(names):
+            rel = rel_dir + "/" + name
             if filter_value and filter_value(rel):
                 continue
-            if os.path.islink(os.path.join(pasta, nome)):
+            if os.path.islink(os.path.join(dir_value, name)):
                 problems.append("%s: link simbolico" % rel)
                 continue
-            arquivos.append(rel)
-    return arquivos
+            files.append(rel)
+    return files
 
 
 def collect(source):
     """(arquivos relativos a origem, problemas de link/ausencia). O routes.py e gerado, nao coletado."""
-    problemas = []
-    arquivos = []
-    for nome in ROOT_FILES:
-        if os.path.isfile(os.path.join(source, nome)):
-            arquivos.append(nome)
+    problems = []
+    files = []
+    for name in ROOT_FILES:
+        if os.path.isfile(os.path.join(source, name)):
+            files.append(name)
         else:
-            problemas.append("%s: ausente" % nome)
-    for nome in BIN:
-        rel = "bin/" + nome
+            problems.append("%s: ausente" % name)
+    for name in BIN:
+        rel = "bin/" + name
         if os.path.isfile(os.path.join(source, rel)) and not os.path.islink(os.path.join(source, rel)):
-            arquivos.append(rel)
+            files.append(rel)
         else:
-            problemas.append("%s: ausente" % rel)
-    for pasta in ROOT_DIRS:
-        arquivos.extend(_walk(source, pasta, problemas,
+            problems.append("%s: ausente" % rel)
+    for dir_value in ROOT_DIRS:
+        files.extend(_walk(source, dir_value, problems,
                                   filter_value=lambda rel: any(p in EXCLUDE_GLUON for p in rel.split("/"))))
-    prefixo = APP + "/"
-    arquivos.extend(_walk(source, APP, problemas,
-                              filter_value=lambda rel: _excluded_from_app(rel[len(prefixo):])))
-    return sorted(arquivos), problemas
+    prefix = APP + "/"
+    files.extend(_walk(source, APP, problems,
+                              filter_value=lambda rel: _excluded_from_app(rel[len(prefix):])))
+    return sorted(files), problems
 
 
 def _credentials(rel, content):
-    nome = rel.rsplit("/", 1)[-1]
-    if not (nome.endswith(".ini") or nome.endswith(".cfg") or nome.endswith(".cfg.example")
-            or nome.endswith(".ini.example")):
+    name = rel.rsplit("/", 1)[-1]
+    if not (name.endswith(".ini") or name.endswith(".cfg") or name.endswith(".cfg.example")
+            or name.endswith(".ini.example")):
         return []
-    problemas = []
-    for n, linha in enumerate(content.decode("utf-8", "replace").splitlines(), 1):
-        m = _RE_CREDENTIAL.match(linha)
+    problems = []
+    for n, line in enumerate(content.decode("utf-8", "replace").splitlines(), 1):
+        m = _RE_CREDENTIAL.match(line)
         if not m:
             continue
-        valor = re.split(r"\s+[;#]", m.group(2), 1)[0].strip()
-        if not valor or valor in ("...",):
+        value = re.split(r"\s+[;#]", m.group(2), 1)[0].strip()
+        if not value or value in ("...",):
             continue
-        if rel == _SECRETS_EXAMPLE and valor == _PLACEHOLDER:
+        if rel == _SECRETS_EXAMPLE and value == _PLACEHOLDER:
             continue
-        problemas.append("%s:%d: %s com valor que nao e o placeholder %s" % (rel, n, m.group(1).lower(), _PLACEHOLDER))
-    return problemas
+        problems.append("%s:%d: %s com valor que nao e o placeholder %s" % (rel, n, m.group(1).lower(), _PLACEHOLDER))
+    return problems
 
 
 def check(files, read):
     """Problemas do conteudo (sem valores). ler(rel) -> bytes."""
-    problemas = []
+    problems = []
     for rel in files:
-        partes = rel.split("/")
-        nome = partes[-1]
-        if nome == "secrets.cfg":
-            problemas.append("%s: arquivo de segredos real" % rel)
-        if nome.endswith(".pyc") or "__pycache__" in partes:
-            problemas.append("%s: bytecode" % rel)
-        if rel.endswith("controllers/dev.py") or "repo_fake" in partes:
-            problemas.append("%s: codigo de DEV" % rel)
-        if rel.startswith("applications/") and partes[1] != "script_scheduling_service":
-            problemas.append("%s: aplicacao fora do SSS (/admin/, welcome, examples)" % rel)
+        parts = rel.split("/")
+        name = parts[-1]
+        if name == "secrets.cfg":
+            problems.append("%s: arquivo de segredos real" % rel)
+        if name.endswith(".pyc") or "__pycache__" in parts:
+            problems.append("%s: bytecode" % rel)
+        if rel.endswith("controllers/dev.py") or "repo_fake" in parts:
+            problems.append("%s: codigo de DEV" % rel)
+        if rel.startswith("applications/") and parts[1] != "script_scheduling_service":
+            problems.append("%s: aplicacao fora do SSS (/admin/, welcome, examples)" % rel)
         if rel.startswith(APP + "/"):
-            resto = rel[len(APP) + 1:]
-            if resto.split("/")[0] in ("applications", "deposit", "logs", "site-packages") or \
-                    resto.split("/")[:2] in (["scripts", "applications"], ["scripts", "deposit"],
+            rest = rel[len(APP) + 1:]
+            if rest.split("/")[0] in ("applications", "deposit", "logs", "site-packages") or \
+                    rest.split("/")[:2] in (["scripts", "applications"], ["scripts", "deposit"],
                                              ["scripts", "logs"], ["scripts", "site-packages"]):
-                problemas.append("%s: pasta de runtime do web2py" % rel)
-        problemas.extend(_credentials(rel, read(rel)))
-    return problemas
+                problems.append("%s: pasta de runtime do web2py" % rel)
+        problems.extend(_credentials(rel, read(rel)))
+    return problems
 
 
 def _info(name, size, mode, kind=tarfile.REGTYPE):
@@ -180,52 +180,52 @@ def build_package(source, output, version=None):
     """Gera o pacote e o SHA256SUMS; devolve (tar_gz, sha256sums). PackageError sem gravar nada."""
     version = version or sss_config.SSS_VERSION
     source = os.path.abspath(source)
-    arquivos, problemas = collect(source)
+    files, problems = collect(source)
 
     def ler(rel):
         with open(os.path.join(source, rel), "rb") as f:
             return f.read()
-    problemas.extend(check(arquivos, ler))
-    if problemas:
-        raise PackageError(problemas)
+    problems.extend(check(files, ler))
+    if problems:
+        raise PackageError(problems)
 
-    topo = "sss-%s" % version
-    conteudo = [(rel, ler(rel)) for rel in arquivos] + [("routes.py", ROUTES.encode("utf-8"))]
-    conteudo.sort()
-    somas = "".join("%s  %s\n" % (hashlib.sha256(dados).hexdigest(), rel) for rel, dados in conteudo)
-    pastas = set()
-    for rel, _d in conteudo:
-        partes = rel.split("/")[:-1]
-        pastas.update("/".join(partes[:i]) for i in range(1, len(partes) + 1))
-    pastas.update(APP + "/" + p for p in EMPTY_RUNTIME_DIRS)
+    top = "sss-%s" % version
+    content = [(rel, ler(rel)) for rel in files] + [("routes.py", ROUTES.encode("utf-8"))]
+    content.sort()
+    sums = "".join("%s  %s\n" % (hashlib.sha256(date).hexdigest(), rel) for rel, date in content)
+    dirs = set()
+    for rel, _d in content:
+        parts = rel.split("/")[:-1]
+        dirs.update("/".join(parts[:i]) for i in range(1, len(parts) + 1))
+    dirs.update(APP + "/" + p for p in EMPTY_RUNTIME_DIRS)
 
     os.makedirs(output, exist_ok=True)
-    destino = os.path.join(output, "%s.tar.gz" % topo)
-    temporario = destino + ".parcial"
+    destination = os.path.join(output, "%s.tar.gz" % top)
+    temporary = destination + ".parcial"
     try:
-        with open(temporario, "wb") as bruto:
-            with gzip.GzipFile(filename="", mode="wb", fileobj=bruto, mtime=0) as gz:
+        with open(temporary, "wb") as raw:
+            with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as gz:
                 with tarfile.open(fileobj=gz, mode="w", format=tarfile.GNU_FORMAT) as tar:
-                    tar.addfile(_info(topo, 0, 0o755, tarfile.DIRTYPE))
-                    itens = [(p, None) for p in pastas] + conteudo + [("SHA256SUMS", somas.encode("utf-8"))]
-                    for rel, dados in sorted(itens, key=lambda x: x[0]):
-                        nome = topo + "/" + rel
-                        if dados is None:
-                            tar.addfile(_info(nome, 0, 0o755, tarfile.DIRTYPE))
+                    tar.addfile(_info(top, 0, 0o755, tarfile.DIRTYPE))
+                    items = [(p, None) for p in dirs] + content + [("SHA256SUMS", sums.encode("utf-8"))]
+                    for rel, date in sorted(items, key=lambda x: x[0]):
+                        name = top + "/" + rel
+                        if date is None:
+                            tar.addfile(_info(name, 0, 0o755, tarfile.DIRTYPE))
                         else:
-                            modo = 0o755 if rel.startswith("bin/") else 0o644
-                            tar.addfile(_info(nome, len(dados), modo), io.BytesIO(dados))
-        os.replace(temporario, destino)
+                            mode = 0o755 if rel.startswith("bin/") else 0o644
+                            tar.addfile(_info(name, len(date), mode), io.BytesIO(date))
+        os.replace(temporary, destination)
     except BaseException:
-        if os.path.exists(temporario):
-            os.remove(temporario)
+        if os.path.exists(temporary):
+            os.remove(temporary)
         raise
-    with open(destino, "rb") as f:
-        hash_pacote = hashlib.sha256(f.read()).hexdigest()
-    somas_dist = os.path.join(output, "SHA256SUMS")
-    with open(somas_dist, "w", encoding="utf-8") as f:
-        f.write("%s  %s\n" % (hash_pacote, os.path.basename(destino)))
-    return destino, somas_dist
+    with open(destination, "rb") as f:
+        hash_package = hashlib.sha256(f.read()).hexdigest()
+    sums_dist = os.path.join(output, "SHA256SUMS")
+    with open(sums_dist, "w", encoding="utf-8") as f:
+        f.write("%s  %s\n" % (hash_package, os.path.basename(destination)))
+    return destination, sums_dist
 
 
 def main(argv=None, output_text=None):
@@ -235,13 +235,13 @@ def main(argv=None, output_text=None):
     parser.add_argument("--out-dir", dest="saida", default=None, help="pasta de saida (padrao: <origem>/dist)")
     args = parser.parse_args(argv)
     try:
-        destino, somas = build_package(args.origem, args.saida or os.path.join(args.origem, "dist"))
+        destination, sums = build_package(args.origem, args.saida or os.path.join(args.origem, "dist"))
     except PackageError as exc:
         output_text.write("Pacote recusado:\n")
-        for problema in exc.problems:
-            output_text.write("  - %s\n" % problema)
+        for problem in exc.problems:
+            output_text.write("  - %s\n" % problem)
         return 1
-    output_text.write("Pacote: %s\nSHA256SUMS: %s\n" % (destino, somas))
+    output_text.write("Pacote: %s\nSHA256SUMS: %s\n" % (destination, sums))
     return 0
 
 

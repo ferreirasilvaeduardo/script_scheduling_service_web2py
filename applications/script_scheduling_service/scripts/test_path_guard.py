@@ -41,15 +41,15 @@ class TestResolver(unittest.TestCase):
 
     def tearDown(self):
         os.chmod(self.root, 0o755)
-        for raiz, dirs, files in os.walk(self.root):
-            os.chmod(raiz, 0o755)
+        for root, dirs, files in os.walk(self.root):
+            os.chmod(root, 0o755)
         shutil.rmtree(self.root)
 
     def _lock(self, top):
-        for raiz, dirs, files in os.walk(top):
-            os.chmod(raiz, DIR_MODE)
+        for root, dirs, files in os.walk(top):
+            os.chmod(root, DIR_MODE)
             for f in files:
-                p = os.path.join(raiz, f)
+                p = os.path.join(root, f)
                 if not os.path.islink(p):
                     os.chmod(p, FILE_MODE)
 
@@ -84,20 +84,20 @@ class TestResolver(unittest.TestCase):
         self.assertEqual(self._code("ciclo_a"), Code.NOT_FOUND)
 
     def test_pastas_do_sistema_digitadas_e_via_symlink(self):
-        for caminho in ("/etc/passwd", "/usr/bin/python3", "/bin/sh", "/root/x.py", "/proc/self/status"):
-            with self.subTest(caminho=caminho):
+        for path in ("/etc/passwd", "/usr/bin/python3", "/bin/sh", "/root/x.py", "/proc/self/status"):
+            with self.subTest(caminho=path):
                 with self.assertRaises(PathGuardError) as ctx:
-                    path_guard.resolve(caminho)
+                    path_guard.resolve(path)
                 self.assertEqual(ctx.exception.code, Code.SYSTEM_DIR)
         self.assertEqual(self._code("link_etc.py"), Code.SYSTEM_DIR)
         self.assertEqual(self._code("link_usr/bin/env"), Code.SYSTEM_DIR)
 
     def test_prefixo_irmao_nao_e_pasta_do_sistema(self):
         # /usrx e /etcetera nao estao dentro de /usr e /etc (componente, nao prefixo de texto).
-        for caminho in ("/usrx/a.py", "/etcetera/a.py", "/binarios/a.sh"):
-            with self.subTest(caminho=caminho):
+        for path in ("/usrx/a.py", "/etcetera/a.py", "/binarios/a.sh"):
+            with self.subTest(caminho=path):
                 with self.assertRaises(PathGuardError) as ctx:
-                    path_guard.resolve(caminho)
+                    path_guard.resolve(path)
                 self.assertEqual(ctx.exception.code, Code.NOT_FOUND)
 
     def test_dentro_de_log_dir_ou_work_dir(self):
@@ -112,13 +112,13 @@ class TestResolver(unittest.TestCase):
 
     def test_gravavel_por_grupo_ou_outros_so_no_arquivo(self):
         # CR-011 (S2): o ambiente controla o conteudo; o SSS confere so o proprio arquivo, nao as pastas.
-        arq = self._p("sub/fundo/ok.sh")
+        file = self._p("sub/fundo/ok.sh")
         for bit in (0o020, 0o002):
-            os.chmod(arq, FILE_MODE | bit)
+            os.chmod(file, FILE_MODE | bit)
             try:
                 self.assertEqual(self._code("sub/fundo/ok.sh"), Code.GROUP_OTHER_WRITABLE, oct(bit))
             finally:
-                os.chmod(arq, FILE_MODE)
+                os.chmod(file, FILE_MODE)
         os.chmod(self._p("sub/fundo"), 0o777)
         try:
             self.assertTrue(self._resolver("sub/fundo/ok.sh"), "pasta gravavel nao e conferida")
@@ -142,12 +142,12 @@ class TestAccessAndExecutable(unittest.TestCase):
     _resolver = TestResolver._resolver
 
     def test_sem_acesso_e_diferente_de_nao_encontrado(self):
-        fundo = self._p("sub/fundo")
-        os.chmod(fundo, 0o000)
+        background = self._p("sub/fundo")
+        os.chmod(background, 0o000)
         try:
             self.assertEqual(self._code("sub/fundo/ok.sh"), Code.NO_ACCESS)
         finally:
-            os.chmod(fundo, DIR_MODE)
+            os.chmod(background, DIR_MODE)
 
     def test_executavel_do_interpretador(self):
         sh = os.path.realpath("/bin/sh")
@@ -155,11 +155,11 @@ class TestAccessAndExecutable(unittest.TestCase):
         with self.assertRaises(PathGuardError) as ctx:
             path_guard.validate_executable("/nao/existe/python3")
         self.assertEqual(ctx.exception.code, Code.NOT_FOUND)
-        for caminho, kw in (("bin/sh", {}), ("/bin/sh", {"sss_dirs": (os.path.dirname(sh),)}),
+        for path, kw in (("bin/sh", {}), ("/bin/sh", {"sss_dirs": (os.path.dirname(sh),)}),
                             (self._p("sub/ok.py"), {}), (self._p("sub"), {})):
-            with self.subTest(caminho=caminho, kw=kw):
+            with self.subTest(caminho=path, kw=kw):
                 with self.assertRaises(PathGuardError) as ctx:
-                    path_guard.validate_executable(caminho, **kw)
+                    path_guard.validate_executable(path, **kw)
                 self.assertEqual(ctx.exception.code, Code.INTERPRETADOR_INSEGURO)
 
 
@@ -168,7 +168,7 @@ class TestTextValidations(unittest.TestCase):
     def test_validar_cadastro(self):
         path_guard.validate_registration("/opt/automacoes/scripts/faturamento/carga_faturas.py")
         path_guard.validate_registration("/opt/a b/script com espaço.py")
-        casos = (("faturamento/carga.py", Code.RELATIVE_PATH),
+        cases = (("faturamento/carga.py", Code.RELATIVE_PATH),
                  ("", Code.RELATIVE_PATH),
                  (None, Code.RELATIVE_PATH),
                  ("./a.py", Code.RELATIVE_PATH),
@@ -182,18 +182,18 @@ class TestTextValidations(unittest.TestCase):
                  ("/opt/./a.py", Code.PATH_NOT_NORMALIZED),
                  ("/opt/scripts/", Code.PATH_NOT_NORMALIZED),
                  ("/", Code.PATH_NOT_NORMALIZED))
-        for valor, codigo in casos:
-            with self.subTest(valor=valor):
+        for value, code in cases:
+            with self.subTest(valor=value):
                 with self.assertRaises(PathGuardError) as ctx:
-                    path_guard.validate_registration(valor)
-                self.assertEqual(ctx.exception.code, codigo)
+                    path_guard.validate_registration(value)
+                self.assertEqual(ctx.exception.code, code)
 
     def test_checar_pastas_proibidas_sem_o_arquivo(self):
         # Vale mesmo se o arquivo nao existe neste servidor (README §8.5, D4).
-        for caminho in ("/etc/nao_existe.py", "/lib64/x.sh", "/sys/x", "/dev/null", "/boot/a.py"):
-            with self.subTest(caminho=caminho):
+        for path in ("/etc/nao_existe.py", "/lib64/x.sh", "/sys/x", "/dev/null", "/boot/a.py"):
+            with self.subTest(caminho=path):
                 with self.assertRaises(PathGuardError) as ctx:
-                    path_guard.check_forbidden_dirs(caminho)
+                    path_guard.check_forbidden_dirs(path)
                 self.assertEqual(ctx.exception.code, Code.SYSTEM_DIR)
         path_guard.check_forbidden_dirs("/opt/automacoes/nao_existe.py")
         with self.assertRaises(PathGuardError) as ctx:

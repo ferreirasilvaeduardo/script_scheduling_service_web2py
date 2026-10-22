@@ -78,12 +78,12 @@ def can_view_environment(ctx, environment):
     """True se o perfil enxerga o ambiente (dict com 'nome' ou o proprio nome)."""
     if not _active(ctx):
         return False
-    nome = _environment_name(environment)
-    if nome is None:
+    name = _environment_name(environment)
+    if name is None:
         return False
     if ctx.get("is_admin") is True:
         return True
-    return nome in ctx.get("environments", ())
+    return name in ctx.get("environments", ())
 
 
 def can_execute(ctx, script, environment, homologations):
@@ -144,9 +144,9 @@ def can_cancel(ctx, ticket):
         return True
     if has_feature(ctx, "CANCEL_TICKET") and can_view_environment(ctx, ticket.get("environment")):
         return True
-    solicitante = ticket.get("requested_by")
-    return has_feature(ctx, "EXEC_SCRIPT") and isinstance(solicitante, str) \
-        and solicitante == ctx.get("login")
+    requester = ticket.get("requested_by")
+    return has_feature(ctx, "EXEC_SCRIPT") and isinstance(requester, str) \
+        and requester == ctx.get("login")
 
 
 def allowed_priority(ctx, priority):

@@ -1559,7 +1559,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
 
 1. **Pré-validação do snapshot e do contexto.** Qualquer falha leva a `FAILED` com `PRECHECK_FAILED` e `-4`, com a linha `[SSS]` do §5.2 no log (o código entre parênteses):
    * o JSON é válido e tem `version` suportada (`VERSAO_NAO_SUPORTADA`);
-   * `version == 4`, e `interpreter` consta na allowlist lógica **e** no mapeamento deste agente (`INTERPRETADOR_NAO_DISPONIVEL`);
+   * `version == 5`, e `interpreter` consta na allowlist lógica **e** no mapeamento deste agente (`INTERPRETADOR_NAO_DISPONIVEL`);
    * `path_file` e `interpreter` do snapshot são iguais aos do cadastro atual do script (`CADASTRO_MUDOU`, CR-007 R-24);
    * `path_file` (absoluto) passa na §8.5 neste agente, que fornece o `script_real` (códigos do `path_guard`);
    * o `argv` é montado pelo agente (§6.4) a partir de `interpreter`, `script_real` e `args`;

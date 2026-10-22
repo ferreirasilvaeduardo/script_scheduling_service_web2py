@@ -33,22 +33,22 @@ def montar_menu(features, is_admin, current_route=None):
     omitindo secoes sem itens.
     """
     admin = is_admin is True or is_admin == "Y"
-    concedidas = frozenset(features or ())
-    atual = tuple(current_route) if current_route else None
+    granted = frozenset(features or ())
+    current = tuple(current_route) if current_route else None
 
     menu = []
-    for secao, titulo, itens in _CATALOGO:
-        visiveis = []
-        for codigo, rotulo, controller, function, icone in itens:
-            if not (admin or codigo in concedidas):
+    for section, title, items in _CATALOGO:
+        visible = []
+        for code, label, controller, function, icon in items:
+            if not (admin or code in granted):
                 continue
-            visiveis.append({
-                "code": codigo,
-                "rotulo": rotulo,
+            visible.append({
+                "code": code,
+                "rotulo": label,
                 "rota": (controller, function),
-                "icone": icone,
-                "active": atual == (controller, function),
+                "icone": icon,
+                "active": current == (controller, function),
             })
-        if visiveis:
-            menu.append({"secao": secao, "titulo": titulo, "itens": visiveis})
+        if visible:
+            menu.append({"secao": section, "titulo": title, "itens": visible})
     return menu

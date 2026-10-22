@@ -43,17 +43,17 @@ def _classify_error(exc):
 
     msg = str(exc)
     match = _RE_ERROR_CODE.search(msg)
-    codigo = match.group(1) if match else None
+    code = match.group(1) if match else None
 
-    if codigo in _AUTH_ERRORS or "logon denied" in msg.lower() or "account is locked" in msg.lower():
-        return codigo or "AUTH_ERROR", "AUTHENTICATION"
-    if codigo == "DPY-3010" or "in thin mode" in msg.lower():
-        return codigo or "DPY-3010", "INCOMPATIBLE"
-    if codigo == "DPI-1047" or "oracle client library" in msg.lower():
-        return codigo or "DPI-1047", "LIBRARY"
-    if codigo in _NETWORK_ERRORS or "timed out" in msg.lower() or "timeout" in msg.lower():
-        return codigo or "NET_ERROR", "NETWORK"
-    return codigo or "ERR_OTHER", "OTHER"
+    if code in _AUTH_ERRORS or "logon denied" in msg.lower() or "account is locked" in msg.lower():
+        return code or "AUTH_ERROR", "AUTHENTICATION"
+    if code == "DPY-3010" or "in thin mode" in msg.lower():
+        return code or "DPY-3010", "INCOMPATIBLE"
+    if code == "DPI-1047" or "oracle client library" in msg.lower():
+        return code or "DPI-1047", "LIBRARY"
+    if code in _NETWORK_ERRORS or "timed out" in msg.lower() or "timeout" in msg.lower():
+        return code or "NET_ERROR", "NETWORK"
+    return code or "ERR_OTHER", "OTHER"
 
 
 def _format_client_version(val):
@@ -69,9 +69,9 @@ def probe(candidate, cfg, password_value, user=None):
     [oracle] user."""
     user = user or cfg.oracle.user
     driver = None
-    versao_servidor = None
-    versao_driver = None
-    versao_cliente = None
+    version_server = None
+    version_driver = None
+    version_client = None
 
     try:
         if candidate == "thin":
@@ -93,8 +93,8 @@ def probe(candidate, cfg, password_value, user=None):
                     oracledb.init_oracle_client(lib_dir=lib_dir)
                 else:
                     oracledb.init_oracle_client()
-            except Exception as e_init:
-                if "already been initialized" not in str(e_init):
+            except Exception as and_init:
+                if "already been initialized" not in str(and_init):
                     raise
             conn = oracledb.connect(
                 user=user,
@@ -108,8 +108,8 @@ def probe(candidate, cfg, password_value, user=None):
             try:
                 if lib_dir:
                     cx_Oracle.init_oracle_client(lib_dir=lib_dir)
-            except Exception as e_init:
-                if "already been initialized" not in str(e_init):
+            except Exception as and_init:
+                if "already been initialized" not in str(and_init):
                     pass
             conn = cx_Oracle.connect(
                 user=user,
@@ -131,13 +131,13 @@ def probe(candidate, cfg, password_value, user=None):
         cur.execute("SELECT SYSDATE FROM DUAL")
         cur.fetchone()
 
-        versao_servidor = str(getattr(conn, "version", None) or "")
-        versao_driver = str(getattr(driver, "__version__", None) or "")
+        version_server = str(getattr(conn, "version", None) or "")
+        version_driver = str(getattr(driver, "__version__", None) or "")
         if candidate in ("thick", "cx_oracle") and hasattr(driver, "clientversion"):
             try:
-                versao_cliente = _format_client_version(driver.clientversion())
+                version_client = _format_client_version(driver.clientversion())
             except Exception:
-                versao_cliente = None
+                version_client = None
 
         cur.close()
         conn.close()
@@ -145,23 +145,23 @@ def probe(candidate, cfg, password_value, user=None):
         return {
             "candidate": candidate,
             "ok": True,
-            "server_version": versao_servidor,
-            "driver_version": versao_driver,
-            "client_version": versao_cliente,
+            "server_version": version_server,
+            "driver_version": version_driver,
+            "client_version": version_client,
             "error_code": None,
             "category": None,
         }
 
     except Exception as exc:
-        codigo, categoria = _classify_error(exc)
+        code, category = _classify_error(exc)
         return {
             "candidate": candidate,
             "ok": False,
             "server_version": None,
             "driver_version": getattr(driver, "__version__", None) if driver else None,
             "client_version": None,
-            "error_code": codigo,
-            "category": categoria,
+            "error_code": code,
+            "category": category,
         }
 
 
@@ -173,19 +173,19 @@ def main():
     args = parser.parse_args()
 
     # Senha estritamente pela entrada padrao (stdin)
-    senha = sys.stdin.read()
-    if senha.endswith("\r\n"):
-        senha = senha[:-2]
-    elif senha.endswith("\n") or senha.endswith("\r"):
-        senha = senha[:-1]
+    password = sys.stdin.read()
+    if password.endswith("\r\n"):
+        password = password[:-2]
+    elif password.endswith("\n") or password.endswith("\r"):
+        password = password[:-1]
 
     if args.config:
         cfg = sss_config.load(args.config)
     else:
         cfg = sss_config.get_config()
 
-    resultado = probe(args.candidate, cfg, senha, user=args.usuario)
-    sys.stdout.write(json.dumps(resultado) + "\n")
+    result = probe(args.candidate, cfg, password, user=args.usuario)
+    sys.stdout.write(json.dumps(result) + "\n")
     sys.stdout.flush()
     sys.exit(0)
 

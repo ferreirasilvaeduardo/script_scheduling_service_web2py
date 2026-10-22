@@ -51,30 +51,30 @@ class TestValidateRule(unittest.TestCase):
     def test_ck_campos(self):
         self.assertIn('recurrence_type', rec.validate_rule(rule('ANUAL')))
         self.assertIn('run_time', rec.validate_rule(rule('DAILY')))
-        erros = rec.validate_rule(rule('WEEKLY'))
-        self.assertEqual(set(erros), {'run_time', 'week_days'})
+        errors = rec.validate_rule(rule('WEEKLY'))
+        self.assertEqual(set(errors), {'run_time', 'week_days'})
         self.assertEqual(set(rec.validate_rule(rule('MONTHLY', run_time='01:00'))), {'month_day'})
         self.assertEqual(set(rec.validate_rule(rule('CRON', cron_expression='  '))), {'cron_expression'})
         self.assertIn('start_date', rec.validate_rule(rule('ONCE', start_date=None)))
 
     def test_ck_hora(self):
-        for hora in ('24:00', '7:00', '12:60', '12h00', '12:00 ', 'ab:cd'):
-            with self.subTest(hora=hora):
-                self.assertIn('run_time', rec.validate_rule(rule('DAILY', run_time=hora)))
+        for hour in ('24:00', '7:00', '12:60', '12h00', '12:00 ', 'ab:cd'):
+            with self.subTest(hora=hour):
+                self.assertIn('run_time', rec.validate_rule(rule('DAILY', run_time=hour)))
 
     def test_ck_dias_semana(self):
-        for dsem in ('0', '8', '1,,2', '1-5', '1,2,3,4,5,6,7,1', ' 1'):
-            with self.subTest(dsem=dsem):
-                self.assertIn('week_days', rec.validate_rule(rule('WEEKLY', run_time='01:00', week_days=dsem)))
+        for wday in ('0', '8', '1,,2', '1-5', '1,2,3,4,5,6,7,1', ' 1'):
+            with self.subTest(dsem=wday):
+                self.assertIn('week_days', rec.validate_rule(rule('WEEKLY', run_time='01:00', week_days=wday)))
 
     def test_ck_dia_mes(self):
-        for dia in (0, 32, -1, 'x', '1.5'):
-            with self.subTest(dia=dia):
-                self.assertIn('month_day', rec.validate_rule(rule('MONTHLY', run_time='01:00', month_day=dia)))
+        for day in (0, 32, -1, 'x', '1.5'):
+            with self.subTest(dia=day):
+                self.assertIn('month_day', rec.validate_rule(rule('MONTHLY', run_time='01:00', month_day=day)))
 
     def test_ck_fim(self):
-        erros = rec.validate_rule(daily(end_date=START - datetime.timedelta(minutes=1)))
-        self.assertEqual(list(erros), ['end_date'])
+        errors = rec.validate_rule(daily(end_date=START - datetime.timedelta(minutes=1)))
+        self.assertEqual(list(errors), ['end_date'])
 
     def test_cron_invalido_ou_sem_ocorrencia(self):
         self.assertIn("'L'", rec.validate_rule(rule('CRON', cron_expression='0 0 L * *'))['cron_expression'])
@@ -98,10 +98,10 @@ class TestNextRun(unittest.TestCase):
 
     def test_semanal_1_3_5(self):
         r = rule('WEEKLY', run_time='08:00', week_days='1,3,5')
-        datas = rec.next_runs(r, NOW, 6)
-        self.assertEqual(datas, [D(2026, 10, 16, 8), D(2026, 10, 19, 8), D(2026, 10, 21, 8),
+        dates = rec.next_runs(r, NOW, 6)
+        self.assertEqual(dates, [D(2026, 10, 16, 8), D(2026, 10, 19, 8), D(2026, 10, 21, 8),
                                  D(2026, 10, 23, 8), D(2026, 10, 26, 8), D(2026, 10, 28, 8)])
-        self.assertEqual([d.isoweekday() for d in datas], [5, 1, 3, 5, 1, 3])
+        self.assertEqual([d.isoweekday() for d in dates], [5, 1, 3, 5, 1, 3])
         self.assertEqual(rec.next_runs(rule('WEEKLY', run_time='08:00', week_days='7'), NOW, 1),
                          [D(2026, 10, 18, 8)])
 
@@ -130,11 +130,11 @@ class TestNextRun(unittest.TestCase):
         self.assertIsNone(rec.next_run(r, NOW))
 
     def test_unica(self):
-        futura = rule('ONCE', start_date=D(2026, 10, 20, 14, 30, 59))
-        self.assertEqual(rec.next_run(futura, NOW), D(2026, 10, 20, 14, 30))
+        future = rule('ONCE', start_date=D(2026, 10, 20, 14, 30, 59))
+        self.assertEqual(rec.next_run(future, NOW), D(2026, 10, 20, 14, 30))
         self.assertIsNone(rec.next_run(rule('ONCE', start_date=D(2026, 10, 1)), NOW))
-        self.assertIsNone(rec.next_run(futura, D(2026, 10, 20, 14, 30)))
-        self.assertEqual(rec.next_runs(futura, NOW, 5), [D(2026, 10, 20, 14, 30)])
+        self.assertIsNone(rec.next_run(future, D(2026, 10, 20, 14, 30)))
+        self.assertEqual(rec.next_runs(future, NOW, 5), [D(2026, 10, 20, 14, 30)])
 
     def test_data_fim_teto_inclusivo(self):
         self.assertEqual(rec.next_run(daily(end_date=D(2026, 10, 16, 3, 0)), NOW), D(2026, 10, 16, 3, 0))
@@ -143,23 +143,23 @@ class TestNextRun(unittest.TestCase):
                          [D(2026, 10, 16, 3), D(2026, 10, 17, 3), D(2026, 10, 18, 3)])
 
     def test_nenhuma_saida_com_microssegundos(self):
-        regras = (rule('ONCE', start_date=D(2026, 12, 1, 1, 2, 3, 999999)),
+        rules = (rule('ONCE', start_date=D(2026, 12, 1, 1, 2, 3, 999999)),
                   daily(start_date=D(2026, 1, 1, 0, 0, 0, 5)),
                   rule('WEEKLY', run_time='08:00', week_days='2'),
                   rule('MONTHLY', run_time='08:00', month_day=31),
                   rule('CRON', cron_expression='*/7 * * * *'))
-        for r in regras:
+        for r in rules:
             with self.subTest(tipo=r['recurrence_type']):
-                for data in rec.next_runs(r, NOW, 5):
-                    self.assertEqual((data.second, data.microsecond), (0, 0))
+                for date in rec.next_runs(r, NOW, 5):
+                    self.assertEqual((date.second, date.microsecond), (0, 0))
                 r = dict(r, next_run_at=D(2026, 10, 15, 9, 0))
-                decisao = rec.evaluate_trigger(r, NOW, 'RUN_ONCE', 300)
-                self.assertTrue(without_micro(decisao.next_date))
+                decision = rec.evaluate_trigger(r, NOW, 'RUN_ONCE', 300)
+                self.assertTrue(without_micro(decision.next_date))
 
     def test_desempenho(self):
         r = rule('CRON', cron_expression='0 0 29 2 1')
-        segundos = min(timeit.repeat(lambda: rec.next_run(r, NOW), number=5, repeat=3)) / 5
-        self.assertLess(segundos, 0.050)
+        seconds = min(timeit.repeat(lambda: rec.next_run(r, NOW), number=5, repeat=3)) / 5
+        self.assertLess(seconds, 0.050)
 
 
 class TestValidateCronWithEnd(unittest.TestCase):
@@ -180,15 +180,15 @@ class TestEvaluateTrigger(unittest.TestCase):
 
     def test_no_horario(self):
         r = daily(next_run_at=D(2026, 10, 15, 3))
-        decisao = rec.evaluate_trigger(r, D(2026, 10, 15, 3, 0, 4, 250), 'SKIP', 300)
-        self.assertEqual(decisao, rec.Decision(True, D(2026, 10, 16, 3), 0, False, D(2026, 10, 15, 3)))
+        decision = rec.evaluate_trigger(r, D(2026, 10, 15, 3, 0, 4, 250), 'SKIP', 300)
+        self.assertEqual(decision, rec.Decision(True, D(2026, 10, 16, 3), 0, False, D(2026, 10, 15, 3)))
 
     def test_run_once_apos_3_dias_de_downtime(self):
         r = daily(next_run_at=D(2026, 10, 12, 3))
-        decisao = rec.evaluate_trigger(r, NOW, 'RUN_ONCE', 300)
+        decision = rec.evaluate_trigger(r, NOW, 'RUN_ONCE', 300)
         # 12, 13, 14 e 15/10 venceram: 1 ticket coalescido e 3 perdidas.
-        self.assertEqual(decisao, rec.Decision(True, D(2026, 10, 16, 3), 3, False, D(2026, 10, 15, 3)))
-        self.assertGreater(decisao.next_date, NOW)
+        self.assertEqual(decision, rec.Decision(True, D(2026, 10, 16, 3), 3, False, D(2026, 10, 15, 3)))
+        self.assertGreater(decision.next_date, NOW)
 
     def test_skip(self):
         r = daily(next_run_at=D(2026, 10, 12, 3))
@@ -196,9 +196,9 @@ class TestEvaluateTrigger(unittest.TestCase):
 
     def test_skip_dentro_da_tolerancia_gera(self):
         r = daily(next_run_at=D(2026, 10, 15, 3))
-        limite = D(2026, 10, 15, 3, 5)
-        self.assertTrue(rec.evaluate_trigger(r, limite, 'SKIP', 300).create_ticket)
-        self.assertFalse(rec.evaluate_trigger(r, limite + datetime.timedelta(seconds=1), 'SKIP', 300).create_ticket)
+        limit = D(2026, 10, 15, 3, 5)
+        self.assertTrue(rec.evaluate_trigger(r, limit, 'SKIP', 300).create_ticket)
+        self.assertFalse(rec.evaluate_trigger(r, limit + datetime.timedelta(seconds=1), 'SKIP', 300).create_ticket)
 
     def test_atraso_tolerado_com_varias_vencidas(self):
         # Decisao 5: CRON a cada minuto com 4 min de atraso gera 1 ticket; nova_data e a primeira > agora.
@@ -227,35 +227,35 @@ class TestEvaluateTrigger(unittest.TestCase):
 
     def test_ocorrencia_nunca_no_futuro(self):
         r = rule('CRON', cron_expression='*/5 * * * *', next_run_at=D(2026, 10, 15, 9, 50))
-        decisao = rec.evaluate_trigger(r, NOW, 'RUN_ONCE', 3600)
-        self.assertEqual(decisao.occurrence, D(2026, 10, 15, 10, 5))
-        self.assertLessEqual(decisao.occurrence, NOW)
+        decision = rec.evaluate_trigger(r, NOW, 'RUN_ONCE', 3600)
+        self.assertEqual(decision.occurrence, D(2026, 10, 15, 10, 5))
+        self.assertLessEqual(decision.occurrence, NOW)
 
     def test_perdidas_limitadas(self):
         r = rule('CRON', cron_expression='* * * * *', next_run_at=D(2026, 9, 1))
-        decisao = rec.evaluate_trigger(r, NOW, 'SKIP', 300)
+        decision = rec.evaluate_trigger(r, NOW, 'SKIP', 300)
         # CR-008, R-21: a vencida mais recente (10:07) esta na tolerancia e gera o ticket.
-        self.assertEqual((decisao.create_ticket, decisao.missed), (True, rec.MISSED_LIMIT))
-        self.assertEqual(decisao.next_date, D(2026, 10, 15, 10, 8))
-        decisao = rec.evaluate_trigger(r, D(2026, 10, 15, 10, 7, 50), 'SKIP', 30)
-        self.assertEqual((decisao.create_ticket, decisao.missed), (False, rec.MISSED_LIMIT))
+        self.assertEqual((decision.create_ticket, decision.missed), (True, rec.MISSED_LIMIT))
+        self.assertEqual(decision.next_date, D(2026, 10, 15, 10, 8))
+        decision = rec.evaluate_trigger(r, D(2026, 10, 15, 10, 7, 50), 'SKIP', 30)
+        self.assertEqual((decision.create_ticket, decision.missed), (False, rec.MISSED_LIMIT))
 
     def test_ocorrencia_mais_recente_apos_limite_de_contagem(self):
-        for fim, esperado in ((None, D(2026, 10, 15, 10, 5)),
+        for end, expected in ((None, D(2026, 10, 15, 10, 5)),
                               (D(2026, 10, 1, 10, 3), D(2026, 10, 1, 10, 0))):
             r = rule('CRON', cron_expression='*/5 * * * *',
-                      next_run_at=START, end_date=fim)
-            decisao = rec.evaluate_trigger(r, NOW, 'RUN_ONCE', 300)
-            self.assertEqual(decisao.missed, rec.MISSED_LIMIT)
-            self.assertEqual(decisao.occurrence, esperado)
+                      next_run_at=START, end_date=end)
+            decision = rec.evaluate_trigger(r, NOW, 'RUN_ONCE', 300)
+            self.assertEqual(decision.missed, rec.MISSED_LIMIT)
+            self.assertEqual(decision.occurrence, expected)
 
     def test_cron_sem_ocorrencia_no_horizonte_vira_cron_erro(self):
         # CR-008, R-19: decisao completa com cron_erro; o daemon aplica sobreposicao e SKIP e pausa.
         r = rule('CRON', cron_expression='0 0 30 2 *', next_run_at=D(2026, 10, 1))
-        decisao = rec.evaluate_trigger(r, NOW, 'RUN_ONCE', 300)
-        self.assertEqual(decisao, rec.Decision(True, None, 0, False, D(2026, 10, 1), True))
-        decisao = rec.evaluate_trigger(r, NOW, 'SKIP', 300)
-        self.assertEqual(decisao, rec.Decision(False, None, 1, False, None, True))
+        decision = rec.evaluate_trigger(r, NOW, 'RUN_ONCE', 300)
+        self.assertEqual(decision, rec.Decision(True, None, 0, False, D(2026, 10, 1), True))
+        decision = rec.evaluate_trigger(r, NOW, 'SKIP', 300)
+        self.assertEqual(decision, rec.Decision(False, None, 1, False, None, True))
 
     def test_cron_sintaxe_invalida_propaga(self):
         r = rule('CRON', cron_expression='0 0 99 2 *', next_run_at=D(2026, 10, 1))
@@ -265,8 +265,8 @@ class TestEvaluateTrigger(unittest.TestCase):
     def test_skip_mede_pela_vencida_mais_recente(self):
         # CR-008, R-21: */5 com proxima 10:00 e agora 10:06; a das 10:05 (1 min) gera o ticket.
         r = rule('CRON', cron_expression='*/5 * * * *', next_run_at=D(2026, 10, 15, 10, 0))
-        decisao = rec.evaluate_trigger(r, D(2026, 10, 15, 10, 6), 'SKIP', 300)
-        self.assertEqual(decisao, rec.Decision(True, D(2026, 10, 15, 10, 10), 1, False, D(2026, 10, 15, 10, 5)))
+        decision = rec.evaluate_trigger(r, D(2026, 10, 15, 10, 6), 'SKIP', 300)
+        self.assertEqual(decision, rec.Decision(True, D(2026, 10, 15, 10, 10), 1, False, D(2026, 10, 15, 10, 5)))
 
     def test_politica_invalida(self):
         with self.assertRaises(ValueError):

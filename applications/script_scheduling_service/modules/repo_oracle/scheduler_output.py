@@ -92,16 +92,16 @@ class RepoSchedulerOutput(object):
     """Owner e prefixo vem da configuracao (nunca fixos); os nomes passam por sql_ident."""
 
     def __init__(self, owner, prefix):
-        sai, tck = sql_ident.table(owner, prefix, "ticket_output"), sql_ident.table(owner, prefix, "tickets")
+        tout, tck = sql_ident.table(owner, prefix, "ticket_output"), sql_ident.table(owner, prefix, "tickets")
         self._seq = sql_ident.sequence(owner, prefix, "ticket_output")
-        self._plsql = _PLSQL_APPEND.format(tout=sai, attr=":" + "=")
-        self._sql_restart = _SQL_RESTART.format(tout=sai)
-        self._sql_insert_writing = _SQL_INSERT.format(tout=sai, tck=tck, content="EMPTY_BLOB()")
-        self._sql_insert_without_content = _SQL_INSERT.format(tout=sai, tck=tck, content="NULL")
-        self._sql_complete = _SQL_COMPLETE.format(tout=sai)
-        self._sql_finish = _SQL_CLOSE_WRITING.format(tout=sai)
-        self._sql_fail = _SQL_FAIL_OF_AGENT.format(tout=sai)
-        self._sql_state = _SQL_STATE.format(tout=sai)
+        self._plsql = _PLSQL_APPEND.format(tout=tout, attr=":" + "=")
+        self._sql_restart = _SQL_RESTART.format(tout=tout)
+        self._sql_insert_writing = _SQL_INSERT.format(tout=tout, tck=tck, content="EMPTY_BLOB()")
+        self._sql_insert_without_content = _SQL_INSERT.format(tout=tout, tck=tck, content="NULL")
+        self._sql_complete = _SQL_COMPLETE.format(tout=tout)
+        self._sql_finish = _SQL_CLOSE_WRITING.format(tout=tout)
+        self._sql_fail = _SQL_FAIL_OF_AGENT.format(tout=tout)
+        self._sql_state = _SQL_STATE.format(tout=tout)
 
     @classmethod
     def from_config(cls, cfg):
@@ -140,20 +140,20 @@ class RepoSchedulerOutput(object):
         cur = conn.cursor()
         try:
             db_conn.set_input_types(cur, part=db_conn.TIPO_BLOB)
-            resultado = db_conn.output_variable(cur, db_conn.TIPO_VARCHAR, size=20)
+            result = db_conn.output_variable(cur, db_conn.TIPO_VARCHAR, size=20)
             try:
                 cur.execute(self._plsql, part=bytes(part), ticket_id=int(ticket_id), agent_id=agent_id,
-                            expected_offset=int(expected_offset), result=resultado)
+                            expected_offset=int(expected_offset), result=result)
             except Exception as exc:
                 if db_conn.classify_error(exc) == ("ORA", _ORA_DIVERGENT):
                     raise OutputOffsetMismatch(ticket_id, int(expected_offset), len(part))
                 raise
-            valor = db_conn.output_value(resultado)
+            value = db_conn.output_value(result)
         finally:
             cur.close()
-        if valor not in _RESULTS:
-            raise RuntimeError("resultado inesperado do anexar da saida: %r" % (valor,))
-        return valor
+        if value not in _RESULTS:
+            raise RuntimeError("resultado inesperado do anexar da saida: %r" % (value,))
+        return value
 
     def complete(self, conn, ticket_id, agent_id, file_count, size_bytes):
         """GRAVANDO -> DISPONIVEL, so se o zip no banco tiver tamanho_bytes. False: posse perdida. Sem COMMIT."""

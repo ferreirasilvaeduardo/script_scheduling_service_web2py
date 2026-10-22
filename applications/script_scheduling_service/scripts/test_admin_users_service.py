@@ -53,31 +53,31 @@ class _Base(unittest.TestCase):
         self.log.propagate = False
         self.auth = auth_service.AuthService(self.users, self.rbac_repo, repo_factory.get("catalog"),
                                              self.audit, 5, 900, self.log, clock=lambda: NOW)
-        self.ctx = dict((login, self.auth.revalidate(sessao)) for login, sessao in SESSIONS.items())
+        self.ctx = dict((login, self.auth.revalidate(session)) for login, session in SESSIONS.items())
         # O seed usa o relogio real: o bloqueio do usuario 'bloqueado' e reposicionado a partir de AGORA.
         self.users.update(U_BLOQUEADO, {"locked_until": NOW + datetime.timedelta(minutes=30)}, actor="teste")
         self.svc = AdminUsersService(self.users, self.rbac_repo, self.log, clock=lambda: NOW)
         self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
 
     def _audits(self, action=None):
-        filtros = {"action": action} if action else None
-        return [a for a in self.audit.list(filters=filtros, page=1, size=200)["itens"]
+        filters = {"action": action} if action else None
+        return [a for a in self.audit.list(filters=filters, page=1, size=200)["itens"]
                 if a["entity"] == "tbsss_users" and a["id"] > self.aud_base]
 
     def _insert(self, **changes):
-        dados = {"login": "maria.silva", "name": "Maria Silva", "profile_id": str(P_CONSULTA),
+        date = {"login": "maria.silva", "name": "Maria Silva", "profile_id": str(P_CONSULTA),
                  "senha": NEW_PASSWORD, "confirmacao": NEW_PASSWORD}
-        dados.update(changes)
-        return self.svc.save(self.ctx["admin"], IP, None, dados)
+        date.update(changes)
+        return self.svc.save(self.ctx["admin"], IP, None, date)
 
     def _form(self, uid, actor="admin"):
         return self.svc.form(self.ctx[actor], str(uid))
 
     def _edit(self, uid, actor="admin", **changes):
         f = self._form(uid, actor)
-        dados = {"name": f["name"], "profile_id": str(f["profile_id"]), "version": f["version"]}
-        dados.update(changes)
-        return self.svc.save(self.ctx[actor], IP, str(uid), dados)
+        date = {"name": f["name"], "profile_id": str(f["profile_id"]), "version": f["version"]}
+        date.update(changes)
+        return self.svc.save(self.ctx[actor], IP, str(uid), date)
 
     def _without_secret(self, text, *secrets):
         for s in secrets:
@@ -89,17 +89,17 @@ class TestInsert(_Base):
 
     def test_auditoria_mostra_perfil_pelo_nome_e_login_sem_espacos(self):
         # CR-003 P6 (README §4.4) e C2.
-        _id, erros = self._insert(login=" maria.silva")
-        self.assertEqual(erros, {"login": admin_crud.MSG_SPACES})
-        uid, erros = self._insert()
-        self.assertEqual(erros, {})
-        detalhe = [a for a in self._audits("CREATE") if a["entity_id"] == uid][0]["detail"]
-        self.assertIn("perfil: READ_ONLY", detalhe)
-        self.assertNotIn("profile_id", detalhe)
+        _id, errors = self._insert(login=" maria.silva")
+        self.assertEqual(errors, {"login": admin_crud.MSG_SPACES})
+        uid, errors = self._insert()
+        self.assertEqual(errors, {})
+        detail = [a for a in self._audits("CREATE") if a["entity_id"] == uid][0]["detail"]
+        self.assertIn("perfil: READ_ONLY", detail)
+        self.assertNotIn("profile_id", detail)
 
     def test_inclusao_ok_com_hash_e_auditoria_sem_senha(self):
-        uid, erros = self._insert()
-        self.assertEqual(erros, {})
+        uid, errors = self._insert()
+        self.assertEqual(errors, {})
         u = self.users.get_by_id(uid)
         self.assertEqual((u["login"], u["name"], u["profile_id"], u["active"]), ("maria.silva", "Maria Silva", P_CONSULTA, "Y"))
         self.assertTrue(security.verify_password(NEW_PASSWORD, u["password_hash"]))
@@ -111,93 +111,93 @@ class TestInsert(_Base):
 
     def test_login_invalido_ou_duplicado(self):
         for login in ("Maria", "ab", "a" * 31, "maria silva", u"joão"):
-            _uid, erros = self._insert(login=login)
-            self.assertEqual(erros.get("login"), usr_mod.MSG_LOGIN_INVALID, login)
-        _uid, erros = self._insert(login="op.prod")
-        self.assertEqual(erros, {"login": usr_mod.MSG_LOGIN_DUPLICATE})
+            _uid, errors = self._insert(login=login)
+            self.assertEqual(errors.get("login"), usr_mod.MSG_LOGIN_INVALID, login)
+        _uid, errors = self._insert(login="op.prod")
+        self.assertEqual(errors, {"login": usr_mod.MSG_LOGIN_DUPLICATE})
         self.assertEqual(self._audits("CREATE"), [])
 
     def test_senha_fraca_e_confirmacao_divergente(self):
-        _uid, erros = self._insert(senha="curta", confirmacao="curta")
-        self.assertEqual(erros, {"senha": security.validate_password_policy("curta")[0]})
-        _uid, erros = self._insert(confirmacao=NEW_PASSWORD + "x")
-        self.assertEqual(erros, {"confirmacao": usr_mod.MSG_CONFIRMATION})
-        _uid, erros = self._insert(senha="", confirmacao="")
-        self.assertEqual(erros, {"senha": usr_mod.MSG_PASSWORD_REQUIRED})
+        _uid, errors = self._insert(senha="curta", confirmacao="curta")
+        self.assertEqual(errors, {"senha": security.validate_password_policy("curta")[0]})
+        _uid, errors = self._insert(confirmacao=NEW_PASSWORD + "x")
+        self.assertEqual(errors, {"confirmacao": usr_mod.MSG_CONFIRMATION})
+        _uid, errors = self._insert(senha="", confirmacao="")
+        self.assertEqual(errors, {"senha": usr_mod.MSG_PASSWORD_REQUIRED})
 
     def test_perfil_inativo_ou_inexistente(self):
         form = self.rbac_repo.profiles_get(P_CONSULTA)
         self.rbac_repo.profiles_update(P_CONSULTA, {"active": "N"}, actor="teste")
-        _uid, erros = self._insert()
-        self.assertEqual(erros, {"profile_id": usr_mod.MSG_PROFILE_INVALID})
-        _uid, erros = self._insert(profile_id="999")
-        self.assertEqual(erros, {"profile_id": usr_mod.MSG_PROFILE_INVALID})
+        _uid, errors = self._insert()
+        self.assertEqual(errors, {"profile_id": usr_mod.MSG_PROFILE_INVALID})
+        _uid, errors = self._insert(profile_id="999")
+        self.assertEqual(errors, {"profile_id": usr_mod.MSG_PROFILE_INVALID})
         self.assertEqual(form["name"], "READ_ONLY")
 
 
 class TestEditAndLastAdmin(_Base):
 
     def test_edicao_ignora_login_e_audita(self):
-        _uid, erros = self._edit(U_OPPROD, name="Operador Prod Novo", login="hacker")
-        self.assertEqual(erros, {})
+        _uid, errors = self._edit(U_OPPROD, name="Operador Prod Novo", login="hacker")
+        self.assertEqual(errors, {})
         u = self.users.get_by_id(U_OPPROD)
         self.assertEqual((u["login"], u["name"]), ("op.prod", "Operador Prod Novo"))
         self.assertIn("name: Operador Producao", self._audits("UPDATE")[0]["detail"])
 
     def test_nao_admin_nao_troca_o_proprio_perfil(self):
         # Revisao de 2026-10-20 (CR-008 E1): MANAGE_USERS sem admin nao muda as proprias permissoes.
-        gestor = dict(self.ctx["op.prod"], features=frozenset({"MANAGE_USERS"}))
-        f = self.svc.form(gestor, str(U_OPPROD))
-        _uid, erros = self.svc.save(gestor, IP, str(U_OPPROD),
+        manager = dict(self.ctx["op.prod"], features=frozenset({"MANAGE_USERS"}))
+        f = self.svc.form(manager, str(U_OPPROD))
+        _uid, errors = self.svc.save(manager, IP, str(U_OPPROD),
                                       {"name": f["name"], "profile_id": str(P_CONSULTA), "version": f["version"]})
-        self.assertEqual(erros, {usr_mod.GENERAL_FIELD: usr_mod.MSG_ADMIN_ONLY})
+        self.assertEqual(errors, {usr_mod.GENERAL_FIELD: usr_mod.MSG_ADMIN_ONLY})
         self.assertEqual(self.users.get_by_id(U_OPPROD)["profile_id"], P_OPPROD)
         # O proprio nome, sem trocar de perfil, continua permitido.
-        _uid, erros = self.svc.save(gestor, IP, str(U_OPPROD),
+        _uid, errors = self.svc.save(manager, IP, str(U_OPPROD),
                                       {"name": "Operador Producao", "profile_id": str(P_OPPROD), "version": f["version"]})
-        self.assertEqual(erros, {})
+        self.assertEqual(errors, {})
         # O administrador continua trocando o perfil de outros usuarios.
         self.assertEqual(self._edit(U_BLOQUEADO, profile_id=str(P_CONSULTA))[1], {})
 
     def test_troca_de_perfil_do_ultimo_admin_negada(self):
         # Outro administrador nao pode tirar o unico admin do perfil admin: novo admin cria o cenario.
-        novo, _ = self._insert(login="admin2", profile_id=str(P_ADMIN))
-        self.users.update(novo, {"active": "N"}, actor="teste")
-        ctx2 = dict(self.ctx["admin"], user_id=novo, login="admin2")
+        new, _ = self._insert(login="admin2", profile_id=str(P_ADMIN))
+        self.users.update(new, {"active": "N"}, actor="teste")
+        ctx2 = dict(self.ctx["admin"], user_id=new, login="admin2")
         f = self.svc.form(ctx2, str(U_ADMIN))
-        _uid, erros = self.svc.save(ctx2, IP, str(U_ADMIN), {"name": f["name"], "profile_id": str(P_CONSULTA),
+        _uid, errors = self.svc.save(ctx2, IP, str(U_ADMIN), {"name": f["name"], "profile_id": str(P_CONSULTA),
                                                                "version": f["version"]})
-        self.assertEqual(erros, {GENERAL_FIELD: usr_mod.MSG_LAST_ADMIN})
+        self.assertEqual(errors, {GENERAL_FIELD: usr_mod.MSG_LAST_ADMIN})
         self.assertEqual(self.users.get_by_id(U_ADMIN)["profile_id"], P_ADMIN)
 
     def test_desativacao_do_ultimo_admin_negada(self):
-        novo, _ = self._insert(login="gestor", profile_id=str(P_OPPROD))
-        ctx_gestor = dict(self.ctx["admin"], user_id=novo, login="gestor")
-        f = self.svc.form(ctx_gestor, str(U_ADMIN))
+        new, _ = self._insert(login="gestor", profile_id=str(P_OPPROD))
+        ctx_manager = dict(self.ctx["admin"], user_id=new, login="gestor")
+        f = self.svc.form(ctx_manager, str(U_ADMIN))
         with self.assertRaises(OperationDenied) as cm:
-            self.svc.toggle_active(ctx_gestor, IP, str(U_ADMIN), f["version"])
+            self.svc.toggle_active(ctx_manager, IP, str(U_ADMIN), f["version"])
         self.assertEqual(cm.exception.message, usr_mod.MSG_LAST_ADMIN)
         self.assertEqual(self.users.get_by_id(U_ADMIN)["active"], "Y")
         self.assertEqual(self._audits("DEACTIVATE"), [])
 
     def test_com_dois_admins_desativar_um_passa(self):
-        novo, _ = self._insert(login="admin2", profile_id=str(P_ADMIN))
-        f = self._form(novo)
-        alterado = self.svc.toggle_active(self.ctx["admin"], IP, str(novo), f["version"])
-        self.assertEqual(alterado["active"], "N")
-        self.assertNotIn("password_hash", alterado)
+        new, _ = self._insert(login="admin2", profile_id=str(P_ADMIN))
+        f = self._form(new)
+        changed = self.svc.toggle_active(self.ctx["admin"], IP, str(new), f["version"])
+        self.assertEqual(changed["active"], "N")
+        self.assertNotIn("password_hash", changed)
         self.assertEqual(len(self._audits("DEACTIVATE")), 1)
 
     def test_autodesativacao_e_autoperfil_negados(self):
-        novo, _ = self._insert(login="admin2", profile_id=str(P_ADMIN))
+        new, _ = self._insert(login="admin2", profile_id=str(P_ADMIN))
         with self.assertRaises(OperationDenied) as cm:
             self.svc.toggle_active(self.ctx["admin"], IP, str(U_ADMIN), self._form(U_ADMIN)["version"])
         self.assertEqual(cm.exception.message, usr_mod.MSG_SELF_DEACTIVATE)
-        _uid, erros = self._edit(U_ADMIN, profile_id=str(P_CONSULTA))
-        self.assertEqual(erros, {GENERAL_FIELD: usr_mod.MSG_SELF_PROFILE})
-        _uid, erros = self._edit(U_ADMIN, name="Admin Renomeado")
-        self.assertEqual(erros, {})
-        self.assertEqual(novo, self.users.get_by_login("admin2")["id"])
+        _uid, errors = self._edit(U_ADMIN, profile_id=str(P_CONSULTA))
+        self.assertEqual(errors, {GENERAL_FIELD: usr_mod.MSG_SELF_PROFILE})
+        _uid, errors = self._edit(U_ADMIN, name="Admin Renomeado")
+        self.assertEqual(errors, {})
+        self.assertEqual(new, self.users.get_by_login("admin2")["id"])
 
     def test_desativado_tem_sessao_encerrada_na_revalidacao(self):
         f = self._form(U_OPPROD)
@@ -207,9 +207,9 @@ class TestEditAndLastAdmin(_Base):
     def test_conflito_de_edicao(self):
         f = self._form(U_OPPROD)
         self._edit(U_OPPROD, name="Primeira")
-        _uid, erros = self.svc.save(self.ctx["admin"], IP, str(U_OPPROD),
+        _uid, errors = self.svc.save(self.ctx["admin"], IP, str(U_OPPROD),
                                       {"name": "Segunda", "profile_id": str(P_OPPROD), "version": f["version"]})
-        self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
+        self.assertEqual(errors, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
         with self.assertRaises(RepoConflict):
             self.svc.toggle_active(self.ctx["admin"], IP, str(U_OPPROD), f["version"])
 
@@ -225,8 +225,8 @@ class TestPasswordAndLock(_Base):
 
     def test_redefinicao_zera_bloqueio_e_audita_sem_senha(self):
         self.assertTrue(self._form(U_BLOQUEADO)["bloqueado"])
-        erros = self.svc.reset_password(self.ctx["admin"], IP, str(U_BLOQUEADO), NEW_PASSWORD, NEW_PASSWORD)
-        self.assertEqual(erros, {})
+        errors = self.svc.reset_password(self.ctx["admin"], IP, str(U_BLOQUEADO), NEW_PASSWORD, NEW_PASSWORD)
+        self.assertEqual(errors, {})
         u = self.users.get_by_id(U_BLOQUEADO)
         self.assertEqual((u["failed_attempts"], u["locked_until"], u["password_changed_at"]), (0, None, NOW))
         self.assertTrue(security.verify_password(NEW_PASSWORD, u["password_hash"]))
@@ -246,25 +246,25 @@ class TestPasswordAndLock(_Base):
         self.assertEqual(cm.exception.message, usr_mod.MSG_SELF_PASSWORD)
 
     def test_desbloquear(self):
-        alterado = self.svc.unlock(self.ctx["admin"], IP, str(U_BLOQUEADO))
-        self.assertEqual((alterado["failed_attempts"], alterado["locked_until"]), (0, None))
+        changed = self.svc.unlock(self.ctx["admin"], IP, str(U_BLOQUEADO))
+        self.assertEqual((changed["failed_attempts"], changed["locked_until"]), (0, None))
         self.assertTrue(self._audits("UPDATE")[0]["detail"].startswith("desbloqueado"))
 
     def test_minha_senha_com_atual_errada(self):
-        res, erros = self.auth.change_password(self.ctx["op.prod"], IP, "errada-errada-1", NEW_PASSWORD, NEW_PASSWORD)
-        self.assertEqual((res, erros), ("ERRO", {"senha_atual": auth_service.MSG_CURRENT_PASSWORD}))
+        res, errors = self.auth.change_password(self.ctx["op.prod"], IP, "errada-errada-1", NEW_PASSWORD, NEW_PASSWORD)
+        self.assertEqual((res, errors), ("ERRO", {"senha_atual": auth_service.MSG_CURRENT_PASSWORD}))
         u = self.users.get_by_id(U_OPPROD)
         self.assertEqual(u["failed_attempts"], 1)
         self.assertTrue(security.verify_password(DEV_PASSWORD, u["password_hash"]))
-        falhas = [a for a in self.audit.list(filters={"action": "LOGIN_FAILED"}, page=1, size=50)["itens"]
+        failures = [a for a in self.audit.list(filters={"action": "LOGIN_FAILED"}, page=1, size=50)["itens"]
                   if a["id"] > self.aud_base]
-        self.assertEqual(len(falhas), 1)
+        self.assertEqual(len(failures), 1)
 
     def test_minha_senha_bloqueia_apos_limite(self):
         for _ in range(4):
             self.assertEqual(self.auth.change_password(self.ctx["op.prod"], IP, "errada-errada-1", NEW_PASSWORD,
                                                     NEW_PASSWORD)[0], "ERRO")
-        res, _erros = self.auth.change_password(self.ctx["op.prod"], IP, "errada-errada-1", NEW_PASSWORD, NEW_PASSWORD)
+        res, _errors = self.auth.change_password(self.ctx["op.prod"], IP, "errada-errada-1", NEW_PASSWORD, NEW_PASSWORD)
         self.assertEqual(res, "BLOQUEADO")
         self.assertIsNotNone(self.users.get_by_id(U_OPPROD)["locked_until"])
         # Mesmo com a senha certa, a conta bloqueada nao troca a senha.
@@ -272,13 +272,13 @@ class TestPasswordAndLock(_Base):
                          "BLOQUEADO")
 
     def test_minha_senha_ok_e_validacoes(self):
-        res, erros = self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, "curta", "curta")
+        res, errors = self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, "curta", "curta")
         self.assertEqual(res, "ERRO")
-        self.assertIn("nova", erros)
-        res, erros = self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, NEW_PASSWORD, "outra")
-        self.assertEqual(erros, {"confirmacao": auth_service.MSG_CONFIRMATION})
-        res, erros = self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, NEW_PASSWORD, NEW_PASSWORD)
-        self.assertEqual((res, erros), ("OK", {}))
+        self.assertIn("nova", errors)
+        res, errors = self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, NEW_PASSWORD, "outra")
+        self.assertEqual(errors, {"confirmacao": auth_service.MSG_CONFIRMATION})
+        res, errors = self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, NEW_PASSWORD, NEW_PASSWORD)
+        self.assertEqual((res, errors), ("OK", {}))
         u = self.users.get_by_id(U_OPPROD)
         self.assertTrue(security.verify_password(NEW_PASSWORD, u["password_hash"]))
         aud = self._audits("UPDATE")
@@ -290,18 +290,18 @@ class TestListAndAccess(_Base):
     def test_relogio_padrao_e_o_do_banco(self):
         # CR-003 P3: sem relogio injetado, o service usa o SYSDATE do repositorio (nunca o do no web).
         svc = AdminUsersService(self.users, self.rbac_repo, self.log)
-        futuro = self.users.now() + datetime.timedelta(minutes=5)
-        self.assertTrue(svc.is_locked({"locked_until": futuro}))
+        future = self.users.now() + datetime.timedelta(minutes=5)
+        self.assertTrue(svc.is_locked({"locked_until": future}))
         self.assertFalse(svc.is_locked({"locked_until": self.users.now() - datetime.timedelta(seconds=1)}))
 
     def test_lista_sem_hash_com_bloqueio_e_filtros(self):
-        pagina = self.svc.list(self.ctx["admin"], {}, 1, 20)
-        self.assertEqual(pagina["total"], 6)
-        for item in pagina["itens"]:
+        page = self.svc.list(self.ctx["admin"], {}, 1, 20)
+        self.assertEqual(page["total"], 6)
+        for item in page["itens"]:
             self.assertNotIn("password_hash", item)
-        bloq = [i for i in pagina["itens"] if i["login"] == "bloqueado"][0]
-        self.assertTrue(bloq["bloqueado"])
-        self.assertEqual(bloq["perfil_nome"], "OPERATOR_PROD")
+        locked = [i for i in page["itens"] if i["login"] == "bloqueado"][0]
+        self.assertTrue(locked["bloqueado"])
+        self.assertEqual(locked["perfil_nome"], "OPERATOR_PROD")
         self.assertEqual([i["login"] for i in self.svc.list(self.ctx["admin"], {"state": "B"}, 1, 20)["itens"]],
                          ["bloqueado"])
         self.assertEqual([i["login"] for i in self.svc.list(self.ctx["admin"], {"state": "N"}, 1, 20)["itens"]],
@@ -313,12 +313,12 @@ class TestListAndAccess(_Base):
 
     def test_acesso_negado_e_nao_encontrado(self):
         ctx = self.ctx["op.prod"]
-        for chamada in (lambda: self.svc.list(ctx, {}, 1, 20), lambda: self.svc.form(ctx),
+        for call in (lambda: self.svc.list(ctx, {}, 1, 20), lambda: self.svc.form(ctx),
                         lambda: self.svc.save(ctx, IP, None, {}), lambda: self.svc.unlock(ctx, IP, "6"),
                         lambda: self.svc.reset_password(ctx, IP, "6", NEW_PASSWORD, NEW_PASSWORD),
                         lambda: self.svc.toggle_active(ctx, IP, "6", "x")):
             with self.assertRaises(AccessDenied):
-                chamada()
+                call()
         for uid in ("999", "abc", "0"):
             with self.assertRaises(RepoNotFound):
                 self.svc.form(self.ctx["admin"], uid)

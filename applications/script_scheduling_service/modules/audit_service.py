@@ -110,78 +110,78 @@ def normalize_filters(input_value, today):
     'de' e 'ate' (padrao: os ultimos 7 dias ate `hoje`); erros mapeia campo -> mensagem.
     """
     input_value = input_value or {}
-    filtros = collections.OrderedDict()
-    erros = {}
+    filters = collections.OrderedDict()
+    errors = {}
 
-    brutos = {}
-    for chave in ("de", "ate"):
-        brutos[chave] = _text(input_value.get(chave), 10)
-    de, ate = _day(brutos["de"]), _day(brutos["ate"])
-    for chave, valor in (("de", de), ("ate", ate)):
-        if brutos[chave] and valor is None:
-            erros[chave] = MSG_DATE
-    if ate is None:
-        ate = today if de is None or de <= today else de
-    if de is None:
-        de = ate - datetime.timedelta(days=DEFAULT_PERIOD_DAYS - 1)
+    raw = {}
+    for key in ("de", "ate"):
+        raw[key] = _text(input_value.get(key), 10)
+    of, until = _day(raw["de"]), _day(raw["ate"])
+    for key, value in (("de", of), ("ate", until)):
+        if raw[key] and value is None:
+            errors[key] = MSG_DATE
+    if until is None:
+        until = today if of is None or of <= today else of
+    if of is None:
+        of = until - datetime.timedelta(days=DEFAULT_PERIOD_DAYS - 1)
 
-    ator = _text(input_value.get("actor"), 41)
-    if ator:
-        if _RE_ACTOR.fullmatch(ator):
-            filtros["actor"] = ator
+    actor = _text(input_value.get("actor"), 41)
+    if actor:
+        if _RE_ACTOR.fullmatch(actor):
+            filters["actor"] = actor
         else:
-            erros["actor"] = MSG_ACTOR
-    acao = _text(input_value.get("action"), 30)
-    if acao:
-        if acao in ACTIONS:
-            filtros["action"] = acao
+            errors["actor"] = MSG_ACTOR
+    action = _text(input_value.get("action"), 30)
+    if action:
+        if action in ACTIONS:
+            filters["action"] = action
         else:
-            erros["action"] = MSG_ACTION
-    entidade = _text(input_value.get("entity"), 30)
-    if entidade:
-        if entidade in ENTITIES:
-            filtros["entity"] = entidade
+            errors["action"] = MSG_ACTION
+    entity = _text(input_value.get("entity"), 30)
+    if entity:
+        if entity in ENTITIES:
+            filters["entity"] = entity
         else:
-            erros["entity"] = MSG_ENTITY
-    entidade_id = _text(input_value.get("entity_id"), 11)
-    if entidade_id:
-        if _RE_ID.fullmatch(entidade_id) and int(entidade_id) > 0:
-            filtros["entity_id"] = int(entidade_id)
+            errors["entity"] = MSG_ENTITY
+    entity_id = _text(input_value.get("entity_id"), 11)
+    if entity_id:
+        if _RE_ID.fullmatch(entity_id) and int(entity_id) > 0:
+            filters["entity_id"] = int(entity_id)
         else:
-            erros["entity_id"] = MSG_ENTITY_ID
+            errors["entity_id"] = MSG_ENTITY_ID
     ip = _text(input_value.get("ip"), 46)
     if ip:
         if _RE_IP.fullmatch(ip):
-            filtros["ip"] = ip
+            filters["ip"] = ip
         else:
-            erros["ip"] = MSG_IP
+            errors["ip"] = MSG_IP
 
-    if "de" not in erros and "ate" not in erros:
-        dias = (ate - de).days + 1
-        seletivo = "actor" in filtros or ("entity" in filtros and "entity_id" in filtros)
-        if dias < 1:
-            erros["ate"] = MSG_RANGE
-        elif dias > MAX_SELECTIVE_PERIOD_DAYS:
-            erros["de"] = MSG_SELECTIVE_PERIOD
-        elif dias > MAX_PERIOD_DAYS and not seletivo:
-            erros["de"] = MSG_PERIOD
+    if "de" not in errors and "ate" not in errors:
+        days = (until - of).days + 1
+        selective = "actor" in filters or ("entity" in filters and "entity_id" in filters)
+        if days < 1:
+            errors["ate"] = MSG_RANGE
+        elif days > MAX_SELECTIVE_PERIOD_DAYS:
+            errors["de"] = MSG_SELECTIVE_PERIOD
+        elif days > MAX_PERIOD_DAYS and not selective:
+            errors["de"] = MSG_PERIOD
 
-    resultado = collections.OrderedDict()
-    resultado["de"] = brutos["de"] if "de" in erros and brutos["de"] else de.strftime(_DAY_FORMAT)
-    resultado["ate"] = brutos["ate"] if "ate" in erros and brutos["ate"] else ate.strftime(_DAY_FORMAT)
-    resultado.update(filtros)
-    return resultado, erros
+    result = collections.OrderedDict()
+    result["de"] = raw["de"] if "de" in errors and raw["de"] else of.strftime(_DAY_FORMAT)
+    result["ate"] = raw["ate"] if "ate" in errors and raw["ate"] else until.strftime(_DAY_FORMAT)
+    result.update(filters)
+    return result, errors
 
 
 def repo_filters(filters):
     """Traduz filtros validos para o contrato: periodo vira [de 00:00:00, ate 23:59:59]."""
-    de = datetime.datetime.strptime(filters["de"], _DAY_FORMAT)
-    ate = datetime.datetime.strptime(filters["ate"], _DAY_FORMAT)
-    repo = {"start_date": de, "end_date": ate + datetime.timedelta(days=1, seconds=-1)}
-    for chave, destino in (("actor", "actor"), ("action", "action"), ("entity", "entity"),
+    of = datetime.datetime.strptime(filters["de"], _DAY_FORMAT)
+    until = datetime.datetime.strptime(filters["ate"], _DAY_FORMAT)
+    repo = {"start_date": of, "end_date": until + datetime.timedelta(days=1, seconds=-1)}
+    for key, destination in (("actor", "actor"), ("action", "action"), ("entity", "entity"),
                            ("entity_id", "entity_id"), ("ip", "source_ip")):
-        if chave in filters:
-            repo[destino] = filters[chave]
+        if key in filters:
+            repo[destination] = filters[key]
     return repo
 
 
@@ -198,10 +198,10 @@ def _mask(text):
 
 def csv_row(reg):
     """Uma linha da exportacao (README §4.4); tambem a do --export-audit do purge (CR-007, R-22)."""
-    criado = reg.get("created_at")
-    valores = (
+    created = reg.get("created_at")
+    values = (
         reg["id"],
-        criado.strftime(_CSV_FORMAT) if criado else u"",
+        created.strftime(_CSV_FORMAT) if created else u"",
         reg.get("actor") or u"",
         reg.get("source_ip") or u"",
         reg.get("action") or u"",
@@ -209,21 +209,21 @@ def csv_row(reg):
         u"" if reg.get("entity_id") is None else reg["entity_id"],
         _mask(reg.get("detail")) or u"",
     )
-    return [neutralize_csv(v) for v in valores]
+    return [neutralize_csv(v) for v in values]
 
 
 def entity_link(ctx, entity, entity_id, can_view_tickets):
     """(controller, funcao, args) da tela da entidade, ou None sem tela ou sem permissao (decisao D6)."""
     if entity_id is None:
         return None
-    tela = ENTITY_SCREENS.get(entity)
-    if tela is None:
+    screen = ENTITY_SCREENS.get(entity)
+    if screen is None:
         return None
-    controller, funcao, func = tela
-    permitido = can_view_tickets if func is None else rbac.has_feature(ctx, func)
-    if not permitido:
+    controller, function, feature = screen
+    allowed = can_view_tickets if feature is None else rbac.has_feature(ctx, feature)
+    if not allowed:
         return None
-    return controller, funcao, [entity_id]
+    return controller, function, [entity_id]
 
 
 def _describe_filters(filters):
@@ -253,20 +253,20 @@ class AuditService(object):
         """
         admin_crud.require_feature(ctx, FEATURE)
         size = max(1, min(int(size or 20), MAX_LENGTH))
-        filtros, erros = self.normalize_filters(input_value)
-        vazio = {"filtros": filtros, "erros": erros, "itens": [], "total": 0, "pagina": 1, "tamanho": size}
-        if erros:
-            return vazio
-        repo_filtros = repo_filters(filtros)
-        resultado = self._audit.list(filters=repo_filtros, page=page, size=size)
-        info = ui_helpers.paginacao_info(page, size, resultado["total"],
-                                         resultado.get("total_limitado", False), len(resultado["itens"]))
-        if not resultado["itens"] and info["pagina"] != resultado["pagina"]:
-            resultado = self._audit.list(filters=repo_filtros, page=info["pagina"], size=size)
-        itens = []
-        for reg in resultado["itens"]:
-            detalhe = _mask(reg.get("detail")) or u""
-            itens.append({
+        filters, errors = self.normalize_filters(input_value)
+        empty = {"filtros": filters, "erros": errors, "itens": [], "total": 0, "pagina": 1, "tamanho": size}
+        if errors:
+            return empty
+        repo_filters_dict = repo_filters(filters)
+        result = self._audit.list(filters=repo_filters_dict, page=page, size=size)
+        info = ui_helpers.paginacao_info(page, size, result["total"],
+                                         result.get("total_limitado", False), len(result["itens"]))
+        if not result["itens"] and info["pagina"] != result["pagina"]:
+            result = self._audit.list(filters=repo_filters_dict, page=info["pagina"], size=size)
+        items = []
+        for reg in result["itens"]:
+            detail = _mask(reg.get("detail")) or u""
+            items.append({
                 "id": reg["id"],
                 "created_at": reg.get("created_at"),
                 "actor": reg.get("actor"),
@@ -274,12 +274,12 @@ class AuditService(object):
                 "action": reg.get("action"),
                 "entity": reg.get("entity"),
                 "entity_id": reg.get("entity_id"),
-                "detail": detalhe,
-                "detalhe_curto": detalhe if len(detalhe) <= SHORT_DETAIL else detalhe[:SHORT_DETAIL - 1] + u"…",
-                "truncado": len(detalhe) > SHORT_DETAIL,
+                "detail": detail,
+                "detalhe_curto": detail if len(detail) <= SHORT_DETAIL else detail[:SHORT_DETAIL - 1] + u"…",
+                "truncado": len(detail) > SHORT_DETAIL,
             })
-        return dict(vazio, itens=itens, total=resultado["total"], pagina=resultado["pagina"],
-                    tamanho=resultado["tamanho"], total_limitado=resultado.get("total_limitado", False))
+        return dict(empty, itens=items, total=result["total"], pagina=result["pagina"],
+                    tamanho=result["tamanho"], total_limitado=result.get("total_limitado", False))
 
     def export_csv(self, ctx, ip, input_value):
         """Exportacao com os filtros e o RBAC da tela: retorna (nome_arquivo, linhas, blocos).
@@ -290,47 +290,47 @@ class AuditService(object):
         Filtros invalidos levantam InvalidFilters.
         """
         admin_crud.require_feature(ctx, FEATURE)
-        filtros, erros = self.normalize_filters(input_value)
-        if erros:
-            raise InvalidFilters(erros)
-        repo_filtros = repo_filters(filtros)
+        filters, errors = self.normalize_filters(input_value)
+        if errors:
+            raise InvalidFilters(errors)
+        repo_filters_dict = repo_filters(filters)
         # README §4.4 (D12): reserva o id, delimita id_max = id - 1, conta esse recorte e so entao grava a
         # linha; a quantidade registrada e o arquivo correspondem ao mesmo conjunto.
         aid = self._audit.reserve_id()
-        repo_filtros["id_max"] = aid - 1
-        total = sum(1 for _ in self._audit.iterate(filters=repo_filtros, limit=EXPORT_LIMIT))
-        linhas = min(total, EXPORT_LIMIT)
-        detalhe = admin_crud.free_detail(u"filtros: %s; linhas: %d (limite %d)" % (
-            _describe_filters(filtros), linhas, EXPORT_LIMIT))
-        self._audit.register(ctx.get("login"), ip, EXPORT_ACTION, AUDIT_ENTITY, None, detalhe, id=aid)
-        self._log.info("auditoria exportada (login=%s linhas=%d total=%d)", ctx.get("login"), linhas, total,
+        repo_filters_dict["id_max"] = aid - 1
+        total = sum(1 for _ in self._audit.iterate(filters=repo_filters_dict, limit=EXPORT_LIMIT))
+        rows = min(total, EXPORT_LIMIT)
+        detail = admin_crud.free_detail(u"filtros: %s; linhas: %d (limite %d)" % (
+            _describe_filters(filters), rows, EXPORT_LIMIT))
+        self._audit.register(ctx.get("login"), ip, EXPORT_ACTION, AUDIT_ENTITY, None, detail, id=aid)
+        self._log.info("auditoria exportada (login=%s linhas=%d total=%d)", ctx.get("login"), rows, total,
                        extra={"action": EXPORT_ACTION})
-        nome = "auditoria_%s.csv" % self._clock().strftime("%Y%m%d_%H%M%S")
-        return nome, linhas, self._chunks(repo_filtros, ctx.get("login"))
+        name = "auditoria_%s.csv" % self._clock().strftime("%Y%m%d_%H%M%S")
+        return name, rows, self._chunks(repo_filters_dict, ctx.get("login"))
 
     def _chunks(self, repo_filters, login):
         buffer = io.StringIO()
-        escritor = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
-        escritor.writerow(CSV_HEADER)
+        writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
+        writer.writerow(CSV_HEADER)
         yield (u"﻿" + buffer.getvalue()).encode("utf-8")
         buffer.seek(0)
         buffer.truncate(0)
-        pendentes = 0
+        pending = 0
         try:
             for reg in self._audit.iterate(filters=repo_filters, limit=EXPORT_LIMIT):
-                escritor.writerow(csv_row(reg))
-                pendentes += 1
-                if pendentes >= _LINES_PER_CHUNK:
+                writer.writerow(csv_row(reg))
+                pending += 1
+                if pending >= _LINES_PER_CHUNK:
                     yield buffer.getvalue().encode("utf-8")
                     buffer.seek(0)
                     buffer.truncate(0)
-                    pendentes = 0
+                    pending = 0
         except Exception:
             # A resposta ja comecou: so resta registrar e encerrar o arquivo incompleto.
             self._log.exception("falha durante a exportacao da auditoria (login=%s)", login,
                                 extra={"action": EXPORT_ACTION})
             raise
-        if pendentes:
+        if pending:
             yield buffer.getvalue().encode("utf-8")
 
 
@@ -344,10 +344,10 @@ def _service():
         if _default is None:
             from gluon import current
             import sss_logging
-            fabrica = current.repo_factory
+            factory = current.repo_factory
             _default = AuditService(
-                audit=fabrica.get("audit"),
-                clock=fabrica.get("tickets").now,
+                audit=factory.get("audit"),
+                clock=factory.get("tickets").now,
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _default

@@ -64,17 +64,17 @@ def _resolve_config(config_param=None):
 def _dev_seed_password():
     """Senha DEV do seed FAKE, lida do ambiente; ausente ou fora da politica deixa os logins impossiveis."""
     log = logging.getLogger("sss_web")
-    senha = os.environ.get(ENV_DEV_PASSWORD)
-    if not senha:
+    password = os.environ.get(ENV_DEV_PASSWORD)
+    if not password:
         log.warning("%s ausente: usuarios do seed FAKE sem senha utilizavel (logins DEV impossiveis)",
                     ENV_DEV_PASSWORD, extra={"action": "SEED"})
         return None
-    masking.register_secret(senha)
-    if security.validate_password_policy(senha):
+    masking.register_secret(password)
+    if security.validate_password_policy(password):
         log.warning("%s fora da politica de senha: usuarios do seed FAKE sem senha utilizavel",
                     ENV_DEV_PASSWORD, extra={"action": "SEED"})
         return None
-    return senha
+    return password
 
 
 def _oracle_class(normalized_name):
@@ -111,22 +111,22 @@ def get(name, config=None):
     if backend == "FAKE" and env != "DEV":
         raise RuntimeError("FAKE (so de teste) e proibido fora de DEV (sss_env=%s)" % env)
 
-    nome_norm = str(name).lower().replace("repo_", "")
+    name_norm = str(name).lower().replace("repo_", "")
 
     if backend == "ORACLE":
         with _factory_lock:
-            if nome_norm in ("users", "rbac") and nome_norm not in _singletons_oracle:
+            if name_norm in ("users", "rbac") and name_norm not in _singletons_oracle:
                 # RBAC_USUARIOS: os dois repositorios compartilham o agregado.
                 from repo_oracle.users import RepoUsersOracle
                 from repo_oracle.rbac import RepoRbacOracle
                 _singletons_oracle["users"] = RepoUsersOracle()
                 _singletons_oracle["rbac"] = RepoRbacOracle()
-            elif nome_norm not in _singletons_oracle:
-                classe = _oracle_class(nome_norm)
-                if classe is None:
+            elif name_norm not in _singletons_oracle:
+                cls_name = _oracle_class(name_norm)
+                if cls_name is None:
                     raise ValueError("Repositorio desconhecido: %s" % name)
-                _singletons_oracle[nome_norm] = classe()
-            return _singletons_oracle[nome_norm]
+                _singletons_oracle[name_norm] = cls_name()
+            return _singletons_oracle[name_norm]
 
     if backend != "FAKE":
         raise ValueError("Backend de persistencia desconhecido: %s" % backend)
@@ -153,7 +153,7 @@ def get(name, config=None):
             _singletons["audit"] = RepoAuditFake(_fake_store)
             _singletons["agents"] = RepoAgentsFake(_fake_store)
 
-        if nome_norm not in _singletons:
+        if name_norm not in _singletons:
             raise ValueError("Repositorio desconhecido: %s" % name)
 
-        return _singletons[nome_norm]
+        return _singletons[name_norm]

@@ -37,10 +37,10 @@ def _split_hash(stored):
     m = _RE_HASH.fullmatch(stored)
     if not m:
         return None
-    iteracoes = int(m.group(1))
-    if iteracoes < 1:
+    iterations = int(m.group(1))
+    if iterations < 1:
         return None
-    return iteracoes, bytes.fromhex(m.group(2)), bytes.fromhex(m.group(3))
+    return iterations, bytes.fromhex(m.group(2)), bytes.fromhex(m.group(3))
 
 
 def hash_password(password_value):
@@ -56,11 +56,11 @@ def verify_password(password_value, stored):
     """True se a senha confere com o hash armazenado; formato invalido ou '!' resulta em False."""
     if not isinstance(password_value, str):
         return False
-    partes = _split_hash(stored)
-    if partes is None:
+    parts = _split_hash(stored)
+    if parts is None:
         return False
-    iteracoes, salt, esperado = partes
-    return hmac.compare_digest(_derive(password_value, salt, iteracoes), esperado)
+    iterations, salt, expected = parts
+    return hmac.compare_digest(_derive(password_value, salt, iterations), expected)
 
 
 def is_known_hash(stored):
@@ -70,8 +70,8 @@ def is_known_hash(stored):
 
 def needs_rehash(stored):
     """True se o hash e valido mas usa menos iteracoes que o vigente."""
-    partes = _split_hash(stored)
-    return partes is not None and partes[0] < ITERATIONS
+    parts = _split_hash(stored)
+    return parts is not None and parts[0] < ITERATIONS
 
 
 _DUMMY_HASH = hash_password(secrets.token_hex(16))
@@ -95,17 +95,17 @@ def strip_passwords(sources, fields):
     O ticket de erro do web2py grava request.vars/post_vars: as senhas saem deles assim que lidas.
     origens: dicts na ordem de prioridade (ex.: post_vars, vars); valor nao str (ou lista) vira None.
     """
-    senhas = {}
-    for campo in fields:
-        valor = None
-        for origem in sources:
-            achado = origem.pop(campo, None)
-            if valor is None:
-                valor = achado
-        if isinstance(valor, list):
-            valor = valor[-1] if valor else None
-        senhas[campo] = valor if isinstance(valor, str) else None
-    return senhas
+    passwords = {}
+    for field in fields:
+        value = None
+        for source in sources:
+            found = source.pop(field, None)
+            if value is None:
+                value = found
+        if isinstance(value, list):
+            value = value[-1] if value else None
+        passwords[field] = value if isinstance(value, str) else None
+    return passwords
 
 
 def generate_csrf_token():
@@ -126,17 +126,17 @@ def normalize_origin(url):
     """Retorna (esquema, host, porta) de uma URL http(s) ou None se invalida."""
     if not isinstance(url, str) or not url:
         return None
-    partes = urllib.parse.urlsplit(url.strip())
-    esquema = partes.scheme.lower()
-    if esquema not in _DEFAULT_PORTS:
+    parts = urllib.parse.urlsplit(url.strip())
+    schema = parts.scheme.lower()
+    if schema not in _DEFAULT_PORTS:
         return None
-    m = _RE_NETLOC.fullmatch(partes.netloc.lower())
+    m = _RE_NETLOC.fullmatch(parts.netloc.lower())
     if not m:
         return None
-    porta = int(m.group(2)) if m.group(2) else _DEFAULT_PORTS[esquema]
-    if not 1 <= porta <= 65535:
+    port = int(m.group(2)) if m.group(2) else _DEFAULT_PORTS[schema]
+    if not 1 <= port <= 65535:
         return None
-    return esquema, m.group(1), porta
+    return schema, m.group(1), port
 
 
 def is_allowed_origin(origin, referer, allowed_origins):
@@ -144,12 +144,12 @@ def is_allowed_origin(origin, referer, allowed_origins):
 
     Compara esquema, host e porta exatos. Sem nenhum dos dois cabecalhos, rejeita.
     """
-    fonte = origin if origin else referer
-    alvo = normalize_origin(fonte)
-    if alvo is None:
+    source = origin if origin else referer
+    target = normalize_origin(source)
+    if target is None:
         return False
-    for permitida in allowed_origins or ():
-        if normalize_origin(permitida) == alvo:
+    for allowed in allowed_origins or ():
+        if normalize_origin(allowed) == target:
             return True
     return False
 
@@ -185,8 +185,8 @@ class SecureCookies(http.cookies.SimpleCookie):
 
     def adopt(self, cookies):
         """Copia os morsels de outro SimpleCookie aplicando as protecoes."""
-        for chave, morsel in cookies.items():
-            dict.__setitem__(self, chave, morsel)
+        for key, morsel in cookies.items():
+            dict.__setitem__(self, key, morsel)
             self._protect(morsel)
 
 
@@ -210,11 +210,11 @@ def validate_next(value, prefix=APP_PREFIX):
         return None
     if "\\" in value or "//" in value or not value.startswith(prefix):
         return None
-    partes = urllib.parse.urlsplit(value)
-    if partes.scheme or partes.netloc:
+    parts = urllib.parse.urlsplit(value)
+    if parts.scheme or parts.netloc:
         return None
-    caminho = urllib.parse.unquote(partes.path)
-    if "\\" in caminho or "//" in caminho or ".." in caminho.split("/") or not caminho.startswith(prefix):
+    path = urllib.parse.unquote(parts.path)
+    if "\\" in path or "//" in path or ".." in path.split("/") or not path.startswith(prefix):
         return None
     return value
 
@@ -233,16 +233,16 @@ def client_ip(remote_addr, x_forwarded_for, trusted_proxies):
 
     No XFF, percorre da direita para a esquerda e devolve o primeiro IP nao confiavel.
     """
-    confiaveis = frozenset(ip for ip in (_normalized_ip(t) for t in (trusted_proxies or ())) if ip)
-    remoto = _normalized_ip(remote_addr)
-    if remoto is None:
+    trusted = frozenset(ip for ip in (_normalized_ip(t) for t in (trusted_proxies or ())) if ip)
+    remote = _normalized_ip(remote_addr)
+    if remote is None:
         return None
-    if remoto not in confiaveis or not isinstance(x_forwarded_for, str):
-        return remoto[:IP_MAX]
+    if remote not in trusted or not isinstance(x_forwarded_for, str):
+        return remote[:IP_MAX]
     for item in reversed(x_forwarded_for.split(",")):
         ip = _normalized_ip(item)
         if ip is None:
-            return remoto[:IP_MAX]
-        if ip not in confiaveis:
+            return remote[:IP_MAX]
+        if ip not in trusted:
             return ip[:IP_MAX]
-    return remoto[:IP_MAX]
+    return remote[:IP_MAX]

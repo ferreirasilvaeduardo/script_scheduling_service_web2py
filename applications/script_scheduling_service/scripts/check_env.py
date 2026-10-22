@@ -45,7 +45,7 @@ class _InvalidJs(Exception):
 def _skip_regex(src, i):
     """i aponta para a '/' de abertura; retorna o indice apos o literal (incluindo flags)."""
     i += 1
-    em_classe = False
+    in_cls_name = False
     while i < len(src):
         c = src[i]
         if c == "\\":
@@ -53,10 +53,10 @@ def _skip_regex(src, i):
             continue
         if c == "\n":
             raise _InvalidJs("regex sem fechamento")
-        if em_classe:
-            em_classe = c != "]"
+        if in_cls_name:
+            in_cls_name = c != "]"
         elif c == "[":
-            em_classe = True
+            in_cls_name = True
         elif c == "/":
             i += 1
             while i < len(src) and (src[i].isalnum() or src[i] in "_$"):
@@ -84,7 +84,7 @@ def _match(src, i):
     Ignora strings, templates (com ${} aninhado), comentarios e literais regex.
     Desbalanceamento levanta _InvalidJs (o chamador reprova: fail-closed).
     """
-    pilha = [_PAIRS[src[i]]]
+    stack = [_PAIRS[src[i]]]
     # Cada nivel de template aberto guarda a profundidade da pilha no '${'.
     templates = []
     i += 1
@@ -101,7 +101,7 @@ def _match(src, i):
                 i += 1
             if i >= n:
                 raise _InvalidJs("string sem fechamento")
-        elif c == "`" or (c == "}" and templates and len(pilha) == templates[-1]):
+        elif c == "`" or (c == "}" and templates and len(stack) == templates[-1]):
             if c == "}":
                 templates.pop()
             i += 1
@@ -109,7 +109,7 @@ def _match(src, i):
                 if src[i] == "\\":
                     i += 1
                 elif src.startswith("${", i):
-                    templates.append(len(pilha))
+                    templates.append(len(stack))
                     i += 1
                     break
                 i += 1
@@ -117,22 +117,22 @@ def _match(src, i):
                 if i >= n:
                     raise _InvalidJs("template sem fechamento")
         elif src.startswith("//", i):
-            fim = src.find("\n", i)
-            i = n if fim < 0 else fim
+            end = src.find("\n", i)
+            i = n if end < 0 else end
         elif src.startswith("/*", i):
-            fim = src.find("*/", i + 2)
-            if fim < 0:
+            end = src.find("*/", i + 2)
+            if end < 0:
                 raise _InvalidJs("comentario sem fechamento")
-            i = fim + 1
+            i = end + 1
         elif c == "/" and _starts_regex(src, i):
             i = _skip_regex(src, i)
             continue
         elif c in _PAIRS:
-            pilha.append(_PAIRS[c])
+            stack.append(_PAIRS[c])
         elif c in ")]}":
-            if c != pilha.pop():
+            if c != stack.pop():
                 raise _InvalidJs("delimitadores desbalanceados")
-            if not pilha:
+            if not stack:
                 return i
         i += 1
     raise _InvalidJs("delimitadores desbalanceados")
@@ -140,14 +140,14 @@ def _match(src, i):
 
 def _function_bodies(src):
     """Mapeia nome -> lista de textos (parametros + corpo) das declaracoes 'function nome(...)'."""
-    corpos = {}
+    bodies = {}
     for m in _RE_FUNCTION_DECL.finditer(src):
-        fim_params = _match(src, m.end() - 1)
-        abre = src.find("{", fim_params)
-        if abre < 0 or src[fim_params + 1:abre].strip():
+        end_params = _match(src, m.end() - 1)
+        open_value = src.find("{", end_params)
+        if open_value < 0 or src[end_params + 1:open_value].strip():
             raise _InvalidJs("declaracao de funcao sem corpo: %s" % m.group(1))
-        corpos.setdefault(m.group(1), []).append(src[m.end() - 1:_match(src, abre) + 1])
-    return corpos
+        bodies.setdefault(m.group(1), []).append(src[m.end() - 1:_match(src, open_value) + 1])
+    return bodies
 
 
 def check_alpine_csp(source):
@@ -158,40 +158,40 @@ def check_alpine_csp(source):
     O build CSP oficial ainda embute o avaliador padrao como codigo morto; ele so e
     aceito se nao for alcancavel a partir do avaliador registrado.
     """
-    for regex, rotulo in _RE_DIRECT_EVAL:
+    for regex, label in _RE_DIRECT_EVAL:
         if regex.search(source):
-            return False, "Uso de %s encontrado" % rotulo
+            return False, "Uso de %s encontrado" % label
 
-    registros = _RE_SET_EVALUATOR.findall(source)
-    if len(registros) != 1:
-        return False, "Esperado exatamente 1 setEvaluator(), encontrados %d" % len(registros)
-    avaliador = registros[0]
+    records = _RE_SET_EVALUATOR.findall(source)
+    if len(records) != 1:
+        return False, "Esperado exatamente 1 setEvaluator(), encontrados %d" % len(records)
+    evaluator = records[0]
 
     try:
-        corpos = _function_bodies(source)
+        bodies = _function_bodies(source)
     except _InvalidJs as e:
         return False, "Bundle não analisável: %s" % e
-    if avaliador not in corpos:
-        return False, "Avaliador registrado '%s' não declarado como função" % avaliador
+    if evaluator not in bodies:
+        return False, "Avaliador registrado '%s' não declarado como função" % evaluator
 
     # Sobreaproximacao intencional: todo identificador igual a nome de funcao declarada
     # conta como alcancavel (inclusive parametros homonimos), errando para o lado da falha.
-    alcancaveis = set()
-    pendentes = [avaliador]
-    while pendentes:
-        nome = pendentes.pop()
-        if nome in alcancaveis:
+    reachable = set()
+    pending = [evaluator]
+    while pending:
+        name = pending.pop()
+        if name in reachable:
             continue
-        alcancaveis.add(nome)
-        for corpo in corpos[nome]:
-            if _RE_DYNAMIC_CONSTRUCTOR.search(corpo):
+        reachable.add(name)
+        for body in bodies[name]:
+            if _RE_DYNAMIC_CONSTRUCTOR.search(body):
                 return False, "Avaliador registrado '%s' alcança construtor dinâmico em '%s' (build não CSP)" % (
-                    avaliador, nome)
-            pendentes.extend(ident for ident in _RE_IDENT.findall(corpo) if ident in corpos)
+                    evaluator, name)
+            pending.extend(ident for ident in _RE_IDENT.findall(body) if ident in bodies)
 
     if _RE_DYNAMIC_CONSTRUCTOR.search(source):
-        return True, "Build CSP confirmada: avaliador '%s' não avalia strings (avaliador padrão presente apenas como código morto)" % avaliador
-    return True, "Build CSP confirmada: avaliador '%s' não avalia strings" % avaliador
+        return True, "Build CSP confirmada: avaliador '%s' não avalia strings (avaliador padrão presente apenas como código morto)" % evaluator
+    return True, "Build CSP confirmada: avaliador '%s' não avalia strings" % evaluator
 
 
 def main():
@@ -244,8 +244,8 @@ def main():
     else:
         try:
             with open(alpine_js, "r", encoding="utf-8") as f:
-                ok, detalhe = check_alpine_csp(f.read())
-            results.append(("Build CSP do Alpine.js", "OK" if ok else "FALHA", detalhe))
+                ok, detail_text = check_alpine_csp(f.read())
+            results.append(("Build CSP do Alpine.js", "OK" if ok else "FALHA", detail_text))
         except Exception as e:
             results.append(("Build CSP do Alpine.js", "FALHA", "Erro ao ler arquivo: %s" % str(e)))
 
@@ -256,26 +256,26 @@ def main():
             sys.path.insert(0, modules_dir)
         import sss_config
         cfg = sss_config.get_config()
-        modo = getattr(cfg.oracle, "driver_mode", "auto")
-        cadeia_desc = "auto (Thin -> Thick -> cx_Oracle)" if modo == "auto" else modo
+        mode = getattr(cfg.oracle, "driver_mode", "auto")
+        chain_desc = "auto (Thin -> Thick -> cx_Oracle)" if mode == "auto" else mode
 
         sel_desc = None
         # Sondagem real do driver so com os testes Oracle ligados (SSS_TEST_ORACLE=1, README §2.5).
         if os.environ.get("SSS_TEST_ORACLE") == "1":
             try:
                 import db_conn
-                segredos = sss_config.get_secrets()
-                sel = db_conn.select_driver(cfg, segredos)
+                secrets_value = sss_config.get_secrets()
+                sel = db_conn.select_driver(cfg, secrets_value)
                 sel_desc = "modo=%s (servidor=%s driver=%s cliente=%s)" % (
                     sel.candidate, sel.server_version or "-", sel.driver_version or "-", sel.client_version or "-"
                 )
-            except Exception as e_sonda:
-                sel_desc = "sondagem falhou: %s" % e_sonda
+            except Exception as and_probe:
+                sel_desc = "sondagem falhou: %s" % and_probe
 
-        detalhe_driver = cadeia_desc
+        detail_driver = chain_desc
         if sel_desc:
-            detalhe_driver = "%s | Selecionado: %s" % (cadeia_desc, sel_desc)
-        results.append(("Driver Oracle (driver_mode)", "OK", detalhe_driver))
+            detail_driver = "%s | Selecionado: %s" % (chain_desc, sel_desc)
+        results.append(("Driver Oracle (driver_mode)", "OK", detail_driver))
     except Exception as exc:
         results.append(("Driver Oracle (driver_mode)", "FALHA", "Erro ao carregar configuracao: %s" % exc))
 

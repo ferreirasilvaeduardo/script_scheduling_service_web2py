@@ -47,37 +47,37 @@ class RepoAuditOracle(BaseRepoOracle, RepoAudit):
     def _filtros(self, filters):
         """Clausulas fixas (allowlist) e binds; datas declaradas como TIPO_DATE (README §7.5)."""
         filters = filters or {}
-        clausulas, binds, datas = [], {}, {}
+        clauses, binds, dates = [], {}, {}
         if filters.get("actor"):
-            trecho = filters["actor"].lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            clausulas.append("LOWER(actor) LIKE :actor_f ESCAPE '\\'")
-            binds["actor_f"] = "%" + trecho + "%"
+            snippet = filters["actor"].lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            clauses.append("LOWER(actor) LIKE :actor_f ESCAPE '\\'")
+            binds["actor_f"] = "%" + snippet + "%"
         if filters.get("action"):
-            clausulas.append("action = :action_f")
+            clauses.append("action = :action_f")
             binds["action_f"] = filters["action"]
         if filters.get("entity"):
-            clausulas.append("entity = :entity_f")
+            clauses.append("entity = :entity_f")
             binds["entity_f"] = filters["entity"]
         if filters.get("entity_id") is not None:
-            clausulas.append("entity_id = :entity_id_f")
+            clauses.append("entity_id = :entity_id_f")
             binds["entity_id_f"] = int(filters["entity_id"])
         if filters.get("source_ip"):
-            trecho = filters["source_ip"].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            clausulas.append("source_ip LIKE :ip_f ESCAPE '\\'")
-            binds["ip_f"] = "%" + trecho + "%"
+            snippet = filters["source_ip"].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            clauses.append("source_ip LIKE :ip_f ESCAPE '\\'")
+            binds["ip_f"] = "%" + snippet + "%"
         # Periodo sempre por intervalo, sem TRUNC na coluna indexada (AGENTS §4.12).
         if filters.get("start_date"):
-            clausulas.append("created_at >= :start_date")
+            clauses.append("created_at >= :start_date")
             binds["start_date"] = filters["start_date"]
-            datas["start_date"] = db_conn.TIPO_DATE
+            dates["start_date"] = db_conn.TIPO_DATE
         if filters.get("end_date"):
-            clausulas.append("created_at <= :end_date")
+            clauses.append("created_at <= :end_date")
             binds["end_date"] = filters["end_date"]
-            datas["end_date"] = db_conn.TIPO_DATE
+            dates["end_date"] = db_conn.TIPO_DATE
         if filters.get("id_max") is not None:
-            clausulas.append("id <= :id_max")
+            clauses.append("id <= :id_max")
             binds["id_max"] = int(filters["id_max"])
-        return clausulas, binds, datas
+        return clauses, binds, dates
 
     def reserve_id(self, conn=None):
         """Proximo id da trilha (seq.NEXTVAL), usado antes de gravar a linha (README §4.4)."""
@@ -103,56 +103,56 @@ class RepoAuditOracle(BaseRepoOracle, RepoAudit):
 
     def list(self, filters=None, page=1, size=20, conn=None):
         """Lista por created_at DESC, id DESC, com total limitado a 10.001."""
-        clausulas, binds, datas = self._filtros(filters)
+        clauses, binds, dates = self._filtros(filters)
         p = 1 if page is None else int(page)
         t = 20 if size is None else int(size)
         if p < 1:
             p = 1
         if t < 1:
             t = 20
-        inicio = (p - 1) * t
-        where = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
-        where_count = " AND ".join(clausulas + ["ROWNUM <= " + str(_LIMIT_TOTAL)])
-        sql_conta = _SQL_COUNT.format(where_count=where_count, **self._idents)
-        sql_pag = (
+        start = (p - 1) * t
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        where_count = " AND ".join(clauses + ["ROWNUM <= " + str(_LIMIT_TOTAL)])
+        sql_count_tpl = _SQL_COUNT.format(where_count=where_count, **self._idents)
+        sql_page = (
             "SELECT * FROM (SELECT a.*, ROWNUM rn FROM (" + _SQL_LIST.format(where=where, **self._idents) + ") a "
             "WHERE ROWNUM <= :end_ts) WHERE rn > :start_ts"
         )
         with self.read_context(conn=conn) as c:
             cur = c.cursor()
             try:
-                if datas:
-                    db_conn.set_input_types(cur, **datas)
-                cur.execute(sql_conta, binds)
-                bruto = cur.fetchone()[0]
+                if dates:
+                    db_conn.set_input_types(cur, **dates)
+                cur.execute(sql_count_tpl, binds)
+                raw = cur.fetchone()[0]
             finally:
                 cur.close()
-            binds_pag = dict(binds)
-            binds_pag["start_ts"] = inicio
-            binds_pag["end_ts"] = inicio + t
+            binds_page = dict(binds)
+            binds_page["start_ts"] = start
+            binds_page["end_ts"] = start + t
             cur = c.cursor()
             try:
-                if datas:
-                    db_conn.set_input_types(cur, **datas)
-                cur.execute(sql_pag, binds_pag)
-                itens = [self.tuple_to_dict(_COLS, r[:len(_COLS)]) for r in cur.fetchall()]
+                if dates:
+                    db_conn.set_input_types(cur, **dates)
+                cur.execute(sql_page, binds_page)
+                items = [self.tuple_to_dict(_COLS, r[:len(_COLS)]) for r in cur.fetchall()]
             finally:
                 cur.close()
         return {
-            "itens": itens,
-            "total": min(bruto, _LIMIT_TOTAL),
+            "itens": items,
+            "total": min(raw, _LIMIT_TOTAL),
             "pagina": p,
             "tamanho": t,
-            "total_limitado": bruto >= _LIMIT_TOTAL,
+            "total_limitado": raw >= _LIMIT_TOTAL,
         }
 
     def iterate(self, filters=None, limit=50000):
         """Iterador de ate `limite` registros na ordem de listar, por cursor (arraysize), sem offset."""
-        clausulas, binds, datas = self._filtros(filters)
-        where = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
+        clauses, binds, dates = self._filtros(filters)
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
         sql = _SQL_ITERATE.format(items=_SQL_LIST.format(where=where, **self._idents))
         binds["cutoff"] = max(0, int(limit))
-        return self._iterar(sql, binds, datas)
+        return self._iterar(sql, binds, dates)
 
     def _iterar(self, sql, binds, dates):
         with self.read_context() as c:
@@ -163,10 +163,10 @@ class RepoAuditOracle(BaseRepoOracle, RepoAudit):
                     db_conn.set_input_types(cur, **dates)
                 cur.execute(sql, binds)
                 while True:
-                    linhas = cur.fetchmany(_ARRAYSIZE)
-                    if not linhas:
+                    rows = cur.fetchmany(_ARRAYSIZE)
+                    if not rows:
                         break
-                    for r in linhas:
+                    for r in rows:
                         yield self.tuple_to_dict(_COLS, r)
             finally:
                 cur.close()

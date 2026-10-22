@@ -28,9 +28,9 @@ class TestWithoutDb(unittest.TestCase):
     def setUp(self):
         self.repo = RepoSchedulerOutput("openrisow", "tbsss_")
         # O cursor roteirizado devolve a variavel de saida em lista (formato do RETURNING).
-        valor = mock.patch.object(db_conn, "output_value", lambda var: var.getvalue()[0])
-        valor.start()
-        self.addCleanup(valor.stop)
+        value = mock.patch.object(db_conn, "output_value", lambda var: var.getvalue()[0])
+        value.start()
+        self.addCleanup(value.stop)
 
     def test_iniciar_reinicia_a_propria_ou_inclui_com_posse_do_ticket(self):
         conn = _Conn([("SET content = EMPTY_BLOB()", (1, []))])
@@ -48,9 +48,9 @@ class TestWithoutDb(unittest.TestCase):
         self.assertEqual((conn.commits, conn.rollbacks), (0, 0), "sem COMMIT: a fase decide")
 
     def test_anexar_resultados_e_divergencia(self):
-        for valor in ("WRITTEN", "ALREADY_WRITTEN", "OWNERSHIP_LOST"):
-            conn = _Conn([("DECLARE", (1, [], valor))])
-            self.assertEqual(self.repo.append_chunk(conn, 7, AGENT, 0, b"PK\x03\x04"), valor)
+        for value in ("WRITTEN", "ALREADY_WRITTEN", "OWNERSHIP_LOST"):
+            conn = _Conn([("DECLARE", (1, [], value))])
+            self.assertEqual(self.repo.append_chunk(conn, 7, AGENT, 0, b"PK\x03\x04"), value)
         conn = _Conn([("DECLARE", (1, [], "WRITTEN"))])
         self.repo.append_chunk(conn, 7, AGENT, 1048576, b"x")
         sql, binds = conn.executed[0]
@@ -61,9 +61,9 @@ class TestWithoutDb(unittest.TestCase):
         conn = _Conn([("DECLARE", _Error("ORA-20003: SAIDA_OFFSET_DIVERGENTE"))])
         with self.assertRaises(OutputOffsetMismatch):
             self.repo.append_chunk(conn, 7, AGENT, 0, b"x")
-        for ruim in (b"", b"x" * (scheduler_output.PART_MAX + 1)):
+        for bad in (b"", b"x" * (scheduler_output.PART_MAX + 1)):
             with self.assertRaises(ValueError):
-                self.repo.append_chunk(_Conn([]), 7, AGENT, 0, ruim)
+                self.repo.append_chunk(_Conn([]), 7, AGENT, 0, bad)
 
     def test_concluir_confere_o_tamanho_no_banco(self):
         conn = _Conn([("SET state = 'AVAILABLE'", (1, []))])
@@ -82,9 +82,9 @@ class TestWithoutDb(unittest.TestCase):
         sql, binds = [e for e in conn.executed if "INSERT INTO" in e[0]][0]
         self.assertIn(", NULL, SYSDATE", sql, "sem content")
         self.assertEqual((binds["state"], binds["reason"]), ("FAILED", "DEADLINE"))
-        for situacao, motivo in (("AVAILABLE", "ERROR"), ("FAILED", "OUTRO")):
+        for state, reason in (("AVAILABLE", "ERROR"), ("FAILED", "OUTRO")):
             with self.assertRaises(ValueError):
-                self.repo.register_without_content(_Conn([]), 7, AGENT, situacao, motivo)
+                self.repo.register_without_content(_Conn([]), 7, AGENT, state, reason)
 
     def test_falhar_gravando_usa_o_indice_de_funcao(self):
         conn = _Conn([("SET state = 'FAILED'", (2, []))])
@@ -207,39 +207,39 @@ class TestSchedulerOutputOracle(unittest.TestCase):
                          ("AVAILABLE", 2, len(zip_), self.agent))
         self.assertEqual(meta["updated_by"], "SYSTEM:%s" % self.agent)
         self.assertNotIn("content", meta)
-        lido, off = b"", 0
+        read, off = b"", 0
         while True:
-            parte = self.tickets.output_read(tid, off, 300000)
-            if not parte:
+            part = self.tickets.output_read(tid, off, 300000)
+            if not part:
                 break
-            lido += parte
-            off += len(parte)
-        self.assertEqual(lido, zip_)
+            read += part
+            off += len(part)
+        self.assertEqual(read, zip_)
         self.assertEqual(self.repo.append_chunk(self.conn, tid, self.agent, len(zip_), b"x"), "OWNERSHIP_LOST",
                          "fora de GRAVANDO nada e anexado")
         self.assertFalse(self.repo.start(self.conn, tid, self.agent), "situacao final nao reabre")
         self.conn.rollback()
 
     def test_combinacoes_de_driver(self):
-        modulos = os.path.dirname(os.path.abspath(scheduler_output.__file__))
-        modulos = os.path.dirname(modulos)
-        parte = bytes(bytearray(range(256))) * 1200
-        resultados = {}
-        for modo in ("thin", "thick", "cx_oracle"):
+        modules = os.path.dirname(os.path.abspath(scheduler_output.__file__))
+        modules = os.path.dirname(modules)
+        part = bytes(bytearray(range(256))) * 1200
+        results = {}
+        for mode in ("thin", "thick", "cx_oracle"):
             tid = self._agent_ticket()
-            p = subprocess.run([sys.executable, "-c", _CHILD, modulos, modo, str(tid), self.agent],
+            p = subprocess.run([sys.executable, "-c", _CHILD, modules, mode, str(tid), self.agent],
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180,
-                               cwd=os.path.dirname(modulos))
-            linhas = [x for x in p.stdout.decode("utf-8", "replace").splitlines() if x.startswith("{")]
-            self.assertTrue(linhas, "%s: %s" % (modo, p.stderr.decode("utf-8", "replace")[-500:]))
-            saida = json.loads(linhas[-1])
-            resultados[modo] = saida
-            if "indisponivel" in saida:
+                               cwd=os.path.dirname(modules))
+            rows = [x for x in p.stdout.decode("utf-8", "replace").splitlines() if x.startswith("{")]
+            self.assertTrue(rows, "%s: %s" % (mode, p.stderr.decode("utf-8", "replace")[-500:]))
+            output = json.loads(rows[-1])
+            results[mode] = output
+            if "indisponivel" in output:
                 continue
-            self.assertEqual((saida["candidate"], saida["r"]), (modo, [True, "WRITTEN", "ALREADY_WRITTEN", True]), modo)
-            self.assertEqual(self.tickets.output_read(tid, 0, len(parte)), parte, modo)
-        print("\n[saida] combinacoes de driver: %s" % json.dumps(resultados))
-        self.assertNotIn("indisponivel", resultados["thin"], "Thin e o driver padrao do ambiente")
+            self.assertEqual((output["candidate"], output["r"]), (mode, [True, "WRITTEN", "ALREADY_WRITTEN", True]), mode)
+            self.assertEqual(self.tickets.output_read(tid, 0, len(part)), part, mode)
+        print("\n[saida] combinacoes de driver: %s" % json.dumps(results))
+        self.assertNotIn("indisponivel", results["thin"], "Thin e o driver padrao do ambiente")
 
     def test_excedeu_falhou_e_startup_check(self):
         t1, t2, t3 = self._agent_ticket(), self._agent_ticket(), self._agent_ticket()
@@ -250,10 +250,10 @@ class TestSchedulerOutputOracle(unittest.TestCase):
         self.conn.commit()
         self.assertEqual(self.repo.fail_agent_writing(self.conn, self.agent), 1)
         self.conn.commit()
-        for tid, esperado in ((t1, ("EXCEEDED", "FILES", 1001)), (t2, ("FAILED", "DEADLINE", None)),
+        for tid, expected in ((t1, ("EXCEEDED", "FILES", 1001)), (t2, ("FAILED", "DEADLINE", None)),
                               (t3, ("FAILED", "ERROR", None))):
             meta = self.tickets.output_get(tid)
-            self.assertEqual((meta["state"], meta["reason"], meta["file_count"]), esperado)
+            self.assertEqual((meta["state"], meta["reason"], meta["file_count"]), expected)
             with self.assertRaises(self.trc.RepoNotFound):
                 self.tickets.output_read(tid, 0, 10)
         self.assertEqual(self.repo.output_state(self.conn, t1), ("EXCEEDED", self.agent))

@@ -36,41 +36,41 @@ _TICKET_NO_PID = 16
 
 def _large_log(start):
     # ~2 MB em UTF-8, com acentos, para exercitar a leitura por offset e o download.
-    linhas = []
+    rows = []
     for i in range(1, _LINES_LOG_LARGE + 1):
-        quando = start + datetime.timedelta(seconds=i // 100)
-        linhas.append(u"[%s] lote %06d/%06d: registros validados \u2014 situa\u00e7\u00e3o OK\n"
-                      % (quando, i, _LINES_LOG_LARGE))
-    return u"".join(linhas)
+        when = start + datetime.timedelta(seconds=i // 100)
+        rows.append(u"[%s] lote %06d/%06d: registros validados \u2014 situa\u00e7\u00e3o OK\n"
+                      % (when, i, _LINES_LOG_LARGE))
+    return u"".join(rows)
 
 
 def _compiler_links(store, script_id):
     """Vinculos ativos do script no formato do compilador (parametro + ordem, obrigatorio e sub)."""
-    vinculos = []
+    links = []
     for v in sorted((v for v in store.script_param.values() if v["script_id"] == script_id), key=lambda v: v["sort_order"]):
         prm = store.parameters[v["parameter_id"]]
         if prm["active"] == "Y":
-            vinculos.append(dict(prm, parameter_id=prm["id"], sort_order=v["sort_order"], required=v["required"],
+            links.append(dict(prm, parameter_id=prm["id"], sort_order=v["sort_order"], required=v["required"],
                                  default_value_override=v.get("default_value_override")))
-    return vinculos
+    return links
 
 
 def _compile_seed(store, script_id, now):
     """Snapshot e respostas resolvidas reais do script (README §2.5: seed coerente com as regras)."""
-    vinculos = _compiler_links(store, script_id)
-    snapshot, resolvidos, erros = params_compiler.compile_snapshot(store.scripts[script_id], vinculos, {}, now)
-    if erros:
-        raise ValueError("seed incoerente: script %s nao compila (%s)" % (script_id, sorted(erros)))
-    return snapshot, resolvidos, vinculos
+    links = _compiler_links(store, script_id)
+    snapshot, resolved, errors = params_compiler.compile_snapshot(store.scripts[script_id], links, {}, now)
+    if errors:
+        raise ValueError("seed incoerente: script %s nao compila (%s)" % (script_id, sorted(errors)))
+    return snapshot, resolved, links
 
 
 def _params_json(resolved):
     """parametros_json de agendamento: respostas resolvidas, nulos omitidos, CHECKBOX como texto (README §7.6)."""
     obj = {}
-    for codigo, valor in resolved.items():
-        if valor is None:
+    for code, value in resolved.items():
+        if value is None:
             continue
-        obj[codigo] = ("true" if valor else "false") if isinstance(valor, bool) else valor
+        obj[code] = ("true" if value else "false") if isinstance(value, bool) else value
     return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
@@ -90,8 +90,8 @@ def _stamp_record(store, base_dt):
     (registro inativo, regra pausada). Tickets: solicitante ou o agente do desdobro; fora de PENDING,
     a ultima mudanca de situacao. Agentes: o proprio agente. Sempre entre created_at e base_dt.
     """
-    for nome in _REGISTRIES:
-        for reg in getattr(store, nome).values():
+    for name in _REGISTRIES:
+        for reg in getattr(store, name).values():
             reg.setdefault("created_at", base_dt - datetime.timedelta(days=90))
             reg.update(created_by=_ACTOR_SEED, updated_at=None, updated_by=None)
             if reg.get("active") == "N":
@@ -117,21 +117,21 @@ def _stamp_record(store, base_dt):
         if t["status"] == "CANCELLED" and t.get("started_at") is None:
             # Cancelado na fila pelo administrador (trilha do seed: TICKET_CANCEL por admin).
             t["updated_by"] = "admin"
-            quando = t.get("finished_at")
+            when = t.get("finished_at")
         elif t["status"] == "RUNNING":
             t["updated_by"] = "SYSTEM:%s" % t["agent_id"]
-            quando = t.get("started_at")
+            when = t.get("started_at")
         else:
             t["updated_by"] = "SYSTEM:%s" % t["agent_id"]
-            quando = t.get("finished_at") or t.get("started_at")
-        t["updated_at"] = _between(quando or t["created_at"], t["created_at"], base_dt)
+            when = t.get("finished_at") or t.get("started_at")
+        t["updated_at"] = _between(when or t["created_at"], t["created_at"], base_dt)
     for r in store.ticket_answer.values():
         r.update(created_by=store.tickets[r["ticket_id"]]["created_by"], updated_at=None, updated_by=None)
-    for sai in store.ticket_output.values():
+    for tout in store.ticket_output.values():
         # A troca de GRAVANDO para a situacao final e alteracao de negocio do agente (README §10, tabela 18).
-        t = store.tickets[sai["ticket_id"]]
-        sai.update(created_at=t["finished_at"], created_by="SYSTEM:%s" % sai["agent_id"],
-                 updated_at=t["finished_at"], updated_by="SYSTEM:%s" % sai["agent_id"])
+        t = store.tickets[tout["ticket_id"]]
+        tout.update(created_at=t["finished_at"], created_by="SYSTEM:%s" % tout["agent_id"],
+                 updated_at=t["finished_at"], updated_by="SYSTEM:%s" % tout["agent_id"])
 
 
 def _seed_zip():
@@ -145,24 +145,24 @@ def _seed_zip():
 
 def _seed_outputs(store):
     """Saidas do ticket (tabela 18, CR-012): uma de cada situacao final, em tickets terminados."""
-    conteudo = _seed_zip()
-    linhas = (
-        (17, "AVAILABLE", None, 2, len(conteudo), conteudo),
+    content = _seed_zip()
+    rows = (
+        (17, "AVAILABLE", None, 2, len(content), content),
         (29, "EXCEEDED", "FILES", None, None, None),
         (30, "FAILED", "DEADLINE", None, None, None),
     )
-    for sid, (ticket_id, situacao, motivo, qtd, tamanho, dados) in enumerate(linhas, 1):
+    for sid, (ticket_id, state, reason, count, size, date) in enumerate(rows, 1):
         store.ticket_output[sid] = {
             "id": sid,
             "ticket_id": ticket_id,
-            "state": situacao,
-            "reason": motivo,
+            "state": state,
+            "reason": reason,
             "agent_id": store.tickets[ticket_id]["agent_id"],
-            "file_count": qtd,
-            "size_bytes": tamanho,
-            "content": dados,
+            "file_count": count,
+            "size_bytes": size,
+            "content": date,
         }
-    store.seqs["tbsss_ticket_output"] = len(linhas)
+    store.seqs["tbsss_ticket_output"] = len(rows)
 
 
 def load_seed(store, force=False, dev_password=None):
@@ -187,7 +187,7 @@ def load_seed(store, force=False, dev_password=None):
                                 # ---------------------------------------------------------
                                 # 1. Ambientes (3)
                                 # ---------------------------------------------------------
-                                ambs = [
+                                envs = [
                                     {"id": 1, "name": "PRODUCAO", "description": "Ambiente de Producao Oficial", "connection": "db-producao.local:1521/svc", "active": "Y"},
                                     {"id": 2, "name": "HOMOLOGACAO", "description": "Ambiente de Homologacao e Testes", "connection": "db-homologacao.local:1521/svc", "active": "Y"},
                                     {"id": 3, "name": "DESENV", "description": "Ambiente de Desenvolvimento", "connection": "db-desenv.local:1521/svc", "active": "N"},
@@ -197,7 +197,7 @@ def load_seed(store, force=False, dev_password=None):
                                     {"id": 7, "name": "CLONE7", "description": "BRTLVLTS1216PL (10.238.10.109)", "connection": "10.238.45.230/svc_gfprodc7", "active": "Y"},
                                     {"id": 8, "name": "GFPREPROD", "description": "BRTLVLTY3067SL (10.129.177.188)", "connection": "10.129.177.188/GFPR", "active": "Y"},
                                 ]
-                                for a in ambs:
+                                for a in envs:
                                     a["created_at"] = base_dt - datetime.timedelta(days=90)
                                     store.environments[a["id"]] = a
                                 store.seqs["tbsss_environments"] = 8
@@ -205,7 +205,7 @@ def load_seed(store, force=False, dev_password=None):
                                 # ---------------------------------------------------------
                                 # 2. Funcionalidades canonicas (10) - README §4.3.D
                                 # ---------------------------------------------------------
-                                funcs = [
+                                features = [
                                     {"id": 1, "code": "EXEC_SCRIPT", "name": "Disparar Scripts", "module": "OPERATION", "description": "Preencher questionários e abrir tickets", "active": "Y"},
                                     {"id": 2, "code": "VIEW_LOGS", "name": "Consultar Logs", "module": "OPERATION", "description": "Visualizar logs e histórico em tempo quase real", "active": "Y"},
                                     {"id": 3, "code": "CANCEL_TICKET", "name": "Cancelar Tickets", "module": "OPERATION", "description": "Cancelar tickets de terceiros em ambientes autorizados", "active": "Y"},
@@ -217,27 +217,27 @@ def load_seed(store, force=False, dev_password=None):
                                     {"id": 9, "code": "MANAGE_SCHEDULES", "name": "Regras de Agendamento", "module": "ADMIN", "description": "Criar e gerenciar recorrências", "active": "Y"},
                                     {"id": 10, "code": "VIEW_AUDIT", "name": "Auditoria", "module": "ADMIN", "description": "Consultar a trilha de auditoria e os agentes", "active": "Y"},
                                 ]
-                                for f in funcs:
+                                for f in features:
                                     store.features[f["id"]] = f
                                 store.seqs["tbsss_features"] = 10
 
                                 # ---------------------------------------------------------
                                 # 3. Perfis (4)
                                 # ---------------------------------------------------------
-                                perfis = [
+                                profiles = [
                                     {"id": 1, "name": "ADMINISTRATOR", "description": "Administrador Geral do Sistema", "is_admin": "Y", "perm_version": 1, "active": "Y"},
                                     {"id": 2, "name": "OPERATOR_PROD", "description": "Operador de Ambientes de Producao", "is_admin": "N", "perm_version": 1, "active": "Y"},
                                     {"id": 3, "name": "OPERATOR_HML", "description": "Operador de Ambientes de Homologacao", "is_admin": "N", "perm_version": 1, "active": "Y"},
                                     {"id": 4, "name": "READ_ONLY", "description": "Perfil de Apenas Leitura e Consulta", "is_admin": "N", "perm_version": 1, "active": "Y"},
                                 ]
-                                for p in perfis:
+                                for p in profiles:
                                     store.profiles[p["id"]] = p
                                 store.seqs["tbsss_profiles"] = 4
 
                                 # ---------------------------------------------------------
                                 # 4. Usuarios (6)
                                 # ---------------------------------------------------------
-                                usuarios = [
+                                users = [
                                     {"id": 1, "login": "admin", "name": "Administrador Geral", "password_hash": "!", "profile_id": 1, "failed_attempts": 0, "locked_until": None, "last_login_at": base_dt - datetime.timedelta(hours=1), "password_changed_at": base_dt - datetime.timedelta(days=30), "active": "Y"},
                                     {"id": 2, "login": "op.prod", "name": "Operador Producao", "password_hash": "!", "profile_id": 2, "failed_attempts": 0, "locked_until": None, "last_login_at": base_dt - datetime.timedelta(hours=2), "password_changed_at": base_dt - datetime.timedelta(days=20), "active": "Y"},
                                     {"id": 3, "login": "op.hml", "name": "Operador Homologacao", "password_hash": "!", "profile_id": 3, "failed_attempts": 0, "locked_until": None, "last_login_at": base_dt - datetime.timedelta(hours=3), "password_changed_at": base_dt - datetime.timedelta(days=15), "active": "Y"},
@@ -245,7 +245,7 @@ def load_seed(store, force=False, dev_password=None):
                                     {"id": 5, "login": "inativo", "name": "Usuario Desativado", "password_hash": "!", "profile_id": 4, "failed_attempts": 0, "locked_until": None, "last_login_at": base_dt - datetime.timedelta(days=60), "password_changed_at": base_dt - datetime.timedelta(days=60), "active": "N"},
                                     {"id": 6, "login": "bloqueado", "name": "Usuario Temporariamente Bloqueado", "password_hash": "!", "profile_id": 2, "failed_attempts": 5, "locked_until": base_dt + datetime.timedelta(minutes=30), "last_login_at": base_dt - datetime.timedelta(hours=4), "password_changed_at": base_dt - datetime.timedelta(days=5), "active": "Y"},
                                 ]
-                                for u in usuarios:
+                                for u in users:
                                     u["created_at"] = base_dt - datetime.timedelta(days=60)
                                     u["session_epoch"] = 0
                                     if dev_password is not None and u["login"] not in _NO_PASSWORD_DEV:
@@ -287,10 +287,10 @@ def load_seed(store, force=False, dev_password=None):
                                 # 7. Matrizes de Perfil (tbsss_profile_feature, amb, scr)
                                 # ---------------------------------------------------------
                                 # ADMINISTRADOR (id 1)
-                                for f in funcs:
+                                for f in features:
                                     nid = store.next_id("tbsss_profile_feature")
                                     store.profile_feature[nid] = {"id": nid, "profile_id": 1, "feature_id": f["id"]}
-                                for a in ambs:
+                                for a in envs:
                                     nid = store.next_id("tbsss_profile_env")
                                     store.profile_env[nid] = {"id": nid, "profile_id": 1, "environment_id": a["id"]}
                                 for s in scripts:
@@ -351,7 +351,7 @@ def load_seed(store, force=False, dev_password=None):
                                 # ---------------------------------------------------------
                                 # 9. Vinculos de Parametros (tbsss_script_param)
                                 # ---------------------------------------------------------
-                                vinculos = [
+                                links = [
                                     # carga_diaria (sid 1, NOMEADO)
                                     {"script_id": 1, "parameter_id": 1, "sort_order": 1, "required": "Y", "default_value_override": "2026-10-14"},
                                     {"script_id": 1, "parameter_id": 2, "sort_order": 2, "required": "N", "default_value_override": "5000"},
@@ -367,7 +367,7 @@ def load_seed(store, force=False, dev_password=None):
                                     {"script_id": 6, "parameter_id": 9, "sort_order": 2, "required": "N", "default_value_override": "1.05"},
                                     {"script_id": 6, "parameter_id": 10, "sort_order": 3, "required": "N", "default_value_override": "Lote Outubro 2026"},
                                 ]
-                                for v in vinculos:
+                                for v in links:
                                     nid = store.next_id("tbsss_script_param")
                                     v["id"] = nid
                                     store.script_param[nid] = v
@@ -375,13 +375,13 @@ def load_seed(store, force=False, dev_password=None):
                                 # ---------------------------------------------------------
                                 # 10. Agentes (2)
                                 # ---------------------------------------------------------
-                                agentes = [
+                                agents = [
                                     {"id": 1, "code": "agt-host01", "hostname": "worker01.internal", "daemon_pid": 1001, "version": "1.0.0", "environments": "PRODUCAO,HOMOLOGACAO", "platform": "LINUX", "interpreters": "PYTHON3,BASH", "status": "ACTIVE", "started_at": base_dt - datetime.timedelta(days=3), "heartbeat_at": base_dt, "created_at": base_dt - datetime.timedelta(days=3)},
                                     {"id": 2, "code": "agt-host02", "hostname": "worker02.internal", "daemon_pid": 1002, "version": "1.0.0", "environments": "HOMOLOGACAO,DESENV", "platform": "UNIX", "interpreters": "PYTHON3,SH", "status": "ACTIVE", "started_at": base_dt - datetime.timedelta(days=2), "heartbeat_at": base_dt - datetime.timedelta(seconds=_HB_FROZEN_S), "created_at": base_dt - datetime.timedelta(days=2)},
                                 ]
                                 # Quadros de atencao do painel (CR-007, R-18): o agt-host02 ficou com a configuracao
                                 # antiga (kill=10) e e o unico que atende SH em HOMOLOGACAO.
-                                for ag in agentes:
+                                for ag in agents:
                                     ag["critical_config"] = ("hb=10;fence=90;offline=180;call=30;kill=%d;"
                                                               "misfire=RUN_ONCE;tol=300;horizonte=1461;envelhecimento=60"
                                                               % (10 if ag["id"] == 2 else 5))
@@ -400,18 +400,18 @@ def load_seed(store, force=False, dev_password=None):
                                     {"id": 4, "name": "Fechamento Mensal Dia 1", "script_id": 2, "environment": "HOMOLOGACAO", "user_id": 3, "priority": 3, "recurrence_type": "MONTHLY", "cron_expression": None, "run_time": "01:00", "week_days": None, "month_day": 1, "params_json": '{"formato_saida":"JSON"}', "start_date": base_dt - datetime.timedelta(days=30), "end_date": None, "next_run_at": base_dt + datetime.timedelta(days=15), "last_run_at": base_dt - datetime.timedelta(days=15), "last_ticket_id": 34, "pause_reason": None, "active": "Y"},
                                     {"id": 5, "name": "Limpeza Cron Periódica (Pausado)", "script_id": 3, "environment": "PRODUCAO", "user_id": 1, "priority": 2, "recurrence_type": "CRON", "cron_expression": "0 */4 * * *", "run_time": None, "week_days": None, "month_day": None, "params_json": "{}", "start_date": base_dt - datetime.timedelta(days=2), "end_date": None, "next_run_at": base_dt + datetime.timedelta(hours=4), "last_run_at": base_dt, "last_ticket_id": 35, "pause_reason": "MANUAL", "active": "N"},
                                 ]
-                                agora_agd = recurrence.truncate_seconds(base_dt)
+                                now_sch = recurrence.truncate_seconds(base_dt)
                                 for a in agds:
                                     a["created_at"] = base_dt - datetime.timedelta(days=20)
                                     # Coerente com as regras (README §2.5, §7.2, §7.6): minuto exato, proxima pelo
                                     # recurrence e parametros_json com as respostas resolvidas completas.
                                     a["start_date"] = recurrence.truncate_seconds(a["start_date"])
-                                    a["next_run_at"] = recurrence.next_run(a, agora_agd, 1461)
-                                    _snap, resolvidos, _v = _compile_seed(store, a["script_id"], agora_agd)
-                                    respostas = dict(json.loads(a["params_json"]))
-                                    for codigo, valor in resolvidos.items():
-                                        respostas.setdefault(codigo, valor)
-                                    a["params_json"] = _params_json(respostas)
+                                    a["next_run_at"] = recurrence.next_run(a, now_sch, 1461)
+                                    _snap, resolved, _v = _compile_seed(store, a["script_id"], now_sch)
+                                    answers = dict(json.loads(a["params_json"]))
+                                    for code, value in resolved.items():
+                                        answers.setdefault(code, value)
+                                    a["params_json"] = _params_json(answers)
                                     store.schedules[a["id"]] = a
                                 store.seqs["tbsss_schedules"] = 5
 
@@ -423,30 +423,30 @@ def load_seed(store, force=False, dev_password=None):
                                 # 12 SUCCESS (17..28)
                                 # 8 FAILED (29..36)
                                 # 4 CANCELLED (37..40)
-                                compilados = {}
-                                sensiveis_por_script = {}
+                                compiled = {}
+                                sensitive_by_script = {}
                                 for v in store.script_param.values():
                                     prm = store.parameters.get(v["parameter_id"])
                                     if prm and prm["sensitive"] == "Y" and v.get("default_value_override"):
-                                        sensiveis_por_script.setdefault(v["script_id"], []).append(
+                                        sensitive_by_script.setdefault(v["script_id"], []).append(
                                             (prm["code"], v["default_value_override"]))
 
                                 for tid in range(1, 41):
                                     script_id = ((tid - 1) % 4) + 1  # rotaciona scripts 1..4
                                     scr = store.scripts[script_id]
-                                    amb = "PRODUCAO" if tid % 2 == 1 else "HOMOLOGACAO"
-                                    solicitante = "admin" if tid % 3 == 0 else ("op.prod" if tid % 2 == 1 else "op.hml")
+                                    env = "PRODUCAO" if tid % 2 == 1 else "HOMOLOGACAO"
+                                    requester = "admin" if tid % 3 == 0 else ("op.prod" if tid % 2 == 1 else "op.hml")
                                     prio = ((tid - 1) % 4) + 1
-                                    if prio == 1 and solicitante != "admin":
+                                    if prio == 1 and requester != "admin":
                                         prio = 2  # prioridade 1 e reservada a admin (README §5.3)
 
                                     # Status e motivos
-                                    agente_id = None
+                                    agent_id = None
                                     pid_proc = None
                                     pstart = None
-                                    smotivo = None
+                                    sreason = None
                                     ret_code = None
-                                    canc_req = "N"
+                                    cancel_req = "N"
                                     trunc = "N"
                                     started = None
                                     heartbeat = None
@@ -463,27 +463,27 @@ def load_seed(store, force=False, dev_password=None):
                                         sched = base_dt - datetime.timedelta(minutes=10)
                                         started = base_dt - datetime.timedelta(minutes=5)
                                         heartbeat = base_dt - datetime.timedelta(seconds=10)
-                                        agente_id = "agt-host01" if tid % 2 == 1 else "agt-host02"
+                                        agent_id = "agt-host01" if tid % 2 == 1 else "agt-host02"
                                         if tid != _TICKET_NO_PID:
                                             pid_proc = 2000 + tid
                                             pstart = 1700000000 + tid
                                             log_out = "[%s] Script %s iniciado em %s.\nEtapa 1 concluida com sucesso.\n" % (
-                                                str(started), scr["name"], amb
+                                                str(started), scr["name"], env
                                             )
                                             store.log_simulated[tid] = {
                                                 "passo_s": _STEP_LOG_S[tid],
                                                 "emitidos": 0,
-                                                "sensiveis": list(sensiveis_por_script.get(script_id, [])),
+                                                "sensiveis": list(sensitive_by_script.get(script_id, [])),
                                             }
                                     elif tid <= 28:
                                         status = "SUCCESS"
-                                        smotivo = "EXIT_OK"
+                                        sreason = "EXIT_OK"
                                         ret_code = 0
                                         sched = base_dt - datetime.timedelta(hours=tid)
                                         started = sched + datetime.timedelta(minutes=1)
                                         heartbeat = started + datetime.timedelta(minutes=4)
                                         finished = started + datetime.timedelta(minutes=5)
-                                        agente_id = "agt-host01"
+                                        agent_id = "agt-host01"
                                         pid_proc = 3000 + tid
                                         pstart = 1700000000 + tid
                                         log_out = "[%s] Script concluido com retorno 0.\n" % str(finished)
@@ -494,11 +494,11 @@ def load_seed(store, force=False, dev_password=None):
                                         sched = base_dt - datetime.timedelta(hours=tid * 2)
                                         started = sched + datetime.timedelta(minutes=1)
                                         finished = started + datetime.timedelta(minutes=2)
-                                        agente_id = "agt-host01" if tid % 2 == 0 else "agt-host02"
+                                        agent_id = "agt-host01" if tid % 2 == 0 else "agt-host02"
                                         pid_proc = 4000 + tid
                                         pstart = 1700000000 + tid
 
-                                        falhas_map = {
+                                        failures_map = {
                                             29: ("EXIT_ERROR", 1),
                                             30: ("TIMEOUT", -3),
                                             31: ("NODE_OFFLINE", -2),
@@ -508,19 +508,19 @@ def load_seed(store, force=False, dev_password=None):
                                             35: ("LOG_LIMIT", -5),
                                             36: ("SHUTDOWN", -6),
                                         }
-                                        smotivo, ret_code = falhas_map.get(tid, ("EXIT_ERROR", 1))
-                                        if smotivo == "LOG_LIMIT":
+                                        sreason, ret_code = failures_map.get(tid, ("EXIT_ERROR", 1))
+                                        if sreason == "LOG_LIMIT":
                                             trunc = "Y"
                                         log_out = "[%s] Falha na execucao: %s (code=%s)\n" % (
-                                            str(finished), smotivo, ret_code
+                                            str(finished), sreason, ret_code
                                         )
                                         if trunc == "Y":
                                             log_out += MARKER_TRUNCATED
                                     else:
                                         status = "CANCELLED"
-                                        smotivo = "CANCEL_USER"
+                                        sreason = "CANCEL_USER"
                                         ret_code = -1
-                                        canc_req = "Y"
+                                        cancel_req = "Y"
                                         sched = base_dt - datetime.timedelta(hours=tid)
                                         finished = sched + datetime.timedelta(minutes=1)
                                         log_out = "Cancelado pelo usuario antes ou durante o processamento.\n"
@@ -531,31 +531,31 @@ def load_seed(store, force=False, dev_password=None):
                                     elif tid == 26:
                                         parent_id = 18
 
-                                    agd_id = None
+                                    sch_id = None
                                     if tid in (31, 32, 33, 34, 35):
-                                        agd_id = tid - 30
+                                        sch_id = tid - 30
 
                                     # Snapshot v3 e respostas compilados de verdade (README §6.5, §2.5).
-                                    if script_id not in compilados:
-                                        compilados[script_id] = _compile_seed(
+                                    if script_id not in compiled:
+                                        compiled[script_id] = _compile_seed(
                                             store, script_id, base_dt - datetime.timedelta(minutes=30))
-                                    snapshot_json, resolvidos, vinc_scr = compilados[script_id]
+                                    snapshot_json, resolved, link_scr = compiled[script_id]
 
                                     t_obj = {
                                         "id": tid,
                                         "script_id": scr["id"],
-                                        "environment": amb,
-                                        "requested_by": solicitante,
+                                        "environment": env,
+                                        "requested_by": requester,
                                         "source_ip": "127.0.0.1",
-                                        "agent_id": agente_id,
+                                        "agent_id": agent_id,
                                         "process_id": pid_proc,
                                         "process_start": pstart,
                                         "status": status,
                                         "priority": prio,
-                                        "cancel_requested": canc_req,
-                                        "status_reason": smotivo,
+                                        "cancel_requested": cancel_req,
+                                        "status_reason": sreason,
                                         "parent_ticket_id": parent_id,
-                                        "schedule_id": agd_id,
+                                        "schedule_id": sch_id,
                                         "submitted_params": snapshot_json,
                                         "log_output": log_out,
                                         "log_truncated": trunc,
@@ -570,16 +570,16 @@ def load_seed(store, force=False, dev_password=None):
                                     store.tickets[tid] = t_obj
 
                                     # Respostas resolvidas (tbsss_ticket_answer, README §5.4): None omitido, CHECKBOX em texto.
-                                    for v in vinc_scr:
-                                        valor = resolvidos.get(v["code"])
-                                        if valor is None:
+                                    for v in link_scr:
+                                        value = resolved.get(v["code"])
+                                        if value is None:
                                             continue
                                         rid = store.next_id("tbsss_ticket_answer")
                                         store.ticket_answer[rid] = {
                                             "id": rid,
                                             "ticket_id": tid,
                                             "parameter_id": v["parameter_id"],
-                                            "answer_value": ("true" if valor else "false") if isinstance(valor, bool) else valor,
+                                            "answer_value": ("true" if value else "false") if isinstance(value, bool) else value,
                                             "created_at": t_obj["created_at"],
                                         }
 
@@ -589,7 +589,7 @@ def load_seed(store, force=False, dev_password=None):
                                 # ---------------------------------------------------------
                                 # 13. Auditoria (30 linhas)
                                 # ---------------------------------------------------------
-                                acoes = [
+                                actions = [
                                     ("admin", "LOGIN_OK", "tbsss_users", 1, "Login bem-sucedido via web"),
                                     ("op.prod", "LOGIN_OK", "tbsss_users", 2, "Login bem-sucedido via web"),
                                     ("op.hml", "LOGIN_OK", "tbsss_users", 3, "Login bem-sucedido via web"),
@@ -621,12 +621,12 @@ def load_seed(store, force=False, dev_password=None):
                                     ("SYSTEM:agt-host02", "AGENT_START", "tbsss_agents", 2, "Agente agt-host02 iniciado no host worker02.internal"),
                                     ("admin", "UPDATE", "tbsss_users", 6, "Conta desbloqueada pelo administrador"),
                                 ]
-                                for i, (ator, acao, ent, ent_id, det) in enumerate(acoes, 1):
+                                for i, (actor, action, ent, ent_id, det) in enumerate(actions, 1):
                                     store.audit[i] = {
                                         "id": i,
-                                        "actor": ator,
+                                        "actor": actor,
                                         "source_ip": "127.0.0.1",
-                                        "action": acao,
+                                        "action": action,
                                         "entity": ent,
                                         "entity_id": ent_id,
                                         "detail": det,

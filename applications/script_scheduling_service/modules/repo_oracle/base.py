@@ -27,12 +27,12 @@ _POOLS_LOCK = threading.Lock()
 
 
 def _pool_web(cfg, secrets):
-    chave = (getattr(cfg.oracle, "dsn", ""), getattr(cfg.oracle, "user", ""))
+    key = (getattr(cfg.oracle, "dsn", ""), getattr(cfg.oracle, "user", ""))
     with _POOLS_LOCK:
-        pool = _POOLS.get(chave)
+        pool = _POOLS.get(key)
         if pool is None:
             pool = db_conn.pool(cfg, secrets, role="web")
-            _POOLS[chave] = pool
+            _POOLS[key] = pool
         return pool
 
 
@@ -121,14 +121,14 @@ def write_audit(conn, sql_tbl_aud, sql_seq_aud, audit, entity, entity_id):
     """
     if not audit:
         return
-    itens = [audit] if isinstance(audit, dict) else audit
-    for item in itens:
+    items = [audit] if isinstance(audit, dict) else audit
+    for item in items:
         if not isinstance(item, dict):
             continue
         validate_audit_fields(item.get("actor"), item.get("detail"))
     cur = conn.cursor()
     try:
-        for item in itens:
+        for item in items:
             if not isinstance(item, dict):
                 continue
             aid = db_conn.next_id(conn, sql_seq_aud)
@@ -192,17 +192,17 @@ class BaseRepoOracle(object):
     @contextlib.contextmanager
     def write_transaction(self, conn=None):
         """Gerencia contexto de transacao com COMMIT/ROLLBACK para operacoes de escrita."""
-        fechar = False
+        close = False
         if conn is None:
             conn = self._obter_conexao()
-            fechar = True
+            close = True
         try:
             with db_conn.transaction(conn):
                 yield conn
         except Exception as exc:
             raise translate_oracle_error(exc, prefix=self._prefixo)
         finally:
-            if fechar:
+            if close:
                 try:
                     conn.close()
                 except Exception:
@@ -211,16 +211,16 @@ class BaseRepoOracle(object):
     @contextlib.contextmanager
     def read_context(self, conn=None):
         """Gerencia contexto de conexao para operacoes de leitura."""
-        fechar = False
+        close = False
         if conn is None:
             conn = self._obter_conexao()
-            fechar = True
+            close = True
         try:
             yield conn
         except Exception as exc:
             raise translate_oracle_error(exc, prefix=self._prefixo)
         finally:
-            if fechar:
+            if close:
                 try:
                     conn.close()
                 except Exception:
@@ -234,13 +234,13 @@ class BaseRepoOracle(object):
 
     def constraint_name(self, kind, entity, suffix):
         """Retorna o nome da constraint/indice para o prefixo configurado (README §9.1)."""
-        abrev = sql_ident.TABLES.get(entity, {}).get("abrev", entity[:3])
-        return "{}_{}{}_{}".format(kind, self._prefixo, abrev, suffix)
+        abbr = sql_ident.TABLES.get(entity, {}).get("abrev", entity[:3])
+        return "{}_{}{}_{}".format(kind, self._prefixo, abbr, suffix)
 
     def trigger_name(self, entity, suffix="bu"):
         """Retorna o nome da trigger para o prefixo configurado (README §9.1)."""
-        abrev = sql_ident.TABLES.get(entity, {}).get("abrev", entity[:3])
-        return "tr_{}{}_{}".format(self._prefixo, abrev, suffix)
+        abbr = sql_ident.TABLES.get(entity, {}).get("abrev", entity[:3])
+        return "tr_{}{}_{}".format(self._prefixo, abbr, suffix)
 
     def tuple_to_dict(self, columns, values):
         """Converte tupla de resultado em dict normalizado."""

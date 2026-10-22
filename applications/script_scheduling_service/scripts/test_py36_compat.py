@@ -80,7 +80,7 @@ _RE_URL_EXTERNA = re.compile(r"https?://", re.IGNORECASE)
 
 def find_python_files(app_dir, web2py_root):
     """Localiza fontes Python de APP e bin/, incluindo o helper sem extensao."""
-    arquivos_py = []
+    files_py = []
     dev_scripts_dir = os.path.normpath(os.path.join(app_dir, "dev", "scripts"))
 
     # Varre a aplicacao
@@ -95,7 +95,7 @@ def find_python_files(app_dir, web2py_root):
 
         for f in files:
             if f.endswith(".py"):
-                arquivos_py.append(os.path.join(root, f))
+                files_py.append(os.path.join(root, f))
 
     # Varre diretorios bin/
     for bin_cand in [os.path.join(app_dir, "bin"), os.path.join(web2py_root, "bin")]:
@@ -106,22 +106,22 @@ def find_python_files(app_dir, web2py_root):
                 for f in files:
                     if f.endswith(".py"):
                         p = os.path.join(root, f)
-                        if p not in arquivos_py:
-                            arquivos_py.append(p)
+                        if p not in files_py:
+                            files_py.append(p)
 
     helper = os.path.join(web2py_root, "bin", "sss-helper")
-    if os.path.isfile(helper) and helper not in arquivos_py:
-        arquivos_py.append(helper)
+    if os.path.isfile(helper) and helper not in files_py:
+        files_py.append(helper)
 
-    return sorted(arquivos_py)
+    return sorted(files_py)
 
 
 def check_os_primitives(path, app_dir, web2py_root):
     """Rejeita primitivas POSIX fora da plataforma e da allowlist estrita do helper."""
-    plataforma_dir = os.path.normpath(os.path.join(app_dir, "modules", "os_platform"))
+    platform_dir = os.path.normpath(os.path.join(app_dir, "modules", "os_platform"))
     helper = os.path.normpath(os.path.join(web2py_root, "bin", "sss-helper"))
     path = os.path.normpath(path)
-    if os.path.commonpath([path, plataforma_dir]) == plataforma_dir:
+    if os.path.commonpath([path, platform_dir]) == platform_dir:
         return []
     if os.path.basename(path).startswith("test_"):
         return []
@@ -190,7 +190,7 @@ def check_os_primitives(path, app_dir, web2py_root):
         HelperVisitor().visit(ast.parse(source, filename=path))
         return violations
 
-    padroes = [
+    patterns = [
         re.compile(r"\bos\.killpg\s*\("),
         re.compile(r"\bos\.setsid\s*\("),
         re.compile(r"\bresource\b"),
@@ -199,14 +199,14 @@ def check_os_primitives(path, app_dir, web2py_root):
         re.compile(r"\bpwdx\b"),
         re.compile(r"\bsys\.platform\b"),
     ]
-    violacoes = []
+    found_violations = []
     with open(path, "r", encoding="utf-8", errors="replace") as f:
-        for num_linha, linha in enumerate(f, start=1):
-            for padrao in padroes:
-                if padrao.search(linha):
-                    violacoes.append((path, num_linha, linha.strip()))
+        for num_line, src_line in enumerate(f, start=1):
+            for default in patterns:
+                if default.search(src_line):
+                    found_violations.append((path, num_line, src_line.strip()))
                     break
-    return violacoes
+    return found_violations
 
 
 def compile_py_file(path):
@@ -223,33 +223,33 @@ def compile_py_file(path):
 
 def check_forbidden_tokens_in_file(path):
     """Procura tokens proibidos em um arquivo fonte, retornando lista de violacoes."""
-    nome_base = os.path.basename(path)
-    if nome_base in TOKEN_EXCEPTION_FILES:
+    name_base = os.path.basename(path)
+    if name_base in TOKEN_EXCEPTION_FILES:
         return []
 
-    violacoes = []
+    violations = []
     with open(path, "r", encoding="utf-8", errors="replace") as f:
-        for num_linha, linha in enumerate(f, start=1):
+        for num_line, line in enumerate(f, start=1):
             for regex, desc in _COMPILED_PATTERNS:
-                if regex.search(linha):
-                    violacoes.append((path, num_linha, desc, linha.strip()))
-    return violacoes
+                if regex.search(line):
+                    violations.append((path, num_line, desc, line.strip()))
+    return violations
 
 
 def check_external_urls_in_file(path):
     """Procura URLs http:// e https:// em arquivos estaticos e views."""
-    violacoes = []
+    violations = []
     with open(path, "r", encoding="utf-8", errors="replace") as f:
-        for num_linha, linha in enumerate(f, start=1):
-            if _RE_URL_EXTERNA.search(linha):
-                violacoes.append((path, num_linha, linha.strip()))
-    return violacoes
+        for num_line, line in enumerate(f, start=1):
+            if _RE_URL_EXTERNA.search(line):
+                violations.append((path, num_line, line.strip()))
+    return violations
 
 
 def check_oracle_driver_imports(path, app_dir):
     """Verifica que apenas db_conn.py e probe_driver.py importam oracledb ou cx_Oracle (AGENTS §2.2)."""
-    nome = os.path.basename(path)
-    if nome in ("db_conn.py", "probe_driver.py") or nome.startswith("test_"):
+    name = os.path.basename(path)
+    if name in ("db_conn.py", "probe_driver.py") or name.startswith("test_"):
         return []
 
     try:
@@ -259,7 +259,7 @@ def check_oracle_driver_imports(path, app_dir):
     except Exception:
         return []
 
-    violacoes = []
+    violations = []
     lines = src.splitlines()
 
     class DriverImportVisitor(ast.NodeVisitor):
@@ -268,18 +268,18 @@ def check_oracle_driver_imports(path, app_dir):
                 if alias.name in ("oracledb", "cx_Oracle"):
                     ln = getattr(node, "lineno", 1)
                     ltext = lines[ln - 1].strip() if ln <= len(lines) else ""
-                    violacoes.append((path, ln, alias.name, ltext))
+                    violations.append((path, ln, alias.name, ltext))
             self.generic_visit(node)
 
         def visit_ImportFrom(self, node):
             if node.module in ("oracledb", "cx_Oracle"):
                 ln = getattr(node, "lineno", 1)
                 ltext = lines[ln - 1].strip() if ln <= len(lines) else ""
-                violacoes.append((path, ln, node.module, ltext))
+                violations.append((path, ln, node.module, ltext))
             self.generic_visit(node)
 
     DriverImportVisitor().visit(tree)
-    return violacoes
+    return violations
 
 
 class TestPy36Compat(unittest.TestCase):
@@ -292,91 +292,91 @@ class TestPy36Compat(unittest.TestCase):
 
     def test_compilacao_python_36(self):
         """Compila todos os .py de APP e bin/ sob gramatica do Python 3.6."""
-        arquivos = find_python_files(self.app_dir, self.web2py_root)
-        self.assertGreater(len(arquivos), 0, "Deve encontrar arquivos .py para testar")
+        files = find_python_files(self.app_dir, self.web2py_root)
+        self.assertGreater(len(files), 0, "Deve encontrar arquivos .py para testar")
 
-        falhas = []
-        for caminho in arquivos:
+        failures = []
+        for path in files:
             try:
-                compile_py_file(caminho)
+                compile_py_file(path)
             except Exception as e:
-                falhas.append("{}: {}".format(caminho, str(e)))
+                failures.append("{}: {}".format(path, str(e)))
 
         self.assertEqual(
-            len(falhas),
+            len(failures),
             0,
             "Arquivos com falha de sintaxe/compilacao em Python 3.6:\n{}".format(
-                "\n".join(falhas)
+                "\n".join(failures)
             ),
         )
 
     def test_primitivas_so_fora_da_plataforma(self):
         """Permite apenas a allowlist de primitivas POSIX do helper isolado."""
-        arquivos = find_python_files(self.app_dir, self.web2py_root)
-        violacoes = []
-        for caminho in arquivos:
-            violacoes.extend(check_os_primitives(caminho, self.app_dir, self.web2py_root))
+        files = find_python_files(self.app_dir, self.web2py_root)
+        violations = []
+        for path in files:
+            violations.extend(check_os_primitives(path, self.app_dir, self.web2py_root))
 
-        mensagem = "\n".join(
-            ["{}:{}: {}".format(p, n, linha) for p, n, linha in violacoes]
+        message = "\n".join(
+            ["{}:{}: {}".format(p, n, line) for p, n, line in violations]
         )
         self.assertEqual(
-            len(violacoes), 0,
-            "Primitivas POSIX fora da camada permitida:\n{}".format(mensagem),
+            len(violations), 0,
+            "Primitivas POSIX fora da camada permitida:\n{}".format(message),
         )
 
     def test_tokens_proibidos_arquivos_reais(self):
         """Verifica ausencia de tokens proibidos de Python >= 3.7 e recursos restritos."""
-        arquivos = find_python_files(self.app_dir, self.web2py_root)
-        todas_violacoes = []
+        files = find_python_files(self.app_dir, self.web2py_root)
+        all_violations = []
 
-        for caminho in arquivos:
-            violacoes = check_forbidden_tokens_in_file(caminho)
-            todas_violacoes.extend(violacoes)
+        for path in files:
+            violations = check_forbidden_tokens_in_file(path)
+            all_violations.extend(violations)
 
-        msg_violacoes = "\n".join(
-            ["{}:{}: {} -> '{}'".format(p, n, d, l) for p, n, d, l in todas_violacoes]
+        msg_violations = "\n".join(
+            ["{}:{}: {} -> '{}'".format(p, n, d, l) for p, n, d, l in all_violations]
         )
         self.assertEqual(
-            len(todas_violacoes),
+            len(all_violations),
             0,
-            "Tokens proibidos encontrados nos arquivos .py:\n{}".format(msg_violacoes),
+            "Tokens proibidos encontrados nos arquivos .py:\n{}".format(msg_violations),
         )
 
     def test_ausencia_urls_externas_frontend(self):
         """Verifica que static/js/app/, static/css/ e views/ nao contem http:// ou https://."""
-        diretorios_alvo = [
+        directories_target = [
             os.path.join(self.app_dir, "static", "js", "app"),
             os.path.join(self.app_dir, "static", "css"),
             os.path.join(self.app_dir, "views"),
         ]
 
-        arquivos_para_checar = []
-        for d in diretorios_alvo:
+        files_for_check = []
+        for d in directories_target:
             if os.path.isdir(d):
                 for root, _, files in os.walk(d):
                     for f in files:
                         if f == ".gitkeep":
                             continue
-                        arquivos_para_checar.append(os.path.join(root, f))
+                        files_for_check.append(os.path.join(root, f))
 
-        todas_violacoes = []
-        for caminho in arquivos_para_checar:
-            violacoes = check_external_urls_in_file(caminho)
-            todas_violacoes.extend(violacoes)
+        all_violations = []
+        for path in files_for_check:
+            violations = check_external_urls_in_file(path)
+            all_violations.extend(violations)
 
         msg = "\n".join(
-            ["{}:{}: URL externa -> '{}'".format(p, n, l) for p, n, l in todas_violacoes]
+            ["{}:{}: URL externa -> '{}'".format(p, n, l) for p, n, l in all_violations]
         )
         self.assertEqual(
-            len(todas_violacoes),
+            len(all_violations),
             0,
             "URLs externas encontradas em ativos frontend hermeticos:\n{}".format(msg),
         )
 
     def test_negativo_detector_tokens_proibidos(self):
         """Verifica se detector de tokens proibidos identifica casos sinteticos."""
-        casos = [
+        cases = [
             ("shell=True", "shell=True proibido"),
             ("x := 10", "walrus"),
             ("subprocess.getoutput('ls')", "getoutput"),
@@ -386,13 +386,13 @@ class TestPy36Compat(unittest.TestCase):
             ('<div x-html="msg"></div>', "x-html"),
         ]
 
-        for linha, desc in casos:
-            detectou = False
+        for line, desc in cases:
+            detected = False
             for regex, d in _COMPILED_PATTERNS:
-                if regex.search(linha):
-                    detectou = True
+                if regex.search(line):
+                    detected = True
                     break
-            self.assertTrue(detectou, "Linha sintetica '{}' ({}) deveria ser detectada".format(linha, desc))
+            self.assertTrue(detected, "Linha sintetica '{}' ({}) deveria ser detectada".format(line, desc))
 
     def test_negativo_detector_urls_externas(self):
         """Verifica se regex de URLs externas detecta http e https."""
@@ -402,23 +402,23 @@ class TestPy36Compat(unittest.TestCase):
 
     def test_negativo_detector_primitivas_so(self):
         """Detecta primitivas POSIX fora da plataforma e limita a excecao ao helper."""
-        with tempfile.TemporaryDirectory() as raiz:
-            app_dir = os.path.join(raiz, "app")
-            web2py_root = os.path.join(raiz, "web2py")
-            caminho_ruim = os.path.join(app_dir, "modules", "outro", "bad_source.py")
+        with tempfile.TemporaryDirectory() as root:
+            app_dir = os.path.join(root, "app")
+            web2py_root = os.path.join(root, "web2py")
+            path_bad = os.path.join(app_dir, "modules", "outro", "bad_source.py")
             helper = os.path.join(web2py_root, "bin", "sss-helper")
-            plataforma = os.path.join(app_dir, "modules", "os_platform", "posix.py")
-            for caminho, conteudo in (
-                (caminho_ruim, "os.killpg(1, 15)\nos.setsid()\nimport resource\nimport fcntl\nproc = '/proc/1/cwd'\nsubprocess.Popen(['pwdx', '1'])\nvalor = sys.platform\n"),
+            platform_value = os.path.join(app_dir, "modules", "os_platform", "posix.py")
+            for path, content in (
+                (path_bad, "os.killpg(1, 15)\nos.setsid()\nimport resource\nimport fcntl\nproc = '/proc/1/cwd'\nsubprocess.Popen(['pwdx', '1'])\nvalor = sys.platform\n"),
                 (helper, "import os\nimport resource\nimport subprocess\ndef _run():\n    resource.setrlimit(1, (2, 3))\ndef _term():\n    os.killpg(1, 15)\ndef _kill():\n    os.killpg(1, 9)\ndef _stop_ticket():\n    proc = '/proc/1/cwd'\n    subprocess.Popen(['/usr/bin/pwdx', '1'])\n"),
-                (plataforma, "os.killpg(1, 15)\n"),
+                (platform_value, "os.killpg(1, 15)\n"),
             ):
-                os.makedirs(os.path.dirname(caminho), exist_ok=True)
-                with open(caminho, "w") as f:
-                    f.write(conteudo)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w") as f:
+                    f.write(content)
 
             self.assertEqual(
-                len(check_os_primitives(caminho_ruim, app_dir, web2py_root)), 7
+                len(check_os_primitives(path_bad, app_dir, web2py_root)), 7
             )
             self.assertEqual(check_os_primitives(helper, app_dir, web2py_root), [])
             helper_bad = "import os\nimport resource\nimport subprocess\ndef _run():\n    os.killpg(1, 15)\ndef _term():\n    resource.setrlimit(1, (2, 3))\ndef _stop_ticket():\n    pass\ndef _clean():\n    proc = '/proc/1/cwd'\n    subprocess.Popen(['/usr/bin/pwdx', '1'])\n"
@@ -428,50 +428,50 @@ class TestPy36Compat(unittest.TestCase):
                 len(check_os_primitives(helper, app_dir, web2py_root)), 4,
                 repr(check_os_primitives(helper, app_dir, web2py_root)),
             )
-            self.assertEqual(check_os_primitives(plataforma, app_dir, web2py_root), [])
+            self.assertEqual(check_os_primitives(platform_value, app_dir, web2py_root), [])
 
     def test_imports_driver_oracle_apenas_em_db_conn_e_sondar(self):
         """Garante que oracledb e cx_Oracle so sejam importados em db_conn.py, probe_driver.py e testes."""
-        arquivos = find_python_files(self.app_dir, self.web2py_root)
-        violacoes = []
-        for caminho in arquivos:
-            violacoes.extend(check_oracle_driver_imports(caminho, self.app_dir))
+        files = find_python_files(self.app_dir, self.web2py_root)
+        violations = []
+        for path in files:
+            violations.extend(check_oracle_driver_imports(path, self.app_dir))
 
-        mensagem = "\n".join(
-            ["{}:{}: importou '{}' ({})".format(p, n, mod, linha) for p, n, mod, linha in violacoes]
+        message = "\n".join(
+            ["{}:{}: importou '{}' ({})".format(p, n, mod, line) for p, n, mod, line in violations]
         )
         self.assertEqual(
-            len(violacoes),
+            len(violations),
             0,
-            "Driver Oracle importado fora de db_conn.py e probe_driver.py:\n{}".format(mensagem),
+            "Driver Oracle importado fora de db_conn.py e probe_driver.py:\n{}".format(message),
         )
 
     def test_negativo_detector_imports_driver_oracle(self):
         """Verifica se detector de imports de oracledb e cx_Oracle identifica violacoes e respeita allowlist."""
-        with tempfile.TemporaryDirectory() as raiz:
-            ruim = os.path.join(raiz, "outro_modulo.py")
-            with open(ruim, "w", encoding="utf-8") as f:
+        with tempfile.TemporaryDirectory() as root:
+            bad = os.path.join(root, "outro_modulo.py")
+            with open(bad, "w", encoding="utf-8") as f:
                 f.write("import oracledb\nfrom cx_Oracle import connect\n")
 
-            violacoes = check_oracle_driver_imports(ruim, raiz)
-            self.assertEqual(len(violacoes), 2)
-            self.assertEqual(violacoes[0][2], "oracledb")
-            self.assertEqual(violacoes[1][2], "cx_Oracle")
+            violations = check_oracle_driver_imports(bad, root)
+            self.assertEqual(len(violations), 2)
+            self.assertEqual(violations[0][2], "oracledb")
+            self.assertEqual(violations[1][2], "cx_Oracle")
 
-            permitido1 = os.path.join(raiz, "db_conn.py")
-            with open(permitido1, "w", encoding="utf-8") as f:
+            allowed1 = os.path.join(root, "db_conn.py")
+            with open(allowed1, "w", encoding="utf-8") as f:
                 f.write("import oracledb\n")
-            self.assertEqual(check_oracle_driver_imports(permitido1, raiz), [])
+            self.assertEqual(check_oracle_driver_imports(allowed1, root), [])
 
-            permitido2 = os.path.join(raiz, "probe_driver.py")
-            with open(permitido2, "w", encoding="utf-8") as f:
+            allowed2 = os.path.join(root, "probe_driver.py")
+            with open(allowed2, "w", encoding="utf-8") as f:
                 f.write("import cx_Oracle\n")
-            self.assertEqual(check_oracle_driver_imports(permitido2, raiz), [])
+            self.assertEqual(check_oracle_driver_imports(allowed2, root), [])
 
-            permitido3 = os.path.join(raiz, "test_algo.py")
-            with open(permitido3, "w", encoding="utf-8") as f:
+            allowed3 = os.path.join(root, "test_algo.py")
+            with open(allowed3, "w", encoding="utf-8") as f:
                 f.write("import oracledb\n")
-            self.assertEqual(check_oracle_driver_imports(permitido3, raiz), [])
+            self.assertEqual(check_oracle_driver_imports(allowed3, root), [])
 
 
 if __name__ == "__main__":

@@ -76,48 +76,48 @@ class TestAuthService(unittest.TestCase):
         self.aud_base = max(a["id"] for a in self.audit.list(size=1000)["itens"])
 
     def _actions(self, actor):
-        itens = self.audit.list({"actor": actor}, page=1, size=100)["itens"]
-        return [a["action"] for a in itens if a["actor"] == actor and a["id"] > self.aud_base]
+        items = self.audit.list({"actor": actor}, page=1, size=100)["itens"]
+        return [a["action"] for a in items if a["actor"] == actor and a["id"] > self.aud_base]
 
     def _fail_login(self, login, times):
-        resultado = None
+        result = None
         for _ in range(times):
-            resultado = self.service.authenticate(login, "senha-errada-123", "10.0.0.1")
-        return resultado
+            result = self.service.authenticate(login, "senha-errada-123", "10.0.0.1")
+        return result
 
     def test_rajada_paralela_nao_escapa_do_bloqueio(self):
         # Revisao de 2026-10-20: 10 tentativas leem o usuario antes de qualquer gravacao; o repositorio
         # decide o bloqueio sob a trava, e a conta fica bloqueada com a contagem certa.
-        barreira = threading.Barrier(10)
+        barrier = threading.Barrier(10)
         original = self.users.get_by_login
 
         def _lento(login):
-            usuario = original(login)
-            barreira.wait(5)
-            return usuario
+            user = original(login)
+            barrier.wait(5)
+            return user
 
-        respostas = []
+        answers = []
         with mock.patch.object(self.users, "get_by_login", side_effect=_lento):
-            threads = [threading.Thread(target=lambda: respostas.append(
+            threads = [threading.Thread(target=lambda: answers.append(
                 self.service.authenticate("admin", "senha-errada-123", "10.0.0.1")[1])) for _ in range(10)]
             for t in threads:
                 t.start()
             for t in threads:
                 t.join(10)
-        usuario = original("admin")
-        self.assertEqual(len(respostas), 10)
-        self.assertIsNotNone(usuario["locked_until"], "a rajada nao pode escapar do bloqueio")
-        self.assertEqual(usuario["failed_attempts"], 10)
+        user = original("admin")
+        self.assertEqual(len(answers), 10)
+        self.assertIsNotNone(user["locked_until"], "a rajada nao pode escapar do bloqueio")
+        self.assertEqual(user["failed_attempts"], 10)
         self.assertEqual(self._actions("admin").count("LOGIN_LOCKED"), 6, "uma por falha a partir do limite")
-        self.assertIn(self.service.lockout_message, respostas)
+        self.assertIn(self.service.lockout_message, answers)
         _ctx, msg = self.service.authenticate("admin", self.password, "10.0.0.1")
         self.assertEqual(msg, self.service.lockout_message, "senha certa nao entra durante o bloqueio")
 
     def test_detalhe_da_falha_com_a_contagem_do_repositorio(self):
         self._fail_login("admin", 2)
-        itens = self.audit.list({"actor": "admin"}, page=1, size=100)["itens"]
-        detalhes = sorted(a["detail"] for a in itens if a["action"] == "LOGIN_FAILED" and a["id"] > self.aud_base)
-        self.assertEqual(detalhes, ["Falha de login: senha incorreta (tentativa 1 de 5)",
+        items = self.audit.list({"actor": "admin"}, page=1, size=100)["itens"]
+        details = sorted(a["detail"] for a in items if a["action"] == "LOGIN_FAILED" and a["id"] > self.aud_base)
+        self.assertEqual(details, ["Falha de login: senha incorreta (tentativa 1 de 5)",
                                     "Falha de login: senha incorreta (tentativa 2 de 5)"])
 
     def test_sucesso(self):
@@ -160,9 +160,9 @@ class TestAuthService(unittest.TestCase):
         self.assertEqual(self._actions("naoexiste"), ["LOGIN_FAILED"])
 
     def test_entradas_invalidas(self):
-        for login, senha in ((None, self.password), ("a", self.password), ("x" * 200, self.password),
+        for login, password in ((None, self.password), ("a", self.password), ("x" * 200, self.password),
                              ("admin", None), ("admin", ""), ("admin", "x" * 5000), (["admin"], self.password)):
-            self.assertEqual(self.service.authenticate(login, senha, "10.0.0.1"), (None, MSG_GENERIC))
+            self.assertEqual(self.service.authenticate(login, password, "10.0.0.1"), (None, MSG_GENERIC))
 
     def test_bloqueio_na_enesima_falha(self):
         self.assertEqual(self._fail_login("op.prod", MAX - 1), (None, MSG_GENERIC))
@@ -170,9 +170,9 @@ class TestAuthService(unittest.TestCase):
         u = self.users.get_by_id(2)
         self.assertEqual(u["failed_attempts"], MAX)
         self.assertEqual(u["locked_until"], START + datetime.timedelta(seconds=LOCKOUT_S))
-        acoes = self._actions("op.prod")
-        self.assertEqual(acoes.count("LOGIN_FAILED"), MAX)
-        self.assertEqual(acoes.count("LOGIN_LOCKED"), 1)
+        actions = self._actions("op.prod")
+        self.assertEqual(actions.count("LOGIN_FAILED"), MAX)
+        self.assertEqual(actions.count("LOGIN_LOCKED"), 1)
 
     def test_senha_correta_durante_bloqueio(self):
         self._fail_login("op.prod", MAX)
@@ -220,14 +220,14 @@ class TestAuthService(unittest.TestCase):
 
     def test_rehash(self):
         self.users.update(1, {"password_hash": _hash_with_iterations(self.password, ITER_TESTE // 2)}, actor="teste")
-        antes = self.users.get_by_id(1)["password_changed_at"]
+        before = self.users.get_by_id(1)["password_changed_at"]
         ctx, msg = self.service.authenticate("admin", self.password, "10.0.0.1")
         self.assertIsNone(msg)
         u = self.users.get_by_id(1)
         self.assertTrue(u["password_hash"].startswith("pbkdf2_sha256$%d$" % ITER_TESTE))
         self.assertFalse(security.needs_rehash(u["password_hash"]))
         self.assertTrue(security.verify_password(self.password, u["password_hash"]))
-        self.assertEqual(u["password_changed_at"], antes)
+        self.assertEqual(u["password_changed_at"], before)
 
     def test_login_e_auditoria_numa_operacao_do_repositorio(self):
         # CR-003 P3: LOGIN_OK, LOGIN_FAILED e LOGIN_LOCKED vao pelo repositorio de usuarios, na mesma operacao.
@@ -236,9 +236,9 @@ class TestAuthService(unittest.TestCase):
             self.assertIsNone(msg)
             self.assertEqual(self._fail_login("op.prod", MAX), (None, self.service.lockout_message))
         self.assertEqual(self._actions("admin"), ["LOGIN_OK"])
-        acoes = self._actions("op.prod")
-        self.assertEqual(acoes.count("LOGIN_FAILED"), MAX)
-        self.assertEqual(acoes.count("LOGIN_LOCKED"), 1)
+        actions = self._actions("op.prod")
+        self.assertEqual(actions.count("LOGIN_FAILED"), MAX)
+        self.assertEqual(actions.count("LOGIN_LOCKED"), 1)
 
     def test_rehash_na_mesma_operacao_do_sucesso(self):
         self.users.update(1, {"password_hash": _hash_with_iterations(self.password, ITER_TESTE // 2)}, actor="teste")
@@ -252,8 +252,8 @@ class TestAuthService(unittest.TestCase):
         ctx, _ = self.service.authenticate("op.prod", self.password, "10.0.0.1")
         self._fail_login("op.prod", MAX)
         self.clock.advance(LOCKOUT_S + 1)
-        resultado, _erros = self.service.change_password(ctx, "10.0.0.1", "senha-errada-123", "x", "x")
-        self.assertEqual(resultado, "ERRO")
+        result, _errors = self.service.change_password(ctx, "10.0.0.1", "senha-errada-123", "x", "x")
+        self.assertEqual(result, "ERRO")
         u = self.users.get_by_id(2)
         self.assertEqual(u["failed_attempts"], 1)
         self.assertIsNone(u["locked_until"])
@@ -279,49 +279,49 @@ class TestAuthService(unittest.TestCase):
                 "perfil_id": ctx["profile_id"], "perm_versao": ctx["perm_version"], "sessao_epoch": ctx["session_epoch"]}
 
     def test_revalidar_ok(self):
-        sessao = self._session("consulta")
-        ctx = self.service.revalidate(sessao)
+        session = self._session("consulta")
+        ctx = self.service.revalidate(session)
         self.assertEqual(ctx["features"], frozenset(["VIEW_LOGS"]))
 
     def test_revalidar_recarrega_com_perm_versao(self):
-        sessao = self._session("consulta")
-        self.assertNotIn("EXEC_SCRIPT", self.service.revalidate(sessao)["features"])
-        matriz = self.rbac.matrix_get(4)
-        self.rbac.matrix_save(4, list(matriz["funcs"]) + [1], matriz["ambs"], matriz["scrs"], actor="teste")
-        ctx = self.service.revalidate(sessao)
+        session = self._session("consulta")
+        self.assertNotIn("EXEC_SCRIPT", self.service.revalidate(session)["features"])
+        matrix = self.rbac.matrix_get(4)
+        self.rbac.matrix_save(4, list(matrix["funcs"]) + [1], matrix["ambs"], matrix["scrs"], actor="teste")
+        ctx = self.service.revalidate(session)
         self.assertIn("EXEC_SCRIPT", ctx["features"])
-        self.assertGreater(ctx["perm_version"], sessao["perm_versao"])
+        self.assertGreater(ctx["perm_version"], session["perm_versao"])
 
     def _last_logout(self, actor):
-        itens = [r for r in self.audit.list({"action": "LOGOUT"}, page=1, size=10)["itens"]
+        items = [r for r in self.audit.list({"action": "LOGOUT"}, page=1, size=10)["itens"]
                  if r["actor"] == actor and r["id"] > self.aud_base]
-        return itens[0] if itens else None
+        return items[0] if items else None
 
     def test_revalidar_usuario_inativo(self):
-        sessao = self._session("op.prod")
+        session = self._session("op.prod")
         self.users.update(2, {"active": "N"}, actor="teste")
-        self.assertIsNone(self.service.revalidate(sessao, "10.9.9.9"))
+        self.assertIsNone(self.service.revalidate(session, "10.9.9.9"))
         aud = self._last_logout("op.prod")
         self.assertEqual(aud["detail"], u"sessão encerrada pela revalidação: usuário inativo")
         self.assertEqual(aud["source_ip"], "10.9.9.9")
 
     def test_revalidar_perfil_inativo(self):
-        sessao = self._session("consulta")
+        session = self._session("consulta")
         self.rbac.profiles_update(4, {"active": "N"}, actor="teste")
-        self.assertIsNone(self.service.revalidate(sessao))
+        self.assertIsNone(self.service.revalidate(session))
         self.assertEqual(self._last_logout("consulta")["detail"],
                          u"sessão encerrada pela revalidação: perfil inativo")
 
     def test_revalidar_sessao_invalida_nao_audita(self):
-        sessao = self._session("consulta")
-        self.assertIsNone(self.service.revalidate(dict(sessao, usuario_id=999)))
+        session = self._session("consulta")
+        self.assertIsNone(self.service.revalidate(dict(session, usuario_id=999)))
         self.assertIsNone(self._last_logout("consulta"))
 
     def test_revalidar_sessao_invalida(self):
-        sessao = self._session("consulta")
-        self.assertIsNone(self.service.revalidate(dict(sessao, login="admin")))
-        self.assertIsNone(self.service.revalidate(dict(sessao, usuario_id=999)))
-        self.assertIsNone(self.service.revalidate(dict(sessao, usuario_id="4")))
+        session = self._session("consulta")
+        self.assertIsNone(self.service.revalidate(dict(session, login="admin")))
+        self.assertIsNone(self.service.revalidate(dict(session, usuario_id=999)))
+        self.assertIsNone(self.service.revalidate(dict(session, usuario_id="4")))
         self.assertIsNone(self.service.revalidate({}))
 
     def test_mensagem_de_bloqueio_pela_funcao_do_modulo(self):
@@ -330,12 +330,12 @@ class TestAuthService(unittest.TestCase):
             self.assertEqual(auth_service.lock_message(), self.service.lockout_message)
 
     def test_controllers_so_usam_nomes_existentes_do_auth_service(self):
-        raiz = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "controllers")
-        for nome in sorted(os.listdir(raiz)):
-            if nome.endswith(".py"):
-                with io.open(os.path.join(raiz, nome), encoding="utf-8") as f:
-                    for atributo in re.findall(r"\bauth_service\.([A-Za-z_]\w*)", f.read()):
-                        self.assertTrue(hasattr(auth_service, atributo), "%s: auth_service.%s" % (nome, atributo))
+        root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "controllers")
+        for name in sorted(os.listdir(root)):
+            if name.endswith(".py"):
+                with io.open(os.path.join(root, name), encoding="utf-8") as f:
+                    for attribute in re.findall(r"\bauth_service\.([A-Za-z_]\w*)", f.read()):
+                        self.assertTrue(hasattr(auth_service, attribute), "%s: auth_service.%s" % (name, attribute))
 
 
 class TestSeedDev(unittest.TestCase):
@@ -361,11 +361,11 @@ class TestSeedDev(unittest.TestCase):
         self.assertTrue(all(h == "!" for h in hashes.values()))
 
     def test_com_variavel(self):
-        senha = secrets.token_urlsafe(16)
-        with mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: senha}):
+        password = secrets.token_urlsafe(16)
+        with mock.patch.dict(os.environ, {repo_factory.ENV_DEV_PASSWORD: password}):
             hashes = self._hashes()
         for login in ("admin", "op.prod", "op.hml", "consulta"):
-            self.assertTrue(security.verify_password(senha, hashes[login]), login)
+            self.assertTrue(security.verify_password(password, hashes[login]), login)
         self.assertEqual(hashes["inativo"], "!")
         self.assertEqual(hashes["bloqueado"], "!")
         self.assertNotEqual(hashes["admin"], hashes["consulta"])

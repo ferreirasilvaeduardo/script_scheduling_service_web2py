@@ -30,9 +30,9 @@ APP_DIR="${WEB2PY_ROOT}/applications/script_scheduling_service"
 WORK_DIR="${APP_DIR}/work"
 LOG_DIR="${APP_DIR}/logs"
 PID_FILE="${WORK_DIR}/sss_web.pid"
-DATA_HORA="$(date +%F_%H-%M-%S)"
-LOG_ARQUIVO_DATA="${LOG_DIR}/server-${DATA_HORA}.log"
-SERVER_OUT="${LOG_FILE:-${LOG_ARQUIVO_DATA}}"
+DATE_TIME="$(date +%F_%H-%M-%S)"
+LOG_FILE_DATED="${LOG_DIR}/server-${DATE_TIME}.log"
+SERVER_OUT="${LOG_FILE:-${LOG_FILE_DATED}}"
 SERVER_LINK="${LOG_DIR}/server.out"
 
 mkdir -p -m 700 "${WORK_DIR}"
@@ -165,7 +165,7 @@ else
 
     # 10. Aguarda subida e valida HTTP 200
     echo -n "Aguardando inicializacao do servico..."
-    PRONTO=0
+    READY=0
     for i in $(seq 1 20); do
         if ! kill -0 "${SRV_PID}" 2>/dev/null; then
             echo
@@ -178,7 +178,7 @@ else
 
         HTTP_CODE="$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${PORT}/script_scheduling_service/default/login" 2>/dev/null || echo "000")"
         if [ "${HTTP_CODE}" = "200" ]; then
-            PRONTO=1
+            READY=1
             break
         fi
         echo -n "."
@@ -186,7 +186,7 @@ else
     done
     echo
 
-    if [ "${PRONTO}" -eq 1 ]; then
+    if [ "${READY}" -eq 1 ]; then
         echo "================================================================="
         echo " SSS iniciado com sucesso!"
         echo " PID:         ${SRV_PID}"

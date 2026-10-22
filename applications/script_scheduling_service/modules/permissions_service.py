@@ -33,33 +33,33 @@ class PermissionsService(object):
 
     def _screens(self, ctx):
         admin = ctx.get("is_admin") is True
-        rotas = {}
-        for secao in ui_menu.montar_menu(ctx.get("features"), admin):
-            for item in secao["itens"]:
+        routes = {}
+        for section in ui_menu.montar_menu(ctx.get("features"), admin):
+            for item in section["itens"]:
                 # Ultimo item vence: EXEC_SCRIPT ("Disparar Scripts") leva ao disparo, nao ao catalogo.
-                rotas[item["code"]] = item["rota"]
-        telas = []
+                routes[item["code"]] = item["rota"]
+        screens = []
         for f in self._rbac.features_list():
             if f.get("active") != "Y" or not (admin or f["code"] in (ctx.get("features") or ())):
                 continue
-            telas.append({"code": f["code"], "name": f["name"], "finalidade": f.get("description") or "",
-                          "rota": rotas.get(f["code"])})
-        return telas
+            screens.append({"code": f["code"], "name": f["name"], "finalidade": f.get("description") or "",
+                          "rota": routes.get(f["code"])})
+        return screens
 
     def _environments(self, ctx):
         admin = ctx.get("is_admin") is True
-        meus = ctx.get("environments") or ()
+        mine = ctx.get("environments") or ()
         return [{"name": a["name"], "description": a.get("description") or ""}
                 for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["itens"]
-                if a["active"] == "Y" and (admin or a["name"] in meus)]
+                if a["active"] == "Y" and (admin or a["name"] in mine)]
 
     def _scripts(self, ctx):
         scripts = []
-        for grupo in self._trigger_service.available_scripts(ctx):
-            for s in grupo["scripts"]:
-                _script, ambientes = self._trigger_service.available_environments(ctx, s["id"])
+        for group in self._trigger_service.available_scripts(ctx):
+            for s in group["scripts"]:
+                _script, environments = self._trigger_service.available_environments(ctx, s["id"])
                 scripts.append({"id": s["id"], "name": s["name"], "description": s["description"],
-                                "environments": [a["name"] for a in ambientes]})
+                                "environments": [a["name"] for a in environments]})
         return scripts
 
     def _reason(self, ctx, script_id):
@@ -70,45 +70,45 @@ class PermissionsService(object):
             return None, None
         if script.get("active") != "Y":
             return script, REASON_SCRIPT_INACTIVE
-        meus = set(ctx.get("environments") or ())
-        homologados = []
+        mine = set(ctx.get("environments") or ())
+        homologated = []
         for aid in self._catalog.homologation_get(script["id"]):
             try:
-                homologados.append(self._catalog.environments_get(aid))
+                homologated.append(self._catalog.environments_get(aid))
             except RepoNotFound:
                 continue
-        nos_meus = [a for a in homologados if a["name"] in meus]
-        if not nos_meus:
+        in_mine = [a for a in homologated if a["name"] in mine]
+        if not in_mine:
             return script, REASON_NOT_HOMOLOGATED
-        if all(a.get("active") != "Y" for a in nos_meus):
+        if all(a.get("active") != "Y" for a in in_mine):
             return script, REASON_ENVIRONMENT_INACTIVE
         return script, REASON_SCRIPT_INACTIVE if script.get("active") != "Y" else None
 
     def build(self, ctx):
         """Dados da tela. Scripts fora do perfil nunca sao listados (nao revela o catalogo)."""
         admin = ctx.get("is_admin") is True
-        pode_exec = rbac.has_feature(ctx, "EXEC_SCRIPT")
-        scripts = self._scripts(ctx) if pode_exec else []
-        disponiveis = set(s["id"] for s in scripts)
-        ausentes = []
+        can_exec = rbac.has_feature(ctx, "EXEC_SCRIPT")
+        scripts = self._scripts(ctx) if can_exec else []
+        available = set(s["id"] for s in scripts)
+        missing = []
         if not admin:
             for sid in sorted(ctx.get("scripts") or ()):
-                if sid in disponiveis:
+                if sid in available:
                     continue
-                script, motivo = self._reason(ctx, sid)
+                script, reason = self._reason(ctx, sid)
                 if script is None:
                     continue
-                ausentes.append({"name": script["name"],
-                                 "reason": REASON_NO_FEATURE if not pode_exec else (motivo or REASON_NOT_HOMOLOGATED)})
+                missing.append({"name": script["name"],
+                                 "reason": REASON_NO_FEATURE if not can_exec else (reason or REASON_NOT_HOMOLOGATED)})
         return {
             "perfil": ctx.get("perfil_nome"),
             "frase_admin": ADMIN_PHRASE if admin else None,
             "telas": self._screens(ctx),
             "environments": self._environments(ctx),
-            "pode_executar": pode_exec,
-            "frase_sem_exec": None if pode_exec else NO_EXEC_PHRASE,
+            "pode_executar": can_exec,
+            "frase_sem_exec": None if can_exec else NO_EXEC_PHRASE,
             "scripts": scripts,
-            "ausentes": ausentes,
+            "ausentes": missing,
             "frase_mais_acesso": MORE_ACCESS_PHRASE,
         }
 
@@ -124,10 +124,10 @@ def _service():
             from gluon import current
             import sss_logging
             import ticket_service
-            fabrica = current.repo_factory
+            factory = current.repo_factory
             _default = PermissionsService(
-                rbac_repo=fabrica.get("rbac"),
-                catalog=fabrica.get("catalog"),
+                rbac_repo=factory.get("rbac"),
+                catalog=factory.get("catalog"),
                 trigger_service=ticket_service._service(),
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )

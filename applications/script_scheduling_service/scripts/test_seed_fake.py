@@ -36,14 +36,14 @@ class TestSeedFake(unittest.TestCase):
         self.now = self.store.now()
 
     def test_funcionalidades_com_os_nomes_do_readme(self):
-        nomes = dict((f["code"], f["name"]) for f in self.store.features.values())
-        self.assertEqual(nomes, CATALOG)
+        names = dict((f["code"], f["name"]) for f in self.store.features.values())
+        self.assertEqual(names, CATALOG)
 
     def test_nenhum_parametro_de_credencial(self):
         for p in self.store.parameters.values():
-            texto = (p["code"] + " " + (p.get("label") or "") + " " + (p.get("param_flag") or "")).lower()
-            for palavra in _CREDENTIAL_WORDS:
-                self.assertNotIn(palavra, texto, p["code"])
+            text = (p["code"] + " " + (p.get("label") or "") + " " + (p.get("param_flag") or "")).lower()
+            for word in _CREDENTIAL_WORDS:
+                self.assertNotIn(word, text, p["code"])
 
     def test_prioridade_1_so_para_admin_e_created_at_nunca_no_futuro(self):
         admins = set(u["login"] for u in self.store.users.values()
@@ -57,22 +57,22 @@ class TestSeedFake(unittest.TestCase):
         for t in self.store.tickets.values():
             snap = json.loads(t["submitted_params"])
             self.assertEqual(snap["version"], params_compiler.SNAPSHOT_VERSION, t["id"])
-            vinculos = [v for v in self.store.script_param.values() if v["script_id"] == t["script_id"]]
-            codigos = set(self.store.parameters[v["parameter_id"]]["code"] for v in vinculos)
-            self.assertEqual(set(snap["answers"]), codigos, t["id"])
+            links = [v for v in self.store.script_param.values() if v["script_id"] == t["script_id"]]
+            codes = set(self.store.parameters[v["parameter_id"]]["code"] for v in links)
+            self.assertEqual(set(snap["answers"]), codes, t["id"])
             resp = [r for r in self.store.ticket_answer.values() if r["ticket_id"] == t["id"]]
-            self.assertTrue(set(r["parameter_id"] for r in resp) <= set(v["parameter_id"] for v in vinculos), t["id"])
+            self.assertTrue(set(r["parameter_id"] for r in resp) <= set(v["parameter_id"] for v in links), t["id"])
 
     def test_agendamentos_alinhados_ao_minuto_e_a_regra(self):
         for a in self.store.schedules.values():
             self.assertEqual((a["next_run_at"].second, a["next_run_at"].microsecond), (0, 0), a["id"])
-            esperado = recurrence.next_run(a, recurrence.truncate_seconds(self.now), 1461)
-            self.assertEqual(a["next_run_at"], esperado, a["id"])
-            respostas = json.loads(a["params_json"])
-            obrigatorios = [self.store.parameters[v["parameter_id"]]["code"] for v in self.store.script_param.values()
+            expected = recurrence.next_run(a, recurrence.truncate_seconds(self.now), 1461)
+            self.assertEqual(a["next_run_at"], expected, a["id"])
+            answers = json.loads(a["params_json"])
+            required = [self.store.parameters[v["parameter_id"]]["code"] for v in self.store.script_param.values()
                             if v["script_id"] == a["script_id"] and v["required"] == "Y"]
-            for codigo in obrigatorios:
-                self.assertIn(codigo, respostas, a["id"])
+            for code in required:
+                self.assertIn(code, answers, a["id"])
 
     def test_linha_de_controle_na_versao_do_codigo(self):
         import sql_ident
@@ -89,25 +89,25 @@ class TestSeedRecordColumns(unittest.TestCase):
 
     def test_toda_linha_com_registro_coerente(self):
         import sql_ident
-        for entidade in sql_ident.TABLES:
-            linhas = list(getattr(self.store, entidade).values())
-            self.assertTrue(linhas, entidade)
-            for r in linhas:
-                if entidade in sql_ident.TABLES_WITHOUT_RECORD:
+        for entity in sql_ident.TABLES:
+            rows = list(getattr(self.store, entity).values())
+            self.assertTrue(rows, entity)
+            for r in rows:
+                if entity in sql_ident.TABLES_WITHOUT_RECORD:
                     self.assertNotIn("created_by", r)
                     continue
-                self.assertTrue(r["created_by"] and len(r["created_by"]) <= sql_ident.ACTOR_MAX, (entidade, r["id"]))
-                self.assertLessEqual(r["created_at"], self.now, (entidade, r["id"]))
-                self.assertEqual(r["updated_at"] is None, r["updated_by"] is None, (entidade, r["id"]))
+                self.assertTrue(r["created_by"] and len(r["created_by"]) <= sql_ident.ACTOR_MAX, (entity, r["id"]))
+                self.assertLessEqual(r["created_at"], self.now, (entity, r["id"]))
+                self.assertEqual(r["updated_at"] is None, r["updated_by"] is None, (entity, r["id"]))
                 if r["updated_at"] is not None:
-                    self.assertTrue(r["created_at"] <= r["updated_at"] <= self.now, (entidade, r["id"]))
+                    self.assertTrue(r["created_at"] <= r["updated_at"] <= self.now, (entity, r["id"]))
 
     def test_autoria_por_tipo_de_registro(self):
-        for nome in ("environments", "profiles", "features", "scripts", "users", "parameters",
+        for name in ("environments", "profiles", "features", "scripts", "users", "parameters",
                      "profile_feature", "script_env", "script_param"):
-            for r in getattr(self.store, nome).values():
-                self.assertEqual(r["created_by"], "SYSTEM:seed", nome)
-                self.assertEqual(r["updated_by"] is not None, r.get("active") == "N", (nome, r["id"]))
+            for r in getattr(self.store, name).values():
+                self.assertEqual(r["created_by"], "SYSTEM:seed", name)
+                self.assertEqual(r["updated_by"] is not None, r.get("active") == "N", (name, r["id"]))
         for a in self.store.agents.values():
             self.assertEqual(a["created_by"], "SYSTEM:%s" % a["code"])
         for a in self.store.schedules.values():

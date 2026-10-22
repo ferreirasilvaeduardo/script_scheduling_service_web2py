@@ -32,42 +32,42 @@ class RepoAuditFake(RepoAudit):
     def _filtrar(self, filters):
         """Registros que atendem aos filtros, ordenados por created_at DESC, id DESC (chamar sob o lock)."""
         filters = filters or {}
-        lista = list(self._store.audit.values())
+        items = list(self._store.audit.values())
 
-        ator_f = filters.get("actor")
-        if ator_f:
-            lista = [a for a in lista if ator_f.lower() in a.get("actor", "").lower()]
+        actor_f = filters.get("actor")
+        if actor_f:
+            items = [a for a in items if actor_f.lower() in a.get("actor", "").lower()]
 
-        acao_f = filters.get("action")
-        if acao_f:
-            lista = [a for a in lista if a.get("action") == acao_f]
+        action_f = filters.get("action")
+        if action_f:
+            items = [a for a in items if a.get("action") == action_f]
 
         ent_f = filters.get("entity")
         if ent_f:
-            lista = [a for a in lista if a.get("entity") == ent_f]
+            items = [a for a in items if a.get("entity") == ent_f]
 
         ent_id_f = filters.get("entity_id")
         if ent_id_f is not None:
-            lista = [a for a in lista if a.get("entity_id") == int(ent_id_f)]
+            items = [a for a in items if a.get("entity_id") == int(ent_id_f)]
 
         ip_f = filters.get("source_ip")
         if ip_f:
-            lista = [a for a in lista if ip_f in (a.get("source_ip") or "")]
+            items = [a for a in items if ip_f in (a.get("source_ip") or "")]
 
         dt_ini = filters.get("start_date")
         if dt_ini:
-            lista = [a for a in lista if a.get("created_at") and a["created_at"] >= dt_ini]
+            items = [a for a in items if a.get("created_at") and a["created_at"] >= dt_ini]
 
-        dt_fim = filters.get("end_date")
-        if dt_fim:
-            lista = [a for a in lista if a.get("created_at") and a["created_at"] <= dt_fim]
+        dt_end = filters.get("end_date")
+        if dt_end:
+            items = [a for a in items if a.get("created_at") and a["created_at"] <= dt_end]
 
         id_max = filters.get("id_max")
         if id_max is not None:
-            lista = [a for a in lista if a["id"] <= int(id_max)]
+            items = [a for a in items if a["id"] <= int(id_max)]
 
-        lista.sort(key=lambda x: (x.get("created_at") or self._store.now(), x["id"]), reverse=True)
-        return lista
+        items.sort(key=lambda x: (x.get("created_at") or self._store.now(), x["id"]), reverse=True)
+        return items
 
     def list(self, filters=None, page=1, size=20):
         """Lista registros de auditoria ordenados por created_at DESC, id DESC."""
@@ -77,5 +77,5 @@ class RepoAuditFake(RepoAudit):
     def iterate(self, filters=None, limit=50000):
         """Iterador de copias, no maximo `limite` registros (no Oracle: cursor com arraysize, sem offset)."""
         with self._store.lock_audit:
-            lista = copy.deepcopy(self._filtrar(filters)[:max(0, int(limit))])
-        return iter(lista)
+            items = copy.deepcopy(self._filtrar(filters)[:max(0, int(limit))])
+        return iter(items)

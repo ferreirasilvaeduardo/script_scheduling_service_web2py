@@ -97,32 +97,32 @@ class RepoSchedulerLog(object):
         cur = conn.cursor()
         try:
             db_conn.set_input_types(cur, chunk=db_conn.TIPO_CLOB)
-            resultado = db_conn.output_variable(cur, db_conn.TIPO_VARCHAR, size=20)
+            result = db_conn.output_variable(cur, db_conn.TIPO_VARCHAR, size=20)
             try:
                 cur.execute(self._plsql, chunk=chunk, ticket_id=int(ticket_id), agent_id=agent_id,
-                            expected_offset=int(expected_offset), result=resultado)
+                            expected_offset=int(expected_offset), result=result)
             except Exception as exc:
                 if db_conn.classify_error(exc) == ("ORA", _ORA_DIVERGENT):
                     raise LogOffsetMismatch(ticket_id, expected_offset, len(chunk))
                 raise
-            valor = db_conn.output_value(resultado)
+            value = db_conn.output_value(result)
         finally:
             cur.close()
-        if valor not in _RESULTS:
-            raise RuntimeError("resultado inesperado do anexar: %r" % (valor,))
-        return valor
+        if value not in _RESULTS:
+            raise RuntimeError("resultado inesperado do anexar: %r" % (value,))
+        return value
 
     def supplementary_unit(self, conn):
         """1 ou 2: posicoes do CLOB para um caractere fora do BMP neste banco (offset da Pump)."""
         cur = conn.cursor()
         try:
             cur.execute(_SQL_UNIT_SUPPLEMENTARY)
-            valor = int(cur.fetchone()[0])
+            value = int(cur.fetchone()[0])
         finally:
             cur.close()
-        if valor not in (1, 2):
-            raise RuntimeError("unidade de CLOB inesperada: %r" % (valor,))
-        return valor
+        if value not in (1, 2):
+            raise RuntimeError("unidade de CLOB inesperada: %r" % (value,))
+        return value
 
     def mark_truncated(self, conn, ticket_id, agent_id):
         """log_truncado = 'S' no ticket RUNNING deste agente. False se a posse foi perdida. Sem COMMIT."""

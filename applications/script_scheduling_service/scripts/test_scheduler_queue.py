@@ -49,16 +49,16 @@ class _Cursor(object):
 
     def _reply(self, sql, binds):
         self.conn.executed.append((sql, binds))
-        for trecho, resposta in self.conn.script_steps:
-            if trecho in sql:
-                if isinstance(resposta, Exception):
-                    raise resposta
-                rowcount, linhas = resposta[0], resposta[1]
-                self.rowcount, self._lines = rowcount, list(linhas)
-                if len(resposta) > 2:  # valor da variavel de saida (RETURNING)
+        for snippet, answer in self.conn.script_steps:
+            if snippet in sql:
+                if isinstance(answer, Exception):
+                    raise answer
+                rowcount, rows = answer[0], answer[1]
+                self.rowcount, self._lines = rowcount, list(rows)
+                if len(answer) > 2:  # valor da variavel de saida (RETURNING)
                     for v in binds.values():
                         if isinstance(v, _Var):
-                            v.value = [resposta[2]]
+                            v.value = [answer[2]]
                 return
         if ".NEXTVAL FROM DUAL" in sql:
             self.conn.seq += 1
@@ -118,22 +118,22 @@ class TestWithoutDb(unittest.TestCase):
         conn = _Conn([("FROM OWN_X.pfx_scripts WHERE interpreter IN", (3, [(3, 2), (4, 1), (5, 1)])),
                       ("WHERE status = 'RUNNING' AND environment IN", (1, [(4, "PRD", 1)])),
                       ("UNION ALL", (2, [(7, 3, "PRD"), (8, 4, "HML")]))])
-        itens = self.repo.candidates(conn, ["PRD", "HML"], ["PYTHON3", "SH"], 10, 30)
-        self.assertEqual(itens, [{"id": 7, "script_id": 3, "environment": "PRD"}, {"id": 8, "script_id": 4, "environment": "HML"}])
+        items = self.repo.candidates(conn, ["PRD", "HML"], ["PYTHON3", "SH"], 10, 30)
+        self.assertEqual(items, [{"id": 7, "script_id": 3, "environment": "PRD"}, {"id": 8, "script_id": 4, "environment": "HML"}])
         (sql_scr, b_scr), (sql_run, b_run), (sql, binds) = conn.executed
         self.assertIn("interpreter IN (:int0, :int1)", sql_scr)
         self.assertEqual(b_scr, {"int0": "PYTHON3", "int1": "SH"})
         self.assertIn("environment IN (:env0, :env1) GROUP BY script_id, environment", sql_run)
         self.assertEqual(b_run, {"env0": "PRD", "env1": "HML"})
-        inicio = sql_ident.FBI_TCK_QUEUE_START
+        start = sql_ident.FBI_TCK_QUEUE_START
         self.assertEqual(sql.count("SELECT id, script_id, environment, prio, inicio FROM (SELECT id, script_id"), 8,
                          "2 environments x 4 prioridades")
         self.assertNotIn("SELECT *", sql, "AGENTS §4.12")
-        for trecho in ("WHERE status = 'PENDING' AND environment = :env0 AND priority = 1 AND %s <= SYSDATE" % inicio,
-                       "ORDER BY %s, id) WHERE ROWNUM <= :batch_size" % inicio,
+        for snippet in ("WHERE status = 'PENDING' AND environment = :env0 AND priority = 1 AND %s <= SYSDATE" % start,
+                       "ORDER BY %s, id) WHERE ROWNUM <= :batch_size" % start,
                        "c.status = 'PENDING' AND c.cancel_requested = 'N'",
                        "j.inicio, j.id", "OWN_X.pfx_tickets"):
-            self.assertIn(trecho, sql)
+            self.assertIn(snippet, sql)
         self.assertNotIn("tbsss_", sql)
         # O script 4 esta no teto em PRD (1 de 1): fica fora so da janela de PRD.
         self.assertIn("(script_id IN (:s0_0, :s0_1))", sql)
@@ -157,25 +157,25 @@ class TestWithoutDb(unittest.TestCase):
                       ("UNION ALL", (0, []))])
         self.repo.candidates(conn, ["PRD"], ["SH"], 10, 30)
         sql = conn.executed[-1][0]
-        bloco = sql[sql.index("AND (script_id IN"):sql.index(") ORDER BY")]
-        self.assertEqual(bloco.count("script_id IN ("), 3, "1.901 scripts: listas de ate 900 (ORA-01795)")
+        chunk = sql[sql.index("AND (script_id IN"):sql.index(") ORDER BY")]
+        self.assertEqual(chunk.count("script_id IN ("), 3, "1.901 scripts: listas de ate 900 (ORA-01795)")
 
     def test_claim_ok(self):
-        inicio = datetime.datetime(2026, 10, 20, 14, 5, 33)
+        start = datetime.datetime(2026, 10, 20, 14, 5, 33)
         conn = _Conn([("FOR UPDATE WAIT 5", (1, [(3, 2)])), ("SELECT COUNT(*)", (1, [(1,)])),
-                      ("RETURNING started_at", (1, [], inicio))])
-        self.assertEqual(self.repo.claim(conn, 7, 3, "PRD", AGENT), (True, None, inicio))
+                      ("RETURNING started_at", (1, [], start))])
+        self.assertEqual(self.repo.claim(conn, 7, 3, "PRD", AGENT), (True, None, start))
         self.assertEqual((conn.commits, conn.rollbacks), (1, 0))
         upd, binds = [x for x in conn.executed if "RETURNING" in x[0]][0]
-        for trecho in ("status = 'RUNNING'", "log_output = EMPTY_CLOB()", "log_offset_chars = 0",
+        for snippet in ("status = 'RUNNING'", "log_output = EMPTY_CLOB()", "log_offset_chars = 0",
                        "updated_at = SYSDATE, updated_by = :actor", "status = 'PENDING' AND cancel_requested = 'N'"):
-            self.assertIn(trecho, upd)
+            self.assertIn(snippet, upd)
         self.assertEqual(binds["actor"], ACTOR)
         # Ordem de locks (README §8.3): scripts antes de tickets.
         self.assertIn("OWN_X.pfx_scripts", conn.executed[0][0])
 
     def test_claim_lock_teto_e_perdido(self):
-        casos = (
+        cases = (
             ([("FOR UPDATE WAIT 5", _Error("ORA-30006: resource busy; acquire with WAIT timeout expired"))],
              ("LOCK", "ORA-30006")),
             ([("FOR UPDATE WAIT 5", _Error("ORA-00054: resource busy"))], ("LOCK", "ORA-00054")),
@@ -184,10 +184,10 @@ class TestWithoutDb(unittest.TestCase):
               ("RETURNING started_at", (0, [], None))], "PERDIDO"),
             ([("FOR UPDATE WAIT 5", (0, []))], "PERDIDO"),
         )
-        for roteiro, motivo in casos:
-            motivo, extra = motivo if isinstance(motivo, tuple) else (motivo, None)
-            conn = _Conn(roteiro)
-            self.assertEqual(self.repo.claim(conn, 7, 3, "PRD", AGENT), (False, motivo, extra), motivo)
+        for script_steps, reason in cases:
+            reason, extra = reason if isinstance(reason, tuple) else (reason, None)
+            conn = _Conn(script_steps)
+            self.assertEqual(self.repo.claim(conn, 7, 3, "PRD", AGENT), (False, reason, extra), reason)
             self.assertEqual(conn.commits, 0)
             self.assertGreaterEqual(conn.rollbacks, 1)
         with self.assertRaises(_Error):
@@ -199,9 +199,9 @@ class TestWithoutDb(unittest.TestCase):
         self.assertTrue(self.repo.register_pid(conn, 7, AGENT, 4321, 99))
         self.assertNotIn("updated_", conn.executed[0][0])
         self.assertFalse(self.repo.register_pid(_Conn([("SET process_id", (0, []))]), 7, AGENT, 1, 1))
-        agora = datetime.datetime(2026, 10, 20, 15, 0, 0)
-        conn = _Conn([("UPDATE OWN_X.pfx_agents", (1, [])), ("SELECT SYSDATE", (1, [(agora,)]))], counts={8: 0})
-        self.assertEqual(self.repo.heartbeat(conn, AGENT, "host", 77, [7, 8]), ([8], agora))
+        now = datetime.datetime(2026, 10, 20, 15, 0, 0)
+        conn = _Conn([("UPDATE OWN_X.pfx_agents", (1, [])), ("SELECT SYSDATE", (1, [(now,)]))], counts={8: 0})
+        self.assertEqual(self.repo.heartbeat(conn, AGENT, "host", 77, [7, 8]), ([8], now))
         self.assertEqual(conn.commits, 1)
         for sql, _b in conn.executed:
             self.assertNotIn("updated_", sql)
@@ -209,9 +209,9 @@ class TestWithoutDb(unittest.TestCase):
                       conn.sql("pfx_agents")[0])
 
     def test_heartbeat_sem_tickets_e_registro_perdido(self):
-        agora = datetime.datetime(2026, 10, 20, 15, 0, 0)
-        conn = _Conn([("UPDATE OWN_X.pfx_agents", (1, [])), ("SELECT SYSDATE", (1, [(agora,)]))])
-        self.assertEqual(self.repo.heartbeat(conn, AGENT, "host", 77, []), ([], agora))
+        now = datetime.datetime(2026, 10, 20, 15, 0, 0)
+        conn = _Conn([("UPDATE OWN_X.pfx_agents", (1, [])), ("SELECT SYSDATE", (1, [(now,)]))])
+        self.assertEqual(self.repo.heartbeat(conn, AGENT, "host", 77, []), ([], now))
         self.assertEqual(conn.sql("pfx_tickets"), [], "executemany vazio pulado; o do agente nao (R-28)")
         conn = _Conn([("UPDATE OWN_X.pfx_agents", (0, []))])
         with self.assertRaises(RegistrationLost):
@@ -219,12 +219,12 @@ class TestWithoutDb(unittest.TestCase):
         self.assertEqual((conn.commits, conn.rollbacks), (0, 1))
 
     def test_devolver_tres_desfechos(self):
-        casos = (([("SET status = 'PENDING'", (1, []))], "DEVOLVIDO"),
+        cases = (([("SET status = 'PENDING'", (1, []))], "DEVOLVIDO"),
                  ([("SET status = 'PENDING'", (0, [])), ("SET status = 'CANCELLED'", (1, []))], "CANCELADO"),
                  ([("SET status = 'PENDING'", (0, [])), ("SET status = 'CANCELLED'", (0, []))], "PERDIDO"))
-        for roteiro, esperado in casos:
-            conn = _Conn(roteiro)
-            self.assertEqual(self.repo.return_to_queue(conn, 7, AGENT), esperado)
+        for script_steps, expected in cases:
+            conn = _Conn(script_steps)
+            self.assertEqual(self.repo.return_to_queue(conn, 7, AGENT), expected)
             self.assertEqual(conn.commits, 1)
         sqls = [s for s, _b in conn.executed]
         self.assertIn("process_id IS NULL AND cancel_requested = 'N'", sqls[0])
@@ -284,7 +284,7 @@ class TestWithoutDb(unittest.TestCase):
             self.assertEqual(self.repo.register_agent(_Conn(r), self._agent_data(), lambda pid: False), 42)
 
     def test_registrar_agente_corrida_na_inclusao(self):
-        estado = {"n": 0}
+        state = {"n": 0}
 
         class _ConnCorrida(_Conn):
             def cursor(conn_self):
@@ -292,8 +292,8 @@ class TestWithoutDb(unittest.TestCase):
                 original = cur.execute
 
                 def execute(sql, binds=None, **kw):
-                    if "MERGE INTO" in sql and estado["n"] == 0:
-                        estado["n"] += 1
+                    if "MERGE INTO" in sql and state["n"] == 0:
+                        state["n"] += 1
                         raise _Error("ORA-00001: unique constraint (OWN_X.UK_PFX_AGT_CODE) violated")
                     return original(sql, binds, **kw)
                 cur.execute = execute
@@ -341,10 +341,10 @@ class TestWithoutDb(unittest.TestCase):
 
     def test_sql_sem_prefixo_fixo(self):
         with open(scheduler_queue.__file__, encoding="utf-8") as f:
-            fonte = f.read()
-        self.assertNotIn("tbsss_tickets", fonte)
-        self.assertNotIn("import gluon", fonte)
-        self.assertNotIn("from gluon", fonte)
+            source = f.read()
+        self.assertNotIn("tbsss_tickets", source)
+        self.assertNotIn("import gluon", source)
+        self.assertNotIn("from gluon", source)
 
 
 @unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")
@@ -411,55 +411,55 @@ class TestSchedulerQueueOracle(unittest.TestCase):
         no teto nem os de outro interpretador; inicio = GREATEST(scheduled_at, created_at) (misfire)."""
         cat = self.catalog
         scr_sh = self.c["scr"]
-        scr_teto = self._fixtures.script("teto", max_parallel_env=1)
+        scr_cap = self._fixtures.script("teto", max_parallel_env=1)
         scr_py = self._fixtures.script("py", interpreter="PYTHON3", path_file="/opt/tst/%s_py.py" % self._fixtures.suf)
         cur = self.conn.cursor()
         tck = cat.qualify_table("tickets")
-        casos = []
+        cases = []
         # (script, prioridade, minutos de scheduled_at atras, minutos de created_at atras)
         for i, (sid, prio, sched, crt) in enumerate((
                 (scr_sh["id"], 4, 600, 601), (scr_sh["id"], 1, 5, 6), (scr_sh["id"], 2, 90, 91),
                 (scr_sh["id"], 3, 300, 2),      # misfire: agendado ha 5 h, criado ha 2 min (espera curta)
                 (scr_sh["id"], 2, 30, 31), (scr_sh["id"], 4, 30, 31), (scr_sh["id"], 1, 240, 241),
-                (scr_sh["id"], 3, 61, 62), (scr_sh["id"], 2, 120, 121), (scr_teto["id"], 1, 900, 901),
+                (scr_sh["id"], 3, 61, 62), (scr_sh["id"], 2, 120, 121), (scr_cap["id"], 1, 900, 901),
                 (scr_py["id"], 1, 900, 901), (scr_sh["id"], 3, -60, 1))):    # o ultimo e do futuro
             tid = self._fixtures.ticket(actor="teste", script_id=sid, environment=self.amb, requested_by=self.c["login"],
                                      priority=prio)
             cur.execute("UPDATE " + tck + " SET scheduled_at = SYSDATE - :s / 1440, created_at = SYSDATE - :c / 1440"
                         " WHERE id = :id", s=sched, c=crt, id=tid)
-            casos.append((tid, sid, prio, sched, crt))
+            cases.append((tid, sid, prio, sched, crt))
         # O script do teto ja tem um RUNNING no ambiente.
-        rodando = self._fixtures.ticket(actor="teste", script_id=scr_teto["id"], environment=self.amb,
+        running = self._fixtures.ticket(actor="teste", script_id=scr_cap["id"], environment=self.amb,
                                      requested_by=self.c["login"])
-        cur.execute("UPDATE " + tck + " SET status = 'RUNNING', agent_id = 'tst-outro' WHERE id = :id", id=rodando)
+        cur.execute("UPDATE " + tck + " SET status = 'RUNNING', agent_id = 'tst-outro' WHERE id = :id", id=running)
         self.conn.commit()
         env = 60
 
         def chave(case):
             tid, _sid, prio, sched, crt = case
-            espera = min(sched, crt)  # minutos desde GREATEST(scheduled_at, created_at)
-            return (max(1, prio - espera // env), -espera, tid)
-        esperado = [c[0] for c in sorted((c for c in casos if c[1] == scr_sh["id"] and c[3] >= 0), key=chave)]
-        for lote in (1, 3, 20):
-            obtidos = [x["id"] for x in self.repo.candidates(self.conn, [self.amb], ["SH"], lote, env)]
-            self.assertEqual(obtidos, esperado[:lote], "lote %d" % lote)
-        sem_env = [x["id"] for x in self.repo.candidates(self.conn, [self.amb], ["SH"], 20, 0)]
-        self.assertEqual(sem_env, [c[0] for c in sorted((c for c in casos if c[1] == scr_sh["id"] and c[3] >= 0),
+            wait = min(sched, crt)  # minutos desde GREATEST(scheduled_at, created_at)
+            return (max(1, prio - wait // env), -wait, tid)
+        expected = [c[0] for c in sorted((c for c in cases if c[1] == scr_sh["id"] and c[3] >= 0), key=chave)]
+        for batch in (1, 3, 20):
+            got = [x["id"] for x in self.repo.candidates(self.conn, [self.amb], ["SH"], batch, env)]
+            self.assertEqual(got, expected[:batch], "lote %d" % batch)
+        without_env = [x["id"] for x in self.repo.candidates(self.conn, [self.amb], ["SH"], 20, 0)]
+        self.assertEqual(without_env, [c[0] for c in sorted((c for c in cases if c[1] == scr_sh["id"] and c[3] >= 0),
                                                         key=lambda c: (c[2], -min(c[3], c[4]), c[0]))])
-        com_py = [x["id"] for x in self.repo.candidates(self.conn, [self.amb], ["SH", "PYTHON3"], 20, env)]
-        self.assertIn(casos[10][0], com_py, "PYTHON3 entra com o interpretador")
-        self.assertNotIn(casos[9][0], com_py, "script no teto fica fora")
-        self.assertNotIn(casos[11][0], com_py, "agendado no futuro fica fora")
+        with_py = [x["id"] for x in self.repo.candidates(self.conn, [self.amb], ["SH", "PYTHON3"], 20, env)]
+        self.assertIn(cases[10][0], with_py, "PYTHON3 entra com o interpretador")
+        self.assertNotIn(cases[9][0], with_py, "script no teto fica fora")
+        self.assertNotIn(cases[11][0], with_py, "agendado no futuro fica fora")
 
     def test_ciclo_completo_do_ticket(self):
         aid = self._register()
         self.assertIsInstance(aid, int)
         tid = self._ticket()
-        candidatos = self.repo.candidates(self.conn, [self.amb], ["SH"], 10, 30)
-        self.assertIn(tid, [c["id"] for c in candidatos])
-        ok, motivo, inicio = self.repo.claim(self.conn, tid, self.c["scr"]["id"], self.amb, self.agent)
-        self.assertEqual((ok, motivo), (True, None))
-        self.assertIsInstance(inicio, datetime.datetime)
+        candidates = self.repo.candidates(self.conn, [self.amb], ["SH"], 10, 30)
+        self.assertIn(tid, [c["id"] for c in candidates])
+        ok, reason, start = self.repo.claim(self.conn, tid, self.c["scr"]["id"], self.amb, self.agent)
+        self.assertEqual((ok, reason), (True, None))
+        self.assertIsInstance(start, datetime.datetime)
         self.assertEqual(self.repo.claim(self.conn, tid, self.c["scr"]["id"], self.amb, self.agent)[:2],
                          (False, "TETO"), "max_qtd_parallel_env = 1 com o ticket RUNNING")
         self.assertEqual(self.repo.own_sweep(self.conn, self.agent), {tid: "N"})
@@ -467,9 +467,9 @@ class TestSchedulerQueueOracle(unittest.TestCase):
         self.assertEqual(ctx["ctx"]["login"], self.c["login"])
         self.assertTrue(self.repo.active_homologated_script(self.conn, self.c["scr"]["id"], self.amb))
         self.assertTrue(self.repo.register_pid(self.conn, tid, self.agent, 4321, 777))
-        perdidos, agora = self.repo.heartbeat(self.conn, self.agent, "host-teste", os.getpid(), [tid])
-        self.assertEqual(perdidos, [])
-        self.assertIsInstance(agora, datetime.datetime)
+        lost, now = self.repo.heartbeat(self.conn, self.agent, "host-teste", os.getpid(), [tid])
+        self.assertEqual(lost, [])
+        self.assertIsInstance(now, datetime.datetime)
         self.assertEqual(self.repo.return_to_queue(self.conn, tid, self.agent), "PERDIDO", "com PID nunca volta a fila")
         self.assertTrue(self.repo.finalize(self.conn, tid, self.agent, "SUCCESS", "EXIT_OK", 0))
         self.assertFalse(self.repo.finalize(self.conn, tid, self.agent, "FAILED", "EXIT_ERROR", 1))
@@ -503,8 +503,8 @@ class TestSchedulerQueueOracle(unittest.TestCase):
                 "platform": "LINUX", "interpreters": "SH", "critical_config": "hb=10",
                 "node_offline_timeout_s": 120}, lambda p: False)
         tid = self._ticket()
-        perdidos, _agora = self.repo.heartbeat(self.conn, self.agent, "host-teste", os.getpid(), [tid])
-        self.assertEqual(perdidos, [tid], "ticket que nao e RUNNING deste agente")
+        lost, _now = self.repo.heartbeat(self.conn, self.agent, "host-teste", os.getpid(), [tid])
+        self.assertEqual(lost, [tid], "ticket que nao e RUNNING deste agente")
         self.assertEqual(self.repo.check_config(self.conn, self.agent, "hb=10", 120),
                          [x for x in self.repo.check_config(self.conn, self.agent, "hb=10", 120)
                           if x[0] != self.agent])

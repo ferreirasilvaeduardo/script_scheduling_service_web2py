@@ -37,9 +37,9 @@ class Check(object):
         self.conn = conn
         self.args = args
         self.repo = repo or saude_sql.RepoHealth.from_config(cfg)
-        agente = cfg.agent
-        self.thresholds = agents_service.Thresholds(agente.heartbeat_interval_s, agente.fence_timeout_s,
-                                                 agente.node_offline_timeout_s)
+        agent = cfg.agent
+        self.thresholds = agents_service.Thresholds(agent.heartbeat_interval_s, agent.fence_timeout_s,
+                                                 agent.node_offline_timeout_s)
         self.problems = []  # (nivel, texto)
         self.performance = []
 
@@ -47,38 +47,38 @@ class Check(object):
         self.problems.append((level, text))
 
     def run(self):
-        agora = db_conn.db_now(self.conn)
+        now = db_conn.db_now(self.conn)
         self._version()
-        agentes = self.repo.agents(self.conn)
-        self._agents(agentes, agora)
-        self._environments(agentes, agora)
-        self._queue(agentes, agora)
-        self._no_pid(agora)
-        self._config(agentes)
-        self._purge(agora)
-        return max([nivel for nivel, _t in self.problems] or [OK])
+        agents = self.repo.agents(self.conn)
+        self._agents(agents, now)
+        self._environments(agents, now)
+        self._queue(agents, now)
+        self._no_pid(now)
+        self._config(agents)
+        self._purge(now)
+        return max([level for level, _t in self.problems] or [OK])
 
     def _version(self):
-        versao = self.repo.schema_version(self.conn)
-        if versao != sql_ident.SCHEMA_VERSION:
+        version = self.repo.schema_version(self.conn)
+        if version != sql_ident.SCHEMA_VERSION:
             self._problem(CRITICAL, "versao do esquema %s, esperada %d (README §11.1)"
-                           % (versao, sql_ident.SCHEMA_VERSION))
+                           % (version, sql_ident.SCHEMA_VERSION))
 
     def _agents(self, agents, now):
-        saudaveis = 0
+        healthy = 0
         for ag in agents:
             if ag["status"] != "ACTIVE":
                 continue
-            saude = agents_service.health(ag, now, self.thresholds)
-            if saude in _HEALTHY:
-                saudaveis += 1
-            elif saude == agents_service.AT_RISK:
+            health = agents_service.health(ag, now, self.thresholds)
+            if health in _HEALTHY:
+                healthy += 1
+            elif health == agents_service.AT_RISK:
                 self._problem(WARNING, "agente %s em risco: heartbeat ha %s (fence %d s)" % (
                     ag["code"], self._age(ag, now), self.thresholds.fence_timeout_s))
             else:
                 self._problem(CRITICAL, "agente %s ATIVO sem heartbeat ha %s (node_offline %d s)" % (
                     ag["code"], self._age(ag, now), self.thresholds.node_offline_timeout_s))
-        self.performance.append("healthy_agents=%d" % saudaveis)
+        self.performance.append("healthy_agents=%d" % healthy)
 
     @staticmethod
     def _age(ag, now):
@@ -86,32 +86,32 @@ class Check(object):
         return "-" if hb is None else "%d s" % max(0, int((now - hb).total_seconds()))
 
     def _environments(self, agents, now):
-        atendidos = set()
+        served = set()
         for ag in agents:
             if ag["status"] == "ACTIVE" and agents_service.health(ag, now, self.thresholds) in _HEALTHY:
-                atendidos.update(a.strip() for a in (ag.get("environments") or "").split(",") if a.strip())
-        for nome in self.repo.active_environments(self.conn):
-            if nome not in atendidos:
-                self._problem(CRITICAL, "ambiente %s ativo sem nenhum agente saudavel" % nome)
+                served.update(a.strip() for a in (ag.get("environments") or "").split(",") if a.strip())
+        for name in self.repo.active_environments(self.conn):
+            if name not in served:
+                self._problem(CRITICAL, "ambiente %s ativo sem nenhum agente saudavel" % name)
 
     def _queue(self, agents, now):
-        atendidos = saude_sql.served_pairs(agents, now, self.thresholds)
-        for g in saude_sql.unattended_queue(self.repo.queue_by_pair(self.conn, now), atendidos):
+        served = saude_sql.served_pairs(agents, now, self.thresholds)
+        for g in saude_sql.unattended_queue(self.repo.queue_by_pair(self.conn, now), served):
             self._problem(CRITICAL, "fila sem atendente: %d tickets de %s/%s, o mais antigo desde %s" % (
                 g["quantidade"], g["environment"], g["interpreter"], g["mais_antigo"].strftime("%Y-%m-%d %H:%M:%S")))
-        qtd, antigo = self.repo.overdue_queue(self.conn, now)
-        espera_min = 0 if antigo is None else max(0, int((now - antigo).total_seconds()) // 60)
+        count, old = self.repo.overdue_queue(self.conn, now)
+        wait_min = 0 if old is None else max(0, int((now - old).total_seconds()) // 60)
         a = self.args
-        if qtd >= a.fila_crit or espera_min >= a.espera_crit_min:
-            nivel = CRITICAL
-        elif qtd >= a.fila_warn or espera_min >= a.espera_warn_min:
-            nivel = WARNING
+        if count >= a.fila_crit or wait_min >= a.espera_crit_min:
+            level = CRITICAL
+        elif count >= a.fila_warn or wait_min >= a.espera_warn_min:
+            level = WARNING
         else:
-            nivel = OK
-        if nivel != OK:
-            self._problem(nivel, "fila vencida: %d tickets PENDING, espera maxima %d min" % (qtd, espera_min))
-        self.performance.append("overdue_queue=%d;%d;%d" % (qtd, a.fila_warn, a.fila_crit))
-        self.performance.append("max_wait_min=%d;%d;%d" % (espera_min, a.espera_warn_min, a.espera_crit_min))
+            level = OK
+        if level != OK:
+            self._problem(level, "fila vencida: %d tickets PENDING, espera maxima %d min" % (count, wait_min))
+        self.performance.append("overdue_queue=%d;%d;%d" % (count, a.fila_warn, a.fila_crit))
+        self.performance.append("max_wait_min=%d;%d;%d" % (wait_min, a.espera_warn_min, a.espera_crit_min))
 
     def _no_pid(self, now):
         for t in self.repo.running_without_pid(self.conn, now, self.args.sem_pid_min):
@@ -131,11 +131,11 @@ class Check(object):
 
     def output(self, code):
         n = len(self.problems)
-        linhas = ["SSS %s - %d problema%s | %s" % (STATES[code], n, "" if n == 1 else "s",
+        rows = ["SSS %s - %d problema%s | %s" % (STATES[code], n, "" if n == 1 else "s",
                                                   " ".join(self.performance))]
-        ordenados = sorted(self.problems, key=lambda p: -p[0])
-        linhas.extend("%s: %s" % (STATES[nivel], texto) for nivel, texto in ordenados)
-        return "\n".join(linhas) + "\n"
+        sorted_value = sorted(self.problems, key=lambda p: -p[0])
+        rows.extend("%s: %s" % (STATES[level], text) for level, text in sorted_value)
+        return "\n".join(rows) + "\n"
 
 
 def _arguments(argv):
@@ -161,22 +161,22 @@ def main(argv=None, connect=None, output=None):
     args = _arguments(argv)
     try:
         cfg = sss_config.get_config(log_name="health", path=args.config)
-        segredos = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="monitor")
+        secrets_value = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="monitor")
     except sss_config.ConfigError as exc:
         return _unknown(output, "configuracao invalida: %s" % exc)
     try:
-        conn = (connect or _connect)(cfg, segredos)
+        conn = (connect or _connect)(cfg, secrets_value)
     except Exception as exc:
         return _unknown(output, "falha ao conectar no Oracle: %s" % db_conn.translate_error(exc))
     try:
-        verificacao = Check(cfg, conn, args)
-        codigo = verificacao.run()
+        check = Check(cfg, conn, args)
+        code = check.run()
     except Exception as exc:
         return _unknown(output, "falha de banco: %s" % db_conn.translate_error(exc))
     finally:
         conn.close()
-    output.write(verificacao.output(codigo))
-    return codigo
+    output.write(check.output(code))
+    return code
 
 
 def _connect(cfg, secrets):

@@ -49,47 +49,47 @@ def main(argv=None):
 
     # 1. Carrega configuracoes de owner e prefixo
     owner = args.owner
-    prefixo = args.prefixo
+    prefix = args.prefixo
     lob_storage = "BASICFILE" if args.lob_basicfile else "SECUREFILE"
 
     cfg = None
     # O config tambem fornece as contas dos papeis quando --grants-to nao e informado (README §11.1).
-    if args.config or (not owner or not prefixo) or not args.grants_para:
-        caminho_cfg = args.config
-        if not caminho_cfg:
-            candidato = os.path.join(_BASE_DIR, "instance", "config.ini")
-            if os.path.isfile(candidato):
-                caminho_cfg = candidato
+    if args.config or (not owner or not prefix) or not args.grants_para:
+        path_cfg = args.config
+        if not path_cfg:
+            candidate = os.path.join(_BASE_DIR, "instance", "config.ini")
+            if os.path.isfile(candidate):
+                path_cfg = candidate
             else:
-                candidato_ex = os.path.join(_BASE_DIR, "instance", "config.ini.example")
-                if os.path.isfile(candidato_ex):
-                    caminho_cfg = candidato_ex
+                candidate_ex = os.path.join(_BASE_DIR, "instance", "config.ini.example")
+                if os.path.isfile(candidate_ex):
+                    path_cfg = candidate_ex
 
-        if caminho_cfg and os.path.isfile(caminho_cfg):
+        if path_cfg and os.path.isfile(path_cfg):
             try:
-                cfg = sss_config.load(caminho_cfg)
+                cfg = sss_config.load(path_cfg)
                 if hasattr(cfg, "oracle"):
                     if not owner:
                         owner = getattr(cfg.oracle, "owner", "OPENRISOW")
-                    if not prefixo:
-                        prefixo = getattr(cfg.oracle, "table_prefix", "tbsss_")
+                    if not prefix:
+                        prefix = getattr(cfg.oracle, "table_prefix", "tbsss_")
                     if not args.lob_basicfile:
                         lob_storage = getattr(cfg.oracle, "lob_storage", "SECUREFILE")
             except Exception as exc:
                 print("Aviso ao ler config.ini: %s" % exc, file=sys.stderr)
 
     owner = owner or "OPENRISOW"
-    prefixo = prefixo or "tbsss_"
+    prefix = prefix or "tbsss_"
 
     try:
         sql_ident.validate_owner(owner)
-        sql_ident.validate_prefix(prefixo)
-        sql_ident.validate_registry(prefixo)
+        sql_ident.validate_prefix(prefix)
+        sql_ident.validate_registry(prefix)
     except Exception as exc:
         print("Erro de validacao em identificadores Oracle: %s" % exc, file=sys.stderr)
         return 2
 
-    papeis_grants = {}
+    roles_grants = {}
     if args.grants_para:
         for p in args.grants_para.split(","):
             p = p.strip()
@@ -98,49 +98,49 @@ def main(argv=None):
             if "=" not in p:
                 print("Formato invalido em --grants-to: use papel=usuario", file=sys.stderr)
                 return 2
-            papel, usr = p.split("=", 1)
-            papeis_grants[papel.strip().lower()] = usr.strip()
+            role, usr = p.split("=", 1)
+            roles_grants[role.strip().lower()] = usr.strip()
     elif cfg is not None:
         # web e agente usam [oracle] user (cada no le o seu config.ini); purge, [retention] purge_user.
         # A conta do monitor fica no secrets.cfg: so por --grants-to.
         usr_app = getattr(getattr(cfg, "oracle", None), "user", None)
-        papeis_grants = {
+        roles_grants = {
             "web": usr_app,
             "agent": usr_app,
             "purge": getattr(getattr(cfg, "retention", None), "purge_user", None),
         }
     try:
-        ddl_builder.build_grants_by_role(owner, prefixo, papeis_grants)
+        ddl_builder.build_grants_by_role(owner, prefix, roles_grants)
     except ValueError as exc:
         print("Erro nos GRANTs por papel: %s" % exc, file=sys.stderr)
         return 2
 
     # 2. Geracao dos scripts
-    script_implantar = ddl_builder.build_full_deploy_script(
+    script_deploy = ddl_builder.build_full_deploy_script(
         owner=owner,
-        prefix=prefixo,
+        prefix=prefix,
         lob_storage=lob_storage,
         admin_login=args.admin_login,
         admin_name=args.admin_nome,
         admin_password_hash=args.admin_senha_hash,
-        user_roles=papeis_grants,
+        user_roles=roles_grants,
     )
 
     script_rollback = ddl_builder.build_rollback_script(
         owner=owner,
-        prefix=prefixo,
+        prefix=prefix,
     )
 
-    script_validar = ddl_builder.build_validation_script(owner=owner, prefix=prefixo)
+    script_validate = ddl_builder.build_validation_script(owner=owner, prefix=prefix)
 
     script_grants = ""
     if args.grants_para:
-        grants = ddl_builder.build_grants_by_role(owner, prefixo, papeis_grants)
+        grants = ddl_builder.build_grants_by_role(owner, prefix, roles_grants)
         script_grants = "\n".join([
             "-- ==============================================================================",
             "-- Script Scheduling Service (SSS) - Grants por Papel Oracle 11gR2+",
             "-- Owner: {}".format(owner),
-            "-- Prefixo: {}".format(prefixo),
+            "-- Prefixo: {}".format(prefix),
             "-- ==============================================================================",
             "SET DEFINE OFF;",
             "",
@@ -148,13 +148,13 @@ def main(argv=None):
 
     # 3. Saida stdout se solicitada
     if args.stdout == "deploy":
-        print(script_implantar)
+        print(script_deploy)
         return 0
     elif args.stdout == "rollback":
         print(script_rollback)
         return 0
     elif args.stdout == "validate":
-        print(script_validar)
+        print(script_validate)
         return 0
     elif args.stdout == "grants":
         print(script_grants)
@@ -164,29 +164,29 @@ def main(argv=None):
     out_dir = os.path.abspath(args.out_dir)
     os.makedirs(out_dir, exist_ok=True)
 
-    arq_implantar = os.path.join(out_dir, "01_deploy_sss.sql")
-    arq_rollback = os.path.join(out_dir, "02_rollback_sss.sql")
-    arq_validar = os.path.join(out_dir, "99_validate_deploy.sql")
+    file_deploy = os.path.join(out_dir, "01_deploy_sss.sql")
+    file_rollback = os.path.join(out_dir, "02_rollback_sss.sql")
+    file_validate = os.path.join(out_dir, "99_validate_deploy.sql")
 
-    with open(arq_implantar, "w", encoding="utf-8") as f:
-        f.write(script_implantar)
+    with open(file_deploy, "w", encoding="utf-8") as f:
+        f.write(script_deploy)
 
-    with open(arq_rollback, "w", encoding="utf-8") as f:
+    with open(file_rollback, "w", encoding="utf-8") as f:
         f.write(script_rollback)
 
-    with open(arq_validar, "w", encoding="utf-8") as f:
-        f.write(script_validar)
+    with open(file_validate, "w", encoding="utf-8") as f:
+        f.write(script_validate)
 
     print("Scripts SQL gerados com sucesso:")
-    print("  - Implantacao : {}".format(arq_implantar))
-    print("  - Rollback    : {}".format(arq_rollback))
-    print("  - Validacao   : {}".format(arq_validar))
+    print("  - Implantacao : {}".format(file_deploy))
+    print("  - Rollback    : {}".format(file_rollback))
+    print("  - Validacao   : {}".format(file_validate))
 
     if script_grants:
-        arq_grants = os.path.join(out_dir, "03_grants_sss.sql")
-        with open(arq_grants, "w", encoding="utf-8") as f:
+        file_grants = os.path.join(out_dir, "03_grants_sss.sql")
+        with open(file_grants, "w", encoding="utf-8") as f:
             f.write(script_grants)
-        print("  - Grants      : {}".format(arq_grants))
+        print("  - Grants      : {}".format(file_grants))
 
     return 0
 

@@ -55,50 +55,50 @@ class _BaseLog(unittest.TestCase):
         self.addCleanup(repo_factory.reset_singletons)
         self.addCleanup(repo_factory.configure, None)
 
-        catalogo = repo_factory.get("catalog")
+        catalog = repo_factory.get("catalog")
         self.tickets = repo_factory.get("tickets")
         # Congela o relogio no instante da carga do seed (started_at do RUNNING + 5 min).
-        inicio = self.tickets.get(TCK_RUNNING)["started_at"]
-        self.clock = _Clock(inicio + datetime.timedelta(minutes=5))
+        start = self.tickets.get(TCK_RUNNING)["started_at"]
+        self.clock = _Clock(start + datetime.timedelta(minutes=5))
         repo_factory._fake_store.set_clock(self.clock)
 
         self.log = logging.getLogger("sss_teste_logs")
         self.log.addHandler(logging.NullHandler())
         self.log.propagate = False
         auth = auth_service.AuthService(
-            repo_factory.get("users"), repo_factory.get("rbac"), catalogo,
+            repo_factory.get("users"), repo_factory.get("rbac"), catalog,
             repo_factory.get("audit"), 5, 900, self.log)
-        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSIONS.items())
-        self.svc = TicketService(catalogo, self.tickets, self.log)
+        self.ctx = dict((login, auth.revalidate(session)) for login, session in SESSIONS.items())
+        self.svc = TicketService(catalog, self.tickets, self.log)
 
     def _full_log(self, ticket_id):
         """Log inteiro lido do repositorio em fatias, pelo contrato (obter nao traz log_output)."""
-        partes, offset = [], 0
+        parts, offset = [], 0
         while True:
-            texto, offset, _terminal, _truncado = self.tickets.log_read(ticket_id, offset, 65536)
-            if not texto:
-                return "".join(partes)
-            partes.append(texto)
+            text, offset, _terminal, _truncated = self.tickets.log_read(ticket_id, offset, 65536)
+            if not text:
+                return "".join(parts)
+            parts.append(text)
 
     def _read_all(self, login, ticket_id):
-        partes = []
+        parts = []
         offset = 0
         while True:
             r = self.svc.read_log(self.ctx[login], str(ticket_id), str(offset))
             self.assertLessEqual(len(r["texto"]), LOG_MAX_CHARS)
             self.assertEqual(r["proximo_offset"], offset + len(r["texto"]))
             if not r["texto"]:
-                return "".join(partes), r
-            partes.append(r["texto"])
+                return "".join(parts), r
+            parts.append(r["texto"])
             offset = r["proximo_offset"]
 
 
 class TestReadLogValidation(_BaseLog):
 
     def test_offset_invalido(self):
-        for invalido in ("-1", "x", "", "1.5", " 1", "12345678901", None, -1, True, 1.0, ["a"]):
-            with self.assertRaises(InvalidOffset, msg=repr(invalido)):
-                self.svc.read_log(self.ctx["admin"], "17", invalido)
+        for invalid in ("-1", "x", "", "1.5", " 1", "12345678901", None, -1, True, 1.0, ["a"]):
+            with self.assertRaises(InvalidOffset, msg=repr(invalid)):
+                self.svc.read_log(self.ctx["admin"], "17", invalid)
 
     def test_offset_valido_em_lista_vale_o_ultimo(self):
         r = self.svc.read_log(self.ctx["admin"], "17", ["0", "10"])
@@ -134,31 +134,31 @@ class TestReadLogContent(_BaseLog):
         self.assertEqual(sorted(r), ["proximo_offset", "status", "terminal", "texto", "truncado"])
 
     def test_limite_de_64k_e_reconstrucao_do_log_de_2mb(self):
-        integral = self._full_log(TCK_GRANDE)
-        self.assertGreaterEqual(len(integral.encode("utf-8")), 2 * 1024 * 1024)
+        full = self._full_log(TCK_GRANDE)
+        self.assertGreaterEqual(len(full.encode("utf-8")), 2 * 1024 * 1024)
         r = self.svc.read_log(self.ctx["admin"], str(TCK_GRANDE), "0")
         self.assertEqual(len(r["texto"]), LOG_MAX_CHARS)
         self.assertEqual(LOG_MAX_CHARS, 65536)
         self.assertTrue(r["terminal"])
-        texto, ultima = self._read_all("admin", TCK_GRANDE)
-        self.assertEqual(texto, integral)
-        self.assertEqual(ultima["proximo_offset"], len(integral))
-        self.assertEqual(ultima["status"], "SUCCESS")
+        text, last = self._read_all("admin", TCK_GRANDE)
+        self.assertEqual(text, full)
+        self.assertEqual(last["proximo_offset"], len(full))
+        self.assertEqual(last["status"], "SUCCESS")
 
     def test_truncado_com_marcador_final(self):
-        texto, ultima = self._read_all("admin", TCK_TRUNCADO)
-        self.assertTrue(ultima["truncado"])
-        self.assertTrue(ultima["terminal"])
-        self.assertTrue(texto.endswith(MARKER_TRUNCATED))
+        text, last = self._read_all("admin", TCK_TRUNCADO)
+        self.assertTrue(last["truncado"])
+        self.assertTrue(last["terminal"])
+        self.assertTrue(text.endswith(MARKER_TRUNCATED))
         self.assertFalse(self.svc.read_log(self.ctx["admin"], "17", "0")["truncado"])
 
     def test_running_cresce_com_o_relogio_e_termina(self):
-        texto1, r1 = self._read_all("admin", TCK_RUNNING)
+        text1, r1 = self._read_all("admin", TCK_RUNNING)
         self.assertFalse(r1["terminal"])
         self.assertEqual(r1["status"], "RUNNING")
-        etapa_atual = 300 // STEP_13_S
-        self.assertIn("etapa %d/%d processada" % (etapa_atual, STAGES), texto1)
-        self.assertNotIn("etapa %d/%d" % (etapa_atual + 1, STAGES), texto1)
+        stage_current = 300 // STEP_13_S
+        self.assertIn("etapa %d/%d processada" % (stage_current, STAGES), text1)
+        self.assertNotIn("etapa %d/%d" % (stage_current + 1, STAGES), text1)
 
         # Sem avanco do relogio, nada novo.
         r = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r1["proximo_offset"]))
@@ -166,7 +166,7 @@ class TestReadLogContent(_BaseLog):
 
         self.clock.advance(STEP_13_S)
         r2 = self.svc.read_log(self.ctx["admin"], str(TCK_RUNNING), str(r1["proximo_offset"]))
-        self.assertIn("etapa %d/%d processada" % (etapa_atual + 1, STAGES), r2["texto"])
+        self.assertIn("etapa %d/%d processada" % (stage_current + 1, STAGES), r2["texto"])
         self.assertFalse(r2["terminal"])
 
         self.clock.advance(STAGES * STEP_13_S)
@@ -186,57 +186,57 @@ class TestReadLogContent(_BaseLog):
 
     def test_running_com_cancelamento_sinalizado_termina_cancelado(self):
         self.assertEqual(self.tickets.request_cancel(TCK_RUNNING, "admin", "10.0.0.1"), "SINALIZADO")
-        texto, ultima = self._read_all("admin", TCK_RUNNING)
-        self.assertTrue(ultima["terminal"])
-        self.assertEqual(ultima["status"], "CANCELLED")
-        self.assertIn("cancelamento", texto)
+        text, last = self._read_all("admin", TCK_RUNNING)
+        self.assertTrue(last["terminal"])
+        self.assertEqual(last["status"], "CANCELLED")
+        self.assertIn("cancelamento", text)
         self.assertEqual(self.tickets.get(TCK_RUNNING)["status_reason"], "CANCEL_USER")
 
     def test_segredo_mascarado(self):
-        texto, _ = self._read_all("admin", TCK_RUNNING)
-        self.assertIn("conectando com documento_cliente=****", texto)
-        self.assertNotIn(SEED_SECRET, texto)
+        text, _ = self._read_all("admin", TCK_RUNNING)
+        self.assertIn("conectando com documento_cliente=****", text)
+        self.assertNotIn(SEED_SECRET, text)
         self.assertNotIn(SEED_SECRET, self._full_log(TCK_RUNNING))
 
     def test_html_preservado_como_texto(self):
         # O servidor entrega o texto cru; o escape e responsabilidade do x-text no cliente.
-        texto, _ = self._read_all("admin", TCK_RUNNING)
-        self.assertIn("<script>alert(1)</script>", texto)
+        text, _ = self._read_all("admin", TCK_RUNNING)
+        self.assertIn("<script>alert(1)</script>", text)
 
 
 class TestLogChunks(_BaseLog):
 
     def test_download_integro_do_log_de_2mb(self):
-        integral = self._full_log(TCK_GRANDE)
-        tid, blocos = self.svc.log_chunks(self.ctx["admin"], str(TCK_GRANDE))
+        full = self._full_log(TCK_GRANDE)
+        tid, chunks = self.svc.log_chunks(self.ctx["admin"], str(TCK_GRANDE))
         self.assertEqual(tid, TCK_GRANDE)
-        lista = list(blocos)
-        self.assertGreater(len(lista), 1)
-        self.assertTrue(all(len(b) <= LOG_MAX_CHARS for b in lista))
-        bruto = b"".join(b.encode("utf-8") for b in lista)
-        self.assertEqual(bruto.decode("utf-8"), integral)
+        items = list(chunks)
+        self.assertGreater(len(items), 1)
+        self.assertTrue(all(len(b) <= LOG_MAX_CHARS for b in items))
+        raw = b"".join(b.encode("utf-8") for b in items)
+        self.assertEqual(raw.decode("utf-8"), full)
 
     def test_escopo_validado_antes_do_streaming(self):
-        with mock.patch.object(self.tickets, "log_read") as log_ler:
+        with mock.patch.object(self.tickets, "log_read") as log_read:
             with self.assertRaises(RepoNotFound):
                 self.svc.log_chunks(self.ctx["op.hml"], str(TCK_RUNNING))
-            log_ler.assert_not_called()
+            log_read.assert_not_called()
 
     def test_falha_no_meio_encerra_com_marcador(self):
         original = self.tickets.log_read
-        chamadas = []
+        calls = []
 
         def falhar_na_segunda(*args, **kwargs):
-            chamadas.append(args)
-            if len(chamadas) == 2:
+            calls.append(args)
+            if len(calls) == 2:
                 raise RepoUnavailable("indisponivel")
             return original(*args, **kwargs)
 
-        _tid, blocos = self.svc.log_chunks(self.ctx["admin"], str(TCK_GRANDE))
+        _tid, chunks = self.svc.log_chunks(self.ctx["admin"], str(TCK_GRANDE))
         with mock.patch.object(self.tickets, "log_read", side_effect=falhar_na_segunda):
-            lista = list(blocos)
-        self.assertEqual(len(lista), 2)
-        self.assertEqual(lista[-1], DOWNLOAD_INTERRUPTED_MARKER)
+            items = list(chunks)
+        self.assertEqual(len(items), 2)
+        self.assertEqual(items[-1], DOWNLOAD_INTERRUPTED_MARKER)
 
 
 if __name__ == "__main__":

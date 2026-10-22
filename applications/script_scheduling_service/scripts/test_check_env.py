@@ -35,44 +35,44 @@ def _bundle(*parts):
 class TestCheckAlpineCsp(unittest.TestCase):
 
     def assertRejects(self, source, snippet):
-        ok, detalhe = check_env.check_alpine_csp(source)
-        self.assertFalse(ok, detalhe)
-        self.assertIn(snippet, detalhe)
+        ok, detail = check_env.check_alpine_csp(source)
+        self.assertFalse(ok, detail)
+        self.assertIn(snippet, detail)
 
     def test_build_padrao_reprovado(self):
         self.assertRejects(_bundle(_PATTERN, _CSP, "B.setEvaluator(gt);"), "construtor dinâmico em 'kn'")
 
     def test_build_csp_com_avaliador_padrao_morto_aprovado(self):
-        ok, detalhe = check_env.check_alpine_csp(_bundle(_PATTERN, _CSP, "B.setEvaluator(Jr);"))
-        self.assertTrue(ok, detalhe)
-        self.assertIn("código morto", detalhe)
+        ok, detail = check_env.check_alpine_csp(_bundle(_PATTERN, _CSP, "B.setEvaluator(Jr);"))
+        self.assertTrue(ok, detail)
+        self.assertIn("código morto", detail)
 
     def test_build_csp_puro_aprovado(self):
-        ok, detalhe = check_env.check_alpine_csp(_bundle(_CSP, "B.setEvaluator(Jr);"))
-        self.assertTrue(ok, detalhe)
+        ok, detail = check_env.check_alpine_csp(_bundle(_CSP, "B.setEvaluator(Jr);"))
+        self.assertTrue(ok, detail)
 
     def test_construtor_alcancado_indiretamente_ou_por_variante(self):
-        variantes = (
+        variants = (
             "Object.getPrototypeOf(async()=>{}).constructor",
             "(async function(){}).constructor",
             "(async()=>{}).constructor",
             "Object.getPrototypeOf(function*(){}).constructor",
         )
-        for expr in variantes:
+        for expr in variants:
             with self.subTest(expr=expr):
-                fonte = _bundle(_CSP.replace("let t={};", "let t={};let q=%s;" % expr), "B.setEvaluator(Jr);")
-                self.assertRejects(fonte, "construtor dinâmico em 'fi'")
+                source = _bundle(_CSP.replace("let t={};", "let t={};let q=%s;" % expr), "B.setEvaluator(Jr);")
+                self.assertRejects(source, "construtor dinâmico em 'fi'")
 
     def test_construtor_passado_como_valor_e_alcancado(self):
-        fonte = _bundle(_PATTERN, "function Jr(e,t){return[t].map(kn)}", "B.setEvaluator(Jr);")
-        self.assertRejects(fonte, "construtor dinâmico em 'kn'")
+        source = _bundle(_PATTERN, "function Jr(e,t){return[t].map(kn)}", "B.setEvaluator(Jr);")
+        self.assertRejects(source, "construtor dinâmico em 'kn'")
 
     def test_eval_direto_reprovado_em_qualquer_ponto(self):
-        for codigo, rotulo in (("let f=new Function('a','return a');", "new Function"),
+        for code, label in (("let f=new Function('a','return a');", "new Function"),
                                ("let f=Function('return 1');", "Function()"),
                                ("let f=" + "ev" + "al('1');", "Uso de eval ")):
-            with self.subTest(rotulo=rotulo):
-                self.assertRejects(_bundle(_CSP, "function zz(){%s}" % codigo, "B.setEvaluator(Jr);"), rotulo)
+            with self.subTest(rotulo=label):
+                self.assertRejects(_bundle(_CSP, "function zz(){%s}" % code, "B.setEvaluator(Jr);"), label)
 
     def test_set_evaluator_ausente_ou_duplicado(self):
         self.assertRejects(_bundle(_CSP), "encontrados 0")
@@ -85,19 +85,19 @@ class TestCheckAlpineCsp(unittest.TestCase):
         self.assertRejects(_bundle("function Jr(e){return{a:(e}", "B.setEvaluator(Jr);"), "não analisável")
 
     def test_delimitadores_em_strings_regex_e_comentarios(self):
-        fonte = _bundle(
+        source = _bundle(
             'function Jr(e,t){let a="}{)(",b=\'{\',c=/[}{]\\//g,d=`${t.x?`}`:"{"}}`;/* } */return a+b+c+d}',
             "// }\n",
             _PATTERN,
             "B.setEvaluator(Jr);",
         )
-        ok, detalhe = check_env.check_alpine_csp(fonte)
-        self.assertTrue(ok, detalhe)
+        ok, detail = check_env.check_alpine_csp(source)
+        self.assertTrue(ok, detail)
 
     def test_asset_instalado_e_build_csp(self):
         with open(_ALPINE, "r", encoding="utf-8") as f:
-            ok, detalhe = check_env.check_alpine_csp(f.read())
-        self.assertTrue(ok, detalhe)
+            ok, detail = check_env.check_alpine_csp(f.read())
+        self.assertTrue(ok, detail)
 
 
 if __name__ == "__main__":

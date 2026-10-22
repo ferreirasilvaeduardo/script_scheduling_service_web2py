@@ -65,29 +65,29 @@ class _Base(unittest.TestCase):
 class TestAdminOnlyByAdmin(_Base):
 
     def test_gestor_nao_cria_usuario_admin(self):
-        dados = {"login": "novo.admin", "name": "Novo", "profile_id": str(P_ADMIN),
+        date = {"login": "novo.admin", "name": "Novo", "profile_id": str(P_ADMIN),
                  "senha": NEW_PASSWORD, "confirmacao": NEW_PASSWORD}
-        uid, erros = self.svc_usr.save(self.ctx["gestor"], IP, None, dados)
-        self.assertEqual((uid, erros), (None, {"profile_id": usr_mod.MSG_ADMIN_ONLY}))
+        uid, errors = self.svc_usr.save(self.ctx["gestor"], IP, None, date)
+        self.assertEqual((uid, errors), (None, {"profile_id": usr_mod.MSG_ADMIN_ONLY}))
         self.assertIsNone(self.users.get_by_login("novo.admin"))
-        uid, erros = self.svc_usr.save(self.ctx["gestor"], IP, None, dict(dados, profile_id=str(P_CONSULTA)))
-        self.assertEqual(erros, {})
+        uid, errors = self.svc_usr.save(self.ctx["gestor"], IP, None, dict(date, profile_id=str(P_CONSULTA)))
+        self.assertEqual(errors, {})
 
     def test_gestor_nao_se_promove_nem_altera_admin(self):
         form = self.svc_usr.form(self.ctx["gestor"], str(U_OPPROD))
-        _id, erros = self.svc_usr.save(self.ctx["gestor"], IP, str(U_OPPROD),
+        _id, errors = self.svc_usr.save(self.ctx["gestor"], IP, str(U_OPPROD),
                                          {"name": form["name"], "profile_id": str(P_ADMIN), "version": form["version"]})
-        self.assertEqual(erros, {GENERAL_FIELD: usr_mod.MSG_ADMIN_ONLY})
+        self.assertEqual(errors, {GENERAL_FIELD: usr_mod.MSG_ADMIN_ONLY})
         self.assertEqual(self.users.get_by_id(U_OPPROD)["profile_id"], P_OPPROD)
         form = self.svc_usr.form(self.ctx["gestor"], str(U_ADMIN))
-        _id, erros = self.svc_usr.save(self.ctx["gestor"], IP, str(U_ADMIN),
+        _id, errors = self.svc_usr.save(self.ctx["gestor"], IP, str(U_ADMIN),
                                          {"name": "Outro", "profile_id": str(P_ADMIN), "version": form["version"]})
-        self.assertEqual(erros, {GENERAL_FIELD: usr_mod.MSG_ADMIN_ONLY})
-        for acao in (lambda: self.svc_usr.reset_password(self.ctx["gestor"], IP, str(U_ADMIN), NEW_PASSWORD, NEW_PASSWORD),
+        self.assertEqual(errors, {GENERAL_FIELD: usr_mod.MSG_ADMIN_ONLY})
+        for action in (lambda: self.svc_usr.reset_password(self.ctx["gestor"], IP, str(U_ADMIN), NEW_PASSWORD, NEW_PASSWORD),
                      lambda: self.svc_usr.unlock(self.ctx["gestor"], IP, str(U_ADMIN)),
                      lambda: self.svc_usr.toggle_active(self.ctx["gestor"], IP, str(U_ADMIN), form["version"])):
             with self.assertRaises(OperationDenied) as cm:
-                acao()
+                action()
             self.assertEqual(cm.exception.message, usr_mod.MSG_ADMIN_ONLY)
         admin = self.users.get_by_id(U_ADMIN)
         self.assertEqual((admin["active"], admin["session_epoch"]), ("Y", 0))
@@ -95,29 +95,29 @@ class TestAdminOnlyByAdmin(_Base):
     def test_gestor_altera_usuario_comum_e_admin_altera_admin(self):
         self.assertEqual(self.svc_usr.reset_password(self.ctx["gestor"], IP, str(U_OPHML), NEW_PASSWORD, NEW_PASSWORD), {})
         form = self.svc_usr.form(self.ctx["admin"], str(U_OPHML))
-        _id, erros = self.svc_usr.save(self.ctx["admin"], IP, str(U_OPHML),
+        _id, errors = self.svc_usr.save(self.ctx["admin"], IP, str(U_OPHML),
                                          {"name": form["name"], "profile_id": str(P_ADMIN), "version": form["version"]})
-        self.assertEqual(erros, {})
+        self.assertEqual(errors, {})
 
     def test_gestor_nao_marca_admin_nem_mexe_no_proprio_perfil(self):
-        _id, erros = self.svc_per.save(self.ctx["gestor"], IP, None, {"name": "SUPORTE", "is_admin": "Y"})
-        self.assertEqual(erros, {GENERAL_FIELD: perfis_mod.MSG_ADMIN_ONLY})
+        _id, errors = self.svc_per.save(self.ctx["gestor"], IP, None, {"name": "SUPORTE", "is_admin": "Y"})
+        self.assertEqual(errors, {GENERAL_FIELD: perfis_mod.MSG_ADMIN_ONLY})
         form = self.svc_per.form(self.ctx["gestor"], str(P_OPPROD))
-        _id, erros = self.svc_per.save(self.ctx["gestor"], IP, str(P_OPPROD),
+        _id, errors = self.svc_per.save(self.ctx["gestor"], IP, str(P_OPPROD),
                                          {"name": form["name"], "description": "nova", "version": form["version"]})
-        self.assertEqual(erros, {GENERAL_FIELD: perfis_mod.MSG_ADMIN_ONLY})
-        matriz = self.rbac_repo.matrix_get(P_OPPROD)
-        todas = [f["id"] for f in self.rbac_repo.features_list()]
-        diff, erros = self.svc_per.save_matrix(self.ctx["gestor"], IP, str(P_OPPROD), [str(i) for i in todas],
-                                                 [str(i) for i in matriz["ambs"]], [str(i) for i in matriz["scrs"]],
+        self.assertEqual(errors, {GENERAL_FIELD: perfis_mod.MSG_ADMIN_ONLY})
+        matrix = self.rbac_repo.matrix_get(P_OPPROD)
+        all_value = [f["id"] for f in self.rbac_repo.features_list()]
+        diff, errors = self.svc_per.save_matrix(self.ctx["gestor"], IP, str(P_OPPROD), [str(i) for i in all_value],
+                                                 [str(i) for i in matrix["ambs"]], [str(i) for i in matrix["scrs"]],
                                                  str(self.rbac_repo.profiles_get(P_OPPROD)["perm_version"]))
-        self.assertEqual((diff, erros), (None, {GENERAL_FIELD: perfis_mod.MSG_ADMIN_ONLY}))
-        self.assertEqual(self.rbac_repo.matrix_get(P_OPPROD), matriz)
+        self.assertEqual((diff, errors), (None, {GENERAL_FIELD: perfis_mod.MSG_ADMIN_ONLY}))
+        self.assertEqual(self.rbac_repo.matrix_get(P_OPPROD), matrix)
         # Perfil comum de outra pessoa continua editavel pelo gestor.
         form = self.svc_per.form(self.ctx["gestor"], str(P_CONSULTA))
-        _id, erros = self.svc_per.save(self.ctx["gestor"], IP, str(P_CONSULTA),
+        _id, errors = self.svc_per.save(self.ctx["gestor"], IP, str(P_CONSULTA),
                                          {"name": form["name"], "description": "leitura", "version": form["version"]})
-        self.assertEqual(erros, {})
+        self.assertEqual(errors, {})
 
 
 class TestRevocableSession(_Base):
@@ -126,13 +126,13 @@ class TestRevocableSession(_Base):
         return self.users.get_by_id(uid)["session_epoch"]
 
     def test_eventos_que_revogam(self):
-        sessao = _session(U_OPHML, "op.hml", 3)
-        self.assertIsNotNone(self.auth.revalidate(sessao))
+        session = _session(U_OPHML, "op.hml", 3)
+        self.assertIsNotNone(self.auth.revalidate(session))
         self.svc_usr.reset_password(self.ctx["admin"], IP, str(U_OPHML), NEW_PASSWORD, NEW_PASSWORD)
         self.assertEqual(self._epoch(U_OPHML), 1)
-        self.assertIsNone(self.auth.revalidate(sessao))
-        sessao["sessao_epoch"] = 1
-        self.assertIsNotNone(self.auth.revalidate(sessao))
+        self.assertIsNone(self.auth.revalidate(session))
+        session["sessao_epoch"] = 1
+        self.assertIsNotNone(self.auth.revalidate(session))
         form = self.svc_usr.form(self.ctx["admin"], str(U_OPHML))
         self.svc_usr.save(self.ctx["admin"], IP, str(U_OPHML),
                             {"name": "Outro nome", "profile_id": str(3), "version": form["version"]})
@@ -143,10 +143,10 @@ class TestRevocableSession(_Base):
         self.assertEqual(self._epoch(U_OPHML), 2)
 
     def test_logout_derruba_todas_as_sessoes_e_audita(self):
-        outra = _session(U_OPPROD, "op.prod", P_OPPROD)
+        other = _session(U_OPPROD, "op.prod", P_OPPROD)
         self.auth.logout(self.ctx["op.prod"], IP)
         self.assertEqual(self._epoch(U_OPPROD), 1)
-        self.assertIsNone(self.auth.revalidate(outra))
+        self.assertIsNone(self.auth.revalidate(other))
         logout = [a for a in self.audit.list(filters={"action": "LOGOUT"}, page=1, size=10)["itens"]
                   if a["actor"] == "op.prod"]
         self.assertEqual((logout[0]["entity"], logout[0]["entity_id"], logout[0]["source_ip"]),
@@ -157,22 +157,22 @@ class TestRevocableSession(_Base):
     def test_troca_da_propria_senha_mantem_a_sessao_nova(self):
         self.users.set_password(U_OPPROD, security.hash_password(DEV_PASSWORD), NOW, actor="teste")
         epoch = self._epoch(U_OPPROD)
-        resultado, erros = self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, NEW_PASSWORD, NEW_PASSWORD)
-        self.assertEqual((resultado, erros), ("OK", {}))
+        result, errors = self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, NEW_PASSWORD, NEW_PASSWORD)
+        self.assertEqual((result, errors), ("OK", {}))
         self.assertEqual(self.auth.session_epoch(U_OPPROD), epoch + 1)
         self.assertIsNotNone(self.auth.revalidate(dict(_session(U_OPPROD, "op.prod", P_OPPROD), sessao_epoch=epoch + 1)))
         self.assertIsNone(self.auth.revalidate(dict(_session(U_OPPROD, "op.prod", P_OPPROD), sessao_epoch=epoch)))
 
     def test_sessao_sem_epoch_e_encerrada(self):
-        sessao = _session(U_OPPROD, "op.prod", P_OPPROD)
-        del sessao["sessao_epoch"]
-        self.assertIsNone(self.auth.revalidate(sessao))
+        session = _session(U_OPPROD, "op.prod", P_OPPROD)
+        del session["sessao_epoch"]
+        self.assertIsNone(self.auth.revalidate(session))
 
     def test_vida_maxima(self):
-        agora = time.time()
-        self.assertFalse(security.is_session_expired(agora - 11 * 3600, agora, 12 * 3600))
-        self.assertTrue(security.is_session_expired(agora - 13 * 3600, agora, 12 * 3600))
-        self.assertTrue(security.is_session_expired(None, agora, 12 * 3600))
+        now = time.time()
+        self.assertFalse(security.is_session_expired(now - 11 * 3600, now, 12 * 3600))
+        self.assertTrue(security.is_session_expired(now - 13 * 3600, now, 12 * 3600))
+        self.assertTrue(security.is_session_expired(None, now, 12 * 3600))
 
 
 class TestWideQuantifierRegex(unittest.TestCase):
@@ -195,12 +195,12 @@ class TestWideQuantifierRegex(unittest.TestCase):
         params_compiler.validate_registry_regex(r"\w{0,10}" * 6 + "x")
 
     def test_pior_caso_aceito_e_rapido(self):
-        for padrao in (r"\w*\w*" + r"\w{0,10}" * 2 + "@", r"\w{0,10}" * 6 + "x", r"\w{0,500}\w{0,500}x"):
-            params_compiler.validate_registry_regex(padrao)
-            inicio = time.time()
-            for valor in ("1" * params_compiler.MAX_LENGTH, "a" * (params_compiler.MAX_LENGTH - 1) + "!"):
-                re.fullmatch(padrao, valor)
-            self.assertLess(time.time() - inicio, 1.0, padrao)
+        for default in (r"\w*\w*" + r"\w{0,10}" * 2 + "@", r"\w{0,10}" * 6 + "x", r"\w{0,500}\w{0,500}x"):
+            params_compiler.validate_registry_regex(default)
+            start = time.time()
+            for value in ("1" * params_compiler.MAX_LENGTH, "a" * (params_compiler.MAX_LENGTH - 1) + "!"):
+                re.fullmatch(default, value)
+            self.assertLess(time.time() - start, 1.0, default)
 
 
 if __name__ == "__main__":

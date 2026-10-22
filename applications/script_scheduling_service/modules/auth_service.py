@@ -56,52 +56,52 @@ class AuthService(object):
 
     def authenticate(self, login, password_value, ip):
         """Autentica login/senha. Retorna (ctx, None) no sucesso ou (None, mensagem_generica)."""
-        agora = self._clock()
+        now = self._clock()
         login_norm = login.strip().lower() if isinstance(login, str) else ""
-        senha_ok_tipo = isinstance(password_value, str) and 0 < len(password_value) <= PASSWORD_MAX
-        senha_txt = password_value if senha_ok_tipo else ""
-        login_valido = bool(_RE_LOGIN.fullmatch(login_norm))
+        password_ok_kind = isinstance(password_value, str) and 0 < len(password_value) <= PASSWORD_MAX
+        password_txt = password_value if password_ok_kind else ""
+        login_valid = bool(_RE_LOGIN.fullmatch(login_norm))
 
-        usuario = self._users.get_by_login(login_norm) if login_valido else None
-        if usuario is None:
-            security.verify_password(senha_txt, security.dummy_hash())
-            return self._unknown_login(login_norm if login_valido else "?", ip, agora)
+        user = self._users.get_by_login(login_norm) if login_valid else None
+        if user is None:
+            security.verify_password(password_txt, security.dummy_hash())
+            return self._unknown_login(login_norm if login_valid else "?", ip, now)
 
-        armazenado = usuario.get("password_hash")
-        if security.is_known_hash(armazenado):
-            senha_confere = senha_ok_tipo and security.verify_password(senha_txt, armazenado)
+        stored = user.get("password_hash")
+        if security.is_known_hash(stored):
+            password_matches = password_ok_kind and security.verify_password(password_txt, stored)
         else:
-            security.verify_password(senha_txt, security.dummy_hash())
-            senha_confere = False
+            security.verify_password(password_txt, security.dummy_hash())
+            password_matches = False
 
-        if self._is_locked(usuario, agora):
-            self._record_failure(usuario, ip, "conta bloqueada")
+        if self._is_locked(user, now):
+            self._record_failure(user, ip, "conta bloqueada")
             return None, self.lockout_message
-        usuario = self._reset_if_expired(usuario)
+        user = self._reset_if_expired(user)
 
-        if not senha_confere:
-            return self._wrong_password(usuario, ip)
+        if not password_matches:
+            return self._wrong_password(user, ip)
 
-        estado = self._users.get_session_state(usuario["id"])
-        if estado.get("usuario_ativo") != "Y" or estado.get("perfil_ativo") != "Y":
-            self._record_failure(usuario, ip, "usuario ou perfil inativo")
+        state = self._users.get_session_state(user["id"])
+        if state.get("usuario_ativo") != "Y" or state.get("perfil_ativo") != "Y":
+            self._record_failure(user, ip, "usuario ou perfil inativo")
             return None, MSG_GENERIC
 
-        novo_hash = security.hash_password(senha_txt) if security.needs_rehash(armazenado) else None
+        new_hash = security.hash_password(password_txt) if security.needs_rehash(stored) else None
         # Sucesso, rehash e auditoria numa unica operacao do repositorio (README §4.2, §4.4).
         self._users.register_login_success(
-            usuario["login"], new_hash=novo_hash,
-            audit=_aud(usuario["login"], ip, "LOGIN_OK", "Login bem-sucedido"))
-        if novo_hash is not None:
+            user["login"], new_hash=new_hash,
+            audit=_aud(user["login"], ip, "LOGIN_OK", "Login bem-sucedido"))
+        if new_hash is not None:
             self._log.info("hash de senha atualizado para as iteracoes vigentes (login=%s)",
-                           usuario["login"], extra={"action": "LOGIN"})
-        self._log.info("login ok (login=%s ip=%s)", usuario["login"], ip, extra={"action": "LOGIN"})
-        return self._build_ctx(estado), None
+                           user["login"], extra={"action": "LOGIN"})
+        self._log.info("login ok (login=%s ip=%s)", user["login"], ip, extra={"action": "LOGIN"})
+        return self._build_ctx(state), None
 
     @staticmethod
     def _is_locked(user, now):
-        bloqueado_ate = user.get("locked_until")
-        return bloqueado_ate is not None and bloqueado_ate > now
+        locked_until = user.get("locked_until")
+        return locked_until is not None and locked_until > now
 
     def _reset_if_expired(self, user):
         # Bloqueio expirado (ou contador no limite): novo ciclo de tentativas, no login e na troca de senha.
@@ -123,29 +123,29 @@ class AuthService(object):
             audit=_aud(user["login"], ip, "LOGIN_FAILED", "Falha de login: senha incorreta"),
             lock_audit=_aud(user["login"], ip, "LOGIN_LOCKED",
                                     "Conta bloqueada por %d falhas consecutivas" % self._max))
-        tentativas = int(reg.get("failed_attempts") or 0)
-        bloquear = bool(reg.get("bloqueou"))
-        motivo = "senha incorreta (tentativa %d de %d)" % (tentativas, self._max)
-        self._log.warning("login falhou (login=%s ip=%s reason=%s)", user["login"], ip, motivo,
+        attempts = int(reg.get("failed_attempts") or 0)
+        lock = bool(reg.get("bloqueou"))
+        reason = "senha incorreta (tentativa %d de %d)" % (attempts, self._max)
+        self._log.warning("login falhou (login=%s ip=%s reason=%s)", user["login"], ip, reason,
                           extra={"action": "LOGIN"})
-        if not bloquear:
+        if not lock:
             return None, MSG_GENERIC
         self._log.warning("conta bloqueada (login=%s ip=%s)", user["login"], ip, extra={"action": "LOGIN"})
         return None, self.lockout_message
 
     def _unknown_login(self, login, ip, now):
         with self._lock:
-            falhas, bloqueado_ate = self._simulated.pop(login, (0, None))
-            if bloqueado_ate is not None and bloqueado_ate > now:
-                self._simulated[login] = (falhas, bloqueado_ate)
-                resultado = "bloqueado"
+            failures, locked_until = self._simulated.pop(login, (0, None))
+            if locked_until is not None and locked_until > now:
+                self._simulated[login] = (failures, locked_until)
+                result = "bloqueado"
             else:
-                if bloqueado_ate is not None:
-                    falhas = 0
-                falhas += 1
-                bloqueado_ate = now + self._lockout if falhas >= self._max else None
-                self._simulated[login] = (falhas, bloqueado_ate)
-                resultado = "bloqueou" if bloqueado_ate is not None else "falha"
+                if locked_until is not None:
+                    failures = 0
+                failures += 1
+                locked_until = now + self._lockout if failures >= self._max else None
+                self._simulated[login] = (failures, locked_until)
+                result = "bloqueou" if locked_until is not None else "falha"
             while len(self._simulated) > SIMULATED_MAX:
                 self._simulated.popitem(last=False)
 
@@ -153,9 +153,9 @@ class AuthService(object):
                                   "Falha de login: usuario inexistente")
         self._log.warning("login falhou (login=%s ip=%s reason=usuario inexistente)", login, ip,
                           extra={"action": "LOGIN"})
-        if resultado == "falha":
+        if result == "falha":
             return None, MSG_GENERIC
-        if resultado == "bloqueou":
+        if result == "bloqueou":
             self._audit.register(login, ip, "LOGIN_LOCKED", ENTITY, None,
                                       "Bloqueio simulado de login inexistente")
         return None, self.lockout_message
@@ -167,72 +167,72 @@ class AuthService(object):
 
         Encerramento por usuario ou perfil inativo e auditado como LOGOUT (README §4.2, D13).
         """
-        usuario_id = sessao.get("usuario_id")
-        if not isinstance(usuario_id, int) or isinstance(usuario_id, bool):
+        user_id = sessao.get("usuario_id")
+        if not isinstance(user_id, int) or isinstance(user_id, bool):
             return None
         try:
-            estado = self._users.get_session_state(usuario_id)
+            state = self._users.get_session_state(user_id)
         except RepoNotFound:
-            self._log.warning("sessao encerrada: usuario inexistente (user_id=%s)", usuario_id,
+            self._log.warning("sessao encerrada: usuario inexistente (user_id=%s)", user_id,
                               extra={"action": "SESSAO"})
             return None
-        if estado.get("login") != sessao.get("login"):
-            self._log.warning("sessao encerrada: login divergente (user_id=%s)", usuario_id,
+        if state.get("login") != sessao.get("login"):
+            self._log.warning("sessao encerrada: login divergente (user_id=%s)", user_id,
                               extra={"action": "SESSAO"})
             return None
-        if estado.get("usuario_ativo") != "Y" or estado.get("perfil_ativo") != "Y":
-            motivo = u"usuário inativo" if estado.get("usuario_ativo") != "Y" else u"perfil inativo"
-            self._audit.register(estado.get("login"), ip, "LOGOUT", ENTITY, usuario_id,
-                                      u"sessão encerrada pela revalidação: %s" % motivo)
-            self._log.info("sessao encerrada: usuario ou perfil inativo (login=%s)", estado.get("login"),
+        if state.get("usuario_ativo") != "Y" or state.get("perfil_ativo") != "Y":
+            reason = u"usuário inativo" if state.get("usuario_ativo") != "Y" else u"perfil inativo"
+            self._audit.register(state.get("login"), ip, "LOGOUT", ENTITY, user_id,
+                                      u"sessão encerrada pela revalidação: %s" % reason)
+            self._log.info("sessao encerrada: usuario ou perfil inativo (login=%s)", state.get("login"),
                            extra={"action": "SESSAO"})
             return None
-        if estado.get("session_epoch", 0) != sessao.get("sessao_epoch"):
+        if state.get("session_epoch", 0) != sessao.get("sessao_epoch"):
             # Sessao revogada (CR-008, E2): logout em outro lugar, senha trocada ou redefinida, perfil
             # ou situacao do usuario alterados. Ja auditado na origem; aqui so o log.
-            self._log.info("sessao encerrada: sessao revogada (login=%s)", estado.get("login"),
+            self._log.info("sessao encerrada: sessao revogada (login=%s)", state.get("login"),
                            extra={"action": "SESSAO"})
             return None
-        if estado.get("perm_version") != sessao.get("perm_versao") \
-                or estado.get("profile_id") != sessao.get("perfil_id"):
+        if state.get("perm_version") != sessao.get("perm_versao") \
+                or state.get("profile_id") != sessao.get("perfil_id"):
             self._log.info("permissoes recarregadas (login=%s profile_id=%s perm_version=%s)",
-                           estado.get("login"), estado.get("profile_id"), estado.get("perm_version"),
+                           state.get("login"), state.get("profile_id"), state.get("perm_version"),
                            extra={"action": "SESSAO"})
-        return self._build_ctx(estado)
+        return self._build_ctx(state)
 
     def _build_ctx(self, state):
-        funcs, ambs, scrs = self._matrix(state["profile_id"], state["perm_version"])
-        dados = dict(state)
-        dados.update(features=funcs, environments=ambs, scripts=scrs)
-        return rbac.user_context(dados)
+        features, envs, scrs = self._matrix(state["profile_id"], state["perm_version"])
+        date = dict(state)
+        date.update(features=features, environments=envs, scripts=scrs)
+        return rbac.user_context(date)
 
     def _matrix(self, profile_id, perm_version):
         # perm_versao muda em toda alteracao de matriz/perfil (README §4.3.A): a chave invalida o cache.
-        chave = (profile_id, perm_version)
+        key = (profile_id, perm_version)
         with self._lock:
-            if chave in self._matrix_cache:
-                self._matrix_cache.move_to_end(chave)
-                return self._matrix_cache[chave]
+            if key in self._matrix_cache:
+                self._matrix_cache.move_to_end(key)
+                return self._matrix_cache[key]
 
-        matriz = self._rbac.matrix_get(profile_id)
-        codigos = dict(
+        matrix = self._rbac.matrix_get(profile_id)
+        codes = dict(
             (f["id"], f["code"]) for f in self._rbac.features_list() if f.get("active") == "Y"
         )
-        funcs = frozenset(codigos[fid] for fid in matriz.get("funcs", ()) if fid in codigos)
-        nomes = []
-        for aid in matriz.get("ambs", ()):
+        features = frozenset(codes[fid] for fid in matrix.get("funcs", ()) if fid in codes)
+        names = []
+        for aid in matrix.get("ambs", ()):
             try:
-                nomes.append(self._catalog.environments_get(aid)["name"])
+                names.append(self._catalog.environments_get(aid)["name"])
             except RepoNotFound:
                 self._log.warning("ambiente da matriz inexistente (profile_id=%s environment_id=%s)",
                                   profile_id, aid, extra={"action": "SESSAO"})
-        valor = (funcs, frozenset(nomes), frozenset(matriz.get("scrs", ())))
+        value = (features, frozenset(names), frozenset(matrix.get("scrs", ())))
 
         with self._lock:
-            self._matrix_cache[chave] = valor
+            self._matrix_cache[key] = value
             while len(self._matrix_cache) > MATRIX_CACHE_MAX:
                 self._matrix_cache.popitem(last=False)
-        return valor
+        return value
 
     # ------------------------------------------------------- troca de senha
 
@@ -242,33 +242,33 @@ class AuthService(object):
         resultado: 'OK' | 'ERRO' | 'BLOQUEADO'. Senha atual errada conta como falha de login
         (mesmo limite e bloqueio do §4.2); ao bloquear, o chamador encerra a sessao.
         """
-        agora = self._clock()
-        usuario = self._users.get_by_id(ctx["user_id"])
-        if self._is_locked(usuario, agora):
-            self._record_failure(usuario, ip, "troca de senha com conta bloqueada")
+        now = self._clock()
+        user = self._users.get_by_id(ctx["user_id"])
+        if self._is_locked(user, now):
+            self._record_failure(user, ip, "troca de senha com conta bloqueada")
             return "BLOQUEADO", {"senha_atual": self.lockout_message}
-        usuario = self._reset_if_expired(usuario)
-        armazenado = usuario.get("password_hash")
-        atual_ok = (isinstance(current_value, str) and 0 < len(current_value) <= PASSWORD_MAX
-                    and security.is_known_hash(armazenado) and security.verify_password(current_value, armazenado))
-        if not atual_ok:
-            _ctx, mensagem = self._wrong_password(usuario, ip)
-            if mensagem == self.lockout_message:
+        user = self._reset_if_expired(user)
+        stored = user.get("password_hash")
+        current_ok = (isinstance(current_value, str) and 0 < len(current_value) <= PASSWORD_MAX
+                    and security.is_known_hash(stored) and security.verify_password(current_value, stored))
+        if not current_ok:
+            _ctx, message = self._wrong_password(user, ip)
+            if message == self.lockout_message:
                 return "BLOQUEADO", {"senha_atual": self.lockout_message}
             return "ERRO", {"senha_atual": MSG_CURRENT_PASSWORD}
-        erros = {}
-        problemas = security.validate_password_policy(new) if isinstance(new, str) and len(new) <= PASSWORD_MAX \
+        errors = {}
+        problems = security.validate_password_policy(new) if isinstance(new, str) and len(new) <= PASSWORD_MAX \
             else [u"Informe a nova senha."]
-        if problemas:
-            erros["nova"] = problemas[0]
+        if problems:
+            errors["nova"] = problems[0]
         elif confirmation != new:
-            erros["confirmacao"] = MSG_CONFIRMATION
-        if erros:
-            return "ERRO", erros
-        self._users.set_password(usuario["id"], security.hash_password(new), agora,
-                                     audit={"actor": usuario["login"], "ip": ip, "action": "UPDATE",
+            errors["confirmacao"] = MSG_CONFIRMATION
+        if errors:
+            return "ERRO", errors
+        self._users.set_password(user["id"], security.hash_password(new), now,
+                                     audit={"actor": user["login"], "ip": ip, "action": "UPDATE",
                                                 "detail": u"senha alterada pelo próprio usuário"})
-        self._log.info("senha alterada pelo proprio usuario (login=%s ip=%s)", usuario["login"], ip,
+        self._log.info("senha alterada pelo proprio usuario (login=%s ip=%s)", user["login"], ip,
                        extra={"action": "UPDATE"})
         return "OK", {}
 
@@ -296,13 +296,13 @@ def _service():
         if _default is None:
             from gluon import current
             import sss_logging
-            fabrica = current.repo_factory
+            factory = current.repo_factory
             cfg = current.sss_cfg
             _default = AuthService(
-                users=fabrica.get("users"),
-                rbac_repo=fabrica.get("rbac"),
-                catalog=fabrica.get("catalog"),
-                audit=fabrica.get("audit"),
+                users=factory.get("users"),
+                rbac_repo=factory.get("rbac"),
+                catalog=factory.get("catalog"),
+                audit=factory.get("audit"),
                 max_attempts=cfg.web.login_max_attempts,
                 lockout_s=cfg.web.login_lockout_s,
                 log=sss_logging.get_logger("sss_web", cfg),

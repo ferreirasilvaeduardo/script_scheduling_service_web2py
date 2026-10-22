@@ -42,14 +42,14 @@ _COLS_USER = (
 
 def _failed_login_audit(audit, attempts, max_attempts, locked, lock_audit):
     """Itens de auditoria da falha de login: a contagem vem do valor lido sob a trava (mesma regra do FAKE)."""
-    itens = [] if not audit else ([audit] if isinstance(audit, dict) else list(audit))
+    items = [] if not audit else ([audit] if isinstance(audit, dict) else list(audit))
     if max_attempts is not None:
-        itens = [dict(item, detail=u"%s (tentativa %d de %d)" % (item.get("detail") or u"", attempts,
+        items = [dict(item, detail=u"%s (tentativa %d de %d)" % (item.get("detail") or u"", attempts,
                                                                     int(max_attempts)))
-                 if isinstance(item, dict) and item.get("action") == "LOGIN_FAILED" else item for item in itens]
+                 if isinstance(item, dict) and item.get("action") == "LOGIN_FAILED" else item for item in items]
     if locked and lock_audit:
-        itens.append(lock_audit)
-    return itens
+        items.append(lock_audit)
+    return items
 
 class RepoUsersOracle(BaseRepoOracle, RepoUsers):
     """Repositorio de usuarios com SQL Oracle 11gR2."""
@@ -149,37 +149,37 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
     def list(self, filters=None, page=1, size=20, conn=None):
         """Lista usuarios paginados com desempate deterministico por id."""
         filters = filters or {}
-        clausulas = []
+        clauses = []
         binds = {}
-        binds_data = {}
+        binds_date = {}
 
         login_f = filters.get("login")
         if login_f:
-            clausulas.append("LOWER(login) LIKE :login_f")
+            clauses.append("LOWER(login) LIKE :login_f")
             binds["login_f"] = "%" + login_f.lower() + "%"
 
-        nome_f = filters.get("name")
-        if nome_f:
-            clausulas.append("LOWER(name) LIKE :name_f")
-            binds["name_f"] = "%" + nome_f.lower() + "%"
+        name_f = filters.get("name")
+        if name_f:
+            clauses.append("LOWER(name) LIKE :name_f")
+            binds["name_f"] = "%" + name_f.lower() + "%"
 
-        perfil_f = filters.get("profile_id")
-        if perfil_f is not None:
-            clausulas.append("profile_id = :profile_f")
-            binds["profile_f"] = int(perfil_f)
+        profile_f = filters.get("profile_id")
+        if profile_f is not None:
+            clauses.append("profile_id = :profile_f")
+            binds["profile_f"] = int(profile_f)
 
-        ativo_f = filters.get("active")
-        if ativo_f:
-            clausulas.append("active = :active_f")
-            binds["active_f"] = str(ativo_f).strip().upper()
+        active_f = filters.get("active")
+        if active_f:
+            clauses.append("active = :active_f")
+            binds["active_f"] = str(active_f).strip().upper()
 
-        bloq_f = filters.get("bloqueado_em")
-        if bloq_f is not None:
-            clausulas.append("locked_until IS NOT NULL AND locked_until > :locked_f")
-            binds["locked_f"] = bloq_f
-            binds_data["locked_f"] = db_conn.TIPO_DATE
+        locked_f = filters.get("bloqueado_em")
+        if locked_f is not None:
+            clauses.append("locked_until IS NOT NULL AND locked_until > :locked_f")
+            binds["locked_f"] = locked_f
+            binds_date["locked_f"] = db_conn.TIPO_DATE
 
-        where_sql = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
+        where_sql = (" WHERE " + " AND ".join(clauses)) if clauses else ""
 
         p = 1 if page is None else int(page)
         t = 20 if size is None else int(size)
@@ -187,8 +187,8 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
             p = 1
         if t < 1:
             t = 20
-        inicio = (p - 1) * t
-        fim = inicio + t
+        start = (p - 1) * t
+        end = start + t
 
         sql_count = (
             "SELECT COUNT(*) FROM ("
@@ -198,7 +198,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
         )
         sql_count += ")"
 
-        sql_paginada = (
+        sql_paged = (
             "SELECT * FROM ("
             "SELECT a.*, ROWNUM rn FROM ("
             "SELECT id, login, name, password_hash, profile_id, failed_attempts, locked_until, "
@@ -213,33 +213,33 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
         with self.read_context(conn=conn) as c:
             cur = c.cursor()
             try:
-                if binds_data:
-                    db_conn.set_input_types(cur, **binds_data)
+                if binds_date:
+                    db_conn.set_input_types(cur, **binds_date)
                 cur.execute(sql_count, binds)
                 row_c = cur.fetchone()
                 raw_count = row_c[0] if row_c else 0
                 total = min(raw_count, 10001)
-                total_limitado = raw_count >= 10001
+                total_capped = raw_count >= 10001
 
-                binds_pag = copy.deepcopy(binds)
-                binds_pag["start_ts"] = inicio
-                binds_pag["end_ts"] = fim
-                cur.execute(sql_paginada, binds_pag)
-                itens = [self.tuple_to_dict(_COLS_USER, r[:-1]) for r in cur.fetchall()]
+                binds_page = copy.deepcopy(binds)
+                binds_page["start_ts"] = start
+                binds_page["end_ts"] = end
+                cur.execute(sql_paged, binds_page)
+                items = [self.tuple_to_dict(_COLS_USER, r[:-1]) for r in cur.fetchall()]
 
                 return {
-                    "itens": itens,
+                    "itens": items,
                     "total": total,
                     "pagina": p,
                     "tamanho": t,
-                    "total_limitado": total_limitado,
+                    "total_limitado": total_capped,
                 }
             finally:
                 cur.close()
 
     def insert(self, date, audit=None, actor=None, conn=None):
         """Insere novo usuario com validacoes e auditoria na mesma transacao."""
-        ator_limpo = validate_record_actor(audit, actor)
+        actor_clean = validate_record_actor(audit, actor)
         login = date.get("login")
         if not login or not isinstance(login, str) or not _RE_LOGIN.fullmatch(login):
             raise repo_errors.RepoViolation(
@@ -247,12 +247,12 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                 constraint=self.constraint_name("ck", "users", "login"),
             )
 
-        ativo = str(date.get("active", "Y")).strip().upper()
-        if ativo not in ("Y", "N"):
+        active = str(date.get("active", "Y")).strip().upper()
+        if active not in ("Y", "N"):
             raise repo_errors.RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint=self.constraint_name("ck", "users", "active"))
 
-        tentativas = int(date.get("failed_attempts", 0))
-        if tentativas < 0:
+        attempts = int(date.get("failed_attempts", 0))
+        if attempts < 0:
             raise repo_errors.RepoViolation(
                 "Tentativas falhas nao podem ser negativas", constraint=self.constraint_name("ck", "users", "att")
             )
@@ -265,10 +265,10 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                 if cur.fetchone():
                     raise repo_errors.RepoViolation("Login '%s' ja existe" % login, constraint=self.constraint_name("uk", "users", "login"))
 
-                perfil_id = date.get("profile_id")
-                cur.execute("SELECT id FROM " + self._tabela_perfis() + " WHERE id = :pid", {"pid": int(perfil_id)})
+                profile_id = date.get("profile_id")
+                cur.execute("SELECT id FROM " + self._tabela_perfis() + " WHERE id = :pid", {"pid": int(profile_id)})
                 if not cur.fetchone():
-                    raise repo_errors.RepoViolation("Perfil ID %s nao existe" % perfil_id, constraint=self.constraint_name("fk", "users", "prf"))
+                    raise repo_errors.RepoViolation("Perfil ID %s nao existe" % profile_id, constraint=self.constraint_name("fk", "users", "prf"))
 
                 uid = db_conn.next_id(c, self._seq_usuarios())
                 sql_ins = (
@@ -294,14 +294,14 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                         "login": login,
                         "name": date.get("name", ""),
                         "password_hash": date.get("password_hash", "!"),
-                        "profile_id": int(perfil_id),
-                        "failed_attempts": tentativas,
+                        "profile_id": int(profile_id),
+                        "failed_attempts": attempts,
                         "locked_until": date.get("locked_until"),
                         "last_login_at": date.get("last_login_at"),
                         "password_changed_at": date.get("password_changed_at"),
-                        "active": ativo,
+                        "active": active,
                         "created_at": date.get("created_at"),
-                        "actor": ator_limpo,
+                        "actor": actor_clean,
                     },
                 )
                 write_audit(c, self._tabela_auditoria(), self._seq_auditoria(), audit, "tbsss_users", uid)
@@ -312,7 +312,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
 
     def update(self, id, date, expected=None, audit=None, actor=None, conn=None):
         """Altera usuario (login imutavel) com protecao do ultimo admin (README §4.3.B)."""
-        ator_limpo = validate_record_actor(audit, actor)
+        actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             cur = c.cursor()
             try:
@@ -330,60 +330,60 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                 if not row:
                     raise repo_errors.RepoNotFound("Usuario ID %s nao encontrado" % id)
 
-                atual = self.tuple_to_dict(_COLS_USER, row[:15])
-                p_atual_ativo = (row[15] or "").strip()
-                p_atual_is_admin = (row[16] or "").strip()
+                current = self.tuple_to_dict(_COLS_USER, row[:15])
+                p_current_active = (row[15] or "").strip()
+                p_current_is_admin = (row[16] or "").strip()
 
-                for campo, val_esp in (expected or {}).items():
-                    val_atual = atual.get(campo)
-                    if isinstance(val_atual, datetime.datetime) and isinstance(val_esp, datetime.datetime):
-                        if val_atual.replace(microsecond=0) != val_esp.replace(microsecond=0):
-                            raise repo_errors.RepoConflict("Usuario ID %s alterado por outra operacao (%s)" % (id, campo))
-                    elif val_atual != val_esp:
-                        raise repo_errors.RepoConflict("Usuario ID %s alterado por outra operacao (%s)" % (id, campo))
+                for field, expected_val in (expected or {}).items():
+                    val_current = current.get(field)
+                    if isinstance(val_current, datetime.datetime) and isinstance(expected_val, datetime.datetime):
+                        if val_current.replace(microsecond=0) != expected_val.replace(microsecond=0):
+                            raise repo_errors.RepoConflict("Usuario ID %s alterado por outra operacao (%s)" % (id, field))
+                    elif val_current != expected_val:
+                        raise repo_errors.RepoConflict("Usuario ID %s alterado por outra operacao (%s)" % (id, field))
 
-                novo_login = date.get("login")
-                if novo_login is not None and novo_login != atual["login"]:
+                new_login = date.get("login")
+                if new_login is not None and new_login != current["login"]:
                     raise repo_errors.RepoViolation("Login de usuario e imutavel", constraint=self.trigger_name("users", "bu"))
 
-                novo_perfil = date.get("profile_id")
-                perfil_alterado = False
-                p_novo_ativo = p_atual_ativo
-                p_novo_is_admin = p_atual_is_admin
-                if novo_perfil is not None:
-                    novo_perfil = int(novo_perfil)
-                    if novo_perfil != atual["profile_id"]:
+                new_profile = date.get("profile_id")
+                profile_changed = False
+                p_new_active = p_current_active
+                p_new_is_admin = p_current_is_admin
+                if new_profile is not None:
+                    new_profile = int(new_profile)
+                    if new_profile != current["profile_id"]:
                         cur.execute(
                             "SELECT active, is_admin FROM " + self._tabela_perfis() + " WHERE id = :pid",
-                            {"pid": novo_perfil},
+                            {"pid": new_profile},
                         )
                         row_p = cur.fetchone()
                         if not row_p:
-                            raise repo_errors.RepoViolation("Perfil ID %s nao existe" % novo_perfil, constraint=self.constraint_name("fk", "users", "prf"))
-                        p_novo_ativo = (row_p[0] or "").strip()
-                        p_novo_is_admin = (row_p[1] or "").strip()
-                        perfil_alterado = True
+                            raise repo_errors.RepoViolation("Perfil ID %s nao existe" % new_profile, constraint=self.constraint_name("fk", "users", "prf"))
+                        p_new_active = (row_p[0] or "").strip()
+                        p_new_is_admin = (row_p[1] or "").strip()
+                        profile_changed = True
 
-                novo_ativo = date.get("active")
-                ativo_alterado = False
-                if novo_ativo is not None:
-                    novo_ativo = str(novo_ativo).strip().upper()
-                    if novo_ativo not in ("Y", "N"):
+                new_active = date.get("active")
+                active_changed = False
+                if new_active is not None:
+                    new_active = str(new_active).strip().upper()
+                    if new_active not in ("Y", "N"):
                         raise repo_errors.RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint=self.constraint_name("ck", "users", "active"))
-                    if novo_ativo != atual["active"]:
-                        ativo_alterado = True
+                    if new_active != current["active"]:
+                        active_changed = True
 
                 # Protecao do ultimo administrador (README §4.3.B)
-                era_admin_ativo = (
-                    atual["active"] == "Y" and p_atual_ativo == "Y" and p_atual_is_admin == "Y"
+                was_admin_active = (
+                    current["active"] == "Y" and p_current_active == "Y" and p_current_is_admin == "Y"
                 )
-                sera_admin_ativo = (
-                    (novo_ativo if novo_ativo is not None else atual["active"]) == "Y"
-                    and p_novo_ativo == "Y"
-                    and p_novo_is_admin == "Y"
+                will_be_admin_active = (
+                    (new_active if new_active is not None else current["active"]) == "Y"
+                    and p_new_active == "Y"
+                    and p_new_is_admin == "Y"
                 )
 
-                if era_admin_ativo and not sera_admin_ativo:
+                if was_admin_active and not will_be_admin_active:
                     cur.execute(
                         "SELECT u.id "
                         "FROM " + self._tabela() + " u "
@@ -393,8 +393,8 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                         # transacao, e duas operacoes simultaneas nao deixam o sistema sem admin.
                         "FOR UPDATE OF u.active, p.is_admin WAIT 5"
                     )
-                    admins_restantes = [r[0] for r in cur.fetchall() if r[0] != int(id)]
-                    if not admins_restantes:
+                    admins_remaining = [r[0] for r in cur.fetchall() if r[0] != int(id)]
+                    if not admins_remaining:
                         raise repo_errors.RepoViolation(
                             "Operacao deixaria o sistema sem administrador ativo",
                             constraint="sss_ultimo_admin",
@@ -409,22 +409,22 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                 ]
                 params = {
                     "id": int(id),
-                    "name": date.get("name", atual["name"]),
-                    "profile_id": novo_perfil if novo_perfil is not None else atual["profile_id"],
-                    "active": novo_ativo if novo_ativo is not None else atual["active"],
-                    "actor": ator_limpo,
+                    "name": date.get("name", current["name"]),
+                    "profile_id": new_profile if new_profile is not None else current["profile_id"],
+                    "active": new_active if new_active is not None else current["active"],
+                    "actor": actor_clean,
                 }
                 if "password_hash" in date:
                     sets.append("password_hash = :password_hash")
                     params["password_hash"] = date["password_hash"]
                 if "failed_attempts" in date:
-                    tentativas = int(date["failed_attempts"])
-                    if tentativas < 0:
+                    attempts = int(date["failed_attempts"])
+                    if attempts < 0:
                         raise repo_errors.RepoViolation(
                             "Tentativas falhas nao podem ser negativas", constraint=self.constraint_name("ck", "users", "att")
                         )
                     sets.append("failed_attempts = :failed_attempts")
-                    params["failed_attempts"] = tentativas
+                    params["failed_attempts"] = attempts
                 if "locked_until" in date:
                     sets.append("locked_until = :locked_until")
                     params["locked_until"] = date["locked_until"]
@@ -435,34 +435,34 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                     sets.append("password_changed_at = :password_changed_at")
                     params["password_changed_at"] = date["password_changed_at"]
 
-                if perfil_alterado or ativo_alterado:
+                if profile_changed or active_changed:
                     sets.append("session_epoch = session_epoch + 1")
 
                 sql_upd = "UPDATE " + self._tabela() + " SET " + ", ".join(sets) + " WHERE id = :id"
                 # So os binds de data presentes no SET: o python-oracledb recusa tipo declarado para bind
                 # ausente do SQL (DPY-4008), o que quebrava toda alteracao sem data (F7.3, bateria integrada).
-                tipos = dict((c, db_conn.TIPO_DATE) for c in ("locked_until", "last_login_at", "password_changed_at")
+                kinds = dict((c, db_conn.TIPO_DATE) for c in ("locked_until", "last_login_at", "password_changed_at")
                              if c in params)
-                if tipos:
-                    db_conn.set_input_types(cur, **tipos)
+                if kinds:
+                    db_conn.set_input_types(cur, **kinds)
                 cur.execute(sql_upd, params)
 
                 # Incrementa perm_versao do perfil de origem e destino se aplicavel
-                if perfil_alterado or ativo_alterado:
-                    p_origem = atual["profile_id"]
-                    p_destino = novo_perfil if novo_perfil is not None else p_origem
+                if profile_changed or active_changed:
+                    p_source = current["profile_id"]
+                    p_destination = new_profile if new_profile is not None else p_source
                     cur.execute(
                         "UPDATE " + self._tabela_perfis() + " "
                         "SET perm_version = perm_version + 1 "
                         "WHERE id = :source",
-                        {"source": p_origem},
+                        {"source": p_source},
                     )
-                    if p_destino != p_origem:
+                    if p_destination != p_source:
                         cur.execute(
                             "UPDATE " + self._tabela_perfis() + " "
                             "SET perm_version = perm_version + 1 "
                             "WHERE id = :target",
-                            {"target": p_destino},
+                            {"target": p_destination},
                         )
 
                 write_audit(c, self._tabela_auditoria(), self._seq_auditoria(), audit, "tbsss_users", int(id))
@@ -489,15 +489,15 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                 if not row:
                     raise repo_errors.RepoNotFound("Usuario com login '%s' nao encontrado" % login)
 
-                uid, tentativas = row[0], int(row[1] or 0)
-                if tentativas + 1 > 99:
+                uid, attempts = row[0], int(row[1] or 0)
+                if attempts + 1 > 99:
                     raise repo_errors.RepoViolation("tentativas_falha excede NUMBER(2)", constraint=self.constraint_name("ck", "users", "att"))
                 if max_attempts is not None:
-                    bloquear = tentativas + 1 >= int(max_attempts)
+                    lock = attempts + 1 >= int(max_attempts)
                 else:
-                    bloquear = lockout_s is not None
+                    lock = lockout_s is not None
 
-                if bloquear:
+                if lock:
                     cur.execute(
                         "UPDATE " + self._tabela() + " "
                         "SET failed_attempts = failed_attempts + 1, "
@@ -512,14 +512,14 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                         "WHERE id = :id",
                         {"id": uid},
                     )
-                itens = _failed_login_audit(audit, tentativas + 1, max_attempts, bloquear, lock_audit)
-                write_audit(c, self._tabela_auditoria(), self._seq_auditoria(), itens, "tbsss_users", uid)
+                items = _failed_login_audit(audit, attempts + 1, max_attempts, lock, lock_audit)
+                write_audit(c, self._tabela_auditoria(), self._seq_auditoria(), items, "tbsss_users", uid)
             finally:
                 cur.close()
 
-            registro = self.get_by_id(uid, conn=c)
-            registro["bloqueou"] = bool(bloquear)
-            return registro
+            record = self.get_by_id(uid, conn=c)
+            record["bloqueou"] = bool(lock)
+            return record
 
     def register_login_success(self, login, new_hash=None, audit=None, conn=None):
         """Zera falhas e grava ultimo_login (rotina tecnica, sem updated_*)."""
@@ -557,7 +557,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
 
     def unlock(self, id, audit=None, actor=None, conn=None):
         """Desbloqueia conta de usuario zerando tentativas (grava updated_*)."""
-        ator_limpo = validate_record_actor(audit, actor)
+        actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             cur = c.cursor()
             try:
@@ -569,7 +569,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                     "UPDATE " + self._tabela() + " "
                     "SET failed_attempts = 0, locked_until = NULL, updated_at = SYSDATE, updated_by = :actor "
                     "WHERE id = :id",
-                    {"id": int(id), "actor": ator_limpo},
+                    {"id": int(id), "actor": actor_clean},
                 )
                 write_audit(c, self._tabela_auditoria(), self._seq_auditoria(), audit, "tbsss_users", int(id))
             finally:
@@ -599,7 +599,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
 
     def set_password(self, id, password_hash, now=None, audit=None, actor=None, conn=None):
         """Atualiza a senha do usuario e incrementa session_epoch (grava updated_*)."""
-        ator_limpo = validate_record_actor(audit, actor)
+        actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             cur = c.cursor()
             try:
@@ -617,7 +617,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                     "WHERE id = :id"
                 )
                 db_conn.set_input_types(cur, now=db_conn.TIPO_DATE)
-                cur.execute(sql, {"id": int(id), "password_hash": password_hash, "now": now, "actor": ator_limpo})
+                cur.execute(sql, {"id": int(id), "password_hash": password_hash, "now": now, "actor": actor_clean})
                 write_audit(c, self._tabela_auditoria(), self._seq_auditoria(), audit, "tbsss_users", int(id))
             finally:
                 cur.close()

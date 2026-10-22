@@ -23,21 +23,21 @@ def next_run(expr, after=NOW, horizon=cron_parser.DEFAULT_HORIZON):
 
 def sequence(expr, after, n):
     cron = cron_parser.parse(expr)
-    lista = []
+    items = []
     for _ in range(n):
         after = cron.next(after)
-        lista.append(after)
-    return lista
+        items.append(after)
+    return items
 
 
 def _raw_match(fields, t):
     """Referencia ingenua (minuto a minuto) para conferir o calculo campo a campo."""
-    minutos, horas, dias, meses, dsem, dia_r, dsem_r = fields
-    if t.minute not in minutos or t.hour not in horas or t.month not in meses:
+    minutes, hours, days, months, wday, day_r, wday_r = fields
+    if t.minute not in minutes or t.hour not in hours or t.month not in months:
         return False
-    casa_dia = t.day in dias
-    casa_dsem = (t.weekday() + 1) % 7 in dsem
-    return (casa_dia or casa_dsem) if (dia_r and dsem_r) else (casa_dia and casa_dsem)
+    match_day = t.day in days
+    match_wday = (t.weekday() + 1) % 7 in wday
+    return (match_day or match_wday) if (day_r and wday_r) else (match_day and match_wday)
 
 
 class TestSyntax(unittest.TestCase):
@@ -56,7 +56,7 @@ class TestSyntax(unittest.TestCase):
         self.assertEqual(cron_parser.parse('0 0 * * 5-7').weekdays, {5, 6, 0})
 
     def test_rejeicoes(self):
-        casos = {
+        cases = {
             'MON * * * *': 'Nomes', '0 0 * JAN *': 'Nomes', '0 0 * * mon': 'Nomes',
             '0 0 L * *': "'L'", '0 0 15W * *': "'W'", '0 0 * * 1#2': "'#'", '0 0 ? * *': "'?'",
             '* * * *': '5 campos', '* * * * * *': '5 campos', '': 'Informe', '   ': 'Informe',
@@ -67,11 +67,11 @@ class TestSyntax(unittest.TestCase):
             '1/5 * * * *': 'use passo', '1,,2 * * * *': 'item vazio', '*/5/2 * * * *': 'inválido',
             '-1 * * * *': 'inválido', '1- * * * *': 'inválido', '0 0 * * 1;2': 'inválido',
         }
-        for expr, trecho in casos.items():
+        for expr, snippet in cases.items():
             with self.subTest(expr=expr):
                 with self.assertRaises(CronError) as ctx:
                     cron_parser.parse(expr)
-                self.assertIn(trecho, ctx.exception.message)
+                self.assertIn(snippet, ctx.exception.message)
         with self.assertRaises(CronError):
             cron_parser.parse('0,' * 30 + '0 * * * *')
         with self.assertRaises(CronError):
@@ -123,11 +123,11 @@ class TestNext(unittest.TestCase):
         self.assertEqual(sequence('0 0 1 * 1', NOW, 4),
                          [D(2026, 10, 19), D(2026, 10, 26), D(2026, 11, 1), D(2026, 11, 2)])
         # Campo iniciado por '*' nao e restrito: vale o E (dias impares que sejam segunda).
-        for data in sequence('0 0 */2 * 1', NOW, 6):
-            self.assertEqual((data.day % 2, data.weekday()), (1, 0))
+        for date in sequence('0 0 */2 * 1', NOW, 6):
+            self.assertEqual((date.day % 2, date.weekday()), (1, 0))
         # So dia da semana restrito.
-        for data in sequence('0 0 * * 1', NOW, 4):
-            self.assertEqual(data.weekday(), 0)
+        for date in sequence('0 0 * * 1', NOW, 4):
+            self.assertEqual(date.weekday(), 0)
 
     def test_sem_ocorrencia_no_horizonte(self):
         self.assertIsNone(next_run('0 0 30 2 *'))
@@ -137,48 +137,48 @@ class TestNext(unittest.TestCase):
         self.assertIsNone(next_run('0 0 29 2 *', D(2026, 10, 15), horizon=501))
 
     def test_confere_com_forca_bruta(self):
-        sorteio = random.Random(20261015)
-        inicio = D(2027, 2, 26, 22, 13, 40)
-        janela = 8 * 24 * 60
+        draw = random.Random(20261015)
+        start = D(2027, 2, 26, 22, 13, 40)
+        window = 8 * 24 * 60
         for _ in range(40):
             expr = ' '.join((
-                sorteio.choice(['*', '*/7', '0,30', '15-20', '%d' % sorteio.randint(0, 59)]),
-                sorteio.choice(['*', '*/5', '0-3,22-23', '%d' % sorteio.randint(0, 23)]),
-                sorteio.choice(['*', '*/3', '1,28,29', '%d-31' % sorteio.randint(25, 31)]),
-                sorteio.choice(['*', '2,3', '2', '3-12/3']),
-                sorteio.choice(['*', '0', '1-5', '6,7', '*/2']),
+                draw.choice(['*', '*/7', '0,30', '15-20', '%d' % draw.randint(0, 59)]),
+                draw.choice(['*', '*/5', '0-3,22-23', '%d' % draw.randint(0, 23)]),
+                draw.choice(['*', '*/3', '1,28,29', '%d-31' % draw.randint(25, 31)]),
+                draw.choice(['*', '2,3', '2', '3-12/3']),
+                draw.choice(['*', '0', '1-5', '6,7', '*/2']),
             ))
             cron = cron_parser.parse(expr)
-            campos = (cron.minutes, cron.hours, cron.days, cron.months, cron.weekdays,
+            fields = (cron.minutes, cron.hours, cron.days, cron.months, cron.weekdays,
                       cron.day_restricted, cron.wday_restricted)
-            t = inicio.replace(second=0) + datetime.timedelta(minutes=1)
-            esperado = None
-            for _ in range(janela):
-                if _raw_match(campos, t):
-                    esperado = t
+            t = start.replace(second=0) + datetime.timedelta(minutes=1)
+            expected = None
+            for _ in range(window):
+                if _raw_match(fields, t):
+                    expected = t
                     break
                 t += datetime.timedelta(minutes=1)
-            obtido = cron.next(inicio)
+            got = cron.next(start)
             with self.subTest(expr=expr):
-                if esperado is not None:
-                    self.assertEqual(obtido, esperado)
+                if expected is not None:
+                    self.assertEqual(got, expected)
                 else:
-                    self.assertTrue(obtido is None or obtido >= t)
+                    self.assertTrue(got is None or got >= t)
 
     def test_desempenho(self):
         exprs = ('0 0 30 2 *', '0 0 29 2 1', '59 23 31 12 *', '*/15 * * * *', '0 0 31 4,6,9,11 *',
                  '0-59/7 0-23/5 1-31/3 1-12/5 0-6/3')
         for expr in exprs:
             cron = cron_parser.parse(expr)
-            segundos = min(timeit.repeat(lambda: cron.next(NOW), number=5, repeat=3)) / 5
+            seconds = min(timeit.repeat(lambda: cron.next(NOW), number=5, repeat=3)) / 5
             with self.subTest(expr=expr):
-                self.assertLess(segundos, 0.050, '%s levou %.1f ms' % (expr, segundos * 1000))
+                self.assertLess(seconds, 0.050, '%s levou %.1f ms' % (expr, seconds * 1000))
 
 
 class TestDescribe(unittest.TestCase):
 
     def test_expressoes_comuns(self):
-        casos = (
+        cases = (
             ('30 2 * * 1-5', 'às 02:30, de segunda a sexta'),
             ('*/15 * * * *', 'a cada 15 minutos'),
             ('0 3 * * *', 'às 03:00, todos os dias'),
@@ -197,9 +197,9 @@ class TestDescribe(unittest.TestCase):
             ('0 0 */3 * 0', 'às 00:00, a cada 3 dias a partir do dia 1, quando cair num domingo'),
             ('*/10 9-17 * * 1-5', 'a cada 10 minutos, das 09:00 às 17:59, de segunda a sexta'),
         )
-        for expr, texto in casos:
+        for expr, text in cases:
             with self.subTest(expr=expr):
-                self.assertEqual(cron_parser.parse(expr).describe(), texto)
+                self.assertEqual(cron_parser.parse(expr).describe(), text)
 
     def test_qualquer_expressao_valida_tem_descricao(self):
         for expr in ('0-59/7 0-23/5 1-31/3 1-12/5 0-6/3', '1,2 3,4 5-9 6-8 *', '0 0 */2 * 1'):
@@ -210,21 +210,21 @@ class TestDescribe(unittest.TestCase):
 class TestPurity(unittest.TestCase):
 
     def test_sem_now_nem_gluon(self):
-        modulos = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'modules')
-        for nome in ('cron_parser.py', 'recurrence.py'):
-            with open(os.path.join(modulos, nome), encoding='utf-8') as f:
-                arvore = ast.parse(f.read())
-            chamadas = set(n.func.attr for n in ast.walk(arvore)
+        modules = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'modules')
+        for name in ('cron_parser.py', 'recurrence.py'):
+            with open(os.path.join(modules, name), encoding='utf-8') as f:
+                tree = ast.parse(f.read())
+            calls = set(n.func.attr for n in ast.walk(tree)
                            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute))
-            importados = set()
-            for n in ast.walk(arvore):
+            imported = set()
+            for n in ast.walk(tree):
                 if isinstance(n, ast.Import):
-                    importados.update(a.name.split('.')[0] for a in n.names)
+                    imported.update(a.name.split('.')[0] for a in n.names)
                 elif isinstance(n, ast.ImportFrom):
-                    importados.add((n.module or '').split('.')[0])
-            with self.subTest(modulo=nome):
-                self.assertFalse(chamadas & {'now', 'utcnow', 'today', 'time'}, chamadas)
-                self.assertNotIn('gluon', importados)
+                    imported.add((n.module or '').split('.')[0])
+            with self.subTest(modulo=name):
+                self.assertFalse(calls & {'now', 'utcnow', 'today', 'time'}, calls)
+                self.assertNotIn('gluon', imported)
 
 if __name__ == '__main__':
     unittest.main()

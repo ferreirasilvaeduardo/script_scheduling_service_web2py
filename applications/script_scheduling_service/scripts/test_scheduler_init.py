@@ -139,10 +139,10 @@ class _RepoLog(object):
 def _alive(pid):
     try:
         with open("/proc/%d/stat" % pid) as f:
-            conteudo = f.read()
+            content = f.read()
     except OSError:
         return False
-    return conteudo[conteudo.rindex(")") + 2:].split()[0] != "Z"
+    return content[content.rindex(")") + 2:].split()[0] != "Z"
 
 
 @unittest.skipIf(os.geteuid() == 0, "o agente nunca roda como root")
@@ -170,9 +170,9 @@ class _Base(unittest.TestCase):
             except OSError:
                 pass
             p.wait()
-        for atual, dirs, _arqs in os.walk(self.root):
+        for current, dirs, _arqs in os.walk(self.root):
             for d in dirs:
-                os.chmod(os.path.join(atual, d), 0o700)
+                os.chmod(os.path.join(current, d), 0o700)
         shutil.rmtree(self.root, ignore_errors=True)
 
     def cfg(self, **agent):
@@ -222,9 +222,9 @@ class TestSteps(_Base):
         self.assertEqual(ag.supplementary_unit, 1)
         self.assertEqual(ag.active_environments, ["DEV"])
         self.assertIsNotNone(ag.last_hb_ok)
-        texto = "\n".join(logs.output)
-        self.assertIn("fence_timeout_s=40 node_offline_timeout_s=120", texto)
-        self.assertNotIn("SEM_EXIGENCIA_HASH", texto, "CR-011: sem hash")
+        text = "\n".join(logs.output)
+        self.assertIn("fence_timeout_s=40 node_offline_timeout_s=120", text)
+        self.assertNotIn("SEM_EXIGENCIA_HASH", text, "CR-011: sem hash")
         r = self.repo.registro
         self.assertEqual((r["code"], r["hostname"], r["version"], r["platform"], r["interpreters"]),
                          ("srv-t", "host-t", sss_config.SSS_VERSION, os_platform.NAME, "SH"))
@@ -249,47 +249,47 @@ class TestSteps(_Base):
     def test_validar_execucao_fora_de_dev(self):
         cfg = self.cfg(sss_env="PROD", exec_work_dir=self.root)
         plat = _Plat(validate_execution=lambda *a, **k: ["helper /opt/sss/bin/sss-helper nao encontrado"])
-        saida = self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=cfg, plat=plat))
-        self.assertTrue(any("helper /opt/sss/bin/sss-helper nao encontrado" in x for x in saida))
+        output = self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=cfg, plat=plat))
+        self.assertTrue(any("helper /opt/sss/bin/sss-helper nao encontrado" in x for x in output))
 
     def test_cr014_pasta_de_entrada_na_subida(self):
         # CR-014 (README §8.12 passo 4): input_dir fora das pastas do sistema e existente; fora de DEV, a pasta
         # de cada ambiente atendido do usuario de execucao dele.
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(input_dir="/usr/local/sss-entrada")))
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(input_dir=os.path.join(self.root, "nao"))))
-        entrada = os.path.join(self.root, "entrada")
-        os.mkdir(entrada, 0o755)
-        self.agent(cfg=self.cfg(input_dir=entrada)).initialize()
-        vistos = []
+        input_value = os.path.join(self.root, "entrada")
+        os.mkdir(input_value, 0o755)
+        self.agent(cfg=self.cfg(input_dir=input_value)).initialize()
+        seen = []
 
         def _pastas(pairs):
-            vistos.extend(pairs)
+            seen.extend(pairs)
             return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pairs[0][0]]
         plat = _Plat(validate_execution=lambda *a, **k: [], validate_output_dirs=_pastas)
         cfg = self.cfg(sss_env="PROD", exec_work_dir=self.root, exec_users=(("DEV", "exec1"),),
-                       input_dir=entrada)
+                       input_dir=input_value)
         logs = self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=cfg, plat=plat))
-        self.assertEqual(vistos, [(os.path.join(entrada, "dev"), "exec1")])
+        self.assertEqual(seen, [(os.path.join(input_value, "dev"), "exec1")])
         self.assertTrue(any("pasta de entrada:" in x for x in logs))
 
     def test_pasta_de_saida_na_subida(self):
         # CR-012 (README §8.12 passo 4): output_dir fora das pastas do sistema e existente.
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(output_dir="/usr/local/sss-saida")))
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(output_dir=os.path.join(self.root, "nao"))))
-        saida = os.path.join(self.root, "saida")
-        os.mkdir(saida, 0o755)
-        self.agent(cfg=self.cfg(output_dir=saida)).initialize()
+        output = os.path.join(self.root, "saida")
+        os.mkdir(output, 0o755)
+        self.agent(cfg=self.cfg(output_dir=output)).initialize()
         # Fora de DEV: a pasta de cada ambiente atendido, do usuario de execucao dele.
-        vistos = []
+        seen = []
 
         def _pastas(pairs):
-            vistos.extend(pairs)
+            seen.extend(pairs)
             return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pairs[0][0]]
         plat = _Plat(validate_execution=lambda *a, **k: [], validate_output_dirs=_pastas)
         cfg = self.cfg(sss_env="PROD", exec_work_dir=self.root, exec_users=(("DEV", "exec1"),),
-                       output_dir=saida)
+                       output_dir=output)
         logs = self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=cfg, plat=plat))
-        self.assertEqual(vistos, [(os.path.join(saida, "dev"), "exec1")])
+        self.assertEqual(seen, [(os.path.join(output, "dev"), "exec1")])
         self.assertTrue(any("pasta de saida:" in x for x in logs))
 
     def test_instancia_unica_e_stop_antigo(self):
@@ -299,11 +299,11 @@ class TestSteps(_Base):
             self.agent().initialize()
         self.assertFalse(os.path.exists(stop))
         self.assertTrue(any(".stop antigo" in x for x in logs.output))
-        codigo = ("import sys\nsys.path.insert(0, %r)\nimport os_platform\n"
+        code = ("import sys\nsys.path.insert(0, %r)\nimport os_platform\n"
                   "try:\n    os_platform.lock_instance(%r)\nexcept os_platform.InstanceAlreadyRunning:\n"
                   "    sys.exit(7)\n" % (os.path.dirname(os.path.abspath(os_platform.__file__)) + "/..",
                                         os.path.join(self.work, "sss-srv-t.lock")))
-        self.assertEqual(subprocess.call([sys.executable, "-c", codigo]), 7, "segunda instancia recusada")
+        self.assertEqual(subprocess.call([sys.executable, "-c", code]), 7, "segunda instancia recusada")
 
     def test_segunda_instancia_no_mesmo_processo(self):
         self.agent().initialize()
@@ -311,18 +311,18 @@ class TestSteps(_Base):
 
     def test_banco(self):
         self.failure(sl.EXIT_DATABASE, self.agent(connection=_Connection(ok=False)))
-        conexao = _Connection()
-        conexao.conn.version = sql_ident.SCHEMA_VERSION + 1
+        connection = _Connection()
+        connection.conn.version = sql_ident.SCHEMA_VERSION + 1
         with mock.patch.object(sl.db_conn, "_log_critical"):
-            self.failure(sl.EXIT_DATABASE, self.agent(connection=conexao))
+            self.failure(sl.EXIT_DATABASE, self.agent(connection=connection))
 
     def test_registro(self):
         self.repo.duplicated = True
         self.failure(sl.EXIT_REGISTRATION)
         self.repo.duplicated = False
         self.repo.divergent = [("srv-02", "hb=20;fence=40")]
-        saida = self.failure(sl.EXIT_REGISTRATION)
-        self.assertTrue(any("srv-02" in x and "hb=20" in x for x in saida), "as duas configuracoes no log")
+        output = self.failure(sl.EXIT_REGISTRATION)
+        self.assertTrue(any("srv-02" in x and "hb=20" in x for x in output), "as duas configuracoes no log")
 
     def test_ambientes(self):
         self.repo.environments = ([], ["DEV"])
@@ -334,15 +334,15 @@ class TestSteps(_Base):
         self.assertTrue(any("DEV inativo" in x for x in logs.output))
 
     def test_thread_unica(self):
-        parar = threading.Event()
-        t = threading.Thread(target=parar.wait, name="thread-intrusa")
+        stop = threading.Event()
+        t = threading.Thread(target=stop.wait, name="thread-intrusa")
         t.start()
         try:
-            saida = self.failure(sl.EXIT_THREADS)
+            output = self.failure(sl.EXIT_THREADS)
         finally:
-            parar.set()
+            stop.set()
             t.join()
-        self.assertTrue(any("thread-intrusa" in x for x in saida))
+        self.assertTrue(any("thread-intrusa" in x for x in output))
 
 
 class TestStartupCheck(_Base):
@@ -359,10 +359,10 @@ class TestStartupCheck(_Base):
 
 
     def _dir(self, tid, **states):
-        pasta = executor.prepare_directory(self.work, tid)
-        for nome, dados in states.items():
-            os_platform.write_state(os.path.join(pasta, "." + nome), dados)
-        return pasta
+        dir_value = executor.prepare_directory(self.work, tid)
+        for name, date in states.items():
+            os_platform.write_state(os.path.join(dir_value, "." + name), date)
+        return dir_value
 
     def _group(self, command="sleep 300 & sleep 300"):
         p = subprocess.Popen(["/bin/sh", "-c", command], start_new_session=True)
@@ -377,17 +377,17 @@ class TestStartupCheck(_Base):
 
     def test_grupo_vivo_e_encerrado_e_ticket_orfao(self):
         p = self._group()
-        pasta = self._dir(5, sss_proc={"ticket_id": 5, "pid": p.pid, "pgid": p.pid, "exec_user": None,
+        dir_value = self._dir(5, sss_proc={"ticket_id": 5, "pid": p.pid, "pgid": p.pid, "exec_user": None,
                                          "process_start": os_platform.process_identity(p.pid)})
         self.repo.running = [{"id": 5, "process_id": p.pid, "process_start": None, "cancel_requested": "N"}]
         ag, _logs = self._start_agent()
         self.assertIn(("finalize", 5, "FAILED", "ORPHAN_PROCESS", -2), self.repo.calls)
         self.assertTrue(self.repo_log.rows[0][1].startswith("[SSS] ORPHAN_PROCESS: "))
         self.assertIn(5, ag.stopping, "o laco termina o encerramento e so entao limpa")
-        self.assertTrue(os.path.isdir(pasta))
+        self.assertTrue(os.path.isdir(dir_value))
         ex = ag.stopping[5]
-        limite = time.monotonic() + 5
-        while not executor.advance_stop(ex, time.monotonic() + 10) and time.monotonic() < limite:
+        limit = time.monotonic() + 5
+        while not executor.advance_stop(ex, time.monotonic() + 10) and time.monotonic() < limit:
             time.sleep(0.05)
         self.assertEqual(p.wait(5), -signal.SIGTERM)
 
@@ -403,56 +403,56 @@ class TestStartupCheck(_Base):
 
     def test_pid_reciclado_nao_recebe_sinal(self):
         p = self._group("sleep 300")
-        pasta = self._dir(7, sss_proc={"ticket_id": 7, "pid": p.pid, "pgid": p.pid, "exec_user": None,
+        dir_value = self._dir(7, sss_proc={"ticket_id": 7, "pid": p.pid, "pgid": p.pid, "exec_user": None,
                                          "process_start": os_platform.process_identity(p.pid) + 1})
         self.repo.running = [{"id": 7, "process_id": p.pid, "process_start": None, "cancel_requested": "N"}]
         ag, _logs = self._start_agent()
         self.assertTrue(_alive(p.pid), "PID reciclado: o processo de agora nao e o do ticket")
         self.assertIn(("finalize", 7, "FAILED", "ORPHAN_PROCESS", -2), self.repo.calls)
-        self.assertFalse(os.path.exists(pasta))
+        self.assertFalse(os.path.exists(dir_value))
 
     def test_resultado_local_prevalece(self):
-        pasta = self._dir(8, sss_proc={"ticket_id": 8, "pid": 2 ** 31 - 2, "pgid": 2 ** 31 - 2,
+        dir_value = self._dir(8, sss_proc={"ticket_id": 8, "pid": 2 ** 31 - 2, "pgid": 2 ** 31 - 2,
                                          "exec_user": None, "process_start": 1},
                             sss_result={"ticket_id": 8, "status": "SUCCESS", "status_reason": "EXIT_OK",
                                         "return_code": 0})
         self.repo.running = [{"id": 8, "process_id": 1, "process_start": 1, "cancel_requested": "N"}]
         self._start_agent()
         self.assertIn(("finalize", 8, "SUCCESS", "EXIT_OK", 0), self.repo.calls)
-        self.assertFalse(os.path.exists(pasta))
+        self.assertFalse(os.path.exists(dir_value))
 
     def test_sem_identidade_preserva_a_pasta(self):
         p = self._group("sleep 300")
-        pasta = self._dir(9, sss_proc={"ticket_id": 9, "pid": p.pid, "pgid": p.pid, "exec_user": None,
+        dir_value = self._dir(9, sss_proc={"ticket_id": 9, "pid": p.pid, "pgid": p.pid, "exec_user": None,
                                          "process_start": None})
         self.repo.running = [{"id": 9, "process_id": p.pid, "process_start": None, "cancel_requested": "N"}]
-        plat = _Plat(reopen_group=lambda estado: os_platform.Process(p.pid, None, no_identity=True))
+        plat = _Plat(reopen_group=lambda state: os_platform.Process(p.pid, None, no_identity=True))
         ag, logs = self._start_agent(plat=plat)
         self.assertIn("ORFAO_SEM_IDENTIDADE", logs)
         self.assertTrue(_alive(p.pid), "sem identidade nunca recebe sinal")
         self.assertIn(9, ag.preserved)
-        self.assertTrue(os.path.isdir(pasta), "CR-008, R-26: o unico rastro do processo fica")
+        self.assertTrue(os.path.isdir(dir_value), "CR-008, R-26: o unico rastro do processo fica")
         self.assertIn(("finalize", 9, "FAILED", "ORPHAN_PROCESS", -2), self.repo.calls)
 
     def test_talvez_iniciado_nunca_volta_a_fila(self):
-        pasta = self._dir(10, sss_spawn={"ticket_id": 10, "exec_user": None})
-        neto = subprocess.Popen(["sleep", "300"], cwd=os.path.join(pasta, "tmp"), start_new_session=True)
-        self.popens.append(neto)
+        dir_value = self._dir(10, sss_spawn={"ticket_id": 10, "exec_user": None})
+        grandchild = subprocess.Popen(["sleep", "300"], cwd=os.path.join(dir_value, "tmp"), start_new_session=True)
+        self.popens.append(grandchild)
         self.repo.running = [{"id": 10, "process_id": None, "process_start": None, "cancel_requested": "N"}]
         _ag, logs = self._start_agent()
         self.assertIn("TALVEZ_INICIADO", logs)
         self.assertNotIn(("return_to_queue", 10), self.repo.calls)
         self.assertIn(("finalize", 10, "FAILED", "ORPHAN_PROCESS", -2), self.repo.calls)
-        self.assertEqual(neto.wait(5), -signal.SIGTERM, "encerrado pelo diretorio atual na pasta do ticket")
-        self.assertFalse(os.path.exists(pasta))
+        self.assertEqual(grandchild.wait(5), -signal.SIGTERM, "encerrado pelo diretorio atual na pasta do ticket")
+        self.assertFalse(os.path.exists(dir_value))
 
     def test_talvez_iniciado_nao_suportado_preserva(self):
-        pasta = self._dir(11, sss_spawn={"ticket_id": 11, "exec_user": None})
+        dir_value = self._dir(11, sss_spawn={"ticket_id": 11, "exec_user": None})
         self.repo.running = [{"id": 11, "process_id": None, "process_start": None, "cancel_requested": "N"}]
         ag, logs = self._start_agent(plat=_Plat(stop_ticket=lambda *a: "NAO_SUPORTADO"))
         self.assertIn("sem meio de encerrar", logs)
         self.assertIn(11, ag.preserved)
-        self.assertTrue(os.path.isdir(pasta))
+        self.assertTrue(os.path.isdir(dir_value))
         self.assertIn(("finalize", 11, "FAILED", "ORPHAN_PROCESS", -2), self.repo.calls)
 
     def test_running_sem_pasta(self):
@@ -463,13 +463,13 @@ class TestStartupCheck(_Base):
         self.assertIn(("finalize", 13, "FAILED", "ORPHAN_PROCESS", -2), self.repo.calls)
 
     def test_pasta_vazia_e_removida_e_link_ignorado(self):
-        pasta = self._dir(14)
-        fora = os.path.join(self.root, "fora")
-        os.mkdir(fora)
-        os.symlink(fora, os.path.join(self.work, "ticket_15"))
+        dir_value = self._dir(14)
+        outside = os.path.join(self.root, "fora")
+        os.mkdir(outside)
+        os.symlink(outside, os.path.join(self.work, "ticket_15"))
         self._start_agent()
-        self.assertFalse(os.path.exists(pasta))
-        self.assertTrue(os.path.isdir(fora), "link simbolico nunca seguido")
+        self.assertFalse(os.path.exists(dir_value))
+        self.assertTrue(os.path.isdir(outside), "link simbolico nunca seguido")
         self.assertEqual(self.repo.calls, [])
 
     def test_falha_de_banco_no_startup_check(self):
@@ -516,27 +516,27 @@ class TestStartupOracle(_Base):
         conn = db_conn.connect(cfg, seg, "agent")
         try:
             import ddl_builder
-            ativos, _ = RepoSchedulerQueue.from_config(cfg).active_environments(
+            active, _ = RepoSchedulerQueue.from_config(cfg).active_environments(
                 conn, [a[0] for a in ddl_builder.DEFAULT_ENVIRONMENTS])
         finally:
             conn.close()
-        self.assertTrue(ativos, "o seed precisa de um ambiente ativo")
-        agente = cfg.agent._replace(agent_id=self.code, environments=tuple(ativos[:1]), work_dir=self.work,
+        self.assertTrue(active, "o seed precisa de um ambiente ativo")
+        agent = cfg.agent._replace(agent_id=self.code, environments=tuple(active[:1]), work_dir=self.work,
                                     interpreters=(("SH", "/bin/sh"),))
-        cfg = cfg._replace(agent=agente, logging=cfg.logging._replace(log_dir=self.logs))
+        cfg = cfg._replace(agent=agent, logging=cfg.logging._replace(log_dir=self.logs))
         ag = sl.Agent(cfg=cfg, secrets=seg, hostname="host-tst", pid=os.getpid())
         self.agents.append(ag)
         with self.assertLogs("sss_scheduler", "INFO"):
             ag.initialize()
         self.assertIsInstance(ag.agent_db_id, int)
         self.assertIn(ag.supplementary_unit, (1, 2))
-        self.assertEqual(ag.active_environments, list(ativos[:1]))
+        self.assertEqual(ag.active_environments, list(active[:1]))
         # Segunda subida do mesmo agent_id, de outro host, enquanto o primeiro esta ativo: recusada.
-        outro = sl.Agent(cfg=cfg._replace(agent=agente._replace(work_dir=self.root)), secrets=seg,
+        other = sl.Agent(cfg=cfg._replace(agent=agent._replace(work_dir=self.root)), secrets=seg,
                           hostname="outro-host", pid=os.getpid())
-        self.agents.append(outro)
+        self.agents.append(other)
         os.makedirs(os.path.join(self.root, "logs2"), exist_ok=True)
-        self.failure(sl.EXIT_REGISTRATION, outro)
+        self.failure(sl.EXIT_REGISTRATION, other)
         self.assertTrue(ag.repo.stop_agent(ag.connection.get_connection(), self.code, "host-tst", os.getpid(),
                                                 "TERMINATE"))
 
@@ -545,9 +545,9 @@ class TestSource(unittest.TestCase):
 
     def test_sem_primitivas_de_so_nem_gluon(self):
         with open(sl.__file__, encoding="utf-8") as f:
-            fonte = f.read()
-        for proibido in ("os.killpg", "os.kill(", "time.sleep", "subprocess", "sys.platform", "gluon", "/proc/"):
-            self.assertFalse(proibido in fonte, proibido)
+            source = f.read()
+        for forbidden in ("os.killpg", "os.kill(", "time.sleep", "subprocess", "sys.platform", "gluon", "/proc/"):
+            self.assertFalse(forbidden in source, forbidden)
 
 
 if __name__ == "__main__":

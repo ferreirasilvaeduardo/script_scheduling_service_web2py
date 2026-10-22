@@ -68,18 +68,18 @@ def public_view(user):
 def normalize_filters(input_value):
     """Filtros da lista: login, nome (trechos), perfil_id e situacao ('S' | 'N' | 'B' bloqueados)."""
     input_value = input_value or {}
-    filtros = {}
-    for chave in ("login", "name"):
-        valor = admin_crud.text(input_value.get(chave), 60)
-        if valor and _RE_FILTER.fullmatch(valor):
-            filtros[chave] = valor
-    perfil = _id(input_value.get("profile_id"))
-    if perfil is not None:
-        filtros["profile_id"] = perfil
-    situacao = admin_crud.text(input_value.get("state"), 1)
-    if situacao in ("Y", "N", "B"):
-        filtros["state"] = situacao
-    return filtros
+    filters = {}
+    for key in ("login", "name"):
+        value = admin_crud.text(input_value.get(key), 60)
+        if value and _RE_FILTER.fullmatch(value):
+            filters[key] = value
+    profile = _id(input_value.get("profile_id"))
+    if profile is not None:
+        filters["profile_id"] = profile
+    state = admin_crud.text(input_value.get("state"), 1)
+    if state in ("Y", "N", "B"):
+        filters["state"] = state
+    return filters
 
 
 class AdminUsersService(object):
@@ -100,9 +100,9 @@ class AdminUsersService(object):
 
     def profiles(self, active_only=False):
         """Perfis para selecao: lista de {id, nome, is_admin, ativo} ordenada por nome."""
-        itens = self._rbac.profiles_list(filters={"active": "Y"} if active_only else None, page=1,
+        items = self._rbac.profiles_list(filters={"active": "Y"} if active_only else None, page=1,
                                          size=_PROFILES_MAX)["itens"]
-        return [{"id": p["id"], "name": p["name"], "is_admin": p["is_admin"], "active": p["active"]} for p in itens]
+        return [{"id": p["id"], "name": p["name"], "is_admin": p["is_admin"], "active": p["active"]} for p in items]
 
     def _admin_profile(self, profile_id):
         try:
@@ -115,29 +115,29 @@ class AdminUsersService(object):
 
     def is_locked(self, user):
         """True se o bloqueio por tentativas ainda vale agora."""
-        ate = user.get("locked_until")
-        return ate is not None and ate > self._clock()
+        until = user.get("locked_until")
+        return until is not None and until > self._clock()
 
     # ----------------------------------------------------------------- leitura
 
     def list(self, ctx, filters, page, size):
         """Pagina de usuarios (login ASC) sem senha_hash, com perfil_nome e bloqueado."""
         admin_crud.require_feature(ctx, FEATURE)
-        repo_filtros = dict((k, v) for k, v in filters.items() if k != "state")
-        situacao = filters.get("state")
-        if situacao in ("Y", "N"):
-            repo_filtros["active"] = situacao
-        elif situacao == "B":
-            repo_filtros["bloqueado_em"] = self._clock()
-        resultado = self._users.list(filters=repo_filtros, page=page, size=size)
-        nomes = dict((p["id"], p["name"]) for p in self.profiles())
-        itens = []
-        for u in resultado["itens"]:
+        repo_filters = dict((k, v) for k, v in filters.items() if k != "state")
+        state = filters.get("state")
+        if state in ("Y", "N"):
+            repo_filters["active"] = state
+        elif state == "B":
+            repo_filters["bloqueado_em"] = self._clock()
+        result = self._users.list(filters=repo_filters, page=page, size=size)
+        names = dict((p["id"], p["name"]) for p in self.profiles())
+        items = []
+        for u in result["itens"]:
             item = public_view(u)
-            item["perfil_nome"] = nomes.get(u["profile_id"], "#%s" % u["profile_id"])
+            item["perfil_nome"] = names.get(u["profile_id"], "#%s" % u["profile_id"])
             item["bloqueado"] = self.is_locked(u)
-            itens.append(item)
-        return dict(resultado, itens=itens)
+            items.append(item)
+        return dict(result, itens=items)
 
     def form(self, ctx, user_id=None):
         """Dados do formulario sem senha_hash; na edicao inclui versao, bloqueio e se e o proprio usuario."""
@@ -147,27 +147,27 @@ class AdminUsersService(object):
                     "bloqueado": False, "locked_until": None, "failed_attempts": 0, "proprio": False,
                     "registro": None}
         u = self._get(user_id)
-        dados = public_view(u)
-        dados.update(version=admin_crud.version(u, EDITABLE_FIELDS), bloqueado=self.is_locked(u),
+        date = public_view(u)
+        date.update(version=admin_crud.version(u, EDITABLE_FIELDS), bloqueado=self.is_locked(u),
                      proprio=u["id"] == ctx.get("user_id"), registro=ui_helpers.registro(u, ctx))
-        return dados
+        return date
 
     # ----------------------------------------------------------------- escrita
 
     def _violation(self, ctx, exc, errors):
-        campo, mensagem = _FIELD_BY_CONSTRAINT.get(exc.constraint, (GENERAL_FIELD, admin_crud.MSG_FAILURE))
-        errors[campo] = mensagem
+        field, message = _FIELD_BY_CONSTRAINT.get(exc.constraint, (GENERAL_FIELD, admin_crud.MSG_FAILURE))
+        errors[field] = message
         self._log.warning("cadastro de usuario rejeitado pelo repositorio (login=%s constraint=%s)",
                           ctx.get("login"), exc.constraint, extra={"action": FEATURE})
 
     def _active_profile(self, value, errors, current_value=None):
         """Perfil escolhido: precisa estar ativo, exceto quando a edicao mantem o perfil atual."""
         pid = _id(value)
-        todos = dict((p["id"], p) for p in self.profiles())
-        if pid not in todos or (todos[pid]["active"] != "Y" and pid != current_value):
+        all_value = dict((p["id"], p) for p in self.profiles())
+        if pid not in all_value or (all_value[pid]["active"] != "Y" and pid != current_value):
             errors["profile_id"] = MSG_PROFILE_INVALID
             return None, None
-        return pid, todos[pid]
+        return pid, all_value[pid]
 
     def _password(self, password_value, confirmation, errors, field="senha"):
         if not isinstance(password_value, str) or not password_value:
@@ -176,9 +176,9 @@ class AdminUsersService(object):
         if len(password_value) > auth_service.PASSWORD_MAX:
             errors[field] = MSG_PASSWORD_TOO_LONG
             return None
-        problemas = security.validate_password_policy(password_value)
-        if problemas:
-            errors[field] = problemas[0]
+        problems = security.validate_password_policy(password_value)
+        if problems:
+            errors[field] = problems[0]
             return None
         if confirmation != password_value:
             errors["confirmacao"] = MSG_CONFIRMATION
@@ -186,12 +186,12 @@ class AdminUsersService(object):
         return password_value
 
     def _name(self, value, errors):
-        nome = admin_crud.free_text(value, errors, "name")
-        if nome is None:
+        name = admin_crud.free_text(value, errors, "name")
+        if name is None:
             errors["name"] = MSG_NAME_REQUIRED
-        elif "name" not in errors and len(nome) > NAME_MAX_LENGTH:
+        elif "name" not in errors and len(name) > NAME_MAX_LENGTH:
             errors["name"] = MSG_NAME_LENGTH
-        return nome
+        return name
 
     def save(self, ctx, ip, user_id, date):
         """Inclui (login, nome, perfil_id, senha, confirmacao) ou altera (nome, perfil_id, versao).
@@ -200,72 +200,72 @@ class AdminUsersService(object):
         RepoNotFound e AccessDenied.
         """
         admin_crud.require_feature(ctx, FEATURE)
-        erros = {}
+        errors = {}
         if user_id in (None, ""):
-            login = admin_crud.identifier(date.get("login"), erros, "login")
+            login = admin_crud.identifier(date.get("login"), errors, "login")
             if login is None:
-                erros["login"] = MSG_LOGIN_REQUIRED
-            elif "login" in erros:
+                errors["login"] = MSG_LOGIN_REQUIRED
+            elif "login" in errors:
                 pass
             elif not _RE_LOGIN.fullmatch(login):
-                erros["login"] = MSG_LOGIN_INVALID
-            nome = self._name(date.get("name"), erros)
-            perfil_id, perfil = self._active_profile(date.get("profile_id"), erros)
-            senha = self._password(date.get("senha"), date.get("confirmacao"), erros)
-            if erros:
-                return None, erros
+                errors["login"] = MSG_LOGIN_INVALID
+            name = self._name(date.get("name"), errors)
+            profile_id, profile = self._active_profile(date.get("profile_id"), errors)
+            password = self._password(date.get("senha"), date.get("confirmacao"), errors)
+            if errors:
+                return None, errors
             try:
-                self._require_admin(ctx, perfil["is_admin"] == "Y", "CREATE")
+                self._require_admin(ctx, profile["is_admin"] == "Y", "CREATE")
             except OperationDenied as exc:
                 return None, {"profile_id": exc.message}
-            agora = self._clock()
-            novo = {"login": login, "name": nome, "profile_id": perfil_id, "active": "Y",
-                    "password_hash": security.hash_password(senha), "password_changed_at": agora}
-            auditoria = admin_crud.audit_entry(ctx, ip, "CREATE",
-                                             admin_crud.insert_detail(dict(novo, perfil=perfil["name"]),
+            now = self._clock()
+            new = {"login": login, "name": name, "profile_id": profile_id, "active": "Y",
+                    "password_hash": security.hash_password(password), "password_changed_at": now}
+            audit = admin_crud.audit_entry(ctx, ip, "CREATE",
+                                             admin_crud.insert_detail(dict(new, perfil=profile["name"]),
                                                                          INSERT_FIELDS))
             try:
-                criado = self._users.insert(novo, audit=auditoria)
+                created = self._users.insert(new, audit=audit)
             except RepoViolation as exc:
-                self._violation(ctx, exc, erros)
-                return None, erros
+                self._violation(ctx, exc, errors)
+                return None, errors
             self._log.info("usuario incluido (login=%s usuario=%s)", ctx.get("login"), login,
                            extra={"action": "CREATE"})
-            return criado["id"], {}
+            return created["id"], {}
 
-        atual = self._get(user_id)
-        nome = self._name(date.get("name"), erros)
-        perfil_id, perfil = self._active_profile(date.get("profile_id"), erros, atual["profile_id"])
-        if erros:
-            return atual["id"], erros
-        if atual["id"] == ctx.get("user_id") and ctx.get("is_admin") is True and perfil["is_admin"] != "Y":
-            return atual["id"], {GENERAL_FIELD: MSG_SELF_PROFILE}
+        current = self._get(user_id)
+        name = self._name(date.get("name"), errors)
+        profile_id, profile = self._active_profile(date.get("profile_id"), errors, current["profile_id"])
+        if errors:
+            return current["id"], errors
+        if current["id"] == ctx.get("user_id") and ctx.get("is_admin") is True and profile["is_admin"] != "Y":
+            return current["id"], {GENERAL_FIELD: MSG_SELF_PROFILE}
         # Trocar o proprio perfil, mesmo por um nao administrativo, mudaria as proprias permissoes: so
         # administrador (CR-008 E1, revisao de 2026-10-20).
-        troca_propria = atual["id"] == ctx.get("user_id") and perfil_id != atual["profile_id"]
+        swap_own = current["id"] == ctx.get("user_id") and profile_id != current["profile_id"]
         try:
-            self._require_admin(ctx, perfil["is_admin"] == "Y" or self._admin_profile(atual["profile_id"])
-                               or troca_propria, "UPDATE")
+            self._require_admin(ctx, profile["is_admin"] == "Y" or self._admin_profile(current["profile_id"])
+                               or swap_own, "UPDATE")
         except OperationDenied as exc:
-            return atual["id"], {GENERAL_FIELD: exc.message}
-        if admin_crud.text(date.get("version"), 64) != admin_crud.version(atual, EDITABLE_FIELDS):
-            return atual["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
-        depois = dict(atual, name=nome, profile_id=perfil_id)
-        detalhe = admin_crud.changes_detail(atual, depois, EDITABLE_FIELDS)
-        if detalhe is None:
-            return atual["id"], {}
+            return current["id"], {GENERAL_FIELD: exc.message}
+        if admin_crud.text(date.get("version"), 64) != admin_crud.version(current, EDITABLE_FIELDS):
+            return current["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
+        after = dict(current, name=name, profile_id=profile_id)
+        detail = admin_crud.changes_detail(current, after, EDITABLE_FIELDS)
+        if detail is None:
+            return current["id"], {}
         try:
-            self._users.update(atual["id"], {"name": nome, "profile_id": perfil_id},
-                                   expected=admin_crud.expected(atual, EDITABLE_FIELDS),
-                                   audit=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
+            self._users.update(current["id"], {"name": name, "profile_id": profile_id},
+                                   expected=admin_crud.expected(current, EDITABLE_FIELDS),
+                                   audit=admin_crud.audit_entry(ctx, ip, "UPDATE", detail))
         except RepoConflict:
-            return atual["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
+            return current["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
         except RepoViolation as exc:
-            self._violation(ctx, exc, erros)
-            return atual["id"], erros
-        self._log.info("usuario alterado (login=%s usuario=%s)", ctx.get("login"), atual["login"],
+            self._violation(ctx, exc, errors)
+            return current["id"], errors
+        self._log.info("usuario alterado (login=%s usuario=%s)", ctx.get("login"), current["login"],
                        extra={"action": "UPDATE"})
-        return atual["id"], {}
+        return current["id"], {}
 
     def toggle_active(self, ctx, ip, user_id, version):
         """Desativa (DEACTIVATE) ou reativa (UPDATE) o usuario.
@@ -274,28 +274,28 @@ class AdminUsersService(object):
         RepoNotFound e AccessDenied.
         """
         admin_crud.require_feature(ctx, FEATURE)
-        atual = self._get(user_id)
-        novo_ativo = "N" if atual["active"] == "Y" else "Y"
-        if novo_ativo == "N" and atual["id"] == ctx.get("user_id"):
+        current = self._get(user_id)
+        new_active = "N" if current["active"] == "Y" else "Y"
+        if new_active == "N" and current["id"] == ctx.get("user_id"):
             raise OperationDenied(MSG_SELF_DEACTIVATE)
-        self._require_admin(ctx, self._admin_profile(atual["profile_id"]), "DEACTIVATE")
-        if admin_crud.text(version, 64) != admin_crud.version(atual, EDITABLE_FIELDS):
+        self._require_admin(ctx, self._admin_profile(current["profile_id"]), "DEACTIVATE")
+        if admin_crud.text(version, 64) != admin_crud.version(current, EDITABLE_FIELDS):
             raise RepoConflict("versao divergente")
-        detalhe = admin_crud.changes_detail(atual, dict(atual, active=novo_ativo), ("active",))
-        acao = "DEACTIVATE" if novo_ativo == "N" else "UPDATE"
+        detail = admin_crud.changes_detail(current, dict(current, active=new_active), ("active",))
+        action = "DEACTIVATE" if new_active == "N" else "UPDATE"
         try:
-            alterado = self._users.update(atual["id"], {"active": novo_ativo},
-                                              expected=admin_crud.expected(atual, EDITABLE_FIELDS),
-                                              audit=admin_crud.audit_entry(ctx, ip, acao, detalhe))
+            changed = self._users.update(current["id"], {"active": new_active},
+                                              expected=admin_crud.expected(current, EDITABLE_FIELDS),
+                                              audit=admin_crud.audit_entry(ctx, ip, action, detail))
         except RepoViolation as exc:
             if exc.constraint == "sss_ultimo_admin":
                 self._log.warning("desativacao do ultimo admin negada (login=%s usuario=%s)", ctx.get("login"),
-                                  atual["login"], extra={"action": acao})
+                                  current["login"], extra={"action": action})
                 raise OperationDenied(MSG_LAST_ADMIN)
             raise
-        self._log.info("usuario %s (login=%s usuario=%s)", "desativado" if novo_ativo == "N" else "reativado",
-                       ctx.get("login"), atual["login"], extra={"action": acao})
-        return public_view(alterado)
+        self._log.info("usuario %s (login=%s usuario=%s)", "desativado" if new_active == "N" else "reativado",
+                       ctx.get("login"), current["login"], extra={"action": action})
+        return public_view(changed)
 
     def reset_password(self, ctx, ip, user_id, password_value, confirmation):
         """Define nova senha (politica + confirmacao), zera tentativas e bloqueio; audita sem o valor.
@@ -304,32 +304,32 @@ class AdminUsersService(object):
         'Minha senha'), RepoNotFound e AccessDenied.
         """
         admin_crud.require_feature(ctx, FEATURE)
-        atual = self._get(user_id)
-        if atual["id"] == ctx.get("user_id"):
+        current = self._get(user_id)
+        if current["id"] == ctx.get("user_id"):
             raise OperationDenied(MSG_SELF_PASSWORD)
-        self._require_admin(ctx, self._admin_profile(atual["profile_id"]), "UPDATE")
-        erros = {}
-        password_value = self._password(password_value, confirmation, erros)
-        if erros:
-            return erros
-        self._users.set_password(atual["id"], security.hash_password(password_value), self._clock(),
+        self._require_admin(ctx, self._admin_profile(current["profile_id"]), "UPDATE")
+        errors = {}
+        password_value = self._password(password_value, confirmation, errors)
+        if errors:
+            return errors
+        self._users.set_password(current["id"], security.hash_password(password_value), self._clock(),
                                      audit=admin_crud.audit_entry(ctx, ip, "UPDATE", u"senha redefinida"))
-        self._log.info("senha redefinida (login=%s usuario=%s)", ctx.get("login"), atual["login"],
+        self._log.info("senha redefinida (login=%s usuario=%s)", ctx.get("login"), current["login"],
                        extra={"action": "UPDATE"})
         return {}
 
     def unlock(self, ctx, ip, user_id):
         """Zera tentativas e bloqueio do usuario, com auditoria UPDATE."""
         admin_crud.require_feature(ctx, FEATURE)
-        atual = self._get(user_id)
-        self._require_admin(ctx, self._admin_profile(atual["profile_id"]), "UPDATE")
-        detalhe = u"desbloqueado (failed_attempts: %s; locked_until: %s)" % (
-            atual.get("failed_attempts") or 0, atual.get("locked_until") or u"(vazio)")
-        alterado = self._users.unlock(atual["id"],
-                                              audit=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
-        self._log.info("usuario desbloqueado (login=%s usuario=%s)", ctx.get("login"), atual["login"],
+        current = self._get(user_id)
+        self._require_admin(ctx, self._admin_profile(current["profile_id"]), "UPDATE")
+        detail = u"desbloqueado (failed_attempts: %s; locked_until: %s)" % (
+            current.get("failed_attempts") or 0, current.get("locked_until") or u"(vazio)")
+        changed = self._users.unlock(current["id"],
+                                              audit=admin_crud.audit_entry(ctx, ip, "UPDATE", detail))
+        self._log.info("usuario desbloqueado (login=%s usuario=%s)", ctx.get("login"), current["login"],
                        extra={"action": "UPDATE"})
-        return public_view(alterado)
+        return public_view(changed)
 
 
 _default = None
@@ -342,10 +342,10 @@ def _service():
         if _default is None:
             from gluon import current
             import sss_logging
-            fabrica = current.repo_factory
+            factory = current.repo_factory
             _default = AdminUsersService(
-                users=fabrica.get("users"),
-                rbac_repo=fabrica.get("rbac"),
+                users=factory.get("users"),
+                rbac_repo=factory.get("rbac"),
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _default

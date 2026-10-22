@@ -66,10 +66,10 @@ def check_environment_preconditions(cfg=None):
     """Verifica a chave, o ambiente e o owner antes de qualquer conexao. Retorna (bool, motivo)."""
     if not real_db_configured():
         return False, "Testes Oracle reais desligados: defina %s=1" % KEY
-    antigas = [v for v in OLD_VARIABLES if os.environ.get(v)]
-    if antigas:
+    old = [v for v in OLD_VARIABLES if os.environ.get(v)]
+    if old:
         return False, ("Variaveis antigas definidas (%s): owner, prefixo e DSN vem so do instance/config.ini; "
-                       "use apenas %s=1" % (", ".join(antigas), KEY))
+                       "use apenas %s=1" % (", ".join(old), KEY))
     if cfg is None:
         return True, ""
 
@@ -93,13 +93,13 @@ def validate_disposable_schema(conn, configured_owner, expected_session_user, pr
     owner = (configured_owner or "").strip().upper()
     if not _RE_OWNER.match(owner):
         raise SchemaPreconditionError("Owner configurado invalido")
-    modo = owner_mode(owner)
-    if modo == DISPOSABLE_MODE and not _RE_DISPOSABLE_OWNER.match(owner):
+    mode = owner_mode(owner)
+    if mode == DISPOSABLE_MODE and not _RE_DISPOSABLE_OWNER.match(owner):
         raise SchemaPreconditionError("Owner descartavel '%s' invalido" % owner)
-    compartilhado = modo == SHARED_MODE
-    esperado = (expected_session_user or "").strip().upper()
+    shared = mode == SHARED_MODE
+    expected = (expected_session_user or "").strip().upper()
 
-    if not compartilhado and esperado == owner:
+    if not shared and expected == owner:
         raise SchemaPreconditionError(
             "Conta de sessao '%s' nao pode ser a conta dona do esquema descartavel '%s'"
             % (expected_session_user, configured_owner)
@@ -111,16 +111,16 @@ def validate_disposable_schema(conn, configured_owner, expected_session_user, pr
         row = cur.fetchone()
         if not row:
             raise SchemaPreconditionError("Nenhum usuario retornado por SELECT USER FROM DUAL")
-        user_sessao = str(row[0]).strip().upper()
-        if user_sessao != esperado:
+        user_session = str(row[0]).strip().upper()
+        if user_session != expected:
             raise SchemaPreconditionError(
-                "Usuario de sessao real '%s' difere do esperado '%s'" % (user_sessao, expected_session_user)
+                "Usuario de sessao real '%s' difere do esperado '%s'" % (user_session, expected_session_user)
             )
-        if user_sessao == owner and not compartilhado:
+        if user_session == owner and not shared:
             raise SchemaPreconditionError(
                 "Sessao Oracle real esta conectada como owner '%s'; exigida conta de teste distinta" % owner
             )
-        if compartilhado:
+        if shared:
             _check_sss_schema(cur, owner, prefix)
     finally:
         cur.close()
@@ -134,9 +134,9 @@ def _check_sss_schema(cur, owner, prefix):
         import sql_ident
     except ImportError:
         from modules import sql_ident
-    tabela = sql_ident.table(owner, prefix or "tbsss_", "control")
+    table = sql_ident.table(owner, prefix or "tbsss_", "control")
     try:
-        cur.execute("SELECT schema_version FROM " + tabela)
+        cur.execute("SELECT schema_version FROM " + table)
         row = cur.fetchone()
     except Exception as exc:
         raise SchemaPreconditionError("Esquema SSS ausente no owner '%s' (%s)" % (owner, type(exc).__name__))
@@ -155,25 +155,25 @@ def prepare_disposable_schema(role="web", cfg=None, secrets=None):
     except ImportError:
         from modules import sss_config
 
-    ok, motivo = check_environment_preconditions()
+    ok, reason = check_environment_preconditions()
     if not ok:
-        raise SchemaPreconditionError(motivo)
+        raise SchemaPreconditionError(reason)
     if cfg is None:
         cfg = sss_config.get_config()
-    ok, motivo = check_environment_preconditions(cfg=cfg)
+    ok, reason = check_environment_preconditions(cfg=cfg)
     if not ok:
-        raise SchemaPreconditionError(motivo)
+        raise SchemaPreconditionError(reason)
 
     cfg_owner = _cfg_oracle(cfg, "owner").upper()
-    modo = owner_mode(cfg_owner)
-    usuario_esperado = getattr(getattr(cfg, "oracle", None), "user", None)
+    mode = owner_mode(cfg_owner)
+    user_expected = getattr(getattr(cfg, "oracle", None), "user", None)
     if role == "purge":
-        usuario_esperado = getattr(getattr(cfg, "retention", None), "purge_user", None)
+        user_expected = getattr(getattr(cfg, "retention", None), "purge_user", None)
     elif role == "monitor":
-        usuario_esperado = getattr(getattr(cfg, "monitor", None), "user", None)
+        user_expected = getattr(getattr(cfg, "monitor", None), "user", None)
 
-    if modo == DISPOSABLE_MODE and usuario_esperado and usuario_esperado.strip().upper() == cfg_owner:
-        raise SchemaPreconditionError("Usuario de teste '%s' nao pode ser o owner do esquema" % usuario_esperado)
+    if mode == DISPOSABLE_MODE and user_expected and user_expected.strip().upper() == cfg_owner:
+        raise SchemaPreconditionError("Usuario de teste '%s' nao pode ser o owner do esquema" % user_expected)
 
     if secrets is None:
         secrets = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role=role)
@@ -187,10 +187,10 @@ def prepare_disposable_schema(role="web", cfg=None, secrets=None):
 
     conn = conn_mod.connect(cfg, secrets, role)
     try:
-        prefixo = _cfg_oracle(cfg, "table_prefix") or "tbsss_"
-        validate_disposable_schema(conn, cfg_owner, usuario_esperado, prefix=prefixo)
+        prefix = _cfg_oracle(cfg, "table_prefix") or "tbsss_"
+        validate_disposable_schema(conn, cfg_owner, user_expected, prefix=prefix)
     finally:
         conn.close()
 
-    _current_mode = modo
+    _current_mode = mode
     return cfg

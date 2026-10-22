@@ -43,22 +43,22 @@ def main(argv=None):
     except sss_config.ConfigError:  # o CRITICAL ja foi registrado (README §12.1)
         return scheduler_loop.EXIT_CONFIG
     logger = sss_logging.configure("sss_scheduler", cfg)
-    for nome in _DAEMON_LOGGERS:
-        outro = logging.getLogger(nome)
-        outro.setLevel(logger.level)
+    for name in _DAEMON_LOGGERS:
+        other = logging.getLogger(name)
+        other.setLevel(logger.level)
         for handler in logger.handlers:
-            outro.addHandler(handler)
+            other.addHandler(handler)
     masking.install_filter_on_handlers()
-    parada = threading.Event()
-    os_platform.install_stop_handler(parada)
-    agente = scheduler_loop.Agent(cfg=cfg)
+    stop = threading.Event()
+    os_platform.install_stop_handler(stop)
+    agent = scheduler_loop.Agent(cfg=cfg)
     try:
-        agente.initialize()
-        return agente.run(parada, wait=_wait(parada))
-    except scheduler_loop.StartupFailure as falha:
-        return falha.code
+        agent.initialize()
+        return agent.run(stop, wait=_wait(stop))
+    except scheduler_loop.StartupFailure as failure:
+        return failure.code
     finally:
-        agente.release_resources()
+        agent.release_resources()
 
 
 if __name__ == "__main__":

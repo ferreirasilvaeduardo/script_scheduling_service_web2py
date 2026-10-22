@@ -80,11 +80,11 @@ class _Agenda(object):
             self._before = (copy.deepcopy(self.rules), copy.deepcopy(self.tickets), list(self.audit))
 
     def due_rules(self, conn, batch, last_next=None, last_id=0):
-        vencidas = sorted((r["next_run_at"], r["id"]) for r in self.rules.values()
+        due = sorted((r["next_run_at"], r["id"]) for r in self.rules.values()
                           if r["active"] == "Y" and r["next_run_at"] <= NOW)
         if last_next is not None:
-            vencidas = [v for v in vencidas if v > (last_next, last_id)]
-        return [(rid, prox) for prox, rid in vencidas[:batch]]
+            due = [v for v in due if v > (last_next, last_id)]
+        return [(rid, next_value) for next_value, rid in due[:batch]]
 
     def lock_rule(self, conn, rid):
         r = self.rules.get(rid)
@@ -271,31 +271,31 @@ class TestExpansion(_Base):
         self.assertEqual(self.process(), "OUTRO_AGENTE")
 
     def test_pausas_pelo_rbac_com_a_traducao_unica(self):
-        casos = (("usuario_ativo", "N", "USER_INACTIVE"), ("perfil_ativo", "N", "NO_PERMISSION"),
+        cases = (("usuario_ativo", "N", "USER_INACTIVE"), ("perfil_ativo", "N", "NO_PERMISSION"),
                  ("scripts", [], "NO_PERMISSION"), ("environments", [], "NO_PERMISSION"),
                  ("features", [], "NO_PERMISSION"))
-        for i, (campo, valor, motivo) in enumerate(casos, 1):
+        for i, (field, value, reason) in enumerate(cases, 1):
             self.setUp()
             self.rule(i)
-            self.queue.usuario[campo] = valor
+            self.queue.usuario[field] = value
             with self.assertLogs("sss_scheduler", "WARNING"):
-                self.assertEqual(self.process(i), "PAUSADA", campo)
-            self.assertEqual(self.agenda.rules[i]["pause_reason"], motivo, campo)
+                self.assertEqual(self.process(i), "PAUSADA", field)
+            self.assertEqual(self.agenda.rules[i]["pause_reason"], reason, field)
             self.assertEqual(self.agenda.rules[i]["updated_by"], "SYSTEM:" + AGENT)
-        for chave, motivo in ((("script", "active"), "SCRIPT_INACTIVE"), (("environment", "active"), "ENVIRONMENT_INACTIVE")):
+        for key, reason in ((("script", "active"), "SCRIPT_INACTIVE"), (("environment", "active"), "ENVIRONMENT_INACTIVE")):
             self.setUp()
             self.rule()
-            getattr(self.queue, chave[0])[chave[1]] = "N"
+            getattr(self.queue, key[0])[key[1]] = "N"
             with self.assertLogs("sss_scheduler", "WARNING"):
                 self.process()
-            self.assertEqual(self.agenda.rules[1]["pause_reason"], motivo)
+            self.assertEqual(self.agenda.rules[1]["pause_reason"], reason)
 
     def test_r33_todo_motivo_do_rbac_cabe_na_ck(self):
-        aceitos = sql_ident.TABLES["schedules"]["cks"]["pause"]["expr"]
-        for nome in dir(rbac.Reason):
-            if nome.startswith("_") or nome == "OK":
+        accepted = sql_ident.TABLES["schedules"]["cks"]["pause"]["expr"]
+        for name in dir(rbac.Reason):
+            if name.startswith("_") or name == "OK":
                 continue
-            self.assertIn("'%s'" % rbac.pause_reason_for(getattr(rbac.Reason, nome)), aceitos, nome)
+            self.assertIn("'%s'" % rbac.pause_reason_for(getattr(rbac.Reason, name)), accepted, name)
 
     def test_prioridade_rebaixada(self):
         self.rule(priority=1)
@@ -325,16 +325,16 @@ class TestExpansion(_Base):
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             self.process()
         self.assertTrue(any("SKIP_OVERLAP_PRESO: o ticket 50" in l for l in logs.output), "600 + 180 s < 2 h")
-        for livre in (None, "SUCCESS"):
+        for free in (None, "SUCCESS"):
             self.setUp()
             self.rule(last_ticket_id=50)
-            if livre:
-                self.agenda.tickets[50] = {"status": livre, "created_at": NOW}
+            if free:
+                self.agenda.tickets[50] = {"status": free, "created_at": NOW}
             self.assertEqual(self.process(), "TICKET", "inexistente (purgado) ou terminal e livre")
 
     def test_misfire_run_once_e_skip(self):
-        tres_dias = datetime.datetime(2026, 10, 17, 9, 55)
-        self.rule(next_run_at=tres_dias)
+        three_days = datetime.datetime(2026, 10, 17, 9, 55)
+        self.rule(next_run_at=three_days)
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             self.assertEqual(self.process(), "TICKET")
         self.assertEqual(len(self.agenda.tickets), 1, "RUN_ONCE: um ticket apos o downtime")
@@ -342,7 +342,7 @@ class TestExpansion(_Base):
         self.assertTrue(any("MISFIRE: 3 ocorrencia(s) perdida(s)" in l for l in logs.output))
         self.setUp()
         self.cfg = _Cfg(misfire_policy="SKIP")
-        self.rule(next_run_at=tres_dias, run_time="09:00")
+        self.rule(next_run_at=three_days, run_time="09:00")
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.assertEqual(self.process(), "AVANCADA")
         self.assertEqual((self.agenda.tickets, self.agenda.rules[1]["next_run_at"]),
@@ -350,7 +350,7 @@ class TestExpansion(_Base):
         # R-21: SKIP com a vencida mais recente dentro da tolerancia gera o ticket dela.
         self.setUp()
         self.cfg = _Cfg(misfire_policy="SKIP")
-        self.rule(next_run_at=tres_dias)
+        self.rule(next_run_at=three_days)
         with self.assertLogs("sss_scheduler", "INFO"):
             self.assertEqual(self.process(), "TICKET")
 
@@ -398,8 +398,8 @@ class TestExpansion(_Base):
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.assertEqual(self.process(), "PAUSADA")
         self.assertEqual(self.agenda.rules[1]["pause_reason"], "INVALID_PARAM")
-        detalhe = self.agenda.audit[0][1]
-        self.assertTrue(detalhe.startswith("pause_reason: INVALID_PARAM; data_ref: "), detalhe)
+        detail = self.agenda.audit[0][1]
+        self.assertTrue(detail.startswith("pause_reason: INVALID_PARAM; data_ref: "), detail)
         self.setUp()
         self.rule(params_json="{nao json")
         with self.assertLogs("sss_scheduler", "WARNING"):
@@ -445,14 +445,14 @@ class TestExpansion(_Base):
     def test_r22_erro_de_banco_tres_vezes_e_erro_interno(self):
         self.rule()
         d = self.des()
-        espaco = _Error("ORA-01653: unable to extend table")
+        space = _Error("ORA-01653: unable to extend table")
         for n in (1, 2):
-            self.agenda.failures = [("inserir_ticket", espaco)]
+            self.agenda.failures = [("inserir_ticket", space)]
             with self.assertLogs("sss_scheduler", "WARNING") as logs:
                 self.assertEqual(d.process(self.conn, 1), "ERRO_BANCO")
             self.assertTrue(any("DESDOBRO_ERRO_BANCO: ORA-01653 (falha %d de 3 seguidas)" % n in l for l in logs.output))
             self.assertEqual((self.agenda.rules[1]["active"], self.agenda.tickets), ("Y", {}), "sem pausar")
-        self.agenda.failures = [("inserir_ticket", espaco)]
+        self.agenda.failures = [("inserir_ticket", space)]
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.assertEqual(d.process(self.conn, 1), "INTERNAL_ERROR")
         self.assertEqual(self.agenda.rules[1]["pause_reason"], "INTERNAL_ERROR")
@@ -461,7 +461,7 @@ class TestExpansion(_Base):
         self.setUp()
         self.rule()
         d = self.des()
-        self.agenda.failures = [("inserir_ticket", espaco)]
+        self.agenda.failures = [("inserir_ticket", space)]
         with self.assertLogs("sss_scheduler", "WARNING"):
             d.process(self.conn, 1)
         self.assertEqual(d.process(self.conn, 1), "TICKET")
@@ -488,13 +488,13 @@ class TestExpansion(_Base):
         for i in range(1, 6):
             self.rule(i, next_run_at=datetime.datetime(2026, 10, 20, 9, 50 + i))
         self.cfg = _Cfg(schedule_batch_size=2)
-        paginas = []
+        pages = []
         original = self.agenda.due_rules
-        self.agenda.due_rules = lambda *a: paginas.append(a[2:]) or original(*a)
+        self.agenda.due_rules = lambda *a: pages.append(a[2:]) or original(*a)
         self.assertEqual(self.des().run(self.conn)["tickets"], 5)
-        self.assertEqual(len(paginas), 3, "2 + 2 + 1")
-        self.assertEqual(paginas[0], (None, 0))
-        self.assertEqual(paginas[1], (datetime.datetime(2026, 10, 20, 9, 52), 2))
+        self.assertEqual(len(pages), 3, "2 + 2 + 1")
+        self.assertEqual(pages[0], (None, 0))
+        self.assertEqual(pages[1], (datetime.datetime(2026, 10, 20, 9, 52), 2))
         # Orcamento (heartbeat / 2 = 5 s) estourado: o resto fica para o proximo ciclo.
         self.setUp()
         for i in range(1, 6):
@@ -551,8 +551,8 @@ class TestExpansionOracle(unittest.TestCase):
         self.c = self._fixtures.scenario()
         cat, self.rbac = self.obter_repo("catalog"), self.obter_repo("rbac")
         self.cat = cat
-        funcs = [f["id"] for f in self.rbac.features_list() if f["code"] == "EXEC_SCRIPT"]
-        self.rbac.matrix_save(self.c["perfil"]["id"], funcs, [self.c["amb1"]["id"]], [self.c["scr"]["id"]],
+        features = [f["id"] for f in self.rbac.features_list() if f["code"] == "EXEC_SCRIPT"]
+        self.rbac.matrix_save(self.c["perfil"]["id"], features, [self.c["amb1"]["id"]], [self.c["scr"]["id"]],
                                 actor=self._fixtures.actor)
         self.agent = "tst-ha-%s" % self._fixtures.suf
         self.des = schedule_expansion.Expansion(RepoSchedulerSchedules(cat._owner, cat._prefixo),
@@ -564,7 +564,7 @@ class TestExpansionOracle(unittest.TestCase):
     def tearDown(self):
         self.conn.rollback()
         cur = self.conn.cursor()
-        agd, aud, tck = (self.cat.qualify_table(t) for t in ("schedules", "audit", "tickets"))
+        sch, aud, tck = (self.cat.qualify_table(t) for t in ("schedules", "audit", "tickets"))
         for rid in self._fixtures.created["schedules"]:
             cur.execute("SELECT id FROM " + tck + " WHERE schedule_id = :id", id=rid)
             for (tid,) in cur.fetchall():
@@ -575,21 +575,21 @@ class TestExpansionOracle(unittest.TestCase):
         self.contrato.tearDown(self)
 
     def _rule(self, answers):
-        proxima = datetime.datetime.now().replace(second=0, microsecond=0) - datetime.timedelta(minutes=2)
+        next_value = datetime.datetime.now().replace(second=0, microsecond=0) - datetime.timedelta(minutes=2)
         return self._fixtures.schedule(self.c["scr"]["id"], self.c["amb1"]["name"], self.c["u1"]["id"],
-                                       recurrence_type="DAILY", run_time=proxima.strftime("%H:%M"),
-                                       start_date=proxima - datetime.timedelta(days=1), next_run_at=proxima,
+                                       recurrence_type="DAILY", run_time=next_value.strftime("%H:%M"),
+                                       start_date=next_value - datetime.timedelta(days=1), next_run_at=next_value,
                                        params_json=json.dumps(answers))
 
     def test_ticket_real_e_pausa_param_invalido(self):
         prm_a = self.c["prm_a"]["code"]
         ok = self._rule({prm_a: "valor-a"})
-        ruim = self._rule({})
+        bad = self._rule({})
         with self.assertLogs("sss_scheduler", "INFO"):
             self.assertEqual(self.des.process(self.conn, ok["id"]), "TICKET")
-            self.assertEqual(self.des.process(self.conn, ruim["id"]), "PAUSADA")
-        agd = self.obter_repo("schedules")
-        r_ok, r_ruim = agd.get(ok["id"]), agd.get(ruim["id"])
+            self.assertEqual(self.des.process(self.conn, bad["id"]), "PAUSADA")
+        sch = self.obter_repo("schedules")
+        r_ok, r_bad = sch.get(ok["id"]), sch.get(bad["id"])
         self.assertGreater(r_ok["next_run_at"], ok["next_run_at"])
         t = self.obter_repo("tickets").get(r_ok["last_ticket_id"])
         self.assertEqual((t["schedule_id"], t["requested_by"], t["created_by"], t["scheduled_at"], t["status"]),
@@ -597,13 +597,13 @@ class TestExpansionOracle(unittest.TestCase):
         snap = json.loads(t["submitted_params"])
         self.assertEqual((snap["version"], snap["path_file"]), (5, self.c["scr"]["path_file"]))
         self.assertEqual([x["answer_value"] for x in self.obter_repo("tickets").answers(t["id"])], ["valor-a"])
-        self.assertEqual((r_ruim["active"], r_ruim["pause_reason"], r_ruim["updated_by"]),
+        self.assertEqual((r_bad["active"], r_bad["pause_reason"], r_bad["updated_by"]),
                          ("N", "INVALID_PARAM", "SYSTEM:%s" % self.agent))
         # A regra ja avancada nao e mais vencida; a pausada tambem nao.
-        vencidas = [rid for rid, _p in self.des.agenda.due_rules(self.conn, 1000)]
+        due = [rid for rid, _p in self.des.agenda.due_rules(self.conn, 1000)]
         self.conn.rollback()
-        self.assertNotIn(ok["id"], vencidas)
-        self.assertNotIn(ruim["id"], vencidas)
+        self.assertNotIn(ok["id"], due)
+        self.assertNotIn(bad["id"], due)
 
 
 # ---------------------------------------------------------------------------- F8.4c: fencing e NODE_OFFLINE
@@ -626,23 +626,23 @@ class TestFencing(tsc._Base):
         self.run_loop(self._running(tid))
         pid = self.db.tickets[tid]["process_id"]
         self.connection.down = True
-        inicio = _time.monotonic()
+        start = _time.monotonic()
         with self.assertLogs("sss_scheduler", "CRITICAL") as logs:
             self.run_loop(lambda: self.ag.fenced, limit=10)
-        self.assertGreaterEqual(_time.monotonic() - inicio, 1.0, "nao antes do limiar")
+        self.assertGreaterEqual(_time.monotonic() - start, 1.0, "nao antes do limiar")
         self.assertTrue(any("FENCED: sem heartbeat confirmado" in l for l in logs.output))
         # Em modo cercado: sem claims nem desdobro, mesmo com ticket novo na fila.
-        novo = self.db.ticket(self.db.script("echo novo\n"))
+        new = self.db.ticket(self.db.script("echo novo\n"))
         self.run_loop(lambda: not tsc._alive(pid), limit=10)
         self.assertFalse(tsc._alive(pid), "o grupo foi encerrado no fence")
-        self.assertEqual(self.db.tickets[novo]["status"], "PENDING")
+        self.assertEqual(self.db.tickets[new]["status"], "PENDING")
         self.connection.down = False
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             self.run_loop(lambda: self.finished(tid)() and not self.ag.fenced, limit=10)
         self.assertEqual(self.final(tid), ("FAILED", "FENCED", -2))
         self.assertTrue(any("FENCED encerrado" in l for l in logs.output))
-        self.run_loop(self.finished(novo), limit=15)
-        self.assertEqual(self.final(novo), ("SUCCESS", "EXIT_OK", 0), "claims voltam depois do heartbeat")
+        self.run_loop(self.finished(new), limit=15)
+        self.assertEqual(self.final(new), ("SUCCESS", "EXIT_OK", 0), "claims voltam depois do heartbeat")
 
     def test_r12_resultado_local_prevalece_sobre_fenced(self):
         tid = self.db.ticket(self.db.script("sleep 0.5\nexit 0\n"))
@@ -663,10 +663,10 @@ class TestFencing(tsc._Base):
         self.run_loop(lambda: all(self._running(t)() for t in tids), limit=30)
         self.connection.down = True
         _time.sleep(1.6)
-        inicio = _time.monotonic()
+        start = _time.monotonic()
         with self.assertLogs("sss_scheduler", "CRITICAL"):
             self.ag._check_fence()
-        self.assertLess(_time.monotonic() - inicio, 1.0, "os 30 pedidos sem esperar nenhum grupo")
+        self.assertLess(_time.monotonic() - start, 1.0, "os 30 pedidos sem esperar nenhum grupo")
         self.assertTrue(all(i.phase == "ENCERRANDO" for i in self.ag.executions.values()))
         self.connection.down = False
         with self.assertLogs("sss_scheduler", "WARNING"):
@@ -710,9 +710,9 @@ class TestNodeOffline(tsc._Base):
             self.run_loop(lambda: self.ag._node_offline_suspended_until is not None, limit=5)
         self.assertTrue(any("SALTO_RELOGIO" in l for l in logs.output))
         self.db.offline.add(tid)
-        chamadas = self.db.node_offline_calls
+        calls = self.db.node_offline_calls
         self.run_loop(lambda: False, limit=1)
-        self.assertEqual(self.db.node_offline_calls, chamadas, "suspenso por node_offline_timeout_s")
+        self.assertEqual(self.db.node_offline_calls, calls, "suspenso por node_offline_timeout_s")
         self.assertEqual(self.db.tickets[tid]["status"], "RUNNING")
 
     def test_salto_detectado_na_propria_transacao(self):
@@ -742,9 +742,9 @@ class TestShutdown(tsc._Base):
     PARADO, AGENT_STOP (encerrar_agente), .stop removido e saida 0."""
 
     def _stop(self):
-        caminho = _os.path.join(self.work, "sss-srv-t.stop")
-        open(caminho, "w").close()
-        return caminho
+        path = _os.path.join(self.work, "sss-srv-t.stop")
+        open(path, "w").close()
+        return path
 
     def test_drain_pelo_stop_termina_os_filhos_e_mantem_heartbeat_e_saida(self):
         output_dir = _os.path.join(self.root, "output")
@@ -753,14 +753,14 @@ class TestShutdown(tsc._Base):
         self.start_agent(shutdown_mode="DRAIN", shutdown_grace_s=30, output_dir=output_dir, output_max_bytes=1048576,
                    output_max_files=10)
         self.run_loop(lambda: self.db.tickets[tid]["status"] == "RUNNING" and self.db.tickets[tid]["process_id"])
-        novo = self.db.ticket(self.db.script("echo novo\n"))
+        new = self.db.ticket(self.db.script("echo novo\n"))
         stop = self._stop()
         heartbeats = len(self.db.heartbeats)
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            codigo = self.run_loop(lambda: False, limit=20)
-        self.assertEqual(codigo, 0)
+            code = self.run_loop(lambda: False, limit=20)
+        self.assertEqual(code, 0)
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0), "DRAIN deixa o script terminar")
-        self.assertEqual(self.db.tickets[novo]["status"], "PENDING", "sem claim na drenagem")
+        self.assertEqual(self.db.tickets[new]["status"], "PENDING", "sem claim na drenagem")
         self.assertGreater(len(self.db.heartbeats), heartbeats, "heartbeat mantido")
         self.assertEqual(self.repo_output.rows[tid]["state"], "AVAILABLE", "a saida segue no DRAIN")
         self.assertEqual(self.db.stopped_flag, "DRAIN")
@@ -773,10 +773,10 @@ class TestShutdown(tsc._Base):
         self.run_loop(lambda: self.db.tickets[tid]["status"] == "RUNNING" and self.db.tickets[tid]["process_id"])
         pid = self.db.tickets[tid]["process_id"]
         self.stopped.set()
-        inicio = _time.monotonic()
+        start = _time.monotonic()
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.assertEqual(self.run_loop(lambda: False, limit=20), 0)
-        self.assertGreaterEqual(_time.monotonic() - inicio, 1.0, "aguardou shutdown_grace_s")
+        self.assertGreaterEqual(_time.monotonic() - start, 1.0, "aguardou shutdown_grace_s")
         self.assertEqual(self.final(tid), ("FAILED", "SHUTDOWN", -6))
         self.assertFalse(tsc._alive(pid))
         self.assertEqual(self.db.stopped_flag, "DRAIN")
@@ -794,11 +794,11 @@ class TestShutdown(tsc._Base):
 class TestStopSignal(unittest.TestCase):
 
     def test_sigterm_e_sigint_so_acionam_a_flag(self):
-        anteriores = (_signal.getsignal(_signal.SIGTERM), _signal.getsignal(_signal.SIGINT))
-        self.addCleanup(_signal.signal, _signal.SIGTERM, anteriores[0])
-        self.addCleanup(_signal.signal, _signal.SIGINT, anteriores[1])
-        for sinal in (_signal.SIGTERM, _signal.SIGINT):
+        previous = (_signal.getsignal(_signal.SIGTERM), _signal.getsignal(_signal.SIGINT))
+        self.addCleanup(_signal.signal, _signal.SIGTERM, previous[0])
+        self.addCleanup(_signal.signal, _signal.SIGINT, previous[1])
+        for signal_value in (_signal.SIGTERM, _signal.SIGINT):
             flag = _threading.Event()
             _plataforma.install_stop_handler(flag)
-            _os.kill(_os.getpid(), sinal)
-            self.assertTrue(flag.wait(2), sinal)
+            _os.kill(_os.getpid(), signal_value)
+            self.assertTrue(flag.wait(2), signal_value)

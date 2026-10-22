@@ -41,11 +41,11 @@ PRM_DATA_REF, PRM_LIMITE, PRM_MODO, PRM_VERBOSE, PRM_CHAVE_API = 1, 2, 3, 4, 6
 
 def _create_tree():
     base = tempfile.mkdtemp(prefix="sss_tck_")
-    for nome in FILES:
-        caminho = os.path.join(base, nome)
-        with open(caminho, "w") as f:
+    for name in FILES:
+        path = os.path.join(base, name)
+        with open(path, "w") as f:
             f.write("# teste\n")
-        os.chmod(caminho, 0o444)
+        os.chmod(path, 0o444)
     os.chmod(base, 0o555)
     return os.path.realpath(base)
 
@@ -82,12 +82,12 @@ class _BaseTicket(unittest.TestCase):
         auth = auth_service.AuthService(
             repo_factory.get("users"), repo_factory.get("rbac"), self.catalog, self.audit,
             5, 900, self.log)
-        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSIONS.items())
+        self.ctx = dict((login, auth.revalidate(session)) for login, session in SESSIONS.items())
 
         self.base = _create_tree()
         self.addCleanup(_remove_tree, self.base)
-        for sid, nome in enumerate(FILES, 1):
-            self.catalog.scripts_update(sid, {"path_file": os.path.join(self.base, nome)}, actor="teste")
+        for sid, name in enumerate(FILES, 1):
+            self.catalog.scripts_update(sid, {"path_file": os.path.join(self.base, name)}, actor="teste")
         self.svc = TicketService(self.catalog, self.tickets, self.log)
 
     def _ticket_total(self):
@@ -105,9 +105,9 @@ class TestTicketService(_BaseTicket):
     # ------------------------------------------------------------- sucesso
 
     def test_criacao_ok_com_snapshot_correto(self):
-        respostas = {"data_ref": "2026-10-20", "modo_exec": "SIMULACAO", "documento_cliente": SECRET}
-        tid, erros = self._create(answers=respostas)
-        self.assertEqual(erros, {})
+        answers = {"data_ref": "2026-10-20", "modo_exec": "SIMULACAO", "documento_cliente": SECRET}
+        tid, errors = self._create(answers=answers)
+        self.assertEqual(errors, {})
         self.assertIsNotNone(tid)
 
         ticket = self.tickets.get(tid)
@@ -118,19 +118,19 @@ class TestTicketService(_BaseTicket):
         self.assertEqual(ticket["source_ip"], IP)
         self.assertEqual(ticket["priority"], 2)
 
-        bruto = ticket["submitted_params"]
-        snap = json.loads(bruto)
-        self.assertEqual(bruto, json.dumps(snap, ensure_ascii=False, sort_keys=True))
+        raw = ticket["submitted_params"]
+        snap = json.loads(raw)
+        self.assertEqual(raw, json.dumps(snap, ensure_ascii=False, sort_keys=True))
         self.assertEqual(sorted(snap), sorted(params_compiler._SNAPSHOT_KEYS))
         self.assertEqual(snap["version"], 5)
         self.assertEqual(snap["script_name"], "carga_diaria")
-        caminho_esperado = os.path.join(self.base, "carga_diaria.py")
+        path_expected = os.path.join(self.base, "carga_diaria.py")
         self.assertEqual((snap["interpreter"], snap["path_file"]),
-                         ("PYTHON3", caminho_esperado))
+                         ("PYTHON3", path_expected))
         self.assertEqual(snap["param_type"], "NAMED")
         # Snapshot v5 (CR-005 D2; chaves em ingles no CR-016c2): path_file e absoluto; sem base_dir.
         self.assertNotIn("pasta_base", snap)
-        self.assertIn(self.base, bruto)
+        self.assertIn(self.base, raw)
         self.assertEqual(snap["args"], [
             "--data-ref", "2026-10-20", "-n", "5000", "--modo", "SIMULACAO",
             "--verbose", "--documento", SECRET,
@@ -143,9 +143,9 @@ class TestTicketService(_BaseTicket):
 
     def test_ticket_resp_com_valores_resolvidos(self):
         tid, _ = self._create(answers={"data_ref": "2026-10-20", "documento_cliente": SECRET})
-        valores = dict((r["parameter_id"], r["answer_value"]) for r in self.tickets.answers(tid))
+        values = dict((r["parameter_id"], r["answer_value"]) for r in self.tickets.answers(tid))
         # limite_linhas, modo_exec e verbose vieram dos padroes (precedencia §6.1).
-        self.assertEqual(valores, {PRM_DATA_REF: "2026-10-20", PRM_LIMITE: "5000", PRM_MODO: "REAL",
+        self.assertEqual(values, {PRM_DATA_REF: "2026-10-20", PRM_LIMITE: "5000", PRM_MODO: "REAL",
                                    PRM_VERBOSE: "true", PRM_CHAVE_API: SECRET})
 
     def test_auditoria_gravada_sem_valor_sensivel(self):
@@ -158,13 +158,13 @@ class TestTicketService(_BaseTicket):
         self.assertNotIn(SECRET, regs[0]["detail"] or "")
 
     def test_scheduled_at_futuro_e_admin_prioridade_1(self):
-        futuro = (self.tickets.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
-        tid, erros = self._create(login="admin", script_id="6", environment="PRODUCAO", priority="1",
-                                 scheduled_at=futuro)
-        self.assertEqual(erros, {})
+        future = (self.tickets.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
+        tid, errors = self._create(login="admin", script_id="6", environment="PRODUCAO", priority="1",
+                                 scheduled_at=future)
+        self.assertEqual(errors, {})
         ticket = self.tickets.get(tid)
         self.assertEqual(ticket["priority"], 1)
-        self.assertEqual(ticket["scheduled_at"], datetime.datetime.strptime(futuro, "%Y-%m-%dT%H:%M"))
+        self.assertEqual(ticket["scheduled_at"], datetime.datetime.strptime(future, "%Y-%m-%dT%H:%M"))
 
     def test_checkbox_desmarcado_vence_padrao_verdadeiro(self):
         # hidden "false" + checkbox ausente: vale "false" e a flag e omitida.
@@ -177,12 +177,12 @@ class TestTicketService(_BaseTicket):
     # ---------------------------------------------------------- autorizacao
 
     def test_sem_exec_script(self):
-        antes = self._ticket_total()
+        before = self._ticket_total()
         with self.assertRaises(AccessDenied) as cm:
             self._create(login="consulta", script_id="1", environment="PRODUCAO")
         self.assertEqual(cm.exception.reason, "NO_FEATURE")
         self.assertEqual(self.svc.available_scripts(self.ctx["consulta"]), [])
-        self.assertEqual(self._ticket_total(), antes)
+        self.assertEqual(self._ticket_total(), before)
 
     def test_script_nao_homologado_no_ambiente(self):
         # sync_tabelas (4) so e homologado em HOMOLOGACAO; admin nao dispensa a homologacao.
@@ -194,10 +194,10 @@ class TestTicketService(_BaseTicket):
 
     def test_script_forjado_e_ambiente_nao_autorizado(self):
         ctx = self.ctx["op.hml"]
-        for script_id, ambiente in (("6", "PRODUCAO"), ("1", "PRODUCAO"), ("999", "HOMOLOGACAO"),
+        for script_id, environment in (("6", "PRODUCAO"), ("1", "PRODUCAO"), ("999", "HOMOLOGACAO"),
                                     ("abc", "HOMOLOGACAO"), ("1", "INEXISTENTE")):
             with self.assertRaises(AccessDenied):
-                self.svc.prepare_form(ctx, script_id, ambiente)
+                self.svc.prepare_form(ctx, script_id, environment)
         with self.assertRaises(AccessDenied):
             self.svc.available_environments(ctx, "6")
 
@@ -205,98 +205,98 @@ class TestTicketService(_BaseTicket):
         ctx = self.ctx["op.hml"]
         ids = sorted(s["id"] for g in self.svc.available_scripts(ctx) for s in g["scripts"])
         self.assertEqual(ids, [1, 2, 3, 4])
-        _script, ambientes = self.svc.available_environments(ctx, "1")
-        self.assertEqual([a["name"] for a in ambientes], ["HOMOLOGACAO"])
+        _script, environments = self.svc.available_environments(ctx, "1")
+        self.assertEqual([a["name"] for a in environments], ["HOMOLOGACAO"])
 
     # ------------------------------------------------------------ validacao
 
     def test_obrigatorio_faltando(self):
-        vinculos = [{"parameter_id": v["parameter_id"], "sort_order": v["sort_order"], "required": v["required"],
+        links = [{"parameter_id": v["parameter_id"], "sort_order": v["sort_order"], "required": v["required"],
                      "default_value_override": None if v["code"] == "data_ref" else v["default_value_override"]}
                     for v in self.catalog.script_params_get(1)]
-        self.catalog.script_params_save(1, vinculos, actor="teste")
-        antes = self._ticket_total()
-        tid, erros = self._create(answers={"data_ref": "   "})
+        self.catalog.script_params_save(1, links, actor="teste")
+        before = self._ticket_total()
+        tid, errors = self._create(answers={"data_ref": "   "})
         self.assertIsNone(tid)
-        self.assertIn("data_ref", erros)
-        self.assertEqual(self._ticket_total(), antes)
+        self.assertIn("data_ref", errors)
+        self.assertEqual(self._ticket_total(), before)
 
     def test_regex_invalida_e_todos_os_erros_de_uma_vez(self):
-        antes = self._ticket_total()
-        passado = (self.tickets.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
-        tid, erros = self._create(login="admin", script_id="6", environment="PRODUCAO",
+        before = self._ticket_total()
+        past = (self.tickets.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
+        tid, errors = self._create(login="admin", script_id="6", environment="PRODUCAO",
                                  answers={"codigo_filial": "ABC", "taxa_ajuste": "x"},
-                                 priority="9", scheduled_at=passado)
+                                 priority="9", scheduled_at=past)
         self.assertIsNone(tid)
-        self.assertEqual(sorted(erros), ["codigo_filial", "priority", "scheduled_at", "taxa_ajuste"])
-        self.assertEqual(self._ticket_total(), antes)
+        self.assertEqual(sorted(errors), ["codigo_filial", "priority", "scheduled_at", "taxa_ajuste"])
+        self.assertEqual(self._ticket_total(), before)
 
     def test_prioridade_1_por_nao_admin(self):
-        tid, erros = self._create(priority="1")
+        tid, errors = self._create(priority="1")
         self.assertIsNone(tid)
-        self.assertEqual(list(erros), ["priority"])
+        self.assertEqual(list(errors), ["priority"])
         self.assertNotIn(1, [p for p, _ in self.svc.prepare_form(
             self.ctx["op.hml"], "1", "HOMOLOGACAO")["prioridades"]])
 
     def test_scheduled_at_no_passado(self):
-        passado = (self.tickets.now() - datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M")
-        tid, erros = self._create(scheduled_at=passado)
+        past = (self.tickets.now() - datetime.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M")
+        tid, errors = self._create(scheduled_at=past)
         self.assertIsNone(tid)
-        self.assertEqual(list(erros), ["scheduled_at"])
-        tid, erros = self._create(scheduled_at="31/12/2099")
-        self.assertEqual(list(erros), ["scheduled_at"])
+        self.assertEqual(list(errors), ["scheduled_at"])
+        tid, errors = self._create(scheduled_at="31/12/2099")
+        self.assertEqual(list(errors), ["scheduled_at"])
 
     def test_scheduled_at_exato_sem_tolerancia_de_minuto(self):
         # CR-003 P5 (README §5.4): o minuto corrente, ja passado, e recusado.
         repo_factory._fake_store.set_clock(lambda: datetime.datetime(2026, 10, 16, 10, 5, 30))
-        tid, erros = self._create(scheduled_at="2026-10-16T10:05")
+        tid, errors = self._create(scheduled_at="2026-10-16T10:05")
         self.assertIsNone(tid)
-        self.assertIn(u"deixe em branco para rodar agora", erros["scheduled_at"])
-        tid, erros = self._create(scheduled_at="2026-10-16T10:06")
-        self.assertEqual(erros, {})
+        self.assertIn(u"deixe em branco para rodar agora", errors["scheduled_at"])
+        tid, errors = self._create(scheduled_at="2026-10-16T10:06")
+        self.assertEqual(errors, {})
 
     def test_scheduled_at_limite_366_dias(self):
         # CR-007 D2 (README §5.4): scheduled_at no maximo 366 dias no futuro.
-        agora = self.tickets.now()
-        mais_366 = (agora + datetime.timedelta(days=366)).strftime("%Y-%m-%dT%H:%M")
-        tid, erros = self._create(scheduled_at=mais_366)
-        self.assertEqual(erros, {})
-        mais_367 = (agora + datetime.timedelta(days=367)).strftime("%Y-%m-%dT%H:%M")
-        tid, erros = self._create(scheduled_at=mais_367)
+        now = self.tickets.now()
+        plus_366 = (now + datetime.timedelta(days=366)).strftime("%Y-%m-%dT%H:%M")
+        tid, errors = self._create(scheduled_at=plus_366)
+        self.assertEqual(errors, {})
+        plus_367 = (now + datetime.timedelta(days=367)).strftime("%Y-%m-%dT%H:%M")
+        tid, errors = self._create(scheduled_at=plus_367)
         self.assertIsNone(tid)
-        self.assertIn(u"Escolha uma data até", erros.get("scheduled_at", ""))
+        self.assertIn(u"Escolha uma data até", errors.get("scheduled_at", ""))
 
     def test_caminho_em_pasta_do_sistema_rejeita_o_disparo(self):
         # CR-011 (S1): o web confere so o formato e as pastas do sistema; o arquivo e conferido pelo agente.
         self.catalog.scripts_update(1, {"path_file": "/etc/carga.py"}, actor="teste")
-        tid, erros = self._create()
+        tid, errors = self._create()
         self.assertIsNone(tid)
-        self.assertEqual(erros, {ticket_service.GENERAL_FIELD: ticket_service.MSG_SCRIPT_UNAVAILABLE})
+        self.assertEqual(errors, {ticket_service.GENERAL_FIELD: ticket_service.MSG_SCRIPT_UNAVAILABLE})
 
     # ----------------------------------------------------- previa e formulario
 
     def test_previa_mascara_sensivel(self):
-        argv, erros = self.svc.preview(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"documento_cliente": SECRET})
-        self.assertEqual(erros, {})
+        argv, errors = self.svc.preview(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"documento_cliente": SECRET})
+        self.assertEqual(errors, {})
         self.assertNotIn(SECRET, " ".join(argv))
         self.assertEqual(argv[argv.index("--documento") + 1], params_compiler.MASK)
-        argv, erros = self.svc.preview(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"modo_exec": "X"})
+        argv, errors = self.svc.preview(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"modo_exec": "X"})
         self.assertIsNone(argv)
-        self.assertIn("modo_exec", erros)
+        self.assertIn("modo_exec", errors)
 
     def test_formulario_nao_expoe_sensivel(self):
         form = self.svc.prepare_form(self.ctx["op.hml"], "1", "HOMOLOGACAO",
                                             values={"documento_cliente": SECRET, "data_ref": "2026-01-01"})
-        campos = dict((c["code"], c) for c in form["campos"])
+        fields = dict((c["code"], c) for c in form["campos"])
         self.assertEqual([c["code"] for c in form["campos"]],
                          ["data_ref", "limite_linhas", "modo_exec", "verbose", "documento_cliente"])
-        self.assertIsNone(campos["documento_cliente"]["valor"])
-        self.assertIsNone(campos["documento_cliente"]["padrao"])
-        self.assertTrue(campos["documento_cliente"]["tem_padrao"])
+        self.assertIsNone(fields["documento_cliente"]["valor"])
+        self.assertIsNone(fields["documento_cliente"]["padrao"])
+        self.assertTrue(fields["documento_cliente"]["tem_padrao"])
         self.assertNotIn("00011122233", json.dumps(form, default=str))
-        self.assertEqual(campos["data_ref"]["valor"], "2026-01-01")
-        self.assertEqual(campos["modo_exec"]["padrao_texto"], "Execucao Real")
-        self.assertTrue(campos["verbose"]["marcado"])
+        self.assertEqual(fields["data_ref"]["valor"], "2026-01-01")
+        self.assertEqual(fields["modo_exec"]["padrao_texto"], "Execucao Real")
+        self.assertTrue(fields["verbose"]["marcado"])
 
 
 @_SKIP_ROOT
@@ -307,48 +307,48 @@ class TestTriggerClarity(_BaseTicket):
         r = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO",
                                     {"documento_cliente": "12345678900"}, "3", "")
         self.assertEqual(r["erros"], {})
-        resumo = r["resumo"]
-        self.assertEqual((resumo["script"], resumo["environment"], resumo["quando"], resumo["priority"]),
+        summary = r["resumo"]
+        self.assertEqual((summary["script"], summary["environment"], summary["quando"], summary["priority"]),
                          ("carga_diaria", "HOMOLOGACAO", u"agora", 3))
-        self.assertTrue(resumo["frase"].startswith(u"Vamos rodar carga_diaria no ambiente HOMOLOGACAO agora, "
+        self.assertTrue(summary["frase"].startswith(u"Vamos rodar carga_diaria no ambiente HOMOLOGACAO agora, "
                                                    u"com prioridade 3."))
-        valores = dict((x["rotulo"], x["valor"]) for x in resumo["respostas"])
-        self.assertNotIn("12345678900", resumo["frase"])
-        self.assertIn(params_compiler.MASK, valores.values())
+        values = dict((x["rotulo"], x["valor"]) for x in summary["respostas"])
+        self.assertNotIn("12345678900", summary["frase"])
+        self.assertIn(params_compiler.MASK, values.values())
         self.assertTrue(r["argv"])
 
     def test_resumo_com_horario_e_erros(self):
-        futuro = (self.tickets.now() + datetime.timedelta(days=1)).replace(second=0)
-        r = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO", {}, "2", futuro.strftime("%Y-%m-%dT%H:%M"))
-        self.assertEqual(r["resumo"]["quando"], u"em %s às %s" % (futuro.strftime("%d/%m/%Y"), futuro.strftime("%H:%M")))
+        future = (self.tickets.now() + datetime.timedelta(days=1)).replace(second=0)
+        r = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO", {}, "2", future.strftime("%Y-%m-%dT%H:%M"))
+        self.assertEqual(r["resumo"]["quando"], u"em %s às %s" % (future.strftime("%d/%m/%Y"), future.strftime("%H:%M")))
         r = self.svc.trigger_summary(self.ctx["op.hml"], "1", "HOMOLOGACAO", {"data_ref": "31/12/2026"}, "2", "")
         self.assertIsNone(r["resumo"])
         self.assertIn("data_ref", r["erros"])
 
     def test_exemplo_por_tipo_no_formulario(self):
         form = self.svc.prepare_form(self.ctx["op.hml"], "1", "HOMOLOGACAO")
-        exemplos = dict((c["code"], c["exemplo"]) for c in form["campos"])
-        self.assertTrue(exemplos["data_ref"].startswith(u"Use o formato AAAA-MM-DD"))
-        self.assertEqual(exemplos["modo_exec"], u"Escolha uma das opções da lista.")
-        self.assertEqual(exemplos["verbose"], u"Marque para sim; deixe desmarcado para não.")
+        examples = dict((c["code"], c["exemplo"]) for c in form["campos"])
+        self.assertTrue(examples["data_ref"].startswith(u"Use o formato AAAA-MM-DD"))
+        self.assertEqual(examples["modo_exec"], u"Escolha uma das opções da lista.")
+        self.assertEqual(examples["verbose"], u"Marque para sim; deixe desmarcado para não.")
 
     def test_ultimas_respostas_sem_sensiveis(self):
         ctx = self.ctx["op.hml"]
         self.assertFalse(self.svc.has_last_run(ctx, "1", "HOMOLOGACAO"))
-        tid, erros = self._create(answers={"data_ref": "2026-11-30", "documento_cliente": "99988877766",
+        tid, errors = self._create(answers={"data_ref": "2026-11-30", "documento_cliente": "99988877766",
                                             "modo_exec": "SIMULACAO"})
-        self.assertEqual(erros, {})
+        self.assertEqual(errors, {})
         self.assertTrue(self.svc.has_last_run(ctx, "1", "HOMOLOGACAO"))
-        valores, avisos = self.svc.last_answers(ctx, "1", "HOMOLOGACAO")
-        self.assertEqual(valores["data_ref"], "2026-11-30")
-        self.assertEqual(valores["modo_exec"], "SIMULACAO")
-        self.assertNotIn("documento_cliente", valores)
-        self.assertEqual(avisos["documento_cliente"], ticket_service.MSG_LAST_SENSITIVE)
+        values, warnings_value = self.svc.last_answers(ctx, "1", "HOMOLOGACAO")
+        self.assertEqual(values["data_ref"], "2026-11-30")
+        self.assertEqual(values["modo_exec"], "SIMULACAO")
+        self.assertNotIn("documento_cliente", values)
+        self.assertEqual(warnings_value["documento_cliente"], ticket_service.MSG_LAST_SENSITIVE)
         # Opcao removida do catalogo: a resposta antiga deixa de valer e vem com aviso.
         self.catalog.parameters_update(3, {"options_json": '{"REAL":"Execucao Real"}', "default_value": "REAL"}, actor="teste")
-        valores, avisos = self.svc.last_answers(ctx, "1", "HOMOLOGACAO")
-        self.assertNotIn("modo_exec", valores)
-        self.assertEqual(avisos["modo_exec"], ticket_service.MSG_LAST_CHANGED)
+        values, warnings_value = self.svc.last_answers(ctx, "1", "HOMOLOGACAO")
+        self.assertNotIn("modo_exec", values)
+        self.assertEqual(warnings_value["modo_exec"], ticket_service.MSG_LAST_CHANGED)
 
 
 @_SKIP_ROOT
@@ -372,54 +372,54 @@ class TestTicketQuery(_BaseTicket):
     # ------------------------------------------------------------- escopo
 
     def test_escopo_da_lista_por_perfil(self):
-        desenv = self._insert_row(environment="DESENV")
-        por_amb = dict((t["id"], t["environment"]) for t in self.tickets.list(page=1, size=1000)["itens"])
-        self.assertEqual(self._ids(self.ctx["admin"]), set(por_amb))
-        consulta = self._ids(self.ctx["consulta"])
-        self.assertNotIn(desenv, consulta)
-        self.assertEqual(consulta, set(i for i, a in por_amb.items() if a in ("PRODUCAO", "HOMOLOGACAO")))
+        dev = self._insert_row(environment="DESENV")
+        by_env = dict((t["id"], t["environment"]) for t in self.tickets.list(page=1, size=1000)["itens"])
+        self.assertEqual(self._ids(self.ctx["admin"]), set(by_env))
+        query = self._ids(self.ctx["consulta"])
+        self.assertNotIn(dev, query)
+        self.assertEqual(query, set(i for i, a in by_env.items() if a in ("PRODUCAO", "HOMOLOGACAO")))
         op_hml = self._ids(self.ctx["op.hml"])
-        self.assertIn(desenv, op_hml)
-        self.assertEqual(op_hml, set(i for i, a in por_amb.items() if a in ("HOMOLOGACAO", "DESENV")))
+        self.assertIn(dev, op_hml)
+        self.assertEqual(op_hml, set(i for i, a in by_env.items() if a in ("HOMOLOGACAO", "DESENV")))
 
     def test_sem_ver_logs_lista_apenas_proprios(self):
         ctx = self._without("op.hml", "VIEW_LOGS")
-        itens = self.svc.list(ctx, {}, 1, 100)["itens"]
-        self.assertTrue(itens)
+        items = self.svc.list(ctx, {}, 1, 100)["itens"]
+        self.assertTrue(items)
         # Sem VIEW_AUDIT o proprio login aparece como "você" (CR-008, E5).
-        self.assertEqual(set(t["requested_by"] for t in itens), {u"você"})
+        self.assertEqual(set(t["requested_by"] for t in items), {u"você"})
         self.assertEqual(self.svc.list(ctx, {"requested_by": "admin"}, 1, 100)["total"], 0)
 
     def test_solicitante_mascarado_sem_auditoria(self):
         # CR-008, E5: consulta sem VIEW_AUDIT nao recebe login de terceiros; admin recebe.
         ctx = self._without("consulta", "VIEW_AUDIT")
-        itens = self.svc.list(ctx, {}, 1, 100)["itens"]
-        self.assertTrue(itens)
-        self.assertEqual(set(t["requested_by"] for t in itens), {u"outra pessoa"})
+        items = self.svc.list(ctx, {}, 1, 100)["itens"]
+        self.assertTrue(items)
+        self.assertEqual(set(t["requested_by"] for t in items), {u"outra pessoa"})
         self.assertEqual(self.svc.detail(ctx, 17)["requested_by"], u"outra pessoa")
         self.assertEqual(self.svc.detail(self.ctx["admin"], 17)["requested_by"], "op.prod")
-        sem_nada = self._without("consulta", "VIEW_LOGS")
+        without_nothing = self._without("consulta", "VIEW_LOGS")
         with self.assertRaises(AccessDenied):
-            self.svc.list(sem_nada, {}, 1, 20)
+            self.svc.list(without_nothing, {}, 1, 20)
 
     def test_detalhe_fora_do_escopo_e_inexistente(self):
-        desenv = self._insert_row(environment="DESENV")
-        for login, tid in (("consulta", desenv), ("op.hml", 1), ("admin", 99999)):
+        dev = self._insert_row(environment="DESENV")
+        for login, tid in (("consulta", dev), ("op.hml", 1), ("admin", 99999)):
             with self.assertRaises(RepoNotFound):
                 self.svc.detail(self.ctx[login], str(tid))
-        for invalido in ("abc", "-1", "0", None, "1; DROP"):
+        for invalid in ("abc", "-1", "0", None, "1; DROP"):
             with self.assertRaises(RepoNotFound):
-                self.svc.detail(self.ctx["admin"], invalido)
-        self.assertEqual(self.svc.detail(self.ctx["op.hml"], str(desenv))["id"], desenv)
+                self.svc.detail(self.ctx["admin"], invalid)
+        self.assertEqual(self.svc.detail(self.ctx["op.hml"], str(dev))["id"], dev)
 
     # ------------------------------------------------------------- filtros
 
     def test_normalizar_filtros_allowlist(self):
-        limpos = ticket_service.normalize_filters({
+        cleaned = ticket_service.normalize_filters({
             "status": ["RUNNING", "X", "PENDING", "RUNNING"], "environment": "producao", "script": "07",
             "requested_by": " OP.Hml ", "criado_de": "2026-02-30", "criado_ate": "2026-10-14",
             "origem": "agendamento", "sort_order": "id; DROP TABLE", "created_at": "x"})
-        self.assertEqual(list(limpos.items()), [
+        self.assertEqual(list(cleaned.items()), [
             ("status", ["PENDING", "RUNNING"]), ("script", 7), ("requested_by", "op.hml"),
             ("criado_ate", "2026-10-14"), ("origem", "agendamento")])
         self.assertEqual(ticket_service.normalize_filters({"status": "SUCCESS", "origem": "outro",
@@ -427,57 +427,57 @@ class TestTicketQuery(_BaseTicket):
                          {"status": ["SUCCESS"]})
 
     def test_filtro_de_periodo_nos_limites(self):
-        dia = datetime.datetime(2025, 3, 10)
-        um_seg = datetime.timedelta(seconds=1)
-        antes = self._insert_row(environment="DESENV", created_at=dia - um_seg)
-        inicio = self._insert_row(environment="DESENV", created_at=dia)
-        fim = self._insert_row(environment="DESENV", created_at=dia + datetime.timedelta(days=1) - um_seg)
-        depois = self._insert_row(environment="DESENV", created_at=dia + datetime.timedelta(days=1))
+        day = datetime.datetime(2025, 3, 10)
+        one_seg = datetime.timedelta(seconds=1)
+        before = self._insert_row(environment="DESENV", created_at=day - one_seg)
+        start = self._insert_row(environment="DESENV", created_at=day)
+        end = self._insert_row(environment="DESENV", created_at=day + datetime.timedelta(days=1) - one_seg)
+        after = self._insert_row(environment="DESENV", created_at=day + datetime.timedelta(days=1))
         admin = self.ctx["admin"]
         base = {"environment": "DESENV"}
         self.assertEqual(self._ids(admin, dict(base, criado_de="2025-03-10", criado_ate="2025-03-10")),
-                         {inicio, fim})
-        self.assertEqual(self._ids(admin, dict(base, criado_de="2025-03-10")), {inicio, fim, depois})
-        self.assertEqual(self._ids(admin, dict(base, criado_ate="2025-03-09")), {antes})
+                         {start, end})
+        self.assertEqual(self._ids(admin, dict(base, criado_de="2025-03-10")), {start, end, after})
+        self.assertEqual(self._ids(admin, dict(base, criado_ate="2025-03-09")), {before})
         self.assertEqual(self._ids(admin, dict(base, criado_de="2025-03-11", criado_ate="2025-03-10")), set())
 
     def test_filtros_combinados_e_paginacao(self):
         admin = self.ctx["admin"]
-        rodando = self._ids(admin, {"status": ["RUNNING"], "environment": "PRODUCAO"})
-        self.assertTrue(rodando)
+        running = self._ids(admin, {"status": ["RUNNING"], "environment": "PRODUCAO"})
+        self.assertTrue(running)
         for t in self.svc.list(admin, {"status": ["RUNNING"], "environment": "PRODUCAO"}, 1, 100)["itens"]:
             self.assertEqual((t["status"], t["environment"]), ("RUNNING", "PRODUCAO"))
-        agend = self.svc.list(admin, {"origem": "agendamento"}, 1, 100)["itens"]
-        self.assertTrue(agend)
-        self.assertTrue(all(t["origem"] == "agendamento" for t in agend))
-        pagina2 = self.svc.list(admin, {"status": ["SUCCESS"]}, 2, 5)
-        self.assertEqual((pagina2["pagina"], len(pagina2["itens"])), (2, 5))
-        alem = self.svc.list(admin, {"status": ["SUCCESS"]}, 99, 5)
-        self.assertEqual(alem["pagina"], (alem["total"] + 4) // 5)
-        self.assertTrue(alem["itens"])
+        sched_value = self.svc.list(admin, {"origem": "agendamento"}, 1, 100)["itens"]
+        self.assertTrue(sched_value)
+        self.assertTrue(all(t["origem"] == "agendamento" for t in sched_value))
+        page2 = self.svc.list(admin, {"status": ["SUCCESS"]}, 2, 5)
+        self.assertEqual((page2["pagina"], len(page2["itens"])), (2, 5))
+        beyond = self.svc.list(admin, {"status": ["SUCCESS"]}, 99, 5)
+        self.assertEqual(beyond["pagina"], (beyond["total"] + 4) // 5)
+        self.assertTrue(beyond["itens"])
 
     # --------------------------------------------------------- cancelamento
 
     def test_cancelamento_nos_tres_resultados(self):
         ctx = self.ctx["op.hml"]
-        pendente, _ = self._create()
-        self.assertEqual(self.svc.cancel(ctx, IP, str(pendente)), "CANCELADO")
-        t = self.tickets.get(pendente)
+        pending, _ = self._create()
+        self.assertEqual(self.svc.cancel(ctx, IP, str(pending)), "CANCELADO")
+        t = self.tickets.get(pending)
         self.assertEqual((t["status"], t["status_reason"], t["return_code"]), ("CANCELLED", "CANCEL_USER", -1))
-        self.assertEqual(self.svc.cancel(ctx, IP, str(pendente)), "TERMINAL")
+        self.assertEqual(self.svc.cancel(ctx, IP, str(pending)), "TERMINAL")
 
-        rodando = self._insert_row(status="RUNNING", requested_by="op.hml", agent_id="agt-x")
-        self.assertEqual(self.svc.cancel(ctx, IP, str(rodando)), "SINALIZADO")
-        t = self.tickets.get(rodando)
+        running = self._insert_row(status="RUNNING", requested_by="op.hml", agent_id="agt-x")
+        self.assertEqual(self.svc.cancel(ctx, IP, str(running)), "SINALIZADO")
+        t = self.tickets.get(running)
         self.assertEqual((t["status"], t["cancel_requested"]), ("RUNNING", "Y"))
-        self.assertFalse(self.svc.detail(ctx, str(rodando))["pode_cancelar"])
+        self.assertFalse(self.svc.detail(ctx, str(running))["pode_cancelar"])
 
         # CR-003 P5 (README §5.6): pedido repetido e ticket encerrado tambem sao auditados, com o resultado.
-        self.assertEqual(self.svc.cancel(ctx, IP, str(rodando)), "JA_SINALIZADO")
-        regs = self.audit.list(filters={"action": "TICKET_CANCEL", "entity_id": rodando})["itens"]
+        self.assertEqual(self.svc.cancel(ctx, IP, str(running)), "JA_SINALIZADO")
+        regs = self.audit.list(filters={"action": "TICKET_CANCEL", "entity_id": running})["itens"]
         self.assertEqual([(r["actor"], r["source_ip"], r["detail"]) for r in regs],
                          [("op.hml", IP, u"resultado: já sinalizado"), ("op.hml", IP, u"resultado: sinalizado")])
-        regs = self.audit.list(filters={"action": "TICKET_CANCEL", "entity_id": pendente})["itens"]
+        regs = self.audit.list(filters={"action": "TICKET_CANCEL", "entity_id": pending})["itens"]
         self.assertEqual([r["detail"] for r in regs],
                          [u"resultado: sem efeito: ticket encerrado", u"resultado: cancelado"])
         self.assertEqual(set(ticket_service.MSG_CANCEL),
@@ -485,21 +485,21 @@ class TestTicketQuery(_BaseTicket):
 
     def test_canc_ticket_sem_ver_logs_cancela_ticket_de_terceiro(self):
         # CR-003 P5 (README §4.3.C): CANCEL_TICKET nao exige VIEW_LOGS.
-        terceiro = self._insert_row(requested_by="admin")
+        third = self._insert_row(requested_by="admin")
         ctx = self._without("op.hml", "VIEW_LOGS")
-        self.assertFalse(self.svc.is_visible(ctx, str(terceiro)))
-        self.assertEqual(self.svc.cancel(ctx, IP, str(terceiro)), "CANCELADO")
+        self.assertFalse(self.svc.is_visible(ctx, str(third)))
+        self.assertEqual(self.svc.cancel(ctx, IP, str(third)), "CANCELADO")
 
     def test_cancelar_terceiro_sem_canc_ticket_negado(self):
-        terceiro = self._insert_row(requested_by="admin")
+        third = self._insert_row(requested_by="admin")
         ctx = self._without("op.hml", "CANCEL_TICKET")
-        self.assertFalse(self.svc.detail(ctx, str(terceiro))["pode_cancelar"])
+        self.assertFalse(self.svc.detail(ctx, str(third))["pode_cancelar"])
         with self.assertRaises(AccessDenied):
-            self.svc.cancel(ctx, IP, str(terceiro))
-        self.assertEqual(self.tickets.get(terceiro)["status"], "PENDING")
-        proprio, _ = self._create()
-        self.assertEqual(self.svc.cancel(ctx, IP, str(proprio)), "CANCELADO")
-        self.assertEqual(self.svc.cancel(self.ctx["op.hml"], IP, str(terceiro)), "CANCELADO")
+            self.svc.cancel(ctx, IP, str(third))
+        self.assertEqual(self.tickets.get(third)["status"], "PENDING")
+        own, _ = self._create()
+        self.assertEqual(self.svc.cancel(ctx, IP, str(own)), "CANCELADO")
+        self.assertEqual(self.svc.cancel(self.ctx["op.hml"], IP, str(third)), "CANCELADO")
         with self.assertRaises(RepoNotFound):
             self.svc.cancel(self.ctx["op.hml"], IP, "1")
 
@@ -514,25 +514,25 @@ class TestTicketQuery(_BaseTicket):
         self.svc.cancel(ctx, IP, str(original))
         self.assertTrue(self.svc.detail(ctx, str(original))["pode_reexecutar"])
 
-        novo = self.svc.rerun(ctx, IP, str(original))
-        t_orig, t_novo = self.tickets.get(original), self.tickets.get(novo)
-        self.assertEqual(t_novo["parent_ticket_id"], original)
-        self.assertEqual((t_novo["status"], t_novo["priority"], t_novo["requested_by"]), ("PENDING", 3, "op.hml"))
-        snap_orig, snap_novo = json.loads(t_orig["submitted_params"]), json.loads(t_novo["submitted_params"])
-        self.assertEqual(snap_novo["args"], snap_orig["args"])
-        self.assertEqual(snap_novo["answers"], snap_orig["answers"])
-        regs = self.audit.list(filters={"action": "TICKET_RERUN", "entity_id": novo})["itens"]
+        new = self.svc.rerun(ctx, IP, str(original))
+        t_orig, t_new = self.tickets.get(original), self.tickets.get(new)
+        self.assertEqual(t_new["parent_ticket_id"], original)
+        self.assertEqual((t_new["status"], t_new["priority"], t_new["requested_by"]), ("PENDING", 3, "op.hml"))
+        snap_orig, snap_new = json.loads(t_orig["submitted_params"]), json.loads(t_new["submitted_params"])
+        self.assertEqual(snap_new["args"], snap_orig["args"])
+        self.assertEqual(snap_new["answers"], snap_orig["answers"])
+        regs = self.audit.list(filters={"action": "TICKET_RERUN", "entity_id": new})["itens"]
         self.assertEqual(len(regs), 1)
         self.assertNotIn(SECRET, regs[0]["detail"] or "")
 
-        self.assertEqual([f["id"] for f in self.svc.detail(ctx, str(original))["filhos"]], [novo])
-        self.assertEqual(self.svc.detail(ctx, str(novo))["pai"]["id"], original)
+        self.assertEqual([f["id"] for f in self.svc.detail(ctx, str(original))["filhos"]], [new])
+        self.assertEqual(self.svc.detail(ctx, str(new))["pai"]["id"], original)
 
     def test_reexecucao_de_terceiro_por_nao_admin_negada(self):
-        terceiro = self._insert_row(requested_by="admin", status="SUCCESS")
+        third = self._insert_row(requested_by="admin", status="SUCCESS")
         with self.assertRaises(AccessDenied):
-            self.svc.rerun(self.ctx["op.hml"], IP, str(terceiro))
-        self.assertFalse(self.svc.detail(self.ctx["op.hml"], str(terceiro))["pode_reexecutar"])
+            self.svc.rerun(self.ctx["op.hml"], IP, str(third))
+        self.assertFalse(self.svc.detail(self.ctx["op.hml"], str(third))["pode_reexecutar"])
         with self.assertRaises(RepoNotFound):
             self.svc.rerun(self.ctx["consulta"], IP, str(self._insert_row(environment="DESENV", status="FAILED")))
 
@@ -540,16 +540,16 @@ class TestTicketQuery(_BaseTicket):
         ctx = self.ctx["op.hml"]
         original, _ = self._create(answers={"documento_cliente": SECRET})
         self.svc.cancel(ctx, IP, str(original))
-        vinculos = [{"parameter_id": v["parameter_id"], "sort_order": v["sort_order"], "required": v["required"],
+        links = [{"parameter_id": v["parameter_id"], "sort_order": v["sort_order"], "required": v["required"],
                      "default_value_override": v["default_value_override"]} for v in self.catalog.script_params_get(1)]
-        vinculos.append({"parameter_id": 10, "sort_order": 6, "required": "Y", "default_value_override": None})
-        self.catalog.script_params_save(1, vinculos, actor="teste")
-        antes = self._ticket_total()
+        links.append({"parameter_id": 10, "sort_order": 6, "required": "Y", "default_value_override": None})
+        self.catalog.script_params_save(1, links, actor="teste")
+        before = self._ticket_total()
         with self.assertRaises(RerunError) as cm:
             self.svc.rerun(ctx, IP, str(original))
         self.assertEqual(cm.exception.ticket_id, original)
         self.assertEqual(list(cm.exception.errors), ["descricao_lote"])
-        self.assertEqual(self._ticket_total(), antes)
+        self.assertEqual(self._ticket_total(), before)
 
         prep = self.svc.prepare_rerun(ctx, str(original))
         self.assertEqual((prep["ticket_id"], prep["script_id"], prep["environment"]), (original, 1, "HOMOLOGACAO"))
@@ -557,10 +557,10 @@ class TestTicketQuery(_BaseTicket):
         self.assertNotIn("documento_cliente", prep["valores"])
         self.assertEqual(prep["valores"]["data_ref"], "2026-10-14")
 
-        novo, erros = self.svc.create_ticket(ctx, IP, "1", "HOMOLOGACAO", dict(prep["valores"], descricao_lote="x"),
+        new, errors = self.svc.create_ticket(ctx, IP, "1", "HOMOLOGACAO", dict(prep["valores"], descricao_lote="x"),
                                             prep["priority"], "", rerun_of=str(original))
-        self.assertEqual(erros, {})
-        self.assertEqual(self.tickets.get(novo)["parent_ticket_id"], original)
+        self.assertEqual(errors, {})
+        self.assertEqual(self.tickets.get(new)["parent_ticket_id"], original)
         with self.assertRaises(AccessDenied):
             self.svc.create_ticket(ctx, IP, "2", "HOMOLOGACAO", {}, "2", "", rerun_of=str(original))
 
@@ -573,10 +573,10 @@ class TestTicketQuery(_BaseTicket):
                 det = self.svc.detail(self.ctx[login], "1")
             else:
                 det = self.svc.detail(self.ctx[login], str(tid))
-                respostas = dict((r["code"], r) for r in det["respostas"])
-                self.assertEqual(respostas["documento_cliente"]["valor"], params_compiler.MASK)
-                self.assertTrue(respostas["documento_cliente"]["sensitive"])
-                self.assertEqual(respostas["data_ref"]["valor"], "2026-10-14")
+                answers = dict((r["code"], r) for r in det["respostas"])
+                self.assertEqual(answers["documento_cliente"]["valor"], params_compiler.MASK)
+                self.assertTrue(answers["documento_cliente"]["sensitive"])
+                self.assertEqual(answers["data_ref"]["valor"], "2026-10-14")
                 self.assertIn(params_compiler.MASK, det["argv_para_exibicao"])
             serial = json.dumps(det, default=str)
             self.assertNotIn(SECRET, serial)
@@ -592,17 +592,17 @@ class TestTicketQuery(_BaseTicket):
 
     def test_caminho_completo_para_quem_nao_e_admin(self):
         """CR-005 D8: quem nao e admin ve o caminho completo no detalhe, no comando e na previa."""
-        tid, erros = self._create(login="op.hml", answers={"data_ref": "2026-10-20", "modo_exec": "SIMULACAO"})
-        self.assertEqual(erros, {})
-        caminho = os.path.join(self.base, "carga_diaria.py")
+        tid, errors = self._create(login="op.hml", answers={"data_ref": "2026-10-20", "modo_exec": "SIMULACAO"})
+        self.assertEqual(errors, {})
+        path = os.path.join(self.base, "carga_diaria.py")
         det = self.svc.detail(self.ctx["op.hml"], str(tid))
-        self.assertEqual(det["snapshot"]["path_file"], caminho)
-        self.assertEqual(det["argv_para_exibicao"][2], caminho)
-        self.assertIn(caminho, det["comando_exibicao"])
-        argv, erros = self.svc.preview(self.ctx["op.hml"], "1", "HOMOLOGACAO",
+        self.assertEqual(det["snapshot"]["path_file"], path)
+        self.assertEqual(det["argv_para_exibicao"][2], path)
+        self.assertIn(path, det["comando_exibicao"])
+        argv, errors = self.svc.preview(self.ctx["op.hml"], "1", "HOMOLOGACAO",
                                       {"data_ref": "2026-10-20", "modo_exec": "SIMULACAO"})
-        self.assertEqual(erros, {})
-        self.assertEqual(argv[2], caminho)
+        self.assertEqual(errors, {})
+        self.assertEqual(argv[2], path)
 
 
 if __name__ == "__main__":
@@ -613,58 +613,58 @@ class TestTicketOutput(_BaseTicket):
     """CR-012 (README §8.13): quadro Saida e download do zip, com a regra de leitura do log."""
 
     def test_quadro_por_situacao(self):
-        disponivel = self.svc.detail(self.ctx["admin"], 17)["saida"]
-        self.assertEqual((disponivel["state"], disponivel["classe"], disponivel["pode_baixar"]),
+        available = self.svc.detail(self.ctx["admin"], 17)["saida"]
+        self.assertEqual((available["state"], available["classe"], available["pode_baixar"]),
                          ("AVAILABLE", "success", True))
-        self.assertIn(u"2 arquivos", disponivel["aconteceu"])
-        excedeu = self.svc.detail(self.ctx["admin"], 29)["saida"]
-        self.assertFalse(excedeu["pode_baixar"])
-        self.assertIn(u"quantidade de arquivos", excedeu["aconteceu"])
-        self.assertIn(u"agente agt-host02", excedeu["fazer"])
-        falhou = self.svc.detail(self.ctx["admin"], 30)["saida"]
-        self.assertEqual((falhou["state"], falhou["pode_baixar"]), ("FAILED", False))
-        self.assertIn(u"agente agt-host01", falhou["fazer"])
+        self.assertIn(u"2 arquivos", available["aconteceu"])
+        exceeded = self.svc.detail(self.ctx["admin"], 29)["saida"]
+        self.assertFalse(exceeded["pode_baixar"])
+        self.assertIn(u"quantidade de arquivos", exceeded["aconteceu"])
+        self.assertIn(u"agente agt-host02", exceeded["fazer"])
+        failed = self.svc.detail(self.ctx["admin"], 30)["saida"]
+        self.assertEqual((failed["state"], failed["pode_baixar"]), ("FAILED", False))
+        self.assertIn(u"agente agt-host01", failed["fazer"])
         self.assertIsNone(self.svc.detail(self.ctx["admin"], 18)["saida"], "sem saida, sem quadro")
-        for campo in ("content", "base", "relativo"):
-            self.assertNotIn(campo, disponivel)
+        for field in ("content", "base", "relativo"):
+            self.assertNotIn(field, available)
 
     def test_gravando_ha_mais_de_uma_hora_e_tamanho_legivel(self):
-        agora = datetime.datetime(2026, 10, 20, 12, 0, 0)
-        recente = ui_helpers.quadro_saida({"state": "WRITING", "agent_id": "a1",
-                                           "created_at": agora - datetime.timedelta(minutes=5)}, agora)
-        self.assertEqual((recente["classe"], recente["pode_baixar"]), ("info", False))
-        self.assertIn(u"em preparação", recente["aconteceu"])
-        parada = ui_helpers.quadro_saida({"state": "WRITING", "agent_id": "a1",
-                                          "created_at": agora - datetime.timedelta(hours=2)}, agora)
-        self.assertIn(u"não foi concluída", parada["aconteceu"])
-        self.assertIn(u"agente a1", parada["fazer"])
-        bytes_ = ui_helpers.quadro_saida({"state": "EXCEEDED", "reason": "BYTES", "agent_id": "a1"}, agora)
+        now = datetime.datetime(2026, 10, 20, 12, 0, 0)
+        recent = ui_helpers.quadro_saida({"state": "WRITING", "agent_id": "a1",
+                                           "created_at": now - datetime.timedelta(minutes=5)}, now)
+        self.assertEqual((recent["classe"], recent["pode_baixar"]), ("info", False))
+        self.assertIn(u"em preparação", recent["aconteceu"])
+        stop = ui_helpers.quadro_saida({"state": "WRITING", "agent_id": "a1",
+                                          "created_at": now - datetime.timedelta(hours=2)}, now)
+        self.assertIn(u"não foi concluída", stop["aconteceu"])
+        self.assertIn(u"agente a1", stop["fazer"])
+        bytes_ = ui_helpers.quadro_saida({"state": "EXCEEDED", "reason": "BYTES", "agent_id": "a1"}, now)
         self.assertIn(u"limite de tamanho", bytes_["aconteceu"])
-        self.assertIsNone(ui_helpers.quadro_saida(None, agora))
+        self.assertIsNone(ui_helpers.quadro_saida(None, now))
         self.assertEqual([ui_helpers.tamanho_legivel(n) for n in (None, 512, 12595, 4718592)],
                          [u"-", u"512 bytes", u"12,3 KB", u"4,5 MB"])
-        um = ui_helpers.quadro_saida({"state": "AVAILABLE", "file_count": 1, "size_bytes": 10}, agora)
-        self.assertIn(u"1 arquivo ", um["aconteceu"])
+        one = ui_helpers.quadro_saida({"state": "AVAILABLE", "file_count": 1, "size_bytes": 10}, now)
+        self.assertIn(u"1 arquivo ", one["aconteceu"])
 
     def test_download_em_fatias_so_disponivel_e_no_escopo(self):
         import io
         import zipfile
         with mock.patch.object(ticket_service, "OUTPUT_SLICE_BYTES", 100):
-            tid, tamanho, partes = self.svc.output_chunks(self.ctx["consulta"], "17")
-            dados = b"".join(partes)
-        self.assertEqual((tid, len(dados)), (17, tamanho))
-        self.assertEqual(sorted(zipfile.ZipFile(io.BytesIO(dados)).namelist()),
+            tid, size, parts = self.svc.output_chunks(self.ctx["consulta"], "17")
+            date = b"".join(parts)
+        self.assertEqual((tid, len(date)), (17, size))
+        self.assertEqual(sorted(zipfile.ZipFile(io.BytesIO(date)).namelist()),
                          ["rejeitados/linhas_rejeitadas.csv", "resumo.txt"])
-        for login, alvo in (("op.hml", "17"), ("admin", "29"), ("admin", "30"), ("admin", "18"),
+        for login, target in (("op.hml", "17"), ("admin", "29"), ("admin", "30"), ("admin", "18"),
                             ("admin", "abc"), ("admin", "99999")):
-            with self.assertRaises(RepoNotFound, msg=(login, alvo)):
-                self.svc.output_chunks(self.ctx[login], alvo)
+            with self.assertRaises(RepoNotFound, msg=(login, target)):
+                self.svc.output_chunks(self.ctx[login], target)
 
     def test_falha_no_meio_do_download_encerra_sem_completar(self):
         from repo_errors import RepoError
         with mock.patch.object(ticket_service, "OUTPUT_SLICE_BYTES", 100):
-            _tid, tamanho, partes = self.svc.output_chunks(self.ctx["admin"], 17)
-            primeira = next(partes)
+            _tid, size, parts = self.svc.output_chunks(self.ctx["admin"], 17)
+            first = next(parts)
             with mock.patch.object(self.tickets, "output_read", side_effect=RepoError("ORA-03113")):
-                resto = b"".join(partes)
-        self.assertLess(len(primeira) + len(resto), tamanho)
+                rest = b"".join(parts)
+        self.assertLess(len(first) + len(rest), size)

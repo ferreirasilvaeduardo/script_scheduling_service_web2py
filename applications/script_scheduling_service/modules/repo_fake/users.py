@@ -14,14 +14,14 @@ _RE_LOGIN = re.compile(r"^[a-z0-9._-]{3,30}$")
 
 def _failed_login_audit(audit, attempts, max_attempts, locked, lock_audit):
     """Itens de auditoria da falha de login: a contagem vem do valor lido sob o lock (mesma regra do Oracle)."""
-    itens = [] if not audit else ([audit] if isinstance(audit, dict) else list(audit))
+    items = [] if not audit else ([audit] if isinstance(audit, dict) else list(audit))
     if max_attempts is not None:
-        itens = [dict(item, detail=u"%s (tentativa %d de %d)" % (item.get("detail") or u"", attempts,
+        items = [dict(item, detail=u"%s (tentativa %d de %d)" % (item.get("detail") or u"", attempts,
                                                                     int(max_attempts)))
-                 if isinstance(item, dict) and item.get("action") == "LOGIN_FAILED" else item for item in itens]
+                 if isinstance(item, dict) and item.get("action") == "LOGIN_FAILED" else item for item in items]
     if locked and lock_audit:
-        itens.append(lock_audit)
-    return itens
+        items.append(lock_audit)
+    return items
 
 class RepoUsersFake(RepoUsers):
     """Implementacao em memoria com semantica Oracle para usuarios."""
@@ -51,10 +51,10 @@ class RepoUsersFake(RepoUsers):
                 if user_id not in self._store.users:
                     raise RepoNotFound("Usuario ID %s nao encontrado" % user_id)
                 u = self._store.users[user_id]
-                perfil_id = u["profile_id"]
-                if perfil_id not in self._store.profiles:
-                    raise RepoNotFound("Perfil ID %s nao encontrado" % perfil_id)
-                p = self._store.profiles[perfil_id]
+                profile_id = u["profile_id"]
+                if profile_id not in self._store.profiles:
+                    raise RepoNotFound("Perfil ID %s nao encontrado" % profile_id)
+                p = self._store.profiles[profile_id]
 
                 return {
                     "user_id": u["id"],
@@ -73,31 +73,31 @@ class RepoUsersFake(RepoUsers):
         """Lista usuarios paginados com desempate por id."""
         filters = filters or {}
         with self._store.lock_users:
-            lista = list(self._store.users.values())
+            items = list(self._store.users.values())
 
             login_f = filters.get("login")
             if login_f:
-                lista = [u for u in lista if login_f.lower() in u["login"].lower()]
+                items = [u for u in items if login_f.lower() in u["login"].lower()]
 
-            nome_f = filters.get("name")
-            if nome_f:
-                lista = [u for u in lista if nome_f.lower() in u["name"].lower()]
+            name_f = filters.get("name")
+            if name_f:
+                items = [u for u in items if name_f.lower() in u["name"].lower()]
 
-            perfil_f = filters.get("profile_id")
-            if perfil_f is not None:
-                lista = [u for u in lista if u["profile_id"] == int(perfil_f)]
+            profile_f = filters.get("profile_id")
+            if profile_f is not None:
+                items = [u for u in items if u["profile_id"] == int(profile_f)]
 
-            ativo_f = filters.get("active")
-            if ativo_f:
-                lista = [u for u in lista if u["active"] == ativo_f]
+            active_f = filters.get("active")
+            if active_f:
+                items = [u for u in items if u["active"] == active_f]
 
-            bloq_f = filters.get("bloqueado_em")
-            if bloq_f is not None:
-                lista = [u for u in lista if u.get("locked_until") is not None and u["locked_until"] > bloq_f]
+            locked_f = filters.get("bloqueado_em")
+            if locked_f is not None:
+                items = [u for u in items if u.get("locked_until") is not None and u["locked_until"] > locked_f]
 
             # Ordenacao estavel: login ASC, id ASC
-            lista.sort(key=lambda x: (x.get("login", ""), x["id"]))
-            return paginate(lista, page=page, size=size)
+            items.sort(key=lambda x: (x.get("login", ""), x["id"]))
+            return paginate(items, page=page, size=size)
 
     def _auditar(self, audit, user_id):
         for item in ([audit] if isinstance(audit, dict) else (audit or ())):
@@ -132,37 +132,37 @@ class RepoUsersFake(RepoUsers):
                     if u["login"] == login:
                         raise RepoViolation("Login '%s' ja existe" % login, constraint="uk_tbsss_usr_login")
 
-                perfil_id = date.get("profile_id")
-                if perfil_id not in self._store.profiles:
-                    raise RepoViolation("Perfil ID %s nao existe" % perfil_id, constraint="fk_tbsss_usr_prf")
+                profile_id = date.get("profile_id")
+                if profile_id not in self._store.profiles:
+                    raise RepoViolation("Perfil ID %s nao existe" % profile_id, constraint="fk_tbsss_usr_prf")
 
-                ativo = date.get("active", "Y")
-                if ativo not in ("Y", "N"):
+                active = date.get("active", "Y")
+                if active not in ("Y", "N"):
                     raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_usr_active")
 
-                tentativas = int(date.get("failed_attempts", 0))
-                if tentativas < 0:
+                attempts = int(date.get("failed_attempts", 0))
+                if attempts < 0:
                     raise RepoViolation("Tentativas falhas nao podem ser negativas", constraint="ck_tbsss_usr_att")
 
                 uid = self._store.next_id("tbsss_users")
-                novo = {
+                new = {
                     "id": uid,
                     "login": login,
                     "name": date.get("name", ""),
                     "password_hash": date.get("password_hash", "!"),
-                    "profile_id": perfil_id,
-                    "failed_attempts": tentativas,
+                    "profile_id": profile_id,
+                    "failed_attempts": attempts,
                     "locked_until": date.get("locked_until"),
                     "last_login_at": date.get("last_login_at"),
                     "password_changed_at": date.get("password_changed_at"),
                     "session_epoch": 0,
-                    "active": ativo,
+                    "active": active,
                     "created_at": date.get("created_at"),
                 }
-                self._store.stamp_insert(novo, actor)
-                self._store.users[uid] = copy.deepcopy(novo)
+                self._store.stamp_insert(new, actor)
+                self._store.users[uid] = copy.deepcopy(new)
                 self._auditar(audit, uid)
-                return copy.deepcopy(novo)
+                return copy.deepcopy(new)
 
     def update(self, id, date, expected=None, audit=None, actor=None):
         """Altera usuario (login imutavel), condicional a 'esperado' e com protecao do ultimo admin."""
@@ -172,55 +172,55 @@ class RepoUsersFake(RepoUsers):
                 if id not in self._store.users:
                     raise RepoNotFound("Usuario ID %s nao encontrado" % id)
 
-                atual = self._store.users[id]
-                for campo, valor in (expected or {}).items():
-                    if atual.get(campo) != valor:
-                        raise RepoConflict("Usuario ID %s alterado por outra operacao (%s)" % (id, campo))
+                current = self._store.users[id]
+                for field, value in (expected or {}).items():
+                    if current.get(field) != value:
+                        raise RepoConflict("Usuario ID %s alterado por outra operacao (%s)" % (id, field))
 
                 # Imutabilidade do login (README §10 trigger tr_tbsss_usr_bu)
-                novo_login = date.get("login")
-                if novo_login is not None and novo_login != atual["login"]:
+                new_login = date.get("login")
+                if new_login is not None and new_login != current["login"]:
                     raise RepoViolation("Login de usuario e imutavel", constraint="tr_tbsss_usr_bu")
 
-                novo_perfil = date.get("profile_id")
-                if novo_perfil is not None and novo_perfil not in self._store.profiles:
-                    raise RepoViolation("Perfil ID %s nao existe" % novo_perfil, constraint="fk_tbsss_usr_prf")
-                perfil_alterado = novo_perfil is not None and novo_perfil != atual["profile_id"]
+                new_profile = date.get("profile_id")
+                if new_profile is not None and new_profile not in self._store.profiles:
+                    raise RepoViolation("Perfil ID %s nao existe" % new_profile, constraint="fk_tbsss_usr_prf")
+                profile_changed = new_profile is not None and new_profile != current["profile_id"]
 
-                novo_ativo = date.get("active")
-                if novo_ativo is not None and novo_ativo not in ("Y", "N"):
+                new_active = date.get("active")
+                if new_active is not None and new_active not in ("Y", "N"):
                     raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_usr_active")
-                ativo_alterado = novo_ativo is not None and novo_ativo != atual["active"]
+                active_changed = new_active is not None and new_active != current["active"]
 
-                mudancas = dict((k, v) for k, v in date.items()
+                changes = dict((k, v) for k, v in date.items()
                                 if k in ("name", "profile_id", "password_hash", "failed_attempts", "locked_until",
                                          "last_login_at", "password_changed_at", "active"))
-                if int(mudancas.get("failed_attempts", 0) or 0) < 0:
+                if int(changes.get("failed_attempts", 0) or 0) < 0:
                     raise RepoViolation("Tentativas falhas nao podem ser negativas", constraint="ck_tbsss_usr_att")
 
                 # README §4.3.B: lock dos admins e validacao do conjunto resultante na mesma operacao.
-                if self._eh_admin_ativo(atual) and not self._eh_admin_ativo(dict(atual, **mudancas)):
-                    restantes = [u for uid, u in self._store.users.items()
+                if self._eh_admin_ativo(current) and not self._eh_admin_ativo(dict(current, **changes)):
+                    remaining = [u for uid, u in self._store.users.items()
                                  if uid != id and self._eh_admin_ativo(u)]
-                    if not restantes:
+                    if not remaining:
                         raise RepoViolation("Operacao deixaria o sistema sem administrador ativo",
                                            constraint="sss_ultimo_admin")
 
-                anterior = atual["profile_id"]
-                atual.update(mudancas)
-                if perfil_alterado or ativo_alterado:
-                    _revoke_sessions(atual)
-                self._store.stamp_update(atual, actor)
+                previous = current["profile_id"]
+                current.update(changes)
+                if profile_changed or active_changed:
+                    _revoke_sessions(current)
+                self._store.stamp_update(current, actor)
 
                 # Incrementa perm_versao do perfil se houver alteracao de perfil ou ativo
-                if perfil_alterado or ativo_alterado:
-                    if anterior in self._store.profiles:
-                        self._store.profiles[anterior]["perm_version"] += 1
-                    if perfil_alterado:
-                        self._store.profiles[novo_perfil]["perm_version"] += 1
+                if profile_changed or active_changed:
+                    if previous in self._store.profiles:
+                        self._store.profiles[previous]["perm_version"] += 1
+                    if profile_changed:
+                        self._store.profiles[new_profile]["perm_version"] += 1
 
                 self._auditar(audit, id)
-                return copy.deepcopy(atual)
+                return copy.deepcopy(current)
 
     def _por_login(self, login):
         for u in self._store.users.values():
@@ -233,18 +233,18 @@ class RepoUsersFake(RepoUsers):
         """Incrementa as falhas e decide o bloqueio sob o lock (contrato em RepoUsers); auditoria junto."""
         with self._store.lock_users:
             u = self._por_login(login)
-            tentativas = int(u.get("failed_attempts", 0)) + 1
-            if tentativas > 99:
+            attempts = int(u.get("failed_attempts", 0)) + 1
+            if attempts > 99:
                 raise RepoViolation("tentativas_falha excede NUMBER(2)", constraint="ck_tbsss_usr_att")
-            bloquear = (tentativas >= int(max_attempts)) if max_attempts is not None else lockout_s is not None
-            u["failed_attempts"] = tentativas
-            if bloquear:
+            lock = (attempts >= int(max_attempts)) if max_attempts is not None else lockout_s is not None
+            u["failed_attempts"] = attempts
+            if lock:
                 u["locked_until"] = self._store.now() + datetime.timedelta(seconds=int(lockout_s))
-            self._auditar(_failed_login_audit(audit, tentativas, max_attempts, bloquear, lock_audit),
+            self._auditar(_failed_login_audit(audit, attempts, max_attempts, lock, lock_audit),
                           u["id"])
-            registro = copy.deepcopy(u)
-            registro["bloqueou"] = bool(bloquear)
-            return registro
+            record = copy.deepcopy(u)
+            record["bloqueou"] = bool(lock)
+            return record
 
     def register_login_success(self, login, new_hash=None, audit=None):
         """Zera falhas, grava ultimo_login (SYSDATE) e o rehash, com a auditoria, numa operacao."""
@@ -310,7 +310,7 @@ class RepoUsersFake(RepoUsers):
 
 def _revoke_sessions(user):
     """Incrementa session_epoch: todas as sessoes abertas do usuario deixam de valer (CR-008, E2)."""
-    novo = int(user.get("session_epoch") or 0) + 1
-    if novo > 9999999999:
+    new = int(user.get("session_epoch") or 0) + 1
+    if new > 9999999999:
         raise RepoViolation("sessao_epoch excede NUMBER(10)", constraint="ck_tbsss_usr_epoch")
-    user["session_epoch"] = novo
+    user["session_epoch"] = new

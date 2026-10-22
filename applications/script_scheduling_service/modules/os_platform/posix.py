@@ -84,20 +84,20 @@ class Process(object):
 # -----------------------------------------------------------------------------
 
 def _rlimits(spec):
-    limites = dict(DEFAULT_RLIMITS)
-    for nome, valor in (spec.get("rlimits") or {}).items():
-        if nome not in _ALLOWED_RLIMITS:
-            raise ValueError("Limite de recurso nao permitido: %s" % nome)
-        limites[nome] = (int(valor[0]), int(valor[1]))
-    return [(getattr(resource, nome), par) for nome, par in sorted(limites.items())]
+    limits = dict(DEFAULT_RLIMITS)
+    for name, value in (spec.get("rlimits") or {}).items():
+        if name not in _ALLOWED_RLIMITS:
+            raise ValueError("Limite de recurso nao permitido: %s" % name)
+        limits[name] = (int(value[0]), int(value[1]))
+    return [(getattr(resource, name), pair) for name, pair in sorted(limits.items())]
 
 
 def _child_limits(limits):
     """preexec_fn em DEV: somente os.umask e resource.setrlimit (AGENTS §3.2; sem threads no daemon)."""
     def _child_limits():
         os.umask(0o077)
-        for recurso, par in limits:
-            resource.setrlimit(recurso, par)
+        for resource_value, pair in limits:
+            resource.setrlimit(resource_value, pair)
     return _child_limits
 
 
@@ -130,14 +130,14 @@ def start_process(spec, log_fd, exec_user=None):
 
 def _reap_helper_requests():
     """Coleta (sem esperar) os helpers term/kill ja terminados e registra os que falharam."""
-    restantes = []
+    remaining = []
     for argv, p in _helper_requests:
         rc = p.poll()
         if rc is None:
-            restantes.append((argv, p))
+            remaining.append((argv, p))
         elif rc not in (0,):
             _log.warning("helper %s terminou com codigo %s", argv[-3], rc, extra={"action": "SINAL"})
-    _helper_requests[:] = restantes
+    _helper_requests[:] = remaining
 
 
 def signal_group(process, signal_value):
@@ -159,8 +159,8 @@ def signal_group(process, signal_value):
         _helper_requests.append((argv, p))
         return True
     if process_exists(process.pid):
-        atual = process_identity(process.pid)
-        if process.identity is not None and atual is not None and atual != process.identity:
+        current = process_identity(process.pid)
+        if process.identity is not None and current is not None and current != process.identity:
             return False
     try:
         os.killpg(process.pgid, signal_value)
@@ -194,19 +194,19 @@ def reopen_group(state):
     que nao recebe sinal. Lider morto com o grupo ainda vivo (netos): Processo para o executor encerrar.
     """
     pid = int(state["pid"])
-    esperada = state.get("process_start")
-    usuario = state.get("exec_user")
+    expected = state.get("process_start")
+    user = state.get("exec_user")
     if process_exists(pid):
-        atual = process_identity(pid)
-        if atual is None:
+        current = process_identity(pid)
+        if current is None:
             _log.warning("ORFAO_SEM_IDENTIDADE pid=%s: identidade ilegivel nesta plataforma", pid,
                          extra={"action": "STARTUP"})
-            return Process(pid, None, exec_user=usuario, no_identity=True)
-        if esperada is not None and int(esperada) != atual:
+            return Process(pid, None, exec_user=user, no_identity=True)
+        if expected is not None and int(expected) != current:
             return None
-        return Process(pid, atual, exec_user=usuario)
-    processo = Process(pid, esperada, exec_user=usuario)
-    return processo if group_alive(processo) else None
+        return Process(pid, current, exec_user=user)
+    process = Process(pid, expected, exec_user=user)
+    return process if group_alive(process) else None
 
 
 # -----------------------------------------------------------------------------
@@ -215,9 +215,9 @@ def reopen_group(state):
 
 def _linux_starttime(content):
     """Campo 22 (starttime) de /proc/<pid>/stat, contado depois do ULTIMO ')' (o comando pode ter ')')."""
-    resto = content[content.rindex(")") + 2:].split()
+    rest = content[content.rindex(")") + 2:].split()
     # O resto comeca no campo 3 (state): o campo 22 fica na posicao 22 - 3.
-    return int(resto[19])
+    return int(rest[19])
 
 
 def process_identity(pid):
@@ -333,11 +333,11 @@ def locale_available(name, run=None):
     """True se o locale consta em `locale -a` (README §8.12 passo 2; CR-007 R-17). C.UTF-8 = C.utf8."""
     run = run or _run_short
     try:
-        codigo, saida = run(["/usr/bin/locale", "-a"])
+        code, output = run(["/usr/bin/locale", "-a"])
     except OSError:  # sem o comando locale: nao da para confirmar
         return False
-    alvo = _normalize_locale(name)
-    return codigo == 0 and any(_normalize_locale(l) == alvo for l in saida.splitlines())
+    target = _normalize_locale(name)
+    return code == 0 and any(_normalize_locale(l) == target for l in output.splitlines())
 
 
 def is_privileged_user():
@@ -381,7 +381,7 @@ def validate_restricted_dir(path):
     if not isinstance(path, str) or not path.startswith("/"):
         return "RELATIVE_PATH"
     real = os.path.realpath(path)
-    if any(_inside(alvo, d) for alvo in (path, real) for d in SYSTEM_DIRS):
+    if any(_inside(target, d) for target in (path, real) for d in SYSTEM_DIRS):
         return "SYSTEM_DIR"
     if not os.path.exists(real):
         return "NOT_FOUND"
@@ -408,9 +408,9 @@ def validate_script_path(path):
     real = final_path(path)
     if os.path.islink(real):
         return "NOT_FOUND"  # realpath parou num link: ciclo ou destino inexistente
-    st, codigo = _stat_code(real)
-    if codigo:
-        return codigo
+    st, code = _stat_code(real)
+    if code:
+        return code
     if not stat.S_ISREG(st.st_mode):
         return "NOT_A_FILE"
     if st.st_mode & 0o022:
@@ -442,42 +442,42 @@ def validate_execution(exec_users, exec_work_dir, helper=HELPER, run=_run_short,
 
     exec_users: pares (ambiente, usuario) do [agent] exec_users.
     """
-    falhas = []
+    failures = []
     try:
         st = os.stat(helper)
         if st.st_uid != 0:
-            falhas.append("helper %s nao pertence ao root" % helper)
+            failures.append("helper %s nao pertence ao root" % helper)
         if stat.S_IMODE(st.st_mode) != 0o755:
-            falhas.append("helper %s deve ter modo 0755" % helper)
+            failures.append("helper %s deve ter modo 0755" % helper)
         dst = os.stat(os.path.dirname(helper))
         if dst.st_uid != 0 or dst.st_mode & 0o022:
-            falhas.append("pasta do helper %s deve ser so do root" % os.path.dirname(helper))
+            failures.append("pasta do helper %s deve ser so do root" % os.path.dirname(helper))
     except OSError:
-        falhas.append("helper %s nao encontrado" % helper)
+        failures.append("helper %s nao encontrado" % helper)
 
-    agente = agent_user or pwd.getpwuid(os.geteuid()).pw_name
-    for usuario in sorted(set(u for _amb, u in exec_users)):
+    agent = agent_user or pwd.getpwuid(os.geteuid()).pw_name
+    for user in sorted(set(u for _env, u in exec_users)):
         try:
-            info = pwd.getpwnam(usuario)
+            info = pwd.getpwnam(user)
         except KeyError:
-            falhas.append("usuario de execucao %s nao existe" % usuario)
+            failures.append("usuario de execucao %s nao existe" % user)
             continue
-        if info.pw_uid == 0 or usuario == "root":
-            falhas.append("usuario de execucao %s nao pode ser root" % usuario)
-        if usuario == agente or info.pw_uid == os.geteuid():
-            falhas.append("usuario de execucao %s e o proprio usuario do agente" % usuario)
+        if info.pw_uid == 0 or user == "root":
+            failures.append("usuario de execucao %s nao pode ser root" % user)
+        if user == agent or info.pw_uid == os.geteuid():
+            failures.append("usuario de execucao %s e o proprio usuario do agente" % user)
         # O agente confere as proprias regras: "sudo -l <comando>" imprime o caminho se a regra existir.
-        codigo, saida = run([SUDO, "-n", "-l", "-u", usuario, helper])
-        if codigo != 0 or helper not in saida:
-            falhas.append("sudo -n -l sem a regra do helper para %s" % usuario)
-        pasta = os.path.join(exec_work_dir or "", usuario)
+        code, output = run([SUDO, "-n", "-l", "-u", user, helper])
+        if code != 0 or helper not in output:
+            failures.append("sudo -n -l sem a regra do helper para %s" % user)
+        dir_value = os.path.join(exec_work_dir or "", user)
         try:
-            pst = os.stat(pasta)
+            pst = os.stat(dir_value)
             if pst.st_uid != info.pw_uid or stat.S_IMODE(pst.st_mode) != 0o700:
-                falhas.append("%s deve pertencer a %s com modo 0700" % (pasta, usuario))
+                failures.append("%s deve pertencer a %s com modo 0700" % (dir_value, user))
         except OSError:
-            falhas.append("%s nao existe" % pasta)
-    return falhas
+            failures.append("%s nao existe" % dir_value)
+    return failures
 
 
 def clean_script_dir(base_dir, ticket_id, exec_user):
@@ -485,10 +485,10 @@ def clean_script_dir(base_dir, ticket_id, exec_user):
 
     So fora de DEV (com usuario de execucao); em DEV a pasta fica dentro de work_dir/ticket_<id>/.
     """
-    codigo, _saida = _run_short([SUDO, "-n", "-u", exec_user, "--", HELPER, "clean",
+    code, _output = _run_short([SUDO, "-n", "-u", exec_user, "--", HELPER, "clean",
                                       base_dir, str(int(ticket_id))])
-    if codigo != 0:
-        raise RuntimeError("helper limpar falhou (codigo %s)" % codigo)
+    if code != 0:
+        raise RuntimeError("helper limpar falhou (codigo %s)" % code)
 
 
 # -----------------------------------------------------------------------------
@@ -506,21 +506,21 @@ def _helper_argv(subcommand, args, exec_user=None):
 def create_output_dir(base, relative):
     """So em DEV sem usuario de execucao: cria base e cada nivel do relativo com 0700, recusando link ou item
     que nao seja diretorio do proprio usuario (fora de DEV, quem cria e o helper run)."""
-    atual = None
-    for parte in [base] + relative.split("/"):
-        atual = parte if atual is None else os.path.join(atual, parte)
-        if atual == base:
+    current = None
+    for part in [base] + relative.split("/"):
+        current = part if current is None else os.path.join(current, part)
+        if current == base:
             os.makedirs(base, 0o700, exist_ok=True)
         else:
             try:
-                os.mkdir(atual, 0o700)
+                os.mkdir(current, 0o700)
             except FileExistsError:  # fluxo previsto: nivel ja criado por outro ticket do mesmo minuto
                 pass
-        st = os.lstat(atual)
+        st = os.lstat(current)
         if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid():
             raise RuntimeError("pasta de saida com item que nao e diretorio do agente")
-    os.chmod(atual, 0o700)
-    return atual
+    os.chmod(current, 0o700)
+    return current
 
 
 def create_input_dir(base, relative):
@@ -528,16 +528,16 @@ def create_input_dir(base, relative):
     recusando link ou item que nao seja diretorio do proprio usuario. A pasta e permanente: a existente fica como
     esta (fora de DEV, quem cria e o helper run)."""
     os.makedirs(base, 0o700, exist_ok=True)
-    pasta = os.path.join(base, relative)
+    dir_value = os.path.join(base, relative)
     try:
-        os.mkdir(pasta, 0o700)
+        os.mkdir(dir_value, 0o700)
     except FileExistsError:  # fluxo previsto: a pasta do script ja existe (tickets anteriores)
         pass
-    for item in (base, pasta):
+    for item in (base, dir_value):
         st = os.lstat(item)
         if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.geteuid():
             raise RuntimeError("pasta de entrada com item que nao e diretorio do agente")
-    return pasta
+    return dir_value
 
 
 def start_pack(base, relative, max_bytes, max_files, destination_fd, exec_user=None):
@@ -553,21 +553,21 @@ def start_pack(base, relative, max_bytes, max_files, destination_fd, exec_user=N
 
 def clean_output(base, relative, exec_user=None):
     """Remove a pasta de saida do ticket pelo helper clean-output (sem seguir links)."""
-    codigo, _saida = _run_short(_helper_argv("clean-output", [base, relative], exec_user))
-    if codigo != 0:
-        raise RuntimeError("helper clean-output falhou (codigo %s)" % codigo)
+    code, _output = _run_short(_helper_argv("clean-output", [base, relative], exec_user))
+    if code != 0:
+        raise RuntimeError("helper clean-output falhou (codigo %s)" % code)
 
 
 def purge_output(base, days, exec_user=None, count_only=False):
     """Retencao das pastas de saida (purge.py, README §11.3): devolve quantas pastas de minuto sairam (ou, com
     contar=True, quantas sairiam: o --dry-run, sem remover nada)."""
     args = [base, int(days)] + (["count"] if count_only else [])
-    codigo, saida = _run_short(_helper_argv("purge-output", args, exec_user))
-    if codigo != 0:
-        raise RuntimeError("helper purge-output falhou (codigo %s)" % codigo)
-    for linha in saida.splitlines():
-        if linha.startswith("removidas="):
-            return int(linha.split("=", 1)[1])
+    code, output = _run_short(_helper_argv("purge-output", args, exec_user))
+    if code != 0:
+        raise RuntimeError("helper purge-output falhou (codigo %s)" % code)
+    for line in output.splitlines():
+        if line.startswith("removidas="):
+            return int(line.split("=", 1)[1])
     raise RuntimeError("helper purge-output sem contagem")
 
 
@@ -577,21 +577,21 @@ def validate_output_dirs(user_dirs):
 
     pastas_usuarios: pares (pasta, usuario).
     """
-    falhas = []
-    for pasta, usuario in user_dirs:
+    failures = []
+    for dir_value, user in user_dirs:
         try:
-            uid = pwd.getpwnam(usuario).pw_uid
+            uid = pwd.getpwnam(user).pw_uid
         except KeyError:
-            falhas.append("usuario de execucao %s nao existe" % usuario)
+            failures.append("usuario de execucao %s nao existe" % user)
             continue
         try:
-            st = os.lstat(pasta)
+            st = os.lstat(dir_value)
         except OSError:
-            falhas.append("%s nao existe" % pasta)
+            failures.append("%s nao existe" % dir_value)
             continue
         if not stat.S_ISDIR(st.st_mode) or st.st_uid != uid or st.st_mode & 0o022:
-            falhas.append("%s deve ser diretorio de %s sem escrita de grupo nem de outros" % (pasta, usuario))
-    return falhas
+            failures.append("%s deve ser diretorio de %s sem escrita de grupo nem de outros" % (dir_value, user))
+    return failures
 
 
 # -----------------------------------------------------------------------------
@@ -601,18 +601,18 @@ def validate_output_dirs(user_dirs):
 def _pids_in_dir(folder):
     """PIDs do proprio usuario cujo diretorio atual esta em pasta (Linux: /proc/<pid>/cwd)."""
     pids = []
-    meu_uid = os.geteuid()
-    for nome in os.listdir("/proc"):
-        if not nome.isdigit() or int(nome) == os.getpid():
+    my_uid = os.geteuid()
+    for name in os.listdir("/proc"):
+        if not name.isdigit() or int(name) == os.getpid():
             continue
         try:
-            if os.stat("/proc/" + nome).st_uid != meu_uid:
+            if os.stat("/proc/" + name).st_uid != my_uid:
                 continue
-            cwd = os.readlink("/proc/%s/cwd" % nome)
+            cwd = os.readlink("/proc/%s/cwd" % name)
         except OSError:  # fluxo previsto: processo saiu durante a varredura
             continue
         if _inside(os.path.normpath(cwd), folder):
-            pids.append(int(nome))
+            pids.append(int(name))
     return pids
 
 
@@ -624,26 +624,26 @@ def stop_ticket(base_dir, ticket_id, exec_user, kill_grace_s):
     proprio usuario cujo diretorio atual esta em <base_dir>/ticket_<id>.
     """
     if exec_user:
-        codigo, saida = _run_short([SUDO, "-n", "-u", exec_user, "--", HELPER, "stop-ticket",
+        code, output = _run_short([SUDO, "-n", "-u", exec_user, "--", HELPER, "stop-ticket",
                                          base_dir, str(int(ticket_id)), str(int(kill_grace_s))])
-        if codigo == UNSUPPORTED_CODE:
+        if code == UNSUPPORTED_CODE:
             return "NAO_SUPORTADO"
-        if codigo != 0:
-            raise RuntimeError("helper stop-ticket falhou (codigo %s)" % codigo)
+        if code != 0:
+            raise RuntimeError("helper stop-ticket falhou (codigo %s)" % code)
         return "OK"
     if NAME != "LINUX" or not os.path.isdir("/proc/self"):
         return "NAO_SUPORTADO"
-    pasta = os.path.normpath(os.path.join(base_dir, "ticket_%d" % int(ticket_id)))
-    for sinal in (signal.SIGTERM, signal.SIGKILL):
-        pids = _pids_in_dir(pasta)
+    dir_value = os.path.normpath(os.path.join(base_dir, "ticket_%d" % int(ticket_id)))
+    for signal_value in (signal.SIGTERM, signal.SIGKILL):
+        pids = _pids_in_dir(dir_value)
         for pid in pids:
             try:
-                os.kill(pid, sinal)
+                os.kill(pid, signal_value)
             except ProcessLookupError:  # fluxo previsto: processo ja saiu
                 pass
-        if not pids or sinal == signal.SIGKILL:
+        if not pids or signal_value == signal.SIGKILL:
             break
-        limite = time.monotonic() + min(int(kill_grace_s), 300)
-        while time.monotonic() < limite and _pids_in_dir(pasta):
+        limit = time.monotonic() + min(int(kill_grace_s), 300)
+        while time.monotonic() < limit and _pids_in_dir(dir_value):
             time.sleep(0.1)
     return "OK"

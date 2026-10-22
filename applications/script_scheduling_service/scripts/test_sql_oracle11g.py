@@ -38,16 +38,16 @@ class TestSqlOracle11g(unittest.TestCase):
     def _get_sql_files(self):
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         repo_oracle_dir = os.path.join(base_dir, "modules", "repo_oracle")
-        arquivos = []
-        for raiz, _, files in os.walk(repo_oracle_dir):
+        file_paths = []
+        for root, _, files in os.walk(repo_oracle_dir):
             for f in files:
                 if f.endswith(".py") and f != "__init__.py":
-                    arquivos.append(os.path.join(raiz, f))
+                    file_paths.append(os.path.join(root, f))
 
         init_db = os.path.join(base_dir, "scripts", "init_db.py")
         if os.path.isfile(init_db):
-            arquivos.append(init_db)
-        return arquivos
+            file_paths.append(init_db)
+        return file_paths
 
     def test_padroes_12c_detectam_a_sintaxe_proibida(self):
         """Regressao: a regra de OFFSET pega a paginacao 12c e ignora o parametro offset do contrato."""
@@ -60,58 +60,58 @@ class TestSqlOracle11g(unittest.TestCase):
 
     def test_ausencia_sintaxe_12c(self):
         """Varre os arquivos do repositorio Oracle garantindo ausencia de recursos 12c+."""
-        arquivos = self._get_sql_files()
-        self.assertTrue(len(arquivos) > 0, "Nenhum arquivo encontrado em modules/repo_oracle/")
+        files = self._get_sql_files()
+        self.assertTrue(len(files) > 0, "Nenhum arquivo encontrado em modules/repo_oracle/")
 
-        violacoes = []
-        for caminho in arquivos:
-            with open(caminho, "r", encoding="utf-8") as fp:
-                conteudo = fp.read()
+        violations = []
+        for path in files:
+            with open(path, "r", encoding="utf-8") as fp:
+                content = fp.read()
 
-            for padrao, desc in _PATTERNS_12C:
-                m = padrao.search(conteudo)
+            for default, desc in _PATTERNS_12C:
+                m = default.search(content)
                 if m:
-                    violacoes.append("%s: sintaxe proibida encontrada (%s)" % (os.path.basename(caminho), desc))
+                    violations.append("%s: sintaxe proibida encontrada (%s)" % (os.path.basename(path), desc))
 
-        self.assertEqual(violacoes, [], "Violacoes de sintaxe 12c+ encontradas:\n" + "\n".join(violacoes))
+        self.assertEqual(violations, [], "Violacoes de sintaxe 12c+ encontradas:\n" + "\n".join(violations))
 
     def test_ausencia_select_star(self):
         """Proibe SELECT * direto da tabela em code de aplicacao (exceto subquery de paginacao)."""
-        arquivos = self._get_sql_files()
-        violacoes = []
-        for caminho in arquivos:
-            with open(caminho, "r", encoding="utf-8") as fp:
-                linhas = fp.readlines()
+        files = self._get_sql_files()
+        violations = []
+        for path in files:
+            with open(path, "r", encoding="utf-8") as fp:
+                rows = fp.readlines()
 
-            for i, linha in enumerate(linhas, 1):
+            for i, line in enumerate(rows, 1):
                 # Permite SELECT * FROM ( subquery de paginacao
-                if "SELECT * FROM" in linha.upper() and "(" not in linha and "SUBQUERY" not in linha.upper():
-                    violacoes.append("%s:%d: SELECT * proibido (deve especificar colunas)" % (os.path.basename(caminho), i))
+                if "SELECT * FROM" in line.upper() and "(" not in line and "SUBQUERY" not in line.upper():
+                    violations.append("%s:%d: SELECT * proibido (deve especificar colunas)" % (os.path.basename(path), i))
 
-        self.assertEqual(violacoes, [], "SELECT * proibido encontrado:\n" + "\n".join(violacoes))
+        self.assertEqual(violations, [], "SELECT * proibido encontrado:\n" + "\n".join(violations))
 
     def test_for_update_com_wait_n_ou_skip_locked(self):
         """Garante que todo FOR UPDATE use WAIT n (n <= 5) ou SKIP LOCKED (AGENTS §4.10)."""
-        arquivos = self._get_sql_files()
-        violacoes = []
-        for caminho in arquivos:
-            with open(caminho, "r", encoding="utf-8") as fp:
-                conteudo = fp.read()
+        files = self._get_sql_files()
+        violations = []
+        for path in files:
+            with open(path, "r", encoding="utf-8") as fp:
+                content = fp.read()
 
             # Encontra todos os blocos contendo FOR UPDATE
-            for m in re.finditer(r"\bFOR\s+UPDATE\b([^\";\n]*)", conteudo, re.IGNORECASE):
-                clausula = m.group(0).upper()
-                if "SKIP LOCKED" in clausula:
+            for m in re.finditer(r"\bFOR\s+UPDATE\b([^\";\n]*)", content, re.IGNORECASE):
+                clause = m.group(0).upper()
+                if "SKIP LOCKED" in clause:
                     continue
-                m_wait = re.search(r"\bWAIT\s+(\d+)\b", clausula)
+                m_wait = re.search(r"\bWAIT\s+(\d+)\b", clause)
                 if not m_wait:
-                    violacoes.append("%s: FOR UPDATE sem WAIT ou SKIP LOCKED: '%s'" % (os.path.basename(caminho), clausula))
+                    violations.append("%s: FOR UPDATE sem WAIT ou SKIP LOCKED: '%s'" % (os.path.basename(path), clause))
                 else:
                     n = int(m_wait.group(1))
                     if n > 5:
-                        violacoes.append("%s: FOR UPDATE WAIT %d excede o maximo de 5s" % (os.path.basename(caminho), n))
+                        violations.append("%s: FOR UPDATE WAIT %d excede o maximo de 5s" % (os.path.basename(path), n))
 
-        self.assertEqual(violacoes, [], "Violacoes de FOR UPDATE encontradas:\n" + "\n".join(violacoes))
+        self.assertEqual(violations, [], "Violacoes de FOR UPDATE encontradas:\n" + "\n".join(violations))
 
 
 if __name__ == "__main__":

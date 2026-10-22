@@ -76,10 +76,10 @@ class Execution(object):
 
 def _agent_from_label(label):
     # rotulo = 'SSS-<agent_id>-<ticket_id>' (F8.3); o agent_id pode ter '-'.
-    texto = str(label or "")
-    if texto.startswith("SSS-"):
-        texto = texto[4:]
-    return texto.rsplit("-", 1)[0] if "-" in texto else texto
+    text = str(label or "")
+    if text.startswith("SSS-"):
+        text = text[4:]
+    return text.rsplit("-", 1)[0] if "-" in text else text
 
 
 def _sss_line(log_fd, text):
@@ -100,28 +100,28 @@ def prepare_directory(work_dir, ticket_id, startup_concluido=False):
     (.sss_spawn, .sss_proc, .sss_result): sem .sss_proc nao ha grupo de processo associado. Com marcador ou
     estado desconhecido, preserva a pasta e lanca PreservedDirectory (falha fechada).
     """
-    caminho = os.path.join(work_dir, "ticket_%d" % int(ticket_id))
-    if os.path.lexists(caminho):
+    path = os.path.join(work_dir, "ticket_%d" % int(ticket_id))
+    if os.path.lexists(path):
         if not startup_concluido:
             raise PreservedDirectory("ticket %s: pasta preexistente antes do startup check" % ticket_id)
-        if os.path.islink(caminho) or not os.path.isdir(caminho):
+        if os.path.islink(path) or not os.path.isdir(path):
             raise PreservedDirectory("ticket %s: pasta de trabalho nao e um diretorio" % ticket_id)
         try:
-            nomes = os.listdir(caminho)
+            names = os.listdir(path)
         except OSError as e:
             raise PreservedDirectory("ticket %s: estado desconhecido (%s)" % (ticket_id, e.__class__.__name__))
-        marcas = [m for m in MARKERS if m in nomes]
-        if marcas:
-            raise PreservedDirectory("ticket %s: pasta com estado local %s" % (ticket_id, ",".join(marcas)))
+        marks = [m for m in MARKERS if m in names]
+        if marks:
+            raise PreservedDirectory("ticket %s: pasta com estado local %s" % (ticket_id, ",".join(marks)))
         base = os_platform.final_path(work_dir)
-        real = os_platform.final_path(caminho)
+        real = os_platform.final_path(path)
         if real == base or os.path.commonpath([real, base]) != base:
             raise PreservedDirectory("ticket %s: pasta fora do work_dir" % ticket_id)
         _log.warning("pasta de trabalho sem estado removida", extra={"ticket": ticket_id, "action": "SPAWN"})
         shutil.rmtree(real)
-    os_platform.create_work_dir(caminho)
-    os_platform.create_work_dir(os.path.join(caminho, "tmp"))
-    return caminho
+    os_platform.create_work_dir(path)
+    os_platform.create_work_dir(os.path.join(path, "tmp"))
+    return path
 
 
 def open_log(log_dir, environment, script_name, started_at, ticket_id, script_id=None):
@@ -131,11 +131,11 @@ def open_log(log_dir, environment, script_name, started_at, ticket_id, script_id
     Cada pasta nova da cadeia recebe 0750 (log_paths.ensure_directory). nome_script e o script_nome do
     snapshot (README §6.5). Devolve (fd, caminho).
     """
-    caminho = log_paths.partial_log_path(log_dir, environment, script_name, started_at, ticket_id, script_id)
-    log_paths.ensure_directory(os.path.dirname(caminho))
-    fd = os.open(caminho, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_APPEND, 0o600)
-    _open_logs[fd] = caminho
-    return fd, caminho
+    path = log_paths.partial_log_path(log_dir, environment, script_name, started_at, ticket_id, script_id)
+    log_paths.ensure_directory(os.path.dirname(path))
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_APPEND, 0o600)
+    _open_logs[fd] = path
+    return fd, path
 
 
 def build_spec(ticket_id, argv, env, rlimits, base_dir, output=None, input_value=None):
@@ -148,7 +148,7 @@ def build_spec(ticket_id, argv, env, rlimits, base_dir, output=None, input_value
         "ticket_id": int(ticket_id),
         "argv": list(argv),
         "env": dict(env),
-        "rlimits": dict((nome, [int(par[0]), int(par[1])]) for nome, par in (rlimits or {}).items()),
+        "rlimits": dict((name, [int(pair[0]), int(pair[1])]) for name, pair in (rlimits or {}).items()),
         "base_dir": base_dir,
     }
     if output is not None:
@@ -186,8 +186,8 @@ def _spawn_failure(execution, log_fd, error, agent):
 def failure_before_spawn(log_fd, ticket_id, error, label, work_dir_ticket=None):
     """SPAWN_ERROR depois de open_log e antes de iniciar (ex.: excecao no env_builder): grava a linha [SSS],
     fecha o descritor e renomeia o parcial para ticket_<id>_0.log, como em iniciar (README §8.4, passo 3)."""
-    execucao = Execution(int(ticket_id), work_dir_ticket, None, None, _open_logs.pop(log_fd, None))
-    return _spawn_failure(execucao, log_fd, error, _agent_from_label(label))
+    execution = Execution(int(ticket_id), work_dir_ticket, None, None, _open_logs.pop(log_fd, None))
+    return _spawn_failure(execution, log_fd, error, _agent_from_label(label))
 
 
 def start(ticket_id, argv, log_fd, env, work_dir_ticket, exec_user, exec_work_dir, rlimits, label,
@@ -202,14 +202,14 @@ def start(ticket_id, argv, log_fd, env, work_dir_ticket, exec_user, exec_work_di
     saida: (base, relativo) da pasta de saida (CR-012): o helper run a cria; em DEV, a plataforma.
     entrada: (base, relativo) da pasta de entrada (CR-014), permanente: idem, so se nao existir.
     """
-    agente = _agent_from_label(label)
-    pasta_base = os.path.join(exec_work_dir, exec_user) if exec_user else None
-    execucao = Execution(int(ticket_id), work_dir_ticket, exec_user, pasta_base, _open_logs.pop(log_fd, None))
+    agent = _agent_from_label(label)
+    dir_base = os.path.join(exec_work_dir, exec_user) if exec_user else None
+    execution = Execution(int(ticket_id), work_dir_ticket, exec_user, dir_base, _open_logs.pop(log_fd, None))
     try:
-        if execucao.log_path is None:
+        if execution.log_path is None:
             raise ValueError("log_fd nao foi aberto por abrir_log")
         if exec_user:
-            spec = build_spec(ticket_id, argv, env, rlimits, pasta_base, output, input_value)
+            spec = build_spec(ticket_id, argv, env, rlimits, dir_base, output, input_value)
         else:
             # DEV sem usuario de execucao: o cwd e a pasta exec de work_dir/ticket_<id> (CR-008, R-36).
             cwd = os_platform.create_work_dir(os.path.join(work_dir_ticket, "exec"))
@@ -223,31 +223,31 @@ def start(ticket_id, argv, log_fd, env, work_dir_ticket, exec_user, exec_work_di
             "ticket_id": int(ticket_id), "exec_user": exec_user,
             "monotonic": time.monotonic(), "wall": time.time()})
     except Exception as e:  # noqa: BLE001 - CR-007 R-17: qualquer excecao no spawn e SPAWN_ERROR
-        return _spawn_failure(execucao, log_fd, e, agente)
+        return _spawn_failure(execution, log_fd, e, agent)
 
     try:
-        processo = os_platform.start_process(spec, log_fd, exec_user)
+        process = os_platform.start_process(spec, log_fd, exec_user)
     except os_platform.FailureAfterSpawn as f:
-        return _after_spawn_failed(execucao, f.process, log_fd, f.cause, agente)
+        return _after_spawn_failed(execution, f.process, log_fd, f.cause, agent)
     except Exception as e:  # noqa: BLE001
-        return _spawn_failure(execucao, log_fd, e, agente)
+        return _spawn_failure(execution, log_fd, e, agent)
 
-    execucao.process = processo
-    execucao.pid = processo.pid
+    execution.process = process
+    execution.pid = process.pid
     try:
-        final = os.path.join(os.path.dirname(execucao.log_path),
-                             log_paths.run_log_name(execucao.ticket_id, processo.pid))
-        os.rename(execucao.log_path, final)
-        execucao.log_path = final
-        execucao.identity = os_platform.process_identity(processo.pid)
-        processo.identity = execucao.identity
+        final = os.path.join(os.path.dirname(execution.log_path),
+                             log_paths.run_log_name(execution.ticket_id, process.pid))
+        os.rename(execution.log_path, final)
+        execution.log_path = final
+        execution.identity = os_platform.process_identity(process.pid)
+        process.identity = execution.identity
         os_platform.write_state(os.path.join(work_dir_ticket, PROC), {
-            "ticket_id": execucao.ticket_id, "pid": processo.pid, "pgid": processo.pgid,
-            "process_start": execucao.identity, "exec_user": exec_user})
+            "ticket_id": execution.ticket_id, "pid": process.pid, "pgid": process.pgid,
+            "process_start": execution.identity, "exec_user": exec_user})
     except Exception as e:  # noqa: BLE001
-        return _after_spawn_failed(execucao, processo, log_fd, e, agente)
+        return _after_spawn_failed(execution, process, log_fd, e, agent)
     os.close(log_fd)
-    return execucao
+    return execution
 
 
 def _after_spawn_failed(execution, process, log_fd, error, agent):
@@ -273,10 +273,10 @@ def _after_spawn_failed(execution, process, log_fd, error, agent):
 
 def check(execution):
     """None enquanto o processo direto roda; o returncode quando terminou (Popen.poll, sem esperar)."""
-    processo = execution.process
-    if processo is None or processo.popen is None:
+    process = execution.process
+    if process is None or process.popen is None:
         return execution.returncode
-    rc = processo.popen.poll()
+    rc = process.popen.poll()
     if rc is not None:
         execution.returncode = rc
     return rc
@@ -287,11 +287,11 @@ def request_stop(execution, now_monotonic, grace_s=DEFAULT_GRACE_S):
     ja terminado (R-02): grupo com membros nesse caso gera WARN NETOS_ENCERRADOS. Nao espera."""
     if execution.phase is not None:
         return
-    processo = execution.process
-    if processo is None or not os_platform.group_alive(processo):
+    process = execution.process
+    if process is None or not os_platform.group_alive(process):
         execution.phase = PHASE_END
         return
-    if processo.no_identity:
+    if process.no_identity:
         # Sem identidade nao ha sinal seguro (PID pode ter sido reciclado): o chamador finaliza ORPHAN_PROCESS
         # e o limpar preserva a pasta enquanto o grupo existir (CR-008, R-26).
         _log.warning("ORFAO_SEM_IDENTIDADE: grupo vivo sem identidade, nenhum sinal enviado",
@@ -301,7 +301,7 @@ def request_stop(execution, now_monotonic, grace_s=DEFAULT_GRACE_S):
     if check(execution) is not None:
         _log.warning("NETOS_ENCERRADOS: o grupo tinha processos depois da saida do principal",
                      extra={"ticket": execution.ticket_id, "action": "ENCERRAR"})
-    os_platform.signal_group(processo, signal.SIGTERM)
+    os_platform.signal_group(process, signal.SIGTERM)
     execution.phase = PHASE_TERM
     execution.grace_s = grace_s
     execution.kill_deadline = now_monotonic + grace_s
@@ -367,8 +367,8 @@ def clean(execution):
         raise RuntimeError("ticket %s: grupo ainda tem processos" % execution.ticket_id)
     if execution.exec_user:
         os_platform.clean_script_dir(execution.base_dir, execution.ticket_id, execution.exec_user)
-    pasta = execution.work_dir_ticket
-    if os.path.basename(pasta) != "ticket_%d" % execution.ticket_id or os.path.islink(pasta):
+    dir_value = execution.work_dir_ticket
+    if os.path.basename(dir_value) != "ticket_%d" % execution.ticket_id or os.path.islink(dir_value):
         raise RuntimeError("ticket %s: pasta de trabalho inesperada" % execution.ticket_id)
-    if os.path.isdir(pasta):
-        shutil.rmtree(pasta)
+    if os.path.isdir(dir_value):
+        shutil.rmtree(dir_value)

@@ -64,32 +64,32 @@ class Expansion(object):
 
         continuar(): False interrompe entre regras (fencing ou parada). Devolve contadores do ciclo.
         """
-        inicio = self.clock()
-        orcamento = self.cfg.heartbeat_interval_s / 2.0
-        lote = self.cfg.schedule_batch_size
-        ult_prox, ult_id = None, 0
-        ignoradas = set()
+        start = self.clock()
+        budget = self.cfg.heartbeat_interval_s / 2.0
+        batch = self.cfg.schedule_batch_size
+        last_next, last_id = None, 0
+        ignored = set()
         stats = {"regras": 0, "tickets": 0, "pausas": 0, "puladas": 0}
         while True:
-            pagina = self.agenda.due_rules(conn, lote, ult_prox, ult_id)
+            page = self.agenda.due_rules(conn, batch, last_next, last_id)
             conn.rollback()  # a leitura nao trava nada; cada regra abre a propria transacao
-            for regra_id, prox in pagina:
-                if (keep_going is not None and not keep_going()) or self.clock() - inicio > orcamento:
+            for rule_id, next_value in page:
+                if (keep_going is not None and not keep_going()) or self.clock() - start > budget:
                     return stats
-                ult_prox, ult_id = prox, regra_id
-                if regra_id in ignoradas:
+                last_next, last_id = next_value, rule_id
+                if rule_id in ignored:
                     continue
                 stats["regras"] += 1
-                desfecho = self.process(conn, regra_id)
-                if desfecho == "IGNORAR":
-                    ignoradas.add(regra_id)
-                elif desfecho in ("TICKET", "CONCLUIDA_COM_TICKET", "CRON_INVALIDO_COM_TICKET"):
+                outcome = self.process(conn, rule_id)
+                if outcome == "IGNORAR":
+                    ignored.add(rule_id)
+                elif outcome in ("TICKET", "CONCLUIDA_COM_TICKET", "CRON_INVALIDO_COM_TICKET"):
                     stats["tickets"] += 1
-                if desfecho in ("PAUSADA", "INVALID_CRON", "CRON_INVALIDO_COM_TICKET", "INTERNAL_ERROR"):
+                if outcome in ("PAUSADA", "INVALID_CRON", "CRON_INVALIDO_COM_TICKET", "INTERNAL_ERROR"):
                     stats["pausas"] += 1
-                if desfecho == "OUTRO_AGENTE":
+                if outcome == "OUTRO_AGENTE":
                     stats["puladas"] += 1
-            if len(pagina) < lote or self.clock() - inicio > orcamento:
+            if len(page) < batch or self.clock() - start > budget:
                 return stats
 
     # ------------------------------------------------------------------ uma regra
@@ -99,7 +99,7 @@ class Expansion(object):
         log = _RuleLog(self.log, self.agent_id, rule_id)
         self._current_rule = None
         try:
-            desfecho = self._process(conn, rule_id, log)
+            outcome = self._process(conn, rule_id, log)
         except DuplicateOccurrence:
             conn.rollback()
             return self._duplicate_occurrence(conn, rule_id, log)
@@ -107,91 +107,91 @@ class Expansion(object):
             conn.rollback()
             return self._failure(conn, rule_id, exc, log)
         self.failures.pop(rule_id, None)
-        return desfecho
+        return outcome
 
     def _process(self, conn, rule_id, log):
         if not self.agenda.lock_rule(conn, rule_id):
             conn.rollback()
             return "OUTRO_AGENTE"
-        regra = self.agenda.load_rule(conn, rule_id)
-        if regra is None:
+        rule = self.agenda.load_rule(conn, rule_id)
+        if rule is None:
             conn.rollback()
             return "OUTRO_AGENTE"
-        antiga = regra["next_run_at"]  # passo 1: exatamente como o banco devolveu
-        agora = db_conn.db_now(conn)
-        self._current_rule = regra
+        old = rule["next_run_at"]  # passo 1: exatamente como o banco devolveu
+        now = db_conn.db_now(conn)
+        self._current_rule = rule
 
         # Passo 2: o responsavel ainda pode executar (motivo pela traducao unica, CR-008 R-33).
-        login = self.agenda.user_login(conn, regra["user_id"])
-        ctx_exec = self.queue.execution_context(conn, {"script_id": regra["script_id"], "environment": regra["environment"],
+        login = self.agenda.user_login(conn, rule["user_id"])
+        ctx_exec = self.queue.execution_context(conn, {"script_id": rule["script_id"], "environment": rule["environment"],
                                                       "requested_by": login})
-        ok, motivo = rbac.can_execute(ctx_exec["ctx"], ctx_exec["script"], ctx_exec["environment"],
+        ok, reason = rbac.can_execute(ctx_exec["ctx"], ctx_exec["script"], ctx_exec["environment"],
                                         ctx_exec["homologacoes"])
         if not ok:
-            return self._pause(conn, regra, antiga, rbac.pause_reason_for(motivo), "rbac: %s" % motivo, log)
-        prioridade = int(regra["priority"])
-        if prioridade == 1 and not (ctx_exec["ctx"] or {}).get("is_admin"):
-            prioridade = 2
+            return self._pause(conn, rule, old, rbac.pause_reason_for(reason), "rbac: %s" % reason, log)
+        priority = int(rule["priority"])
+        if priority == 1 and not (ctx_exec["ctx"] or {}).get("is_admin"):
+            priority = 2
             log.warning("PRIORIDADE_REBAIXADA: o responsavel %s deixou de ser admin; ticket com prioridade 2", login)
 
         # Passo 3: decisao (misfire pela vencida mais recente, CR-008 R-21).
         try:
-            dec = recurrence.evaluate_trigger(regra, agora, self.cfg.misfire_policy, self.cfg.misfire_tolerance_s,
+            dec = recurrence.evaluate_trigger(rule, now, self.cfg.misfire_policy, self.cfg.misfire_tolerance_s,
                                              self.horizon)
         except recurrence.CronError as exc:
-            return self._pause(conn, regra, antiga, "INVALID_CRON", _short(exc), log)
-        self._log_missed(dec, antiga, agora, log)
+            return self._pause(conn, rule, old, "INVALID_CRON", _short(exc), log)
+        self._log_missed(dec, old, now, log)
 
         # Passo 4: sobreposicao (ultimo ticket PENDING/RUNNING).
-        if self._busy(conn, regra, ctx_exec["script"], agora, log):
+        if self._busy(conn, rule, ctx_exec["script"], now, log):
             if dec.cron_error:
-                return self._cron_error(conn, regra, antiga, None, None, [], log)
+                return self._cron_error(conn, rule, old, None, None, [], log)
             if dec.complete:
-                if not self.agenda.complete_without_ticket(conn, regra["id"], antiga, self.agent_id):
+                if not self.agenda.complete_without_ticket(conn, rule["id"], old, self.agent_id):
                     conn.rollback()
                     return "CORRIDA"
                 conn.commit()
                 log.info("SKIP_OVERLAP: regra concluida sem ticket; ocorrencias perdidas: %d", dec.missed + 1)
                 return "CONCLUIDA_SEM_TICKET"
-            return self._advance(conn, regra, antiga, dec.next_date, log, "SKIP_OVERLAP")
+            return self._advance(conn, rule, old, dec.next_date, log, "SKIP_OVERLAP")
 
         if not dec.create_ticket:
             if dec.cron_error:
-                return self._cron_error(conn, regra, antiga, None, None, [], log)
+                return self._cron_error(conn, rule, old, None, None, [], log)
             if dec.complete:
-                if not self.agenda.complete_without_ticket(conn, regra["id"], antiga, self.agent_id):
+                if not self.agenda.complete_without_ticket(conn, rule["id"], old, self.agent_id):
                     conn.rollback()
                     return "CORRIDA"
                 conn.commit()
                 log.info("regra concluida sem ticket (misfire SKIP fora da tolerancia)")
                 return "CONCLUIDA_SEM_TICKET"
-            return self._advance(conn, regra, antiga, dec.next_date, log, "MISFIRE_SKIP")
+            return self._advance(conn, rule, old, dec.next_date, log, "MISFIRE_SKIP")
 
         # Passo 5: snapshot v4 (path_file absoluto, CR-005) a partir de parametros_json.
-        script, vinculos = self.agenda.script_and_links(conn, regra["script_id"])
-        ticket, linhas, erro = self._build_ticket(regra, script, vinculos, login, prioridade, dec.occurrence, agora)
-        if erro is not None:
-            return self._pause(conn, regra, antiga, "INVALID_PARAM", erro, log)
+        script, links = self.agenda.script_and_links(conn, rule["script_id"])
+        ticket, rows, error = self._build_ticket(rule, script, links, login, priority, dec.occurrence, now)
+        if error is not None:
+            return self._pause(conn, rule, old, "INVALID_PARAM", error, log)
 
         # Passo 6: reserva + ticket (ou conclusao / variante cron_erro).
         ticket_id = self.agenda.next_ticket_id(conn)
         if dec.cron_error:
-            return self._cron_error(conn, regra, antiga, ticket_id, ticket, linhas, log)
+            return self._cron_error(conn, rule, old, ticket_id, ticket, rows, log)
         if dec.complete:
-            if not self.agenda.complete_with_ticket(conn, regra, antiga, ticket_id, ticket, linhas, self.agent_id):
+            if not self.agenda.complete_with_ticket(conn, rule, old, ticket_id, ticket, rows, self.agent_id):
                 conn.rollback()
                 return "CORRIDA"
             conn.commit()
             log.info("ticket %d gerado (ocorrencia %s, prioridade %d); regra concluida", ticket_id, dec.occurrence,
-                     prioridade)
+                     priority)
             return "CONCLUIDA_COM_TICKET"
-        if not self.agenda.reserve_and_create_ticket(conn, regra, antiga, dec.next_date, ticket_id, ticket, linhas,
+        if not self.agenda.reserve_and_create_ticket(conn, rule, old, dec.next_date, ticket_id, ticket, rows,
                                                    self.agent_id):
             conn.rollback()
             return "CORRIDA"
         conn.commit()
         log.info("ticket %d gerado (ocorrencia %s, prioridade %d); proxima execucao %s", ticket_id, dec.occurrence,
-                 prioridade, dec.next_date)
+                 priority, dec.next_date)
         return "TICKET"
 
     # ------------------------------------------------------------------ passos auxiliares
@@ -209,19 +209,19 @@ class Expansion(object):
 
     def _busy(self, conn, rule, script, now, log):
         """ultimo_ticket_id PENDING/RUNNING bloqueia; nulo, inexistente (purgado) ou terminal e livre."""
-        ultimo = rule.get("last_ticket_id")
-        if ultimo is None:
+        last = rule.get("last_ticket_id")
+        if last is None:
             return False
-        estado = self.agenda.get_ticket_status(conn, ultimo)
-        if estado is None or estado[0] not in _BUSY:
+        state = self.agenda.get_ticket_status(conn, last)
+        if state is None or state[0] not in _BUSY:
             return False
-        limite = (((script or {}).get("timeout_s") or self.cfg.script_timeout_s) + self.cfg.node_offline_timeout_s)
-        criado = estado[1]
-        if criado is not None and (now - criado).total_seconds() > limite:
-            log.warning("SKIP_OVERLAP_PRESO: o ticket %d esta %s ha mais de %d s; precisa de atencao", ultimo,
-                        estado[0], limite)
+        limit = (((script or {}).get("timeout_s") or self.cfg.script_timeout_s) + self.cfg.node_offline_timeout_s)
+        created = state[1]
+        if created is not None and (now - created).total_seconds() > limit:
+            log.warning("SKIP_OVERLAP_PRESO: o ticket %d esta %s ha mais de %d s; precisa de atencao", last,
+                        state[0], limit)
         else:
-            log.info("SKIP_OVERLAP: o ticket %d ainda esta %s", ultimo, estado[0])
+            log.info("SKIP_OVERLAP: o ticket %d ainda esta %s", last, state[0])
         return True
 
     def _build_ticket(self, rule, script, links, login, priority, occurrence, now):
@@ -229,20 +229,20 @@ class Expansion(object):
         if script is None:
             return None, None, "script inexistente"
         try:
-            respostas = json.loads(rule.get("params_json") or "{}")
+            answers = json.loads(rule.get("params_json") or "{}")
         except ValueError:
             return None, None, "parametros_json invalido"
-        if not isinstance(respostas, dict):
+        if not isinstance(answers, dict):
             return None, None, "parametros_json invalido"
-        ativos = sorted((v for v in links if v.get("active") == "Y"), key=lambda v: (v["sort_order"], v["parameter_id"]))
-        snapshot, resolvidos, erros = params_compiler.compile_snapshot(script, ativos, respostas, now)
-        if erros:
-            return None, None, _short("; ".join("%s: %s" % (c, m) for c, m in sorted(erros.items())))
-        linhas = [{"parameter_id": v["parameter_id"], "answer_value": _answer_text(resolvidos.get(v["code"]))}
-                  for v in ativos if resolvidos.get(v["code"]) is not None]
+        active = sorted((v for v in links if v.get("active") == "Y"), key=lambda v: (v["sort_order"], v["parameter_id"]))
+        snapshot, resolved, errors = params_compiler.compile_snapshot(script, active, answers, now)
+        if errors:
+            return None, None, _short("; ".join("%s: %s" % (c, m) for c, m in sorted(errors.items())))
+        rows = [{"parameter_id": v["parameter_id"], "answer_value": _answer_text(resolved.get(v["code"]))}
+                  for v in active if resolved.get(v["code"]) is not None]
         ticket = {"requested_by": login, "priority": priority, "submitted_params": snapshot,
                   "scheduled_at": occurrence}
-        return ticket, linhas, None
+        return ticket, rows, None
 
     def _advance(self, conn, rule, old, new, log, reason):
         if not self.agenda.advance_without_ticket(conn, rule["id"], old, new):
@@ -275,13 +275,13 @@ class Expansion(object):
     def _duplicate_occurrence(self, conn, rule_id, log):
         """R-31: ROLLBACK, WARN e, numa nova transacao, o avanco sem ticket com a mesma antiga e a nova da decisao."""
         log.warning("OCORRENCIA_DUPLICADA: outro caminho ja gerou o ticket desta ocorrencia")
-        regra = getattr(self, "_current_rule", None)
+        rule = getattr(self, "_current_rule", None)
         try:
-            if regra is not None and regra["id"] == rule_id:
-                dec = recurrence.evaluate_trigger(regra, db_conn.db_now(conn), self.cfg.misfire_policy,
+            if rule is not None and rule["id"] == rule_id:
+                dec = recurrence.evaluate_trigger(rule, db_conn.db_now(conn), self.cfg.misfire_policy,
                                                  self.cfg.misfire_tolerance_s, self.horizon)
                 if dec.next_date is not None:
-                    self.agenda.advance_without_ticket(conn, rule_id, regra["next_run_at"], dec.next_date)
+                    self.agenda.advance_without_ticket(conn, rule_id, rule["next_run_at"], dec.next_date)
             conn.commit()
         except Exception as exc:  # noqa: BLE001 - a regra volta no ciclo seguinte
             conn.rollback()
@@ -300,20 +300,20 @@ class Expansion(object):
                 raise exc  # conexao perdida: o ciclo para e o agente reconecta (o laco trata)
             if n < FAILURES_BEFORE_PAUSE:
                 return "ERRO_BANCO"
-            detalhe = "%d falhas seguidas de banco (%s)" % (n, "%s-%05d" % (pfx, num) if pfx else exc.__class__.__name__)
+            detail = "%d falhas seguidas de banco (%s)" % (n, "%s-%05d" % (pfx, num) if pfx else exc.__class__.__name__)
         else:
             log.error("erro interno no desdobro: %s", exc.__class__.__name__, exc_info=True)
-            detalhe = exc.__class__.__name__
+            detail = exc.__class__.__name__
         self.failures.pop(rule_id, None)
         try:
-            pausou = self.agenda.pause_internal_error(conn, rule_id, detalhe, self.agent_id)
+            paused = self.agenda.pause_internal_error(conn, rule_id, detail, self.agent_id)
             conn.commit()
         except Exception as exc2:  # noqa: BLE001 - a regra fica ignorada ate o fim do ciclo (R-08)
             conn.rollback()
             log.error("pausa INTERNAL_ERROR falhou (%s): regra ignorada neste ciclo", exc2.__class__.__name__)
             return "IGNORAR"
-        if pausou:
-            log.warning("regra pausada: INTERNAL_ERROR (%s)", detalhe)
+        if paused:
+            log.warning("regra pausada: INTERNAL_ERROR (%s)", detail)
         return "INTERNAL_ERROR"
 
 

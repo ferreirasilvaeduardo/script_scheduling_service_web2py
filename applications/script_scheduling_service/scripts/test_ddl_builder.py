@@ -30,18 +30,18 @@ class TestDdlBuilder(unittest.TestCase):
 
     def test_ddl_contem_todos_os_nomes_do_registro(self):
         """O DDL gerado contem todos os nomes de objetos registrados em sql_ident."""
-        nomes_esperados = sql_ident.all_identifiers(self.prefixo, include_columns=False)
-        nomes_gerados = set(item.name for item in self.statements)
+        names_expected = sql_ident.all_identifiers(self.prefixo, include_columns=False)
+        names_generated = set(item.name for item in self.statements)
 
-        for nome in nomes_esperados:
+        for name in names_expected:
             self.assertIn(
-                nome, nomes_gerados,
-                "Objeto '%s' registrado em sql_ident nao foi gerado no DDL" % nome
+                name, names_generated,
+                "Objeto '%s' registrado em sql_ident nao foi gerado no DDL" % name
             )
 
     def test_proibicoes_sql_12c_e_tipos_estritos(self):
         """Garante ausencia de sintaxe 12c+ e presenca de VARCHAR2(n CHAR)."""
-        proibidos = [
+        forbidden = [
             re.compile(r"\bIDENTITY\b", re.IGNORECASE),
             re.compile(r"\bFETCH\s+FIRST\b", re.IGNORECASE),
             re.compile(r"\bOFFSET\b", re.IGNORECASE),
@@ -52,11 +52,11 @@ class TestDdlBuilder(unittest.TestCase):
 
         for item in self.statements:
             sql = item.sql
-            for padrao in proibidos:
+            for default in forbidden:
                 self.assertIsNone(
-                    padrao.search(sql),
+                    default.search(sql),
                     "Padrao proibido '%s' encontrado no DDL de %s %s:\n%s"
-                    % (padrao.pattern, item.kind, item.name, sql)
+                    % (default.pattern, item.kind, item.name, sql)
                 )
 
     def test_triggers_bi_e_bu_literais(self):
@@ -67,7 +67,7 @@ class TestDdlBuilder(unittest.TestCase):
         bi_triggers = [t for t in triggers if t.name.endswith("_bi")]
         self.assertEqual(len(bi_triggers), 18)
 
-        template_esperado = (
+        template_expected = (
             "BEGIN\n"
             "    IF :NEW.id IS NULL THEN\n"
             "        SELECT {owner}.{sequence_name}.NEXTVAL INTO :NEW.id FROM DUAL;\n"
@@ -75,20 +75,20 @@ class TestDdlBuilder(unittest.TestCase):
             "END;"
         )
 
-        esquema = sql_ident.names(self.prefixo)
+        schema = sql_ident.names(self.prefixo)
         for t in bi_triggers:
-            entidade = t.entity
-            seq = esquema[entidade]["sequence"]
-            esperado = template_esperado.format(owner=self.owner, sequence_name=seq)
-            self.assertIn(esperado, t.sql)
+            entity = t.entity
+            seq = schema[entity]["sequence"]
+            expected = template_expected.format(owner=self.owner, sequence_name=seq)
+            self.assertIn(expected, t.sql)
 
         # Triggers _bu (ambientes e usuarios)
         bu_triggers = {t.name: t for t in triggers if t.name.endswith("_bu")}
         self.assertEqual(len(bu_triggers), 2)
 
-        tr_amb_bu = bu_triggers["tr_tbsss_env_bu"]
-        self.assertIn(":NEW.name <> :OLD.name", tr_amb_bu.sql)
-        self.assertIn("RAISE_APPLICATION_ERROR(-20001, 'name é imutável')", tr_amb_bu.sql)
+        tr_env_bu = bu_triggers["tr_tbsss_env_bu"]
+        self.assertIn(":NEW.name <> :OLD.name", tr_env_bu.sql)
+        self.assertIn("RAISE_APPLICATION_ERROR(-20001, 'name é imutável')", tr_env_bu.sql)
 
         tr_usr_bu = bu_triggers["tr_tbsss_usr_bu"]
         self.assertIn(":NEW.login <> :OLD.login", tr_usr_bu.sql)
@@ -96,13 +96,13 @@ class TestDdlBuilder(unittest.TestCase):
 
     def test_ordem_estrita_das_fases(self):
         """As fases 1 a 6 respeitam a ordem estrita do README §11.1."""
-        fases = [item.phase for item in self.statements]
+        phases = [item.phase for item in self.statements]
         # Garante que a lista de fases e nao-decrescente
-        for i in range(len(fases) - 1):
-            self.assertLessEqual(fases[i], fases[i + 1])
+        for i in range(len(phases) - 1):
+            self.assertLessEqual(phases[i], phases[i + 1])
 
         # Verifica tipo esperado por fase
-        tipos_por_fase = {
+        kinds_by_phase = {
             1: {"SEQUENCE"},
             2: {"TABLE"},
             3: {"CONSTRAINT"},
@@ -111,15 +111,15 @@ class TestDdlBuilder(unittest.TestCase):
             6: {"TRIGGER"},
         }
         for item in self.statements:
-            esperados = tipos_por_fase[item.phase]
-            self.assertIn(item.kind, esperados)
+            expected = kinds_by_phase[item.phase]
+            self.assertIn(item.kind, expected)
 
     def test_cr005_path_file_e_cks(self):
         """Valida path_file VARCHAR2(500 CHAR) NOT NULL e CKs do CR-005."""
-        tabelas = {item.name: item.sql for item in self.statements if item.kind == "TABLE"}
-        self.assertIn("path_file VARCHAR2(500 CHAR) NOT NULL", tabelas["tbsss_scripts"])
-        self.assertNotIn("pasta_base", tabelas["tbsss_scripts"])
-        self.assertNotIn("pastas_base", tabelas["tbsss_agents"])
+        tables = {item.name: item.sql for item in self.statements if item.kind == "TABLE"}
+        self.assertIn("path_file VARCHAR2(500 CHAR) NOT NULL", tables["tbsss_scripts"])
+        self.assertNotIn("pasta_base", tables["tbsss_scripts"])
+        self.assertNotIn("pastas_base", tables["tbsss_agents"])
 
         constraints = {item.name: item.sql for item in self.statements if item.kind == "CONSTRAINT"}
         ck_path = constraints["ck_tbsss_scr_path"]
@@ -133,20 +133,20 @@ class TestDdlBuilder(unittest.TestCase):
 
     def test_cr006_colunas_registro_e_ck_upd(self):
         """Valida que as 15 tabelas (menos auditoria e controle) tem colunas de registro e ck_upd."""
-        tabelas = {item.name: item.sql for item in self.statements if item.kind == "TABLE"}
+        tables = {item.name: item.sql for item in self.statements if item.kind == "TABLE"}
         constraints = {item.name: item.sql for item in self.statements if item.kind == "CONSTRAINT"}
 
-        esquema = sql_ident.names(self.prefixo)
-        for ent, t in esquema.items():
-            t_nome = t["tabela"]
-            abrev = t["abrev"]
-            sql_t = tabelas[t_nome]
+        schema = sql_ident.names(self.prefixo)
+        for ent, t in schema.items():
+            t_name = t["tabela"]
+            abbr = t["abrev"]
+            sql_t = tables[t_name]
 
             if ent in ("audit", "control"):
                 self.assertNotIn("created_by", sql_t)
                 self.assertNotIn("updated_at", sql_t)
                 self.assertNotIn("updated_by", sql_t)
-                self.assertNotIn("ck_{}{}_upd".format(self.prefixo, abrev), constraints)
+                self.assertNotIn("ck_{}{}_upd".format(self.prefixo, abbr), constraints)
             else:
                 self.assertIn("created_at DATE DEFAULT SYSDATE NOT NULL", sql_t)
                 self.assertIn("created_by VARCHAR2(40 CHAR) NOT NULL", sql_t)
@@ -154,15 +154,15 @@ class TestDdlBuilder(unittest.TestCase):
                 self.assertIn("updated_at DATE", sql_t)
                 self.assertIn("updated_by VARCHAR2(40 CHAR)", sql_t)
 
-                ck_upd_nome = "ck_{}{}_upd".format(self.prefixo, abrev)
-                self.assertIn(ck_upd_nome, constraints)
-                self.assertIn("(updated_at IS NULL AND updated_by IS NULL)", constraints[ck_upd_nome])
+                ck_upd_name = "ck_{}{}_upd".format(self.prefixo, abbr)
+                self.assertIn(ck_upd_name, constraints)
+                self.assertIn("(updated_at IS NULL AND updated_by IS NULL)", constraints[ck_upd_name])
 
     def test_cr007_controle_fbi_unico_sha_e_lobs(self):
         """Valida objetos adicionados pelo CR-007 e suporte a SECUREFILE e BASICFILE."""
         constraints = {item.name: item.sql for item in self.statements if item.kind == "CONSTRAINT"}
-        indices = {item.name: item.sql for item in self.statements if item.kind == "INDEX"}
-        tabelas = {item.name: item.sql for item in self.statements if item.kind == "TABLE"}
+        indexes = {item.name: item.sql for item in self.statements if item.kind == "INDEX"}
+        tables = {item.name: item.sql for item in self.statements if item.kind == "TABLE"}
 
         # tbsss_control
         self.assertIn("ck_tbsss_ctl_id", constraints)
@@ -170,39 +170,39 @@ class TestDdlBuilder(unittest.TestCase):
         self.assertIn("schema_version >= 1", constraints["ck_tbsss_ctl_version"])
 
         # FBI unico ix_tbsss_tck_occur
-        self.assertIn("ix_tbsss_tck_occur", indices)
-        self.assertTrue(indices["ix_tbsss_tck_occur"].startswith("CREATE UNIQUE INDEX"))
-        self.assertIn("schedule_id IS NOT NULL", indices["ix_tbsss_tck_occur"])
+        self.assertIn("ix_tbsss_tck_occur", indexes)
+        self.assertTrue(indexes["ix_tbsss_tck_occur"].startswith("CREATE UNIQUE INDEX"))
+        self.assertIn("schedule_id IS NOT NULL", indexes["ix_tbsss_tck_occur"])
 
         # CR-011: sem CKs de hash
         self.assertNotIn("ck_tbsss_scr_sha", constraints)
         self.assertNotIn("ck_tbsss_tck_sha", constraints)
 
         # LOB Securefile (padrao)
-        self.assertIn("LOB (params_json) STORE AS SECUREFILE (CACHE)", tabelas["tbsss_schedules"])
-        self.assertIn("LOB (submitted_params, log_output) STORE AS SECUREFILE (CACHE)", tabelas["tbsss_tickets"])
+        self.assertIn("LOB (params_json) STORE AS SECUREFILE (CACHE)", tables["tbsss_schedules"])
+        self.assertIn("LOB (submitted_params, log_output) STORE AS SECUREFILE (CACHE)", tables["tbsss_tickets"])
 
         # Fallback Basicfile
         ddl_basic = ddl_builder.build_ddl_statements(self.owner, self.prefixo, lob_storage="BASICFILE")
-        tabelas_basic = {item.name: item.sql for item in ddl_basic if item.kind == "TABLE"}
-        self.assertIn("LOB (params_json) STORE AS BASICFILE", tabelas_basic["tbsss_schedules"])
-        self.assertIn("LOB (submitted_params, log_output) STORE AS BASICFILE", tabelas_basic["tbsss_tickets"])
+        tables_basic = {item.name: item.sql for item in ddl_basic if item.kind == "TABLE"}
+        self.assertIn("LOB (params_json) STORE AS BASICFILE", tables_basic["tbsss_schedules"])
+        self.assertIn("LOB (submitted_params, log_output) STORE AS BASICFILE", tables_basic["tbsss_tickets"])
 
     def test_cr008_sessao_epoch_pid_daemon_log_offset(self):
         """Valida campos adicionados e ajustados pelo CR-008."""
-        tabelas = {item.name: item.sql for item in self.statements if item.kind == "TABLE"}
+        tables = {item.name: item.sql for item in self.statements if item.kind == "TABLE"}
         constraints = {item.name: item.sql for item in self.statements if item.kind == "CONSTRAINT"}
 
         # tbsss_users.sessao_epoch e ck
-        self.assertIn("session_epoch NUMBER(10) DEFAULT 0 NOT NULL", tabelas["tbsss_users"])
+        self.assertIn("session_epoch NUMBER(10) DEFAULT 0 NOT NULL", tables["tbsss_users"])
         self.assertIn("ck_tbsss_usr_epoch", constraints)
         self.assertIn("session_epoch >= 0", constraints["ck_tbsss_usr_epoch"])
 
         # tbsss_agents.pid_daemon
-        self.assertIn("daemon_pid NUMBER(10)", tabelas["tbsss_agents"])
+        self.assertIn("daemon_pid NUMBER(10)", tables["tbsss_agents"])
 
         # tbsss_tickets.log_offset_chars e ck
-        self.assertIn("log_offset_chars NUMBER(20) DEFAULT 0 NOT NULL", tabelas["tbsss_tickets"])
+        self.assertIn("log_offset_chars NUMBER(20) DEFAULT 0 NOT NULL", tables["tbsss_tickets"])
         self.assertIn("ck_tbsss_tck_logoff", constraints)
         self.assertIn("log_offset_chars >= 0", constraints["ck_tbsss_tck_logoff"])
 
@@ -242,18 +242,18 @@ class TestGrantsByRole(unittest.TestCase):
             self.assertNotIn("DELETE", g)
             self.assertNotIn("sq_", g, "Monitor nao deve ter GRANT em sequences")
 
-        tabelas_monitor = [
+        tables_monitor = [
             "tbsss_agents", "tbsss_tickets", "tbsss_schedules", "tbsss_scripts",
             "tbsss_environments", "tbsss_control", "tbsss_audit"
         ]
-        for t in tabelas_monitor:
+        for t in tables_monitor:
             self.assertTrue(any(t in g for g in grants_monitor), "Faltou GRANT para %s" % t)
 
     def test_grants_da_saida_do_ticket(self):
         """CR-012: web so le o zip; agente le, inclui e altera (com a sequence); purge e monitor nada."""
         grants = ddl_builder.build_grants_by_role("openrisow", "tbsss_", dict(self.roles))
-        da_saida = [g for g in grants if "ticket_output" in g]
-        self.assertEqual(sorted(da_saida), sorted([
+        of_output = [g for g in grants if "ticket_output" in g]
+        self.assertEqual(sorted(of_output), sorted([
             "GRANT SELECT ON openrisow.tbsss_ticket_output TO %s;" % self.roles["web"],
             "GRANT SELECT, INSERT, UPDATE ON openrisow.tbsss_ticket_output TO %s;" % self.roles["agent"],
             "GRANT SELECT ON openrisow.sq_tbsss_ticket_output TO %s;" % self.roles["agent"],
@@ -270,9 +270,9 @@ class TestGrantsByRole(unittest.TestCase):
         """Papel que usa a conta dona do esquema vira comentario (GRANT a si mesmo e ORA-01749)."""
         grants = ddl_builder.build_grants_by_role(
             "openrisow", "tbsss_", {"web": "OPENRISOW", "agent": "openrisow", "purge": "sss_purge"})
-        comandos = [g for g in grants if not g.startswith("--")]
-        self.assertTrue(comandos)
-        self.assertTrue(all(g.endswith("TO sss_purge;") for g in comandos))
+        commands = [g for g in grants if not g.startswith("--")]
+        self.assertTrue(commands)
+        self.assertTrue(all(g.endswith("TO sss_purge;") for g in commands))
         self.assertIn("-- papel web: usa a conta dona do esquema (openrisow); nenhum GRANT necessario", grants)
         self.assertIn("-- papel monitor: conta nao informada; nenhum GRANT gerado", grants)
 
@@ -300,14 +300,14 @@ class TestOracle11gExpressionNormalization(unittest.TestCase):
 
     def test_fbi_texto_real_11g(self):
         """FBI com CASE e aspas duplas no 11gR2 bate normalizado contra o registro."""
-        texto_oracle = 'CASE WHEN "STATUS"=\'PENDING\' THEN "PRIORITY" END'
-        normalizado = sql_ident.normalize_expression(texto_oracle)
-        self.assertEqual(normalizado, "CASE WHEN STATUS='PENDING' THEN PRIORITY END")
+        text_oracle = 'CASE WHEN "STATUS"=\'PENDING\' THEN "PRIORITY" END'
+        normalized = sql_ident.normalize_expression(text_oracle)
+        self.assertEqual(normalized, "CASE WHEN STATUS='PENDING' THEN PRIORITY END")
 
         # Texto do registro
-        texto_reg = "CASE WHEN status = 'PENDING' THEN priority END"
-        norm_reg = sql_ident.normalize_expression(texto_reg)
-        self.assertEqual(normalizado, norm_reg)
+        text_reg = "CASE WHEN status = 'PENDING' THEN priority END"
+        norm_reg = sql_ident.normalize_expression(text_reg)
+        self.assertEqual(normalized, norm_reg)
 
     def test_data_default_espacos_e_quebras(self):
         """DATA_DEFAULT com espacos e quebras no fim bate com o valor normalizado."""
@@ -331,12 +331,12 @@ class TestInitDbCli(unittest.TestCase):
         with mock.patch("sys.stdout", new_callable=io.StringIO) as mock_out:
             code = init_db.main(["--dry-run"])
         self.assertEqual(code, 0)
-        saida = mock_out.getvalue()
-        self.assertIn("FASE 1: SEQUENCES", saida)
-        self.assertIn("CREATE SEQUENCE", saida)
-        self.assertIn("CREATE TABLE", saida)
-        self.assertIn("ALTER TABLE", saida)
-        self.assertIn("CREATE OR REPLACE TRIGGER", saida)
+        output = mock_out.getvalue()
+        self.assertIn("FASE 1: SEQUENCES", output)
+        self.assertIn("CREATE SEQUENCE", output)
+        self.assertIn("CREATE TABLE", output)
+        self.assertIn("ALTER TABLE", output)
+        self.assertIn("CREATE OR REPLACE TRIGGER", output)
 
     def test_argumento_desconhecido_recusado_codigo_2(self):
         """Argumento desconhecido como --recreate eh rejeitado com codigo 2."""
@@ -348,25 +348,25 @@ class TestInitDbCli(unittest.TestCase):
     def test_prefixo_invalido_aborta_com_critical(self):
         """Prefixo que inicia com digito ou excede 8 chars gera log CRITICAL e codigo 2."""
         with tempfile.TemporaryDirectory() as tmp:
-            ini_ruim = os.path.join(tmp, "config.ini")
-            with open(ini_ruim, "w", encoding="utf-8") as f:
+            ini_bad = os.path.join(tmp, "config.ini")
+            with open(ini_bad, "w", encoding="utf-8") as f:
                 f.write("[app]\nsss_env=DEV\ndata_backend=FAKE\n")
                 f.write("[oracle]\nuser=u\ndsn=d\nowner=ow\ntable_prefix=1prefix_\nmodo_driver=auto\n")
                 f.write("[secrets]\nsecrets_file=/tmp/secrets.cfg\n")
 
             with self.assertLogs("sss_init_db", level="CRITICAL") as cm:
-                code = init_db.main(["--config", ini_ruim, "--dry-run"])
+                code = init_db.main(["--config", ini_bad, "--dry-run"])
 
             self.assertEqual(code, 2)
             self.assertTrue(any("CRITICAL" in msg for msg in cm.output))
 
     def test_cr016a_esquema_1_detectado_pela_tabela_de_controle_antiga(self):
         """CR-016a: tbsss_controle (esquema anterior, em portugues) no owner impede criar o novo ao lado dele."""
-        for contagem, esperado in ((1, True), (0, False)):
+        for count, expected in ((1, True), (0, False)):
             conn = mock.MagicMock()
             cur = conn.cursor.return_value
-            cur.fetchone.return_value = (contagem,)
-            self.assertIs(init_db._schema_1_exists(conn, "openrisow", "tbsss_"), esperado)
+            cur.fetchone.return_value = (count,)
+            self.assertIs(init_db._schema_1_exists(conn, "openrisow", "tbsss_"), expected)
             _sql, binds = cur.execute.call_args[0][0], cur.execute.call_args[1]
             self.assertEqual(binds, {"o": "OPENRISOW", "t": "TBSSS_CONTROLE"})
             cur.close.assert_called_once_with()
@@ -382,10 +382,10 @@ class TestInitDbCheckMock(unittest.TestCase):
         mock_conn.cursor.return_value = mock_cursor
 
         def fake_fetchall():
-            chamada = mock_cursor.execute.call_args[0][0]
-            if "ALL_OBJECTS" in chamada:
+            call = mock_cursor.execute.call_args[0][0]
+            if "ALL_OBJECTS" in call:
                 return []
-            if "ALL_TAB_COLUMNS" in chamada:
+            if "ALL_TAB_COLUMNS" in call:
                 # Retorna apenas 'id', faltando 'created_by' e outras colunas
                 return [("id", "NUMBER", None, 10, 0, "N", None)]
             return []
@@ -393,9 +393,9 @@ class TestInitDbCheckMock(unittest.TestCase):
         mock_cursor.fetchall.side_effect = fake_fetchall
         mock_cursor.fetchone.return_value = None
 
-        ok, divergencias = init_db._check_schema(mock_conn, "openrisow", "tbsss_", log_fn=lambda x: None)
+        ok, divergences = init_db._check_schema(mock_conn, "openrisow", "tbsss_", log_fn=lambda x: None)
         self.assertFalse(ok)
-        self.assertTrue(any("Coluna ausente" in d for d in divergencias))
+        self.assertTrue(any("Coluna ausente" in d for d in divergences))
 
     def test_conferencia_detecta_objeto_invalido(self):
         """Conferencia de esquema detecta triggers ou objetos com status INVALID."""
@@ -404,19 +404,19 @@ class TestInitDbCheckMock(unittest.TestCase):
         mock_conn.cursor.return_value = mock_cursor
 
         def fake_fetchall():
-            chamada = mock_cursor.execute.call_args[0][0]
-            if "ALL_OBJECTS" in chamada:
+            call = mock_cursor.execute.call_args[0][0]
+            if "ALL_OBJECTS" in call:
                 return [("TRIGGER", "TR_TBSSS_TCK_BI")]
-            if "ALL_ERRORS" in chamada:
+            if "ALL_ERRORS" in call:
                 return [(10, 5, "PLS-00103: Encountered symbol")]
             return []
 
         mock_cursor.fetchall.side_effect = fake_fetchall
         mock_cursor.fetchone.return_value = None
 
-        ok, divergencias = init_db._check_schema(mock_conn, "openrisow", "tbsss_", log_fn=lambda x: None)
+        ok, divergences = init_db._check_schema(mock_conn, "openrisow", "tbsss_", log_fn=lambda x: None)
         self.assertFalse(ok)
-        self.assertTrue(any("Objeto invalido" in d for d in divergencias))
+        self.assertTrue(any("Objeto invalido" in d for d in divergences))
 
 
 class TestDdlSeedAndRollback(unittest.TestCase):
@@ -437,8 +437,8 @@ class TestDdlSeedAndRollback(unittest.TestCase):
         self.assertIn("MERGE INTO openrisow.tbsss_control", sql_seed)
 
         # 5 ambientes padrao
-        for amb in ("CLONE2", "CLONE1", "CLONE6", "CLONE7", "GFPREPROD"):
-            self.assertIn("'%s'" % amb, sql_seed)
+        for env in ("CLONE2", "CLONE1", "CLONE6", "CLONE7", "GFPREPROD"):
+            self.assertIn("'%s'" % env, sql_seed)
 
         # Estatisticas e commit
         self.assertIn("DBMS_STATS.GATHER_TABLE_STATS", sql_seed)
@@ -459,8 +459,8 @@ class TestDdlSeedAndRollback(unittest.TestCase):
 
         # Ordem de remocao: ticket_resp e tickets antes de ambientes e perfis
         pos_tck = sql_rb.index("DROP TABLE openrisow.tbsss_tickets")
-        pos_amb = sql_rb.index("DROP TABLE openrisow.tbsss_environments")
-        self.assertLess(pos_tck, pos_amb)
+        pos_env = sql_rb.index("DROP TABLE openrisow.tbsss_environments")
+        self.assertLess(pos_tck, pos_env)
 
     def test_hash_do_seed_confere_com_a_senha_documentada(self):
         """Regressao (F7.3): o hash do seed nao conferia com a senha do README §11.1 e nenhum usuario entrava."""
@@ -478,8 +478,8 @@ class TestDdlSeedAndRollback(unittest.TestCase):
         self.assertIn("SSS_APP.abc_users", sql)
         self.assertIn("owner = 'SSS_APP'", sql)
         # senha_hash so aparece dentro do CASE que diz se a senha esta definida (AGENTS §3.3).
-        usos = [l for l in sql.splitlines() if "password_hash" in l]
-        self.assertEqual(usos, ["       CASE WHEN u.password_hash IS NULL THEN 'N' ELSE 'Y' END AS senha_definida"])
+        uses = [l for l in sql.splitlines() if "password_hash" in l]
+        self.assertEqual(uses, ["       CASE WHEN u.password_hash IS NULL THEN 'N' ELSE 'Y' END AS senha_definida"])
         self.assertLessEqual(max(len(l) for l in sql.splitlines()), 2499)
         self.assertIn("GRANTS A PUBLIC", sql)
         self.assertNotIn("SELECT *", sql)
@@ -487,16 +487,16 @@ class TestDdlSeedAndRollback(unittest.TestCase):
     def test_validacao_espera_o_registro_e_o_seed(self):
         """Os esperados vem do registro (objetos) e do proprio seed (minimo de linhas)."""
         sql = ddl_builder.build_validation_script(self.owner, self.prefixo)
-        esquema = sql_ident.names(self.prefixo)
-        self.assertIn("'TABELAS' AS verificacao, '=' AS regra, {} AS esperado".format(len(esquema)), sql)
+        schema = sql_ident.names(self.prefixo)
+        self.assertIn("'TABELAS' AS verificacao, '=' AS regra, {} AS esperado".format(len(schema)), sql)
         self.assertIn("'VERSAO DO ESQUEMA' AS verificacao, '=' AS regra, {} AS esperado".format(
             sql_ident.SCHEMA_VERSION), sql)
         seed = ddl_builder.build_seed_statements(self.owner, self.prefixo)
-        contagem = ddl_builder._seed_rows_by_table(self.owner, self.prefixo)
-        self.assertEqual(sum(contagem.values()), sum(1 for c in seed if c.lstrip().upper().startswith("MERGE INTO")))
-        self.assertEqual(contagem["users"], 4)
+        count = ddl_builder._seed_rows_by_table(self.owner, self.prefixo)
+        self.assertEqual(sum(count.values()), sum(1 for c in seed if c.lstrip().upper().startswith("MERGE INTO")))
+        self.assertEqual(count["users"], 4)
         self.assertIn("'LINHAS TBSSS_SCRIPT_ENV' AS verificacao, '>=' AS regra, {} AS esperado".format(
-            contagem["script_env"]), sql)
+            count["script_env"]), sql)
         # Resumo final com OK/FALHA em cada secao de verificacao.
         self.assertEqual(sql.count("'OK: nenhuma falha'"), 2)
 

@@ -26,18 +26,18 @@ class RepoCatalogFake(RepoCatalog):
         """Lista ambientes com paginacao deterministica por nome ASC, id ASC."""
         filters = filters or {}
         with self._store.lock_catalog:
-            lista = list(self._store.environments.values())
+            items = list(self._store.environments.values())
 
-            nome_f = filters.get("name")
-            if nome_f:
-                lista = [a for a in lista if nome_f.upper() in a["name"].upper()]
+            name_f = filters.get("name")
+            if name_f:
+                items = [a for a in items if name_f.upper() in a["name"].upper()]
 
-            ativo_f = filters.get("active")
-            if ativo_f:
-                lista = [a for a in lista if a["active"] == ativo_f]
+            active_f = filters.get("active")
+            if active_f:
+                items = [a for a in items if a["active"] == active_f]
 
-            lista.sort(key=lambda x: (x.get("name", ""), x["id"]))
-            return paginate(lista, page=page, size=size)
+            items.sort(key=lambda x: (x.get("name", ""), x["id"]))
+            return paginate(items, page=page, size=size)
 
     def environments_get(self, id):
         """Retorna dict do ambiente pelo ID ou lanca RepoNotFound."""
@@ -61,35 +61,35 @@ class RepoCatalogFake(RepoCatalog):
         """Insere novo ambiente com validacao de CKs, UK e DSN, auditando na mesma operacao."""
         with self._store.lock_catalog:
             actor = self._store.record_actor(audit, actor)
-            nome = date.get("name")
-            if not nome or not _RE_ENV_NAME.fullmatch(nome):
+            name = date.get("name")
+            if not name or not _RE_ENV_NAME.fullmatch(name):
                 raise RepoViolation("Nome de ambiente invalido (esperado: 1-30 chars [A-Z0-9_])", constraint="ck_tbsss_env_name")
 
             for a in self._store.environments.values():
-                if a["name"].upper() == nome.upper():
-                    raise RepoViolation("Ambiente com nome '%s' ja existe" % nome, constraint="uk_tbsss_env_name")
+                if a["name"].upper() == name.upper():
+                    raise RepoViolation("Ambiente com nome '%s' ja existe" % name, constraint="uk_tbsss_env_name")
 
-            conexao = date.get("connection")
-            if conexao and "@" in conexao:
+            connection = date.get("connection")
+            if connection and "@" in connection:
                 raise RepoViolation("Conexao nao pode conter credencial (@)", constraint="ck_tbsss_env_connection")
 
-            ativo = date.get("active", "Y")
-            if ativo not in ("Y", "N"):
+            active = date.get("active", "Y")
+            if active not in ("Y", "N"):
                 raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_env_active")
 
             aid = self._store.next_id("tbsss_environments")
-            novo = {
+            new = {
                 "id": aid,
-                "name": nome,
+                "name": name,
                 "description": date.get("description", ""),
-                "connection": conexao,
-                "active": ativo,
+                "connection": connection,
+                "active": active,
                 "created_at": date.get("created_at"),
             }
-            self._store.stamp_insert(novo, actor)
-            self._store.environments[aid] = copy.deepcopy(novo)
+            self._store.stamp_insert(new, actor)
+            self._store.environments[aid] = copy.deepcopy(new)
             self._auditar_ambiente(audit, aid)
-            return copy.deepcopy(novo)
+            return copy.deepcopy(new)
 
     def environments_update(self, id, date, expected=None, audit=None, actor=None):
         """Altera ambiente (nome imutavel, trigger tr_tbsss_env_bu), condicional a 'esperado'."""
@@ -98,38 +98,38 @@ class RepoCatalogFake(RepoCatalog):
             if id not in self._store.environments:
                 raise RepoNotFound("Ambiente ID %s nao encontrado" % id)
 
-            atual = self._store.environments[id]
-            for campo, valor in (expected or {}).items():
-                if atual.get(campo) != valor:
-                    raise RepoConflict("Ambiente ID %s alterado por outra operacao (%s)" % (id, campo))
+            current = self._store.environments[id]
+            for field, value in (expected or {}).items():
+                if current.get(field) != value:
+                    raise RepoConflict("Ambiente ID %s alterado por outra operacao (%s)" % (id, field))
 
-            novo_nome = date.get("name")
-            if novo_nome is not None and novo_nome != atual["name"]:
+            new_name = date.get("name")
+            if new_name is not None and new_name != current["name"]:
                 raise RepoViolation("Nome de ambiente e imutavel", constraint="tr_tbsss_env_bu")
 
-            mudancas = {}
-            novo_conexao = date.get("connection")
-            if novo_conexao is not None:
-                if "@" in novo_conexao:
+            changes = {}
+            new_connection = date.get("connection")
+            if new_connection is not None:
+                if "@" in new_connection:
                     raise RepoViolation("Conexao nao pode conter credencial (@)", constraint="ck_tbsss_env_connection")
-                mudancas["connection"] = novo_conexao
+                changes["connection"] = new_connection
             elif "connection" in date:
-                mudancas["connection"] = None
+                changes["connection"] = None
 
             if "description" in date:
-                mudancas["description"] = date["description"]
+                changes["description"] = date["description"]
 
-            novo_ativo = date.get("active")
-            if novo_ativo is not None:
-                if novo_ativo not in ("Y", "N"):
+            new_active = date.get("active")
+            if new_active is not None:
+                if new_active not in ("Y", "N"):
                     raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_env_active")
-                mudancas["active"] = novo_ativo
+                changes["active"] = new_active
 
             # Validacao completa antes de aplicar: um UPDATE rejeitado nao altera nenhuma coluna.
-            atual.update(mudancas)
-            self._store.stamp_update(atual, actor)
+            current.update(changes)
+            self._store.stamp_update(current, actor)
             self._auditar_ambiente(audit, id)
-            return copy.deepcopy(atual)
+            return copy.deepcopy(current)
 
     # -------------------------------------------------------------------------
     # Scripts (tbsss_scripts)
@@ -147,9 +147,9 @@ class RepoCatalogFake(RepoCatalog):
             )
 
     def _vinculos_do_script(self, script_id):
-        lista = [sp for sp in self._store.script_param.values() if sp["script_id"] == script_id]
-        lista.sort(key=lambda x: x["sort_order"])
-        return lista
+        items = [sp for sp in self._store.script_param.values() if sp["script_id"] == script_id]
+        items.sort(key=lambda x: x["sort_order"])
+        return items
 
     def _regras_tipo_param(self, param_type, parameter_ids):
         # README §6.3: NENHUM nao aceita vinculos; NOMEADO exige flag em todo parametro vinculado.
@@ -164,24 +164,24 @@ class RepoCatalogFake(RepoCatalog):
         """Lista scripts com paginacao deterministica por nome ASC, id ASC, homologacoes e qtd de parametros."""
         filters = filters or {}
         with self._store.lock_catalog:
-            lista = list(self._store.scripts.values())
+            items = list(self._store.scripts.values())
 
-            nome_f = filters.get("name")
-            if nome_f:
-                lista = [s for s in lista if nome_f.lower() in s["name"].lower()]
-            for chave in ("script_group", "category", "interpreter", "active"):
-                valor = filters.get(chave)
-                if valor:
-                    lista = [s for s in lista if s.get(chave) == valor]
+            name_f = filters.get("name")
+            if name_f:
+                items = [s for s in items if name_f.lower() in s["name"].lower()]
+            for key in ("script_group", "category", "interpreter", "active"):
+                value = filters.get(key)
+                if value:
+                    items = [s for s in items if s.get(key) == value]
 
-            lista.sort(key=lambda x: (x.get("name", ""), x["id"]))
-            pagina_ = paginate(lista, page=page, size=size)
-            for item in pagina_["itens"]:
+            items.sort(key=lambda x: (x.get("name", ""), x["id"]))
+            page_ = paginate(items, page=page, size=size)
+            for item in page_["itens"]:
                 item["ambientes_homologados"] = sorted(
                     self._store.environments[sa["environment_id"]]["name"] for sa in self._store.script_env.values()
                     if sa["script_id"] == item["id"] and sa["environment_id"] in self._store.environments)
                 item["qtd_parametros"] = len(self._vinculos_do_script(item["id"]))
-            return pagina_
+            return page_
 
     def scripts_get(self, id):
         """Retorna dict do script pelo ID ou lanca RepoNotFound."""
@@ -223,7 +223,7 @@ class RepoCatalogFake(RepoCatalog):
             self._validar_script(date)
             sid = self._store.next_id("tbsss_scripts")
             tmout = date.get("timeout_s")
-            novo = {
+            new = {
                 "id": sid,
                 "name": date["name"],
                 "description": date.get("description", ""),
@@ -237,10 +237,10 @@ class RepoCatalogFake(RepoCatalog):
                 "timeout_s": int(tmout) if tmout is not None else None,
                 "active": date.get("active", "Y"),
             }
-            self._store.stamp_insert(novo, actor)
-            self._store.scripts[sid] = copy.deepcopy(novo)
+            self._store.stamp_insert(new, actor)
+            self._store.scripts[sid] = copy.deepcopy(new)
             self._auditar_script(audit, sid)
-            return copy.deepcopy(novo)
+            return copy.deepcopy(new)
 
     def scripts_update(self, id, date, expected=None, audit=None, actor=None):
         """Altera script (CKs, esperado e regras de tipo_param x vinculos) na mesma operacao."""
@@ -248,25 +248,25 @@ class RepoCatalogFake(RepoCatalog):
             actor = self._store.record_actor(audit, actor)
             if id not in self._store.scripts:
                 raise RepoNotFound("Script ID %s nao encontrado" % id)
-            atual = self._store.scripts[id]
-            for campo, valor in (expected or {}).items():
-                if atual.get(campo) != valor:
-                    raise RepoConflict("Script ID %s alterado por outra operacao (%s)" % (id, campo))
-            campos = ("name", "description", "script_group", "category", "stage", "interpreter", "path_file",
+            current = self._store.scripts[id]
+            for field, value in (expected or {}).items():
+                if current.get(field) != value:
+                    raise RepoConflict("Script ID %s alterado por outra operacao (%s)" % (id, field))
+            fields = ("name", "description", "script_group", "category", "stage", "interpreter", "path_file",
                       "param_type", "max_parallel_env", "timeout_s", "active")
-            mudancas = dict((k, date[k]) for k in campos if k in date)
-            self._validar_script(mudancas, atual)
-            if "param_type" in mudancas and mudancas["param_type"] != atual["param_type"]:
-                self._regras_tipo_param(mudancas["param_type"],
+            changes = dict((k, date[k]) for k in fields if k in date)
+            self._validar_script(changes, current)
+            if "param_type" in changes and changes["param_type"] != current["param_type"]:
+                self._regras_tipo_param(changes["param_type"],
                                         [v["parameter_id"] for v in self._vinculos_do_script(id)])
-            if "max_parallel_env" in mudancas:
-                mudancas["max_parallel_env"] = int(mudancas["max_parallel_env"])
-            if mudancas.get("timeout_s") is not None:
-                mudancas["timeout_s"] = int(mudancas["timeout_s"])
-            atual.update(mudancas)
-            self._store.stamp_update(atual, actor)
+            if "max_parallel_env" in changes:
+                changes["max_parallel_env"] = int(changes["max_parallel_env"])
+            if changes.get("timeout_s") is not None:
+                changes["timeout_s"] = int(changes["timeout_s"])
+            current.update(changes)
+            self._store.stamp_update(current, actor)
             self._auditar_script(audit, id)
-            return copy.deepcopy(atual)
+            return copy.deepcopy(current)
 
     # -------------------------------------------------------------------------
     # Homologacao de Scripts por Ambiente (tbsss_script_env)
@@ -277,13 +277,13 @@ class RepoCatalogFake(RepoCatalog):
         with self._store.lock_catalog:
             if script_id not in self._store.scripts:
                 raise RepoNotFound("Script ID %s nao encontrado" % script_id)
-            ambs = [
+            envs = [
                 sa["environment_id"]
                 for sa in self._store.script_env.values()
                 if sa["script_id"] == script_id
             ]
-            ambs.sort()
-            return copy.deepcopy(ambs)
+            envs.sort()
+            return copy.deepcopy(envs)
 
     def homologation_save(self, script_id, environment_ids, expected=None, audit=None, actor=None):
         """Substitui homologacoes do script por diferenca (FK, esperado e auditoria na mesma operacao).
@@ -302,17 +302,17 @@ class RepoCatalogFake(RepoCatalog):
                 if aid not in self._store.environments:
                     raise RepoViolation("Ambiente ID %s nao existe" % aid, constraint="fk_tbsss_senv_env")
 
-            atuais = dict((v["environment_id"], k) for k, v in self._store.script_env.items()
+            current = dict((v["environment_id"], k) for k, v in self._store.script_env.items()
                           if v["script_id"] == script_id)
-            for aid, k in atuais.items():
+            for aid, k in current.items():
                 if aid not in ids:
                     del self._store.script_env[k]
             for aid in ids:
-                if aid not in atuais:
+                if aid not in current:
                     nid = self._store.next_id("tbsss_script_env")
                     self._store.script_env[nid] = self._store.stamp_insert(
                         {"id": nid, "script_id": script_id, "environment_id": aid}, actor)
-            if set(atuais) != set(ids):
+            if set(current) != set(ids):
                 self._store.stamp_update(self._store.scripts[script_id], actor)
 
             self._auditar_script(audit, script_id)
@@ -326,30 +326,30 @@ class RepoCatalogFake(RepoCatalog):
         """Lista parametros com paginacao deterministica por codigo ASC, id ASC."""
         filters = filters or {}
         with self._store.lock_catalog:
-            lista = list(self._store.parameters.values())
+            items = list(self._store.parameters.values())
 
-            cod_f = filters.get("code")
-            if cod_f:
-                lista = [p for p in lista if cod_f.lower() in p["code"].lower()]
+            code_f = filters.get("code")
+            if code_f:
+                items = [p for p in items if code_f.lower() in p["code"].lower()]
 
             label_f = filters.get("label")
             if label_f:
-                lista = [p for p in lista if label_f.lower() in p["label"].lower()]
+                items = [p for p in items if label_f.lower() in p["label"].lower()]
 
-            tipo_f = filters.get("component_type")
-            if tipo_f:
-                lista = [p for p in lista if p["component_type"] == tipo_f]
+            kind_f = filters.get("component_type")
+            if kind_f:
+                items = [p for p in items if p["component_type"] == kind_f]
 
-            ativo_f = filters.get("active")
-            if ativo_f:
-                lista = [p for p in lista if p["active"] == ativo_f]
+            active_f = filters.get("active")
+            if active_f:
+                items = [p for p in items if p["active"] == active_f]
 
-            lista.sort(key=lambda x: (x.get("code", ""), x["id"]))
-            pagina_ = paginate(lista, page=page, size=size)
-            for item in pagina_["itens"]:
+            items.sort(key=lambda x: (x.get("code", ""), x["id"]))
+            page_ = paginate(items, page=page, size=size)
+            for item in page_["itens"]:
                 item["qtd_scripts"] = sum(1 for sp in self._store.script_param.values()
                                           if sp["parameter_id"] == item["id"])
-            return pagina_
+            return page_
 
     def parameters_get(self, id):
         """Retorna dict do parametro pelo ID ou lanca RepoNotFound."""
@@ -373,13 +373,13 @@ class RepoCatalogFake(RepoCatalog):
         """Insere novo parametro validando CKs e UK, auditando na mesma operacao."""
         with self._store.lock_catalog:
             actor = self._store.record_actor(audit, actor)
-            codigo = date.get("code")
-            if not codigo or not _RE_PRM_CODE.fullmatch(codigo):
+            code = date.get("code")
+            if not code or not _RE_PRM_CODE.fullmatch(code):
                 raise RepoViolation("Codigo de parametro invalido (esperado: 1-30 chars [a-z0-9_])", constraint="ck_tbsss_prm_code")
 
             for p in self._store.parameters.values():
-                if p["code"] == codigo:
-                    raise RepoViolation("Parametro com codigo '%s' ja existe" % codigo, constraint="uk_tbsss_prm_code")
+                if p["code"] == code:
+                    raise RepoViolation("Parametro com codigo '%s' ja existe" % code, constraint="uk_tbsss_prm_code")
 
             tcomp = date.get("component_type")
             if tcomp not in ("TEXT", "NUMBER", "DATE", "SELECT", "CHECKBOX"):
@@ -396,14 +396,14 @@ class RepoCatalogFake(RepoCatalog):
             if sens not in ("Y", "N"):
                 raise RepoViolation("sensivel deve ser 'Y' ou 'N'", constraint="ck_tbsss_prm_sens")
 
-            ativo = date.get("active", "Y")
-            if ativo not in ("Y", "N"):
+            active = date.get("active", "Y")
+            if active not in ("Y", "N"):
                 raise RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint="ck_tbsss_prm_active")
 
             pid = self._store.next_id("tbsss_parameters")
-            novo = {
+            new = {
                 "id": pid,
-                "code": codigo,
+                "code": code,
                 "param_flag": flag,
                 "label": date.get("label", ""),
                 "description": date.get("description", ""),
@@ -412,12 +412,12 @@ class RepoCatalogFake(RepoCatalog):
                 "default_value": date.get("default_value"),
                 "validation_regex": date.get("validation_regex"),
                 "sensitive": sens,
-                "active": ativo,
+                "active": active,
             }
-            self._store.stamp_insert(novo, actor)
-            self._store.parameters[pid] = copy.deepcopy(novo)
+            self._store.stamp_insert(new, actor)
+            self._store.parameters[pid] = copy.deepcopy(new)
             self._auditar_parametro(audit, pid)
-            return copy.deepcopy(novo)
+            return copy.deepcopy(new)
 
     def parameters_update(self, id, date, expected=None, audit=None, actor=None):
         """Altera parametro (CKs, dependencias de vinculo e 'esperado') na mesma operacao."""
@@ -426,43 +426,43 @@ class RepoCatalogFake(RepoCatalog):
             if id not in self._store.parameters:
                 raise RepoNotFound("Parametro ID %s nao encontrado" % id)
 
-            atual = self._store.parameters[id]
-            for campo, valor in (expected or {}).items():
-                if atual.get(campo) != valor:
-                    raise RepoConflict("Parametro ID %s alterado por outra operacao (%s)" % (id, campo))
+            current = self._store.parameters[id]
+            for field, value in (expected or {}).items():
+                if current.get(field) != value:
+                    raise RepoConflict("Parametro ID %s alterado por outra operacao (%s)" % (id, field))
 
-            mudancas = dict((k, date[k]) for k in ("label", "description", "options_json", "default_value",
+            changes = dict((k, date[k]) for k in ("label", "description", "options_json", "default_value",
                                                     "validation_regex") if k in date)
             if "param_flag" in date:
                 flag = date["param_flag"] or None
                 if flag is not None and not _RE_PRM_FLAG.fullmatch(flag):
                     raise RepoViolation("Flag param_nomeado invalida", constraint="ck_tbsss_prm_flag")
-                mudancas["param_flag"] = flag
+                changes["param_flag"] = flag
             if "component_type" in date:
                 if date["component_type"] not in ("TEXT", "NUMBER", "DATE", "SELECT", "CHECKBOX"):
                     raise RepoViolation("Tipo de componente invalido", constraint="ck_tbsss_prm_ctype")
-                mudancas["component_type"] = date["component_type"]
-            for campo, ck in (("sensitive", "ck_tbsss_prm_sens"), ("active", "ck_tbsss_prm_active")):
-                if campo in date:
-                    if date[campo] not in ("Y", "N"):
-                        raise RepoViolation("Flag %s deve ser 'Y' ou 'N'" % campo, constraint=ck)
-                    mudancas[campo] = date[campo]
+                changes["component_type"] = date["component_type"]
+            for field, ck in (("sensitive", "ck_tbsss_prm_sens"), ("active", "ck_tbsss_prm_active")):
+                if field in date:
+                    if date[field] not in ("Y", "N"):
+                        raise RepoViolation("Flag %s deve ser 'Y' ou 'N'" % field, constraint=ck)
+                    changes[field] = date[field]
 
             # Regras de dependencia (README §10) avaliadas sob o mesmo lock da alteracao.
             scripts = [self._store.scripts[sp["script_id"]] for sp in self._store.script_param.values()
                        if sp["parameter_id"] == id and sp["script_id"] in self._store.scripts]
-            if scripts and mudancas.get("component_type", atual["component_type"]) != atual["component_type"]:
+            if scripts and changes.get("component_type", current["component_type"]) != current["component_type"]:
                 raise RepoViolation("Tipo de componente com vinculos", constraint="sss_prm_tipo_vinculado")
-            if "param_flag" in mudancas and mudancas["param_flag"] != atual["param_flag"] \
+            if "param_flag" in changes and changes["param_flag"] != current["param_flag"] \
                     and any(s.get("param_type") == "NAMED" for s in scripts):
                 raise RepoViolation("Flag com vinculo NOMEADO", constraint="sss_prm_flag_nomeado")
-            if mudancas.get("active") == "N" and atual["active"] == "Y" and any(s.get("active") == "Y" for s in scripts):
+            if changes.get("active") == "N" and current["active"] == "Y" and any(s.get("active") == "Y" for s in scripts):
                 raise RepoViolation("Desativacao com vinculo a script ativo", constraint="sss_prm_vinculo_ativo")
 
-            atual.update(mudancas)
-            self._store.stamp_update(atual, actor)
+            current.update(changes)
+            self._store.stamp_update(current, actor)
             self._auditar_parametro(audit, id)
-            return copy.deepcopy(atual)
+            return copy.deepcopy(current)
 
     def parameter_links(self, parameter_id):
         """Retorna lista de scripts vinculados ao parametro para verificacao de desativacao."""
@@ -472,12 +472,12 @@ class RepoCatalogFake(RepoCatalog):
                 for sp in self._store.script_param.values()
                 if sp["parameter_id"] == parameter_id
             }
-            resultado = [
+            result = [
                 s for sid, s in self._store.scripts.items()
                 if sid in script_ids
             ]
-            resultado.sort(key=lambda x: (x.get("name", ""), x["id"]))
-            return copy.deepcopy(resultado)
+            result.sort(key=lambda x: (x.get("name", ""), x["id"]))
+            return copy.deepcopy(result)
 
     # -------------------------------------------------------------------------
     # Vinculos de Parametros em Scripts (tbsss_script_param)
@@ -489,14 +489,14 @@ class RepoCatalogFake(RepoCatalog):
             if script_id not in self._store.scripts:
                 raise RepoNotFound("Script ID %s nao encontrado" % script_id)
 
-            vinculos = [
+            links = [
                 sp for sp in self._store.script_param.values()
                 if sp["script_id"] == script_id
             ]
-            vinculos.sort(key=lambda x: x["sort_order"])
+            links.sort(key=lambda x: x["sort_order"])
 
-            resultado = []
-            for v in vinculos:
+            result = []
+            for v in links:
                 param = self._store.parameters.get(v["parameter_id"])
                 if param:
                     item = copy.deepcopy(param)
@@ -505,8 +505,8 @@ class RepoCatalogFake(RepoCatalog):
                     item["sort_order"] = v["sort_order"]
                     item["required"] = v["required"]
                     item["default_value_override"] = v.get("default_value_override")
-                    resultado.append(item)
-            return copy.deepcopy(resultado)
+                    result.append(item)
+            return copy.deepcopy(result)
 
     def script_params_save(self, script_id, links, expected=None, audit=None, actor=None):
         """Substitui os vinculos do script (UKs, FK, regras de tipo_param, esperado e auditoria).
@@ -519,62 +519,62 @@ class RepoCatalogFake(RepoCatalog):
             if script_id not in self._store.scripts:
                 raise RepoNotFound("Script ID %s nao encontrado" % script_id)
             if expected is not None:
-                lidos = [(v["parameter_id"], v["sort_order"], v["required"], v.get("default_value_override"))
+                read = [(v["parameter_id"], v["sort_order"], v["required"], v.get("default_value_override"))
                          for v in self._vinculos_do_script(script_id)]
-                if [tuple(e) for e in expected] != lidos:
+                if [tuple(e) for e in expected] != read:
                     raise RepoConflict("Vinculos do script ID %s alterados por outra operacao" % script_id)
 
-            params_vistos = set()
-            ordens_vistas = set()
-            novos_vinculos = []
+            params_seen = set()
+            orders_seen = set()
+            new_links = []
             for item in (links or []):
                 pid = int(item["parameter_id"])
                 if pid not in self._store.parameters:
                     raise RepoViolation("Parametro ID %s nao existe" % pid, constraint="fk_tbsss_sprm_prm")
-                if pid in params_vistos:
+                if pid in params_seen:
                     raise RepoViolation("Parametro duplicado no script", constraint="uk_tbsss_sprm_scr_prm")
-                params_vistos.add(pid)
+                params_seen.add(pid)
 
-                ordem = int(item["sort_order"])
-                if ordem < 1:
+                order = int(item["sort_order"])
+                if order < 1:
                     raise RepoViolation("Ordem deve ser >= 1", constraint="ck_tbsss_sprm_sort_order")
-                if ordem in ordens_vistas:
+                if order in orders_seen:
                     raise RepoViolation("Ordem duplicada no script", constraint="uk_tbsss_sprm_scr_ord")
-                ordens_vistas.add(ordem)
+                orders_seen.add(order)
 
-                obrig = item.get("required", "Y")
-                if obrig not in ("Y", "N"):
+                req = item.get("required", "Y")
+                if req not in ("Y", "N"):
                     raise RepoViolation("obrigatorio deve ser 'Y' ou 'N'", constraint="ck_tbsss_sprm_req")
 
-                novos_vinculos.append({
+                new_links.append({
                     "script_id": script_id,
                     "parameter_id": pid,
-                    "sort_order": ordem,
-                    "required": obrig,
+                    "sort_order": order,
+                    "required": req,
                     "default_value_override": item.get("default_value_override"),
                 })
 
             self._regras_tipo_param(self._store.scripts[script_id]["param_type"],
-                                    [v["parameter_id"] for v in novos_vinculos])
+                                    [v["parameter_id"] for v in new_links])
 
-            anteriores = dict((v["parameter_id"], v) for v in self._vinculos_do_script(script_id))
+            previous = dict((v["parameter_id"], v) for v in self._vinculos_do_script(script_id))
             for k in [k for k, v in self._store.script_param.items() if v["script_id"] == script_id]:
                 del self._store.script_param[k]
-            mudou = set(anteriores) != set(v["parameter_id"] for v in novos_vinculos)
-            for nv in novos_vinculos:
+            changed = set(previous) != set(v["parameter_id"] for v in new_links)
+            for nv in new_links:
                 nid = self._store.next_id("tbsss_script_param")
                 nv["id"] = nid
-                velho = anteriores.get(nv["parameter_id"])
-                if velho is None:
+                old = previous.get(nv["parameter_id"])
+                if old is None:
                     self._store.stamp_insert(nv, actor)
                 else:
-                    for campo in ("created_at", "created_by", "updated_at", "updated_by"):
-                        nv[campo] = velho.get(campo)
-                    if any(nv[c] != velho.get(c) for c in ("sort_order", "required", "default_value_override")):
+                    for field in ("created_at", "created_by", "updated_at", "updated_by"):
+                        nv[field] = old.get(field)
+                    if any(nv[c] != old.get(c) for c in ("sort_order", "required", "default_value_override")):
                         self._store.stamp_update(nv, actor)
-                        mudou = True
+                        changed = True
                 self._store.script_param[nid] = nv
-            if mudou:
+            if changed:
                 self._store.stamp_update(self._store.scripts[script_id], actor)
 
             self._auditar_script(audit, script_id)
@@ -591,65 +591,65 @@ class RepoCatalogFake(RepoCatalog):
             is_admin = user_ctx.get("is_admin") in ("Y", True)
 
             # Mapeamento de ambientes ativos
-            ambientes_ativos_ids = {
+            environments_active_ids = {
                 aid for aid, a in self._store.environments.items()
                 if a["active"] == "Y"
             }
-            ambientes_ativos_nomes = {
+            environments_active_names = {
                 a["name"] for aid, a in self._store.environments.items()
                 if a["active"] == "Y"
             }
 
             # Scripts ativos
-            scripts_candidatos = [
+            scripts_candidates = [
                 s for s in self._store.scripts.values()
                 if s["active"] == "Y"
             ]
 
             if is_admin:
                 # Admin dispensa dimensoes 1-3, mas exige homologacao em ambiente ativo
-                executaveis = []
-                for s in scripts_candidatos:
-                    ambs_homologados = [
+                executables = []
+                for s in scripts_candidates:
+                    envs_homologated = [
                         sa["environment_id"]
                         for sa in self._store.script_env.values()
-                        if sa["script_id"] == s["id"] and sa["environment_id"] in ambientes_ativos_ids
+                        if sa["script_id"] == s["id"] and sa["environment_id"] in environments_active_ids
                     ]
-                    if ambs_homologados:
-                        executaveis.append(s)
-                executaveis.sort(key=lambda x: (x.get("name", ""), x["id"]))
-                return copy.deepcopy(executaveis)
+                    if envs_homologated:
+                        executables.append(s)
+                executables.sort(key=lambda x: (x.get("name", ""), x["id"]))
+                return copy.deepcopy(executables)
 
             # Nao admin: requer funcionalidade EXEC_SCRIPT
-            funcs = user_ctx.get("features") or set()
-            if "EXEC_SCRIPT" not in funcs:
+            features = user_ctx.get("features") or set()
+            if "EXEC_SCRIPT" not in features:
                 return []
 
-            ambs_permitidos = user_ctx.get("environments") or set()
-            scrs_permitidos = user_ctx.get("scripts") or set()
+            envs_allowed = user_ctx.get("environments") or set()
+            scrs_allowed = user_ctx.get("scripts") or set()
 
-            executaveis = []
-            for s in scripts_candidatos:
+            executables = []
+            for s in scripts_candidates:
                 # Script autorizado na dimensao de perfil
-                if s["id"] not in scrs_permitidos and s["name"] not in scrs_permitidos:
+                if s["id"] not in scrs_allowed and s["name"] not in scrs_allowed:
                     continue
 
                 # Homologacao ativa e autorizada
-                homologados_ativos = [
+                homologated_active = [
                     self._store.environments[sa["environment_id"]]
                     for sa in self._store.script_env.values()
-                    if sa["script_id"] == s["id"] and sa["environment_id"] in ambientes_ativos_ids
+                    if sa["script_id"] == s["id"] and sa["environment_id"] in environments_active_ids
                 ]
 
                 # Deve haver ao menos um ambiente homologado que esteja nos ambientes autorizados
-                pode_em_algum = False
-                for a in homologados_ativos:
-                    if a["id"] in ambs_permitidos or a["name"] in ambs_permitidos:
-                        pode_em_algum = True
+                can_in_any = False
+                for a in homologated_active:
+                    if a["id"] in envs_allowed or a["name"] in envs_allowed:
+                        can_in_any = True
                         break
 
-                if pode_em_algum:
-                    executaveis.append(s)
+                if can_in_any:
+                    executables.append(s)
 
-            executaveis.sort(key=lambda x: (x.get("name", ""), x["id"]))
-            return copy.deepcopy(executaveis)
+            executables.sort(key=lambda x: (x.get("name", ""), x["id"]))
+            return copy.deepcopy(executables)

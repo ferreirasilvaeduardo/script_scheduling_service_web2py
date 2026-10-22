@@ -63,22 +63,22 @@ echo "Encerrando o SSS (PID: ${PID})..."
 # 5. Encerramento gracioso com SIGINT (Rocket do web2py trata SIGINT)
 kill -INT "${PID}" 2>/dev/null || true
 
-PAROU=0
+STOPPED=0
 for i in $(seq 1 10); do
     if ! kill -0 "${PID}" 2>/dev/null; then
-        PAROU=1
+        STOPPED=1
         break
     fi
     sleep 1
 done
 
 # 6. Escalar para SIGTERM se nao encerrou apos 10s
-if [ "${PAROU}" -eq 0 ]; then
+if [ "${STOPPED}" -eq 0 ]; then
     echo "Processo nao encerrou com SIGINT. Enviando SIGTERM..."
     kill -TERM "${PID}" 2>/dev/null || true
     for i in $(seq 1 5); do
         if ! kill -0 "${PID}" 2>/dev/null; then
-            PAROU=1
+            STOPPED=1
             break
         fi
         sleep 1
@@ -86,7 +86,7 @@ if [ "${PAROU}" -eq 0 ]; then
 fi
 
 # 7. Escalar para SIGKILL se ainda estiver rodando
-if [ "${PAROU}" -eq 0 ]; then
+if [ "${STOPPED}" -eq 0 ]; then
     echo "Processo nao respondeu a SIGTERM. Forcando encerramento (SIGKILL)..."
     kill -KILL "${PID}" 2>/dev/null || true
     sleep 1

@@ -80,10 +80,10 @@ def _inside(path, folder):
 def check_forbidden_dirs(path_file, sss_dirs=()):
     """Recusa pastas do sistema e log_dir/work_dir, no caminho digitado e no resolvido (symlink)."""
     sss = [os_platform.final_path(d) for d in sss_dirs if d]
-    for alvo in (path_file, os_platform.final_path(path_file)):
-        if any(_inside(alvo, d) for d in SYSTEM_DIRS):
+    for target in (path_file, os_platform.final_path(path_file)):
+        if any(_inside(target, d) for d in SYSTEM_DIRS):
             raise PathGuardError(Code.SYSTEM_DIR)
-        if any(_inside(alvo, d) for d in sss):
+        if any(_inside(target, d) for d in sss):
             raise PathGuardError(Code.SSS_DIR)
 
 
@@ -106,9 +106,9 @@ def resolve(path_file, sss_dirs=()):
     """
     validate_registration(path_file)
     check_forbidden_dirs(path_file, sss_dirs)
-    codigo = os_platform.validate_script_path(path_file)
-    if codigo:
-        raise PathGuardError(codigo)
+    code = os_platform.validate_script_path(path_file)
+    if code:
+        raise PathGuardError(code)
     return os_platform.final_path(path_file)
 
 
@@ -127,7 +127,7 @@ def validate_executable(path, sss_dirs=()):
             raise
         raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
     sss = [os_platform.final_path(d) for d in sss_dirs if d]
-    if any(_inside(alvo, d) for alvo in (path, real) for d in sss):
+    if any(_inside(target, d) for target in (path, real) for d in sss):
         raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
     if not os.path.isfile(real) or not os.access(real, os.X_OK):
         raise PathGuardError(Code.INTERPRETADOR_INSEGURO)

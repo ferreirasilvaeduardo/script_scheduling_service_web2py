@@ -33,11 +33,11 @@ KYROS_PALETTE = {"#4daf9a", "#68d8bd", "#38977f", "#5f0684", "#831fb2", "#430463
 
 
 def _luminance(hexa):
-    canais = []
+    channels = []
     for i in (1, 3, 5):
         c = int(hexa[i:i + 2], 16) / 255.0
-        canais.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
-    return 0.2126 * canais[0] + 0.7152 * canais[1] + 0.0722 * canais[2]
+        channels.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
 
 
 def contrast(a, b):
@@ -50,11 +50,11 @@ def _chunks():
     with open(CSS, encoding="utf-8") as f:
         css = f.read()
     ini = css.index(":root {")
-    escuro = css.index("@media (prefers-color-scheme: dark)")
-    claro = dict(_RE_TOKEN.findall(css[ini:escuro]))
-    fim_escuro = css.index("/* Base */", escuro)
-    tokens_escuro = dict(claro, **dict(_RE_TOKEN.findall(css[escuro:fim_escuro])))
-    return {"claro": claro, "escuro": tokens_escuro}
+    dark = css.index("@media (prefers-color-scheme: dark)")
+    light = dict(_RE_TOKEN.findall(css[ini:dark]))
+    end_dark = css.index("/* Base */", dark)
+    tokens_dark = dict(light, **dict(_RE_TOKEN.findall(css[dark:end_dark])))
+    return {"claro": light, "escuro": tokens_dark}
 
 
 class TestColorContrast(unittest.TestCase):
@@ -69,36 +69,36 @@ class TestColorContrast(unittest.TestCase):
         self.assertLess(contrast("#4daf9a", "#ffffff"), 4.5)
 
     def test_texto_aa(self):
-        for tema, tokens in self.themes.items():
+        for theme, tokens in self.themes.items():
             for fg, bg in TEXT_PAIRS:
-                with self.subTest(tema=tema, par=(fg, bg)):
+                with self.subTest(tema=theme, par=(fg, bg)):
                     r = contrast(tokens[fg], tokens[bg])
                     self.assertGreaterEqual(r, 4.5, "%s: %s %s / %s %s = %.2f" % (
-                        tema, fg, tokens[fg], bg, tokens[bg], r))
+                        theme, fg, tokens[fg], bg, tokens[bg], r))
 
     def test_indicadores_nao_textuais(self):
-        for tema, tokens in self.themes.items():
+        for theme, tokens in self.themes.items():
             for fg, bg in INDICATOR_PAIRS:
-                with self.subTest(tema=tema, par=(fg, bg)):
+                with self.subTest(tema=theme, par=(fg, bg)):
                     self.assertGreaterEqual(contrast(tokens[fg], tokens[bg]), 3.0)
 
     def test_cores_principais_sao_da_paleta_kyros(self):
-        for tema, tokens in self.themes.items():
+        for theme, tokens in self.themes.items():
             for token in ("sss-accent", "sss-header-faixa", "sss-header-ativo-bg", "sss-banner-bg"):
-                with self.subTest(tema=tema, token=token):
+                with self.subTest(tema=theme, token=token):
                     self.assertIn(tokens[token].lower(), KYROS_PALETTE)
-        claro = self.themes["claro"]
-        self.assertEqual((claro["sss-marca-verde"], claro["sss-marca-roxo"], claro["sss-marca-amarelo"]),
+        light = self.themes["claro"]
+        self.assertEqual((light["sss-marca-verde"], light["sss-marca-roxo"], light["sss-marca-amarelo"]),
                          ("#4daf9a", "#5f0684", "#faba00"))
 
     def test_fontes_locais(self):
         with open(CSS, encoding="utf-8") as f:
             css = f.read()
-        fontes = re.findall(r'url\("\.\./fonts/montserrat/([^"]+)"\)', css)
-        self.assertEqual(len(fontes), 10)
+        sources = re.findall(r'url\("\.\./fonts/montserrat/([^"]+)"\)', css)
+        self.assertEqual(len(sources), 10)
         base = os.path.join(os.path.dirname(CSS), "..", "fonts", "montserrat")
-        for nome in fontes:
-            self.assertTrue(os.path.isfile(os.path.join(base, nome)), nome)
+        for name in sources:
+            self.assertTrue(os.path.isfile(os.path.join(base, name)), name)
         self.assertTrue(os.path.isfile(os.path.join(base, "OFL.txt")))
 
 

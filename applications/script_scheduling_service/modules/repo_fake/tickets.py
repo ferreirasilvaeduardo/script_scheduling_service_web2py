@@ -17,19 +17,19 @@ _STAGE_HTML = 5
 def _mask_like_log_pump(text, sensitive):
     # README §8.10: segredos carregados e valores de parametros sensiveis antes de anexar ao CLOB.
     local = masking.Masker()
-    for _codigo, valor in sensitive:
-        local.register(valor)
+    for _code, value in sensitive:
+        local.register(value)
     return masking.MASKER.mask(local.mask(text))
 
 
 def _stage_lines(n, when, sensitive):
-    linhas = ["[%s] etapa %d/%d processada\n" % (when, n, _STAGES_SIMULATED)]
+    rows = ["[%s] etapa %d/%d processada\n" % (when, n, _STAGES_SIMULATED)]
     if n == _STAGE_SECRET:
-        for codigo, valor in sensitive:
-            linhas.append("[%s] conectando com %s=%s\n" % (when, codigo, valor))
+        for code, value in sensitive:
+            rows.append("[%s] conectando com %s=%s\n" % (when, code, value))
     elif n == _STAGE_HTML:
-        linhas.append("[%s] saida bruta do script: <script>alert(1)</script> <b>negrito</b>\n" % when)
-    return linhas
+        rows.append("[%s] saida bruta do script: <script>alert(1)</script> <b>negrito</b>\n" % when)
+    return rows
 
 
 _COLUMNS_CLOB = ("submitted_params", "log_output")
@@ -57,15 +57,15 @@ class RepoTicketsFake(RepoTickets):
         """
         with self._store.lock_tickets:
             script_id = int(ticket.get("script_id", 0))
-            ambiente = ticket.get("environment")
-            solicitante = ticket.get("requested_by")
-            actor = self._store.record_actor(actor=actor or solicitante)
+            environment = ticket.get("environment")
+            requester = ticket.get("requested_by")
+            actor = self._store.record_actor(actor=actor or requester)
 
             if not script_id:
                 raise RepoViolation("script_id e obrigatorio")
-            if not ambiente:
+            if not environment:
                 raise RepoViolation("ambiente e obrigatorio")
-            if not solicitante:
+            if not requester:
                 raise RepoViolation("solicitante e obrigatorio")
 
             prio = int(ticket.get("priority", 2))
@@ -81,31 +81,31 @@ class RepoTicketsFake(RepoTickets):
                 raise RepoViolation("ticket pai inexistente", constraint="fk_tbsss_tck_parent")
             # FKs e UK checadas antes de gravar qualquer linha: a operacao e atomica como no Oracle.
             self._store.check_fk(script_id in self._store.scripts, "fk_tbsss_tck_scr")
-            self._store.check_fk(self._store.environment_exists(ambiente), "fk_tbsss_tck_env")
-            self._store.check_fk(self._store.login_exists(solicitante), "fk_tbsss_tck_usr")
-            vistos = set()
+            self._store.check_fk(self._store.environment_exists(environment), "fk_tbsss_tck_env")
+            self._store.check_fk(self._store.login_exists(requester), "fk_tbsss_tck_usr")
+            seen = set()
             for resp in (answers or []):
                 pid = int(resp["parameter_id"])
                 self._store.check_fk(pid in self._store.parameters, "fk_tbsss_tans_prm")
-                if pid in vistos:
+                if pid in seen:
                     raise RepoViolation("resposta repetida para o parametro %s" % pid, constraint="uk_tbsss_tans_tck_prm")
-                vistos.add(pid)
+                seen.add(pid)
 
             tid = self._store.next_id("tbsss_tickets")
-            agora = self._store.now()
-            sched = ticket.get("scheduled_at") or agora
+            now = self._store.now()
+            sched = ticket.get("scheduled_at") or now
 
             if ticket.get("schedule_id") is not None:
-                agd_id = int(ticket["schedule_id"])
+                sch_id = int(ticket["schedule_id"])
                 for t in self._store.tickets.values():
-                    if t.get("schedule_id") == agd_id and t.get("scheduled_at") == sched:
+                    if t.get("schedule_id") == sch_id and t.get("scheduled_at") == sched:
                         raise RepoViolation("ocorrencia duplicada para este agendamento", constraint="ix_tbsss_tck_occur")
 
-            novo_ticket = {
+            new_ticket = {
                 "id": tid,
                 "script_id": script_id,
-                "environment": ambiente,
-                "requested_by": solicitante,
+                "environment": environment,
+                "requested_by": requester,
                 "source_ip": ticket.get("source_ip"),
                 "agent_id": ticket.get("agent_id"),
                 "process_id": ticket.get("process_id"),
@@ -124,10 +124,10 @@ class RepoTicketsFake(RepoTickets):
                 "started_at": ticket.get("started_at"),
                 "heartbeat_at": ticket.get("heartbeat_at"),
                 "finished_at": ticket.get("finished_at"),
-                "created_at": ticket.get("created_at") or agora,
+                "created_at": ticket.get("created_at") or now,
             }
-            self._store.stamp_insert(novo_ticket, actor)
-            self._store.tickets[tid] = copy.deepcopy(novo_ticket)
+            self._store.stamp_insert(new_ticket, actor)
+            self._store.tickets[tid] = copy.deepcopy(new_ticket)
 
             # Insercao das respostas
             for resp in (answers or []):
@@ -137,25 +137,25 @@ class RepoTicketsFake(RepoTickets):
                     "ticket_id": tid,
                     "parameter_id": int(resp["parameter_id"]),
                     "answer_value": resp.get("answer_value"),
-                    "created_at": agora,
+                    "created_at": now,
                 }
                 self._store.stamp_insert(nresp, actor)
                 self._store.ticket_answer[rid] = copy.deepcopy(nresp)
 
             # Auditoria na mesma transacao (lock)
             if parent_id is None:
-                acao = "TICKET_CREATE"
-                detalhe = "Ticket criado para script %s em %s" % (script_id, ambiente)
+                action = "TICKET_CREATE"
+                detail = "Ticket criado para script %s em %s" % (script_id, environment)
             else:
-                acao = "TICKET_RERUN"
-                detalhe = "Reexecucao do ticket %s para script %s em %s" % (parent_id, script_id, ambiente)
+                action = "TICKET_RERUN"
+                detail = "Reexecucao do ticket %s para script %s em %s" % (parent_id, script_id, environment)
             self._store.register_internal_audit(
-                actor=solicitante,
+                actor=requester,
                 ip=ticket.get("source_ip"),
-                action=acao,
+                action=action,
                 entity="tbsss_tickets",
                 entity_id=tid,
-                detail=detalhe,
+                detail=detail,
             )
 
             return tid
@@ -172,87 +172,87 @@ class RepoTicketsFake(RepoTickets):
         """Lista tickets com paginacao, filtros e escopo de ambientes."""
         filters = filters or {}
         with self._store.lock_tickets:
-            lista = list(self._store.tickets.values())
+            items = list(self._store.tickets.values())
 
             # Escopo de ambientes autorizados ao perfil
             if environment_scope is not None:
-                ambs_permitidos = set(environment_scope)
-                lista = [t for t in lista if t.get("environment") in ambs_permitidos]
+                envs_allowed = set(environment_scope)
+                items = [t for t in items if t.get("environment") in envs_allowed]
 
             stat_f = filters.get("status")
             if stat_f:
                 if isinstance(stat_f, (list, tuple, set)):
                     stat_set = set(stat_f)
-                    lista = [t for t in lista if t.get("status") in stat_set]
+                    items = [t for t in items if t.get("status") in stat_set]
                 else:
-                    lista = [t for t in lista if t.get("status") == stat_f]
+                    items = [t for t in items if t.get("status") == stat_f]
 
-            amb_f = filters.get("environment")
-            if amb_f:
-                lista = [t for t in lista if t.get("environment") == amb_f]
+            env_f = filters.get("environment")
+            if env_f:
+                items = [t for t in items if t.get("environment") == env_f]
 
             sid_f = filters.get("script_id")
             if sid_f is not None:
-                lista = [t for t in lista if t.get("script_id") == int(sid_f)]
+                items = [t for t in items if t.get("script_id") == int(sid_f)]
 
             usr_f = filters.get("requested_by")
             if usr_f:
-                lista = [t for t in lista if t.get("requested_by") == usr_f]
+                items = [t for t in items if t.get("requested_by") == usr_f]
 
-            par_f = filters.get("parent_ticket_id")
-            if par_f is not None:
-                lista = [t for t in lista if t.get("parent_ticket_id") == int(par_f)]
+            pair_f = filters.get("parent_ticket_id")
+            if pair_f is not None:
+                items = [t for t in items if t.get("parent_ticket_id") == int(pair_f)]
 
-            origem_f = filters.get("origem")
-            if origem_f == "manual":
-                lista = [t for t in lista if t.get("schedule_id") is None]
-            elif origem_f == "agendamento":
-                lista = [t for t in lista if t.get("schedule_id") is not None]
+            source_f = filters.get("origem")
+            if source_f == "manual":
+                items = [t for t in items if t.get("schedule_id") is None]
+            elif source_f == "agendamento":
+                items = [t for t in items if t.get("schedule_id") is not None]
 
             dt_ini = filters.get("criado_inicio")
             if dt_ini:
-                lista = [t for t in lista if t.get("created_at") and t["created_at"] >= dt_ini]
+                items = [t for t in items if t.get("created_at") and t["created_at"] >= dt_ini]
 
-            dt_fim = filters.get("criado_fim")
-            if dt_fim:
-                lista = [t for t in lista if t.get("created_at") and t["created_at"] < dt_fim]
+            dt_end = filters.get("criado_fim")
+            if dt_end:
+                items = [t for t in items if t.get("created_at") and t["created_at"] < dt_end]
 
             # Ordenacao estavel padrao: created_at DESC, id DESC
-            lista.sort(key=lambda x: (x.get("created_at") or self._store.now(), x["id"]), reverse=True)
+            items.sort(key=lambda x: (x.get("created_at") or self._store.now(), x["id"]), reverse=True)
             # Listagens nunca trazem CLOB (contrato RepoTickets.listar).
-            return paginate([_without(t, _COLUMNS_CLOB) for t in lista], page=page, size=size)
+            return paginate([_without(t, _COLUMNS_CLOB) for t in items], page=page, size=size)
 
     def last_runs(self, script_ids, environment_scope=None, requester=None):
         """Ultimo ticket de cada script no escopo, sem LOB (contrato RepoTickets)."""
         ids = set(int(i) for i in script_ids)
-        ambs = None if environment_scope is None else set(environment_scope)
+        envs = None if environment_scope is None else set(environment_scope)
         with self._store.lock_tickets:
-            melhores = {}
+            best = {}
             for t in self._store.tickets.values():
-                if t["script_id"] not in ids or (ambs is not None and t["environment"] not in ambs):
+                if t["script_id"] not in ids or (envs is not None and t["environment"] not in envs):
                     continue
                 if requester is not None and t["requested_by"] != requester:
                     continue
-                chave = (t["created_at"], t["id"])
-                atual = melhores.get(t["script_id"])
-                if atual is None or chave > (atual["created_at"], atual["id"]):
-                    melhores[t["script_id"]] = t
+                key = (t["created_at"], t["id"])
+                current = best.get(t["script_id"])
+                if current is None or key > (current["created_at"], current["id"]):
+                    best[t["script_id"]] = t
             return dict((sid, {"id": t["id"], "status": t["status"], "status_reason": t.get("status_reason"),
                                "created_at": t["created_at"], "finished_at": t.get("finished_at")})
-                        for sid, t in melhores.items())
+                        for sid, t in best.items())
 
     def script_history(self, script_id, since, environment_scope=None, requester=None, limit=5000):
         """Tickets do script desde a data, no escopo, sem LOB (contrato RepoTickets)."""
-        ambs = None if environment_scope is None else set(environment_scope)
+        envs = None if environment_scope is None else set(environment_scope)
         with self._store.lock_tickets:
-            lista = [t for t in self._store.tickets.values()
+            items = [t for t in self._store.tickets.values()
                      if t["script_id"] == int(script_id) and t["created_at"] >= since
-                     and (ambs is None or t["environment"] in ambs)
+                     and (envs is None or t["environment"] in envs)
                      and (requester is None or t["requested_by"] == requester)]
-            lista.sort(key=lambda t: (t["created_at"], t["id"]))
-            lista = lista[-int(limit):] if limit else lista
+            items.sort(key=lambda t: (t["created_at"], t["id"]))
+            items = items[-int(limit):] if limit else items
             return [dict((k, t.get(k)) for k in ("id", "status", "status_reason", "created_at", "started_at",
-                                                 "finished_at")) for t in lista]
+                                                 "finished_at")) for t in items]
 
     def answers(self, ticket_id):
         """Retorna lista de dicts com respostas do ticket."""
@@ -314,9 +314,9 @@ class RepoTicketsFake(RepoTickets):
                 raise RepoNotFound("Ticket ID %s nao encontrado" % id)
 
             t = self._store.tickets[id]
-            sim = self._store.log_simulated.get(id)
-            if sim is not None and t.get("status") == "RUNNING":
-                self._simular_log(t, sim)
+            yes = self._store.log_simulated.get(id)
+            if yes is not None and t.get("status") == "RUNNING":
+                self._simular_log(t, yes)
             log_output = t.get("log_output") or ""
 
             # Valor nao numerico propaga ValueError/TypeError, como o bind NUMBER no Oracle.
@@ -328,12 +328,12 @@ class RepoTicketsFake(RepoTickets):
             if mc < 1:
                 mc = 65536
 
-            texto = log_output[off:off + mc]
-            novo_offset = off + len(texto)
+            text = log_output[off:off + mc]
+            new_offset = off + len(text)
             terminal = t.get("status") in ("SUCCESS", "FAILED", "CANCELLED")
-            truncado = t.get("log_truncated") == "Y"
+            truncated = t.get("log_truncated") == "Y"
 
-            return (texto, novo_offset, terminal, truncado)
+            return (text, new_offset, terminal, truncated)
 
     def output_get(self, ticket_id):
         """Metadados da saida do ticket (CR-012), sem o conteudo; None sem saida."""
@@ -346,38 +346,38 @@ class RepoTicketsFake(RepoTickets):
     def output_read(self, ticket_id, offset, size):
         """Fatia do zip (offset base 0); so DISPONIVEL, como no Oracle."""
         off = int(offset)
-        tam = int(size)
-        if off < 0 or tam < 1 or tam > 1024 * 1024:
+        size_n = int(size)
+        if off < 0 or size_n < 1 or size_n > 1024 * 1024:
             raise RepoViolation("Fatia da saida invalida")
         with self._store.lock_tickets:
             for s in self._store.ticket_output.values():
                 if s["ticket_id"] == int(ticket_id) and s["state"] == "AVAILABLE" and s["content"] is not None:
-                    return bytes(s["content"][off:off + tam])
+                    return bytes(s["content"][off:off + size_n])
         raise RepoNotFound("Saida do ticket %s indisponivel" % ticket_id)
 
     def _simular_log(self, t, sim):
         """Emula o log_pump e a finalizacao pelo agente em funcao do relogio injetavel (somente FAKE)."""
-        agora = self._store.now()
-        decorrido = int((agora - t["started_at"]).total_seconds())
-        alvo = min(_STAGES_SIMULATED, max(0, decorrido // sim["passo_s"]))
-        cancelar = t.get("cancel_requested") == "Y"
-        if alvo <= sim["emitidos"] and not cancelar:
+        now = self._store.now()
+        elapsed = int((now - t["started_at"]).total_seconds())
+        target = min(_STAGES_SIMULATED, max(0, elapsed // sim["passo_s"]))
+        cancel = t.get("cancel_requested") == "Y"
+        if target <= sim["emitidos"] and not cancel:
             return
-        linhas = []
-        for n in range(sim["emitidos"] + 1, alvo + 1):
-            quando = t["started_at"] + datetime.timedelta(seconds=n * sim["passo_s"])
-            linhas.extend(_stage_lines(n, quando, sim["sensiveis"]))
-        sim["emitidos"] = alvo
-        if cancelar:
-            linhas.append("[%s] processo encerrado por cancelamento (SIGTERM)\n" % agora)
+        rows = []
+        for n in range(sim["emitidos"] + 1, target + 1):
+            when = t["started_at"] + datetime.timedelta(seconds=n * sim["passo_s"])
+            rows.extend(_stage_lines(n, when, sim["sensiveis"]))
+        sim["emitidos"] = target
+        if cancel:
+            rows.append("[%s] processo encerrado por cancelamento (SIGTERM)\n" % now)
             t.update(status="CANCELLED", status_reason="CANCEL_USER", return_code=-1)
-        elif alvo >= _STAGES_SIMULATED:
-            linhas.append("[%s] Script concluido com retorno 0.\n" % agora)
+        elif target >= _STAGES_SIMULATED:
+            rows.append("[%s] Script concluido com retorno 0.\n" % now)
             t.update(status="SUCCESS", status_reason="EXIT_OK", return_code=0)
         if t["status"] != "RUNNING":
-            t["finished_at"] = agora
+            t["finished_at"] = now
             # A finalizacao e do agente dono (README §8.7); o heartbeat e o log nao gravam updated_*.
             self._store.stamp_update(t, "SYSTEM:%s" % t.get("agent_id"))
             self._store.log_simulated.pop(t["id"], None)
-        t["heartbeat_at"] = agora
-        t["log_output"] = (t.get("log_output") or "") + _mask_like_log_pump("".join(linhas), sim["sensiveis"])
+        t["heartbeat_at"] = now
+        t["log_output"] = (t.get("log_output") or "") + _mask_like_log_pump("".join(rows), sim["sensiveis"])

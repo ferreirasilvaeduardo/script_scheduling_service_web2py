@@ -49,24 +49,24 @@ class TestPasswordHash(unittest.TestCase):
         self.assertFalse(security.verify_password("!", "!"))
 
     def test_formatos_invalidos(self):
-        partes = self.armazenado.split("$")
-        invalidos = [
+        parts = self.armazenado.split("$")
+        invalid = [
             None, "", "lixo", self.armazenado + "$",
-            "pbkdf2_sha1$" + "$".join(partes[1:]),
-            "$".join([partes[0], "abc", partes[2], partes[3]]),
-            "$".join([partes[0], "0", partes[2], partes[3]]),
-            "$".join([partes[0], partes[1], partes[2][:-2], partes[3]]),
-            "$".join([partes[0], partes[1], partes[2], partes[3].upper()]),
-            "$".join([partes[0], partes[1], partes[2], partes[3][:-1] + "g"]),
+            "pbkdf2_sha1$" + "$".join(parts[1:]),
+            "$".join([parts[0], "abc", parts[2], parts[3]]),
+            "$".join([parts[0], "0", parts[2], parts[3]]),
+            "$".join([parts[0], parts[1], parts[2][:-2], parts[3]]),
+            "$".join([parts[0], parts[1], parts[2], parts[3].upper()]),
+            "$".join([parts[0], parts[1], parts[2], parts[3][:-1] + "g"]),
         ]
-        for inv in invalidos:
+        for inv in invalid:
             self.assertFalse(security.verify_password(self.password, inv), inv)
             self.assertFalse(security.needs_rehash(inv), inv)
 
     def test_iteracoes_antigas_verificam_e_pedem_rehash(self):
-        antigo = _hash_with_iterations("senha-antiga-123", 1000)
-        self.assertTrue(security.verify_password("senha-antiga-123", antigo))
-        self.assertTrue(security.needs_rehash(antigo))
+        old = _hash_with_iterations("senha-antiga-123", 1000)
+        self.assertTrue(security.verify_password("senha-antiga-123", old))
+        self.assertTrue(security.needs_rehash(old))
         self.assertFalse(security.needs_rehash(self.armazenado))
         self.assertFalse(security.needs_rehash("!"))
 
@@ -93,13 +93,13 @@ class TestStripPasswords(unittest.TestCase):
 
     def test_remove_de_todas_as_origens(self):
         post_vars = {"login": "admin", "senha": "Segredo-123456", "outra": "x"}
-        todas = dict(post_vars, pagina="1")
-        senhas = security.strip_passwords((post_vars, todas), ("senha", "confirmacao"))
-        self.assertEqual(senhas, {"senha": "Segredo-123456", "confirmacao": None})
+        all_value = dict(post_vars, pagina="1")
+        passwords = security.strip_passwords((post_vars, all_value), ("senha", "confirmacao"))
+        self.assertEqual(passwords, {"senha": "Segredo-123456", "confirmacao": None})
         self.assertNotIn("senha", post_vars)
-        self.assertNotIn("senha", todas)
+        self.assertNotIn("senha", all_value)
         self.assertEqual(post_vars, {"login": "admin", "outra": "x"})
-        self.assertNotIn("Segredo", repr(post_vars) + repr(todas))
+        self.assertNotIn("Segredo", repr(post_vars) + repr(all_value))
 
     def test_lista_vale_o_ultimo_e_nao_str_vira_none(self):
         self.assertEqual(security.strip_passwords(({"s": ["a", "b"]},), ("s",)), {"s": "b"})
@@ -108,12 +108,12 @@ class TestStripPasswords(unittest.TestCase):
 
     def test_controllers_nao_leem_senha_direto_de_request(self):
         # Regressao: login lia request.post_vars.get("senha") e a senha ia parar no ticket de erro.
-        raiz = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "controllers")
-        padrao = re.compile(r"request\.(post_vars|vars)\.get\(\s*[\'\"](senha|senha_atual|nova|confirmacao)[\'\"]")
-        for nome in sorted(os.listdir(raiz)):
-            if nome.endswith(".py"):
-                with open(os.path.join(raiz, nome), encoding="utf-8") as f:
-                    self.assertIsNone(padrao.search(f.read()), nome)
+        root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "controllers")
+        default = re.compile(r"request\.(post_vars|vars)\.get\(\s*[\'\"](senha|senha_atual|nova|confirmacao)[\'\"]")
+        for name in sorted(os.listdir(root)):
+            if name.endswith(".py"):
+                with open(os.path.join(root, name), encoding="utf-8") as f:
+                    self.assertIsNone(default.search(f.read()), name)
 
 
 class TestCsrf(unittest.TestCase):
@@ -207,16 +207,16 @@ class TestCookiesSeguros(unittest.TestCase):
         c = security.SecureCookies(secure=True)
         c["session_data_x"] = "valor"
         c["session_data_x"]["path"] = "/"
-        saida = c["session_data_x"].OutputString()
-        self.assertIn("HttpOnly", saida)
-        self.assertIn("Secure", saida)
+        output = c["session_data_x"].OutputString()
+        self.assertIn("HttpOnly", output)
+        self.assertIn("Secure", output)
 
     def test_sem_secure(self):
         c = security.SecureCookies(secure=False)
         c["a"] = "1"
-        saida = c["a"].OutputString()
-        self.assertIn("HttpOnly", saida)
-        self.assertNotIn("Secure", saida)
+        output = c["a"].OutputString()
+        self.assertIn("HttpOnly", output)
+        self.assertNotIn("Secure", output)
 
     def test_reatribuicao_mantem_atributos(self):
         c = security.SecureCookies(secure=True)
@@ -251,40 +251,40 @@ class TestCookiesSeguros(unittest.TestCase):
         """Regressao: cookie de sessao do web2py precisa sobreviver a ida e volta no Python 3."""
         import http.cookies
         from gluon.utils import secure_dumps, secure_loads
-        chave = "k" * 32
+        key = "k" * 32
         c = security.SecureCookies(secure=True)
-        c["session_data_x"] = secure_dumps({"csrf_token": "t"}, chave)
+        c["session_data_x"] = secure_dumps({"csrf_token": "t"}, key)
         r = http.cookies.SimpleCookie()
         r.load(c["session_data_x"].OutputString().split(";")[0])
         security.adapt_session_cookie(r, "session_data_x")
-        self.assertEqual(secure_loads(r["session_data_x"].value, chave, safe_unpickle=False), {"csrf_token": "t"})
+        self.assertEqual(secure_loads(r["session_data_x"].value, key, safe_unpickle=False), {"csrf_token": "t"})
 
     def test_adotar(self):
         import http.cookies
-        origem = http.cookies.SimpleCookie()
-        origem["b"] = "2"
+        source = http.cookies.SimpleCookie()
+        source["b"] = "2"
         c = security.SecureCookies(secure=True)
-        c.adopt(origem)
-        saida = c["b"].OutputString()
-        self.assertIn("HttpOnly", saida)
-        self.assertIn("Secure", saida)
+        c.adopt(source)
+        output = c["b"].OutputString()
+        self.assertIn("HttpOnly", output)
+        self.assertIn("Secure", output)
 
 
 class TestPureModules(unittest.TestCase):
 
     def test_sem_gluon(self):
-        for nome in ("security.py", "masking.py"):
-            with open(os.path.join(_MODULES, nome), "r", encoding="utf-8") as f:
-                arvore = ast.parse(f.read())
-            for no in ast.walk(arvore):
+        for name in ("security.py", "masking.py"):
+            with open(os.path.join(_MODULES, name), "r", encoding="utf-8") as f:
+                tree = ast.parse(f.read())
+            for no in ast.walk(tree):
                 if isinstance(no, ast.Import):
-                    nomes = [a.name for a in no.names]
+                    names = [a.name for a in no.names]
                 elif isinstance(no, ast.ImportFrom):
-                    nomes = [no.module or ""]
+                    names = [no.module or ""]
                 else:
                     continue
-                for n in nomes:
-                    self.assertFalse(n.split(".")[0] == "gluon", "%s importa %s" % (nome, n))
+                for n in names:
+                    self.assertFalse(n.split(".")[0] == "gluon", "%s importa %s" % (name, n))
 
 
 
@@ -331,11 +331,11 @@ class TestReferrerHeader(unittest.TestCase):
     """Regressao: 'no-referrer' faz o navegador enviar Origin: null e todo POST de formulario vira 403."""
 
     def test_referrer_policy_same_origin(self):
-        caminho = os.path.join(os.path.dirname(_MODULES), "models", "10_security.py")
-        with open(caminho, encoding="utf-8") as f:
-            codigo = f.read()
-        self.assertRegex(codigo, r'"Referrer-Policy":\s*"same-origin"')
-        self.assertNotRegex(codigo, r'"Referrer-Policy":\s*"no-referrer"')
+        path = os.path.join(os.path.dirname(_MODULES), "models", "10_security.py")
+        with open(path, encoding="utf-8") as f:
+            code = f.read()
+        self.assertRegex(code, r'"Referrer-Policy":\s*"same-origin"')
+        self.assertNotRegex(code, r'"Referrer-Policy":\s*"no-referrer"')
 
     def test_origin_null_continua_rejeitado(self):
         self.assertFalse(security.is_allowed_origin("null", None, ["http://127.0.0.1:8000"]))

@@ -62,9 +62,9 @@ class TestOracleRbacUsers(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        agregado = os.environ.get("SSS_TEST_REPO_AGREGADO")
-        if agregado != "RBAC_USUARIOS":
-            raise unittest.SkipTest("Execucao restrita ao agregado RBAC_USUARIOS (atual: %s)" % agregado)
+        aggregate = os.environ.get("SSS_TEST_REPO_AGREGADO")
+        if aggregate != "RBAC_USUARIOS":
+            raise unittest.SkipTest("Execucao restrita ao agregado RBAC_USUARIOS (atual: %s)" % aggregate)
 
         _prepare_real_db(cls)
 
@@ -87,22 +87,22 @@ class TestOracleRbacUsers(unittest.TestCase):
 
     def test_ator_obrigatorio_usuarios_e_perfis(self):
         """Valida que insercao e alteracao sem ator ou com ator longo lancam RepoViolation."""
-        for ator_invalido in (None, "", "   ", "x" * 41):
+        for actor_invalid in (None, "", "   ", "x" * 41):
             with self.assertRaises(repo_errors.RepoViolation):
-                self.usr.insert({"login": "novo.user", "profile_id": 1}, actor=ator_invalido)
+                self.usr.insert({"login": "novo.user", "profile_id": 1}, actor=actor_invalid)
             with self.assertRaises(repo_errors.RepoViolation):
-                self.rbac.profiles_insert({"name": "Novo Perfil"}, actor=ator_invalido)
+                self.rbac.profiles_insert({"name": "Novo Perfil"}, actor=actor_invalid)
             with self.assertRaises(repo_errors.RepoViolation):
-                self.usr.unlock(1, actor=ator_invalido)
+                self.usr.unlock(1, actor=actor_invalid)
 
     def test_alterar_sem_data_nao_declara_bind_de_data_ausente(self):
         """Regressao (F7.3): alterar so o nome declarava bloqueado_ate/ultimo_login e caia em DPY-4008."""
         import repo_oracle.users as mod
-        linha = tuple(1 if c in ("id", "profile_id") else ("Y" if c == "active" else
+        line = tuple(1 if c in ("id", "profile_id") else ("Y" if c == "active" else
                       ("tst.x" if c == "login" else (0 if c in ("failed_attempts", "session_epoch") else None)))
                       for c in mod._COLS_USER)
-        conn = _ScriptedConnection([("FOR UPDATE OF u.active WAIT 5", 1, [linha + ("Y", "N")]), ("UPDATE", 1, []),
-                                    ("SELECT", 1, [linha])])
+        conn = _ScriptedConnection([("FOR UPDATE OF u.active WAIT 5", 1, [line + ("Y", "N")]), ("UPDATE", 1, []),
+                                    ("SELECT", 1, [line])])
         with mock.patch.object(self.usr, "_obter_conexao", return_value=conn):
             self.usr.update(1, {"name": "Novo nome"}, actor="ana")
         upd = [sql for sql, _b in conn.executed if sql.startswith("UPDATE")]
@@ -121,36 +121,36 @@ class TestOracleRbacUsers(unittest.TestCase):
         if not self.tem_banco_real:
             self.skipTest("Banco descartavel real nao configurado (marcado como NAO TESTADO)")
 
-        ator_teste = "teste_agregado"
-        prefixo = "tst_%d" % int(datetime.datetime.now().strftime("%H%M%S"))
+        actor_test = "teste_agregado"
+        prefix = "tst_%d" % int(datetime.datetime.now().strftime("%H%M%S"))
 
         # 1. Cria perfil
-        nome_perfil = ("P_%s" % prefixo)[:30]
-        per = self.rbac.profiles_insert({
-            "name": nome_perfil,
+        name_profile = ("P_%s" % prefix)[:30]
+        prf = self.rbac.profiles_insert({
+            "name": name_profile,
             "description": "Perfil temporario de teste progressivo",
             "is_admin": "N",
             "active": "Y",
-        }, actor=ator_teste)
-        self.assertIsNotNone(per.get("id"))
-        pid = per["id"]
+        }, actor=actor_test)
+        self.assertIsNotNone(prf.get("id"))
+        pid = prf["id"]
 
         try:
             # 2. Cria usuario associado
-            login = ("u_%s" % prefixo)[:30].lower()
+            login = ("u_%s" % prefix)[:30].lower()
             usr = self.usr.insert({
                 "login": login,
                 "name": "Usuario de Teste",
                 "password_hash": "hash_fake_123",
                 "profile_id": pid,
                 "active": "Y",
-            }, actor=ator_teste)
+            }, actor=actor_test)
             self.assertIsNotNone(usr.get("id"))
             uid = usr["id"]
 
             # 3. Teste do relogio do banco sem microssegundos
-            dt_banco = self.usr.now()
-            self.assertEqual(dt_banco.microsecond, 0)
+            dt_db = self.usr.now()
+            self.assertEqual(dt_db.microsecond, 0)
 
             # 4. Estado da sessao
             sess = self.usr.get_session_state(uid)
@@ -159,15 +159,15 @@ class TestOracleRbacUsers(unittest.TestCase):
             self.assertEqual(sess["session_epoch"], 0)
 
             # 5. Logout incrementa session_epoch
-            self.usr.end_sessions(uid, audit={"actor": ator_teste, "action": "LOGOUT"})
+            self.usr.end_sessions(uid, audit={"actor": actor_test, "action": "LOGOUT"})
             sess2 = self.usr.get_session_state(uid)
             self.assertEqual(sess2["session_epoch"], 1)
 
             # 6. Falha e sucesso de login
             self.usr.register_login_failure(login, lockout_s=300)
-            u_falha = self.usr.get_by_id(uid)
-            self.assertEqual(u_falha["failed_attempts"], 1)
-            self.assertIsNotNone(u_falha["locked_until"])
+            u_failure = self.usr.get_by_id(uid)
+            self.assertEqual(u_failure["failed_attempts"], 1)
+            self.assertIsNotNone(u_failure["locked_until"])
 
             self.usr.register_login_success(login, new_hash="hash_rehash_456")
             u_ok = self.usr.get_by_id(uid)
@@ -177,14 +177,14 @@ class TestOracleRbacUsers(unittest.TestCase):
 
             # 7. Imutabilidade do login
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                self.usr.update(uid, {"login": "outro_login"}, actor=ator_teste)
+                self.usr.update(uid, {"login": "outro_login"}, actor=actor_test)
             self.assertEqual(ctx.exception.constraint, "tr_tbsss_usr_bu")
 
             # 8. Unicidade de UKs
             with self.assertRaises(repo_errors.RepoViolation):
-                self.usr.insert({"login": login, "profile_id": pid}, actor=ator_teste)
+                self.usr.insert({"login": login, "profile_id": pid}, actor=actor_test)
             with self.assertRaises(repo_errors.RepoViolation):
-                self.rbac.profiles_insert({"name": nome_perfil}, actor=ator_teste)
+                self.rbac.profiles_insert({"name": name_profile}, actor=actor_test)
 
         finally:
             # Limpeza cirurgica no schema descartavel
@@ -243,9 +243,9 @@ class TestOracleCatalog(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        agregado = os.environ.get("SSS_TEST_REPO_AGREGADO")
-        if agregado != "CATALOGO":
-            raise unittest.SkipTest("Execucao restrita ao agregado CATALOGO (atual: %s)" % agregado)
+        aggregate = os.environ.get("SSS_TEST_REPO_AGREGADO")
+        if aggregate != "CATALOGO":
+            raise unittest.SkipTest("Execucao restrita ao agregado CATALOGO (atual: %s)" % aggregate)
 
         _prepare_real_db(cls)
 
@@ -269,11 +269,11 @@ class TestOracleCatalog(unittest.TestCase):
     def test_sql_qualificado_sem_marcadores_pendentes(self):
         """Todo SQL montado na carga usa o owner qualificado e nenhum marcador sobra."""
         self.assertTrue(self.cat._sql)
-        for nome, sql in self.cat._sql.items():
-            self.assertNotIn("{", sql, nome)
-            self.assertNotIn("SELECT *", sql, nome)
+        for name, sql in self.cat._sql.items():
+            self.assertNotIn("{", sql, name)
+            self.assertNotIn("SELECT *", sql, name)
             if "FOR UPDATE" in sql:
-                self.assertIn("FOR UPDATE WAIT 5", sql, nome)
+                self.assertIn("FOR UPDATE WAIT 5", sql, name)
         self.assertIn(self.cat.qualify_table("scripts"), self.cat._sql["SCR_GET"])
 
     def test_owner_e_prefixo_parametrizados(self):
@@ -282,8 +282,8 @@ class TestOracleCatalog(unittest.TestCase):
         cfg.oracle.owner = "SSS_TEST_CAT"
         cfg.oracle.table_prefix = "abc_"
         repo = RepoCatalogOracle(cfg=cfg, secrets={})
-        for nome, sql in repo._sql.items():
-            self.assertNotIn("tbsss_", sql, nome)
+        for name, sql in repo._sql.items():
+            self.assertNotIn("tbsss_", sql, name)
         self.assertIn("SSS_TEST_CAT.abc_scripts", repo._sql["SCR_GET"])
         self.assertIn("SSS_TEST_CAT.abc_profile_script", repo._sql["EXEC_PROFILE"])
         self.assertEqual(repo._seq["script_param"], "SSS_TEST_CAT.sq_abc_script_param")
@@ -295,8 +295,8 @@ class TestOracleCatalog(unittest.TestCase):
     def test_ator_obrigatorio_antes_de_qualquer_sql(self):
         """Sem ator (ou com mais de 40 caracteres), RepoViolation sem abrir conexao."""
         with mock.patch.object(self.cat, "_obter_conexao", side_effect=AssertionError("abriu conexao")):
-            for ator_invalido in (None, "", "   ", "x" * 41):
-                for chamada in (
+            for actor_invalid in (None, "", "   ", "x" * 41):
+                for call in (
                     lambda a: self.cat.environments_insert({"name": "AMB_X"}, actor=a),
                     lambda a: self.cat.environments_update(1, {"description": "x"}, actor=a),
                     lambda a: self.cat.scripts_insert({"name": "s", "interpreter": "SH",
@@ -308,13 +308,13 @@ class TestOracleCatalog(unittest.TestCase):
                     lambda a: self.cat.script_params_save(1, [], actor=a),
                 ):
                     with self.assertRaises(repo_errors.RepoViolation):
-                        chamada(ator_invalido)
+                        call(actor_invalid)
 
     def test_cks_recusadas_antes_do_banco_com_nome_do_fake(self):
         """CKs de nome, caminho, interpretador, paralelismo e codigo devolvem o nome da constraint do FAKE."""
         n = self.cat.constraint_name
         with mock.patch.object(self.cat, "_obter_conexao", side_effect=AssertionError("abriu conexao")):
-            casos = (
+            cases = (
                 (lambda: self.cat.environments_insert({"name": "minusculo"}, actor="t"), n("ck", "environments", "name")),
                 (lambda: self.cat.scripts_insert({"name": "s", "interpreter": "SH",
                                                    "path_file": "relativo.sh"}, actor="t"), n("ck", "scripts", "path")),
@@ -329,9 +329,9 @@ class TestOracleCatalog(unittest.TestCase):
                 (lambda: self.cat.parameters_insert({"code": "Maiusc", "component_type": "TEXT"},
                                                      actor="t"), n("ck", "parameters", "code")),
             )
-            for chamada, ck in casos:
+            for call, ck in cases:
                 with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                    chamada()
+                    call()
                 self.assertEqual(ctx.exception.constraint, ck)
 
     def test_scripts_executaveis_sem_exec_script_nao_consulta(self):
@@ -350,10 +350,10 @@ class TestOracleCatalog(unittest.TestCase):
                                           "features": frozenset(["EXEC_SCRIPT"])})
             self.cat.executable_scripts({"is_admin": True})
         self.assertEqual(len(cur.executed), 2)
-        sql_perfil, binds_perfil = cur.executed[0]
-        self.assertIn(self.cat.qualify_table("profile_script"), sql_perfil)
-        self.assertIn(self.cat.qualify_table("profile_env"), sql_perfil)
-        self.assertEqual(binds_perfil, {"profile_id": 7})
+        sql_profile, binds_profile = cur.executed[0]
+        self.assertIn(self.cat.qualify_table("profile_script"), sql_profile)
+        self.assertIn(self.cat.qualify_table("profile_env"), sql_profile)
+        self.assertEqual(binds_profile, {"profile_id": 7})
         sql_admin, binds_admin = cur.executed[1]
         self.assertNotIn(self.cat.qualify_table("profile_script"), sql_admin)
         self.assertIn(self.cat.qualify_table("script_env"), sql_admin)
@@ -364,39 +364,39 @@ class TestOracleCatalog(unittest.TestCase):
         cur = _RecordingCursor(once=(0,))
         with mock.patch.object(self.cat, "_obter_conexao", return_value=_RecordingConnection(cur)):
             self.cat.scripts_list(filters={"name": "carga_10%"})
-        sql_conta, binds = cur.executed[0]
-        self.assertIn("ROWNUM <= 10001", sql_conta)
-        self.assertIn("ESCAPE", sql_conta)
+        sql_count_tpl, binds = cur.executed[0]
+        self.assertIn("ROWNUM <= 10001", sql_count_tpl)
+        self.assertIn("ESCAPE", sql_count_tpl)
         self.assertEqual(binds["name_f"], "%carga\\_10\\%%")
-        self.assertNotIn("carga", sql_conta)
+        self.assertNotIn("carga", sql_count_tpl)
 
     # ------------------------------------------------------------- banco real
 
     def _clean(self, ids):
         """Remove somente os registros criados por este teste, em transacao propria."""
         conn = self.cat._obter_conexao()
-        restantes = []
+        remaining = []
         try:
             cur = conn.cursor()
             try:
-                for tabela, chave in (("script_param", "script_id"), ("script_env", "script_id"),
+                for table, key in (("script_param", "script_id"), ("script_env", "script_id"),
                                       ("scripts", "id"), ("parameters", "id"), ("environments", "id")):
-                    for valor in ids.get(tabela, ()):
-                        cur.execute("DELETE FROM " + self.cat.qualify_table(tabela) + " WHERE "
-                                    + chave + " = :v", {"v": valor})
+                    for value in ids.get(table, ()):
+                        cur.execute("DELETE FROM " + self.cat.qualify_table(table) + " WHERE "
+                                    + key + " = :v", {"v": value})
                 conn.commit()
-                for tabela in ("scripts", "parameters", "environments"):
-                    for valor in ids.get(tabela, ()):
-                        cur.execute("SELECT id FROM " + self.cat.qualify_table(tabela) + " WHERE id = :v",
-                                    {"v": valor})
+                for table in ("scripts", "parameters", "environments"):
+                    for value in ids.get(table, ()):
+                        cur.execute("SELECT id FROM " + self.cat.qualify_table(table) + " WHERE id = :v",
+                                    {"v": value})
                         if cur.fetchone():
-                            restantes.append((tabela, valor))
+                            remaining.append((table, value))
             finally:
                 cur.close()
         finally:
             conn.close()
-        if restantes:
-            self.fail("Limpeza incompleta no schema descartavel: %s" % restantes)
+        if remaining:
+            self.fail("Limpeza incompleta no schema descartavel: %s" % remaining)
 
     def test_banco_real_catalogo(self):
         """Ciclo completo no Oracle descartavel: CRUD, esperado, UKs, vinculos por diferenca e executaveis."""
@@ -404,77 +404,77 @@ class TestOracleCatalog(unittest.TestCase):
             self.skipTest("Banco descartavel real nao configurado (marcado como NAO TESTADO)")
 
         n = self.cat.constraint_name
-        ator = "teste_catalogo"
-        sufixo = datetime.datetime.now().strftime("%H%M%S")
+        actor = "teste_catalogo"
+        suffix = datetime.datetime.now().strftime("%H%M%S")
         ids = {"environments": [], "scripts": [], "parameters": []}
         ids["script_param"] = ids["scripts"]
         ids["script_env"] = ids["scripts"]
         try:
             # 1. Ambientes: inclusao, registro, UK, imutabilidade e esperado.
-            amb = self.cat.environments_insert({"name": "TST_" + sufixo, "description": "a"}, actor=ator)
-            ids["environments"].append(amb["id"])
-            self.assertEqual(amb["created_by"], ator)
-            self.assertIsNone(amb["updated_at"])
+            env = self.cat.environments_insert({"name": "TST_" + suffix, "description": "a"}, actor=actor)
+            ids["environments"].append(env["id"])
+            self.assertEqual(env["created_by"], actor)
+            self.assertIsNone(env["updated_at"])
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                self.cat.environments_insert({"name": "TST_" + sufixo}, actor=ator)
+                self.cat.environments_insert({"name": "TST_" + suffix}, actor=actor)
             self.assertEqual(ctx.exception.constraint, n("uk", "environments", "name"))
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                self.cat.environments_update(amb["id"], {"name": "OUTRO_" + sufixo}, actor=ator)
+                self.cat.environments_update(env["id"], {"name": "OUTRO_" + suffix}, actor=actor)
             self.assertEqual(ctx.exception.constraint, self.cat.trigger_name("environments", "bu"))
             with self.assertRaises(repo_errors.RepoConflict):
-                self.cat.environments_update(amb["id"], {"description": "b"}, expected={"description": "z"}, actor=ator)
-            alt = self.cat.environments_update(amb["id"], {"description": "b"}, expected={"description": "a"}, actor="bia")
-            self.assertEqual((alt["description"], alt["updated_by"], alt["created_by"]), ("b", "bia", ator))
+                self.cat.environments_update(env["id"], {"description": "b"}, expected={"description": "z"}, actor=actor)
+            alt = self.cat.environments_update(env["id"], {"description": "b"}, expected={"description": "a"}, actor="bia")
+            self.assertEqual((alt["description"], alt["updated_by"], alt["created_by"]), ("b", "bia", actor))
             self.assertEqual(alt["created_at"].microsecond, 0)
 
             # 2. Scripts: UK sensivel a maiusculas, path_file absoluto e esperado nulo-seguro.
-            nome_scr = "Tst_Scr_" + sufixo
-            scr = self.cat.scripts_insert({"name": nome_scr, "interpreter": "SH", "param_type": "NAMED",
-                                            "path_file": "/opt/sss_teste/" + sufixo + ".sh"}, actor=ator)
+            name_scr = "Tst_Scr_" + suffix
+            scr = self.cat.scripts_insert({"name": name_scr, "interpreter": "SH", "param_type": "NAMED",
+                                            "path_file": "/opt/sss_teste/" + suffix + ".sh"}, actor=actor)
             ids["scripts"].append(scr["id"])
-            outro = self.cat.scripts_insert({"name": nome_scr.lower(), "interpreter": "SH",
-                                              "path_file": "/opt/sss_teste/b.sh"}, actor=ator)
-            ids["scripts"].append(outro["id"])
+            other = self.cat.scripts_insert({"name": name_scr.lower(), "interpreter": "SH",
+                                              "path_file": "/opt/sss_teste/b.sh"}, actor=actor)
+            ids["scripts"].append(other["id"])
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                self.cat.scripts_insert({"name": nome_scr, "interpreter": "SH",
-                                          "path_file": "/opt/sss_teste/c.sh"}, actor=ator)
+                self.cat.scripts_insert({"name": name_scr, "interpreter": "SH",
+                                          "path_file": "/opt/sss_teste/c.sh"}, actor=actor)
             self.assertEqual(ctx.exception.constraint, n("uk", "scripts", "name"))
             alt = self.cat.scripts_update(scr["id"], {"script_group": "G1"}, expected={"script_group": None,
                                                                                   "path_file": scr["path_file"]},
-                                           actor=ator)
+                                           actor=actor)
             self.assertEqual(alt["script_group"], "G1")
-            self.assertEqual(alt["updated_by"], ator)
+            self.assertEqual(alt["updated_by"], actor)
 
             # 3. Homologacao por diferenca: vinculo que continua mantem o created_*.
-            self.assertEqual(self.cat.homologation_save(scr["id"], [amb["id"]], expected=[], actor=ator),
-                             [amb["id"]])
+            self.assertEqual(self.cat.homologation_save(scr["id"], [env["id"]], expected=[], actor=actor),
+                             [env["id"]])
             with self.assertRaises(repo_errors.RepoConflict):
-                self.cat.homologation_save(scr["id"], [], expected=[], actor=ator)
+                self.cat.homologation_save(scr["id"], [], expected=[], actor=actor)
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                self.cat.homologation_save(scr["id"], [amb["id"], 999999999], actor=ator)
+                self.cat.homologation_save(scr["id"], [env["id"], 999999999], actor=actor)
             self.assertEqual(ctx.exception.constraint, n("fk", "script_env", "env"))
 
             # 4. Parametros e vinculos: NOMEADO exige flag; created_* preservado; dependencias.
-            sem_flag = self.cat.parameters_insert({"code": "tst_sf_" + sufixo, "label": "X",
-                                                    "component_type": "TEXT"}, actor=ator)
-            ids["parameters"].append(sem_flag["id"])
-            com_flag = self.cat.parameters_insert({"code": "tst_cf_" + sufixo, "label": "Y",
-                                                    "component_type": "TEXT", "param_flag": "--y"}, actor=ator)
-            ids["parameters"].append(com_flag["id"])
+            without_flag = self.cat.parameters_insert({"code": "tst_sf_" + suffix, "label": "X",
+                                                    "component_type": "TEXT"}, actor=actor)
+            ids["parameters"].append(without_flag["id"])
+            with_flag = self.cat.parameters_insert({"code": "tst_cf_" + suffix, "label": "Y",
+                                                    "component_type": "TEXT", "param_flag": "--y"}, actor=actor)
+            ids["parameters"].append(with_flag["id"])
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                self.cat.script_params_save(scr["id"], [{"parameter_id": sem_flag["id"], "sort_order": 1}], actor=ator)
+                self.cat.script_params_save(scr["id"], [{"parameter_id": without_flag["id"], "sort_order": 1}], actor=actor)
             self.assertEqual(ctx.exception.constraint, "sss_scr_nomeado_sem_flag")
-            v1 = self.cat.script_params_save(scr["id"], [{"parameter_id": com_flag["id"], "sort_order": 1,
-                                                            "required": "Y"}], expected=[], actor=ator)
-            self.assertEqual([v["parameter_id"] for v in v1], [com_flag["id"]])
+            v1 = self.cat.script_params_save(scr["id"], [{"parameter_id": with_flag["id"], "sort_order": 1,
+                                                            "required": "Y"}], expected=[], actor=actor)
+            self.assertEqual([v["parameter_id"] for v in v1], [with_flag["id"]])
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                self.cat.parameters_update(com_flag["id"], {"component_type": "NUMBER"}, actor=ator)
+                self.cat.parameters_update(with_flag["id"], {"component_type": "NUMBER"}, actor=actor)
             self.assertEqual(ctx.exception.constraint, "sss_prm_tipo_vinculado")
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                self.cat.parameters_update(com_flag["id"], {"active": "N"}, actor=ator)
+                self.cat.parameters_update(with_flag["id"], {"active": "N"}, actor=actor)
             self.assertEqual(ctx.exception.constraint, "sss_prm_vinculo_ativo")
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                self.cat.scripts_update(scr["id"], {"param_type": "NONE"}, actor=ator)
+                self.cat.scripts_update(scr["id"], {"param_type": "NONE"}, actor=actor)
             self.assertEqual(ctx.exception.constraint, "sss_scr_nenhum_vinculado")
             self.assertEqual(self.cat.scripts_get(scr["id"])["param_type"], "NAMED")
 
@@ -484,39 +484,39 @@ class TestOracleCatalog(unittest.TestCase):
                 try:
                     sql = ("SELECT created_at, created_by FROM " + self.cat.qualify_table("script_param")
                            + " WHERE script_id = :s AND parameter_id = :p")
-                    cur.execute(sql, {"s": scr["id"], "p": com_flag["id"]})
-                    criado_antes = cur.fetchone()
+                    cur.execute(sql, {"s": scr["id"], "p": with_flag["id"]})
+                    created_before = cur.fetchone()
                 finally:
                     cur.close()
             finally:
                 conn.close()
-            self.cat.script_params_save(scr["id"], [{"parameter_id": com_flag["id"], "sort_order": 1,
+            self.cat.script_params_save(scr["id"], [{"parameter_id": with_flag["id"], "sort_order": 1,
                                                        "required": "Y"}],
-                                          expected=[(com_flag["id"], 1, "Y", None)], actor="outro")
+                                          expected=[(with_flag["id"], 1, "Y", None)], actor="outro")
             conn = self.cat._obter_conexao()
             try:
                 cur = conn.cursor()
                 try:
-                    cur.execute(sql, {"s": scr["id"], "p": com_flag["id"]})
-                    self.assertEqual(cur.fetchone(), criado_antes)
+                    cur.execute(sql, {"s": scr["id"], "p": with_flag["id"]})
+                    self.assertEqual(cur.fetchone(), created_before)
                 finally:
                     cur.close()
             finally:
                 conn.close()
 
             # 5. Listagens: total limitado, contagens e homologados na mesma leitura.
-            lista = self.cat.scripts_list(filters={"name": nome_scr})
-            self.assertIn("total_limitado", lista)
-            item = [i for i in lista["itens"] if i["id"] == scr["id"]][0]
-            self.assertEqual(item["ambientes_homologados"], [amb["name"]])
+            items = self.cat.scripts_list(filters={"name": name_scr})
+            self.assertIn("total_limitado", items)
+            item = [i for i in items["itens"] if i["id"] == scr["id"]][0]
+            self.assertEqual(item["ambientes_homologados"], [env["name"]])
             self.assertEqual(item["qtd_parametros"], 1)
-            prm = self.cat.parameters_list(filters={"code": "tst_cf_" + sufixo})["itens"][0]
-            self.assertEqual(prm["qtd_scripts"], len(self.cat.parameter_links(com_flag["id"])))
+            prm = self.cat.parameters_list(filters={"code": "tst_cf_" + suffix})["itens"][0]
+            self.assertEqual(prm["qtd_scripts"], len(self.cat.parameter_links(with_flag["id"])))
 
             # 6. Executaveis do admin: script ativo homologado em ambiente ativo.
-            executaveis = [s["id"] for s in self.cat.executable_scripts({"is_admin": True})]
-            self.assertIn(scr["id"], executaveis)
-            self.assertNotIn(outro["id"], executaveis)
+            executables = [s["id"] for s in self.cat.executable_scripts({"is_admin": True})]
+            self.assertIn(scr["id"], executables)
+            self.assertNotIn(other["id"], executables)
         finally:
             self._clean(ids)
 
@@ -531,18 +531,18 @@ class _ScriptedCursor(object):
 
     def execute(self, sql, binds=None):
         # Como o python-oracledb (DPY-4008): tipo declarado para bind que nao existe no SQL.
-        for nome in getattr(self, "_tipos", {}):
-            if ":" + nome not in sql:
-                raise RuntimeError("DPY-4008: no bind placeholder named \":%s\" was found in the SQL text" % nome)
+        for name in getattr(self, "_tipos", {}):
+            if ":" + name not in sql:
+                raise RuntimeError("DPY-4008: no bind placeholder named \":%s\" was found in the SQL text" % name)
         self._tipos = {}
         self._conexao.executed.append((sql, binds))
         if ".NEXTVAL FROM DUAL" in sql:
             self._conexao.seq += 1
             self.rowcount, self._lines = 1, [(self._conexao.seq,)]
             return
-        for trecho, rowcount, linhas in self._conexao.script_steps:
-            if trecho in sql:
-                self.rowcount, self._lines = rowcount, list(linhas)
+        for snippet, rowcount, rows in self._conexao.script_steps:
+            if snippet in sql:
+                self.rowcount, self._lines = rowcount, list(rows)
                 return
         self.rowcount, self._lines = 0, []
 
@@ -556,8 +556,8 @@ class _ScriptedCursor(object):
         return list(self._lines)
 
     def fetchmany(self, n):
-        lote, self._lines = self._lines[:n], self._lines[n:]
-        return lote
+        batch, self._lines = self._lines[:n], self._lines[n:]
+        return batch
 
     def close(self):
         pass
@@ -592,9 +592,9 @@ class TestOracleTickets(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        agregado = os.environ.get("SSS_TEST_REPO_AGREGADO")
-        if agregado != "TICKETS":
-            raise unittest.SkipTest("Execucao restrita ao agregado TICKETS (atual: %s)" % agregado)
+        aggregate = os.environ.get("SSS_TEST_REPO_AGREGADO")
+        if aggregate != "TICKETS":
+            raise unittest.SkipTest("Execucao restrita ao agregado TICKETS (atual: %s)" % aggregate)
         _prepare_real_db(cls)
 
     @classmethod
@@ -621,9 +621,9 @@ class TestOracleTickets(unittest.TestCase):
         cfg.oracle.owner = "SSS_TEST_TCK"
         cfg.oracle.table_prefix = "abc_"
         repo = RepoTicketsOracle(cfg=cfg, secrets={})
-        for nome, sql in repo._sql.items():
-            self.assertNotIn("tbsss_", sql, nome)
-            self.assertNotIn("SELECT *", sql, nome)
+        for name, sql in repo._sql.items():
+            self.assertNotIn("tbsss_", sql, name)
+            self.assertNotIn("SELECT *", sql, name)
         self.assertIn("SSS_TEST_TCK.abc_tickets", repo._sql["GET"])
         self.assertEqual(repo._seq_tck, "SSS_TEST_TCK.sq_abc_tickets")
         with mock.patch.object(repo, "_obter_conexao", side_effect=AssertionError("abriu conexao")):
@@ -645,10 +645,10 @@ class TestOracleTickets(unittest.TestCase):
 
     def test_listagens_e_leituras_do_cr004_sem_clob(self):
         """Nenhuma listagem le CLOB; obter traz parametros_enviados mas nunca log_output."""
-        for modelo in ("_SQL_LIST", "_SQL_COUNT", "_SQL_LAST", "_SQL_HISTORY", "_SQL_ANSWERS"):
-            sql = getattr(sys.modules[RepoTicketsOracle.__module__], modelo)
-            self.assertNotIn("log_output", sql, modelo)
-            self.assertNotIn("submitted_params", sql, modelo)
+        for template in ("_SQL_LIST", "_SQL_COUNT", "_SQL_LAST", "_SQL_HISTORY", "_SQL_ANSWERS"):
+            sql = getattr(sys.modules[RepoTicketsOracle.__module__], template)
+            self.assertNotIn("log_output", sql, template)
+            self.assertNotIn("submitted_params", sql, template)
         self.assertNotIn("log_output", self.tck._sql["GET"])
         self.assertIn("submitted_params", self.tck._sql["GET"])
         self.assertIn("ROW_NUMBER() OVER (PARTITION BY t.script_id ORDER BY t.created_at DESC, t.id DESC)",
@@ -656,21 +656,21 @@ class TestOracleTickets(unittest.TestCase):
 
     def test_ator_obrigatorio_antes_de_qualquer_sql(self):
         with mock.patch.object(self.tck, "_obter_conexao", side_effect=AssertionError("abriu conexao")):
-            for ator in (None, "", "   ", "x" * 41):
+            for actor in (None, "", "   ", "x" * 41):
                 with self.assertRaises(repo_errors.RepoViolation):
-                    self.tck.create({"script_id": 1, "environment": "X", "requested_by": ator}, [], actor=ator)
+                    self.tck.create({"script_id": 1, "environment": "X", "requested_by": actor}, [], actor=actor)
                 with self.assertRaises(repo_errors.RepoViolation):
-                    self.tck.request_cancel(1, ator, "127.0.0.1")
+                    self.tck.request_cancel(1, actor, "127.0.0.1")
 
     def _cancel_with(self, script_steps):
         conn = _ScriptedConnection(script_steps)
         with mock.patch.object(self.tck, "_obter_conexao", return_value=conn):
-            retorno = self.tck.request_cancel(7, "ana", "10.0.0.1")
-        return retorno, conn
+            return_value = self.tck.request_cancel(7, "ana", "10.0.0.1")
+        return return_value, conn
 
     def test_cancelamento_nos_quatro_resultados_e_residuo_pending(self):
         """Cada desfecho do §5.6 audita TICKET_CANCEL com o resultado, numa transacao confirmada."""
-        casos = (
+        cases = (
             # PENDING: sinaliza e cancela.
             ([("cancel_requested = 'Y', updated_at", 1, []), ("SET status = 'CANCELLED'", 1, [])],
              "CANCELADO", u"resultado: cancelado"),
@@ -686,13 +686,13 @@ class TestOracleTickets(unittest.TestCase):
             ([("FOR UPDATE WAIT 5", 1, [("PENDING", "Y")]), ("SET status = 'CANCELLED'", 1, [])],
              "CANCELADO", u"resultado: cancelado"),
         )
-        for roteiro, esperado, detalhe in casos:
-            retorno, conn = self._cancel_with(roteiro)
-            self.assertEqual(retorno, esperado)
+        for script_steps, expected, detail in cases:
+            return_value, conn = self._cancel_with(script_steps)
+            self.assertEqual(return_value, expected)
             auds = conn.audits()
             self.assertEqual(len(auds), 1)
             self.assertEqual((auds[0]["action"], auds[0]["detail"], auds[0]["actor"], auds[0]["entity_id"]),
-                             ("TICKET_CANCEL", detalhe, "ana", 7))
+                             ("TICKET_CANCEL", detail, "ana", 7))
             self.assertEqual((conn.commits, conn.rollbacks), (1, 0))
 
     def test_cancelamento_de_ticket_inexistente(self):
@@ -705,8 +705,8 @@ class TestOracleTickets(unittest.TestCase):
 
     def test_criar_sem_gravacao_parcial_com_fk_ausente(self):
         """FK conferida antes de qualquer INSERT: nada e gravado e a transacao e desfeita."""
-        roteiro = [("WHERE id = :id", 1, [(1,)]), ("WHERE name = :name", 0, [])]
-        conn = _ScriptedConnection(roteiro)
+        script_steps = [("WHERE id = :id", 1, [(1,)]), ("WHERE name = :name", 0, [])]
+        conn = _ScriptedConnection(script_steps)
         with mock.patch.object(self.tck, "_obter_conexao", return_value=conn):
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
                 self.tck.create({"script_id": 1, "environment": "NAO_EXISTE", "requested_by": "ana"}, [])
@@ -742,7 +742,7 @@ class TestOracleTickets(unittest.TestCase):
                 cur.execute("SELECT MIN(id) FROM " + self.tck._idents["scr"])
                 script_id = cur.fetchone()[0]
                 cur.execute("SELECT MIN(name) FROM " + self.tck._idents["env"])
-                ambiente = cur.fetchone()[0]
+                environment = cur.fetchone()[0]
                 cur.execute("SELECT MIN(id), MAX(id) FROM " + self.tck._idents["prm"])
                 prm1, prm2 = cur.fetchone()
                 cur.execute("SELECT MIN(login) FROM " + self.tck._idents["usr"])
@@ -751,9 +751,9 @@ class TestOracleTickets(unittest.TestCase):
                 cur.close()
         finally:
             c.close()
-        if None in (script_id, ambiente, prm1, login) or prm1 == prm2:
+        if None in (script_id, environment, prm1, login) or prm1 == prm2:
             self.skipTest("Seed do catalogo ausente no banco real (implante o 01_deploy_sss.sql)")
-        return script_id, ambiente, prm1, prm2, login
+        return script_id, environment, prm1, prm2, login
 
     def _clean(self, ids, ip_mark):
         """Remove so os tickets criados por este teste (respostas em cascata) e, no modo compartilhado,
@@ -771,13 +771,13 @@ class TestOracleTickets(unittest.TestCase):
                 c.commit()
                 cur.execute("SELECT COUNT(*) FROM " + self.tck._idents["tck"] + " WHERE source_ip = :ip",
                             {"ip": ip_mark})
-                restantes = cur.fetchone()[0]
+                remaining = cur.fetchone()[0]
             finally:
                 cur.close()
         finally:
             c.close()
-        if restantes:
-            self.fail("Limpeza incompleta: %d ticket(s) com ip_origem %s" % (restantes, ip_mark))
+        if remaining:
+            self.fail("Limpeza incompleta: %d ticket(s) com ip_origem %s" % (remaining, ip_mark))
 
     def _count_by_ip(self, ip_mark):
         c = self.tck._obter_conexao()
@@ -797,14 +797,14 @@ class TestOracleTickets(unittest.TestCase):
         if not self.tem_banco_real:
             self.skipTest("Banco descartavel real nao configurado (marcado como NAO TESTADO)")
         n = self.tck.constraint_name
-        script_id, ambiente, prm1, prm2, login = self._seed_fixtures()
-        marca_ip = "tst-%s" % datetime.datetime.now().strftime("%H%M%S%f")
-        base = {"script_id": script_id, "environment": ambiente, "requested_by": login, "source_ip": marca_ip,
+        script_id, environment, prm1, prm2, login = self._seed_fixtures()
+        mark_ip = "tst-%s" % datetime.datetime.now().strftime("%H%M%S%f")
+        base = {"script_id": script_id, "environment": environment, "requested_by": login, "source_ip": mark_ip,
                 "submitted_params": '{"args": ["--x"]}'}
         ids = []
         try:
-            agora = self.tck.now()
-            self.assertEqual(agora.microsecond, 0)
+            now = self.tck.now()
+            self.assertEqual(now.microsecond, 0)
 
             # 1. criar: ticket + respostas; created_by = solicitante; obter sem log_output.
             t1 = self.tck.create(dict(base), [{"parameter_id": prm1, "answer_value": "a"},
@@ -817,8 +817,8 @@ class TestOracleTickets(unittest.TestCase):
             self.assertEqual([r["answer_value"] for r in self.tck.answers(t1)], ["a", "b"])
 
             # 2. FKs e UK: nenhuma linha gravada em caso de violacao.
-            antes = self._count_by_ip(marca_ip)
-            for dados, resp, ck in (
+            before = self._count_by_ip(mark_ip)
+            for date, resp, ck in (
                 (dict(base, script_id=999999999), [], n("fk", "tickets", "scr")),
                 (dict(base, environment="NAO_EXISTE_TST"), [], n("fk", "tickets", "env")),
                 (dict(base, requested_by="nao.existe.tst"), [], n("fk", "tickets", "usr")),
@@ -827,34 +827,34 @@ class TestOracleTickets(unittest.TestCase):
                 (dict(base), [{"parameter_id": prm1}, {"parameter_id": prm1}], n("uk", "ticket_answer", "tck_prm")),
             ):
                 with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                    self.tck.create(dados, resp)
+                    self.tck.create(date, resp)
                 self.assertEqual(ctx.exception.constraint, ck)
-            self.assertEqual(self._count_by_ip(marca_ip), antes)
+            self.assertEqual(self._count_by_ip(mark_ip), before)
 
             # 3. Cancelamento nos quatro resultados (README §5.6) e o residuo PENDING com 'S' (CR-008, R-02).
-            self.assertEqual(self.tck.request_cancel(t1, "teste_tck", marca_ip), "CANCELADO")
-            cancelado = self.tck.get(t1)
-            self.assertEqual((cancelado["status"], cancelado["status_reason"], cancelado["return_code"]),
+            self.assertEqual(self.tck.request_cancel(t1, "teste_tck", mark_ip), "CANCELADO")
+            cancelled = self.tck.get(t1)
+            self.assertEqual((cancelled["status"], cancelled["status_reason"], cancelled["return_code"]),
                              ("CANCELLED", "CANCEL_USER", -1))
-            self.assertEqual((cancelado["updated_by"], cancelado["created_by"]), ("teste_tck", login))
-            self.assertEqual(self.tck.request_cancel(t1, "teste_tck", marca_ip), "TERMINAL")
-            t2 = self.tck.create(dict(base, status="RUNNING", agent_id="tst-agente", started_at=agora), [])
+            self.assertEqual((cancelled["updated_by"], cancelled["created_by"]), ("teste_tck", login))
+            self.assertEqual(self.tck.request_cancel(t1, "teste_tck", mark_ip), "TERMINAL")
+            t2 = self.tck.create(dict(base, status="RUNNING", agent_id="tst-agente", started_at=now), [])
             ids.append(t2)
-            self.assertEqual(self.tck.request_cancel(t2, "teste_tck", marca_ip), "SINALIZADO")
-            self.assertEqual(self.tck.request_cancel(t2, "teste_tck", marca_ip), "JA_SINALIZADO")
+            self.assertEqual(self.tck.request_cancel(t2, "teste_tck", mark_ip), "SINALIZADO")
+            self.assertEqual(self.tck.request_cancel(t2, "teste_tck", mark_ip), "JA_SINALIZADO")
             self.assertEqual(self.tck.get(t2)["status"], "RUNNING")
             t3 = self.tck.create(dict(base, cancel_requested="Y"), [])
             ids.append(t3)
-            self.assertEqual(self.tck.request_cancel(t3, "teste_tck", marca_ip), "CANCELADO")
+            self.assertEqual(self.tck.request_cancel(t3, "teste_tck", mark_ip), "CANCELADO")
             with self.assertRaises(repo_errors.RepoNotFound):
-                self.tck.request_cancel(999999999, "teste_tck", marca_ip)
+                self.tck.request_cancel(999999999, "teste_tck", mark_ip)
 
             # 4. log_ler por locator: base 0 na API, offset alem do fim, negativo e max_chars < 1.
             log = "".join("linha %03d ção\n" % i for i in range(40))
-            t4 = self.tck.create(dict(base, status="SUCCESS", log_output=log, finished_at=agora), [])
+            t4 = self.tck.create(dict(base, status="SUCCESS", log_output=log, finished_at=now), [])
             ids.append(t4)
-            texto, prox, terminal, truncado = self.tck.log_read(t4, 0, 20)
-            self.assertEqual((texto, prox, terminal, truncado), (log[:20], 20, True, False))
+            text, next_value, terminal, truncated = self.tck.log_read(t4, 0, 20)
+            self.assertEqual((text, next_value, terminal, truncated), (log[:20], 20, True, False))
             self.assertEqual(self.tck.log_read(t4, 20, 20)[0], log[20:40])
             self.assertEqual(self.tck.log_read(t4, -5, 10)[:2], (log[:10], 10))
             self.assertEqual(self.tck.log_read(t4, len(log) + 5, 10)[:2], ("", len(log) + 5))
@@ -862,28 +862,28 @@ class TestOracleTickets(unittest.TestCase):
             self.assertEqual(self.tck.log_read(t1, 0, 10)[:3], ("", 0, True))
 
             # 5. Leituras: listar sem CLOB, ultima execucao e historico (os mais recentes, crescente).
-            lista = self.tck.list({"script_id": script_id, "criado_inicio": agora}, size=50)
-            meus = [i["id"] for i in lista["itens"] if i["id"] in ids]
-            self.assertEqual(sorted(meus, reverse=True), meus)
-            self.assertEqual(set(meus), set(ids))
-            for item in lista["itens"]:
+            items = self.tck.list({"script_id": script_id, "criado_inicio": now}, size=50)
+            mine = [i["id"] for i in items["itens"] if i["id"] in ids]
+            self.assertEqual(sorted(mine, reverse=True), mine)
+            self.assertEqual(set(mine), set(ids))
+            for item in items["itens"]:
                 self.assertNotIn("log_output", item)
                 self.assertNotIn("submitted_params", item)
-            self.assertIn("total_limitado", lista)
-            so_cancelados = self.tck.list({"script_id": script_id, "status": ["CANCELLED"],
-                                             "criado_inicio": agora}, environment_scope=[ambiente])
-            self.assertEqual(sorted(i["id"] for i in so_cancelados["itens"] if i["id"] in ids), sorted([t1, t3]))
+            self.assertIn("total_limitado", items)
+            only_cancelled = self.tck.list({"script_id": script_id, "status": ["CANCELLED"],
+                                             "criado_inicio": now}, environment_scope=[environment])
+            self.assertEqual(sorted(i["id"] for i in only_cancelled["itens"] if i["id"] in ids), sorted([t1, t3]))
             self.assertEqual(self.tck.list({"script_id": script_id}, environment_scope=[])["total"], 0)
-            ultima = self.tck.last_runs([script_id], environment_scope=[ambiente], requester=login)
-            self.assertEqual(ultima[script_id]["id"], max(ids))
-            self.assertEqual(sorted(ultima[script_id]), ["created_at", "finished_at", "id", "status", "status_reason"])
+            last = self.tck.last_runs([script_id], environment_scope=[environment], requester=login)
+            self.assertEqual(last[script_id]["id"], max(ids))
+            self.assertEqual(sorted(last[script_id]), ["created_at", "finished_at", "id", "status", "status_reason"])
             self.assertEqual(self.tck.last_runs([script_id], environment_scope=[]), {})
-            hist = self.tck.script_history(script_id, agora, environment_scope=[ambiente], limit=2)
+            hist = self.tck.script_history(script_id, now, environment_scope=[environment], limit=2)
             self.assertEqual([h["id"] for h in hist], sorted(ids)[-2:])
             self.assertEqual(sorted(hist[0]), ["created_at", "finished_at", "id", "started_at", "status",
                                                "status_reason"])
         finally:
-            self._clean(ids, marca_ip)
+            self._clean(ids, mark_ip)
 
 
 class TestOracleSchedules(unittest.TestCase):
@@ -891,9 +891,9 @@ class TestOracleSchedules(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        agregado = os.environ.get("SSS_TEST_REPO_AGREGADO")
-        if agregado != "AGENDAMENTOS":
-            raise unittest.SkipTest("Execucao restrita ao agregado AGENDAMENTOS (atual: %s)" % agregado)
+        aggregate = os.environ.get("SSS_TEST_REPO_AGREGADO")
+        if aggregate != "AGENDAMENTOS":
+            raise unittest.SkipTest("Execucao restrita ao agregado AGENDAMENTOS (atual: %s)" % aggregate)
         _prepare_real_db(cls)
 
     @classmethod
@@ -917,9 +917,9 @@ class TestOracleSchedules(unittest.TestCase):
         cfg.oracle.owner = "SSS_TEST_AGD"
         cfg.oracle.table_prefix = "abc_"
         repo = RepoSchedulesOracle(cfg=cfg, secrets={})
-        for nome, sql in repo._sql.items():
-            self.assertNotIn("tbsss_", sql, nome)
-            self.assertNotIn("SELECT *", sql, nome)
+        for name, sql in repo._sql.items():
+            self.assertNotIn("tbsss_", sql, name)
+            self.assertNotIn("SELECT *", sql, name)
         self.assertIn("SSS_TEST_AGD.abc_schedules", repo._sql["GET"])
         self.assertEqual(repo._seq_sch, "SSS_TEST_AGD.sq_abc_schedules")
         with self.assertRaises(repo_errors.RepoViolation) as ctx:
@@ -938,31 +938,31 @@ class TestOracleSchedules(unittest.TestCase):
         n = lambda s: "ck_tbsss_sch_" + s  # noqa: E731
         base = {"name": "r", "recurrence_type": "DAILY", "priority": 2, "active": "Y", "run_time": "08:00",
                 "start_date": datetime.datetime(2026, 1, 1), "next_run_at": datetime.datetime(2026, 1, 2)}
-        casos = (
+        cases = (
             ({"recurrence_type": "ANUAL"}, n("rtype")), ({"priority": 5}, n("prio")), ({"priority": True}, n("prio")),
             ({"active": "X"}, n("active")), ({"month_day": 32}, n("day")), ({"run_time": "24:00"}, n("time")),
             ({"week_days": "8"}, n("wday")), ({"end_date": datetime.datetime(2025, 1, 1)}, n("end")),
             ({"pause_reason": "OUTRO"}, n("pause")), ({"run_time": None}, n("fields")),
             ({"recurrence_type": "CRON"}, n("fields")),
         )
-        for mudanca, ck in casos:
+        for change, ck in cases:
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                self.agd._checar_cks(dict(base, **mudanca))
-            self.assertEqual(ctx.exception.constraint, ck, mudanca)
+                self.agd._checar_cks(dict(base, **change))
+            self.assertEqual(ctx.exception.constraint, ck, change)
         with self.assertRaises(repo_errors.RepoViolation):
             self.agd._checar_cks(dict(base, name="x" * 61))
 
     def test_ator_obrigatorio_antes_de_qualquer_sql(self):
         with mock.patch.object(self.agd, "_obter_conexao", side_effect=AssertionError("abriu conexao")):
-            for ator in (None, "", "   ", "x" * 41):
-                for chamada in (
+            for actor in (None, "", "   ", "x" * 41):
+                for call in (
                     lambda a: self.agd.insert({"script_id": 1, "environment": "X", "user_id": 1}, actor=a),
                     lambda a: self.agd.update(1, {"name": "y"}, actor=a),
                     lambda a: self.agd.pause(1, "MANUAL", actor=a),
                     lambda a: self.agd.resume(1, datetime.datetime(2026, 1, 1), actor=a),
                 ):
                     with self.assertRaises(repo_errors.RepoViolation):
-                        chamada(ator)
+                        call(actor)
 
     def test_pausar_sem_linha_afetada_e_conflito(self):
         """Regra existente, mas nao ativa (ou com outra next_run): RepoConflict e ROLLBACK."""
@@ -994,20 +994,20 @@ class TestOracleSchedules(unittest.TestCase):
                 cur.execute("SELECT MIN(id) FROM " + self.agd._idents["scr"])
                 script_id = cur.fetchone()[0]
                 cur.execute("SELECT MIN(name) FROM " + self.agd._idents["env"])
-                ambiente = cur.fetchone()[0]
+                environment = cur.fetchone()[0]
                 cur.execute("SELECT MIN(id), MIN(login) FROM " + self.agd._idents["usr"])
-                usuario_id, login = cur.fetchone()
+                user_id, login = cur.fetchone()
             finally:
                 cur.close()
         finally:
             c.close()
-        if None in (script_id, ambiente, usuario_id):
+        if None in (script_id, environment, user_id):
             self.skipTest("Seed do catalogo ausente no banco real (implante o 01_deploy_sss.sql)")
-        return script_id, ambiente, usuario_id, login
+        return script_id, environment, user_id, login
 
     def _clean(self, sch_ids, tck_ids, mark):
         """Remove so os registros criados por este teste e, no modo compartilhado, a auditoria deles."""
-        compartilhado = _oracle_test_support.schema_mode() == _oracle_test_support.SHARED_MODE
+        shared = _oracle_test_support.schema_mode() == _oracle_test_support.SHARED_MODE
         tck = repo_factory.get("tickets")
         c = self.agd._obter_conexao()
         try:
@@ -1015,24 +1015,24 @@ class TestOracleSchedules(unittest.TestCase):
             try:
                 for tid in tck_ids:
                     cur.execute("DELETE FROM " + tck._idents["tck"] + " WHERE id = :id", {"id": tid})
-                    if compartilhado:
+                    if shared:
                         cur.execute("DELETE FROM " + self.agd._tbl_aud + " WHERE entity = 'tbsss_tickets' "
                                     "AND entity_id = :id", {"id": tid})
                 for aid in sch_ids:
                     cur.execute("DELETE FROM " + self.agd._idents["sch"] + " WHERE id = :id", {"id": aid})
-                    if compartilhado:
+                    if shared:
                         cur.execute("DELETE FROM " + self.agd._tbl_aud + " WHERE entity = 'tbsss_schedules' "
                                     "AND entity_id = :id", {"id": aid})
                 c.commit()
                 cur.execute("SELECT COUNT(*) FROM " + self.agd._idents["sch"] + " WHERE name LIKE :m",
                             {"m": mark + "%"})
-                restantes = cur.fetchone()[0]
+                remaining = cur.fetchone()[0]
             finally:
                 cur.close()
         finally:
             c.close()
-        if restantes:
-            self.fail("Limpeza incompleta: %d agendamento(s) com nome %s*" % (restantes, mark))
+        if remaining:
+            self.fail("Limpeza incompleta: %d agendamento(s) com nome %s*" % (remaining, mark))
 
     def _contar(self, mark):
         c = self.agd._obter_conexao()
@@ -1051,36 +1051,36 @@ class TestOracleSchedules(unittest.TestCase):
         """Ciclo no Oracle: CRUD, CKs e FKs sem gravacao parcial, pausa otimista, microssegundos e ocorrencia."""
         if not self.tem_banco_real:
             self.skipTest("Testes Oracle reais desligados (marcado como NAO TESTADO)")
-        script_id, ambiente, usuario_id, login = self._seed_fixtures()
-        marca = "TST_AGD_%s" % datetime.datetime.now().strftime("%H%M%S%f")
-        agora = self.agd.now() if hasattr(self.agd, "now") else repo_factory.get("tickets").now()
-        amanha = agora + datetime.timedelta(days=1)
-        base = {"name": marca + "_1", "script_id": script_id, "environment": ambiente, "user_id": usuario_id,
-                "recurrence_type": "DAILY", "run_time": "08:00", "start_date": agora,
-                "next_run_at": amanha, "params_json": '{"p": "v"}'}
+        script_id, environment, user_id, login = self._seed_fixtures()
+        mark = "TST_AGD_%s" % datetime.datetime.now().strftime("%H%M%S%f")
+        now = self.agd.now() if hasattr(self.agd, "now") else repo_factory.get("tickets").now()
+        tomorrow = now + datetime.timedelta(days=1)
+        base = {"name": mark + "_1", "script_id": script_id, "environment": environment, "user_id": user_id,
+                "recurrence_type": "DAILY", "run_time": "08:00", "start_date": now,
+                "next_run_at": tomorrow, "params_json": '{"p": "v"}'}
         n = self.agd.constraint_name
-        agd_ids, tck_ids = [], []
+        sch_ids, tck_ids = [], []
         try:
             # 1. inserir: created_* do criador; parametros_json no obter e no listar.
             r1 = self.agd.insert(dict(base), actor="teste_agd")
-            agd_ids.append(r1["id"])
+            sch_ids.append(r1["id"])
             self.assertEqual((r1["created_by"], r1["updated_at"], r1["params_json"]), ("teste_agd", None, '{"p": "v"}'))
-            self.assertEqual(r1["next_run_at"], amanha.replace(microsecond=0))
+            self.assertEqual(r1["next_run_at"], tomorrow.replace(microsecond=0))
 
             # 2. CKs e FKs: nada gravado em caso de violacao.
-            antes = self._contar(marca)
-            for dados, ck in (
+            before = self._contar(mark)
+            for date, ck in (
                 (dict(base, recurrence_type="ANUAL"), n("ck", "schedules", "rtype")),
                 (dict(base, run_time=None), n("ck", "schedules", "fields")),
-                (dict(base, end_date=agora - datetime.timedelta(days=1)), n("ck", "schedules", "end")),
+                (dict(base, end_date=now - datetime.timedelta(days=1)), n("ck", "schedules", "end")),
                 (dict(base, script_id=999999999), n("fk", "schedules", "scr")),
                 (dict(base, user_id=999999999), n("fk", "schedules", "usr")),
                 (dict(base, environment="NAO_EXISTE_TST"), n("fk", "schedules", "env")),
             ):
                 with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                    self.agd.insert(dados, actor="teste_agd")
+                    self.agd.insert(date, actor="teste_agd")
                 self.assertEqual(ctx.exception.constraint, ck)
-            self.assertEqual(self._contar(marca), antes)
+            self.assertEqual(self._contar(mark), before)
 
             # 3. alterar condicional ao esperado; created_* preservado, updated_* com o editor.
             with self.assertRaises(repo_errors.RepoConflict):
@@ -1092,15 +1092,15 @@ class TestOracleSchedules(unittest.TestCase):
             self.assertEqual(self.agd.get(r1["id"])["week_days"], None)
 
             # 4. pausar: microssegundos no bind nao dao conflito (README §7.5); regra ja pausada da conflito.
-            lida = self.agd.get(r1["id"])["next_run_at"]
-            pausado = self.agd.pause(r1["id"], "MANUAL", old_date=lida.replace(microsecond=543210), actor="bia")
-            self.assertEqual((pausado["active"], pausado["pause_reason"]), ("N", "MANUAL"))
+            read = self.agd.get(r1["id"])["next_run_at"]
+            paused = self.agd.pause(r1["id"], "MANUAL", old_date=read.replace(microsecond=543210), actor="bia")
+            self.assertEqual((paused["active"], paused["pause_reason"]), ("N", "MANUAL"))
             with self.assertRaises(repo_errors.RepoConflict):
                 self.agd.pause(r1["id"], "MANUAL", actor="bia")
-            r2 = self.agd.insert(dict(base, name=marca + "_2"), actor="teste_agd")
-            agd_ids.append(r2["id"])
+            r2 = self.agd.insert(dict(base, name=mark + "_2"), actor="teste_agd")
+            sch_ids.append(r2["id"])
             with self.assertRaises(repo_errors.RepoConflict):
-                self.agd.pause(r2["id"], "MANUAL", old_date=amanha + datetime.timedelta(minutes=5), actor="bia")
+                self.agd.pause(r2["id"], "MANUAL", old_date=tomorrow + datetime.timedelta(minutes=5), actor="bia")
             with self.assertRaises(repo_errors.RepoNotFound):
                 self.agd.pause(999999999, "MANUAL", actor="bia")
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
@@ -1108,35 +1108,35 @@ class TestOracleSchedules(unittest.TestCase):
             self.assertEqual(ctx.exception.constraint, n("ck", "schedules", "pause"))
 
             # 5. retomar condicional ao esperado.
-            nova = amanha + datetime.timedelta(days=1)
+            new = tomorrow + datetime.timedelta(days=1)
             with self.assertRaises(repo_errors.RepoConflict):
-                self.agd.resume(r1["id"], nova, expected={"active": "Y"}, actor="bia")
-            retomado = self.agd.resume(r1["id"], nova, expected={"active": "N", "next_run_at": lida}, actor="bia")
-            self.assertEqual((retomado["active"], retomado["pause_reason"]), ("Y", None))
-            self.assertEqual(retomado["next_run_at"], nova.replace(microsecond=0))
+                self.agd.resume(r1["id"], new, expected={"active": "Y"}, actor="bia")
+            resumed = self.agd.resume(r1["id"], new, expected={"active": "N", "next_run_at": read}, actor="bia")
+            self.assertEqual((resumed["active"], resumed["pause_reason"]), ("Y", None))
+            self.assertEqual(resumed["next_run_at"], new.replace(microsecond=0))
 
             # 6. listar: filtro por trecho, escopo e parametros_json presente (excecao documentada).
-            lista = self.agd.list({"name": marca.lower()}, environment_scope=[ambiente])
-            self.assertEqual(sorted(i["id"] for i in lista["itens"]), sorted(agd_ids))
-            self.assertTrue(all(i["params_json"] == '{"p": "v"}' for i in lista["itens"]))
-            self.assertEqual(self.agd.list({"name": marca.lower()}, environment_scope=[])["total"], 0)
-            self.assertEqual([i["id"] for i in self.agd.list({"name": marca.lower(), "active": "N"})["itens"]], [])
+            items = self.agd.list({"name": mark.lower()}, environment_scope=[environment])
+            self.assertEqual(sorted(i["id"] for i in items["itens"]), sorted(sch_ids))
+            self.assertTrue(all(i["params_json"] == '{"p": "v"}' for i in items["itens"]))
+            self.assertEqual(self.agd.list({"name": mark.lower()}, environment_scope=[])["total"], 0)
+            self.assertEqual([i["id"] for i in self.agd.list({"name": mark.lower(), "active": "N"})["itens"]], [])
 
             # 7. ticket_status e a ocorrencia unica do agendamento (ix_<prefixo>tck_ocor, CR-007 R-27).
             tck = repo_factory.get("tickets")
             self.assertIsNone(self.agd.ticket_status(None))
             self.assertIsNone(self.agd.ticket_status(999999999))
-            ocorrencia = amanha.replace(second=0, microsecond=0)
-            t1 = tck.create({"script_id": script_id, "environment": ambiente, "requested_by": login,
-                            "schedule_id": r1["id"], "scheduled_at": ocorrencia}, [])
+            occurrence = tomorrow.replace(second=0, microsecond=0)
+            t1 = tck.create({"script_id": script_id, "environment": environment, "requested_by": login,
+                            "schedule_id": r1["id"], "scheduled_at": occurrence}, [])
             tck_ids.append(t1)
             self.assertEqual(self.agd.ticket_status(t1), "PENDING")
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                tck_ids.append(tck.create({"script_id": script_id, "environment": ambiente, "requested_by": login,
-                                          "schedule_id": r1["id"], "scheduled_at": ocorrencia}, []))
+                tck_ids.append(tck.create({"script_id": script_id, "environment": environment, "requested_by": login,
+                                          "schedule_id": r1["id"], "scheduled_at": occurrence}, []))
             self.assertEqual(ctx.exception.constraint, tck.constraint_name("ix", "tickets", "occur"))
         finally:
-            self._clean(agd_ids, tck_ids, marca)
+            self._clean(sch_ids, tck_ids, mark)
 
 
 class TestOracleAuditAgents(unittest.TestCase):
@@ -1144,9 +1144,9 @@ class TestOracleAuditAgents(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        agregado = os.environ.get("SSS_TEST_REPO_AGREGADO")
-        if agregado != "AUDITORIA_AGENTES":
-            raise unittest.SkipTest("Execucao restrita ao agregado AUDITORIA_AGENTES (atual: %s)" % agregado)
+        aggregate = os.environ.get("SSS_TEST_REPO_AGREGADO")
+        if aggregate != "AUDITORIA_AGENTES":
+            raise unittest.SkipTest("Execucao restrita ao agregado AUDITORIA_AGENTES (atual: %s)" % aggregate)
         _prepare_real_db(cls)
 
     @classmethod
@@ -1162,11 +1162,11 @@ class TestOracleAuditAgents(unittest.TestCase):
 
     def test_todos_os_agregados_no_oracle(self):
         """Com o 5o agregado, a aplicacao resolve todos os repositorios para o Oracle (sem FAKE)."""
-        esperados = {"users": "RepoUsersOracle", "rbac": "RepoRbacOracle", "catalog": "RepoCatalogOracle",
+        expected = {"users": "RepoUsersOracle", "rbac": "RepoRbacOracle", "catalog": "RepoCatalogOracle",
                      "tickets": "RepoTicketsOracle", "schedules": "RepoSchedulesOracle",
                      "audit": "RepoAuditOracle", "agents": "RepoAgentsOracle"}
-        for nome, classe in esperados.items():
-            self.assertEqual(repo_factory.get(nome).__class__.__name__, classe, nome)
+        for name, cls_name in expected.items():
+            self.assertEqual(repo_factory.get(name).__class__.__name__, cls_name, name)
         with self.assertRaises(ValueError):
             repo_factory.get("inexistente")
 
@@ -1176,8 +1176,8 @@ class TestOracleAuditAgents(unittest.TestCase):
         cfg.oracle.table_prefix = "abc_"
         aud = RepoAuditOracle(cfg=cfg, secrets={})
         agt = RepoAgentsOracle(cfg=cfg, secrets={})
-        for nome, sql in list(aud._sql.items()) + list(agt._sql.items()):
-            self.assertNotIn("tbsss_", sql, nome)
+        for name, sql in list(aud._sql.items()) + list(agt._sql.items()):
+            self.assertNotIn("tbsss_", sql, name)
         self.assertIn("SSS_TEST_AUD.abc_audit", aud._sql["INSERT"])
         self.assertEqual(aud._seq_aud, "SSS_TEST_AUD.sq_abc_audit")
         self.assertIn("SSS_TEST_AUD.abc_scripts", agt._sql["QUEUE"])
@@ -1189,16 +1189,16 @@ class TestOracleAuditAgents(unittest.TestCase):
         # CR-013: so ix_tck_fila (status lider e o inicio da espera), agrupado por script antes do JOIN.
         self.assertIn("WHERE status = 'PENDING' AND " + sql_ident.FBI_TCK_QUEUE_START + " <= :now", self.agt._sql["QUEUE"])
         self.assertIn("JOIN " + self.agt._idents["scr"] + " s ON s.id = g.script_id", self.agt._sql["QUEUE"])
-        for nome in ("TICKETS_RUNNING", "QUEUE", "RUNNING_NO_PID"):
-            self.assertNotIn("log_output", self.agt._sql[nome])
-            self.assertNotIn("submitted_params", self.agt._sql[nome])
+        for name in ("TICKETS_RUNNING", "QUEUE", "RUNNING_NO_PID"):
+            self.assertNotIn("log_output", self.agt._sql[name])
+            self.assertNotIn("submitted_params", self.agt._sql[name])
 
     def test_registrar_sem_corte_e_ator_obrigatorio_antes_do_sql(self):
         """test_06b: ator nulo, vazio ou longo e detalhe longo viram RepoViolation sem abrir conexao."""
         with mock.patch.object(self.aud, "_obter_conexao", side_effect=AssertionError("abriu conexao")):
-            for ator, detalhe in ((None, None), ("", None), ("x" * 41, None), ("ana", "d" * 1001)):
+            for actor, detail in ((None, None), ("", None), ("x" * 41, None), ("ana", "d" * 1001)):
                 with self.assertRaises(repo_errors.RepoViolation):
-                    self.aud.register(ator, "1.2.3.4", "UPDATE", "tbsss_scripts", 1, detalhe)
+                    self.aud.register(actor, "1.2.3.4", "UPDATE", "tbsss_scripts", 1, detail)
 
     def test_gravacao_de_auditoria_dos_outros_agregados_sem_corte(self):
         """base.write_audit recusa (nao corta) detalhe longo: a transacao toda e desfeita."""
@@ -1211,15 +1211,15 @@ class TestOracleAuditAgents(unittest.TestCase):
 
     def test_listar_e_iterar_por_bind_com_periodo_e_id_max(self):
         conn = _ScriptedConnection([("SELECT COUNT(*)", 1, [(0,)])])
-        filtros = {"actor": "Ana_1", "start_date": datetime.datetime(2026, 1, 1),
+        filters = {"actor": "Ana_1", "start_date": datetime.datetime(2026, 1, 1),
                    "end_date": datetime.datetime(2026, 1, 31, 23, 59, 59), "id_max": 99, "source_ip": "10.%"}
         with mock.patch.object(self.aud, "_obter_conexao", return_value=conn):
-            self.aud.list(filtros)
-            list(self.aud.iterate(filtros, limit=5))
+            self.aud.list(filters)
+            list(self.aud.iterate(filters, limit=5))
         sql, binds = conn.executed[0]
-        for trecho in ("LOWER(actor) LIKE :actor_f ESCAPE", "created_at >= :start_date", "created_at <= :end_date",
+        for snippet in ("LOWER(actor) LIKE :actor_f ESCAPE", "created_at >= :start_date", "created_at <= :end_date",
                        "id <= :id_max", "ROWNUM <= 10001"):
-            self.assertIn(trecho, sql)
+            self.assertIn(snippet, sql)
         self.assertNotIn("TRUNC", sql)
         self.assertEqual((binds["actor_f"], binds["ip_f"]), ("%ana\\_1%", "%10.\\%%"))
         sql_it, binds_it = conn.executed[-1]
@@ -1246,36 +1246,36 @@ class TestOracleAuditAgents(unittest.TestCase):
         if not self.tem_banco_real:
             self.skipTest("Testes Oracle reais desligados (marcado como NAO TESTADO)")
         tck = repo_factory.get("tickets")
-        marca = "tst%s" % datetime.datetime.now().strftime("%H%M%S%f")
+        mark = "tst%s" % datetime.datetime.now().strftime("%H%M%S%f")
         aud_ids, tck_ids, agt_id = [], [], None
         tab_agt = self.agt._idents["agt"]
         try:
-            agora = tck.now()
+            now = tck.now()
 
             # 1. Trilha: id reservado, id repetido recusado com o nome da PK, listar e iterar com filtros.
             aid = self.aud.reserve_id()
-            reg = self.aud.register("teste_" + marca, "10.0.0.1", "SCHEMA_MIGRATE", "tbsss_control", 1,
+            reg = self.aud.register("teste_" + mark, "10.0.0.1", "SCHEMA_MIGRATE", "tbsss_control", 1,
                                      u"versão 1 conferida", id=aid)
             aud_ids.append(aid)
-            self.assertEqual((reg["id"], reg["actor"], reg["detail"]), (aid, "teste_" + marca, u"versão 1 conferida"))
+            self.assertEqual((reg["id"], reg["actor"], reg["detail"]), (aid, "teste_" + mark, u"versão 1 conferida"))
             self.assertEqual(reg["created_at"].microsecond, 0)
             with self.assertRaises(repo_errors.RepoViolation) as ctx:
-                self.aud.register("teste_" + marca, None, "UPDATE", "tbsss_control", 1, None, id=aid)
+                self.aud.register("teste_" + mark, None, "UPDATE", "tbsss_control", 1, None, id=aid)
             self.assertEqual(ctx.exception.constraint, "pk_" + self.aud._prefixo + sql_ident.physical("audit"))
             for _ in range(2):
-                aud_ids.append(self.aud.register("teste_" + marca, None, "UPDATE", "tbsss_control", 1)["id"])
-            filtros = {"actor": "TESTE_" + marca.upper(), "start_date": agora - datetime.timedelta(minutes=5),
-                       "end_date": agora + datetime.timedelta(minutes=5)}
-            lista = self.aud.list(filtros)
-            self.assertEqual([i["id"] for i in lista["itens"]], sorted(aud_ids, reverse=True))
-            self.assertEqual(self.aud.list(dict(filtros, id_max=aid))["total"], 1)
-            self.assertEqual(self.aud.list(dict(filtros, action="SCHEMA_MIGRATE", entity="tbsss_control",
+                aud_ids.append(self.aud.register("teste_" + mark, None, "UPDATE", "tbsss_control", 1)["id"])
+            filters = {"actor": "TESTE_" + mark.upper(), "start_date": now - datetime.timedelta(minutes=5),
+                       "end_date": now + datetime.timedelta(minutes=5)}
+            items = self.aud.list(filters)
+            self.assertEqual([i["id"] for i in items["itens"]], sorted(aud_ids, reverse=True))
+            self.assertEqual(self.aud.list(dict(filters, id_max=aid))["total"], 1)
+            self.assertEqual(self.aud.list(dict(filters, action="SCHEMA_MIGRATE", entity="tbsss_control",
                                                   entity_id=1))["total"], 1)
-            self.assertEqual([r["id"] for r in self.aud.iterate(filtros, limit=2)], sorted(aud_ids, reverse=True)[:2])
+            self.assertEqual([r["id"] for r in self.aud.iterate(filters, limit=2)], sorted(aud_ids, reverse=True)[:2])
 
             # 2. Painel: agente ATIVO com heartbeat agora atende (ambiente, interpretador) do proprio teste.
             script = repo_factory.get("catalog").scripts_list(size=1)["itens"][0]
-            ambiente = repo_factory.get("catalog").environments_list(size=1)["itens"][0]["name"]
+            environment = repo_factory.get("catalog").environments_list(size=1)["itens"][0]["name"]
             login = repo_factory.get("users").list(size=1)["itens"][0]["login"]
             c = self.aud._obter_conexao()
             try:
@@ -1286,51 +1286,51 @@ class TestOracleAuditAgents(unittest.TestCase):
                 "INSERT INTO " + tab_agt + " (id, code, hostname, status, environments, platform, interpreters, "
                 "heartbeat_at, critical_config, created_at, created_by) VALUES (:id, :code, 'host-tst', 'ACTIVE', "
                 ":env, 'LINUX', :interp, :hb, 'tst=1', SYSDATE, 'SYSTEM:teste')",
-                {"id": agt_id, "code": marca, "env": ambiente, "interp": script["interpreter"], "hb": agora})])
-            ag = [a for a in self.agt.list() if a["code"] == marca][0]
+                {"id": agt_id, "code": mark, "env": environment, "interp": script["interpreter"], "hb": now})])
+            ag = [a for a in self.agt.list() if a["code"] == mark][0]
             self.assertEqual((ag["platform"], ag["interpreters"], ag["critical_config"]),
                              ("LINUX", script["interpreter"], "tst=1"))
 
-            antigo = agora - datetime.timedelta(minutes=30)
-            base = {"script_id": script["id"], "environment": ambiente, "requested_by": login, "source_ip": marca}
-            t_run = tck.create(dict(base, status="RUNNING", agent_id=marca, started_at=antigo), [])
+            old = now - datetime.timedelta(minutes=30)
+            base = {"script_id": script["id"], "environment": environment, "requested_by": login, "source_ip": mark}
+            t_run = tck.create(dict(base, status="RUNNING", agent_id=mark, started_at=old), [])
             tck_ids.append(t_run)
-            t_pend = tck.create(dict(base, scheduled_at=antigo), [])
+            t_pend = tck.create(dict(base, scheduled_at=old), [])
             tck_ids.append(t_pend)
 
-            rodando = self.agt.tickets_running(marca)
-            self.assertEqual([t["id"] for t in rodando], [t_run])
-            self.assertNotIn("log_output", rodando[0])
-            self.assertNotIn("submitted_params", rodando[0])
-            sem_pid = [t for t in self.agt.running_without_pid(agora, 2) if t["id"] == t_run]
-            self.assertEqual(sorted(sem_pid[0]), ["agent_id", "environment", "id", "script_id", "started_at"])
+            running = self.agt.tickets_running(mark)
+            self.assertEqual([t["id"] for t in running], [t_run])
+            self.assertNotIn("log_output", running[0])
+            self.assertNotIn("submitted_params", running[0])
+            without_pid = [t for t in self.agt.running_without_pid(now, 2) if t["id"] == t_run]
+            self.assertEqual(sorted(without_pid[0]), ["agent_id", "environment", "id", "script_id", "started_at"])
             # Reservado ha 30 minutos: fica de fora com o limite de 60.
-            self.assertNotIn(t_run, [t["id"] for t in self.agt.running_without_pid(agora, 60)])
+            self.assertNotIn(t_run, [t["id"] for t in self.agt.running_without_pid(now, 60)])
 
-            limiares = mock.Mock(heartbeat_interval_s=30, fence_timeout_s=120)
-            chave = (ambiente, script["interpreter"])
-            self.assertNotIn(chave, [(g["environment"], g["interpreter"]) for g in self.agt.unattended_queue(agora, limiares)])
+            thresholds = mock.Mock(heartbeat_interval_s=30, fence_timeout_s=120)
+            key = (environment, script["interpreter"])
+            self.assertNotIn(key, [(g["environment"], g["interpreter"]) for g in self.agt.unattended_queue(now, thresholds)])
             # Agent parado: o mesmo par passa a aparecer na fila sem atendente, com o PENDING do teste.
             self._executar([("UPDATE " + tab_agt + " SET status = 'STOPPED', updated_at = SYSDATE, "
                              "updated_by = 'SYSTEM:teste' WHERE id = :id", {"id": agt_id})])
             # Relogio novo: o PENDING entra na fila em GREATEST(scheduled_at, created_at) (CR-013), depois de `agora`.
-            depois = tck.now()
-            grupos = dict(((g["environment"], g["interpreter"]), g)
-                          for g in self.agt.unattended_queue(depois, limiares))
-            self.assertIn(chave, grupos)
-            self.assertGreaterEqual(grupos[chave]["quantidade"], 1)
+            after = tck.now()
+            groups = dict(((g["environment"], g["interpreter"]), g)
+                          for g in self.agt.unattended_queue(after, thresholds))
+            self.assertIn(key, groups)
+            self.assertGreaterEqual(groups[key]["quantidade"], 1)
             # scheduled_at no passado nao antecipa a espera: conta da criacao do ticket.
-            self.assertLessEqual(grupos[chave]["mais_antigo"], depois)
+            self.assertLessEqual(groups[key]["mais_antigo"], after)
         finally:
-            limpeza = [("DELETE FROM " + self.aud._idents["aud"] + " WHERE id = :id", {"id": i}) for i in aud_ids]
+            cleanup = [("DELETE FROM " + self.aud._idents["aud"] + " WHERE id = :id", {"id": i}) for i in aud_ids]
             for tid in tck_ids:
-                limpeza.append(("DELETE FROM " + tck._idents["tck"] + " WHERE id = :id", {"id": tid}))
+                cleanup.append(("DELETE FROM " + tck._idents["tck"] + " WHERE id = :id", {"id": tid}))
                 if _oracle_test_support.schema_mode() == _oracle_test_support.SHARED_MODE:
-                    limpeza.append(("DELETE FROM " + self.aud._idents["aud"] + " WHERE entity = 'tbsss_tickets' "
+                    cleanup.append(("DELETE FROM " + self.aud._idents["aud"] + " WHERE entity = 'tbsss_tickets' "
                                     "AND entity_id = :id", {"id": tid}))
             if agt_id is not None:
-                limpeza.append(("DELETE FROM " + tab_agt + " WHERE id = :id", {"id": agt_id}))
-            self._executar(limpeza)
+                cleanup.append(("DELETE FROM " + tab_agt + " WHERE id = :id", {"id": agt_id}))
+            self._executar(cleanup)
 
 
 if __name__ == "__main__":

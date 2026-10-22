@@ -64,43 +64,43 @@ class _Base(unittest.TestCase):
         }
         self.now = NOW
         self.tickets = repo_factory.get("tickets")
-        disparo = TicketService(self.catalog, self.tickets, self.log)
-        self.svc = SchedulesService(self.agd, self.catalog, repo_factory.get("users"), disparo,
+        trigger = TicketService(self.catalog, self.tickets, self.log)
+        self.svc = SchedulesService(self.agd, self.catalog, repo_factory.get("users"), trigger,
                                        lambda: self.now, HORIZON, self.log,
                                        tickets=self.tickets, rbac_repo=self.rbac)
         self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
 
     def _ctx(self, user_id, login, profile_id):
-        sessao = {"usuario_id": user_id, "login": login, "perfil_id": profile_id,
+        session = {"usuario_id": user_id, "login": login, "perfil_id": profile_id,
                   "perm_versao": self.rbac.profiles_get(profile_id)["perm_version"], "sessao_epoch": 0}
-        return self.auth.revalidate(sessao)
+        return self.auth.revalidate(session)
 
     def _audits(self, action=None):
-        itens = self.audit.list(filters={"action": action} if action else None, page=1, size=1000)["itens"]
-        return [a for a in itens if a["entity"] == "tbsss_schedules" and a["id"] > self.aud_base]
+        items = self.audit.list(filters={"action": action} if action else None, page=1, size=1000)["itens"]
+        return [a for a in items if a["entity"] == "tbsss_schedules" and a["id"] > self.aud_base]
 
     def _data(self, **extra):
-        dados = {"name": "Regra de teste", "script_id": "1", "environment": "HOMOLOGACAO",
+        date = {"name": "Regra de teste", "script_id": "1", "environment": "HOMOLOGACAO",
                  "recurrence_type": "DAILY", "run_time": "03:00", "priority": "2",
                  "respostas": {"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"}}
-        dados.update(extra)
-        return dados
+        date.update(extra)
+        return date
 
     def _save(self, login="admin", **extra):
         return self.svc.save(self.ctx[login], IP, self._data(**extra))
 
     def _version(self, reg):
         # Como a tela: as respostas sensiveis do script entram pelo marcador (CR-003 P1).
-        sensiveis = frozenset(v["code"] for v in repo_factory.get("catalog").script_params_get(reg["script_id"])
+        sensitive = frozenset(v["code"] for v in repo_factory.get("catalog").script_params_get(reg["script_id"])
                               if v.get("sensitive") == "Y")
-        return svc_mod.version(reg, sensiveis)
+        return svc_mod.version(reg, sensitive)
 
 
 class TestSaveTypes(_Base):
 
     def test_valores_fora_do_formato_sao_recusados_nunca_cortados(self):
         # CR-003 P7 / D11 (README §7.6).
-        casos = (
+        cases = (
             ({"recurrence_type": "MONTHLY", "run_time": "01:00", "month_day": "100"}, "month_day"),
             ({"recurrence_type": "MONTHLY", "run_time": "01:00", "month_day": "311"}, "month_day"),
             ({"recurrence_type": "DAILY", "run_time": "03:000"}, "run_time"),
@@ -109,19 +109,19 @@ class TestSaveTypes(_Base):
             ({"recurrence_type": "DAILY", "run_time": "03:00", "start_date": "2026-02-01T10:00:00.999"},
              "start_date"),
         )
-        for extra, campo in casos:
-            aid, erros = self._save(**extra)
+        for extra, field in cases:
+            aid, errors = self._save(**extra)
             self.assertIsNone(aid, extra)
-            self.assertIn(campo, erros, extra)
+            self.assertIn(field, errors, extra)
 
     def test_data_fim_ignorada_em_unica(self):
-        aid, erros = self._save(recurrence_type="ONCE", start_date="2026-02-01T08:30",
+        aid, errors = self._save(recurrence_type="ONCE", start_date="2026-02-01T08:30",
                                   end_date="2026-01-01T00:00")
-        self.assertEqual(erros, {})
+        self.assertEqual(errors, {})
         self.assertIsNone(self.agd.get(aid)["end_date"])
 
     def test_salvar_cada_tipo(self):
-        casos = [
+        cases = [
             ({"recurrence_type": "ONCE", "start_date": "2026-02-01T08:30"}, datetime.datetime(2026, 2, 1, 8, 30)),
             ({"recurrence_type": "DAILY", "run_time": "03:00"}, datetime.datetime(2026, 1, 16, 3, 0)),
             ({"recurrence_type": "WEEKLY", "run_time": "04:00", "week_days": ["5", "1", "3"]},
@@ -131,33 +131,33 @@ class TestSaveTypes(_Base):
             ({"recurrence_type": "CRON", "cron_expression": "*/15 8-18 * * 1-5"},
              datetime.datetime(2026, 1, 15, 10, 15)),
         ]
-        for extra, proxima in casos:
-            aid, erros = self._save(**extra)
-            self.assertEqual(erros, {}, extra)
+        for extra, next_value in cases:
+            aid, errors = self._save(**extra)
+            self.assertEqual(errors, {}, extra)
             reg = self.agd.get(aid)
-            self.assertEqual(reg["next_run_at"], proxima, extra)
+            self.assertEqual(reg["next_run_at"], next_value, extra)
             self.assertEqual(reg["user_id"], 1)
             self.assertEqual(reg["active"], "Y")
             self.assertIsNone(reg["pause_reason"])
-            for campo in ("start_date", "end_date", "next_run_at"):
-                if reg[campo] is not None:
-                    self.assertEqual(reg[campo].microsecond, 0, campo)
-        semanal = self.agd.list(filters={"name": "Regra de teste"}, size=100)["itens"]
-        self.assertIn("1,3,5", [r["week_days"] for r in semanal])
+            for field in ("start_date", "end_date", "next_run_at"):
+                if reg[field] is not None:
+                    self.assertEqual(reg[field].microsecond, 0, field)
+        weekly = self.agd.list(filters={"name": "Regra de teste"}, size=100)["itens"]
+        self.assertIn("1,3,5", [r["week_days"] for r in weekly])
 
     def test_campos_de_outros_tipos_sao_descartados(self):
-        aid, erros = self._save(recurrence_type="DAILY", run_time="03:00", month_day="5",
+        aid, errors = self._save(recurrence_type="DAILY", run_time="03:00", month_day="5",
                                   cron_expression="* * * * *", week_days="1,2")
-        self.assertEqual(erros, {})
+        self.assertEqual(errors, {})
         reg = self.agd.get(aid)
         self.assertEqual((reg["month_day"], reg["cron_expression"], reg["week_days"]), (None, None, None))
 
     def test_inicio_vazio_vale_agora_truncado(self):
-        aid, _erros = self._save()
+        aid, _errors = self._save()
         self.assertEqual(self.agd.get(aid)["start_date"], datetime.datetime(2026, 1, 15, 10, 0))
 
     def test_parametros_json_ordenado_com_resolvidos(self):
-        aid, _erros = self._save(respostas={"modo_exec": "SIMULACAO", "data_ref": "2026-01-20",
+        aid, _errors = self._save(respostas={"modo_exec": "SIMULACAO", "data_ref": "2026-01-20",
                                               "verbose": ["false", "true"], "intruso": "x"})
         params = self.agd.get(aid)["params_json"]
         obj = json.loads(params)
@@ -171,7 +171,7 @@ class TestSaveTypes(_Base):
 class TestValidation(_Base):
 
     def test_campos_obrigatorios_por_tipo(self):
-        casos = [
+        cases = [
             ({"recurrence_type": "ONCE", "start_date": ""}, "start_date"),
             ({"recurrence_type": "DAILY", "run_time": ""}, "run_time"),
             ({"recurrence_type": "WEEKLY", "run_time": "04:00", "week_days": []}, "week_days"),
@@ -181,14 +181,14 @@ class TestValidation(_Base):
             ({"name": ""}, "name"),
             ({"name": "x" * 61}, "name"),
         ]
-        for extra, campo in casos:
-            aid, erros = self._save(**extra)
+        for extra, field in cases:
+            aid, errors = self._save(**extra)
             self.assertIsNone(aid, extra)
-            self.assertIn(campo, erros, extra)
+            self.assertIn(field, errors, extra)
         self.assertEqual(self._audits(), [])
 
     def test_formatos_invalidos(self):
-        casos = [
+        cases = [
             ({"run_time": "25:00"}, "run_time"),
             ({"recurrence_type": "WEEKLY", "week_days": ["1", "9"]}, "week_days"),
             ({"recurrence_type": "MONTHLY", "month_day": "32"}, "month_day"),
@@ -196,41 +196,41 @@ class TestValidation(_Base):
             ({"start_date": "15/01/2026"}, "start_date"),
             ({"start_date": "2026-01-20T10:00", "end_date": "2026-01-19T10:00"}, "end_date"),
         ]
-        for extra, campo in casos:
-            _aid, erros = self._save(**extra)
-            self.assertIn(campo, erros, extra)
+        for extra, field in cases:
+            _aid, errors = self._save(**extra)
+            self.assertIn(field, errors, extra)
 
     def test_cron_invalido(self):
         for expr in ("0 0 * * MON", "* * *", "5/10 * * * *", "0 0 L * *", "61 * * * *"):
-            aid, erros = self._save(recurrence_type="CRON", cron_expression=expr)
+            aid, errors = self._save(recurrence_type="CRON", cron_expression=expr)
             self.assertIsNone(aid, expr)
-            self.assertIn("cron_expression", erros, expr)
+            self.assertIn("cron_expression", errors, expr)
 
     def test_cron_sem_ocorrencia_no_horizonte(self):
-        _aid, erros = self._save(recurrence_type="CRON", cron_expression="0 0 30 2 *")
-        self.assertIn("cron_expression", erros)
+        _aid, errors = self._save(recurrence_type="CRON", cron_expression="0 0 30 2 *")
+        self.assertIn("cron_expression", errors)
 
     def test_sem_proxima_ocorrencia(self):
-        aid, erros = self._save(recurrence_type="ONCE", start_date="2026-01-15T09:00")
+        aid, errors = self._save(recurrence_type="ONCE", start_date="2026-01-15T09:00")
         self.assertIsNone(aid)
-        self.assertEqual(erros, {GENERAL_FIELD: svc_mod.MSG_NO_NEXT_RUN})
-        _aid, erros = self._save(start_date="2026-01-01T00:00", end_date="2026-01-10T00:00")
-        self.assertEqual(erros, {GENERAL_FIELD: svc_mod.MSG_NO_NEXT_RUN})
+        self.assertEqual(errors, {GENERAL_FIELD: svc_mod.MSG_NO_NEXT_RUN})
+        _aid, errors = self._save(start_date="2026-01-01T00:00", end_date="2026-01-10T00:00")
+        self.assertEqual(errors, {GENERAL_FIELD: svc_mod.MSG_NO_NEXT_RUN})
 
     def test_parametros_invalidos(self):
-        aid, erros = self._save(respostas={"data_ref": "20/01/2026", "modo_exec": "INEXISTENTE",
+        aid, errors = self._save(respostas={"data_ref": "20/01/2026", "modo_exec": "INEXISTENTE",
                                              "limite_linhas": "abc"})
         self.assertIsNone(aid)
-        self.assertEqual(set(erros), {"data_ref", "modo_exec", "limite_linhas"})
-        self.assertNotIn("abc", json.dumps(erros, ensure_ascii=False))
+        self.assertEqual(set(errors), {"data_ref", "modo_exec", "limite_linhas"})
+        self.assertNotIn("abc", json.dumps(errors, ensure_ascii=False))
 
     def test_prioridade_1_exclusiva_de_admin(self):
-        _aid, erros = self._save(login="op.hml", priority="1")
-        self.assertEqual(erros, {"priority": svc_mod.MSG_PRIORITY_ADMIN})
-        _aid, erros = self._save(login="op.hml", priority="7")
-        self.assertEqual(erros, {"priority": svc_mod.MSG_PRIORITY})
-        aid, erros = self._save(priority="1")
-        self.assertEqual(erros, {})
+        _aid, errors = self._save(login="op.hml", priority="1")
+        self.assertEqual(errors, {"priority": svc_mod.MSG_PRIORITY_ADMIN})
+        _aid, errors = self._save(login="op.hml", priority="7")
+        self.assertEqual(errors, {"priority": svc_mod.MSG_PRIORITY})
+        aid, errors = self._save(priority="1")
+        self.assertEqual(errors, {})
         self.assertEqual(self.agd.get(aid)["priority"], 1)
 
     def test_script_ou_ambiente_nao_autorizado(self):
@@ -253,55 +253,55 @@ class TestEdit(_Base):
 
     def _edit(self, aid, login="admin", **extra):
         reg = self.agd.get(aid)
-        dados = self._data(id=str(aid), version=self._version(reg), **extra)
-        return self.svc.save(self.ctx[login], IP, dados)
+        date = self._data(id=str(aid), version=self._version(reg), **extra)
+        return self.svc.save(self.ctx[login], IP, date)
 
     def test_edicao_troca_usuario_id_para_o_editor(self):
-        aid, _erros = self._save(login="op.prod")
+        aid, _errors = self._save(login="op.prod")
         self.assertEqual(self.agd.get(aid)["user_id"], 2)
-        _id, erros = self._edit(aid, login="admin", name="Regra de teste")
-        self.assertEqual(erros, {})
+        _id, errors = self._edit(aid, login="admin", name="Regra de teste")
+        self.assertEqual(errors, {})
         self.assertEqual(self.agd.get(aid)["user_id"], 1)
-        alteracoes = self._audits("UPDATE")
-        self.assertEqual(len(alteracoes), 1)
-        self.assertEqual(alteracoes[0]["actor"], "admin")
-        self.assertEqual(alteracoes[0]["source_ip"], IP)
-        self.assertIn(u"user_id: 2 (op.prod)%s1 (admin)" % ARROW, alteracoes[0]["detail"])
+        changes = self._audits("UPDATE")
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(changes[0]["actor"], "admin")
+        self.assertEqual(changes[0]["source_ip"], IP)
+        self.assertIn(u"user_id: 2 (op.prod)%s1 (admin)" % ARROW, changes[0]["detail"])
 
     def test_edicao_de_regra_do_seed_por_outro_usuario(self):
         # Regra 4: MENSAL, script 2 em HOMOLOGACAO, criada por op.hml (id 3).
         reg = self.agd.get(4)
-        dados = {"id": "4", "version": self._version(reg), "name": reg["name"], "recurrence_type": "MONTHLY",
+        date = {"id": "4", "version": self._version(reg), "name": reg["name"], "recurrence_type": "MONTHLY",
                  "run_time": "01:00", "month_day": "1", "priority": "3",
                  "start_date": reg["start_date"].strftime("%Y-%m-%dT%H:%M"),
                  "respostas": {"formato_saida": "JSON"}}
-        _id, erros = self.svc.save(self.ctx["op.prod"], IP, dados)
-        self.assertEqual(erros, {})
+        _id, errors = self.svc.save(self.ctx["op.prod"], IP, date)
+        self.assertEqual(errors, {})
         self.assertEqual(self.agd.get(4)["user_id"], 2)
         self.assertIn(u"user_id: 3 (op.hml)%s2 (op.prod)" % ARROW, self._audits("UPDATE")[0]["detail"])
 
     def test_mesmo_editor_sem_mudanca_nao_audita(self):
-        aid, _erros = self._save()
-        _id, erros = self._edit(aid)
-        self.assertEqual(erros, {})
+        aid, _errors = self._save()
+        _id, errors = self._edit(aid)
+        self.assertEqual(errors, {})
         self.assertEqual(self._audits("UPDATE"), [])
 
     def test_mesmo_editor_com_mudanca_registra_usuario_id(self):
-        aid, _erros = self._save()
-        _id, erros = self._edit(aid, run_time="05:00")
-        self.assertEqual(erros, {})
-        detalhe = self._audits("UPDATE")[0]["detail"]
-        self.assertIn(u"user_id: 1 (admin)%s1 (admin)" % ARROW, detalhe)
-        self.assertIn(u"run_time: 03:00%s05:00" % ARROW, detalhe)
+        aid, _errors = self._save()
+        _id, errors = self._edit(aid, run_time="05:00")
+        self.assertEqual(errors, {})
+        detail = self._audits("UPDATE")[0]["detail"]
+        self.assertIn(u"user_id: 1 (admin)%s1 (admin)" % ARROW, detail)
+        self.assertIn(u"run_time: 03:00%s05:00" % ARROW, detail)
         self.assertEqual(self.agd.get(aid)["next_run_at"], datetime.datetime(2026, 1, 16, 5, 0))
 
     def test_editor_sem_permissao_e_negado(self):
-        aid, _erros = self._save(script_id="4", respostas={})
-        antes = self.agd.get(aid)
+        aid, _errors = self._save(script_id="4", respostas={})
+        before = self.agd.get(aid)
         with self.assertRaises(OperationDenied) as cm:
             self._edit(aid, login="op.prod", run_time="06:00", respostas={})
         self.assertEqual(cm.exception.message, svc_mod.MSG_NO_PERMISSION)
-        self.assertEqual(self.agd.get(aid), antes)
+        self.assertEqual(self.agd.get(aid), before)
         self.assertEqual(self._audits("UPDATE"), [])
         with self.assertRaises(OperationDenied):
             self.svc.form(self.ctx["op.prod"], str(aid))
@@ -318,19 +318,19 @@ class TestEdit(_Base):
             self.svc.form(self.ctx["admin"], "999")
 
     def test_script_e_ambiente_fixos_na_edicao(self):
-        aid, _erros = self._save()
-        _id, erros = self._edit(aid, script_id="2", environment="PRODUCAO")
-        self.assertEqual(erros, {})
+        aid, _errors = self._save()
+        _id, errors = self._edit(aid, script_id="2", environment="PRODUCAO")
+        self.assertEqual(errors, {})
         reg = self.agd.get(aid)
         self.assertEqual((reg["script_id"], reg["environment"]), (1, "HOMOLOGACAO"))
 
     def test_edicao_concorrente(self):
-        aid, _erros = self._save()
+        aid, _errors = self._save()
         reg = self.agd.get(aid)
-        versao = self._version(reg)
+        version = self._version(reg)
         self.agd.update(aid, {"name": "Mudou por outro"}, actor="teste")
-        _id, erros = self.svc.save(self.ctx["admin"], IP, self._data(id=str(aid), version=versao, name="X"))
-        self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
+        _id, errors = self.svc.save(self.ctx["admin"], IP, self._data(id=str(aid), version=version, name="X"))
+        self.assertEqual(errors, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
         # Mudanca entre a leitura e a escrita: o 'esperado' do repositorio barra.
         reg = self.agd.get(aid)
         original = self.agd.update
@@ -340,9 +340,9 @@ class TestEdit(_Base):
             return original(id, date, expected=expected, audit=audit)
 
         with mock.patch.object(self.agd, "update", side_effect=alterar_com_corrida):
-            _id, erros = self.svc.save(self.ctx["admin"], IP,
+            _id, errors = self.svc.save(self.ctx["admin"], IP,
                                          self._data(id=str(aid), version=self._version(reg), name="Y"))
-        self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
+        self.assertEqual(errors, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
         self.assertEqual(self.agd.get(aid)["name"], "Mudou por outro")
         self.assertEqual(self._audits("UPDATE"), [])
 
@@ -351,26 +351,26 @@ class TestEdit(_Base):
         aid0, _e = self._save(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": "tok-um-111"})
         v1 = self.svc.form(self.ctx["admin"], str(aid0))["regra"]["version"]
         reg = self.agd.get(aid0)
-        trocado = json.loads(reg["params_json"])
-        trocado["documento_cliente"] = "tok-dois-222"
-        self.assertEqual(svc_mod.version(dict(reg, params_json=json.dumps(trocado)), frozenset(["documento_cliente"])), v1)
+        swapped = json.loads(reg["params_json"])
+        swapped["documento_cliente"] = "tok-dois-222"
+        self.assertEqual(svc_mod.version(dict(reg, params_json=json.dumps(swapped)), frozenset(["documento_cliente"])), v1)
         self.assertNotEqual(svc_mod.version(reg), v1)
-        aid, erros = self._save(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": SECRET})
-        self.assertEqual(erros, {})
-        dados = self.svc.form(self.ctx["admin"], str(aid))
-        campo = [c for c in dados["form"]["campos"] if c["code"] == "documento_cliente"][0]
-        self.assertTrue(campo["mantido"])
-        self.assertIsNone(campo["valor"])
-        self.assertNotIn(SECRET, json.dumps(dados, default=str))
-        nao_sensivel = [c for c in dados["form"]["campos"] if c["code"] == "modo_exec"][0]
-        self.assertEqual(nao_sensivel["valor"], "REAL")
-        self.assertFalse(nao_sensivel["mantido"])
+        aid, errors = self._save(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": SECRET})
+        self.assertEqual(errors, {})
+        date = self.svc.form(self.ctx["admin"], str(aid))
+        field = [c for c in date["form"]["campos"] if c["code"] == "documento_cliente"][0]
+        self.assertTrue(field["mantido"])
+        self.assertIsNone(field["valor"])
+        self.assertNotIn(SECRET, json.dumps(date, default=str))
+        not_sensitive = [c for c in date["form"]["campos"] if c["code"] == "modo_exec"][0]
+        self.assertEqual(not_sensitive["valor"], "REAL")
+        self.assertFalse(not_sensitive["mantido"])
 
-        _id, erros = self._edit(aid, run_time="05:00",
+        _id, errors = self._edit(aid, run_time="05:00",
                                   respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": ""})
-        self.assertEqual(erros, {})
+        self.assertEqual(errors, {})
         self.assertEqual(json.loads(self.agd.get(aid)["params_json"])["documento_cliente"], SECRET)
-        _id, erros = self._edit(aid, respostas={"data_ref": "2026-01-20", "modo_exec": "REAL",
+        _id, errors = self._edit(aid, respostas={"data_ref": "2026-01-20", "modo_exec": "REAL",
                                                   "documento_cliente": "outro-token-99"})
         self.assertEqual(json.loads(self.agd.get(aid)["params_json"])["documento_cliente"], "outro-token-99")
         for aud in self._audits():
@@ -383,8 +383,8 @@ class TestEdit(_Base):
 class TestAgenda(_Base):
 
     def test_cron_valido_fora_da_semana_nao_e_problema(self):
-        aid, erros = self._save(recurrence_type="CRON", cron_expression="0 0 1 12 *")
-        self.assertEqual(erros, {})
+        aid, errors = self._save(recurrence_type="CRON", cron_expression="0 0 1 12 *")
+        self.assertEqual(errors, {})
         agenda = self.svc.agenda(self.ctx["admin"])
         self.assertFalse(any(item["regra_id"] == aid for item in agenda["problemas"]))
 
@@ -403,30 +403,30 @@ class TestAgenda(_Base):
 
     def test_diaria_sete_dias_com_rotulos(self):
         rid = self._rule()
-        dados = self.svc.agenda(self.ctx["admin"])
-        itens = self._items(dados, rid)
-        self.assertEqual(len(itens), 7)  # 16/01 a 22/01: ate o fim do 7o dia seguinte a 15/01
-        rotulos = [d["rotulo"] for d in dados["dias"] if any(o["regra_id"] == rid for o in d["itens"])]
-        self.assertEqual(rotulos[0], u"Amanhã")
-        self.assertTrue(rotulos[1].startswith(u"sábado, 17/01"))
+        date = self.svc.agenda(self.ctx["admin"])
+        items = self._items(date, rid)
+        self.assertEqual(len(items), 7)  # 16/01 a 22/01: ate o fim do 7o dia seguinte a 15/01
+        labels = [d["rotulo"] for d in date["dias"] if any(o["regra_id"] == rid for o in d["itens"])]
+        self.assertEqual(labels[0], u"Amanhã")
+        self.assertTrue(labels[1].startswith(u"sábado, 17/01"))
 
     def test_cron_a_cada_minuto_limitado_a_20_com_mais(self):
         rid = self._rule(recurrence_type="CRON", run_time=None, cron_expression="* * * * *",
                           next_run_at=datetime.datetime(2026, 1, 15, 10, 1))
-        itens = self._items(self.svc.agenda(self.ctx["admin"]), rid)
-        self.assertEqual(len(itens), svc_mod.AGENDA_PER_RULE)
-        self.assertGreater(itens[-1]["mais"], 0)
+        items = self._items(self.svc.agenda(self.ctx["admin"]), rid)
+        self.assertEqual(len(items), svc_mod.AGENDA_PER_RULE)
+        self.assertGreater(items[-1]["mais"], 0)
 
     def test_atrasada_pausada_e_escopo(self):
-        atrasada = self._rule(next_run_at=datetime.datetime(2026, 1, 15, 3, 0))
-        pausada = self._rule(active="N", pause_reason="MANUAL")
-        em_prod = self._rule(environment="PRODUCAO")
-        dados = self.svc.agenda(self.ctx["admin"])
-        self.assertIn(atrasada, [a["regra_id"] for a in dados["atrasados"]])
-        self.assertFalse(self._items(dados, pausada))
-        self.assertTrue(self._items(dados, em_prod))
+        late = self._rule(next_run_at=datetime.datetime(2026, 1, 15, 3, 0))
+        paused = self._rule(active="N", pause_reason="MANUAL")
+        in_prod = self._rule(environment="PRODUCAO")
+        date = self.svc.agenda(self.ctx["admin"])
+        self.assertIn(late, [a["regra_id"] for a in date["atrasados"]])
+        self.assertFalse(self._items(date, paused))
+        self.assertTrue(self._items(date, in_prod))
         # op.hml nao enxerga PRODUCAO (README §7.6, lista por escopo).
-        self.assertFalse(self._items(self.svc.agenda(self.ctx["op.hml"]), em_prod))
+        self.assertFalse(self._items(self.svc.agenda(self.ctx["op.hml"]), in_prod))
 
     def test_exige_cad_agendamentos(self):
         with self.assertRaises(AccessDenied):
@@ -436,37 +436,37 @@ class TestAgenda(_Base):
 class TestPauseResume(_Base):
 
     def test_falha_de_rbac_nao_retoma_nem_audita(self):
-        aid, erros = self._save()
-        self.assertEqual(erros, {})
+        aid, errors = self._save()
+        self.assertEqual(errors, {})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
-        antes = self.agd.get(aid)
-        auditorias = self._audits()
+        before = self.agd.get(aid)
+        audits = self._audits()
         with mock.patch.object(self.rbac, "matrix_get", side_effect=RuntimeError("indisponivel")):
             with self.assertRaises(RuntimeError):
                 self.svc.resume(self.ctx["admin"], IP, str(aid))
-        self.assertEqual(self.agd.get(aid), antes)
-        self.assertEqual(self._audits(), auditorias)
+        self.assertEqual(self.agd.get(aid), before)
+        self.assertEqual(self._audits(), audits)
 
 
     def test_pausar_e_retomar_com_recalculo(self):
-        aid, _erros = self._save()
+        aid, _errors = self._save()
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         reg = self.agd.get(aid)
         self.assertEqual((reg["active"], reg["pause_reason"]), ("N", "MANUAL"))
-        pausas = self._audits("SCHEDULE_PAUSE")
-        self.assertEqual(len(pausas), 1)
-        self.assertEqual((pausas[0]["actor"], pausas[0]["source_ip"]), ("admin", IP))
-        self.assertIn(u"pause_reason: (vazio)%sMANUAL" % ARROW, pausas[0]["detail"])
+        pauses = self._audits("SCHEDULE_PAUSE")
+        self.assertEqual(len(pauses), 1)
+        self.assertEqual((pauses[0]["actor"], pauses[0]["source_ip"]), ("admin", IP))
+        self.assertIn(u"pause_reason: (vazio)%sMANUAL" % ARROW, pauses[0]["detail"])
 
         self.now = datetime.datetime(2026, 1, 20, 4, 0, 0, 999)
         self.svc.resume(self.ctx["admin"], IP, str(aid))
         reg = self.agd.get(aid)
         self.assertEqual((reg["active"], reg["pause_reason"]), ("Y", None))
         self.assertEqual(reg["next_run_at"], datetime.datetime(2026, 1, 21, 3, 0))
-        retomadas = self._audits("UPDATE")
-        self.assertEqual(len(retomadas), 1)
-        self.assertIn(u"active: N%sY" % ARROW, retomadas[0]["detail"])
-        self.assertIn(u"21/01/2026 03:00", retomadas[0]["detail"])
+        resumed = self._audits("UPDATE")
+        self.assertEqual(len(resumed), 1)
+        self.assertIn(u"active: N%sY" % ARROW, resumed[0]["detail"])
+        self.assertIn(u"21/01/2026 03:00", resumed[0]["detail"])
 
     def test_pausar_ja_pausada_e_retomar_ativa(self):
         with self.assertRaises(OperationDenied):
@@ -476,7 +476,7 @@ class TestPauseResume(_Base):
         self.assertEqual(self._audits(), [])
 
     def test_pausa_otimista(self):
-        aid, _erros = self._save()
+        aid, _errors = self._save()
         original = self.agd.pause
 
         def pausar_com_corrida(id, reason, old_date=None, audit=None):
@@ -490,7 +490,7 @@ class TestPauseResume(_Base):
         self.assertEqual(self._audits("SCHEDULE_PAUSE"), [])
 
     def test_retomar_revalida_permissao(self):
-        aid, _erros = self._save(script_id="4", respostas={})
+        aid, _errors = self._save(script_id="4", respostas={})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         with self.assertRaises(OperationDenied) as cm:
             self.svc.resume(self.ctx["op.prod"], IP, str(aid))
@@ -498,7 +498,7 @@ class TestPauseResume(_Base):
         self.assertEqual(self.agd.get(aid)["active"], "N")
 
     def test_retomar_sem_proxima_execucao(self):
-        aid, _erros = self._save(recurrence_type="ONCE", start_date="2026-01-16T08:00")
+        aid, _errors = self._save(recurrence_type="ONCE", start_date="2026-01-16T08:00")
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         self.now = datetime.datetime(2026, 1, 17, 0, 0)
         with self.assertRaises(OperationDenied) as cm:
@@ -507,18 +507,18 @@ class TestPauseResume(_Base):
         self.assertEqual(self.agd.get(aid)["active"], "N")
 
     def test_retomar_reavalia_usuario_responsavel_inativo(self):
-        aid, _erros = self._save(login="op.hml", script_id="1",
+        aid, _errors = self._save(login="op.hml", script_id="1",
                                    respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
-        usuarios = repo_factory.get("users")
-        usuarios.update(3, {"active": "N"}, actor="teste")
+        users = repo_factory.get("users")
+        users.update(3, {"active": "N"}, actor="teste")
         with self.assertRaises(OperationDenied) as cm:
             self.svc.resume(self.ctx["admin"], IP, str(aid))
         self.assertIn(svc_mod.PAUSE_REASONS["USER_INACTIVE"], cm.exception.message)
         self.assertIn(svc_mod.MSG_RESUME_GUIDANCE, cm.exception.message)
 
     def test_retomar_reavalia_script_inativo(self):
-        aid, _erros = self._save(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
+        aid, _errors = self._save(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         self.catalog.scripts_update(1, {"active": "N"}, actor="teste")
         with self.assertRaises(OperationDenied) as cm:
@@ -526,7 +526,7 @@ class TestPauseResume(_Base):
         self.assertIn(svc_mod.PAUSE_REASONS["SCRIPT_INACTIVE"], cm.exception.message)
 
     def test_retomar_reavalia_ambiente_inativo(self):
-        aid, _erros = self._save(environment="HOMOLOGACAO", script_id="1",
+        aid, _errors = self._save(environment="HOMOLOGACAO", script_id="1",
                                    respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         self.catalog.environments_update(2, {"active": "N"}, actor="teste")
@@ -535,7 +535,7 @@ class TestPauseResume(_Base):
         self.assertIn(svc_mod.PAUSE_REASONS["ENVIRONMENT_INACTIVE"], cm.exception.message)
 
     def test_retomar_reavalia_parametros_invalidos(self):
-        aid, _erros = self._save(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
+        aid, _errors = self._save(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         self.agd.update(aid, {"params_json": json.dumps({"data_ref": "data-invalida"})}, actor="teste")
         with self.assertRaises(OperationDenied) as cm:
@@ -548,24 +548,24 @@ class TestPreviewList(_Base):
     def test_lista_no_escopo_com_colunas(self):
         res = self.svc.list(self.ctx["op.hml"], {}, 1, 20)
         self.assertEqual(sorted(i["environment"] for i in res["itens"]), ["HOMOLOGACAO", "HOMOLOGACAO"])
-        todos = self.svc.list(self.ctx["admin"], {}, 1, 20)
-        self.assertEqual(todos["total"], 5)
-        pausada = [i for i in todos["itens"] if i["id"] == 5][0]
-        self.assertEqual((pausada["state"], pausada["reason"]), (u"Pausado", u"Pausado manualmente"))
-        self.assertEqual(pausada["cron_expression"], "0 */4 * * *")
-        self.assertTrue(pausada["recorrencia"].startswith(u"A cada"))
-        self.assertEqual(pausada["next_run_at"], "-")
-        self.assertEqual(pausada["last_ticket_id"], 35)
-        semanal = [i for i in todos["itens"] if i["id"] == 3][0]
-        self.assertEqual(semanal["recorrencia"], u"Às 04:00, seg, qua, sex")
-        self.assertEqual(semanal["responsavel"], "admin")
-        self.assertEqual(semanal["script"], "relatorio_mensal")
-        self.assertEqual([i for i in todos["itens"] if i["id"] == 4][0]["responsavel"], "op.hml")
+        all_value = self.svc.list(self.ctx["admin"], {}, 1, 20)
+        self.assertEqual(all_value["total"], 5)
+        paused = [i for i in all_value["itens"] if i["id"] == 5][0]
+        self.assertEqual((paused["state"], paused["reason"]), (u"Pausado", u"Pausado manualmente"))
+        self.assertEqual(paused["cron_expression"], "0 */4 * * *")
+        self.assertTrue(paused["recorrencia"].startswith(u"A cada"))
+        self.assertEqual(paused["next_run_at"], "-")
+        self.assertEqual(paused["last_ticket_id"], 35)
+        weekly = [i for i in all_value["itens"] if i["id"] == 3][0]
+        self.assertEqual(weekly["recorrencia"], u"Às 04:00, seg, qua, sex")
+        self.assertEqual(weekly["responsavel"], "admin")
+        self.assertEqual(weekly["script"], "relatorio_mensal")
+        self.assertEqual([i for i in all_value["itens"] if i["id"] == 4][0]["responsavel"], "op.hml")
 
     def test_lista_filtros(self):
-        filtros = svc_mod.normalize_filters({"environment": "producao", "active": "N", "name": " Limpeza "})
-        self.assertEqual(filtros, {"environment": "PRODUCAO", "active": "N", "name": "Limpeza"})
-        res = self.svc.list(self.ctx["admin"], filtros, 1, 20)
+        filters = svc_mod.normalize_filters({"environment": "producao", "active": "N", "name": " Limpeza "})
+        self.assertEqual(filters, {"environment": "PRODUCAO", "active": "N", "name": "Limpeza"})
+        res = self.svc.list(self.ctx["admin"], filters, 1, 20)
         self.assertEqual([i["id"] for i in res["itens"]], [5])
         self.assertEqual(svc_mod.normalize_filters({"environment": "x;drop", "active": "Z"}), {})
 
@@ -617,23 +617,23 @@ class TestPreviewList(_Base):
         self.assertIn(str(tid), item1["aviso"])
 
     def test_agenda_aviso_e_problemas(self):
-        aid_ativo, erros = self._save()
-        self.assertEqual(erros, {})
+        aid_active, errors = self._save()
+        self.assertEqual(errors, {})
         self.catalog.scripts_update(1, {"active": "N"}, actor="teste")
-        dados = self.svc.agenda(self.ctx["admin"])
-        itens_r1 = [i for dia in dados["dias"] for i in dia["itens"] if i["regra_id"] == aid_ativo]
-        self.assertTrue(itens_r1)
-        self.assertIn(u"Será pausada", itens_r1[0].get("aviso", ""))
+        date = self.svc.agenda(self.ctx["admin"])
+        items_r1 = [i for day in date["dias"] for i in day["itens"] if i["regra_id"] == aid_active]
+        self.assertTrue(items_r1)
+        self.assertIn(u"Será pausada", items_r1[0].get("aviso", ""))
         aid = self.agd.insert({"name": "CRON Problematico", "user_id": 1, "script_id": 1,
                                 "environment": "HOMOLOGACAO", "recurrence_type": "CRON",
                                 "cron_expression": "0 0 31 2 *", "priority": 2, "active": "Y",
                                 "params_json": "{}"}, actor="teste")["id"]
-        dados2 = self.svc.agenda(self.ctx["admin"])
-        problemas = dados2.get("problemas", [])
-        self.assertIn(aid, [p["regra_id"] for p in problemas])
+        data2 = self.svc.agenda(self.ctx["admin"])
+        problems = data2.get("problemas", [])
+        self.assertIn(aid, [p["regra_id"] for p in problems])
 
     def test_formulario_regra_pausada_pausa_aviso(self):
-        aid, _erros = self._save(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
+        aid, _errors = self._save(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         f = self.svc.form(self.ctx["admin"], str(aid))
         self.assertIsNotNone(f["regra"].get("pausa_aviso"))
@@ -643,10 +643,10 @@ class TestPreviewList(_Base):
 class TestAuditInsert(_Base):
 
     def test_inclusao_auditada_sem_valor_sensivel(self):
-        aid, _erros = self._save(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": SECRET})
-        inclusoes = self._audits("CREATE")
-        self.assertEqual(len(inclusoes), 1)
-        aud = inclusoes[0]
+        aid, _errors = self._save(respostas={"data_ref": "2026-01-20", "modo_exec": "REAL", "documento_cliente": SECRET})
+        inserts = self._audits("CREATE")
+        self.assertEqual(len(inserts), 1)
+        aud = inserts[0]
         self.assertEqual((aud["actor"], aud["source_ip"], aud["entity_id"]), ("admin", IP, aid))
         self.assertNotIn(SECRET, aud["detail"])
         self.assertIn(u"documento_cliente=%s" % svc_mod.MASK, aud["detail"])

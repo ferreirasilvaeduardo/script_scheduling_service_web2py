@@ -141,9 +141,9 @@ def abandon(output, plat):
 def log_line(output, agent_id, max_files, max_bytes):
     """Texto da linha [SSS] para o log do ticket (sem caminho nem conteudo), ou None."""
     if output.result == EXCEEDED:
-        limite = ("%d arquivos" % max_files) if output.reason == "FILES" else \
+        limit = ("%d arquivos" % max_files) if output.reason == "FILES" else \
             ("%d MiB" % (max_bytes // (1024 * 1024)))
-        return "saida nao empacotada: excede o limite de %s (agente %s)" % (limite, agent_id)
+        return "saida nao empacotada: excede o limite de %s (agente %s)" % (limit, agent_id)
     if output.result == FAILED:
         return "saida nao empacotada: %s (agente %s)" % (
             "prazo de %d s esgotado" % PACK_DEADLINE_S if output.reason == "DEADLINE" else "falha", agent_id)
@@ -172,13 +172,13 @@ def write(output, conn, repo, agent_id):
                 if output.offset >= output.size:
                     break
                 f.seek(output.offset)
-                parte = f.read(PART_SIZE)
-                desfecho = repo.append_chunk(conn, output.ticket_id, agent_id, output.offset, parte)
-                if desfecho == scheduler_output.OWNERSHIP_LOST:
+                part = f.read(PART_SIZE)
+                outcome = repo.append_chunk(conn, output.ticket_id, agent_id, output.offset, part)
+                if outcome == scheduler_output.OWNERSHIP_LOST:
                     conn.rollback()
                     return DONE if _already_written(conn, repo, output, agent_id, "AVAILABLE") else OWNERSHIP_LOST
                 conn.commit()
-                output.offset += len(parte)
+                output.offset += len(part)
         if output.offset < output.size:
             return CONTINUE
         if repo.complete(conn, output.ticket_id, agent_id, output.file_count, output.size):
@@ -197,8 +197,8 @@ def write(output, conn, repo, agent_id):
 
 def _already_written(conn, repo, output, agent_id, state_value):
     """COMMIT anterior sem resposta: a linha ja tem a situacao final deste agente?"""
-    atual = repo.output_state(conn, output.ticket_id)
-    return atual == (state_value, agent_id)
+    current = repo.output_state(conn, output.ticket_id)
+    return current == (state_value, agent_id)
 
 
 def remove_dir(output, plat):

@@ -24,7 +24,7 @@ class RepoPurge(object):
     """Owner e prefixo vem da configuracao (nunca fixos); os nomes passam por sql_ident."""
 
     def __init__(self, owner, prefix):
-        t = lambda nome: sql_ident.table(owner, prefix, nome)  # noqa: E731
+        t = lambda name: sql_ident.table(owner, prefix, name)  # noqa: E731
         self._tck, self._aud, self._ctl, self._scr = t("tickets"), t("audit"), t("control"), t("scripts")
         self._seq_aud = sql_ident.sequence(owner, prefix, "audit")
         self._prefixo = prefix
@@ -96,10 +96,10 @@ class RepoPurge(object):
             db_conn.set_input_types(cur, cutoff=db_conn.TIPO_DATE)
             cur.execute("SELECT " + ", ".join(_COLS_AUD) + " FROM " + self._aud + " WHERE created_at < :cutoff"
                         " AND ROWNUM <= :batch_size FOR UPDATE WAIT 5", {"cutoff": limit, "batch_size": int(batch)})
-            linhas = [dict(zip(_COLS_AUD, r)) for r in cur.fetchall()]
-            if linhas:
-                cur.executemany("DELETE FROM " + self._aud + " WHERE id = :id", [{"id": l["id"]} for l in linhas])
-            return linhas
+            rows = [dict(zip(_COLS_AUD, r)) for r in cur.fetchall()]
+            if rows:
+                cur.executemany("DELETE FROM " + self._aud + " WHERE id = :id", [{"id": l["id"]} for l in rows])
+            return rows
         finally:
             cur.close()
 
@@ -124,13 +124,13 @@ class RepoPurge(object):
         try:
             cur.execute("SELECT t.environment, t.script_id, t.started_at, t.submitted_params FROM " + self._tck + " t"
                         " WHERE t.status = 'RUNNING' AND t.started_at IS NOT NULL")
-            saida = []
-            for amb, sid, inicio, snap in cur.fetchall():
+            output = []
+            for env, sid, start, snap in cur.fetchall():
                 try:
-                    nome = json.loads(_read_lob(snap) or "{}").get("script_name")
+                    name = json.loads(_read_lob(snap) or "{}").get("script_name")
                 except ValueError:
-                    nome = None
-                saida.append((amb, nome, sid, inicio))
-            return saida
+                    name = None
+                output.append((env, name, sid, start))
+            return output
         finally:
             cur.close()

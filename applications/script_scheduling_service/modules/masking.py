@@ -35,10 +35,10 @@ class Masker(object):
         with self._lock:
             if value in self._secrets:
                 return
-            segredos = sorted(self._secrets + [value], key=len, reverse=True)
-            self._regex = re.compile("|".join(re.escape(s) for s in segredos))
-            self._secrets = segredos
-            self.max_len = len(segredos[0])
+            secrets_value = sorted(self._secrets + [value], key=len, reverse=True)
+            self._regex = re.compile("|".join(re.escape(s) for s in secrets_value))
+            self._secrets = secrets_value
+            self.max_len = len(secrets_value[0])
 
     @property
     def regex(self):
@@ -72,35 +72,35 @@ class StreamMasker(object):
 
     def feed(self, chunk):
         """Recebe um bloco e devolve o texto ja seguro para emissao."""
-        texto = self._pending + (chunk or "")
+        text = self._pending + (chunk or "")
         regex = self._masker.regex
-        corte = len(texto)
+        cutoff = len(text)
         if regex is not None:
-            corte = max(0, corte - (self._masker.max_len - 1))
-        corte = _trim_connect_string(texto, corte)
+            cutoff = max(0, cutoff - (self._masker.max_len - 1))
+        cutoff = _trim_connect_string(text, cutoff)
         if regex is None:
-            self._pending = texto[corte:]
-            return self._masker.mask(texto[:corte])
+            self._pending = text[cutoff:]
+            return self._masker.mask(text[:cutoff])
         # Um segredo que comece antes do corte cabe inteiro no texto (len <= max_len);
         # se ele atravessa o corte, o corte avanca para o fim do match.
-        pedacos = []
+        pieces = []
         pos = 0
-        for m in regex.finditer(texto):
-            if m.start() >= corte:
+        for m in regex.finditer(text):
+            if m.start() >= cutoff:
                 break
-            pedacos.append(texto[pos:m.start()])
-            pedacos.append(MASK)
+            pieces.append(text[pos:m.start()])
+            pieces.append(MASK)
             pos = m.end()
-            if pos > corte:
-                corte = pos
-        pedacos.append(texto[pos:corte])
-        self._pending = texto[corte:]
-        return self._masker.mask("".join(pedacos))
+            if pos > cutoff:
+                cutoff = pos
+        pieces.append(text[pos:cutoff])
+        self._pending = text[cutoff:]
+        return self._masker.mask("".join(pieces))
 
     def finalize(self):
         """Mascara e devolve o restante retido."""
-        resto, self._pending = self._pending, ""
-        return self._masker.mask(resto)
+        rest, self._pending = self._pending, ""
+        return self._masker.mask(rest)
 
 
 def _mask_arg(masker, value):

@@ -124,9 +124,9 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             "tck": self.qualify_table("tickets"),
         }
         self._sql = {}
-        for nome, modelo in globals().items():
-            if nome.startswith("_SQL_") and "{where" not in modelo:
-                self._sql[nome[5:]] = modelo.format(**self._idents)
+        for name, template in globals().items():
+            if name.startswith("_SQL_") and "{where" not in template:
+                self._sql[name[5:]] = template.format(**self._idents)
         self._tbl_aud = self.qualify_table("audit")
         self._seq_aud = self.qualify_sequence("audit")
         self._seq_sch = self.qualify_sequence("schedules")
@@ -140,8 +140,8 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
 
     def _checar_cks(self, r):
         """Espelha NOT NULL e as CKs de tbsss_schedules (README §10, tabela 12), na ordem do FAKE."""
-        nome = r.get("name")
-        if _null(nome) or len(nome) > _SIZE_NAME:
+        name = r.get("name")
+        if _null(name) or len(name) > _SIZE_NAME:
             # NOT NULL e tamanho da coluna nao sao constraints nomeadas (ORA-01400 / ORA-12899).
             raise repo_errors.RepoViolation("nome obrigatorio com ate %d caracteres" % _SIZE_NAME)
         trec = r.get("recurrence_type")
@@ -152,14 +152,14 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             raise repo_errors.RepoViolation("prioridade deve estar entre 1 e 4", constraint=self._ck("prio"))
         if r.get("active") not in ("Y", "N"):
             raise repo_errors.RepoViolation("ativo deve ser 'Y' ou 'N'", constraint=self._ck("active"))
-        dia = r.get("month_day")
-        if not _null(dia) and (isinstance(dia, bool) or not isinstance(dia, int) or not (1 <= dia <= 31)):
+        day = r.get("month_day")
+        if not _null(day) and (isinstance(day, bool) or not isinstance(day, int) or not (1 <= day <= 31)):
             raise repo_errors.RepoViolation("dia_mes deve estar entre 1 e 31", constraint=self._ck("day"))
-        hora = r.get("run_time")
-        if not _null(hora) and not _RE_TIME.match(hora):
+        hour = r.get("run_time")
+        if not _null(hour) and not _RE_TIME.match(hour):
             raise repo_errors.RepoViolation("hora_execucao fora do formato HH:MM", constraint=self._ck("time"))
-        dsem = r.get("week_days")
-        if not _null(dsem) and not _RE_WDAY.match(dsem):
+        wday = r.get("week_days")
+        if not _null(wday) and not _RE_WDAY.match(wday):
             raise repo_errors.RepoViolation("dias_semana fora do formato ISO 1-7", constraint=self._ck("wday"))
         if r.get("start_date") is None or r.get("next_run_at") is None:
             raise repo_errors.RepoViolation("data_inicio e proxima_execucao sao obrigatorias")
@@ -167,11 +167,11 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             raise repo_errors.RepoViolation("data_fim anterior a data_inicio", constraint=self._ck("end"))
         if not _null(r.get("pause_reason")) and r["pause_reason"] not in _REASONS_PAUSE:
             raise repo_errors.RepoViolation("pausa_motivo invalido", constraint=self._ck("pause"))
-        exigidos = {"DAILY": ("run_time",), "WEEKLY": ("run_time", "week_days"),
+        required = {"DAILY": ("run_time",), "WEEKLY": ("run_time", "week_days"),
                     "MONTHLY": ("run_time", "month_day"), "CRON": ("cron_expression",)}
-        for coluna in exigidos.get(trec, ()):
-            if _null(r.get(coluna)):
-                raise repo_errors.RepoViolation("%s obrigatorio para %s" % (coluna, trec),
+        for column in required.get(trec, ()):
+            if _null(r.get(column)):
+                raise repo_errors.RepoViolation("%s obrigatorio para %s" % (column, trec),
                                                constraint=self._ck("fields"))
 
     def _existe(self, conn, sql, binds):
@@ -183,13 +183,13 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             cur.close()
 
     def _checar_fks(self, conn, reg):
-        for existe, sufixo in (
+        for exists, suffix in (
             (self._existe(conn, self._sql["SCR_EXISTS"], {"id": int(reg["script_id"])}), "scr"),
             (self._existe(conn, self._sql["USR_EXISTS"], {"id": int(reg["user_id"])}), "usr"),
             (self._existe(conn, self._sql["ENV_EXISTS"], {"name": reg["environment"]}), "env"),
         ):
-            if not existe:
-                constraint = self.constraint_name("fk", "schedules", sufixo)
+            if not exists:
+                constraint = self.constraint_name("fk", "schedules", suffix)
                 raise repo_errors.RepoViolation("Referencia inexistente (%s)" % constraint, constraint=constraint)
 
     def _linha(self, row):
@@ -215,9 +215,9 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
 
     @staticmethod
     def _tipos(cur):
-        tipos = dict((c, db_conn.TIPO_DATE) for c in _DATES)
-        tipos["params_json"] = db_conn.TIPO_CLOB
-        db_conn.set_input_types(cur, **tipos)
+        kinds = dict((c, db_conn.TIPO_DATE) for c in _DATES)
+        kinds["params_json"] = db_conn.TIPO_CLOB
+        db_conn.set_input_types(cur, **kinds)
 
     def _auditar(self, conn, audit, id, default_action=None, default_detail=None, actor=None):
         if audit:
@@ -228,9 +228,9 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
                              "tbsss_schedules", id)
 
     def _conferir_esperado(self, id, current_value, expected):
-        for campo, valor in (expected or {}).items():
-            if not _equal(current_value.get(campo), valor):
-                raise repo_errors.RepoConflict("Agendamento ID %s alterado por outra operacao (%s)" % (id, campo))
+        for field, value in (expected or {}).items():
+            if not _equal(current_value.get(field), value):
+                raise repo_errors.RepoConflict("Agendamento ID %s alterado por outra operacao (%s)" % (id, field))
 
     # -------------------------------------------------------------------------
     # Leituras
@@ -239,34 +239,34 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
     def list(self, filters=None, page=1, size=20, environment_scope=None, conn=None):
         """Lista por next_run, id, com total limitado a 10.001 (traz parametros_json, sem log)."""
         filters = filters or {}
-        clausulas, binds = [], {}
+        clauses, binds = [], {}
         if environment_scope is not None:
-            ambs = sorted(set(environment_scope))
-            if not ambs:
-                clausulas.append("1 = 0")
+            envs = sorted(set(environment_scope))
+            if not envs:
+                clauses.append("1 = 0")
             else:
-                marcas = []
-                for n, amb in enumerate(ambs):
-                    binds["e%d" % n] = amb
-                    marcas.append(":e%d" % n)
-                clausulas.append("environment IN (" + ", ".join(marcas) + ")")
+                marks = []
+                for n, env in enumerate(envs):
+                    binds["e%d" % n] = env
+                    marks.append(":e%d" % n)
+                clauses.append("environment IN (" + ", ".join(marks) + ")")
         if filters.get("active"):
-            clausulas.append("active = :active_f")
+            clauses.append("active = :active_f")
             binds["active_f"] = filters["active"]
         if filters.get("script_id") is not None:
-            clausulas.append("script_id = :script_id_f")
+            clauses.append("script_id = :script_id_f")
             binds["script_id_f"] = int(filters["script_id"])
         if filters.get("environment"):
-            clausulas.append("environment = :environment_f")
+            clauses.append("environment = :environment_f")
             binds["environment_f"] = filters["environment"]
         if filters.get("user_id") is not None:
-            clausulas.append("user_id = :user_id_f")
+            clauses.append("user_id = :user_id_f")
             binds["user_id_f"] = int(filters["user_id"])
         if filters.get("name"):
             # '%' e '_' digitados contam como literais, como o 'in' do FAKE.
-            trecho = filters["name"].lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            clausulas.append("LOWER(name) LIKE :name_f ESCAPE '\\'")
-            binds["name_f"] = "%" + trecho + "%"
+            snippet = filters["name"].lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            clauses.append("LOWER(name) LIKE :name_f ESCAPE '\\'")
+            binds["name_f"] = "%" + snippet + "%"
 
         p = 1 if page is None else int(page)
         t = 20 if size is None else int(size)
@@ -274,32 +274,32 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             p = 1
         if t < 1:
             t = 20
-        inicio = (p - 1) * t
-        where = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
-        where_count = " AND ".join(clausulas + ["ROWNUM <= " + str(_LIMIT_TOTAL)])
-        sql_conta = _SQL_COUNT.format(where_count=where_count, **self._idents)
-        sql_pag = (
+        start = (p - 1) * t
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        where_count = " AND ".join(clauses + ["ROWNUM <= " + str(_LIMIT_TOTAL)])
+        sql_count_tpl = _SQL_COUNT.format(where_count=where_count, **self._idents)
+        sql_page = (
             "SELECT * FROM (SELECT a.*, ROWNUM rn FROM (" + _SQL_LIST.format(where=where, **self._idents) + ") a "
             "WHERE ROWNUM <= :end_ts) WHERE rn > :start_ts"
         )
         with self.read_context(conn=conn) as c:
             cur = c.cursor()
             try:
-                cur.execute(sql_conta, binds)
-                bruto = cur.fetchone()[0]
-                binds_pag = dict(binds)
-                binds_pag["start_ts"] = inicio
-                binds_pag["end_ts"] = inicio + t
-                cur.execute(sql_pag, binds_pag)
-                itens = [self._linha(r) for r in cur.fetchall()]
+                cur.execute(sql_count_tpl, binds)
+                raw = cur.fetchone()[0]
+                binds_page = dict(binds)
+                binds_page["start_ts"] = start
+                binds_page["end_ts"] = start + t
+                cur.execute(sql_page, binds_page)
+                items = [self._linha(r) for r in cur.fetchall()]
             finally:
                 cur.close()
         return {
-            "itens": itens,
-            "total": min(bruto, _LIMIT_TOTAL),
+            "itens": items,
+            "total": min(raw, _LIMIT_TOTAL),
             "pagina": p,
             "tamanho": t,
-            "total_limitado": bruto >= _LIMIT_TOTAL,
+            "total_limitado": raw >= _LIMIT_TOTAL,
         }
 
     def get(self, id, conn=None):
@@ -329,10 +329,10 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
 
     def insert(self, date, audit=None, actor=None, conn=None):
         """Insere com as CKs e FKs conferidas antes do INSERT e a auditoria na mesma transacao."""
-        ator_limpo = validate_record_actor(audit, actor)
+        actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
-            agora = db_conn.db_now(c)
-            novo = {
+            now = db_conn.db_now(c)
+            new = {
                 "name": date.get("name"),
                 "script_id": int(date["script_id"]),
                 "environment": date["environment"],
@@ -344,18 +344,18 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
                 "week_days": date.get("week_days"),
                 "month_day": date.get("month_day"),
                 "params_json": date.get("params_json", "{}"),
-                "start_date": date.get("start_date") or agora,
+                "start_date": date.get("start_date") or now,
                 "end_date": date.get("end_date"),
-                "next_run_at": date.get("next_run_at") or agora,
+                "next_run_at": date.get("next_run_at") or now,
                 "last_run_at": date.get("last_run_at"),
                 "last_ticket_id": date.get("last_ticket_id"),
                 "pause_reason": date.get("pause_reason"),
                 "active": date.get("active", "Y"),
             }
-            self._checar_cks(novo)
-            self._checar_fks(c, novo)
+            self._checar_cks(new)
+            self._checar_fks(c, new)
             aid = db_conn.next_id(c, self._seq_sch)
-            binds = self._binds_registro(novo, ator_limpo)
+            binds = self._binds_registro(new, actor_clean)
             binds["id"] = aid
             cur = c.cursor()
             try:
@@ -368,20 +368,20 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
 
     def update(self, id, date, expected=None, audit=None, actor=None, conn=None):
         """Altera a regra (usuario_id do editor), condicional a 'esperado'; created_* nunca muda."""
-        ator_limpo = validate_record_actor(audit, actor)
+        actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
-            atual = self._uma(c, self._sql["GET_LOCK"], {"id": int(id)})
-            if atual is None:
+            current = self._uma(c, self._sql["GET_LOCK"], {"id": int(id)})
+            if current is None:
                 raise repo_errors.RepoNotFound("Agendamento ID %s nao encontrado" % id)
-            self._conferir_esperado(id, atual, expected)
-            resultado = dict(atual)
+            self._conferir_esperado(id, current, expected)
+            result = dict(current)
             for k in _COLUMNS_UPDATABLE:
                 if k in date:
-                    resultado[k] = date[k]
+                    result[k] = date[k]
             # Validacao completa antes do UPDATE: um UPDATE rejeitado nao altera nenhuma coluna.
-            self._checar_cks(resultado)
-            self._checar_fks(c, resultado)
-            binds = self._binds_registro(resultado, ator_limpo)
+            self._checar_cks(result)
+            self._checar_fks(c, result)
+            binds = self._binds_registro(result, actor_clean)
             binds["id"] = int(id)
             cur = c.cursor()
             try:
@@ -396,13 +396,13 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
 
     def pause(self, id, reason, old_date=None, audit=None, actor=None, conn=None):
         """Pausa so regra ativa e, com antiga_data, so se a next_run nao mudou (CR-007, R-19)."""
-        ator_limpo = validate_record_actor(audit, actor)
+        actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             if not self._existe(c, self._sql["EXISTS"], {"id": int(id)}):
                 raise repo_errors.RepoNotFound("Agendamento ID %s nao encontrado" % id)
             if reason not in _REASONS_PAUSE:
                 raise repo_errors.RepoViolation("pausa_motivo invalido", constraint=self._ck("pause"))
-            binds = {"id": int(id), "reason": reason, "actor": ator_limpo}
+            binds = {"id": int(id), "reason": reason, "actor": actor_clean}
             cur = c.cursor()
             try:
                 if old_date is not None:
@@ -418,27 +418,27 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             finally:
                 cur.close()
             self._auditar(c, audit, int(id), "SCHEDULE_PAUSE", "Agendamento pausado: reason=%s" % reason,
-                          ator_limpo)
+                          actor_clean)
             return self.get(id, conn=c)
 
     def resume(self, id, new_date, expected=None, audit=None, actor=None, conn=None):
         """Retoma: ativo = 'S', pausa_motivo nulo e next_run = nova_data, condicional a 'esperado'."""
-        ator_limpo = validate_record_actor(audit, actor)
+        actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
-            atual = self._uma(c, self._sql["GET_LOCK"], {"id": int(id)})
-            if atual is None:
+            current = self._uma(c, self._sql["GET_LOCK"], {"id": int(id)})
+            if current is None:
                 raise repo_errors.RepoNotFound("Agendamento ID %s nao encontrado" % id)
-            self._conferir_esperado(id, atual, expected)
+            self._conferir_esperado(id, current, expected)
             if new_date is None:
                 raise repo_errors.RepoViolation("proxima_execucao e obrigatoria")
             cur = c.cursor()
             try:
                 db_conn.set_input_types(cur, new_date=db_conn.TIPO_DATE)
-                cur.execute(self._sql["RESUME"], {"id": int(id), "new_date": new_date, "actor": ator_limpo})
+                cur.execute(self._sql["RESUME"], {"id": int(id), "new_date": new_date, "actor": actor_clean})
                 if cur.rowcount != 1:
                     raise repo_errors.RepoConflict("Agendamento ID %s alterado por outra operacao" % id)
             finally:
                 cur.close()
             self._auditar(c, audit, int(id), "UPDATE",
-                          "Agendamento retomado com next_run_at=%s" % new_date, ator_limpo)
+                          "Agendamento retomado com next_run_at=%s" % new_date, actor_clean)
             return self.get(id, conn=c)

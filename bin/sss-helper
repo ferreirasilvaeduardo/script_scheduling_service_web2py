@@ -75,10 +75,10 @@ def _error(code, message):
 def _integer(text, name, minimum=0, maximum=None):
     if not isinstance(text, str) or not text.isdigit():
         _error(INVALID_USAGE, "%s invalido" % name)
-    valor = int(text)
-    if valor < minimum or (maximum is not None and valor > maximum):
+    value = int(text)
+    if value < minimum or (maximum is not None and value > maximum):
         _error(INVALID_USAGE, "%s fora da faixa" % name)
-    return valor
+    return value
 
 
 def _base_dir(path, name="base_dir"):
@@ -101,11 +101,11 @@ def _relative_parts(relative):
     """<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id> com exatamente esse formato (CR-012)."""
     if not isinstance(relative, str):
         _error(INVALID_USAGE, "relativo invalido")
-    partes = relative.split("/")
-    if len(partes) != 7 or not _RE_SCRIPT_DIR.match(partes[0]) \
-            or not _RE_MINUTE_RELATIVE.match("/".join(partes[1:6])) or not _RE_TICKET.match(partes[6]):
+    parts = relative.split("/")
+    if len(parts) != 7 or not _RE_SCRIPT_DIR.match(parts[0]) \
+            or not _RE_MINUTE_RELATIVE.match("/".join(parts[1:6])) or not _RE_TICKET.match(parts[6]):
         _error(INVALID_USAGE, "relativo fora do formato <script>/AAAA/MM/DD/HH/MI/ticket_<id>")
-    return partes
+    return parts
 
 
 def _own_directory(path):
@@ -124,21 +124,21 @@ def _output_dir(base, relative, create=False):
 
     Devolve o caminho, ou None se algum nivel nao existir (e criar=False).
     """
-    atual = _base_dir(base, "base")
-    for parte in _relative_parts(relative):
-        atual = os.path.join(atual, parte)
-        if _own_directory(atual):
+    current = _base_dir(base, "base")
+    for part in _relative_parts(relative):
+        current = os.path.join(current, part)
+        if _own_directory(current):
             continue
         if not create:
             return None
         try:
-            os.mkdir(atual, 0o700)
+            os.mkdir(current, 0o700)
         except FileExistsError:  # criado por outro caminho entre o lstat e o mkdir: conferido abaixo
             pass
-        if not _own_directory(atual):
+        if not _own_directory(current):
             _error(SYSTEM_ERROR, "pasta de saida nao foi criada")
-        os.chmod(atual, 0o700)
-    return atual
+        os.chmod(current, 0o700)
+    return current
 
 
 def _input_dir(base, relative):
@@ -146,15 +146,15 @@ def _input_dir(base, relative):
     script, um nivel so. Permanente: criada com 0700 se nao existir, sem seguir link; a existente fica como esta."""
     if not isinstance(relative, str) or not _RE_SCRIPT_DIR.match(relative):
         _error(INVALID_USAGE, "entrada fora do formato <script>")
-    atual = os.path.join(_base_dir(base, "base"), relative)
-    if not _own_directory(atual):
+    current = os.path.join(_base_dir(base, "base"), relative)
+    if not _own_directory(current):
         try:
-            os.mkdir(atual, 0o700)
+            os.mkdir(current, 0o700)
         except FileExistsError:  # criada por outro ticket entre o lstat e o mkdir: conferida abaixo
             pass
-        if not _own_directory(atual):
+        if not _own_directory(current):
             _error(SYSTEM_ERROR, "pasta de entrada nao foi criada")
-    return atual
+    return current
 
 
 def _ticket_dir(base_dir, ticket_id):
@@ -166,11 +166,11 @@ def _ticket_dir(base_dir, ticket_id):
 # -----------------------------------------------------------------------------
 
 def _read_spec(input_value):
-    bruto = input_value.read(_MAX_SPEC + 1)
-    if len(bruto) > _MAX_SPEC:
+    raw = input_value.read(_MAX_SPEC + 1)
+    if len(raw) > _MAX_SPEC:
         _error(INVALID_USAGE, "especificacao maior que 1 MiB")
     try:
-        spec = json.loads(bruto.decode("utf-8"))
+        spec = json.loads(raw.decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
         _error(INVALID_USAGE, "especificacao nao e JSON valido")
     if not isinstance(spec, dict):
@@ -189,18 +189,18 @@ def _read_spec(input_value):
     rlimits = spec.get("rlimits") or {}
     if not isinstance(rlimits, dict):
         _error(INVALID_USAGE, "rlimits invalido")
-    limites = {"RLIMIT_CORE": (0, 0), "RLIMIT_NOFILE": (1024, 1024)}
-    for nome, valor in rlimits.items():
-        if nome not in _ALLOWED_RLIMITS or not isinstance(valor, list) or len(valor) != 2 \
-                or not all(isinstance(x, int) and not isinstance(x, bool) for x in valor):
+    limits = {"RLIMIT_CORE": (0, 0), "RLIMIT_NOFILE": (1024, 1024)}
+    for name, value in rlimits.items():
+        if name not in _ALLOWED_RLIMITS or not isinstance(value, list) or len(value) != 2 \
+                or not all(isinstance(x, int) and not isinstance(x, bool) for x in value):
             _error(INVALID_USAGE, "limite de recurso invalido")
-        limites[nome] = (valor[0], valor[1])
-    saida = spec.get("output")
-    if saida is not None:
-        if not isinstance(saida, dict) or set(saida) != {"base", "relativo"}:
+        limits[name] = (value[0], value[1])
+    output = spec.get("output")
+    if output is not None:
+        if not isinstance(output, dict) or set(output) != {"base", "relativo"}:
             _error(INVALID_USAGE, "saida invalida")
-        _base_dir(saida["base"], "base")
-        if _relative_parts(saida["relativo"])[6] != "ticket_%d" % ticket_id:
+        _base_dir(output["base"], "base")
+        if _relative_parts(output["relativo"])[6] != "ticket_%d" % ticket_id:
             _error(INVALID_USAGE, "saida de outro ticket")
     input_value = spec.get("input")
     if input_value is not None:
@@ -209,32 +209,32 @@ def _read_spec(input_value):
         _base_dir(input_value["base"], "base")
         if not isinstance(input_value["relativo"], str) or not _RE_SCRIPT_DIR.match(input_value["relativo"]):
             _error(INVALID_USAGE, "entrada fora do formato <script>")
-    return ticket_id, argv, env, limites, _base_dir(spec.get("base_dir")), saida, input_value
+    return ticket_id, argv, env, limits, _base_dir(spec.get("base_dir")), output, input_value
 
 
 def _run(input_value=None, run=os.execve):
     """Cria <pasta_base>/ticket_<id>/ e tmp/ (0700), entra nela, aplica umask e limites e faz execve."""
-    ticket_id, argv, env, limites, pasta_base, saida, pasta_entrada = _read_spec(
+    ticket_id, argv, env, limits, dir_base, output, dir_input = _read_spec(
         input_value or sys.stdin.buffer)
-    pasta = _ticket_dir(pasta_base, ticket_id)
+    dir_value = _ticket_dir(dir_base, ticket_id)
     try:
         # O script nunca le a entrada padrao do helper (a especificacao ja foi consumida).
-        nulo = os.open(os.devnull, os.O_RDONLY)
-        os.dup2(nulo, 0)
-        os.close(nulo)
-        os.makedirs(os.path.join(pasta, "tmp"), mode=0o700, exist_ok=True)
-        os.chmod(pasta, 0o700)
-        os.chmod(os.path.join(pasta, "tmp"), 0o700)
-        if saida is not None:
+        null = os.open(os.devnull, os.O_RDONLY)
+        os.dup2(null, 0)
+        os.close(null)
+        os.makedirs(os.path.join(dir_value, "tmp"), mode=0o700, exist_ok=True)
+        os.chmod(dir_value, 0o700)
+        os.chmod(os.path.join(dir_value, "tmp"), 0o700)
+        if output is not None:
             # CR-012: a pasta de saida do ticket, do usuario de execucao, antes do script (README §8.13).
-            _output_dir(saida["base"], saida["relativo"], create=True)
-        if pasta_entrada is not None:
+            _output_dir(output["base"], output["relativo"], create=True)
+        if dir_input is not None:
             # CR-014: a pasta de entrada do script, permanente, do usuario de execucao (README §8.14).
-            _input_dir(pasta_entrada["base"], pasta_entrada["relativo"])
-        os.chdir(pasta)
+            _input_dir(dir_input["base"], dir_input["relativo"])
+        os.chdir(dir_value)
         os.umask(0o077)
-        for nome, par in sorted(limites.items()):
-            resource.setrlimit(getattr(resource, nome), par)
+        for name, pair in sorted(limits.items()):
+            resource.setrlimit(getattr(resource, name), pair)
     except OSError as e:
         _error(SYSTEM_ERROR, "preparo da execucao falhou (%s)" % e.__class__.__name__)
     try:
@@ -252,8 +252,8 @@ def _identity(pid):
     """starttime do processo (campo 22 de /proc/<pid>/stat, depois do ultimo ')'); None se ilegivel."""
     try:
         with open("/proc/%d/stat" % pid, "r") as f:
-            conteudo = f.read()
-        return int(conteudo[conteudo.rindex(")") + 2:].split()[19])
+            content = f.read()
+        return int(content[content.rindex(")") + 2:].split()[19])
     except (OSError, ValueError, IndexError):  # processo saiu ou /proc ilegivel: identidade desconhecida
         return None
 
@@ -263,24 +263,24 @@ def _signal(pgid, process_start, signal_value):
         _error(INVALID_USAGE, "pgid invalido")
     try:
         os.kill(pgid, 0)
-        lider_vivo = True
+        leader_alive = True
     except ProcessLookupError:  # lider ja saiu; os membros do grupo seguem (R-02)
-        lider_vivo = False
+        leader_alive = False
     except PermissionError:
         # O lider do grupo e o sudo, que roda como root: EPERM e o caso normal. A identidade lida em
         # /proc/<pid>/stat (legivel por todos) protege contra PID reciclado (revisao de 2026-10-20).
-        lider_vivo = True
-    if lider_vivo:
-        identidade = _identity(pgid)
-        if identidade is None or identidade != process_start:
+        leader_alive = True
+    if leader_alive:
+        identity = _identity(pgid)
+        if identity is None or identity != process_start:
             _error(REFUSED, "identidade do lider diverge (PID reciclado)")
     return signal_value
 
 
 def _term(pgid, process_start):
-    sinal = _signal(pgid, process_start, signal.SIGTERM)
+    signal_value = _signal(pgid, process_start, signal.SIGTERM)
     try:
-        os.killpg(pgid, sinal)
+        os.killpg(pgid, signal_value)
     except ProcessLookupError:  # ESRCH = grupo vazio: sucesso
         return 0
     except PermissionError:  # so o sudo (root) resta no grupo: nada do usuario de execucao a sinalizar
@@ -289,9 +289,9 @@ def _term(pgid, process_start):
 
 
 def _kill(pgid, process_start):
-    sinal = _signal(pgid, process_start, signal.SIGKILL)
+    signal_value = _signal(pgid, process_start, signal.SIGKILL)
     try:
-        os.killpg(pgid, sinal)
+        os.killpg(pgid, signal_value)
     except ProcessLookupError:  # ESRCH = grupo vazio: sucesso
         return 0
     except PermissionError:  # so o sudo (root) resta no grupo: nada do usuario de execucao a sinalizar
@@ -305,13 +305,13 @@ def _kill(pgid, process_start):
 
 def _clean(base_dir, ticket_id):
     """Remove <pasta_base>/ticket_<id>/ sem seguir links simbolicos."""
-    pasta = _ticket_dir(_base_dir(base_dir), ticket_id)
-    if not os.path.lexists(pasta):
+    dir_value = _ticket_dir(_base_dir(base_dir), ticket_id)
+    if not os.path.lexists(dir_value):
         return 0
-    if os.path.islink(pasta) or not os.path.isdir(pasta):
+    if os.path.islink(dir_value) or not os.path.isdir(dir_value):
         _error(INVALID_USAGE, "pasta do ticket nao e um diretorio")
     try:
-        shutil.rmtree(pasta)  # rmtree nao segue links simbolicos internos (remove o proprio link)
+        shutil.rmtree(dir_value)  # rmtree nao segue links simbolicos internos (remove o proprio link)
     except OSError as e:
         _error(SYSTEM_ERROR, "limpeza falhou (%s)" % e.__class__.__name__)
     return 0
@@ -320,37 +320,37 @@ def _clean(base_dir, ticket_id):
 def _stop_ticket(base_dir, ticket_id, kill_grace_s, list_fn=None):
     """SIGTERM e, depois de kill_grace_s, SIGKILL aos processos do proprio usuario cujo cwd esta na pasta do
     ticket (Linux: /proc/<pid>/cwd; outros Unix: pwdx). Sem meio de identificar: codigo 5."""
-    pasta = _ticket_dir(_base_dir(base_dir), ticket_id)
-    meu_uid = os.geteuid()
+    dir_value = _ticket_dir(_base_dir(base_dir), ticket_id)
+    my_uid = os.geteuid()
     pwdx = [p for p in ("/usr/bin/pwdx", "/bin/pwdx") if os.path.isfile(p)]
 
     def _na_pasta(cwd):
         cwd = os.path.normpath(cwd)
-        return os.path.commonpath([cwd, pasta]) == pasta
+        return os.path.commonpath([cwd, dir_value]) == dir_value
 
     def _listar_proc():
         pids = []
-        for nome in os.listdir("/proc/"):
-            if not nome.isdigit() or int(nome) == os.getpid():
+        for name in os.listdir("/proc/"):
+            if not name.isdigit() or int(name) == os.getpid():
                 continue
             try:
-                if os.stat("/proc/" + nome).st_uid != meu_uid:
+                if os.stat("/proc/" + name).st_uid != my_uid:
                     continue
-                if _na_pasta(os.readlink("/proc/%s/cwd" % nome)):
-                    pids.append(int(nome))
+                if _na_pasta(os.readlink("/proc/%s/cwd" % name)):
+                    pids.append(int(name))
             except OSError:  # processo saiu durante a varredura
                 continue
         return pids
 
     def _listar_pwdx():
-        saida = subprocess.run(["/bin/ps", "-U", str(meu_uid), "-o", "pid="], stdout=subprocess.PIPE,
+        output = subprocess.run(["/bin/ps", "-U", str(my_uid), "-o", "pid="], stdout=subprocess.PIPE,
                                stderr=subprocess.DEVNULL, universal_newlines=True).stdout
         pids = []
-        for pid in (int(x) for x in saida.split() if x.isdigit()):
-            linha = subprocess.run([pwdx[0], str(pid)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        for pid in (int(x) for x in output.split() if x.isdigit()):
+            line = subprocess.run([pwdx[0], str(pid)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                    universal_newlines=True).stdout
-            partes = linha.split(":", 1)
-            if len(partes) == 2 and _na_pasta(partes[1].strip()):
+            parts = line.split(":", 1)
+            if len(parts) == 2 and _na_pasta(parts[1].strip()):
                 pids.append(pid)
         return pids
 
@@ -362,17 +362,17 @@ def _stop_ticket(base_dir, ticket_id, kill_grace_s, list_fn=None):
         else:
             _error(UNSUPPORTED, "sem /proc/<pid>/cwd nem pwdx nesta plataforma")
 
-    for sinal in (signal.SIGTERM, signal.SIGKILL):
+    for signal_value in (signal.SIGTERM, signal.SIGKILL):
         pids = list_fn()
         for pid in pids:
             try:
-                os.kill(pid, sinal)
+                os.kill(pid, signal_value)
             except ProcessLookupError:  # processo ja saiu
                 pass
-        if not pids or sinal == signal.SIGKILL:
+        if not pids or signal_value == signal.SIGKILL:
             break
-        limite = time.monotonic() + kill_grace_s
-        while time.monotonic() < limite and list_fn():
+        limit = time.monotonic() + kill_grace_s
+        while time.monotonic() < limit and list_fn():
             time.sleep(0.1)
     return 0
 
@@ -406,68 +406,68 @@ class _CountedOutput(object):
 
 def _output_files(folder, max_files):
     """[(caminho, nome_relativo)] dos arquivos regulares, sem seguir links; acima do limite: codigo 7."""
-    arquivos = []
-    for raiz, dirs, nomes in os.walk(folder, followlinks=False):
+    files = []
+    for root, dirs, names in os.walk(folder, followlinks=False):
         dirs.sort()
-        for nome in sorted(nomes):
-            caminho = os.path.join(raiz, nome)
+        for name in sorted(names):
+            path = os.path.join(root, name)
             try:
-                if not stat.S_ISREG(os.lstat(caminho).st_mode):
+                if not stat.S_ISREG(os.lstat(path).st_mode):
                     continue  # link, socket, fifo ou dispositivo: fora do zip
             except OSError:  # o script apagou o arquivo durante a varredura
                 continue
-            arquivos.append((caminho, os.path.relpath(caminho, folder)))
-            if len(arquivos) > max_files:
+            files.append((path, os.path.relpath(path, folder)))
+            if len(files) > max_files:
                 _error(OUTPUT_TOO_MANY_FILES, "saida acima do limite de arquivos")
-    return arquivos
+    return files
 
 
 def _pack(base, relative, max_bytes, max_files, destination=None):
     """Zip (ZIP_DEFLATED) da pasta de saida na saida padrao. Vazia: 6; arquivos: 7; bytes: 8."""
-    pasta = _output_dir(base, relative)
-    if pasta is None:
+    dir_value = _output_dir(base, relative)
+    if dir_value is None:
         _error(OUTPUT_EMPTY, "pasta de saida inexistente")
-    arquivos = _output_files(pasta, max_files)
-    if not arquivos:
+    files = _output_files(dir_value, max_files)
+    if not files:
         _error(OUTPUT_EMPTY, "pasta de saida vazia")
-    saida = _CountedOutput(destination or sys.stdout.buffer, max_bytes)
+    output = _CountedOutput(destination or sys.stdout.buffer, max_bytes)
     try:
-        with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as z:
-            for caminho, nome in arquivos:
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as z:
+            for path, name in files:
                 try:
-                    fd = os.open(caminho, os.O_RDONLY | os.O_NOFOLLOW)
+                    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
                 except OSError:  # apagado ou trocado por link depois da varredura: fica de fora
                     continue
                 with os.fdopen(fd, "rb") as f:
                     st = os.fstat(f.fileno())
                     if not stat.S_ISREG(st.st_mode):
                         continue
-                    info = zipfile.ZipInfo(nome, time.localtime(max(st.st_mtime, _MTIME_MIN))[:6])
+                    info = zipfile.ZipInfo(name, time.localtime(max(st.st_mtime, _MTIME_MIN))[:6])
                     info.compress_type = zipfile.ZIP_DEFLATED
                     info.external_attr = 0o600 << 16
                     with z.open(info, "w") as dst:
-                        while not saida.exceeded:
-                            bloco = f.read(_CHUNK)
-                            if not bloco:
+                        while not output.exceeded:
+                            chunk = f.read(_CHUNK)
+                            if not chunk:
                                 break
-                            dst.write(bloco)
-                if saida.exceeded:
+                            dst.write(chunk)
+                if output.exceeded:
                     break
-        saida.flush()
+        output.flush()
     except OSError as e:
         _error(SYSTEM_ERROR, "empacotamento falhou (%s)" % e.__class__.__name__)
-    if saida.exceeded:
+    if output.exceeded:
         _error(OUTPUT_TOO_MANY_BYTES, "saida acima do limite de bytes")
     return 0
 
 
 def _clean_output(base, relative):
     """Remove a pasta de saida do ticket sem seguir links simbolicos (as pastas acima ficam para o purge)."""
-    pasta = _output_dir(base, relative)
-    if pasta is None:
+    dir_value = _output_dir(base, relative)
+    if dir_value is None:
         return 0
     try:
-        shutil.rmtree(pasta)  # rmtree nao segue links simbolicos internos (remove o proprio link)
+        shutil.rmtree(dir_value)  # rmtree nao segue links simbolicos internos (remove o proprio link)
     except OSError as e:
         _error(SYSTEM_ERROR, "limpeza da saida falhou (%s)" % e.__class__.__name__)
     return 0
@@ -478,15 +478,15 @@ def _purge_output(base, days, today=None, count_only=False):
     que ficarem vazias acima delas. Imprime 'removidas=<n>'. Itens fora do formato sao ignorados.
     contar=True so conta (nada e removido)."""
     base = _base_dir(base, "base")
-    limite = (today or datetime.date.today()) - datetime.timedelta(days=days)
-    removidas = 0
+    limit = (today or datetime.date.today()) - datetime.timedelta(days=days)
+    removed = 0
 
     def _subpastas(folder, regex):
         try:
-            nomes = sorted(os.listdir(folder))
+            names = sorted(os.listdir(folder))
         except OSError:  # pasta removida durante a varredura
             return []
-        return [os.path.join(folder, n) for n in nomes
+        return [os.path.join(folder, n) for n in names
                 if regex.match(n) and _own_directory(os.path.join(folder, n))]
 
     def _remover_se_vazia(folder):
@@ -495,38 +495,38 @@ def _purge_output(base, days, today=None, count_only=False):
         except OSError:  # nao vazia (ou ja removida): fica
             pass
 
-    ano, dois = re.compile(r"^\d{4}$"), re.compile(r"^\d{2}$")
+    year, two = re.compile(r"^\d{4}$"), re.compile(r"^\d{2}$")
     for p_scr in _subpastas(base, _RE_SCRIPT_DIR):
-        for p_ano in _subpastas(p_scr, ano):
-            for p_mes in _subpastas(p_ano, dois):
-                for p_dia in _subpastas(p_mes, dois):
-                    a, m, d = (int(os.path.basename(x)) for x in (p_ano, p_mes, p_dia))
+        for p_year in _subpastas(p_scr, year):
+            for p_month in _subpastas(p_year, two):
+                for p_day in _subpastas(p_month, two):
+                    a, m, d = (int(os.path.basename(x)) for x in (p_year, p_month, p_day))
                     try:
-                        data = datetime.date(a, m, d)
+                        date = datetime.date(a, m, d)
                     except ValueError:  # data invalida no caminho: fora do formato
                         continue
-                    if data < limite:
-                        for p_hora in _subpastas(p_dia, dois):
-                            for p_min in _subpastas(p_hora, dois):
+                    if date < limit:
+                        for p_hour in _subpastas(p_day, two):
+                            for p_min in _subpastas(p_hour, two):
                                 if count_only:
-                                    removidas += 1
+                                    removed += 1
                                     continue
                                 try:
                                     shutil.rmtree(p_min)
-                                    removidas += 1
+                                    removed += 1
                                 except OSError as e:
                                     _error(SYSTEM_ERROR, "purga da saida falhou (%s)" % e.__class__.__name__)
                             if not count_only:
-                                _remover_se_vazia(p_hora)
+                                _remover_se_vazia(p_hour)
                     if not count_only:
-                        _remover_se_vazia(p_dia)
+                        _remover_se_vazia(p_day)
                 if not count_only:
-                    _remover_se_vazia(p_mes)
+                    _remover_se_vazia(p_month)
             if not count_only:
-                _remover_se_vazia(p_ano)
+                _remover_se_vazia(p_year)
         if not count_only:
             _remover_se_vazia(p_scr)
-    sys.stdout.write("removidas=%d\n" % removidas)
+    sys.stdout.write("removidas=%d\n" % removed)
     return 0
 
 
@@ -542,8 +542,8 @@ def run_main(argv):
         return _run()
     if sub in ("term", "kill") and len(args) == 2:
         pgid = _integer(args[0], "pgid", minimum=2)
-        inicio = _integer(args[1], "process_start")
-        return _term(pgid, inicio) if sub == "term" else _kill(pgid, inicio)
+        start = _integer(args[1], "process_start")
+        return _term(pgid, start) if sub == "term" else _kill(pgid, start)
     if sub == "clean" and len(args) == 2:
         return _clean(args[0], _integer(args[1], "ticket_id", minimum=1))
     if sub == "pack" and len(args) == 4:

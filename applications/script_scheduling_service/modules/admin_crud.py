@@ -111,15 +111,15 @@ def version(record, fields, sensitive=()):
     Campos em 'sensiveis' entram pelo marcador, nunca pelo valor: a versao vai ao HTML e um sha256
     sem sal do segredo permitiria adivinha-lo. A troca concorrente so do segredo fica com o esperado.
     """
-    estado = [[c, sensitive_marker(record.get(c)) if c in sensitive else normalize(record.get(c))]
+    state = [[c, sensitive_marker(record.get(c)) if c in sensitive else normalize(record.get(c))]
               for c in fields]
-    return state_hash(estado)
+    return state_hash(state)
 
 
 def state_hash(state):
     """sha256 do JSON deterministico de um estado serializavel."""
-    bruto = json.dumps(state, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(bruto.encode("utf-8")).hexdigest()
+    raw = json.dumps(state, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def expected(record, fields):
@@ -146,12 +146,12 @@ def free_detail(text):
 
 def changes_detail(before, after_value, fields):
     """'campo: antigo → novo' por campo alterado, mascarado e limitado a 1000 caracteres; None se nada mudou."""
-    partes = []
+    parts = []
     for c in fields:
         a, d = normalize(before.get(c)), normalize(after_value.get(c))
         if a != d:
-            partes.append(u"%s: %s%s%s" % (c, _display(a), _ARROW, _display(d)))
-    return truncate_detail(u"; ".join(partes)) if partes else None
+            parts.append(u"%s: %s%s%s" % (c, _display(a), _ARROW, _display(d)))
+    return truncate_detail(u"; ".join(parts)) if parts else None
 
 
 def insert_detail(record, fields):

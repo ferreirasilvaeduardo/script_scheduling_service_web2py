@@ -63,8 +63,8 @@ class TestRocketPy36(unittest.TestCase):
 
     def test_sem_classes_ssl_ausentes_no_36(self):
         with open(rocket3.__file__, encoding="utf-8") as f:
-            codigo = f.read()
-        self.assertIsNone(re.search(r"except\s+ssl\.SSLCertVerificationError", codigo))
+            code = f.read()
+        self.assertIsNone(re.search(r"except\s+ssl\.SSLCertVerificationError", code))
 
 
 # Roda num interpretador separado: o ssl ausente nao pode vazar para os demais testes.
@@ -102,11 +102,11 @@ print("SEM_SSL_OK")
 class TestRocketWithoutSSL(unittest.TestCase):
 
     def test_conexao_ociosa_sem_modulo_ssl(self):
-        resultado = subprocess.run([sys.executable, "-I", "-c", _SCRIPT_SEM_SSL, _ROCKET_DIR],
+        result = subprocess.run([sys.executable, "-I", "-c", _SCRIPT_SEM_SSL, _ROCKET_DIR],
                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
-        saida = resultado.stdout.decode("utf-8", "replace")
-        self.assertEqual(resultado.returncode, 0, saida)
-        self.assertIn("SEM_SSL_OK", saida)
+        output = result.stdout.decode("utf-8", "replace")
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIn("SEM_SSL_OK", output)
 
 
 if __name__ == "__main__":

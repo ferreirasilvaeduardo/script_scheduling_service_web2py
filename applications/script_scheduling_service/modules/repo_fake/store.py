@@ -102,12 +102,12 @@ class FakeDataStore(object):
 
         Chamado antes de qualquer gravacao: sem ator, nada e gravado (paridade com created_by NOT NULL).
         """
-        valor = (audit or {}).get("actor") or actor
-        if not valor:
+        value = (audit or {}).get("actor") or actor
+        if not value:
             raise RepoViolation("ator das colunas de registro e obrigatorio")
-        if len(valor) > ACTOR_MAX:
+        if len(value) > ACTOR_MAX:
             raise RepoViolation("ator excede o tamanho da coluna (ORA-12899)")
-        return valor
+        return value
 
     def stamp_insert(self, reg, actor):
         """created_at (o informado ou SYSDATE) e created_by; updated_* nulos ate a 1a alteracao."""
@@ -172,7 +172,7 @@ LIMIT_TOTAL_PAGINATION = 10001
 
 def paginate(items, page=1, size=20):
     """Pagina deterministica com total limitado a 10.001 (README §10)."""
-    total_limitado = len(items) >= LIMIT_TOTAL_PAGINATION
+    total_capped = len(items) >= LIMIT_TOTAL_PAGINATION
     total = min(len(items), LIMIT_TOTAL_PAGINATION)
     # Valor nao numerico propaga ValueError/TypeError: o controller valida a entrada antes.
     p = 1 if page is None else int(page)
@@ -183,13 +183,13 @@ def paginate(items, page=1, size=20):
     if t < 1:
         t = 20
 
-    inicio = (p - 1) * t
-    fim = inicio + t
-    fatia = items[inicio:fim]
+    start = (p - 1) * t
+    end = start + t
+    slice_value = items[start:end]
     return {
-        "itens": copy.deepcopy(fatia),
+        "itens": copy.deepcopy(slice_value),
         "total": total,
         "pagina": p,
         "tamanho": t,
-        "total_limitado": total_limitado,
+        "total_limitado": total_capped,
     }

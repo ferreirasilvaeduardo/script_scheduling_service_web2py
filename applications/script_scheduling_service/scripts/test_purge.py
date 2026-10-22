@@ -34,11 +34,11 @@ TERMINAL_STATUSES = ("SUCCESS", "FAILED", "CANCELLED")
 
 
 def _cfg(root, **extra):
-    agente = dict(agent_id="srv-a", work_dir=os.path.join(root, "work"), output_dir=None,
+    agent = dict(agent_id="srv-a", work_dir=os.path.join(root, "work"), output_dir=None,
                   environments=("PRODUCAO",), exec_users=())
-    agente.update(extra.get("agent", {}))
+    agent.update(extra.get("agent", {}))
     return NS(app=NS(sss_env="DEV"), oracle=NS(owner="openrisow", table_prefix="tbsss_"),
-              secrets=NS(secrets_file=os.path.join(root, "secrets.cfg")), agent=NS(**agente),
+              secrets=NS(secrets_file=os.path.join(root, "secrets.cfg")), agent=NS(**agent),
               logging=NS(log_dir=os.path.join(root, "logs"), local_log_retention_days=30, output_retention_days=7),
               retention=NS(ticket_retention_days=90, audit_retention_days=365, purge_batch_size=2,
                           purge_user=extra.get("purge_user", "sss_purge")))
@@ -83,17 +83,17 @@ class _Cursor(object):
 
     def _eligible(self, table, limit, batch=None):
         if table == "tickets":
-            linhas = [t for t in self.b.tickets if t["created_at"] < limit and t["status"] in TERMINAL_STATUSES]
+            rows = [t for t in self.b.tickets if t["created_at"] < limit and t["status"] in TERMINAL_STATUSES]
         else:
-            linhas = [a for a in self.b.audit if a["created_at"] < limit]
-        return linhas if batch is None else linhas[:batch]
+            rows = [a for a in self.b.audit if a["created_at"] < limit]
+        return rows if batch is None else rows[:batch]
 
     def execute(self, sql, binds=None):
         b, binds = self.b, binds or {}
         b.sqls.append(sql)
         if b.fail_at and b.fail_at in sql:
             raise RuntimeError("ORA-03113: end-of-file on communication channel")
-        tabela = "tickets" if "tbsss_tickets" in sql else "audit"
+        table = "tickets" if "tbsss_tickets" in sql else "audit"
         self._lines, self.rowcount = [], 0
         if sql == "SELECT SYSDATE FROM DUAL":
             self._lines = [(NOW.replace(microsecond=123),)]
@@ -104,23 +104,23 @@ class _Cursor(object):
             b.taken += 1
             if b.steal_on_renewal == b.taken:
                 b.ctl = {"dono": "srv-outro", "ate": NOW + datetime.timedelta(hours=1)}
-            livre = b.ctl["ate"] is None or b.ctl["ate"] < NOW or b.ctl["dono"] == binds["owner"]
-            if livre:
+            free = b.ctl["ate"] is None or b.ctl["ate"] < NOW or b.ctl["dono"] == binds["owner"]
+            if free:
                 b.ctl = {"dono": binds["owner"], "ate": NOW + datetime.timedelta(hours=1)}
-            self.rowcount = int(livre)
+            self.rowcount = int(free)
         elif "SET purge_owner = NULL" in sql:
             if b.ctl["dono"] == binds["owner"]:
                 b.ctl = {"dono": None, "ate": None}
                 self.rowcount = 1
         elif sql.startswith("SELECT COUNT(*)"):
-            self._lines = [(len(self._eligible(tabela, binds["cutoff"])),)]
+            self._lines = [(len(self._eligible(table, binds["cutoff"])),)]
         elif sql.startswith("DELETE") and "ROWNUM <= :batch_size" in sql:
-            alvo = self._eligible(tabela, binds["cutoff"], binds["batch_size"])
-            lista = b.tickets if tabela == "tickets" else b.audit
-            for linha in alvo:
-                lista.remove(linha)
-                b.pending.append((lista, linha))
-            self.rowcount = len(alvo)
+            target = self._eligible(table, binds["cutoff"], binds["batch_size"])
+            items = b.tickets if table == "tickets" else b.audit
+            for line in target:
+                items.remove(line)
+                b.pending.append((items, line))
+            self.rowcount = len(target)
         elif "FOR UPDATE" in sql:
             cols = ("id", "created_at", "actor", "source_ip", "action", "entity", "entity_id", "detail")
             self._lines = [tuple(a[c] for c in cols) for a in self._eligible("audit", binds["cutoff"],
@@ -136,9 +136,9 @@ class _Cursor(object):
     def executemany(self, sql, binds):
         self.b.sqls.append(sql)
         ids = set(x["id"] for x in binds)
-        for linha in [a for a in self.b.audit if a["id"] in ids]:
-            self.b.audit.remove(linha)
-            self.b.pending.append((self.b.audit, linha))
+        for line in [a for a in self.b.audit if a["id"] in ids]:
+            self.b.audit.remove(line)
+            self.b.pending.append((self.b.audit, line))
         self.rowcount = len(ids)
 
 
@@ -156,10 +156,10 @@ class _Conn(object):
 
     def rollback(self):
         self.b.rollbacks += 1
-        for lista, linha in self.b.pending:
-            lista.append(linha)
-        lista_ordem = sorted(self.b.tickets, key=lambda t: t["id"])
-        self.b.tickets[:] = lista_ordem
+        for items, line in self.b.pending:
+            items.append(line)
+        items_order = sorted(self.b.tickets, key=lambda t: t["id"])
+        self.b.tickets[:] = items_order
         self.b.pending = []
 
     def close(self):
@@ -209,12 +209,12 @@ class _Base(unittest.TestCase):
         return purge_cli.Purge(cfg or self.cfg, _Conn(db), plat=plat or _Plat(), logger=self.log)
 
     def _minute(self, rel, files=("ticket_1_100.log",)):
-        pasta = os.path.join(self.cfg.logging.log_dir, *rel.split("/"))
-        os.makedirs(pasta)
-        for nome in files:
-            with open(os.path.join(pasta, nome), "w") as f:
+        dir_value = os.path.join(self.cfg.logging.log_dir, *rel.split("/"))
+        os.makedirs(dir_value)
+        for name in files:
+            with open(os.path.join(dir_value, name), "w") as f:
                 f.write("x")
-        return pasta
+        return dir_value
 
     def _purges(self, db):
         return [a for a in db.audit if a["action"] == "PURGE"]
@@ -223,111 +223,111 @@ class _Base(unittest.TestCase):
 class TestTables(_Base):
 
     def test_lotes_ate_rowcount_zero_e_so_terminais(self):
-        velhos = [(i, _days(100), s) for i, s in enumerate(TERMINAL_STATUSES * 2, 1)][:5]
-        banco = _Db(tickets=velhos + [(10, _days(100), "PENDING"), (11, _days(100), "RUNNING"),
+        old = [(i, _days(100), s) for i, s in enumerate(TERMINAL_STATUSES * 2, 1)][:5]
+        db = _Db(tickets=old + [(10, _days(100), "PENDING"), (11, _days(100), "RUNNING"),
                                          (12, _days(10), "SUCCESS")])
-        p = self._purge(banco)
+        p = self._purge(db)
         self.assertEqual(p.run(("tickets",)), purge_cli.EXIT_OK)
-        self.assertEqual(sorted(t["id"] for t in banco.tickets), [10, 11, 12], "nunca um ticket nao terminal")
-        lotes = [s for s in banco.sqls if s.startswith("DELETE")]
-        self.assertEqual(len(lotes), 4, "2 + 2 + 1 e o lote vazio")
-        self.assertEqual(lotes[0], "DELETE FROM openrisow.tbsss_tickets WHERE created_at < :cutoff"
+        self.assertEqual(sorted(t["id"] for t in db.tickets), [10, 11, 12], "nunca um ticket nao terminal")
+        batches = [s for s in db.sqls if s.startswith("DELETE")]
+        self.assertEqual(len(batches), 4, "2 + 2 + 1 e o lote vazio")
+        self.assertEqual(batches[0], "DELETE FROM openrisow.tbsss_tickets WHERE created_at < :cutoff"
                                    " AND status IN ('SUCCESS','FAILED','CANCELLED') AND ROWNUM <= :batch_size")
         self.assertIn("tickets: 5 linhas apagadas", p.summary)
 
     def test_purge_auditado_por_tabela_inclusive_com_zero(self):
-        banco = _Db(tickets=[(1, _days(100), "FAILED")], audit=[(50, _days(10))])
-        self.assertEqual(self._purge(banco).run(("tickets", "audit")), 0)
-        purges = self._purges(banco)
+        db = _Db(tickets=[(1, _days(100), "FAILED")], audit=[(50, _days(10))])
+        self.assertEqual(self._purge(db).run(("tickets", "audit")), 0)
+        purges = self._purges(db)
         self.assertEqual([(a["entity"], a["detail"], a["actor"], a["entity_id"]) for a in purges],
                          [("tbsss_tickets", "1 linhas", "SYSTEM:purge", None),
                           ("tbsss_audit", "0 linhas", "SYSTEM:purge", None)])
-        self.assertEqual([a["id"] for a in banco.audit if a["action"] != "PURGE"], [50], "recente fica")
+        self.assertEqual([a["id"] for a in db.audit if a["action"] != "PURGE"], [50], "recente fica")
 
     def test_limite_calculado_uma_vez_pelo_banco(self):
-        banco = _Db(tickets=[(1, NOW - datetime.timedelta(days=90, seconds=1), "SUCCESS"),
+        db = _Db(tickets=[(1, NOW - datetime.timedelta(days=90, seconds=1), "SUCCESS"),
                                 (2, NOW - datetime.timedelta(days=90), "SUCCESS")])
-        self._purge(banco).run(("tickets",))
-        self.assertEqual([t["id"] for t in banco.tickets], [2], "created_at < SYSDATE - dias, estrito")
-        self.assertEqual(banco.sqls.count("SELECT SYSDATE FROM DUAL"), 1)
+        self._purge(db).run(("tickets",))
+        self.assertEqual([t["id"] for t in db.tickets], [2], "created_at < SYSDATE - dias, estrito")
+        self.assertEqual(db.sqls.count("SELECT SYSDATE FROM DUAL"), 1)
 
     def test_concessao_tomada_renovada_e_liberada(self):
-        banco = _Db(tickets=[(i, _days(100), "SUCCESS") for i in range(1, 6)])
-        self._purge(banco).run(("tickets",))
-        tomadas = [s for s in banco.sqls if "purge_lease_until = SYSDATE + 1/24" in s]
-        self.assertEqual(len(tomadas), 1 + 3, "tomada e uma renovacao por lote nao vazio")
-        self.assertEqual(banco.ctl, {"dono": None, "ate": None}, "dono e prazo zerados (CR-008, R-27)")
+        db = _Db(tickets=[(i, _days(100), "SUCCESS") for i in range(1, 6)])
+        self._purge(db).run(("tickets",))
+        taken = [s for s in db.sqls if "purge_lease_until = SYSDATE + 1/24" in s]
+        self.assertEqual(len(taken), 1 + 3, "tomada e uma renovacao por lote nao vazio")
+        self.assertEqual(db.ctl, {"dono": None, "ate": None}, "dono e prazo zerados (CR-008, R-27)")
         self.assertIn("UPDATE openrisow.tbsss_control SET purge_owner = NULL, purge_lease_until = NULL"
-                      " WHERE id = 1 AND purge_owner = :owner", banco.sqls)
+                      " WHERE id = 1 AND purge_owner = :owner", db.sqls)
 
     def test_concessao_de_outro_no_pula_tabelas_sem_auditar(self):
-        ate = NOW + datetime.timedelta(minutes=30)
-        banco = _Db(tickets=[(1, _days(100), "SUCCESS")], owner="srv-b", until=ate)
-        p = self._purge(banco)
+        until = NOW + datetime.timedelta(minutes=30)
+        db = _Db(tickets=[(1, _days(100), "SUCCESS")], owner="srv-b", until=until)
+        p = self._purge(db)
         self.assertEqual(p.run(("tickets", "audit")), purge_cli.EXIT_OK)
-        self.assertEqual(len(banco.tickets), 1)
-        self.assertEqual(self._purges(banco), [], "sem a concessao, outro no audita a sua execucao")
-        self.assertFalse([s for s in banco.sqls if s.startswith("DELETE")])
-        self.assertEqual(banco.ctl, {"dono": "srv-b", "ate": ate}, "concessao alheia intocada")
+        self.assertEqual(len(db.tickets), 1)
+        self.assertEqual(self._purges(db), [], "sem a concessao, outro no audita a sua execucao")
+        self.assertFalse([s for s in db.sqls if s.startswith("DELETE")])
+        self.assertEqual(db.ctl, {"dono": "srv-b", "ate": until}, "concessao alheia intocada")
         self.assertIn("tickets: pulado (outro no esta purgando)", p.summary)
 
     def test_concessao_vencida_de_outro_no_e_tomada(self):
-        banco = _Db(tickets=[(1, _days(100), "SUCCESS")], owner="srv-b", until=NOW - datetime.timedelta(minutes=1))
-        self.assertEqual(self._purge(banco).run(("tickets",)), 0)
-        self.assertEqual(banco.tickets, [])
+        db = _Db(tickets=[(1, _days(100), "SUCCESS")], owner="srv-b", until=NOW - datetime.timedelta(minutes=1))
+        self.assertEqual(self._purge(db).run(("tickets",)), 0)
+        self.assertEqual(db.tickets, [])
 
     def test_concessao_perdida_no_meio(self):
-        banco = _Db(tickets=[(i, _days(100), "SUCCESS") for i in range(1, 6)])
-        banco.steal_on_renewal = 3  # tomada, 1a renovacao, 2a renovacao perdida
-        self.assertEqual(self._purge(banco).run(("tickets",)), purge_cli.EXIT_DATABASE)
-        self.assertEqual(len(banco.tickets), 3, "o 2o lote foi desfeito")
-        self.assertEqual(banco.ctl["dono"], "srv-outro", "a concessao de quem tomou fica")
-        self.assertEqual(self._purges(banco), [])
+        db = _Db(tickets=[(i, _days(100), "SUCCESS") for i in range(1, 6)])
+        db.steal_on_renewal = 3  # tomada, 1a renovacao, 2a renovacao perdida
+        self.assertEqual(self._purge(db).run(("tickets",)), purge_cli.EXIT_DATABASE)
+        self.assertEqual(len(db.tickets), 3, "o 2o lote foi desfeito")
+        self.assertEqual(db.ctl["dono"], "srv-outro", "a concessao de quem tomou fica")
+        self.assertEqual(self._purges(db), [])
 
     def test_falha_de_banco(self):
-        banco = _Db(tickets=[(1, _days(100), "SUCCESS")])
-        banco.fail_at = "DELETE FROM"
-        self.assertEqual(self._purge(banco).run(("tickets",)), purge_cli.EXIT_DATABASE)
-        self.assertGreaterEqual(banco.rollbacks, 1)
-        self.assertEqual(banco.ctl, {"dono": None, "ate": None}, "liberada mesmo na falha")
+        db = _Db(tickets=[(1, _days(100), "SUCCESS")])
+        db.fail_at = "DELETE FROM"
+        self.assertEqual(self._purge(db).run(("tickets",)), purge_cli.EXIT_DATABASE)
+        self.assertGreaterEqual(db.rollbacks, 1)
+        self.assertEqual(db.ctl, {"dono": None, "ate": None}, "liberada mesmo na falha")
 
     def test_exportar_auditoria(self):
-        pasta = os.path.join(self.root, "arquivo")
-        os.mkdir(pasta)
-        banco = _Db(audit=[(1, _days(400)), (2, _days(400)), (3, _days(380)), (4, _days(10))])
-        p = self._purge(banco)
-        self.assertEqual(p.run(("audit",), export=pasta), 0)
-        arquivos = os.listdir(pasta)
-        self.assertEqual(arquivos, ["auditoria_purge_20261021_030000.csv"])
-        caminho = os.path.join(pasta, arquivos[0])
-        self.assertEqual(os.stat(caminho).st_mode & 0o777, 0o600)
-        with io.open(caminho, encoding="utf-8-sig", newline="") as f:
-            linhas = list(csv.reader(f, delimiter=";"))
-        self.assertEqual(linhas[0][0], u"ID")
-        self.assertEqual([l[0] for l in linhas[1:]], ["1", "2", "3"])
-        self.assertEqual([a["id"] for a in banco.audit if a["action"] != "PURGE"], [4])
-        self.assertEqual(self._purges(banco)[0]["detail"], "3 linhas")
-        self.assertFalse([s for s in banco.sqls if s.startswith("DELETE") and "ROWNUM" in s],
+        dir_value = os.path.join(self.root, "arquivo")
+        os.mkdir(dir_value)
+        db = _Db(audit=[(1, _days(400)), (2, _days(400)), (3, _days(380)), (4, _days(10))])
+        p = self._purge(db)
+        self.assertEqual(p.run(("audit",), export=dir_value), 0)
+        files = os.listdir(dir_value)
+        self.assertEqual(files, ["auditoria_purge_20261021_030000.csv"])
+        path = os.path.join(dir_value, files[0])
+        self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+        with io.open(path, encoding="utf-8-sig", newline="") as f:
+            rows = list(csv.reader(f, delimiter=";"))
+        self.assertEqual(rows[0][0], u"ID")
+        self.assertEqual([l[0] for l in rows[1:]], ["1", "2", "3"])
+        self.assertEqual([a["id"] for a in db.audit if a["action"] != "PURGE"], [4])
+        self.assertEqual(self._purges(db)[0]["detail"], "3 linhas")
+        self.assertFalse([s for s in db.sqls if s.startswith("DELETE") and "ROWNUM" in s],
                          "com exportacao, apaga pelo id das linhas gravadas")
 
 
 class TestDryRun(_Base):
 
     def test_so_select_um_agora_e_nada_alterado(self):
-        antigo = self._minute("producao/carga/2026/01/10/03/00")
+        old = self._minute("producao/carga/2026/01/10/03/00")
         plat = _Plat(count=4)
         cfg = _cfg(self.root, agent={"output_dir": os.path.join(self.root, "saida")})
         os.makedirs(os.path.join(self.root, "saida", "producao"))
-        banco = _Db(tickets=[(1, _days(100), "SUCCESS"), (2, _days(100), "PENDING")],
+        db = _Db(tickets=[(1, _days(100), "SUCCESS"), (2, _days(100), "PENDING")],
                        audit=[(5, _days(400))])
-        p = self._purge(banco, plat=plat, cfg=cfg)
+        p = self._purge(db, plat=plat, cfg=cfg)
         self.assertEqual(p.run(purge_cli.TARGETS, dry_run=True), 0)
-        self.assertTrue(all(s.startswith("SELECT") for s in banco.sqls), banco.sqls)
-        self.assertEqual(banco.sqls.count("SELECT SYSDATE FROM DUAL"), 1)
-        self.assertTrue(any(s.startswith("SELECT t.environment") for s in banco.sqls), "RUNNING tambem no dry-run")
-        self.assertEqual((banco.commits, len(banco.tickets), len(banco.audit)), (0, 2, 1))
-        self.assertEqual(banco.ctl, {"dono": None, "ate": None})
-        self.assertTrue(os.path.isdir(antigo))
+        self.assertTrue(all(s.startswith("SELECT") for s in db.sqls), db.sqls)
+        self.assertEqual(db.sqls.count("SELECT SYSDATE FROM DUAL"), 1)
+        self.assertTrue(any(s.startswith("SELECT t.environment") for s in db.sqls), "RUNNING tambem no dry-run")
+        self.assertEqual((db.commits, len(db.tickets), len(db.audit)), (0, 2, 1))
+        self.assertEqual(db.ctl, {"dono": None, "ate": None})
+        self.assertTrue(os.path.isdir(old))
         self.assertEqual(plat.calls, [(os.path.join(self.root, "saida", "producao"), 7, None, True)])
         self.assertEqual(p.summary, ["tickets: 1 linhas elegiveis (estimativa)",
                                     "audit: 1 linhas elegiveis (estimativa)",
@@ -338,30 +338,30 @@ class TestDryRun(_Base):
 class TestLocalLogs(_Base):
 
     def test_pela_data_do_caminho_com_running_mantido(self):
-        velho = self._minute("producao/carga/2026/09/01/10/00", ("ticket_1_100.log", "ticket_2.log.parcial"))
-        recente = self._minute("producao/carga/2026/10/20/10/00")
+        old = self._minute("producao/carga/2026/09/01/10/00", ("ticket_1_100.log", "ticket_2.log.parcial"))
+        recent = self._minute("producao/carga/2026/10/20/10/00")
         running = self._minute("producao/extrator/2026/09/01/23/59", ("ticket_3.log.parcial",))
-        sozinho = self._minute("homologacao/outro/2025/12/31/08/15")
+        alone = self._minute("homologacao/outro/2025/12/31/08/15")
         internal = self._minute("internal/app/2020/01/01/00/00", ("sss_web_1.log",))
-        estranho = os.path.join(self.cfg.logging.log_dir, "producao", "carga", "2026", "09", "lixo")
-        os.makedirs(estranho)
-        fora = os.path.join(self.root, "fora", "2026", "01", "01", "00", "00")
-        os.makedirs(fora)
+        odd = os.path.join(self.cfg.logging.log_dir, "producao", "carga", "2026", "09", "lixo")
+        os.makedirs(odd)
+        outside = os.path.join(self.root, "fora", "2026", "01", "01", "00", "00")
+        os.makedirs(outside)
         os.symlink(os.path.join(self.root, "fora"), os.path.join(self.cfg.logging.log_dir, "producao", "ligado"))
-        banco = _Db(running=[("PRODUCAO", 9, datetime.datetime(2026, 9, 1, 23, 59, 30),
+        db = _Db(running=[("PRODUCAO", 9, datetime.datetime(2026, 9, 1, 23, 59, 30),
                                  '{"version": 5, "script_name": "Extrator"}')])
-        p = self._purge(banco)
+        p = self._purge(db)
         self.assertEqual(p.run(("local_logs",)), 0)
-        self.assertFalse(os.path.exists(velho), "pasta de minuto inteira, com o .log.parcial")
+        self.assertFalse(os.path.exists(old), "pasta de minuto inteira, com o .log.parcial")
         self.assertFalse(os.path.exists(os.path.join(self.cfg.logging.log_dir, "producao", "carga", "2026", "09", "01")),
                          "hora e dia vazios removidos")
-        self.assertTrue(os.path.isdir(estranho), "fora do formato e ignorado")
-        self.assertTrue(os.path.isdir(recente))
+        self.assertTrue(os.path.isdir(odd), "fora do formato e ignorado")
+        self.assertTrue(os.path.isdir(recent))
         self.assertTrue(os.path.isdir(running), "log de ticket RUNNING mantido (CR-007, R-32)")
         self.assertFalse(os.path.exists(os.path.join(self.cfg.logging.log_dir, "homologacao")),
                          "vazias ate o ambiente")
         self.assertTrue(os.path.isdir(internal), "internal/ intocada (CR-009)")
-        self.assertTrue(os.path.isdir(fora), "link nao e seguido")
+        self.assertTrue(os.path.isdir(outside), "link nao e seguido")
         self.assertEqual(p.summary, ["local_logs: 2 pastas de minuto removidas"])
 
     def test_falha_na_remocao_sai_com_3(self):
@@ -370,11 +370,11 @@ class TestLocalLogs(_Base):
             self.assertEqual(self._purge(_Db()).run(("local_logs",)), purge_cli.EXIT_LOCAL)
 
     def test_caminho_real_fora_de_log_dir_nao_e_removido(self):
-        velho = self._minute("producao/carga/2026/01/01/10/00")
+        old = self._minute("producao/carga/2026/01/01/10/00")
         plat = _Plat()
         plat.final_path = lambda c: "/outro" + c if c != self.cfg.logging.log_dir else c
         self.assertEqual(self._purge(_Db(), plat=plat).run(("local_logs",)), purge_cli.EXIT_LOCAL)
-        self.assertTrue(os.path.isdir(velho))
+        self.assertTrue(os.path.isdir(old))
 
 
 class TestOutput(_Base):
@@ -413,40 +413,40 @@ class TestMain(_Base):
         def conectar(_cfg, _secrets):
             self.connections.append(1)
             return _Conn(db)
-        saida = io.StringIO()
-        carregar = mock.Mock(side_effect=purge_cli.sss_config.ConfigError(reason="x") if secrets_error_flag else None,
+        output = io.StringIO()
+        load = mock.Mock(side_effect=purge_cli.sss_config.ConfigError(reason="x") if secrets_error_flag else None,
                              return_value=object())
         with mock.patch.object(purge_cli.sss_config, "get_config", return_value=cfg), \
-                mock.patch.object(purge_cli.sss_config, "load_secrets", carregar), \
+                mock.patch.object(purge_cli.sss_config, "load_secrets", load), \
                 mock.patch.object(purge_cli.sss_logging, "configure", return_value=self.log), \
                 mock.patch.object(purge_cli.masking, "install_filter_on_handlers"):
-            codigo = purge_cli.main(argv, connect=conectar, plat=plat or _Plat(), output=saida)
-        self.load = carregar
-        return codigo, saida.getvalue()
+            code = purge_cli.main(argv, connect=conectar, plat=plat or _Plat(), output=output)
+        self.load = load
+        return code, output.getvalue()
 
     def test_execucao_real_com_trava_e_resumo(self):
         plat = _Plat()
-        banco = _Db(tickets=[(1, _days(100), "CANCELLED")])
-        codigo, texto = self._main(["--target", "tickets"], db=banco, plat=plat)
-        self.assertEqual(codigo, 0)
+        db = _Db(tickets=[(1, _days(100), "CANCELLED")])
+        code, text = self._main(["--target", "tickets"], db=db, plat=plat)
+        self.assertEqual(code, 0)
         self.assertEqual(plat.locks, [os.path.join(self.root, "work", "sss-purge.lock")])
-        self.assertEqual(texto, "tickets: 1 linhas apagadas\n")
-        self.assertEqual(banco.closed, 1)
+        self.assertEqual(text, "tickets: 1 linhas apagadas\n")
+        self.assertEqual(db.closed, 1)
         self.assertEqual(self.load.call_args[1]["role"], "agent", "[purge] password so no papel agente")
 
     def test_dry_run_sem_trava_e_com_aviso(self):
         plat = _Plat()
-        codigo, texto = self._main(["--dry-run", "--target", "audit"], plat=plat)
-        self.assertEqual(codigo, 0)
+        code, text = self._main(["--dry-run", "--target", "audit"], plat=plat)
+        self.assertEqual(code, 0)
         self.assertEqual(plat.locks, [])
         self.assertFalse(os.path.exists(os.path.join(self.root, "work", "sss-purge.lock")))
-        self.assertIn("dry-run: contagens estimadas", texto)
+        self.assertIn("dry-run: contagens estimadas", text)
 
     def test_outro_purge_no_servidor(self):
-        trava = os_platform.lock_instance(os.path.join(self.root, "work", "sss-purge.lock"))
-        self.addCleanup(os_platform.release_instance, trava)
-        codigo, texto = self._main([])
-        self.assertEqual((codigo, texto, self.connections), (0, "", []))
+        lock = os_platform.lock_instance(os.path.join(self.root, "work", "sss-purge.lock"))
+        self.addCleanup(os_platform.release_instance, lock)
+        code, text = self._main([])
+        self.assertEqual((code, text, self.connections), (0, "", []))
 
     def test_configuracao_invalida(self):
         with mock.patch.object(purge_cli.sss_config, "get_config",
@@ -463,9 +463,9 @@ class TestMain(_Base):
                 mock.patch.object(purge_cli.sss_config, "load_secrets", return_value=object()), \
                 mock.patch.object(purge_cli.sss_logging, "configure", return_value=self.log), \
                 mock.patch.object(purge_cli.masking, "install_filter_on_handlers"):
-            codigo = purge_cli.main([], connect=mock.Mock(side_effect=RuntimeError("ORA-12541: no listener")),
+            code = purge_cli.main([], connect=mock.Mock(side_effect=RuntimeError("ORA-12541: no listener")),
                                     plat=_Plat(), output=io.StringIO())
-        self.assertEqual(codigo, purge_cli.EXIT_DATABASE)
+        self.assertEqual(code, purge_cli.EXIT_DATABASE)
 
     def test_alvo_invalido(self):
         with self.assertRaises(SystemExit), mock.patch("sys.stderr", io.StringIO()):
@@ -528,34 +528,34 @@ class TestPurgeOracle(unittest.TestCase):
 
     def test_purge_real_so_dos_tickets_e_auditoria_da_fixture(self):
         m = self._fixtures
-        amb, scr = m.environment("P"), m.script("p")
+        env, scr = m.environment("P"), m.script("p")
         login = m.usuario(m.profile("P")["id"], "u")["login"]
-        base = {"script_id": scr["id"], "environment": amb["name"], "requested_by": login, "priority": 2,
+        base = {"script_id": scr["id"], "environment": env["name"], "requested_by": login, "priority": 2,
                 "status": "PENDING", "submitted_params": "{}"}
-        velho_ok, velho_pend, novo_ok = (m.ticket(actor=login, **base) for _ in range(3))
-        self.tck_fixture = [velho_ok, velho_pend, novo_ok]
-        for tid, status, dias in ((velho_ok, "SUCCESS", 40), (velho_pend, "PENDING", 40), (novo_ok, "SUCCESS", 5)):
+        old_ok, old_pend, new_ok = (m.ticket(actor=login, **base) for _ in range(3))
+        self.tck_fixture = [old_ok, old_pend, new_ok]
+        for tid, status, days in ((old_ok, "SUCCESS", 40), (old_pend, "PENDING", 40), (new_ok, "SUCCESS", 5)):
             self._executar("UPDATE " + self.tck + " SET status = :s, created_at = SYSDATE - :d WHERE id = :id",
-                           s=status, d=dias, id=tid)
+                           s=status, d=days, id=tid)
         aid = self._one("SELECT " + RepoPurge.from_config(self.oracle_cfg)._seq_aud + ".NEXTVAL FROM DUAL")
         self._executar("INSERT INTO " + self.aud + " (id, actor, action, entity, detail, created_at)"
                        " VALUES (:id, :a, 'LOGIN', 'tbsss_users', 'fixture F9.1a', SYSDATE - 400)", id=aid, a=m.actor)
         self.aud_fixture.append(aid)
         # Guarda (decisao 1a): nada fora da fixture pode ser elegivel no esquema compartilhado.
-        alheios_tck = self._one("SELECT COUNT(*) FROM " + self.tck + " WHERE created_at < SYSDATE - :d"
-                               " AND status IN ('SUCCESS','FAILED','CANCELLED') AND id <> :id", d=self.DAYS, id=velho_ok)
-        alheios_aud = self._one("SELECT COUNT(*) FROM " + self.aud + " WHERE created_at < SYSDATE - 365 AND id <> :id",
+        foreign_tck = self._one("SELECT COUNT(*) FROM " + self.tck + " WHERE created_at < SYSDATE - :d"
+                               " AND status IN ('SUCCESS','FAILED','CANCELLED') AND id <> :id", d=self.DAYS, id=old_ok)
+        foreign_aud = self._one("SELECT COUNT(*) FROM " + self.aud + " WHERE created_at < SYSDATE - 365 AND id <> :id",
                                id=aid)
-        if alheios_tck or alheios_aud:
+        if foreign_tck or foreign_aud:
             self.skipTest("%d tickets e %d linhas de auditoria fora da fixture seriam elegiveis"
-                          % (alheios_tck, alheios_aud))
+                          % (foreign_tck, foreign_aud))
         cfg = self.oracle_cfg
-        dono = "tst-f91a-%s" % m.suf
+        owner = "tst-f91a-%s" % m.suf
         cfg_purge = types.SimpleNamespace(
-            agent=types.SimpleNamespace(agent_id=dono), oracle=cfg.oracle,
+            agent=types.SimpleNamespace(agent_id=owner), oracle=cfg.oracle,
             retention=types.SimpleNamespace(ticket_retention_days=self.DAYS, audit_retention_days=365,
                                            purge_batch_size=1))
-        marca = self._one("SELECT NVL(MAX(id), 0) FROM " + self.aud)
+        mark = self._one("SELECT NVL(MAX(id), 0) FROM " + self.aud)
         logger = logging.getLogger("sss_test_purge_oracle")
         logger.addHandler(logging.NullHandler())
         logger.propagate = False
@@ -564,30 +564,30 @@ class TestPurgeOracle(unittest.TestCase):
         self.assertEqual(p.run(("tickets", "audit"), dry_run=True), 0)
         self.assertEqual(p.summary, ["tickets: 1 linhas elegiveis (estimativa)",
                                     "audit: 1 linhas elegiveis (estimativa)"])
-        pasta = tempfile.mkdtemp(prefix="sss_test_purge_csv_")
-        self.addCleanup(shutil.rmtree, pasta, True)
+        dir_value = tempfile.mkdtemp(prefix="sss_test_purge_csv_")
+        self.addCleanup(shutil.rmtree, dir_value, True)
         p = purge_cli.Purge(cfg_purge, self.conn, logger=logger)
-        codigo = p.run(("tickets", "audit"), export=pasta)
+        code = p.run(("tickets", "audit"), export=dir_value)
         self.purges = [r[0] for r in self.conn.cursor().execute(
-            "SELECT id FROM " + self.aud + " WHERE id > :m AND actor = 'SYSTEM:purge'", {"m": marca}).fetchall()]
+            "SELECT id FROM " + self.aud + " WHERE id > :m AND actor = 'SYSTEM:purge'", {"m": mark}).fetchall()]
         if p.summary and "pulado" in p.summary[0]:
             self.skipTest("concessao com outro no: %s" % p.summary)
-        self.assertEqual(codigo, 0)
-        restantes = dict(self.conn.cursor().execute(
+        self.assertEqual(code, 0)
+        remaining = dict(self.conn.cursor().execute(
             "SELECT id, status FROM " + self.tck + " WHERE id IN (:a, :b, :c)",
-            {"a": velho_ok, "b": velho_pend, "c": novo_ok}).fetchall())
-        self.assertEqual(restantes, {velho_pend: "PENDING", novo_ok: "SUCCESS"})
+            {"a": old_ok, "b": old_pend, "c": new_ok}).fetchall())
+        self.assertEqual(remaining, {old_pend: "PENDING", new_ok: "SUCCESS"})
         self.assertEqual(self._one("SELECT COUNT(*) FROM " + self.aud + " WHERE id = :id", id=aid), 0)
-        with io.open(os.path.join(pasta, os.listdir(pasta)[0]), encoding="utf-8-sig", newline="") as f:
+        with io.open(os.path.join(dir_value, os.listdir(dir_value)[0]), encoding="utf-8-sig", newline="") as f:
             self.assertEqual([l[0] for l in csv.reader(f, delimiter=";")][1:], [str(aid)], "exportada antes de sair")
-        linhas = self.conn.cursor().execute(
+        rows = self.conn.cursor().execute(
             "SELECT entity, detail, entity_id FROM " + self.aud + " WHERE id > :m AND actor = 'SYSTEM:purge'"
-            " ORDER BY id", {"m": marca}).fetchall()
-        self.assertEqual(linhas, [("tbsss_tickets", "1 linhas", None), ("tbsss_audit", "1 linhas", None)])
+            " ORDER BY id", {"m": mark}).fetchall()
+        self.assertEqual(rows, [("tbsss_tickets", "1 linhas", None), ("tbsss_audit", "1 linhas", None)])
         ctl = self.conn.cursor().execute("SELECT purge_owner, purge_lease_until FROM "
                                          + self.cat.qualify_table("control") + " WHERE id = 1").fetchone()
         self.assertEqual(tuple(ctl), (None, None), "concessao liberada (CR-008, R-27)")
-        self._fixtures.created["tickets"].remove(velho_ok)
+        self._fixtures.created["tickets"].remove(old_ok)
         self.aud_fixture.remove(aid)
         print("\n[F9.1a] purge real: %s" % "; ".join(p.summary))
 

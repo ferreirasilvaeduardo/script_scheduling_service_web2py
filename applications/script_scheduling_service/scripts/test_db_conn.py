@@ -99,10 +99,10 @@ class TestDbConnSelectionMocks(unittest.TestCase):
 
     def test_auto_escolhe_thin_quando_thin_conecta(self):
         """No modo 'auto', escolhe Thin logo de inicio quando a conexao Thin funciona."""
-        chamadas = []
+        calls = []
 
         def executor_sondagem(candidate, cfg, password_value):
-            chamadas.append(candidate)
+            calls.append(candidate)
             if candidate == "thin":
                 return {
                     "candidate": "thin",
@@ -113,19 +113,19 @@ class TestDbConnSelectionMocks(unittest.TestCase):
                 }
             return {"candidate": candidate, "ok": False}
 
-        selecao = db_conn.select_driver(self.cfg, self.secrets, probe_runner=executor_sondagem)
-        self.assertEqual(selecao.candidate, "thin")
-        self.assertEqual(selecao.server_version, "19.0.0.0.0")
-        self.assertEqual(selecao.driver_version, "1.4.0")
-        self.assertIsNone(selecao.client_version)
-        self.assertEqual(chamadas, ["thin"])
+        selection = db_conn.select_driver(self.cfg, self.secrets, probe_runner=executor_sondagem)
+        self.assertEqual(selection.candidate, "thin")
+        self.assertEqual(selection.server_version, "19.0.0.0.0")
+        self.assertEqual(selection.driver_version, "1.4.0")
+        self.assertIsNone(selection.client_version)
+        self.assertEqual(calls, ["thin"])
 
     def test_thin_dpy_3010_thick_dpi_1047_cx_oracle(self):
         """Thin com DPY-3010 cai para Thick; Thick com DPI-1047 cai para cx_Oracle."""
-        chamadas = []
+        calls = []
 
         def executor_sondagem(candidate, cfg, password_value):
-            chamadas.append(candidate)
+            calls.append(candidate)
             if candidate == "thin":
                 return {"candidate": "thin", "ok": False, "error_code": "DPY-3010", "category": "INCOMPATIBLE"}
             elif candidate == "thick":
@@ -140,17 +140,17 @@ class TestDbConnSelectionMocks(unittest.TestCase):
                 }
             return {"candidate": candidate, "ok": False}
 
-        selecao = db_conn.select_driver(self.cfg, self.secrets, probe_runner=executor_sondagem)
-        self.assertEqual(selecao.candidate, "cx_oracle")
-        self.assertEqual(selecao.server_version, "11.2.0.4.0")
-        self.assertEqual(chamadas, ["thin", "thick", "cx_oracle"])
+        selection = db_conn.select_driver(self.cfg, self.secrets, probe_runner=executor_sondagem)
+        self.assertEqual(selection.candidate, "cx_oracle")
+        self.assertEqual(selection.server_version, "11.2.0.4.0")
+        self.assertEqual(calls, ["thin", "thick", "cx_oracle"])
 
     def test_oracledb_ausente_escolhe_cx_oracle(self):
         """Quando oracledb nao esta instalado, cai para cx_Oracle."""
-        chamadas = []
+        calls = []
 
         def executor_sondagem(candidate, cfg, password_value):
-            chamadas.append(candidate)
+            calls.append(candidate)
             if candidate in ("thin", "thick"):
                 return {"candidate": candidate, "ok": False, "error_code": "NO_ORACLEDB", "category": "LIBRARY"}
             elif candidate == "cx_oracle":
@@ -163,77 +163,77 @@ class TestDbConnSelectionMocks(unittest.TestCase):
                 }
             return {"candidate": candidate, "ok": False}
 
-        selecao = db_conn.select_driver(self.cfg, self.secrets, probe_runner=executor_sondagem)
-        self.assertEqual(selecao.candidate, "cx_oracle")
-        self.assertEqual(chamadas, ["thin", "thick", "cx_oracle"])
+        selection = db_conn.select_driver(self.cfg, self.secrets, probe_runner=executor_sondagem)
+        self.assertEqual(selection.candidate, "cx_oracle")
+        self.assertEqual(calls, ["thin", "thick", "cx_oracle"])
 
     def test_erro_autenticacao_interrompe_cadeia(self):
         """Erro de autenticacao interrompe a cadeia imediatamente."""
-        for cod_erro in ("ORA-01017", "ORA-28000"):
+        for code_error in ("ORA-01017", "ORA-28000"):
             db_conn.reset_selection()
-            chamadas = []
+            calls = []
 
             def executor_sondagem(candidate, cfg, password_value):
-                chamadas.append(candidate)
-                return {"candidate": candidate, "ok": False, "error_code": cod_erro, "category": "AUTHENTICATION"}
+                calls.append(candidate)
+                return {"candidate": candidate, "ok": False, "error_code": code_error, "category": "AUTHENTICATION"}
 
             with self.assertLogs("sss_db_conn", level="CRITICAL") as cm:
                 with self.assertRaises(RuntimeError) as ctx:
                     db_conn.select_driver(self.cfg, self.secrets, probe_runner=executor_sondagem)
 
             self.assertIn("Falha fatal de autenticacao Oracle", str(ctx.exception))
-            self.assertIn(cod_erro, str(ctx.exception))
-            self.assertEqual(chamadas, ["thin"])
-            self.assertTrue(any("CRITICAL" in msg and cod_erro in msg for msg in cm.output))
+            self.assertIn(code_error, str(ctx.exception))
+            self.assertEqual(calls, ["thin"])
+            self.assertTrue(any("CRITICAL" in msg and code_error in msg for msg in cm.output))
 
     def test_todos_falham_erro_fatal_critical(self):
         """Quando todos os candidatos falham, registra CRITICAL e lanca RuntimeError."""
         def executor_sondagem(candidate, cfg, password_value):
-            erros = {
+            errors = {
                 "thin": ("DPY-4011", "NETWORK"),
                 "thick": ("DPI-1047", "LIBRARY"),
                 "cx_oracle": ("ORA-12541", "NETWORK"),
             }
-            cod, cat = erros[candidate]
-            return {"candidate": candidate, "ok": False, "error_code": cod, "category": cat}
+            code, cat = errors[candidate]
+            return {"candidate": candidate, "ok": False, "error_code": code, "category": cat}
 
         with self.assertLogs("sss_db_conn", level="CRITICAL") as cm:
             with self.assertRaises(RuntimeError) as ctx:
                 db_conn.select_driver(self.cfg, self.secrets, probe_runner=executor_sondagem)
 
-        msg_erro = str(ctx.exception)
-        self.assertIn("todos os candidatos de driver Oracle falharam", msg_erro)
-        self.assertIn("DPY-4011", msg_erro)
-        self.assertIn("DPI-1047", msg_erro)
-        self.assertIn("ORA-12541", msg_erro)
+        msg_error = str(ctx.exception)
+        self.assertIn("todos os candidatos de driver Oracle falharam", msg_error)
+        self.assertIn("DPY-4011", msg_error)
+        self.assertIn("DPI-1047", msg_error)
+        self.assertIn("ORA-12541", msg_error)
 
     def test_candidato_forcado_falha_sem_sondar_outros(self):
         """Quando o candidato forcado falha, gera CRITICAL e nao testa os demais."""
-        for modo in ("thin", "thick", "cx_oracle"):
+        for mode in ("thin", "thick", "cx_oracle"):
             db_conn.reset_selection()
-            cfg = _FakeConfig(driver_mode=modo)
-            chamadas = []
+            cfg = _FakeConfig(driver_mode=mode)
+            calls = []
 
             def executor_sondagem(candidate, cfg, password_value):
-                chamadas.append(candidate)
+                calls.append(candidate)
                 return {"candidate": candidate, "ok": False, "error_code": "FORCED_FAIL", "category": "INCOMPATIBLE"}
 
             with self.assertLogs("sss_db_conn", level="CRITICAL") as cm:
                 with self.assertRaises(RuntimeError) as ctx:
                     db_conn.select_driver(cfg, self.secrets, probe_runner=executor_sondagem)
 
-            self.assertIn("candidato forçado '%s' falhou" % modo, str(ctx.exception))
-            self.assertEqual(chamadas, [modo])
+            self.assertIn("candidato forçado '%s' falhou" % mode, str(ctx.exception))
+            self.assertEqual(calls, [mode])
 
     def test_valores_forcados_sucesso_nao_sondam_outros(self):
         """Quando candidato forcado tem sucesso, nao sonda outros."""
-        for modo in ("thin", "thick", "cx_oracle"):
+        for mode in ("thin", "thick", "cx_oracle"):
             db_conn.reset_selection()
-            cfg = _FakeConfig(driver_mode=modo)
-            chamadas = []
+            cfg = _FakeConfig(driver_mode=mode)
+            calls = []
 
             def executor_sondagem(candidate, cfg, password_value):
-                chamadas.append(candidate)
+                calls.append(candidate)
                 return {
                     "candidate": candidate,
                     "ok": True,
@@ -242,9 +242,9 @@ class TestDbConnSelectionMocks(unittest.TestCase):
                     "client_version": "19.10" if candidate != "thin" else None,
                 }
 
-            selecao = db_conn.select_driver(cfg, self.secrets, probe_runner=executor_sondagem)
-            self.assertEqual(selecao.candidate, modo)
-            self.assertEqual(chamadas, [modo])
+            selection = db_conn.select_driver(cfg, self.secrets, probe_runner=executor_sondagem)
+            self.assertEqual(selection.candidate, mode)
+            self.assertEqual(calls, [mode])
 
     def test_modo_driver_invalido_critical(self):
         """Modo driver invalido aborta com CRITICAL."""
@@ -257,16 +257,16 @@ class TestDbConnSelectionMocks(unittest.TestCase):
 
     def test_cache_em_memoria_thread_safe(self):
         """Apos uma selecao bem-sucedida, chamadas subsequentes reutilizam o resultado."""
-        execucoes = []
+        executions = []
 
         def executor_sondagem(candidate, cfg, password_value):
-            execucoes.append(candidate)
+            executions.append(candidate)
             return {"candidate": "thin", "ok": True, "server_version": "19.0.0.0.0", "driver_version": "1.4.0"}
 
         sel1 = db_conn.select_driver(self.cfg, self.secrets, probe_runner=executor_sondagem)
         sel2 = db_conn.select_driver(self.cfg, self.secrets, probe_runner=executor_sondagem)
         self.assertIs(sel1, sel2)
-        self.assertEqual(len(execucoes), 1)
+        self.assertEqual(len(executions), 1)
 
 
 class TestDbConnApiAmpliadaMocks(unittest.TestCase):
@@ -287,10 +287,10 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
 
         with mock.patch.dict(sys.modules, {"oracledb": mock_oracledb}):
             with mock.patch.object(sys, "version_info", (3, 6, 8)):
-                selecao = db_conn.DriverSelection("thin", "19.0.0.0.0", "2.0.1", None)
+                selection = db_conn.DriverSelection("thin", "19.0.0.0.0", "2.0.1", None)
                 with self.assertLogs("sss_db_conn", level="CRITICAL") as cm:
                     with self.assertRaises(RuntimeError) as ctx:
-                        db_conn.initialize(selecao, cfg=self.cfg)
+                        db_conn.initialize(selection, cfg=self.cfg)
                 self.assertIn("python-oracledb 2.x nao e compativel com Python 3.6", str(ctx.exception))
                 self.assertTrue(any("CRITICAL" in m and "python-oracledb 2.x" in m for m in cm.output))
 
@@ -302,10 +302,10 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
         mock_oracledb.clientversion.return_value = (21, 3, 0, 0, 0)
 
         with mock.patch.dict(sys.modules, {"oracledb": mock_oracledb}):
-            selecao = db_conn.DriverSelection("thick", "19.0.0.0.0", "1.4.3", "21.3")
+            selection = db_conn.DriverSelection("thick", "19.0.0.0.0", "1.4.3", "21.3")
             with self.assertLogs("sss_db_conn", level="CRITICAL") as cm:
                 with self.assertRaises(RuntimeError) as ctx:
-                    db_conn.initialize(selecao, cfg=self.cfg)
+                    db_conn.initialize(selection, cfg=self.cfg)
             self.assertIn("Exigido major 19", str(ctx.exception))
             self.assertTrue(any("CRITICAL" in m and "major 19" in m for m in cm.output))
 
@@ -315,33 +315,33 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
         mock_cx.clientversion.return_value = (18, 5, 0, 0, 0)
 
         with mock.patch.dict(sys.modules, {"cx_Oracle": mock_cx}):
-            selecao = db_conn.DriverSelection("cx_oracle", "11.2.0.4.0", "8.3.0", "18.5")
+            selection = db_conn.DriverSelection("cx_oracle", "11.2.0.4.0", "8.3.0", "18.5")
             with self.assertLogs("sss_db_conn", level="CRITICAL") as cm:
                 with self.assertRaises(RuntimeError) as ctx:
-                    db_conn.initialize(selecao, cfg=self.cfg)
+                    db_conn.initialize(selection, cfg=self.cfg)
             self.assertIn("Exigido major 19", str(ctx.exception))
 
     def test_mesma_api_tres_combinacoes(self):
         """Valida que conectar() configura autocommit=False, call_timeout, module e action nos 3 modos."""
-        modos = [
+        modes = [
             ("thin", "oracledb", {"DB_TYPE_DATE": "DB_DATE"}),
             ("thick", "oracledb", {"DB_TYPE_DATE": "DB_DATE"}),
             ("cx_oracle", "cx_Oracle", {"DATETIME": "CX_DATETIME"}),
         ]
-        for candidato, mod_name, tipos_extras in modos:
+        for candidate, mod_name, kinds_extras in modes:
             db_conn.reset_selection()
             mock_drv = mock.MagicMock(__name__=mod_name)
             mock_drv.__version__ = "1.4.0" if mod_name == "oracledb" else "8.3.0"
             mock_drv.clientversion.return_value = (19, 10, 0, 0, 0)
-            for k, v in tipos_extras.items():
+            for k, v in kinds_extras.items():
                 setattr(mock_drv, k, v)
 
             mock_conn = mock.MagicMock()
             mock_drv.connect.return_value = mock_conn
 
             with mock.patch.dict(sys.modules, {mod_name: mock_drv}):
-                selecao = db_conn.DriverSelection(candidato, "19.0.0.0.0", "1.4.0", "19.10" if candidato != "thin" else None)
-                with mock.patch.object(db_conn, "select_driver", return_value=selecao):
+                selection = db_conn.DriverSelection(candidate, "19.0.0.0.0", "1.4.0", "19.10" if candidate != "thin" else None)
+                with mock.patch.object(db_conn, "select_driver", return_value=selection):
                     conn = db_conn.connect(self.cfg, self.secrets, role="web")
                     self.assertIs(conn, mock_conn)
                     self.assertFalse(mock_conn.autocommit)
@@ -383,7 +383,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
     def test_classificacao_erros_e_failover(self):
         """Valida classificacao de erros de rede/failover, timeout, lock e violacoes."""
         # Rede e failover (CR-007, R-12)
-        erros_rede = [
+        errors_network = [
             "ORA-03113: end-of-file on communication channel",
             "ORA-03114: not connected to ORACLE",
             "ORA-03135: connection lost contact",
@@ -404,7 +404,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
             "DPY-6000: cannot connect to database",
             "DPY-6005: cannot connect to database",
         ]
-        for msg in erros_rede:
+        for msg in errors_network:
             exc = Exception(msg)
             self.assertTrue(db_conn.is_network_error(exc), "Deveria ser erro de rede: %s" % msg)
             self.assertFalse(db_conn.is_lock(exc))
@@ -435,51 +435,51 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
 
     def test_backoff_sem_sleep_em_garantir(self):
         """ConexaoResiliente gerencia backoff exponencial (1s a 60s) via monotonic() sem time.sleep."""
-        resiliente = db_conn.ResilientConnection(self.cfg, self.secrets, role="agent")
-        self.assertIsNone(resiliente.get_connection())
+        resilient = db_conn.ResilientConnection(self.cfg, self.secrets, role="agent")
+        self.assertIsNone(resilient.get_connection())
 
-        t_atual = 1000.0
+        t_current = 1000.0
 
-        with mock.patch("time.monotonic", side_effect=lambda: t_atual):
-            with mock.patch.object(db_conn, "connect") as mock_conectar:
+        with mock.patch("time.monotonic", side_effect=lambda: t_current):
+            with mock.patch.object(db_conn, "connect") as mock_connect:
                 # 1. Primeira tentativa falha: backoff dobra de 1.0 para 2.0
-                mock_conectar.side_effect = Exception("ORA-12541: no listener")
-                ok = resiliente.ensure()
+                mock_connect.side_effect = Exception("ORA-12541: no listener")
+                ok = resilient.ensure()
                 self.assertFalse(ok)
-                self.assertEqual(resiliente.backoff_s, 2.0)
-                self.assertEqual(resiliente.next_attempt_monotonic, 1001.0)
+                self.assertEqual(resilient.backoff_s, 2.0)
+                self.assertEqual(resilient.next_attempt_monotonic, 1001.0)
 
                 # 2. Chamada antes do prazo (t_atual = 1000.5): retorna False imediatamente sem tentar conectar
-                t_atual = 1000.5
-                mock_conectar.reset_mock()
-                ok = resiliente.ensure()
+                t_current = 1000.5
+                mock_connect.reset_mock()
+                ok = resilient.ensure()
                 self.assertFalse(ok)
-                mock_conectar.assert_not_called()
+                mock_connect.assert_not_called()
 
                 # 3. Chamada apos vencer o prazo (t_atual = 1001.2): tenta novamente e tem sucesso
-                t_atual = 1001.2
+                t_current = 1001.2
                 mock_conn = mock.MagicMock()
-                mock_conectar.side_effect = None
-                mock_conectar.return_value = mock_conn
+                mock_connect.side_effect = None
+                mock_connect.return_value = mock_conn
 
-                ok = resiliente.ensure()
+                ok = resilient.ensure()
                 self.assertTrue(ok)
-                self.assertIs(resiliente.get_connection(), mock_conn)
-                self.assertEqual(resiliente.backoff_s, 1.0)  # Resetado para 1.0
+                self.assertIs(resilient.get_connection(), mock_conn)
+                self.assertEqual(resilient.backoff_s, 1.0)  # Resetado para 1.0
 
                 # 4. Notificar erro de rede fecha conexao e reinicia backoff
-                resiliente.notify_error(Exception("ORA-03113: end-of-file"))
-                self.assertIsNone(resiliente.get_connection())
-                self.assertTrue(resiliente.failing)
-                self.assertEqual(resiliente.backoff_s, 2.0)
+                resilient.notify_error(Exception("ORA-03113: end-of-file"))
+                self.assertIsNone(resilient.get_connection())
+                self.assertTrue(resilient.failing)
+                self.assertEqual(resilient.backoff_s, 2.0)
 
     def test_orcamento_conexao_s(self):
         """Valida orcamento_conexao_s com Easy Connect e descritores TNS com aviso de timeout (CR-008, R-17)."""
         db_conn.reset_selection()
 
         # 1. Easy Connect: 1 endereco, retorna call_timeout_s
-        orc = db_conn.connection_budget_s("localhost:2424/servico", 30.0)
-        self.assertEqual(orc, 30)
+        budget = db_conn.connection_budget_s("localhost:2424/servico", 30.0)
+        self.assertEqual(budget, 30)
 
         # 2. Descritor TNS 1 endereco: CONNECT_TIMEOUT=5, RETRY_COUNT=2 -> 5 * (2 + 1) * 1 = 15
         dsn1 = "(DESCRIPTION=(CONNECT_TIMEOUT=5)(RETRY_COUNT=2)(ADDRESS=(PROTOCOL=TCP)(HOST=host1)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=svc)))"
@@ -529,9 +529,9 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
         # Simulando oracledb
         mock_oracledb = mock.MagicMock(__name__="oracledb")
         mock_oracledb.DB_TYPE_DATE = "ORACLEDB_DATE_TYPE"
-        selecao_thin = db_conn.DriverSelection("thin", "19.0.0.0.0", "1.4.0", None)
+        selection_thin = db_conn.DriverSelection("thin", "19.0.0.0.0", "1.4.0", None)
 
-        with mock.patch.object(db_conn, "_DRIVER_SELECTION", selecao_thin):
+        with mock.patch.object(db_conn, "_DRIVER_SELECTION", selection_thin):
             with mock.patch.object(db_conn, "_DRIVER_INITIALIZED", mock_oracledb):
                 db_conn.set_input_types(mock_cur, dt=db_conn.TIPO_DATE, clob=db_conn.TIPO_CLOB)
                 mock_cur.setinputsizes.assert_called_with(dt="ORACLEDB_DATE_TYPE", clob=mock_oracledb.DB_TYPE_CLOB)
@@ -540,9 +540,9 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
         mock_cur.reset_mock()
         mock_cx = mock.MagicMock(__name__="cx_Oracle")
         mock_cx.DATETIME = "CX_DATETIME_TYPE"
-        selecao_cx = db_conn.DriverSelection("cx_oracle", "11.2.0.4.0", "8.3.0", "19.10")
+        selection_cx = db_conn.DriverSelection("cx_oracle", "11.2.0.4.0", "8.3.0", "19.10")
 
-        with mock.patch.object(db_conn, "_DRIVER_SELECTION", selecao_cx):
+        with mock.patch.object(db_conn, "_DRIVER_SELECTION", selection_cx):
             with mock.patch.object(db_conn, "_DRIVER_INITIALIZED", mock_cx):
                 db_conn.set_input_types(mock_cur, dt=db_conn.TIPO_DATE)
                 mock_cur.setinputsizes.assert_called_with(dt="CX_DATETIME_TYPE")
@@ -564,9 +564,9 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
 
         mock_oracledb = mock.MagicMock(__name__="oracledb")
         mock_oracledb.DB_TYPE_VARCHAR = "DB_VARCHAR_TYPE"
-        selecao = db_conn.DriverSelection("thin", "19.0.0.0.0", "1.4.0", None)
+        selection = db_conn.DriverSelection("thin", "19.0.0.0.0", "1.4.0", None)
 
-        with mock.patch.object(db_conn, "_DRIVER_SELECTION", selecao):
+        with mock.patch.object(db_conn, "_DRIVER_SELECTION", selection):
             with mock.patch.object(db_conn, "_DRIVER_INITIALIZED", mock_oracledb):
                 v = db_conn.output_variable(mock_cur, db_conn.TIPO_VARCHAR, size=100)
                 mock_cur.var.assert_called_with("DB_VARCHAR_TYPE", size=100)
@@ -588,8 +588,8 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
         """agora_banco retorna o SYSDATE com microsecond==0."""
         mock_conn = mock.MagicMock()
         mock_cur = mock.MagicMock()
-        dt_com_micro = datetime.datetime(2026, 10, 19, 12, 30, 45, 999999)
-        mock_cur.fetchone.return_value = (dt_com_micro,)
+        dt_with_micro = datetime.datetime(2026, 10, 19, 12, 30, 45, 999999)
+        mock_cur.fetchone.return_value = (dt_with_micro,)
         mock_conn.cursor.return_value = mock_cur
 
         res = db_conn.db_now(mock_conn)
@@ -600,47 +600,47 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
         """saude retorna o SYSDATE naive do banco."""
         mock_conn = mock.MagicMock()
         mock_cur = mock.MagicMock()
-        dt_esperado = datetime.datetime(2026, 10, 19, 12, 30, 45)
-        mock_cur.fetchone.return_value = (dt_esperado,)
+        dt_expected = datetime.datetime(2026, 10, 19, 12, 30, 45)
+        mock_cur.fetchone.return_value = (dt_expected,)
         mock_conn.cursor.return_value = mock_cur
 
-        self.assertEqual(db_conn.health(mock_conn), dt_esperado)
+        self.assertEqual(db_conn.health(mock_conn), dt_expected)
 
     def test_ausencia_de_senha_em_logs(self):
         """A senha nunca deve aparecer em mensagens de log emitidas por db_conn."""
-        senha_super_secreta = "minha_senha_super_secreta_999"
-        seg = _FakeSecrets(password=senha_super_secreta)
+        password_super_secret = "minha_senha_super_secreta_999"
+        seg = _FakeSecrets(password=password_super_secret)
         with self.assertLogs("sss_db_conn", level="INFO") as cm:
             mock_drv = mock.MagicMock(__name__="oracledb")
             mock_drv.__version__ = "1.4.0"
             mock_conn = mock.MagicMock()
             mock_drv.connect.return_value = mock_conn
             with mock.patch.dict(sys.modules, {"oracledb": mock_drv}):
-                selecao = db_conn.DriverSelection("thin", "19.0.0.0.0", "1.4.0", None)
-                with mock.patch.object(db_conn, "select_driver", return_value=selecao):
+                selection = db_conn.DriverSelection("thin", "19.0.0.0.0", "1.4.0", None)
+                with mock.patch.object(db_conn, "select_driver", return_value=selection):
                     db_conn.connect(self.cfg, seg, role="web")
 
-        for registro in cm.output:
-            self.assertNotIn(senha_super_secreta, registro)
+        for record in cm.output:
+            self.assertNotIn(password_super_secret, record)
 
     def test_tipo_varchar_tres_modos(self):
         """TIPO_VARCHAR e variavel_saida/valor_saida operam identicamente nos tres modos."""
-        modos = [
+        modes = [
             ("thin", "oracledb", "DB_TYPE_VARCHAR"),
             ("thick", "oracledb", "DB_TYPE_VARCHAR"),
             ("cx_oracle", "cx_Oracle", "STRING"),
         ]
-        for candidato, mod_name, attr_tipo in modos:
+        for candidate, mod_name, attr_kind in modes:
             mock_cur = mock.MagicMock()
             mock_var = mock.MagicMock()
             mock_var.getvalue.return_value = "RESULTADO_OK"
             mock_cur.var.return_value = mock_var
 
             mock_drv = mock.MagicMock(__name__=mod_name)
-            setattr(mock_drv, attr_tipo, "TIPO_CONCRETO_VARCHAR")
+            setattr(mock_drv, attr_kind, "TIPO_CONCRETO_VARCHAR")
 
-            selecao = db_conn.DriverSelection(candidato, "19.0.0.0.0", "1.4.0", None)
-            with mock.patch.object(db_conn, "_DRIVER_SELECTION", selecao):
+            selection = db_conn.DriverSelection(candidate, "19.0.0.0.0", "1.4.0", None)
+            with mock.patch.object(db_conn, "_DRIVER_SELECTION", selection):
                 with mock.patch.object(db_conn, "_DRIVER_INITIALIZED", mock_drv):
                     v = db_conn.output_variable(mock_cur, db_conn.TIPO_VARCHAR, size=50)
                     mock_cur.var.assert_called_with("TIPO_CONCRETO_VARCHAR", size=50)
@@ -666,8 +666,8 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
         """pool cria pool com ping_interval=60 para oracledb e cx_Oracle (CR-007, R-12)."""
         # oracledb create_pool
         mock_oracledb = mock.MagicMock(__name__="oracledb")
-        selecao = db_conn.DriverSelection("thin", "19.0.0.0.0", "1.4.0", None)
-        with mock.patch.object(db_conn, "_DRIVER_SELECTION", selecao):
+        selection = db_conn.DriverSelection("thin", "19.0.0.0.0", "1.4.0", None)
+        with mock.patch.object(db_conn, "_DRIVER_SELECTION", selection):
             with mock.patch.object(db_conn, "_DRIVER_INITIALIZED", mock_oracledb):
                 p = db_conn.pool(self.cfg, self.secrets, role="web")
                 mock_oracledb.create_pool.assert_called_once()
@@ -704,17 +704,17 @@ class TestOracleTestSupportMocks(unittest.TestCase):
         for env in ({}, {"SSS_TEST_ORACLE": "0"}, {"SSS_TEST_ORACLE": "sim"}):
             with mock.patch.dict(os.environ, env, clear=True):
                 self.assertFalse(_oracle_test_support.real_db_configured())
-                ok, motivo = _oracle_test_support.check_environment_preconditions(cfg=self._cfg())
+                ok, reason = _oracle_test_support.check_environment_preconditions(cfg=self._cfg())
                 self.assertFalse(ok)
-                self.assertIn("SSS_TEST_ORACLE=1", motivo)
+                self.assertIn("SSS_TEST_ORACLE=1", reason)
 
     def test_variaveis_antigas_recusadas(self):
         """As variaveis da guarda anterior nao sao ignoradas em silencio."""
-        for antiga in _oracle_test_support.OLD_VARIABLES:
-            with mock.patch.dict(os.environ, dict(self._ENABLED, **{antiga: "x"}), clear=True):
-                ok, motivo = _oracle_test_support.check_environment_preconditions(cfg=self._cfg())
+        for old in _oracle_test_support.OLD_VARIABLES:
+            with mock.patch.dict(os.environ, dict(self._ENABLED, **{old: "x"}), clear=True):
+                ok, reason = _oracle_test_support.check_environment_preconditions(cfg=self._cfg())
                 self.assertFalse(ok)
-                self.assertIn(antiga, motivo)
+                self.assertIn(old, reason)
 
     def test_modo_deduzido_do_owner(self):
         self.assertEqual(_oracle_test_support.owner_mode("SSS_TEST_DEV"), _oracle_test_support.DISPOSABLE_MODE)
@@ -725,12 +725,12 @@ class TestOracleTestSupportMocks(unittest.TestCase):
         """DEV obrigatorio, DSN preenchido e owner valido; o data_backend nao importa."""
         with mock.patch.dict(os.environ, self._ENABLED, clear=True):
             self.assertEqual(_oracle_test_support.check_environment_preconditions(cfg=self._cfg()), (True, ""))
-            for cfg, trecho in ((self._cfg(sss_env="HML"), "DEV"), (self._cfg(dsn=""), "dsn"),
+            for cfg, snippet in ((self._cfg(sss_env="HML"), "DEV"), (self._cfg(dsn=""), "dsn"),
                                 (self._cfg(owner="openrisow;DROP"), "owner"),
                                 (self._cfg(owner="SSS_TEST_"), "descartavel"), (self._cfg(owner="SSS_TEST_" + "X" * 25), "owner")):
-                ok, motivo = _oracle_test_support.check_environment_preconditions(cfg=cfg)
+                ok, reason = _oracle_test_support.check_environment_preconditions(cfg=cfg)
                 self.assertFalse(ok)
-                self.assertIn(trecho, motivo)
+                self.assertIn(snippet, reason)
 
     def test_descartavel_conta_igual_owner_recusada(self):
         mock_conn, _cur = self._conn("SSS_TEST_DEV")
@@ -786,29 +786,29 @@ class TestOracleTestSupportMocks(unittest.TestCase):
         mock_conn, _cur = self._conn("OPENRISOW", sql_ident.SCHEMA_VERSION)
         cfg = self._cfg()
         with mock.patch.dict(os.environ, self._ENABLED, clear=True):
-            with mock.patch("sss_config.get_config", return_value=cfg) as obter:
+            with mock.patch("sss_config.get_config", return_value=cfg) as get:
                 with mock.patch("sss_config.load_secrets", return_value=mock.MagicMock()):
                     with mock.patch("db_conn.connect", return_value=mock_conn):
                         self.assertIs(_oracle_test_support.prepare_disposable_schema("web"), cfg)
-        obter.assert_called_once_with()
+        get.assert_called_once_with()
         mock_conn.close.assert_called_once()
         self.assertEqual(_oracle_test_support.schema_mode(), _oracle_test_support.SHARED_MODE)
 
     def test_preparar_descartavel_recusa_conta_do_owner_sem_conectar(self):
         cfg = self._cfg(owner="SSS_TEST_APP", user="SSS_TEST_APP")
         with mock.patch.dict(os.environ, self._ENABLED, clear=True):
-            with mock.patch("db_conn.connect") as conectar:
+            with mock.patch("db_conn.connect") as connect:
                 with self.assertRaises(_oracle_test_support.SchemaPreconditionError):
                     _oracle_test_support.prepare_disposable_schema("web", cfg=cfg)
-        conectar.assert_not_called()
+        connect.assert_not_called()
 
     def test_preparar_desligado_nao_le_config_nem_conecta(self):
         with mock.patch.dict(os.environ, {}, clear=True):
-            with mock.patch("sss_config.get_config") as obter, mock.patch("db_conn.connect") as conectar:
+            with mock.patch("sss_config.get_config") as get, mock.patch("db_conn.connect") as connect:
                 with self.assertRaises(_oracle_test_support.SchemaPreconditionError):
                     _oracle_test_support.prepare_disposable_schema("web")
-        obter.assert_not_called()
-        conectar.assert_not_called()
+        get.assert_not_called()
+        connect.assert_not_called()
 
 
 class TestFirstConnectionIsNotReconnection(unittest.TestCase):
@@ -816,26 +816,26 @@ class TestFirstConnectionIsNotReconnection(unittest.TestCase):
     'Tentando reconexao' fica so para as reconexoes de verdade."""
 
     def test_primeira_conexao_e_depois_reconexao(self):
-        resiliente = db_conn.ResilientConnection(_FakeConfig(), _FakeSecrets(password="x"))
+        resilient = db_conn.ResilientConnection(_FakeConfig(), _FakeSecrets(password="x"))
         with mock.patch.object(db_conn, "connect", return_value=mock.Mock()):
-            with self.assertLogs("sss_db_conn", "INFO") as primeira:
-                self.assertTrue(resiliente.ensure())
-            resiliente.close()
-            resiliente.next_attempt_monotonic = 0.0
-            with self.assertLogs("sss_db_conn", "INFO") as segunda:
-                self.assertTrue(resiliente.ensure())
-        self.assertEqual([(r.levelname, r.getMessage()) for r in primeira.records],
+            with self.assertLogs("sss_db_conn", "INFO") as first:
+                self.assertTrue(resilient.ensure())
+            resilient.close()
+            resilient.next_attempt_monotonic = 0.0
+            with self.assertLogs("sss_db_conn", "INFO") as second:
+                self.assertTrue(resilient.ensure())
+        self.assertEqual([(r.levelname, r.getMessage()) for r in first.records],
                          [("INFO", "Conectando ao Oracle (papel=agent)..."),
                           ("INFO", "Conexao estabelecida (papel=agent)")])
-        self.assertEqual([(r.levelname, r.getMessage()) for r in segunda.records],
+        self.assertEqual([(r.levelname, r.getMessage()) for r in second.records],
                          [("WARNING", "Tentando reconexao com o Oracle (papel=agent)..."),
                           ("INFO", "Reconexao bem-sucedida (papel=agent)")])
 
     def test_falha_na_primeira_conexao(self):
-        resiliente = db_conn.ResilientConnection(_FakeConfig(), _FakeSecrets(password="x"))
+        resilient = db_conn.ResilientConnection(_FakeConfig(), _FakeSecrets(password="x"))
         with mock.patch.object(db_conn, "connect", side_effect=RuntimeError("ORA-12541: TNS:no listener")):
             with self.assertLogs("sss_db_conn", "INFO") as logs:
-                self.assertFalse(resiliente.ensure())
+                self.assertFalse(resilient.ensure())
         self.assertIn("Falha na tentativa de conexao: ORA-12541", logs.records[-1].getMessage())
 
 
@@ -848,36 +848,36 @@ class TestProbeWithRoleAccount(unittest.TestCase):
         self.addCleanup(db_conn.reset_selection)
 
     def test_subprocesso_recebe_o_usuario_no_argv_e_a_senha_no_stdin(self):
-        processo = mock.Mock(returncode=0)
-        processo.communicate.return_value = (b'{"candidate": "thin", "ok": true}', b"")
-        with mock.patch.object(db_conn.subprocess, "Popen", return_value=processo) as popen:
+        process = mock.Mock(returncode=0)
+        process.communicate.return_value = (b'{"candidate": "thin", "ok": true}', b"")
+        with mock.patch.object(db_conn.subprocess, "Popen", return_value=process) as popen:
             db_conn.select_driver(_FakeConfig(driver_mode="thin"), _FakeSecrets(password="x"),
                                       user="sss_monitor", password_value="senha-mon-77")
         cmd = popen.call_args[0][0]
         self.assertEqual(cmd[-2:], ["--user", "sss_monitor"])
         self.assertNotIn("senha-mon-77", " ".join(cmd))
-        self.assertEqual(processo.communicate.call_args[1]["input"], b"senha-mon-77")
+        self.assertEqual(process.communicate.call_args[1]["input"], b"senha-mon-77")
 
     def test_conectar_monitor_sonda_com_a_conta_do_monitor(self):
-        segredos = mock.Mock(monitor=mock.Mock(user="sss_monitor", password="senha-mon-77"))
-        capturado = {}
+        secrets_value = mock.Mock(monitor=mock.Mock(user="sss_monitor", password="senha-mon-77"))
+        captured = {}
 
         def selecionar(cfg, secrets_obj, user=None, password_value=None):
-            capturado.update(usuario=user, senha=password_value)
+            captured.update(usuario=user, senha=password_value)
             raise RuntimeError("parar aqui")
         with mock.patch.object(db_conn, "select_driver", side_effect=selecionar), \
                 mock.patch.object(db_conn, "connection_budget_s"):
             with self.assertRaises(RuntimeError):
-                db_conn.connect(_FakeConfig(driver_mode="thin"), segredos, role="monitor")
-        self.assertEqual(capturado, {"usuario": "sss_monitor", "senha": "senha-mon-77"})
+                db_conn.connect(_FakeConfig(driver_mode="thin"), secrets_value, role="monitor")
+        self.assertEqual(captured, {"usuario": "sss_monitor", "senha": "senha-mon-77"})
 
     def test_sondar_driver_usa_o_usuario_informado(self):
         cfg = _FakeConfig(driver_mode="thin")
-        falso = mock.Mock()
-        falso.connect.side_effect = RuntimeError("ORA-01017: invalid username/password")
-        with mock.patch.dict(sys.modules, {"oracledb": falso}):
+        fake = mock.Mock()
+        fake.connect.side_effect = RuntimeError("ORA-01017: invalid username/password")
+        with mock.patch.dict(sys.modules, {"oracledb": fake}):
             sondar_driver.probe("thin", cfg, "s", user="sss_monitor")
-        self.assertEqual(falso.connect.call_args[1]["user"], "sss_monitor")
+        self.assertEqual(fake.connect.call_args[1]["user"], "sss_monitor")
 
 
 class TestProbeDriverScript(unittest.TestCase):
@@ -885,7 +885,7 @@ class TestProbeDriverScript(unittest.TestCase):
 
     def test_categorizacao_erros(self):
         """Valida que codigos Oracle/DPY/DPI sao categorizados corretamente."""
-        casos = [
+        cases = [
             ("ORA-01017: invalid username/password", "ORA-01017", "AUTHENTICATION"),
             ("ORA-28000: the account is locked", "ORA-28000", "AUTHENTICATION"),
             ("DPY-3010: connections to this database server version are not supported", "DPY-3010", "INCOMPATIBLE"),
@@ -896,11 +896,11 @@ class TestProbeDriverScript(unittest.TestCase):
             ("DPY-4011: the network connection was closed", "DPY-4011", "NETWORK"),
             ("ORA-00942: table or view does not exist", "ORA-00942", "OTHER"),
         ]
-        for item, cod_esperado, cat_esperada in casos:
+        for item, code_expected, cat_expected in cases:
             exc = item if isinstance(item, Exception) else Exception(item)
-            cod, cat = sondar_driver._classify_error(exc)
-            self.assertEqual(cod, cod_esperado, "Codigo incorreto para: %s" % item)
-            self.assertEqual(cat, cat_esperada, "Categoria incorreta para: %s" % item)
+            code, cat = sondar_driver._classify_error(exc)
+            self.assertEqual(code, code_expected, "Codigo incorreto para: %s" % item)
+            self.assertEqual(cat, cat_expected, "Categoria incorreta para: %s" % item)
 
 
 class TestDbConnReal(unittest.TestCase):
@@ -911,26 +911,26 @@ class TestDbConnReal(unittest.TestCase):
             self.skipTest("Testes Oracle reais desligados (SSS_TEST_ORACLE=1); marcado como NAO TESTADO")
         import sss_config
         cfg = _oracle_test_support.prepare_disposable_schema(role="web")
-        segredos = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="web")
+        secrets_value = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="web")
 
-        conn = db_conn.connect(cfg, segredos, role="web")
+        conn = db_conn.connect(cfg, secrets_value, role="web")
         self.assertIsNotNone(conn)
 
         try:
             # 1. Saude e Relogio
-            dt_saude = db_conn.health(conn)
-            self.assertIsInstance(dt_saude, datetime.datetime)
+            dt_health = db_conn.health(conn)
+            self.assertIsInstance(dt_health, datetime.datetime)
 
-            dt_banco = db_conn.db_now(conn)
-            self.assertEqual(dt_banco.microsecond, 0)
+            dt_db = db_conn.db_now(conn)
+            self.assertEqual(dt_db.microsecond, 0)
 
             # 2. Bind DATE descartando microssegundos (README §7.5)
             # Um datetime com microssegundos comparado com TIPO_DATE deve casar perfeitamente
             cur = conn.cursor()
             try:
                 db_conn.set_input_types(cur, d=db_conn.TIPO_DATE)
-                dt_com_micros = dt_banco.replace(microsecond=543210)
-                cur.execute("SELECT 1 FROM DUAL WHERE :d = TRUNC(SYSDATE, 'MI')", {"d": dt_com_micros})
+                dt_with_micros = dt_db.replace(microsecond=543210)
+                cur.execute("SELECT 1 FROM DUAL WHERE :d = TRUNC(SYSDATE, 'MI')", {"d": dt_with_micros})
                 # Pode ou nao retornar 1 dependendo do segundo, mas o ponto critico e que setinputsizes
                 # descarta microssegundos sem gerar erro ORA-018xx
             finally:

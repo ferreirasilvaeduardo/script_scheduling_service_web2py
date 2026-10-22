@@ -68,14 +68,14 @@ def validate_connection(value):
 def normalize_filters(input_value):
     """Filtros da lista vindos de request.vars: nome (trecho) e ativo ('S' | 'N')."""
     input_value = input_value or {}
-    filtros = {}
-    nome = admin_crud.text(input_value.get("name"), 30)
-    if nome and _RE_NAME_FILTER.fullmatch(nome):
-        filtros["name"] = nome
-    ativo = admin_crud.text(input_value.get("active"), 1)
-    if ativo in ("Y", "N"):
-        filtros["active"] = ativo
-    return filtros
+    filters = {}
+    name = admin_crud.text(input_value.get("name"), 30)
+    if name and _RE_NAME_FILTER.fullmatch(name):
+        filters["name"] = name
+    active = admin_crud.text(input_value.get("active"), 1)
+    if active in ("Y", "N"):
+        filters["active"] = active
+    return filters
 
 
 class AdminEnvironmentsService(object):
@@ -99,13 +99,13 @@ class AdminEnvironmentsService(object):
 
     def homologated_scripts(self, name):
         """Quantidade de scripts homologados no ambiente (deixam de poder rodar nele se for desativado)."""
-        total, pagina = 0, 1
+        total, page = 0, 1
         while True:
-            itens = self._catalog.scripts_list(page=pagina, size=_SCRIPTS_PAGE)["itens"]
-            total += sum(1 for s in itens if name in (s.get("ambientes_homologados") or ()))
-            if len(itens) < _SCRIPTS_PAGE:
+            items = self._catalog.scripts_list(page=page, size=_SCRIPTS_PAGE)["itens"]
+            total += sum(1 for s in items if name in (s.get("ambientes_homologados") or ()))
+            if len(items) < _SCRIPTS_PAGE:
                 return total
-            pagina += 1
+            page += 1
 
     def list(self, ctx, filters, page, size):
         """Pagina de ambientes (ordem nome ASC) com a versao de cada linha."""
@@ -121,32 +121,32 @@ class AdminEnvironmentsService(object):
         if environment_id in (None, ""):
             return {"id": None, "name": "", "description": "", "connection": "", "active": "Y", "version": "",
                     "agendamentos_ativos": 0, "scripts_homologados": 0, "registro": None}
-        amb = self._get(environment_id)
+        env = self._get(environment_id)
         return {
-            "id": amb["id"],
-            "name": amb["name"],
-            "description": admin_crud.normalize(amb.get("description")) or "",
-            "connection": admin_crud.normalize(amb.get("connection")) or "",
-            "active": amb["active"],
-            "version": admin_crud.version(amb, EDITABLE_FIELDS),
-            "agendamentos_ativos": self.active_schedules(amb["name"]),
-            "scripts_homologados": self.homologated_scripts(amb["name"]),
-            "registro": ui_helpers.registro(amb, ctx),
+            "id": env["id"],
+            "name": env["name"],
+            "description": admin_crud.normalize(env.get("description")) or "",
+            "connection": admin_crud.normalize(env.get("connection")) or "",
+            "active": env["active"],
+            "version": admin_crud.version(env, EDITABLE_FIELDS),
+            "agendamentos_ativos": self.active_schedules(env["name"]),
+            "scripts_homologados": self.homologated_scripts(env["name"]),
+            "registro": ui_helpers.registro(env, ctx),
         }
 
     def _validate(self, date, errors):
-        descricao = admin_crud.free_text(date.get("description"), errors, "description")
-        if descricao is not None and len(descricao) > DESCRIPTION_MAX_LENGTH:
+        description = admin_crud.free_text(date.get("description"), errors, "description")
+        if description is not None and len(description) > DESCRIPTION_MAX_LENGTH:
             errors["description"] = MSG_DESCRIPTION_LENGTH
-        conexao = admin_crud.text(date.get("connection"))
-        erro_conexao = validate_connection(conexao)
-        if erro_conexao:
-            errors["connection"] = erro_conexao
-        return descricao, conexao
+        connection = admin_crud.text(date.get("connection"))
+        error_connection = validate_connection(connection)
+        if error_connection:
+            errors["connection"] = error_connection
+        return description, connection
 
     def _violation(self, ctx, exc, errors):
-        campo, mensagem = _FIELD_BY_CONSTRAINT.get(exc.constraint, (GENERAL_FIELD, admin_crud.MSG_FAILURE))
-        errors[campo] = mensagem
+        field, message = _FIELD_BY_CONSTRAINT.get(exc.constraint, (GENERAL_FIELD, admin_crud.MSG_FAILURE))
+        errors[field] = message
         self._log.warning("cadastro de ambiente rejeitado pelo repositorio (login=%s constraint=%s)",
                           ctx.get("login"), exc.constraint, extra={"action": "MANAGE_ENVIRONMENTS"})
 
@@ -158,58 +158,58 @@ class AdminEnvironmentsService(object):
         Lanca RepoNotFound (edicao de id inexistente) e AccessDenied.
         """
         admin_crud.require_feature(ctx, FEATURE)
-        erros = {}
+        errors = {}
         if environment_id in (None, ""):
-            nome = admin_crud.identifier(date.get("name"), erros, "name")
-            if nome is None:
-                erros["name"] = MSG_NAME_REQUIRED
-            elif "name" in erros:
+            name = admin_crud.identifier(date.get("name"), errors, "name")
+            if name is None:
+                errors["name"] = MSG_NAME_REQUIRED
+            elif "name" in errors:
                 pass
-            elif not _RE_NAME.fullmatch(nome):
-                erros["name"] = MSG_NAME_INVALID
-            elif log_paths.is_reserved_environment(nome):
+            elif not _RE_NAME.fullmatch(name):
+                errors["name"] = MSG_NAME_INVALID
+            elif log_paths.is_reserved_environment(name):
                 # CR-009: a pasta de log 'internal' e dos logs sem ambiente (aplicacao).
-                erros["name"] = MSG_NAME_RESERVED
-            descricao, conexao = self._validate(date, erros)
-            if erros:
-                return None, erros
-            novo = {"name": nome, "description": descricao, "connection": conexao, "active": "Y"}
-            auditoria = admin_crud.audit_entry(ctx, ip, "CREATE",
-                                             admin_crud.insert_detail(novo, INSERT_FIELDS))
+                errors["name"] = MSG_NAME_RESERVED
+            description, connection = self._validate(date, errors)
+            if errors:
+                return None, errors
+            new = {"name": name, "description": description, "connection": connection, "active": "Y"}
+            audit = admin_crud.audit_entry(ctx, ip, "CREATE",
+                                             admin_crud.insert_detail(new, INSERT_FIELDS))
             try:
-                criado = self._catalog.environments_insert(novo, audit=auditoria)
+                created = self._catalog.environments_insert(new, audit=audit)
             except RepoViolation as exc:
-                self._violation(ctx, exc, erros)
-                return None, erros
-            self._log.info("ambiente incluido (login=%s environment=%s)", ctx.get("login"), criado["name"],
+                self._violation(ctx, exc, errors)
+                return None, errors
+            self._log.info("ambiente incluido (login=%s environment=%s)", ctx.get("login"), created["name"],
                            extra={"action": "CREATE"})
-            return criado["id"], {}
+            return created["id"], {}
 
-        atual = self._get(environment_id)
-        descricao, conexao = self._validate(date, erros)
-        if erros:
-            return atual["id"], erros
-        if admin_crud.text(date.get("version"), 64) != admin_crud.version(atual, EDITABLE_FIELDS):
-            erros[GENERAL_FIELD] = admin_crud.MSG_CONFLICT
-            return atual["id"], erros
-        depois = dict(atual, description=descricao, connection=conexao)
-        detalhe = admin_crud.changes_detail(atual, depois, EDITABLE_FIELDS)
-        if detalhe is None:
-            return atual["id"], {}
+        current = self._get(environment_id)
+        description, connection = self._validate(date, errors)
+        if errors:
+            return current["id"], errors
+        if admin_crud.text(date.get("version"), 64) != admin_crud.version(current, EDITABLE_FIELDS):
+            errors[GENERAL_FIELD] = admin_crud.MSG_CONFLICT
+            return current["id"], errors
+        after = dict(current, description=description, connection=connection)
+        detail = admin_crud.changes_detail(current, after, EDITABLE_FIELDS)
+        if detail is None:
+            return current["id"], {}
         try:
             self._catalog.environments_update(
-                atual["id"], {"description": descricao, "connection": conexao},
-                expected=admin_crud.expected(atual, EDITABLE_FIELDS),
-                audit=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
+                current["id"], {"description": description, "connection": connection},
+                expected=admin_crud.expected(current, EDITABLE_FIELDS),
+                audit=admin_crud.audit_entry(ctx, ip, "UPDATE", detail))
         except RepoConflict:
-            erros[GENERAL_FIELD] = admin_crud.MSG_CONFLICT
-            return atual["id"], erros
+            errors[GENERAL_FIELD] = admin_crud.MSG_CONFLICT
+            return current["id"], errors
         except RepoViolation as exc:
-            self._violation(ctx, exc, erros)
-            return atual["id"], erros
-        self._log.info("ambiente alterado (login=%s environment=%s)", ctx.get("login"), atual["name"],
+            self._violation(ctx, exc, errors)
+            return current["id"], errors
+        self._log.info("ambiente alterado (login=%s environment=%s)", ctx.get("login"), current["name"],
                        extra={"action": "UPDATE"})
-        return atual["id"], {}
+        return current["id"], {}
 
     def toggle_active(self, ctx, ip, environment_id, version):
         """Desativa ou reativa o ambiente; retorna o registro alterado.
@@ -219,21 +219,21 @@ class AdminEnvironmentsService(object):
         RepoNotFound e AccessDenied.
         """
         admin_crud.require_feature(ctx, FEATURE)
-        atual = self._get(environment_id)
-        if admin_crud.text(version, 64) != admin_crud.version(atual, EDITABLE_FIELDS):
+        current = self._get(environment_id)
+        if admin_crud.text(version, 64) != admin_crud.version(current, EDITABLE_FIELDS):
             raise RepoConflict("versao divergente")
-        novo_ativo = "N" if atual["active"] == "Y" else "Y"
-        detalhe = admin_crud.changes_detail(atual, dict(atual, active=novo_ativo), ("active",))
-        acao = "DEACTIVATE" if novo_ativo == "N" else "UPDATE"
-        if novo_ativo == "N":
-            detalhe = u"%s; agendamentos ativos afetados: %d; scripts homologados afetados: %d" % (
-                detalhe, self.active_schedules(atual["name"]), self.homologated_scripts(atual["name"]))
-        alterado = self._catalog.environments_update(
-            atual["id"], {"active": novo_ativo}, expected=admin_crud.expected(atual, EDITABLE_FIELDS),
-            audit=admin_crud.audit_entry(ctx, ip, acao, detalhe))
-        self._log.info("ambiente %s (login=%s environment=%s)", "desativado" if novo_ativo == "N" else "reativado",
-                       ctx.get("login"), atual["name"], extra={"action": acao})
-        return alterado
+        new_active = "N" if current["active"] == "Y" else "Y"
+        detail = admin_crud.changes_detail(current, dict(current, active=new_active), ("active",))
+        action = "DEACTIVATE" if new_active == "N" else "UPDATE"
+        if new_active == "N":
+            detail = u"%s; agendamentos ativos afetados: %d; scripts homologados afetados: %d" % (
+                detail, self.active_schedules(current["name"]), self.homologated_scripts(current["name"]))
+        changed = self._catalog.environments_update(
+            current["id"], {"active": new_active}, expected=admin_crud.expected(current, EDITABLE_FIELDS),
+            audit=admin_crud.audit_entry(ctx, ip, action, detail))
+        self._log.info("ambiente %s (login=%s environment=%s)", "desativado" if new_active == "N" else "reativado",
+                       ctx.get("login"), current["name"], extra={"action": action})
+        return changed
 
 
 _default = None
@@ -246,10 +246,10 @@ def _service():
         if _default is None:
             from gluon import current
             import sss_logging
-            fabrica = current.repo_factory
+            factory = current.repo_factory
             _default = AdminEnvironmentsService(
-                catalog=fabrica.get("catalog"),
-                schedules=fabrica.get("schedules"),
+                catalog=factory.get("catalog"),
+                schedules=factory.get("schedules"),
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _default

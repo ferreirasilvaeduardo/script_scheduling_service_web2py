@@ -67,17 +67,17 @@ class _FakeRepo(object):
         if clob.owner != (agent_id, "RUNNING"):
             return OWNERSHIP_LOST
         clob.start_tx()
-        tam = log_pump.clob_units(chunk)
+        size = log_pump.clob_units(chunk)
         if log_pump.clob_units(clob.text) != clob.offset:
-            raise LogOffsetMismatch(ticket_id, expected_offset, tam)
+            raise LogOffsetMismatch(ticket_id, expected_offset, size)
         if clob.offset == expected_offset:
             clob.text += chunk
-            clob.offset += tam
+            clob.offset += size
             return WRITTEN
-        if clob.offset == expected_offset + tam and clob.text.encode("utf-16-le")[2 * expected_offset:] == \
+        if clob.offset == expected_offset + size and clob.text.encode("utf-16-le")[2 * expected_offset:] == \
                 chunk.encode("utf-16-le"):
             return ALREADY_WRITTEN
-        raise LogOffsetMismatch(ticket_id, expected_offset, tam)
+        raise LogOffsetMismatch(ticket_id, expected_offset, size)
 
     def mark_truncated(self, conn, ticket_id, agent_id):
         clob = conn.clobs[ticket_id]
@@ -136,10 +136,10 @@ class _Base(unittest.TestCase):
 
     def file(self, content=b""):
         self.n += 1
-        caminho = os.path.join(self.root, "ticket_%d.log" % self.n)
-        with open(caminho, "wb") as f:
+        path = os.path.join(self.root, "ticket_%d.log" % self.n)
+        with open(path, "wb") as f:
             f.write(content)
-        return caminho
+        return path
 
     def append_bytes(self, path, date):
         with open(path, "ab") as f:
@@ -159,22 +159,22 @@ class _Base(unittest.TestCase):
 class TestReadAndMask(_Base):
 
     def test_ascii(self):
-        caminho = self.file(b"linha 1\nlinha 2\n")
-        b = self.pump(caminho)
+        path = self.file(b"linha 1\nlinha 2\n")
+        b = self.pump(path)
         self.assertEqual(b.collect(), "linha 1\nlinha 2\n")
         self.assertEqual(self.drain(b).text, "linha 1\nlinha 2\n")
 
     def test_multibyte_cortado_em_todas_as_posicoes(self):
-        dados = MB_TEXT.encode("utf-8")
-        for corte in range(len(dados) + 1):
-            caminho = self.file(dados[:corte])
-            b = self.pump(caminho)
-            primeiro = b.collect()
-            self.append_bytes(caminho, dados[corte:])
-            segundo = b.collect(max_bytes_leitura=7)
+        date = MB_TEXT.encode("utf-8")
+        for cutoff in range(len(date) + 1):
+            path = self.file(date[:cutoff])
+            b = self.pump(path)
+            first = b.collect()
+            self.append_bytes(path, date[cutoff:])
+            second = b.collect(max_bytes_leitura=7)
             clob = self.drain(b)
-            self.assertEqual(clob.text, MB_TEXT, "corte em %d" % corte)
-            self.assertNotIn("�", primeiro + segundo, "corte em %d" % corte)
+            self.assertEqual(clob.text, MB_TEXT, "corte em %d" % cutoff)
+            self.assertNotIn("�", first + second, "corte em %d" % cutoff)
             self.assertEqual(clob.offset, log_pump.clob_units(MB_TEXT))
 
     def test_bytes_invalidos_viram_replacement(self):
@@ -184,22 +184,22 @@ class TestReadAndMask(_Base):
     def test_segredo_cortado_entre_leituras(self):
         m = masking.Masker()
         m.register("SenhaSuperSecreta")
-        caminho = self.file(b"conectando com Senha")
-        b = self.pump(caminho, m)
+        path = self.file(b"conectando com Senha")
+        b = self.pump(path, m)
         b.collect()
-        self.append_bytes(caminho, b"SuperSecreta e pronto\n")
+        self.append_bytes(path, b"SuperSecreta e pronto\n")
         b.collect()
-        texto = self.drain(b).text
-        self.assertEqual(texto, "conectando com **** e pronto\n")
+        text = self.drain(b).text
+        self.assertEqual(text, "conectando com **** e pronto\n")
 
     def test_mascarador_por_ticket_isolado(self):
         snap1 = {"answers": {"token": "tok-ticket-um", "data": "2026-10-13"}, "sensitive": ["token"]}
         snap2 = {"answers": {"token": "tok-ticket-dois"}, "sensitive": ["token"]}
         m1 = log_pump.ticket_masker(["SegredoGlobal1"], "app/Pw1234@db:1521/X", snap1)
         m2 = log_pump.ticket_masker(["SegredoGlobal1"], None, snap2)
-        linha = b"tok-ticket-um tok-ticket-dois SegredoGlobal1 app/Pw1234@db:1521/X 2026-10-13\n"
-        t1 = self.drain(self.pump(self.file(linha), m1, ticket_id=1)).text
-        t2 = self.drain(self.pump(self.file(linha), m2, ticket_id=2)).text
+        line = b"tok-ticket-um tok-ticket-dois SegredoGlobal1 app/Pw1234@db:1521/X 2026-10-13\n"
+        t1 = self.drain(self.pump(self.file(line), m1, ticket_id=1)).text
+        t2 = self.drain(self.pump(self.file(line), m2, ticket_id=2)).text
         self.assertEqual(t1, "**** tok-ticket-dois **** **** 2026-10-13\n")
         self.assertEqual(t2, "tok-ticket-um **** **** app/****@db:1521/X 2026-10-13\n")
         self.assertIsNone(masking.MASKER.regex and masking.MASKER.regex.search("tok-ticket-um"),
@@ -208,84 +208,84 @@ class TestReadAndMask(_Base):
     def test_segredo_curto_nao_e_mascarado(self):
         snap = {"answers": {"pin": "123", "senha": "4567"}, "sensitive": ["pin", "senha"]}
         m = log_pump.ticket_masker([], None, snap)
-        texto = self.drain(self.pump(self.file(b"pin=123 senha=4567\n"), m)).text
-        self.assertEqual(texto, "pin=123 senha=****\n")
+        text = self.drain(self.pump(self.file(b"pin=123 senha=4567\n"), m)).text
+        self.assertEqual(text, "pin=123 senha=****\n")
 
     def test_arquivo_que_cresce_entre_coletas(self):
-        caminho = self.file(b"a\n")
-        b = self.pump(caminho)
+        path = self.file(b"a\n")
+        b = self.pump(path)
         self.assertEqual(b.collect(), "a\n")
         self.assertEqual(b.collect(), "")
-        self.append_bytes(caminho, b"b\n")
+        self.append_bytes(path, b"b\n")
         self.assertEqual(b.collect(), "b\n")
         self.assertEqual(b.offset_bytes, 4)
         self.assertEqual(self.drain(b).text, "a\nb\n")
 
     def test_arquivo_escrito_por_outro_processo_durante_a_coleta(self):
-        caminho = self.file()
-        filho = subprocess.Popen([sys.executable, "-c",
+        path = self.file()
+        child = subprocess.Popen([sys.executable, "-c",
                                   "import sys,time\nf=open(sys.argv[1],'ab',0)\n"
                                   "for i in range(200):\n    f.write(('linha %04d ação\\n' % i).encode('utf-8'))\n"
-                                  "    time.sleep(0.002)\n", caminho])
-        b = self.pump(caminho)
-        coletado = []
-        while filho.poll() is None:
-            coletado.append(b.collect(max_bytes_leitura=37))
-        filho.wait()
-        texto = self.drain(b).text
-        esperado = "".join("linha %04d ação\n" % i for i in range(200))
-        self.assertEqual(texto, esperado)
-        self.assertTrue(any(coletado), "houve coleta com o arquivo aberto pelo filho")
+                                  "    time.sleep(0.002)\n", path])
+        b = self.pump(path)
+        collected = []
+        while child.poll() is None:
+            collected.append(b.collect(max_bytes_leitura=37))
+        child.wait()
+        text = self.drain(b).text
+        expected = "".join("linha %04d ação\n" % i for i in range(200))
+        self.assertEqual(text, expected)
+        self.assertTrue(any(collected), "houve coleta com o arquivo aberto pelo filho")
 
 
 class TestLimits(_Base):
 
     def test_teto_que_cabe_exatamente_sem_marcador(self):
-        teto = 2048
-        conteudo = ("é" * 1024).encode("utf-8")
-        self.assertEqual(len(conteudo), teto)
-        b = self.pump(self.file(conteudo), cap=teto)
+        cap = 2048
+        content = ("é" * 1024).encode("utf-8")
+        self.assertEqual(len(content), cap)
+        b = self.pump(self.file(content), cap=cap)
         b.collect()
         clob = self.drain(b)
-        self.assertEqual(clob.text, conteudo.decode("utf-8"))
+        self.assertEqual(clob.text, content.decode("utf-8"))
         self.assertEqual(clob.truncated, "N")
         self.assertFalse(b.truncated)
 
     def test_teto_excedido_por_um_byte_com_marcador(self):
-        teto = 2048
-        for conteudo in (("é" * 1024 + "x").encode("utf-8"), ("\U0001F600" * 600).encode("utf-8"),
+        cap = 2048
+        for content in (("é" * 1024 + "x").encode("utf-8"), ("\U0001F600" * 600).encode("utf-8"),
                          ("a" * 5000).encode("utf-8")):
-            b = self.pump(self.file(conteudo), cap=teto)
+            b = self.pump(self.file(content), cap=cap)
             with self.assertLogs("sss_scheduler", "WARNING"):
                 b.collect(max_bytes_leitura=333)
                 b.collect(max_bytes_leitura=MB)
                 clob = self.drain(b)
             self.assertTrue(clob.text.endswith(MARKER))
             self.assertEqual(clob.text.count(MARKER), 1)
-            self.assertLessEqual(len(clob.text.encode("utf-8")), teto)
-            corpo = clob.text[:-len(MARKER)]
-            self.assertTrue(conteudo.decode("utf-8").startswith(corpo), "corte em fronteira de caractere")
-            self.assertGreater(len(corpo.encode("utf-8")), teto - len(MARKER.encode("utf-8")) - 4)
+            self.assertLessEqual(len(clob.text.encode("utf-8")), cap)
+            body = clob.text[:-len(MARKER)]
+            self.assertTrue(content.decode("utf-8").startswith(body), "corte em fronteira de caractere")
+            self.assertGreater(len(body.encode("utf-8")), cap - len(MARKER.encode("utf-8")) - 4)
             self.assertEqual(clob.truncated, "Y")
 
     def test_aplicar_teto_banco_direto(self):
-        teto = 1100
-        marcador = len(MARKER.encode("utf-8"))
-        b = self.pump(self.file(), cap=teto)
-        enviar, truncou = b.apply_db_cap("a" * (teto - marcador))
-        self.assertEqual((len(enviar), truncou), (teto - marcador, False))
-        enviar, truncou = b.apply_db_cap("b" * marcador)
-        self.assertEqual((enviar, truncou), ("", False), "sufixo retido ate a decisao")
+        cap = 1100
+        marker = len(MARKER.encode("utf-8"))
+        b = self.pump(self.file(), cap=cap)
+        send, truncated = b.apply_db_cap("a" * (cap - marker))
+        self.assertEqual((len(send), truncated), (cap - marker, False))
+        send, truncated = b.apply_db_cap("b" * marker)
+        self.assertEqual((send, truncated), ("", False), "sufixo retido ate a decisao")
         with self.assertLogs("sss_scheduler", "WARNING"):
-            enviar, truncou = b.apply_db_cap("c")
-        self.assertEqual((enviar, truncou), (MARKER, True))
+            send, truncated = b.apply_db_cap("c")
+        self.assertEqual((send, truncated), (MARKER, True))
         self.assertEqual(b.apply_db_cap("mais"), ("", True))
 
     def test_teto_local(self):
-        caminho = self.file(b"x" * 1024)
-        b = self.pump(caminho, local_value=1024)
+        path = self.file(b"x" * 1024)
+        b = self.pump(path, local_value=1024)
         self.assertFalse(b.local_exceeded())
-        self.append_bytes(caminho, b"y")
+        self.append_bytes(path, b"y")
         self.assertTrue(b.local_exceeded())
 
     def test_blocos_com_tamanho_exato(self):
@@ -342,66 +342,66 @@ class TestProtocol(_Base):
         self.assertEqual(conn.clobs[1].text, "abc\n")
 
     def test_divergencia_interrompe_sem_alterar(self):
-        for clob_texto, clob_offset in (("zzz", 3), ("abc", 2)):
+        for clob_text, clob_offset in (("zzz", 3), ("abc", 2)):
             b = self.pump(self.file(b"abc\n"))
             clob = _FakeClob()
-            clob.text, clob.offset = clob_texto, clob_offset
+            clob.text, clob.offset = clob_text, clob_offset
             with self.assertLogs("sss_scheduler", "ERROR"):
                 self.assertEqual(log_pump.final_flush(b, _FakeConn({1: clob}), _FakeRepo(), "srv-01"),
                                  log_pump.INCONSISTENT)
-            self.assertEqual((clob.text, clob.offset), (clob_texto, clob_offset))
+            self.assertEqual((clob.text, clob.offset), (clob_text, clob_offset))
             self.assertTrue(b.stopped)
             self.assertEqual(b.collect(), "", "pump do ticket interrompido")
 
     def test_orcamento_e_rodizio(self):
-        relogio = _Clock()
+        clock = _Clock()
         clobs = dict((t, _FakeClob()) for t in (1, 2, 3))
-        conn = _FakeConn(clobs, clock=relogio)
-        caminhos = dict((t, self.file()) for t in (1, 2, 3))
-        bombas = dict((t, self.pump(caminhos[t], ticket_id=t)) for t in (1, 2, 3))
-        rodada = Round(bombas, relogio, budget_s=3)
-        atendidos = []
+        conn = _FakeConn(clobs, clock=clock)
+        paths = dict((t, self.file()) for t in (1, 2, 3))
+        pumps = dict((t, self.pump(paths[t], ticket_id=t)) for t in (1, 2, 3))
+        round_value = Round(pumps, clock, budget_s=3)
+        served = []
         for _ in range(9):
             for t in (1, 2, 3):
                 # Tickets verbosos: 3 blocos novos por rodada (cada envio custa 1 s no relogio simulado).
-                self.append_bytes(caminhos[t], ("%d" % t * 8000 * 3).encode("ascii"))
-            res = rodada.run(conn, _FakeRepo(), "srv-01")
+                self.append_bytes(paths[t], ("%d" % t * 8000 * 3).encode("ascii"))
+            res = round_value.run(conn, _FakeRepo(), "srv-01")
             self.assertTrue(res.budget_exhausted)
-            atendidos.append(set(res.served))
-            relogio.advance(100)
+            served.append(set(res.served))
+            clock.advance(100)
         self.assertEqual(len(clobs[1].text) + len(clobs[2].text) + len(clobs[3].text) > 0, True)
-        for i in range(len(atendidos) - 1):
+        for i in range(len(served) - 1):
             for t in (1, 2, 3):
-                self.assertTrue(t in atendidos[i] or t in atendidos[i + 1],
-                                "ticket %d sem coleta nas rodadas %d e %d: %s" % (t, i, i + 1, atendidos))
+                self.assertTrue(t in served[i] or t in served[i + 1],
+                                "ticket %d sem coleta nas rodadas %d e %d: %s" % (t, i, i + 1, served))
         # O orcamento (3 s, 1 s por bloco) cobre os blocos de um ticket so; ainda assim ha fila acumulada.
-        self.assertTrue(any(b.pending() for b in bombas.values()))
+        self.assertTrue(any(b.pending() for b in pumps.values()))
         # Lidos e nao confirmados sobrevivem: drenando, cada CLOB tem tudo, sem perda nem duplicacao.
         for t in (1, 2, 3):
-            self.assertEqual(log_pump.final_flush(bombas[t], conn, _FakeRepo(), "srv-01"), log_pump.OK)
+            self.assertEqual(log_pump.final_flush(pumps[t], conn, _FakeRepo(), "srv-01"), log_pump.OK)
             self.assertEqual(clobs[t].text, "%d" % t * 8000 * 3 * 9)
 
     def test_rodada_segue_com_arquivo_ausente(self):
         # Revisao F8.0-F8.2 (A1): um log ilegivel nao para a coleta dos outros tickets.
         clobs = {1: _FakeClob(), 2: _FakeClob()}
         conn = _FakeConn(clobs)
-        bombas = {1: self.pump(os.path.join(self.root, "sumiu.log"), ticket_id=1),
+        pumps = {1: self.pump(os.path.join(self.root, "sumiu.log"), ticket_id=1),
                   2: self.pump(self.file(b"ok\n"), ticket_id=2)}
-        rodada = Round(bombas, _Clock(), budget_s=100)
+        round_value = Round(pumps, _Clock(), budget_s=100)
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            rodada.run(conn, _FakeRepo(), "srv-01")
-            rodada.run(conn, _FakeRepo(), "srv-01")
+            round_value.run(conn, _FakeRepo(), "srv-01")
+            round_value.run(conn, _FakeRepo(), "srv-01")
         self.assertEqual(len([x for x in logs.output if "ilegivel" in x]), 1, "WARN uma vez")
-        self.assertTrue(bombas[1].read_error)
-        self.assertEqual(log_pump.final_flush(bombas[2], conn, _FakeRepo(), "srv-01"), log_pump.OK)
+        self.assertTrue(pumps[1].read_error)
+        self.assertEqual(log_pump.final_flush(pumps[2], conn, _FakeRepo(), "srv-01"), log_pump.OK)
         self.assertEqual(clobs[2].text, "ok\n")
-        self.assertEqual(log_pump.final_flush(bombas[1], conn, _FakeRepo(), "srv-01"), log_pump.OK)
+        self.assertEqual(log_pump.final_flush(pumps[1], conn, _FakeRepo(), "srv-01"), log_pump.OK)
         self.assertEqual(clobs[1].text, "")
 
     def test_flush_final_le_em_blocos_e_para_ao_truncar(self):
         # Revisao F8.0-F8.2 (M1): arquivo bem maior que o teto nao e lido inteiro para a memoria.
-        caminho = self.file(b"x" * (5 * MB))
-        b = self.pump(caminho, cap=4096)
+        path = self.file(b"x" * (5 * MB))
+        b = self.pump(path, cap=4096)
         with self.assertLogs("sss_scheduler", "WARNING"):
             clob = self.drain(b)
         self.assertLessEqual(b.offset_bytes, log_pump.DEFAULT_READ, "parou de ler no primeiro bloco")
@@ -409,25 +409,25 @@ class TestProtocol(_Base):
         self.assertLessEqual(len(clob.text.encode("utf-8")), 4096)
 
     def test_flush_final_sem_truncar_le_tudo_em_blocos(self):
-        conteudo = b"".join(("linha ação %06d\n" % i).encode("utf-8") for i in range(150000))
-        b = self.pump(self.file(conteudo))
+        content = b"".join(("linha ação %06d\n" % i).encode("utf-8") for i in range(150000))
+        b = self.pump(self.file(content))
         clob = self.drain(b)
-        self.assertGreater(len(conteudo), 2 * log_pump.DEFAULT_READ)
-        self.assertEqual(clob.text, conteudo.decode("utf-8"))
+        self.assertGreater(len(content), 2 * log_pump.DEFAULT_READ)
+        self.assertEqual(clob.text, content.decode("utf-8"))
 
     def test_rodada_com_commit_incerto_preserva_e_retoma(self):
-        relogio = _Clock()
+        clock = _Clock()
         clobs = {1: _FakeClob()}
-        conn = _FakeConn(clobs, clock=relogio, fail_commit=1)
-        caminho = self.file(b"a" * 20000)
-        bombas = {1: self.pump(caminho)}
-        rodada = Round(bombas, relogio, budget_s=100)
+        conn = _FakeConn(clobs, clock=clock, fail_commit=1)
+        path = self.file(b"a" * 20000)
+        pumps = {1: self.pump(path)}
+        round_value = Round(pumps, clock, budget_s=100)
         with self.assertLogs("sss_scheduler", "WARNING"):
-            res = rodada.run(conn, _FakeRepo(), "srv-01")
+            res = round_value.run(conn, _FakeRepo(), "srv-01")
         self.assertTrue(res.uncertain_connection)
-        res = rodada.run(conn, _FakeRepo(), "srv-01")
+        res = round_value.run(conn, _FakeRepo(), "srv-01")
         self.assertFalse(res.uncertain_connection)
-        self.assertEqual(log_pump.final_flush(bombas[1], conn, _FakeRepo(), "srv-01"), log_pump.OK)
+        self.assertEqual(log_pump.final_flush(pumps[1], conn, _FakeRepo(), "srv-01"), log_pump.OK)
         self.assertEqual(clobs[1].text, "a" * 20000)
 
 
@@ -476,22 +476,22 @@ class TestRepoSchedulerLog(unittest.TestCase):
     def test_bloco_plsql_literal_com_owner_e_prefixo(self):
         conn = _ConnAppend()
         self.assertEqual(self.repo.append_chunk(conn, 7, "srv-01", 0, "abc"), WRITTEN)
-        sql, binds, tipos = conn.executions[0]
+        sql, binds, kinds = conn.executions[0]
         # Literal do README §8.10, com o owner e o prefixo da configuracao no lugar de {owner}.tbsss_.
         with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "README.md"),
                   encoding="utf-8") as f:
             readme = f.read()
-        secao = readme[readme.index("### 8.10"):readme.index("### 8.11")]
-        bloco = secao[secao.index("```sql\nDECLARE") + len("```sql\n"):]
-        bloco = bloco[:bloco.index("\n```")]
-        self.assertEqual(sql, bloco.replace("{owner}.tbsss_tickets", "OWN_X.pfx_tickets"))
+        section = readme[readme.index("### 8.10"):readme.index("### 8.11")]
+        chunk = section[section.index("```sql\nDECLARE") + len("```sql\n"):]
+        chunk = chunk[:chunk.index("\n```")]
+        self.assertEqual(sql, chunk.replace("{owner}.tbsss_tickets", "OWN_X.pfx_tickets"))
         self.assertNotIn("tbsss_", sql)
-        for trecho in ("FOR UPDATE WAIT 5", "DBMS_LOB.GETLENGTH(v_lob) <> v_offset", "DBMS_LOB.WRITEAPPEND",
+        for snippet in ("FOR UPDATE WAIT 5", "DBMS_LOB.GETLENGTH(v_lob) <> v_offset", "DBMS_LOB.WRITEAPPEND",
                        "DBMS_LOB.COMPARE", "WHEN NO_DATA_FOUND", "RAISE_APPLICATION_ERROR(-20002"):
-            self.assertIn(trecho, sql)
+            self.assertIn(snippet, sql)
         self.assertNotIn("updated_", sql)
         self.assertEqual(set(binds), {"chunk", "ticket_id", "agent_id", "expected_offset", "result"})
-        self.assertEqual(tipos, {"chunk": db_conn.get_driver_type(db_conn.TIPO_CLOB)})
+        self.assertEqual(kinds, {"chunk": db_conn.get_driver_type(db_conn.TIPO_CLOB)})
 
     def test_resultados_e_posse_perdida(self):
         for r in (WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST):
@@ -502,9 +502,9 @@ class TestRepoSchedulerLog(unittest.TestCase):
             self.repo.append_chunk(_ConnAppend(), 7, "srv-01", 0, "")
 
     def test_ora_20002_vira_log_offset_inconsistente(self):
-        erro = Exception("ORA-20002: LOG_OFFSET_DIVERGENTE\nORA-06512: at line 13")
+        error = Exception("ORA-20002: LOG_OFFSET_DIVERGENTE\nORA-06512: at line 13")
         with self.assertRaises(LogOffsetMismatch):
-            self.repo.append_chunk(_ConnAppend(error=erro), 7, "srv-01", 0, "abc")
+            self.repo.append_chunk(_ConnAppend(error=error), 7, "srv-01", 0, "abc")
         with self.assertRaises(Exception) as ctx:
             self.repo.append_chunk(_ConnAppend(error=Exception("ORA-00054: resource busy")), 7, "srv-01", 0, "abc")
         self.assertNotIsInstance(ctx.exception, LogOffsetMismatch)
@@ -514,16 +514,16 @@ class TestRepoSchedulerLog(unittest.TestCase):
         cx_Oracle: STRING); o resultado lido e o mesmo."""
         oracledb = mock.Mock(__name__="oracledb", DB_TYPE_VARCHAR="ODB_VARCHAR", DB_TYPE_CLOB="ODB_CLOB")
         cx = mock.Mock(__name__="cx_Oracle", STRING="CX_STRING", CLOB="CX_CLOB")
-        for candidato, driver, esperado, clob in (("thin", oracledb, "ODB_VARCHAR", "ODB_CLOB"),
+        for candidate, driver, expected, clob in (("thin", oracledb, "ODB_VARCHAR", "ODB_CLOB"),
                                                   ("thick", oracledb, "ODB_VARCHAR", "ODB_CLOB"),
                                                   ("cx_oracle", cx, "CX_STRING", "CX_CLOB")):
-            selecao = mock.Mock(candidate=candidato)
+            selection = mock.Mock(candidate=candidate)
             conn = _ConnAppend(result=ALREADY_WRITTEN)
             with mock.patch.object(db_conn, "_DRIVER_INITIALIZED", driver), \
-                    mock.patch.object(db_conn, "_DRIVER_SELECTION", selecao):
-                self.assertEqual(self.repo.append_chunk(conn, 7, "srv-01", 3, "abc"), ALREADY_WRITTEN, candidato)
-            self.assertEqual(conn.vars, [(esperado, 20)], candidato)
-            self.assertEqual(conn.executions[0][2], {"chunk": clob}, candidato)
+                    mock.patch.object(db_conn, "_DRIVER_SELECTION", selection):
+                self.assertEqual(self.repo.append_chunk(conn, 7, "srv-01", 3, "abc"), ALREADY_WRITTEN, candidate)
+            self.assertEqual(conn.vars, [(expected, 20)], candidate)
+            self.assertEqual(conn.executions[0][2], {"chunk": clob}, candidate)
 
     def test_marcar_truncado(self):
         conn = _ConnAppend(rowcount=1)
@@ -537,8 +537,8 @@ class TestRepoSchedulerLog(unittest.TestCase):
     def test_modulos_sem_commit_nem_sleep(self):
         for mod in (scheduler_log, log_pump):
             with open(mod.__file__, encoding="utf-8") as f:
-                fonte = f.read()
-            self.assertFalse("time.sleep" in fonte, mod.__name__)
+                source = f.read()
+            self.assertFalse("time.sleep" in source, mod.__name__)
         with open(scheduler_log.__file__, encoding="utf-8") as f:
             self.assertFalse(".commit(" in f.read(), "COMMIT e do chamador")
 
@@ -651,26 +651,26 @@ class TestSchedulerLogOracle(unittest.TestCase):
     def test_append_idempotente_rollback_e_divergencia(self):
         conn = self.catalog._obter_conexao()
         try:
-            bloco = "ação \U0001F600 linha 1\n"
-            unidades = log_pump.clob_units(bloco, self.unit)
-            guardado = self._as_db(bloco)
+            chunk = "ação \U0001F600 linha 1\n"
+            units = log_pump.clob_units(chunk, self.unit)
+            saved = self._as_db(chunk)
             # Rollback antes do primeiro COMMIT: a nova tentativa grava (WRITTEN).
-            self.assertEqual(self.repo.append_chunk(conn, self.ticket_id, self.AGENT, 0, bloco), WRITTEN)
+            self.assertEqual(self.repo.append_chunk(conn, self.ticket_id, self.AGENT, 0, chunk), WRITTEN)
             conn.rollback()
-            self.assertEqual(self.repo.append_chunk(conn, self.ticket_id, self.AGENT, 0, bloco), WRITTEN)
+            self.assertEqual(self.repo.append_chunk(conn, self.ticket_id, self.AGENT, 0, chunk), WRITTEN)
             conn.commit()
             # Mesma operacao depois do COMMIT: ALREADY_WRITTEN, sem segundo WRITEAPPEND.
-            self.assertEqual(self.repo.append_chunk(conn, self.ticket_id, self.AGENT, 0, bloco), ALREADY_WRITTEN)
+            self.assertEqual(self.repo.append_chunk(conn, self.ticket_id, self.AGENT, 0, chunk), ALREADY_WRITTEN)
             conn.commit()
-            self.assertEqual(self._state(), (guardado, unidades, "N"))
+            self.assertEqual(self._state(), (saved, units, "N"))
             # Offset divergente e conteudo diferente: LogOffsetMismatch sem alterar o CLOB.
-            for offset, outro in ((unidades + 5, "x"), (0, "ação \U0001F600 linha 2\n"), (1, bloco)):
+            for offset, other in ((units + 5, "x"), (0, "ação \U0001F600 linha 2\n"), (1, chunk)):
                 with self.assertRaises(LogOffsetMismatch):
-                    self.repo.append_chunk(conn, self.ticket_id, self.AGENT, offset, outro)
+                    self.repo.append_chunk(conn, self.ticket_id, self.AGENT, offset, other)
                 conn.rollback()
-            self.assertEqual(self._state(), (guardado, unidades, "N"))
+            self.assertEqual(self._state(), (saved, units, "N"))
             # Outro agente: OWNERSHIP_LOST.
-            self.assertEqual(self.repo.append_chunk(conn, self.ticket_id, "outro-agente", unidades, "z"), OWNERSHIP_LOST)
+            self.assertEqual(self.repo.append_chunk(conn, self.ticket_id, "outro-agente", units, "z"), OWNERSHIP_LOST)
             conn.rollback()
             self.assertTrue(self.repo.mark_truncated(conn, self.ticket_id, self.AGENT))
             conn.commit()
@@ -679,52 +679,52 @@ class TestSchedulerLogOracle(unittest.TestCase):
             conn.close()
 
     def test_bomba_completa_mascarada_uma_vez(self):
-        raiz = tempfile.mkdtemp(prefix="sss_pump_ora_")
-        self.addCleanup(shutil.rmtree, raiz, True)
-        caminho = os.path.join(raiz, "ticket.log")
-        linhas = "".join("linha %05d ação \U0001F600 senha=SegredoDoTicket\n" % i for i in range(700))
-        with open(caminho, "wb") as f:
-            f.write(linhas.encode("utf-8"))
+        root = tempfile.mkdtemp(prefix="sss_pump_ora_")
+        self.addCleanup(shutil.rmtree, root, True)
+        path = os.path.join(root, "ticket.log")
+        rows = "".join("linha %05d ação \U0001F600 senha=SegredoDoTicket\n" % i for i in range(700))
+        with open(path, "wb") as f:
+            f.write(rows.encode("utf-8"))
         m = log_pump.ticket_masker(["SegredoDoTicket"])
-        b = Pump(caminho, self.ticket_id, m, 5 * MB, 50 * MB, supplementary_unit=self.unit)
+        b = Pump(path, self.ticket_id, m, 5 * MB, 50 * MB, supplementary_unit=self.unit)
         conn = self.catalog._obter_conexao()
         try:
             self.assertEqual(log_pump.final_flush(b, conn, self.repo, self.AGENT), log_pump.OK)
         finally:
             conn.close()
-        esperado = linhas.replace("SegredoDoTicket", "****")
-        texto, offset, _trunc = self._state()
-        self.assertEqual(texto, self._as_db(esperado))
-        self.assertEqual(texto.count("****"), 700)
-        self.assertNotIn("SegredoDoTicket", texto)
-        self.assertEqual(offset, log_pump.clob_units(esperado, self.unit))
-        self.assertGreater(len(esperado), 8000, "mais de um bloco")
+        expected = rows.replace("SegredoDoTicket", "****")
+        text, offset, _trunc = self._state()
+        self.assertEqual(text, self._as_db(expected))
+        self.assertEqual(text.count("****"), 700)
+        self.assertNotIn("SegredoDoTicket", text)
+        self.assertEqual(offset, log_pump.clob_units(expected, self.unit))
+        self.assertGreater(len(expected), 8000, "mais de um bloco")
 
     def test_combinacoes_de_driver(self):
-        modulos = os.path.dirname(os.path.abspath(log_pump.__file__))
+        modules = os.path.dirname(os.path.abspath(log_pump.__file__))
         offset = 0
-        resultados = {}
-        for modo in ("thin", "thick", "cx_oracle"):
-            bloco = "driver %s ação \U0001F600\n" % modo
-            p = subprocess.run([sys.executable, "-c", _CHILD, modulos, modo, str(self.ticket_id), self.AGENT,
-                                str(offset), bloco], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               timeout=180, cwd=os.path.dirname(modulos),
+        results = {}
+        for mode in ("thin", "thick", "cx_oracle"):
+            chunk = "driver %s ação \U0001F600\n" % mode
+            p = subprocess.run([sys.executable, "-c", _CHILD, modules, mode, str(self.ticket_id), self.AGENT,
+                                str(offset), chunk], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               timeout=180, cwd=os.path.dirname(modules),
                                env=dict(os.environ, PYTHONIOENCODING="utf-8"))
-            saida_txt = p.stdout.decode("utf-8", "replace")
-            linhas = [x for x in saida_txt.splitlines() if x.startswith("{")]
-            self.assertTrue(linhas, "%s: %s" % (modo, p.stderr.decode("utf-8", "replace")[-500:]))
-            saida = json.loads(linhas[-1])
-            resultados[modo] = saida
-            if "indisponivel" in saida:
+            output_txt = p.stdout.decode("utf-8", "replace")
+            rows = [x for x in output_txt.splitlines() if x.startswith("{")]
+            self.assertTrue(rows, "%s: %s" % (mode, p.stderr.decode("utf-8", "replace")[-500:]))
+            output = json.loads(rows[-1])
+            results[mode] = output
+            if "indisponivel" in output:
                 continue
-            self.assertEqual((saida["candidate"], saida["r"]), (modo, [WRITTEN, ALREADY_WRITTEN]), modo)
-            offset += log_pump.clob_units(bloco, self.unit)
-        print("\n[log_pump] combinacoes de driver: %s" % json.dumps(resultados, ensure_ascii=False))
-        texto, off, _trunc = self._state()
-        esperado = "".join("driver %s ação \U0001F600\n" % m for m in ("thin", "thick", "cx_oracle")
-                           if "indisponivel" not in resultados[m])
-        self.assertEqual((texto, off), (self._as_db(esperado), offset), "cada bloco uma unica vez")
-        self.assertNotIn("indisponivel", resultados["thin"], "Thin e o driver padrao do ambiente")
+            self.assertEqual((output["candidate"], output["r"]), (mode, [WRITTEN, ALREADY_WRITTEN]), mode)
+            offset += log_pump.clob_units(chunk, self.unit)
+        print("\n[log_pump] combinacoes de driver: %s" % json.dumps(results, ensure_ascii=False))
+        text, off, _trunc = self._state()
+        expected = "".join("driver %s ação \U0001F600\n" % m for m in ("thin", "thick", "cx_oracle")
+                           if "indisponivel" not in results[m])
+        self.assertEqual((text, off), (self._as_db(expected), offset), "cada bloco uma unica vez")
+        self.assertNotIn("indisponivel", results["thin"], "Thin e o driver padrao do ambiente")
 
 
 if __name__ == "__main__":

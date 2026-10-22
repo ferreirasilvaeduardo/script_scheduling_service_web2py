@@ -45,10 +45,10 @@ FILES = ("carga_diaria.py", "relatorio_mensal.py", "cleanup_tmp.sh", "sync_tabel
 def _tree():
     base = tempfile.mkdtemp(prefix="sss_scr_")
     os.mkdir(os.path.join(base, "sub"))
-    for nome in FILES:
-        with open(os.path.join(base, nome), "w") as f:
+    for name in FILES:
+        with open(os.path.join(base, name), "w") as f:
             f.write("# teste\n")
-        os.chmod(os.path.join(base, nome), 0o444)
+        os.chmod(os.path.join(base, name), 0o444)
     with open(os.path.join(base, "gravavel.py"), "w") as f:
         f.write("# teste\n")
     os.chmod(os.path.join(base, "gravavel.py"), 0o666)
@@ -61,9 +61,9 @@ def _tree():
 
 
 def _remove(base):
-    for raiz, dirs, _arqs in os.walk(base):
+    for root, dirs, _arqs in os.walk(base):
         for d in dirs:
-            os.chmod(os.path.join(raiz, d), stat.S_IRWXU)
+            os.chmod(os.path.join(root, d), stat.S_IRWXU)
     os.chmod(base, stat.S_IRWXU)
     shutil.rmtree(base)
 
@@ -93,7 +93,7 @@ class _Base(unittest.TestCase):
         self.log.propagate = False
         auth = auth_service.AuthService(repo_factory.get("users"), repo_factory.get("rbac"), self.catalog,
                                         self.audit, 5, 900, self.log)
-        self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSIONS.items())
+        self.ctx = dict((login, auth.revalidate(session)) for login, session in SESSIONS.items())
         self.ctx["gestor"] = dict(self.ctx["op.prod"], features=frozenset(["MANAGE_SCRIPTS"]))
         self.base = _tree()
         self.addCleanup(_remove, self.base)
@@ -111,31 +111,31 @@ class _Base(unittest.TestCase):
                 if a["entity"] == "tbsss_scripts" and a["id"] > self.aud_base]
 
     def _insert(self, svc=None, **changes):
-        dados = {"name": "Novo script", "interpreter": "PYTHON3", "path_file": self._p("novo.py"),
+        date = {"name": "Novo script", "interpreter": "PYTHON3", "path_file": self._p("novo.py"),
                  "param_type": "POSITIONAL", "max_parallel_env": "2", "timeout_s": ""}
-        dados.update(changes)
-        return (svc or self.svc).save(self.ctx["admin"], IP, None, dados)
+        date.update(changes)
+        return (svc or self.svc).save(self.ctx["admin"], IP, None, date)
 
     def _edit(self, sid, **changes):
         f = self.svc.form(self.ctx["admin"], str(sid))
-        dados = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
-        dados["version"] = f["version"]
-        dados.update(changes)
-        return self.svc.save(self.ctx["admin"], IP, str(sid), dados)
+        date = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
+        date["version"] = f["version"]
+        date.update(changes)
+        return self.svc.save(self.ctx["admin"], IP, str(sid), date)
 
     def _links_json(self, sid):
-        tela = self.svc.parameters(self.ctx["admin"], str(sid))
-        return tela, [{"parameter_id": v["id"], "required": v["required"],
+        screen = self.svc.parameters(self.ctx["admin"], str(sid))
+        return screen, [{"parameter_id": v["id"], "required": v["required"],
                        "default_value_override": v["default_value_override"], "manter_sigiloso": v["sensitive"]}
-                      for v in tela["vinculos"]]
+                      for v in screen["vinculos"]]
 
 
 @_SKIP_ROOT
 class TestRegistration(_Base):
 
     def test_inclusao_ok_e_auditoria(self):
-        sid, erros, aviso = self._insert()
-        self.assertEqual((erros, aviso), ({}, None))
+        sid, errors, warning = self._insert()
+        self.assertEqual((errors, warning), ({}, None))
         s = self.catalog.scripts_get(sid)
         self.assertEqual((s["interpreter"], s["path_file"], s["max_parallel_env"], s["timeout_s"]),
                          ("PYTHON3", self._p("novo.py"), 2, None))
@@ -144,61 +144,61 @@ class TestRegistration(_Base):
 
     def test_interpretador_fora_da_allowlist(self):
         for cmd in ("/bin/ls", "/usr/bin/python3", "PYTHON3 -c", "python3", "CMD", "POWERSHELL", "", None):
-            _sid, erros, _ = self._insert(interpreter=cmd)
-            self.assertEqual(erros.get("interpreter"), scr_mod.PATH_MESSAGES[Code.INTERPRETADOR_NAO_PERMITIDO], cmd)
+            _sid, errors, _ = self._insert(interpreter=cmd)
+            self.assertEqual(errors.get("interpreter"), scr_mod.PATH_MESSAGES[Code.INTERPRETADOR_NAO_PERMITIDO], cmd)
 
     def test_path_file_invalidos(self):
         # CR-005 (README §8.5): caminho absoluto, normalizado e fora das pastas do sistema; vale em qualquer sss_env.
-        casos = (("novo.py", Code.RELATIVE_PATH), ("/etc/passwd", Code.SYSTEM_DIR),
+        cases = (("novo.py", Code.RELATIVE_PATH), ("/etc/passwd", Code.SYSTEM_DIR),
                  ("/usr/local/bin/x.py", Code.SYSTEM_DIR), ("/etc/nao_existe.py", Code.SYSTEM_DIR),
                  (self.base + "/../x.py", Code.HAS_DOTS), (self.base + "//novo.py", Code.PATH_NOT_NORMALIZED),
                  ("/opt\\x.py", Code.INVALID_SEPARATOR))
         for env in ("DEV", "HML"):
             svc = self._service(env)
-            for path, codigo in casos:
-                _sid, erros, _ = self._insert(svc=svc, path_file=path)
-                self.assertEqual(erros.get("path_file"), scr_mod.PATH_MESSAGES[codigo], (env, path))
-        _sid, erros, _ = self._insert(path_file="/opt/" + "a" * 500)
-        self.assertEqual(erros.get("path_file"), u"Use no máximo 500 caracteres.")
+            for path, code in cases:
+                _sid, errors, _ = self._insert(svc=svc, path_file=path)
+                self.assertEqual(errors.get("path_file"), scr_mod.PATH_MESSAGES[code], (env, path))
+        _sid, errors, _ = self._insert(path_file="/opt/" + "a" * 500)
+        self.assertEqual(errors.get("path_file"), u"Use no máximo 500 caracteres.")
 
     def test_symlink_para_pasta_do_sistema(self):
         os.chmod(self.base, stat.S_IRWXU)
         os.symlink("/etc/hostname", self._p("fuga.py"))
         os.chmod(self.base, 0o555)
-        _sid, erros, _ = self._insert(path_file=self._p("fuga.py"))
-        self.assertEqual(erros, {"path_file": scr_mod.PATH_MESSAGES[Code.SYSTEM_DIR]})
+        _sid, errors, _ = self._insert(path_file=self._p("fuga.py"))
+        self.assertEqual(errors, {"path_file": scr_mod.PATH_MESSAGES[Code.SYSTEM_DIR]})
 
     def test_arquivo_nao_e_conferido_no_cadastro(self):
         # CR-011 (S1): ausente, gravavel ou pasta neste servidor nao importam aqui; o agente confere ao executar.
         for env in ("DEV", "HML", "PROD"):
-            for i, caminho in enumerate(("/opt/automacoes/scripts/nao_existe.py", self._p("gravavel.py"), self._p("sub"))):
-                sid, erros, aviso = self._insert(svc=self._service(env), name="Sem conferencia %s %d" % (env, i),
-                                                  path_file=caminho)
-                self.assertEqual((erros, aviso), ({}, None), (env, caminho))
+            for i, path in enumerate(("/opt/automacoes/scripts/nao_existe.py", self._p("gravavel.py"), self._p("sub"))):
+                sid, errors, warning = self._insert(svc=self._service(env), name="Sem conferencia %s %d" % (env, i),
+                                                  path_file=path)
+                self.assertEqual((errors, warning), ({}, None), (env, path))
                 self.assertIsNotNone(sid)
 
     def test_campos_numericos_e_nome(self):
-        for valor in ("0", "1000", "x", ""):
-            _sid, erros, _ = self._insert(max_parallel_env=valor)
-            self.assertEqual(erros.get("max_parallel_env"), scr_mod.MSG_PARALLEL, valor)
-        _sid, erros, _ = self._insert(timeout_s="0")
-        self.assertEqual(erros.get("timeout_s"), scr_mod.MSG_TIMEOUT)
-        _sid, erros, _ = self._insert(name="carga_diaria")
-        self.assertEqual(erros, {"name": scr_mod.MSG_NAME_DUPLICATE})
-        _sid, erros, _ = self._insert(name="nome\x07estranho")
-        self.assertEqual(erros, {"name": scr_mod.MSG_CONTROL_CHARS})
+        for value in ("0", "1000", "x", ""):
+            _sid, errors, _ = self._insert(max_parallel_env=value)
+            self.assertEqual(errors.get("max_parallel_env"), scr_mod.MSG_PARALLEL, value)
+        _sid, errors, _ = self._insert(timeout_s="0")
+        self.assertEqual(errors.get("timeout_s"), scr_mod.MSG_TIMEOUT)
+        _sid, errors, _ = self._insert(name="carga_diaria")
+        self.assertEqual(errors, {"name": scr_mod.MSG_NAME_DUPLICATE})
+        _sid, errors, _ = self._insert(name="nome\x07estranho")
+        self.assertEqual(errors, {"name": scr_mod.MSG_CONTROL_CHARS})
         # Nome unico diferencia maiusculas (README §8.5), como a UK no Oracle.
-        _sid, erros, _a = self._insert(name="CARGA_DIARIA")
-        self.assertNotIn("name", erros)
+        _sid, errors, _a = self._insert(name="CARGA_DIARIA")
+        self.assertNotIn("name", errors)
 
     def test_nome_reservado_app(self):
         # CR-005 D7: a pasta de log do script nao pode ser 'app'.
-        for nome in ("app", "APP", "App.", "_app_", u"Áṕp"):
-            _sid, erros, _ = self._insert(name=nome)
-            self.assertEqual(erros.get("name"), scr_mod.MSG_NAME_RESERVED, nome)
-        for nome in ("app2", "minha app", "aplicacao"):
-            _sid, erros, _ = self._insert(name=nome)
-            self.assertNotIn("name", erros, nome)
+        for name in ("app", "APP", "App.", "_app_", u"Áṕp"):
+            _sid, errors, _ = self._insert(name=name)
+            self.assertEqual(errors.get("name"), scr_mod.MSG_NAME_RESERVED, name)
+        for name in ("app2", "minha app", "aplicacao"):
+            _sid, errors, _ = self._insert(name=name)
+            self.assertNotIn("name", errors, name)
 
     def test_edicao_e_reativacao_sem_conferir_o_arquivo(self):
         # CR-011 (S1): o estado do arquivo neste servidor nao impede editar, desativar nem reativar.
@@ -206,13 +206,13 @@ class TestRegistration(_Base):
         sid = self.catalog.scripts_insert({"name": "Gravavel", "interpreter": "PYTHON3",
                                              "path_file": self._p("gravavel.py"), "param_type": "POSITIONAL"}, actor="teste")["id"]
         f = svc.form(self.ctx["admin"], str(sid))
-        dados = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
-        _sid, erros, _a = svc.save(self.ctx["admin"], IP, str(sid), dict(dados, version=f["version"], description="Nova"))
-        self.assertEqual(erros, {})
-        _sid, erros, _a = svc.save(self.ctx["admin"], IP, str(sid),
-                                     dict(dados, version=svc.form(self.ctx["admin"], str(sid))["version"],
+        date = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
+        _sid, errors, _a = svc.save(self.ctx["admin"], IP, str(sid), dict(date, version=f["version"], description="Nova"))
+        self.assertEqual(errors, {})
+        _sid, errors, _a = svc.save(self.ctx["admin"], IP, str(sid),
+                                     dict(date, version=svc.form(self.ctx["admin"], str(sid))["version"],
                                           interpreter="BASH"))
-        self.assertEqual(erros, {})
+        self.assertEqual(errors, {})
         svc.toggle_active(self.ctx["admin"], IP, str(sid), svc.form(self.ctx["admin"], str(sid))["version"])
         self.assertEqual(self.catalog.scripts_get(sid)["active"], "N")
         svc.toggle_active(self.ctx["admin"], IP, str(sid), svc.form(self.ctx["admin"], str(sid))["version"])
@@ -223,14 +223,14 @@ class TestRegistration(_Base):
             svc.toggle_active(self.ctx["admin"], IP, str(sid), svc.form(self.ctx["admin"], str(sid))["version"])
 
     def test_troca_de_tipo_param_revalida_vinculos(self):
-        _sid, erros, _ = self._edit(S_CARGA, param_type="NONE")
-        self.assertEqual(erros, {"param_type": scr_mod.MSG_NONE_LINKED})
+        _sid, errors, _ = self._edit(S_CARGA, param_type="NONE")
+        self.assertEqual(errors, {"param_type": scr_mod.MSG_NONE_LINKED})
         # Script SEQUENCIAL com parametro sem flag nao pode virar NOMEADO.
         pid = self.catalog.parameters_insert({"code": "sem_flag", "label": "Sem flag", "component_type": "TEXT"}, actor="teste")["id"]
         sid, _e, _a = self._insert()
         self.catalog.script_params_save(sid, [{"parameter_id": pid, "sort_order": 1, "required": "N"}], actor="teste")
-        _sid, erros, _ = self._edit(sid, param_type="NAMED")
-        self.assertIn("sem_flag", erros["param_type"])
+        _sid, errors, _ = self._edit(sid, param_type="NAMED")
+        self.assertIn("sem_flag", errors["param_type"])
         with self.assertRaises(RepoViolation) as cm:
             self.catalog.scripts_update(sid, {"param_type": "NAMED"}, actor="teste")
         self.assertEqual(cm.exception.constraint, "sss_scr_nomeado_sem_flag")
@@ -245,8 +245,8 @@ class TestRegistration(_Base):
 
     def test_formulario_sem_pastas_base(self):
         f = self.svc.form(self.ctx["admin"])
-        for chave in ("pasta_base", "pastas", "base_exibicao"):
-            self.assertNotIn(chave, f)
+        for key in ("pasta_base", "pastas", "base_exibicao"):
+            self.assertNotIn(key, f)
         self.assertEqual(self.svc.form(self.ctx["gestor"], str(S_CARGA))["path_file"],
                          "/opt/automacoes/scripts/carga_diaria.py")
 
@@ -255,48 +255,48 @@ class TestRegistration(_Base):
 class TestHomologation(_Base):
 
     def test_homologacao_com_auditoria_e_inativo(self):
-        tela = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
-        nomes = [a["name"] for a in tela["environments"]]
-        self.assertNotIn("DESENV", nomes)
-        diff, erros = self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA), [str(AMB_PROD)], tela["version"])
-        self.assertEqual(erros, {})
+        screen = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
+        names = [a["name"] for a in screen["environments"]]
+        self.assertNotIn("DESENV", names)
+        diff, errors = self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA), [str(AMB_PROD)], screen["version"])
+        self.assertEqual(errors, {})
         self.assertIn("-HOMOLOGACAO", diff)
         self.assertEqual(self.catalog.homologation_get(S_CARGA), [AMB_PROD])
         self.assertIn(u"homologação:", self._audits("UPDATE")[0]["detail"])
-        tela = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
-        _diff, erros = self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA),
-                                                   [str(AMB_PROD), str(AMB_DESENV)], tela["version"])
-        self.assertEqual(erros, {GENERAL_FIELD: scr_mod.MSG_HOMOLOG_INACTIVE})
+        screen = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
+        _diff, errors = self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA),
+                                                   [str(AMB_PROD), str(AMB_DESENV)], screen["version"])
+        self.assertEqual(errors, {GENERAL_FIELD: scr_mod.MSG_HOMOLOG_INACTIVE})
 
     def test_homologacao_inativa_pode_sair_e_nao_volta(self):
         # CR-003 D9: inativo ja homologado pode ser removido; nunca readicionado.
         self.catalog.homologation_save(S_CARGA, [AMB_PROD, AMB_DESENV], actor="teste")
-        tela = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
-        desenv = [a for a in tela["environments"] if a["name"] == "DESENV"][0]
-        self.assertTrue(desenv["marcado"] and desenv["inativo"])
+        screen = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
+        dev = [a for a in screen["environments"] if a["name"] == "DESENV"][0]
+        self.assertTrue(dev["marcado"] and dev["inativo"])
         diff, _ = self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA),
-                                              [str(AMB_PROD), str(AMB_HML), str(AMB_DESENV)], tela["version"])
+                                              [str(AMB_PROD), str(AMB_HML), str(AMB_DESENV)], screen["version"])
         self.assertEqual(diff, "+HOMOLOGACAO")
         self.assertEqual(self.catalog.homologation_get(S_CARGA), [AMB_PROD, AMB_HML, AMB_DESENV])
-        tela = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
+        screen = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
         diff, _ = self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA), [str(AMB_PROD), str(AMB_HML)],
-                                              tela["version"])
+                                              screen["version"])
         self.assertEqual(diff, "-DESENV")
         self.assertEqual(self.catalog.homologation_get(S_CARGA), [AMB_PROD, AMB_HML])
-        tela = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
-        _d, erros = self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA),
-                                                [str(AMB_PROD), str(AMB_HML), str(AMB_DESENV)], tela["version"])
-        self.assertIn(GENERAL_FIELD, erros)
+        screen = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
+        _d, errors = self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA),
+                                                [str(AMB_PROD), str(AMB_HML), str(AMB_DESENV)], screen["version"])
+        self.assertIn(GENERAL_FIELD, errors)
 
     def test_conflito_e_ids_invalidos(self):
-        tela = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
-        self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA), [str(AMB_PROD)], tela["version"])
-        _d, erros = self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA), [], tela["version"])
-        self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
-        tela = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
+        screen = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
+        self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA), [str(AMB_PROD)], screen["version"])
+        _d, errors = self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA), [], screen["version"])
+        self.assertEqual(errors, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
+        screen = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
         for ids in (["x"], ["999"]):
-            _d, erros = self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA), ids, tela["version"])
-            self.assertEqual(erros, {GENERAL_FIELD: scr_mod.MSG_HOMOLOG_INVALID})
+            _d, errors = self.svc.save_homologation(self.ctx["admin"], IP, str(S_CARGA), ids, screen["version"])
+            self.assertEqual(errors, {GENERAL_FIELD: scr_mod.MSG_HOMOLOG_INVALID})
 
 
 @_SKIP_ROOT
@@ -304,97 +304,97 @@ class TestLinks(_Base):
 
     def test_sub_sigiloso_mantido_e_revalidado_e_pode_ser_removido(self):
         # CR-003 P6 (README §6.5).
-        tela, itens = self._links_json(S_CARGA)
+        screen, items = self._links_json(S_CARGA)
         self.catalog.parameters_update(6, {"validation_regex": "^x$"}, actor="teste")  # documento_cliente: o sub gravado deixa de valer
-        _d, erros = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens), tela["version"])
-        self.assertEqual(erros, {"vinculo_6": scr_mod.MSG_SENSITIVE_INVALID})
-        for item in itens:
+        _d, errors = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(items), screen["version"])
+        self.assertEqual(errors, {"vinculo_6": scr_mod.MSG_SENSITIVE_INVALID})
+        for item in items:
             if item["parameter_id"] == 6:
                 item["manter_sigiloso"] = False  # "Remover valor"
-        _d, erros = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens), tela["version"])
-        self.assertEqual(erros, {})
+        _d, errors = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(items), screen["version"])
+        self.assertEqual(errors, {})
         sub = [v for v in self.catalog.script_params_get(S_CARGA) if v["parameter_id"] == 6][0]["default_value_override"]
         self.assertIsNone(sub)
 
     def test_detalhe_dos_vinculos_passa_pelo_masking(self):
         import masking
         masking.MASKER.register("SEGREDO-DE-INFRA-9")
-        tela, itens = self._links_json(S_CARGA)
-        for item in itens:
+        screen, items = self._links_json(S_CARGA)
+        for item in items:
             if item["parameter_id"] == 1:
                 item["default_value_override"] = None
-        itens.append({"parameter_id": 10, "required": False, "default_value_override": "SEGREDO-DE-INFRA-9"})
-        _d, erros = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens), tela["version"])
-        self.assertEqual(erros, {})
+        items.append({"parameter_id": 10, "required": False, "default_value_override": "SEGREDO-DE-INFRA-9"})
+        _d, errors = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(items), screen["version"])
+        self.assertEqual(errors, {})
         self.assertNotIn("SEGREDO-DE-INFRA-9", self._audits("UPDATE")[0]["detail"])
 
     def test_versao_dos_vinculos_nao_deriva_do_sub_sensivel(self):
         # CR-003 P1: o sub sensivel entra na versao pelo marcador, nunca pelo valor.
         v1 = self.svc.parameters(self.ctx["admin"], str(S_CARGA))["version"]
-        vinc = self.catalog.script_params_get(S_CARGA)
-        lidos = [dict((k, v[k]) for k in ("parameter_id", "sort_order", "required", "default_value_override")) for v in vinc]
-        for v in lidos:
+        link = self.catalog.script_params_get(S_CARGA)
+        read = [dict((k, v[k]) for k in ("parameter_id", "sort_order", "required", "default_value_override")) for v in link]
+        for v in read:
             if v["default_value_override"] == "00011122233":
                 v["default_value_override"] = "outro-segredo-456"
-        self.catalog.script_params_save(S_CARGA, lidos, actor="teste")
-        tela = self.svc.parameters(self.ctx["admin"], str(S_CARGA))
-        self.assertEqual(tela["version"], v1)
-        self.assertNotEqual(tela["version"], scr_mod._hash(scr_mod._read_back(self.catalog.script_params_get(S_CARGA))))
-        self.assertNotIn("outro-segredo-456", repr(tela))
+        self.catalog.script_params_save(S_CARGA, read, actor="teste")
+        screen = self.svc.parameters(self.ctx["admin"], str(S_CARGA))
+        self.assertEqual(screen["version"], v1)
+        self.assertNotEqual(screen["version"], scr_mod._hash(scr_mod._read_back(self.catalog.script_params_get(S_CARGA))))
+        self.assertNotIn("outro-segredo-456", repr(screen))
 
     def test_renumeracao_e_reordenacao(self):
-        tela, itens = self._links_json(S_CARGA)
-        itens.reverse()
-        desc, erros = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens), tela["version"])
-        self.assertEqual(erros, {})
-        vinc = self.catalog.script_params_get(S_CARGA)
-        self.assertEqual([v["sort_order"] for v in vinc], [1, 2, 3, 4, 5])
-        self.assertEqual(vinc[0]["code"], "documento_cliente")
+        screen, items = self._links_json(S_CARGA)
+        items.reverse()
+        desc, errors = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(items), screen["version"])
+        self.assertEqual(errors, {})
+        link = self.catalog.script_params_get(S_CARGA)
+        self.assertEqual([v["sort_order"] for v in link], [1, 2, 3, 4, 5])
+        self.assertEqual(link[0]["code"], "documento_cliente")
         # Sub sigiloso preservado ("manter") e mascarado na auditoria.
-        self.assertEqual(vinc[0]["default_value_override"], "00011122233")
-        detalhe = self._audits("UPDATE")[0]["detail"]
-        self.assertNotIn("00011122233", detalhe)
-        self.assertIn("documento_cliente=****", detalhe)
+        self.assertEqual(link[0]["default_value_override"], "00011122233")
+        detail = self._audits("UPDATE")[0]["detail"]
+        self.assertNotIn("00011122233", detail)
+        self.assertIn("documento_cliente=****", detail)
         self.assertNotIn("00011122233", repr(self.svc.parameters(self.ctx["admin"], str(S_CARGA))))
 
     def test_vinculo_duplicado_inexistente_e_json_invalido(self):
-        tela, itens = self._links_json(S_CARGA)
-        for corpo in (json.dumps(itens + [itens[0]]), json.dumps(itens + [{"parameter_id": 999}]), "{", '{"a": 1}'):
-            _d, erros = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), corpo, tela["version"])
-            self.assertIn(GENERAL_FIELD, erros, corpo[:30])
+        screen, items = self._links_json(S_CARGA)
+        for body in (json.dumps(items + [items[0]]), json.dumps(items + [{"parameter_id": 999}]), "{", '{"a": 1}'):
+            _d, errors = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), body, screen["version"])
+            self.assertIn(GENERAL_FIELD, errors, body[:30])
 
     def test_nomeado_com_parametro_sem_flag(self):
         pid = self.catalog.parameters_insert({"code": "sem_flag", "label": "Sem flag", "component_type": "TEXT"}, actor="teste")["id"]
-        tela, itens = self._links_json(S_CARGA)
-        _d, erros = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA),
-                                               json.dumps(itens + [{"parameter_id": pid}]), tela["version"])
-        self.assertIn("sem_flag", erros[GENERAL_FIELD])
+        screen, items = self._links_json(S_CARGA)
+        _d, errors = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA),
+                                               json.dumps(items + [{"parameter_id": pid}]), screen["version"])
+        self.assertIn("sem_flag", errors[GENERAL_FIELD])
         with self.assertRaises(RepoViolation):
             self.catalog.script_params_save(S_CARGA, [{"parameter_id": pid, "sort_order": 1, "required": "N"}], actor="teste")
 
     def test_nenhum_com_vinculo(self):
-        tela = self.svc.parameters(self.ctx["admin"], str(S_CLEANUP))
-        _d, erros = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CLEANUP),
-                                               json.dumps([{"parameter_id": 1}]), tela["version"])
-        self.assertEqual(erros, {GENERAL_FIELD: scr_mod.MSG_LINK_NONE})
+        screen = self.svc.parameters(self.ctx["admin"], str(S_CLEANUP))
+        _d, errors = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CLEANUP),
+                                               json.dumps([{"parameter_id": 1}]), screen["version"])
+        self.assertEqual(errors, {GENERAL_FIELD: scr_mod.MSG_LINK_NONE})
 
     def test_valor_padrao_sub_validado_e_inativo_rejeitado(self):
-        tela, itens = self._links_json(S_CARGA)
-        itens[0]["default_value_override"] = "31/12/2026"  # data_ref e DATE
-        _d, erros = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens), tela["version"])
-        self.assertIn("vinculo_1", erros)
+        screen, items = self._links_json(S_CARGA)
+        items[0]["default_value_override"] = "31/12/2026"  # data_ref e DATE
+        _d, errors = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(items), screen["version"])
+        self.assertIn("vinculo_1", errors)
         pid = self.catalog.parameters_insert({"code": "inativo_x", "label": "X", "component_type": "TEXT",
                                                 "param_flag": "--x", "active": "N"}, actor="teste")["id"]
-        tela, itens = self._links_json(S_CARGA)
-        _d, erros = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA),
-                                               json.dumps(itens + [{"parameter_id": pid}]), tela["version"])
-        self.assertIn("inativo", erros[GENERAL_FIELD])
+        screen, items = self._links_json(S_CARGA)
+        _d, errors = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA),
+                                               json.dumps(items + [{"parameter_id": pid}]), screen["version"])
+        self.assertIn("inativo", errors[GENERAL_FIELD])
 
     def test_conflito_de_vinculos(self):
-        tela, itens = self._links_json(S_CARGA)
-        self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens[:-1]), tela["version"])
-        _d, erros = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens), tela["version"])
-        self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
+        screen, items = self._links_json(S_CARGA)
+        self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(items[:-1]), screen["version"])
+        _d, errors = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(items), screen["version"])
+        self.assertEqual(errors, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
 
 
 @_SKIP_ROOT
@@ -409,25 +409,25 @@ class TestPreview(_Base):
 
     def test_previa_no_cadastro_mostra_o_caminho_e_reflete_edicao(self):
         # CR-005 R-f: no cadastro (MANAGE_SCRIPTS) o caminho aparece inteiro, porque e o que o usuario cadastra.
-        _tela, itens = self._links_json(S_CARGA)
-        r = self.svc.preview(self.ctx["gestor"], str(S_CARGA), json.dumps(itens[:1]))
+        _screen, items = self._links_json(S_CARGA)
+        r = self.svc.preview(self.ctx["gestor"], str(S_CARGA), json.dumps(items[:1]))
         self.assertEqual(r["argv"], ["PYTHON3", "-I", "/opt/automacoes/scripts/carga_diaria.py",
                                      "--data-ref", "2026-10-14"])
 
     def test_acesso_negado_e_nao_encontrado(self):
-        for chamada in (lambda c: self.svc.list(c, {}, 1, 20), lambda c: self.svc.homologation(c, "1"),
+        for call in (lambda c: self.svc.list(c, {}, 1, 20), lambda c: self.svc.homologation(c, "1"),
                         lambda c: self.svc.parameters(c, "1"), lambda c: self.svc.preview(c, "1")):
             with self.assertRaises(AccessDenied):
-                chamada(self.ctx["op.prod"])
+                call(self.ctx["op.prod"])
         with self.assertRaises(RepoNotFound):
             self.svc.form(self.ctx["admin"], "999")
 
     def test_lista_com_homologados_e_parametros(self):
-        pagina = self.svc.list(self.ctx["admin"], {"interpreter": "PYTHON3"}, 1, 20)
-        carga = [s for s in pagina["itens"] if s["name"] == "carga_diaria"][0]
-        self.assertEqual(carga["qtd_parametros"], 5)
-        self.assertIn("PRODUCAO", carga["ambientes_homologados"])
-        self.assertTrue(all(s["interpreter"] == "PYTHON3" for s in pagina["itens"]))
+        page = self.svc.list(self.ctx["admin"], {"interpreter": "PYTHON3"}, 1, 20)
+        load = [s for s in page["itens"] if s["name"] == "carga_diaria"][0]
+        self.assertEqual(load["qtd_parametros"], 5)
+        self.assertIn("PRODUCAO", load["ambientes_homologados"])
+        self.assertTrue(all(s["interpreter"] == "PYTHON3" for s in page["itens"]))
         self.assertEqual(scr_mod.normalize_filters({"interpreter": "/bin/ls", "active": "Y"}), {"active": "Y"})
         self.assertEqual(scr_mod.normalize_filters({"interpreter": "POWERSHELL"}), {})
 
@@ -437,9 +437,9 @@ class TestNoHashAndLink(_Base):
     """CR-011: o cadastro nao calcula nem registra hash do arquivo, e o caminho pode ter link simbolico."""
 
     def test_inclusao_e_edicao_nao_registram_hash(self):
-        sid, erros, _a = self._insert(path_file=self._p("novo.py"), sha256_informado="0" * 64,
+        sid, errors, _a = self._insert(path_file=self._p("novo.py"), sha256_informado="0" * 64,
                                        registrar_conteudo_atual="1")
-        self.assertEqual(erros, {})
+        self.assertEqual(errors, {})
         self.assertIsNone(self.catalog.scripts_get(sid).get("sha256_homologado"))
         self.assertEqual(self._edit(sid, description="nova", registrar_conteudo_atual="1")[1], {})
         self.assertIsNone(self.catalog.scripts_get(sid).get("sha256_homologado"))
@@ -452,8 +452,8 @@ class TestNoHashAndLink(_Base):
         link = self._p("atalho.py")
         os.symlink(self._p("novo.py"), link)
         os.chmod(self.base, 0o555)
-        sid, erros, aviso = self._insert(path_file=link)
-        self.assertEqual((erros, aviso), ({}, None))
+        sid, errors, warning = self._insert(path_file=link)
+        self.assertEqual((errors, warning), ({}, None))
         self.assertEqual(self.catalog.scripts_get(sid)["path_file"], link, "fica o caminho cadastrado")
 
     def test_link_para_pasta_do_sistema_e_recusado(self):
@@ -461,8 +461,8 @@ class TestNoHashAndLink(_Base):
         link = self._p("atalho_sistema.py")
         os.symlink("/etc/hostname", link)
         os.chmod(self.base, 0o555)
-        _sid, erros, _a = self._insert(path_file=link)
-        self.assertEqual(erros, {"path_file": scr_mod.PATH_MESSAGES[path_guard.Code.SYSTEM_DIR]})
+        _sid, errors, _a = self._insert(path_file=link)
+        self.assertEqual(errors, {"path_file": scr_mod.PATH_MESSAGES[path_guard.Code.SYSTEM_DIR]})
 
 
 if __name__ == "__main__":

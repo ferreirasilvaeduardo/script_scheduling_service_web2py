@@ -18,8 +18,8 @@ _STATUS_DESCONHECIDO = (u"Desconhecido", "sss-status-unknown", "status-unknown")
 
 def status_info(status):
     """Retorna {rotulo, classe, icone} do status do ticket (README §5.1)."""
-    rotulo, classe, icone = _STATUS.get(status, _STATUS_DESCONHECIDO)
-    return {"rotulo": rotulo, "classe": classe, "icone": icone}
+    label, cls_name, icon = _STATUS.get(status, _STATUS_DESCONHECIDO)
+    return {"rotulo": label, "classe": cls_name, "icone": icon}
 
 
 _ATIVO = {
@@ -30,8 +30,8 @@ _ATIVO = {
 
 def ativo_info(flag):
     """Retorna {rotulo, classe, icone} da flag ativo ('S'/'N') dos cadastros; outro valor e desconhecido."""
-    rotulo, classe, icone = _ATIVO.get(flag, _STATUS_DESCONHECIDO)
-    return {"rotulo": rotulo, "classe": classe, "icone": icone}
+    label, cls_name, icon = _ATIVO.get(flag, _STATUS_DESCONHECIDO)
+    return {"rotulo": label, "classe": cls_name, "icone": icon}
 
 
 _MOTIVOS = {
@@ -81,12 +81,12 @@ def tempo_simples(seconds):
     seconds = max(0, int(seconds or 0))
     if seconds < 60:
         return u"menos de 1 minuto"
-    horas, resto = divmod(seconds // 60, 60)
-    minutos = u"%d minuto%s" % (resto, "" if resto == 1 else "s")
-    if not horas:
-        return minutos
-    texto = u"%d hora%s" % (horas, "" if horas == 1 else "s")
-    return texto if not resto else u"%s e %s" % (texto, minutos)
+    hours, rest = divmod(seconds // 60, 60)
+    minutes = u"%d minuto%s" % (rest, "" if rest == 1 else "s")
+    if not hours:
+        return minutes
+    text = u"%d hora%s" % (hours, "" if hours == 1 else "s")
+    return text if not rest else u"%s e %s" % (text, minutes)
 
 
 def explicacao_ticket(ticket, now, timeout_s=None):
@@ -95,35 +95,35 @@ def explicacao_ticket(ticket, now, timeout_s=None):
     agora: relogio do banco; timeout_s: tempo maximo do script (para a frase de TIMEOUT).
     """
     status = ticket.get("status")
-    situacao = status_info(status)["rotulo"]
+    state = status_info(status)["rotulo"]
     if status == "PENDING":
-        agendado = ticket.get("scheduled_at")
-        if agendado is not None and now is not None and agendado > now:
-            return {"state": situacao,
+        scheduled = ticket.get("scheduled_at")
+        if scheduled is not None and now is not None and scheduled > now:
+            return {"state": state,
                     "aconteceu": u"Está agendado para começar em %s às %s." % (
-                        agendado.strftime("%d/%m/%Y"), agendado.strftime("%H:%M")),
+                        scheduled.strftime("%d/%m/%Y"), scheduled.strftime("%H:%M")),
                     "fazer": u"Não precisa fazer nada. Se não quiser mais, cancele."}
-        return {"state": situacao, "aconteceu": u"Está na fila, esperando um servidor livre.",
+        return {"state": state, "aconteceu": u"Está na fila, esperando um servidor livre.",
                 "fazer": u"Não precisa fazer nada. Esta página se atualiza sozinha."}
     if status == "RUNNING":
         if ticket.get("cancel_requested") == "Y":
-            return {"state": situacao,
+            return {"state": state,
                     "aconteceu": u"O cancelamento foi pedido. O servidor está parando o script.",
                     "fazer": u"Espere alguns segundos."}
-        inicio = ticket.get("started_at")
-        decorrido = (now - inicio).total_seconds() if inicio is not None and now is not None else 0
-        return {"state": situacao, "aconteceu": u"Está rodando agora. Começou há %s." % tempo_simples(decorrido),
+        start = ticket.get("started_at")
+        elapsed = (now - start).total_seconds() if start is not None and now is not None else 0
+        return {"state": state, "aconteceu": u"Está rodando agora. Começou há %s." % tempo_simples(elapsed),
                 "fazer": u"Acompanhe o log abaixo."}
-    motivo = ticket.get("status_reason")
-    if motivo not in _EXPLICACOES:
-        return {"state": situacao,
-                "aconteceu": u"Terminou com um motivo que o sistema não conhece (%s)." % (motivo or "-"),
+    reason = ticket.get("status_reason")
+    if reason not in _EXPLICACOES:
+        return {"state": state,
+                "aconteceu": u"Terminou com um motivo que o sistema não conhece (%s)." % (reason or "-"),
                 "fazer": u"Avise o suporte com o número deste ticket."}
-    aconteceu, fazer = _EXPLICACOES[motivo]
-    tempo = tempo_simples(timeout_s) if timeout_s else u"definido para o script"
-    return {"state": situacao,
-            "aconteceu": aconteceu.format(codigo=ticket.get("return_code"), tempo=tempo),
-            "fazer": fazer}
+    happened, todo = _EXPLICACOES[reason]
+    time_value = tempo_simples(timeout_s) if timeout_s else u"definido para o script"
+    return {"state": state,
+            "aconteceu": happened.format(codigo=ticket.get("return_code"), tempo=time_value),
+            "fazer": todo}
 
 
 def etapas_ticket(ticket, now):
@@ -133,30 +133,30 @@ def etapas_ticket(ticket, now):
     """
     status = ticket.get("status")
     terminal = status in ("SUCCESS", "FAILED", "CANCELLED")
-    nunca_rodou = status == "CANCELLED" and ticket.get("started_at") is None
-    agendado = ticket.get("scheduled_at")
-    fila_quando = formatar_data(agendado)
-    if status == "PENDING" and agendado is not None and now is not None and agendado > now:
-        fila_quando = u"agendado para %s" % fila_quando
+    never_ran = status == "CANCELLED" and ticket.get("started_at") is None
+    scheduled = ticket.get("scheduled_at")
+    queue_when = formatar_data(scheduled)
+    if status == "PENDING" and scheduled is not None and now is not None and scheduled > now:
+        queue_when = u"agendado para %s" % queue_when
     if status == "RUNNING":
-        inicio = ticket.get("started_at")
-        decorrido = (now - inicio).total_seconds() if inicio is not None and now is not None else 0
-        rodando_quando = u"há %s" % tempo_simples(decorrido)
-    elif nunca_rodou:
-        rodando_quando = u"não chegou a rodar"
+        start = ticket.get("started_at")
+        elapsed = (now - start).total_seconds() if start is not None and now is not None else 0
+        running_when = u"há %s" % tempo_simples(elapsed)
+    elif never_ran:
+        running_when = u"não chegou a rodar"
     else:
-        rodando_quando = formatar_data(ticket.get("started_at"))
-    fim = formatar_data(ticket.get("finished_at"))
+        running_when = formatar_data(ticket.get("started_at"))
+    end = formatar_data(ticket.get("finished_at"))
     if terminal:
-        fim = u"%s — %s" % (status_info(status)["rotulo"], fim)
-    estados = {
+        end = u"%s — %s" % (status_info(status)["rotulo"], end)
+    states = {
         "PENDING": ("feito", "atual", "pendente", "pendente"),
         "RUNNING": ("feito", "feito", "atual", "pendente"),
-    }.get(status, ("feito", "feito", "pulado" if nunca_rodou else "feito", "atual"))
-    rotulos = (u"Pedido criado", u"Na fila", u"Rodando", u"Terminou")
-    quandos = (formatar_data(ticket.get("created_at")), fila_quando, rodando_quando,
-               fim if terminal else u"-")
-    return [{"rotulo": r, "quando": q, "estado": e} for r, q, e in zip(rotulos, quandos, estados)]
+    }.get(status, ("feito", "feito", "pulado" if never_ran else "feito", "atual"))
+    labels = (u"Pedido criado", u"Na fila", u"Rodando", u"Terminou")
+    whens = (formatar_data(ticket.get("created_at")), queue_when, running_when,
+               end if terminal else u"-")
+    return [{"rotulo": r, "quando": q, "estado": e} for r, q, e in zip(labels, whens, states)]
 
 
 # Nomes curtos dos motivos de erro (historico do script, README §5.8).
@@ -181,33 +181,33 @@ def barras_empilhadas(days, width=1000, height=240, left_margin=28, bottom_margi
     barras: [{x, y, largura, altura, classe, titulo}]}. Cores so por classe CSS (sem style inline);
     vao de 2px entre os segmentos; o titulo de cada segmento e a dica ao passar o mouse.
     """
-    maximo = max([sum(d.get(c, 0) for c, _r in SERIES_HISTORICO) for d in days] or [0])
-    escala_max = max(maximo, 1)
+    max_value = max([sum(d.get(c, 0) for c, _r in SERIES_HISTORICO) for d in days] or [0])
+    scale_max = max(max_value, 1)
     area_h = height - bottom_margin - 4
     base_y = height - bottom_margin
     n = max(len(days), 1)
-    passo = float(width - left_margin) / n
-    larg_barra = max(2.0, passo * 0.7)
-    barras, eixo_x = [], []
+    step = float(width - left_margin) / n
+    width_bar = max(2.0, step * 0.7)
+    bars, axis_x = [], []
     for i, d in enumerate(days):
-        x = left_margin + i * passo + (passo - larg_barra) / 2.0
-        topo = base_y
-        for chave, rotulo in SERIES_HISTORICO:
-            qtd = d.get(chave, 0)
-            if not qtd:
+        x = left_margin + i * step + (step - width_bar) / 2.0
+        top = base_y
+        for key, label in SERIES_HISTORICO:
+            count = d.get(key, 0)
+            if not count:
                 continue
-            h = area_h * qtd / float(escala_max)
-            y = topo - h
-            barras.append({"x": round(x, 1), "y": round(y, 1), "largura": round(larg_barra, 1),
-                           "altura": round(max(h - gap, 1.0), 1), "classe": "sss-graf-" + chave,
-                           "titulo": u"%s: %s — %d" % (d["rotulo"], rotulo, qtd)})
-            topo = y
+            h = area_h * count / float(scale_max)
+            y = top - h
+            bars.append({"x": round(x, 1), "y": round(y, 1), "largura": round(width_bar, 1),
+                           "altura": round(max(h - gap, 1.0), 1), "classe": "sss-graf-" + key,
+                           "titulo": u"%s: %s — %d" % (d["rotulo"], label, count)})
+            top = y
         if i % 5 == 0 or i == n - 1:
-            eixo_x.append({"x": round(x + larg_barra / 2.0, 1), "rotulo": d["rotulo"]})
-    grade = [{"y": round(base_y - area_h * f, 1), "rotulo": str(int(round(escala_max * f)))}
-             for f in (0.5, 1.0) if maximo]
-    return {"largura": width, "altura": height, "base_y": base_y, "maximo": maximo, "grade": grade,
-            "eixo_x": eixo_x, "barras": barras, "margem_esq": left_margin}
+            axis_x.append({"x": round(x + width_bar / 2.0, 1), "rotulo": d["rotulo"]})
+    grid = [{"y": round(base_y - area_h * f, 1), "rotulo": str(int(round(scale_max * f)))}
+             for f in (0.5, 1.0) if max_value]
+    return {"largura": width, "altura": height, "base_y": base_y, "maximo": max_value, "grade": grid,
+            "eixo_x": axis_x, "barras": bars, "margem_esq": left_margin}
 
 
 # Mensagens-padrao em duas partes: o que aconteceu + o que fazer agora (README §2.4.2, texto exato).
@@ -271,34 +271,34 @@ def quadro_saida(output, now):
     """Quadro Saida (CR-012) a partir de saida_obter, ou None sem saida. Nunca leva o conteudo nem o caminho."""
     if not output:
         return None
-    situacao = output.get("state")
-    chave = situacao
-    if situacao == "WRITING":
-        desde = output.get("updated_at") or output.get("created_at")
-        if desde is not None and now is not None and (now - desde).total_seconds() > SAIDA_GRAVANDO_LIMITE_S:
-            chave = "PARADA"
-    elif situacao == "EXCEEDED":
-        chave = "BYTES" if output.get("reason") == "BYTES" else "FILES"
-    elif situacao not in _SAIDA_MENSAGENS:
-        chave = "FAILED"
-    qtd = output.get("file_count")
-    valores = {"agente": output.get("agent_id") or u"-", "tamanho": tamanho_legivel(output.get("size_bytes")),
-               "qtd": (u"1 arquivo" if qtd == 1 else u"%s arquivos" % qtd)}
-    aconteceu, fazer = _SAIDA_MENSAGENS[chave]
-    return {"state": situacao, "classe": _SAIDA_CLASSE[chave], "aconteceu": aconteceu.format(**valores),
-            "fazer": fazer.format(**valores), "pode_baixar": situacao == "AVAILABLE"}
+    state = output.get("state")
+    key = state
+    if state == "WRITING":
+        since = output.get("updated_at") or output.get("created_at")
+        if since is not None and now is not None and (now - since).total_seconds() > SAIDA_GRAVANDO_LIMITE_S:
+            key = "PARADA"
+    elif state == "EXCEEDED":
+        key = "BYTES" if output.get("reason") == "BYTES" else "FILES"
+    elif state not in _SAIDA_MENSAGENS:
+        key = "FAILED"
+    count = output.get("file_count")
+    values = {"agente": output.get("agent_id") or u"-", "tamanho": tamanho_legivel(output.get("size_bytes")),
+               "qtd": (u"1 arquivo" if count == 1 else u"%s arquivos" % count)}
+    happened, todo = _SAIDA_MENSAGENS[key]
+    return {"state": state, "classe": _SAIDA_CLASSE[key], "aconteceu": happened.format(**values),
+            "fazer": todo.format(**values), "pode_baixar": state == "AVAILABLE"}
 
 
 def mensagem(key_name, **values):
     """Mensagem-padrao completa ('o que aconteceu' + 'o que fazer agora')."""
-    aconteceu, fazer = MENSAGENS[key_name]
-    return u"%s %s" % (aconteceu, fazer.format(**values))
+    happened, todo = MENSAGENS[key_name]
+    return u"%s %s" % (happened, todo.format(**values))
 
 
 def mensagem_partes(key_name, **values):
     """(o que aconteceu, o que fazer agora) para telas que mostram as duas partes separadas."""
-    aconteceu, fazer = MENSAGENS[key_name]
-    return aconteceu, fazer.format(**values)
+    happened, todo = MENSAGENS[key_name]
+    return happened, todo.format(**values)
 
 
 def descricao_motivo(status_reason):
@@ -335,10 +335,10 @@ def ator_visivel(actor, ctx):
 
 def registro(reg, ctx):
     """Colunas de registro com os atores permitidos ao contexto da sessao."""
-    dados = dict((c, (reg or {}).get(c)) for c in COLUNAS_REGISTRO)
-    for campo in ("created_by", "updated_by"):
-        dados[campo] = ator_visivel(dados[campo], ctx)
-    return dados
+    date = dict((c, (reg or {}).get(c)) for c in COLUNAS_REGISTRO)
+    for field in ("created_by", "updated_by"):
+        date[field] = ator_visivel(date[field], ctx)
+    return date
 
 
 def nome_ator(actor):
@@ -348,20 +348,20 @@ def nome_ator(actor):
     if actor == "SYSTEM":
         return u"Sistema"
     if actor.startswith(_PREFIXO_SISTEMA):
-        resto = actor[len(_PREFIXO_SISTEMA):]
-        return _ATORES_SISTEMA.get(resto, u"Sistema (agente %s)" % resto)
+        rest = actor[len(_PREFIXO_SISTEMA):]
+        return _ATORES_SISTEMA.get(rest, u"Sistema (agente %s)" % rest)
     return actor
 
 
 def registro_exibicao(reg):
     """Textos do quadro Registro: {'criado': '<data> por <ator>', 'alterado': ... | 'Nunca alterado'}."""
     reg = reg or {}
-    criado = u"%s por %s" % (formatar_data(reg.get("created_at")), nome_ator(reg.get("created_by")))
+    created = u"%s por %s" % (formatar_data(reg.get("created_at")), nome_ator(reg.get("created_by")))
     if reg.get("updated_at") is None:
-        alterado = u"Nunca alterado"
+        changed = u"Nunca alterado"
     else:
-        alterado = u"%s por %s" % (formatar_data(reg.get("updated_at")), nome_ator(reg.get("updated_by")))
-    return {"criado": criado, "alterado": alterado}
+        changed = u"%s por %s" % (formatar_data(reg.get("updated_at")), nome_ator(reg.get("updated_by")))
+    return {"criado": created, "alterado": changed}
 
 
 def formatar_duracao(start, end):
@@ -374,13 +374,13 @@ def formatar_duracao(start, end):
     total = int((end - start).total_seconds())
     if total < 0:
         return "-"
-    horas, resto = divmod(total, 3600)
-    minutos, segundos = divmod(resto, 60)
-    if horas:
-        return "%dh %02dm %02ds" % (horas, minutos, segundos)
-    if minutos:
-        return "%dm %02ds" % (minutos, segundos)
-    return "%ds" % segundos
+    hours, rest = divmod(total, 3600)
+    minutes, seconds = divmod(rest, 60)
+    if hours:
+        return "%dh %02dm %02ds" % (hours, minutes, seconds)
+    if minutes:
+        return "%dm %02ds" % (minutes, seconds)
+    return "%ds" % seconds
 
 
 _RE_INTEIRO = r"[0-9]{1,9}"
@@ -418,39 +418,39 @@ def paginacao_info(page, size, total, capped_total=False, quantity=None):
     """
     size = _inteiro_positivo(size) or 20
     total = total if isinstance(total, int) and not isinstance(total, bool) and total > 0 else 0
-    total_paginas = max(1, (total + size - 1) // size)
+    total_pages = max(1, (total + size - 1) // size)
     page = max(sanitizar_pagina(page), 1)
     if not capped_total:
-        page = min(page, total_paginas)
+        page = min(page, total_pages)
     if total:
-        primeiro = (page - 1) * size + 1
-        ultimo = (primeiro + quantity - 1 if capped_total and quantity is not None
+        first = (page - 1) * size + 1
+        last = (first + quantity - 1 if capped_total and quantity is not None
                   else min(page * size, total))
         if capped_total and quantity == 0:
-            primeiro = ultimo = 0
+            first = last = 0
     else:
-        primeiro = ultimo = 0
+        first = last = 0
     return {
         "pagina": page,
         "tamanho": size,
         "total": total,
-        "total_paginas": None if capped_total else total_paginas,
+        "total_paginas": None if capped_total else total_pages,
         "total_limitado": bool(capped_total),
         "tem_anterior": page > 1,
         "tem_proxima": (quantity == size if capped_total and quantity is not None
-                        else page < total_paginas),
+                        else page < total_pages),
         "anterior": max(page - 1, 1),
-        "proxima": page + 1 if capped_total else min(page + 1, total_paginas),
-        "primeiro_registro": primeiro,
-        "ultimo_registro": ultimo,
+        "proxima": page + 1 if capped_total else min(page + 1, total_pages),
+        "primeiro_registro": first,
+        "ultimo_registro": last,
     }
 
 
 def primeiro_campo_invalido(fields):
     """Nome do primeiro campo (na ordem dada) com 'erro' preenchido; None se nenhum."""
-    for campo in fields or ():
-        if campo.get("erro"):
-            return campo.get("name")
+    for field in fields or ():
+        if field.get("erro"):
+            return field.get("name")
     return None
 
 
@@ -468,14 +468,14 @@ def alerta_info(flash):
     ou desconhecido vira 'aviso'. Retorna None quando nao ha mensagem.
     """
     if isinstance(flash, dict):
-        tipo, mensagem = flash.get("tipo"), flash.get("mensagem")
+        kind, message = flash.get("tipo"), flash.get("mensagem")
     elif isinstance(flash, (tuple, list)) and len(flash) == 2:
-        tipo, mensagem = flash
+        kind, message = flash
     else:
-        tipo, mensagem = None, flash
-    if mensagem is None or mensagem == "":
+        kind, message = None, flash
+    if message is None or message == "":
         return None
-    if tipo not in _ALERTAS:
-        tipo = "aviso"
-    classe, icone, role = _ALERTAS[tipo]
-    return {"tipo": tipo, "mensagem": mensagem, "classe": classe, "icone": icone, "role": role}
+    if kind not in _ALERTAS:
+        kind = "aviso"
+    cls_name, icon, role = _ALERTAS[kind]
+    return {"tipo": kind, "mensagem": message, "classe": cls_name, "icone": icon, "role": role}

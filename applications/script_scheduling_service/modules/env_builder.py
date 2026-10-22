@@ -37,30 +37,30 @@ def script_work_dir(ticket_id, user, exec_work_dir, work_dir_ticket):
 
 def _passthrough(names, environ_daemon):
     env = {}
-    for nome in names or ():
-        if sss_config.is_blocked_variable(nome):
+    for name in names or ():
+        if sss_config.is_blocked_variable(name):
             # O config ja recusa na subida; aqui e defesa em profundidade (README §8.6).
-            raise ValueError("Variavel bloqueada no env_passthrough: %s" % nome)
-        if nome in environ_daemon:
-            env[nome] = environ_daemon[nome]
+            raise ValueError("Variavel bloqueada no env_passthrough: %s" % name)
+        if name in environ_daemon:
+            env[name] = environ_daemon[name]
     return env
 
 
 def _connection(secrets, environment, ticket_id):
     """(usuario, connect string) do ambiente, ou (usuario ou None, None) sem DSN ou sem credencial."""
-    nome = environment["name"]
+    name = environment["name"]
     dsn = (environment.get("connection") or "").strip()
-    cred = (getattr(secrets, "environments", None) or {}).get(nome)
-    usuario = cred.user if cred is not None else None
+    cred = (getattr(secrets, "environments", None) or {}).get(name)
+    user = cred.user if cred is not None else None
     if not dsn or cred is None:
-        _log.warning("%s omitida: ambiente %s sem %s", CONNECTION_VAR, nome,
-                     "DSN" if not dsn else "credencial [environment:%s] no secrets.cfg" % nome,
+        _log.warning("%s omitida: ambiente %s sem %s", CONNECTION_VAR, name,
+                     "DSN" if not dsn else "credencial [environment:%s] no secrets.cfg" % name,
                      extra={"ticket": ticket_id, "action": "SPAWN"})
-        return usuario, None
-    valor = "%s/%s@%s" % (cred.user, cred.password, dsn)
+        return user, None
+    value = "%s/%s@%s" % (cred.user, cred.password, dsn)
     masking.register_secret(cred.password)
-    masking.register_secret(valor)
-    return usuario, valor
+    masking.register_secret(value)
+    return user, value
 
 
 def _date(value):
@@ -73,9 +73,9 @@ def _set(env, name, value):
     """Define SSS_* so com valor (CR-010): None ou texto vazio deixam a variavel ausente."""
     if value is None:
         return
-    texto = str(value)
-    if texto.strip() and "\x00" not in texto:
-        env[name] = texto
+    text = str(value)
+    if text.strip() and "\x00" not in text:
+        env[name] = text
 
 
 def build(cfg, secrets, ticket, environment, script_real, work_dir_ticket, environ_daemon, platform_name,
@@ -97,24 +97,24 @@ def build(cfg, secrets, ticket, environment, script_real, work_dir_ticket, envir
     if not isinstance(script_real, str) or not script_real.startswith("/"):
         raise ValueError("script_real deve ser absoluto")
     ticket_id = int(ticket["id"])
-    agente = cfg.agent
-    usuario = exec_user(cfg, environment["name"])
-    home = script_work_dir(ticket_id, usuario, agente.exec_work_dir, work_dir_ticket)
+    agent = cfg.agent
+    user = exec_user(cfg, environment["name"])
+    home = script_work_dir(ticket_id, user, agent.exec_work_dir, work_dir_ticket)
     snap = snapshot or {}
 
-    env = _passthrough(agente.env_passthrough, environ_daemon)
+    env = _passthrough(agent.env_passthrough, environ_daemon)
     env.update({
         "PATH": CHILD_PATH,
         "HOME": home,
         "TMPDIR": os.path.join(home, "tmp"),
-        "LANG": agente.child_locale,
-        "LC_ALL": agente.child_locale,
+        "LANG": agent.child_locale,
+        "LC_ALL": agent.child_locale,
         # Efeito so em BASH/SH chamando python sem -I; o PYTHON3 roda com -I (CR-007, R-17).
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONIOENCODING": "utf-8",
         "SSS_TICKET_ID": str(ticket_id),
         "SSS_ENVIRONMENT": environment["name"],
-        "SSS_AGENT_ID": agente.agent_id,
+        "SSS_AGENT_ID": agent.agent_id,
         "SSS_SCRIPT_DIR": os.path.dirname(script_real),
         "SSS_SCRIPT_FILE": script_real,
         "SSS_PLATFORM": platform_name,
@@ -123,14 +123,14 @@ def build(cfg, secrets, ticket, environment, script_real, work_dir_ticket, envir
         env["TZ"] = environ_daemon["TZ"]
 
     # Execucao (CR-010).
-    agendada = ticket.get("schedule_id") is not None
-    env["SSS_EXECUTION_TYPE"] = "AGENDADA" if agendada else "MANUAL"
+    scheduled = ticket.get("schedule_id") is not None
+    env["SSS_EXECUTION_TYPE"] = "AGENDADA" if scheduled else "MANUAL"
     _set(env, "SSS_PARENT_TICKET_ID", ticket.get("parent_ticket_id"))
     _set(env, "SSS_PRIORITY", ticket.get("priority"))
     _set(env, "SSS_STARTED_AT", _date(ticket.get("started_at")))
     _set(env, "SSS_SCHEDULED_AT", _date(ticket.get("scheduled_at")))
     _set(env, "SSS_TIMEOUT_SECONDS", timeout_sec)
-    if agendada:
+    if scheduled:
         _set(env, "SSS_SCHEDULE_ID", ticket.get("schedule_id"))
         _set(env, "SSS_SCHEDULE_NAME", (schedule or {}).get("name"))
         _set(env, "SSS_RECURRENCE", (schedule or {}).get("recurrence_type"))
@@ -151,9 +151,9 @@ def build(cfg, secrets, ticket, environment, script_real, work_dir_ticket, envir
     # Ambiente: descricao, DSN (sem credencial), usuario e a connect string (mascarada em todo log).
     _set(env, "SSS_ENVIRONMENT_DESCRIPTION", environment.get("description"))
     _set(env, "SSS_ENVIRONMENT_DSN", (environment.get("connection") or "").strip() or None)
-    usuario_bd, conexao = _connection(secrets, environment, ticket_id)
-    _set(env, "SSS_ENVIRONMENT_USER", usuario_bd)
-    if conexao is not None:
-        env[CONNECTION_VAR] = conexao
-        env[SSS_CONNECTION_VAR] = conexao
+    user_db, connection = _connection(secrets, environment, ticket_id)
+    _set(env, "SSS_ENVIRONMENT_USER", user_db)
+    if connection is not None:
+        env[CONNECTION_VAR] = connection
+        env[SSS_CONNECTION_VAR] = connection
     return env

@@ -95,17 +95,17 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
         self._delay = delay
         self._warnings = []
 
-        agora = datetime.datetime.now()
-        caminho_inicial = log_paths.next_app_log_path(
-            self.log_dir, self.process_name, self.pid, agora
+        now = datetime.datetime.now()
+        path_initial = log_paths.next_app_log_path(
+            self.log_dir, self.process_name, self.pid, now
         )
-        _ensure_directory(os.path.dirname(caminho_inicial), self._warnings)
+        _ensure_directory(os.path.dirname(path_initial), self._warnings)
 
         # Retencao na subida (CR-005, R-d)
-        self.executar_retencao(agora)
+        self.executar_retencao(now)
 
         super(AppLogRotatingHandler, self).__init__(
-            caminho_inicial, mode="a", encoding=encoding, delay=delay
+            path_initial, mode="a", encoding=encoding, delay=delay
         )
         # Filtro unico: um segundo SSSContextFilter depois deste nunca veria o agente vazio.
         self.addFilter(SSSContextFilter(default_agent=default_agent))
@@ -115,28 +115,28 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
         self._warnings.append((action, message))
 
     def executar_retencao(self, ref_dt=None):
-        falhas = []
-        log_paths.clean_app_retention(self.log_dir, self.retention_days, ref_dt=ref_dt, failures=falhas)
-        for falha in falhas:
-            self.registrar_aviso("RETENCAO", "retencao do log da aplicacao nao removeu %s" % falha)
+        failures = []
+        log_paths.clean_app_retention(self.log_dir, self.retention_days, ref_dt=ref_dt, failures=failures)
+        for failure in failures:
+            self.registrar_aviso("RETENCAO", "retencao do log da aplicacao nao removeu %s" % failure)
 
     def _open(self):
         _ensure_directory(os.path.dirname(self.baseFilename), self._warnings)
-        arquivo_novo = not os.path.exists(self.baseFilename)
+        file_new = not os.path.exists(self.baseFilename)
         stream = open(self.baseFilename, self.mode, encoding=self.encoding)
-        if arquivo_novo:
+        if file_new:
             _chmod(self.baseFilename, 0o640, self._warnings)
         return stream
 
     def emit(self, record):
         if self._warnings:
-            pendentes, self._warnings = self._warnings, []
-            for acao, mensagem in pendentes:
-                aviso = logging.LogRecord(self.process_name, logging.WARNING, __file__, 0,
-                                          mensagem, None, None)
-                aviso.action = acao
-                if aviso.levelno >= self.level and self.filter(aviso):
-                    super(AppLogRotatingHandler, self).emit(aviso)
+            pending, self._warnings = self._warnings, []
+            for action, message in pending:
+                warning = logging.LogRecord(self.process_name, logging.WARNING, __file__, 0,
+                                          message, None, None)
+                warning.action = action
+                if warning.levelno >= self.level and self.filter(warning):
+                    super(AppLogRotatingHandler, self).emit(warning)
         super(AppLogRotatingHandler, self).emit(record)
 
     def shouldRollover(self, record):
@@ -155,12 +155,12 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
         if self.stream:
             self.stream.close()
             self.stream = None
-        agora = datetime.datetime.now()
-        novo_caminho = log_paths.next_app_log_path(
-            self.log_dir, self.process_name, self.pid, agora
+        now = datetime.datetime.now()
+        new_path = log_paths.next_app_log_path(
+            self.log_dir, self.process_name, self.pid, now
         )
-        self.baseFilename = os.path.abspath(novo_caminho)
-        self.executar_retencao(agora)
+        self.baseFilename = os.path.abspath(new_path)
+        self.executar_retencao(now)
         if not self.delay:
             self.stream = self._open()
 
@@ -238,23 +238,23 @@ def log_initial_critical(log_name, message, log_dir=None, stream=None):
     README §13. Retorna o destino usado ('arquivo' ou 'stderr').
     """
     handler = None
-    destino = "stderr"
-    motivo_stderr = None
-    avisos = []
+    destination = "stderr"
+    reason_stderr = None
+    warnings_value = []
     if log_dir and os.path.isdir(log_dir) and os.access(log_dir, os.W_OK):
-        nome = log_name[:-4] if log_name.endswith(".log") else log_name
+        name = log_name[:-4] if log_name.endswith(".log") else log_name
         # Sem sufixo _<n>: falhas repetidas no mesmo minuto e processo vao para o mesmo arquivo.
-        caminho = log_paths.app_log_path(log_dir, nome, os.getpid(), datetime.datetime.now())
+        path = log_paths.app_log_path(log_dir, name, os.getpid(), datetime.datetime.now())
         try:
-            _ensure_directory(os.path.dirname(caminho), avisos)
-            arquivo_novo = not os.path.exists(caminho)
-            handler = logging.FileHandler(caminho, encoding="utf-8")
-            if arquivo_novo:
-                _chmod(caminho, 0o640, avisos)
-            destino = "arquivo"
+            _ensure_directory(os.path.dirname(path), warnings_value)
+            file_new = not os.path.exists(path)
+            handler = logging.FileHandler(path, encoding="utf-8")
+            if file_new:
+                _chmod(path, 0o640, warnings_value)
+            destination = "arquivo"
         except OSError as exc:
             handler = None
-            motivo_stderr = "log da aplicacao indisponivel (%s): %s" % (caminho, exc)
+            reason_stderr = "log da aplicacao indisponivel (%s): %s" % (path, exc)
     if handler is None:
         handler = logging.StreamHandler(stream or sys.stderr)
     handler.setFormatter(SSSFormatter(FMT_SSS))
@@ -263,15 +263,15 @@ def log_initial_critical(log_name, message, log_dir=None, stream=None):
     logger.propagate = False
     logger.addHandler(handler)
     try:
-        if motivo_stderr:
-            logger.warning(motivo_stderr)
-        for _acao, aviso in avisos:
-            logger.warning(aviso)
+        if reason_stderr:
+            logger.warning(reason_stderr)
+        for _action, warning in warnings_value:
+            logger.warning(warning)
         logger.critical(message)
     finally:
         logger.removeHandler(handler)
         handler.close()
-    return destino
+    return destination
 
 
 def get_logger(log_name, cfg):
