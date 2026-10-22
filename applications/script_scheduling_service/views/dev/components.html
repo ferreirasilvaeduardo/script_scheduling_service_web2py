@@ -48,7 +48,7 @@ page_count = None}}
     <p class="sss-page-sub"><a href="{{=URL(c=url_base[0], f=url_base[1], vars=dict(demo_submit='1', demo_timeout='0'), anchor='sec-form')}}">Simular envio com erros</a> (foco vai para o primeiro campo inválido).</p>
     {{pass}}
     <form method="post" action="{{=URL(c=url_base[0], f=url_base[1], anchor='sec-form')}}" novalidate>
-      {{=csrf_campo()}}
+      {{=csrf_field()}}
       <input type="hidden" name="demo_submit" value="1">
       {{for field in form_fields:}}
       {{include 'components/form_field.html'}}

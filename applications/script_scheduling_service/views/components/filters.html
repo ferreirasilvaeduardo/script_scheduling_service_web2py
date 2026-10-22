@@ -9,22 +9,22 @@
 #                  multipla: lista de (valor, rotulo) em caixas de seleção, valor = lista marcada)};
 #     keep -- opcional; dict de parâmetros mantidos ao filtrar e ao limpar (ex.: tamanho).
 # 'page' nunca é preservada: filtrar ou limpar volta para a página 1.
-_flt_preservar = dict((k, v) for k, v in (filters.get('keep') or {}).items() if k != 'page')
+_flt_keep = dict((k, v) for k, v in (filters.get('keep') or {}).items() if k != 'page')
 _flt_url = URL(c=filters['url_base'][0], f=filters['url_base'][1])
 }}<form class="sss-filters" method="get" action="{{=_flt_url}}" role="search" x-data="filters">
-  {{for _flt_k, _flt_v in sorted(_flt_preservar.items()):}}
+  {{for _flt_k, _flt_v in sorted(_flt_keep.items()):}}
   <input type="hidden" name="{{=_flt_k}}" value="{{=_flt_v}}">
   {{pass}}
   {{for _flt_c in filters['fields']:}}
   {{_flt_id = filters['id'] + '-' + _flt_c['name']
-  _flt_valor = _flt_c.get('value')
-  _flt_valor = '' if _flt_valor is None else _flt_valor}}
+  _flt_value = _flt_c.get('value')
+  _flt_value = '' if _flt_value is None else _flt_value}}
   {{if _flt_c['kind'] == 'multiple':}}
   <fieldset class="sss-filters-field sss-filters-multiple">
     <legend class="form-label">{{=_flt_c['label']}}</legend>
     {{for _flt_i, (_flt_ov, _flt_or) in enumerate(_flt_c.get('options', ())):}}
     <div class="form-check form-check-inline">
-      <input class="form-check-input" type="checkbox" id="{{=_flt_id}}-{{=_flt_i}}" name="{{=_flt_c['name']}}" value="{{=_flt_ov}}"{{if _flt_ov in (_flt_valor or ()):}} checked{{pass}}>
+      <input class="form-check-input" type="checkbox" id="{{=_flt_id}}-{{=_flt_i}}" name="{{=_flt_c['name']}}" value="{{=_flt_ov}}"{{if _flt_ov in (_flt_value or ()):}} checked{{pass}}>
       <label class="form-check-label" for="{{=_flt_id}}-{{=_flt_i}}">{{=_flt_or}}</label>
     </div>
     {{pass}}
@@ -35,19 +35,19 @@ _flt_url = URL(c=filters['url_base'][0], f=filters['url_base'][1])
     {{if _flt_c['kind'] == 'select':}}
     <select class="form-select form-select-sm" id="{{=_flt_id}}" name="{{=_flt_c['name']}}">
       {{for _flt_ov, _flt_or in _flt_c.get('options', ()):}}
-      <option value="{{=_flt_ov}}"{{if str(_flt_ov) == str(_flt_valor):}} selected{{pass}}>{{=_flt_or}}</option>
+      <option value="{{=_flt_ov}}"{{if str(_flt_ov) == str(_flt_value):}} selected{{pass}}>{{=_flt_or}}</option>
       {{pass}}
     </select>
     {{elif _flt_c['kind'] == 'date':}}
-    <input class="form-control form-control-sm" type="date" id="{{=_flt_id}}" name="{{=_flt_c['name']}}" value="{{=_flt_valor}}">
+    <input class="form-control form-control-sm" type="date" id="{{=_flt_id}}" name="{{=_flt_c['name']}}" value="{{=_flt_value}}">
     {{else:}}
-    <input class="form-control form-control-sm" type="search" id="{{=_flt_id}}" name="{{=_flt_c['name']}}" value="{{=_flt_valor}}" maxlength="100">
+    <input class="form-control form-control-sm" type="search" id="{{=_flt_id}}" name="{{=_flt_c['name']}}" value="{{=_flt_value}}" maxlength="100">
     {{pass}}
   </div>
   {{pass}}
   {{pass}}
   <div class="sss-filters-actions">
     <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
-    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c=filters['url_base'][0], f=filters['url_base'][1], vars=_flt_preservar)}}" @click="clear">Limpar</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c=filters['url_base'][0], f=filters['url_base'][1], vars=_flt_keep)}}" @click="clear">Limpar</a>
   </div>
 </form>

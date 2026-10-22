@@ -4,131 +4,131 @@
 Regras ficam em modules/admin_environments_service.py; CSRF e Origin de todo POST sao validados
 em models/10_security.py.
 """
-import admin_environments_service as servico
+import admin_environments_service as service
 import admin_crud
 import ui_helpers
 from admin_crud import AccessDenied
 from repo_errors import RepoConflict, RepoError, RepoNotFound
 
 _FUNC = "MANAGE_ENVIRONMENTS"
-_TAMANHOS = (20, 50, 100)
-_MSG_FALHA_LISTA = u"Não foi possível carregar os ambientes. Tente novamente em instantes."
-_MSG_FALHA_ALTERNAR = u"Não foi possível alterar a situação do ambiente. Tente novamente em instantes."
+_SIZES = (20, 50, 100)
+_MSG_LIST_FAILED = u"Não foi possível carregar os ambientes. Tente novamente em instantes."
+_MSG_TOGGLE_FAILED = u"Não foi possível alterar a situação do ambiente. Tente novamente em instantes."
 
 
-def _exigir_metodo(*permitidos):
+def _require_method(*permitidos):
     if (request.env.request_method or "GET").upper() not in permitidos:
         raise HTTP(405, **response.headers)
 
 
-def _negado():
+def _denied():
     raise HTTP(403, u"Acesso negado.", **response.headers)
 
 
-def _nao_encontrado():
+def _not_found():
     raise HTTP(404, u"Ambiente não encontrado.", **response.headers)
 
 
-def _texto(valor, limite):
-    valor = valor[-1] if isinstance(valor, list) and valor else valor
-    return valor[:limite] if isinstance(valor, str) else None
+def _text(value, limit):
+    value = value[-1] if isinstance(value, list) and value else value
+    return value[:limit] if isinstance(value, str) else None
 
 
-def _pagina_form(ctx, dados, erros=None):
-    response.title = (u"Ambiente %s — SSS" % dados["name"]) if dados.get("id") else u"Novo ambiente — SSS"
+def _form_page(ctx, data, errors=None):
+    response.title = (u"Ambiente %s — SSS" % data["name"]) if data.get("id") else u"Novo ambiente — SSS"
     response.view = "admin_environments/form.html"
-    erros = erros or {}
-    campos = [{"name": n, "error": erros.get(n)} for n in ("name", "description", "connection")]
-    return dict(env=dados, errors=erros, general_error=erros.get(admin_crud.GENERAL_FIELD),
-                focus_field=ui_helpers.primeiro_campo_invalido(campos),
-                deactivation_warning=servico.DEACTIVATION_WARNING)
+    errors = errors or {}
+    fields = [{"name": n, "error": errors.get(n)} for n in ("name", "description", "connection")]
+    return dict(env=data, errors=errors, general_error=errors.get(admin_crud.GENERAL_FIELD),
+                focus_field=ui_helpers.first_invalid_field(fields),
+                deactivation_warning=service.DEACTIVATION_WARNING)
 
 
 def index():
-    _exigir_metodo("GET", "HEAD")
-    ctx = _exigir_func(_FUNC)
-    filtros = servico.normalize_filters(request.get_vars)
-    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("page"), 9))
-    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("size"), 3), _TAMANHOS)
-    erro = None
+    _require_method("GET", "HEAD")
+    ctx = _require_func(_FUNC)
+    filters = service.normalize_filters(request.get_vars)
+    page = ui_helpers.sanitize_page(_text(request.get_vars.get("page"), 9))
+    size = ui_helpers.sanitize_size(_text(request.get_vars.get("size"), 3), _SIZES)
+    error = None
     try:
-        resultado = servico.list_page(ctx, filtros, pagina, tamanho)
+        result = service.list_page(ctx, filters, page, size)
     except AccessDenied:
-        _negado()
+        _denied()
     except RepoError:
         _log.exception("falha ao listar ambientes (login=%s)", ctx["login"], extra={"action": _FUNC})
-        resultado = {"items": [], "total": 0, "page": 1, "size": tamanho}
-        erro = _MSG_FALHA_LISTA
+        result = {"items": [], "total": 0, "page": 1, "size": size}
+        error = _MSG_LIST_FAILED
     response.title = u"Ambientes — SSS"
-    return dict(result=resultado, error=erro, active_filters=filtros, size=tamanho,
-                query_params=dict(filtros, size=tamanho))
+    return dict(result=result, error=error, active_filters=filters, size=size,
+                query_params=dict(filters, size=size))
 
 
 def form():
-    _exigir_metodo("GET", "HEAD")
-    ctx = _exigir_func(_FUNC)
+    _require_method("GET", "HEAD")
+    ctx = _require_func(_FUNC)
     try:
-        dados = servico.form(ctx, _texto(request.args(0), 11))
+        data = service.form(ctx, _text(request.args(0), 11))
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
-    return _pagina_form(ctx, dados)
+        _denied()
+    return _form_page(ctx, data)
 
 
 def save():
-    _exigir_metodo("POST")
-    ctx = _exigir_func(_FUNC)
-    ambiente_id = _texto(request.post_vars.get("id"), 11)
-    enviados = dict((c, _texto(request.post_vars.get(c), 300)) for c in ("name", "description", "connection", "version"))
+    _require_method("POST")
+    ctx = _require_func(_FUNC)
+    environment_id = _text(request.post_vars.get("id"), 11)
+    submitted = dict((c, _text(request.post_vars.get(c), 300)) for c in ("name", "description", "connection", "version"))
     try:
-        salvo_id, erros = servico.save(ctx, _ip_origem(), ambiente_id, enviados)
+        saved_id, errors = service.save(ctx, _client_ip(), environment_id, submitted)
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
+        _denied()
     except RepoError:
-        _log.exception("falha ao salvar ambiente (login=%s id=%r)", ctx["login"], ambiente_id, extra={"action": _FUNC})
-        salvo_id, erros = None, {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
-    if not erros:
+        _log.exception("falha ao salvar ambiente (login=%s id=%r)", ctx["login"], environment_id, extra={"action": _FUNC})
+        saved_id, errors = None, {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
+    if not errors:
         session.flash = {"kind": "success", "message": u"Ambiente salvo com sucesso."}
         redirect(URL(c="admin_environments", f="index"))
     # Reapresenta o que foi digitado; na edicao o nome e a versao continuam os do registro.
     try:
-        dados = servico.form(ctx, ambiente_id) if ambiente_id else servico.form(ctx)
+        data = service.form(ctx, environment_id) if environment_id else service.form(ctx)
     except RepoError:
-        dados = {"id": None, "name": "", "active": "Y", "version": "", "active_schedules": 0, "homologated_scripts": 0}
-    if admin_crud.GENERAL_FIELD not in erros:
-        conexao = enviados["connection"] or ""
+        data = {"id": None, "name": "", "active": "Y", "version": "", "active_schedules": 0, "homologated_scripts": 0}
+    if admin_crud.GENERAL_FIELD not in errors:
+        connection = submitted["connection"] or ""
         # Nunca devolve ao HTML um DSN com credencial digitado por engano.
-        dados = dict(dados, description=enviados["description"] or "", connection="" if "@" in conexao else conexao)
-        if not ambiente_id:
-            dados["name"] = enviados["name"] or ""
+        data = dict(data, description=submitted["description"] or "", connection="" if "@" in connection else connection)
+        if not environment_id:
+            data["name"] = submitted["name"] or ""
         else:
-            dados["version"] = enviados["version"] or ""
+            data["version"] = submitted["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-    response.flash = {"kind": "error", "message": erros.get(admin_crud.GENERAL_FIELD)
-                      or ui_helpers.mensagem("form_errors")}
-    return _pagina_form(ctx, dados, erros)
+    response.flash = {"kind": "error", "message": errors.get(admin_crud.GENERAL_FIELD)
+                      or ui_helpers.message("form_errors")}
+    return _form_page(ctx, data, errors)
 
 
 def toggle_active():
-    _exigir_metodo("POST")
-    ctx = _exigir_func(_FUNC)
-    ambiente_id = _texto(request.post_vars.get("id"), 11)
+    _require_method("POST")
+    ctx = _require_func(_FUNC)
+    environment_id = _text(request.post_vars.get("id"), 11)
     try:
-        alterado = servico.toggle_active(ctx, _ip_origem(), ambiente_id, _texto(request.post_vars.get("version"), 64))
-        if alterado["active"] == "N":
-            session.flash = {"kind": "success", "message": u"Ambiente %s desativado." % alterado["name"]}
+        changed = service.toggle_active(ctx, _client_ip(), environment_id, _text(request.post_vars.get("version"), 64))
+        if changed["active"] == "N":
+            session.flash = {"kind": "success", "message": u"Ambiente %s desativado." % changed["name"]}
         else:
-            session.flash = {"kind": "success", "message": u"Ambiente %s reativado." % alterado["name"]}
+            session.flash = {"kind": "success", "message": u"Ambiente %s reativado." % changed["name"]}
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
+        _denied()
     except RepoConflict:
         session.flash = {"kind": "warning", "message": admin_crud.MSG_CONFLICT}
     except RepoError:
-        _log.exception("falha ao alternar ambiente (login=%s id=%r)", ctx["login"], ambiente_id, extra={"action": _FUNC})
-        session.flash = {"kind": "error", "message": _MSG_FALHA_ALTERNAR}
-    redirect(URL(c="admin_environments", f="form", args=[ambiente_id]))
+        _log.exception("falha ao alternar ambiente (login=%s id=%r)", ctx["login"], environment_id, extra={"action": _FUNC})
+        session.flash = {"kind": "error", "message": _MSG_TOGGLE_FAILED}
+    redirect(URL(c="admin_environments", f="form", args=[environment_id]))

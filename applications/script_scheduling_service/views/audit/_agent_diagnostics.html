@@ -2,14 +2,14 @@
 <section class="sss-card" aria-labelledby="title-unattended-queue">
   <h3 class="sss-card-title" id="title-unattended-queue">Fila sem atendente</h3>
   <div class="sss-card-body">
-    <p>{{=ui_helpers.mensagem('unattended_queue')}}</p>
+    <p>{{=ui_helpers.message('unattended_queue')}}</p>
     <div class="table-responsive">
       <table class="table table-sm sss-table mb-0">
         <caption class="visually-hidden">Pedidos vencidos sem servidor disponível</caption>
         <thead><tr><th scope="col">Ambiente</th><th scope="col">Interpretador</th><th scope="col">Quantidade</th><th scope="col">Horário mais antigo</th></tr></thead>
         <tbody>
-          {{for _fila in dashboard['unattended_queue']:}}
-          <tr><td>{{=_fila['environment']}}</td><td>{{=_fila['interpreter']}}</td><td>{{=_fila['quantity']}}</td><td>{{=ui_helpers.formatar_data(_fila['oldest'])}}</td></tr>
+          {{for _queue in dashboard['unattended_queue']:}}
+          <tr><td>{{=_queue['environment']}}</td><td>{{=_queue['interpreter']}}</td><td>{{=_queue['quantity']}}</td><td>{{=ui_helpers.format_date(_queue['oldest'])}}</td></tr>
           {{pass}}
         </tbody>
       </table>
@@ -21,10 +21,10 @@
 <section class="sss-card" aria-labelledby="title-running-without-pid">
   <h3 class="sss-card-title" id="title-running-without-pid">Rodando sem PID</h3>
   <div class="sss-card-body">
-    <p>{{=ui_helpers.mensagem('running_without_pid')}}</p>
+    <p>{{=ui_helpers.message('running_without_pid')}}</p>
     <ul>
-      {{for _sem_pid in dashboard['running_without_pid']:}}
-      <li><a href="{{=URL(c='tickets', f='detail', args=[_sem_pid['id']], extension=False)}}">Pedido #{{=_sem_pid['id']}}</a> · {{=_sem_pid['environment']}} · servidor {{=_sem_pid['agent_id'] or '-'}} · reservado em {{=ui_helpers.formatar_data(_sem_pid['started_at'])}}</li>
+      {{for _no_pid in dashboard['running_without_pid']:}}
+      <li><a href="{{=URL(c='tickets', f='detail', args=[_no_pid['id']], extension=False)}}">Pedido #{{=_no_pid['id']}}</a> · {{=_no_pid['environment']}} · servidor {{=_no_pid['agent_id'] or '-'}} · reservado em {{=ui_helpers.format_date(_no_pid['started_at'])}}</li>
       {{pass}}
     </ul>
   </div>
@@ -34,11 +34,11 @@
 <section class="sss-card" aria-labelledby="title-config-mismatch">
   <h3 class="sss-card-title" id="title-config-mismatch">Configuração divergente</h3>
   <div class="sss-card-body">
-    <p>{{=ui_helpers.mensagem('config_mismatch')}}</p>
+    <p>{{=ui_helpers.message('config_mismatch')}}</p>
     <p>Nó web: <code class="text-break">{{=dashboard['config_web']}}</code></p>
     <ul>
-      {{for _divergente in dashboard['config_mismatch']:}}
-      <li>{{=_divergente['code']}}: <code class="text-break">{{=_divergente['critical_config'] or 'Configuração não registrada'}}</code></li>
+      {{for _mismatch in dashboard['config_mismatch']:}}
+      <li>{{=_mismatch['code']}}: <code class="text-break">{{=_mismatch['critical_config'] or 'Configuração não registrada'}}</code></li>
       {{pass}}
     </ul>
   </div>

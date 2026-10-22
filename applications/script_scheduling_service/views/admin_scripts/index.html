@@ -1,18 +1,18 @@
 {{extend 'layout.html'}}
 {{
 # Lista de scripts (padrão de CRUD administrativo). O caminho completo do arquivo é exibido (README §8.5, CR-005 D8).
-_opc_cmd = [('', 'Todos')] + [(_c, _c) for _c, _r in interpreters]
-_opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
+_opt_cmd = [('', 'Todos')] + [(_c, _c) for _c, _r in interpreters]
+_opt_active = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
 filters = {'id': 'filter-scripts', 'url_base': ('admin_scripts', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
     {'name': 'script_group', 'label': 'Grupo', 'kind': 'text', 'value': active_filters.get('script_group')},
     {'name': 'category', 'label': 'Categoria', 'kind': 'text', 'value': active_filters.get('category')},
-    {'name': 'interpreter', 'label': 'Interpretador', 'kind': 'select', 'value': active_filters.get('interpreter'), 'options': _opc_cmd},
-    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opc_ativo},
+    {'name': 'interpreter', 'label': 'Interpretador', 'kind': 'select', 'value': active_filters.get('interpreter'), 'options': _opt_cmd},
+    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opt_active},
 ]}
-_linhas = []
+_rows = []
 for _s in result['items']:
-    _linhas.append({
+    _rows.append({
         'name': _s['name'],
         'script_group': ' / '.join([_x for _x in (_s.get('script_group'), _s.get('category')) if _x]) or '-',
         'cmd': _s['interpreter'],
@@ -27,7 +27,7 @@ for _s in result['items']:
         ],
     })
 pass
-table = {'caption': 'Scripts cadastrados', 'error': error, 'rows': _linhas, 'empty_message': 'Nenhum script encontrado.', 'columns': [
+table = {'caption': 'Scripts cadastrados', 'error': error, 'rows': _rows, 'empty_message': 'Nenhum script encontrado.', 'columns': [
     {'key': 'name', 'label': 'Nome', 'kind': 'mono'},
     {'key': 'script_group', 'label': 'Grupo / categoria'},
     {'key': 'cmd', 'label': 'Interpretador', 'kind': 'mono'},

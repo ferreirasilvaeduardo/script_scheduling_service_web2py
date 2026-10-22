@@ -131,7 +131,7 @@ class AdminEnvironmentsService(object):
             "version": admin_crud.version(env, EDITABLE_FIELDS),
             "active_schedules": self.active_schedules(env["name"]),
             "homologated_scripts": self.homologated_scripts(env["name"]),
-            "record": ui_helpers.registro(env, ctx),
+            "record": ui_helpers.record_info(env, ctx),
         }
 
     def _validate(self, date, errors):

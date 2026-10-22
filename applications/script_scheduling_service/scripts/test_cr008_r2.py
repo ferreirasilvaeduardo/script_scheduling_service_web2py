@@ -23,13 +23,13 @@ class TestVisibleActor(unittest.TestCase):
 
     def test_regras(self):
         without = {"login": "op.prod", "features": frozenset(["VIEW_LOGS"])}
-        self.assertEqual(ui_helpers.ator_visivel("op.prod", without), u"você")
-        self.assertEqual(ui_helpers.ator_visivel("admin", without), u"outra pessoa")
-        self.assertEqual(ui_helpers.ator_visivel("SYSTEM:agt-host01", without), "SYSTEM:agt-host01")
-        self.assertIsNone(ui_helpers.ator_visivel(None, without))
-        self.assertEqual(ui_helpers.ator_visivel("admin", dict(without, features=frozenset(["VIEW_AUDIT"]))),
+        self.assertEqual(ui_helpers.visible_actor("op.prod", without), u"você")
+        self.assertEqual(ui_helpers.visible_actor("admin", without), u"outra pessoa")
+        self.assertEqual(ui_helpers.visible_actor("SYSTEM:agt-host01", without), "SYSTEM:agt-host01")
+        self.assertIsNone(ui_helpers.visible_actor(None, without))
+        self.assertEqual(ui_helpers.visible_actor("admin", dict(without, features=frozenset(["VIEW_AUDIT"]))),
                          "admin")
-        self.assertEqual(ui_helpers.ator_visivel("admin", {"is_admin": True}), "admin")
+        self.assertEqual(ui_helpers.visible_actor("admin", {"is_admin": True}), "admin")
 
 
 class TestMaskedOwner(unittest.TestCase):

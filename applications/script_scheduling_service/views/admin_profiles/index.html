@@ -1,16 +1,16 @@
 {{extend 'layout.html'}}
 {{
 # Lista de perfis (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
-_opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
-_opc_admin = [('', 'Todos'), ('Y', 'Administrativos'), ('N', 'Operacionais')]
+_opt_active = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
+_opt_admin = [('', 'Todos'), ('Y', 'Administrativos'), ('N', 'Operacionais')]
 filters = {'id': 'filter-perfis', 'url_base': ('admin_profiles', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
-    {'name': 'is_admin', 'label': 'Tipo', 'kind': 'select', 'value': active_filters.get('is_admin'), 'options': _opc_admin},
-    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opc_ativo},
+    {'name': 'is_admin', 'label': 'Tipo', 'kind': 'select', 'value': active_filters.get('is_admin'), 'options': _opt_admin},
+    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opt_active},
 ]}
-_linhas = []
+_rows = []
 for _p in result['items']:
-    _linhas.append({
+    _rows.append({
         'name': _p['name'],
         'description': _p.get('description') or '-',
         'kind': 'Administrativo' if _p['is_admin'] == 'Y' else 'Operacional',
@@ -21,7 +21,7 @@ for _p in result['items']:
         ],
     })
 pass
-table = {'caption': 'Perfis cadastrados', 'error': error, 'rows': _linhas, 'empty_message': 'Nenhum perfil encontrado.', 'columns': [
+table = {'caption': 'Perfis cadastrados', 'error': error, 'rows': _rows, 'empty_message': 'Nenhum perfil encontrado.', 'columns': [
     {'key': 'name', 'label': 'Nome', 'kind': 'mono'},
     {'key': 'description', 'label': u'Descrição'},
     {'key': 'kind', 'label': 'Tipo'},

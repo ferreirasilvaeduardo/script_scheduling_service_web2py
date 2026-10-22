@@ -5,7 +5,7 @@ Funcao pura: nao importa gluon nem acessa repositorios.
 """
 
 # CANCEL_TICKET e uma acao dentro das telas de tickets, nao uma tela propria; fica fora do menu.
-_CATALOGO = (
+_CATALOG = (
     ("OPERATION", u"Operação", (
         ("EXEC_SCRIPT", u"Rotinas disponíveis", "tickets", "catalog", "icon-file-code"),
         ("EXEC_SCRIPT", u"Disparar Scripts", "tickets", "new", "icon-play"),
@@ -23,7 +23,7 @@ _CATALOGO = (
 )
 
 
-def montar_menu(features, is_admin, current_route=None):
+def build_menu(features, is_admin, current_route=None):
     """Monta as secoes OPERACAO e ADMIN visiveis ao perfil.
 
     funcionalidades: iteravel de codigos concedidos ao perfil.
@@ -37,7 +37,7 @@ def montar_menu(features, is_admin, current_route=None):
     current = tuple(current_route) if current_route else None
 
     menu = []
-    for section, title, items in _CATALOGO:
+    for section, title, items in _CATALOG:
         visible = []
         for code, label, controller, function, icon in items:
             if not (admin or code in granted):

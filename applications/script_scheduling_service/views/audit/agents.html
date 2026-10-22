@@ -2,7 +2,7 @@
 {{
 # Painel de agentes (README §8.7-8.9, §13). Somente leitura; o fragmento agents.load é
 # recarregado a cada intervalo_s segundos por static/js/app/agents.js.
-icones = URL('static', 'img/icons.svg')
+icons = URL('static', 'img/icons.svg')
 active_tab = 'agents'
 }}
 <div class="sss-page-header">
@@ -26,7 +26,7 @@ active_tab = 'agents'
   <div class="sss-card-body">
     <dl class="sss-legend-health">
       {{for _lg in legend:}}
-      <dt><span class="sss-status {{=_lg['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_lg['icon']}}"></use></svg><span>{{=_lg['label']}}</span></span></dt>
+      <dt><span class="sss-status {{=_lg['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#{{=_lg['icon']}}"></use></svg><span>{{=_lg['label']}}</span></span></dt>
       <dd>{{=_lg['description']}}</dd>
       {{pass}}
     </dl>

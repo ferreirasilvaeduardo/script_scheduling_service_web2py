@@ -144,13 +144,13 @@ class TestStackedBars(unittest.TestCase):
         import ui_helpers
         days = [{"label": "01/10", "succeeded": 2, "error": 1, "cancelled": 0, "in_progress": 0},
                 {"label": "02/10", "succeeded": 0, "error": 0, "cancelled": 0, "in_progress": 0}]
-        g = ui_helpers.barras_empilhadas(days, width=200, height=100)
+        g = ui_helpers.stacked_bars(days, width=200, height=100)
         self.assertEqual(g["maximum"], 3)
         self.assertEqual([b["css_class"] for b in g["bars"]], ["sss-graf-succeeded", "sss-graf-error"])
         right, error = g["bars"]
         self.assertLess(error["y"], right["y"])  # empilhado de baixo para cima
         self.assertIn(u"01/10: Deu erro — 1", error["title"])
-        self.assertEqual(ui_helpers.barras_empilhadas([], 200, 100)["bars"], [])
+        self.assertEqual(ui_helpers.stacked_bars([], 200, 100)["bars"], [])
 
 
 if __name__ == "__main__":

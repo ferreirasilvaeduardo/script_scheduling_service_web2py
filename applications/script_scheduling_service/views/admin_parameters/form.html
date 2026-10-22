@@ -4,35 +4,35 @@
 # opções só monta o JSON por conveniência e o servidor revalida tudo. A regex nunca roda no cliente.
 import ui_helpers
 _p = prm
-_novo = not _p.get('id')
-_sensivel = _p.get('sensitive') == 'Y'
-_situacao = ui_helpers.ativo_info(_p.get('active'))
-_icones = URL('static', 'img/icons.svg')
+_new = not _p.get('id')
+_sensitive = _p.get('sensitive') == 'Y'
+_state = ui_helpers.active_info(_p.get('active'))
+_icons = URL('static', 'img/icons.svg')
 import json
 import admin_parameters_service
-_pares = admin_parameters_service.options_as_pairs(_p['options_json'])
-if not _novo:
-    _desativar = _p.get('active') == 'Y'
-    _ativos = [_s['name'] for _s in _p['links'] if _s['active'] == 'Y']
-    if _desativar and _ativos:
-        _texto_modal = u'Este parâmetro está vinculado aos scripts ativos %s; a desativação será negada.' % ', '.join(_ativos)
-    elif _desativar:
-        _texto_modal = u'O parâmetro deixará de poder ser vinculado a scripts.'
+_pairs = admin_parameters_service.options_as_pairs(_p['options_json'])
+if not _new:
+    _deactivate = _p.get('active') == 'Y'
+    _active = [_s['name'] for _s in _p['links'] if _s['active'] == 'Y']
+    if _deactivate and _active:
+        _modal_text = u'Este parâmetro está vinculado aos scripts ativos %s; a desativação será negada.' % ', '.join(_active)
+    elif _deactivate:
+        _modal_text = u'O parâmetro deixará de poder ser vinculado a scripts.'
     else:
-        _texto_modal = u'O parâmetro voltará a poder ser vinculado a scripts.'
+        _modal_text = u'O parâmetro voltará a poder ser vinculado a scripts.'
     pass
-    _modal_ativo = {'id': 'modal-active', 'title': (u'Desativar parâmetro %s' if _desativar else u'Reativar parâmetro %s') % _p['code'],
-                    'text': _texto_modal, 'trigger_label': 'Desativar' if _desativar else 'Reativar',
-                    'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
-                    'variant': 'danger' if _desativar else 'normal', 'action': URL(c='admin_parameters', f='toggle_active'),
-                    'hidden_fields': dict(id=_p['id'], versao=_p['version'])}
+    _modal_active = {'id': 'modal-active', 'title': (u'Desativar parâmetro %s' if _deactivate else u'Reativar parâmetro %s') % _p['code'],
+                    'text': _modal_text, 'trigger_label': 'Desativar' if _deactivate else 'Reativar',
+                    'confirm_label': u'Confirmar desativação' if _deactivate else u'Confirmar reativação',
+                    'variant': 'danger' if _deactivate else 'normal', 'action': URL(c='admin_parameters', f='toggle_active'),
+                    'hidden_fields': dict(id=_p['id'], version=_p['version'])}
 pass
 def _classe(field):
     return 'form-control is-invalid' if errors.get(field) else 'form-control'
 pass
-def _desc(field, ajuda=True):
+def _desc(field, help=True):
     _ids = []
-    if ajuda:
+    if help:
         _ids.append('field-%s-ajuda' % field)
     pass
     if errors.get(field):
@@ -43,17 +43,17 @@ pass
 }}
 <div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-title">{{if _novo:}}Novo parâmetro{{else:}}Parâmetro <span class="sss-mono">{{=_p['code']}}</span>
-      <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icones}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
+    <h1 class="sss-page-title">{{if _new:}}Novo parâmetro{{else:}}Parâmetro <span class="sss-mono">{{=_p['code']}}</span>
+      <span class="sss-status {{=_state['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icons}}#{{=_state['icon']}}"></use></svg><span>{{=_state['label']}}</span></span>{{pass}}
     </h1>
-    {{if not _novo:}}
+    {{if not _new:}}
     <p class="sss-page-sub">{{if _p['links']:}}Usado por: {{for _i, _s in enumerate(_p['links']):}}{{=', ' if _i else ''}}<span class="sss-mono">{{=_s['name']}}</span> ({{=_s['param_type']}}{{=', inativo' if _s['active'] != 'Y' else ''}}){{pass}}. Tipo e flag ficam bloqueados enquanto houver vínculos.{{else:}}Nenhum script usa este parâmetro.{{pass}}</p>
     {{pass}}
   </div>
   <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_parameters', f='index')}}">Voltar à lista</a>
-    {{if not _novo:}}
-    {{modal = _modal_ativo}}
+    {{if not _new:}}
+    {{modal = _modal_active}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}
   </div>
@@ -63,22 +63,22 @@ pass
   <h2 class="sss-card-title" id="title-form">Dados do parâmetro</h2>
   <form class="sss-card-body" method="post" action="{{=URL(c='admin_parameters', f='save')}}" autocomplete="off"
         x-data="parameterForm" data-url-test="{{=URL(c='admin_parameters', f='test_regex')}}">
-    {{=csrf_campo()}}
-    {{if not _novo:}}
+    {{=csrf_field()}}
+    {{if not _new:}}
     <input type="hidden" name="id" value="{{=_p['id']}}">
     <input type="hidden" name="version" value="{{=_p['version']}}">
     {{pass}}
     {{if general_error:}}
     <div class="alert alert-danger sss-alert" role="alert">
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icones}}#icon-alert"></use></svg>
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icons}}#icon-alert"></use></svg>
       <span>{{=general_error}}</span>
     </div>
     {{pass}}
 
     <div class="sss-form-row">
       <div class="sss-form-field mb-3">
-        <label class="form-label" for="field-code">Código{{if _novo:}} <span class="sss-required" aria-hidden="true">*</span>{{pass}}</label>
-        <input type="text" class="{{=_classe('code')}}" id="field-code" name="code" value="{{=_p['code']}}" maxlength="30" aria-describedby="{{=_desc('code')}}"{{if _novo:}} required{{else:}} readonly aria-readonly="true"{{pass}}{{if focus_field == 'code':}} autofocus{{pass}}>
+        <label class="form-label" for="field-code">Código{{if _new:}} <span class="sss-required" aria-hidden="true">*</span>{{pass}}</label>
+        <input type="text" class="{{=_classe('code')}}" id="field-code" name="code" value="{{=_p['code']}}" maxlength="30" aria-describedby="{{=_desc('code')}}"{{if _new:}} required{{else:}} readonly aria-readonly="true"{{pass}}{{if focus_field == 'code':}} autofocus{{pass}}>
         <div class="form-text" id="field-code-help">Minúsculas, dígitos e _ (ex.: data_ref). É a chave das respostas e dos agendamentos: não muda depois de criado.</div>
         {{if errors.get('code'):}}<div class="invalid-feedback" id="field-code-error">{{=errors['code']}}</div>{{pass}}
       </div>
@@ -113,7 +113,7 @@ pass
 
     <fieldset class="sss-form-field mb-3 sss-options" x-show="isSelect">
       <legend class="form-label fs-6">Opções da lista <span class="sss-required" aria-hidden="true">*</span></legend>
-      <input type="hidden" name="options_json" x-ref="options" value="{{=_p['options_json']}}" data-pairs="{{=json.dumps(_pares) if _pares is not None else ''}}" :value="optionsJson">
+      <input type="hidden" name="options_json" x-ref="options" value="{{=_p['options_json']}}" data-pairs="{{=json.dumps(_pairs) if _pairs is not None else ''}}" :value="optionsJson">
       <template x-for="(row, index) in rows" :key="index">
         <div class="sss-options-row">
           <input type="text" class="form-control form-control-sm sss-mono" maxlength="100" aria-label="Valor da opção" placeholder="Valor enviado" :value="row.value" :data-i="index" data-field="value" @input="editRow">
@@ -134,21 +134,21 @@ pass
     </div>
 
     <div class="form-check mb-2">
-      <input class="form-check-input" type="checkbox" id="field-sensitive" name="sensitive" value="Y" x-ref="sensitive" @change="switchSensitive"{{if _sensivel:}} checked{{pass}}>
+      <input class="form-check-input" type="checkbox" id="field-sensitive" name="sensitive" value="Y" x-ref="sensitive" @change="switchSensitive"{{if _sensitive:}} checked{{pass}}>
       <label class="form-check-label" for="field-sensitive">Valor sigiloso (mascarado na tela e nos logs)</label>
       {{if errors.get('sensitive'):}}<div class="invalid-feedback d-block" id="field-sensitive-error">{{=errors['sensitive']}}</div>{{pass}}
     </div>
-    <div class="alert alert-warning sss-alert" role="note" x-show="sensitive"{{if not _sensivel:}} x-cloak{{pass}}>
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icones}}#icon-alert"></use></svg>
+    <div class="alert alert-warning sss-alert" role="note" x-show="sensitive"{{if not _sensitive:}} x-cloak{{pass}}>
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icons}}#icon-alert"></use></svg>
       <span>{{=sensitive_warning}}</span>
     </div>
 
     <div class="sss-form-field mb-3">
       <label class="form-label" for="field-default_value">Valor padrão (opcional)</label>
-      <input class="{{=_classe('default_value')}}" id="field-default_value" name="default_value" maxlength="100" :type="defaultType" type="{{='password' if _sensivel else 'text'}}" value="{{='' if _sensivel else _p['default_value']}}" autocomplete="off" aria-describedby="{{=_desc('default_value')}}"{{if focus_field == 'default_value':}} autofocus{{pass}}>
-      <div class="form-text" id="field-default_value-help">Validado pelas mesmas regras do tipo.{{if _sensivel and _p.get('has_default'):}} Há um padrão sigiloso gravado: deixe em branco para mantê-lo.{{pass}}</div>
+      <input class="{{=_classe('default_value')}}" id="field-default_value" name="default_value" maxlength="100" :type="defaultType" type="{{='password' if _sensitive else 'text'}}" value="{{='' if _sensitive else _p['default_value']}}" autocomplete="off" aria-describedby="{{=_desc('default_value')}}"{{if focus_field == 'default_value':}} autofocus{{pass}}>
+      <div class="form-text" id="field-default_value-help">Validado pelas mesmas regras do tipo.{{if _sensitive and _p.get('has_default'):}} Há um padrão sigiloso gravado: deixe em branco para mantê-lo.{{pass}}</div>
       {{if errors.get('default_value'):}}<div class="invalid-feedback" id="field-default_value-error">{{=errors['default_value']}}</div>{{pass}}
-      {{if _sensivel and _p.get('has_default'):}}
+      {{if _sensitive and _p.get('has_default'):}}
       <div class="form-check mt-1">
         <input class="form-check-input" type="checkbox" id="field-remove_default" name="remove_default" value="Y">
         <label class="form-check-label" for="field-remove_default">Remover o padrão sigiloso gravado</label>
@@ -166,13 +166,13 @@ pass
     </fieldset>
 
     <div class="sss-form-actions">
-      <button type="submit" class="btn btn-primary">{{=u'Incluir parâmetro' if _novo else u'Salvar alterações'}}</button>
+      <button type="submit" class="btn btn-primary">{{=u'Incluir parâmetro' if _new else u'Salvar alterações'}}</button>
       <a class="btn btn-outline-secondary" href="{{=URL(c='admin_parameters', f='index')}}">Cancelar</a>
     </div>
   </form>
 </section>
 
-{{if not _novo and _p.get('record'):}}
+{{if not _new and _p.get('record'):}}
 {{record = _p['record']}}
 {{include 'components/record.html'}}
 {{pass}}

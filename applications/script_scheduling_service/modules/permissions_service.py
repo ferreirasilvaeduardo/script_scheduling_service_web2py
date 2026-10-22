@@ -34,7 +34,7 @@ class PermissionsService(object):
     def _screens(self, ctx):
         admin = ctx.get("is_admin") is True
         routes = {}
-        for section in ui_menu.montar_menu(ctx.get("features"), admin):
+        for section in ui_menu.build_menu(ctx.get("features"), admin):
             for item in section["items"]:
                 # Ultimo item vence: EXEC_SCRIPT ("Disparar Scripts") leva ao disparo, nao ao catalogo.
                 routes[item["code"]] = item["route"]

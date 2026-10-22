@@ -36,7 +36,7 @@ MSG_PROFILE_INVALID = u"Selecione um perfil ativo."
 MSG_PASSWORD_REQUIRED = u"Informe a senha."
 MSG_PASSWORD_TOO_LONG = u"A senha deve ter no máximo %d caracteres." % auth_service.PASSWORD_MAX
 MSG_CONFIRMATION = auth_service.MSG_CONFIRMATION
-MSG_LAST_ADMIN = ui_helpers.mensagem("last_admin")
+MSG_LAST_ADMIN = ui_helpers.message("last_admin")
 MSG_SELF_DEACTIVATE = u"Operação negada: você não pode desativar o próprio usuário."
 MSG_SELF_PROFILE = u"Operação negada: você não pode remover o próprio perfil administrativo."
 MSG_SELF_PASSWORD = u"Para trocar a sua própria senha, use \"Minha senha\" (exige a senha atual)."
@@ -149,7 +149,7 @@ class AdminUsersService(object):
         u = self._get(user_id)
         date = public_view(u)
         date.update(version=admin_crud.version(u, EDITABLE_FIELDS), locked=self.is_locked(u),
-                     own=u["id"] == ctx.get("user_id"), record=ui_helpers.registro(u, ctx))
+                     own=u["id"] == ctx.get("user_id"), record=ui_helpers.record_info(u, ctx))
         return date
 
     # ----------------------------------------------------------------- escrita

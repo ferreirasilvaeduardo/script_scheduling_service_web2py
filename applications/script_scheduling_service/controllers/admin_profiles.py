@@ -5,190 +5,190 @@ Regras ficam em modules/admin_profiles_service.py; CSRF e Origin de todo POST sa
 em models/10_security.py. Nenhuma permissao e decidida no cliente: o POST da matriz e revalidado inteiro.
 """
 import admin_crud
-import admin_profiles_service as servico
+import admin_profiles_service as service
 import ui_helpers
 from admin_crud import AccessDenied, OperationDenied
 from repo_errors import RepoConflict, RepoError, RepoNotFound
 
 _FUNC = "MANAGE_PROFILES"
-_TAMANHOS = (20, 50, 100)
+_SIZES = (20, 50, 100)
 _MAX_IDS = 5000
-_MSG_FALHA_LISTA = u"Não foi possível carregar os perfis. Tente novamente em instantes."
-_MSG_FALHA_ALTERNAR = u"Não foi possível alterar a situação do perfil. Tente novamente em instantes."
-_MSG_FALHA_MATRIZ = u"Não foi possível salvar a matriz. Tente novamente em instantes."
-_JS_MATRIZ = "js/app/matrix.js"
+_MSG_LIST_FAILED = u"Não foi possível carregar os perfis. Tente novamente em instantes."
+_MSG_TOGGLE_FAILED = u"Não foi possível alterar a situação do perfil. Tente novamente em instantes."
+_MSG_MATRIX_FAILED = u"Não foi possível salvar a matriz. Tente novamente em instantes."
+_JS_MATRIX = "js/app/matrix.js"
 
 
-def _exigir_metodo(*permitidos):
+def _require_method(*permitidos):
     if (request.env.request_method or "GET").upper() not in permitidos:
         raise HTTP(405, **response.headers)
 
 
-def _negado():
+def _denied():
     raise HTTP(403, u"Acesso negado.", **response.headers)
 
 
-def _nao_encontrado():
+def _not_found():
     raise HTTP(404, u"Perfil não encontrado.", **response.headers)
 
 
-def _texto(valor, limite):
-    valor = valor[-1] if isinstance(valor, list) and valor else valor
-    return valor[:limite] if isinstance(valor, str) else None
+def _text(value, limit):
+    value = value[-1] if isinstance(value, list) and value else value
+    return value[:limit] if isinstance(value, str) else None
 
 
-def _lista(nome):
-    valor = request.post_vars.get(nome)
-    if valor is None:
+def _list(name):
+    value = request.post_vars.get(name)
+    if value is None:
         return []
-    valor = valor if isinstance(valor, list) else [valor]
-    return [v[:11] if isinstance(v, str) else v for v in valor[:_MAX_IDS]]
+    value = value if isinstance(value, list) else [value]
+    return [v[:11] if isinstance(v, str) else v for v in value[:_MAX_IDS]]
 
 
-def _pagina_form(ctx, dados, erros=None):
-    response.title = (u"Perfil %s — SSS" % dados["name"]) if dados.get("id") else u"Novo perfil — SSS"
+def _form_page(ctx, data, errors=None):
+    response.title = (u"Perfil %s — SSS" % data["name"]) if data.get("id") else u"Novo perfil — SSS"
     response.view = "admin_profiles/form.html"
-    erros = erros or {}
-    campos = [{"name": n, "error": erros.get(n)} for n in ("name", "description")]
-    return dict(profile=dados, errors=erros, general_error=erros.get(admin_crud.GENERAL_FIELD),
-                focus_field=ui_helpers.primeiro_campo_invalido(campos),
-                deactivation_warning=servico.DEACTIVATION_WARNING)
+    errors = errors or {}
+    fields = [{"name": n, "error": errors.get(n)} for n in ("name", "description")]
+    return dict(profile=data, errors=errors, general_error=errors.get(admin_crud.GENERAL_FIELD),
+                focus_field=ui_helpers.first_invalid_field(fields),
+                deactivation_warning=service.DEACTIVATION_WARNING)
 
 
 def index():
-    _exigir_metodo("GET", "HEAD")
-    ctx = _exigir_func(_FUNC)
-    filtros = servico.normalize_filters(request.get_vars)
-    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("page"), 9))
-    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("size"), 3), _TAMANHOS)
-    erro = None
+    _require_method("GET", "HEAD")
+    ctx = _require_func(_FUNC)
+    filters = service.normalize_filters(request.get_vars)
+    page = ui_helpers.sanitize_page(_text(request.get_vars.get("page"), 9))
+    size = ui_helpers.sanitize_size(_text(request.get_vars.get("size"), 3), _SIZES)
+    error = None
     try:
-        resultado = servico.list_page(ctx, filtros, pagina, tamanho)
+        result = service.list_page(ctx, filters, page, size)
     except AccessDenied:
-        _negado()
+        _denied()
     except RepoError:
         _log.exception("falha ao listar perfis (login=%s)", ctx["login"], extra={"action": _FUNC})
-        resultado = {"items": [], "total": 0, "page": 1, "size": tamanho}
-        erro = _MSG_FALHA_LISTA
+        result = {"items": [], "total": 0, "page": 1, "size": size}
+        error = _MSG_LIST_FAILED
     response.title = u"Perfis — SSS"
-    return dict(result=resultado, error=erro, active_filters=filtros, size=tamanho,
-                query_params=dict(filtros, size=tamanho))
+    return dict(result=result, error=error, active_filters=filters, size=size,
+                query_params=dict(filters, size=size))
 
 
 def form():
-    _exigir_metodo("GET", "HEAD")
-    ctx = _exigir_func(_FUNC)
+    _require_method("GET", "HEAD")
+    ctx = _require_func(_FUNC)
     try:
-        dados = servico.form(ctx, _texto(request.args(0), 11))
+        data = service.form(ctx, _text(request.args(0), 11))
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
-    return _pagina_form(ctx, dados)
+        _denied()
+    return _form_page(ctx, data)
 
 
 def save():
-    _exigir_metodo("POST")
-    ctx = _exigir_func(_FUNC)
-    perfil_id = _texto(request.post_vars.get("id"), 11)
-    enviados = dict((c, _texto(request.post_vars.get(c), 300)) for c in ("name", "description", "is_admin", "version"))
+    _require_method("POST")
+    ctx = _require_func(_FUNC)
+    profile_id = _text(request.post_vars.get("id"), 11)
+    submitted = dict((c, _text(request.post_vars.get(c), 300)) for c in ("name", "description", "is_admin", "version"))
     try:
-        salvo_id, erros = servico.save(ctx, _ip_origem(), perfil_id, enviados)
+        saved_id, errors = service.save(ctx, _client_ip(), profile_id, submitted)
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
+        _denied()
     except RepoError:
-        _log.exception("falha ao salvar perfil (login=%s id=%r)", ctx["login"], perfil_id, extra={"action": _FUNC})
-        salvo_id, erros = None, {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
-    if not erros:
+        _log.exception("falha ao salvar perfil (login=%s id=%r)", ctx["login"], profile_id, extra={"action": _FUNC})
+        saved_id, errors = None, {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
+    if not errors:
         session.flash = {"kind": "success", "message": u"Perfil salvo com sucesso."}
         redirect(URL(c="admin_profiles", f="index"))
     try:
-        dados = servico.form(ctx, perfil_id) if perfil_id else servico.form(ctx)
+        data = service.form(ctx, profile_id) if profile_id else service.form(ctx)
     except RepoError:
-        dados = {"id": None, "name": "", "description": "", "is_admin": "N", "active": "Y", "version": "",
+        data = {"id": None, "name": "", "description": "", "is_admin": "N", "active": "Y", "version": "",
                  "active_users": 0}
-    if admin_crud.GENERAL_FIELD not in erros:
-        dados = dict(dados, name=enviados["name"] or "", description=enviados["description"] or "",
-                     is_admin="Y" if enviados["is_admin"] == "Y" else "N")
-        if perfil_id:
-            dados["version"] = enviados["version"] or ""
+    if admin_crud.GENERAL_FIELD not in errors:
+        data = dict(data, name=submitted["name"] or "", description=submitted["description"] or "",
+                     is_admin="Y" if submitted["is_admin"] == "Y" else "N")
+        if profile_id:
+            data["version"] = submitted["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-    response.flash = {"kind": "error", "message": erros.get(admin_crud.GENERAL_FIELD)
-                      or ui_helpers.mensagem("form_errors")}
-    return _pagina_form(ctx, dados, erros)
+    response.flash = {"kind": "error", "message": errors.get(admin_crud.GENERAL_FIELD)
+                      or ui_helpers.message("form_errors")}
+    return _form_page(ctx, data, errors)
 
 
 def toggle_active():
-    _exigir_metodo("POST")
-    ctx = _exigir_func(_FUNC)
-    perfil_id = _texto(request.post_vars.get("id"), 11)
+    _require_method("POST")
+    ctx = _require_func(_FUNC)
+    profile_id = _text(request.post_vars.get("id"), 11)
     try:
-        alterado = servico.toggle_active(ctx, _ip_origem(), perfil_id, _texto(request.post_vars.get("version"), 64))
-        acao = u"desativado" if alterado["active"] == "N" else u"reativado"
-        session.flash = {"kind": "success", "message": u"Perfil %s %s." % (alterado["name"], acao)}
+        changed = service.toggle_active(ctx, _client_ip(), profile_id, _text(request.post_vars.get("version"), 64))
+        action = u"desativado" if changed["active"] == "N" else u"reativado"
+        session.flash = {"kind": "success", "message": u"Perfil %s %s." % (changed["name"], action)}
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
+        _denied()
     except OperationDenied as exc:
         session.flash = {"kind": "error", "message": exc.message}
     except RepoConflict:
         session.flash = {"kind": "warning", "message": admin_crud.MSG_CONFLICT}
     except RepoError:
-        _log.exception("falha ao alternar perfil (login=%s id=%r)", ctx["login"], perfil_id, extra={"action": _FUNC})
-        session.flash = {"kind": "error", "message": _MSG_FALHA_ALTERNAR}
-    redirect(URL(c="admin_profiles", f="form", args=[perfil_id]))
+        _log.exception("falha ao alternar perfil (login=%s id=%r)", ctx["login"], profile_id, extra={"action": _FUNC})
+        session.flash = {"kind": "error", "message": _MSG_TOGGLE_FAILED}
+    redirect(URL(c="admin_profiles", f="form", args=[profile_id]))
 
 
 def who_can():
     """Quem pode o que (README §4.3.B.2): so leitura, por script ou por ambiente."""
-    _exigir_metodo("GET", "HEAD")
-    ctx = _exigir_func(_FUNC)
+    _require_method("GET", "HEAD")
+    ctx = _require_func(_FUNC)
     try:
-        dados = servico.who_can(ctx, _texto(request.get_vars.get("script"), 11),
-                                  _texto(request.get_vars.get("environment"), 11))
+        data = service.who_can(ctx, _text(request.get_vars.get("script"), 11),
+                                  _text(request.get_vars.get("environment"), 11))
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
+        _denied()
     response.title = u"Quem pode o quê — SSS"
-    return dict(q=dados)
+    return dict(q=data)
 
 
 def matrix():
-    _exigir_metodo("GET", "HEAD")
-    ctx = _exigir_func(_FUNC)
+    _require_method("GET", "HEAD")
+    ctx = _require_func(_FUNC)
     try:
-        dados = servico.matrix(ctx, _texto(request.args(0), 11))
+        data = service.matrix(ctx, _text(request.args(0), 11))
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
-    response.title = u"Permissões de %s — SSS" % dados["profile"]["name"]
-    response.sss_scripts = [_JS_MATRIZ]
-    return dict(matrix=dados)
+        _denied()
+    response.title = u"Permissões de %s — SSS" % data["profile"]["name"]
+    response.sss_scripts = [_JS_MATRIX]
+    return dict(matrix=data)
 
 
 def save_matrix():
-    _exigir_metodo("POST")
-    ctx = _exigir_func(_FUNC)
-    perfil_id = _texto(request.post_vars.get("id"), 11)
+    _require_method("POST")
+    ctx = _require_func(_FUNC)
+    profile_id = _text(request.post_vars.get("id"), 11)
     try:
-        diff, erros = servico.save_matrix(ctx, _ip_origem(), perfil_id, _lista("funcs"), _lista("ambs"),
-                                            _lista("scrs"), _texto(request.post_vars.get("perm_version"), 11))
+        diff, errors = service.save_matrix(ctx, _client_ip(), profile_id, _list("funcs"), _list("ambs"),
+                                            _list("scrs"), _text(request.post_vars.get("perm_version"), 11))
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
+        _denied()
     except RepoError:
-        _log.exception("falha ao salvar matriz (login=%s id=%r)", ctx["login"], perfil_id, extra={"action": "PERM_UPDATE"})
-        diff, erros = None, {admin_crud.GENERAL_FIELD: _MSG_FALHA_MATRIZ}
-    if erros:
-        session.flash = {"kind": "error", "message": erros[admin_crud.GENERAL_FIELD]}
+        _log.exception("falha ao salvar matriz (login=%s id=%r)", ctx["login"], profile_id, extra={"action": "PERM_UPDATE"})
+        diff, errors = None, {admin_crud.GENERAL_FIELD: _MSG_MATRIX_FAILED}
+    if errors:
+        session.flash = {"kind": "error", "message": errors[admin_crud.GENERAL_FIELD]}
     elif diff:
         session.flash = {"kind": "success", "message": u"Permissões salvas: %s" % diff}
     else:
         session.flash = {"kind": "warning", "message": u"Nenhuma alteração para salvar."}
-    redirect(URL(c="admin_profiles", f="matrix", args=[perfil_id]))
+    redirect(URL(c="admin_profiles", f="matrix", args=[profile_id]))

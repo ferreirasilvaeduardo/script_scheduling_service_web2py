@@ -13,28 +13,28 @@ _STATUS = {
     "FAILED": (u"Deu erro", "sss-status-failed", "status-failed"),
     "CANCELLED": (u"Cancelado", "sss-status-cancelled", "status-cancelled"),
 }
-_STATUS_DESCONHECIDO = (u"Desconhecido", "sss-status-unknown", "status-unknown")
+_STATUS_UNKNOWN = (u"Desconhecido", "sss-status-unknown", "status-unknown")
 
 
 def status_info(status):
     """Retorna {rotulo, classe, icone} do status do ticket (README §5.1)."""
-    label, cls_name, icon = _STATUS.get(status, _STATUS_DESCONHECIDO)
+    label, cls_name, icon = _STATUS.get(status, _STATUS_UNKNOWN)
     return {"label": label, "css_class": cls_name, "icon": icon}
 
 
-_ATIVO = {
+_ACTIVE = {
     "Y": (u"Ativo", "sss-status-success", "status-success"),
     "N": (u"Inativo", "sss-status-cancelled", "status-cancelled"),
 }
 
 
-def ativo_info(flag):
+def active_info(flag):
     """Retorna {rotulo, classe, icone} da flag ativo ('S'/'N') dos cadastros; outro valor e desconhecido."""
-    label, cls_name, icon = _ATIVO.get(flag, _STATUS_DESCONHECIDO)
+    label, cls_name, icon = _ACTIVE.get(flag, _STATUS_UNKNOWN)
     return {"label": label, "css_class": cls_name, "icon": icon}
 
 
-_MOTIVOS = {
+_REASONS = {
     "EXIT_OK": u"Execução concluída com código de saída 0.",
     "EXIT_ERROR": u"O script terminou com código de saída diferente de zero.",
     "KILLED_SIGNAL": u"O processo foi encerrado por um sinal não solicitado (código 128 + número do sinal).",
@@ -51,14 +51,14 @@ _MOTIVOS = {
 
 
 # Frases "o que aconteceu" / "o que fazer agora" por status_motivo (README §5.2.1, texto exato).
-_EXPLICACOES = {
+_EXPLANATIONS = {
     "EXIT_OK": (u"Terminou e deu certo.", None),
-    "EXIT_ERROR": (u"O script rodou, mas terminou avisando que algo deu errado (código {codigo}).",
+    "EXIT_ERROR": (u"O script rodou, mas terminou avisando que algo deu errado (código {code}).",
                    u"Veja o fim do log para entender o erro. Se não souber resolver, envie o número deste ticket "
                    u"ao responsável pelo script."),
     "KILLED_SIGNAL": (u"O script foi interrompido de repente pelo servidor.",
                       u"Tente de novo. Se acontecer outra vez, avise o suporte com o número deste ticket."),
-    "TIMEOUT": (u"O script demorou mais do que o tempo máximo ({tempo}) e foi parado.",
+    "TIMEOUT": (u"O script demorou mais do que o tempo máximo ({time}) e foi parado.",
                 u"Confira se as respostas estão certas e tente de novo. Se o script costuma demorar mais, "
                 u"peça ao administrador para aumentar o tempo máximo."),
     "NODE_OFFLINE": (u"O servidor que rodava o script parou de responder.",
@@ -76,7 +76,7 @@ _EXPLICACOES = {
 }
 
 
-def tempo_simples(seconds):
+def simple_time(seconds):
     """Duracao em linguagem simples: 'menos de 1 minuto', '1 minuto', '4 minutos', '2 horas e 5 minutos'."""
     seconds = max(0, int(seconds or 0))
     if seconds < 60:
@@ -89,7 +89,7 @@ def tempo_simples(seconds):
     return text if not rest else u"%s e %s" % (text, minutes)
 
 
-def explicacao_ticket(ticket, now, timeout_s=None):
+def ticket_explanation(ticket, now, timeout_s=None):
     """{'situacao', 'aconteceu', 'fazer'} do ticket em linguagem simples (README §5.2.1, §5.7).
 
     agora: relogio do banco; timeout_s: tempo maximo do script (para a frase de TIMEOUT).
@@ -112,21 +112,21 @@ def explicacao_ticket(ticket, now, timeout_s=None):
                     "todo": u"Espere alguns segundos."}
         start = ticket.get("started_at")
         elapsed = (now - start).total_seconds() if start is not None and now is not None else 0
-        return {"state": state, "happened": u"Está rodando agora. Começou há %s." % tempo_simples(elapsed),
+        return {"state": state, "happened": u"Está rodando agora. Começou há %s." % simple_time(elapsed),
                 "todo": u"Acompanhe o log abaixo."}
     reason = ticket.get("status_reason")
-    if reason not in _EXPLICACOES:
+    if reason not in _EXPLANATIONS:
         return {"state": state,
                 "happened": u"Terminou com um motivo que o sistema não conhece (%s)." % (reason or "-"),
                 "todo": u"Avise o suporte com o número deste ticket."}
-    happened, todo = _EXPLICACOES[reason]
-    time_value = tempo_simples(timeout_s) if timeout_s else u"definido para o script"
+    happened, todo = _EXPLANATIONS[reason]
+    time_value = simple_time(timeout_s) if timeout_s else u"definido para o script"
     return {"state": state,
-            "happened": happened.format(codigo=ticket.get("return_code"), tempo=time_value),
+            "happened": happened.format(code=ticket.get("return_code"), time=time_value),
             "todo": todo}
 
 
-def etapas_ticket(ticket, now):
+def ticket_steps(ticket, now):
     """Barra de etapas do detalhe (README §5.7): Pedido criado -> Na fila -> Rodando -> Terminou.
 
     Cada etapa: {rotulo, quando, estado} com estado 'done' | 'current' | 'pending' | 'skipped'.
@@ -135,18 +135,18 @@ def etapas_ticket(ticket, now):
     terminal = status in ("SUCCESS", "FAILED", "CANCELLED")
     never_ran = status == "CANCELLED" and ticket.get("started_at") is None
     scheduled = ticket.get("scheduled_at")
-    queue_when = formatar_data(scheduled)
+    queue_when = format_date(scheduled)
     if status == "PENDING" and scheduled is not None and now is not None and scheduled > now:
         queue_when = u"agendado para %s" % queue_when
     if status == "RUNNING":
         start = ticket.get("started_at")
         elapsed = (now - start).total_seconds() if start is not None and now is not None else 0
-        running_when = u"há %s" % tempo_simples(elapsed)
+        running_when = u"há %s" % simple_time(elapsed)
     elif never_ran:
         running_when = u"não chegou a rodar"
     else:
-        running_when = formatar_data(ticket.get("started_at"))
-    end = formatar_data(ticket.get("finished_at"))
+        running_when = format_date(ticket.get("started_at"))
+    end = format_date(ticket.get("finished_at"))
     if terminal:
         end = u"%s — %s" % (status_info(status)["label"], end)
     states = {
@@ -154,13 +154,13 @@ def etapas_ticket(ticket, now):
         "RUNNING": ("done", "done", "current", "pending"),
     }.get(status, ("done", "done", "skipped" if never_ran else "done", "current"))
     labels = (u"Pedido criado", u"Na fila", u"Rodando", u"Terminou")
-    whens = (formatar_data(ticket.get("created_at")), queue_when, running_when,
+    whens = (format_date(ticket.get("created_at")), queue_when, running_when,
                end if terminal else u"-")
     return [{"label": r, "when": q, "state_info": e} for r, q, e in zip(labels, whens, states)]
 
 
 # Nomes curtos dos motivos de erro (historico do script, README §5.8).
-NOMES_MOTIVO = {
+REASON_NAMES = {
     "EXIT_ERROR": u"O script avisou que algo deu errado", "KILLED_SIGNAL": u"Interrompido pelo servidor",
     "TIMEOUT": u"Passou do tempo máximo", "NODE_OFFLINE": u"Servidor parou de responder",
     "ORPHAN_PROCESS": u"Servidor reiniciado", "FENCED": u"Servidor sem contato com o banco",
@@ -169,11 +169,11 @@ NOMES_MOTIVO = {
 }
 
 # Series do grafico do historico na ordem fixa de empilhamento (de baixo para cima).
-SERIES_HISTORICO = (("succeeded", u"Deu certo"), ("error", u"Deu erro"), ("cancelled", u"Cancelado"),
+HISTORY_SERIES = (("succeeded", u"Deu certo"), ("error", u"Deu erro"), ("cancelled", u"Cancelado"),
                     ("in_progress", u"Esperando ou rodando"))
 
 
-def barras_empilhadas(days, width=1000, height=240, left_margin=28, bottom_margin=22, gap=2):
+def stacked_bars(days, width=1000, height=240, left_margin=28, bottom_margin=22, gap=2):
     """Geometria do grafico de barras empilhadas por dia (SVG gerado no servidor, README §5.8).
 
     dias: [{'label': 'dd/mm', 'succeeded': n, 'error': n, 'cancelled': n, 'in_progress': n}].
@@ -181,7 +181,7 @@ def barras_empilhadas(days, width=1000, height=240, left_margin=28, bottom_margi
     barras: [{x, y, largura, altura, classe, titulo}]}. Cores so por classe CSS (sem style inline);
     vao de 2px entre os segmentos; o titulo de cada segmento e a dica ao passar o mouse.
     """
-    max_value = max([sum(d.get(c, 0) for c, _r in SERIES_HISTORICO) for d in days] or [0])
+    max_value = max([sum(d.get(c, 0) for c, _r in HISTORY_SERIES) for d in days] or [0])
     scale_max = max(max_value, 1)
     area_h = height - bottom_margin - 4
     base_y = height - bottom_margin
@@ -192,7 +192,7 @@ def barras_empilhadas(days, width=1000, height=240, left_margin=28, bottom_margi
     for i, d in enumerate(days):
         x = left_margin + i * step + (step - width_bar) / 2.0
         top = base_y
-        for key, label in SERIES_HISTORICO:
+        for key, label in HISTORY_SERIES:
             count = d.get(key, 0)
             if not count:
                 continue
@@ -211,7 +211,7 @@ def barras_empilhadas(days, width=1000, height=240, left_margin=28, bottom_margi
 
 
 # Mensagens-padrao em duas partes: o que aconteceu + o que fazer agora (README §2.4.2, texto exato).
-MENSAGENS = {
+MESSAGES = {
     "unattended_queue": (u"Há pedidos vencidos sem servidor disponível para o ambiente e o interpretador.",
                            u"Confira os servidores e quais ambientes e interpretadores eles atendem."),
     "running_without_pid": (u"Há pedidos reservados há mais de dois minutos sem processo registrado.",
@@ -238,8 +238,8 @@ MENSAGENS = {
 
 
 # Quadro Saida do detalhe do ticket (CR-012, README §8.13): o que aconteceu + o que fazer agora.
-SAIDA_GRAVANDO_LIMITE_S = 3600
-_SAIDA_MENSAGENS = {
+OUTPUT_WRITING_LIMIT_S = 3600
+_OUTPUT_MESSAGES = {
     "WRITING": (u"A saída está em preparação.", u"Atualize a página em alguns instantes."),
     "STALLED": (u"A saída não foi concluída.",
                u"Os arquivos ficaram temporariamente no servidor do agente {agent}. Peça a quem administra o servidor."),
@@ -251,11 +251,11 @@ _SAIDA_MENSAGENS = {
     "FAILED": (u"A saída não foi gravada.",
                u"Os arquivos ficaram temporariamente no servidor do agente {agent}. Peça a quem administra o servidor."),
 }
-_SAIDA_CLASSE = {"WRITING": "info", "STALLED": "warning", "AVAILABLE": "success", "FILES": "warning",
+_OUTPUT_CLASS = {"WRITING": "info", "STALLED": "warning", "AVAILABLE": "success", "FILES": "warning",
                  "BYTES": "warning", "FAILED": "warning"}
 
 
-def tamanho_legivel(nbytes):
+def readable_size(nbytes):
     """Bytes em texto curto: '512 bytes', '12,3 KB', '4,5 MB' (virgula decimal, README §2.4.2)."""
     if nbytes is None:
         return u"-"
@@ -267,7 +267,7 @@ def tamanho_legivel(nbytes):
     return (u"%.1f MB" % (n / (1024.0 * 1024.0))).replace(".", ",")
 
 
-def quadro_saida(output, now):
+def output_panel(output, now):
     """Quadro Saida (CR-012) a partir de saida_obter, ou None sem saida. Nunca leva o conteudo nem o caminho."""
     if not output:
         return None
@@ -275,40 +275,40 @@ def quadro_saida(output, now):
     key = state
     if state == "WRITING":
         since = output.get("updated_at") or output.get("created_at")
-        if since is not None and now is not None and (now - since).total_seconds() > SAIDA_GRAVANDO_LIMITE_S:
+        if since is not None and now is not None and (now - since).total_seconds() > OUTPUT_WRITING_LIMIT_S:
             key = "STALLED"
     elif state == "EXCEEDED":
         key = "BYTES" if output.get("reason") == "BYTES" else "FILES"
-    elif state not in _SAIDA_MENSAGENS:
+    elif state not in _OUTPUT_MESSAGES:
         key = "FAILED"
     count = output.get("file_count")
-    values = {"agent": output.get("agent_id") or u"-", "size": tamanho_legivel(output.get("size_bytes")),
+    values = {"agent": output.get("agent_id") or u"-", "size": readable_size(output.get("size_bytes")),
                "count": (u"1 arquivo" if count == 1 else u"%s arquivos" % count)}
-    happened, todo = _SAIDA_MENSAGENS[key]
-    return {"state": state, "css_class": _SAIDA_CLASSE[key], "happened": happened.format(**values),
+    happened, todo = _OUTPUT_MESSAGES[key]
+    return {"state": state, "css_class": _OUTPUT_CLASS[key], "happened": happened.format(**values),
             "todo": todo.format(**values), "can_download": state == "AVAILABLE"}
 
 
-def mensagem(key_name, **values):
+def message(key_name, **values):
     """Mensagem-padrao completa ('o que aconteceu' + 'o que fazer agora')."""
-    happened, todo = MENSAGENS[key_name]
+    happened, todo = MESSAGES[key_name]
     return u"%s %s" % (happened, todo.format(**values))
 
 
-def mensagem_partes(key_name, **values):
+def message_parts(key_name, **values):
     """(o que aconteceu, o que fazer agora) para telas que mostram as duas partes separadas."""
-    happened, todo = MENSAGENS[key_name]
+    happened, todo = MESSAGES[key_name]
     return happened, todo.format(**values)
 
 
-def descricao_motivo(status_reason):
+def reason_description(status_reason):
     """Texto em portugues do status_motivo (README §5.2); None/vazio vira None, codigo desconhecido e citado."""
     if status_reason is None or status_reason == "":
         return None
-    return _MOTIVOS.get(status_reason, u"Motivo não catalogado (%s)." % status_reason)
+    return _REASONS.get(status_reason, u"Motivo não catalogado (%s)." % status_reason)
 
 
-def formatar_data(dt):
+def format_date(dt):
     """Formata datetime como dd/mm/aaaa HH:MM:SS; None vira '-'."""
     if dt is None:
         return "-"
@@ -316,55 +316,55 @@ def formatar_data(dt):
 
 
 # Colunas de registro (CR-006, README §10) e nomes simples dos atores do sistema (README §2.4.2).
-COLUNAS_REGISTRO = ("created_at", "created_by", "updated_at", "updated_by")
-_PREFIXO_SISTEMA = "SYSTEM:"
-_ATORES_SISTEMA = {"init_db": u"Sistema (instalação)", "seed": u"Sistema (dados de demonstração)",
+RECORD_COLUMNS = ("created_at", "created_by", "updated_at", "updated_by")
+_SYSTEM_PREFIX = "SYSTEM:"
+_SYSTEM_ACTORS = {"init_db": u"Sistema (instalação)", "seed": u"Sistema (dados de demonstração)",
                    "purge": u"Sistema (limpeza)"}
 
 
-def ator_visivel(actor, ctx):
+def visible_actor(actor, ctx):
     """Login de pessoa como o contexto pode ver (CR-007 D6, CR-008 E5): sem VIEW_AUDIT nem admin,
     vira "você" ou "outra pessoa"; atores do sistema e vazio passam direto."""
     ctx = ctx or {}
-    if not actor or actor == "SYSTEM" or actor.startswith(_PREFIXO_SISTEMA):
+    if not actor or actor == "SYSTEM" or actor.startswith(_SYSTEM_PREFIX):
         return actor
     if ctx.get("is_admin") is True or "VIEW_AUDIT" in (ctx.get("features") or ()):
         return actor
     return u"você" if actor == ctx.get("login") else u"outra pessoa"
 
 
-def registro(reg, ctx):
+def record_info(rec, ctx):
     """Colunas de registro com os atores permitidos ao contexto da sessao."""
-    date = dict((c, (reg or {}).get(c)) for c in COLUNAS_REGISTRO)
+    date = dict((c, (rec or {}).get(c)) for c in RECORD_COLUMNS)
     for field in ("created_by", "updated_by"):
-        date[field] = ator_visivel(date[field], ctx)
+        date[field] = visible_actor(date[field], ctx)
     return date
 
 
-def nome_ator(actor):
+def actor_name(actor):
     """Ator em linguagem simples: login como esta; SYSTEM:<agent_id> vira 'Sistema (agente <agent_id>)'."""
     if not actor:
         return "-"
     if actor == "SYSTEM":
         return u"Sistema"
-    if actor.startswith(_PREFIXO_SISTEMA):
-        rest = actor[len(_PREFIXO_SISTEMA):]
-        return _ATORES_SISTEMA.get(rest, u"Sistema (agente %s)" % rest)
+    if actor.startswith(_SYSTEM_PREFIX):
+        rest = actor[len(_SYSTEM_PREFIX):]
+        return _SYSTEM_ACTORS.get(rest, u"Sistema (agente %s)" % rest)
     return actor
 
 
-def registro_exibicao(reg):
+def record_display(rec):
     """Textos do quadro Registro: {'created': '<data> por <ator>', 'updated': ... | 'Nunca alterado'}."""
-    reg = reg or {}
-    created = u"%s por %s" % (formatar_data(reg.get("created_at")), nome_ator(reg.get("created_by")))
-    if reg.get("updated_at") is None:
+    rec = rec or {}
+    created = u"%s por %s" % (format_date(rec.get("created_at")), actor_name(rec.get("created_by")))
+    if rec.get("updated_at") is None:
         changed = u"Nunca alterado"
     else:
-        changed = u"%s por %s" % (formatar_data(reg.get("updated_at")), nome_ator(reg.get("updated_by")))
+        changed = u"%s por %s" % (format_date(rec.get("updated_at")), actor_name(rec.get("updated_by")))
     return {"created": created, "updated": changed}
 
 
-def formatar_duracao(start, end):
+def format_duration(start, end):
     """Duracao entre dois datetimes ('42s', '5m 07s', '2h 15m 30s').
 
     Retorna '-' se algum extremo for None ou se fim < inicio.
@@ -383,43 +383,43 @@ def formatar_duracao(start, end):
     return "%ds" % seconds
 
 
-_RE_INTEIRO = r"[0-9]{1,9}"
+_RE_INT = r"[0-9]{1,9}"
 
 
-def _inteiro_positivo(value):
+def _positive_int(value):
     """int >= 1 a partir de int ou str ASCII de ate 9 digitos; None se invalido."""
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
         n = value
-    elif isinstance(value, str) and re.fullmatch(_RE_INTEIRO, value):
+    elif isinstance(value, str) and re.fullmatch(_RE_INT, value):
         n = int(value)
     else:
         return None
     return n if n >= 1 else None
 
 
-def sanitizar_pagina(value, default_value=1):
+def sanitize_page(value, default_value=1):
     """Pagina de request.vars; valor ausente, nao numerico ou < 1 vira `padrao`."""
-    n = _inteiro_positivo(value)
+    n = _positive_int(value)
     return default_value if n is None else n
 
 
-def sanitizar_tamanho(value, allowed=(20, 50, 100)):
+def sanitize_size(value, allowed=(20, 50, 100)):
     """Tamanho de pagina restrito a `permitidos`; fora da lista vira permitidos[0]."""
-    n = _inteiro_positivo(value)
+    n = _positive_int(value)
     return n if n in allowed else allowed[0]
 
 
-def paginacao_info(page, size, total, capped_total=False, quantity=None):
+def pagination_info(page, size, total, capped_total=False, quantity=None):
     """Navegacao por total exato ou por quantidade da pagina quando o total foi limitado.
 
     Com total 0 ha uma unica pagina, sem registros (faixa 0-0).
     """
-    size = _inteiro_positivo(size) or 20
+    size = _positive_int(size) or 20
     total = total if isinstance(total, int) and not isinstance(total, bool) and total > 0 else 0
     total_pages = max(1, (total + size - 1) // size)
-    page = max(sanitizar_pagina(page), 1)
+    page = max(sanitize_page(page), 1)
     if not capped_total:
         page = min(page, total_pages)
     if total:
@@ -446,7 +446,7 @@ def paginacao_info(page, size, total, capped_total=False, quantity=None):
     }
 
 
-def primeiro_campo_invalido(fields):
+def first_invalid_field(fields):
     """Nome do primeiro campo (na ordem dada) com 'error' preenchido; None se nenhum."""
     for field in fields or ():
         if field.get("error"):
@@ -454,14 +454,14 @@ def primeiro_campo_invalido(fields):
     return None
 
 
-_ALERTAS = {
+_ALERTS = {
     "success": ("alert-success", "status-success", "status"),
     "warning": ("alert-warning", "icon-alert", "status"),
     "error": ("alert-danger", "status-failed", "alert"),
 }
 
 
-def alerta_info(flash):
+def alert_info(flash):
     """Normaliza response.flash para {tipo, mensagem, classe, icone, role}.
 
     Aceita {'tipo', 'mensagem'}, (tipo, mensagem) ou texto simples. Tipo ausente
@@ -475,7 +475,7 @@ def alerta_info(flash):
         kind, message = None, flash
     if message is None or message == "":
         return None
-    if kind not in _ALERTAS:
+    if kind not in _ALERTS:
         kind = "warning"
-    cls_name, icon, role = _ALERTAS[kind]
+    cls_name, icon, role = _ALERTS[kind]
     return {"kind": kind, "message": message, "css_class": cls_name, "icon": icon, "role": role}

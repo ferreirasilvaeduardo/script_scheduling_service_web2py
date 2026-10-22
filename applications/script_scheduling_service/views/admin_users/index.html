@@ -2,27 +2,27 @@
 {{
 # Lista de usuários (padrão de CRUD administrativo). O serviço já remove senha_hash dos itens.
 import ui_helpers
-_opc_situacao = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos'), ('B', 'Bloqueados')]
-_opc_perfil = [('', 'Todos')] + [(str(_pf['id']), _pf['name']) for _pf in profiles]
+_opt_state = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos'), ('B', 'Bloqueados')]
+_opt_profile = [('', 'Todos')] + [(str(_pf['id']), _pf['name']) for _pf in profiles]
 filters = {'id': 'filter-usuarios', 'url_base': ('admin_users', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'login', 'label': 'Login', 'kind': 'text', 'value': active_filters.get('login')},
     {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
-    {'name': 'profile_id', 'label': 'Perfil', 'kind': 'select', 'value': str(active_filters.get('profile_id') or ''), 'options': _opc_perfil},
-    {'name': 'state', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('state'), 'options': _opc_situacao},
+    {'name': 'profile_id', 'label': 'Perfil', 'kind': 'select', 'value': str(active_filters.get('profile_id') or ''), 'options': _opt_profile},
+    {'name': 'state', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('state'), 'options': _opt_state},
 ]}
-_linhas = []
+_rows = []
 for _u in result['items']:
-    _linhas.append({
+    _rows.append({
         'login': _u['login'],
         'name': _u['name'],
         'profile': _u['profile_name'],
         'active': _u['active'],
-        'lockout': (u'Bloqueado até %s' % ui_helpers.formatar_data(_u['locked_until'])) if _u['locked'] else '-',
-        'last_login_at': ui_helpers.formatar_data(_u['last_login_at']),
+        'lockout': (u'Bloqueado até %s' % ui_helpers.format_date(_u['locked_until'])) if _u['locked'] else '-',
+        'last_login_at': ui_helpers.format_date(_u['last_login_at']),
         'action': {'href': URL(c='admin_users', f='form', args=[_u['id']]), 'label': 'Editar', 'description': u'Editar usuário %s' % _u['login']},
     })
 pass
-table = {'caption': u'Usuários cadastrados', 'error': error, 'rows': _linhas, 'empty_message': u'Nenhum usuário encontrado.', 'columns': [
+table = {'caption': u'Usuários cadastrados', 'error': error, 'rows': _rows, 'empty_message': u'Nenhum usuário encontrado.', 'columns': [
     {'key': 'login', 'label': 'Login', 'kind': 'mono'},
     {'key': 'name', 'label': 'Nome'},
     {'key': 'profile', 'label': 'Perfil', 'kind': 'mono'},

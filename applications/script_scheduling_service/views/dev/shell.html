@@ -1,5 +1,5 @@
 {{extend 'layout.html'}}
-{{icones = URL('static', 'img/icons.svg')}}
+{{icons = URL('static', 'img/icons.svg')}}
 
 <div class="sss-page-header">
   <h1 class="sss-page-title">Shell de desenvolvimento</h1>
@@ -11,12 +11,12 @@
   <div class="sss-card-body sss-status-list">
     {{for t in tickets:}}
     <span class="sss-status {{=t['status']['css_class']}}">
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=t['status']['icon']}}"></use></svg>
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#{{=t['status']['icon']}}"></use></svg>
       <span>{{=t['status']['label']}}</span>
     </span>
     {{pass}}
     <span class="sss-status {{=unknown_status['css_class']}}">
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=unknown_status['icon']}}"></use></svg>
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#{{=unknown_status['icon']}}"></use></svg>
       <span>{{=unknown_status['label']}}</span>
     </span>
   </div>
@@ -44,7 +44,7 @@
           <td>{{=t['environment']}}</td>
           <td>
             <span class="sss-status {{=t['status']['css_class']}}">
-              <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=t['status']['icon']}}"></use></svg>
+              <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#{{=t['status']['icon']}}"></use></svg>
               <span>{{=t['status']['label']}}</span>
             </span>
           </td>

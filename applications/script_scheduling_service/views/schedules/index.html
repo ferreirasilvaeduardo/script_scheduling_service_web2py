@@ -3,14 +3,14 @@
 # Lista de regras de agendamento (README §7; padrão de lista em docs/ADMIN_CRUD_PATTERN.md).
 # Pausar e retomar abrem components/confirm_modal.html com POST real.
 import ui_helpers
-icones = URL('static', 'img/icons.svg')
-_opc_ativo = [('', 'Todas'), ('Y', 'Ativas'), ('N', 'Pausadas')]
+icons = URL('static', 'img/icons.svg')
+_opt_active = [('', 'Todas'), ('Y', 'Ativas'), ('N', 'Pausadas')]
 filters = {'id': 'filter-schedules', 'url_base': ('schedules', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
     {'name': 'environment', 'label': 'Ambiente', 'kind': 'text', 'value': active_filters.get('environment')},
-    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opc_ativo},
+    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opt_active},
 ]}
-_colunas = ('Nome', 'Script', 'Ambiente', u'Recorrência', u'Próxima execução', u'Última execução', u'Responsável', u'Situação', u'Ações')
+_columns = ('Nome', 'Script', 'Ambiente', u'Recorrência', u'Próxima execução', u'Última execução', u'Responsável', u'Situação', u'Ações')
 page = result['page']
 total = result['total']
 total_capped = result.get('total_capped', False)
@@ -38,24 +38,24 @@ url_base = ('schedules', 'index')
       <caption class="visually-hidden">Regras de agendamento cadastradas</caption>
       <thead>
         <tr>
-          {{for _col in _colunas:}}<th scope="col">{{=_col}}</th>{{pass}}
+          {{for _col in _columns:}}<th scope="col">{{=_col}}</th>{{pass}}
         </tr>
       </thead>
       <tbody>
         {{if error:}}
         <tr>
-          <td colspan="{{=len(_colunas)}}" class="sss-table-state">
+          <td colspan="{{=len(_columns)}}" class="sss-table-state">
             <div class="alert alert-danger mb-0" role="alert">
-              <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
+              <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-alert"></use></svg>
               <span>{{=error}}</span>
             </div>
           </td>
         </tr>
         {{elif not result['items']:}}
-        <tr><td colspan="{{=len(_colunas)}}" class="sss-table-state sss-table-empty">Nenhuma regra de agendamento encontrada.</td></tr>
+        <tr><td colspan="{{=len(_columns)}}" class="sss-table-state sss-table-empty">Nenhuma regra de agendamento encontrada.</td></tr>
         {{else:}}
         {{for _r in result['items']:}}
-        {{_sit = ui_helpers.ativo_info(_r['active'])}}
+        {{_state = ui_helpers.active_info(_r['active'])}}
         <tr>
           <td>{{=_r['name']}}</td>
           <td class="sss-mono">{{=_r['script']}}</td>
@@ -65,7 +65,7 @@ url_base = ('schedules', 'index')
           <td>{{=_r['last_run_at']}}{{if _r['last_ticket_id']:}}<br><a href="{{=URL(c='tickets', f='detail', args=[_r['last_ticket_id']])}}" aria-label="Ticket #{{=_r['last_ticket_id']}} da última execução">ticket #{{=_r['last_ticket_id']}}</a>{{pass}}</td>
           <td class="sss-mono">{{=_r['responsible']}}</td>
           <td>
-            <span class="sss-status {{=_sit['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_sit['icon']}}"></use></svg><span>{{=_r['state']}}</span></span>
+            <span class="sss-status {{=_state['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#{{=_state['icon']}}"></use></svg><span>{{=_r['state']}}</span></span>
             {{if _r['reason']:}}<div class="sss-text-muted">{{=_r['reason']}}</div>{{pass}}
             {{if _r.get('warning'):}}<div class="sss-text-muted text-warning"><small>{{=_r['warning']}}</small></div>{{pass}}
           </td>

@@ -105,7 +105,7 @@ class AgentsService(object):
                 "environment": t.get("environment"),
                 "requested_by": t.get("requested_by"),
                 "started_at": t.get("started_at"),
-                "duration": ui_helpers.formatar_duracao(t.get("started_at"), now),
+                "duration": ui_helpers.format_duration(t.get("started_at"), now),
                 "heartbeat": format_age(None if hb is None else max(0, int((now - hb).total_seconds()))),
             })
         return items

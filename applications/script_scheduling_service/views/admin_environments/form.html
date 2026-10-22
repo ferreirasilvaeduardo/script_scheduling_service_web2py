@@ -3,46 +3,46 @@
 # Inclusão e edição de ambiente (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
 # Na edição o nome é somente leitura e o servidor ignora qualquer valor enviado para ele.
 import ui_helpers
-_novo = not env.get('id')
-_situacao = ui_helpers.ativo_info(env.get('active'))
-_campos = [
-    {'name': 'name', 'label': 'Nome', 'value': env.get('name'), 'error': errors.get('name'), 'required': _novo, 'maxlength': 30, 'read_only': not _novo,
+_new = not env.get('id')
+_state = ui_helpers.active_info(env.get('active'))
+_fields = [
+    {'name': 'name', 'label': 'Nome', 'value': env.get('name'), 'error': errors.get('name'), 'required': _new, 'maxlength': 30, 'read_only': not _new,
      'help': u'Letras maiúsculas, dígitos e _ (ex.: PRODUCAO). Não pode ser alterado depois de criado.'},
     {'name': 'description', 'label': u'Descrição', 'value': env.get('description'), 'error': errors.get('description'), 'maxlength': 100},
     {'name': 'connection', 'label': 'DSN', 'value': env.get('connection'), 'error': errors.get('connection'), 'maxlength': 250,
      'help': u'host:porta/serviço (ex.: db01.local:1521/svc) ou alias TNS. Sem usuário nem senha: credenciais ficam no secrets.cfg.'},
 ]
-if not _novo:
-    _desativar = env.get('active') == 'Y'
-    _qtd = env.get('active_schedules') or 0
-    if _desativar:
-        _texto_modal = u'%s Agendamentos ativos afetados: %d. Scripts homologados neste ambiente, que deixam de poder rodar nele: %d.' % (deactivation_warning, _qtd, env.get('homologated_scripts') or 0)
+if not _new:
+    _deactivate = env.get('active') == 'Y'
+    _count = env.get('active_schedules') or 0
+    if _deactivate:
+        _modal_text = u'%s Agendamentos ativos afetados: %d. Scripts homologados neste ambiente, que deixam de poder rodar nele: %d.' % (deactivation_warning, _count, env.get('homologated_scripts') or 0)
     else:
-        _texto_modal = u'O ambiente voltará a aceitar tickets e agendamentos.'
+        _modal_text = u'O ambiente voltará a aceitar tickets e agendamentos.'
     pass
-    _modal_ativo = {'id': 'modal-active', 'title': (u'Desativar ambiente %s' if _desativar else u'Reativar ambiente %s') % env['name'],
-                    'text': _texto_modal, 'trigger_label': 'Desativar' if _desativar else 'Reativar',
-                    'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
-                    'variant': 'danger' if _desativar else 'normal', 'action': URL(c='admin_environments', f='toggle_active'),
-                    'hidden_fields': dict(id=env['id'], versao=env['version'])}
+    _modal_active = {'id': 'modal-active', 'title': (u'Desativar ambiente %s' if _deactivate else u'Reativar ambiente %s') % env['name'],
+                    'text': _modal_text, 'trigger_label': 'Desativar' if _deactivate else 'Reativar',
+                    'confirm_label': u'Confirmar desativação' if _deactivate else u'Confirmar reativação',
+                    'variant': 'danger' if _deactivate else 'normal', 'action': URL(c='admin_environments', f='toggle_active'),
+                    'hidden_fields': dict(id=env['id'], version=env['version'])}
 pass
 }}
 <div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-title">{{if _novo:}}Novo ambiente{{else:}}Ambiente <span class="sss-mono">{{=env['name']}}</span>
-      <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
+    <h1 class="sss-page-title">{{if _new:}}Novo ambiente{{else:}}Ambiente <span class="sss-mono">{{=env['name']}}</span>
+      <span class="sss-status {{=_state['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_state['icon']}}"></use></svg><span>{{=_state['label']}}</span></span>{{pass}}
     </h1>
   </div>
   <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_environments', f='index')}}">Voltar à lista</a>
-    {{if not _novo:}}
-    {{modal = _modal_ativo}}
+    {{if not _new:}}
+    {{modal = _modal_active}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}
   </div>
 </div>
 
-{{if not _novo and env.get('active') == 'Y' and env.get('active_schedules'):}}
+{{if not _new and env.get('active') == 'Y' and env.get('active_schedules'):}}
 <div class="alert alert-info sss-alert" role="note">
   <span>Este ambiente tem {{=env['active_schedules']}} agendamento(s) ativo(s). {{=deactivation_warning}}</span>
 </div>
@@ -51,8 +51,8 @@ pass
 <section class="sss-card" aria-labelledby="title-form">
   <h2 class="sss-card-title" id="title-form">Dados do ambiente</h2>
   <form class="sss-card-body" method="post" action="{{=URL(c='admin_environments', f='save')}}" autocomplete="off">
-    {{=csrf_campo()}}
-    {{if not _novo:}}
+    {{=csrf_field()}}
+    {{if not _new:}}
     <input type="hidden" name="id" value="{{=env['id']}}">
     <input type="hidden" name="version" value="{{=env['version']}}">
     {{pass}}
@@ -62,17 +62,17 @@ pass
       <span>{{=general_error}}</span>
     </div>
     {{pass}}
-    {{for field in _campos:}}
+    {{for field in _fields:}}
     {{include 'components/form_field.html'}}
     {{pass}}
     <div class="sss-form-actions">
-      <button type="submit" class="btn btn-primary">{{='Incluir ambiente' if _novo else u'Salvar alterações'}}</button>
+      <button type="submit" class="btn btn-primary">{{='Incluir ambiente' if _new else u'Salvar alterações'}}</button>
       <a class="btn btn-outline-secondary" href="{{=URL(c='admin_environments', f='index')}}">Cancelar</a>
     </div>
   </form>
 </section>
 
-{{if not _novo and env.get('record'):}}
+{{if not _new and env.get('record'):}}
 {{record = env['record']}}
 {{include 'components/record.html'}}
 {{pass}}

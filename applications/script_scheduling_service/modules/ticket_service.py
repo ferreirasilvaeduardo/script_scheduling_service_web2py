@@ -213,7 +213,7 @@ def _duration(ticket, now):
     end = ticket.get("finished_at")
     if end is None and ticket.get("status") == "RUNNING":
         end = now
-    return ui_helpers.formatar_duracao(ticket.get("started_at"), end)
+    return ui_helpers.format_duration(ticket.get("started_at"), end)
 
 
 def _snapshot(ticket):
@@ -719,7 +719,7 @@ class TicketService(object):
                     info = ui_helpers.status_info(u["status"])
                     last = {"id": u["id"], "state": info["label"], "css_class": info["css_class"],
                               "icon": info["icon"],
-                              "when": u"há %s" % ui_helpers.tempo_simples((now - u["created_at"]).total_seconds())}
+                              "when": u"há %s" % ui_helpers.simple_time((now - u["created_at"]).total_seconds())}
                 cards.append(dict(s, script_group=g["script_group"], category=g["category"], questions=questions,
                                     environments=[a["name"] for a in environments], last_run=last))
             result.append({"script_group": g["script_group"], "category": g["category"], "cards": cards})
@@ -739,11 +739,11 @@ class TicketService(object):
         scope, requester = self._runs_scope(ctx)
         items = self._tickets.script_history(sid, since, scope, requester, HISTORY_LIMIT)
         groups = {"SUCCESS": "succeeded", "FAILED": "error", "CANCELLED": "cancelled"}
-        count = dict((c, 0) for c, _r in ui_helpers.SERIES_HISTORICO)
+        count = dict((c, 0) for c, _r in ui_helpers.HISTORY_SERIES)
         days = collections.OrderedDict()
         for i in range(HISTORY_DAYS - 1, -1, -1):
             day = (now - datetime.timedelta(days=i)).date()
-            days[day] = dict((c, 0) for c, _r in ui_helpers.SERIES_HISTORICO)
+            days[day] = dict((c, 0) for c, _r in ui_helpers.HISTORY_SERIES)
         durations, reasons = [], collections.Counter()
         for t in items:
             key = groups.get(t["status"], "in_progress")
@@ -769,12 +769,12 @@ class TicketService(object):
             "rate": rate,
             "rate_phrase": (u"De cada 10 vezes, %d deram certo." % int(round(rate / 10.0))) if rate is not None
             else u"Ainda não há execuções terminadas no período.",
-            "typical_duration": (u"cerca de %s" % ui_helpers.tempo_simples(median)) if median is not None else u"-",
-            "max_duration": ui_helpers.tempo_simples(durations[-1]) if durations else u"-",
-            "reasons": [{"reason": m, "name": ui_helpers.NOMES_MOTIVO.get(m, m), "quantity": q}
+            "typical_duration": (u"cerca de %s" % ui_helpers.simple_time(median)) if median is not None else u"-",
+            "max_duration": ui_helpers.simple_time(durations[-1]) if durations else u"-",
+            "reasons": [{"reason": m, "name": ui_helpers.REASON_NAMES.get(m, m), "quantity": q}
                         for m, q in sorted(reasons.items(), key=lambda x: (-x[1], x[0]))],
             "days": series,
-            "chart": ui_helpers.barras_empilhadas(series),
+            "chart": ui_helpers.stacked_bars(series),
             "limit_warning": (u"Mostrando os %d pedidos mais recentes." % HISTORY_LIMIT)
             if len(items) >= HISTORY_LIMIT else None,
             "list_filter": {"script": sid, "created_from": since.strftime("%Y-%m-%d")},
@@ -818,7 +818,7 @@ class TicketService(object):
             return empty
         result = self._tickets.list(filters=repo_filters, page=page, size=size,
                                          environment_scope=scope)
-        info = ui_helpers.paginacao_info(page, size, result["total"],
+        info = ui_helpers.pagination_info(page, size, result["total"],
                                          result.get("total_capped", False), len(result["items"]))
         if not result["items"] and info["page"] != result["page"]:
             result = self._tickets.list(filters=repo_filters, page=info["page"], size=size,
@@ -833,10 +833,10 @@ class TicketService(object):
                 "environment": t["environment"],
                 "status": t["status"],
                 "status_reason": t.get("status_reason"),
-                "reason_description": ui_helpers.descricao_motivo(t.get("status_reason")),
+                "reason_description": ui_helpers.reason_description(t.get("status_reason")),
                 "cancel_requested": t.get("cancel_requested") == "Y",
                 "priority": t["priority"],
-                "requested_by": ui_helpers.ator_visivel(t["requested_by"], ctx),
+                "requested_by": ui_helpers.visible_actor(t["requested_by"], ctx),
                 "source": "agendamento" if t.get("schedule_id") is not None else "manual",
                 "created_at": t.get("created_at"),
                 "started_at": t.get("started_at"),
@@ -926,11 +926,11 @@ class TicketService(object):
             "environment": ticket["environment"],
             "status": status,
             "status_reason": ticket.get("status_reason"),
-            "reason_description": ui_helpers.descricao_motivo(ticket.get("status_reason")),
+            "reason_description": ui_helpers.reason_description(ticket.get("status_reason")),
             "return_code": ticket.get("return_code"),
             "cancel_requested": cancel_requested,
             "priority": ticket["priority"],
-            "requested_by": ui_helpers.ator_visivel(ticket["requested_by"], ctx),
+            "requested_by": ui_helpers.visible_actor(ticket["requested_by"], ctx),
             "source": "agendamento" if ticket.get("schedule_id") is not None else "manual",
             "schedule_id": ticket.get("schedule_id"),
             "agent_id": ticket.get("agent_id"),
@@ -942,8 +942,8 @@ class TicketService(object):
             "finished_at": ticket.get("finished_at"),
             "duration": _duration(ticket, now),
             # CR-004 U2 (README §5.7): frase "o que aconteceu / o que fazer" e barra de etapas.
-            "explanation": ui_helpers.explicacao_ticket(ticket, now, timeout_s),
-            "steps": ui_helpers.etapas_ticket(ticket, now),
+            "explanation": ui_helpers.ticket_explanation(ticket, now, timeout_s),
+            "steps": ui_helpers.ticket_steps(ticket, now),
             "log_truncated": ticket.get("log_truncated") == "Y",
             "snapshot": snapshot,
             "display_argv": argv,
@@ -951,9 +951,9 @@ class TicketService(object):
             "answers": self._display_answers(ticket["id"], snap),
             "parent": parent,
             "children": children,
-            "record": ui_helpers.registro(ticket, ctx),
+            "record": ui_helpers.record_info(ticket, ctx),
             # CR-012 (README §8.13): quadro Saida, com a mesma regra de leitura do log (ticket visivel).
-            "output": ui_helpers.quadro_saida(self._tickets.output_get(ticket["id"]), now),
+            "output": ui_helpers.output_panel(self._tickets.output_get(ticket["id"]), now),
             "can_cancel": can_cancel,
             "can_rerun": can_rerun,
         }

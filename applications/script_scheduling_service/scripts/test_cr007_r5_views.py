@@ -43,12 +43,12 @@ class TestViewsCR007(unittest.TestCase):
     def test_registro_nao_inclui_ator_oculto_no_html(self):
         reg = {"created_at": datetime.datetime(2026, 10, 17), "created_by": "editor.privado",
                "updated_at": datetime.datetime(2026, 10, 17), "updated_by": "operador"}
-        html = _render("components/record.html", record=ui_helpers.registro(reg, {"login": "operador"}))
+        html = _render("components/record.html", record=ui_helpers.record_info(reg, {"login": "operador"}))
         self.assertNotIn("editor.privado", html)
         self.assertNotIn("operador", html)
         self.assertIn("outra pessoa", html)
         self.assertIn("você", html)
-        html = _render("components/record.html", record=ui_helpers.registro(reg, {"is_admin": True}))
+        html = _render("components/record.html", record=ui_helpers.record_info(reg, {"is_admin": True}))
         self.assertIn("editor.privado", html)
 
     def test_diagnosticos_aparecem_sem_agentes_e_escapam_conteudo(self):

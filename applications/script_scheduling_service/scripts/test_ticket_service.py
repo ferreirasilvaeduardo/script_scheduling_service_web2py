@@ -585,7 +585,7 @@ class TestTicketQuery(_BaseTicket):
     def test_detalhe_campos_e_descricao_motivo(self):
         det = self.svc.detail(self.ctx["admin"], "30")
         self.assertEqual((det["status"], det["status_reason"], det["return_code"]), ("FAILED", "TIMEOUT", -3))
-        self.assertEqual(det["reason_description"], ui_helpers.descricao_motivo("TIMEOUT"))
+        self.assertEqual(det["reason_description"], ui_helpers.reason_description("TIMEOUT"))
         self.assertNotEqual(det["duration"], "-")
         self.assertEqual(self.svc.detail(self.ctx["admin"], "25")["parent"]["id"], 17)
         self.assertEqual([f["id"] for f in self.svc.detail(self.ctx["admin"], "17")["children"]], [25])
@@ -630,20 +630,20 @@ class TestTicketOutput(_BaseTicket):
 
     def test_gravando_ha_mais_de_uma_hora_e_tamanho_legivel(self):
         now = datetime.datetime(2026, 10, 20, 12, 0, 0)
-        recent = ui_helpers.quadro_saida({"state": "WRITING", "agent_id": "a1",
+        recent = ui_helpers.output_panel({"state": "WRITING", "agent_id": "a1",
                                            "created_at": now - datetime.timedelta(minutes=5)}, now)
         self.assertEqual((recent["css_class"], recent["can_download"]), ("info", False))
         self.assertIn(u"em preparação", recent["happened"])
-        stop = ui_helpers.quadro_saida({"state": "WRITING", "agent_id": "a1",
+        stop = ui_helpers.output_panel({"state": "WRITING", "agent_id": "a1",
                                           "created_at": now - datetime.timedelta(hours=2)}, now)
         self.assertIn(u"não foi concluída", stop["happened"])
         self.assertIn(u"agente a1", stop["todo"])
-        bytes_ = ui_helpers.quadro_saida({"state": "EXCEEDED", "reason": "BYTES", "agent_id": "a1"}, now)
+        bytes_ = ui_helpers.output_panel({"state": "EXCEEDED", "reason": "BYTES", "agent_id": "a1"}, now)
         self.assertIn(u"limite de tamanho", bytes_["happened"])
-        self.assertIsNone(ui_helpers.quadro_saida(None, now))
-        self.assertEqual([ui_helpers.tamanho_legivel(n) for n in (None, 512, 12595, 4718592)],
+        self.assertIsNone(ui_helpers.output_panel(None, now))
+        self.assertEqual([ui_helpers.readable_size(n) for n in (None, 512, 12595, 4718592)],
                          [u"-", u"512 bytes", u"12,3 KB", u"4,5 MB"])
-        one = ui_helpers.quadro_saida({"state": "AVAILABLE", "file_count": 1, "size_bytes": 10}, now)
+        one = ui_helpers.output_panel({"state": "AVAILABLE", "file_count": 1, "size_bytes": 10}, now)
         self.assertIn(u"1 arquivo ", one["happened"])
 
     def test_download_em_fatias_so_disponivel_e_no_escopo(self):

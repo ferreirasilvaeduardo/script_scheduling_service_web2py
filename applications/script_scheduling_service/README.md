@@ -589,7 +589,7 @@ Responde às duas perguntas mais comuns do administrador, sem abrir perfil por p
 | `ADMIN` | `VIEW_AUDIT` | Auditoria | Consultar a trilha de auditoria e os agentes |
 
 * O seed (FAKE e `init_db.py`) grava os nomes e as finalidades **exatamente** como nesta tabela, com acentuação. A matriz de perfis exibe esses textos.
-* **Não existe tela de cadastro de funcionalidades.** O catálogo é fixo: cada código está ligado a rotas e guardas no código (`ui_menu.py`, `_exigir_func`), então um código novo sem rota não teria efeito. Novas funcionalidades entram por change request, com seed e código no mesmo pacote.
+* **Não existe tela de cadastro de funcionalidades.** O catálogo é fixo: cada código está ligado a rotas e guardas no código (`ui_menu.py`, `_require_func`), então um código novo sem rota não teria efeito. Novas funcionalidades entram por change request, com seed e código no mesmo pacote.
 * A associação perfil × funcionalidade (`tbsss_profile_feature`) é editada **somente** na aba Funcionalidades da matriz de permissões (§4.3.B.1), no mesmo POST de ambientes e scripts.
 
 #### D.1 Perfis e Usuários Padrão Homologados (Seed Inicial)
@@ -775,7 +775,7 @@ Os filtros da lista de tickets usam os mesmos nomes. A auditoria, o CSV e o banc
 | `CANCEL_USER` | "A execução foi cancelada a pedido." | — |
 | Motivo desconhecido | "Terminou com um motivo que o sistema não conhece ({código})." | "Avise o suporte com o número deste ticket." |
 
-O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas views e testado por `test_ui_helpers.py`. Os textos técnicos atuais de `descricao_motivo` continuam existindo para o suporte e aparecem no detalhe como "Detalhe técnico".
+O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas views e testado por `test_ui_helpers.py`. Os textos técnicos atuais de `reason_description` continuam existindo para o suporte e aparecem no detalhe como "Detalhe técnico".
 
 ### 5.3 Prioridade
 
@@ -917,7 +917,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
 
    * Um ticket cancelado ainda na fila mostra a etapa "Rodando" como "não chegou a rodar" e a etapa final como "Cancelado".
    * A etapa atual de um ticket `RUNNING` mostra "há {tempo}".
-3. Depois disso vêm, como hoje: resumo, linha do tempo, comando executado, respostas, reexecuções e log. A linha "Detalhe técnico" do resumo traz o status, o `status_reason`, o `return_code` e a descrição técnica (`descricao_motivo`). O bloco do snapshot mostra o **arquivo do script** (`path_file`, snapshot v5), com o caminho completo para todos (CR-005, D8). Logo depois do resumo vem o quadro **Registro** (§10, CR-006): quem criou o pedido e quando, e a última alteração, que normalmente é a última mudança de situação feita pelo agente.
+3. Depois disso vêm, como hoje: resumo, linha do tempo, comando executado, respostas, reexecuções e log. A linha "Detalhe técnico" do resumo traz o status, o `status_reason`, o `return_code` e a descrição técnica (`reason_description`). O bloco do snapshot mostra o **arquivo do script** (`path_file`, snapshot v5), com o caminho completo para todos (CR-005, D8). Logo depois do resumo vem o quadro **Registro** (§10, CR-006): quem criou o pedido e quando, e a última alteração, que normalmente é a última mudança de situação feita pelo agente.
 4. **Quadro Saída (CR-012):** depois do log, quando o ticket tem linha em `tbsss_ticket_output`, com a situação e o botão **Baixar** (§8.13).
 5. **Botões com o efeito escrito:** "Cancelar este pedido" (com a consequência no modal) e "Rodar de novo com as mesmas respostas" (reexecução, §5.5).
 6. A página continua se atualizando sozinha enquanto o ticket não termina, e a frase e a barra acompanham. Quando o polling do log (§8.10) recebe uma situação diferente da que a página mostrou ao abrir, o visualizador para, mostra "A situação mudou; atualizando a página…" e recarrega a página após 1,5 s.
@@ -945,7 +945,7 @@ O topo do detalhe (`tickets/detail/<id>`) responde "o que está acontecendo?" an
   * total de pedidos e quantos **deram certo**, **deram erro**, **foram cancelados** e ainda estão **esperando ou rodando**;
   * **taxa de acerto**: deram certo ÷ terminados, em porcentagem inteira, com a frase "De cada 10 vezes, {n} deram certo";
   * **duração típica** (mediana) e **mais demorada**, só dos que terminaram com `started_at`, em linguagem simples ("cerca de 4 minutos");
-  * **gráfico de barras por dia**, empilhado por situação, como SVG gerado no servidor (`ui_helpers.barras_empilhadas`). As cores vêm por classe CSS e não há `style=` inline:
+  * **gráfico de barras por dia**, empilhado por situação, como SVG gerado no servidor (`ui_helpers.stacked_bars`). As cores vêm por classe CSS e não há `style=` inline:
     * quatro séries, sempre na mesma ordem e com a mesma cor: Deu certo, Deu erro, Cancelado e Esperando ou rodando;
     * as cores são tokens de `static/css/sss.css`, com valores próprios para o modo escuro:
 
@@ -1946,7 +1946,7 @@ Canal opcional para o script devolver arquivos ao usuário. O zip vai para o ban
 * **Retenção no disco:** pastas que ficaram (`EXCEEDED`, `FAILED`, abandono) são removidas pelo `purge.py` depois de `output_retention_days` (§11.3).
 * **Sem mascaramento:** o conteúdo da saída não passa pelo mascarador (risco aceito no §14).
 * **Download:** `tickets/output/<id>`, `GET`, com a mesma regra de leitura do log do ticket (§4.3.C). Só com situação `AVAILABLE`; resposta `application/zip`, `Content-Disposition: attachment; filename="ticket_<id>_saida.zip"`, `X-Content-Type-Options: nosniff`, `Cache-Control: no-store` e `Content-Length` (o tamanho gravado), lida do BLOB em fatias de 256 KiB (`ticket_service.output_chunks`). Uma falha de leitura no meio encerra a resposta antes do tamanho anunciado, e o navegador acusa o download incompleto. Sem auditoria (consulta); o download fica no log da aplicação (`SAIDA_BAIXAR`).
-* **Quadro Saída no detalhe do ticket (§5.7; `ui_helpers.quadro_saida`, mensagem em duas partes):** o nó web não conhece os limites nem a retenção de cada agente, então as mensagens não citam números; o tamanho aparece em bytes, KB ou MB (`ui_helpers.tamanho_legivel`). O quadro nunca leva o conteúdo nem o caminho da pasta.
+* **Quadro Saída no detalhe do ticket (§5.7; `ui_helpers.output_panel`, mensagem em duas partes):** o nó web não conhece os limites nem a retenção de cada agente, então as mensagens não citam números; o tamanho aparece em bytes, KB ou MB (`ui_helpers.readable_size`). O quadro nunca leva o conteúdo nem o caminho da pasta.
 
   | Situação | Mostra |
   |---|---|
@@ -2062,8 +2062,8 @@ END;
   * **Tickets e agendamentos:** `tickets.created_by` é o login do solicitante na criação manual e na reexecução, e `SYSTEM:<agent_id>` no desdobro; o `ticket_resp` recebe o mesmo `created_by` do ticket. `agendamentos.created_by` guarda o criador original; `user_id` continua sendo quem salvou por último (§7.6).
   * As quatro colunas **não** entram na `version` do formulário, no `esperado` do repositório nem no `detail` da auditoria. A trilha completa continua na auditoria (§4.4). As colunas guardam só a criação e a **última** alteração, mas não são purgadas.
   * **Na tela:** quadro **Registro** no formulário de edição de ambientes, perfis, usuários, parâmetros, scripts e agendamentos, e no detalhe do ticket (§5.7). Ele mostra "Criado em {data} por {ator}" e "Última alteração em {data} por {ator}" ou "Nunca alterado". `SYSTEM:<agent_id>` aparece como "Sistema (agente {agent_id})", `SYSTEM:init_db` como "Sistema (instalação)", `SYSTEM:purge` como "Sistema (limpeza)" e `SYSTEM:seed` como "Sistema (dados de demonstração)". As listas não mostram essas colunas.
-  * **Quem vê o login (CR-007, D6):** o login do ator só aparece para quem tem `VIEW_AUDIT` ou é administrador. Para os demais, o ator aparece como "você" (quando é o próprio usuário), "Sistema (…)" (atores do sistema) ou "outra pessoa". As datas aparecem para todos. O mascaramento é feito no servidor (`ui_helpers.registro(reg, ctx)`); o login de terceiros nunca vai para o HTML de quem não pode vê-lo.
-  * **Solicitante e responsável (CR-008, E5/R-35):** a mesma regra vale para o **solicitante** do ticket ("solicitado por" no detalhe e a coluna da lista de tickets, inclusive o fragmento `.load`) e para o **responsável** da regra de agendamento (lista, formulário, aviso de outro responsável e agenda). O service entrega o texto já mascarado por `ui_helpers.ator_visivel(login, ctx)`: o login para quem tem `VIEW_AUDIT` ou é administrador; "você" para o próprio usuário; "Sistema (…)" para atores do sistema; "outra pessoa" para os demais. Os filtros por solicitante continuam aceitando o login digitado (quem digita já o conhece) e não revelam o login nos resultados. Ficam fora da regra as telas que só existem para gerir pessoas (`MANAGE_USERS`, e a lista de usuários afetados no formulário de perfis, `MANAGE_PROFILES`), em que o login é o próprio dado cadastrado.
+  * **Quem vê o login (CR-007, D6):** o login do ator só aparece para quem tem `VIEW_AUDIT` ou é administrador. Para os demais, o ator aparece como "você" (quando é o próprio usuário), "Sistema (…)" (atores do sistema) ou "outra pessoa". As datas aparecem para todos. O mascaramento é feito no servidor (`ui_helpers.record_info(rec, ctx)`); o login de terceiros nunca vai para o HTML de quem não pode vê-lo.
+  * **Solicitante e responsável (CR-008, E5/R-35):** a mesma regra vale para o **solicitante** do ticket ("solicitado por" no detalhe e a coluna da lista de tickets, inclusive o fragmento `.load`) e para o **responsável** da regra de agendamento (lista, formulário, aviso de outro responsável e agenda). O service entrega o texto já mascarado por `ui_helpers.visible_actor(login, ctx)`: o login para quem tem `VIEW_AUDIT` ou é administrador; "você" para o próprio usuário; "Sistema (…)" para atores do sistema; "outra pessoa" para os demais. Os filtros por solicitante continuam aceitando o login digitado (quem digita já o conhece) e não revelam o login nos resultados. Ficam fora da regra as telas que só existem para gerir pessoas (`MANAGE_USERS`, e a lista de usuários afetados no formulário de perfis, `MANAGE_PROFILES`), em que o login é o próprio dado cadastrado.
 * **Política de exclusão:**
   * **Entidades mestras não são excluídas, apenas desativadas** (`active = 'N'`): ambientes, perfis, funcionalidades, usuários, scripts, parâmetros e agendamentos.
   * **Associações podem ser removidas fisicamente:** `perfil_func`, `perfil_amb`, `perfil_scr`, `script_amb` e `script_param`.

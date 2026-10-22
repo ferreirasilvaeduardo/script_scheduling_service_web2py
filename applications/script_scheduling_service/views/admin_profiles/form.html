@@ -2,47 +2,47 @@
 {{
 # Inclusão e edição de perfil (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
 import ui_helpers
-_novo = not profile.get('id')
-_situacao = ui_helpers.ativo_info(profile.get('active'))
-_campos = [
+_new = not profile.get('id')
+_state = ui_helpers.active_info(profile.get('active'))
+_fields = [
     {'name': 'name', 'label': 'Nome', 'value': profile.get('name'), 'error': errors.get('name'), 'required': True, 'maxlength': 30,
      'help': u'Letras maiúsculas, dígitos e _ (ex.: OPERATOR_PROD).'},
     {'name': 'description', 'label': u'Descrição', 'value': profile.get('description'), 'error': errors.get('description'), 'maxlength': 100},
 ]
-if not _novo:
-    _desativar = profile.get('active') == 'Y'
-    if _desativar:
+if not _new:
+    _deactivate = profile.get('active') == 'Y'
+    if _deactivate:
         _total = profile.get('active_users') or 0
         _logins = profile.get('affected_users') or []
-        _texto_modal = u'%s Usuários ativos afetados: %d' % (deactivation_warning, _total)
+        _modal_text = u'%s Usuários ativos afetados: %d' % (deactivation_warning, _total)
         if _logins:
-            _texto_modal += u' (%s%s)' % (u', '.join(_logins), (u' e outros %d' % (_total - len(_logins))) if _total > len(_logins) else u'')
+            _modal_text += u' (%s%s)' % (u', '.join(_logins), (u' e outros %d' % (_total - len(_logins))) if _total > len(_logins) else u'')
         pass
-        _texto_modal += u'.'
+        _modal_text += u'.'
         if profile.get('own'):
-            _texto_modal = u'Você não pode desativar o seu próprio perfil.'
+            _modal_text = u'Você não pode desativar o seu próprio perfil.'
         pass
     else:
-        _texto_modal = u'Os usuários do perfil voltarão a ter acesso conforme a matriz de permissões.'
+        _modal_text = u'Os usuários do perfil voltarão a ter acesso conforme a matriz de permissões.'
     pass
-    _modal_ativo = {'id': 'modal-active', 'title': (u'Desativar perfil %s' if _desativar else u'Reativar perfil %s') % profile['name'],
-                    'text': _texto_modal, 'trigger_label': 'Desativar' if _desativar else 'Reativar',
-                    'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
-                    'variant': 'danger' if _desativar else 'normal', 'action': URL(c='admin_profiles', f='toggle_active'),
-                    'hidden_fields': dict(id=profile['id'], versao=profile['version'])}
+    _modal_active = {'id': 'modal-active', 'title': (u'Desativar perfil %s' if _deactivate else u'Reativar perfil %s') % profile['name'],
+                    'text': _modal_text, 'trigger_label': 'Desativar' if _deactivate else 'Reativar',
+                    'confirm_label': u'Confirmar desativação' if _deactivate else u'Confirmar reativação',
+                    'variant': 'danger' if _deactivate else 'normal', 'action': URL(c='admin_profiles', f='toggle_active'),
+                    'hidden_fields': dict(id=profile['id'], version=profile['version'])}
 pass
 }}
 <div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-title">{{if _novo:}}Novo perfil{{else:}}Perfil <span class="sss-mono">{{=profile['name']}}</span>
-      <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
+    <h1 class="sss-page-title">{{if _new:}}Novo perfil{{else:}}Perfil <span class="sss-mono">{{=profile['name']}}</span>
+      <span class="sss-status {{=_state['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_state['icon']}}"></use></svg><span>{{=_state['label']}}</span></span>{{pass}}
     </h1>
   </div>
   <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_profiles', f='index')}}">Voltar à lista</a>
-    {{if not _novo:}}
+    {{if not _new:}}
     <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_profiles', f='matrix', args=[profile['id']])}}">Permissões</a>
-    {{modal = _modal_ativo}}
+    {{modal = _modal_active}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}
   </div>
@@ -51,8 +51,8 @@ pass
 <section class="sss-card" aria-labelledby="title-form">
   <h2 class="sss-card-title" id="title-form">Dados do perfil</h2>
   <form class="sss-card-body" method="post" action="{{=URL(c='admin_profiles', f='save')}}" autocomplete="off">
-    {{=csrf_campo()}}
-    {{if not _novo:}}
+    {{=csrf_field()}}
+    {{if not _new:}}
     <input type="hidden" name="id" value="{{=profile['id']}}">
     <input type="hidden" name="version" value="{{=profile['version']}}">
     {{pass}}
@@ -62,7 +62,7 @@ pass
       <span>{{=general_error}}</span>
     </div>
     {{pass}}
-    {{for field in _campos:}}
+    {{for field in _fields:}}
     {{include 'components/form_field.html'}}
     {{pass}}
     <div class="form-check mb-3">
@@ -71,13 +71,13 @@ pass
       <div class="form-text" id="field-is_admin-help">Dispensa funcionalidades, ambientes e scripts; não dispensa a homologação nem as flags de ativo. O sistema nunca fica sem administrador ativo.</div>
     </div>
     <div class="sss-form-actions">
-      <button type="submit" class="btn btn-primary">{{='Incluir perfil' if _novo else u'Salvar alterações'}}</button>
+      <button type="submit" class="btn btn-primary">{{='Incluir perfil' if _new else u'Salvar alterações'}}</button>
       <a class="btn btn-outline-secondary" href="{{=URL(c='admin_profiles', f='index')}}">Cancelar</a>
     </div>
   </form>
 </section>
 
-{{if not _novo and profile.get('record'):}}
+{{if not _new and profile.get('record'):}}
 {{record = profile['record']}}
 {{include 'components/record.html'}}
 {{pass}}

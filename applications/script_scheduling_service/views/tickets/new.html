@@ -2,8 +2,8 @@
 {{
 # Disparo de script em 3 etapas (script -> ambiente -> questionário), renderizado pelo servidor.
 # Os IDs e nomes recebidos são reautorizados no servidor a cada requisição (README §4.3.A).
-icones = URL('static', 'img/icons.svg')
-_etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
+icons = URL('static', 'img/icons.svg')
+_steps = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 }}
 <div class="sss-page-header">
   <h1 class="sss-page-title">Disparar script</h1>
@@ -11,9 +11,9 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 </div>
 
 <ol class="sss-stages" aria-label="Etapas do disparo">
-  {{for _num, _rotulo in _etapas:}}
+  {{for _num, _label in _steps:}}
   <li class="sss-stage{{=' sss-stage-current' if _num == step else (' sss-stage-done' if _num < step else '')}}"{{if _num == step:}} aria-current="step"{{pass}}>
-    <span class="sss-stage-num">{{=_num}}</span> <span>{{=_rotulo}}</span>
+    <span class="sss-stage-num">{{=_num}}</span> <span>{{=_label}}</span>
   </li>
   {{pass}}
 </ol>
@@ -86,13 +86,13 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 <section class="sss-card" aria-labelledby="title-questionnaire">
   <h2 class="sss-card-title" id="title-questionnaire">3. Responda às perguntas.</h2>
   <form class="sss-card-body" id="form-ticket" method="post" action="{{=URL(c='tickets', f='create')}}" autocomplete="off">
-    {{=csrf_campo()}}
+    {{=csrf_field()}}
     <input type="hidden" name="script_id" value="{{=form['script']['id']}}">
     <input type="hidden" name="environment" value="{{=form['environment']['name']}}">
     {{if rerun_of:}}
     <input type="hidden" name="rerun_of" value="{{=rerun_of}}">
     <div class="alert alert-info sss-alert" role="note">
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-alert"></use></svg>
       <span>Reexecução do <a href="{{=URL(c='tickets', f='detail', args=[rerun_of])}}">ticket #{{=rerun_of}}</a>. As respostas originais foram carregadas; valores sigilosos não são exibidos e precisam ser informados novamente, se necessário.</span>
     </div>
     {{pass}}
@@ -138,7 +138,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 
     <div class="sss-preview" x-data="preview" data-url="{{=URL(c='tickets', f='preview')}}">
       <button type="button" class="btn btn-sm btn-outline-secondary" @click="load" :disabled="loading">
-        <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-eye"></use></svg>
+        <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-eye"></use></svg>
         <span>Pré-visualizar comando</span>
       </button>
       <div class="sss-preview-result" aria-live="polite">
@@ -158,7 +158,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 
     <div class="sss-confirmation sss-form-actions" x-data="confirmation" @keydown.escape.window="close">
       <button type="button" class="btn btn-primary" x-ref="trigger" data-summary-trigger @click="open">
-        <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-play"></use></svg>
+        <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-play"></use></svg>
         <span>Criar ticket</span>
       </button>
       <div class="modal sss-modal" :class="modalClass" role="dialog" aria-modal="true" aria-labelledby="confirm-ticket-title" aria-describedby="confirm-ticket-text" tabindex="-1" @click.self="close">
@@ -171,7 +171,7 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
             <div class="modal-body" id="confirm-ticket-text">
               {{if form['environment']['production']:}}
               <div class="alert alert-danger sss-alert sss-warning-production" role="alert">
-                <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
+                <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-alert"></use></svg>
                 <strong>Ambiente de produção</strong>
               </div>
               {{pass}}

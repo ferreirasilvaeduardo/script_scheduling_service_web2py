@@ -61,8 +61,8 @@ _d = data
       <li>
         <strong class="sss-mono">{{=_s['name']}}</strong>{{if _s['description']:}}<span class="sss-text-muted"> — {{=_s['description']}}</span>{{pass}}
         <div class="sss-actions-inline">
-          {{for _amb in _s['environments']:}}
-          <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='tickets', f='new', vars=dict(script_id=_s['id'], environment=_amb))}}">Rodar em {{=_amb}}</a>
+          {{for _env in _s['environments']:}}
+          <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='tickets', f='new', vars=dict(script_id=_s['id'], environment=_env))}}">Rodar em {{=_env}}</a>
           {{pass}}
         </div>
       </li>

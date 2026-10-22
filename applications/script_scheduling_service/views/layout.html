@@ -11,19 +11,19 @@
   <link rel="stylesheet" href="{{=URL('static', 'css/sss.css')}}">
 </head>
 <body class="sss-body">
-{{icones = URL('static', 'img/icons.svg')}}
+{{icons = URL('static', 'img/icons.svg')}}
 <a class="sss-skip-link" href="#content">Pular para o conteúdo</a>
 
 {{if response.sss_env != 'PROD':}}
 <div class="sss-env-banner" role="note">
-  <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
+  <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-alert"></use></svg>
   <span>Ambiente {{=response.sss_env}} — dados e execuções não produtivos</span>
 </div>
 {{pass}}
 
 <header class="sss-header">
   <a class="sss-brand" href="{{=URL(c='default', f='index')}}">
-    <svg class="sss-icon sss-icon-lg" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-logo"></use></svg>
+    <svg class="sss-icon sss-icon-lg" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-logo"></use></svg>
     <span>SSS</span>
     <span class="sss-brand-name">Script Scheduling Service</span>
   </a>
@@ -39,7 +39,7 @@
           {{else:}}
           <a class="sss-nav-link" href="{{=URL(c=item['route'][0], f=item['route'][1])}}">
           {{pass}}
-            <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=item['icon']}}"></use></svg>
+            <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#{{=item['icon']}}"></use></svg>
             <span>{{=item['label']}}</span>
           </a>
         </li>
@@ -52,14 +52,14 @@
   {{if _sss_ctx:}}
   <div class="sss-user">
     <span class="sss-user-id">
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-users"></use></svg>
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-users"></use></svg>
       <span>{{=_sss_ctx['login']}}</span>
       <span class="sss-user-profile">{{=_sss_ctx['profile_name']}}</span>
     </span>
     <a class="btn btn-sm btn-outline-light" href="{{=URL(c='default', f='permissions')}}">O que eu posso fazer</a>
     <a class="btn btn-sm btn-outline-light" href="{{=URL(c='default', f='my_password')}}">Minha senha</a>
     <form method="post" action="{{=URL(c='default', f='logout')}}" class="sss-user-logout">
-      {{=csrf_campo()}}
+      {{=csrf_field()}}
       <button type="submit" class="btn btn-sm btn-outline-light">Sair</button>
     </form>
   </div>
@@ -68,7 +68,7 @@
 
 <main id="content" class="sss-main" tabindex="-1">
   {{import ui_helpers
-  alert = ui_helpers.alerta_info(response.flash)}}
+  alert = ui_helpers.alert_info(response.flash)}}
   {{include 'components/alert.html'}}
   {{include}}
 </main>
@@ -78,7 +78,7 @@
     <div class="sss-toast" :class="t.classValue" role="status">
       <span class="sss-toast-msg" x-text="t.message"></span>
       <button type="button" class="sss-toast-close" aria-label="Fechar notificação" @click="close">
-        <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-close"></use></svg>
+        <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-close"></use></svg>
       </button>
     </div>
   </template>
@@ -86,7 +86,7 @@
 
 <footer class="sss-footer">
   <span>Script Scheduling Service</span>
-  <span>Ambiente <strong>{{=response.sss_env}}</strong> · Versão {{=response.sss_versao}}</span>
+  <span>Ambiente <strong>{{=response.sss_env}}</strong> · Versão {{=response.sss_version}}</span>
 </footer>
 
 <script defer src="{{=URL('static', 'js/app/sss.js')}}"></script>

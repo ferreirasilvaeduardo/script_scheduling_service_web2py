@@ -63,7 +63,7 @@ class TestRecordInServices(unittest.TestCase):
     def test_formularios_de_inclusao_sem_registro_e_de_edicao_com_as_quatro_colunas(self):
         for name, (svc, rid, read) in self.services.items():
             self.assertIsNone(svc.form(self.ctx)["record"], name)
-            self.assertEqual(svc.form(self.ctx, str(rid))["record"], ui_helpers.registro(read(), self.ctx), name)
+            self.assertEqual(svc.form(self.ctx, str(rid))["record"], ui_helpers.record_info(read(), self.ctx), name)
             self.assertEqual(svc.form(self.ctx, str(rid))["record"]["created_by"], "SYSTEM:seed", name)
 
     def test_registro_sem_auditoria_nos_servicos_e_aviso_de_pausa(self):
@@ -100,12 +100,12 @@ class TestRecordInServices(unittest.TestCase):
 
     def test_agendamento_e_ticket(self):
         rule = self.schedules.form(self.ctx, "5")["rule"]
-        self.assertEqual(rule["record"], ui_helpers.registro(self.r("schedules").get(5), self.ctx))
+        self.assertEqual(rule["record"], ui_helpers.record_info(self.r("schedules").get(5), self.ctx))
         self.assertEqual(rule["record"]["created_by"], "SYSTEM:seed")
         self.assertEqual(rule["record"]["updated_by"], "admin")
         detail = self.ticket.detail(self.ctx, 17)
         raw = self.r("tickets").get(17)
-        self.assertEqual(detail["record"], ui_helpers.registro(raw, self.ctx))
+        self.assertEqual(detail["record"], ui_helpers.record_info(raw, self.ctx))
         self.assertTrue(detail["record"]["updated_by"].startswith("SYSTEM:agt-"))
 
 

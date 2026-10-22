@@ -1,7 +1,7 @@
 {{extend 'layout.html'}}
 {{
 # Rotinas disponíveis (README §5.8, CR-004 T2): só leitura. A busca filtra no navegador (buscaScript).
-icones = URL('static', 'img/icons.svg')
+icons = URL('static', 'img/icons.svg')
 }}
 <div class="sss-page-header">
   <h1 class="sss-page-title">Rotinas disponíveis</h1>
@@ -33,13 +33,13 @@ icones = URL('static', 'img/icons.svg')
           </p>
           <p class="mb-2"><strong>Última execução:</strong>
             {{if _c['last_run']:}}
-            <a href="{{=URL(c='tickets', f='detail', args=[_c['last_run']['id']])}}"><span class="sss-status {{=_c['last_run']['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_c['last_run']['icon']}}"></use></svg><span>{{=_c['last_run']['state']}}</span></span></a>
+            <a href="{{=URL(c='tickets', f='detail', args=[_c['last_run']['id']])}}"><span class="sss-status {{=_c['last_run']['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#{{=_c['last_run']['icon']}}"></use></svg><span>{{=_c['last_run']['state']}}</span></span></a>
             <span class="sss-text-muted">{{=_c['last_run']['when']}}</span>
             {{else:}}Ainda não rodou{{pass}}
           </p>
           <div class="sss-actions-inline">
-            {{for _amb in _c['environments']:}}
-            <a class="btn btn-sm btn-primary" href="{{=URL(c='tickets', f='new', vars=dict(script_id=_c['id'], environment=_amb))}}">Rodar em {{=_amb}}</a>
+            {{for _env in _c['environments']:}}
+            <a class="btn btn-sm btn-primary" href="{{=URL(c='tickets', f='new', vars=dict(script_id=_c['id'], environment=_env))}}">Rodar em {{=_env}}</a>
             {{pass}}
             <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='history', args=[_c['id']])}}">Ver histórico</a>
           </div>

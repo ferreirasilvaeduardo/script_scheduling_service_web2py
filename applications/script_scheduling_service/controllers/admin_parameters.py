@@ -5,164 +5,164 @@ Regras ficam em modules/admin_parameters_service.py; CSRF e Origin de todo POST 
 models/10_security.py. O editor de opcoes do cliente e conveniencia: o servidor revalida tudo.
 """
 import admin_crud
-import admin_parameters_service as servico
+import admin_parameters_service as service
 import ui_helpers
 from admin_crud import AccessDenied, OperationDenied
 from repo_errors import RepoConflict, RepoError, RepoNotFound
 
 _FUNC = "MANAGE_PARAMETERS"
-_TAMANHOS = (20, 50, 100)
-_CAMPOS = ("code", "param_flag", "label", "description", "component_type", "options_json", "default_value",
+_SIZES = (20, 50, 100)
+_FIELDS = ("code", "param_flag", "label", "description", "component_type", "options_json", "default_value",
            "remove_default", "validation_regex", "sensitive", "version")
 _JS = "js/app/parameters.js"
-_MSG_FALHA_LISTA = u"Não foi possível carregar os parâmetros. Tente novamente em instantes."
-_MSG_FALHA_ACAO = u"Não foi possível concluir a operação. Tente novamente em instantes."
+_MSG_LIST_FAILED = u"Não foi possível carregar os parâmetros. Tente novamente em instantes."
+_MSG_ACTION_FAILED = u"Não foi possível concluir a operação. Tente novamente em instantes."
 
 
-def _exigir_metodo(*permitidos):
+def _require_method(*permitidos):
     if (request.env.request_method or "GET").upper() not in permitidos:
         raise HTTP(405, **response.headers)
 
 
-def _negado():
+def _denied():
     raise HTTP(403, u"Acesso negado.", **response.headers)
 
 
-def _nao_encontrado():
+def _not_found():
     raise HTTP(404, u"Parâmetro não encontrado.", **response.headers)
 
 
-def _texto(valor, limite):
-    valor = valor[-1] if isinstance(valor, list) and valor else valor
-    return valor[:limite] if isinstance(valor, str) else None
+def _text(value, limit):
+    value = value[-1] if isinstance(value, list) and value else value
+    return value[:limit] if isinstance(value, str) else None
 
 
-def _enviados():
-    return dict((c, _texto(request.post_vars.get(c), 1000)) for c in _CAMPOS)
+def _submitted():
+    return dict((c, _text(request.post_vars.get(c), 1000)) for c in _FIELDS)
 
 
-def _pagina_form(ctx, dados, erros=None):
-    response.title = (u"Parâmetro %s — SSS" % dados["code"]) if dados.get("id") else u"Novo parâmetro — SSS"
+def _form_page(ctx, data, errors=None):
+    response.title = (u"Parâmetro %s — SSS" % data["code"]) if data.get("id") else u"Novo parâmetro — SSS"
     response.view = "admin_parameters/form.html"
     response.sss_scripts = [_JS]
-    erros = erros or {}
-    campos = [{"name": n, "error": erros.get(n)} for n in ("code", "param_flag", "label", "description",
+    errors = errors or {}
+    fields = [{"name": n, "error": errors.get(n)} for n in ("code", "param_flag", "label", "description",
                                                           "component_type", "options_json", "validation_regex",
                                                           "default_value")]
-    return dict(prm=dados, errors=erros, general_error=erros.get(admin_crud.GENERAL_FIELD),
-                focus_field=ui_helpers.primeiro_campo_invalido(campos), types=servico.TYPE_LABELS,
-                sensitive_warning=servico.SENSITIVE_WARNING)
+    return dict(prm=data, errors=errors, general_error=errors.get(admin_crud.GENERAL_FIELD),
+                focus_field=ui_helpers.first_invalid_field(fields), types=service.TYPE_LABELS,
+                sensitive_warning=service.SENSITIVE_WARNING)
 
 
 def index():
-    _exigir_metodo("GET", "HEAD")
-    ctx = _exigir_func(_FUNC)
-    filtros = servico.normalize_filters(request.get_vars)
-    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("page"), 9))
-    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("size"), 3), _TAMANHOS)
-    erro = None
+    _require_method("GET", "HEAD")
+    ctx = _require_func(_FUNC)
+    filters = service.normalize_filters(request.get_vars)
+    page = ui_helpers.sanitize_page(_text(request.get_vars.get("page"), 9))
+    size = ui_helpers.sanitize_size(_text(request.get_vars.get("size"), 3), _SIZES)
+    error = None
     try:
-        resultado = servico.list_page(ctx, filtros, pagina, tamanho)
+        result = service.list_page(ctx, filters, page, size)
     except AccessDenied:
-        _negado()
+        _denied()
     except RepoError:
         _log.exception("falha ao listar parametros (login=%s)", ctx["login"], extra={"action": _FUNC})
-        resultado = {"items": [], "total": 0, "page": 1, "size": tamanho}
-        erro = _MSG_FALHA_LISTA
+        result = {"items": [], "total": 0, "page": 1, "size": size}
+        error = _MSG_LIST_FAILED
     response.title = u"Parâmetros — SSS"
-    return dict(result=resultado, error=erro, active_filters=filtros, size=tamanho, types=servico.TYPE_LABELS,
-                query_params=dict(filtros, size=tamanho))
+    return dict(result=result, error=error, active_filters=filters, size=size, types=service.TYPE_LABELS,
+                query_params=dict(filters, size=size))
 
 
 def form():
-    _exigir_metodo("GET", "HEAD")
-    ctx = _exigir_func(_FUNC)
+    _require_method("GET", "HEAD")
+    ctx = _require_func(_FUNC)
     try:
-        dados = servico.form(ctx, _texto(request.args(0), 11))
+        data = service.form(ctx, _text(request.args(0), 11))
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
-    return _pagina_form(ctx, dados)
+        _denied()
+    return _form_page(ctx, data)
 
 
 def save():
-    _exigir_metodo("POST")
-    ctx = _exigir_func(_FUNC)
-    parametro_id = _texto(request.post_vars.get("id"), 11)
-    enviados = _enviados()
+    _require_method("POST")
+    ctx = _require_func(_FUNC)
+    parameter_id = _text(request.post_vars.get("id"), 11)
+    submitted = _submitted()
     try:
-        _salvo, erros = servico.save(ctx, _ip_origem(), parametro_id, enviados)
+        _saved, errors = service.save(ctx, _client_ip(), parameter_id, submitted)
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
+        _denied()
     except RepoError:
-        _log.exception("falha ao salvar parametro (login=%s id=%r)", ctx["login"], parametro_id, extra={"action": _FUNC})
-        erros = {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
-    if not erros:
+        _log.exception("falha ao salvar parametro (login=%s id=%r)", ctx["login"], parameter_id, extra={"action": _FUNC})
+        errors = {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
+    if not errors:
         session.flash = {"kind": "success", "message": u"Parâmetro salvo com sucesso."}
         redirect(URL(c="admin_parameters", f="index"))
     try:
-        dados = servico.form(ctx, parametro_id) if parametro_id else servico.form(ctx)
+        data = service.form(ctx, parameter_id) if parameter_id else service.form(ctx)
     except RepoError:
-        dados = {"id": None, "code": "", "param_flag": "", "label": "", "description": "",
+        data = {"id": None, "code": "", "param_flag": "", "label": "", "description": "",
                  "component_type": "TEXT", "options_json": "", "default_value": "", "has_default": False,
                  "validation_regex": "", "sensitive": "N", "active": "Y", "version": "", "links": [],
                  "can_regex": ctx.get("is_admin") is True}
-    if admin_crud.GENERAL_FIELD not in erros:
-        reapresentar = dict((c, enviados[c] or "") for c in ("param_flag", "label", "description", "component_type",
+    if admin_crud.GENERAL_FIELD not in errors:
+        redisplay = dict((c, submitted[c] or "") for c in ("param_flag", "label", "description", "component_type",
                                                              "options_json", "validation_regex"))
-        reapresentar["sensitive"] = "Y" if enviados["sensitive"] == "Y" else "N"
+        redisplay["sensitive"] = "Y" if submitted["sensitive"] == "Y" else "N"
         # Padrao de parametro sensivel nunca volta ao HTML.
-        reapresentar["default_value"] = "" if reapresentar["sensitive"] == "Y" else (enviados["default_value"] or "")
-        if not dados.get("can_regex"):
-            reapresentar.pop("validation_regex")
-        dados = dict(dados, **reapresentar)
-        if not parametro_id:
-            dados["code"] = enviados["code"] or ""
+        redisplay["default_value"] = "" if redisplay["sensitive"] == "Y" else (submitted["default_value"] or "")
+        if not data.get("can_regex"):
+            redisplay.pop("validation_regex")
+        data = dict(data, **redisplay)
+        if not parameter_id:
+            data["code"] = submitted["code"] or ""
         else:
-            dados["version"] = enviados["version"] or ""
+            data["version"] = submitted["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-    response.flash = {"kind": "error", "message": erros.get(admin_crud.GENERAL_FIELD)
-                      or ui_helpers.mensagem("form_errors")}
-    return _pagina_form(ctx, dados, erros)
+    response.flash = {"kind": "error", "message": errors.get(admin_crud.GENERAL_FIELD)
+                      or ui_helpers.message("form_errors")}
+    return _form_page(ctx, data, errors)
 
 
 def toggle_active():
-    _exigir_metodo("POST")
-    ctx = _exigir_func(_FUNC)
-    parametro_id = _texto(request.post_vars.get("id"), 11)
+    _require_method("POST")
+    ctx = _require_func(_FUNC)
+    parameter_id = _text(request.post_vars.get("id"), 11)
     try:
-        alterado = servico.toggle_active(ctx, _ip_origem(), parametro_id, _texto(request.post_vars.get("version"), 64))
-        acao = u"desativado" if alterado["active"] == "N" else u"reativado"
-        session.flash = {"kind": "success", "message": u"Parâmetro %s %s." % (alterado["code"], acao)}
+        changed = service.toggle_active(ctx, _client_ip(), parameter_id, _text(request.post_vars.get("version"), 64))
+        action = u"desativado" if changed["active"] == "N" else u"reativado"
+        session.flash = {"kind": "success", "message": u"Parâmetro %s %s." % (changed["code"], action)}
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
+        _denied()
     except OperationDenied as exc:
         session.flash = {"kind": "error", "message": exc.message}
     except RepoConflict:
         session.flash = {"kind": "warning", "message": admin_crud.MSG_CONFLICT}
     except RepoError:
-        _log.exception("falha ao alternar parametro (login=%s id=%r)", ctx["login"], parametro_id, extra={"action": _FUNC})
-        session.flash = {"kind": "error", "message": _MSG_FALHA_ACAO}
-    redirect(URL(c="admin_parameters", f="form", args=[parametro_id]))
+        _log.exception("falha ao alternar parametro (login=%s id=%r)", ctx["login"], parameter_id, extra={"action": _FUNC})
+        session.flash = {"kind": "error", "message": _MSG_ACTION_FAILED}
+    redirect(URL(c="admin_parameters", f="form", args=[parameter_id]))
 
 
 def test_regex():
     # POST: a configuracao em edicao e o valor de teste nunca vao para a URL nem para o log de acesso.
-    _exigir_metodo("POST")
-    ctx = _exigir_func(_FUNC)
+    _require_method("POST")
+    ctx = _require_func(_FUNC)
     response.headers["Cache-Control"] = "no-store"
     try:
-        resultado = servico.test_regex(ctx, _texto(request.post_vars.get("id"), 11), _enviados(),
-                                   _texto(request.post_vars.get("test_value"), 1000))
+        result = service.test_regex(ctx, _text(request.post_vars.get("id"), 11), _submitted(),
+                                   _text(request.post_vars.get("test_value"), 1000))
     except RepoNotFound:
         response.status = 404
         return response.json({"ok": False, "error": u"Parâmetro não encontrado."})
     except AccessDenied:
         response.status = 403
         return response.json({"ok": False, "error": u"Acesso negado."})
-    return response.json(resultado)
+    return response.json(result)

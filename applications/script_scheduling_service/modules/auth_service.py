@@ -15,7 +15,7 @@ import ui_helpers
 from repo_errors import RepoNotFound
 
 # Mensagens-padrao em duas partes (README §2.4.2); o bloqueio informa os minutos configurados.
-MSG_GENERIC = ui_helpers.mensagem("login_failed")
+MSG_GENERIC = ui_helpers.message("login_failed")
 
 ENTITY = "tbsss_users"
 MSG_CURRENT_PASSWORD = u"A senha atual está incorreta."
@@ -43,7 +43,7 @@ class AuthService(object):
         self._max = int(max_attempts)
         self._lockout_s = int(lockout_s)
         self._lockout = datetime.timedelta(seconds=self._lockout_s)
-        self.lockout_message = ui_helpers.mensagem("account_locked", minutos=max(1, -(-self._lockout_s // 60)))
+        self.lockout_message = ui_helpers.message("account_locked", minutos=max(1, -(-self._lockout_s // 60)))
         self._log = log
         # Relogio do banco (README §4.2): o bloqueio nunca depende do relogio do no web.
         self._clock = clock or users.now

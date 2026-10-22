@@ -4,56 +4,56 @@
 # o caminho é absoluto, em qualquer pasta fora das do sistema (README §8.5, CR-005).
 import ui_helpers
 _s = scr
-_novo = not _s.get('id')
-_situacao = ui_helpers.ativo_info(_s.get('active'))
-_campos_a = [
+_new = not _s.get('id')
+_state = ui_helpers.active_info(_s.get('active'))
+_fields_a = [
     {'name': 'name', 'label': 'Nome', 'value': _s.get('name'), 'error': errors.get('name'), 'required': True, 'maxlength': 60},
     {'name': 'description', 'label': u'Descrição', 'kind': 'textarea', 'value': _s.get('description'), 'error': errors.get('description'), 'maxlength': 200},
 ]
-_campos_b = [
+_fields_b = [
     {'name': 'script_group', 'label': 'Grupo', 'value': _s.get('script_group'), 'error': errors.get('script_group'), 'maxlength': 30},
     {'name': 'category', 'label': 'Categoria', 'value': _s.get('category'), 'error': errors.get('category'), 'maxlength': 30},
     {'name': 'stage', 'label': 'Etapa', 'value': _s.get('stage'), 'error': errors.get('stage'), 'maxlength': 30},
 ]
-_ajuda_path = (u'Caminho completo do arquivo, começando por / (ex.: /opt/automacoes/scripts/carga.py). '
+_help_path = (u'Caminho completo do arquivo, começando por / (ex.: /opt/automacoes/scripts/carga.py). '
                u'Não pode ficar em pastas do sistema (/bin, /usr, /etc…). ' + _s['validation_note'])
-_campos_c = [
+_fields_c = [
     {'name': 'interpreter', 'label': 'Interpretador', 'kind': 'select', 'value': _s.get('interpreter'), 'error': errors.get('interpreter'), 'required': True, 'options': list(interpreters),
      'help': u'Chave lógica: cada agente a traduz para o executável local.'},
-    {'name': 'path_file', 'label': 'Arquivo do script', 'value': _s.get('path_file'), 'error': errors.get('path_file'), 'required': True, 'maxlength': 500, 'help': _ajuda_path},
+    {'name': 'path_file', 'label': 'Arquivo do script', 'value': _s.get('path_file'), 'error': errors.get('path_file'), 'required': True, 'maxlength': 500, 'help': _help_path},
     {'name': 'param_type', 'label': u'Montagem dos argumentos', 'kind': 'select', 'value': _s.get('param_type'), 'error': errors.get('param_type'), 'required': True, 'options': list(param_types),
      'help': u'Trocar a montagem revalida os parâmetros já vinculados.'},
 ]
-_campos_d = [
+_fields_d = [
     {'name': 'max_parallel_env', 'label': u'Execuções simultâneas por ambiente', 'kind': 'number', 'value': _s.get('max_parallel_env'), 'error': errors.get('max_parallel_env'), 'required': True, 'help': u'De 1 a 999.'},
     {'name': 'timeout_s', 'label': 'Tempo limite (segundos)', 'kind': 'number', 'value': _s.get('timeout_s'), 'error': errors.get('timeout_s'), 'help': u'Em branco usa o padrão do agente.'},
 ]
-if not _novo:
-    _desativar = _s.get('active') == 'Y'
-    if _desativar:
-        _texto_modal = u'%s Agendamentos ativos afetados: %d.' % (deactivation_warning, _s.get('active_schedules') or 0)
+if not _new:
+    _deactivate = _s.get('active') == 'Y'
+    if _deactivate:
+        _modal_text = u'%s Agendamentos ativos afetados: %d.' % (deactivation_warning, _s.get('active_schedules') or 0)
     else:
-        _texto_modal = u'O script voltará a aceitar tickets e agendamentos.'
+        _modal_text = u'O script voltará a aceitar tickets e agendamentos.'
     pass
-    _modal_ativo = {'id': 'modal-active', 'title': (u'Desativar script %s' if _desativar else u'Reativar script %s') % _s['name'],
-                    'text': _texto_modal, 'trigger_label': 'Desativar' if _desativar else 'Reativar',
-                    'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
-                    'variant': 'danger' if _desativar else 'normal', 'action': URL(c='admin_scripts', f='toggle_active'),
-                    'hidden_fields': dict(id=_s['id'], versao=_s['version'])}
+    _modal_active = {'id': 'modal-active', 'title': (u'Desativar script %s' if _deactivate else u'Reativar script %s') % _s['name'],
+                    'text': _modal_text, 'trigger_label': 'Desativar' if _deactivate else 'Reativar',
+                    'confirm_label': u'Confirmar desativação' if _deactivate else u'Confirmar reativação',
+                    'variant': 'danger' if _deactivate else 'normal', 'action': URL(c='admin_scripts', f='toggle_active'),
+                    'hidden_fields': dict(id=_s['id'], version=_s['version'])}
 pass
 }}
 <div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-title">{{if _novo:}}Novo script{{else:}}Script <span class="sss-mono">{{=_s['name']}}</span>
-      <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
+    <h1 class="sss-page-title">{{if _new:}}Novo script{{else:}}Script <span class="sss-mono">{{=_s['name']}}</span>
+      <span class="sss-status {{=_state['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_state['icon']}}"></use></svg><span>{{=_state['label']}}</span></span>{{pass}}
     </h1>
   </div>
   <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_scripts', f='index')}}">Voltar à lista</a>
-    {{if not _novo:}}
+    {{if not _new:}}
     <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='homologation', args=[_s['id']])}}">Homologação</a>
     <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='parameters', args=[_s['id']])}}">Parâmetros</a>
-    {{modal = _modal_ativo}}
+    {{modal = _modal_active}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}
   </div>
@@ -62,8 +62,8 @@ pass
 <section class="sss-card" aria-labelledby="title-form">
   <h2 class="sss-card-title" id="title-form">Dados do script</h2>
   <form class="sss-card-body" method="post" action="{{=URL(c='admin_scripts', f='save')}}" autocomplete="off">
-    {{=csrf_campo()}}
-    {{if not _novo:}}
+    {{=csrf_field()}}
+    {{if not _new:}}
     <input type="hidden" name="id" value="{{=_s['id']}}">
     <input type="hidden" name="version" value="{{=_s['version']}}">
     {{pass}}
@@ -73,30 +73,30 @@ pass
       <span>{{=general_error}}</span>
     </div>
     {{pass}}
-    {{for field in _campos_a:}}
+    {{for field in _fields_a:}}
     {{include 'components/form_field.html'}}
     {{pass}}
     <div class="sss-form-row">
-      {{for field in _campos_b:}}
+      {{for field in _fields_b:}}
       {{include 'components/form_field.html'}}
       {{pass}}
     </div>
-    {{for field in _campos_c:}}
+    {{for field in _fields_c:}}
     {{include 'components/form_field.html'}}
     {{pass}}
     <div class="sss-form-row">
-      {{for field in _campos_d:}}
+      {{for field in _fields_d:}}
       {{include 'components/form_field.html'}}
       {{pass}}
     </div>
     <div class="sss-form-actions">
-      <button type="submit" class="btn btn-primary">{{=u'Incluir script' if _novo else u'Salvar alterações'}}</button>
+      <button type="submit" class="btn btn-primary">{{=u'Incluir script' if _new else u'Salvar alterações'}}</button>
       <a class="btn btn-outline-secondary" href="{{=URL(c='admin_scripts', f='index')}}">Cancelar</a>
     </div>
   </form>
 </section>
 
-{{if not _novo and _s.get('record'):}}
+{{if not _new and _s.get('record'):}}
 {{record = _s['record']}}
 {{include 'components/record.html'}}
 {{pass}}

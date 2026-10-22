@@ -5,184 +5,184 @@ Padrao em docs/ADMIN_CRUD_PATTERN.md. Regras ficam em modules/admin_scripts_serv
 de todo POST sao validados em models/10_security.py. Listas enviadas pelo cliente sao revalidadas inteiras.
 """
 import admin_crud
-import admin_scripts_service as servico
+import admin_scripts_service as service
 import path_guard
 import ui_helpers
 from admin_crud import AccessDenied, OperationDenied
 from repo_errors import RepoConflict, RepoError, RepoNotFound
 
 _FUNC = "MANAGE_SCRIPTS"
-_TAMANHOS = (20, 50, 100)
-_CAMPOS = ("name", "description", "script_group", "category", "stage", "interpreter", "path_file", "param_type",
+_SIZES = (20, 50, 100)
+_FIELDS = ("name", "description", "script_group", "category", "stage", "interpreter", "path_file", "param_type",
            "max_parallel_env", "timeout_s", "version")
 _JS = "js/app/scripts_admin.js"
 _MAX_JSON = 50000
 _MAX_IDS = 1000
-_MSG_FALHA_LISTA = u"Não foi possível carregar os scripts. Tente novamente em instantes."
-_MSG_FALHA_ACAO = u"Não foi possível concluir a operação. Tente novamente em instantes."
+_MSG_LIST_FAILED = u"Não foi possível carregar os scripts. Tente novamente em instantes."
+_MSG_ACTION_FAILED = u"Não foi possível concluir a operação. Tente novamente em instantes."
 
 
-def _exigir_metodo(*permitidos):
+def _require_method(*permitidos):
     if (request.env.request_method or "GET").upper() not in permitidos:
         raise HTTP(405, **response.headers)
 
 
-def _negado():
+def _denied():
     raise HTTP(403, u"Acesso negado.", **response.headers)
 
 
-def _nao_encontrado():
+def _not_found():
     raise HTTP(404, u"Script não encontrado.", **response.headers)
 
 
-def _texto(valor, limite):
-    valor = valor[-1] if isinstance(valor, list) and valor else valor
-    return valor[:limite] if isinstance(valor, str) else None
+def _text(value, limit):
+    value = value[-1] if isinstance(value, list) and value else value
+    return value[:limit] if isinstance(value, str) else None
 
 
-def _vazio_form(ctx):
+def _empty_form(ctx):
     # Fallback quando nem o formulario pode ser lido (falha de repositorio): so os campos que a view usa.
     return {"id": None, "name": "", "description": "", "script_group": "", "category": "", "stage": "",
             "interpreter": path_guard.ALLOWLIST[0], "path_file": "",
             "param_type": "NAMED",
             "max_parallel_env": 1, "timeout_s": "", "active": "Y", "version": "", "active_schedules": 0,
-            "validation_note": servico.VALIDATION_NOTE}
+            "validation_note": service.VALIDATION_NOTE}
 
 
-def _pagina_form(ctx, dados, erros=None):
-    response.title = (u"Script %s — SSS" % dados["name"]) if dados.get("id") else u"Novo script — SSS"
+def _form_page(ctx, data, errors=None):
+    response.title = (u"Script %s — SSS" % data["name"]) if data.get("id") else u"Novo script — SSS"
     response.view = "admin_scripts/form.html"
-    erros = erros or {}
-    campos = [{"name": n, "error": erros.get(n)} for n in ("name", "description", "script_group", "category", "stage",
+    errors = errors or {}
+    fields = [{"name": n, "error": errors.get(n)} for n in ("name", "description", "script_group", "category", "stage",
                                                           "interpreter", "path_file", "param_type",
                                                           "max_parallel_env", "timeout_s")]
-    return dict(scr=dados, errors=erros, general_error=erros.get(admin_crud.GENERAL_FIELD), interpreters=servico.INTERPRETER_LABELS,
-                param_types=servico.PARAM_TYPE_LABELS, focus_field=ui_helpers.primeiro_campo_invalido(campos),
-                deactivation_warning=servico.DEACTIVATION_WARNING)
+    return dict(scr=data, errors=errors, general_error=errors.get(admin_crud.GENERAL_FIELD), interpreters=service.INTERPRETER_LABELS,
+                param_types=service.PARAM_TYPE_LABELS, focus_field=ui_helpers.first_invalid_field(fields),
+                deactivation_warning=service.DEACTIVATION_WARNING)
 
 
 def index():
-    _exigir_metodo("GET", "HEAD")
-    ctx = _exigir_func(_FUNC)
-    filtros = servico.normalize_filters(request.get_vars)
-    pagina = ui_helpers.sanitizar_pagina(_texto(request.get_vars.get("page"), 9))
-    tamanho = ui_helpers.sanitizar_tamanho(_texto(request.get_vars.get("size"), 3), _TAMANHOS)
-    erro = None
+    _require_method("GET", "HEAD")
+    ctx = _require_func(_FUNC)
+    filters = service.normalize_filters(request.get_vars)
+    page = ui_helpers.sanitize_page(_text(request.get_vars.get("page"), 9))
+    size = ui_helpers.sanitize_size(_text(request.get_vars.get("size"), 3), _SIZES)
+    error = None
     try:
-        resultado = servico.list_page(ctx, filtros, pagina, tamanho)
+        result = service.list_page(ctx, filters, page, size)
     except AccessDenied:
-        _negado()
+        _denied()
     except RepoError:
         _log.exception("falha ao listar scripts (login=%s)", ctx["login"], extra={"action": _FUNC})
-        resultado = {"items": [], "total": 0, "page": 1, "size": tamanho}
-        erro = _MSG_FALHA_LISTA
+        result = {"items": [], "total": 0, "page": 1, "size": size}
+        error = _MSG_LIST_FAILED
     response.title = u"Scripts — SSS"
-    return dict(result=resultado, error=erro, active_filters=filtros, size=tamanho, interpreters=servico.INTERPRETER_LABELS,
-                query_params=dict(filtros, size=tamanho))
+    return dict(result=result, error=error, active_filters=filters, size=size, interpreters=service.INTERPRETER_LABELS,
+                query_params=dict(filters, size=size))
 
 
 def form():
-    _exigir_metodo("GET", "HEAD")
-    ctx = _exigir_func(_FUNC)
+    _require_method("GET", "HEAD")
+    ctx = _require_func(_FUNC)
     try:
-        dados = servico.form(ctx, _texto(request.args(0), 11))
+        data = service.form(ctx, _text(request.args(0), 11))
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
-    return _pagina_form(ctx, dados)
+        _denied()
+    return _form_page(ctx, data)
 
 
 def save():
-    _exigir_metodo("POST")
-    ctx = _exigir_func(_FUNC)
-    script_id = _texto(request.post_vars.get("id"), 11)
+    _require_method("POST")
+    ctx = _require_func(_FUNC)
+    script_id = _text(request.post_vars.get("id"), 11)
     # Teto acima do maior limite do service (path_file: 500), para que o excesso seja recusado (AGENTS §3.4).
-    enviados = dict((c, _texto(request.post_vars.get(c), 600)) for c in _CAMPOS)
-    aviso = None
+    submitted = dict((c, _text(request.post_vars.get(c), 600)) for c in _FIELDS)
+    warning = None
     try:
-        salvo_id, erros, aviso = servico.save(ctx, _ip_origem(), script_id, enviados)
+        saved_id, errors, warning = service.save(ctx, _client_ip(), script_id, submitted)
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
+        _denied()
     except OperationDenied as exc:
-        salvo_id, erros = None, {admin_crud.GENERAL_FIELD: str(exc)}
+        saved_id, errors = None, {admin_crud.GENERAL_FIELD: str(exc)}
     except RepoError:
         _log.exception("falha ao salvar script (login=%s id=%r)", ctx["login"], script_id, extra={"action": _FUNC})
-        salvo_id, erros = None, {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
-    if not erros:
-        mensagem = u"Script salvo com sucesso." + (u" " + aviso if aviso else u"")
-        session.flash = {"kind": "warning" if aviso else "success", "message": mensagem}
-        redirect(URL(c="admin_scripts", f="form", args=[salvo_id]))
+        saved_id, errors = None, {admin_crud.GENERAL_FIELD: admin_crud.MSG_FAILURE}
+    if not errors:
+        message = u"Script salvo com sucesso." + (u" " + warning if warning else u"")
+        session.flash = {"kind": "warning" if warning else "success", "message": message}
+        redirect(URL(c="admin_scripts", f="form", args=[saved_id]))
     try:
-        dados = servico.form(ctx, script_id) if script_id else servico.form(ctx)
+        data = service.form(ctx, script_id) if script_id else service.form(ctx)
     except RepoError:
-        dados = _vazio_form(ctx)
-    if admin_crud.GENERAL_FIELD not in erros:
-        dados = dict(dados, **dict((c, enviados[c] or "") for c in _CAMPOS if c != "version"))
+        data = _empty_form(ctx)
+    if admin_crud.GENERAL_FIELD not in errors:
+        data = dict(data, **dict((c, submitted[c] or "") for c in _FIELDS if c != "version"))
         if script_id:
-            dados["version"] = enviados["version"] or ""
+            data["version"] = submitted["version"] or ""
     # Status 200: um 4xx seria substituido pela pagina de erro do routes_onerror.
-    response.flash = {"kind": "error", "message": erros.get(admin_crud.GENERAL_FIELD)
-                      or ui_helpers.mensagem("form_errors")}
-    return _pagina_form(ctx, dados, erros)
+    response.flash = {"kind": "error", "message": errors.get(admin_crud.GENERAL_FIELD)
+                      or ui_helpers.message("form_errors")}
+    return _form_page(ctx, data, errors)
 
 
 def toggle_active():
-    _exigir_metodo("POST")
-    ctx = _exigir_func(_FUNC)
-    script_id = _texto(request.post_vars.get("id"), 11)
+    _require_method("POST")
+    ctx = _require_func(_FUNC)
+    script_id = _text(request.post_vars.get("id"), 11)
     try:
-        alterado = servico.toggle_active(ctx, _ip_origem(), script_id, _texto(request.post_vars.get("version"), 64))
-        acao = u"desativado" if alterado["active"] == "N" else u"reativado"
-        session.flash = {"kind": "success", "message": u"Script %s %s." % (alterado["name"], acao)}
+        changed = service.toggle_active(ctx, _client_ip(), script_id, _text(request.post_vars.get("version"), 64))
+        action = u"desativado" if changed["active"] == "N" else u"reativado"
+        session.flash = {"kind": "success", "message": u"Script %s %s." % (changed["name"], action)}
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
+        _denied()
     except OperationDenied as exc:
         session.flash = {"kind": "error", "message": exc.message}
     except RepoConflict:
         session.flash = {"kind": "warning", "message": admin_crud.MSG_CONFLICT}
     except RepoError:
         _log.exception("falha ao alternar script (login=%s id=%r)", ctx["login"], script_id, extra={"action": _FUNC})
-        session.flash = {"kind": "error", "message": _MSG_FALHA_ACAO}
+        session.flash = {"kind": "error", "message": _MSG_ACTION_FAILED}
     redirect(URL(c="admin_scripts", f="form", args=[script_id]))
 
 
 def homologation():
-    _exigir_metodo("GET", "HEAD")
-    ctx = _exigir_func(_FUNC)
+    _require_method("GET", "HEAD")
+    ctx = _require_func(_FUNC)
     try:
-        dados = servico.homologation(ctx, _texto(request.args(0), 11))
+        data = service.homologation(ctx, _text(request.args(0), 11))
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
-    response.title = u"Homologação de %s — SSS" % dados["script"]["name"]
+        _denied()
+    response.title = u"Homologação de %s — SSS" % data["script"]["name"]
     response.sss_scripts = [_JS]
-    return dict(homologation=dados)
+    return dict(homologation=data)
 
 
 def save_homologation():
-    _exigir_metodo("POST")
-    ctx = _exigir_func(_FUNC)
-    script_id = _texto(request.post_vars.get("id"), 11)
+    _require_method("POST")
+    ctx = _require_func(_FUNC)
+    script_id = _text(request.post_vars.get("id"), 11)
     ids = request.post_vars.get("environments")
     ids = (ids if isinstance(ids, list) else ([] if ids is None else [ids]))[:_MAX_IDS]
     try:
-        diff, erros = servico.save_homologation(ctx, _ip_origem(), script_id, ids,
-                                                 _texto(request.post_vars.get("version"), 64))
+        diff, errors = service.save_homologation(ctx, _client_ip(), script_id, ids,
+                                                 _text(request.post_vars.get("version"), 64))
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
+        _denied()
     except RepoError:
         _log.exception("falha ao salvar homologacao (login=%s id=%r)", ctx["login"], script_id, extra={"action": _FUNC})
-        diff, erros = None, {admin_crud.GENERAL_FIELD: _MSG_FALHA_ACAO}
-    if erros:
-        session.flash = {"kind": "error", "message": erros[admin_crud.GENERAL_FIELD]}
+        diff, errors = None, {admin_crud.GENERAL_FIELD: _MSG_ACTION_FAILED}
+    if errors:
+        session.flash = {"kind": "error", "message": errors[admin_crud.GENERAL_FIELD]}
     elif diff:
         session.flash = {"kind": "success", "message": u"Homologação salva: %s" % diff}
     else:
@@ -191,39 +191,39 @@ def save_homologation():
 
 
 def parameters():
-    _exigir_metodo("GET", "HEAD")
-    ctx = _exigir_func(_FUNC)
+    _require_method("GET", "HEAD")
+    ctx = _require_func(_FUNC)
     try:
-        dados = servico.parameters(ctx, _texto(request.args(0), 11))
+        data = service.parameters(ctx, _text(request.args(0), 11))
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
-    response.title = u"Parâmetros de %s — SSS" % dados["script"]["name"]
+        _denied()
+    response.title = u"Parâmetros de %s — SSS" % data["script"]["name"]
     response.sss_scripts = [_JS]
-    return dict(links_page=dados)
+    return dict(links_page=data)
 
 
 def save_parameters():
-    _exigir_metodo("POST")
-    ctx = _exigir_func(_FUNC)
-    script_id = _texto(request.post_vars.get("id"), 11)
+    _require_method("POST")
+    ctx = _require_func(_FUNC)
+    script_id = _text(request.post_vars.get("id"), 11)
     try:
-        descricao, erros = servico.save_parameters(ctx, _ip_origem(), script_id,
-                                                     _texto(request.post_vars.get("links_json"), _MAX_JSON),
-                                                     _texto(request.post_vars.get("version"), 64))
+        description, errors = service.save_parameters(ctx, _client_ip(), script_id,
+                                                     _text(request.post_vars.get("links_json"), _MAX_JSON),
+                                                     _text(request.post_vars.get("version"), 64))
     except RepoNotFound:
-        _nao_encontrado()
+        _not_found()
     except AccessDenied:
-        _negado()
+        _denied()
     except RepoError:
         _log.exception("falha ao salvar vinculos (login=%s id=%r)", ctx["login"], script_id, extra={"action": _FUNC})
-        descricao, erros = None, {admin_crud.GENERAL_FIELD: _MSG_FALHA_ACAO}
-    if erros:
-        mensagem = erros.get(admin_crud.GENERAL_FIELD) or u" ".join(sorted(erros.values()))
-        session.flash = {"kind": "error", "message": mensagem}
-    elif descricao:
-        session.flash = {"kind": "success", "message": u"Parâmetros salvos: %s" % descricao}
+        description, errors = None, {admin_crud.GENERAL_FIELD: _MSG_ACTION_FAILED}
+    if errors:
+        message = errors.get(admin_crud.GENERAL_FIELD) or u" ".join(sorted(errors.values()))
+        session.flash = {"kind": "error", "message": message}
+    elif description:
+        session.flash = {"kind": "success", "message": u"Parâmetros salvos: %s" % description}
     else:
         session.flash = {"kind": "warning", "message": u"Nenhuma alteração para salvar."}
     redirect(URL(c="admin_scripts", f="parameters", args=[script_id]))
@@ -231,17 +231,17 @@ def save_parameters():
 
 def preview():
     # POST: a configuracao em edicao (e eventuais valores sigilosos) nunca vai para a URL.
-    _exigir_metodo("POST")
-    ctx = _exigir_func(_FUNC)
+    _require_method("POST")
+    ctx = _require_func(_FUNC)
     response.headers["Cache-Control"] = "no-store"
-    vinculos_json = request.post_vars.get("links_json")
+    links_json = request.post_vars.get("links_json")
     try:
-        resultado = servico.preview(ctx, _texto(request.post_vars.get("id"), 11),
-                                   _texto(vinculos_json, _MAX_JSON) if vinculos_json is not None else None)
+        result = service.preview(ctx, _text(request.post_vars.get("id"), 11),
+                                   _text(links_json, _MAX_JSON) if links_json is not None else None)
     except RepoNotFound:
         response.status = 404
         return response.json({"argv": None, "errors": {admin_crud.GENERAL_FIELD: u"Script não encontrado."}})
     except AccessDenied:
         response.status = 403
         return response.json({"argv": None, "errors": {admin_crud.GENERAL_FIELD: u"Acesso negado."}})
-    return response.json(resultado)
+    return response.json(result)

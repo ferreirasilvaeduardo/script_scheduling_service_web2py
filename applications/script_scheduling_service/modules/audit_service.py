@@ -259,7 +259,7 @@ class AuditService(object):
             return empty
         repo_filters_dict = repo_filters(filters)
         result = self._audit.list(filters=repo_filters_dict, page=page, size=size)
-        info = ui_helpers.paginacao_info(page, size, result["total"],
+        info = ui_helpers.pagination_info(page, size, result["total"],
                                          result.get("total_capped", False), len(result["items"]))
         if not result["items"] and info["page"] != result["page"]:
             result = self._audit.list(filters=repo_filters_dict, page=info["page"], size=size)

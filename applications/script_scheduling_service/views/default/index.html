@@ -1,7 +1,7 @@
 {{extend 'layout.html'}}
 {{
 import ui_helpers
-icones = URL('static', 'img/icons.svg')
+icons = URL('static', 'img/icons.svg')
 }}
 <div class="sss-page-header">
   <h1 class="sss-page-title">Olá, {{=ctx['name']}}</h1>
@@ -14,7 +14,7 @@ icones = URL('static', 'img/icons.svg')
   <div class="sss-card-body sss-chosen">
     <span>Escolha um script e um ambiente autorizados, preencha o questionário e crie o ticket de execução.</span>
     <a class="btn btn-sm btn-primary" href="{{=URL(c='tickets', f='new')}}">
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-play"></use></svg>
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#icon-play"></use></svg>
       <span>Disparar script</span>
     </a>
   </div>
@@ -24,28 +24,28 @@ icones = URL('static', 'img/icons.svg')
 {{if cards:}}
 <div class="sss-panel-grid">
   {{if 'tickets' in cards:}}
-  {{_c_dados, _c_erro = cards['tickets']}}
+  {{_c_dados, _c_error = cards['tickets']}}
   <section class="sss-card" aria-labelledby="panel-count">
     <h2 class="sss-card-title" id="panel-count">Tickets nas últimas 24 horas</h2>
     <div class="sss-card-body">
-      {{if _c_erro:}}<p class="mb-0" role="alert">{{=_c_erro}}</p>{{else:}}
+      {{if _c_error:}}<p class="mb-0" role="alert">{{=_c_error}}</p>{{else:}}
       <ul class="sss-count">
-        {{for _st, _qtd in _c_dados['counts']:}}
+        {{for _st, _count in _c_dados['counts']:}}
         <li>
-          <span class="sss-count-number">{{=_qtd}}</span>
+          <span class="sss-count-number">{{=_count}}</span>
           {{status = _st
           status_reason = None}}{{include 'components/badge_status.html'}}
         </li>
         {{pass}}
       </ul>
-      <p class="sss-text-muted mt-2 mb-0">Criados desde {{=ui_helpers.formatar_data(_c_dados['since'])}}, no escopo do seu perfil. <a href="{{=URL(c='tickets', f='index')}}">Ver tickets</a></p>
+      <p class="sss-text-muted mt-2 mb-0">Criados desde {{=ui_helpers.format_date(_c_dados['since'])}}, no escopo do seu perfil. <a href="{{=URL(c='tickets', f='index')}}">Ver tickets</a></p>
       {{pass}}
     </div>
   </section>
   <section class="sss-card" aria-labelledby="panel-mine">
     <h2 class="sss-card-title" id="panel-mine">Meus últimos tickets</h2>
     <div class="sss-card-body">
-      {{if _c_erro:}}<p class="mb-0" role="alert">{{=_c_erro}}</p>{{elif not _c_dados['mine']:}}<p class="sss-text-muted mb-0">Você ainda não criou tickets.</p>{{else:}}
+      {{if _c_error:}}<p class="mb-0" role="alert">{{=_c_error}}</p>{{elif not _c_dados['mine']:}}<p class="sss-text-muted mb-0">Você ainda não criou tickets.</p>{{else:}}
       <ul class="sss-list-simple">
         {{for _t in _c_dados['mine']:}}
         <li>
@@ -54,7 +54,7 @@ icones = URL('static', 'img/icons.svg')
           <span>{{=_t['environment']}}</span>
           {{status = _t['status']
           status_reason = None}}{{include 'components/badge_status.html'}}
-          <span class="sss-text-muted">{{=ui_helpers.formatar_data(_t['created_at'])}}</span>
+          <span class="sss-text-muted">{{=ui_helpers.format_date(_t['created_at'])}}</span>
         </li>
         {{pass}}
       </ul>
@@ -63,11 +63,11 @@ icones = URL('static', 'img/icons.svg')
   </section>
   {{pass}}
   {{if 'schedules' in cards:}}
-  {{_c_dados, _c_erro = cards['schedules']}}
+  {{_c_dados, _c_error = cards['schedules']}}
   <section class="sss-card" aria-labelledby="panel-schedules">
     <h2 class="sss-card-title" id="panel-schedules">Próximos agendamentos</h2>
     <div class="sss-card-body">
-      {{if _c_erro:}}<p class="mb-0" role="alert">{{=_c_erro}}</p>{{elif not _c_dados:}}<p class="sss-text-muted mb-0">Nenhuma regra ativa nos seus ambientes.</p>{{else:}}
+      {{if _c_error:}}<p class="mb-0" role="alert">{{=_c_error}}</p>{{elif not _c_dados:}}<p class="sss-text-muted mb-0">Nenhuma regra ativa nos seus ambientes.</p>{{else:}}
       <ul class="sss-list-simple">
         {{for _a in _c_dados:}}
         <li>
@@ -83,17 +83,17 @@ icones = URL('static', 'img/icons.svg')
   </section>
   {{pass}}
   {{if 'agents' in cards:}}
-  {{_c_dados, _c_erro = cards['agents']}}
+  {{_c_dados, _c_error = cards['agents']}}
   <section class="sss-card" aria-labelledby="panel-agents">
     <h2 class="sss-card-title" id="panel-agents">Saúde dos agentes</h2>
     <div class="sss-card-body">
-      {{if _c_erro:}}<p class="mb-0" role="alert">{{=_c_erro}}</p>{{elif not _c_dados['agents']:}}<p class="sss-text-muted mb-0">Nenhum agente registrado.</p>{{else:}}
+      {{if _c_error:}}<p class="mb-0" role="alert">{{=_c_error}}</p>{{elif not _c_dados['agents']:}}<p class="sss-text-muted mb-0">Nenhum agente registrado.</p>{{else:}}
       <ul class="sss-list-simple">
-        {{for _ag in _c_dados['agents']:}}
+        {{for _agent in _c_dados['agents']:}}
         <li>
-          <span class="sss-mono">{{=_ag['code']}}</span>
-          <span class="sss-status {{=_ag['health']['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_ag['health']['icon']}}"></use></svg><span>{{=_ag['health']['label']}}</span></span>
-          <span class="sss-text-muted">heartbeat {{=_ag['ago']}} · {{=_ag['running']}} em execução</span>
+          <span class="sss-mono">{{=_agent['code']}}</span>
+          <span class="sss-status {{=_agent['health']['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#{{=_agent['health']['icon']}}"></use></svg><span>{{=_agent['health']['label']}}</span></span>
+          <span class="sss-text-muted">heartbeat {{=_agent['ago']}} · {{=_agent['running']}} em execução</span>
         </li>
         {{pass}}
       </ul>
@@ -116,7 +116,7 @@ icones = URL('static', 'img/icons.svg')
   <div class="sss-card-body sss-actions">
     {{for item in section['items']:}}
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c=item['route'][0], f=item['route'][1])}}">
-      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=item['icon']}}"></use></svg>
+      <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#{{=item['icon']}}"></use></svg>
       <span>{{=item['label']}}</span>
     </a>
     {{pass}}

@@ -17,7 +17,7 @@ _sc = _h['script']
 </div>
 
 <form class="sss-card" method="post" action="{{=URL(c='admin_scripts', f='save_homologation')}}" x-data="scriptHomologation" aria-label="Homologação por ambiente">
-  {{=csrf_campo()}}
+  {{=csrf_field()}}
   <input type="hidden" name="id" value="{{=_sc['id']}}">
   <input type="hidden" name="version" value="{{=_h['version']}}">
   <div class="sss-card-body">

@@ -9,15 +9,15 @@
 #     variant           -- 'danger' (btn-danger) | 'normal' (btn-primary);
 #     action              -- URL do POST;
 #     hidden_fields    -- opcional; dict de campos hidden enviados no POST.
-# O token CSRF da sessão é enviado no campo oculto '_csrf' (csrf_campo(), README §4.2).
+# O token CSRF da sessão é enviado no campo oculto '_csrf' (csrf_field(), README §4.2).
 # Abrir/fechar exige JavaScript (Alpine 'confirmacao' em static/js/app/components.js).
-_mod_perigo = modal.get('variant') == 'danger'
+_mod_danger = modal.get('variant') == 'danger'
 }}<div class="sss-confirmation" x-data="confirmation" @keydown.escape.window="close">
-  <button type="button" class="btn btn-sm {{='btn-outline-danger' if _mod_perigo else 'btn-outline-primary'}}" x-ref="trigger" @click="open">{{=modal['trigger_label']}}</button>
+  <button type="button" class="btn btn-sm {{='btn-outline-danger' if _mod_danger else 'btn-outline-primary'}}" x-ref="trigger" @click="open">{{=modal['trigger_label']}}</button>
   <div class="modal sss-modal" :class="modalClass" role="dialog" aria-modal="true" aria-labelledby="{{=modal['id']}}-titulo" aria-describedby="{{=modal['id']}}-texto" tabindex="-1" @click.self="close">
     <div class="modal-dialog modal-dialog-centered">
       <form class="modal-content" method="post" action="{{=modal['action']}}">
-        {{=csrf_campo()}}
+        {{=csrf_field()}}
         {{for _mod_k, _mod_v in sorted((modal.get('hidden_fields') or {}).items()):}}
         <input type="hidden" name="{{=_mod_k}}" value="{{=_mod_v}}">
         {{pass}}
@@ -30,7 +30,7 @@ _mod_perigo = modal.get('variant') == 'danger'
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancel" @click="close">Cancelar</button>
-          <button type="submit" class="btn btn-sm {{='btn-danger' if _mod_perigo else 'btn-primary'}}">{{=modal['confirm_label']}}</button>
+          <button type="submit" class="btn btn-sm {{='btn-danger' if _mod_danger else 'btn-primary'}}">{{=modal['confirm_label']}}</button>
         </div>
       </form>
     </div>

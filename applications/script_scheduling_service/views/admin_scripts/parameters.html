@@ -6,12 +6,12 @@
 import json
 _v = links_page
 _sc = _v['script']
-_rotulo_tipo = {'NAMED': u'por flag (NOMEADO)', 'POSITIONAL': u'posicional (SEQUENCIAL)', 'NONE': u'sem argumentos (NENHUM)'}
+_kind_label = {'NAMED': u'por flag (NOMEADO)', 'POSITIONAL': u'posicional (SEQUENCIAL)', 'NONE': u'sem argumentos (NENHUM)'}
 }}
 <div class="sss-page-header sss-detail-header">
   <div>
     <h1 class="sss-page-title">Parâmetros de <span class="sss-mono">{{=_sc['name']}}</span></h1>
-    <p class="sss-page-sub">Montagem {{=_rotulo_tipo.get(_sc['param_type'], _sc['param_type'])}}. A ordem da lista é a ordem dos argumentos.</p>
+    <p class="sss-page-sub">Montagem {{=_kind_label.get(_sc['param_type'], _sc['param_type'])}}. A ordem da lista é a ordem dos argumentos.</p>
   </div>
   <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_scripts', f='form', args=[_sc['id']])}}">Dados do script</a>
@@ -22,7 +22,7 @@ _rotulo_tipo = {'NAMED': u'por flag (NOMEADO)', 'POSITIONAL': u'posicional (SEQU
 <form class="sss-card" method="post" action="{{=URL(c='admin_scripts', f='save_parameters')}}" autocomplete="off"
       x-data="scriptLinks" data-url-preview="{{=URL(c='admin_scripts', f='preview')}}"
       data-links="{{=json.dumps(_v['links'])}}" data-available="{{=json.dumps(_v['available'])}}">
-  {{=csrf_campo()}}
+  {{=csrf_field()}}
   <input type="hidden" name="id" value="{{=_sc['id']}}">
   <input type="hidden" name="version" value="{{=_v['version']}}">
   <input type="hidden" name="links_json" :value="linksJson">

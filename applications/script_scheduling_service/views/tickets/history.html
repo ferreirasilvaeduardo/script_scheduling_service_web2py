@@ -42,7 +42,7 @@ _g = h['chart']
     <p class="sss-text-muted mb-0">Nenhum pedido nos últimos 30 dias.</p>
     {{else:}}
     <ul class="sss-legend" aria-label="Legenda">
-      {{for _k, _r in ui_helpers.SERIES_HISTORICO:}}
+      {{for _k, _r in ui_helpers.HISTORY_SERIES:}}
       <li><span class="sss-legend-color sss-graf-{{=_k}}" aria-hidden="true"></span>{{=_r}}</li>
       {{pass}}
     </ul>
@@ -64,11 +64,11 @@ _g = h['chart']
       <div class="table-responsive">
         <table class="table table-sm sss-table mb-0">
           <caption class="visually-hidden">Pedidos por dia e situação</caption>
-          <thead><tr><th scope="col">Dia</th>{{for _k, _r in ui_helpers.SERIES_HISTORICO:}}<th scope="col">{{=_r}}</th>{{pass}}</tr></thead>
+          <thead><tr><th scope="col">Dia</th>{{for _k, _r in ui_helpers.HISTORY_SERIES:}}<th scope="col">{{=_r}}</th>{{pass}}</tr></thead>
           <tbody>
             {{for _d in h['days']:}}
-            {{if sum(_d[_k] for _k, _r in ui_helpers.SERIES_HISTORICO):}}
-            <tr><th scope="row">{{=_d['label']}}</th>{{for _k, _r in ui_helpers.SERIES_HISTORICO:}}<td>{{=_d[_k]}}</td>{{pass}}</tr>
+            {{if sum(_d[_k] for _k, _r in ui_helpers.HISTORY_SERIES):}}
+            <tr><th scope="row">{{=_d['label']}}</th>{{for _k, _r in ui_helpers.HISTORY_SERIES:}}<td>{{=_d[_k]}}</td>{{pass}}</tr>
             {{pass}}
             {{pass}}
           </tbody>

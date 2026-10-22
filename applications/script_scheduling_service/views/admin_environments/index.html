@@ -1,14 +1,14 @@
 {{extend 'layout.html'}}
 {{
 # Lista de ambientes (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
-_opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
+_opt_active = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
 filters = {'id': 'filter-environments', 'url_base': ('admin_environments', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
-    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opc_ativo},
+    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opt_active},
 ]}
-_linhas = []
+_rows = []
 for _a in result['items']:
-    _linhas.append({
+    _rows.append({
         'name': _a['name'],
         'description': _a.get('description') or '-',
         'connection': _a.get('connection') or '-',
@@ -16,7 +16,7 @@ for _a in result['items']:
         'action': {'href': URL(c='admin_environments', f='form', args=[_a['id']]), 'label': 'Editar', 'description': u'Editar ambiente %s' % _a['name']},
     })
 pass
-table = {'caption': 'Ambientes cadastrados', 'error': error, 'rows': _linhas, 'empty_message': 'Nenhum ambiente encontrado.', 'columns': [
+table = {'caption': 'Ambientes cadastrados', 'error': error, 'rows': _rows, 'empty_message': 'Nenhum ambiente encontrado.', 'columns': [
     {'key': 'name', 'label': 'Nome', 'kind': 'mono'},
     {'key': 'description', 'label': u'Descrição'},
     {'key': 'connection', 'label': 'DSN', 'kind': 'mono'},

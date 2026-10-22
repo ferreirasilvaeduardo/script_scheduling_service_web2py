@@ -5,7 +5,7 @@
 # O resumo do modal usa o mesmo formato do diff auditado (PERM_UPDATE), e o servidor revalida tudo.
 _m = matrix
 _p = _m['profile']
-_abas = (
+_tabs = (
     ('funcs', u'Funcionalidades', _m['funcs']),
     ('ambs', u'Ambientes', _m['ambs']),
     ('scrs', u'Scripts', _m['scrs']),
@@ -30,19 +30,19 @@ _abas = (
 {{pass}}
 
 <form class="sss-card" method="post" action="{{=URL(c='admin_profiles', f='save_matrix')}}" x-data="permissionMatrix" aria-label="Matriz de permissões">
-  {{=csrf_campo()}}
+  {{=csrf_field()}}
   <input type="hidden" name="id" value="{{=_p['id']}}">
   <input type="hidden" name="perm_version" value="{{=_m['perm_version']}}">
 
   <ul class="nav nav-tabs sss-matrix-tabs" role="tablist">
-    {{for _dim, _titulo, _grupos in _abas:}}
+    {{for _dim, _title, _groups in _tabs:}}
     <li class="nav-item" role="presentation">
-      <button type="button" class="nav-link" role="tab" id="tab-{{=_dim}}" aria-controls="panel-{{=_dim}}" data-tab="{{=_dim}}" aria-selected="false" @click="openTab">{{=_titulo}} <span class="badge text-bg-secondary" data-counter="{{=_dim}}">0</span></button>
+      <button type="button" class="nav-link" role="tab" id="tab-{{=_dim}}" aria-controls="panel-{{=_dim}}" data-tab="{{=_dim}}" aria-selected="false" @click="openTab">{{=_title}} <span class="badge text-bg-secondary" data-counter="{{=_dim}}">0</span></button>
     </li>
     {{pass}}
   </ul>
 
-  {{for _dim, _titulo, _grupos in _abas:}}
+  {{for _dim, _title, _groups in _tabs:}}
   <div class="sss-card-body sss-matrix-panel" role="tabpanel" id="panel-{{=_dim}}" aria-labelledby="tab-{{=_dim}}" data-panel="{{=_dim}}" tabindex="0">
     {{if _dim == 'scrs':}}
     <div class="sss-matrix-search mb-3">
@@ -51,10 +51,10 @@ _abas = (
       <p class="sss-text-muted mt-1 mb-0" data-no-result hidden>Nenhum script corresponde à busca.</p>
     </div>
     {{pass}}
-    {{if not _grupos:}}
+    {{if not _groups:}}
     <p class="sss-text-muted mb-0">Nenhum item cadastrado.</p>
     {{pass}}
-    {{for _gi, _g in enumerate(_grupos):}}
+    {{for _gi, _g in enumerate(_groups):}}
     {{_gid = '%s-%d' % (_dim, _gi)}}
     <fieldset class="sss-matrix-group" data-group="{{=_gid}}">
       <legend class="sss-matrix-legend">

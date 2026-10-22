@@ -187,7 +187,7 @@ class AdminScriptsService(object):
         date["timeout_s"] = "" if s.get("timeout_s") is None else s["timeout_s"]
         date.update(common, id=s["id"], version=admin_crud.version(s, EDITABLE_FIELDS),
                      active_schedules=self._active_schedules(script_id=s["id"]),
-                     record=ui_helpers.registro(s, ctx))
+                     record=ui_helpers.record_info(s, ctx))
         return date
 
     # ------------------------------------------------------------- validacao

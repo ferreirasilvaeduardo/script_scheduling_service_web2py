@@ -1,30 +1,30 @@
 {{extend 'layout.html'}}
 {{
 # Lista do dicionário de parâmetros (padrão de CRUD administrativo).
-_rotulo_tipo = dict(types)
-_opc_tipo = [('', 'Todos')] + list(types)
-_opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
+_kind_label = dict(types)
+_opt_kind = [('', 'Todos')] + list(types)
+_opt_active = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
 filters = {'id': 'filter-parameters', 'url_base': ('admin_parameters', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'code', 'label': u'Código', 'kind': 'text', 'value': active_filters.get('code')},
     {'name': 'label', 'label': u'Rótulo', 'kind': 'text', 'value': active_filters.get('label')},
-    {'name': 'component_type', 'label': 'Tipo', 'kind': 'select', 'value': active_filters.get('component_type'), 'options': _opc_tipo},
-    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opc_ativo},
+    {'name': 'component_type', 'label': 'Tipo', 'kind': 'select', 'value': active_filters.get('component_type'), 'options': _opt_kind},
+    {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opt_active},
 ]}
-_linhas = []
+_rows = []
 for _p in result['items']:
-    _qtd = _p.get('script_count') or 0
-    _linhas.append({
+    _count = _p.get('script_count') or 0
+    _rows.append({
         'code': _p['code'],
         'label': _p['label'] + (u' (sigiloso)' if _p.get('sensitive') == 'Y' else ''),
-        'kind': _rotulo_tipo.get(_p['component_type'], _p['component_type']),
+        'kind': _kind_label.get(_p['component_type'], _p['component_type']),
         'flag': _p.get('param_flag') or '-',
         'default': _p.get('default_value') or '-',
-        'usage': (u'Usado por %d script%s' % (_qtd, '' if _qtd == 1 else 's')) if _qtd else u'Não usado',
+        'usage': (u'Usado por %d script%s' % (_count, '' if _count == 1 else 's')) if _count else u'Não usado',
         'active': _p['active'],
         'action': {'href': URL(c='admin_parameters', f='form', args=[_p['id']]), 'label': 'Editar', 'description': u'Editar parâmetro %s' % _p['code']},
     })
 pass
-table = {'caption': u'Parâmetros cadastrados', 'error': error, 'rows': _linhas, 'empty_message': u'Nenhum parâmetro encontrado.', 'columns': [
+table = {'caption': u'Parâmetros cadastrados', 'error': error, 'rows': _rows, 'empty_message': u'Nenhum parâmetro encontrado.', 'columns': [
     {'key': 'code', 'label': u'Código', 'kind': 'mono'},
     {'key': 'label', 'label': u'Rótulo'},
     {'key': 'kind', 'label': 'Tipo'},

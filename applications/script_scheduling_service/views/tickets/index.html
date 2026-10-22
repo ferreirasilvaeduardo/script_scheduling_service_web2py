@@ -2,19 +2,19 @@
 {{
 # Lista de tickets com filtros (GET) e atualização automática opcional da tabela.
 import ui_helpers
-_opc_status = [(_st, ui_helpers.status_info(_st)['label']) for _st in options['status']]
-_opc_ambientes = [('', 'Todos')] + [(_a, _a) for _a in options['environments']]
-_opc_scripts = [('', 'Todos')] + list(options['scripts'])
-_opc_origens = [('', 'Todas')] + list(options['sources'])
-_campos = []
-_campos.append({'name': 'status', 'label': 'Status', 'kind': 'multiple', 'value': active_filters.get('status', []), 'options': _opc_status})
-_campos.append({'name': 'environment', 'label': 'Ambiente', 'kind': 'select', 'value': active_filters.get('environment'), 'options': _opc_ambientes})
-_campos.append({'name': 'script', 'label': 'Script', 'kind': 'select', 'value': active_filters.get('script'), 'options': _opc_scripts})
-_campos.append({'name': 'requested_by', 'label': 'Solicitante (login)', 'kind': 'text', 'value': active_filters.get('requested_by')})
-_campos.append({'name': 'created_from', 'label': 'Criado de', 'kind': 'date', 'value': active_filters.get('created_from')})
-_campos.append({'name': 'created_to', 'label': 'Criado até', 'kind': 'date', 'value': active_filters.get('created_to')})
-_campos.append({'name': 'source', 'label': 'Origem', 'kind': 'select', 'value': active_filters.get('source'), 'options': _opc_origens})
-filters = {'id': 'filter-tickets', 'url_base': ('tickets', 'index'), 'keep': {'size': size}, 'fields': _campos}
+_opt_status = [(_st, ui_helpers.status_info(_st)['label']) for _st in options['status']]
+_opt_environments = [('', 'Todos')] + [(_a, _a) for _a in options['environments']]
+_opt_scripts = [('', 'Todos')] + list(options['scripts'])
+_opt_sources = [('', 'Todas')] + list(options['sources'])
+_fields = []
+_fields.append({'name': 'status', 'label': 'Status', 'kind': 'multiple', 'value': active_filters.get('status', []), 'options': _opt_status})
+_fields.append({'name': 'environment', 'label': 'Ambiente', 'kind': 'select', 'value': active_filters.get('environment'), 'options': _opt_environments})
+_fields.append({'name': 'script', 'label': 'Script', 'kind': 'select', 'value': active_filters.get('script'), 'options': _opt_scripts})
+_fields.append({'name': 'requested_by', 'label': 'Solicitante (login)', 'kind': 'text', 'value': active_filters.get('requested_by')})
+_fields.append({'name': 'created_from', 'label': 'Criado de', 'kind': 'date', 'value': active_filters.get('created_from')})
+_fields.append({'name': 'created_to', 'label': 'Criado até', 'kind': 'date', 'value': active_filters.get('created_to')})
+_fields.append({'name': 'source', 'label': 'Origem', 'kind': 'select', 'value': active_filters.get('source'), 'options': _opt_sources})
+filters = {'id': 'filter-tickets', 'url_base': ('tickets', 'index'), 'keep': {'size': size}, 'fields': _fields}
 }}
 <div class="sss-page-header">
   <h1 class="sss-page-title">Tickets</h1>

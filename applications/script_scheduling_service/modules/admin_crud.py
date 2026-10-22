@@ -12,7 +12,7 @@ import rbac
 import ui_helpers
 
 GENERAL_FIELD = "_geral"
-MSG_CONFLICT = ui_helpers.mensagem("conflict")
+MSG_CONFLICT = ui_helpers.message("conflict")
 MSG_FAILURE = u"Não foi possível salvar. Tente novamente em instantes."
 DETAIL_LIMIT = 1000
 _EMPTY = u"(vazio)"

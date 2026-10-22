@@ -29,7 +29,7 @@ MSG_NAME_REQUIRED = u"Informe o nome do perfil."
 MSG_NAME_INVALID = u"Use de 1 a 30 caracteres: letras maiúsculas, dígitos e _ (ex.: OPERATOR_PROD)."
 MSG_NAME_DUPLICATE = u"Já existe um perfil com este nome."
 MSG_DESCRIPTION_LENGTH = u"A descrição deve ter no máximo %d caracteres." % DESCRIPTION_MAX_LENGTH
-MSG_LAST_ADMIN = ui_helpers.mensagem("last_admin")
+MSG_LAST_ADMIN = ui_helpers.message("last_admin")
 MSG_SELF_ADMIN = u"Você não pode remover o acesso administrativo do seu próprio perfil."
 MSG_SELF_DEACTIVATE = u"Você não pode desativar o seu próprio perfil."
 MSG_ADMIN_ONLY = (u"Só um administrador pode alterar um perfil de administrador, mudar o seu próprio perfil ou "
@@ -151,7 +151,7 @@ class AdminProfilesService(object):
             "active_users": total,
             "affected_users": logins,
             "own": ctx.get("profile_id") == profile["id"],
-            "record": ui_helpers.registro(profile, ctx),
+            "record": ui_helpers.record_info(profile, ctx),
         }
 
     def _validate(self, date, errors):

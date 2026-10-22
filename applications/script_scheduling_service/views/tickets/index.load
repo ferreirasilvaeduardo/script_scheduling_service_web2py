@@ -3,7 +3,7 @@
 # incluído por tickets/index.html. O controller aplica os mesmos guardas nas duas extensões.
 # Variáveis: resultado, erro, pagina, tamanho, query_params.
 import ui_helpers
-_lt_itens = result['items']
+_lt_items = result['items']
 _lt_ncol = 10
 total = result['total']
 total_capped = result.get('total_capped', False)
@@ -37,12 +37,12 @@ url_base = ('tickets', 'index')
             </div>
           </td>
         </tr>
-        {{elif not _lt_itens:}}
+        {{elif not _lt_items:}}
         <tr>
           <td colspan="{{=_lt_ncol}}" class="sss-table-state sss-table-empty">Nenhum ticket encontrado para os filtros informados.</td>
         </tr>
         {{else:}}
-        {{for _lt in _lt_itens:}}
+        {{for _lt in _lt_items:}}
         <tr{{if _lt['status'] == 'RUNNING':}} class="sss-row-running"{{pass}}>
           <td class="sss-col-num sss-mono"><a href="{{=URL(c='tickets', f='detail', args=[_lt['id']], extension=False)}}">{{=_lt['id']}}</a></td>
           <td class="sss-mono">{{=_lt['script_name']}}{{if _lt['source'] == 'agendamento':}} <span class="badge text-bg-secondary" title="Criado por regra de agendamento">agend.</span>{{pass}}</td>
@@ -55,8 +55,8 @@ url_base = ('tickets', 'index')
           </td>
           <td class="sss-col-num">{{=_lt['priority']}}</td>
           <td>{{=_lt['requested_by']}}</td>
-          <td class="sss-col-data">{{=ui_helpers.formatar_data(_lt['created_at'])}}</td>
-          <td class="sss-col-data">{{=ui_helpers.formatar_data(_lt['started_at'])}}</td>
+          <td class="sss-col-data">{{=ui_helpers.format_date(_lt['created_at'])}}</td>
+          <td class="sss-col-data">{{=ui_helpers.format_date(_lt['started_at'])}}</td>
           <td class="sss-col-num">{{=_lt['duration']}}</td>
           <td><a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='detail', args=[_lt['id']], extension=False)}}" aria-label="Detalhes do ticket {{=_lt['id']}}">Detalhes</a></td>
         </tr>

@@ -636,7 +636,7 @@ class SchedulesService(object):
                 "next_run_at": format_date(reg.get("next_run_at")) if reg["active"] == "Y" else "-",
                 "last_run_at": format_date(reg.get("last_run_at")),
                 "last_ticket_id": reg.get("last_ticket_id"),
-                "responsible": ui_helpers.ator_visivel(self._login(reg["user_id"], logins), ctx),
+                "responsible": ui_helpers.visible_actor(self._login(reg["user_id"], logins), ctx),
                 "active": reg["active"],
                 "state": label,
                 "reason": reason,
@@ -692,7 +692,7 @@ class SchedulesService(object):
         pause_warning = None
         if current_value and current_value.get("active") == "N":
             dt_pause = format_date(current_value.get("updated_at"))
-            actor_pause = ui_helpers.nome_ator(ui_helpers.registro(current_value, ctx)["updated_by"])
+            actor_pause = ui_helpers.actor_name(ui_helpers.record_info(current_value, ctx)["updated_by"])
             reason_txt = PAUSE_REASONS.get(current_value.get("pause_reason"), current_value.get("pause_reason")) or u"Desconhecido"
             pause_warning = (
                 u"Pausada em %s por %s: %s. "
@@ -713,9 +713,9 @@ class SchedulesService(object):
             "version": version(current_value, self._sensitive_codes(current_value["script_id"])) if current_value else "",
             "active": base.get("active", "Y"),
             "state": rule_state(current_value) if current_value else None,
-            "responsible": ui_helpers.ator_visivel(self._login(current_value["user_id"]), ctx) if current_value else None,
+            "responsible": ui_helpers.visible_actor(self._login(current_value["user_id"]), ctx) if current_value else None,
             "other_owner": bool(current_value) and current_value["user_id"] != ctx.get("user_id"),
-            "record": ui_helpers.registro(current_value, ctx) if current_value else None,
+            "record": ui_helpers.record_info(current_value, ctx) if current_value else None,
             "pause_warning": pause_warning,
         }
         for field in ("name", "recurrence_type", "cron_expression", "run_time", "month_day",

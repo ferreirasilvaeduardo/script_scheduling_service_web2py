@@ -189,7 +189,7 @@ class AdminParametersService(object):
             "validation_regex": p.get("validation_regex") or "", "sensitive": p.get("sensitive") or "N",
             "active": p["active"], "version": _version(p),
             "links": self.links(p["id"]), "can_regex": can_regex,
-            "record": ui_helpers.registro(p, ctx),
+            "record": ui_helpers.record_info(p, ctx),
         }
 
     # ------------------------------------------------------------- validacao

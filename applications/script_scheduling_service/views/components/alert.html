@@ -1,7 +1,7 @@
 {{
 # Componente: mensagem de response.flash tipada.
 # Variáveis de entrada:
-#   alerta -- resultado de ui_helpers.alerta_info(flash): None (nada é exibido) ou
+#   alerta -- resultado de ui_helpers.alert_info(flash): None (nada é exibido) ou
 #             {tipo: 'sucesso' | 'aviso' | 'erro', mensagem, classe, icone, role}.
 }}{{if alert:}}
 <div class="alert {{=alert['css_class']}} sss-alert" role="{{=alert['role']}}">

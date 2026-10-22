@@ -3,23 +3,23 @@
 # Detalhe do ticket. Botões de ação só aparecem quando o servidor calculou que RBAC e status
 # permitem (pode_cancelar/pode_reexecutar); as actions POST reautorizam tudo de novo.
 import ui_helpers
-icones = URL('static', 'img/icons.svg')
+icons = URL('static', 'img/icons.svg')
 _t = ticket
-_eventos = (
+_events = (
     (u'Criado', _t['created_at']),
     (u'Agendado para', _t['scheduled_at']),
     (u'Iniciado', _t['started_at']),
     (u'Último heartbeat', _t['heartbeat_at']),
     (u'Finalizado', _t['finished_at']),
 )
-_ocultos = {'ticket_id': _t['id']}
-_txt_cancelar = u'O pedido ainda não começou a rodar e será cancelado na hora.'
+_hidden = {'ticket_id': _t['id']}
+_txt_cancel = u'O pedido ainda não começou a rodar e será cancelado na hora.'
 if _t['status'] == 'RUNNING':
-    _txt_cancelar = u'O script está rodando: o servidor vai receber o pedido e parar a execução em alguns segundos.'
+    _txt_cancel = u'O script está rodando: o servidor vai receber o pedido e parar a execução em alguns segundos.'
 pass
-_modal_cancelar = {'id': 'modal-cancel', 'title': u'Cancelar o pedido #%s' % _t['id'], 'text': _txt_cancelar, 'trigger_label': u'Cancelar este pedido', 'confirm_label': u'Sim, cancelar', 'variant': 'danger', 'action': URL(c='tickets', f='cancel'), 'hidden_fields': _ocultos}
-_modal_reexecutar = {'id': 'modal-reexecutar', 'title': u'Rodar de novo o pedido #%s' % _t['id'], 'text': u'Um novo pedido será criado com as mesmas respostas, conferidas de novo contra o cadastro atual do script. Este pedido não muda.', 'trigger_label': u'Rodar de novo com as mesmas respostas', 'confirm_label': u'Sim, rodar de novo', 'variant': 'normal', 'action': URL(c='tickets', f='rerun'), 'hidden_fields': _ocultos}
-_exp = _t['explanation']
+_modal_cancel = {'id': 'modal-cancel', 'title': u'Cancelar o pedido #%s' % _t['id'], 'text': _txt_cancel, 'trigger_label': u'Cancelar este pedido', 'confirm_label': u'Sim, cancelar', 'variant': 'danger', 'action': URL(c='tickets', f='cancel'), 'hidden_fields': _hidden}
+_modal_rerun = {'id': 'modal-reexecutar', 'title': u'Rodar de novo o pedido #%s' % _t['id'], 'text': u'Um novo pedido será criado com as mesmas respostas, conferidas de novo contra o cadastro atual do script. Este pedido não muda.', 'trigger_label': u'Rodar de novo com as mesmas respostas', 'confirm_label': u'Sim, rodar de novo', 'variant': 'normal', 'action': URL(c='tickets', f='rerun'), 'hidden_fields': _hidden}
+_expl = _t['explanation']
 _info = ui_helpers.status_info(_t['status'])
 }}
 <div class="sss-page-header sss-detail-header">
@@ -33,11 +33,11 @@ _info = ui_helpers.status_info(_t['status'])
   <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='index')}}">Voltar à lista</a>
     {{if _t['can_cancel']:}}
-    {{modal = _modal_cancelar}}
+    {{modal = _modal_cancel}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}
     {{if _t['can_rerun']:}}
-    {{modal = _modal_reexecutar}}
+    {{modal = _modal_rerun}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}
   </div>
@@ -46,10 +46,10 @@ _info = ui_helpers.status_info(_t['status'])
 <section class="sss-card sss-explanation" aria-labelledby="title-explanation">
   <div class="sss-card-body">
     <h2 class="sss-explanation-title" id="title-explanation">
-      <span class="sss-status {{=_info['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_info['icon']}}"></use></svg><span>{{=_exp['state']}}</span></span>
+      <span class="sss-status {{=_info['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icons}}#{{=_info['icon']}}"></use></svg><span>{{=_expl['state']}}</span></span>
     </h2>
-    <p class="sss-explanation-phrase mb-1"><strong>O que aconteceu:</strong> {{=_exp['happened']}}</p>
-    {{if _exp['todo']:}}<p class="sss-explanation-phrase mb-3"><strong>O que fazer agora:</strong> {{=_exp['todo']}}</p>{{pass}}
+    <p class="sss-explanation-phrase mb-1"><strong>O que aconteceu:</strong> {{=_expl['happened']}}</p>
+    {{if _expl['todo']:}}<p class="sss-explanation-phrase mb-3"><strong>O que fazer agora:</strong> {{=_expl['todo']}}</p>{{pass}}
     <ol class="sss-steps" aria-label="Etapas do pedido">
       {{for _e in _t['steps']:}}
       <li class="sss-step sss-step-{{=_e['state_info']}}"{{if _e['state_info'] == 'current':}} aria-current="step"{{pass}}>
@@ -87,10 +87,10 @@ _info = ui_helpers.status_info(_t['status'])
   <section class="sss-card" aria-labelledby="title-time">
     <h2 class="sss-card-title" id="title-time">Linha do tempo</h2>
     <ol class="sss-card-body sss-timeline">
-      {{for _rotulo, _quando in _eventos:}}
-      <li class="{{='sss-time-done' if _quando is not None else 'sss-time-pending'}}">
-        <span class="sss-time-label">{{=_rotulo}}</span>
-        <span class="sss-time-value">{{=ui_helpers.formatar_data(_quando)}}</span>
+      {{for _label, _when in _events:}}
+      <li class="{{='sss-time-done' if _when is not None else 'sss-time-pending'}}">
+        <span class="sss-time-label">{{=_label}}</span>
+        <span class="sss-time-value">{{=ui_helpers.format_date(_when)}}</span>
       </li>
       {{pass}}
     </ol>
@@ -176,10 +176,10 @@ _info = ui_helpers.status_info(_t['status'])
 import json
 import ticket_service
 _vl = log_viewer
-_status_visor = dict((_s, ui_helpers.status_info(_s)) for _s in ticket_service.STATUS_TICKET)
-_status_visor = dict((_s, {'label': _i['label'], 'css_class': _i['css_class']}) for _s, _i in _status_visor.items())
+_viewer_status = dict((_s, ui_helpers.status_info(_s)) for _s in ticket_service.STATUS_TICKET)
+_viewer_status = dict((_s, {'label': _i['label'], 'css_class': _i['css_class']}) for _s, _i in _viewer_status.items())
 }}
-<section class="sss-card" aria-labelledby="title-log" x-data="logViewer" data-url-chunk="{{=_vl['url_chunk']}}" data-interval-s="{{=_vl['interval_s']}}" data-max-chars="{{=_vl['max_chars']}}" data-status="{{=_t['status']}}" data-truncated="{{='Y' if _t['log_truncated'] else 'N'}}" data-status-info="{{=json.dumps(_status_visor, sort_keys=True)}}">
+<section class="sss-card" aria-labelledby="title-log" x-data="logViewer" data-url-chunk="{{=_vl['url_chunk']}}" data-interval-s="{{=_vl['interval_s']}}" data-max-chars="{{=_vl['max_chars']}}" data-status="{{=_t['status']}}" data-truncated="{{='Y' if _t['log_truncated'] else 'N'}}" data-status-info="{{=json.dumps(_viewer_status, sort_keys=True)}}">
   <h2 class="sss-card-title sss-log-title" id="title-log">
     <span>Log de execução</span>
     <span class="sss-status" :class="statusClass" role="status" aria-live="polite"><span x-text="statusLabel">{{=ui_helpers.status_info(_t['status'])['label']}}</span></span>

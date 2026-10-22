@@ -1,7 +1,7 @@
 {{extend 'layout.html'}}
 {{
 # Quem pode o quê (README §4.3.B.2, CR-004 T5): só leitura; a regra é a de rbac.can_execute, perfil a perfil.
-_alvo = q['script'] or q['environment']
+_target = q['script'] or q['environment']
 }}
 <div class="sss-page-header sss-detail-header">
   <div>
@@ -40,20 +40,20 @@ _alvo = q['script'] or q['environment']
   </div>
 </section>
 
-{{if _alvo:}}
+{{if _target:}}
 {{if q['warning']:}}<div class="alert alert-warning sss-alert" role="status"><span>{{=q['warning']}}</span></div>{{pass}}
-{{for _titulo, _lista in ((u'Perfis ativos', q['profiles']), (u'Não valem agora (perfil inativo)', q['inactive_items'])):}}
-{{if _lista or _titulo == u'Perfis ativos':}}
+{{for _title, _items in ((u'Perfis ativos', q['profiles']), (u'Não valem agora (perfil inativo)', q['inactive_items'])):}}
+{{if _items or _title == u'Perfis ativos':}}
 <section class="sss-card">
-  <h2 class="sss-card-title">{{=_titulo}}</h2>
-  {{if not _lista:}}
+  <h2 class="sss-card-title">{{=_title}}</h2>
+  {{if not _items:}}
   <p class="sss-card-body sss-text-muted mb-0">{{if q['script']:}}Nenhum perfil pode rodar este script.{{else:}}Nenhum perfil roda scripts neste ambiente.{{pass}}</p>
   {{else:}}
   <div class="table-responsive">
     <table class="table table-sm sss-table mb-0">
       <thead><tr><th scope="col">Perfil</th><th scope="col">Por quê</th><th scope="col">{{='Onde pode rodar' if q['script'] else 'Scripts que pode rodar'}}</th><th scope="col">Usuários ativos</th></tr></thead>
       <tbody>
-        {{for _p in _lista:}}
+        {{for _p in _items:}}
         <tr>
           <td><a class="sss-mono" href="{{=URL(c='admin_profiles', f='matrix', args=[_p['id']])}}">{{=_p['name']}}</a></td>
           <td>{{=_p['reason']}}</td>
