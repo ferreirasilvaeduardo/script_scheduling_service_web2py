@@ -32,7 +32,7 @@ filters = {'id': 'filter-tickets', 'url_base': ('tickets', 'index'), 'keep': {'s
       <input class="form-check-input" type="checkbox" role="switch" id="auto-refresh" :checked="active" @change="toggle">
       <label class="form-check-label" for="auto-refresh">Atualizar automaticamente</label>
     </div>
-    <span class="sss-text-muted sss-auto-status-text" aria-live="polite" x-text="state"></span>
+    <span class="sss-text-muted sss-auto-status-text" aria-live="polite" x-text="statusText"></span>
   </div>
   {{include 'tickets/index.load'}}
 </section>

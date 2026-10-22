@@ -81,7 +81,7 @@ _tabs = (
   <div class="sss-card-body sss-matrix-footer">
     <div class="sss-confirmation sss-form-actions" x-data="confirmation" @keydown.escape.window="close">
       <button type="button" class="btn btn-primary" x-ref="trigger" @click="open">Revisar e salvar</button>
-      <span class="sss-text-muted" aria-live="polite" x-text="state"></span>
+      <span class="sss-text-muted" aria-live="polite" x-text="statusText"></span>
       <div class="modal sss-modal" :class="modalClass" role="dialog" aria-modal="true" aria-labelledby="modal-matrix-title" tabindex="-1" @click.self="close">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
           <div class="modal-content">

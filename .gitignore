@@ -53,5 +53,8 @@ bin/sss-web-*_v*.sh
 /applications/script_scheduling_service/docs/sss_dev_script_examples/
 # Capturas do manual de homologacao: ja ficam dentro do .docx (dev/homologation/README.md)
 applications/script_scheduling_service/dev/homologation/screens/
+# Evidencias reais (2026-10-22): capturas e estado da rodada; o .docx e o results.json sao versionados
+applications/script_scheduling_service/dev/homologation/evidence_*/*.png
+applications/script_scheduling_service/dev/homologation/evidence_*/state.json
 applications/script_scheduling_service/output/
 applications/script_scheduling_service/input/

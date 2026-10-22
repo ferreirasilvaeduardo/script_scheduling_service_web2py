@@ -125,6 +125,19 @@ class TestScriptHistory(_Base):
             self.assertTrue(h["rate_phrase"].startswith(u"De cada 10 vezes,"))
         self.assertEqual(h["list_filter"]["script"], 1)
 
+    def test_duracao_tipica_curta_sem_cerca_de(self):
+        """Execucoes abaixo de 1 minuto: 'menos de 1 minuto', nunca 'cerca de menos de 1 minuto'."""
+        now = self.tickets.now()
+        rows = [{"id": 900 + i, "status": "SUCCESS", "status_reason": "EXIT_OK", "created_at": now,
+                 "started_at": now, "finished_at": now + datetime.timedelta(seconds=10)} for i in range(3)]
+        with mock.patch.object(self.tickets, "script_history", return_value=rows):
+            h = self.svc.script_history(self.ctx["admin"], "1")
+        self.assertEqual(h["typical_duration"], u"menos de 1 minuto")
+        rows = [dict(r, finished_at=now + datetime.timedelta(minutes=4)) for r in rows]
+        with mock.patch.object(self.tickets, "script_history", return_value=rows):
+            h = self.svc.script_history(self.ctx["admin"], "1")
+        self.assertEqual(h["typical_duration"], u"cerca de 4 minutos")
+
     def test_fora_das_rotinas_e_404(self):
         from repo_errors import RepoNotFound
         with self.assertRaises(RepoNotFound):

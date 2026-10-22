@@ -1,16 +1,42 @@
-# Ferramentas do manual de homologação (somente DEV)
+# Ferramentas de homologação (somente DEV)
 
-Geram e conferem as figuras do `docs/homologation/SSS_Homologation_Manual_UI_Freeze.docx` (UI Freeze, 2026-10-18). Ficam em `dev/`, fora do pacote de implantação (README §12.2).
+Geram e conferem as figuras dos documentos de homologação em `docs/homologation/`. Ficam em `dev/`, fora do pacote de implantação (README §12.2).
+
+## Evidências reais no DEV (2026-10-22)
+
+`docs/homologation/SSS_Homologation_Evidence_2026-10-22.docx`: os casos de teste do manual de UI Freeze executados de verdade no DEV (banco Oracle, servidor web e agente real), com a conferência de cada resultado esperado na própria página.
 
 | Arquivo | Uso |
 |---|---|
-| `ferramentas/capture_all_screens.js` | Executa os 25 casos de teste (CT-01 a CT-25) no navegador (Puppeteer) e grava as 68 telas em `telas/` |
-| `ferramentas/capture_remaining.js`, `ferramentas/capture_ct25.js` | Recapturam só as figuras que faltaram ou só as do CT-25 |
-| `ferramentas/test_step.js`, `ferramentas/test_step2.js` | Depuração de um passo isolado (login e formulário de ambientes) |
-| `ferramentas/update_docx_images.py` | Troca as figuras do `.docx` pelas de `telas/` (cria um `.bak` antes) |
-| `ferramentas/verify_docx_images.py` | Lista as figuras do `.docx` com as dimensões |
+| `tools/capture_evidence.js` | Executa os casos (CT-01 a CT-25, a preparação da massa e o encerramento) no navegador (Puppeteer), confere o resultado esperado de cada passo e grava as telas, `results.json`, `state.json` e o log em `evidence_20261022/` |
+| `tools/build_evidence_docx.py` | Gera o `.docx` de evidências a partir de `evidence_20261022/` (`python-docx`) |
+| `evidence_20261022/results.json`, `execucao.log` | Resultado de cada verificação e o log da execução que gerou o documento (versionados) |
+| `evidence_20261022/*.png`, `state.json` | Capturas e estado da rodada; não versionados, porque as capturas já estão dentro do `.docx` |
+
+Pré-requisitos: servidor web do DEV no ar (`bin/start_local.sh 18000`), agente do DEV no ar com `interpreters` configurado, scripts do seed acessíveis em `/opt/automacoes/scripts/utilitarios/` (link para `dev/scripts/utilitarios/`) e os arquivos de entrada em `input/<ambiente>/<script>/` (ver o documento, seção 2).
+
+```bash
+cd dev/homologation/tools
+node capture_evidence.js                 # todos os casos, na ordem
+node capture_evidence.js CT-05 CT-08     # só os casos pedidos (o estado fica em state.json)
+python3 build_evidence_docx.py
+```
+
+Senhas: nunca no código nem no log. A senha inicial dos usuários do seed vem do `docs/DEPLOYMENT.md` (§5.3, documentada); a senha nova do admin, usada a partir da troca válida do CT-01, vem do arquivo `SSS_ADMIN_NEW_PASSWORD_FILE` (padrão `~/.sss_homolog_pw`, permissão 0600).
+
+## Manual de UI Freeze (2026-10-18, histórico)
+
+Figuras do `docs/homologation/SSS_Homologation_Manual_UI_Freeze.docx`, capturadas sobre o backend FAKE.
+
+| Arquivo | Uso |
+|---|---|
+| `tools/capture_all_screens.js` | Executa os 25 casos de teste no navegador (Puppeteer) e grava as 68 telas em `screens/` |
+| `tools/capture_remaining.js`, `tools/capture_ct25.js` | Recapturam só as figuras que faltaram ou só as do CT-25 |
+| `tools/test_step.js`, `tools/test_step2.js` | Depuração de um passo isolado (login e formulário de ambientes) |
+| `tools/update_docx_images.py` | Troca as figuras do `.docx` pelas de `screens/` (cria um `.bak` antes) |
+| `tools/verify_docx_images.py` | Lista as figuras do `.docx` com as dimensões |
 | `all_cts_steps.txt`, `all_figures.txt` | Texto dos casos de teste e mapa figura → imagem, extraídos do manual |
-| `telas/` | As 68 capturas (`image<n>.png`); não versionadas, porque já estão dentro do `.docx` |
+| `screens/` | As 68 capturas (`image<n>.png`); não versionadas, porque já estão dentro do `.docx` |
 
 Uso, com o servidor de DEV em `http://127.0.0.1:8000`:
 

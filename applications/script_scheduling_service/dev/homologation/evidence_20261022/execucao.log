@@ -1,0 +1,359 @@
+
+=== CT-01 — Login, sessão e troca de senha ===
+  [OK]     Endereço raiz redireciona para Entrar — /default/login?next=%2Fscript_scheduling_service%2F
+  [OK]     Faixa amarela do ambiente DEV no topo
+  [fig] Tela de login -> CT-01_1.png
+  [OK]     Senha incorreta não entra
+  [OK]     Mensagem genérica, sem dizer se o erro foi no login ou na senha
+  [fig] Mensagem após senha incorreta -> CT-01_2.png
+  [OK]     Login com espaços em volta entra (o login é limpo antes da validação) — /default/index
+  [OK]     Confirmação divergente: campo destacado com mensagem em português
+  [OK]     Confirmação divergente marca o campo como inválido
+  [fig] Tela Minha senha com a confirmação divergente -> CT-01_3.png
+  [OK]     Troca válida: mensagem de sucesso e a sessão continua ativa — /default/index
+  [nota] A senha do admin passou a ser a senha escolhida pelo responsável pela homologação (os demais usuários continuam com a senha inicial).
+  [OK]     GET em /default/logout não faz logout (405) — status 405
+  [OK]     Sair volta ao login com "Você saiu do sistema."
+  [OK]     Depois de Sair a página é a de login
+  [OK]     admin entra com a senha nova
+
+=== CT-02 — Painel inicial por perfil ===
+  [OK]     admin: cartões de disparo, tickets 24 h, meus tickets, agendamentos e saúde dos agentes
+  [OK]     admin: menu com Administração
+  [fig] Painel inicial do admin -> CT-02_1.png
+  [OK]     op.prod: disparo, tickets 24 h e meus tickets
+  [OK]     op.prod: sem agendamentos, agentes e Administração
+  [fig] Painel inicial do op.prod -> CT-02_2.png
+  [OK]     op.hml: disparo, tickets 24 h e meus tickets
+  [OK]     op.hml: sem Administração
+  [fig] Painel inicial do op.hml -> CT-02_3.png
+  [OK]     consulta: tickets 24 h e meus tickets
+  [OK]     consulta: sem Disparar script e sem Rotinas disponíveis
+  [fig] Painel inicial do consulta -> CT-02_4.png
+
+=== CT-03 — O que eu posso fazer ===
+  [OK]     Quadros do perfil e a frase de mais acesso
+  [OK]     op.hml: ambientes do perfil (CLONE6, CLONE7 e GFPREPROD)
+  [OK]     op.hml: CLONE1 e CLONE2 (fora do perfil) não aparecem
+  [fig] O que eu posso fazer (op.hml) -> CT-03_1.png
+  [OK]     O botão Rodar em… abre o disparo já na etapa 3 — /tickets/new?environment=GFPREPROD&script_id=9
+  [OK]     consulta: ainda não pode rodar scripts
+  [OK]     admin: frase de administrador
+
+=== MASSA — Preparação da massa: tickets reais criados pelas telas e executados pelo agente ===
+  [OK]     Scripts do seed disponíveis no disparo do admin — compactar_targz, contar_linhas_arquivo, converter_encoding, descompactar_targz, descompactar_zip, filtrar_linhas, gerar_hash_arquivo, juntar_arquivos, limpar_linhas_vazias, ordenar_arquivo, quebrar_arquivo, remover_duplicadas, substituir_texto, zipar_arquivos
+  [OK]     Ticket ok_hml criado por op.hml (contar_linhas_arquivo em GFPREPROD) — #3386
+  [OK]     Ticket erro_hml criado por op.hml (contar_linhas_arquivo em GFPREPROD) — #3387
+  [OK]     Ticket ok_clone6 criado por op.hml (contar_linhas_arquivo em CLONE6) — #3388
+  [OK]     Ticket ok_prod criado por op.prod (gerar_hash_arquivo em CLONE2) — #3389
+  [OK]     Ticket ok_admin criado por admin (gerar_hash_arquivo em CLONE2) — #3390
+  [OK]     Ticket #3386 (ok_hml) executado pelo agente: Deu certo
+  [OK]     Ticket #3387 (erro_hml) executado pelo agente: Deu erro
+  [OK]     Ticket #3388 (ok_clone6) executado pelo agente: Deu certo
+  [OK]     Ticket #3389 (ok_prod) executado pelo agente: Deu certo
+  [OK]     Ticket #3390 (ok_admin) executado pelo agente: Deu certo
+
+=== CT-04 — Rotinas disponíveis e histórico do script ===
+  [OK]     Cartões com perguntas, última execução e botões
+  [OK]     A busca filtra na hora — gerar_hash_arquivo
+  [OK]     Sem resultado: "Nenhuma rotina corresponde à busca."
+  [fig] Rotinas disponíveis (op.hml) -> CT-04_1.png
+  [OK]     Histórico: resumo, gráfico de 30 dias e números
+  [fig] Histórico do contar_linhas_arquivo -> CT-04_2.png
+  [OK]     consulta: acesso negado (403)
+  [OK]     Status HTTP 403 — status 403
+
+=== CT-05 — Disparo de script (criação de ticket) ===
+  [OK]     Etapa 1: só scripts ativos autorizados ao perfil e homologados (os 14 utilitários) — compactar_targz, contar_linhas_arquivo, converter_encoding, descompactar_targz, descompactar_zip, filtrar_linhas, gerar_hash_arquivo, juntar_arquivos, limpar_linhas_vazias, ordenar_arquivo, quebrar_arquivo, remover_duplicadas, substituir_texto, zipar_arquivos
+  [fig] Etapa 1: escolha do script -> CT-05_1.png
+  [OK]     Etapa 2: ambientes ativos do perfil em que o script está homologado — CLONE1, CLONE2, CLONE6, CLONE7, GFPREPROD
+  [fig] Etapa 2: escolha do ambiente -> CT-05_2.png
+  [OK]     A lista de prioridades do op.prod começa em 2 (a 1 é só de administradores) — 2,3,4
+  [OK]     Prévia do comando com o interpretador e o caminho completo do script
+  [fig] Etapa 3: questionário e prévia do comando -> CT-05_3.png
+  [OK]     Confirmação com a frase-resumo e o comando que será executado
+  [fig] Confirmação do disparo, com o resumo -> CT-05_4.png
+  [nota] O destaque "AMBIENTE DE PRODUÇÃO" (botão vermelho e selo) só aparece para o ambiente chamado PRODUCAO (ticket_service.PRODUCTION_ENVIRONMENT); nenhum ambiente do DEV tem esse nome, então ele não aparece nos dados reais.
+  [OK]     Mensagem "Ticket #N criado com sucesso."
+  [OK]     Detalhe com o que aconteceu, o que fazer agora, as etapas e o arquivo do script
+  [fig] Ticket criado (detalhe) -> CT-05_5.png
+  [OK]     Ticket #3391 executado pelo agente real até o fim
+  [OK]     Aviso de respostas carregadas da última execução
+  [OK]     Campos preenchidos com as respostas do ticket anterior — /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/input/clone2/gerar_hash_arquivo/extrato_20261022.csv
+  [OK]     Nada é criado até confirmar (a página continua no disparo)
+  [fig] Questionário preenchido com a última execução -> CT-05_6.png
+
+=== CT-06 — Lista de tickets, filtros e escopo ===
+  [OK]     Ticket longo #3392 (zipar_arquivos, 3 GB de texto, nível 9) rodando no agente
+  [OK]     admin vê tickets de vários ambientes
+  [fig] Lista de tickets (admin) -> CT-06_1.png
+  [OK]     Filtro pela situação Rodando mostra só tickets rodando — 1 linha(s)
+  [fig] Filtro pela situação Rodando -> CT-06_2.png
+  [OK]     Atualização automática: "Atualizada às HH:MM:SS"
+  [OK]     op.hml não vê tickets de CLONE1 e CLONE2
+  [fig] Lista de tickets do op.hml: só os ambientes do perfil -> CT-06_3.png
+
+=== CT-07 — Detalhe do ticket e visualizador de log ===
+  [OK]     Ticket rodando: frase "Está rodando agora. Começou há …" e as etapas
+  [fig] Detalhe do ticket rodando, com log -> CT-07_1.png
+  [OK]     Baixar log baixa ticket_<id>.log — ticket_3392.log
+  [nota] Os scripts PYTHON3 rodam com -I e saída em buffer: o log de um script Python aparece quando o buffer descarrega (no fim); scripts SH/BASH escrevem na hora.
+  [OK]     Marcação HTML do log aparece como texto
+  [OK]     Nenhum script executado e nenhum negrito aplicado
+  [OK]     Ticket com erro: o que aconteceu, o que fazer e o detalhe técnico
+  [fig] Detalhe de ticket que deu erro -> CT-07_2.png
+
+=== CT-08 — Cancelamento de ticket ===
+  [OK]     Ticket longo #3394 (zipar_arquivos, 3 GB de texto, nível 9) rodando no agente
+  [OK]     A janela explica o efeito do cancelamento de um ticket rodando
+  [fig] Confirmação de cancelamento -> CT-08_1.png
+  [OK]     Rodando: "Cancelamento solicitado ao agente; ele vai encerrar a execução."
+  [OK]     Segunda aba (aberta antes do pedido): "O cancelamento já havia sido solicitado." ou "O ticket já estava encerrado."
+  [OK]     Ticket #3394 cancelado pelo agente real (processo encerrado)
+  [fig] Ticket após o pedido de cancelamento -> CT-08_2.png
+  [OK]     O botão Cancelar este pedido some do ticket terminado
+  [OK]     Ticket agendado fica Esperando
+  [OK]     Esperando: o ticket fica Cancelado imediatamente
+  [nota] Cada pedido de cancelamento gera TICKET_CANCEL na auditoria (conferido no CT-19).
+
+=== CT-09 — Reexecução de ticket ===
+  [OK]     A janela explica que um novo pedido será criado com as mesmas respostas
+  [fig] Confirmação de reexecução -> CT-09_1.png
+  [OK]     "Ticket #N criado como reexecução do ticket #orig."
+  [fig] Ticket criado por reexecução -> CT-09_2.png
+  [OK]     O ticket original lista a reexecução
+  [OK]     Vínculo obrigatório novo (termo_busca) salvo no gerar_hash_arquivo
+  [OK]     Cadastro mudou: volta ao formulário com o aviso
+  [OK]     Nenhum ticket criado (continua no disparo) — /tickets/new?rerun=3389
+  [OK]     Vínculo desfeito ao final (cadastro restaurado) — arq_origem,tipo_hash
+  [OK]     Ticket de outro usuário: sem o botão Rodar de novo
+
+=== CT-10 — Perfil somente leitura (consulta) ===
+  [OK]     A lista mostra tickets dos ambientes do perfil
+  [fig] Lista de tickets do consulta -> CT-10_1.png
+  [OK]     Detalhe sem Cancelar e sem Rodar de novo
+  [OK]     O log é visível
+  [fig] Detalhe sem ações para o consulta -> CT-10_2.png
+  [OK]     Disparo direto pela URL: acesso negado
+  [OK]     Status HTTP 403 — status 403
+  [fig] Página de acesso negado (403) no disparo -> CT-10_3.png
+
+=== CT-11 — Gestão de Ambientes ===
+  [OK]     Lista com os ambientes do DEV
+  [fig] Lista de ambientes -> CT-11_1.png
+  [OK]     Nome com espaços em volta recusado e aviso no topo
+  [fig] Identificador com espaços recusado -> CT-11_2.png
+  [OK]     Inclusão válida: mensagem de sucesso
+  [OK]     Ambiente HOMOLOG_20261022_1805 gravado — #2799
+  [OK]     Alteração: mensagem de sucesso
+  [OK]     Salvar sem mudança não grava nada (o quadro Registro não muda) — Registro Criado em 22/10/2026 18:13:18 por admin Última alteração 22/10/2026 18:13:22 por admin
+  [OK]     A desativação mostra o impacto antes de confirmar
+  [fig] Confirmação de desativação de ambiente -> CT-11_3.png
+  [OK]     Ambiente HOMOLOG_20261022_1805 desativado ao final (não recebe execuções)
+  [nota] O ambiente HOMOLOG_20261022_1805 fica cadastrado e inativo como evidência (inclusão, alteração e desativação na auditoria).
+
+=== CT-12 — Gestão de Perfis e matriz de permissões ===
+  [OK]     Lista com os 4 perfis do seed
+  [fig] Lista de perfis -> CT-12_1.png
+  [OK]     A confirmação diz o efeito e quem é afetado
+  [fig] Desativação de perfil com usuários afetados -> CT-12_2.png
+  [OK]     Marcações feitas na matriz (−CLONE7, +VIEW_AUDIT)
+  [OK]     Contador de alterações pendentes
+  [fig] Matriz de permissões (aba Ambientes) -> CT-12_3.png
+  [OK]     Resumo da revisão no formato +código / -amb:nome
+  [fig] Revisão das alterações da matriz -> CT-12_4.png
+  [nota] A revisão foi cancelada: a matriz do OPERATOR_HML não foi alterada neste CT.
+  [OK]     Desativar o próprio perfil é negado
+  [OK]     Remover o acesso administrativo do próprio perfil é negado
+
+=== CT-13 — Quem pode o quê ===
+  [OK]     Por script: perfis ativos, por quê, onde e usuários ativos
+  [fig] Quem pode o quê: perfis que podem rodar o contar_linhas_arquivo -> CT-13_1.png
+  [OK]     Por ambiente: quem roda o quê no GFPREPROD
+  [OK]     O nome do perfil leva à matriz de permissões — /admin_profiles/matrix/3
+  [OK]     op.prod: acesso negado (403) — status 403
+
+=== CT-14 — Gestão de Usuários ===
+  [OK]     Depois de 5 falhas a conta fica bloqueada
+  [OK]     Lista com os 4 usuários do seed
+  [fig] Lista de usuários -> CT-14_1.png
+  [OK]     Filtro Bloqueados mostra o consulta
+  [OK]     Desativar mostra a confirmação
+  [OK]     Senha fora da política é recusada com a explicação
+  [OK]     Senha válida aceita (a senha nunca aparece na tela)
+  [nota] A redefinição do op.prod usou a própria senha inicial, para o usuário continuar com a senha documentada.
+  [fig] Edição de usuário -> CT-14_2.png
+  [OK]     Texto livre com caractere de controle é recusado com explicação
+  [OK]     Desbloquear: mensagem de sucesso
+  [OK]     consulta volta a entrar depois do desbloqueio
+  [OK]     O próprio usuário não oferece Desativar
+
+=== CT-15 — Dicionário de Parâmetros ===
+  [NAO OK] Lista com os parâmetros do seed — faltou: tipo_hash
+  [fig] Lista de parâmetros -> CT-15_1.png
+  [OK]     Parâmetro sigiloso com o aviso de credenciais
+  [OK]     Testar: valor válido aceito e inválido recusado com mensagem
+  [fig] Parâmetro sigiloso -> CT-15_2.png
+  [nota] O parâmetro documento_cliente_hml fica cadastrado (sem vínculo com scripts) como evidência.
+
+=== CT-16 — Gestão de Scripts, homologação e vínculo de parâmetros ===
+  [OK]     Lista com o caminho completo de cada script
+  [fig] Lista de scripts -> CT-16_1.png
+  [OK]     Arquivo do script com o caminho completo — /opt/automacoes/scripts/utilitarios/contar_linhas_arquivo.sh
+  [OK]     Ajuda do campo com o exemplo de caminho
+  [fig] Edição de script com o caminho completo -> CT-16_2.png
+  [OK]     Caminho "contar_linhas_arquivo.sh" recusado — Informe o caminho completo do arquivo, começando por / (ex.: /opt/automacoes/scripts/carga.py).
+  [OK]     Caminho "/opt/automacoes/../scripts/contar.sh" recusado — O caminho não pode conter '..'.
+  [OK]     Caminho "/etc/passwd" recusado — Scripts não podem ficar em pastas do sistema (/bin, /sbin, /usr, /lib, /etc, /boot, /proc, /sys, /dev, /root). Use outra pasta.
+  [OK]     Caminho "/opt/automacoes/scripts/" recusado — Escreva o caminho sem // repetida, sem /./ e sem / no fim.
+  [OK]     Nome "App" recusado como reservado — Este nome é reservado pelo sistema. Escolha outro.
+  [OK]     Arquivo que não existe neste servidor: salvo, com a nota de que o agente confere na execução
+  [fig] Script salvo com a nota de conferência pelo agente -> CT-16_3.png
+  [OK]     Caminho original restaurado — /opt/automacoes/scripts/utilitarios/contar_linhas_arquivo.sh
+  [OK]     Homologação por ambiente com os 5 ambientes ativos
+  [fig] Homologação por ambiente -> CT-16_4.png
+  [OK]     Vínculo de parâmetros com a prévia do comando
+  [fig] Vínculo de parâmetros -> CT-16_5.png
+
+=== CT-17 — Regras de Agendamento ===
+  [OK]     CRON inválido recusado com explicação — Campo minuto: 61 fora da faixa 0–59.
+  [OK]     Data inexistente (31/02 no CRON) recusada com explicação — A expressão não ocorre nos próximos 1461 dias a partir do início.
+  [OK]     Prévia das próximas execuções coerente com a regra
+  [fig] Edição de regra com prévia -> CT-17_1.png
+  [OK]     Regra salva com sucesso
+  [OK]     Regra HOMOLOG_20261022_DIARIA_1805 gravada (diária às 18:21) — #484
+  [fig] Lista de regras de agendamento -> CT-17_2.png
+  [OK]     Confirmação de pausa
+  [fig] Confirmação de pausa -> CT-17_3.png
+  [OK]     Pausar: mensagem e situação Pausado
+  [OK]     Retomar recalcula a próxima execução
+
+=== CT-18 — Agenda dos próximos 7 dias ===
+  [OK]     Agenda com a regra ativa, recorrência em palavras e o aviso de previsão
+  [fig] Agenda dos próximos 7 dias -> CT-18_1.png
+  [OK]     O nome da regra leva ao formulário dela — /schedules/form/484
+  [OK]     op.prod: acesso negado (403) — status 403
+  [OK]     Ticket criado pela regra às 18:21 aparece com o selo "agend." — 3385 contar_linhas_arquivo agend. GFPREPROD Deu certo EXIT_OK 2 admin 22/10/2026 18:04:03 22/10/2026 18:04:03 4s Detalhes
+  [fig] Ticket criado pela regra de agendamento (selo agend.) -> CT-18_2.png
+
+=== CT-19 — Auditoria: trilha, filtros e exportação CSV ===
+  [OK]     Trilha com o período padrão
+  [fig] Trilha de auditoria -> CT-19_1.png
+  [OK]     Cancelamentos do CT-08 como TICKET_CANCEL, um por pedido
+  [fig] Filtro por ação TICKET_CANCEL -> CT-19_2.png
+  [OK]     Período acima de 90 dias sem filtro seletivo é recusado
+  [fig] Período acima do limite -> CT-19_3.png
+  [OK]     Com o ator informado, o período longo é aceito
+  [OK]     CSV: nome auditoria_AAAAMMDD_HHMMSS.csv — attachment; filename="auditoria_20261022_181734.csv"
+  [OK]     CSV: separador ; e cabeçalho em português — ID;Data/hora;Ator;IP de origem;Ação;Entidade;ID da entidade;Detalhe
+  [OK]     A exportação aparece na trilha como AUDIT_EXPORT, com filtros e linhas
+  [fig] Exportação registrada na trilha -> CT-19_4.png
+
+=== CT-20 — Painel de agentes ===
+  [OK]     Agente real srv-linux-local-01 com saúde, heartbeat, ambientes e interpretadores
+  [OK]     Legenda de saúde e limiares
+  [OK]     A tela se atualiza sozinha ("Atualizado às …")
+  [fig] Painel de agentes -> CT-20_1.png
+  [nota] No DEV há um único agente real; os estados Atrasado, Em risco e Offline do manual vinham de agentes simulados pelo FAKE.
+
+=== CT-21 — Controle de acesso direto pela URL ===
+  [OK]     op.prod em /admin_users/index: acesso negado (403) — status 403
+  [OK]     op.prod em /audit/index: acesso negado (403) — status 403
+  [OK]     op.prod em /schedules/agenda: acesso negado (403) — status 403
+  [OK]     op.prod em /admin_profiles/who_can: acesso negado (403) — status 403
+  [OK]     op.hml no ticket #3389 (CLONE2, fora do escopo): 404 — status 404
+  [fig] Erro 404 em ticket fora do escopo -> CT-21_1.png
+  [OK]     Telas de consulta não vazam o catálogo (nem CLONE1/CLONE2 no HTML do op.hml)
+  [OK]     consulta em /tickets/catalog: 403 — status 403
+  [OK]     Login com next externo abre o Painel inicial, nunca o site externo — http://127.0.0.1:18000/script_scheduling_service/default/index
+
+=== CT-22 — Tema escuro e uso em celular ===
+  [fig] Tema escuro (detalhe do ticket) -> CT-22_1.png
+  [fig] Tema escuro (histórico com gráfico) -> CT-22_2.png
+  [OK]     360 px: painel inicial sem rolagem horizontal — 360 px
+  [fig] Painel inicial em 360 px -> CT-22_3.png
+  [OK]     360 px: rotinas disponíveis sem rolagem horizontal — 360 px
+  [fig] Rotinas disponíveis em 360 px -> CT-22_4.png
+
+=== CT-23 — Quadro Registro: quem criou e quem alterou ===
+  [NAO OK] Perfil do seed: criado pelo Sistema (instalação) e nunca alterado — Registro Criado em 21/10/2026 10:56:58 por Sistema (instalação) Última alteração 22/10/2026 18:03:21 por admin
+  [fig] Perfil nunca alterado -> CT-23_1.png
+  [OK]     Ambiente alterado pela tela: última alteração por admin — Registro Criado em 22/10/2026 18:13:18 por admin Última alteração 22/10/2026 18:13:35 por admin
+  [fig] Ambiente alterado pela tela -> CT-23_2.png
+  [OK]     Ticket: criado por op.prod; última alteração pelo agente que finalizou — Registro Criado em 22/10/2026 18:07:39 por op.prod Última alteração 22/10/2026 18:07:46 por Sistema (agente srv-linux-local-01)
+  [fig] Quadro Registro no detalhe do ticket -> CT-23_3.png
+  [OK]     Inclusão não mostra o quadro Registro
+
+=== CT-24 — Robustez do scheduler na interface ===
+  [OK]     Regex (a|a)*b recusada no campo — A expressão regular foi recusada: grupo entre parênteses repetido por quantificador (use só ? depois de parênteses) (README §6.2).
+  [fig] Regex recusada no Dicionário de Parâmetros -> CT-24_1.png
+  [OK]     Regex ^(\w|\d)+$ recusada no campo — A expressão regular foi recusada: grupo entre parênteses repetido por quantificador (use só ? depois de parênteses) (README §6.2).
+  [OK]     Regex ^\d+(\.\d{1,2})?$ aceita
+  [OK]     Sigiloso não volta atrás
+  [OK]     Data além de 366 dias recusada no campo Agendar para — Escolha uma data até 23/10/2027.
+  [OK]     Primeira aba: regra pausada
+  [OK]     Segunda aba: "A regra já está pausada."
+  [OK]     Formulário da regra pausada mostra quem pausou e o motivo
+  [OK]     Regra retomada ao final
+  [nota] Responsável inativo: no DEV as regras são do admin (o op.hml não tem Regras de Agendamento), então o cenário do manual não se aplica sem mudar permissões; coberto pelos testes automatizados.
+  [nota] Link simbólico (CR-011): os 14 scripts do DEV rodaram por /opt/automacoes/scripts/utilitarios, que é um link para dev/scripts/utilitarios; o agente executou o arquivo real (comportamento atual; o manual de 18/10 previa recusa).
+  [OK]     consulta: o criador aparece como "outra pessoa" — Registro Criado em 22/10/2026 18:07:39 por outra pessoa Última alteração 22/10/2026 18:07:46 por Sistema (agente srv-linux-local-01)
+  [fig] Quadro Registro visto pelo perfil consulta -> CT-24_2.png
+  [OK]     op.prod: "por você" — Registro Criado em 22/10/2026 18:07:39 por você Última alteração 22/10/2026 18:07:46 por Sistema (agente srv-linux-local-01)
+  [fig] Quadros de atenção da tela de agentes -> CT-24_3.png
+
+=== CT-25 — Correções da auditoria final ===
+  [OK]     Permissões salvas: +MANAGE_USERS
+  [OK]     op.prod não vê ADMINISTRATOR entre os perfis — Selecione…, OPERATOR_HML, OPERATOR_PROD, READ_ONLY
+  [OK]     Redefinir a senha do admin é recusado para quem não é administrador
+  [fig] Redefinição de senha de administrador recusada -> CT-25_1.png
+  [OK]     Permissão removida ao final: -MANAGE_USERS
+  [OK]     Regex com mais de 2 quantificadores largos é recusada — A expressão regular foi recusada: mais de 2 quantificadores ilimitados (*, +, {n,} ou {m,n} com mais de 10 de diferença) (README §6.2).
+  [nota] O campo SHA-256 do script foi retirado pelo CR-011 (20/10); o item E4 do manual não se aplica mais.
+  [OK]     Cabeçalho do ticket: "solicitado por outra pessoa"
+  [OK]     Nenhum login de terceiros no detalhe
+  [fig] Solicitante mascarado para o perfil consulta -> CT-25_2.png
+  [OK]     Primeiro navegador: "Você saiu do sistema."
+  [OK]     Segundo navegador volta ao login com "Seu acesso mudou e a sessão foi encerrada." — /default/login
+
+=== ENCERRAMENTO — Encerramento: regras da homologação pausadas (ficam como evidência, sem rodar) ===
+  [OK]     Regras HOMOLOG_20261022_* pausadas (3 nesta etapa) — 0 ativa(s) restante(s)
+  [fig] Regras da homologação pausadas ao final -> ENCERRAMENTO_1.png
+
+=== CT-15 — Dicionário de Parâmetros ===
+  [OK]     Lista com os parâmetros do seed
+  [fig] Lista de parâmetros -> CT-15_1.png
+  [OK]     Parâmetro sigiloso com o aviso de credenciais
+  [OK]     Testar: valor válido aceito e inválido recusado com mensagem
+  [fig] Parâmetro sigiloso -> CT-15_2.png
+  [nota] O parâmetro documento_cliente_hml fica cadastrado (sem vínculo com scripts) como evidência.
+
+=== CT-23 — Quadro Registro: quem criou e quem alterou ===
+  [nota] READ_ONLY no lugar do OPERATOR_PROD do manual: a matriz do OPERATOR_PROD é alterada pelo CT-25 (MANAGE_USERS concedida e retirada), o que atualiza a última alteração do perfil.
+  [OK]     Perfil do seed: criado pelo Sistema (instalação) e nunca alterado — Registro Criado em 21/10/2026 10:56:58 por Sistema (instalação) Última alteração Nunca alterado
+  [fig] Perfil nunca alterado -> CT-23_1.png
+  [OK]     Ambiente alterado pela tela: última alteração por admin — Registro Criado em 22/10/2026 18:13:18 por admin Última alteração 22/10/2026 18:13:35 por admin
+  [fig] Ambiente alterado pela tela -> CT-23_2.png
+  [OK]     Ticket: criado por op.prod; última alteração pelo agente que finalizou — Registro Criado em 22/10/2026 18:07:39 por op.prod Última alteração 22/10/2026 18:07:46 por Sistema (agente srv-linux-local-01)
+  [fig] Quadro Registro no detalhe do ticket -> CT-23_3.png
+  [OK]     Inclusão não mostra o quadro Registro
+
+=== CT-05 — Disparo de script (criação de ticket) ===
+  [OK]     Etapa 1: só scripts ativos autorizados ao perfil e homologados (os 14 utilitários) — compactar_targz, contar_linhas_arquivo, converter_encoding, descompactar_targz, descompactar_zip, filtrar_linhas, gerar_hash_arquivo, juntar_arquivos, limpar_linhas_vazias, ordenar_arquivo, quebrar_arquivo, remover_duplicadas, substituir_texto, zipar_arquivos
+  [fig] Etapa 1: escolha do script -> CT-05_1.png
+  [OK]     Etapa 2: ambientes ativos do perfil em que o script está homologado — CLONE1, CLONE2, CLONE6, CLONE7, GFPREPROD
+  [fig] Etapa 2: escolha do ambiente -> CT-05_2.png
+  [OK]     A lista de prioridades do op.prod começa em 2 (a 1 é só de administradores) — 2,3,4
+  [OK]     Prévia do comando com o interpretador e o caminho completo do script
+  [fig] Etapa 3: questionário e prévia do comando -> CT-05_3.png
+  [OK]     Confirmação com a frase-resumo e o comando que será executado
+  [fig] Confirmação do disparo, com o resumo -> CT-05_4.png
+  [nota] O destaque "AMBIENTE DE PRODUÇÃO" (botão vermelho e selo) só aparece para o ambiente chamado PRODUCAO (ticket_service.PRODUCTION_ENVIRONMENT); nenhum ambiente do DEV tem esse nome, então ele não aparece nos dados reais.
+  [OK]     Mensagem "Ticket #N criado com sucesso."
+  [OK]     Detalhe com o que aconteceu, o que fazer agora, as etapas e o arquivo do script
+  [fig] Ticket criado (detalhe) -> CT-05_5.png
+  [OK]     Ticket #3398 executado pelo agente real até o fim
+  [OK]     Aviso de respostas carregadas da última execução
+  [OK]     Campos preenchidos com as respostas do ticket anterior — /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/input/clone2/gerar_hash_arquivo/extrato_20261022.csv
+  [OK]     Nada é criado até confirmar (a página continua no disparo)
+  [fig] Questionário preenchido com a última execução -> CT-05_6.png

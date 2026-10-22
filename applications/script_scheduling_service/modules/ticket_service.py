@@ -143,6 +143,14 @@ def _answer_text(value):
     return value
 
 
+def _typical_duration(median):
+    """Duracao tipica do historico: 'cerca de 4 minutos'; abaixo de 1 minuto, so 'menos de 1 minuto'."""
+    if median is None:
+        return u"-"
+    text = ui_helpers.simple_time(median)
+    return text if text.startswith(u"menos de") else u"cerca de %s" % text
+
+
 def _day(value):
     if not isinstance(value, str):
         return None
@@ -769,7 +777,7 @@ class TicketService(object):
             "rate": rate,
             "rate_phrase": (u"De cada 10 vezes, %d deram certo." % int(round(rate / 10.0))) if rate is not None
             else u"Ainda não há execuções terminadas no período.",
-            "typical_duration": (u"cerca de %s" % ui_helpers.simple_time(median)) if median is not None else u"-",
+            "typical_duration": _typical_duration(median),
             "max_duration": ui_helpers.simple_time(durations[-1]) if durations else u"-",
             "reasons": [{"reason": m, "name": ui_helpers.REASON_NAMES.get(m, m), "quantity": q}
                         for m, q in sorted(reasons.items(), key=lambda x: (-x[1], x[0]))],

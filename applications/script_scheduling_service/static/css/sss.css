@@ -876,6 +876,11 @@
   overflow-wrap: anywhere;
 }
 
+/* Respostas no resumo do disparo: caminhos longos quebram dentro do modal. */
+.sss-summary-answers li {
+  overflow-wrap: anywhere;
+}
+
 /* Contém filhos absolutos (ex.: .visually-hidden dos badges), que de outro modo escapam da
    rolagem do container e alargam a página. */
 .table-responsive {

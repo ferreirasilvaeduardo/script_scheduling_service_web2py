@@ -351,9 +351,11 @@ applications/script_scheduling_service/
   views/                      # layout.html, components/*.html, <controller>/*.html
   instance/config.ini         # configuração sem segredos (§12)
   dev/scripts/                # árvore de scripts de exemplo para DEV/testes (nunca implantada)
-  dev/homologation/            # ferramentas das figuras do manual de homologação (Puppeteer e .docx; nunca implantadas)
+  dev/homologation/            # ferramentas de homologação: figuras do manual de UI Freeze e evidências reais no DEV
+                              # (capture_evidence.js + build_evidence_docx.py; Puppeteer e .docx; nunca implantadas)
 docs/
   prompts/                    # prompts de execução faseada (UI-first)
+  homologation/               # manual de homologação (UI Freeze, histórico) e evidências reais no DEV (2026-10-22)
 /portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/instance          # segredos fora do repositório, modo 0600, um arquivo por papel (§4.1)
 /opt/sss/bin/sss-helper       # cópia do bin/sss-helper, dono root, 0755 (§8.0)
 ```

@@ -192,7 +192,7 @@ _viewer_status = dict((_s, {'label': _i['label'], 'css_class': _i['css_class']})
       </div>
       <button type="button" class="btn btn-sm btn-outline-secondary" @click="togglePause" :disabled="finished"><span x-text="pauseLabel">Pausar</span></button>
       <a class="btn btn-sm btn-outline-secondary" href="{{=_vl['download_url']}}" download="ticket_{{=_t['id']}}.log">Baixar log</a>
-      <span class="sss-text-muted sss-log-status-text" x-text="state" aria-live="polite"></span>
+      <span class="sss-text-muted sss-log-status-text" x-text="statusText" aria-live="polite"></span>
     </div>
     <p class="alert alert-warning sss-alert sss-log-warning" role="status" x-show="truncated" x-cloak>O log foi truncado no banco por exceder o limite; o arquivo integral permanece no agente.</p>
     <p class="alert alert-info sss-alert sss-log-warning" role="status" x-show="discarded" x-cloak>Exibindo apenas o final do log. Use 'Baixar log' para o conteúdo integral.</p>
