@@ -6,39 +6,39 @@ icones = URL('static', 'img/icons.svg')
 _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 }}
 <div class="sss-page-header">
-  <h1 class="sss-page-titulo">Disparar script</h1>
+  <h1 class="sss-page-title">Disparar script</h1>
   <p class="sss-page-sub">Escolha o script e o ambiente, preencha o questionário e confira o comando antes de criar o ticket.</p>
 </div>
 
-<ol class="sss-etapas" aria-label="Etapas do disparo">
+<ol class="sss-stages" aria-label="Etapas do disparo">
   {{for _num, _rotulo in _etapas:}}
-  <li class="sss-etapa{{=' sss-etapa-atual' if _num == step else (' sss-etapa-feita' if _num < step else '')}}"{{if _num == step:}} aria-current="step"{{pass}}>
-    <span class="sss-etapa-num">{{=_num}}</span> <span>{{=_rotulo}}</span>
+  <li class="sss-stage{{=' sss-stage-current' if _num == step else (' sss-stage-done' if _num < step else '')}}"{{if _num == step:}} aria-current="step"{{pass}}>
+    <span class="sss-stage-num">{{=_num}}</span> <span>{{=_rotulo}}</span>
   </li>
   {{pass}}
 </ol>
 
 {{if step == 1:}}
-<section class="sss-card" aria-labelledby="titulo-scripts" x-data="buscaScript">
-  <h2 class="sss-card-titulo" id="titulo-scripts">1. Escolha o script, que é a rotina que você quer rodar.</h2>
-  <div class="sss-card-corpo">
+<section class="sss-card" aria-labelledby="title-scripts" x-data="scriptSearch">
+  <h2 class="sss-card-title" id="title-scripts">1. Escolha o script, que é a rotina que você quer rodar.</h2>
+  <div class="sss-card-body">
     {{if not groups:}}
     <p class="mb-0">Nenhum script está liberado para o seu perfil em ambientes homologados. Procure um administrador.</p>
     {{else:}}
-    <div class="sss-busca mb-3">
-      <label class="form-label" for="busca-script">Buscar script</label>
-      <input class="form-control form-control-sm" type="search" id="busca-script" maxlength="60" autocomplete="off" placeholder="Nome, descrição, grupo ou categoria" x-ref="busca" @input="filtrar">
+    <div class="sss-search mb-3">
+      <label class="form-label" for="search-script">Buscar script</label>
+      <input class="form-control form-control-sm" type="search" id="search-script" maxlength="60" autocomplete="off" placeholder="Nome, descrição, grupo ou categoria" x-ref="searchTerm" @input="filter">
     </div>
-    <p class="sss-busca-vazia" x-show="semResultado" x-cloak role="status">Nenhum script corresponde à busca.</p>
+    <p class="sss-search-empty" x-show="noResult" x-cloak role="status">Nenhum script corresponde à busca.</p>
     {{for _g in groups:}}
-    <section class="sss-grupo-scripts" data-grupo>
-      <h3 class="sss-grupo-titulo">{{=_g['script_group']}} <span class="sss-grupo-categoria">/ {{=_g['category']}}</span></h3>
-      <ul class="sss-lista-escolha">
+    <section class="sss-group-scripts" data-group>
+      <h3 class="sss-group-title">{{=_g['script_group']}} <span class="sss-group-category">/ {{=_g['category']}}</span></h3>
+      <ul class="sss-list-choice">
         {{for _s in _g['scripts']:}}
-        <li data-busca="{{=(' '.join((_s['name'], _s['description'], _g['script_group'], _g['category'], _s['stage']))).lower()}}">
-          <a class="sss-escolha" href="{{=URL(c='tickets', f='new', vars={'script_id': _s['id']})}}">
-            <span class="sss-escolha-nome sss-mono">{{=_s['name']}}</span>
-            <span class="sss-escolha-desc">{{=_s['description']}}</span>
+        <li data-search="{{=(' '.join((_s['name'], _s['description'], _g['script_group'], _g['category'], _s['stage']))).lower()}}">
+          <a class="sss-choice" href="{{=URL(c='tickets', f='new', vars={'script_id': _s['id']})}}">
+            <span class="sss-choice-name sss-mono">{{=_s['name']}}</span>
+            <span class="sss-choice-desc">{{=_s['description']}}</span>
           </a>
         </li>
         {{pass}}
@@ -49,9 +49,9 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
   </div>
 </section>
 {{else:}}
-<section class="sss-card" aria-labelledby="titulo-script-escolhido">
-  <h2 class="sss-card-titulo" id="titulo-script-escolhido">1. Script</h2>
-  <div class="sss-card-corpo sss-escolhido">
+<section class="sss-card" aria-labelledby="title-script-chosen">
+  <h2 class="sss-card-title" id="title-script-chosen">1. Script</h2>
+  <div class="sss-card-body sss-chosen">
     <span><span class="sss-mono">{{=script['name']}}</span> — {{=script.get('description') or ''}}</span>
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='new')}}">Trocar script</a>
   </div>
@@ -59,15 +59,15 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 {{pass}}
 
 {{if step == 2:}}
-<section class="sss-card" aria-labelledby="titulo-ambientes">
-  <h2 class="sss-card-titulo" id="titulo-ambientes">2. Escolha o ambiente, que é onde ela vai rodar.</h2>
-  <div class="sss-card-corpo">
-    <ul class="sss-lista-escolha">
+<section class="sss-card" aria-labelledby="title-environments">
+  <h2 class="sss-card-title" id="title-environments">2. Escolha o ambiente, que é onde ela vai rodar.</h2>
+  <div class="sss-card-body">
+    <ul class="sss-list-choice">
       {{for _a in environments:}}
       <li>
-        <a class="sss-escolha" href="{{=URL(c='tickets', f='new', vars={'script_id': script['id'], 'environment': _a['name']})}}">
-          <span class="sss-escolha-nome">{{=_a['name']}}{{if _a['name'] == 'PRODUCAO':}} <span class="badge text-bg-danger">Produção</span>{{pass}}</span>
-          <span class="sss-escolha-desc">{{=_a['description']}}</span>
+        <a class="sss-choice" href="{{=URL(c='tickets', f='new', vars={'script_id': script['id'], 'environment': _a['name']})}}">
+          <span class="sss-choice-name">{{=_a['name']}}{{if _a['name'] == 'PRODUCAO':}} <span class="badge text-bg-danger">Produção</span>{{pass}}</span>
+          <span class="sss-choice-desc">{{=_a['description']}}</span>
         </a>
       </li>
       {{pass}}
@@ -75,23 +75,23 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
   </div>
 </section>
 {{elif step == 3:}}
-<section class="sss-card" aria-labelledby="titulo-ambiente-escolhido">
-  <h2 class="sss-card-titulo" id="titulo-ambiente-escolhido">2. Ambiente</h2>
-  <div class="sss-card-corpo sss-escolhido">
+<section class="sss-card" aria-labelledby="title-environment-chosen">
+  <h2 class="sss-card-title" id="title-environment-chosen">2. Ambiente</h2>
+  <div class="sss-card-body sss-chosen">
     <span><strong>{{=form['environment']['name']}}</strong>{{if form['environment']['production']:}} <span class="badge text-bg-danger">Produção</span>{{pass}} — {{=form['environment']['description']}}</span>
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='new', vars={'script_id': form['script']['id']})}}">Trocar ambiente</a>
   </div>
 </section>
 
-<section class="sss-card" aria-labelledby="titulo-questionario">
-  <h2 class="sss-card-titulo" id="titulo-questionario">3. Responda às perguntas.</h2>
-  <form class="sss-card-corpo" id="form-ticket" method="post" action="{{=URL(c='tickets', f='create')}}" autocomplete="off">
+<section class="sss-card" aria-labelledby="title-questionnaire">
+  <h2 class="sss-card-title" id="title-questionnaire">3. Responda às perguntas.</h2>
+  <form class="sss-card-body" id="form-ticket" method="post" action="{{=URL(c='tickets', f='create')}}" autocomplete="off">
     {{=csrf_campo()}}
     <input type="hidden" name="script_id" value="{{=form['script']['id']}}">
     <input type="hidden" name="environment" value="{{=form['environment']['name']}}">
     {{if rerun_of:}}
     <input type="hidden" name="rerun_of" value="{{=rerun_of}}">
-    <div class="alert alert-info sss-alerta" role="note">
+    <div class="alert alert-info sss-alert" role="note">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
       <span>Reexecução do <a href="{{=URL(c='tickets', f='detail', args=[rerun_of])}}">ticket #{{=rerun_of}}</a>. As respostas originais foram carregadas; valores sigilosos não são exibidos e precisam ser informados novamente, se necessário.</span>
     </div>
@@ -100,11 +100,11 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
     {{if has_last and not used_last:}}
     <p class="mb-3"><a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='tickets', f='new', vars=dict(script_id=form['script']['id'], environment=form['environment']['name'], last='1'))}}">Usar as respostas da minha última execução</a></p>
     {{elif used_last:}}
-    <div class="alert alert-info sss-alerta" role="note"><span>Carregamos as respostas da sua última execução. Confira antes de criar; valores sigilosos precisam ser digitados de novo.</span></div>
+    <div class="alert alert-info sss-alert" role="note"><span>Carregamos as respostas da sua última execução. Confira antes de criar; valores sigilosos precisam ser digitados de novo.</span></div>
     {{pass}}
 
     {{if errors:}}
-    <div class="alert alert-danger sss-alerta-lista" role="alert" id="resumo-erros">
+    <div class="alert alert-danger sss-alert-list" role="alert" id="summary-errors">
       <p class="mb-1"><strong>Não foi possível criar o ticket:</strong></p>
       <ul class="mb-0">
         {{if general_error:}}<li>{{=general_error}}</li>{{pass}}
@@ -117,91 +117,91 @@ _etapas = ((1, u'Script'), (2, u'Ambiente'), (3, u'Questionário'))
 
     {{include 'components/questionnaire.html'}}
 
-    <div class="sss-form-linha">
-      <div class="sss-form-campo mb-3">
-        <label class="form-label" for="campo-prioridade">Prioridade</label>
-        <select class="form-select{{=' is-invalid' if errors.get('priority') else ''}}" id="campo-prioridade" name="priority" aria-describedby="campo-prioridade-ajuda{{=' campo-prioridade-erro' if errors.get('priority') else ''}}"{{if errors.get('priority'):}} aria-invalid="true"{{pass}}{{if focus_field == 'priority':}} autofocus{{pass}}>
+    <div class="sss-form-row">
+      <div class="sss-form-field mb-3">
+        <label class="form-label" for="field-priority">Prioridade</label>
+        <select class="form-select{{=' is-invalid' if errors.get('priority') else ''}}" id="field-priority" name="priority" aria-describedby="field-priority-help{{=' field-priority-error' if errors.get('priority') else ''}}"{{if errors.get('priority'):}} aria-invalid="true"{{pass}}{{if focus_field == 'priority':}} autofocus{{pass}}>
           {{for _pv, _pr in form['priorities']:}}
           <option value="{{=_pv}}"{{if str(_pv) == str(priority or 2):}} selected{{pass}}>{{=_pr}}</option>
           {{pass}}
         </select>
-        <div class="form-text" id="campo-prioridade-ajuda">1 é a mais alta; a fila ordena por prioridade e depois pelo horário agendado.</div>
-        {{if errors.get('priority'):}}<div class="invalid-feedback" id="campo-prioridade-erro">{{=errors['priority']}}</div>{{pass}}
+        <div class="form-text" id="field-priority-help">1 é a mais alta; a fila ordena por prioridade e depois pelo horário agendado.</div>
+        {{if errors.get('priority'):}}<div class="invalid-feedback" id="field-priority-error">{{=errors['priority']}}</div>{{pass}}
       </div>
-      <div class="sss-form-campo mb-3">
-        <label class="form-label" for="campo-scheduled_at">Agendar para (opcional)</label>
-        <input class="form-control{{=' is-invalid' if errors.get('scheduled_at') else ''}}" type="datetime-local" id="campo-scheduled_at" name="scheduled_at" value="{{=scheduled_at}}" aria-describedby="campo-scheduled_at-ajuda{{=' campo-scheduled_at-erro' if errors.get('scheduled_at') else ''}}"{{if errors.get('scheduled_at'):}} aria-invalid="true"{{pass}}{{if focus_field == 'scheduled_at':}} autofocus{{pass}}>
-        <div class="form-text" id="campo-scheduled_at-ajuda">Horário do servidor do banco de dados. Deixe em branco para rodar assim que houver um servidor livre.</div>
-        {{if errors.get('scheduled_at'):}}<div class="invalid-feedback" id="campo-scheduled_at-erro">{{=errors['scheduled_at']}}</div>{{pass}}
+      <div class="sss-form-field mb-3">
+        <label class="form-label" for="field-scheduled_at">Agendar para (opcional)</label>
+        <input class="form-control{{=' is-invalid' if errors.get('scheduled_at') else ''}}" type="datetime-local" id="field-scheduled_at" name="scheduled_at" value="{{=scheduled_at}}" aria-describedby="field-scheduled_at-help{{=' field-scheduled_at-error' if errors.get('scheduled_at') else ''}}"{{if errors.get('scheduled_at'):}} aria-invalid="true"{{pass}}{{if focus_field == 'scheduled_at':}} autofocus{{pass}}>
+        <div class="form-text" id="field-scheduled_at-help">Horário do servidor do banco de dados. Deixe em branco para rodar assim que houver um servidor livre.</div>
+        {{if errors.get('scheduled_at'):}}<div class="invalid-feedback" id="field-scheduled_at-error">{{=errors['scheduled_at']}}</div>{{pass}}
       </div>
     </div>
 
-    <div class="sss-previa" x-data="previa" data-url="{{=URL(c='tickets', f='preview')}}">
-      <button type="button" class="btn btn-sm btn-outline-secondary" @click="carregar" :disabled="carregando">
+    <div class="sss-preview" x-data="preview" data-url="{{=URL(c='tickets', f='preview')}}">
+      <button type="button" class="btn btn-sm btn-outline-secondary" @click="load" :disabled="loading">
         <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-eye"></use></svg>
         <span>Pré-visualizar comando</span>
       </button>
-      <div class="sss-previa-resultado" aria-live="polite">
-        <ul class="sss-previa-erros" x-show="temErros" x-cloak>
-          <template x-for="e in erros" :key="e.id">
-            <li x-text="e.texto"></li>
+      <div class="sss-preview-result" aria-live="polite">
+        <ul class="sss-preview-errors" x-show="hasErrors" x-cloak>
+          <template x-for="e in errors" :key="e.id">
+            <li x-text="e.text"></li>
           </template>
         </ul>
-        <div class="sss-previa-comando" x-show="temComando" x-cloak>
-          <pre class="sss-argv" tabindex="0" aria-label="Comando que será executado (valores sigilosos mascarados)"><code x-text="comando"></code></pre>
-          <div x-data="copiar">
-            <button type="button" class="btn btn-sm btn-outline-secondary" :data-texto="comando" @click="copiar" x-text="rotulo">Copiar</button>
+        <div class="sss-preview-command" x-show="hasCommand" x-cloak>
+          <pre class="sss-argv" tabindex="0" aria-label="Comando que será executado (valores sigilosos mascarados)"><code x-text="command"></code></pre>
+          <div x-data="copy">
+            <button type="button" class="btn btn-sm btn-outline-secondary" :data-text="command" @click="copy" x-text="label">Copiar</button>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="sss-confirmacao sss-form-acoes" x-data="confirmacao" @keydown.escape.window="fechar">
-      <button type="button" class="btn btn-primary" x-ref="gatilho" data-resumo-gatilho @click="abrir">
+    <div class="sss-confirmation sss-form-actions" x-data="confirmation" @keydown.escape.window="close">
+      <button type="button" class="btn btn-primary" x-ref="trigger" data-summary-trigger @click="open">
         <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-play"></use></svg>
         <span>Criar ticket</span>
       </button>
-      <div class="modal sss-modal" :class="classeModal" role="dialog" aria-modal="true" aria-labelledby="confirmar-ticket-titulo" aria-describedby="confirmar-ticket-texto" tabindex="-1" @click.self="fechar">
+      <div class="modal sss-modal" :class="modalClass" role="dialog" aria-modal="true" aria-labelledby="confirm-ticket-title" aria-describedby="confirm-ticket-text" tabindex="-1" @click.self="close">
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
             <div class="modal-header">
-              <h2 class="modal-title fs-5" id="confirmar-ticket-titulo">Confirmar disparo</h2>
-              <button type="button" class="btn-close" aria-label="Fechar" @click="fechar"></button>
+              <h2 class="modal-title fs-5" id="confirm-ticket-title">Confirmar disparo</h2>
+              <button type="button" class="btn-close" aria-label="Fechar" @click="close"></button>
             </div>
-            <div class="modal-body" id="confirmar-ticket-texto">
+            <div class="modal-body" id="confirm-ticket-text">
               {{if form['environment']['production']:}}
-              <div class="alert alert-danger sss-alerta sss-aviso-producao" role="alert">
+              <div class="alert alert-danger sss-alert sss-warning-production" role="alert">
                 <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
                 <strong>Ambiente de produção</strong>
               </div>
               {{pass}}
-              <div x-data="resumoDisparo" data-url="{{=URL(c='tickets', f='preview')}}">
-                <p class="mb-2" x-show="carregando">Montando o resumo…</p>
-                <div x-show="temResumo" x-cloak>
-                  <p class="mb-2">Vamos rodar <strong class="sss-mono" x-text="script"></strong> no ambiente <strong x-text="environment"></strong> <span x-text="quando"></span>, com prioridade <span x-text="priority"></span>.</p>
-                  <ul class="mb-2 sss-resumo-respostas" x-show="temRespostas">
-                    <template x-for="r in respostas" :key="r.id">
-                      <li><span x-text="r.rotulo"></span> = <span class="sss-mono" x-text="r.valor"></span></li>
+              <div x-data="triggerSummary" data-url="{{=URL(c='tickets', f='preview')}}">
+                <p class="mb-2" x-show="loading">Montando o resumo…</p>
+                <div x-show="hasSummary" x-cloak>
+                  <p class="mb-2">Vamos rodar <strong class="sss-mono" x-text="script"></strong> no ambiente <strong x-text="environment"></strong> <span x-text="when"></span>, com prioridade <span x-text="priority"></span>.</p>
+                  <ul class="mb-2 sss-summary-answers" x-show="hasAnswers">
+                    <template x-for="r in answers" :key="r.id">
+                      <li><span x-text="r.label"></span> = <span class="sss-mono" x-text="r.value"></span></li>
                     </template>
                   </ul>
                   <p class="mb-1"><strong>Comando que será executado</strong></p>
-                  <pre class="sss-argv" tabindex="0"><code x-text="comando"></code></pre>
+                  <pre class="sss-argv" tabindex="0"><code x-text="command"></code></pre>
                 </div>
-                <ul class="sss-previa-erros mb-0" x-show="temErros" x-cloak>
-                  <template x-for="e in erros" :key="e.id">
-                    <li x-text="e.texto"></li>
+                <ul class="sss-preview-errors mb-0" x-show="hasErrors" x-cloak>
+                  <template x-for="e in errors" :key="e.id">
+                    <li x-text="e.text"></li>
                   </template>
                 </ul>
               </div>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancelar" @click="fechar">Cancelar</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancel" @click="close">Cancelar</button>
               <button type="submit" class="btn btn-sm {{='btn-danger' if form['environment']['production'] else 'btn-primary'}}">Criar ticket</button>
             </div>
           </div>
         </div>
       </div>
-      <div class="sss-modal-fundo" :class="classeFundo"></div>
+      <div class="sss-modal-backdrop" :class="backdropClass"></div>
     </div>
   </form>
 </section>

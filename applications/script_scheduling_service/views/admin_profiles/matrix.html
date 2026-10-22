@@ -11,64 +11,64 @@ _abas = (
     ('scrs', u'Scripts', _m['scrs']),
 )
 }}
-<div class="sss-page-header sss-detalhe-cabecalho">
+<div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-titulo">Permissões do perfil <span class="sss-mono">{{=_p['name']}}</span></h1>
+    <h1 class="sss-page-title">Permissões do perfil <span class="sss-mono">{{=_p['name']}}</span></h1>
     <p class="sss-page-sub">Marque o que o perfil pode acessar. A mudança vale no próximo clique dos usuários do perfil. Itens marcados como inativo podem ser removidos, mas não adicionados de novo.</p>
   </div>
-  <div class="sss-acoes">
+  <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_profiles', f='index')}}">Voltar à lista</a>
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_profiles', f='form', args=[_p['id']])}}">Dados do perfil</a>
   </div>
 </div>
 
 {{if _m['admin_warning']:}}
-<div class="alert alert-info sss-alerta" role="note"><span>{{=_m['admin_warning']}}</span></div>
+<div class="alert alert-info sss-alert" role="note"><span>{{=_m['admin_warning']}}</span></div>
 {{pass}}
 {{if _p['active'] != 'Y':}}
-<div class="alert alert-warning sss-alerta" role="note"><span>Perfil inativo: os usuários dele não têm acesso enquanto o perfil não for reativado.</span></div>
+<div class="alert alert-warning sss-alert" role="note"><span>Perfil inativo: os usuários dele não têm acesso enquanto o perfil não for reativado.</span></div>
 {{pass}}
 
-<form class="sss-card" method="post" action="{{=URL(c='admin_profiles', f='save_matrix')}}" x-data="matrizPermissoes" aria-label="Matriz de permissões">
+<form class="sss-card" method="post" action="{{=URL(c='admin_profiles', f='save_matrix')}}" x-data="permissionMatrix" aria-label="Matriz de permissões">
   {{=csrf_campo()}}
   <input type="hidden" name="id" value="{{=_p['id']}}">
   <input type="hidden" name="perm_version" value="{{=_m['perm_version']}}">
 
-  <ul class="nav nav-tabs sss-matriz-abas" role="tablist">
+  <ul class="nav nav-tabs sss-matrix-tabs" role="tablist">
     {{for _dim, _titulo, _grupos in _abas:}}
     <li class="nav-item" role="presentation">
-      <button type="button" class="nav-link" role="tab" id="aba-{{=_dim}}" aria-controls="painel-{{=_dim}}" data-aba="{{=_dim}}" aria-selected="false" @click="abrirAba">{{=_titulo}} <span class="badge text-bg-secondary" data-contador="{{=_dim}}">0</span></button>
+      <button type="button" class="nav-link" role="tab" id="tab-{{=_dim}}" aria-controls="panel-{{=_dim}}" data-tab="{{=_dim}}" aria-selected="false" @click="openTab">{{=_titulo}} <span class="badge text-bg-secondary" data-counter="{{=_dim}}">0</span></button>
     </li>
     {{pass}}
   </ul>
 
   {{for _dim, _titulo, _grupos in _abas:}}
-  <div class="sss-card-corpo sss-matriz-painel" role="tabpanel" id="painel-{{=_dim}}" aria-labelledby="aba-{{=_dim}}" data-painel="{{=_dim}}" tabindex="0">
+  <div class="sss-card-body sss-matrix-panel" role="tabpanel" id="panel-{{=_dim}}" aria-labelledby="tab-{{=_dim}}" data-panel="{{=_dim}}" tabindex="0">
     {{if _dim == 'scrs':}}
-    <div class="sss-matriz-busca mb-3">
-      <label class="form-label" for="busca-scripts">Buscar script</label>
-      <input class="form-control form-control-sm" type="search" id="busca-scripts" maxlength="60" autocomplete="off" placeholder="Nome, descrição, grupo ou categoria" @input="filtrarScripts">
-      <p class="sss-texto-suave mt-1 mb-0" data-sem-resultado hidden>Nenhum script corresponde à busca.</p>
+    <div class="sss-matrix-search mb-3">
+      <label class="form-label" for="search-scripts">Buscar script</label>
+      <input class="form-control form-control-sm" type="search" id="search-scripts" maxlength="60" autocomplete="off" placeholder="Nome, descrição, grupo ou categoria" @input="filterScripts">
+      <p class="sss-text-muted mt-1 mb-0" data-no-result hidden>Nenhum script corresponde à busca.</p>
     </div>
     {{pass}}
     {{if not _grupos:}}
-    <p class="sss-texto-suave mb-0">Nenhum item cadastrado.</p>
+    <p class="sss-text-muted mb-0">Nenhum item cadastrado.</p>
     {{pass}}
     {{for _gi, _g in enumerate(_grupos):}}
     {{_gid = '%s-%d' % (_dim, _gi)}}
-    <fieldset class="sss-matriz-grupo" data-grupo="{{=_gid}}">
-      <legend class="sss-matriz-legenda">
+    <fieldset class="sss-matrix-group" data-group="{{=_gid}}">
+      <legend class="sss-matrix-legend">
         <span>{{=_g['script_group']}}</span>
-        <button type="button" class="btn btn-sm btn-link" data-grupo="{{=_gid}}" @click="marcarGrupo">Marcar/desmarcar todos</button>
+        <button type="button" class="btn btn-sm btn-link" data-group="{{=_gid}}" @click="markGroup">Marcar/desmarcar todos</button>
       </legend>
-      <div class="sss-matriz-itens">
+      <div class="sss-matrix-items">
         {{for _i in _g['items']:}}
         {{_iid = '%s-%s' % (_dim, _i['id'])}}
-        <div class="form-check sss-matriz-item" data-busca="{{=(_i['label'] + ' ' + _i['detail'] + ' ' + _g['script_group']).lower()}}">
-          <input class="form-check-input" type="checkbox" name="{{=_dim}}" value="{{=_i['id']}}" id="{{=_iid}}" data-dim="{{=_dim}}" data-inicial="{{='Y' if _i['checked'] else 'N'}}" data-diff="{{=_i['diff_label']}}"{{if _i['checked']:}} checked{{pass}} @change="atualizar">
+        <div class="form-check sss-matrix-item" data-search="{{=(_i['label'] + ' ' + _i['detail'] + ' ' + _g['script_group']).lower()}}">
+          <input class="form-check-input" type="checkbox" name="{{=_dim}}" value="{{=_i['id']}}" id="{{=_iid}}" data-dim="{{=_dim}}" data-initial="{{='Y' if _i['checked'] else 'N'}}" data-diff="{{=_i['diff_label']}}"{{if _i['checked']:}} checked{{pass}} @change="refresh">
           <label class="form-check-label" for="{{=_iid}}">
             <span class="sss-mono">{{=_i['label']}}</span>{{if _i['inactive']:}} <span class="badge text-bg-secondary">inativo</span>{{pass}}
-            {{if _i['detail']:}}<span class="sss-matriz-detalhe">{{=_i['detail']}}</span>{{pass}}
+            {{if _i['detail']:}}<span class="sss-matrix-detail">{{=_i['detail']}}</span>{{pass}}
           </label>
         </div>
         {{pass}}
@@ -78,36 +78,36 @@ _abas = (
   </div>
   {{pass}}
 
-  <div class="sss-card-corpo sss-matriz-rodape">
-    <div class="sss-confirmacao sss-form-acoes" x-data="confirmacao" @keydown.escape.window="fechar">
-      <button type="button" class="btn btn-primary" x-ref="gatilho" @click="abrir">Revisar e salvar</button>
-      <span class="sss-texto-suave" aria-live="polite" x-text="state"></span>
-      <div class="modal sss-modal" :class="classeModal" role="dialog" aria-modal="true" aria-labelledby="modal-matriz-titulo" tabindex="-1" @click.self="fechar">
+  <div class="sss-card-body sss-matrix-footer">
+    <div class="sss-confirmation sss-form-actions" x-data="confirmation" @keydown.escape.window="close">
+      <button type="button" class="btn btn-primary" x-ref="trigger" @click="open">Revisar e salvar</button>
+      <span class="sss-text-muted" aria-live="polite" x-text="state"></span>
+      <div class="modal sss-modal" :class="modalClass" role="dialog" aria-modal="true" aria-labelledby="modal-matrix-title" tabindex="-1" @click.self="close">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
           <div class="modal-content">
             <div class="modal-header">
-              <h2 class="modal-title fs-5" id="modal-matriz-titulo">Confirmar permissões de {{=_p['name']}}</h2>
-              <button type="button" class="btn-close" aria-label="Fechar" @click="fechar"></button>
+              <h2 class="modal-title fs-5" id="modal-matrix-title">Confirmar permissões de {{=_p['name']}}</h2>
+              <button type="button" class="btn-close" aria-label="Fechar" @click="close"></button>
             </div>
             <div class="modal-body">
-              <p class="mb-2" x-show="semAlteracoes">Nenhuma alteração em relação às permissões atuais.</p>
-              <div x-show="temAlteracoes">
+              <p class="mb-2" x-show="noChanges">Nenhuma alteração em relação às permissões atuais.</p>
+              <div x-show="hasChanges">
                 <p class="mb-2">Alterações que serão gravadas (adicionados com +, removidos com −):</p>
-                <ul class="sss-matriz-resumo sss-mono">
-                  <template x-for="linha in resumo" :key="linha">
-                    <li x-text="linha"></li>
+                <ul class="sss-matrix-summary sss-mono">
+                  <template x-for="row in summary" :key="row">
+                    <li x-text="row"></li>
                   </template>
                 </ul>
               </div>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancelar" @click="fechar">Cancelar</button>
-              <button type="submit" class="btn btn-sm btn-primary" :disabled="semAlteracoes">Salvar permissões</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancel" @click="close">Cancelar</button>
+              <button type="submit" class="btn btn-sm btn-primary" :disabled="noChanges">Salvar permissões</button>
             </div>
           </div>
         </div>
       </div>
-      <div class="sss-modal-fundo" :class="classeFundo"></div>
+      <div class="sss-modal-backdrop" :class="backdropClass"></div>
     </div>
   </div>
 </form>

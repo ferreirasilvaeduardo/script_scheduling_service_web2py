@@ -62,7 +62,7 @@ async function sleep(ms) {
     async function login(user, pass = PASS_SEED) {
         await page.goto(`${BASE_URL}/default/login`, { waitUntil: 'networkidle0' });
         const jaLogado = await page.evaluate((u) => {
-            const el = document.querySelector('.sss-usuario-login');
+            const el = document.querySelector('.sss-user-login');
             return el && el.textContent.includes(u);
         }, user);
         if (jaLogado) return;
@@ -77,11 +77,11 @@ async function sleep(ms) {
 
         await page.goto(`${BASE_URL}/default/login`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
-            document.querySelector('#campo-login').value = '';
-            document.querySelector('#campo-password').value = '';
+            document.querySelector('#field-login').value = '';
+            document.querySelector('#field-password').value = '';
         });
-        await page.type('#campo-login', user);
-        await page.type('#campo-password', pass);
+        await page.type('#field-login', user);
+        await page.type('#field-password', pass);
         await Promise.all([
             page.waitForNavigation({ waitUntil: 'networkidle0' }),
             page.click('button[type="submit"]')
@@ -100,7 +100,7 @@ async function sleep(ms) {
 
         // Fig 43: Script salvo com aviso de arquivo não encontrado
         await page.evaluate(() => {
-            const el = document.querySelector('#campo-path_file');
+            const el = document.querySelector('#field-path_file');
             if (el) el.value = '/opt/automacoes/scripts/carga_diaria_nova.py';
         });
         const btnSalvarScr = await page.$('form[action*="/admin_scripts/save"] button[type="submit"]');
@@ -114,7 +114,7 @@ async function sleep(ms) {
 
         // Restaurar caminho original
         await page.evaluate(() => {
-            const el = document.querySelector('#campo-path_file');
+            const el = document.querySelector('#field-path_file');
             if (el) el.value = '/opt/automacoes/scripts/carga_diaria.py';
         });
         const btnRestaurarScr = await page.$('form[action*="/admin_scripts/save"] button[type="submit"]');
@@ -229,24 +229,24 @@ async function sleep(ms) {
         await login('admin');
         // Fig 60: Perfil nunca alterado (OPERADOR_PROD = id 2)
         await page.goto(`${BASE_URL}/admin_profiles/form/2`, { waitUntil: 'networkidle0' });
-        await snap(60, false, '.sss-quadro-registro, section[aria-label*="Registro"]');
+        await snap(60, false, '.sss-quadro-record, section[aria-label*="Registro"]');
 
         // Fig 61: Ambiente alterado pela tela (PRODUCAO = id 1)
         await page.goto(`${BASE_URL}/admin_environments/form/1`, { waitUntil: 'networkidle0' });
         // Alterar e salvar para ter alteracao
         await page.evaluate(() => {
-            const desc = document.querySelector('#campo-description');
+            const desc = document.querySelector('#field-description');
             if (desc) desc.value = desc.value + ' (atualizado)';
         });
         const btnSalvarAmb = await page.$('form[action*="/admin_environments/save"] button[type="submit"]');
         if (btnSalvarAmb) {
             await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), btnSalvarAmb.click()]);
         }
-        await snap(61, false, '.sss-quadro-registro, section[aria-label*="Registro"]');
+        await snap(61, false, '.sss-quadro-record, section[aria-label*="Registro"]');
 
         // Fig 62: Quadro Registro no detalhe do ticket (#17)
         await page.goto(`${BASE_URL}/tickets/detail/17`, { waitUntil: 'networkidle0' });
-        await snap(62, false, '.sss-quadro-registro, section[aria-label*="Registro"]');
+        await snap(62, false, '.sss-quadro-record, section[aria-label*="Registro"]');
 
         // ==========================================
         // CT-24 — Robustez do scheduler na interface
@@ -254,16 +254,16 @@ async function sleep(ms) {
         console.log('\n--- CT-24 (Fig 63 a 65) ---');
         // Fig 63: Regex recusada no Dicionário de Parâmetros
         await page.goto(`${BASE_URL}/admin_parameters/form`, { waitUntil: 'networkidle0' });
-        await page.type('#campo-codigo', 'ct24_a');
-        await page.type('#campo-label', 'Teste Regex');
-        await page.type('#campo-regex_validacao', '(a|a)*b');
+        await page.type('#field-code', 'ct24_a');
+        await page.type('#field-label', 'Teste Regex');
+        await page.type('#field-validation_regex', '(a|a)*b');
         await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.click('button[type="submit"]')]);
         await snap(63, false);
 
         // Fig 64: Quadro Registro visto pelo perfil consulta
         await login('consulta');
         await page.goto(`${BASE_URL}/tickets/detail/17`, { waitUntil: 'networkidle0' });
-        await snap(64, false, '.sss-quadro-registro, section[aria-label*="Registro"]');
+        await snap(64, false, '.sss-quadro-record, section[aria-label*="Registro"]');
 
         // Fig 65: Quadros de atenção da tela de agentes
         await login('admin');
@@ -292,9 +292,9 @@ async function sleep(ms) {
             if (btn) btn.click();
         });
         await sleep(400);
-        await page.type('#campo-nova_senha', 'NovaSenha123!');
-        await page.type('#campo-confirmacao_senha', 'NovaSenha123!');
-        const btnSubRedef = await page.$('#modal-redefinir-senha button[type="submit"], form[action*="redefinir_senha"] button[type="submit"]');
+        await page.type('#field-nova_password', 'NovaSenha123!');
+        await page.type('#field-confirmation_password', 'NovaSenha123!');
+        const btnSubRedef = await page.$('#modal-reset-password button[type="submit"], form[action*="redefinir_senha"] button[type="submit"]');
         if (btnSubRedef) {
             await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {}), btnSubRedef.click()]);
         }
@@ -305,7 +305,7 @@ async function sleep(ms) {
         await page.goto(`${BASE_URL}/admin_scripts/form/1`, { waitUntil: 'networkidle0' });
         const dummySha = 'ab'.repeat(32);
         await page.evaluate((val) => {
-            const el = document.querySelector('#campo-sha256_informado');
+            const el = document.querySelector('#field-sha256_informado');
             if (el) el.value = val;
         }, dummySha);
         const btnSalvarScrSha = await page.$('form[action*="/admin_scripts/save"] button[type="submit"]');

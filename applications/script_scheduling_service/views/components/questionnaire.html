@@ -10,11 +10,11 @@
 # Valores sigilosos nunca são reexibidos.
 }}
     {{if not form['fields']:}}
-    <p class="sss-texto-suave">Este script não recebe parâmetros.</p>
+    <p class="sss-text-muted">Este script não recebe parâmetros.</p>
     {{pass}}
 
     {{for _c in form['fields']:}}
-    {{_cid = 'campo-' + _c['name']
+    {{_cid = 'field-' + _c['name']
     _mantido = bool(_c.get('kept'))
     _desc = []
     _exemplo = _c.get('example')
@@ -37,18 +37,18 @@
     _foco = bool(_c['error']) and _c['name'] == focus_field
     }}
     {{if _c['kind'] == 'CHECKBOX':}}
-    <div class="sss-form-campo mb-3">
+    <div class="sss-form-field mb-3">
       <input type="hidden" name="{{=_c['name']}}" value="false">
       <div class="form-check">
         <input class="form-check-input{{=_invalido}}" type="checkbox" id="{{=_cid}}" name="{{=_c['name']}}" value="true"{{if _c['checked']:}} checked{{pass}}{{if _desc:}} aria-describedby="{{=' '.join(_desc)}}"{{pass}}{{if _c['error']:}} aria-invalid="true"{{pass}}{{if _foco:}} autofocus{{pass}}>
-        <label class="form-check-label" for="{{=_cid}}">{{=_c['label']}}{{if _c['required']:}} <span class="sss-obrigatorio">(obrigatório)</span>{{pass}}</label>
+        <label class="form-check-label" for="{{=_cid}}">{{=_c['label']}}{{if _c['required']:}} <span class="sss-required">(obrigatório)</span>{{pass}}</label>
         {{if _c['error']:}}<div class="invalid-feedback" id="{{=_cid}}-erro">{{=_c['error']}}</div>{{pass}}
       </div>
       {{if '%s-ajuda' % _cid in _desc:}}<div class="form-text" id="{{=_cid}}-ajuda">{{if _aviso:}}<strong>{{=_aviso}}</strong> {{pass}}{{=_descricao}}{{if _exemplo:}} {{=_exemplo}}{{pass}}{{if _c['default_text'] is not None:}} Padrão: {{=_c['default_text']}}.{{pass}}</div>{{pass}}
     </div>
     {{else:}}
-    <div class="sss-form-campo mb-3">
-      <label class="form-label" for="{{=_cid}}">{{=_c['label']}}{{if _c['required']:}} <span class="sss-obrigatorio">(obrigatório)</span>{{pass}}</label>
+    <div class="sss-form-field mb-3">
+      <label class="form-label" for="{{=_cid}}">{{=_c['label']}}{{if _c['required']:}} <span class="sss-required">(obrigatório)</span>{{pass}}</label>
       {{if _c['kind'] == 'SELECT':}}
       <select class="form-select{{=_invalido}}" id="{{=_cid}}" name="{{=_c['name']}}"{{if _desc:}} aria-describedby="{{=' '.join(_desc)}}"{{pass}}{{if _requerido:}} required aria-required="true"{{pass}}{{if _c['error']:}} aria-invalid="true"{{pass}}{{if _foco:}} autofocus{{pass}}>
         <option value="">{{if _c['default_text'] is not None:}}Usar o padrão ({{=_c['default_text']}}){{else:}}Selecione…{{pass}}</option>

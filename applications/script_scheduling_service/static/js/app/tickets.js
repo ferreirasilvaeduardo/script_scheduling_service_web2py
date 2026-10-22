@@ -5,86 +5,86 @@
 (function () {
   'use strict';
 
-  var INTERVALO_MS = 10000;
-  var SELETOR_FRAGMENTO = '[data-sss-fragmento="tickets"]';
+  var INTERVAL_MS = 10000;
+  var FRAGMENT_SELECTOR = '[data-sss-fragment="tickets"]';
 
-  function horaAtual() {
+  function currentTime() {
     var d = new Date();
-    function dois(n) { return (n < 10 ? '0' : '') + n; }
-    return dois(d.getHours()) + ':' + dois(d.getMinutes()) + ':' + dois(d.getSeconds());
+    function two(n) { return (n < 10 ? '0' : '') + n; }
+    return two(d.getHours()) + ':' + two(d.getMinutes()) + ':' + two(d.getSeconds());
   }
 
   document.addEventListener('alpine:init', function () {
-    window.Alpine.data('atualizacaoTickets', function () {
+    window.Alpine.data('ticketsRefresh', function () {
       return {
-        ativo: false,
-        carregando: false,
-        ultima: '',
-        temporizador: null,
+        active: false,
+        loading: false,
+        last: '',
+        timer: null,
         // Incrementada ao desligar: respostas de requisicoes antigas sao descartadas.
-        geracao: 0,
-        get situacao() {
-          if (!this.ativo) {
+        generation: 0,
+        get statusText() {
+          if (!this.active) {
             return 'Atualização automática desligada.';
           }
-          return this.ultima ? 'Atualizada às ' + this.ultima + '.' : 'Atualização a cada 10 segundos.';
+          return this.last ? 'Atualizada às ' + this.last + '.' : 'Atualização a cada 10 segundos.';
         },
-        alternar: function () {
-          if (this.ativo) {
-            this.parar();
+        toggle: function () {
+          if (this.active) {
+            this.stop();
           } else {
-            this.iniciar();
+            this.start();
           }
         },
-        iniciar: function () {
+        start: function () {
           var self = this;
-          this.ativo = true;
-          this.temporizador = window.setInterval(function () { self.recarregar(); }, INTERVALO_MS);
+          this.active = true;
+          this.timer = window.setInterval(function () { self.reload(); }, INTERVAL_MS);
         },
-        parar: function () {
-          this.ativo = false;
-          this.geracao++;
-          if (this.temporizador !== null) {
-            window.clearInterval(this.temporizador);
-            this.temporizador = null;
+        stop: function () {
+          this.active = false;
+          this.generation++;
+          if (this.timer !== null) {
+            window.clearInterval(this.timer);
+            this.timer = null;
           }
         },
         destroy: function () {
-          this.parar();
+          this.stop();
         },
-        recarregar: function () {
+        reload: function () {
           var self = this;
-          var geracao = this.geracao;
-          if (!this.ativo || this.carregando || document.hidden) {
+          var generation = this.generation;
+          if (!this.active || this.loading || document.hidden) {
             return;
           }
-          this.carregando = true;
-          window.SSS.fetch(this.$root.getAttribute('data-url')).then(function (resposta) {
-            if (!resposta.ok) {
-              throw new Error('HTTP ' + resposta.status);
+          this.loading = true;
+          window.SSS.fetch(this.$root.getAttribute('data-url')).then(function (response) {
+            if (!response.ok) {
+              throw new Error('HTTP ' + response.status);
             }
-            return resposta.text();
+            return response.text();
           }).then(function (html) {
-            var novo;
-            var atual;
-            if (geracao !== self.geracao) {
+            var newValue;
+            var current;
+            if (generation !== self.generation) {
               return;
             }
-            novo = new DOMParser().parseFromString(html, 'text/html').querySelector(SELETOR_FRAGMENTO);
-            atual = self.$root.querySelector(SELETOR_FRAGMENTO);
+            newValue = new DOMParser().parseFromString(html, 'text/html').querySelector(FRAGMENT_SELECTOR);
+            current = self.$root.querySelector(FRAGMENT_SELECTOR);
             // Sem o marcador (ex.: sessao expirada redirecionou ao login), nao ha o que trocar.
-            if (!novo || !atual) {
+            if (!newValue || !current) {
               throw new Error('fragmento ausente');
             }
-            atual.replaceWith(document.importNode(novo, true));
-            self.ultima = horaAtual();
+            current.replaceWith(document.importNode(newValue, true));
+            self.last = currentTime();
           }).catch(function () {
-            if (geracao === self.geracao) {
-              self.parar();
+            if (generation === self.generation) {
+              self.stop();
               window.SSS.toast('error', 'Não foi possível atualizar a lista. A atualização automática foi desligada; recarregue a página.');
             }
           }).then(function () {
-            self.carregando = false;
+            self.loading = false;
           });
         }
       };

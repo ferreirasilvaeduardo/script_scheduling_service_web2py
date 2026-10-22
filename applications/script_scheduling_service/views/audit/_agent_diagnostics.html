@@ -1,10 +1,10 @@
 {{if dashboard['unattended_queue']:}}
-<section class="sss-card" aria-labelledby="titulo-fila-sem-atendente">
-  <h3 class="sss-card-titulo" id="titulo-fila-sem-atendente">Fila sem atendente</h3>
-  <div class="sss-card-corpo">
+<section class="sss-card" aria-labelledby="title-unattended-queue">
+  <h3 class="sss-card-title" id="title-unattended-queue">Fila sem atendente</h3>
+  <div class="sss-card-body">
     <p>{{=ui_helpers.mensagem('unattended_queue')}}</p>
     <div class="table-responsive">
-      <table class="table table-sm sss-tabela mb-0">
+      <table class="table table-sm sss-table mb-0">
         <caption class="visually-hidden">Pedidos vencidos sem servidor disponível</caption>
         <thead><tr><th scope="col">Ambiente</th><th scope="col">Interpretador</th><th scope="col">Quantidade</th><th scope="col">Horário mais antigo</th></tr></thead>
         <tbody>
@@ -18,9 +18,9 @@
 </section>
 {{pass}}
 {{if dashboard['running_without_pid']:}}
-<section class="sss-card" aria-labelledby="titulo-rodando-sem-pid">
-  <h3 class="sss-card-titulo" id="titulo-rodando-sem-pid">Rodando sem PID</h3>
-  <div class="sss-card-corpo">
+<section class="sss-card" aria-labelledby="title-running-without-pid">
+  <h3 class="sss-card-title" id="title-running-without-pid">Rodando sem PID</h3>
+  <div class="sss-card-body">
     <p>{{=ui_helpers.mensagem('running_without_pid')}}</p>
     <ul>
       {{for _sem_pid in dashboard['running_without_pid']:}}
@@ -31,9 +31,9 @@
 </section>
 {{pass}}
 {{if dashboard['config_mismatch']:}}
-<section class="sss-card" aria-labelledby="titulo-config-divergente">
-  <h3 class="sss-card-titulo" id="titulo-config-divergente">Configuração divergente</h3>
-  <div class="sss-card-corpo">
+<section class="sss-card" aria-labelledby="title-config-mismatch">
+  <h3 class="sss-card-title" id="title-config-mismatch">Configuração divergente</h3>
+  <div class="sss-card-body">
     <p>{{=ui_helpers.mensagem('config_mismatch')}}</p>
     <p>Nó web: <code class="text-break">{{=dashboard['config_web']}}</code></p>
     <ul>

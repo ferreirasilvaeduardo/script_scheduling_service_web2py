@@ -2,7 +2,7 @@
 # Componente: barra de filtros (formulário GET; funciona sem JavaScript).
 # Variáveis de entrada:
 #   filtros -- dict:
-#     id        -- prefixo ASCII dos ids dos campos (ex.: 'filtro-tickets');
+#     id        -- prefixo ASCII dos ids dos campos (ex.: 'filter-tickets');
 #     url_base  -- tupla (controller, funcao) da listagem;
 #     fields    -- lista de {name, label, kind: 'text' | 'select' | 'date' | 'multiple', value,
 #                  opcoes (select: lista de (valor, rotulo); a primeira deve ser a opção "todos";
@@ -11,7 +11,7 @@
 # 'page' nunca é preservada: filtrar ou limpar volta para a página 1.
 _flt_preservar = dict((k, v) for k, v in (filters.get('keep') or {}).items() if k != 'page')
 _flt_url = URL(c=filters['url_base'][0], f=filters['url_base'][1])
-}}<form class="sss-filtros" method="get" action="{{=_flt_url}}" role="search" x-data="filtros">
+}}<form class="sss-filters" method="get" action="{{=_flt_url}}" role="search" x-data="filters">
   {{for _flt_k, _flt_v in sorted(_flt_preservar.items()):}}
   <input type="hidden" name="{{=_flt_k}}" value="{{=_flt_v}}">
   {{pass}}
@@ -20,7 +20,7 @@ _flt_url = URL(c=filters['url_base'][0], f=filters['url_base'][1])
   _flt_valor = _flt_c.get('value')
   _flt_valor = '' if _flt_valor is None else _flt_valor}}
   {{if _flt_c['kind'] == 'multiple':}}
-  <fieldset class="sss-filtros-campo sss-filtros-multipla">
+  <fieldset class="sss-filters-field sss-filters-multiple">
     <legend class="form-label">{{=_flt_c['label']}}</legend>
     {{for _flt_i, (_flt_ov, _flt_or) in enumerate(_flt_c.get('options', ())):}}
     <div class="form-check form-check-inline">
@@ -30,7 +30,7 @@ _flt_url = URL(c=filters['url_base'][0], f=filters['url_base'][1])
     {{pass}}
   </fieldset>
   {{else:}}
-  <div class="sss-filtros-campo">
+  <div class="sss-filters-field">
     <label class="form-label" for="{{=_flt_id}}">{{=_flt_c['label']}}</label>
     {{if _flt_c['kind'] == 'select':}}
     <select class="form-select form-select-sm" id="{{=_flt_id}}" name="{{=_flt_c['name']}}">
@@ -46,8 +46,8 @@ _flt_url = URL(c=filters['url_base'][0], f=filters['url_base'][1])
   </div>
   {{pass}}
   {{pass}}
-  <div class="sss-filtros-acoes">
+  <div class="sss-filters-actions">
     <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
-    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c=filters['url_base'][0], f=filters['url_base'][1], vars=_flt_preservar)}}" @click="limpar">Limpar</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c=filters['url_base'][0], f=filters['url_base'][1], vars=_flt_preservar)}}" @click="clear">Limpar</a>
   </div>
 </form>

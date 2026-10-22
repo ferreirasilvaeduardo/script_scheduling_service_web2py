@@ -3,7 +3,7 @@
 # Lista de perfis (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
 _opc_admin = [('', 'Todos'), ('Y', 'Administrativos'), ('N', 'Operacionais')]
-filters = {'id': 'filtro-perfis', 'url_base': ('admin_profiles', 'index'), 'keep': {'size': size}, 'fields': [
+filters = {'id': 'filter-perfis', 'url_base': ('admin_profiles', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
     {'name': 'is_admin', 'label': 'Tipo', 'kind': 'select', 'value': active_filters.get('is_admin'), 'options': _opc_admin},
     {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opc_ativo},
@@ -34,12 +34,12 @@ total_capped = result.get('total_capped', False)
 page_count = len(result['items'])
 url_base = ('admin_profiles', 'index')
 }}
-<div class="sss-page-header sss-detalhe-cabecalho">
+<div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-titulo">Perfis</h1>
+    <h1 class="sss-page-title">Perfis</h1>
     <p class="sss-page-sub">Perfil é o conjunto do que um grupo de pessoas pode fazer: telas, ambientes e scripts. Alterações valem no próximo clique dos usuários do perfil.</p>
   </div>
-  <div class="sss-acoes">
+  <div class="sss-actions">
     <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_profiles', f='who_can')}}">Quem pode o quê</a>
     <a class="btn btn-sm btn-primary" href="{{=URL(c='admin_profiles', f='form')}}">Novo perfil</a>
   </div>

@@ -3,7 +3,7 @@
 # Lista de scripts (padrão de CRUD administrativo). O caminho completo do arquivo é exibido (README §8.5, CR-005 D8).
 _opc_cmd = [('', 'Todos')] + [(_c, _c) for _c, _r in interpreters]
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
-filters = {'id': 'filtro-scripts', 'url_base': ('admin_scripts', 'index'), 'keep': {'size': size}, 'fields': [
+filters = {'id': 'filter-scripts', 'url_base': ('admin_scripts', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
     {'name': 'script_group', 'label': 'Grupo', 'kind': 'text', 'value': active_filters.get('script_group')},
     {'name': 'category', 'label': 'Categoria', 'kind': 'text', 'value': active_filters.get('category')},
@@ -43,12 +43,12 @@ total_capped = result.get('total_capped', False)
 page_count = len(result['items'])
 url_base = ('admin_scripts', 'index')
 }}
-<div class="sss-page-header sss-detalhe-cabecalho">
+<div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-titulo">Scripts</h1>
+    <h1 class="sss-page-title">Scripts</h1>
     <p class="sss-page-sub">Script é a rotina que o sistema roda. Aqui ficam o cadastro, onde cada um pode rodar (homologação) e as perguntas que faz. Arquivos nunca são enviados nem editados pela interface.</p>
   </div>
-  <div class="sss-acoes">
+  <div class="sss-actions">
     <a class="btn btn-sm btn-primary" href="{{=URL(c='admin_scripts', f='form')}}">Novo script</a>
   </div>
 </div>

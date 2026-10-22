@@ -4,7 +4,7 @@
 _rotulo_tipo = dict(types)
 _opc_tipo = [('', 'Todos')] + list(types)
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
-filters = {'id': 'filtro-parametros', 'url_base': ('admin_parameters', 'index'), 'keep': {'size': size}, 'fields': [
+filters = {'id': 'filter-parameters', 'url_base': ('admin_parameters', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'code', 'label': u'Código', 'kind': 'text', 'value': active_filters.get('code')},
     {'name': 'label', 'label': u'Rótulo', 'kind': 'text', 'value': active_filters.get('label')},
     {'name': 'component_type', 'label': 'Tipo', 'kind': 'select', 'value': active_filters.get('component_type'), 'options': _opc_tipo},
@@ -40,12 +40,12 @@ total_capped = result.get('total_capped', False)
 page_count = len(result['items'])
 url_base = ('admin_parameters', 'index')
 }}
-<div class="sss-page-header sss-detalhe-cabecalho">
+<div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-titulo">Dicionário de parâmetros</h1>
+    <h1 class="sss-page-title">Dicionário de parâmetros</h1>
     <p class="sss-page-sub">Parâmetro é uma pergunta que o script faz antes de rodar (por exemplo, a data de referência). As perguntas são reutilizáveis pelos scripts. O vínculo com cada script é feito na gestão de scripts.</p>
   </div>
-  <div class="sss-acoes">
+  <div class="sss-actions">
     <a class="btn btn-sm btn-primary" href="{{=URL(c='admin_parameters', f='form')}}">Novo parâmetro</a>
   </div>
 </div>

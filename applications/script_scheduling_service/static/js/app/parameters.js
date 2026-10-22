@@ -8,157 +8,157 @@
 
   // O servidor entrega as opcoes como lista de pares [valor, rotulo]: JSON.parse de um objeto
   // reordenaria chaves numericas ("2" antes de "1" viraria "1", "2").
-  function opcoesIniciais(campo) {
-    var pares;
-    var bruto = campo.getAttribute('data-pares');
-    if (!bruto) {
-      return { linhas: [], valido: !campo.getAttribute('value') };
+  function initialOptions(field) {
+    var pairs;
+    var raw = field.getAttribute('data-pairs');
+    if (!raw) {
+      return { rows: [], valid: !field.getAttribute('value') };
     }
     try {
-      pares = JSON.parse(bruto);
-    } catch (erro) {
-      return { linhas: [], valido: false };
+      pairs = JSON.parse(raw);
+    } catch (error) {
+      return { rows: [], valid: false };
     }
-    if (!Array.isArray(pares)) {
-      return { linhas: [], valido: false };
+    if (!Array.isArray(pairs)) {
+      return { rows: [], valid: false };
     }
     return {
-      linhas: pares.map(function (par) {
-        return { valor: String(par[0]), rotulo: typeof par[1] === 'string' ? par[1] : '' };
+      rows: pairs.map(function (pair) {
+        return { value: String(pair[0]), label: typeof pair[1] === 'string' ? pair[1] : '' };
       }),
-      valido: true
+      valid: true
     };
   }
 
   document.addEventListener('alpine:init', function () {
-    window.Alpine.data('parametroForm', function () {
+    window.Alpine.data('parameterForm', function () {
       return {
-        tipo: 'TEXT',
-        sensivel: false,
-        linhas: [],
-        editado: false,
-        opcoesBrutas: '',
-        testando: false,
-        resultadoTeste: '',
-        testeOk: null,
+        type: 'TEXT',
+        sensitive: false,
+        rows: [],
+        edited: false,
+        rawOptions: '',
+        testing: false,
+        testResult: '',
+        testOk: null,
 
         init: function () {
-          var inicial;
-          this.tipo = this.$refs.tipo.value;
-          this.sensivel = this.$refs.sensivel.checked;
-          this.opcoesBrutas = this.$refs.opcoes.getAttribute('value') || '';
-          inicial = opcoesIniciais(this.$refs.opcoes);
-          this.linhas = inicial.linhas;
+          var initial;
+          this.type = this.$refs.type.value;
+          this.sensitive = this.$refs.sensitive.checked;
+          this.rawOptions = this.$refs.options.getAttribute('value') || '';
+          initial = initialOptions(this.$refs.options);
+          this.rows = initial.rows;
           // JSON reapresentado invalido (apos erro) segue intacto ate o usuario editar a lista.
-          this.editado = inicial.valido;
-          if (this.tipo === 'SELECT' && !this.linhas.length) {
-            this.linhas.push({ valor: '', rotulo: '' });
+          this.edited = initial.valid;
+          if (this.type === 'SELECT' && !this.rows.length) {
+            this.rows.push({ value: '', label: '' });
           }
-          this.ajustarRegex();
+          this.adjustRegex();
         },
 
-        get ehSelect() {
-          return this.tipo === 'SELECT';
+        get isSelect() {
+          return this.type === 'SELECT';
         },
-        get ehTexto() {
-          return this.tipo === 'TEXT';
+        get isText() {
+          return this.type === 'TEXT';
         },
-        get tipoPadrao() {
-          return this.sensivel ? 'password' : 'text';
+        get defaultType() {
+          return this.sensitive ? 'password' : 'text';
         },
-        get classeTeste() {
-          if (this.testeOk === null) {
+        get testClass() {
+          if (this.testOk === null) {
             return '';
           }
-          return this.testeOk ? 'sss-teste-ok' : 'sss-teste-erro';
+          return this.testOk ? 'sss-test-ok' : 'sss-test-error';
         },
-        get opcoesJson() {
-          var partes = [];
-          if (!this.ehSelect) {
+        get optionsJson() {
+          var parts = [];
+          if (!this.isSelect) {
             return '';
           }
-          if (!this.editado) {
-            return this.opcoesBrutas;
+          if (!this.edited) {
+            return this.rawOptions;
           }
           // Montagem manual: objetos JS reordenam chaves numericas, e a ordem do usuario importa.
-          this.linhas.forEach(function (linha) {
-            var valor = String(linha.valor || '');
-            var rotulo = String(linha.rotulo || '');
-            if (valor.trim() || rotulo.trim()) {
-              partes.push(JSON.stringify(valor) + ':' + JSON.stringify(rotulo));
+          this.rows.forEach(function (row) {
+            var value = String(row.value || '');
+            var label = String(row.label || '');
+            if (value.trim() || label.trim()) {
+              parts.push(JSON.stringify(value) + ':' + JSON.stringify(label));
             }
           });
-          return partes.length ? '{' + partes.join(',') + '}' : '';
+          return parts.length ? '{' + parts.join(',') + '}' : '';
         },
 
-        trocarTipo: function (evt) {
-          this.tipo = evt.target.value;
-          if (this.ehSelect && !this.linhas.length) {
-            this.linhas.push({ valor: '', rotulo: '' });
+        switchType: function (evt) {
+          this.type = evt.target.value;
+          if (this.isSelect && !this.rows.length) {
+            this.rows.push({ value: '', label: '' });
           }
-          this.limparTeste();
-          this.ajustarRegex();
+          this.clearTest();
+          this.adjustRegex();
         },
-        ajustarRegex: function () {
+        adjustRegex: function () {
           // Campo oculto pelo tipo nao e enviado: o servidor rejeitaria regex fora de Texto.
-          var campo = this.$root.querySelector('#campo-regex_validacao');
-          if (campo) {
-            campo.disabled = !this.ehTexto;
+          var field = this.$root.querySelector('#field-validation_regex');
+          if (field) {
+            field.disabled = !this.isText;
           }
         },
-        trocarSensivel: function (evt) {
-          this.sensivel = evt.target.checked;
+        switchSensitive: function (evt) {
+          this.sensitive = evt.target.checked;
         },
-        editarLinha: function (evt) {
+        editRow: function (evt) {
           var i = parseInt(evt.target.getAttribute('data-i'), 10);
-          var campo = evt.target.getAttribute('data-campo');
-          if (this.linhas[i] && (campo === 'valor' || campo === 'rotulo')) {
-            this.linhas[i][campo] = evt.target.value;
-            this.editado = true;
+          var field = evt.target.getAttribute('data-field');
+          if (this.rows[i] && (field === 'value' || field === 'label')) {
+            this.rows[i][field] = evt.target.value;
+            this.edited = true;
           }
         },
-        adicionarLinha: function () {
-          this.linhas.push({ valor: '', rotulo: '' });
-          this.editado = true;
+        addRow: function () {
+          this.rows.push({ value: '', label: '' });
+          this.edited = true;
         },
-        removerLinha: function (evt) {
+        removeRow: function (evt) {
           var i = parseInt(evt.target.getAttribute('data-i'), 10);
-          this.linhas.splice(i, 1);
-          this.editado = true;
+          this.rows.splice(i, 1);
+          this.edited = true;
         },
-        limparTeste: function () {
-          this.resultadoTeste = '';
-          this.testeOk = null;
+        clearTest: function () {
+          this.testResult = '';
+          this.testOk = null;
         },
 
-        testar: function () {
+        test: function () {
           var self = this;
           var form = this.$root;
-          var corpo = new URLSearchParams();
-          var dados = new FormData(form);
-          dados.forEach(function (valor, chave) {
-            if (chave !== 'default_value') {
-              corpo.append(chave, valor);
+          var body = new URLSearchParams();
+          var data = new FormData(form);
+          data.forEach(function (value, key) {
+            if (key !== 'default_value') {
+              body.append(key, value);
             }
           });
-          corpo.set('options_json', this.opcoesJson);
-          corpo.set('test_value', this.$refs.valorTeste.value);
-          this.testando = true;
-          this.limparTeste();
-          window.SSS.fetch(form.getAttribute('data-url-testar'), {
+          body.set('options_json', this.optionsJson);
+          body.set('test_value', this.$refs.testValue.value);
+          this.testing = true;
+          this.clearTest();
+          window.SSS.fetch(form.getAttribute('data-url-test'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: corpo.toString()
-          }).then(function (resposta) {
-            return resposta.json();
+            body: body.toString()
+          }).then(function (response) {
+            return response.json();
           }).then(function (r) {
-            self.testeOk = r.ok === true;
-            self.resultadoTeste = r.ok === true ? 'Válido. Valor normalizado: ' + r.value : (r.error || 'Valor inválido.');
+            self.testOk = r.ok === true;
+            self.testResult = r.ok === true ? 'Válido. Valor normalizado: ' + r.value : (r.error || 'Valor inválido.');
           }).catch(function () {
-            self.testeOk = false;
-            self.resultadoTeste = 'Não foi possível testar agora. Tente novamente.';
+            self.testOk = false;
+            self.testResult = 'Não foi possível testar agora. Tente novamente.';
           }).then(function () {
-            self.testando = false;
+            self.testing = false;
           });
         }
       };

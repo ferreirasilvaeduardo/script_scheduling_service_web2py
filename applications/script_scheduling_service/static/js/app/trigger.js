@@ -5,201 +5,201 @@
 (function () {
   'use strict';
 
-  var PREFIXO_PARAM = 'p_';
-  var RE_TOKEN_SIMPLES = /^[A-Za-z0-9_@%+=:,.\/-]+$/;
+  var PARAM_PREFIX = 'p_';
+  var RE_SIMPLE_TOKEN = /^[A-Za-z0-9_@%+=:,.\/-]+$/;
 
-  function normalizar(texto) {
-    return String(texto || '').toLowerCase().replace(/^\s+|\s+$/g, '');
+  function normalize(text) {
+    return String(text || '').toLowerCase().replace(/^\s+|\s+$/g, '');
   }
 
   // Apenas para exibicao: o argv real e uma lista e nunca passa por shell.
-  function tokenExibicao(token) {
-    if (RE_TOKEN_SIMPLES.test(token)) {
+  function displayToken(token) {
+    if (RE_SIMPLE_TOKEN.test(token)) {
       return token;
     }
     return "'" + String(token).replace(/'/g, "'\\''") + "'";
   }
 
   // Ordem do DOM: o hidden "false" vem antes do checkbox, que so sobrescreve quando marcado.
-  function coletarRespostas(form) {
-    var respostas = {};
-    var campos = form.elements;
+  function collectAnswers(form) {
+    var answers = {};
+    var fields = form.elements;
     var i;
-    var campo;
-    var codigo;
-    for (i = 0; i < campos.length; i++) {
-      campo = campos[i];
-      if (!campo.name || campo.name.indexOf(PREFIXO_PARAM) !== 0 || campo.disabled) {
+    var field;
+    var code;
+    for (i = 0; i < fields.length; i++) {
+      field = fields[i];
+      if (!field.name || field.name.indexOf(PARAM_PREFIX) !== 0 || field.disabled) {
         continue;
       }
-      codigo = campo.name.substring(PREFIXO_PARAM.length);
-      if (campo.type === 'checkbox') {
-        if (campo.checked) {
-          respostas[codigo] = campo.value;
+      code = field.name.substring(PARAM_PREFIX.length);
+      if (field.type === 'checkbox') {
+        if (field.checked) {
+          answers[code] = field.value;
         }
       } else {
-        respostas[codigo] = campo.value;
+        answers[code] = field.value;
       }
     }
-    return respostas;
+    return answers;
   }
 
   document.addEventListener('alpine:init', function () {
-    window.Alpine.data('buscaScript', function () {
+    window.Alpine.data('scriptSearch', function () {
       return {
-        semResultado: false,
-        filtrar: function () {
-          var termo = normalizar(this.$refs.busca.value);
-          var grupos = this.$root.querySelectorAll('[data-grupo]');
-          var visiveisTotal = 0;
+        noResult: false,
+        filter: function () {
+          var term = normalize(this.$refs.searchTerm.value);
+          var groups = this.$root.querySelectorAll('[data-group]');
+          var visibleTotal = 0;
           var g;
-          var itens;
+          var items;
           var i;
-          var visiveis;
-          var mostra;
-          for (g = 0; g < grupos.length; g++) {
-            itens = grupos[g].querySelectorAll('[data-busca]');
-            visiveis = 0;
-            for (i = 0; i < itens.length; i++) {
-              mostra = termo === '' || itens[i].getAttribute('data-busca').indexOf(termo) !== -1;
-              itens[i].hidden = !mostra;
-              if (mostra) {
-                visiveis++;
+          var visible;
+          var show;
+          for (g = 0; g < groups.length; g++) {
+            items = groups[g].querySelectorAll('[data-search]');
+            visible = 0;
+            for (i = 0; i < items.length; i++) {
+              show = term === '' || items[i].getAttribute('data-search').indexOf(term) !== -1;
+              items[i].hidden = !show;
+              if (show) {
+                visible++;
               }
             }
-            grupos[g].hidden = visiveis === 0;
-            visiveisTotal += visiveis;
+            groups[g].hidden = visible === 0;
+            visibleTotal += visible;
           }
-          this.semResultado = visiveisTotal === 0;
+          this.noResult = visibleTotal === 0;
         }
       };
     });
 
     // Resumo em frase do modal de confirmacao (README §5.4): montado pelo servidor ao abrir o modal.
-    window.Alpine.data('resumoDisparo', function () {
+    window.Alpine.data('triggerSummary', function () {
       return {
-        carregando: false,
+        loading: false,
         script: '',
-        ambiente: '',
-        quando: '',
-        prioridade: '',
-        comando: '',
-        respostas: [],
-        erros: [],
-        get temResumo() { return this.script !== ''; },
-        get temRespostas() { return this.respostas.length > 0; },
-        get temErros() { return this.erros.length > 0; },
+        environment: '',
+        when: '',
+        priority: '',
+        command: '',
+        answers: [],
+        errors: [],
+        get hasSummary() { return this.script !== ''; },
+        get hasAnswers() { return this.answers.length > 0; },
+        get hasErrors() { return this.errors.length > 0; },
         init: function () {
           var self = this;
           var form = this.$root.closest('form');
-          var gatilho = form.querySelector('[data-resumo-gatilho]');
-          if (gatilho) {
-            gatilho.addEventListener('click', function () { self.carregar(); });
+          var trigger = form.querySelector('[data-summary-trigger]');
+          if (trigger) {
+            trigger.addEventListener('click', function () { self.load(); });
           }
         },
-        carregar: function () {
+        load: function () {
           var self = this;
           var form = this.$root.closest('form');
-          var corpo = {
+          var body = {
             script_id: form.elements.script_id.value,
             environment: form.elements.environment.value,
             priority: form.elements.priority ? form.elements.priority.value : '',
             scheduled_at: form.elements.scheduled_at ? form.elements.scheduled_at.value : '',
-            answers: coletarRespostas(form)
+            answers: collectAnswers(form)
           };
-          this.carregando = true;
+          this.loading = true;
           this.script = '';
-          this.erros = [];
+          this.errors = [];
           window.sssFetch(this.$root.getAttribute('data-url'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify(corpo)
-          }).then(function (resposta) {
-            return resposta.json();
-          }).then(function (dados) {
-            var chave;
-            if (dados && dados.summary) {
-              self.script = dados.summary.script;
-              self.ambiente = dados.summary.environment;
-              self.quando = dados.summary.when;
-              self.prioridade = String(dados.summary.priority);
-              self.respostas = dados.summary.answers.map(function (r, i) {
-                return { id: i, rotulo: r.label, valor: String(r.value) };
+            body: JSON.stringify(body)
+          }).then(function (response) {
+            return response.json();
+          }).then(function (data) {
+            var key;
+            if (data && data.summary) {
+              self.script = data.summary.script;
+              self.environment = data.summary.environment;
+              self.when = data.summary.when;
+              self.priority = String(data.summary.priority);
+              self.answers = data.summary.answers.map(function (r, i) {
+                return { id: i, label: r.label, value: String(r.value) };
               });
-              self.comando = (dados.argv || []).map(tokenExibicao).join(' ');
+              self.command = (data.argv || []).map(displayToken).join(' ');
             } else {
-              for (chave in (dados && dados.errors) || {}) {
-                if (Object.prototype.hasOwnProperty.call(dados.errors, chave)) {
-                  self.erros.push({ id: self.erros.length, texto: String(dados.errors[chave]) });
+              for (key in (data && data.errors) || {}) {
+                if (Object.prototype.hasOwnProperty.call(data.errors, key)) {
+                  self.errors.push({ id: self.errors.length, text: String(data.errors[key]) });
                 }
               }
-              if (!self.erros.length) {
-                self.erros.push({ id: 0, texto: (dados && dados.error) || 'Não foi possível montar o resumo.' });
+              if (!self.errors.length) {
+                self.errors.push({ id: 0, text: (data && data.error) || 'Não foi possível montar o resumo.' });
               }
             }
           }).catch(function () {
-            self.erros = [{ id: 0, texto: 'Não foi possível montar o resumo. Tente novamente.' }];
+            self.errors = [{ id: 0, text: 'Não foi possível montar o resumo. Tente novamente.' }];
           }).then(function () {
-            self.carregando = false;
+            self.loading = false;
           });
         }
       };
     });
 
-    window.Alpine.data('previa', function () {
+    window.Alpine.data('preview', function () {
       return {
-        carregando: false,
-        comando: '',
-        erros: [],
-        get temComando() {
-          return this.comando !== '';
+        loading: false,
+        command: '',
+        errors: [],
+        get hasCommand() {
+          return this.command !== '';
         },
-        get temErros() {
-          return this.erros.length > 0;
+        get hasErrors() {
+          return this.errors.length > 0;
         },
-        mostrarErros: function (mapa) {
-          var lista = [];
-          var chave;
-          for (chave in mapa) {
-            if (Object.prototype.hasOwnProperty.call(mapa, chave)) {
-              lista.push({ id: lista.length, texto: String(mapa[chave]) });
+        showErrors: function (map) {
+          var listItems = [];
+          var key;
+          for (key in map) {
+            if (Object.prototype.hasOwnProperty.call(map, key)) {
+              listItems.push({ id: listItems.length, text: String(map[key]) });
             }
           }
-          this.erros = lista;
+          this.errors = listItems;
         },
-        carregar: function () {
+        load: function () {
           var self = this;
           var form = this.$root.closest('form');
-          var corpo = {
+          var body = {
             script_id: form.elements.script_id.value,
             environment: form.elements.environment.value,
-            answers: coletarRespostas(form)
+            answers: collectAnswers(form)
           };
-          this.carregando = true;
-          this.comando = '';
-          this.erros = [];
+          this.loading = true;
+          this.command = '';
+          this.errors = [];
           window.sssFetch(this.$root.getAttribute('data-url'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify(corpo)
-          }).then(function (resposta) {
-            if (resposta.status === 403) {
+            body: JSON.stringify(body)
+          }).then(function (response) {
+            if (response.status === 403) {
               return null;
             }
-            return resposta.json();
-          }).then(function (dados) {
-            if (!dados) {
+            return response.json();
+          }).then(function (data) {
+            if (!data) {
               return;
             }
-            if (dados.argv) {
-              self.comando = dados.argv.map(tokenExibicao).join(' ');
+            if (data.argv) {
+              self.command = data.argv.map(displayToken).join(' ');
             } else {
-              self.mostrarErros(dados.errors || {});
+              self.showErrors(data.errors || {});
             }
           }).catch(function () {
             window.SSS.toast('error', 'Não foi possível gerar a prévia. Tente novamente.');
           }).then(function () {
-            self.carregando = false;
+            self.loading = false;
           });
         }
       };

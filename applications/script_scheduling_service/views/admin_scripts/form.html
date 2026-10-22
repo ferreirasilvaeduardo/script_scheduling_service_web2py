@@ -35,20 +35,20 @@ if not _novo:
     else:
         _texto_modal = u'O script voltará a aceitar tickets e agendamentos.'
     pass
-    _modal_ativo = {'id': 'modal-ativo', 'title': (u'Desativar script %s' if _desativar else u'Reativar script %s') % _s['name'],
+    _modal_ativo = {'id': 'modal-active', 'title': (u'Desativar script %s' if _desativar else u'Reativar script %s') % _s['name'],
                     'text': _texto_modal, 'trigger_label': 'Desativar' if _desativar else 'Reativar',
                     'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
                     'variant': 'danger' if _desativar else 'normal', 'action': URL(c='admin_scripts', f='toggle_active'),
                     'hidden_fields': dict(id=_s['id'], versao=_s['version'])}
 pass
 }}
-<div class="sss-page-header sss-detalhe-cabecalho">
+<div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-titulo">{{if _novo:}}Novo script{{else:}}Script <span class="sss-mono">{{=_s['name']}}</span>
+    <h1 class="sss-page-title">{{if _novo:}}Novo script{{else:}}Script <span class="sss-mono">{{=_s['name']}}</span>
       <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
     </h1>
   </div>
-  <div class="sss-acoes">
+  <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_scripts', f='index')}}">Voltar à lista</a>
     {{if not _novo:}}
     <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_scripts', f='homologation', args=[_s['id']])}}">Homologação</a>
@@ -59,16 +59,16 @@ pass
   </div>
 </div>
 
-<section class="sss-card" aria-labelledby="titulo-form">
-  <h2 class="sss-card-titulo" id="titulo-form">Dados do script</h2>
-  <form class="sss-card-corpo" method="post" action="{{=URL(c='admin_scripts', f='save')}}" autocomplete="off">
+<section class="sss-card" aria-labelledby="title-form">
+  <h2 class="sss-card-title" id="title-form">Dados do script</h2>
+  <form class="sss-card-body" method="post" action="{{=URL(c='admin_scripts', f='save')}}" autocomplete="off">
     {{=csrf_campo()}}
     {{if not _novo:}}
     <input type="hidden" name="id" value="{{=_s['id']}}">
     <input type="hidden" name="version" value="{{=_s['version']}}">
     {{pass}}
     {{if general_error:}}
-    <div class="alert alert-danger sss-alerta" role="alert">
+    <div class="alert alert-danger sss-alert" role="alert">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
       <span>{{=general_error}}</span>
     </div>
@@ -76,7 +76,7 @@ pass
     {{for field in _campos_a:}}
     {{include 'components/form_field.html'}}
     {{pass}}
-    <div class="sss-form-linha">
+    <div class="sss-form-row">
       {{for field in _campos_b:}}
       {{include 'components/form_field.html'}}
       {{pass}}
@@ -84,12 +84,12 @@ pass
     {{for field in _campos_c:}}
     {{include 'components/form_field.html'}}
     {{pass}}
-    <div class="sss-form-linha">
+    <div class="sss-form-row">
       {{for field in _campos_d:}}
       {{include 'components/form_field.html'}}
       {{pass}}
     </div>
-    <div class="sss-form-acoes">
+    <div class="sss-form-actions">
       <button type="submit" class="btn btn-primary">{{=u'Incluir script' if _novo else u'Salvar alterações'}}</button>
       <a class="btn btn-outline-secondary" href="{{=URL(c='admin_scripts', f='index')}}">Cancelar</a>
     </div>

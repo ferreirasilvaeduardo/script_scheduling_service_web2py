@@ -6,30 +6,30 @@ icones = URL('static', 'img/icons.svg')
 active_tab = 'agents'
 }}
 <div class="sss-page-header">
-  <h1 class="sss-page-titulo">Auditoria</h1>
+  <h1 class="sss-page-title">Auditoria</h1>
   <p class="sss-page-sub">Saúde dos agentes executores, medida pelo relógio do banco. Painel somente leitura.</p>
 </div>
 {{include 'audit/_tabs.html'}}
 
-<section class="sss-card" aria-labelledby="titulo-agentes" x-data="atualizacaoAgentes" data-url="{{=fragment_url}}" data-intervalo="{{=interval_s}}">
-  <div class="sss-card-titulo sss-titulo-linha">
-    <h2 class="sss-card-titulo-texto" id="titulo-agentes">Agentes</h2>
-    <span class="sss-texto-suave sss-auto-situacao" aria-live="polite" x-text="state">Atualização automática a cada {{=interval_s}} segundos.</span>
+<section class="sss-card" aria-labelledby="title-agents" x-data="agentsRefresh" data-url="{{=fragment_url}}" data-interval="{{=interval_s}}">
+  <div class="sss-card-title sss-title-row">
+    <h2 class="sss-card-title-text" id="title-agents">Agentes</h2>
+    <span class="sss-text-muted sss-auto-status-text" aria-live="polite" x-text="state">Atualização automática a cada {{=interval_s}} segundos.</span>
   </div>
-  <div class="sss-card-corpo">
+  <div class="sss-card-body">
     {{include 'audit/agents.load'}}
   </div>
 </section>
 
-<section class="sss-card" aria-labelledby="titulo-legenda">
-  <h2 class="sss-card-titulo" id="titulo-legenda">Legenda de saúde</h2>
-  <div class="sss-card-corpo">
-    <dl class="sss-legenda-saude">
+<section class="sss-card" aria-labelledby="title-legend">
+  <h2 class="sss-card-title" id="title-legend">Legenda de saúde</h2>
+  <div class="sss-card-body">
+    <dl class="sss-legend-health">
       {{for _lg in legend:}}
       <dt><span class="sss-status {{=_lg['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_lg['icon']}}"></use></svg><span>{{=_lg['label']}}</span></span></dt>
       <dd>{{=_lg['description']}}</dd>
       {{pass}}
     </dl>
-    <p class="sss-texto-suave mb-0">Limiares atuais: heartbeat a cada {{=thresholds.heartbeat_interval_s}} s (OK abaixo de {{=2 * thresholds.heartbeat_interval_s}} s), fence em {{=thresholds.fence_timeout_s}} s e nó offline em {{=thresholds.node_offline_timeout_s}} s.</p>
+    <p class="sss-text-muted mb-0">Limiares atuais: heartbeat a cada {{=thresholds.heartbeat_interval_s}} s (OK abaixo de {{=2 * thresholds.heartbeat_interval_s}} s), fence em {{=thresholds.fence_timeout_s}} s e nó offline em {{=thresholds.node_offline_timeout_s}} s.</p>
   </div>
 </section>

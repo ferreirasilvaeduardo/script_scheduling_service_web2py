@@ -2,7 +2,7 @@
 # Abas da área de auditoria. Variável de entrada: aba_ativa ('index' | 'agents').
 _abas = (('index', u'Trilha de auditoria'), ('agents', u'Agentes'))
 }}<nav aria-label="Seções da auditoria">
-  <ul class="nav nav-tabs sss-abas-auditoria">
+  <ul class="nav nav-tabs sss-tabs-audit">
     {{for _aba_f, _aba_rotulo in _abas:}}
     <li class="nav-item">
       {{if _aba_f == active_tab:}}

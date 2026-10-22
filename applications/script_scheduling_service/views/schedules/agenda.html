@@ -2,37 +2,37 @@
 {{
 # Agenda (README §7.7, CR-004 T3): só leitura. É uma previsão: a execução real depende de um servidor livre.
 }}
-<div class="sss-page-header sss-detalhe-cabecalho">
+<div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-titulo">Agenda</h1>
+    <h1 class="sss-page-title">Agenda</h1>
     <p class="sss-page-sub">O que vai rodar hoje e nos próximos 7 dias, pelas regras de agendamento ativas. É uma previsão: a execução real depende de um servidor livre.</p>
   </div>
-  <div class="sss-acoes">
+  <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='schedules', f='index')}}">Voltar às regras</a>
   </div>
 </div>
 
 {{if error:}}
-<div class="alert alert-danger sss-alerta" role="alert"><span>{{=error}}</span></div>
+<div class="alert alert-danger sss-alert" role="alert"><span>{{=error}}</span></div>
 {{else:}}
-<p class="sss-texto-suave">Regras pausadas não aparecem aqui.</p>
-{{if data['total_warning']:}}<div class="alert alert-warning sss-alerta" role="status"><span>{{=data['total_warning']}}</span></div>{{pass}}
+<p class="sss-text-muted">Regras pausadas não aparecem aqui.</p>
+{{if data['total_warning']:}}<div class="alert alert-warning sss-alert" role="status"><span>{{=data['total_warning']}}</span></div>{{pass}}
 
 {{if data['delayed']:}}
-<section class="sss-card" aria-labelledby="titulo-atrasados">
-  <h2 class="sss-card-titulo" id="titulo-atrasados">Atrasado</h2>
-  <ul class="sss-card-corpo sss-agenda-lista">
+<section class="sss-card" aria-labelledby="title-delayed">
+  <h2 class="sss-card-title" id="title-delayed">Atrasado</h2>
+  <ul class="sss-card-body sss-agenda-list">
     {{for _a in data['delayed']:}}
-    <li><span class="sss-agenda-hora">{{=_a['hour']}}</span> <a href="{{=URL(c='schedules', f='form', args=[_a['rule_id']])}}">{{=_a['name']}}</a> — <span class="sss-mono">{{=_a['script']}}</span> em <strong>{{=_a['environment']}}</strong>: {{=_a['phrase']}}{{if _a.get('warning'):}} <span class="sss-texto-suave text-warning">({{=_a['warning']}})</span>{{pass}}</li>
+    <li><span class="sss-agenda-hour">{{=_a['hour']}}</span> <a href="{{=URL(c='schedules', f='form', args=[_a['rule_id']])}}">{{=_a['name']}}</a> — <span class="sss-mono">{{=_a['script']}}</span> em <strong>{{=_a['environment']}}</strong>: {{=_a['phrase']}}{{if _a.get('warning'):}} <span class="sss-text-muted text-warning">({{=_a['warning']}})</span>{{pass}}</li>
     {{pass}}
   </ul>
 </section>
 {{pass}}
 
 {{if data.get('problems'):}}
-<section class="sss-card" aria-labelledby="titulo-problemas">
-  <h2 class="sss-card-titulo" id="titulo-problemas">Regras com problema</h2>
-  <ul class="sss-card-corpo sss-agenda-lista">
+<section class="sss-card" aria-labelledby="title-problems">
+  <h2 class="sss-card-title" id="title-problems">Regras com problema</h2>
+  <ul class="sss-card-body sss-agenda-list">
     {{for _p in data['problems']:}}
     <li>
       <a href="{{=URL(c='schedules', f='form', args=[_p['rule_id']])}}">{{=_p['name']}}</a>
@@ -45,20 +45,20 @@
 {{pass}}
 
 {{if not data['days'] and not data.get('problems'):}}
-<section class="sss-card"><p class="sss-card-corpo mb-0">Nada previsto para os próximos 7 dias.</p></section>
+<section class="sss-card"><p class="sss-card-body mb-0">Nada previsto para os próximos 7 dias.</p></section>
 {{pass}}
 {{for _d in data['days']:}}
 <section class="sss-card" aria-label="{{=_d['label']}}">
-  <h2 class="sss-card-titulo">{{=_d['label']}}</h2>
-  <ul class="sss-card-corpo sss-agenda-lista">
+  <h2 class="sss-card-title">{{=_d['label']}}</h2>
+  <ul class="sss-card-body sss-agenda-list">
     {{for _o in _d['items']:}}
     <li>
-      <span class="sss-agenda-hora">{{=_o['hour']}}</span>
+      <span class="sss-agenda-hour">{{=_o['hour']}}</span>
       <a href="{{=URL(c='schedules', f='form', args=[_o['rule_id']])}}">{{=_o['name']}}</a>
       — <span class="sss-mono">{{=_o['script']}}</span> em <strong>{{=_o['environment']}}</strong>
-      <span class="sss-texto-suave">({{=_o['recurrence']}})</span>
-      {{if _o.get('more'):}}<span class="sss-texto-suave"> e mais {{=_o['more']}} vezes neste período</span>{{pass}}
-      {{if _o.get('warning'):}} <span class="sss-texto-suave text-warning">({{=_o['warning']}})</span>{{pass}}
+      <span class="sss-text-muted">({{=_o['recurrence']}})</span>
+      {{if _o.get('more'):}}<span class="sss-text-muted"> e mais {{=_o['more']}} vezes neste período</span>{{pass}}
+      {{if _o.get('warning'):}} <span class="sss-text-muted text-warning">({{=_o['warning']}})</span>{{pass}}
     </li>
     {{pass}}
   </ul>

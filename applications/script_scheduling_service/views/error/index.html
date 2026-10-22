@@ -11,11 +11,11 @@
 </head>
 <body class="sss-body">
 <main id="content" class="sss-main">
-  <section class="sss-card" aria-labelledby="erro-titulo">
-    <h1 class="sss-card-titulo" id="erro-titulo">{{=happened}}</h1>
+  <section class="sss-card" aria-labelledby="error-title">
+    <h1 class="sss-card-title" id="error-title">{{=happened}}</h1>
     <p class="mb-2"><strong>O que fazer agora:</strong> {{=todo}}</p>
     {{if permissions:}}<p class="mb-2"><a href="{{=URL(c='default', f='permissions')}}">Ver o que eu posso fazer</a></p>{{pass}}
-    <p class="mb-0 sss-texto-suave">Código do erro: {{=code}}</p>
+    <p class="mb-0 sss-text-muted">Código do erro: {{=code}}</p>
   </section>
 </main>
 </body>

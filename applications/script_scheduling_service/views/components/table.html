@@ -15,7 +15,7 @@ import ui_helpers
 _tab_colunas = table['columns']
 _tab_linhas = table.get('rows') or []
 }}<div class="table-responsive">
-  <table class="table table-sm sss-tabela mb-0">
+  <table class="table table-sm sss-table mb-0">
     {{if table.get('caption'):}}<caption class="visually-hidden">{{=table['caption']}}</caption>{{pass}}
     <thead>
       <tr>
@@ -27,7 +27,7 @@ _tab_linhas = table.get('rows') or []
     <tbody>
       {{if table.get('error'):}}
       <tr>
-        <td colspan="{{=len(_tab_colunas)}}" class="sss-tabela-estado">
+        <td colspan="{{=len(_tab_colunas)}}" class="sss-table-state">
           <div class="alert alert-danger mb-0" role="alert">
             <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
             <span>{{=table['error']}}</span>
@@ -36,7 +36,7 @@ _tab_linhas = table.get('rows') or []
       </tr>
       {{elif not _tab_linhas:}}
       <tr>
-        <td colspan="{{=len(_tab_colunas)}}" class="sss-tabela-estado sss-tabela-vazia">{{=table.get('empty_message') or 'Nenhum registro encontrado'}}</td>
+        <td colspan="{{=len(_tab_colunas)}}" class="sss-table-state sss-table-empty">{{=table.get('empty_message') or 'Nenhum registro encontrado'}}</td>
       </tr>
       {{else:}}
       {{for _tab_linha in _tab_linhas:}}
@@ -55,7 +55,7 @@ _tab_linhas = table.get('rows') or []
         {{elif _tab_tipo == 'action':}}
         {{_tab_acoes = _tab_linha.get(_tab_col['key']) or []
         _tab_acoes = _tab_acoes if isinstance(_tab_acoes, (list, tuple)) else [_tab_acoes]}}
-        <td class="sss-tabela-acoes {{=_tab_col.get('css_class', '')}}">{{for _tab_acao in _tab_acoes:}}{{if _tab_acao.get('href'):}}<a class="btn btn-sm btn-outline-secondary" href="{{=_tab_acao['href']}}"{{if _tab_acao.get('description'):}} aria-label="{{=_tab_acao['description']}}"{{pass}}>{{=_tab_acao['label']}}</a> {{pass}}{{pass}}</td>
+        <td class="sss-table-actions {{=_tab_col.get('css_class', '')}}">{{for _tab_acao in _tab_acoes:}}{{if _tab_acao.get('href'):}}<a class="btn btn-sm btn-outline-secondary" href="{{=_tab_acao['href']}}"{{if _tab_acao.get('description'):}} aria-label="{{=_tab_acao['description']}}"{{pass}}>{{=_tab_acao['label']}}</a> {{pass}}{{pass}}</td>
         {{elif _tab_tipo == 'mono':}}
         <td class="sss-mono {{=_tab_col.get('css_class', '')}}">{{=_tab_linha.get(_tab_col['key'], '')}}</td>
         {{else:}}

@@ -5,115 +5,115 @@
 (function () {
   'use strict';
 
-  var DIMENSOES = ['funcs', 'ambs', 'scrs'];
+  var DIMENSIONS = ['funcs', 'ambs', 'scrs'];
 
-  function caixas(raiz, seletor) {
-    return Array.prototype.slice.call(raiz.querySelectorAll(seletor));
+  function boxes(root, selector) {
+    return Array.prototype.slice.call(root.querySelectorAll(selector));
   }
 
   document.addEventListener('alpine:init', function () {
-    window.Alpine.data('matrizPermissoes', function () {
+    window.Alpine.data('permissionMatrix', function () {
       return {
-        resumo: [],
-        aba: 'funcs',
+        summary: [],
+        tab: 'funcs',
 
-        get semAlteracoes() {
-          return this.resumo.length === 0;
+        get noChanges() {
+          return this.summary.length === 0;
         },
-        get temAlteracoes() {
-          return this.resumo.length > 0;
+        get hasChanges() {
+          return this.summary.length > 0;
         },
-        get situacao() {
-          if (!this.resumo.length) {
+        get statusText() {
+          if (!this.summary.length) {
             return 'Nenhuma alteração pendente.';
           }
-          return this.resumo.length === 1 ? '1 alteração pendente.' : this.resumo.length + ' alterações pendentes.';
+          return this.summary.length === 1 ? '1 alteração pendente.' : this.summary.length + ' alterações pendentes.';
         },
 
         init: function () {
-          this.mostrarAba('funcs');
-          this.atualizar();
+          this.showTab('funcs');
+          this.refresh();
         },
 
-        mostrarAba: function (dim) {
-          var raiz = this.$root;
-          this.aba = dim;
-          caixas(raiz, '[data-aba]').forEach(function (botao) {
-            var ativo = botao.getAttribute('data-aba') === dim;
-            botao.classList.toggle('active', ativo);
-            botao.setAttribute('aria-selected', ativo ? 'true' : 'false');
-            botao.setAttribute('tabindex', ativo ? '0' : '-1');
+        showTab: function (dim) {
+          var root = this.$root;
+          this.tab = dim;
+          boxes(root, '[data-tab]').forEach(function (button) {
+            var active = button.getAttribute('data-tab') === dim;
+            button.classList.toggle('active', active);
+            button.setAttribute('aria-selected', active ? 'true' : 'false');
+            button.setAttribute('tabindex', active ? '0' : '-1');
           });
-          caixas(raiz, '[data-painel]').forEach(function (painel) {
-            painel.hidden = painel.getAttribute('data-painel') !== dim;
+          boxes(root, '[data-panel]').forEach(function (panel) {
+            panel.hidden = panel.getAttribute('data-panel') !== dim;
           });
         },
-        abrirAba: function (evt) {
-          this.mostrarAba(evt.currentTarget.getAttribute('data-aba'));
+        openTab: function (evt) {
+          this.showTab(evt.currentTarget.getAttribute('data-tab'));
         },
 
-        atualizar: function () {
-          var raiz = this.$root;
-          var linhas = [];
-          DIMENSOES.forEach(function (dim) {
-            var mudancas = [];
-            var marcados = 0;
-            caixas(raiz, 'input[type="checkbox"][data-dim="' + dim + '"]').forEach(function (cx) {
-              var inicial = cx.getAttribute('data-inicial') === 'Y';
-              var rotulo = cx.getAttribute('data-diff');
+        refresh: function () {
+          var root = this.$root;
+          var rows = [];
+          DIMENSIONS.forEach(function (dim) {
+            var changes = [];
+            var checked = 0;
+            boxes(root, 'input[type="checkbox"][data-dim="' + dim + '"]').forEach(function (cx) {
+              var initial = cx.getAttribute('data-initial') === 'Y';
+              var label = cx.getAttribute('data-diff');
               if (cx.checked) {
-                marcados++;
+                checked++;
               }
-              if (cx.disabled || cx.checked === inicial) {
+              if (cx.disabled || cx.checked === initial) {
                 return;
               }
-              mudancas.push({ rotulo: rotulo, sinal: cx.checked ? '+' : '-' });
+              changes.push({ label: label, sign: cx.checked ? '+' : '-' });
             });
             // Mesma ordem do servidor: por rotulo e depois sinal ('+' antes de '-').
-            mudancas.sort(function (a, b) {
-              if (a.rotulo !== b.rotulo) {
-                return a.rotulo < b.rotulo ? -1 : 1;
+            changes.sort(function (a, b) {
+              if (a.label !== b.label) {
+                return a.label < b.label ? -1 : 1;
               }
-              return a.sinal < b.sinal ? -1 : (a.sinal > b.sinal ? 1 : 0);
+              return a.sign < b.sign ? -1 : (a.sign > b.sign ? 1 : 0);
             });
-            mudancas.forEach(function (m) { linhas.push(m.sinal + m.rotulo); });
-            caixas(raiz, '[data-contador="' + dim + '"]').forEach(function (el) {
-              el.textContent = String(marcados);
+            changes.forEach(function (m) { rows.push(m.sign + m.label); });
+            boxes(root, '[data-counter="' + dim + '"]').forEach(function (el) {
+              el.textContent = String(checked);
             });
           });
-          this.resumo = linhas;
+          this.summary = rows;
         },
 
-        marcarGrupo: function (evt) {
-          var grupo = evt.currentTarget.getAttribute('data-grupo');
-          var conjunto = this.$root.querySelector('fieldset[data-grupo="' + grupo + '"]');
-          var editaveis = caixas(conjunto, 'input[type="checkbox"]').filter(function (cx) {
+        markGroup: function (evt) {
+          var group = evt.currentTarget.getAttribute('data-group');
+          var set = this.$root.querySelector('fieldset[data-group="' + group + '"]');
+          var editable = boxes(set, 'input[type="checkbox"]').filter(function (cx) {
             return !cx.disabled && !cx.closest('[hidden]');
           });
-          var todos = editaveis.length > 0 && editaveis.every(function (cx) { return cx.checked; });
-          editaveis.forEach(function (cx) { cx.checked = !todos; });
-          this.atualizar();
+          var all = editable.length > 0 && editable.every(function (cx) { return cx.checked; });
+          editable.forEach(function (cx) { cx.checked = !all; });
+          this.refresh();
         },
 
-        filtrarScripts: function (evt) {
-          var termo = String(evt.target.value || '').trim().toLowerCase();
-          var painel = this.$root.querySelector('[data-painel="scrs"]');
-          var algum = false;
-          caixas(painel, 'fieldset[data-grupo]').forEach(function (conjunto) {
-            var visiveis = 0;
-            caixas(conjunto, '[data-busca]').forEach(function (item) {
-              var ok = !termo || item.getAttribute('data-busca').indexOf(termo) !== -1;
+        filterScripts: function (evt) {
+          var term = String(evt.target.value || '').trim().toLowerCase();
+          var panel = this.$root.querySelector('[data-panel="scrs"]');
+          var any = false;
+          boxes(panel, 'fieldset[data-group]').forEach(function (set) {
+            var visible = 0;
+            boxes(set, '[data-search]').forEach(function (item) {
+              var ok = !term || item.getAttribute('data-search').indexOf(term) !== -1;
               item.hidden = !ok;
               if (ok) {
-                visiveis++;
+                visible++;
               }
             });
-            conjunto.hidden = visiveis === 0;
-            if (visiveis) {
-              algum = true;
+            set.hidden = visible === 0;
+            if (visible) {
+              any = true;
             }
           });
-          painel.querySelector('[data-sem-resultado]').hidden = algum;
+          panel.querySelector('[data-no-result]').hidden = any;
         }
       };
     });

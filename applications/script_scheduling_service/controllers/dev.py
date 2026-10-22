@@ -172,7 +172,7 @@ def components():
         url_base=(request.controller, request.function),
         query_params=filtros_ativos,
         filters={
-            "id": "filtro-tickets",
+            "id": "filter-tickets",
             "url_base": (request.controller, request.function),
             "keep": {"size": pag["size"]},
             "fields": [
@@ -189,7 +189,7 @@ def components():
         form_sent=form_enviado,
         focus_field=ui_helpers.primeiro_campo_invalido(campos_form),
         modals=[
-            {"id": "modal-cancelar", "title": u"Cancelar ticket 1024?",
+            {"id": "modal-cancel", "title": u"Cancelar ticket 1024?",
              "text": u"O processo em execução será interrompido. Esta ação não pode ser desfeita.",
              "trigger_label": u"Cancelar ticket", "confirm_label": u"Sim, cancelar",
              "variant": "danger", "action": URL("dev", "components"), "hidden_fields": {"ticket_id": 1024}},

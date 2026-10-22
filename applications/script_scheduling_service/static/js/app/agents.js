@@ -6,96 +6,96 @@
 (function () {
   'use strict';
 
-  var SELETOR_FRAGMENTO = '[data-sss-fragmento="agentes"]';
+  var FRAGMENT_SELECTOR = '[data-sss-fragment="agentes"]';
 
-  function horaAtual() {
+  function currentTime() {
     var d = new Date();
-    function dois(n) { return (n < 10 ? '0' : '') + n; }
-    return dois(d.getHours()) + ':' + dois(d.getMinutes()) + ':' + dois(d.getSeconds());
+    function two(n) { return (n < 10 ? '0' : '') + n; }
+    return two(d.getHours()) + ':' + two(d.getMinutes()) + ':' + two(d.getSeconds());
   }
 
-  function abertos(raiz) {
-    var codigos = {};
-    Array.prototype.forEach.call(raiz.querySelectorAll('details[data-agente]'), function (el) {
+  function openItems(root) {
+    var codes = {};
+    Array.prototype.forEach.call(root.querySelectorAll('details[data-agent]'), function (el) {
       if (el.open) {
-        codigos[el.getAttribute('data-agente')] = true;
+        codes[el.getAttribute('data-agent')] = true;
       }
     });
-    return codigos;
+    return codes;
   }
 
-  function reabrir(raiz, codigos) {
-    Array.prototype.forEach.call(raiz.querySelectorAll('details[data-agente]'), function (el) {
-      if (codigos[el.getAttribute('data-agente')]) {
+  function reopen(root, codes) {
+    Array.prototype.forEach.call(root.querySelectorAll('details[data-agent]'), function (el) {
+      if (codes[el.getAttribute('data-agent')]) {
         el.open = true;
       }
     });
   }
 
   document.addEventListener('alpine:init', function () {
-    window.Alpine.data('atualizacaoAgentes', function () {
+    window.Alpine.data('agentsRefresh', function () {
       return {
-        ativo: false,
-        carregando: false,
-        ultima: '',
-        intervaloS: 15,
-        temporizador: null,
-        get situacao() {
-          if (!this.ativo) {
+        active: false,
+        loading: false,
+        last: '',
+        intervalS: 15,
+        timer: null,
+        get statusText() {
+          if (!this.active) {
             return 'Atualização automática interrompida. Recarregue a página.';
           }
-          return (this.ultima ? 'Atualizado às ' + this.ultima + '. ' : '') +
-            'Atualização automática a cada ' + this.intervaloS + ' segundos.';
+          return (this.last ? 'Atualizado às ' + this.last + '. ' : '') +
+            'Atualização automática a cada ' + this.intervalS + ' segundos.';
         },
         init: function () {
           var self = this;
-          var intervalo = parseInt(this.$root.getAttribute('data-intervalo'), 10);
-          if (intervalo > 0) {
-            this.intervaloS = intervalo;
+          var interval = parseInt(this.$root.getAttribute('data-interval'), 10);
+          if (interval > 0) {
+            this.intervalS = interval;
           }
-          this.ativo = true;
-          this.ultima = horaAtual();
-          this.temporizador = window.setInterval(function () { self.recarregar(); }, this.intervaloS * 1000);
+          this.active = true;
+          this.last = currentTime();
+          this.timer = window.setInterval(function () { self.reload(); }, this.intervalS * 1000);
         },
-        parar: function () {
-          this.ativo = false;
-          if (this.temporizador !== null) {
-            window.clearInterval(this.temporizador);
-            this.temporizador = null;
+        stop: function () {
+          this.active = false;
+          if (this.timer !== null) {
+            window.clearInterval(this.timer);
+            this.timer = null;
           }
         },
         destroy: function () {
-          this.parar();
+          this.stop();
         },
-        recarregar: function () {
+        reload: function () {
           var self = this;
-          if (!this.ativo || this.carregando || document.hidden) {
+          if (!this.active || this.loading || document.hidden) {
             return;
           }
-          this.carregando = true;
-          window.SSS.fetch(this.$root.getAttribute('data-url')).then(function (resposta) {
-            if (!resposta.ok) {
-              throw new Error('HTTP ' + resposta.status);
+          this.loading = true;
+          window.SSS.fetch(this.$root.getAttribute('data-url')).then(function (response) {
+            if (!response.ok) {
+              throw new Error('HTTP ' + response.status);
             }
-            return resposta.text();
+            return response.text();
           }).then(function (html) {
-            var novo = new DOMParser().parseFromString(html, 'text/html').querySelector(SELETOR_FRAGMENTO);
-            var atual = self.$root.querySelector(SELETOR_FRAGMENTO);
-            var estado;
+            var newValue = new DOMParser().parseFromString(html, 'text/html').querySelector(FRAGMENT_SELECTOR);
+            var current = self.$root.querySelector(FRAGMENT_SELECTOR);
+            var state;
             // Sem o marcador (ex.: sessao expirada redirecionou ao login), nao ha o que trocar.
-            if (!novo || !atual) {
+            if (!newValue || !current) {
               throw new Error('fragmento ausente');
             }
-            estado = abertos(atual);
-            novo = document.importNode(novo, true);
-            reabrir(novo, estado);
-            atual.replaceWith(novo);
-            self.ultima = horaAtual();
+            state = openItems(current);
+            newValue = document.importNode(newValue, true);
+            reopen(newValue, state);
+            current.replaceWith(newValue);
+            self.last = currentTime();
           }).catch(function () {
-            self.parar();
+            self.stop();
             window.SSS.toast('error', 'Não foi possível atualizar o painel de agentes. Recarregue a página.');
           }).then(function () {
-            self.carregando = false;
+            self.loading = false;
           });
         }
       };

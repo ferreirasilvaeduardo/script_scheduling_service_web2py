@@ -4,29 +4,29 @@
 icones = URL('static', 'img/icons.svg')
 }}
 <div class="sss-page-header">
-  <h1 class="sss-page-titulo">Rotinas disponíveis</h1>
+  <h1 class="sss-page-title">Rotinas disponíveis</h1>
   <p class="sss-page-sub">Os scripts (rotinas) que você pode rodar, onde podem rodar, que perguntas fazem e como foi a última vez.</p>
 </div>
 
 {{if error:}}
-<div class="alert alert-danger sss-alerta" role="alert"><span>{{=error}}</span></div>
+<div class="alert alert-danger sss-alert" role="alert"><span>{{=error}}</span></div>
 {{elif not groups:}}
-<section class="sss-card"><p class="sss-card-corpo mb-0">Nenhum script pode ser rodado agora com o seu perfil. Veja em <a href="{{=URL(c='default', f='permissions')}}">O que eu posso fazer</a> o motivo.</p></section>
+<section class="sss-card"><p class="sss-card-body mb-0">Nenhum script pode ser rodado agora com o seu perfil. Veja em <a href="{{=URL(c='default', f='permissions')}}">O que eu posso fazer</a> o motivo.</p></section>
 {{else:}}
-<section class="sss-card" x-data="buscaScript" aria-label="Rotinas">
-  <div class="sss-card-corpo">
-    <div class="sss-busca mb-3">
-      <label class="form-label" for="busca-rotina">Buscar rotina</label>
-      <input class="form-control form-control-sm" type="search" id="busca-rotina" maxlength="60" autocomplete="off" placeholder="Nome, descrição, grupo ou categoria" x-ref="busca" @input="filtrar">
+<section class="sss-card" x-data="scriptSearch" aria-label="Rotinas">
+  <div class="sss-card-body">
+    <div class="sss-search mb-3">
+      <label class="form-label" for="search-routine">Buscar rotina</label>
+      <input class="form-control form-control-sm" type="search" id="search-routine" maxlength="60" autocomplete="off" placeholder="Nome, descrição, grupo ou categoria" x-ref="searchTerm" @input="filter">
     </div>
-    <p class="sss-busca-vazia" x-show="semResultado" x-cloak role="status">Nenhuma rotina corresponde à busca.</p>
+    <p class="sss-search-empty" x-show="noResult" x-cloak role="status">Nenhuma rotina corresponde à busca.</p>
     {{for _g in groups:}}
-    <section class="sss-grupo-scripts" data-grupo>
-      <h2 class="sss-grupo-titulo">{{=_g['script_group']}} <span class="sss-grupo-categoria">/ {{=_g['category']}}</span></h2>
-      <ul class="sss-cartoes-rotina">
+    <section class="sss-group-scripts" data-group>
+      <h2 class="sss-group-title">{{=_g['script_group']}} <span class="sss-group-category">/ {{=_g['category']}}</span></h2>
+      <ul class="sss-cards-routine">
         {{for _c in _g['cards']:}}
-        <li class="sss-cartao-rotina" data-busca="{{=(' '.join((_c['name'], _c['description'], _c['script_group'], _c['category'], _c['stage']))).lower()}}">
-          <h3 class="sss-cartao-rotina-titulo sss-mono">{{=_c['name']}}</h3>
+        <li class="sss-card-routine" data-search="{{=(' '.join((_c['name'], _c['description'], _c['script_group'], _c['category'], _c['stage']))).lower()}}">
+          <h3 class="sss-card-routine-title sss-mono">{{=_c['name']}}</h3>
           {{if _c['description']:}}<p class="mb-2">{{=_c['description']}}</p>{{pass}}
           <p class="mb-1"><strong>Perguntas que faz:</strong>
             {{if _c['questions']:}}{{=u', '.join(p['label'] + (u' (obrigatório)' if p['required'] else u'') for p in _c['questions'])}}{{else:}}nenhuma{{pass}}
@@ -34,10 +34,10 @@ icones = URL('static', 'img/icons.svg')
           <p class="mb-2"><strong>Última execução:</strong>
             {{if _c['last_run']:}}
             <a href="{{=URL(c='tickets', f='detail', args=[_c['last_run']['id']])}}"><span class="sss-status {{=_c['last_run']['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_c['last_run']['icon']}}"></use></svg><span>{{=_c['last_run']['state']}}</span></span></a>
-            <span class="sss-texto-suave">{{=_c['last_run']['when']}}</span>
+            <span class="sss-text-muted">{{=_c['last_run']['when']}}</span>
             {{else:}}Ainda não rodou{{pass}}
           </p>
-          <div class="sss-acoes-inline">
+          <div class="sss-actions-inline">
             {{for _amb in _c['environments']:}}
             <a class="btn btn-sm btn-primary" href="{{=URL(c='tickets', f='new', vars=dict(script_id=_c['id'], environment=_amb))}}">Rodar em {{=_amb}}</a>
             {{pass}}

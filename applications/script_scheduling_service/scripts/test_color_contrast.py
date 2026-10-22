@@ -19,7 +19,7 @@ TEXT_PAIRS = (
     ("sss-accent-text", "sss-accent"), ("sss-accent-text", "sss-accent-hover"),
     ("sss-link", "sss-surface"), ("sss-link", "sss-bg"),
     ("sss-header-text", "sss-header-bg"), ("sss-header-muted", "sss-header-bg"),
-    ("sss-header-ativo-text", "sss-header-ativo-bg"),
+    ("sss-header-active-text", "sss-header-active-bg"),
     ("sss-banner-text", "sss-banner-bg"),
     ("sss-status-pending-fg", "sss-status-pending-bg"), ("sss-status-running-fg", "sss-status-running-bg"),
     ("sss-status-success-fg", "sss-status-success-bg"), ("sss-status-failed-fg", "sss-status-failed-bg"),
@@ -27,7 +27,7 @@ TEXT_PAIRS = (
 )
 INDICATOR_PAIRS = (
     ("sss-focus", "sss-surface"), ("sss-focus", "sss-bg"), ("sss-header-focus", "sss-header-bg"),
-    ("sss-header-faixa", "sss-header-bg"),
+    ("sss-header-stripe", "sss-header-bg"),
 )
 KYROS_PALETTE = {"#4daf9a", "#68d8bd", "#38977f", "#5f0684", "#831fb2", "#430463", "#faba00", "#ffce55", "#f8a600"}
 
@@ -84,11 +84,11 @@ class TestColorContrast(unittest.TestCase):
 
     def test_cores_principais_sao_da_paleta_kyros(self):
         for theme, tokens in self.themes.items():
-            for token in ("sss-accent", "sss-header-faixa", "sss-header-ativo-bg", "sss-banner-bg"):
+            for token in ("sss-accent", "sss-header-stripe", "sss-header-active-bg", "sss-banner-bg"):
                 with self.subTest(tema=theme, token=token):
                     self.assertIn(tokens[token].lower(), KYROS_PALETTE)
         light = self.themes["claro"]
-        self.assertEqual((light["sss-marca-verde"], light["sss-marca-roxo"], light["sss-marca-amarelo"]),
+        self.assertEqual((light["sss-brand-green"], light["sss-brand-purple"], light["sss-brand-yellow"]),
                          ("#4daf9a", "#5f0684", "#faba00"))
 
     def test_fontes_locais(self):

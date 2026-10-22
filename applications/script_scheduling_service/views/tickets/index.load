@@ -9,9 +9,9 @@ total = result['total']
 total_capped = result.get('total_capped', False)
 page_count = len(result['items'])
 url_base = ('tickets', 'index')
-}}<div data-sss-fragmento="tickets">
+}}<div data-sss-fragment="tickets">
   <div class="table-responsive">
-    <table class="table table-sm sss-tabela mb-0">
+    <table class="table table-sm sss-table mb-0">
       <caption class="visually-hidden">Tickets{{if error:}} (erro ao carregar){{pass}}</caption>
       <thead>
         <tr>
@@ -30,7 +30,7 @@ url_base = ('tickets', 'index')
       <tbody>
         {{if error:}}
         <tr>
-          <td colspan="{{=_lt_ncol}}" class="sss-tabela-estado">
+          <td colspan="{{=_lt_ncol}}" class="sss-table-state">
             <div class="alert alert-danger mb-0" role="alert">
               <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
               <span>{{=error}}</span>
@@ -39,19 +39,19 @@ url_base = ('tickets', 'index')
         </tr>
         {{elif not _lt_itens:}}
         <tr>
-          <td colspan="{{=_lt_ncol}}" class="sss-tabela-estado sss-tabela-vazia">Nenhum ticket encontrado para os filtros informados.</td>
+          <td colspan="{{=_lt_ncol}}" class="sss-table-state sss-table-empty">Nenhum ticket encontrado para os filtros informados.</td>
         </tr>
         {{else:}}
         {{for _lt in _lt_itens:}}
-        <tr{{if _lt['status'] == 'RUNNING':}} class="sss-linha-running"{{pass}}>
+        <tr{{if _lt['status'] == 'RUNNING':}} class="sss-row-running"{{pass}}>
           <td class="sss-col-num sss-mono"><a href="{{=URL(c='tickets', f='detail', args=[_lt['id']], extension=False)}}">{{=_lt['id']}}</a></td>
           <td class="sss-mono">{{=_lt['script_name']}}{{if _lt['source'] == 'agendamento':}} <span class="badge text-bg-secondary" title="Criado por regra de agendamento">agend.</span>{{pass}}</td>
           <td>{{=_lt['environment']}}</td>
           <td>
             {{status = _lt['status']
             status_reason = None}}{{include 'components/badge_status.html'}}
-            {{if _lt['status_reason']:}}<span class="sss-motivo" title="{{=_lt['reason_description']}}">{{=_lt['status_reason']}}</span>{{pass}}
-            {{if _lt['cancel_requested'] and _lt['status'] == 'RUNNING':}}<span class="sss-motivo">Cancelamento solicitado</span>{{pass}}
+            {{if _lt['status_reason']:}}<span class="sss-reason" title="{{=_lt['reason_description']}}">{{=_lt['status_reason']}}</span>{{pass}}
+            {{if _lt['cancel_requested'] and _lt['status'] == 'RUNNING':}}<span class="sss-reason">Cancelamento solicitado</span>{{pass}}
           </td>
           <td class="sss-col-num">{{=_lt['priority']}}</td>
           <td>{{=_lt['requested_by']}}</td>

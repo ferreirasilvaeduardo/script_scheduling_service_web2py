@@ -2,7 +2,7 @@
 # Componente: campo de formulário com label, ajuda e erro por campo.
 # Variáveis de entrada:
 #   campo -- dict:
-#     nome        -- nome ASCII do campo (vira id 'campo-<nome>');
+#     nome        -- nome ASCII do campo (vira id 'field-<nome>');
 #     label      -- texto do label;
 #     kind        -- 'text' | 'number' | 'date' | 'select' | 'textarea' (padrão 'text');
 #     value       -- valor atual (reapresentado após erro);
@@ -16,7 +16,7 @@
 # tipo 'password' nunca reapresenta o valor recebido.
 #   foco_campo -- nome do primeiro campo inválido (ui_helpers.primeiro_campo_invalido);
 #                 esse campo recebe autofocus, sem JavaScript.
-_fc_id = 'campo-' + field['name']
+_fc_id = 'field-' + field['name']
 _fc_tipo = field.get('kind') or 'text'
 _fc_valor = field.get('value')
 _fc_valor = '' if (_fc_valor is None or _fc_tipo == 'password') else _fc_valor
@@ -43,8 +43,8 @@ if field.get('read_only'):
     _fc_attrs['readonly'] = 'readonly'
     _fc_attrs['aria-readonly'] = 'true'
 pass
-}}<div class="sss-form-campo mb-3">
-  <label class="form-label" for="{{=_fc_id}}">{{=field['label']}}{{if field.get('required'):}} <span class="sss-obrigatorio" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span>{{pass}}</label>
+}}<div class="sss-form-field mb-3">
+  <label class="form-label" for="{{=_fc_id}}">{{=field['label']}}{{if field.get('required'):}} <span class="sss-required" aria-hidden="true">*</span><span class="visually-hidden">(obrigatório)</span>{{pass}}</label>
   {{if _fc_tipo == 'select':}}
   <select{{for _fc_k in sorted(_fc_attrs):}} {{=_fc_k}}="{{=_fc_attrs[_fc_k]}}"{{pass}}{{if field.get('required'):}} required{{pass}}{{if _fc_erro:}} aria-invalid="true"{{pass}}{{if _fc_erro and field['name'] == focus_field:}} autofocus{{pass}}>
     {{for _fc_ov, _fc_or in field.get('options', ()):}}

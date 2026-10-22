@@ -425,20 +425,20 @@ class TestPlainLanguage(unittest.TestCase):
         created = self.NOW - datetime.timedelta(minutes=10)
         pend = ui_helpers.etapas_ticket({"status": "PENDING", "created_at": created,
                                          "scheduled_at": self.NOW + datetime.timedelta(hours=1)}, self.NOW)
-        self.assertEqual([e["state_info"] for e in pend], ["feito", "atual", "pendente", "pendente"])
+        self.assertEqual([e["state_info"] for e in pend], ["done", "current", "pending", "pending"])
         self.assertTrue(pend[1]["when"].startswith(u"agendado para"))
         run = ui_helpers.etapas_ticket({"status": "RUNNING", "created_at": created, "scheduled_at": created,
                                         "started_at": self.NOW - datetime.timedelta(minutes=2)}, self.NOW)
-        self.assertEqual([e["state_info"] for e in run], ["feito", "feito", "atual", "pendente"])
+        self.assertEqual([e["state_info"] for e in run], ["done", "done", "current", "pending"])
         self.assertEqual(run[2]["when"], u"há 2 minutos")
         cancel = ui_helpers.etapas_ticket({"status": "CANCELLED", "created_at": created, "scheduled_at": created,
                                          "finished_at": self.NOW}, self.NOW)
-        self.assertEqual([e["state_info"] for e in cancel], ["feito", "feito", "pulado", "atual"])
+        self.assertEqual([e["state_info"] for e in cancel], ["done", "done", "skipped", "current"])
         self.assertEqual(cancel[2]["when"], u"não chegou a rodar")
         self.assertTrue(cancel[3]["when"].startswith(u"Cancelado"))
         ok = ui_helpers.etapas_ticket({"status": "SUCCESS", "created_at": created, "scheduled_at": created,
                                        "started_at": created, "finished_at": self.NOW}, self.NOW)
-        self.assertEqual([e["state_info"] for e in ok], ["feito", "feito", "feito", "atual"])
+        self.assertEqual([e["state_info"] for e in ok], ["done", "done", "done", "current"])
 
     def test_tempo_simples(self):
         self.assertEqual(ui_helpers.tempo_simples(30), u"menos de 1 minuto")

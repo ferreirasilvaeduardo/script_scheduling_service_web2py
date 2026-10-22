@@ -21,8 +21,8 @@ _pag_links = (
 if _pag['total_capped']:
     _pag_links = _pag_links[:-1]
 pass
-}}<nav class="sss-paginacao" aria-label="Paginação">
-  <span class="sss-paginacao-total">
+}}<nav class="sss-pagination" aria-label="Paginação">
+  <span class="sss-pagination-total">
     {{if _pag['total']:}}{{=_pag['first_record']}}–{{=_pag['last_record']}} de {{if _pag['total_capped']:}}mais de 10.000 registros{{else:}}{{=_pag['total']}} {{='registro' if _pag['total'] == 1 else 'registros'}}{{pass}}{{else:}}0 registros{{pass}}
   </span>
   <ul class="pagination pagination-sm mb-0">

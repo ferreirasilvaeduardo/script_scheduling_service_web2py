@@ -11,8 +11,8 @@ if (!process.env.SSS_HOMOLOG_PASSWORD) { console.error('Defina SSS_HOMOLOG_PASSW
     
     // Login admin
     await page.goto('http://127.0.0.1:8000/script_scheduling_service/default/login', { waitUntil: 'networkidle0' });
-    await page.type('#campo-login', 'admin');
-    await page.type('#campo-password', process.env.SSS_HOMOLOG_PASSWORD);
+    await page.type('#field-login', 'admin');
+    await page.type('#field-password', process.env.SSS_HOMOLOG_PASSWORD);
     await Promise.all([
         page.waitForNavigation({ waitUntil: 'networkidle0' }),
         page.click('.sss-login button[type="submit"]')
@@ -24,12 +24,12 @@ if (!process.env.SSS_HOMOLOG_PASSWORD) { console.error('Defina SSS_HOMOLOG_PASSW
     console.log('2. In form, url:', page.url());
 
     // Digitar espacos
-    await page.type('#campo-name', '  QA_01  ');
-    await page.type('#campo-description', 'Ambiente de teste');
+    await page.type('#field-name', '  QA_01  ');
+    await page.type('#field-description', 'Ambiente de teste');
     // Submeter usando o botao do form!
     await Promise.all([
         page.waitForNavigation({ waitUntil: 'networkidle0' }),
-        page.click('.sss-form-acoes button[type="submit"]')
+        page.click('.sss-form-actions button[type="submit"]')
     ]);
     console.log('3. After submit, url:', page.url());
     const errText = await page.evaluate(() => {

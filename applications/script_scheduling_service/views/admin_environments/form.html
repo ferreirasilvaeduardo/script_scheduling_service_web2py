@@ -20,20 +20,20 @@ if not _novo:
     else:
         _texto_modal = u'O ambiente voltará a aceitar tickets e agendamentos.'
     pass
-    _modal_ativo = {'id': 'modal-ativo', 'title': (u'Desativar ambiente %s' if _desativar else u'Reativar ambiente %s') % env['name'],
+    _modal_ativo = {'id': 'modal-active', 'title': (u'Desativar ambiente %s' if _desativar else u'Reativar ambiente %s') % env['name'],
                     'text': _texto_modal, 'trigger_label': 'Desativar' if _desativar else 'Reativar',
                     'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
                     'variant': 'danger' if _desativar else 'normal', 'action': URL(c='admin_environments', f='toggle_active'),
                     'hidden_fields': dict(id=env['id'], versao=env['version'])}
 pass
 }}
-<div class="sss-page-header sss-detalhe-cabecalho">
+<div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-titulo">{{if _novo:}}Novo ambiente{{else:}}Ambiente <span class="sss-mono">{{=env['name']}}</span>
+    <h1 class="sss-page-title">{{if _novo:}}Novo ambiente{{else:}}Ambiente <span class="sss-mono">{{=env['name']}}</span>
       <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
     </h1>
   </div>
-  <div class="sss-acoes">
+  <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_environments', f='index')}}">Voltar à lista</a>
     {{if not _novo:}}
     {{modal = _modal_ativo}}
@@ -43,21 +43,21 @@ pass
 </div>
 
 {{if not _novo and env.get('active') == 'Y' and env.get('active_schedules'):}}
-<div class="alert alert-info sss-alerta" role="note">
+<div class="alert alert-info sss-alert" role="note">
   <span>Este ambiente tem {{=env['active_schedules']}} agendamento(s) ativo(s). {{=deactivation_warning}}</span>
 </div>
 {{pass}}
 
-<section class="sss-card" aria-labelledby="titulo-form">
-  <h2 class="sss-card-titulo" id="titulo-form">Dados do ambiente</h2>
-  <form class="sss-card-corpo" method="post" action="{{=URL(c='admin_environments', f='save')}}" autocomplete="off">
+<section class="sss-card" aria-labelledby="title-form">
+  <h2 class="sss-card-title" id="title-form">Dados do ambiente</h2>
+  <form class="sss-card-body" method="post" action="{{=URL(c='admin_environments', f='save')}}" autocomplete="off">
     {{=csrf_campo()}}
     {{if not _novo:}}
     <input type="hidden" name="id" value="{{=env['id']}}">
     <input type="hidden" name="version" value="{{=env['version']}}">
     {{pass}}
     {{if general_error:}}
-    <div class="alert alert-danger sss-alerta" role="alert">
+    <div class="alert alert-danger sss-alert" role="alert">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
       <span>{{=general_error}}</span>
     </div>
@@ -65,7 +65,7 @@ pass
     {{for field in _campos:}}
     {{include 'components/form_field.html'}}
     {{pass}}
-    <div class="sss-form-acoes">
+    <div class="sss-form-actions">
       <button type="submit" class="btn btn-primary">{{='Incluir ambiente' if _novo else u'Salvar alterações'}}</button>
       <a class="btn btn-outline-secondary" href="{{=URL(c='admin_environments', f='index')}}">Cancelar</a>
     </div>

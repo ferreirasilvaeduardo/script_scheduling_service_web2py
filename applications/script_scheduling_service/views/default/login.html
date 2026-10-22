@@ -1,12 +1,12 @@
 {{extend 'layout.html'}}
 <div class="sss-login">
-  <section class="sss-card" aria-labelledby="login-titulo">
-    <h1 class="sss-card-titulo" id="login-titulo">Entrar</h1>
-    <div class="sss-card-corpo">
+  <section class="sss-card" aria-labelledby="login-title">
+    <h1 class="sss-card-title" id="login-title">Entrar</h1>
+    <div class="sss-card-body">
       {{if message:}}
       {{# components/alert.html ja e incluido pelo layout; o parser do web2py nao o inclui duas vezes.
       _erro = ui_helpers.alerta_info({'kind': 'error', 'message': message})}}
-      <div class="alert {{=_erro['css_class']}} sss-alerta" role="{{=_erro['role']}}">
+      <div class="alert {{=_erro['css_class']}} sss-alert" role="{{=_erro['role']}}">
         <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_erro['icon']}}"></use></svg>
         <span>{{=_erro['message']}}</span>
       </div>
@@ -15,12 +15,12 @@
         {{=csrf_campo()}}
         {{if next_url:}}<input type="hidden" name="next" value="{{=next_url}}">{{pass}}
         <div class="mb-3">
-          <label class="form-label" for="campo-login">Usuário</label>
-          <input type="text" class="form-control" id="campo-login" name="login" value="{{=typed_login}}" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
+          <label class="form-label" for="field-login">Usuário</label>
+          <input type="text" class="form-control" id="field-login" name="login" value="{{=typed_login}}" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
         </div>
         <div class="mb-3">
-          <label class="form-label" for="campo-password">Senha</label>
-          <input type="password" class="form-control" id="campo-password" name="password" maxlength="1024" autocomplete="current-password" required>
+          <label class="form-label" for="field-password">Senha</label>
+          <input type="password" class="form-control" id="field-password" name="password" maxlength="1024" autocomplete="current-password" required>
         </div>
         <button type="submit" class="btn btn-primary w-100">Entrar</button>
       </form>

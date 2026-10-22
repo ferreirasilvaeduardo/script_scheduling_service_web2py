@@ -1,23 +1,23 @@
 {{extend 'layout.html'}}
 
 <div class="sss-page-header">
-  <h1 class="sss-page-titulo">Componentes</h1>
+  <h1 class="sss-page-title">Componentes</h1>
   <p class="sss-page-sub">Galeria dos partials de <span class="sss-mono">views/components/</span> com dados fictícios. Tema segue o sistema operacional.</p>
 </div>
 
 <section class="sss-card" aria-labelledby="sec-badges">
-  <h2 class="sss-card-titulo" id="sec-badges">badge_status</h2>
-  <div class="sss-card-corpo sss-status-lista">
+  <h2 class="sss-card-title" id="sec-badges">badge_status</h2>
+  <div class="sss-card-body sss-status-list">
     {{for status, status_reason in badges:}}
     {{include 'components/badge_status.html'}}
     {{pass}}
   </div>
 </section>
 
-<section class="sss-card" aria-labelledby="sec-listagem">
-  <h2 class="sss-card-titulo" id="sec-listagem">filtros + tabela + paginacao</h2>
+<section class="sss-card" aria-labelledby="sec-listing">
+  <h2 class="sss-card-title" id="sec-listing">filtros + tabela + paginacao</h2>
   {{include 'components/filters.html'}}
-  <div class="sss-card-corpo sss-acoes">
+  <div class="sss-card-body sss-actions">
     <span class="sss-page-sub">Tamanho da página:</span>
     {{for _t in sizes:}}
     {{if _t == size:}}
@@ -33,8 +33,8 @@ page_count = None}}
   {{include 'components/pagination.html'}}
 </section>
 
-<section class="sss-card" aria-labelledby="sec-tabela-estados">
-  <h2 class="sss-card-titulo" id="sec-tabela-estados">tabela: estados vazio e de erro</h2>
+<section class="sss-card" aria-labelledby="sec-table-states">
+  <h2 class="sss-card-title" id="sec-table-states">tabela: estados vazio e de erro</h2>
   {{table = empty_table}}
   {{include 'components/table.html'}}
   {{table = error_table}}
@@ -42,8 +42,8 @@ page_count = None}}
 </section>
 
 <section class="sss-card" aria-labelledby="sec-form">
-  <h2 class="sss-card-titulo" id="sec-form">form_campo</h2>
-  <div class="sss-card-corpo">
+  <h2 class="sss-card-title" id="sec-form">form_campo</h2>
+  <div class="sss-card-body">
     {{if not form_sent:}}
     <p class="sss-page-sub"><a href="{{=URL(c=url_base[0], f=url_base[1], vars=dict(demo_submit='1', demo_timeout='0'), anchor='sec-form')}}">Simular envio com erros</a> (foco vai para o primeiro campo inválido).</p>
     {{pass}}
@@ -59,18 +59,18 @@ page_count = None}}
 </section>
 
 <section class="sss-card" aria-labelledby="sec-modal">
-  <h2 class="sss-card-titulo" id="sec-modal">modal_confirmacao</h2>
-  <div class="sss-card-corpo sss-acoes">
+  <h2 class="sss-card-title" id="sec-modal">modal_confirmacao</h2>
+  <div class="sss-card-body sss-actions">
     {{for modal in modals:}}
     {{include 'components/confirm_modal.html'}}
     {{pass}}
   </div>
-  <p class="sss-card-corpo sss-page-sub mb-0">O POST de confirmação envia o campo <code>_csrf</code>; sem ele, a resposta é 403.</p>
+  <p class="sss-card-body sss-page-sub mb-0">O POST de confirmação envia o campo <code>_csrf</code>; sem ele, a resposta é 403.</p>
 </section>
 
-<section class="sss-card" aria-labelledby="sec-alerta">
-  <h2 class="sss-card-titulo" id="sec-alerta">alerta</h2>
-  <div class="sss-card-corpo">
+<section class="sss-card" aria-labelledby="sec-alert">
+  <h2 class="sss-card-title" id="sec-alert">alerta</h2>
+  <div class="sss-card-body">
     {{for alert in alerts:}}
     {{include 'components/alert.html'}}
     {{pass}}
@@ -81,10 +81,10 @@ page_count = None}}
   </div>
 </section>
 
-<section class="sss-card" aria-labelledby="sec-copiar">
-  <h2 class="sss-card-titulo" id="sec-copiar">copiar</h2>
-  <div class="sss-card-corpo sss-copiar-valor">
-    <code id="texto-copia">{{=copy_text}}</code>
-    <button type="button" class="btn btn-sm btn-outline-secondary" x-data="copiar" data-texto="{{=copy_text}}" aria-describedby="texto-copia" @click="copiar"><span x-text="rotulo">Copiar</span></button>
+<section class="sss-card" aria-labelledby="sec-copy">
+  <h2 class="sss-card-title" id="sec-copy">copiar</h2>
+  <div class="sss-card-body sss-copy-value">
+    <code id="text-copy">{{=copy_text}}</code>
+    <button type="button" class="btn btn-sm btn-outline-secondary" x-data="copy" data-text="{{=copy_text}}" aria-describedby="text-copy" @click="copy"><span x-text="label">Copiar</span></button>
   </div>
 </section>

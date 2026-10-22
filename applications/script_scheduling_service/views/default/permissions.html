@@ -4,63 +4,63 @@
 _d = data
 }}
 <div class="sss-page-header">
-  <h1 class="sss-page-titulo">O que eu posso fazer</h1>
+  <h1 class="sss-page-title">O que eu posso fazer</h1>
   <p class="sss-page-sub">Aqui você vê o que o seu perfil libera: as telas, os ambientes (onde os scripts rodam) e os scripts (as rotinas) que você pode rodar.</p>
 </div>
 
 {{if error:}}
-<div class="alert alert-danger sss-alerta" role="alert"><span>{{=error}}</span></div>
+<div class="alert alert-danger sss-alert" role="alert"><span>{{=error}}</span></div>
 {{else:}}
-<section class="sss-card" aria-labelledby="titulo-perfil">
-  <h2 class="sss-card-titulo" id="titulo-perfil">Meu perfil</h2>
-  <div class="sss-card-corpo">
+<section class="sss-card" aria-labelledby="title-profile">
+  <h2 class="sss-card-title" id="title-profile">Meu perfil</h2>
+  <div class="sss-card-body">
     <p class="mb-1">Seu perfil é <strong class="sss-mono">{{=_d['profile']}}</strong>.</p>
     {{if _d['admin_phrase']:}}<p class="mb-0">{{=_d['admin_phrase']}}</p>{{pass}}
   </div>
 </section>
 
-<section class="sss-card" aria-labelledby="titulo-telas">
-  <h2 class="sss-card-titulo" id="titulo-telas">Telas que posso usar</h2>
+<section class="sss-card" aria-labelledby="title-screens">
+  <h2 class="sss-card-title" id="title-screens">Telas que posso usar</h2>
   {{if _d['screens']:}}
-  <ul class="sss-card-corpo sss-lista-permissoes">
+  <ul class="sss-card-body sss-list-permissions">
     {{for _t in _d['screens']:}}
     <li>
       {{if _t['route']:}}<a href="{{=URL(c=_t['route'][0], f=_t['route'][1])}}">{{=_t['name']}}</a>{{else:}}<strong>{{=_t['name']}}</strong>{{pass}}
-      <span class="sss-texto-suave"> — {{=_t['purpose']}}</span>
+      <span class="sss-text-muted"> — {{=_t['purpose']}}</span>
     </li>
     {{pass}}
   </ul>
   {{else:}}
-  <p class="sss-card-corpo sss-texto-suave mb-0">Seu perfil ainda não libera nenhuma tela.</p>
+  <p class="sss-card-body sss-text-muted mb-0">Seu perfil ainda não libera nenhuma tela.</p>
   {{pass}}
 </section>
 
-<section class="sss-card" aria-labelledby="titulo-ambientes">
-  <h2 class="sss-card-titulo" id="titulo-ambientes">Onde posso rodar scripts</h2>
+<section class="sss-card" aria-labelledby="title-environments">
+  <h2 class="sss-card-title" id="title-environments">Onde posso rodar scripts</h2>
   {{if _d['environments']:}}
-  <ul class="sss-card-corpo sss-lista-permissoes">
+  <ul class="sss-card-body sss-list-permissions">
     {{for _a in _d['environments']:}}
-    <li><strong class="sss-mono">{{=_a['name']}}</strong>{{if _a['description']:}}<span class="sss-texto-suave"> — {{=_a['description']}}</span>{{pass}}</li>
+    <li><strong class="sss-mono">{{=_a['name']}}</strong>{{if _a['description']:}}<span class="sss-text-muted"> — {{=_a['description']}}</span>{{pass}}</li>
     {{pass}}
   </ul>
   {{else:}}
-  <p class="sss-card-corpo sss-texto-suave mb-0">Nenhum ambiente liberado para o seu perfil.</p>
+  <p class="sss-card-body sss-text-muted mb-0">Nenhum ambiente liberado para o seu perfil.</p>
   {{pass}}
 </section>
 
-<section class="sss-card" aria-labelledby="titulo-scripts">
-  <h2 class="sss-card-titulo" id="titulo-scripts">Scripts que posso rodar</h2>
-  <div class="sss-card-corpo">
+<section class="sss-card" aria-labelledby="title-scripts">
+  <h2 class="sss-card-title" id="title-scripts">Scripts que posso rodar</h2>
+  <div class="sss-card-body">
     {{if not _d['can_execute']:}}
     <p class="mb-0">{{=_d['no_runs_phrase']}}</p>
     {{elif not _d['scripts']:}}
-    <p class="sss-texto-suave mb-0">Nenhum script pode ser rodado agora com o seu perfil.</p>
+    <p class="sss-text-muted mb-0">Nenhum script pode ser rodado agora com o seu perfil.</p>
     {{else:}}
-    <ul class="sss-lista-permissoes">
+    <ul class="sss-list-permissions">
       {{for _s in _d['scripts']:}}
       <li>
-        <strong class="sss-mono">{{=_s['name']}}</strong>{{if _s['description']:}}<span class="sss-texto-suave"> — {{=_s['description']}}</span>{{pass}}
-        <div class="sss-acoes-inline">
+        <strong class="sss-mono">{{=_s['name']}}</strong>{{if _s['description']:}}<span class="sss-text-muted"> — {{=_s['description']}}</span>{{pass}}
+        <div class="sss-actions-inline">
           {{for _amb in _s['environments']:}}
           <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='tickets', f='new', vars=dict(script_id=_s['id'], environment=_amb))}}">Rodar em {{=_amb}}</a>
           {{pass}}
@@ -73,9 +73,9 @@ _d = data
 </section>
 
 {{if _d['absent']:}}
-<section class="sss-card" aria-labelledby="titulo-ausentes">
-  <h2 class="sss-card-titulo" id="titulo-ausentes">Por que um script não aparece</h2>
-  <ul class="sss-card-corpo sss-lista-permissoes">
+<section class="sss-card" aria-labelledby="title-absent">
+  <h2 class="sss-card-title" id="title-absent">Por que um script não aparece</h2>
+  <ul class="sss-card-body sss-list-permissions">
     {{for _x in _d['absent']:}}
     <li><strong class="sss-mono">{{=_x['name']}}</strong>: {{=_x['reason']}}.</li>
     {{pass}}
@@ -83,5 +83,5 @@ _d = data
 </section>
 {{pass}}
 
-<p class="sss-texto-suave">{{=_d['more_access_phrase']}}</p>
+<p class="sss-text-muted">{{=_d['more_access_phrase']}}</p>
 {{pass}}

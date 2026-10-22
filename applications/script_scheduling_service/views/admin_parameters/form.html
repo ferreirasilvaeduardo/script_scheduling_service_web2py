@@ -21,7 +21,7 @@ if not _novo:
     else:
         _texto_modal = u'O parâmetro voltará a poder ser vinculado a scripts.'
     pass
-    _modal_ativo = {'id': 'modal-ativo', 'title': (u'Desativar parâmetro %s' if _desativar else u'Reativar parâmetro %s') % _p['code'],
+    _modal_ativo = {'id': 'modal-active', 'title': (u'Desativar parâmetro %s' if _desativar else u'Reativar parâmetro %s') % _p['code'],
                     'text': _texto_modal, 'trigger_label': 'Desativar' if _desativar else 'Reativar',
                     'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
                     'variant': 'danger' if _desativar else 'normal', 'action': URL(c='admin_parameters', f='toggle_active'),
@@ -33,24 +33,24 @@ pass
 def _desc(field, ajuda=True):
     _ids = []
     if ajuda:
-        _ids.append('campo-%s-ajuda' % field)
+        _ids.append('field-%s-ajuda' % field)
     pass
     if errors.get(field):
-        _ids.append('campo-%s-erro' % field)
+        _ids.append('field-%s-erro' % field)
     pass
     return ' '.join(_ids)
 pass
 }}
-<div class="sss-page-header sss-detalhe-cabecalho">
+<div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-titulo">{{if _novo:}}Novo parâmetro{{else:}}Parâmetro <span class="sss-mono">{{=_p['code']}}</span>
+    <h1 class="sss-page-title">{{if _novo:}}Novo parâmetro{{else:}}Parâmetro <span class="sss-mono">{{=_p['code']}}</span>
       <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icones}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
     </h1>
     {{if not _novo:}}
     <p class="sss-page-sub">{{if _p['links']:}}Usado por: {{for _i, _s in enumerate(_p['links']):}}{{=', ' if _i else ''}}<span class="sss-mono">{{=_s['name']}}</span> ({{=_s['param_type']}}{{=', inativo' if _s['active'] != 'Y' else ''}}){{pass}}. Tipo e flag ficam bloqueados enquanto houver vínculos.{{else:}}Nenhum script usa este parâmetro.{{pass}}</p>
     {{pass}}
   </div>
-  <div class="sss-acoes">
+  <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_parameters', f='index')}}">Voltar à lista</a>
     {{if not _novo:}}
     {{modal = _modal_ativo}}
@@ -59,113 +59,113 @@ pass
   </div>
 </div>
 
-<section class="sss-card" aria-labelledby="titulo-form">
-  <h2 class="sss-card-titulo" id="titulo-form">Dados do parâmetro</h2>
-  <form class="sss-card-corpo" method="post" action="{{=URL(c='admin_parameters', f='save')}}" autocomplete="off"
-        x-data="parametroForm" data-url-testar="{{=URL(c='admin_parameters', f='test_regex')}}">
+<section class="sss-card" aria-labelledby="title-form">
+  <h2 class="sss-card-title" id="title-form">Dados do parâmetro</h2>
+  <form class="sss-card-body" method="post" action="{{=URL(c='admin_parameters', f='save')}}" autocomplete="off"
+        x-data="parameterForm" data-url-test="{{=URL(c='admin_parameters', f='test_regex')}}">
     {{=csrf_campo()}}
     {{if not _novo:}}
     <input type="hidden" name="id" value="{{=_p['id']}}">
     <input type="hidden" name="version" value="{{=_p['version']}}">
     {{pass}}
     {{if general_error:}}
-    <div class="alert alert-danger sss-alerta" role="alert">
+    <div class="alert alert-danger sss-alert" role="alert">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icones}}#icon-alert"></use></svg>
       <span>{{=general_error}}</span>
     </div>
     {{pass}}
 
-    <div class="sss-form-linha">
-      <div class="sss-form-campo mb-3">
-        <label class="form-label" for="campo-codigo">Código{{if _novo:}} <span class="sss-obrigatorio" aria-hidden="true">*</span>{{pass}}</label>
-        <input type="text" class="{{=_classe('code')}}" id="campo-codigo" name="code" value="{{=_p['code']}}" maxlength="30" aria-describedby="{{=_desc('code')}}"{{if _novo:}} required{{else:}} readonly aria-readonly="true"{{pass}}{{if focus_field == 'code':}} autofocus{{pass}}>
-        <div class="form-text" id="campo-codigo-ajuda">Minúsculas, dígitos e _ (ex.: data_ref). É a chave das respostas e dos agendamentos: não muda depois de criado.</div>
-        {{if errors.get('code'):}}<div class="invalid-feedback" id="campo-codigo-erro">{{=errors['code']}}</div>{{pass}}
+    <div class="sss-form-row">
+      <div class="sss-form-field mb-3">
+        <label class="form-label" for="field-code">Código{{if _novo:}} <span class="sss-required" aria-hidden="true">*</span>{{pass}}</label>
+        <input type="text" class="{{=_classe('code')}}" id="field-code" name="code" value="{{=_p['code']}}" maxlength="30" aria-describedby="{{=_desc('code')}}"{{if _novo:}} required{{else:}} readonly aria-readonly="true"{{pass}}{{if focus_field == 'code':}} autofocus{{pass}}>
+        <div class="form-text" id="field-code-help">Minúsculas, dígitos e _ (ex.: data_ref). É a chave das respostas e dos agendamentos: não muda depois de criado.</div>
+        {{if errors.get('code'):}}<div class="invalid-feedback" id="field-code-error">{{=errors['code']}}</div>{{pass}}
       </div>
-      <div class="sss-form-campo mb-3">
-        <label class="form-label" for="campo-param_nomeado">Flag (opcional)</label>
-        <input type="text" class="{{=_classe('param_flag')}} sss-mono" id="campo-param_nomeado" name="param_flag" value="{{=_p['param_flag']}}" maxlength="30" aria-describedby="{{=_desc('param_flag')}}"{{if focus_field == 'param_flag':}} autofocus{{pass}}>
-        <div class="form-text" id="campo-param_nomeado-ajuda">Ex.: --data-ref ou -n. Obrigatória para scripts que montam o comando por flag (NOMEADO).</div>
-        {{if errors.get('param_flag'):}}<div class="invalid-feedback" id="campo-param_nomeado-erro">{{=errors['param_flag']}}</div>{{pass}}
+      <div class="sss-form-field mb-3">
+        <label class="form-label" for="field-param_flag">Flag (opcional)</label>
+        <input type="text" class="{{=_classe('param_flag')}} sss-mono" id="field-param_flag" name="param_flag" value="{{=_p['param_flag']}}" maxlength="30" aria-describedby="{{=_desc('param_flag')}}"{{if focus_field == 'param_flag':}} autofocus{{pass}}>
+        <div class="form-text" id="field-param_flag-help">Ex.: --data-ref ou -n. Obrigatória para scripts que montam o comando por flag (NOMEADO).</div>
+        {{if errors.get('param_flag'):}}<div class="invalid-feedback" id="field-param_flag-error">{{=errors['param_flag']}}</div>{{pass}}
       </div>
     </div>
 
-    <div class="sss-form-campo mb-3">
-      <label class="form-label" for="campo-label">Rótulo <span class="sss-obrigatorio" aria-hidden="true">*</span></label>
-      <input type="text" class="{{=_classe('label')}}" id="campo-label" name="label" value="{{=_p['label']}}" maxlength="60" required aria-describedby="{{=_desc('label', False)}}"{{if focus_field == 'label':}} autofocus{{pass}}>
-      {{if errors.get('label'):}}<div class="invalid-feedback" id="campo-label-erro">{{=errors['label']}}</div>{{pass}}
+    <div class="sss-form-field mb-3">
+      <label class="form-label" for="field-label">Rótulo <span class="sss-required" aria-hidden="true">*</span></label>
+      <input type="text" class="{{=_classe('label')}}" id="field-label" name="label" value="{{=_p['label']}}" maxlength="60" required aria-describedby="{{=_desc('label', False)}}"{{if focus_field == 'label':}} autofocus{{pass}}>
+      {{if errors.get('label'):}}<div class="invalid-feedback" id="field-label-error">{{=errors['label']}}</div>{{pass}}
     </div>
-    <div class="sss-form-campo mb-3">
-      <label class="form-label" for="campo-descricao">Descrição</label>
-      <textarea rows="2" class="{{=_classe('description')}}" id="campo-descricao" name="description" maxlength="150" aria-describedby="{{=_desc('description', False)}}">{{=_p['description']}}</textarea>
-      {{if errors.get('description'):}}<div class="invalid-feedback" id="campo-descricao-erro">{{=errors['description']}}</div>{{pass}}
+    <div class="sss-form-field mb-3">
+      <label class="form-label" for="field-description">Descrição</label>
+      <textarea rows="2" class="{{=_classe('description')}}" id="field-description" name="description" maxlength="150" aria-describedby="{{=_desc('description', False)}}">{{=_p['description']}}</textarea>
+      {{if errors.get('description'):}}<div class="invalid-feedback" id="field-description-error">{{=errors['description']}}</div>{{pass}}
     </div>
 
-    <div class="sss-form-campo mb-3">
-      <label class="form-label" for="campo-tipo_componente">Tipo do componente <span class="sss-obrigatorio" aria-hidden="true">*</span></label>
-      <select class="form-select{{=' is-invalid' if errors.get('component_type') else ''}}" id="campo-tipo_componente" name="component_type" x-ref="tipo" @change="trocarTipo" aria-describedby="{{=_desc('component_type', False)}}"{{if focus_field == 'component_type':}} autofocus{{pass}}>
+    <div class="sss-form-field mb-3">
+      <label class="form-label" for="field-component_type">Tipo do componente <span class="sss-required" aria-hidden="true">*</span></label>
+      <select class="form-select{{=' is-invalid' if errors.get('component_type') else ''}}" id="field-component_type" name="component_type" x-ref="type" @change="switchType" aria-describedby="{{=_desc('component_type', False)}}"{{if focus_field == 'component_type':}} autofocus{{pass}}>
         {{for _tv, _tr in types:}}
         <option value="{{=_tv}}"{{if _tv == _p['component_type']:}} selected{{pass}}>{{=_tr}}</option>
         {{pass}}
       </select>
-      {{if errors.get('component_type'):}}<div class="invalid-feedback" id="campo-tipo_componente-erro">{{=errors['component_type']}}</div>{{pass}}
+      {{if errors.get('component_type'):}}<div class="invalid-feedback" id="field-component_type-error">{{=errors['component_type']}}</div>{{pass}}
     </div>
 
-    <fieldset class="sss-form-campo mb-3 sss-opcoes" x-show="ehSelect">
-      <legend class="form-label fs-6">Opções da lista <span class="sss-obrigatorio" aria-hidden="true">*</span></legend>
-      <input type="hidden" name="options_json" x-ref="opcoes" value="{{=_p['options_json']}}" data-pares="{{=json.dumps(_pares) if _pares is not None else ''}}" :value="opcoesJson">
-      <template x-for="(linha, indice) in linhas" :key="indice">
-        <div class="sss-opcoes-linha">
-          <input type="text" class="form-control form-control-sm sss-mono" maxlength="100" aria-label="Valor da opção" placeholder="Valor enviado" :value="linha.valor" :data-i="indice" data-campo="valor" @input="editarLinha">
-          <input type="text" class="form-control form-control-sm" maxlength="100" aria-label="Rótulo da opção" placeholder="Rótulo exibido" :value="linha.rotulo" :data-i="indice" data-campo="rotulo" @input="editarLinha">
-          <button type="button" class="btn btn-sm btn-outline-secondary" :data-i="indice" @click="removerLinha" aria-label="Remover opção">Remover</button>
+    <fieldset class="sss-form-field mb-3 sss-options" x-show="isSelect">
+      <legend class="form-label fs-6">Opções da lista <span class="sss-required" aria-hidden="true">*</span></legend>
+      <input type="hidden" name="options_json" x-ref="options" value="{{=_p['options_json']}}" data-pairs="{{=json.dumps(_pares) if _pares is not None else ''}}" :value="optionsJson">
+      <template x-for="(row, index) in rows" :key="index">
+        <div class="sss-options-row">
+          <input type="text" class="form-control form-control-sm sss-mono" maxlength="100" aria-label="Valor da opção" placeholder="Valor enviado" :value="row.value" :data-i="index" data-field="value" @input="editRow">
+          <input type="text" class="form-control form-control-sm" maxlength="100" aria-label="Rótulo da opção" placeholder="Rótulo exibido" :value="row.label" :data-i="index" data-field="label" @input="editRow">
+          <button type="button" class="btn btn-sm btn-outline-secondary" :data-i="index" @click="removeRow" aria-label="Remover opção">Remover</button>
         </div>
       </template>
-      <button type="button" class="btn btn-sm btn-outline-primary mt-1" @click="adicionarLinha">Adicionar opção</button>
+      <button type="button" class="btn btn-sm btn-outline-primary mt-1" @click="addRow">Adicionar opção</button>
       <p class="form-text mb-0">Até 500 caracteres no total. O servidor valida as opções ao salvar.</p>
-      {{if errors.get('options_json'):}}<div class="invalid-feedback d-block" id="campo-opcoes_json-erro">{{=errors['options_json']}}</div>{{pass}}
+      {{if errors.get('options_json'):}}<div class="invalid-feedback d-block" id="field-options_json-error">{{=errors['options_json']}}</div>{{pass}}
     </fieldset>
 
-    <div class="sss-form-campo mb-3" x-show="ehTexto">
-      <label class="form-label" for="campo-regex_validacao">Validação por expressão regular (opcional)</label>
-      <input type="text" class="{{=_classe('validation_regex')}} sss-mono" id="campo-regex_validacao" name="validation_regex" value="{{=_p['validation_regex']}}" maxlength="150" aria-describedby="{{=_desc('validation_regex')}}"{{if not _p['can_regex']:}} readonly aria-readonly="true"{{pass}}{{if focus_field == 'validation_regex':}} autofocus{{pass}}>
-      <div class="form-text" id="campo-regex_validacao-ajuda">Aplicada com fullmatch. Quantificador aninhado, como (a+)+, é rejeitado por risco de desempenho.{{if not _p['can_regex']:}} Somente administradores alteram este campo.{{pass}}</div>
-      {{if errors.get('validation_regex'):}}<div class="invalid-feedback" id="campo-regex_validacao-erro">{{=errors['validation_regex']}}</div>{{pass}}
+    <div class="sss-form-field mb-3" x-show="isText">
+      <label class="form-label" for="field-validation_regex">Validação por expressão regular (opcional)</label>
+      <input type="text" class="{{=_classe('validation_regex')}} sss-mono" id="field-validation_regex" name="validation_regex" value="{{=_p['validation_regex']}}" maxlength="150" aria-describedby="{{=_desc('validation_regex')}}"{{if not _p['can_regex']:}} readonly aria-readonly="true"{{pass}}{{if focus_field == 'validation_regex':}} autofocus{{pass}}>
+      <div class="form-text" id="field-validation_regex-help">Aplicada com fullmatch. Quantificador aninhado, como (a+)+, é rejeitado por risco de desempenho.{{if not _p['can_regex']:}} Somente administradores alteram este campo.{{pass}}</div>
+      {{if errors.get('validation_regex'):}}<div class="invalid-feedback" id="field-validation_regex-error">{{=errors['validation_regex']}}</div>{{pass}}
     </div>
 
     <div class="form-check mb-2">
-      <input class="form-check-input" type="checkbox" id="campo-sensivel" name="sensitive" value="Y" x-ref="sensitive" @change="trocarSensivel"{{if _sensivel:}} checked{{pass}}>
-      <label class="form-check-label" for="campo-sensivel">Valor sigiloso (mascarado na tela e nos logs)</label>
-      {{if errors.get('sensitive'):}}<div class="invalid-feedback d-block" id="campo-sensivel-erro">{{=errors['sensitive']}}</div>{{pass}}
+      <input class="form-check-input" type="checkbox" id="field-sensitive" name="sensitive" value="Y" x-ref="sensitive" @change="switchSensitive"{{if _sensivel:}} checked{{pass}}>
+      <label class="form-check-label" for="field-sensitive">Valor sigiloso (mascarado na tela e nos logs)</label>
+      {{if errors.get('sensitive'):}}<div class="invalid-feedback d-block" id="field-sensitive-error">{{=errors['sensitive']}}</div>{{pass}}
     </div>
-    <div class="alert alert-warning sss-alerta" role="note" x-show="sensitive"{{if not _sensivel:}} x-cloak{{pass}}>
+    <div class="alert alert-warning sss-alert" role="note" x-show="sensitive"{{if not _sensivel:}} x-cloak{{pass}}>
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=_icones}}#icon-alert"></use></svg>
       <span>{{=sensitive_warning}}</span>
     </div>
 
-    <div class="sss-form-campo mb-3">
-      <label class="form-label" for="campo-valor_padrao">Valor padrão (opcional)</label>
-      <input class="{{=_classe('default_value')}}" id="campo-valor_padrao" name="default_value" maxlength="100" :type="tipoPadrao" type="{{='password' if _sensivel else 'text'}}" value="{{='' if _sensivel else _p['default_value']}}" autocomplete="off" aria-describedby="{{=_desc('default_value')}}"{{if focus_field == 'default_value':}} autofocus{{pass}}>
-      <div class="form-text" id="campo-valor_padrao-ajuda">Validado pelas mesmas regras do tipo.{{if _sensivel and _p.get('has_default'):}} Há um padrão sigiloso gravado: deixe em branco para mantê-lo.{{pass}}</div>
-      {{if errors.get('default_value'):}}<div class="invalid-feedback" id="campo-valor_padrao-erro">{{=errors['default_value']}}</div>{{pass}}
+    <div class="sss-form-field mb-3">
+      <label class="form-label" for="field-default_value">Valor padrão (opcional)</label>
+      <input class="{{=_classe('default_value')}}" id="field-default_value" name="default_value" maxlength="100" :type="defaultType" type="{{='password' if _sensivel else 'text'}}" value="{{='' if _sensivel else _p['default_value']}}" autocomplete="off" aria-describedby="{{=_desc('default_value')}}"{{if focus_field == 'default_value':}} autofocus{{pass}}>
+      <div class="form-text" id="field-default_value-help">Validado pelas mesmas regras do tipo.{{if _sensivel and _p.get('has_default'):}} Há um padrão sigiloso gravado: deixe em branco para mantê-lo.{{pass}}</div>
+      {{if errors.get('default_value'):}}<div class="invalid-feedback" id="field-default_value-error">{{=errors['default_value']}}</div>{{pass}}
       {{if _sensivel and _p.get('has_default'):}}
       <div class="form-check mt-1">
-        <input class="form-check-input" type="checkbox" id="campo-remove_default" name="remove_default" value="Y">
-        <label class="form-check-label" for="campo-remove_default">Remover o padrão sigiloso gravado</label>
+        <input class="form-check-input" type="checkbox" id="field-remove_default" name="remove_default" value="Y">
+        <label class="form-check-label" for="field-remove_default">Remover o padrão sigiloso gravado</label>
       </div>
       {{pass}}
     </div>
 
-    <fieldset class="sss-teste mb-3">
+    <fieldset class="sss-test mb-3">
       <legend class="form-label fs-6">Testar valor com a configuração acima (sem salvar)</legend>
-      <div class="sss-teste-linha">
-        <input type="text" class="form-control form-control-sm" id="campo-valor_teste" maxlength="500" aria-label="Valor de teste" x-ref="valorTeste">
-        <button type="button" class="btn btn-sm btn-outline-primary" @click="testar" :disabled="testando">Testar</button>
+      <div class="sss-test-row">
+        <input type="text" class="form-control form-control-sm" id="field-test_value" maxlength="500" aria-label="Valor de teste" x-ref="testValue">
+        <button type="button" class="btn btn-sm btn-outline-primary" @click="test" :disabled="testing">Testar</button>
       </div>
-      <p class="mt-2 mb-0" :class="classeTeste" role="status" aria-live="polite" x-text="resultadoTeste"></p>
+      <p class="mt-2 mb-0" :class="testClass" role="status" aria-live="polite" x-text="testResult"></p>
     </fieldset>
 
-    <div class="sss-form-acoes">
+    <div class="sss-form-actions">
       <button type="submit" class="btn btn-primary">{{=u'Incluir parâmetro' if _novo else u'Salvar alterações'}}</button>
       <a class="btn btn-outline-secondary" href="{{=URL(c='admin_parameters', f='index')}}">Cancelar</a>
     </div>

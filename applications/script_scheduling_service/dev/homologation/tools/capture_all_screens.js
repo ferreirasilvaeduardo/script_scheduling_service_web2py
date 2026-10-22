@@ -74,13 +74,13 @@ async function sleep(ms) {
         await clearCookies();
         await page.goto(`${BASE_URL}/default/login`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
-            const l = document.querySelector('#campo-login');
-            const s = document.querySelector('#campo-password');
+            const l = document.querySelector('#field-login');
+            const s = document.querySelector('#field-password');
             if (l) l.value = '';
             if (s) s.value = '';
         });
-        await page.type('#campo-login', user);
-        await page.type('#campo-password', pass);
+        await page.type('#field-login', user);
+        await page.type('#field-password', pass);
         await Promise.all([
             page.waitForNavigation({ waitUntil: 'networkidle0' }),
             page.click('button[type="submit"]')
@@ -98,8 +98,8 @@ async function sleep(ms) {
         await page.goto(`${BASE_URL}/default/login`, { waitUntil: 'networkidle0' });
         await snap(1, false);
 
-        await page.type('#campo-login', 'op.hml');
-        await page.type('#campo-password', 'senha-incorreta-teste');
+        await page.type('#field-login', 'op.hml');
+        await page.type('#field-password', 'senha-incorreta-teste');
         await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.click('button[type="submit"]')]);
         await snap(2, false);
 
@@ -170,7 +170,7 @@ async function sleep(ms) {
         await snap(14, false);
 
         // Confirmar disparo no modal
-        const btnModalConfirm = await page.$('#modal-confirmacao button.btn-danger, #modal-confirmacao button[type="submit"]');
+        const btnModalConfirm = await page.$('#modal-confirmation button.btn-danger, #modal-confirmation button[type="submit"]');
         if (btnModalConfirm) {
             await Promise.all([
                 page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {}),
@@ -230,7 +230,7 @@ async function sleep(ms) {
         await sleep(500);
         await snap(22, false);
 
-        const btnConfCanc = await page.$('#modal-cancelar button[type="submit"], .modal button.btn-danger');
+        const btnConfCanc = await page.$('#modal-cancel button[type="submit"], .modal button.btn-danger');
         if (btnConfCanc) {
             await Promise.all([
                 page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {}),
@@ -286,8 +286,8 @@ async function sleep(ms) {
         await snap(29, false);
 
         await page.goto(`${BASE_URL}/admin_environments/form`, { waitUntil: 'networkidle0' });
-        await page.type('#campo-name', '  QA_01  ');
-        await page.type('#campo-description', 'Ambiente de teste');
+        await page.type('#field-name', '  QA_01  ');
+        await page.type('#field-description', 'Ambiente de teste');
         await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.click('button[type="submit"]')]);
         await snap(30, false);
 
@@ -362,7 +362,7 @@ async function sleep(ms) {
         await snap(42, true);
 
         await page.evaluate(() => {
-            const el = document.querySelector('#campo-path_file');
+            const el = document.querySelector('#field-path_file');
             if (el) el.value = '/opt/automacoes/scripts/carga_diaria_nova.py';
         });
         const formSalvarScr1 = await page.$('form[action*="/admin_scripts/save"]');
@@ -376,7 +376,7 @@ async function sleep(ms) {
 
         // Restaurar caminho original
         await page.evaluate(() => {
-            const el = document.querySelector('#campo-path_file');
+            const el = document.querySelector('#field-path_file');
             if (el) el.value = '/opt/automacoes/scripts/carga_diaria.py';
         });
         const formSalvarScr2 = await page.$('form[action*="/admin_scripts/save"]');
@@ -477,36 +477,36 @@ async function sleep(ms) {
         console.log('\n--- CT-23 ---');
         await login('admin');
         await page.goto(`${BASE_URL}/admin_profiles/form/2`, { waitUntil: 'networkidle0' });
-        await snap(60, false, '.sss-quadro-registro, section[aria-label*="Registro"]');
+        await snap(60, false, '.sss-quadro-record, section[aria-label*="Registro"]');
 
         await page.goto(`${BASE_URL}/admin_environments/form/1`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
-            const desc = document.querySelector('#campo-description');
+            const desc = document.querySelector('#field-description');
             if (desc) desc.value = desc.value + ' (atualizado)';
         });
         const formSalvarAmb = await page.$('form[action*="/admin_environments/save"]');
         if (formSalvarAmb) {
             await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), formSalvarAmb.evaluate(f => f.submit())]);
         }
-        await snap(61, false, '.sss-quadro-registro, section[aria-label*="Registro"]');
+        await snap(61, false, '.sss-quadro-record, section[aria-label*="Registro"]');
 
         await page.goto(`${BASE_URL}/tickets/detail/17`, { waitUntil: 'networkidle0' });
-        await snap(62, false, '.sss-quadro-registro, section[aria-label*="Registro"]');
+        await snap(62, false, '.sss-quadro-record, section[aria-label*="Registro"]');
 
         // ==========================================
         // CT-24 — Robustez do scheduler na interface
         // ==========================================
         console.log('\n--- CT-24 ---');
         await page.goto(`${BASE_URL}/admin_parameters/form`, { waitUntil: 'networkidle0' });
-        await page.type('#campo-codigo', 'ct24_a');
-        await page.type('#campo-label', 'Teste Regex');
-        await page.type('#campo-regex_validacao', '(a|a)*b');
+        await page.type('#field-code', 'ct24_a');
+        await page.type('#field-label', 'Teste Regex');
+        await page.type('#field-validation_regex', '(a|a)*b');
         await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.click('button[type="submit"]')]);
         await snap(63, false);
 
         await login('consulta');
         await page.goto(`${BASE_URL}/tickets/detail/17`, { waitUntil: 'networkidle0' });
-        await snap(64, false, '.sss-quadro-registro, section[aria-label*="Registro"]');
+        await snap(64, false, '.sss-quadro-record, section[aria-label*="Registro"]');
 
         await login('admin');
         await page.goto(`${BASE_URL}/audit/agents`, { waitUntil: 'networkidle0' });
@@ -547,7 +547,7 @@ async function sleep(ms) {
         await page.goto(`${BASE_URL}/admin_scripts/form/1`, { waitUntil: 'networkidle0' });
         const dummySha = 'ab'.repeat(32);
         await page.evaluate((val) => {
-            const el = document.querySelector('#campo-sha256_informado');
+            const el = document.querySelector('#field-sha256_informado');
             if (el) el.value = val;
         }, dummySha);
         const formSalvarScrSha = await page.$('form[action*="/admin_scripts/save"]');

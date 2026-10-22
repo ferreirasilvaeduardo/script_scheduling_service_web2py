@@ -4,7 +4,7 @@
 import ui_helpers
 _opc_situacao = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos'), ('B', 'Bloqueados')]
 _opc_perfil = [('', 'Todos')] + [(str(_pf['id']), _pf['name']) for _pf in profiles]
-filters = {'id': 'filtro-usuarios', 'url_base': ('admin_users', 'index'), 'keep': {'size': size}, 'fields': [
+filters = {'id': 'filter-usuarios', 'url_base': ('admin_users', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'login', 'label': 'Login', 'kind': 'text', 'value': active_filters.get('login')},
     {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
     {'name': 'profile_id', 'label': 'Perfil', 'kind': 'select', 'value': str(active_filters.get('profile_id') or ''), 'options': _opc_perfil},
@@ -37,12 +37,12 @@ total_capped = result.get('total_capped', False)
 page_count = len(result['items'])
 url_base = ('admin_users', 'index')
 }}
-<div class="sss-page-header sss-detalhe-cabecalho">
+<div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-titulo">Usuários</h1>
+    <h1 class="sss-page-title">Usuários</h1>
     <p class="sss-page-sub">Pessoas que usam o sistema. Cada uma tem um perfil, que define o que ela pode fazer. Senhas nunca são exibidas.</p>
   </div>
-  <div class="sss-acoes">
+  <div class="sss-actions">
     <a class="btn btn-sm btn-primary" href="{{=URL(c='admin_users', f='form')}}">Novo usuário</a>
   </div>
 </div>

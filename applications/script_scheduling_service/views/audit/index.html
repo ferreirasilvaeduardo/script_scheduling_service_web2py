@@ -6,7 +6,7 @@ icones = URL('static', 'img/icons.svg')
 _opc_acoes = [('', 'Todas')] + [(_a, _a) for _a in actions]
 _opc_entidades = [('', 'Todas')] + [(_e, _e) for _e in entities]
 _erros = result['errors']
-filters = {'id': 'filtro-auditoria', 'url_base': ('audit', 'index'), 'keep': {'size': size}, 'fields': [
+filters = {'id': 'filter-audit', 'url_base': ('audit', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'date_from', 'label': 'De', 'kind': 'date', 'value': active_filters.get('date_from')},
     {'name': 'date_to', 'label': u'Até', 'kind': 'date', 'value': active_filters.get('date_to')},
     {'name': 'actor', 'label': 'Ator (login)', 'kind': 'text', 'value': active_filters.get('actor')},
@@ -25,7 +25,7 @@ url_base = ('audit', 'index')
 active_tab = 'index'
 }}
 <div class="sss-page-header">
-  <h1 class="sss-page-titulo">Auditoria</h1>
+  <h1 class="sss-page-title">Auditoria</h1>
   <p class="sss-page-sub">Trilha das ações sensíveis do sistema, da mais recente para a mais antiga. Sem filtro de data, mostra os últimos 7 dias.</p>
 </div>
 {{include 'audit/_tabs.html'}}
@@ -36,7 +36,7 @@ active_tab = 'index'
   <div class="alert alert-danger mx-3 mb-3" role="alert">
     <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
     <span>Filtros inválidos:</span>
-    <ul class="mb-0 sss-alerta-lista">
+    <ul class="mb-0 sss-alert-list">
       {{for _campo in [c for c in ('date_from', 'date_to', 'actor', 'action', 'entity', 'entity_id', 'ip') if c in _erros]:}}
       <li><strong>{{=_rotulos_campo[_campo]}}:</strong> {{=_erros[_campo]}}</li>
       {{pass}}
@@ -45,18 +45,18 @@ active_tab = 'index'
   {{pass}}
 </section>
 
-<section class="sss-card" aria-labelledby="titulo-trilha">
-  <div class="sss-card-titulo sss-titulo-linha">
-    <h2 class="sss-card-titulo-texto" id="titulo-trilha">Registros</h2>
+<section class="sss-card" aria-labelledby="title-trail">
+  <div class="sss-card-title sss-title-row">
+    <h2 class="sss-card-title-text" id="title-trail">Registros</h2>
     {{if not _erros:}}
-    <form method="post" action="{{=URL(c='audit', f='export')}}" class="sss-exportar">
+    <form method="post" action="{{=URL(c='audit', f='export')}}" class="sss-export">
       {{=csrf_campo()}}
       {{for _fk, _fv in active_filters.items():}}
       <input type="hidden" name="{{=_fk}}" value="{{=_fv}}">
       {{pass}}
       <button type="submit" class="btn btn-sm btn-outline-secondary">Exportar CSV</button>
     </form>
-    <span class="sss-texto-suave">Mesmos filtros da tela; no máximo {{='{:,}'.format(export_limit).replace(',', '.')}} linhas, as mais recentes. A exportação é registrada na auditoria.</span>
+    <span class="sss-text-muted">Mesmos filtros da tela; no máximo {{='{:,}'.format(export_limit).replace(',', '.')}} linhas, as mais recentes. A exportação é registrada na auditoria.</span>
     {{pass}}
   </div>
   {{if total > export_limit:}}
@@ -66,7 +66,7 @@ active_tab = 'index'
   </div>
   {{pass}}
   <div class="table-responsive">
-    <table class="table table-sm sss-tabela mb-0">
+    <table class="table table-sm sss-table mb-0">
       <caption class="visually-hidden">Trilha de auditoria{{if error:}} (erro ao carregar){{pass}}</caption>
       <thead>
         <tr>
@@ -76,7 +76,7 @@ active_tab = 'index'
       <tbody>
         {{if error:}}
         <tr>
-          <td colspan="{{=len(_colunas)}}" class="sss-tabela-estado">
+          <td colspan="{{=len(_colunas)}}" class="sss-table-state">
             <div class="alert alert-danger mb-0" role="alert">
               <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
               <span>{{=error}}</span>
@@ -85,7 +85,7 @@ active_tab = 'index'
         </tr>
         {{elif not result['items']:}}
         <tr>
-          <td colspan="{{=len(_colunas)}}" class="sss-tabela-estado sss-tabela-vazia">{{if _erros:}}Corrija os filtros para consultar a trilha.{{else:}}Nenhum registro encontrado para os filtros informados.{{pass}}</td>
+          <td colspan="{{=len(_colunas)}}" class="sss-table-state sss-table-empty">{{if _erros:}}Corrija os filtros para consultar a trilha.{{else:}}Nenhum registro encontrado para os filtros informados.{{pass}}</td>
         </tr>
         {{else:}}
         {{for _r in result['items']:}}
@@ -98,11 +98,11 @@ active_tab = 'index'
             {{if _r['link']:}}<a href="{{=URL(c=_r['link'][0], f=_r['link'][1], args=_r['link'][2], extension=False)}}" aria-label="Abrir {{=_r['entity']}} {{=_r['entity_id']}}">{{=_r['entity_id']}}</a>{{elif _r['entity_id'] is not None:}}{{=_r['entity_id']}}{{else:}}-{{pass}}
           </td>
           <td class="sss-mono">{{=_r['source_ip'] or '-'}}</td>
-          <td class="sss-aud-detalhe">
+          <td class="sss-audit-detail">
             {{if _r['truncated']:}}
             <details>
-              <summary><span>{{=_r['short_detail']}}</span> <span class="sss-ver-mais">ver mais</span></summary>
-              <div class="sss-aud-detalhe-completo">{{=_r['detail']}}</div>
+              <summary><span>{{=_r['short_detail']}}</span> <span class="sss-see-more">ver mais</span></summary>
+              <div class="sss-audit-detail-full">{{=_r['detail']}}</div>
             </details>
             {{else:}}{{=_r['detail'] or '-'}}{{pass}}
           </td>

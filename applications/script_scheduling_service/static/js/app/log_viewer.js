@@ -4,203 +4,203 @@
 (function () {
   'use strict';
 
-  var LIMITE_TELA = 5000000;
+  var SCREEN_LIMIT = 5000000;
   // Ao estourar o limite, mantem uma folga para nao recortar a cada nova leitura.
-  var MANTER_TELA = 4000000;
-  var FATOR_BACKOFF = 3;
-  var MARGEM_FINAL_PX = 8;
-  var STATUS_TERMINAIS = { SUCCESS: 1, FAILED: 1, CANCELLED: 1 };
+  var SCREEN_KEEP = 4000000;
+  var BACKOFF_FACTOR = 3;
+  var END_MARGIN_PX = 8;
+  var TERMINAL_STATUSES = { SUCCESS: 1, FAILED: 1, CANCELLED: 1 };
 
-  function ErroHttp(status) {
+  function HttpError(status) {
     this.status = status;
   }
 
   document.addEventListener('alpine:init', function () {
     window.Alpine.data('logViewer', function () {
       return {
-        texto: '',
+        text: '',
         offset: 0,
         status: '',
-        statusInicial: '',
-        truncado: false,
-        descartado: false,
-        seguir: true,
-        pausado: false,
-        encerrado: false,
-        carregando: false,
-        situacao: '',
-        temporizador: null,
+        initialStatus: '',
+        truncated: false,
+        discarded: false,
+        follow: true,
+        paused: false,
+        finished: false,
+        loading: false,
+        statusText: '',
+        timer: null,
         // Incrementada ao pausar: respostas de requisicoes antigas sao descartadas.
-        geracao: 0,
-        intervaloMs: 3000,
+        generation: 0,
+        intervalMs: 3000,
         maxChars: 65536,
         url: '',
         statusInfo: {},
 
         init: function () {
-          var raiz = this.$root;
-          var segundos = parseInt(raiz.getAttribute('data-intervalo-s'), 10);
-          var max = parseInt(raiz.getAttribute('data-max-chars'), 10);
-          this.url = raiz.getAttribute('data-url-chunk');
-          this.intervaloMs = (segundos > 0 ? segundos : 3) * 1000;
+          var root = this.$root;
+          var seconds = parseInt(root.getAttribute('data-interval-s'), 10);
+          var max = parseInt(root.getAttribute('data-max-chars'), 10);
+          this.url = root.getAttribute('data-url-chunk');
+          this.intervalMs = (seconds > 0 ? seconds : 3) * 1000;
           this.maxChars = max > 0 ? max : 65536;
-          this.status = raiz.getAttribute('data-status') || '';
-          this.statusInicial = this.status;
-          this.truncado = raiz.getAttribute('data-truncado') === 'Y';
+          this.status = root.getAttribute('data-status') || '';
+          this.initialStatus = this.status;
+          this.truncated = root.getAttribute('data-truncated') === 'Y';
           try {
-            this.statusInfo = JSON.parse(raiz.getAttribute('data-status-info') || '{}');
-          } catch (erro) {
+            this.statusInfo = JSON.parse(root.getAttribute('data-status-info') || '{}');
+          } catch (error) {
             this.statusInfo = {};
           }
-          this.situacao = 'Carregando o log…';
-          this.buscar();
+          this.statusText = 'Carregando o log…';
+          this.search();
         },
         destroy: function () {
-          this.cancelarAgendamento();
-          this.geracao++;
+          this.cancelSchedule();
+          this.generation++;
         },
 
-        get rotuloStatus() {
+        get statusLabel() {
           var info = this.statusInfo[this.status];
           return info ? info.label : this.status;
         },
-        get classeStatus() {
+        get statusClass() {
           var info = this.statusInfo[this.status];
           return info ? info.css_class : '';
         },
-        get rotuloPausa() {
-          return this.pausado ? 'Retomar' : 'Pausar';
+        get pauseLabel() {
+          return this.paused ? 'Retomar' : 'Pausar';
         },
 
-        cancelarAgendamento: function () {
-          if (this.temporizador !== null) {
-            window.clearTimeout(this.temporizador);
-            this.temporizador = null;
+        cancelSchedule: function () {
+          if (this.timer !== null) {
+            window.clearTimeout(this.timer);
+            this.timer = null;
           }
         },
-        agendar: function (ms) {
+        schedule: function (ms) {
           var self = this;
-          this.cancelarAgendamento();
-          this.temporizador = window.setTimeout(function () {
-            self.temporizador = null;
-            self.buscar();
+          this.cancelSchedule();
+          this.timer = window.setTimeout(function () {
+            self.timer = null;
+            self.search();
           }, ms);
         },
-        alternarPausa: function () {
-          if (this.encerrado) {
+        togglePause: function () {
+          if (this.finished) {
             return;
           }
-          if (this.pausado) {
-            this.pausado = false;
-            this.situacao = 'Atualização retomada.';
-            this.buscar();
+          if (this.paused) {
+            this.paused = false;
+            this.statusText = 'Atualização retomada.';
+            this.search();
             return;
           }
-          this.pausado = true;
-          this.geracao++;
-          this.carregando = false;
-          this.cancelarAgendamento();
-          this.situacao = 'Atualização pausada.';
+          this.paused = true;
+          this.generation++;
+          this.loading = false;
+          this.cancelSchedule();
+          this.statusText = 'Atualização pausada.';
         },
-        alternarSeguir: function (evt) {
-          this.seguir = evt.target.checked;
-          if (this.seguir) {
-            this.rolarParaFinal();
+        toggleFollow: function (evt) {
+          this.follow = evt.target.checked;
+          if (this.follow) {
+            this.scrollToEnd();
           }
         },
-        aoRolar: function () {
+        onScroll: function () {
           var area = this.$refs.area;
-          this.seguir = area.scrollHeight - area.scrollTop - area.clientHeight <= MARGEM_FINAL_PX;
+          this.follow = area.scrollHeight - area.scrollTop - area.clientHeight <= END_MARGIN_PX;
         },
-        rolarParaFinal: function () {
+        scrollToEnd: function () {
           var self = this;
           this.$nextTick(function () {
             var area = self.$refs.area;
             area.scrollTop = area.scrollHeight;
           });
         },
-        encerrar: function (mensagem) {
-          this.encerrado = true;
-          this.cancelarAgendamento();
-          this.situacao = mensagem;
+        finish: function (message) {
+          this.finished = true;
+          this.cancelSchedule();
+          this.statusText = message;
         },
 
-        anexar: function (bloco) {
-          if (!bloco) {
+        append: function (block) {
+          if (!block) {
             return;
           }
-          var novo = this.texto + bloco;
-          if (novo.length > LIMITE_TELA) {
-            novo = novo.slice(novo.length - MANTER_TELA);
-            this.descartado = true;
+          var newValue = this.text + block;
+          if (newValue.length > SCREEN_LIMIT) {
+            newValue = newValue.slice(newValue.length - SCREEN_KEEP);
+            this.discarded = true;
           }
-          this.texto = novo;
-          if (this.seguir) {
-            this.rolarParaFinal();
+          this.text = newValue;
+          if (this.follow) {
+            this.scrollToEnd();
           }
         },
 
-        buscar: function () {
+        search: function () {
           var self = this;
-          var geracao = this.geracao;
+          var generation = this.generation;
           var url;
-          if (this.pausado || this.encerrado || this.carregando) {
+          if (this.paused || this.finished || this.loading) {
             return;
           }
-          this.carregando = true;
+          this.loading = true;
           url = this.url + (this.url.indexOf('?') === -1 ? '?' : '&') + 'offset=' + encodeURIComponent(this.offset);
-          window.SSS.fetch(url).then(function (resposta) {
-            var tipo = resposta.headers.get('Content-Type') || '';
-            if (!resposta.ok) {
-              throw new ErroHttp(resposta.status);
+          window.SSS.fetch(url).then(function (response) {
+            var type = response.headers.get('Content-Type') || '';
+            if (!response.ok) {
+              throw new HttpError(response.status);
             }
             // Sessao expirada redireciona ao login (HTML 200): nao ha como continuar.
-            if (tipo.indexOf('application/json') === -1) {
-              throw new ErroHttp(401);
+            if (type.indexOf('application/json') === -1) {
+              throw new HttpError(401);
             }
-            return resposta.json();
-          }).then(function (dados) {
-            var cheio;
-            if (geracao !== self.geracao) {
+            return response.json();
+          }).then(function (data) {
+            var full;
+            if (generation !== self.generation) {
               return;
             }
-            self.carregando = false;
-            if (typeof dados.text !== 'string' || typeof dados.next_offset !== 'number') {
-              throw new ErroHttp(0);
+            self.loading = false;
+            if (typeof data.text !== 'string' || typeof data.next_offset !== 'number') {
+              throw new HttpError(0);
             }
-            self.anexar(dados.text);
-            self.offset = dados.next_offset;
+            self.append(data.text);
+            self.offset = data.next_offset;
             // README §5.7: a frase e a barra de etapas acompanham a mudanca de situacao.
-            if (self.statusInicial && dados.status && dados.status !== self.statusInicial) {
-              self.status = dados.status;
-              self.encerrar('A situação mudou; atualizando a página…');
+            if (self.initialStatus && data.status && data.status !== self.initialStatus) {
+              self.status = data.status;
+              self.finish('A situação mudou; atualizando a página…');
               window.setTimeout(function () { window.location.reload(); }, 1500);
               return;
             }
-            self.status = dados.status;
-            self.truncado = dados.truncated === true;
-            cheio = dados.text.length >= self.maxChars;
-            if ((dados.terminal === true || STATUS_TERMINAIS[dados.status]) && !cheio) {
-              self.encerrar('Execução finalizada; log lido até o fim. Recarregue a página para atualizar o resumo.');
+            self.status = data.status;
+            self.truncated = data.truncated === true;
+            full = data.text.length >= self.maxChars;
+            if ((data.terminal === true || TERMINAL_STATUSES[data.status]) && !full) {
+              self.finish('Execução finalizada; log lido até o fim. Recarregue a página para atualizar o resumo.');
               return;
             }
-            self.situacao = cheio ? 'Carregando o log…' : 'Acompanhando a execução.';
+            self.statusText = full ? 'Carregando o log…' : 'Acompanhando a execução.';
             // Bloco cheio: ainda ha log acumulado, le o proximo sem esperar o intervalo.
-            self.agendar(cheio ? 0 : self.intervaloMs);
-          }).catch(function (erro) {
-            var status = erro instanceof ErroHttp ? erro.status : -1;
-            if (geracao !== self.geracao) {
+            self.schedule(full ? 0 : self.intervalMs);
+          }).catch(function (error) {
+            var status = error instanceof HttpError ? error.status : -1;
+            if (generation !== self.generation) {
               return;
             }
-            self.carregando = false;
+            self.loading = false;
             if (status === 401) {
-              self.encerrar('Sessão encerrada. Recarregue a página para continuar acompanhando o log.');
+              self.finish('Sessão encerrada. Recarregue a página para continuar acompanhando o log.');
             } else if (status === 400 || status === 403 || status === 404) {
-              self.encerrar('Não foi possível acompanhar o log deste ticket. Recarregue a página.');
+              self.finish('Não foi possível acompanhar o log deste ticket. Recarregue a página.');
             } else {
-              self.situacao = 'Falha de comunicação; nova tentativa em ' +
-                Math.round(self.intervaloMs * FATOR_BACKOFF / 1000) + ' s.';
-              self.agendar(self.intervaloMs * FATOR_BACKOFF);
+              self.statusText = 'Falha de comunicação; nova tentativa em ' +
+                Math.round(self.intervalMs * BACKOFF_FACTOR / 1000) + ' s.';
+              self.schedule(self.intervalMs * BACKOFF_FACTOR);
             }
           });
         }

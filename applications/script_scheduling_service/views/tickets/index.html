@@ -14,10 +14,10 @@ _campos.append({'name': 'requested_by', 'label': 'Solicitante (login)', 'kind': 
 _campos.append({'name': 'created_from', 'label': 'Criado de', 'kind': 'date', 'value': active_filters.get('created_from')})
 _campos.append({'name': 'created_to', 'label': 'Criado até', 'kind': 'date', 'value': active_filters.get('created_to')})
 _campos.append({'name': 'source', 'label': 'Origem', 'kind': 'select', 'value': active_filters.get('source'), 'options': _opc_origens})
-filters = {'id': 'filtro-tickets', 'url_base': ('tickets', 'index'), 'keep': {'size': size}, 'fields': _campos}
+filters = {'id': 'filter-tickets', 'url_base': ('tickets', 'index'), 'keep': {'size': size}, 'fields': _campos}
 }}
 <div class="sss-page-header">
-  <h1 class="sss-page-titulo">Tickets</h1>
+  <h1 class="sss-page-title">Tickets</h1>
   <p class="sss-page-sub">Ticket é o pedido para rodar um script. Acompanhe aqui os pedidos e o que está rodando. Você vê apenas os tickets permitidos ao seu perfil.</p>
 </div>
 
@@ -25,14 +25,14 @@ filters = {'id': 'filtro-tickets', 'url_base': ('tickets', 'index'), 'keep': {'s
   {{include 'components/filters.html'}}
 </section>
 
-<section class="sss-card" aria-labelledby="titulo-tickets" x-data="atualizacaoTickets" data-url="{{=fragment_url}}">
-  <div class="sss-card-titulo sss-titulo-linha">
-    <h2 class="sss-card-titulo-texto" id="titulo-tickets">Fila de tickets</h2>
+<section class="sss-card" aria-labelledby="title-tickets" x-data="ticketsRefresh" data-url="{{=fragment_url}}">
+  <div class="sss-card-title sss-title-row">
+    <h2 class="sss-card-title-text" id="title-tickets">Fila de tickets</h2>
     <div class="form-check form-switch mb-0">
-      <input class="form-check-input" type="checkbox" role="switch" id="auto-atualizar" :checked="active" @change="alternar">
-      <label class="form-check-label" for="auto-atualizar">Atualizar automaticamente</label>
+      <input class="form-check-input" type="checkbox" role="switch" id="auto-refresh" :checked="active" @change="toggle">
+      <label class="form-check-label" for="auto-refresh">Atualizar automaticamente</label>
     </div>
-    <span class="sss-texto-suave sss-auto-situacao" aria-live="polite" x-text="state"></span>
+    <span class="sss-text-muted sss-auto-status-text" aria-live="polite" x-text="state"></span>
   </div>
   {{include 'tickets/index.load'}}
 </section>

@@ -18,7 +18,7 @@ if _novo:
     _campos.append({'name': 'confirmation', 'label': u'Confirmação da senha', 'kind': 'password', 'error': errors.get('confirmation'), 'required': True, 'autocomplete': 'new-password', 'maxlength': 1024})
 else:
     _desativar = _u.get('active') == 'Y'
-    _modal_ativo = {'id': 'modal-ativo', 'title': (u'Desativar usuário %s' if _desativar else u'Reativar usuário %s') % _u['login'],
+    _modal_ativo = {'id': 'modal-active', 'title': (u'Desativar usuário %s' if _desativar else u'Reativar usuário %s') % _u['login'],
                     'text': deactivation_warning if _desativar else u'O usuário voltará a ter acesso conforme o perfil.',
                     'trigger_label': 'Desativar' if _desativar else 'Reativar',
                     'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
@@ -34,14 +34,14 @@ else:
     ]
 pass
 }}
-<div class="sss-page-header sss-detalhe-cabecalho">
+<div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-titulo">{{if _novo:}}Novo usuário{{else:}}Usuário <span class="sss-mono">{{=_u['login']}}</span>
+    <h1 class="sss-page-title">{{if _novo:}}Novo usuário{{else:}}Usuário <span class="sss-mono">{{=_u['login']}}</span>
       <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
     </h1>
     {{if not _novo and _u.get('own'):}}<p class="sss-page-sub">Este é o seu usuário: desativação, troca para perfil não administrativo e redefinição de senha por aqui não são permitidas.</p>{{pass}}
   </div>
-  <div class="sss-acoes">
+  <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_users', f='index')}}">Voltar à lista</a>
     {{if not _novo and not (_u.get('own') and _u.get('active') == 'Y'):}}
     {{modal = _modal_ativo}}
@@ -50,16 +50,16 @@ pass
   </div>
 </div>
 
-<section class="sss-card" aria-labelledby="titulo-form">
-  <h2 class="sss-card-titulo" id="titulo-form">Dados do usuário</h2>
-  <form class="sss-card-corpo" method="post" action="{{=URL(c='admin_users', f='save')}}" autocomplete="off">
+<section class="sss-card" aria-labelledby="title-form">
+  <h2 class="sss-card-title" id="title-form">Dados do usuário</h2>
+  <form class="sss-card-body" method="post" action="{{=URL(c='admin_users', f='save')}}" autocomplete="off">
     {{=csrf_campo()}}
     {{if not _novo:}}
     <input type="hidden" name="id" value="{{=_u['id']}}">
     <input type="hidden" name="version" value="{{=_u['version']}}">
     {{pass}}
     {{if general_error:}}
-    <div class="alert alert-danger sss-alerta" role="alert">
+    <div class="alert alert-danger sss-alert" role="alert">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
       <span>{{=general_error}}</span>
     </div>
@@ -67,7 +67,7 @@ pass
     {{for field in _campos:}}
     {{include 'components/form_field.html'}}
     {{pass}}
-    <div class="sss-form-acoes">
+    <div class="sss-form-actions">
       <button type="submit" class="btn btn-primary">{{=u'Incluir usuário' if _novo else u'Salvar alterações'}}</button>
       <a class="btn btn-outline-secondary" href="{{=URL(c='admin_users', f='index')}}">Cancelar</a>
     </div>
@@ -80,10 +80,10 @@ pass
 {{pass}}
 
 {{if not _novo:}}
-<section class="sss-card" aria-labelledby="titulo-acesso">
-  <h2 class="sss-card-titulo" id="titulo-acesso">Acesso e bloqueio</h2>
-  <div class="sss-card-corpo">
-    <dl class="sss-resumo">
+<section class="sss-card" aria-labelledby="title-access">
+  <h2 class="sss-card-title" id="title-access">Acesso e bloqueio</h2>
+  <div class="sss-card-body">
+    <dl class="sss-summary">
       <dt>Situação do login</dt>
       <dd>{{if _u.get('locked'):}}Bloqueado até {{=ui_helpers.formatar_data(_u.get('locked_until'))}}{{else:}}Liberado{{pass}}</dd>
       <dt>Tentativas com falha</dt>
@@ -102,37 +102,37 @@ pass
   </div>
 </section>
 
-<section class="sss-card" aria-labelledby="titulo-redefinir">
-  <h2 class="sss-card-titulo" id="titulo-redefinir">Redefinir senha</h2>
+<section class="sss-card" aria-labelledby="title-reset">
+  <h2 class="sss-card-title" id="title-reset">Redefinir senha</h2>
   {{if _u.get('own'):}}
-  <p class="sss-card-corpo mb-0">Para trocar a sua própria senha, use <a href="{{=URL(c='default', f='my_password')}}">Minha senha</a> (exige a senha atual).</p>
+  <p class="sss-card-body mb-0">Para trocar a sua própria senha, use <a href="{{=URL(c='default', f='my_password')}}">Minha senha</a> (exige a senha atual).</p>
   {{else:}}
-  <form class="sss-card-corpo sss-form-estreito" method="post" action="{{=URL(c='admin_users', f='reset_password')}}" autocomplete="off">
+  <form class="sss-card-body sss-form-narrow" method="post" action="{{=URL(c='admin_users', f='reset_password')}}" autocomplete="off">
     {{=csrf_campo()}}
     <input type="hidden" name="id" value="{{=_u['id']}}">
     {{for field in _campos_senha:}}
     {{include 'components/form_field.html'}}
     {{pass}}
-    <div class="sss-confirmacao sss-form-acoes" x-data="confirmacao" @keydown.escape.window="fechar">
-      <button type="button" class="btn btn-outline-primary" x-ref="gatilho" @click="abrir">Redefinir senha</button>
-      <div class="modal sss-modal" :class="classeModal" role="dialog" aria-modal="true" aria-labelledby="modal-senha-titulo" aria-describedby="modal-senha-texto" tabindex="-1" @click.self="fechar">
+    <div class="sss-confirmation sss-form-actions" x-data="confirmation" @keydown.escape.window="close">
+      <button type="button" class="btn btn-outline-primary" x-ref="trigger" @click="open">Redefinir senha</button>
+      <div class="modal sss-modal" :class="modalClass" role="dialog" aria-modal="true" aria-labelledby="modal-password-title" aria-describedby="modal-password-text" tabindex="-1" @click.self="close">
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
             <div class="modal-header">
-              <h2 class="modal-title fs-5" id="modal-senha-titulo">Redefinir a senha de {{=_u['login']}}</h2>
-              <button type="button" class="btn-close" aria-label="Fechar" @click="fechar"></button>
+              <h2 class="modal-title fs-5" id="modal-password-title">Redefinir a senha de {{=_u['login']}}</h2>
+              <button type="button" class="btn-close" aria-label="Fechar" @click="close"></button>
             </div>
             <div class="modal-body">
-              <p class="mb-0" id="modal-senha-texto">A senha atual deixa de valer, e as tentativas com falha e o bloqueio são zerados. Informe a nova senha ao usuário por um canal seguro.</p>
+              <p class="mb-0" id="modal-password-text">A senha atual deixa de valer, e as tentativas com falha e o bloqueio são zerados. Informe a nova senha ao usuário por um canal seguro.</p>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancelar" @click="fechar">Cancelar</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" x-ref="cancel" @click="close">Cancelar</button>
               <button type="submit" class="btn btn-sm btn-primary">Confirmar redefinição</button>
             </div>
           </div>
         </div>
       </div>
-      <div class="sss-modal-fundo" :class="classeFundo"></div>
+      <div class="sss-modal-backdrop" :class="backdropClass"></div>
     </div>
   </form>
   {{pass}}

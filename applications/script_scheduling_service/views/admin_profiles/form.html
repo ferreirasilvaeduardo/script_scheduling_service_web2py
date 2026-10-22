@@ -25,20 +25,20 @@ if not _novo:
     else:
         _texto_modal = u'Os usuários do perfil voltarão a ter acesso conforme a matriz de permissões.'
     pass
-    _modal_ativo = {'id': 'modal-ativo', 'title': (u'Desativar perfil %s' if _desativar else u'Reativar perfil %s') % profile['name'],
+    _modal_ativo = {'id': 'modal-active', 'title': (u'Desativar perfil %s' if _desativar else u'Reativar perfil %s') % profile['name'],
                     'text': _texto_modal, 'trigger_label': 'Desativar' if _desativar else 'Reativar',
                     'confirm_label': u'Confirmar desativação' if _desativar else u'Confirmar reativação',
                     'variant': 'danger' if _desativar else 'normal', 'action': URL(c='admin_profiles', f='toggle_active'),
                     'hidden_fields': dict(id=profile['id'], versao=profile['version'])}
 pass
 }}
-<div class="sss-page-header sss-detalhe-cabecalho">
+<div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-titulo">{{if _novo:}}Novo perfil{{else:}}Perfil <span class="sss-mono">{{=profile['name']}}</span>
+    <h1 class="sss-page-title">{{if _novo:}}Novo perfil{{else:}}Perfil <span class="sss-mono">{{=profile['name']}}</span>
       <span class="sss-status {{=_situacao['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=_situacao['icon']}}"></use></svg><span>{{=_situacao['label']}}</span></span>{{pass}}
     </h1>
   </div>
-  <div class="sss-acoes">
+  <div class="sss-actions">
     <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='admin_profiles', f='index')}}">Voltar à lista</a>
     {{if not _novo:}}
     <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='admin_profiles', f='matrix', args=[profile['id']])}}">Permissões</a>
@@ -48,16 +48,16 @@ pass
   </div>
 </div>
 
-<section class="sss-card" aria-labelledby="titulo-form">
-  <h2 class="sss-card-titulo" id="titulo-form">Dados do perfil</h2>
-  <form class="sss-card-corpo" method="post" action="{{=URL(c='admin_profiles', f='save')}}" autocomplete="off">
+<section class="sss-card" aria-labelledby="title-form">
+  <h2 class="sss-card-title" id="title-form">Dados do perfil</h2>
+  <form class="sss-card-body" method="post" action="{{=URL(c='admin_profiles', f='save')}}" autocomplete="off">
     {{=csrf_campo()}}
     {{if not _novo:}}
     <input type="hidden" name="id" value="{{=profile['id']}}">
     <input type="hidden" name="version" value="{{=profile['version']}}">
     {{pass}}
     {{if general_error:}}
-    <div class="alert alert-danger sss-alerta" role="alert">
+    <div class="alert alert-danger sss-alert" role="alert">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#icon-alert"></use></svg>
       <span>{{=general_error}}</span>
     </div>
@@ -66,11 +66,11 @@ pass
     {{include 'components/form_field.html'}}
     {{pass}}
     <div class="form-check mb-3">
-      <input class="form-check-input" type="checkbox" id="campo-is_admin" name="is_admin" value="Y" aria-describedby="campo-is_admin-ajuda"{{if profile.get('is_admin') == 'Y':}} checked{{pass}}>
-      <label class="form-check-label" for="campo-is_admin">Perfil administrativo</label>
-      <div class="form-text" id="campo-is_admin-ajuda">Dispensa funcionalidades, ambientes e scripts; não dispensa a homologação nem as flags de ativo. O sistema nunca fica sem administrador ativo.</div>
+      <input class="form-check-input" type="checkbox" id="field-is_admin" name="is_admin" value="Y" aria-describedby="field-is_admin-help"{{if profile.get('is_admin') == 'Y':}} checked{{pass}}>
+      <label class="form-check-label" for="field-is_admin">Perfil administrativo</label>
+      <div class="form-text" id="field-is_admin-help">Dispensa funcionalidades, ambientes e scripts; não dispensa a homologação nem as flags de ativo. O sistema nunca fica sem administrador ativo.</div>
     </div>
-    <div class="sss-form-acoes">
+    <div class="sss-form-actions">
       <button type="submit" class="btn btn-primary">{{='Incluir perfil' if _novo else u'Salvar alterações'}}</button>
       <a class="btn btn-outline-secondary" href="{{=URL(c='admin_profiles', f='index')}}">Cancelar</a>
     </div>

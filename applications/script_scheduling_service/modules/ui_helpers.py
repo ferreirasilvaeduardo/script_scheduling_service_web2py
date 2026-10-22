@@ -129,7 +129,7 @@ def explicacao_ticket(ticket, now, timeout_s=None):
 def etapas_ticket(ticket, now):
     """Barra de etapas do detalhe (README §5.7): Pedido criado -> Na fila -> Rodando -> Terminou.
 
-    Cada etapa: {rotulo, quando, estado} com estado 'feito' | 'atual' | 'pendente' | 'pulado'.
+    Cada etapa: {rotulo, quando, estado} com estado 'done' | 'current' | 'pending' | 'skipped'.
     """
     status = ticket.get("status")
     terminal = status in ("SUCCESS", "FAILED", "CANCELLED")
@@ -150,9 +150,9 @@ def etapas_ticket(ticket, now):
     if terminal:
         end = u"%s — %s" % (status_info(status)["label"], end)
     states = {
-        "PENDING": ("feito", "atual", "pendente", "pendente"),
-        "RUNNING": ("feito", "feito", "atual", "pendente"),
-    }.get(status, ("feito", "feito", "pulado" if never_ran else "feito", "atual"))
+        "PENDING": ("done", "current", "pending", "pending"),
+        "RUNNING": ("done", "done", "current", "pending"),
+    }.get(status, ("done", "done", "skipped" if never_ran else "done", "current"))
     labels = (u"Pedido criado", u"Na fila", u"Rodando", u"Terminou")
     whens = (formatar_data(ticket.get("created_at")), queue_when, running_when,
                end if terminal else u"-")

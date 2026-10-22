@@ -2,13 +2,13 @@
 {{icones = URL('static', 'img/icons.svg')}}
 
 <div class="sss-page-header">
-  <h1 class="sss-page-titulo">Shell de desenvolvimento</h1>
+  <h1 class="sss-page-title">Shell de desenvolvimento</h1>
   <p class="sss-page-sub">Layout, tokens de design, ícones e navegação sob CSP estrita. O menu reflete as funcionalidades do perfil logado.</p>
 </div>
 
 <section class="sss-card" aria-labelledby="sec-status">
-  <h2 class="sss-card-titulo" id="sec-status">Estados do ticket</h2>
-  <div class="sss-card-corpo sss-status-lista">
+  <h2 class="sss-card-title" id="sec-status">Estados do ticket</h2>
+  <div class="sss-card-body sss-status-list">
     {{for t in tickets:}}
     <span class="sss-status {{=t['status']['css_class']}}">
       <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=t['status']['icon']}}"></use></svg>
@@ -23,9 +23,9 @@
 </section>
 
 <section class="sss-card" aria-labelledby="sec-tickets">
-  <h2 class="sss-card-titulo" id="sec-tickets">Tickets (tabela compacta)</h2>
+  <h2 class="sss-card-title" id="sec-tickets">Tickets (tabela compacta)</h2>
   <div class="table-responsive">
-    <table class="table table-sm sss-tabela mb-0">
+    <table class="table table-sm sss-table mb-0">
       <thead>
         <tr>
           <th scope="col" class="sss-col-id">Ticket</th>
@@ -58,11 +58,11 @@
 </section>
 
 <section class="sss-card" aria-labelledby="sec-toast">
-  <h2 class="sss-card-titulo" id="sec-toast">Notificações</h2>
-  <div class="sss-card-corpo sss-acoes" x-data="toastDemo">
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="success" data-mensagem="Ticket 1023 concluído com sucesso." @click="disparar">Sucesso</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="error" data-mensagem="Ticket 1022 falhou: tempo limite excedido." @click="disparar">Erro</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="warning" data-mensagem="Agendamento pausado após falhas consecutivas." @click="disparar">Alerta</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-tipo="info" data-mensagem="Agente srv-linux-prod-01 ativo." @click="disparar">Informação</button>
+  <h2 class="sss-card-title" id="sec-toast">Notificações</h2>
+  <div class="sss-card-body sss-actions" x-data="toastDemo">
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-type="success" data-message="Ticket 1023 concluído com sucesso." @click="trigger">Sucesso</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-type="error" data-message="Ticket 1022 falhou: tempo limite excedido." @click="trigger">Erro</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-type="warning" data-message="Agendamento pausado após falhas consecutivas." @click="trigger">Alerta</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-type="info" data-message="Agente srv-linux-prod-01 ativo." @click="trigger">Informação</button>
   </div>
 </section>

@@ -48,11 +48,11 @@ async function sleep(ms) {
         }
         await page.goto(`${BASE_URL}/default/login`, { waitUntil: 'networkidle0' });
         await page.evaluate(() => {
-            document.querySelector('#campo-login').value = '';
-            document.querySelector('#campo-password').value = '';
+            document.querySelector('#field-login').value = '';
+            document.querySelector('#field-password').value = '';
         });
-        await page.type('#campo-login', user);
-        await page.type('#campo-password', pass);
+        await page.type('#field-login', user);
+        await page.type('#field-password', pass);
         await Promise.all([
             page.waitForNavigation({ waitUntil: 'networkidle0' }),
             page.click('button[type="submit"]')
@@ -103,7 +103,7 @@ async function sleep(ms) {
         await page.goto(`${BASE_URL}/admin_scripts/form/1`, { waitUntil: 'networkidle0' });
         const dummySha = 'ab'.repeat(32);
         await page.evaluate((val) => {
-            const el = document.querySelector('#campo-sha256_informado');
+            const el = document.querySelector('#field-sha256_informado');
             if (el) el.value = val;
         }, dummySha);
         const formSalvarScr = await page.$('form[action*="/admin_scripts/save"]');

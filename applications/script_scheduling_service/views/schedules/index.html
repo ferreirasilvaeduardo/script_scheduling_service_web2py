@@ -5,7 +5,7 @@
 import ui_helpers
 icones = URL('static', 'img/icons.svg')
 _opc_ativo = [('', 'Todas'), ('Y', 'Ativas'), ('N', 'Pausadas')]
-filters = {'id': 'filtro-agendamentos', 'url_base': ('schedules', 'index'), 'keep': {'size': size}, 'fields': [
+filters = {'id': 'filter-schedules', 'url_base': ('schedules', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
     {'name': 'environment', 'label': 'Ambiente', 'kind': 'text', 'value': active_filters.get('environment')},
     {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opc_ativo},
@@ -17,12 +17,12 @@ total_capped = result.get('total_capped', False)
 page_count = len(result['items'])
 url_base = ('schedules', 'index')
 }}
-<div class="sss-page-header sss-detalhe-cabecalho">
+<div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-titulo">Regras de agendamento</h1>
+    <h1 class="sss-page-title">Regras de agendamento</h1>
     <p class="sss-page-sub">Agendamento é uma regra que pede para rodar um script sozinho, de tempos em tempos. Cada regra roda com as permissões de quem a salvou por último.</p>
   </div>
-  <div class="sss-acoes">
+  <div class="sss-actions">
     <a class="btn btn-sm btn-outline-primary" href="{{=URL(c='schedules', f='agenda')}}">Ver agenda</a>
     <a class="btn btn-sm btn-primary" href="{{=URL(c='schedules', f='form')}}">Nova regra</a>
   </div>
@@ -34,7 +34,7 @@ url_base = ('schedules', 'index')
 
 <section class="sss-card" aria-label="Regras de agendamento">
   <div class="table-responsive">
-    <table class="table table-sm sss-tabela mb-0">
+    <table class="table table-sm sss-table mb-0">
       <caption class="visually-hidden">Regras de agendamento cadastradas</caption>
       <thead>
         <tr>
@@ -44,7 +44,7 @@ url_base = ('schedules', 'index')
       <tbody>
         {{if error:}}
         <tr>
-          <td colspan="{{=len(_colunas)}}" class="sss-tabela-estado">
+          <td colspan="{{=len(_colunas)}}" class="sss-table-state">
             <div class="alert alert-danger mb-0" role="alert">
               <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#icon-alert"></use></svg>
               <span>{{=error}}</span>
@@ -52,7 +52,7 @@ url_base = ('schedules', 'index')
           </td>
         </tr>
         {{elif not result['items']:}}
-        <tr><td colspan="{{=len(_colunas)}}" class="sss-tabela-estado sss-tabela-vazia">Nenhuma regra de agendamento encontrada.</td></tr>
+        <tr><td colspan="{{=len(_colunas)}}" class="sss-table-state sss-table-empty">Nenhuma regra de agendamento encontrada.</td></tr>
         {{else:}}
         {{for _r in result['items']:}}
         {{_sit = ui_helpers.ativo_info(_r['active'])}}
@@ -66,11 +66,11 @@ url_base = ('schedules', 'index')
           <td class="sss-mono">{{=_r['responsible']}}</td>
           <td>
             <span class="sss-status {{=_sit['css_class']}}"><svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=icones}}#{{=_sit['icon']}}"></use></svg><span>{{=_r['state']}}</span></span>
-            {{if _r['reason']:}}<div class="sss-texto-suave">{{=_r['reason']}}</div>{{pass}}
-            {{if _r.get('warning'):}}<div class="sss-texto-suave text-warning"><small>{{=_r['warning']}}</small></div>{{pass}}
+            {{if _r['reason']:}}<div class="sss-text-muted">{{=_r['reason']}}</div>{{pass}}
+            {{if _r.get('warning'):}}<div class="sss-text-muted text-warning"><small>{{=_r['warning']}}</small></div>{{pass}}
           </td>
-          <td class="sss-tabela-acoes">
-            <div class="sss-acoes">
+          <td class="sss-table-actions">
+            <div class="sss-actions">
               <a class="btn btn-sm btn-outline-secondary" href="{{=URL(c='schedules', f='form', args=[_r['id']])}}" aria-label="Editar regra {{=_r['name']}}">Editar</a>
               {{if _r['active'] == 'Y':}}
               {{modal = {'id': 'modal-pausar-%s' % _r['id'], 'title': u'Pausar regra %s' % _r['name'],

@@ -2,7 +2,7 @@
 {{
 # Lista de ambientes (padrão de CRUD administrativo, docs/ADMIN_CRUD_PATTERN.md).
 _opc_ativo = [('', 'Todos'), ('Y', 'Ativos'), ('N', 'Inativos')]
-filters = {'id': 'filtro-ambientes', 'url_base': ('admin_environments', 'index'), 'keep': {'size': size}, 'fields': [
+filters = {'id': 'filter-environments', 'url_base': ('admin_environments', 'index'), 'keep': {'size': size}, 'fields': [
     {'name': 'name', 'label': 'Nome', 'kind': 'text', 'value': active_filters.get('name')},
     {'name': 'active', 'label': u'Situação', 'kind': 'select', 'value': active_filters.get('active'), 'options': _opc_ativo},
 ]}
@@ -29,12 +29,12 @@ total_capped = result.get('total_capped', False)
 page_count = len(result['items'])
 url_base = ('admin_environments', 'index')
 }}
-<div class="sss-page-header sss-detalhe-cabecalho">
+<div class="sss-page-header sss-detail-header">
   <div>
-    <h1 class="sss-page-titulo">Ambientes</h1>
+    <h1 class="sss-page-title">Ambientes</h1>
     <p class="sss-page-sub">Ambiente é onde o script vai rodar (por exemplo, produção ou homologação). Cada um aponta para o seu banco (DSN). As credenciais ficam no secrets.cfg, nunca aqui.</p>
   </div>
-  <div class="sss-acoes">
+  <div class="sss-actions">
     <a class="btn btn-sm btn-primary" href="{{=URL(c='admin_environments', f='form')}}">Novo ambiente</a>
   </div>
 </div>

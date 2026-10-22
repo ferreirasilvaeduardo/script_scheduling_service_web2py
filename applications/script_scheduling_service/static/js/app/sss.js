@@ -7,29 +7,29 @@
   'use strict';
 
   var SSS = window.SSS = window.SSS || {};
-  var TIPOS_TOAST = { sucesso: 1, erro: 1, alerta: 1, info: 1 };
-  var DURACAO_TOAST_MS = 6000;
-  var proximoId = 1;
+  var TOAST_TYPES = { success: 1, error: 1, alert: 1, info: 1 };
+  var TOAST_DURATION_MS = 6000;
+  var nextId = 1;
 
   // Bootstrap 5.3 nao segue prefers-color-scheme sozinho; o tema vem do sistema.
-  var esquemaEscuro = window.matchMedia('(prefers-color-scheme: dark)');
-  function aplicarTema() {
-    document.documentElement.setAttribute('data-bs-theme', esquemaEscuro.matches ? 'dark' : 'light');
+  var darkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+  function applyTheme() {
+    document.documentElement.setAttribute('data-bs-theme', darkScheme.matches ? 'dark' : 'light');
   }
-  aplicarTema();
-  if (esquemaEscuro.addEventListener) {
-    esquemaEscuro.addEventListener('change', aplicarTema);
+  applyTheme();
+  if (darkScheme.addEventListener) {
+    darkScheme.addEventListener('change', applyTheme);
   } else {
-    esquemaEscuro.addListener(aplicarTema);
+    darkScheme.addListener(applyTheme);
   }
 
-  SSS.toast = function (tipo, mensagem) {
+  SSS.toast = function (type, message) {
     window.dispatchEvent(new CustomEvent('sss:toast', {
-      detail: { tipo: tipo, mensagem: String(mensagem) }
+      detail: { type: type, message: String(message) }
     }));
   };
 
-  var METODOS_SEGUROS = { GET: 1, HEAD: 1 };
+  var SAFE_METHODS = { GET: 1, HEAD: 1 };
 
   function tokenCsrf() {
     var meta = document.querySelector('meta[name="csrf-token"]');
@@ -37,65 +37,65 @@
   }
 
   // fetch com cookies de mesma origem e X-CSRF-Token em metodos que alteram estado (README §4.2).
-  SSS.fetch = window.sssFetch = function (url, opcoes) {
+  SSS.fetch = window.sssFetch = function (url, options) {
     var opts = {};
-    var chave;
-    opcoes = opcoes || {};
-    for (chave in opcoes) {
-      if (Object.prototype.hasOwnProperty.call(opcoes, chave)) {
-        opts[chave] = opcoes[chave];
+    var key;
+    options = options || {};
+    for (key in options) {
+      if (Object.prototype.hasOwnProperty.call(options, key)) {
+        opts[key] = options[key];
       }
     }
-    var metodo = String(opts.method || 'GET').toUpperCase();
-    var cabecalhos = new Headers(opts.headers || {});
-    if (!METODOS_SEGUROS[metodo]) {
-      cabecalhos.set('X-CSRF-Token', tokenCsrf());
+    var method = String(opts.method || 'GET').toUpperCase();
+    var headers = new Headers(opts.headers || {});
+    if (!SAFE_METHODS[method]) {
+      headers.set('X-CSRF-Token', tokenCsrf());
     }
-    opts.method = metodo;
-    opts.headers = cabecalhos;
+    opts.method = method;
+    opts.headers = headers;
     opts.credentials = 'same-origin';
-    return window.fetch(url, opts).then(function (resposta) {
-      if (resposta.status === 403) {
+    return window.fetch(url, opts).then(function (response) {
+      if (response.status === 403) {
         SSS.toast('error', 'Requisição recusada. Recarregue a página e tente novamente.');
       }
-      return resposta;
+      return response;
     });
   };
 
   document.addEventListener('alpine:init', function () {
     window.Alpine.data('toast', function () {
       return {
-        itens: [],
+        items: [],
         init: function () {
           var self = this;
           window.addEventListener('sss:toast', function (evt) {
-            self.adicionar(evt.detail.tipo, evt.detail.mensagem);
+            self.add(evt.detail.type, evt.detail.message);
           });
         },
-        adicionar: function (tipo, mensagem) {
-          var id = proximoId++;
+        add: function (type, message) {
+          var id = nextId++;
           var self = this;
-          if (!TIPOS_TOAST[tipo]) {
-            tipo = 'info';
+          if (!TOAST_TYPES[type]) {
+            type = 'info';
           }
-          this.itens.push({ id: id, mensagem: mensagem, classe: 'sss-toast-' + tipo });
-          window.setTimeout(function () { self.remover(id); }, DURACAO_TOAST_MS);
+          this.items.push({ id: id, message: message, classValue: 'sss-toast-' + type });
+          window.setTimeout(function () { self.remove(id); }, TOAST_DURATION_MS);
         },
-        remover: function (id) {
-          this.itens = this.itens.filter(function (t) { return t.id !== id; });
+        remove: function (id) {
+          this.items = this.items.filter(function (t) { return t.id !== id; });
         },
         // Chamado dentro do x-for: o escopo mesclado expoe o item corrente como this.t.
-        fechar: function () {
-          this.remover(this.t.id);
+        close: function () {
+          this.remove(this.t.id);
         }
       };
     });
 
     window.Alpine.data('toastDemo', function () {
       return {
-        disparar: function (evt) {
-          var botao = evt.currentTarget;
-          SSS.toast(botao.getAttribute('data-tipo'), botao.getAttribute('data-mensagem'));
+        trigger: function (evt) {
+          var button = evt.currentTarget;
+          SSS.toast(button.getAttribute('data-type'), button.getAttribute('data-message'));
         }
       };
     });

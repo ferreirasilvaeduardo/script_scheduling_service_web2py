@@ -274,7 +274,7 @@ class TestSteps(_Base):
 
     def test_pasta_de_saida_na_subida(self):
         # CR-012 (README §8.12 passo 4): output_dir fora das pastas do sistema e existente.
-        self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(output_dir="/usr/local/sss-saida")))
+        self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(output_dir="/usr/local/sss-output")))
         self.failure(sl.EXIT_DIRECTORIES, self.agent(cfg=self.cfg(output_dir=os.path.join(self.root, "nao"))))
         output = os.path.join(self.root, "saida")
         os.mkdir(output, 0o755)
