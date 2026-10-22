@@ -2,7 +2,7 @@
 """Implementacao Oracle 11gR2 do repositorio de auditoria (F7.3, agregado AUDITORIA_AGENTES; AGENTS §4).
 
 tbsss_audit com a mesma semantica do repo_fake/audit.py (README §2.5, §4.4):
-- reservar_id: NEXTVAL da sequence (README §2.7); registrar usa o id recebido ou um proprio;
+- reserve_id: NEXTVAL da sequence (README §2.7); registrar usa o id recebido ou um proprio;
 - ator obrigatorio ate 40 e detalhe ate 1.000, sem corte nem valor padrao (test_06b);
 - sem colunas de registro (CR-006, D1): so ator e created_at;
 - listar paginado por created_at DESC, id DESC com periodo por intervalo (sem TRUNC, AGENTS §4.12) e

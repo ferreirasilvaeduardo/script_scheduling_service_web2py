@@ -243,7 +243,7 @@ class RepoCatalogFake(RepoCatalog):
             return copy.deepcopy(new)
 
     def scripts_update(self, id, date, expected=None, audit=None, actor=None):
-        """Altera script (CKs, esperado e regras de tipo_param x vinculos) na mesma operacao."""
+        """Altera script (CKs, esperado e regras de param_type x vinculos) na mesma operacao."""
         with self._store.lock_catalog:
             actor = self._store.record_actor(audit, actor)
             if id not in self._store.scripts:
@@ -273,7 +273,7 @@ class RepoCatalogFake(RepoCatalog):
     # -------------------------------------------------------------------------
 
     def homologation_get(self, script_id):
-        """Retorna lista de ambiente_id homologados para o script."""
+        """Retorna lista de environment_id homologados para o script."""
         with self._store.lock_catalog:
             if script_id not in self._store.scripts:
                 raise RepoNotFound("Script ID %s nao encontrado" % script_id)
@@ -509,10 +509,10 @@ class RepoCatalogFake(RepoCatalog):
             return copy.deepcopy(result)
 
     def script_params_save(self, script_id, links, expected=None, audit=None, actor=None):
-        """Substitui os vinculos do script (UKs, FK, regras de tipo_param, esperado e auditoria).
+        """Substitui os vinculos do script (UKs, FK, regras de param_type, esperado e auditoria).
 
         Apaga e reinsere (UK script_id + ordem), mas cada parametro que continua leva o created_*;
-        o updated_* do vinculo so muda se ordem, obrigatorio ou valor_padrao_sub mudar (CR-006).
+        o updated_* do vinculo so muda se ordem, obrigatorio ou default_value_override mudar (CR-006).
         """
         with self._store.lock_catalog:
             actor = self._store.record_actor(audit, actor)

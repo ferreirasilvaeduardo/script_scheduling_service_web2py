@@ -2,9 +2,9 @@
 """Implementacao Oracle 11gR2 do repositorio de agentes (F7.3, agregado AUDITORIA_AGENTES; AGENTS §4).
 
 Leituras do painel de agentes com a mesma semantica do repo_fake/agents.py (README §2.5, §8.7):
-- tickets_running e rodando_sem_pid usam a expressao CASE textualmente identica a de ix_tck_run
+- tickets_running e running_without_pid usam a expressao CASE textualmente identica a de ix_tck_run
   (AGENTS §4.8, importada do sql_ident) e nunca leem CLOB;
-- fila_sem_atendente agrupa os PENDING vencidos pelo interpretador do cadastro (JOIN em tbsss_scripts,
+- unattended_queue agrupa os PENDING vencidos pelo interpretador do cadastro (JOIN em tbsss_scripts,
   o mesmo criterio do claim; CR-008, R-15), lendo so ix_tck_fila (status, ambiente, script_id e o inicio
   da espera; CR-013); a comparacao com os agentes saudaveis fica em Python, como no FAKE;
 - o SQL da fila e do rodando sem PID e o calculo dos pares atendidos vem do repo_oracle/health.py (F9.1b),

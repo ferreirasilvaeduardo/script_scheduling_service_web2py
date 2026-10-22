@@ -3,7 +3,7 @@
 R-26, R-27; CR-008 R-03, R-19, R-21, R-22, R-31, R-33).
 
 Uma transacao por regra, sem espera: trava (SKIP LOCKED), le, revalida o responsavel, decide (recurrence), confere
-a sobreposicao, compila o snapshot v4 e reserva/conclui/pausa pelo repo_oracle/scheduler_agenda, com o COMMIT unico
+a sobreposicao, compila o snapshot v4 e reserva/conclui/pausa pelo repo_oracle/scheduler_schedules, com o COMMIT unico
 aqui (passo 8). Uma regra com defeito nunca trava as demais: erro de banco conta falhas seguidas (3a pausa
 INTERNAL_ERROR), outra excecao pausa INTERNAL_ERROR numa transacao separada. Paginacao com orcamento de tempo.
 Python puro, sem gluon; o log permite reconstruir cada decisao sem o banco.
@@ -173,7 +173,7 @@ class Expansion(object):
         if error is not None:
             return self._pause(conn, rule, old, "INVALID_PARAM", error, log)
 
-        # Passo 6: reserva + ticket (ou conclusao / variante cron_erro).
+        # Passo 6: reserva + ticket (ou conclusao / variante cron_error).
         ticket_id = self.agenda.next_ticket_id(conn)
         if dec.cron_error:
             return self._cron_error(conn, rule, old, ticket_id, ticket, rows, log)
@@ -208,7 +208,7 @@ class Expansion(object):
             log.info("%d ocorrencia(s) coalescida(s) dentro da tolerancia", decision.missed)
 
     def _busy(self, conn, rule, script, now, log):
-        """ultimo_ticket_id PENDING/RUNNING bloqueia; nulo, inexistente (purgado) ou terminal e livre."""
+        """last_ticket_id PENDING/RUNNING bloqueia; nulo, inexistente (purgado) ou terminal e livre."""
         last = rule.get("last_ticket_id")
         if last is None:
             return False

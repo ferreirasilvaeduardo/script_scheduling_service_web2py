@@ -728,7 +728,7 @@ def next_id(conn, qualified_sequence):
 
 
 def check_schema_version(conn, owner=None, prefix="tbsss_"):
-    """Confere se versao_esquema em tbsss_control e igual a VERSAO_ESQUEMA (CR-007, D4)."""
+    """Confere se schema_version em tbsss_control e igual a SCHEMA_VERSION (CR-007, D4)."""
     if owner:
         table = sql_ident.qualify(owner, prefix + sql_ident.physical("control"))
     else:

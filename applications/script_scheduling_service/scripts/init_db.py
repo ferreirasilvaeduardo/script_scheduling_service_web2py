@@ -211,7 +211,35 @@ def _run_seed(conn, owner, prefix, admin_login=None, admin_name=None, admin_pass
                 "description": desc,
             })
 
-        # 2. Perfis padrao e matrizes de permissao (DEFAULT_PROFILES)
+        # 2. Ambientes padrão do sistema (antes dos perfis: a matriz perfil x ambiente liga pelo nome)
+        tb_env = "{}.{}".format(owner, schema["environments"]["tabela"])
+        sq_env = "{}.{}".format(owner, schema["environments"]["sequence"])
+        sql_merge_env = """
+        MERGE INTO {tb_env} dst
+        USING (SELECT :name AS name FROM DUAL) src
+        ON (dst.name = src.name)
+        WHEN MATCHED THEN
+          UPDATE SET dst.description = :description,
+                     dst.connection = :connection,
+                     dst.active = 'Y',
+                     dst.updated_at = SYSDATE,
+                     dst.updated_by = 'SYSTEM:init_db'
+          WHERE dst.active <> 'Y'
+             OR NVL(dst.description, '~') <> NVL(:description, '~')
+             OR NVL(dst.connection, '~') <> NVL(:connection, '~')
+        WHEN NOT MATCHED THEN
+          INSERT (id, name, description, connection, active, created_at, created_by)
+          VALUES ({sq_env}.NEXTVAL, :name, :description, :connection, 'Y', SYSDATE, 'SYSTEM:init_db')
+        """.format(tb_env=tb_env, sq_env=sq_env)
+
+        for env_name, env_desc, env_conn in ddl_builder.DEFAULT_ENVIRONMENTS:
+            cursor.execute(sql_merge_env, {
+                "name": env_name,
+                "description": env_desc,
+                "connection": env_conn,
+            })
+
+        # 3. Perfis padrao e matrizes de permissao (DEFAULT_PROFILES)
         tb_prf = "{}.{}".format(owner, schema["profiles"]["tabela"])
         sq_prf = "{}.{}".format(owner, schema["profiles"]["sequence"])
         tb_pfea = "{}.{}".format(owner, schema["profile_feature"]["tabela"])
@@ -274,35 +302,7 @@ def _run_seed(conn, owner, prefix, admin_login=None, admin_name=None, admin_pass
             for a_name in prf_envs:
                 cursor.execute(sql_merge_penv, {"prf_name": prf_name, "env_name": a_name})
 
-        # 4. Ambientes padrão do sistema
-        tb_env = "{}.{}".format(owner, schema["environments"]["tabela"])
-        sq_env = "{}.{}".format(owner, schema["environments"]["sequence"])
-        sql_merge_env = """
-        MERGE INTO {tb_env} dst
-        USING (SELECT :name AS name FROM DUAL) src
-        ON (dst.name = src.name)
-        WHEN MATCHED THEN
-          UPDATE SET dst.description = :description,
-                     dst.connection = :connection,
-                     dst.active = 'Y',
-                     dst.updated_at = SYSDATE,
-                     dst.updated_by = 'SYSTEM:init_db'
-          WHERE dst.active <> 'Y'
-             OR NVL(dst.description, '~') <> NVL(:description, '~')
-             OR NVL(dst.connection, '~') <> NVL(:connection, '~')
-        WHEN NOT MATCHED THEN
-          INSERT (id, name, description, connection, active, created_at, created_by)
-          VALUES ({sq_env}.NEXTVAL, :name, :description, :connection, 'Y', SYSDATE, 'SYSTEM:init_db')
-        """.format(tb_env=tb_env, sq_env=sq_env)
-
-        for env_name, env_desc, env_conn in ddl_builder.DEFAULT_ENVIRONMENTS:
-            cursor.execute(sql_merge_env, {
-                "name": env_name,
-                "description": env_desc,
-                "connection": env_conn,
-            })
-
-        # 5. Parametros padrao reutilizaveis
+        # 4. Parametros padrao reutilizaveis
         tb_prm = "{}.{}".format(owner, schema["parameters"]["tabela"])
         sq_prm = "{}.{}".format(owner, schema["parameters"]["sequence"])
         sql_merge_prm = """
@@ -343,7 +343,7 @@ def _run_seed(conn, owner, prefix, admin_login=None, admin_name=None, admin_pass
                 "default_value": vpad,
             })
 
-        # 6. Scripts utilitarios padrao e associacoes
+        # 5. Scripts utilitarios padrao e associacoes
         tb_scr = "{}.{}".format(owner, schema["scripts"]["tabela"])
         sq_scr = "{}.{}".format(owner, schema["scripts"]["sequence"])
         tb_senv = "{}.{}".format(owner, schema["script_env"]["tabela"])
@@ -462,7 +462,7 @@ def _run_seed(conn, owner, prefix, admin_login=None, admin_name=None, admin_pass
                     "vsub": p_vsub,
                 })
 
-        # 7. Linha de tbsss_control
+        # 6. Linha de tbsss_control
         tb_ctl = "{}.{}".format(owner, schema["control"]["tabela"])
         sql_merge_ctl = """
         MERGE INTO {tb_ctl} dst
@@ -474,7 +474,7 @@ def _run_seed(conn, owner, prefix, admin_login=None, admin_name=None, admin_pass
         """.format(tb_ctl=tb_ctl)
         cursor.execute(sql_merge_ctl, {"schema_version": sql_ident.SCHEMA_VERSION})
 
-        # 8. Usuarios padrao da aplicacao e homologacao (DEFAULT_USERS)
+        # 7. Usuarios padrao da aplicacao e homologacao (DEFAULT_USERS)
         tb_usr = "{}.{}".format(owner, schema["users"]["tabela"])
         sq_usr = "{}.{}".format(owner, schema["users"]["sequence"])
 

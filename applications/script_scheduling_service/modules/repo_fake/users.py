@@ -45,7 +45,7 @@ class RepoUsersFake(RepoUsers):
             return copy.deepcopy(self._store.users[id])
 
     def get_session_state(self, user_id):
-        """Retorna estado composto de sessao (usuario + perfil + perm_versao)."""
+        """Retorna estado composto de sessao (usuario + perfil + perm_version)."""
         with self._store.lock_rbac:
             with self._store.lock_users:
                 if user_id not in self._store.users:
@@ -120,7 +120,7 @@ class RepoUsersFake(RepoUsers):
 
     def insert(self, date, audit=None, actor=None):
         """Insere novo usuario com validacoes de integridade, auditando na mesma operacao."""
-        # Ordem de locks unica no FAKE: rbac e depois usuarios (como admins_ativos_bloquear).
+        # Ordem de locks unica no FAKE: rbac e depois usuarios (como lock_active_admins).
         with self._store.lock_rbac:
             with self._store.lock_users:
                 actor = self._store.record_actor(audit, actor)
@@ -212,7 +212,7 @@ class RepoUsersFake(RepoUsers):
                     _revoke_sessions(current)
                 self._store.stamp_update(current, actor)
 
-                # Incrementa perm_versao do perfil se houver alteracao de perfil ou ativo
+                # Incrementa perm_version do perfil se houver alteracao de perfil ou ativo
                 if profile_changed or active_changed:
                     if previous in self._store.profiles:
                         self._store.profiles[previous]["perm_version"] += 1
@@ -247,7 +247,7 @@ class RepoUsersFake(RepoUsers):
             return record
 
     def register_login_success(self, login, new_hash=None, audit=None):
-        """Zera falhas, grava ultimo_login (SYSDATE) e o rehash, com a auditoria, numa operacao."""
+        """Zera falhas, grava last_login_at (SYSDATE) e o rehash, com a auditoria, numa operacao."""
         with self._store.lock_users:
             u = self._por_login(login)
             u["failed_attempts"] = 0

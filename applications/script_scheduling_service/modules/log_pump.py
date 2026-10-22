@@ -29,7 +29,7 @@ INCONSISTENT = "INCONSISTENT"
 
 
 def clob_units(text, supplementary_unit=2):
-    """Comprimento do texto como o CLOB o conta: caractere fora do BMP vale unidade_suplementar posicoes
+    """Comprimento do texto como o CLOB o conta: caractere fora do BMP vale supplementary_unit posicoes
     (2 em AL32UTF8, UTF-16 interno; 1 num charset de um byte, onde vira o caractere de substituicao).
     O agente mede a unidade no banco (RepoSchedulerLog.unidade_suplementar)."""
     if supplementary_unit == 1:

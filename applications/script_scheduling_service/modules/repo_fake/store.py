@@ -98,7 +98,7 @@ class FakeDataStore(object):
             return copy.deepcopy(reg)
 
     def record_actor(self, audit=None, actor=None):
-        """Ator das colunas de registro (CR-006, README §10): auditoria['actor'] ou ator=, obrigatorio.
+        """Ator das colunas de registro (CR-006, README §10): audit['actor'] ou actor=, obrigatorio.
 
         Chamado antes de qualquer gravacao: sem ator, nada e gravado (paridade com created_by NOT NULL).
         """

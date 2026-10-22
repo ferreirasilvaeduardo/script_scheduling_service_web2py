@@ -79,7 +79,7 @@ def _select_options(parameter):
 
 
 def validate_value(parameter, raw_value):
-    """Valida e normaliza um valor conforme tipo_componente (README §6.2); lanca ParamError.
+    """Valida e normaliza um valor conforme component_type (README §6.2); lanca ParamError.
 
     CHECKBOX devolve bool; os demais tipos devolvem str normalizada.
     """
@@ -156,7 +156,7 @@ def _class_end(default_value, i):
 
 
 def validate_registry_regex(default_value):
-    """Compila regex_validacao e exige o subconjunto seguro do README §6.2 (CR-007, D5); lanca ParamError.
+    """Compila validation_regex e exige o subconjunto seguro do README §6.2 (CR-007, D5); lanca ParamError.
 
     Recusa grupo repetido por quantificador (exceto '?'), quantificador sobre quantificador, referencia a
     grupo, lookaround, grupo condicional, mais de MAX_UNBOUNDED quantificadores ilimitados (*, +, {n,} e

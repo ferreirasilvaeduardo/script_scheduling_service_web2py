@@ -53,7 +53,7 @@ class RepoTicketsFake(RepoTickets):
     def create(self, ticket, answers, actor=None):
         """Cria ticket e respostas vinculadas atomicamente, com auditoria TICKET_CREATE ou TICKET_RERUN.
 
-        created_by do ticket e das respostas: ator= ou, sem ele, o solicitante (CR-006, README §10).
+        created_by do ticket e das respostas: actor= ou, sem ele, o solicitante (CR-006, README §10).
         """
         with self._store.lock_tickets:
             script_id = int(ticket.get("script_id", 0))

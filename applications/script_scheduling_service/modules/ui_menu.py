@@ -26,10 +26,10 @@ _CATALOG = (
 def build_menu(features, is_admin, current_route=None):
     """Monta as secoes OPERACAO e ADMIN visiveis ao perfil.
 
-    funcionalidades: iteravel de codigos concedidos ao perfil.
-    is_admin: perfil administrativo (True ou 'S') ve todo o catalogo.
-    rota_atual: tupla (controller, function) para marcar o item ativo.
-    Retorna lista de {secao, titulo, itens: [{codigo, rotulo, rota, icone, ativo}]},
+    features: iteravel de codigos concedidos ao perfil.
+    is_admin: perfil administrativo (True ou 'Y') ve todo o catalogo.
+    current_route: tupla (controller, function) para marcar o item ativo.
+    Retorna lista de {section, title, items: [{code, label, route, icon, active}]},
     omitindo secoes sem itens.
     """
     admin = is_admin is True or is_admin == "Y"

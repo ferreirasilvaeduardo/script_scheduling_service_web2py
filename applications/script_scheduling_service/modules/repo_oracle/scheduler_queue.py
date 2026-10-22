@@ -385,7 +385,7 @@ class RepoSchedulerQueue(object):
     def mark_node_offline(self, conn, agent_id, node_offline_timeout_s, clock_jump):
         """Deteccao de no offline (README §8.8, literal, em duas etapas; CR-007 R-12; CR-008 R-10).
 
-        Na mesma transacao: SYSDATE primeiro e salto_de_relogio(sysdate) -> True aborta sem marcar nada
+        Na mesma transacao: SYSDATE primeiro e clock_jump(sysdate) -> True aborta sem marcar nada
         (devolve None; quem chama ja iniciou a suspensao). Depois, os RUNNING de OUTROS agentes com heartbeat
         vencido, FOR UPDATE SKIP LOCKED (linhas travadas ficam para o ciclo seguinte), e o UPDATE por
         executemany com updated_* do agente que detectou (CR-006). Devolve os ids marcados.

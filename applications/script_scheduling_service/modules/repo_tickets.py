@@ -6,7 +6,7 @@ class RepoTickets(object):
     """Contrato abstrato para gestao do ciclo de vida e logs dos tickets.
 
     Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o actor, por
-    auditoria['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
+    audit['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
     Sem actor, RepoViolation sem gravar nada.
     """
 
@@ -18,14 +18,14 @@ class RepoTickets(object):
         """Cria ticket e respostas vinculadas em transacao unica e retorna o ID criado.
 
         Audita TICKET_CREATE, ou TICKET_RERUN quando ticket['parent_ticket_id'] e informado.
-        created_by do ticket e das respostas: ator= ou, sem ele, o solicitante (CR-006).
+        created_by do ticket e das respostas: actor= ou, sem ele, o solicitante (CR-006).
         """
         raise NotImplementedError
 
     def get(self, id):
         """Retorna dict com dados do ticket pelo ID ou lanca RepoNotFound.
 
-        Traz parametros_enviados (snapshot) e as colunas de registro, mas nunca log_output: o log so e
+        Traz submitted_params (snapshot) e as colunas de registro, mas nunca log_output: o log so e
         lido em fatias por log_ler (README §8.10, AGENTS §4.13).
         """
         raise NotImplementedError
@@ -33,12 +33,12 @@ class RepoTickets(object):
     def list(self, filters=None, page=1, size=20, environment_scope=None):
         """Lista tickets com paginacao e formato {'items': [...], 'total': n, 'page': p, 'size': t}.
 
-        Os itens nunca trazem CLOB (sem log_output e sem parametros_enviados; AGENTS §4.13).
+        Os itens nunca trazem CLOB (sem log_output e sem submitted_params; AGENTS §4.13).
 
         Ordem: created_at DESC, id DESC. Chaves de filtros (todas opcionais, combinadas com E):
-        status (lista), ambiente, script_id, solicitante (igualdade exata), origem
-        ('manual' | 'agendamento'), criado_inicio (created_at >= valor), criado_fim
-        (created_at < valor, extremo aberto) e parent_ticket_id. escopo_ambientes (iteravel
+        status (lista), environment, script_id, requested_by (igualdade exata), source
+        ('manual' | 'agendamento'), created_from (created_at >= valor), created_to
+        (created_at < valor, extremo aberto) e parent_ticket_id. environment_scope (iteravel
         de nomes) restringe o ambiente; None nao restringe.
         """
         raise NotImplementedError
@@ -46,8 +46,8 @@ class RepoTickets(object):
     def last_runs(self, script_ids, environment_scope=None, requester=None):
         """Ticket mais recente (created_at DESC, id DESC) de cada script no escopo (README §5.8, CR-004).
 
-        Retorna {script_id: {id, status, status_motivo, created_at, finished_at}}; scripts sem ticket no
-        escopo ficam de fora. escopo_ambientes None nao restringe; solicitante restringe ao login.
+        Retorna {script_id: {id, status, status_reason, created_at, finished_at}}; scripts sem ticket no
+        escopo ficam de fora. environment_scope None nao restringe; solicitante restringe ao login.
         Nunca le log_output (Oracle: ROW_NUMBER() por script sobre ix_tbsss_tck_scr).
         """
         raise NotImplementedError
@@ -55,7 +55,7 @@ class RepoTickets(object):
     def script_history(self, script_id, since, environment_scope=None, requester=None, limit=5000):
         """Tickets do script com created_at >= desde, no escopo, por created_at (README §5.8, CR-004).
 
-        Devolve no maximo `limite` itens (os mais recentes), cada um so com id, status, status_motivo,
+        Devolve no maximo `limite` itens (os mais recentes), cada um so com id, status, status_reason,
         created_at, started_at e finished_at, sem LOB, ordenados por created_at crescente.
         """
         raise NotImplementedError
@@ -74,13 +74,13 @@ class RepoTickets(object):
         raise NotImplementedError
 
     def log_read(self, id, offset, max_chars):
-        """Leitura incremental de log, retornando (texto, novo_offset, terminal, truncado)."""
+        """Leitura incremental de log, retornando (texto, new_offset, terminal, truncado)."""
         raise NotImplementedError
 
     def output_get(self, ticket_id):
         """Saida do ticket (CR-012, README §8.13) sem o conteudo, ou None se nao houver.
 
-        Dict com situacao, motivo, agent_id, file_count, tamanho_bytes e as colunas de registro.
+        Dict com situacao, motivo, agent_id, file_count, size_bytes e as colunas de registro.
         """
         raise NotImplementedError
 

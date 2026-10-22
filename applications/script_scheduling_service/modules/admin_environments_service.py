@@ -66,7 +66,7 @@ def validate_connection(value):
 
 
 def normalize_filters(input_value):
-    """Filtros da lista vindos de request.vars: nome (trecho) e ativo ('S' | 'N')."""
+    """Filtros da lista vindos de request.vars: name (trecho) e active ('Y' | 'N')."""
     input_value = input_value or {}
     filters = {}
     name = admin_crud.text(input_value.get("name"), 30)
@@ -151,7 +151,7 @@ class AdminEnvironmentsService(object):
                           ctx.get("login"), exc.constraint, extra={"action": "MANAGE_ENVIRONMENTS"})
 
     def save(self, ctx, ip, environment_id, date):
-        """Inclui (ambiente_id vazio) ou altera um ambiente.
+        """Inclui (environment_id vazio) ou altera um ambiente.
 
         dados: nome, descricao, conexao e versao (edicao). Na edicao o nome enviado e ignorado.
         Retorna (id, erros); erros e dict campo -> mensagem (GENERAL_FIELD para conflito/falha).

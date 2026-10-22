@@ -20,7 +20,7 @@ SESSIONS = {
     "consulta": {"user_id": 4, "login": "consulta", "profile_id": 4, "perm_version": 1, "session_epoch": 0},
 }
 # Seed FAKE: 13 RUNNING (PRODUCAO, op.prod, carga_diaria com documento_cliente sensivel, 8 s/etapa),
-# 17 SUCCESS com log de ~2 MB, 35 FAILED/LOG_LIMIT com log_truncado = 'S'.
+# 17 SUCCESS com log de ~2 MB, 35 FAILED/LOG_LIMIT com log_truncated = 'Y'.
 TCK_RUNNING, TCK_GRANDE, TCK_TRUNCADO = 13, 17, 35
 STEP_13_S = 8
 STAGES = 50

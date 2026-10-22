@@ -67,7 +67,7 @@ def _empty(value):
 def validate_rule(rule, horizon_days=DEFAULT_HORIZON):
     """Espelha as CKs de tbsss_schedules (_trec, _campos, _hora, _dsem, _dia, _fim) e valida o CRON.
 
-    Devolve {campo: mensagem}; vazio quando a regra e valida.
+    Devolve {campo: mensagem} (nome do campo do formulario: texto do erro); vazio quando a regra e valida.
     """
     errors = collections.OrderedDict()
     kind = rule.get('recurrence_type')

@@ -38,7 +38,7 @@ class TestSSSLogging(unittest.TestCase):
         return cfg
 
     def test_handler_cria_caminho_por_minuto_e_permissoes(self):
-        """CR-005 D6 e CR-009: log em log_dir/internal/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log com 0750 e 0640."""
+        """CR-005 D6 e CR-009: log em log_dir/internal/app/AAAA/MM/DD/HH/MI/<log_name>_<PID>.log com 0750 e 0640."""
         log_dir = os.path.join(self.tmp_dir, "logs")
         cfg = self._create_cfg(log_dir)
 

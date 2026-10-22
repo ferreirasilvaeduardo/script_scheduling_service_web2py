@@ -3,7 +3,7 @@
 # Variáveis de entrada:
 #   status        -- código do status ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELLED');
 #                    código desconhecido vira "Desconhecido".
-#   status_motivo -- opcional; código de status_motivo (README §5.2) exibido como tooltip textual.
+#   status_reason -- opcional; código de status_reason (README §5.2) exibido como tooltip textual.
 import ui_helpers
 _badge = ui_helpers.status_info(status)
 _badge_reason = globals().get('status_reason')

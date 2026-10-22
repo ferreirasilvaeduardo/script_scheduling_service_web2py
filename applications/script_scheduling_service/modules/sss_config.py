@@ -976,7 +976,7 @@ def _abort(log_name, exc, log_dir):
 def get_config(log_name=None, path=None):
     """Retorna a configuracao validada, carregada uma unica vez por processo.
 
-    Com nome_log ('sss_web' ou 'sss_scheduler'), uma falha e registrada em CRITICAL antes de
+    Com log_name ('sss_web' ou 'sss_scheduler'), uma falha e registrada em CRITICAL antes de
     ser relancada (README §12.1, "Falha de configuracao"). caminho: outro config.ini (so o
     agente, por --config do run_scheduler; README §12.2); sem ele, instance/config.ini.
     """
@@ -1006,7 +1006,7 @@ def get_secrets(log_name=None, role="web"):
     """Retorna os segredos validados de [secrets] secrets_file, carregados uma unica vez por processo.
 
     papel: 'web' (nó web) ou 'agent' (daemon e purge), README §4.1.
-    Com nome_log, uma falha e registrada em CRITICAL (sem valores de segredo) antes de ser relancada.
+    Com log_name, uma falha e registrada em CRITICAL (sem valores de segredo) antes de ser relancada.
     """
     global _SECRETS_CACHE
     if _SECRETS_CACHE is None:

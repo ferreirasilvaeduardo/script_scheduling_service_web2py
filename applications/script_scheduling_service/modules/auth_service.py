@@ -207,7 +207,7 @@ class AuthService(object):
         return rbac.user_context(date)
 
     def _matrix(self, profile_id, perm_version):
-        # perm_versao muda em toda alteracao de matriz/perfil (README §4.3.A): a chave invalida o cache.
+        # perm_version muda em toda alteracao de matriz/perfil (README §4.3.A): a chave invalida o cache.
         key = (profile_id, perm_version)
         with self._lock:
             if key in self._matrix_cache:

@@ -10,7 +10,7 @@
 #     action              -- URL do POST;
 #     hidden_fields    -- opcional; dict de campos hidden enviados no POST.
 # O token CSRF da sessão é enviado no campo oculto '_csrf' (csrf_field(), README §4.2).
-# Abrir/fechar exige JavaScript (Alpine 'confirmacao' em static/js/app/components.js).
+# Abrir/fechar exige JavaScript (Alpine 'confirmation' em static/js/app/components.js).
 _mod_danger = modal.get('variant') == 'danger'
 }}<div class="sss-confirmation" x-data="confirmation" @keydown.escape.window="close">
   <button type="button" class="btn btn-sm {{='btn-outline-danger' if _mod_danger else 'btn-outline-primary'}}" x-ref="trigger" @click="open">{{=modal['trigger_label']}}</button>

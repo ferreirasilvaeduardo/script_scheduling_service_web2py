@@ -96,7 +96,7 @@ class TestOracleRbacUsers(unittest.TestCase):
                 self.usr.unlock(1, actor=actor_invalid)
 
     def test_alterar_sem_data_nao_declara_bind_de_data_ausente(self):
-        """Regressao (F7.3): alterar so o nome declarava bloqueado_ate/ultimo_login e caia em DPY-4008."""
+        """Regressao (F7.3): alterar so o nome declarava locked_until/last_login_at e caia em DPY-4008."""
         import repo_oracle.users as mod
         line = tuple(1 if c in ("id", "profile_id") else ("Y" if c == "active" else
                       ("tst.x" if c == "login" else (0 if c in ("failed_attempts", "session_epoch") else None)))
@@ -194,7 +194,7 @@ class TestOracleRbacUsers(unittest.TestCase):
                 try:
                     cur.execute("DELETE FROM " + self.usr._tabela() + " WHERE id = :id", {"id": uid})
                     if _oracle_test_support.schema_mode() == _oracle_test_support.SHARED_MODE:
-                        # encerrar_sessoes audita o LOGOUT do usuario do teste: so essa auditoria sai.
+                        # end_sessions audita o LOGOUT do usuario do teste: so essa auditoria sai.
                         cur.execute("DELETE FROM " + self.rbac._tabela_auditoria() + " WHERE entity = "
                                     "'tbsss_users' AND entity_id = :id", {"id": uid})
                     cur.execute("DELETE FROM " + self.rbac._tabela_perfis() + " WHERE id = :id", {"id": pid})
@@ -343,7 +343,7 @@ class TestOracleCatalog(unittest.TestCase):
                                                            "features": frozenset(["EXEC_SCRIPT"])}), [])
 
     def test_scripts_executaveis_uma_consulta_por_perfil_ou_admin(self):
-        """Uma unica consulta: EXISTS em perfil_scr/perfil_amb pelo perfil_id, ou o atalho do admin."""
+        """Uma unica consulta: EXISTS em profile_script/profile_env pelo profile_id, ou o atalho do admin."""
         cur = _RecordingCursor()
         with mock.patch.object(self.cat, "_obter_conexao", return_value=_RecordingConnection(cur)):
             self.cat.executable_scripts({"is_admin": False, "profile_id": 7,
@@ -644,7 +644,7 @@ class TestOracleTickets(unittest.TestCase):
         self.assertTrue(self.tck._sql["CANCEL_READ"].endswith("WHERE id = :id FOR UPDATE WAIT 5"))
 
     def test_listagens_e_leituras_do_cr004_sem_clob(self):
-        """Nenhuma listagem le CLOB; obter traz parametros_enviados mas nunca log_output."""
+        """Nenhuma listagem le CLOB; obter traz submitted_params mas nunca log_output."""
         for template in ("_SQL_LIST", "_SQL_COUNT", "_SQL_LAST", "_SQL_HISTORY", "_SQL_ANSWERS"):
             sql = getattr(sys.modules[RepoTicketsOracle.__module__], template)
             self.assertNotIn("log_output", sql, template)
@@ -682,7 +682,7 @@ class TestOracleTickets(unittest.TestCase):
             # Terminal.
             ([("FOR UPDATE WAIT 5", 1, [("SUCCESS", "N")])], "TERMINAL",
              u"resultado: sem efeito: ticket encerrado"),
-            # Residuo PENDING com cancel_requested = 'S' (CR-008, R-02): cancelado pelo segundo UPDATE.
+            # Residuo PENDING com cancel_requested = 'Y' (CR-008, R-02): cancelado pelo segundo UPDATE.
             ([("FOR UPDATE WAIT 5", 1, [("PENDING", "Y")]), ("SET status = 'CANCELLED'", 1, [])],
              "CANCELADO", u"resultado: cancelado"),
         )
@@ -927,7 +927,7 @@ class TestOracleSchedules(unittest.TestCase):
         self.assertEqual(ctx.exception.constraint, "ck_abc_sch_rtype")
 
     def test_pausar_condicional_a_regra_ativa_e_a_data_lida(self):
-        """CR-007, R-19: o UPDATE exige active = 'Y' e, com antiga_data, a next_run_at lida."""
+        """CR-007, R-19: o UPDATE exige active = 'Y' e, com old_date, a next_run_at lida."""
         self.assertTrue(self.agd._sql["PAUSE"].endswith("WHERE id = :id AND active = 'Y'"))
         self.assertTrue(self.agd._sql["PAUSE_OPTIMISTIC"].endswith(
             "WHERE id = :id AND active = 'Y' AND next_run_at = :old_date"))

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Agente em alta disponibilidade (F8.4): desdobro dos agendamentos (F8.4b; README §7.4 e §7.5).
 
-Repositorio da agenda em memoria com a semantica do contrato (rowcount pela antiga_data, SKIP LOCKED, ROLLBACK
+Repositorio da agenda em memoria com a semantica do contrato (rowcount pela old_date, SKIP LOCKED, ROLLBACK
 que desfaz a regra, DuplicateOccurrence), contexto RBAC em memoria e as funcoes reais de recurrence, rbac e
 params_compiler. Relogio do banco (agora_banco) e monotonico injetaveis.
 """
@@ -184,7 +184,7 @@ class _Agenda(object):
 
 
 class _Queue(object):
-    """contexto_execucao do RepoSchedulerQueue em memoria (o mesmo ctx RBAC da web)."""
+    """execution_context do RepoSchedulerQueue em memoria (o mesmo ctx RBAC da web)."""
 
     def __init__(self):
         self.usuario = {"user_id": 7, "login": LOGIN, "profile_id": 2, "active_user": "Y", "active_profile": "Y",
@@ -739,7 +739,7 @@ import os_platform as _plataforma  # noqa: E402
 
 class TestShutdown(tsc._Base):
     """README §8.11: DRAIN aguarda os filhos com o laco normal; TERMINATE encerra todos; os dois terminam com
-    PARADO, AGENT_STOP (encerrar_agente), .stop removido e saida 0."""
+    PARADO, AGENT_STOP (stop_agent), .stop removido e saida 0."""
 
     def _stop(self):
         path = _os.path.join(self.work, "sss-srv-t.stop")

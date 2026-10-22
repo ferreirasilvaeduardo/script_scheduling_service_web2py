@@ -541,7 +541,7 @@ def create_input_dir(base, relative):
 
 
 def start_pack(base, relative, max_bytes, max_files, destination_fd, exec_user=None):
-    """Inicia o helper empacotar num grupo proprio, com o zip no descritor destino_fd; nao espera.
+    """Inicia o helper empacotar num grupo proprio, com o zip no descritor destination_fd; nao espera.
 
     O agente acompanha por processo.popen.poll() e, no prazo, encerra com signal_group (README §8.13).
     """
@@ -575,7 +575,7 @@ def validate_output_dirs(user_dirs):
     """Subida fora de DEV (README §8.12, passo 4): cada output_dir/<ambiente> existe, e diretorio (sem link),
     pertence ao usuario de execucao do ambiente e nao tem escrita de grupo nem de outros. Devolve as falhas.
 
-    pastas_usuarios: pares (pasta, usuario).
+    user_dirs: pares (pasta, usuario).
     """
     failures = []
     for dir_value, user in user_dirs:

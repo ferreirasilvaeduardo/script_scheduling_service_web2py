@@ -1,8 +1,8 @@
 {{
 # Componente: mensagem de response.flash tipada.
 # Variáveis de entrada:
-#   alerta -- resultado de ui_helpers.alert_info(flash): None (nada é exibido) ou
-#             {tipo: 'sucesso' | 'aviso' | 'erro', mensagem, classe, icone, role}.
+#   alert -- resultado de ui_helpers.alert_info(flash): None (nada é exibido) ou
+#            {kind: 'success' | 'warning' | 'error', message, css_class, icon, role}.
 }}{{if alert:}}
 <div class="alert {{=alert['css_class']}} sss-alert" role="{{=alert['role']}}">
   <svg class="sss-icon" aria-hidden="true" focusable="false"><use href="{{=URL('static', 'img/icons.svg')}}#{{=alert['icon']}}"></use></svg>

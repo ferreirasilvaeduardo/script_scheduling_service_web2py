@@ -83,10 +83,10 @@ def build(cfg, secrets, ticket, environment, script_real, work_dir_ticket, envir
               output_dir=None, input_dir=None):
     """Ambiente exato do filho (README §8.6, tabela POSIX; CR-010). Variavel bloqueada: ValueError.
 
-    ticket: dict com id, ambiente e, quando houver, parent_ticket_id, agendamento_id, prioridade, started_at
+    ticket: dict com id, ambiente e, quando houver, parent_ticket_id, schedule_id, prioridade, started_at
     (relogio do banco, devolvido pelo claim) e scheduled_at; ambiente: dict com nome, descricao e conexao
     (tbsss_environments); script_real: o caminho resolvido pelo path_guard; environ_daemon: o ambiente do daemon
-    (so para TZ e env_passthrough); snapshot: o snapshot v4 (script_id, script_nome, interpretador);
+    (so para TZ e env_passthrough); snapshot: o snapshot v4 (script_id, script_name, interpretador);
     agendamento: dict com nome e tipo_recorrencia da regra que gerou o ticket; log_path: o
     .log.parcial aberto por executor.open_log; timeout_seg: o prazo efetivo; hostname e versao: do agente;
     output_dir: a pasta de saida do ticket (CR-012), so quando o agente tem output_dir.

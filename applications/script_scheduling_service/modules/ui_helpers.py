@@ -17,7 +17,7 @@ _STATUS_UNKNOWN = (u"Desconhecido", "sss-status-unknown", "status-unknown")
 
 
 def status_info(status):
-    """Retorna {rotulo, classe, icone} do status do ticket (README §5.1)."""
+    """Retorna {label, css_class, icon} do status do ticket (README §5.1)."""
     label, cls_name, icon = _STATUS.get(status, _STATUS_UNKNOWN)
     return {"label": label, "css_class": cls_name, "icon": icon}
 
@@ -29,7 +29,7 @@ _ACTIVE = {
 
 
 def active_info(flag):
-    """Retorna {rotulo, classe, icone} da flag ativo ('S'/'N') dos cadastros; outro valor e desconhecido."""
+    """Retorna {label, css_class, icon} da flag active ('Y'/'N') dos cadastros; outro valor e desconhecido."""
     label, cls_name, icon = _ACTIVE.get(flag, _STATUS_UNKNOWN)
     return {"label": label, "css_class": cls_name, "icon": icon}
 
@@ -50,7 +50,7 @@ _REASONS = {
 }
 
 
-# Frases "o que aconteceu" / "o que fazer agora" por status_motivo (README §5.2.1, texto exato).
+# Frases "o que aconteceu" / "o que fazer agora" por status_reason (README §5.2.1, texto exato).
 _EXPLANATIONS = {
     "EXIT_OK": (u"Terminou e deu certo.", None),
     "EXIT_ERROR": (u"O script rodou, mas terminou avisando que algo deu errado (código {code}).",
@@ -129,7 +129,7 @@ def ticket_explanation(ticket, now, timeout_s=None):
 def ticket_steps(ticket, now):
     """Barra de etapas do detalhe (README §5.7): Pedido criado -> Na fila -> Rodando -> Terminou.
 
-    Cada etapa: {rotulo, quando, estado} com estado 'done' | 'current' | 'pending' | 'skipped'.
+    Cada etapa: {label, when, state_info} com state_info 'done' | 'current' | 'pending' | 'skipped'.
     """
     status = ticket.get("status")
     terminal = status in ("SUCCESS", "FAILED", "CANCELLED")
@@ -176,10 +176,10 @@ HISTORY_SERIES = (("succeeded", u"Deu certo"), ("error", u"Deu erro"), ("cancell
 def stacked_bars(days, width=1000, height=240, left_margin=28, bottom_margin=22, gap=2):
     """Geometria do grafico de barras empilhadas por dia (SVG gerado no servidor, README §5.8).
 
-    dias: [{'label': 'dd/mm', 'succeeded': n, 'error': n, 'cancelled': n, 'in_progress': n}].
-    Retorna {largura, altura, base_y, maximo, grade: [{y, rotulo}], eixo_x: [{x, rotulo}],
-    barras: [{x, y, largura, altura, classe, titulo}]}. Cores so por classe CSS (sem style inline);
-    vao de 2px entre os segmentos; o titulo de cada segmento e a dica ao passar o mouse.
+    days: [{'label': 'dd/mm', 'succeeded': n, 'error': n, 'cancelled': n, 'in_progress': n}].
+    Retorna {width, height, base_y, maximum, left_margin, grid: [{y, label}], x_axis: [{x, label}],
+    bars: [{x, y, width, height, css_class, title}]}. Cores so por classe CSS (sem style inline);
+    vao de 2px entre os segmentos; o title de cada segmento e a dica ao passar o mouse.
     """
     max_value = max([sum(d.get(c, 0) for c, _r in HISTORY_SERIES) for d in days] or [0])
     scale_max = max(max_value, 1)
@@ -268,7 +268,7 @@ def readable_size(nbytes):
 
 
 def output_panel(output, now):
-    """Quadro Saida (CR-012) a partir de saida_obter, ou None sem saida. Nunca leva o conteudo nem o caminho."""
+    """Quadro Saida (CR-012) a partir de output_get, ou None sem saida. Nunca leva o conteudo nem o caminho."""
     if not output:
         return None
     state = output.get("state")
@@ -302,7 +302,7 @@ def message_parts(key_name, **values):
 
 
 def reason_description(status_reason):
-    """Texto em portugues do status_motivo (README §5.2); None/vazio vira None, codigo desconhecido e citado."""
+    """Texto em portugues do status_reason (README §5.2); None/vazio vira None, codigo desconhecido e citado."""
     if status_reason is None or status_reason == "":
         return None
     return _REASONS.get(status_reason, u"Motivo não catalogado (%s)." % status_reason)
@@ -462,9 +462,9 @@ _ALERTS = {
 
 
 def alert_info(flash):
-    """Normaliza response.flash para {tipo, mensagem, classe, icone, role}.
+    """Normaliza response.flash para {kind, message, css_class, icon, role}.
 
-    Aceita {'tipo', 'mensagem'}, (tipo, mensagem) ou texto simples. Tipo ausente
+    Aceita {'kind', 'message'}, (kind, message) ou texto simples. kind ausente
     ou desconhecido vira 'warning'. Retorna None quando nao ha mensagem.
     """
     if isinstance(flash, dict):

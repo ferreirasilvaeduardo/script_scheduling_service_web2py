@@ -6,7 +6,7 @@ class RepoCatalog(object):
     """Contrato abstrato para gestao de environments, scripts e parametros.
 
     Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o actor, por
-    auditoria['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
+    audit['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
     Sem actor, RepoViolation sem gravar nada.
     """
 
@@ -21,17 +21,17 @@ class RepoCatalog(object):
     def environments_insert(self, date, audit=None, actor=None):
         """Insere novo ambiente e retorna dict com o registro criado.
 
-        auditoria: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
-        (entidade tbsss_environments, entidade_id = novo id).
+        audit: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
+        (entidade tbsss_environments, entity_id = novo id).
         """
         raise NotImplementedError
 
     def environments_update(self, id, date, expected=None, audit=None, actor=None):
         """Atualiza dados do environment e retorna o registro alterado. Nome e imutavel.
 
-        esperado: opcional, dict campo -> valor lido pelo chamador; o UPDATE e condicional a esses
+        expected: opcional, dict campo -> valor lido pelo chamador; o UPDATE e condicional a esses
         valores (concorrencia otimista) e, se algum divergir, lanca RepoConflict sem alterar nada.
-        auditoria: opcional, como em ambientes_inserir, gravada na mesma transacao do UPDATE.
+        audit: opcional, como em environments_insert, gravada na mesma transacao do UPDATE.
         """
         raise NotImplementedError
 
@@ -54,21 +54,21 @@ class RepoCatalog(object):
     def scripts_update(self, id, date, expected=None, audit=None, actor=None):
         """Atualiza o script e retorna o registro; esperado divergente lanca RepoConflict.
 
-        Trocar tipo_param revalida os vinculos na mesma operacao: NENHUM com vinculo lanca
+        Trocar param_type revalida os vinculos na mesma operacao: NENHUM com vinculo lanca
         RepoViolation('sss_scr_nenhum_vinculado'); NOMEADO com parametro sem flag lanca
-        RepoViolation('sss_scr_nomeado_sem_flag'). auditoria: opcional, na mesma transacao.
+        RepoViolation('sss_scr_nomeado_sem_flag'). audit: opcional, na mesma transacao.
         """
         raise NotImplementedError
 
     def homologation_get(self, script_id):
-        """Retorna lista de ambiente_id homologados para o script."""
+        """Retorna lista de environment_id homologados para o script."""
         raise NotImplementedError
 
     def homologation_save(self, script_id, environment_ids, expected=None, audit=None, actor=None):
         """Substitui os ambientes homologados do script e retorna a lista resultante.
 
-        esperado: opcional, lista de ambiente_id lida; divergencia lanca RepoConflict.
-        auditoria: opcional (entidade tbsss_scripts), na mesma transacao.
+        expected: opcional, lista de environment_id lida; divergencia lanca RepoConflict.
+        audit: opcional (entidade tbsss_scripts), na mesma transacao.
         """
         raise NotImplementedError
 
@@ -87,8 +87,8 @@ class RepoCatalog(object):
     def parameters_insert(self, date, audit=None, actor=None):
         """Insere novo parametro e retorna dict com o registro criado.
 
-        auditoria: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
-        (entidade tbsss_parameters, entidade_id = novo id).
+        audit: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
+        (entidade tbsss_parameters, entity_id = novo id).
         """
         raise NotImplementedError
 
@@ -96,10 +96,10 @@ class RepoCatalog(object):
         """Atualiza o parametro e retorna o registro, com as regras de dependencia na mesma operacao.
 
         Lanca RepoViolation com constraint de aplicacao, sem alterar nada, quando:
-        sss_prm_tipo_vinculado (tipo_componente muda e ha qualquer vinculo), sss_prm_flag_nomeado
+        sss_prm_tipo_vinculado (component_type muda e ha qualquer vinculo), sss_prm_flag_nomeado
         (param_nomeado muda e ha vinculo com script NOMEADO) ou sss_prm_vinculo_ativo (desativacao com
-        vinculo a script ativo). esperado: opcional, divergencia lanca RepoConflict.
-        auditoria: opcional, na mesma transacao.
+        vinculo a script ativo). expected: opcional, divergencia lanca RepoConflict.
+        audit: opcional, na mesma transacao.
         """
         raise NotImplementedError
 
@@ -112,12 +112,12 @@ class RepoCatalog(object):
         raise NotImplementedError
 
     def script_params_save(self, script_id, links, expected=None, audit=None, actor=None):
-        """Substitui os vinculos do script ({parametro_id, ordem, obrigatorio, valor_padrao_sub}).
+        """Substitui os vinculos do script ({parameter_id, sort_order, required, default_value_override}).
 
         Regras na mesma operacao: script NENHUM nao aceita vinculo ('sss_scr_nenhum_vinculado');
         script NOMEADO exige param_nomeado em todo parametro ('sss_scr_nomeado_sem_flag').
-        esperado: opcional, lista lida de (parametro_id, ordem, obrigatorio, valor_padrao_sub);
-        divergencia lanca RepoConflict. auditoria: opcional (entidade tbsss_scripts).
+        expected: opcional, lista lida de (parameter_id, sort_order, required, default_value_override);
+        divergencia lanca RepoConflict. audit: opcional (entidade tbsss_scripts).
         """
         raise NotImplementedError
 

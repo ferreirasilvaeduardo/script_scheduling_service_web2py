@@ -2,11 +2,11 @@
 # Componente: questionário de parâmetros de um script (README §6.2), usado no disparo (F3.2) e no
 # formulário de agendamento (F5.2).
 # Variáveis de entrada:
-#   form       -- resultado de ticket_service.prepare_form; usa form['fields'], cada um com
-#                 codigo, nome ('p_<codigo>'), label, descricao, tipo, obrigatorio, sensivel, opcoes,
-#                 padrao, tem_padrao, padrao_texto, valor, marcado, erro e, opcional, mantido (valor
-#                 sigiloso já salvo que um campo vazio preserva; só na edição de agendamento);
-#   foco_campo -- nome do primeiro campo inválido (ui_helpers.first_invalid_field).
+#   form        -- resultado de ticket_service.prepare_form; usa form['fields'], cada um com
+#                  name ('p_<código>'), label, description, kind, required, sensitive, options,
+#                  has_default, default_text, value, checked, error, example, warning e, opcional, kept
+#                  (valor sigiloso já salvo que um campo vazio preserva; só na edição de agendamento);
+#   focus_field -- nome do primeiro campo inválido (ui_helpers.first_invalid_field).
 # Valores sigilosos nunca são reexibidos.
 }}
     {{if not form['fields']:}}

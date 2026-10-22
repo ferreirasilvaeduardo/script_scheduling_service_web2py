@@ -7,7 +7,7 @@ Valida requisitos do prompt F0.4, README §2.5 e AGENTS.md §4, §5.5, §7:
 3. CKs de connection com '@' gerando RepoViolation;
 4. Imutabilidade de environments.name e usuarios.login;
 5. Cascatas de associacao (matriz, script_param, homologacao);
-6. solicitar_cancelamento nos 3 retornos ('TERMINAL', 'CANCELADO', 'SINALIZADO');
+6. request_cancel nos 3 retornos ('TERMINAL', 'CANCELADO', 'SINALIZADO');
 7. Transicao concorrente perdida gerando RepoConflict; CKs, UPDATE condicional e auditoria de agendamentos;
 8. perm_version incrementando em alteracoes de perfil, matriz e usuario;
 9. Paginacao estavel e deterministica com desempate por id;
@@ -429,7 +429,7 @@ class BaseRepoContractTest(object):
             sch.pause(rule["id"], reason="MANUAL", old_date=date_correct, actor="teste")
 
     def test_06b_fks_e_limites_de_auditoria(self):
-        """CR-003 P8 (README §2.5): FKs, UK de ticket_resp e limites da auditoria, sem gravacao parcial."""
+        """CR-003 P8 (README §2.5): FKs, UK de ticket_answer e limites da auditoria, sem gravacao parcial."""
         c = self.m.scenario()
         tck, sch, aud = self.obter_repo("tickets"), self.obter_repo("schedules"), self.obter_repo("audit")
         base = c["ticket_base"]

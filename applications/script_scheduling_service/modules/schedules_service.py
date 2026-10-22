@@ -204,7 +204,7 @@ def rule_state(record):
 
 
 def normalize_filters(input_value):
-    """Filtros da lista vindos de request.vars: nome (trecho), ambiente e ativo ('S' | 'N')."""
+    """Filtros da lista vindos de request.vars: name (trecho), environment e active ('Y' | 'N')."""
     input_value = input_value or {}
     filters = {}
     name = admin_crud.text(input_value.get("name"), NAME_MAX_LENGTH)
@@ -229,7 +229,7 @@ def _parameters(record):
 
 
 def _serialize(resolved):
-    """JSON objeto {codigo: valor} com sort_keys; CHECKBOX vira 'true'/'false', como o formulario envia."""
+    """JSON objeto {codigo do parametro: valor} com sort_keys; CHECKBOX vira 'true'/'false', como o formulario envia."""
     obj = {}
     for code, value in resolved.items():
         if value is None:
@@ -518,9 +518,9 @@ class SchedulesService(object):
     def agenda(self, ctx):
         """Agenda (README §7.7, CR-004 T3): o que vai rodar de agora ate o fim do 7o dia seguinte.
 
-        Retorna {atrasados: [...], dias: [{rotulo, itens}], aviso_total, ocorrencias}. Cada item:
-        hora, regra_id, nome, script, ambiente, recorrencia e, no ultimo item de uma regra com mais de
-        AGENDA_PER_RULE ocorrencias, 'mais' (quantas a mais no periodo). So leitura.
+        Retorna {delayed: [...], days: [{label, items}], total_warning, total}. Cada item: hour,
+        rule_id, name, script, environment, recurrence, warning e, no ultimo item de uma regra com mais de
+        AGENDA_PER_RULE ocorrencias, 'more' (quantas a mais no periodo). So leitura.
         """
         admin_crud.require_feature(ctx, FEATURE)
         now = recurrence.truncate_seconds(self._now())
@@ -730,7 +730,7 @@ class SchedulesService(object):
     def preview(self, ctx, date):
         """Proximas PREVIEW_COUNT execucoes e a descricao da regra, sem gravar.
 
-        Retorna {datas: [texto], descricao: texto | None, erros: {campo: mensagem}}.
+        Retorna {dates: [texto], description: texto | None, errors: {campo: mensagem}}.
         """
         admin_crud.require_feature(ctx, FEATURE)
         errors = collections.OrderedDict()
@@ -751,9 +751,9 @@ class SchedulesService(object):
     def save(self, ctx, ip, date):
         """Inclui (sem 'id') ou altera uma regra. Retorna (id | None, erros_por_campo).
 
-        dados: id, versao, nome, script_id e ambiente (so na inclusao), tipo_recorrencia,
-        expressao_cron, hora_execucao, weekdays, dia_mes, data_inicio, data_fim, prioridade e
-        respostas ({codigo: valor}). Lanca RepoNotFound, AccessDenied e OperationDenied
+        date (os dados do formulario): id, version, name, script_id e environment (so na inclusao),
+        recurrence_type, cron_expression, run_time, week_days, month_day, start_date, end_date,
+        priority e answers ({codigo do parametro: valor}). Lanca RepoNotFound, AccessDenied e OperationDenied
         (editor sem can_execute).
         """
         admin_crud.require_feature(ctx, FEATURE)

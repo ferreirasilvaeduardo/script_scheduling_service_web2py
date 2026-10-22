@@ -88,7 +88,7 @@ DEFAULT_PARAMETERS = (
     ("caminho_arquivo", None, "Caminho do Arquivo", "Caminho do arquivo a ser analisado", "TEXT", None, None),
 )
 
-# Catalogo padrao de scripts utilitarios de demonstracao (nome, descricao, grupo, categoria, etapa, interpretador, path_file, tipo_param, max_paral, timeout_seg, params)
+# Catalogo padrao de scripts utilitarios de demonstracao (nome, descricao, grupo, categoria, etapa, interpretador, path_file, param_type, max_par, timeout_seg, params)
 DEFAULT_SCRIPTS = (
     ("zipar_arquivos", "Compacta arquivo ou pasta em formato ZIP", "UTILITARIOS", "ARQUIVOS", "COMPACTACAO", "PYTHON3", "/opt/automacoes/scripts/utilitarios/zipar_arquivos.py", "NAMED", 2, 1800, (
         ("arq_origem", 1, "Y", None),
@@ -663,7 +663,7 @@ GRANT_ROLES = ("web", "agent", "purge", "monitor")
 def build_grants_by_role(owner, prefix, user_roles):
     """Gera comandos GRANT para os usuarios informados por papel (README §11.1).
 
-    papeis_usuarios: dict com mapeamento papel -> usuario_oracle, ex:
+    user_roles: dict com mapeamento papel -> usuario_oracle, ex:
       {'web': 'sss_web', 'agent': 'sss_agente', 'purge': 'sss_purge', 'monitor': 'sss_monitor'}
 
     Nunca concede a PUBLIC. A conta de cada papel e validada como identificador Oracle (entra no
@@ -735,7 +735,7 @@ def build_grants_by_role(owner, prefix, user_roles):
             owner, schema["ticket_output"]["tabela"], usr_web
         ))
 
-        # Sequences para web (todas exceto agentes, controle e ticket_saida, que a web nao insere)
+        # Sequences para web (todas exceto agentes, controle e ticket_output, que a web nao insere)
         for ent, t in schema.items():
             if ent not in ("agents", "control", "ticket_output"):
                 commands.append("GRANT SELECT ON {}.{} TO {};".format(
@@ -864,7 +864,7 @@ def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admi
         )
         commands.append(sql)
 
-    # 2. Ambientes padrao (inseridos antes dos perfis para permitir vinculo de perfil_amb)
+    # 2. Ambientes padrao (inseridos antes dos perfis para permitir vinculo de profile_env)
     tb_env = "{}.{}".format(owner, schema["environments"]["tabela"])
     sq_env = "{}.{}".format(owner, schema["environments"]["sequence"])
     for env_name, env_desc, env_conn in DEFAULT_ENVIRONMENTS:

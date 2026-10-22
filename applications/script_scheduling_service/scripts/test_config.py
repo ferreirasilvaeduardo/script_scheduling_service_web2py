@@ -32,7 +32,7 @@ class TestConfig(unittest.TestCase):
         self.web2py_root = os.path.dirname(os.path.dirname(self.app_dir))
         self.example_ini = os.path.join(self.app_dir, "instance", "config.ini.example")
 
-        # masking.py ainda nao existe; o substituto registra o que carregar_segredos entrega.
+        # masking.py ainda nao existe; o substituto registra o que load_secrets entrega.
         self.masked = []
         masking_stub = types.ModuleType("masking")
         masking_stub.register_secret = self.masked.append
@@ -385,7 +385,7 @@ class TestConfig(unittest.TestCase):
             return sss_config.get_config(log_name)
 
     def _read_app_log(self, log_dir, log_name):
-        """CR-005 D6: o CRITICAL inicial fica em log_dir/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log."""
+        """CR-005 D6: o CRITICAL inicial fica em log_dir/app/AAAA/MM/DD/HH/MI/<log_name>_<PID>.log."""
         expected = "%s_%d.log" % (log_name, os.getpid())
         found = []
         for root, _dirs, files in os.walk(log_dir):

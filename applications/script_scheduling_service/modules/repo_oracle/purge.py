@@ -104,7 +104,7 @@ class RepoPurge(object):
             cur.close()
 
     def audit(self, conn, table, deleted):
-        """PURGE com uma linha por tabela purgada, entidade = a tabela, entidade_id nulo (README §4.4; CR-008 R-16:
+        """PURGE com uma linha por tabela purgada, entidade = a tabela, entity_id nulo (README §4.4; CR-008 R-16:
         tambem com 0 linhas). Sem COMMIT."""
         self._executar(conn, "INSERT INTO " + self._aud + " (id, actor, source_ip, action, entity, entity_id, detail,"
                        " created_at) VALUES (:id, :actor, NULL, 'PURGE', :entity, NULL, :detail, SYSDATE)",
@@ -118,7 +118,7 @@ class RepoPurge(object):
     # ------------------------------------------------------------------ logs de tickets RUNNING
 
     def running_for_logs(self, conn):
-        """(ambiente, script_nome, script_id, started_at) dos RUNNING, para manter a pasta de minuto do log deles
+        """(ambiente, script_name, script_id, started_at) dos RUNNING, para manter a pasta de minuto do log deles
         (CR-007, R-32). O nome vem do snapshot (o da epoca do disparo), como no caminho do log (README §8.4)."""
         cur = conn.cursor()
         try:

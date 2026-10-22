@@ -163,7 +163,7 @@ def run_log_path(log_dir, environment, script_name, started_at, ticket_id, pid=N
 
 # ---------------------------------------------------------------------------
 # 2. Logs da aplicacao (CR-005 D6, R-c, R-d, R-e, README §13)
-#    log_dir/internal/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>[_<n>].log (CR-009: sem ambiente)
+#    log_dir/internal/app/AAAA/MM/DD/HH/MI/<log_name>_<PID>[_<n>].log (CR-009: sem ambiente)
 # ---------------------------------------------------------------------------
 
 def app_log_dir(log_dir, dt):

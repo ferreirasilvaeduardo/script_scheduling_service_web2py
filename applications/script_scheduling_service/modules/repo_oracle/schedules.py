@@ -77,7 +77,7 @@ _SQL_UPDATE = (
     "last_ticket_id = :last_ticket_id, pause_reason = :pause_reason, active = :active, "
     "updated_at = SYSDATE, updated_by = :actor WHERE id = :id"
 )
-# CR-007, R-19: so pausa regra ativa e, com antiga_data, so se a next_run lida nao mudou.
+# CR-007, R-19: so pausa regra ativa e, com old_date, so se a next_run lida nao mudou.
 _SQL_PAUSE = (
     "UPDATE {sch} SET active = 'N', pause_reason = :reason, updated_at = SYSDATE, updated_by = :actor "
     "WHERE id = :id AND active = 'Y'"
@@ -395,7 +395,7 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             return self.get(id, conn=c)
 
     def pause(self, id, reason, old_date=None, audit=None, actor=None, conn=None):
-        """Pausa so regra ativa e, com antiga_data, so se a next_run nao mudou (CR-007, R-19)."""
+        """Pausa so regra ativa e, com old_date, so se a next_run nao mudou (CR-007, R-19)."""
         actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             if not self._existe(c, self._sql["EXISTS"], {"id": int(id)}):
@@ -422,7 +422,7 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
             return self.get(id, conn=c)
 
     def resume(self, id, new_date, expected=None, audit=None, actor=None, conn=None):
-        """Retoma: ativo = 'S', pausa_motivo nulo e next_run = nova_data, condicional a 'esperado'."""
+        """Retoma: ativo = 'S', pausa_motivo nulo e next_run = new_date, condicional a 'esperado'."""
         actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             current = self._uma(c, self._sql["GET_LOCK"], {"id": int(id)})

@@ -10,7 +10,7 @@ class RepoAgents(object):
         raise NotImplementedError
 
     def tickets_running(self, code):
-        """Tickets RUNNING do agente informado, por id, sem CLOB (sem log_output nem parametros_enviados)."""
+        """Tickets RUNNING do agente informado, por id, sem CLOB (sem log_output nem submitted_params)."""
         raise NotImplementedError
 
     def unattended_queue(self, now, thresholds):
@@ -19,7 +19,7 @@ class RepoAgents(object):
         Retorna grupos ordenados por ambiente e interpretador: ambiente, interpretador,
         quantidade e mais_antigo (menor inicio da espera, GREATEST(scheduled_at, created_at); CR-013). O interpretador e o do cadastro
         (tbsss_scripts.interpretador, join), o mesmo criterio do claim (CR-008, R-15); nenhum
-        CLOB e lido (nem parametros_enviados nem log_output).
+        CLOB e lido (nem submitted_params nem log_output).
         """
         raise NotImplementedError
 

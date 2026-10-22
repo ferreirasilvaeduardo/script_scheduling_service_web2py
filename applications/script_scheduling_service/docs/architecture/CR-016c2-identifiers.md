@@ -5072,3 +5072,36 @@ Achado durante a validação: a primeira passada não olhou os `views/**/*.load`
 
 Ficam para o d3c: funções privadas e parâmetros em português nos repositórios e serviços (`_auditar`, `_validar_script`, `_conferir_esperado`, `executar_retencao`, `registrar_aviso`, `gerar`, `agrupar`…) e o parâmetro `date` dos serviços de cadastro, que significa "dados".
 
+## 36. Encerramento do CR-016 e verificação de funcionamento (2026-10-22)
+
+Decisão do usuário (2026-10-22): **parar a tradução** depois do d3b e deixar tudo funcionando, com a documentação atualizada. O d3c (funções privadas e parâmetros dos repositórios e serviços) e o D29 (códigos internos em português) foram cancelados. O que ficou em português está listado no README §2.8 ("Encerramento") e não será mais trocado. Um nome legado só muda junto com uma alteração funcional do mesmo trecho.
+
+**Verificação de funcionamento.** O percurso real das telas (web2py na porta 18000, banco DEV) passou a exercitar o caminho de sucesso de **toda action que grava**, enviando o formulário da própria tela com os campos que o navegador envia e conferindo o resultado no banco:
+
+* parâmetro: incluir, editar, ativar/inativar;
+* script: editar, ativar/inativar, homologação (tirar e devolver o ambiente), vínculos (ligar e desligar um parâmetro);
+* ambiente: incluir, editar, ativar/inativar;
+* perfil: incluir, editar, ativar/inativar, matriz de permissões;
+* usuário: incluir, editar, ativar/inativar, desbloquear (depois de uma tentativa errada), redefinir senha (e entrar com a nova);
+* ticket: criar, cancelar, rodar de novo;
+* agendamento: criar, pausar, retomar;
+* auditoria: exportar;
+* minha senha, sair e entrar com a senha nova.
+
+Resultado: as 32 gravações passam. A massa do percurso passou a criar o ambiente antes da matriz de permissões e a homologar o script nele, e as duas falhas que eram tratadas como base (403 em `/tickets/new` e 404 em `/tickets/history`) deixaram de existir. Restam só os 404 legítimos da varredura de links (auditoria de registros já apagados e `logs/download` sem argumento).
+
+**Defeitos corrigidos nesta etapa:**
+
+* **Seed do `init_db.py` (desde a F7):** a ligação perfil × ambiente usava a tabela de ambientes antes de ela ser definida (`UnboundLocalError`, com rollback de todo o seed) e, mesmo com o nome definido, rodaria antes de os ambientes existirem. Os ambientes passaram a ser gravados antes dos perfis. O SQL gerado para produção (`ddl_builder.build_seed_script`) já estava na ordem certa. Teste novo: `test_ddl_builder.TestInitDbSeedMock`.
+* **Tooltip do motivo na tabela:** `components/table.html` lia `<key>_motivo` da linha, mas as linhas trazem `<key>_reason` desde o CR-016a; o motivo não aparecia.
+
+**Documentação atualizada:**
+
+* README §2.8 (encerramento e lista do que fica em português) e AGENTS §1;
+* cabeçalhos dos componentes de `views/components/` (entradas `alert`, `field`, `filters`, `table`, `record`, `page`/`size`, `focus_field`…);
+* docstrings que descreviam chaves de dicionário com os nomes antigos (`ui_helpers`, `ui_menu`, serviços e interfaces `repo_*.py`), flags `'S'` → `'Y'` e parâmetros `auditoria`/`esperado`/`ator` → `audit`/`expected`/`actor`;
+* cerca de 190 citações de nomes antigos em comentários e docstrings de `modules/`, `controllers/`, `models/` e `scripts/`, trocadas só quando o nome antigo não existe mais no código e o novo existe;
+* citações de nomes antigos entre crases no README, AGENTS, `docs/ADMIN_CRUD_PATTERN.md` e `docs/DEPLOYMENT.md`.
+
+Marcadores descritivos em português dentro de comentários (`<nome_log>`, `(codigo_motivo, texto_motivo)`) continuam valendo, pela regra de comentários em português. Os documentos históricos (CRs anteriores, prompts das fases e manuais de homologação/UI Freeze) não foram reescritos.
+

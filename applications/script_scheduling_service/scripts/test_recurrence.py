@@ -201,7 +201,7 @@ class TestEvaluateTrigger(unittest.TestCase):
         self.assertFalse(rec.evaluate_trigger(r, limit + datetime.timedelta(seconds=1), 'SKIP', 300).create_ticket)
 
     def test_atraso_tolerado_com_varias_vencidas(self):
-        # Decisao 5: CRON a cada minuto com 4 min de atraso gera 1 ticket; nova_data e a primeira > agora.
+        # Decisao 5: CRON a cada minuto com 4 min de atraso gera 1 ticket; new_date e a primeira > agora.
         r = rule('CRON', cron_expression='* * * * *', next_run_at=D(2026, 10, 15, 10, 3))
         self.assertEqual(rec.evaluate_trigger(r, NOW, 'SKIP', 300), rec.Decision(True, D(2026, 10, 15, 10, 8), 4, False, D(2026, 10, 15, 10, 7)))
 
@@ -250,7 +250,7 @@ class TestEvaluateTrigger(unittest.TestCase):
             self.assertEqual(decision.occurrence, expected)
 
     def test_cron_sem_ocorrencia_no_horizonte_vira_cron_erro(self):
-        # CR-008, R-19: decisao completa com cron_erro; o daemon aplica sobreposicao e SKIP e pausa.
+        # CR-008, R-19: decisao completa com cron_error; o daemon aplica sobreposicao e SKIP e pausa.
         r = rule('CRON', cron_expression='0 0 30 2 *', next_run_at=D(2026, 10, 1))
         decision = rec.evaluate_trigger(r, NOW, 'RUN_ONCE', 300)
         self.assertEqual(decision, rec.Decision(True, None, 0, False, D(2026, 10, 1), True))

@@ -90,7 +90,7 @@ def can_execute(ctx, script, environment, homologations):
     """Decisao composta de execucao (README §4.3.A). Retorna (bool, Reason.*).
 
     script e ambiente sao dicts do repositorio (id, ativo, nome); homologacoes e o
-    iteravel de ambiente_id homologados para o script (tbsss_script_env).
+    iteravel de environment_id homologados para o script (tbsss_script_env).
     """
     if not ctx or not isinstance(script, dict) or not isinstance(environment, dict):
         return False, Reason.INVALID_DATA

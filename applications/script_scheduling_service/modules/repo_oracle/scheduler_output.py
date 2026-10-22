@@ -156,7 +156,7 @@ class RepoSchedulerOutput(object):
         return value
 
     def complete(self, conn, ticket_id, agent_id, file_count, size_bytes):
-        """GRAVANDO -> DISPONIVEL, so se o zip no banco tiver tamanho_bytes. False: posse perdida. Sem COMMIT."""
+        """GRAVANDO -> DISPONIVEL, so se o zip no banco tiver size_bytes. False: posse perdida. Sem COMMIT."""
         cur = conn.cursor()
         try:
             cur.execute(self._sql_complete, ticket_id=int(ticket_id), agent_id=agent_id,

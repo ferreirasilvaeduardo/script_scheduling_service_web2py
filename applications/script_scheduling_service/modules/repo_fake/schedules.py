@@ -193,7 +193,7 @@ class RepoSchedulesFake(RepoSchedules):
             return copy.deepcopy(current)
 
     def pause(self, id, reason, old_date=None, audit=None, actor=None):
-        """Pausa agendamento de forma otimista, validando antiga_data se informada."""
+        """Pausa agendamento de forma otimista, validando old_date se informada."""
         with self._store.lock_schedules:
             actor = self._store.record_actor(audit, actor)
             if id not in self._store.schedules:

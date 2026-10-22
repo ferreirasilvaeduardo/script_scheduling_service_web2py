@@ -1,13 +1,13 @@
 {{
 # Componente: barra de filtros (formulário GET; funciona sem JavaScript).
 # Variáveis de entrada:
-#   filtros -- dict:
+#   filters -- dict:
 #     id        -- prefixo ASCII dos ids dos campos (ex.: 'filter-tickets');
-#     url_base  -- tupla (controller, funcao) da listagem;
+#     url_base  -- tupla (controller, função) da listagem;
 #     fields    -- lista de {name, label, kind: 'text' | 'select' | 'date' | 'multiple', value,
-#                  opcoes (select: lista de (valor, rotulo); a primeira deve ser a opção "todos";
-#                  multipla: lista de (valor, rotulo) em caixas de seleção, valor = lista marcada)};
-#     keep -- opcional; dict de parâmetros mantidos ao filtrar e ao limpar (ex.: tamanho).
+#                  options (select: lista de (valor, rótulo); a primeira deve ser a opção "todos";
+#                  multiple: lista de (valor, rótulo) em caixas de seleção, value = lista marcada)};
+#     keep      -- opcional; dict de parâmetros mantidos ao filtrar e ao limpar (ex.: size).
 # 'page' nunca é preservada: filtrar ou limpar volta para a página 1.
 _flt_keep = dict((k, v) for k, v in (filters.get('keep') or {}).items() if k != 'page')
 _flt_url = URL(c=filters['url_base'][0], f=filters['url_base'][1])

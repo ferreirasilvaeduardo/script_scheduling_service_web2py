@@ -128,7 +128,7 @@ def open_log(log_dir, environment, script_name, started_at, ticket_id, script_id
     """Abre log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>.log.parcial (O_EXCL, 0600)
     antes do spawn (CR-009: o ambiente do ticket e obrigatorio; vazio e ValueError).
 
-    Cada pasta nova da cadeia recebe 0750 (log_paths.ensure_directory). nome_script e o script_nome do
+    Cada pasta nova da cadeia recebe 0750 (log_paths.ensure_directory). script_name e o script_name do
     snapshot (README §6.5). Devolve (fd, caminho).
     """
     path = log_paths.partial_log_path(log_dir, environment, script_name, started_at, ticket_id, script_id)
@@ -332,7 +332,7 @@ def advance_stop(execution, now_monotonic):
 
 
 def translate_return(returncode, platform_name):
-    """returncode -> (status, status_motivo, return_code) do README §5.2 (POSIX; sinal = 128 + signum)."""
+    """returncode -> (status, status_reason, return_code) do README §5.2 (POSIX; sinal = 128 + signum)."""
     if platform_name not in ("LINUX", "UNIX"):
         raise ValueError("Plataforma nao suportada: %s" % platform_name)
     rc = int(returncode)

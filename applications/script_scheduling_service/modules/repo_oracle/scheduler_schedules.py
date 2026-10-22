@@ -5,9 +5,9 @@ CR-007 R-05, R-08, R-19, R-27; CR-008 R-03, R-19, R-22, R-31).
 Fora do contrato da UI e sem gluon (processo batch, sem FAKE; README §2.5). SQL literal do README §7.5, com
 owner e prefixo da configuracao e identificadores por sql_ident. **Nenhuma operacao faz COMMIT nem ROLLBACK:**
 todas recebem a conexao da transacao da regra, e o COMMIT unico e do passo 8 (quem chama). Toda data vai
-como TIPO_DATE e sem microssegundos; a antiga_data e usada exatamente como lida do banco.
+como TIPO_DATE e sem microssegundos; a old_date e usada exatamente como lida do banco.
 
-Colunas de registro (CR-006): o ticket e o ticket_resp do desdobro nascem com created_by = 'SYSTEM:<agent_id>';
+Colunas de registro (CR-006): o ticket e o ticket_answer do desdobro nascem com created_by = 'SYSTEM:<agent_id>';
 a reserva e o avanco sem ticket sao rotina tecnica (sem updated_*); pausa e conclusao gravam updated_*.
 """
 import datetime
@@ -15,7 +15,7 @@ import datetime
 import db_conn
 import sql_ident
 
-# Primeira pagina (README §7.5): :ult_prox = DATE '0001-01-01' e :ult_id = 0.
+# Primeira pagina (README §7.5): :last_next = DATE '0001-01-01' e :last_id = 0.
 DATE_INITIAL = datetime.datetime(1, 1, 1)
 DETAIL_MAX = 1000
 ACTOR_MAX = 40
@@ -94,7 +94,7 @@ class RepoSchedulerSchedules(object):
     # ------------------------------------------------------------------ leitura
 
     def due_rules(self, conn, batch, last_next=None, last_id=0):
-        """Pagina de (id, next_run) vencidas, depois de (ult_prox, ult_id) (README §7.5, R-08)."""
+        """Pagina de (id, next_run) vencidas, depois de (last_next, last_id) (README §7.5, R-08)."""
         cur = conn.cursor()
         try:
             db_conn.set_input_types(cur, last_next=db_conn.TIPO_DATE)
@@ -121,7 +121,7 @@ class RepoSchedulerSchedules(object):
             cur.close()
 
     def load_rule(self, conn, rule_id):
-        """Regra completa (passo 1); next_run exatamente como o banco a devolveu (a antiga_data)."""
+        """Regra completa (passo 1); next_run exatamente como o banco a devolveu (a old_date)."""
         cur = conn.cursor()
         try:
             cur.execute("SELECT " + ", ".join(_COLS_RULE) + " FROM " + self._sch + " WHERE id = :id",
@@ -187,7 +187,7 @@ class RepoSchedulerSchedules(object):
     # ------------------------------------------------------------------ escrita do ticket
 
     def _inserir_ticket(self, conn, rule, ticket_id, ticket, answers, actor):
-        """INSERT do ticket e do ticket_resp (README §7.5 passo 6): schedule_id, source_ip NULL,
+        """INSERT do ticket e do ticket_answer (README §7.5 passo 6): schedule_id, source_ip NULL,
         scheduled_at = ocorrencia (CR-007 R-27, CR-008 R-03). ORA-00001 em ix_tck_ocor: DuplicateOccurrence."""
         cur = conn.cursor()
         try:
@@ -218,7 +218,7 @@ class RepoSchedulerSchedules(object):
 
     def reserve_and_create_ticket(self, conn, rule, old, new, ticket_id, ticket, answers, agent_id):
         """Passo 6: reserva otimista (rotina tecnica, sem updated_*) e, com rowcount 1, o INSERT do ticket e do
-        ticket_resp. False = outro no processou a regra (rowcount 0; quem chama faz ROLLBACK)."""
+        ticket_answer. False = outro no processou a regra (rowcount 0; quem chama faz ROLLBACK)."""
         n = self._executar(conn, "UPDATE " + self._sch + " SET next_run_at = :new_date, last_run_at = SYSDATE,"
                            " last_ticket_id = :ticket_id WHERE id = :id AND active = 'Y'"
                            " AND next_run_at = :old_date",
@@ -245,7 +245,7 @@ class RepoSchedulerSchedules(object):
 
     def complete_without_ticket(self, conn, rule_id, old, agent_id):
         """Conclusao sem ticket (SKIP fora da tolerancia em UNICA, ou sobreposicao): so ativo, pausa_motivo e
-        updated_*; ultima_execucao e ultimo_ticket_id nao mudam."""
+        updated_*; last_run_at e last_ticket_id nao mudam."""
         actor = system_actor(agent_id)
         n = self._executar(conn, "UPDATE " + self._sch + " SET active = 'N', pause_reason = 'COMPLETED',"
                            " updated_at = SYSDATE, updated_by = :actor WHERE id = :id AND active = 'Y'"
@@ -257,7 +257,7 @@ class RepoSchedulerSchedules(object):
         return True
 
     def advance_without_ticket(self, conn, rule_id, old, new):
-        """Avanco sem ticket (CR-007, R-05): so next_run, sem ultima_execucao, ultimo_ticket_id nem
+        """Avanco sem ticket (CR-007, R-05): so next_run, sem last_run_at, last_ticket_id nem
         updated_* (rotina tecnica)."""
         return self._executar(conn, "UPDATE " + self._sch + " SET next_run_at = :new_date WHERE id = :id"
                               " AND active = 'Y' AND next_run_at = :old_date",
@@ -278,8 +278,8 @@ class RepoSchedulerSchedules(object):
         return True
 
     def pause_cron_error(self, conn, rule, old, ticket_id, ticket, answers, detail, agent_id):
-        """Variante cron_erro (CR-008, R-19): pausa INVALID_CRON no UPDATE otimista, mantendo next_run_at;
-        com ticket (ticket_id nao nulo), o INSERT do ticket e do ticket_resp em seguida."""
+        """Variante cron_error (CR-008, R-19): pausa INVALID_CRON no UPDATE otimista, mantendo next_run_at;
+        com ticket (ticket_id nao nulo), o INSERT do ticket e do ticket_answer em seguida."""
         actor = system_actor(agent_id)
         n = self._executar(conn, "UPDATE " + self._sch + " SET active = 'N', pause_reason = 'INVALID_CRON',"
                            " last_run_at = CASE WHEN :ticket_id IS NULL THEN last_run_at ELSE SYSDATE END,"

@@ -6,7 +6,7 @@ Duas etapas:
      empacotar roda num grupo proprio, acompanhado por poll() e com prazo fixo; a linha [SSS] de excesso ou
      falha vai para o arquivo de log local e chega ao banco no flush final;
   2. gravar, depois da finalizacao: a linha da saida (GRAVANDO, partes de 1 MiB, DISPONIVEL; ou EXCEDEU/FALHOU
-     sem conteudo) pelo repo_oracle/scheduler_saida, com posse em toda gravacao e COMMIT por passo.
+     sem conteudo) pelo repo_oracle/scheduler_output, com posse em toda gravacao e COMMIT por passo.
 O resultado do ticket nunca muda por causa da saida. O conteudo da saida nunca vai para log nenhum.
 Toda primitiva de SO vem de `os_platform`.
 """

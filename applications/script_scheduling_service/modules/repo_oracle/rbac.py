@@ -240,7 +240,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
             return self.profiles_get(pid, conn=c)
 
     def profiles_update(self, id, date, expected=None, audit=None, actor=None, conn=None):
-        """Altera perfil e incrementa perm_versao com protecao do ultimo admin (§4.3.B)."""
+        """Altera perfil e incrementa perm_version com protecao do ultimo admin (§4.3.B)."""
         actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             cur = c.cursor()
@@ -477,7 +477,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                 if s_del or s_ins:
                     changed = True
 
-                # Incrementa perm_versao do perfil
+                # Incrementa perm_version do perfil
                 if changed:
                     cur.execute(
                         "UPDATE " + self._tabela_perfis() + " "

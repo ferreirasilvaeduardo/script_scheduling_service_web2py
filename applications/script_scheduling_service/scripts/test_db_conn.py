@@ -449,14 +449,14 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
                 self.assertEqual(resilient.backoff_s, 2.0)
                 self.assertEqual(resilient.next_attempt_monotonic, 1001.0)
 
-                # 2. Chamada antes do prazo (t_atual = 1000.5): retorna False imediatamente sem tentar conectar
+                # 2. Chamada antes do prazo (t_current = 1000.5): retorna False imediatamente sem tentar conectar
                 t_current = 1000.5
                 mock_connect.reset_mock()
                 ok = resilient.ensure()
                 self.assertFalse(ok)
                 mock_connect.assert_not_called()
 
-                # 3. Chamada apos vencer o prazo (t_atual = 1001.2): tenta novamente e tem sucesso
+                # 3. Chamada apos vencer o prazo (t_current = 1001.2): tenta novamente e tem sucesso
                 t_current = 1001.2
                 mock_conn = mock.MagicMock()
                 mock_connect.side_effect = None
@@ -498,7 +498,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
         self.assertTrue(any("CONEXAO_ACIMA_DO_PRAZO" in m and "40s" in m for m in cm.output))
 
     def test_conferir_versao_esquema(self):
-        """conferir_versao_esquema() valida versao_esquema da tabela controle contra sql_ident (CR-007, D4)."""
+        """conferir_versao_esquema() valida schema_version da tabela controle contra sql_ident (CR-007, D4)."""
         mock_conn = mock.MagicMock()
         mock_cur = mock.MagicMock()
         mock_conn.cursor.return_value = mock_cur
@@ -574,7 +574,7 @@ class TestDbConnApiAmpliadaMocks(unittest.TestCase):
                 self.assertEqual(res, "VALOR_RETORNADO_PLSQL")
 
     def test_proximo_id_qualificado(self):
-        """proximo_id executa NEXTVAL com o identificador qualificado e retorna int."""
+        """next_id executa NEXTVAL com o identificador qualificado e retorna int."""
         mock_conn = mock.MagicMock()
         mock_cur = mock.MagicMock()
         mock_cur.fetchone.return_value = (42,)

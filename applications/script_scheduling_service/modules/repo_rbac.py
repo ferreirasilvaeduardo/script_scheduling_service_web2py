@@ -6,7 +6,7 @@ class RepoRbac(object):
     """Contrato abstrato para gestao de perfis, matrizes de permissao e RBAC.
 
     Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o actor, por
-    auditoria['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
+    audit['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
     Sem actor, RepoViolation sem gravar nada.
     """
 
@@ -21,19 +21,19 @@ class RepoRbac(object):
     def profiles_insert(self, date, audit=None, actor=None):
         """Insere novo perfil e retorna dict com o registro criado.
 
-        auditoria: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
-        (entidade tbsss_profiles, entidade_id = novo id).
+        audit: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
+        (entidade tbsss_profiles, entity_id = novo id).
         """
         raise NotImplementedError
 
     def profiles_update(self, id, date, expected=None, audit=None, actor=None):
-        """Atualiza perfil, incrementa perm_versao e retorna o registro, tudo na mesma transacao.
+        """Atualiza perfil, incrementa perm_version e retorna o registro, tudo na mesma transacao.
 
-        esperado: opcional, dict campo -> valor lido; divergencia lanca RepoConflict sem alterar nada.
+        expected: opcional, dict campo -> valor lido; divergencia lanca RepoConflict sem alterar nada.
         Se a alteracao reduz administradores (ativo ou is_admin de 'S' para 'N'), a mesma operacao
         bloqueia os admins ativos (README §4.3.B) e, se o conjunto resultante ficar vazio, lanca
         RepoViolation(constraint='sss_ultimo_admin') com ROLLBACK.
-        auditoria: opcional, como em perfis_inserir.
+        audit: opcional, como em profiles_insert.
         """
         raise NotImplementedError
 
@@ -42,10 +42,10 @@ class RepoRbac(object):
         raise NotImplementedError
 
     def matrix_save(self, profile_id, features_ids, envs, scrs, expected_perm_version=None, audit=None, actor=None):
-        """Substitui a matriz do perfil e incrementa perm_versao atomicamente; retorna a nova matriz.
+        """Substitui a matriz do perfil e incrementa perm_version atomicamente; retorna a nova matriz.
 
-        perm_versao_esperada: opcional; se o perm_versao atual divergir, lanca RepoConflict sem alterar.
-        IDs inexistentes violam as FKs (RepoViolation). auditoria: opcional, gravada na mesma transacao.
+        expected_perm_version: opcional; se o perm_version atual divergir, lanca RepoConflict sem alterar.
+        IDs inexistentes violam as FKs (RepoViolation). audit: opcional, gravada na mesma transacao.
         """
         raise NotImplementedError
 

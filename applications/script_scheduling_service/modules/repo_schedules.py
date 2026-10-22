@@ -6,7 +6,7 @@ class RepoSchedules(object):
     """Contrato abstrato para gestao de agendamentos e regras de recorrencia.
 
     Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o actor, por
-    auditoria['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
+    audit['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
     Sem actor, RepoViolation sem gravar nada.
     """
 
@@ -39,14 +39,14 @@ class RepoSchedules(object):
         raise NotImplementedError
 
     def pause(self, id, reason, old_date=None, audit=None, actor=None):
-        """Pausa o agendamento de forma otimista, checando antiga_data se informada (README §7.5 passo 7).
+        """Pausa o agendamento de forma otimista, checando old_date se informada (README §7.5 passo 7).
 
         Audita SCHEDULE_PAUSE na mesma operacao: com `auditoria` (ator e ip da UI) ou, sem ela, como SYSTEM.
         """
         raise NotImplementedError
 
     def resume(self, id, new_date, expected=None, audit=None, actor=None):
-        """Retoma agendamento pausado: active = 'Y', pause_reason nulo e next_run_at = nova_data.
+        """Retoma agendamento pausado: active = 'Y', pause_reason nulo e next_run_at = new_date.
 
         UPDATE condicional aos valores lidos em `esperado` (RepoConflict se divergirem) e `auditoria`
         gravada na mesma operacao.

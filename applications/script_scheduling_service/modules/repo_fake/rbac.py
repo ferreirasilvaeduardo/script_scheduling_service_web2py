@@ -92,8 +92,8 @@ class RepoRbacFake(RepoRbac):
                       if u["active"] == "Y" and u["profile_id"] in admin)
 
     def profiles_update(self, id, date, expected=None, audit=None, actor=None):
-        """Altera perfil e incrementa perm_versao; protege o ultimo admin na mesma operacao (§4.3.B)."""
-        # Ordem de locks igual a admins_ativos_bloquear: rbac e depois usuarios.
+        """Altera perfil e incrementa perm_version; protege o ultimo admin na mesma operacao (§4.3.B)."""
+        # Ordem de locks igual a lock_active_admins: rbac e depois usuarios.
         with self._store.lock_rbac:
             with self._store.lock_users:
                 actor = self._store.record_actor(audit, actor)
@@ -133,7 +133,7 @@ class RepoRbacFake(RepoRbac):
                                            constraint="sss_ultimo_admin")
 
                 current.update(changes)
-                # Toda alteracao de perfil incrementa perm_versao (README §4.3.A)
+                # Toda alteracao de perfil incrementa perm_version (README §4.3.A)
                 current["perm_version"] = int(current.get("perm_version", 1)) + 1
                 self._store.stamp_update(current, actor)
                 self._auditar(audit, id)
@@ -167,7 +167,7 @@ class RepoRbacFake(RepoRbac):
             }
 
     def matrix_save(self, profile_id, features_ids, envs, scrs, expected_perm_version=None, audit=None, actor=None):
-        """Substitui associacoes da matriz e incrementa perm_versao atomicamente (condicional a versao).
+        """Substitui associacoes da matriz e incrementa perm_version atomicamente (condicional a versao).
 
         Grava por diferenca: os vinculos que continuam mantem o created_*; havendo mudanca, o perfil
         recebe updated_* (CR-006, README §10).
@@ -208,7 +208,7 @@ class RepoRbacFake(RepoRbac):
                                 {"id": nid, "profile_id": profile_id, column: x}, actor)
                     changed = changed or set(current) != set(ids)
 
-                # Incrementa perm_versao atomicamente na mesma transacao
+                # Incrementa perm_version atomicamente na mesma transacao
                 profile["perm_version"] += 1
                 if changed:
                     self._store.stamp_update(profile, actor)

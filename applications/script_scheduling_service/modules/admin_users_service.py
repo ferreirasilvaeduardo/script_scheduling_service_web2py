@@ -16,7 +16,7 @@ from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 FEATURE = "MANAGE_USERS"
 EDITABLE_FIELDS = ("name", "profile_id", "active")
-# Referencias aparecem pelo nome na auditoria de inclusao (README §4.4): perfil, nao perfil_id.
+# Referencias aparecem pelo nome na auditoria de inclusao (README §4.4): perfil, nao profile_id.
 INSERT_FIELDS = ("login", "name", "profile")
 NAME_MAX_LENGTH = 60
 _PROFILES_MAX = 1000
@@ -66,7 +66,7 @@ def public_view(user):
 
 
 def normalize_filters(input_value):
-    """Filtros da lista: login, nome (trechos), perfil_id e situacao ('S' | 'N' | 'B' bloqueados)."""
+    """Filtros da lista: login, name (trechos), profile_id e state ('Y' | 'N' | 'B' bloqueados)."""
     input_value = input_value or {}
     filters = {}
     for key in ("login", "name"):
@@ -99,7 +99,7 @@ class AdminUsersService(object):
         return self._users.get_by_id(uid)
 
     def profiles(self, active_only=False):
-        """Perfis para selecao: lista de {id, nome, is_admin, ativo} ordenada por nome."""
+        """Perfis para selecao: lista de {id, name, is_admin, active} ordenada por nome."""
         items = self._rbac.profiles_list(filters={"active": "Y"} if active_only else None, page=1,
                                          size=_PROFILES_MAX)["items"]
         return [{"id": p["id"], "name": p["name"], "is_admin": p["is_admin"], "active": p["active"]} for p in items]
@@ -194,7 +194,7 @@ class AdminUsersService(object):
         return name
 
     def save(self, ctx, ip, user_id, date):
-        """Inclui (login, nome, perfil_id, senha, confirmacao) ou altera (nome, perfil_id, versao).
+        """Inclui (login, nome, profile_id, senha, confirmacao) ou altera (nome, profile_id, versao).
 
         Retorna (id, erros). Na edicao o login e a senha enviados sao ignorados. Lanca
         RepoNotFound e AccessDenied.

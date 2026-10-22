@@ -42,7 +42,7 @@ class RepoAgentsFake(RepoAgents):
             hb = ag.get("heartbeat_at")
             if ag.get("status") != "ACTIVE" or hb is None:
                 continue
-            age = max(0, int((now - hb).total_seconds()))  # mesmo arredondamento de agentes_service.saude
+            age = max(0, int((now - hb).total_seconds()))  # mesmo arredondamento de agents_service.saude
             if age >= 2 * thresholds.heartbeat_interval_s and age > thresholds.fence_timeout_s:
                 continue
             served.update((a.strip(), i.strip()) for a in (ag.get("environments") or "").split(",")

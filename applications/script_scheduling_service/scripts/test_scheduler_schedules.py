@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Testes do repo_oracle.scheduler_schedules e das operacoes de no offline e fencing do scheduler_fila (F8.4a;
+"""Testes do repo_oracle.scheduler_schedules e das operacoes de no offline e fencing do scheduler_queue (F8.4a;
 README §7.5, §8.8, §8.9; CR-006; CR-007 R-05, R-08, R-12, R-19, R-27; CR-008 R-03, R-10, R-19, R-31).
 
-Sem banco: conexao roteirizada do test_scheduler_fila (SQL literal, binds de data sem microssegundos e com
+Sem banco: conexao roteirizada do test_scheduler_queue (SQL literal, binds de data sem microssegundos e com
 TIPO_DATE, nenhuma operacao do agenda faz COMMIT/ROLLBACK). Com SSS_TEST_ORACLE=1: as operacoes reais no
 owner do instance/config.ini com massa propria (inclusive o teste obrigatorio de microssegundos).
 """

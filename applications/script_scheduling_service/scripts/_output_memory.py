@@ -4,7 +4,7 @@ from repo_oracle import scheduler_output
 
 
 class RepoOutputMemory(object):
-    """Contrato do RepoSchedulerOutput em memoria. tickets: {id: {'agente_id': ...}} para a posse."""
+    """Contrato do RepoSchedulerOutput em memoria. tickets: {id: {'agent_id': ...}} para a posse."""
 
     def __init__(self, tickets=None):
         self.tickets = tickets if tickets is not None else {}

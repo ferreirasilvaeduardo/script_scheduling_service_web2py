@@ -1,15 +1,15 @@
 {{
 # Componente: tabela de listagem com estados vazio e de erro.
 # Variáveis de entrada:
-#   tabela -- dict:
+#   table -- dict:
 #     caption   -- texto do <caption> (lido por leitores de tela; visualmente oculto);
 #     columns   -- lista de {key, label, css_class (opcional), kind: 'text' | 'mono' | 'status' | 'active' | 'action'};
-#                  tipo 'status' usa components/badge_status.html e lê '<chave>_motivo' da linha;
-#                  tipo 'active' mostra o selo Ativo/Inativo da flag 'Y'/'N' (ui_helpers.active_info);
-#                  tipo 'acao' espera na linha {href, rotulo, descricao (opcional, aria-label)}, ou uma lista
-#                  deles, e gera um link por item;
-#     rows    -- lista de dicts indexados pela 'key' de cada coluna;
-#     error      -- opcional; mensagem segura ao usuário (sem ORA-, SQL ou stack trace, AGENTS §3.1);
+#                  kind 'status' usa components/badge_status.html e lê '<key>_reason' da linha;
+#                  kind 'active' mostra o selo Ativo/Inativo da flag 'Y'/'N' (ui_helpers.active_info);
+#                  kind 'action' espera na linha {href, label, description (opcional, aria-label)}, ou uma
+#                  lista deles, e gera um link por item;
+#     rows          -- lista de dicts indexados pela 'key' de cada coluna;
+#     error         -- opcional; mensagem segura ao usuário (sem ORA-, SQL ou stack trace, AGENTS §3.1);
 #     empty_message -- opcional; padrão "Nenhum registro encontrado".
 import ui_helpers
 _tab_columns = table['columns']
@@ -46,7 +46,7 @@ _tab_rows = table.get('rows') or []
         {{if _tab_kind == 'status':}}
         <td class="{{=_tab_col.get('css_class', '')}}">
           {{status = _tab_row.get(_tab_col['key'])
-          status_reason = _tab_row.get(_tab_col['key'] + '_motivo')}}
+          status_reason = _tab_row.get(_tab_col['key'] + '_reason')}}
           {{include 'components/badge_status.html'}}
         </td>
         {{elif _tab_kind == 'active':}}

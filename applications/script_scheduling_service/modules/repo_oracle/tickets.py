@@ -4,10 +4,10 @@
 tbsss_tickets e tbsss_ticket_answer com a mesma semantica do repo_fake/tickets.py (README §2.5):
 - SQL estatico com binds; os modelos ficam nas constantes abaixo e recebem, uma vez por instancia,
   somente identificadores qualificados por sql_ident (owner e prefixo validados);
-- listagens e leituras do CR-004 nunca selecionam CLOB; obter traz parametros_enviados, nunca
+- listagens e leituras do CR-004 nunca selecionam CLOB; obter traz submitted_params, nunca
   log_output, que so sai em fatias por log_ler (locator, offset base 0 na API e base 1 no LOB);
 - cancelamento com os dois UPDATEs literais do README §5.6 e o residuo PENDING com cancel_requested
-  = 'S' (CR-008, R-02), travando so a linha do proprio ticket (nao altera a ordem de locks do §8.3);
+  = 'Y' (CR-008, R-02), travando so a linha do proprio ticket (nao altera a ordem de locks do §8.3);
 - binds de DATE declarados como TIPO_DATE (README §7.5) e "agora" pelo SYSDATE do banco.
 """
 import db_conn
@@ -21,7 +21,7 @@ _LOG_MAX_CHARS = 65536
 _STATUS = ("PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED")
 _TERMINAL = ("SUCCESS", "FAILED", "CANCELLED")
 
-# Colunas sem CLOB (listagens); obter acrescenta parametros_enviados.
+# Colunas sem CLOB (listagens); obter acrescenta submitted_params.
 _COLS_TCK = ("id", "script_id", "environment", "requested_by", "source_ip", "agent_id", "process_id",
              "process_start", "status", "priority", "cancel_requested", "status_reason",
              "parent_ticket_id", "schedule_id", "log_offset_chars", "log_truncated", "return_code",
@@ -194,7 +194,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             return db_conn.db_now(conn)
 
     def get(self, id, conn=None):
-        """Ticket pela PK, com parametros_enviados e sem log_output (que sai por log_ler)."""
+        """Ticket pela PK, com submitted_params e sem log_output (que sai por log_ler)."""
         with self.read_context(conn=conn) as c:
             cur = c.cursor()
             try:

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Dicionario de parametros (README §6.1-6.3, §6.5, §10 tabela 10). Padrao em docs/ADMIN_CRUD_PATTERN.md.
 
-Validacao de cadastro forte: opcoes_json e regex sao validadas no servidor (o editor do cliente e so
+Validacao de cadastro forte: options_json e regex sao validadas no servidor (o editor do cliente e so
 conveniencia) e a regex nunca roda no navegador. Regras de dependencia com vinculos sao reverificadas
 pelo repositorio na mesma operacao. Nao importa gluon fora de _servico.
 """
@@ -89,7 +89,7 @@ def msg_active_link(scripts):
 
 
 def normalize_filters(input_value):
-    """Filtros da lista: codigo e label (trechos), tipo_componente e ativo ('S' | 'N')."""
+    """Filtros da lista: codigo e label (trechos), component_type e ativo ('S' | 'N')."""
     input_value = input_value or {}
     filters = {}
     for key in ("code", "label"):
@@ -106,7 +106,7 @@ def normalize_filters(input_value):
 
 
 def options_as_pairs(text):
-    """Lista ordenada de [valor, rotulo] do opcoes_json (para a tela); None se o texto nao for um objeto JSON.
+    """Lista ordenada de [valor, rotulo] do options_json (para a tela); None se o texto nao for um objeto JSON.
 
     A tela recebe pares porque o JSON.parse do navegador reordena chaves numericas.
     """
@@ -150,7 +150,7 @@ class AdminParametersService(object):
         return self._catalog.parameters_get(pid)
 
     def links(self, parameter_id):
-        """Scripts vinculados ao parametro: [{id, nome, tipo_param, ativo}] por nome."""
+        """Scripts vinculados ao parametro: [{id, name, param_type, active}] por nome."""
         return [{"id": s["id"], "name": s["name"], "param_type": s.get("param_type"), "active": s.get("active")}
                 for s in self._catalog.parameter_links(parameter_id)]
 
@@ -414,7 +414,7 @@ class AdminParametersService(object):
         return changed
 
     def test_regex(self, ctx, parameter_id, date, value):
-        """Valida 'valor' contra a configuracao em edicao (nao salva). Retorna {ok, valor | erro}.
+        """Valida 'value' contra a configuracao em edicao (nao salva). Retorna {ok, value | error}.
 
         Regex na configuracao exige perfil admin. Parametro sensivel devolve o valor mascarado.
         Lanca RepoNotFound (id informado e inexistente) e AccessDenied.

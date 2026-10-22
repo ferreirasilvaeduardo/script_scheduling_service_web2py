@@ -57,7 +57,7 @@ def health(agent, now, thresholds):
 
 
 def health_info(code):
-    """{codigo, rotulo, classe, icone, descricao} da saude, para badge e legenda."""
+    """{code, label, css_class, icon, description} da saude, para badge e legenda."""
     label, cls_name, icon, description = _HEALTH[code]
     return {"code": code, "label": label, "css_class": cls_name, "icon": icon, "description": description}
 

@@ -5,7 +5,7 @@ R-17, R-23, R-28; CR-008 R-01, R-02, R-07, R-08, R-09, R-11, R-17, R-25, R-26, E
 Laco single-threaded com tres prazos monotonicos e nenhuma espera dentro das operacoes: a unica espera e a
 de entre iteracoes (injetada, no maximo 1 s). Encerramentos pela maquina de estados do executor. NODE_OFFLINE,
 desdobro, fencing completo e DRAIN ficam para o F8.4 (pontos de extensao).
-A pasta de saida do ticket (CR-012, README §8.13) passa pela maquina de fase_saida: empacotar antes do flush
+A pasta de saida do ticket (CR-012, README §8.13) passa pela maquina de output_phase: empacotar antes do flush
 final e gravar depois da finalizacao, fora do mapa de execucoes.
 
 Python puro (sem web2py): o processo inteiro precisa de uma unica thread antes do primeiro spawn, por causa
@@ -50,7 +50,7 @@ EXIT_STARTUP = 18
 EXIT_THREADS = 19
 EXIT_REGISTRATION_LOST = 20
 
-# Motivos de encerramento -> (status, status_motivo, return_code) do README §5.2.
+# Motivos de encerramento -> (status, status_reason, return_code) do README §5.2.
 _FINAL = {
     "TIMEOUT": ("FAILED", "TIMEOUT", -3),
     "LOG_LIMIT": ("FAILED", "LOG_LIMIT", -5),
@@ -533,7 +533,7 @@ class Agent(object):
     def run(self, stop_event, wait=None, until=None, limit_s=None):
         """Laco principal ate a parada (flag com is_set() ou arquivo .stop). Devolve o codigo de saida.
 
-        ate/limite_s: so para os testes (condicao de termino e prazo maximo do harness).
+        ate/limit_s: so para os testes (condicao de termino e prazo maximo do harness).
         """
         if not hasattr(self, "executions"):
             self.prepare_loop(wait)
@@ -1205,7 +1205,7 @@ class Agent(object):
             item.phase = _Item.FINALIZAR
             return
         if ex.failed_after_spawn:
-            # CR-008, R-01: o grupo ja recebeu SIGTERM; acompanhado ate morrer, sem registrar_pid.
+            # CR-008, R-01: o grupo ja recebeu SIGTERM; acompanhado ate morrer, sem register_pid.
             item.reason = "SPAWN_ERROR"
             item.phase = _Item.ENCERRANDO
             return
@@ -1290,4 +1290,4 @@ class _Item(object):
         self.pid_pending = False
         self.pid_warned = False
         self.finalize_pending = False
-        self.output = None  # CR-012: fase_saida.Saida quando o agente tem output_dir
+        self.output = None  # CR-012: output_phase.Saida quando o agente tem output_dir

@@ -156,8 +156,8 @@ def normalize_filters(input_value):
     """Allowlist de chaves e valores dos filtros da lista de tickets (querystring).
 
     Retorna OrderedDict apenas com os filtros validos, na forma de exibicao/URL: status
-    (lista na ordem canonica), ambiente, script (int), solicitante, criado_de/criado_ate
-    ('YYYY-MM-DD') e origem. Chaves desconhecidas e valores invalidos sao descartados.
+    (lista na ordem canonica), environment, script (int), requested_by, created_from/created_to
+    ('YYYY-MM-DD') e source. Chaves desconhecidas e valores invalidos sao descartados.
     """
     input_value = input_value or {}
     cleaned = collections.OrderedDict()
@@ -302,7 +302,7 @@ class TicketService(object):
     def available_scripts(self, ctx):
         """Scripts executaveis pelo usuario em ao menos um ambiente, agrupados por grupo/categoria.
 
-        Retorna lista ordenada de {grupo, categoria, scripts: [{id, nome, descricao, etapa}]}.
+        Retorna lista ordenada de {script_group, category, scripts: [{id, name, description, stage}]}.
         """
         if not rbac.has_feature(ctx, "EXEC_SCRIPT"):
             return []
@@ -502,8 +502,8 @@ class TicketService(object):
     def trigger_summary(self, ctx, script_id, environment, answers, priority=None, scheduled_at=None):
         """Resumo em frase do modal de confirmacao (README §5.4), montado pelo servidor; nao grava nada.
 
-        Retorna {argv, erros, resumo} com resumo = {script, ambiente, quando, prioridade, respostas:
-        [{rotulo, valor}], frase}. Sensiveis aparecem como '****'; vazios como '(sem resposta)'.
+        Retorna {argv, errors, summary} com summary = {script, environment, when, priority, answers:
+        [{label, value}], phrase}. Sensiveis aparecem como '****'; vazios como '(sem resposta)'.
         """
         script, env = self._authorize(ctx, script_id, environment)
         now = self._tickets.now()
@@ -577,7 +577,7 @@ class TicketService(object):
                      rerun_of=None):
         """Cria o ticket (README §5.4). Retorna (ticket_id | None, erros_por_campo).
 
-        reexecucao_de (opcional) vincula o novo ticket ao original (README §5.5), exigindo
+        rerun_of (opcional) vincula o novo ticket ao original (README §5.5), exigindo
         as mesmas regras de reexecutar e o mesmo script/environment. Lanca AccessDenied quando
         can_execute nega. A auditoria e gravada pelo repositorio na mesma transacao do INSERT.
         """
@@ -674,7 +674,7 @@ class TicketService(object):
                 "sources": list(SOURCES)}
 
     def _query_scope(self, ctx, repo_filters):
-        """(visivel, escopo_ambientes) da consulta; sem VIEW_LOGS fixa o solicitante em repo_filtros.
+        """(visivel, environment_scope) da consulta; sem VIEW_LOGS fixa o solicitante em repo_filters_dict.
 
         Com VIEW_LOGS: ambientes autorizados (admin: todos, escopo None). Sem VIEW_LOGS: apenas
         os tickets do proprio solicitante. visivel False: nada a consultar.
@@ -690,7 +690,7 @@ class TicketService(object):
         return True, None
 
     def _runs_scope(self, ctx):
-        """(escopo_ambientes, solicitante) da ultima execucao/historico: o mesmo da lista (README §5.8)."""
+        """(environment_scope, solicitante) da ultima execucao/historico: o mesmo da lista (README §5.8)."""
         if rbac.has_feature(ctx, "VIEW_LOGS"):
             return (None if ctx.get("is_admin") is True else sorted(ctx.get("environments") or ())), None
         return None, ctx["login"]
@@ -698,8 +698,8 @@ class TicketService(object):
     def routine_catalog(self, ctx):
         """Rotinas disponiveis (README §5.8, CR-004 T2): cartoes por grupo dos scripts que o usuario pode rodar.
 
-        Cada cartao: id, nome, descricao, grupo, categoria, perguntas [{rotulo, obrigatorio}], ambientes
-        (nomes) e ultima (None ou {id, situacao, classe, icone, quando}). So leitura.
+        Cada cartao: id, name, description, script_group, category, questions [{label, required}],
+        environments (nomes) e last_run (None ou {id, state, css_class, icon, when}). So leitura.
         """
         groups = self.available_scripts(ctx)
         ids = [s["id"] for g in groups for s in g["scripts"]]
@@ -963,7 +963,7 @@ class TicketService(object):
     def read_log(self, ctx, ticket_id, offset):
         """Bloco do log a partir de offset (caracteres, base 0), no maximo LOG_MAX_CHARS.
 
-        Retorna {texto, proximo_offset, terminal, truncado, status}. Lanca InvalidOffset e
+        Retorna {text, next_offset, terminal, truncated, status}. Lanca InvalidOffset e
         RepoNotFound (inexistente ou fora do escopo do perfil).
         """
         off = _offset(offset)
@@ -1109,7 +1109,7 @@ class TicketService(object):
     def prepare_rerun(self, ctx, ticket_id):
         """Dados para reabrir o questionario a partir de um ticket (fallback da reexecucao).
 
-        Retorna {ticket_id, script_id, ambiente, prioridade, valores, erros}; valores de
+        Retorna {ticket_id, script_id, environment, priority, values, errors}; valores de
         parametros sensiveis nunca sao devolvidos.
         """
         original = self._rerunnable_ticket(ctx, ticket_id)

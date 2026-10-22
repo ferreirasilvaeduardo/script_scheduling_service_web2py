@@ -125,7 +125,7 @@ class RepoSchedulerLog(object):
         return value
 
     def mark_truncated(self, conn, ticket_id, agent_id):
-        """log_truncado = 'S' no ticket RUNNING deste agente. False se a posse foi perdida. Sem COMMIT."""
+        """log_truncated = 'Y' no ticket RUNNING deste agente. False se a posse foi perdida. Sem COMMIT."""
         cur = conn.cursor()
         try:
             cur.execute(self._sql_truncated, ticket_id=int(ticket_id), agent_id=agent_id)

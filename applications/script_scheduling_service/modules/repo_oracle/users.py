@@ -447,7 +447,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
                     db_conn.set_input_types(cur, **kinds)
                 cur.execute(sql_upd, params)
 
-                # Incrementa perm_versao do perfil de origem e destino se aplicavel
+                # Incrementa perm_version do perfil de origem e destino se aplicavel
                 if profile_changed or active_changed:
                     p_source = current["profile_id"]
                     p_destination = new_profile if new_profile is not None else p_source
@@ -473,7 +473,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
 
     def register_login_failure(self, login, lockout_s=None, audit=None, max_attempts=None,
                               lock_audit=None, conn=None):
-        """Incrementa tentativas_falha e decide o bloqueio sob a trava da linha (contrato em RepoUsers).
+        """Incrementa failed_attempts e decide o bloqueio sob a trava da linha (contrato em RepoUsers).
 
         Rotina tecnica, sem updated_*. A contagem usada e a lida com a linha travada: tentativas
         paralelas de login nunca escapam do limite (revisao de 2026-10-20).
@@ -522,7 +522,7 @@ class RepoUsersOracle(BaseRepoOracle, RepoUsers):
             return record
 
     def register_login_success(self, login, new_hash=None, audit=None, conn=None):
-        """Zera falhas e grava ultimo_login (rotina tecnica, sem updated_*)."""
+        """Zera falhas e grava last_login_at (rotina tecnica, sem updated_*)."""
         with self.write_transaction(conn=conn) as c:
             cur = c.cursor()
             try:

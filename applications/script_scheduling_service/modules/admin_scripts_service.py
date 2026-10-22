@@ -2,7 +2,7 @@
 """Cadastro de scripts, homologacao por ambiente e vinculo de parametros (README §4.3.A, §6.3, §8.5, §10).
 
 Segue docs/ADMIN_CRUD_PATTERN.md. O cadastro confere so o formato do path_file e as pastas do sistema (CR-011,
-S1): o arquivo e conferido pelo agente, no servidor onde o script roda. Regras de tipo_param x vinculos sao
+S1): o arquivo e conferido pelo agente, no servidor onde o script roda. Regras de param_type x vinculos sao
 reverificadas pelo repositorio na mesma operacao. Nao importa gluon fora de _servico.
 """
 import collections
@@ -506,7 +506,7 @@ class AdminScriptsService(object):
     def save_parameters(self, ctx, ip, script_id, links_json, version):
         """Substitui os vinculos (ordem renumerada pela posicao). Retorna (descricao ou None, erros por campo).
 
-        erros usa GENERAL_FIELD ou 'vinculo_<parametro_id>' (valor padrao especifico invalido).
+        erros usa GENERAL_FIELD ou 'vinculo_<parameter_id>' (valor padrao especifico invalido).
         """
         admin_crud.require_feature(ctx, FEATURE)
         script = self._get(script_id)

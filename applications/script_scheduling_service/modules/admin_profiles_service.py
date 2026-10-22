@@ -72,7 +72,7 @@ def _ids(values):
 
 
 def normalize_filters(input_value):
-    """Filtros da lista vindos de request.vars: nome (trecho), ativo e is_admin ('S' | 'N')."""
+    """Filtros da lista vindos de request.vars: name (trecho), active e is_admin ('Y' | 'N')."""
     input_value = input_value or {}
     filters = {}
     name = admin_crud.text(input_value.get("name"), 30)
@@ -88,7 +88,7 @@ def normalize_filters(input_value):
 def matrix_diff(before, after_value, labels):
     """'+EXEC_SCRIPT, -VIEW_LOGS, +amb:PRODUCAO, -scr:carga_diaria' (ordem: dimensao, rotulo); None se igual.
 
-    antes/depois: {'funcs': set, 'ambs': set, 'scrs': set}; rotulos: {dimensao: {id: rotulo}}.
+    before/after_value: {'funcs': set, 'ambs': set, 'scrs': set}; labels: {dimensao: {id: rotulo}}.
     """
     parts = []
     for dim, prefix in _PREFIXES:
@@ -183,7 +183,7 @@ class AdminProfilesService(object):
         return profile["is_admin"] == "Y" or ctx.get("profile_id") == profile["id"]
 
     def save(self, ctx, ip, profile_id, date):
-        """Inclui (perfil_id vazio) ou altera um perfil: nome, descricao, is_admin ('S' marcado).
+        """Inclui (profile_id vazio) ou altera um perfil: name, description, is_admin ('Y' marcado).
 
         Retorna (id, erros). Remover is_admin do ultimo perfil admin ativo gera erro geral.
         Lanca RepoNotFound e AccessDenied.
@@ -284,7 +284,7 @@ class AdminProfilesService(object):
     def who_can(self, ctx, script_id=None, environment_id=None):
         """Consulta "Quem pode o que" (README §4.3.B.2, CR-004 T5): so leitura, sem metodo novo no contrato.
 
-        Por script: perfis ativos que podem roda-lo e em quais ambientes (perfil_amb ∩ homologacao, so
+        Por script: perfis ativos que podem roda-lo e em quais ambientes (profile_env ∩ homologacao, so
         ambientes ativos; admin: todos os homologados ativos). Por ambiente: perfis que o acessam e os
         scripts homologados ali que podem rodar. Perfis inativos vao para 'inativos'.
         """
@@ -366,8 +366,8 @@ class AdminProfilesService(object):
     def matrix(self, ctx, profile_id):
         """Matriz do perfil para a tela: itens ativos e os inativos ja associados (somente leitura).
 
-        Retorna {perfil, perm_versao, aviso_admin, funcs: [{grupo, itens}], ambs: [{grupo, itens}],
-        scrs: [{grupo, itens}]}; cada item tem id, rotulo, detalhe, marcado, inativo e rotulo_diff.
+        Retorna {profile, perm_version, admin_warning, funcs: [{script_group, items}], ambs: [...],
+        scrs: [...]}; cada item tem id, label, detail, checked, inactive e diff_label.
         """
         admin_crud.require_feature(ctx, FEATURE)
         profile = self._get(profile_id)

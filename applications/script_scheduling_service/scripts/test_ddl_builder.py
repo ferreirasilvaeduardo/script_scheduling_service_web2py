@@ -419,6 +419,33 @@ class TestInitDbCheckMock(unittest.TestCase):
         self.assertTrue(any("Objeto invalido" in d for d in divergences))
 
 
+class TestInitDbSeedMock(unittest.TestCase):
+    """Seed do init_db com conexao simulada: ordem dos MERGE e conclusao sem erro."""
+
+    def test_seed_grava_ambientes_antes_de_ligar_aos_perfis(self):
+        """A matriz perfil x ambiente liga pelo nome: o ambiente precisa existir antes (bug do seed desde a F7)."""
+        mock_conn = mock.MagicMock()
+        mock_cursor = mock.MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+        init_db._run_seed(mock_conn, "openrisow", "tbsss_", log_fn=lambda x: None)
+        mock_conn.commit.assert_called_once_with()
+        mock_conn.rollback.assert_not_called()
+        schema = sql_ident.names("tbsss_")
+        tb_env = "openrisow." + schema["environments"]["tabela"]
+        tb_penv = "openrisow." + schema["profile_env"]["tabela"]
+        gravados = set()
+        ligados = 0
+        for chamada in mock_cursor.execute.call_args_list:
+            sql, binds = chamada[0][0], (chamada[0][1] if len(chamada[0]) > 1 else {})
+            if re.search(r"MERGE INTO %s dst" % re.escape(tb_env), sql):
+                gravados.add(binds["name"])
+            elif re.search(r"MERGE INTO %s dst" % re.escape(tb_penv), sql):
+                self.assertIn(binds["env_name"], gravados)
+                ligados += 1
+        self.assertEqual(gravados, set(n for n, _d, _c in ddl_builder.DEFAULT_ENVIRONMENTS))
+        self.assertEqual(ligados, sum(len(p[4]) for p in ddl_builder.DEFAULT_PROFILES))
+
+
 class TestDdlSeedAndRollback(unittest.TestCase):
     """Testes unitarios da geracao de scripts DML Seed, Rollback e CLI de geracao SQL."""
 
@@ -457,7 +484,7 @@ class TestDdlSeedAndRollback(unittest.TestCase):
         # 18 sequences
         self.assertEqual(sql_rb.count("DROP SEQUENCE openrisow.sq_"), 18)
 
-        # Ordem de remocao: ticket_resp e tickets antes de ambientes e perfis
+        # Ordem de remocao: ticket_answer e tickets antes de ambientes e perfis
         pos_tck = sql_rb.index("DROP TABLE openrisow.tbsss_tickets")
         pos_env = sql_rb.index("DROP TABLE openrisow.tbsss_environments")
         self.assertLess(pos_tck, pos_env)

@@ -1,10 +1,12 @@
 {{
 # Componente: paginação por links GET (funciona sem JavaScript).
 # Variáveis de entrada:
-#   pagina       -- página pedida (já saneada com ui_helpers.sanitize_page);
-#   tamanho      -- tamanho da página (ui_helpers.sanitize_size);
+#   page         -- página pedida (já saneada com ui_helpers.sanitize_page);
+#   size         -- tamanho da página (ui_helpers.sanitize_size);
 #   total        -- total de registros retornado pelo repositório;
-#   url_base     -- tupla (controller, funcao) da listagem;
+#   total_capped -- True quando a contagem foi limitada (sem link para a última página);
+#   page_count   -- quantidade de registros desta página (faixa exibida quando total_capped);
+#   url_base     -- tupla (controller, função) da listagem;
 #   query_params -- dict com os filtros ativos, preservados em todos os links.
 # 'page' e 'size' em query_params são sobrescritos pelos valores do link. Os links nunca herdam
 # a extensão da requisição (o componente também é usado em fragmentos .load).

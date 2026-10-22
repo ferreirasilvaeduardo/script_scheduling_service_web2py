@@ -12,14 +12,14 @@ class RepoAudit(object):
     def register(self, actor, ip, action, entity, entity_id=None, detail=None, id=None):
         """Registra uma linha na trilha de auditoria e retorna o registro criado.
 
-        id: opcional, o reservado por reservar_id (a aplicacao sempre informa o id, README §2.7).
+        id: opcional, o reservado por reserve_id (a aplicacao sempre informa o id, README §2.7).
         """
         raise NotImplementedError
 
     def list(self, filters=None, page=1, size=20):
         """Lista registros de auditoria ordenados por created_at DESC, id DESC.
 
-        Chaves de filtros: ator (trecho, sem distinguir caixa), acao, entidade, entidade_id,
+        Chaves de filtros: ator (trecho, sem distinguir caixa), acao, entidade, entity_id,
         client_ip (trecho), data_inicio e data_fim (inclusivos) e id_max (inclusivo).
         """
         raise NotImplementedError

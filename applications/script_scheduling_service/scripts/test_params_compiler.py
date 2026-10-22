@@ -494,7 +494,7 @@ class TestValidateSnapshot(unittest.TestCase):
 
 
 class TestSeedFake(unittest.TestCase):
-    """compilar_snapshot com o seed do FAKE (script 1, carga_diaria) gera o formato da §6.5."""
+    """compile_snapshot com o seed do FAKE (script 1, carga_diaria) gera o formato da §6.5."""
 
     def setUp(self):
         import repo_factory

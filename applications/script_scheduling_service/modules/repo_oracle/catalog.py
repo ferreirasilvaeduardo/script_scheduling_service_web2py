@@ -172,7 +172,7 @@ _SQL_SPRM_INSERT_CHANGED = (
     ":created_at, :created_by, SYSDATE, :actor)"
 )
 
-# README §4.3.A: script ativo, homologado em ambiente ativo; o admin dispensa perfil_scr/perfil_amb.
+# README §4.3.A: script ativo, homologado em ambiente ativo; o admin dispensa profile_script/profile_env.
 _SQL_EXEC_ADMIN = (
     "SELECT " + _column_list(_COLS_SCR, "s.") + " FROM {scr} s "
     "WHERE s.active = 'Y' "
@@ -565,7 +565,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             return self.scripts_get(sid, conn=c)
 
     def scripts_update(self, id, date, expected=None, audit=None, actor=None, conn=None):
-        """Altera script (CKs, esperado nulo-seguro e regras de tipo_param x vinculos)."""
+        """Altera script (CKs, esperado nulo-seguro e regras de param_type x vinculos)."""
         actor_clean = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             current = self._uma(c, self._sql["SCR_GET_LOCK"], {"id": int(id)}, _COLS_SCR)
@@ -605,7 +605,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
     # -------------------------------------------------------------------------
 
     def homologation_get(self, script_id, conn=None):
-        """Retorna lista ordenada de ambiente_id homologados para o script."""
+        """Retorna lista ordenada de environment_id homologados para o script."""
         with self.read_context(conn=conn) as c:
             if not self._existe(c, self._sql["SCR_GET"], {"id": int(script_id)}):
                 raise repo_errors.RepoNotFound("Script ID %s nao encontrado" % script_id)
@@ -931,8 +931,8 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
     def executable_scripts(self, user_ctx, conn=None):
         """Scripts que o usuario pode executar em ao menos um ambiente, numa unica consulta.
 
-        Admin dispensa perfil_scr/perfil_amb (dimensoes 1 a 3), nunca a homologacao em ambiente ativo.
-        Os demais exigem EXEC_SCRIPT no contexto; a matriz vem do banco pelo perfil_id (README §4.3.A).
+        Admin dispensa profile_script/profile_env (dimensoes 1 a 3), nunca a homologacao em ambiente ativo.
+        Os demais exigem EXEC_SCRIPT no contexto; a matriz vem do banco pelo profile_id (README §4.3.A).
         """
         user_ctx = user_ctx or {}
         is_admin = user_ctx.get("is_admin") in ("Y", True)

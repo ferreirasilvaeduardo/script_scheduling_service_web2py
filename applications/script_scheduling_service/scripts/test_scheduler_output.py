@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Testes do repo_oracle.scheduler_output (CR-012; README §8.13 e §10, tabela 18).
 
-Sem banco: conexao roteirizada do test_scheduler_fila (SQL, binds, posse e ausencia de COMMIT).
+Sem banco: conexao roteirizada do test_scheduler_queue (SQL, binds, posse e ausencia de COMMIT).
 Com SSS_TEST_ORACLE=1: o ciclo real no owner e prefixo do instance/config.ini, com massa propria, e a
-leitura pelo repositorio da web (saida_obter, saida_ler); tudo removido no fim (cascata do ticket).
+leitura pelo repositorio da web (output_get, output_read); tudo removido no fim (cascata do ticket).
 """
 import _testenv  # noqa: F401
 

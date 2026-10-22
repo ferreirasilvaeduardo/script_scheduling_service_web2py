@@ -8,7 +8,7 @@ Cobertura obrigatoria (AGENTS.md §7.4):
 - Toda tabela com sequence, trigger _bi e id NUMBER(10) NOT NULL;
 - Toda coluna VARCHAR2 com CHAR explicito;
 - Toda flag CHAR(1) com CK IN ('S','N');
-- 18 tabelas exatas (CR-007: controle; CR-012: ticket_saida);
+- 18 tabelas exatas (CR-007: controle; CR-012: ticket_output);
 - Teste negativo de identificador com 31 caracteres;
 - Colunas de registro do CR-006 e README §10 igual ao registro.
 """
@@ -52,7 +52,7 @@ class TestDbSchema(unittest.TestCase):
         return "tbsss_"
 
     def test_dezessete_tabelas_exatas(self):
-        """Verifica presenca e contagem exata das 18 tabelas do README §9.2 e §10 (CR-007: controle; CR-012: ticket_saida)."""
+        """Verifica presenca e contagem exata das 18 tabelas do README §9.2 e §10 (CR-007: controle; CR-012: ticket_output)."""
         entities_expected = [
             "environments",
             "profiles",

@@ -6,7 +6,7 @@ class RepoUsers(object):
     """Contrato abstrato para gestao de usuarios e credenciais.
 
     Colunas de registro (CR-006, README §10): toda gravacao de negocio exige o actor, por
-    auditoria['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
+    audit['actor'] ou pelo parametro actor=; o INSERT grava created_*, a alteracao grava updated_*.
     Sem actor, RepoViolation sem gravar nada.
     """
 
@@ -19,33 +19,33 @@ class RepoUsers(object):
         raise NotImplementedError
 
     def get_session_state(self, user_id):
-        """Retorna dict de sessao com usuario, perfil, perm_versao e session_epoch (CR-008, E2)."""
+        """Retorna dict de sessao com usuario, perfil, perm_version e session_epoch (CR-008, E2)."""
         raise NotImplementedError
 
     def list(self, filters=None, page=1, size=20):
         """Lista usuarios paginados com formato {'items': [...], 'total': n, 'page': p, 'size': t}.
 
         Ordem: login ASC, id ASC. Filtros (opcionais, combinados com E): login e nome (trecho, sem
-        diferenciar maiusculas), perfil_id, ativo e bloqueado_em (bloqueado_ate > valor).
+        diferenciar maiusculas), profile_id, active e locked_at (locked_until > valor).
         """
         raise NotImplementedError
 
     def insert(self, date, audit=None, actor=None):
         """Insere novo usuario e retorna dict com o registro criado.
 
-        auditoria: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
-        (entidade tbsss_users, entidade_id = novo id).
+        audit: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
+        (entidade tbsss_users, entity_id = novo id).
         """
         raise NotImplementedError
 
     def update(self, id, date, expected=None, audit=None, actor=None):
         """Atualiza campos do usuario pelo ID e retorna o registro. Login e imutavel.
 
-        esperado: opcional, dict campo -> valor lido; divergencia lanca RepoConflict sem alterar nada.
-        Mudar perfil_id ou ativo incrementa session_epoch (CR-008, E2): as sessoes abertas caem.
+        expected: opcional, dict campo -> valor lido; divergencia lanca RepoConflict sem alterar nada.
+        Mudar profile_id ou ativo incrementa session_epoch (CR-008, E2): as sessoes abertas caem.
         Desativar o usuario ou mover para perfil nao administrativo bloqueia os admins ativos na
         mesma operacao (README §4.3.B); conjunto resultante vazio lanca
-        RepoViolation(constraint='sss_ultimo_admin'). auditoria: opcional, na mesma transacao.
+        RepoViolation(constraint='sss_ultimo_admin'). audit: opcional, na mesma transacao.
         """
         raise NotImplementedError
 
@@ -55,37 +55,37 @@ class RepoUsers(object):
 
     def register_login_failure(self, login, lockout_s=None, audit=None, max_attempts=None,
                               lock_audit=None):
-        """Incrementa tentativas_falha numa unica operacao (README §4.2, §4.4). Rotina tecnica: sem updated_*.
+        """Incrementa failed_attempts numa unica operacao (README §4.2, §4.4). Rotina tecnica: sem updated_*.
 
-        Com max_tentativas (uso do login), a decisao de bloquear e tomada aqui, sobre a contagem lida sob a
+        Com max_attempts (uso do login), a decisao de bloquear e tomada aqui, sobre a contagem lida sob a
         trava da linha: tentativas paralelas nunca escapam do limite (revisao de 2026-10-20). Ao atingir o
-        limite, bloqueado_ate = SYSDATE + bloqueio_s/86400 (relogio do banco) e auditoria_bloqueio
+        limite, locked_until = SYSDATE + lockout_s/86400 (relogio do banco) e lock_audit
         (LOGIN_LOCKED) e gravada; o detalhe de auditoria (LOGIN_FAILED) ganha " (tentativa N de M)".
-        Sem max_tentativas: bloqueia se bloqueio_s for informado (testes e rotinas tecnicas).
-        auditoria: dict ou lista de dicts {'actor', 'ip', 'action', 'detail'} na mesma transacao.
-        Retorna o registro atualizado, com a chave 'bloqueou' (bool).
+        Sem max_attempts: bloqueia se lockout_s for informado (testes e rotinas tecnicas).
+        audit: dict ou lista de dicts {'actor', 'ip', 'action', 'detail'} na mesma transacao.
+        Retorna o registro atualizado, com a chave 'locked_now' (bool).
         """
         raise NotImplementedError
 
     def register_login_success(self, login, new_hash=None, audit=None):
-        """Zera tentativas_falha e bloqueado_ate e grava ultimo_login = SYSDATE numa unica operacao.
+        """Zera failed_attempts e locked_until e grava last_login_at = SYSDATE numa unica operacao.
 
         Rotina tecnica do login: nao grava updated_* (CR-006).
 
-        novo_hash: rehash da senha (iteracoes abaixo do vigente), gravado na mesma transacao.
-        auditoria: dict ou lista (LOGIN_OK), na mesma transacao. Retorna o registro atualizado.
+        new_hash: rehash da senha (iteracoes abaixo do vigente), gravado na mesma transacao.
+        audit: dict ou lista (LOGIN_OK), na mesma transacao. Retorna o registro atualizado.
         """
         raise NotImplementedError
 
     def unlock(self, id, audit=None, actor=None):
-        """Desbloqueio pelo administrador: zera tentativas_falha e bloqueado_ate e grava updated_*.
+        """Desbloqueio pelo administrador: zera failed_attempts e locked_until e grava updated_*.
 
-        auditoria: opcional, na mesma transacao. O ator (auditoria['actor'] ou ator=) e obrigatorio (CR-006).
+        audit: opcional, na mesma transacao. O ator (audit['actor'] ou actor=) e obrigatorio (CR-006).
         """
         raise NotImplementedError
 
     def reset_attempts(self, id):
-        """Rotina tecnica do login (README §4.2): bloqueio vencido zera tentativas_falha e bloqueado_ate.
+        """Rotina tecnica do login (README §4.2): bloqueio vencido zera failed_attempts e locked_until.
 
         Nao grava updated_* nem auditoria (CR-006, README §10). Retorna o registro atualizado.
         """
@@ -95,13 +95,13 @@ class RepoUsers(object):
         """Atualiza password_hash e password_changed_at, zera failed_attempts e locked_until e incrementa
         session_epoch (CR-008, E2), tudo no mesmo UPDATE.
 
-        auditoria: opcional, na mesma transacao; o detail nunca contem senha nem hash.
+        audit: opcional, na mesma transacao; o detail nunca contem senha nem hash.
         """
         raise NotImplementedError
 
     def end_sessions(self, id, audit=None):
         """Logout (CR-008, E2): session_epoch = session_epoch + 1 num UPDATE, sem updated_* (rotina tecnica).
 
-        auditoria: opcional (LOGOUT), na mesma transacao. Retorna o registro atualizado.
+        audit: opcional (LOGOUT), na mesma transacao. Retorna o registro atualizado.
         """
         raise NotImplementedError

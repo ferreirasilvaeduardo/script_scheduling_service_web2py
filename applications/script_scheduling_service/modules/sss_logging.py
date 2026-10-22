@@ -74,7 +74,7 @@ def get_adapter(logger, agent="-", ticket="-", action="-"):
 class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
     """Handler rotativo para logs da aplicacao (CR-005 D6, R-c a R-e, README §13).
 
-    - Caminho: log_dir/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>[_<n>].log
+    - Caminho: log_dir/app/AAAA/MM/DD/HH/MI/<log_name>_<PID>[_<n>].log
     - Nasce na pasta do minuto da subida pelo relogio local do processo.
     - Troca de arquivo ao atingir max_bytes, abrindo no minuto atual com sufixo _<n> em colisao.
     - Executa retencao apagando pastas app/AAAA/MM/DD anteriores a retention_days dias na subida
@@ -173,7 +173,7 @@ def _chmod(path, mode, warnings):
 
 
 def _ensure_directory(directory, warnings):
-    # Nivel a nivel com 0o750 (README §13): regra unica em pastas_log (F8.1).
+    # Nivel a nivel com 0o750 (README §13): regra unica em log_paths (F8.1).
     log_paths.ensure_directory(directory, warnings)
 
 
@@ -233,7 +233,7 @@ _LOGGERS_LOCK = threading.Lock()
 def log_initial_critical(log_name, message, log_dir=None, stream=None):
     """CRITICAL de falha na subida, antes de haver configuracao valida (README §12.1).
 
-    Grava no log da aplicacao do minuto atual (log_dir/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log,
+    Grava no log da aplicacao do minuto atual (log_dir/app/AAAA/MM/DD/HH/MI/<log_name>_<PID>.log,
     README §13) quando log_dir existe e aceita escrita; senao, no stderr, sempre no formato do
     README §13. Retorna o destino usado ('arquivo' ou 'stderr').
     """

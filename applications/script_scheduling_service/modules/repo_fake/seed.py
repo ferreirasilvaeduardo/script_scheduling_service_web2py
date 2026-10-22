@@ -168,7 +168,7 @@ def _seed_outputs(store):
 def load_seed(store, force=False, dev_password=None):
     """Carrega dados iniciais deterministicos no store FAKE de forma idempotente.
 
-    senha_dev: senha comum dos usuarios de demonstracao (exceto inativo e bloqueado),
+    dev_password: senha comum dos usuarios de demonstracao (exceto inativo e bloqueado),
     com hash e salt individuais. Sem ela, as senhas ficam inutilizaveis ('!').
     """
     with store.lock_users:
