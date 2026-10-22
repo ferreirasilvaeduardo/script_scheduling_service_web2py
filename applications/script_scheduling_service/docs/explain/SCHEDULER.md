@@ -203,7 +203,7 @@ Pior caso conhecido: um script no teto com a fila inteira à frente dos demais. 
 | `scheduler_agenda.due_rules` | README §7.5, paginada (R-08) | `INDEX RANGE SCAN` de `ix_{prefixo}sch_next (active, next_run_at, id)` com `COUNT STOPKEY` |
 | `scheduler_agenda.lock_rule` | `FOR UPDATE SKIP LOCKED` pela regra | `ix_{prefixo}sch_next` |
 | `scheduler_agenda.get_ticket_status` | sobreposição (passo 4) | `pk_{prefixo}tickets` |
-| `scheduler_fila.mark_node_offline` | README §8.8, 1ª etapa, `FOR UPDATE SKIP LOCKED` | `ix_{prefixo}tck_run` (só os `RUNNING`), sem `TABLE ACCESS FULL` com volume; tabela vazia e sem estatística dá `TABLE ACCESS FULL`, que é o mais barato nesse caso |
+| `scheduler_queue.mark_node_offline` | README §8.8, 1ª etapa, `FOR UPDATE SKIP LOCKED` | `ix_{prefixo}tck_run` (só os `RUNNING`), sem `TABLE ACCESS FULL` com volume; tabela vazia e sem estatística dá `TABLE ACCESS FULL`, que é o mais barato nesse caso |
 
 ### regras_vencidas
 

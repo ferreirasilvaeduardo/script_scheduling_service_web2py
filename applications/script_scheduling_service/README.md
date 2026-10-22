@@ -1733,7 +1733,7 @@ SELECT id, cancel_requested
 * **Heartbeat** (a cada `heartbeat_interval_s`):
   * `executemany` de `UPDATE ... SET heartbeat_at = SYSDATE WHERE id = :id AND agent_id = :agent_id AND status = 'RUNNING'`, com `arraydmlrowcounts=True`, incluindo os tickets em finalização pendente;
   * linha com contagem 0 é tratada como `OWNERSHIP_LOST`;
-  * **instante de referência (CR-008, R-09):** o agente captura `time.monotonic()` **antes** do primeiro `UPDATE` da transação; no `COMMIT` bem-sucedido, `ultimo_hb_ok` recebe esse instante (e não o do fim da transação). Assim, uma transação lenta, com várias chamadas, não estende o prazo do fence além do que outro nó vê em `heartbeat_at`;
+  * **instante de referência (CR-008, R-09):** o agente captura `time.monotonic()` **antes** do primeiro `UPDATE` da transação; no `COMMIT` bem-sucedido, `last_hb_ok` recebe esse instante (e não o do fim da transação). Assim, uma transação lenta, com várias chamadas, não estende o prazo do fence além do que outro nó vê em `heartbeat_at`;
   * na mesma transação, atualiza `tbsss_agents.heartbeat_at` com `WHERE code = :agent_id AND hostname = :hostname AND daemon_pid = :pid AND status = 'ACTIVE'` e lê `SYSDATE` (trava de salto de relógio, §8.8). `rowcount = 0` é `REGISTRO_PERDIDO`: outro processo assumiu o registro deste `agent_id` (§8.12). O agente registra CRITICAL, faz o encerramento `TERMINATE` e sai com código diferente de zero (CR-007, R-11);
   * **roda sempre**, mesmo sem tickets: o `executemany` vazio é pulado, o `UPDATE` do agente não (R-28);
   * o heartbeat é rotina técnica: não grava `updated_*` no ticket nem no agente (§10, CR-006).
@@ -1777,14 +1777,14 @@ UPDATE {owner}.tbsss_tickets
 
 O relógio de referência é sempre o `SYSDATE` do banco, nunca o relógio do nó.
 
-**Implementação (F8.4c):** `Agente._node_offline` no ciclo do orquestrador, com `scheduler_fila.mark_node_offline`; a referência do salto de relógio é o par (`SYSDATE`, monotônico) do último `SYSDATE` lido, no heartbeat ou na própria transação da detecção (`SALTO_RELOGIO_S = 30`).
+**Implementação (F8.4c):** `Agent._node_offline` no ciclo do orquestrador, com `scheduler_queue.mark_node_offline`; a referência do salto de relógio é o par (`SYSDATE`, monotônico) do último `SYSDATE` lido, no heartbeat ou na própria transação da detecção (`CLOCK_JUMP_S = 30`).
 
 ### 8.9 Self-fencing (prevenção de split-brain)
 
 * O agente registra o instante do último heartbeat **confirmado** (commit OK), medido no **início** da transação de heartbeat (§8.7, CR-008 R-09).
-* `ultimo_hb_ok` começa no fim da inicialização (§8.12) e só avança com heartbeat confirmado (R-28).
+* `last_hb_ok` começa no fim da inicialização (§8.12) e só avança com heartbeat confirmado (R-28).
 * A condição é verificada a **cada iteração do laço** e depois de cada chamada ao banco (§8.1), não só no ciclo de heartbeat (CR-007, R-04).
-* Se `agora_monotonico - ultimo_hb_ok > fence_timeout_s`, o agente:
+* Se `agora_monotonico - last_hb_ok > fence_timeout_s`, o agente:
   1. envia SIGTERM a **todos** os grupos que possui de uma vez e, depois de `kill_grace_s`, SIGKILL aos que restarem (máquina de estados, nunca grupo a grupo);
   2. suspende novos claims;
   3. registra CRITICAL `FENCED`.
@@ -1797,7 +1797,7 @@ O relógio de referência é sempre o `SYSDATE` do banco, nunca o relógio do n�
   * **I1:** `heartbeat_interval_s * 3 <= fence_timeout_s`;
   * **I2:** `fence_timeout_s * 2 <= node_offline_timeout_s`;
   * **I3 (CR-007):** `heartbeat_interval_s + 2 * call_timeout_s <= fence_timeout_s`, para que um heartbeat atrasado por uma chamada travada não provoque fencing falso;
-  * **I4 (CR-007):** `fence_timeout_s + call_timeout_s + kill_grace_s + 2 <= node_offline_timeout_s`, para que o agente termine de matar os filhos **antes** de outro nó declará-lo offline, mesmo com uma chamada travada no momento do fence. A I4 vale para transações de heartbeat com várias chamadas porque `ultimo_hb_ok` é medido no início da transação (CR-008, R-09): o `heartbeat_at` gravado é sempre posterior a esse instante.
+  * **I4 (CR-007):** `fence_timeout_s + call_timeout_s + kill_grace_s + 2 <= node_offline_timeout_s`, para que o agente termine de matar os filhos **antes** de outro nó declará-lo offline, mesmo com uma chamada travada no momento do fence. A I4 vale para transações de heartbeat com várias chamadas porque `last_hb_ok` é medido no início da transação (CR-008, R-09): o `heartbeat_at` gravado é sempre posterior a esse instante.
 
   Com os valores de exemplo (heartbeat 10, fence 90, offline 180, `call_timeout_ms` 30.000, `kill_grace_s` 5): I3 = 70 ≤ 90 e I4 = 127 ≤ 180.
 * **Mesmos tempos em todos os nós:** quem declara um agente offline é **outro** agente, com o `node_offline_timeout_s` dele (§8.8). Por isso, `fence_timeout_s` e `node_offline_timeout_s` devem ser **idênticos em todos os agentes**; senão a invariante deixa de valer entre nós. A conferência automática é o `critical_config` (§8.12, CR-007 R-23); além dela:
@@ -1805,7 +1805,7 @@ O relógio de referência é sempre o `SYSDATE` do banco, nunca o relógio do n�
   * o pacote de implantação (F9.1) usa um único `config.ini` de referência para esses tempos;
   * o roteiro E2E (F9.2) confere que todos os agentes usam os mesmos valores.
 * A medição usa `time.monotonic()`, imune a ajuste de relógio.
-* **Implementação (F8.4c):** `Agente._conferir_fence` roda a cada iteração, depois de cada ciclo e entre as chamadas do claim e do desdobro. O encerramento pedido pelo fence finaliza `FAILED`/`FENCED`/`-2`; quem já tinha terminado ou estava sendo encerrado por outro motivo (timeout, cancelamento) fica com o resultado próprio, gravado no `.sss_result` (CR-008, R-12). Em modo cercado, os ciclos rápido e do orquestrador não usam o banco (claim, desdobro, varredura e `NODE_OFFLINE` suspensos); o heartbeat continua tentando e, ao ser confirmado, encerra o modo cercado (WARN `FENCED encerrado`), e as finalizações pendentes seguem pelo laço normal.
+* **Implementação (F8.4c):** `Agent._check_fence` roda a cada iteração, depois de cada ciclo e entre as chamadas do claim e do desdobro. O encerramento pedido pelo fence finaliza `FAILED`/`FENCED`/`-2`; quem já tinha terminado ou estava sendo encerrado por outro motivo (timeout, cancelamento) fica com o resultado próprio, gravado no `.sss_result` (CR-008, R-12). Em modo cercado, os ciclos rápido e do orquestrador não usam o banco (claim, desdobro, varredura e `NODE_OFFLINE` suspensos); o heartbeat continua tentando e, ao ser confirmado, encerra o modo cercado (WARN `FENCED encerrado`), e as finalizações pendentes seguem pelo laço normal.
 
 ### 8.10 Coleta de log (`log_pump.py`)
 
@@ -1882,7 +1882,7 @@ END;
 | `DRAIN` | Aguarda os filhos por até `shutdown_grace_s`, mantendo heartbeat, varredura, log pump e fence (CR-007, R-04), e então aplica `TERMINATE` aos restantes |
 | `TERMINATE` (padrão) | Encerramento escalonado de todos os grupos de uma vez (§8.9). Finaliza com `FAILED`, `SHUTDOWN` e `-6` |
 
-**Implementação (F8.4d):** no `DRAIN`, a parada só suspende claim e desdobro; o laço normal segue (heartbeat, varredura, log pump, fence e também a pasta de saída, CR-012) até não restar execução, encerramento nem saída em gravação, ou até `shutdown_grace_s`. No fim da drenagem, e no `TERMINATE` desde o início, o que restar é encerrado e finalizado `SHUTDOWN`, e a saída em andamento é abandonada (a pasta fica no disco; `WRITING` vira `FAILED` na subida seguinte). O `detail` do `AGENT_STOP` traz o modo (`Agente parado (DRAIN)`).
+**Implementação (F8.4d):** no `DRAIN`, a parada só suspende claim e desdobro; o laço normal segue (heartbeat, varredura, log pump, fence e também a pasta de saída, CR-012) até não restar execução, encerramento nem saída em gravação, ou até `shutdown_grace_s`. No fim da drenagem, e no `TERMINATE` desde o início, o que restar é encerrado e finalizado `SHUTDOWN`, e a saída em andamento é abandonada (a pasta fica no disco; `WRITING` vira `FAILED` na subida seguinte). O `detail` do `AGENT_STOP` traz o modo (`Agent parado (DRAIN)`).
 
 Em seguida, o daemon faz o flush dos logs, grava `tbsss_agents.status = 'STOPPED'` (com `updated_*` de `SYSTEM:<agent_id>`, §10, e o mesmo filtro de `hostname`/`daemon_pid` do heartbeat), audita `AGENT_STOP`, remove o arquivo `.stop` (se houver), fecha a conexão e o lock file, e sai com código 0.
 
@@ -1911,7 +1911,7 @@ O daemon aborta com código diferente de zero e log CRITICAL ao falhar em qualqu
    * caso contrário, executar `MERGE` com `status = 'ACTIVE'`, `hostname`, `daemon_pid`, `version`, `ambientes`, `platform`, `interpreters`, `started_at` e **`critical_config`** (abaixo). A inclusão grava `created_at = SYSDATE` e `created_by = 'SYSTEM:<agent_id>'`; a atualização grava `updated_*` com o mesmo ator (§10, CR-006).
    * Auditar `AGENT_START`.
    * **Configuração crítica igual em todos os nós (CR-007, R-23):** `critical_config` é o texto canônico `hb=<heartbeat_interval_s>;fence=<fence_timeout_s>;offline=<node_offline_timeout_s>;call=<call_timeout_s>;kill=<kill_grace_s>;misfire=<misfire_policy>;tol=<misfire_tolerance_s>;horizonte=<cron_horizon_days>;envelhecimento=<queue_aging_min>`. Se outro agente `ACTIVE` com heartbeat recente tiver um valor diferente, a subida é recusada com CRITICAL (as duas configurações no log). A cada ciclo do orquestrador a conferência se repete: divergência é ERROR `CONFIG_DIVERGENTE`, e a tela de agentes mostra (§13).
-   * `ultimo_hb_ok` é inicializado aqui (§8.9).
+   * `last_hb_ok` é inicializado aqui (§8.9).
 8. **Ambientes atendidos:** todos existem em `tbsss_environments` com `active = 'Y'`. Um ambiente inexistente é ERROR fatal; um ambiente inativo gera WARN e é ignorado.
 9. **Startup check pelo estado local (CR-007, R-01).** O disco do agente é a fonte de verdade sobre o que ele iniciou, seja qual for o status no banco (o ticket pode já ter sido marcado `NODE_OFFLINE` por outro nó enquanto o filho seguia vivo):
    * para **cada** `work_dir/ticket_<id>/` com `.sss_proc`: se o grupo existe e a identidade do líder confere (ou o líder morreu e há membros do usuário de execução), o grupo é encerrado sem bloquear (§8.9). Identidade desconhecida (`None`, §8.0) com PID vivo **não** recebe sinal: WARN `ORFAO_SEM_IDENTIDADE`, para intervenção manual;
@@ -1928,7 +1928,7 @@ Canal opcional para o script devolver arquivos ao usuário. O zip vai para o ban
 * **Pasta do ticket:** `output_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>/`, com as partes do caminho do log (§8.4, passo 3). Usa o número do ticket, e não o PID.
 * **Dono:** fora de DEV, `output_dir/<ambiente>/` é criada na implantação pelo root, com dono o usuário de execução do ambiente e `0700` (`DEPLOYMENT.md`). O helper `run`, como o usuário de execução, cria o resto do caminho nível a nível com `os.mkdir(..., 0o700)`, recusando link ou item que não seja diretório do próprio usuário. Uma falha aqui faz o helper sair com o código 2 ou 4 antes de executar o script, com a causa (`sss-helper: ...`) no log do ticket, como as demais falhas do preparo do `run`. O agente não lê o conteúdo. Em DEV sem usuário de execução, o agente cria tudo.
 * **Fase de saída**, máquina de estados do laço (`modules/output_phase.py`), sem espera, em todo fim de ticket (sucesso, erro, timeout, cancelamento, `LOG_LIMIT`), em duas etapas: **empacotar** depois do grupo encerrado e antes do flush final (§8.7, passo 1a: o ticket segue `RUNNING`, e a linha `[SSS]` entra no log) e **gravar** depois da finalização (§8.7, passo 6):
-  1. o agente inicia o `pack` (helper fora de DEV; `platform` em DEV) com a saída padrão no arquivo `work_dir/ticket_<id>/saida.zip` e acompanha com `poll()`. Prazo fixo de 120 s: ao vencer, o processo é encerrado e a saída fica `FAILED` (`DEADLINE`);
+  1. o agente inicia o `pack` (helper fora de DEV; `platform` em DEV) com a saída padrão no arquivo `work_dir/ticket_<id>/output.zip` e acompanha com `poll()`. Prazo fixo de 120 s: ao vencer, o processo é encerrado e a saída fica `FAILED` (`DEADLINE`);
   2. o `pack` percorre a pasta sem seguir links; só entram arquivos regulares, com o nome relativo à pasta do ticket. Conta os arquivos antes de compactar (`ZIP_DEFLATED`) e interrompe ao passar de `output_max_bytes`. **Não há zip parcial**;
   3. código 6 (pasta vazia ou inexistente): a pasta é removida e nada é gravado;
   4. código 7 ou 8 (limite de arquivos ou de bytes): grava a linha `EXCEEDED` (motivo `FILES` ou `BYTES`) e anexa ao log local `[SSS] saida nao empacotada: excede o limite de <n> arquivos (ou de <n> MiB) (agente <agent_id>)`, que o flush final leva ao banco. A pasta fica no disco;

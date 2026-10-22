@@ -113,7 +113,7 @@ class RepoSchedulerLog(object):
         return valor
 
     def supplementary_unit(self, conn):
-        """1 ou 2: posicoes do CLOB para um caractere fora do BMP neste banco (offset da Bomba)."""
+        """1 ou 2: posicoes do CLOB para um caractere fora do BMP neste banco (offset da Pump)."""
         cur = conn.cursor()
         try:
             cur.execute(_SQL_UNIT_SUPPLEMENTARY)

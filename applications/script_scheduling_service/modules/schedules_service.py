@@ -396,7 +396,7 @@ class SchedulesService(object):
             return self._disparo.authorize(ctx, script_id, ambiente)
         except DisparoNegado as exc:
             self._log.warning("agendamento negado ao editor (login=%s script_id=%r environment=%r reason=%s)",
-                              ctx.get("login"), script_id, ambiente, exc.motivo, extra={"action": FEATURE})
+                              ctx.get("login"), script_id, ambiente, exc.reason, extra={"action": FEATURE})
             raise OperationDenied(MSG_NO_PERMISSION)
 
     def _login(self, usuario_id, cache=None):
@@ -679,7 +679,7 @@ class SchedulesService(object):
         except DisparoNegado as exc:
             if dados["edicao"]:
                 self._log.warning("edicao de agendamento negada (login=%s agendamento=%s reason=%s)",
-                                  ctx.get("login"), atual["id"], exc.motivo, extra={"action": FEATURE})
+                                  ctx.get("login"), atual["id"], exc.reason, extra={"action": FEATURE})
                 raise OperationDenied(MSG_NO_PERMISSION)
             raise
         for campo in form["campos"]:

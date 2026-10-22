@@ -180,7 +180,7 @@ class TestTicketService(_BaseTicket):
         antes = self._total_tickets()
         with self.assertRaises(AccessDenied) as cm:
             self._criar(login="consulta", script_id="1", ambiente="PRODUCAO")
-        self.assertEqual(cm.exception.motivo, "NO_FEATURE")
+        self.assertEqual(cm.exception.reason, "NO_FEATURE")
         self.assertEqual(self.svc.available_scripts(self.ctx["consulta"]), [])
         self.assertEqual(self._total_tickets(), antes)
 
@@ -188,7 +188,7 @@ class TestTicketService(_BaseTicket):
         # sync_tabelas (4) so e homologado em HOMOLOGACAO; admin nao dispensa a homologacao.
         with self.assertRaises(AccessDenied) as cm:
             self._criar(login="admin", script_id="4", ambiente="PRODUCAO")
-        self.assertEqual(cm.exception.motivo, "NOT_HOMOLOGATED")
+        self.assertEqual(cm.exception.reason, "NOT_HOMOLOGATED")
         with self.assertRaises(AccessDenied):
             self.svc.preview(self.ctx["admin"], "4", "PRODUCAO", {})
 

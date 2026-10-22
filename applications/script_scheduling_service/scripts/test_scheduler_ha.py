@@ -625,10 +625,10 @@ class TestFencing(tsc._Base):
         self.subir(fence_timeout_s=1.5)
         self.rodar(self._rodando(tid))
         pid = self.banco.tickets[tid]["process_id"]
-        self.conexao.fora = True
+        self.connection.fora = True
         inicio = _time.monotonic()
         with self.assertLogs("sss_scheduler", "CRITICAL") as logs:
-            self.rodar(lambda: self.ag.cercado, limite=10)
+            self.rodar(lambda: self.ag.fenced, limite=10)
         self.assertGreaterEqual(_time.monotonic() - inicio, 1.0, "nao antes do limiar")
         self.assertTrue(any("FENCED: sem heartbeat confirmado" in l for l in logs.output))
         # Em modo cercado: sem claims nem desdobro, mesmo com ticket novo na fila.
@@ -636,9 +636,9 @@ class TestFencing(tsc._Base):
         self.rodar(lambda: not tsc._vivo(pid), limite=10)
         self.assertFalse(tsc._vivo(pid), "o grupo foi encerrado no fence")
         self.assertEqual(self.banco.tickets[novo]["status"], "PENDING")
-        self.conexao.fora = False
+        self.connection.fora = False
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.rodar(lambda: self.terminado(tid)() and not self.ag.cercado, limite=10)
+            self.rodar(lambda: self.terminado(tid)() and not self.ag.fenced, limite=10)
         self.assertEqual(self.final(tid), ("FAILED", "FENCED", -2))
         self.assertTrue(any("FENCED encerrado" in l for l in logs.output))
         self.rodar(self.terminado(novo), limite=15)
@@ -648,12 +648,12 @@ class TestFencing(tsc._Base):
         tid = self.banco.ticket(self.banco.script("sleep 0.5\nexit 0\n"))
         self.subir(fence_timeout_s=2.0)
         self.rodar(self._rodando(tid))
-        self.conexao.fora = True
+        self.connection.fora = True
         with self.assertLogs("sss_scheduler", "CRITICAL"):
-            self.rodar(lambda: self.ag.cercado, limite=10)
-        self.conexao.fora = False
+            self.rodar(lambda: self.ag.fenced, limite=10)
+        self.connection.fora = False
         with self.assertLogs("sss_scheduler", "WARNING"):
-            self.rodar(lambda: self.terminado(tid)() and not self.ag.cercado, limite=10)
+            self.rodar(lambda: self.terminado(tid)() and not self.ag.fenced, limite=10)
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0), "o script terminou antes do fence")
 
     def test_30_execucoes_encerradas_de_uma_vez_sem_bloquear(self):
@@ -661,14 +661,14 @@ class TestFencing(tsc._Base):
         tids = [self.banco.ticket(sid) for _i in range(30)]
         self.subir(fence_timeout_s=1.5, max_parallel_jobs=30)
         self.rodar(lambda: all(self._rodando(t)() for t in tids), limite=30)
-        self.conexao.fora = True
+        self.connection.fora = True
         _time.sleep(1.6)
         inicio = _time.monotonic()
         with self.assertLogs("sss_scheduler", "CRITICAL"):
-            self.ag._conferir_fence()
+            self.ag._check_fence()
         self.assertLess(_time.monotonic() - inicio, 1.0, "os 30 pedidos sem esperar nenhum grupo")
-        self.assertTrue(all(i.phase == "ENCERRANDO" for i in self.ag.execucoes.values()))
-        self.conexao.fora = False
+        self.assertTrue(all(i.phase == "ENCERRANDO" for i in self.ag.executions.values()))
+        self.connection.fora = False
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.rodar(lambda: all(self.terminado(t)() for t in tids), limite=30)
         self.assertEqual(set(self.final(t) for t in tids), {("FAILED", "FENCED", -2)})
@@ -696,7 +696,7 @@ class TestNodeOffline(tsc._Base):
     def test_heartbeat_proprio_velho_nao_detecta(self):
         self._ticket_de_outro()
         self.subir()
-        self.ag.ultimo_hb_ok = self.ag.relogio() - 25  # fence 40: 25 > 20 (fence / 2)
+        self.ag.last_hb_ok = self.ag.clock() - 25  # fence 40: 25 > 20 (fence / 2)
         self.ag._node_offline()
         self.assertEqual(self.banco.node_offline_chamadas, 0)
 
@@ -707,7 +707,7 @@ class TestNodeOffline(tsc._Base):
         self.rodar(lambda: self.banco.heartbeats, limite=5)
         self.banco.sysdate_deslocamento_s = 120  # o SYSDATE saltou 2 minutos
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.rodar(lambda: self.ag._node_offline_suspenso_ate is not None, limite=5)
+            self.rodar(lambda: self.ag._node_offline_suspended_until is not None, limite=5)
         self.assertTrue(any("SALTO_RELOGIO" in l for l in logs.output))
         self.banco.offline.add(tid)
         chamadas = self.banco.node_offline_chamadas
@@ -722,11 +722,11 @@ class TestNodeOffline(tsc._Base):
         self.subir()
         self.rodar(lambda: self.banco.heartbeats, limite=5)
         self.banco.offline.add(tid)
-        self.ag._ref_relogio = (self.banco.sysdate() - datetime.timedelta(seconds=300), self.ag.relogio())
+        self.ag._clock_ref = (self.banco.sysdate() - datetime.timedelta(seconds=300), self.ag.clock())
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.ag._node_offline()
         self.assertEqual(self.banco.tickets[tid]["status"], "RUNNING")
-        self.assertIsNotNone(self.ag._node_offline_suspenso_ate)
+        self.assertIsNotNone(self.ag._node_offline_suspended_until)
 
 
 # ---------------------------------------------------------------------------- F8.4d: parada DRAIN e TERMINATE
@@ -762,7 +762,7 @@ class TestParada(tsc._Base):
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0), "DRAIN deixa o script terminar")
         self.assertEqual(self.banco.tickets[novo]["status"], "PENDING", "sem claim na drenagem")
         self.assertGreater(len(self.banco.heartbeats), heartbeats, "heartbeat mantido")
-        self.assertEqual(self.repo_saida.linhas[tid]["state"], "AVAILABLE", "a saida segue no DRAIN")
+        self.assertEqual(self.repo_output.linhas[tid]["state"], "AVAILABLE", "a saida segue no DRAIN")
         self.assertEqual(self.banco.encerrou, "DRAIN")
         self.assertFalse(_os.path.exists(stop), ".stop removido")
         self.assertTrue(any("DRAIN: parada pedida" in l for l in logs.output))
@@ -772,7 +772,7 @@ class TestParada(tsc._Base):
         self.subir(shutdown_mode="DRAIN", shutdown_grace_s=1)
         self.rodar(lambda: self.banco.tickets[tid]["status"] == "RUNNING" and self.banco.tickets[tid]["process_id"])
         pid = self.banco.tickets[tid]["process_id"]
-        self.parada.set()
+        self.stopped.set()
         inicio = _time.monotonic()
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.assertEqual(self.rodar(lambda: False, limite=20), 0)
@@ -785,7 +785,7 @@ class TestParada(tsc._Base):
         tid = self.banco.ticket(self.banco.script("sleep 300\n"))
         self.subir()
         self.rodar(lambda: self.banco.tickets[tid]["status"] == "RUNNING" and self.banco.tickets[tid]["process_id"])
-        self.parada.set()
+        self.stopped.set()
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.assertEqual(self.rodar(lambda: False, limite=20), 0)
         self.assertEqual((self.final(tid), self.banco.encerrou), (("FAILED", "SHUTDOWN", -6), "TERMINATE"))

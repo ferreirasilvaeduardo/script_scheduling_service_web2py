@@ -1310,7 +1310,7 @@ class TestOracleAuditoriaAgentes(unittest.TestCase):
             limiares = mock.Mock(heartbeat_interval_s=30, fence_timeout_s=120)
             chave = (ambiente, script["interpreter"])
             self.assertNotIn(chave, [(g["environment"], g["interpreter"]) for g in self.agt.unattended_queue(agora, limiares)])
-            # Agente parado: o mesmo par passa a aparecer na fila sem atendente, com o PENDING do teste.
+            # Agent parado: o mesmo par passa a aparecer na fila sem atendente, com o PENDING do teste.
             self._executar([("UPDATE " + tab_agt + " SET status = 'STOPPED', updated_at = SYSDATE, "
                              "updated_by = 'SYSTEM:teste' WHERE id = :id", {"id": agt_id})])
             # Relogio novo: o PENDING entra na fila em GREATEST(scheduled_at, created_at) (CR-013), depois de `agora`.

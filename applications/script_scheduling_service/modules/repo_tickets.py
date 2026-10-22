@@ -80,7 +80,7 @@ class RepoTickets(object):
     def output_get(self, ticket_id):
         """Saida do ticket (CR-012, README §8.13) sem o conteudo, ou None se nao houver.
 
-        Dict com situacao, motivo, agente_id, qtd_arquivos, tamanho_bytes e as colunas de registro.
+        Dict com situacao, motivo, agent_id, file_count, tamanho_bytes e as colunas de registro.
         """
         raise NotImplementedError
 

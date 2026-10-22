@@ -230,7 +230,7 @@ class AdminScriptsService(object):
         try:
             path_guard.validate_interpreter(cmd)
         except PathGuardError as exc:
-            erros["interpreter"] = PATH_MESSAGES[exc.codigo]
+            erros["interpreter"] = PATH_MESSAGES[exc.code]
         reg["interpreter"] = cmd
         # D7 (README §8.5): a pasta de log do script nao pode ser a dos logs da aplicacao.
         if reg["name"] and "name" not in erros and log_paths.is_reserved_name(reg["name"]):
@@ -250,7 +250,7 @@ class AdminScriptsService(object):
             path_guard.validate_registration(path_file)
             path_guard.check_forbidden_dirs(path_file)
         except PathGuardError as exc:
-            erros["path_file"] = PATH_MESSAGES[exc.codigo]
+            erros["path_file"] = PATH_MESSAGES[exc.code]
 
     def _param_type_precheck(self, script_id, tipo, erros):
         vinculos = self._catalogo.script_params_get(script_id)

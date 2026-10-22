@@ -48,7 +48,7 @@ class PathGuardError(Exception):
 
     def __init__(self, codigo):
         Exception.__init__(self, codigo)
-        self.codigo = codigo
+        self.code = codigo
 
 
 def validate_interpreter(interpretador):
@@ -123,7 +123,7 @@ def validate_executable(caminho, dirs_sss=()):
     try:
         _stat(real)
     except PathGuardError as e:
-        if e.codigo == Code.NOT_FOUND:
+        if e.code == Code.NOT_FOUND:
             raise
         raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
     sss = [os_platform.final_path(d) for d in dirs_sss if d]

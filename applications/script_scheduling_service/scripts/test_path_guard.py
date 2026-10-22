@@ -62,7 +62,7 @@ class TestResolver(unittest.TestCase):
     def _codigo(self, rel, **kw):
         with self.assertRaises(PathGuardError) as ctx:
             self._resolver(rel, **kw)
-        return ctx.exception.codigo
+        return ctx.exception.code
 
     def test_caminho_valido(self):
         self.assertEqual(self._resolver("sub/ok.py"), os.path.realpath(self._p("sub/ok.py")))
@@ -88,7 +88,7 @@ class TestResolver(unittest.TestCase):
             with self.subTest(caminho=caminho):
                 with self.assertRaises(PathGuardError) as ctx:
                     path_guard.resolve(caminho)
-                self.assertEqual(ctx.exception.codigo, Code.SYSTEM_DIR)
+                self.assertEqual(ctx.exception.code, Code.SYSTEM_DIR)
         self.assertEqual(self._codigo("link_etc.py"), Code.SYSTEM_DIR)
         self.assertEqual(self._codigo("link_usr/bin/env"), Code.SYSTEM_DIR)
 
@@ -98,7 +98,7 @@ class TestResolver(unittest.TestCase):
             with self.subTest(caminho=caminho):
                 with self.assertRaises(PathGuardError) as ctx:
                     path_guard.resolve(caminho)
-                self.assertEqual(ctx.exception.codigo, Code.NOT_FOUND)
+                self.assertEqual(ctx.exception.code, Code.NOT_FOUND)
 
     def test_dentro_de_log_dir_ou_work_dir(self):
         self.assertEqual(self._codigo("sub/ok.py", dirs_sss=(self._p("sub"),)), Code.SSS_DIR)
@@ -154,13 +154,13 @@ class TestAcessoEExecutavel(unittest.TestCase):
         self.assertEqual(path_guard.validate_executable("/bin/sh"), sh)
         with self.assertRaises(PathGuardError) as ctx:
             path_guard.validate_executable("/nao/existe/python3")
-        self.assertEqual(ctx.exception.codigo, Code.NOT_FOUND)
+        self.assertEqual(ctx.exception.code, Code.NOT_FOUND)
         for caminho, kw in (("bin/sh", {}), ("/bin/sh", {"dirs_sss": (os.path.dirname(sh),)}),
                             (self._p("sub/ok.py"), {}), (self._p("sub"), {})):
             with self.subTest(caminho=caminho, kw=kw):
                 with self.assertRaises(PathGuardError) as ctx:
                     path_guard.validate_executable(caminho, **kw)
-                self.assertEqual(ctx.exception.codigo, Code.INTERPRETADOR_INSEGURO)
+                self.assertEqual(ctx.exception.code, Code.INTERPRETADOR_INSEGURO)
 
 
 class TestValidacoesTextuais(unittest.TestCase):
@@ -186,7 +186,7 @@ class TestValidacoesTextuais(unittest.TestCase):
             with self.subTest(valor=valor):
                 with self.assertRaises(PathGuardError) as ctx:
                     path_guard.validate_registration(valor)
-                self.assertEqual(ctx.exception.codigo, codigo)
+                self.assertEqual(ctx.exception.code, codigo)
 
     def test_checar_pastas_proibidas_sem_o_arquivo(self):
         # Vale mesmo se o arquivo nao existe neste servidor (README §8.5, D4).
@@ -194,11 +194,11 @@ class TestValidacoesTextuais(unittest.TestCase):
             with self.subTest(caminho=caminho):
                 with self.assertRaises(PathGuardError) as ctx:
                     path_guard.check_forbidden_dirs(caminho)
-                self.assertEqual(ctx.exception.codigo, Code.SYSTEM_DIR)
+                self.assertEqual(ctx.exception.code, Code.SYSTEM_DIR)
         path_guard.check_forbidden_dirs("/opt/automacoes/nao_existe.py")
         with self.assertRaises(PathGuardError) as ctx:
             path_guard.check_forbidden_dirs("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs/x.py", ("/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/logs", "/portaloptrib/TESHUVA/web2py/applications/script_scheduling_service/work"))
-        self.assertEqual(ctx.exception.codigo, Code.SSS_DIR)
+        self.assertEqual(ctx.exception.code, Code.SSS_DIR)
 
     def test_interpretador_na_allowlist(self):
         for cmd in ("PYTHON3", "BASH", "SH"):
@@ -207,7 +207,7 @@ class TestValidacoesTextuais(unittest.TestCase):
         for cmd in ("POWERSHELL", "CMD", "python3"):
             with self.assertRaises(PathGuardError) as ctx:
                 path_guard.validate_interpreter(cmd)
-            self.assertEqual(ctx.exception.codigo, Code.INTERPRETADOR_NAO_PERMITIDO)
+            self.assertEqual(ctx.exception.code, Code.INTERPRETADOR_NAO_PERMITIDO)
         self.assertNotIn("POWERSHELL", path_guard.FIXED_ARGS)
         self.assertEqual(path_guard.FIXED_ARGS["PYTHON3"], ("-I",))
 
@@ -218,7 +218,7 @@ class TestValidacoesTextuais(unittest.TestCase):
             with self.subTest(cmd=cmd):
                 with self.assertRaises(PathGuardError) as ctx:
                     path_guard.validate_interpreter(cmd)
-                self.assertEqual(ctx.exception.codigo, Code.INTERPRETADOR_NAO_PERMITIDO)
+                self.assertEqual(ctx.exception.code, Code.INTERPRETADOR_NAO_PERMITIDO)
 
     def test_sem_startswith(self):
         with open(path_guard.__file__, "r", encoding="utf-8") as f:

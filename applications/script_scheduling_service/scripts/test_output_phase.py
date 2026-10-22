@@ -86,115 +86,115 @@ class TestMaquina(unittest.TestCase):
         import shutil
         self.work = tempfile.mkdtemp(prefix="sss_fase_")
         self.addCleanup(shutil.rmtree, self.work, True)
-        self.saida = output_phase.Saida(7, "/s/producao", "carga/2026/10/20/14/05/ticket_7", None, self.work)
+        self.output = output_phase.Output(7, "/s/producao", "carga/2026/10/20/14/05/ticket_7", None, self.work)
         self.repo = RepoSaidaMemoria({7: {"agent_id": AGENTE}})
         self.conn = _Conn()
 
-    def _empacotar(self, plat, rc):
-        output_phase.iniciar_empacotar(self.saida, plat, 1048576, 10, 100.0)
-        self.assertFalse(output_phase.avancar_empacotar(self.saida, plat, 101.0), "ainda rodando: sem esperar")
+    def _pack(self, plat, rc):
+        output_phase.start_pack(self.output, plat, 1048576, 10, 100.0)
+        self.assertFalse(output_phase.advance_pack(self.output, plat, 101.0), "ainda rodando: sem esperar")
         plat.proc.popen.rc = rc
-        self.assertTrue(output_phase.avancar_empacotar(self.saida, plat, 102.0))
+        self.assertTrue(output_phase.advance_pack(self.output, plat, 102.0))
 
     def test_zip_gravado_em_partes_e_concluido(self):
         conteudo = _zip({"a.txt": os.urandom(5 * 1024 * 1024), "b.txt": b"x"})
         plat = _Plat(conteudo)
-        self._empacotar(plat, 0)
-        self.assertEqual((self.saida.resultado, self.saida.qtd_arquivos), (output_phase.ZIP, 2))
-        self.assertEqual(self.saida.tamanho, len(conteudo))
-        self.assertIsNone(output_phase.linha_log(self.saida, AGENTE, 10, 1048576))
+        self._pack(plat, 0)
+        self.assertEqual((self.output.result, self.output.file_count), (output_phase.ZIP, 2))
+        self.assertEqual(self.output.size, len(conteudo))
+        self.assertIsNone(output_phase.log_line(self.output, AGENTE, 10, 1048576))
         voltas = 0
         while True:
             voltas += 1
-            desfecho = output_phase.gravar(self.saida, self.conn, self.repo, AGENTE)
-            if desfecho != output_phase.CONTINUA:
+            desfecho = output_phase.write(self.output, self.conn, self.repo, AGENTE)
+            if desfecho != output_phase.CONTINUE:
                 break
-        self.assertEqual(desfecho, output_phase.CONCLUIDA)
+        self.assertEqual(desfecho, output_phase.DONE)
         self.assertEqual(voltas, 2, "5 MiB em partes de 1 MiB, ate 4 por volta")
         linha = self.repo.linhas[7]
         self.assertEqual((linha["state"], linha["file_count"], linha["content"]), ("AVAILABLE", 2, conteudo))
-        self.assertTrue(output_phase.deve_remover_pasta(self.saida))
+        self.assertTrue(output_phase.should_remove_dir(self.output))
 
     def test_vazia_excedeu_e_falhou(self):
-        for rc, esperado in ((6, (output_phase.VAZIA, None)), (7, (output_phase.EXCEDEU, "FILES")),
-                             (8, (output_phase.EXCEDEU, "BYTES")), (4, (output_phase.FALHOU, "ERROR"))):
-            self.saida = output_phase.Saida(7, "/s/p", "c/2026/10/20/14/05/ticket_7", None, self.work)
+        for rc, esperado in ((6, (output_phase.EMPTY, None)), (7, (output_phase.EXCEEDED, "FILES")),
+                             (8, (output_phase.EXCEEDED, "BYTES")), (4, (output_phase.FAILED, "ERROR"))):
+            self.output = output_phase.Output(7, "/s/p", "c/2026/10/20/14/05/ticket_7", None, self.work)
             self.repo = RepoSaidaMemoria({7: {"agent_id": AGENTE}})
             with self.assertLogs("sss_scheduler", "WARNING") if rc == 4 else _nada():
-                self._empacotar(_Plat(b""), rc)
-            self.assertEqual((self.saida.resultado, self.saida.motivo), esperado, rc)
-            self.assertEqual(output_phase.gravar(self.saida, self.conn, self.repo, AGENTE), output_phase.CONCLUIDA)
+                self._pack(_Plat(b""), rc)
+            self.assertEqual((self.output.result, self.output.reason), esperado, rc)
+            self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENTE), output_phase.DONE)
             if rc == 6:
                 self.assertEqual(self.repo.linhas, {}, "pasta vazia nao grava linha")
-                self.assertTrue(output_phase.deve_remover_pasta(self.saida))
+                self.assertTrue(output_phase.should_remove_dir(self.output))
             else:
                 self.assertEqual(self.repo.linhas[7]["state"], esperado[0])
-                self.assertFalse(output_phase.deve_remover_pasta(self.saida), "a pasta fica no disco")
-        self.assertEqual(output_phase.linha_log(self.saida, AGENTE, 10, 1048576),
+                self.assertFalse(output_phase.should_remove_dir(self.output), "a pasta fica no disco")
+        self.assertEqual(output_phase.log_line(self.output, AGENTE, 10, 1048576),
                          "saida nao empacotada: falha (agente srv-t)")
-        s = output_phase.Saida(7, "/s", "c/2026/10/20/14/05/ticket_7", None, self.work)
-        s.resultado, s.motivo = output_phase.EXCEDEU, "BYTES"
-        self.assertEqual(output_phase.linha_log(s, AGENTE, 1000, 20 * 1024 * 1024),
+        s = output_phase.Output(7, "/s", "c/2026/10/20/14/05/ticket_7", None, self.work)
+        s.result, s.reason = output_phase.EXCEEDED, "BYTES"
+        self.assertEqual(output_phase.log_line(s, AGENTE, 1000, 20 * 1024 * 1024),
                          "saida nao empacotada: excede o limite de 20 MiB (agente srv-t)")
-        s.motivo = "FILES"
-        self.assertIn("1000 arquivos", output_phase.linha_log(s, AGENTE, 1000, 20 * 1024 * 1024))
+        s.reason = "FILES"
+        self.assertIn("1000 arquivos", output_phase.log_line(s, AGENTE, 1000, 20 * 1024 * 1024))
 
     def test_prazo_encerra_o_helper_sem_esperar(self):
         plat = _Plat(b"")
-        output_phase.iniciar_empacotar(self.saida, plat, 1048576, 10, 0.0)
+        output_phase.start_pack(self.output, plat, 1048576, 10, 0.0)
         with self.assertLogs("sss_scheduler", "WARNING"):
-            self.assertFalse(output_phase.avancar_empacotar(self.saida, plat, output_phase.PRAZO_EMPACOTAR_S + 1))
+            self.assertFalse(output_phase.advance_pack(self.output, plat, output_phase.PACK_DEADLINE_S + 1))
         self.assertEqual(plat.sinais, [signal.SIGKILL])
-        self.assertFalse(output_phase.avancar_empacotar(self.saida, plat, output_phase.PRAZO_EMPACOTAR_S + 2))
+        self.assertFalse(output_phase.advance_pack(self.output, plat, output_phase.PACK_DEADLINE_S + 2))
         self.assertEqual(plat.sinais, [signal.SIGKILL], "um sinal so")
         plat.proc.popen.rc = -9
-        self.assertTrue(output_phase.avancar_empacotar(self.saida, plat, output_phase.PRAZO_EMPACOTAR_S + 3))
-        self.assertEqual((self.saida.resultado, self.saida.motivo), (output_phase.FALHOU, "DEADLINE"))
+        self.assertTrue(output_phase.advance_pack(self.output, plat, output_phase.PACK_DEADLINE_S + 3))
+        self.assertEqual((self.output.result, self.output.reason), (output_phase.FAILED, "DEADLINE"))
 
     def test_zip_ilegivel_e_falha_ao_iniciar(self):
         with self.assertLogs("sss_scheduler", "WARNING"):
-            self._empacotar(_Plat(b"nao e zip"), 0)
-        self.assertEqual((self.saida.resultado, self.saida.motivo), (output_phase.FALHOU, "ERROR"))
-        s = output_phase.Saida(8, "/s", "c/2026/10/20/14/05/ticket_8", None, os.path.join(self.work, "nao_existe"))
+            self._pack(_Plat(b"nao e zip"), 0)
+        self.assertEqual((self.output.result, self.output.reason), (output_phase.FAILED, "ERROR"))
+        s = output_phase.Output(8, "/s", "c/2026/10/20/14/05/ticket_8", None, os.path.join(self.work, "nao_existe"))
         with self.assertLogs("sss_scheduler", "WARNING"):
-            output_phase.iniciar_empacotar(s, _Plat(b""), 1, 1, 0.0)
-        self.assertEqual((s.resultado, s.motivo), (output_phase.FALHOU, "ERROR"))
+            output_phase.start_pack(s, _Plat(b""), 1, 1, 0.0)
+        self.assertEqual((s.result, s.reason), (output_phase.FAILED, "ERROR"))
 
     def test_posse_perdida_e_commit_sem_resposta(self):
         plat = _Plat(_zip({"a": b"1"}))
-        self._empacotar(plat, 0)
+        self._pack(plat, 0)
         self.repo.tickets[7]["agent_id"] = "outro"
-        self.assertEqual(output_phase.gravar(self.saida, self.conn, self.repo, AGENTE), output_phase.OWNERSHIP_LOST)
+        self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENTE), output_phase.OWNERSHIP_LOST)
         # COMMIT do concluir sem resposta: a linha ja esta DISPONIVEL deste agente -> CONCLUIDA.
         self.repo.tickets[7]["agent_id"] = AGENTE
         self.repo.linhas[7] = {"state": "AVAILABLE", "agent_id": AGENTE}
-        self.assertEqual(output_phase.gravar(self.saida, self.conn, self.repo, AGENTE), output_phase.CONCLUIDA)
+        self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENTE), output_phase.DONE)
 
     def test_erro_de_banco_rollback_e_retomada(self):
         conteudo = _zip({"a.txt": os.urandom(3 * 1024 * 1024)})
-        self._empacotar(_Plat(conteudo), 0)
+        self._pack(_Plat(conteudo), 0)
         self.repo.falhas = [("append_chunk", RuntimeError("ORA-03113"))]
         with self.assertRaises(RuntimeError):
-            output_phase.gravar(self.saida, self.conn, self.repo, AGENTE)
+            output_phase.write(self.output, self.conn, self.repo, AGENTE)
         self.assertEqual(self.conn.rollbacks, 1)
-        self.assertEqual(output_phase.gravar(self.saida, self.conn, self.repo, AGENTE), output_phase.CONCLUIDA)
+        self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENTE), output_phase.DONE)
         self.assertEqual(self.repo.linhas[7]["content"], conteudo)
         # Divergencia de offset: recomeca do inicio (o iniciar zera a gravacao deste agente).
-        self.saida.iniciada, self.saida.offset = True, 0
+        self.output.started, self.output.offset = True, 0
         self.repo.linhas[7] = {"state": "WRITING", "agent_id": AGENTE, "content": b"xx"}
         with self.assertRaises(scheduler_output.OutputOffsetMismatch):
-            output_phase.gravar(self.saida, self.conn, self.repo, AGENTE)
-        self.assertFalse(self.saida.iniciada)
-        self.assertEqual(output_phase.gravar(self.saida, self.conn, self.repo, AGENTE), output_phase.CONCLUIDA)
+            output_phase.write(self.output, self.conn, self.repo, AGENTE)
+        self.assertFalse(self.output.started)
+        self.assertEqual(output_phase.write(self.output, self.conn, self.repo, AGENTE), output_phase.DONE)
         self.assertEqual(self.repo.linhas[7]["content"], conteudo)
 
     def test_abandonar_encerra_o_helper(self):
         plat = _Plat(b"")
-        output_phase.iniciar_empacotar(self.saida, plat, 1, 1, 0.0)
-        output_phase.abandonar(self.saida, plat)
+        output_phase.start_pack(self.output, plat, 1, 1, 0.0)
+        output_phase.abandon(self.output, plat)
         self.assertEqual(plat.sinais, [signal.SIGKILL])
-        self.assertEqual(self.saida.resultado, output_phase.ABANDONADA)
-        self.assertFalse(output_phase.deve_remover_pasta(self.saida))
+        self.assertEqual(self.output.result, output_phase.ABANDONED)
+        self.assertFalse(output_phase.should_remove_dir(self.output))
 
 
 class _nada(object):
@@ -216,7 +216,7 @@ class TestLacoComSaida(tsc._Base):
         tsc._Base.setUp(self)
         self.output_dir = os.path.join(self.raiz, "saida")
         os.mkdir(self.output_dir, 0o755)
-        self.repo_saida = RepoSaidaMemoria(self.banco.tickets)
+        self.repo_output = RepoSaidaMemoria(self.banco.tickets)
 
     def subir(self, **mudancas):
         mudancas.setdefault("output_dir", self.output_dir)
@@ -231,7 +231,7 @@ class TestLacoComSaida(tsc._Base):
         return None
 
     def concluido(self, tid):
-        return lambda: self.terminado(tid)() and tid not in self.ag.saidas
+        return lambda: self.terminado(tid)() and tid not in self.ag.outputs
 
     def test_saida_disponivel_e_pasta_removida(self):
         sid = self.banco.script("echo resultado > \"$SSS_OUTPUT_DIR/r.txt\"\nmkdir \"$SSS_OUTPUT_DIR/sub\"\n"
@@ -240,7 +240,7 @@ class TestLacoComSaida(tsc._Base):
         self.subir()
         self.rodar(self.concluido(tid))
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
-        linha = self.repo_saida.linhas[tid]
+        linha = self.repo_output.linhas[tid]
         self.assertEqual((linha["state"], linha["file_count"]), ("AVAILABLE", 2))
         z = zipfile.ZipFile(io.BytesIO(linha["content"]))
         self.assertEqual(sorted(z.namelist()), ["r.txt", "sub/y.csv"])
@@ -253,7 +253,7 @@ class TestLacoComSaida(tsc._Base):
         self.subir()
         self.rodar(self.concluido(tid))
         self.assertEqual(self.final(tid), ("SUCCESS", "EXIT_OK", 0))
-        self.assertNotIn(tid, self.repo_saida.linhas)
+        self.assertNotIn(tid, self.repo_output.linhas)
         self.assertIsNone(self._pasta_do_ticket(tid))
         self.assertIn("[%s/" % self.output_dir, self.banco.tickets[tid]["log"])
 
@@ -264,7 +264,7 @@ class TestLacoComSaida(tsc._Base):
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.rodar(self.concluido(tid))
         self.assertEqual(self.final(tid), ("FAILED", "EXIT_ERROR", 3), "o resultado do script prevalece")
-        self.assertEqual((self.repo_saida.linhas[tid]["state"], self.repo_saida.linhas[tid]["reason"]),
+        self.assertEqual((self.repo_output.linhas[tid]["state"], self.repo_output.linhas[tid]["reason"]),
                          ("EXCEEDED", "FILES"))
         self.assertIn("[SSS] saida nao empacotada: excede o limite de 5 arquivos (agente srv-t)\n",
                       self.banco.tickets[tid]["log"])
@@ -276,29 +276,29 @@ class TestLacoComSaida(tsc._Base):
         self.subir(output_dir=None)
         self.rodar(self.terminado(tid))
         self.assertIn("[ausente]", self.banco.tickets[tid]["log"])
-        self.assertEqual(self.repo_saida.linhas, {})
+        self.assertEqual(self.repo_output.linhas, {})
 
     def test_erro_de_banco_na_gravacao_e_refeito(self):
         tid = self.banco.ticket(self.banco.script("echo r > \"$SSS_OUTPUT_DIR/r.txt\"\n"))
-        self.repo_saida.falhas = [("start", RuntimeError("ORA-03113"))]
+        self.repo_output.falhas = [("start", RuntimeError("ORA-03113"))]
         self.subir()
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             self.rodar(self.concluido(tid))
         self.assertTrue(any("gravacao da saida pendente" in l for l in logs.output))
-        self.assertEqual(self.repo_saida.linhas[tid]["state"], "AVAILABLE")
+        self.assertEqual(self.repo_output.linhas[tid]["state"], "AVAILABLE")
 
     def test_parada_abandona_e_startup_marca_falhou(self):
         tid = self.banco.ticket(self.banco.script("echo r > \"$SSS_OUTPUT_DIR/r.txt\"\n"))
-        self.repo_saida.falhas = [("append_chunk", RuntimeError("ORA-03113"))] * 50
+        self.repo_output.falhas = [("append_chunk", RuntimeError("ORA-03113"))] * 50
         self.subir()
         with self.assertLogs("sss_scheduler", "WARNING"):
-            self.rodar(lambda: self.terminado(tid)() and tid in self.repo_saida.linhas)
-            self.assertEqual(self.repo_saida.linhas[tid]["state"], "WRITING")
-            self.ag.encerrar_tudo("TERMINATE")
-        self.assertEqual(self.ag.saidas, {})
+            self.rodar(lambda: self.terminado(tid)() and tid in self.repo_output.linhas)
+            self.assertEqual(self.repo_output.linhas[tid]["state"], "WRITING")
+            self.ag.stop_all("TERMINATE")
+        self.assertEqual(self.ag.outputs, {})
         self.assertIsNotNone(self._pasta_do_ticket(tid), "pasta fica no disco")
-        self.assertEqual(self.repo_saida.fail_agent_writing(None, "srv-t"), 1)
-        self.assertEqual(self.repo_saida.linhas[tid]["state"], "FAILED")
+        self.assertEqual(self.repo_output.fail_agent_writing(None, "srv-t"), 1)
+        self.assertEqual(self.repo_output.linhas[tid]["state"], "FAILED")
 
 
 if __name__ == "__main__":

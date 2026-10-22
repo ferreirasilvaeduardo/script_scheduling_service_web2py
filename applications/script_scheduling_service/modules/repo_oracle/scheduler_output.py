@@ -193,7 +193,7 @@ class RepoSchedulerOutput(object):
             cur.close()
 
     def output_state(self, conn, ticket_id):
-        """(situacao, agente_id) da saida do ticket, ou None; desfaz a duvida de um COMMIT sem resposta."""
+        """(situacao, agent_id) da saida do ticket, ou None; desfaz a duvida de um COMMIT sem resposta."""
         cur = conn.cursor()
         try:
             cur.execute(self._sql_situacao, ticket_id=int(ticket_id))

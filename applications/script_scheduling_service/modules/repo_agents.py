@@ -26,6 +26,6 @@ class RepoAgents(object):
     def running_without_pid(self, agora, minutos):
         """RUNNING sem process_id com started_at < agora - minutos, por started_at e id.
 
-        Retorna apenas id, script_id, ambiente, agente_id e started_at, sem LOB.
+        Retorna apenas id, script_id, ambiente, agent_id e started_at, sem LOB.
         """
         raise NotImplementedError

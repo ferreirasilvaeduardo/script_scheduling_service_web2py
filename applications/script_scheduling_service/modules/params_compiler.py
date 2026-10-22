@@ -55,7 +55,7 @@ class SnapshotError(Exception):
 
     def __init__(self, motivo):
         Exception.__init__(self, motivo)
-        self.motivo = motivo
+        self.reason = motivo
 
 
 def _sensitive(parametro):
@@ -464,7 +464,7 @@ def validate_snapshot(json_str, cfg):
     try:
         real = path_guard.resolve(snap['path_file'], dirs_sss=getattr(cfg, 'dirs_sss', None) or ())
     except path_guard.PathGuardError as e:
-        raise SnapshotError('PATH_GUARD_' + e.codigo)
+        raise SnapshotError('PATH_GUARD_' + e.code)
     return snap, build_agent_argv(interpretador, executavel, real, args), real
 
 

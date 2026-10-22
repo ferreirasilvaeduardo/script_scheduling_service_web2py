@@ -323,7 +323,7 @@ class TestPastaDeSaida(unittest.TestCase):
         self.assertEqual(os_platform.create_output_dir(self.base, self.rel), pasta, "idempotente")
         with open(os.path.join(pasta, "r.txt"), "w") as f:
             f.write("resultado")
-        destino = os.path.join(self.raiz, "saida.zip")
+        destino = os.path.join(self.raiz, "output.zip")
         fd = os.open(destino, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         try:
             proc = os_platform.start_pack(self.base, self.rel, 1048576, 10, fd)

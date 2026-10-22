@@ -75,7 +75,7 @@ class AccessDenied(Exception):
 
     def __init__(self, motivo):
         Exception.__init__(self, motivo)
-        self.motivo = motivo
+        self.reason = motivo
 
 
 class RerunError(Exception):
@@ -473,7 +473,7 @@ class TicketService(object):
             path_guard.check_forbidden_dirs(script["path_file"])
         except path_guard.PathGuardError as e:
             self._log.warning("caminho do script recusado (login=%s script_id=%s code=%s)",
-                              ctx["login"], script["id"], e.codigo, extra={"action": "TICKET_CREATE"})
+                              ctx["login"], script["id"], e.code, extra={"action": "TICKET_CREATE"})
             erros[GENERAL_FIELD] = MSG_SCRIPT_UNAVAILABLE
 
         snapshot, resolvidos, erros_param = params_compiler.compile_snapshot(

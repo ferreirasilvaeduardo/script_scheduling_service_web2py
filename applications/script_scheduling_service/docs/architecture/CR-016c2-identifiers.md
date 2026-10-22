@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras), 3b (services) e 4a (camada de processo) concluídos em 2026-10-21 |
+| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras), 3b (services), 4a (camada de processo) e 4b (laço do agente) concluídos em 2026-10-21 |
 | Origem | Regra do README §2.8 (CR-016): funções, classes, métodos, constantes e variáveis em inglês |
 | Restrições | Sem dependência nova. Python 3.6. Sem mudança de esquema |
 | Blocos | 1 base (`sql_ident`, `sss_config`, `db_conn`, `sss_logging` e formato do log); 2 repositórios e chaves lógicas das entidades; 3 regras (3a) e services (3b); 4 daemon (4a camada de processo, 4b laço do agente, 4c helper); 5 scripts e testes; passada final de parâmetros e variáveis locais |
@@ -1837,3 +1837,249 @@ O `os_platform` é usado também por um objeto que guarda o módulo (`self.plat`
 
 * Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, percurso real das telas e conferência de resíduos.
 * Achados na conferência e corrigidos: funções definidas em `os_platform/__init__.py` (o nome do arquivo não é o do pacote, e a ferramenta não as achou); código Python em string rodado em subprocesso nos testes de trava de instância; lista de nomes da interface em `test_platform`; atributos de classe e chaves de plataformas falsas.
+
+## 12. Bloco 4b (laço do agente)
+
+Módulos `scheduler_loop`, `output_phase` e `log_pump`, com os atributos de instância de `Agent`, `_Item`, `Output`, `Pump`, `Round` e `RoundResult`.
+
+* Métodos e atributos mudaram só nos arquivos do daemon e nos testes dele: nomes genéricos (`_ler`, `_limpar`, `relogio`, `saida`, `tamanho`, `segredos`…) também existem em outras classes (repositórios, services, `purge.py`), que ficam como estão.
+* `codigo` → `code` e `motivo` → `reason` mudaram em todas as classes que os definem (`StartupFailure`, `PathGuardError`, `SnapshotError`, `AccessDenied`, `Output`, `_Item`), porque o laço lê os das exceções de `path_guard` e `params_compiler`. O `Falha.codigo` do helper fica para o 4c.
+* Valores (D9): estados da fase de saída e resultados do `log_pump`; o zip no `work_dir` passa a `output.zip` (D11). O nome do download (`ticket_<id>_saida.zip`) fica para o CR-016d.
+
+### Nomes de módulo
+
+#### `scheduler_loop`
+
+| Antes | Depois |
+|---|---|
+| `Agente` | `Agent` |
+| `DIVERGENCIA_RELOGIO_S` | `CLOCK_SKEW_S` |
+| `FalhaInicializacao` | `StartupFailure` |
+| `INTERVALO_AVISO_DISCO_S` | `DISK_WARNING_INTERVAL_S` |
+| `INTERVALO_MAXIMO_ESPERA_S` | `MAX_WAIT_INTERVAL_S` |
+| `SAIDA_AMBIENTES` | `EXIT_ENVIRONMENTS` |
+| `SAIDA_BANCO` | `EXIT_DATABASE` |
+| `SAIDA_CONFIG` | `EXIT_CONFIG` |
+| `SAIDA_DIRETORIOS` | `EXIT_DIRECTORIES` |
+| `SAIDA_INSTANCIA` | `EXIT_INSTANCE` |
+| `SAIDA_REGISTRO` | `EXIT_REGISTRATION` |
+| `SAIDA_REGISTRO_PERDIDO` | `EXIT_REGISTRATION_LOST` |
+| `SAIDA_SEGREDOS` | `EXIT_SECRETS` |
+| `SAIDA_STARTUP` | `EXIT_STARTUP` |
+| `SAIDA_THREADS` | `EXIT_THREADS` |
+| `SAIDA_USUARIO` | `EXIT_USER` |
+| `SALTO_RELOGIO_S` | `CLOCK_JUMP_S` |
+| `_PREFIXO_PASTA` | `_DIR_PREFIX` |
+| `_dirs_sss` | `_sss_dirs` |
+| `_ler_estado` | `_read_state` |
+
+#### `output_phase`
+
+| Antes | Depois |
+|---|---|
+| `ABANDONADA` | `ABANDONED` |
+| `CONCLUIDA` | `DONE` |
+| `CONTINUA` | `CONTINUE` |
+| `EXCEDEU` | `EXCEEDED` |
+| `FALHOU` | `FAILED` |
+| `NOME_ZIP` | `ZIP_NAME` |
+| `PARTES_POR_VOLTA` | `PARTS_PER_ROUND` |
+| `PRAZO_EMPACOTAR_S` | `PACK_DEADLINE_S` |
+| `Saida` | `Output` |
+| `TAMANHO_PARTE` | `PART_SIZE` |
+| `VAZIA` | `EMPTY` |
+| `_conferir_zip` | `_check_zip` |
+| `_ja_esta` | `_already_written` |
+| `abandonar` | `abandon` |
+| `avancar_empacotar` | `advance_pack` |
+| `deve_remover_pasta` | `should_remove_dir` |
+| `gravar` | `write` |
+| `iniciar_empacotar` | `start_pack` |
+| `linha_log` | `log_line` |
+| `remover_pasta` | `remove_dir` |
+
+#### `log_pump`
+
+| Antes | Depois |
+|---|---|
+| `Bomba` | `Pump` |
+| `CONEXAO_INCERTA` | `UNCERTAIN_CONNECTION` |
+| `INCONSISTENTE` | `INCONSISTENT` |
+| `LEITURA_PADRAO` | `DEFAULT_READ` |
+| `MARCADOR` | `MARKER` |
+| `ResultadoRodada` | `RoundResult` |
+| `Rodada` | `Round` |
+| `TAMANHO_BLOCO` | `CHUNK_SIZE` |
+| `_enviar_um` | `_send_one` |
+| `_prefixo_em_bytes` | `_prefix_in_bytes` |
+| `blocos` | `chunks` |
+| `flush_final` | `final_flush` |
+| `mascarador_do_ticket` | `ticket_masker` |
+| `unidades_clob` | `clob_units` |
+
+### Valores
+
+| Antes | Depois |
+|---|---|
+| `ABANDONADA` | `ABANDONED` |
+| `CONCLUIDA` | `DONE` |
+| `CONEXAO_INCERTA` | `UNCERTAIN_CONNECTION` |
+| `CONTINUA` | `CONTINUE` |
+| `INCONSISTENTE` | `INCONSISTENT` |
+| `VAZIA` | `EMPTY` |
+| `saida.zip` | `output.zip` |
+
+### Métodos
+
+| Antes | Depois |
+|---|---|
+| `_apos_iniciar` | `_after_start` |
+| `_avancar_saidas` | `_advance_outputs` |
+| `_avisar_leitura` | `_warn_read` |
+| `_ciclo` | `_cycle` |
+| `_ciclo_heartbeat` | `_heartbeat_cycle` |
+| `_ciclo_orquestrador` | `_orchestrator_cycle` |
+| `_ciclo_rapido` | `_fast_cycle` |
+| `_conferir_entrada_dir` | `_check_input_dir` |
+| `_conferir_fence` | `_check_fence` |
+| `_conferir_limites` | `_check_limits` |
+| `_conferir_saida_dir` | `_check_output_dir` |
+| `_conferir_thread_unica` | `_check_single_thread` |
+| `_desdobro` | `_expansion` |
+| `_devolver` | `_return_to_queue` |
+| `_drenado` | `_drained` |
+| `_empacotar` | `_pack` |
+| `_encerrar` | `_stop` |
+| `_erro_antes_do_spawn` | `_error_before_spawn` |
+| `_falhar` | `_fail` |
+| `_fence_vencido` | `_fence_expired` |
+| `_finalizar` | `_finalize` |
+| `_finalizar_execucao` | `_finalize_execution` |
+| `_finalizar_execucao_sem_processo` | `_finalize_execution_without_process` |
+| `_finalizar_sem_spawn` | `_finalize_without_spawn` |
+| `_iniciar` | `_start` |
+| `_iniciar_drenagem` | `_start_drain` |
+| `_iteracao` | `_iteration` |
+| `_iteracao_sem_banco` | `_iteration_without_db` |
+| `_ler` | `_read` |
+| `_limpar` | `_clean` |
+| `_limpar_pasta` | `_clean_dir` |
+| `_ordem` | `_order` |
+| `_passo1_usuario` | `_step1_user` |
+| `_passo2_config` | `_step2_config` |
+| `_passo3_segredos` | `_step3_secrets` |
+| `_passo4_diretorios` | `_step4_directories` |
+| `_passo5_instancia` | `_step5_instance` |
+| `_passo6_banco` | `_step6_database` |
+| `_passo7_registro` | `_step7_registration` |
+| `_passo8_ambientes` | `_step8_environments` |
+| `_passo9_startup_check` | `_step9_startup_check` |
+| `_passos` | `_steps` |
+| `_pastas_locais` | `_local_dirs` |
+| `_pendencias` | `_pending` |
+| `_pode_seguir` | `_can_continue` |
+| `_prevalidar` | `_prevalidate` |
+| `_reabrir` | `_reopen` |
+| `_reconciliar` | `_reconcile` |
+| `_recusar` | `_refuse` |
+| `_registrar_pid` | `_register_pid` |
+| `_remover` | `_remove` |
+| `_resultado` | `_result` |
+| `_sair_do_cerco` | `_leave_fence` |
+| `_salto_de_relogio` | `_clock_jump` |
+| `_segredos_lista` | `_secret_values` |
+| `_usuario_execucao` | `_exec_user` |
+| `agente_id` | `agent_id` |
+| `aplicar_teto_banco` | `apply_db_cap` |
+| `coletar` | `collect` |
+| `confirmar` | `confirm` |
+| `empacotada` | `packed` |
+| `encerrar_tudo` | `stop_all` |
+| `excedeu_local` | `local_exceeded` |
+| `inicializar` | `initialize` |
+| `liberar_recursos` | `release_resources` |
+| `pasta` | `folder` |
+| `pendente` | `pending` |
+| `preparar_laco` | `prepare_loop` |
+| `proximo_bloco` | `next_chunk` |
+
+### Atributos de instância
+
+| Antes | Depois |
+|---|---|
+| `_bytes_aceitos` | `_accepted_bytes` |
+| `_bytes_marcador` | `_marker_bytes` |
+| `_carregar_config` | `_load_config` |
+| `_carregar_segredos` | `_load_secrets` |
+| `_drenagem_ate` | `_drain_until` |
+| `_em_voo` | `_in_flight` |
+| `_esperar` | `_wait` |
+| `_fila` | `_queue` |
+| `_fluxo` | `_stream` |
+| `_mascarador_fixo` | `_fixed_masker` |
+| `_node_offline_suspenso_ate` | `_node_offline_suspended_until` |
+| `_parando` | `_stopping` |
+| `_ref_relogio` | `_clock_ref` |
+| `_retido` | `_held` |
+| `_terminando` | `_terminating` |
+| `_ultimo` | `_last` |
+| `_ultimo_aviso_disco` | `_last_disk_warning` |
+| `agente_db_id` | `agent_db_id` |
+| `atendidos` | `served` |
+| `avisou_pendencia` | `pending_warned` |
+| `avisou_pid` | `pid_warned` |
+| `bomba` | `pump` |
+| `bombas` | `pumps` |
+| `bytes_confirmados` | `confirmed_bytes` |
+| `caminho_zip` | `zip_path` |
+| `cercado` | `fenced` |
+| `codigo` | `code` |
+| `codigo_saida` | `exit_code` |
+| `conexao` | `connection` |
+| `conexao_incerta` | `uncertain_connection` |
+| `desdobro` | `expansion` |
+| `devolucoes_pendentes` | `pending_returns` |
+| `encerrando` | `stopping` |
+| `erro_leitura` | `read_error` |
+| `esgotou_orcamento` | `budget_exhausted` |
+| `execucao` | `execution` |
+| `execucoes` | `executions` |
+| `finalizacao_pendente` | `finalize_pending` |
+| `finalizada` | `finished` |
+| `inconsistentes` | `inconsistent` |
+| `iniciada` | `started` |
+| `inicio` | `start` |
+| `morto` | `dead` |
+| `motivo` | `reason` |
+| `offset_confirmado_chars` | `confirmed_offset_chars` |
+| `orcamento_s` | `budget_s` |
+| `parada` | `stopped` |
+| `pid_pendente` | `pid_pending` |
+| `posse_perdida` | `ownership_lost` |
+| `prazo` | `deadline` |
+| `prazos` | `deadlines` |
+| `preservadas` | `preserved` |
+| `proxima_tentativa` | `next_attempt` |
+| `qtd_arquivos` | `file_count` |
+| `relativo` | `relative` |
+| `relogio` | `clock` |
+| `relogio_parede` | `wall_clock` |
+| `repo_agenda` | `repo_schedules` |
+| `repo_saida` | `repo_output` |
+| `resultado` | `result` |
+| `rodada` | `round` |
+| `saida` | `output` |
+| `saidas` | `outputs` |
+| `segredos` | `secrets` |
+| `tamanho` | `size` |
+| `trava` | `lock` |
+| `truncado` | `truncated` |
+| `truncado_gravado` | `truncated_written` |
+| `ultimo_hb_ok` | `last_hb_ok` |
+
+## 13. Validação do bloco 4b
+
+* Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, percurso real das telas e conferência de resíduos.
+* Ciclo real do agente no DEV, com dados próprios e config próprio: claim, execução do script, marcadores `.sss_spawn` (`exec_user`, `monotonic`, `ticket_id`, `wall`) e `.sss_proc` (`exec_user`, `pgid`, `pid`, `process_start`, `ticket_id`), ticket `SUCCESS`/`EXIT_OK`, saída `AVAILABLE` com 1 arquivo, log do agente em `log_dir/internal/app/` e parada pelo `sss-stop.sh`.
+* Achado na bateria e corrigido: o atributo `_esperar` do agente virou `_wait`, e a troca alcançou o método auxiliar de mesmo nome que `test_ha_real_agents` herda de `test_agents_concurrency` (fora do conjunto do daemon); as chamadas voltaram a `_esperar` (testes no bloco 5).
+* Fica para decisão: os códigos de ação do log (`[action=INICIO]`, `PARADA`, `SAIDA`…) continuam em português; são valores que filtros e alertas usam, como o formato do log no bloco 1.

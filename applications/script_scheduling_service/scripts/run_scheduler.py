@@ -41,7 +41,7 @@ def main(argv=None):
     try:
         cfg = sss_config.get_config(nome_log="sss_scheduler", caminho=args.config)
     except sss_config.ConfigError:  # o CRITICAL ja foi registrado (README §12.1)
-        return scheduler_loop.SAIDA_CONFIG
+        return scheduler_loop.EXIT_CONFIG
     logger = sss_logging.configure("sss_scheduler", cfg)
     for nome in _LOGGERS_DO_DAEMON:
         outro = logging.getLogger(nome)
@@ -51,14 +51,14 @@ def main(argv=None):
     masking.install_filter_on_handlers()
     parada = threading.Event()
     os_platform.install_stop_handler(parada)
-    agente = scheduler_loop.Agente(cfg=cfg)
+    agente = scheduler_loop.Agent(cfg=cfg)
     try:
-        agente.inicializar()
+        agente.initialize()
         return agente.run(parada, esperar=_esperar(parada))
-    except scheduler_loop.FalhaInicializacao as falha:
-        return falha.codigo
+    except scheduler_loop.StartupFailure as falha:
+        return falha.code
     finally:
-        agente.liberar_recursos()
+        agente.release_resources()
 
 
 if __name__ == "__main__":

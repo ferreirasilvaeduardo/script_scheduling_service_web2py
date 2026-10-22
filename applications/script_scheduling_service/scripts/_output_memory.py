@@ -16,13 +16,13 @@ class RepoSaidaMemoria(object):
         t = self.tickets.get(tid)
         return t is not None and t.get("agent_id") == agente_id
 
-    def _falhar(self, nome):
+    def _fail(self, nome):
         self.chamadas.append(nome)
         if self.falhas and self.falhas[0][0] == nome:
             raise self.falhas.pop(0)[1]
 
     def start(self, conn, tid, agente_id):
-        self._falhar("start")
+        self._fail("start")
         linha = self.linhas.get(tid)
         if linha is not None:
             if linha["state"] == "WRITING" and linha["agent_id"] == agente_id:
@@ -36,7 +36,7 @@ class RepoSaidaMemoria(object):
         return True
 
     def append_chunk(self, conn, tid, agente_id, offset, parte):
-        self._falhar("append_chunk")
+        self._fail("append_chunk")
         linha = self.linhas.get(tid)
         if linha is None or linha["state"] != "WRITING" or linha["agent_id"] != agente_id:
             return scheduler_output.OWNERSHIP_LOST
@@ -49,7 +49,7 @@ class RepoSaidaMemoria(object):
         raise scheduler_output.OutputOffsetMismatch(tid, offset, len(parte))
 
     def complete(self, conn, tid, agente_id, qtd, tamanho):
-        self._falhar("complete")
+        self._fail("complete")
         linha = self.linhas.get(tid)
         if linha is None or linha["state"] != "WRITING" or linha["agent_id"] != agente_id \
                 or len(linha["content"]) != tamanho:
@@ -58,7 +58,7 @@ class RepoSaidaMemoria(object):
         return True
 
     def register_without_content(self, conn, tid, agente_id, situacao, motivo, qtd=None):
-        self._falhar("register_without_content")
+        self._fail("register_without_content")
         linha = self.linhas.get(tid)
         if linha is not None:
             if linha["state"] != "WRITING" or linha["agent_id"] != agente_id:
@@ -70,7 +70,7 @@ class RepoSaidaMemoria(object):
         return True
 
     def fail_agent_writing(self, conn, agente_id):
-        self._falhar("fail_agent_writing")
+        self._fail("fail_agent_writing")
         n = 0
         for linha in self.linhas.values():
             if linha["state"] == "WRITING" and linha["agent_id"] == agente_id:

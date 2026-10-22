@@ -449,7 +449,7 @@ class TestValidarSnapshot(unittest.TestCase):
     def _reason(self, js, cfg=None):
         with self.assertRaises(SnapshotError) as ctx:
             pc.validate_snapshot(js, cfg or self.cfg)
-        return ctx.exception.motivo
+        return ctx.exception.reason
 
     def test_ok_monta_argv_com_executavel_e_base_do_agente(self):
         snap, argv, script_real = pc.validate_snapshot(self.js, self.cfg)
