@@ -121,7 +121,7 @@ class TestSssHelper(unittest.TestCase):
     def test_term_kill_com_identidade_divergente(self):
         helper = _carregar_helper()
         p = self.grupo()
-        inicio = helper._identidade(p.pid)
+        inicio = helper._identity(p.pid)
         self.assertIsNotNone(inicio)
         for sub in ("term", "kill"):
             codigo, erro = _helper(sub, p.pid, inicio + 1)
@@ -132,7 +132,7 @@ class TestSssHelper(unittest.TestCase):
         p.wait(10)
         self.assertEqual(p.returncode, -signal.SIGTERM)
         q = self.grupo()
-        self.assertEqual(_helper("kill", q.pid, helper._identidade(q.pid))[0], 0)
+        self.assertEqual(_helper("kill", q.pid, helper._identity(q.pid))[0], 0)
         q.wait(10)
         self.assertEqual(q.returncode, -signal.SIGKILL)
 
@@ -148,7 +148,7 @@ class TestSssHelper(unittest.TestCase):
         helper = _carregar_helper()
         for sub, sinal in ((helper._term, signal.SIGTERM), (helper._kill, signal.SIGKILL)):
             with mock.patch.object(helper.os, "kill", side_effect=PermissionError()), \
-                    mock.patch.object(helper, "_identidade", return_value=777), \
+                    mock.patch.object(helper, "_identity", return_value=777), \
                     mock.patch.object(helper.os, "killpg") as killpg:
                 self.assertEqual(sub(4242, 777), 0)
             killpg.assert_called_once_with(4242, sinal)
@@ -157,17 +157,17 @@ class TestSssHelper(unittest.TestCase):
         helper = _carregar_helper()
         for sub in (helper._term, helper._kill):
             with mock.patch.object(helper.os, "kill", side_effect=PermissionError()), \
-                    mock.patch.object(helper, "_identidade", return_value=778), \
+                    mock.patch.object(helper, "_identity", return_value=778), \
                     mock.patch.object(helper.os, "killpg") as killpg:
-                with self.assertRaises(helper.Falha) as ctx:
+                with self.assertRaises(helper.Failure) as ctx:
                     sub(4242, 777)
-            self.assertEqual(ctx.exception.codigo, 3)
+            self.assertEqual(ctx.exception.code, 3)
             killpg.assert_not_called()
 
     def test_grupo_so_com_o_sudo_e_sucesso(self):
         helper = _carregar_helper()
         with mock.patch.object(helper.os, "kill", side_effect=PermissionError()), \
-                mock.patch.object(helper, "_identidade", return_value=777), \
+                mock.patch.object(helper, "_identity", return_value=777), \
                 mock.patch.object(helper.os, "killpg", side_effect=PermissionError()):
             self.assertEqual(helper._term(4242, 777), 0)
             self.assertEqual(helper._kill(4242, 777), 0)
@@ -176,8 +176,8 @@ class TestSssHelper(unittest.TestCase):
         helper = _carregar_helper()
         campos = " ".join(["Y"] + [str(i) for i in range(4, 60)])
         with mock.patch("builtins.open", mock.mock_open(read_data="77 (a) b)) %s" % campos)):
-            self.assertEqual(helper._identidade(77), 22)
-        self.assertIsNone(helper._identidade(2 ** 31 - 2))
+            self.assertEqual(helper._identity(77), 22)
+        self.assertIsNone(helper._identity(2 ** 31 - 2))
 
     # -- base_dir -------------------------------------------------------------
 
@@ -200,9 +200,9 @@ class TestSssHelper(unittest.TestCase):
     def test_pasta_base_de_outro_dono(self):
         helper = _carregar_helper()
         with mock.patch.object(helper.os, "geteuid", return_value=os.geteuid() + 1):
-            with self.assertRaises(helper.Falha) as ctx:
-                helper._pasta_base(self.base)
-        self.assertEqual(ctx.exception.codigo, 2)
+            with self.assertRaises(helper.Failure) as ctx:
+                helper._base_dir(self.base)
+        self.assertEqual(ctx.exception.code, 2)
 
     def test_limpar_sem_seguir_links(self):
         fora = os.path.join(self.raiz, "fora")
@@ -381,7 +381,7 @@ class TestSssHelper(unittest.TestCase):
         dt = datetime.datetime(2026, 1, 2, 3, 4)
         for nome in (u"Carga Diária", u"-x-", u"a.b_c", u"!!!", u"x" * 60, u"Relatório 2026 (v2)"):
             _base, rel = log_paths.output_dir("/s", "PRODUCAO", nome, dt, 99, script_id=5)
-            self.assertEqual(len(helper._partes_relativo(rel)), 7, rel)
+            self.assertEqual(len(helper._relative_parts(rel)), 7, rel)
 
     def test_empacotar_so_arquivos_regulares_sem_seguir_links(self):
         import io
@@ -451,12 +451,12 @@ class TestSssHelper(unittest.TestCase):
         import io
         contagem = io.StringIO()
         with mock.patch.object(helper.sys, "stdout", contagem):  # --dry-run do purge: so conta
-            self.assertEqual(helper._purgar_saida(base, 7, hoje=datetime.date(2026, 10, 20), contar=True), 0)
+            self.assertEqual(helper._purge_output(base, 7, hoje=datetime.date(2026, 10, 20), contar=True), 0)
         self.assertEqual(contagem.getvalue(), "removidas=1\n")
         self.assertTrue(os.path.exists(velha), "contar nao remove")
         saida = io.StringIO()
         with mock.patch.object(helper.sys, "stdout", saida):
-            self.assertEqual(helper._purgar_saida(base, 7, hoje=datetime.date(2026, 10, 20)), 0)
+            self.assertEqual(helper._purge_output(base, 7, hoje=datetime.date(2026, 10, 20)), 0)
         self.assertEqual(saida.getvalue(), "removidas=1\n")
         self.assertFalse(os.path.exists(os.path.join(base, "carga", "2026", "09", "01")))
         self.assertTrue(os.path.exists(nova))

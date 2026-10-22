@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras), 3b (services), 4a (camada de processo) e 4b (laço do agente) concluídos em 2026-10-21 |
+| Status | **Em andamento**, em blocos. Blocos 1 (base), 2 (repositórios), 3a (regras), 3b (services), 4a (camada de processo), 4b (laço do agente) e 4c (helper) concluídos em 2026-10-21 |
 | Origem | Regra do README §2.8 (CR-016): funções, classes, métodos, constantes e variáveis em inglês |
 | Restrições | Sem dependência nova. Python 3.6. Sem mudança de esquema |
 | Blocos | 1 base (`sql_ident`, `sss_config`, `db_conn`, `sss_logging` e formato do log); 2 repositórios e chaves lógicas das entidades; 3 regras (3a) e services (3b); 4 daemon (4a camada de processo, 4b laço do agente, 4c helper); 5 scripts e testes; passada final de parâmetros e variáveis locais |
@@ -2082,4 +2082,55 @@ Módulos `scheduler_loop`, `output_phase` e `log_pump`, com os atributos de inst
 * Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, percurso real das telas e conferência de resíduos.
 * Ciclo real do agente no DEV, com dados próprios e config próprio: claim, execução do script, marcadores `.sss_spawn` (`exec_user`, `monotonic`, `ticket_id`, `wall`) e `.sss_proc` (`exec_user`, `pgid`, `pid`, `process_start`, `ticket_id`), ticket `SUCCESS`/`EXIT_OK`, saída `AVAILABLE` com 1 arquivo, log do agente em `log_dir/internal/app/` e parada pelo `sss-stop.sh`.
 * Achado na bateria e corrigido: o atributo `_esperar` do agente virou `_wait`, e a troca alcançou o método auxiliar de mesmo nome que `test_ha_real_agents` herda de `test_agents_concurrency` (fora do conjunto do daemon); as chamadas voltaram a `_esperar` (testes no bloco 5).
-* Fica para decisão: os códigos de ação do log (`[action=INICIO]`, `PARADA`, `SAIDA`…) continuam em português; são valores que filtros e alertas usam, como o formato do log no bloco 1.
+* Decisão do usuário (2026-10-21, D15): os códigos de ação do log (`[action=INICIO]`, `PARADA`, `SAIDA`, `SPAWN`…) **ficam em português**.
+
+## 14. Bloco 4c (helper)
+
+Só nomes internos do `bin/sss-helper` (instalado como `/opt/sss/bin/sss-helper`, roda como root via `sudo`). Os subcomandos (`run`, `term`, `kill`, `clean`, `stop-ticket`, `pack`, `clean-output`, `purge-output`), os códigos de saída numéricos e as chaves da especificação não mudam.
+
+| Antes | Depois |
+|---|---|
+| `ERRO_SISTEMA` | `SYSTEM_ERROR` |
+| `Falha` | `Failure` |
+| `NAO_SUPORTADO` | `UNSUPPORTED` |
+| `RECUSADO` | `REFUSED` |
+| `SAIDA_EXCEDE_ARQUIVOS` | `OUTPUT_TOO_MANY_FILES` |
+| `SAIDA_EXCEDE_BYTES` | `OUTPUT_TOO_MANY_BYTES` |
+| `SAIDA_VAZIA` | `OUTPUT_EMPTY` |
+| `USO_INVALIDO` | `INVALID_USAGE` |
+| `_BLOCO` | `_CHUNK` |
+| `_MAX_ARQUIVOS_SAIDA` | `_MAX_OUTPUT_FILES` |
+| `_MAX_BYTES_SAIDA` | `_MAX_OUTPUT_BYTES` |
+| `_MAX_ESPECIFICACAO` | `_MAX_SPEC` |
+| `_RE_PASTA_SCRIPT` | `_RE_SCRIPT_DIR` |
+| `_RE_RELATIVO_MINUTO` | `_RE_MINUTE_RELATIVE` |
+| `_RLIMITS_PERMITIDOS` | `_ALLOWED_RLIMITS` |
+| `_SaidaContada` | `_CountedOutput` |
+| `_arquivos_da_saida` | `_output_files` |
+| `_diretorio_proprio` | `_own_directory` |
+| `_empacotar` | `_pack` |
+| `_encerrar_ticket` | `_stop_ticket` |
+| `_erro` | `_error` |
+| `_identidade` | `_identity` |
+| `_inteiro` | `_integer` |
+| `_ler_especificacao` | `_read_spec` |
+| `_limpar` | `_clean` |
+| `_limpar_saida` | `_clean_output` |
+| `_partes_relativo` | `_relative_parts` |
+| `_pasta_base` | `_base_dir` |
+| `_pasta_entrada` | `_input_dir` |
+| `_pasta_saida` | `_output_dir` |
+| `_pasta_ticket` | `_ticket_dir` |
+| `_purgar_saida` | `_purge_output` |
+| `_sinalizar` | `_signal` |
+| `principal` | `run_main` |
+
+Atributos: `Failure.codigo` → `code`; `_CountedOutput`: `destino` → `destination`, `escritos` → `written`, `excedeu` → `exceeded`. Parâmetros e variáveis locais ficam para a passada final.
+
+As funções autorizadas a ler `/proc/<pid>/cwd` e `/proc/<pid>/stat` e a chamar `pwdx` (AGENTS §3.2 e §8) passam a ser `_stop_ticket` e `_identity`; a verificação de `test_py36_compat` acompanha.
+
+## 15. Validação do bloco 4c
+
+* `test_sss_helper`, `test_py36_compat`, `test_platform`, `test_scheduler_init`, `test_package`, `test_launchers` e `test_deployment_doc` em 3.6.0 e 3.13.2; suítes completas em 3.6.0, 3.6.8 e 3.13.2; bateria Oracle.
+* Ensaio do pacote: o pacote gerado traz o helper idêntico ao da árvore, que responde com código 2 a subcomando ausente ou inválido, e o `secrets.cfg.example` com `CHANGE_ME`.
+* Ciclo real do agente no DEV repetido (em DEV a saída é empacotada pela cópia do helper no pacote): ticket `SUCCESS`, saída `AVAILABLE`.

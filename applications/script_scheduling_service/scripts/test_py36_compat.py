@@ -180,11 +180,11 @@ def verificar_primitivas_so(caminho, app_dir, web2py_root):
 
             def visit_Str(self, node):
                 function = self.functions[0] if self.functions else None
-                # /proc/<pid>/cwd so em _encerrar_ticket; a leitura de /proc/<pid>/stat (identidade do
-                # lider, README §8.0) so em _identidade, usada por term/kill (AGENTS §3.2).
-                if "/proc/" in node.s and function not in ("_encerrar_ticket", "_identidade"):
+                # /proc/<pid>/cwd so em _stop_ticket; a leitura de /proc/<pid>/stat (identidade do
+                # lider, README §8.0) so em _identity, usada por term/kill (AGENTS §3.2).
+                if "/proc/" in node.s and function not in ("_stop_ticket", "_identity"):
                     self._add(node)
-                elif "pwdx" in node.s and function != "_encerrar_ticket":
+                elif "pwdx" in node.s and function != "_stop_ticket":
                     self._add(node)
 
         HelperVisitor().visit(ast.parse(source, filename=caminho))
@@ -410,7 +410,7 @@ class TestPy36Compat(unittest.TestCase):
             plataforma = os.path.join(app_dir, "modules", "os_platform", "posix.py")
             for caminho, conteudo in (
                 (caminho_ruim, "os.killpg(1, 15)\nos.setsid()\nimport resource\nimport fcntl\nproc = '/proc/1/cwd'\nsubprocess.Popen(['pwdx', '1'])\nvalor = sys.platform\n"),
-                (helper, "import os\nimport resource\nimport subprocess\ndef _run():\n    resource.setrlimit(1, (2, 3))\ndef _term():\n    os.killpg(1, 15)\ndef _kill():\n    os.killpg(1, 9)\ndef _encerrar_ticket():\n    proc = '/proc/1/cwd'\n    subprocess.Popen(['/usr/bin/pwdx', '1'])\n"),
+                (helper, "import os\nimport resource\nimport subprocess\ndef _run():\n    resource.setrlimit(1, (2, 3))\ndef _term():\n    os.killpg(1, 15)\ndef _kill():\n    os.killpg(1, 9)\ndef _stop_ticket():\n    proc = '/proc/1/cwd'\n    subprocess.Popen(['/usr/bin/pwdx', '1'])\n"),
                 (plataforma, "os.killpg(1, 15)\n"),
             ):
                 os.makedirs(os.path.dirname(caminho), exist_ok=True)
@@ -421,7 +421,7 @@ class TestPy36Compat(unittest.TestCase):
                 len(verificar_primitivas_so(caminho_ruim, app_dir, web2py_root)), 7
             )
             self.assertEqual(verificar_primitivas_so(helper, app_dir, web2py_root), [])
-            helper_bad = "import os\nimport resource\nimport subprocess\ndef _run():\n    os.killpg(1, 15)\ndef _term():\n    resource.setrlimit(1, (2, 3))\ndef _encerrar_ticket():\n    pass\ndef _limpar():\n    proc = '/proc/1/cwd'\n    subprocess.Popen(['/usr/bin/pwdx', '1'])\n"
+            helper_bad = "import os\nimport resource\nimport subprocess\ndef _run():\n    os.killpg(1, 15)\ndef _term():\n    resource.setrlimit(1, (2, 3))\ndef _stop_ticket():\n    pass\ndef _clean():\n    proc = '/proc/1/cwd'\n    subprocess.Popen(['/usr/bin/pwdx', '1'])\n"
             with open(helper, "w") as f:
                 f.write(helper_bad)
             self.assertEqual(
