@@ -444,7 +444,7 @@ class TestValidateSnapshot(unittest.TestCase):
         # CR-007, R-32: o snapshot vem do banco; NUL ou controle nos args nunca chegam ao argv.
         for bad in ("a\x00b", "linha\nnova"):
             with self.subTest(arg=repr(bad)):
-                self.assertEqual(self._reason(self._changed(args=["--data", bad])), "ARGS_INVALIDOS")
+                self.assertEqual(self._reason(self._changed(args=["--data", bad])), "INVALID_ARGS")
 
     def _reason(self, js, cfg=None):
         with self.assertRaises(SnapshotError) as ctx:
@@ -458,25 +458,25 @@ class TestValidateSnapshot(unittest.TestCase):
         self.assertEqual(snap["interpreter"], "PYTHON3")
 
     def test_json_e_estrutura(self):
-        self.assertEqual(self._reason("{x"), "JSON_INVALIDO")
-        self.assertEqual(self._reason(None), "JSON_INVALIDO")
-        self.assertEqual(self._reason("[]"), "ESTRUTURA_INVALIDA")
-        self.assertEqual(self._reason('{"versao": 3}'), "ESTRUTURA_INVALIDA")
+        self.assertEqual(self._reason("{x"), "INVALID_JSON")
+        self.assertEqual(self._reason(None), "INVALID_JSON")
+        self.assertEqual(self._reason("[]"), "INVALID_STRUCTURE")
+        self.assertEqual(self._reason('{"versao": 3}'), "INVALID_STRUCTURE")
 
     def test_versoes_1_a_3_rejeitadas(self):
         # CR-005: path_file absoluto desde o v4; CR-016c2 (D20): chaves em ingles no v5. v1 a v4 sao recusados.
         for version in (1, 2, 3, 4):
-            self.assertEqual(self._reason(self._changed(version=version)), "VERSAO_NAO_SUPORTADA")
+            self.assertEqual(self._reason(self._changed(version=version)), "UNSUPPORTED_VERSION")
 
     def test_interpretador_fora_da_allowlist_ou_indisponivel_no_agente(self):
-        self.assertEqual(self._reason(self._changed(interpreter="/usr/bin/perl")), "INTERPRETADOR_NAO_PERMITIDO")
-        self.assertEqual(self._reason(self._changed(interpreter="BASH")), "INTERPRETADOR_NAO_DISPONIVEL")
+        self.assertEqual(self._reason(self._changed(interpreter="/usr/bin/perl")), "INTERPRETER_NOT_ALLOWED")
+        self.assertEqual(self._reason(self._changed(interpreter="BASH")), "INTERPRETER_UNAVAILABLE")
         # CR-005: POWERSHELL saiu da allowlist (somente POSIX).
-        self.assertEqual(self._reason(self._changed(interpreter="POWERSHELL")), "INTERPRETADOR_NAO_PERMITIDO")
+        self.assertEqual(self._reason(self._changed(interpreter="POWERSHELL")), "INTERPRETER_NOT_ALLOWED")
 
     def test_args_invalidos(self):
-        self.assertEqual(self._reason(self._changed(args="--data x")), "ARGS_INVALIDOS")
-        self.assertEqual(self._reason(self._changed(args=["--n", 1])), "ARGS_INVALIDOS")
+        self.assertEqual(self._reason(self._changed(args="--data x")), "INVALID_ARGS")
+        self.assertEqual(self._reason(self._changed(args=["--n", 1])), "INVALID_ARGS")
 
     def test_path_guard_revalidado_no_agente(self):
         self.assertEqual(self._reason(self._changed(path_file="x.py")), "PATH_GUARD_RELATIVE_PATH")

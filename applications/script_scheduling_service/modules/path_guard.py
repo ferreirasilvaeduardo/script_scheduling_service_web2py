@@ -39,8 +39,8 @@ class Code(object):
     NO_ACCESS = 'NO_ACCESS'
     NOT_A_FILE = 'NOT_A_FILE'
     GROUP_OTHER_WRITABLE = 'GROUP_OTHER_WRITABLE'
-    INTERPRETADOR_NAO_PERMITIDO = 'INTERPRETADOR_NAO_PERMITIDO'
-    INTERPRETADOR_INSEGURO = 'INTERPRETADOR_INSEGURO'
+    INTERPRETER_NOT_ALLOWED = 'INTERPRETER_NOT_ALLOWED'
+    INTERPRETER_UNSAFE = 'INTERPRETER_UNSAFE'
 
 
 class PathGuardError(Exception):
@@ -54,7 +54,7 @@ class PathGuardError(Exception):
 def validate_interpreter(interpreter):
     """Exige que o interpretador logico seja exatamente um item da ALLOWLIST."""
     if interpreter not in ALLOWLIST:
-        raise PathGuardError(Code.INTERPRETADOR_NAO_PERMITIDO)
+        raise PathGuardError(Code.INTERPRETER_NOT_ALLOWED)
 
 
 def validate_registration(path_file):
@@ -116,19 +116,19 @@ def validate_executable(path, sss_dirs=()):
     """Executavel de um interpretador de [agent] interpreters (README §8.5, CR-011): caminho absoluto e
     normalizado, existe, e arquivo executavel e fica fora de log_dir/work_dir/exec_work_dir. Pode ser link
     simbolico (ex.: /usr/bin/python3) e ficar nas pastas do sistema. Devolve o caminho real; falha:
-    NOT_FOUND ou INTERPRETADOR_INSEGURO."""
+    NOT_FOUND ou INTERPRETER_UNSAFE."""
     if not isinstance(path, str) or path[:1] != '/' or os.path.normpath(path) != path:
-        raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
+        raise PathGuardError(Code.INTERPRETER_UNSAFE)
     real = os_platform.final_path(path)
     try:
         _stat(real)
     except PathGuardError as e:
         if e.code == Code.NOT_FOUND:
             raise
-        raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
+        raise PathGuardError(Code.INTERPRETER_UNSAFE)
     sss = [os_platform.final_path(d) for d in sss_dirs if d]
     if any(_inside(target, d) for target in (path, real) for d in sss):
-        raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
+        raise PathGuardError(Code.INTERPRETER_UNSAFE)
     if not os.path.isfile(real) or not os.access(real, os.X_OK):
-        raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
+        raise PathGuardError(Code.INTERPRETER_UNSAFE)
     return real

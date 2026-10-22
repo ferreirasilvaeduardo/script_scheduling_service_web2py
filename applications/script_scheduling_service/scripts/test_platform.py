@@ -259,7 +259,7 @@ class TestHelperDoubles(unittest.TestCase):
                 os_platform.clean_script_dir("/srv/exec/exec1", 9, "exec1")
 
     def test_encerrar_ticket_pelo_helper(self):
-        for code, expected in ((0, "OK"), (5, "NAO_SUPORTADO")):
+        for code, expected in ((0, "OK"), (5, "UNSUPPORTED")):
             with mock.patch.object(posix, "_run_short", return_value=(code, "")) as ex:
                 self.assertEqual(os_platform.stop_ticket("/srv/exec/exec1", 9, "exec1", 10), expected)
             self.assertEqual(ex.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER,

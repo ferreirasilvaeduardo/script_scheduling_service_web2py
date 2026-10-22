@@ -403,7 +403,7 @@ class Agent(object):
             elif spawn is not None:
                 # Talvez iniciado (CR-008, R-01): nunca volta a fila. Unica espera da subida (kill_grace_s).
                 base = os.path.join(agent.exec_work_dir, user) if user else agent.work_dir
-                if self.plat.stop_ticket(base, tid, user, agent.kill_grace_s) == "NAO_SUPORTADO":
+                if self.plat.stop_ticket(base, tid, user, agent.kill_grace_s) == "UNSUPPORTED":
                     # O processo pode seguir vivo: a pasta fica como rastro (CR-008, R-26).
                     self.preserved.add(tid)
                     log.warning("TALVEZ_INICIADO sem meio de encerrar nesta plataforma: o processo fica com o "
@@ -872,7 +872,7 @@ class Agent(object):
             elif spawn is not None:
                 user = spawn.get("exec_user")
                 base = os.path.join(self.cfg.agent.exec_work_dir, user) if user else self.cfg.agent.work_dir
-                if self.plat.stop_ticket(base, tid, user, self.cfg.agent.kill_grace_s) == "NAO_SUPORTADO":
+                if self.plat.stop_ticket(base, tid, user, self.cfg.agent.kill_grace_s) == "UNSUPPORTED":
                     self.preserved.add(tid)
                     log.warning("TALVEZ_INICIADO sem meio de encerrar nesta plataforma")
                 log.error("TALVEZ_INICIADO: .sss_spawn sem .sss_proc")
@@ -1073,11 +1073,11 @@ class Agent(object):
             code = exc.reason[len("PATH_GUARD_"):] if exc.reason.startswith("PATH_GUARD_") else exc.reason
             return self._refuse(item, code)
         if script is None or snap["path_file"] != script["path_file"] or snap["interpreter"] != script["interpreter"]:
-            return self._refuse(item, "CADASTRO_MUDOU")
+            return self._refuse(item, "REGISTRATION_CHANGED")
         if script.get("active") != "Y":
             return self._refuse(item, "SCRIPT_INACTIVE")
         if not self.repo.active_homologated_script(conn, script["id"], ticket["environment"]):
-            return self._refuse(item, "NAO_HOMOLOGADO")
+            return self._refuse(item, "NOT_HOMOLOGATED")
         if environment is None or environment.get("active") != "Y":
             return self._refuse(item, "ENVIRONMENT_INACTIVE")
         ok, _reason = rbac.can_execute(context["ctx"], script, environment, context["homologacoes"])
@@ -1111,7 +1111,7 @@ class Agent(object):
             return None
         pfx, num = db_conn.classify_error(exc)
         if pfx:
-            line = "ERRO_BANCO: %s-%05d" % (pfx, num)
+            line = "DB_ERROR: %s-%05d" % (pfx, num)
         else:
             line = "pre-validacao recusada: %s (agente %s)" % (exc.__class__.__name__, self.agent_id)
         item.log.error("falha antes do spawn: %s", line, exc_info=not pfx, extra={"action": "PRECHECK"})

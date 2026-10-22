@@ -81,13 +81,13 @@ class Expansion(object):
                     continue
                 stats["regras"] += 1
                 outcome = self.process(conn, rule_id)
-                if outcome == "IGNORAR":
+                if outcome == "IGNORE":
                     ignored.add(rule_id)
-                elif outcome in ("TICKET", "CONCLUIDA_COM_TICKET", "CRON_INVALIDO_COM_TICKET"):
+                elif outcome in ("TICKET", "COMPLETED_WITH_TICKET", "INVALID_CRON_WITH_TICKET"):
                     stats["tickets"] += 1
-                if outcome in ("PAUSADA", "INVALID_CRON", "CRON_INVALIDO_COM_TICKET", "INTERNAL_ERROR"):
+                if outcome in ("PAUSED", "INVALID_CRON", "INVALID_CRON_WITH_TICKET", "INTERNAL_ERROR"):
                     stats["pausas"] += 1
-                if outcome == "OUTRO_AGENTE":
+                if outcome == "OTHER_AGENT":
                     stats["puladas"] += 1
             if len(page) < batch or self.clock() - start > budget:
                 return stats
@@ -112,11 +112,11 @@ class Expansion(object):
     def _process(self, conn, rule_id, log):
         if not self.agenda.lock_rule(conn, rule_id):
             conn.rollback()
-            return "OUTRO_AGENTE"
+            return "OTHER_AGENT"
         rule = self.agenda.load_rule(conn, rule_id)
         if rule is None:
             conn.rollback()
-            return "OUTRO_AGENTE"
+            return "OTHER_AGENT"
         old = rule["next_run_at"]  # passo 1: exatamente como o banco devolveu
         now = db_conn.db_now(conn)
         self._current_rule = rule
@@ -149,10 +149,10 @@ class Expansion(object):
             if dec.complete:
                 if not self.agenda.complete_without_ticket(conn, rule["id"], old, self.agent_id):
                     conn.rollback()
-                    return "CORRIDA"
+                    return "RACE"
                 conn.commit()
                 log.info("SKIP_OVERLAP: regra concluida sem ticket; ocorrencias perdidas: %d", dec.missed + 1)
-                return "CONCLUIDA_SEM_TICKET"
+                return "COMPLETED_WITHOUT_TICKET"
             return self._advance(conn, rule, old, dec.next_date, log, "SKIP_OVERLAP")
 
         if not dec.create_ticket:
@@ -161,10 +161,10 @@ class Expansion(object):
             if dec.complete:
                 if not self.agenda.complete_without_ticket(conn, rule["id"], old, self.agent_id):
                     conn.rollback()
-                    return "CORRIDA"
+                    return "RACE"
                 conn.commit()
                 log.info("regra concluida sem ticket (misfire SKIP fora da tolerancia)")
-                return "CONCLUIDA_SEM_TICKET"
+                return "COMPLETED_WITHOUT_TICKET"
             return self._advance(conn, rule, old, dec.next_date, log, "MISFIRE_SKIP")
 
         # Passo 5: snapshot v4 (path_file absoluto, CR-005) a partir de parametros_json.
@@ -180,15 +180,15 @@ class Expansion(object):
         if dec.complete:
             if not self.agenda.complete_with_ticket(conn, rule, old, ticket_id, ticket, rows, self.agent_id):
                 conn.rollback()
-                return "CORRIDA"
+                return "RACE"
             conn.commit()
             log.info("ticket %d gerado (ocorrencia %s, prioridade %d); regra concluida", ticket_id, dec.occurrence,
                      priority)
-            return "CONCLUIDA_COM_TICKET"
+            return "COMPLETED_WITH_TICKET"
         if not self.agenda.reserve_and_create_ticket(conn, rule, old, dec.next_date, ticket_id, ticket, rows,
                                                    self.agent_id):
             conn.rollback()
-            return "CORRIDA"
+            return "RACE"
         conn.commit()
         log.info("ticket %d gerado (ocorrencia %s, prioridade %d); proxima execucao %s", ticket_id, dec.occurrence,
                  priority, dec.next_date)
@@ -247,34 +247,34 @@ class Expansion(object):
     def _advance(self, conn, rule, old, new, log, reason):
         if not self.agenda.advance_without_ticket(conn, rule["id"], old, new):
             conn.rollback()
-            return "CORRIDA"
+            return "RACE"
         conn.commit()
         log.info("%s: sem ticket; proxima execucao %s", reason, new)
-        return "AVANCADA"
+        return "ADVANCED"
 
     def _pause(self, conn, rule, old, reason, detail, log):
         if not self.agenda.pause(conn, rule["id"], old, reason, detail, self.agent_id):
             conn.rollback()
-            return "CORRIDA"
+            return "RACE"
         conn.commit()
         log.warning("regra pausada: %s (%s)", reason, detail)
-        return "PAUSADA"
+        return "PAUSED"
 
     def _cron_error(self, conn, rule, old, ticket_id, ticket, rows, log):
         if not self.agenda.pause_cron_error(conn, rule, old, ticket_id, ticket, rows,
                                             "sem proxima ocorrencia no horizonte", self.agent_id):
             conn.rollback()
-            return "CORRIDA"
+            return "RACE"
         conn.commit()
         if ticket_id is None:
             log.warning("regra pausada: INVALID_CRON (sem proxima ocorrencia no horizonte), sem ticket")
             return "INVALID_CRON"
         log.warning("ticket %d gerado e regra pausada: INVALID_CRON (sem proxima ocorrencia no horizonte)", ticket_id)
-        return "CRON_INVALIDO_COM_TICKET"
+        return "INVALID_CRON_WITH_TICKET"
 
     def _duplicate_occurrence(self, conn, rule_id, log):
         """R-31: ROLLBACK, WARN e, numa nova transacao, o avanco sem ticket com a mesma antiga e a nova da decisao."""
-        log.warning("OCORRENCIA_DUPLICADA: outro caminho ja gerou o ticket desta ocorrencia")
+        log.warning("DUPLICATE_OCCURRENCE: outro caminho ja gerou o ticket desta ocorrencia")
         rule = getattr(self, "_current_rule", None)
         try:
             if rule is not None and rule["id"] == rule_id:
@@ -285,9 +285,9 @@ class Expansion(object):
             conn.commit()
         except Exception as exc:  # noqa: BLE001 - a regra volta no ciclo seguinte
             conn.rollback()
-            log.warning("avanco apos OCORRENCIA_DUPLICADA falhou (%s)", exc.__class__.__name__)
+            log.warning("avanco apos DUPLICATE_OCCURRENCE falhou (%s)", exc.__class__.__name__)
         self.failures.pop(rule_id, None)
-        return "OCORRENCIA_DUPLICADA"
+        return "DUPLICATE_OCCURRENCE"
 
     def _failure(self, conn, rule_id, exc, log):
         if is_db_error(exc):
@@ -299,7 +299,7 @@ class Expansion(object):
             if db_conn.is_network_error(exc):
                 raise exc  # conexao perdida: o ciclo para e o agente reconecta (o laco trata)
             if n < FAILURES_BEFORE_PAUSE:
-                return "ERRO_BANCO"
+                return "DB_ERROR"
             detail = "%d falhas seguidas de banco (%s)" % (n, "%s-%05d" % (pfx, num) if pfx else exc.__class__.__name__)
         else:
             log.error("erro interno no desdobro: %s", exc.__class__.__name__, exc_info=True)
@@ -311,7 +311,7 @@ class Expansion(object):
         except Exception as exc2:  # noqa: BLE001 - a regra fica ignorada ate o fim do ciclo (R-08)
             conn.rollback()
             log.error("pausa INTERNAL_ERROR falhou (%s): regra ignorada neste ciclo", exc2.__class__.__name__)
-            return "IGNORAR"
+            return "IGNORE"
         if paused:
             log.warning("regra pausada: INTERNAL_ERROR (%s)", detail)
         return "INTERNAL_ERROR"

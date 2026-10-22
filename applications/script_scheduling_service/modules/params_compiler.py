@@ -443,23 +443,23 @@ def validate_snapshot(json_str, cfg):
     try:
         snap = json.loads(json_str)
     except (TypeError, ValueError):
-        raise SnapshotError('JSON_INVALIDO')
+        raise SnapshotError('INVALID_JSON')
     if not isinstance(snap, dict) or any(k not in snap for k in _SNAPSHOT_KEYS):
-        raise SnapshotError('ESTRUTURA_INVALIDA')
+        raise SnapshotError('INVALID_STRUCTURE')
     if snap['version'] != SNAPSHOT_VERSION:
-        raise SnapshotError('VERSAO_NAO_SUPORTADA')
+        raise SnapshotError('UNSUPPORTED_VERSION')
     interpreter = snap['interpreter']
     if interpreter not in path_guard.ALLOWLIST:
-        raise SnapshotError('INTERPRETADOR_NAO_PERMITIDO')
+        raise SnapshotError('INTERPRETER_NOT_ALLOWED')
     executable = (cfg.interpreters or {}).get(interpreter)
     if not executable:
-        raise SnapshotError('INTERPRETADOR_NAO_DISPONIVEL')
+        raise SnapshotError('INTERPRETER_UNAVAILABLE')
     args = snap['args']
     if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
-        raise SnapshotError('ARGS_INVALIDOS')
+        raise SnapshotError('INVALID_ARGS')
     # Defesa em profundidade (CR-007, R-32): o snapshot vem do banco; NUL ou controle nunca chegam ao argv.
     if any(_RE_CONTROL.search(a) for a in args):
-        raise SnapshotError('ARGS_INVALIDOS')
+        raise SnapshotError('INVALID_ARGS')
 
     try:
         real = path_guard.resolve(snap['path_file'], sss_dirs=getattr(cfg, 'sss_dirs', None) or ())

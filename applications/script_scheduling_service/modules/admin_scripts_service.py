@@ -57,8 +57,8 @@ PATH_MESSAGES = {
     Code.SYSTEM_DIR: u"Scripts não podem ficar em pastas do sistema (/bin, /sbin, /usr, /lib, /etc, /boot, "
                              u"/proc, /sys, /dev, /root). Use outra pasta.",
     Code.SSS_DIR: u"Scripts não podem ficar nas pastas de log ou de trabalho do SSS. Use outra pasta.",
-    Code.INTERPRETADOR_INSEGURO: u"O executável do interpretador não passou na checagem de segurança.",
-    Code.INTERPRETADOR_NAO_PERMITIDO: u"Interpretador não permitido.",
+    Code.INTERPRETER_UNSAFE: u"O executável do interpretador não passou na checagem de segurança.",
+    Code.INTERPRETER_NOT_ALLOWED: u"Interpretador não permitido.",
 }
 VALIDATION_NOTE = (u"O arquivo é conferido pelo agente, no servidor onde o script roda, no momento da execução "
                  u"(pode ser link simbólico).")
@@ -83,7 +83,7 @@ DEACTIVATION_WARNING = u"Agendamentos que usam este script serão pausados no pr
 
 _FIELD_BY_CONSTRAINT = {
     "uk_tbsss_scr_name": ("name", MSG_NAME_DUPLICATE),
-    "ck_tbsss_scr_int": ("interpreter", PATH_MESSAGES[Code.INTERPRETADOR_NAO_PERMITIDO]),
+    "ck_tbsss_scr_int": ("interpreter", PATH_MESSAGES[Code.INTERPRETER_NOT_ALLOWED]),
     "ck_tbsss_scr_path": ("path_file", PATH_MESSAGES[Code.PATH_NOT_NORMALIZED]),
     "ck_tbsss_scr_paral": ("max_parallel_env", MSG_PARALLEL),
     "ck_tbsss_scr_tmout": ("timeout_s", MSG_TIMEOUT),

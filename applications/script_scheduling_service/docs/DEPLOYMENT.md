@@ -644,10 +644,10 @@ Procure a linha indicada no log da aplicação do processo (§14.2). As mensagen
 | ↳ `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE` | | O arquivo real não existe, não é legível ou não é arquivo, no servidor do agente | Corrija o arquivo no agente (§9) |
 | ↳ `GROUP_OTHER_WRITABLE` | | Arquivo real com escrita de grupo ou outros | `chmod go-w <arquivo>` |
 | ↳ `SYSTEM_DIR`, `SSS_DIR` | | Script nas pastas do sistema ou nas do SSS (inclusive `output_dir` e `input_dir`, CR-014) | Mova o script e corrija o cadastro |
-| ↳ `INTERPRETADOR_NAO_DISPONIVEL` | | O interpretador do script não está mapeado **neste** agente | `[agent] interpreters` |
-| ↳ `VERSAO_NAO_SUPORTADA` | | Ticket criado por uma versão anterior (snapshot antes da versão 5) | Dispare de novo pela tela |
-| ↳ `CADASTRO_MUDOU`, `SCRIPT_INACTIVE`, `NAO_HOMOLOGADO`, `ENVIRONMENT_INACTIVE`, `NO_PERMISSION` | | O cadastro mudou entre o disparo e a execução | Confira o cadastro e dispare de novo |
-| ↳ `ERRO_BANCO: ORA-nnnnn` | `falha antes do spawn: ERRO_BANCO: ...` | Erro de banco na pré-validação | Veja o código ORA |
+| ↳ `INTERPRETER_UNAVAILABLE` | | O interpretador do script não está mapeado **neste** agente | `[agent] interpreters` |
+| ↳ `UNSUPPORTED_VERSION` | | Ticket criado por uma versão anterior (snapshot antes da versão 5) | Dispare de novo pela tela |
+| ↳ `REGISTRATION_CHANGED`, `SCRIPT_INACTIVE`, `NOT_HOMOLOGATED`, `ENVIRONMENT_INACTIVE`, `NO_PERMISSION` | | O cadastro mudou entre o disparo e a execução | Confira o cadastro e dispare de novo |
+| ↳ `DB_ERROR: ORA-nnnnn` | `falha antes do spawn: DB_ERROR: ...` | Erro de banco na pré-validação | Veja o código ORA |
 | `FAILED` / `SPAWN_ERROR` | `falha antes do spawn: <erro>` e `[SSS] falha ao iniciar: <erro> (agente X)` | Não foi possível criar o log ou o processo (disco, permissão, `sudo`) | Veja o erro; confira o §8 |
 | `FAILED` / `LOG_LIMIT` | `encerramento pedido: LOG_LIMIT` | O log local passou de `max_local_log_size_bytes` | Reduza a saída do script ou aumente o limite |
 | `FAILED` / `TIMEOUT` | `encerramento pedido: TIMEOUT` | Passou do `timeout_s` do script (ou `script_timeout_s`) | Ajuste o cadastro |

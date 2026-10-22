@@ -145,7 +145,7 @@ class TestRegistration(_Base):
     def test_interpretador_fora_da_allowlist(self):
         for cmd in ("/bin/ls", "/usr/bin/python3", "PYTHON3 -c", "python3", "CMD", "POWERSHELL", "", None):
             _sid, errors, _ = self._insert(interpreter=cmd)
-            self.assertEqual(errors.get("interpreter"), scr_mod.PATH_MESSAGES[Code.INTERPRETADOR_NAO_PERMITIDO], cmd)
+            self.assertEqual(errors.get("interpreter"), scr_mod.PATH_MESSAGES[Code.INTERPRETER_NOT_ALLOWED], cmd)
 
     def test_path_file_invalidos(self):
         # CR-005 (README §8.5): caminho absoluto, normalizado e fora das pastas do sistema; vale em qualquer sss_env.

@@ -618,7 +618,7 @@ def _pids_in_dir(folder):
 
 def stop_ticket(base_dir, ticket_id, exec_user, kill_grace_s):
     """Encerra os processos do ticket "talvez iniciado" (.sss_spawn sem .sss_proc). Devolve 'OK' ou
-    'NAO_SUPORTADO'. Unica operacao que espera (kill_grace_s), porque roda so antes do laco.
+    'UNSUPPORTED'. Unica operacao que espera (kill_grace_s), porque roda so antes do laco.
 
     Com usuario de execucao: helper stop-ticket (codigo 5 = nao suportado). Em DEV: os processos do
     proprio usuario cujo diretorio atual esta em <base_dir>/ticket_<id>.
@@ -627,12 +627,12 @@ def stop_ticket(base_dir, ticket_id, exec_user, kill_grace_s):
         code, output = _run_short([SUDO, "-n", "-u", exec_user, "--", HELPER, "stop-ticket",
                                          base_dir, str(int(ticket_id)), str(int(kill_grace_s))])
         if code == UNSUPPORTED_CODE:
-            return "NAO_SUPORTADO"
+            return "UNSUPPORTED"
         if code != 0:
             raise RuntimeError("helper stop-ticket falhou (codigo %s)" % code)
         return "OK"
     if NAME != "LINUX" or not os.path.isdir("/proc/self"):
-        return "NAO_SUPORTADO"
+        return "UNSUPPORTED"
     dir_value = os.path.normpath(os.path.join(base_dir, "ticket_%d" % int(ticket_id)))
     for signal_value in (signal.SIGTERM, signal.SIGKILL):
         pids = _pids_in_dir(dir_value)

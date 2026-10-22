@@ -160,7 +160,7 @@ class TestAccessAndExecutable(unittest.TestCase):
             with self.subTest(caminho=path, kw=kw):
                 with self.assertRaises(PathGuardError) as ctx:
                     path_guard.validate_executable(path, **kw)
-                self.assertEqual(ctx.exception.code, Code.INTERPRETADOR_INSEGURO)
+                self.assertEqual(ctx.exception.code, Code.INTERPRETER_UNSAFE)
 
 
 class TestTextValidations(unittest.TestCase):
@@ -207,7 +207,7 @@ class TestTextValidations(unittest.TestCase):
         for cmd in ("POWERSHELL", "CMD", "python3"):
             with self.assertRaises(PathGuardError) as ctx:
                 path_guard.validate_interpreter(cmd)
-            self.assertEqual(ctx.exception.code, Code.INTERPRETADOR_NAO_PERMITIDO)
+            self.assertEqual(ctx.exception.code, Code.INTERPRETER_NOT_ALLOWED)
         self.assertNotIn("POWERSHELL", path_guard.FIXED_ARGS)
         self.assertEqual(path_guard.FIXED_ARGS["PYTHON3"], ("-I",))
 
@@ -218,7 +218,7 @@ class TestTextValidations(unittest.TestCase):
             with self.subTest(cmd=cmd):
                 with self.assertRaises(PathGuardError) as ctx:
                     path_guard.validate_interpreter(cmd)
-                self.assertEqual(ctx.exception.code, Code.INTERPRETADOR_NAO_PERMITIDO)
+                self.assertEqual(ctx.exception.code, Code.INTERPRETER_NOT_ALLOWED)
 
     def test_sem_startswith(self):
         with open(path_guard.__file__, "r", encoding="utf-8") as f:

@@ -570,7 +570,7 @@ class TestPrevalidation(_Base):
         self.run_loop(lambda: all(self.finished(t)() for t in tids))
         for tid in tids:
             self.assertEqual(self.final(tid), ("FAILED", "PRECHECK_FAILED", -4))
-            self.assertIn("[SSS] pre-validacao recusada: VERSAO_NAO_SUPORTADA", self.db.tickets[tid]["log"])
+            self.assertIn("[SSS] pre-validacao recusada: UNSUPPORTED_VERSION", self.db.tickets[tid]["log"])
 
     def test_interpretador_nao_mapeado(self):
         # O script e BASH, mas este agente so mapeia SH; a fila de teste entrega o ticket mesmo assim.
@@ -578,7 +578,7 @@ class TestPrevalidation(_Base):
         self.db.candidates = lambda conn, a, i, batch, env: [
             {"id": tid, "script_id": self.db.tickets[tid]["script_id"], "environment": AMB}
         ] if self.db.tickets[tid]["status"] == "PENDING" else []
-        self._refusal(tid, "INTERPRETADOR_NAO_DISPONIVEL")
+        self._refusal(tid, "INTERPRETER_UNAVAILABLE")
 
     def test_caminho_inexistente(self):
         sid = self.db.script("echo x\n")
@@ -589,7 +589,7 @@ class TestPrevalidation(_Base):
         sid = self.db.script("echo x\n")
         other = self.db.script("echo y\n")
         tid = self.db.ticket(sid, path_file=self.db.scripts[other]["path_file"])
-        self._refusal(tid, "CADASTRO_MUDOU")
+        self._refusal(tid, "REGISTRATION_CHANGED")
 
     def test_sem_permissao(self):
         sid = self.db.script("echo x\n")
@@ -603,7 +603,7 @@ class TestPrevalidation(_Base):
 
     def test_nao_homologado(self):
         tid = self.db.ticket(self.db.script("echo x\n", homologate=False))
-        self._refusal(tid, "NAO_HOMOLOGADO")
+        self._refusal(tid, "NOT_HOMOLOGATED")
 
     def test_erro_de_rede_antes_do_spawn_devolve(self):
         tid = self.db.ticket(self.db.script("echo x\n"))
@@ -620,7 +620,7 @@ class TestPrevalidation(_Base):
         with self.assertLogs("sss_scheduler", "ERROR"):
             self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("FAILED", "PRECHECK_FAILED", -4))
-        self.assertIn("[SSS] ERRO_BANCO: ORA-01031", self.db.tickets[tid]["log"])
+        self.assertIn("[SSS] DB_ERROR: ORA-01031", self.db.tickets[tid]["log"])
 
 
 class TestPending(_Base):

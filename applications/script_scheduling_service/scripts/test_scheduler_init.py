@@ -449,7 +449,7 @@ class TestStartupCheck(_Base):
     def test_talvez_iniciado_nao_suportado_preserva(self):
         dir_value = self._dir(11, sss_spawn={"ticket_id": 11, "exec_user": None})
         self.repo.running = [{"id": 11, "process_id": None, "process_start": None, "cancel_requested": "N"}]
-        ag, logs = self._start_agent(plat=_Plat(stop_ticket=lambda *a: "NAO_SUPORTADO"))
+        ag, logs = self._start_agent(plat=_Plat(stop_ticket=lambda *a: "UNSUPPORTED"))
         self.assertIn("sem meio de encerrar", logs)
         self.assertIn(11, ag.preserved)
         self.assertTrue(os.path.isdir(dir_value))

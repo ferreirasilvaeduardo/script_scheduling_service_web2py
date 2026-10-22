@@ -4644,3 +4644,31 @@ Também: atributo `dirs_sss` → `sss_dirs` (configuração montada no laço e l
 
 * Suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos nos cinco agregados, ciclo real do agente, percurso real das telas, conferência de resíduos, `bash -n` e subida e parada reais do `start_local.sh`/`stop_local.sh`.
 * Achados durante a aplicação e corrigidos antes do commit (os arquivos foram restaurados do commit da F3 e a troca refeita): um nome traduzido para palavra reservada (`retorno` → `return`, que quebrou a sintaxe); dois nomes da mesma função traduzidos para o mesmo destino (`sensiveis` e `sensivel` → `sensitive`; `ultimas` e `ultima` → `last`), o que trocava o tipo da variável; uma função aninhada ligada a um nome que mudava (`def sondador`). A ferramenta passou a recusar os três casos e chegou a ponto fixo.
+
+## 28. Códigos internos de pré-validação e do desdobro (D21)
+
+Decisão do usuário (2026-10-22, D21): os códigos de recusa da pré-validação, que aparecem na linha `[SSS] pré-validação recusada: <código>` do log do ticket, passam a inglês, como os demais valores internos (D9). No mesmo passo, os resultados internos do desdobro (`Expansion.process`) e o código do erro de banco antes do spawn. O código de ação do log `DESDOBRO` fica em português (D15).
+
+| Antes | Depois |
+|---|---|
+| `VERSAO_NAO_SUPORTADA` | `UNSUPPORTED_VERSION` |
+| `ESTRUTURA_INVALIDA` | `INVALID_STRUCTURE` |
+| `JSON_INVALIDO` | `INVALID_JSON` |
+| `ARGS_INVALIDOS` | `INVALID_ARGS` |
+| `INTERPRETADOR_NAO_PERMITIDO` | `INTERPRETER_NOT_ALLOWED` |
+| `INTERPRETADOR_NAO_DISPONIVEL` | `INTERPRETER_UNAVAILABLE` |
+| `INTERPRETADOR_INSEGURO` | `INTERPRETER_UNSAFE` |
+| `NAO_HOMOLOGADO` | `NOT_HOMOLOGATED` |
+| `CADASTRO_MUDOU` | `REGISTRATION_CHANGED` |
+| `NAO_SUPORTADO` (`stop_ticket` da plataforma) | `UNSUPPORTED` |
+| `ERRO_BANCO` (log do ticket e resultado do desdobro) | `DB_ERROR` |
+| `AVANCADA` | `ADVANCED` |
+| `CONCLUIDA_COM_TICKET` / `CONCLUIDA_SEM_TICKET` | `COMPLETED_WITH_TICKET` / `COMPLETED_WITHOUT_TICKET` |
+| `CORRIDA` | `RACE` |
+| `CRON_INVALIDO_COM_TICKET` | `INVALID_CRON_WITH_TICKET` |
+| `IGNORAR` | `IGNORE` |
+| `OCORRENCIA_DUPLICADA` (também o prefixo da mensagem de log) | `DUPLICATE_OCCURRENCE` |
+| `OUTRO_AGENTE` | `OTHER_AGENT` |
+| `PAUSADA` | `PAUSED` |
+
+Validação: suítes em 3.6.0, 3.6.8 e 3.13.2, bateria Oracle, testes progressivos, ciclo real do agente, percurso real das telas e conferência de resíduos; README (§8.4) e DEPLOYMENT (tabela de diagnóstico) atualizados.

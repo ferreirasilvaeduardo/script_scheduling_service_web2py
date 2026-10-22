@@ -734,7 +734,7 @@ Os estados `SUCCESS`, `FAILED` e `CANCELLED` são **terminais e imutáveis**. To
 
 * `OWNERSHIP_LOST` é um **evento de log** do agente. Ele nunca é gravado no ticket, que já foi finalizado por outro nó.
 * `Popen.returncode` negativo (morte por sinal) é convertido para `128 + abs(returncode)`.
-* **Motivo técnico no log (CR-007, R-18):** antes de gravar `PRECHECK_FAILED` ou `SPAWN_ERROR`, o agente anexa ao `log_output` a linha `[SSS] pré-validação recusada: <código> (agente <agent_id>)` ou `[SSS] falha ao iniciar: <classe do erro> (agente <agent_id>)`, sem o caminho do arquivo. Códigos da pré-validação: os do `path_guard` (§8.5), `VERSAO_NAO_SUPORTADA`, `INTERPRETADOR_NAO_DISPONIVEL`, `SCRIPT_INACTIVE`, `NAO_HOMOLOGADO`, `ENVIRONMENT_INACTIVE`, `NO_PERMISSION` e `CADASTRO_MUDOU`. O mesmo vale para as finalizações pelo startup check, com `[SSS] <motivo>: <detalhe>`.
+* **Motivo técnico no log (CR-007, R-18):** antes de gravar `PRECHECK_FAILED` ou `SPAWN_ERROR`, o agente anexa ao `log_output` a linha `[SSS] pré-validação recusada: <código> (agente <agent_id>)` ou `[SSS] falha ao iniciar: <classe do erro> (agente <agent_id>)`, sem o caminho do arquivo. Códigos da pré-validação: os do `path_guard` (§8.5), `UNSUPPORTED_VERSION`, `INTERPRETER_UNAVAILABLE`, `SCRIPT_INACTIVE`, `NOT_HOMOLOGATED`, `ENVIRONMENT_INACTIVE`, `NO_PERMISSION` e `REGISTRATION_CHANGED`. O mesmo vale para as finalizações pelo startup check, com `[SSS] <motivo>: <detalhe>`.
 
 #### 5.2.1 Explicação ao usuário (CR-004)
 
@@ -1093,12 +1093,12 @@ JSON serializado com `json.dumps(obj, ensure_ascii=False, sort_keys=True)`:
 * **Versão 2 (CR-001):** o snapshot não guarda mais caminho absoluto nem executável do nó que o compilou. O agente revalida `interpreter` contra a allowlist e o próprio mapeamento, resolve `path_file` pelo `path_guard` local e monta o `argv` (§6.4, §8.4).
 * **Versão 3 (CR-003, várias pastas base):** acrescentava `base_dir`, o nome lógico da pasta onde o script ficava.
 * **Versão 4 (CR-005, caminho livre):** sai `base_dir`; `path_file` é o caminho **absoluto** cadastrado. O agente o confere pelo `path_guard` local (§8.5) e monta o `argv` (§6.4, §8.4). O executável do interpretador continua fora do snapshot.
-* **Versão 5 (CR-016c2, D20):** as chaves passam a inglês (`script_name`, `answers`, `sensitive`, `compiled_at`). O agente recusa as versões 1 a 4 (`VERSAO_NAO_SUPORTADA`); como o CR-016a recria o banco, não há ticket v4 num ambiente atualizado.
+* **Versão 5 (CR-016c2, D20):** as chaves passam a inglês (`script_name`, `answers`, `sensitive`, `compiled_at`). O agente recusa as versões 1 a 4 (`UNSUPPORTED_VERSION`); como o CR-016a recria o banco, não há ticket v4 num ambiente atualizado.
 * Snapshots das versões 1 a 3 foram gerados apenas em DEV/FAKE e não são aceitos pelo agente. O claim os rejeita com `PRECHECK_FAILED`.
 
 * O snapshot é **compilado na criação do ticket** (manual ou desdobro). O agente **nunca** recompila nem lê `tbsss_script_param` e `tbsss_parameters` para executar.
 * **Defesa em profundidade no claim:** o agente revalida o snapshot (§8.4, passo 1).
-* **Snapshot × cadastro (CR-007, R-24):** se `path_file` ou `interpreter` do snapshot diferirem do cadastro atual do script, o agente recusa (`CADASTRO_MUDOU`): o ticket foi criado antes de uma mudança de cadastro e deve ser reexecutado, para ser compilado de novo.
+* **Snapshot × cadastro (CR-007, R-24):** se `path_file` ou `interpreter` do snapshot diferirem do cadastro atual do script, o agente recusa (`REGISTRATION_CHANGED`): o ticket foi criado antes de uma mudança de cadastro e deve ser reexecutado, para ser compilado de novo.
 * **Conteúdo do arquivo (CR-011):** o SSS não guarda nem confere hash do arquivo; o ambiente controla o conteúdo e a versão do script (§8.5).
 * **Vínculo de parâmetros pela UI** (`admin_scripts/parametros`, F4.5):
   * a lista inteira vai num único POST, e a ordem é renumerada pelo servidor (1..n, pela posição);
@@ -1268,7 +1268,7 @@ Para cada regra travada, na **mesma transação** (que já detém o lock da linh
    ```
 
    * Se `rowcount = 1`, fazer o `INSERT` do ticket com `id = :ticket_id`, `schedule_id = :id`, `solicitante = <login do usuario_id>`, `source_ip = NULL`, **`scheduled_at = :ocorrencia`** (a ocorrência coberta, nunca no futuro, CR-007 R-27) e a prioridade do passo 2. Em seguida, o `INSERT` em `tbsss_ticket_answer`.
-   * O índice único `ix_tbsss_tck_occur` impede um segundo ticket para a mesma ocorrência da mesma regra. A violação (ORA-00001) leva a `ROLLBACK` e WARN `OCORRENCIA_DUPLICADA`: outro caminho já gerou o ticket. Em seguida, numa **nova transação**, o agente aplica o **avanço sem ticket** (abaixo) com a mesma `:old_date` e a `:new_date` da decisão (CR-008, R-31); `rowcount = 0` é ignorado. Assim, a regra não é reprocessada a cada ciclo até a próxima ocorrência.
+   * O índice único `ix_tbsss_tck_occur` impede um segundo ticket para a mesma ocorrência da mesma regra. A violação (ORA-00001) leva a `ROLLBACK` e WARN `DUPLICATE_OCCURRENCE`: outro caminho já gerou o ticket. Em seguida, numa **nova transação**, o agente aplica o **avanço sem ticket** (abaixo) com a mesma `:old_date` e a `:new_date` da decisão (CR-008, R-31); `rowcount = 0` é ignorado. Assim, a regra não é reprocessada a cada ciclo até a próxima ocorrência.
    * Se `rowcount = 0`, outro nó processou a regra: fazer `ROLLBACK` e seguir para a próxima.
    * A trigger condicional (§10) preserva o `:ticket_id`. Valores de sequence descartados geram apenas lacunas inofensivas.
    * A reserva é rotina técnica e **não** grava `updated_*` na regra (§10, CR-006). O ticket e o `ticket_resp` nascem com `created_by = 'SYSTEM:<agent_id>'`.
@@ -1558,15 +1558,15 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
 ### 8.4 Pré-validação, spawn e registro do PID
 
 1. **Pré-validação do snapshot e do contexto.** Qualquer falha leva a `FAILED` com `PRECHECK_FAILED` e `-4`, com a linha `[SSS]` do §5.2 no log (o código entre parênteses):
-   * o JSON é válido e tem `version` suportada (`VERSAO_NAO_SUPORTADA`);
-   * `version == 5`, e `interpreter` consta na allowlist lógica **e** no mapeamento deste agente (`INTERPRETADOR_NAO_DISPONIVEL`);
-   * `path_file` e `interpreter` do snapshot são iguais aos do cadastro atual do script (`CADASTRO_MUDOU`, CR-007 R-24);
+   * o JSON é válido e tem `version` suportada (`UNSUPPORTED_VERSION`);
+   * `version == 5`, e `interpreter` consta na allowlist lógica **e** no mapeamento deste agente (`INTERPRETER_UNAVAILABLE`);
+   * `path_file` e `interpreter` do snapshot são iguais aos do cadastro atual do script (`REGISTRATION_CHANGED`, CR-007 R-24);
    * `path_file` (absoluto) passa na §8.5 neste agente, que fornece o `script_real` (códigos do `path_guard`);
    * o `argv` é montado pelo agente (§6.4) a partir de `interpreter`, `script_real` e `args`;
-   * o script segue `active = 'Y'` (`SCRIPT_INACTIVE`) e homologado para o ambiente (`NAO_HOMOLOGADO`);
+   * o script segue `active = 'Y'` (`SCRIPT_INACTIVE`) e homologado para o ambiente (`NOT_HOMOLOGATED`);
    * o ambiente do ticket segue ativo (`ENVIRONMENT_INACTIVE`) e o **solicitante** ainda tem `rbac.can_execute` para o script e o ambiente, com o mesmo contexto de RBAC do desdobro (`NO_PERMISSION`, CR-007 D2).
 
-   Uma exceção inesperada nesta fase também finaliza o ticket com `PRECHECK_FAILED` (R-03). **Erro de banco antes do spawn (CR-008, R-07):** só erro de rede ou de prazo (`db_conn.is_network_error` ou `is_timeout`, §2.3) é "banco indisponível": o ticket é **devolvido à fila** (§5.1), ou finalizado `CANCELLED` se `cancel_requested = 'Y'` (R-02). Qualquer outro erro de banco (ex.: ORA-01031 por GRANT faltando, ORA-00942, ORA-30006 de lock persistente) finaliza `PRECHECK_FAILED` com a linha `[SSS] ERRO_BANCO: ORA-nnnnn` no log, sem a mensagem do Oracle. Se a própria devolução ou finalização falhar, o ticket fica como "devolução pendente" no mapa local (§8.7, R-08).
+   Uma exceção inesperada nesta fase também finaliza o ticket com `PRECHECK_FAILED` (R-03). **Erro de banco antes do spawn (CR-008, R-07):** só erro de rede ou de prazo (`db_conn.is_network_error` ou `is_timeout`, §2.3) é "banco indisponível": o ticket é **devolvido à fila** (§5.1), ou finalizado `CANCELLED` se `cancel_requested = 'Y'` (R-02). Qualquer outro erro de banco (ex.: ORA-01031 por GRANT faltando, ORA-00942, ORA-30006 de lock persistente) finaliza `PRECHECK_FAILED` com a linha `[SSS] DB_ERROR: ORA-nnnnn` no log, sem a mensagem do Oracle. Se a própria devolução ou finalização falhar, o ticket fica como "devolução pendente" no mapa local (§8.7, R-08).
 2. **Diretórios de trabalho:**
    * `work_dir/ticket_<id>/`, do agente, com `0700`, guarda o estado local (`.sss_spawn`, `.sss_proc` e `.sss_result`, §8.7);
    * o diretório de trabalho do **script** (`cwd`, `HOME` e, com `tmp/`, `TMPDIR`) é `exec_work_dir/<usuário de execução>/ticket_<id>/`, criado pelo helper com o usuário de execução e `0700` (§8.0). Em DEV sem usuário de execução, é `work_dir/ticket_<id>/exec/`, com `tmp/`;
@@ -1637,7 +1637,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
 
 **Interpretadores lógicos (somente POSIX):** `PYTHON3`, `BASH` e `SH`.
 
-* O executável de cada interpretador vem de `[agent] interpreters`. Na inicialização, o agente confere, por `path_guard.validate_executable`: caminho absoluto e normalizado, existe, é arquivo executável e fica fora de `log_dir`, `work_dir` e `exec_work_dir`. Pode ser link simbólico (como `/usr/bin/python3`) e pode ficar nas pastas do sistema. Falha: `INTERPRETADOR_INSEGURO` (ou `NOT_FOUND`), CRITICAL.
+* O executável de cada interpretador vem de `[agent] interpreters`. Na inicialização, o agente confere, por `path_guard.validate_executable`: caminho absoluto e normalizado, existe, é arquivo executável e fica fora de `log_dir`, `work_dir` e `exec_work_dir`. Pode ser link simbólico (como `/usr/bin/python3`) e pode ficar nas pastas do sistema. Falha: `INTERPRETER_UNSAFE` (ou `NOT_FOUND`), CRITICAL.
 
 **Caminho livre (CR-005, D2): o script pode ficar em qualquer lugar do servidor, fora das pastas do sistema e do SSS**
 
@@ -1653,7 +1653,7 @@ Não há filtro por pasta (CR-005): o script fica num caminho absoluto, e um age
   * as pastas do caminho deixam o agente passar (`EACCES` é `NO_ACCESS`, diferente de `NOT_FOUND`);
   * é arquivo regular (`NOT_A_FILE`);
   * não é gravável por grupo nem por outros (`st_mode & 0o022 == 0`; senão `GROUP_OTHER_WRITABLE`). As pastas do caminho não são conferidas.
-* **Códigos de recusa:** `RELATIVE_PATH`, `PATH_NOT_NORMALIZED`, `HAS_DOTS`, `INVALID_SEPARATOR`, `INVALID_CHARACTER`, `SYSTEM_DIR`, `SSS_DIR`, `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE`, `GROUP_OTHER_WRITABLE`, `INTERPRETADOR_NAO_PERMITIDO` e `INTERPRETADOR_INSEGURO`. A mensagem de erro nunca inclui o caminho.
+* **Códigos de recusa:** `RELATIVE_PATH`, `PATH_NOT_NORMALIZED`, `HAS_DOTS`, `INVALID_SEPARATOR`, `INVALID_CHARACTER`, `SYSTEM_DIR`, `SSS_DIR`, `NOT_FOUND`, `NO_ACCESS`, `NOT_A_FILE`, `GROUP_OTHER_WRITABLE`, `INTERPRETER_NOT_ALLOWED` e `INTERPRETER_UNSAFE`. A mensagem de erro nunca inclui o caminho.
 * **Onde cada coisa é conferida (CR-011, S1):**
   * **no nó web** (cadastro, prévia e disparo): só o formato, o interpretador da allowlist e as pastas do sistema. O web pode nem ter o arquivo, e não emite aviso de arquivo ausente;
   * **no agente**, a cada execução (§8.4, passo 1): tudo acima, inclusive o arquivo real. Falha: `PRECHECK_FAILED` com o código na linha `[SSS]` do log.

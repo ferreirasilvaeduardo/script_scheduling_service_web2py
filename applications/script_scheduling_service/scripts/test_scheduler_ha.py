@@ -265,10 +265,10 @@ class TestExpansion(_Base):
     def test_corrida_e_outro_agente(self):
         self.rule()
         self.agenda.reserve_and_create_ticket = lambda *a: False
-        self.assertEqual(self.process(), "CORRIDA")
+        self.assertEqual(self.process(), "RACE")
         self.assertEqual((self.agenda.tickets, self.conn.commits), ({}, 0))
         self.agenda.locked_by_other.add(1)
-        self.assertEqual(self.process(), "OUTRO_AGENTE")
+        self.assertEqual(self.process(), "OTHER_AGENT")
 
     def test_pausas_pelo_rbac_com_a_traducao_unica(self):
         cases = (("usuario_ativo", "N", "USER_INACTIVE"), ("perfil_ativo", "N", "NO_PERMISSION"),
@@ -279,7 +279,7 @@ class TestExpansion(_Base):
             self.rule(i)
             self.queue.usuario[field] = value
             with self.assertLogs("sss_scheduler", "WARNING"):
-                self.assertEqual(self.process(i), "PAUSADA", field)
+                self.assertEqual(self.process(i), "PAUSED", field)
             self.assertEqual(self.agenda.rules[i]["pause_reason"], reason, field)
             self.assertEqual(self.agenda.rules[i]["updated_by"], "SYSTEM:" + AGENT)
         for key, reason in ((("script", "active"), "SCRIPT_INACTIVE"), (("environment", "active"), "ENVIRONMENT_INACTIVE")):
@@ -314,7 +314,7 @@ class TestExpansion(_Base):
         self.rule(last_ticket_id=50)
         self.agenda.tickets[50] = {"status": "RUNNING", "created_at": NOW - datetime.timedelta(minutes=5)}
         with self.assertLogs("sss_scheduler", "INFO") as logs:
-            self.assertEqual(self.process(), "AVANCADA")
+            self.assertEqual(self.process(), "ADVANCED")
         r = self.agenda.rules[1]
         self.assertEqual((r["last_ticket_id"], r["next_run_at"], r["last_run_at"]),
                          (50, datetime.datetime(2026, 10, 21, 9, 55), None), "R-05: sem mexer no ultimo ticket")
@@ -344,7 +344,7 @@ class TestExpansion(_Base):
         self.cfg = _Cfg(misfire_policy="SKIP")
         self.rule(next_run_at=three_days, run_time="09:00")
         with self.assertLogs("sss_scheduler", "WARNING"):
-            self.assertEqual(self.process(), "AVANCADA")
+            self.assertEqual(self.process(), "ADVANCED")
         self.assertEqual((self.agenda.tickets, self.agenda.rules[1]["next_run_at"]),
                          ({}, datetime.datetime(2026, 10, 21, 9, 0)))
         # R-21: SKIP com a vencida mais recente dentro da tolerancia gera o ticket dela.
@@ -365,7 +365,7 @@ class TestExpansion(_Base):
     def test_unica_conclui_com_e_sem_ticket(self):
         self.rule(recurrence_type="ONCE", run_time=None)
         with self.assertLogs("sss_scheduler", "INFO") as logs:
-            self.assertEqual(self.process(), "CONCLUIDA_COM_TICKET")
+            self.assertEqual(self.process(), "COMPLETED_WITH_TICKET")
         r = self.agenda.rules[1]
         self.assertEqual((r["active"], r["pause_reason"], r["next_run_at"]),
                          ("N", "COMPLETED", datetime.datetime(2026, 10, 20, 9, 55)), "proxima_execucao mantida (D1)")
@@ -376,19 +376,19 @@ class TestExpansion(_Base):
         self.cfg = _Cfg(misfire_policy="SKIP")
         self.rule(recurrence_type="ONCE", run_time=None, next_run_at=datetime.datetime(2026, 10, 19, 9, 0))
         with self.assertLogs("sss_scheduler", "INFO"):
-            self.assertEqual(self.process(), "CONCLUIDA_SEM_TICKET")
+            self.assertEqual(self.process(), "COMPLETED_WITHOUT_TICKET")
         self.assertEqual((self.agenda.tickets, self.agenda.rules[1]["last_ticket_id"]), ({}, None))
 
     def test_data_fim_conclui_com_o_ticket_da_ocorrencia(self):
         self.rule(end_date=datetime.datetime(2026, 10, 20, 23, 59))
-        self.assertEqual(self.process(), "CONCLUIDA_COM_TICKET")
+        self.assertEqual(self.process(), "COMPLETED_WITH_TICKET")
         self.assertEqual(self.agenda.rules[1]["pause_reason"], "COMPLETED")
 
     def test_sobreposicao_numa_regra_que_conclui(self):
         self.rule(recurrence_type="ONCE", run_time=None, last_ticket_id=50)
         self.agenda.tickets[50] = {"status": "RUNNING", "created_at": NOW}
         with self.assertLogs("sss_scheduler", "INFO") as logs:
-            self.assertEqual(self.process(), "CONCLUIDA_SEM_TICKET")
+            self.assertEqual(self.process(), "COMPLETED_WITHOUT_TICKET")
         self.assertTrue(any("SKIP_OVERLAP: regra concluida sem ticket; ocorrencias perdidas: 1" in l
                             for l in logs.output))
         self.assertEqual(len(self.agenda.tickets), 1)
@@ -396,7 +396,7 @@ class TestExpansion(_Base):
     def test_param_invalido_e_cron_invalido(self):
         self.rule(params_json=json.dumps({}))
         with self.assertLogs("sss_scheduler", "WARNING"):
-            self.assertEqual(self.process(), "PAUSADA")
+            self.assertEqual(self.process(), "PAUSED")
         self.assertEqual(self.agenda.rules[1]["pause_reason"], "INVALID_PARAM")
         detail = self.agenda.audit[0][1]
         self.assertTrue(detail.startswith("pause_reason: INVALID_PARAM; data_ref: "), detail)
@@ -408,7 +408,7 @@ class TestExpansion(_Base):
         self.setUp()
         self.rule(recurrence_type="CRON", cron_expression="99 * * * *", run_time=None)
         with self.assertLogs("sss_scheduler", "WARNING"):
-            self.assertEqual(self.process(), "PAUSADA")
+            self.assertEqual(self.process(), "PAUSED")
         self.assertEqual((self.agenda.rules[1]["pause_reason"], self.agenda.tickets), ("INVALID_CRON", {}))
 
     def test_r19_cron_sem_proxima_no_horizonte(self):
@@ -419,7 +419,7 @@ class TestExpansion(_Base):
         self.agenda.rules[1]["cron_expression"] = "55 9 * * *"
         with mock.patch("recurrence.next_run", side_effect=schedule_expansion.recurrence.CronError("sem ocorrencia")):
             with self.assertLogs("sss_scheduler", "WARNING"):
-                self.assertEqual(self.process(), "CRON_INVALIDO_COM_TICKET")
+                self.assertEqual(self.process(), "INVALID_CRON_WITH_TICKET")
         r = self.agenda.rules[1]
         self.assertEqual((r["pause_reason"], r["next_run_at"]), ("INVALID_CRON", datetime.datetime(2026, 10, 20, 9, 55)))
         self.assertEqual(len(self.agenda.tickets), 1, "o ticket da vencida e gerado antes de pausar")
@@ -435,11 +435,11 @@ class TestExpansion(_Base):
         self.rule()
         self.agenda.duplicate.add((1, datetime.datetime(2026, 10, 20, 9, 55)))
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.assertEqual(self.process(), "OCORRENCIA_DUPLICADA")
+            self.assertEqual(self.process(), "DUPLICATE_OCCURRENCE")
         r = self.agenda.rules[1]
         self.assertEqual((r["next_run_at"], r["last_ticket_id"]), (datetime.datetime(2026, 10, 21, 9, 55), None))
         self.assertEqual((self.conn.rollbacks, self.conn.commits), (1, 1))
-        self.assertTrue(any("OCORRENCIA_DUPLICADA" in l for l in logs.output))
+        self.assertTrue(any("DUPLICATE_OCCURRENCE" in l for l in logs.output))
         self.assertEqual(self.agenda.due_rules(self.conn, 50), [], "nao e reprocessada no ciclo seguinte")
 
     def test_r22_erro_de_banco_tres_vezes_e_erro_interno(self):
@@ -449,7 +449,7 @@ class TestExpansion(_Base):
         for n in (1, 2):
             self.agenda.failures = [("inserir_ticket", space)]
             with self.assertLogs("sss_scheduler", "WARNING") as logs:
-                self.assertEqual(d.process(self.conn, 1), "ERRO_BANCO")
+                self.assertEqual(d.process(self.conn, 1), "DB_ERROR")
             self.assertTrue(any("DESDOBRO_ERRO_BANCO: ORA-01653 (falha %d de 3 seguidas)" % n in l for l in logs.output))
             self.assertEqual((self.agenda.rules[1]["active"], self.agenda.tickets), ("Y", {}), "sem pausar")
         self.agenda.failures = [("inserir_ticket", space)]
@@ -587,7 +587,7 @@ class TestExpansionOracle(unittest.TestCase):
         bad = self._rule({})
         with self.assertLogs("sss_scheduler", "INFO"):
             self.assertEqual(self.des.process(self.conn, ok["id"]), "TICKET")
-            self.assertEqual(self.des.process(self.conn, bad["id"]), "PAUSADA")
+            self.assertEqual(self.des.process(self.conn, bad["id"]), "PAUSED")
         sch = self.obter_repo("schedules")
         r_ok, r_bad = sch.get(ok["id"]), sch.get(bad["id"])
         self.assertGreater(r_ok["next_run_at"], ok["next_run_at"])
