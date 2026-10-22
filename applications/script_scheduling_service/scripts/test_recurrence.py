@@ -15,8 +15,8 @@ NOW = D(2026, 10, 15, 10, 7, 30, 123456)
 START = D(2026, 1, 1)
 
 
-def rule(tipo, **extra):
-    base = {'recurrence_type': tipo, 'start_date': START, 'end_date': None, 'run_time': None,
+def rule(kind, **extra):
+    base = {'recurrence_type': kind, 'start_date': START, 'end_date': None, 'run_time': None,
             'week_days': None, 'month_day': None, 'cron_expression': None, 'next_run_at': None}
     base.update(extra)
     return base

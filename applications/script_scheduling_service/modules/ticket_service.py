@@ -73,9 +73,9 @@ DOWNLOAD_INTERRUPTED_MARKER = u"\n[SSS] download interrompido por falha na leitu
 class AccessDenied(Exception):
     """Execucao nao autorizada; o motivo (rbac.Reason) e destinado apenas ao log."""
 
-    def __init__(self, motivo):
-        Exception.__init__(self, motivo)
-        self.reason = motivo
+    def __init__(self, reason):
+        Exception.__init__(self, reason)
+        self.reason = reason
 
 
 class RerunError(Exception):
@@ -84,46 +84,46 @@ class RerunError(Exception):
     erros: dict codigo_campo -> mensagem, ja seguro para exibicao (sem valores).
     """
 
-    def __init__(self, ticket_id, erros):
-        Exception.__init__(self, ",".join(sorted(erros)))
+    def __init__(self, ticket_id, errors):
+        Exception.__init__(self, ",".join(sorted(errors)))
         self.ticket_id = ticket_id
-        self.errors = erros
+        self.errors = errors
 
 
 class InvalidOffset(ValueError):
     """Offset de leitura do log ausente, negativo ou nao inteiro."""
 
 
-def _offset(valor):
-    valor = _last(valor)
-    if isinstance(valor, int) and not isinstance(valor, bool) and 0 <= valor < 10 ** 10:
-        return valor
-    if isinstance(valor, str) and _RE_OFFSET.fullmatch(valor):
-        return int(valor)
+def _offset(value):
+    value = _last(value)
+    if isinstance(value, int) and not isinstance(value, bool) and 0 <= value < 10 ** 10:
+        return value
+    if isinstance(value, str) and _RE_OFFSET.fullmatch(value):
+        return int(value)
     raise InvalidOffset("offset invalido")
 
 
-def _id(valor):
-    if isinstance(valor, bool):
+def _id(value):
+    if isinstance(value, bool):
         return None
-    if isinstance(valor, int):
-        return valor if valor > 0 else None
-    if isinstance(valor, str) and _RE_ID.fullmatch(valor):
-        numero = int(valor)
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, str) and _RE_ID.fullmatch(value):
+        numero = int(value)
         return numero if numero > 0 else None
     return None
 
 
-def _last(valor):
+def _last(value):
     # Campo repetido no POST (hidden + checkbox): vale o ultimo enviado.
-    if isinstance(valor, (list, tuple)):
-        return valor[-1] if valor else None
-    return valor
+    if isinstance(value, (list, tuple)):
+        return value[-1] if value else None
+    return value
 
 
-def _options(parametro):
+def _options(parameter):
     try:
-        opcoes = json.loads(parametro.get("options_json") or "", object_pairs_hook=collections.OrderedDict)
+        opcoes = json.loads(parameter.get("options_json") or "", object_pairs_hook=collections.OrderedDict)
     except ValueError:
         return []
     if not isinstance(opcoes, dict):
@@ -131,88 +131,88 @@ def _options(parametro):
     return [(str(k), str(v)) for k, v in opcoes.items()]
 
 
-def _sorted_items(vinculos):
-    return sorted(vinculos, key=lambda v: int(v["sort_order"]))
+def _sorted_items(links):
+    return sorted(links, key=lambda v: int(v["sort_order"]))
 
 
-def _answer_text(valor):
-    if valor is True:
+def _answer_text(value):
+    if value is True:
         return "true"
-    if valor is False:
+    if value is False:
         return "false"
-    return valor
+    return value
 
 
-def _day(valor):
-    if not isinstance(valor, str):
+def _day(value):
+    if not isinstance(value, str):
         return None
     try:
-        return datetime.datetime.strptime(valor.strip(), _DAY_FORMAT)
+        return datetime.datetime.strptime(value.strip(), _DAY_FORMAT)
     except ValueError:
         return None
 
 
-def normalize_filters(entrada):
+def normalize_filters(input_value):
     """Allowlist de chaves e valores dos filtros da lista de tickets (querystring).
 
     Retorna OrderedDict apenas com os filtros validos, na forma de exibicao/URL: status
     (lista na ordem canonica), ambiente, script (int), solicitante, criado_de/criado_ate
     ('YYYY-MM-DD') e origem. Chaves desconhecidas e valores invalidos sao descartados.
     """
-    entrada = entrada or {}
+    input_value = input_value or {}
     limpos = collections.OrderedDict()
-    status = entrada.get("status")
+    status = input_value.get("status")
     if isinstance(status, str):
         status = [status]
     if isinstance(status, (list, tuple)):
         marcados = [st for st in STATUS_TICKET if st in status]
         if marcados:
             limpos["status"] = marcados
-    ambiente = _last(entrada.get("environment"))
+    ambiente = _last(input_value.get("environment"))
     if isinstance(ambiente, str) and _RE_ENVIRONMENT.fullmatch(ambiente):
         limpos["environment"] = ambiente
-    script = _id(_last(entrada.get("script")))
+    script = _id(_last(input_value.get("script")))
     if script is not None:
         limpos["script"] = script
-    solicitante = _last(entrada.get("requested_by"))
+    solicitante = _last(input_value.get("requested_by"))
     if isinstance(solicitante, str):
         solicitante = solicitante.strip().lower()
         if _RE_LOGIN.fullmatch(solicitante):
             limpos["requested_by"] = solicitante
     for chave in ("criado_de", "criado_ate"):
-        dia = _day(_last(entrada.get(chave)))
+        dia = _day(_last(input_value.get(chave)))
         if dia is not None:
             limpos[chave] = dia.strftime(_DAY_FORMAT)
-    origem = _last(entrada.get("origem"))
+    origem = _last(input_value.get("origem"))
     if origem in dict(SOURCES):
         limpos["origem"] = origem
     return limpos
 
 
-def _repo_filters(limpos):
+def _repo_filters(cleaned):
     """Traduz filtros normalizados para as chaves do contrato; periodo vira [inicio, fim + 1 dia)."""
     repo = {}
-    if "status" in limpos:
-        repo["status"] = list(limpos["status"])
-    if "environment" in limpos:
-        repo["environment"] = limpos["environment"]
-    if "script" in limpos:
-        repo["script_id"] = limpos["script"]
-    if "requested_by" in limpos:
-        repo["requested_by"] = limpos["requested_by"]
-    if "origem" in limpos:
-        repo["origem"] = limpos["origem"]
-    if "criado_de" in limpos:
-        repo["criado_inicio"] = _day(limpos["criado_de"])
-    if "criado_ate" in limpos:
-        repo["criado_fim"] = _day(limpos["criado_ate"]) + datetime.timedelta(days=1)
+    if "status" in cleaned:
+        repo["status"] = list(cleaned["status"])
+    if "environment" in cleaned:
+        repo["environment"] = cleaned["environment"]
+    if "script" in cleaned:
+        repo["script_id"] = cleaned["script"]
+    if "requested_by" in cleaned:
+        repo["requested_by"] = cleaned["requested_by"]
+    if "origem" in cleaned:
+        repo["origem"] = cleaned["origem"]
+    if "criado_de" in cleaned:
+        repo["criado_inicio"] = _day(cleaned["criado_de"])
+    if "criado_ate" in cleaned:
+        repo["criado_fim"] = _day(cleaned["criado_ate"]) + datetime.timedelta(days=1)
     return repo
 
 
-def _duration(ticket, agora):
+def _duration(ticket, now):
     fim = ticket.get("finished_at")
     if fim is None and ticket.get("status") == "RUNNING":
-        fim = agora
+        fim = now
     return ui_helpers.formatar_duracao(ticket.get("started_at"), fim)
 
 
@@ -237,18 +237,18 @@ def _display_argv(snap):
 class TicketService(object):
     """Servico de disparo com dependencias injetadas (repositorios, arvore de scripts e log)."""
 
-    def __init__(self, catalogo, tickets, log):
-        self._catalog = catalogo
+    def __init__(self, catalog, tickets, log):
+        self._catalog = catalog
         self._tickets = tickets
         self._log = log
 
     # ------------------------------------------------------------ autorizacao
 
-    def _deny(self, ctx, motivo, script_id, ambiente):
+    def _deny(self, ctx, reason, script_id, environment):
         self._log.warning("disparo negado (login=%s script_id=%r environment=%r reason=%s)",
-                          (ctx or {}).get("login"), script_id, ambiente, motivo,
+                          (ctx or {}).get("login"), script_id, environment, reason,
                           extra={"action": "RBAC"})
-        raise AccessDenied(motivo)
+        raise AccessDenied(reason)
 
     def _script(self, ctx, script_id):
         sid = _id(script_id)
@@ -259,30 +259,30 @@ class TicketService(object):
         except RepoNotFound:
             self._deny(ctx, rbac.Reason.INVALID_DATA, script_id, None)
 
-    def _environment_by_name(self, nome):
-        if not isinstance(nome, str) or not _RE_ENVIRONMENT.fullmatch(nome):
+    def _environment_by_name(self, name):
+        if not isinstance(name, str) or not _RE_ENVIRONMENT.fullmatch(name):
             return None
-        pagina = self._catalog.environments_list(filtros={"name": nome}, pagina=1, tamanho=_ENVIRONMENTS_MAX)
+        pagina = self._catalog.environments_list(filters={"name": name}, page=1, size=_ENVIRONMENTS_MAX)
         for amb in pagina["itens"]:
-            if amb.get("name") == nome:
+            if amb.get("name") == name:
                 return amb
         return None
 
-    def _authorize(self, ctx, script_id, ambiente):
+    def _authorize(self, ctx, script_id, environment):
         """Recarrega script, ambiente e homologacao do repositorio e aplica can_execute."""
         script = self._script(ctx, script_id)
-        amb = self._environment_by_name(ambiente)
+        amb = self._environment_by_name(environment)
         if amb is None:
-            self._deny(ctx, rbac.Reason.INVALID_DATA, script_id, ambiente)
+            self._deny(ctx, rbac.Reason.INVALID_DATA, script_id, environment)
         homologacoes = self._catalog.homologation_get(script["id"])
         ok, motivo = rbac.can_execute(ctx, script, amb, homologacoes)
         if not ok:
             self._deny(ctx, motivo, script["id"], amb["name"])
         return script, amb
 
-    def authorize(self, ctx, script_id, ambiente):
+    def authorize(self, ctx, script_id, environment):
         """(script, ambiente) recarregados do repositorio e autorizados por can_execute; lanca AccessDenied."""
-        return self._authorize(ctx, script_id, ambiente)
+        return self._authorize(ctx, script_id, environment)
 
     def _executable_environments(self, ctx, script):
         ambientes = []
@@ -333,19 +333,19 @@ class TicketService(object):
     def _links(self, script_id):
         return [v for v in self._catalog.script_params_get(script_id) if v.get("active") == "Y"]
 
-    def _display_default(self, vinculo):
-        for fonte in (vinculo.get("default_value_override"), vinculo.get("default_value")):
+    def _display_default(self, link):
+        for fonte in (link.get("default_value_override"), link.get("default_value")):
             if fonte is None or (isinstance(fonte, str) and fonte.strip() == ""):
                 continue
             try:
-                return params_compiler.validate_value(vinculo, fonte)
+                return params_compiler.validate_value(link, fonte)
             except params_compiler.ParamError:
                 return None
         return None
 
-    def _example(self, vinculo):
+    def _example(self, link):
         """Texto de ajuda gerado pelo tipo (README §5.4, "Clareza no disparo"); sem coluna nova."""
-        tipo = vinculo.get("component_type")
+        tipo = link.get("component_type")
         if tipo == "DATE":
             return u"Use o formato AAAA-MM-DD, por exemplo %s." % self._tickets.now().strftime("%Y-%m-%d")
         if tipo == "NUMBER":
@@ -354,20 +354,20 @@ class TicketService(object):
             return u"Escolha uma das opções da lista."
         if tipo == "CHECKBOX":
             return u"Marque para sim; deixe desmarcado para não."
-        if tipo == "TEXT" and vinculo.get("validation_regex"):
+        if tipo == "TEXT" and link.get("validation_regex"):
             return u"Siga o formato pedido pelo cadastro."
         return None
 
-    def prepare_form(self, ctx, script_id, ambiente, valores=None, erros=None, avisos=None):
+    def prepare_form(self, ctx, script_id, environment, values=None, errors=None, warnings=None):
         """Vinculos ordenados com padroes resolvidos para exibicao; valida can_execute.
 
         valores/erros (opcionais) reapresentam um POST com erro; avisos (opcional) sao notas por campo
         (ex.: resposta da ultima execucao que mudou). Valores e padroes sensiveis nunca sao devolvidos.
         """
-        script, amb = self._authorize(ctx, script_id, ambiente)
-        valores = valores or {}
-        erros = erros or {}
-        avisos = avisos or {}
+        script, amb = self._authorize(ctx, script_id, environment)
+        values = values or {}
+        errors = errors or {}
+        warnings = warnings or {}
         campos = []
         for v in _sorted_items(self._links(script["id"])):
             codigo = v["code"]
@@ -376,9 +376,9 @@ class TicketService(object):
             opcoes = _options(v) if tipo == "SELECT" else []
             padrao_real = self._display_default(v)
             padrao = None if sensivel else padrao_real
-            enviado = _last(valores.get(codigo))
+            enviado = _last(values.get(codigo))
             if tipo == "CHECKBOX":
-                if codigo in valores:
+                if codigo in values:
                     marcado = isinstance(enviado, str) and enviado.strip().lower() in ("true", "1")
                 else:
                     marcado = padrao is True
@@ -402,9 +402,9 @@ class TicketService(object):
                 "padrao_texto": padrao_texto,
                 "valor": valor,
                 "marcado": marcado,
-                "erro": erros.get(codigo),
+                "erro": errors.get(codigo),
                 "exemplo": self._example(v),
-                "aviso": avisos.get(codigo),
+                "aviso": warnings.get(codigo),
             })
         prioridades = [(p, PRIORITY_LABELS[p]) for p in rbac.PRIORITIES if rbac.allowed_priority(ctx, p)]
         return {
@@ -418,53 +418,53 @@ class TicketService(object):
 
     # ------------------------------------------------------------- validacao
 
-    def _priority(self, ctx, valor, erros):
-        valor = _last(valor)
-        if valor is None or valor == "":
+    def _priority(self, ctx, value, errors):
+        value = _last(value)
+        if value is None or value == "":
             prioridade = DEFAULT_PRIORITY
         else:
-            prioridade = _id(valor.strip() if isinstance(valor, str) else valor)
+            prioridade = _id(value.strip() if isinstance(value, str) else value)
         if prioridade is not None and rbac.allowed_priority(ctx, prioridade):
             return prioridade
         if prioridade == rbac.ADMIN_PRIORITY:
-            erros[PRIORITY_FIELD] = u"A prioridade 1 é exclusiva de administradores."
+            errors[PRIORITY_FIELD] = u"A prioridade 1 é exclusiva de administradores."
         else:
-            erros[PRIORITY_FIELD] = u"Selecione uma prioridade entre 1 e 4."
+            errors[PRIORITY_FIELD] = u"Selecione uma prioridade entre 1 e 4."
         return None
 
-    def _scheduled_at(self, valor, agora, erros):
-        valor = _last(valor)
-        if valor is None or (isinstance(valor, str) and valor.strip() == ""):
+    def _scheduled_at(self, value, now, errors):
+        value = _last(value)
+        if value is None or (isinstance(value, str) and value.strip() == ""):
             return None
         data = None
-        if isinstance(valor, str):
+        if isinstance(value, str):
             for formato in _SCHEDULED_AT_FORMATS:
                 try:
-                    data = datetime.datetime.strptime(valor.strip(), formato)
+                    data = datetime.datetime.strptime(value.strip(), formato)
                     break
                 except ValueError:
                     continue
         if data is None:
-            erros[SCHEDULED_AT_FIELD] = u"Informe uma data e hora válidas para o agendamento."
+            errors[SCHEDULED_AT_FIELD] = u"Informe uma data e hora válidas para o agendamento."
             return None
         # README §5.4 passo 4: >= SYSDATE exato, sem tolerancia de minuto.
-        if data < agora:
-            erros[SCHEDULED_AT_FIELD] = (u"O horário escolhido já passou. "
+        if data < now:
+            errors[SCHEDULED_AT_FIELD] = (u"O horário escolhido já passou. "
                                         u"Escolha um horário futuro, ou deixe em branco para rodar agora.")
             return None
-        limite = agora + datetime.timedelta(days=366)
+        limite = now + datetime.timedelta(days=366)
         if data > limite:
-            erros[SCHEDULED_AT_FIELD] = u"Escolha uma data até %s." % limite.strftime("%d/%m/%Y")
+            errors[SCHEDULED_AT_FIELD] = u"Escolha uma data até %s." % limite.strftime("%d/%m/%Y")
             return None
         return data.replace(microsecond=0)
 
-    def _compile(self, ctx, script, amb, respostas, agora, erros):
+    def _compile(self, ctx, script, env, answers, now, errors):
         """Confere o formato do caminho e compila o snapshot v4, acumulando erros por campo."""
         vinculos = self._links(script["id"])
         codigos = set(v["code"] for v in vinculos)
-        if not isinstance(respostas, dict):
-            respostas = {}
-        respostas = dict((k, _last(v)) for k, v in respostas.items() if k in codigos)
+        if not isinstance(answers, dict):
+            answers = {}
+        answers = dict((k, _last(v)) for k, v in answers.items() if k in codigos)
 
         # CR-011 (README §5.4, §8.5): o web confere so o formato do caminho e as pastas do sistema; o arquivo
         # e conferido pelo agente, no servidor onde ele roda (README §8.4).
@@ -474,43 +474,43 @@ class TicketService(object):
         except path_guard.PathGuardError as e:
             self._log.warning("caminho do script recusado (login=%s script_id=%s code=%s)",
                               ctx["login"], script["id"], e.code, extra={"action": "TICKET_CREATE"})
-            erros[GENERAL_FIELD] = MSG_SCRIPT_UNAVAILABLE
+            errors[GENERAL_FIELD] = MSG_SCRIPT_UNAVAILABLE
 
         snapshot, resolvidos, erros_param = params_compiler.compile_snapshot(
-            script, vinculos, respostas, agora)
+            script, vinculos, answers, now)
         for codigo, mensagem in erros_param.items():
-            erros.setdefault(codigo, mensagem)
-        if erros:
+            errors.setdefault(codigo, mensagem)
+        if errors:
             self._log.info("validacao do disparo com erros (login=%s script_id=%s ambiente=%s campos=%s)",
-                           ctx["login"], script["id"], amb["name"], ",".join(sorted(erros)),
+                           ctx["login"], script["id"], env["name"], ",".join(sorted(errors)),
                            extra={"action": "TICKET_CREATE"})
             return None, None, vinculos
         return snapshot, resolvidos, vinculos
 
     # --------------------------------------------------------------- acoes
 
-    def preview(self, ctx, script_id, ambiente, respostas):
+    def preview(self, ctx, script_id, environment, answers):
         """Compila sem gravar e devolve (argv_exibicao | None, erros_por_campo); sensiveis mascarados."""
-        script, amb = self._authorize(ctx, script_id, ambiente)
+        script, amb = self._authorize(ctx, script_id, environment)
         erros = collections.OrderedDict()
-        snapshot, _resolvidos, _vinculos = self._compile(ctx, script, amb, respostas,
+        snapshot, _resolvidos, _vinculos = self._compile(ctx, script, amb, answers,
                                                           self._tickets.now(), erros)
         if snapshot is None:
             return None, dict(erros)
         return params_compiler.display_argv(json.loads(snapshot)), {}
 
-    def trigger_summary(self, ctx, script_id, ambiente, respostas, prioridade=None, scheduled_at=None):
+    def trigger_summary(self, ctx, script_id, environment, answers, priority=None, scheduled_at=None):
         """Resumo em frase do modal de confirmacao (README §5.4), montado pelo servidor; nao grava nada.
 
         Retorna {argv, erros, resumo} com resumo = {script, ambiente, quando, prioridade, respostas:
         [{rotulo, valor}], frase}. Sensiveis aparecem como '****'; vazios como '(sem resposta)'.
         """
-        script, amb = self._authorize(ctx, script_id, ambiente)
+        script, amb = self._authorize(ctx, script_id, environment)
         agora = self._tickets.now()
         erros = collections.OrderedDict()
-        prio = self._priority(ctx, prioridade, erros)
+        prio = self._priority(ctx, priority, erros)
         sched = self._scheduled_at(scheduled_at, agora, erros)
-        snapshot, resolvidos, vinculos = self._compile(ctx, script, amb, respostas, agora, erros)
+        snapshot, resolvidos, vinculos = self._compile(ctx, script, amb, answers, agora, erros)
         if snapshot is None or erros:
             return {"argv": None, "erros": dict(erros), "resumo": None}
         linhas = []
@@ -534,26 +534,26 @@ class TicketService(object):
                 "resumo": {"script": script["name"], "environment": amb["name"], "quando": quando, "priority": prio,
                            "respostas": linhas, "frase": frase}}
 
-    def _last_ticket(self, ctx, script_id, ambiente):
+    def _last_ticket(self, ctx, script_id, environment):
         sid = _id(script_id)
-        if sid is None or not ambiente:
+        if sid is None or not environment:
             return None
-        itens = self._tickets.list(filtros={"requested_by": ctx.get("login"), "script_id": sid,
-                                              "environment": ambiente}, pagina=1, tamanho=1)["itens"]
+        itens = self._tickets.list(filters={"requested_by": ctx.get("login"), "script_id": sid,
+                                              "environment": environment}, page=1, size=1)["itens"]
         return itens[0] if itens else None
 
-    def has_last_run(self, ctx, script_id, ambiente):
+    def has_last_run(self, ctx, script_id, environment):
         """True se o proprio usuario ja pediu este script neste ambiente (botao do README §5.4)."""
-        return self._last_ticket(ctx, script_id, ambiente) is not None
+        return self._last_ticket(ctx, script_id, environment) is not None
 
-    def last_answers(self, ctx, script_id, ambiente):
+    def last_answers(self, ctx, script_id, environment):
         """(valores, avisos) da ultima execucao propria: so nao sensiveis e ainda validas (README §5.4).
 
         Nada e gravado. Sensivel fica vazio com o aviso de digitar de novo; resposta que nao vale mais
         no catalogo atual fica vazia com o aviso de que mudou.
         """
-        script, _amb = self._authorize(ctx, script_id, ambiente)
-        ticket = self._last_ticket(ctx, script["id"], ambiente)
+        script, _amb = self._authorize(ctx, script_id, environment)
+        ticket = self._last_ticket(ctx, script["id"], environment)
         valores, avisos = {}, {}
         if ticket is None:
             return valores, avisos
@@ -573,8 +573,8 @@ class TicketService(object):
             valores[v["code"]] = bruto
         return valores, avisos
 
-    def create_ticket(self, ctx, ip, script_id, ambiente, respostas, prioridade, scheduled_at,
-                     reexecucao_de=None):
+    def create_ticket(self, ctx, ip, script_id, environment, answers, priority, scheduled_at,
+                     rerun_of=None):
         """Cria o ticket (README §5.4). Retorna (ticket_id | None, erros_por_campo).
 
         reexecucao_de (opcional) vincula o novo ticket ao original (README §5.5), exigindo
@@ -582,26 +582,26 @@ class TicketService(object):
         can_execute nega. A auditoria e gravada pelo repositorio na mesma transacao do INSERT.
         """
         parent_id = None
-        if reexecucao_de not in (None, ""):
-            original = self._rerunnable_ticket(ctx, reexecucao_de)
-            if str(original["script_id"]) != str(script_id) or original["environment"] != ambiente:
-                self._deny(ctx, "REEXECUCAO_DIVERGENTE", script_id, ambiente)
+        if rerun_of not in (None, ""):
+            original = self._rerunnable_ticket(ctx, rerun_of)
+            if str(original["script_id"]) != str(script_id) or original["environment"] != environment:
+                self._deny(ctx, "REEXECUCAO_DIVERGENTE", script_id, environment)
             parent_id = original["id"]
-        script, amb = self._authorize(ctx, script_id, ambiente)
+        script, amb = self._authorize(ctx, script_id, environment)
         agora = self._tickets.now()
         erros = collections.OrderedDict()
-        prio = self._priority(ctx, prioridade, erros)
+        prio = self._priority(ctx, priority, erros)
         sched = self._scheduled_at(scheduled_at, agora, erros)
-        snapshot, resolvidos, vinculos = self._compile(ctx, script, amb, respostas, agora, erros)
+        snapshot, resolvidos, vinculos = self._compile(ctx, script, amb, answers, agora, erros)
         if erros:
             return None, dict(erros)
         return self._save(ctx, ip, script, amb, prio, sched, snapshot, resolvidos, vinculos, parent_id)
 
-    def _save(self, ctx, ip, script, amb, prio, sched, snapshot, resolvidos, vinculos, parent_id):
+    def _save(self, ctx, ip, script, env, prio, sched, snapshot, resolved, links, parent_id):
         acao = "TICKET_CREATE" if parent_id is None else "TICKET_RERUN"
         ticket = {
             "script_id": script["id"],
-            "environment": amb["name"],
+            "environment": env["name"],
             "requested_by": ctx["login"],
             "source_ip": ip,
             "status": "PENDING",
@@ -611,18 +611,18 @@ class TicketService(object):
             "parent_ticket_id": parent_id,
         }
         linhas = []
-        for v in _sorted_items(vinculos):
-            valor = resolvidos.get(v["code"])
+        for v in _sorted_items(links):
+            valor = resolved.get(v["code"])
             if valor is not None:
                 linhas.append({"parameter_id": v["parameter_id"], "answer_value": _answer_text(valor)})
         try:
             ticket_id = self._tickets.create(ticket, linhas)
         except RepoError:
             self._log.exception("falha ao gravar ticket (login=%s script_id=%s environment=%s pai=%s)",
-                                ctx["login"], script["id"], amb["name"], parent_id, extra={"action": acao})
+                                ctx["login"], script["id"], env["name"], parent_id, extra={"action": acao})
             return None, {GENERAL_FIELD: MSG_CREATE_FAILED}
         self._log.info("ticket criado (ticket=%s login=%s script_id=%s environment=%s priority=%s pai=%s ip=%s)",
-                       ticket_id, ctx["login"], script["id"], amb["name"], prio, parent_id, ip,
+                       ticket_id, ctx["login"], script["id"], env["name"], prio, parent_id, ip,
                        extra={"action": acao})
         return ticket_id, {}
 
@@ -646,7 +646,7 @@ class TicketService(object):
         except RepoNotFound:
             return False
 
-    def _visible_ticket(self, ctx, ticket_id, acao):
+    def _visible_ticket(self, ctx, ticket_id, action):
         """Ticket existente e visivel; fora do escopo e tratado como inexistente (404, nao 403)."""
         tid = _id(ticket_id)
         if tid is None:
@@ -654,18 +654,18 @@ class TicketService(object):
         ticket = self._tickets.get(tid)
         if not self._can_view(ctx, ticket):
             self._log.warning("ticket fora do escopo (login=%s ticket=%s environment=%s)",
-                              ctx.get("login"), tid, ticket.get("environment"), extra={"action": acao})
+                              ctx.get("login"), tid, ticket.get("environment"), extra={"action": action})
             raise RepoNotFound("ticket fora do escopo")
         return ticket
 
     def _script_names(self):
-        pagina = self._catalog.scripts_list(pagina=1, tamanho=_SCRIPTS_MAX)
+        pagina = self._catalog.scripts_list(page=1, size=_SCRIPTS_MAX)
         return dict((s["id"], s["name"]) for s in pagina["itens"])
 
     def filter_options(self, ctx):
         """Opcoes dos selects de filtro: ambientes visiveis ao perfil e scripts do catalogo."""
         if rbac.has_feature(ctx, "VIEW_LOGS") and ctx.get("is_admin") is True:
-            pagina = self._catalog.environments_list(pagina=1, tamanho=_ENVIRONMENTS_MAX)
+            pagina = self._catalog.environments_list(page=1, size=_ENVIRONMENTS_MAX)
             ambientes = sorted(a["name"] for a in pagina["itens"])
         else:
             ambientes = sorted(ctx.get("environments") or ())
@@ -673,7 +673,7 @@ class TicketService(object):
         return {"environments": ambientes, "scripts": scripts, "status": list(STATUS_TICKET),
                 "origens": list(SOURCES)}
 
-    def _query_scope(self, ctx, repo_filtros):
+    def _query_scope(self, ctx, repo_filters):
         """(visivel, escopo_ambientes) da consulta; sem VIEW_LOGS fixa o solicitante em repo_filtros.
 
         Com VIEW_LOGS: ambientes autorizados (admin: todos, escopo None). Sem VIEW_LOGS: apenas
@@ -684,9 +684,9 @@ class TicketService(object):
                 return True, None
             escopo = sorted(ctx.get("environments") or ())
             return bool(escopo), escopo
-        if repo_filtros.get("requested_by", ctx["login"]) != ctx["login"]:
+        if repo_filters.get("requested_by", ctx["login"]) != ctx["login"]:
             return False, None
-        repo_filtros["requested_by"] = ctx["login"]
+        repo_filters["requested_by"] = ctx["login"]
         return True, None
 
     def _runs_scope(self, ctx):
@@ -780,7 +780,7 @@ class TicketService(object):
             "filtro_lista": {"script": sid, "criado_de": desde.strftime("%Y-%m-%d")},
         }
 
-    def home_summary(self, ctx, horas=24, ultimos=5):
+    def home_summary(self, ctx, hours=24, latest=5):
         """Cartoes do painel inicial no escopo da lista de tickets; None sem acesso a consulta.
 
         Retorna {"contagem": [(status, quantidade)], "desde": datetime, "meus": [itens da lista]}:
@@ -790,20 +790,20 @@ class TicketService(object):
         if not self.can_query(ctx):
             return None
         agora = self._tickets.now()
-        desde = agora - datetime.timedelta(hours=horas)
+        desde = agora - datetime.timedelta(hours=hours)
         contagem = []
         for status in STATUS_TICKET:
             repo_filtros = {"status": [status], "criado_inicio": desde}
             visivel, escopo = self._query_scope(ctx, repo_filtros)
             total = 0
             if visivel:
-                total = self._tickets.list(filtros=repo_filtros, pagina=1, tamanho=1,
-                                             escopo_ambientes=escopo)["total"]
+                total = self._tickets.list(filters=repo_filtros, page=1, size=1,
+                                             environment_scope=escopo)["total"]
             contagem.append((status, total))
-        meus = self.list(ctx, {"requested_by": ctx["login"]}, 1, ultimos)["itens"]
+        meus = self.list(ctx, {"requested_by": ctx["login"]}, 1, latest)["itens"]
         return {"contagem": contagem, "desde": desde, "meus": meus}
 
-    def list(self, ctx, filtros, pagina, tamanho):
+    def list(self, ctx, filters, page, size):
         """Lista paginada no escopo do perfil (README §4.3.C).
 
         Com VIEW_LOGS: ambientes autorizados (admin: todos). Sem VIEW_LOGS: apenas os
@@ -811,18 +811,18 @@ class TicketService(object):
         """
         if not self.can_query(ctx):
             self._deny(ctx, rbac.Reason.NO_FEATURE, None, None)
-        repo_filtros = _repo_filters(normalize_filters(filtros))
-        vazio = {"itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
+        repo_filtros = _repo_filters(normalize_filters(filters))
+        vazio = {"itens": [], "total": 0, "pagina": 1, "tamanho": size}
         visivel, escopo = self._query_scope(ctx, repo_filtros)
         if not visivel:
             return vazio
-        resultado = self._tickets.list(filtros=repo_filtros, pagina=pagina, tamanho=tamanho,
-                                         escopo_ambientes=escopo)
-        info = ui_helpers.paginacao_info(pagina, tamanho, resultado["total"],
+        resultado = self._tickets.list(filters=repo_filtros, page=page, size=size,
+                                         environment_scope=escopo)
+        info = ui_helpers.paginacao_info(page, size, resultado["total"],
                                          resultado.get("total_limitado", False), len(resultado["itens"]))
         if not resultado["itens"] and info["pagina"] != resultado["pagina"]:
-            resultado = self._tickets.list(filtros=repo_filtros, pagina=info["pagina"], tamanho=tamanho,
-                                             escopo_ambientes=escopo)
+            resultado = self._tickets.list(filters=repo_filtros, page=info["pagina"], size=size,
+                                             environment_scope=escopo)
         agora = self._tickets.now()
         nomes = self._script_names()
         itens = []
@@ -897,8 +897,8 @@ class TicketService(object):
             if original is not None and self._can_view(ctx, original):
                 pai = {"id": original["id"], "status": original["status"]}
         filhos = [{"id": f["id"], "status": f["status"]}
-                  for f in self._tickets.list(filtros={"parent_ticket_id": ticket["id"]}, pagina=1,
-                                                tamanho=_CHILDREN_MAX)["itens"]
+                  for f in self._tickets.list(filters={"parent_ticket_id": ticket["id"]}, page=1,
+                                                size=_CHILDREN_MAX)["itens"]
                   if self._can_view(ctx, f)]
         filhos.sort(key=lambda f: f["id"])
 
@@ -1071,9 +1071,9 @@ class TicketService(object):
             self._deny(ctx, rbac.Reason.NO_FEATURE, ticket["script_id"], ticket["environment"])
         return ticket
 
-    def _original_answers(self, ticket, vinculos):
+    def _original_answers(self, ticket, links):
         """Respostas resolvidas do original (tbsss_ticket_answer) indexadas pelo codigo vigente."""
-        codigos = dict((v["parameter_id"], v["code"]) for v in vinculos)
+        codigos = dict((v["parameter_id"], v["code"]) for v in links)
         respostas = {}
         for r in self._tickets.answers(ticket["id"]):
             codigo = codigos.get(r["parameter_id"])
@@ -1137,7 +1137,7 @@ def _service():
             fabrica = current.repo_factory
             cfg = current.sss_cfg
             _default = TicketService(
-                catalogo=fabrica.get("catalog"),
+                catalog=fabrica.get("catalog"),
                 tickets=fabrica.get("tickets"),
                 log=sss_logging.get_logger("sss_web", cfg),
             )
@@ -1154,14 +1154,14 @@ def available_environments(ctx, script_id):
     return _service().available_environments(ctx, script_id)
 
 
-def prepare_form(ctx, script_id, ambiente, valores=None, erros=None, avisos=None):
+def prepare_form(ctx, script_id, environment, values=None, errors=None, warnings=None):
     """Questionario do script no ambiente (servico padrao)."""
-    return _service().prepare_form(ctx, script_id, ambiente, valores, erros, avisos)
+    return _service().prepare_form(ctx, script_id, environment, values, errors, warnings)
 
 
-def trigger_summary(ctx, script_id, ambiente, respostas, prioridade=None, scheduled_at=None):
+def trigger_summary(ctx, script_id, environment, answers, priority=None, scheduled_at=None):
     """Resumo em frase do disparo (servico padrao)."""
-    return _service().trigger_summary(ctx, script_id, ambiente, respostas, prioridade, scheduled_at)
+    return _service().trigger_summary(ctx, script_id, environment, answers, priority, scheduled_at)
 
 
 def script_history(ctx, script_id):
@@ -1174,25 +1174,25 @@ def routine_catalog(ctx):
     return _service().routine_catalog(ctx)
 
 
-def has_last_run(ctx, script_id, ambiente):
+def has_last_run(ctx, script_id, environment):
     """Ha execucao propria anterior deste script neste ambiente (servico padrao)."""
-    return _service().has_last_run(ctx, script_id, ambiente)
+    return _service().has_last_run(ctx, script_id, environment)
 
 
-def last_answers(ctx, script_id, ambiente):
+def last_answers(ctx, script_id, environment):
     """Respostas reutilizaveis da ultima execucao propria (servico padrao)."""
-    return _service().last_answers(ctx, script_id, ambiente)
+    return _service().last_answers(ctx, script_id, environment)
 
 
-def preview(ctx, script_id, ambiente, respostas):
+def preview(ctx, script_id, environment, answers):
     """Previa do argv mascarado (servico padrao)."""
-    return _service().preview(ctx, script_id, ambiente, respostas)
+    return _service().preview(ctx, script_id, environment, answers)
 
 
-def create_ticket(ctx, ip, script_id, ambiente, respostas, prioridade, scheduled_at, reexecucao_de=None):
+def create_ticket(ctx, ip, script_id, environment, answers, priority, scheduled_at, rerun_of=None):
     """Criacao do ticket (servico padrao)."""
-    return _service().create_ticket(ctx, ip, script_id, ambiente, respostas, prioridade, scheduled_at,
-                                   reexecucao_de)
+    return _service().create_ticket(ctx, ip, script_id, environment, answers, priority, scheduled_at,
+                                   rerun_of)
 
 
 def can_query(ctx):
@@ -1205,9 +1205,9 @@ def filter_options(ctx):
     return _service().filter_options(ctx)
 
 
-def list_page(ctx, filtros, pagina, tamanho):
+def list_page(ctx, filters, page, size):
     """Lista de tickets no escopo do perfil (servico padrao)."""
-    return _service().list(ctx, filtros, pagina, tamanho)
+    return _service().list(ctx, filters, page, size)
 
 
 def home_summary(ctx):

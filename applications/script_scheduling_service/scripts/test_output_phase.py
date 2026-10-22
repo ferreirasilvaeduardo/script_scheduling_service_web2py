@@ -50,31 +50,31 @@ class _Plat(object):
     OUTPUT_TOO_MANY_FILES = 7
     OUTPUT_TOO_MANY_BYTES = 8
 
-    def __init__(self, conteudo=None, rc=0):
-        self.content = conteudo
+    def __init__(self, content=None, rc=0):
+        self.content = content
         self.rc = rc
         self.signals = []
         self.cleaned = []
         self.proc = None
 
-    def start_pack(self, base, relativo, max_bytes, max_arquivos, fd, usuario):
+    def start_pack(self, base, relative, max_bytes, max_files, fd, user):
         if self.content is not None:
             os.write(fd, self.content)
         self.proc = _Proc(None)
         return self.proc
 
-    def signal_group(self, processo, sinal):
-        self.signals.append(sinal)
+    def signal_group(self, process, signal_value):
+        self.signals.append(signal_value)
         return True
 
-    def clean_output(self, base, relativo, usuario):
-        self.cleaned.append((base, relativo, usuario))
+    def clean_output(self, base, relative, user):
+        self.cleaned.append((base, relative, user))
 
 
-def _zip(arquivos):
+def _zip(files):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        for nome, dados in arquivos.items():
+        for nome, dados in files.items():
             z.writestr(nome, dados)
     return buf.getvalue()
 
@@ -218,11 +218,11 @@ class TestLoopWithOutput(tsc._Base):
         os.mkdir(self.output_dir, 0o755)
         self.repo_output = RepoOutputMemory(self.db.tickets)
 
-    def start_agent(self, **mudancas):
-        mudancas.setdefault("output_dir", self.output_dir)
-        mudancas.setdefault("output_max_files", 5)
-        mudancas.setdefault("output_max_bytes", 1048576)
-        return tsc._Base.start_agent(self, **mudancas)
+    def start_agent(self, **changes):
+        changes.setdefault("output_dir", self.output_dir)
+        changes.setdefault("output_max_files", 5)
+        changes.setdefault("output_max_bytes", 1048576)
+        return tsc._Base.start_agent(self, **changes)
 
     def _ticket_dir(self, tid):
         for raiz, dirs, _arqs in os.walk(self.output_dir):

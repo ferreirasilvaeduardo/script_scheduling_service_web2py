@@ -23,8 +23,8 @@ class RepoConflict(RepoError):
 class RepoViolation(RepoError):
     """Violacao de constraint (UK, CK, FK) ou regra de imutabilidade."""
 
-    def __init__(self, mensagem, constraint=None):
-        super(RepoViolation, self).__init__(mensagem)
+    def __init__(self, message, constraint=None):
+        super(RepoViolation, self).__init__(message)
         self.constraint = constraint
 
 

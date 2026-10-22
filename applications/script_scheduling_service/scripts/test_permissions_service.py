@@ -45,7 +45,7 @@ class TestPermissions(unittest.TestCase):
         disparo = TicketService(self.catalog, repo_factory.get("tickets"), log)
         self.svc = PermissionsService(self.rbac_repo, self.catalog, disparo, log)
         self.trigger = disparo
-        self.n_audit = repo_factory.get("audit").list(pagina=1, tamanho=1)["total"]
+        self.n_audit = repo_factory.get("audit").list(page=1, size=1)["total"]
 
     def test_admin_ve_frase_e_todas_as_telas(self):
         d = self.svc.build(self.ctx["admin"])
@@ -77,12 +77,12 @@ class TestPermissions(unittest.TestCase):
         ctx = dict(self.ctx["op.hml"])
         # Script do perfil desativado e script do perfil sem homologacao nos ambientes dele.
         sid_inativo = sorted(ctx["scripts"])[0]
-        self.catalog.scripts_update(sid_inativo, {"active": "N"}, ator="teste")
+        self.catalog.scripts_update(sid_inativo, {"active": "N"}, actor="teste")
         novo = self.catalog.scripts_insert({"name": "So em PRODUCAO", "interpreter": "PYTHON3",
                                               "path_file": "/opt/scripts/x.py",
-                                              "param_type": "NONE"}, ator="teste")["id"]
-        prod = [a for a in self.catalog.environments_list(pagina=1, tamanho=50)["itens"] if a["name"] == "PRODUCAO"][0]
-        self.catalog.homologation_save(novo, [prod["id"]], ator="teste")
+                                              "param_type": "NONE"}, actor="teste")["id"]
+        prod = [a for a in self.catalog.environments_list(page=1, size=50)["itens"] if a["name"] == "PRODUCAO"][0]
+        self.catalog.homologation_save(novo, [prod["id"]], actor="teste")
         ctx["scripts"] = frozenset(ctx["scripts"]) | frozenset([novo])
         ctx["environments"] = frozenset(a for a in ctx["environments"] if a != "PRODUCAO")
         d = self.svc.build(ctx)
@@ -90,14 +90,14 @@ class TestPermissions(unittest.TestCase):
         nome_inativo = self.catalog.scripts_get(sid_inativo)["name"]
         self.assertEqual(motivos[nome_inativo], svc_mod.REASON_SCRIPT_INACTIVE)
         self.assertEqual(motivos["So em PRODUCAO"], svc_mod.REASON_NOT_HOMOLOGATED)
-        fora = set(s["name"] for s in self.catalog.scripts_list(pagina=1, tamanho=100)["itens"]
+        fora = set(s["name"] for s in self.catalog.scripts_list(page=1, size=100)["itens"]
                    if s["id"] not in ctx["scripts"])
         self.assertFalse(fora & set(motivos))
         self.assertFalse(fora & set(s["name"] for s in d["scripts"]))
 
     def test_nao_grava_nem_audita(self):
         self.svc.build(self.ctx["op.hml"])
-        self.assertEqual(repo_factory.get("audit").list(pagina=1, tamanho=1)["total"], self.n_audit)
+        self.assertEqual(repo_factory.get("audit").list(page=1, size=1)["total"], self.n_audit)
 
 
 if __name__ == "__main__":

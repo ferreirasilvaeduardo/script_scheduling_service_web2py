@@ -52,25 +52,25 @@ class TestPack(unittest.TestCase):
             self._write(rel, texto)
         os.chmod(os.path.join(self.origem, "bin", "sss-helper"), 0o755)
 
-    def _write(self, rel, texto):
+    def _write(self, rel, text):
         caminho = os.path.join(self.origem, *rel.split("/"))
         os.makedirs(os.path.dirname(caminho), exist_ok=True)
         with open(caminho, "w") as f:
-            f.write(texto)
+            f.write(text)
         return caminho
 
     def _main(self):
         texto = io.StringIO()
-        codigo = empacotar.main(["--source", self.origem, "--out-dir", self.saida], saida_texto=texto)
+        codigo = empacotar.main(["--source", self.origem, "--out-dir", self.saida], output_text=texto)
         return codigo, texto.getvalue()
 
     def _package(self):
         return os.path.join(self.saida, "sss-%s.tar.gz" % empacotar.sss_config.SSS_VERSION)
 
-    def _refused(self, trecho):
+    def _refused(self, snippet):
         codigo, texto = self._main()
         self.assertEqual(codigo, 1, texto)
-        self.assertIn(trecho, texto)
+        self.assertIn(snippet, texto)
         self.assertNotIn(SECRET, texto, "o valor nunca e impresso")
         self.assertFalse(os.path.exists(self.saida) and os.listdir(self.saida), "nada gravado")
         return texto

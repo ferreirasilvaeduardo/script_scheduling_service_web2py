@@ -49,8 +49,8 @@ _SQL_RUNNING_NO_PID = saude_sql.SQL_RUNNING_NO_PID
 class RepoAgentsOracle(BaseRepoOracle, RepoAgents):
     """Repositorio do painel de agentes com SQL Oracle 11gR2."""
 
-    def __init__(self, cfg=None, segredos=None):
-        super(RepoAgentsOracle, self).__init__(cfg=cfg, segredos=segredos)
+    def __init__(self, cfg=None, secrets=None):
+        super(RepoAgentsOracle, self).__init__(cfg=cfg, secrets=secrets)
         self._idents = {
             "agt": self.qualify_table("agents"),
             "tck": self.qualify_table("tickets"),
@@ -61,12 +61,12 @@ class RepoAgentsOracle(BaseRepoOracle, RepoAgents):
             if nome.startswith("_SQL_"):
                 self._sql[nome[5:]] = modelo.format(**self._idents)
 
-    def _ler(self, sql, binds=None, tipos=None, conn=None):
+    def _ler(self, sql, binds=None, types=None, conn=None):
         with self.read_context(conn=conn) as c:
             cur = c.cursor()
             try:
-                if tipos:
-                    db_conn.set_input_types(cur, **tipos)
+                if types:
+                    db_conn.set_input_types(cur, **types)
                 if binds is None:
                     cur.execute(sql)
                 else:
@@ -79,20 +79,20 @@ class RepoAgentsOracle(BaseRepoOracle, RepoAgents):
         """Agentes por codigo, id, com plataforma, interpretadores e config_criticos."""
         return [self.tuple_to_dict(_COLS_AGT, r) for r in self._ler(self._sql["LIST"], conn=conn)]
 
-    def tickets_running(self, codigo, conn=None):
+    def tickets_running(self, code, conn=None):
         """Tickets RUNNING do agente pela expressao de ix_tck_run, por id, sem CLOB."""
-        linhas = self._ler(self._sql["TICKETS_RUNNING"], {"code": codigo}, conn=conn)
+        linhas = self._ler(self._sql["TICKETS_RUNNING"], {"code": code}, conn=conn)
         return [self.tuple_to_dict(_COLS_TCK, r) for r in linhas]
 
-    def unattended_queue(self, agora, limiares, conn=None):
+    def unattended_queue(self, now, thresholds, conn=None):
         """Grupos de PENDING vencidos sem agente OK/DELAYED para o par ambiente/interpretador."""
-        atendidos = saude_sql.served_pairs(self.list(conn=conn), agora, limiares)
-        linhas = self._ler(self._sql["QUEUE"], {"now": agora}, {"now": db_conn.TIPO_DATE}, conn=conn)
+        atendidos = saude_sql.served_pairs(self.list(conn=conn), now, thresholds)
+        linhas = self._ler(self._sql["QUEUE"], {"now": now}, {"now": db_conn.TIPO_DATE}, conn=conn)
         return saude_sql.unattended_queue(linhas, atendidos)
 
-    def running_without_pid(self, agora, minutos, conn=None):
+    def running_without_pid(self, now, minutes, conn=None):
         """RUNNING sem process_id ha mais de `minutos`, por started_at e id; so as colunas do contrato."""
-        limite = agora - datetime.timedelta(minutes=minutos)
+        limite = now - datetime.timedelta(minutes=minutes)
         linhas = self._ler(self._sql["RUNNING_NO_PID"], {"cutoff": limite}, {"cutoff": db_conn.TIPO_DATE},
                            conn=conn)
         return [self.tuple_to_dict(_COLS_NO_PID, r) for r in linhas]

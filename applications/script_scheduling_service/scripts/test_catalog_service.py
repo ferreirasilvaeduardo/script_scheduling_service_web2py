@@ -42,16 +42,16 @@ class _Base(unittest.TestCase):
         self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSIONS.items())
         self.svc = TicketService(self.catalog, self.tickets, log)
 
-    def _without(self, login, *funcs):
+    def _without(self, login, *features_ids):
         ctx = dict(self.ctx[login])
-        ctx["features"] = frozenset(ctx["features"] - set(funcs))
+        ctx["features"] = frozenset(ctx["features"] - set(features_ids))
         return ctx
 
 
 class TestLastRuns(_Base):
 
     def test_contrato_ultimo_por_script_no_escopo(self):
-        todos = self.tickets.list(pagina=1, tamanho=100)["itens"]
+        todos = self.tickets.list(page=1, size=100)["itens"]
         esperado = {}
         for t in todos:
             if t["environment"] == "HOMOLOGACAO":
@@ -108,7 +108,7 @@ class TestScriptHistory(_Base):
         self.assertTrue(itens)
         self.assertEqual(set(itens[0]), {"id", "status", "status_reason", "created_at", "started_at", "finished_at"})
         self.assertEqual(itens, sorted(itens, key=lambda t: (t["created_at"], t["id"])))
-        self.assertEqual(len(self.tickets.script_history(1, desde, limite=2)), 2)
+        self.assertEqual(len(self.tickets.script_history(1, desde, limit=2)), 2)
         self.assertTrue(all(self.tickets.get(t["id"])["environment"] == "HOMOLOGACAO"
                             for t in self.tickets.script_history(1, desde, ["HOMOLOGACAO"])))
 
@@ -144,7 +144,7 @@ class TestStackedBars(unittest.TestCase):
         import ui_helpers
         dias = [{"rotulo": "01/10", "certo": 2, "erro": 1, "cancelado": 0, "andamento": 0},
                 {"rotulo": "02/10", "certo": 0, "erro": 0, "cancelado": 0, "andamento": 0}]
-        g = ui_helpers.barras_empilhadas(dias, largura=200, altura=100)
+        g = ui_helpers.barras_empilhadas(dias, width=200, height=100)
         self.assertEqual(g["maximo"], 3)
         self.assertEqual([b["classe"] for b in g["barras"]], ["sss-graf-certo", "sss-graf-erro"])
         certo, erro = g["barras"]

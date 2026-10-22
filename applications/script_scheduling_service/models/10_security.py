@@ -47,10 +47,10 @@ session.connect(request, response, cookie_key=_segredos.cookie_key)
 _URL_LOGIN = ("default", "login")
 
 
-def _encerrar_sessao(mensagem):
+def _encerrar_sessao(message):
     session.clear()
     session.csrf_token = security.generate_csrf_token()
-    session.flash = {"tipo": "aviso", "mensagem": mensagem}
+    session.flash = {"tipo": "aviso", "mensagem": message}
     redirect(URL(c=_URL_LOGIN[0], f=_URL_LOGIN[1]))
 
 
@@ -98,11 +98,11 @@ def _origens_permitidas():
     return origens
 
 
-def _rejeitar(motivo):
+def _rejeitar(reason):
     origem = request.env.http_origin or request.env.http_referer or ""
     _log.warning(
         "requisicao rejeitada (motivo=%s metodo=%s caminho=%s origem=%r ip=%s)",
-        motivo, request.env.request_method, request.env.path_info, origem[:200],
+        reason, request.env.request_method, request.env.path_info, origem[:200],
         request.env.remote_addr, extra={"action": "CSRF"},
     )
     raise HTTP(403, u"Requisição recusada.", **response.headers)
@@ -150,13 +150,13 @@ def _exigir_login():
     redirect(URL(c=_URL_LOGIN[0], f=_URL_LOGIN[1], vars={"next": destino} if destino else {}))
 
 
-def _exigir_func(codigo):
+def _exigir_func(code):
     """Guarda de autorizacao: exige login e a funcionalidade; sem ela, 403 com log WARN."""
     ctx = _exigir_login()
-    if not rbac.has_feature(ctx, codigo):
+    if not rbac.has_feature(ctx, code):
         _log.warning(
             "acesso negado (login=%s funcionalidade=%s caminho=%s ip=%s)",
-            ctx["login"], codigo, request.env.path_info, _ip_origem(), extra={"action": "RBAC"},
+            ctx["login"], code, request.env.path_info, _ip_origem(), extra={"action": "RBAC"},
         )
         raise HTTP(403, u"Acesso negado.", **response.headers)
     return ctx

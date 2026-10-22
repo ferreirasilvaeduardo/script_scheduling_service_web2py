@@ -54,8 +54,8 @@ class _Base(unittest.TestCase):
             repo_factory.get("users"), self.rbac, self.catalog, self.audit, 5, 900, self.log)
 
         # MANAGE_SCHEDULES para os operadores (no seed, so o admin a tem).
-        self.rbac.matrix_save(PERFIL_OP_PROD, [FUNC_EXEC, FUNC_LOGS, FUNC_CANC, FUNC_CAD_AGD], [1, 2], [1, 2, 3, 6], ator="teste")
-        self.rbac.matrix_save(PERFIL_OP_HML, [FUNC_EXEC, FUNC_LOGS, FUNC_CANC, FUNC_CAD_AGD], [2, 3], [1, 2, 3, 4], ator="teste")
+        self.rbac.matrix_save(PERFIL_OP_PROD, [FUNC_EXEC, FUNC_LOGS, FUNC_CANC, FUNC_CAD_AGD], [1, 2], [1, 2, 3, 6], actor="teste")
+        self.rbac.matrix_save(PERFIL_OP_HML, [FUNC_EXEC, FUNC_LOGS, FUNC_CANC, FUNC_CAD_AGD], [2, 3], [1, 2, 3, 4], actor="teste")
         self.ctx = {
             "admin": self._ctx(1, "admin", 1),
             "op.prod": self._ctx(2, "op.prod", PERFIL_OP_PROD),
@@ -68,15 +68,15 @@ class _Base(unittest.TestCase):
         self.svc = SchedulesService(self.agd, self.catalog, repo_factory.get("users"), disparo,
                                        lambda: self.now, HORIZON, self.log,
                                        tickets=self.tickets, rbac_repo=self.rbac)
-        self.aud_base = max([a["id"] for a in self.audit.list(pagina=1, tamanho=1000)["itens"]] or [0])
+        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
 
-    def _ctx(self, usuario_id, login, perfil_id):
-        sessao = {"usuario_id": usuario_id, "login": login, "perfil_id": perfil_id,
-                  "perm_versao": self.rbac.profiles_get(perfil_id)["perm_version"], "sessao_epoch": 0}
+    def _ctx(self, user_id, login, profile_id):
+        sessao = {"usuario_id": user_id, "login": login, "perfil_id": profile_id,
+                  "perm_versao": self.rbac.profiles_get(profile_id)["perm_version"], "sessao_epoch": 0}
         return self.auth.revalidate(sessao)
 
-    def _audits(self, acao=None):
-        itens = self.audit.list(filtros={"action": acao} if acao else None, pagina=1, tamanho=1000)["itens"]
+    def _audits(self, action=None):
+        itens = self.audit.list(filters={"action": action} if action else None, page=1, size=1000)["itens"]
         return [a for a in itens if a["entity"] == "tbsss_schedules" and a["id"] > self.aud_base]
 
     def _data(self, **extra):
@@ -142,7 +142,7 @@ class TestSaveTypes(_Base):
             for campo in ("start_date", "end_date", "next_run_at"):
                 if reg[campo] is not None:
                     self.assertEqual(reg[campo].microsecond, 0, campo)
-        semanal = self.agd.list(filtros={"name": "Regra de teste"}, tamanho=100)["itens"]
+        semanal = self.agd.list(filters={"name": "Regra de teste"}, size=100)["itens"]
         self.assertIn("1,3,5", [r["week_days"] for r in semanal])
 
     def test_campos_de_outros_tipos_sao_descartados(self):
@@ -328,16 +328,16 @@ class TestEdit(_Base):
         aid, _erros = self._save()
         reg = self.agd.get(aid)
         versao = self._version(reg)
-        self.agd.update(aid, {"name": "Mudou por outro"}, ator="teste")
+        self.agd.update(aid, {"name": "Mudou por outro"}, actor="teste")
         _id, erros = self.svc.save(self.ctx["admin"], IP, self._data(id=str(aid), version=versao, name="X"))
         self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
         # Mudanca entre a leitura e a escrita: o 'esperado' do repositorio barra.
         reg = self.agd.get(aid)
         original = self.agd.update
 
-        def alterar_com_corrida(id, dados, esperado=None, auditoria=None):
-            original(id, {"run_time": "07:00"}, ator="teste")
-            return original(id, dados, esperado=esperado, auditoria=auditoria)
+        def alterar_com_corrida(id, date, expected=None, audit=None):
+            original(id, {"run_time": "07:00"}, actor="teste")
+            return original(id, date, expected=expected, audit=audit)
 
         with mock.patch.object(self.agd, "update", side_effect=alterar_com_corrida):
             _id, erros = self.svc.save(self.ctx["admin"], IP,
@@ -390,16 +390,16 @@ class TestAgenda(_Base):
 
     """CR-004 U6 (README §7.7)."""
 
-    def _rule(self, **campos):
+    def _rule(self, **fields):
         base = {"name": "Agenda teste", "script_id": 1, "environment": "HOMOLOGACAO", "user_id": 1, "priority": 2,
                 "recurrence_type": "DAILY", "run_time": "03:00", "params_json": "{}",
                 "start_date": datetime.datetime(2026, 1, 1, 0, 0),
                 "next_run_at": datetime.datetime(2026, 1, 16, 3, 0)}
-        base.update(campos)
-        return self.agd.insert(base, ator="teste")["id"]
+        base.update(fields)
+        return self.agd.insert(base, actor="teste")["id"]
 
-    def _items(self, dados, regra_id):
-        return [o for d in dados["dias"] for o in d["itens"] if o["regra_id"] == regra_id]
+    def _items(self, date, rule_id):
+        return [o for d in date["dias"] for o in d["itens"] if o["regra_id"] == rule_id]
 
     def test_diaria_sete_dias_com_rotulos(self):
         rid = self._rule()
@@ -479,9 +479,9 @@ class TestPauseResume(_Base):
         aid, _erros = self._save()
         original = self.agd.pause
 
-        def pausar_com_corrida(id, motivo, antiga_data=None, auditoria=None):
-            self.agd.update(id, {"next_run_at": datetime.datetime(2026, 1, 17, 3, 0)}, ator="teste")
-            return original(id, motivo, antiga_data=antiga_data, auditoria=auditoria)
+        def pausar_com_corrida(id, reason, old_date=None, audit=None):
+            self.agd.update(id, {"next_run_at": datetime.datetime(2026, 1, 17, 3, 0)}, actor="teste")
+            return original(id, reason, old_date=old_date, audit=audit)
 
         with mock.patch.object(self.agd, "pause", side_effect=pausar_com_corrida):
             with self.assertRaises(RepoConflict):
@@ -511,7 +511,7 @@ class TestPauseResume(_Base):
                                    respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
         usuarios = repo_factory.get("users")
-        usuarios.update(3, {"active": "N"}, ator="teste")
+        usuarios.update(3, {"active": "N"}, actor="teste")
         with self.assertRaises(OperationDenied) as cm:
             self.svc.resume(self.ctx["admin"], IP, str(aid))
         self.assertIn(svc_mod.PAUSE_REASONS["USER_INACTIVE"], cm.exception.message)
@@ -520,7 +520,7 @@ class TestPauseResume(_Base):
     def test_retomar_reavalia_script_inativo(self):
         aid, _erros = self._save(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
-        self.catalog.scripts_update(1, {"active": "N"}, ator="teste")
+        self.catalog.scripts_update(1, {"active": "N"}, actor="teste")
         with self.assertRaises(OperationDenied) as cm:
             self.svc.resume(self.ctx["admin"], IP, str(aid))
         self.assertIn(svc_mod.PAUSE_REASONS["SCRIPT_INACTIVE"], cm.exception.message)
@@ -529,7 +529,7 @@ class TestPauseResume(_Base):
         aid, _erros = self._save(environment="HOMOLOGACAO", script_id="1",
                                    respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
-        self.catalog.environments_update(2, {"active": "N"}, ator="teste")
+        self.catalog.environments_update(2, {"active": "N"}, actor="teste")
         with self.assertRaises(OperationDenied) as cm:
             self.svc.resume(self.ctx["admin"], IP, str(aid))
         self.assertIn(svc_mod.PAUSE_REASONS["ENVIRONMENT_INACTIVE"], cm.exception.message)
@@ -537,7 +537,7 @@ class TestPauseResume(_Base):
     def test_retomar_reavalia_parametros_invalidos(self):
         aid, _erros = self._save(script_id="1", respostas={"data_ref": "2026-01-20", "modo_exec": "SIMULACAO"})
         self.svc.pause(self.ctx["admin"], IP, str(aid))
-        self.agd.update(aid, {"params_json": json.dumps({"data_ref": "data-invalida"})}, ator="teste")
+        self.agd.update(aid, {"params_json": json.dumps({"data_ref": "data-invalida"})}, actor="teste")
         with self.assertRaises(OperationDenied) as cm:
             self.svc.resume(self.ctx["admin"], IP, str(aid))
         self.assertIn(svc_mod.PAUSE_REASONS["INVALID_PARAM"], cm.exception.message)
@@ -608,8 +608,8 @@ class TestPreviewList(_Base):
     def test_lista_aviso_sobreposicao(self):
         tid = self.tickets.create({"script_id": 1, "environment": "PRODUCAO", "requested_by": "admin",
                                   "submitted_params": "{}", "priority": 2, "status": "PENDING"},
-                                 [], ator="admin")
-        self.agd.update(1, {"last_ticket_id": tid}, ator="teste")
+                                 [], actor="admin")
+        self.agd.update(1, {"last_ticket_id": tid}, actor="teste")
         res = self.svc.list(self.ctx["admin"], {}, 1, 20)
         item1 = [i for i in res["itens"] if i["id"] == 1][0]
         self.assertIsNotNone(item1.get("aviso"))
@@ -619,7 +619,7 @@ class TestPreviewList(_Base):
     def test_agenda_aviso_e_problemas(self):
         aid_ativo, erros = self._save()
         self.assertEqual(erros, {})
-        self.catalog.scripts_update(1, {"active": "N"}, ator="teste")
+        self.catalog.scripts_update(1, {"active": "N"}, actor="teste")
         dados = self.svc.agenda(self.ctx["admin"])
         itens_r1 = [i for dia in dados["dias"] for i in dia["itens"] if i["regra_id"] == aid_ativo]
         self.assertTrue(itens_r1)
@@ -627,7 +627,7 @@ class TestPreviewList(_Base):
         aid = self.agd.insert({"name": "CRON Problematico", "user_id": 1, "script_id": 1,
                                 "environment": "HOMOLOGACAO", "recurrence_type": "CRON",
                                 "cron_expression": "0 0 31 2 *", "priority": 2, "active": "Y",
-                                "params_json": "{}"}, ator="teste")["id"]
+                                "params_json": "{}"}, actor="teste")["id"]
         dados2 = self.svc.agenda(self.ctx["admin"])
         problemas = dados2.get("problemas", [])
         self.assertIn(aid, [p["regra_id"] for p in problemas])

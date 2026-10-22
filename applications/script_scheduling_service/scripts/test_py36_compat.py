@@ -116,18 +116,18 @@ def find_python_files(app_dir, web2py_root):
     return sorted(arquivos_py)
 
 
-def check_os_primitives(caminho, app_dir, web2py_root):
+def check_os_primitives(path, app_dir, web2py_root):
     """Rejeita primitivas POSIX fora da plataforma e da allowlist estrita do helper."""
     plataforma_dir = os.path.normpath(os.path.join(app_dir, "modules", "os_platform"))
     helper = os.path.normpath(os.path.join(web2py_root, "bin", "sss-helper"))
-    caminho = os.path.normpath(caminho)
-    if os.path.commonpath([caminho, plataforma_dir]) == plataforma_dir:
+    path = os.path.normpath(path)
+    if os.path.commonpath([path, plataforma_dir]) == plataforma_dir:
         return []
-    if os.path.basename(caminho).startswith("test_"):
+    if os.path.basename(path).startswith("test_"):
         return []
 
-    if caminho == helper:
-        with open(caminho, "r", encoding="utf-8", errors="replace") as f:
+    if path == helper:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
             source = f.read()
         source_lines = source.splitlines()
         violations = []
@@ -139,7 +139,7 @@ def check_os_primitives(caminho, app_dir, web2py_root):
             def _add(self, node):
                 line_number = getattr(node, "lineno", 1)
                 line = source_lines[line_number - 1].strip()
-                violations.append((caminho, line_number, line))
+                violations.append((path, line_number, line))
 
             def visit_FunctionDef(self, node):
                 self.functions.append(node.name)
@@ -187,7 +187,7 @@ def check_os_primitives(caminho, app_dir, web2py_root):
                 elif "pwdx" in node.s and function != "_stop_ticket":
                     self._add(node)
 
-        HelperVisitor().visit(ast.parse(source, filename=caminho))
+        HelperVisitor().visit(ast.parse(source, filename=path))
         return violations
 
     padroes = [
@@ -200,62 +200,62 @@ def check_os_primitives(caminho, app_dir, web2py_root):
         re.compile(r"\bsys\.platform\b"),
     ]
     violacoes = []
-    with open(caminho, "r", encoding="utf-8", errors="replace") as f:
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
         for num_linha, linha in enumerate(f, start=1):
             for padrao in padroes:
                 if padrao.search(linha):
-                    violacoes.append((caminho, num_linha, linha.strip()))
+                    violacoes.append((path, num_linha, linha.strip()))
                     break
     return violacoes
 
 
-def compile_py_file(caminho):
+def compile_py_file(path):
     """Compila codigo fonte garantindo compatibilidade com Python 3.6."""
-    with open(caminho, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8") as f:
         src = f.read()
 
     # Quando interpretador >= 3.8, valida AST com feature_version 3.6
     if sys.version_info >= (3, 8):
-        ast.parse(src, filename=caminho, feature_version=(3, 6))
+        ast.parse(src, filename=path, feature_version=(3, 6))
     else:
-        compile(src, caminho, "exec")
+        compile(src, path, "exec")
 
 
-def check_forbidden_tokens_in_file(caminho):
+def check_forbidden_tokens_in_file(path):
     """Procura tokens proibidos em um arquivo fonte, retornando lista de violacoes."""
-    nome_base = os.path.basename(caminho)
+    nome_base = os.path.basename(path)
     if nome_base in TOKEN_EXCEPTION_FILES:
         return []
 
     violacoes = []
-    with open(caminho, "r", encoding="utf-8", errors="replace") as f:
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
         for num_linha, linha in enumerate(f, start=1):
             for regex, desc in _COMPILED_PATTERNS:
                 if regex.search(linha):
-                    violacoes.append((caminho, num_linha, desc, linha.strip()))
+                    violacoes.append((path, num_linha, desc, linha.strip()))
     return violacoes
 
 
-def check_external_urls_in_file(caminho):
+def check_external_urls_in_file(path):
     """Procura URLs http:// e https:// em arquivos estaticos e views."""
     violacoes = []
-    with open(caminho, "r", encoding="utf-8", errors="replace") as f:
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
         for num_linha, linha in enumerate(f, start=1):
             if _RE_URL_EXTERNA.search(linha):
-                violacoes.append((caminho, num_linha, linha.strip()))
+                violacoes.append((path, num_linha, linha.strip()))
     return violacoes
 
 
-def check_oracle_driver_imports(caminho, app_dir):
+def check_oracle_driver_imports(path, app_dir):
     """Verifica que apenas db_conn.py e probe_driver.py importam oracledb ou cx_Oracle (AGENTS §2.2)."""
-    nome = os.path.basename(caminho)
+    nome = os.path.basename(path)
     if nome in ("db_conn.py", "probe_driver.py") or nome.startswith("test_"):
         return []
 
     try:
-        with open(caminho, "r", encoding="utf-8", errors="replace") as f:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
             src = f.read()
-        tree = ast.parse(src, filename=caminho)
+        tree = ast.parse(src, filename=path)
     except Exception:
         return []
 
@@ -268,14 +268,14 @@ def check_oracle_driver_imports(caminho, app_dir):
                 if alias.name in ("oracledb", "cx_Oracle"):
                     ln = getattr(node, "lineno", 1)
                     ltext = lines[ln - 1].strip() if ln <= len(lines) else ""
-                    violacoes.append((caminho, ln, alias.name, ltext))
+                    violacoes.append((path, ln, alias.name, ltext))
             self.generic_visit(node)
 
         def visit_ImportFrom(self, node):
             if node.module in ("oracledb", "cx_Oracle"):
                 ln = getattr(node, "lineno", 1)
                 ltext = lines[ln - 1].strip() if ln <= len(lines) else ""
-                violacoes.append((caminho, ln, node.module, ltext))
+                violacoes.append((path, ln, node.module, ltext))
             self.generic_visit(node)
 
     DriverImportVisitor().visit(tree)

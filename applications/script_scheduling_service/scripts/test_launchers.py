@@ -41,10 +41,10 @@ class TestLaunchers(unittest.TestCase):
         self.python = self._executable("python3", _FAKE_PYTHON)
         self.registro = os.path.join(self.root, "registro.json")
 
-    def _executable(self, nome, corpo):
-        caminho = os.path.join(self.fakes, nome)
+    def _executable(self, name, body):
+        caminho = os.path.join(self.fakes, name)
         with open(caminho, "w") as f:
-            f.write(corpo)
+            f.write(body)
         os.chmod(caminho, 0o755)
         return caminho
 

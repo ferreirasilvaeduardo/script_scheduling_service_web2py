@@ -64,7 +64,7 @@ class _PrivilegeError(Exception):
 class _Db(object):
     """Banco em memoria: tickets, scripts, ambiente, homologacao, contexto RBAC e o CLOB do log."""
 
-    def __init__(self, raiz):
+    def __init__(self, root):
         self.lock = threading.Lock()
         self.tickets = {}
         self.scripts = {}
@@ -88,64 +88,64 @@ class _Db(object):
         self.node_offline_calls = 0
         self.sysdate_offset_s = 0
 
-    def _fail(self, metodo):
-        self.calls[metodo] += 1
-        if self.failures[metodo]:
-            erro = self.failures[metodo].pop(0)
+    def _fail(self, method):
+        self.calls[method] += 1
+        if self.failures[method]:
+            erro = self.failures[method].pop(0)
             if erro is not None:
                 raise erro
 
     # -- massa
 
-    def script(self, corpo, timeout=None, active="Y", max_par=5, interpreter="SH", homologar=True):
+    def script(self, body, timeout=None, active="Y", max_par=5, interpreter="SH", homologate=True):
         self.seq += 1
         sid = self.seq
         caminho = os.path.join(self.base, "s%d.sh" % sid)
         with open(caminho, "w") as f:
-            f.write(corpo)
+            f.write(body)
         os.chmod(caminho, 0o444)
         self.scripts[sid] = {"id": sid, "name": "Script %d" % sid, "interpreter": interpreter,
                              "path_file": caminho, "active": active, "timeout_s": timeout,
                              "max_parallel_env": max_par}
-        if homologar:
+        if homologate:
             self.homologados.add(sid)
         self.ctx = dict(self.ctx, scripts=frozenset(set(self.ctx["scripts"]) | {sid}))
         return sid
 
-    def ticket(self, sid, version=5, args=(), path_file=None, interpretador=None, agendamento_id=None):
+    def ticket(self, sid, version=5, args=(), path_file=None, interpreter=None, schedule_id=None):
         self.seq += 1
         s = self.scripts[sid]
         snap = {"version": version, "script_id": sid, "script_name": s["name"],
-                "interpreter": interpretador or s["interpreter"], "path_file": path_file or s["path_file"],
+                "interpreter": interpreter or s["interpreter"], "path_file": path_file or s["path_file"],
                 "param_type": "NAMED", "args": list(args), "answers": {}, "sensitive": [],
                 "compiled_at": "2026-10-20 10:00:00"}
         self.tickets[self.seq] = {
             "id": self.seq, "script_id": sid, "environment": AMB, "requested_by": "ana", "status": "PENDING",
             "priority": 2, "cancel_requested": "N", "agent_id": None, "process_id": None, "process_start": None,
-            "parent_ticket_id": None, "schedule_id": agendamento_id, "scheduled_at": None, "started_at": None,
+            "parent_ticket_id": None, "schedule_id": schedule_id, "scheduled_at": None, "started_at": None,
             "created_at": None, "log_offset_chars": 0, "submitted_params": json.dumps(snap), "log": "",
             "status_reason": None, "return_code": None, "updated_by": None}
         return self.seq
 
     # -- contrato do RepoSchedulerQueue
 
-    def active_environments(self, conn, atendidos):
+    def active_environments(self, conn, served):
         self._fail("active_environments")
-        return ([AMB] if self.environment["active"] == "Y" and AMB in atendidos else []), []
+        return ([AMB] if self.environment["active"] == "Y" and AMB in served else []), []
 
-    def check_config(self, conn, agente_id, criticos, offline):
+    def check_config(self, conn, agent_id, critical, offline):
         self._fail("check_config")
         return []
 
-    def candidates(self, conn, ambientes, interpretadores, lote, env_min):
+    def candidates(self, conn, environments, interpreters, batch, env_min):
         self._fail("candidates")
         with self.lock:
             return [{"id": t["id"], "script_id": t["script_id"], "environment": t["environment"]}
                     for t in sorted(self.tickets.values(), key=lambda x: x["id"])
                     if t["status"] == "PENDING" and t["cancel_requested"] == "N"
-                    and self.scripts[t["script_id"]]["interpreter"] in interpretadores][:lote]
+                    and self.scripts[t["script_id"]]["interpreter"] in interpreters][:batch]
 
-    def claim(self, conn, tid, sid, ambiente, agente_id):
+    def claim(self, conn, tid, sid, environment, agent_id):
         self._fail("claim")
         if self.claim_answers:
             resposta = self.claim_answers.pop(0)
@@ -158,8 +158,8 @@ class _Db(object):
                 return False, "TETO", None
             if t["status"] != "PENDING" or t["cancel_requested"] != "N":
                 return False, "PERDIDO", None
-            t.update(status="RUNNING", agent_id=agente_id, started_at=datetime.datetime(2026, 10, 20, 14, 5),
-                     log="", log_offset_chars=0, updated_by="SYSTEM:%s" % agente_id)
+            t.update(status="RUNNING", agent_id=agent_id, started_at=datetime.datetime(2026, 10, 20, 14, 5),
+                     log="", log_offset_chars=0, updated_by="SYSTEM:%s" % agent_id)
             self.max_running = max(self.max_running, sum(1 for x in self.tickets.values() if x["status"] == "RUNNING"))
             return True, None, t["started_at"]
 
@@ -174,25 +174,25 @@ class _Db(object):
                 "homologacoes": frozenset({1}) if ticket["script_id"] in self.homologados else frozenset(),
                 "ctx": self.ctx, "agendamento": None}
 
-    def active_homologated_script(self, conn, sid, ambiente):
+    def active_homologated_script(self, conn, sid, environment):
         return self.scripts[sid]["active"] == "Y" and sid in self.homologados
 
     def is_cancel_requested(self, conn, tid):
         self._fail("is_cancel_requested")
         return self.tickets[tid]["cancel_requested"] == "Y"
 
-    def register_pid(self, conn, tid, agente_id, pid, start):
+    def register_pid(self, conn, tid, agent_id, pid, start):
         self._fail("register_pid")
         t = self.tickets[tid]
-        if t["status"] != "RUNNING" or t["agent_id"] != agente_id:
+        if t["status"] != "RUNNING" or t["agent_id"] != agent_id:
             return False
         t.update(process_id=pid, process_start=start)
         return True
 
-    def return_to_queue(self, conn, tid, agente_id):
+    def return_to_queue(self, conn, tid, agent_id):
         self._fail("return_to_queue")
         t = self.tickets[tid]
-        if t["status"] == "RUNNING" and t["agent_id"] == agente_id and t["process_id"] is None:
+        if t["status"] == "RUNNING" and t["agent_id"] == agent_id and t["process_id"] is None:
             if t["cancel_requested"] == "N":
                 t.update(status="PENDING", agent_id=None, log="", log_offset_chars=0)
                 return "DEVOLVIDO"
@@ -200,54 +200,54 @@ class _Db(object):
             return "CANCELADO"
         return "PERDIDO"
 
-    def finalize(self, conn, tid, agente_id, status, motivo, rc):
+    def finalize(self, conn, tid, agent_id, status, reason, rc):
         self._fail("finalize")
         t = self.tickets[tid]
-        if t["status"] != "RUNNING" or t["agent_id"] != agente_id:
+        if t["status"] != "RUNNING" or t["agent_id"] != agent_id:
             return False
-        t.update(status=status, status_reason=motivo, return_code=rc, updated_by="SYSTEM:%s" % agente_id)
+        t.update(status=status, status_reason=reason, return_code=rc, updated_by="SYSTEM:%s" % agent_id)
         return True
 
-    def own_sweep(self, conn, agente_id):
+    def own_sweep(self, conn, agent_id):
         self._fail("own_sweep")
         return dict((t["id"], t["cancel_requested"]) for t in self.tickets.values()
-                    if t["status"] == "RUNNING" and t["agent_id"] == agente_id)
+                    if t["status"] == "RUNNING" and t["agent_id"] == agent_id)
 
-    def agent_running_tickets(self, conn, agente_id):
+    def agent_running_tickets(self, conn, agent_id):
         return [{"id": t["id"], "process_id": t["process_id"], "process_start": t["process_start"],
                  "cancel_requested": t["cancel_requested"]} for t in self.tickets.values()
-                if t["status"] == "RUNNING" and t["agent_id"] == agente_id]
+                if t["status"] == "RUNNING" and t["agent_id"] == agent_id]
 
-    def heartbeat(self, conn, agente_id, hostname, pid, ids):
+    def heartbeat(self, conn, agent_id, hostname, pid, ids):
         self._fail("heartbeat")
         if not self.active_agent:
             raise RegistrationLost("registro assumido")
         self.heartbeats.append(list(ids))
-        perdidos = [i for i in ids if self.tickets[i]["status"] != "RUNNING" or self.tickets[i]["agent_id"] != agente_id]
+        perdidos = [i for i in ids if self.tickets[i]["status"] != "RUNNING" or self.tickets[i]["agent_id"] != agent_id]
         return perdidos, self.sysdate()
 
     def sysdate(self):
         return datetime.datetime.now() + datetime.timedelta(seconds=self.sysdate_offset_s)
 
-    def mark_node_offline(self, conn, agente_id, timeout_s, salto_de_relogio):
+    def mark_node_offline(self, conn, agent_id, timeout_s, clock_jump):
         self._fail("mark_node_offline")
         self.node_offline_calls += 1
-        if salto_de_relogio(self.sysdate()):
+        if clock_jump(self.sysdate()):
             return None
         marcados = []
         for tid in sorted(self.offline):
             t = self.tickets[tid]
-            if t["status"] == "RUNNING" and t["agent_id"] != agente_id:
+            if t["status"] == "RUNNING" and t["agent_id"] != agent_id:
                 t.update(status="FAILED", status_reason="NODE_OFFLINE", return_code=-2,
-                         updated_by="SYSTEM:%s" % agente_id)
+                         updated_by="SYSTEM:%s" % agent_id)
                 marcados.append(tid)
         return marcados
 
-    def register_agent(self, conn, dados, processo_existe):
+    def register_agent(self, conn, date, process_exists):
         return 1
 
-    def stop_agent(self, conn, agente_id, hostname, pid, modo):
-        self.stopped_flag = modo
+    def stop_agent(self, conn, agent_id, hostname, pid, mode):
+        self.stopped_flag = mode
         return True
 
     # -- contrato do RepoSchedulerLog
@@ -255,25 +255,25 @@ class _Db(object):
     def supplementary_unit(self, conn):
         return self.unit
 
-    def append_chunk(self, conn, tid, agente_id, offset, bloco):
+    def append_chunk(self, conn, tid, agent_id, offset, chunk):
         self._fail("append_chunk")
         t = self.tickets[tid]
-        if t["status"] != "RUNNING" or t["agent_id"] != agente_id:
+        if t["status"] != "RUNNING" or t["agent_id"] != agent_id:
             return "OWNERSHIP_LOST"
         if t["log_offset_chars"] != offset:
             return "ALREADY_WRITTEN"
-        t["log"] += bloco
-        t["log_offset_chars"] += log_pump.clob_units(bloco, self.unit)
+        t["log"] += chunk
+        t["log_offset_chars"] += log_pump.clob_units(chunk, self.unit)
         return "WRITTEN"
 
-    def mark_truncated(self, conn, tid, agente_id):
+    def mark_truncated(self, conn, tid, agent_id):
         return True
 
 
 class _EmptyAgenda(object):
     """Sem regras vencidas: o desdobro (F8.4b) e testado no test_scheduler_ha."""
 
-    def due_rules(self, conn, lote, ult_prox=None, ult_id=0):
+    def due_rules(self, conn, batch, last_next=None, last_id=0):
         return []
 
 
@@ -352,7 +352,7 @@ class _Base(unittest.TestCase):
                 os.chmod(os.path.join(atual, d), 0o700)
         shutil.rmtree(self.root, ignore_errors=True)
 
-    def cfg(self, **mudancas):
+    def cfg(self, **changes):
         base = dict(agent_id="srv-t", environments=(AMB,), work_dir=self.work,
                     interpreters=(("SH", "/bin/sh"),), exec_users=(), exec_work_dir=None,
                     heartbeat_interval_s=0.2, fence_timeout_s=40, node_offline_timeout_s=120, kill_grace_s=1,
@@ -360,27 +360,27 @@ class _Base(unittest.TestCase):
                     queue_aging_min=30, child_locale="C.UTF-8",
                     cancel_poll_interval_s=0.05, orchestrator_interval_s=0.05, max_parallel_jobs=4,
                     log_dir_min_free_mb=1, script_timeout_s=60, env_passthrough=())
-        local = mudancas.pop("max_local_log_size_bytes", 10 * 1024 * 1024)
-        base.update(mudancas)
+        local = changes.pop("max_local_log_size_bytes", 10 * 1024 * 1024)
+        base.update(changes)
         return _Cfg(_Agent(**base), _Log(self.logs, 5 * 1024 * 1024, local), _App("DEV"),
                     _Oracle("db:1521/x", 30000, "OWN_X", "pfx_"), None)
 
-    def start_agent(self, **mudancas):
+    def start_agent(self, **changes):
         segredos = Secrets("SenhaOracle#1", None, {AMB: EnvironmentSecret("app_dev", ENV_PASSWORD)})
-        plat = mudancas.pop("plat", None)
+        plat = changes.pop("plat", None)
         with mock.patch.object(sl.os, "geteuid", return_value=FAKE_AGENT):
             if getattr(self, "repo_output", None) is None:
                 self.repo_output = RepoOutputMemory(self.db.tickets)
-            self.ag = sl.Agent(cfg=self.cfg(**mudancas), segredos=segredos, plat=plat, conexao=self.connection,
+            self.ag = sl.Agent(cfg=self.cfg(**changes), secrets=segredos, plat=plat, connection=self.connection,
                                 repo=self.db, repo_log=self.db, hostname="host-t", pid=os.getpid(),
-                                repo_saida=self.repo_output, repo_agenda=_EmptyAgenda())
+                                repo_output=self.repo_output, repo_schedules=_EmptyAgenda())
             self.ag.initialize()
         self.ag.prepare_loop(lambda s: self._wait_s.wait(min(s, 0.02)))
         return self.ag
 
-    def run_loop(self, ate, limite=15):
+    def run_loop(self, until, limit=15):
         with mock.patch.object(time, "sleep", side_effect=AssertionError("time.sleep dentro do laco")):
-            codigo = self.ag.run(self.stopped, ate=ate, limite_s=limite)
+            codigo = self.ag.run(self.stopped, until=until, limit_s=limit)
         return codigo
 
     def finished(self, tid):
@@ -522,7 +522,7 @@ class TestExecution(_Base):
         sid = self.db.script("sleep 0.5\n", max_par=10)
         tids = [self.db.ticket(sid) for _ in range(5)]
         self.start_agent(max_parallel_jobs=2)
-        self.run_loop(lambda: all(self.finished(t)() for t in tids), limite=30)
+        self.run_loop(lambda: all(self.finished(t)() for t in tids), limit=30)
         self.assertEqual(self.db.max_running, 2)
         self.assertEqual([self.final(t)[0] for t in tids], ["SUCCESS"] * 5)
 
@@ -543,11 +543,11 @@ class TestExecution(_Base):
 
 class TestPrevalidation(_Base):
 
-    def _refusal(self, tid, codigo, **subir):
-        self.start_agent(**subir)
+    def _refusal(self, tid, code, **start_agent):
+        self.start_agent(**start_agent)
         self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("FAILED", "PRECHECK_FAILED", -4))
-        self.assertIn("[SSS] pre-validacao recusada: %s (agente srv-t)" % codigo, self.db.tickets[tid]["log"])
+        self.assertIn("[SSS] pre-validacao recusada: %s (agente srv-t)" % code, self.db.tickets[tid]["log"])
         self.assertIsNone(self.db.tickets[tid]["process_id"])
 
     def test_cr014_script_dentro_da_entrada_ou_da_saida_e_pasta_do_sss(self):
@@ -602,7 +602,7 @@ class TestPrevalidation(_Base):
         self._refusal(tid, "SCRIPT_INACTIVE")
 
     def test_nao_homologado(self):
-        tid = self.db.ticket(self.db.script("echo x\n", homologar=False))
+        tid = self.db.ticket(self.db.script("echo x\n", homologate=False))
         self._refusal(tid, "NAO_HOMOLOGADO")
 
     def test_erro_de_rede_antes_do_spawn_devolve(self):
@@ -660,10 +660,10 @@ class TestPending(_Base):
     def test_falha_no_proc_depois_do_spawn_e_spawn_error(self):
         tid = self.db.ticket(self.db.script("sleep 300\n"))
         original = os_platform.write_state
-        def _grava(caminho, dados):
-            if caminho.endswith(executor.PROC):
+        def _grava(path, date):
+            if path.endswith(executor.PROC):
                 raise OSError(28, "No space left on device")
-            return original(caminho, dados)
+            return original(path, date)
         self.start_agent()
         with mock.patch.object(os_platform, "write_state", side_effect=_grava), \
                 self.assertLogs("sss_scheduler", "ERROR"):
@@ -703,14 +703,14 @@ class TestCycles(_Base):
         self.start_agent()
         self.db.active_agent = False
         with self.assertLogs("sss_scheduler", "CRITICAL"):
-            self.assertEqual(self.run_loop(lambda: False, limite=5), sl.EXIT_REGISTRATION_LOST)
+            self.assertEqual(self.run_loop(lambda: False, limit=5), sl.EXIT_REGISTRATION_LOST)
 
     def test_disco_baixo_sem_claim(self):
         tid = self.db.ticket(self.db.script("echo x\n"))
         plat = _PlatDisk()
         self.start_agent(plat=plat, log_dir_min_free_mb=1024)
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
-            self.run_loop(lambda: False, limite=0.5)
+            self.run_loop(lambda: False, limit=0.5)
         self.assertEqual(self.db.tickets[tid]["status"], "PENDING")
         self.assertEqual(self.db.calls["candidates"], 0)
         self.assertEqual(len([x for x in logs.output if "DISCO_LOG" in x]), 1, "uma vez por minuto")
@@ -720,7 +720,7 @@ class TestCycles(_Base):
                                 "i=$((i+1)); done\n", max_par=5)
         tids = [self.db.ticket(sid) for _ in range(3)]
         self.start_agent()
-        self.run_loop(lambda: all(self.finished(t)() for t in tids), limite=30)
+        self.run_loop(lambda: all(self.finished(t)() for t in tids), limit=30)
         for t in tids:
             self.assertEqual(self.db.tickets[t]["log"].count("linha "), 400)
 
@@ -730,7 +730,7 @@ class TestCycles(_Base):
         self.start_agent()
         self.run_loop(lambda: os.path.exists(pronto))
         open(os.path.join(self.work, "sss-srv-t.stop"), "w").close()
-        self.assertEqual(self.run_loop(lambda: False, limite=15), 0)
+        self.assertEqual(self.run_loop(lambda: False, limit=15), 0)
         self.assertEqual(self.final(tid), ("FAILED", "SHUTDOWN", -6))
         self.assertEqual(self.db.stopped_flag, "TERMINATE")
         self.assertFalse(os.path.exists(os.path.join(self.work, "sss-srv-t.stop")))
@@ -740,17 +740,17 @@ class TestCycles(_Base):
         self.start_agent()
         self.run_loop(lambda: self.db.tickets[tid]["process_id"] is not None)
         self.connection.down = True
-        self.run_loop(lambda: self.ag.executions[tid].phase != sl._Item.RODANDO, limite=10)
+        self.run_loop(lambda: self.ag.executions[tid].phase != sl._Item.RODANDO, limit=10)
         self.connection.down = False
         self.run_loop(self.finished(tid))
         self.assertEqual(self.final(tid), ("FAILED", "TIMEOUT", -3))
 
 
 class _PlatDisk(object):
-    def __getattr__(self, nome):
-        if nome == "free_space_mb":
+    def __getattr__(self, name):
+        if name == "free_space_mb":
             return lambda caminho: 10
-        return getattr(os_platform, nome)
+        return getattr(os_platform, name)
 
 
 def _alive(pid):

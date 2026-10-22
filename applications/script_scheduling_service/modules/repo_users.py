@@ -18,11 +18,11 @@ class RepoUsers(object):
         """Retorna dict com dados do usuario pelo ID ou lanca RepoNotFound."""
         raise NotImplementedError
 
-    def get_session_state(self, usuario_id):
+    def get_session_state(self, user_id):
         """Retorna dict de sessao com usuario, perfil, perm_versao e session_epoch (CR-008, E2)."""
         raise NotImplementedError
 
-    def list(self, filtros=None, pagina=1, tamanho=20):
+    def list(self, filters=None, page=1, size=20):
         """Lista usuarios paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
 
         Ordem: login ASC, id ASC. Filtros (opcionais, combinados com E): login e nome (trecho, sem
@@ -30,7 +30,7 @@ class RepoUsers(object):
         """
         raise NotImplementedError
 
-    def insert(self, dados, auditoria=None, ator=None):
+    def insert(self, date, audit=None, actor=None):
         """Insere novo usuario e retorna dict com o registro criado.
 
         auditoria: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
@@ -38,7 +38,7 @@ class RepoUsers(object):
         """
         raise NotImplementedError
 
-    def update(self, id, dados, esperado=None, auditoria=None, ator=None):
+    def update(self, id, date, expected=None, audit=None, actor=None):
         """Atualiza campos do usuario pelo ID e retorna o registro. Login e imutavel.
 
         esperado: opcional, dict campo -> valor lido; divergencia lanca RepoConflict sem alterar nada.
@@ -53,8 +53,8 @@ class RepoUsers(object):
         """Instante atual do banco (SYSDATE), sem microssegundos (README §4.2: relogio do banco)."""
         raise NotImplementedError
 
-    def register_login_failure(self, login, bloqueio_s=None, auditoria=None, max_tentativas=None,
-                              auditoria_bloqueio=None):
+    def register_login_failure(self, login, lockout_s=None, audit=None, max_attempts=None,
+                              lock_audit=None):
         """Incrementa tentativas_falha numa unica operacao (README §4.2, §4.4). Rotina tecnica: sem updated_*.
 
         Com max_tentativas (uso do login), a decisao de bloquear e tomada aqui, sobre a contagem lida sob a
@@ -67,7 +67,7 @@ class RepoUsers(object):
         """
         raise NotImplementedError
 
-    def register_login_success(self, login, novo_hash=None, auditoria=None):
+    def register_login_success(self, login, new_hash=None, audit=None):
         """Zera tentativas_falha e bloqueado_ate e grava ultimo_login = SYSDATE numa unica operacao.
 
         Rotina tecnica do login: nao grava updated_* (CR-006).
@@ -77,7 +77,7 @@ class RepoUsers(object):
         """
         raise NotImplementedError
 
-    def unlock(self, id, auditoria=None, ator=None):
+    def unlock(self, id, audit=None, actor=None):
         """Desbloqueio pelo administrador: zera tentativas_falha e bloqueado_ate e grava updated_*.
 
         auditoria: opcional, na mesma transacao. O ator (auditoria['ator'] ou ator=) e obrigatorio (CR-006).
@@ -91,7 +91,7 @@ class RepoUsers(object):
         """
         raise NotImplementedError
 
-    def set_password(self, id, senha_hash, agora=None, auditoria=None, ator=None):
+    def set_password(self, id, password_hash, now=None, audit=None, actor=None):
         """Atualiza password_hash e password_changed_at, zera failed_attempts e locked_until e incrementa
         session_epoch (CR-008, E2), tudo no mesmo UPDATE.
 
@@ -99,7 +99,7 @@ class RepoUsers(object):
         """
         raise NotImplementedError
 
-    def end_sessions(self, id, auditoria=None):
+    def end_sessions(self, id, audit=None):
         """Logout (CR-008, E2): session_epoch = session_epoch + 1 num UPDATE, sem updated_* (rotina tecnica).
 
         auditoria: opcional (LOGOUT), na mesma transacao. Retorna o registro atualizado.

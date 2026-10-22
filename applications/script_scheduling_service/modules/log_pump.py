@@ -28,40 +28,40 @@ UNCERTAIN_CONNECTION = "UNCERTAIN_CONNECTION"
 INCONSISTENT = "INCONSISTENT"
 
 
-def clob_units(texto, unidade_suplementar=2):
+def clob_units(text, supplementary_unit=2):
     """Comprimento do texto como o CLOB o conta: caractere fora do BMP vale unidade_suplementar posicoes
     (2 em AL32UTF8, UTF-16 interno; 1 num charset de um byte, onde vira o caractere de substituicao).
     O agente mede a unidade no banco (RepoSchedulerLog.unidade_suplementar)."""
-    if unidade_suplementar == 1:
-        return len(texto)
-    return len(texto.encode("utf-16-le")) // 2
+    if supplementary_unit == 1:
+        return len(text)
+    return len(text.encode("utf-16-le")) // 2
 
 
-def _bytes(texto):
-    return len(texto.encode("utf-8"))
+def _bytes(text):
+    return len(text.encode("utf-8"))
 
 
-def _prefix_in_bytes(texto, limite):
+def _prefix_in_bytes(text, limit):
     """Maior prefixo de texto com ate limite bytes UTF-8, sem dividir caractere."""
-    if limite <= 0:
+    if limit <= 0:
         return ""
-    return texto.encode("utf-8")[:limite].decode("utf-8", "ignore")
+    return text.encode("utf-8")[:limit].decode("utf-8", "ignore")
 
 
-def chunks(texto, tamanho=CHUNK_SIZE):
+def chunks(text, size=CHUNK_SIZE):
     """Divide o texto em pedacos de ate tamanho caracteres para o WRITEAPPEND."""
-    return [texto[i:i + tamanho] for i in range(0, len(texto), tamanho)]
+    return [text[i:i + size] for i in range(0, len(text), size)]
 
 
-def ticket_masker(segredos, conexao=None, snapshot=None):
+def ticket_masker(secrets, connection=None, snapshot=None):
     """Mascarador proprio do ticket (CR-007, R-25): segredos carregados, PADRAO_VALOR_RUN_CONEXAO_BD do
     ambiente e os valores de respostas cujos codigos estao em sensiveis no snapshot. Valores com menos
     de 4 caracteres nao sao registrados (regra do masking, README §4.1; risco aceito no §14)."""
     m = masking.Masker()
-    for valor in segredos or ():
+    for valor in secrets or ():
         m.register(valor)
-    if conexao:
-        m.register(conexao)
+    if connection:
+        m.register(connection)
     snap = snapshot or {}
     respostas = snap.get("answers") or {}
     for codigo in snap.get("sensitive") or ():
@@ -73,9 +73,9 @@ class Pump(object):
     """Estado da coleta de um ticket. Grandezas separadas: bytes lidos do arquivo, bytes UTF-8 aceitos para
     o CLOB (teto) e offset confirmado em unidades do CLOB (= tbsss_tickets.log_offset_chars)."""
 
-    def __init__(self, caminho_log, ticket_id, mascarador, max_log_size_bytes, max_local_log_size_bytes,
-                 offset_confirmado_chars=0, unidade_suplementar=2):
-        self.log_path = caminho_log
+    def __init__(self, log_path, ticket_id, masker, max_log_size_bytes, max_local_log_size_bytes,
+                 confirmed_offset_chars=0, supplementary_unit=2):
+        self.log_path = log_path
         self.ticket_id = ticket_id
         self.max_log_size_bytes = int(max_log_size_bytes)
         self.max_local_log_size_bytes = int(max_local_log_size_bytes)
@@ -85,7 +85,7 @@ class Pump(object):
         # Leitura do arquivo.
         self.offset_bytes = 0
         self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-        self._stream = masking.StreamMasker(mascarador)
+        self._stream = masking.StreamMasker(masker)
         # Teto do CLOB: bytes ja aceitos (confirmados + fila) e o sufixo retido ate a decisao.
         self._accepted_bytes = 0
         self._held = ""
@@ -95,8 +95,8 @@ class Pump(object):
         self._queue = ""
         self._in_flight = None
         self.confirmed_bytes = 0
-        self.confirmed_offset_chars = int(offset_confirmado_chars)
-        self.supplementary_unit = unidade_suplementar
+        self.confirmed_offset_chars = int(confirmed_offset_chars)
+        self.supplementary_unit = supplementary_unit
         self.finished = False
         self.stopped = False
         self.ownership_lost = False
@@ -104,11 +104,11 @@ class Pump(object):
 
     # -- leitura -------------------------------------------------------------
 
-    def _read(self, maximo):
+    def _read(self, maximum):
         # open padrao do Python no POSIX nao bloqueia a escrita do filho (O_RDONLY, sem trava).
         with open(self.log_path, "rb") as f:
             f.seek(self.offset_bytes)
-            dados = f.read(maximo) if maximo is not None else f.read()
+            dados = f.read(maximum) if maximum is not None else f.read()
         self.offset_bytes += len(dados)
         return dados
 
@@ -151,11 +151,11 @@ class Pump(object):
         self.finished = True
         return texto
 
-    def _warn_read(self, erro):
+    def _warn_read(self, error):
         """WARN uma vez por bomba quando o arquivo de log some ou fica ilegivel."""
         if not self.read_error:
             self.read_error = True
-            _log.warning("log local ilegivel (%s); coleta do ticket suspensa", erro.__class__.__name__,
+            _log.warning("log local ilegivel (%s); coleta do ticket suspensa", error.__class__.__name__,
                          extra={"ticket": self.ticket_id, "action": "LOG"})
 
     # -- limites -------------------------------------------------------------
@@ -167,7 +167,7 @@ class Pump(object):
         except OSError:  # arquivo ausente: nada a medir; a leitura registra o WARN
             return False
 
-    def apply_db_cap(self, texto):
+    def apply_db_cap(self, text):
         """(texto_para_enviar, truncou). O total no CLOB, marcador incluido, nunca passa do teto.
 
         Enquanto cabe, envia ate max - bytes_do_marcador e retem o resto (no maximo o tamanho do marcador),
@@ -176,7 +176,7 @@ class Pump(object):
         """
         if self.truncated:
             return "", True
-        buf = self._held + (texto or "")
+        buf = self._held + (text or "")
         disponivel = self.max_log_size_bytes - self._accepted_bytes
         antes_do_marcador = self.max_log_size_bytes - self._marker_bytes - self._accepted_bytes
         prefixo = _prefix_in_bytes(buf, antes_do_marcador)
@@ -221,39 +221,39 @@ def _rollback(conn):
         _log.warning("rollback falhou (%s)", e.__class__.__name__, extra={"action": "LOG"})
 
 
-def _send_one(bomba, conn, repo, agente_id):
+def _send_one(pump, conn, repo, agent_id):
     """Envia o proximo passo pendente da bomba: OK, OWNERSHIP_LOST, INCONSISTENTE ou UNCERTAIN_CONNECTION."""
-    item = bomba.next_chunk()
+    item = pump.next_chunk()
     try:
         if item is not None:
             bloco, offset = item
-            resultado = repo.append_chunk(conn, bomba.ticket_id, agente_id, offset, bloco)
+            resultado = repo.append_chunk(conn, pump.ticket_id, agent_id, offset, bloco)
         else:
-            resultado = WRITTEN if repo.mark_truncated(conn, bomba.ticket_id, agente_id) else OWNERSHIP_LOST
+            resultado = WRITTEN if repo.mark_truncated(conn, pump.ticket_id, agent_id) else OWNERSHIP_LOST
     except LogOffsetMismatch as e:
         _rollback(conn)
-        bomba.stopped = True
-        _log.error("pump interrompido: %s", e, extra={"ticket": bomba.ticket_id, "action": "LOG"})
+        pump.stopped = True
+        _log.error("pump interrompido: %s", e, extra={"ticket": pump.ticket_id, "action": "LOG"})
         return INCONSISTENT
     except Exception as e:  # noqa: BLE001 - erro de banco: mesmo bloco reapresentado numa conexao nova
         _rollback(conn)
         _log.warning("envio do log falhou (%s); bloco mantido", e.__class__.__name__,
-                     extra={"ticket": bomba.ticket_id, "action": "LOG"})
+                     extra={"ticket": pump.ticket_id, "action": "LOG"})
         return UNCERTAIN_CONNECTION
     if resultado == OWNERSHIP_LOST:
         _rollback(conn)
-        bomba.ownership_lost = True
+        pump.ownership_lost = True
         return OWNERSHIP_LOST
     try:
         conn.commit()
     except Exception as e:  # noqa: BLE001 - desfecho desconhecido: a repeticao reconcilia (ALREADY_WRITTEN)
         _log.warning("COMMIT do log incerto (%s); bloco mantido", e.__class__.__name__,
-                     extra={"ticket": bomba.ticket_id, "action": "LOG"})
+                     extra={"ticket": pump.ticket_id, "action": "LOG"})
         return UNCERTAIN_CONNECTION
     if item is not None:
-        bomba.confirm()
+        pump.confirm()
     else:
-        bomba.truncated_written = True
+        pump.truncated_written = True
     return OK
 
 
@@ -276,10 +276,10 @@ class Round(object):
     encerra a rodada com uncertain_connection: o laco reconecta e a mesma operacao e reapresentada.
     """
 
-    def __init__(self, bombas, relogio_monotonico, orcamento_s):
-        self.pumps = bombas
-        self.clock = relogio_monotonico
-        self.budget_s = orcamento_s
+    def __init__(self, pumps, monotonic_clock, budget_s):
+        self.pumps = pumps
+        self.clock = monotonic_clock
+        self.budget_s = budget_s
         self._last = None
 
     def _order(self):
@@ -289,7 +289,7 @@ class Round(object):
         depois = [t for t in ids if t > self._last]
         return depois + [t for t in ids if t <= self._last]
 
-    def run(self, conn, repo, agente_id):
+    def run(self, conn, repo, agent_id):
         res = RoundResult()
         inicio = self.clock()
         ativos = []
@@ -311,7 +311,7 @@ class Round(object):
                 if res.served and self.clock() - inicio > self.budget_s:
                     res.budget_exhausted = True
                     return res
-                desfecho = _send_one(self.pumps[ticket_id], conn, repo, agente_id)
+                desfecho = _send_one(self.pumps[ticket_id], conn, repo, agent_id)
                 if ticket_id not in res.served:
                     res.served.append(ticket_id)
                 self._last = ticket_id
@@ -323,19 +323,19 @@ class Round(object):
                     ativos.remove(ticket_id)
 
 
-def final_flush(bomba, conn, repo, agente_id):
+def final_flush(pump, conn, repo, agent_id):
     """Flush final de um ticket terminado, sem orcamento (o laco faz um por iteracao).
 
     Devolve OK (tudo confirmado), OWNERSHIP_LOST, INCONSISTENTE ou UNCERTAIN_CONNECTION (repetir na proxima
     iteracao com a mesma bomba: nada confirmado se perde nem se duplica).
     """
-    if bomba.stopped:
+    if pump.stopped:
         return INCONSISTENT
-    if bomba.ownership_lost:
+    if pump.ownership_lost:
         return OWNERSHIP_LOST
-    bomba.finalize()
-    while bomba.pending():
-        desfecho = _send_one(bomba, conn, repo, agente_id)
+    pump.finalize()
+    while pump.pending():
+        desfecho = _send_one(pump, conn, repo, agent_id)
         if desfecho != OK:
             return desfecho
     return OK

@@ -6,7 +6,7 @@ Este documento registra as consultas SQL estáticas executadas pelos repositóri
 > * `{owner}`: configurado em `[oracle] owner` no `instance/config.ini` (ex.: `openrisow`). Validado por `^[A-Za-z][A-Za-z0-9_]{0,29}$`.
 > * `{prefixo}`: configurado em `[oracle] table_prefix` no `instance/config.ini` (padrão: `tbsss_`). Validado por `^[a-z][a-z0-9_]{0,7}$` (CR-007 R-31, CR-008 R-28).
 >
-> Nenhum SQL dos repositórios possui nomes de tabela, sequence ou constraint fixos no código; todos são qualificados dinamicamente via `BaseRepoOracle.qualify_table(entity)`, `qualify_sequence(entity)` e `constraint_name(tipo, entity, sufixo)` com base em `modules/sql_ident.py`.
+> Nenhum SQL dos repositórios possui nomes de tabela, sequence ou constraint fixos no código; todos são qualificados dinamicamente via `BaseRepoOracle.qualify_table(entity)`, `qualify_sequence(entity)` e `constraint_name(kind, entity, suffix)` com base em `modules/sql_ident.py`.
 
 ---
 

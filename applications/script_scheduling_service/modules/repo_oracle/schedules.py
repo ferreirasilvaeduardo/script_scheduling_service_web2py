@@ -89,33 +89,33 @@ _SQL_RESUME = (
 )
 
 
-def _null(valor):
+def _null(value):
     # O Oracle grava '' como NULL.
-    return valor is None or valor == ""
+    return value is None or value == ""
 
 
-def _equal(atual, esperado):
+def _equal(current_value, expected):
     """Comparacao nula-segura do 'esperado' ('' e NULL no Oracle; DATE sem fracao)."""
-    if atual == "":
-        atual = None
-    if esperado == "":
-        esperado = None
-    if isinstance(atual, datetime.datetime) and isinstance(esperado, datetime.datetime):
-        return atual.replace(microsecond=0) == esperado.replace(microsecond=0)
-    return atual == esperado
+    if current_value == "":
+        current_value = None
+    if expected == "":
+        expected = None
+    if isinstance(current_value, datetime.datetime) and isinstance(expected, datetime.datetime):
+        return current_value.replace(microsecond=0) == expected.replace(microsecond=0)
+    return current_value == expected
 
 
-def _read_lob(valor):
-    if valor is not None and hasattr(valor, "read"):
-        return valor.read()
-    return valor
+def _read_lob(value):
+    if value is not None and hasattr(value, "read"):
+        return value.read()
+    return value
 
 
 class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
     """Repositorio de agendamentos com SQL Oracle 11gR2."""
 
-    def __init__(self, cfg=None, segredos=None):
-        super(RepoSchedulesOracle, self).__init__(cfg=cfg, segredos=segredos)
+    def __init__(self, cfg=None, secrets=None):
+        super(RepoSchedulesOracle, self).__init__(cfg=cfg, secrets=secrets)
         self._idents = {
             "sch": self.qualify_table("schedules"),
             "scr": self.qualify_table("scripts"),
@@ -135,8 +135,8 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
     # Utilitarios
     # -------------------------------------------------------------------------
 
-    def _ck(self, sufixo):
-        return self.constraint_name("ck", "schedules", sufixo)
+    def _ck(self, suffix):
+        return self.constraint_name("ck", "schedules", suffix)
 
     def _checar_cks(self, r):
         """Espelha NOT NULL e as CKs de tbsss_schedules (README §10, tabela 12), na ordem do FAKE."""
@@ -206,11 +206,11 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
         finally:
             cur.close()
 
-    def _binds_registro(self, reg, ator):
+    def _binds_registro(self, reg, actor):
         binds = dict((c, reg.get(c)) for c in _COLUMNS_UPDATABLE)
         binds["script_id"] = int(reg["script_id"])
         binds["user_id"] = int(reg["user_id"])
-        binds["actor"] = ator
+        binds["actor"] = actor
         return binds
 
     @staticmethod
@@ -219,29 +219,29 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
         tipos["params_json"] = db_conn.TIPO_CLOB
         db_conn.set_input_types(cur, **tipos)
 
-    def _auditar(self, conn, auditoria, id, acao_padrao=None, detalhe_padrao=None, ator=None):
-        if auditoria:
-            write_audit(conn, self._tbl_aud, self._seq_aud, auditoria, "tbsss_schedules", id)
-        elif acao_padrao:
+    def _auditar(self, conn, audit, id, default_action=None, default_detail=None, actor=None):
+        if audit:
+            write_audit(conn, self._tbl_aud, self._seq_aud, audit, "tbsss_schedules", id)
+        elif default_action:
             write_audit(conn, self._tbl_aud, self._seq_aud,
-                             {"actor": ator, "ip": None, "action": acao_padrao, "detail": detalhe_padrao},
+                             {"actor": actor, "ip": None, "action": default_action, "detail": default_detail},
                              "tbsss_schedules", id)
 
-    def _conferir_esperado(self, id, atual, esperado):
-        for campo, valor in (esperado or {}).items():
-            if not _equal(atual.get(campo), valor):
+    def _conferir_esperado(self, id, current_value, expected):
+        for campo, valor in (expected or {}).items():
+            if not _equal(current_value.get(campo), valor):
                 raise repo_errors.RepoConflict("Agendamento ID %s alterado por outra operacao (%s)" % (id, campo))
 
     # -------------------------------------------------------------------------
     # Leituras
     # -------------------------------------------------------------------------
 
-    def list(self, filtros=None, pagina=1, tamanho=20, escopo_ambientes=None, conn=None):
+    def list(self, filters=None, page=1, size=20, environment_scope=None, conn=None):
         """Lista por next_run, id, com total limitado a 10.001 (traz parametros_json, sem log)."""
-        filtros = filtros or {}
+        filters = filters or {}
         clausulas, binds = [], {}
-        if escopo_ambientes is not None:
-            ambs = sorted(set(escopo_ambientes))
+        if environment_scope is not None:
+            ambs = sorted(set(environment_scope))
             if not ambs:
                 clausulas.append("1 = 0")
             else:
@@ -250,26 +250,26 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
                     binds["e%d" % n] = amb
                     marcas.append(":e%d" % n)
                 clausulas.append("environment IN (" + ", ".join(marcas) + ")")
-        if filtros.get("active"):
+        if filters.get("active"):
             clausulas.append("active = :active_f")
-            binds["active_f"] = filtros["active"]
-        if filtros.get("script_id") is not None:
+            binds["active_f"] = filters["active"]
+        if filters.get("script_id") is not None:
             clausulas.append("script_id = :script_id_f")
-            binds["script_id_f"] = int(filtros["script_id"])
-        if filtros.get("environment"):
+            binds["script_id_f"] = int(filters["script_id"])
+        if filters.get("environment"):
             clausulas.append("environment = :environment_f")
-            binds["environment_f"] = filtros["environment"]
-        if filtros.get("user_id") is not None:
+            binds["environment_f"] = filters["environment"]
+        if filters.get("user_id") is not None:
             clausulas.append("user_id = :user_id_f")
-            binds["user_id_f"] = int(filtros["user_id"])
-        if filtros.get("name"):
+            binds["user_id_f"] = int(filters["user_id"])
+        if filters.get("name"):
             # '%' e '_' digitados contam como literais, como o 'in' do FAKE.
-            trecho = filtros["name"].lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            trecho = filters["name"].lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             clausulas.append("LOWER(name) LIKE :name_f ESCAPE '\\'")
             binds["name_f"] = "%" + trecho + "%"
 
-        p = 1 if pagina is None else int(pagina)
-        t = 20 if tamanho is None else int(tamanho)
+        p = 1 if page is None else int(page)
+        t = 20 if size is None else int(size)
         if p < 1:
             p = 1
         if t < 1:
@@ -327,30 +327,30 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
     # Gravacoes
     # -------------------------------------------------------------------------
 
-    def insert(self, dados, auditoria=None, ator=None, conn=None):
+    def insert(self, date, audit=None, actor=None, conn=None):
         """Insere com as CKs e FKs conferidas antes do INSERT e a auditoria na mesma transacao."""
-        ator_limpo = validate_record_actor(auditoria, ator)
+        ator_limpo = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             agora = db_conn.db_now(c)
             novo = {
-                "name": dados.get("name"),
-                "script_id": int(dados["script_id"]),
-                "environment": dados["environment"],
-                "user_id": int(dados["user_id"]),
-                "priority": dados.get("priority", 2),
-                "recurrence_type": dados.get("recurrence_type"),
-                "cron_expression": dados.get("cron_expression"),
-                "run_time": dados.get("run_time"),
-                "week_days": dados.get("week_days"),
-                "month_day": dados.get("month_day"),
-                "params_json": dados.get("params_json", "{}"),
-                "start_date": dados.get("start_date") or agora,
-                "end_date": dados.get("end_date"),
-                "next_run_at": dados.get("next_run_at") or agora,
-                "last_run_at": dados.get("last_run_at"),
-                "last_ticket_id": dados.get("last_ticket_id"),
-                "pause_reason": dados.get("pause_reason"),
-                "active": dados.get("active", "Y"),
+                "name": date.get("name"),
+                "script_id": int(date["script_id"]),
+                "environment": date["environment"],
+                "user_id": int(date["user_id"]),
+                "priority": date.get("priority", 2),
+                "recurrence_type": date.get("recurrence_type"),
+                "cron_expression": date.get("cron_expression"),
+                "run_time": date.get("run_time"),
+                "week_days": date.get("week_days"),
+                "month_day": date.get("month_day"),
+                "params_json": date.get("params_json", "{}"),
+                "start_date": date.get("start_date") or agora,
+                "end_date": date.get("end_date"),
+                "next_run_at": date.get("next_run_at") or agora,
+                "last_run_at": date.get("last_run_at"),
+                "last_ticket_id": date.get("last_ticket_id"),
+                "pause_reason": date.get("pause_reason"),
+                "active": date.get("active", "Y"),
             }
             self._checar_cks(novo)
             self._checar_fks(c, novo)
@@ -363,21 +363,21 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
                 cur.execute(self._sql["INSERT"], binds)
             finally:
                 cur.close()
-            self._auditar(c, auditoria, aid)
+            self._auditar(c, audit, aid)
             return self.get(aid, conn=c)
 
-    def update(self, id, dados, esperado=None, auditoria=None, ator=None, conn=None):
+    def update(self, id, date, expected=None, audit=None, actor=None, conn=None):
         """Altera a regra (usuario_id do editor), condicional a 'esperado'; created_* nunca muda."""
-        ator_limpo = validate_record_actor(auditoria, ator)
+        ator_limpo = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             atual = self._uma(c, self._sql["GET_LOCK"], {"id": int(id)})
             if atual is None:
                 raise repo_errors.RepoNotFound("Agendamento ID %s nao encontrado" % id)
-            self._conferir_esperado(id, atual, esperado)
+            self._conferir_esperado(id, atual, expected)
             resultado = dict(atual)
             for k in _COLUMNS_UPDATABLE:
-                if k in dados:
-                    resultado[k] = dados[k]
+                if k in date:
+                    resultado[k] = date[k]
             # Validacao completa antes do UPDATE: um UPDATE rejeitado nao altera nenhuma coluna.
             self._checar_cks(resultado)
             self._checar_fks(c, resultado)
@@ -391,22 +391,22 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
                     raise repo_errors.RepoConflict("Agendamento ID %s alterado por outra operacao" % id)
             finally:
                 cur.close()
-            self._auditar(c, auditoria, int(id))
+            self._auditar(c, audit, int(id))
             return self.get(id, conn=c)
 
-    def pause(self, id, motivo, antiga_data=None, auditoria=None, ator=None, conn=None):
+    def pause(self, id, reason, old_date=None, audit=None, actor=None, conn=None):
         """Pausa so regra ativa e, com antiga_data, so se a next_run nao mudou (CR-007, R-19)."""
-        ator_limpo = validate_record_actor(auditoria, ator)
+        ator_limpo = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             if not self._existe(c, self._sql["EXISTS"], {"id": int(id)}):
                 raise repo_errors.RepoNotFound("Agendamento ID %s nao encontrado" % id)
-            if motivo not in _REASONS_PAUSE:
+            if reason not in _REASONS_PAUSE:
                 raise repo_errors.RepoViolation("pausa_motivo invalido", constraint=self._ck("pause"))
-            binds = {"id": int(id), "reason": motivo, "actor": ator_limpo}
+            binds = {"id": int(id), "reason": reason, "actor": ator_limpo}
             cur = c.cursor()
             try:
-                if antiga_data is not None:
-                    binds["old_date"] = antiga_data
+                if old_date is not None:
+                    binds["old_date"] = old_date
                     # TIPO_DATE descarta a fracao: o valor lido mais microssegundos ainda casa (README §7.5).
                     db_conn.set_input_types(cur, old_date=db_conn.TIPO_DATE)
                     cur.execute(self._sql["PAUSE_OPTIMISTIC"], binds)
@@ -417,28 +417,28 @@ class RepoSchedulesOracle(BaseRepoOracle, RepoSchedules):
                         "Agendamento %s nao esta ativo ou a proxima_execucao mudou (outra operacao)" % id)
             finally:
                 cur.close()
-            self._auditar(c, auditoria, int(id), "SCHEDULE_PAUSE", "Agendamento pausado: reason=%s" % motivo,
+            self._auditar(c, audit, int(id), "SCHEDULE_PAUSE", "Agendamento pausado: reason=%s" % reason,
                           ator_limpo)
             return self.get(id, conn=c)
 
-    def resume(self, id, nova_data, esperado=None, auditoria=None, ator=None, conn=None):
+    def resume(self, id, new_date, expected=None, audit=None, actor=None, conn=None):
         """Retoma: ativo = 'S', pausa_motivo nulo e next_run = nova_data, condicional a 'esperado'."""
-        ator_limpo = validate_record_actor(auditoria, ator)
+        ator_limpo = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             atual = self._uma(c, self._sql["GET_LOCK"], {"id": int(id)})
             if atual is None:
                 raise repo_errors.RepoNotFound("Agendamento ID %s nao encontrado" % id)
-            self._conferir_esperado(id, atual, esperado)
-            if nova_data is None:
+            self._conferir_esperado(id, atual, expected)
+            if new_date is None:
                 raise repo_errors.RepoViolation("proxima_execucao e obrigatoria")
             cur = c.cursor()
             try:
                 db_conn.set_input_types(cur, new_date=db_conn.TIPO_DATE)
-                cur.execute(self._sql["RESUME"], {"id": int(id), "new_date": nova_data, "actor": ator_limpo})
+                cur.execute(self._sql["RESUME"], {"id": int(id), "new_date": new_date, "actor": ator_limpo})
                 if cur.rowcount != 1:
                     raise repo_errors.RepoConflict("Agendamento ID %s alterado por outra operacao" % id)
             finally:
                 cur.close()
-            self._auditar(c, auditoria, int(id), "UPDATE",
-                          "Agendamento retomado com next_run_at=%s" % nova_data, ator_limpo)
+            self._auditar(c, audit, int(id), "UPDATE",
+                          "Agendamento retomado com next_run_at=%s" % new_date, ator_limpo)
             return self.get(id, conn=c)

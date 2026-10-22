@@ -74,10 +74,10 @@ _DIR_PREFIX = "ticket_"
 class StartupFailure(SystemExit):
     """Falha de um passo da inicializacao: o CRITICAL ja foi registrado; o codigo identifica o passo."""
 
-    def __init__(self, codigo, motivo):
-        SystemExit.__init__(self, codigo)
-        self.code = codigo
-        self.reason = motivo
+    def __init__(self, code, reason):
+        SystemExit.__init__(self, code)
+        self.code = code
+        self.reason = reason
 
 
 class _Log(logging.LoggerAdapter):
@@ -98,9 +98,9 @@ def _sss_dirs(cfg):
                              getattr(agente, "output_dir", None), getattr(agente, "input_dir", None)) if d)
 
 
-def _read_state(pasta, nome, plat):
+def _read_state(folder, name, plat):
     try:
-        return plat.read_state(os.path.join(pasta, nome))
+        return plat.read_state(os.path.join(folder, name))
     except (OSError, ValueError):  # estado ilegivel: tratado como ausente, com o rastro preservado
         return None
 
@@ -108,24 +108,24 @@ def _read_state(pasta, nome, plat):
 class Agent(object):
     """Daemon de um no agente. inicializar() executa os passos 1 a 9 do README §8.12, em ordem."""
 
-    def __init__(self, cfg=None, segredos=None, plat=None, conexao=None, repo=None, repo_log=None,
-                 relogio=None, relogio_parede=None, hostname=None, pid=None, carregar_config=None,
-                 carregar_segredos=None, repo_saida=None, repo_agenda=None):
+    def __init__(self, cfg=None, secrets=None, plat=None, connection=None, repo=None, repo_log=None,
+                 clock=None, wall_clock=None, hostname=None, pid=None, load_config=None,
+                 load_secrets=None, repo_output=None, repo_schedules=None):
         self.cfg = cfg
-        self.secrets = segredos
+        self.secrets = secrets
         self.plat = plat or os_platform
-        self.connection = conexao
+        self.connection = connection
         self.repo = repo
         self.repo_log = repo_log
-        self.repo_output = repo_saida
-        self.repo_schedules = repo_agenda
+        self.repo_output = repo_output
+        self.repo_schedules = repo_schedules
         self.expansion = None
-        self.clock = relogio or time.monotonic
-        self.wall_clock = relogio_parede or time.time
+        self.clock = clock or time.monotonic
+        self.wall_clock = wall_clock or time.time
         self.hostname = hostname or socket.gethostname()
         self.pid = pid or os.getpid()
-        self._load_config = carregar_config or (lambda: sss_config.get_config(nome_log="sss_scheduler"))
-        self._load_secrets = carregar_segredos
+        self._load_config = load_config or (lambda: sss_config.get_config(log_name="sss_scheduler"))
+        self._load_secrets = load_secrets
         self.log = _Log(_log, {"agent": "-", "ticket": "-", "action": "INICIO"})
         self.lock = None
         self.agent_db_id = None
@@ -138,10 +138,10 @@ class Agent(object):
 
     # ------------------------------------------------------------------ util
 
-    def _fail(self, codigo, motivo, *args):
-        texto = motivo % args if args else motivo
+    def _fail(self, code, reason, *args):
+        texto = reason % args if args else reason
         self.log.critical("Subida abortada: %s", texto, extra={"action": "INICIO"})
-        raise StartupFailure(codigo, texto)
+        raise StartupFailure(code, texto)
 
     @property
     def agent_id(self):
@@ -150,8 +150,8 @@ class Agent(object):
     def _conn(self):
         return self.connection.get_connection()
 
-    def _exec_user(self, ambiente):
-        return dict(self.cfg.agent.exec_users or ()).get(ambiente) or None
+    def _exec_user(self, environment):
+        return dict(self.cfg.agent.exec_users or ()).get(environment) or None
 
     # --------------------------------------------------------------- passos
 
@@ -215,7 +215,7 @@ class Agent(object):
             return
         try:
             carregar = self._load_secrets or (
-                lambda: sss_config.load_secrets(self.cfg.secrets.secrets_file, cfg=self.cfg, papel="agent"))
+                lambda: sss_config.load_secrets(self.cfg.secrets.secrets_file, cfg=self.cfg, role="agent"))
             self.secrets = carregar()
         except sss_config.ConfigError as exc:
             self._fail(EXIT_SECRETS, "secrets.cfg invalido: %s", exc)
@@ -231,7 +231,7 @@ class Agent(object):
             self._fail(EXIT_DIRECTORIES, "[agent] interpreters vazio: o agente nao executaria nada")
         for logico, caminho in agente.interpreters:
             try:
-                self.plat.validate_interpreter_executable(caminho, dirs_sss=dirs_sss)
+                self.plat.validate_interpreter_executable(caminho, sss_dirs=dirs_sss)
             except Exception as exc:  # noqa: BLE001 - PathGuardError e afins: CRITICAL com o codigo
                 self._fail(EXIT_DIRECTORIES, "interpretador %s (%s) recusado: %s", logico, caminho,
                              getattr(exc, "code", exc.__class__.__name__))
@@ -298,7 +298,7 @@ class Agent(object):
             if self.connection is None:
                 selecao = db_conn.select_driver(self.cfg, self.secrets)
                 db_conn.initialize(selecao, self.cfg)
-                self.connection = db_conn.ResilientConnection(self.cfg, self.secrets, papel="agent")
+                self.connection = db_conn.ResilientConnection(self.cfg, self.secrets, role="agent")
             if not self.connection.ensure():
                 self._fail(EXIT_DATABASE, "sem conexao com o Oracle")
             conn = self._conn()
@@ -316,7 +316,7 @@ class Agent(object):
             if divergencia > CLOCK_SKEW_S:
                 self.log.warning("relogio local diverge do SYSDATE em %d s (README §7.1)", divergencia)
             db_conn.check_schema_version(conn, owner=self.cfg.oracle.owner.strip(),
-                                            prefixo=self.cfg.oracle.table_prefix.strip())
+                                            prefix=self.cfg.oracle.table_prefix.strip())
             self.supplementary_unit = self.repo_log.supplementary_unit(conn)
         except StartupFailure:
             raise
@@ -435,12 +435,12 @@ class Agent(object):
             self.log.warning("%d saida(s) em gravacao marcada(s) FALHOU na subida", falhadas,
                              extra={"action": "STARTUP"})
 
-    def _reopen(self, tid, pasta, proc, usuario, log):
+    def _reopen(self, tid, folder, proc, user, log):
         processo = self.plat.reopen_group(proc)
         if processo is None:
             return
-        execucao = executor.Execution(tid, pasta, usuario,
-                                     os.path.join(self.cfg.agent.exec_work_dir, usuario) if usuario else None, None)
+        execucao = executor.Execution(tid, folder, user,
+                                     os.path.join(self.cfg.agent.exec_work_dir, user) if user else None, None)
         execucao.process = processo
         execucao.pid = processo.pid
         execucao.identity = processo.identity
@@ -451,33 +451,33 @@ class Agent(object):
             self.stopping[tid] = execucao  # o laco avanca o encerramento e limpa a pasta depois
             log.warning("grupo do ticket em encerramento na subida (pid %s)", processo.pid)
 
-    def _finalize(self, tid, status, motivo, rc, log, detalhe):
+    def _finalize(self, tid, status, reason, rc, log, detail):
         """Finaliza o ticket RUNNING deste agente com a linha [SSS] no log (README §5.2)."""
         conn = self._conn()
-        self._linha_sss(conn, tid, "%s: %s (agente %s)" % (motivo, detalhe, self.agent_id))
-        if not self.repo.finalize(conn, tid, self.agent_id, status, motivo, rc):
+        self._linha_sss(conn, tid, "%s: %s (agente %s)" % (reason, detail, self.agent_id))
+        if not self.repo.finalize(conn, tid, self.agent_id, status, reason, rc):
             log.warning("OWNERSHIP_LOST na subida: o ticket ja nao era deste agente")
         elif status == "SUCCESS":
-            log.info("ticket finalizado na subida pelo resultado local: %s/%s", status, motivo)
+            log.info("ticket finalizado na subida pelo resultado local: %s/%s", status, reason)
         else:
-            log.error("ticket finalizado na subida: %s/%s (%s)", status, motivo, detalhe)
+            log.error("ticket finalizado na subida: %s/%s (%s)", status, reason, detail)
 
-    def _linha_sss(self, conn, tid, texto):
+    def _linha_sss(self, conn, tid, text):
         ticket = self.repo.get_ticket(conn, tid)
         if ticket is None:
             return
         try:
             self.repo_log.append_chunk(conn, tid, self.agent_id, int(ticket.get("log_offset_chars") or 0),
-                                 "[SSS] %s\n" % texto)
+                                 "[SSS] %s\n" % text)
             conn.commit()
         except Exception as exc:  # noqa: BLE001 - a linha e informativa; a finalizacao segue
             conn.rollback()
             _log.warning("linha [SSS] nao gravada no log do ticket (%s)", exc.__class__.__name__,
                          extra={"agent": self.agent_id, "ticket": tid, "action": "STARTUP"})
 
-    def _clean_dir(self, tid, pasta):
-        execucao = executor.Execution(tid, pasta, None, None, None)
-        estado = _read_state(pasta, executor.PROC, self.plat) or _read_state(pasta, executor.SPAWN, self.plat) or {}
+    def _clean_dir(self, tid, folder):
+        execucao = executor.Execution(tid, folder, None, None, None)
+        estado = _read_state(folder, executor.PROC, self.plat) or _read_state(folder, executor.SPAWN, self.plat) or {}
         usuario = estado.get("exec_user")
         if usuario:
             execucao.exec_user = usuario
@@ -493,7 +493,7 @@ class Agent(object):
     # Laco (README §8.1)
     # ======================================================================
 
-    def prepare_loop(self, esperar):
+    def prepare_loop(self, wait):
         """Estado do laco: mapa local, bombas do log, rodada do pump e os tres prazos.
 
         esperar(segundos): a unica espera do daemon, entre iteracoes (no maximo 1 s); o run_scheduler injeta a
@@ -514,7 +514,7 @@ class Agent(object):
         self._clock_ref = None          # (SYSDATE, monotonico) do ultimo SYSDATE lido
         self._node_offline_suspended_until = None
         self.round = log_pump.Round(self.pumps, self.clock, agente.heartbeat_interval_s / 2.0)
-        self._wait = esperar
+        self._wait = wait
         agora = self.clock()
         self.deadlines = {"rapido": agora, "heartbeat": agora, "orquestrador": agora}
         self._last_disk_warning = None
@@ -530,16 +530,16 @@ class Agent(object):
             valores.append(getattr(cred, "password", None))
         return valores
 
-    def run(self, parada, esperar=None, ate=None, limite_s=None):
+    def run(self, stop_event, wait=None, until=None, limit_s=None):
         """Laco principal ate a parada (flag com is_set() ou arquivo .stop). Devolve o codigo de saida.
 
         ate/limite_s: so para os testes (condicao de termino e prazo maximo do harness).
         """
         if not hasattr(self, "executions"):
-            self.prepare_loop(esperar)
+            self.prepare_loop(wait)
         agente = self.cfg.agent
         stop = os.path.join(agente.work_dir, "sss-%s.stop" % self.agent_id)
-        fim = None if limite_s is None else self.clock() + limite_s
+        fim = None if limit_s is None else self.clock() + limit_s
         while True:
             self._iteration()
             self._check_fence()
@@ -560,16 +560,16 @@ class Agent(object):
                         self._check_fence()
             except RegistrationLost as exc:
                 self.log.critical("REGISTRO_PERDIDO: %s; encerramento TERMINATE", exc, extra={"action": "HB"})
-                self.stop_all("TERMINATE", registro_perdido=True)
+                self.stop_all("TERMINATE", registration_lost=True)
                 return EXIT_REGISTRATION_LOST
-            if parada.is_set() or os.path.exists(stop):
+            if stop_event.is_set() or os.path.exists(stop):
                 if agente.shutdown_mode != "DRAIN":
                     return self.stop_all("TERMINATE")
                 if self._drain_until is None:
                     self._start_drain()
                 if self._drained() or self.clock() >= self._drain_until:
                     return self.stop_all("DRAIN")
-            if (ate is not None and ate()) or (fim is not None and self.clock() >= fim):
+            if (until is not None and until()) or (fim is not None and self.clock() >= fim):
                 return self.exit_code
             espera = min(self.deadlines.values()) - self.clock()
             self._wait(max(0.0, min(MAX_WAIT_INTERVAL_S, espera)))
@@ -628,20 +628,20 @@ class Agent(object):
                          "suspenso por %d s", diferenca, self.cfg.agent.node_offline_timeout_s, extra={"action": "HB"})
         return True
 
-    def _cycle(self, nome, funcao):
+    def _cycle(self, name, function):
         """Um ciclo isolado: erro registrado com contexto; erro de rede descarta a conexao (reconexao no
         ciclo seguinte, uma tentativa por ciclo, sem esperar)."""
         if not self.connection.ensure():
-            if nome == "rapido":
+            if name == "rapido":
                 self._iteration_without_db()
             return
         try:
-            funcao()
+            function()
         except RegistrationLost:
             raise
         except Exception as exc:  # noqa: BLE001 - o laco nunca cai por um ciclo
-            self.log.error("ciclo %s falhou: %s", nome, exc, exc_info=not db_conn.is_network_error(exc),
-                           extra={"action": nome.upper()})
+            self.log.error("ciclo %s falhou: %s", name, exc, exc_info=not db_conn.is_network_error(exc),
+                           extra={"action": name.upper()})
             self.connection.notify_error(exc)
 
     def _iteration_without_db(self):
@@ -677,7 +677,7 @@ class Agent(object):
 
     # ---------------------------------------------------- saida (CR-012)
 
-    def _pack(self, item, agora):
+    def _pack(self, item, now):
         """Etapa 1 da fase de saida, antes do flush final. True quando o ticket pode seguir para a finalizacao."""
         saida = item.output
         if saida is None or saida.packed:
@@ -687,10 +687,10 @@ class Agent(object):
             return True
         agente = self.cfg.agent
         if saida.process is None:
-            output_phase.start_pack(saida, self.plat, agente.output_max_bytes, agente.output_max_files, agora)
+            output_phase.start_pack(saida, self.plat, agente.output_max_bytes, agente.output_max_files, now)
             if not saida.packed:
                 return False
-        elif not output_phase.advance_pack(saida, self.plat, agora):
+        elif not output_phase.advance_pack(saida, self.plat, now):
             return False
         linha = output_phase.log_line(saida, self.agent_id, agente.output_max_files, agente.output_max_bytes)
         if linha and item.execution is not None and item.execution.log_path:
@@ -703,7 +703,7 @@ class Agent(object):
             item.log.warning("saida acima do limite (%s): a pasta fica no disco", saida.reason, extra={"action": "SAIDA"})
         return True
 
-    def _advance_outputs(self, agora):
+    def _advance_outputs(self, now):
         """Etapa 2, depois da finalizacao: grava a saida sem esperar, refazendo erro de banco a cada
         cancel_poll_interval_s. Ao terminar, remove a pasta (ZIP ou vazia) e o work_dir do ticket."""
         if not self.outputs or self._terminating:
@@ -712,12 +712,12 @@ class Agent(object):
         if conn is None:
             return
         for tid, (saida, ex, log) in sorted(self.outputs.items()):
-            if agora < saida.next_attempt:
+            if now < saida.next_attempt:
                 continue
             try:
                 desfecho = output_phase.write(saida, conn, self.repo_output, self.agent_id)
             except Exception as exc:  # noqa: BLE001 - pendencia refeita no proximo prazo
-                saida.next_attempt = agora + self.cfg.agent.cancel_poll_interval_s
+                saida.next_attempt = now + self.cfg.agent.cancel_poll_interval_s
                 if not saida.pending_warned:
                     saida.pending_warned = True
                     log.warning("gravacao da saida pendente (%s)", exc.__class__.__name__, extra={"action": "SAIDA"})
@@ -738,18 +738,18 @@ class Agent(object):
                                     extra={"action": "SAIDA"})
             self._clean(tid, ex.work_dir_ticket, ex)
 
-    def _stop(self, item, motivo):
+    def _stop(self, item, reason):
         """Pede o encerramento do grupo (SIGTERM, prazo, SIGKILL) sem esperar. motivo None: saida natural."""
         if item.phase != _Item.RODANDO:
             return
         ex = item.execution
-        if motivo is not None and executor.check(ex) is not None:
-            motivo = None  # o processo ja tinha terminado: prevalece o resultado real (README §5.6)
-        item.reason = motivo
+        if reason is not None and executor.check(ex) is not None:
+            reason = None  # o processo ja tinha terminado: prevalece o resultado real (README §5.6)
+        item.reason = reason
         executor.request_stop(ex, self.clock(), grace_s=self.cfg.agent.kill_grace_s)
         item.phase = _Item.ENCERRANDO
-        if motivo is not None:
-            item.log.warning("encerramento pedido: %s", motivo, extra={"action": "ENCERRAR"})
+        if reason is not None:
+            item.log.warning("encerramento pedido: %s", reason, extra={"action": "ENCERRAR"})
 
     def _result(self, item):
         if item.reason in _FINAL:
@@ -812,13 +812,13 @@ class Agent(object):
         self._clean(item.tid, item.execution.work_dir_ticket if item.execution else None,
                      item.execution)
 
-    def _clean(self, tid, pasta, execucao=None):
-        if not pasta:
+    def _clean(self, tid, folder, execution=None):
+        if not folder:
             return
-        if execucao is None:
-            return self._clean_dir(tid, pasta)
+        if execution is None:
+            return self._clean_dir(tid, folder)
         try:
-            executor.clean(execucao)
+            executor.clean(execution)
         except Exception as exc:  # noqa: BLE001 - a pasta fica para a proxima subida
             _log.warning("pasta do ticket nao removida (%s)", exc.__class__.__name__,
                          extra={"agent": self.agent_id, "ticket": tid, "action": "LIMPEZA"})
@@ -984,7 +984,7 @@ class Agent(object):
         if self.expansion is None:
             self.expansion = schedule_expansion.Expansion(self.repo_schedules, self.repo, self.agent_id, self.cfg.agent,
                                               self.clock)
-        stats = self.expansion.run(self._conn(), continuar=self._can_continue)
+        stats = self.expansion.run(self._conn(), keep_going=self._can_continue)
         if stats["regras"]:
             self.log.info("desdobro: %(regras)d regra(s), %(tickets)d ticket(s), %(pausas)d pausa(s), "
                           "%(puladas)d com outro agente", stats, extra={"action": "DESDOBRO"})
@@ -1093,9 +1093,9 @@ class Agent(object):
             dirs_sss = _sss_dirs(self.cfg)
         return _Cfg()
 
-    def _refuse(self, item, codigo):
-        item.log.warning("pre-validacao recusada: %s", codigo, extra={"action": "PRECHECK"})
-        self._finalize_without_spawn(item, _PRECHECK, "pre-validacao recusada: %s (agente %s)" % (codigo, self.agent_id))
+    def _refuse(self, item, code):
+        item.log.warning("pre-validacao recusada: %s", code, extra={"action": "PRECHECK"})
+        self._finalize_without_spawn(item, _PRECHECK, "pre-validacao recusada: %s (agente %s)" % (code, self.agent_id))
         return None
 
     def _error_before_spawn(self, item, exc):
@@ -1118,12 +1118,12 @@ class Agent(object):
         self._finalize_without_spawn(item, _PRECHECK, linha)
         return None
 
-    def _finalize_without_spawn(self, item, resultado, linha_sss):
+    def _finalize_without_spawn(self, item, result, sss_line):
         """Finaliza o ticket que nao chegou a iniciar (PRECHECK_FAILED ou CANCELLED), com a linha [SSS]."""
         conn = self._conn()
-        if linha_sss:
-            self._linha_sss(conn, item.tid, linha_sss)
-        item.result = resultado
+        if sss_line:
+            self._linha_sss(conn, item.tid, sss_line)
+        item.result = result
         item.phase = _Item.FINALIZAR
         item.flush_ok = True
         self._finalize_execution_without_process(item)
@@ -1145,7 +1145,7 @@ class Agent(object):
         if item.execution is not None:
             self._clean(item.tid, item.execution.work_dir_ticket, item.execution)
 
-    def _spawn(self, item, snap, argv, script_real, contexto):
+    def _spawn(self, item, snap, argv, script_real, context):
         agente = self.cfg.agent
         ticket = item.ticket
         usuario = env_builder.exec_user(self.cfg, ticket["environment"])
@@ -1158,7 +1158,7 @@ class Agent(object):
             item.log.error("falha antes do spawn: %s", exc, extra={"action": "SPAWN"})
             return self._finalize_without_spawn(item, _FINAL["SPAWN_ERROR"], "falha ao iniciar: %s (agente %s)" % (
                 exc.__class__.__name__, self.agent_id))
-        timeout = contexto["script"].get("timeout_s") or agente.script_timeout_s
+        timeout = context["script"].get("timeout_s") or agente.script_timeout_s
         conexao = None
         saida = None
         entrada = None
@@ -1173,30 +1173,30 @@ class Agent(object):
                                                         item.started_at, item.tid, snap.get("script_id"))
                 saida = output_phase.Output(item.tid, base, relativo, usuario, work_dir_ticket)
             ticket_env = dict(ticket, started_at=item.started_at)
-            env = env_builder.build(self.cfg, self.secrets, ticket_env, contexto["environment"], script_real,
+            env = env_builder.build(self.cfg, self.secrets, ticket_env, context["environment"], script_real,
                                         work_dir_ticket, dict(os.environ), self.plat.NAME, snapshot=snap,
-                                        agendamento=contexto["agendamento"], caminho_log=caminho,
-                                        timeout_seg=timeout, hostname=self.hostname, versao=sss_config.SSS_VERSION,
-                                        pasta_saida=saida.folder if saida else None,
-                                        pasta_entrada=os.path.join(*entrada) if entrada else None)
+                                        schedule=context["agendamento"], log_path=caminho,
+                                        timeout_sec=timeout, hostname=self.hostname, version=sss_config.SSS_VERSION,
+                                        output_dir=saida.folder if saida else None,
+                                        input_dir=os.path.join(*entrada) if entrada else None)
             conexao = env.get(env_builder.CONNECTION_VAR)
         except Exception as exc:  # noqa: BLE001 - CR-007 R-17: SPAWN_ERROR
             ex = executor.failure_before_spawn(fd, item.tid, exc, rotulo, work_dir_ticket)
             return self._after_start(item, ex, snap, conexao)
         ex = executor.start(item.tid, argv, fd, env, work_dir_ticket, usuario, agente.exec_work_dir,
                               dict(self.plat.DEFAULT_RLIMITS), rotulo,
-                              saida=(saida.base, saida.relative) if saida else None, entrada=entrada)
+                              output=(saida.base, saida.relative) if saida else None, input_value=entrada)
         if not ex.spawn_error:
             item.output = saida
         item.timeout_s = timeout
         self._after_start(item, ex, snap, conexao)
 
-    def _after_start(self, item, ex, snap, conexao):
+    def _after_start(self, item, ex, snap, connection):
         item.execution = ex
         item.start = self.clock()
         if ex.log_path:
             item.pump = log_pump.Pump(
-                ex.log_path, item.tid, log_pump.ticket_masker(self._fixed_masker, conexao, snap),
+                ex.log_path, item.tid, log_pump.ticket_masker(self._fixed_masker, connection, snap),
                 self.cfg.logging.max_log_size_bytes, self.cfg.logging.max_local_log_size_bytes, 0,
                 self.supplementary_unit)
             self.pumps[item.tid] = item.pump
@@ -1231,11 +1231,11 @@ class Agent(object):
 
     # ---------------------------------------------------- parada
 
-    def stop_all(self, modo, registro_perdido=False):
+    def stop_all(self, mode, registration_lost=False):
         """Fim da parada (README §8.11): TERMINATE nos grupos que restarem (todos, no TERMINATE; os que passaram
         de shutdown_grace_s, no DRAIN), finalizados SHUTDOWN; flush dos logs, PARADO com AGENT_STOP, remocao
         do .stop, recursos liberados e saida 0."""
-        self.log.warning("encerramento %s: %d execucao(oes) local(is)", modo, len(self.executions),
+        self.log.warning("encerramento %s: %d execucao(oes) local(is)", mode, len(self.executions),
                          extra={"action": "PARADA"})
         # CR-012: a saida em andamento e abandonada (a pasta fica no disco; GRAVANDO vira FALHOU na subida).
         self._stopping = True
@@ -1253,9 +1253,9 @@ class Agent(object):
             if self.executions or self.stopping:
                 self._wait(0.05)
         conn = self._conn() if self.connection.ensure() else None
-        if conn is not None and not registro_perdido:
+        if conn is not None and not registration_lost:
             try:
-                self.repo.stop_agent(conn, self.agent_id, self.hostname, self.pid, modo)
+                self.repo.stop_agent(conn, self.agent_id, self.hostname, self.pid, mode)
             except Exception as exc:  # noqa: BLE001 - a parada segue
                 self.log.error("registro de parada falhou: %s", exc, extra={"action": "PARADA"})
         stop = os.path.join(self.cfg.agent.work_dir, "sss-%s.stop" % self.agent_id)

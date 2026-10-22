@@ -25,10 +25,10 @@ _CATALOG_MAX = 1000
 class PermissionsService(object):
     """Monta a tela a partir do contexto revalidado da sessao e das leituras do catalogo."""
 
-    def __init__(self, rbac_repo, catalogo, disparo, log):
+    def __init__(self, rbac_repo, catalog, trigger_service, log):
         self._rbac = rbac_repo
-        self._catalog = catalogo
-        self._trigger_service = disparo
+        self._catalog = catalog
+        self._trigger_service = trigger_service
         self._log = log
 
     def _screens(self, ctx):
@@ -50,7 +50,7 @@ class PermissionsService(object):
         admin = ctx.get("is_admin") is True
         meus = ctx.get("environments") or ()
         return [{"name": a["name"], "description": a.get("description") or ""}
-                for a in self._catalog.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"]
+                for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["itens"]
                 if a["active"] == "Y" and (admin or a["name"] in meus)]
 
     def _scripts(self, ctx):
@@ -127,8 +127,8 @@ def _service():
             fabrica = current.repo_factory
             _default = PermissionsService(
                 rbac_repo=fabrica.get("rbac"),
-                catalogo=fabrica.get("catalog"),
-                disparo=ticket_service._service(),
+                catalog=fabrica.get("catalog"),
+                trigger_service=ticket_service._service(),
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _default

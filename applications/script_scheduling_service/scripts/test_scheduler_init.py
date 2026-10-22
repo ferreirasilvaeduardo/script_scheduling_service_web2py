@@ -97,27 +97,27 @@ class _Repo(object):
         self.environments = None
         self.registro = None
 
-    def register_agent(self, conn, dados, processo_existe):
-        self.registro = dados
+    def register_agent(self, conn, date, process_exists):
+        self.registro = date
         if self.duplicated:
             raise DuplicateAgent("agent_id ativo em outro-host")
         return 42
 
-    def check_config(self, conn, agente_id, criticos, offline):
+    def check_config(self, conn, agent_id, critical, offline):
         return self.divergent
 
-    def active_environments(self, conn, atendidos):
-        return self.environments or (list(atendidos), [])
+    def active_environments(self, conn, served):
+        return self.environments or (list(served), [])
 
-    def agent_running_tickets(self, conn, agente_id):
+    def agent_running_tickets(self, conn, agent_id):
         return list(self.running)
 
-    def return_to_queue(self, conn, tid, agente_id):
+    def return_to_queue(self, conn, tid, agent_id):
         self.calls.append(("return_to_queue", tid))
         return "DEVOLVIDO"
 
-    def finalize(self, conn, tid, agente_id, status, motivo, rc):
-        self.calls.append(("finalize", tid, status, motivo, rc))
+    def finalize(self, conn, tid, agent_id, status, reason, rc):
+        self.calls.append(("finalize", tid, status, reason, rc))
         return True
 
     def get_ticket(self, conn, tid):
@@ -131,8 +131,8 @@ class _RepoLog(object):
     def supplementary_unit(self, conn):
         return 1
 
-    def append_chunk(self, conn, tid, agente_id, offset, bloco):
-        self.rows.append((tid, bloco))
+    def append_chunk(self, conn, tid, agent_id, offset, chunk):
+        self.rows.append((tid, chunk))
         return "WRITTEN"
 
 
@@ -175,42 +175,42 @@ class _Base(unittest.TestCase):
                 os.chmod(os.path.join(atual, d), 0o700)
         shutil.rmtree(self.root, ignore_errors=True)
 
-    def cfg(self, **agente):
+    def cfg(self, **agent):
         base = dict(agent_id="srv-t", environments=("DEV",), work_dir=self.work,
                     interpreters=(("SH", "/bin/sh"),), exec_users=(), exec_work_dir=None,
                     heartbeat_interval_s=10, fence_timeout_s=40, node_offline_timeout_s=120, kill_grace_s=1,
                     misfire_policy="RUN_ONCE", misfire_tolerance_s=300, cron_horizon_days=366,
                     queue_aging_min=30, child_locale="C.UTF-8")
-        env = agente.pop("sss_env", "DEV")
-        log_dir = agente.pop("log_dir", self.logs)
-        base.update(agente)
+        env = agent.pop("sss_env", "DEV")
+        log_dir = agent.pop("log_dir", self.logs)
+        base.update(agent)
         return _Cfg(_Agent(**base), _NS(log_dir), _App(env),
                     _Oracle("db:1521/x", 30000, "OWN_X", "pfx_"), None)
 
     def agent(self, cfg=None, plat=None, **kw):
-        kw.setdefault("repo_saida", self.repo_output)
-        ag = sl.Agent(cfg=cfg or self.cfg(), segredos=object(), plat=plat, conexao=kw.pop("connection", self.connection),
+        kw.setdefault("repo_output", self.repo_output)
+        ag = sl.Agent(cfg=cfg or self.cfg(), secrets=object(), plat=plat, connection=kw.pop("connection", self.connection),
                        repo=self.repo, repo_log=self.repo_log, hostname="host-t", pid=os.getpid(), **kw)
         self.agents.append(ag)
         return ag
 
-    def failure(self, codigo, ag=None):
+    def failure(self, code, ag=None):
         ag = ag or self.agent()
         with self.assertLogs("sss_scheduler", "CRITICAL") as logs, self.assertRaises(sl.StartupFailure) as ctx:
             ag.initialize()
-        self.assertEqual(ctx.exception.code, codigo)
-        self.assertEqual(ctx.exception.code, codigo, "codigo de saida do processo")
+        self.assertEqual(ctx.exception.code, code)
+        self.assertEqual(ctx.exception.code, code, "codigo de saida do processo")
         return logs.output
 
 
 class _Plat(object):
     """A plataforma real com funcoes trocadas por teste."""
 
-    def __init__(self, **troca):
-        self._overrides = troca
+    def __init__(self, **overrides):
+        self._overrides = overrides
 
-    def __getattr__(self, nome):
-        return self._overrides[nome] if nome in self._overrides else getattr(os_platform, nome)
+    def __getattr__(self, name):
+        return self._overrides[name] if name in self._overrides else getattr(os_platform, name)
 
 
 class TestSteps(_Base):
@@ -262,9 +262,9 @@ class TestSteps(_Base):
         self.agent(cfg=self.cfg(input_dir=entrada)).initialize()
         vistos = []
 
-        def _pastas(pares):
-            vistos.extend(pares)
-            return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pares[0][0]]
+        def _pastas(pairs):
+            vistos.extend(pairs)
+            return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pairs[0][0]]
         plat = _Plat(validate_execution=lambda *a, **k: [], validate_output_dirs=_pastas)
         cfg = self.cfg(sss_env="PROD", exec_work_dir=self.root, exec_users=(("DEV", "exec1"),),
                        input_dir=entrada)
@@ -282,9 +282,9 @@ class TestSteps(_Base):
         # Fora de DEV: a pasta de cada ambiente atendido, do usuario de execucao dele.
         vistos = []
 
-        def _pastas(pares):
-            vistos.extend(pares)
-            return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pares[0][0]]
+        def _pastas(pairs):
+            vistos.extend(pairs)
+            return ["%s deve ser diretorio de exec1 sem escrita de grupo nem de outros" % pairs[0][0]]
         plat = _Plat(validate_execution=lambda *a, **k: [], validate_output_dirs=_pastas)
         cfg = self.cfg(sss_env="PROD", exec_work_dir=self.root, exec_users=(("DEV", "exec1"),),
                        output_dir=saida)
@@ -358,14 +358,14 @@ class TestStartupCheck(_Base):
         self.assertTrue(any("1 saida(s) em gravacao" in x for x in logs.output))
 
 
-    def _dir(self, tid, **estados):
+    def _dir(self, tid, **states):
         pasta = executor.prepare_directory(self.work, tid)
-        for nome, dados in estados.items():
+        for nome, dados in states.items():
             os_platform.write_state(os.path.join(pasta, "." + nome), dados)
         return pasta
 
-    def _group(self, comando="sleep 300 & sleep 300"):
-        p = subprocess.Popen(["/bin/sh", "-c", comando], start_new_session=True)
+    def _group(self, command="sleep 300 & sleep 300"):
+        p = subprocess.Popen(["/bin/sh", "-c", command], start_new_session=True)
         self.popens.append(p)
         time.sleep(0.2)
         return p
@@ -426,7 +426,7 @@ class TestStartupCheck(_Base):
         pasta = self._dir(9, sss_proc={"ticket_id": 9, "pid": p.pid, "pgid": p.pid, "exec_user": None,
                                          "process_start": None})
         self.repo.running = [{"id": 9, "process_id": p.pid, "process_start": None, "cancel_requested": "N"}]
-        plat = _Plat(reopen_group=lambda estado: os_platform.Process(p.pid, None, sem_identidade=True))
+        plat = _Plat(reopen_group=lambda estado: os_platform.Process(p.pid, None, no_identity=True))
         ag, logs = self._start_agent(plat=plat)
         self.assertIn("ORFAO_SEM_IDENTIDADE", logs)
         self.assertTrue(_alive(p.pid), "sem identidade nunca recebe sinal")
@@ -493,7 +493,7 @@ class TestStartupOracle(_Base):
     def _clean_registration(self):
         import db_conn
         import sql_ident
-        seg = sss_config.load_secrets(self.cfg_real.secrets.secrets_file, cfg=self.cfg_real, papel="agent")
+        seg = sss_config.load_secrets(self.cfg_real.secrets.secrets_file, cfg=self.cfg_real, role="agent")
         conn = db_conn.connect(self.cfg_real, seg, "agent")
         try:
             o, p = self.cfg_real.oracle.owner.strip(), self.cfg_real.oracle.table_prefix.strip()
@@ -512,7 +512,7 @@ class TestStartupOracle(_Base):
         import db_conn
         from repo_oracle.scheduler_queue import RepoSchedulerQueue
         cfg = self.cfg_real
-        seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel="agent")
+        seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="agent")
         conn = db_conn.connect(cfg, seg, "agent")
         try:
             import ddl_builder
@@ -524,7 +524,7 @@ class TestStartupOracle(_Base):
         agente = cfg.agent._replace(agent_id=self.code, environments=tuple(ativos[:1]), work_dir=self.work,
                                     interpreters=(("SH", "/bin/sh"),))
         cfg = cfg._replace(agent=agente, logging=cfg.logging._replace(log_dir=self.logs))
-        ag = sl.Agent(cfg=cfg, segredos=seg, hostname="host-tst", pid=os.getpid())
+        ag = sl.Agent(cfg=cfg, secrets=seg, hostname="host-tst", pid=os.getpid())
         self.agents.append(ag)
         with self.assertLogs("sss_scheduler", "INFO"):
             ag.initialize()
@@ -532,7 +532,7 @@ class TestStartupOracle(_Base):
         self.assertIn(ag.supplementary_unit, (1, 2))
         self.assertEqual(ag.active_environments, list(ativos[:1]))
         # Segunda subida do mesmo agent_id, de outro host, enquanto o primeiro esta ativo: recusada.
-        outro = sl.Agent(cfg=cfg._replace(agent=agente._replace(work_dir=self.root)), segredos=seg,
+        outro = sl.Agent(cfg=cfg._replace(agent=agente._replace(work_dir=self.root)), secrets=seg,
                           hostname="outro-host", pid=os.getpid())
         self.agents.append(outro)
         os.makedirs(os.path.join(self.root, "logs2"), exist_ok=True)

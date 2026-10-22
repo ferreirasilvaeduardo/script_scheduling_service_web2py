@@ -98,29 +98,29 @@ class _Base(unittest.TestCase):
         self.base = _tree()
         self.addCleanup(_remove, self.base)
         self.svc = self._service(self.ENV)
-        self.aud_base = max([a["id"] for a in self.audit.list(pagina=1, tamanho=1000)["itens"]] or [0])
+        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
 
     def _service(self, env):
         return AdminScriptsService(self.catalog, repo_factory.get("schedules"), env, self.log, lambda: NOW)
 
-    def _p(self, nome):
-        return os.path.join(self.base, nome)
+    def _p(self, name):
+        return os.path.join(self.base, name)
 
-    def _audits(self, acao):
-        return [a for a in self.audit.list(filtros={"action": acao}, pagina=1, tamanho=100)["itens"]
+    def _audits(self, action):
+        return [a for a in self.audit.list(filters={"action": action}, page=1, size=100)["itens"]
                 if a["entity"] == "tbsss_scripts" and a["id"] > self.aud_base]
 
-    def _insert(self, svc=None, **mudancas):
+    def _insert(self, svc=None, **changes):
         dados = {"name": "Novo script", "interpreter": "PYTHON3", "path_file": self._p("novo.py"),
                  "param_type": "POSITIONAL", "max_parallel_env": "2", "timeout_s": ""}
-        dados.update(mudancas)
+        dados.update(changes)
         return (svc or self.svc).save(self.ctx["admin"], IP, None, dados)
 
-    def _edit(self, sid, **mudancas):
+    def _edit(self, sid, **changes):
         f = self.svc.form(self.ctx["admin"], str(sid))
         dados = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
         dados["version"] = f["version"]
-        dados.update(mudancas)
+        dados.update(changes)
         return self.svc.save(self.ctx["admin"], IP, str(sid), dados)
 
     def _links_json(self, sid):
@@ -204,7 +204,7 @@ class TestRegistration(_Base):
         # CR-011 (S1): o estado do arquivo neste servidor nao impede editar, desativar nem reativar.
         svc = self._service("HML")
         sid = self.catalog.scripts_insert({"name": "Gravavel", "interpreter": "PYTHON3",
-                                             "path_file": self._p("gravavel.py"), "param_type": "POSITIONAL"}, ator="teste")["id"]
+                                             "path_file": self._p("gravavel.py"), "param_type": "POSITIONAL"}, actor="teste")["id"]
         f = svc.form(self.ctx["admin"], str(sid))
         dados = dict((c, "" if f[c] is None else str(f[c])) for c in scr_mod.EDITABLE_FIELDS)
         _sid, erros, _a = svc.save(self.ctx["admin"], IP, str(sid), dict(dados, version=f["version"], description="Nova"))
@@ -218,7 +218,7 @@ class TestRegistration(_Base):
         svc.toggle_active(self.ctx["admin"], IP, str(sid), svc.form(self.ctx["admin"], str(sid))["version"])
         self.assertEqual(self.catalog.scripts_get(sid)["active"], "Y")
         # Reativar ainda confere o formato e as pastas do sistema.
-        self.catalog.scripts_update(sid, {"path_file": "/etc/sumiu.py", "active": "N"}, ator="teste")
+        self.catalog.scripts_update(sid, {"path_file": "/etc/sumiu.py", "active": "N"}, actor="teste")
         with self.assertRaises(OperationDenied):
             svc.toggle_active(self.ctx["admin"], IP, str(sid), svc.form(self.ctx["admin"], str(sid))["version"])
 
@@ -226,13 +226,13 @@ class TestRegistration(_Base):
         _sid, erros, _ = self._edit(S_CARGA, param_type="NONE")
         self.assertEqual(erros, {"param_type": scr_mod.MSG_NONE_LINKED})
         # Script SEQUENCIAL com parametro sem flag nao pode virar NOMEADO.
-        pid = self.catalog.parameters_insert({"code": "sem_flag", "label": "Sem flag", "component_type": "TEXT"}, ator="teste")["id"]
+        pid = self.catalog.parameters_insert({"code": "sem_flag", "label": "Sem flag", "component_type": "TEXT"}, actor="teste")["id"]
         sid, _e, _a = self._insert()
-        self.catalog.script_params_save(sid, [{"parameter_id": pid, "sort_order": 1, "required": "N"}], ator="teste")
+        self.catalog.script_params_save(sid, [{"parameter_id": pid, "sort_order": 1, "required": "N"}], actor="teste")
         _sid, erros, _ = self._edit(sid, param_type="NAMED")
         self.assertIn("sem_flag", erros["param_type"])
         with self.assertRaises(RepoViolation) as cm:
-            self.catalog.scripts_update(sid, {"param_type": "NAMED"}, ator="teste")
+            self.catalog.scripts_update(sid, {"param_type": "NAMED"}, actor="teste")
         self.assertEqual(cm.exception.constraint, "sss_scr_nomeado_sem_flag")
 
     def test_desativacao_com_agendamentos_e_conflito(self):
@@ -270,7 +270,7 @@ class TestHomologation(_Base):
 
     def test_homologacao_inativa_pode_sair_e_nao_volta(self):
         # CR-003 D9: inativo ja homologado pode ser removido; nunca readicionado.
-        self.catalog.homologation_save(S_CARGA, [AMB_PROD, AMB_DESENV], ator="teste")
+        self.catalog.homologation_save(S_CARGA, [AMB_PROD, AMB_DESENV], actor="teste")
         tela = self.svc.homologation(self.ctx["admin"], str(S_CARGA))
         desenv = [a for a in tela["environments"] if a["name"] == "DESENV"][0]
         self.assertTrue(desenv["marcado"] and desenv["inativo"])
@@ -305,7 +305,7 @@ class TestLinks(_Base):
     def test_sub_sigiloso_mantido_e_revalidado_e_pode_ser_removido(self):
         # CR-003 P6 (README §6.5).
         tela, itens = self._links_json(S_CARGA)
-        self.catalog.parameters_update(6, {"validation_regex": "^x$"}, ator="teste")  # documento_cliente: o sub gravado deixa de valer
+        self.catalog.parameters_update(6, {"validation_regex": "^x$"}, actor="teste")  # documento_cliente: o sub gravado deixa de valer
         _d, erros = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens), tela["version"])
         self.assertEqual(erros, {"vinculo_6": scr_mod.MSG_SENSITIVE_INVALID})
         for item in itens:
@@ -336,7 +336,7 @@ class TestLinks(_Base):
         for v in lidos:
             if v["default_value_override"] == "00011122233":
                 v["default_value_override"] = "outro-segredo-456"
-        self.catalog.script_params_save(S_CARGA, lidos, ator="teste")
+        self.catalog.script_params_save(S_CARGA, lidos, actor="teste")
         tela = self.svc.parameters(self.ctx["admin"], str(S_CARGA))
         self.assertEqual(tela["version"], v1)
         self.assertNotEqual(tela["version"], scr_mod._hash(scr_mod._read_back(self.catalog.script_params_get(S_CARGA))))
@@ -364,13 +364,13 @@ class TestLinks(_Base):
             self.assertIn(GENERAL_FIELD, erros, corpo[:30])
 
     def test_nomeado_com_parametro_sem_flag(self):
-        pid = self.catalog.parameters_insert({"code": "sem_flag", "label": "Sem flag", "component_type": "TEXT"}, ator="teste")["id"]
+        pid = self.catalog.parameters_insert({"code": "sem_flag", "label": "Sem flag", "component_type": "TEXT"}, actor="teste")["id"]
         tela, itens = self._links_json(S_CARGA)
         _d, erros = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA),
                                                json.dumps(itens + [{"parameter_id": pid}]), tela["version"])
         self.assertIn("sem_flag", erros[GENERAL_FIELD])
         with self.assertRaises(RepoViolation):
-            self.catalog.script_params_save(S_CARGA, [{"parameter_id": pid, "sort_order": 1, "required": "N"}], ator="teste")
+            self.catalog.script_params_save(S_CARGA, [{"parameter_id": pid, "sort_order": 1, "required": "N"}], actor="teste")
 
     def test_nenhum_com_vinculo(self):
         tela = self.svc.parameters(self.ctx["admin"], str(S_CLEANUP))
@@ -384,7 +384,7 @@ class TestLinks(_Base):
         _d, erros = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA), json.dumps(itens), tela["version"])
         self.assertIn("vinculo_1", erros)
         pid = self.catalog.parameters_insert({"code": "inativo_x", "label": "X", "component_type": "TEXT",
-                                                "param_flag": "--x", "active": "N"}, ator="teste")["id"]
+                                                "param_flag": "--x", "active": "N"}, actor="teste")["id"]
         tela, itens = self._links_json(S_CARGA)
         _d, erros = self.svc.save_parameters(self.ctx["admin"], IP, str(S_CARGA),
                                                json.dumps(itens + [{"parameter_id": pid}]), tela["version"])

@@ -38,9 +38,9 @@ def _cfg():
 CRITICAL = sss_config.critical_config(_cfg())
 
 
-def _agent(codigo, idade_s=5, status="ACTIVE", ambientes="PRODUCAO", interpreters="SH,PYTHON3", cfg=CRITICAL):
-    hb = None if idade_s is None else NOW - datetime.timedelta(seconds=idade_s)
-    return {"code": codigo, "status": status, "heartbeat_at": hb, "environments": ambientes,
+def _agent(code, age_s=5, status="ACTIVE", environments="PRODUCAO", interpreters="SH,PYTHON3", cfg=CRITICAL):
+    hb = None if age_s is None else NOW - datetime.timedelta(seconds=age_s)
+    return {"code": code, "status": status, "heartbeat_at": hb, "environments": environments,
             "interpreters": interpreters, "critical_config": cfg}
 
 
@@ -62,18 +62,18 @@ class _Repo(object):
     def active_environments(self, conn):
         return self.d["environments"]
 
-    def queue_by_pair(self, conn, agora):
+    def queue_by_pair(self, conn, now):
         return self.d["fila"]
 
-    def overdue_queue(self, conn, agora):
+    def overdue_queue(self, conn, now):
         return self.d["vencida"]
 
-    def running_without_pid(self, conn, agora, minutos):
-        self.calls.append(("sem_pid", minutos))
+    def running_without_pid(self, conn, now, minutes):
+        self.calls.append(("sem_pid", minutes))
         return self.d["sem_pid"]
 
-    def last_purge(self, conn, agora, dias):
-        self.calls.append(("purge", dias))
+    def last_purge(self, conn, now, days):
+        self.calls.append(("purge", days))
         return self.d["purge"]
 
 
@@ -140,7 +140,7 @@ class TestChecks(unittest.TestCase):
 
     def test_ambiente_sem_agente_saudavel(self):
         codigo, texto, _r = self._run_loop(environments=["PRODUCAO", "HOMOLOGACAO"],
-                                        agents=[_agent("srv-a"), _agent("srv-b", 120, ambientes="HOMOLOGACAO")])
+                                        agents=[_agent("srv-a"), _agent("srv-b", 120, environments="HOMOLOGACAO")])
         self.assertEqual(codigo, saude_cli.CRITICAL)
         self.assertIn("CRITICAL: ambiente HOMOLOGACAO ativo sem nenhum agente saudavel", texto)
 
@@ -202,16 +202,16 @@ class TestChecks(unittest.TestCase):
 
 class TestMain(unittest.TestCase):
 
-    def _main(self, argv=(), conectar=None, cfg_erro=False, seg_erro=False):
+    def _main(self, argv=(), connect=None, cfg_error=False, secrets_error=False):
         saida = io.StringIO()
-        obter = mock.Mock(side_effect=sss_config.ConfigError(reason="faltou dsn") if cfg_erro else None,
+        obter = mock.Mock(side_effect=sss_config.ConfigError(reason="faltou dsn") if cfg_error else None,
                           return_value=_cfg())
-        carregar = mock.Mock(side_effect=sss_config.ConfigError(reason="sem [monitor]") if seg_erro else None,
+        carregar = mock.Mock(side_effect=sss_config.ConfigError(reason="sem [monitor]") if secrets_error else None,
                              return_value=object())
         with mock.patch.object(saude_cli.sss_config, "get_config", obter), \
                 mock.patch.object(saude_cli.sss_config, "load_secrets", carregar), \
                 mock.patch.object(saude_cli.saude_sql.RepoHealth, "from_config", return_value=_Repo()):
-            codigo = saude_cli.main(list(argv), conectar=conectar, saida=saida)
+            codigo = saude_cli.main(list(argv), connect=connect, output=saida)
         self.load = carregar
         return codigo, saida.getvalue()
 
@@ -219,26 +219,26 @@ class TestMain(unittest.TestCase):
         conn = _ConnNow()
         papeis = []
 
-        def conectar(cfg, segredos):
-            papeis.append(segredos)
+        def conectar(cfg, secrets):
+            papeis.append(secrets)
             return conn
-        codigo, texto = self._main(conectar=conectar)
+        codigo, texto = self._main(connect=conectar)
         self.assertEqual(codigo, 0)
         self.assertTrue(texto.startswith("SSS OK - 0 problemas"))
-        self.assertEqual(self.load.call_args[1]["papel"], "monitor")
+        self.assertEqual(self.load.call_args[1]["role"], "monitor")
         self.assertTrue(conn.closed)
 
     def test_unknown(self):
-        self.assertEqual(self._main(cfg_erro=True), (3, "SSS UNKNOWN - configuracao invalida: faltou dsn\n"))
-        codigo, texto = self._main(seg_erro=True)
+        self.assertEqual(self._main(cfg_error=True), (3, "SSS UNKNOWN - configuracao invalida: faltou dsn\n"))
+        codigo, texto = self._main(secrets_error=True)
         self.assertEqual(codigo, 3)
         self.assertIn("sem [monitor]", texto)
-        codigo, texto = self._main(conectar=mock.Mock(side_effect=RuntimeError("ORA-12541: TNS:no listener")))
+        codigo, texto = self._main(connect=mock.Mock(side_effect=RuntimeError("ORA-12541: TNS:no listener")))
         self.assertEqual(codigo, 3)
         self.assertIn("falha ao conectar no Oracle", texto)
         conn = _ConnNow()
         with mock.patch.object(_Repo, "agents", side_effect=RuntimeError("ORA-03113: end-of-file")):
-            codigo, texto = self._main(conectar=lambda c, s: conn)
+            codigo, texto = self._main(connect=lambda c, s: conn)
         self.assertEqual(codigo, 3)
         self.assertIn("falha de banco", texto)
         self.assertTrue(conn.closed)
@@ -255,7 +255,7 @@ class TestMain(unittest.TestCase):
         os.chmod(caminho, 0o600)
         registrados = []
         with mock.patch("masking.register_secret", side_effect=registrados.append):
-            seg = sss_config.load_secrets(caminho, sss_env="PROD", papel="monitor")
+            seg = sss_config.load_secrets(caminho, sss_env="PROD", role="monitor")
         self.assertEqual((seg.monitor_user, seg.oracle_password, seg.purge_password, seg.environments),
                          ("sss_monitor", None, None, {}))
         self.assertEqual(registrados, ["senha-mon-1"])
@@ -302,8 +302,8 @@ class TestHealthOracle(unittest.TestCase):
         from _oracle_test_support import prepare_disposable_schema
         import db_conn
         cls.cfg = prepare_disposable_schema("agent")
-        segredos = sss_config.load_secrets(cls.cfg.secrets.secrets_file, cfg=cls.cfg, papel="agent")
-        cls.conn = db_conn.connect(cls.cfg, segredos, papel="agent")
+        segredos = sss_config.load_secrets(cls.cfg.secrets.secrets_file, cfg=cls.cfg, role="agent")
+        cls.conn = db_conn.connect(cls.cfg, segredos, role="agent")
         cls.repo = saude_sql.RepoHealth.from_config(cls.cfg)
 
     @classmethod

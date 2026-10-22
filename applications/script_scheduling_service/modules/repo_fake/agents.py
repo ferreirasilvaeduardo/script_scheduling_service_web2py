@@ -23,27 +23,27 @@ class RepoAgentsFake(RepoAgents):
             lista.sort(key=lambda x: (x.get("code", ""), x["id"]))
             return copy.deepcopy(lista)
 
-    def tickets_running(self, codigo):
+    def tickets_running(self, code):
         """Retorna tickets em status RUNNING pertencentes ao agente informado."""
         with self._store.lock_tickets:
             running = [
                 t for t in self._store.tickets.values()
-                if t.get("status") == "RUNNING" and t.get("agent_id") == codigo
+                if t.get("status") == "RUNNING" and t.get("agent_id") == code
             ]
             running.sort(key=lambda x: x["id"])
             # Sem CLOB, como no Oracle (contrato RepoAgents.tickets_running).
             return [dict((k, copy.deepcopy(v)) for k, v in t.items()
                          if k not in ("submitted_params", "log_output")) for t in running]
 
-    def unattended_queue(self, agora, limiares):
+    def unattended_queue(self, now, thresholds):
         """Agrupa a fila vencida sem agente saudavel para o ambiente e o interpretador."""
         atendidos = set()
         for ag in self.list():
             hb = ag.get("heartbeat_at")
             if ag.get("status") != "ACTIVE" or hb is None:
                 continue
-            idade = max(0, int((agora - hb).total_seconds()))  # mesmo arredondamento de agentes_service.saude
-            if idade >= 2 * limiares.heartbeat_interval_s and idade > limiares.fence_timeout_s:
+            idade = max(0, int((now - hb).total_seconds()))  # mesmo arredondamento de agentes_service.saude
+            if idade >= 2 * thresholds.heartbeat_interval_s and idade > thresholds.fence_timeout_s:
                 continue
             atendidos.update((a.strip(), i.strip()) for a in (ag.get("environments") or "").split(",")
                              for i in (ag.get("interpreters") or "").split(",") if a.strip() and i.strip())
@@ -51,7 +51,7 @@ class RepoAgentsFake(RepoAgents):
         interpretadores = dict((sid, s.get("interpreter")) for sid, s in self._store.scripts.items())
         with self._store.lock_tickets:
             for t in self._store.tickets.values():
-                if t["status"] != "PENDING" or t["scheduled_at"] > agora:
+                if t["status"] != "PENDING" or t["scheduled_at"] > now:
                     continue
                 # Inicio da espera (CR-013): o mesmo de ix_tck_fila e do envelhecimento da fila.
                 inicio = max(t["scheduled_at"], t.get("created_at") or t["scheduled_at"])
@@ -65,9 +65,9 @@ class RepoAgentsFake(RepoAgents):
                 grupo["mais_antigo"] = min(grupo["mais_antigo"], inicio)
         return [grupos[chave] for chave in sorted(grupos)]
 
-    def running_without_pid(self, agora, minutos):
+    def running_without_pid(self, now, minutes):
         """Tickets reservados ha mais de minutos, ainda sem PID, sem ler o log."""
-        limite = agora - datetime.timedelta(minutes=minutos)
+        limite = now - datetime.timedelta(minutes=minutes)
         campos = ("id", "script_id", "environment", "agent_id", "started_at")
         with self._store.lock_tickets:
             itens = [dict((c, t.get(c)) for c in campos) for t in self._store.tickets.values()

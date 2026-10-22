@@ -178,8 +178,8 @@ class TestSanitizePage(unittest.TestCase):
                 self.assertEqual(ui_helpers.sanitizar_pagina(valor), 1)
 
     def test_padrao_customizado(self):
-        self.assertEqual(ui_helpers.sanitizar_pagina("x", padrao=4), 4)
-        self.assertEqual(ui_helpers.sanitizar_pagina("2", padrao=4), 2)
+        self.assertEqual(ui_helpers.sanitizar_pagina("x", default_value=4), 4)
+        self.assertEqual(ui_helpers.sanitizar_pagina("2", default_value=4), 2)
 
 
 class TestSanitizeSize(unittest.TestCase):
@@ -195,9 +195,9 @@ class TestSanitizeSize(unittest.TestCase):
                 self.assertEqual(ui_helpers.sanitizar_tamanho(valor), 20)
 
     def test_permitidos_customizados(self):
-        self.assertEqual(ui_helpers.sanitizar_tamanho("10", permitidos=(10, 25)), 10)
-        self.assertEqual(ui_helpers.sanitizar_tamanho("25", permitidos=(10, 25)), 25)
-        self.assertEqual(ui_helpers.sanitizar_tamanho("20", permitidos=(10, 25)), 10)
+        self.assertEqual(ui_helpers.sanitizar_tamanho("10", allowed=(10, 25)), 10)
+        self.assertEqual(ui_helpers.sanitizar_tamanho("25", allowed=(10, 25)), 25)
+        self.assertEqual(ui_helpers.sanitizar_tamanho("20", allowed=(10, 25)), 10)
 
 
 class TestPaginationInfo(unittest.TestCase):

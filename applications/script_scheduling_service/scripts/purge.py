@@ -59,8 +59,8 @@ class AuditExport(object):
     """CSV 0600 do --export-audit (mesmo formato da exportacao do README §4.4). Cada lote e gravado e
     sincronizado no disco antes do COMMIT que apaga as linhas (CR-007, R-22)."""
 
-    def __init__(self, pasta, agora):
-        self.path = os.path.join(pasta, "auditoria_purge_%s.csv" % agora.strftime("%Y%m%d_%H%M%S"))
+    def __init__(self, folder, now):
+        self.path = os.path.join(folder, "auditoria_purge_%s.csv" % now.strftime("%Y%m%d_%H%M%S"))
         fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         self._file = io.open(fd, "w", encoding="utf-8", newline="")
         self._writer = csv.writer(self._file, delimiter=";", lineterminator="\r\n")
@@ -68,12 +68,12 @@ class AuditExport(object):
         self._writer.writerow(audit_service.CSV_HEADER)
         self.rows = 0
 
-    def write(self, registros):
-        for reg in registros:
+    def write(self, records):
+        for reg in records:
             self._writer.writerow(audit_service.csv_row(reg))
         self._file.flush()
         os.fsync(self._file.fileno())
-        self.rows += len(registros)
+        self.rows += len(records)
 
     def close(self):
         self._file.close()
@@ -91,19 +91,19 @@ class Purge(object):
         self.owner = cfg.agent.agent_id
         self.summary = []
 
-    def run(self, alvos, dry_run=False, exportar=None):
+    def run(self, targets, dry_run=False, export=None):
         agora = db_conn.db_now(self.conn)  # uma vez: todos os limites partem deste instante
-        self.log.info("purge iniciado (alvos=%s dry_run=%s agora_banco=%s)", ",".join(alvos), dry_run,
+        self.log.info("purge iniciado (alvos=%s dry_run=%s agora_banco=%s)", ",".join(targets), dry_run,
                       agora.strftime("%Y-%m-%d %H:%M:%S"), extra=_EXTRA)
-        tabelas = [a for a in ("tickets", "audit") if a in alvos]
+        tabelas = [a for a in ("tickets", "audit") if a in targets]
         try:
             if tabelas:
                 if dry_run:
                     self._count_tables(tabelas, agora)
                 else:
-                    self._purge_tables(tabelas, agora, exportar)
+                    self._purge_tables(tabelas, agora, export)
             codigo = EXIT_OK
-            if "local_logs" in alvos and not self._local_logs(agora, dry_run):
+            if "local_logs" in targets and not self._local_logs(agora, dry_run):
                 codigo = EXIT_LOCAL
         except LeaseLost:
             self.log.error("concessao do purge perdida durante a execucao; parado", extra=_EXTRA)
@@ -114,7 +114,7 @@ class Purge(object):
         finally:
             if dry_run:
                 self._undo()
-        if "output" in alvos and not self._output(dry_run):
+        if "output" in targets and not self._output(dry_run):
             codigo = EXIT_LOCAL
         return codigo
 
@@ -126,31 +126,31 @@ class Purge(object):
 
     # ------------------------------------------------------------------ tickets e auditoria
 
-    def _cutoff(self, tabela, agora):
-        dias = (self.cfg.retention.ticket_retention_days if tabela == "tickets"
+    def _cutoff(self, table, now):
+        dias = (self.cfg.retention.ticket_retention_days if table == "tickets"
                 else self.cfg.retention.audit_retention_days)
-        return agora - datetime.timedelta(days=dias)
+        return now - datetime.timedelta(days=dias)
 
-    def _count_tables(self, tabelas, agora):
-        for tabela in tabelas:
+    def _count_tables(self, tables, now):
+        for tabela in tables:
             contar = self.repo.count_tickets if tabela == "tickets" else self.repo.count_audit
-            n = contar(self.conn, self._cutoff(tabela, agora))
+            n = contar(self.conn, self._cutoff(tabela, now))
             self.summary.append("%s: %d linhas elegiveis (estimativa)" % (tabela, n))
 
-    def _purge_tables(self, tabelas, agora, exportar):
+    def _purge_tables(self, tables, now, export):
         if not self.repo.take_lease(self.conn, self.owner):
             self._undo()
             self.log.info("outro no esta purgando (concessao em tbsss_control); tickets e auditoria pulados",
                           extra=_EXTRA)
-            for tabela in tabelas:
+            for tabela in tables:
                 self.summary.append("%s: pulado (outro no esta purgando)" % tabela)
             return
         self.conn.commit()
         try:
-            for tabela in tabelas:
-                arquivo = AuditExport(exportar, agora) if tabela == "audit" and exportar else None
+            for tabela in tables:
+                arquivo = AuditExport(export, now) if tabela == "audit" and export else None
                 try:
-                    total = self._purge_table(tabela, self._cutoff(tabela, agora), arquivo)
+                    total = self._purge_table(tabela, self._cutoff(tabela, now), arquivo)
                 finally:
                     if arquivo is not None:
                         arquivo.close()
@@ -166,18 +166,18 @@ class Purge(object):
         finally:
             self._release()
 
-    def _purge_table(self, tabela, limite, arquivo):
+    def _purge_table(self, table, limit, file):
         lote = self.cfg.retention.purge_batch_size
         total = 0
         while True:
-            if arquivo is not None:
-                registros = self.repo.read_and_delete_audit(self.conn, limite, lote)
-                arquivo.write(registros)  # no disco antes do COMMIT que apaga
+            if file is not None:
+                registros = self.repo.read_and_delete_audit(self.conn, limit, lote)
+                file.write(registros)  # no disco antes do COMMIT que apaga
                 n = len(registros)
-            elif tabela == "tickets":
-                n = self.repo.delete_tickets(self.conn, limite, lote)
+            elif table == "tickets":
+                n = self.repo.delete_tickets(self.conn, limit, lote)
             else:
-                n = self.repo.delete_audit(self.conn, limite, lote)
+                n = self.repo.delete_audit(self.conn, limit, lote)
             if not n:
                 self.conn.rollback()
                 return total
@@ -196,14 +196,14 @@ class Purge(object):
 
     # ------------------------------------------------------------------ logs locais e saida
 
-    def _local_logs(self, agora, dry_run):
+    def _local_logs(self, now, dry_run):
         log_dir = self.cfg.logging.log_dir
         manter = [log_paths.run_log_dir(log_dir, amb, nome, inicio, script_id=sid)
                   for amb, nome, sid, inicio in self.repo.running_for_logs(self.conn) if nome]
         falhas = []
-        pastas = log_paths.clean_run_retention(log_dir, self.cfg.logging.local_log_retention_days, agora,
-                                                     manter=manter, dry_run=dry_run, falhas=falhas,
-                                                     caminho_final=self.plat.final_path)
+        pastas = log_paths.clean_run_retention(log_dir, self.cfg.logging.local_log_retention_days, now,
+                                                     keep=manter, dry_run=dry_run, failures=falhas,
+                                                     final_path=self.plat.final_path)
         for falha in falhas:
             self.log.error("retencao dos logs locais: %s", falha, extra=_EXTRA)
         self.log.info("logs locais: %d pastas de minuto %s (%d mantidas por ticket RUNNING)", len(pastas),
@@ -225,7 +225,7 @@ class Purge(object):
                 continue
             try:
                 total += self.plat.purge_output(base, self.cfg.logging.output_retention_days,
-                                                usuarios.get(amb) or None, contar=dry_run)
+                                                usuarios.get(amb) or None, count_only=dry_run)
             except (RuntimeError, OSError) as exc:
                 ok = False
                 self.log.error("retencao da saida de %s: %s", amb, exc, extra=_EXTRA)
@@ -244,13 +244,13 @@ def _arguments(argv):
     return parser.parse_args(argv)
 
 
-def main(argv=None, conectar=None, plat=os_platform, saida=None):
+def main(argv=None, connect=None, plat=os_platform, output=None):
     """conectar(cfg, segredos) e plat sao pontos de injecao dos testes; saida recebe o resumo (stdout)."""
-    saida = saida or sys.stdout
+    output = output or sys.stdout
     args = _arguments(argv)
     alvos = TARGETS if args.alvo == "all" else (args.alvo,)
     try:
-        cfg = sss_config.get_config(nome_log="purge", caminho=args.config)
+        cfg = sss_config.get_config(log_name="purge", path=args.config)
     except sss_config.ConfigError:  # o CRITICAL ja foi registrado (README §12.1)
         return EXIT_CONFIG
     logger = sss_logging.configure("purge", cfg)
@@ -267,7 +267,7 @@ def main(argv=None, conectar=None, plat=os_platform, saida=None):
         logger.critical("--export-audit: pasta inexistente: %s", args.exportar_auditoria, extra=_EXTRA)
         return EXIT_CONFIG
     try:
-        segredos = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel="agent")
+        segredos = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="agent")
     except sss_config.ConfigError as exc:
         logger.critical("segredos invalidos: %s", exc, extra=_EXTRA)
         return EXIT_CONFIG
@@ -281,19 +281,19 @@ def main(argv=None, conectar=None, plat=os_platform, saida=None):
             return EXIT_OK
     try:
         try:
-            conn = (conectar or _connect)(cfg, segredos)
+            conn = (connect or _connect)(cfg, segredos)
         except Exception as exc:
             logger.error("falha ao conectar no Oracle: %s", db_conn.translate_error(exc), extra=_EXTRA)
             return EXIT_DATABASE
         try:
             purge = Purge(cfg, conn, plat=plat, logger=logger)
-            codigo = purge.run(alvos, dry_run=args.dry_run, exportar=args.exportar_auditoria)
+            codigo = purge.run(alvos, dry_run=args.dry_run, export=args.exportar_auditoria)
         finally:
             conn.close()
         if args.dry_run:
             purge.summary.append("dry-run: contagens estimadas, sem trava; podem mudar antes da execucao real")
         for linha in purge.summary:
-            saida.write(linha + "\n")
+            output.write(linha + "\n")
         logger.info("purge encerrado (codigo %d)", codigo, extra=_EXTRA)
         return codigo
     finally:
@@ -301,8 +301,8 @@ def main(argv=None, conectar=None, plat=os_platform, saida=None):
             plat.release_instance(trava)
 
 
-def _connect(cfg, segredos):
-    return db_conn.connect(cfg, segredos, papel="purge")
+def _connect(cfg, secrets):
+    return db_conn.connect(cfg, secrets, role="purge")
 
 
 if __name__ == "__main__":

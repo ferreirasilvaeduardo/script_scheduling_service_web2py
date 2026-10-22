@@ -43,8 +43,8 @@ class Check(object):
         self.problems = []  # (nivel, texto)
         self.performance = []
 
-    def _problem(self, nivel, texto):
-        self.problems.append((nivel, texto))
+    def _problem(self, level, text):
+        self.problems.append((level, text))
 
     def run(self):
         agora = db_conn.db_now(self.conn)
@@ -64,43 +64,43 @@ class Check(object):
             self._problem(CRITICAL, "versao do esquema %s, esperada %d (README §11.1)"
                            % (versao, sql_ident.SCHEMA_VERSION))
 
-    def _agents(self, agentes, agora):
+    def _agents(self, agents, now):
         saudaveis = 0
-        for ag in agentes:
+        for ag in agents:
             if ag["status"] != "ACTIVE":
                 continue
-            saude = agents_service.health(ag, agora, self.thresholds)
+            saude = agents_service.health(ag, now, self.thresholds)
             if saude in _HEALTHY:
                 saudaveis += 1
             elif saude == agents_service.AT_RISK:
                 self._problem(WARNING, "agente %s em risco: heartbeat ha %s (fence %d s)" % (
-                    ag["code"], self._age(ag, agora), self.thresholds.fence_timeout_s))
+                    ag["code"], self._age(ag, now), self.thresholds.fence_timeout_s))
             else:
                 self._problem(CRITICAL, "agente %s ATIVO sem heartbeat ha %s (node_offline %d s)" % (
-                    ag["code"], self._age(ag, agora), self.thresholds.node_offline_timeout_s))
+                    ag["code"], self._age(ag, now), self.thresholds.node_offline_timeout_s))
         self.performance.append("healthy_agents=%d" % saudaveis)
 
     @staticmethod
-    def _age(ag, agora):
+    def _age(ag, now):
         hb = ag.get("heartbeat_at")
-        return "-" if hb is None else "%d s" % max(0, int((agora - hb).total_seconds()))
+        return "-" if hb is None else "%d s" % max(0, int((now - hb).total_seconds()))
 
-    def _environments(self, agentes, agora):
+    def _environments(self, agents, now):
         atendidos = set()
-        for ag in agentes:
-            if ag["status"] == "ACTIVE" and agents_service.health(ag, agora, self.thresholds) in _HEALTHY:
+        for ag in agents:
+            if ag["status"] == "ACTIVE" and agents_service.health(ag, now, self.thresholds) in _HEALTHY:
                 atendidos.update(a.strip() for a in (ag.get("environments") or "").split(",") if a.strip())
         for nome in self.repo.active_environments(self.conn):
             if nome not in atendidos:
                 self._problem(CRITICAL, "ambiente %s ativo sem nenhum agente saudavel" % nome)
 
-    def _queue(self, agentes, agora):
-        atendidos = saude_sql.served_pairs(agentes, agora, self.thresholds)
-        for g in saude_sql.unattended_queue(self.repo.queue_by_pair(self.conn, agora), atendidos):
+    def _queue(self, agents, now):
+        atendidos = saude_sql.served_pairs(agents, now, self.thresholds)
+        for g in saude_sql.unattended_queue(self.repo.queue_by_pair(self.conn, now), atendidos):
             self._problem(CRITICAL, "fila sem atendente: %d tickets de %s/%s, o mais antigo desde %s" % (
                 g["quantidade"], g["environment"], g["interpreter"], g["mais_antigo"].strftime("%Y-%m-%d %H:%M:%S")))
-        qtd, antigo = self.repo.overdue_queue(self.conn, agora)
-        espera_min = 0 if antigo is None else max(0, int((agora - antigo).total_seconds()) // 60)
+        qtd, antigo = self.repo.overdue_queue(self.conn, now)
+        espera_min = 0 if antigo is None else max(0, int((now - antigo).total_seconds()) // 60)
         a = self.args
         if qtd >= a.fila_crit or espera_min >= a.espera_crit_min:
             nivel = CRITICAL
@@ -113,25 +113,25 @@ class Check(object):
         self.performance.append("overdue_queue=%d;%d;%d" % (qtd, a.fila_warn, a.fila_crit))
         self.performance.append("max_wait_min=%d;%d;%d" % (espera_min, a.espera_warn_min, a.espera_crit_min))
 
-    def _no_pid(self, agora):
-        for t in self.repo.running_without_pid(self.conn, agora, self.args.sem_pid_min):
+    def _no_pid(self, now):
+        for t in self.repo.running_without_pid(self.conn, now, self.args.sem_pid_min):
             self._problem(WARNING, "ticket %d RUNNING sem PID no agente %s desde %s" % (
                 t["id"], t["agent_id"], t["started_at"].strftime("%Y-%m-%d %H:%M:%S")))
 
-    def _config(self, agentes):
+    def _config(self, agents):
         local = sss_config.critical_config(self.cfg)
-        for ag in agentes:
+        for ag in agents:
             if ag["status"] == "ACTIVE" and ag.get("critical_config") and ag["critical_config"] != local:
                 self._problem(WARNING, "agente %s com configuracao divergente: %s (local: %s)" % (
                     ag["code"], ag["critical_config"], local))
 
-    def _purge(self, agora):
-        if self.repo.last_purge(self.conn, agora, self.args.purge_dias) is None:
+    def _purge(self, now):
+        if self.repo.last_purge(self.conn, now, self.args.purge_dias) is None:
             self._problem(WARNING, "nenhum PURGE auditado nos ultimos %d dias (README §11.3)" % self.args.purge_dias)
 
-    def output(self, codigo):
+    def output(self, code):
         n = len(self.problems)
-        linhas = ["SSS %s - %d problema%s | %s" % (STATES[codigo], n, "" if n == 1 else "s",
+        linhas = ["SSS %s - %d problema%s | %s" % (STATES[code], n, "" if n == 1 else "s",
                                                   " ".join(self.performance))]
         ordenados = sorted(self.problems, key=lambda p: -p[0])
         linhas.extend("%s: %s" % (STATES[nivel], texto) for nivel, texto in ordenados)
@@ -150,37 +150,37 @@ def _arguments(argv):
     return parser.parse_args(argv)
 
 
-def _unknown(saida, motivo):
-    saida.write("SSS UNKNOWN - %s\n" % motivo)
+def _unknown(output, reason):
+    output.write("SSS UNKNOWN - %s\n" % reason)
     return UNKNOWN
 
 
-def main(argv=None, conectar=None, saida=None):
+def main(argv=None, connect=None, output=None):
     """conectar(cfg, segredos) e o ponto de injecao dos testes; saida recebe o texto do plugin (stdout)."""
-    saida = saida or sys.stdout
+    output = output or sys.stdout
     args = _arguments(argv)
     try:
-        cfg = sss_config.get_config(nome_log="health", caminho=args.config)
-        segredos = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel="monitor")
+        cfg = sss_config.get_config(log_name="health", path=args.config)
+        segredos = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="monitor")
     except sss_config.ConfigError as exc:
-        return _unknown(saida, "configuracao invalida: %s" % exc)
+        return _unknown(output, "configuracao invalida: %s" % exc)
     try:
-        conn = (conectar or _connect)(cfg, segredos)
+        conn = (connect or _connect)(cfg, segredos)
     except Exception as exc:
-        return _unknown(saida, "falha ao conectar no Oracle: %s" % db_conn.translate_error(exc))
+        return _unknown(output, "falha ao conectar no Oracle: %s" % db_conn.translate_error(exc))
     try:
         verificacao = Check(cfg, conn, args)
         codigo = verificacao.run()
     except Exception as exc:
-        return _unknown(saida, "falha de banco: %s" % db_conn.translate_error(exc))
+        return _unknown(output, "falha de banco: %s" % db_conn.translate_error(exc))
     finally:
         conn.close()
-    saida.write(verificacao.output(codigo))
+    output.write(verificacao.output(codigo))
     return codigo
 
 
-def _connect(cfg, segredos):
-    return db_conn.connect(cfg, segredos, papel="monitor")
+def _connect(cfg, secrets):
+    return db_conn.connect(cfg, secrets, role="monitor")
 
 
 if __name__ == "__main__":

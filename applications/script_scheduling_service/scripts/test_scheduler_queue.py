@@ -27,8 +27,8 @@ class _Error(Exception):
 
 
 class _Var(object):
-    def __init__(self, valor=None):
-        self.value = valor
+    def __init__(self, value=None):
+        self.value = value
 
     def getvalue(self):
         return self.value
@@ -41,10 +41,10 @@ class _Cursor(object):
         self._lines = []
         self._counts = []
 
-    def var(self, tipo, size=None):
+    def var(self, kind, size=None):
         return _Var()
 
-    def setinputsizes(self, **tipos):
+    def setinputsizes(self, **types):
         pass
 
     def _reply(self, sql, binds):
@@ -69,9 +69,9 @@ class _Cursor(object):
     def execute(self, sql, binds=None, **kw):
         self._reply(sql, dict(binds or {}, **kw))
 
-    def executemany(self, sql, linhas, arraydmlrowcounts=False):
-        self.conn.executed.append((sql, linhas))
-        self._counts = [self.conn.counts.get(l["id"], 1) for l in linhas]
+    def executemany(self, sql, rows, arraydmlrowcounts=False):
+        self.conn.executed.append((sql, rows))
+        self._counts = [self.conn.counts.get(l["id"], 1) for l in rows]
 
     def getarraydmlrowcounts(self):
         return self._counts
@@ -87,9 +87,9 @@ class _Cursor(object):
 
 
 class _Conn(object):
-    def __init__(self, roteiro, contagens=None):
-        self.script_steps = roteiro
-        self.counts = contagens or {}
+    def __init__(self, script_steps, counts=None):
+        self.script_steps = script_steps
+        self.counts = counts or {}
         self.executed = []
         self.commits = 0
         self.rollbacks = 0
@@ -104,8 +104,8 @@ class _Conn(object):
     def rollback(self):
         self.rollbacks += 1
 
-    def sql(self, trecho):
-        return [s for s, _b in self.executed if trecho in s]
+    def sql(self, snippet):
+        return [s for s, _b in self.executed if snippet in s]
 
 
 class TestWithoutDb(unittest.TestCase):
@@ -200,7 +200,7 @@ class TestWithoutDb(unittest.TestCase):
         self.assertNotIn("updated_", conn.executed[0][0])
         self.assertFalse(self.repo.register_pid(_Conn([("SET process_id", (0, []))]), 7, AGENT, 1, 1))
         agora = datetime.datetime(2026, 10, 20, 15, 0, 0)
-        conn = _Conn([("UPDATE OWN_X.pfx_agents", (1, [])), ("SELECT SYSDATE", (1, [(agora,)]))], contagens={8: 0})
+        conn = _Conn([("UPDATE OWN_X.pfx_agents", (1, [])), ("SELECT SYSDATE", (1, [(agora,)]))], counts={8: 0})
         self.assertEqual(self.repo.heartbeat(conn, AGENT, "host", 77, [7, 8]), ([8], agora))
         self.assertEqual(conn.commits, 1)
         for sql, _b in conn.executed:
@@ -251,11 +251,11 @@ class TestWithoutDb(unittest.TestCase):
         self.assertEqual(self.repo.agent_running_tickets(conn, AGENT),
                          [{"id": 7, "process_id": None, "process_start": None, "cancel_requested": "N"}])
 
-    def _agent_data(self, **mudancas):
+    def _agent_data(self, **changes):
         d = {"code": AGENT, "hostname": "host-a", "pid": 100, "version": "1.0", "environments": "PRD",
              "platform": "LINUX", "interpreters": "PYTHON3,SH", "critical_config": "hb=10",
              "node_offline_timeout_s": 120}
-        d.update(mudancas)
+        d.update(changes)
         return d
 
     def test_registrar_agente_merge_e_auditoria(self):
@@ -272,15 +272,15 @@ class TestWithoutDb(unittest.TestCase):
         self.assertEqual(conn.commits, 1)
 
     def test_registrar_agente_duplicidade(self):
-        def roteiro(host, pid, status="ACTIVE", recente="Y"):
-            return [("FOR UPDATE WAIT 5", (1, [(42, host, pid, status, recente)])), ("MERGE INTO", (1, [])),
+        def roteiro(host, pid, status="ACTIVE", recent="Y"):
+            return [("FOR UPDATE WAIT 5", (1, [(42, host, pid, status, recent)])), ("MERGE INTO", (1, [])),
                     ("SELECT id FROM", (1, [(42,)]))]
         with self.assertRaises(DuplicateAgent):
             self.repo.register_agent(_Conn(roteiro("host-b", 100)), self._agent_data(), lambda pid: False)
         with self.assertRaises(DuplicateAgent):
             self.repo.register_agent(_Conn(roteiro("host-a", 99)), self._agent_data(), lambda pid: True)
         # Mesmo host com PID antigo morto, heartbeat antigo ou PARADO: religacao segue.
-        for r in (roteiro("host-a", 99), roteiro("host-b", 99, recente="N"), roteiro("host-b", 99, "STOPPED")):
+        for r in (roteiro("host-a", 99), roteiro("host-b", 99, recent="N"), roteiro("host-b", 99, "STOPPED")):
             self.assertEqual(self.repo.register_agent(_Conn(r), self._agent_data(), lambda pid: False), 42)
 
     def test_registrar_agente_corrida_na_inclusao(self):
@@ -362,8 +362,8 @@ class TestSchedulerQueueOracle(unittest.TestCase):
     def tearDownClass(cls):
         cls.contrato.tearDownClass.__func__(cls)
 
-    def obter_repo(self, nome):
-        return self.contrato.obter_repo(self, nome)
+    def obter_repo(self, name):
+        return self.contrato.obter_repo(self, name)
 
     def _clean_fixtures(self):
         return self.contrato._clean_fixtures(self)
@@ -435,8 +435,8 @@ class TestSchedulerQueueOracle(unittest.TestCase):
         self.conn.commit()
         env = 60
 
-        def chave(caso):
-            tid, _sid, prio, sched, crt = caso
+        def chave(case):
+            tid, _sid, prio, sched, crt = case
             espera = min(sched, crt)  # minutos desde GREATEST(scheduled_at, created_at)
             return (max(1, prio - espera // env), -espera, tid)
         esperado = [c[0] for c in sorted((c for c in casos if c[1] == scr_sh["id"] and c[3] >= 0), key=chave)]

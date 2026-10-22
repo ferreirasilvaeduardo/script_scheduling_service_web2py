@@ -9,11 +9,11 @@ class RepoAgents(object):
         """Todos os agentes, por codigo e id, com plataforma, interpretadores e config_criticos."""
         raise NotImplementedError
 
-    def tickets_running(self, codigo):
+    def tickets_running(self, code):
         """Tickets RUNNING do agente informado, por id, sem CLOB (sem log_output nem parametros_enviados)."""
         raise NotImplementedError
 
-    def unattended_queue(self, agora, limiares):
+    def unattended_queue(self, now, thresholds):
         """PENDING com scheduled_at <= agora sem agente OK/DELAYED para o par ambiente/interpretador.
 
         Retorna grupos ordenados por ambiente e interpretador: ambiente, interpretador,
@@ -23,7 +23,7 @@ class RepoAgents(object):
         """
         raise NotImplementedError
 
-    def running_without_pid(self, agora, minutos):
+    def running_without_pid(self, now, minutes):
         """RUNNING sem process_id com started_at < agora - minutos, por started_at e id.
 
         Retorna apenas id, script_id, ambiente, agent_id e started_at, sem LOB.

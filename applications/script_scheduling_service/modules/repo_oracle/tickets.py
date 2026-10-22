@@ -104,20 +104,20 @@ _SQL_OUTPUT_CONTENT = "SELECT state, content FROM {tout} WHERE ticket_id = :tick
 OUTPUT_SLICE_MAX = 1024 * 1024
 
 
-def _read_lob(valor):
+def _read_lob(value):
     """CLOB lido pelo driver (locator) ou ja como texto."""
-    if valor is None:
+    if value is None:
         return None
-    if hasattr(valor, "read"):
-        return valor.read()
-    return valor
+    if hasattr(value, "read"):
+        return value.read()
+    return value
 
 
 class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
     """Repositorio de tickets com SQL Oracle 11gR2."""
 
-    def __init__(self, cfg=None, segredos=None):
-        super(RepoTicketsOracle, self).__init__(cfg=cfg, segredos=segredos)
+    def __init__(self, cfg=None, secrets=None):
+        super(RepoTicketsOracle, self).__init__(cfg=cfg, secrets=secrets)
         self._idents = {
             "tck": self.qualify_table("tickets"),
             "tans": self.qualify_table("ticket_answer"),
@@ -141,11 +141,11 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
     # Utilitarios
     # -------------------------------------------------------------------------
 
-    def _sql_dinamico(self, modelo, **partes):
+    def _sql_dinamico(self, template, **parts):
         """Completa um modelo com identificadores e clausulas fixas (allowlist) montadas pelo codigo."""
         valores = dict(self._idents)
-        valores.update(partes)
-        return modelo.format(**valores)
+        valores.update(parts)
+        return template.format(**valores)
 
     def _existe(self, conn, sql, binds):
         cur = conn.cursor()
@@ -155,33 +155,33 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
         finally:
             cur.close()
 
-    def _fk(self, existe, sufixo, entidade="tickets"):
-        if not existe:
-            constraint = self.constraint_name("fk", entidade, sufixo)
+    def _fk(self, exists, suffix, entity="tickets"):
+        if not exists:
+            constraint = self.constraint_name("fk", entity, suffix)
             raise repo_errors.RepoViolation("Referencia inexistente (%s)" % constraint, constraint=constraint)
 
     @staticmethod
-    def _marcas(prefixo, valores, binds):
+    def _marcas(prefix, values, binds):
         """Placeholders :<prefixo>0..N por contagem controlada; os valores vao so como binds."""
         marcas = []
-        for n, v in enumerate(valores):
-            nome = "%s%d" % (prefixo, n)
+        for n, v in enumerate(values):
+            nome = "%s%d" % (prefix, n)
             binds[nome] = v
             marcas.append(":" + nome)
         return ", ".join(marcas)
 
-    def _escopo(self, alias, escopo_ambientes, solicitante, binds):
+    def _escopo(self, alias, environment_scope, requester, binds):
         """Clausulas de escopo (ambientes autorizados e solicitante), iguais as do listar."""
         clausulas = []
-        if escopo_ambientes is not None:
-            ambs = sorted(set(escopo_ambientes))
+        if environment_scope is not None:
+            ambs = sorted(set(environment_scope))
             if not ambs:
                 clausulas.append("1 = 0")
             else:
                 clausulas.append(alias + "environment IN (" + self._marcas("e", ambs, binds) + ")")
-        if solicitante is not None:
+        if requester is not None:
             clausulas.append(alias + "requested_by = :requested_by")
-            binds["requested_by"] = solicitante
+            binds["requested_by"] = requester
         return clausulas
 
     # -------------------------------------------------------------------------
@@ -208,45 +208,45 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             finally:
                 cur.close()
 
-    def list(self, filtros=None, pagina=1, tamanho=20, escopo_ambientes=None, conn=None):
+    def list(self, filters=None, page=1, size=20, environment_scope=None, conn=None):
         """Lista tickets por created_at DESC, id DESC, sem CLOB, com total limitado a 10.001."""
-        filtros = filtros or {}
+        filters = filters or {}
         clausulas, binds, datas = [], {}, {}
-        clausulas.extend(self._escopo("", escopo_ambientes, None, binds))
+        clausulas.extend(self._escopo("", environment_scope, None, binds))
 
-        stat_f = filtros.get("status")
+        stat_f = filters.get("status")
         if stat_f:
             valores = sorted(set(stat_f)) if isinstance(stat_f, (list, tuple, set, frozenset)) else [stat_f]
             clausulas.append("status IN (" + self._marcas("s", valores, binds) + ")")
-        if filtros.get("environment"):
+        if filters.get("environment"):
             clausulas.append("environment = :environment_f")
-            binds["environment_f"] = filtros["environment"]
-        if filtros.get("script_id") is not None:
+            binds["environment_f"] = filters["environment"]
+        if filters.get("script_id") is not None:
             clausulas.append("script_id = :script_id_f")
-            binds["script_id_f"] = int(filtros["script_id"])
-        if filtros.get("requested_by"):
+            binds["script_id_f"] = int(filters["script_id"])
+        if filters.get("requested_by"):
             clausulas.append("requested_by = :requester_f")
-            binds["requester_f"] = filtros["requested_by"]
-        if filtros.get("parent_ticket_id") is not None:
+            binds["requester_f"] = filters["requested_by"]
+        if filters.get("parent_ticket_id") is not None:
             clausulas.append("parent_ticket_id = :parent_f")
-            binds["parent_f"] = int(filtros["parent_ticket_id"])
-        origem = filtros.get("origem")
+            binds["parent_f"] = int(filters["parent_ticket_id"])
+        origem = filters.get("origem")
         if origem == "manual":
             clausulas.append("schedule_id IS NULL")
         elif origem == "agendamento":
             clausulas.append("schedule_id IS NOT NULL")
         # Periodo sempre por intervalo, sem TRUNC (AGENTS §4.12); binds DATE (README §7.5).
-        if filtros.get("criado_inicio"):
+        if filters.get("criado_inicio"):
             clausulas.append("created_at >= :created_from")
-            binds["created_from"] = filtros["criado_inicio"]
+            binds["created_from"] = filters["criado_inicio"]
             datas["created_from"] = db_conn.TIPO_DATE
-        if filtros.get("criado_fim"):
+        if filters.get("criado_fim"):
             clausulas.append("created_at < :created_to")
-            binds["created_to"] = filtros["criado_fim"]
+            binds["created_to"] = filters["criado_fim"]
             datas["created_to"] = db_conn.TIPO_DATE
 
-        p = 1 if pagina is None else int(pagina)
-        t = 20 if tamanho is None else int(tamanho)
+        p = 1 if page is None else int(page)
+        t = 20 if size is None else int(size)
         if p < 1:
             p = 1
         if t < 1:
@@ -287,7 +287,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             "total_limitado": bruto >= _LIMIT_TOTAL,
         }
 
-    def last_runs(self, script_ids, escopo_ambientes=None, solicitante=None, conn=None):
+    def last_runs(self, script_ids, environment_scope=None, requester=None, conn=None):
         """Ticket mais recente de cada script no escopo, numa consulta por lote (ROW_NUMBER, sem LOB)."""
         ids = sorted(set(int(i) for i in script_ids))
         resultado = {}
@@ -297,7 +297,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             for i in range(0, len(ids), _BATCH_IN):
                 binds = {}
                 marcas = self._marcas("s", ids[i:i + _BATCH_IN], binds)
-                escopo = self._escopo("t.", escopo_ambientes, solicitante, binds)
+                escopo = self._escopo("t.", environment_scope, requester, binds)
                 sql = self._sql_dinamico(_SQL_LAST, ids=marcas,
                                          scope="".join(" AND " + x for x in escopo))
                 cur = c.cursor()
@@ -311,15 +311,15 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
                     cur.close()
         return resultado
 
-    def script_history(self, script_id, desde, escopo_ambientes=None, solicitante=None, limite=5000,
+    def script_history(self, script_id, since, environment_scope=None, requester=None, limit=5000,
                          conn=None):
         """Tickets do script desde a data, no escopo, sem LOB: os `limite` mais recentes, em ordem crescente."""
-        binds = {"script_id": int(script_id), "since": desde}
-        escopo = self._escopo("t.", escopo_ambientes, solicitante, binds)
+        binds = {"script_id": int(script_id), "since": since}
+        escopo = self._escopo("t.", environment_scope, requester, binds)
         sql = self._sql_dinamico(_SQL_HISTORY, scope="".join(" AND " + x for x in escopo))
-        if limite:
+        if limit:
             sql = "SELECT " + _column_list(_COLS_HIST) + " FROM (" + sql + ") WHERE ROWNUM <= :cutoff"
-            binds["cutoff"] = int(limite)
+            binds["cutoff"] = int(limit)
         with self.read_context(conn=conn) as c:
             cur = c.cursor()
             try:
@@ -380,10 +380,10 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
                 cur.close()
         return self.tuple_to_dict(_COLS_OUTPUT, row) if row else None
 
-    def output_read(self, ticket_id, offset, tamanho, conn=None):
+    def output_read(self, ticket_id, offset, size, conn=None):
         """Fatia do zip por locator (offset base 0 na API, offset + 1 no LOB); so DISPONIVEL."""
         off = int(offset)
-        tam = int(tamanho)
+        tam = int(size)
         if off < 0 or tam < 1 or tam > OUTPUT_SLICE_MAX:
             raise repo_errors.RepoViolation("Fatia da saida invalida")
         with self.read_context(conn=conn) as c:
@@ -404,12 +404,12 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
     # Gravacoes
     # -------------------------------------------------------------------------
 
-    def create(self, ticket, respostas, ator=None, conn=None):
+    def create(self, ticket, answers, actor=None, conn=None):
         """Ticket, respostas e auditoria numa transacao, sem gravacao parcial; retorna o ID criado."""
         script_id = int(ticket.get("script_id", 0))
         ambiente = ticket.get("environment")
         solicitante = ticket.get("requested_by")
-        ator_limpo = validate_record_actor(ator=ator or solicitante)
+        ator_limpo = validate_record_actor(actor=actor or solicitante)
         if not script_id:
             raise repo_errors.RepoViolation("script_id e obrigatorio")
         if not ambiente:
@@ -434,9 +434,9 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
             self._fk(self._existe(c, self._sql["ENV_EXISTS"], {"name": ambiente}), "env")
             self._fk(self._existe(c, self._sql["USR_EXISTS"], {"login": solicitante}), "usr")
             vistos = set()
-            for resp in (respostas or []):
+            for resp in (answers or []):
                 pid = int(resp["parameter_id"])
-                self._fk(self._existe(c, self._sql["PRM_EXISTS"], {"id": pid}), "prm", entidade="ticket_answer")
+                self._fk(self._existe(c, self._sql["PRM_EXISTS"], {"id": pid}), "prm", entity="ticket_answer")
                 if pid in vistos:
                     raise repo_errors.RepoViolation(
                         "resposta repetida para o parametro %s" % pid,
@@ -470,7 +470,7 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
                 cur.close()
 
             lote = []
-            for resp in (respostas or []):
+            for resp in (answers or []):
                 lote.append({"id": db_conn.next_id(c, self._seq_tans), "ticket_id": tid,
                              "parameter_id": int(resp["parameter_id"]),
                              "answer_value": resp.get("answer_value"), "actor": ator_limpo})
@@ -491,9 +491,9 @@ class RepoTicketsOracle(BaseRepoOracle, RepoTickets):
                              "tbsss_tickets", tid)
             return tid
 
-    def request_cancel(self, id, ator, ip, conn=None):
+    def request_cancel(self, id, actor, ip, conn=None):
         """Os dois UPDATEs do README §5.6 e a auditoria TICKET_CANCEL numa transacao."""
-        ator_limpo = validate_record_actor(ator=ator)
+        ator_limpo = validate_record_actor(actor=actor)
         tid = int(id)
         with self.write_transaction(conn=conn) as c:
             cur = c.cursor()

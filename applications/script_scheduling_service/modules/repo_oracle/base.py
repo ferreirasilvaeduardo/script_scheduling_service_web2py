@@ -26,12 +26,12 @@ _POOLS = {}
 _POOLS_LOCK = threading.Lock()
 
 
-def _pool_web(cfg, segredos):
+def _pool_web(cfg, secrets):
     chave = (getattr(cfg.oracle, "dsn", ""), getattr(cfg.oracle, "user", ""))
     with _POOLS_LOCK:
         pool = _POOLS.get(chave)
         if pool is None:
-            pool = db_conn.pool(cfg, segredos, papel="web")
+            pool = db_conn.pool(cfg, secrets, role="web")
             _POOLS[chave] = pool
         return pool
 
@@ -53,16 +53,16 @@ def discard_pools():
 atexit.register(discard_pools)
 
 
-def validate_record_actor(auditoria=None, ator=None):
+def validate_record_actor(audit=None, actor=None):
     """Valida e extrai o ator obrigatorio de registro (CR-006, README §10, AGENTS §4.15).
 
     Lanca RepoViolation antes de qualquer SQL se o ator for nulo, vazio ou exceder 40 chars.
     """
     at = None
-    if isinstance(auditoria, dict):
-        at = auditoria.get("actor")
-    if not at and ator:
-        at = ator
+    if isinstance(audit, dict):
+        at = audit.get("actor")
+    if not at and actor:
+        at = actor
 
     if not at or not isinstance(at, str) or not at.strip() or len(at) > 40:
         raise repo_errors.RepoViolation("Ator obrigatorio e deve ter ate 40 caracteres")
@@ -73,15 +73,15 @@ _ACTOR_MAX = 40
 _DETAIL_MAX = 1000
 
 
-def validate_audit_fields(ator, detalhe):
+def validate_audit_fields(actor, detail):
     """ator NOT NULL ate 40 e detalhe ate 1.000 (README §4.4), sem valor padrao nem corte."""
-    if not ator:
+    if not actor:
         raise repo_errors.RepoViolation("ator da auditoria e obrigatorio")
-    if len(ator) > _ACTOR_MAX or (detalhe is not None and len(detalhe) > _DETAIL_MAX):
+    if len(actor) > _ACTOR_MAX or (detail is not None and len(detail) > _DETAIL_MAX):
         raise repo_errors.RepoViolation("auditoria excede o tamanho da coluna (ORA-12899)")
 
 
-def translate_oracle_error(exc, constraint_padrao=None, prefixo=None):
+def translate_oracle_error(exc, constraint_padrao=None, prefix=None):
     """Traduz excecoes Oracle capturadas para a hierarquia de repo_errors."""
     if isinstance(exc, repo_errors.RepoError):
         return exc
@@ -92,7 +92,7 @@ def translate_oracle_error(exc, constraint_padrao=None, prefixo=None):
     m = _RE_CONSTRAINT.search(msg)
     constraint = m.group(1).lower() if m else (constraint_padrao.lower() if constraint_padrao else None)
 
-    pfx_real = prefixo or "tbsss_"
+    pfx_real = prefix or "tbsss_"
     if pfx == "ORA":
         if num in (1, 2290, 2291, 2292, 1400, 12899, 1438, 20001):
             if num == 1438 and not constraint:
@@ -112,16 +112,16 @@ def translate_oracle_error(exc, constraint_padrao=None, prefixo=None):
     return repo_errors.RepoError(msg)
 
 
-def write_audit(conn, sql_tbl_aud, sql_seq_aud, auditoria, entidade, entidade_id):
+def write_audit(conn, sql_tbl_aud, sql_seq_aud, audit, entity, entity_id):
     """Grava linha(s) em tbsss_audit na mesma transacao (README §4.4, §10).
 
     Nunca corta nem completa valores (paridade com o FAKE e o test_06b): actor required com ate 40
     caracteres e detail com ate 1.000; fora disso, RepoViolation antes do INSERT, e a transacao toda
     e desfeita.
     """
-    if not auditoria:
+    if not audit:
         return
-    itens = [auditoria] if isinstance(auditoria, dict) else auditoria
+    itens = [audit] if isinstance(audit, dict) else audit
     for item in itens:
         if not isinstance(item, dict):
             continue
@@ -141,8 +141,8 @@ def write_audit(conn, sql_tbl_aud, sql_seq_aud, auditoria, entidade, entidade_id
                     "actor": item.get("actor"),
                     "source_ip": item.get("ip") or item.get("source_ip"),
                     "action": item["action"],
-                    "entity": entidade,
-                    "entity_id": entidade_id,
+                    "entity": entity,
+                    "entity_id": entity_id,
                     "detail": item.get("detail"),
                 }
             )
@@ -153,9 +153,9 @@ def write_audit(conn, sql_tbl_aud, sql_seq_aud, auditoria, entidade, entidade_id
 class BaseRepoOracle(object):
     """Classe base para repositorios Oracle 11gR2."""
 
-    def __init__(self, cfg=None, segredos=None):
+    def __init__(self, cfg=None, secrets=None):
         self._cfg = cfg
-        self._secrets = segredos
+        self._secrets = secrets
         self._owner = None
         self._prefixo = None
         self._resolver_config()
@@ -181,7 +181,7 @@ class BaseRepoOracle(object):
         if self._secrets is None and self._cfg is not None:
             try:
                 self._secrets = sss_config.load_secrets(
-                    self._cfg.secrets.secrets_file, cfg=self._cfg, papel="web"
+                    self._cfg.secrets.secrets_file, cfg=self._cfg, role="web"
                 )
             except Exception:
                 pass
@@ -200,7 +200,7 @@ class BaseRepoOracle(object):
             with db_conn.transaction(conn):
                 yield conn
         except Exception as exc:
-            raise translate_oracle_error(exc, prefixo=self._prefixo)
+            raise translate_oracle_error(exc, prefix=self._prefixo)
         finally:
             if fechar:
                 try:
@@ -218,7 +218,7 @@ class BaseRepoOracle(object):
         try:
             yield conn
         except Exception as exc:
-            raise translate_oracle_error(exc, prefixo=self._prefixo)
+            raise translate_oracle_error(exc, prefix=self._prefixo)
         finally:
             if fechar:
                 try:
@@ -226,26 +226,26 @@ class BaseRepoOracle(object):
                 except Exception:
                     pass
 
-    def qualify_table(self, entidade):
-        return sql_ident.table(self._owner, self._prefixo, entidade)
+    def qualify_table(self, entity):
+        return sql_ident.table(self._owner, self._prefixo, entity)
 
-    def qualify_sequence(self, entidade):
-        return sql_ident.sequence(self._owner, self._prefixo, entidade)
+    def qualify_sequence(self, entity):
+        return sql_ident.sequence(self._owner, self._prefixo, entity)
 
-    def constraint_name(self, tipo, entidade, sufixo):
+    def constraint_name(self, kind, entity, suffix):
         """Retorna o nome da constraint/indice para o prefixo configurado (README §9.1)."""
-        abrev = sql_ident.TABLES.get(entidade, {}).get("abrev", entidade[:3])
-        return "{}_{}{}_{}".format(tipo, self._prefixo, abrev, sufixo)
+        abrev = sql_ident.TABLES.get(entity, {}).get("abrev", entity[:3])
+        return "{}_{}{}_{}".format(kind, self._prefixo, abrev, suffix)
 
-    def trigger_name(self, entidade, sufixo="bu"):
+    def trigger_name(self, entity, suffix="bu"):
         """Retorna o nome da trigger para o prefixo configurado (README §9.1)."""
-        abrev = sql_ident.TABLES.get(entidade, {}).get("abrev", entidade[:3])
-        return "tr_{}{}_{}".format(self._prefixo, abrev, sufixo)
+        abrev = sql_ident.TABLES.get(entity, {}).get("abrev", entity[:3])
+        return "tr_{}{}_{}".format(self._prefixo, abrev, suffix)
 
-    def tuple_to_dict(self, colunas, valores):
+    def tuple_to_dict(self, columns, values):
         """Converte tupla de resultado em dict normalizado."""
         d = collections.OrderedDict()
-        for col, val in zip(colunas, valores):
+        for col, val in zip(columns, values):
             k = col.lower()
             if isinstance(val, str) and len(val) == 1:
                 val = val.strip()

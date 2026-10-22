@@ -118,20 +118,20 @@ def main(argv=None):
     # 2. Geracao dos scripts
     script_implantar = ddl_builder.build_full_deploy_script(
         owner=owner,
-        prefixo=prefixo,
+        prefix=prefixo,
         lob_storage=lob_storage,
         admin_login=args.admin_login,
-        admin_nome=args.admin_nome,
-        admin_senha_hash=args.admin_senha_hash,
-        papeis_usuarios=papeis_grants,
+        admin_name=args.admin_nome,
+        admin_password_hash=args.admin_senha_hash,
+        user_roles=papeis_grants,
     )
 
     script_rollback = ddl_builder.build_rollback_script(
         owner=owner,
-        prefixo=prefixo,
+        prefix=prefixo,
     )
 
-    script_validar = ddl_builder.build_validation_script(owner=owner, prefixo=prefixo)
+    script_validar = ddl_builder.build_validation_script(owner=owner, prefix=prefixo)
 
     script_grants = ""
     if args.grants_para:

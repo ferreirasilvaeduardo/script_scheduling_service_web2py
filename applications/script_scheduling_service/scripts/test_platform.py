@@ -25,26 +25,26 @@ _Stat = collections.namedtuple("_Stat", "st_uid st_mode")
 _Pw = collections.namedtuple("_Pw", "pw_name pw_uid")
 
 
-def _wait(condicao, prazo=10.0):
-    limite = time.monotonic() + prazo
+def _wait(condition, deadline=10.0):
+    limite = time.monotonic() + deadline
     while time.monotonic() < limite:
-        if condicao():
+        if condition():
             return True
         time.sleep(0.05)
-    return condicao()
+    return condition()
 
 
-def _content(caminho):
+def _content(path):
     try:
-        with open(caminho) as f:
+        with open(path) as f:
             return f.read().strip()
     except OSError:
         return ""
 
 
-def _read_pid(caminho, prazo=10.0):
-    _wait(lambda: _content(caminho).isdigit(), prazo)
-    return int(_content(caminho))
+def _read_pid(path, deadline=10.0):
+    _wait(lambda: _content(path).isdigit(), deadline)
+    return int(_content(path))
 
 
 def _alive(pid):
@@ -82,11 +82,11 @@ class _WithProcesses(unittest.TestCase):
                 os.chmod(os.path.join(atual, d), 0o700)
         shutil.rmtree(self.root, ignore_errors=True)
 
-    def start(self, codigo, cwd=None):
+    def start(self, code, cwd=None):
         """Script Python em grupo proprio pela plataforma (DEV, sem usuario de execucao)."""
         log = open(os.path.join(self.root, "log_%d.txt" % len(self.groups)), "wb")
         try:
-            proc = os_platform.start_process({"argv": [sys.executable, "-c", codigo], "cwd": cwd or self.root,
+            proc = os_platform.start_process({"argv": [sys.executable, "-c", code], "cwd": cwd or self.root,
                                                 "env": {}}, log.fileno())
         finally:
             log.close()
@@ -210,7 +210,7 @@ class TestHelperDoubles(unittest.TestCase):
         falso = mock.MagicMock(pid=4321)
         with mock.patch.object(posix.subprocess, "Popen", return_value=falso) as popen, \
                 mock.patch.object(posix, "process_identity", return_value=99):
-            proc = os_platform.start_process({"ticket_id": 3, "argv": ["/bin/true"]}, 7, usuario_execucao="exec1")
+            proc = os_platform.start_process({"ticket_id": 3, "argv": ["/bin/true"]}, 7, exec_user="exec1")
         argv = popen.call_args[0][0]
         self.assertEqual(argv, [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "run"])
         kw = popen.call_args[1]
@@ -226,7 +226,7 @@ class TestHelperDoubles(unittest.TestCase):
         lento.poll.return_value = None
         with mock.patch.object(posix.subprocess, "Popen", return_value=lento) as popen:
             inicio = time.monotonic()
-            ok = os_platform.signal_group(os_platform.Process(500, 77, usuario_execucao="exec1"), signal.SIGKILL)
+            ok = os_platform.signal_group(os_platform.Process(500, 77, exec_user="exec1"), signal.SIGKILL)
             self.assertLess(time.monotonic() - inicio, 0.5)
         self.assertTrue(ok)
         self.assertEqual(popen.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "kill",
@@ -244,7 +244,7 @@ class TestHelperDoubles(unittest.TestCase):
         with mock.patch.object(posix.subprocess, "Popen", return_value=falso), \
                 mock.patch.object(posix, "process_identity", return_value=7):
             with self.assertRaises(os_platform.FailureAfterSpawn) as ctx:
-                os_platform.start_process({"ticket_id": 3, "argv": ["/bin/true"]}, 7, usuario_execucao="exec1")
+                os_platform.start_process({"ticket_id": 3, "argv": ["/bin/true"]}, 7, exec_user="exec1")
         self.assertEqual((ctx.exception.process.pid, ctx.exception.process.identity), (4322, 7))
         self.assertIsInstance(ctx.exception.cause, BrokenPipeError)
         falso.stdin.close.assert_called_once_with()
@@ -289,7 +289,7 @@ class TestOutputDir(unittest.TestCase):
         falso = mock.MagicMock(pid=4400)
         with mock.patch.object(posix.subprocess, "Popen", return_value=falso) as popen, \
                 mock.patch.object(posix, "process_identity", return_value=55):
-            proc = os_platform.start_pack(self.base, self.rel, 1048576, 10, 9, usuario_execucao="exec1")
+            proc = os_platform.start_pack(self.base, self.rel, 1048576, 10, 9, exec_user="exec1")
         self.assertEqual(popen.call_args[0][0], [posix.SUDO, "-n", "-u", "exec1", "--", posix.HELPER, "pack",
                                                  self.base, self.rel, "1048576", "10"])
         kw = popen.call_args[1]
@@ -302,7 +302,7 @@ class TestOutputDir(unittest.TestCase):
         with mock.patch.object(posix, "_run_short", return_value=(0, "removidas=3\n")) as ex:
             os_platform.clean_output(self.base, self.rel, "exec1")
             self.assertEqual(os_platform.purge_output(self.base, 7, "exec1"), 3)
-            self.assertEqual(os_platform.purge_output(self.base, 7, "exec1", contar=True), 3)
+            self.assertEqual(os_platform.purge_output(self.base, 7, "exec1", count_only=True), 3)
         self.assertEqual(ex.call_args_list[0][0][0][-3:], ["clean-output", self.base, self.rel])
         self.assertEqual(ex.call_args_list[1][0][0][-3:], ["purge-output", self.base, "7"])
         self.assertEqual(ex.call_args_list[2][0][0][-4:], ["purge-output", self.base, "7", "count"])
@@ -512,8 +512,8 @@ class TestPathValidations(unittest.TestCase):
         os.chmod(self.base, 0o700)
         shutil.rmtree(self.root, ignore_errors=True)
 
-    def validate(self, caminho):
-        return os_platform.validate_script_path(caminho)
+    def validate(self, path):
+        return os_platform.validate_script_path(path)
 
     def test_script_valido(self):
         self.assertIsNone(self.validate(self.script))
@@ -550,8 +550,8 @@ class TestPathValidations(unittest.TestCase):
         real = os_platform.validate_interpreter_executable("/bin/sh")
         self.assertEqual(real, os.path.realpath("/bin/sh"))
         with mock.patch.object(path_guard, "validate_executable", return_value="/x") as ve:
-            os_platform.validate_interpreter_executable("/usr/bin/python3", dirs_sss=("/srv",))
-        ve.assert_called_once_with("/usr/bin/python3", dirs_sss=("/srv",))
+            os_platform.validate_interpreter_executable("/usr/bin/python3", sss_dirs=("/srv",))
+        ve.assert_called_once_with("/usr/bin/python3", sss_dirs=("/srv",))
         with self.assertRaises(path_guard.PathGuardError):
             os_platform.validate_interpreter_executable("bin/sh")
 
@@ -597,23 +597,23 @@ class TestValidateExecution(unittest.TestCase):
         self.sudo = {"exec1": (0, "%s\n" % self.HELPER)}
         self.calls = []
 
-    def _stat(self, caminho, *a, **k):
-        if caminho in self.stats:
-            return self.stats[caminho]
-        raise FileNotFoundError(caminho)
+    def _stat(self, path, *a, **k):
+        if path in self.stats:
+            return self.stats[path]
+        raise FileNotFoundError(path)
 
-    def _getpwnam(self, nome):
-        return self.users[nome]
+    def _getpwnam(self, name):
+        return self.users[name]
 
     def _executar(self, argv):
         self.calls.append(argv)
         return self.sudo.get(argv[4], (1, "Sorry, user may not run sudo"))
 
-    def validate(self, usuarios=("exec1",)):
+    def validate(self, users=("exec1",)):
         with mock.patch.object(posix.os, "stat", side_effect=self._stat), \
                 mock.patch.object(posix.pwd, "getpwnam", side_effect=self._getpwnam):
-            return os_platform.validate_execution([("PROD", u) for u in usuarios], self.EXEC,
-                                               helper=self.HELPER, executar=self._executar, usuario_agente="agente")
+            return os_platform.validate_execution([("PROD", u) for u in users], self.EXEC,
+                                               helper=self.HELPER, run=self._executar, agent_user="agente")
 
     def test_tudo_certo(self):
         self.assertEqual(self.validate(), [])
@@ -631,9 +631,9 @@ class TestValidateExecution(unittest.TestCase):
         self.assertIn("nao encontrado", " ".join(self.validate()))
 
     def test_usuarios_invalidos(self):
-        self.assertIn("nao existe", " ".join(self.validate(usuarios=("fantasma",))))
-        self.assertIn("nao pode ser root", " ".join(self.validate(usuarios=("root",))))
-        self.assertIn("proprio usuario do agente", " ".join(self.validate(usuarios=("agente",))))
+        self.assertIn("nao existe", " ".join(self.validate(users=("fantasma",))))
+        self.assertIn("nao pode ser root", " ".join(self.validate(users=("root",))))
+        self.assertIn("proprio usuario do agente", " ".join(self.validate(users=("agente",))))
 
     def test_sudo_sem_regra_e_pasta(self):
         self.sudo["exec1"] = (0, "/usr/bin/outro\n")

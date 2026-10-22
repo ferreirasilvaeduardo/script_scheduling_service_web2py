@@ -56,13 +56,13 @@ def _alive(pid):
     return conteudo[conteudo.rindex(")") + 2:].split()[0] != "Z"
 
 
-def _wait(condicao, prazo=10.0):
-    limite = time.monotonic() + prazo
+def _wait(condition, deadline=10.0):
+    limite = time.monotonic() + deadline
     while time.monotonic() < limite:
-        if condicao():
+        if condition():
             return True
         time.sleep(0.05)
-    return condicao()
+    return condition()
 
 
 @unittest.skipIf(os.geteuid() == 0, "o helper roda como usuario de execucao, nunca root")
@@ -364,10 +364,10 @@ class TestSssHelper(unittest.TestCase):
         spec = dict(valida, input={"base": base, "relativo": "x"})
         self.assertEqual(_helper("run", entrada=json.dumps(spec).encode("utf-8"))[0], 2, "link recusado")
 
-    def _fill(self, base, rel, arquivos):
+    def _fill(self, base, rel, files):
         pasta = os.path.join(base, rel)
         os.makedirs(pasta, 0o700)
-        for nome, dados in arquivos.items():
+        for nome, dados in files.items():
             caminho = os.path.join(pasta, nome)
             os.makedirs(os.path.dirname(caminho), exist_ok=True)
             with open(caminho, "wb") as f:
@@ -451,12 +451,12 @@ class TestSssHelper(unittest.TestCase):
         import io
         contagem = io.StringIO()
         with mock.patch.object(helper.sys, "stdout", contagem):  # --dry-run do purge: so conta
-            self.assertEqual(helper._purge_output(base, 7, hoje=datetime.date(2026, 10, 20), contar=True), 0)
+            self.assertEqual(helper._purge_output(base, 7, today=datetime.date(2026, 10, 20), count_only=True), 0)
         self.assertEqual(contagem.getvalue(), "removidas=1\n")
         self.assertTrue(os.path.exists(velha), "contar nao remove")
         saida = io.StringIO()
         with mock.patch.object(helper.sys, "stdout", saida):
-            self.assertEqual(helper._purge_output(base, 7, hoje=datetime.date(2026, 10, 20)), 0)
+            self.assertEqual(helper._purge_output(base, 7, today=datetime.date(2026, 10, 20)), 0)
         self.assertEqual(saida.getvalue(), "removidas=1\n")
         self.assertFalse(os.path.exists(os.path.join(base, "carga", "2026", "09", "01")))
         self.assertTrue(os.path.exists(nova))

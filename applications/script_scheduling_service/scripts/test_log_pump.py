@@ -60,28 +60,28 @@ class _FakeRepo(object):
     def __init__(self):
         self.calls = []
 
-    def append_chunk(self, conn, ticket_id, agente_id, offset_esperado, bloco):
-        self.calls.append((ticket_id, offset_esperado, bloco))
+    def append_chunk(self, conn, ticket_id, agent_id, expected_offset, chunk):
+        self.calls.append((ticket_id, expected_offset, chunk))
         conn.count()
         clob = conn.clobs[ticket_id]
-        if clob.owner != (agente_id, "RUNNING"):
+        if clob.owner != (agent_id, "RUNNING"):
             return OWNERSHIP_LOST
         clob.start_tx()
-        tam = log_pump.clob_units(bloco)
+        tam = log_pump.clob_units(chunk)
         if log_pump.clob_units(clob.text) != clob.offset:
-            raise LogOffsetMismatch(ticket_id, offset_esperado, tam)
-        if clob.offset == offset_esperado:
-            clob.text += bloco
+            raise LogOffsetMismatch(ticket_id, expected_offset, tam)
+        if clob.offset == expected_offset:
+            clob.text += chunk
             clob.offset += tam
             return WRITTEN
-        if clob.offset == offset_esperado + tam and clob.text.encode("utf-16-le")[2 * offset_esperado:] == \
-                bloco.encode("utf-16-le"):
+        if clob.offset == expected_offset + tam and clob.text.encode("utf-16-le")[2 * expected_offset:] == \
+                chunk.encode("utf-16-le"):
             return ALREADY_WRITTEN
-        raise LogOffsetMismatch(ticket_id, offset_esperado, tam)
+        raise LogOffsetMismatch(ticket_id, expected_offset, tam)
 
-    def mark_truncated(self, conn, ticket_id, agente_id):
+    def mark_truncated(self, conn, ticket_id, agent_id):
         clob = conn.clobs[ticket_id]
-        if clob.owner != (agente_id, "RUNNING"):
+        if clob.owner != (agent_id, "RUNNING"):
             return False
         clob.start_tx()
         clob.truncated = "Y"
@@ -89,10 +89,10 @@ class _FakeRepo(object):
 
 
 class _FakeConn(object):
-    def __init__(self, clobs, relogio=None, falhar_commit=0):
+    def __init__(self, clobs, clock=None, fail_commit=0):
         self.clobs = clobs
-        self.clock = relogio
-        self.fail_commit = falhar_commit
+        self.clock = clock
+        self.fail_commit = fail_commit
         self.uncertain_commit_persisted = True
 
     def count(self):
@@ -134,26 +134,26 @@ class _Base(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)
 
-    def file(self, conteudo=b""):
+    def file(self, content=b""):
         self.n += 1
         caminho = os.path.join(self.root, "ticket_%d.log" % self.n)
         with open(caminho, "wb") as f:
-            f.write(conteudo)
+            f.write(content)
         return caminho
 
-    def append_bytes(self, caminho, dados):
-        with open(caminho, "ab") as f:
-            f.write(dados)
+    def append_bytes(self, path, date):
+        with open(path, "ab") as f:
+            f.write(date)
 
-    def pump(self, caminho, mascarador=None, teto=LARGE, local=LARGE, ticket_id=1):
-        return Pump(caminho, ticket_id, mascarador or masking.Masker(), teto, local)
+    def pump(self, path, masker=None, cap=LARGE, local_value=LARGE, ticket_id=1):
+        return Pump(path, ticket_id, masker or masking.Masker(), cap, local_value)
 
-    def drain(self, bomba, conn=None, repo=None):
+    def drain(self, pump, conn=None, repo=None):
         """Flush final num CLOB falso e devolve o texto do CLOB."""
-        conn = conn or _FakeConn({bomba.ticket_id: _FakeClob()})
+        conn = conn or _FakeConn({pump.ticket_id: _FakeClob()})
         repo = repo or _FakeRepo()
-        self.assertEqual(log_pump.final_flush(bomba, conn, repo, "srv-01"), log_pump.OK)
-        return conn.clobs[bomba.ticket_id]
+        self.assertEqual(log_pump.final_flush(pump, conn, repo, "srv-01"), log_pump.OK)
+        return conn.clobs[pump.ticket_id]
 
 
 class TestReadAndMask(_Base):
@@ -244,7 +244,7 @@ class TestLimits(_Base):
         teto = 2048
         conteudo = ("é" * 1024).encode("utf-8")
         self.assertEqual(len(conteudo), teto)
-        b = self.pump(self.file(conteudo), teto=teto)
+        b = self.pump(self.file(conteudo), cap=teto)
         b.collect()
         clob = self.drain(b)
         self.assertEqual(clob.text, conteudo.decode("utf-8"))
@@ -255,7 +255,7 @@ class TestLimits(_Base):
         teto = 2048
         for conteudo in (("é" * 1024 + "x").encode("utf-8"), ("\U0001F600" * 600).encode("utf-8"),
                          ("a" * 5000).encode("utf-8")):
-            b = self.pump(self.file(conteudo), teto=teto)
+            b = self.pump(self.file(conteudo), cap=teto)
             with self.assertLogs("sss_scheduler", "WARNING"):
                 b.collect(max_bytes_leitura=333)
                 b.collect(max_bytes_leitura=MB)
@@ -271,7 +271,7 @@ class TestLimits(_Base):
     def test_aplicar_teto_banco_direto(self):
         teto = 1100
         marcador = len(MARKER.encode("utf-8"))
-        b = self.pump(self.file(), teto=teto)
+        b = self.pump(self.file(), cap=teto)
         enviar, truncou = b.apply_db_cap("a" * (teto - marcador))
         self.assertEqual((len(enviar), truncou), (teto - marcador, False))
         enviar, truncou = b.apply_db_cap("b" * marcador)
@@ -283,7 +283,7 @@ class TestLimits(_Base):
 
     def test_teto_local(self):
         caminho = self.file(b"x" * 1024)
-        b = self.pump(caminho, local=1024)
+        b = self.pump(caminho, local_value=1024)
         self.assertFalse(b.local_exceeded())
         self.append_bytes(caminho, b"y")
         self.assertTrue(b.local_exceeded())
@@ -301,7 +301,7 @@ class TestLimits(_Base):
 
     def test_bomba_com_unidade_de_charset_de_um_byte(self):
         b = Pump(self.file("x\U0001F600y\n".encode("utf-8")), 1, masking.Masker(), LARGE, LARGE,
-                  unidade_suplementar=1)
+                  supplementary_unit=1)
         conn = _FakeConn({1: _FakeClob()})
         log_pump.final_flush(b, conn, _FakeRepo(), "srv-01")
         self.assertEqual(b.confirmed_offset_chars, 4)
@@ -321,7 +321,7 @@ class TestProtocol(_Base):
 
     def test_commit_incerto_reconciliado_sem_duplicar(self):
         b = self.pump(self.file(("x" * 8000 + "fim\n").encode("utf-8")))
-        conn = _FakeConn({1: _FakeClob()}, falhar_commit=1)
+        conn = _FakeConn({1: _FakeClob()}, fail_commit=1)
         repo = _FakeRepo()
         with self.assertLogs("sss_scheduler", "WARNING"):
             self.assertEqual(log_pump.final_flush(b, conn, repo, "srv-01"), log_pump.UNCERTAIN_CONNECTION)
@@ -332,7 +332,7 @@ class TestProtocol(_Base):
 
     def test_commit_que_falhou_sem_persistir_regrava(self):
         b = self.pump(self.file(b"abc\n"))
-        conn = _FakeConn({1: _FakeClob()}, falhar_commit=1)
+        conn = _FakeConn({1: _FakeClob()}, fail_commit=1)
         conn.uncertain_commit_persisted = False
         repo = _FakeRepo()
         with self.assertLogs("sss_scheduler", "WARNING"):
@@ -356,10 +356,10 @@ class TestProtocol(_Base):
     def test_orcamento_e_rodizio(self):
         relogio = _Clock()
         clobs = dict((t, _FakeClob()) for t in (1, 2, 3))
-        conn = _FakeConn(clobs, relogio=relogio)
+        conn = _FakeConn(clobs, clock=relogio)
         caminhos = dict((t, self.file()) for t in (1, 2, 3))
         bombas = dict((t, self.pump(caminhos[t], ticket_id=t)) for t in (1, 2, 3))
-        rodada = Round(bombas, relogio, orcamento_s=3)
+        rodada = Round(bombas, relogio, budget_s=3)
         atendidos = []
         for _ in range(9):
             for t in (1, 2, 3):
@@ -387,7 +387,7 @@ class TestProtocol(_Base):
         conn = _FakeConn(clobs)
         bombas = {1: self.pump(os.path.join(self.root, "sumiu.log"), ticket_id=1),
                   2: self.pump(self.file(b"ok\n"), ticket_id=2)}
-        rodada = Round(bombas, _Clock(), orcamento_s=100)
+        rodada = Round(bombas, _Clock(), budget_s=100)
         with self.assertLogs("sss_scheduler", "WARNING") as logs:
             rodada.run(conn, _FakeRepo(), "srv-01")
             rodada.run(conn, _FakeRepo(), "srv-01")
@@ -401,7 +401,7 @@ class TestProtocol(_Base):
     def test_flush_final_le_em_blocos_e_para_ao_truncar(self):
         # Revisao F8.0-F8.2 (M1): arquivo bem maior que o teto nao e lido inteiro para a memoria.
         caminho = self.file(b"x" * (5 * MB))
-        b = self.pump(caminho, teto=4096)
+        b = self.pump(caminho, cap=4096)
         with self.assertLogs("sss_scheduler", "WARNING"):
             clob = self.drain(b)
         self.assertLessEqual(b.offset_bytes, log_pump.DEFAULT_READ, "parou de ler no primeiro bloco")
@@ -418,10 +418,10 @@ class TestProtocol(_Base):
     def test_rodada_com_commit_incerto_preserva_e_retoma(self):
         relogio = _Clock()
         clobs = {1: _FakeClob()}
-        conn = _FakeConn(clobs, relogio=relogio, falhar_commit=1)
+        conn = _FakeConn(clobs, clock=relogio, fail_commit=1)
         caminho = self.file(b"a" * 20000)
         bombas = {1: self.pump(caminho)}
-        rodada = Round(bombas, relogio, orcamento_s=100)
+        rodada = Round(bombas, relogio, budget_s=100)
         with self.assertLogs("sss_scheduler", "WARNING"):
             res = rodada.run(conn, _FakeRepo(), "srv-01")
         self.assertTrue(res.uncertain_connection)
@@ -439,11 +439,11 @@ class _CursorAppend(object):
         self.inputs = None
         self.rowcount = 0
 
-    def setinputsizes(self, **tipos):
-        self.inputs = tipos
+    def setinputsizes(self, **types):
+        self.inputs = types
 
-    def var(self, tipo, size=None):
-        self.conn.vars.append((tipo, size))
+    def var(self, kind, size=None):
+        self.conn.vars.append((kind, size))
         return mock.Mock(getvalue=mock.Mock(return_value=self.conn.result))
 
     def execute(self, sql, **binds):
@@ -457,9 +457,9 @@ class _CursorAppend(object):
 
 
 class _ConnAppend(object):
-    def __init__(self, resultado="WRITTEN", erro=None, rowcount=1):
-        self.result = resultado
-        self.error = erro
+    def __init__(self, result="WRITTEN", error=None, rowcount=1):
+        self.result = result
+        self.error = error
         self.rowcount = rowcount
         self.vars = []
         self.executions = []
@@ -495,18 +495,18 @@ class TestRepoSchedulerLog(unittest.TestCase):
 
     def test_resultados_e_posse_perdida(self):
         for r in (WRITTEN, ALREADY_WRITTEN, OWNERSHIP_LOST):
-            self.assertEqual(self.repo.append_chunk(_ConnAppend(resultado=r), 7, "srv-01", 0, "abc"), r)
+            self.assertEqual(self.repo.append_chunk(_ConnAppend(result=r), 7, "srv-01", 0, "abc"), r)
         with self.assertRaises(RuntimeError):
-            self.repo.append_chunk(_ConnAppend(resultado=None), 7, "srv-01", 0, "abc")
+            self.repo.append_chunk(_ConnAppend(result=None), 7, "srv-01", 0, "abc")
         with self.assertRaises(ValueError):
             self.repo.append_chunk(_ConnAppend(), 7, "srv-01", 0, "")
 
     def test_ora_20002_vira_log_offset_inconsistente(self):
         erro = Exception("ORA-20002: LOG_OFFSET_DIVERGENTE\nORA-06512: at line 13")
         with self.assertRaises(LogOffsetMismatch):
-            self.repo.append_chunk(_ConnAppend(erro=erro), 7, "srv-01", 0, "abc")
+            self.repo.append_chunk(_ConnAppend(error=erro), 7, "srv-01", 0, "abc")
         with self.assertRaises(Exception) as ctx:
-            self.repo.append_chunk(_ConnAppend(erro=Exception("ORA-00054: resource busy")), 7, "srv-01", 0, "abc")
+            self.repo.append_chunk(_ConnAppend(error=Exception("ORA-00054: resource busy")), 7, "srv-01", 0, "abc")
         self.assertNotIsInstance(ctx.exception, LogOffsetMismatch)
 
     def test_bind_out_pelos_tres_drivers(self):
@@ -518,7 +518,7 @@ class TestRepoSchedulerLog(unittest.TestCase):
                                                   ("thick", oracledb, "ODB_VARCHAR", "ODB_CLOB"),
                                                   ("cx_oracle", cx, "CX_STRING", "CX_CLOB")):
             selecao = mock.Mock(candidate=candidato)
-            conn = _ConnAppend(resultado=ALREADY_WRITTEN)
+            conn = _ConnAppend(result=ALREADY_WRITTEN)
             with mock.patch.object(db_conn, "_DRIVER_INITIALIZED", driver), \
                     mock.patch.object(db_conn, "_DRIVER_SELECTION", selecao):
                 self.assertEqual(self.repo.append_chunk(conn, 7, "srv-01", 3, "abc"), ALREADY_WRITTEN, candidato)
@@ -555,7 +555,7 @@ import sss_config, db_conn
 from repo_oracle.scheduler_log import RepoSchedulerLog
 cfg = sss_config.get_config()
 cfg = cfg._replace(oracle=cfg.oracle._replace(driver_mode=sys.argv[2]))
-seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel="web")
+seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="web")
 try:
     conn = db_conn.connect(cfg, seg, "web")
 except Exception as e:
@@ -611,8 +611,8 @@ class TestSchedulerLogOracle(unittest.TestCase):
     def tearDown(self):
         self.contrato.tearDown(self)
 
-    def obter_repo(self, nome):
-        return self.contrato.obter_repo(self, nome)
+    def obter_repo(self, name):
+        return self.contrato.obter_repo(self, name)
 
     def _clean_fixtures(self):
         return self.contrato._clean_fixtures(self)
@@ -626,13 +626,13 @@ class TestSchedulerLogOracle(unittest.TestCase):
         finally:
             conn.close()
 
-    def _as_db(self, texto):
+    def _as_db(self, text):
         """O texto como o charset do banco o guarda (caractere fora dele vira o de substituicao)."""
         conn = self.catalog._obter_conexao()
         try:
             cur = conn.cursor()
             db_conn.set_input_types(cur, x=db_conn.TIPO_CLOB)
-            cur.execute("SELECT TO_CLOB(:x) FROM DUAL", x=texto)
+            cur.execute("SELECT TO_CLOB(:x) FROM DUAL", x=text)
             return cur.fetchone()[0].read()
         finally:
             conn.close()
@@ -686,7 +686,7 @@ class TestSchedulerLogOracle(unittest.TestCase):
         with open(caminho, "wb") as f:
             f.write(linhas.encode("utf-8"))
         m = log_pump.ticket_masker(["SegredoDoTicket"])
-        b = Pump(caminho, self.ticket_id, m, 5 * MB, 50 * MB, unidade_suplementar=self.unit)
+        b = Pump(caminho, self.ticket_id, m, 5 * MB, 50 * MB, supplementary_unit=self.unit)
         conn = self.catalog._obter_conexao()
         try:
             self.assertEqual(log_pump.final_flush(b, conn, self.repo, self.AGENT), log_pump.OK)

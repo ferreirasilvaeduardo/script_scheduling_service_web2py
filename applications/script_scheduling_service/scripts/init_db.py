@@ -45,16 +45,16 @@ def _log_critical_config(msg, cfg=None):
         sss_logging.log_initial_critical("sss_init_db", msg, log_dir)
 
 
-def _connect(cfg, usuario, senha):
+def _connect(cfg, user, password_value):
     """Estabelece conexao Oracle com a conta informada usando db_conn.connect (F7.2)."""
     import db_conn
     segredos_dummy = collections.namedtuple("SegredosDummy", ["oracle"])(
-        oracle=collections.namedtuple("OracleDummy", ["password"])(password=senha)
+        oracle=collections.namedtuple("OracleDummy", ["password"])(password=password_value)
     )
-    return db_conn.connect(cfg, segredos_dummy, papel="dono", user=usuario, password=senha)
+    return db_conn.connect(cfg, segredos_dummy, role="dono", user=user, password=password_value)
 
 
-def _validate_disposable_schema_dev(cfg, usuario_dono, conn):
+def _validate_disposable_schema_dev(cfg, owner_user, conn):
     """Valida requisitos de seguranca para schema descartavel em DEV (F7.1)."""
     dsn_env = os.environ.get("SSS_TEST_DSN")
     owner_env = os.environ.get("SSS_TEST_OWNER")
@@ -84,10 +84,10 @@ def _validate_disposable_schema_dev(cfg, usuario_dono, conn):
         cursor.execute("SELECT USER FROM DUAL")
         row = cursor.fetchone()
         usuario_banco = row[0] if row else ""
-        if usuario_banco.upper() != usuario_dono.upper():
+        if usuario_banco.upper() != owner_user.upper():
             raise RuntimeError(
                 "Usuario conectado no Oracle ('%s') diverge do usuario dono ('%s')"
-                % (usuario_banco, usuario_dono)
+                % (usuario_banco, owner_user)
             )
     finally:
         cursor.close()
@@ -132,24 +132,24 @@ def _query_existence(cursor, owner):
     }
 
 
-def _object_exists(tipo, nome, mapa_existencia):
+def _object_exists(kind, name, existence_map):
     """Verifica se um determinado objeto ja existe no dicionario de dados."""
-    nome_low = nome.lower()
-    if tipo in ("SEQUENCE", "TABLE", "TRIGGER"):
-        return (tipo, nome_low) in mapa_existencia["objetos"]
-    elif tipo == "CONSTRAINT":
-        return nome_low in mapa_existencia["constraints"]
-    elif tipo == "INDEX":
-        return nome_low in mapa_existencia["indices"]
+    nome_low = name.lower()
+    if kind in ("SEQUENCE", "TABLE", "TRIGGER"):
+        return (kind, nome_low) in existence_map["objetos"]
+    elif kind == "CONSTRAINT":
+        return nome_low in existence_map["constraints"]
+    elif kind == "INDEX":
+        return nome_low in existence_map["indices"]
     return False
 
 
-def _run_ddl_phases(conn, owner, prefixo, lob_storage="SECUREFILE", log_fn=print):
+def _run_ddl_phases(conn, owner, prefix, lob_storage="SECUREFILE", log_fn=print):
     """Aplica o DDL fase a fase de forma idempotente (1 a 6)."""
     cursor = conn.cursor()
     try:
         mapa = _query_existence(cursor, owner)
-        instrucoes = ddl_builder.build_ddl_statements(owner, prefixo, lob_storage=lob_storage)
+        instrucoes = ddl_builder.build_ddl_statements(owner, prefix, lob_storage=lob_storage)
 
         total = len(instrucoes)
         sucesso_count = 0
@@ -175,9 +175,9 @@ def _run_ddl_phases(conn, owner, prefixo, lob_storage="SECUREFILE", log_fn=print
         cursor.close()
 
 
-def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_senha=None, log_fn=print):
+def _run_seed(conn, owner, prefix, admin_login=None, admin_name=None, admin_password=None, log_fn=print):
     """Executa o seed idempotente via MERGE (Fase 7, README §4.3.D e §11.1)."""
-    esquema = sql_ident.names(prefixo)
+    esquema = sql_ident.names(prefix)
     cursor = conn.cursor()
     try:
         # 1. Catálogo de Funcionalidades
@@ -501,9 +501,9 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
         """.format(tb_usr=tb_usr, sq_usr=sq_usr, tb_prf=tb_prf)
 
         for u_login, u_nome, u_perfil in ddl_builder.DEFAULT_USERS:
-            nome_final = admin_nome if (u_login == "admin" and admin_nome) else u_nome
-            if u_login == "admin" and admin_senha:
-                hash_final = security.hash_password(admin_senha)
+            nome_final = admin_name if (u_login == "admin" and admin_name) else u_nome
+            if u_login == "admin" and admin_password:
+                hash_final = security.hash_password(admin_password)
             else:
                 hash_final = ddl_builder.HOMOLOGATION_DEFAULT_PASSWORD_HASH
 
@@ -526,10 +526,10 @@ def _run_seed(conn, owner, prefixo, admin_login=None, admin_nome=None, admin_sen
         cursor.close()
 
 
-def _gather_statistics(conn, owner, prefixo, log_fn=print):
+def _gather_statistics(conn, owner, prefix, log_fn=print):
     """Coleta estatisticas apenas em tabelas com linhas (Fase 8, CR-007, R-29)."""
     cursor = conn.cursor()
-    esquema = sql_ident.names(prefixo)
+    esquema = sql_ident.names(prefix)
     try:
         for entidade, t in esquema.items():
             tabela_nome = t["tabela"]
@@ -555,22 +555,22 @@ def _gather_statistics(conn, owner, prefixo, log_fn=print):
         cursor.close()
 
 
-def _check_schema(conn, owner, prefixo, log_fn=print):
+def _check_schema(conn, owner, prefix, log_fn=print):
     """Confere esquema real do banco contra o registro sql_ident (README §11.1, CR-008, R-14)."""
-    esquema = sql_ident.names(prefixo)
+    esquema = sql_ident.names(prefix)
     cursor = conn.cursor()
     divergencias = []
 
     try:
         # 1. Checagem de Objetos Invalidos (apenas objetos pertencentes ao SSS)
-        idents_sss = {i.upper() for i in esquema.all_identifiers(incluir_colunas=False)}
+        idents_sss = {i.upper() for i in esquema.all_identifiers(include_columns=False)}
         cursor.execute(
             "SELECT OBJECT_TYPE, OBJECT_NAME FROM ALL_OBJECTS WHERE OWNER = :o AND STATUS = 'INVALID'",
             {"o": owner.upper()}
         )
         for obj_tipo, obj_nome in cursor.fetchall():
             nome_u = obj_nome.upper()
-            if nome_u in idents_sss or nome_u.startswith(prefixo.upper()) or nome_u.startswith("SQ_" + prefixo.upper()) or nome_u.startswith("TR_" + prefixo.upper()):
+            if nome_u in idents_sss or nome_u.startswith(prefix.upper()) or nome_u.startswith("SQ_" + prefix.upper()) or nome_u.startswith("TR_" + prefix.upper()):
                 cursor.execute(
                     "SELECT LINE, POSITION, TEXT FROM ALL_ERRORS WHERE OWNER = :o AND NAME = :n",
                     {"o": owner.upper(), "n": obj_nome}
@@ -716,12 +716,12 @@ def _parse_grants_arg(arg_str):
     return papeis
 
 
-def _schema_1_exists(conn, owner, prefixo):
+def _schema_1_exists(conn, owner, prefix):
     """Tabela de controle do esquema anterior ao CR-016a presente: o esquema novo nao convive com ele."""
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT COUNT(*) FROM all_tables WHERE owner = :o AND table_name = :t",
-                       o=owner.upper(), t=(prefixo + sql_ident.LEGACY_CONTROL_TABLE).upper())
+                       o=owner.upper(), t=(prefix + sql_ident.LEGACY_CONTROL_TABLE).upper())
         return int(cursor.fetchone()[0]) > 0
     finally:
         cursor.close()
@@ -925,8 +925,8 @@ def main(argv=None):
         _run_seed(
             conn, owner, prefixo,
             admin_login=args.admin_login,
-            admin_nome=args.admin_nome,
-            admin_senha=admin_senha,
+            admin_name=args.admin_nome,
+            admin_password=admin_senha,
             log_fn=print,
         )
 

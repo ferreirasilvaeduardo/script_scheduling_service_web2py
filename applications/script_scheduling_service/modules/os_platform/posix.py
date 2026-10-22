@@ -57,23 +57,23 @@ class FailureAfterSpawn(RuntimeError):
     """O Popen do sudo/helper retornou, mas a entrega da especificacao falhou (CR-008, R-01): o grupo
     existe e vai em processo, para o executor encerra-lo sem esperar."""
 
-    def __init__(self, processo, causa):
-        RuntimeError.__init__(self, causa.__class__.__name__)
-        self.process = processo
-        self.cause = causa
+    def __init__(self, process, cause):
+        RuntimeError.__init__(self, cause.__class__.__name__)
+        self.process = process
+        self.cause = cause
 
 
 class Process(object):
     """Grupo de processos de um ticket: lider (pid = pgid, start_new_session) e sua identidade."""
 
-    def __init__(self, pid, identidade, popen=None, usuario_execucao=None, sem_identidade=False):
+    def __init__(self, pid, identity, popen=None, exec_user=None, no_identity=False):
         self.pid = pid
         self.pgid = pid
-        self.identity = identidade
+        self.identity = identity
         self.popen = popen
-        self.exec_user = usuario_execucao
+        self.exec_user = exec_user
         # Identidade desconhecida com PID vivo: nunca recebe sinal (WARN ORFAO_SEM_IDENTIDADE).
-        self.no_identity = sem_identidade
+        self.no_identity = no_identity
 
     def __repr__(self):
         return "Processo(pid=%s, identidade=%s, usuario=%s)" % (self.pid, self.identity, self.exec_user)
@@ -83,49 +83,49 @@ class Process(object):
 # Execucao
 # -----------------------------------------------------------------------------
 
-def _rlimits(especificacao):
+def _rlimits(spec):
     limites = dict(DEFAULT_RLIMITS)
-    for nome, valor in (especificacao.get("rlimits") or {}).items():
+    for nome, valor in (spec.get("rlimits") or {}).items():
         if nome not in _ALLOWED_RLIMITS:
             raise ValueError("Limite de recurso nao permitido: %s" % nome)
         limites[nome] = (int(valor[0]), int(valor[1]))
     return [(getattr(resource, nome), par) for nome, par in sorted(limites.items())]
 
 
-def _child_limits(limites):
+def _child_limits(limits):
     """preexec_fn em DEV: somente os.umask e resource.setrlimit (AGENTS §3.2; sem threads no daemon)."""
     def _child_limits():
         os.umask(0o077)
-        for recurso, par in limites:
+        for recurso, par in limits:
             resource.setrlimit(recurso, par)
     return _child_limits
 
 
-def start_process(especificacao, log_fd, usuario_execucao=None):
+def start_process(spec, log_fd, exec_user=None):
     """Inicia o script num grupo proprio (start_new_session) com stdout/stderr no arquivo de log.
 
     Com exec_user: sudo -n -u <usuario> -- /opt/sss/bin/sss-helper run, com a especificacao JSON
     (ticket_id, argv, env, rlimits, base_dir) pela entrada padrao. Sem ele (so DEV): Popen direto com
     argv, cwd, env e os limites. Nunca usa shell nem PIPE de saida (AGENTS §3.2).
     """
-    if usuario_execucao:
-        argv = [SUDO, "-n", "-u", usuario_execucao, "--", HELPER, "run"]
+    if exec_user:
+        argv = [SUDO, "-n", "-u", exec_user, "--", HELPER, "run"]
         p = subprocess.Popen(argv, shell=False, start_new_session=True, close_fds=True, stdin=subprocess.PIPE,
                              stdout=log_fd, stderr=subprocess.STDOUT, env=dict(_ENV_HELPER))
         try:
             try:
-                p.stdin.write(json.dumps(especificacao, sort_keys=True).encode("utf-8"))
+                p.stdin.write(json.dumps(spec, sort_keys=True).encode("utf-8"))
             finally:
                 p.stdin.close()
         except Exception as e:  # noqa: BLE001 - qualquer falha aqui deixa um grupo vivo sem registro
             raise FailureAfterSpawn(Process(p.pid, process_identity(p.pid), popen=p,
-                                          usuario_execucao=usuario_execucao), e)
+                                          exec_user=exec_user), e)
     else:
-        p = subprocess.Popen(list(especificacao["argv"]), shell=False, start_new_session=True, close_fds=True,
+        p = subprocess.Popen(list(spec["argv"]), shell=False, start_new_session=True, close_fds=True,
                              stdin=subprocess.DEVNULL, stdout=log_fd, stderr=subprocess.STDOUT,
-                             cwd=especificacao.get("cwd"), env=dict(especificacao.get("env") or {}),
-                             preexec_fn=_child_limits(_rlimits(especificacao)))
-    return Process(p.pid, process_identity(p.pid), popen=p, usuario_execucao=usuario_execucao)
+                             cwd=spec.get("cwd"), env=dict(spec.get("env") or {}),
+                             preexec_fn=_child_limits(_rlimits(spec)))
+    return Process(p.pid, process_identity(p.pid), popen=p, exec_user=exec_user)
 
 
 def _reap_helper_requests():
@@ -140,7 +140,7 @@ def _reap_helper_requests():
     _helper_requests[:] = restantes
 
 
-def signal_group(processo, sinal):
+def signal_group(process, signal_value):
     """Envia o sinal ao grupo do processo, sem esperar (CR-007, R-04). True se o pedido saiu.
 
     Identidade desconhecida: nao sinaliza (False). Lider vivo com outra identidade (PID reciclado):
@@ -148,36 +148,36 @@ def signal_group(processo, sinal):
     term/kill <pgid> <process_start>, iniciado sem esperar; o resultado e coletado nas proximas chamadas.
     """
     _reap_helper_requests()
-    if processo.no_identity:
+    if process.no_identity:
         return False
-    if processo.exec_user:
-        sub = "kill" if sinal == signal.SIGKILL else "term"
-        argv = [SUDO, "-n", "-u", processo.exec_user, "--", HELPER, sub, str(processo.pgid),
-                str(processo.identity if processo.identity is not None else 0)]
+    if process.exec_user:
+        sub = "kill" if signal_value == signal.SIGKILL else "term"
+        argv = [SUDO, "-n", "-u", process.exec_user, "--", HELPER, sub, str(process.pgid),
+                str(process.identity if process.identity is not None else 0)]
         p = subprocess.Popen(argv, shell=False, close_fds=True, stdin=subprocess.DEVNULL,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=dict(_ENV_HELPER))
         _helper_requests.append((argv, p))
         return True
-    if process_exists(processo.pid):
-        atual = process_identity(processo.pid)
-        if processo.identity is not None and atual is not None and atual != processo.identity:
+    if process_exists(process.pid):
+        atual = process_identity(process.pid)
+        if process.identity is not None and atual is not None and atual != process.identity:
             return False
     try:
-        os.killpg(processo.pgid, sinal)
+        os.killpg(process.pgid, signal_value)
         return True
     except ProcessLookupError:  # fluxo previsto (AGENTS §6): ESRCH = grupo vazio
         return False
 
 
-def group_alive(processo):
+def group_alive(process):
     """True enquanto o grupo tem membros, inclusive netos depois da saida do lider (CR-007, R-02).
 
     Coleta o lider filho direto com poll() (sem esperar) para que um zumbi nao conte como vivo.
     """
-    if processo.popen is not None:
-        processo.popen.poll()
+    if process.popen is not None:
+        process.popen.poll()
     try:
-        os.killpg(processo.pgid, 0)
+        os.killpg(process.pgid, 0)
         return True
     except ProcessLookupError:  # fluxo previsto: grupo sem membros
         return False
@@ -186,26 +186,26 @@ def group_alive(processo):
         return True
 
 
-def reopen_group(estado):
+def reopen_group(state):
     """Grupo de um ticket que nao e filho do daemon (startup check, README §8.12 passo 9), sem wait().
 
     estado: o .sss_proc (pid, process_start, exec_user). PID vivo com outra identidade: PID
     reciclado, o grupo antigo acabou (None). PID vivo sem identidade legivel: Processo no_identity,
     que nao recebe sinal. Lider morto com o grupo ainda vivo (netos): Processo para o executor encerrar.
     """
-    pid = int(estado["pid"])
-    esperada = estado.get("process_start")
-    usuario = estado.get("exec_user")
+    pid = int(state["pid"])
+    esperada = state.get("process_start")
+    usuario = state.get("exec_user")
     if process_exists(pid):
         atual = process_identity(pid)
         if atual is None:
             _log.warning("ORFAO_SEM_IDENTIDADE pid=%s: identidade ilegivel nesta plataforma", pid,
                          extra={"action": "STARTUP"})
-            return Process(pid, None, usuario_execucao=usuario, sem_identidade=True)
+            return Process(pid, None, exec_user=usuario, no_identity=True)
         if esperada is not None and int(esperada) != atual:
             return None
-        return Process(pid, atual, usuario_execucao=usuario)
-    processo = Process(pid, esperada, usuario_execucao=usuario)
+        return Process(pid, atual, exec_user=usuario)
+    processo = Process(pid, esperada, exec_user=usuario)
     return processo if group_alive(processo) else None
 
 
@@ -213,9 +213,9 @@ def reopen_group(estado):
 # Identidade e existencia de processos
 # -----------------------------------------------------------------------------
 
-def _linux_starttime(conteudo):
+def _linux_starttime(content):
     """Campo 22 (starttime) de /proc/<pid>/stat, contado depois do ULTIMO ')' (o comando pode ter ')')."""
-    resto = conteudo[conteudo.rindex(")") + 2:].split()
+    resto = content[content.rindex(")") + 2:].split()
     # O resto comeca no campo 3 (state): o campo 22 fica na posicao 22 - 3.
     return int(resto[19])
 
@@ -247,17 +247,17 @@ def process_exists(pid):
 # Estado local, diretorios e espaco
 # -----------------------------------------------------------------------------
 
-def write_state(caminho, dados):
+def write_state(path, date):
     """JSON em arquivo temporario + rename, 0600 (.sss_spawn, .sss_proc, .sss_result; CR-008, R-01)."""
-    tmp = "%s.tmp.%d" % (caminho, os.getpid())
+    tmp = "%s.tmp.%d" % (path, os.getpid())
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(dados, f, sort_keys=True)
+            json.dump(date, f, sort_keys=True)
             f.flush()
             os.fsync(f.fileno())
         os.chmod(tmp, 0o600)
-        os.rename(tmp, caminho)
+        os.rename(tmp, path)
     except Exception:
         try:
             os.unlink(tmp)
@@ -266,31 +266,31 @@ def write_state(caminho, dados):
         raise
 
 
-def read_state(caminho):
+def read_state(path):
     """Conteudo do arquivo de estado, ou None se nao existir."""
     try:
-        with open(caminho, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:  # fluxo previsto: estado ainda nao gravado
         return None
 
 
-def create_work_dir(caminho):
+def create_work_dir(path):
     """work_dir/ticket_<id>/ do agente com 0700 (estado local; README §8.4)."""
-    os.makedirs(caminho, mode=0o700, exist_ok=True)
-    os.chmod(caminho, 0o700)
-    return caminho
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    os.chmod(path, 0o700)
+    return path
 
 
-def free_space_mb(caminho):
+def free_space_mb(path):
     """Espaco livre para usuario comum em caminho (f_bavail x f_frsize), em MiB (CR-008, R-25)."""
-    st = os.statvfs(caminho)
+    st = os.statvfs(path)
     return int(st.f_bavail * st.f_frsize // (1024 * 1024))
 
 
-def final_path(caminho):
+def final_path(path):
     """Caminho resolvido (realpath no POSIX)."""
-    return os.path.realpath(caminho)
+    return os.path.realpath(path)
 
 
 # -----------------------------------------------------------------------------
@@ -298,45 +298,45 @@ def final_path(caminho):
 # -----------------------------------------------------------------------------
 
 class _Lock(object):
-    def __init__(self, fd, caminho):
+    def __init__(self, fd, path):
         self.fd = fd
-        self.path = caminho
+        self.path = path
 
 
-def lock_instance(caminho):
+def lock_instance(path):
     """Trava exclusiva nao bloqueante (fcntl.flock LOCK_EX | LOCK_NB); outra instancia: InstanceAlreadyRunning."""
-    fd = os.open(caminho, os.O_RDWR | os.O_CREAT, 0o600)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except (BlockingIOError, PermissionError):
         os.close(fd)
-        raise InstanceAlreadyRunning("Outra instancia do agente ja esta em execucao (%s)" % caminho)
+        raise InstanceAlreadyRunning("Outra instancia do agente ja esta em execucao (%s)" % path)
     os.ftruncate(fd, 0)
     os.write(fd, ("%d\n" % os.getpid()).encode("ascii"))
-    return _Lock(fd, caminho)
+    return _Lock(fd, path)
 
 
-def release_instance(trava):
-    if trava is None:
+def release_instance(lock):
+    if lock is None:
         return
     try:
-        fcntl.flock(trava.fd, fcntl.LOCK_UN)
+        fcntl.flock(lock.fd, fcntl.LOCK_UN)
     finally:
-        os.close(trava.fd)
+        os.close(lock.fd)
 
 
-def _normalize_locale(nome):
-    return (nome or "").strip().lower().replace("-", "")
+def _normalize_locale(name):
+    return (name or "").strip().lower().replace("-", "")
 
 
-def locale_available(nome, executar=None):
+def locale_available(name, run=None):
     """True se o locale consta em `locale -a` (README §8.12 passo 2; CR-007 R-17). C.UTF-8 = C.utf8."""
-    executar = executar or _run_short
+    run = run or _run_short
     try:
-        codigo, saida = executar(["/usr/bin/locale", "-a"])
+        codigo, saida = run(["/usr/bin/locale", "-a"])
     except OSError:  # sem o comando locale: nao da para confirmar
         return False
-    alvo = _normalize_locale(nome)
+    alvo = _normalize_locale(name)
     return codigo == 0 and any(_normalize_locale(l) == alvo for l in saida.splitlines())
 
 
@@ -356,12 +356,12 @@ def install_stop_handler(flag):
 # Validacoes de arquivos, diretorios e caminhos
 # -----------------------------------------------------------------------------
 
-def validate_restricted_file(caminho):
+def validate_restricted_file(path):
     """Segredos (README §4.1): arquivo regular, dono = euid e mode & 0o077 == 0.
 
     Devolve (codigo, st): codigo None se valido, ou 'NAO_REGULAR', 'DONO_INVALIDO' ou 'PERMISSAO_INSEGURA'.
     """
-    st = os.stat(caminho)
+    st = os.stat(path)
     if not stat.S_ISREG(st.st_mode):
         return "NAO_REGULAR", st
     if st.st_uid != os.geteuid():
@@ -371,17 +371,17 @@ def validate_restricted_file(caminho):
     return None, st
 
 
-def _inside(caminho, pasta):
-    return os.path.commonpath([caminho, pasta]) == pasta
+def _inside(path, folder):
+    return os.path.commonpath([path, folder]) == folder
 
 
-def validate_restricted_dir(caminho):
+def validate_restricted_dir(path):
     """log_dir/work_dir (README §8.12 passo 4): existe, e diretorio, e gravavel e fica fora das pastas do
     sistema. Nao exige 0700 (log_dir e as pastas de log sao 0750). Devolve o codigo da falha ou None."""
-    if not isinstance(caminho, str) or not caminho.startswith("/"):
+    if not isinstance(path, str) or not path.startswith("/"):
         return "RELATIVE_PATH"
-    real = os.path.realpath(caminho)
-    if any(_inside(alvo, d) for alvo in (caminho, real) for d in SYSTEM_DIRS):
+    real = os.path.realpath(path)
+    if any(_inside(alvo, d) for alvo in (path, real) for d in SYSTEM_DIRS):
         return "SYSTEM_DIR"
     if not os.path.exists(real):
         return "NOT_FOUND"
@@ -392,20 +392,20 @@ def validate_restricted_dir(caminho):
     return None
 
 
-def _stat_code(caminho):
+def _stat_code(path):
     try:
-        return os.stat(caminho), None
+        return os.stat(path), None
     except OSError as e:
         if e.errno in (errno.EACCES, errno.EPERM):
             return None, "NO_ACCESS"
         return None, "NOT_FOUND"
 
 
-def validate_script_path(caminho):
+def validate_script_path(path):
     """Script no servidor do agente (README §8.0, §8.5; CR-011): vale o arquivo real (o caminho pode ter link
     simbolico), que precisa existir, ser regular e nao ser gravavel por grupo nem por outros. Ciclo de links:
     NOT_FOUND; EACCES: NO_ACCESS. Devolve o codigo ou None."""
-    real = final_path(caminho)
+    real = final_path(path)
     if os.path.islink(real):
         return "NOT_FOUND"  # realpath parou num link: ciclo ou destino inexistente
     st, codigo = _stat_code(real)
@@ -418,10 +418,10 @@ def validate_script_path(caminho):
     return None
 
 
-def validate_interpreter_executable(caminho, dirs_sss=()):
+def validate_interpreter_executable(path, sss_dirs=()):
     """Executavel do interpretador: envolve path_guard.validate_executable (README §8.5, CR-011)."""
     import path_guard
-    return path_guard.validate_executable(caminho, dirs_sss=dirs_sss)
+    return path_guard.validate_executable(path, sss_dirs=sss_dirs)
 
 
 # -----------------------------------------------------------------------------
@@ -435,8 +435,8 @@ def _run_short(argv):
     return p.returncode, p.stdout or ""
 
 
-def validate_execution(exec_users, exec_work_dir, helper=HELPER, executar=_run_short,
-                     usuario_agente=None):
+def validate_execution(exec_users, exec_work_dir, helper=HELPER, run=_run_short,
+                     agent_user=None):
     """Confere o helper, o sudoers e os usuarios de execucao (README §8.0). Devolve a lista de falhas
     (vazia = OK); o agente registra cada uma em CRITICAL e recusa subir.
 
@@ -455,7 +455,7 @@ def validate_execution(exec_users, exec_work_dir, helper=HELPER, executar=_run_s
     except OSError:
         falhas.append("helper %s nao encontrado" % helper)
 
-    agente = usuario_agente or pwd.getpwuid(os.geteuid()).pw_name
+    agente = agent_user or pwd.getpwuid(os.geteuid()).pw_name
     for usuario in sorted(set(u for _amb, u in exec_users)):
         try:
             info = pwd.getpwnam(usuario)
@@ -467,7 +467,7 @@ def validate_execution(exec_users, exec_work_dir, helper=HELPER, executar=_run_s
         if usuario == agente or info.pw_uid == os.geteuid():
             falhas.append("usuario de execucao %s e o proprio usuario do agente" % usuario)
         # O agente confere as proprias regras: "sudo -l <comando>" imprime o caminho se a regra existir.
-        codigo, saida = executar([SUDO, "-n", "-l", "-u", usuario, helper])
+        codigo, saida = run([SUDO, "-n", "-l", "-u", usuario, helper])
         if codigo != 0 or helper not in saida:
             falhas.append("sudo -n -l sem a regra do helper para %s" % usuario)
         pasta = os.path.join(exec_work_dir or "", usuario)
@@ -480,13 +480,13 @@ def validate_execution(exec_users, exec_work_dir, helper=HELPER, executar=_run_s
     return falhas
 
 
-def clean_script_dir(pasta_base, ticket_id, usuario_execucao):
+def clean_script_dir(base_dir, ticket_id, exec_user):
     """Remove o diretorio de trabalho do script pelo helper limpar (CR-008, R-36; README §8.7 passo 6).
 
     So fora de DEV (com usuario de execucao); em DEV a pasta fica dentro de work_dir/ticket_<id>/.
     """
-    codigo, _saida = _run_short([SUDO, "-n", "-u", usuario_execucao, "--", HELPER, "clean",
-                                      pasta_base, str(int(ticket_id))])
+    codigo, _saida = _run_short([SUDO, "-n", "-u", exec_user, "--", HELPER, "clean",
+                                      base_dir, str(int(ticket_id))])
     if codigo != 0:
         raise RuntimeError("helper limpar falhou (codigo %s)" % codigo)
 
@@ -495,19 +495,19 @@ def clean_script_dir(pasta_base, ticket_id, usuario_execucao):
 # Pasta de saida do ticket (CR-012, README §8.13)
 # -----------------------------------------------------------------------------
 
-def _helper_argv(subcomando, args, usuario_execucao=None):
+def _helper_argv(subcommand, args, exec_user=None):
     """Fora de DEV: sudo -n -u <usuario> -- helper <sub>; em DEV: a copia do pacote com o proprio usuario."""
     args = [str(a) for a in args]
-    if usuario_execucao:
-        return [SUDO, "-n", "-u", usuario_execucao, "--", HELPER, subcomando] + args
-    return [sys.executable, "-I", PACKAGE_HELPER, subcomando] + args
+    if exec_user:
+        return [SUDO, "-n", "-u", exec_user, "--", HELPER, subcommand] + args
+    return [sys.executable, "-I", PACKAGE_HELPER, subcommand] + args
 
 
-def create_output_dir(base, relativo):
+def create_output_dir(base, relative):
     """So em DEV sem usuario de execucao: cria base e cada nivel do relativo com 0700, recusando link ou item
     que nao seja diretorio do proprio usuario (fora de DEV, quem cria e o helper run)."""
     atual = None
-    for parte in [base] + relativo.split("/"):
+    for parte in [base] + relative.split("/"):
         atual = parte if atual is None else os.path.join(atual, parte)
         if atual == base:
             os.makedirs(base, 0o700, exist_ok=True)
@@ -523,12 +523,12 @@ def create_output_dir(base, relativo):
     return atual
 
 
-def create_input_dir(base, relativo):
+def create_input_dir(base, relative):
     """So em DEV sem usuario de execucao (CR-014, README §8.14): base e a pasta do script com 0700 se nao existirem,
     recusando link ou item que nao seja diretorio do proprio usuario. A pasta e permanente: a existente fica como
     esta (fora de DEV, quem cria e o helper run)."""
     os.makedirs(base, 0o700, exist_ok=True)
-    pasta = os.path.join(base, relativo)
+    pasta = os.path.join(base, relative)
     try:
         os.mkdir(pasta, 0o700)
     except FileExistsError:  # fluxo previsto: a pasta do script ja existe (tickets anteriores)
@@ -540,29 +540,29 @@ def create_input_dir(base, relativo):
     return pasta
 
 
-def start_pack(base, relativo, max_bytes, max_arquivos, destino_fd, usuario_execucao=None):
+def start_pack(base, relative, max_bytes, max_files, destination_fd, exec_user=None):
     """Inicia o helper empacotar num grupo proprio, com o zip no descritor destino_fd; nao espera.
 
     O agente acompanha por processo.popen.poll() e, no prazo, encerra com signal_group (README §8.13).
     """
-    argv = _helper_argv("pack", [base, relativo, int(max_bytes), int(max_arquivos)], usuario_execucao)
+    argv = _helper_argv("pack", [base, relative, int(max_bytes), int(max_files)], exec_user)
     p = subprocess.Popen(argv, shell=False, start_new_session=True, close_fds=True, stdin=subprocess.DEVNULL,
-                         stdout=destino_fd, stderr=subprocess.DEVNULL, env=dict(_ENV_HELPER))
-    return Process(p.pid, process_identity(p.pid), popen=p, usuario_execucao=usuario_execucao)
+                         stdout=destination_fd, stderr=subprocess.DEVNULL, env=dict(_ENV_HELPER))
+    return Process(p.pid, process_identity(p.pid), popen=p, exec_user=exec_user)
 
 
-def clean_output(base, relativo, usuario_execucao=None):
+def clean_output(base, relative, exec_user=None):
     """Remove a pasta de saida do ticket pelo helper clean-output (sem seguir links)."""
-    codigo, _saida = _run_short(_helper_argv("clean-output", [base, relativo], usuario_execucao))
+    codigo, _saida = _run_short(_helper_argv("clean-output", [base, relative], exec_user))
     if codigo != 0:
         raise RuntimeError("helper clean-output falhou (codigo %s)" % codigo)
 
 
-def purge_output(base, dias, usuario_execucao=None, contar=False):
+def purge_output(base, days, exec_user=None, count_only=False):
     """Retencao das pastas de saida (purge.py, README §11.3): devolve quantas pastas de minuto sairam (ou, com
     contar=True, quantas sairiam: o --dry-run, sem remover nada)."""
-    args = [base, int(dias)] + (["count"] if contar else [])
-    codigo, saida = _run_short(_helper_argv("purge-output", args, usuario_execucao))
+    args = [base, int(days)] + (["count"] if count_only else [])
+    codigo, saida = _run_short(_helper_argv("purge-output", args, exec_user))
     if codigo != 0:
         raise RuntimeError("helper purge-output falhou (codigo %s)" % codigo)
     for linha in saida.splitlines():
@@ -571,14 +571,14 @@ def purge_output(base, dias, usuario_execucao=None, contar=False):
     raise RuntimeError("helper purge-output sem contagem")
 
 
-def validate_output_dirs(pastas_usuarios):
+def validate_output_dirs(user_dirs):
     """Subida fora de DEV (README §8.12, passo 4): cada output_dir/<ambiente> existe, e diretorio (sem link),
     pertence ao usuario de execucao do ambiente e nao tem escrita de grupo nem de outros. Devolve as falhas.
 
     pastas_usuarios: pares (pasta, usuario).
     """
     falhas = []
-    for pasta, usuario in pastas_usuarios:
+    for pasta, usuario in user_dirs:
         try:
             uid = pwd.getpwnam(usuario).pw_uid
         except KeyError:
@@ -598,7 +598,7 @@ def validate_output_dirs(pastas_usuarios):
 # Caso "talvez iniciado" do startup check (CR-008, R-01)
 # -----------------------------------------------------------------------------
 
-def _pids_in_dir(pasta):
+def _pids_in_dir(folder):
     """PIDs do proprio usuario cujo diretorio atual esta em pasta (Linux: /proc/<pid>/cwd)."""
     pids = []
     meu_uid = os.geteuid()
@@ -611,21 +611,21 @@ def _pids_in_dir(pasta):
             cwd = os.readlink("/proc/%s/cwd" % nome)
         except OSError:  # fluxo previsto: processo saiu durante a varredura
             continue
-        if _inside(os.path.normpath(cwd), pasta):
+        if _inside(os.path.normpath(cwd), folder):
             pids.append(int(nome))
     return pids
 
 
-def stop_ticket(pasta_base, ticket_id, usuario_execucao, kill_grace_s):
+def stop_ticket(base_dir, ticket_id, exec_user, kill_grace_s):
     """Encerra os processos do ticket "talvez iniciado" (.sss_spawn sem .sss_proc). Devolve 'OK' ou
     'NAO_SUPORTADO'. Unica operacao que espera (kill_grace_s), porque roda so antes do laco.
 
     Com usuario de execucao: helper stop-ticket (codigo 5 = nao suportado). Em DEV: os processos do
     proprio usuario cujo diretorio atual esta em <base_dir>/ticket_<id>.
     """
-    if usuario_execucao:
-        codigo, saida = _run_short([SUDO, "-n", "-u", usuario_execucao, "--", HELPER, "stop-ticket",
-                                         pasta_base, str(int(ticket_id)), str(int(kill_grace_s))])
+    if exec_user:
+        codigo, saida = _run_short([SUDO, "-n", "-u", exec_user, "--", HELPER, "stop-ticket",
+                                         base_dir, str(int(ticket_id)), str(int(kill_grace_s))])
         if codigo == UNSUPPORTED_CODE:
             return "NAO_SUPORTADO"
         if codigo != 0:
@@ -633,7 +633,7 @@ def stop_ticket(pasta_base, ticket_id, usuario_execucao, kill_grace_s):
         return "OK"
     if NAME != "LINUX" or not os.path.isdir("/proc/self"):
         return "NAO_SUPORTADO"
-    pasta = os.path.normpath(os.path.join(pasta_base, "ticket_%d" % int(ticket_id)))
+    pasta = os.path.normpath(os.path.join(base_dir, "ticket_%d" % int(ticket_id)))
     for sinal in (signal.SIGTERM, signal.SIGKILL):
         pids = _pids_in_dir(pasta)
         for pid in pids:

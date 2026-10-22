@@ -51,8 +51,8 @@ class TestSqlOracle11g(unittest.TestCase):
 
     def test_padroes_12c_detectam_a_sintaxe_proibida(self):
         """Regressao: a regra de OFFSET pega a paginacao 12c e ignora o parametro offset do contrato."""
-        def acusa(texto):
-            return [d for p, d in _PATTERNS_12C if p.search(texto)]
+        def acusa(text):
+            return [d for p, d in _PATTERNS_12C if p.search(text)]
         self.assertTrue(acusa("SELECT id FROM t ORDER BY id OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY"))
         self.assertTrue(acusa("SELECT id FROM t OFFSET :start_ts ROWS"))
         self.assertTrue(acusa("select id from t offset 1 row"))

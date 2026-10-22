@@ -10,7 +10,7 @@ class RepoSchedules(object):
     Sem actor, RepoViolation sem gravar nada.
     """
 
-    def list(self, filtros=None, pagina=1, tamanho=20, escopo_ambientes=None):
+    def list(self, filters=None, page=1, size=20, environment_scope=None):
         """Lista agendamentos paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
 
         Ordem: next_run ASC, id ASC. Os itens trazem parametros_json (excecao documentada no
@@ -22,7 +22,7 @@ class RepoSchedules(object):
         """Retorna dict com dados do agendamento ou lanca RepoNotFound."""
         raise NotImplementedError
 
-    def insert(self, dados, auditoria=None, ator=None):
+    def insert(self, date, audit=None, actor=None):
         """Insere novo agendamento e retorna dict com o registro criado.
 
         Aplica as CKs da tabela (README §10, tabela 12) e grava `auditoria` (dict ator, ip, acao,
@@ -30,7 +30,7 @@ class RepoSchedules(object):
         """
         raise NotImplementedError
 
-    def update(self, id, dados, esperado=None, auditoria=None, ator=None):
+    def update(self, id, date, expected=None, audit=None, actor=None):
         """Atualiza agendamento (com user_id do editor) e retorna dict atualizado.
 
         UPDATE condicional aos valores lidos em `esperado` (RepoConflict se divergirem), CKs
@@ -38,14 +38,14 @@ class RepoSchedules(object):
         """
         raise NotImplementedError
 
-    def pause(self, id, motivo, antiga_data=None, auditoria=None, ator=None):
+    def pause(self, id, reason, old_date=None, audit=None, actor=None):
         """Pausa o agendamento de forma otimista, checando antiga_data se informada (README §7.5 passo 7).
 
         Audita SCHEDULE_PAUSE na mesma operacao: com `auditoria` (ator e ip da UI) ou, sem ela, como SYSTEM.
         """
         raise NotImplementedError
 
-    def resume(self, id, nova_data, esperado=None, auditoria=None, ator=None):
+    def resume(self, id, new_date, expected=None, audit=None, actor=None):
         """Retoma agendamento pausado: active = 'Y', pause_reason nulo e next_run_at = nova_data.
 
         UPDATE condicional aos valores lidos em `esperado` (RepoConflict se divergirem) e `auditoria`

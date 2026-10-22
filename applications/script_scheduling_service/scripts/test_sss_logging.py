@@ -75,7 +75,7 @@ class TestSSSLogging(unittest.TestCase):
         # max_bytes pequeno para forcar rollover rapido
         handler = sss_logging.AppLogRotatingHandler(
             log_dir=log_dir,
-            nome_processo="sss_web",
+            process_name="sss_web",
             max_bytes=300,
             retention_days=30,
             pid=9999
@@ -121,7 +121,7 @@ class TestSSSLogging(unittest.TestCase):
             mock_dt.side_effect = lambda *args, **kw: datetime.datetime(*args, **kw)
             handler = sss_logging.AppLogRotatingHandler(
                 log_dir=log_dir,
-                nome_processo="sss_scheduler",
+                process_name="sss_scheduler",
                 max_bytes=200,
                 retention_days=30,
                 pid=1234
@@ -175,7 +175,7 @@ class TestSSSLogging(unittest.TestCase):
             # Subida do handler deve executar a retencao
             handler = sss_logging.AppLogRotatingHandler(
                 log_dir=log_dir,
-                nome_processo="sss_web",
+                process_name="sss_web",
                 max_bytes=1048576,
                 retention_days=30,
                 pid=5000

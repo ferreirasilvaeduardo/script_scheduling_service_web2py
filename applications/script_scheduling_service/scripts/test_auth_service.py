@@ -24,22 +24,22 @@ ITER_TESTE = 1000
 START = datetime.datetime(2026, 10, 14, 9, 0, 0)
 
 
-def _hash_with_iterations(senha, iteracoes):
+def _hash_with_iterations(password_value, iterations):
     salt = secrets.token_bytes(16)
-    dk = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, iteracoes)
-    return "pbkdf2_sha256$%d$%s$%s" % (iteracoes, salt.hex(), dk.hex())
+    dk = hashlib.pbkdf2_hmac("sha256", password_value.encode("utf-8"), salt, iterations)
+    return "pbkdf2_sha256$%d$%s$%s" % (iterations, salt.hex(), dk.hex())
 
 
 class _Clock(object):
 
-    def __init__(self, agora):
-        self.now = agora
+    def __init__(self, now):
+        self.now = now
 
     def __call__(self):
         return self.now
 
-    def advance(self, segundos):
-        self.now += datetime.timedelta(seconds=segundos)
+    def advance(self, seconds):
+        self.now += datetime.timedelta(seconds=seconds)
 
 
 class TestAuthService(unittest.TestCase):
@@ -69,19 +69,19 @@ class TestAuthService(unittest.TestCase):
         log.addHandler(logging.NullHandler())
         log.propagate = False
         self.service = auth_service.AuthService(
-            usuarios=self.users, rbac_repo=self.rbac, catalogo=repo_factory.get("catalog"),
-            auditoria=self.audit, max_tentativas=MAX, bloqueio_s=LOCKOUT_S, log=log,
+            users=self.users, rbac_repo=self.rbac, catalog=repo_factory.get("catalog"),
+            audit=self.audit, max_attempts=MAX, lockout_s=LOCKOUT_S, log=log,
         )
-        self.users.update(5, {"password_hash": security.hash_password(self.password)}, ator="teste")
-        self.aud_base = max(a["id"] for a in self.audit.list(tamanho=1000)["itens"])
+        self.users.update(5, {"password_hash": security.hash_password(self.password)}, actor="teste")
+        self.aud_base = max(a["id"] for a in self.audit.list(size=1000)["itens"])
 
-    def _actions(self, ator):
-        itens = self.audit.list({"actor": ator}, pagina=1, tamanho=100)["itens"]
-        return [a["action"] for a in itens if a["actor"] == ator and a["id"] > self.aud_base]
+    def _actions(self, actor):
+        itens = self.audit.list({"actor": actor}, page=1, size=100)["itens"]
+        return [a["action"] for a in itens if a["actor"] == actor and a["id"] > self.aud_base]
 
-    def _fail_login(self, login, vezes):
+    def _fail_login(self, login, times):
         resultado = None
-        for _ in range(vezes):
+        for _ in range(times):
             resultado = self.service.authenticate(login, "senha-errada-123", "10.0.0.1")
         return resultado
 
@@ -115,7 +115,7 @@ class TestAuthService(unittest.TestCase):
 
     def test_detalhe_da_falha_com_a_contagem_do_repositorio(self):
         self._fail_login("admin", 2)
-        itens = self.audit.list({"actor": "admin"}, pagina=1, tamanho=100)["itens"]
+        itens = self.audit.list({"actor": "admin"}, page=1, size=100)["itens"]
         detalhes = sorted(a["detail"] for a in itens if a["action"] == "LOGIN_FAILED" and a["id"] > self.aud_base)
         self.assertEqual(detalhes, ["Falha de login: senha incorreta (tentativa 1 de 5)",
                                     "Falha de login: senha incorreta (tentativa 2 de 5)"])
@@ -202,7 +202,7 @@ class TestAuthService(unittest.TestCase):
 
     def test_seed_bloqueado(self):
         self.users.update(6, {"password_hash": security.hash_password(self.password),
-                                  "locked_until": START + datetime.timedelta(minutes=5)}, ator="teste")
+                                  "locked_until": START + datetime.timedelta(minutes=5)}, actor="teste")
         self.assertEqual(self.service.authenticate("bloqueado", self.password, "10.0.0.1"), (None, self.service.lockout_message))
 
     def test_usuario_inativo(self):
@@ -211,15 +211,15 @@ class TestAuthService(unittest.TestCase):
         self.assertEqual(self._actions("inativo"), ["LOGIN_FAILED"])
 
     def test_perfil_inativo(self):
-        self.rbac.profiles_update(4, {"active": "N"}, ator="teste")
+        self.rbac.profiles_update(4, {"active": "N"}, actor="teste")
         self.assertEqual(self.service.authenticate("consulta", self.password, "10.0.0.1"), (None, MSG_GENERIC))
 
     def test_hash_inutilizavel(self):
-        self.users.update(3, {"password_hash": "!"}, ator="teste")
+        self.users.update(3, {"password_hash": "!"}, actor="teste")
         self.assertEqual(self.service.authenticate("op.hml", "!", "10.0.0.1"), (None, MSG_GENERIC))
 
     def test_rehash(self):
-        self.users.update(1, {"password_hash": _hash_with_iterations(self.password, ITER_TESTE // 2)}, ator="teste")
+        self.users.update(1, {"password_hash": _hash_with_iterations(self.password, ITER_TESTE // 2)}, actor="teste")
         antes = self.users.get_by_id(1)["password_changed_at"]
         ctx, msg = self.service.authenticate("admin", self.password, "10.0.0.1")
         self.assertIsNone(msg)
@@ -241,7 +241,7 @@ class TestAuthService(unittest.TestCase):
         self.assertEqual(acoes.count("LOGIN_LOCKED"), 1)
 
     def test_rehash_na_mesma_operacao_do_sucesso(self):
-        self.users.update(1, {"password_hash": _hash_with_iterations(self.password, ITER_TESTE // 2)}, ator="teste")
+        self.users.update(1, {"password_hash": _hash_with_iterations(self.password, ITER_TESTE // 2)}, actor="teste")
         with mock.patch.object(self.users, "update", side_effect=AssertionError("rehash separado")):
             _ctx, msg = self.service.authenticate("admin", self.password, "10.0.0.1")
         self.assertIsNone(msg)
@@ -261,7 +261,7 @@ class TestAuthService(unittest.TestCase):
     def test_auditoria_sem_senha(self):
         self.service.authenticate("admin", self.password, "10.0.0.1")
         self.service.authenticate("admin", "senha-errada-123", "10.0.0.1")
-        for reg in self.audit.list(tamanho=1000)["itens"]:
+        for reg in self.audit.list(size=1000)["itens"]:
             self.assertNotIn(self.password, reg.get("detail") or "")
             self.assertNotIn("senha-errada-123", reg.get("detail") or "")
             self.assertNotIn("pbkdf2", reg.get("detail") or "")
@@ -287,19 +287,19 @@ class TestAuthService(unittest.TestCase):
         sessao = self._session("consulta")
         self.assertNotIn("EXEC_SCRIPT", self.service.revalidate(sessao)["features"])
         matriz = self.rbac.matrix_get(4)
-        self.rbac.matrix_save(4, list(matriz["funcs"]) + [1], matriz["ambs"], matriz["scrs"], ator="teste")
+        self.rbac.matrix_save(4, list(matriz["funcs"]) + [1], matriz["ambs"], matriz["scrs"], actor="teste")
         ctx = self.service.revalidate(sessao)
         self.assertIn("EXEC_SCRIPT", ctx["features"])
         self.assertGreater(ctx["perm_version"], sessao["perm_versao"])
 
-    def _last_logout(self, ator):
-        itens = [r for r in self.audit.list({"action": "LOGOUT"}, pagina=1, tamanho=10)["itens"]
-                 if r["actor"] == ator and r["id"] > self.aud_base]
+    def _last_logout(self, actor):
+        itens = [r for r in self.audit.list({"action": "LOGOUT"}, page=1, size=10)["itens"]
+                 if r["actor"] == actor and r["id"] > self.aud_base]
         return itens[0] if itens else None
 
     def test_revalidar_usuario_inativo(self):
         sessao = self._session("op.prod")
-        self.users.update(2, {"active": "N"}, ator="teste")
+        self.users.update(2, {"active": "N"}, actor="teste")
         self.assertIsNone(self.service.revalidate(sessao, "10.9.9.9"))
         aud = self._last_logout("op.prod")
         self.assertEqual(aud["detail"], u"sessão encerrada pela revalidação: usuário inativo")
@@ -307,7 +307,7 @@ class TestAuthService(unittest.TestCase):
 
     def test_revalidar_perfil_inativo(self):
         sessao = self._session("consulta")
-        self.rbac.profiles_update(4, {"active": "N"}, ator="teste")
+        self.rbac.profiles_update(4, {"active": "N"}, actor="teste")
         self.assertIsNone(self.service.revalidate(sessao))
         self.assertEqual(self._last_logout("consulta")["detail"],
                          u"sessão encerrada pela revalidação: perfil inativo")
@@ -351,7 +351,7 @@ class TestSeedDev(unittest.TestCase):
 
     def _hashes(self):
         repo = repo_factory.get("users")
-        return dict((u["login"], u["password_hash"]) for u in repo.list(tamanho=100)["itens"])
+        return dict((u["login"], u["password_hash"]) for u in repo.list(size=100)["itens"])
 
     def test_sem_variavel_logins_impossiveis(self):
         with mock.patch.dict(os.environ):

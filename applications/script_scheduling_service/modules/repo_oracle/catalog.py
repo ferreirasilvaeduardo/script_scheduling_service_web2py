@@ -191,17 +191,17 @@ _SQL_EXEC_PROFILE = (
 )
 
 
-def _like_contains(valor, maiusculas):
+def _like_contains(value, uppercase):
     """Trecho para LIKE ... ESCAPE '\\': '%' e '_' digitados contam como literais (como no FAKE)."""
-    v = valor.upper() if maiusculas else valor.lower()
+    v = value.upper() if uppercase else value.lower()
     v = v.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return "%" + v + "%"
 
 
-def _page_size(pagina, tamanho):
+def _page_size(page, size):
     # Valor nao numerico propaga ValueError/TypeError, como no FAKE: o controller valida antes.
-    p = 1 if pagina is None else int(pagina)
-    t = 20 if tamanho is None else int(tamanho)
+    p = 1 if page is None else int(page)
+    t = 20 if size is None else int(size)
     if p < 1:
         p = 1
     if t < 1:
@@ -209,22 +209,22 @@ def _page_size(pagina, tamanho):
     return p, t
 
 
-def _equal(atual, esperado):
+def _equal(current_value, expected):
     """Comparacao nula-segura do 'esperado' ('' e NULL no Oracle; DATE sem fracao)."""
-    if atual == "":
-        atual = None
-    if esperado == "":
-        esperado = None
-    if isinstance(atual, datetime.datetime) and isinstance(esperado, datetime.datetime):
-        return atual.replace(microsecond=0) == esperado.replace(microsecond=0)
-    return atual == esperado
+    if current_value == "":
+        current_value = None
+    if expected == "":
+        expected = None
+    if isinstance(current_value, datetime.datetime) and isinstance(expected, datetime.datetime):
+        return current_value.replace(microsecond=0) == expected.replace(microsecond=0)
+    return current_value == expected
 
 
 class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
     """Repositorio de catalogo com SQL Oracle 11gR2."""
 
-    def __init__(self, cfg=None, segredos=None):
-        super(RepoCatalogOracle, self).__init__(cfg=cfg, segredos=segredos)
+    def __init__(self, cfg=None, secrets=None):
+        super(RepoCatalogOracle, self).__init__(cfg=cfg, secrets=secrets)
         self._idents = {
             "env": self.qualify_table("environments"),
             "scr": self.qualify_table("scripts"),
@@ -252,14 +252,14 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
     # Utilitarios
     # -------------------------------------------------------------------------
 
-    def _ck(self, entidade, sufixo):
-        return self.constraint_name("ck", entidade, sufixo)
+    def _ck(self, entity, suffix):
+        return self.constraint_name("ck", entity, suffix)
 
-    def _sql_dinamico(self, modelo, **partes):
+    def _sql_dinamico(self, template, **parts):
         """Completa um modelo com identificadores e clausulas fixas (allowlist) montadas pelo codigo."""
         valores = dict(self._idents)
-        valores.update(partes)
-        return modelo.format(**valores)
+        valores.update(parts)
+        return template.format(**valores)
 
     def _executar(self, cur, sql, binds=None):
         if binds is None:
@@ -284,18 +284,18 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
         finally:
             cur.close()
 
-    def _listar(self, conn, modelo_lista, modelo_conta, cols, clausulas, binds, pagina, tamanho, extras=()):
+    def _listar(self, conn, list_template, count_template, cols, clauses, binds, page, size, extras=()):
         """Paginacao ROWNUM (AGENTS §4.4) e COUNT limitado a 10.001 na mesma leitura."""
-        p, t = _page_size(pagina, tamanho)
+        p, t = _page_size(page, size)
         inicio = (p - 1) * t
-        where = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
-        where_count = " AND ".join(list(clausulas) + ["ROWNUM <= " + str(_LIMIT_TOTAL)])
-        sql_lista = self._sql_dinamico(modelo_lista, where=where)
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        where_count = " AND ".join(list(clauses) + ["ROWNUM <= " + str(_LIMIT_TOTAL)])
+        sql_lista = self._sql_dinamico(list_template, where=where)
         sql_pag = (
             "SELECT * FROM (SELECT a.*, ROWNUM rn FROM (" + sql_lista + ") a WHERE ROWNUM <= :end_ts) "
             "WHERE rn > :start_ts"
         )
-        sql_conta = self._sql_dinamico(modelo_conta, where_count=where_count)
+        sql_conta = self._sql_dinamico(count_template, where_count=where_count)
         cur = conn.cursor()
         try:
             cur.execute(sql_conta, binds)
@@ -316,30 +316,30 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             "total_limitado": bruto >= _LIMIT_TOTAL,
         }
 
-    def _auditar(self, conn, auditoria, entidade, entidade_id):
-        write_audit(conn, self._tbl_aud, self._seq_aud, auditoria, entidade, entidade_id)
+    def _auditar(self, conn, audit, entity, entity_id):
+        write_audit(conn, self._tbl_aud, self._seq_aud, audit, entity, entity_id)
 
-    def _conferir_esperado(self, atual, esperado, rotulo, id):
-        for campo, valor in (esperado or {}).items():
-            if not _equal(atual.get(campo), valor):
-                raise repo_errors.RepoConflict("%s ID %s alterado por outra operacao (%s)" % (rotulo, id, campo))
+    def _conferir_esperado(self, current_value, expected, label, id):
+        for campo, valor in (expected or {}).items():
+            if not _equal(current_value.get(campo), valor):
+                raise repo_errors.RepoConflict("%s ID %s alterado por outra operacao (%s)" % (label, id, campo))
 
     # -------------------------------------------------------------------------
     # Ambientes (tbsss_environments)
     # -------------------------------------------------------------------------
 
-    def environments_list(self, filtros=None, pagina=1, tamanho=20, conn=None):
+    def environments_list(self, filters=None, page=1, size=20, conn=None):
         """Lista ambientes paginados por nome ASC, id ASC."""
-        filtros = filtros or {}
+        filters = filters or {}
         clausulas, binds = [], {}
-        if filtros.get("name"):
+        if filters.get("name"):
             clausulas.append("UPPER(name) LIKE :name_f ESCAPE '\\'")
-            binds["name_f"] = _like_contains(filtros["name"], maiusculas=True)
-        if filtros.get("active"):
+            binds["name_f"] = _like_contains(filters["name"], uppercase=True)
+        if filters.get("active"):
             clausulas.append("active = :active_f")
-            binds["active_f"] = filtros["active"]
+            binds["active_f"] = filters["active"]
         with self.read_context(conn=conn) as c:
-            return self._listar(c, _SQL_ENV_LIST, _SQL_ENV_COUNT, _COLS_ENV, clausulas, binds, pagina, tamanho)
+            return self._listar(c, _SQL_ENV_LIST, _SQL_ENV_COUNT, _COLS_ENV, clausulas, binds, page, size)
 
     def environments_get(self, id, conn=None):
         """Retorna dict do ambiente pelo ID ou lanca RepoNotFound."""
@@ -349,15 +349,15 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             raise repo_errors.RepoNotFound("Ambiente ID %s nao encontrado" % id)
         return reg
 
-    def environments_insert(self, dados, auditoria=None, ator=None, conn=None):
+    def environments_insert(self, date, audit=None, actor=None, conn=None):
         """Insere ambiente (CKs, UK e DSN sem credencial) e audita na mesma transacao."""
-        ator_limpo = validate_record_actor(auditoria, ator)
-        nome = dados.get("name")
+        ator_limpo = validate_record_actor(audit, actor)
+        nome = date.get("name")
         if not nome or not _RE_ENV_NAME.match(nome):
             raise repo_errors.RepoViolation("Nome de ambiente invalido (esperado: 1-30 chars [A-Z0-9_])",
                                            constraint=self._ck("environments", "name"))
-        conexao = dados.get("connection")
-        ativo = dados.get("active", "Y")
+        conexao = date.get("connection")
+        ativo = date.get("active", "Y")
 
         with self.write_transaction(conn=conn) as c:
             # Mesma ordem do FAKE: UK antes das CKs. ck_..._amb_nome garante maiusculas, entao a
@@ -375,39 +375,39 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             cur = c.cursor()
             try:
                 cur.execute(self._sql["ENV_INSERT"], {
-                    "id": aid, "name": nome, "description": dados.get("description", ""),
+                    "id": aid, "name": nome, "description": date.get("description", ""),
                     "connection": conexao, "active": ativo, "actor": ator_limpo,
                 })
             finally:
                 cur.close()
-            self._auditar(c, auditoria, "tbsss_environments", aid)
+            self._auditar(c, audit, "tbsss_environments", aid)
             return self.environments_get(aid, conn=c)
 
-    def environments_update(self, id, dados, esperado=None, auditoria=None, ator=None, conn=None):
+    def environments_update(self, id, date, expected=None, audit=None, actor=None, conn=None):
         """Altera ambiente (nome imutavel, tr_tbsss_env_bu), condicional a 'esperado'."""
-        ator_limpo = validate_record_actor(auditoria, ator)
+        ator_limpo = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             atual = self._uma(c, self._sql["ENV_GET_LOCK"], {"id": int(id)}, _COLS_ENV)
             if atual is None:
                 raise repo_errors.RepoNotFound("Ambiente ID %s nao encontrado" % id)
-            self._conferir_esperado(atual, esperado, "Ambiente", id)
+            self._conferir_esperado(atual, expected, "Ambiente", id)
 
-            novo_nome = dados.get("name")
+            novo_nome = date.get("name")
             if novo_nome is not None and novo_nome != atual["name"]:
                 raise repo_errors.RepoViolation("Nome de ambiente e imutavel",
                                                constraint=self.trigger_name("environments", "bu"))
             novo = dict(atual)
-            novo_conexao = dados.get("connection")
+            novo_conexao = date.get("connection")
             if novo_conexao is not None:
                 if "@" in novo_conexao:
                     raise repo_errors.RepoViolation("Conexao nao pode conter credencial (@)",
                                                    constraint=self._ck("environments", "connection"))
                 novo["connection"] = novo_conexao
-            elif "connection" in dados:
+            elif "connection" in date:
                 novo["connection"] = None
-            if "description" in dados:
-                novo["description"] = dados["description"]
-            novo_ativo = dados.get("active")
+            if "description" in date:
+                novo["description"] = date["description"]
+            novo_ativo = date.get("active")
             if novo_ativo is not None:
                 if novo_ativo not in ("Y", "N"):
                     raise repo_errors.RepoViolation("Flag ativo deve ser 'Y' ou 'N'",
@@ -424,7 +424,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                     raise repo_errors.RepoConflict("Ambiente ID %s alterado por outra operacao" % id)
             finally:
                 cur.close()
-            self._auditar(c, auditoria, "tbsss_environments", int(id))
+            self._auditar(c, audit, "tbsss_environments", int(id))
             return self.environments_get(id, conn=c)
 
     # -------------------------------------------------------------------------
@@ -450,20 +450,20 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             nomes.sort()
         return resultado
 
-    def scripts_list(self, filtros=None, pagina=1, tamanho=20, conn=None):
+    def scripts_list(self, filters=None, page=1, size=20, conn=None):
         """Lista scripts por nome ASC, id ASC, com ambientes_homologados e qtd_parametros."""
-        filtros = filtros or {}
+        filters = filters or {}
         clausulas, binds = [], {}
-        if filtros.get("name"):
+        if filters.get("name"):
             clausulas.append("LOWER(s.name) LIKE :name_f ESCAPE '\\'")
-            binds["name_f"] = _like_contains(filtros["name"], maiusculas=False)
+            binds["name_f"] = _like_contains(filters["name"], uppercase=False)
         for chave in ("script_group", "category", "interpreter", "active"):
-            if filtros.get(chave):
+            if filters.get(chave):
                 clausulas.append("s." + chave + " = :" + chave + "_f")
-                binds[chave + "_f"] = filtros[chave]
+                binds[chave + "_f"] = filters[chave]
         with self.read_context(conn=conn) as c:
             pagina_ = self._listar(c, _SQL_SCR_LIST, _SQL_SCR_COUNT, _COLS_SCR, clausulas, binds,
-                                   pagina, tamanho, extras=("qtd_parametros",))
+                                   page, size, extras=("qtd_parametros",))
             homolog = self._homologados_por_script(c, [it["id"] for it in pagina_["itens"]])
         for item in pagina_["itens"]:
             item["ambientes_homologados"] = homolog.get(item["id"], [])
@@ -501,15 +501,15 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             raise repo_errors.RepoViolation("timeout_seg deve ser maior que zero",
                                            constraint=self._ck("scripts", "tmout"))
 
-    def _nome_script_livre(self, conn, nome, id_atual):
-        if self._existe(conn, self._sql["SCR_NAME_IN_USE"], {"name": nome, "id": id_atual}):
-            raise repo_errors.RepoViolation("Script com nome '%s' ja existe" % nome,
+    def _nome_script_livre(self, conn, name, current_id):
+        if self._existe(conn, self._sql["SCR_NAME_IN_USE"], {"name": name, "id": current_id}):
+            raise repo_errors.RepoViolation("Script com nome '%s' ja existe" % name,
                                            constraint=self.constraint_name("uk", "scripts", "name"))
 
-    def _flags_dos_parametros(self, conn, parametro_ids):
+    def _flags_dos_parametros(self, conn, parameter_ids):
         """Trava os parametros (scripts -> parametros) e devolve {id: param_nomeado}; ausente = FK."""
         flags = {}
-        for pid in parametro_ids:
+        for pid in parameter_ids:
             cur = conn.cursor()
             try:
                 cur.execute(self._sql["PRM_LOCK_FLAG"], {"id": pid})
@@ -522,17 +522,17 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             flags[pid] = row[1]
         return flags
 
-    def _regras_tipo_param(self, tipo_param, flags):
+    def _regras_tipo_param(self, param_type, flags):
         # README §6.3: NENHUM nao aceita vinculos; NOMEADO exige flag em todo parametro vinculado.
-        if tipo_param == "NONE" and flags:
+        if param_type == "NONE" and flags:
             raise repo_errors.RepoViolation("Script NENHUM com vinculos", constraint="sss_scr_nenhum_vinculado")
-        if tipo_param == "NAMED":
+        if param_type == "NAMED":
             for pid in flags:
                 if not flags[pid]:
                     raise repo_errors.RepoViolation("Parametro sem flag em script NOMEADO",
                                                    constraint="sss_scr_nomeado_sem_flag")
 
-    def _binds_script(self, reg, ator):
+    def _binds_script(self, reg, actor):
         tmout = reg.get("timeout_s")
         return {
             "name": reg["name"], "description": reg.get("description"), "script_group": reg.get("script_group"),
@@ -542,13 +542,13 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             "max_parallel_env": int(reg.get("max_parallel_env", 1)),
             "timeout_s": int(tmout) if tmout is not None else None,
             "active": reg.get("active", "Y"),
-            "actor": ator,
+            "actor": actor,
         }
 
-    def scripts_insert(self, dados, auditoria=None, ator=None, conn=None):
+    def scripts_insert(self, date, audit=None, actor=None, conn=None):
         """Insere script (CKs, UK sensivel a maiusculas) e audita na mesma transacao."""
-        ator_limpo = validate_record_actor(auditoria, ator)
-        base = dict(dados)
+        ator_limpo = validate_record_actor(audit, actor)
+        base = dict(date)
         base.setdefault("description", "")
         self._validar_script(base)
         with self.write_transaction(conn=conn) as c:
@@ -561,19 +561,19 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                 cur.execute(self._sql["SCR_INSERT"], binds)
             finally:
                 cur.close()
-            self._auditar(c, auditoria, "tbsss_scripts", sid)
+            self._auditar(c, audit, "tbsss_scripts", sid)
             return self.scripts_get(sid, conn=c)
 
-    def scripts_update(self, id, dados, esperado=None, auditoria=None, ator=None, conn=None):
+    def scripts_update(self, id, date, expected=None, audit=None, actor=None, conn=None):
         """Altera script (CKs, esperado nulo-seguro e regras de tipo_param x vinculos)."""
-        ator_limpo = validate_record_actor(auditoria, ator)
+        ator_limpo = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             atual = self._uma(c, self._sql["SCR_GET_LOCK"], {"id": int(id)}, _COLS_SCR)
             if atual is None:
                 raise repo_errors.RepoNotFound("Script ID %s nao encontrado" % id)
-            self._conferir_esperado(atual, esperado, "Script", id)
+            self._conferir_esperado(atual, expected, "Script", id)
 
-            mudancas = dict((k, dados[k]) for k in _FIELDS_SCR_UPDATABLE if k in dados)
+            mudancas = dict((k, date[k]) for k in _FIELDS_SCR_UPDATABLE if k in date)
             novo = dict(atual)
             novo.update(mudancas)
             self._validar_script(novo)
@@ -597,7 +597,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                     raise repo_errors.RepoConflict("Script ID %s alterado por outra operacao" % id)
             finally:
                 cur.close()
-            self._auditar(c, auditoria, "tbsss_scripts", int(id))
+            self._auditar(c, audit, "tbsss_scripts", int(id))
             return self.scripts_get(id, conn=c)
 
     # -------------------------------------------------------------------------
@@ -616,11 +616,11 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             finally:
                 cur.close()
 
-    def homologation_save(self, script_id, ambiente_ids, esperado=None, auditoria=None, ator=None, conn=None):
+    def homologation_save(self, script_id, environment_ids, expected=None, audit=None, actor=None, conn=None):
         """Substitui as homologacoes por diferenca (CR-006, R-f), sob o lock do script."""
-        ator_limpo = validate_record_actor(auditoria, ator)
+        ator_limpo = validate_record_actor(audit, actor)
         sid = int(script_id)
-        ids = sorted(set(int(x) for x in (ambiente_ids or [])))
+        ids = sorted(set(int(x) for x in (environment_ids or [])))
         with self.write_transaction(conn=conn) as c:
             if not self._existe(c, self._sql["SCR_LOCK"], {"id": sid}):
                 raise repo_errors.RepoNotFound("Script ID %s nao encontrado" % script_id)
@@ -630,7 +630,7 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                 atuais = dict((r[1], r[0]) for r in cur.fetchall())
             finally:
                 cur.close()
-            if esperado is not None and sorted(int(x) for x in esperado) != sorted(atuais):
+            if expected is not None and sorted(int(x) for x in expected) != sorted(atuais):
                 raise repo_errors.RepoConflict("Homologacao do script ID %s alterada por outra operacao" % script_id)
             for aid in ids:
                 if not self._existe(c, self._sql["ENV_EXISTS"], {"id": aid}):
@@ -653,30 +653,30 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                     cur.execute(self._sql["SCR_STAMP"], {"id": sid, "actor": ator_limpo})
             finally:
                 cur.close()
-            self._auditar(c, auditoria, "tbsss_scripts", sid)
+            self._auditar(c, audit, "tbsss_scripts", sid)
             return self.homologation_get(sid, conn=c)
 
     # -------------------------------------------------------------------------
     # Parametros (tbsss_parameters)
     # -------------------------------------------------------------------------
 
-    def parameters_list(self, filtros=None, pagina=1, tamanho=20, conn=None):
+    def parameters_list(self, filters=None, page=1, size=20, conn=None):
         """Lista parametros por codigo ASC, id ASC, com qtd_scripts na mesma consulta."""
-        filtros = filtros or {}
+        filters = filters or {}
         clausulas, binds = [], {}
-        if filtros.get("code"):
+        if filters.get("code"):
             clausulas.append("LOWER(p.code) LIKE :code_f ESCAPE '\\'")
-            binds["code_f"] = _like_contains(filtros["code"], maiusculas=False)
-        if filtros.get("label"):
+            binds["code_f"] = _like_contains(filters["code"], uppercase=False)
+        if filters.get("label"):
             clausulas.append("LOWER(p.label) LIKE :label_f ESCAPE '\\'")
-            binds["label_f"] = _like_contains(filtros["label"], maiusculas=False)
+            binds["label_f"] = _like_contains(filters["label"], uppercase=False)
         for chave in ("component_type", "active"):
-            if filtros.get(chave):
+            if filters.get(chave):
                 clausulas.append("p." + chave + " = :" + chave + "_f")
-                binds[chave + "_f"] = filtros[chave]
+                binds[chave + "_f"] = filters[chave]
         with self.read_context(conn=conn) as c:
             return self._listar(c, _SQL_PRM_LIST, _SQL_PRM_COUNT, _COLS_PRM, clausulas, binds,
-                                pagina, tamanho, extras=("qtd_scripts",))
+                                page, size, extras=("qtd_scripts",))
 
     def parameters_get(self, id, conn=None):
         """Retorna dict do parametro pelo ID ou lanca RepoNotFound."""
@@ -686,31 +686,31 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             raise repo_errors.RepoNotFound("Parametro ID %s nao encontrado" % id)
         return reg
 
-    def _validar_flags_parametro(self, campo, valor):
-        if valor not in ("Y", "N"):
-            sufixo = "sens" if campo == "sensitive" else "active"
-            raise repo_errors.RepoViolation("Flag %s deve ser 'Y' ou 'N'" % campo,
+    def _validar_flags_parametro(self, field, value):
+        if value not in ("Y", "N"):
+            sufixo = "sens" if field == "sensitive" else "active"
+            raise repo_errors.RepoViolation("Flag %s deve ser 'Y' ou 'N'" % field,
                                            constraint=self._ck("parameters", sufixo))
 
-    def _validar_tipo_componente(self, valor):
-        if valor not in ("TEXT", "NUMBER", "DATE", "SELECT", "CHECKBOX"):
+    def _validar_tipo_componente(self, value):
+        if value not in ("TEXT", "NUMBER", "DATE", "SELECT", "CHECKBOX"):
             raise repo_errors.RepoViolation("Tipo de componente invalido", constraint=self._ck("parameters", "ctype"))
 
     def _validar_flag_nomeado(self, flag):
         if flag is not None and not _RE_PRM_FLAG.match(flag):
             raise repo_errors.RepoViolation("Flag param_nomeado invalida", constraint=self._ck("parameters", "flag"))
 
-    def parameters_insert(self, dados, auditoria=None, ator=None, conn=None):
+    def parameters_insert(self, date, audit=None, actor=None, conn=None):
         """Insere parametro (CKs e UK) e audita na mesma transacao."""
-        ator_limpo = validate_record_actor(auditoria, ator)
-        codigo = dados.get("code")
+        ator_limpo = validate_record_actor(audit, actor)
+        codigo = date.get("code")
         if not codigo or not _RE_PRM_CODE.match(codigo):
             raise repo_errors.RepoViolation("Codigo de parametro invalido (esperado: 1-30 chars [a-z0-9_])",
                                            constraint=self._ck("parameters", "code"))
-        tcomp = dados.get("component_type")
-        flag = dados.get("param_flag") or None
-        sens = dados.get("sensitive", "N")
-        ativo = dados.get("active", "Y")
+        tcomp = date.get("component_type")
+        flag = date.get("param_flag") or None
+        sens = date.get("sensitive", "N")
+        ativo = date.get("active", "Y")
         with self.write_transaction(conn=conn) as c:
             # Mesma ordem do FAKE: a UK e conferida antes das demais CKs.
             if self._existe(c, self._sql["PRM_BY_CODE"], {"code": codigo}):
@@ -724,39 +724,39 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             cur = c.cursor()
             try:
                 cur.execute(self._sql["PRM_INSERT"], {
-                    "id": pid, "code": codigo, "param_flag": flag, "label": dados.get("label", ""),
-                    "description": dados.get("description", ""), "component_type": tcomp,
-                    "options_json": dados.get("options_json"), "default_value": dados.get("default_value"),
-                    "validation_regex": dados.get("validation_regex"), "sensitive": sens, "active": ativo,
+                    "id": pid, "code": codigo, "param_flag": flag, "label": date.get("label", ""),
+                    "description": date.get("description", ""), "component_type": tcomp,
+                    "options_json": date.get("options_json"), "default_value": date.get("default_value"),
+                    "validation_regex": date.get("validation_regex"), "sensitive": sens, "active": ativo,
                     "actor": ator_limpo,
                 })
             finally:
                 cur.close()
-            self._auditar(c, auditoria, "tbsss_parameters", pid)
+            self._auditar(c, audit, "tbsss_parameters", pid)
             return self.parameters_get(pid, conn=c)
 
-    def parameters_update(self, id, dados, esperado=None, auditoria=None, ator=None, conn=None):
+    def parameters_update(self, id, date, expected=None, audit=None, actor=None, conn=None):
         """Altera parametro com as regras de dependencia de vinculo na mesma transacao."""
-        ator_limpo = validate_record_actor(auditoria, ator)
+        ator_limpo = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             atual = self._uma(c, self._sql["PRM_GET_LOCK"], {"id": int(id)}, _COLS_PRM)
             if atual is None:
                 raise repo_errors.RepoNotFound("Parametro ID %s nao encontrado" % id)
-            self._conferir_esperado(atual, esperado, "Parametro", id)
+            self._conferir_esperado(atual, expected, "Parametro", id)
 
-            mudancas = dict((k, dados[k]) for k in ("label", "description", "options_json", "default_value",
-                                                    "validation_regex") if k in dados)
-            if "param_flag" in dados:
-                flag = dados["param_flag"] or None
+            mudancas = dict((k, date[k]) for k in ("label", "description", "options_json", "default_value",
+                                                    "validation_regex") if k in date)
+            if "param_flag" in date:
+                flag = date["param_flag"] or None
                 self._validar_flag_nomeado(flag)
                 mudancas["param_flag"] = flag
-            if "component_type" in dados:
-                self._validar_tipo_componente(dados["component_type"])
-                mudancas["component_type"] = dados["component_type"]
+            if "component_type" in date:
+                self._validar_tipo_componente(date["component_type"])
+                mudancas["component_type"] = date["component_type"]
             for campo in ("sensitive", "active"):
-                if campo in dados:
-                    self._validar_flags_parametro(campo, dados[campo])
-                    mudancas[campo] = dados[campo]
+                if campo in date:
+                    self._validar_flags_parametro(campo, date[campo])
+                    mudancas[campo] = date[campo]
 
             # Regras de dependencia (README §10) sob o lock do parametro.
             cur = c.cursor()
@@ -789,15 +789,15 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                     raise repo_errors.RepoConflict("Parametro ID %s alterado por outra operacao" % id)
             finally:
                 cur.close()
-            self._auditar(c, auditoria, "tbsss_parameters", int(id))
+            self._auditar(c, audit, "tbsss_parameters", int(id))
             return self.parameters_get(id, conn=c)
 
-    def parameter_links(self, parametro_id, conn=None):
+    def parameter_links(self, parameter_id, conn=None):
         """Retorna os scripts vinculados ao parametro (verificacao de desativacao)."""
         with self.read_context(conn=conn) as c:
             cur = c.cursor()
             try:
-                cur.execute(self._sql["PRM_LINKS"], {"parameter_id": int(parametro_id)})
+                cur.execute(self._sql["PRM_LINKS"], {"parameter_id": int(parameter_id)})
                 return [self.tuple_to_dict(_COLS_SCR, r) for r in cur.fetchall()]
             finally:
                 cur.close()
@@ -826,9 +826,9 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
             resultado.append(item)
         return resultado
 
-    def script_params_save(self, script_id, vinculos, esperado=None, auditoria=None, ator=None, conn=None):
+    def script_params_save(self, script_id, links, expected=None, audit=None, actor=None, conn=None):
         """Substitui os vinculos do script, preservando o created_* de quem continua (CR-006, R-f)."""
-        ator_limpo = validate_record_actor(auditoria, ator)
+        ator_limpo = validate_record_actor(audit, actor)
         sid = int(script_id)
         with self.write_transaction(conn=conn) as c:
             script = self._uma(c, self._sql["SCR_GET_LOCK"], {"id": sid}, _COLS_SCR)
@@ -840,14 +840,14 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                 anteriores_lista = [self.tuple_to_dict(_COLS_SPRM, r) for r in cur.fetchall()]
             finally:
                 cur.close()
-            if esperado is not None:
+            if expected is not None:
                 lidos = [(v["parameter_id"], v["sort_order"], v["required"], v.get("default_value_override"))
                          for v in anteriores_lista]
-                if [tuple(e) for e in esperado] != lidos:
+                if [tuple(e) for e in expected] != lidos:
                     raise repo_errors.RepoConflict("Vinculos do script ID %s alterados por outra operacao" % script_id)
 
             params_vistos, ordens_vistas, novos = set(), set(), []
-            for item in (vinculos or []):
+            for item in (links or []):
                 pid = int(item["parameter_id"])
                 if not self._existe(c, self._sql["PRM_EXISTS"], {"id": pid}):
                     raise repo_errors.RepoViolation("Parametro ID %s nao existe" % pid,
@@ -921,26 +921,26 @@ class RepoCatalogOracle(BaseRepoOracle, RepoCatalog):
                     cur.executemany(sql, lote)
                 finally:
                     cur.close()
-            self._auditar(c, auditoria, "tbsss_scripts", sid)
+            self._auditar(c, audit, "tbsss_scripts", sid)
             return self.script_params_get(sid, conn=c)
 
     # -------------------------------------------------------------------------
     # Scripts executaveis (README §4.3.A)
     # -------------------------------------------------------------------------
 
-    def executable_scripts(self, usuario_ctx, conn=None):
+    def executable_scripts(self, user_ctx, conn=None):
         """Scripts que o usuario pode executar em ao menos um ambiente, numa unica consulta.
 
         Admin dispensa perfil_scr/perfil_amb (dimensoes 1 a 3), nunca a homologacao em ambiente ativo.
         Os demais exigem EXEC_SCRIPT no contexto; a matriz vem do banco pelo perfil_id (README §4.3.A).
         """
-        usuario_ctx = usuario_ctx or {}
-        is_admin = usuario_ctx.get("is_admin") in ("Y", True)
+        user_ctx = user_ctx or {}
+        is_admin = user_ctx.get("is_admin") in ("Y", True)
         if is_admin:
             sql, binds = self._sql["EXEC_ADMIN"], None
         else:
-            funcs = usuario_ctx.get("features") or set()
-            perfil_id = usuario_ctx.get("profile_id")
+            funcs = user_ctx.get("features") or set()
+            perfil_id = user_ctx.get("profile_id")
             if "EXEC_SCRIPT" not in funcs or perfil_id is None:
                 return []
             sql, binds = self._sql["EXEC_PROFILE"], {"profile_id": int(perfil_id)}

@@ -28,16 +28,16 @@ _CSP = (
 )
 
 
-def _bundle(*partes):
-    return "(()=>{" + "".join(partes) + "})();"
+def _bundle(*parts):
+    return "(()=>{" + "".join(parts) + "})();"
 
 
 class TestCheckAlpineCsp(unittest.TestCase):
 
-    def assertRejects(self, fonte, trecho):
-        ok, detalhe = check_env.check_alpine_csp(fonte)
+    def assertRejects(self, source, snippet):
+        ok, detalhe = check_env.check_alpine_csp(source)
         self.assertFalse(ok, detalhe)
-        self.assertIn(trecho, detalhe)
+        self.assertIn(snippet, detalhe)
 
     def test_build_padrao_reprovado(self):
         self.assertRejects(_bundle(_PATTERN, _CSP, "B.setEvaluator(gt);"), "construtor dinâmico em 'kn'")

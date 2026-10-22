@@ -68,9 +68,9 @@ ROLES = ("web", "agent", "monitor")
 _log = logging.getLogger("sss_config")
 
 
-def is_blocked_variable(nome):
+def is_blocked_variable(name):
     """Verdadeiro se a variavel nao pode ir para o ambiente do script (lista de bloqueio ou chave fixa)."""
-    alto = nome.upper()
+    alto = name.upper()
     if alto in BLOCKED_ENV_VARS:
         return True
     if alto.startswith(_BLOCKED_PREFIXES) and alto != _ALLOWED_LD:
@@ -277,11 +277,11 @@ class Config(_ItemAccessMixin, collections.namedtuple("Config", [
     __slots__ = ()
 
 
-def _convert_value(secao, chave, cdef, raw_val):
+def _convert_value(section_name, key_name, cdef, raw_val):
     """Converte e valida um valor individual com base em CampoDef."""
     if raw_val is None:
         if cdef.required:
-            raise ConfigError(secao, chave, "Chave obrigatoria ausente")
+            raise ConfigError(section_name, key_name, "Chave obrigatoria ausente")
         return cdef.default
 
     val_str = str(raw_val).strip()
@@ -289,11 +289,11 @@ def _convert_value(secao, chave, cdef, raw_val):
     if cdef.kind == "str":
         if not val_str:
             if cdef.required:
-                raise ConfigError(secao, chave, "Valor obrigatorio nao pode ser vazio")
+                raise ConfigError(section_name, key_name, "Valor obrigatorio nao pode ser vazio")
             return cdef.default
         if cdef.regex and not re.fullmatch(cdef.regex, val_str):
             raise ConfigError(
-                secao, chave,
+                section_name, key_name,
                 "Valor '%s' nao atende ao padrao exigido '%s'" % (val_str, cdef.regex)
             )
         return val_str
@@ -301,28 +301,28 @@ def _convert_value(secao, chave, cdef, raw_val):
     elif cdef.kind == "path":
         if not val_str:
             if cdef.required:
-                raise ConfigError(secao, chave, "Caminho obrigatorio nao pode ser vazio")
+                raise ConfigError(section_name, key_name, "Caminho obrigatorio nao pode ser vazio")
             return cdef.default
         return os.path.normpath(val_str)
 
     elif cdef.kind == "int":
         if not val_str:
             if cdef.required:
-                raise ConfigError(secao, chave, "Valor inteiro obrigatorio ausente")
+                raise ConfigError(section_name, key_name, "Valor inteiro obrigatorio ausente")
             return cdef.default
         try:
             val_int = int(val_str)
         except ValueError:
-            raise ConfigError(secao, chave, "Valor inteiro invalido: '%s'" % val_str)
+            raise ConfigError(section_name, key_name, "Valor inteiro invalido: '%s'" % val_str)
 
         if cdef.min_val is not None and val_int < cdef.min_val:
             raise ConfigError(
-                secao, chave,
+                section_name, key_name,
                 "Valor %d abaixo do minimo permitido (%d)" % (val_int, cdef.min_val)
             )
         if cdef.max_val is not None and val_int > cdef.max_val:
             raise ConfigError(
-                secao, chave,
+                section_name, key_name,
                 "Valor %d acima do maximo permitido (%d)" % (val_int, cdef.max_val)
             )
         return val_int
@@ -330,23 +330,23 @@ def _convert_value(secao, chave, cdef, raw_val):
     elif cdef.kind == "bool":
         if not val_str:
             if cdef.required:
-                raise ConfigError(secao, chave, "Valor booleano obrigatorio ausente")
+                raise ConfigError(section_name, key_name, "Valor booleano obrigatorio ausente")
             return cdef.default
         low = val_str.lower()
         if low in ("true", "1", "yes", "on"):
             return True
         elif low in ("false", "0", "no", "off"):
             return False
-        raise ConfigError(secao, chave, "Valor booleano invalido: '%s'" % val_str)
+        raise ConfigError(section_name, key_name, "Valor booleano invalido: '%s'" % val_str)
 
     elif cdef.kind == "enum":
         if not val_str:
             if cdef.required:
-                raise ConfigError(secao, chave, "Valor obrigatorio ausente")
+                raise ConfigError(section_name, key_name, "Valor obrigatorio ausente")
             return cdef.default
         if cdef.allowed_values and val_str not in cdef.allowed_values:
             raise ConfigError(
-                secao, chave,
+                section_name, key_name,
                 "Valor '%s' invalido. Permitidos: %s" % (
                     val_str, ", ".join(cdef.allowed_values)
                 )
@@ -356,12 +356,12 @@ def _convert_value(secao, chave, cdef, raw_val):
     elif cdef.kind == "list_csv":
         if not val_str:
             if cdef.required:
-                raise ConfigError(secao, chave, "Lista obrigatoria nao pode ser vazia")
+                raise ConfigError(section_name, key_name, "Lista obrigatoria nao pode ser vazia")
             return cdef.default
 
         partes = [p.strip() for p in val_str.split(",") if p.strip()]
         if cdef.required and not partes:
-            raise ConfigError(secao, chave, "Lista obrigatoria nao pode ser vazia")
+            raise ConfigError(section_name, key_name, "Lista obrigatoria nao pode ser vazia")
 
         return tuple(partes)
 
@@ -369,39 +369,39 @@ def _convert_value(secao, chave, cdef, raw_val):
         # "CHAVE=valor,CHAVE=valor" -> tupla de pares, na ordem, sem chave repetida.
         if not val_str:
             if cdef.required:
-                raise ConfigError(secao, chave, "Lista obrigatoria nao pode ser vazia")
+                raise ConfigError(section_name, key_name, "Lista obrigatoria nao pode ser vazia")
             return cdef.default
         pares = []
         vistas = set()
         for item in [p.strip() for p in val_str.split(",") if p.strip()]:
             if item.count("=") != 1:
-                raise ConfigError(secao, chave, "Item invalido (esperado CHAVE=valor): '%s'" % item)
+                raise ConfigError(section_name, key_name, "Item invalido (esperado CHAVE=valor): '%s'" % item)
             k, v = [x.strip() for x in item.split("=")]
             if not k or not v:
-                raise ConfigError(secao, chave, "Item invalido (esperado CHAVE=valor): '%s'" % item)
+                raise ConfigError(section_name, key_name, "Item invalido (esperado CHAVE=valor): '%s'" % item)
             if k in vistas:
-                raise ConfigError(secao, chave, "Chave repetida: '%s'" % k)
+                raise ConfigError(section_name, key_name, "Chave repetida: '%s'" % k)
             vistas.add(k)
             pares.append((k, v))
         return tuple(pares)
 
-    raise ConfigError(secao, chave, "Tipo de campo desconhecido no schema: '%s'" % cdef.kind)
+    raise ConfigError(section_name, key_name, "Tipo de campo desconhecido no schema: '%s'" % cdef.kind)
 
 
-def load(caminho_ini):
+def load(ini_path):
     """Carrega e valida o config.ini de forma declarativa e fail-fast.
 
     Retorna uma instancia imutavel de Config.
     """
-    if not os.path.exists(caminho_ini):
-        raise ConfigError(reason="Arquivo de configuracao nao encontrado: %s" % caminho_ini)
+    if not os.path.exists(ini_path):
+        raise ConfigError(reason="Arquivo de configuracao nao encontrado: %s" % ini_path)
 
     cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
     try:
-        with open(caminho_ini, "r", encoding="utf-8") as f:
+        with open(ini_path, "r", encoding="utf-8") as f:
             cp.read_file(f)
     except Exception as e:
-        raise ConfigError(reason="Erro ao ler arquivo de configuracao %s: %s" % (caminho_ini, e))
+        raise ConfigError(reason="Erro ao ler arquivo de configuracao %s: %s" % (ini_path, e))
 
     # 1. Validar secoes desconhecidas
     for sec in cp.sections():
@@ -517,12 +517,12 @@ def call_timeout_s(call_timeout_ms):
     return (int(call_timeout_ms) + 999) // 1000
 
 
-def _inside(caminho, pasta):
-    caminho, pasta = os.path.normpath(caminho), os.path.normpath(pasta)
-    return os.path.commonpath([caminho, pasta]) == pasta
+def _inside(path, folder):
+    path, folder = os.path.normpath(path), os.path.normpath(folder)
+    return os.path.commonpath([path, folder]) == folder
 
 
-def _validate_cr007(app, oracle, agent, logging_dict, retencao):
+def _validate_cr007(app, oracle, agent, logging_dict, retention):
     """Validacoes cruzadas do CR-007: invariantes I3/I4, execucao, retencao e purge."""
     call_s = call_timeout_s(oracle["call_timeout_ms"])
     i3 = agent["heartbeat_interval_s"] + 2 * call_s
@@ -592,15 +592,15 @@ def _validate_cr007(app, oracle, agent, logging_dict, retencao):
                 raise ConfigError(section="agent", key="input_dir",
                                  reason="Nao pode ficar dentro de %s nem conte-lo" % nome)
 
-    if retencao["audit_retention_days"] < retencao["ticket_retention_days"]:
+    if retention["audit_retention_days"] < retention["ticket_retention_days"]:
         raise ConfigError(section="retention", key="audit_retention_days",
                          reason="audit_retention_days (%d) deve ser >= ticket_retention_days (%d)" % (
-                             retencao["audit_retention_days"], retencao["ticket_retention_days"]))
+                             retention["audit_retention_days"], retention["ticket_retention_days"]))
     if app["sss_env"] != "DEV" and oracle["user"].upper() == oracle["owner"].upper():
         # CR-008, R-29: a conta da aplicacao nunca e a dona do esquema fora de DEV (D1b do CR-007).
         raise ConfigError(section="oracle", key="user",
                          reason="Fora de DEV, a conta da aplicacao deve ser diferente do owner do esquema")
-    purge = retencao["purge_user"]
+    purge = retention["purge_user"]
     if not purge:
         # Em DEV, purge_user vazio significa purge desligado (scripts/purge.py recusa rodar; README §12.1).
         if app["sss_env"] != "DEV":
@@ -610,14 +610,14 @@ def _validate_cr007(app, oracle, agent, logging_dict, retencao):
                              reason="A conta de purge deve ser diferente da conta do processo e do owner")
 
 
-def check_encoding(nome_log=None, log_dir=None):
+def check_encoding(log_name=None, log_dir=None):
     """Aborta (ConfigErro) se a codificacao do sistema de arquivos nao for UTF-8 (CR-007, R-17)."""
     cod = (sys.getfilesystemencoding() or "").lower().replace("-", "")
     if cod != "utf8":
         exc = ConfigError(reason="Codificacao do sistema de arquivos '%s' nao e UTF-8: exporte LANG/LC_ALL "
                                 "(por exemplo C.UTF-8) antes de iniciar (README §12.2)" % sys.getfilesystemencoding())
-        if nome_log:
-            _abort(nome_log, exc, log_dir)
+        if log_name:
+            _abort(log_name, exc, log_dir)
         raise exc
 
 
@@ -731,8 +731,8 @@ class Secrets(object):
     def environments(self):
         return self._environments
 
-    def get_environment(self, nome):
-        return self._environments.get(nome)
+    def get_environment(self, name):
+        return self._environments.get(name)
 
     def __getitem__(self, item):
         if item == "oracle":
@@ -769,11 +769,11 @@ class Secrets(object):
         return "<Segredos: ***redacted***>"
 
 
-def _other_role_section(papel, secao, env):
+def _other_role_section(role, section_name, env):
     """Secao que pertence a outro papel (README §4.1, CR-007 D1b): erro em HML/PROD, WARN nos demais casos."""
-    motivo = "Secao [%s] nao pertence ao papel '%s' (README §4.1)" % (secao, papel)
+    motivo = "Secao [%s] nao pertence ao papel '%s' (README §4.1)" % (section_name, role)
     if env in ("HML", "PROD"):
-        raise ConfigError(section=secao, key=None, reason=motivo)
+        raise ConfigError(section=section_name, key=None, reason=motivo)
     _log.warning("secrets.cfg: %s; ignorada fora de HML/PROD", motivo)
 
 
@@ -797,26 +797,26 @@ def _monitor_secrets(cp, env):
                     monitor=EnvironmentSecret(user=valores["user"], password=valores["password"]))
 
 
-def load_secrets(caminho, cfg=None, sss_env=None, data_backend=None, papel="web"):
+def load_secrets(path, cfg=None, sss_env=None, data_backend=None, role="web"):
     """Valida e carrega segredos de arquivo com modo 0600 e ownership restrito.
 
     papel ('web' ou 'agent', CR-007 D1b) define as secoes obrigatorias e as proibidas (README §4.1).
     A aplicacao usa sempre o Oracle, entao [oracle] password e obrigatoria para web e agente.
     data_backend='FAKE' so pode vir como parametro explicito de teste (DEV), nunca do config.ini.
     """
-    if papel not in ROLES:
-        raise ConfigError(reason="Papel de segredos invalido: %r" % (papel,))
-    if not os.path.exists(caminho):
-        raise ConfigError(reason="Arquivo de segredos nao encontrado: %s" % caminho)
+    if role not in ROLES:
+        raise ConfigError(reason="Papel de segredos invalido: %r" % (role,))
+    if not os.path.exists(path):
+        raise ConfigError(reason="Arquivo de segredos nao encontrado: %s" % path)
 
     import os_platform
     try:
-        codigo, st = os_platform.validate_restricted_file(caminho)
+        codigo, st = os_platform.validate_restricted_file(path)
     except OSError as e:
-        raise ConfigError(reason="Erro ao obter informacoes do arquivo de segredos %s: %s" % (caminho, e))
+        raise ConfigError(reason="Erro ao obter informacoes do arquivo de segredos %s: %s" % (path, e))
 
     if codigo == "NAO_REGULAR":
-        raise ConfigError(reason="Arquivo de segredos deve ser um arquivo regular: %s" % caminho)
+        raise ConfigError(reason="Arquivo de segredos deve ser um arquivo regular: %s" % path)
 
     if codigo == "DONO_INVALIDO":
         raise ConfigError(
@@ -841,17 +841,17 @@ def load_secrets(caminho, cfg=None, sss_env=None, data_backend=None, papel="web"
 
     cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
     try:
-        with open(caminho, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             cp.read_file(f)
     except Exception as e:
-        raise ConfigError(reason="Erro ao ler arquivo de segredos %s: %s" % (caminho, e))
+        raise ConfigError(reason="Erro ao ler arquivo de segredos %s: %s" % (path, e))
 
-    if papel == "monitor":
+    if role == "monitor":
         return _monitor_secrets(cp, env)
 
     # [web] cookie_key: obrigatorio no papel web e proibido no agente (README §4.1)
     cookie_key = None
-    if papel == "web":
+    if role == "web":
         if "web" not in cp.sections():
             raise ConfigError(section="web", key=None, reason="Secao [web] obrigatoria ausente em secrets.cfg")
         if "cookie_key" not in cp["web"]:
@@ -860,7 +860,7 @@ def load_secrets(caminho, cfg=None, sss_env=None, data_backend=None, papel="web"
         if not cookie_key:
             raise ConfigError(section="web", key="cookie_key", reason="cookie_key nao pode ser vazio")
     elif "web" in cp.sections():
-        _other_role_section(papel, "web", env)
+        _other_role_section(role, "web", env)
 
     # [oracle] password: em DEV e FAKE e opcional; obrigatorio para web e agente
     oracle_password = None
@@ -881,8 +881,8 @@ def load_secrets(caminho, cfg=None, sss_env=None, data_backend=None, papel="web"
     # [purge] password: so no papel agente (o purge.py roda no servidor do agente)
     purge_password = None
     if "purge" in cp.sections():
-        if papel != "agent":
-            _other_role_section(papel, "purge", env)
+        if role != "agent":
+            _other_role_section(role, "purge", env)
         else:
             purge_password = (cp["purge"].get("password") or "").strip() or None
             if purge_password is None:
@@ -890,7 +890,7 @@ def load_secrets(caminho, cfg=None, sss_env=None, data_backend=None, papel="web"
 
     # [monitor]: so no papel monitor (CR-008, E3), tratado em _segredos_monitor
     if "monitor" in cp.sections():
-        _other_role_section(papel, "monitor", env)
+        _other_role_section(role, "monitor", env)
 
     # [environment:<NOME>]: so no papel agente
     ambientes = {}
@@ -898,8 +898,8 @@ def load_secrets(caminho, cfg=None, sss_env=None, data_backend=None, papel="web"
         if sec in ("oracle", "web", "purge", "monitor"):
             continue
         if sec.startswith("environment:"):
-            if papel != "agent":
-                _other_role_section(papel, sec, env)
+            if role != "agent":
+                _other_role_section(role, sec, env)
                 if env in ("HML", "PROD"):
                     continue
             nome = sec.split(":", 1)[1].strip()
@@ -922,7 +922,7 @@ def load_secrets(caminho, cfg=None, sss_env=None, data_backend=None, papel="web"
         else:
             raise ConfigError(section=sec, key=None, reason="Secao desconhecida em secrets.cfg: [%s]" % sec)
 
-    if papel == "agent" and cfg is not None and env != "DEV":
+    if role == "agent" and cfg is not None and env != "DEV":
         faltando = [a for a in cfg.agent.environments if a not in ambientes]
         if faltando:
             raise ConfigError(section="ambiente", key=None,
@@ -956,11 +956,11 @@ def default_config_path():
     return os.path.join(app_dir, "instance", "config.ini")
 
 
-def _raw_log_dir(caminho_ini):
+def _raw_log_dir(ini_path):
     """[logging] log_dir lido sem validacao, so para registrar o CRITICAL de uma configuracao invalida."""
     try:
         cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
-        with open(caminho_ini, "r", encoding="utf-8") as f:
+        with open(ini_path, "r", encoding="utf-8") as f:
             cp.read_file(f)
         valor = cp.get("logging", "log_dir", fallback="").strip()
         return valor or None
@@ -968,12 +968,12 @@ def _raw_log_dir(caminho_ini):
         return None
 
 
-def _abort(nome_log, exc, log_dir):
+def _abort(log_name, exc, log_dir):
     import sss_logging
-    sss_logging.log_initial_critical(nome_log, "Subida abortada: configuracao invalida: %s" % exc, log_dir)
+    sss_logging.log_initial_critical(log_name, "Subida abortada: configuracao invalida: %s" % exc, log_dir)
 
 
-def get_config(nome_log=None, caminho=None):
+def get_config(log_name=None, path=None):
     """Retorna a configuracao validada, carregada uma unica vez por processo.
 
     Com nome_log ('sss_web' ou 'sss_scheduler'), uma falha e registrada em CRITICAL antes de
@@ -982,13 +982,13 @@ def get_config(nome_log=None, caminho=None):
     """
     global _CONFIG_CACHE
     if _CONFIG_CACHE is None:
-        caminho = caminho or default_config_path()
+        path = path or default_config_path()
         try:
             # Corrida entre threads do servidor web apenas recarrega o mesmo arquivo imutavel.
-            _CONFIG_CACHE = load(caminho)
+            _CONFIG_CACHE = load(path)
         except ConfigError as exc:
-            if nome_log:
-                _abort(nome_log, exc, _raw_log_dir(caminho))
+            if log_name:
+                _abort(log_name, exc, _raw_log_dir(path))
             raise
     return _CONFIG_CACHE
 
@@ -1002,7 +1002,7 @@ def reset_config_cache():
 _SECRETS_CACHE = None
 
 
-def get_secrets(nome_log=None, papel="web"):
+def get_secrets(log_name=None, role="web"):
     """Retorna os segredos validados de [secrets] secrets_file, carregados uma unica vez por processo.
 
     papel: 'web' (nó web) ou 'agent' (daemon e purge), README §4.1.
@@ -1010,12 +1010,12 @@ def get_secrets(nome_log=None, papel="web"):
     """
     global _SECRETS_CACHE
     if _SECRETS_CACHE is None:
-        cfg = get_config(nome_log)
+        cfg = get_config(log_name)
         try:
-            _SECRETS_CACHE = load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel=papel)
+            _SECRETS_CACHE = load_secrets(cfg.secrets.secrets_file, cfg=cfg, role=role)
         except ConfigError as exc:
-            if nome_log:
-                _abort(nome_log, exc, cfg.logging.log_dir)
+            if log_name:
+                _abort(log_name, exc, cfg.logging.log_dir)
             raise
     return _SECRETS_CACHE
 

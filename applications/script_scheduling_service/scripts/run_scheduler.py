@@ -26,11 +26,11 @@ import sss_logging  # noqa: E402
 _DAEMON_LOGGERS = ("sss_db_conn", "sss_config")
 
 
-def _wait(parada):
+def _wait(stop_event):
     """A unica espera do daemon, entre iteracoes (no maximo 1 s, README §8.1); volta logo se a parada chegar."""
-    def esperar(segundos):
-        if segundos > 0 and not parada.is_set():
-            time.sleep(segundos)
+    def esperar(seconds):
+        if seconds > 0 and not stop_event.is_set():
+            time.sleep(seconds)
     return esperar
 
 
@@ -39,7 +39,7 @@ def main(argv=None):
     parser.add_argument("--config", dest="config", default=None, help="config.ini do agente (padrao: instance/)")
     args = parser.parse_args(argv)
     try:
-        cfg = sss_config.get_config(nome_log="sss_scheduler", caminho=args.config)
+        cfg = sss_config.get_config(log_name="sss_scheduler", path=args.config)
     except sss_config.ConfigError:  # o CRITICAL ja foi registrado (README §12.1)
         return scheduler_loop.EXIT_CONFIG
     logger = sss_logging.configure("sss_scheduler", cfg)
@@ -54,7 +54,7 @@ def main(argv=None):
     agente = scheduler_loop.Agent(cfg=cfg)
     try:
         agente.initialize()
-        return agente.run(parada, esperar=_wait(parada))
+        return agente.run(parada, wait=_wait(parada))
     except scheduler_loop.StartupFailure as falha:
         return falha.code
     finally:

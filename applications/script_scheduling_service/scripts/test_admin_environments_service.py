@@ -52,10 +52,10 @@ class _Base(unittest.TestCase):
         self.ctx = dict((login, auth.revalidate(sessao)) for login, sessao in SESSIONS.items())
         self.svc = AdminEnvironmentsService(self.catalog, repo_factory.get("schedules"), self.log)
         # O seed ja tem auditorias de environments: so contam as gravadas pelo teste.
-        self.aud_base = max([a["id"] for a in self.audit.list(pagina=1, tamanho=1000)["itens"]] or [0])
+        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
 
-    def _audits(self, acao):
-        return [a for a in self.audit.list(filtros={"action": acao}, pagina=1, tamanho=100)["itens"]
+    def _audits(self, action):
+        return [a for a in self.audit.list(filters={"action": action}, page=1, size=100)["itens"]
                 if a["entity"] == "tbsss_environments" and a["id"] > self.aud_base]
 
     def _insert(self, name="QA_01", description="Ambiente de QA", connection="db-qa.local:1521/svc"):
@@ -121,7 +121,7 @@ class TestInsert(_Base):
             self.assertEqual(erros, {"name": svc_mod.MSG_NAME_INVALID}, nome)
         aid, erros = self._insert(name="")
         self.assertEqual(erros, {"name": svc_mod.MSG_NAME_REQUIRED})
-        self.assertEqual(self.catalog.environments_list(pagina=1, tamanho=100)["total"], 8)
+        self.assertEqual(self.catalog.environments_list(page=1, size=100)["total"], 8)
 
     def test_dsn_com_credencial_rejeitado(self):
         for dsn in ("usuario/senha@host", "app/s3cr3t@db01:1521/svc", "@db"):
@@ -150,10 +150,10 @@ class TestEdit(_Base):
     def _form(self, aid=AMB_HOMOLOGACAO):
         return self.svc.form(self.ctx["admin"], str(aid))
 
-    def _save(self, form, **mudancas):
+    def _save(self, form, **changes):
         dados = {"name": form["name"], "description": form["description"], "connection": form["connection"],
                  "version": form["version"]}
-        dados.update(mudancas)
+        dados.update(changes)
         return self.svc.save(self.ctx["admin"], IP, str(form["id"]), dados)
 
     def test_alteracao_auditada_campo_antigo_novo(self):
@@ -197,7 +197,7 @@ class TestEdit(_Base):
         def obter_e_concorrer(aid):
             lido = original(aid)
             # Outra sessao grava depois da leitura do service e antes do UPDATE condicional.
-            self.catalog.environments_update(aid, {"description": "Concorrente"}, ator="teste")
+            self.catalog.environments_update(aid, {"description": "Concorrente"}, actor="teste")
             return lido
 
         with mock.patch.object(self.catalog, "environments_get", side_effect=obter_e_concorrer):

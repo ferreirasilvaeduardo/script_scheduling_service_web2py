@@ -34,11 +34,11 @@ _TICKET_QUEUE_NO_SERVER = 4
 _TICKET_NO_PID = 16
 
 
-def _large_log(inicio):
+def _large_log(start):
     # ~2 MB em UTF-8, com acentos, para exercitar a leitura por offset e o download.
     linhas = []
     for i in range(1, _LINES_LOG_LARGE + 1):
-        quando = inicio + datetime.timedelta(seconds=i // 100)
+        quando = start + datetime.timedelta(seconds=i // 100)
         linhas.append(u"[%s] lote %06d/%06d: registros validados \u2014 situa\u00e7\u00e3o OK\n"
                       % (quando, i, _LINES_LOG_LARGE))
     return u"".join(linhas)
@@ -55,19 +55,19 @@ def _compiler_links(store, script_id):
     return vinculos
 
 
-def _compile_seed(store, script_id, agora):
+def _compile_seed(store, script_id, now):
     """Snapshot e respostas resolvidas reais do script (README §2.5: seed coerente com as regras)."""
     vinculos = _compiler_links(store, script_id)
-    snapshot, resolvidos, erros = params_compiler.compile_snapshot(store.scripts[script_id], vinculos, {}, agora)
+    snapshot, resolvidos, erros = params_compiler.compile_snapshot(store.scripts[script_id], vinculos, {}, now)
     if erros:
         raise ValueError("seed incoerente: script %s nao compila (%s)" % (script_id, sorted(erros)))
     return snapshot, resolvidos, vinculos
 
 
-def _params_json(resolvidos):
+def _params_json(resolved):
     """parametros_json de agendamento: respostas resolvidas, nulos omitidos, CHECKBOX como texto (README §7.6)."""
     obj = {}
-    for codigo, valor in resolvidos.items():
+    for codigo, valor in resolved.items():
         if valor is None:
             continue
         obj[codigo] = ("true" if valor else "false") if isinstance(valor, bool) else valor
@@ -79,8 +79,8 @@ _REGISTRIES = ("environments", "profiles", "features", "profile_feature", "profi
               "script_env", "users", "parameters", "script_param", "schedules")
 
 
-def _between(valor, minimo, maximo):
-    return max(minimo, min(valor, maximo))
+def _between(value, minimum, maximum):
+    return max(minimum, min(value, maximum))
 
 
 def _stamp_record(store, base_dt):
@@ -165,7 +165,7 @@ def _seed_outputs(store):
     store.seqs["tbsss_ticket_output"] = len(linhas)
 
 
-def load_seed(store, forcar=False, senha_dev=None):
+def load_seed(store, force=False, dev_password=None):
     """Carrega dados iniciais deterministicos no store FAKE de forma idempotente.
 
     senha_dev: senha comum dos usuarios de demonstracao (exceto inativo e bloqueado),
@@ -178,7 +178,7 @@ def load_seed(store, forcar=False, senha_dev=None):
                     with store.lock_schedules:
                         with store.lock_audit:
                             with store.lock_agents:
-                                if store.environments and not forcar:
+                                if store.environments and not force:
                                     return
 
                                 store.reset()
@@ -248,8 +248,8 @@ def load_seed(store, forcar=False, senha_dev=None):
                                 for u in usuarios:
                                     u["created_at"] = base_dt - datetime.timedelta(days=60)
                                     u["session_epoch"] = 0
-                                    if senha_dev is not None and u["login"] not in _NO_PASSWORD_DEV:
-                                        u["password_hash"] = security.hash_password(senha_dev)
+                                    if dev_password is not None and u["login"] not in _NO_PASSWORD_DEV:
+                                        u["password_hash"] = security.hash_password(dev_password)
                                     store.users[u["id"]] = u
                                 store.seqs["tbsss_users"] = 6
 

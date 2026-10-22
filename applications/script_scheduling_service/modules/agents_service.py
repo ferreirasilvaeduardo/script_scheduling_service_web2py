@@ -35,31 +35,31 @@ _HEALTH = {
 Thresholds = collections.namedtuple("Thresholds", "heartbeat_interval_s fence_timeout_s node_offline_timeout_s")
 
 
-def health(agente, agora, limiares):
+def health(agent, now, thresholds):
     """Codigo de saude do agente: OK, DELAYED, AT_RISK ou OFFLINE.
 
     OK: idade < 2 x heartbeat_interval_s; DELAYED: ate fence_timeout_s; AT_RISK: ate
     node_offline_timeout_s; OFFLINE: alem disso, sem heartbeat ou com status PARADO.
     """
-    if agente.get("status") == "STOPPED":
+    if agent.get("status") == "STOPPED":
         return OFFLINE
-    hb = agente.get("heartbeat_at")
+    hb = agent.get("heartbeat_at")
     if hb is None:
         return OFFLINE
-    idade = max(0, int((agora - hb).total_seconds()))
-    if idade < 2 * limiares.heartbeat_interval_s:
+    idade = max(0, int((now - hb).total_seconds()))
+    if idade < 2 * thresholds.heartbeat_interval_s:
         return OK
-    if idade <= limiares.fence_timeout_s:
+    if idade <= thresholds.fence_timeout_s:
         return DELAYED
-    if idade <= limiares.node_offline_timeout_s:
+    if idade <= thresholds.node_offline_timeout_s:
         return AT_RISK
     return OFFLINE
 
 
-def health_info(codigo):
+def health_info(code):
     """{codigo, rotulo, classe, icone, descricao} da saude, para badge e legenda."""
-    rotulo, classe, icone, descricao = _HEALTH[codigo]
-    return {"code": codigo, "rotulo": rotulo, "classe": classe, "icone": icone, "description": descricao}
+    rotulo, classe, icone, descricao = _HEALTH[code]
+    return {"code": code, "rotulo": rotulo, "classe": classe, "icone": icone, "description": descricao}
 
 
 def legend():
@@ -67,62 +67,62 @@ def legend():
     return [health_info(c) for c in HEALTH_ORDER]
 
 
-def format_age(segundos):
+def format_age(seconds):
     """'há N s' ate 2 min; depois minutos, horas ou dias inteiros; None vira 'sem heartbeat'."""
-    if segundos is None:
+    if seconds is None:
         return u"sem heartbeat"
-    if segundos < 120:
-        return u"há %d s" % segundos
-    if segundos < 7200:
-        return u"há %d min" % (segundos // 60)
-    if segundos < 172800:
-        return u"há %d h" % (segundos // 3600)
-    return u"há %d dias" % (segundos // 86400)
+    if seconds < 120:
+        return u"há %d s" % seconds
+    if seconds < 7200:
+        return u"há %d min" % (seconds // 60)
+    if seconds < 172800:
+        return u"há %d h" % (seconds // 3600)
+    return u"há %d dias" % (seconds // 86400)
 
 
 class AgentsService(object):
     """Painel de agentes com repositorios, relogio, limiares e log injetados."""
 
-    def __init__(self, agentes, catalogo, relogio, limiares, log, config_criticos):
-        self._agents = agentes
-        self._catalog = catalogo
-        self._clock = relogio
-        self._thresholds = limiares
+    def __init__(self, agents, catalog, clock, thresholds, log, config_criticos):
+        self._agents = agents
+        self._catalog = catalog
+        self._clock = clock
+        self._thresholds = thresholds
         self._log = log
         self._critical_config = config_criticos
 
     def _script_names(self):
-        pagina = self._catalog.scripts_list(pagina=1, tamanho=1000)
+        pagina = self._catalog.scripts_list(page=1, size=1000)
         return dict((s["id"], s["name"]) for s in pagina["itens"])
 
-    def _tickets(self, codigo, agora, nomes):
+    def _tickets(self, code, now, names):
         itens = []
-        for t in self._agents.tickets_running(codigo):
+        for t in self._agents.tickets_running(code):
             hb = t.get("heartbeat_at")
             itens.append({
                 "id": t["id"],
-                "script_nome": nomes.get(t.get("script_id"), u"#%s" % t.get("script_id")),
+                "script_nome": names.get(t.get("script_id"), u"#%s" % t.get("script_id")),
                 "environment": t.get("environment"),
                 "requested_by": t.get("requested_by"),
                 "started_at": t.get("started_at"),
-                "duracao": ui_helpers.formatar_duracao(t.get("started_at"), agora),
-                "heartbeat": format_age(None if hb is None else max(0, int((agora - hb).total_seconds()))),
+                "duracao": ui_helpers.formatar_duracao(t.get("started_at"), now),
+                "heartbeat": format_age(None if hb is None else max(0, int((now - hb).total_seconds()))),
             })
         return itens
 
-    def agent_tickets(self, ctx, codigo, agora=None):
+    def agent_tickets(self, ctx, code, now=None):
         """Tickets RUNNING do agente, prontos para a lista com link para o detalhe."""
         admin_crud.require_feature(ctx, FEATURE)
-        agora = agora or self._clock()
-        return self._tickets(codigo, agora, self._script_names())
+        now = now or self._clock()
+        return self._tickets(code, now, self._script_names())
 
-    def dashboard(self, ctx, agora=None):
+    def dashboard(self, ctx, now=None):
         """Agentes com saude derivada, idade do heartbeat e tickets RUNNING (somente leitura).
 
         Retorna {"agents": [...], "resumo": {codigo_saude: quantidade}, "agora": datetime}.
         """
         admin_crud.require_feature(ctx, FEATURE)
-        agora = agora or self._clock()
+        now = now or self._clock()
         nomes = self._script_names()
         resumo = collections.OrderedDict((c, 0) for c in HEALTH_ORDER)
         agentes = []
@@ -131,10 +131,10 @@ class AgentsService(object):
             if ag.get("status") == "ACTIVE" and ag.get("critical_config") != self._critical_config:
                 divergentes.append({"code": ag["code"], "critical_config": ag.get("critical_config")})
             hb = ag.get("heartbeat_at")
-            idade = None if hb is None else max(0, int((agora - hb).total_seconds()))
-            codigo_saude = health(ag, agora, self._thresholds)
+            idade = None if hb is None else max(0, int((now - hb).total_seconds()))
+            codigo_saude = health(ag, now, self._thresholds)
             resumo[codigo_saude] += 1
-            tickets = self._tickets(ag["code"], agora, nomes)
+            tickets = self._tickets(ag["code"], now, nomes)
             agentes.append({
                 "code": ag["code"],
                 "hostname": ag.get("hostname"),
@@ -152,9 +152,9 @@ class AgentsService(object):
                 "running": len(tickets),
                 "tickets": tickets,
             })
-        return {"agents": agentes, "resumo": resumo, "agora": agora,
-                "fila_sem_atendente": self._agents.unattended_queue(agora, self._thresholds),
-                "rodando_sem_pid": self._agents.running_without_pid(agora, 2),
+        return {"agents": agentes, "resumo": resumo, "agora": now,
+                "fila_sem_atendente": self._agents.unattended_queue(now, self._thresholds),
+                "rodando_sem_pid": self._agents.running_without_pid(now, 2),
                 "config_divergente": divergentes, "config_web": self._critical_config}
 
 
@@ -172,10 +172,10 @@ def _service():
             fabrica = current.repo_factory
             cfg = current.sss_cfg
             _default = AgentsService(
-                agentes=fabrica.get("agents"),
-                catalogo=fabrica.get("catalog"),
-                relogio=fabrica.get("tickets").now,
-                limiares=Thresholds(cfg.agent.heartbeat_interval_s, cfg.agent.fence_timeout_s,
+                agents=fabrica.get("agents"),
+                catalog=fabrica.get("catalog"),
+                clock=fabrica.get("tickets").now,
+                thresholds=Thresholds(cfg.agent.heartbeat_interval_s, cfg.agent.fence_timeout_s,
                                   cfg.agent.node_offline_timeout_s),
                 log=sss_logging.get_logger("sss_web", cfg),
                 config_criticos=sss_config.critical_config(cfg),
@@ -183,11 +183,11 @@ def _service():
         return _default
 
 
-def dashboard(ctx, agora=None):
+def dashboard(ctx, now=None):
     """Painel de agentes (servico padrao)."""
-    return _service().dashboard(ctx, agora)
+    return _service().dashboard(ctx, now)
 
 
-def agent_tickets(ctx, codigo, agora=None):
+def agent_tickets(ctx, code, now=None):
     """Tickets RUNNING do agente (servico padrao)."""
-    return _service().agent_tickets(ctx, codigo, agora)
+    return _service().agent_tickets(ctx, code, now)

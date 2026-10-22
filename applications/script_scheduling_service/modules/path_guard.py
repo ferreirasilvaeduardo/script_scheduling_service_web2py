@@ -46,14 +46,14 @@ class Code(object):
 class PathGuardError(Exception):
     """Rejeicao de caminho ou interpretador; a mensagem nunca inclui o caminho."""
 
-    def __init__(self, codigo):
-        Exception.__init__(self, codigo)
-        self.code = codigo
+    def __init__(self, code):
+        Exception.__init__(self, code)
+        self.code = code
 
 
-def validate_interpreter(interpretador):
+def validate_interpreter(interpreter):
     """Exige que o interpretador logico seja exatamente um item da ALLOWLIST."""
-    if interpretador not in ALLOWLIST:
+    if interpreter not in ALLOWLIST:
         raise PathGuardError(Code.INTERPRETADOR_NAO_PERMITIDO)
 
 
@@ -72,14 +72,14 @@ def validate_registration(path_file):
         raise PathGuardError(Code.PATH_NOT_NORMALIZED)
 
 
-def _inside(caminho, pasta):
+def _inside(path, folder):
     """True se caminho e a propria pasta ou fica abaixo dela (por componente, nunca prefixo de texto)."""
-    return os.path.commonpath([caminho, pasta]) == pasta
+    return os.path.commonpath([path, folder]) == folder
 
 
-def check_forbidden_dirs(path_file, dirs_sss=()):
+def check_forbidden_dirs(path_file, sss_dirs=()):
     """Recusa pastas do sistema e log_dir/work_dir, no caminho digitado e no resolvido (symlink)."""
-    sss = [os_platform.final_path(d) for d in dirs_sss if d]
+    sss = [os_platform.final_path(d) for d in sss_dirs if d]
     for alvo in (path_file, os_platform.final_path(path_file)):
         if any(_inside(alvo, d) for d in SYSTEM_DIRS):
             raise PathGuardError(Code.SYSTEM_DIR)
@@ -87,17 +87,17 @@ def check_forbidden_dirs(path_file, dirs_sss=()):
             raise PathGuardError(Code.SSS_DIR)
 
 
-def _stat(caminho):
+def _stat(path):
     """os.stat com EACCES -> NO_ACCESS e ausente -> NOT_FOUND (README §8.5)."""
     try:
-        return os.stat(caminho)
+        return os.stat(path)
     except OSError as e:
         if e.errno in (errno.EACCES, errno.EPERM):
             raise PathGuardError(Code.NO_ACCESS)
         raise PathGuardError(Code.NOT_FOUND)
 
 
-def resolve(path_file, dirs_sss=()):
+def resolve(path_file, sss_dirs=()):
     """Confere o script no servidor do agente e devolve o caminho real, que e o executado (README §8.5, CR-011).
 
     Formato do caminho cadastrado; pastas do sistema e do SSS no cadastrado e no real; o arquivo real existe
@@ -105,29 +105,29 @@ def resolve(path_file, dirs_sss=()):
     (NOT_A_FILE) e nao e gravavel por grupo nem por outros (GROUP_OTHER_WRITABLE).
     """
     validate_registration(path_file)
-    check_forbidden_dirs(path_file, dirs_sss)
+    check_forbidden_dirs(path_file, sss_dirs)
     codigo = os_platform.validate_script_path(path_file)
     if codigo:
         raise PathGuardError(codigo)
     return os_platform.final_path(path_file)
 
 
-def validate_executable(caminho, dirs_sss=()):
+def validate_executable(path, sss_dirs=()):
     """Executavel de um interpretador de [agent] interpreters (README §8.5, CR-011): caminho absoluto e
     normalizado, existe, e arquivo executavel e fica fora de log_dir/work_dir/exec_work_dir. Pode ser link
     simbolico (ex.: /usr/bin/python3) e ficar nas pastas do sistema. Devolve o caminho real; falha:
     NOT_FOUND ou INTERPRETADOR_INSEGURO."""
-    if not isinstance(caminho, str) or caminho[:1] != '/' or os.path.normpath(caminho) != caminho:
+    if not isinstance(path, str) or path[:1] != '/' or os.path.normpath(path) != path:
         raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
-    real = os_platform.final_path(caminho)
+    real = os_platform.final_path(path)
     try:
         _stat(real)
     except PathGuardError as e:
         if e.code == Code.NOT_FOUND:
             raise
         raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
-    sss = [os_platform.final_path(d) for d in dirs_sss if d]
-    if any(_inside(alvo, d) for alvo in (caminho, real) for d in sss):
+    sss = [os_platform.final_path(d) for d in sss_dirs if d]
+    if any(_inside(alvo, d) for alvo in (path, real) for d in sss):
         raise PathGuardError(Code.INTERPRETADOR_INSEGURO)
     if not os.path.isfile(real) or not os.access(real, os.X_OK):
         raise PathGuardError(Code.INTERPRETADOR_INSEGURO)

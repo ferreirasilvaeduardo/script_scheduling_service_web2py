@@ -61,7 +61,7 @@ class TestHaTwoAgents(_TwoAgentsBase):
         def ocorrencias():
             return self._query("SELECT scheduled_at, COUNT(*) FROM {tck} WHERE schedule_id = :r"
                                   " GROUP BY scheduled_at ORDER BY scheduled_at", r=regra["id"])
-        self.assertTrue(self._wait(lambda: any(s >= fim for s, _n in ocorrencias()), MINUTES * 60 + 60, passo=2),
+        self.assertTrue(self._wait(lambda: any(s >= fim for s, _n in ocorrencias()), MINUTES * 60 + 60, step=2),
                         "tickets das %d ocorrencias" % MINUTES)
         for agente, p, _pastas in self.processes:
             self.assertIsNone(p.poll(), "agente %s caiu" % agente)
@@ -88,7 +88,7 @@ class TestHaTwoAgents(_TwoAgentsBase):
         processo_dono.wait(10)
         inicio = time.monotonic()
         self.assertTrue(_alive(orfaos[0]), "o filho sobrevive a morte do agente")
-        self.assertTrue(self._wait(lambda: self._tickets({tid})[tid][0] == "FAILED", NODE_OFFLINE_S + 60, passo=1),
+        self.assertTrue(self._wait(lambda: self._tickets({tid})[tid][0] == "FAILED", NODE_OFFLINE_S + 60, step=1),
                         "NODE_OFFLINE pelo outro agente")
         decorrido = time.monotonic() - inicio
         estado = self._tickets({tid})[tid]

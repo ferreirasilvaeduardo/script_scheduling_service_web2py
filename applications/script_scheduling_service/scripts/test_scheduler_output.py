@@ -113,7 +113,7 @@ import sss_config, db_conn
 from repo_oracle.scheduler_output import RepoSchedulerOutput
 cfg = sss_config.get_config()
 cfg = cfg._replace(oracle=cfg.oracle._replace(driver_mode=sys.argv[2]))
-seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel="web")
+seg = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role="web")
 try:
     conn = db_conn.connect(cfg, seg, "web")
 except Exception as e:
@@ -149,8 +149,8 @@ class TestSchedulerOutputOracle(unittest.TestCase):
     def tearDownClass(cls):
         cls.contrato.tearDownClass.__func__(cls)
 
-    def obter_repo(self, nome):
-        return self.contrato.obter_repo(self, nome)
+    def obter_repo(self, name):
+        return self.contrato.obter_repo(self, name)
 
     def _clean_fixtures(self):
         return self.contrato._clean_fixtures(self)

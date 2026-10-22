@@ -150,7 +150,7 @@ def _function_bodies(src):
     return corpos
 
 
-def check_alpine_csp(fonte):
+def check_alpine_csp(source):
     """Retorna (ok, detalhe) indicando se o bundle Alpine e seguro sob script-src 'self'.
 
     Reprova eval, new Function e Function() em qualquer ponto e reprova o avaliador
@@ -159,16 +159,16 @@ def check_alpine_csp(fonte):
     aceito se nao for alcancavel a partir do avaliador registrado.
     """
     for regex, rotulo in _RE_DIRECT_EVAL:
-        if regex.search(fonte):
+        if regex.search(source):
             return False, "Uso de %s encontrado" % rotulo
 
-    registros = _RE_SET_EVALUATOR.findall(fonte)
+    registros = _RE_SET_EVALUATOR.findall(source)
     if len(registros) != 1:
         return False, "Esperado exatamente 1 setEvaluator(), encontrados %d" % len(registros)
     avaliador = registros[0]
 
     try:
-        corpos = _function_bodies(fonte)
+        corpos = _function_bodies(source)
     except _InvalidJs as e:
         return False, "Bundle não analisável: %s" % e
     if avaliador not in corpos:
@@ -189,7 +189,7 @@ def check_alpine_csp(fonte):
                     avaliador, nome)
             pendentes.extend(ident for ident in _RE_IDENT.findall(corpo) if ident in corpos)
 
-    if _RE_DYNAMIC_CONSTRUCTOR.search(fonte):
+    if _RE_DYNAMIC_CONSTRUCTOR.search(source):
         return True, "Build CSP confirmada: avaliador '%s' não avalia strings (avaliador padrão presente apenas como código morto)" % avaliador
     return True, "Build CSP confirmada: avaliador '%s' não avalia strings" % avaliador
 

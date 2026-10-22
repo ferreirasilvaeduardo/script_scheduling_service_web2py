@@ -67,19 +67,19 @@ class LogOffsetMismatch(RuntimeError):
     O pump do ticket para, sem repetir nem descartar o bloco.
     """
 
-    def __init__(self, ticket_id, offset_esperado, tamanho):
+    def __init__(self, ticket_id, expected_offset, size):
         RuntimeError.__init__(self, "LOG_OFFSET_DIVERGENTE ticket=%s offset_esperado=%s tamanho=%s"
-                              % (ticket_id, offset_esperado, tamanho))
+                              % (ticket_id, expected_offset, size))
         self.ticket_id = ticket_id
-        self.expected_offset = offset_esperado
-        self.size = tamanho
+        self.expected_offset = expected_offset
+        self.size = size
 
 
 class RepoSchedulerLog(object):
     """Owner e prefixo vem da configuracao (nunca fixos); os nomes passam por sql_ident."""
 
-    def __init__(self, owner, prefixo):
-        self._tck = sql_ident.table(owner, prefixo, "tickets")
+    def __init__(self, owner, prefix):
+        self._tck = sql_ident.table(owner, prefix, "tickets")
         self._plsql = _PLSQL_APPEND.format(tck=self._tck, attr=":" + "=")
         self._sql_truncated = _SQL_TRUNCATED.format(tck=self._tck)
 
@@ -87,23 +87,23 @@ class RepoSchedulerLog(object):
     def from_config(cls, cfg):
         return cls(cfg.oracle.owner.strip(), cfg.oracle.table_prefix.strip())
 
-    def append_chunk(self, conn, ticket_id, agente_id, offset_esperado, bloco):
+    def append_chunk(self, conn, ticket_id, agent_id, expected_offset, chunk):
         """Anexa bloco (ate 8.000 caracteres) em expected_offset: WRITTEN, ALREADY_WRITTEN ou OWNERSHIP_LOST.
 
         Divergencia de offset ou de conteudo: LogOffsetMismatch. Sem COMMIT.
         """
-        if not bloco:
+        if not chunk:
             raise ValueError("bloco vazio")
         cur = conn.cursor()
         try:
             db_conn.set_input_types(cur, chunk=db_conn.TIPO_CLOB)
-            resultado = db_conn.output_variable(cur, db_conn.TIPO_VARCHAR, tamanho=20)
+            resultado = db_conn.output_variable(cur, db_conn.TIPO_VARCHAR, size=20)
             try:
-                cur.execute(self._plsql, chunk=bloco, ticket_id=int(ticket_id), agent_id=agente_id,
-                            expected_offset=int(offset_esperado), result=resultado)
+                cur.execute(self._plsql, chunk=chunk, ticket_id=int(ticket_id), agent_id=agent_id,
+                            expected_offset=int(expected_offset), result=resultado)
             except Exception as exc:
                 if db_conn.classify_error(exc) == ("ORA", _ORA_DIVERGENT):
-                    raise LogOffsetMismatch(ticket_id, offset_esperado, len(bloco))
+                    raise LogOffsetMismatch(ticket_id, expected_offset, len(chunk))
                 raise
             valor = db_conn.output_value(resultado)
         finally:
@@ -124,11 +124,11 @@ class RepoSchedulerLog(object):
             raise RuntimeError("unidade de CLOB inesperada: %r" % (valor,))
         return valor
 
-    def mark_truncated(self, conn, ticket_id, agente_id):
+    def mark_truncated(self, conn, ticket_id, agent_id):
         """log_truncado = 'S' no ticket RUNNING deste agente. False se a posse foi perdida. Sem COMMIT."""
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_truncated, ticket_id=int(ticket_id), agent_id=agente_id)
+            cur.execute(self._sql_truncated, ticket_id=int(ticket_id), agent_id=agent_id)
             return cur.rowcount == 1
         finally:
             cur.close()

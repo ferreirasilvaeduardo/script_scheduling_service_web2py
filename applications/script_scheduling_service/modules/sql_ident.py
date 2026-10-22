@@ -56,15 +56,15 @@ CK_RECORD_EXPR = (
 )
 
 
-def _safe_echo(valor):
+def _safe_echo(value):
     """Retorna representacao segura do valor sem expor dados que excedam 64 caracteres."""
-    if valor is None:
+    if value is None:
         return "None"
-    if not isinstance(valor, str):
-        return "tipo invalido ({})".format(type(valor).__name__)
-    if len(valor) > 64:
-        return "<valor com {} caracteres excede limite de 64>".format(len(valor))
-    return "'{}'".format(valor)
+    if not isinstance(value, str):
+        return "tipo invalido ({})".format(type(value).__name__)
+    if len(value) > 64:
+        return "<valor com {} caracteres excede limite de 64>".format(len(value))
+    return "'{}'".format(value)
 
 
 def validate_owner(owner):
@@ -78,59 +78,59 @@ def validate_owner(owner):
     return owner
 
 
-def validate_prefix(prefixo):
+def validate_prefix(prefix):
     """Valida o prefixo de tabela conforme AGENTS §3.1.
 
     Aceita ^[A-Za-z][A-Za-z0-9_]{0,7}$: comeca com letra (nome Oracle valido), ate 8 caracteres.
     Lanca ValueError se invalido, sem ecoar o valor se tiver mais de 64 caracteres.
     """
-    if not isinstance(prefixo, str) or not _RE_PREFIXO.fullmatch(prefixo):
-        raise ValueError("Prefixo invalido: {}".format(_safe_echo(prefixo)))
-    return prefixo
+    if not isinstance(prefix, str) or not _RE_PREFIXO.fullmatch(prefix):
+        raise ValueError("Prefixo invalido: {}".format(_safe_echo(prefix)))
+    return prefix
 
 
-def validate_name(nome, prefixo=None):
+def validate_name(name, prefix=None):
     """Valida sintaxe e tamanho de um identificador Oracle (<= 30 caracteres).
 
     Se prefixo for informado, verifica tambem presenca no catalogo de identificadores.
     Lanca ValueError se invalido, sem ecoar o valor se tiver mais de 64 caracteres.
     """
-    if not isinstance(nome, str) or len(nome) > 30 or not _RE_IDENT.fullmatch(nome):
-        raise ValueError("Nome de objeto invalido: {}".format(_safe_echo(nome)))
-    if prefixo is not None:
-        validate_prefix(prefixo)
-        catalogo = all_identifiers(prefixo)
-        if nome.lower() not in catalogo:
+    if not isinstance(name, str) or len(name) > 30 or not _RE_IDENT.fullmatch(name):
+        raise ValueError("Nome de objeto invalido: {}".format(_safe_echo(name)))
+    if prefix is not None:
+        validate_prefix(prefix)
+        catalogo = all_identifiers(prefix)
+        if name.lower() not in catalogo:
             raise ValueError(
-                "Nome de objeto nao registrado no catalogo: {}".format(_safe_echo(nome))
+                "Nome de objeto nao registrado no catalogo: {}".format(_safe_echo(name))
             )
-    return nome
+    return name
 
 
 # Tabela de controle do esquema anterior ao CR-016a (nomes em portugues): o init_db recusa criar o novo com ela.
 LEGACY_CONTROL_TABLE = "controle"
 
 
-def physical(entidade):
+def physical(entity):
     """Nome fisico da tabela, sem o prefixo, da entidade logica (CR-016a; a chave logica muda no CR-016c)."""
-    return TABLES[entidade]['fisico']
+    return TABLES[entity]['fisico']
 
 
-def qualify(owner, nome, prefixo=None):
+def qualify(owner, name, prefix=None):
     """Valida e retorna OWNER.NOME qualificado para uso em SQL (AGENTS §3.1)."""
     v_owner = validate_owner(owner)
-    v_nome = validate_name(nome, prefixo=prefixo)
+    v_nome = validate_name(name, prefix=prefix)
     return "{}.{}".format(v_owner, v_nome)
 
 
-def table(owner, prefixo, entidade):
+def table(owner, prefix, entity):
     """OWNER.<prefixo><nome fisico> da entidade logica, validado (CR-016a)."""
-    return qualify(owner, prefixo + physical(entidade), prefixo=prefixo)
+    return qualify(owner, prefix + physical(entity), prefix=prefix)
 
 
-def sequence(owner, prefixo, entidade):
+def sequence(owner, prefix, entity):
     """OWNER.sq_<prefixo><nome fisico> da entidade logica, validado (CR-016a)."""
-    return qualify(owner, "sq_" + prefixo + physical(entidade), prefixo=prefixo)
+    return qualify(owner, "sq_" + prefix + physical(entity), prefix=prefix)
 
 
 # ---------------------------------------------------------------------------
@@ -796,7 +796,7 @@ class SchemaNames(OrderedDict):
     extracao plana de todos os identificadores gerados no esquema.
     """
 
-    def all_identifiers(self, incluir_colunas=True):
+    def all_identifiers(self, include_columns=True):
         """Retorna o conjunto (set) de todos os identificadores expandidos."""
         ids = set()
         for entidade, t in self.items():
@@ -815,17 +815,17 @@ class SchemaNames(OrderedDict):
                 ids.add(ck_nome)
             for ix_nome in t['indices']:
                 ids.add(ix_nome)
-            if incluir_colunas:
+            if include_columns:
                 for col_nome in t['colunas']:
                     ids.add(col_nome)
         return ids
 
-    def list_identifiers(self, incluir_colunas=True):
+    def list_identifiers(self, include_columns=True):
         """Retorna lista ordenada de todos os identificadores expandidos."""
-        return sorted(self.all_identifiers(incluir_colunas=incluir_colunas))
+        return sorted(self.all_identifiers(include_columns=include_columns))
 
 
-def names(prefixo, tabelas=None):
+def names(prefix, tables=None):
     """Gera e retorna todos os identificadores expandidos a partir de table_prefix.
 
     Segue as regras do template README §9.1:
@@ -836,22 +836,22 @@ def names(prefixo, tabelas=None):
       PK          = pk_{prefixo}{fisico}
       UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}
     """
-    validate_prefix(prefixo)
-    registro = TABLES if tabelas is None else tabelas
+    validate_prefix(prefix)
+    registro = TABLES if tables is None else tables
 
     resultado = SchemaNames()
     for entidade, defn in registro.items():
         abrev = defn['abrev']
-        tabela_nome = "{}{}".format(prefixo, defn['fisico'])
-        seq_nome = "sq_{}{}".format(prefixo, defn['fisico'])
-        tr_bi_nome = "tr_{}{}_bi".format(prefixo, abrev)
-        tr_bu_nome = "tr_{}{}_bu".format(prefixo, abrev) if defn.get('trigger_bu') else None
-        pk_nome = "pk_{}{}".format(prefixo, defn['fisico'])
+        tabela_nome = "{}{}".format(prefix, defn['fisico'])
+        seq_nome = "sq_{}{}".format(prefix, defn['fisico'])
+        tr_bi_nome = "tr_{}{}_bi".format(prefix, abrev)
+        tr_bu_nome = "tr_{}{}_bu".format(prefix, abrev) if defn.get('trigger_bu') else None
+        pk_nome = "pk_{}{}".format(prefix, defn['fisico'])
 
         uks = OrderedDict()
         for sufixo_key, uk_def in defn.get('uks', {}).items():
             suf = uk_def['sufixo']
-            uk_nome = "uk_{}{}_{}".format(prefixo, abrev, suf)
+            uk_nome = "uk_{}{}_{}".format(prefix, abrev, suf)
             uks[uk_nome] = OrderedDict([
                 ('name', uk_nome),
                 ('sufixo', suf),
@@ -861,8 +861,8 @@ def names(prefixo, tabelas=None):
         fks = OrderedDict()
         for sufixo_key, fk_def in defn.get('fks', {}).items():
             suf = fk_def['sufixo']
-            fk_nome = "fk_{}{}_{}".format(prefixo, abrev, suf)
-            ref_tabela_nome = "{}{}".format(prefixo, registro[fk_def['ref_tabela']]['fisico'])
+            fk_nome = "fk_{}{}_{}".format(prefix, abrev, suf)
+            ref_tabela_nome = "{}{}".format(prefix, registro[fk_def['ref_tabela']]['fisico'])
             fks[fk_nome] = OrderedDict([
                 ('name', fk_nome),
                 ('sufixo', suf),
@@ -876,7 +876,7 @@ def names(prefixo, tabelas=None):
         cks = OrderedDict()
         for sufixo_key, ck_def in defn.get('cks', {}).items():
             suf = ck_def['sufixo']
-            ck_nome = "ck_{}{}_{}".format(prefixo, abrev, suf)
+            ck_nome = "ck_{}{}_{}".format(prefix, abrev, suf)
             cks[ck_nome] = OrderedDict([
                 ('name', ck_nome),
                 ('sufixo', suf),
@@ -886,7 +886,7 @@ def names(prefixo, tabelas=None):
         indices = OrderedDict()
         for sufixo_key, ix_def in defn.get('indices', {}).items():
             suf = ix_def['sufixo']
-            ix_nome = "ix_{}{}_{}".format(prefixo, abrev, suf)
+            ix_nome = "ix_{}{}_{}".format(prefix, abrev, suf)
             indices[ix_nome] = OrderedDict([
                 ('name', ix_nome),
                 ('sufixo', suf),
@@ -919,13 +919,13 @@ def names(prefixo, tabelas=None):
     return resultado
 
 
-def all_identifiers(prefixo, tabelas=None, incluir_colunas=True):
+def all_identifiers(prefix, tables=None, include_columns=True):
     """Retorna conjunto de todos os identificadores expandidos para o prefixo informado."""
-    esquema = names(prefixo, tabelas=tabelas)
-    return esquema.all_identifiers(incluir_colunas=incluir_colunas)
+    esquema = names(prefix, tables=tables)
+    return esquema.all_identifiers(include_columns=include_columns)
 
 
-def validate_registry(prefixo, tabelas=None):
+def validate_registry(prefix, tables=None):
     """Valida se todos os identificadores respeitam as restricoes do Oracle 11gR2.
 
     Garante:
@@ -934,9 +934,9 @@ def validate_registry(prefixo, tabelas=None):
 
     Lanca ValueError detalhando o identificador e tipo em caso de violacao.
     """
-    validate_prefix(prefixo)
-    registro = TABLES if tabelas is None else tabelas
-    esquema = names(prefixo, tabelas=registro)
+    validate_prefix(prefix)
+    registro = TABLES if tables is None else tables
+    esquema = names(prefix, tables=registro)
 
     for entidade, t in esquema.items():
         # Tabelas, sequences, triggers, PK
@@ -975,20 +975,20 @@ def validate_registry(prefixo, tabelas=None):
     return True
 
 
-def _check_identifier(ident, tipo, entidade):
+def _check_identifier(ident, kind, entity):
     """Verifica comprimento (<= 30) e formato ASCII minúsculo de um identificador."""
     if not isinstance(ident, str):
         raise ValueError(
             "Identificador do tipo {} na entidade '{}' nao e string: {}".format(
-                tipo, entidade, _safe_echo(ident)
+                kind, entity, _safe_echo(ident)
             )
         )
     if len(ident) > 30:
         raise ValueError(
             "Identificador '{}' (tipo {}, entidade '{}') excede 30 caracteres (len={})".format(
                 ident if len(ident) <= 64 else "<identificador excede 64 chars>",
-                tipo,
-                entidade,
+                kind,
+                entity,
                 len(ident),
             )
         )
@@ -996,13 +996,13 @@ def _check_identifier(ident, tipo, entidade):
         raise ValueError(
             "Identificador '{}' (tipo {}, entidade '{}') nao atende ao padrao ASCII lowercase".format(
                 ident if len(ident) <= 64 else "<identificador excede 64 chars>",
-                tipo,
-                entidade,
+                kind,
+                entity,
             )
         )
 
 
-def normalize_expression(texto):
+def normalize_expression(text):
     """Normaliza expressoes SQL (CK, FBI, DATA_DEFAULT) para comparacao (CR-008, R-14).
 
     Regras:
@@ -1012,27 +1012,27 @@ def normalize_expression(texto):
       4. Remove espacos adjacentes a '(', ')' e ',' e operadores fora de literais.
       5. Remove espacos nas pontas (strip) e parenteses mais externos se envolverem a expressao inteira.
     """
-    if texto is None:
+    if text is None:
         return ""
-    if not isinstance(texto, str):
-        texto = str(texto)
+    if not isinstance(text, str):
+        text = str(text)
 
     # 1. Remove aspas duplas
-    texto = texto.replace('"', '')
+    text = text.replace('"', '')
 
     # 2. Converte para maiusculas fora de literais entre aspas simples
     partes = []
     em_literal = False
     buffer = []
     i = 0
-    n = len(texto)
+    n = len(text)
     while i < n:
-        c = texto[i]
+        c = text[i]
         if c == "'":
             buffer.append(c)
             # Escape de aspas simples em SQL eh ''
-            if em_literal and i + 1 < n and texto[i + 1] == "'":
-                buffer.append(texto[i + 1])
+            if em_literal and i + 1 < n and text[i + 1] == "'":
+                buffer.append(text[i + 1])
                 i += 2
                 continue
             em_literal = not em_literal
@@ -1106,10 +1106,10 @@ def normalize_expression(texto):
     return res
 
 
-def is_system_not_null_ck(nome_ck, condicao):
+def is_system_not_null_ck(ck_name, condition):
     """Indica se a CK eh uma constraint de sistema SYS_C% que apenas reforca NOT NULL."""
-    if not nome_ck or not nome_ck.upper().startswith("SYS_C"):
+    if not ck_name or not ck_name.upper().startswith("SYS_C"):
         return False
     # Para checar se eh NOT NULL, normalizamos apenas tirando aspas e espacos externos
-    c_limpa = condicao.replace('"', '').strip()
+    c_limpa = condition.replace('"', '').strip()
     return bool(re.fullmatch(r"^[A-Za-z0-9_]+\s+IS\s+NOT\s+NULL$", c_limpa, re.IGNORECASE))

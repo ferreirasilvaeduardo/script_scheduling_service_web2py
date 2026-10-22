@@ -51,23 +51,23 @@ class _Base(unittest.TestCase):
         # Gestor: perfil nao admin com MANAGE_PARAMETERS (como se a matriz o concedesse).
         self.ctx["gestor"] = dict(self.ctx["op.prod"], features=frozenset(["MANAGE_PARAMETERS"]))
         self.svc = AdminParametersService(self.catalog, self.log)
-        self.aud_base = max([a["id"] for a in self.audit.list(pagina=1, tamanho=1000)["itens"]] or [0])
+        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
 
-    def _audits(self, acao):
-        return [a for a in self.audit.list(filtros={"action": acao}, pagina=1, tamanho=100)["itens"]
+    def _audits(self, action):
+        return [a for a in self.audit.list(filters={"action": action}, page=1, size=100)["itens"]
                 if a["entity"] == "tbsss_parameters" and a["id"] > self.aud_base]
 
-    def _insert(self, actor="admin", **mudancas):
+    def _insert(self, actor="admin", **changes):
         dados = {"code": "novo_param", "label": "Novo parametro", "component_type": "TEXT"}
-        dados.update(mudancas)
+        dados.update(changes)
         return self.svc.save(self.ctx[actor], IP, None, dados)
 
-    def _edit(self, pid, actor="admin", **mudancas):
+    def _edit(self, pid, actor="admin", **changes):
         f = self.svc.form(self.ctx[actor], str(pid))
         dados = dict((k, f[k]) for k in ("param_flag", "label", "description", "component_type", "options_json",
                                           "default_value", "validation_regex", "version"))
         dados["sensitive"] = f["sensitive"]
-        dados.update(mudancas)
+        dados.update(changes)
         return self.svc.save(self.ctx[actor], IP, str(pid), dados)
 
 
@@ -110,7 +110,7 @@ class TestRegistration(_Base):
     def test_sensivel_de_vazio_para_preenchido_gera_conflito(self):
         f = self.svc.form(self.ctx["admin"], str(P_CHAVE_API))
         self.assertFalse(f["tem_padrao"])
-        self.catalog.parameters_update(P_CHAVE_API, {"default_value": "colocado-por-outro-333"}, ator="teste")
+        self.catalog.parameters_update(P_CHAVE_API, {"default_value": "colocado-por-outro-333"}, actor="teste")
         dados = dict((k, f[k]) for k in ("param_flag", "label", "description", "component_type", "options_json",
                                           "default_value", "validation_regex", "version", "sensitive"))
         _pid, erros = self.svc.save(self.ctx["admin"], IP, str(P_CHAVE_API), dict(dados, label="Outro"))
@@ -225,7 +225,7 @@ class TestDependencies(_Base):
                                   ({"param_flag": "--outra"}, "sss_prm_flag_nomeado"),
                                   ({"active": "N"}, "sss_prm_vinculo_ativo")):
             with self.assertRaises(RepoViolation) as cm:
-                self.catalog.parameters_update(P_DATA_REF, dados, ator="teste")
+                self.catalog.parameters_update(P_DATA_REF, dados, actor="teste")
             self.assertEqual(cm.exception.constraint, constraint)
 
     def test_conflito_de_edicao(self):

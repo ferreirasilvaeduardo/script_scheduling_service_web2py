@@ -77,27 +77,27 @@ def _dev_seed_password():
     return senha
 
 
-def _oracle_class(nome_norm):
+def _oracle_class(normalized_name):
     """Classe Oracle do agregado (import tardio: o driver so e carregado quando usado)."""
-    if nome_norm == "catalog":
+    if normalized_name == "catalog":
         from repo_oracle.catalog import RepoCatalogOracle
         return RepoCatalogOracle
-    if nome_norm == "tickets":
+    if normalized_name == "tickets":
         from repo_oracle.tickets import RepoTicketsOracle
         return RepoTicketsOracle
-    if nome_norm == "schedules":
+    if normalized_name == "schedules":
         from repo_oracle.schedules import RepoSchedulesOracle
         return RepoSchedulesOracle
-    if nome_norm == "audit":
+    if normalized_name == "audit":
         from repo_oracle.audit import RepoAuditOracle
         return RepoAuditOracle
-    if nome_norm == "agents":
+    if normalized_name == "agents":
         from repo_oracle.agents import RepoAgentsOracle
         return RepoAgentsOracle
     return None
 
 
-def get(nome, config=None):
+def get(name, config=None):
     """Retorna a instancia singleton do repositorio solicitado.
 
     Lanca RuntimeError se o FAKE (so de teste) for pedido fora de sss_env=DEV e ValueError para
@@ -111,7 +111,7 @@ def get(nome, config=None):
     if backend == "FAKE" and env != "DEV":
         raise RuntimeError("FAKE (so de teste) e proibido fora de DEV (sss_env=%s)" % env)
 
-    nome_norm = str(nome).lower().replace("repo_", "")
+    nome_norm = str(name).lower().replace("repo_", "")
 
     if backend == "ORACLE":
         with _factory_lock:
@@ -124,7 +124,7 @@ def get(nome, config=None):
             elif nome_norm not in _singletons_oracle:
                 classe = _oracle_class(nome_norm)
                 if classe is None:
-                    raise ValueError("Repositorio desconhecido: %s" % nome)
+                    raise ValueError("Repositorio desconhecido: %s" % name)
                 _singletons_oracle[nome_norm] = classe()
             return _singletons_oracle[nome_norm]
 
@@ -143,7 +143,7 @@ def get(nome, config=None):
             from repo_fake.tickets import RepoTicketsFake
             from repo_fake.users import RepoUsersFake
             _fake_store = FakeDataStore()
-            load_seed(_fake_store, senha_dev=_dev_seed_password())
+            load_seed(_fake_store, dev_password=_dev_seed_password())
 
             _singletons["users"] = RepoUsersFake(_fake_store)
             _singletons["rbac"] = RepoRbacFake(_fake_store)
@@ -154,6 +154,6 @@ def get(nome, config=None):
             _singletons["agents"] = RepoAgentsFake(_fake_store)
 
         if nome_norm not in _singletons:
-            raise ValueError("Repositorio desconhecido: %s" % nome)
+            raise ValueError("Repositorio desconhecido: %s" % name)
 
         return _singletons[nome_norm]

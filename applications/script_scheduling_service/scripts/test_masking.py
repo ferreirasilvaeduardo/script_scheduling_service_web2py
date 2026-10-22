@@ -10,9 +10,9 @@ import unittest
 import masking
 
 
-def _stream(mascarador, blocos):
-    f = masking.StreamMasker(mascarador)
-    saida = [f.feed(b) for b in blocos]
+def _stream(masker, chunks):
+    f = masking.StreamMasker(masker)
+    saida = [f.feed(b) for b in chunks]
     saida.append(f.finalize())
     return saida
 

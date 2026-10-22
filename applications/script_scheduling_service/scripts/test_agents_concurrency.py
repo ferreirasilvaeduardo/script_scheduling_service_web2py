@@ -49,8 +49,8 @@ class _TwoAgentsBase(unittest.TestCase):
     def tearDownClass(cls):
         cls.contrato.tearDownClass.__func__(cls)
 
-    def obter_repo(self, nome):
-        return self.contrato.obter_repo(self, nome)
+    def obter_repo(self, name):
+        return self.contrato.obter_repo(self, name)
 
     def _clean_fixtures(self):
         return self.contrato._clean_fixtures(self)
@@ -81,10 +81,10 @@ class _TwoAgentsBase(unittest.TestCase):
         self.scr_longo = m.script("longo", path_file=longo, max_parallel_env=1)
         cat, rbac = self.obter_repo("catalog"), self.obter_repo("rbac")
         for s in (self.scr, self.scr_longo):
-            cat.homologation_save(s["id"], [self.amb["id"]], ator=m.actor)
+            cat.homologation_save(s["id"], [self.amb["id"]], actor=m.actor)
         self.profile = perfil = m.profile("P")
         funcs = [f["id"] for f in rbac.features_list() if f["code"] in ("EXEC_SCRIPT", "VIEW_LOGS", "CANCEL_TICKET")]
-        rbac.matrix_save(perfil["id"], funcs, [self.amb["id"]], [self.scr["id"], self.scr_longo["id"]], ator=m.actor)
+        rbac.matrix_save(perfil["id"], funcs, [self.amb["id"]], [self.scr["id"], self.scr_longo["id"]], actor=m.actor)
         self.login = m.usuario(perfil["id"], "u")["login"]
         self.usuario_id = [u for u in m.created["users"]][-1]
         self.agents = ["%s-%s-a" % (self.AGENT_PREFIX, m.suf), "%s-%s-b" % (self.AGENT_PREFIX, m.suf)]
@@ -98,9 +98,9 @@ class _TwoAgentsBase(unittest.TestCase):
         m = self._fixtures
         cat, rbac = self.obter_repo("catalog"), self.obter_repo("rbac")
         if self.profile is not None:
-            rbac.matrix_save(self.profile["id"], [], [], [], ator=m.actor)
+            rbac.matrix_save(self.profile["id"], [], [], [], actor=m.actor)
         for sid in m.created["scripts"]:
-            cat.homologation_save(sid, [], ator=m.actor)
+            cat.homologation_save(sid, [], actor=m.actor)
         # Tickets gerados pelo desdobro das regras da fixture (F8.4e) entram na limpeza antes do usuario.
         for rid in m.created["schedules"]:
             for (tid,) in self._query("SELECT id FROM {tck} WHERE schedule_id = :r", r=rid):
@@ -108,10 +108,10 @@ class _TwoAgentsBase(unittest.TestCase):
                     m.note("tickets", tid)
         self._clean_fixtures()
 
-    def _file(self, pasta, nome, corpo):
-        caminho = os.path.join(pasta, nome)
+    def _file(self, folder, name, body):
+        caminho = os.path.join(folder, name)
         with open(caminho, "w") as f:
-            f.write(corpo)
+            f.write(body)
         os.chmod(caminho, 0o644)
         return caminho
 
@@ -123,17 +123,17 @@ class _TwoAgentsBase(unittest.TestCase):
     def _ticket(self, scr):
         tid = self.obter_repo("tickets").create({
             "script_id": scr["id"], "environment": self.amb["name"], "requested_by": self.login, "status": "PENDING",
-            "priority": 2, "submitted_params": self._snapshot(scr)}, [], ator=self.login)
+            "priority": 2, "submitted_params": self._snapshot(scr)}, [], actor=self.login)
         return self._fixtures.note("tickets", tid)
 
-    def _config(self, agente):
-        base = os.path.join(self.root, agente)
+    def _config(self, agent):
+        base = os.path.join(self.root, agent)
         pastas = dict((n, os.path.join(base, n)) for n in ("work", "logs", "output", "input"))
         for p in pastas.values():
             os.makedirs(p, 0o750, exist_ok=True)
         cp = configparser.ConfigParser(interpolation=None, inline_comment_prefixes=(";", "#"))
         cp.read(os.path.join(APP, "instance", "config.ini"), encoding="utf-8")
-        cp["agent"].update({"agent_id": agente, "environments": self.amb["name"], "work_dir": pastas["work"],
+        cp["agent"].update({"agent_id": agent, "environments": self.amb["name"], "work_dir": pastas["work"],
                             "exec_users": "", "exec_work_dir": "", "interpreters": "SH=/bin/sh",
                             "max_parallel_jobs": "4", "orchestrator_interval_s": "1", "cancel_poll_interval_s": "1",
                             "output_dir": pastas["output"], "input_dir": pastas["input"],
@@ -146,13 +146,13 @@ class _TwoAgentsBase(unittest.TestCase):
             cp.write(f)
         return caminho, pastas
 
-    def _start_agent(self, agente):
-        caminho, pastas = self._config(agente)
-        saida = open(os.path.join(self.root, agente + ".out"), "w")
+    def _start_agent(self, agent):
+        caminho, pastas = self._config(agent)
+        saida = open(os.path.join(self.root, agent + ".out"), "w")
         self.addCleanup(saida.close)
         p = subprocess.Popen([sys.executable, RUN_SCHEDULER, "--config", caminho], cwd=APP, stdout=saida,
                              stderr=subprocess.STDOUT, start_new_session=True)
-        self.processes.append((agente, p, pastas))
+        self.processes.append((agent, p, pastas))
         return p, pastas
 
     def _kill_agents(self):
@@ -205,13 +205,13 @@ class _TwoAgentsBase(unittest.TestCase):
         return [os.path.join(r, d) for _a, _p, pastas in self.processes
                 for r, ds, _arqs in os.walk(pastas["output"]) for d in ds if d in nomes]
 
-    def _wait(self, condicao, prazo, passo=0.2):
-        limite = time.monotonic() + prazo
+    def _wait(self, condition, deadline, step=0.2):
+        limite = time.monotonic() + deadline
         while time.monotonic() < limite:
-            if condicao():
+            if condition():
                 return True
-            time.sleep(passo)
-        return condicao()
+            time.sleep(step)
+        return condition()
 
 
 @unittest.skipUnless(os.environ.get("SSS_TEST_ORACLE") == "1", "Testes Oracle reais desligados (SSS_TEST_ORACLE=1)")

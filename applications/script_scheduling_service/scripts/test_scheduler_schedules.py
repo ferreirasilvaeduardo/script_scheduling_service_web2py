@@ -34,8 +34,8 @@ class _Types(object):
     def __init__(self):
         self.calls = []
 
-    def __call__(self, cursor, **mapa):
-        self.calls.append(dict(mapa))
+    def __call__(self, cursor, **mapping):
+        self.calls.append(dict(mapping))
 
 
 class TestAgendaWithoutDb(unittest.TestCase):
@@ -59,7 +59,7 @@ class TestAgendaWithoutDb(unittest.TestCase):
                        "ORDER BY next_run_at, id", "OWN_X.pfx_schedules"):
             self.assertIn(trecho, sql)
         self.assertEqual(binds, {"last_next": scheduler_schedules.DATE_INITIAL, "last_id": 0, "batch_size": 50})
-        self.repo.due_rules(conn, 50, ult_prox=NEW, ult_id=5)
+        self.repo.due_rules(conn, 50, last_next=NEW, last_id=5)
         self.assertEqual(conn.executed[1][1]["last_next"], NEW.replace(microsecond=0))
         self.assertEqual(self.types.calls[0], {"last_next": db_conn.TIPO_DATE})
         self.assertTrue(self.repo.lock_rule(conn, 5))
@@ -162,7 +162,7 @@ class TestQueueNodeOfflineWithoutDb(unittest.TestCase):
 
     def test_duas_etapas_sem_os_proprios_e_com_ator(self):
         conn = _Conn([("SELECT SYSDATE FROM DUAL", (1, [(OLD,)])), ("FOR UPDATE SKIP LOCKED", (2, [(4,), (5,)]))],
-                     contagens={4: 1, 5: 0})
+                     counts={4: 1, 5: 0})
         vistos = []
         ids = self.repo.mark_node_offline(conn, AGENT, 180, lambda agora: vistos.append(agora) or False)
         self.assertEqual((ids, vistos), ([4], [OLD]), "a linha ja finalizada (rowcount 0) nao conta")
@@ -201,8 +201,8 @@ class TestAgendaOracle(unittest.TestCase):
     def tearDownClass(cls):
         cls.contrato.tearDownClass.__func__(cls)
 
-    def obter_repo(self, nome):
-        return self.contrato.obter_repo(self, nome)
+    def obter_repo(self, name):
+        return self.contrato.obter_repo(self, name)
 
     def _clean_fixtures(self):
         return self.contrato._clean_fixtures(self)
@@ -229,12 +229,12 @@ class TestAgendaOracle(unittest.TestCase):
         self.conn.commit()
         self.contrato.tearDown(self)
 
-    def _rule(self, minutos_atras=10, **extra):
-        proxima = datetime.datetime.now().replace(second=0, microsecond=0) - datetime.timedelta(minutes=minutos_atras)
+    def _rule(self, minutes_ago=10, **extra):
+        proxima = datetime.datetime.now().replace(second=0, microsecond=0) - datetime.timedelta(minutes=minutes_ago)
         return self._fixtures.schedule(self.c["scr"]["id"], self.c["amb1"]["name"], self.c["u1"]["id"],
                                        next_run_at=proxima, **extra)
 
-    def _ticket(self, regra, scheduled):
+    def _ticket(self, rule, scheduled):
         return {"requested_by": self.c["login"], "priority": 2, "submitted_params": "{\"versao\": 4}",
                 "scheduled_at": scheduled}
 

@@ -36,33 +36,33 @@ class DuplicateOccurrence(RuntimeError):
     """ORA-00001 em ix_tck_ocor: outro caminho ja gerou o ticket desta ocorrencia (README §7.5 passo 6, R-31)."""
 
 
-def system_actor(agente_id):
-    return "SYSTEM:%s" % agente_id
+def system_actor(agent_id):
+    return "SYSTEM:%s" % agent_id
 
 
-def without_microseconds(valor):
-    return valor.replace(microsecond=0) if valor is not None and hasattr(valor, "replace") else valor
+def without_microseconds(value):
+    return value.replace(microsecond=0) if value is not None and hasattr(value, "replace") else value
 
 
-def _read_lob(valor):
-    return valor.read() if hasattr(valor, "read") else valor
+def _read_lob(value):
+    return value.read() if hasattr(value, "read") else value
 
 
-def _clean(chave, valor):
-    return valor.strip() if chave in _CHAR1 and isinstance(valor, str) else valor
+def _clean(key_name, value):
+    return value.strip() if key_name in _CHAR1 and isinstance(value, str) else value
 
 
 class RepoSchedulerSchedules(object):
     """Owner e prefixo vem da configuracao (nunca fixos); os nomes passam por sql_ident."""
 
-    def __init__(self, owner, prefixo):
-        t = lambda nome: sql_ident.table(owner, prefixo, nome)  # noqa: E731
-        s = lambda nome: sql_ident.sequence(owner, prefixo, nome)  # noqa: E731
+    def __init__(self, owner, prefix):
+        t = lambda nome: sql_ident.table(owner, prefix, nome)  # noqa: E731
+        s = lambda nome: sql_ident.sequence(owner, prefix, nome)  # noqa: E731
         self._sch, self._tck, self._tans, self._aud = t("schedules"), t("tickets"), t("ticket_answer"), t("audit")
         self._scr, self._env, self._usr, self._senv = t("scripts"), t("environments"), t("users"), t("script_env")
         self._sprm, self._prm = t("script_param"), t("parameters")
         self._seq_tck, self._seq_tans, self._seq_aud = s("tickets"), s("ticket_answer"), s("audit")
-        self._occ = "ix_%stck_occur" % prefixo
+        self._occ = "ix_%stck_occur" % prefix
 
     @classmethod
     def from_config(cls, cfg):
@@ -70,30 +70,30 @@ class RepoSchedulerSchedules(object):
 
     # ------------------------------------------------------------------ util
 
-    def _executar(self, conn, sql, binds, datas=()):
+    def _executar(self, conn, sql, binds, dates=()):
         """Executa com os binds de data declarados como TIPO_DATE (README §7.5, "Bind de datas")."""
         cur = conn.cursor()
         try:
-            if datas:
-                db_conn.set_input_types(cur, **dict((d, db_conn.TIPO_DATE) for d in datas))
+            if dates:
+                db_conn.set_input_types(cur, **dict((d, db_conn.TIPO_DATE) for d in dates))
             cur.execute(sql, binds)
             return cur.rowcount
         finally:
             cur.close()
 
-    def _auditar(self, conn, ator, regra_id, detalhe):
+    def _auditar(self, conn, actor, rule_id, detail):
         """SCHEDULE_PAUSE da pausa e da conclusao (README §4.4), na mesma transacao."""
-        if not ator or len(ator) > ACTOR_MAX or (detalhe is not None and len(detalhe) > DETAIL_MAX):
+        if not actor or len(actor) > ACTOR_MAX or (detail is not None and len(detail) > DETAIL_MAX):
             raise ValueError("ator ou detalhe de auditoria fora do limite")
         self._executar(conn, "INSERT INTO " + self._aud + " (id, actor, source_ip, action, entity, entity_id, "
                        "detail, created_at) VALUES (:id, :actor, NULL, 'SCHEDULE_PAUSE', 'tbsss_schedules', :rid, "
                        ":detail, SYSDATE)",
-                       {"id": db_conn.next_id(conn, self._seq_aud), "actor": ator, "rid": int(regra_id),
-                        "detail": detalhe})
+                       {"id": db_conn.next_id(conn, self._seq_aud), "actor": actor, "rid": int(rule_id),
+                        "detail": detail})
 
     # ------------------------------------------------------------------ leitura
 
-    def due_rules(self, conn, lote, ult_prox=None, ult_id=0):
+    def due_rules(self, conn, batch, last_next=None, last_id=0):
         """Pagina de (id, next_run) vencidas, depois de (ult_prox, ult_id) (README §7.5, R-08)."""
         cur = conn.cursor()
         try:
@@ -104,28 +104,28 @@ class RepoSchedulerSchedules(object):
                         " AND (next_run_at > :last_next OR (next_run_at = :last_next AND id > :last_id))"
                         " ORDER BY next_run_at, id"
                         ") WHERE ROWNUM <= :batch_size",
-                        {"last_next": without_microseconds(ult_prox or DATE_INITIAL), "last_id": int(ult_id),
-                         "batch_size": int(lote)})
+                        {"last_next": without_microseconds(last_next or DATE_INITIAL), "last_id": int(last_id),
+                         "batch_size": int(batch)})
             return [(int(r[0]), r[1]) for r in cur.fetchall()]
         finally:
             cur.close()
 
-    def lock_rule(self, conn, regra_id):
+    def lock_rule(self, conn, rule_id):
         """FOR UPDATE SKIP LOCKED: False = outro agente esta processando a regra (ou ela ja mudou)."""
         cur = conn.cursor()
         try:
             cur.execute("SELECT id FROM " + self._sch + " WHERE id = :id AND active = 'Y' AND next_run_at <= SYSDATE"
-                        " FOR UPDATE SKIP LOCKED", {"id": int(regra_id)})
+                        " FOR UPDATE SKIP LOCKED", {"id": int(rule_id)})
             return cur.fetchone() is not None
         finally:
             cur.close()
 
-    def load_rule(self, conn, regra_id):
+    def load_rule(self, conn, rule_id):
         """Regra completa (passo 1); next_run exatamente como o banco a devolveu (a antiga_data)."""
         cur = conn.cursor()
         try:
             cur.execute("SELECT " + ", ".join(_COLS_RULE) + " FROM " + self._sch + " WHERE id = :id",
-                        {"id": int(regra_id)})
+                        {"id": int(rule_id)})
             r = cur.fetchone()
         finally:
             cur.close()
@@ -138,10 +138,10 @@ class RepoSchedulerSchedules(object):
                 regra[c] = regra[c].strip()
         return regra
 
-    def user_login(self, conn, usuario_id):
+    def user_login(self, conn, user_id):
         cur = conn.cursor()
         try:
-            cur.execute("SELECT login FROM " + self._usr + " WHERE id = :id", {"id": int(usuario_id)})
+            cur.execute("SELECT login FROM " + self._usr + " WHERE id = :id", {"id": int(user_id)})
             r = cur.fetchone()
             return r[0] if r else None
         finally:
@@ -186,7 +186,7 @@ class RepoSchedulerSchedules(object):
 
     # ------------------------------------------------------------------ escrita do ticket
 
-    def _inserir_ticket(self, conn, regra, ticket_id, ticket, respostas, ator):
+    def _inserir_ticket(self, conn, rule, ticket_id, ticket, answers, actor):
         """INSERT do ticket e do ticket_resp (README §7.5 passo 6): schedule_id, source_ip NULL,
         scheduled_at = ocorrencia (CR-007 R-27, CR-008 R-03). ORA-00001 em ix_tck_ocor: DuplicateOccurrence."""
         cur = conn.cursor()
@@ -198,110 +198,110 @@ class RepoSchedulerSchedules(object):
                             " log_truncated, scheduled_at, created_at, created_by)"
                             " VALUES (:id, :script_id, :environment, :requested_by, NULL, 'PENDING', :priority, 'N',"
                             " :schedule_id, :params, 0, 'N', :scheduled_at, SYSDATE, :actor)",
-                            {"id": int(ticket_id), "script_id": int(regra["script_id"]), "environment": regra["environment"],
+                            {"id": int(ticket_id), "script_id": int(rule["script_id"]), "environment": rule["environment"],
                              "requested_by": ticket["requested_by"], "priority": int(ticket["priority"]),
-                             "schedule_id": int(regra["id"]), "params": ticket["submitted_params"],
-                             "scheduled_at": without_microseconds(ticket["scheduled_at"]), "actor": ator})
+                             "schedule_id": int(rule["id"]), "params": ticket["submitted_params"],
+                             "scheduled_at": without_microseconds(ticket["scheduled_at"]), "actor": actor})
             except Exception as exc:
                 if db_conn.classify_error(exc) == ("ORA", _ORA_DUPLICATE) and self._occ.upper() in str(exc).upper():
                     raise DuplicateOccurrence(str(exc))
                 raise
         finally:
             cur.close()
-        for linha in respostas or ():
+        for linha in answers or ():
             self._executar(conn, "INSERT INTO " + self._tans + " (id, ticket_id, parameter_id, answer_value,"
                            " created_at, created_by, updated_at, updated_by) VALUES (:id, :ticket_id, :parameter_id,"
                            " :value, SYSDATE, :actor, NULL, NULL)",
                            {"id": db_conn.next_id(conn, self._seq_tans), "ticket_id": int(ticket_id),
                             "parameter_id": int(linha["parameter_id"]), "value": linha["answer_value"],
-                            "actor": ator})
+                            "actor": actor})
 
-    def reserve_and_create_ticket(self, conn, regra, antiga, nova, ticket_id, ticket, respostas, agente_id):
+    def reserve_and_create_ticket(self, conn, rule, old, new, ticket_id, ticket, answers, agent_id):
         """Passo 6: reserva otimista (rotina tecnica, sem updated_*) e, com rowcount 1, o INSERT do ticket e do
         ticket_resp. False = outro no processou a regra (rowcount 0; quem chama faz ROLLBACK)."""
         n = self._executar(conn, "UPDATE " + self._sch + " SET next_run_at = :new_date, last_run_at = SYSDATE,"
                            " last_ticket_id = :ticket_id WHERE id = :id AND active = 'Y'"
                            " AND next_run_at = :old_date",
-                           {"new_date": without_microseconds(nova), "ticket_id": int(ticket_id), "id": int(regra["id"]),
-                            "old_date": antiga}, datas=("new_date", "old_date"))
+                           {"new_date": without_microseconds(new), "ticket_id": int(ticket_id), "id": int(rule["id"]),
+                            "old_date": old}, dates=("new_date", "old_date"))
         if n != 1:
             return False
-        self._inserir_ticket(conn, regra, ticket_id, ticket, respostas, system_actor(agente_id))
+        self._inserir_ticket(conn, rule, ticket_id, ticket, answers, system_actor(agent_id))
         return True
 
-    def complete_with_ticket(self, conn, regra, antiga, ticket_id, ticket, respostas, agente_id):
+    def complete_with_ticket(self, conn, rule, old, ticket_id, ticket, answers, agent_id):
         """Conclusao (README §7.5, D1) com o ticket da ocorrencia atual: um UPDATE so, next_run_at mantida."""
-        ator = system_actor(agente_id)
+        ator = system_actor(agent_id)
         n = self._executar(conn, "UPDATE " + self._sch + " SET active = 'N', pause_reason = 'COMPLETED',"
                            " last_run_at = SYSDATE, last_ticket_id = :ticket_id, updated_at = SYSDATE,"
                            " updated_by = :actor WHERE id = :id AND active = 'Y' AND next_run_at = :old_date",
-                           {"ticket_id": int(ticket_id), "actor": ator, "id": int(regra["id"]), "old_date": antiga},
-                           datas=("old_date",))
+                           {"ticket_id": int(ticket_id), "actor": ator, "id": int(rule["id"]), "old_date": old},
+                           dates=("old_date",))
         if n != 1:
             return False
-        self._inserir_ticket(conn, regra, ticket_id, ticket, respostas, ator)
-        self._auditar(conn, ator, regra["id"], "pause_reason: COMPLETED")
+        self._inserir_ticket(conn, rule, ticket_id, ticket, answers, ator)
+        self._auditar(conn, ator, rule["id"], "pause_reason: COMPLETED")
         return True
 
-    def complete_without_ticket(self, conn, regra_id, antiga, agente_id):
+    def complete_without_ticket(self, conn, rule_id, old, agent_id):
         """Conclusao sem ticket (SKIP fora da tolerancia em UNICA, ou sobreposicao): so ativo, pausa_motivo e
         updated_*; ultima_execucao e ultimo_ticket_id nao mudam."""
-        ator = system_actor(agente_id)
+        ator = system_actor(agent_id)
         n = self._executar(conn, "UPDATE " + self._sch + " SET active = 'N', pause_reason = 'COMPLETED',"
                            " updated_at = SYSDATE, updated_by = :actor WHERE id = :id AND active = 'Y'"
                            " AND next_run_at = :old_date",
-                           {"actor": ator, "id": int(regra_id), "old_date": antiga}, datas=("old_date",))
+                           {"actor": ator, "id": int(rule_id), "old_date": old}, dates=("old_date",))
         if n != 1:
             return False
-        self._auditar(conn, ator, regra_id, "pause_reason: COMPLETED")
+        self._auditar(conn, ator, rule_id, "pause_reason: COMPLETED")
         return True
 
-    def advance_without_ticket(self, conn, regra_id, antiga, nova):
+    def advance_without_ticket(self, conn, rule_id, old, new):
         """Avanco sem ticket (CR-007, R-05): so next_run, sem ultima_execucao, ultimo_ticket_id nem
         updated_* (rotina tecnica)."""
         return self._executar(conn, "UPDATE " + self._sch + " SET next_run_at = :new_date WHERE id = :id"
                               " AND active = 'Y' AND next_run_at = :old_date",
-                              {"new_date": without_microseconds(nova), "id": int(regra_id), "old_date": antiga},
-                              datas=("new_date", "old_date")) == 1
+                              {"new_date": without_microseconds(new), "id": int(rule_id), "old_date": old},
+                              dates=("new_date", "old_date")) == 1
 
-    def pause(self, conn, regra_id, antiga, motivo, detalhe, agente_id):
+    def pause(self, conn, rule_id, old, reason, detail, agent_id):
         """Passo 7: pausa otimista so de regra ativa (CR-007, R-19), com SCHEDULE_PAUSE. False = ja pausada ou
         concluida por outro caminho (sem auditoria)."""
-        ator = system_actor(agente_id)
+        ator = system_actor(agent_id)
         n = self._executar(conn, "UPDATE " + self._sch + " SET active = 'N', pause_reason = :reason, updated_at = SYSDATE,"
                            " updated_by = :actor WHERE id = :id AND active = 'Y' AND next_run_at = :old_date",
-                           {"reason": motivo, "actor": ator, "id": int(regra_id), "old_date": antiga},
-                           datas=("old_date",))
+                           {"reason": reason, "actor": ator, "id": int(rule_id), "old_date": old},
+                           dates=("old_date",))
         if n != 1:
             return False
-        self._auditar(conn, ator, regra_id, "pause_reason: %s%s" % (motivo, "; " + detalhe if detalhe else ""))
+        self._auditar(conn, ator, rule_id, "pause_reason: %s%s" % (reason, "; " + detail if detail else ""))
         return True
 
-    def pause_cron_error(self, conn, regra, antiga, ticket_id, ticket, respostas, detalhe, agente_id):
+    def pause_cron_error(self, conn, rule, old, ticket_id, ticket, answers, detail, agent_id):
         """Variante cron_erro (CR-008, R-19): pausa INVALID_CRON no UPDATE otimista, mantendo next_run_at;
         com ticket (ticket_id nao nulo), o INSERT do ticket e do ticket_resp em seguida."""
-        ator = system_actor(agente_id)
+        ator = system_actor(agent_id)
         n = self._executar(conn, "UPDATE " + self._sch + " SET active = 'N', pause_reason = 'INVALID_CRON',"
                            " last_run_at = CASE WHEN :ticket_id IS NULL THEN last_run_at ELSE SYSDATE END,"
                            " last_ticket_id = NVL(:ticket_id, last_ticket_id), updated_at = SYSDATE,"
                            " updated_by = :actor WHERE id = :id AND active = 'Y' AND next_run_at = :old_date",
                            {"ticket_id": None if ticket_id is None else int(ticket_id), "actor": ator,
-                            "id": int(regra["id"]), "old_date": antiga}, datas=("old_date",))
+                            "id": int(rule["id"]), "old_date": old}, dates=("old_date",))
         if n != 1:
             return False
         if ticket_id is not None:
-            self._inserir_ticket(conn, regra, ticket_id, ticket, respostas, ator)
-        self._auditar(conn, ator, regra["id"], "pause_reason: INVALID_CRON%s" % ("; " + detalhe if detalhe else ""))
+            self._inserir_ticket(conn, rule, ticket_id, ticket, answers, ator)
+        self._auditar(conn, ator, rule["id"], "pause_reason: INVALID_CRON%s" % ("; " + detail if detail else ""))
         return True
 
-    def pause_internal_error(self, conn, regra_id, detalhe, agente_id):
+    def pause_internal_error(self, conn, rule_id, detail, agent_id):
         """INTERNAL_ERROR (CR-007 R-08; CR-008 R-22) numa transacao separada, depois do ROLLBACK da regra: so
         regra ativa, sem conferir a data (a regra pode nem ter sido lida)."""
-        ator = system_actor(agente_id)
+        ator = system_actor(agent_id)
         n = self._executar(conn, "UPDATE " + self._sch + " SET active = 'N', pause_reason = 'INTERNAL_ERROR',"
                            " updated_at = SYSDATE, updated_by = :actor WHERE id = :id AND active = 'Y'",
-                           {"actor": ator, "id": int(regra_id)})
+                           {"actor": ator, "id": int(rule_id)})
         if n != 1:
             return False
-        self._auditar(conn, ator, regra_id, "pause_reason: INTERNAL_ERROR%s" % ("; " + detalhe if detalhe else ""))
+        self._auditar(conn, ator, rule_id, "pause_reason: INTERNAL_ERROR%s" % ("; " + detail if detail else ""))
         return True

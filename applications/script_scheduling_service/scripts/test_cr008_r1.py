@@ -29,8 +29,8 @@ U_ADMIN, U_OPPROD, U_OPHML = 1, 2, 3
 P_ADMIN, P_OPPROD, P_CONSULTA = 1, 2, 4
 
 
-def _session(uid, login, perfil_id):
-    return {"usuario_id": uid, "login": login, "perfil_id": perfil_id, "perm_versao": 1, "sessao_epoch": 0}
+def _session(uid, login, profile_id):
+    return {"usuario_id": uid, "login": login, "perfil_id": profile_id, "perm_versao": 1, "sessao_epoch": 0}
 
 
 class _Base(unittest.TestCase):
@@ -53,12 +53,12 @@ class _Base(unittest.TestCase):
         self.log.addHandler(logging.NullHandler())
         self.log.propagate = False
         self.auth = auth_service.AuthService(self.users, self.rbac_repo, repo_factory.get("catalog"),
-                                             self.audit, 5, 900, self.log, relogio=lambda: NOW)
+                                             self.audit, 5, 900, self.log, clock=lambda: NOW)
         self.ctx = {"admin": self.auth.revalidate(_session(U_ADMIN, "admin", P_ADMIN)),
                     "op.prod": self.auth.revalidate(_session(U_OPPROD, "op.prod", P_OPPROD))}
         # Gestor sem perfil de administrador, com as funcionalidades de cadastro (CR-008, F-05).
         self.ctx["gestor"] = dict(self.ctx["op.prod"], features=frozenset(["MANAGE_USERS", "MANAGE_PROFILES"]))
-        self.svc_usr = AdminUsersService(self.users, self.rbac_repo, self.log, relogio=lambda: NOW)
+        self.svc_usr = AdminUsersService(self.users, self.rbac_repo, self.log, clock=lambda: NOW)
         self.svc_per = AdminProfilesService(self.rbac_repo, repo_factory.get("catalog"), self.users, self.log)
 
 
@@ -147,7 +147,7 @@ class TestRevocableSession(_Base):
         self.auth.logout(self.ctx["op.prod"], IP)
         self.assertEqual(self._epoch(U_OPPROD), 1)
         self.assertIsNone(self.auth.revalidate(outra))
-        logout = [a for a in self.audit.list(filtros={"action": "LOGOUT"}, pagina=1, tamanho=10)["itens"]
+        logout = [a for a in self.audit.list(filters={"action": "LOGOUT"}, page=1, size=10)["itens"]
                   if a["actor"] == "op.prod"]
         self.assertEqual((logout[0]["entity"], logout[0]["entity_id"], logout[0]["source_ip"]),
                          ("tbsss_users", U_OPPROD, IP))
@@ -155,7 +155,7 @@ class TestRevocableSession(_Base):
         self.assertIsNone(u.get("updated_by"), "logout e rotina tecnica, sem updated_*")
 
     def test_troca_da_propria_senha_mantem_a_sessao_nova(self):
-        self.users.set_password(U_OPPROD, security.hash_password(DEV_PASSWORD), NOW, ator="teste")
+        self.users.set_password(U_OPPROD, security.hash_password(DEV_PASSWORD), NOW, actor="teste")
         epoch = self._epoch(U_OPPROD)
         resultado, erros = self.auth.change_password(self.ctx["op.prod"], IP, DEV_PASSWORD, NEW_PASSWORD, NEW_PASSWORD)
         self.assertEqual((resultado, erros), ("OK", {}))
@@ -177,9 +177,9 @@ class TestRevocableSession(_Base):
 
 class TestWideQuantifierRegex(unittest.TestCase):
 
-    def _refused_f(self, padrao):
+    def _refused_f(self, default_value):
         with self.assertRaises(ParamError):
-            params_compiler.validate_registry_regex(padrao)
+            params_compiler.validate_registry_regex(default_value)
 
     def test_largo_conta_como_ilimitado(self):
         self._refused_f(r"\w{0,100}\w{0,100}\w{0,100}x")

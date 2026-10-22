@@ -44,27 +44,27 @@ _SQL_LAST_PURGE = ("SELECT MAX(created_at) FROM {aud} WHERE actor = 'SYSTEM:purg
 _SQL_VERSION = "SELECT schema_version FROM {ctl} WHERE id = 1"
 
 
-def served_pairs(agentes, agora, limiares):
+def served_pairs(agents, now, thresholds):
     """(ambiente, interpretador) servidos por agente ATIVO com saude OK ou DELAYED (README §13), com o mesmo
     arredondamento de agents_service.health."""
     atendidos = set()
-    for ag in agentes:
+    for ag in agents:
         hb = ag.get("heartbeat_at")
         if ag.get("status") != "ACTIVE" or hb is None:
             continue
-        idade = max(0, int((agora - hb).total_seconds()))
-        if idade >= 2 * limiares.heartbeat_interval_s and idade > limiares.fence_timeout_s:
+        idade = max(0, int((now - hb).total_seconds()))
+        if idade >= 2 * thresholds.heartbeat_interval_s and idade > thresholds.fence_timeout_s:
             continue
         atendidos.update((a.strip(), i.strip()) for a in (ag.get("environments") or "").split(",")
                          for i in (ag.get("interpreters") or "").split(",") if a.strip() and i.strip())
     return atendidos
 
 
-def unattended_queue(linhas_fila, atendidos):
+def unattended_queue(queue_rows, served):
     """Grupos (ambiente, interpretador) do SQL_QUEUE que nenhum par atendido cobre, por ambiente e interpretador."""
     grupos = [{"environment": amb, "interpreter": interp, "quantidade": int(qtd),
                "mais_antigo": antigo.replace(microsecond=0)}
-              for amb, interp, qtd, antigo in linhas_fila if (amb, interp) not in atendidos]
+              for amb, interp, qtd, antigo in queue_rows if (amb, interp) not in served]
     grupos.sort(key=lambda g: (g["environment"], g["interpreter"]))
     return grupos
 
@@ -72,10 +72,10 @@ def unattended_queue(linhas_fila, atendidos):
 class RepoHealth(object):
     """Owner e prefixo vem da configuracao; os nomes passam por sql_ident."""
 
-    def __init__(self, owner, prefixo):
+    def __init__(self, owner, prefix):
         nomes = {"agt": "agents", "tck": "tickets", "scr": "scripts", "env": "environments", "aud": "audit",
                  "ctl": "control"}
-        idents = dict((k, sql_ident.table(owner, prefixo, v)) for k, v in nomes.items())
+        idents = dict((k, sql_ident.table(owner, prefix, v)) for k, v in nomes.items())
         self._sql = dict((nome, modelo.format(**idents)) for nome, modelo in (
             ("agents", _SQL_AGENTS), ("environments", _SQL_ENVIRONMENTS), ("queue", SQL_QUEUE),
             ("overdue_queue", _SQL_QUEUE_OVERDUE), ("running_no_pid", SQL_RUNNING_NO_PID),
@@ -85,17 +85,17 @@ class RepoHealth(object):
     def from_config(cls, cfg):
         return cls(cfg.oracle.owner.strip(), cfg.oracle.table_prefix.strip())
 
-    def sql(self, nome):
-        return self._sql[nome]
+    def sql(self, name):
+        return self._sql[name]
 
-    def _ler(self, conn, nome, datas=None):
+    def _ler(self, conn, name, dates=None):
         cur = conn.cursor()
         try:
-            if datas:
-                db_conn.set_input_types(cur, **dict((k, db_conn.TIPO_DATE) for k in datas))
-                cur.execute(self._sql[nome], datas)
+            if dates:
+                db_conn.set_input_types(cur, **dict((k, db_conn.TIPO_DATE) for k in dates))
+                cur.execute(self._sql[name], dates)
             else:
-                cur.execute(self._sql[nome])
+                cur.execute(self._sql[name])
             return cur.fetchall()
         finally:
             cur.close()
@@ -106,22 +106,22 @@ class RepoHealth(object):
     def active_environments(self, conn):
         return [r[0] for r in self._ler(conn, "environments")]
 
-    def queue_by_pair(self, conn, agora):
+    def queue_by_pair(self, conn, now):
         """Linhas (ambiente, interpretador, quantidade, mais_antigo) dos PENDING vencidos."""
-        return self._ler(conn, "queue", {"now": agora})
+        return self._ler(conn, "queue", {"now": now})
 
-    def overdue_queue(self, conn, agora):
+    def overdue_queue(self, conn, now):
         """(quantidade, mais_antigo) dos PENDING vencidos; mais_antigo None sem fila."""
-        qtd, antigo = self._ler(conn, "overdue_queue", {"now": agora})[0]
+        qtd, antigo = self._ler(conn, "overdue_queue", {"now": now})[0]
         return int(qtd or 0), antigo
 
-    def running_without_pid(self, conn, agora, minutos):
-        linhas = self._ler(conn, "running_no_pid", {"cutoff": agora - datetime.timedelta(minutes=minutos)})
+    def running_without_pid(self, conn, now, minutes):
+        linhas = self._ler(conn, "running_no_pid", {"cutoff": now - datetime.timedelta(minutes=minutes)})
         return [dict(zip(COLS_NO_PID, r)) for r in linhas]
 
-    def last_purge(self, conn, agora, dias):
+    def last_purge(self, conn, now, days):
         """created_at do PURGE mais recente desde agora - dias (inclusive 0 linhas, CR-008 R-16), ou None."""
-        return self._ler(conn, "purge", {"cutoff": agora - datetime.timedelta(days=dias)})[0][0]
+        return self._ler(conn, "purge", {"cutoff": now - datetime.timedelta(days=days)})[0][0]
 
     def schema_version(self, conn):
         linhas = self._ler(conn, "version")

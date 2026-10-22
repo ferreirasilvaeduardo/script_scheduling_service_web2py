@@ -92,31 +92,31 @@ _FIELD_BY_CONSTRAINT = {
 }
 
 
-def _id(valor):
-    valor = admin_crud.text(valor, 11)
-    if valor is None or not _RE_ID.fullmatch(valor) or int(valor) < 1:
+def _id(value):
+    value = admin_crud.text(value, 11)
+    if value is None or not _RE_ID.fullmatch(value) or int(value) < 1:
         return None
-    return int(valor)
+    return int(value)
 
 
-def msg_named_without_flag(codigos):
+def msg_named_without_flag(codes):
     """Mensagem do bloqueio NOMEADO com os parametros sem flag."""
     return (u"Montagem por flag exige flag em todo parâmetro: cadastre a flag de %s no dicionário de parâmetros."
-            % u", ".join(codigos))
+            % u", ".join(codes))
 
 
-def normalize_filters(entrada):
+def normalize_filters(input_value):
     """Filtros da lista: nome (trecho), grupo, categoria, interpretador (allowlist logica) e ativo."""
-    entrada = entrada or {}
+    input_value = input_value or {}
     filtros = {}
     for chave in ("name", "script_group", "category"):
-        valor = admin_crud.text(entrada.get(chave), 60)
+        valor = admin_crud.text(input_value.get(chave), 60)
         if valor and _RE_FILTER.fullmatch(valor):
             filtros[chave] = valor
-    cmd = admin_crud.text(entrada.get("interpreter"), 60)
+    cmd = admin_crud.text(input_value.get("interpreter"), 60)
     if cmd in path_guard.ALLOWLIST:
         filtros["interpreter"] = cmd
-    ativo = admin_crud.text(entrada.get("active"), 1)
+    ativo = admin_crud.text(input_value.get("active"), 1)
     if ativo in ("Y", "N"):
         filtros["active"] = ativo
     return filtros
@@ -127,32 +127,32 @@ def _hash(obj):
     return hashlib.sha256(bruto.encode("utf-8")).hexdigest()
 
 
-def _read_back(vinculos):
-    return [(v["parameter_id"], v["sort_order"], v["required"], v.get("default_value_override")) for v in vinculos]
+def _read_back(links):
+    return [(v["parameter_id"], v["sort_order"], v["required"], v.get("default_value_override")) for v in links]
 
 
-def _links_version(vinculos, dicionario):
+def _links_version(links, mapping):
     """Hash dos vinculos lidos; o sub de parametro sensivel entra pelo marcador (README §6.5, §10).
 
     O esperado do repositorio continua com _lidos (valores reais).
     """
     def sub(v):
         valor = v.get("default_value_override")
-        if dicionario.get(v["parameter_id"], {}).get("sensitive") == "Y":
+        if mapping.get(v["parameter_id"], {}).get("sensitive") == "Y":
             return admin_crud.sensitive_marker(valor)
         return valor
-    return _hash([(v["parameter_id"], v["sort_order"], v["required"], sub(v)) for v in vinculos])
+    return _hash([(v["parameter_id"], v["sort_order"], v["required"], sub(v)) for v in links])
 
 
 class AdminScriptsService(object):
     """Regras do cadastro de scripts com repositorios, configuracao do agente, relogio e log injetados."""
 
-    def __init__(self, catalogo, agendamentos, sss_env, log, relogio):
-        self._catalog = catalogo
-        self._schedules = agendamentos
+    def __init__(self, catalog, schedules, sss_env, log, clock):
+        self._catalog = catalog
+        self._schedules = schedules
         self._env = sss_env
         self._log = log
-        self._clock = relogio
+        self._clock = clock
 
     def _get(self, script_id):
         sid = _id(script_id)
@@ -160,16 +160,16 @@ class AdminScriptsService(object):
             raise RepoNotFound("script invalido")
         return self._catalog.scripts_get(sid)
 
-    def _active_schedules(self, **filtros):
-        filtros["active"] = "Y"
-        return self._schedules.list(filtros=filtros, pagina=1, tamanho=_COUNT_PAGE_SIZE)["total"]
+    def _active_schedules(self, **filters):
+        filters["active"] = "Y"
+        return self._schedules.list(filters=filters, page=1, size=_COUNT_PAGE_SIZE)["total"]
 
     # ----------------------------------------------------------------- leitura
 
-    def list(self, ctx, filtros, pagina, tamanho):
+    def list(self, ctx, filters, page, size):
         """Pagina de scripts (nome ASC) com ambientes homologados e quantidade de parametros."""
         admin_crud.require_feature(ctx, FEATURE)
-        return self._catalog.scripts_list(filtros=filtros, pagina=pagina, tamanho=tamanho)
+        return self._catalog.scripts_list(filters=filters, page=page, size=size)
 
     def form(self, ctx, script_id=None):
         """Dados do formulario. Inclui agendamentos ativos na edicao."""
@@ -192,93 +192,93 @@ class AdminScriptsService(object):
 
     # ------------------------------------------------------------- validacao
 
-    def _field_text(self, dados, campo, erros, obrigatorio=False):
-        valor = admin_crud.text(dados.get(campo))
+    def _field_text(self, date, field, errors, required_flag=False):
+        valor = admin_crud.text(date.get(field))
         if valor is None:
-            if obrigatorio:
-                erros[campo] = MSG_NAME_REQUIRED if campo == "name" else MSG_PATH_REQUIRED
+            if required_flag:
+                errors[field] = MSG_NAME_REQUIRED if field == "name" else MSG_PATH_REQUIRED
             return None
         if _RE_CONTROL.search(valor):
-            erros[campo] = MSG_CONTROL_CHARS
-        elif len(valor) > MAX_LENGTHS[campo]:
-            erros[campo] = u"Use no máximo %d caracteres." % MAX_LENGTHS[campo]
+            errors[field] = MSG_CONTROL_CHARS
+        elif len(valor) > MAX_LENGTHS[field]:
+            errors[field] = u"Use no máximo %d caracteres." % MAX_LENGTHS[field]
         return valor
 
     @staticmethod
-    def _integer(dados, campo, minimo, maximo, erros, mensagem, opcional=False):
-        valor = admin_crud.text(dados.get(campo), 10)
-        if valor is None and opcional:
+    def _integer(date, field, minimum, maximum, errors, message, optional=False):
+        valor = admin_crud.text(date.get(field), 10)
+        if valor is None and optional:
             return None
-        if valor is None or not _RE_INTEGER.fullmatch(valor) or not minimo <= int(valor) <= maximo:
-            erros[campo] = mensagem
+        if valor is None or not _RE_INTEGER.fullmatch(valor) or not minimum <= int(valor) <= maximum:
+            errors[field] = message
             return None
         return int(valor)
 
-    def _validate(self, dados, erros, atual=None):
+    def _validate(self, date, errors, current_value=None):
         reg = {
-            "name": self._field_text(dados, "name", erros, obrigatorio=True),
-            "description": self._field_text(dados, "description", erros),
-            "script_group": self._field_text(dados, "script_group", erros),
-            "category": self._field_text(dados, "category", erros),
-            "stage": self._field_text(dados, "stage", erros),
-            "path_file": self._field_text(dados, "path_file", erros, obrigatorio=True),
-            "max_parallel_env": self._integer(dados, "max_parallel_env", 1, 999, erros, MSG_PARALLEL),
-            "timeout_s": self._integer(dados, "timeout_s", 1, MAX_TIMEOUT, erros, MSG_TIMEOUT, opcional=True),
+            "name": self._field_text(date, "name", errors, required_flag=True),
+            "description": self._field_text(date, "description", errors),
+            "script_group": self._field_text(date, "script_group", errors),
+            "category": self._field_text(date, "category", errors),
+            "stage": self._field_text(date, "stage", errors),
+            "path_file": self._field_text(date, "path_file", errors, required_flag=True),
+            "max_parallel_env": self._integer(date, "max_parallel_env", 1, 999, errors, MSG_PARALLEL),
+            "timeout_s": self._integer(date, "timeout_s", 1, MAX_TIMEOUT, errors, MSG_TIMEOUT, optional=True),
         }
         # Valor exato da allowlist: um HTML adulterado nunca grava outro interpretador.
-        cmd = dados.get("interpreter")
+        cmd = date.get("interpreter")
         try:
             path_guard.validate_interpreter(cmd)
         except PathGuardError as exc:
-            erros["interpreter"] = PATH_MESSAGES[exc.code]
+            errors["interpreter"] = PATH_MESSAGES[exc.code]
         reg["interpreter"] = cmd
         # D7 (README §8.5): a pasta de log do script nao pode ser a dos logs da aplicacao.
-        if reg["name"] and "name" not in erros and log_paths.is_reserved_name(reg["name"]):
-            erros["name"] = MSG_NAME_RESERVED
-        tipo = admin_crud.text(dados.get("param_type"), 15)
+        if reg["name"] and "name" not in errors and log_paths.is_reserved_name(reg["name"]):
+            errors["name"] = MSG_NAME_RESERVED
+        tipo = admin_crud.text(date.get("param_type"), 15)
         if tipo not in PARAM_TYPES:
-            erros["param_type"] = MSG_PARAM_TYPE
+            errors["param_type"] = MSG_PARAM_TYPE
         reg["param_type"] = tipo
         return reg
 
-    def validate_path(self, path_file, erros):
+    def validate_path(self, path_file, errors):
         """Confere o formato de path_file e as pastas do sistema (README §8.5; CR-011, S1). O arquivo nao e
         conferido aqui: o web pode nem ter o arquivo; o agente confere no servidor onde o script roda."""
-        if path_file is None or "path_file" in erros:
+        if path_file is None or "path_file" in errors:
             return
         try:
             path_guard.validate_registration(path_file)
             path_guard.check_forbidden_dirs(path_file)
         except PathGuardError as exc:
-            erros["path_file"] = PATH_MESSAGES[exc.code]
+            errors["path_file"] = PATH_MESSAGES[exc.code]
 
-    def _param_type_precheck(self, script_id, tipo, erros):
+    def _param_type_precheck(self, script_id, kind, errors):
         vinculos = self._catalog.script_params_get(script_id)
-        if tipo == "NONE" and vinculos:
-            erros["param_type"] = MSG_NONE_LINKED
-        elif tipo == "NAMED":
+        if kind == "NONE" and vinculos:
+            errors["param_type"] = MSG_NONE_LINKED
+        elif kind == "NAMED":
             sem_flag = [v["code"] for v in vinculos if not v.get("param_flag")]
             if sem_flag:
-                erros["param_type"] = msg_named_without_flag(sem_flag)
+                errors["param_type"] = msg_named_without_flag(sem_flag)
 
-    def _violation(self, ctx, exc, erros, script_id=None):
+    def _violation(self, ctx, exc, errors, script_id=None):
         if exc.constraint == "sss_scr_nomeado_sem_flag" and script_id:
-            erros["param_type"] = msg_named_without_flag(
+            errors["param_type"] = msg_named_without_flag(
                 [v["code"] for v in self._catalog.script_params_get(script_id) if not v.get("param_flag")])
         else:
             campo, mensagem = _FIELD_BY_CONSTRAINT.get(exc.constraint, (GENERAL_FIELD, admin_crud.MSG_FAILURE))
-            erros[campo] = mensagem
+            errors[campo] = mensagem
         self._log.warning("cadastro de script rejeitado pelo repositorio (login=%s constraint=%s)",
                           ctx.get("login"), exc.constraint, extra={"action": FEATURE})
 
     # ----------------------------------------------------------------- escrita
 
-    def save(self, ctx, ip, script_id, dados):
+    def save(self, ctx, ip, script_id, date):
         """Inclui ou altera um script. Retorna (id, erros, aviso). Lanca RepoNotFound e AccessDenied."""
         admin_crud.require_feature(ctx, FEATURE)
         erros = {}
         atual = None if script_id in (None, "") else self._get(script_id)
-        reg = self._validate(dados, erros, atual)
+        reg = self._validate(date, erros, atual)
         self.validate_path(reg["path_file"], erros)
         aviso = None
         if script_id in (None, ""):
@@ -287,7 +287,7 @@ class AdminScriptsService(object):
             novo = dict(reg, active="Y")
             auditoria = admin_crud.audit_entry(ctx, ip, "CREATE", admin_crud.insert_detail(novo, INSERT_FIELDS))
             try:
-                criado = self._catalog.scripts_insert(novo, auditoria=auditoria)
+                criado = self._catalog.scripts_insert(novo, audit=auditoria)
             except RepoViolation as exc:
                 self._violation(ctx, exc, erros)
                 return None, erros, None
@@ -300,7 +300,7 @@ class AdminScriptsService(object):
             self._param_type_precheck(atual["id"], reg["param_type"], erros)
         if erros:
             return atual["id"], erros, None
-        if admin_crud.text(dados.get("version"), 64) != admin_crud.version(atual, EDITABLE_FIELDS):
+        if admin_crud.text(date.get("version"), 64) != admin_crud.version(atual, EDITABLE_FIELDS):
             return atual["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}, None
         alteracoes = dict((c, reg[c]) for c in EDITABLE_FIELDS if c != "active")
 
@@ -308,8 +308,8 @@ class AdminScriptsService(object):
         if detalhe is None:
             return atual["id"], {}, aviso
         try:
-            self._catalog.scripts_update(atual["id"], alteracoes, esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
-                                           auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
+            self._catalog.scripts_update(atual["id"], alteracoes, expected=admin_crud.expected(atual, EDITABLE_FIELDS),
+                                           audit=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         except RepoConflict:
             return atual["id"], {GENERAL_FIELD: admin_crud.MSG_CONFLICT}, None
         except RepoViolation as exc:
@@ -319,11 +319,11 @@ class AdminScriptsService(object):
                        extra={"action": "UPDATE"})
         return atual["id"], {}, aviso
 
-    def toggle_active(self, ctx, ip, script_id, versao):
+    def toggle_active(self, ctx, ip, script_id, version):
         """Desativa (DEACTIVATE, com agendamentos ativos afetados) ou reativa (UPDATE) o script."""
         admin_crud.require_feature(ctx, FEATURE)
         atual = self._get(script_id)
-        if admin_crud.text(versao, 64) != admin_crud.version(atual, EDITABLE_FIELDS):
+        if admin_crud.text(version, 64) != admin_crud.version(atual, EDITABLE_FIELDS):
             raise RepoConflict("versao divergente")
         novo_ativo = "N" if atual["active"] == "Y" else "Y"
         mudancas = {"active": novo_ativo}
@@ -338,8 +338,8 @@ class AdminScriptsService(object):
         if novo_ativo == "N":
             detalhe = u"%s; agendamentos ativos afetados: %d" % (detalhe, self._active_schedules(script_id=atual["id"]))
         alterado = self._catalog.scripts_update(atual["id"], mudancas,
-                                                  esperado=admin_crud.expected(atual, EDITABLE_FIELDS),
-                                                  auditoria=admin_crud.audit_entry(ctx, ip, acao, detalhe))
+                                                  expected=admin_crud.expected(atual, EDITABLE_FIELDS),
+                                                  audit=admin_crud.audit_entry(ctx, ip, acao, detalhe))
         self._log.info("script %s (login=%s script=%s)", "desativado" if novo_ativo == "N" else "reativado",
                        ctx.get("login"), atual["name"], extra={"action": acao})
         return alterado
@@ -352,7 +352,7 @@ class AdminScriptsService(object):
         script = self._get(script_id)
         marcados = set(self._catalog.homologation_get(script["id"]))
         ambientes = []
-        for a in self._catalog.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"]:
+        for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["itens"]:
             if a["active"] != "Y" and a["id"] not in marcados:
                 continue
             ambientes.append({"id": a["id"], "name": a["name"], "description": a.get("description") or "",
@@ -362,7 +362,7 @@ class AdminScriptsService(object):
         return {"script": {"id": script["id"], "name": script["name"], "active": script["active"]},
                 "environments": ambientes, "version": _hash(sorted(marcados))}
 
-    def save_homologation(self, ctx, ip, script_id, ambiente_ids, versao):
+    def save_homologation(self, ctx, ip, script_id, environment_ids, version):
         """Substitui a homologacao (so ambientes ativos podem ser adicionados; inativos existentes podem sair, D9).
 
         Retorna (diff ou None, erros). Auditoria UPDATE com +/- e agendamentos ativos afetados.
@@ -370,7 +370,7 @@ class AdminScriptsService(object):
         admin_crud.require_feature(ctx, FEATURE)
         script = self._get(script_id)
         enviados = set()
-        for valor in (ambiente_ids if isinstance(ambiente_ids, (list, tuple)) else [ambiente_ids]):
+        for valor in (environment_ids if isinstance(environment_ids, (list, tuple)) else [environment_ids]):
             if valor in (None, ""):
                 continue
             aid = _id(valor)
@@ -378,9 +378,9 @@ class AdminScriptsService(object):
                 return None, {GENERAL_FIELD: MSG_HOMOLOG_INVALID}
             enviados.add(aid)
         atuais = self._catalog.homologation_get(script["id"])
-        if admin_crud.text(versao, 64) != _hash(sorted(atuais)):
+        if admin_crud.text(version, 64) != _hash(sorted(atuais)):
             return None, {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
-        ambientes = dict((a["id"], a) for a in self._catalog.environments_list(pagina=1, tamanho=_CATALOG_MAX)["itens"])
+        ambientes = dict((a["id"], a) for a in self._catalog.environments_list(page=1, size=_CATALOG_MAX)["itens"])
         if enviados - set(ambientes):
             return None, {GENERAL_FIELD: MSG_HOMOLOG_INVALID}
         inativos = set(i for i, a in ambientes.items() if a["active"] != "Y")
@@ -398,8 +398,8 @@ class AdminScriptsService(object):
         detalhe = admin_crud.free_detail(u"homologação: %s%s" % (
             diff, (u"; agendamentos ativos afetados: %d" % afetados) if removidos else u""))
         try:
-            self._catalog.homologation_save(script["id"], sorted(final), esperado=atuais,
-                                              auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
+            self._catalog.homologation_save(script["id"], sorted(final), expected=atuais,
+                                              audit=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         except RepoConflict:
             return None, {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
         self._log.info("homologacao alterada (login=%s script=%s)", ctx.get("login"), script["name"],
@@ -409,7 +409,7 @@ class AdminScriptsService(object):
     # -------------------------------------------------------------- vinculos
 
     def _dictionary(self):
-        return dict((p["id"], p) for p in self._catalog.parameters_list(pagina=1, tamanho=_CATALOG_MAX)["itens"])
+        return dict((p["id"], p) for p in self._catalog.parameters_list(page=1, size=_CATALOG_MAX)["itens"])
 
     def parameters(self, ctx, script_id):
         """Tela de vinculos: vinculos atuais (sub sigiloso nunca devolvido), dicionario para busca e versao."""
@@ -435,31 +435,31 @@ class AdminScriptsService(object):
         return {"script": {"id": script["id"], "name": script["name"], "param_type": script["param_type"]},
                 "vinculos": vinculos, "disponiveis": disponiveis, "version": _links_version(atuais, dicionario)}
 
-    def _build_links(self, script, vinculos_json, atuais, erros):
+    def _build_links(self, script, links_json, current, errors):
         """Valida o JSON do cliente e devolve a lista final ordenada (dicts completos para o compilador)."""
         try:
-            itens = json.loads(vinculos_json or "[]")
+            itens = json.loads(links_json or "[]")
         except ValueError:
             itens = None
         if not isinstance(itens, list) or len(itens) > MAX_LINKS:
-            erros[GENERAL_FIELD] = MSG_LINKS_INVALID
+            errors[GENERAL_FIELD] = MSG_LINKS_INVALID
             return None
         dicionario = self._dictionary()
-        atuais_por_id = dict((v["parameter_id"], v) for v in atuais)
+        atuais_por_id = dict((v["parameter_id"], v) for v in current)
         vistos = set()
         final = []
         for posicao, item in enumerate(itens, 1):
             pid = _id(str(item.get("parameter_id"))) if isinstance(item, dict) else None
             if pid is None or pid not in dicionario:
-                erros[GENERAL_FIELD] = MSG_LINKS_INVALID
+                errors[GENERAL_FIELD] = MSG_LINKS_INVALID
                 return None
             p = dicionario[pid]
             if pid in vistos:
-                erros[GENERAL_FIELD] = MSG_LINK_DUPLICATE % p["code"]
+                errors[GENERAL_FIELD] = MSG_LINK_DUPLICATE % p["code"]
                 return None
             vistos.add(pid)
             if p.get("active") != "Y" and pid not in atuais_por_id:
-                erros[GENERAL_FIELD] = MSG_LINK_INACTIVE % p["code"]
+                errors[GENERAL_FIELD] = MSG_LINK_INACTIVE % p["code"]
                 return None
             sub = item.get("default_value_override")
             sub = sub.strip() if isinstance(sub, str) else None
@@ -470,40 +470,40 @@ class AdminScriptsService(object):
                     try:
                         params_compiler.validate_value(p, sub)
                     except ParamError:
-                        erros["vinculo_%d" % pid] = MSG_SENSITIVE_INVALID
+                        errors["vinculo_%d" % pid] = MSG_SENSITIVE_INVALID
             elif sub:
                 try:
                     sub = params_compiler.validate_value(p, sub)
                     sub = "true" if sub is True else ("false" if sub is False else sub)
                 except ParamError as exc:
-                    erros["vinculo_%d" % pid] = exc.message
+                    errors["vinculo_%d" % pid] = exc.message
                     sub = None
                 if sub is not None and len(sub) > SUB_DEFAULT_MAX_LENGTH:
-                    erros["vinculo_%d" % pid] = u"O valor padrão específico aceita até %d caracteres." % SUB_DEFAULT_MAX_LENGTH
+                    errors["vinculo_%d" % pid] = u"O valor padrão específico aceita até %d caracteres." % SUB_DEFAULT_MAX_LENGTH
             else:
                 sub = None
             v = dict(p, parameter_id=pid, sort_order=posicao, required="Y" if item.get("required") is True else "N",
                      default_value_override=sub)
             final.append(v)
         if script["param_type"] == "NONE" and final:
-            erros[GENERAL_FIELD] = MSG_LINK_NONE
+            errors[GENERAL_FIELD] = MSG_LINK_NONE
         elif script["param_type"] == "NAMED":
             sem_flag = [v["code"] for v in final if not v.get("param_flag")]
             if sem_flag:
-                erros[GENERAL_FIELD] = msg_named_without_flag(sem_flag)
+                errors[GENERAL_FIELD] = msg_named_without_flag(sem_flag)
         return final
 
     @staticmethod
-    def _describe(vinculos):
+    def _describe(links):
         partes = []
-        for v in vinculos:
+        for v in links:
             texto = v["code"] + ("*" if v["required"] == "Y" else "")
             if v.get("default_value_override"):
                 texto += "=" + (MASK if v.get("sensitive") == "Y" else str(v["default_value_override"]))
             partes.append(texto)
         return u", ".join(partes) or u"(nenhum)"
 
-    def save_parameters(self, ctx, ip, script_id, vinculos_json, versao):
+    def save_parameters(self, ctx, ip, script_id, links_json, version):
         """Substitui os vinculos (ordem renumerada pela posicao). Retorna (descricao ou None, erros por campo).
 
         erros usa GENERAL_FIELD ou 'vinculo_<parametro_id>' (valor padrao especifico invalido).
@@ -511,10 +511,10 @@ class AdminScriptsService(object):
         admin_crud.require_feature(ctx, FEATURE)
         script = self._get(script_id)
         atuais = self._catalog.script_params_get(script["id"])
-        if admin_crud.text(versao, 64) != _links_version(atuais, self._dictionary()):
+        if admin_crud.text(version, 64) != _links_version(atuais, self._dictionary()):
             return None, {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
         erros = {}
-        final = self._build_links(script, vinculos_json, atuais, erros)
+        final = self._build_links(script, links_json, atuais, erros)
         if erros:
             return None, erros
         if _read_back(final) == _read_back(atuais):
@@ -525,7 +525,7 @@ class AdminScriptsService(object):
             self._catalog.script_params_save(
                 script["id"], [dict((k, v[k]) for k in ("parameter_id", "sort_order", "required", "default_value_override"))
                                for v in final],
-                esperado=_read_back(atuais), auditoria=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
+                expected=_read_back(atuais), audit=admin_crud.audit_entry(ctx, ip, "UPDATE", detalhe))
         except RepoConflict:
             return None, {GENERAL_FIELD: admin_crud.MSG_CONFLICT}
         except RepoViolation as exc:
@@ -540,7 +540,7 @@ class AdminScriptsService(object):
                        extra={"action": "UPDATE"})
         return depois, {}
 
-    def preview(self, ctx, script_id, vinculos_json=None):
+    def preview(self, ctx, script_id, links_json=None):
         """argv mascarado com os valores padrao (README §6.1), da configuracao em edicao ou da gravada.
 
         Retorna {argv: [...] | None, erros: {campo: msg}, aviso: str | None}. Nao grava nada.
@@ -549,10 +549,10 @@ class AdminScriptsService(object):
         script = self._get(script_id)
         atuais = self._catalog.script_params_get(script["id"])
         erros = {}
-        if vinculos_json is None:
+        if links_json is None:
             vinculos = atuais
         else:
-            vinculos = self._build_links(script, vinculos_json, atuais, erros)
+            vinculos = self._build_links(script, links_json, atuais, erros)
             if erros:
                 return {"argv": None, "erros": erros, "aviso": None}
         aviso = None
@@ -577,18 +577,18 @@ def _service():
             cfg = current.sss_cfg
             tickets = fabrica.get("tickets")
             _default = AdminScriptsService(
-                catalogo=fabrica.get("catalog"),
-                agendamentos=fabrica.get("schedules"),
+                catalog=fabrica.get("catalog"),
+                schedules=fabrica.get("schedules"),
                 sss_env=cfg.app.sss_env,
                 log=sss_logging.get_logger("sss_web", cfg),
-                relogio=tickets.now,
+                clock=tickets.now,
             )
         return _default
 
 
-def list_page(ctx, filtros, pagina, tamanho):
+def list_page(ctx, filters, page, size):
     """Pagina de scripts (servico padrao)."""
-    return _service().list(ctx, filtros, pagina, tamanho)
+    return _service().list(ctx, filters, page, size)
 
 
 def form(ctx, script_id=None):
@@ -596,14 +596,14 @@ def form(ctx, script_id=None):
     return _service().form(ctx, script_id)
 
 
-def save(ctx, ip, script_id, dados):
+def save(ctx, ip, script_id, date):
     """Inclusao ou alteracao de script (servico padrao)."""
-    return _service().save(ctx, ip, script_id, dados)
+    return _service().save(ctx, ip, script_id, date)
 
 
-def toggle_active(ctx, ip, script_id, versao):
+def toggle_active(ctx, ip, script_id, version):
     """Desativacao/reativacao de script (servico padrao)."""
-    return _service().toggle_active(ctx, ip, script_id, versao)
+    return _service().toggle_active(ctx, ip, script_id, version)
 
 
 def homologation(ctx, script_id):
@@ -611,9 +611,9 @@ def homologation(ctx, script_id):
     return _service().homologation(ctx, script_id)
 
 
-def save_homologation(ctx, ip, script_id, ambiente_ids, versao):
+def save_homologation(ctx, ip, script_id, environment_ids, version):
     """Gravacao da homologacao (servico padrao)."""
-    return _service().save_homologation(ctx, ip, script_id, ambiente_ids, versao)
+    return _service().save_homologation(ctx, ip, script_id, environment_ids, version)
 
 
 def parameters(ctx, script_id):
@@ -621,11 +621,11 @@ def parameters(ctx, script_id):
     return _service().parameters(ctx, script_id)
 
 
-def save_parameters(ctx, ip, script_id, vinculos_json, versao):
+def save_parameters(ctx, ip, script_id, links_json, version):
     """Gravacao dos vinculos (servico padrao)."""
-    return _service().save_parameters(ctx, ip, script_id, vinculos_json, versao)
+    return _service().save_parameters(ctx, ip, script_id, links_json, version)
 
 
-def preview(ctx, script_id, vinculos_json=None):
+def preview(ctx, script_id, links_json=None):
     """Previa do argv mascarado (servico padrao)."""
-    return _service().preview(ctx, script_id, vinculos_json)
+    return _service().preview(ctx, script_id, links_json)

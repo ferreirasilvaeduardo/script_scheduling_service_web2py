@@ -20,9 +20,9 @@ _COLUMNS_UPDATABLE = ("name", "script_id", "environment", "user_id", "priority",
                        "pause_reason", "active")
 
 
-def _null(valor):
+def _null(value):
     # O Oracle grava '' como NULL.
-    return valor is None or valor == ""
+    return value is None or value == ""
 
 
 def _check_cks(r):
@@ -67,38 +67,38 @@ class RepoSchedulesFake(RepoSchedules):
     def __init__(self, store):
         self._store = store
 
-    def list(self, filtros=None, pagina=1, tamanho=20, escopo_ambientes=None):
+    def list(self, filters=None, page=1, size=20, environment_scope=None):
         """Lista agendamentos paginados com desempate por id."""
-        filtros = filtros or {}
+        filters = filters or {}
         with self._store.lock_schedules:
             lista = list(self._store.schedules.values())
 
-            if escopo_ambientes is not None:
-                ambs_permitidos = set(escopo_ambientes)
+            if environment_scope is not None:
+                ambs_permitidos = set(environment_scope)
                 lista = [a for a in lista if a.get("environment") in ambs_permitidos]
 
-            ativo_f = filtros.get("active")
+            ativo_f = filters.get("active")
             if ativo_f:
                 lista = [a for a in lista if a.get("active") == ativo_f]
 
-            sid_f = filtros.get("script_id")
+            sid_f = filters.get("script_id")
             if sid_f is not None:
                 lista = [a for a in lista if a.get("script_id") == int(sid_f)]
 
-            amb_f = filtros.get("environment")
+            amb_f = filters.get("environment")
             if amb_f:
                 lista = [a for a in lista if a.get("environment") == amb_f]
 
-            usr_f = filtros.get("user_id")
+            usr_f = filters.get("user_id")
             if usr_f is not None:
                 lista = [a for a in lista if a.get("user_id") == int(usr_f)]
 
-            nome_f = filtros.get("name")
+            nome_f = filters.get("name")
             if nome_f:
                 lista = [a for a in lista if nome_f.lower() in a.get("name", "").lower()]
 
             lista.sort(key=lambda x: (x.get("next_run_at") or self._store.now(), x["id"]))
-            return paginate(lista, pagina=pagina, tamanho=tamanho)
+            return paginate(lista, page=page, size=size)
 
     def get(self, id):
         """Retorna dict com dados do agendamento pelo ID ou lanca RepoNotFound."""
@@ -107,20 +107,20 @@ class RepoSchedulesFake(RepoSchedules):
                 raise RepoNotFound("Agendamento ID %s nao encontrado" % id)
             return copy.deepcopy(self._store.schedules[id])
 
-    def _auditar(self, auditoria, id, acao_padrao=None, detalhe_padrao=None, ator=None):
-        if auditoria:
+    def _auditar(self, audit, id, default_action=None, default_detail=None, actor=None):
+        if audit:
             self._store.register_internal_audit(
-                ator=auditoria.get("actor"),
-                ip=auditoria.get("ip"),
-                acao=auditoria["action"],
-                entidade="tbsss_schedules",
-                entidade_id=id,
-                detalhe=auditoria.get("detail"),
+                actor=audit.get("actor"),
+                ip=audit.get("ip"),
+                action=audit["action"],
+                entity="tbsss_schedules",
+                entity_id=id,
+                detail=audit.get("detail"),
             )
-        elif acao_padrao:
+        elif default_action:
             self._store.register_internal_audit(
-                ator=ator, ip=None, acao=acao_padrao, entidade="tbsss_schedules",
-                entidade_id=id, detalhe=detalhe_padrao,
+                actor=actor, ip=None, action=default_action, entity="tbsss_schedules",
+                entity_id=id, detail=default_detail,
             )
 
     def _checar_fks(self, reg):
@@ -128,113 +128,113 @@ class RepoSchedulesFake(RepoSchedules):
         self._store.check_fk(reg["user_id"] in self._store.users, "fk_tbsss_sch_usr")
         self._store.check_fk(self._store.environment_exists(reg["environment"]), "fk_tbsss_sch_env")
 
-    def _conferir_esperado(self, id, atual, esperado):
-        for campo, valor in (esperado or {}).items():
-            if atual.get(campo) != valor:
+    def _conferir_esperado(self, id, current_value, expected):
+        for campo, valor in (expected or {}).items():
+            if current_value.get(campo) != valor:
                 raise RepoConflict("Agendamento ID %s alterado por outra operacao (%s)" % (id, campo))
 
-    def insert(self, dados, auditoria=None, ator=None):
+    def insert(self, date, audit=None, actor=None):
         """Insere novo agendamento com as CKs da tabela e auditoria na mesma operacao."""
         with self._store.lock_schedules:
-            ator = self._store.record_actor(auditoria, ator)
+            actor = self._store.record_actor(audit, actor)
             agora = self._store.now()
             novo = {
-                "name": dados.get("name"),
-                "script_id": int(dados["script_id"]),
-                "environment": dados["environment"],
-                "user_id": int(dados["user_id"]),
-                "priority": dados.get("priority", 2),
-                "recurrence_type": dados.get("recurrence_type"),
-                "cron_expression": dados.get("cron_expression"),
-                "run_time": dados.get("run_time"),
-                "week_days": dados.get("week_days"),
-                "month_day": dados.get("month_day"),
-                "params_json": dados.get("params_json", "{}"),
-                "start_date": dados.get("start_date") or agora,
-                "end_date": dados.get("end_date"),
-                "next_run_at": dados.get("next_run_at") or agora,
-                "last_run_at": dados.get("last_run_at"),
-                "last_ticket_id": dados.get("last_ticket_id"),
-                "pause_reason": dados.get("pause_reason"),
-                "active": dados.get("active", "Y"),
-                "created_at": dados.get("created_at") or agora,
+                "name": date.get("name"),
+                "script_id": int(date["script_id"]),
+                "environment": date["environment"],
+                "user_id": int(date["user_id"]),
+                "priority": date.get("priority", 2),
+                "recurrence_type": date.get("recurrence_type"),
+                "cron_expression": date.get("cron_expression"),
+                "run_time": date.get("run_time"),
+                "week_days": date.get("week_days"),
+                "month_day": date.get("month_day"),
+                "params_json": date.get("params_json", "{}"),
+                "start_date": date.get("start_date") or agora,
+                "end_date": date.get("end_date"),
+                "next_run_at": date.get("next_run_at") or agora,
+                "last_run_at": date.get("last_run_at"),
+                "last_ticket_id": date.get("last_ticket_id"),
+                "pause_reason": date.get("pause_reason"),
+                "active": date.get("active", "Y"),
+                "created_at": date.get("created_at") or agora,
             }
-            self._store.stamp_insert(novo, ator)
+            self._store.stamp_insert(novo, actor)
             _check_cks(novo)
             self._checar_fks(novo)
             aid = self._store.next_id("tbsss_schedules")
             novo["id"] = aid
             self._store.schedules[aid] = copy.deepcopy(novo)
-            self._auditar(auditoria, aid)
+            self._auditar(audit, aid)
             return copy.deepcopy(novo)
 
-    def update(self, id, dados, esperado=None, auditoria=None, ator=None):
+    def update(self, id, date, expected=None, audit=None, actor=None):
         """Altera agendamento (usuario_id do editor, README §10), condicional a 'esperado'.
 
         created_by guarda o criador original e nunca muda; updated_* recebe o editor (CR-006).
         """
         with self._store.lock_schedules:
-            ator = self._store.record_actor(auditoria, ator)
+            actor = self._store.record_actor(audit, actor)
             if id not in self._store.schedules:
                 raise RepoNotFound("Agendamento ID %s nao encontrado" % id)
 
             atual = self._store.schedules[id]
-            self._conferir_esperado(id, atual, esperado)
+            self._conferir_esperado(id, atual, expected)
             resultado = dict(atual)
             for k in _COLUMNS_UPDATABLE:
-                if k in dados:
-                    resultado[k] = dados[k]
+                if k in date:
+                    resultado[k] = date[k]
             # Validacao completa antes de aplicar: um UPDATE rejeitado nao altera nenhuma coluna.
             _check_cks(resultado)
             self._checar_fks(resultado)
             atual.update(resultado)
-            self._store.stamp_update(atual, ator)
-            self._auditar(auditoria, id)
+            self._store.stamp_update(atual, actor)
+            self._auditar(audit, id)
             return copy.deepcopy(atual)
 
-    def pause(self, id, motivo, antiga_data=None, auditoria=None, ator=None):
+    def pause(self, id, reason, old_date=None, audit=None, actor=None):
         """Pausa agendamento de forma otimista, validando antiga_data se informada."""
         with self._store.lock_schedules:
-            ator = self._store.record_actor(auditoria, ator)
+            actor = self._store.record_actor(audit, actor)
             if id not in self._store.schedules:
                 raise RepoNotFound("Agendamento ID %s nao encontrado" % id)
-            if motivo not in _REASONS_PAUSE:
+            if reason not in _REASONS_PAUSE:
                 raise RepoViolation("pausa_motivo invalido", constraint="ck_tbsss_sch_pause")
 
             a = self._store.schedules[id]
             if a.get("active") != "Y":
                 raise RepoConflict("Agendamento %s nao esta ativo (ja pausado ou concluido)" % id)
-            if antiga_data is not None:
+            if old_date is not None:
                 prox = a.get("next_run_at")
-                if prox != antiga_data:
+                if prox != old_date:
                     raise RepoConflict(
                         "Conflito otimista no agendamento %s: proxima_execucao divergiu (%s != %s)"
-                        % (id, prox, antiga_data)
+                        % (id, prox, old_date)
                     )
 
             a["active"] = "N"
-            a["pause_reason"] = motivo
-            self._store.stamp_update(a, ator)
-            self._auditar(auditoria, id, "SCHEDULE_PAUSE", "Agendamento pausado: reason=%s" % motivo, ator)
+            a["pause_reason"] = reason
+            self._store.stamp_update(a, actor)
+            self._auditar(audit, id, "SCHEDULE_PAUSE", "Agendamento pausado: reason=%s" % reason, actor)
             return copy.deepcopy(a)
 
-    def resume(self, id, nova_data, esperado=None, auditoria=None, ator=None):
+    def resume(self, id, new_date, expected=None, audit=None, actor=None):
         """Retoma agendamento pausado, limpando pausa_motivo e definindo next_run."""
         with self._store.lock_schedules:
-            ator = self._store.record_actor(auditoria, ator)
+            actor = self._store.record_actor(audit, actor)
             if id not in self._store.schedules:
                 raise RepoNotFound("Agendamento ID %s nao encontrado" % id)
 
             a = self._store.schedules[id]
-            self._conferir_esperado(id, a, esperado)
-            if nova_data is None:
+            self._conferir_esperado(id, a, expected)
+            if new_date is None:
                 raise RepoViolation("proxima_execucao e obrigatoria")
             a["active"] = "Y"
             a["pause_reason"] = None
-            a["next_run_at"] = nova_data
-            self._store.stamp_update(a, ator)
-            self._auditar(auditoria, id, "UPDATE",
-                          "Agendamento retomado com next_run_at=%s" % nova_data, ator)
+            a["next_run_at"] = new_date
+            self._store.stamp_update(a, actor)
+            self._auditar(audit, id, "UPDATE",
+                          "Agendamento retomado com next_run_at=%s" % new_date, actor)
             return copy.deepcopy(a)
 
     def ticket_status(self, ticket_id):

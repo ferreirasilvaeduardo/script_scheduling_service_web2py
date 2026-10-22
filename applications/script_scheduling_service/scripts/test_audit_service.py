@@ -31,8 +31,8 @@ CRITICAL_CONFIG = ("hb=10;fence=90;offline=180;call=30;kill=5;"
 TODAY = datetime.date(2026, 10, 15)
 
 
-def _read_csv(blocos):
-    corpo = b"".join(blocos)
+def _read_csv(chunks):
+    corpo = b"".join(chunks)
     texto = corpo.decode("utf-8")
     return corpo, list(csv.reader(io.StringIO(texto.lstrip(u"﻿")), delimiter=";"))
 
@@ -75,15 +75,15 @@ class _Base(unittest.TestCase):
         self.svc = AuditService(self.audit, lambda: self.now, self.log)
         self.svc_agentes = AgentsService(self.agents, self.catalog, lambda: self.now, THRESHOLDS, self.log, CRITICAL_CONFIG)
 
-    def _insert_row(self, created_at, actor="admin", acao="UPDATE", entidade="tbsss_scripts",
-                 entidade_id=1, detail="x", ip="127.0.0.1"):
+    def _insert_row(self, created_at, actor="admin", action="UPDATE", entity="tbsss_scripts",
+                 entity_id=1, detail="x", ip="127.0.0.1"):
         aid = self.store.next_id("tbsss_audit")
-        self.store.audit[aid] = {"id": aid, "actor": actor, "source_ip": ip, "action": acao, "entity": entidade,
-                                     "entity_id": entidade_id, "detail": detail, "created_at": created_at}
+        self.store.audit[aid] = {"id": aid, "actor": actor, "source_ip": ip, "action": action, "entity": entity,
+                                     "entity_id": entity_id, "detail": detail, "created_at": created_at}
         return aid
 
     def _exports(self):
-        return self.audit.list(filtros={"action": "AUDIT_EXPORT"}, pagina=1, tamanho=100)["itens"]
+        return self.audit.list(filters={"action": "AUDIT_EXPORT"}, page=1, size=100)["itens"]
 
 
 class TestFilters(unittest.TestCase):
@@ -282,7 +282,7 @@ class TestExport(_Base):
     def test_limite_de_linhas(self):
         for _ in range(audit_service.EXPORT_LIMIT + 20):
             self._insert_row(self.base)
-        resultado = self.audit.list(tamanho=1)
+        resultado = self.audit.list(size=1)
         self.assertEqual(resultado["total"], 10001)
         self.assertTrue(resultado["total_limitado"])
         _, linhas, blocos = self.svc.export_csv(self.ctx["admin"], IP, {})
@@ -310,8 +310,8 @@ class TestAgentHealth(unittest.TestCase):
 
     NOW = datetime.datetime(2026, 10, 15, 12, 0, 0)
 
-    def _health(self, idade_s, status="ACTIVE"):
-        hb = None if idade_s is None else self.NOW - datetime.timedelta(seconds=idade_s)
+    def _health(self, age_s, status="ACTIVE"):
+        hb = None if age_s is None else self.NOW - datetime.timedelta(seconds=age_s)
         return agents_service.health({"status": status, "heartbeat_at": hb}, self.NOW, THRESHOLDS)
 
     def test_quatro_limiares(self):
@@ -341,8 +341,8 @@ class TestAgentHealth(unittest.TestCase):
 
 class TestAgentsDashboard(_Base):
 
-    def _healths(self, agora=None):
-        painel = self.svc_agentes.dashboard(self.ctx["admin"], agora)
+    def _healths(self, now=None):
+        painel = self.svc_agentes.dashboard(self.ctx["admin"], now)
         return dict((a["code"], a["saude"]["code"]) for a in painel["agents"])
 
     def test_seed_em_estados_diferentes_mudando_com_o_relogio(self):
@@ -482,8 +482,8 @@ class TestHomeSummary(_Base):
     def test_contagem_igual_a_lista(self):
         resumo = self.svc_tickets.home_summary(self.ctx["op.prod"])
         desde = resumo["desde"]
-        itens = self.tickets.list(filtros={"criado_inicio": desde}, pagina=1, tamanho=1000,
-                                    escopo_ambientes=["HOMOLOGACAO", "PRODUCAO"])["itens"]
+        itens = self.tickets.list(filters={"criado_inicio": desde}, page=1, size=1000,
+                                    environment_scope=["HOMOLOGACAO", "PRODUCAO"])["itens"]
         for status, qtd in resumo["contagem"]:
             with self.subTest(status=status):
                 self.assertEqual(qtd, len([t for t in itens if t["status"] == status]))

@@ -23,7 +23,7 @@ _CATALOGO = (
 )
 
 
-def montar_menu(funcionalidades, is_admin, rota_atual=None):
+def montar_menu(features, is_admin, current_route=None):
     """Monta as secoes OPERACAO e ADMIN visiveis ao perfil.
 
     funcionalidades: iteravel de codigos concedidos ao perfil.
@@ -33,8 +33,8 @@ def montar_menu(funcionalidades, is_admin, rota_atual=None):
     omitindo secoes sem itens.
     """
     admin = is_admin is True or is_admin == "Y"
-    concedidas = frozenset(funcionalidades or ())
-    atual = tuple(rota_atual) if rota_atual else None
+    concedidas = frozenset(features or ())
+    atual = tuple(current_route) if current_route else None
 
     menu = []
     for secao, titulo, itens in _CATALOGO:

@@ -47,8 +47,8 @@ _COLS_FUNC = (
 class RepoRbacOracle(BaseRepoOracle, RepoRbac):
     """Repositorio de perfis e RBAC com SQL Oracle 11gR2."""
 
-    def __init__(self, cfg=None, segredos=None):
-        super(RepoRbacOracle, self).__init__(cfg=cfg, segredos=segredos)
+    def __init__(self, cfg=None, secrets=None):
+        super(RepoRbacOracle, self).__init__(cfg=cfg, secrets=secrets)
 
     def _tabela_perfis(self):
         return self.qualify_table("profiles")
@@ -92,31 +92,31 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
     def _seq_auditoria(self):
         return self.qualify_sequence("audit")
 
-    def profiles_list(self, filtros=None, pagina=1, tamanho=20, conn=None):
+    def profiles_list(self, filters=None, page=1, size=20, conn=None):
         """Lista perfis com paginacao e desempate deterministico por id."""
-        filtros = filtros or {}
+        filters = filters or {}
         clausulas = []
         binds = {}
 
-        nome_f = filtros.get("name")
+        nome_f = filters.get("name")
         if nome_f:
             clausulas.append("LOWER(name) LIKE :name_f")
             binds["name_f"] = "%" + nome_f.lower() + "%"
 
-        ativo_f = filtros.get("active")
+        ativo_f = filters.get("active")
         if ativo_f:
             clausulas.append("active = :active_f")
             binds["active_f"] = str(ativo_f).strip().upper()
 
-        is_admin_f = filtros.get("is_admin")
+        is_admin_f = filters.get("is_admin")
         if is_admin_f:
             clausulas.append("is_admin = :is_admin_f")
             binds["is_admin_f"] = str(is_admin_f).strip().upper()
 
         where_sql = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
 
-        p = 1 if pagina is None else int(pagina)
-        t = 20 if tamanho is None else int(tamanho)
+        p = 1 if page is None else int(page)
+        t = 20 if size is None else int(size)
         if p < 1:
             p = 1
         if t < 1:
@@ -186,18 +186,18 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
             finally:
                 cur.close()
 
-    def profiles_insert(self, dados, auditoria=None, ator=None, conn=None):
+    def profiles_insert(self, date, audit=None, actor=None, conn=None):
         """Insere novo perfil com validacoes de UK e CKs e auditoria na mesma transacao."""
-        ator_limpo = validate_record_actor(auditoria, ator)
-        nome = dados.get("name")
+        ator_limpo = validate_record_actor(audit, actor)
+        nome = date.get("name")
         if not nome or not str(nome).strip():
             raise repo_errors.RepoViolation("Nome de perfil e obrigatorio")
 
-        is_admin = str(dados.get("is_admin", "N")).strip().upper()
+        is_admin = str(date.get("is_admin", "N")).strip().upper()
         if is_admin not in ("Y", "N"):
             raise repo_errors.RepoViolation("Flag is_admin deve ser 'Y' ou 'N'", constraint=self.constraint_name("ck", "profiles", "adm"))
 
-        ativo = str(dados.get("active", "Y")).strip().upper()
+        ativo = str(date.get("active", "Y")).strip().upper()
         if ativo not in ("Y", "N"):
             raise repo_errors.RepoViolation("Flag ativo deve ser 'Y' ou 'N'", constraint=self.constraint_name("ck", "profiles", "active"))
 
@@ -212,7 +212,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                     raise repo_errors.RepoViolation("Perfil com nome '%s' ja existe" % nome, constraint=self.constraint_name("uk", "profiles", "name"))
 
                 pid = db_conn.next_id(c, self._seq_perfis())
-                perm_versao = int(dados.get("perm_version", 1))
+                perm_versao = int(date.get("perm_version", 1))
 
                 sql_ins = (
                     "INSERT INTO " + self._tabela_perfis() + " "
@@ -226,22 +226,22 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                     {
                         "id": pid,
                         "name": nome.strip(),
-                        "description": dados.get("description", ""),
+                        "description": date.get("description", ""),
                         "is_admin": is_admin,
                         "perm_version": perm_versao,
                         "active": ativo,
                         "actor": ator_limpo,
                     },
                 )
-                write_audit(c, self._tabela_auditoria(), self._seq_auditoria(), auditoria, "tbsss_profiles", pid)
+                write_audit(c, self._tabela_auditoria(), self._seq_auditoria(), audit, "tbsss_profiles", pid)
             finally:
                 cur.close()
 
             return self.profiles_get(pid, conn=c)
 
-    def profiles_update(self, id, dados, esperado=None, auditoria=None, ator=None, conn=None):
+    def profiles_update(self, id, date, expected=None, audit=None, actor=None, conn=None):
         """Altera perfil e incrementa perm_versao com protecao do ultimo admin (§4.3.B)."""
-        ator_limpo = validate_record_actor(auditoria, ator)
+        ator_limpo = validate_record_actor(audit, actor)
         with self.write_transaction(conn=conn) as c:
             cur = c.cursor()
             try:
@@ -257,7 +257,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
 
                 atual = self.tuple_to_dict(_COLS_PROFILE, row)
 
-                for campo, val_esp in (esperado or {}).items():
+                for campo, val_esp in (expected or {}).items():
                     val_atual = atual.get(campo)
                     if isinstance(val_atual, datetime.datetime) and isinstance(val_esp, datetime.datetime):
                         if val_atual.replace(microsecond=0) != val_esp.replace(microsecond=0):
@@ -265,7 +265,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                     elif val_atual != val_esp:
                         raise repo_errors.RepoConflict("Perfil ID %s alterado por outra operacao (%s)" % (id, campo))
 
-                novo_nome = dados.get("name")
+                novo_nome = date.get("name")
                 if novo_nome and novo_nome.strip().upper() != atual["name"].upper():
                     cur.execute(
                         "SELECT id FROM " + self._tabela_perfis() + " WHERE UPPER(name) = :n AND id != :id",
@@ -274,13 +274,13 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                     if cur.fetchone():
                         raise repo_errors.RepoViolation("Perfil com nome '%s' ja existe" % novo_nome, constraint=self.constraint_name("uk", "profiles", "name"))
 
-                novo_is_admin = dados.get("is_admin")
+                novo_is_admin = date.get("is_admin")
                 if novo_is_admin is not None:
                     novo_is_admin = str(novo_is_admin).strip().upper()
                     if novo_is_admin not in ("Y", "N"):
                         raise repo_errors.RepoViolation("Flag is_admin deve ser 'Y' ou 'N'", constraint=self.constraint_name("ck", "profiles", "adm"))
 
-                novo_ativo = dados.get("active")
+                novo_ativo = date.get("active")
                 if novo_ativo is not None:
                     novo_ativo = str(novo_ativo).strip().upper()
                     if novo_ativo not in ("Y", "N"):
@@ -322,46 +322,46 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                 params = {
                     "id": int(id),
                     "name": novo_nome.strip() if novo_nome else atual["name"],
-                    "description": dados.get("description", atual["description"]),
+                    "description": date.get("description", atual["description"]),
                     "is_admin": is_admin_efetivo,
                     "active": ativo_efetivo,
                     "actor": ator_limpo,
                 }
                 sql_upd = "UPDATE " + self._tabela_perfis() + " SET " + ", ".join(sets) + " WHERE id = :id"
                 cur.execute(sql_upd, params)
-                write_audit(c, self._tabela_auditoria(), self._seq_auditoria(), auditoria, "tbsss_profiles", int(id))
+                write_audit(c, self._tabela_auditoria(), self._seq_auditoria(), audit, "tbsss_profiles", int(id))
             finally:
                 cur.close()
 
             return self.profiles_get(id, conn=c)
 
-    def matrix_get(self, perfil_id, conn=None):
+    def matrix_get(self, profile_id, conn=None):
         """Retorna dict com {'funcs': [...], 'ambs': [...], 'scrs': [...]} ordenados."""
         with self.read_context(conn=conn) as c:
             cur = c.cursor()
             try:
-                cur.execute("SELECT id FROM " + self._tabela_perfis() + " WHERE id = :id", {"id": int(perfil_id)})
+                cur.execute("SELECT id FROM " + self._tabela_perfis() + " WHERE id = :id", {"id": int(profile_id)})
                 if not cur.fetchone():
-                    raise repo_errors.RepoNotFound("Perfil ID %s nao encontrado" % perfil_id)
+                    raise repo_errors.RepoNotFound("Perfil ID %s nao encontrado" % profile_id)
 
                 cur.execute(
                     "SELECT feature_id FROM " + self._tabela_perfil_func() + " "
                     "WHERE profile_id = :id ORDER BY feature_id ASC",
-                    {"id": int(perfil_id)},
+                    {"id": int(profile_id)},
                 )
                 funcs = [r[0] for r in cur.fetchall()]
 
                 cur.execute(
                     "SELECT environment_id FROM " + self._tabela_perfil_amb() + " "
                     "WHERE profile_id = :id ORDER BY environment_id ASC",
-                    {"id": int(perfil_id)},
+                    {"id": int(profile_id)},
                 )
                 ambs = [r[0] for r in cur.fetchall()]
 
                 cur.execute(
                     "SELECT script_id FROM " + self._tabela_perfil_scr() + " "
                     "WHERE profile_id = :id ORDER BY script_id ASC",
-                    {"id": int(perfil_id)},
+                    {"id": int(profile_id)},
                 )
                 scrs = [r[0] for r in cur.fetchall()]
 
@@ -373,12 +373,12 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
             finally:
                 cur.close()
 
-    def matrix_save(self, perfil_id, funcs, ambs, scrs, perm_versao_esperada=None, auditoria=None, ator=None, conn=None):
+    def matrix_save(self, profile_id, features_ids, envs, scrs, expected_perm_version=None, audit=None, actor=None, conn=None):
         """Substitui associacoes por diferenca preservando created_* (CR-006, R-f)."""
-        ator_limpo = validate_record_actor(auditoria, ator)
-        pid = int(perfil_id)
-        funcs_ids = sorted(set(int(x) for x in (funcs or [])))
-        ambs_ids = sorted(set(int(x) for x in (ambs or [])))
+        ator_limpo = validate_record_actor(audit, actor)
+        pid = int(profile_id)
+        funcs_ids = sorted(set(int(x) for x in (features_ids or [])))
+        ambs_ids = sorted(set(int(x) for x in (envs or [])))
         scrs_ids = sorted(set(int(x) for x in (scrs or [])))
 
         with self.write_transaction(conn=conn) as c:
@@ -393,7 +393,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                     raise repo_errors.RepoNotFound("Perfil ID %s nao encontrado" % pid)
                 perm_versao_atual = row[0]
 
-                if perm_versao_esperada is not None and perm_versao_atual != int(perm_versao_esperada):
+                if expected_perm_version is not None and perm_versao_atual != int(expected_perm_version):
                     raise repo_errors.RepoConflict("Matriz do perfil ID %s alterada por outra operacao" % pid)
 
                 # Validacao previa das Foreign Keys
@@ -493,7 +493,7 @@ class RepoRbacOracle(BaseRepoOracle, RepoRbac):
                         {"id": pid},
                     )
 
-                write_audit(c, self._tabela_auditoria(), self._seq_auditoria(), auditoria, "tbsss_profiles", pid)
+                write_audit(c, self._tabela_auditoria(), self._seq_auditoria(), audit, "tbsss_profiles", pid)
             finally:
                 cur.close()
 

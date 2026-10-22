@@ -23,12 +23,12 @@ DAEMON = {"PATH": "/opt/daemon/bin:/usr/bin", "HOME": "/home/sssagente", "TZ": "
           "LD_PRELOAD": "/tmp/x.so", "PYTHONPATH": "/tmp"}
 
 
-def _cfg(passthrough=("ORACLE_HOME", "NLS_LANG", "TNS_ADMIN"), usuarios=(), exec_work_dir=None):
-    return _Cfg(_AgentStub("srv-01", "C.UTF-8", tuple(passthrough), tuple(usuarios), exec_work_dir))
+def _cfg(passthrough=("ORACLE_HOME", "NLS_LANG", "TNS_ADMIN"), users=(), exec_work_dir=None):
+    return _Cfg(_AgentStub("srv-01", "C.UTF-8", tuple(passthrough), tuple(users), exec_work_dir))
 
 
-def _secrets(ambientes=None):
-    return Secrets(oracle_password="x" * 8, cookie_key=None, environments=ambientes or {})
+def _secrets(environments=None):
+    return Secrets(oracle_password="x" * 8, cookie_key=None, environments=environments or {})
 
 
 AMB = {"name": "PRODUCAO", "connection": "dbprod:1521/FAT"}
@@ -37,8 +37,8 @@ TICKET = {"id": 41, "environment": "PRODUCAO"}
 
 class TestEnvBuilder(unittest.TestCase):
 
-    def build(self, cfg=None, segredos=None, ambiente=AMB, environ=DAEMON):
-        return env_builder.build(cfg or _cfg(), segredos or _secrets(), TICKET, ambiente, SCRIPT, WORK,
+    def build(self, cfg=None, secrets=None, environment=AMB, environ=DAEMON):
+        return env_builder.build(cfg or _cfg(), secrets or _secrets(), TICKET, environment, SCRIPT, WORK,
                                      dict(environ), "LINUX")
 
     def test_variaveis_exatas_dev(self):
@@ -71,7 +71,7 @@ class TestEnvBuilder(unittest.TestCase):
         self.assertNotIn("TZ", env)
 
     def test_home_com_usuario_de_execucao(self):
-        cfg = _cfg(usuarios=(("PRODUCAO", "sssprd"),), exec_work_dir="/srv/sss/exec")
+        cfg = _cfg(users=(("PRODUCAO", "sssprd"),), exec_work_dir="/srv/sss/exec")
         with self.assertLogs("sss_scheduler", "WARNING"):
             env = self.build(cfg=cfg)
         self.assertEqual(env["HOME"], "/srv/sss/exec/sssprd/ticket_41")
@@ -92,7 +92,7 @@ class TestEnvBuilder(unittest.TestCase):
     def test_conexao_com_dsn_e_credencial_e_mascarador(self):
         cred = EnvironmentSecret("fat_app", "S3nh@Forte")
         with mock.patch.object(masking, "MASKER", masking.Masker()) as masc:
-            env = self.build(segredos=_secrets({"PRODUCAO": cred}))
+            env = self.build(secrets=_secrets({"PRODUCAO": cred}))
             self.assertEqual(env["PADRAO_VALOR_RUN_CONEXAO_BD"], "fat_app/S3nh@Forte@dbprod:1521/FAT")
             self.assertEqual(masc.mask("conexao fat_app/S3nh@Forte@dbprod:1521/FAT ok"), "conexao **** ok")
             self.assertNotIn("S3nh@Forte", masc.mask("senha S3nh@Forte"))
@@ -103,7 +103,7 @@ class TestEnvBuilder(unittest.TestCase):
                  (_secrets({"PRODUCAO": cred}), dict(AMB, connection="  "), "DSN"))
         for segredos, ambiente, motivo in casos:
             with self.assertLogs("sss_scheduler", "WARNING") as logs:
-                env = self.build(segredos=segredos, ambiente=ambiente)
+                env = self.build(secrets=segredos, environment=ambiente)
             self.assertNotIn("PADRAO_VALOR_RUN_CONEXAO_BD", env)
             self.assertIn(motivo, logs.output[0])
             self.assertNotIn("S3nh@Forte", logs.output[0], "WARN sem valores")
@@ -119,8 +119,8 @@ class TestEnvBuilder(unittest.TestCase):
         with mock.patch.object(masking, "MASKER", masking.Masker()):
             env = env_builder.build(_cfg(), _secrets({"PRODUCAO": cred}), ticket, amb, SCRIPT, WORK,
                                         dict(DAEMON), "LINUX", snapshot=snap,
-                                        agendamento={"name": "Carga noturna", "recurrence_type": "MONTHLY"},
-                                        caminho_log=log, timeout_seg=3600, hostname="srv-linux-01", versao="1.0")
+                                        schedule={"name": "Carga noturna", "recurrence_type": "MONTHLY"},
+                                        log_path=log, timeout_sec=3600, hostname="srv-linux-01", version="1.0")
         sss = dict((k, v) for k, v in env.items() if k.startswith("SSS_"))
         self.assertEqual(sss, {
             "SSS_TICKET_ID": "41", "SSS_PARENT_TICKET_ID": "7", "SSS_EXECUTION_TYPE": "AGENDADA",
@@ -147,8 +147,8 @@ class TestEnvBuilder(unittest.TestCase):
         with self.assertLogs("sss_scheduler", "WARNING"):
             env = env_builder.build(_cfg(), _secrets(), ticket, dict(AMB, description="  ", connection=None),
                                         SCRIPT, WORK, {}, "UNIX", snapshot={"script_name": ""},
-                                        agendamento={"name": "ignorado", "recurrence_type": "DAILY"},
-                                        hostname="", versao=None)
+                                        schedule={"name": "ignorado", "recurrence_type": "DAILY"},
+                                        hostname="", version=None)
         self.assertEqual(env["SSS_EXECUTION_TYPE"], "MANUAL")
         for ausente in ("SSS_RECURRENCE", "SSS_SCHEDULE_ID", "SSS_SCHEDULE_NAME", "SSS_PARENT_TICKET_ID",
                         "SSS_PRIORITY", "SSS_ENVIRONMENT_DESCRIPTION", "SSS_ENVIRONMENT_DSN", "SSS_ENVIRONMENT_USER",
@@ -160,7 +160,7 @@ class TestEnvBuilder(unittest.TestCase):
     def test_cr010_conexao_mascarada_nos_logs(self):
         cred = EnvironmentSecret("fat_app", "S3nh@Forte")
         with mock.patch.object(masking, "MASKER", masking.Masker()) as masc:
-            env = self.build(segredos=_secrets({"PRODUCAO": cred}))
+            env = self.build(secrets=_secrets({"PRODUCAO": cred}))
             self.assertEqual(masc.mask("SSS_ENVIRONMENT_CONNECTION=%s" % env["SSS_ENVIRONMENT_CONNECTION"]),
                              "SSS_ENVIRONMENT_CONNECTION=****")
         self.assertEqual(env["SSS_ENVIRONMENT_USER"], "fat_app")
@@ -177,7 +177,7 @@ class TestEnvBuilder(unittest.TestCase):
     def test_cr012_pasta_de_saida_so_quando_informada(self):
         with self.assertLogs("sss_scheduler", "WARNING"):
             env = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
-                                        pasta_saida="/srv/sss/output/producao/carga/2026/10/20/03/00/ticket_41")
+                                        output_dir="/srv/sss/output/producao/carga/2026/10/20/03/00/ticket_41")
             sem = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
         self.assertEqual(env["SSS_OUTPUT_DIR"], "/srv/sss/output/producao/carga/2026/10/20/03/00/ticket_41")
         self.assertNotIn("SSS_OUTPUT_DIR", sem)
@@ -185,7 +185,7 @@ class TestEnvBuilder(unittest.TestCase):
     def test_cr014_pasta_de_entrada_so_quando_informada(self):
         with self.assertLogs("sss_scheduler", "WARNING"):
             env = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX",
-                                        pasta_entrada="/srv/sss/input/producao/carga")
+                                        input_dir="/srv/sss/input/producao/carga")
             sem = env_builder.build(_cfg(), _secrets(), TICKET, AMB, SCRIPT, WORK, {}, "LINUX")
         self.assertEqual(env["SSS_INPUT_DIR"], "/srv/sss/input/producao/carga")
         self.assertNotIn("SSS_INPUT_DIR", sem)
@@ -206,9 +206,9 @@ class TestEnvBuilder(unittest.TestCase):
                                         ticket, dict(AMB, description="x"), SCRIPT, WORK, dict(DAEMON), "LINUX",
                                         snapshot={"script_id": 12, "script_name": "C", "interpreter": "SH",
                                                   "path_file": "/opt/automacoes/atual/carga.sh"},
-                                        agendamento={"name": "N", "recurrence_type": "CRON"},
-                                        caminho_log="/srv/sss/logs/x/ticket_41.log.parcial", timeout_seg=60,
-                                        hostname="h", versao="1.0", pasta_saida="/srv/s", pasta_entrada="/srv/e")
+                                        schedule={"name": "N", "recurrence_type": "CRON"},
+                                        log_path="/srv/sss/logs/x/ticket_41.log.parcial", timeout_sec=60,
+                                        hostname="h", version="1.0", output_dir="/srv/s", input_dir="/srv/e")
         self.assertEqual([k for k in antigos if k in env], [])
         self.assertTrue(set(("SSS_ENVIRONMENT", "SSS_OUTPUT_DIR", "SSS_INPUT_DIR", "SSS_SCHEDULE_NAME")) <= set(env))
 

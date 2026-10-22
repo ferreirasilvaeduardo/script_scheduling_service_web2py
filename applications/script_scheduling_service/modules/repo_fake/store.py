@@ -19,7 +19,7 @@ _DETAIL_MAX = 1000
 class FakeDataStore(object):
     """Armazenamento central em memoria simulando as tabelas Oracle."""
 
-    def __init__(self, relogio=None):
+    def __init__(self, clock=None):
         self.lock_users = threading.RLock()
         self.lock_rbac = threading.RLock()
         self.lock_catalog = threading.RLock()
@@ -28,7 +28,7 @@ class FakeDataStore(object):
         self.lock_audit = threading.RLock()
         self.lock_agents = threading.RLock()
 
-        self._clock_fn = relogio or (lambda: datetime.datetime.now().replace(microsecond=0))
+        self._clock_fn = clock or (lambda: datetime.datetime.now().replace(microsecond=0))
 
         self.environments = collections.OrderedDict()
         self.profiles = collections.OrderedDict()
@@ -64,21 +64,21 @@ class FakeDataStore(object):
             return dt.replace(microsecond=0)
         return dt
 
-    def set_clock(self, relogio):
+    def set_clock(self, clock):
         """Atualiza a funcao de relogio injetavel."""
-        self._clock_fn = relogio
+        self._clock_fn = clock
 
-    def next_id(self, tabela):
+    def next_id(self, table):
         """Simula a obtencao de sequence.NEXTVAL do Oracle."""
-        self.seqs[tabela] += 1
-        return self.seqs[tabela]
+        self.seqs[table] += 1
+        return self.seqs[table]
 
-    def register_internal_audit(self, ator, ip, acao, entidade, entidade_id=None, detalhe=None, id=None):
+    def register_internal_audit(self, actor, ip, action, entity, entity_id=None, detail=None, id=None):
         """Grava registro de auditoria dentro do lock do agregado atual."""
         # Paridade com o Oracle (README §2.5): ator NOT NULL e limites de coluna, sem valor padrao.
-        if not ator:
+        if not actor:
             raise RepoViolation("ator da auditoria e obrigatorio")
-        if len(ator) > _ACTOR_MAX or (detalhe is not None and len(detalhe) > _DETAIL_MAX):
+        if len(actor) > _ACTOR_MAX or (detail is not None and len(detail) > _DETAIL_MAX):
             raise RepoViolation("auditoria excede o tamanho da coluna (ORA-12899)")
         with self.lock_audit:
             aid = id if id is not None else self.next_id("tbsss_audit")
@@ -86,51 +86,51 @@ class FakeDataStore(object):
                 raise RepoViolation("id de auditoria ja usado", constraint="pk_tbsss_audit")
             reg = {
                 "id": aid,
-                "actor": ator,
+                "actor": actor,
                 "source_ip": ip,
-                "action": acao,
-                "entity": entidade,
-                "entity_id": entidade_id,
-                "detail": detalhe,
+                "action": action,
+                "entity": entity,
+                "entity_id": entity_id,
+                "detail": detail,
                 "created_at": self.now(),
             }
             self.audit[aid] = copy.deepcopy(reg)
             return copy.deepcopy(reg)
 
-    def record_actor(self, auditoria=None, ator=None):
+    def record_actor(self, audit=None, actor=None):
         """Ator das colunas de registro (CR-006, README §10): auditoria['ator'] ou ator=, obrigatorio.
 
         Chamado antes de qualquer gravacao: sem ator, nada e gravado (paridade com created_by NOT NULL).
         """
-        valor = (auditoria or {}).get("actor") or ator
+        valor = (audit or {}).get("actor") or actor
         if not valor:
             raise RepoViolation("ator das colunas de registro e obrigatorio")
         if len(valor) > ACTOR_MAX:
             raise RepoViolation("ator excede o tamanho da coluna (ORA-12899)")
         return valor
 
-    def stamp_insert(self, reg, ator):
+    def stamp_insert(self, reg, actor):
         """created_at (o informado ou SYSDATE) e created_by; updated_* nulos ate a 1a alteracao."""
         if not reg.get("created_at"):
             reg["created_at"] = self.now()
-        reg["created_by"] = ator
+        reg["created_by"] = actor
         reg["updated_at"] = None
         reg["updated_by"] = None
         return reg
 
-    def stamp_update(self, reg, ator):
+    def stamp_update(self, reg, actor):
         """updated_at = SYSDATE e updated_by em toda alteracao de negocio; created_* nunca muda."""
         reg["updated_at"] = self.now()
-        reg["updated_by"] = ator
+        reg["updated_by"] = actor
         return reg
 
-    def check_fk(self, existe, constraint):
+    def check_fk(self, exists, constraint):
         """FK do Oracle emulada: referencia inexistente vira RepoViolation com o nome da FK (README §2.5)."""
-        if not existe:
+        if not exists:
             raise RepoViolation("Referencia inexistente (%s)" % constraint, constraint=constraint)
 
-    def environment_exists(self, nome):
-        return any(a["name"] == nome for a in self.environments.values())
+    def environment_exists(self, name):
+        return any(a["name"] == name for a in self.environments.values())
 
     def login_exists(self, login):
         return any(u["login"] == login for u in self.users.values())
@@ -170,13 +170,13 @@ class FakeDataStore(object):
 LIMIT_TOTAL_PAGINATION = 10001
 
 
-def paginate(itens, pagina=1, tamanho=20):
+def paginate(items, page=1, size=20):
     """Pagina deterministica com total limitado a 10.001 (README §10)."""
-    total_limitado = len(itens) >= LIMIT_TOTAL_PAGINATION
-    total = min(len(itens), LIMIT_TOTAL_PAGINATION)
+    total_limitado = len(items) >= LIMIT_TOTAL_PAGINATION
+    total = min(len(items), LIMIT_TOTAL_PAGINATION)
     # Valor nao numerico propaga ValueError/TypeError: o controller valida a entrada antes.
-    p = 1 if pagina is None else int(pagina)
-    t = 20 if tamanho is None else int(tamanho)
+    p = 1 if page is None else int(page)
+    t = 20 if size is None else int(size)
 
     if p < 1:
         p = 1
@@ -185,7 +185,7 @@ def paginate(itens, pagina=1, tamanho=20):
 
     inicio = (p - 1) * t
     fim = inicio + t
-    fatia = itens[inicio:fim]
+    fatia = items[inicio:fim]
     return {
         "itens": copy.deepcopy(fatia),
         "total": total,

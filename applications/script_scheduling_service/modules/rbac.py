@@ -23,35 +23,35 @@ class Reason(object):
     NO_SCRIPT = "NO_SCRIPT"
 
 
-def _flag(valor):
+def _flag(value):
     # Somente 'S' ou True sao verdadeiros: 'N', '', None e afins negam.
-    return valor is True or valor == "Y"
+    return value is True or value == "Y"
 
 
-def _valid_id(valor):
-    return isinstance(valor, int) and not isinstance(valor, bool) and valor > 0
+def _valid_id(value):
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
-def user_context(estado):
+def user_context(state):
     """Monta o contexto de autorizacao a partir do estado de sessao e da matriz do perfil.
 
     estado: dict de RepoUsers.obter_estado_sessao acrescido de 'features'
     (codigos), 'environments' (nomes) e 'scripts' (ids).
     """
     return {
-        "user_id": estado["user_id"],
-        "login": estado["login"],
-        "name": estado.get("name") or estado["login"],
-        "profile_id": estado["profile_id"],
-        "perfil_nome": estado.get("perfil_nome") or "",
-        "is_admin": _flag(estado.get("is_admin")),
-        "usuario_ativo": _flag(estado.get("usuario_ativo")),
-        "perfil_ativo": _flag(estado.get("perfil_ativo")),
-        "features": frozenset(estado.get("features") or ()),
-        "environments": frozenset(estado.get("environments") or ()),
-        "scripts": frozenset(estado.get("scripts") or ()),
-        "perm_version": estado["perm_version"],
-        "session_epoch": estado.get("session_epoch", 0),
+        "user_id": state["user_id"],
+        "login": state["login"],
+        "name": state.get("name") or state["login"],
+        "profile_id": state["profile_id"],
+        "perfil_nome": state.get("perfil_nome") or "",
+        "is_admin": _flag(state.get("is_admin")),
+        "usuario_ativo": _flag(state.get("usuario_ativo")),
+        "perfil_ativo": _flag(state.get("perfil_ativo")),
+        "features": frozenset(state.get("features") or ()),
+        "environments": frozenset(state.get("environments") or ()),
+        "scripts": frozenset(state.get("scripts") or ()),
+        "perm_version": state["perm_version"],
+        "session_epoch": state.get("session_epoch", 0),
     }
 
 
@@ -59,26 +59,26 @@ def _active(ctx):
     return bool(ctx) and ctx.get("usuario_ativo") is True and ctx.get("perfil_ativo") is True
 
 
-def has_feature(ctx, codigo):
+def has_feature(ctx, code):
     """True se o perfil concede a funcionalidade; admin tem todas, desde que ativo."""
     if not _active(ctx):
         return False
     if ctx.get("is_admin") is True:
         return True
-    return codigo in ctx.get("features", ())
+    return code in ctx.get("features", ())
 
 
-def _environment_name(ambiente):
-    if isinstance(ambiente, dict):
-        ambiente = ambiente.get("name")
-    return ambiente if isinstance(ambiente, str) and ambiente else None
+def _environment_name(environment):
+    if isinstance(environment, dict):
+        environment = environment.get("name")
+    return environment if isinstance(environment, str) and environment else None
 
 
-def can_view_environment(ctx, ambiente):
+def can_view_environment(ctx, environment):
     """True se o perfil enxerga o ambiente (dict com 'nome' ou o proprio nome)."""
     if not _active(ctx):
         return False
-    nome = _environment_name(ambiente)
+    nome = _environment_name(environment)
     if nome is None:
         return False
     if ctx.get("is_admin") is True:
@@ -86,16 +86,16 @@ def can_view_environment(ctx, ambiente):
     return nome in ctx.get("environments", ())
 
 
-def can_execute(ctx, script, ambiente, homologacoes):
+def can_execute(ctx, script, environment, homologations):
     """Decisao composta de execucao (README §4.3.A). Retorna (bool, Reason.*).
 
     script e ambiente sao dicts do repositorio (id, ativo, nome); homologacoes e o
     iteravel de ambiente_id homologados para o script (tbsss_script_env).
     """
-    if not ctx or not isinstance(script, dict) or not isinstance(ambiente, dict):
+    if not ctx or not isinstance(script, dict) or not isinstance(environment, dict):
         return False, Reason.INVALID_DATA
-    if not _valid_id(script.get("id")) or not _valid_id(ambiente.get("id")) \
-            or _environment_name(ambiente) is None:
+    if not _valid_id(script.get("id")) or not _valid_id(environment.get("id")) \
+            or _environment_name(environment) is None:
         return False, Reason.INVALID_DATA
     if ctx.get("usuario_ativo") is not True:
         return False, Reason.USER_INACTIVE
@@ -103,29 +103,29 @@ def can_execute(ctx, script, ambiente, homologacoes):
         return False, Reason.PROFILE_INACTIVE
     if not _flag(script.get("active")):
         return False, Reason.SCRIPT_INACTIVE
-    if not _flag(ambiente.get("active")):
+    if not _flag(environment.get("active")):
         return False, Reason.ENVIRONMENT_INACTIVE
-    if ambiente["id"] not in frozenset(homologacoes or ()):
+    if environment["id"] not in frozenset(homologations or ()):
         return False, Reason.NOT_HOMOLOGATED
     if ctx.get("is_admin") is True:
         return True, Reason.OK
     if "EXEC_SCRIPT" not in ctx.get("features", ()):
         return False, Reason.NO_FEATURE
-    if ambiente["name"] not in ctx.get("environments", ()):
+    if environment["name"] not in ctx.get("environments", ()):
         return False, Reason.NO_ENVIRONMENT
     if script["id"] not in ctx.get("scripts", ()):
         return False, Reason.NO_SCRIPT
     return True, Reason.OK
 
 
-def pause_reason_for(motivo_rbac):
+def pause_reason_for(rbac_reason):
     """Motivo de pausa da regra (tbsss_schedules.pausa_motivo) para um motivo de can_execute.
 
     Traducao unica para a web e o daemon (CR-008, R-33; README §7.5): USER_INACTIVE,
     SCRIPT_INACTIVE e ENVIRONMENT_INACTIVE passam direto; os demais viram NO_PERMISSION.
     """
-    if motivo_rbac in (Reason.USER_INACTIVE, Reason.SCRIPT_INACTIVE, Reason.ENVIRONMENT_INACTIVE):
-        return motivo_rbac
+    if rbac_reason in (Reason.USER_INACTIVE, Reason.SCRIPT_INACTIVE, Reason.ENVIRONMENT_INACTIVE):
+        return rbac_reason
     return "NO_PERMISSION"
 
 
@@ -149,10 +149,10 @@ def can_cancel(ctx, ticket):
         and solicitante == ctx.get("login")
 
 
-def allowed_priority(ctx, prioridade):
+def allowed_priority(ctx, priority):
     """Prioridade entre 1 e 4; a prioridade 1 e exclusiva de admin (README §5.3)."""
-    if not _active(ctx) or not _valid_id(prioridade) or prioridade not in PRIORITIES:
+    if not _active(ctx) or not _valid_id(priority) or priority not in PRIORITIES:
         return False
-    if prioridade == ADMIN_PRIORITY:
+    if priority == ADMIN_PRIORITY:
         return ctx.get("is_admin") is True
     return True

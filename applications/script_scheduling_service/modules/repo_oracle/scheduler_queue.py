@@ -31,14 +31,14 @@ class DuplicateAgent(RuntimeError):
     """Outro processo ativo com o mesmo agent_id (README §8.12, passo 7)."""
 
 
-def system_actor(agente_id):
-    return "SYSTEM:%s" % agente_id
+def system_actor(agent_id):
+    return "SYSTEM:%s" % agent_id
 
 
-def _placeholders(prefixo, valores):
+def _placeholders(prefix, values):
     """(':p0, :p1', {'p0': v0, 'p1': v1}): placeholders gerados por contagem; valores sempre em bind."""
-    nomes = ["%s%d" % (prefixo, i) for i in range(len(valores))]
-    return ", ".join(":" + n for n in nomes), dict(zip(nomes, valores))
+    nomes = ["%s%d" % (prefix, i) for i in range(len(values))]
+    return ", ".join(":" + n for n in nomes), dict(zip(nomes, values))
 
 
 class _Transaction(object):
@@ -51,32 +51,32 @@ class _Transaction(object):
     def __enter__(self):
         return self.conn
 
-    def __exit__(self, tipo, valor, tb):
-        if tipo is None:
+    def __exit__(self, kind, value, tb):
+        if kind is None:
             self.conn.commit()
             return False
-        if issubclass(tipo, (DuplicateAgent, RegistrationLost)):
+        if issubclass(kind, (DuplicateAgent, RegistrationLost)):
             self.conn.rollback()
             return False
         with db_conn.transaction(self.conn):
-            raise valor
+            raise value
 
 
-def _read_lob(valor):
-    return valor.read() if hasattr(valor, "read") else valor
+def _read_lob(value):
+    return value.read() if hasattr(value, "read") else value
 
 
 class RepoSchedulerQueue(object):
 
-    def __init__(self, owner, prefixo):
-        t = lambda nome: sql_ident.table(owner, prefixo, nome)  # noqa: E731
-        self._p = prefixo
+    def __init__(self, owner, prefix):
+        t = lambda nome: sql_ident.table(owner, prefix, nome)  # noqa: E731
+        self._p = prefix
         self._tck, self._scr, self._env = t("tickets"), t("scripts"), t("environments")
         self._agt, self._aud, self._usr, self._prf = t("agents"), t("audit"), t("users"), t("profiles")
         self._pfea, self._penv, self._pscr = t("profile_feature"), t("profile_env"), t("profile_script")
         self._fea, self._senv, self._sch = t("features"), t("script_env"), t("schedules")
-        self._seq_agt = sql_ident.sequence(owner, prefixo, "agents")
-        self._seq_aud = sql_ident.sequence(owner, prefixo, "audit")
+        self._seq_agt = sql_ident.sequence(owner, prefix, "agents")
+        self._seq_aud = sql_ident.sequence(owner, prefix, "audit")
 
     @classmethod
     def from_config(cls, cfg):
@@ -86,21 +86,21 @@ class RepoSchedulerQueue(object):
     # Auditoria (mesma transacao da operacao; README §4.4)
     # -------------------------------------------------------------------------
 
-    def _auditar(self, cur, conn, ator, acao, entidade_id, detalhe):
-        if not ator or len(ator) > ACTOR_MAX or (detalhe is not None and len(detalhe) > DETAIL_MAX):
+    def _auditar(self, cur, conn, actor, action, entity_id, detail):
+        if not actor or len(actor) > ACTOR_MAX or (detail is not None and len(detail) > DETAIL_MAX):
             raise ValueError("ator ou detalhe de auditoria fora do limite")
         cur.execute("INSERT INTO " + self._aud + " (id, actor, source_ip, action, entity, entity_id, detail, "
                     "created_at) VALUES (:id, :actor, NULL, :action, :entity, :entity_id, :detail, SYSDATE)",
-                    id=db_conn.next_id(conn, self._seq_aud), actor=ator, action=acao,
-                    entity="tbsss_agents", entity_id=entidade_id, detail=detalhe)
+                    id=db_conn.next_id(conn, self._seq_aud), actor=actor, action=action,
+                    entity="tbsss_agents", entity_id=entity_id, detail=detail)
 
     # -------------------------------------------------------------------------
     # Selecao de candidatos (§8.2) e claim (§8.3)
     # -------------------------------------------------------------------------
 
-    def active_environments(self, conn, atendidos):
+    def active_environments(self, conn, served):
         """(ativos, inexistentes) entre os ambientes atendidos, relidos a cada ciclo do orquestrador (D2)."""
-        nomes = sorted(set(atendidos or ()))
+        nomes = sorted(set(served or ()))
         if not nomes:
             return [], []
         ph, binds = _placeholders("env", nomes)
@@ -112,7 +112,7 @@ class RepoSchedulerQueue(object):
             cur.close()
         return [n for n in nomes if achados.get(n) == "Y"], [n for n in nomes if n not in achados]
 
-    def candidates(self, conn, ambientes, interpretadores, lote, envelhecimento_min):
+    def candidates(self, conn, environments, interpreters, batch, aging_min):
         """Lote de tickets PENDING vencidos, pela prioridade efetiva (README §8.2; CR-007 R-07; CR-008 R-20;
         CR-013).
 
@@ -122,23 +122,23 @@ class RepoSchedulerQueue(object):
         por (prioridade efetiva, inicio, id). Dentro de uma prioridade, a efetiva so cai com a espera, entao
         a janela contem o lote exato da ordem completa (inicio = GREATEST(scheduled_at, created_at)).
         """
-        if not ambientes or not interpretadores or lote < 1:
+        if not environments or not interpreters or batch < 1:
             return []
-        ambientes = list(ambientes)
+        environments = list(environments)
         cur = conn.cursor()
         try:
-            ph_int, b_int = _placeholders("int", list(interpretadores))
+            ph_int, b_int = _placeholders("int", list(interpreters))
             cur.execute("SELECT id, max_parallel_env FROM " + self._scr + " WHERE interpreter IN ("
                         + ph_int + ")", b_int)
             tetos = dict((int(sid), int(teto or 0)) for sid, teto in cur.fetchall())
             if not tetos:
                 return []
-            ph_amb, b_amb = _placeholders("env", ambientes)
+            ph_amb, b_amb = _placeholders("env", environments)
             cur.execute("SELECT script_id, environment, COUNT(*) FROM " + self._tck + " WHERE status = 'RUNNING'"
                         " AND environment IN (" + ph_amb + ") GROUP BY script_id, environment", b_amb)
             rodando = dict(((int(sid), amb), int(n)) for sid, amb, n in cur.fetchall())
-            blocos, binds = [], {"batch_size": int(lote), "env_min": int(envelhecimento_min)}
-            for i, amb in enumerate(ambientes):
+            blocos, binds = [], {"batch_size": int(batch), "env_min": int(aging_min)}
+            for i, amb in enumerate(environments):
                 elegiveis = sorted(sid for sid, teto in tetos.items() if rodando.get((sid, amb), 0) < teto)
                 if not elegiveis:
                     continue
@@ -173,7 +173,7 @@ class RepoSchedulerQueue(object):
         finally:
             cur.close()
 
-    def claim(self, conn, ticket_id, script_id, ambiente, agente_id):
+    def claim(self, conn, ticket_id, script_id, environment, agent_id):
         """Claim em tres passos numa transacao (README §8.3). (True, None, started_at) ou (False, motivo, extra)
         com motivo 'LOCK' (extra = o codigo, ORA-30006 ou ORA-00054, para o WARN do laco; README §13, CR-007
         R-32), 'TETO' ou 'PERDIDO' (extra None). Ordem de locks: scripts -> tickets."""
@@ -193,7 +193,7 @@ class RepoSchedulerQueue(object):
                 conn.rollback()
                 return False, "PERDIDO", None
             cur.execute("SELECT COUNT(*) FROM " + self._tck + " WHERE script_id = :script_id AND environment = :environment "
-                        "AND status = 'RUNNING'", script_id=int(script_id), environment=ambiente)
+                        "AND status = 'RUNNING'", script_id=int(script_id), environment=environment)
             if cur.fetchone()[0] >= int(linha[1]):
                 conn.rollback()
                 return False, "TETO", None
@@ -203,7 +203,7 @@ class RepoSchedulerQueue(object):
                         "log_offset_chars = 0, updated_at = SYSDATE, updated_by = :actor "
                         "WHERE id = :ticket_id AND status = 'PENDING' AND cancel_requested = 'N' "
                         "RETURNING started_at INTO :started_at",
-                        agent_id=agente_id, actor=system_actor(agente_id), ticket_id=int(ticket_id),
+                        agent_id=agent_id, actor=system_actor(agent_id), ticket_id=int(ticket_id),
                         started_at=started)
             if cur.rowcount != 1:
                 conn.rollback()
@@ -304,14 +304,14 @@ class RepoSchedulerQueue(object):
         estado["scripts"] = [x[0] for x in cur.fetchall()]
         return rbac.user_context(estado)
 
-    def active_homologated_script(self, conn, script_id, ambiente):
+    def active_homologated_script(self, conn, script_id, environment):
         """Script ativo e homologado para o ambiente (README §8.4 passo 1)."""
         cur = conn.cursor()
         try:
             cur.execute("SELECT COUNT(*) FROM " + self._scr + " s JOIN " + self._senv + " sa ON sa.script_id = s.id "
                         "JOIN " + self._env + " a ON a.id = sa.environment_id "
                         "WHERE s.id = :script_id AND s.active = 'Y' AND a.name = :environment",
-                        script_id=int(script_id), environment=ambiente)
+                        script_id=int(script_id), environment=environment)
             return cur.fetchone()[0] > 0
         finally:
             cur.close()
@@ -330,7 +330,7 @@ class RepoSchedulerQueue(object):
     # Transicoes do ticket (§5.1, §8.4 passo 5, §8.7)
     # -------------------------------------------------------------------------
 
-    def register_pid(self, conn, ticket_id, agente_id, pid, process_start):
+    def register_pid(self, conn, ticket_id, agent_id, pid, process_start):
         """PID e identidade do processo (README §8.4 passo 5). Rotina tecnica, sem updated_*.
         False = posse perdida (OWNERSHIP_LOST)."""
         with db_conn.transaction(conn):
@@ -338,15 +338,15 @@ class RepoSchedulerQueue(object):
             try:
                 cur.execute("UPDATE " + self._tck + " SET process_id = :pid, process_start = :process_start "
                             "WHERE id = :ticket_id AND agent_id = :agent_id AND status = 'RUNNING'",
-                            pid=int(pid), process_start=process_start, ticket_id=int(ticket_id), agent_id=agente_id)
+                            pid=int(pid), process_start=process_start, ticket_id=int(ticket_id), agent_id=agent_id)
                 return cur.rowcount == 1
             finally:
                 cur.close()
 
-    def return_to_queue(self, conn, ticket_id, agente_id):
+    def return_to_queue(self, conn, ticket_id, agent_id):
         """RUNNING -> PENDING para script nunca iniciado (CR-007 R-03); com cancelamento pedido, CANCELLED/
         CANCEL_USER/-1 na mesma transacao (CR-008 R-02). 'DEVOLVIDO' | 'CANCELADO' | 'PERDIDO'."""
-        ator = system_actor(agente_id)
+        ator = system_actor(agent_id)
         with db_conn.transaction(conn):
             cur = conn.cursor()
             try:
@@ -354,19 +354,19 @@ class RepoSchedulerQueue(object):
                             "heartbeat_at = NULL, log_output = NULL, log_offset_chars = 0, "
                             "updated_at = SYSDATE, updated_by = :actor WHERE id = :ticket_id AND status = 'RUNNING' "
                             "AND agent_id = :agent_id AND process_id IS NULL AND cancel_requested = 'N'",
-                            actor=ator, ticket_id=int(ticket_id), agent_id=agente_id)
+                            actor=ator, ticket_id=int(ticket_id), agent_id=agent_id)
                 if cur.rowcount == 1:
                     return "DEVOLVIDO"
                 cur.execute("UPDATE " + self._tck + " SET status = 'CANCELLED', status_reason = 'CANCEL_USER', "
                             "return_code = -1, finished_at = SYSDATE, updated_at = SYSDATE, updated_by = :actor "
                             "WHERE id = :ticket_id AND status = 'RUNNING' AND agent_id = :agent_id "
                             "AND process_id IS NULL AND cancel_requested = 'Y'",
-                            actor=ator, ticket_id=int(ticket_id), agent_id=agente_id)
+                            actor=ator, ticket_id=int(ticket_id), agent_id=agent_id)
                 return "CANCELADO" if cur.rowcount == 1 else "PERDIDO"
             finally:
                 cur.close()
 
-    def finalize(self, conn, ticket_id, agente_id, status, motivo, rc):
+    def finalize(self, conn, ticket_id, agent_id, status, reason, rc):
         """Finalizacao pelo agente dono (README §8.7 passo 4). False = posse perdida (rowcount 0)."""
         if status not in TERMINAL_STATUSES:
             raise ValueError("status terminal invalido: %r" % (status,))
@@ -376,13 +376,13 @@ class RepoSchedulerQueue(object):
                 cur.execute("UPDATE " + self._tck + " SET status = :status, status_reason = :reason, "
                             "return_code = :rc, finished_at = SYSDATE, updated_at = SYSDATE, updated_by = :actor "
                             "WHERE id = :ticket_id AND agent_id = :agent_id AND status = 'RUNNING'",
-                            status=status, reason=motivo, rc=rc, actor=system_actor(agente_id),
-                            ticket_id=int(ticket_id), agent_id=agente_id)
+                            status=status, reason=reason, rc=rc, actor=system_actor(agent_id),
+                            ticket_id=int(ticket_id), agent_id=agent_id)
                 return cur.rowcount == 1
             finally:
                 cur.close()
 
-    def mark_node_offline(self, conn, agente_id, node_offline_timeout_s, salto_de_relogio):
+    def mark_node_offline(self, conn, agent_id, node_offline_timeout_s, clock_jump):
         """Deteccao de no offline (README §8.8, literal, em duas etapas; CR-007 R-12; CR-008 R-10).
 
         Na mesma transacao: SYSDATE primeiro e salto_de_relogio(sysdate) -> True aborta sem marcar nada
@@ -390,18 +390,18 @@ class RepoSchedulerQueue(object):
         vencido, FOR UPDATE SKIP LOCKED (linhas travadas ficam para o ciclo seguinte), e o UPDATE por
         executemany com updated_* do agente que detectou (CR-006). Devolve os ids marcados.
         """
-        ator = system_actor(agente_id)
+        ator = system_actor(agent_id)
         with db_conn.transaction(conn):
             cur = conn.cursor()
             try:
                 cur.execute("SELECT SYSDATE FROM DUAL")
-                if salto_de_relogio(cur.fetchone()[0]):
+                if clock_jump(cur.fetchone()[0]):
                     return None
                 cur.execute("SELECT id FROM " + self._tck + " WHERE (" + _RUN + ") IS NOT NULL"
                             " AND (" + _RUN + ") <> :agent_id"
                             " AND heartbeat_at < SYSDATE - :node_offline_timeout_s * INTERVAL '1' SECOND"
                             " FOR UPDATE SKIP LOCKED",
-                            agent_id=agente_id, node_offline_timeout_s=int(node_offline_timeout_s))
+                            agent_id=agent_id, node_offline_timeout_s=int(node_offline_timeout_s))
                 ids = [int(r[0]) for r in cur.fetchall()]
                 if ids:
                     cur.executemany("UPDATE " + self._tck + " SET status = 'FAILED', status_reason = 'NODE_OFFLINE',"
@@ -414,33 +414,33 @@ class RepoSchedulerQueue(object):
             finally:
                 cur.close()
 
-    def finalize_fenced(self, conn, ticket_id, agente_id):
+    def finalize_fenced(self, conn, ticket_id, agent_id):
         """Recuperacao do fencing sem .sss_result (README §8.9): FAILED/FENCED/-2 so se o ticket ainda for deste
         agente e RUNNING. False e esperado se outro no ja o marcou NODE_OFFLINE."""
-        return self.finalize(conn, ticket_id, agente_id, "FAILED", "FENCED", -2)
+        return self.finalize(conn, ticket_id, agent_id, "FAILED", "FENCED", -2)
 
-    def own_sweep(self, conn, agente_id):
+    def own_sweep(self, conn, agent_id):
         """{ticket_id: cancel_requested} dos RUNNING deste agente (README §8.7; ix_tck_run)."""
         cur = conn.cursor()
         try:
             cur.execute("SELECT id, cancel_requested FROM " + self._tck + " WHERE (" + _RUN + ") = :agent_id",
-                        agent_id=agente_id)
+                        agent_id=agent_id)
             return dict((r[0], (r[1] or "").strip()) for r in cur.fetchall())
         finally:
             cur.close()
 
-    def agent_running_tickets(self, conn, agente_id):
+    def agent_running_tickets(self, conn, agent_id):
         """RUNNING deste agente para o startup check (README §8.12 passo 9)."""
         cur = conn.cursor()
         try:
             cur.execute("SELECT id, process_id, process_start, cancel_requested FROM " + self._tck +
-                        " WHERE (" + _RUN + ") = :agent_id ORDER BY id", agent_id=agente_id)
+                        " WHERE (" + _RUN + ") = :agent_id ORDER BY id", agent_id=agent_id)
             return [{"id": r[0], "process_id": r[1], "process_start": r[2],
                      "cancel_requested": (r[3] or "").strip()} for r in cur.fetchall()]
         finally:
             cur.close()
 
-    def heartbeat(self, conn, agente_id, hostname, pid, ids):
+    def heartbeat(self, conn, agent_id, hostname, pid, ids):
         """Heartbeat dos tickets (executemany, arraydmlrowcounts) e do agente numa transacao, com o SYSDATE
         (README §8.7; CR-007 R-11, R-28). Devolve (ids_perdidos, sysdate). Rotina tecnica: sem updated_*.
         rowcount 0 no agente: ROLLBACK e RegistrationLost. O chamador captura o instante monotonico ANTES desta
@@ -453,14 +453,14 @@ class RepoSchedulerQueue(object):
                 if ids:
                     cur.executemany("UPDATE " + self._tck + " SET heartbeat_at = SYSDATE WHERE id = :id "
                                     "AND agent_id = :agent_id AND status = 'RUNNING'",
-                                    [{"id": i, "agent_id": agente_id} for i in ids], arraydmlrowcounts=True)
+                                    [{"id": i, "agent_id": agent_id} for i in ids], arraydmlrowcounts=True)
                     contagens = cur.getarraydmlrowcounts()
                     perdidos = [i for i, n in zip(ids, contagens) if n == 0]
                 cur.execute("UPDATE " + self._agt + " SET heartbeat_at = SYSDATE WHERE code = :agent_id "
                             "AND hostname = :hostname AND daemon_pid = :pid AND status = 'ACTIVE'",
-                            agent_id=agente_id, hostname=hostname, pid=int(pid))
+                            agent_id=agent_id, hostname=hostname, pid=int(pid))
                 if cur.rowcount != 1:
-                    raise RegistrationLost("registro do agente %s assumido por outro processo" % agente_id)
+                    raise RegistrationLost("registro do agente %s assumido por outro processo" % agent_id)
                 cur.execute("SELECT SYSDATE FROM DUAL")
                 agora = cur.fetchone()[0]
                 return perdidos, agora
@@ -471,7 +471,7 @@ class RepoSchedulerQueue(object):
     # Registro, conferencia e parada do agente (§8.11, §8.12 passo 7)
     # -------------------------------------------------------------------------
 
-    def check_config(self, conn, agente_id, config_criticos, node_offline_timeout_s):
+    def check_config(self, conn, agent_id, config_criticos, node_offline_timeout_s):
         """[(codigo, config_criticos)] dos outros agentes ATIVO com heartbeat recente e configuracao diferente
         (CR-007, R-23)."""
         cur = conn.cursor()
@@ -479,27 +479,27 @@ class RepoSchedulerQueue(object):
             cur.execute("SELECT code, critical_config FROM " + self._agt + " WHERE status = 'ACTIVE' "
                         "AND code <> :agent_id AND heartbeat_at > SYSDATE - :offline_s / 86400 "
                         "AND (critical_config IS NULL OR critical_config <> :config) ORDER BY code",
-                        agent_id=agente_id, offline_s=int(node_offline_timeout_s), config=config_criticos)
+                        agent_id=agent_id, offline_s=int(node_offline_timeout_s), config=config_criticos)
             return [(r[0], r[1]) for r in cur.fetchall()]
         finally:
             cur.close()
 
-    def register_agent(self, conn, dados, processo_existe, tentativas=2):
+    def register_agent(self, conn, date, process_exists, attempts=2):
         """Registro do agente sob FOR UPDATE WAIT 5 (README §8.12 passo 7; CR-007 R-11). Devolve o id.
 
         dados: code, hostname, pid, version, environments, platform, interpreters, critical_config,
         node_offline_timeout_s. process_exists: os_platform.process_exists (o repositorio nao conhece o SO).
         Duplicidade: DuplicateAgent. Corrida na inclusao (uk_<prefixo>agt_codigo): ROLLBACK e nova tentativa.
         """
-        for tentativa in range(tentativas):
+        for tentativa in range(attempts):
             try:
-                return self._registrar_agente(conn, dados, processo_existe)
+                return self._registrar_agente(conn, date, process_exists)
             except Exception as exc:
-                if tentativa + 1 < tentativas and db_conn.classify_error(exc) == ("ORA", 1):
+                if tentativa + 1 < attempts and db_conn.classify_error(exc) == ("ORA", 1):
                     continue  # ORA-00001 em uk_<prefixo>agt_codigo: outro processo incluiu antes; relê
                 raise
 
-    def _registrar_agente(self, conn, d, processo_existe):
+    def _registrar_agente(self, conn, d, process_exists):
         ator = system_actor(d["code"])
         with _Transaction(conn):
             cur = conn.cursor()
@@ -511,7 +511,7 @@ class RepoSchedulerQueue(object):
                 r = cur.fetchone()
                 if r is not None and (r[3] or "").strip() == "ACTIVE" and r[4] == "Y":
                     outro_host = r[1] != d["hostname"]
-                    outro_pid = r[2] is not None and int(r[2]) != int(d["pid"]) and processo_existe(int(r[2]))
+                    outro_pid = r[2] is not None and int(r[2]) != int(d["pid"]) and process_exists(int(r[2]))
                     if outro_host or outro_pid:
                         raise DuplicateAgent("agent_id %s ativo em %s (pid %s)" % (d["code"], r[1], r[2]))
                 binds = dict(code=d["code"], hostname=d["hostname"], pid=int(d["pid"]), version=d["version"],
@@ -538,20 +538,20 @@ class RepoSchedulerQueue(object):
             finally:
                 cur.close()
 
-    def stop_agent(self, conn, agente_id, hostname, pid, modo):
+    def stop_agent(self, conn, agent_id, hostname, pid, mode):
         """status = 'PARADO' com updated_* e AGENT_STOP, com o filtro de hostname/pid do heartbeat (README
         §8.11). False se o registro ja nao era deste processo."""
-        ator = system_actor(agente_id)
+        ator = system_actor(agent_id)
         with db_conn.transaction(conn):
             cur = conn.cursor()
             try:
                 cur.execute("UPDATE " + self._agt + " SET status = 'STOPPED', updated_at = SYSDATE, updated_by = :actor "
                             "WHERE code = :agent_id AND hostname = :hostname AND daemon_pid = :pid "
-                            "AND status = 'ACTIVE'", actor=ator, agent_id=agente_id, hostname=hostname, pid=int(pid))
+                            "AND status = 'ACTIVE'", actor=ator, agent_id=agent_id, hostname=hostname, pid=int(pid))
                 if cur.rowcount != 1:
                     return False
-                cur.execute("SELECT id FROM " + self._agt + " WHERE code = :agent_id", agent_id=agente_id)
-                self._auditar(cur, conn, ator, "AGENT_STOP", cur.fetchone()[0], "Agente parado (%s)" % modo)
+                cur.execute("SELECT id FROM " + self._agt + " WHERE code = :agent_id", agent_id=agent_id)
+                self._auditar(cur, conn, ator, "AGENT_STOP", cur.fetchone()[0], "Agente parado (%s)" % mode)
                 return True
             finally:
                 cur.close()

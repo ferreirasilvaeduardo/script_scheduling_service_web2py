@@ -36,14 +36,14 @@ _Cfg = collections.namedtuple("_Cfg", "agent")
 _CfgSnap = collections.namedtuple("_CfgSnap", "interpreters")
 
 
-def _wait(condicao, prazo=10.0):
+def _wait(condition, deadline=10.0):
     """So do harness de teste."""
-    limite = time.monotonic() + prazo
+    limite = time.monotonic() + deadline
     while time.monotonic() < limite:
-        if condicao():
+        if condition():
             return True
         time.sleep(0.02)
-    return condicao()
+    return condition()
 
 
 def _alive(pid):
@@ -55,9 +55,9 @@ def _alive(pid):
     return conteudo[conteudo.rindex(")") + 2:].split()[0] != "Z"
 
 
-def _read(caminho):
+def _read(path):
     try:
-        with open(caminho) as f:
+        with open(path) as f:
             return f.read()
     except OSError:
         return ""
@@ -95,22 +95,22 @@ class _Base(unittest.TestCase):
                 os.chmod(os.path.join(atual, d), 0o700)
         shutil.rmtree(self.root, ignore_errors=True)
 
-    def start(self, comando, ticket_id=1, argv=None, env=None, rotulo=None):
+    def start(self, command, ticket_id=1, argv=None, env=None, label=None):
         wd = executor.prepare_directory(self.work, ticket_id)
         fd, _parcial = executor.open_log(self.logs, "DEV", "Teste Script", STARTED_AT, ticket_id)
-        ex = executor.start(ticket_id, argv or [SH, "-c", comando], fd, env or {"PATH": "/usr/bin:/bin"}, wd,
-                              None, None, os_platform.DEFAULT_RLIMITS, rotulo or "SSS-srv-01-%d" % ticket_id)
+        ex = executor.start(ticket_id, argv or [SH, "-c", command], fd, env or {"PATH": "/usr/bin:/bin"}, wd,
+                              None, None, os_platform.DEFAULT_RLIMITS, label or "SSS-srv-01-%d" % ticket_id)
         self.execs.append(ex)
         return ex
 
     def dir_log(self):
         return os.path.join(self.logs, "dev", "teste_script", "2026", "10", "16", "14", "05")
 
-    def until_exit(self, ex, prazo=10):
-        self.assertTrue(_wait(lambda: executor.check(ex) is not None, prazo), "o script nao terminou")
+    def until_exit(self, ex, deadline=10):
+        self.assertTrue(_wait(lambda: executor.check(ex) is not None, deadline), "o script nao terminou")
         return ex.returncode
 
-    def stop(self, ex, grace_s=1, prazo=10):
+    def stop(self, ex, grace_s=1, deadline=10):
         """Ciclo do laco do daemon: cada chamada volta logo; o harness so repete ate o grupo acabar."""
         inicio = time.monotonic()
         executor.request_stop(ex, time.monotonic(), grace_s=grace_s)
@@ -121,7 +121,7 @@ class _Base(unittest.TestCase):
             fim = executor.advance_stop(ex, time.monotonic())
             self.assertLess(time.monotonic() - t, 0.5, "avancar_encerramento nao pode bloquear")
             return fim
-        self.assertTrue(_wait(_passo, prazo), "o grupo nao acabou")
+        self.assertTrue(_wait(_passo, deadline), "o grupo nao acabou")
         return time.monotonic() - inicio
 
 
@@ -201,7 +201,7 @@ class TestStop(_Base):
         pronto = os.path.join(self.root, "pronto")
         ex = self.start("trap '' TERM; touch %s; sleep 300 & sleep 300" % pronto)
         self.assertTrue(_wait(lambda: os.path.exists(pronto)))
-        duracao = self.stop(ex, grace_s=1, prazo=5)
+        duracao = self.stop(ex, grace_s=1, deadline=5)
         self.assertLess(duracao, 2.0)
         self.assertEqual(ex.phase, executor.PHASE_END)
         self.assertEqual(executor.check(ex), -signal.SIGKILL)
@@ -271,12 +271,12 @@ class TestLocalState(_Base):
         original = os_platform.start_process
         vistos = {}
 
-        def _confere(spec, log_fd, usuario):
+        def _confere(spec, log_fd, user):
             wd = os.path.join(self.work, "ticket_3")
             vistos["spawn"] = os_platform.read_state(os.path.join(wd, executor.SPAWN))
             vistos["proc"] = os.path.exists(os.path.join(wd, executor.PROC))
             vistos["spec"] = spec
-            return original(spec, log_fd, usuario)
+            return original(spec, log_fd, user)
 
         with mock.patch.object(os_platform, "start_process", side_effect=_confere):
             ex = self.start("sleep 300", ticket_id=3)
@@ -354,10 +354,10 @@ class TestSpawnFailures(_Base):
         neto = os.path.join(self.root, "neto.pid")
         original = os_platform.write_state
 
-        def _grava(caminho, dados):
-            if caminho.endswith(executor.PROC):
+        def _grava(path, date):
+            if path.endswith(executor.PROC):
                 raise OSError(28, "No space left on device")
-            return original(caminho, dados)
+            return original(path, date)
 
         with mock.patch.object(os_platform, "write_state", side_effect=_grava), \
                 self.assertLogs("sss_scheduler", "ERROR"):
@@ -390,7 +390,7 @@ class TestSpawnFailures(_Base):
         erro = UnicodeEncodeError("utf-8", "x", 0, 1, "surrogates not allowed")
         with mock.patch.object(os_platform, "start_process", side_effect=erro), \
                 self.assertLogs("sss_scheduler", "ERROR"):
-            ex = self.start("echo nunca", ticket_id=12, rotulo="SSS-srv-linux-prod-01-12")
+            ex = self.start("echo nunca", ticket_id=12, label="SSS-srv-linux-prod-01-12")
         self.assertTrue(ex.spawn_error)
         self.assertFalse(ex.failed_after_spawn)
         self.assertIsNone(ex.process)
@@ -425,8 +425,8 @@ class TestSpawnFailures(_Base):
     def test_especificacao_do_helper_com_usuario_de_execucao(self):
         capturado = {}
 
-        def _captura(spec, log_fd, usuario):
-            capturado.update(spec=spec, usuario=usuario)
+        def _captura(spec, log_fd, user):
+            capturado.update(spec=spec, usuario=user)
             raise RuntimeError("sem sudo no teste")
 
         wd = executor.prepare_directory(self.work, 15)
@@ -445,7 +445,7 @@ class TestSpawnFailures(_Base):
 
     def test_cr014_entrada_na_especificacao_e_criada_em_dev(self):
         self.assertEqual(executor.build_spec(15, ["/bin/true"], {}, {}, "/srv/exec/sssprd",
-                                                entrada=("/srv/sss/input/producao", "carga"))["input"],
+                                                input_value=("/srv/sss/input/producao", "carga"))["input"],
                          {"base": "/srv/sss/input/producao", "relativo": "carga"})
         self.assertNotIn("input", executor.build_spec(15, ["/bin/true"], {}, {}, "/srv/exec/sssprd"))
         base = os.path.join(self.root, "input", "dev")
@@ -454,7 +454,7 @@ class TestSpawnFailures(_Base):
         with mock.patch.object(os_platform, "start_process", side_effect=RuntimeError("parar")), \
                 self.assertLogs("sss_scheduler", "ERROR"):
             executor.start(16, ["/bin/true"], fd, {}, wd, None, None, os_platform.DEFAULT_RLIMITS, "SSS-srv-01-16",
-                             entrada=(base, "teste_script"))
+                             input_value=(base, "teste_script"))
         self.assertEqual(os.stat(os.path.join(base, "teste_script")).st_mode & 0o777, 0o700)
 
 
@@ -491,8 +491,8 @@ class TestSnapshotV4(_Base):
             env = env_builder.build(cfg, Secrets("x" * 8, None, {}), ticket,
                                         {"name": "DEV", "connection": None, "description": "Desenvolvimento"},
                                         script_real, wd, {}, os_platform.NAME, snapshot=snap,
-                                        agendamento={"name": "Diario DEV", "recurrence_type": "DAILY"},
-                                        caminho_log=parcial, timeout_seg=60, hostname="host-dev", versao="t")
+                                        schedule={"name": "Diario DEV", "recurrence_type": "DAILY"},
+                                        log_path=parcial, timeout_sec=60, hostname="host-dev", version="t")
         ex = executor.start(21, argv, fd, env, wd, None, None, os_platform.DEFAULT_RLIMITS, "SSS-srv-01-21")
         self.execs.append(ex)
         self.assertEqual(self.until_exit(ex), 0, _read(ex.log_path))

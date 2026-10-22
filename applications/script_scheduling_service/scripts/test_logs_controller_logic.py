@@ -31,14 +31,14 @@ MARKER_TRUNCATED = "[SSS] log truncado no banco; arquivo integral no agente\n"
 
 class _Clock(object):
 
-    def __init__(self, instante):
-        self.instant = instante
+    def __init__(self, instant):
+        self.instant = instant
 
     def __call__(self):
         return self.instant
 
-    def advance(self, segundos):
-        self.instant += datetime.timedelta(seconds=segundos)
+    def advance(self, seconds):
+        self.instant += datetime.timedelta(seconds=seconds)
 
 
 class _BaseLog(unittest.TestCase):

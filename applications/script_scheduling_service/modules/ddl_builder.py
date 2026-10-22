@@ -373,9 +373,9 @@ COLUMN_COMMENTS = {
 }
 
 
-def _format_column(col_nome, col_info):
+def _format_column(col_name, col_info):
     """Formata a declaracao de uma coluna em CREATE TABLE."""
-    partes = [col_nome, col_info["tipo"]]
+    partes = [col_name, col_info["tipo"]]
     if col_info.get("default") is not None:
         partes.append("DEFAULT {}".format(col_info["default"]))
     if col_info.get("not_null"):
@@ -383,7 +383,7 @@ def _format_column(col_nome, col_info):
     return "    {}".format(" ".join(partes))
 
 
-def build_ddl_statements(owner, prefixo, lob_storage="SECUREFILE"):
+def build_ddl_statements(owner, prefix, lob_storage="SECUREFILE"):
     """Gera todas as instrucoes DDL em ordem estrita de fases (README §11.1).
 
     Fases:
@@ -397,8 +397,8 @@ def build_ddl_statements(owner, prefixo, lob_storage="SECUREFILE"):
     Retorna lista de ItemDDL(fase, tipo, nome, sql, entidade).
     """
     sql_ident.validate_owner(owner)
-    sql_ident.validate_prefix(prefixo)
-    esquema = sql_ident.names(prefixo)
+    sql_ident.validate_prefix(prefix)
+    esquema = sql_ident.names(prefix)
     instrucoes = []
 
     # -------------------------------------------------------------------------
@@ -570,11 +570,11 @@ def build_ddl_statements(owner, prefixo, lob_storage="SECUREFILE"):
     return instrucoes
 
 
-def build_comment_statements(owner, prefixo):
+def build_comment_statements(owner, prefix):
     """Gera declaracoes COMMENT ON TABLE e COMMENT ON COLUMN para todas as tabelas e colunas."""
     sql_ident.validate_owner(owner)
-    sql_ident.validate_prefix(prefixo)
-    esquema = sql_ident.names(prefixo)
+    sql_ident.validate_prefix(prefix)
+    esquema = sql_ident.names(prefix)
     comandos = []
 
     for entidade, t in esquema.items():
@@ -599,9 +599,9 @@ def build_comment_statements(owner, prefixo):
     return comandos
 
 
-def build_ddl_script(owner, prefixo, lob_storage="SECUREFILE", incluir_comentarios=True):
+def build_ddl_script(owner, prefix, lob_storage="SECUREFILE", include_comments=True):
     """Gera script SQL completo pronto para visualizacao ou execucao via cliente."""
-    instrucoes = build_ddl_statements(owner, prefixo, lob_storage=lob_storage)
+    instrucoes = build_ddl_statements(owner, prefix, lob_storage=lob_storage)
     fases_titulos = {
         1: "FASE 1: SEQUENCES",
         2: "FASE 2: TABELAS",
@@ -616,7 +616,7 @@ def build_ddl_script(owner, prefixo, lob_storage="SECUREFILE", incluir_comentari
         "-- Script Scheduling Service (SSS) - DDL Oracle 11gR2",
         "-- Gerado automaticamente a partir do registro sql_ident.py (F7.1)",
         "-- Owner: {}".format(owner),
-        "-- Prefixo: {}".format(prefixo),
+        "-- Prefixo: {}".format(prefix),
         "-- LOB Storage: {}".format(lob_storage),
         "-- ==============================================================================",
         "",
@@ -641,8 +641,8 @@ def build_ddl_script(owner, prefixo, lob_storage="SECUREFILE", incluir_comentari
             linhas.append(item.sql + ";")
             linhas.append("")
 
-    if incluir_comentarios:
-        comentarios = build_comment_statements(owner, prefixo)
+    if include_comments:
+        comentarios = build_comment_statements(owner, prefix)
         if comentarios:
             linhas.extend([
                 "-- ------------------------------------------------------------------------------",
@@ -660,7 +660,7 @@ def build_ddl_script(owner, prefixo, lob_storage="SECUREFILE", incluir_comentari
 GRANT_ROLES = ("web", "agent", "purge", "monitor")
 
 
-def build_grants_by_role(owner, prefixo, papeis_usuarios):
+def build_grants_by_role(owner, prefix, user_roles):
     """Gera comandos GRANT para os usuarios informados por papel (README §11.1).
 
     papeis_usuarios: dict com mapeamento papel -> usuario_oracle, ex:
@@ -671,16 +671,16 @@ def build_grants_by_role(owner, prefixo, papeis_usuarios):
     tem todos os privilegios e GRANT para si mesmo falha (ORA-01749); fica um comentario no lugar.
     """
     sql_ident.validate_owner(owner)
-    sql_ident.validate_prefix(prefixo)
-    esquema = sql_ident.names(prefixo)
+    sql_ident.validate_prefix(prefix)
+    esquema = sql_ident.names(prefix)
     comandos = []
 
-    desconhecidos = sorted(set(papeis_usuarios or {}) - set(GRANT_ROLES))
+    desconhecidos = sorted(set(user_roles or {}) - set(GRANT_ROLES))
     if desconhecidos:
         raise ValueError("Papel de GRANT desconhecido: {}".format(", ".join(desconhecidos)))
-    papeis_usuarios = dict(papeis_usuarios or {})
+    user_roles = dict(user_roles or {})
     for papel in GRANT_ROLES:
-        usr = papeis_usuarios.get(papel)
+        usr = user_roles.get(papel)
         if not usr:
             comandos.append("-- papel {}: conta nao informada; nenhum GRANT gerado".format(papel))
             continue
@@ -693,10 +693,10 @@ def build_grants_by_role(owner, prefixo, papeis_usuarios):
         if usr.upper() == owner.upper():
             comandos.append("-- papel {}: usa a conta dona do esquema ({}); nenhum GRANT necessario".format(
                 papel, owner))
-            papeis_usuarios[papel] = None
+            user_roles[papel] = None
 
     # 1. PAPEL: web
-    usr_web = papeis_usuarios.get("web")
+    usr_web = user_roles.get("web")
     if usr_web:
         cadastros_e_agendamentos = (
             "environments", "profiles", "features", "scripts",
@@ -743,7 +743,7 @@ def build_grants_by_role(owner, prefixo, papeis_usuarios):
                 ))
 
     # 2. PAPEL: agente
-    usr_agt = papeis_usuarios.get("agent")
+    usr_agt = user_roles.get("agent")
     if usr_agt:
         cadastros_e_assoc = (
             "environments", "profiles", "features", "profile_feature", "profile_env",
@@ -783,7 +783,7 @@ def build_grants_by_role(owner, prefixo, papeis_usuarios):
             ))
 
     # 3. PAPEL: purge
-    usr_purge = papeis_usuarios.get("purge")
+    usr_purge = user_roles.get("purge")
     if usr_purge:
         comandos.append("GRANT SELECT, DELETE ON {}.{} TO {};".format(
             owner, esquema["tickets"]["tabela"], usr_purge
@@ -800,7 +800,7 @@ def build_grants_by_role(owner, prefixo, papeis_usuarios):
 
     # 4. PAPEL: monitor (CR-008, E3/R-04)
     # Somente SELECT nas 7 tabelas que health.py consulta, zero sequences
-    usr_mon = papeis_usuarios.get("monitor")
+    usr_mon = user_roles.get("monitor")
     if usr_mon:
         tabelas_monitor = (
             "agents", "tickets", "schedules", "scripts",
@@ -818,18 +818,18 @@ def build_grants_by_role(owner, prefixo, papeis_usuarios):
 # DML Seed, Rollback e Script Completo de Implantacao
 # -----------------------------------------------------------------------------
 
-def _escape_sql(texto):
+def _escape_sql(text):
     """Escapa aspas simples em literais SQL Oracle."""
-    if texto is None:
+    if text is None:
         return ""
-    return str(texto).replace("'", "''")
+    return str(text).replace("'", "''")
 
 
-def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, admin_senha_hash=None):
+def build_seed_statements(owner, prefix, admin_login=None, admin_name=None, admin_password_hash=None):
     """Gera declaracoes SQL de seed inicial (Fase 7) via MERGE idempotente e estatisticas (Fase 8)."""
     sql_ident.validate_owner(owner)
-    sql_ident.validate_prefix(prefixo)
-    esquema = sql_ident.names(prefixo)
+    sql_ident.validate_prefix(prefix)
+    esquema = sql_ident.names(prefix)
     comandos = []
 
     # 1. Funcionalidades canonicas
@@ -1135,8 +1135,8 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
     sq_usr = "{}.{}".format(owner, esquema["users"]["sequence"])
 
     for u_login, u_nome, u_perfil in DEFAULT_USERS:
-        nome_final = admin_nome if (u_login == "admin" and admin_nome) else u_nome
-        hash_final = admin_senha_hash if (u_login == "admin" and admin_senha_hash) else HOMOLOGATION_DEFAULT_PASSWORD_HASH
+        nome_final = admin_name if (u_login == "admin" and admin_name) else u_nome
+        hash_final = admin_password_hash if (u_login == "admin" and admin_password_hash) else HOMOLOGATION_DEFAULT_PASSWORD_HASH
         sql_usr = (
             "MERGE INTO {tb_usr} dst\n"
             "USING (\n"
@@ -1171,15 +1171,15 @@ def build_seed_statements(owner, prefixo, admin_login=None, admin_nome=None, adm
     return comandos
 
 
-def build_seed_script(owner, prefixo, admin_login=None, admin_nome=None, admin_senha_hash=None):
+def build_seed_script(owner, prefix, admin_login=None, admin_name=None, admin_password_hash=None):
     """Gera script SQL puro com DML de seed, estatisticas e COMMIT pronto para SQL*Plus."""
     comandos = build_seed_statements(
-        owner, prefixo,
+        owner, prefix,
         admin_login=admin_login,
-        admin_nome=admin_nome,
-        admin_senha_hash=admin_senha_hash
+        admin_name=admin_name,
+        admin_password_hash=admin_password_hash
     )
-    esquema = sql_ident.names(prefixo)
+    esquema = sql_ident.names(prefix)
     owner_u = owner.upper()
 
     tabelas_stats = [
@@ -1254,11 +1254,11 @@ ROLLBACK_ENTITY_ORDER = (
 )
 
 
-def build_rollback_statements(owner, prefixo):
+def build_rollback_statements(owner, prefix):
     """Gera lista de instrucoes DROP (Triggers, Tabelas com CASCADE PURGE e Sequences)."""
     sql_ident.validate_owner(owner)
-    sql_ident.validate_prefix(prefixo)
-    esquema = sql_ident.names(prefixo)
+    sql_ident.validate_prefix(prefix)
+    esquema = sql_ident.names(prefix)
     instrucoes = []
 
     # 1. Triggers
@@ -1284,16 +1284,16 @@ def build_rollback_statements(owner, prefixo):
     return instrucoes
 
 
-def build_rollback_script(owner, prefixo):
+def build_rollback_script(owner, prefix):
     """Gera script SQL puro para rollback total da implantacao no Oracle."""
-    instrucoes = build_rollback_statements(owner, prefixo)
+    instrucoes = build_rollback_statements(owner, prefix)
 
     linhas = [
         "-- ==============================================================================",
         "-- Script Scheduling Service (SSS) - Rollback / Desinstalacao Oracle 11gR2+",
         "-- Gerado automaticamente a partir do registro sql_ident.py",
         "-- Owner: {}".format(owner),
-        "-- Prefixo: {}".format(prefixo),
+        "-- Prefixo: {}".format(prefix),
         "-- ==============================================================================",
         "SET DEFINE OFF;",
         "SET SERVEROUTPUT ON;",
@@ -1338,23 +1338,23 @@ def build_rollback_script(owner, prefixo):
     return "\n".join(linhas)
 
 
-def _literal_list(nomes):
+def _literal_list(names):
     """Lista IN de literais com nomes do registro sql_ident (ja validados), em maiusculas.
 
     Quebra a cada 6 nomes: o SQL*Plus recusa linhas com mais de 2.499 caracteres (SP2-0027).
     """
-    literais = ["'{}'".format(n.upper()) for n in nomes]
+    literais = ["'{}'".format(n.upper()) for n in names]
     grupos = [", ".join(literais[i:i + 6]) for i in range(0, len(literais), 6)]
     return ",\n      ".join(grupos)
 
 
-def _seed_rows_by_table(owner, prefixo):
+def _seed_rows_by_table(owner, prefix):
     """Quantidade de MERGE do seed por tabela (minimo esperado logo apos a implantacao)."""
-    esquema = sql_ident.names(prefixo)
+    esquema = sql_ident.names(prefix)
     por_tabela = dict((t["tabela"].upper(), ent) for ent, t in esquema.items())
     contagem = collections.OrderedDict((ent, 0) for ent in esquema)
     marca = "MERGE INTO {}.".format(owner).upper()
-    for cmd in build_seed_statements(owner, prefixo):
+    for cmd in build_seed_statements(owner, prefix):
         texto = cmd.lstrip()
         if texto.upper().startswith(marca):
             ent = por_tabela.get(texto[len(marca):].split(None, 1)[0].upper())
@@ -1363,7 +1363,7 @@ def _seed_rows_by_table(owner, prefixo):
     return contagem
 
 
-def build_validation_script(owner, prefixo):
+def build_validation_script(owner, prefix):
     """Gera o 99_validate_deploy.sql a partir do registro sql_ident (SQL*Plus, somente leitura).
 
     Compara esperado x encontrado: objetos (tabelas, sequences, triggers, constraints e indices pelos
@@ -1372,8 +1372,8 @@ def build_validation_script(owner, prefixo):
     parametros; nenhum hash de senha e exibido (AGENTS §3.3), so se a senha esta definida.
     """
     sql_ident.validate_owner(owner)
-    sql_ident.validate_prefix(prefixo)
-    esquema = sql_ident.names(prefixo)
+    sql_ident.validate_prefix(prefix)
+    esquema = sql_ident.names(prefix)
     own = owner.upper()
 
     tabelas = [t["tabela"] for t in esquema.values()]
@@ -1389,9 +1389,9 @@ def build_validation_script(owner, prefixo):
         indices.extend(t["indices"].keys())
     objetos = tabelas + sequences + triggers + indices
 
-    def chk(ordem, rotulo, regra, valor, sql_contagem):
+    def chk(order, label, rule, value, sql_contagem):
         return ("SELECT {o} AS sort_order, '{r}' AS verificacao, '{g}' AS regra, {v} AS esperado, "
-                "({s}) AS encontrado FROM DUAL").format(o=ordem, r=rotulo, g=regra, v=valor, s=sql_contagem)
+                "({s}) AS encontrado FROM DUAL").format(o=order, r=label, g=rule, v=value, s=sql_contagem)
 
     dicionario = [
         chk(1, "TABELAS", "=", len(tabelas),
@@ -1422,12 +1422,12 @@ def build_validation_script(owner, prefixo):
         chk(10, "VERSAO DO ESQUEMA", "=", sql_ident.SCHEMA_VERSION,
             "SELECT MAX(schema_version) FROM {}".format(tab["control"])),
     ]
-    for n, (ent, minimo) in enumerate(_seed_rows_by_table(owner, prefixo).items()):
+    for n, (ent, minimo) in enumerate(_seed_rows_by_table(owner, prefix).items()):
         dados.append(chk(11 + n, "LINHAS " + esquema[ent]["tabela"].upper(), ">=", minimo,
                          "SELECT COUNT(*) FROM {}".format(tab[ent])))
 
-    def relatorio(partes):
-        uniao = "\n  UNION ALL ".join(partes)
+    def relatorio(parts):
+        uniao = "\n  UNION ALL ".join(parts)
         detalhe = (
             "WITH chk AS (\n  " + uniao + "\n)\n"
             "SELECT verificacao, regra || ' ' || esperado AS esperado, encontrado,\n"
@@ -1450,7 +1450,7 @@ def build_validation_script(owner, prefixo):
         "-- Script Scheduling Service (SSS) - Validacao da Implantacao Oracle 11gR2+",
         "-- Gerado automaticamente a partir do registro sql_ident.py (somente leitura)",
         "-- Owner: {}".format(owner),
-        "-- Prefixo: {}".format(prefixo),
+        "-- Prefixo: {}".format(prefix),
         "-- Cada verificacao mostra OK ou FALHA; procure tambem ORA-/SP2- no SPOOL.",
         "-- ==============================================================================",
         "SET DEFINE OFF;",
@@ -1534,9 +1534,9 @@ def build_validation_script(owner, prefixo):
     return "\n".join(linhas)
 
 
-def build_full_deploy_script(owner, prefixo, lob_storage="SECUREFILE",
-                                      admin_login=None, admin_nome=None, admin_senha_hash=None,
-                                      papeis_usuarios=None):
+def build_full_deploy_script(owner, prefix, lob_storage="SECUREFILE",
+                                      admin_login=None, admin_name=None, admin_password_hash=None,
+                                      user_roles=None):
     """Gera script SQL autocontido com DDL, DML Seed, Estatisticas e Grants para execucao direta.
 
     Para no primeiro erro (WHENEVER SQLERROR EXIT FAILURE ROLLBACK, revisao de 2026-10-20): um
@@ -1544,12 +1544,12 @@ def build_full_deploy_script(owner, prefixo, lob_storage="SECUREFILE",
     02 -> 01 -> 99). Os GRANTs seguem so os papeis do README §11.1; nada e concedido a PUBLIC
     (tbsss_users guarda senha_hash).
     """
-    sql_ddl = build_ddl_script(owner, prefixo, lob_storage=lob_storage)
+    sql_ddl = build_ddl_script(owner, prefix, lob_storage=lob_storage)
     sql_seed = build_seed_script(
-        owner, prefixo,
+        owner, prefix,
         admin_login=admin_login,
-        admin_nome=admin_nome,
-        admin_senha_hash=admin_senha_hash
+        admin_name=admin_name,
+        admin_password_hash=admin_password_hash
     )
 
     partes = [
@@ -1571,7 +1571,7 @@ def build_full_deploy_script(owner, prefixo, lob_storage="SECUREFILE",
         "-- ==============================================================================",
         "",
     ])
-    partes.extend(build_grants_by_role(owner, prefixo, papeis_usuarios or {}))
+    partes.extend(build_grants_by_role(owner, prefix, user_roles or {}))
     partes.append("")
 
     partes.extend([

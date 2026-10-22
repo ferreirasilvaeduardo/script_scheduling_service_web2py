@@ -44,65 +44,65 @@ _SNAPSHOT_KEYS = ('version', 'script_id', 'script_name', 'interpreter', 'path_fi
 class ParamError(Exception):
     """Erro de validacao de um parametro; a mensagem e voltada ao usuario e nunca ecoa o valor."""
 
-    def __init__(self, codigo_param, mensagem):
-        Exception.__init__(self, mensagem)
-        self.param_code = codigo_param
-        self.message = mensagem
+    def __init__(self, param_code, message):
+        Exception.__init__(self, message)
+        self.param_code = param_code
+        self.message = message
 
 
 class SnapshotError(Exception):
     """Falha na pre-validacao do snapshot (PRECHECK_FAILED)."""
 
-    def __init__(self, motivo):
-        Exception.__init__(self, motivo)
-        self.reason = motivo
+    def __init__(self, reason):
+        Exception.__init__(self, reason)
+        self.reason = reason
 
 
-def _sensitive(parametro):
-    return parametro.get('sensitive') == 'Y'
+def _sensitive(parameter):
+    return parameter.get('sensitive') == 'Y'
 
 
-def _label(parametro):
-    return parametro.get('label') or parametro.get('code') or 'Parâmetro'
+def _label(parameter):
+    return parameter.get('label') or parameter.get('code') or 'Parâmetro'
 
 
-def _select_options(parametro):
+def _select_options(parameter):
     try:
-        opcoes = json.loads(parametro.get('options_json') or '')
+        opcoes = json.loads(parameter.get('options_json') or '')
     except ValueError:
         opcoes = None
     if not isinstance(opcoes, dict) or not opcoes:
-        raise ParamError(parametro.get('code'),
+        raise ParamError(parameter.get('code'),
                         'O parâmetro "%s" está com as opções mal configuradas. Contate o administrador.'
-                        % _label(parametro))
+                        % _label(parameter))
     return opcoes
 
 
-def validate_value(parametro, valor_bruto):
+def validate_value(parameter, raw_value):
     """Valida e normaliza um valor conforme tipo_componente (README §6.2); lanca ParamError.
 
     CHECKBOX devolve bool; os demais tipos devolvem str normalizada.
     """
-    codigo = parametro.get('code')
-    rotulo = _label(parametro)
-    tipo = parametro.get('component_type')
+    codigo = parameter.get('code')
+    rotulo = _label(parameter)
+    tipo = parameter.get('component_type')
 
-    if tipo == 'CHECKBOX' and isinstance(valor_bruto, bool):
-        return valor_bruto
-    if not isinstance(valor_bruto, str):
+    if tipo == 'CHECKBOX' and isinstance(raw_value, bool):
+        return raw_value
+    if not isinstance(raw_value, str):
         raise ParamError(codigo, 'Valor inválido para "%s".' % rotulo)
     # Ordem do README §6.2: strip primeiro; controle so nas pontas ja foi removido.
-    valor = valor_bruto.strip()
+    valor = raw_value.strip()
     if len(valor) > MAX_LENGTH:
         raise ParamError(codigo, 'O campo "%s" excede o limite de %d caracteres.' % (rotulo, MAX_LENGTH))
     if _RE_CONTROL.search(valor):
         raise ParamError(codigo, 'O campo "%s" contém caracteres de controle não permitidos.' % rotulo)
     # Valor sigiloso curto nao pode ser mascarado com seguranca (README §4.1 e §6.2, CR-007 R-25).
-    if _sensitive(parametro) and tipo != 'CHECKBOX' and 0 < len(valor) < SENSITIVE_MIN_LENGTH:
+    if _sensitive(parameter) and tipo != 'CHECKBOX' and 0 < len(valor) < SENSITIVE_MIN_LENGTH:
         raise ParamError(codigo, 'O valor sigiloso precisa ter pelo menos %d caracteres.' % SENSITIVE_MIN_LENGTH)
 
     if tipo == 'TEXT':
-        padrao = parametro.get('validation_regex')
+        padrao = parameter.get('validation_regex')
         if padrao:
             try:
                 casou = re.fullmatch(padrao, valor) is not None
@@ -123,7 +123,7 @@ def validate_value(parametro, valor_bruto):
             raise ParamError(codigo, 'O campo "%s" deve ser uma data válida no formato AAAA-MM-DD.' % rotulo)
         return data.strftime('%Y-%m-%d')
     if tipo == 'SELECT':
-        if valor not in _select_options(parametro):
+        if valor not in _select_options(parameter):
             raise ParamError(codigo, 'Selecione uma opção válida para "%s".' % rotulo)
         return valor
     if tipo == 'CHECKBOX':
@@ -134,28 +134,28 @@ def validate_value(parametro, valor_bruto):
     raise ParamError(codigo, 'O parâmetro "%s" tem um tipo de componente desconhecido.' % rotulo)
 
 
-def _reject_regex(motivo):
-    raise ParamError('validation_regex', 'A expressão regular foi recusada: %s (README §6.2).' % motivo)
+def _reject_regex(reason):
+    raise ParamError('validation_regex', 'A expressão regular foi recusada: %s (README §6.2).' % reason)
 
 
-def _class_end(padrao, i):
+def _class_end(default_value, i):
     """Indice logo depois do ']' que fecha a classe aberta em padrao[i] == '['."""
     j = i + 1
-    if j < len(padrao) and padrao[j] == '^':
+    if j < len(default_value) and default_value[j] == '^':
         j += 1
-    if j < len(padrao) and padrao[j] == ']':
+    if j < len(default_value) and default_value[j] == ']':
         j += 1
-    while j < len(padrao):
-        if padrao[j] == '\\':
+    while j < len(default_value):
+        if default_value[j] == '\\':
             j += 2
             continue
-        if padrao[j] == ']':
+        if default_value[j] == ']':
             return j + 1
         j += 1
-    return len(padrao)
+    return len(default_value)
 
 
-def validate_registry_regex(padrao):
+def validate_registry_regex(default_value):
     """Compila regex_validacao e exige o subconjunto seguro do README §6.2 (CR-007, D5); lanca ParamError.
 
     Recusa grupo repetido por quantificador (exceto '?'), quantificador sobre quantificador, referencia a
@@ -165,10 +165,10 @@ def validate_registry_regex(padrao):
     fica no maximo polinomial de grau 2 no tamanho do valor (CR-008, R-06).
     """
     try:
-        re.compile(padrao)
+        re.compile(default_value)
     except Exception:  # noqa: B902 - re.error, TypeError e erros internos do sre (ex.: grupo condicional invalido)
         raise ParamError('validation_regex', 'A expressão regular é inválida.')
-    if len(padrao) > REGEX_MAX_LENGTH:
+    if len(default_value) > REGEX_MAX_LENGTH:
         _reject_regex('tem mais de %d caracteres' % REGEX_MAX_LENGTH)
     ilimitados = 0
     escolhas = 0
@@ -176,20 +176,20 @@ def validate_registry_regex(padrao):
     apos_quant = False    # o ultimo token foi um quantificador
     preguicoso = False    # e ele ja recebeu o modificador '?'
     i = 0
-    n = len(padrao)
+    n = len(default_value)
     while i < n:
-        c = padrao[i]
+        c = default_value[i]
         if c == '\\':
-            prox = padrao[i + 1:i + 2]
+            prox = default_value[i + 1:i + 2]
             if prox.isdigit() and prox != '0':
                 _reject_regex('referência a grupo (\\%s) não é permitida' % prox)
             atomo, apos_quant, i = 'simples', False, i + 2
             continue
         if c == '[':
-            atomo, apos_quant, i = 'simples', False, _class_end(padrao, i)
+            atomo, apos_quant, i = 'simples', False, _class_end(default_value, i)
             continue
         if c == '(':
-            resto = padrao[i + 1:i + 5]
+            resto = default_value[i + 1:i + 5]
             if resto.startswith(('?=', '?!', '?<=', '?<!')):
                 _reject_regex('lookahead e lookbehind não são permitidos')
             if resto.startswith('?('):
@@ -208,7 +208,7 @@ def validate_registry_regex(padrao):
         if c in '*+?':
             quant, fim = c, i + 1
         elif c == '{':
-            m = _RE_BRACE_QUANT.match(padrao, i)
+            m = _RE_BRACE_QUANT.match(default_value, i)
             if m and (m.group(1) or m.group(3)):
                 quant, fim = m.group(0), m.end()
         if quant is None:
@@ -248,25 +248,25 @@ def validate_flag(flag):
                                          'letras, dígitos, _ e -).')
 
 
-def _unique_pairs(pares):
+def _unique_pairs(pairs):
     vistos = collections.OrderedDict()
-    for chave, valor in pares:
+    for chave, valor in pairs:
         if chave in vistos:
             raise ValueError('chave duplicada')
         vistos[chave] = valor
     return vistos
 
 
-def validate_registry_options(texto):
+def validate_registry_options(text):
     """Valida options_json de SELECT e devolve o JSON canonico (sort_order do usuario preservada).
 
     Exige objeto {"valor": "Rotulo"} nao vazio, sem chave duplicada, com chaves e rotulos str nao vazios
     (apos strip), sem caracteres de controle, e serializacao com ate OPTIONS_MAX_LENGTH caracteres.
     """
-    if not isinstance(texto, str) or not texto.strip():
+    if not isinstance(text, str) or not text.strip():
         raise ParamError('options_json', 'Informe as opções da lista (pelo menos uma).')
     try:
-        opcoes = json.loads(texto, object_pairs_hook=_unique_pairs)
+        opcoes = json.loads(text, object_pairs_hook=_unique_pairs)
     except ValueError:
         raise ParamError('options_json', 'As opções não formam um JSON válido sem chaves repetidas.')
     if not isinstance(opcoes, dict) or not opcoes:
@@ -293,24 +293,24 @@ def validate_registry_options(texto):
     return canonico
 
 
-def _sorted_links(vinculos):
-    return sorted(vinculos, key=lambda v: int(v['sort_order']))
+def _sorted_links(links):
+    return sorted(links, key=lambda v: int(v['sort_order']))
 
 
-def _empty(valor):
-    return valor is None or (isinstance(valor, str) and valor.strip() == '')
+def _empty(value):
+    return value is None or (isinstance(value, str) and value.strip() == '')
 
 
-def _resolve(vinculos, respostas):
+def _resolve(links, answers):
     """Aplica a precedencia (README §6.1) acumulando os erros por campo."""
-    respostas = respostas or {}
+    answers = answers or {}
     resolvidos = collections.OrderedDict()
     erros = collections.OrderedDict()
-    for v in _sorted_links(vinculos):
+    for v in _sorted_links(links):
         codigo = v['code']
         valor = None
         try:
-            for fonte in (respostas.get(codigo), v.get('default_value_override'), v.get('default_value')):
+            for fonte in (answers.get(codigo), v.get('default_value_override'), v.get('default_value')):
                 if not _empty(fonte):
                     valor = validate_value(v, fonte)
                     break
@@ -323,93 +323,93 @@ def _resolve(vinculos, respostas):
     return resolvidos, erros
 
 
-def resolve_answers(vinculos, respostas):
+def resolve_answers(links, answers):
     """Resolve o valor final de cada vinculo (OrderedDict codigo -> valor | None); lanca ParamError."""
-    resolvidos, erros = _resolve(vinculos, respostas)
+    resolvidos, erros = _resolve(links, answers)
     for codigo, mensagem in erros.items():
         raise ParamError(codigo, mensagem)
     return resolvidos
 
 
-def _named_args(v, valor):
+def _named_args(v, value):
     codigo = v['code']
     flag = v.get('param_flag')
     if not flag:
         raise ParamError(codigo, 'O parâmetro "%s" não tem flag configurada para script NOMEADO.' % _label(v))
     if v.get('component_type') == 'CHECKBOX':
-        return [flag] if valor is True else []
-    if valor is None:
+        return [flag] if value is True else []
+    if value is None:
         return []
     if flag[:2] == '--':
-        if valor[:1] == '-':
-            return [flag + '=' + valor]
-        return [flag, valor]
-    if valor[:1] == '-':
+        if value[:1] == '-':
+            return [flag + '=' + value]
+        return [flag, value]
+    if value[:1] == '-':
         raise ParamError(codigo, 'O campo "%s" não pode começar com "-".' % _label(v))
-    return [flag, valor]
+    return [flag, value]
 
 
-def _sequential_arg(v, valor):
-    if valor is None:
+def _sequential_arg(v, value):
+    if value is None:
         return ''
     if v.get('component_type') == 'CHECKBOX':
-        return '1' if valor else '0'
-    if valor[:1] == '-' and v.get('component_type') != 'NUMBER':
+        return '1' if value else '0'
+    if value[:1] == '-' and v.get('component_type') != 'NUMBER':
         raise ParamError(v['code'], 'O campo "%s" não pode começar com "-".' % _label(v))
-    return valor
+    return value
 
 
-def _build(tipo_param, vinculos, resolvidos, erros):
+def _build(param_type, links, resolved, errors):
     """Monta args acumulando erros; erros estruturais vao em GENERAL_KEY."""
     args = []
-    if tipo_param == 'NONE':
-        if vinculos:
-            erros[GENERAL_KEY] = 'Scripts sem parâmetros (NENHUM) não podem ter parâmetros vinculados.'
+    if param_type == 'NONE':
+        if links:
+            errors[GENERAL_KEY] = 'Scripts sem parâmetros (NENHUM) não podem ter parâmetros vinculados.'
         return args
-    if tipo_param not in ('NAMED', 'POSITIONAL'):
-        erros[GENERAL_KEY] = 'Estratégia de parâmetros do script é desconhecida.'
+    if param_type not in ('NAMED', 'POSITIONAL'):
+        errors[GENERAL_KEY] = 'Estratégia de parâmetros do script é desconhecida.'
         return args
-    for v in _sorted_links(vinculos):
+    for v in _sorted_links(links):
         codigo = v['code']
-        if codigo in erros:
+        if codigo in errors:
             continue
-        valor = resolvidos.get(codigo)
+        valor = resolved.get(codigo)
         try:
-            if tipo_param == 'NAMED':
+            if param_type == 'NAMED':
                 args.extend(_named_args(v, valor))
             else:
                 args.append(_sequential_arg(v, valor))
         except ParamError as e:
-            erros[codigo] = e.message
+            errors[codigo] = e.message
     return args
 
 
-def build_args(tipo_param, vinculos, resolvidos):
+def build_args(param_type, links, resolved):
     """Monta a lista de argumentos conforme a estrategia (README §6.3); lanca ParamError."""
     erros = collections.OrderedDict()
-    args = _build(tipo_param, vinculos, resolvidos, erros)
+    args = _build(param_type, links, resolved, erros)
     for codigo, mensagem in erros.items():
         raise ParamError(None if codigo == GENERAL_KEY else codigo, mensagem)
     return args
 
 
-def build_agent_argv(interpretador, executavel, script_real, args):
+def build_agent_argv(interpreter, executable, script_real, args):
     """argv real montado no agente (README §6.4): executavel local + argumentos fixos + script + args.
 
     Lanca PathGuardError se o interpretador logico estiver fora da allowlist.
     """
-    path_guard.validate_interpreter(interpretador)
-    return [executavel] + list(path_guard.FIXED_ARGS[interpretador]) + [script_real] + list(args)
+    path_guard.validate_interpreter(interpreter)
+    return [executable] + list(path_guard.FIXED_ARGS[interpreter]) + [script_real] + list(args)
 
 
-def compile_snapshot(script, vinculos, respostas, agora):
+def compile_snapshot(script, links, answers, now):
     """Compila o snapshot v5 (README §6.5) -> (json_str | None, resolvidos, erros_por_campo).
 
     Guarda o interpretador logico, o path_file absoluto e apenas os argumentos: o argv real e montado
     pelo agente com o proprio executavel. Erros sao acumulados.
     """
-    resolvidos, erros = _resolve(vinculos, respostas)
-    args = _build(script['param_type'], vinculos, resolvidos, erros)
+    resolvidos, erros = _resolve(links, answers)
+    args = _build(script['param_type'], links, resolvidos, erros)
     try:
         path_guard.validate_interpreter(script['interpreter'])
     except path_guard.PathGuardError:
@@ -426,8 +426,8 @@ def compile_snapshot(script, vinculos, respostas, agora):
         'param_type': script['param_type'],
         'args': args,
         'answers': dict(resolvidos),
-        'sensitive': sorted(v['code'] for v in vinculos if _sensitive(v)),
-        'compiled_at': agora.strftime('%Y-%m-%d %H:%M:%S'),
+        'sensitive': sorted(v['code'] for v in links if _sensitive(v)),
+        'compiled_at': now.strftime('%Y-%m-%d %H:%M:%S'),
     }
     return json.dumps(obj, ensure_ascii=False, sort_keys=True), resolvidos, erros
 
@@ -462,7 +462,7 @@ def validate_snapshot(json_str, cfg):
         raise SnapshotError('ARGS_INVALIDOS')
 
     try:
-        real = path_guard.resolve(snap['path_file'], dirs_sss=getattr(cfg, 'dirs_sss', None) or ())
+        real = path_guard.resolve(snap['path_file'], sss_dirs=getattr(cfg, 'dirs_sss', None) or ())
     except path_guard.PathGuardError as e:
         raise SnapshotError('PATH_GUARD_' + e.code)
     return snap, build_agent_argv(interpretador, executavel, real, args), real
@@ -478,14 +478,14 @@ def _secrets(snapshot):
     return segredos
 
 
-def _mask_args(args, segredos):
+def _mask_args(args, secrets):
     exibidos = []
     for token in args:
-        if token in segredos:
+        if token in secrets:
             token = MASK
         elif token[:2] == '--' and '=' in token:
             flag, valor = token.split('=', 1)
-            if valor in segredos:
+            if valor in secrets:
                 token = flag + '=' + MASK
         exibidos.append(token)
     return exibidos

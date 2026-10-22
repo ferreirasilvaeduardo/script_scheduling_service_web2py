@@ -354,7 +354,7 @@ class TestDbSchema(unittest.TestCase):
         self.assertEqual(validate_prefix("a1_"), "a1_")
         self.assertEqual(qualify("openrisow", "tbsss_tickets"), "openrisow.tbsss_tickets")
         self.assertEqual(
-            qualify("openrisow", "tbsss_tickets", prefixo="tbsss_"),
+            qualify("openrisow", "tbsss_tickets", prefix="tbsss_"),
             "openrisow.tbsss_tickets",
         )
 
@@ -401,7 +401,7 @@ class TestDbSchema(unittest.TestCase):
             "default": None,
         }
         with self.assertRaises(ValueError) as ctx:
-            validate_registry("tbsss_", tabelas=reg_col_invalida)
+            validate_registry("tbsss_", tables=reg_col_invalida)
         self.assertIn("excede 30 caracteres", str(ctx.exception))
 
         # 2. Constraint UK que gera nome com 31 caracteres
@@ -414,7 +414,7 @@ class TestDbSchema(unittest.TestCase):
             "colunas": ("name",),
         }
         with self.assertRaises(ValueError) as ctx:
-            validate_registry("tbsss_", tabelas=reg_uk_invalida)
+            validate_registry("tbsss_", tables=reg_uk_invalida)
         self.assertIn("excede 30 caracteres", str(ctx.exception))
 
 

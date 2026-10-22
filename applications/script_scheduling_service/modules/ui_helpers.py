@@ -76,12 +76,12 @@ _EXPLICACOES = {
 }
 
 
-def tempo_simples(segundos):
+def tempo_simples(seconds):
     """Duracao em linguagem simples: 'menos de 1 minuto', '1 minuto', '4 minutos', '2 horas e 5 minutos'."""
-    segundos = max(0, int(segundos or 0))
-    if segundos < 60:
+    seconds = max(0, int(seconds or 0))
+    if seconds < 60:
         return u"menos de 1 minuto"
-    horas, resto = divmod(segundos // 60, 60)
+    horas, resto = divmod(seconds // 60, 60)
     minutos = u"%d minuto%s" % (resto, "" if resto == 1 else "s")
     if not horas:
         return minutos
@@ -89,7 +89,7 @@ def tempo_simples(segundos):
     return texto if not resto else u"%s e %s" % (texto, minutos)
 
 
-def explicacao_ticket(ticket, agora, timeout_s=None):
+def explicacao_ticket(ticket, now, timeout_s=None):
     """{'situacao', 'aconteceu', 'fazer'} do ticket em linguagem simples (README §5.2.1, §5.7).
 
     agora: relogio do banco; timeout_s: tempo maximo do script (para a frase de TIMEOUT).
@@ -98,7 +98,7 @@ def explicacao_ticket(ticket, agora, timeout_s=None):
     situacao = status_info(status)["rotulo"]
     if status == "PENDING":
         agendado = ticket.get("scheduled_at")
-        if agendado is not None and agora is not None and agendado > agora:
+        if agendado is not None and now is not None and agendado > now:
             return {"state": situacao,
                     "aconteceu": u"Está agendado para começar em %s às %s." % (
                         agendado.strftime("%d/%m/%Y"), agendado.strftime("%H:%M")),
@@ -111,7 +111,7 @@ def explicacao_ticket(ticket, agora, timeout_s=None):
                     "aconteceu": u"O cancelamento foi pedido. O servidor está parando o script.",
                     "fazer": u"Espere alguns segundos."}
         inicio = ticket.get("started_at")
-        decorrido = (agora - inicio).total_seconds() if inicio is not None and agora is not None else 0
+        decorrido = (now - inicio).total_seconds() if inicio is not None and now is not None else 0
         return {"state": situacao, "aconteceu": u"Está rodando agora. Começou há %s." % tempo_simples(decorrido),
                 "fazer": u"Acompanhe o log abaixo."}
     motivo = ticket.get("status_reason")
@@ -126,7 +126,7 @@ def explicacao_ticket(ticket, agora, timeout_s=None):
             "fazer": fazer}
 
 
-def etapas_ticket(ticket, agora):
+def etapas_ticket(ticket, now):
     """Barra de etapas do detalhe (README §5.7): Pedido criado -> Na fila -> Rodando -> Terminou.
 
     Cada etapa: {rotulo, quando, estado} com estado 'feito' | 'atual' | 'pendente' | 'pulado'.
@@ -136,11 +136,11 @@ def etapas_ticket(ticket, agora):
     nunca_rodou = status == "CANCELLED" and ticket.get("started_at") is None
     agendado = ticket.get("scheduled_at")
     fila_quando = formatar_data(agendado)
-    if status == "PENDING" and agendado is not None and agora is not None and agendado > agora:
+    if status == "PENDING" and agendado is not None and now is not None and agendado > now:
         fila_quando = u"agendado para %s" % fila_quando
     if status == "RUNNING":
         inicio = ticket.get("started_at")
-        decorrido = (agora - inicio).total_seconds() if inicio is not None and agora is not None else 0
+        decorrido = (now - inicio).total_seconds() if inicio is not None and now is not None else 0
         rodando_quando = u"há %s" % tempo_simples(decorrido)
     elif nunca_rodou:
         rodando_quando = u"não chegou a rodar"
@@ -173,7 +173,7 @@ SERIES_HISTORICO = (("certo", u"Deu certo"), ("erro", u"Deu erro"), ("cancelado"
                     ("andamento", u"Esperando ou rodando"))
 
 
-def barras_empilhadas(dias, largura=1000, altura=240, margem_esq=28, margem_inf=22, vao=2):
+def barras_empilhadas(days, width=1000, height=240, left_margin=28, bottom_margin=22, gap=2):
     """Geometria do grafico de barras empilhadas por dia (SVG gerado no servidor, README §5.8).
 
     dias: [{'rotulo': 'dd/mm', 'certo': n, 'erro': n, 'cancelado': n, 'andamento': n}].
@@ -181,16 +181,16 @@ def barras_empilhadas(dias, largura=1000, altura=240, margem_esq=28, margem_inf=
     barras: [{x, y, largura, altura, classe, titulo}]}. Cores so por classe CSS (sem style inline);
     vao de 2px entre os segmentos; o titulo de cada segmento e a dica ao passar o mouse.
     """
-    maximo = max([sum(d.get(c, 0) for c, _r in SERIES_HISTORICO) for d in dias] or [0])
+    maximo = max([sum(d.get(c, 0) for c, _r in SERIES_HISTORICO) for d in days] or [0])
     escala_max = max(maximo, 1)
-    area_h = altura - margem_inf - 4
-    base_y = altura - margem_inf
-    n = max(len(dias), 1)
-    passo = float(largura - margem_esq) / n
+    area_h = height - bottom_margin - 4
+    base_y = height - bottom_margin
+    n = max(len(days), 1)
+    passo = float(width - left_margin) / n
     larg_barra = max(2.0, passo * 0.7)
     barras, eixo_x = [], []
-    for i, d in enumerate(dias):
-        x = margem_esq + i * passo + (passo - larg_barra) / 2.0
+    for i, d in enumerate(days):
+        x = left_margin + i * passo + (passo - larg_barra) / 2.0
         topo = base_y
         for chave, rotulo in SERIES_HISTORICO:
             qtd = d.get(chave, 0)
@@ -199,15 +199,15 @@ def barras_empilhadas(dias, largura=1000, altura=240, margem_esq=28, margem_inf=
             h = area_h * qtd / float(escala_max)
             y = topo - h
             barras.append({"x": round(x, 1), "y": round(y, 1), "largura": round(larg_barra, 1),
-                           "altura": round(max(h - vao, 1.0), 1), "classe": "sss-graf-" + chave,
+                           "altura": round(max(h - gap, 1.0), 1), "classe": "sss-graf-" + chave,
                            "titulo": u"%s: %s — %d" % (d["rotulo"], rotulo, qtd)})
             topo = y
         if i % 5 == 0 or i == n - 1:
             eixo_x.append({"x": round(x + larg_barra / 2.0, 1), "rotulo": d["rotulo"]})
     grade = [{"y": round(base_y - area_h * f, 1), "rotulo": str(int(round(escala_max * f)))}
              for f in (0.5, 1.0) if maximo]
-    return {"largura": largura, "altura": altura, "base_y": base_y, "maximo": maximo, "grade": grade,
-            "eixo_x": eixo_x, "barras": barras, "margem_esq": margem_esq}
+    return {"largura": width, "altura": height, "base_y": base_y, "maximo": maximo, "grade": grade,
+            "eixo_x": eixo_x, "barras": barras, "margem_esq": left_margin}
 
 
 # Mensagens-padrao em duas partes: o que aconteceu + o que fazer agora (README §2.4.2, texto exato).
@@ -267,45 +267,45 @@ def tamanho_legivel(nbytes):
     return (u"%.1f MB" % (n / (1024.0 * 1024.0))).replace(".", ",")
 
 
-def quadro_saida(saida, agora):
+def quadro_saida(output, now):
     """Quadro Saida (CR-012) a partir de saida_obter, ou None sem saida. Nunca leva o conteudo nem o caminho."""
-    if not saida:
+    if not output:
         return None
-    situacao = saida.get("state")
+    situacao = output.get("state")
     chave = situacao
     if situacao == "WRITING":
-        desde = saida.get("updated_at") or saida.get("created_at")
-        if desde is not None and agora is not None and (agora - desde).total_seconds() > SAIDA_GRAVANDO_LIMITE_S:
+        desde = output.get("updated_at") or output.get("created_at")
+        if desde is not None and now is not None and (now - desde).total_seconds() > SAIDA_GRAVANDO_LIMITE_S:
             chave = "PARADA"
     elif situacao == "EXCEEDED":
-        chave = "BYTES" if saida.get("reason") == "BYTES" else "FILES"
+        chave = "BYTES" if output.get("reason") == "BYTES" else "FILES"
     elif situacao not in _SAIDA_MENSAGENS:
         chave = "FAILED"
-    qtd = saida.get("file_count")
-    valores = {"agente": saida.get("agent_id") or u"-", "tamanho": tamanho_legivel(saida.get("size_bytes")),
+    qtd = output.get("file_count")
+    valores = {"agente": output.get("agent_id") or u"-", "tamanho": tamanho_legivel(output.get("size_bytes")),
                "qtd": (u"1 arquivo" if qtd == 1 else u"%s arquivos" % qtd)}
     aconteceu, fazer = _SAIDA_MENSAGENS[chave]
     return {"state": situacao, "classe": _SAIDA_CLASSE[chave], "aconteceu": aconteceu.format(**valores),
             "fazer": fazer.format(**valores), "pode_baixar": situacao == "AVAILABLE"}
 
 
-def mensagem(chave, **valores):
+def mensagem(key_name, **values):
     """Mensagem-padrao completa ('o que aconteceu' + 'o que fazer agora')."""
-    aconteceu, fazer = MENSAGENS[chave]
-    return u"%s %s" % (aconteceu, fazer.format(**valores))
+    aconteceu, fazer = MENSAGENS[key_name]
+    return u"%s %s" % (aconteceu, fazer.format(**values))
 
 
-def mensagem_partes(chave, **valores):
+def mensagem_partes(key_name, **values):
     """(o que aconteceu, o que fazer agora) para telas que mostram as duas partes separadas."""
-    aconteceu, fazer = MENSAGENS[chave]
-    return aconteceu, fazer.format(**valores)
+    aconteceu, fazer = MENSAGENS[key_name]
+    return aconteceu, fazer.format(**values)
 
 
-def descricao_motivo(status_motivo):
+def descricao_motivo(status_reason):
     """Texto em portugues do status_motivo (README §5.2); None/vazio vira None, codigo desconhecido e citado."""
-    if status_motivo is None or status_motivo == "":
+    if status_reason is None or status_reason == "":
         return None
-    return _MOTIVOS.get(status_motivo, u"Motivo não catalogado (%s)." % status_motivo)
+    return _MOTIVOS.get(status_reason, u"Motivo não catalogado (%s)." % status_reason)
 
 
 def formatar_data(dt):
@@ -322,15 +322,15 @@ _ATORES_SISTEMA = {"init_db": u"Sistema (instalação)", "seed": u"Sistema (dado
                    "purge": u"Sistema (limpeza)"}
 
 
-def ator_visivel(ator, ctx):
+def ator_visivel(actor, ctx):
     """Login de pessoa como o contexto pode ver (CR-007 D6, CR-008 E5): sem VIEW_AUDIT nem admin,
     vira "você" ou "outra pessoa"; atores do sistema e vazio passam direto."""
     ctx = ctx or {}
-    if not ator or ator == "SYSTEM" or ator.startswith(_PREFIXO_SISTEMA):
-        return ator
+    if not actor or actor == "SYSTEM" or actor.startswith(_PREFIXO_SISTEMA):
+        return actor
     if ctx.get("is_admin") is True or "VIEW_AUDIT" in (ctx.get("features") or ()):
-        return ator
-    return u"você" if ator == ctx.get("login") else u"outra pessoa"
+        return actor
+    return u"você" if actor == ctx.get("login") else u"outra pessoa"
 
 
 def registro(reg, ctx):
@@ -341,16 +341,16 @@ def registro(reg, ctx):
     return dados
 
 
-def nome_ator(ator):
+def nome_ator(actor):
     """Ator em linguagem simples: login como esta; SYSTEM:<agent_id> vira 'Sistema (agente <agent_id>)'."""
-    if not ator:
+    if not actor:
         return "-"
-    if ator == "SYSTEM":
+    if actor == "SYSTEM":
         return u"Sistema"
-    if ator.startswith(_PREFIXO_SISTEMA):
-        resto = ator[len(_PREFIXO_SISTEMA):]
+    if actor.startswith(_PREFIXO_SISTEMA):
+        resto = actor[len(_PREFIXO_SISTEMA):]
         return _ATORES_SISTEMA.get(resto, u"Sistema (agente %s)" % resto)
-    return ator
+    return actor
 
 
 def registro_exibicao(reg):
@@ -364,14 +364,14 @@ def registro_exibicao(reg):
     return {"criado": criado, "alterado": alterado}
 
 
-def formatar_duracao(inicio, fim):
+def formatar_duracao(start, end):
     """Duracao entre dois datetimes ('42s', '5m 07s', '2h 15m 30s').
 
     Retorna '-' se algum extremo for None ou se fim < inicio.
     """
-    if inicio is None or fim is None:
+    if start is None or end is None:
         return "-"
-    total = int((fim - inicio).total_seconds())
+    total = int((end - start).total_seconds())
     if total < 0:
         return "-"
     horas, resto = divmod(total, 3600)
@@ -386,69 +386,69 @@ def formatar_duracao(inicio, fim):
 _RE_INTEIRO = r"[0-9]{1,9}"
 
 
-def _inteiro_positivo(valor):
+def _inteiro_positivo(value):
     """int >= 1 a partir de int ou str ASCII de ate 9 digitos; None se invalido."""
-    if isinstance(valor, bool):
+    if isinstance(value, bool):
         return None
-    if isinstance(valor, int):
-        n = valor
-    elif isinstance(valor, str) and re.fullmatch(_RE_INTEIRO, valor):
-        n = int(valor)
+    if isinstance(value, int):
+        n = value
+    elif isinstance(value, str) and re.fullmatch(_RE_INTEIRO, value):
+        n = int(value)
     else:
         return None
     return n if n >= 1 else None
 
 
-def sanitizar_pagina(valor, padrao=1):
+def sanitizar_pagina(value, default_value=1):
     """Pagina de request.vars; valor ausente, nao numerico ou < 1 vira `padrao`."""
-    n = _inteiro_positivo(valor)
-    return padrao if n is None else n
+    n = _inteiro_positivo(value)
+    return default_value if n is None else n
 
 
-def sanitizar_tamanho(valor, permitidos=(20, 50, 100)):
+def sanitizar_tamanho(value, allowed=(20, 50, 100)):
     """Tamanho de pagina restrito a `permitidos`; fora da lista vira permitidos[0]."""
-    n = _inteiro_positivo(valor)
-    return n if n in permitidos else permitidos[0]
+    n = _inteiro_positivo(value)
+    return n if n in allowed else allowed[0]
 
 
-def paginacao_info(pagina, tamanho, total, total_limitado=False, quantidade=None):
+def paginacao_info(page, size, total, capped_total=False, quantity=None):
     """Navegacao por total exato ou por quantidade da pagina quando o total foi limitado.
 
     Com total 0 ha uma unica pagina, sem registros (faixa 0-0).
     """
-    tamanho = _inteiro_positivo(tamanho) or 20
+    size = _inteiro_positivo(size) or 20
     total = total if isinstance(total, int) and not isinstance(total, bool) and total > 0 else 0
-    total_paginas = max(1, (total + tamanho - 1) // tamanho)
-    pagina = max(sanitizar_pagina(pagina), 1)
-    if not total_limitado:
-        pagina = min(pagina, total_paginas)
+    total_paginas = max(1, (total + size - 1) // size)
+    page = max(sanitizar_pagina(page), 1)
+    if not capped_total:
+        page = min(page, total_paginas)
     if total:
-        primeiro = (pagina - 1) * tamanho + 1
-        ultimo = (primeiro + quantidade - 1 if total_limitado and quantidade is not None
-                  else min(pagina * tamanho, total))
-        if total_limitado and quantidade == 0:
+        primeiro = (page - 1) * size + 1
+        ultimo = (primeiro + quantity - 1 if capped_total and quantity is not None
+                  else min(page * size, total))
+        if capped_total and quantity == 0:
             primeiro = ultimo = 0
     else:
         primeiro = ultimo = 0
     return {
-        "pagina": pagina,
-        "tamanho": tamanho,
+        "pagina": page,
+        "tamanho": size,
         "total": total,
-        "total_paginas": None if total_limitado else total_paginas,
-        "total_limitado": bool(total_limitado),
-        "tem_anterior": pagina > 1,
-        "tem_proxima": (quantidade == tamanho if total_limitado and quantidade is not None
-                        else pagina < total_paginas),
-        "anterior": max(pagina - 1, 1),
-        "proxima": pagina + 1 if total_limitado else min(pagina + 1, total_paginas),
+        "total_paginas": None if capped_total else total_paginas,
+        "total_limitado": bool(capped_total),
+        "tem_anterior": page > 1,
+        "tem_proxima": (quantity == size if capped_total and quantity is not None
+                        else page < total_paginas),
+        "anterior": max(page - 1, 1),
+        "proxima": page + 1 if capped_total else min(page + 1, total_paginas),
         "primeiro_registro": primeiro,
         "ultimo_registro": ultimo,
     }
 
 
-def primeiro_campo_invalido(campos):
+def primeiro_campo_invalido(fields):
     """Nome do primeiro campo (na ordem dada) com 'erro' preenchido; None se nenhum."""
-    for campo in campos or ():
+    for campo in fields or ():
         if campo.get("erro"):
             return campo.get("name")
     return None

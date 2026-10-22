@@ -30,7 +30,7 @@ class TestDdlBuilder(unittest.TestCase):
 
     def test_ddl_contem_todos_os_nomes_do_registro(self):
         """O DDL gerado contem todos os nomes de objetos registrados em sql_ident."""
-        nomes_esperados = sql_ident.all_identifiers(self.prefixo, incluir_colunas=False)
+        nomes_esperados = sql_ident.all_identifiers(self.prefixo, include_columns=False)
         nomes_gerados = set(item.name for item in self.statements)
 
         for nome in nomes_esperados:
@@ -261,7 +261,7 @@ class TestGrantsByRole(unittest.TestCase):
 
     def test_nunca_concede_a_public(self):
         """O script de implantacao nao concede nada a PUBLIC (tbsss_users guarda senha_hash)."""
-        script = ddl_builder.build_full_deploy_script("openrisow", "tbsss_", papeis_usuarios=self.roles)
+        script = ddl_builder.build_full_deploy_script("openrisow", "tbsss_", user_roles=self.roles)
         self.assertNotIn("PUBLIC", script.upper().replace("NENHUM GRANT A PUBLIC", ""))
         self.assertIn("GRANT SELECT ON openrisow.tbsss_agents TO sss_monitor;", script)
         self.assertFalse(hasattr(ddl_builder, "gerar_grants_public"))

@@ -79,21 +79,21 @@ _SQL_STATE = "SELECT state, agent_id FROM {tout} WHERE ticket_id = :ticket_id"
 class OutputOffsetMismatch(RuntimeError):
     """O tamanho do zip no banco nao bate com o offset esperado nem com a parte ja gravada."""
 
-    def __init__(self, ticket_id, offset_esperado, tamanho):
+    def __init__(self, ticket_id, expected_offset, size):
         RuntimeError.__init__(self, "saida do ticket %s: offset %d (+%d) divergente"
-                              % (ticket_id, offset_esperado, tamanho))
+                              % (ticket_id, expected_offset, size))
 
 
-def _actor(agente_id):
-    return "SYSTEM:%s" % agente_id
+def _actor(agent_id):
+    return "SYSTEM:%s" % agent_id
 
 
 class RepoSchedulerOutput(object):
     """Owner e prefixo vem da configuracao (nunca fixos); os nomes passam por sql_ident."""
 
-    def __init__(self, owner, prefixo):
-        sai, tck = sql_ident.table(owner, prefixo, "ticket_output"), sql_ident.table(owner, prefixo, "tickets")
-        self._seq = sql_ident.sequence(owner, prefixo, "ticket_output")
+    def __init__(self, owner, prefix):
+        sai, tck = sql_ident.table(owner, prefix, "ticket_output"), sql_ident.table(owner, prefix, "tickets")
+        self._seq = sql_ident.sequence(owner, prefix, "ticket_output")
         self._plsql = _PLSQL_APPEND.format(tout=sai, attr=":" + "=")
         self._sql_restart = _SQL_RESTART.format(tout=sai)
         self._sql_insert_writing = _SQL_INSERT.format(tout=sai, tck=tck, content="EMPTY_BLOB()")
@@ -111,42 +111,42 @@ class RepoSchedulerOutput(object):
         cur.execute("SELECT %s.NEXTVAL FROM DUAL" % self._seq)
         return int(cur.fetchone()[0])
 
-    def _insert(self, cur, sql, ticket_id, agente_id, situacao, reason=None, file_count=None):
-        cur.execute(sql, id=self._proximo_id(cur), ticket_id=int(ticket_id), agent_id=agente_id,
-                    state=situacao, reason=reason, file_count=file_count, actor=_actor(agente_id))
+    def _insert(self, cur, sql, ticket_id, agent_id, state_value, reason=None, file_count=None):
+        cur.execute(sql, id=self._proximo_id(cur), ticket_id=int(ticket_id), agent_id=agent_id,
+                    state=state_value, reason=reason, file_count=file_count, actor=_actor(agent_id))
         return cur.rowcount == 1
 
-    def start(self, conn, ticket_id, agente_id):
+    def start(self, conn, ticket_id, agent_id):
         """Linha GRAVANDO com o zip vazio: reinicia a deste agente ou inclui uma nova se o ticket for dele.
 
         False: o ticket nao e deste agente, ou a saida ja tem situacao final. Sem COMMIT.
         """
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_restart, ticket_id=int(ticket_id), agent_id=agente_id)
+            cur.execute(self._sql_restart, ticket_id=int(ticket_id), agent_id=agent_id)
             if cur.rowcount == 1:
                 return True
-            return self._insert(cur, self._sql_insert_writing, ticket_id, agente_id, "WRITING")
+            return self._insert(cur, self._sql_insert_writing, ticket_id, agent_id, "WRITING")
         finally:
             cur.close()
 
-    def append_chunk(self, conn, ticket_id, agente_id, offset_esperado, parte):
+    def append_chunk(self, conn, ticket_id, agent_id, expected_offset, part):
         """Anexa parte (bytes, ate 1 MiB) em expected_offset: WRITTEN, ALREADY_WRITTEN ou OWNERSHIP_LOST.
 
         Divergencia de tamanho ou de conteudo: OutputOffsetMismatch. Sem COMMIT.
         """
-        if not parte or len(parte) > PART_MAX:
+        if not part or len(part) > PART_MAX:
             raise ValueError("parte da saida vazia ou acima de 1 MiB")
         cur = conn.cursor()
         try:
             db_conn.set_input_types(cur, part=db_conn.TIPO_BLOB)
-            resultado = db_conn.output_variable(cur, db_conn.TIPO_VARCHAR, tamanho=20)
+            resultado = db_conn.output_variable(cur, db_conn.TIPO_VARCHAR, size=20)
             try:
-                cur.execute(self._plsql, part=bytes(parte), ticket_id=int(ticket_id), agent_id=agente_id,
-                            expected_offset=int(offset_esperado), result=resultado)
+                cur.execute(self._plsql, part=bytes(part), ticket_id=int(ticket_id), agent_id=agent_id,
+                            expected_offset=int(expected_offset), result=resultado)
             except Exception as exc:
                 if db_conn.classify_error(exc) == ("ORA", _ORA_DIVERGENT):
-                    raise OutputOffsetMismatch(ticket_id, int(offset_esperado), len(parte))
+                    raise OutputOffsetMismatch(ticket_id, int(expected_offset), len(part))
                 raise
             valor = db_conn.output_value(resultado)
         finally:
@@ -155,39 +155,39 @@ class RepoSchedulerOutput(object):
             raise RuntimeError("resultado inesperado do anexar da saida: %r" % (valor,))
         return valor
 
-    def complete(self, conn, ticket_id, agente_id, qtd_arquivos, tamanho_bytes):
+    def complete(self, conn, ticket_id, agent_id, file_count, size_bytes):
         """GRAVANDO -> DISPONIVEL, so se o zip no banco tiver tamanho_bytes. False: posse perdida. Sem COMMIT."""
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_complete, ticket_id=int(ticket_id), agent_id=agente_id,
-                        file_count=int(qtd_arquivos), size_bytes=int(tamanho_bytes), actor=_actor(agente_id))
+            cur.execute(self._sql_complete, ticket_id=int(ticket_id), agent_id=agent_id,
+                        file_count=int(file_count), size_bytes=int(size_bytes), actor=_actor(agent_id))
             return cur.rowcount == 1
         finally:
             cur.close()
 
-    def register_without_content(self, conn, ticket_id, agente_id, situacao, motivo, qtd_arquivos=None):
+    def register_without_content(self, conn, ticket_id, agent_id, state_value, reason, file_count=None):
         """EXCEDEU ou FALHOU sem zip: encerra a linha GRAVANDO deste agente ou inclui uma nova.
 
         False: o ticket nao e deste agente, ou a saida ja tem situacao final. Sem COMMIT.
         """
-        if situacao not in STATES_NO_CONTENT or motivo not in REASONS:
+        if state_value not in STATES_NO_CONTENT or reason not in REASONS:
             raise ValueError("situacao ou motivo da saida invalido")
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_finish, ticket_id=int(ticket_id), agent_id=agente_id, state=situacao,
-                        reason=motivo, file_count=qtd_arquivos, actor=_actor(agente_id))
+            cur.execute(self._sql_finish, ticket_id=int(ticket_id), agent_id=agent_id, state=state_value,
+                        reason=reason, file_count=file_count, actor=_actor(agent_id))
             if cur.rowcount == 1:
                 return True
-            return self._insert(cur, self._sql_insert_without_content, ticket_id, agente_id, situacao,
-                                 reason=motivo, file_count=qtd_arquivos)
+            return self._insert(cur, self._sql_insert_without_content, ticket_id, agent_id, state_value,
+                                 reason=reason, file_count=file_count)
         finally:
             cur.close()
 
-    def fail_agent_writing(self, conn, agente_id):
+    def fail_agent_writing(self, conn, agent_id):
         """Startup check (README §8.13): toda linha GRAVANDO deste agente vira FALHOU. Devolve a contagem."""
         cur = conn.cursor()
         try:
-            cur.execute(self._sql_fail, agent_id=agente_id, actor=_actor(agente_id))
+            cur.execute(self._sql_fail, agent_id=agent_id, actor=_actor(agent_id))
             return cur.rowcount
         finally:
             cur.close()

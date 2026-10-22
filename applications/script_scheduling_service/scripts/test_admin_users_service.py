@@ -52,37 +52,37 @@ class _Base(unittest.TestCase):
         self.log.addHandler(logging.NullHandler())
         self.log.propagate = False
         self.auth = auth_service.AuthService(self.users, self.rbac_repo, repo_factory.get("catalog"),
-                                             self.audit, 5, 900, self.log, relogio=lambda: NOW)
+                                             self.audit, 5, 900, self.log, clock=lambda: NOW)
         self.ctx = dict((login, self.auth.revalidate(sessao)) for login, sessao in SESSIONS.items())
         # O seed usa o relogio real: o bloqueio do usuario 'bloqueado' e reposicionado a partir de AGORA.
-        self.users.update(U_BLOQUEADO, {"locked_until": NOW + datetime.timedelta(minutes=30)}, ator="teste")
-        self.svc = AdminUsersService(self.users, self.rbac_repo, self.log, relogio=lambda: NOW)
-        self.aud_base = max([a["id"] for a in self.audit.list(pagina=1, tamanho=1000)["itens"]] or [0])
+        self.users.update(U_BLOQUEADO, {"locked_until": NOW + datetime.timedelta(minutes=30)}, actor="teste")
+        self.svc = AdminUsersService(self.users, self.rbac_repo, self.log, clock=lambda: NOW)
+        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
 
-    def _audits(self, acao=None):
-        filtros = {"action": acao} if acao else None
-        return [a for a in self.audit.list(filtros=filtros, pagina=1, tamanho=200)["itens"]
+    def _audits(self, action=None):
+        filtros = {"action": action} if action else None
+        return [a for a in self.audit.list(filters=filtros, page=1, size=200)["itens"]
                 if a["entity"] == "tbsss_users" and a["id"] > self.aud_base]
 
-    def _insert(self, **mudancas):
+    def _insert(self, **changes):
         dados = {"login": "maria.silva", "name": "Maria Silva", "profile_id": str(P_CONSULTA),
                  "senha": NEW_PASSWORD, "confirmacao": NEW_PASSWORD}
-        dados.update(mudancas)
+        dados.update(changes)
         return self.svc.save(self.ctx["admin"], IP, None, dados)
 
-    def _form(self, uid, ator="admin"):
-        return self.svc.form(self.ctx[ator], str(uid))
+    def _form(self, uid, actor="admin"):
+        return self.svc.form(self.ctx[actor], str(uid))
 
-    def _edit(self, uid, actor="admin", **mudancas):
+    def _edit(self, uid, actor="admin", **changes):
         f = self._form(uid, actor)
         dados = {"name": f["name"], "profile_id": str(f["profile_id"]), "version": f["version"]}
-        dados.update(mudancas)
+        dados.update(changes)
         return self.svc.save(self.ctx[actor], IP, str(uid), dados)
 
-    def _without_secret(self, texto, *segredos):
-        for s in segredos:
-            self.assertNotIn(s, texto)
-        self.assertNotIn("pbkdf2", texto)
+    def _without_secret(self, text, *secrets):
+        for s in secrets:
+            self.assertNotIn(s, text)
+        self.assertNotIn("pbkdf2", text)
 
 
 class TestInsert(_Base):
@@ -127,7 +127,7 @@ class TestInsert(_Base):
 
     def test_perfil_inativo_ou_inexistente(self):
         form = self.rbac_repo.profiles_get(P_CONSULTA)
-        self.rbac_repo.profiles_update(P_CONSULTA, {"active": "N"}, ator="teste")
+        self.rbac_repo.profiles_update(P_CONSULTA, {"active": "N"}, actor="teste")
         _uid, erros = self._insert()
         self.assertEqual(erros, {"profile_id": usr_mod.MSG_PROFILE_INVALID})
         _uid, erros = self._insert(profile_id="999")
@@ -162,7 +162,7 @@ class TestEditAndLastAdmin(_Base):
     def test_troca_de_perfil_do_ultimo_admin_negada(self):
         # Outro administrador nao pode tirar o unico admin do perfil admin: novo admin cria o cenario.
         novo, _ = self._insert(login="admin2", profile_id=str(P_ADMIN))
-        self.users.update(novo, {"active": "N"}, ator="teste")
+        self.users.update(novo, {"active": "N"}, actor="teste")
         ctx2 = dict(self.ctx["admin"], user_id=novo, login="admin2")
         f = self.svc.form(ctx2, str(U_ADMIN))
         _uid, erros = self.svc.save(ctx2, IP, str(U_ADMIN), {"name": f["name"], "profile_id": str(P_CONSULTA),
@@ -215,10 +215,10 @@ class TestEditAndLastAdmin(_Base):
 
     def test_ultimo_admin_atomico_no_repositorio(self):
         with self.assertRaises(RepoViolation) as cm:
-            self.users.update(U_ADMIN, {"profile_id": P_CONSULTA}, ator="teste")
+            self.users.update(U_ADMIN, {"profile_id": P_CONSULTA}, actor="teste")
         self.assertEqual(cm.exception.constraint, "sss_ultimo_admin")
         with self.assertRaises(RepoViolation):
-            self.users.update(U_ADMIN, {"active": "N"}, ator="teste")
+            self.users.update(U_ADMIN, {"active": "N"}, actor="teste")
 
 
 class TestPasswordAndLock(_Base):
@@ -232,7 +232,7 @@ class TestPasswordAndLock(_Base):
         self.assertTrue(security.verify_password(NEW_PASSWORD, u["password_hash"]))
         aud = self._audits("UPDATE")
         self.assertEqual([a["detail"] for a in aud], ["senha redefinida"])
-        self._without_secret(repr(self.audit.list(pagina=1, tamanho=1000)), NEW_PASSWORD, u["password_hash"])
+        self._without_secret(repr(self.audit.list(page=1, size=1000)), NEW_PASSWORD, u["password_hash"])
 
     def test_redefinicao_valida_politica_e_confirmacao(self):
         self.assertEqual(self.svc.reset_password(self.ctx["admin"], IP, str(U_OPPROD), "fraca", "fraca"),
@@ -256,7 +256,7 @@ class TestPasswordAndLock(_Base):
         u = self.users.get_by_id(U_OPPROD)
         self.assertEqual(u["failed_attempts"], 1)
         self.assertTrue(security.verify_password(DEV_PASSWORD, u["password_hash"]))
-        falhas = [a for a in self.audit.list(filtros={"action": "LOGIN_FAILED"}, pagina=1, tamanho=50)["itens"]
+        falhas = [a for a in self.audit.list(filters={"action": "LOGIN_FAILED"}, page=1, size=50)["itens"]
                   if a["id"] > self.aud_base]
         self.assertEqual(len(falhas), 1)
 

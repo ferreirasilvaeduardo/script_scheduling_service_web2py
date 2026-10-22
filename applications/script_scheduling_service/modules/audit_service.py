@@ -85,71 +85,71 @@ MSG_IP = u"Informe um endereço IPv4 ou IPv6 (ou parte dele)."
 class InvalidFilters(ValueError):
     """Filtros recusados; erros: dict campo -> mensagem segura para exibicao."""
 
-    def __init__(self, erros):
-        ValueError.__init__(self, ",".join(sorted(erros)))
-        self.errors = erros
+    def __init__(self, errors):
+        ValueError.__init__(self, ",".join(sorted(errors)))
+        self.errors = errors
 
 
-def _text(valor, limite):
-    return admin_crud.text(valor, limite)
+def _text(value, limit):
+    return admin_crud.text(value, limit)
 
 
-def _day(valor):
-    if not valor or not _RE_DAY.fullmatch(valor):
+def _day(value):
+    if not value or not _RE_DAY.fullmatch(value):
         return None
     try:
-        return datetime.datetime.strptime(valor, _DAY_FORMAT).date()
+        return datetime.datetime.strptime(value, _DAY_FORMAT).date()
     except ValueError:
         return None
 
 
-def normalize_filters(entrada, hoje):
+def normalize_filters(input_value, today):
     """Allowlist dos filtros (querystring ou POST da exportacao).
 
     Retorna (filtros, erros): filtros e um OrderedDict na forma de exibicao/URL, sempre com
     'de' e 'ate' (padrao: os ultimos 7 dias ate `hoje`); erros mapeia campo -> mensagem.
     """
-    entrada = entrada or {}
+    input_value = input_value or {}
     filtros = collections.OrderedDict()
     erros = {}
 
     brutos = {}
     for chave in ("de", "ate"):
-        brutos[chave] = _text(entrada.get(chave), 10)
+        brutos[chave] = _text(input_value.get(chave), 10)
     de, ate = _day(brutos["de"]), _day(brutos["ate"])
     for chave, valor in (("de", de), ("ate", ate)):
         if brutos[chave] and valor is None:
             erros[chave] = MSG_DATE
     if ate is None:
-        ate = hoje if de is None or de <= hoje else de
+        ate = today if de is None or de <= today else de
     if de is None:
         de = ate - datetime.timedelta(days=DEFAULT_PERIOD_DAYS - 1)
 
-    ator = _text(entrada.get("actor"), 41)
+    ator = _text(input_value.get("actor"), 41)
     if ator:
         if _RE_ACTOR.fullmatch(ator):
             filtros["actor"] = ator
         else:
             erros["actor"] = MSG_ACTOR
-    acao = _text(entrada.get("action"), 30)
+    acao = _text(input_value.get("action"), 30)
     if acao:
         if acao in ACTIONS:
             filtros["action"] = acao
         else:
             erros["action"] = MSG_ACTION
-    entidade = _text(entrada.get("entity"), 30)
+    entidade = _text(input_value.get("entity"), 30)
     if entidade:
         if entidade in ENTITIES:
             filtros["entity"] = entidade
         else:
             erros["entity"] = MSG_ENTITY
-    entidade_id = _text(entrada.get("entity_id"), 11)
+    entidade_id = _text(input_value.get("entity_id"), 11)
     if entidade_id:
         if _RE_ID.fullmatch(entidade_id) and int(entidade_id) > 0:
             filtros["entity_id"] = int(entidade_id)
         else:
             erros["entity_id"] = MSG_ENTITY_ID
-    ip = _text(entrada.get("ip"), 46)
+    ip = _text(input_value.get("ip"), 46)
     if ip:
         if _RE_IP.fullmatch(ip):
             filtros["ip"] = ip
@@ -173,27 +173,27 @@ def normalize_filters(entrada, hoje):
     return resultado, erros
 
 
-def repo_filters(filtros):
+def repo_filters(filters):
     """Traduz filtros validos para o contrato: periodo vira [de 00:00:00, ate 23:59:59]."""
-    de = datetime.datetime.strptime(filtros["de"], _DAY_FORMAT)
-    ate = datetime.datetime.strptime(filtros["ate"], _DAY_FORMAT)
+    de = datetime.datetime.strptime(filters["de"], _DAY_FORMAT)
+    ate = datetime.datetime.strptime(filters["ate"], _DAY_FORMAT)
     repo = {"start_date": de, "end_date": ate + datetime.timedelta(days=1, seconds=-1)}
     for chave, destino in (("actor", "actor"), ("action", "action"), ("entity", "entity"),
                            ("entity_id", "entity_id"), ("ip", "source_ip")):
-        if chave in filtros:
-            repo[destino] = filtros[chave]
+        if chave in filters:
+            repo[destino] = filters[chave]
     return repo
 
 
-def neutralize_csv(valor):
+def neutralize_csv(value):
     """Prefixa com ' o texto que uma planilha leria como formula (= + - @ TAB CR no inicio)."""
-    if isinstance(valor, str) and valor.startswith(_DANGEROUS_PREFIXES):
-        return u"'" + valor
-    return valor
+    if isinstance(value, str) and value.startswith(_DANGEROUS_PREFIXES):
+        return u"'" + value
+    return value
 
 
-def _mask(texto):
-    return masking.MASKER.mask(texto) if texto else texto
+def _mask(text):
+    return masking.MASKER.mask(text) if text else text
 
 
 def csv_row(reg):
@@ -212,57 +212,57 @@ def csv_row(reg):
     return [neutralize_csv(v) for v in valores]
 
 
-def entity_link(ctx, entidade, entidade_id, pode_ver_tickets):
+def entity_link(ctx, entity, entity_id, can_view_tickets):
     """(controller, funcao, args) da tela da entidade, ou None sem tela ou sem permissao (decisao D6)."""
-    if entidade_id is None:
+    if entity_id is None:
         return None
-    tela = ENTITY_SCREENS.get(entidade)
+    tela = ENTITY_SCREENS.get(entity)
     if tela is None:
         return None
     controller, funcao, func = tela
-    permitido = pode_ver_tickets if func is None else rbac.has_feature(ctx, func)
+    permitido = can_view_tickets if func is None else rbac.has_feature(ctx, func)
     if not permitido:
         return None
-    return controller, funcao, [entidade_id]
+    return controller, funcao, [entity_id]
 
 
-def _describe_filters(filtros):
-    return u", ".join(u"%s=%s" % (k, filtros[k]) for k in FILTER_FIELDS if k in filtros)
+def _describe_filters(filters):
+    return u", ".join(u"%s=%s" % (k, filters[k]) for k in FILTER_FIELDS if k in filters)
 
 
 class AuditService(object):
     """Consulta e exportacao da trilha, com repositorio, relogio e log injetados."""
 
-    def __init__(self, auditoria, relogio, log):
-        self._audit = auditoria
-        self._clock = relogio
+    def __init__(self, audit, clock, log):
+        self._audit = audit
+        self._clock = clock
         self._log = log
 
     def _today(self):
         return self._clock().date()
 
-    def normalize_filters(self, entrada):
+    def normalize_filters(self, input_value):
         """Filtros e erros com o periodo padrao calculado pelo relogio do banco."""
-        return normalize_filters(entrada, self._today())
+        return normalize_filters(input_value, self._today())
 
-    def list(self, ctx, entrada, pagina, tamanho):
+    def list(self, ctx, input_value, page, size):
         """Pagina da trilha (tamanho <= 100), ordenada por created_at DESC, id DESC.
 
         Retorna dict com filtros, erros, itens, total, pagina e tamanho. Com erros de filtro
         nada e consultado.
         """
         admin_crud.require_feature(ctx, FEATURE)
-        tamanho = max(1, min(int(tamanho or 20), MAX_LENGTH))
-        filtros, erros = self.normalize_filters(entrada)
-        vazio = {"filtros": filtros, "erros": erros, "itens": [], "total": 0, "pagina": 1, "tamanho": tamanho}
+        size = max(1, min(int(size or 20), MAX_LENGTH))
+        filtros, erros = self.normalize_filters(input_value)
+        vazio = {"filtros": filtros, "erros": erros, "itens": [], "total": 0, "pagina": 1, "tamanho": size}
         if erros:
             return vazio
         repo_filtros = repo_filters(filtros)
-        resultado = self._audit.list(filtros=repo_filtros, pagina=pagina, tamanho=tamanho)
-        info = ui_helpers.paginacao_info(pagina, tamanho, resultado["total"],
+        resultado = self._audit.list(filters=repo_filtros, page=page, size=size)
+        info = ui_helpers.paginacao_info(page, size, resultado["total"],
                                          resultado.get("total_limitado", False), len(resultado["itens"]))
         if not resultado["itens"] and info["pagina"] != resultado["pagina"]:
-            resultado = self._audit.list(filtros=repo_filtros, pagina=info["pagina"], tamanho=tamanho)
+            resultado = self._audit.list(filters=repo_filtros, page=info["pagina"], size=size)
         itens = []
         for reg in resultado["itens"]:
             detalhe = _mask(reg.get("detail")) or u""
@@ -281,7 +281,7 @@ class AuditService(object):
         return dict(vazio, itens=itens, total=resultado["total"], pagina=resultado["pagina"],
                     tamanho=resultado["tamanho"], total_limitado=resultado.get("total_limitado", False))
 
-    def export_csv(self, ctx, ip, entrada):
+    def export_csv(self, ctx, ip, input_value):
         """Exportacao com os filtros e o RBAC da tela: retorna (nome_arquivo, linhas, blocos).
 
         blocos e um gerador de bytes UTF-8 (com BOM, separador ';') de no maximo
@@ -290,7 +290,7 @@ class AuditService(object):
         Filtros invalidos levantam InvalidFilters.
         """
         admin_crud.require_feature(ctx, FEATURE)
-        filtros, erros = self.normalize_filters(entrada)
+        filtros, erros = self.normalize_filters(input_value)
         if erros:
             raise InvalidFilters(erros)
         repo_filtros = repo_filters(filtros)
@@ -298,7 +298,7 @@ class AuditService(object):
         # linha; a quantidade registrada e o arquivo correspondem ao mesmo conjunto.
         aid = self._audit.reserve_id()
         repo_filtros["id_max"] = aid - 1
-        total = sum(1 for _ in self._audit.iterate(filtros=repo_filtros, limite=EXPORT_LIMIT))
+        total = sum(1 for _ in self._audit.iterate(filters=repo_filtros, limit=EXPORT_LIMIT))
         linhas = min(total, EXPORT_LIMIT)
         detalhe = admin_crud.free_detail(u"filtros: %s; linhas: %d (limite %d)" % (
             _describe_filters(filtros), linhas, EXPORT_LIMIT))
@@ -308,7 +308,7 @@ class AuditService(object):
         nome = "auditoria_%s.csv" % self._clock().strftime("%Y%m%d_%H%M%S")
         return nome, linhas, self._chunks(repo_filtros, ctx.get("login"))
 
-    def _chunks(self, repo_filtros, login):
+    def _chunks(self, repo_filters, login):
         buffer = io.StringIO()
         escritor = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
         escritor.writerow(CSV_HEADER)
@@ -317,7 +317,7 @@ class AuditService(object):
         buffer.truncate(0)
         pendentes = 0
         try:
-            for reg in self._audit.iterate(filtros=repo_filtros, limite=EXPORT_LIMIT):
+            for reg in self._audit.iterate(filters=repo_filters, limit=EXPORT_LIMIT):
                 escritor.writerow(csv_row(reg))
                 pendentes += 1
                 if pendentes >= _LINES_PER_CHUNK:
@@ -346,23 +346,23 @@ def _service():
             import sss_logging
             fabrica = current.repo_factory
             _default = AuditService(
-                auditoria=fabrica.get("audit"),
-                relogio=fabrica.get("tickets").now,
+                audit=fabrica.get("audit"),
+                clock=fabrica.get("tickets").now,
                 log=sss_logging.get_logger("sss_web", current.sss_cfg),
             )
         return _default
 
 
-def default_filters(entrada):
+def default_filters(input_value):
     """Filtros e erros normalizados com o relogio do banco (servico padrao)."""
-    return _service().normalize_filters(entrada)
+    return _service().normalize_filters(input_value)
 
 
-def list_page(ctx, entrada, pagina, tamanho):
+def list_page(ctx, input_value, page, size):
     """Pagina da trilha de auditoria (servico padrao)."""
-    return _service().list(ctx, entrada, pagina, tamanho)
+    return _service().list(ctx, input_value, page, size)
 
 
-def export_csv(ctx, ip, entrada):
+def export_csv(ctx, ip, input_value):
     """Exportacao CSV auditada (servico padrao)."""
-    return _service().export_csv(ctx, ip, entrada)
+    return _service().export_csv(ctx, ip, input_value)

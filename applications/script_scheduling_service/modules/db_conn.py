@@ -55,21 +55,21 @@ class SchemaVersionError(Exception):
     pass
 
 
-def _get_password(segredos):
+def _get_password(secrets):
     """Extrai a senha Oracle de Segredos, dict ou mock."""
-    if segredos is None:
+    if secrets is None:
         return ""
-    if hasattr(segredos, "oracle") and segredos.oracle:
-        return getattr(segredos.oracle, "password", "") or ""
-    if hasattr(segredos, "oracle_password"):
-        return getattr(segredos, "oracle_password", "") or ""
-    if hasattr(segredos, "password"):
-        return getattr(segredos, "password", "") or ""
-    if isinstance(segredos, dict):
-        oracle_dict = segredos.get("oracle")
+    if hasattr(secrets, "oracle") and secrets.oracle:
+        return getattr(secrets.oracle, "password", "") or ""
+    if hasattr(secrets, "oracle_password"):
+        return getattr(secrets, "oracle_password", "") or ""
+    if hasattr(secrets, "password"):
+        return getattr(secrets, "password", "") or ""
+    if isinstance(secrets, dict):
+        oracle_dict = secrets.get("oracle")
         if isinstance(oracle_dict, dict):
             return oracle_dict.get("password") or ""
-        return segredos.get("password") or ""
+        return secrets.get("password") or ""
     return ""
 
 
@@ -89,7 +89,7 @@ def _log_critical(msg, cfg=None):
         sss_logging.log_initial_critical("sss_db_conn", msg, log_dir)
 
 
-def _run_probe_subprocess(candidato, cfg, senha, usuario=None):
+def _run_probe_subprocess(candidate, cfg, password_value, user=None):
     """Executa scripts/probe_driver.py em subprocesso isolado com sys.executable -I.
 
     usuario: a conta do papel que vai conectar (F9.1d; sem ele, [oracle] user). Nao e segredo e vai no argv; a
@@ -98,12 +98,12 @@ def _run_probe_subprocess(candidato, cfg, senha, usuario=None):
     app_dir = os.path.dirname(scripts_dir)
     sondar_script = os.path.join(app_dir, "scripts", "probe_driver.py")
 
-    cmd = [sys.executable, "-I", sondar_script, candidato]
+    cmd = [sys.executable, "-I", sondar_script, candidate]
     caminho_cfg = getattr(cfg, "caminho_arquivo", None)
     if caminho_cfg and os.path.isfile(caminho_cfg):
         cmd.extend(["--config", caminho_cfg])
-    if usuario:
-        cmd.extend(["--user", usuario])
+    if user:
+        cmd.extend(["--user", user])
 
     timeout_ms = getattr(cfg.oracle, "call_timeout_ms", 30000) if hasattr(cfg, "oracle") else 30000
     timeout_s = (2.0 * float(timeout_ms)) / 1000.0
@@ -119,12 +119,12 @@ def _run_probe_subprocess(candidato, cfg, senha, usuario=None):
             close_fds=True,
         )
         stdout_bytes, _stderr = proc.communicate(
-            input=(senha or "").encode("utf-8"),
+            input=(password_value or "").encode("utf-8"),
             timeout=timeout_s,
         )
         if proc.returncode != 0:
             return {
-                "candidate": candidato,
+                "candidate": candidate,
                 "ok": False,
                 "error_code": "EXIT_%d" % proc.returncode,
                 "category": "OTHER",
@@ -133,7 +133,7 @@ def _run_probe_subprocess(candidato, cfg, senha, usuario=None):
         linha = stdout_bytes.decode("utf-8", "replace").strip()
         if not linha:
             return {
-                "candidate": candidato,
+                "candidate": candidate,
                 "ok": False,
                 "error_code": "SEM_SAIDA",
                 "category": "OTHER",
@@ -147,21 +147,21 @@ def _run_probe_subprocess(candidato, cfg, senha, usuario=None):
         except Exception:
             pass
         return {
-            "candidate": candidato,
+            "candidate": candidate,
             "ok": False,
             "error_code": "TIMEOUT",
             "category": "NETWORK",
         }
     except Exception as exc:
         return {
-            "candidate": candidato,
+            "candidate": candidate,
             "ok": False,
             "error_code": "SUBPROCESS_ERROR: %s" % exc,
             "category": "OTHER",
         }
 
 
-def select_driver(cfg, segredos, executor_sondagem=None, usuario=None, senha=None):
+def select_driver(cfg, secrets, probe_runner=None, user=None, password_value=None):
     """Sonda e seleciona a combinacao de driver Oracle apropriada.
 
     Em 'auto': Thin -> Thick -> cx_Oracle. usuario e senha: as credenciais do papel que vai conectar (F9.1d:
@@ -185,16 +185,16 @@ def select_driver(cfg, segredos, executor_sondagem=None, usuario=None, senha=Non
         else:
             candidatos = [modo]
 
-        if senha is None:
-            senha = _get_password(segredos)
+        if password_value is None:
+            password_value = _get_password(secrets)
         tentativas = []
-        sondador = executor_sondagem
+        sondador = probe_runner
         if sondador is None:
-            def sondador(cand, cfg_sondagem, senha_sondagem):
-                return _run_probe_subprocess(cand, cfg_sondagem, senha_sondagem, usuario=usuario)
+            def sondador(cand, probe_cfg, probe_password):
+                return _run_probe_subprocess(cand, probe_cfg, probe_password, user=user)
 
         for cand in candidatos:
-            res = sondador(cand, cfg, senha)
+            res = sondador(cand, cfg, password_value)
             if res.get("ok"):
                 selecao = DriverSelection(
                     candidate=cand,
@@ -235,17 +235,17 @@ def select_driver(cfg, segredos, executor_sondagem=None, usuario=None, senha=Non
         raise RuntimeError(msg)
 
 
-def initialize(selecao, cfg=None):
+def initialize(selection, cfg=None):
     """Importa o driver vencedor no processo principal e inicializa Thick/cx_Oracle se necessario."""
     global _DRIVER_INITIALIZED
     with _SELECTION_LOCK:
         if _DRIVER_INITIALIZED is not None:
             return _DRIVER_INITIALIZED
 
-        if selecao is None:
+        if selection is None:
             raise RuntimeError("selecao de driver nao fornecida para inicializar()")
 
-        candidato = selecao.candidate
+        candidato = selection.candidate
         driver = None
 
         if candidato in ("thin", "thick"):
@@ -307,8 +307,8 @@ def initialize(selecao, cfg=None):
             "driver=%s modo=%s servidor=%s cliente=%s",
             nome_driver,
             candidato,
-            selecao.server_version or "-",
-            selecao.client_version or "-",
+            selection.server_version or "-",
+            selection.client_version or "-",
             extra={"agent": "-", "ticket": "-", "action": "INICIO"},
         )
 
@@ -335,43 +335,43 @@ def reset_selection():
 # TIPOS NEUTROS, BINDS E SETINPUTSIZES (README §7.5, AGENTS §3.1)
 # ==============================================================================
 
-def get_driver_type(tipo_neutro, driver=None, candidato=None):
+def get_driver_type(neutral_type, driver=None, candidate=None):
     """Mapeia uma constante de tipo neutro para o tipo nativo do driver ativo."""
     drv = driver or _DRIVER_INITIALIZED
-    cand = candidato or (_DRIVER_SELECTION.candidate if _DRIVER_SELECTION else None)
+    cand = candidate or (_DRIVER_SELECTION.candidate if _DRIVER_SELECTION else None)
 
     if drv is None:
-        return tipo_neutro
+        return neutral_type
 
-    if tipo_neutro == TIPO_DATE:
+    if neutral_type == TIPO_DATE:
         if cand == "cx_oracle" or (hasattr(drv, "__name__") and drv.__name__ == "cx_Oracle"):
             return getattr(drv, "DATETIME", None)
         return getattr(drv, "DB_TYPE_DATE", None)
 
-    if tipo_neutro == TIPO_CLOB:
+    if neutral_type == TIPO_CLOB:
         if cand == "cx_oracle" or (hasattr(drv, "__name__") and drv.__name__ == "cx_Oracle"):
             return getattr(drv, "CLOB", None)
         return getattr(drv, "DB_TYPE_CLOB", None)
 
-    if tipo_neutro == TIPO_BLOB:
+    if neutral_type == TIPO_BLOB:
         if cand == "cx_oracle" or (hasattr(drv, "__name__") and drv.__name__ == "cx_Oracle"):
             return getattr(drv, "BLOB", None)
         return getattr(drv, "DB_TYPE_BLOB", None)
 
-    if tipo_neutro == TIPO_NUMBER:
+    if neutral_type == TIPO_NUMBER:
         if cand == "cx_oracle" or (hasattr(drv, "__name__") and drv.__name__ == "cx_Oracle"):
             return getattr(drv, "NUMBER", None)
         return getattr(drv, "DB_TYPE_NUMBER", None)
 
-    if tipo_neutro == TIPO_VARCHAR:
+    if neutral_type == TIPO_VARCHAR:
         if cand == "cx_oracle" or (hasattr(drv, "__name__") and drv.__name__ == "cx_Oracle"):
             return getattr(drv, "STRING", None)
         return getattr(drv, "DB_TYPE_VARCHAR", None)
 
-    return tipo_neutro
+    return neutral_type
 
 
-def set_input_types(cursor, **mapa):
+def set_input_types(cursor, **mapping):
     """Aplica setinputsizes no cursor convertendo constantes neutras para tipos do driver ativo."""
     drv = _DRIVER_INITIALIZED
     cand = _DRIVER_SELECTION.candidate if _DRIVER_SELECTION else None
@@ -381,31 +381,31 @@ def set_input_types(cursor, **mapa):
         drv = cursor.connection._driver
 
     mapa_driver = {}
-    for param, tipo_neutro in mapa.items():
-        tipo_concreto = get_driver_type(tipo_neutro, driver=drv, candidato=cand)
+    for param, tipo_neutro in mapping.items():
+        tipo_concreto = get_driver_type(tipo_neutro, driver=drv, candidate=cand)
         mapa_driver[param] = tipo_concreto if tipo_concreto is not None else tipo_neutro
 
     cursor.setinputsizes(**mapa_driver)
 
 
-def output_variable(cursor, tipo, tamanho=None):
+def output_variable(cursor, kind, size=None):
     """Cria uma variavel de saida OUT bind PL/SQL sem expor cursor.var externamente."""
     drv = _DRIVER_INITIALIZED
     cand = _DRIVER_SELECTION.candidate if _DRIVER_SELECTION else None
 
-    tipo_concreto = get_driver_type(tipo, driver=drv, candidato=cand)
-    alvo = tipo_concreto if tipo_concreto is not None else tipo
+    tipo_concreto = get_driver_type(kind, driver=drv, candidate=cand)
+    alvo = tipo_concreto if tipo_concreto is not None else kind
 
-    if tamanho is not None:
-        return cursor.var(alvo, size=tamanho)
+    if size is not None:
+        return cursor.var(alvo, size=size)
     return cursor.var(alvo)
 
 
-def output_value(variavel):
+def output_value(variable):
     """Extrai e normaliza o valor Python de uma variavel de saida PL/SQL."""
-    if variavel is None:
+    if variable is None:
         return None
-    val = variavel.getvalue()
+    val = variable.getvalue()
     if hasattr(val, "read") and callable(val.read):
         return val.read()
     return val
@@ -551,27 +551,27 @@ def connection_budget_s(dsn, call_timeout_s):
 # CONEXAO E POOL (README §2.3, §4.1, CR-007 D1b, CR-008 E3)
 # ==============================================================================
 
-def connect(cfg, segredos, papel="web", user=None, password=None):
+def connect(cfg, secrets, role="web", user=None, password=None):
     """Abre conexao Oracle neutra para o papel especificado (web, agente, purge, monitor)."""
     # 1. Resolver credenciais conforme o papel
     if user is not None and password is not None:
         u = user
         p = password
-    elif papel in ("web", "agent"):
+    elif role in ("web", "agent"):
         u = getattr(cfg.oracle, "user", None)
-        p = _get_password(segredos)
-    elif papel == "purge":
+        p = _get_password(secrets)
+    elif role == "purge":
         u = getattr(getattr(cfg, "retention", None), "purge_user", None) or getattr(cfg.oracle, "user", None)
-        p = getattr(segredos, "purge_password", None) or _get_password(segredos)
-    elif papel == "monitor":
-        mon = getattr(segredos, "monitor", None)
+        p = getattr(secrets, "purge_password", None) or _get_password(secrets)
+    elif role == "monitor":
+        mon = getattr(secrets, "monitor", None)
         u = getattr(mon, "user", None) if mon else getattr(getattr(cfg, "monitor", None), "user", None)
         p = getattr(mon, "password", None) if mon else None
-    elif papel == "dono":
+    elif role == "dono":
         u = user or getattr(cfg.oracle, "owner", None)
-        p = password or _get_password(segredos)
+        p = password or _get_password(secrets)
     else:
-        raise ValueError("Papel de conexao desconhecido: %s" % papel)
+        raise ValueError("Papel de conexao desconhecido: %s" % role)
 
     dsn = getattr(cfg.oracle, "dsn", "") if hasattr(cfg, "oracle") else getattr(cfg, "dsn", "")
     timeout_ms = getattr(cfg.oracle, "call_timeout_ms", 30000) if hasattr(cfg, "oracle") else 30000
@@ -586,7 +586,7 @@ def connect(cfg, segredos, papel="web", user=None, password=None):
 
     selecao = get_selection()
     if selecao is None:
-        selecao = select_driver(cfg, segredos, usuario=u, senha=p)
+        selecao = select_driver(cfg, secrets, user=u, password_value=p)
     driver = initialize(selecao, cfg)
 
     candidato = selecao.candidate
@@ -595,10 +595,10 @@ def connect(cfg, segredos, papel="web", user=None, password=None):
     else:
         conn = driver.connect(user=u, password=p, dsn=dsn)
 
-    return configure_session(conn, cfg, papel, user=u)
+    return configure_session(conn, cfg, role, user=u)
 
 
-def configure_session(conn, cfg, papel="web", user=None):
+def configure_session(conn, cfg, role="web", user=None):
     """Configuracao obrigatoria de toda conexao (README §2.3), nova ou tirada do pool.
 
     autocommit desligado, call_timeout do config e module/action/client_identifier da sessao.
@@ -612,7 +612,7 @@ def configure_session(conn, cfg, papel="web", user=None):
     if hasattr(conn, "call_timeout"):
         conn.call_timeout = timeout_ms
 
-    conn.module = "SSS_%s" % papel.upper()
+    conn.module = "SSS_%s" % role.upper()
     conn.action = "INICIO"
 
     u = user or (getattr(cfg.oracle, "user", None) if hasattr(cfg, "oracle") else None)
@@ -621,10 +621,10 @@ def configure_session(conn, cfg, papel="web", user=None):
     return conn
 
 
-def pool(cfg, segredos, papel="web"):
+def pool(cfg, secrets, role="web"):
     """Cria pool de conexoes Oracle para o no web com ping_interval de 60s (CR-007, R-12)."""
     u = getattr(cfg.oracle, "user", None)
-    p = _get_password(segredos)
+    p = _get_password(secrets)
     dsn = getattr(cfg.oracle, "dsn", "") if hasattr(cfg, "oracle") else getattr(cfg, "dsn", "")
     timeout_ms = getattr(cfg.oracle, "call_timeout_ms", 30000) if hasattr(cfg, "oracle") else 30000
     timeout_s = float(timeout_ms) / 1000.0
@@ -635,7 +635,7 @@ def pool(cfg, segredos, papel="web"):
 
     selecao = get_selection()
     if selecao is None:
-        selecao = select_driver(cfg, segredos)
+        selecao = select_driver(cfg, secrets)
     driver = initialize(selecao, cfg)
 
     candidato = selecao.candidate
@@ -716,23 +716,23 @@ def health(conn):
         cur.close()
 
 
-def next_id(conn, sequence_qualificada):
+def next_id(conn, qualified_sequence):
     """Obtem o proximo id sequencial (SELECT {seq}.NEXTVAL FROM DUAL, README §2.7)."""
     cur = conn.cursor()
     try:
-        cur.execute("SELECT %s.NEXTVAL FROM DUAL" % sequence_qualificada)
+        cur.execute("SELECT %s.NEXTVAL FROM DUAL" % qualified_sequence)
         row = cur.fetchone()
         return int(row[0])
     finally:
         cur.close()
 
 
-def check_schema_version(conn, owner=None, prefixo="tbsss_"):
+def check_schema_version(conn, owner=None, prefix="tbsss_"):
     """Confere se versao_esquema em tbsss_control e igual a VERSAO_ESQUEMA (CR-007, D4)."""
     if owner:
-        tabela = sql_ident.qualify(owner, prefixo + sql_ident.physical("control"))
+        tabela = sql_ident.qualify(owner, prefix + sql_ident.physical("control"))
     else:
-        tabela = prefixo + sql_ident.physical("control")
+        tabela = prefix + sql_ident.physical("control")
 
     cur = conn.cursor()
     try:
@@ -760,10 +760,10 @@ def check_schema_version(conn, owner=None, prefixo="tbsss_"):
 class ResilientConnection(object):
     """Gerencia conexao persistente com reconexao monotonica sem sleep (CR-007, R-04)."""
 
-    def __init__(self, cfg, segredos, papel="agent"):
+    def __init__(self, cfg, secrets, role="agent"):
         self.cfg = cfg
-        self.secrets = segredos
-        self.role = papel
+        self.secrets = secrets
+        self.role = role
         self.conn = None
         self.backoff_s = 1.0
         self.next_attempt_monotonic = 0.0
@@ -810,7 +810,7 @@ class ResilientConnection(object):
                 extra={"agent": "-", "ticket": "-", "action": "RECONEXAO"},
             )
         try:
-            self.conn = connect(self.cfg, self.secrets, papel=self.role)
+            self.conn = connect(self.cfg, self.secrets, role=self.role)
             self.backoff_s = 1.0
             self.failing = False
             self._connected_once = True

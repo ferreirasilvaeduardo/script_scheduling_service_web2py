@@ -28,14 +28,14 @@ class Masker(object):
         self._regex = None
         self.max_len = 0
 
-    def register(self, valor):
+    def register(self, value):
         """Registra um segredo; valores nao str ou com menos de 4 caracteres sao ignorados."""
-        if not isinstance(valor, str) or len(valor) < MIN_LENGTH:
+        if not isinstance(value, str) or len(value) < MIN_LENGTH:
             return
         with self._lock:
-            if valor in self._secrets:
+            if value in self._secrets:
                 return
-            segredos = sorted(self._secrets + [valor], key=len, reverse=True)
+            segredos = sorted(self._secrets + [value], key=len, reverse=True)
             self._regex = re.compile("|".join(re.escape(s) for s in segredos))
             self._secrets = segredos
             self.max_len = len(segredos[0])
@@ -44,35 +44,35 @@ class Masker(object):
     def regex(self):
         return self._regex
 
-    def mask(self, texto):
+    def mask(self, text):
         """Mascara segredos registrados e senhas em connect strings."""
-        if not isinstance(texto, str) or not texto:
-            return texto
+        if not isinstance(text, str) or not text:
+            return text
         regex = self._regex
         if regex is not None:
-            texto = regex.sub(MASK, texto)
-        return _RE_CONNECT.sub(r"\1/" + MASK + "@", texto)
+            text = regex.sub(MASK, text)
+        return _RE_CONNECT.sub(r"\1/" + MASK + "@", text)
 
 
-def _trim_connect_string(texto, corte):
+def _trim_connect_string(text, cutoff):
     # Um corte dentro de 'usuario/senha@dsn' emitiria parte da senha sem casar o padrao:
     # nunca corta um token sem espaco ainda nao terminado (limite de MAX_HELD_TOKEN caracteres).
-    if corte < len(texto) and texto[corte].isspace():
-        return corte
-    m = _RE_TOKEN_FINAL.search(texto, max(0, corte - MAX_HELD_TOKEN), corte)
-    return m.start() if m else corte
+    if cutoff < len(text) and text[cutoff].isspace():
+        return cutoff
+    m = _RE_TOKEN_FINAL.search(text, max(0, cutoff - MAX_HELD_TOKEN), cutoff)
+    return m.start() if m else cutoff
 
 
 class StreamMasker(object):
     """Mascara um fluxo em blocos retendo a cauda que pode conter um segredo cortado."""
 
-    def __init__(self, mascarador):
-        self._masker = mascarador
+    def __init__(self, masker):
+        self._masker = masker
         self._pending = ""
 
-    def feed(self, bloco):
+    def feed(self, chunk):
         """Recebe um bloco e devolve o texto ja seguro para emissao."""
-        texto = self._pending + (bloco or "")
+        texto = self._pending + (chunk or "")
         regex = self._masker.regex
         corte = len(texto)
         if regex is not None:
@@ -103,19 +103,19 @@ class StreamMasker(object):
         return self._masker.mask(resto)
 
 
-def _mask_arg(mascarador, valor):
-    if valor is None or isinstance(valor, (bool, int, float)):
-        return valor
-    if isinstance(valor, str):
-        return mascarador.mask(valor)
-    return mascarador.mask(str(valor))
+def _mask_arg(masker, value):
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        return masker.mask(value)
+    return masker.mask(str(value))
 
 
 class _MaskFilter(logging.Filter):
 
-    def __init__(self, mascarador):
+    def __init__(self, masker):
         super(_MaskFilter, self).__init__()
-        self.masker = mascarador
+        self.masker = masker
 
     def filter(self, record):
         m = self.masker
@@ -136,29 +136,29 @@ class _MaskFilter(logging.Filter):
         return True
 
 
-def logging_filter(mascarador):
+def logging_filter(masker):
     """logging.Filter que mascara msg, args e traceback do registro."""
-    return _MaskFilter(mascarador)
+    return _MaskFilter(masker)
 
 
 MASKER = Masker()
 
 
-def register_secret(valor):
+def register_secret(value):
     """Registra um segredo no mascarador global do processo."""
-    MASKER.register(valor)
+    MASKER.register(value)
 
 
-def install_filter_on_handlers(mascarador=None):
+def install_filter_on_handlers(masker=None):
     """Instala (uma vez por handler) o filtro de mascaramento em todos os handlers de log."""
-    mascarador = mascarador or MASKER
+    masker = masker or MASKER
     loggers = [logging.getLogger()]
     for lg in list(logging.Logger.manager.loggerDict.values()):
         if isinstance(lg, logging.Logger):
             loggers.append(lg)
     for lg in loggers:
         for handler in list(lg.handlers):
-            if getattr(handler, _FILTER_MARK, None) is mascarador:
+            if getattr(handler, _FILTER_MARK, None) is masker:
                 continue
-            handler.addFilter(logging_filter(mascarador))
-            setattr(handler, _FILTER_MARK, mascarador)
+            handler.addFilter(logging_filter(masker))
+            setattr(handler, _FILTER_MARK, masker)

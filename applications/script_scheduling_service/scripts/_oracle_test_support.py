@@ -58,8 +58,8 @@ def schema_mode():
     return _current_mode
 
 
-def _cfg_oracle(cfg, campo):
-    return (getattr(getattr(cfg, "oracle", None), campo, None) or "").strip()
+def _cfg_oracle(cfg, field):
+    return (getattr(getattr(cfg, "oracle", None), field, None) or "").strip()
 
 
 def check_environment_preconditions(cfg=None):
@@ -85,24 +85,24 @@ def check_environment_preconditions(cfg=None):
     return True, ""
 
 
-def validate_disposable_schema(conn, owner_configurado, usuario_sessao_esperado, prefixo="tbsss_"):
+def validate_disposable_schema(conn, configured_owner, expected_session_user, prefix="tbsss_"):
     """Confere a sessao real (USER) e, no modo compartilhado, o esquema SSS na versao do codigo.
 
     No modo descartavel, a conta de sessao nunca pode ser a dona do esquema.
     """
-    owner = (owner_configurado or "").strip().upper()
+    owner = (configured_owner or "").strip().upper()
     if not _RE_OWNER.match(owner):
         raise SchemaPreconditionError("Owner configurado invalido")
     modo = owner_mode(owner)
     if modo == DISPOSABLE_MODE and not _RE_DISPOSABLE_OWNER.match(owner):
         raise SchemaPreconditionError("Owner descartavel '%s' invalido" % owner)
     compartilhado = modo == SHARED_MODE
-    esperado = (usuario_sessao_esperado or "").strip().upper()
+    esperado = (expected_session_user or "").strip().upper()
 
     if not compartilhado and esperado == owner:
         raise SchemaPreconditionError(
             "Conta de sessao '%s' nao pode ser a conta dona do esquema descartavel '%s'"
-            % (usuario_sessao_esperado, owner_configurado)
+            % (expected_session_user, configured_owner)
         )
 
     cur = conn.cursor()
@@ -114,27 +114,27 @@ def validate_disposable_schema(conn, owner_configurado, usuario_sessao_esperado,
         user_sessao = str(row[0]).strip().upper()
         if user_sessao != esperado:
             raise SchemaPreconditionError(
-                "Usuario de sessao real '%s' difere do esperado '%s'" % (user_sessao, usuario_sessao_esperado)
+                "Usuario de sessao real '%s' difere do esperado '%s'" % (user_sessao, expected_session_user)
             )
         if user_sessao == owner and not compartilhado:
             raise SchemaPreconditionError(
                 "Sessao Oracle real esta conectada como owner '%s'; exigida conta de teste distinta" % owner
             )
         if compartilhado:
-            _check_sss_schema(cur, owner, prefixo)
+            _check_sss_schema(cur, owner, prefix)
     finally:
         cur.close()
 
     return owner
 
 
-def _check_sss_schema(cur, owner, prefixo):
+def _check_sss_schema(cur, owner, prefix):
     """Owner existente: so aceita se o esquema SSS estiver implantado na versao do codigo."""
     try:
         import sql_ident
     except ImportError:
         from modules import sql_ident
-    tabela = sql_ident.table(owner, prefixo or "tbsss_", "control")
+    tabela = sql_ident.table(owner, prefix or "tbsss_", "control")
     try:
         cur.execute("SELECT schema_version FROM " + tabela)
         row = cur.fetchone()
@@ -147,7 +147,7 @@ def _check_sss_schema(cur, owner, prefixo):
         )
 
 
-def prepare_disposable_schema(papel="web", cfg=None, segredos=None):
+def prepare_disposable_schema(role="web", cfg=None, secrets=None):
     """Valida o banco real para o papel e devolve o cfg do instance/config.ini (ou o informado)."""
     global _current_mode
     try:
@@ -167,16 +167,16 @@ def prepare_disposable_schema(papel="web", cfg=None, segredos=None):
     cfg_owner = _cfg_oracle(cfg, "owner").upper()
     modo = owner_mode(cfg_owner)
     usuario_esperado = getattr(getattr(cfg, "oracle", None), "user", None)
-    if papel == "purge":
+    if role == "purge":
         usuario_esperado = getattr(getattr(cfg, "retention", None), "purge_user", None)
-    elif papel == "monitor":
+    elif role == "monitor":
         usuario_esperado = getattr(getattr(cfg, "monitor", None), "user", None)
 
     if modo == DISPOSABLE_MODE and usuario_esperado and usuario_esperado.strip().upper() == cfg_owner:
         raise SchemaPreconditionError("Usuario de teste '%s' nao pode ser o owner do esquema" % usuario_esperado)
 
-    if segredos is None:
-        segredos = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, papel=papel)
+    if secrets is None:
+        secrets = sss_config.load_secrets(cfg.secrets.secrets_file, cfg=cfg, role=role)
 
     import sys
     try:
@@ -185,10 +185,10 @@ def prepare_disposable_schema(papel="web", cfg=None, segredos=None):
         from modules import db_conn
     conn_mod = sys.modules.get("db_conn", db_conn)
 
-    conn = conn_mod.connect(cfg, segredos, papel)
+    conn = conn_mod.connect(cfg, secrets, role)
     try:
         prefixo = _cfg_oracle(cfg, "table_prefix") or "tbsss_"
-        validate_disposable_schema(conn, cfg_owner, usuario_esperado, prefixo=prefixo)
+        validate_disposable_schema(conn, cfg_owner, usuario_esperado, prefix=prefixo)
     finally:
         conn.close()
 

@@ -10,7 +10,7 @@ class RepoCatalog(object):
     Sem actor, RepoViolation sem gravar nada.
     """
 
-    def environments_list(self, filtros=None, pagina=1, tamanho=20):
+    def environments_list(self, filters=None, page=1, size=20):
         """Lista ambientes paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}."""
         raise NotImplementedError
 
@@ -18,7 +18,7 @@ class RepoCatalog(object):
         """Retorna dict com dados do ambiente ou lanca RepoNotFound."""
         raise NotImplementedError
 
-    def environments_insert(self, dados, auditoria=None, ator=None):
+    def environments_insert(self, date, audit=None, actor=None):
         """Insere novo ambiente e retorna dict com o registro criado.
 
         auditoria: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
@@ -26,7 +26,7 @@ class RepoCatalog(object):
         """
         raise NotImplementedError
 
-    def environments_update(self, id, dados, esperado=None, auditoria=None, ator=None):
+    def environments_update(self, id, date, expected=None, audit=None, actor=None):
         """Atualiza dados do environment e retorna o registro alterado. Nome e imutavel.
 
         esperado: opcional, dict campo -> valor lido pelo chamador; o UPDATE e condicional a esses
@@ -35,7 +35,7 @@ class RepoCatalog(object):
         """
         raise NotImplementedError
 
-    def scripts_list(self, filtros=None, pagina=1, tamanho=20):
+    def scripts_list(self, filters=None, page=1, size=20):
         """Lista scripts paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
 
         Ordem: nome ASC, id ASC. Filtros: nome (trecho), grupo, categoria, interpretador (logico) e ativo.
@@ -47,11 +47,11 @@ class RepoCatalog(object):
         """Retorna dict com dados do script ou lanca RepoNotFound."""
         raise NotImplementedError
 
-    def scripts_insert(self, dados, auditoria=None, ator=None):
+    def scripts_insert(self, date, audit=None, actor=None):
         """Insere novo script e retorna dict com o registro criado (auditoria opcional na mesma transacao)."""
         raise NotImplementedError
 
-    def scripts_update(self, id, dados, esperado=None, auditoria=None, ator=None):
+    def scripts_update(self, id, date, expected=None, audit=None, actor=None):
         """Atualiza o script e retorna o registro; esperado divergente lanca RepoConflict.
 
         Trocar tipo_param revalida os vinculos na mesma operacao: NENHUM com vinculo lanca
@@ -64,7 +64,7 @@ class RepoCatalog(object):
         """Retorna lista de ambiente_id homologados para o script."""
         raise NotImplementedError
 
-    def homologation_save(self, script_id, ambiente_ids, esperado=None, auditoria=None, ator=None):
+    def homologation_save(self, script_id, environment_ids, expected=None, audit=None, actor=None):
         """Substitui os ambientes homologados do script e retorna a lista resultante.
 
         esperado: opcional, lista de ambiente_id lida; divergencia lanca RepoConflict.
@@ -72,7 +72,7 @@ class RepoCatalog(object):
         """
         raise NotImplementedError
 
-    def parameters_list(self, filtros=None, pagina=1, tamanho=20):
+    def parameters_list(self, filters=None, page=1, size=20):
         """Lista parametros paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
 
         Ordem: codigo ASC, id ASC. Cada item traz 'qtd_scripts' (vinculos em tbsss_script_param, de
@@ -84,7 +84,7 @@ class RepoCatalog(object):
         """Retorna dict com dados do parametro ou lanca RepoNotFound."""
         raise NotImplementedError
 
-    def parameters_insert(self, dados, auditoria=None, ator=None):
+    def parameters_insert(self, date, audit=None, actor=None):
         """Insere novo parametro e retorna dict com o registro criado.
 
         auditoria: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
@@ -92,7 +92,7 @@ class RepoCatalog(object):
         """
         raise NotImplementedError
 
-    def parameters_update(self, id, dados, esperado=None, auditoria=None, ator=None):
+    def parameters_update(self, id, date, expected=None, audit=None, actor=None):
         """Atualiza o parametro e retorna o registro, com as regras de dependencia na mesma operacao.
 
         Lanca RepoViolation com constraint de aplicacao, sem alterar nada, quando:
@@ -103,7 +103,7 @@ class RepoCatalog(object):
         """
         raise NotImplementedError
 
-    def parameter_links(self, parametro_id):
+    def parameter_links(self, parameter_id):
         """Retorna lista de scripts vinculados ao parametro para verificacao de desativacao."""
         raise NotImplementedError
 
@@ -111,7 +111,7 @@ class RepoCatalog(object):
         """Retorna lista de vinculos ordenados por ordem com dados completos do parametro."""
         raise NotImplementedError
 
-    def script_params_save(self, script_id, vinculos, esperado=None, auditoria=None, ator=None):
+    def script_params_save(self, script_id, links, expected=None, audit=None, actor=None):
         """Substitui os vinculos do script ({parametro_id, ordem, obrigatorio, valor_padrao_sub}).
 
         Regras na mesma operacao: script NENHUM nao aceita vinculo ('sss_scr_nenhum_vinculado');
@@ -121,6 +121,6 @@ class RepoCatalog(object):
         """
         raise NotImplementedError
 
-    def executable_scripts(self, usuario_ctx):
+    def executable_scripts(self, user_ctx):
         """Retorna lista de scripts executaveis autorizados para o contexto de usuario (README §4.3.A)."""
         raise NotImplementedError

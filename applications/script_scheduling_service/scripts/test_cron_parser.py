@@ -17,22 +17,22 @@ D = datetime.datetime
 NOW = D(2026, 10, 15, 10, 7, 30, 123456)
 
 
-def next_run(expr, apos=NOW, horizonte=cron_parser.DEFAULT_HORIZON):
-    return cron_parser.parse(expr).next(apos, horizonte)
+def next_run(expr, after=NOW, horizon=cron_parser.DEFAULT_HORIZON):
+    return cron_parser.parse(expr).next(after, horizon)
 
 
-def sequence(expr, apos, n):
+def sequence(expr, after, n):
     cron = cron_parser.parse(expr)
     lista = []
     for _ in range(n):
-        apos = cron.next(apos)
-        lista.append(apos)
+        after = cron.next(after)
+        lista.append(after)
     return lista
 
 
-def _raw_match(campos, t):
+def _raw_match(fields, t):
     """Referencia ingenua (minuto a minuto) para conferir o calculo campo a campo."""
-    minutos, horas, dias, meses, dsem, dia_r, dsem_r = campos
+    minutos, horas, dias, meses, dsem, dia_r, dsem_r = fields
     if t.minute not in minutos or t.hour not in horas or t.month not in meses:
         return False
     casa_dia = t.day in dias
@@ -132,9 +132,9 @@ class TestNext(unittest.TestCase):
     def test_sem_ocorrencia_no_horizonte(self):
         self.assertIsNone(next_run('0 0 30 2 *'))
         self.assertIsNone(next_run('0 0 31 4,6,9,11 *'))
-        self.assertIsNone(next_run('0 0 29 2 *', D(2026, 10, 15), horizonte=365))
-        self.assertEqual(next_run('0 0 29 2 *', D(2026, 10, 15), horizonte=503), D(2028, 2, 29))
-        self.assertIsNone(next_run('0 0 29 2 *', D(2026, 10, 15), horizonte=501))
+        self.assertIsNone(next_run('0 0 29 2 *', D(2026, 10, 15), horizon=365))
+        self.assertEqual(next_run('0 0 29 2 *', D(2026, 10, 15), horizon=503), D(2028, 2, 29))
+        self.assertIsNone(next_run('0 0 29 2 *', D(2026, 10, 15), horizon=501))
 
     def test_confere_com_forca_bruta(self):
         sorteio = random.Random(20261015)

@@ -388,7 +388,7 @@ user = app_hml
 password = ...
 ```
 
-* **Seções por papel** (validadas por `sss_config.load_secrets(caminho, papel)`):
+* **Seções por papel** (validadas por `sss_config.load_secrets(path, role)`):
 
   | Papel | Obrigatórias | Proibidas |
   |---|---|---|
@@ -492,7 +492,7 @@ password = ...
      * Script inativo pode ter a homologação editada: a regra vale para o caso de ele ser reativado.
      * A alteração é auditada (`UPDATE`, `homologação: +A, -B`).
      * O modal mostra os agendamentos ativos afetados nos ambientes removidos.
-* **Decisão composta para executar** (`rbac.can_execute(usuario, script, environment)`), verdadeira somente se todas as condições forem atendidas:
+* **Decisão composta para executar** (`rbac.can_execute(user, script, environment)`), verdadeira somente se todas as condições forem atendidas:
   * usuário ativo **e** perfil ativo;
   * script ativo **e** ambiente ativo **e** par (script, ambiente) presente em `tbsss_script_env`;
   * perfil admin, **ou** (funcionalidade `EXEC_SCRIPT` **e** ambiente em `perfil_amb` **e** script em `perfil_scr`).
@@ -686,7 +686,7 @@ Todo `detail` passa pelo `masking.py`, inclusive os de vínculos de parâmetros,
   * neutralização de *CSV injection*: texto iniciado por `=`, `+`, `-`, `@`, TAB ou CR recebe o prefixo `'`;
   * auditada com a ação `AUDIT_EXPORT` (entidade `tbsss_audit`, `detail` = filtros + quantidade de linhas), gravada antes do streaming. O arquivo para no ID anterior ao dessa linha.
   * **Quantidade registrada:** o `id` da linha de auditoria é obtido primeiro (`seq.NEXTVAL`, §2.7), e `id_max = id − 1`. A quantidade é contada sobre os filtros com `id <= id_max` e limitada a 50.000. Só então a linha é gravada, com essa quantidade, e o streaming lê o mesmo conjunto. Assim, a contagem e o arquivo correspondem ao mesmo recorte.
-* Contrato: `RepoAudit.iterate(filtros, limite)` alimenta o streaming (no Oracle, um cursor com `arraysize`, sem paginação por offset). O filtro `id_max` delimita o conjunto exportado.
+* Contrato: `RepoAudit.iterate(filters, limit)` alimenta o streaming (no Oracle, um cursor com `arraysize`, sem paginação por offset). O filtro `id_max` delimita o conjunto exportado.
 
 ---
 
@@ -783,7 +783,7 @@ O catálogo fica num único lugar do código (`ui_helpers.py`), consumido pelas 
 
 ### 5.4 Criação manual de ticket (transação única)
 
-1. Validar o CSRF e `rbac.can_execute(usuario, script_id, environment)`.
+1. Validar o CSRF e `rbac.can_execute(user, script_id, environment)`.
 2. Carregar o vínculo `tbsss_script_param` + `tbsss_parameters` (ativos) do script.
 3. Validar as respostas e compilar o snapshot (§6). Em caso de erro, retornar o erro por campo, sem gravar nada.
 4. Gravar o `scheduled_at` informado (opcional, padrão `SYSDATE`).
@@ -886,8 +886,8 @@ UPDATE {owner}.tbsss_tickets
 
 **No agente dono:** a cada `cancel_poll_interval_s`, executa a varredura combinada da §8.7. Ao encontrar `cancel_requested = 'Y'` em ticket próprio:
 
-1. Iniciar o encerramento do grupo pela máquina de estados do §8.7 (CR-007, R-02 e R-04): `signal_group(execucao, SIGTERM)` pela camada de plataforma (§8.0; fora de DEV, pelo helper `term`), **sem esperar** no laço.
-2. Nos ciclos seguintes, conferir com `coletar` (`Popen.poll()`); passado `kill_grace_s` sem o processo terminar, `signal_group(execucao, SIGKILL)` (helper `kill`). Nunca `Popen.wait()` bloqueante (AGENTS §3.2).
+1. Iniciar o encerramento do grupo pela máquina de estados do §8.7 (CR-007, R-02 e R-04): `signal_group(execution, SIGTERM)` pela camada de plataforma (§8.0; fora de DEV, pelo helper `term`), **sem esperar** no laço.
+2. Nos ciclos seguintes, conferir com `coletar` (`Popen.poll()`); passado `kill_grace_s` sem o processo terminar, `signal_group(execution, SIGKILL)` (helper `kill`). Nunca `Popen.wait()` bloqueante (AGENTS §3.2).
 3. Com o processo coletado, encerrar o restante do grupo (R-02 do CR-007) e gravar `.sss_result` antes do `UPDATE` (§8.7).
 4. Fazer o flush final do log (§8.10).
 5. `UPDATE ... SET status = 'CANCELLED', status_reason = 'CANCEL_USER', return_code = -1, finished_at = SYSDATE, updated_at = SYSDATE, updated_by = :actor WHERE id = :id AND agent_id = :agent_id AND status = 'RUNNING'`, com `:actor = 'SYSTEM:<agent_id>'`, seguido de `COMMIT`.
@@ -931,7 +931,7 @@ O topo do detalhe (`tickets/detalhe/<id>`) responde "o que está acontecendo?" a
   * o link "Ver histórico".
 * Uma busca no topo filtra os cartões por nome, descrição, grupo e categoria, no navegador (Alpine, `static/js/app/`). A lista completa já vem do servidor. Os cartões ficam agrupados por grupo, como no disparo.
 * O **escopo da última execução** é o mesmo da lista de tickets (§4.3.C): com `VIEW_LOGS`, os tickets dos ambientes autorizados (admin: todos); sem `VIEW_LOGS`, só os próprios.
-* **Contrato (leitura nova):** `RepoTickets.last_runs(script_ids, escopo_ambientes=None, requested_by=None)` devolve `{script_id: {id, status, status_motivo, created_at, finished_at}}` com o ticket mais recente (`created_at DESC, id DESC`) de cada script no escopo. No Oracle, a consulta usa `ix_tbsss_tck_scr` e um `ROW_NUMBER()` por script, que é sintaxe 11gR2 e não carrega `log_output`.
+* **Contrato (leitura nova):** `RepoTickets.last_runs(script_ids, environment_scope=None, requested_by=None)` devolve `{script_id: {id, status, status_motivo, created_at, finished_at}}` com o ticket mais recente (`created_at DESC, id DESC`) de cada script no escopo. No Oracle, a consulta usa `ix_tbsss_tck_scr` e um `ROW_NUMBER()` por script, que é sintaxe 11gR2 e não carrega `log_output`.
 * O menu Operação ganha o item "Rotinas disponíveis" (`EXEC_SCRIPT`), antes de "Disparar Scripts".
 
 **Histórico do script** (`tickets/historico/<script_id>`, exige `EXEC_SCRIPT`): responde "esse script costuma dar certo?".
@@ -957,7 +957,7 @@ O topo do detalhe (`tickets/detalhe/<id>`) responde "o que está acontecendo?" a
     * um vão de 2 px separa os segmentos; o eixo vertical tem linhas de grade discretas;
   * os principais motivos de erro, com a contagem por `status_reason` e o nome simples;
   * o link "Ver estes pedidos", que abre a lista de tickets filtrada por script e período.
-* **Contrato (leitura nova):** `RepoTickets.script_history(script_id, desde, escopo_ambientes=None, requested_by=None, limite=5000)` devolve só `{id, status, status_motivo, created_at, started_at, finished_at}`, sem LOB, ordenado por `created_at`. A agregação é feita no service. Acima do limite, a tela avisa "mostrando os 5.000 mais recentes".
+* **Contrato (leitura nova):** `RepoTickets.script_history(script_id, since, environment_scope=None, requested_by=None, limit=5000)` devolve só `{id, status, status_motivo, created_at, started_at, finished_at}`, sem LOB, ordenado por `created_at`. A agregação é feita no service. Acima do limite, a tela avisa "mostrando os 5.000 mais recentes".
 * Não grava nada e não audita.
 
 ## 6. Parâmetros, Validação e Compilação do Snapshot
@@ -986,7 +986,7 @@ Para todos os tipos, **nesta ordem**:
 |---|---|
 | `TEXT` | Se houver `validation_regex`, aplica `re.fullmatch` |
 | `NUMBER` | `^-?\d{1,18}(\.\d{1,6})?$` |
-| `DATE` | `datetime.strptime(valor, '%Y-%m-%d')`, emitido como `YYYY-MM-DD` |
+| `DATE` | `datetime.strptime(value, '%Y-%m-%d')`, emitido como `YYYY-MM-DD` |
 | `SELECT` | O valor deve ser uma chave de `options_json` (objeto JSON `{"valor": "Rótulo"}`, parseado em Python) |
 | `CHECKBOX` | Aceita `true`, `false`, `1` e `0` (sem distinção de maiúsculas), normalizados para booleano |
 
@@ -1191,7 +1191,7 @@ Nos dois casos, `next_run_at` recebe a **primeira ocorrência futura** maior que
 * em **WARN** quando a vencida **mais antiga** (`next_run_at`) passa de `misfire_tolerance_s` (houve misfire de verdade, mesmo que a mais recente esteja na tolerância);
 * em **INFO** quando há ocorrências coalescidas **dentro** da tolerância (por exemplo, CRON a cada minuto com o daemon 4 minutos atrasado gera 1 ticket e 4 perdidas em INFO).
 
-**Contrato de `recurrence.evaluate_trigger(regra, agora, misfire_policy, misfire_tolerance_s)`** (decisões do F5.1). A função devolve `Decision(create_ticket, next_date, missed, complete, occurrence, cron_error)`; `cron_error` tem padrão `False` (CR-008, R-19):
+**Contrato de `recurrence.evaluate_trigger(rule, now, misfire_policy, misfire_tolerance_s)`** (decisões do F5.1). A função devolve `Decision(create_ticket, next_date, missed, complete, occurrence, cron_error)`; `cron_error` tem padrão `False` (CR-008, R-19):
 
 * **Vencidas** são as ocorrências em `[next_run_at, agora]`, contando a própria `next_run_at`.
 * **Atraso dentro da tolerância** (`agora − última vencida ≤ misfire_tolerance_s`, CR-008 R-21): gera **um** ticket para a vencida mais recente, mesmo que várias tenham vencido e mesmo com `SKIP`. Exemplo: CRON a cada minuto com o daemon 4 minutos atrasado.
@@ -1240,7 +1240,7 @@ SELECT id, next_run_at FROM (
 Para cada regra travada, na **mesma transação** (que já detém o lock da linha):
 
 1. Ler a regra completa, guardando `antiga_data = next_run_at` **exatamente como retornada pelo banco**.
-2. **Revalidar privilégios** do `user_id` com `rbac.can_execute(usuario, script, environment)`. Se falhar, pausar (passo 7) com o motivo dado por `rbac.pause_reason_for(motivo_rbac)` (CR-008, R-33), função pura usada também pela web (aviso "Será pausada", §7.6), para que o daemon nunca grave um valor fora de `ck_tbsss_sch_pause`:
+2. **Revalidar privilégios** do `user_id` com `rbac.can_execute(user, script, environment)`. Se falhar, pausar (passo 7) com o motivo dado por `rbac.pause_reason_for(rbac_reason)` (CR-008, R-33), função pura usada também pela web (aviso "Será pausada", §7.6), para que o daemon nunca grave um valor fora de `ck_tbsss_sch_pause`:
 
    | `rbac.Reason` | `pause_reason` |
    |---|---|
@@ -1426,13 +1426,13 @@ O daemon chama apenas a interface abaixo, implementada em `posix.py` (Linux e de
 | Operação | Implementação POSIX |
 |---|---|
 | `start_process` (§8.4) | Fora de DEV: `Popen` do `sudo -n -u <usuário de execução> -- /opt/sss/bin/sss-helper run`, com `start_new_session=True`, a especificação da execução pela entrada padrão e o log como stdout/stderr. Em DEV sem usuário de execução: `Popen(argv, start_new_session=True, preexec_fn=_child_limits)`, com `umask(0o077)` e `setrlimit` |
-| `signal_group(execucao, sinal)` (não bloqueante) | Fora de DEV: `sudo -n -u <usuário> -- /opt/sss/bin/sss-helper term|kill <pgid> <process_start>`. Em DEV: `os.killpg`. **Nunca espera:** a escalada SIGTERM → `kill_grace_s` → SIGKILL → coleta é uma máquina de estados do laço (§8.1, §8.9) |
-| `coletar(execucao)` | `Popen.poll()` para o filho direto. Grupo que **não** é filho do daemon (startup check) é acompanhado por `process_exists` + identidade, sem `wait()` |
+| `signal_group(execution, signal_value)` (não bloqueante) | Fora de DEV: `sudo -n -u <usuário> -- /opt/sss/bin/sss-helper term|kill <pgid> <process_start>`. Em DEV: `os.killpg`. **Nunca espera:** a escalada SIGTERM → `kill_grace_s` → SIGKILL → coleta é uma máquina de estados do laço (§8.1, §8.9) |
+| `coletar(execution)` | `Popen.poll()` para o filho direto. Grupo que **não** é filho do daemon (startup check) é acompanhado por `process_exists` + identidade, sem `wait()` |
 | `process_identity(pid)` (contra PID reciclado) | Linux: `starttime` de `/proc/<pid>/stat` (campo 22, após o último `)`). Outros Unix: `/proc/<pid>/psinfo` ou `sysctl KERN_PROC`, sempre sem `ctypes` (AGENTS §3.2). Onde a leitura não for possível assim, devolve `None` (identidade desconhecida) |
 | `process_exists(pid)` | `os.kill(pid, 0)`; `EPERM` (processo de outro usuário) conta como existente |
-| `lock_instance(caminho)` | `fcntl.flock(LOCK_EX \| LOCK_NB)` |
+| `lock_instance(path)` | `fcntl.flock(LOCK_EX \| LOCK_NB)` |
 | `is_privileged_user()` | `os.geteuid() == 0` |
-| `validate_restricted_file(caminho)` (segredos, §4.1) | Dono = euid e `mode & 0o077 == 0` |
+| `validate_restricted_file(path)` (segredos, §4.1) | Dono = euid e `mode & 0o077 == 0` |
 | `validate_script_path` (§8.5, CR-011) | Arquivo real (o caminho pode ter link simbólico): existe, é regular e não é gravável por grupo nem por outros |
 | `validate_execution()` (CR-007, D1) | Na subida, fora de DEV: o helper existe, tem dono root, modo `0755` e pasta só gravável pelo root; `sudo -n -l` do usuário do agente mostra a regra do helper para cada usuário de execução; cada usuário de execução existe, não é root e não é o usuário do agente; `exec_work_dir/<usuário>` existe, pertence ao usuário de execução e tem modo `0700` |
 | `create_work_dir` (§8.4) | `work_dir/ticket_<id>/` do agente com `0700` (estado local). O diretório de trabalho do script é criado pelo helper |
@@ -1982,7 +1982,7 @@ PK          = pk_{prefixo}{fisico}              pk_tbsss_tickets
 UK/FK/CK/IX = {uk|fk|ck|ix}_{prefixo}{abrev}_{sufixo}   ix_tbsss_tck_queue
 ```
 
-* **Nomes em inglês (CR-016a):** tabela (`{fisico}`), coluna, abreviação, sufixo e valor gravado (`'Y'`/`'N'`, `DAILY`, `NAMED`, `VIEW_LOGS`…) são em inglês. A chave lógica da entidade no código (`ambientes`, `agendamentos`…) muda no CR-016c; até lá, `sql_ident.physical(entidade)` dá o nome físico, e `sql_ident.table`/`sql_ident.sequence` dão o nome qualificado. Texto de tela e comentários de tabela e coluna continuam em português.
+* **Nomes em inglês (CR-016a):** tabela (`{fisico}`), coluna, abreviação, sufixo e valor gravado (`'Y'`/`'N'`, `DAILY`, `NAMED`, `VIEW_LOGS`…) são em inglês. A chave lógica da entidade no código (`ambientes`, `agendamentos`…) muda no CR-016c; até lá, `sql_ident.physical(entity)` dá o nome físico, e `sql_ident.table`/`sql_ident.sequence` dão o nome qualificado. Texto de tela e comentários de tabela e coluna continuam em português.
 * `{prefixo}` vem de `table_prefix`, inclui o `_` final e obedece à regex `^[a-z][a-z0-9_]{0,7}$` (começa com letra minúscula, para gerar nome Oracle válido e casar com o registro, que só aceita identificadores em minúsculas; até 8 caracteres; CR-007, R-31).
 * O DDL é gerado por `init_db.py` a partir de um **registro único de identificadores** em `modules/sql_ident.py`, consumido também por `test_db_schema.py`.
 * O `owner` vem de `[oracle] owner` no `config.ini` (ex.: `openrisow`) e obedece à regex `^[A-Za-z][A-Za-z0-9_]{0,29}$`. Todo objeto no banco é qualificado como `{owner}.{prefixo}{fisico}`.

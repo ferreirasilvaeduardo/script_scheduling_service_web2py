@@ -64,27 +64,27 @@ def _format_client_version(val):
     return str(val)
 
 
-def probe(candidato, cfg, senha, usuario=None):
+def probe(candidate, cfg, password_value, user=None):
     """Executa a tentativa de conexao para o candidato especificado, com a conta do papel (usuario) ou, sem ela,
     [oracle] user."""
-    usuario = usuario or cfg.oracle.user
+    user = user or cfg.oracle.user
     driver = None
     versao_servidor = None
     versao_driver = None
     versao_cliente = None
 
     try:
-        if candidato == "thin":
+        if candidate == "thin":
             import oracledb
             driver = oracledb
             timeout_s = float(cfg.oracle.call_timeout_ms) / 1000.0 if cfg.oracle.call_timeout_ms else 30.0
             conn = oracledb.connect(
-                user=usuario,
-                password=senha,
+                user=user,
+                password=password_value,
                 dsn=cfg.oracle.dsn,
                 tcp_connect_timeout=timeout_s,
             )
-        elif candidato == "thick":
+        elif candidate == "thick":
             import oracledb
             driver = oracledb
             lib_dir = os_platform.get_oracle_lib_dir(cfg)
@@ -97,11 +97,11 @@ def probe(candidato, cfg, senha, usuario=None):
                 if "already been initialized" not in str(e_init):
                     raise
             conn = oracledb.connect(
-                user=usuario,
-                password=senha,
+                user=user,
+                password=password_value,
                 dsn=cfg.oracle.dsn,
             )
-        elif candidato == "cx_oracle":
+        elif candidate == "cx_oracle":
             import cx_Oracle
             driver = cx_Oracle
             lib_dir = os_platform.get_oracle_lib_dir(cfg)
@@ -112,13 +112,13 @@ def probe(candidato, cfg, senha, usuario=None):
                 if "already been initialized" not in str(e_init):
                     pass
             conn = cx_Oracle.connect(
-                user=usuario,
-                password=senha,
+                user=user,
+                password=password_value,
                 dsn=cfg.oracle.dsn,
             )
         else:
             return {
-                "candidate": candidato,
+                "candidate": candidate,
                 "ok": False,
                 "server_version": None,
                 "driver_version": None,
@@ -133,7 +133,7 @@ def probe(candidato, cfg, senha, usuario=None):
 
         versao_servidor = str(getattr(conn, "version", None) or "")
         versao_driver = str(getattr(driver, "__version__", None) or "")
-        if candidato in ("thick", "cx_oracle") and hasattr(driver, "clientversion"):
+        if candidate in ("thick", "cx_oracle") and hasattr(driver, "clientversion"):
             try:
                 versao_cliente = _format_client_version(driver.clientversion())
             except Exception:
@@ -143,7 +143,7 @@ def probe(candidato, cfg, senha, usuario=None):
         conn.close()
 
         return {
-            "candidate": candidato,
+            "candidate": candidate,
             "ok": True,
             "server_version": versao_servidor,
             "driver_version": versao_driver,
@@ -155,7 +155,7 @@ def probe(candidato, cfg, senha, usuario=None):
     except Exception as exc:
         codigo, categoria = _classify_error(exc)
         return {
-            "candidate": candidato,
+            "candidate": candidate,
             "ok": False,
             "server_version": None,
             "driver_version": getattr(driver, "__version__", None) if driver else None,
@@ -184,7 +184,7 @@ def main():
     else:
         cfg = sss_config.get_config()
 
-    resultado = probe(args.candidate, cfg, senha, usuario=args.usuario)
+    resultado = probe(args.candidate, cfg, senha, user=args.usuario)
     sys.stdout.write(json.dumps(resultado) + "\n")
     sys.stdout.flush()
     sys.exit(0)

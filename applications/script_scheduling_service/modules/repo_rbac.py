@@ -10,7 +10,7 @@ class RepoRbac(object):
     Sem actor, RepoViolation sem gravar nada.
     """
 
-    def profiles_list(self, filtros=None, pagina=1, tamanho=20):
+    def profiles_list(self, filters=None, page=1, size=20):
         """Lista perfis paginados com formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}."""
         raise NotImplementedError
 
@@ -18,7 +18,7 @@ class RepoRbac(object):
         """Retorna dict com dados do perfil ou lanca RepoNotFound."""
         raise NotImplementedError
 
-    def profiles_insert(self, dados, auditoria=None, ator=None):
+    def profiles_insert(self, date, audit=None, actor=None):
         """Insere novo perfil e retorna dict com o registro criado.
 
         auditoria: opcional, {'actor', 'ip', 'action', 'detail'}; gravada na mesma transacao
@@ -26,7 +26,7 @@ class RepoRbac(object):
         """
         raise NotImplementedError
 
-    def profiles_update(self, id, dados, esperado=None, auditoria=None, ator=None):
+    def profiles_update(self, id, date, expected=None, audit=None, actor=None):
         """Atualiza perfil, incrementa perm_versao e retorna o registro, tudo na mesma transacao.
 
         esperado: opcional, dict campo -> valor lido; divergencia lanca RepoConflict sem alterar nada.
@@ -37,11 +37,11 @@ class RepoRbac(object):
         """
         raise NotImplementedError
 
-    def matrix_get(self, perfil_id):
+    def matrix_get(self, profile_id):
         """Retorna dict {'funcs': [...], 'ambs': [...], 'scrs': [...]} com IDs associados."""
         raise NotImplementedError
 
-    def matrix_save(self, perfil_id, funcs, ambs, scrs, perm_versao_esperada=None, auditoria=None, ator=None):
+    def matrix_save(self, profile_id, features_ids, envs, scrs, expected_perm_version=None, audit=None, actor=None):
         """Substitui a matriz do perfil e incrementa perm_versao atomicamente; retorna a nova matriz.
 
         perm_versao_esperada: opcional; se o perm_versao atual divergir, lanca RepoConflict sem alterar.

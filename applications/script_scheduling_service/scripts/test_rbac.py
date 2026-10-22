@@ -20,13 +20,13 @@ from rbac import Reason
 from repo_errors import RepoConflict, RepoNotFound, RepoViolation
 
 
-def _ctx(is_admin=False, usuario_ativo="Y", perfil_ativo="Y", funcs=("EXEC_SCRIPT",),
-         ambs=("PRODUCAO",), scrs=(1,), login="op.prod"):
+def _ctx(is_admin=False, active_user="Y", active_profile="Y", features_ids=("EXEC_SCRIPT",),
+         envs=("PRODUCAO",), scrs=(1,), login="op.prod"):
     return rbac.user_context({
-        "user_id": 2, "login": login, "name": "Operador", "usuario_ativo": usuario_ativo,
-        "profile_id": 2, "perfil_nome": "OPERADOR", "perfil_ativo": perfil_ativo,
+        "user_id": 2, "login": login, "name": "Operador", "usuario_ativo": active_user,
+        "profile_id": 2, "perfil_nome": "OPERADOR", "perfil_ativo": active_profile,
         "is_admin": "Y" if is_admin else "N", "perm_version": 1,
-        "features": funcs, "environments": ambs, "scripts": scrs,
+        "features": features_ids, "environments": envs, "scripts": scrs,
     })
 
 
@@ -47,7 +47,7 @@ class TestContext(unittest.TestCase):
 
     def test_flag_n_nao_e_verdadeira(self):
         self.assertIs(_ctx(is_admin=False)["is_admin"], False)
-        self.assertIs(_ctx(usuario_ativo="N")["usuario_ativo"], False)
+        self.assertIs(_ctx(active_user="N")["usuario_ativo"], False)
 
     def test_modulo_puro_sem_gluon(self):
         with open(rbac.__file__, encoding="utf-8") as f:
@@ -56,22 +56,22 @@ class TestContext(unittest.TestCase):
 
 class TestCanExecute(unittest.TestCase):
 
-    def assertDenied(self, resultado, motivo):
-        self.assertEqual(resultado, (False, motivo))
+    def assertDenied(self, result, reason):
+        self.assertEqual(result, (False, reason))
 
     def test_caso_ok(self):
         self.assertEqual(rbac.can_execute(_ctx(), SCRIPT, ENVIRONMENT, HOMOLOGATIONS), (True, Reason.OK))
 
     def test_admin_dispensa_dimensoes(self):
-        ctx = _ctx(is_admin=True, funcs=(), ambs=(), scrs=())
+        ctx = _ctx(is_admin=True, features_ids=(), envs=(), scrs=())
         self.assertEqual(rbac.can_execute(ctx, SCRIPT, ENVIRONMENT, HOMOLOGATIONS), (True, Reason.OK))
 
     def test_admin_com_perfil_inativo(self):
-        ctx = _ctx(is_admin=True, perfil_ativo="N")
+        ctx = _ctx(is_admin=True, active_profile="N")
         self.assertDenied(rbac.can_execute(ctx, SCRIPT, ENVIRONMENT, HOMOLOGATIONS), Reason.PROFILE_INACTIVE)
 
     def test_usuario_inativo(self):
-        self.assertDenied(rbac.can_execute(_ctx(usuario_ativo="N"), SCRIPT, ENVIRONMENT, HOMOLOGATIONS),
+        self.assertDenied(rbac.can_execute(_ctx(active_user="N"), SCRIPT, ENVIRONMENT, HOMOLOGATIONS),
                           Reason.USER_INACTIVE)
 
     def test_script_inativo(self):
@@ -92,11 +92,11 @@ class TestCanExecute(unittest.TestCase):
         self.assertDenied(rbac.can_execute(_ctx(), SCRIPT, ENVIRONMENT, None), Reason.NOT_HOMOLOGATED)
 
     def test_sem_exec_script(self):
-        self.assertDenied(rbac.can_execute(_ctx(funcs=("VIEW_LOGS",)), SCRIPT, ENVIRONMENT, HOMOLOGATIONS),
+        self.assertDenied(rbac.can_execute(_ctx(features_ids=("VIEW_LOGS",)), SCRIPT, ENVIRONMENT, HOMOLOGATIONS),
                           Reason.NO_FEATURE)
 
     def test_sem_ambiente(self):
-        self.assertDenied(rbac.can_execute(_ctx(ambs=("HOMOLOGACAO",)), SCRIPT, ENVIRONMENT, HOMOLOGATIONS),
+        self.assertDenied(rbac.can_execute(_ctx(envs=("HOMOLOGACAO",)), SCRIPT, ENVIRONMENT, HOMOLOGATIONS),
                           Reason.NO_ENVIRONMENT)
 
     def test_sem_script(self):
@@ -124,14 +124,14 @@ class TestCanExecute(unittest.TestCase):
 class TestHasFeature(unittest.TestCase):
 
     def test_admin_ativo(self):
-        self.assertTrue(rbac.has_feature(_ctx(is_admin=True, funcs=()), "MANAGE_USERS"))
+        self.assertTrue(rbac.has_feature(_ctx(is_admin=True, features_ids=()), "MANAGE_USERS"))
 
     def test_admin_perfil_inativo(self):
-        self.assertFalse(rbac.has_feature(_ctx(is_admin=True, perfil_ativo="N"), "MANAGE_USERS"))
+        self.assertFalse(rbac.has_feature(_ctx(is_admin=True, active_profile="N"), "MANAGE_USERS"))
 
     def test_nao_admin(self):
-        self.assertTrue(rbac.has_feature(_ctx(funcs=("VIEW_LOGS",)), "VIEW_LOGS"))
-        self.assertFalse(rbac.has_feature(_ctx(funcs=("VIEW_LOGS",)), "MANAGE_USERS"))
+        self.assertTrue(rbac.has_feature(_ctx(features_ids=("VIEW_LOGS",)), "VIEW_LOGS"))
+        self.assertFalse(rbac.has_feature(_ctx(features_ids=("VIEW_LOGS",)), "MANAGE_USERS"))
         self.assertFalse(rbac.has_feature(None, "VIEW_LOGS"))
 
 
@@ -142,23 +142,23 @@ class TestTickets(unittest.TestCase):
     TICKET_OTHER_ENV = {"id": 12, "environment": "HOMOLOGACAO", "requested_by": "outro"}
 
     def test_cancelar_proprio_sem_canc_ticket(self):
-        ctx = _ctx(funcs=("EXEC_SCRIPT",))
+        ctx = _ctx(features_ids=("EXEC_SCRIPT",))
         self.assertTrue(rbac.can_cancel(ctx, self.TICKET_OWN))
         self.assertFalse(rbac.can_cancel(ctx, self.TICKET_THIRD_PARTY))
 
     def test_cancelar_proprio_sem_exec_script(self):
-        self.assertFalse(rbac.can_cancel(_ctx(funcs=("VIEW_LOGS",)), self.TICKET_OWN))
+        self.assertFalse(rbac.can_cancel(_ctx(features_ids=("VIEW_LOGS",)), self.TICKET_OWN))
 
     def test_cancelar_terceiro_com_canc_ticket(self):
-        ctx = _ctx(funcs=("CANCEL_TICKET",))
+        ctx = _ctx(features_ids=("CANCEL_TICKET",))
         self.assertTrue(rbac.can_cancel(ctx, self.TICKET_THIRD_PARTY))
         self.assertFalse(rbac.can_cancel(ctx, self.TICKET_OTHER_ENV))
 
     def test_cancelar_admin(self):
-        self.assertTrue(rbac.can_cancel(_ctx(is_admin=True, funcs=(), ambs=()), self.TICKET_OTHER_ENV))
+        self.assertTrue(rbac.can_cancel(_ctx(is_admin=True, features_ids=(), envs=()), self.TICKET_OTHER_ENV))
 
     def test_cancelar_perfil_inativo(self):
-        ctx = _ctx(funcs=("CANCEL_TICKET", "EXEC_SCRIPT"), perfil_ativo="N")
+        ctx = _ctx(features_ids=("CANCEL_TICKET", "EXEC_SCRIPT"), active_profile="N")
         self.assertFalse(rbac.can_cancel(ctx, self.TICKET_OWN))
 
     def test_cancelar_ticket_invalido(self):
@@ -166,11 +166,11 @@ class TestTickets(unittest.TestCase):
         self.assertFalse(rbac.can_cancel(_ctx(), {"environment": "PRODUCAO", "requested_by": None}))
 
     def test_ver_ticket(self):
-        ctx = _ctx(funcs=("VIEW_LOGS",))
+        ctx = _ctx(features_ids=("VIEW_LOGS",))
         self.assertTrue(rbac.can_view_ticket(ctx, self.TICKET_THIRD_PARTY))
         self.assertFalse(rbac.can_view_ticket(ctx, self.TICKET_OTHER_ENV))
-        self.assertFalse(rbac.can_view_ticket(_ctx(funcs=("EXEC_SCRIPT",)), self.TICKET_OWN))
-        self.assertTrue(rbac.can_view_ticket(_ctx(is_admin=True, ambs=()), self.TICKET_OTHER_ENV))
+        self.assertFalse(rbac.can_view_ticket(_ctx(features_ids=("EXEC_SCRIPT",)), self.TICKET_OWN))
+        self.assertTrue(rbac.can_view_ticket(_ctx(is_admin=True, envs=()), self.TICKET_OTHER_ENV))
 
     def test_ver_ambiente(self):
         self.assertTrue(rbac.can_view_environment(_ctx(), {"name": "PRODUCAO"}))
@@ -195,7 +195,7 @@ class TestPriority(unittest.TestCase):
             self.assertFalse(rbac.allowed_priority(_ctx(is_admin=True), p))
 
     def test_perfil_inativo(self):
-        self.assertFalse(rbac.allowed_priority(_ctx(perfil_ativo="N"), 2))
+        self.assertFalse(rbac.allowed_priority(_ctx(active_profile="N"), 2))
 
 
 # ---------------------------------------------------------------- F4.2: perfis e matriz (FAKE)
@@ -243,22 +243,22 @@ class _BaseProfiles(unittest.TestCase):
         # ja que quem nao e admin nao altera perfil de admin (CR-008, E1).
         self.ctx["admin_externo"] = dict(self.ctx["admin"], profile_id=999)
         self.svc = AdminProfilesService(self.rbac_repo, self.catalog, self.users, self.log)
-        self.aud_base = max([a["id"] for a in self.audit.list(pagina=1, tamanho=1000)["itens"]] or [0])
+        self.aud_base = max([a["id"] for a in self.audit.list(page=1, size=1000)["itens"]] or [0])
 
-    def _audits(self, acao):
-        return [a for a in self.audit.list(filtros={"action": acao}, pagina=1, tamanho=100)["itens"]
+    def _audits(self, action):
+        return [a for a in self.audit.list(filters={"action": action}, page=1, size=100)["itens"]
                 if a["entity"] == "tbsss_profiles" and a["id"] > self.aud_base]
 
-    def _version(self, perfil_id):
-        return self.rbac_repo.profiles_get(perfil_id)["perm_version"]
+    def _version(self, profile_id):
+        return self.rbac_repo.profiles_get(profile_id)["perm_version"]
 
-    def _save_matrix(self, perfil_id, funcs, ambs, scrs, versao=None):
-        versao = self._version(perfil_id) if versao is None else versao
-        return self.svc.save_matrix(self.ctx["admin"], IP, str(perfil_id), [str(x) for x in funcs],
-                                      [str(x) for x in ambs], [str(x) for x in scrs], str(versao))
+    def _save_matrix(self, profile_id, features_ids, envs, scrs, version=None):
+        version = self._version(profile_id) if version is None else version
+        return self.svc.save_matrix(self.ctx["admin"], IP, str(profile_id), [str(x) for x in features_ids],
+                                      [str(x) for x in envs], [str(x) for x in scrs], str(version))
 
-    def _matrix(self, perfil_id):
-        return self.rbac_repo.matrix_get(perfil_id)
+    def _matrix(self, profile_id):
+        return self.rbac_repo.matrix_get(profile_id)
 
 
 class TestMatrix(_BaseProfiles):
@@ -335,7 +335,7 @@ class TestMatrix(_BaseProfiles):
         m = self._matrix(PERFIL_CONSULTA)
         antiga = self._version(PERFIL_CONSULTA)
         self._save_matrix(PERFIL_CONSULTA, [F_EXEC, F_VER_LOGS], m["ambs"], m["scrs"])
-        diff, erros = self._save_matrix(PERFIL_CONSULTA, [], m["ambs"], m["scrs"], versao=antiga)
+        diff, erros = self._save_matrix(PERFIL_CONSULTA, [], m["ambs"], m["scrs"], version=antiga)
         self.assertEqual(erros, {GENERAL_FIELD: admin_crud.MSG_CONFLICT})
         self.assertEqual(sorted(self._matrix(PERFIL_CONSULTA)["funcs"]), [F_EXEC, F_VER_LOGS])
 
@@ -353,8 +353,8 @@ class TestMatrix(_BaseProfiles):
 
 class TestLastAdmin(_BaseProfiles):
 
-    def _form(self, perfil_id):
-        return self.svc.form(self.ctx["admin"], str(perfil_id))
+    def _form(self, profile_id):
+        return self.svc.form(self.ctx["admin"], str(profile_id))
 
     def test_desativar_unico_perfil_admin_e_negado(self):
         form = self._form(PERFIL_ADMIN)
@@ -377,7 +377,7 @@ class TestLastAdmin(_BaseProfiles):
         novo_id, erros = self.svc.save(self.ctx["admin"], IP, None, {"name": "ADMIN_RESERVA", "is_admin": "Y"})
         self.assertEqual(erros, {})
         u = self.users.get_by_login("op.hml")
-        self.users.update(u["id"], {"profile_id": novo_id}, ator="teste")
+        self.users.update(u["id"], {"profile_id": novo_id}, actor="teste")
         form = self._form(PERFIL_ADMIN)
         alterado = self.svc.toggle_active(self.ctx["admin_externo"], IP, str(PERFIL_ADMIN), form["version"])
         self.assertEqual(alterado["active"], "N")
@@ -406,7 +406,7 @@ class TestLastAdmin(_BaseProfiles):
 
     def test_protecao_e_atomica_no_repositorio(self):
         with self.assertRaises(RepoViolation) as cm:
-            self.rbac_repo.profiles_update(PERFIL_ADMIN, {"active": "N"}, ator="teste")
+            self.rbac_repo.profiles_update(PERFIL_ADMIN, {"active": "N"}, actor="teste")
         self.assertEqual(cm.exception.constraint, "sss_ultimo_admin")
         self.assertEqual(self.rbac_repo.lock_active_admins(), [1])
 

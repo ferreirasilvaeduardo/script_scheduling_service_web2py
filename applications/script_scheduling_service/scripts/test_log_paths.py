@@ -212,15 +212,15 @@ class TestLogDirs(unittest.TestCase):
         dia_1 = os.path.join(self.tmp, "internal", "app", "2026", "09", "01")
         rmtree_real = shutil.rmtree
 
-        def rmtree_falha(caminho, *args, **kw):
-            if caminho == dia_1:
+        def rmtree_falha(path, *args, **kw):
+            if path == dia_1:
                 raise PermissionError(13, "Permission denied")
-            return rmtree_real(caminho, *args, **kw)
+            return rmtree_real(path, *args, **kw)
 
         falhas = []
         with mock.patch("log_paths.shutil.rmtree", side_effect=rmtree_falha):
             removidos = log_paths.clean_app_retention(self.tmp, 30, ref_dt=datetime.date(2026, 10, 16),
-                                                       falhas=falhas)
+                                                       failures=falhas)
         self.assertEqual(removidos, [os.path.join(self.tmp, "internal", "app", "2026", "09", "02")])
         self.assertEqual(len(falhas), 1)
         self.assertIn(dia_1, falhas[0])
@@ -253,7 +253,7 @@ class TestLogDirs(unittest.TestCase):
         internal = self._run_minute("internal/app/2026/01/01/10/00")
         falhas = []
         removidas = log_paths.clean_run_retention(self.tmp, 30, datetime.date(2026, 10, 21),
-                                                        manter=[running + os.sep], falhas=falhas)
+                                                        keep=[running + os.sep], failures=falhas)
         self.assertEqual((removidas, falhas), ([], []))
         self.assertTrue(os.path.isdir(running))
         self.assertTrue(os.path.isdir(internal))

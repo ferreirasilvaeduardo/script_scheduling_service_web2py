@@ -42,12 +42,12 @@ class PreservedDirectory(RuntimeError):
 class Execution(object):
     """Um ticket em execucao (ou que falhou ao iniciar) no mapa local do agente."""
 
-    def __init__(self, ticket_id, work_dir_ticket, usuario_execucao, pasta_base, caminho_log):
+    def __init__(self, ticket_id, work_dir_ticket, exec_user, base_dir, log_path):
         self.ticket_id = ticket_id
         self.work_dir_ticket = work_dir_ticket
-        self.exec_user = usuario_execucao
-        self.base_dir = pasta_base
-        self.log_path = caminho_log
+        self.exec_user = exec_user
+        self.base_dir = base_dir
+        self.log_path = log_path
         self.process = None
         self.pid = None
         self.identity = None
@@ -74,17 +74,17 @@ class Execution(object):
                                                                   self.spawn_error_info)
 
 
-def _agent_from_label(rotulo):
+def _agent_from_label(label):
     # rotulo = 'SSS-<agent_id>-<ticket_id>' (F8.3); o agent_id pode ter '-'.
-    texto = str(rotulo or "")
+    texto = str(label or "")
     if texto.startswith("SSS-"):
         texto = texto[4:]
     return texto.rsplit("-", 1)[0] if "-" in texto else texto
 
 
-def _sss_line(log_fd, texto):
+def _sss_line(log_fd, text):
     try:
-        os.write(log_fd, ("[SSS] %s\n" % texto).encode("utf-8", "replace"))
+        os.write(log_fd, ("[SSS] %s\n" % text).encode("utf-8", "replace"))
     except OSError as e:
         _log.warning("falha ao gravar a linha [SSS] no log (%s)", e.__class__.__name__, extra={"action": "SPAWN"})
 
@@ -124,21 +124,21 @@ def prepare_directory(work_dir, ticket_id, startup_concluido=False):
     return caminho
 
 
-def open_log(log_dir, ambiente, nome_script, started_at, ticket_id, script_id=None):
+def open_log(log_dir, environment, script_name, started_at, ticket_id, script_id=None):
     """Abre log_dir/<ambiente>/<pasta do script>/AAAA/MM/DD/HH/MI/ticket_<id>.log.parcial (O_EXCL, 0600)
     antes do spawn (CR-009: o ambiente do ticket e obrigatorio; vazio e ValueError).
 
     Cada pasta nova da cadeia recebe 0750 (log_paths.ensure_directory). nome_script e o script_nome do
     snapshot (README §6.5). Devolve (fd, caminho).
     """
-    caminho = log_paths.partial_log_path(log_dir, ambiente, nome_script, started_at, ticket_id, script_id)
+    caminho = log_paths.partial_log_path(log_dir, environment, script_name, started_at, ticket_id, script_id)
     log_paths.ensure_directory(os.path.dirname(caminho))
     fd = os.open(caminho, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_APPEND, 0o600)
     _open_logs[fd] = caminho
     return fd, caminho
 
 
-def build_spec(ticket_id, argv, env, rlimits, pasta_base, saida=None, entrada=None):
+def build_spec(ticket_id, argv, env, rlimits, base_dir, output=None, input_value=None):
     """Especificacao do helper run (README §8.0), serializada em JSON pela plataforma.
 
     saida: (base, relativo) da pasta de saida do ticket (CR-012), que o helper cria antes do script.
@@ -149,12 +149,12 @@ def build_spec(ticket_id, argv, env, rlimits, pasta_base, saida=None, entrada=No
         "argv": list(argv),
         "env": dict(env),
         "rlimits": dict((nome, [int(par[0]), int(par[1])]) for nome, par in (rlimits or {}).items()),
-        "base_dir": pasta_base,
+        "base_dir": base_dir,
     }
-    if saida is not None:
-        spec["output"] = {"base": saida[0], "relativo": saida[1]}
-    if entrada is not None:
-        spec["input"] = {"base": entrada[0], "relativo": entrada[1]}
+    if output is not None:
+        spec["output"] = {"base": output[0], "relativo": output[1]}
+    if input_value is not None:
+        spec["input"] = {"base": input_value[0], "relativo": input_value[1]}
     return spec
 
 
@@ -162,36 +162,36 @@ def build_spec(ticket_id, argv, env, rlimits, pasta_base, saida=None, entrada=No
 # Spawn
 # -----------------------------------------------------------------------------
 
-def _spawn_failure(execucao, log_fd, erro, agente):
+def _spawn_failure(execution, log_fd, error, agent):
     """SPAWN_ERROR sem processo: causa no log (sem segredos) e parcial renomeado para ticket_<id>_0.log."""
-    execucao.spawn_error_info = erro.__class__.__name__
-    _sss_line(log_fd, "falha ao iniciar: %s (agente %s)" % (execucao.spawn_error_info, agente))
+    execution.spawn_error_info = error.__class__.__name__
+    _sss_line(log_fd, "falha ao iniciar: %s (agente %s)" % (execution.spawn_error_info, agent))
     try:
         os.close(log_fd)
     except OSError:
-        _log.warning("log_fd ja fechado", extra={"ticket": execucao.ticket_id, "action": "SPAWN"})
-    if execucao.log_path:
-        final = os.path.join(os.path.dirname(execucao.log_path),
-                             log_paths.run_log_name(execucao.ticket_id, 0))
+        _log.warning("log_fd ja fechado", extra={"ticket": execution.ticket_id, "action": "SPAWN"})
+    if execution.log_path:
+        final = os.path.join(os.path.dirname(execution.log_path),
+                             log_paths.run_log_name(execution.ticket_id, 0))
         try:
-            os.rename(execucao.log_path, final)
-            execucao.log_path = final
+            os.rename(execution.log_path, final)
+            execution.log_path = final
         except OSError as e:
             _log.error("rename do log de SPAWN_ERROR falhou (%s)", e.__class__.__name__,
-                       extra={"ticket": execucao.ticket_id, "action": "SPAWN"})
-    _log.error("SPAWN_ERROR: %s", execucao.spawn_error_info, extra={"ticket": execucao.ticket_id, "action": "SPAWN"})
-    return execucao
+                       extra={"ticket": execution.ticket_id, "action": "SPAWN"})
+    _log.error("SPAWN_ERROR: %s", execution.spawn_error_info, extra={"ticket": execution.ticket_id, "action": "SPAWN"})
+    return execution
 
 
-def failure_before_spawn(log_fd, ticket_id, erro, rotulo, work_dir_ticket=None):
+def failure_before_spawn(log_fd, ticket_id, error, label, work_dir_ticket=None):
     """SPAWN_ERROR depois de open_log e antes de iniciar (ex.: excecao no env_builder): grava a linha [SSS],
     fecha o descritor e renomeia o parcial para ticket_<id>_0.log, como em iniciar (README §8.4, passo 3)."""
     execucao = Execution(int(ticket_id), work_dir_ticket, None, None, _open_logs.pop(log_fd, None))
-    return _spawn_failure(execucao, log_fd, erro, _agent_from_label(rotulo))
+    return _spawn_failure(execucao, log_fd, error, _agent_from_label(label))
 
 
-def start(ticket_id, argv, log_fd, env, work_dir_ticket, usuario_execucao, exec_work_dir, rlimits, rotulo,
-            saida=None, entrada=None):
+def start(ticket_id, argv, log_fd, env, work_dir_ticket, exec_user, exec_work_dir, rlimits, label,
+            output=None, input_value=None):
     """Inicia o script e devolve a Execucao (README §8.4 passos 3 a 5; CR-008 R-01).
 
     Ordem: .sss_spawn -> os_platform.start_process -> rename do log para ticket_<id>_<PID>.log ->
@@ -202,31 +202,31 @@ def start(ticket_id, argv, log_fd, env, work_dir_ticket, usuario_execucao, exec_
     saida: (base, relativo) da pasta de saida (CR-012): o helper run a cria; em DEV, a plataforma.
     entrada: (base, relativo) da pasta de entrada (CR-014), permanente: idem, so se nao existir.
     """
-    agente = _agent_from_label(rotulo)
-    pasta_base = os.path.join(exec_work_dir, usuario_execucao) if usuario_execucao else None
-    execucao = Execution(int(ticket_id), work_dir_ticket, usuario_execucao, pasta_base, _open_logs.pop(log_fd, None))
+    agente = _agent_from_label(label)
+    pasta_base = os.path.join(exec_work_dir, exec_user) if exec_user else None
+    execucao = Execution(int(ticket_id), work_dir_ticket, exec_user, pasta_base, _open_logs.pop(log_fd, None))
     try:
         if execucao.log_path is None:
             raise ValueError("log_fd nao foi aberto por abrir_log")
-        if usuario_execucao:
-            spec = build_spec(ticket_id, argv, env, rlimits, pasta_base, saida, entrada)
+        if exec_user:
+            spec = build_spec(ticket_id, argv, env, rlimits, pasta_base, output, input_value)
         else:
             # DEV sem usuario de execucao: o cwd e a pasta exec de work_dir/ticket_<id> (CR-008, R-36).
             cwd = os_platform.create_work_dir(os.path.join(work_dir_ticket, "exec"))
             os_platform.create_work_dir(os.path.join(cwd, "tmp"))
             spec = {"argv": list(argv), "cwd": cwd, "env": dict(env), "rlimits": dict(rlimits or {})}
-            if saida is not None:
-                os_platform.create_output_dir(saida[0], saida[1])
-            if entrada is not None:
-                os_platform.create_input_dir(entrada[0], entrada[1])
+            if output is not None:
+                os_platform.create_output_dir(output[0], output[1])
+            if input_value is not None:
+                os_platform.create_input_dir(input_value[0], input_value[1])
         os_platform.write_state(os.path.join(work_dir_ticket, SPAWN), {
-            "ticket_id": int(ticket_id), "exec_user": usuario_execucao,
+            "ticket_id": int(ticket_id), "exec_user": exec_user,
             "monotonic": time.monotonic(), "wall": time.time()})
     except Exception as e:  # noqa: BLE001 - CR-007 R-17: qualquer excecao no spawn e SPAWN_ERROR
         return _spawn_failure(execucao, log_fd, e, agente)
 
     try:
-        processo = os_platform.start_process(spec, log_fd, usuario_execucao)
+        processo = os_platform.start_process(spec, log_fd, exec_user)
     except os_platform.FailureAfterSpawn as f:
         return _after_spawn_failed(execucao, f.process, log_fd, f.cause, agente)
     except Exception as e:  # noqa: BLE001
@@ -243,98 +243,98 @@ def start(ticket_id, argv, log_fd, env, work_dir_ticket, usuario_execucao, exec_
         processo.identity = execucao.identity
         os_platform.write_state(os.path.join(work_dir_ticket, PROC), {
             "ticket_id": execucao.ticket_id, "pid": processo.pid, "pgid": processo.pgid,
-            "process_start": execucao.identity, "exec_user": usuario_execucao})
+            "process_start": execucao.identity, "exec_user": exec_user})
     except Exception as e:  # noqa: BLE001
         return _after_spawn_failed(execucao, processo, log_fd, e, agente)
     os.close(log_fd)
     return execucao
 
 
-def _after_spawn_failed(execucao, processo, log_fd, erro, agente):
+def _after_spawn_failed(execution, process, log_fd, error, agent):
     """CR-008, R-01: o grupo existe sem .sss_proc; inicia o encerramento e devolve failed_after_spawn."""
-    execucao.process = processo
-    execucao.pid = processo.pid
-    execucao.failed_after_spawn = True
-    execucao.spawn_error_info = erro.__class__.__name__
-    _sss_line(log_fd, "falha ao iniciar: %s (agente %s)" % (execucao.spawn_error_info, agente))
+    execution.process = process
+    execution.pid = process.pid
+    execution.failed_after_spawn = True
+    execution.spawn_error_info = error.__class__.__name__
+    _sss_line(log_fd, "falha ao iniciar: %s (agente %s)" % (execution.spawn_error_info, agent))
     try:
         os.close(log_fd)
     except OSError:
-        _log.warning("log_fd ja fechado", extra={"ticket": execucao.ticket_id, "action": "SPAWN"})
-    _log.error("falha depois do spawn (%s): encerrando o grupo", execucao.spawn_error_info,
-               extra={"ticket": execucao.ticket_id, "action": "SPAWN"})
-    request_stop(execucao, time.monotonic())
-    return execucao
+        _log.warning("log_fd ja fechado", extra={"ticket": execution.ticket_id, "action": "SPAWN"})
+    _log.error("falha depois do spawn (%s): encerrando o grupo", execution.spawn_error_info,
+               extra={"ticket": execution.ticket_id, "action": "SPAWN"})
+    request_stop(execution, time.monotonic())
+    return execution
 
 
 # -----------------------------------------------------------------------------
 # Acompanhamento e encerramento (maquina de estados)
 # -----------------------------------------------------------------------------
 
-def check(execucao):
+def check(execution):
     """None enquanto o processo direto roda; o returncode quando terminou (Popen.poll, sem esperar)."""
-    processo = execucao.process
+    processo = execution.process
     if processo is None or processo.popen is None:
-        return execucao.returncode
+        return execution.returncode
     rc = processo.popen.poll()
     if rc is not None:
-        execucao.returncode = rc
+        execution.returncode = rc
     return rc
 
 
-def request_stop(execucao, agora_monotonico, grace_s=DEFAULT_GRACE_S):
+def request_stop(execution, now_monotonic, grace_s=DEFAULT_GRACE_S):
     """SIGTERM ao grupo e prazo do SIGKILL (CR-007, R-04). Chamado em TODA finalizacao, mesmo com o lider
     ja terminado (R-02): grupo com membros nesse caso gera WARN NETOS_ENCERRADOS. Nao espera."""
-    if execucao.phase is not None:
+    if execution.phase is not None:
         return
-    processo = execucao.process
+    processo = execution.process
     if processo is None or not os_platform.group_alive(processo):
-        execucao.phase = PHASE_END
+        execution.phase = PHASE_END
         return
     if processo.no_identity:
         # Sem identidade nao ha sinal seguro (PID pode ter sido reciclado): o chamador finaliza ORPHAN_PROCESS
         # e o limpar preserva a pasta enquanto o grupo existir (CR-008, R-26).
         _log.warning("ORFAO_SEM_IDENTIDADE: grupo vivo sem identidade, nenhum sinal enviado",
-                     extra={"ticket": execucao.ticket_id, "action": "ENCERRAR"})
-        execucao.phase = PHASE_NO_IDENTITY
+                     extra={"ticket": execution.ticket_id, "action": "ENCERRAR"})
+        execution.phase = PHASE_NO_IDENTITY
         return
-    if check(execucao) is not None:
+    if check(execution) is not None:
         _log.warning("NETOS_ENCERRADOS: o grupo tinha processos depois da saida do principal",
-                     extra={"ticket": execucao.ticket_id, "action": "ENCERRAR"})
+                     extra={"ticket": execution.ticket_id, "action": "ENCERRAR"})
     os_platform.signal_group(processo, signal.SIGTERM)
-    execucao.phase = PHASE_TERM
-    execucao.grace_s = grace_s
-    execucao.kill_deadline = agora_monotonico + grace_s
+    execution.phase = PHASE_TERM
+    execution.grace_s = grace_s
+    execution.kill_deadline = now_monotonic + grace_s
 
 
-def advance_stop(execucao, agora_monotonico):
+def advance_stop(execution, now_monotonic):
     """Avanca o encerramento sem esperar: SIGKILL quando o prazo vence. True quando o grupo acabou ou
     quando nao ha mais o que fazer (PHASE_NO_IDENTITY). Grupo vivo depois do SIGKILL e de mais um prazo:
     ERROR GRUPO_NAO_ENCERRA uma vez (travado), e o laco segue tentando a cada chamada."""
-    if execucao.phase is None:
+    if execution.phase is None:
         raise RuntimeError("encerramento nao foi pedido")
-    if execucao.phase in (PHASE_END, PHASE_NO_IDENTITY):
+    if execution.phase in (PHASE_END, PHASE_NO_IDENTITY):
         return True
-    check(execucao)
-    if not os_platform.group_alive(execucao.process):
-        execucao.phase = PHASE_END
+    check(execution)
+    if not os_platform.group_alive(execution.process):
+        execution.phase = PHASE_END
         return True
-    if execucao.phase == PHASE_TERM and agora_monotonico >= execucao.kill_deadline:
-        os_platform.signal_group(execucao.process, signal.SIGKILL)
-        execucao.phase = PHASE_KILL
-    elif execucao.phase == PHASE_KILL and not execucao.stuck \
-            and agora_monotonico >= execucao.kill_deadline + (execucao.grace_s or 0):
-        execucao.stuck = True
-        _log.error("GRUPO_NAO_ENCERRA: grupo vivo depois do SIGKILL", extra={"ticket": execucao.ticket_id,
+    if execution.phase == PHASE_TERM and now_monotonic >= execution.kill_deadline:
+        os_platform.signal_group(execution.process, signal.SIGKILL)
+        execution.phase = PHASE_KILL
+    elif execution.phase == PHASE_KILL and not execution.stuck \
+            and now_monotonic >= execution.kill_deadline + (execution.grace_s or 0):
+        execution.stuck = True
+        _log.error("GRUPO_NAO_ENCERRA: grupo vivo depois do SIGKILL", extra={"ticket": execution.ticket_id,
                                                                          "action": "ENCERRAR"})
-        os_platform.signal_group(execucao.process, signal.SIGKILL)
+        os_platform.signal_group(execution.process, signal.SIGKILL)
     return False
 
 
-def translate_return(returncode, plataforma_nome):
+def translate_return(returncode, platform_name):
     """returncode -> (status, status_motivo, return_code) do README §5.2 (POSIX; sinal = 128 + signum)."""
-    if plataforma_nome not in ("LINUX", "UNIX"):
-        raise ValueError("Plataforma nao suportada: %s" % plataforma_nome)
+    if platform_name not in ("LINUX", "UNIX"):
+        raise ValueError("Plataforma nao suportada: %s" % platform_name)
     rc = int(returncode)
     if rc == 0:
         return "SUCCESS", "EXIT_OK", 0
@@ -343,32 +343,32 @@ def translate_return(returncode, plataforma_nome):
     return "FAILED", "KILLED_SIGNAL", 128 + abs(rc)
 
 
-def record_result(execucao, status, motivo, rc):
+def record_result(execution, status, reason, rc):
     """Grava .sss_result antes do UPDATE de finalizacao (CR-007, R-01)."""
-    os_platform.write_state(os.path.join(execucao.work_dir_ticket, RESULT), {
-        "ticket_id": execucao.ticket_id, "status": status, "status_reason": motivo, "return_code": rc})
+    os_platform.write_state(os.path.join(execution.work_dir_ticket, RESULT), {
+        "ticket_id": execution.ticket_id, "status": status, "status_reason": reason, "return_code": rc})
 
 
-def append_local_line(execucao, texto):
+def append_local_line(execution, text):
     """Acrescenta uma linha [SSS] ao arquivo de log local (do agente), antes do flush final (CR-012)."""
-    fd = os.open(execucao.log_path, os.O_WRONLY | os.O_APPEND)
+    fd = os.open(execution.log_path, os.O_WRONLY | os.O_APPEND)
     try:
-        _sss_line(fd, texto)
+        _sss_line(fd, text)
     finally:
         os.close(fd)
 
 
-def clean(execucao):
+def clean(execution):
     """Remove work_dir/ticket_<id>/ e, pelo helper, o diretorio do script (CR-008, R-26 e R-36).
 
     So depois de o grupo estar vazio: com membros vivos, lanca RuntimeError e nada e apagado.
     """
-    if execucao.process is not None and os_platform.group_alive(execucao.process):
-        raise RuntimeError("ticket %s: grupo ainda tem processos" % execucao.ticket_id)
-    if execucao.exec_user:
-        os_platform.clean_script_dir(execucao.base_dir, execucao.ticket_id, execucao.exec_user)
-    pasta = execucao.work_dir_ticket
-    if os.path.basename(pasta) != "ticket_%d" % execucao.ticket_id or os.path.islink(pasta):
-        raise RuntimeError("ticket %s: pasta de trabalho inesperada" % execucao.ticket_id)
+    if execution.process is not None and os_platform.group_alive(execution.process):
+        raise RuntimeError("ticket %s: grupo ainda tem processos" % execution.ticket_id)
+    if execution.exec_user:
+        os_platform.clean_script_dir(execution.base_dir, execution.ticket_id, execution.exec_user)
+    pasta = execution.work_dir_ticket
+    if os.path.basename(pasta) != "ticket_%d" % execution.ticket_id or os.path.islink(pasta):
+        raise RuntimeError("ticket %s: pasta de trabalho inesperada" % execution.ticket_id)
     if os.path.isdir(pasta):
         shutil.rmtree(pasta)

@@ -33,13 +33,13 @@ NS = types.SimpleNamespace
 TERMINAL_STATUSES = ("SUCCESS", "FAILED", "CANCELLED")
 
 
-def _cfg(raiz, **extra):
-    agente = dict(agent_id="srv-a", work_dir=os.path.join(raiz, "work"), output_dir=None,
+def _cfg(root, **extra):
+    agente = dict(agent_id="srv-a", work_dir=os.path.join(root, "work"), output_dir=None,
                   environments=("PRODUCAO",), exec_users=())
     agente.update(extra.get("agent", {}))
     return NS(app=NS(sss_env="DEV"), oracle=NS(owner="openrisow", table_prefix="tbsss_"),
-              secrets=NS(secrets_file=os.path.join(raiz, "secrets.cfg")), agent=NS(**agente),
-              logging=NS(log_dir=os.path.join(raiz, "logs"), local_log_retention_days=30, output_retention_days=7),
+              secrets=NS(secrets_file=os.path.join(root, "secrets.cfg")), agent=NS(**agente),
+              logging=NS(log_dir=os.path.join(root, "logs"), local_log_retention_days=30, output_retention_days=7),
               retention=NS(ticket_retention_days=90, audit_retention_days=365, purge_batch_size=2,
                           purge_user=extra.get("purge_user", "sss_purge")))
 
@@ -47,11 +47,11 @@ def _cfg(raiz, **extra):
 class _Db(object):
     """Tickets, auditoria e tbsss_control em memoria, respondendo ao SQL do RepoPurge."""
 
-    def __init__(self, tickets=(), auditoria=(), dono=None, ate=None, running=()):
+    def __init__(self, tickets=(), audit=(), owner=None, until=None, running=()):
         self.tickets = [dict(id=i, created_at=c, status=s) for i, c, s in tickets]
         self.audit = [dict(id=i, created_at=c, actor="admin", source_ip="10.0.0.1", action="LOGIN",
-                               entity="tbsss_users", entity_id=7, detail="d%d" % i) for i, c in auditoria]
-        self.ctl = {"dono": dono, "ate": ate}
+                               entity="tbsss_users", entity_id=7, detail="d%d" % i) for i, c in audit]
+        self.ctl = {"dono": owner, "ate": until}
         self.running = list(running)
         self.sqls = []
         self.commits = self.rollbacks = self.closed = 0
@@ -64,12 +64,12 @@ class _Db(object):
 
 class _Cursor(object):
 
-    def __init__(self, banco):
-        self.b = banco
+    def __init__(self, db):
+        self.b = db
         self.rowcount = 0
         self._lines = []
 
-    def setinputsizes(self, **_tipos):
+    def setinputsizes(self, **_types):
         pass
 
     def close(self):
@@ -81,12 +81,12 @@ class _Cursor(object):
     def fetchall(self):
         return list(self._lines)
 
-    def _eligible(self, tabela, limite, lote=None):
-        if tabela == "tickets":
-            linhas = [t for t in self.b.tickets if t["created_at"] < limite and t["status"] in TERMINAL_STATUSES]
+    def _eligible(self, table, limit, batch=None):
+        if table == "tickets":
+            linhas = [t for t in self.b.tickets if t["created_at"] < limit and t["status"] in TERMINAL_STATUSES]
         else:
-            linhas = [a for a in self.b.audit if a["created_at"] < limite]
-        return linhas if lote is None else linhas[:lote]
+            linhas = [a for a in self.b.audit if a["created_at"] < limit]
+        return linhas if batch is None else linhas[:batch]
 
     def execute(self, sql, binds=None):
         b, binds = self.b, binds or {}
@@ -144,8 +144,8 @@ class _Cursor(object):
 
 class _Conn(object):
 
-    def __init__(self, banco):
-        self.b = banco
+    def __init__(self, db):
+        self.b = db
 
     def cursor(self):
         return _Cursor(self.b)
@@ -169,24 +169,24 @@ class _Conn(object):
 class _Plat(object):
     """Plataforma dos testes: final_path real; helper de saida, trava e liberacao registrados."""
 
-    def __init__(self, contagem=0, falhar=False):
+    def __init__(self, count=0, fail=False):
         self.calls = []
-        self.count, self.fail = contagem, falhar
+        self.count, self.fail = count, fail
         self.locks = []
         self.final_path = os_platform.final_path
 
-    def purge_output(self, base, dias, usuario_execucao=None, contar=False):
-        self.calls.append((base, dias, usuario_execucao, contar))
+    def purge_output(self, base, days, exec_user=None, count_only=False):
+        self.calls.append((base, days, exec_user, count_only))
         if self.fail:
             raise RuntimeError("helper purge-output falhou (codigo 4)")
         return self.count
 
-    def lock_instance(self, caminho):
-        self.locks.append(caminho)
-        return os_platform.lock_instance(caminho)
+    def lock_instance(self, path):
+        self.locks.append(path)
+        return os_platform.lock_instance(path)
 
-    def release_instance(self, trava):
-        os_platform.release_instance(trava)
+    def release_instance(self, lock):
+        os_platform.release_instance(lock)
 
 
 def _days(n):
@@ -205,19 +205,19 @@ class _Base(unittest.TestCase):
         self.log.addHandler(logging.NullHandler())
         self.log.propagate = False
 
-    def _purge(self, banco, plat=None, cfg=None):
-        return purge_cli.Purge(cfg or self.cfg, _Conn(banco), plat=plat or _Plat(), logger=self.log)
+    def _purge(self, db, plat=None, cfg=None):
+        return purge_cli.Purge(cfg or self.cfg, _Conn(db), plat=plat or _Plat(), logger=self.log)
 
-    def _minute(self, rel, arquivos=("ticket_1_100.log",)):
+    def _minute(self, rel, files=("ticket_1_100.log",)):
         pasta = os.path.join(self.cfg.logging.log_dir, *rel.split("/"))
         os.makedirs(pasta)
-        for nome in arquivos:
+        for nome in files:
             with open(os.path.join(pasta, nome), "w") as f:
                 f.write("x")
         return pasta
 
-    def _purges(self, banco):
-        return [a for a in banco.audit if a["action"] == "PURGE"]
+    def _purges(self, db):
+        return [a for a in db.audit if a["action"] == "PURGE"]
 
 
 class TestTables(_Base):
@@ -236,7 +236,7 @@ class TestTables(_Base):
         self.assertIn("tickets: 5 linhas apagadas", p.summary)
 
     def test_purge_auditado_por_tabela_inclusive_com_zero(self):
-        banco = _Db(tickets=[(1, _days(100), "FAILED")], auditoria=[(50, _days(10))])
+        banco = _Db(tickets=[(1, _days(100), "FAILED")], audit=[(50, _days(10))])
         self.assertEqual(self._purge(banco).run(("tickets", "audit")), 0)
         purges = self._purges(banco)
         self.assertEqual([(a["entity"], a["detail"], a["actor"], a["entity_id"]) for a in purges],
@@ -262,7 +262,7 @@ class TestTables(_Base):
 
     def test_concessao_de_outro_no_pula_tabelas_sem_auditar(self):
         ate = NOW + datetime.timedelta(minutes=30)
-        banco = _Db(tickets=[(1, _days(100), "SUCCESS")], dono="srv-b", ate=ate)
+        banco = _Db(tickets=[(1, _days(100), "SUCCESS")], owner="srv-b", until=ate)
         p = self._purge(banco)
         self.assertEqual(p.run(("tickets", "audit")), purge_cli.EXIT_OK)
         self.assertEqual(len(banco.tickets), 1)
@@ -272,7 +272,7 @@ class TestTables(_Base):
         self.assertIn("tickets: pulado (outro no esta purgando)", p.summary)
 
     def test_concessao_vencida_de_outro_no_e_tomada(self):
-        banco = _Db(tickets=[(1, _days(100), "SUCCESS")], dono="srv-b", ate=NOW - datetime.timedelta(minutes=1))
+        banco = _Db(tickets=[(1, _days(100), "SUCCESS")], owner="srv-b", until=NOW - datetime.timedelta(minutes=1))
         self.assertEqual(self._purge(banco).run(("tickets",)), 0)
         self.assertEqual(banco.tickets, [])
 
@@ -294,9 +294,9 @@ class TestTables(_Base):
     def test_exportar_auditoria(self):
         pasta = os.path.join(self.root, "arquivo")
         os.mkdir(pasta)
-        banco = _Db(auditoria=[(1, _days(400)), (2, _days(400)), (3, _days(380)), (4, _days(10))])
+        banco = _Db(audit=[(1, _days(400)), (2, _days(400)), (3, _days(380)), (4, _days(10))])
         p = self._purge(banco)
-        self.assertEqual(p.run(("audit",), exportar=pasta), 0)
+        self.assertEqual(p.run(("audit",), export=pasta), 0)
         arquivos = os.listdir(pasta)
         self.assertEqual(arquivos, ["auditoria_purge_20261021_030000.csv"])
         caminho = os.path.join(pasta, arquivos[0])
@@ -315,11 +315,11 @@ class TestDryRun(_Base):
 
     def test_so_select_um_agora_e_nada_alterado(self):
         antigo = self._minute("producao/carga/2026/01/10/03/00")
-        plat = _Plat(contagem=4)
+        plat = _Plat(count=4)
         cfg = _cfg(self.root, agent={"output_dir": os.path.join(self.root, "saida")})
         os.makedirs(os.path.join(self.root, "saida", "producao"))
         banco = _Db(tickets=[(1, _days(100), "SUCCESS"), (2, _days(100), "PENDING")],
-                       auditoria=[(5, _days(400))])
+                       audit=[(5, _days(400))])
         p = self._purge(banco, plat=plat, cfg=cfg)
         self.assertEqual(p.run(purge_cli.TARGETS, dry_run=True), 0)
         self.assertTrue(all(s.startswith("SELECT") for s in banco.sqls), banco.sqls)
@@ -384,7 +384,7 @@ class TestOutput(_Base):
         os.makedirs(os.path.join(base, "producao"))
         cfg = _cfg(self.root, agent={"output_dir": base, "environments": ("PRODUCAO", "HOMOLOGACAO"),
                                      "exec_users": (("PRODUCAO", "sssprd"), ("HOMOLOGACAO", "ssshml"))})
-        plat = _Plat(contagem=2)
+        plat = _Plat(count=2)
         p = self._purge(_Db(), plat=plat, cfg=cfg)
         self.assertEqual(p.run(("output",)), 0)
         self.assertEqual(plat.calls, [(os.path.join(base, "producao"), 7, "sssprd", False)],
@@ -398,41 +398,41 @@ class TestOutput(_Base):
         base = os.path.join(self.root, "saida")
         os.makedirs(os.path.join(base, "producao"))
         cfg = _cfg(self.root, agent={"output_dir": base})
-        self.assertEqual(self._purge(_Db(), plat=_Plat(falhar=True), cfg=cfg).run(("output",)),
+        self.assertEqual(self._purge(_Db(), plat=_Plat(fail=True), cfg=cfg).run(("output",)),
                          purge_cli.EXIT_LOCAL)
 
 
 class TestMain(_Base):
     """A linha de comando: configuracao, trava local, conexao e resumo no stdout."""
 
-    def _main(self, argv, banco=None, cfg=None, plat=None, segredos_erro=False):
+    def _main(self, argv, db=None, cfg=None, plat=None, secrets_error_flag=False):
         cfg = cfg or self.cfg
-        banco = banco if banco is not None else _Db()
+        db = db if db is not None else _Db()
         self.connections = []
 
-        def conectar(_cfg, _segredos):
+        def conectar(_cfg, _secrets):
             self.connections.append(1)
-            return _Conn(banco)
+            return _Conn(db)
         saida = io.StringIO()
-        carregar = mock.Mock(side_effect=purge_cli.sss_config.ConfigError(reason="x") if segredos_erro else None,
+        carregar = mock.Mock(side_effect=purge_cli.sss_config.ConfigError(reason="x") if secrets_error_flag else None,
                              return_value=object())
         with mock.patch.object(purge_cli.sss_config, "get_config", return_value=cfg), \
                 mock.patch.object(purge_cli.sss_config, "load_secrets", carregar), \
                 mock.patch.object(purge_cli.sss_logging, "configure", return_value=self.log), \
                 mock.patch.object(purge_cli.masking, "install_filter_on_handlers"):
-            codigo = purge_cli.main(argv, conectar=conectar, plat=plat or _Plat(), saida=saida)
+            codigo = purge_cli.main(argv, connect=conectar, plat=plat or _Plat(), output=saida)
         self.load = carregar
         return codigo, saida.getvalue()
 
     def test_execucao_real_com_trava_e_resumo(self):
         plat = _Plat()
         banco = _Db(tickets=[(1, _days(100), "CANCELLED")])
-        codigo, texto = self._main(["--target", "tickets"], banco=banco, plat=plat)
+        codigo, texto = self._main(["--target", "tickets"], db=banco, plat=plat)
         self.assertEqual(codigo, 0)
         self.assertEqual(plat.locks, [os.path.join(self.root, "work", "sss-purge.lock")])
         self.assertEqual(texto, "tickets: 1 linhas apagadas\n")
         self.assertEqual(banco.closed, 1)
-        self.assertEqual(self.load.call_args[1]["papel"], "agent", "[purge] password so no papel agente")
+        self.assertEqual(self.load.call_args[1]["role"], "agent", "[purge] password so no papel agente")
 
     def test_dry_run_sem_trava_e_com_aviso(self):
         plat = _Plat()
@@ -451,11 +451,11 @@ class TestMain(_Base):
     def test_configuracao_invalida(self):
         with mock.patch.object(purge_cli.sss_config, "get_config",
                                side_effect=purge_cli.sss_config.ConfigError(reason="x")):
-            self.assertEqual(purge_cli.main([], conectar=None), purge_cli.EXIT_CONFIG)
+            self.assertEqual(purge_cli.main([], connect=None), purge_cli.EXIT_CONFIG)
         self.assertEqual(self._main([], cfg=_cfg(self.root, purge_user=None))[0], purge_cli.EXIT_CONFIG)
         self.assertEqual(self._main(["--export-audit", os.path.join(self.root, "nao_existe")])[0],
                          purge_cli.EXIT_CONFIG)
-        self.assertEqual(self._main([], segredos_erro=True)[0], purge_cli.EXIT_CONFIG)
+        self.assertEqual(self._main([], secrets_error_flag=True)[0], purge_cli.EXIT_CONFIG)
         self.assertEqual(self.connections, [])
 
     def test_falha_ao_conectar(self):
@@ -463,8 +463,8 @@ class TestMain(_Base):
                 mock.patch.object(purge_cli.sss_config, "load_secrets", return_value=object()), \
                 mock.patch.object(purge_cli.sss_logging, "configure", return_value=self.log), \
                 mock.patch.object(purge_cli.masking, "install_filter_on_handlers"):
-            codigo = purge_cli.main([], conectar=mock.Mock(side_effect=RuntimeError("ORA-12541: no listener")),
-                                    plat=_Plat(), saida=io.StringIO())
+            codigo = purge_cli.main([], connect=mock.Mock(side_effect=RuntimeError("ORA-12541: no listener")),
+                                    plat=_Plat(), output=io.StringIO())
         self.assertEqual(codigo, purge_cli.EXIT_DATABASE)
 
     def test_alvo_invalido(self):
@@ -491,8 +491,8 @@ class TestPurgeOracle(unittest.TestCase):
     def tearDownClass(cls):
         cls.contrato.tearDownClass.__func__(cls)
 
-    def obter_repo(self, nome):
-        return self.contrato.obter_repo(self, nome)
+    def obter_repo(self, name):
+        return self.contrato.obter_repo(self, name)
 
     def setUp(self):
         self.contrato.setUp(self)
@@ -567,7 +567,7 @@ class TestPurgeOracle(unittest.TestCase):
         pasta = tempfile.mkdtemp(prefix="sss_test_purge_csv_")
         self.addCleanup(shutil.rmtree, pasta, True)
         p = purge_cli.Purge(cfg_purge, self.conn, logger=logger)
-        codigo = p.run(("tickets", "audit"), exportar=pasta)
+        codigo = p.run(("tickets", "audit"), export=pasta)
         self.purges = [r[0] for r in self.conn.cursor().execute(
             "SELECT id FROM " + self.aud + " WHERE id > :m AND actor = 'SYSTEM:purge'", {"m": marca}).fetchall()]
         if p.summary and "pulado" in p.summary[0]:

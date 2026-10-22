@@ -26,17 +26,17 @@ KEYS_6_5 = {"version", "script_id", "script_name", "interpreter", "path_file", "
 EXE_PY = "/usr/bin/python3"
 
 
-def prm(codigo, tipo="TEXT", ordem=1, obrigatorio="N", flag=None, opcoes=None, padrao=None,
-        padrao_sub=None, regex=None, sensivel="N"):
-    return {"code": codigo, "label": codigo.upper(), "component_type": tipo, "sort_order": ordem,
-            "required": obrigatorio, "param_flag": flag, "options_json": opcoes,
-            "default_value": padrao, "default_value_override": padrao_sub, "validation_regex": regex,
-            "sensitive": sensivel}
+def prm(code, kind="TEXT", order=1, required_flag="N", flag=None, options=None, default_value=None,
+        default_override=None, regex=None, sensitive_flag="N"):
+    return {"code": code, "label": code.upper(), "component_type": kind, "sort_order": order,
+            "required": required_flag, "param_flag": flag, "options_json": options,
+            "default_value": default_value, "default_value_override": default_override, "validation_regex": regex,
+            "sensitive": sensitive_flag}
 
 
-def script(tipo_param="NAMED", interpreter="PYTHON3"):
+def script(param_type="NAMED", interpreter="PYTHON3"):
     return {"id": 12, "name": "carga_faturas", "interpreter": interpreter,
-            "path_file": REAL, "param_type": tipo_param}
+            "path_file": REAL, "param_type": param_type}
 
 
 REAL = "/opt/automacoes/scripts/faturamento/carga_faturas.py"
@@ -44,9 +44,9 @@ REAL = "/opt/automacoes/scripts/faturamento/carga_faturas.py"
 
 class TestValidateValue(unittest.TestCase):
 
-    def _error(self, p, valor):
+    def _error(self, p, value):
         with self.assertRaises(ParamError) as ctx:
-            pc.validate_value(p, valor)
+            pc.validate_value(p, value)
         self.assertEqual(ctx.exception.param_code, p["code"])
         return ctx.exception
 
@@ -99,7 +99,7 @@ class TestValidateValue(unittest.TestCase):
                 self._error(p, ruim)
 
     def test_select(self):
-        p = prm("s", "SELECT", opcoes='{"CSV": "Arquivo CSV", "JSON": "Arquivo JSON"}')
+        p = prm("s", "SELECT", options='{"CSV": "Arquivo CSV", "JSON": "Arquivo JSON"}')
         self.assertEqual(pc.validate_value(p, "CSV"), "CSV")
         self._error(p, "XML")
         self._error(p, "Arquivo CSV")
@@ -108,7 +108,7 @@ class TestValidateValue(unittest.TestCase):
     def test_select_opcoes_json_invalido(self):
         for opcoes in ("{nao json", '["CSV"]', "{}", None, '"CSV"'):
             with self.subTest(opcoes=opcoes):
-                e = self._error(prm("s", "SELECT", opcoes=opcoes), "CSV")
+                e = self._error(prm("s", "SELECT", options=opcoes), "CSV")
                 self.assertIn("administrador", e.message)
 
     def test_checkbox(self):
@@ -125,8 +125,8 @@ class TestValidateValue(unittest.TestCase):
 
     def test_sensivel_nao_ecoa_valor(self):
         segredo = "Segr3d0-Muito-Secreto"
-        for p in (prm("k", regex=r"[a-z]+", sensivel="Y"), prm("k", "NUMBER", sensivel="Y"),
-                  prm("k", "SELECT", opcoes='{"A":"a"}', sensivel="Y")):
+        for p in (prm("k", regex=r"[a-z]+", sensitive_flag="Y"), prm("k", "NUMBER", sensitive_flag="Y"),
+                  prm("k", "SELECT", options='{"A":"a"}', sensitive_flag="Y")):
             e = self._error(p, segredo)
             self.assertNotIn(segredo, e.message)
             self.assertNotIn(segredo, str(e))
@@ -211,110 +211,110 @@ class TestRegistrationOptionsAndFlag(unittest.TestCase):
 class TestPrecedence(unittest.TestCase):
 
     def test_ordem_de_precedencia(self):
-        v = [prm("a", ordem=1, padrao_sub="sub", padrao="glob")]
+        v = [prm("a", order=1, default_override="sub", default_value="glob")]
         self.assertEqual(pc.resolve_answers(v, {"a": "resp"})["a"], "resp")
         self.assertEqual(pc.resolve_answers(v, {})["a"], "sub")
         self.assertEqual(pc.resolve_answers(v, {"a": "   "})["a"], "sub")
-        v = [prm("a", ordem=1, padrao="glob")]
+        v = [prm("a", order=1, default_value="glob")]
         self.assertEqual(pc.resolve_answers(v, None)["a"], "glob")
-        v = [prm("a", ordem=1)]
+        v = [prm("a", order=1)]
         self.assertIsNone(pc.resolve_answers(v, {})["a"])
 
     def test_padrao_tambem_validado(self):
-        v = [prm("n", "NUMBER", ordem=1, padrao_sub="abc", padrao="10")]
+        v = [prm("n", "NUMBER", order=1, default_override="abc", default_value="10")]
         with self.assertRaises(ParamError) as ctx:
             pc.resolve_answers(v, {})
         self.assertEqual(ctx.exception.param_code, "n")
-        v = [prm("n", "NUMBER", ordem=1, padrao="abc")]
+        v = [prm("n", "NUMBER", order=1, default_value="abc")]
         with self.assertRaises(ParamError):
             pc.resolve_answers(v, {})
 
     def test_resposta_invalida_nao_cai_no_padrao(self):
-        v = [prm("n", "NUMBER", ordem=1, padrao_sub="10")]
+        v = [prm("n", "NUMBER", order=1, default_override="10")]
         with self.assertRaises(ParamError):
             pc.resolve_answers(v, {"n": "abc"})
 
     def test_obrigatorio_ausente(self):
-        v = [prm("a", ordem=1, obrigatorio="Y")]
+        v = [prm("a", order=1, required_flag="Y")]
         with self.assertRaises(ParamError) as ctx:
             pc.resolve_answers(v, {"a": ""})
         self.assertEqual(ctx.exception.param_code, "a")
         self.assertIn("obrigatório", ctx.exception.message)
 
     def test_checkbox_falso_obrigatorio_e_valor(self):
-        v = [prm("c", "CHECKBOX", ordem=1, obrigatorio="Y")]
+        v = [prm("c", "CHECKBOX", order=1, required_flag="Y")]
         self.assertIs(pc.resolve_answers(v, {"c": "false"})["c"], False)
 
     def test_ordem_do_resultado(self):
-        v = [prm("z", ordem=3), prm("a", ordem=1), prm("m", ordem=2)]
+        v = [prm("z", order=3), prm("a", order=1), prm("m", order=2)]
         self.assertEqual(list(pc.resolve_answers(v, {}).keys()), ["a", "m", "z"])
 
 
 class TestBuildArgs(unittest.TestCase):
 
-    def _args(self, tipo_param, vinculos, respostas):
-        return pc.build_args(tipo_param, vinculos, pc.resolve_answers(vinculos, respostas))
+    def _args(self, param_type, links, answers):
+        return pc.build_args(param_type, links, pc.resolve_answers(links, answers))
 
-    def _error(self, tipo_param, vinculos, respostas):
+    def _error(self, param_type, links, answers):
         with self.assertRaises(ParamError) as ctx:
-            self._args(tipo_param, vinculos, respostas)
+            self._args(param_type, links, answers)
         return ctx.exception
 
     def test_nomeado_flags(self):
-        v = [prm("d", "DATE", ordem=2, flag="--data"), prm("n", "NUMBER", ordem=1, flag="-n")]
+        v = [prm("d", "DATE", order=2, flag="--data"), prm("n", "NUMBER", order=1, flag="-n")]
         self.assertEqual(self._args("NAMED", v, {"d": "2026-10-13", "n": "5"}),
                          ["-n", "5", "--data", "2026-10-13"])
 
     def test_nomeado_longa_valor_com_hifen(self):
-        v = [prm("t", ordem=1, flag="--taxa"), prm("x", ordem=2, flag="--texto")]
+        v = [prm("t", order=1, flag="--taxa"), prm("x", order=2, flag="--texto")]
         self.assertEqual(self._args("NAMED", v, {"t": "-1.5", "x": "--rm"}), ["--taxa=-1.5", "--texto=--rm"])
 
     def test_nomeado_curta_valor_com_hifen_rejeitado(self):
         for tipo, valor in (("NUMBER", "-5"), ("TEXT", "-rf")):
             with self.subTest(tipo=tipo):
-                e = self._error("NAMED", [prm("n", tipo, ordem=1, flag="-n")], {"n": valor})
+                e = self._error("NAMED", [prm("n", tipo, order=1, flag="-n")], {"n": valor})
                 self.assertEqual(e.param_code, "n")
                 self.assertNotIn(valor, e.message)
 
     def test_nomeado_checkbox(self):
-        v = [prm("v", "CHECKBOX", ordem=1, flag="--verbose"), prm("m", "CHECKBOX", ordem=2, flag="-m")]
+        v = [prm("v", "CHECKBOX", order=1, flag="--verbose"), prm("m", "CHECKBOX", order=2, flag="-m")]
         self.assertEqual(self._args("NAMED", v, {"v": "true", "m": "false"}), ["--verbose"])
         self.assertEqual(self._args("NAMED", v, {"v": "0", "m": "1"}), ["-m"])
         self.assertEqual(self._args("NAMED", v, {}), [])
 
     def test_nomeado_opcional_vazio_omitido(self):
-        v = [prm("a", ordem=1, flag="--a"), prm("b", ordem=2, flag="--b")]
+        v = [prm("a", order=1, flag="--a"), prm("b", order=2, flag="--b")]
         self.assertEqual(self._args("NAMED", v, {"b": "x"}), ["--b", "x"])
 
     def test_nomeado_sem_flag(self):
-        e = self._error("NAMED", [prm("a", ordem=1)], {"a": "x"})
+        e = self._error("NAMED", [prm("a", order=1)], {"a": "x"})
         self.assertEqual(e.param_code, "a")
 
     def test_sequencial(self):
-        v = [prm("c", "CHECKBOX", ordem=4), prm("a", ordem=1, flag="--ignorada"),
-             prm("b", ordem=2), prm("n", "NUMBER", ordem=3), prm("d", "CHECKBOX", ordem=5)]
+        v = [prm("c", "CHECKBOX", order=4), prm("a", order=1, flag="--ignorada"),
+             prm("b", order=2), prm("n", "NUMBER", order=3), prm("d", "CHECKBOX", order=5)]
         self.assertEqual(self._args("POSITIONAL", v, {"a": "x", "n": "-7", "c": "true", "d": "false"}),
                          ["x", "", "-7", "1", "0"])
 
     def test_sequencial_opcional_vazio_intermediario(self):
-        v = [prm("a", ordem=1), prm("b", ordem=2), prm("c", "CHECKBOX", ordem=3), prm("d", ordem=4)]
+        v = [prm("a", order=1), prm("b", order=2), prm("c", "CHECKBOX", order=3), prm("d", order=4)]
         self.assertEqual(self._args("POSITIONAL", v, {"a": "x", "d": "y"}), ["x", "", "", "y"])
 
     def test_sequencial_hifen_rejeitado_exceto_number(self):
         for tipo, valor in (("TEXT", "-x"), ("SELECT", "-A")):
             with self.subTest(tipo=tipo):
-                p = prm("t", tipo, ordem=1, opcoes='{"-A": "a"}')
+                p = prm("t", tipo, order=1, options='{"-A": "a"}')
                 e = self._error("POSITIONAL", [p], {"t": valor})
                 self.assertEqual(e.param_code, "t")
-        self.assertEqual(self._args("POSITIONAL", [prm("n", "NUMBER", ordem=1)], {"n": "-1.5"}), ["-1.5"])
+        self.assertEqual(self._args("POSITIONAL", [prm("n", "NUMBER", order=1)], {"n": "-1.5"}), ["-1.5"])
 
     def test_nenhum(self):
         self.assertEqual(pc.build_args("NONE", [], collections.OrderedDict()), [])
-        e = self._error("NONE", [prm("a", ordem=1)], {"a": "x"})
+        e = self._error("NONE", [prm("a", order=1)], {"a": "x"})
         self.assertIsNone(e.param_code)
 
     def test_tipo_param_desconhecido(self):
-        e = self._error("OUTRO", [prm("a", ordem=1)], {"a": "x"})
+        e = self._error("OUTRO", [prm("a", order=1)], {"a": "x"})
         self.assertIsNone(e.param_code)
 
 
@@ -335,9 +335,9 @@ class TestBuildAgentArgv(unittest.TestCase):
 class TestCompileSnapshot(unittest.TestCase):
 
     def _links(self):
-        return [prm("data_ref", "DATE", ordem=1, obrigatorio="Y", flag="--data"),
-                prm("token", ordem=2, flag="--token", sensivel="Y"),
-                prm("modo", "SELECT", ordem=3, flag="--modo", opcoes='{"A":"Ação","B":"Bê"}', padrao="A")]
+        return [prm("data_ref", "DATE", order=1, required_flag="Y", flag="--data"),
+                prm("token", order=2, flag="--token", sensitive_flag="Y"),
+                prm("modo", "SELECT", order=3, flag="--modo", options='{"A":"Ação","B":"Bê"}', default_value="A")]
 
     def test_formato_6_5(self):
         js, resolvidos, erros = pc.compile_snapshot(script(), self._links()[:1], {"data_ref": "2026-10-13"}, NOW)
@@ -365,16 +365,16 @@ class TestCompileSnapshot(unittest.TestCase):
         self.assertEqual(snap["sensitive"], ["token"])
 
     def test_utf8_sem_escape(self):
-        js = pc.compile_snapshot(script(), [prm("t", ordem=1, flag="--t")], {"t": "ação"}, NOW)[0]
+        js = pc.compile_snapshot(script(), [prm("t", order=1, flag="--t")], {"t": "ação"}, NOW)[0]
         self.assertIn("ação", js)
 
     def test_respostas_tipadas(self):
-        v = [prm("c", "CHECKBOX", ordem=1, flag="--c"), prm("o", ordem=2, flag="--o")]
+        v = [prm("c", "CHECKBOX", order=1, flag="--c"), prm("o", order=2, flag="--o")]
         snap = json.loads(pc.compile_snapshot(script(), v, {"c": "1"}, NOW)[0])
         self.assertEqual(snap["answers"], {"c": True, "o": None})
 
     def test_erros_acumulados(self):
-        v = self._links() + [prm("n", "NUMBER", ordem=4, flag="-n")]
+        v = self._links() + [prm("n", "NUMBER", order=4, flag="-n")]
         js, resolvidos, erros = pc.compile_snapshot(script(), v, {"token": "a\x00b", "modo": "Z", "n": "-3"}, NOW)
         self.assertIsNone(js)
         self.assertEqual(list(erros.keys()), ["data_ref", "token", "modo", "n"])
@@ -382,7 +382,7 @@ class TestCompileSnapshot(unittest.TestCase):
             self.assertNotIn("a\x00b", msg)
 
     def test_erros_estruturais(self):
-        js, _, erros = pc.compile_snapshot(script("NONE"), [prm("a", ordem=1)], {"a": "x"}, NOW)
+        js, _, erros = pc.compile_snapshot(script("NONE"), [prm("a", order=1)], {"a": "x"}, NOW)
         self.assertIsNone(js)
         self.assertIn(pc.GENERAL_KEY, erros)
         for interp in ("/usr/bin/python3", "PERL", "CMD"):
@@ -396,7 +396,7 @@ class TestCompileSnapshot(unittest.TestCase):
         self.assertEqual((snap["interpreter"], snap["args"]), ("BASH", []))
 
     def test_argv_para_exibicao(self):
-        v = self._links() + [prm("seq", ordem=4, flag="-s", sensivel="Y")]
+        v = self._links() + [prm("seq", order=4, flag="-s", sensitive_flag="Y")]
         snap = json.loads(pc.compile_snapshot(
             script(), v, {"data_ref": "2026-10-13", "token": "-segredo", "seq": "outro_segredo"}, NOW)[0])
         exib = pc.display_argv(snap)
@@ -407,7 +407,7 @@ class TestCompileSnapshot(unittest.TestCase):
         self.assertIn("-segredo", snap["args"][2])
 
     def test_argv_para_exibicao_sem_sensiveis(self):
-        snap = json.loads(pc.compile_snapshot(script("POSITIONAL", "SH"), [prm("a", ordem=1)], {"a": "x"}, NOW)[0])
+        snap = json.loads(pc.compile_snapshot(script("POSITIONAL", "SH"), [prm("a", order=1)], {"a": "x"}, NOW)[0])
         self.assertEqual(pc.display_argv(snap), ["SH", REAL, "x"])
 
 
@@ -426,7 +426,7 @@ class TestValidateSnapshot(unittest.TestCase):
         os.chmod(self.base, 0o555)
         self.cfg = AgentCfg({"PYTHON3": EXE_PY, "SH": "/bin/sh"})
         self.real = os.path.realpath(self.arq)
-        v = [prm("data_ref", "DATE", ordem=1, obrigatorio="Y", flag="--data")]
+        v = [prm("data_ref", "DATE", order=1, required_flag="Y", flag="--data")]
         scr = dict(script(), path_file=self.arq)
         self.js = pc.compile_snapshot(scr, v, {"data_ref": "2026-10-13"}, NOW)[0]
 
@@ -435,9 +435,9 @@ class TestValidateSnapshot(unittest.TestCase):
             os.chmod(raiz, 0o755)
         shutil.rmtree(self.root)
 
-    def _changed(self, **mudancas):
+    def _changed(self, **changes):
         snap = json.loads(self.js)
-        snap.update(mudancas)
+        snap.update(changes)
         return json.dumps(snap)
 
     def test_argumento_com_controle_no_snapshot(self):

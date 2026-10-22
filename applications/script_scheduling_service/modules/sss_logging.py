@@ -83,10 +83,10 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
     - Falhas de retencao, chmod ou fechamento viram WARN no proprio arquivo, antes do proximo registro.
     """
 
-    def __init__(self, log_dir, nome_processo, max_bytes, retention_days,
+    def __init__(self, log_dir, process_name, max_bytes, retention_days,
                  encoding="utf-8", pid=None, delay=False, default_agent="-"):
         self.log_dir = log_dir
-        self.process_name = nome_processo[:-4] if nome_processo.endswith(".log") else nome_processo
+        self.process_name = process_name[:-4] if process_name.endswith(".log") else process_name
         self.max_bytes = max_bytes
         self.maxBytes = max_bytes
         self.retention_days = retention_days
@@ -110,13 +110,13 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
         # Filtro unico: um segundo SSSContextFilter depois deste nunca veria o agente vazio.
         self.addFilter(SSSContextFilter(default_agent=default_agent))
 
-    def registrar_aviso(self, acao, mensagem):
+    def registrar_aviso(self, action, message):
         """Guarda um WARN para gravar neste arquivo antes do proximo registro."""
-        self._warnings.append((acao, mensagem))
+        self._warnings.append((action, message))
 
     def executar_retencao(self, ref_dt=None):
         falhas = []
-        log_paths.clean_app_retention(self.log_dir, self.retention_days, ref_dt=ref_dt, falhas=falhas)
+        log_paths.clean_app_retention(self.log_dir, self.retention_days, ref_dt=ref_dt, failures=falhas)
         for falha in falhas:
             self.registrar_aviso("RETENCAO", "retencao do log da aplicacao nao removeu %s" % falha)
 
@@ -165,19 +165,19 @@ class AppLogRotatingHandler(logging.handlers.BaseRotatingHandler):
             self.stream = self._open()
 
 
-def _chmod(caminho, modo, avisos):
+def _chmod(path, mode, warnings):
     try:
-        os.chmod(caminho, modo)
+        os.chmod(path, mode)
     except OSError as exc:
-        avisos.append(("LOG", "chmod %o falhou em %s: %s" % (modo, caminho, exc)))
+        warnings.append(("LOG", "chmod %o falhou em %s: %s" % (mode, path, exc)))
 
 
-def _ensure_directory(diretorio, avisos):
+def _ensure_directory(directory, warnings):
     # Nivel a nivel com 0o750 (README §13): regra unica em pastas_log (F8.1).
-    log_paths.ensure_directory(diretorio, avisos)
+    log_paths.ensure_directory(directory, warnings)
 
 
-def configure(nome_log, cfg):
+def configure(log_name, cfg):
     """Cria um AppLogRotatingHandler em log_dir/app/... com o formato do README §13.
 
     Aplica o nivel configurado e cria log_dir com permissao 0o750 se necessario.
@@ -195,7 +195,7 @@ def configure(nome_log, cfg):
 
     handler = AppLogRotatingHandler(
         log_dir=log_dir,
-        nome_processo=nome_log,
+        process_name=log_name,
         max_bytes=cfg.logging.app_log_max_bytes,
         retention_days=cfg.logging.app_log_retention_days,
         encoding="utf-8",
@@ -208,7 +208,7 @@ def configure(nome_log, cfg):
     level = getattr(logging, lvl_name if lvl_name != "WARN" else "WARNING", logging.INFO)
     handler.setLevel(level)
 
-    logger = logging.getLogger(nome_log)
+    logger = logging.getLogger(log_name)
     logger.setLevel(level)
 
     # Evita acumular handlers para o mesmo arquivo em reinicializacoes
@@ -230,7 +230,7 @@ _LOGGERS = {}
 _LOGGERS_LOCK = threading.Lock()
 
 
-def log_initial_critical(nome_log, mensagem, log_dir=None, stream=None):
+def log_initial_critical(log_name, message, log_dir=None, stream=None):
     """CRITICAL de falha na subida, antes de haver configuracao valida (README §12.1).
 
     Grava no log da aplicacao do minuto atual (log_dir/app/AAAA/MM/DD/HH/MI/<nome_log>_<PID>.log,
@@ -242,7 +242,7 @@ def log_initial_critical(nome_log, mensagem, log_dir=None, stream=None):
     motivo_stderr = None
     avisos = []
     if log_dir and os.path.isdir(log_dir) and os.access(log_dir, os.W_OK):
-        nome = nome_log[:-4] if nome_log.endswith(".log") else nome_log
+        nome = log_name[:-4] if log_name.endswith(".log") else log_name
         # Sem sufixo _<n>: falhas repetidas no mesmo minuto e processo vao para o mesmo arquivo.
         caminho = log_paths.app_log_path(log_dir, nome, os.getpid(), datetime.datetime.now())
         try:
@@ -259,7 +259,7 @@ def log_initial_critical(nome_log, mensagem, log_dir=None, stream=None):
         handler = logging.StreamHandler(stream or sys.stderr)
     handler.setFormatter(SSSFormatter(FMT_SSS))
     handler.addFilter(SSSContextFilter(default_action="INICIO"))
-    logger = logging.getLogger("%s.inicio" % nome_log)
+    logger = logging.getLogger("%s.inicio" % log_name)
     logger.propagate = False
     logger.addHandler(handler)
     try:
@@ -267,18 +267,18 @@ def log_initial_critical(nome_log, mensagem, log_dir=None, stream=None):
             logger.warning(motivo_stderr)
         for _acao, aviso in avisos:
             logger.warning(aviso)
-        logger.critical(mensagem)
+        logger.critical(message)
     finally:
         logger.removeHandler(handler)
         handler.close()
     return destino
 
 
-def get_logger(nome_log, cfg):
+def get_logger(log_name, cfg):
     """Retorna o logger configurado por configurar(), criando-o uma unica vez por processo."""
     with _LOGGERS_LOCK:
-        logger = _LOGGERS.get(nome_log)
+        logger = _LOGGERS.get(log_name)
         if logger is None:
-            logger = configure(nome_log, cfg)
-            _LOGGERS[nome_log] = logger
+            logger = configure(log_name, cfg)
+            _LOGGERS[log_name] = logger
         return logger

@@ -27,14 +27,14 @@ APP_PREFIX = "/script_scheduling_service/"
 IP_MAX = 45
 
 
-def _derive(senha, salt, iteracoes):
-    return hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, iteracoes)
+def _derive(password_value, salt, iterations):
+    return hashlib.pbkdf2_hmac("sha256", password_value.encode("utf-8"), salt, iterations)
 
 
-def _split_hash(armazenado):
-    if not isinstance(armazenado, str):
+def _split_hash(stored):
+    if not isinstance(stored, str):
         return None
-    m = _RE_HASH.fullmatch(armazenado)
+    m = _RE_HASH.fullmatch(stored)
     if not m:
         return None
     iteracoes = int(m.group(1))
@@ -43,34 +43,34 @@ def _split_hash(armazenado):
     return iteracoes, bytes.fromhex(m.group(2)), bytes.fromhex(m.group(3))
 
 
-def hash_password(senha):
+def hash_password(password_value):
     """Gera o hash 'pbkdf2_sha256$<iter>$<salt_hex>$<hash_hex>' da senha."""
-    if not isinstance(senha, str):
+    if not isinstance(password_value, str):
         raise TypeError("senha deve ser str")
     salt = secrets.token_bytes(SALT_BYTES)
-    dk = _derive(senha, salt, ITERATIONS)
+    dk = _derive(password_value, salt, ITERATIONS)
     return "%s$%d$%s$%s" % (ALGORITHM, ITERATIONS, salt.hex(), dk.hex())
 
 
-def verify_password(senha, armazenado):
+def verify_password(password_value, stored):
     """True se a senha confere com o hash armazenado; formato invalido ou '!' resulta em False."""
-    if not isinstance(senha, str):
+    if not isinstance(password_value, str):
         return False
-    partes = _split_hash(armazenado)
+    partes = _split_hash(stored)
     if partes is None:
         return False
     iteracoes, salt, esperado = partes
-    return hmac.compare_digest(_derive(senha, salt, iteracoes), esperado)
+    return hmac.compare_digest(_derive(password_value, salt, iteracoes), esperado)
 
 
-def is_known_hash(armazenado):
+def is_known_hash(stored):
     """True se o valor armazenado tem o formato de hash vigente (senha utilizavel)."""
-    return _split_hash(armazenado) is not None
+    return _split_hash(stored) is not None
 
 
-def needs_rehash(armazenado):
+def needs_rehash(stored):
     """True se o hash e valido mas usa menos iteracoes que o vigente."""
-    partes = _split_hash(armazenado)
+    partes = _split_hash(stored)
     return partes is not None and partes[0] < ITERATIONS
 
 
@@ -82,23 +82,23 @@ def dummy_hash():
     return _DUMMY_HASH
 
 
-def validate_password_policy(senha):
+def validate_password_policy(password_value):
     """Lista de mensagens de violacao da politica de senha (vazia se valida)."""
-    if not isinstance(senha, str) or len(senha) < PASSWORD_MIN:
+    if not isinstance(password_value, str) or len(password_value) < PASSWORD_MIN:
         return [u"A senha deve ter no mínimo %d caracteres." % PASSWORD_MIN]
     return []
 
 
-def strip_passwords(origens, campos):
+def strip_passwords(sources, fields):
     """Remove os campos de senha de todos os dicts de variaveis da requisicao e devolve seus valores.
 
     O ticket de erro do web2py grava request.vars/post_vars: as senhas saem deles assim que lidas.
     origens: dicts na ordem de prioridade (ex.: post_vars, vars); valor nao str (ou lista) vira None.
     """
     senhas = {}
-    for campo in campos:
+    for campo in fields:
         valor = None
-        for origem in origens:
+        for origem in sources:
             achado = origem.pop(campo, None)
             if valor is None:
                 valor = achado
@@ -113,13 +113,13 @@ def generate_csrf_token():
     return secrets.token_urlsafe(CSRF_BYTES)
 
 
-def validate_csrf_token(esperado, recebido):
+def validate_csrf_token(expected, received):
     """Compara os tokens em tempo constante; ausentes ou vazios resultam em False."""
-    if not isinstance(esperado, str) or not isinstance(recebido, str):
+    if not isinstance(expected, str) or not isinstance(received, str):
         return False
-    if not esperado or not recebido:
+    if not expected or not received:
         return False
-    return hmac.compare_digest(esperado.encode("utf-8"), recebido.encode("utf-8"))
+    return hmac.compare_digest(expected.encode("utf-8"), received.encode("utf-8"))
 
 
 def normalize_origin(url):
@@ -154,11 +154,11 @@ def is_allowed_origin(origin, referer, allowed_origins):
     return False
 
 
-def is_session_expired(ultimo_acesso, agora, timeout_s):
+def is_session_expired(last_access, now, timeout_s):
     """True se a sessao esta ociosa ha mais de timeout_s segundos (ou sem marca valida)."""
-    if not isinstance(ultimo_acesso, (int, float)) or isinstance(ultimo_acesso, bool):
+    if not isinstance(last_access, (int, float)) or isinstance(last_access, bool):
         return True
-    return (agora - ultimo_acesso) > timeout_s
+    return (now - last_access) > timeout_s
 
 
 class SecureCookies(http.cookies.SimpleCookie):
@@ -190,40 +190,40 @@ class SecureCookies(http.cookies.SimpleCookie):
             self._protect(morsel)
 
 
-def adapt_session_cookie(cookies, nome):
+def adapt_session_cookie(cookies, name):
     """Converte para bytes o valor do cookie de sessao recebido, formato que o secure_loads exige.
 
     Valor fora de ASCII imprimivel e descartado (sessao vazia) em vez de gerar erro.
     """
-    morsel = cookies.get(nome)
+    morsel = cookies.get(name)
     if morsel is None or not isinstance(morsel.value, str):
         return
     if _RE_COOKIE_ASCII.fullmatch(morsel.value):
         morsel.set(morsel.key, morsel.value.encode("ascii"), morsel.coded_value)
     else:
-        del cookies[nome]
+        del cookies[name]
 
 
-def validate_next(valor, prefixo=APP_PREFIX):
+def validate_next(value, prefix=APP_PREFIX):
     """Retorna o destino pos-login se for caminho local da aplicacao; senao None (open redirect)."""
-    if not isinstance(valor, str) or not _RE_NEXT.fullmatch(valor):
+    if not isinstance(value, str) or not _RE_NEXT.fullmatch(value):
         return None
-    if "\\" in valor or "//" in valor or not valor.startswith(prefixo):
+    if "\\" in value or "//" in value or not value.startswith(prefix):
         return None
-    partes = urllib.parse.urlsplit(valor)
+    partes = urllib.parse.urlsplit(value)
     if partes.scheme or partes.netloc:
         return None
     caminho = urllib.parse.unquote(partes.path)
-    if "\\" in caminho or "//" in caminho or ".." in caminho.split("/") or not caminho.startswith(prefixo):
+    if "\\" in caminho or "//" in caminho or ".." in caminho.split("/") or not caminho.startswith(prefix):
         return None
-    return valor
+    return value
 
 
-def _normalized_ip(texto):
-    if not isinstance(texto, str):
+def _normalized_ip(text):
+    if not isinstance(text, str):
         return None
     try:
-        return str(ipaddress.ip_address(texto.strip()))
+        return str(ipaddress.ip_address(text.strip()))
     except ValueError:
         return None
 

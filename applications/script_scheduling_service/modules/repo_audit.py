@@ -9,14 +9,14 @@ class RepoAudit(object):
         """Proximo id da trilha (seq.NEXTVAL, README §2.7), usado antes de gravar a linha (README §4.4)."""
         raise NotImplementedError
 
-    def register(self, ator, ip, acao, entidade, entidade_id=None, detalhe=None, id=None):
+    def register(self, actor, ip, action, entity, entity_id=None, detail=None, id=None):
         """Registra uma linha na trilha de auditoria e retorna o registro criado.
 
         id: opcional, o reservado por reservar_id (a aplicacao sempre informa o id, README §2.7).
         """
         raise NotImplementedError
 
-    def list(self, filtros=None, pagina=1, tamanho=20):
+    def list(self, filters=None, page=1, size=20):
         """Lista registros de auditoria ordenados por created_at DESC, id DESC.
 
         Chaves de filtros: ator (trecho, sem distinguir caixa), acao, entidade, entidade_id,
@@ -24,6 +24,6 @@ class RepoAudit(object):
         """
         raise NotImplementedError
 
-    def iterate(self, filtros=None, limite=50000):
+    def iterate(self, filters=None, limit=50000):
         """Iterador de no maximo `limite` registros, na ordem e com os filtros de listar (exportacao em streaming)."""
         raise NotImplementedError

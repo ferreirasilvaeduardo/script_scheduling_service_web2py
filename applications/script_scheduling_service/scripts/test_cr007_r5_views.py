@@ -17,9 +17,9 @@ def _url(*args, **kwargs):
     return "/consulta?" + urlencode(kwargs.get("vars", {}))
 
 
-def _render(view, **contexto):
-    contexto.update(URL=_url, ui_helpers=ui_helpers)
-    return render(filename=os.path.join(_VIEWS, view), path=_VIEWS, context=contexto)
+def _render(view, **context):
+    context.update(URL=_url, ui_helpers=ui_helpers)
+    return render(filename=os.path.join(_VIEWS, view), path=_VIEWS, context=context)
 
 
 class TestViewsCR007(unittest.TestCase):

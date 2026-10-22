@@ -45,8 +45,8 @@ class TestResolver(unittest.TestCase):
             os.chmod(raiz, 0o755)
         shutil.rmtree(self.root)
 
-    def _lock(self, topo):
-        for raiz, dirs, files in os.walk(topo):
+    def _lock(self, top):
+        for raiz, dirs, files in os.walk(top):
             os.chmod(raiz, DIR_MODE)
             for f in files:
                 p = os.path.join(raiz, f)
@@ -56,8 +56,8 @@ class TestResolver(unittest.TestCase):
     def _p(self, rel):
         return os.path.join(self.base, rel)
 
-    def _resolver(self, rel, dirs_sss=()):
-        return path_guard.resolve(self._p(rel), dirs_sss)
+    def _resolver(self, rel, sss_dirs=()):
+        return path_guard.resolve(self._p(rel), sss_dirs)
 
     def _code(self, rel, **kw):
         with self.assertRaises(PathGuardError) as ctx:
@@ -101,10 +101,10 @@ class TestResolver(unittest.TestCase):
                 self.assertEqual(ctx.exception.code, Code.NOT_FOUND)
 
     def test_dentro_de_log_dir_ou_work_dir(self):
-        self.assertEqual(self._code("sub/ok.py", dirs_sss=(self._p("sub"),)), Code.SSS_DIR)
-        self.assertEqual(self._code("sub/fundo/ok.sh", dirs_sss=("/var/x", self._p("sub/fundo"))),
+        self.assertEqual(self._code("sub/ok.py", sss_dirs=(self._p("sub"),)), Code.SSS_DIR)
+        self.assertEqual(self._code("sub/fundo/ok.sh", sss_dirs=("/var/x", self._p("sub/fundo"))),
                          Code.SSS_DIR)
-        self.assertTrue(self._resolver("sub/ok.py", dirs_sss=(self._p("sub/fundo"),)))
+        self.assertTrue(self._resolver("sub/ok.py", sss_dirs=(self._p("sub/fundo"),)))
 
     def test_inexistente_e_diretorio(self):
         self.assertEqual(self._code("inexistente.py"), Code.NOT_FOUND)
@@ -155,7 +155,7 @@ class TestAccessAndExecutable(unittest.TestCase):
         with self.assertRaises(PathGuardError) as ctx:
             path_guard.validate_executable("/nao/existe/python3")
         self.assertEqual(ctx.exception.code, Code.NOT_FOUND)
-        for caminho, kw in (("bin/sh", {}), ("/bin/sh", {"dirs_sss": (os.path.dirname(sh),)}),
+        for caminho, kw in (("bin/sh", {}), ("/bin/sh", {"sss_dirs": (os.path.dirname(sh),)}),
                             (self._p("sub/ok.py"), {}), (self._p("sub"), {})):
             with self.subTest(caminho=caminho, kw=kw):
                 with self.assertRaises(PathGuardError) as ctx:

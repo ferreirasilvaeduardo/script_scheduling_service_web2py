@@ -14,7 +14,7 @@ class RepoTickets(object):
         """Instante corrente do banco (SYSDATE), sem microssegundos, para regras de negocio."""
         raise NotImplementedError
 
-    def create(self, ticket, respostas, ator=None):
+    def create(self, ticket, answers, actor=None):
         """Cria ticket e respostas vinculadas em transacao unica e retorna o ID criado.
 
         Audita TICKET_CREATE, ou TICKET_RERUN quando ticket['parent_ticket_id'] e informado.
@@ -30,7 +30,7 @@ class RepoTickets(object):
         """
         raise NotImplementedError
 
-    def list(self, filtros=None, pagina=1, tamanho=20, escopo_ambientes=None):
+    def list(self, filters=None, page=1, size=20, environment_scope=None):
         """Lista tickets com paginacao e formato {'itens': [...], 'total': n, 'pagina': p, 'tamanho': t}.
 
         Os itens nunca trazem CLOB (sem log_output e sem parametros_enviados; AGENTS §4.13).
@@ -43,7 +43,7 @@ class RepoTickets(object):
         """
         raise NotImplementedError
 
-    def last_runs(self, script_ids, escopo_ambientes=None, solicitante=None):
+    def last_runs(self, script_ids, environment_scope=None, requester=None):
         """Ticket mais recente (created_at DESC, id DESC) de cada script no escopo (README §5.8, CR-004).
 
         Retorna {script_id: {id, status, status_motivo, created_at, finished_at}}; scripts sem ticket no
@@ -52,7 +52,7 @@ class RepoTickets(object):
         """
         raise NotImplementedError
 
-    def script_history(self, script_id, desde, escopo_ambientes=None, solicitante=None, limite=5000):
+    def script_history(self, script_id, since, environment_scope=None, requester=None, limit=5000):
         """Tickets do script com created_at >= desde, no escopo, por created_at (README §5.8, CR-004).
 
         Devolve no maximo `limite` itens (os mais recentes), cada um so com id, status, status_motivo,
@@ -64,7 +64,7 @@ class RepoTickets(object):
         """Retorna lista de dicts com as respostas resolvidas do ticket."""
         raise NotImplementedError
 
-    def request_cancel(self, id, ator, ip):
+    def request_cancel(self, id, actor, ip):
         """Cancelamento do no web (README §5.6) e auditoria TICKET_CANCEL na mesma transacao.
 
         Retorna 'TERMINAL' | 'CANCELADO' | 'SINALIZADO' | 'JA_SINALIZADO'. Toda solicitacao grava
@@ -84,7 +84,7 @@ class RepoTickets(object):
         """
         raise NotImplementedError
 
-    def output_read(self, ticket_id, offset, tamanho):
+    def output_read(self, ticket_id, offset, size):
         """Fatia do zip (bytes) a partir de offset (base 0), com ate `tamanho` bytes (1 a 1 MiB).
 
         So para situacao DISPONIVEL; outra situacao, ou sem saida, lanca RepoNotFound. Fim do zip: b''.

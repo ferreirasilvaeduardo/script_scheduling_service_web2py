@@ -44,7 +44,7 @@ class TestRecordInServices(unittest.TestCase):
         auth = auth_service.AuthService(r("users"), r("rbac"), r("catalog"), r("audit"), 5, 900, log)
         self.ctx = auth.revalidate(ADMIN_SESSION)
         tickets = r("tickets")
-        self.ticket = TicketService(catalogo=r("catalog"), tickets=tickets, log=log)
+        self.ticket = TicketService(catalog=r("catalog"), tickets=tickets, log=log)
         self.services = {
             "environments": (AdminEnvironmentsService(r("catalog"), r("schedules"), log), 1,
                           lambda: r("catalog").environments_get(1)),

@@ -14,30 +14,30 @@ _STAGE_SECRET = 3
 _STAGE_HTML = 5
 
 
-def _mask_like_log_pump(texto, sensiveis):
+def _mask_like_log_pump(text, sensitive):
     # README §8.10: segredos carregados e valores de parametros sensiveis antes de anexar ao CLOB.
     local = masking.Masker()
-    for _codigo, valor in sensiveis:
+    for _codigo, valor in sensitive:
         local.register(valor)
-    return masking.MASKER.mask(local.mask(texto))
+    return masking.MASKER.mask(local.mask(text))
 
 
-def _stage_lines(n, quando, sensiveis):
-    linhas = ["[%s] etapa %d/%d processada\n" % (quando, n, _STAGES_SIMULATED)]
+def _stage_lines(n, when, sensitive):
+    linhas = ["[%s] etapa %d/%d processada\n" % (when, n, _STAGES_SIMULATED)]
     if n == _STAGE_SECRET:
-        for codigo, valor in sensiveis:
-            linhas.append("[%s] conectando com %s=%s\n" % (quando, codigo, valor))
+        for codigo, valor in sensitive:
+            linhas.append("[%s] conectando com %s=%s\n" % (when, codigo, valor))
     elif n == _STAGE_HTML:
-        linhas.append("[%s] saida bruta do script: <script>alert(1)</script> <b>negrito</b>\n" % quando)
+        linhas.append("[%s] saida bruta do script: <script>alert(1)</script> <b>negrito</b>\n" % when)
     return linhas
 
 
 _COLUMNS_CLOB = ("submitted_params", "log_output")
 
 
-def _without(registro, colunas):
+def _without(record, columns):
     """Copia do registro sem as colunas indicadas (paridade com o Oracle, que nao as seleciona)."""
-    return dict((k, copy.deepcopy(v)) for k, v in registro.items() if k not in colunas)
+    return dict((k, copy.deepcopy(v)) for k, v in record.items() if k not in columns)
 
 
 class RepoTicketsFake(RepoTickets):
@@ -50,7 +50,7 @@ class RepoTicketsFake(RepoTickets):
         """Emula SYSDATE com o relogio injetavel do armazem."""
         return self._store.now()
 
-    def create(self, ticket, respostas, ator=None):
+    def create(self, ticket, answers, actor=None):
         """Cria ticket e respostas vinculadas atomicamente, com auditoria TICKET_CREATE ou TICKET_RERUN.
 
         created_by do ticket e das respostas: ator= ou, sem ele, o solicitante (CR-006, README §10).
@@ -59,7 +59,7 @@ class RepoTicketsFake(RepoTickets):
             script_id = int(ticket.get("script_id", 0))
             ambiente = ticket.get("environment")
             solicitante = ticket.get("requested_by")
-            ator = self._store.record_actor(ator=ator or solicitante)
+            actor = self._store.record_actor(actor=actor or solicitante)
 
             if not script_id:
                 raise RepoViolation("script_id e obrigatorio")
@@ -84,7 +84,7 @@ class RepoTicketsFake(RepoTickets):
             self._store.check_fk(self._store.environment_exists(ambiente), "fk_tbsss_tck_env")
             self._store.check_fk(self._store.login_exists(solicitante), "fk_tbsss_tck_usr")
             vistos = set()
-            for resp in (respostas or []):
+            for resp in (answers or []):
                 pid = int(resp["parameter_id"])
                 self._store.check_fk(pid in self._store.parameters, "fk_tbsss_tans_prm")
                 if pid in vistos:
@@ -126,11 +126,11 @@ class RepoTicketsFake(RepoTickets):
                 "finished_at": ticket.get("finished_at"),
                 "created_at": ticket.get("created_at") or agora,
             }
-            self._store.stamp_insert(novo_ticket, ator)
+            self._store.stamp_insert(novo_ticket, actor)
             self._store.tickets[tid] = copy.deepcopy(novo_ticket)
 
             # Insercao das respostas
-            for resp in (respostas or []):
+            for resp in (answers or []):
                 rid = self._store.next_id("tbsss_ticket_answer")
                 nresp = {
                     "id": rid,
@@ -139,7 +139,7 @@ class RepoTicketsFake(RepoTickets):
                     "answer_value": resp.get("answer_value"),
                     "created_at": agora,
                 }
-                self._store.stamp_insert(nresp, ator)
+                self._store.stamp_insert(nresp, actor)
                 self._store.ticket_answer[rid] = copy.deepcopy(nresp)
 
             # Auditoria na mesma transacao (lock)
@@ -150,12 +150,12 @@ class RepoTicketsFake(RepoTickets):
                 acao = "TICKET_RERUN"
                 detalhe = "Reexecucao do ticket %s para script %s em %s" % (parent_id, script_id, ambiente)
             self._store.register_internal_audit(
-                ator=solicitante,
+                actor=solicitante,
                 ip=ticket.get("source_ip"),
-                acao=acao,
-                entidade="tbsss_tickets",
-                entidade_id=tid,
-                detalhe=detalhe,
+                action=acao,
+                entity="tbsss_tickets",
+                entity_id=tid,
+                detail=detalhe,
             )
 
             return tid
@@ -168,18 +168,18 @@ class RepoTicketsFake(RepoTickets):
             # O log so sai em fatias por log_ler (contrato RepoTickets.obter).
             return _without(self._store.tickets[id], ("log_output",))
 
-    def list(self, filtros=None, pagina=1, tamanho=20, escopo_ambientes=None):
+    def list(self, filters=None, page=1, size=20, environment_scope=None):
         """Lista tickets com paginacao, filtros e escopo de ambientes."""
-        filtros = filtros or {}
+        filters = filters or {}
         with self._store.lock_tickets:
             lista = list(self._store.tickets.values())
 
             # Escopo de ambientes autorizados ao perfil
-            if escopo_ambientes is not None:
-                ambs_permitidos = set(escopo_ambientes)
+            if environment_scope is not None:
+                ambs_permitidos = set(environment_scope)
                 lista = [t for t in lista if t.get("environment") in ambs_permitidos]
 
-            stat_f = filtros.get("status")
+            stat_f = filters.get("status")
             if stat_f:
                 if isinstance(stat_f, (list, tuple, set)):
                     stat_set = set(stat_f)
@@ -187,51 +187,51 @@ class RepoTicketsFake(RepoTickets):
                 else:
                     lista = [t for t in lista if t.get("status") == stat_f]
 
-            amb_f = filtros.get("environment")
+            amb_f = filters.get("environment")
             if amb_f:
                 lista = [t for t in lista if t.get("environment") == amb_f]
 
-            sid_f = filtros.get("script_id")
+            sid_f = filters.get("script_id")
             if sid_f is not None:
                 lista = [t for t in lista if t.get("script_id") == int(sid_f)]
 
-            usr_f = filtros.get("requested_by")
+            usr_f = filters.get("requested_by")
             if usr_f:
                 lista = [t for t in lista if t.get("requested_by") == usr_f]
 
-            par_f = filtros.get("parent_ticket_id")
+            par_f = filters.get("parent_ticket_id")
             if par_f is not None:
                 lista = [t for t in lista if t.get("parent_ticket_id") == int(par_f)]
 
-            origem_f = filtros.get("origem")
+            origem_f = filters.get("origem")
             if origem_f == "manual":
                 lista = [t for t in lista if t.get("schedule_id") is None]
             elif origem_f == "agendamento":
                 lista = [t for t in lista if t.get("schedule_id") is not None]
 
-            dt_ini = filtros.get("criado_inicio")
+            dt_ini = filters.get("criado_inicio")
             if dt_ini:
                 lista = [t for t in lista if t.get("created_at") and t["created_at"] >= dt_ini]
 
-            dt_fim = filtros.get("criado_fim")
+            dt_fim = filters.get("criado_fim")
             if dt_fim:
                 lista = [t for t in lista if t.get("created_at") and t["created_at"] < dt_fim]
 
             # Ordenacao estavel padrao: created_at DESC, id DESC
             lista.sort(key=lambda x: (x.get("created_at") or self._store.now(), x["id"]), reverse=True)
             # Listagens nunca trazem CLOB (contrato RepoTickets.listar).
-            return paginate([_without(t, _COLUMNS_CLOB) for t in lista], pagina=pagina, tamanho=tamanho)
+            return paginate([_without(t, _COLUMNS_CLOB) for t in lista], page=page, size=size)
 
-    def last_runs(self, script_ids, escopo_ambientes=None, solicitante=None):
+    def last_runs(self, script_ids, environment_scope=None, requester=None):
         """Ultimo ticket de cada script no escopo, sem LOB (contrato RepoTickets)."""
         ids = set(int(i) for i in script_ids)
-        ambs = None if escopo_ambientes is None else set(escopo_ambientes)
+        ambs = None if environment_scope is None else set(environment_scope)
         with self._store.lock_tickets:
             melhores = {}
             for t in self._store.tickets.values():
                 if t["script_id"] not in ids or (ambs is not None and t["environment"] not in ambs):
                     continue
-                if solicitante is not None and t["requested_by"] != solicitante:
+                if requester is not None and t["requested_by"] != requester:
                     continue
                 chave = (t["created_at"], t["id"])
                 atual = melhores.get(t["script_id"])
@@ -241,16 +241,16 @@ class RepoTicketsFake(RepoTickets):
                                "created_at": t["created_at"], "finished_at": t.get("finished_at")})
                         for sid, t in melhores.items())
 
-    def script_history(self, script_id, desde, escopo_ambientes=None, solicitante=None, limite=5000):
+    def script_history(self, script_id, since, environment_scope=None, requester=None, limit=5000):
         """Tickets do script desde a data, no escopo, sem LOB (contrato RepoTickets)."""
-        ambs = None if escopo_ambientes is None else set(escopo_ambientes)
+        ambs = None if environment_scope is None else set(environment_scope)
         with self._store.lock_tickets:
             lista = [t for t in self._store.tickets.values()
-                     if t["script_id"] == int(script_id) and t["created_at"] >= desde
+                     if t["script_id"] == int(script_id) and t["created_at"] >= since
                      and (ambs is None or t["environment"] in ambs)
-                     and (solicitante is None or t["requested_by"] == solicitante)]
+                     and (requester is None or t["requested_by"] == requester)]
             lista.sort(key=lambda t: (t["created_at"], t["id"]))
-            lista = lista[-int(limite):] if limite else lista
+            lista = lista[-int(limit):] if limit else lista
             return [dict((k, t.get(k)) for k in ("id", "status", "status_reason", "created_at", "started_at",
                                                  "finished_at")) for t in lista]
 
@@ -264,23 +264,23 @@ class RepoTicketsFake(RepoTickets):
             resps.sort(key=lambda x: x["id"])
             return copy.deepcopy(resps)
 
-    def request_cancel(self, id, ator, ip):
+    def request_cancel(self, id, actor, ip):
         """Logica de cancelamento do no web (README §5.6), auditada em nome de quem cancelou.
 
         Cancelar ou sinalizar grava updated_* com o ator; as solicitacoes sem efeito nao (CR-006).
         """
         with self._store.lock_tickets:
-            ator = self._store.record_actor(ator=ator)
+            actor = self._store.record_actor(actor=actor)
             if id not in self._store.tickets:
                 raise RepoNotFound("Ticket ID %s nao encontrado" % id)
 
             t = self._store.tickets[id]
             st = t.get("status")
 
-            def auditar(resultado):
+            def auditar(result):
                 self._store.register_internal_audit(
-                    ator=ator, ip=ip, acao="TICKET_CANCEL", entidade="tbsss_tickets", entidade_id=id,
-                    detalhe=u"resultado: %s" % resultado)
+                    actor=actor, ip=ip, action="TICKET_CANCEL", entity="tbsss_tickets", entity_id=id,
+                    detail=u"resultado: %s" % result)
 
             if st not in ("PENDING", "RUNNING"):
                 auditar(u"sem efeito: ticket encerrado")
@@ -295,14 +295,14 @@ class RepoTicketsFake(RepoTickets):
                 t["status_reason"] = "CANCEL_USER"
                 t["return_code"] = -1
                 t["finished_at"] = self._store.now()
-                self._store.stamp_update(t, ator)
+                self._store.stamp_update(t, actor)
 
                 auditar(u"cancelado")
                 return "CANCELADO"
 
             if st == "RUNNING":
                 t["cancel_requested"] = "Y"
-                self._store.stamp_update(t, ator)
+                self._store.stamp_update(t, actor)
 
                 auditar(u"sinalizado")
                 return "SINALIZADO"
@@ -343,10 +343,10 @@ class RepoTicketsFake(RepoTickets):
                     return dict((k, v) for k, v in s.items() if k not in ("id", "ticket_id", "content"))
         return None
 
-    def output_read(self, ticket_id, offset, tamanho):
+    def output_read(self, ticket_id, offset, size):
         """Fatia do zip (offset base 0); so DISPONIVEL, como no Oracle."""
         off = int(offset)
-        tam = int(tamanho)
+        tam = int(size)
         if off < 0 or tam < 1 or tam > 1024 * 1024:
             raise RepoViolation("Fatia da saida invalida")
         with self._store.lock_tickets:

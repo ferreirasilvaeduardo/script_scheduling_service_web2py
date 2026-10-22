@@ -13,11 +13,11 @@ _MODULES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 _RE_FORMATO = re.compile(r"pbkdf2_sha256\$200000\$[0-9a-f]{32}\$[0-9a-f]{64}")
 
 
-def _hash_with_iterations(senha, iteracoes):
+def _hash_with_iterations(password_value, iterations):
     import hashlib
     salt = b"\x01" * 16
-    dk = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, iteracoes)
-    return "pbkdf2_sha256$%d$%s$%s" % (iteracoes, salt.hex(), dk.hex())
+    dk = hashlib.pbkdf2_hmac("sha256", password_value.encode("utf-8"), salt, iterations)
+    return "pbkdf2_sha256$%d$%s$%s" % (iterations, salt.hex(), dk.hex())
 
 
 class TestPasswordHash(unittest.TestCase):

@@ -43,55 +43,55 @@ _WEEKDAYS_PLURAL = ('aos domingos', 'às segundas', 'às terças', 'às quartas'
 class CronError(Exception):
     """Expressao CRON invalida; a mensagem e voltada ao usuario, em portugues."""
 
-    def __init__(self, mensagem):
-        Exception.__init__(self, mensagem)
-        self.message = mensagem
+    def __init__(self, message):
+        Exception.__init__(self, message)
+        self.message = message
 
 
-def _integer(texto, campo, minimo, maximo):
-    if not texto or not texto.isdigit():
-        raise CronError("Campo %s: valor '%s' inválido." % (campo, texto))
-    valor = int(texto)
-    if valor < minimo or valor > maximo:
-        raise CronError("Campo %s: %d fora da faixa %d–%d." % (campo, valor, minimo, maximo))
+def _integer(text, field, minimum, maximum):
+    if not text or not text.isdigit():
+        raise CronError("Campo %s: valor '%s' inválido." % (field, text))
+    valor = int(text)
+    if valor < minimum or valor > maximum:
+        raise CronError("Campo %s: %d fora da faixa %d–%d." % (field, valor, minimum, maximum))
     return valor
 
 
-def _item(texto, campo, minimo, maximo):
+def _item(text, field, minimum, maximum):
     """Converte um item em (tipo, inicio, fim, passo); tipo '*' (estrela), 'v' (valor) ou 'r' (intervalo)."""
     passo = 1
-    if '/' in texto:
-        base, _, txt_passo = texto.partition('/')
+    if '/' in text:
+        base, _, txt_passo = text.partition('/')
         if '/' in txt_passo:
-            raise CronError("Campo %s: item '%s' inválido." % (campo, texto))
+            raise CronError("Campo %s: item '%s' inválido." % (field, text))
         if not txt_passo.isdigit():
-            raise CronError("Campo %s: passo '%s' inválido." % (campo, txt_passo))
+            raise CronError("Campo %s: passo '%s' inválido." % (field, txt_passo))
         passo = int(txt_passo)
         if passo == 0:
-            raise CronError("Campo %s: o passo não pode ser 0." % campo)
+            raise CronError("Campo %s: o passo não pode ser 0." % field)
         if base != '*' and '-' not in base:
-            raise CronError("Campo %s: use passo apenas com '*' ou intervalo (ex.: */5 ou 0-30/5)." % campo)
+            raise CronError("Campo %s: use passo apenas com '*' ou intervalo (ex.: */5 ou 0-30/5)." % field)
     else:
-        base = texto
+        base = text
     if base == '*':
-        return ('*', minimo, maximo, passo)
+        return ('*', minimum, maximum, passo)
     if '-' in base:
         txt_ini, _, txt_fim = base.partition('-')
-        inicio = _integer(txt_ini, campo, minimo, maximo)
-        fim = _integer(txt_fim, campo, minimo, maximo)
+        inicio = _integer(txt_ini, field, minimum, maximum)
+        fim = _integer(txt_fim, field, minimum, maximum)
         if inicio > fim:
-            raise CronError("Campo %s: intervalo %d-%d invertido." % (campo, inicio, fim))
+            raise CronError("Campo %s: intervalo %d-%d invertido." % (field, inicio, fim))
         return ('r', inicio, fim, passo)
-    valor = _integer(base, campo, minimo, maximo)
+    valor = _integer(base, field, minimum, maximum)
     return ('v', valor, valor, 1)
 
 
-def _field(texto, campo, minimo, maximo):
+def _field(text, field, minimum, maximum):
     itens = []
-    for parte in texto.split(','):
+    for parte in text.split(','):
         if not parte:
-            raise CronError("Campo %s: lista com item vazio." % campo)
-        itens.append(_item(parte, campo, minimo, maximo))
+            raise CronError("Campo %s: lista com item vazio." % field)
+        itens.append(_item(parte, field, minimum, maximum))
     valores = set()
     for _, inicio, fim, passo in itens:
         valores.update(range(inicio, fim + 1, passo))
@@ -122,24 +122,24 @@ def parse(expr):
     return CronExpr(' '.join(campos), analisados)
 
 
-def _last_day(ano, mes):
-    return calendar.monthrange(ano, mes)[1]
+def _last_day(year, month):
+    return calendar.monthrange(year, month)[1]
 
 
-def _next_month(ano, mes):
-    return (ano + 1, 1) if mes == 12 else (ano, mes + 1)
+def _next_month(year, month):
+    return (year + 1, 1) if month == 12 else (year, month + 1)
 
 
 class CronExpr(object):
     """Expressao CRON ja validada; criada apenas por parse()."""
 
-    def __init__(self, texto, analisados):
-        self.text = texto
+    def __init__(self, text, analyzed):
+        self.text = text
         (self._it_min, self.minutes), (self._it_hour, self.hours), (self._it_day, self.days), \
-            (self._it_month, self.months), (self._it_wday, dsem) = analisados
+            (self._it_month, self.months), (self._it_wday, dsem) = analyzed
         self.weekdays = set(d % 7 for d in dsem)
         # Vixie: o campo so e "estrela" (nao restrito) quando o texto comeca com '*'.
-        campos = texto.split()
+        campos = text.split()
         self.day_restricted = not campos[2].startswith('*')
         self.wday_restricted = not campos[4].startswith('*')
         self._minute_list = sorted(self.minutes)
@@ -148,20 +148,20 @@ class CronExpr(object):
     def __repr__(self):
         return 'CronExpr(%r)' % self.text
 
-    def _day_matches(self, data):
-        casa_dia = data.day in self.days
-        casa_dsem = (data.weekday() + 1) % 7 in self.weekdays
+    def _day_matches(self, date):
+        casa_dia = date.day in self.days
+        casa_dsem = (date.weekday() + 1) % 7 in self.weekdays
         if self.day_restricted and self.wday_restricted:
             return casa_dia or casa_dsem
         return casa_dia and casa_dsem
 
-    def next(self, apos, horizonte_dias=DEFAULT_HORIZON):
+    def next(self, after, horizon_days=DEFAULT_HORIZON):
         """Primeira ocorrencia estritamente maior que `apos` (segundos = 0) ou None alem do horizonte.
 
         Avanca campo a campo (mes -> dia -> hora -> minuto) com carry; nunca minuto a minuto.
         """
-        limite = apos + datetime.timedelta(days=horizonte_dias)
-        t = apos.replace(second=0, microsecond=0) + _ONE_MINUTE
+        limite = after + datetime.timedelta(days=horizon_days)
+        t = after.replace(second=0, microsecond=0) + _ONE_MINUTE
         while t <= limite:
             if t.month not in self.months:
                 ano, mes = _next_month(t.year, t.month)
@@ -198,50 +198,50 @@ class CronExpr(object):
         return horario
 
 
-def _next_value(lista_ordenada, atual):
-    for valor in lista_ordenada:
-        if valor > atual:
+def _next_value(sorted_list, current_value):
+    for valor in sorted_list:
+        if valor > current_value:
             return valor
     return None
 
 
-def _join(partes):
-    if len(partes) == 1:
-        return partes[0]
-    return '%s e %s' % (', '.join(partes[:-1]), partes[-1])
+def _join(parts):
+    if len(parts) == 1:
+        return parts[0]
+    return '%s e %s' % (', '.join(parts[:-1]), parts[-1])
 
 
-def _simple(itens):
+def _simple(items):
     """Valores dos itens quando todos sao valores unicos; senao None."""
-    if all(tipo == 'v' for tipo, _, _, _ in itens):
-        return sorted(set(inicio for _, inicio, _, _ in itens))
+    if all(tipo == 'v' for tipo, _, _, _ in items):
+        return sorted(set(inicio for _, inicio, _, _ in items))
     return None
 
 
-def _star(itens):
+def _star(items):
     """Passo de um campo '*' ou '*/n' isolado; senao None."""
-    if len(itens) == 1 and itens[0][0] == '*':
-        return itens[0][3]
+    if len(items) == 1 and items[0][0] == '*':
+        return items[0][3]
     return None
 
 
-def _items_text(itens, nome):
+def _items_text(items, name):
     partes = []
-    for tipo, inicio, fim, passo in itens:
+    for tipo, inicio, fim, passo in items:
         if tipo == '*':
             partes.append('todos' if passo == 1 else 'a cada %d' % passo)
         elif tipo == 'v':
-            partes.append(nome(inicio))
+            partes.append(name(inicio))
         elif passo == 1:
-            partes.append('%s a %s' % (nome(inicio), nome(fim)))
+            partes.append('%s a %s' % (name(inicio), name(fim)))
         else:
-            partes.append('de %s a %s a cada %d' % (nome(inicio), nome(fim), passo))
+            partes.append('de %s a %s a cada %d' % (name(inicio), name(fim), passo))
     return _join(partes)
 
 
-def _describe_time(it_min, it_hora):
-    passo_min, passo_hora = _star(it_min), _star(it_hora)
-    minutos, horas = _simple(it_min), _simple(it_hora)
+def _describe_time(it_min, it_hour):
+    passo_min, passo_hora = _star(it_min), _star(it_hour)
+    minutos, horas = _simple(it_min), _simple(it_hour)
     if passo_hora == 1:
         if passo_min == 1:
             return 'a cada minuto'
@@ -250,8 +250,8 @@ def _describe_time(it_min, it_hora):
         if minutos is not None:
             return 'a cada hora, %s %s' % ('no minuto' if len(minutos) == 1 else 'nos minutos',
                                             _join(['%02d' % m for m in minutos]))
-    if len(it_hora) == 1 and it_hora[0][0] == 'r' and it_hora[0][3] == 1:
-        faixa = 'das %02d:00 às %02d:59' % (it_hora[0][1], it_hora[0][2])
+    if len(it_hour) == 1 and it_hour[0][0] == 'r' and it_hour[0][3] == 1:
+        faixa = 'das %02d:00 às %02d:59' % (it_hour[0][1], it_hour[0][2])
         if passo_min is not None:
             return '%s, %s' % ('a cada minuto' if passo_min == 1 else 'a cada %d minutos' % passo_min, faixa)
         if minutos is not None and len(minutos) == 1:
@@ -261,27 +261,27 @@ def _describe_time(it_min, it_hora):
     if minutos is not None and horas is not None and len(minutos) * len(horas) <= 6:
         return 'às ' + _join(['%02d:%02d' % (h, m) for h in horas for m in minutos])
     return 'nos minutos %s das horas %s' % (_items_text(it_min, lambda v: '%02d' % v),
-                                           _items_text(it_hora, lambda v: '%02d' % v))
+                                           _items_text(it_hour, lambda v: '%02d' % v))
 
 
-def _describe_weekday(itens):
-    valores = _simple(itens)
+def _describe_weekday(items):
+    valores = _simple(items)
     if valores is not None:
         valores = sorted(set(v % 7 for v in valores))
         if len(valores) == 1:
             return _WEEKDAYS_PLURAL[valores[0]]
         return 'em ' + _join([_WEEKDAYS[v] for v in valores])
-    if len(itens) == 1 and itens[0][0] == 'r' and itens[0][3] == 1:
-        return 'de %s a %s' % (_WEEKDAYS[itens[0][1] % 7], _WEEKDAYS[itens[0][2] % 7])
-    return 'nos dias da semana %s' % _items_text(itens, lambda v: _WEEKDAYS[v % 7])
+    if len(items) == 1 and items[0][0] == 'r' and items[0][3] == 1:
+        return 'de %s a %s' % (_WEEKDAYS[items[0][1] % 7], _WEEKDAYS[items[0][2] % 7])
+    return 'nos dias da semana %s' % _items_text(items, lambda v: _WEEKDAYS[v % 7])
 
 
-def _weekday_when(itens, texto_dsem):
-    valores = _simple(itens)
+def _weekday_when(items, weekday_text):
+    valores = _simple(items)
     if valores is not None and len(set(v % 7 for v in valores)) == 1:
         dia = valores[0] % 7
         return ('num ' if dia in (0, 6) else 'numa ') + _WEEKDAYS[dia]
-    return texto_dsem
+    return weekday_text
 
 
 def _describe_dates(cron):
